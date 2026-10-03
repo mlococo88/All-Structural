@@ -1,0 +1,1532 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BridgeLoad Pro — Continuous Span Moving Load</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:Inter,-apple-system,'Segoe UI',sans-serif;background:#f1f5f9;color:#0f172a;font-size:13px}
+.hdr{background:linear-gradient(135deg,#0f172a,#1e3a8a);height:54px;display:flex;align-items:center;justify-content:space-between;padding:0 20px;position:sticky;top:0;z-index:10;box-shadow:0 2px 16px rgba(0,0,0,.3)}
+.hdr h1{font-size:15px;color:#fff;font-weight:700}
+.hdr small{display:block;font-size:10px;color:#93c5fd;text-transform:uppercase;letter-spacing:.04em}
+.st{color:#93c5fd;font-size:11px;margin-right:10px}
+.hb{padding:6px 12px;border-radius:6px;font-size:12px;cursor:pointer;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.08);color:#e2e8f0;margin-left:6px;font-family:inherit}
+.hb:hover{background:rgba(255,255,255,.16)}
+.hb.pri{background:#4f46e5;border-color:#4338ca;color:#fff}
+.body{display:grid;grid-template-columns:390px 1fr;min-height:calc(100vh - 54px)}
+aside{background:#fff;border-right:1px solid #e2e8f0;overflow-y:auto;max-height:calc(100vh - 54px);position:sticky;top:54px}
+details{border-bottom:1px solid #e2e8f0}
+summary{padding:10px 14px;cursor:pointer;list-style:none;background:#f8fafc;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:#64748b}
+summary::-webkit-details-marker{display:none}
+details[open] summary{color:#4f46e5;background:#eef2ff;border-bottom:1px solid #e0e7ff}
+.pb{padding:12px 14px;display:flex;flex-direction:column;gap:9px}
+.f{display:flex;flex-direction:column;gap:3px}
+.f label,.lbl{font-size:11px;font-weight:600;color:#475569}
+input,select{padding:6px 9px;border:1px solid #cbd5e1;border-radius:6px;font-size:12.5px;font-family:inherit;background:#fff;color:#0f172a;width:100%}
+input:focus,select:focus{outline:none;border-color:#6366f1;box-shadow:0 0 0 3px rgba(99,102,241,.1)}
+input:disabled{background:#f8fafc;color:#94a3b8}
+input[type=checkbox]{width:14px;height:14px;accent-color:#4f46e5;flex-shrink:0}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+.chk{display:flex;align-items:center;gap:7px;font-size:12px;color:#334155;cursor:pointer}
+.hint{font-size:10.5px;color:#94a3b8;line-height:1.5}
+.btn{padding:5px 10px;border-radius:6px;font-size:11px;cursor:pointer;border:1px solid #d1d5db;background:#fff;color:#374151;font-family:inherit}
+.btn:hover{background:#f9fafb}
+.axr{display:grid;grid-template-columns:30px 1fr 1fr;gap:6px;align-items:center;font-size:11px;color:#94a3b8}
+#axles{display:flex;flex-direction:column;gap:4px;max-height:250px;overflow-y:auto}
+main{padding:16px;display:flex;flex-direction:column;gap:14px;min-width:0}
+.mets{display:grid;grid-template-columns:repeat(5,1fr);gap:10px}
+.met{background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:11px 13px}
+.met b{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#94a3b8;margin-bottom:3px}
+.met span{font-size:17px;font-weight:700}
+.met i{display:block;font-style:normal;font-size:10px;color:#94a3b8;margin-top:2px}
+.card{background:#fff;border:1px solid #e2e8f0;border-radius:10px;overflow:hidden}
+.ch{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;padding:10px 14px;border-bottom:1px solid #f1f5f9;background:#fafbfc}
+.ch h2{font-size:12.5px;font-weight:700}
+.ch p{font-size:10.5px;color:#94a3b8;margin-top:1px}
+canvas{display:block;width:100%;height:290px}
+.tw{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th{background:#f1f5f9;color:#475569;font-size:10px;text-transform:uppercase;letter-spacing:.04em;padding:7px 9px;text-align:right;white-space:nowrap}
+td{padding:5px 9px;text-align:right;border-bottom:1px solid #f1f5f9;white-space:nowrap}
+th:first-child,td:first-child{text-align:left}
+td.g{color:#64748b;font-size:11px;text-align:left}
+tr.pier td{background:#f8fafc;font-weight:600}
+#segT input{padding:4px 6px;font-size:12px;width:68px}
+.warn{background:#fef3c7;border:1px solid #f59e0b;border-left:4px solid #d97706;border-radius:8px;padding:10px 14px;font-size:12px;color:#78350f;line-height:1.6}
+.pos{color:#059669}.neg{color:#dc2626}
+.hidden{display:none!important}
+.deck{display:flex;flex-wrap:wrap;gap:10px;padding:10px 14px;border-bottom:1px solid #f1f5f9;align-items:flex-end}
+.deck .f{width:110px}
+@media(max-width:900px){.body{grid-template-columns:1fr}aside{position:static;max-height:none}.mets{grid-template-columns:repeat(2,1fr)}}
+</style>
+</head>
+<body>
+
+<header class="hdr">
+  <div><h1>BridgeLoad Pro — Continuous</h1><small>Moving live load · line girder · 1–4 spans</small></div>
+  <div><span id="status" class="st"></span><button class="hb" id="runBtn">Run</button><button class="hb pri" id="csvBtn">Export CSV</button></div>
+</header>
+
+<div class="body">
+<aside>
+  <details open><summary>Spans</summary><div class="pb">
+    <div class="f"><label>Number of spans</label>
+      <select id="nSpans"><option>1</option><option selected>2</option><option>3</option><option>4</option></select></div>
+    <div id="spanInputs" class="g2"></div>
+    <div class="f"><label>E steel (ksi)</label><input id="Es" type="number" value="29000"></div>
+    <p class="hint">Pinned supports. Live load stiffness uses the uncracked short-term composite section (n) over the full length per LRFD 6.10.1.5, or the steel section alone. Girder segments and flange transitions are defined in the main panel.</p>
+  </div></details>
+
+  <details open><summary>Vehicle</summary><div class="pb">
+    <div class="f"><label>Preset (loads axles and default rules)</label><select id="preset"></select></div>
+    <div class="axr lbl"><span>#</span><span>Load (kips)</span><span>Spacing from prev. (ft)</span></div>
+    <div id="axles"></div>
+    <div style="display:flex;gap:6px"><button class="btn" id="axAdd">+ Axle</button><button class="btn" id="axDel">− Last axle</button></div>
+  </div></details>
+
+  <details open><summary>Load Model Rules</summary><div class="pb">
+    <div class="f"><label>Uniform load behavior</label>
+      <select id="udlMode">
+        <option value="none">None</option>
+        <option value="lane">Lane — patterned on influence lines</option>
+        <option value="trail">Trailing — attached behind last axle</option>
+        <option value="full">Uniform — full length, not patterned</option>
+      </select></div>
+    <div class="g2">
+      <div class="f" id="wF"><label>w (k/ft)</label><input id="udlW" type="number" step="0.01"></div>
+      <div class="f" id="gapF"><label>Gap after last axle (ft)</label><input id="udlGap" type="number" step="0.1"></div>
+    </div>
+    <label class="chk" id="truncF"><input type="checkbox" id="udlTrunc">Allow trailing load to be truncated where it relieves</label>
+    <div class="lbl" style="margin-top:4px">Variable axle spacing</div>
+    <div class="g3">
+      <div class="f"><label>Axle # (0 = off)</label><input id="vK" type="number" min="0" step="1"></div>
+      <div class="f"><label>Min (ft)</label><input id="vMin" type="number" step="any"></div>
+      <div class="f"><label>Max (ft)</label><input id="vMax" type="number" step="any"></div>
+    </div>
+    <label class="chk"><input type="checkbox" id="neglect">Neglect axles that don't contribute (LRFD 3.6.1.3.1)</label>
+    <label class="chk"><input type="checkbox" id="bothDir" checked>Run vehicle in both directions</label>
+    <div class="f"><label>Also envelope with vehicle</label><select id="secondary"></select></div>
+    <label class="chk"><input type="checkbox" id="multi">Multi-vehicle case (two vehicles)</label>
+    <div id="multiF" class="g3">
+      <div class="f"><label>Scale factor</label><input id="mScale" type="number" step="0.05"></div>
+      <div class="f"><label>Min headway (ft)</label><input id="mHmin" type="number" step="1"></div>
+      <div class="f"><label>Fixed var. spacing (ft)</label><input id="mFixed" type="number" step="any"></div>
+    </div>
+    <p class="hint">The multi-vehicle case applies only to negative moment between points of contraflexure (unit load on all spans) and to interior support reactions. Headway is the clear distance from the rear axle of the lead vehicle to the front axle of the following one, swept up to twice the longest span. The lane or uniform load is included and scaled with the vehicles.</p>
+  </div></details>
+
+  <details open><summary>Impact</summary><div class="pb">
+    <div class="f"><label>Method</label>
+      <select id="impM"><option value="const">Constant multiplier</option><option value="arema">AREMA steel (span-dependent)</option></select></div>
+    <div class="f" id="impCF"><label>Impact multiplier (e.g. 1.33)</label><input id="impV" type="number" step="0.01"></div>
+    <div id="impAF" class="pb" style="padding:0">
+      <div class="g2">
+        <div class="f"><label>Girder spacing S (ft)</label><input id="aS" type="number" value="6.5" step="0.1"></div>
+        <div class="f"><label>&nbsp;</label><label class="chk"><input type="checkbox" id="aBal">Ballasted deck (90%)</label></div>
+      </div>
+      <p class="hint">I% = 100/S + [40 − 3L²/1600 for L &lt; 80 ft, else 16 + 600/(L − 30)]. L = length of the span containing the section; interior supports and pier sections use the mean of the adjacent spans. Verify against current AREMA Ch. 15 for continuous spans.</p>
+    </div>
+    <label class="chk"><input type="checkbox" id="impUdl">Apply impact to uniform load</label>
+  </div></details>
+
+  <details open><summary>Factors &amp; Analysis</summary><div class="pb">
+    <div class="g2">
+      <div class="f"><label>Limit state</label>
+        <select id="lls"><option value="1.75">Strength I (1.75)</option><option value="1.35">Strength II (1.35)</option><option value="1.00">Service I (1.00)</option><option value="1.30">Service II (1.30)</option><option value="c">Custom</option></select></div>
+      <div class="f"><label>Live load factor</label><input id="llf" type="number" value="1.75" step="0.05"></div>
+    </div>
+    <div class="lbl">Distribution factors (per lane or track → girder)</div>
+    <div id="dfT" class="pb" style="padding:0;gap:5px"></div>
+    <div class="f"><label>Negative moment DF (blank = span DF)</label><input id="dfNeg" type="number" step="0.01" placeholder="Same as span"></div>
+    <p class="hint">LRFD DFs already include multiple presence (except lever rule). Pier sections use the larger adjacent-span DF; reactions use the larger adjacent shear DF.</p>
+    <div class="g2">
+      <div class="f"><label>Position step (ft)</label><input id="step" type="number" value="1" step="0.25"></div>
+      <div class="f"><label>Spacing / headway step (ft)</label><input id="hStep" type="number" value="2" step="0.5"></div>
+    </div>
+  </div></details>
+</aside>
+
+<main>
+  <div class="mets">
+    <div class="met"><b>Max +M</b><span id="mMp" class="pos">—</span><i>kip-ft, factored</i></div>
+    <div class="met"><b>Max −M</b><span id="mMn" class="neg">—</span><i>kip-ft, factored</i></div>
+    <div class="met"><b>Max +V</b><span id="mVp" class="pos">—</span><i>kips, factored</i></div>
+    <div class="met"><b>Max −V</b><span id="mVn" class="neg">—</span><i>kips, factored</i></div>
+    <div class="met"><b>Max Reaction</b><span id="mR">—</span><i id="mRw">kips, factored</i></div>
+  </div>
+
+  <div id="warns" class="warn hidden"></div>
+
+  <div class="card">
+    <div class="ch"><div><h2>Vehicle Configuration</h2><p>Axle loads, spacings, resultant, and trailing load as analyzed · axle 1 is the lead axle</p></div></div>
+    <canvas id="cVeh" style="height:210px"></canvas>
+    <div id="vehInfo" class="hint" style="padding:8px 14px;color:#475569;font-size:11.5px"></div>
+  </div>
+
+  <div class="card" id="secCard">
+    <div class="ch">
+      <div><h2>Girder Segments &amp; Section Properties</h2><p>Segments run from the left abutment; the last segment extends to the right abutment. Dimensions in inches.</p></div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <label class="chk"><input type="checkbox" id="comp" checked>Composite</label>
+        <button class="btn" id="segAdd">+ Segment</button><button class="btn" id="segDel">− Last</button>
+      </div>
+    </div>
+    <div class="deck" id="deckF">
+      <div class="f"><label>Modular ratio n</label><input id="dn" type="number" value="8" step="0.1"></div>
+      <div class="f"><label>Effective width (in)</label><input id="dbeff" type="number" value="96" step="any"></div>
+      <div class="f"><label>Slab thickness (in)</label><input id="dts" type="number" value="8" step="any"></div>
+      <div class="f"><label>Haunch depth (in)</label><input id="dth" type="number" value="2" step="any"></div>
+      <label class="chk" style="margin-bottom:7px"><input type="checkbox" id="dinc">Include haunch concrete</label>
+    </div>
+    <div class="tw"><table id="segT">
+      <thead><tr><th>#</th><th>From–To (ft)</th><th>Length (ft)</th><th>Top flg b</th><th>Top flg t</th><th>Web D</th><th>Web tw</th><th>Bot flg b</th><th>Bot flg t</th><th>I override</th><th>A (in²)</th><th>ȳ bot (in)</th><th>I (in⁴)</th><th>S bot stl</th><th>S top stl</th><th>S deck n·I/c</th></tr></thead>
+      <tbody id="segB"></tbody>
+    </table></div>
+    <p class="hint" style="padding:8px 14px">Uncracked short-term composite properties. * = I override used for stiffness. Only relative stiffness changes V, M, and R, so a uniform girder gives the same results regardless of section.</p>
+  </div>
+
+  <div class="card">
+    <div class="ch"><div><h2>Moment Envelope</h2><p id="envNote"></p></div>
+      <select id="viewMode" style="width:auto"><option value="f">Factored per girder</option><option value="u">Unfactored per lane</option></select></div>
+    <canvas id="cM"></canvas>
+  </div>
+
+  <div class="card">
+    <div class="ch"><div><h2>Shear Envelope</h2><p>Purple = max (+), teal = min (−). Values just left and right of interior supports are plotted separately.</p></div></div>
+    <canvas id="cV"></canvas>
+  </div>
+
+  <div class="card" id="stepCard">
+    <div class="ch"><div><h2>Step Vehicle Across Bridge</h2><p id="stepNote">Lead axle position is measured from the left abutment.</p></div>
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+        <select id="sCase" style="width:auto"></select>
+        <select id="sDir" style="width:auto"><option value="1">Travel →</option><option value="-1">Travel ←</option></select>
+        <span id="sSpF" class="lbl">Var. spacing <input id="sSp" type="number" step="any" style="width:64px"> ft</span>
+        <span id="sHF" class="lbl">Headway <input id="sH" type="number" step="any" style="width:64px"> ft</span>
+        <select id="sLane" style="width:auto"><option value="full">Lane: full length</option><option value="none">Lane: none</option></select>
+      </div></div>
+    <div style="display:flex;gap:8px;align-items:center;padding:10px 14px;border-bottom:1px solid #f1f5f9;flex-wrap:wrap">
+      <button class="btn" id="sFirst" title="Start">⏮</button>
+      <button class="btn" id="sPrev">◀ Step back</button>
+      <button class="btn" id="sPlay">▶ Play</button>
+      <button class="btn" id="sNext">Step forward ▶</button>
+      <button class="btn" id="sLast" title="End">⏭</button>
+      <span class="lbl">Step (ft)</span><input id="sStep" type="number" value="1" step="0.5" style="width:64px">
+      <input id="sPos" type="range" style="flex:1;min-width:160px;padding:0">
+      <span class="lbl">Lead axle @</span><input id="sPosN" type="number" step="any" style="width:84px"><span class="lbl">ft</span>
+    </div>
+    <canvas id="cLD" style="height:170px"></canvas>
+    <div id="sOut" class="mets" style="padding:10px 14px;grid-template-columns:repeat(4,1fr)"></div>
+    <canvas id="cSM" style="height:240px"></canvas>
+    <canvas id="cSV" style="height:240px"></canvas>
+  </div>
+
+  <div class="card">
+    <div class="ch"><div><h2>Influence Line Viewer</h2><p>▼ red = axle positions for the governing max, ▲ blue = governing min</p></div>
+      <div style="display:flex;gap:6px"><select id="ilSec" style="width:auto"></select><select id="ilType" style="width:auto"><option value="M">Moment</option><option value="V">Shear</option></select></div></div>
+    <canvas id="cIL" style="height:250px"></canvas>
+    <div id="ilInfo" class="hint" style="padding:8px 14px;color:#475569;font-size:11.5px"></div>
+  </div>
+
+  <div class="card">
+    <div class="ch"><div><h2>Envelope Table — Tenth Points</h2><p id="tblNote"></p></div></div>
+    <div class="tw"><table>
+      <thead><tr><th>Span</th><th>x (ft)</th><th>x/L</th><th>+M</th><th>−M</th><th>+V</th><th>−V</th><th>Gov. +M</th><th>Gov. −M</th><th>Gov. +V / −V</th></tr></thead>
+      <tbody id="envB"></tbody>
+    </table></div>
+  </div>
+
+  <div class="card">
+    <div class="ch"><div><h2>Support Reactions</h2><p>Upward positive; negative minimum = uplift</p></div></div>
+    <div class="tw"><table>
+      <thead><tr><th>Support</th><th>x (ft)</th><th>Max R</th><th>Min R</th><th>Gov. max</th><th>Gov. min</th></tr></thead>
+      <tbody id="rB"></tbody>
+    </table></div>
+  </div>
+
+  <div class="card">
+    <div class="ch"><h2>Engine Check</h2></div>
+    <div class="pb" id="check" style="font-size:12px;color:#334155;line-height:1.7"></div>
+  </div>
+</main>
+</div>
+
+<script>
+const $=id=>document.getElementById(id);
+const num=(id,d)=>{const e=$(id);const v=e?parseFloat(e.value):NaN;return isNaN(v)?d:v;};
+const sp=(load,arr)=>arr.map(s=>[load,s]);
+
+// ═══════════ PRESETS (defaults only — every rule is editable in the UI) ═══════════
+const E80=[[40,0],[80,8],[80,5],[80,5],[80,5],[52,9],[52,5],[52,6],[52,5],[40,8],[80,8],[80,5],[80,5],[80,5],[52,9],[52,5],[52,6],[52,5]];
+const NOV={k:0,min:0,max:0}, NOUDL={mode:'none',w:0,gap:0,trunc:false};
+const HW=(label,axles,o={})=>Object.assign({label,axles,udl:{mode:'lane',w:0.64,gap:0,trunc:false},vary:NOV,neglect:true,secondary:'',multi:{on:false,scale:0.9,hmin:50,fixed:14},imp:{method:'const',val:1.33,onUdl:false}},o);
+const RL=(label,axles,w,gap,o={})=>Object.assign({label,axles,udl:{mode:w>0?'trail':'none',w,gap,trunc:false},vary:NOV,neglect:false,secondary:'',multi:{on:false,scale:1,hmin:50,fixed:0},imp:{method:'arema',val:1,onUdl:true}},o);
+const P={
+  'HL93-Truck':HW('HL-93 Design Truck',[[8,0],[32,14],[32,14]],{vary:{k:3,min:14,max:30},secondary:'HL93-Tandem',multi:{on:true,scale:0.9,hmin:50,fixed:14}}),
+  'HL93-Tandem':HW('HL-93 Design Tandem',[[25,0],[25,4]]),
+  'HS20':HW('HS20 Truck',[[8,0],[32,14],[32,14]],{udl:NOUDL,vary:{k:3,min:14,max:30},neglect:false,imp:{method:'const',val:1.30,onUdl:false}}),
+  'H20':HW('H20 Truck',[[8,0],[32,14]],{udl:NOUDL,neglect:false,imp:{method:'const',val:1.30,onUdl:false}}),
+  'E80':RL('AREMA Cooper E80',E80,8,5,{secondary:'E80-Alt'}),
+  'E80-Alt':RL('Cooper E80 Alternate (4 × 100k)',sp(100,[0,5,6,5]),0,0),
+  'F40PH':RL('F40PH Locomotive (280K)',sp(70,[0,9,24,9,14.17,9,24,9]),2,7),
+  'HSP46':RL('HSP-46 Locomotive (296K)',sp(73.75,[0,9.33,35.67,9.33,16.67,9.33,35.67,9.33]),2,8.33),
+  '286K':RL('286K Rail Car (×3)',sp(71.5,[0,5.67,19.58,5.67,6.67,5.67,19.58,5.67,6.67,5.67,19.58,5.67]),0,0),
+  '315K':RL('315K CSX Rail Car (×3)',sp(78.75,[0,6,35.67,6,7.5,6,35.67,6,7.5,6,35.67,6]),0,0),
+  'ES44AC':RL('ES44AC Locomotive (315K)',sp(72,[0,6.58,6.58,33.08,6.58,6.58,13.75,6.58,6.58,33.08,6.58,6.58]),6,5)
+};
+
+let axles=[], segs=[{len:0,bt:16,tt:1,D:54,tw:0.5625,bb:18,tb:1.5,Io:0}], RES=null, timer=null;
+
+// ═══════════ UI BUILDERS ═══════════
+function initSelects(){
+  const o=Object.entries(P).map(([k,p])=>`<option value="${k}">${p.label}</option>`).join('');
+  $('preset').innerHTML=o+'<option value="Custom">Custom (current axles)</option>';
+  $('secondary').innerHTML='<option value="">None</option>'+o;
+}
+function renderSpans(){
+  const ns=+$('nSpans').value, g=(id,d)=>$(id)?$(id).value:d;
+  const L=[0,1,2,3].map(i=>g('L'+i,100)), dm=[0,1,2,3].map(i=>g('dfm'+i,'1.00')), dv=[0,1,2,3].map(i=>g('dfv'+i,'1.00'));
+  let h='', d='<div class="g3 lbl"><span>Span</span><span>DF moment</span><span>DF shear</span></div>';
+  for(let i=0;i<ns;i++){
+    h+=`<div class="f"><label>Span ${i+1} (ft)</label><input id="L${i}" type="number" min="1" step="any" value="${L[i]}"></div>`;
+    d+=`<div class="g3" style="align-items:center"><span class="lbl">Span ${i+1}</span><input id="dfm${i}" type="number" step="0.01" value="${dm[i]}"><input id="dfv${i}" type="number" step="0.01" value="${dv[i]}"></div>`;
+  }
+  $('spanInputs').innerHTML=h; $('dfT').innerHTML=d;
+}
+function renderAxles(){
+  $('axles').innerHTML=axles.map((a,i)=>`<div class="axr"><span>${i+1}</span><input class="axl" type="number" step="any" value="${a[0]}"><input class="axs" type="number" step="any" value="${i?a[1]:0}" ${i?'':'disabled'}></div>`).join('');
+}
+function readAxles(){
+  document.querySelectorAll('#axles .axr').forEach((r,i)=>{
+    const l=parseFloat(r.querySelector('.axl').value), s=parseFloat(r.querySelector('.axs').value);
+    axles[i]=[isNaN(l)?0:l, i?(isNaN(s)?0:s):0];
+  });
+}
+function applyPreset(k){
+  const p=P[k]; if(!p) return;
+  axles=p.axles.map(a=>[...a]); renderAxles();
+  $('udlMode').value=p.udl.mode; $('udlW').value=p.udl.w; $('udlGap').value=p.udl.gap; $('udlTrunc').checked=p.udl.trunc;
+  $('vK').value=p.vary.k; $('vMin').value=p.vary.min; $('vMax').value=p.vary.max;
+  $('neglect').checked=p.neglect; $('secondary').value=p.secondary;
+  $('multi').checked=p.multi.on; $('mScale').value=p.multi.scale; $('mHmin').value=p.multi.hmin; $('mFixed').value=p.multi.fixed;
+  $('impM').value=p.imp.method; $('impV').value=p.imp.val; $('impUdl').checked=p.imp.onUdl;
+}
+function syncVis(){
+  const um=$('udlMode').value, ar=$('impM').value==='arema';
+  $('wF').classList.toggle('hidden',um==='none');
+  $('gapF').classList.toggle('hidden',um!=='trail');
+  $('truncF').classList.toggle('hidden',um!=='trail');
+  $('multiF').classList.toggle('hidden',!$('multi').checked);
+  $('impCF').classList.toggle('hidden',ar);
+  $('impAF').classList.toggle('hidden',!ar);
+}
+
+// ═══════════ SECTION PROPERTIES (uncracked, short-term n) ═══════════
+function deckRead(){return {comp:$('comp').checked,n:Math.max(1,num('dn',8)),beff:num('dbeff',96),ts:num('dts',8),th:Math.max(0,num('dth',0)),inclH:$('dinc').checked};}
+function props(s,dk){
+  const d=s.tb+s.D+s.tt;
+  const parts=[[s.bb*s.tb,s.tb/2,s.bb*s.tb**3/12],[s.tw*s.D,s.tb+s.D/2,s.tw*s.D**3/12],[s.bt*s.tt,s.tb+s.D+s.tt/2,s.bt*s.tt**3/12]];
+  let top=d;
+  if(dk.comp){
+    if(dk.inclH&&dk.th>0) parts.push([s.bt*dk.th/dk.n,d+dk.th/2,s.bt/dk.n*dk.th**3/12]);
+    parts.push([dk.beff*dk.ts/dk.n,d+dk.th+dk.ts/2,dk.beff/dk.n*dk.ts**3/12]);
+    top=d+dk.th+dk.ts;
+  }
+  const A=parts.reduce((a,p)=>a+p[0],0);
+  if(!(A>0)) return {A:0,yb:0,I:0,Sbs:0,Sts:0,Sdk:null};
+  const yb=parts.reduce((a,p)=>a+p[0]*p[1],0)/A;
+  const I=parts.reduce((a,p)=>a+p[2]+p[0]*(p[1]-yb)**2,0);
+  return {A,yb,I,Sbs:I/yb,Sts:I/(d-yb),Sdk:dk.comp?dk.n*I/(top-yb):null};
+}
+const SF=['len','bt','tt','D','tw','bb','tb','Io'];
+function totalL(){let t=0;for(let i=0;i<+$('nSpans').value;i++)t+=Math.max(1,num('L'+i,100));return t;}
+function renderSegs(){
+  $('segB').innerHTML=segs.map((s,i)=>{
+    const last=i===segs.length-1;
+    return `<tr><td>${i+1}</td><td id="sx${i}" class="g"></td>`+SF.map(k=>{
+      if(k==='len'&&last) return '<td><input disabled placeholder="to end"></td>';
+      const v=k==='Io'&&!s.Io?'':s[k];
+      return `<td><input data-i="${i}" data-k="${k}" type="number" step="any" value="${v}" ${k==='Io'?'placeholder="—"':''}></td>`;
+    }).join('')+`<td id="pA${i}"></td><td id="pY${i}"></td><td id="pI${i}"></td><td id="pB${i}"></td><td id="pT${i}"></td><td id="pD${i}"></td></tr>`;
+  }).join('');
+  updateProps();
+}
+function updateProps(){
+  const dk=deckRead(), Lt=totalL(); let c=0;
+  segs.forEach((s,i)=>{
+    const last=i===segs.length-1, len=last?Math.max(0,Lt-c):Math.max(0,Math.min(s.len,Lt-c)), p=props(s,dk);
+    $('sx'+i).textContent=`${c.toFixed(1)}–${(c+len).toFixed(1)}`; c+=len;
+    $('pA'+i).textContent=p.A.toFixed(1); $('pY'+i).textContent=p.yb.toFixed(2);
+    $('pI'+i).textContent=Math.round(p.I).toLocaleString()+(s.Io>0?' *':'');
+    $('pB'+i).textContent=p.Sbs.toFixed(0); $('pT'+i).textContent=p.Sts.toFixed(0);
+    $('pD'+i).textContent=p.Sdk?p.Sdk.toFixed(0):'—';
+  });
+  $('deckF').style.opacity=dk.comp?1:.45;
+}
+
+// ═══════════ MODEL ═══════════
+function readModel(){
+  const ns=+$('nSpans').value, spans=[];
+  for(let i=0;i<ns;i++) spans.push(Math.max(1,num('L'+i,100)));
+  const dk=deckRead();
+  const sg=segs.map(s=>{const p=props(s,dk);let I=s.Io>0?s.Io:p.I;const bad=!(I>0);return {...s,I:bad?1:I,bad};});
+  const pk=$('preset').value;
+  return {spans,E:num('Es',29000),segs:sg,axles:axles.map(a=>[...a]),short:pk,
+    udl:{mode:$('udlMode').value,w:num('udlW',0),gap:num('udlGap',0),trunc:$('udlTrunc').checked},
+    vK:Math.round(num('vK',0)),vMin:num('vMin',0),vMax:num('vMax',0),
+    neglect:$('neglect').checked,dirs:$('bothDir').checked?[1,-1]:[1],
+    secondary:$('secondary').value,multi:$('multi').checked,mScale:num('mScale',0.9),mHmin:Math.max(0,num('mHmin',50)),mFixed:num('mFixed',0),
+    imp:{method:$('impM').value,val:num('impV',1),S:Math.max(0.1,num('aS',6.5)),bal:$('aBal').checked,onUdl:$('impUdl').checked},
+    llf:num('llf',1),dfM:spans.map((_,i)=>num('dfm'+i,1)),dfV:spans.map((_,i)=>num('dfv'+i,1)),dfNeg:num('dfNeg',0),
+    step:Math.max(0.1,num('step',1)),hStep:Math.max(0.25,num('hStep',2))};
+}
+
+// ═══════════ LINEAR ALGEBRA ═══════════
+function luDecomp(A,n){
+  for(let k=0;k<n;k++){const akk=A[k*n+k],rk=k*n;
+    for(let i=k+1;i<n;i++){const ri=i*n,f=A[ri+k]/akk;if(f===0)continue;A[ri+k]=f;for(let j=k+1;j<n;j++)A[ri+j]-=f*A[rk+j];}}
+}
+function luSolve(A,n,b){
+  const y=Float64Array.from(b);
+  for(let i=0;i<n;i++){let s=y[i];const ri=i*n;for(let j=0;j<i;j++)s-=A[ri+j]*y[j];y[i]=s;}
+  for(let i=n-1;i>=0;i--){let s=y[i];const ri=i*n;for(let j=i+1;j<n;j++)s-=A[ri+j]*y[j];y[i]=s/A[ri+i];}
+  return y;
+}
+
+// ═══════════ ANALYSIS ENGINE ═══════════
+function analyze(m){
+  const ns=m.spans.length, sup=[0]; m.spans.forEach(l=>sup.push(sup[sup.length-1]+l)); const Lt=sup[ns];
+  // Segment bounds
+  const sb=[]; let c=0;
+  m.segs.forEach((s,i)=>{const last=i===m.segs.length-1,len=last?Math.max(0,Lt-c):Math.max(0,Math.min(s.len,Lt-c));sb.push([c,c+len,s.I]);c+=len;});
+  // Mesh: supports, 1/20 points of each span, segment transitions, then subdivide
+  const key=[...sup]; m.spans.forEach((l,k)=>{for(let t=1;t<20;t++)key.push(sup[k]+l*t/20);});
+  sb.forEach(b=>{if(b[1]>1e-6&&b[1]<Lt-1e-6)key.push(b[1]);});
+  key.sort((a,b)=>a-b); const ks=[]; key.forEach(v=>{if(!ks.length||v-ks[ks.length-1]>1e-6)ks.push(v);});
+  const hmax=Lt/240, x=[ks[0]];
+  for(let i=1;i<ks.length;i++){const a=ks[i-1],b=ks[i],n=Math.max(1,Math.ceil((b-a)/hmax-1e-9));for(let j=1;j<=n;j++)x.push(a+(b-a)*j/n);}
+  const nn=x.length, nd=2*nn;
+  const idxOf=v=>{let lo=0,hi=nn-1;while(hi-lo>1){const md=(lo+hi)>>1;if(x[md]<=v)lo=md;else hi=md;}return Math.abs(x[lo]-v)<=Math.abs(x[hi]-v)?lo:hi;};
+  const Iat=xx=>{for(const b of sb)if(xx>=b[0]&&xx<b[1])return b[2];return sb[sb.length-1][2];};
+
+  // Global stiffness (v up, θ CCW), EI in kip-ft²
+  const K=new Float64Array(nd*nd), ek=[], el=[];
+  for(let e=0;e<nn-1;e++){
+    const l=x[e+1]-x[e], k=m.E*Iat((x[e]+x[e+1])/2)/144/(l*l*l); ek.push(k); el.push(l);
+    const M=[[12,6*l,-12,6*l],[6*l,4*l*l,-6*l,2*l*l],[-12,-6*l,12,-6*l],[6*l,2*l*l,-6*l,4*l*l]], D=[2*e,2*e+1,2*e+2,2*e+3];
+    for(let a=0;a<4;a++)for(let b=0;b<4;b++)K[D[a]*nd+D[b]]+=k*M[a][b];
+  }
+  const supNodes=sup.map(idxOf), isSup=new Uint8Array(nd); supNodes.forEach(i=>isSup[2*i]=1);
+  const fmap=new Int32Array(nd).fill(-1), free=[];
+  for(let d=0;d<nd;d++) if(!isSup[d]){fmap[d]=free.length;free.push(d);}
+  const nf=free.length, A=new Float64Array(nf*nf);
+  for(let i=0;i<nf;i++){const r=free[i]*nd;for(let j=0;j<nf;j++)A[i*nf+j]=K[r+free[j]];}
+  luDecomp(A,nf);
+
+  // Output effects and table rows (1/20 points of each span)
+  const effs=[], mKey={}, vKey={}, rows=[];
+  for(let k=0;k<ns;k++){const L=m.spans[k],a=sup[k];
+    for(let t=0;t<=20;t++){const i=idxOf(a+L*t/20);
+      let mi=mKey[i];
+      if(mi===undefined){mi=mKey[i]=effs.length;effs.push({t:'M',node:i,x:x[i],spans:t===20&&k<ns-1?[k,k+1]:[k]});}
+      const elx=t===20?i-1:i;
+      let vi=vKey[elx];
+      if(vi===undefined){vi=vKey[elx]=effs.length;effs.push({t:'V',el:elx,cutL:t!==20,x:x[i],spans:[k]});}
+      rows.push({k,t,x:x[i],mi,vi});
+    }}
+  // Plate transitions (segment boundaries) as additional output sections
+  const trans=[];
+  sb.forEach(b=>{const xb=b[1];if(xb<=1e-6||xb>=Lt-1e-6||sup.some(s=>Math.abs(s-xb)<1e-6))return;
+    const i=idxOf(xb);let k=0;while(k<ns-1&&xb>sup[k+1]-1e-9)k++;
+    let mi=mKey[i],isNew=false;if(mi===undefined){mi=mKey[i]=effs.length;effs.push({t:'M',node:i,x:x[i],spans:[k]});isNew=true;}
+    let vi=vKey[i];if(vi===undefined){vi=vKey[i]=effs.length;effs.push({t:'V',el:i,cutL:true,x:x[i],spans:[k]});isNew=true;}
+    if(isNew)rows.push({k,t:20*(x[i]-sup[k])/m.spans[k],x:x[i],mi,vi,tr:true});
+    trans.push({x:x[i],k,mi,vi});});
+  rows.sort((a,b)=>a.k-b.k||a.x-b.x); rows.trans=trans;
+  sup.forEach((s,q)=>effs.push({t:'R',node:supNodes[q],q,x:s,spans:q===0?[0]:q===ns?[ns-1]:[q-1,q],interior:q>0&&q<ns}));
+
+  // Influence lines: unit downward load at every node
+  const IL=effs.map(()=>new Float64Array(nn)), d=new Float64Array(nd), b=new Float64Array(nf);
+  for(let j=0;j<nn;j++){
+    const sq=supNodes.indexOf(j);
+    if(sq>=0){effs.forEach((ef,ei)=>{if(ef.t==='R'&&ef.q===sq)IL[ei][j]=1;});continue;}
+    b.fill(0); b[fmap[2*j]]=-1;
+    const y=luSolve(A,nf,b); d.fill(0); for(let i=0;i<nf;i++)d[free[i]]=y[i];
+    effs.forEach((ef,ei)=>{
+      let v=0;
+      if(ef.t==='M'){
+        const e=ef.node<nn-1?ef.node:ef.node-1,l=el[e],k=ek[e],v1=d[2*e],t1=d[2*e+1],v2=d[2*e+2],t2=d[2*e+3];
+        v=ef.node<nn-1? -k*(6*l*v1+4*l*l*t1-6*l*v2+2*l*l*t2) : k*(6*l*v1+2*l*l*t1-6*l*v2+4*l*l*t2);
+      } else if(ef.t==='V'){
+        const e=ef.el,l=el[e],k=ek[e];
+        v=k*(12*d[2*e]+6*l*d[2*e+1]-12*d[2*e+2]+6*l*d[2*e+3]);
+      } else {
+        const r=2*ef.node; for(let cc=Math.max(0,r-4);cc<Math.min(nd,r+6);cc++) v+=K[r*nd+cc]*d[cc];
+      }
+      IL[ei][j]=v;
+    });
+  }
+  // Shear IL has a unit jump at the cut: adjust the element containing the cut
+  const ends=(ei,j)=>{const f=IL[ei],ef=effs[ei];let a=f[j],bb=f[j+1];if(ef.t==='V'&&j===ef.el){if(ef.cutL)a+=1;else bb-=1;}return [a,bb];};
+
+  // Integrals for uniform loads: cumulative, patterned (+/−), prefix/suffix extremes
+  const DER=effs.map((ef,ei)=>{
+    const CI=new Float64Array(nn); let lp=0,ln=0;
+    for(let j=0;j<nn-1;j++){const h=x[j+1]-x[j],[a,bb]=ends(ei,j);CI[j+1]=CI[j]+(a+bb)/2*h;
+      if(a>=0&&bb>=0)lp+=(a+bb)/2*h; else if(a<=0&&bb<=0)ln+=(a+bb)/2*h;
+      else{const t=a/(a-bb),A1=a*t*h/2,A2=bb*(1-t)*h/2;if(a>0){lp+=A1;ln+=A2;}else{ln+=A1;lp+=A2;}}}
+    const pmin=new Float64Array(nn),pmax=new Float64Array(nn),smin=new Float64Array(nn),smax=new Float64Array(nn);
+    pmin[0]=pmax[0]=CI[0]; for(let j=1;j<nn;j++){pmin[j]=Math.min(pmin[j-1],CI[j]);pmax[j]=Math.max(pmax[j-1],CI[j]);}
+    smin[nn-1]=smax[nn-1]=CI[nn-1]; for(let j=nn-2;j>=0;j--){smin[j]=Math.min(smin[j+1],CI[j]);smax[j]=Math.max(smax[j+1],CI[j]);}
+    return {CI,lp,ln,pmin,pmax,smin,smax,end:CI[nn-1]};
+  });
+  effs.forEach((ef,ei)=>{ef.neg=ef.t==='M'&&DER[ei].end<-1e-9*Lt*Lt;});
+
+  // Impact per effect
+  const imOf=ef=>{if(m.imp.method==='const')return m.imp.val;
+    const Lb=$('aLb')?$('aLb').value:'span';
+    const L=Lb==='user'?Math.max(1,num('aL',100)):Lb==='max'?Math.max(...m.spans):Lb==='total'?m.spans.reduce((a,b)=>a+b,0):ef.spans.reduce((a,s)=>a+m.spans[s],0)/ef.spans.length;
+    const I=100/m.imp.S+(L<80?40-3*L*L/1600:16+600/(L-30));
+    return 1+(m.imp.bal?0.9:1)*I/100;};
+  const imArr=effs.map(imOf);
+  const dfOf=(ef,v)=>ef.t==='M'?(v<0&&m.dfNeg>0?m.dfNeg:Math.max(...ef.spans.map(s=>m.dfM[s]))):ef.t==='V'?m.dfV[ef.spans[0]]:Math.max(...ef.spans.map(s=>m.dfV[s]));
+
+  // Independent uniform load (lane patterned, or full length) — constant per effect
+  const uw=(m.udl.mode==='lane'||m.udl.mode==='full')?m.udl.w:0;
+  const laneMax=effs.map((ef,ei)=>{const uf=m.imp.onUdl?imArr[ei]:1;return m.udl.mode==='lane'?uf*uw*DER[ei].lp:uf*uw*DER[ei].end;});
+  const laneMin=effs.map((ef,ei)=>{const uf=m.imp.onUdl?imArr[ei]:1;return m.udl.mode==='lane'?uf*uw*DER[ei].ln:uf*uw*DER[ei].end;});
+
+  const res=effs.map(()=>({max:0,maxG:null,min:0,minG:null}));
+
+  const cfgs=[];function sweep(cfg){cfgs.push(cfg);
+    const nA=cfg.offs.length, Lv=cfg.offs[nA-1], tr=cfg.trail, ext=Lv+(tr?tr.gap:0)+m.step;
+    const J=new Int32Array(nA),T=new Float64Array(nA),on=new Uint8Array(nA);
+    const act=[]; effs.forEach((ef,ei)=>{const s=cfg.sel(ef);if(s[0]||s[1])act.push([ei,s[0],s[1],imArr[ei],ef.t==='V'?ef.el:-1,ef.cutL]);});
+    const loc=v=>{let lo=0,hi=nn-1;while(hi-lo>1){const md=(lo+hi)>>1;if(x[md]<=v)lo=md;else hi=md;}return lo;};
+    for(const dir of m.dirs){
+      for(let p=-ext;p<=Lt+ext+1e-9;p+=m.step){
+        let any=false;
+        for(let a=0;a<nA;a++){const xp=p-dir*cfg.offs[a];
+          if(xp<-1e-9||xp>Lt+1e-9){on[a]=0;continue;}
+          on[a]=1;any=true;const lo=loc(xp);J[a]=lo;T[a]=Math.min(1,Math.max(0,(xp-x[lo])/(x[lo+1]-x[lo])));}
+        let sc=null;
+        if(tr){const s0=p-dir*(Lv+tr.gap);if(dir>0){if(s0>0)sc=Math.min(s0,Lt);}else{if(s0<Lt)sc=Math.max(s0,0);}}
+        if(!any&&sc===null)continue;
+        let jc=0,tc=0; if(sc!==null){jc=loc(sc);tc=(sc-x[jc])/(x[jc+1]-x[jc]);}
+        for(const [ei,dMax,dMin,im,cutEl,cutL] of act){
+          const f=IL[ei]; let tot=0,ps=0,ng=0;
+          for(let a=0;a<nA;a++){if(!on[a])continue;const j=J[a];let fa=f[j],fb=f[j+1];
+            if(j===cutEl){if(cutL)fa+=1;else fb-=1;}
+            const v=cfg.loads[a]*(fa+(fb-fa)*T[a]);tot+=v;if(v>0)ps+=v;else ng+=v;}
+          const axMax=m.neglect?ps:tot, axMin=m.neglect?ng:tot;
+          let uMax=0,uMin=0;
+          if(sc!==null){const D=DER[ei],CIs=D.CI[jc]+(D.CI[jc+1]-D.CI[jc])*tc;
+            if(dir>0){if(tr.trunc){uMax=CIs-Math.min(D.pmin[jc],CIs);uMin=CIs-Math.max(D.pmax[jc],CIs);}else uMax=uMin=CIs;}
+            else{if(tr.trunc){uMax=Math.max(D.smax[jc+1],CIs)-CIs;uMin=Math.min(D.smin[jc+1],CIs)-CIs;}else uMax=uMin=D.end-CIs;}
+            uMax*=tr.w;uMin*=tr.w;}
+          const uf=m.imp.onUdl?im:1;
+          const vMax=cfg.scale*(im*axMax+uf*uMax+laneMax[ei]), vMin=cfg.scale*(im*axMin+uf*uMin+laneMin[ei]);
+          const r=res[ei];
+          if(dMax&&vMax>r.max+1e-9){r.max=vMax;r.maxG=gov(cfg,p,dir,on);}
+          if(dMin&&vMin<r.min-1e-9){r.min=vMin;r.minG=gov(cfg,p,dir,on);}
+        }
+      }
+    }
+  }
+  const gov=(cfg,p,dir,on)=>({lab:cfg.lab,p,dir,pos:cfg.offs.map(o=>p-dir*o).filter((_,a)=>on[a])});
+  const mk=(ax,vk,sv)=>{const offs=[0],loads=[ax[0][0]];for(let i=1;i<ax.length;i++){offs.push(offs[i-1]+(i+1===vk&&sv!=null?sv:ax[i][1]));loads.push(ax[i][0]);}return {offs,loads};};
+  const rng=(a,bb,s)=>{const r=[];for(let v=a;v<=bb+1e-9;v+=s)r.push(+v.toFixed(3));if(!r.length||r[r.length-1]<bb-1e-9)r.push(bb);return r;};
+  const all=()=>[1,1], trail=m.udl.mode==='trail'&&m.udl.w>0?{w:m.udl.w,gap:m.udl.gap,trunc:m.udl.trunc}:null;
+  const varOK=m.vK>=2&&m.vK<=m.axles.length&&m.vMax>=m.vMin;
+  const base=m.axles.filter(a=>a[0]>0).length===m.axles.length?m.axles:m.axles.map(a=>[Math.max(0,a[0]),a[1]]);
+
+  // Case 1: primary vehicle (with variable spacing)
+  (varOK?rng(m.vMin,m.vMax,m.hStep):[null]).forEach(sv=>{
+    const v=mk(base,varOK?m.vK:0,sv);
+    sweep({...v,trail,scale:1,lab:m.short+(sv!=null?` s=${sv}`:''),sel:all});
+  });
+  // Case 2: secondary vehicle (lane/uniform applies; trailing load does not)
+  if(m.secondary&&P[m.secondary]){const v=mk(P[m.secondary].axles,0,null);sweep({...v,trail:null,scale:1,lab:m.secondary,sel:all});}
+  // Case 3: multi-vehicle (negative moment in contraflexure zones + interior reactions)
+  if(m.multi&&ns>1){
+    const v=mk(base,varOK?m.vK:0,varOK&&m.mFixed>0?m.mFixed:null), Lv=v.offs[v.offs.length-1];
+    const Hmax=Math.min(Lt,2*Math.max(...m.spans));
+    rng(m.mHmin,Math.max(m.mHmin,Hmax),m.hStep).forEach(H=>{
+      const offs=[...v.offs,...v.offs.map(o=>o+Lv+H)], loads=[...v.loads,...v.loads];
+      sweep({offs,loads,trail,scale:m.mScale,lab:`${m.mScale}×2 ${m.short} H=${H}`,sel:ef=>[ef.t==='R'&&ef.interior,ef.t==='M'&&ef.neg]});
+    });
+  }
+
+  // Warnings
+  // ── Refinement: spacing/headway at 0.5 ft, then each governing position at 0.1 ft ──
+  const refineAt=(cfg,p,dir,list)=>{
+    const nA=cfg.offs.length,Lv=cfg.offs[nA-1],tr=cfg.trail,J=[],T=[],Pa=[],pos=[];
+    for(let a=0;a<nA;a++){const xp=p-dir*cfg.offs[a];if(xp<-1e-9||xp>Lt+1e-9)continue;
+      let lo=0,hi=nn-1;while(hi-lo>1){const md=(lo+hi)>>1;if(x[md]<=xp)lo=md;else hi=md;}
+      J.push(lo);T.push(Math.min(1,Math.max(0,(xp-x[lo])/(x[lo+1]-x[lo]))));Pa.push(cfg.loads[a]);pos.push(xp);}
+    let sc=null;if(tr){const s0=p-dir*(Lv+tr.gap);if(dir>0){if(s0>0)sc=Math.min(s0,Lt);}else if(s0<Lt)sc=Math.max(s0,0);}
+    if(!J.length&&sc===null)return;
+    let jc=0,tc=0;if(sc!==null){let lo=0,hi=nn-1;while(hi-lo>1){const md=(lo+hi)>>1;if(x[md]<=sc)lo=md;else hi=md;}jc=lo;tc=(sc-x[jc])/(x[jc+1]-x[jc]);}
+    list.forEach(([ei,dMax,dMin])=>{
+      const ef=effs[ei],f=IL[ei],im=imArr[ei],cutEl=ef.t==='V'?ef.el:-1;let tot=0,ps=0,ng=0;
+      for(let a=0;a<J.length;a++){const j=J[a];let fa=f[j],fb=f[j+1];if(j===cutEl){if(ef.cutL)fa+=1;else fb-=1;}
+        const v=Pa[a]*(fa+(fb-fa)*T[a]);tot+=v;if(v>0)ps+=v;else ng+=v;}
+      const axMax=m.neglect?ps:tot,axMin=m.neglect?ng:tot;let uMax=0,uMin=0;
+      if(sc!==null){const D=DER[ei],CIs=D.CI[jc]+(D.CI[jc+1]-D.CI[jc])*tc;
+        if(dir>0){if(tr.trunc){uMax=CIs-Math.min(D.pmin[jc],CIs);uMin=CIs-Math.max(D.pmax[jc],CIs);}else uMax=uMin=CIs;}
+        else{if(tr.trunc){uMax=Math.max(D.smax[jc+1],CIs)-CIs;uMin=Math.min(D.smin[jc+1],CIs)-CIs;}else uMax=uMin=D.end-CIs;}
+        uMax*=tr.w;uMin*=tr.w;}
+      const uf=m.imp.onUdl?im:1,vMax=cfg.scale*(im*axMax+uf*uMax+laneMax[ei]),vMin=cfg.scale*(im*axMin+uf*uMin+laneMin[ei]),r=res[ei];
+      if(dMax&&vMax>r.max+1e-9){r.max=vMax;r.maxG={lab:cfg.lab,p,dir,pos:[...pos]};}
+      if(dMin&&vMin<r.min-1e-9){r.min=vMin;r.minG={lab:cfg.lab,p,dir,pos:[...pos]};}
+    });
+  };
+  if(!$('refineChk')||$('refineChk').checked){
+    const have={};cfgs.forEach(c=>have[c.lab]=1);
+    const newS=new Set(),newH=new Set();
+    res.forEach(r=>[r.maxG,r.minG].forEach(g=>{if(!g)return;
+      const s=g.lab.match(/ s=([\d.]+)$/),h=g.lab.match(/ H=([\d.]+)$/);
+      for(let dd=-m.hStep+0.5;dd<m.hStep-1e-9;dd+=0.5){if(Math.abs(dd)<1e-9)continue;
+        if(s&&varOK){const v=+(+s[1]+dd).toFixed(2);if(v>=m.vMin-1e-9&&v<=m.vMax+1e-9)newS.add(v);}
+        if(h){const v=+(+h[1]+dd).toFixed(2);if(v>=m.mHmin-1e-9)newH.add(v);}}}));
+    newS.forEach(sv=>{const lab=`${m.short} s=${sv}`;if(!have[lab])sweep({...mk(base,m.vK,sv),trail,scale:1,lab,sel:all});});
+    if(m.multi&&ns>1&&newH.size){
+      const v=mk(base,varOK?m.vK:0,varOK&&m.mFixed>0?m.mFixed:null),Lv=v.offs[v.offs.length-1];
+      newH.forEach(H=>{const lab=`${m.mScale}×2 ${m.short} H=${H}`;if(have[lab])return;
+        sweep({offs:[...v.offs,...v.offs.map(o=>o+Lv+H)],loads:[...v.loads,...v.loads],trail,scale:m.mScale,lab,sel:ef=>[ef.t==='R'&&ef.interior,ef.t==='M'&&ef.neg]});});
+    }
+    const byLab={};cfgs.forEach(c=>byLab[c.lab]=c);
+    res.forEach((r,ei)=>[[r.maxG,true],[r.minG,false]].forEach(([g,isMax])=>{if(!g)return;const c=byLab[g.lab];if(!c)return;
+      const p0=g.p,dr=g.dir,list=[[ei,isMax,!isMax]];
+      for(let q=-m.step;q<=m.step+1e-9;q+=0.1)refineAt(c,+(p0+q).toFixed(3),dr,list);}));
+  }
+
+  const warn=[]; let segSum=0; m.segs.slice(0,-1).forEach(s=>segSum+=s.len);
+  if(m.segs.length>1&&segSum>=Lt) warn.push('Segment lengths reach or exceed the girder length, so the last segment has zero length.');
+  if(m.segs.some(s=>s.bad)) warn.push('A segment has invalid geometry (zero area or I); a placeholder stiffness was used.');
+  if(m.vK>0&&!(m.vK>=2&&m.vK<=m.axles.length)) warn.push(`Variable spacing axle # must be between 2 and ${m.axles.length}; variable spacing was ignored.`);
+  if(m.vK>=2&&m.vMax<m.vMin) warn.push('Variable spacing maximum is less than the minimum; variable spacing was ignored.');
+  if(m.multi&&ns<2) warn.push('The multi-vehicle case needs at least two spans and is inactive for a single span.');
+  if(m.udl.mode!=='none'&&!(m.udl.w>0)) warn.push('A uniform load mode is selected but w = 0.');
+  if([...m.dfM,...m.dfV].some(v=>!(v>0))) warn.push('One or more distribution factors are zero or blank.');
+  if(m.imp.method==='const'&&m.imp.val<1) warn.push('The impact multiplier is below 1.0.');
+  if(m.axles.some(a=>!(a[0]>0))) warn.push('One or more axles have zero or negative load.');
+
+  // Engine check: unit uniform load on all spans
+  const th={1:[0.125,0.5],2:[-0.125,0.375],3:[-0.1,0.4],4:[-0.1071,0.3929]}[ns], L1=m.spans[0];
+  const mChk=ns>1?mKey[supNodes[1]]:rows.find(r=>r.k===0&&r.t===10).mi;
+  const rA=effs.findIndex(ef=>ef.t==='R'&&ef.q===0);
+  let sumR=0; effs.forEach((ef,ei)=>{if(ef.t==='R')sumR+=DER[ei].end;});
+  const check=`<div>Mesh: ${nn} nodes, ${nn-1} elements (max element ≈ ${hmax.toFixed(2)} ft). Influence lines from ${nn} unit-load solutions.</div>
+    <div>Unit uniform load on all spans, L = span 1:</div>
+    <div>• ${ns>1?'M at first interior support':'M at midspan'} = <b>${(DER[mChk].end/(L1*L1)).toFixed(4)} wL²</b> (equal spans, uniform section theory: ${th[0]} wL²)</div>
+    <div>• R_A = <b>${(DER[rA].end/L1).toFixed(4)} wL</b> (theory: ${th[1]} wL)</div>
+    <div>• ΣR / wL_total = <b>${(sumR/Lt).toFixed(4)}</b> (must equal 1.0000)</div>
+    <div class="hint">Theory values apply only when spans are equal and the section is uniform. Influence lines are exact at nodes and interpolated linearly between them.</div>`;
+
+  // ── Step-mode solver: actual loads on the girder (exact for the given EI) ──
+  const elOf=v=>{let lo=0,hi=nn-1;while(hi-lo>1){const md=(lo+hi)>>1;if(x[md]<=v)lo=md;else hi=md;}return lo;};
+  const spanOfX=v=>{for(let k=0;k<ns;k++)if(v<=sup[k+1]+1e-9)return k;return ns-1;};
+  function solveOne(pl,uW){
+    const FEF=new Float64Array(4*(nn-1)), eP=Array.from({length:nn-1},()=>[]);
+    pl.forEach(([xp,Pk])=>{if(!Pk)return;const e=elOf(xp),L=el[e],a=Math.min(L,Math.max(0,xp-x[e])),bq=L-a;eP[e].push([a,Pk]);
+      FEF[4*e]+=Pk*bq*bq*(3*a+bq)/L**3;FEF[4*e+1]+=Pk*a*bq*bq/(L*L);FEF[4*e+2]+=Pk*a*a*(a+3*bq)/L**3;FEF[4*e+3]-=Pk*a*a*bq/(L*L);});
+    if(uW)for(let e=0;e<nn-1;e++){const w=uW[e];if(!w)continue;const L=el[e];FEF[4*e]+=w*L/2;FEF[4*e+1]+=w*L*L/12;FEF[4*e+2]+=w*L/2;FEF[4*e+3]-=w*L*L/12;}
+    const F=new Float64Array(nd);for(let e=0;e<nn-1;e++)for(let q=0;q<4;q++)F[2*e+q]-=FEF[4*e+q];
+    const bb=new Float64Array(nf);for(let i=0;i<nf;i++)bb[i]=F[free[i]];
+    const y=luSolve(A,nf,bb),dd=new Float64Array(nd);for(let i=0;i<nf;i++)dd[free[i]]=y[i];
+    const f1=new Float64Array(nn-1),m1=new Float64Array(nn-1);
+    for(let e=0;e<nn-1;e++){const l=el[e],k=ek[e],v1=dd[2*e],t1=dd[2*e+1],v2=dd[2*e+2],t2=dd[2*e+3];
+      f1[e]=k*(12*v1+6*l*t1-12*v2+6*l*t2)+FEF[4*e];m1[e]=k*(6*l*v1+4*l*l*t1-6*l*v2+2*l*l*t2)+FEF[4*e+1];}
+    const rx=supNodes.map(sn=>{const r=2*sn;let s=0;for(let cc=Math.max(0,r-4);cc<Math.min(nd,r+6);cc++)s+=K[r*nd+cc]*dd[cc];return s-F[r];});
+    return {f1,m1,eP,uW,rx};
+  }
+  // Returns sampled M and V (axle part and uniform part separately, so impact can be applied per span)
+  function stepSolve(pl,ul){
+    const ulPts=[],uW=new Float64Array(nn-1);
+    ul.forEach(([a,bq,w])=>{if(!(w>0)||bq<=a)return;for(let e=elOf(a);e<nn-1&&x[e]<bq;e++){const s0=Math.max(a,x[e]),s1=Math.min(bq,x[e+1]);if(s1-s0<=1e-9)continue;if(s1-s0>=el[e]-1e-6)uW[e]+=w;else ulPts.push([(s0+s1)/2,w*(s1-s0)]);}});
+    const S1=solveOne(pl,null),S2=solveOne(ulPts,uW);
+    const ev=(S,e,s,inc)=>{let V=S.f1[e],M=-S.m1[e]+S.f1[e]*s;
+      for(const [a,Pk] of S.eP[e]){if(a<s-1e-9||(inc&&a<=s+1e-9)){V-=Pk;M-=Pk*(s-a);}}
+      if(S.uW){const w=S.uW[e];V-=w*s;M-=w*s*s/2;}return [M,V];};
+    const out=[];
+    for(let e=0;e<nn-1;e++){const L=el[e],ks=new Set([0,L]);
+      [S1,S2].forEach(S=>S.eP[e].forEach(([a])=>{if(a>1e-9&&a<L-1e-9)ks.add(a);}));
+      const sp=spanOfX(x[e]+L/2);
+      [...ks].sort((p,q)=>p-q).forEach(s=>{const vs=s<=1e-9?[true]:s>=L-1e-9?[false]:[false,true];
+        vs.forEach(inc=>{const [Ma,Va]=ev(S1,e,s,inc),[Mu,Vu]=ev(S2,e,s,inc);out.push([x[e]+s,Ma,Mu,Va,Vu,sp]);});});}
+    return {pts:out,rAx:S1.rx,rU:S2.rx};
+  }
+  function stepCase(cs,sv,H){
+    if(cs==='s'&&m.secondary&&P[m.secondary]){const v=mk(P[m.secondary].axles,0,null);return {...v,trail:null,scale:1};}
+    if(cs==='m'){const v=mk(base,varOK?m.vK:0,varOK?(sv!=null?sv:(m.mFixed>0?m.mFixed:null)):null),Lv=v.offs[v.offs.length-1],h=H!=null?H:m.mHmin;
+      return {offs:[...v.offs,...v.offs.map(o=>o+Lv+h)],loads:[...v.loads,...v.loads],trail,scale:m.mScale};}
+    const v=mk(base,varOK?m.vK:0,varOK?(sv!=null?sv:m.vMin):null);return {...v,trail,scale:1};
+  }
+  const imSpan=m.spans.map((_,k)=>imOf({spans:[k]}));
+  const effR=effs.filter(ef=>ef.t==='R'), imR=effs.map((ef,i)=>ef.t==='R'?imArr[i]:null).filter(v=>v!==null);
+
+  return {m,effs,res,rows,x,sup,Lt,IL,ends,dfOf,warn,check,supNodes,stepSolve,stepCase,varOK,imSpan,imR,effR,A,nf,fmap,nn};
+}
+
+// ═══════════ PLOTTING ═══════════
+function fmt(v,r){const a=Math.abs(r!=null?r:v);return a<2?v.toFixed(3):a<100?v.toFixed(1):v.toFixed(0);}
+function plot(cv,ser,o){
+  const dpr=window.devicePixelRatio||1,W=cv.offsetWidth||800,H=cv.offsetHeight||290;
+  cv.width=W*dpr;cv.height=H*dpr;const c=cv.getContext('2d');c.setTransform(dpr,0,0,dpr,0,0);c.clearRect(0,0,W,H);
+  const pl=68,pr=18,pt=24,pb=38,w=W-pl-pr,h=H-pt-pb;
+  let y0=0,y1=0; ser.forEach(s=>s.pts.forEach(q=>{if(q){y0=Math.min(y0,q[1]);y1=Math.max(y1,q[1]);}}));
+  if(y1-y0<1e-12){y1=1;y0=-1;} const pad=(y1-y0)*0.14; y1+=pad; y0-=pad;
+  const rg=y1-y0, X=v=>pl+v/o.Lt*w, Y=v=>pt+(y1-v)/rg*h;
+  c.font='10px Inter,Segoe UI,sans-serif'; c.lineWidth=1;
+  for(let i=0;i<=5;i++){const v=y0+rg*i/5,yy=Y(v);c.strokeStyle='#f1f5f9';c.beginPath();c.moveTo(pl,yy);c.lineTo(pl+w,yy);c.stroke();
+    c.fillStyle='#94a3b8';c.textAlign='right';c.textBaseline='middle';c.fillText(fmt(v,rg/5),pl-6,yy);}
+  c.strokeStyle='#cbd5e1';c.setLineDash([4,4]);o.sup.forEach(s=>{c.beginPath();c.moveTo(X(s),pt);c.lineTo(X(s),pt+h);c.stroke();});c.setLineDash([]);
+  c.strokeStyle='#94a3b8';c.lineWidth=1.5;c.beginPath();c.moveTo(pl,Y(0));c.lineTo(pl+w,Y(0));c.stroke();
+  c.fillStyle='#475569';o.sup.forEach(s=>{const xx=X(s),yy=pt+h+2;c.beginPath();c.moveTo(xx,yy);c.lineTo(xx-6,yy+9);c.lineTo(xx+6,yy+9);c.closePath();c.fill();});
+  c.fillStyle='#94a3b8';c.textAlign='center';c.textBaseline='top';o.sup.forEach(s=>c.fillText(s.toFixed(1)+"'",X(s),pt+h+14));
+  c.save();c.translate(14,pt+h/2);c.rotate(-Math.PI/2);c.textAlign='center';c.textBaseline='middle';c.fillStyle='#64748b';c.font='11px Inter,Segoe UI,sans-serif';c.fillText(o.ylab,0,0);c.restore();
+  ser.forEach(s=>{
+    const runs=[];let cur=[];s.pts.forEach(q=>{if(!q){if(cur.length)runs.push(cur);cur=[];}else cur.push(q);});if(cur.length)runs.push(cur);
+    if(s.fill){c.fillStyle=s.fill;runs.forEach(r=>{c.beginPath();c.moveTo(X(r[0][0]),Y(0));r.forEach(q=>c.lineTo(X(q[0]),Y(q[1])));c.lineTo(X(r[r.length-1][0]),Y(0));c.closePath();c.fill();});}
+    c.strokeStyle=s.color;c.lineWidth=s.lw||2;c.lineJoin='round';
+    runs.forEach(r=>{c.beginPath();r.forEach((q,i)=>i?c.lineTo(X(q[0]),Y(q[1])):c.moveTo(X(q[0]),Y(q[1])));c.stroke();});
+    if(s.peak){let b=null;s.pts.forEach(q=>{if(q&&(!b||(s.peak>0?q[1]>b[1]:q[1]<b[1])))b=q;});
+      if(b&&Math.abs(b[1])>1e-9){const xx=X(b[0]),yy=Y(b[1]),rt=xx>pl+w*0.75;
+        c.fillStyle=s.color;c.beginPath();c.arc(xx,yy,3.5,0,7);c.fill();
+        c.fillStyle='#1e293b';c.font='bold 11px Inter,Segoe UI,sans-serif';c.textAlign=rt?'right':'left';c.textBaseline=s.peak>0?'bottom':'top';
+        c.fillText(`${fmt(b[1])} @ ${b[0].toFixed(1)}'`,xx+(rt?-6:6),yy+(s.peak>0?-3:3));}}
+  });
+  (o.marks||[]).forEach(k=>{const xx=X(k.x);c.fillStyle=k.color;c.beginPath();
+    if(k.down){c.moveTo(xx-5,pt-13);c.lineTo(xx+5,pt-13);c.lineTo(xx,pt-4);}else{c.moveTo(xx-5,pt+h-3);c.lineTo(xx+5,pt+h-3);c.lineTo(xx,pt+h-12);}
+    c.closePath();c.fill();});
+}
+
+// ═══════════ RENDER ═══════════
+function render(){
+  if(!RES) return;
+  const R=RES,{m,effs,res,rows,x,sup,Lt,IL}=R, view=$('viewMode').value, ns=m.spans.length;
+  const F=(ei,v)=>view==='f'?m.llf*R.dfOf(effs[ei],v)*v:v, FF=(ei,v)=>m.llf*R.dfOf(effs[ei],v)*v;
+  const G=g=>g?`${g.lab} ${g.dir>0?'→':'←'} @${g.p.toFixed(1)}'`:'—';
+  // Metrics (always factored)
+  let mp=0,mn=0,vp=0,vn=0,rx=0,rxs='';
+  effs.forEach((ef,ei)=>{const a=FF(ei,res[ei].max),b=FF(ei,res[ei].min);
+    if(ef.t==='M'){mp=Math.max(mp,a);mn=Math.min(mn,b);}
+    else if(ef.t==='V'){vp=Math.max(vp,a);vn=Math.min(vn,b);}
+    else if(a>rx){rx=a;rxs='Support '+'ABCDE'[ef.q];}});
+  $('mMp').textContent=mp.toFixed(1);$('mMn').textContent=mn.toFixed(1);$('mVp').textContent=vp.toFixed(1);$('mVn').textContent=vn.toFixed(1);
+  $('mR').textContent=rx.toFixed(1);$('mRw').textContent=`kips, factored · ${rxs}`;
+  const u=view==='f'?`factored per girder (LLF ${m.llf} × DF)`:'unfactored per lane, including impact';
+  $('envNote').textContent=`Red = max (+), blue = min (−) · ${u}`; $('tblNote').textContent=`Values ${u}. Governing case, direction, and lead axle position shown for each extreme.`;
+  // Warnings
+  $('warns').classList.toggle('hidden',!R.warn.length); $('warns').innerHTML=R.warn.map(w=>'⚠ '+w).join('<br>');
+  // Envelopes
+  const cut=fn=>{const out=[];let k=-1;rows.forEach(r=>{if(k>=0&&r.k!==k)out.push(null);k=r.k;out.push([r.x,fn(r)]);});return out;};
+  plot($('cM'),[{pts:rows.map(r=>[r.x,F(r.mi,res[r.mi].max)]),color:'#ef4444',fill:'rgba(239,68,68,.12)',peak:1},
+                {pts:rows.map(r=>[r.x,F(r.mi,res[r.mi].min)]),color:'#3b82f6',fill:'rgba(59,130,246,.12)',peak:-1}],{Lt,sup,ylab:'Moment (kip-ft)'});
+  plot($('cV'),[{pts:cut(r=>F(r.vi,res[r.vi].max)),color:'#8b5cf6',fill:'rgba(139,92,246,.12)',peak:1},
+                {pts:cut(r=>F(r.vi,res[r.vi].min)),color:'#0d9488',fill:'rgba(13,148,136,.12)',peak:-1}],{Lt,sup,ylab:'Shear (kips)'});
+  // Influence line viewer
+  const tr=rows.filter(r=>r.t%2===0), sel=$('ilSec');
+  const opts=tr.map((r,i)=>`<option value="${i}">Span ${r.k+1} · ${(r.t/20).toFixed(1)}L · x=${r.x.toFixed(1)}'${r.t===0&&r.k>0?' (right of pier)':r.t===20&&r.k<ns-1?' (left of pier)':''}</option>`).join('');
+  if(sel.dataset.sig!==opts){const prev=sel.value;sel.innerHTML=opts;sel.dataset.sig=opts;sel.value=(prev!==''&&+prev<tr.length)?prev:String(ns>1?10:5);}
+  const r=tr[+sel.value]||tr[0], ty=$('ilType').value, ei=ty==='M'?r.mi:r.vi, pts=[];
+  for(let j=0;j<x.length-1;j++){const [a,b]=R.ends(ei,j);pts.push([x[j],a],[x[j+1],b]);}
+  const gmx=res[ei].maxG, gmn=res[ei].minG;
+  plot($('cIL'),[{pts,color:'#4f46e5',fill:'rgba(79,70,229,.08)',lw:2}],{Lt,sup,ylab:ty==='M'?'M per unit load (ft)':'V per unit load',
+    marks:[...(gmx?gmx.pos.map(p=>({x:p,down:true,color:'#ef4444'})):[]),...(gmn?gmn.pos.map(p=>({x:p,down:false,color:'#3b82f6'})):[])]});
+  const un=ty==='M'?'kip-ft':'kips';
+  $('ilInfo').innerHTML=`Max ${res[ei].max.toFixed(2)} ${un} per lane — ${G(gmx)}<br>Min ${res[ei].min.toFixed(2)} ${un} per lane — ${G(gmn)}`;
+  // Envelope table
+  $('envB').innerHTML=tr.map(r=>{const pier=(r.t===0&&r.k>0)||(r.t===20&&r.k<ns-1), side=r.t===0&&r.k>0?' R':r.t===20&&r.k<ns-1?' L':'', a=res[r.mi], b=res[r.vi];
+    return `<tr class="${pier?'pier':''}"><td>${r.k+1}</td><td>${r.x.toFixed(2)}${side}</td><td>${(r.t/20).toFixed(1)}</td><td class="pos">${F(r.mi,a.max).toFixed(1)}</td><td class="neg">${F(r.mi,a.min).toFixed(1)}</td><td class="pos">${F(r.vi,b.max).toFixed(1)}</td><td class="neg">${F(r.vi,b.min).toFixed(1)}</td><td class="g">${G(a.maxG)}</td><td class="g">${G(a.minG)}</td><td class="g">${G(b.maxG)} / ${G(b.minG)}</td></tr>`;}).join('');
+  // Reactions
+  $('rB').innerHTML=effs.map((ef,ei)=>ef.t!=='R'?'':`<tr><td>${'ABCDE'[ef.q]} ${ef.interior?'(pier)':'(abutment)'}</td><td>${ef.x.toFixed(1)}</td><td class="pos">${F(ei,res[ei].max).toFixed(1)}</td><td class="neg">${F(ei,res[ei].min).toFixed(1)}</td><td class="g">${G(res[ei].maxG)}</td><td class="g">${G(res[ei].minG)}</td></tr>`).join('');
+  $('check').innerHTML=R.check;
+}
+
+// ═══════════ STEP MODE ═══════════
+let stepTimer=null;
+function stepCfg(){
+  if(!RES)return null;
+  const sv=parseFloat($('sSp').value),H=parseFloat($('sH').value);
+  return RES.stepCase($('sCase').value||'p',isNaN(sv)?null:sv,isNaN(H)?null:H);
+}
+function updateStepUI(){
+  if(!RES)return; const R=RES,m=R.m;
+  const opts=[`<option value="p">${m.short}</option>`];
+  if(m.secondary&&P[m.secondary])opts.push(`<option value="s">${m.secondary}</option>`);
+  if(m.multi&&m.spans.length>1)opts.push(`<option value="m">${m.mScale}×2 ${m.short}</option>`);
+  const sc=$('sCase'),prev=sc.value,html=opts.join('');
+  if(sc.dataset.sig!==html){sc.innerHTML=html;sc.dataset.sig=html;sc.value=[...sc.options].some(o=>o.value===prev)?prev:'p';}
+  const c=sc.value;
+  $('sSpF').classList.toggle('hidden',!(R.varOK&&c!=='s'));
+  $('sHF').classList.toggle('hidden',c!=='m');
+  $('sLane').classList.toggle('hidden',m.udl.mode!=='lane');
+  if($('sSp').value==='')$('sSp').value=R.varOK?m.vMin:'';
+  if($('sH').value==='')$('sH').value=m.mHmin;
+  const cfg=stepCfg(),Lv=cfg.offs[cfg.offs.length-1],ext=Lv+(cfg.trail?cfg.trail.gap:0);
+  const sl=$('sPos');sl.min=(-ext).toFixed(2);sl.max=(R.Lt+ext).toFixed(2);sl.step=Math.max(0.1,num('sStep',1));
+  if($('sPosN').value===''){setPos(Math.min(R.Lt,(R.sup[1]||R.Lt)/2+Lv/2));return;}
+  sl.value=$('sPosN').value; drawStep();
+}
+function setPos(v){const sl=$('sPos'),lo=+sl.min,hi=+sl.max;v=Math.min(hi,Math.max(lo,v));sl.value=v;$('sPosN').value=(+v).toFixed(2);drawStep();}
+function drawLD(cv,R,loads,ul,rx){
+  const dpr=window.devicePixelRatio||1,W=cv.offsetWidth||800,H=cv.offsetHeight||170;cv.width=W*dpr;cv.height=H*dpr;
+  const c=cv.getContext('2d');c.setTransform(dpr,0,0,dpr,0,0);c.clearRect(0,0,W,H);
+  const pl=68,pr=18,w=W-pl-pr,X=v=>pl+v/R.Lt*w,by=92;
+  ul.forEach(([a,b,ww])=>{c.fillStyle='rgba(99,102,241,.15)';c.fillRect(X(a),by-18,X(b)-X(a),18);c.strokeStyle='#6366f1';c.lineWidth=1;c.strokeRect(X(a),by-18,X(b)-X(a),18);
+    c.fillStyle='#4f46e5';c.font='bold 10px Inter,sans-serif';c.textAlign='center';c.textBaseline='bottom';c.fillText(`${ww.toFixed(2)} k/ft`,(X(a)+X(b))/2,by-20);});
+  const mx=Math.max(1,...loads.map(l=>l[1]));
+  loads.forEach(([xp,Pk])=>{const xx=X(xp),hh=22+46*Pk/mx;c.strokeStyle='#ef4444';c.lineWidth=2;c.beginPath();c.moveTo(xx,by-hh);c.lineTo(xx,by-3);c.stroke();
+    c.fillStyle='#ef4444';c.beginPath();c.moveTo(xx-4,by-10);c.lineTo(xx+4,by-10);c.lineTo(xx,by-2);c.closePath();c.fill();
+    if(loads.length<=12){c.fillStyle='#b91c1c';c.font='9px Inter,sans-serif';c.textAlign='center';c.textBaseline='bottom';c.fillText(`${+Pk.toFixed(2)}k`,xx,by-hh-2);}});
+  c.fillStyle='#334155';c.fillRect(pl,by,w,5);
+  R.sup.forEach((s,q)=>{const xx=X(s);c.fillStyle='#475569';c.beginPath();c.moveTo(xx,by+5);c.lineTo(xx-8,by+18);c.lineTo(xx+8,by+18);c.closePath();c.fill();
+    c.fillStyle='#047857';c.font='bold 11px Inter,sans-serif';c.textAlign='center';c.textBaseline='top';c.fillText(`${'ABCDE'[q]}: ${rx[q].toFixed(1)} k`,xx,by+24);
+    c.fillStyle='#94a3b8';c.font='10px Inter,sans-serif';c.fillText(s.toFixed(1)+"'",xx,by+40);});
+}
+function drawStep(){
+  if(!RES)return; const R=RES,m=R.m,cfg=stepCfg(); if(!cfg)return;
+  const p=num('sPosN',0),dir=+$('sDir').value,f=$('viewMode').value==='f',Lt=R.Lt;
+  const loads=[];cfg.offs.forEach((o,a)=>{const xp=p-dir*o;if(xp>=-1e-9&&xp<=Lt+1e-9)loads.push([Math.min(Lt,Math.max(0,xp)),cfg.loads[a]*cfg.scale]);});
+  const ul=[];
+  if(cfg.trail){const s0=p-dir*(cfg.offs[cfg.offs.length-1]+cfg.trail.gap);if(dir>0){if(s0>0)ul.push([0,Math.min(s0,Lt),cfg.trail.w*cfg.scale]);}else if(s0<Lt)ul.push([Math.max(0,s0),Lt,cfg.trail.w*cfg.scale]);}
+  if(m.udl.w>0&&(m.udl.mode==='full'||(m.udl.mode==='lane'&&$('sLane').value==='full')))ul.push([0,Lt,m.udl.w*cfg.scale]);
+  const S=R.stepSolve(loads,ul),Mp=[],Vp=[];
+  S.pts.forEach(([xx,Ma,Mu,Va,Vu,sp])=>{const im=R.imSpan[sp],uf=m.imp.onUdl?im:1;let M=im*Ma+uf*Mu,V=im*Va+uf*Vu;
+    if(f){M*=m.llf*(M<0&&m.dfNeg>0?m.dfNeg:m.dfM[sp]);V*=m.llf*m.dfV[sp];}Mp.push([xx,M]);Vp.push([xx,V]);});
+  const rx=R.effR.map((ef,q)=>{const im=R.imR[q],uf=m.imp.onUdl?im:1,v=im*S.rAx[q]+uf*S.rU[q];return f?m.llf*R.dfOf(ef,v)*v:v;});
+  drawLD($('cLD'),R,loads,ul,rx);
+  plot($('cSM'),[{pts:Mp,color:'#ef4444',fill:'rgba(239,68,68,.12)',peak:1},{pts:Mp,color:'#ef4444',peak:-1}],{Lt,sup:R.sup,ylab:'Moment (kip-ft)'});
+  plot($('cSV'),[{pts:Vp,color:'#8b5cf6',fill:'rgba(139,92,246,.12)',peak:1},{pts:Vp,color:'#8b5cf6',peak:-1}],{Lt,sup:R.sup,ylab:'Shear (kips)'});
+  const ext=(arr,sg)=>arr.reduce((b,q)=>(sg>0?q[1]>b[1]:q[1]<b[1])?q:b,[0,0]);
+  const mP=ext(Mp,1),mN=ext(Mp,-1),vP=ext(Vp,1),vN=ext(Vp,-1),u=f?'factored':'per lane';
+  $('sOut').innerHTML=`<div class="met"><b>Max +M (${u})</b><span class="pos">${mP[1].toFixed(1)}</span><i>kip-ft @ ${mP[0].toFixed(1)}'</i></div>
+    <div class="met"><b>Max −M (${u})</b><span class="neg">${mN[1].toFixed(1)}</span><i>kip-ft @ ${mN[0].toFixed(1)}'</i></div>
+    <div class="met"><b>Shear +/− (${u})</b><span>${vP[1].toFixed(1)} / ${vN[1].toFixed(1)}</span><i>kips @ ${vP[0].toFixed(1)}' / ${vN[0].toFixed(1)}'</i></div>
+    <div class="met"><b>Reactions (${u})</b><span style="font-size:13px">${rx.map((r,q)=>'ABCDE'[q]+' '+r.toFixed(1)).join(' · ')}</span><i>kips, upward +</i></div>`;
+  $('stepNote').textContent=`${loads.length} axle${loads.length===1?'':'s'} on the bridge · lead axle @ ${p.toFixed(2)}' · travel ${dir>0?'→':'←'}${m.udl.mode==='lane'?' · lane shown as a physical load here (envelopes pattern it per effect)':''} · all axles counted (no axle neglect in step mode).`;
+}
+$('sPos').addEventListener('input',e=>{$('sPosN').value=(+e.target.value).toFixed(2);drawStep();});
+$('sPosN').addEventListener('input',()=>{$('sPos').value=$('sPosN').value;drawStep();});
+$('sPrev').onclick=()=>setPos(num('sPosN',0)-(+$('sDir').value)*num('sStep',1));
+$('sNext').onclick=()=>setPos(num('sPosN',0)+(+$('sDir').value)*num('sStep',1));
+$('sFirst').onclick=()=>setPos(+$('sDir').value>0?+$('sPos').min:+$('sPos').max);
+$('sLast').onclick=()=>setPos(+$('sDir').value>0?+$('sPos').max:+$('sPos').min);
+$('sPlay').onclick=()=>{
+  if(stepTimer){clearInterval(stepTimer);stepTimer=null;$('sPlay').textContent='▶ Play';return;}
+  $('sPlay').textContent='⏸ Pause';
+  stepTimer=setInterval(()=>{const d=+$('sDir').value,nx=num('sPosN',0)+d*num('sStep',1);
+    if(nx>+$('sPos').max||nx<+$('sPos').min){clearInterval(stepTimer);stepTimer=null;$('sPlay').textContent='▶ Play';return;}setPos(nx);},120);
+};
+['sCase','sDir','sSp','sH','sLane','sStep'].forEach(id=>$(id).addEventListener('input',updateStepUI));
+const _render=render; render=function(){_render();updateStepUI();};
+
+// ═══════════ VEHICLE CONFIGURATION GRAPHIC ═══════════
+function drawVehicle(){
+  if(!RES)return; const R0=RES,m=R0.m,cv=$('cVeh');
+  const dpr=window.devicePixelRatio||1,W=cv.offsetWidth||800,H=cv.offsetHeight||210;cv.width=W*dpr;cv.height=H*dpr;
+  const c=cv.getContext('2d');c.setTransform(dpr,0,0,dpr,0,0);c.clearRect(0,0,W,H);
+  const ax=m.axles; if(!ax.length)return;
+  const varOK=R0.varOK, offs=[0];
+  for(let i=1;i<ax.length;i++)offs.push(offs[i-1]+(varOK&&i+1===m.vK?m.vMin:ax[i][1]));
+  const Lv=offs[offs.length-1], tr=m.udl.mode==='trail'&&m.udl.w>0, udlS=Lv+(tr?m.udl.gap:0), tot=tr?udlS+Math.max(10,Lv*0.25):Math.max(Lv,1);
+  const pl=46,pr=46,w=W-pl-pr,X=v=>pl+v/tot*w,gy=128;
+  const Rt=ax.reduce((s,a)=>s+a[0],0), CR=Rt>0?ax.reduce((s,a,i)=>s+a[0]*offs[i],0)/Rt:0, mx=Math.max(1,...ax.map(a=>a[0]));
+  const dim=(x1,x2,y,t)=>{c.strokeStyle='#94a3b8';c.lineWidth=1;c.beginPath();c.moveTo(x1,y);c.lineTo(x2,y);c.moveTo(x1,y-4);c.lineTo(x1,y+4);c.moveTo(x2,y-4);c.lineTo(x2,y+4);c.stroke();
+    if(t){c.fillStyle='#64748b';c.font='10px Inter,sans-serif';c.textAlign='center';c.textBaseline='top';c.fillText(t,(x1+x2)/2,y+3);}};
+  // Ground line
+  c.strokeStyle='#cbd5e1';c.lineWidth=2;c.beginPath();c.moveTo(pl-12,gy);c.lineTo(pl+w+12,gy);c.stroke();
+  // Trailing uniform load
+  if(tr){const x1=X(udlS),x2=X(tot),uh=16;
+    c.fillStyle='rgba(99,102,241,.15)';c.fillRect(x1,gy-uh,x2-x1,uh);c.strokeStyle='#6366f1';c.lineWidth=1;c.strokeRect(x1,gy-uh,x2-x1,uh);
+    c.beginPath();c.moveTo(x2,gy);c.lineTo(x2-5,gy-uh*.33);c.lineTo(x2+5,gy-uh*.66);c.lineTo(x2,gy-uh);c.stroke();
+    c.fillStyle='#4f46e5';c.font='bold 10px Inter,sans-serif';c.textAlign='center';c.textBaseline='bottom';c.fillText(`${m.udl.w} k/ft trailing`,(x1+x2)/2,gy-uh-3);
+    if(m.udl.gap>0)dim(X(Lv),x1,gy+20,`gap ${m.udl.gap}'`);}
+  // Axles
+  ax.forEach((a,i)=>{const xx=X(offs[i]),hh=18+62*a[0]/mx;
+    c.strokeStyle='#ef4444';c.lineWidth=2.5;c.beginPath();c.moveTo(xx,gy-hh);c.lineTo(xx,gy-4);c.stroke();
+    c.fillStyle='#ef4444';c.beginPath();c.moveTo(xx-4.5,gy-11);c.lineTo(xx+4.5,gy-11);c.lineTo(xx,gy-2);c.closePath();c.fill();
+    c.fillStyle='#1e293b';c.font='bold 10px Inter,sans-serif';c.textAlign='center';c.textBaseline='bottom';c.fillText(`${+a[0].toFixed(2)}k`,xx,gy-hh-3);
+    c.fillStyle='#94a3b8';c.font='9px Inter,sans-serif';c.textBaseline='top';c.fillText(String(i+1),xx,gy+4);});
+  // Spacing dimensions
+  for(let i=1;i<ax.length;i++){const x1=X(offs[i-1]),x2=X(offs[i]),v=varOK&&i+1===m.vK;
+    dim(x1,x2,gy+20,(x2-x1)>26?(v?`${m.vMin}–${m.vMax}'`:`${+ax[i][1].toFixed(2)}'`):'');}
+  if(ax.length>1)dim(X(0),X(Lv),gy+44,`${+Lv.toFixed(2)}' axle 1 to axle ${ax.length}${varOK?' (at min. variable spacing)':''}`);
+  // Resultant
+  const cx=X(CR);c.strokeStyle='#2563eb';c.lineWidth=1.2;c.setLineDash([4,3]);c.beginPath();c.moveTo(cx,gy-96);c.lineTo(cx,gy);c.stroke();c.setLineDash([]);
+  c.fillStyle='#1d4ed8';c.font='bold 10px Inter,sans-serif';c.textAlign=cx<pl+80?'left':cx>pl+w-80?'right':'center';c.textBaseline='bottom';
+  c.fillText(`R = ${+Rt.toFixed(2)}k @ ${CR.toFixed(2)}' from axle 1`,cx,gy-98);
+  // Summary line
+  const udlTxt=m.udl.mode==='none'||!(m.udl.w>0)?'No uniform load':m.udl.mode==='lane'?`Lane ${m.udl.w} k/ft, patterned on influence lines`:m.udl.mode==='full'?`Uniform ${m.udl.w} k/ft, full length`:`Trailing ${m.udl.w} k/ft, ${m.udl.gap}' behind last axle${m.udl.trunc?' (truncatable)':''}`;
+  $('vehInfo').innerHTML=`<b>${m.short==='Custom'?'Custom vehicle':(P[m.short]?P[m.short].label:m.short)}</b> · ${ax.length} axles · ΣP = ${+Rt.toFixed(2)} kips · ${udlTxt} · Impact: ${m.imp.method==='const'?m.imp.val:'AREMA formula'}${m.imp.onUdl?' (incl. uniform load)':''}`+
+    `${varOK?` · Axle ${m.vK} spacing varies ${m.vMin}–${m.vMax}'`:''}${m.secondary?` · Also enveloped with ${m.secondary}`:''}${m.multi&&m.spans.length>1?` · ${m.mScale}×2-vehicle case, headway ≥ ${m.mHmin}'`:''}`;
+}
+const _render2=render; render=function(){_render2();drawVehicle();};
+
+// ═══════════ ADDED UI: fatigue preset, LLF option, AREMA L basis, deflection card ═══════════
+P['Fatigue']=HW('LRFD Fatigue Truck (30 ft)',[[8,0],[32,14],[32,30]],{udl:NOUDL,imp:{method:'const',val:1.15,onUdl:false}});
+$('lls').options[0].text='Strength I / Fatigue I (1.75)';
+$('lls').options[4].insertAdjacentHTML('beforebegin','<option value="0.80">Fatigue II (0.80)</option>');
+{const hn=$('impAF').querySelector('.hint');if(hn)hn.textContent='I% = 100/S + [40 − 3L²/1600 for L < 80 ft, else 16 + 600/(L − 30)]. Choose how L is defined below. With "span containing section", pier sections and interior reactions use the mean of the adjacent spans. Confirm the basis against the current AREMA Ch. 15 for your structure.';}
+$('impAF').insertAdjacentHTML('beforeend',`<div class="g2"><div class="f"><label>Impact length L basis</label><select id="aLb"><option value="span">Span containing section</option><option value="max">Longest span</option><option value="total">Total bridge length</option><option value="user">User-defined L</option></select></div><div class="f hidden" id="aLF"><label>User L (ft)</label><input id="aL" type="number" value="100" step="any"></div></div>`);
+$('aLb').addEventListener('input',()=>$('aLF').classList.toggle('hidden',$('aLb').value!=='user'));
+document.head.insertAdjacentHTML('beforeend','<style>#envB td,#rB td{cursor:pointer}#envB tr:hover td,#rB tr:hover td{background:#eef2ff}</style>');
+$('stepCard').insertAdjacentHTML('afterend',`<div class="card" id="deflCard">
+  <div class="ch"><div><h2>Live Load Deflection</h2><p id="dNote">Service level (LLF not applied). Uses the absolute EI of the section table.</p></div>
+    <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">
+      <div class="f" style="width:auto"><label>Load case</label><select id="dCase" style="width:auto"><option value="lrfd">LRFD 3.6.1.3.2: vehicle alone, or 25% vehicle + lane</option><option value="veh">Vehicle with its uniform load as configured</option></select></div>
+      <div class="f" style="width:96px"><label>Deflection DF</label><input id="dDF" type="number" value="1.00" step="0.01"></div>
+      <div class="f" style="width:96px"><label>Limit L /</label><input id="dLim" type="number" value="800" step="10"></div>
+      <label class="chk" style="margin-bottom:7px"><input type="checkbox" id="dIM" checked>Include impact</label>
+    </div></div>
+  <canvas id="cD" style="height:240px"></canvas>
+  <div class="tw"><table><thead><tr><th>Span</th><th>L (ft)</th><th>Max ↓ δ (in)</th><th>@ x (ft)</th><th>Allowable L/N (in)</th><th>Ratio</th><th>Max ↑ δ (in)</th><th>Governing ↓</th></tr></thead><tbody id="dB"></tbody></table></div>
+  <p class="hint" style="padding:8px 14px">Deflection DF is typically (number of lanes × multiple presence) ÷ number of girders, assuming all girders deflect equally (LRFD 2.5.2.6.2). AREMA commonly limits live load plus impact deflection to L/640; confirm the owner's criterion. Blue = max downward, teal = max upward.</p>
+</div>`);
+
+// ═══════════ LIVE LOAD DEFLECTION ═══════════
+let DEF=null;
+function deflAnalyze(){
+  const R=RES,m=R.m,{x,nn,Lt,A,nf,fmap,supNodes}=R;
+  const loc=v=>{let lo=0,hi=nn-1;while(hi-lo>1){const md=(lo+hi)>>1;if(x[md]<=v)lo=md;else hi=md;}return lo;};
+  // Sections = the 1/20 points; deflection IL by Maxwell's reciprocal theorem (inches)
+  const secs=[],seen={};
+  R.rows.forEach(r=>{const i=R.effs[r.mi].node;if(seen[i]===undefined){seen[i]=secs.length;secs.push({node:i,x:x[i],k:r.k});}});
+  const G=secs.map(s=>{const g=new Float64Array(nn);if(supNodes.includes(s.node))return g;
+    const b=new Float64Array(nf);b[fmap[2*s.node]]=-1;const y=luSolve(A,nf,b);
+    for(let j=0;j<nn;j++){const f=fmap[2*j];g[j]=f>=0?12*y[f]:0;}return g;});
+  const D=G.map(g=>{const CI=new Float64Array(nn);let lp=0,ln=0;
+    for(let j=0;j<nn-1;j++){const h=x[j+1]-x[j],a=g[j],b=g[j+1];CI[j+1]=CI[j]+(a+b)/2*h;
+      if(a>=0&&b>=0)lp+=(a+b)/2*h;else if(a<=0&&b<=0)ln+=(a+b)/2*h;else{const t=a/(a-b),A1=a*t*h/2,A2=b*(1-t)*h/2;if(a>0){lp+=A1;ln+=A2;}else{ln+=A1;lp+=A2;}}}
+    return {CI,lp,ln,end:CI[nn-1]};});
+  const mode=$('dCase').value,DF=num('dDF',1),useIM=$('dIM').checked,im=secs.map(s=>useIM?R.imSpan[s.k]:1);
+  const laneOn=m.udl.w>0&&(m.udl.mode==='lane'||m.udl.mode==='full');
+  const svs=[];if(R.varOK){for(let v=m.vMin;v<=m.vMax+1e-9;v+=m.hStep)svs.push(+v.toFixed(3));if(svs[svs.length-1]<m.vMax-1e-9)svs.push(m.vMax);}else svs.push(null);
+  const cases=[];
+  svs.forEach(sv=>{const c=R.stepCase('p',sv,null),lab=m.short+(sv!=null?` s=${sv}`:'');
+    if(mode==='lrfd'){cases.push({c,aS:1,lane:false,trail:null,lab});if(laneOn)cases.push({c,aS:0.25,lane:true,trail:null,lab:`25% ${lab} + lane`});}
+    else cases.push({c,aS:1,lane:laneOn,trail:c.trail,lab});});
+  const res=secs.map(()=>({dn:0,dnG:null,up:0,upG:null}));
+  cases.forEach(cc=>{
+    const offs=cc.c.offs,loads=cc.c.loads,nA=offs.length,Lv=offs[nA-1],tr=cc.trail,ext=Lv+(tr?tr.gap:0)+m.step;
+    for(const dir of m.dirs)for(let p=-ext;p<=Lt+ext+1e-9;p+=m.step){
+      const J=[],T=[],Pl=[];
+      for(let a=0;a<nA;a++){const xp=p-dir*offs[a];if(xp<-1e-9||xp>Lt+1e-9)continue;const j=loc(xp);J.push(j);T.push(Math.min(1,Math.max(0,(xp-x[j])/(x[j+1]-x[j]))));Pl.push(loads[a]);}
+      let sc=null;if(tr){const s0=p-dir*(Lv+tr.gap);if(dir>0){if(s0>0)sc=Math.min(s0,Lt);}else if(s0<Lt)sc=Math.max(s0,0);}
+      if(!J.length&&sc===null)continue;
+      let jc=0,tc=0;if(sc!==null){jc=loc(sc);tc=(sc-x[jc])/(x[jc+1]-x[jc]);}
+      secs.forEach((s,si)=>{const g=G[si];let v=0;for(let a=0;a<J.length;a++){const j=J[a];v+=Pl[a]*(g[j]+(g[j+1]-g[j])*T[a]);}v*=im[si]*cc.aS;
+        const uf=m.imp.onUdl&&useIM?im[si]:1;let uDn=0,uUp=0;
+        if(sc!==null){const Dd=D[si],CIs=Dd.CI[jc]+(Dd.CI[jc+1]-Dd.CI[jc])*tc,u=(dir>0?CIs:Dd.end-CIs)*tr.w*uf;uDn=uUp=u;}
+        if(cc.lane){const w=m.udl.w*uf;uDn+=m.udl.mode==='lane'?w*D[si].ln:w*D[si].end;uUp+=m.udl.mode==='lane'?w*D[si].lp:w*D[si].end;}
+        const vd=DF*(v+uDn),vu=DF*(v+uUp),r=res[si];
+        if(vd<r.dn-1e-12){r.dn=vd;r.dnG={lab:cc.lab,p,dir};}
+        if(vu>r.up+1e-12){r.up=vu;r.upG={lab:cc.lab,p,dir};}});
+    }});
+  return {secs,res};
+}
+function drawDefl(){
+  if(!RES||!DEF)return;const R=RES,m=R.m,{secs,res}=DEF;
+  plot($('cD'),[{pts:secs.map((s,i)=>[s.x,res[i].dn]),color:'#2563eb',fill:'rgba(37,99,235,.1)',peak:-1},{pts:secs.map((s,i)=>[s.x,res[i].up]),color:'#0d9488',fill:'rgba(13,148,136,.1)',peak:1}],{Lt:R.Lt,sup:R.sup,ylab:'Deflection (in)'});
+  const N=Math.max(1,num('dLim',800));
+  $('dB').innerHTML=m.spans.map((L,k)=>{let b={v:0,x:R.sup[k],g:null},up=0;
+    secs.forEach((s,i)=>{if(s.x<R.sup[k]-1e-9||s.x>R.sup[k+1]+1e-9)return;if(res[i].dn<b.v)b={v:res[i].dn,x:s.x,g:res[i].dnG};if(res[i].up>up)up=res[i].up;});
+    const al=L*12/N,ratio=Math.abs(b.v)/al;
+    return `<tr><td>${k+1}</td><td>${L.toFixed(1)}</td><td class="neg">${b.v.toFixed(3)}</td><td>${b.x.toFixed(1)}</td><td>${al.toFixed(3)}</td><td style="font-weight:700;color:${ratio>1?'#dc2626':'#059669'}">${ratio.toFixed(2)} ${ratio>1?'✗':'✓'}</td><td class="pos">${up.toFixed(3)}</td><td class="g">${b.g?`${b.g.lab} ${b.g.dir>0?'→':'←'} @${b.g.p.toFixed(1)}'`:'—'}</td></tr>`;}).join('');
+  $('dNote').textContent=`Service level (LLF not applied) · DF ${num('dDF',1)} · ${$('dIM').checked?'impact included':'no impact'} · absolute EI from the section table (E = ${m.E} ksi)`;
+}
+['dCase','dDF','dLim','dIM'].forEach(id=>$(id).addEventListener('input',()=>{if(RES){try{DEF=deflAnalyze();}catch(e){console.error(e);}drawDefl();}}));
+
+// ═══════════ JUMP TO GOVERNING POSITION ═══════════
+function jumpTo(ei,isMax){
+  const R=RES,m=R.m,r=R.res[ei],g=isMax?r.maxG:r.minG; if(!g)return;
+  let cs='p',sv=null,H=null;
+  if(g.lab.startsWith(`${m.mScale}×2 `)){cs='m';const h=g.lab.match(/H=([\d.]+)/);H=h?+h[1]:null;}
+  else if(g.lab===m.secondary&&g.lab!==m.short)cs='s';
+  else{const s=g.lab.match(/ s=([\d.]+)/);sv=s?+s[1]:null;}
+  updateStepUI();$('sCase').value=cs;$('sDir').value=String(g.dir);
+  if(cs==='m'){if(R.varOK)$('sSp').value=m.mFixed>0?m.mFixed:m.vMin;if(H!=null)$('sH').value=H;}else if(sv!=null)$('sSp').value=sv;
+  updateStepUI();setPos(g.p);
+  const v=r[isMax?'max':'min'],ef=R.effs[ei],f=$('viewMode').value==='f',val=f?m.llf*R.dfOf(ef,v)*v:v;
+  const what=ef.t==='M'?'moment':ef.t==='V'?'shear':'reaction';
+  $('stepNote').textContent+=` — Loaded governing ${isMax?'max':'min'} ${what} at x = ${ef.x.toFixed(2)}' (envelope value ${val.toFixed(2)}).`+
+    (m.udl.mode==='lane'?' The envelope patterns the lane per effect; set Lane to full or none here, so totals differ by the lane portion.':'')+
+    (m.neglect?' The envelope may neglect non-contributing axles; step mode counts all axles.':'');
+  $('stepCard').scrollIntoView({behavior:'smooth',block:'start'});
+}
+$('envB').addEventListener('click',e=>{const td=e.target.closest('td'),tr=e.target.closest('tr');if(!td||!tr||!RES)return;
+  const row=RES.rows.filter(r=>r.t%2===0)[[...tr.parentNode.children].indexOf(tr)];if(!row)return;
+  const t={3:[row.mi,1],7:[row.mi,1],4:[row.mi,0],8:[row.mi,0],5:[row.vi,1],6:[row.vi,0],9:[row.vi,1]}[td.cellIndex];if(t)jumpTo(t[0],!!t[1]);});
+$('rB').addEventListener('click',e=>{const td=e.target.closest('td'),tr=e.target.closest('tr');if(!td||!tr||!RES)return;
+  const ef=RES.effR[[...tr.parentNode.children].indexOf(tr)];if(!ef)return;const ei=RES.effs.indexOf(ef);
+  const t={2:1,4:1,3:0,5:0}[td.cellIndex];if(t!==undefined)jumpTo(ei,!!t);});
+
+// Wrap run/render so deflection and notes stay in sync
+const _run0=run; run=function(){_run0();if(RES){try{DEF=deflAnalyze();}catch(e){console.error(e);DEF=null;}drawDefl();}};
+const _render3=render; render=function(){_render3();drawDefl();const n=$('tblNote');if(n)n.textContent+=' Click any value or governing case to load it into step mode (reactions table too).';};
+
+// ═══════════ GIRDER SECTION INPUTS ON THE INPUT PANEL ═══════════
+document.head.insertAdjacentHTML('beforeend','<style>.segb{border:1px solid #e2e8f0;border-radius:8px;padding:9px;background:#f8fafc;display:flex;flex-direction:column;gap:7px}.segh{display:flex;justify-content:space-between;align-items:center;font-size:11px;color:#475569}.segh b{color:#1e293b}.segp{font-size:10.5px;color:#64748b;line-height:1.55;border-top:1px dashed #e2e8f0;padding-top:6px}#segList{display:flex;flex-direction:column;gap:8px}</style>');
+{
+  const first=document.querySelector('aside details');
+  first.insertAdjacentHTML('afterend',`<details open id="secPanel"><summary>Girder Section</summary><div class="pb">
+    <div id="compRow"></div>
+    <div class="lbl">Deck (inches)</div>
+    <div id="deckHold"></div>
+    <div class="lbl" style="margin-top:4px">Steel segments — from left abutment; last segment runs to the right abutment</div>
+    <div id="segList"></div>
+    <div style="display:flex;gap:6px" id="segBtns"></div>
+    <p class="hint">Uncracked short-term composite properties (LRFD 6.10.1.5). Only relative stiffness affects V, M, and R; absolute EI matters for deflection.</p>
+  </div></details>`);
+  $('compRow').appendChild($('comp').closest('label'));
+  const dk=$('deckF');dk.className='g2';dk.style.cssText='';$('deckHold').appendChild(dk);
+  $('segBtns').appendChild($('segAdd'));$('segBtns').appendChild($('segDel'));
+  $('secCard').style.display='none';
+  const h=first.querySelector('.hint');if(h)h.textContent='Pinned supports. Deck, girder segments, and flange transitions are defined in the Girder Section panel below.';
+}
+renderSegs=function(){
+  $('segList').innerHTML=segs.map((s,i)=>{
+    const last=i===segs.length-1;
+    const inp=(k,lab)=>`<div class="f"><label>${lab}</label><input data-i="${i}" data-k="${k}" type="number" step="any" value="${k==='Io'&&!s.Io?'':s[k]}" ${k==='Io'?'placeholder="Computed"':''}></div>`;
+    return `<div class="segb"><div class="segh"><b>Segment ${i+1}</b><span id="sx${i}"></span></div>
+      <div class="g2">${last?'<div class="f"><label>Length (ft)</label><input disabled placeholder="To end"></div>':inp('len','Length (ft)')}${inp('Io','I override (in⁴)')}</div>
+      <div class="g2">${inp('bt','Top flange b')}${inp('tt','Top flange t')}${inp('D','Web depth D')}${inp('tw','Web thickness')}${inp('bb','Bot flange b')}${inp('tb','Bot flange t')}</div>
+      <div class="segp" id="sp${i}"></div></div>`;
+  }).join('');
+  updateProps();
+};
+updateProps=function(){
+  const dk=deckRead(),Lt=totalL();let c=0;
+  segs.forEach((s,i)=>{
+    const last=i===segs.length-1,len=last?Math.max(0,Lt-c):Math.max(0,Math.min(s.len,Lt-c)),p=props(s,dk);
+    $('sx'+i).textContent=`x = ${c.toFixed(1)} – ${(c+len).toFixed(1)} ft`;c+=len;
+    $('sp'+i).innerHTML=`A ${p.A.toFixed(1)} in² · ȳ ${p.yb.toFixed(2)} in from bottom · I ${Math.round(p.I).toLocaleString()} in⁴${s.Io>0?' <b>(override used)</b>':''}<br>S bot steel ${p.Sbs.toFixed(0)} · S top steel ${p.Sts.toFixed(0)}${p.Sdk?` · S deck (n·I/c) ${p.Sdk.toFixed(0)}`:''} in³`;
+  });
+  $('deckF').style.opacity=dk.comp?1:.45;
+};
+document.querySelector('aside').addEventListener('input',e=>{
+  const t=e.target;
+  if(t.dataset.k){segs[+t.dataset.i][t.dataset.k]=parseFloat(t.value)||0;updateProps();}
+  else if(['comp','dn','dbeff','dts','dth','dinc'].includes(t.id))updateProps();
+});
+
+// ═══════════ PRINT REPORT (multi-vehicle) ═══════════
+document.head.insertAdjacentHTML('beforeend','<style>.mdl{position:fixed;inset:0;background:rgba(15,23,42,.6);display:flex;align-items:center;justify-content:center;z-index:100}.mdlc{background:#fff;border-radius:12px;padding:20px;width:min(600px,92vw);max-height:90vh;overflow:auto;display:flex;flex-direction:column;gap:10px}.mdlc h3{font-size:16px}.rveh{display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;border:1px solid #e2e8f0;border-radius:8px;padding:10px;background:#f8fafc}.btn.pri{background:#4f46e5;color:#fff;border-color:#4338ca}.mdla{display:flex;justify-content:flex-end;gap:8px;margin-top:4px}</style>');
+$('runBtn').insertAdjacentHTML('beforebegin','<button class="hb" id="rptBtn">🖨 Print Report</button>');
+document.body.insertAdjacentHTML('beforeend',`<div id="rptModal" class="mdl hidden"><div class="mdlc">
+  <h3>Print Report</h3>
+  <p class="hint">Each selected vehicle is analyzed with its own preset rules (uniform load, impact method, variable spacing, secondary vehicle, multi-vehicle case). Spans, girder section, distribution factors, LLF, and step sizes are shared.</p>
+  <div class="g2"><div class="f"><label>Project</label><input id="rProj"></div><div class="f"><label>Computed by</label><input id="rBy"></div></div>
+  <div class="lbl">Vehicles</div><div id="rVeh" class="rveh"></div>
+  <div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn" id="rAll">All presets</button><button class="btn" id="rNone">None</button><button class="btn" id="rHwy">Highway</button><button class="btn" id="rRail">Rail</button></div>
+  <label class="chk"><input type="checkbox" id="rFac" checked>Factored per girder (uncheck for unfactored per lane)</label>
+  <label class="chk"><input type="checkbox" id="rDefl" checked>Include live load deflection</label>
+  <label class="chk"><input type="checkbox" id="rTab">Include tenth-point envelope table for each vehicle</label>
+  <div class="mdla"><button class="btn" id="rCancel">Cancel</button><button class="btn pri" id="rGo">Generate Report</button></div>
+</div></div>`);
+const HWY=['HL93-Truck','HL93-Tandem','HS20','H20','Fatigue'];
+const esc=s=>String(s||'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+function buildRptList(){
+  const cur=$('preset').value;
+  $('rVeh').innerHTML=`<label class="chk" style="grid-column:1/-1"><input type="checkbox" value="__current">Current vehicle as configured (${cur==='Custom'?'custom axles':P[cur].label})</label>`+
+    Object.entries(P).map(([k,p])=>`<label class="chk"><input type="checkbox" value="${k}" checked>${p.label}</label>`).join('');
+}
+const rSet=fn=>$('rVeh').querySelectorAll('input').forEach(c=>c.checked=fn(c.value));
+$('rptBtn').onclick=()=>{buildRptList();$('rptModal').classList.remove('hidden');};
+$('rCancel').onclick=()=>$('rptModal').classList.add('hidden');
+$('rAll').onclick=()=>rSet(v=>v!=='__current');
+$('rNone').onclick=()=>rSet(()=>false);
+$('rHwy').onclick=()=>rSet(v=>HWY.includes(v));
+$('rRail').onclick=()=>rSet(v=>v!=='__current'&&!HWY.includes(v));
+$('rGo').onclick=()=>{
+  const keys=[...$('rVeh').querySelectorAll('input:checked')].map(c=>c.value);
+  if(!keys.length){alert('Select at least one vehicle.');return;}
+  const win=window.open('','_blank');
+  if(!win){alert('Please allow pop-ups for this page to generate the report.');return;}
+  win.document.write('<p style="font-family:sans-serif;padding:30px">Generating report…</p>');
+  $('rptModal').classList.add('hidden');
+  genReport(keys,{proj:$('rProj').value,by:$('rBy').value,defl:$('rDefl').checked,tab:$('rTab').checked,fac:$('rFac').checked},win);
+};
+function modelFor(k){
+  const m=readModel(); if(k==='__current') return m;
+  const p=P[k];
+  return {...m,axles:p.axles.map(a=>[...a]),short:k,udl:{...p.udl},vK:p.vary.k,vMin:p.vary.min,vMax:p.vary.max,neglect:p.neglect,
+    secondary:p.secondary,multi:p.multi.on,mScale:p.multi.scale,mHmin:p.multi.hmin,mFixed:p.multi.fixed,
+    imp:{...m.imp,method:p.imp.method,val:p.imp.val,onUdl:p.imp.onUdl}};
+}
+function offPlot(series,o,w=1100,h=300){
+  const cv=document.createElement('canvas');cv.style.cssText=`position:fixed;left:-99999px;top:0;width:${w}px;height:${h}px`;
+  document.body.appendChild(cv);plot(cv,series,o);const u=cv.toDataURL('image/png');cv.remove();return u;
+}
+function envData(R,fac){
+  const {m,effs,res,rows}=R, F=(ei,v)=>fac?m.llf*R.dfOf(effs[ei],v)*v:v;
+  const cut=fn=>{const o=[];let k=-1;rows.forEach(r=>{if(k>=0&&r.k!==k)o.push(null);k=r.k;o.push([r.x,fn(r)]);});return o;};
+  return {F,
+    M:[{pts:rows.map(r=>[r.x,F(r.mi,res[r.mi].max)]),color:'#ef4444',fill:'rgba(239,68,68,.12)',peak:1},{pts:rows.map(r=>[r.x,F(r.mi,res[r.mi].min)]),color:'#3b82f6',fill:'rgba(59,130,246,.12)',peak:-1}],
+    V:[{pts:cut(r=>F(r.vi,res[r.vi].max)),color:'#8b5cf6',fill:'rgba(139,92,246,.12)',peak:1},{pts:cut(r=>F(r.vi,res[r.vi].min)),color:'#0d9488',fill:'rgba(13,148,136,.12)',peak:-1}]};
+}
+function extremes(R,F){
+  const pick=(t,isMax)=>{let b=null;R.effs.forEach((ef,ei)=>{if(ef.t!==t)return;const v=F(ei,isMax?R.res[ei].max:R.res[ei].min);
+    if(!b||(isMax?v>b.v:v<b.v))b={v,x:ef.x,g:isMax?R.res[ei].maxG:R.res[ei].minG,ef};});return b;};
+  return {Mp:pick('M',1),Mn:pick('M',0),Vp:pick('V',1),Vn:pick('V',0),Rp:pick('R',1),Rn:pick('R',0)};
+}
+async function genReport(keys,o,win){
+  const saved=RES,savedD=DEF,out=[],base=readModel(),dk=deckRead();
+  try{
+    for(let i=0;i<keys.length;i++){
+      const k=keys[i];
+      try{win.document.body.innerHTML=`<p style="font-family:sans-serif;padding:30px">Analyzing ${i+1} of ${keys.length}: ${k==='__current'?'current vehicle':P[k].label}…</p>`;}catch(e){}
+      await new Promise(r=>setTimeout(r,20));
+      const m=modelFor(k),R=analyze(m); RES=R;
+      let D=null; if(o.defl){try{D=deflAnalyze();}catch(e){console.error(e);}}
+      drawVehicle(); const veh=$('cVeh').toDataURL('image/png'), info=$('vehInfo').innerHTML;
+      const E=envData(R,o.fac);
+      const mImg=offPlot(E.M,{Lt:R.Lt,sup:R.sup,ylab:'Moment (kip-ft)'}), vImg=offPlot(E.V,{Lt:R.Lt,sup:R.sup,ylab:'Shear (kips)'});
+      const dImg=D?offPlot([{pts:D.secs.map((s,j)=>[s.x,D.res[j].dn]),color:'#2563eb',fill:'rgba(37,99,235,.1)',peak:-1},{pts:D.secs.map((s,j)=>[s.x,D.res[j].up]),color:'#0d9488',fill:'rgba(13,148,136,.1)',peak:1}],{Lt:R.Lt,sup:R.sup,ylab:'Deflection (in)'},1100,240):null;
+      out.push({k,R,D,E,X:extremes(R,E.F),veh,info,mImg,vImg,dImg,name:k==='__current'?`As configured (${m.short==='Custom'?'custom axles':m.short})`:P[k].label});
+    }
+    RES=saved;DEF=savedD;render();
+    win.document.open();win.document.write(reportHTML(out,o,base,dk));win.document.close();
+  }catch(e){
+    RES=saved;DEF=savedD;render();console.error(e);
+    try{win.document.body.innerHTML=`<p style="font-family:sans-serif;padding:30px;color:#b91c1c">Report failed: ${esc(e.message)}</p>`;}catch(_){}
+  }
+}
+function reportHTML(out,o,base,dk){
+  const N=Math.max(1,num('dLim',800)), unit=o.fac?`factored per girder (LLF ${base.llf} × DF)`:'unfactored per lane, including impact';
+  const f1=v=>(+v).toFixed(1), G=g=>g?`${g.lab} ${g.dir>0?'→':'←'} lead axle @ ${g.p.toFixed(1)}'`:'—';
+  const Lt=base.spans.reduce((a,b)=>a+b,0);
+  const loc=(R,x)=>{const s=R.sup;let k=0;while(k<s.length-2&&x>s[k+1]+1e-6)k++;return `Span ${k+1}, ${((x-s[k])/(s[k+1]-s[k])).toFixed(2)}L`;};
+  const dRatio=r=>{if(!r.D)return null;let mx=0;r.R.m.spans.forEach((L,k)=>r.D.secs.forEach((s,j)=>{if(s.x>=r.R.sup[k]-1e-9&&s.x<=r.R.sup[k+1]+1e-9)mx=Math.max(mx,Math.abs(r.D.res[j].dn)/(L*12/N));}));return mx;};
+  // Summary with governing cell per column
+  const cols=[r=>r.X.Mp.v,r=>r.X.Mn.v,r=>r.X.Vp.v,r=>r.X.Vn.v,r=>r.X.Rp.v,r=>dRatio(r)];
+  const best=cols.map(fn=>{let b=-1,bv=-1;out.forEach((r,i)=>{const v=fn(r);if(v!=null&&Math.abs(v)>bv){bv=Math.abs(v);b=i;}});return b;});
+  const cell=(ci,i,t)=>`<td class="${best[ci]===i?'gv':''}">${t}</td>`;
+  const summ=out.map((r,i)=>`<tr><td>${esc(r.name)}</td>${cell(0,i,`${f1(r.X.Mp.v)}<small>@ ${r.X.Mp.x.toFixed(1)}'</small>`)}${cell(1,i,`${f1(r.X.Mn.v)}<small>@ ${r.X.Mn.x.toFixed(1)}'</small>`)}${cell(2,i,`${f1(r.X.Vp.v)}<small>@ ${r.X.Vp.x.toFixed(1)}'</small>`)}${cell(3,i,`${f1(r.X.Vn.v)}<small>@ ${r.X.Vn.x.toFixed(1)}'</small>`)}${cell(4,i,`${f1(r.X.Rp.v)}<small>Support ${'ABCDE'[r.X.Rp.ef.q]}</small>`)}${o.defl?cell(5,i,dRatio(r)!=null?dRatio(r).toFixed(2):'—'):''}</tr>`).join('');
+  // Inputs
+  let c=0;
+  const segRows=base.segs.map((s,i)=>{const last=i===base.segs.length-1,len=last?Math.max(0,Lt-c):Math.max(0,Math.min(s.len,Lt-c)),p=props(s,dk),a=c;c+=len;
+    return `<tr><td>${i+1}</td><td>${a.toFixed(1)}–${(a+len).toFixed(1)}</td><td>${s.bt} × ${s.tt}</td><td>${s.D} × ${s.tw}</td><td>${s.bb} × ${s.tb}</td><td>${p.A.toFixed(1)}</td><td>${p.yb.toFixed(2)}</td><td>${Math.round(s.Io>0?s.Io:p.I).toLocaleString()}${s.Io>0?' *':''}</td><td>${p.Sbs.toFixed(0)}</td><td>${p.Sts.toFixed(0)}</td><td>${p.Sdk?p.Sdk.toFixed(0):'—'}</td></tr>`;}).join('');
+  const inp=[['Spans',`${base.spans.join(' + ')} = ${Lt} ft, pinned supports`],
+    ['Live load stiffness',dk.comp?`Uncracked short-term composite, n = ${dk.n}, b_eff = ${dk.beff} in, t_s = ${dk.ts} in, haunch ${dk.th} in (${dk.inclH?'included':'excluded'})`:'Steel section alone'],
+    ['E',`${base.E} ksi`],['Live load factor',base.llf],
+    ['Distribution factors',base.spans.map((_,k)=>`Span ${k+1}: moment ${base.dfM[k]}, shear ${base.dfV[k]}`).join(' · ')+(base.dfNeg>0?` · negative moment ${base.dfNeg}`:'')],
+    ['AREMA impact inputs (rail presets)',`S = ${base.imp.S} ft${base.imp.bal?', ballasted deck (90%)':''}, L basis: ${$('aLb')?$('aLb').selectedOptions[0].text:'span'}`],
+    ['Analysis',`Position step ${base.step} ft, spacing/headway step ${base.hStep} ft, ${base.dirs.length>1?'both travel directions':'one travel direction'}`],
+    ['Results basis',unit]];
+  if(o.defl)inp.push(['Deflection',`${$('dCase').selectedOptions[0].text}; DF ${num('dDF',1)}; ${$('dIM').checked?'with':'without'} impact; limit L/${N}`]);
+  // Per-vehicle sections
+  const veh=out.map((r,i)=>{
+    const R=r.R,X=r.X,F=r.E.F;
+    const kv=[['Max +M',X.Mp,'kip-ft'],['Max −M',X.Mn,'kip-ft'],['Max +V',X.Vp,'kips'],['Max −V',X.Vn,'kips'],['Max reaction',X.Rp,'kips'],['Min reaction (uplift if negative)',X.Rn,'kips']]
+      .map(([lab,b,u])=>`<tr><td>${lab}</td><td><b>${f1(b.v)}</b> ${u}</td><td>${b.ef.t==='R'?`Support ${'ABCDE'[b.ef.q]} (x = ${b.x.toFixed(1)}')`:`x = ${b.x.toFixed(2)}' (${loc(R,b.x)})`}</td><td>${G(b.g)}</td></tr>`).join('');
+    const rx=R.effs.map((ef,ei)=>ef.t!=='R'?'':`<tr><td>${'ABCDE'[ef.q]} ${ef.interior?'(pier)':'(abutment)'}</td><td>${ef.x.toFixed(1)}</td><td>${f1(F(ei,R.res[ei].max))}</td><td>${f1(F(ei,R.res[ei].min))}</td><td>${G(R.res[ei].maxG)}</td><td>${G(R.res[ei].minG)}</td></tr>`).join('');
+    let dsec='';
+    if(r.D){const rows=R.m.spans.map((L,k)=>{let b={v:0,x:R.sup[k],g:null};
+        r.D.secs.forEach((s,j)=>{if(s.x<R.sup[k]-1e-9||s.x>R.sup[k+1]+1e-9)return;if(r.D.res[j].dn<b.v)b={v:r.D.res[j].dn,x:s.x,g:r.D.res[j].dnG};});
+        const al=L*12/N,ra=Math.abs(b.v)/al;
+        return `<tr><td>${k+1}</td><td>${b.v.toFixed(3)}</td><td>${b.x.toFixed(1)}</td><td>${al.toFixed(3)}</td><td class="${ra>1?'ng':'ok'}">${ra.toFixed(2)} ${ra>1?'✗':'✓'}</td><td>${G(b.g)}</td></tr>`;}).join('');
+      dsec=`<h3>Live Load Deflection</h3><div class="img"><img src="${r.dImg}"></div><table><thead><tr><th>Span</th><th>Max ↓ δ (in)</th><th>@ x (ft)</th><th>L/${N} (in)</th><th>Ratio</th><th>Governing</th></tr></thead><tbody>${rows}</tbody></table>`;}
+    let tsec='';
+    if(o.tab){const tr=R.rows.filter(q=>q.t%2===0);
+      tsec=`<h3>Tenth-Point Envelope</h3><table><thead><tr><th>Span</th><th>x (ft)</th><th>x/L</th><th>+M</th><th>−M</th><th>+V</th><th>−V</th></tr></thead><tbody>${tr.map(q=>`<tr><td>${q.k+1}</td><td>${q.x.toFixed(2)}</td><td>${(q.t/20).toFixed(1)}</td><td>${f1(F(q.mi,R.res[q.mi].max))}</td><td>${f1(F(q.mi,R.res[q.mi].min))}</td><td>${f1(F(q.vi,R.res[q.vi].max))}</td><td>${f1(F(q.vi,R.res[q.vi].min))}</td></tr>`).join('')}</tbody></table>`;}
+    return `<section class="pb"><h2>${i+3}. ${esc(r.name)}</h2>
+      ${R.warn.length?`<p class="wn">⚠ ${R.warn.join('<br>⚠ ')}</p>`:''}
+      <div class="img"><img src="${r.veh}"></div><p class="info">${r.info}</p>
+      <h3>Governing Results — ${unit}</h3>
+      <table class="kv"><thead><tr><th>Result</th><th>Value</th><th>Location</th><th>Governing case / vehicle position</th></tr></thead><tbody>${kv}</tbody></table>
+      <h3>Moment Envelope</h3><div class="img"><img src="${r.mImg}"></div>
+      <h3>Shear Envelope</h3><div class="img"><img src="${r.vImg}"></div>
+      <h3>Support Reactions</h3><table><thead><tr><th>Support</th><th>x (ft)</th><th>Max</th><th>Min</th><th>Gov. max</th><th>Gov. min</th></tr></thead><tbody>${rx}</tbody></table>
+      ${dsec}${tsec}</section>`;
+  }).join('');
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>BridgeLoad Pro Report</title><style>
+    body{font-family:'Segoe UI',Arial,sans-serif;color:#1e293b;max-width:1050px;margin:0 auto;padding:32px;font-size:12.5px}
+    h1{font-size:22px;color:#0f172a;border-bottom:3px solid #4f46e5;padding-bottom:8px;margin-bottom:16px}
+    h2{font-size:15px;color:#1e3a8a;margin:22px 0 10px;border-bottom:1px solid #cbd5e1;padding-bottom:5px}
+    h3{font-size:12px;color:#334155;margin:16px 0 6px;text-transform:uppercase;letter-spacing:.04em}
+    table{width:100%;border-collapse:collapse;margin-bottom:10px}th,td{border:1px solid #e2e8f0;padding:5px 8px;text-align:right;vertical-align:top}
+    th{background:#1e3a8a;color:#fff;font-size:10.5px;text-transform:uppercase;letter-spacing:.03em}td:first-child,th:first-child{text-align:left}
+    table.kv td:nth-child(n+3){text-align:left}td.gv{background:#fef3c7;font-weight:700}td small{display:block;color:#64748b;font-weight:400;font-size:10px}
+    .hdr td{text-align:left}.hdr td:first-child{width:26%;background:#f8fafc;font-weight:600;color:#475569}
+    .ok{color:#059669;font-weight:700}.ng{color:#dc2626;font-weight:700}
+    .img{border:1px solid #e2e8f0;border-radius:6px;overflow:hidden;margin-bottom:8px;page-break-inside:avoid}img{width:100%;display:block}
+    .info{font-size:11px;color:#475569;margin:4px 0 8px}.wn{background:#fef3c7;padding:8px 10px;border-radius:6px;font-size:11px;color:#78350f}
+    .pb{page-break-before:always}.btn{background:#4f46e5;color:#fff;border:none;padding:9px 20px;border-radius:6px;font-size:14px;font-weight:600;cursor:pointer}
+    @media print{.np{display:none}body{padding:0}}
+  </style></head><body>
+  <div class="np" style="text-align:right;margin-bottom:16px"><button class="btn" onclick="window.print()">Print / Save as PDF</button></div>
+  <h1>Bridge Moving Load Analysis Report</h1>
+  <table class="hdr"><tr><td>Project</td><td>${esc(o.proj)||'&nbsp;'}</td></tr><tr><td>Computed by</td><td>${esc(o.by)||'&nbsp;'}</td></tr><tr><td>Date</td><td>${new Date().toLocaleDateString()}</td></tr><tr><td>Vehicles analyzed</td><td>${out.map(r=>esc(r.name)).join(', ')}</td></tr></table>
+  <h2>1. Structure &amp; Analysis Inputs</h2>
+  <table class="hdr">${inp.map(([a,b])=>`<tr><td>${a}</td><td>${b}</td></tr>`).join('')}</table>
+  <h3>Girder Segments (* = I override used for stiffness)</h3>
+  <table><thead><tr><th>#</th><th>x (ft)</th><th>Top flg b × t</th><th>Web D × t</th><th>Bot flg b × t</th><th>A (in²)</th><th>ȳ (in)</th><th>I (in⁴)</th><th>S bot stl</th><th>S top stl</th><th>S deck</th></tr></thead><tbody>${segRows}</tbody></table>
+  <h2>2. Summary — All Vehicles (${unit})</h2>
+  <table><thead><tr><th>Vehicle</th><th>Max +M (kip-ft)</th><th>Max −M (kip-ft)</th><th>Max +V (kips)</th><th>Max −V (kips)</th><th>Max R (kips)</th>${o.defl?'<th>Defl. ratio</th>':''}</tr></thead><tbody>${summ}</tbody></table>
+  <p class="info">Highlighted cells govern their column. Each vehicle uses its own preset rules; spans, section, DFs, and LLF are shared${o.fac?', so confirm the DFs entered apply to every vehicle listed (rail and highway DFs usually differ)':''}.</p>
+  ${veh}
+  <p style="text-align:center;color:#94a3b8;font-size:10px;margin-top:30px">Generated by BridgeLoad Pro — Continuous · ${new Date().toLocaleString()}</p>
+  </body></html>`;
+}
+
+// ═══════════ BENCHMARK: FHWA LRFD STEEL GIRDER SUPERSTRUCTURE DESIGN EXAMPLE ═══════════
+$('runBtn').insertAdjacentHTML('beforebegin','<button class="hb" id="bmBtn">✔ Benchmark</button>');
+$('warns').insertAdjacentHTML('afterend',`<div class="card hidden" id="bmCard"><div class="ch"><div><h2>Benchmark — FHWA LRFD Steel Girder Superstructure Design Example</h2><p>Two-span 120 ft + 120 ft composite plate girder, interior girder, HL-93 (Design Step 3.5, Table 3-10); fatigue (Tables 3-11 to 3-13); deflection (Step 3.15)</p></div><button class="btn" id="bmClose">Close</button></div><div id="bmBody" class="pb"></div></div>`);
+const FHWA={pM:[0,836,1422,1766,1908,1857,1628,1318,1006,865,983],nM:[0,-324,-583,-777,-905,-968,-966,-966,-1097,-1593,-2450],
+  pV:[110.5,93.7,76.6,61.0,49.6,42.5,37.1,33.5,32.1,33.0,35.8],nV:[-33.8,-28.7,-29.1,-36.4,-47.8,-62.2,-76.7,-91.1,-105.1,-118.5,-131.4]};
+function loadBenchmark(){
+  $('nSpans').value='2';renderSpans();$('L0').value=120;$('L1').value=120;
+  const A={bt:14,tt:0.625,D:54,tw:0.5,bb:14,tb:0.875},B={bt:14,tt:1.25,D:54,tw:0.5,bb:14,tb:1.375},C={bt:14,tt:2.5,D:54,tw:0.5,bb:14,tb:2.75};
+  segs=[{...A,len:84,Io:66340.3},{...B,len:24,Io:84193.7},{...C,len:12,Io:130196.1},{...C,len:12,Io:130196.1},{...B,len:24,Io:84193.7},{...A,len:0,Io:66340.3}];
+  $('comp').checked=true;$('dn').value=8;$('dbeff').value=103;$('dts').value=8;$('dth').value=2.875;$('dinc').checked=false;
+  $('preset').value='HL93-Truck';applyPreset('HL93-Truck');
+  $('bothDir').checked=true;$('step').value=1;$('hStep').value=2;$('Es').value=29000;
+  $('lls').value='1.00';$('llf').value=1;
+  ['0','1'].forEach(i=>{$('dfm'+i).value=0.696;$('dfv'+i).value=0.935;});$('dfNeg').value='';
+  $('viewMode').value='f';
+  $('dCase').value='lrfd';$('dDF').value=0.51;$('dIM').checked=true;$('dLim').value=800;
+  renderSegs();syncVis();run();
+}
+function benchmarkReport(){
+  if(!RES)return;
+  const R=RES,m=R.m,F=(ei,v)=>m.llf*R.dfOf(R.effs[ei],v)*v;
+  const tr=R.rows.filter(r=>r.k===0&&r.t%2===0);
+  const pct=(a,b)=>b===0?null:(a-b)/Math.abs(b)*100;
+  const cls=p=>p==null?'':Math.abs(p)<=2?'pos':Math.abs(p)<=5?'':'neg';
+  const fmtP=p=>p==null?'—':(p>=0?'+':'')+p.toFixed(1)+'%';
+  let worst=0;
+  const rows=tr.map((r,i)=>{
+    const a=[F(r.mi,R.res[r.mi].max),F(r.mi,R.res[r.mi].min),F(r.vi,R.res[r.vi].max),F(r.vi,R.res[r.vi].min)];
+    const refs=[FHWA.pM[i],FHWA.nM[i],FHWA.pV[i],FHWA.nV[i]];
+    const cells=a.map((v,j)=>{const ex=j===0&&i===10,p=pct(v,refs[j]);if(!ex&&p!=null)worst=Math.max(worst,Math.abs(p));
+      return `<td>${refs[j]}</td><td>${v.toFixed(1)}</td><td class="${ex?'':cls(p)}" style="font-weight:600">${ex?'n/a *':fmtP(p)}</td>`;}).join('');
+    return `<tr><td>${(i/10).toFixed(1)}L</td>${cells}</tr>`;
+  }).join('');
+  // Fatigue truck check (separate analysis, current structure)
+  const mf={...readModel(),axles:[[8,0],[32,14],[32,30]],short:'Fatigue',udl:{mode:'none',w:0,gap:0,trunc:false},vK:0,vMin:0,vMax:0,neglect:true,
+    secondary:'',multi:false,imp:{...m.imp,method:'const',val:1.15,onUdl:false},llf:1,dfM:[0.472/1.2,0.472/1.2],dfV:[0.75/1.2,0.75/1.2],dfNeg:0};
+  const Rf=analyze(mf),Ff=(ei,v)=>mf.llf*Rf.dfOf(Rf.effs[ei],v)*v;
+  const r04=Rf.rows.find(r=>r.k===0&&r.t===8),rP=Rf.rows.find(r=>r.k===0&&r.t===20);
+  const fat=[['+M at 0.4L (kip-ft) — Table 3-11',Ff(r04.mi,Rf.res[r04.mi].max),563],['−M at pier (kip-ft) — Table 3-12',Ff(rP.mi,Rf.res[rP.mi].min),-406],['Max shear at pier (kips) — Table 3-13',Math.abs(Ff(rP.vi,Rf.res[rP.vi].min)),46.5]];
+  fat.forEach(([,a,b])=>{worst=Math.max(worst,Math.abs(pct(a,b)));});
+  let dmax=0;if(DEF)DEF.secs.forEach((s,j)=>{if(s.x<=120+1e-6)dmax=Math.min(dmax,DEF.res[j].dn);});
+  const col=worst<=2?'#059669':worst<=5?'#d97706':'#dc2626', verdict=worst<=2?'agrees with the FHWA / Opis results':worst<=5?'close — review the flagged cells':'does not agree — investigate the red cells';
+  $('bmBody').innerHTML=`<div style="font-size:13px;font-weight:700;color:${col}">Largest difference (HL-93 envelope + fatigue, excluding 1.0L +M): ${worst.toFixed(1)}% — ${verdict}</div>
+    <div class="lbl">HL-93 envelope, Span 1 — distributed, with IM, unfactored (green ≤ 2%, black ≤ 5%, red &gt; 5%)</div>
+    <div class="tw"><table><thead><tr><th>Loc.</th><th>FHWA +M</th><th>App +M</th><th>Δ</th><th>FHWA −M</th><th>App −M</th><th>Δ</th><th>FHWA +V</th><th>App +V</th><th>Δ</th><th>FHWA −V</th><th>App −V</th><th>Δ</th></tr></thead><tbody>${rows}</tbody></table></div>
+    <div class="lbl">Fatigue truck — 30 ft rear spacing, IM 15%, DF 0.472/1.2 (moment) and 0.750/1.2 (shear)</div>
+    <div class="tw"><table><thead><tr><th>Quantity</th><th>FHWA</th><th>App</th><th>Δ</th></tr></thead><tbody>${fat.map(([q,a,b])=>{const p=pct(a,b);return `<tr><td>${q}</td><td>${b}</td><td>${a.toFixed(1)}</td><td class="${cls(p)}" style="font-weight:600">${fmtP(p)}</td></tr>`;}).join('')}</tbody></table></div>
+    <div class="lbl">Live load deflection, Span 1 (informational only)</div>
+    <div style="font-size:12px;color:#475569">FHWA: 1.43 in (all lanes loaded, all girders deflect equally, full-width section, IM included). App: <b>${Math.abs(dmax).toFixed(2)} in</b> using DF 0.51 (3 lanes × 0.85 ÷ 5 girders) and the single-girder composite I. Only rough agreement is expected because the reference uses the full-width cross-section.</div>
+    <p class="hint">Inputs loaded: 120 ft + 120 ft; plate segments per FHWA Figure 3-4 with I overrides for the short-term composite section (66,340 / 84,194 / 130,196 in⁴). The 84,194 in⁴ intermediate-region value is computed here with the FHWA method (the example lists only the steel-only I of 34,640 in⁴ for that region). DF moment 0.696 and shear 0.935 (FHWA Step 3.5), LLF 1.00, impact 1.33 on truck/tandem only. * FHWA Table 3-10 lists +983 kip-ft at 1.0L, but the moment influence line at the interior support of a two-span continuous girder is negative everywhere, so that value is excluded from scoring.</p>`;
+  $('bmCard').classList.remove('hidden');$('bmCard').scrollIntoView({behavior:'smooth',block:'start'});
+}
+$('bmBtn').onclick=()=>{if(!confirm('Load the FHWA two-span steel girder example? This replaces the current inputs.'))return;loadBenchmark();setTimeout(benchmarkReport,30);};
+$('bmClose').onclick=()=>$('bmCard').classList.add('hidden');
+
+// ═══════════ BATCH: haunch reference, rail DFs, deflection stiffness, |V|, transitions, benchmarks ═══════════
+// --- Injected inputs ---
+$('dth').closest('.f').insertAdjacentHTML('afterend','<div class="f"><label>Haunch measured from</label><select id="dhRef"><option value="flange">Top of top flange</option><option value="web">Top of web (slab elevation constant)</option></select></div>');
+$('hStep').closest('.g2').insertAdjacentHTML('afterend','<label class="chk"><input type="checkbox" id="refineChk" checked>Refine governing positions (0.1 ft) and spacing/headway (0.5 ft)</label>');
+$('dfNeg').closest('.f').insertAdjacentHTML('afterend',`<div class="lbl" style="margin-top:4px">Rail vehicles (used instead of the highway DFs above)</div>
+  <div class="g3"><div class="f"><label>DF moment</label><input id="rDFm" type="number" value="0.50" step="0.01"></div><div class="f"><label>DF shear</label><input id="rDFv" type="number" value="0.50" step="0.01"></div><div class="f"><label>Neg. M DF</label><input id="rDFn" type="number" step="0.01" placeholder="Same"></div></div>
+  <label class="chk"><input type="checkbox" id="custRail">Treat custom vehicles as rail</label>`);
+$('dLim').closest('.f').insertAdjacentHTML('afterend','<div class="f" style="width:96px"><label>Rail defl. DF</label><input id="dDFr" type="number" value="0.50" step="0.01"></div><div class="f" style="width:96px"><label>Rail limit L /</label><input id="dLimR" type="number" value="640" step="10"></div><div class="f" style="width:140px"><label>Defl. width / girder (in)</label><input id="dBw" type="number" step="any" placeholder="Same as b_eff"></div>');
+$('envB').closest('.card').insertAdjacentHTML('afterend',`<div class="card hidden" id="trCard"><div class="ch"><div><h2>Results at Plate Transitions</h2><p>Segment boundaries, checked in addition to tenth points. Click a value to load it into step mode.</p></div></div>
+  <div class="tw"><table><thead><tr><th>x (ft)</th><th>Span</th><th>x/L</th><th>+M</th><th>−M</th><th>+V</th><th>−V</th><th>Max |V|</th></tr></thead><tbody id="trB"></tbody></table></div></div>`);
+$('bmBtn').textContent='✔ FHWA';
+$('bmBtn').insertAdjacentHTML('afterend','<button class="hb" id="cfBtn">✔ Closed-form</button>');
+document.head.insertAdjacentHTML('beforeend','<style>#trB td{cursor:pointer}#trB tr:hover td{background:#eef2ff}</style>');
+
+// --- Haunch reference (top of web keeps slab elevation constant across flange changes) ---
+const _deckRead=deckRead; deckRead=function(){const d=_deckRead();d.href=$('dhRef')?$('dhRef').value:'flange';return d;};
+const _props=props; props=function(s,dk){if(dk&&dk.href==='web')dk={...dk,th:Math.max(0,dk.th-s.tt)};return _props(s,dk);};
+$('dhRef').addEventListener('input',updateProps);
+
+// --- Highway / rail distribution factor sets ---
+function isRail(key){return key==='Custom'||key==='__current'?$('custRail').checked:!HWY.includes(key);}
+function applyFam(m,key){
+  const n=m.spans.length; m.rail=isRail(key);
+  if(m.rail){m.dfM=Array(n).fill(num('rDFm',0.5));m.dfV=Array(n).fill(num('rDFv',0.5));m.dfNeg=num('rDFn',0);}
+  else{m.dfM=m.spans.map((_,i)=>num('dfm'+i,1));m.dfV=m.spans.map((_,i)=>num('dfv'+i,1));m.dfNeg=num('dfNeg',0);}
+  return m;
+}
+const _readModel=readModel; readModel=function(){return applyFam(_readModel(),$('preset').value);};
+const _modelFor=modelFor; modelFor=function(k){return applyFam(_modelFor(k),k==='__current'?$('preset').value:k);};
+
+// --- Deflection: rail DF/limit and optional deflection width ---
+function deflK(){
+  const w=num('dBw',0),dk=deckRead(); if(!(w>0)||!RES||!dk.comp)return 1;
+  const Lt=RES.Lt;let c=0,sum=0,L=0;
+  segs.forEach((s,i)=>{const last=i===segs.length-1,len=last?Math.max(0,Lt-c):Math.max(0,Math.min(s.len,Lt-c));c+=len;if(!(len>0))return;
+    const I0=props(s,dk).I,I1=props(s,{...dk,beff:w}).I;if(I0>0){sum+=len*I1/I0;L+=len;}});
+  return L>0?sum/L:1;
+}
+const _deflAnalyze=deflAnalyze;
+deflAnalyze=function(){
+  const rail=RES&&RES.m.rail,e=$('dDF'),old=e.value; if(rail)e.value=$('dDFr').value;
+  let D; try{D=_deflAnalyze();}finally{e.value=old;}
+  const k=deflK(); if(k!==1)D.res.forEach(r=>{r.dn/=k;r.up/=k;}); D.k=k; return D;
+};
+const _drawDefl=drawDefl;
+drawDefl=function(){
+  const rail=RES&&RES.m.rail,e=$('dLim'),old=e.value; if(rail)e.value=$('dLimR').value;
+  try{_drawDefl();}finally{e.value=old;}
+  if(DEF&&RES)$('dNote').textContent+=` · ${rail?'rail':'highway'} DF and limit`+(DEF.k&&DEF.k!==1?` · stiffness factor ${DEF.k.toFixed(3)} (${num('dBw',0)} in width)`:'');
+};
+['dDFr','dLimR','dBw'].forEach(id=>$(id).addEventListener('input',()=>{if(RES){try{DEF=deflAnalyze();}catch(e){console.error(e);}drawDefl();}}));
+
+// --- Max |V| column and plate-transition table ---
+const _render4=render;
+render=function(){
+  _render4(); if(!RES)return;
+  const R=RES,m=R.m,view=$('viewMode').value,F=(ei,v)=>view==='f'?m.llf*R.dfOf(R.effs[ei],v)*v:v;
+  const av=ei=>Math.max(Math.abs(F(ei,R.res[ei].max)),Math.abs(F(ei,R.res[ei].min)));
+  const th=$('envB').parentNode.querySelector('thead tr'); if(th&&!th.querySelector('.absV'))th.insertAdjacentHTML('beforeend','<th class="absV">Max |V|</th>');
+  const tr=R.rows.filter(r=>r.t%2===0);
+  [...$('envB').children].forEach((row,i)=>{const r=tr[i];if(r)row.insertAdjacentHTML('beforeend',`<td style="font-weight:700">${av(r.vi).toFixed(1)}</td>`);});
+  const T=R.rows.trans||[]; $('trCard').classList.toggle('hidden',!T.length);
+  $('trB').innerHTML=T.map((t,i)=>{const a=R.res[t.mi],b=R.res[t.vi];
+    return `<tr data-i="${i}"><td>${t.x.toFixed(2)}</td><td>${t.k+1}</td><td>${((t.x-R.sup[t.k])/m.spans[t.k]).toFixed(3)}</td><td class="pos">${F(t.mi,a.max).toFixed(1)}</td><td class="neg">${F(t.mi,a.min).toFixed(1)}</td><td class="pos">${F(t.vi,b.max).toFixed(1)}</td><td class="neg">${F(t.vi,b.min).toFixed(1)}</td><td style="font-weight:700">${av(t.vi).toFixed(1)}</td></tr>`;}).join('');
+};
+const jumpAbsV=vi=>{const R=RES,m=R.m,F=v=>m.llf*R.dfOf(R.effs[vi],v)*v;jumpTo(vi,Math.abs(F(R.res[vi].max))>=Math.abs(F(R.res[vi].min)));};
+$('envB').addEventListener('click',e=>{const td=e.target.closest('td'),tr=e.target.closest('tr');if(!td||!tr||!RES||td.cellIndex!==10)return;
+  const r=RES.rows.filter(q=>q.t%2===0)[[...tr.parentNode.children].indexOf(tr)];if(r)jumpAbsV(r.vi);});
+$('trB').addEventListener('click',e=>{const td=e.target.closest('td'),tr=e.target.closest('tr');if(!td||!tr||!RES)return;
+  const t=(RES.rows.trans||[])[+tr.dataset.i];if(!t)return;const c=td.cellIndex;
+  if(c===3)jumpTo(t.mi,true);else if(c===4)jumpTo(t.mi,false);else if(c===5)jumpTo(t.vi,true);else if(c===6)jumpTo(t.vi,false);else if(c===7)jumpAbsV(t.vi);});
+
+// --- CSV with |V|, transitions, family ---
+exportCsv=function(){
+  if(!RES)return;const R=RES,{m,effs,res,rows}=R,view=$('viewMode').value;
+  const F=(ei,v)=>view==='f'?m.llf*R.dfOf(effs[ei],v)*v:v,G=g=>g?`${g.lab} ${g.dir>0?'->':'<-'} @${g.p.toFixed(1)}`:'';
+  const av=ei=>Math.max(Math.abs(F(ei,res[ei].max)),Math.abs(F(ei,res[ei].min)));
+  const HDR=['Span','x (ft)','x/L','+M (kip-ft)','-M (kip-ft)','+V (kips)','-V (kips)','Max |V| (kips)','Gov +M','Gov -M','Gov +V','Gov -V'];
+  const line=(r,lab)=>{const a=res[r.mi],b=res[r.vi];return [r.k+1,r.x.toFixed(2),lab,F(r.mi,a.max).toFixed(2),F(r.mi,a.min).toFixed(2),F(r.vi,b.max).toFixed(2),F(r.vi,b.min).toFixed(2),av(r.vi).toFixed(2),G(a.maxG),G(a.minG),G(b.maxG),G(b.minG)];};
+  const L=[['BridgeLoad Pro - Continuous Span Moving Load'],['Generated',new Date().toLocaleString()],['Spans (ft)',m.spans.join(' / ')],['Vehicle',m.short],['Vehicle family',m.rail?'Rail':'Highway'],
+    ['Distribution factors',m.spans.map((_,k)=>`Span ${k+1}: M ${m.dfM[k]} V ${m.dfV[k]}`).join('; ')+(m.dfNeg>0?`; neg M ${m.dfNeg}`:'')],
+    ['Impact',m.imp.method==='const'?m.imp.val:'AREMA steel formula'],['Values',view==='f'?`Factored per girder (LLF ${m.llf} x DF)`:'Unfactored per lane incl. impact'],[],HDR];
+  rows.filter(r=>r.t%2===0).forEach(r=>L.push(line(r,(r.t/20).toFixed(1))));
+  const T=rows.trans||[]; if(T.length){L.push([],['Plate transitions'],HDR);T.forEach(t=>L.push(line(t,((t.x-R.sup[t.k])/m.spans[t.k]).toFixed(3))));}
+  L.push([],['Support','x (ft)','Max R (kips)','Min R (kips)','Gov max','Gov min']);
+  effs.forEach((ef,ei)=>{if(ef.t==='R')L.push(['ABCDE'[ef.q],ef.x.toFixed(2),F(ei,res[ei].max).toFixed(2),F(ei,res[ei].min).toFixed(2),G(res[ei].maxG),G(res[ei].minG)]);});
+  const q=s=>`"${String(s).replace(/"/g,'""')}"`;
+  const blob=new Blob([L.map(r=>r.map(q).join(',')).join('\n')],{type:'text/csv;charset=utf-8;'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`bridgeload_continuous_${m.short}_${m.spans.join('-')}ft.csv`;a.click();
+};
+
+// --- Report: |V| row, transitions per vehicle, separate highway / rail sections ---
+const _reportHTML=reportHTML;
+reportHTML=function(out,o,base,dk){
+  const G=g=>g?`${g.lab} ${g.dir>0?'→':'←'} lead axle @ ${g.p.toFixed(1)}'`:'—';
+  const patch=(html,arr)=>{const parts=html.split('<h3>Moment Envelope</h3>');
+    for(let i=0;i<arr.length&&i<parts.length-1;i++){const R=arr[i].R,F=arr[i].E.F;let bv=null;
+      R.effs.forEach((ef,ei)=>{if(ef.t!=='V')return;[[R.res[ei].max,R.res[ei].maxG],[R.res[ei].min,R.res[ei].minG]].forEach(([v,g])=>{const f=F(ei,v);if(!bv||Math.abs(f)>Math.abs(bv.v))bv={v:f,x:ef.x,g};});});
+      const row=bv?`<tr><td>Max |V| (design shear)</td><td><b>${Math.abs(bv.v).toFixed(1)}</b> kips</td><td>x = ${bv.x.toFixed(2)}'</td><td>${G(bv.g)}</td></tr>`:'';
+      const T=R.rows.trans||[];
+      const tt=T.length?`<h3>Results at Plate Transitions</h3><table><thead><tr><th>x (ft)</th><th>Span</th><th>+M</th><th>−M</th><th>+V</th><th>−V</th><th>Max |V|</th></tr></thead><tbody>${T.map(t=>{const a=R.res[t.mi],b=R.res[t.vi],vp=F(t.vi,b.max),vn=F(t.vi,b.min);return `<tr><td>${t.x.toFixed(2)}</td><td>${t.k+1}</td><td>${F(t.mi,a.max).toFixed(1)}</td><td>${F(t.mi,a.min).toFixed(1)}</td><td>${vp.toFixed(1)}</td><td>${vn.toFixed(1)}</td><td>${Math.max(Math.abs(vp),Math.abs(vn)).toFixed(1)}</td></tr>`;}).join('')}</tbody></table>`:'';
+      const p=parts[i],k=p.lastIndexOf('</tbody></table>');
+      if(k>=0)parts[i]=p.slice(0,k)+row+'</tbody></table>'+tt+p.slice(k+16);}
+    return parts.join('<h3>Moment Envelope</h3>');};
+  const withLim=(lim,fn)=>{const e=$('dLim'),old=e.value;e.value=lim;try{return fn();}finally{e.value=old;}};
+  const gen=(arr,rail)=>patch(withLim(rail?num('dLimR',640):num('dLim',800),()=>_reportHTML(arr,o,base,dk)),arr);
+  const railRow=`<tr><td>Rail distribution factors</td><td>moment ${num('rDFm',0.5)}, shear ${num('rDFv',0.5)}${num('rDFn',0)>0?`, negative moment ${num('rDFn',0)}`:''}; deflection DF ${num('dDFr',0.5)}, limit L/${num('dLimR',640)}</td></tr>`;
+  const addRail=h=>h.replace('<tr><td>AREMA impact inputs',railRow+'<tr><td>AREMA impact inputs');
+  const hw=out.filter(r=>!r.R.m.rail),rl=out.filter(r=>r.R.m.rail);
+  if(!hw.length||!rl.length)return addRail(gen(out,!hw.length));
+  let h1=addRail(gen(hw,false)).replace('2. Summary — All Vehicles','2. Summary — Highway Vehicles')
+    .replace(/(<td>Vehicles analyzed<\/td><td>)[^<]*/,'$1'+out.map(r=>esc(r.name)).join(', '));
+  const h2=gen(rl,true),s=h2.indexOf('<h2>2. Summary'),e=h2.lastIndexOf('<p style="text-align:center');
+  const mid=h2.slice(s,e).replace('2. Summary — All Vehicles','Summary — Rail Vehicles').replace(/<h2>(\d+)\. /g,(m0,n)=>`<h2>${+n+hw.length}. `);
+  const cut=h1.lastIndexOf('<p style="text-align:center');
+  return h1.slice(0,cut)+'<section class="pb"></section>'+mid+h1.slice(cut);
+};
+
+// --- FHWA benchmark: section built from plate geometry, graded on governing values ---
+loadBenchmark=function(){
+  $('nSpans').value='2';renderSpans();$('L0').value=120;$('L1').value=120;
+  const A={bt:14,tt:0.625,D:54,tw:0.5,bb:14,tb:0.875,Io:0},B={bt:14,tt:1.25,D:54,tw:0.5,bb:14,tb:1.375,Io:0},C={bt:14,tt:2.5,D:54,tw:0.5,bb:14,tb:2.75,Io:0};
+  segs=[{...A,len:84},{...B,len:24},{...C,len:12},{...C,len:12},{...B,len:24},{...A,len:0}];
+  $('comp').checked=true;$('dn').value=8;$('dbeff').value=103;$('dts').value=8;$('dhRef').value='web';$('dth').value=3.5;$('dinc').checked=false;
+  $('preset').value='HL93-Truck';applyPreset('HL93-Truck');
+  $('bothDir').checked=true;$('step').value=1;$('hStep').value=2;$('Es').value=29000;$('refineChk').checked=true;
+  $('lls').value='1.00';$('llf').value=1;['0','1'].forEach(i=>{$('dfm'+i).value=0.696;$('dfv'+i).value=0.935;});$('dfNeg').value='';
+  $('viewMode').value='f';$('dCase').value='lrfd';$('dDF').value=0.51;$('dIM').checked=true;$('dLim').value=800;$('dBw').value='';
+  renderSegs();syncVis();run();
+};
+const bmCol=p=>Math.abs(p)<=2?'#059669':Math.abs(p)<=5?'#d97706':'#dc2626', bmFp=p=>(p>=0?'+':'')+p.toFixed(1)+'%', bmPct=(a,b)=>(a-b)/Math.abs(b)*100;
+benchmarkReport=function(){
+  if(!RES)return;const R=RES,m=R.m,F=(ei,v)=>m.llf*R.dfOf(R.effs[ei],v)*v;
+  $('bmCard').querySelector('h2').textContent='Benchmark — FHWA LRFD Steel Girder Superstructure Design Example';
+  const tr=R.rows.filter(r=>r.k===0&&r.t%2===0);let worst=0;
+  const rows=tr.map((r,i)=>{
+    const aM=[F(r.mi,R.res[r.mi].max),F(r.mi,R.res[r.mi].min)],aV=[F(r.vi,R.res[r.vi].max),F(r.vi,R.res[r.vi].min)];
+    const fM=[FHWA.pM[i],FHWA.nM[i]],fV=[FHWA.pV[i],FHWA.nV[i]];
+    let mTxt='—',mP=null,mRev='—';
+    if(i>0){const g=Math.abs(fM[0])>=Math.abs(fM[1])?0:1;mP=bmPct(aM[g],fM[g]);worst=Math.max(worst,Math.abs(mP));mTxt=`${fM[g]} / ${aM[g].toFixed(1)}`;mRev=`${fM[1-g]} / ${aM[1-g].toFixed(1)}`;}
+    const gv=Math.abs(fV[0])>=Math.abs(fV[1])?0:1,fA=Math.abs(fV[gv]),aA=Math.max(Math.abs(aV[0]),Math.abs(aV[1])),vP=bmPct(aA,fA);worst=Math.max(worst,Math.abs(vP));
+    return `<tr><td>${(i/10).toFixed(1)}L</td><td>${mTxt}</td><td style="font-weight:700;color:${mP==null?'#94a3b8':bmCol(mP)}">${mP==null?'—':bmFp(mP)}</td><td>${fA} / ${aA.toFixed(1)}</td><td style="font-weight:700;color:${bmCol(vP)}">${bmFp(vP)}</td><td style="color:#94a3b8">M ${mRev} · V ${fV[1-gv]} / ${aV[1-gv].toFixed(1)}</td></tr>`;
+  }).join('');
+  const mf={...readModel(),axles:[[8,0],[32,14],[32,30]],short:'Fatigue',udl:{mode:'none',w:0,gap:0,trunc:false},vK:0,vMin:0,vMax:0,neglect:true,
+    secondary:'',multi:false,imp:{...m.imp,method:'const',val:1.15,onUdl:false},llf:1,dfM:[0.472/1.2,0.472/1.2],dfV:[0.75/1.2,0.75/1.2],dfNeg:0};
+  const Rf=analyze(mf),Ff=(ei,v)=>mf.llf*Rf.dfOf(Rf.effs[ei],v)*v,r04=Rf.rows.find(r=>r.k===0&&r.t===8),rP=Rf.rows.find(r=>r.k===0&&r.t===20);
+  const fat=[['+M at 0.4L (kip-ft) — Table 3-11',Ff(r04.mi,Rf.res[r04.mi].max),563],['−M at pier (kip-ft) — Table 3-12',Ff(rP.mi,Rf.res[rP.mi].min),-406],['Max shear at pier (kips) — Table 3-13',Math.abs(Ff(rP.vi,Rf.res[rP.vi].min)),46.5]];
+  fat.forEach(([,a,b])=>{worst=Math.max(worst,Math.abs(bmPct(a,b)));});
+  let dmax=0;if(DEF)DEF.secs.forEach((s,j)=>{if(s.x<=120+1e-6)dmax=Math.min(dmax,DEF.res[j].dn);});
+  const Is=segs.slice(0,3).map(s=>Math.round(props(s,deckRead()).I).toLocaleString()).join(' / ');
+  $('bmBody').innerHTML=`<div style="font-size:13px;font-weight:700;color:${bmCol(worst)}">Largest graded difference: ${worst.toFixed(1)}% — ${worst<=2?'agrees with FHWA / Opis':worst<=5?'close; review the amber cells':'review the red cells'}</div>
+    <div class="lbl">HL-93, Span 1 — graded on the governing value at each section (FHWA / App). Shear graded on max |V|, the design shear.</div>
+    <div class="tw"><table><thead><tr><th>Loc.</th><th>Governing M</th><th>Δ</th><th>Max |V|</th><th>Δ</th><th>Reversal values (not graded)</th></tr></thead><tbody>${rows}</tbody></table></div>
+    <div class="lbl">Fatigue truck — 30 ft rear spacing, IM 15%, DF 0.472/1.2 (moment) and 0.750/1.2 (shear)</div>
+    <div class="tw"><table><thead><tr><th>Quantity</th><th>FHWA</th><th>App</th><th>Δ</th></tr></thead><tbody>${fat.map(([q,a,b])=>{const p=bmPct(a,b);return `<tr><td>${q}</td><td>${b}</td><td>${a.toFixed(1)}</td><td style="font-weight:700;color:${bmCol(p)}">${bmFp(p)}</td></tr>`;}).join('')}</tbody></table></div>
+    <div class="lbl">Live load deflection, Span 1 (informational)</div>
+    <div style="font-size:12px;color:#475569">FHWA 1.43 in (full-width section, all lanes, IM) · App <b>${Math.abs(dmax).toFixed(2)} in</b> with DF 0.51 and the single-girder section. Enter a deflection width per girder to approximate the full-width section.</div>
+    <div style="display:flex;gap:8px;align-items:center"><button class="btn" id="bmSensBtn">Run stiffness sensitivity</button><span class="hint">Tests which section-property assumption best matches FHWA</span></div>
+    <div id="bmSens"></div>
+    <p class="hint">Section built from the FHWA plates with the haunch measured from the top of the web (3.5 in), giving composite I = ${Is} in⁴ (FHWA lists 66,340 and 130,196 for the end and pier regions). Reversal values are shown but not graded: by statics, moment over the pier and shear just left of the pier cannot be positive under downward load, and FHWA's −33.8 kip uplift exceeds the 27.4 kip bound implied by its own −2,450 kip-ft pier moment.</p>`;
+  $('bmSensBtn').onclick=runSensitivity;
+  $('bmCard').classList.remove('hidden');$('bmCard').scrollIntoView({behavior:'smooth',block:'start'});
+};
+async function runSensitivity(){
+  if(segs.length!==6){$('bmSens').innerHTML='<p class="hint">Load the FHWA benchmark first.</p>';return;}
+  const base=readModel(),dk=deckRead(),Ig=segs.map(s=>props(s,dk).I);
+  const trials=[['Base (from plate geometry)',null],['Intermediate I = 65,000',{1:65000,4:65000}],['Intermediate I = 100,000',{1:100000,4:100000}],['Pier rebar-only I = 79,333',{2:79333.4,3:79333.4}],['Positive 3n I = 48,999',{0:48998.7,5:48998.7}],['Uniform I = 66,340','all']];
+  const out=[];
+  for(const [lab,ov] of trials){
+    $('bmSens').innerHTML=`<p class="hint">Running: ${lab}…</p>`;await new Promise(r=>setTimeout(r,20));
+    const m={...base,segs:base.segs.map((s,i)=>({...s,I:ov==='all'?66340.3:(ov&&ov[i]!=null?ov[i]:Ig[i])}))};
+    const R=analyze(m),F=(ei,v)=>m.llf*R.dfOf(R.effs[ei],v)*v,rw=t=>R.rows.find(r=>r.k===0&&r.t===t);
+    out.push([lab,F(rw(8).mi,R.res[rw(8).mi].max),F(rw(20).mi,R.res[rw(20).mi].min),F(rw(14).mi,R.res[rw(14).mi].max)]);
+  }
+  const c=(a,b)=>{const p=bmPct(a,b);return `<td>${a.toFixed(0)}</td><td style="color:${bmCol(p)};font-weight:600">${bmFp(p)}</td>`;};
+  $('bmSens').innerHTML=`<div class="tw"><table><thead><tr><th>Trial</th><th>+M 0.4L</th><th>vs 1,908</th><th>−M pier</th><th>vs −2,450</th><th>+M 0.7L</th><th>vs 1,318</th></tr></thead><tbody>${out.map(([l,a,b,d])=>`<tr><td>${l}</td>${c(a,1908)}${c(b,-2450)}${c(d,1318)}</tr>`).join('')}</tbody></table></div><p class="hint">The trial that brings +M and −M closest together indicates the stiffness assumption FHWA's software most likely used.</p>`;
+}
+
+// --- Closed-form benchmark (uniform section, exact two-span influence lines) ---
+function loadClosedForm(){
+  $('nSpans').value='2';renderSpans();$('L0').value=120;$('L1').value=120;
+  segs=[{len:0,bt:14,tt:0.625,D:54,tw:0.5,bb:14,tb:0.875,Io:66340}];
+  $('preset').value='HS20';applyPreset('HS20');$('impM').value='const';$('impV').value=1;
+  $('bothDir').checked=true;$('step').value=1;$('hStep').value=2;$('refineChk').checked=true;
+  $('lls').value='1.00';$('llf').value=1;['0','1'].forEach(i=>{$('dfm'+i).value=1;$('dfv'+i).value=1;});$('dfNeg').value='';
+  $('viewMode').value='f';renderSegs();syncVis();run();
+}
+function closedFormReport(){
+  if(!RES)return;const R=RES,m=R.m,F=(ei,v)=>m.llf*R.dfOf(R.effs[ei],v)*v,rw=t=>R.rows.find(r=>r.k===0&&r.t===t);
+  $('bmCard').querySelector('h2').textContent='Benchmark — Closed-Form Two-Span Influence Lines';
+  const chk=[['−M at pier (kip-ft)',F(rw(20).mi,R.res[rw(20).mi].min),-809.4,'Truck in one span: M_B = −ΣP·a(L²−a²)/(4L²); 32k axles at 64 and 78 ft from the far abutment'],
+    ['−M at 0.5L (kip-ft)',F(rw(10).mi,R.res[rw(10).mi].min),-404.7,'Same span-2 loading; M = R_A·x = ½·M_B'],
+    ['−V at 0.0L, uplift (kips)',F(rw(0).vi,R.res[rw(0).vi].min),-6.745,'R_A = M_B ÷ L for loads in span 2'],
+    ['+V at 0.5L (kips)',F(rw(10).vi,R.res[rw(10).vi].max),23.67,'32k axle just right of 0.5L, truck toward the pier; limit value as the axle approaches the section'],
+    ['+M at 0.4L (kip-ft)',F(rw(8).mi,R.res[rw(8).mi].max),1527.7,'Middle axle at 0.4L: simple-span ordinate + 0.4·M_B(ξ)']];
+  let worst=0;chk.forEach(([,a,b])=>{worst=Math.max(worst,Math.abs(bmPct(a,b)));});
+  const col=p=>Math.abs(p)<=0.5?'#059669':Math.abs(p)<=1.5?'#d97706':'#dc2626';
+  $('bmBody').innerHTML=`<div style="font-size:13px;font-weight:700;color:${col(worst)}">Largest difference: ${worst.toFixed(2)}% — ${worst<=0.5?'matches the exact solution':worst<=1.5?'close; check step sizes':'does not match; investigate'}</div>
+    <div class="tw"><table><thead><tr><th>Quantity</th><th>Exact</th><th>App</th><th>Δ</th><th>Basis</th></tr></thead><tbody>${chk.map(([q,a,b,n])=>{const p=bmPct(a,b);return `<tr><td>${q}</td><td>${b}</td><td>${a.toFixed(2)}</td><td style="font-weight:700;color:${col(p)}">${(p>=0?'+':'')+p.toFixed(2)}%</td><td class="g" style="white-space:normal">${n}</td></tr>`;}).join('')}</tbody></table></div>
+    <p class="hint">Inputs loaded: 120 ft + 120 ft, uniform I, HS20 (no lane), impact 1.00, LLF 1.00, DF 1.00, both directions. These cells include the reversal values the FHWA table cannot check (uplift, negative moment in the positive region). Tolerance: green ≤ 0.5%, amber ≤ 1.5%.</p>`;
+  $('bmCard').classList.remove('hidden');$('bmCard').scrollIntoView({behavior:'smooth',block:'start'});
+}
+$('cfBtn').onclick=()=>{if(!confirm('Load the closed-form two-span check? This replaces the current inputs.'))return;loadClosedForm();setTimeout(closedFormReport,30);};
+
+// ═══════════ GIRDER STIFFNESS (EI) DIAGRAM ═══════════
+$('cVeh').closest('.card').insertAdjacentHTML('afterend',`<div class="card" id="eiCard"><div class="ch"><div><h2>Girder Stiffness Along Length</h2><p id="eiNote">Moment of inertia used in the analysis, by segment</p></div></div><canvas id="cEI" style="height:200px"></canvas></div>`);
+function eiSegs(R){
+  const m=R.m,Lt=R.Lt;let cc=0;
+  return m.segs.map((s,i)=>{const last=i===m.segs.length-1,len=last?Math.max(0,Lt-cc):Math.max(0,Math.min(s.len,Lt-cc)),a=cc;cc+=len;return {a,b:a+len,I:s.I,ov:s.Io>0};}).filter(s=>s.b-s.a>1e-6);
+}
+function drawEI(cv,R){
+  const dpr=window.devicePixelRatio||1,W=cv.offsetWidth||800,H=cv.offsetHeight||200;cv.width=W*dpr;cv.height=H*dpr;
+  const c=cv.getContext('2d');c.setTransform(dpr,0,0,dpr,0,0);c.clearRect(0,0,W,H);
+  if(!R)return;
+  const Lt=R.Lt,sg=eiSegs(R);if(!sg.length)return;
+  const pl=72,pr=20,pt=24,pb=42,w=W-pl-pr,h=H-pt-pb,X=v=>pl+v/Lt*w;
+  const Imax=Math.max(...sg.map(s=>s.I)),Imin=Math.min(...sg.map(s=>s.I)),top=Imax*1.2,Y=v=>pt+h-(v/top)*h;
+  c.font='10px Inter,Segoe UI,sans-serif';
+  for(let i=0;i<=4;i++){const v=top*i/4,yy=Y(v);c.strokeStyle='#f1f5f9';c.lineWidth=1;c.beginPath();c.moveTo(pl,yy);c.lineTo(pl+w,yy);c.stroke();
+    c.fillStyle='#94a3b8';c.textAlign='right';c.textBaseline='middle';c.fillText(Math.round(v).toLocaleString(),pl-6,yy);}
+  sg.forEach(s=>{const x1=X(s.a),x2=X(s.b),y=Y(s.I),t=Imax>Imin?(s.I-Imin)/(Imax-Imin):0;
+    c.fillStyle=`rgba(79,70,229,${0.12+0.33*t})`;c.fillRect(x1,y,x2-x1,Y(0)-y);
+    if(s.ov){c.save();c.beginPath();c.rect(x1,y,x2-x1,Y(0)-y);c.clip();c.strokeStyle='rgba(217,119,6,.35)';c.lineWidth=1;
+      for(let k=x1-(Y(0)-y);k<x2;k+=8){c.beginPath();c.moveTo(k,Y(0));c.lineTo(k+(Y(0)-y),y);c.stroke();}c.restore();}
+    c.strokeStyle='#4f46e5';c.lineWidth=2;c.beginPath();c.moveTo(x1,y);c.lineTo(x2,y);c.stroke();
+    if(x2-x1>66){c.fillStyle='#1e293b';c.font='bold 10.5px Inter,Segoe UI,sans-serif';c.textAlign='center';c.textBaseline='bottom';
+      c.fillText(`${Math.round(s.I).toLocaleString()}${s.ov?' *':''}`,(x1+x2)/2,y-3);
+      c.font='10px Inter,Segoe UI,sans-serif';c.fillStyle='#4338ca';c.textBaseline='top';c.fillText(`×${(s.I/Imin).toFixed(2)}`,(x1+x2)/2,y+4);}});
+  for(let i=1;i<sg.length;i++){const xx=X(sg[i].a);
+    c.strokeStyle='#4f46e5';c.lineWidth=2;c.beginPath();c.moveTo(xx,Y(sg[i-1].I));c.lineTo(xx,Y(sg[i].I));c.stroke();
+    c.setLineDash([3,3]);c.strokeStyle='#cbd5e1';c.lineWidth=1;c.beginPath();c.moveTo(xx,Math.max(Y(sg[i].I),Y(sg[i-1].I)));c.lineTo(xx,Y(0));c.stroke();c.setLineDash([]);}
+  c.strokeStyle='#94a3b8';c.lineWidth=1.5;c.beginPath();c.moveTo(pl,Y(0));c.lineTo(pl+w,Y(0));c.stroke();
+  R.sup.forEach(s=>{const xx=X(s),yy=Y(0)+2;c.fillStyle='#475569';c.beginPath();c.moveTo(xx,yy);c.lineTo(xx-6,yy+9);c.lineTo(xx+6,yy+9);c.closePath();c.fill();});
+  const xs=[...new Set([...R.sup,...sg.map(s=>s.a)].map(v=>+v.toFixed(2)))].sort((a,b)=>a-b);
+  c.fillStyle='#94a3b8';c.font='10px Inter,Segoe UI,sans-serif';c.textAlign='center';c.textBaseline='top';
+  let lastX=-1e9;xs.forEach(v=>{const xx=X(v);if(xx-lastX<30)return;lastX=xx;c.fillText((Number.isInteger(v)?v:v.toFixed(1))+"'",xx,Y(0)+14);});
+  c.save();c.translate(14,pt+h/2);c.rotate(-Math.PI/2);c.textAlign='center';c.textBaseline='middle';c.fillStyle='#64748b';c.font='11px Inter,Segoe UI,sans-serif';c.fillText('I (in⁴)',0,0);c.restore();
+}
+const _render5=render;
+render=function(){
+  _render5(); if(!RES)return;
+  drawEI($('cEI'),RES);
+  const sg=eiSegs(RES),E=RES.m.E,Imin=Math.min(...sg.map(s=>s.I)),Imax=Math.max(...sg.map(s=>s.I)),dk=deckRead();
+  $('eiNote').textContent=`${dk.comp?`Uncracked short-term composite (n = ${dk.n})`:'Steel section alone'} · E = ${E} ksi · EI ${Math.round(E*Imin/144).toLocaleString()} to ${Math.round(E*Imax/144).toLocaleString()} kip-ft² · max/min = ${(Imax/Imin).toFixed(2)}${sg.some(s=>s.ov)?' · * hatched = I override':''} · relative stiffness drives V, M, R; absolute EI drives deflection`;
+};
+const _reportHTML2=reportHTML;
+reportHTML=function(out,o,base,dk){
+  const h=_reportHTML2(out,o,base,dk); if(!RES)return h;
+  const cv=document.createElement('canvas');cv.style.cssText='position:fixed;left:-99999px;top:0;width:1100px;height:240px';
+  document.body.appendChild(cv);drawEI(cv,RES);const u=cv.toDataURL('image/png');cv.remove();
+  const i=h.indexOf('<h2>2. Summary');
+  return i<0?h:h.slice(0,i)+`<h3>Girder Stiffness Along Length (I used in the analysis)</h3><div class="img"><img src="${u}"></div>`+h.slice(i);
+};
+
+// ═══════════ CSV ═══════════
+function exportCsv(){
+  if(!RES) return;
+  const R=RES,{m,effs,res,rows}=R, view=$('viewMode').value;
+  const F=(ei,v)=>view==='f'?m.llf*R.dfOf(effs[ei],v)*v:v, G=g=>g?`${g.lab} ${g.dir>0?'->':'<-'} @${g.p.toFixed(1)}`:'';
+  const L=[['BridgeLoad Pro - Continuous Span Moving Load'],['Generated',new Date().toLocaleString()],['Spans (ft)',m.spans.join(' / ')],['Vehicle',m.short],
+    ['Impact',m.imp.method==='const'?m.imp.val:'AREMA steel formula'],['Values',view==='f'?`Factored per girder (LLF ${m.llf} x DF)`:'Unfactored per lane incl. impact'],[],
+    ['Span','x (ft)','x/L','+M (kip-ft)','-M (kip-ft)','+V (kips)','-V (kips)','Gov +M','Gov -M','Gov +V','Gov -V']];
+  rows.filter(r=>r.t%2===0).forEach(r=>{const a=res[r.mi],b=res[r.vi];
+    L.push([r.k+1,r.x.toFixed(2),(r.t/20).toFixed(1),F(r.mi,a.max).toFixed(2),F(r.mi,a.min).toFixed(2),F(r.vi,b.max).toFixed(2),F(r.vi,b.min).toFixed(2),G(a.maxG),G(a.minG),G(b.maxG),G(b.minG)]);});
+  L.push([],['Support','x (ft)','Max R (kips)','Min R (kips)','Gov max','Gov min']);
+  effs.forEach((ef,ei)=>{if(ef.t==='R')L.push(['ABCDE'[ef.q],ef.x.toFixed(2),F(ei,res[ei].max).toFixed(2),F(ei,res[ei].min).toFixed(2),G(res[ei].maxG),G(res[ei].minG)]);});
+  const q=s=>`"${String(s).replace(/"/g,'""')}"`;
+  const blob=new Blob([L.map(r=>r.map(q).join(',')).join('\n')],{type:'text/csv;charset=utf-8;'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`bridgeload_continuous_${m.short}_${m.spans.join('-')}ft.csv`;a.click();
+}
+
+// ═══════════ RUN & EVENTS ═══════════
+function run(){
+  try{const t0=performance.now();RES=analyze(readModel());render();$('status').textContent=`Solved in ${Math.round(performance.now()-t0)} ms`;}
+  catch(err){$('status').textContent='Error: '+err.message;console.error(err);}
+}
+function schedule(){clearTimeout(timer);$('status').textContent='Updating…';timer=setTimeout(run,450);}
+
+document.querySelector('aside').addEventListener('input',e=>{
+  const t=e.target,id=t.id;
+  if(id==='nSpans'){renderSpans();updateProps();}
+  if(id==='preset')applyPreset(t.value);
+  if(t.classList.contains('axl')||t.classList.contains('axs')){readAxles();$('preset').value='Custom';}
+  if(id==='lls'&&t.value!=='c')$('llf').value=t.value;
+  if(id==='llf'){const v=(+t.value).toFixed(2);$('lls').value=[...$('lls').options].some(o=>o.value===v)?v:'c';}
+  if(/^L\d$/.test(id))updateProps();
+  syncVis();schedule();
+});
+$('secCard').addEventListener('input',e=>{const t=e.target;if(t.dataset.k)segs[+t.dataset.i][t.dataset.k]=parseFloat(t.value)||0;updateProps();schedule();});
+$('axAdd').onclick=()=>{readAxles();axles.push([20,10]);renderAxles();$('preset').value='Custom';schedule();};
+$('axDel').onclick=()=>{readAxles();if(axles.length>1){axles.pop();renderAxles();$('preset').value='Custom';schedule();}};
+$('segAdd').onclick=()=>{const Lt=totalL();let c=0;segs.slice(0,-1).forEach(s=>c+=s.len);const last=segs[segs.length-1];last.len=Math.max(1,Math.round((Lt-c)/2));segs.push({...last,len:0,Io:0});renderSegs();schedule();};
+$('segDel').onclick=()=>{if(segs.length>1){segs.pop();renderSegs();schedule();}};
+['viewMode','ilSec','ilType'].forEach(id=>$(id).addEventListener('input',render));
+$('runBtn').onclick=run; $('csvBtn').onclick=exportCsv;
+window.addEventListener('resize',()=>{clearTimeout(window._rz);window._rz=setTimeout(render,150);});
+
+initSelects(); renderSpans(); $('preset').value='HL93-Truck'; applyPreset('HL93-Truck'); renderSegs(); syncVis(); run();
+</script>
+</body>
+</html>

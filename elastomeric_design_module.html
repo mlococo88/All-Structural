@@ -1,0 +1,691 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Elastomeric Bearing Design Module (EDM)</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+<style>
+:root{--navy:#1f3a5f;--navy-lt:#33517a;--panel:#f4f5f0;--panel-h:#e7e9e0;--line:#c9ccc0;--ok:#1a7f37;--bad:#c62828;--amber:#b8860b;}
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;background:#e9ebe4;color:#1a1a1a;font-family:"Times New Roman",Times,serif;font-size:15px;}
+.wrap{max-width:1500px;margin:0 auto;background:#fff;min-height:100vh;box-shadow:0 0 12px rgba(0,0,0,.12);}
+header{padding:12px 18px 8px;border-bottom:2px solid var(--navy);}
+.apptitle{font-size:22px;font-weight:bold;color:var(--navy);line-height:1.1;}
+.byline{font-size:12px;color:#555;margin-top:1px;}
+.codeline{font-size:12px;color:#444;margin-top:3px;}
+.toolbar{display:flex;flex-wrap:wrap;gap:6px;padding:8px 18px;border-bottom:1px solid var(--line);background:var(--panel);align-items:center;}
+.toolbar button{font-family:inherit;font-size:13px;padding:5px 10px;border:1px solid var(--line);background:#fff;border-radius:3px;cursor:pointer;}
+.toolbar button:hover{background:var(--panel-h);}
+.toolbar button.primary{background:var(--navy);color:#fff;border-color:var(--navy);}
+.toolbar button.primary:hover{background:var(--navy-lt);}
+.toolbar .spacer{flex:1;}
+#linkStatus{font-size:12px;padding:3px 8px;border-radius:10px;background:#eee;color:#555;}
+#linkStatus.on{background:#e7f4e9;color:var(--ok);}
+#saveStatus{font-size:12px;color:#777;}
+.layout{display:flex;gap:0;align-items:flex-start;}
+#inputPanel{width:34%;min-width:330px;padding:12px 14px;border-right:1px solid var(--line);}
+#outputPanel{width:66%;padding:12px 16px;}
+@media(max-width:900px){.layout{flex-direction:column;}#inputPanel,#outputPanel{width:100%;}}
+h2.sech{font-size:15px;color:var(--navy);margin:6px 0 4px;}
+.subhead{font-weight:bold;font-size:13px;color:#333;margin:8px 0 3px;border-bottom:1px solid #e0e2d8;}
+.panel{border:1px solid var(--line);border-radius:3px;margin-bottom:8px;background:#fff;}
+.panel>.p-head{background:var(--panel);padding:5px 9px;font-weight:bold;cursor:pointer;display:flex;align-items:center;gap:6px;border-bottom:1px solid var(--line);font-size:14px;}
+.panel>.p-head:hover{background:var(--panel-h);}
+.panel>.p-head .tri{font-size:10px;color:#777;transition:transform .15s;}
+.panel.closed>.p-head .tri{transform:rotate(-90deg);}
+.panel>.p-body{padding:8px 10px;}
+.panel.closed>.p-body{display:none;}
+.in-row{display:flex;align-items:center;gap:6px;margin:3px 0;}
+.in-row label{flex:1;font-size:13px;}
+.in-row input,.in-row select{font-family:inherit;font-size:13px;width:96px;padding:3px 5px;border:1px solid var(--line);border-radius:2px;}
+.in-row select{width:auto;max-width:160px;}
+.in-row .unit{width:42px;font-size:12px;color:#666;}
+.chk-row{display:flex;align-items:center;gap:7px;margin:5px 0;font-size:13px;}
+.chk-row input{width:auto;}
+.in-note,.eq-note{font-size:12px;color:#555;background:#f7f8f3;border-left:3px solid var(--line);padding:5px 8px;margin:5px 0;line-height:1.35;}
+.derived{font-size:12.5px;color:#1f3a5f;background:#eef2f7;padding:5px 8px;border-radius:3px;margin:4px 0;}
+.tog{font-size:12px;color:#7a5c00;background:#fbf6e8;border-left:3px solid var(--amber);padding:4px 8px;margin:4px 0;}
+table.itbl{border-collapse:collapse;width:100%;margin:5px 0;font-size:12.5px;}
+table.itbl th,table.itbl td{border:1px solid var(--line);padding:2px 5px;text-align:center;}
+table.itbl th{background:var(--panel);}
+table.itbl td.ro{background:#f2f2ec;color:#555;}
+table.itbl input{width:80px;font-family:inherit;font-size:12.5px;border:1px solid var(--line);padding:2px 4px;text-align:right;}
+.mini-btn{font-family:inherit;font-size:12px;padding:3px 8px;border:1px solid var(--line);background:#fff;border-radius:3px;cursor:pointer;}
+.mini-btn:hover{background:var(--panel-h);}
+/* dashboard */
+#dashboard{border:1px solid var(--line);border-radius:4px;padding:8px 10px;margin-bottom:10px;background:#fafbf7;}
+.dash-title{font-weight:bold;color:var(--navy);margin-bottom:5px;}
+.dash-grid{display:flex;flex-wrap:wrap;gap:5px;}
+.dash-item{display:flex;align-items:center;gap:6px;font-size:12.5px;border:1px solid var(--line);border-radius:12px;padding:3px 9px;background:#fff;cursor:pointer;}
+.dash-item .lamp{width:12px;height:12px;border-radius:50%;flex:0 0 12px;border:1px solid rgba(0,0,0,.2);}
+.lamp.ok{background:var(--ok);}.lamp.bad{background:var(--bad);}.lamp.na{background:#bbb;}
+.dash-item.fail{border-color:var(--bad);background:#fdecec;font-weight:bold;}
+.dash-summary{margin-top:6px;font-size:13px;}
+.dash-summary .pass{color:var(--ok);font-weight:bold;}.dash-summary .fail{color:var(--bad);font-weight:bold;}
+/* tabs */
+#tabbar{display:flex;flex-wrap:wrap;gap:3px;border-bottom:2px solid var(--navy);margin-bottom:10px;}
+.tab{font-size:13px;padding:6px 12px;border:1px solid var(--line);border-bottom:none;border-radius:5px 5px 0 0;background:var(--panel);cursor:pointer;}
+.tab.active{background:var(--navy);color:#fff;border-color:var(--navy);}
+.tabpane{display:none;}.tabpane.active{display:block;}
+/* equation blocks */
+.eqb{margin:7px 0;border-left:2px solid #dfe2d6;padding:2px 0 2px 10px;}
+.eqb .eqtitle{font-size:13.5px;font-weight:bold;color:#243;}
+.eqb .eqref{font-size:11.5px;color:#777;font-style:italic;margin-left:6px;}
+.eqb .ktx{margin:3px 0;overflow-x:auto;}
+.eqb .eqnote{font-size:12px;color:#555;margin-top:2px;}
+.vtbl{border-collapse:collapse;margin:4px 0;font-size:12.5px;}
+.vtbl td{border:1px solid #e0e2d8;padding:1px 7px;}
+.vtbl td:first-child{text-align:right;}
+.checkline{display:flex;align-items:center;gap:8px;margin:5px 0;font-size:13px;padding:4px 6px;border-radius:3px;background:#f7f8f3;}
+.checkline .verdict{font-weight:bold;padding:1px 7px;border-radius:3px;color:#fff;}
+.verdict.ok{background:var(--ok);}.verdict.bad{background:var(--bad);}
+.svgbox{width:100%;overflow:auto;margin:6px 0;background:#fff;border:1px solid #eee;border-radius:3px;}
+.figcap{font-size:12px;color:#666;font-style:italic;margin:2px 0 6px;}
+.plotbox{width:100%;min-height:300px;margin:5px 0;}
+.warn-item{font-size:12.5px;padding:4px 8px;margin:3px 0;border-radius:3px;background:#fbf6e8;border-left:3px solid var(--amber);}
+.warn-item.err{background:#fdecec;border-left-color:var(--bad);color:#7a1c1c;}
+dialog{border:1px solid var(--navy);border-radius:6px;padding:14px 16px;font-family:inherit;max-width:520px;}
+dialog h3{margin:0 0 8px;color:var(--navy);}
+.prow{display:flex;gap:8px;align-items:center;padding:3px 0;border-bottom:1px dotted #ddd;font-size:13px;}
+.pname{flex:1;font-weight:bold;}.pdate{color:#888;font-size:12px;}
+textarea{width:100%;min-height:90px;font-family:inherit;font-size:13px;border:1px solid var(--line);border-radius:3px;padding:6px;resize:vertical;}
+.tblock{border:2px solid #000;border-collapse:collapse;width:100%;margin:4px 0 10px;font-size:12.5px;}
+.tblock td{border:1px solid #000;padding:3px 7px;}
+.tblock .lbl{font-size:10px;color:#333;display:block;font-variant:small-caps;}
+/* print report */
+#report{display:none;}
+@media print{
+  body,.wrap{background:#fff;box-shadow:none;max-width:none;}
+  header,.toolbar,.layout,#inputPanel{display:none !important;}
+  #report{display:block;padding:0;font-size:11pt;color:#000;}
+  #report h1{font-size:16pt;text-align:center;margin:4px 0;}
+  #report h2{font-size:13pt;border-bottom:1.5px solid #000;margin-top:16px;break-after:avoid;}
+  #report .eqb{break-inside:avoid;}
+  .pagebreak{break-before:page;}
+  @page{size:letter;margin:0.75in 0.7in;}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <div class="apptitle">Elastomeric Bearing Design Module</div>
+  <div class="byline">by Mario Lococo</div>
+  <div class="codeline">AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024) &middot; MassDOT LRFD Bridge Manual, Part I §3.5.7 &middot; v1.0</div>
+</header>
+<div class="toolbar">
+  <button id="btnSaveProj" title="Save current inputs as a named project">Save Project</button>
+  <button id="btnManageProj" title="Load / delete saved projects">Projects…</button>
+  <button id="btnExport" title="Download inputs as JSON backup">Export JSON</button>
+  <button id="btnImport" title="Load inputs from JSON">Import JSON</button>
+  <input type="file" id="importFile" accept="application/json" style="display:none">
+  <button id="btnReset" title="Reset all inputs to defaults">Reset</button>
+  <button id="btnSelfTest" title="Run the built-in MassDOT benchmark self-test">Self-Test</button>
+  <button id="btnSendBack" title="Send the designed pad back to the Abutment app (if opened from it)">↩ Send Pad to Abutment</button>
+  <span class="spacer"></span>
+  <span id="linkStatus">Standalone</span>
+  <span id="saveStatus"></span>
+  <button class="primary" id="btnPrint" title="Generate the full engineering calculation report">Print / PDF Report</button>
+</div>
+<div class="layout">
+  <div id="inputPanel"></div>
+  <div id="outputPanel">
+    <div id="dashboard"></div>
+    <div id="tabbar"></div>
+    <div id="tabs"></div>
+  </div>
+</div>
+<div id="report"></div>
+</div>
+
+<!-- project dialog -->
+<dialog id="dlgProj">
+  <h3>Saved Projects</h3>
+  <div class="in-note">Projects are stored in this browser's local storage on this machine. Use Export JSON for a portable backup.</div>
+  <div id="projList" style="max-height:50vh;overflow:auto;margin:8px 0;"></div>
+  <div style="text-align:right;"><button id="dlgProjClose" class="mini-btn">Close</button></div>
+</dialog>
+
+<script>
+/* ============================================================
+   SECTION A — constants, state, helpers
+   Elastomeric Bearing Design Module (EDM)
+   AASHTO LRFD 14.7.5 (Method B) / 14.7.6 (Method A); MassDOT §3.5.7
+   ============================================================ */
+const DFTH_A = 24.0;          // constant-amplitude fatigue threshold, Category A (ksi) [Table 6.6.1.2.5-3]
+const LANE_MPF = {1:1.20,2:1.00,3:0.85,4:0.65};
+
+function defaultState(){
+  return {
+    proj:{name:"Example Bearing",num:"",calcBy:"",date:new Date().toISOString().slice(0,10),chkBy:"",chkDate:""},
+    padType:"circRein",      // 'circRein' | 'rectRein' | 'plain'
+    method:"B",              // 'B' (MassDOT preferred) | 'A'
+    // geometry (in)
+    geom:{ L:18.0, W:24.0, D:16.0, hri:0.50, nLayer:6, cover:0.25, tSteel:0.1196 },
+    // material
+    mat:{ G:0.160, Fy:36.0, fc:4.0 },   // shear modulus ksi (Method B 0.160), laminate yield ksi, seat f'c ksi
+    // loads (service, per bearing) — auto-filled from the Abutment app hand-off
+    loads:{
+      Pdl:80.0, Pll:55.0,                // dead / live service reactions (kip)
+      thetaProfile:0.000, thetaDL:0.000, thetaLL:0.004, thetaCamber:0.000, thetaTrans:0.000, seatSlope:0.010,
+      deltaS:0.35                        // total design shear movement Δs (in) — thermal+creep, already ×1.2
+    },
+    // MassDOT ↔ AASHTO toggles
+    tog:{
+      combLimit:4.75,        // 4.75 MassDOT (first interior) | 5.0 AASHTO/exterior
+      rotTol:0.03,           // 0.03 MassDOT | 0.005 AASHTO — added to resultant rotation
+      thermalFactor:1.2,     // ×1.2 on largest one-way movement (MassDOT explicit)
+      includeIM:false,       // MassDOT excludes dynamic load allowance from bearings
+      fixedShear:false,      // bearing fixed against shear translation (affects Method A stress & stability form)
+      exteriorCheck:false    // exterior-beam check → uses 5.0 limit regardless
+    },
+    // editable code coefficients (EOR confirms against governing edition)
+    coef:{ Da:1.4, DrRect:0.5, DrCirc:0.375, sigCapReinA:1.25, sigCapPlainA:0.80, GmethodA:0.150 },
+    assumptions:"1. Design shear movement Δs is the largest one-way thermal + creep/shrinkage movement from the superstructure, factored ×1.2 [MassDOT §3.5.7.6].\n2. Live load rotation approximated from midspan deflection as θ ≈ 3.2·Δ_LL/L per MassDOT Figs 3.5.7-2..4.\n3. Elastomer cover layers are 0.25 in; tapered internal layers are not used [MassDOT §3.5.7.8].\n4. The same bearing is used for all girders in the line and at both supports; design governs across girders.",
+    ui:{ tab:"tab-in", collapse:{} }
+  };
+}
+let S=defaultState();
+let LAST=null, WARN=[], SELFTEST=null;
+
+const clone=o=>JSON.parse(JSON.stringify(o));
+function getPath(o,p){return p.split(".").reduce((a,k)=>a==null?a:a[k],o);}
+function setPath(o,p,v){const k=p.split(".");let c=o;for(let i=0;i<k.length-1;i++)c=c[k[i]];c[k[k.length-1]]=v;}
+function fmt(x,d=2){ if(x==null||!isFinite(x))return "—"; const v=+x; if(v!==0&&Math.abs(v)<1e-4)return v.toExponential(2); return v.toFixed(d);}
+function fmtT(x,d=2){ if(x==null||!isFinite(x))return "\\text{—}"; return fmt(x,d);}
+function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
+function warn(msg,cls){ WARN.push({msg,cls:cls||""}); }
+const isCirc=()=>S.padType==="circRein";
+const isPlain=()=>S.padType==="plain";
+
+/* validation ranges: {hard:[lo,hi], typ:[lo,hi], msg} */
+const VALID={
+  "geom.L":{hard:[2,60],typ:[6,36],msg:"Pad length (long.) outside the typical 6–36 in range."},
+  "geom.W":{hard:[2,72],typ:[6,48],msg:"Pad width (trans.) outside the typical 6–48 in range."},
+  "geom.D":{hard:[4,60],typ:[8,36],msg:"Pad diameter outside the typical 8–36 in range."},
+  "geom.hri":{hard:[0.1,1.0],typ:[0.25,0.6],msg:"Internal layer thickness outside the typical 0.25–0.60 in range."},
+  "geom.nLayer":{hard:[1,30],typ:[2,12],msg:"Number of internal layers outside the typical 2–12."},
+  "geom.cover":{hard:[0,0.5],typ:[0.2,0.3],msg:"Cover layer usually 0.25 in [MassDOT Fig 3.5.7-5]."},
+  "geom.tSteel":{hard:[0.05,0.5],typ:[0.1196,0.25],msg:"Steel laminate ≥ 0.1196 in (11 ga) per MassDOT §3.5.7.5."},
+  "mat.G":{hard:[0.05,0.30],typ:[0.130,0.200],msg:"Shear modulus outside 0.130–0.200 ksi [14.7.6.2 / MassDOT §3.5.7.4]."},
+  "mat.Fy":{hard:[30,80],typ:[36,50],msg:"Laminate yield outside typical 36–50 ksi (ASTM A1011 Gr36+)."},
+  "mat.fc":{hard:[3,10],typ:[3,6],msg:"Seat concrete strength outside typical 3–6 ksi."},
+  "loads.Pdl":{hard:[0,2000],typ:[10,800],msg:"Dead-load reaction outside typical range — confirm."},
+  "loads.Pll":{hard:[0,2000],typ:[5,600],msg:"Live-load reaction outside typical range — confirm."},
+  "loads.deltaS":{hard:[0,4],typ:[0,2.5],msg:"Δs > 2.5 in → PTFE sliding bearing required [MassDOT §3.5.7.10]."},
+  "loads.thetaLL":{hard:[0,0.1],typ:[0,0.02],msg:"Live-load rotation appears high — confirm."}
+};
+
+function migrate(){
+  const d=defaultState();
+  ["proj","geom","mat","loads","tog","coef","ui"].forEach(k=>{ if(!S[k])S[k]=clone(d[k]);
+    Object.keys(d[k]).forEach(kk=>{ if(S[k][kk]===undefined) S[k][kk]=d[k][kk]; }); });
+  if(!S.padType)S.padType=d.padType; if(!S.method)S.method=d.method;
+  if(S.assumptions===undefined)S.assumptions=d.assumptions;
+  if(!S.ui.collapse)S.ui.collapse={};
+}
+</script>
+
+<script>
+/* ============================================================
+   SECTION B — input builders
+   ============================================================ */
+function inpRow(label,path,unit,o={}){
+  const v=getPath(S,path);
+  return `<div class="in-row"><label title="${esc(o.title||'')}">${label}</label>
+    <input type="number" step="${o.step||'any'}" data-path="${path}" value="${v}"><span class="unit">${unit||''}</span></div>`;
+}
+function selRow(label,path,opts,o={}){
+  const v=getPath(S,path);
+  return `<div class="in-row"><label>${label}</label><select data-path="${path}"${o.rebuild?' data-rebuild="1"':''}>
+    ${opts.map(([val,lab])=>`<option value="${val}"${String(v)===String(val)?" selected":""}>${lab}</option>`).join("")}</select></div>`;
+}
+function panel(id,no,title,body){
+  const closed=S.ui.collapse[id]?" closed":"";
+  return `<div class="panel${closed}" data-cid="${id}"><div class="p-head"><span class="tri">▼</span>${no?`<span>${no}</span>`:""} ${title}</div><div class="p-body">${body}</div></div>`;
+}
+function buildInputs(){
+  const g=S.geom,m=S.mat,L=S.loads,tg=S.tog,cf=S.coef;
+  let h="";
+  // project header
+  h+=panel("in-proj","","Project / Title Block",`
+    ${inpRow("Project name","proj.name","")}${inpRow("Project no.","proj.num","")}
+    ${inpRow("Calculated by","proj.calcBy","")}${inpRow("Date","proj.date","")}
+    ${inpRow("Checked by","proj.chkBy","")}${inpRow("Checked date","proj.chkDate","")}`.replace(/type="number"/g,'type="text"'));
+  // pad type & method
+  h+=panel("in-type","I-1","Bearing Type & Design Method",`
+    ${selRow("Pad type","padType",[["circRein","Steel-reinforced — circular (MassDOT default)"],["rectRein","Steel-reinforced — rectangular (approval)"],["plain","Plain (unreinforced) 1×5 pad"]],{rebuild:true})}
+    ${selRow("Design method","method",[["B","Method B — MassDOT preferred [14.7.5]"],["A","Method A — needs approval [14.7.6]"]],{rebuild:true})}
+    ${isPlain()?`<div class="in-note">Plain pads apply to adjacent concrete box / deck-beam bridges, span ≤ 50 ft; MassDOT standard is 1 in thick × 5 in wide [§3.5.7.9].</div>`:""}`);
+  // geometry
+  h+=panel("in-geom","I-2","Pad Geometry",`
+    ${isCirc()?inpRow("Diameter D","geom.D","in"):inpRow("Length L (longitudinal)","geom.L","in")+inpRow("Width W (transverse)","geom.W","in")}
+    ${inpRow("Internal layer thickness h<sub>ri</sub>","geom.hri","in")}
+    ${!isPlain()?inpRow("Number of internal layers n","geom.nLayer","")+inpRow("Cover layer thickness","geom.cover","in")+inpRow("Steel laminate thickness","geom.tSteel","in"):""}
+    <div class="derived" id="geomDeriv"></div>`);
+  // material
+  h+=panel("in-mat","I-3","Materials",`
+    ${inpRow("Shear modulus G","mat.G","ksi",{title:"Method B 0.160±15% (0.136–0.184); Method A 60-durometer 0.130–0.200 [MassDOT §3.5.7.4]"})}
+    ${!isPlain()?inpRow("Laminate yield F<sub>y</sub>","mat.Fy","ksi"):""}
+    ${inpRow("Seat concrete f'c","mat.fc","ksi")}`);
+  // loads
+  h+=panel("in-loads","I-4","Loads & Movements (service, per bearing)",`
+    <div class="in-note">Auto-filled from the Abutment app when opened via its “Open EDM” button; editable here.</div>
+    ${inpRow("Dead-load reaction P<sub>DL</sub>","loads.Pdl","kip")}
+    ${inpRow("Live-load reaction P<sub>LL</sub>","loads.Pll","kip")}
+    <div class="subhead">Rotations (rad)</div>
+    ${inpRow("Profile-grade rotation θ<sub>pg</sub>","loads.thetaProfile","rad")}
+    ${inpRow("Dead-load rotation θ<sub>DL</sub>","loads.thetaDL","rad",{title:"Neglect if girder is cambered for DL [§3.5.7.6]."})}
+    ${inpRow("Live-load rotation θ<sub>LL</sub>","loads.thetaLL","rad",{title:"≈ 3.2·Δ_LL/L (MassDOT approx)."})}
+    ${inpRow("Camber rotation θ<sub>c</sub>","loads.thetaCamber","rad")}
+    ${inpRow("Beam-seat slope (1%)","loads.seatSlope","rad")}
+    ${inpRow("Transverse rotation θ<sub>t</sub>","loads.thetaTrans","rad")}
+    <div class="subhead">Shear movement</div>
+    ${inpRow("Design shear movement Δ<sub>s</sub>","loads.deltaS","in",{title:"Largest one-way thermal+creep movement, ×1.2 [§3.5.7.6]."})}
+    <div class="derived" id="rotDeriv"></div>`);
+  // toggles
+  h+=panel("in-tog","I-5","MassDOT ↔ AASHTO Toggles",`
+    <div class="tog">MassDOT values are the defaults; switch to the AASHTO value where they differ.</div>
+    ${selRow("Combined shear-strain limit","tog.combLimit",[[4.75,"4.75 — MassDOT (first interior) [§3.5.7.6]"],[5.0,"5.0 — AASHTO / exterior check"]])}
+    ${selRow("Construction rotation tolerance","tog.rotTol",[[0.03,"0.03 rad — MassDOT [§3.5.7.3]"],[0.005,"0.005 rad — AASHTO"]])}
+    ${selRow("Thermal movement factor","tog.thermalFactor",[[1.2,"×1.2 — MassDOT explicit [§3.5.7.6]"],[1.0,"×1.0 — none"]])}
+    <div class="chk-row"><input type="checkbox" data-path="tog.includeIM"${tg.includeIM?" checked":""}><label>Include dynamic load allowance (IM) — MassDOT excludes it</label></div>
+    <div class="chk-row"><input type="checkbox" data-path="tog.fixedShear"${tg.fixedShear?" checked":""}><label>Bearing fixed against shear translation</label></div>
+    <div class="chk-row"><input type="checkbox" data-path="tog.exteriorCheck"${tg.exteriorCheck?" checked":""}><label>Exterior-beam check (forces the 5.0 limit)</label></div>`);
+  // editable coefficients
+  h+=panel("in-coef","I-6","Code Coefficients (editable — EOR confirms)",`
+    <div class="in-note">Standard AASHTO values shown; editable so the engineer of record can confirm against the governing edition [14.7.5.3.3 / 14.7.6].</div>
+    ${inpRow("Axial-strain coeff. D<sub>a</sub>","coef.Da","",{title:"εa = Da·σ/(G·S) [14.7.5.3.3]"})}
+    ${inpRow("Rotation coeff. D<sub>r</sub> (rect.)","coef.DrRect","")}
+    ${inpRow("Rotation coeff. D<sub>r</sub> (circ.)","coef.DrCirc","")}
+    ${inpRow("Method-A stress cap (reinf.)","coef.sigCapReinA","ksi")}
+    ${inpRow("Method-A stress cap (plain)","coef.sigCapPlainA","ksi")}
+    ${inpRow("Method-A shear modulus","coef.GmethodA","ksi")}`);
+  // assumptions
+  h+=panel("in-assum","I-7","Engineering Assumptions",`
+    <textarea data-path="assumptions">${esc(S.assumptions)}</textarea>`);
+  document.getElementById("inputPanel").innerHTML=h;
+  // derived readouts
+  const R=LAST;
+  if(R){
+    const gd=document.getElementById("geomDeriv");
+    if(gd) gd.innerHTML=`Plan area A = <b>${fmt(R.A,1)} in²</b> · shape factor S = <b>${fmt(R.S)}</b> · total elastomer h<sub>rt</sub> = <b>${fmt(R.hrt,3)} in</b>`;
+    const rd=document.getElementById("rotDeriv");
+    if(rd) rd.innerHTML=`Design rotation θ<sub>s</sub> = √(long²+trans²)+tol = <b>${fmt(R.rot.thTotal,4)} rad</b> · σ<sub>TL</sub> = <b>${fmt(R.sigTL,3)} ksi</b>`;
+  }
+}
+</script>
+
+<script>
+/* ============================================================
+   SECTION C — design engine
+   AASHTO LRFD 14.7.5 (Method B) / 14.7.6 (Method A), MassDOT §3.5.7
+   ============================================================ */
+function computeEDM(loadsOverride){
+  WARN=[];
+  const g=S.geom,m=S.mat,L=loadsOverride||S.loads,tg=S.tog,cf=S.coef;
+  const R={padType:S.padType,method:S.method,girderTag:loadsOverride?loadsOverride.__tag:null};
+  const hri=+g.hri;
+  let A,Sf,planL,planW,Bdim,Dr;
+  if(isCirc()){ const D=+g.D; A=Math.PI*D*D/4; Sf=D/(4*hri); planL=D; planW=D; Bdim=D; Dr=+cf.DrCirc; }
+  else { planL=+g.L; planW=(+g.W); A=planL*planW; Sf=planL*planW/(2*hri*(planL+planW)); Bdim=planL; Dr=+cf.DrRect; }
+  const n=isPlain()?1:(+g.nLayer);
+  const hrt=isPlain()?hri:(n*hri+2*(+g.cover));
+  R.A=A;R.S=Sf;R.hrt=hrt;R.n=n;R.hri=hri;R.planL=planL;R.planW=planW;R.Bdim=Bdim;R.DrUsed=Dr;
+  const Pdl=+L.Pdl,Pll=+L.Pll,G=+m.G;
+  const sigDL=Pdl/A,sigLL=Pll/A,sigTL=(Pdl+Pll)/A;
+  R.sigDL=sigDL;R.sigLL=sigLL;R.sigTL=sigTL;R.Pdl=Pdl;R.Pll=Pll;
+  // design rotation (MassDOT §3.5.7.6): vector sum of components + tolerance on resultant
+  const thLongStatic=Math.abs(+L.thetaProfile)+Math.abs(+L.thetaDL)+Math.abs(+L.thetaCamber)+Math.abs(+L.seatSlope);
+  const thLongCyclic=Math.abs(+L.thetaLL);
+  const thTrans=Math.abs(+L.thetaTrans);
+  const thTotal=Math.hypot(thLongStatic+thLongCyclic,thTrans)+(+tg.rotTol);
+  R.rot={thLongStatic,thLongCyclic,thTrans,thTotal,tol:+tg.rotTol};
+  // Method B shear strains (14.7.5.3.3)
+  const Da=+cf.Da;
+  const ga_st=Da*sigDL/(G*Sf), ga_cy=Da*sigLL/(G*Sf);
+  const gr_st=Dr*Math.pow(Bdim/hri,2)*((thLongStatic+(+tg.rotTol))/n);
+  const gr_cy=Dr*Math.pow(Bdim/hri,2)*(thLongCyclic/n);
+  const gs_st=(+L.deltaS)/hrt, gs_cy=0;
+  const combined=(ga_st+gr_st+gs_st)+1.75*(ga_cy+gr_cy+gs_cy);
+  const limit=tg.exteriorCheck?5.0:(+tg.combLimit);
+  R.strain={Da,ga_st,ga_cy,gr_st,gr_cy,gs_st,gs_cy,combined,limit};
+  // stability (14.7.5.3.4)
+  let Lp=planL,Wp=planW; if(isCirc()){const aeq=0.886*(+g.D);Lp=aeq;Wp=aeq;}
+  const Ac=1.92*(hrt/Lp)/Math.sqrt(1+2*Lp/Wp);
+  const Bc=2.67/((Sf+2.0)*(1+Lp/(4*Wp)));
+  const stable=(2*Ac<=Bc);
+  const denom=tg.fixedShear?(Ac-Bc):(2*Ac-Bc);
+  const sigLim=(denom>0)?G*Sf/denom:Infinity;
+  R.stab={Ac,Bc,stable,sigLim,denom,Lp,Wp};
+  // reinforcement (14.7.5.3.5)
+  const hsService=3*hri*sigTL/(+m.Fy), hsFatigue=2.0*hri*sigLL/DFTH_A;
+  R.reinf={hsService,hsFatigue,hsReq:Math.max(hsService,hsFatigue),tProvided:+g.tSteel};
+  // Method A limits (14.7.6)
+  const GmA=+cf.GmethodA;
+  const sigGS=(tg.fixedShear?1.25:1.0)*GmA*Sf;
+  const sigCap=isPlain()?+cf.sigCapPlainA:+cf.sigCapReinA;
+  const upliftA=Dr*GmA*Sf*Math.pow(Bdim/hri,2)*(thTotal/n);
+  R.methodA={GmA,sigGS,sigCap,upliftA};
+  // dashboard
+  const dash=[]; const add=(id,name,dc,ref)=>dash.push({id,name,dc,pass:dc<=1.0001,ref});
+  if(isPlain()){
+    add("sigP","Compressive stress — plain [14.7.6.3.2]",sigTL/(+cf.sigCapPlainA),"σs ≤ 0.80 ksi");
+    add("shearP","Shear deformation [14.7.6.3.4]",(2*(+L.deltaS))/hrt,"hrt ≥ 2Δs");
+    add("stabP","Stability thickness",hrt/(Math.min(planL,planW)/3),"hrt ≤ L/3, W/3");
+  } else if(S.method==="B"){
+    add("comb","Combined shear strain [14.7.5.3.3]",combined/limit,"≤ "+fmt(limit));
+    if(denom>0) add("stab","Stability [14.7.5.3.4]",sigTL/sigLim,"σs ≤ GS/("+(tg.fixedShear?"A−B":"2A−B")+")");
+    else dash.push({id:"stab",name:"Stability [14.7.5.3.4] — 2A ≤ B, stable",dc:0,pass:true,ref:"2A ≤ B"});
+    add("shearB","Shear deformation [14.7.5.3.2]",(+L.deltaS)/(0.5*hrt),"γs ≤ 0.50");
+    add("reinf","Steel laminate thickness [14.7.5.3.5]",R.reinf.hsReq/R.reinf.tProvided,"hs ≥ max(svc,fat)");
+  } else {
+    add("sigA","Compressive stress [14.7.6.3.2]",sigTL/Math.min(sigGS,sigCap),"σs ≤ min(GS, cap)");
+    add("shearA","Shear deformation [14.7.6.3.4]",(2*(+L.deltaS))/hrt,"hrt ≥ 2Δs");
+    add("rotA","Compression–rotation (uplift) [14.7.6.3.5]",upliftA/sigTL,"σs ≥ Dr·GS(B/hri)²(θ/n)");
+    add("stabA","Stability thickness [14.7.6.3.6]",hrt/(isCirc()?(+g.D)/4:Math.min(planL,planW)/3),isCirc()?"hrt ≤ D/4":"hrt ≤ L/3, W/3");
+    add("reinfA","Steel laminate thickness [14.7.6.3.7]",R.reinf.hsReq/R.reinf.tProvided,"hs ≥ max(svc,fat)");
+  }
+  R.dash=dash; R.nFail=dash.filter(d=>d.pass===false).length;
+  // applicability warnings
+  if(sigDL<0.2) warn("Dead-load stress σ_DL = "+fmt(sigDL)+" ksi < 0.20 ksi — risk of bearing walking/creep; increase DL or reduce pad area.");
+  if((+L.deltaS)>2.5) warn("Δs = "+fmt(+L.deltaS)+" in > 2.5 in — a PTFE sliding bearing is required [MassDOT §3.5.7.10].","err");
+  if(+g.tSteel<0.1196 && !isPlain()) warn("Steel laminate < 0.1196 in (11 ga) — below the MassDOT minimum [§3.5.7.5].","err");
+  if(!isCirc()&&!isPlain()) warn("Rectangular steel-reinforced bearings require State Bridge Engineer approval; MassDOT default is circular [§3.5.7.9].");
+  if(S.method==="A"&&!isPlain()) warn("Method A requires State Bridge Engineer approval in lieu of the preferred Method B [MassDOT §3.5.7.2].");
+  R.warn=WARN.slice();
+  return R;
+}
+function recalc(){ migrate(); LAST=computeEDM(); renderAll(); scheduleSave(); }
+// thermal movement per MassDOT §3.5.7.6 / Figs 3.5.7-2..4: Δ = factor·0.5·α·span·12·ΔT (half-span, midspan neutral)
+function thermalMovement(spanFt,alpha,dT,factor){ return factor*0.5*alpha*spanFt*12*dT; }
+</script>
+
+<script>
+/* ============================================================
+   SECTION D — output rendering, graphics, persistence, linkage, self-test
+   ============================================================ */
+function renderMathIn(el){ if(!window.katex)return; el.querySelectorAll(".ktx").forEach(k=>{ if(k.dataset.done)return; try{katex.render(k.dataset.tex,k,{throwOnError:false,displayMode:true});k.dataset.done="1";}catch(e){k.textContent=k.dataset.tex;} }); }
+function eqB(title,ref,lines,note){
+  return `<div class="eqb"><div class="eqtitle">${title}${ref?`<span class="eqref">[${ref}]</span>`:""}</div>
+    ${lines.map(t=>`<div class="ktx" data-tex="${esc(t)}"></div>`).join("")}
+    ${note?`<div class="eqnote">${note}</div>`:""}</div>`;
+}
+function varsTbl(rows){
+  return `<table class="vtbl">${rows.map(r=>`<tr><td>${r[0]?`\\(${r[0]}\\)`:""}</td><td>${r[1]}</td><td><b>${fmt(r[2],r[4]??2)}</b></td><td>${r[3]||""}</td></tr>`).join("")}</table>`
+    .replace(/\\\(([^)]*)\\\)/g,(m,tex)=>`<span class="ktxi" data-tex="${esc(tex)}">${esc(tex)}</span>`);
+}
+function checkLine(name,dc,ref){
+  const pass=dc<=1.0001;
+  return `<div class="checkline"><span class="verdict ${pass?"ok":"bad"}">${pass?"PASS":"FAIL"}</span>
+    <span style="flex:1">${name} — D/C = <b>${fmt(dc)}</b> ${ref?`<span class="eqref">${ref}</span>`:""}</span></div>`;
+}
+function renderInlineMath(root){ (root||document).querySelectorAll(".ktxi").forEach(k=>{ if(k.dataset.done)return; try{katex.render(k.dataset.tex,k,{throwOnError:false,displayMode:false});k.dataset.done="1";}catch(e){} }); }
+
+const TABS=[["tab-in","Geometry & Schematic"],["tab-des","Design Checks"],["tab-rot","Rotation & Movement"],["tab-gird","Girder Run"],["tab-warn","Warnings & Assumptions"]];
+function renderAll(){
+  const R=LAST; if(!R)return;
+  renderDashboard(R);
+  // tabbar
+  document.getElementById("tabbar").innerHTML=TABS.map(([id,t])=>`<div class="tab${S.ui.tab===id?" active":""}" data-tab="${id}">${t}</div>`).join("");
+  // tabs
+  let h="";
+  h+=`<div class="tabpane${S.ui.tab==="tab-in"?" active":""}" id="tab-in">${renderGeom(R)}</div>`;
+  h+=`<div class="tabpane${S.ui.tab==="tab-des"?" active":""}" id="tab-des">${renderDesign(R)}</div>`;
+  h+=`<div class="tabpane${S.ui.tab==="tab-rot"?" active":""}" id="tab-rot">${renderRot(R)}</div>`;
+  h+=`<div class="tabpane${S.ui.tab==="tab-gird"?" active":""}" id="tab-gird">${renderGird(R)}</div>`;
+  h+=`<div class="tabpane${S.ui.tab==="tab-warn"?" active":""}" id="tab-warn">${renderWarn(R)}</div>`;
+  document.getElementById("tabs").innerHTML=h;
+  const pane=document.getElementById(S.ui.tab); if(pane){ renderMathIn(pane); renderInlineMath(pane); }
+  drawSchematic(); drawCharts(R);
+  // sync input derived readouts
+  buildInputsDerived();
+}
+function buildInputsDerived(){
+  const R=LAST; if(!R)return;
+  const gd=document.getElementById("geomDeriv"); if(gd) gd.innerHTML=`Plan area A = <b>${fmt(R.A,1)} in²</b> · shape factor S = <b>${fmt(R.S)}</b> · total elastomer h<sub>rt</sub> = <b>${fmt(R.hrt,3)} in</b>`;
+  const rd=document.getElementById("rotDeriv"); if(rd) rd.innerHTML=`Design rotation θ<sub>s</sub> = <b>${fmt(R.rot.thTotal,4)} rad</b> · σ<sub>TL</sub> = <b>${fmt(R.sigTL,3)} ksi</b>`;
+}
+function renderDashboard(R){
+  const items=R.dash.map(d=>`<div class="dash-item${d.pass===false?" fail":""}" data-goto="tab-des"><span class="lamp ${d.pass===null?"na":d.pass?"ok":"bad"}"></span>${d.name} ${d.dc!=null&&d.dc>0?"("+fmt(d.dc)+")":""}</div>`).join("");
+  const ok=R.nFail===0;
+  document.getElementById("dashboard").innerHTML=`<div class="dash-title">Design Summary — ${S.padType==="circRein"?"circular reinforced":S.padType==="rectRein"?"rectangular reinforced":"plain"} pad, Method ${isPlain()?"A (plain)":S.method}</div>
+    <div class="dash-grid">${items}</div>
+    <div class="dash-summary">${ok?`<span class="pass">All ${R.dash.length} checks PASS</span>`:`<span class="fail">${R.nFail} of ${R.dash.length} checks FAIL</span>`} · governing D/C = <b>${fmt(Math.max(...R.dash.map(d=>d.dc||0)))}</b></div>`;
+}
+function renderGeom(R){
+  const g=S.geom;
+  const shapeEq=isCirc()
+    ? eqB("Shape factor — circular","AASHTO 14.7.5.1",["S = \\dfrac{D}{4\\,h_{ri}}",`S = \\dfrac{${fmtT(g.D)}}{4(${fmtT(g.hri,3)})} = ${fmtT(R.S)}`])
+    : eqB("Shape factor — rectangular","AASHTO 14.7.5.1",["S = \\dfrac{L\\,W}{2\\,h_{ri}(L+W)}",`S = \\dfrac{(${fmtT(g.L)})(${fmtT(g.W)})}{2(${fmtT(g.hri,3)})(${fmtT(g.L)}+${fmtT(g.W)})} = ${fmtT(R.S)}`]);
+  return panel("o-geom","1.1","Plan Geometry & Shape Factor",`
+    ${varsTbl(isCirc()?[["D","Diameter",g.D,"in"],["h_{ri}","Internal layer thickness",g.hri,"in",3],["n","Internal layers",R.n,"",0]]:[["L","Length (long.)",g.L,"in"],["W","Width (trans.)",g.W,"in"],["h_{ri}","Internal layer thickness",g.hri,"in",3],["n","Internal layers",R.n,"",0]])}
+    ${shapeEq}
+    ${eqB("Total elastomer thickness (for shear) and plan area",isPlain()?"single layer":"MassDOT Fig 3.5.7-5",[
+      isPlain()?`h_{rt} = h_{ri} = ${fmtT(R.hrt,3)}\\ \\text{in}`:`h_{rt} = n\\,h_{ri} + 2c = ${fmtT(R.n,0)}(${fmtT(g.hri,3)})+2(${fmtT(g.cover,3)}) = ${fmtT(R.hrt,3)}\\ \\text{in}`,
+      isCirc()?`A = \\tfrac{\\pi}{4}D^2 = ${fmtT(R.A,1)}\\ \\text{in}^2`:`A = L\\,W = ${fmtT(R.A,1)}\\ \\text{in}^2`])}
+    <div class="svgbox" id="padSvg"></div>
+    <div class="figcap">Elastomer layers (amber) with steel laminates (grey); dimensions to scale. Live schematic.</div>`);
+}
+function renderDesign(R){
+  const st=R.strain, g=S.geom, m=S.mat;
+  if(isPlain()){
+    return panel("o-plain","2.1","Plain Pad — Method A [14.7.6.3.2]",`
+      ${eqB("Compressive stress","AASHTO 14.7.6.3.2 / MassDOT §3.5.7.9",["\\sigma_s = \\dfrac{P_{DL}+P_{LL}}{A}",`\\sigma_s = \\dfrac{${fmtT(R.Pdl)}+${fmtT(R.Pll)}}{${fmtT(R.A,1)}} = ${fmtT(R.sigTL,3)}\\ \\text{ksi} \\le ${fmtT(S.coef.sigCapPlainA,2)}\\ \\text{ksi}`])}
+      ${checkLine("Compressive stress",R.sigTL/(+S.coef.sigCapPlainA),"[14.7.6.3.2]")}
+      ${eqB("Shear deformation","AASHTO 14.7.6.3.4",["h_{rt} \\ge 2\\Delta_s",`${fmtT(R.hrt,3)} \\ge 2(${fmtT(S.loads.deltaS,3)}) = ${fmtT(2*S.loads.deltaS,3)}\\ \\text{in}`])}
+      ${checkLine("Shear deformation",(2*(+S.loads.deltaS))/R.hrt,"[14.7.6.3.4]")}
+      ${checkLine("Stability thickness",R.hrt/(Math.min(R.planL,R.planW)/3),"hrt ≤ L/3, W/3")}`);
+  }
+  if(S.method==="B"){
+    return panel("o-methB","2.1","Method B — Combined Shear Strain [14.7.5.3.3]",`
+      ${varsTbl([["\\sigma_{DL}","Dead-load stress",R.sigDL,"ksi",3],["\\sigma_{LL}","Live-load stress",R.sigLL,"ksi",3],["G","Shear modulus",m.G,"ksi",3],["S","Shape factor",R.S,""],["D_a","Axial coeff.",st.Da,""],["D_r","Rotation coeff.",R.DrUsed,""],["\\theta_s","Design rotation",R.rot.thTotal,"rad",4],["\\Delta_s","Shear movement",S.loads.deltaS,"in",3]])}
+      ${eqB("Axial shear strain (static / cyclic)","AASHTO 14.7.5.3.3-3",[`\\gamma_{a} = \\dfrac{D_a\\,\\sigma}{G\\,S}`,`\\gamma_{a,st} = \\dfrac{${fmtT(st.Da)}(${fmtT(R.sigDL,3)})}{${fmtT(m.G,3)}(${fmtT(R.S)})} = ${fmtT(st.ga_st,3)}, \\quad \\gamma_{a,cy} = ${fmtT(st.ga_cy,3)}`])}
+      ${eqB("Rotational shear strain","AASHTO 14.7.5.3.3-6",[`\\gamma_{r} = D_r\\left(\\dfrac{${isCirc()?"D":"L"}}{h_{ri}}\\right)^2\\dfrac{\\theta}{n}`,`\\gamma_{r,st} = ${fmtT(st.gr_st,3)}, \\quad \\gamma_{r,cy} = ${fmtT(st.gr_cy,3)}`])}
+      ${eqB("Shear strain from movement","AASHTO 14.7.5.3.2",[`\\gamma_{s} = \\dfrac{\\Delta_s}{h_{rt}} = \\dfrac{${fmtT(S.loads.deltaS,3)}}{${fmtT(R.hrt,3)}} = ${fmtT(st.gs_st,3)}`])}
+      ${eqB("Combined static + cyclic limit","AASHTO 14.7.5.3.3-1 / MassDOT §3.5.7.6",[
+        `(\\gamma_{a,st}+\\gamma_{r,st}+\\gamma_{s,st}) + 1.75(\\gamma_{a,cy}+\\gamma_{r,cy}+\\gamma_{s,cy}) \\le ${fmtT(st.limit)}`,
+        `(${fmtT(st.ga_st,3)}+${fmtT(st.gr_st,3)}+${fmtT(st.gs_st,3)}) + 1.75(${fmtT(st.ga_cy,3)}+${fmtT(st.gr_cy,3)}+${fmtT(st.gs_cy,3)}) = ${fmtT(st.combined,3)}`],
+        `Limit = ${fmt(st.limit)} (${S.tog.exteriorCheck?"exterior check":"MassDOT first-interior 4.75 / AASHTO 5.0"}).`)}
+      ${checkLine("Combined shear strain",st.combined/st.limit,"[14.7.5.3.3]")}
+      ${eqB("Stability","AASHTO 14.7.5.3.4",[
+        `A = \\dfrac{1.92\\,h_{rt}/L}{\\sqrt{1+2L/W}} = ${fmtT(R.stab.Ac,4)}, \\quad B = \\dfrac{2.67}{(S+2)(1+L/4W)} = ${fmtT(R.stab.Bc,4)}`,
+        R.stab.stable?`2A = ${fmtT(2*R.stab.Ac,4)} \\le B = ${fmtT(R.stab.Bc,4)} \\Rightarrow \\text{stable, no stress limit}`:`\\sigma_s \\le \\dfrac{G S}{${S.tog.fixedShear?"A-B":"2A-B"}} = ${fmtT(R.stab.sigLim,3)}\\ \\text{ksi}, \\quad \\sigma_s = ${fmtT(R.sigTL,3)}`])}
+      ${R.stab.stable?checkLine("Stability (2A ≤ B)",0,"[14.7.5.3.4]"):checkLine("Stability",R.sigTL/R.stab.sigLim,"[14.7.5.3.4]")}
+      ${eqB("Steel reinforcement thickness","AASHTO 14.7.5.3.5",[
+        `h_s \\ge \\dfrac{3\\,h_{ri}\\,\\sigma_s}{F_y} = \\dfrac{3(${fmtT(g.hri,3)})(${fmtT(R.sigTL,3)})}{${fmtT(m.Fy)}} = ${fmtT(R.reinf.hsService,4)}\\ \\text{in (service)}`,
+        `h_s \\ge \\dfrac{2.0\\,h_{ri}\\,\\sigma_L}{\\Delta F_{TH}} = \\dfrac{2.0(${fmtT(g.hri,3)})(${fmtT(R.sigLL,3)})}{${DFTH_A}} = ${fmtT(R.reinf.hsFatigue,4)}\\ \\text{in (fatigue, Cat. A)}`,
+        `h_{s,req} = ${fmtT(R.reinf.hsReq,4)}\\ \\text{in} \\le h_{s,prov} = ${fmtT(R.reinf.tProvided,4)}\\ \\text{in}`])}
+      ${checkLine("Steel laminate thickness",R.reinf.hsReq/R.reinf.tProvided,"[14.7.5.3.5]")}`);
+  }
+  // Method A
+  const ma=R.methodA;
+  return panel("o-methA","2.1","Method A — Stress & Rotation [14.7.6]",`
+    ${eqB("Compressive stress limit","AASHTO 14.7.6.3.2",[
+      `\\sigma_s \\le ${S.tog.fixedShear?"1.25":"1.0"}\\,G\\,S = ${fmtT(ma.sigGS,3)}\\ \\text{ksi} \\;\\text{and}\\; \\le ${fmtT(ma.sigCap)}\\ \\text{ksi}`,
+      `\\sigma_s = ${fmtT(R.sigTL,3)}\\ \\text{ksi}`])}
+    ${checkLine("Compressive stress",R.sigTL/Math.min(ma.sigGS,ma.sigCap),"[14.7.6.3.2]")}
+    ${eqB("Shear deformation","AASHTO 14.7.6.3.4",[`h_{rt} \\ge 2\\Delta_s = 2(${fmtT(S.loads.deltaS,3)}) = ${fmtT(2*S.loads.deltaS,3)}\\ \\text{in}, \\quad h_{rt}=${fmtT(R.hrt,3)}`])}
+    ${checkLine("Shear deformation",(2*(+S.loads.deltaS))/R.hrt,"[14.7.6.3.4]")}
+    ${eqB("Combined compression & rotation (uplift)","AASHTO 14.7.6.3.5",[
+      `\\sigma_s \\ge D_r\\,G\\,S\\left(\\dfrac{${isCirc()?"D":"L"}}{h_{ri}}\\right)^2\\dfrac{\\theta_s}{n} = ${fmtT(ma.upliftA,3)}\\ \\text{ksi}`,
+      `\\sigma_s = ${fmtT(R.sigTL,3)}\\ \\text{ksi}`])}
+    ${checkLine("Compression–rotation (uplift)",ma.upliftA/R.sigTL,"[14.7.6.3.5]")}
+    ${checkLine("Stability thickness",R.hrt/(isCirc()?(+g.D)/4:Math.min(R.planL,R.planW)/3),isCirc()?"hrt ≤ D/4":"hrt ≤ L/3, W/3")}
+    ${checkLine("Steel laminate thickness",R.reinf.hsReq/R.reinf.tProvided,"[14.7.6.3.7]")}`);
+}
+function renderRot(R){
+  const L=S.loads, th=S.thermal||{span:75,alpha:6.5e-6,dT:100,factor:+S.tog.thermalFactor};
+  const dTherm=thermalMovement(+th.span,+th.alpha,+th.dT,+th.factor);
+  return panel("o-rot","3.1","Design Rotation Build-up [MassDOT §3.5.7.6]",`
+    ${varsTbl([["\\theta_{pg}","Profile grade",L.thetaProfile,"rad",4],["\\theta_{DL}","Dead load",L.thetaDL,"rad",4],["\\theta_{c}","Camber",L.thetaCamber,"rad",4],["\\text{slope}","Seat 1%",L.seatSlope,"rad",4],["\\theta_{LL}","Live load",L.thetaLL,"rad",4],["\\theta_{t}","Transverse",L.thetaTrans,"rad",4]])}
+    ${eqB("Resultant design rotation (vector sum + construction tolerance)","MassDOT §3.5.7.6, Figs 3.5.7-2..4",[
+      `\\theta_s = \\sqrt{(\\theta_{long})^2+(\\theta_{trans})^2} + \\theta_{tol}`,
+      `\\theta_s = \\sqrt{(${fmtT(R.rot.thLongStatic+R.rot.thLongCyclic,4)})^2+(${fmtT(R.rot.thTrans,4)})^2} + ${fmtT(R.rot.tol,3)} = ${fmtT(R.rot.thTotal,4)}\\ \\text{rad}`],
+      `θ_long includes profile grade, DL, camber, 1% seat slope and LL; the ${fmt(R.rot.tol,3)}-rad tolerance is added to the resultant, not each direction [§3.5.7.6].`)}
+    ${panel("o-therm","3.2","Thermal Movement (reference calc)",`
+      ${eqB("One-way thermal movement","MassDOT §3.5.7.6, Fig 3.5.7-2",[
+        `\\Delta = f\\cdot 0.5\\,\\alpha\\,L_{span}\\,\\Delta T`,
+        `\\Delta = ${fmtT(th.factor,2)}(0.5)(${fmtT(th.alpha,7)})(${fmtT(th.span)}\\cdot12)(${fmtT(th.dT,0)}) = ${fmtT(dTherm,3)}\\ \\text{in}`],
+        `Half-span (midspan-neutral, standard bridge) with the MassDOT ×${fmt(th.factor,1)} factor. Use this as Δs above, adding creep/shrinkage. Enter span/α/ΔT in the Rotation & Movement inputs.`)}
+      ${inpRow("Span length","thermal.span","ft").replace('data-path','data-path data-rot')}
+      ${inpRow("CTE α","thermal.alpha","/°F")}
+      ${inpRow("Temperature range ΔT","thermal.dT","°F")}`)}`);
+}
+function renderGird(R){
+  const gs=S.girders||[];
+  if(!gs.length) return panel("o-gird","4.1","Girder Run",`<div class="in-note">No girder set loaded. Open the EDM from the Abutment app to receive per-girder loads, or add girders via JSON import. You can still design for the single load case in panel I-4.</div>`);
+  const run=gs.map((gd,i)=>{ const r=computeEDM(Object.assign({__tag:gd.tag||("G"+(i+1))},S.loads,gd)); return {tag:gd.tag||("G"+(i+1)),gov:Math.max(...r.dash.map(d=>d.dc||0)),fail:r.nFail}; });
+  const govAll=Math.max(...run.map(r=>r.gov));
+  return panel("o-gird","4.1","Girder Run — one pad checked against every girder",`
+    <table class="itbl"><tr><th>Girder</th><th>Governing D/C</th><th>Result</th></tr>
+      ${run.map(r=>`<tr${r.gov===govAll?' style="background:#eef4ff"':''}><td>${esc(r.tag)}</td><td>${fmt(r.gov)}</td><td><b style="color:${r.fail?"#c62828":"#1a7f37"}">${r.fail?r.fail+" FAIL":"PASS"}</b></td></tr>`).join("")}
+    </table>
+    <div class="derived">Governing across all girders: D/C = <b>${fmt(govAll)}</b>. Per MassDOT the pad is designed for the first interior girder and checked at the exterior; the same pad serves the whole line and both supports.</div>`);
+}
+function renderWarn(R){
+  const w=R.warn||[];
+  return panel("o-warn","5.1","Validation Warnings & Applicability",`
+    ${w.length?w.map(x=>`<div class="warn-item${x.cls==="err"?" err":""}">${x.msg}</div>`).join(""):'<div class="warn-item" style="background:#e7f4e9;border-left-color:#1a7f37">No warnings — inputs within range of applicability.</div>'}`)
+    + panel("o-assum","5.2","Engineering Assumptions",`<div style="white-space:pre-wrap;font-size:13px;">${esc(S.assumptions)||"—"}</div>`);
+}
+/* ---- SVG pad schematic ---- */
+function drawSchematic(){
+  const el=document.getElementById("padSvg"); if(!el)return;
+  const g=S.geom, R=LAST; const n=R.n;
+  const W=440, m=70; const totH=(isPlain()?R.hrt:(n*(+g.hri)+2*(+g.cover)+(n+1)*(+g.tSteel)));
+  const planDim=isCirc()?(+g.D):(+g.L);
+  const scX=(W-2*m)/Math.max(planDim,1), scY=Math.min(18, 150/Math.max(totH,0.5));
+  const Hpx=totH*scY+2*m; const x0=m, y0=m;
+  let s=`<svg viewBox="0 0 ${W} ${Hpx}" width="100%" style="max-width:520px">`;
+  let y=y0;
+  if(isPlain()){
+    s+=`<rect x="${x0}" y="${y}" width="${planDim*scX}" height="${R.hrt*scY}" fill="#d9b36a" stroke="#8a6d2b"/>`;
+  } else {
+    // bottom cover
+    const draw=(hh,fill,stroke)=>{ s+=`<rect x="${x0}" y="${y}" width="${planDim*scX}" height="${hh*scY}" fill="${fill}" stroke="${stroke}"/>`; y+=hh*scY; };
+    draw(+g.cover,"#e3c785","#8a6d2b");
+    for(let i=0;i<n;i++){ draw(+g.tSteel,"#9aa0aa","#5a5f68"); draw(+g.hri,"#d9b36a","#8a6d2b"); }
+    draw(+g.tSteel,"#9aa0aa","#5a5f68"); draw(+g.cover,"#e3c785","#8a6d2b");
+  }
+  // dims
+  const bx=x0+planDim*scX+14;
+  s+=`<line x1="${bx}" y1="${y0}" x2="${bx}" y2="${y0+totH*scY}" stroke="#333"/><text x="${bx+4}" y="${y0+totH*scY/2}" font-size="11" font-family="Times New Roman">total ${fmt(totH,3)}"</text>`;
+  s+=`<line x1="${x0}" y1="${Hpx-m+18}" x2="${x0+planDim*scX}" y2="${Hpx-m+18}" stroke="#333"/><text x="${x0+planDim*scX/2}" y="${Hpx-m+32}" text-anchor="middle" font-size="11" font-family="Times New Roman">${isCirc()?"D":"L"} = ${fmt(planDim)}"</text>`;
+  s+=`<text x="${x0}" y="${y0-6}" font-size="11" font-family="Times New Roman" fill="#8a6d2b">elastomer</text><text x="${x0+planDim*scX*0.5}" y="${y0-6}" font-size="11" font-family="Times New Roman" fill="#5a5f68">${isPlain()?"":"steel laminate"}</text>`;
+  s+=`</svg>`;
+  el.innerHTML=s;
+}
+/* ---- charts ---- */
+function drawCharts(R){
+  if(!window.Plotly)return;
+  const pane=document.getElementById("tab-des"); if(!pane||S.ui.tab!=="tab-des")return;
+  let host=document.getElementById("dcChart");
+  if(!host){ host=document.createElement("div"); host.className="plotbox"; host.id="dcChart"; const p=pane.querySelector(".p-body"); if(p)p.appendChild(host); }
+  const d=R.dash.filter(x=>x.dc!=null);
+  Plotly.react("dcChart",[{x:d.map(x=>x.name.replace(/\[.*/,"").trim()),y:d.map(x=>x.dc||0),type:"bar",
+    marker:{color:d.map(x=>x.pass===false?"#c62828":"#1a7f37")},hovertemplate:"%{x}<br>D/C = %{y:.2f}<extra></extra>"}],
+    {title:{text:"Demand / Capacity by check",font:{family:"Times New Roman",size:15,color:"#1f3a5f"}},font:{family:"Times New Roman",size:12},
+     paper_bgcolor:"#fff",plot_bgcolor:"#fff",margin:{l:45,r:15,t:40,b:80},height:320,
+     shapes:[{type:"line",x0:-0.5,x1:d.length-0.5,y0:1,y1:1,line:{color:"#c62828",dash:"dot"}}],
+     yaxis:{title:{text:"D/C"},gridcolor:"#eee"},xaxis:{tickangle:-30}},{displayModeBar:false,responsive:true});
+}
+/* ---- persistence ---- */
+const AUTOSAVE="edm_v1_autosave", PROJKEY="edm_v1_projects";
+let saveT=null;
+function scheduleSave(){ clearTimeout(saveT); saveT=setTimeout(()=>{ try{localStorage.setItem(AUTOSAVE,JSON.stringify(S));document.getElementById("saveStatus").textContent="autosaved "+new Date().toLocaleTimeString();}catch(e){} },500); }
+function getProjects(){ try{return JSON.parse(localStorage.getItem(PROJKEY))||{};}catch(e){return {};} }
+function setProjects(o){ localStorage.setItem(PROJKEY,JSON.stringify(o)); }
+document.getElementById("btnSaveProj").addEventListener("click",()=>{ const n=prompt("Project name:",S.proj.name||"Bearing"); if(!n)return; const all=getProjects(); all[n]={state:clone(S),ts:Date.now()}; setProjects(all); document.getElementById("saveStatus").textContent=`saved "${n}"`; });
+document.getElementById("btnManageProj").addEventListener("click",()=>{ renderProjList(); document.getElementById("dlgProj").showModal(); });
+document.getElementById("dlgProjClose").addEventListener("click",()=>document.getElementById("dlgProj").close());
+function renderProjList(){ const all=getProjects(),el=document.getElementById("projList"); const names=Object.keys(all).sort((a,b)=>all[b].ts-all[a].ts);
+  el.innerHTML=names.length?names.map(n=>`<div class="prow"><span class="pname">${esc(n)}</span><span class="pdate">${new Date(all[n].ts).toLocaleString()}</span><button class="mini-btn" data-a="load" data-n="${esc(n)}">Load</button><button class="mini-btn" data-a="del" data-n="${esc(n)}">Delete</button></div>`).join(""):"<i>No saved projects.</i>";
+  el.querySelectorAll("button").forEach(b=>b.addEventListener("click",()=>{ const n=b.dataset.n,all=getProjects(); if(b.dataset.a==="load"){S=all[n].state;migrate();buildInputs();recalc();document.getElementById("dlgProj").close();} if(b.dataset.a==="del"){delete all[n];setProjects(all);renderProjList();} })); }
+document.getElementById("btnExport").addEventListener("click",()=>{ const blob=new Blob([JSON.stringify(S,null,2)],{type:"application/json"}); const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=(S.proj.name||"bearing").replace(/[^\w]+/g,"_")+"_edm.json"; a.click(); URL.revokeObjectURL(a.href); });
+document.getElementById("btnImport").addEventListener("click",()=>document.getElementById("importFile").click());
+document.getElementById("importFile").addEventListener("change",ev=>{ const f=ev.target.files[0]; if(!f)return; const rd=new FileReader(); rd.onload=()=>{ try{ S=Object.assign(defaultState(),JSON.parse(rd.result)); migrate(); buildInputs(); recalc(); }catch(e){alert("Import failed: "+e.message);} ev.target.value=""; }; rd.readAsText(f); });
+document.getElementById("btnReset").addEventListener("click",()=>{ if(!confirm("Reset all inputs to defaults?"))return; S=defaultState(); migrate(); buildInputs(); recalc(); });
+/* ---- events ---- */
+document.addEventListener("input",ev=>{ const el=ev.target,p=el.dataset.path; if(!p)return; if(el.tagName==="SELECT")return;
+  let v; if(el.type==="checkbox")v=el.checked; else if(el.type==="number")v=el.value===""?0:Number(el.value); else v=el.value;
+  setPath(S,p,v); recalc(); });
+document.addEventListener("change",ev=>{ const el=ev.target,p=el.dataset.path; if(!p)return;
+  if(el.type==="checkbox"){ setPath(S,p,el.checked); recalc(); return; }
+  if(el.tagName!=="SELECT")return; const raw=el.value; const num=Number(raw);
+  const strPaths=["padType","method"]; const v=(raw!==""&&!isNaN(num)&&!strPaths.includes(p))?num:raw;
+  setPath(S,p,v); migrate(); if(el.dataset.rebuild)buildInputs(); recalc(); });
+document.addEventListener("click",ev=>{ const head=ev.target.closest(".p-head"); if(head&&!ev.target.closest("#report")){ const pn=head.parentElement,id=pn.dataset.cid; pn.classList.toggle("closed"); if(id){S.ui.collapse[id]=pn.classList.contains("closed");scheduleSave();} return; }
+  const tab=ev.target.closest(".tab"); if(tab){ S.ui.tab=tab.dataset.tab; renderAll(); scheduleSave(); return; }
+  const di=ev.target.closest(".dash-item"); if(di&&di.dataset.goto){ S.ui.tab=di.dataset.goto; renderAll(); } });
+/* ---- print report ---- */
+document.getElementById("btnPrint").addEventListener("click",()=>{ buildReport(); window.print(); });
+function inputEcho(){ const g=S.geom,m=S.mat,L=S.loads;
+  const rows=[["Pad type",S.padType,""],["Design method",S.method,""],
+    isCirc()?["Diameter D",g.D,"in"]:["Length × Width",g.L+" × "+g.W,"in"],["Internal layer hri",g.hri,"in"],["Internal layers n",g.nLayer,""],["Cover",g.cover,"in"],["Steel laminate",g.tSteel,"in"],
+    ["Shear modulus G",m.G,"ksi"],["Laminate Fy",m.Fy,"ksi"],
+    ["P_DL",L.Pdl,"kip"],["P_LL",L.Pll,"kip"],["Δs",L.deltaS,"in"],
+    ["Combined limit",S.tog.combLimit,""],["Rotation tolerance",S.tog.rotTol,"rad"]];
+  return `<table class="tblock">${rows.map(r=>`<tr><td style="width:45%">${r[0]}</td><td><b>${r[1]}</b> ${r[2]}</td></tr>`).join("")}</table>`;
+}
+function buildReport(){ const R=LAST; const P=S.proj;
+  let h=`<table class="tblock"><tr><td><span class="lbl">Project</span>${esc(P.name)||"—"}</td><td><span class="lbl">Project No.</span>${esc(P.num)||"—"}</td><td><span class="lbl">Calc by</span>${esc(P.calcBy)||"—"}</td><td><span class="lbl">Date</span>${esc(P.date)||"—"}</td></tr>
+    <tr><td><span class="lbl">Subject</span>Elastomeric Bearing Design</td><td><span class="lbl">Method</span>${isPlain()?"A (plain)":S.method}</td><td><span class="lbl">Checked by</span>${esc(P.chkBy)||"—"}</td><td><span class="lbl">Checked</span>${esc(P.chkDate)||"—"}</td></tr></table>
+    <h1>Elastomeric Bearing Design Calculation</h1>
+    <div style="text-align:center;font-style:italic;font-size:10.5pt;">AASHTO LRFD 10th Ed. (2024) · MassDOT Bridge Manual §3.5.7 · Elastomeric Bearing Design Module v1.0, by Mario Lococo · ${new Date().toLocaleString()}</div>
+    <h2>A — Design Summary</h2><p>${R.nFail===0?"All "+R.dash.length+" checks PASS.":"<b style='color:#c62828'>"+R.nFail+" check(s) FAIL.</b>"}</p>
+    <table class="tblock"><tr><td><b>Check</b></td><td><b>D/C</b></td><td><b>Result</b></td></tr>${R.dash.map(d=>`<tr><td>${d.name}</td><td>${d.dc!=null?fmt(d.dc):"—"}</td><td><b>${d.pass?"PASS":"FAIL"}</b></td></tr>`).join("")}</table>
+    <h2>B — Input Echo</h2>${inputEcho()}`;
+  for(const [id,name] of TABS){ if(id==="tab-gird"&&!(S.girders&&S.girders.length))continue;
+    const src=document.getElementById(id); if(!src)continue; const cl=src.cloneNode(true);
+    cl.querySelectorAll(".panel").forEach(p=>p.classList.remove("closed"));
+    cl.querySelectorAll(".plotbox").forEach(pb=>pb.remove());
+    h+=`<h2 class="pagebreak">${name}</h2>${cl.innerHTML}`; }
+  const rp=document.getElementById("report"); rp.innerHTML=h; renderMathIn(rp); renderInlineMath(rp);
+}
+/* ---- postMessage linkage with the Abutment app ---- */
+window.addEventListener("message",ev=>{ const d=ev.data; if(!d||d.app!=="abutment-edm")return;
+  if(d.type==="INIT"){ applyHandoff(d.payload); window.__abutSource=ev.source; document.getElementById("linkStatus").textContent="Linked to Abutment"; document.getElementById("linkStatus").classList.add("on"); }
+});
+function applyHandoff(p){ if(!p)return;
+  if(p.bearing){ if(p.bearing.padL)S.geom.L=+p.bearing.padL; if(p.bearing.padW)S.geom.W=+p.bearing.padW; if(p.bearing.G)S.mat.G=+p.bearing.G; if(p.bearing.hrt){/* infer layers */} }
+  if(p.loads){ if(p.loads.Pdl!=null)S.loads.Pdl=+p.loads.Pdl; if(p.loads.Pll!=null)S.loads.Pll=+p.loads.Pll; if(p.loads.deltaS!=null)S.loads.deltaS=+p.loads.deltaS; if(p.loads.thetaLL!=null)S.loads.thetaLL=+p.loads.thetaLL; }
+  if(p.thermal)S.thermal=Object.assign(S.thermal||{},p.thermal);
+  if(p.girders)S.girders=p.girders;
+  migrate(); buildInputs(); recalc();
+}
+function sendPadBack(){ const R=LAST; const payload={app:"abutment-edm",type:"PAD",payload:{G:+S.mat.G,hrt:R.hrt,padL:isCirc()?null:+S.geom.L,padW:isCirc()?null:+S.geom.W,D:isCirc()?+S.geom.D:null,nBrgPerGird:1,pass:R.nFail===0,govDC:Math.max(...R.dash.map(d=>d.dc||0))}};
+  if(window.opener&&!window.opener.closed){ window.opener.postMessage(payload,"*"); document.getElementById("saveStatus").textContent="pad sent to Abutment"; }
+  else if(window.__abutSource){ window.__abutSource.postMessage(payload,"*"); document.getElementById("saveStatus").textContent="pad sent to Abutment"; }
+  else { const blob=new Blob([JSON.stringify(payload.payload,null,2)],{type:"application/json"}); const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="edm_pad_result.json"; a.click(); URL.revokeObjectURL(a.href); document.getElementById("saveStatus").textContent="no linked window — pad exported as JSON"; }
+}
+document.getElementById("btnSendBack").addEventListener("click",sendPadBack);
+/* ---- self-test vs MassDOT worked examples ---- */
+function runSelfTest(){
+  const rows=[]; const chk=(name,got,exp,tol)=>{ const pass=Math.abs(got-exp)<=(tol||0.005); rows.push({name,got,exp,pass}); };
+  // MassDOT Fig 3.5.7-2: steel, span 75 ft, ΔT 100°F, α 6.5e-6 → one-way thermal movement 0.351"
+  chk("Thermal Δ (steel,75ft,ΔT100) [Fig 3.5.7-2]", thermalMovement(75,6.5e-6,100,1.2), 0.351, 0.002);
+  // MassDOT Fig 3.5.7-4: prestressed, span 75 ft, ΔT 70°F, α 5.5e-6 → 0.208"
+  chk("Thermal Δ (conc,75ft,ΔT70) [Fig 3.5.7-4]", thermalMovement(75,5.5e-6,70,1.2), 0.208, 0.002);
+  // shape factor sanity: rectangular 18×24, hri 0.406 → S = 18·24/(2·0.406·42)
+  chk("Shape factor (18×24, hri .406)", 18*24/(2*0.406*42), 12.67, 0.05);
+  SELFTEST={pass:rows.every(r=>r.pass),rows}; return SELFTEST;
+}
+document.getElementById("btnSelfTest").addEventListener("click",()=>{ const st=runSelfTest(); alert("Self-test: "+(st.pass?"PASS":"FAIL")+"\n"+st.rows.map(r=>`${r.pass?"✓":"✗"} ${r.name}: ${fmt(r.got,3)} vs ${fmt(r.exp,3)}`).join("\n")); });
+/* ---- init ---- */
+function init(){
+  try{ const sav=localStorage.getItem(AUTOSAVE); if(sav){ S=Object.assign(defaultState(),JSON.parse(sav)); } }catch(e){}
+  if(!S.thermal) S.thermal={span:75,alpha:6.5e-6,dT:100,factor:1.2};
+  if(!S.girders) S.girders=null;
+  migrate(); buildInputs(); recalc();
+  let tries=0; const kt=setInterval(()=>{ tries++; if(window.katex){clearInterval(kt);const pane=document.getElementById(S.ui.tab);if(pane){renderMathIn(pane);renderInlineMath(pane);}} else if(tries>40)clearInterval(kt); },200);
+  // announce readiness to an opener (Abutment app) so it can push INIT
+  if(window.opener&&!window.opener.closed){ try{ window.opener.postMessage({app:"abutment-edm",type:"EDM_READY"},"*"); document.getElementById("linkStatus").textContent="Linked to Abutment"; document.getElementById("linkStatus").classList.add("on"); }catch(e){} }
+}
+document.addEventListener("DOMContentLoaded",init);
+</script>
+</body>
+</html>

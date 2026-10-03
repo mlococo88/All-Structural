@@ -1,0 +1,773 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Universal Timber Design Studio (NDS 2018)</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Babel for React -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <style>
+        body { visibility: visible !important; font-family: 'Inter', sans-serif; }
+        .font-mono { font-family: 'JetBrains Mono', monospace; }
+        
+        @media print {
+            .hide-print { display: none !important; }
+            .print-break { page-break-before: always; }
+            body { background-color: white; color: black; }
+            .no-shadow-print { box-shadow: none !important; border: 1px solid #e2e8f0 !important; }
+            .chart-container { height: 150px !important; page-break-inside: avoid; }
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+        .dark ::-webkit-scrollbar-thumb { background: #475569; }
+
+        /* Range Slider Customization */
+        input[type=range] {
+            -webkit-appearance: none; background: transparent;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none; height: 14px; width: 14px; border-radius: 50%;
+            background: #3b82f6; margin-top: -5px; box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%; height: 4px; cursor: pointer; background: #e2e8f0; border-radius: 2px;
+        }
+        .dark input[type=range]::-webkit-slider-runnable-track { background: #475569; }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-900 selection:bg-blue-100 selection:text-blue-900">
+    <div id="root"></div>
+
+    <script type="text/babel" data-type="module">
+        import React, { useState, useEffect, useMemo } from 'https://esm.sh/react@18.2.0';
+        import { createRoot } from 'https://esm.sh/react-dom@18.2.0/client';
+        import { 
+            Calculator, Printer, Info, AlertTriangle, CheckCircle, XCircle, 
+            ChevronDown, ChevronRight, Settings, Maximize2, Minimize2,
+            ArrowDown, Ruler, MoreHorizontal, Lock, Unlock, Eye, EyeOff,
+            Moon, Sun, Zap, Save, Upload, FileDown, Plus, Trash2, Briefcase, 
+            MousePointer2, LayoutTemplate, FileText, Menu, X, Check, DollarSign
+        } from 'https://esm.sh/lucide-react@0.292.0';
+
+        // --- DATABASE ---
+        const DEFAULT_SPECIES = {
+            'DF-L': { name: 'Douglas Fir-Larch', G: 0.50, dens: 34, F_b: 900, F_v: 180, E: 1600000, F_c_perp: 625, Emin: 580000 },
+            'SP': { name: 'Southern Pine', G: 0.55, dens: 36, F_b: 850, F_v: 175, E: 1400000, F_c_perp: 565, Emin: 510000 },
+            'HF': { name: 'Hem-Fir', G: 0.43, dens: 30, F_b: 850, F_v: 150, E: 1300000, F_c_perp: 405, Emin: 470000 },
+            'SPF': { name: 'Spruce-Pine-Fir', G: 0.42, dens: 29, F_b: 875, F_v: 135, E: 1400000, F_c_perp: 425, Emin: 510000 },
+        };
+
+        const GRADES_DB = {
+            'SS': { name: 'Select Structural', mod: 1.0 },
+            'No.1': { name: 'No. 1', mod: 0.85 },
+            'No.2': { name: 'No. 2', mod: 0.75 },
+            'Stud': { name: 'Stud', mod: 0.60 },
+        };
+
+        const SIZES_DB = [
+            { label: '2x4', b: 1.5, d: 3.5 }, { label: '2x6', b: 1.5, d: 5.5 },
+            { label: '2x8', b: 1.5, d: 7.25 }, { label: '2x10', b: 1.5, d: 9.25 },
+            { label: '2x12', b: 1.5, d: 11.25 }, { label: '4x4', b: 3.5, d: 3.5 },
+            { label: '4x6', b: 3.5, d: 5.5 }, { label: '6x6', b: 5.5, d: 5.5 },
+            { label: '6x8', b: 5.5, d: 7.25 }, { label: '8x8', b: 7.25, d: 7.25 },
+            { label: 'Custom', b: 0, d: 0 },
+        ];
+
+        // --- UI COMPONENTS ---
+
+        const RadialProgress = ({ pct, label, sub, size = 80, stroke = 8, isDark }) => {
+            const radius = (size - stroke) / 2;
+            const circ = 2 * Math.PI * radius;
+            const safePct = isNaN(pct) ? 0 : Math.max(0, pct); // Guard NaN
+            const offset = circ - (Math.min(safePct, 100) / 100) * circ;
+            
+            let color = "text-emerald-500";
+            if(safePct > 100) color = "text-red-500";
+            else if(safePct > 90) color = "text-amber-500";
+
+            return (
+                <div className="flex flex-col items-center justify-center">
+                    <div className="relative" style={{ width: size, height: size }}>
+                        <svg className="transform -rotate-90 w-full h-full">
+                            <circle cx={size/2} cy={size/2} r={radius} stroke="currentColor" strokeWidth={stroke} fill="transparent" className={`${isDark ? 'text-slate-700' : 'text-slate-200'}`} />
+                            <circle cx={size/2} cy={size/2} r={radius} stroke="currentColor" strokeWidth={stroke} fill="transparent" 
+                                strokeDasharray={circ} strokeDashoffset={offset} strokeLinecap="round" className={`${color} transition-all duration-1000 ease-out`} />
+                        </svg>
+                        <div className="absolute inset-0 flex items-center justify-center flex-col">
+                            <span className={`text-sm font-bold ${color}`}>{Math.round(safePct)}%</span>
+                        </div>
+                    </div>
+                    <span className="mt-2 text-xs font-bold uppercase text-slate-500 tracking-wide">{label}</span>
+                    <span className="text-[10px] text-slate-400 font-mono">{sub}</span>
+                </div>
+            );
+        };
+
+        const InputControl = ({ label, value, onChange, min, max, step, unit, icon:Icon }) => (
+            <div className="mb-4 group">
+                <div className="flex justify-between items-center mb-1.5">
+                    <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1">
+                        {Icon && <Icon className="w-3 h-3 opacity-50" />} {label}
+                    </label>
+                    <span className="text-xs font-mono font-medium bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                        {value} {unit}
+                    </span>
+                </div>
+                <div className="flex items-center gap-3">
+                    <input type="range" min={min} max={max} step={step} value={value || 0} onChange={(e)=>onChange(parseFloat(e.target.value)||0)} 
+                        className="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer dark:bg-slate-700 accent-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-all"
+                    />
+                </div>
+            </div>
+        );
+
+        const NumberInput = ({ label, value, onChange, color="border-slate-200" }) => (
+            <div className={`relative rounded-md border ${color} bg-white dark:bg-slate-800 dark:border-slate-700 p-2 focus-within:ring-2 focus-within:ring-blue-500/20 transition-all`}>
+                <label className="block text-[10px] font-bold uppercase text-slate-400 mb-1">{label}</label>
+                <div className="flex items-center justify-between">
+                    <input type="number" value={value} onChange={(e)=>onChange(parseFloat(e.target.value)||0)} className="w-full bg-transparent text-sm font-mono font-medium outline-none dark:text-white" />
+                </div>
+            </div>
+        );
+
+        const Toast = ({ msg, show }) => (
+            <div className={`fixed bottom-6 right-6 bg-slate-900 text-white px-4 py-3 rounded-lg shadow-xl flex items-center gap-3 transform transition-all duration-300 z-50 ${show ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0 pointer-events-none'}`}>
+                <CheckCircle className="w-5 h-5 text-emerald-400" />
+                <span className="text-sm font-medium">{msg}</span>
+            </div>
+        );
+
+        const Accordion = ({ title, icon: Icon, children, isOpen, onToggle, isDark }) => (
+            <div className={`border rounded-xl overflow-hidden mb-4 transition-all duration-300 ${isDark ? 'border-slate-700 bg-slate-800/50' : 'border-slate-200 bg-white'} shadow-sm hover:shadow-md`}>
+                <button onClick={onToggle} className={`w-full flex items-center justify-between p-4 transition-colors ${isDark ? 'hover:bg-slate-700/50' : 'hover:bg-slate-50'}`}>
+                <div className="flex items-center gap-3">
+                    <div className={`p-2 rounded-lg ${isDark ? 'bg-slate-700 text-blue-400' : 'bg-blue-50 text-blue-600'}`}><Icon className="w-4 h-4" /></div>
+                    <span className={`font-semibold text-sm tracking-tight ${isDark ? 'text-slate-200' : 'text-slate-700'}`}>{title}</span>
+                </div>
+                {isOpen ? <ChevronDown className="w-4 h-4 text-slate-400" /> : <ChevronRight className="w-4 h-4 text-slate-400" />}
+                </button>
+                {isOpen && <div className={`p-5 border-t text-sm animate-in slide-in-from-top-2 duration-200 ${isDark ? 'border-slate-700 text-slate-300' : 'border-slate-100 text-slate-600'}`}>{children}</div>}
+            </div>
+        );
+        
+        const FactorRow = ({ label, val, note, isDark }) => (
+            <div className={`flex justify-between items-center text-xs p-2 rounded ${isDark ? 'bg-slate-700/50' : 'bg-slate-50'}`}>
+                <span className="font-bold text-slate-500">{label}</span>
+                <div className="flex items-center gap-2">
+                    <span className="opacity-50 italic text-[10px]">{note}</span>
+                    <span className={`font-mono font-bold ${val!==1.0 ? 'text-blue-500' : 'text-slate-400'}`}>{typeof val === 'number' && !isNaN(val) ? val.toFixed(2) : "1.00"}</span>
+                </div>
+            </div>
+        );
+
+        const EquationBlock = ({ title, equations, isDark, showTrace }) => (
+            <div className={`mb-6 p-4 rounded-lg border ${isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-white border-slate-200'} shadow-sm break-inside-avoid`}>
+                <h4 className={`text-xs font-bold uppercase tracking-wider mb-3 border-b pb-2 flex items-center gap-2 ${isDark ? 'text-blue-400 border-blue-900' : 'text-slate-600 border-slate-100'}`}>
+                    {title}
+                </h4>
+                <div className="space-y-2">
+                {equations.map((eq, idx) => {
+                    if (eq.traceOnly && !showTrace) return null;
+                    return (
+                    <div key={idx} className={`group flex flex-wrap items-baseline gap-x-2 gap-y-1 font-mono text-xs md:text-sm ${eq.traceOnly ? 'pl-4 border-l-2 border-slate-200 dark:border-slate-700' : ''}`}>
+                        {eq.label && <span className="text-slate-400 w-24 shrink-0 font-sans text-[10px] uppercase font-bold">{eq.label}</span>}
+                        <div className="flex items-baseline gap-2 flex-1">
+                            <span className={`font-bold ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>{eq.sym}</span>
+                            <span className="text-slate-400">=</span>
+                            <span className={`italic ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>{eq.formula}</span>
+                            <span className="text-slate-400">=</span>
+                            <span className={`${isDark ? 'text-slate-300' : 'text-slate-600'}`}>{eq.sub}</span>
+                            <span className="text-slate-400">=</span>
+                            <span className={`font-bold px-1.5 py-0.5 rounded ${isDark ? 'bg-slate-700 text-white' : 'bg-slate-100 text-slate-900 border border-slate-200'}`}>
+                            {eq.res} <span className="text-[10px] opacity-60 font-normal ml-1">{eq.unit}</span>
+                            </span>
+                        </div>
+                        {eq.ref && <span className="text-[10px] text-slate-400 ml-auto hidden sm:inline-block border border-slate-200 dark:border-slate-700 rounded px-1.5 py-0.5 bg-slate-50 dark:bg-slate-800">[{eq.ref}]</span>}
+                    </div>
+                )})} 
+                </div>
+            </div>
+        );
+
+        // --- INTERACTIVE DIAGRAMS ---
+        const DiagramsPanel = ({ span, pointLoads, wTotal, shearData, momentData, maxV, maxM, isDark, hoverX, setHoverX }) => {
+            const height = 80; 
+            const getVal = (data, x_pct) => data[Math.floor(x_pct * (data.length - 1))]?.y || 0;
+            const valV = hoverX !== null ? getVal(shearData, hoverX/100) : 0;
+            const valM = hoverX !== null ? getVal(momentData, hoverX/100) : 0;
+            
+            const genPath = (data, max, inv=false) => {
+                if(!max || max===0 || isNaN(max)) return `M 0 ${height/2} L 100 ${height/2}`;
+                const s = (height/2 - 10)/max;
+                return data.map((p,i) => `${i===0?'M':'L'} ${p.x} ${height/2 - (p.y*s*(inv?-1:1))}`).join(" ");
+            };
+
+            const shearPath = genPath(shearData, maxV);
+            const momentPath = genPath(momentData, maxM, true); 
+            
+            const Grid = () => (
+                <g opacity="0.1">
+                    {[0,25,50,75,100].map(x => <line key={x} x1={x} y1="0" x2={x} y2="100" stroke="currentColor" strokeWidth="0.5" strokeDasharray="2" />)}
+                    <line x1="0" y1="40" x2="100" y2="40" stroke="currentColor" strokeWidth="1" />
+                </g>
+            );
+
+            return (
+                <div className="space-y-6 font-sans" onMouseMove={(e) => {
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    setHoverX(Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100)));
+                }} onMouseLeave={() => setHoverX(null)}>
+                    
+                    {/* LOAD DIAGRAM */}
+                    <div className={`relative h-32 rounded-xl border chart-container ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} overflow-hidden shadow-sm`}>
+                         <div className="absolute top-3 left-4 flex items-center gap-2">
+                            <span className="w-2 h-2 rounded-full bg-slate-400"></span>
+                            <span className="text-[10px] font-bold uppercase text-slate-500 tracking-wider">Loading</span>
+                         </div>
+                         <svg viewBox="0 0 100 80" className="w-full h-full" preserveAspectRatio="none">
+                            <rect x="0" y="40" width="100" height="6" fill="#92400e" rx="1" />
+                            <polygon points="1,46 4,52 -2,52" fill="#64748b" />
+                            <polygon points="99,46 102,52 96,52" fill="#64748b" />
+                            <rect x="0" y="20" width="100" height="20" fill="url(#hatch)" opacity="0.1"/>
+                            <line x1="0" y1="20" x2="100" y2="20" stroke="#3b82f6" strokeWidth="0.5" />
+                            {pointLoads.map((pl,i) => (
+                                <g key={i} transform={`translate(${((pl.loc||0)/(span||1))*100}, 0)`}>
+                                    <line x1="0" y1="10" x2="0" y2="40" stroke="#ef4444" strokeWidth="1"/>
+                                    <polygon points="0,40 -2,35 2,35" fill="#ef4444"/>
+                                    <text x="2" y="15" fontSize="3" fill="#ef4444" fontWeight="bold">{pl.mag || 0}</text>
+                                </g>
+                            ))}
+                            {hoverX !== null && <line x1={hoverX} y1="0" x2={hoverX} y2="100" stroke="currentColor" strokeDasharray="2" strokeWidth="0.5" className="text-slate-400" />}
+                         </svg>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {/* SHEAR */}
+                        <div className={`relative h-48 rounded-xl border chart-container ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} overflow-hidden shadow-sm group`}>
+                            <div className="absolute top-3 left-4 flex items-center gap-2">
+                                <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                                <span className="text-[10px] font-bold uppercase text-emerald-600 tracking-wider">Shear (V)</span>
+                            </div>
+                            <div className="absolute top-3 right-4 text-xs font-mono font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-900/30 px-2 py-1 rounded border border-emerald-100 dark:border-emerald-800">
+                                {hoverX !== null ? valV.toFixed(0) : maxV.toFixed(0)} lb
+                            </div>
+                            <svg viewBox="0 0 100 80" className="w-full h-full" preserveAspectRatio="none">
+                                <Grid />
+                                <path d={`${shearPath} L 100 40 L 0 40 Z`} fill="rgba(16, 185, 129, 0.1)" stroke="none" />
+                                <path d={shearPath} fill="none" stroke="#10b981" strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
+                                {hoverX !== null && (
+                                    <>
+                                        <circle cx={hoverX} cy={40 - (valV * (30/(maxV||1)))} r="1.5" fill="#10b981" stroke="white" strokeWidth="0.5"/>
+                                        <line x1={hoverX} y1="0" x2={hoverX} y2="100" stroke="currentColor" strokeDasharray="2" strokeWidth="0.5" className="text-emerald-400" />
+                                    </>
+                                )}
+                            </svg>
+                        </div>
+
+                        {/* MOMENT */}
+                        <div className={`relative h-48 rounded-xl border chart-container ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} overflow-hidden shadow-sm group`}>
+                            <div className="absolute top-3 left-4 flex items-center gap-2">
+                                <span className="w-2 h-2 rounded-full bg-blue-500"></span>
+                                <span className="text-[10px] font-bold uppercase text-blue-600 tracking-wider">Moment (M)</span>
+                            </div>
+                            <div className="absolute top-3 right-4 text-xs font-mono font-bold text-blue-600 bg-blue-50 dark:bg-blue-900/30 px-2 py-1 rounded border border-blue-100 dark:border-blue-800">
+                                {hoverX !== null ? (valM/12).toFixed(0) : (maxM/12).toFixed(0)} ft-lb
+                            </div>
+                            <svg viewBox="0 0 100 80" className="w-full h-full" preserveAspectRatio="none">
+                                <Grid />
+                                <path d={`${momentPath} L 100 40 L 0 40 Z`} fill="rgba(59, 130, 246, 0.1)" stroke="none" />
+                                <path d={momentPath} fill="none" stroke="#3b82f6" strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
+                                {hoverX !== null && (
+                                    <>
+                                        <circle cx={hoverX} cy={40 - (valM * (30/(maxM||1)))} r="1.5" fill="#3b82f6" stroke="white" strokeWidth="0.5" />
+                                        <line x1={hoverX} y1="0" x2={hoverX} y2="100" stroke="currentColor" strokeDasharray="2" strokeWidth="0.5" className="text-blue-400" />
+                                    </>
+                                )}
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // --- MAIN APP ---
+        function UniversalTimberStudio() {
+            // State
+            const [isDark, setIsDark] = useState(false);
+            const [activeTab, setActiveTab] = useState('analysis'); 
+            const [traceMode, setTraceMode] = useState(true); // Default to True for transparency
+            const [hoverX, setHoverX] = useState(null);
+            const [toast, setToast] = useState({ show: false, msg: '' });
+            const [openSections, setOpenSections] = useState({ project: true, loads: true, material: true, factors: true }); // Open by default
+
+            // Data
+            const [customMaterials, setCustomMaterials] = useState({});
+            const [projectInfo, setProjectInfo] = useState({ client: '', job: '', designer: '', notes: '' });
+
+            // Geometry
+            const [span, setSpan] = useState(16);
+            const [spacing, setSpacing] = useState(16);
+            const [bearingLen, setBearingLen] = useState(3.5);
+            const [unbracedLen, setUnbracedLen] = useState(0); // 0 = span
+
+            // Loads
+            const [wDead, setWDead] = useState(15);
+            const [wLive, setWLive] = useState(40);
+            const [wSnow, setWSnow] = useState(0);
+            const [wWind, setWWind] = useState(0);
+            const [wRoofLive, setWRoofLive] = useState(0);
+            const [pointLoads, setPointLoads] = useState([]); 
+            const [loadCombo, setLoadCombo] = useState('D+L');
+            const [selfWeight, setSelfWeight] = useState(true);
+
+            // Material
+            const [species, setSpecies] = useState('DF-L');
+            const [grade, setGrade] = useState('No.2');
+            const [sizeLabel, setSizeLabel] = useState('2x10');
+            const [customB, setCustomB] = useState(1.5);
+            const [customD, setCustomD] = useState(9.25);
+            const [isManual, setIsManual] = useState(false);
+            const [manualProps, setManualProps] = useState({ Fb: 900, Fv: 180, E: 1600000, Emin: 580000, FcPerp: 625, G: 0.50, dens: 35 });
+
+            // Advanced Factors
+            const [moisture, setMoisture] = useState('Dry');
+            const [temp, setTemp] = useState('Normal');
+            const [incising, setIncising] = useState(false);
+            const [repetitive, setRepetitive] = useState(true);
+            const [flatUse, setFlatUse] = useState(false);
+            const [creepFactor, setCreepFactor] = useState(1.5);
+            const [notchDepth, setNotchDepth] = useState(0);
+            const [costPerBF, setCostPerBF] = useState(1.50);
+            const [deflLimitLL, setDeflLimitLL] = useState(360);
+            const [deflLimitTL, setDeflLimitTL] = useState(240);
+            const [latSupport, setLatSupport] = useState('Continuous');
+
+            // --- CALCULATION ENGINE ---
+            // Safe parsing inputs
+            const span_safe = span || 0.1;
+            const spacing_safe = spacing || 0.1;
+
+            const b = sizeLabel === 'Custom' ? (customB || 0.1) : (SIZES_DB.find(s => s.label === sizeLabel)?.b || 1.5);
+            const d = sizeLabel === 'Custom' ? (customD || 0.1) : (SIZES_DB.find(s => s.label === sizeLabel)?.d || 9.25);
+            
+            // Prevent zeros
+            const b_safe = b > 0 ? b : 0.1;
+            const d_safe = d > 0 ? d : 0.1;
+
+            const Area = b_safe * d_safe;
+            const Sx = (b_safe * d_safe * d_safe) / 6;
+            const Ix = (b_safe * d_safe * d_safe * d_safe) / 12;
+            const BF = (b_safe * d_safe / 144) * span_safe;
+            const Cost = BF * (costPerBF || 0);
+
+            // FIX: Add safeguard for Grade lookup to prevent NaN
+            const baseVals = useMemo(() => {
+                if (isManual) return manualProps;
+                const s = customMaterials[species] || DEFAULT_SPECIES[species];
+                const gMod = GRADES_DB[grade] ? GRADES_DB[grade].mod : 1.0; // Safety check here
+                return { Fb: s.F_b * gMod, Fv: s.F_v, E: s.E, Emin: s.Emin, FcPerp: s.F_c_perp, G: s.G, dens: s.dens };
+            }, [species, grade, isManual, manualProps, customMaterials]);
+
+            const trib = spacing_safe / 12;
+            const w_self = selfWeight ? (baseVals.dens * Area) / 144 : 0;
+            const w_D = (wDead || 0) * trib + w_self;
+            const w_L = (wLive || 0) * trib;
+            const w_S = (wSnow || 0) * trib;
+            const w_W = (wWind || 0) * trib;
+            const w_Lr = (wRoofLive || 0) * trib;
+
+            let w_total = 0;
+            let Cd = 1.0;
+            let comboName = "";
+
+            switch(loadCombo) {
+                case 'D': w_total = w_D; Cd = 0.9; comboName="0.9D"; break;
+                case 'D+L': w_total = w_D + w_L; Cd = 1.0; comboName="1.0D + 1.0L"; break;
+                case 'D+S': w_total = w_D + w_S; Cd = 1.15; comboName="1.0D + 1.0S"; break;
+                case 'D+Lr': w_total = w_D + w_Lr; Cd = 1.25; comboName="1.0D + 1.0Lr"; break;
+                case 'D+0.75(L+S)': w_total = w_D + 0.75*(w_L + w_S); Cd = 1.15; comboName="1.0D + 0.75L + 0.75S"; break;
+                case 'D+0.6W': w_total = w_D + 0.6*w_W; Cd = 1.6; comboName="1.0D + 0.6W"; break;
+                default: w_total = w_D + w_L; Cd = 1.0;
+            }
+
+            // Factors
+            const CM = moisture === 'Wet' ? 0.85 : 1.0;
+            const Ct = temp === 'High' ? 0.7 : 1.0;
+            const Ci = incising ? 0.80 : 1.0;
+            const Cr = (repetitive && spacing_safe <= 24) ? 1.15 : 1.0;
+            const Cfu = flatUse ? 1.1 : 1.0;
+            const Cb = ((bearingLen||3.5) + 0.375) / (bearingLen||3.5);
+            const CF = (d_safe > 12) ? Math.pow((12/d_safe), 1/9) : 1.0;
+
+            // Stability
+            const Lu = (unbracedLen > 0 ? unbracedLen : span_safe) * 12;
+            const le = 1.63 * Lu + 3 * d_safe;
+            const RB = Math.sqrt((le * d_safe) / (b_safe * b_safe));
+            const Emin_p = baseVals.Emin * CM * Ct * Ci;
+            const FbE = (1.20 * Emin_p) / (RB * RB);
+            const Fb_star = baseVals.Fb * Cd * CM * Ct * CF * Ci * Cr;
+            
+            let CL = 1.0;
+            // Only calc CL if depth > breadth per NDS
+            if (d_safe > b_safe && latSupport !== 'Continuous') {
+                 const ratio = FbE / (Fb_star || 1); // guard 0
+                 CL = (1 + ratio) / 1.9 - Math.sqrt(Math.pow((1 + ratio)/1.9, 2) - (ratio / 0.95));
+                 if (CL > 1.0 || isNaN(CL)) CL = 1.0;
+            }
+
+            // Adjusted Values
+            const Fb_p = baseVals.Fb * Cd * CM * Ct * CL * CF * Ci * Cfu * Cr;
+            const Fv_p = baseVals.Fv * Cd * CM * Ct * Ci;
+            const E_p = baseVals.E * CM * Ct * Ci;
+            const Fcp_p = baseVals.FcPerp * CM * Ct * Ci * Cb;
+
+            // Analysis
+            let R_left = (w_total * span_safe) / 2;
+            pointLoads.forEach(pl => R_left += ((pl.mag||0) * (span_safe - (pl.loc||0))) / span_safe);
+            
+            const pts = 100;
+            const dx = span_safe / pts;
+            let shearData = [], momentData = [];
+            let maxV = 0, maxM = 0;
+            for (let i=0; i<=pts; i++) {
+                const x = i * dx;
+                let V = R_left - w_total * x;
+                pointLoads.forEach(pl => { if (x > (pl.loc||0)) V -= (pl.mag||0); });
+                let M = R_left * x - (w_total * x * x) / 2;
+                pointLoads.forEach(pl => { if (x > (pl.loc||0)) M -= (pl.mag||0) * (x - (pl.loc||0)); });
+                shearData.push({x: (x/span_safe)*100, y: V});
+                momentData.push({x: (x/span_safe)*100, y: M});
+                if (Math.abs(V) > maxV) maxV = Math.abs(V);
+                if (Math.abs(M) > maxM) maxM = Math.abs(M);
+            }
+
+            // Critical Shear (Notch)
+            const d_ft = d_safe/12;
+            const dn_rat = (d_safe - (notchDepth||0)) / d_safe;
+            const Cn = (notchDepth||0) > 0 ? Math.pow(dn_rat, 2) : 1.0;
+            let V_crit = R_left - w_total * d_ft; // at d
+            pointLoads.forEach(pl => { if (d_ft > (pl.loc||0)) V_crit -= (pl.mag||0); });
+            V_crit = Math.abs(V_crit);
+            
+            // Deflection
+            const del_unif = (w) => (5 * (w/12) * Math.pow(span_safe*12, 4)) / (384 * E_p * Ix);
+            const del_D = del_unif(w_D);
+            const del_L = del_unif(wLive*trib); // Use Live component
+            const del_LT = del_D * (creepFactor||1.5) + del_L;
+            
+            const del_long_term = del_LT;
+
+            // Checks
+            const fb_actual = (maxM * 12) / Sx;
+            const fv_actual = (1.5 * V_crit) / (Area * ((notchDepth||0) > 0 ? dn_rat : 1));
+            const fcp_actual = R_left / (b_safe * (bearingLen||3.5));
+            
+            const dcr_b = fb_actual / (Fb_p || 1);
+            const dcr_v = fv_actual / ((Fv_p * Cn) || 1);
+            const dcr_c = fcp_actual / (Fcp_p || 1);
+            const dcr_def = del_long_term / ((span_safe*12)/(deflLimitTL||240));
+
+            // Helpers
+            const showToast = (msg) => { setToast({show:true, msg}); setTimeout(()=>setToast({show:false, msg:''}), 3000); };
+            const addPointLoad = () => setPointLoads([...pointLoads, { mag: 500, loc: span_safe/2 }]);
+            const removePointLoad = (idx) => setPointLoads(pointLoads.filter((_,i)=>i!==idx));
+            const updatePointLoad = (idx, field, val) => {
+                const newLoads = [...pointLoads];
+                newLoads[idx][field] = parseFloat(val) || 0;
+                setPointLoads(newLoads);
+            };
+            const addMaterial = () => {
+                const name = prompt("Enter Custom Species Name:");
+                if(name) setCustomMaterials({...customMaterials, [name]: DEFAULT_SPECIES['DF-L']});
+            };
+            const saveProject = () => {
+                const data = { span, spacing, wDead, wLive, wSnow, wWind, species, grade, sizeLabel, loadCombo, projectInfo };
+                const blob = new Blob([JSON.stringify(data, null, 2)], {type: "application/json"});
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a'); a.href = url; a.download = "timber_design.json"; a.click();
+                showToast("Project saved successfully");
+            };
+            const loadProject = (e) => {
+                const file = e.target.files[0];
+                if(!file) return;
+                const reader = new FileReader();
+                reader.onload = (ev) => {
+                    const d = JSON.parse(ev.target.result);
+                    setSpan(d.span); setSpacing(d.spacing); setWDead(d.wDead); setWLive(d.wLive); setWSnow(d.wSnow || 0);
+                    setSpecies(d.species); setGrade(d.grade); setSizeLabel(d.sizeLabel); setLoadCombo(d.loadCombo || 'D+L');
+                    if(d.projectInfo) setProjectInfo(d.projectInfo);
+                    showToast("Project loaded");
+                };
+                reader.readAsText(file);
+            };
+
+            return (
+                <div className={`min-h-screen transition-colors duration-500 ${isDark ? 'bg-slate-900 text-slate-100' : 'bg-slate-50 text-slate-900'} font-sans pb-20`}>
+                    <svg width="0" height="0"><defs><pattern id="hatch" width="8" height="8" patternTransform="rotate(45 0 0)" patternUnits="userSpaceOnUse"><line x1="0" y1="0" x2="0" y2="8" style={{stroke:'#3b82f6', strokeWidth:1}} /></pattern></defs></svg>
+                    <Toast msg={toast.msg} show={toast.show} />
+
+                    {/* HEADER */}
+                    <header className={`sticky top-0 z-50 border-b backdrop-blur-xl px-6 py-4 flex justify-between items-center ${isDark ? 'bg-slate-900/80 border-slate-700' : 'bg-white/80 border-slate-200'} hide-print`}>
+                        <div className="flex items-center gap-4">
+                            <div className="bg-indigo-600 p-2 rounded-lg"><Calculator className="text-white w-5 h-5"/></div>
+                            <h1 className="font-bold text-lg">TimberStudio<span className="text-indigo-500">Complete</span></h1>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <button onClick={()=>setTraceMode(!traceMode)} className={`px-3 py-1.5 text-xs rounded border ${traceMode ? 'bg-blue-100 text-blue-700 border-blue-200' : 'border-slate-200'}`}>{traceMode ? 'Trace ON' : 'Trace OFF'}</button>
+                            <div className="h-6 w-px bg-slate-300 mx-2"></div>
+                            <button onClick={saveProject} className="p-2 hover:bg-slate-100 rounded"><Save className="w-4 h-4"/></button>
+                            <label className="p-2 hover:bg-slate-100 rounded cursor-pointer"><Upload className="w-4 h-4"/><input type="file" className="hidden" onChange={loadProject}/></label>
+                            <button onClick={() => setIsDark(!isDark)} className="p-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800">{isDark ? <Sun className="w-4 h-4"/> : <Moon className="w-4 h-4"/>}</button>
+                        </div>
+                    </header>
+
+                    <main className="max-w-8xl mx-auto p-6 grid grid-cols-1 lg:grid-cols-12 gap-8">
+                        
+                        {/* CONTROLS */}
+                        <div className="lg:col-span-4 space-y-4 hide-print h-[calc(100vh-120px)] overflow-y-auto pr-2 custom-scrollbar">
+                             
+                             {/* 1. PROJECT */}
+                             <Accordion title="Project & Geometry" icon={Briefcase} isOpen={openSections.project} onToggle={()=>setOpenSections({...openSections, project:!openSections.project})} isDark={isDark}>
+                                <input className="w-full p-2 text-xs border rounded mb-2 dark:bg-slate-800 dark:border-slate-600" placeholder="Client" value={projectInfo.client} onChange={e=>setProjectInfo({...projectInfo, client:e.target.value})} />
+                                <div className="grid grid-cols-2 gap-2 mb-2">
+                                    <input className="w-full p-2 text-xs border rounded dark:bg-slate-800 dark:border-slate-600" placeholder="Job #" value={projectInfo.job} onChange={e=>setProjectInfo({...projectInfo, job:e.target.value})} />
+                                    <input className="w-full p-2 text-xs border rounded dark:bg-slate-800 dark:border-slate-600" placeholder="Designer" value={projectInfo.designer} onChange={e=>setProjectInfo({...projectInfo, designer:e.target.value})} />
+                                </div>
+                                <div className="pt-4 border-t dark:border-slate-700">
+                                    <InputControl label="Span (ft)" value={span} onChange={setSpan} min={4} max={40} step={0.5} unit="ft" icon={Ruler} />
+                                    <InputControl label="Spacing (in)" value={spacing} onChange={setSpacing} min={6} max={48} step={2} unit="in" icon={ArrowDown} />
+                                </div>
+                             </Accordion>
+
+                             {/* 2. LOADS */}
+                             <Accordion title="Loads & Combinations" icon={ArrowDown} isOpen={openSections.loads} onToggle={()=>setOpenSections({...openSections, loads:!openSections.loads})} isDark={isDark}>
+                                <div className="space-y-3">
+                                    <div className={`p-3 rounded-xl border shadow-sm ${isDark ? 'bg-slate-900/50 border-slate-700' : 'bg-blue-50/50 border-blue-100'}`}>
+                                        <label className="text-[10px] font-bold opacity-60 uppercase block mb-2">Governing Combo</label>
+                                        <select value={loadCombo} onChange={e=>setLoadCombo(e.target.value)} className={`w-full p-2 text-sm border rounded-lg font-medium outline-none focus:ring-2 focus:ring-blue-500 ${isDark ? 'bg-slate-800 border-slate-600' : 'bg-white border-blue-200'}`}>
+                                            <option value="D">D Only (Cd=0.9)</option>
+                                            <option value="D+L">D + L (Cd=1.0)</option>
+                                            <option value="D+S">D + S (Cd=1.15)</option>
+                                            <option value="D+Lr">D + Lr (Cd=1.25)</option>
+                                            <option value="D+0.75(L+S)">D + 0.75(L+S) (Cd=1.15)</option>
+                                            <option value="D+0.6W">D + 0.6W (Cd=1.6)</option>
+                                        </select>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <NumberInput label="Dead (D)" value={wDead} onChange={setWDead} />
+                                        <NumberInput label="Live (L)" value={wLive} onChange={setWLive} />
+                                        <NumberInput label="Snow (S)" value={wSnow} onChange={setWSnow} />
+                                        <NumberInput label="Wind (W)" value={wWind} onChange={setWWind} />
+                                    </div>
+                                    <div className="border-t pt-2 dark:border-slate-700">
+                                        <div className="flex justify-between items-center mb-1">
+                                            <span className="text-[10px] font-bold opacity-60">POINT LOADS</span>
+                                            <button onClick={addPointLoad} className="text-[10px] text-blue-500 hover:underline">+ Add</button>
+                                        </div>
+                                        {pointLoads.map((pl, i) => (
+                                            <div key={i} className="flex items-center gap-1 mb-1">
+                                                <input type="number" value={pl.mag} onChange={e=>updatePointLoad(i,'mag',e.target.value)} className="w-16 p-1 text-xs border rounded dark:bg-slate-700 dark:border-slate-600" placeholder="lb"/>
+                                                <span className="text-[10px]">@</span>
+                                                <input type="number" value={pl.loc} onChange={e=>updatePointLoad(i,'loc',e.target.value)} className="w-12 p-1 text-xs border rounded dark:bg-slate-700 dark:border-slate-600" placeholder="ft"/>
+                                                <button onClick={()=>removePointLoad(i)} className="text-red-400"><Trash2 className="w-3 h-3"/></button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                             </Accordion>
+
+                             {/* 3. MATERIAL */}
+                             <Accordion title="Material & Section" icon={Settings} isOpen={openSections.material} onToggle={()=>setOpenSections({...openSections, material:!openSections.material})} isDark={isDark}>
+                                <div className="space-y-2">
+                                    <div className="flex justify-between items-center"><span className="text-xs font-bold text-slate-500">SPECIES</span> <button onClick={addMaterial} className="text-[10px] text-blue-500 hover:underline">+ Add Custom</button></div>
+                                    <select value={species} onChange={e=>setSpecies(e.target.value)} className="w-full p-2 text-xs border rounded dark:bg-slate-800 dark:border-slate-600">
+                                        {Object.keys({...DEFAULT_SPECIES, ...customMaterials}).map(k=><option key={k} value={k}>{k}</option>)}
+                                    </select>
+                                    <div className="flex gap-2 items-center">
+                                        <select value={sizeLabel} onChange={e=>setSizeLabel(e.target.value)} className="flex-1 p-2 text-xs border rounded dark:bg-slate-800 dark:border-slate-600 font-mono">{SIZES_DB.map(s=><option key={s.label} value={s.label}>{s.label}</option>)}</select>
+                                        <button onClick={()=>setIsManual(!isManual)} className="text-[10px] underline opacity-60">{isManual?'Std':'Man'}</button>
+                                    </div>
+                                    {sizeLabel === 'Custom' && (
+                                        <div className="flex gap-2"><input placeholder="b" type="number" value={customB} onChange={e=>setCustomB(parseFloat(e.target.value))} className="w-1/2 p-1 border rounded"/><input placeholder="d" type="number" value={customD} onChange={e=>setCustomD(parseFloat(e.target.value))} className="w-1/2 p-1 border rounded"/></div>
+                                    )}
+                                    <div className="flex gap-2 pt-2 border-t border-slate-100 dark:border-slate-700">
+                                        <div className="w-1/2"><label className="text-[10px]">Notch Depth</label><input type="number" value={notchDepth} onChange={e=>setNotchDepth(parseFloat(e.target.value))} className="w-full p-1 text-xs border rounded"/></div>
+                                        <div className="w-1/2"><label className="text-[10px]">Cost $/BF</label><input type="number" value={costPerBF} onChange={e=>setCostPerBF(parseFloat(e.target.value))} className="w-full p-1 text-xs border rounded"/></div>
+                                    </div>
+                                    <div className="text-[10px] text-emerald-600 font-mono text-right">Est. Cost: ${Cost.toFixed(2)}</div>
+                                </div>
+                             </Accordion>
+
+                             {/* 4. FACTORS */}
+                             <Accordion title="Advanced Factors" icon={MoreHorizontal} isOpen={openSections.factors} onToggle={()=>setOpenSections({...openSections, factors:!openSections.factors})} isDark={isDark}>
+                                <div className="space-y-2 text-xs">
+                                    <div className="flex items-center justify-between"><span className="opacity-70">Unbraced Len (ft)</span><input type="number" value={unbracedLen} onChange={e=>setUnbracedLen(parseFloat(e.target.value))} className="w-16 p-1 border rounded text-right" placeholder="Span"/></div>
+                                    <div className="flex items-center justify-between"><span className="opacity-70">Bearing Len (in)</span><input type="number" value={bearingLen} onChange={e=>setBearingLen(parseFloat(e.target.value))} className="w-16 p-1 border rounded text-right"/></div>
+                                    <div className="flex items-center justify-between"><span className="opacity-70">Creep Factor</span><input type="number" value={creepFactor} onChange={e=>setCreepFactor(parseFloat(e.target.value))} className="w-16 p-1 border rounded text-right"/></div>
+                                    
+                                    <label className="flex justify-between items-center pt-2 border-t dark:border-slate-700">
+                                        <span className="opacity-70">Incised (Ci)</span>
+                                        <input type="checkbox" checked={incising} onChange={e=>setIncising(e.target.checked)}/>
+                                    </label>
+                                    <label className="flex justify-between items-center">
+                                        <span className="opacity-70">Repetitive (Cr)</span>
+                                        <input type="checkbox" checked={repetitive} onChange={e=>setRepetitive(e.target.checked)}/>
+                                    </label>
+                                    
+                                    <div className="pt-2 border-t dark:border-slate-700">
+                                        <div className="flex justify-between items-center mb-2">
+                                            <span className="opacity-70">Temperature (Ct)</span>
+                                            <select value={temp} onChange={e=>setTemp(e.target.value)} className="p-1 border rounded w-24">
+                                                <option value="Normal">Normal</option>
+                                                <option value="High">High</option>
+                                            </select>
+                                        </div>
+                                        <label className="flex justify-between items-center">
+                                            <span className="opacity-70">Flat Use (Cfu)</span>
+                                            <input type="checkbox" checked={flatUse} onChange={e=>setFlatUse(e.target.checked)}/>
+                                        </label>
+                                        <label className="flex justify-between items-center mt-2">
+                                            <span className="opacity-70">Wet Service (CM)</span>
+                                            <input type="checkbox" checked={moisture==='Wet'} onChange={e=>setMoisture(e.target.checked?'Wet':'Dry')} />
+                                        </label>
+                                        <div className="flex justify-between items-center mb-2">
+                                            <span className="opacity-70">Lateral Support</span>
+                                            <select value={latSupport} onChange={e=>setLatSupport(e.target.value)} className="p-1 border rounded text-xs">
+                                                <option value="Continuous">Continuous</option>
+                                                <option value="Supports">Supports Only</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                             </Accordion>
+                        </div>
+
+                        {/* RIGHT: RESULTS */}
+                        <div className="lg:col-span-8 flex flex-col h-full print:col-span-12 space-y-6">
+                             
+                             {/* TAB NAV */}
+                             <div className="flex p-1 bg-slate-200 dark:bg-slate-800 w-fit rounded-lg hide-print">
+                                <button onClick={()=>setActiveTab('analysis')} className={`px-4 py-1.5 text-xs font-bold rounded ${activeTab==='analysis'?'bg-white shadow text-blue-600':'text-slate-500'}`}>Visual Analysis</button>
+                                <button onClick={()=>setActiveTab('report')} className={`px-4 py-1.5 text-xs font-bold rounded ${activeTab==='report'?'bg-white shadow text-blue-600':'text-slate-500'}`}>Detailed Report</button>
+                             </div>
+
+                             {activeTab === 'analysis' && (
+                                <div className="space-y-6 animate-in fade-in">
+                                    {/* HERO STAT */}
+                                    <div className={`p-6 rounded-2xl border ${isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-gradient-to-br from-blue-50 to-indigo-50 border-blue-100'} flex items-center justify-between`}>
+                                        <div>
+                                            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Controlling Limit State</h4>
+                                            <div className="text-xl font-bold text-slate-800 dark:text-slate-100">
+                                                {Math.max(dcr_b, dcr_v, dcr_def) === dcr_b ? "Bending Moment" : Math.max(dcr_b, dcr_v, dcr_def) === dcr_v ? "Shear" : "Deflection"}
+                                            </div>
+                                        </div>
+                                        <div className="text-right">
+                                            <div className={`text-3xl font-bold ${Math.max(dcr_b, dcr_v, dcr_def) > 1 ? "text-red-500" : "text-emerald-500"}`}>
+                                                {(Math.max(dcr_b, dcr_v, dcr_def)*100).toFixed(1)}%
+                                            </div>
+                                            <div className="text-xs font-mono opacity-50">Capacity Utilization</div>
+                                        </div>
+                                    </div>
+
+                                    {/* UNITY RINGS */}
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                                        <div className={`rounded-2xl p-4 border shadow-sm flex flex-col items-center justify-center transition-all ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} hover:shadow-md`}>
+                                            <RadialProgress pct={dcr_b*100} label="Bending" sub={`${fb_actual.toFixed(0)} psi`} isDark={isDark} />
+                                        </div>
+                                        <div className={`rounded-2xl p-4 border shadow-sm flex flex-col items-center justify-center transition-all ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} hover:shadow-md`}>
+                                            <RadialProgress pct={dcr_v*100} label="Shear" sub={`${fv_actual.toFixed(0)} psi`} isDark={isDark} />
+                                        </div>
+                                        <div className={`rounded-2xl p-4 border shadow-sm flex flex-col items-center justify-center transition-all ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} hover:shadow-md`}>
+                                            <RadialProgress pct={dcr_def*100} label="Deflection" sub={`L/${(span*12/del_long_term).toFixed(0)}`} isDark={isDark} />
+                                        </div>
+                                        <div className={`rounded-2xl p-4 border shadow-sm flex flex-col items-center justify-center transition-all ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} hover:shadow-md`}>
+                                            <RadialProgress pct={dcr_c*100} label="Bearing" sub={`${fcp_actual.toFixed(0)} psi`} isDark={isDark} />
+                                        </div>
+                                    </div>
+
+                                    <DiagramsPanel span={span} pointLoads={pointLoads} wTotal={w_total} shearData={shearData} momentData={momentData} maxV={maxV} maxM={maxM} isDark={isDark} hoverX={hoverX} setHoverX={setHoverX} />
+                                </div>
+                             )}
+
+                             {activeTab === 'report' && (
+                                <div className="bg-white p-8 rounded-xl shadow-sm border border-slate-200 dark:bg-slate-900 dark:border-slate-700 print:border-none print:shadow-none">
+                                    <div className="flex justify-between border-b pb-4 mb-6">
+                                        <div>
+                                            <h2 className="text-2xl font-bold">Structural Calculation Trace</h2>
+                                            <p className="text-xs font-mono text-slate-400">{new Date().toLocaleString()}</p>
+                                        </div>
+                                        <div className="text-right text-xs font-mono opacity-60">
+                                            <p>Ref: NDS 2018</p>
+                                            <p>Method: ASD</p>
+                                        </div>
+                                    </div>
+
+                                    <EquationBlock title="1. Member & Geometric Properties" isDark={isDark} showTrace={true} equations={[
+                                        { label:"Area", sym:"A", formula:"b * d", sub:`${b} * ${d}`, res:Area.toFixed(2), unit:"in²", ref:"NDS 3.1" },
+                                        { label:"Modulus", sym:"S", formula:"b * d² / 6", sub:`${b} * ${d}² / 6`, res:Sx.toFixed(2), unit:"in³", ref:"NDS 3.1" },
+                                        { label:"Inertia", sym:"I", formula:"b * d³ / 12", sub:`${b} * ${d}³ / 12`, res:Ix.toFixed(1), unit:"in⁴", ref:"NDS 3.1" },
+                                        { label:"Self Weight", sym:"w_sw", formula:"ρ * A / 144", sub:`${baseVals.dens} * ${Area.toFixed(2)} / 144`, res:w_self.toFixed(1), unit:"plf", traceOnly:true },
+                                    ]} />
+
+                                    <div className={`mb-6 p-4 rounded-lg border ${isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-white border-slate-200'} shadow-sm break-inside-avoid`}>
+                                        <h4 className={`text-xs font-bold uppercase tracking-wider mb-3 border-b pb-2 ${isDark ? 'text-blue-400 border-blue-900' : 'text-slate-600 border-slate-100'}`}>2. Adjustment Factors Summary</h4>
+                                        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs font-mono">
+                                            <FactorRow label="CD (Duration)" val={Cd} note={loadCombo} isDark={isDark} />
+                                            <FactorRow label="CM (Wet)" val={CM} note={moisture} isDark={isDark} />
+                                            <FactorRow label="Ct (Temp)" val={Ct} note={temp} isDark={isDark} />
+                                            <FactorRow label="CL (Stability)" val={CL} note={CL<1?"Unbraced":"Braced"} isDark={isDark} />
+                                            <FactorRow label="CF (Size)" val={CF} note={`d=${d}"`} isDark={isDark} />
+                                            <FactorRow label="Ci (Incised)" val={Ci} note={incising?"Yes":"No"} isDark={isDark} />
+                                            <FactorRow label="Cr (Repetitive)" val={Cr} note={repetitive?"Yes":"No"} isDark={isDark} />
+                                            <FactorRow label="Cfu (Flat Use)" val={Cfu} note={flatUse?"Yes":"No"} isDark={isDark} />
+                                        </div>
+                                    </div>
+
+                                    <EquationBlock title="3. Beam Stability Factor (CL) Trace" isDark={isDark} showTrace={true} equations={[
+                                        { label:"Eff Length", sym:"le", formula:"1.63Lu + 3d", sub:`1.63(${Lu}) + 3(${d})`, res:le.toFixed(1), unit:"in", ref:"Table 3.3.3" },
+                                        { label:"Slenderness", sym:"RB", formula:"√(le*d/b²)", sub:`√(${le.toFixed(0)}*${d}/${b}²)`, res:RB.toFixed(2), unit:"", ref:"3.3.3.6" },
+                                        { label:"Crit Buckling", sym:"FbE", formula:"1.20*Emin'/RB²", sub:`1.20*${Emin_p}/ ${RB.toFixed(2)}²`, res:FbE.toFixed(0), unit:"psi", ref:"3.3.3.7" },
+                                        { label:"Stability", sym:"CL", formula:"Derived", sub:"Eq 3.3-6", res:CL.toFixed(3), unit:"", ref:"3.3.3.8" },
+                                    ]} />
+
+                                    <EquationBlock title="4. Design Values & Adjustment Factors" isDark={isDark} showTrace={traceMode} equations={[
+                                        { label:"Adj Bending", sym:"Fb'", formula:"Fb * Factors", sub:`${baseVals.Fb} * ...`, res:Fb_p.toFixed(0), unit:"psi", ref:"Table 4.3.1" },
+                                        { label:"Adj Shear", sym:"Fv'", formula:"Fv * Factors", sub:`${baseVals.Fv} * ...`, res:(Fv_p * Cn).toFixed(0), unit:"psi", ref:"Table 4.3.1" },
+                                        { label:"Notch Factor", sym:"Cn", formula:"(dn/d)²", sub:`(${d-notchDepth}/${d})²`, res:Cn.toFixed(2), unit:"", ref:"3.4.3.2", traceOnly:true },
+                                    ]} />
+
+                                    <EquationBlock title="5. Analysis & Stress Check" isDark={isDark} showTrace={traceMode} equations={[
+                                        { label:"Max Moment", sym:"Mmax", formula:"WL²/8 + ...", sub:"Superposition", res:(maxM/12).toFixed(0), unit:"ft-lb", ref:"Statics" },
+                                        { label:"Design Shear", sym:"V*", formula:"Vmax - w*d", sub:`${maxV.toFixed(0)} - ${w_total.toFixed(0)}*${(d/12).toFixed(2)}`, res:V_crit.toFixed(0), unit:"lb", ref:"3.4.3.1" },
+                                        { label:"Act Bending", sym:"fb", formula:"M / S", sub:`${maxM.toFixed(0)} / ${Sx.toFixed(2)}`, res:fb_actual.toFixed(0), unit:"psi", ref:"3.2.1" },
+                                        { label:"Act Shear", sym:"fv", formula:"1.5 V / A_net", sub:`1.5 * ${V_crit.toFixed(0)} / ${Area.toFixed(2)}`, res:fv_actual.toFixed(0), unit:"psi", ref:"3.4.1" },
+                                    ]} />
+
+                                    {projectInfo.notes && <div className="mt-6 p-4 bg-slate-50 border rounded text-xs font-mono whitespace-pre-wrap">{projectInfo.notes}</div>}
+                                </div>
+                             )}
+                        </div>
+                    </main>
+                </div>
+            );
+        }
+
+        const root = createRoot(document.getElementById('root'));
+        root.render(<UniversalTimberStudio />);
+    </script>
+</body>
+</html>
