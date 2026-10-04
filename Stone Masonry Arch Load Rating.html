@@ -1184,6 +1184,7 @@ function buildModelRaw(p){
      arch. Line items are entered as weight per foot of bridge length and
      converted to an equivalent pressure on the one-foot strip. */
   const sdlLine=(p.sdl||[]).reduce((s,it)=>s+(+it.w||0),0)/1000;   // k/ft of span
+  if(sdlLine>0&&!(p.barrelW>0))throw new Error("Barrel width must be positive: it divides the superimposed dead load (§7.2.7.4B).");
   const wSdl=(p.barrelW>0)?sdlLine/p.barrelW:0;                    // k/ft² on the strip
   /* Surface loads — fill, wearing surface, superimposed dead load — are carried
      on the horizontal projection of the EXTRADOS, because that is the surface
@@ -1623,6 +1624,17 @@ function nodalLLRail(model,vehicle,pos,dir){
 
 /* ---------- live load: pressure through fill (Std Spec 6.4) ---------- */
 const TIRE_L=10/12, TIRE_W=20/12, GAGE=6.0;
+/* Basis of the Art. 6.4.2 spread where the fill is 2 ft or more.
+     "std"   DEFAULT. Std. Spec. 6.4.2 as written: the wheel load is distributed
+             over a square whose sides are 1.75 times the depth of fill. No tire
+             contact dimensions are added.
+     "tire"  The tire contact area grown at 1.75H (L = 10 in + 1.75H, w = 20 in +
+             1.75H). This is the LRFD 3.6.1.2.6 form of the footprint, and it was
+             the only basis before v2026.10.04; it spreads the load further and so
+             gives lower pressures than the Std. Spec. text.
+   Returns the constant terms added to 1.75H. The shallow-fill (< 2 ft) credited
+   spread is a separate control and always grows from the tire patch. */
+function deepTire(p){return (p&&p.deepSpread==="tire")?{l:TIRE_L,b:TIRE_W,tire:true}:{l:0,b:0,tire:false};}
 /* ---------- shallow-cover rule, AASHTO Std. Spec. 6.4.1 ----------
    6.4.2 gives the familiar 1.75H square, but it is written for fill of 2 ft or
    more. Below that, 6.4.1 sends the wheel to Article 3.24.3 instead: it is NOT
@@ -1794,7 +1806,7 @@ function nodalLL(model,vehicle,pos,dir){
   }
   for(let i=1;i<model.nN-1;i++){
     const h=model.coverAt(i), T=tribSpan(model,i);
-    const spreadL=TIRE_L+1.75*h, wtr=TIRE_W+1.75*h;
+    const dT=deepTire(model.p), spreadL=dT.l+1.75*h, wtr=dT.b+1.75*h;
     let press=0;
     for(const a of disp){
       const f=coverFrac(T,a.xa-spreadL/2,a.xa+spreadL/2);
@@ -1853,7 +1865,7 @@ function nodalLLByAxle(model,vehicle,pos,dir){
       if(R.axQ)for(let k=0;k<nA;k++){axQ[k][i]=R.axQ[k];axP[k][i]=R.axP[k];}
       if(R.trQ){trQ[i]=R.trQ;trP[i]=R.trP;}
     }else{
-      const spreadL=TIRE_L+1.75*H, wtr=TIRE_W+1.75*H;
+      const dT=deepTire(p), spreadL=dT.l+1.75*H, wtr=dT.b+1.75*H;
       const E=shallowWidth(p);
       vehicle.axles.forEach((ax,k)=>{
         const xa=(dir>0)?pos+ax.x:pos+maxOff-ax.x;
@@ -2416,8 +2428,8 @@ const VEHICLES=[
  {id:"T3S2", name:"Type 3S2",   tons:36,   axles:[{x:0,P:10},{x:11,P:15.5},{x:15,P:15.5},{x:37,P:15.5},{x:41,P:15.5}]},
  {id:"SU4",  name:"SU4",        tons:27,   axles:[{x:0,P:12},{x:10,P:8},{x:14,P:17},{x:18,P:17}]},
  {id:"SU5",  name:"SU5",        tons:31,   axles:[{x:0,P:12},{x:10,P:8},{x:14,P:8},{x:18,P:17},{x:22,P:17}]},
- {id:"SU6",  name:"SU6",        tons:34.75,axles:[{x:0,P:11.5},{x:10,P:8},{x:14,P:8},{x:18,P:11},{x:22,P:17},{x:26,P:17}]},
- {id:"SU7",  name:"SU7",        tons:38.75,axles:[{x:0,P:11.5},{x:10,P:8},{x:14,P:8},{x:18,P:11},{x:22,P:11},{x:26,P:17},{x:30,P:17}]},
+ {id:"SU6",  name:"SU6",        tons:34.75,axles:[{x:0,P:11.5},{x:10,P:8},{x:14,P:8},{x:18,P:17},{x:22,P:17},{x:26,P:8}]},
+ {id:"SU7",  name:"SU7",        tons:38.75,axles:[{x:0,P:11.5},{x:10,P:8},{x:14,P:8},{x:18,P:17},{x:22,P:17},{x:26,P:8},{x:30,P:8}]},
  {id:"EV2",  name:"EV2 (Inv basis)",tons:28.75,ev:true,axles:[{x:0,P:24},{x:15,P:33.5}]},
  {id:"EV3",  name:"EV3 (Inv basis)",tons:43,  ev:true,axles:[{x:0,P:24},{x:15,P:31},{x:19,P:31}]}
 ].map(v=>Object.assign({mode:"hwy"},v));
@@ -2425,7 +2437,7 @@ const ALL_VEHICLES=VEHICLES.concat(RAIL_VEHICLES);
 function vehiclesFor(mode){return (mode==="rail")?RAIL_VEHICLES:VEHICLES;}
 
 return {buildModel,buildGeometry,denseIntrados,fitAll,fitOk,stressPair,
-        SHALLOW_FILL,slabWidthE,shallowWidth,shallowRate,shallowRuleOn,stripLoadConc,coverAtX,llRegime,
+        SHALLOW_FILL,slabWidthE,shallowWidth,shallowRate,shallowRuleOn,stripLoadConc,coverAtX,llRegime,deepTire,
         RAIL_VEHICLES,ALL_VEHICLES,vehiclesFor,railSpread,railGroups,railTracks,TIE_LONG,nodalLL,nodalLLByAxle,llEffects,stressMax,
         impactFor,impactForRail,impactAt,baseDepth,faAt,leadAxleX,shearRF,deterZones,tribSpan,coverFrac,rateTrace,rateAllSections,extremeAt,railRate,llEffectsSplit,llAtSection,axleLs,axleTrib,axleFoot,axleHalves,trackExtents,applyLocalImpact,rateVehicle,thrustOffsets,VEHICLES,
         TIRE_L,TIRE_W,GAGE};
@@ -3529,7 +3541,7 @@ const MESHCONV=(()=>{
       p.dC,p.dS,(p.dOver||[]).map(o=>[o.x,o.d]),
       (p.deter||[]).map(e=>[e.node,e.x,e.x2,e.d,e.fa,e.hinge]),p.deterFace,
       p.gradeMode,p.gradePct,p.cover,p.covL,p.covR,p.tws,p.gm,p.gf,p.gws,p.K,p.E,
-      p.shearDef,p.impMode,p.shallowE,p.shallowRate,p.fa,p.fv,p.barrelW,
+      p.shearDef,p.impMode,p.shallowE,p.shallowRate,p.deepSpread,p.fa,p.fv,p.barrelW,
       (p.sdl||[]).map(i=>i.w),p.loadMode,p.tieLen,p.tieDepth,(p.tracks||[]),
       (p.vehicles||[]).slice().sort()]);
   }
@@ -4625,10 +4637,11 @@ function stateAt(p,M,veh,pos,dir,i){
      integrated. lsAt(k) is the single source both this figure and the solver
      read; a figure drawn from R.Ls alone would show overlapping cones over a
      calculation that had none. */
+  const dT=shallow?{l:ARCH.TIRE_L,b:ARCH.TIRE_W}:ARCH.deepTire(p);   // 6.4.2 basis for deep fill
   const lsAt=(k)=>rail?ARCH.axleLs(p,veh,k,H)
-                      :(shallow&&rate<=0?0:(ARCH.TIRE_L+(shallow?rate:1.75)*H));
-  const Ls=rail?R.Ls:(shallow&&rate<=0?0:(ARCH.TIRE_L+(shallow?rate:1.75)*H));
-  const wt=rail?R.wTrack:(shallow&&rate<=0?Esh:(ARCH.TIRE_W+(shallow?rate:1.75)*H));
+                      :(shallow&&rate<=0?0:(dT.l+(shallow?rate:1.75)*H));
+  const Ls=rail?R.Ls:(shallow&&rate<=0?0:(dT.l+(shallow?rate:1.75)*H));
+  const wt=rail?R.wTrack:(shallow&&rate<=0?Esh:(dT.b+(shallow?rate:1.75)*H));
   /* Overlap treatment differs by branch. 6.4.2 merges over the outside limits;
      3.24.3.2 has no merge provision and the wheel lines superimpose. */
   const supers=(!rail&&shallow&&rate<=0&&wt>ARCH.GAGE);
@@ -4744,8 +4757,10 @@ function draw(svg,p,M,veh,pos,dir,i,opt){
     wheels.forEach(zw=>{
       if(S.disp){
         // dispersion wedge from the tire patch down to the extrados
+        /* bottom of the wedge at the analysed width w_t (tire + spread, or the bare 1.75H square) */
+        const hw=(S.wt>0)?S.wt/2:hb+sp;
         el("polygon",{points:
-          `${X(zw-hb)},${Y(yTop)} ${X(zw+hb)},${Y(yTop)} ${X(zw+hb+sp)},${Y(yExt)} ${X(zw-hb-sp)},${Y(yExt)}`,
+          `${X(zw-hb)},${Y(yTop)} ${X(zw+hb)},${Y(yTop)} ${X(zw+hw)},${Y(yExt)} ${X(zw-hw)},${Y(yExt)}`,
           fill:"rgba(31,78,121,.13)",stroke:"#1f4e79","stroke-dasharray":"4 3","stroke-width":1},svg);
       }else{
         /* No dispersion is credited — the load goes straight down on its
@@ -4886,6 +4901,9 @@ function drawUmbrellas(svg,g,p,veh,pos,X,Y,dir,Mdl){
   };
   const rail=(veh.mode==="rail");
   const hf=rail?ARCH.TIE_LONG/2:ARCH.TIRE_L/2;
+  /* half length at the top of the drawn spread cone: the tie, the tire (tire-patch basis), or zero
+     for the literal Std. Spec. 6.4.2 square, which grows from the wheel itself */
+  const hfc=rail?hf:ARCH.deepTire(p).l/2;
   /* Horizontal spread per unit of depth on each side. This was hardcoded to 1.0
      for rail — the old 1H:1V — and so went on drawing 45-degree cones after the
      dispersion moved to 1H:2V at v2026.08.11d. The figure was a picture of a
@@ -4938,7 +4956,7 @@ function drawUmbrellas(svg,g,p,veh,pos,X,Y,dir,Mdl){
       return;
     }
     const yUpAt=(x)=>{const o=Math.abs(x-xa);
-      return (o<=hf)?yTop:(yTop-(d0+(o-hf)/kSide));};
+      return (o<=hfc)?yTop:(yTop-(d0+(o-hfc)/kSide));};
     /* THE CONE, DRAWN WHOLE. The filled umbrella is bounded below by the
        extrados, so it exists only where there is arch beneath it — which made
        every cone stop dead at the springings, and an axle standing off the end
@@ -6643,8 +6661,11 @@ function validate(p,M,results){
           `defensible as engineering judgment about the fill — there is real material over the extrados and it `+
           `does spread load — but it is a judgment and it must appear in the assumptions. `+
           ((Math.abs(rSh-1.75)<1e-9)
-            ?"At 1.75H the result is arithmetically identical to applying Art. 6.4.2 at every depth, which is "+
-             "what a legacy rating built before this distinction was drawn would have produced."
+            ?(ARCH.deepTire(p).tire
+              ?"At 1.75H the result is arithmetically identical to applying Art. 6.4.2 (tire-patch basis) at every "+
+               "depth, which is what a legacy rating built before this distinction was drawn would have produced."
+              :"At 1.75H the shallow branch grows from the tire patch, so it spreads slightly further than the "+
+               "literal Art. 6.4.2 square used at 2 ft and above.")
             :`At ${nfx(rSh,2)}H the credit is conservative against the Art. 6.4.2 rate.`),
           "Std Spec 6.4.1");
       else if(shallow)
@@ -6653,7 +6674,7 @@ function validate(p,M,results){
           ((ARCH.shallowRate(p)>0)
             ?`cover take a credited fill dispersion of ${nfx(ARCH.shallowRate(p),2)}H, applied in both `+
              `directions, rather than the ${nfx(1.75,2)}H of Art. 6.4.2`+
-             ((Math.abs(ARCH.shallowRate(p)-1.75)<1e-9)
+             ((Math.abs(ARCH.shallowRate(p)-1.75)<1e-9&&ARCH.deepTire(p).tire)
                ?" — at this rate the branch is identical to 6.4.2 and the load is continuous across 2 ft."
                :". A step remains at H = 2 ft.")
             :`cover are carried as concentrated loads, not by the 1.75H spread of 6.4.2, over a transverse `+
@@ -6670,6 +6691,15 @@ function validate(p,M,results){
           `Least cover ${nfx(covMinN,2)} ft, at or above the ${nfx(ARCH.SHALLOW_FILL,1)} ft threshold `+
           `everywhere, so the 1.75H spread of Std. Spec. 6.4.2 governs across the whole barrel.`,
           "Std Spec 6.4.2");
+      if(ARCH.deepTire(p).tire)
+        add("wn","Wheel spread at 2 ft of fill or more: tire patch + 1.75H",
+          "The tire contact area is grown at 1.75H. Std. Spec. Art. 6.4.2 as written uses a 1.75H square with no "+
+          "tire dimensions, so this basis spreads the load further and gives lower pressures than the cited "+
+          "article. State it in the assumptions, or select the literal 6.4.2 basis on the input panel.","Std Spec 6.4.2");
+      add("wn","One truck placed transversely",
+        "Each rating places a single vehicle (two wheel lines at 6 ft gage) on the strip. Side-by-side trucks in "+
+        `adjacent lanes are not placed, so on a multi-lane barrel (this one is ${nfx(p.barrelW,1)} ft wide) the `+
+        "overlap of their spread areas under deep fill, which Art. 6.4.2 combines, is not considered.","Std Spec 6.4.2");
     }
 
     if(__trackWarn)
@@ -7632,8 +7662,11 @@ function liveLoadSection(p,M,veh,pos,dir){
         "is which, a dispersion cone through soil is symmetric, and crediting lateral spread while denying "+
         "longitudinal spread through the same material has no basis. "+
         (Math.abs(rateSh-1.75)<1e-9
-          ? "At this rate the shallow branch is arithmetically identical to Art. 6.4.2, so the load is "+
-            "continuous across the 2 ft threshold and there is no step at H = 2 ft."
+          ? (ARCH.deepTire(p).tire
+            ? "At this rate the shallow branch is arithmetically identical to Art. 6.4.2 (tire-patch basis), so the "+
+              "load is continuous across the 2 ft threshold and there is no step at H = 2 ft."
+            : "At this rate the shallow branch grows from the tire patch while Art. 6.4.2 at 2 ft and above uses the "+
+              "bare 1.75H square, so a small step remains at H = 2 ft (the shallow side spreads further).")
           : "This rate is below the Art. 6.4.2 rate of 1.75H, so a step remains at H = 2 ft — smaller than "+
             "with no credit at all, but present.")+
         " Note this is a different question from the transverse width E. E is a load-SHARING assumption — how "+
@@ -7700,10 +7733,25 @@ function liveLoadSection(p,M,veh,pos,dir){
       "legacy rating; it should not be used for a submitted calculation without saying so in the assumptions.");
   }
 
+  const dTL=ARCH.deepTire(p);
+  h+=msg(dTL.tire?"warn":"inf","Spread basis at 2 ft of fill or more",
+    dTL.tire
+      ? "<b>Tire patch + 1.75H</b> is selected: the tire contact area (10 in by 20 in) is grown at 1.75H. Std. Spec. "+
+        "Art. 6.4.2 as written distributes the wheel over a square of side 1.75H with no tire dimensions added, "+
+        "so this option spreads the load further and gives lower pressures than the cited article. State the "+
+        "basis in the assumptions."
+      : "Std. Spec. Art. 6.4.2 as written: each wheel load is distributed over a square whose sides are 1.75 times "+
+        "the depth of fill, with no tire contact dimensions added. The tire patch + 1.75H basis is available on "+
+        "the input panel.");
+  h+=msg("warn","One truck transversely",
+    "A single vehicle is placed on the strip: one axle with two wheel lines at the 6 ft gage. No adjacent-lane "+
+    `vehicle is placed, so on a barrel wide enough for two lanes (this one is ${nfx(p.barrelW,1)} ft) the overlap of `+
+    "spread areas from side-by-side trucks, which Art. 6.4.2 combines, is not considered. Under deep fill that "+
+    "overlap can raise the strip pressure above the single-truck value.");
   h+=step({label:"Longitudinal spread length at depth H",ref:"Std Spec 6.4",
-    sym:"L_s=\\ell_t+1.75H",sub:`${num(ARCH.TIRE_L,3)}+1.75H`,res:"",units:"ft"});
+    sym:dTL.tire?"L_s=\\ell_t+1.75H":"L_s=1.75H",sub:dTL.tire?`${num(ARCH.TIRE_L,3)}+1.75H`:"1.75H",res:"",units:"ft"});
   h+=step({label:"Transverse spread width at depth H",ref:"Std Spec 6.4",
-    sym:"w_t=b_t+1.75H",sub:`${num(ARCH.TIRE_W,3)}+1.75H`,res:"",units:"ft"});
+    sym:dTL.tire?"w_t=b_t+1.75H":"w_t=1.75H",sub:dTL.tire?`${num(ARCH.TIRE_W,3)}+1.75H`:"1.75H",res:"",units:"ft"});
   h+=eqLine("Pressure on the extrados, wheel lines merged where the spreads overlap",
     "p=\\begin{cases}\\dfrac{P_{ax}}{(s_g+w_t)\\,L_s} & w_t\\ge s_g\\quad\\text{(spreads overlap, axle acts as one patch)}\\\\[10pt]"+
     "\\dfrac{P_{ax}/2}{w_t\\,L_s} & w_t< s_g\\quad\\text{(wheel lines independent)}\\end{cases}",
@@ -7721,7 +7769,7 @@ function liveLoadSection(p,M,veh,pos,dir){
   let jm=1,qm=0;
   for(let i=1;i<M.nN-1;i++)if(q[i]>qm){qm=q[i];jm=i;}
   const nd=M.g.nodes[jm], H=M.coverAt(jm);
-  const Ls=ARCH.TIRE_L+1.75*H, wt=ARCH.TIRE_W+1.75*H;
+  const Ls=dTL.l+1.75*H, wt=dTL.b+1.75*H;
   const merged=(wt>=ARCH.GAGE);
   const offs=veh.axles.map(a=>a.x), maxOff=offs[offs.length-1];
   const contrib=[];
@@ -7755,9 +7803,9 @@ function liveLoadSection(p,M,veh,pos,dir){
     sym:"H=y_{surf}(x)-y_{ext}",
     sub:`${num(M.g.surfAt(nd.extX),3)}-${num(nd.extY,3)}`,res:num(H,3),units:"ft"});
   h+=step({label:"Longitudinal spread length",ref:"Std Spec 6.4",
-    sym:"L_s=\\ell_t+1.75H",sub:`${num(ARCH.TIRE_L,3)}+1.75\\times${num(H,3)}`,res:num(Ls,3),units:"ft"});
+    sym:dTL.tire?"L_s=\\ell_t+1.75H":"L_s=1.75H",sub:`${dTL.tire?num(ARCH.TIRE_L,3)+"+":""}1.75\\times${num(H,3)}`,res:num(Ls,3),units:"ft"});
   h+=step({label:"Transverse spread width",ref:"Std Spec 6.4",
-    sym:"w_t=b_t+1.75H",sub:`${num(ARCH.TIRE_W,3)}+1.75\\times${num(H,3)}`,res:num(wt,3),units:"ft"});
+    sym:dTL.tire?"w_t=b_t+1.75H":"w_t=1.75H",sub:`${dTL.tire?num(ARCH.TIRE_W,3)+"+":""}1.75\\times${num(H,3)}`,res:num(wt,3),units:"ft"});
   h+=step({label:"Wheel line overlap check",
     sym:"w_t\\ \\text{vs}\\ s_g",sub:`${num(wt,3)}\\ \\text{vs}\\ ${num(ARCH.GAGE,2)}`,
     res:merged?"\\text{overlap}":"\\text{independent}",
@@ -8346,7 +8394,7 @@ function liveWorked(p,M,veh,pos,dir,node,part){
       branch=grp.merged?(grp.n+" tracks merged"):"single track";
       nWheel=grp.n;
     }else{
-      Ls=ARCH.TIRE_L+1.75*H; wid=ARCH.TIRE_W+1.75*H;
+      Ls=ARCH.deepTire(p).l+1.75*H; wid=ARCH.deepTire(p).b+1.75*H;
       const merged=(wid>=ARCH.GAGE);
       wEff=merged?(ARCH.GAGE+wid):wid;
       branch=merged?("merged, w_t ≥ "+nfx(ARCH.GAGE,2)):("separate, w_t < "+nfx(ARCH.GAGE,2));
@@ -8367,8 +8415,8 @@ function liveWorked(p,M,veh,pos,dir,node,part){
   h+=`<div class="scrollx">`+dtab([
     {k:"tag",h:"Node",txt:1},{k:"x",h:"x (ft)",dp:2},
     {k:"H",h:"cover H (ft)",dp:3},{k:"Hi",h:"depth used for I (ft)",dp:3},
-    {k:"Ls",h:rail?"L_s = 3.0+2h (ft)":"L_s = 10″+1.75H (ft)",dp:3},
-    {k:"wid",h:rail?"W_tr = L_tie+2h (ft)":"w_t = 20″+1.75H (ft)",dp:3},
+    {k:"Ls",h:rail?"L_s = 3.0+2h (ft)":(ARCH.deepTire(p).tire?"L_s = 10″+1.75H (ft)":"L_s = 1.75H (ft)"),dp:3},
+    {k:"wid",h:rail?"W_tr = L_tie+2h (ft)":(ARCH.deepTire(p).tire?"w_t = 20″+1.75H (ft)":"w_t = 1.75H (ft)"),dp:3},
     {k:"branch",h:rail?"tracks":"Std Spec 6.4 branch",txt:1},
     {k:"wEff",h:"effective width (ft)",dp:3},{k:"area",h:"patch area (ft²)",dp:2},
     {k:"wheels",h:rail?"tracks in group":"wheel lines",dp:0},
@@ -8528,8 +8576,8 @@ function rows(p,M,veh,pos,dir){
     const hf=Math.max(M.g.bwsAt(n.extX)-n.extY,0);
     const rail=(veh.mode==="rail");
     const RS=rail?ARCH.railSpread(p,H):null;
-    const Ls=rail?RS.Ls:(ARCH.TIRE_L+1.75*H);
-    const wt=rail?RS.wTrack:(ARCH.TIRE_W+1.75*H);
+    const Ls=rail?RS.Ls:(ARCH.deepTire(p).l+1.75*H);
+    const wt=rail?RS.wTrack:(ARCH.deepTire(p).b+1.75*H);
     const merged=rail?RS.groups.some(gg=>gg.merged):(wt>=ARCH.GAGE);
     const wEff=rail?Math.max(...RS.groups.map(gg=>gg.width)):(merged?(ARCH.GAGE+wt):wt);
     let nAx=0,press=0,branch=merged?"merged":"separate",LsR=Ls,wtR=wt,wEffR=wEff;
@@ -8644,8 +8692,8 @@ function section(p,M,veh,pos,dir,govSec){
   const isRail=(veh.mode==="rail");
   h+=UI.pnl("nd_ll",c(),"Live load distribution through fill"+(isRail?" — railroad, tie distribution":" — highway, Std Spec 6.4"),
     dtab([{k:"tag",h:"Node",txt:1},{k:"H",h:"H (ft)",dp:3},
-      {k:"Ls",h:isRail?"L_s = 3.0+2h (ft)":"L_s = 10″+1.75H (ft)",dp:3},
-      {k:"wt",h:isRail?"W_tr = L_tie+2h (ft)":"w_t = 20″+1.75H (ft)",dp:3},
+      {k:"Ls",h:isRail?"L_s = 3.0+2h (ft)":(ARCH.deepTire(p).tire?"L_s = 10″+1.75H (ft)":"L_s = 1.75H (ft)"),dp:3},
+      {k:"wt",h:isRail?"W_tr = L_tie+2h (ft)":(ARCH.deepTire(p).tire?"w_t = 20″+1.75H (ft)":"w_t = 1.75H (ft)"),dp:3},
       {k:"merged",h:isRail?"tracks":"wheel lines",txt:1},{k:"wEff",h:"effective width (ft)",dp:3},
       {k:"area",h:"spread area (ft²)",dp:3},{k:"nAx",h:"axles",dp:0},
       {k:"press",h:"pressure p (ksf)",dp:5},{k:"trib",h:"trib length (ft)",dp:3},
@@ -8840,7 +8888,8 @@ function worked(p,M,veh,pos,dir,i){
   const LL=ARCH.llEffects(M,qImp);
   LL[i]=LLs;
   const H=M.coverAt(i), hf=Math.max(M.g.bwsAt(n.extX)-n.extY,0);
-  const Ls=ARCH.TIRE_L+1.75*H, wt=ARCH.TIRE_W+1.75*H;
+  const dTW=ARCH.deepTire(p);
+  const Ls=dTW.l+1.75*H, wt=dTW.b+1.75*H;
   const merged=(wt>=ARCH.GAGE), wEff=merged?(ARCH.GAGE+wt):wt;
   const offs=veh.axles.map(a=>a.x), maxOff=offs[offs.length-1];
   const concAx=(veh.mode==="rail")?[]:veh.axles
@@ -8982,11 +9031,11 @@ function worked(p,M,veh,pos,dir,i){
       `section includes both contributions.`);
   }
   h+=step({label:"Longitudinal spread length",ref:"Std Spec 6.4",
-    sym:"L_s=\\ell_t+1.75H",
-    sub:`${num(ARCH.TIRE_L,4)}+1.75\\times${num(H,4)}`,res:num(Ls,4),units:"ft"});
+    sym:dTW.tire?"L_s=\\ell_t+1.75H":"L_s=1.75H",
+    sub:`${dTW.tire?num(ARCH.TIRE_L,4)+"+":""}1.75\\times${num(H,4)}`,res:num(Ls,4),units:"ft"});
   h+=step({label:"Transverse spread width per wheel line",ref:"Std Spec 6.4",
-    sym:"w_t=b_t+1.75H",
-    sub:`${num(ARCH.TIRE_W,4)}+1.75\\times${num(H,4)}`,res:num(wt,4),units:"ft"});
+    sym:dTW.tire?"w_t=b_t+1.75H":"w_t=1.75H",
+    sub:`${dTW.tire?num(ARCH.TIRE_W,4)+"+":""}1.75\\times${num(H,4)}`,res:num(wt,4),units:"ft"});
   h+=step({label:"Wheel line overlap check",
     sym:"w_t\\ \\text{vs}\\ s_g",sub:`${num(wt,4)}\\ \\text{vs}\\ ${num(ARCH.GAGE,2)}`,
     res:merged?"w_t\\ge s_g":"w_t<s_g",
@@ -9253,7 +9302,7 @@ const F={
   geoMode:"ideal",shape:"circular",span:"40",rise:"10",measPts:"",fitSel:"auto",
   support:"fixed",nelem:"0",dCrown:"24",dSpring:"24",dOver:"",deter:"",deterFace:"intrados",
   gradeMode:"crown",gradePct:"0",cover:"2.0",covL:"12.0",covR:"12.0",tws:"4",
-  gm:"170",gf:"120",gws:"140",kcoef:"0.25",emod:"1500",shearDef:"1",impMode:"crown",llAdverse:"0",shallowE:"tire",shallowRate:"0",fallow:"250",fv:"0",
+  gm:"170",gf:"120",gws:"140",kcoef:"0.25",emod:"1500",shearDef:"1",impMode:"crown",llAdverse:"0",shallowE:"tire",shallowRate:"0",deepSpread:"std",fallow:"250",fv:"0",
   barrelW:"24",sdlItems:"",loadMode:"hwy",tieLen:"8.5",tieDepth:"0.583",railSpread:"0.5",railCapLong:"0",tracks:"0",
   assume:"",vehicles:ARCH.VEHICLES.map(v=>v.id).join(",")
 };
@@ -9345,7 +9394,10 @@ function inputPanel(){
       row("Fill spread credit below 2 ft","applied in both directions, or in neither",
         sel("shallowRate",[["0","None — wheel arrives on its footprint (default)"],
           ["1","1.0H both directions — LRFD 3.6.1.2.6 rate"],
-          ["1.75","1.75H both directions — Art. 6.4.2 rate, continuous at 2 ft"]])))+
+          ["1.75","1.75H both directions — Art. 6.4.2 rate (continuous at 2 ft with the tire-patch basis below)"]]))+
+      row("Wheel spread, fill 2 ft or more","Std. Spec. 6.4.2",
+        sel("deepSpread",[["std","Std. Spec. 6.4.2 literal — 1.75H square (default)"],
+          ["tire","Tire patch + 1.75H (10 in + 1.75H by 20 in + 1.75H) — less conservative"]])))+
     row("Allowable compressive stress f<sub>a</sub>","psi — MBE 6B.5.2.6 with field judgment",nb("fallow","10"))+
     row("Allowable shear stress f<sub>v</sub>",
       "psi — 0 disables the check. §7.2.7 does not require a shear rating; entering a value adds one to the "+
@@ -9531,7 +9583,11 @@ function readP(){
     S=measPts[measPts.length-1].x-measPts[0].x;
     Rr=Math.max(...measPts.map(q=>q.y))-Math.min(measPts[0].y,measPts[measPts.length-1].y);
     if(S<=0)throw new Error("Measured points must span a positive width.");
-  }else{S=n("span");Rr=n("rise");}
+  }else{S=n("span");Rr=n("rise");
+    /* rise = 0 sends the circular radius S²/8R + R/2 to Infinity and the geometry to NaN */
+    if(!(S>0))throw new Error(`The span is ${nfx(S,3)} ft. Enter a positive clear span.`);
+    if(!(Rr>0))throw new Error(`The rise is ${nfx(Rr,3)} ft. Enter a positive rise; a rise of zero is a flat beam, not an arch.`);
+  }
   let nEl=Math.floor(n("nelem"));
   const auto=Math.max(10,Math.ceil(S/4));
   if(!nEl||nEl<auto)nEl=auto;
@@ -9569,6 +9625,12 @@ function readP(){
     `Ring depth must be positive at both the crown (${nfx(n("dCrown"),2)} in entered) and the springings `+
     `(${nfx(n("dSpring"),2)} in entered). Depths are entered in INCHES as of v2026.08.10k — a 19 in ring is `+
     `entered as 19, not 1.583.`);
+  /* Barrel width divides every superimposed dead load line item (§7.2.7.4B). A blank or zero width
+     used to drop all of them, spandrel walls included, without a word. */
+  if(!(n("barrelW")>0))throw new Error(
+    `The barrel width is ${nfx(n("barrelW"),2)} ft. It must be positive: the superimposed dead loads `+
+    `(curbs, railings, sidewalks, spandrel walls) are spread across it per §7.2.7.4B, and with a zero width `+
+    `they would all be dropped from the rating. Enter the out-to-out width of the arch.`);
   if(badCov.length)throw new Error(
     badCov.map(b=>`${b[0]} is ${nfx(b[1],3)} ${b[2]||"ft"}.`).join(" ")+
     " A negative cover or thickness puts the road surface below the extrados, which is not a structure the "+
@@ -9584,7 +9646,8 @@ function readP(){
     cover:n("cover"),tws:ftOf(n("tws")),gm:n("gm"),gf:n("gf"),gws:n("gws"),
     K:n("kcoef"),E:n("emod"),shearDef:g("shearDef")==="1",
     llAdverse:g("llAdverse")==="1",
-    impMode:g("impMode"),shallowRule:"6.4.1",shallowE:g("shallowE")||"tire",shallowRate:+(g("shallowRate")||0),fa:n("fallow"),fv:n("fv"),
+    impMode:g("impMode"),shallowRule:"6.4.1",shallowE:g("shallowE")||"tire",shallowRate:+(g("shallowRate")||0),
+    deepSpread:(g("deepSpread")==="tire")?"tire":"std",fa:n("fallow"),fv:n("fv"),
     barrelW:n("barrelW"),sdl:readSdl(g("sdlItems")),
     loadMode:g("loadMode"),tieLen:n("tieLen"),tieDepth:n("tieDepth"),
     railSpread:n("railSpread"),railCapLong:g("railCapLong")==="1",
@@ -11995,9 +12058,10 @@ function showAutoInfo(){
     : "";
   if(!storageWorks()){
     e.innerHTML=rMsg+uMsg+`<span class="warn">This browser is not allowing local storage, so nothing is being saved
-      automatically and named projects will not persist.</span> Chrome treats each file opened from disk as its
-      own origin; putting the app on a shared drive or a server, or using Export JSON after each session, keeps
-      your work.`;
+      automatically and named projects will not persist.</span> Storage can be blocked by browser policy or a
+      private window, and in Chrome and Edge every file opened from disk shares one storage origin and one quota
+      with every other file opened the same way, so other tools can fill it. Using Export JSON after each
+      session, or putting the app on a shared drive or a server, keeps your work.`;
     return;
   }
   const when=restoredAt?new Date(restoredAt):null;
@@ -12545,6 +12609,7 @@ function init(){
            would silently revert to the default on a rail→highway round trip. */
         if(e2.id==="shallowE")F.shallowE=e2.value;
         if(e2.id==="shallowRate")F.shallowRate=e2.value;
+        if(e2.id==="deepSpread")F.deepSpread=e2.value;
         syncCond();render();autosave();});
       if(e2.type==="number")e2.addEventListener("input",()=>{render();autosave();});
     });
