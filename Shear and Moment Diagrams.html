@@ -267,6 +267,7 @@ tbody tr.ud:hover td{background:#dbeafe}
         <div class="fg"><label class="lbl">Force</label><select id="iFU"><option value="kN">kN</option><option value="lb">lb</option><option value="kip" selected>kip</option><option value="N">N</option></select></div>
         <div class="fg"><label class="lbl">Length</label><select id="iLU"><option value="m">m</option><option value="ft" selected>ft</option><option value="in">in</option><option value="cm">cm</option></select></div>
       </div>
+      <p class="hint" style="color:#b45309">⚠ Changing units only relabels the inputs — existing spans, loads, E, I, c, A and σ are NOT converted. Re-enter them in the new units.</p>
       <div class="fg"><label class="lbl">Load Combination</label>
         <select id="iLC"></select>
       </div>
@@ -280,10 +281,10 @@ tbody tr.ud:hover td{background:#dbeafe}
     <div id="secB" class="card hidden" style="display:flex;flex-direction:column;gap:6px">
       <div class="fg"><label class="lbl">Standard Shape (auto-fills, kip units)</label>
         <select id="iShape"><option value="">— Custom —</option>
-        <option value="30.8,7.89,2.96">W8×10</option><option value="118,10.2,6.49">W10×22</option>
-        <option value="204,12.2,7.65">W12×26</option><option value="291,13.8,8.85">W14×30</option>
-        <option value="448,15.9,10.6">W16×36</option><option value="800,18.0,14.7">W18×50</option>
-        <option value="1330,21.0,18.3">W21×62</option><option value="2100,23.9,22.4">W24×76</option></select>
+        <option value="30.8,7.89,2.96,0.170">W8×10</option><option value="118,10.2,6.49,0.240">W10×22</option>
+        <option value="204,12.2,7.65,0.230">W12×26</option><option value="291,13.8,8.85,0.270">W14×30</option>
+        <option value="448,15.9,10.6,0.295">W16×36</option><option value="800,18.0,14.7,0.355">W18×50</option>
+        <option value="1330,21.0,18.3,0.400">W21×62</option><option value="2100,23.9,22.4,0.440">W24×76</option></select>
       </div>
       <div class="g2">
         <div class="fg"><label class="lbl">E (<span class="uE">kip/ft²</span>)</label><input id="iE" type="number" value="4176000" step="any" min="0"></div>
@@ -443,7 +444,9 @@ let spans=[{L:12},{L:12}],nodes=[{t:'pin'},{t:'roller'},{t:'pin'}];
 let loads=[],editId=null,userX=[];
 let fu='kip',lu='ft',cid='U',envOn=false,secOn=false,Ev=4176000,Iv=.02,cv=.5,Av=.05,defLim=360,Fbv=0;
 let nodeX=[],totL=0,nodeR=[],shD=[],moD=[],deD=[],tabR=[],crits={zV:[],inf:[]};
-let env=null; // {V:{mx,mn,mxC,mnC},M:{...},R:[{mx,mxC}],per:[{id,name,vm,mm}]}
+let env=null; // {V:{mx,mn,mxC,mnC},M:{...},R:[{mx,mc,mn,mnc}],per:[{id,name,vm,mm}]}
+let stX=[]; // analysis stations (see stationList)
+let shpW=null; // W-shape preset in use: {nm,d,tw} in current length units (null = custom section)
 let hov={s:null,m:null,d:null},rafI={},hitR=[];
 let cT=null,kT=null;
 
@@ -475,6 +478,22 @@ function spanFER(spL,sl,fac){const r=[0,0,0,0];
         r[0]+=w*b*b*(L+2*s)/(L*L*L)*dx;r[1]+=w*s*b*b/(L*L)*dx;r[2]+=w*s*s*(3*L-2*s)/(L*L*L)*dx;r[3]-=w*s*s*b/(L*L)*dx;}}});
   return r;}
 
+/* Analysis stations: the uniform 400-division grid used before, plus every node and every
+   point-load / moment position (each also at ±ε) and the trapezoid ends, so V and M peaks under
+   concentrated loads and beside supports are evaluated exactly instead of being clipped by the grid.
+   Same approach as stationList() in Steel Beam Design - AISC 15th.html. Depends only on geometry,
+   so every combination shares the same stations (the envelope relies on that). */
+function stationList(){
+  const L=totL,set=new Set(),EPS=1e-6;
+  const add=x=>{if(x>=-1e-12&&x<=L+1e-12)set.add(Math.max(0,Math.min(L,+x.toFixed(9))));};
+  for(let i=0;i<=400;i++)add(i/400*L);
+  nodeX.forEach(x=>{add(x-EPS);add(x);add(x+EPS);});
+  loads.forEach(ld=>{if(ld.off||ld.allSpans)return;
+    const si=Math.min(ld.si||0,spans.length-1),x0=nodeX[si],spL=spans[si].L;
+    if(ld.type==='point'||ld.type==='moment'){const gx=x0+Math.max(0,Math.min(spL,ld.pos));add(gx-EPS);add(gx);add(gx+EPS);}
+    else if(ld.type==='distributed'){add(x0+(ld.sx||0));add(x0+(ld.ex||spL));}});
+  return[...set].sort((a,b)=>a-b);
+}
 /* SOLVE for one factor set → {R[],sh[],mo[]} */
 function solveFor(fac){
   const EI=secOn&&Ev>0&&Iv>0?Ev*Iv:1,ns=spans.length,nn=ns+1,nd=2*nn;
@@ -495,7 +514,7 @@ function solveFor(fac){
   const R=nodes.map((n2,j)=>n2.t==='free'?{v:0,m:0}:{v:f[2*j]-Kd[2*j],m:f[2*j+1]-Kd[2*j+1]});
   // V & M (sampled curve)
   const sh=[],mo=[];
-  for(let i=0;i<=400;i++){const X=i/400*totL,e=evalVM(X,R,fac);sh.push({x:X,y:e.V});mo.push({x:X,y:e.M});}
+  stX.forEach(X=>{const e=evalVM(X,R,fac);sh.push({x:X,y:e.V});mo.push({x:X,y:e.M});});
   return{R,sh,mo};
 }
 // Exact V & M at any X by statics on the left segment.
@@ -522,12 +541,13 @@ function solve(){
   nodes.forEach(n2=>{if(n2.t==='roller')n2.t='pin';}); // pin ≡ roller in this model (no axial DOF)
   nodeX=[0];spans.forEach(sp=>nodeX.push(nodeX[nodeX.length-1]+sp.L));
   totL=nodeX[nodeX.length-1];
+  stX=stationList();
   // stability: a vertical-plane beam has 2 rigid-body modes — needs ≥1 fixed support OR ≥2 supported nodes
   const nSup=nodes.filter(n2=>n2.t!=='free').length,nFix=nodes.filter(n2=>n2.t==='fixed').length;
   window.unstable=nFix===0&&nSup<2;
   if(window.unstable){
     nodeR=nodes.map(()=>({v:0,m:0}));shD=[];moD=[];deD=[];crits={zV:[],inf:[]};tabR=[];
-    env={V:{mx:[],mn:[],mxC:[],mnC:[]},M:{mx:[],mn:[],mxC:[],mnC:[]},R:nodes.map(()=>({mx:0,mc:'U'})),per:[]};
+    env={V:{mx:[],mn:[],mxC:[],mnC:[]},M:{mx:[],mn:[],mxC:[],mnC:[]},R:nodes.map(()=>({mx:0,mc:'U',mn:0,mnc:'U'})),per:[]};
     return;}
   if(envOn){
     env={V:{mx:[],mn:[],mxC:[],mnC:[]},M:{mx:[],mn:[],mxC:[],mnC:[]},R:[],per:[]};
@@ -537,16 +557,16 @@ function solve(){
     EK.forEach(k=>{const c=COMBOS[k];res[k]=solveFor(c.f);
       const vm=Math.max(...res[k].sh.map(p=>Math.abs(p.y))),mm=Math.max(...res[k].mo.map(p=>Math.abs(p.y)));
       env.per.push({id:k,name:c.name,vm,mm,sh:res[k].sh,mo:res[k].mo});});
-    for(let i=0;i<=400;i++){
+    for(let i=0;i<stX.length;i++){
       let vmx=-1e18,vmn=1e18,mmx=-1e18,mmn=1e18,vxc='',vnc='',mxc='',mnc='';
       EK.forEach(k=>{
         const v=res[k].sh[i].y,m=res[k].mo[i].y;
         if(v>vmx){vmx=v;vxc=k}if(v<vmn){vmn=v;vnc=k}
         if(m>mmx){mmx=m;mxc=k}if(m<mmn){mmn=m;mnc=k}});
-      const x=i/400*totL;
+      const x=stX[i];
       env.V.mx.push({x,y:vmx});env.V.mn.push({x,y:vmn});env.V.mxC.push(vxc);env.V.mnC.push(vnc);
       env.M.mx.push({x,y:mmx});env.M.mn.push({x,y:mmn});env.M.mxC.push(mxc);env.M.mnC.push(mnc);}
-    env.R=nodes.map((_,j)=>{let mx=-1e18,mc='';EK.forEach(k=>{const v=res[k].R[j].v;if(v>mx){mx=v;mc=k}});return{mx,mc};});
+    env.R=nodes.map((_,j)=>{let mx=-1e18,mc='',mn=1e18,mnc='';EK.forEach(k=>{const v=res[k].R[j].v;if(v>mx){mx=v;mc=k}if(v<mn){mn=v;mnc=k}});return{mx,mc,mn,mnc};});
     shD=env.V.mx;moD=env.M.mx;deD=[];crits={zV:[],inf:[]};nodeR=nodes.map((_,j)=>({v:env.R[j].mx,m:0}));
   } else {
     env=null;
@@ -567,13 +587,20 @@ function solve(){
       for(let i=1;i<n;i++){const dx=moD[i].x-moD[i-1].x;F2[i]=F2[i-1]+.5*(F1[i-1]+F1[i])*dx;}
       // constants from first & last support nodes: δ(xa)=δ(xb)=0
       const supIdx=nodes.map((nd2,j)=>nd2.t!=='free'?j:-1).filter(j=>j>=0);
+      const xsD=moD.map(p=>p.x);
+      const at=(A,x)=>{let lo=0,hi=xsD.length-1;while(hi-lo>1){const md=(lo+hi)>>1;if(xsD[md]<=x)lo=md;else hi=md;}
+        const dx=xsD[hi]-xsD[lo];return dx>0?A[lo]+(A[hi]-A[lo])*(x-xsD[lo])/dx:A[lo];};
+      const F2at=x=>at(F2,x),F1at=x=>at(F1,x);
+      // EI·v'' = M (v up) → v=(F2+c1x+c2)/EI ; δ(down) = −v = (−F2+C1x+C2)/EI
+      let C1=null,C2=null;
       if(supIdx.length>=2){
         const xa=nodeX[supIdx[0]],xb=nodeX[supIdx[supIdx.length-1]];
-        const F2at=x=>{const t=x/totL*400,i0=Math.min(399,Math.floor(t)),fr=t-i0;return F2[i0]+(F2[i0+1]-F2[i0])*fr;};
-        // EI·v'' = M (v up) → v=(F2+c1x+c2)/EI ; δ(down) = −v = (−F2+C1x+C2)/EI
-        const C1=(F2at(xb)-F2at(xa))/(xb-xa||1),C2=F2at(xa)-C1*xa;
-        deD=moD.map((p,i)=>({x:p.x,y:(-F2[i]+C1*p.x+C2)/EI}));
+        C1=(F2at(xb)-F2at(xa))/(xb-xa||1);C2=F2at(xa)-C1*xa;
+      } else if(supIdx.length===1&&nodes[supIdx[0]].t==='fixed'){
+        // single fixed support (cantilever): δ = 0 and slope = 0 there
+        const xa=nodeX[supIdx[0]];C1=F1at(xa);C2=F2at(xa)-C1*xa;
       }
+      if(C1!==null)deD=moD.map((p,i)=>({x:p.x,y:(-F2[i]+C1*p.x+C2)/EI}));
     }
   }
   // tabular
@@ -599,7 +626,8 @@ function schedule(){g('upd').classList.add('show');clearTimeout(cT);clearTimeout
 function readIn(){
   fu=g('iFU').value;lu=g('iLU').value;cid=g('iLC').value;
   if(!COMBOS[cid])cid=combosArr[0].id;
-  Ev=parseFloat(g('iE').value)||1;Iv=parseFloat(g('iI').value)||1;cv=parseFloat(g('iC').value)||0;Av=parseFloat(g('iA').value)||0;
+  Ev=parseFloat(g('iE').value);Iv=parseFloat(g('iI').value);if(!(Ev>0))Ev=0;if(!(Iv>0))Iv=0; // blank/zero/negative → flagged (was silently 1)
+  cv=parseFloat(g('iC').value)||0;Av=parseFloat(g('iA').value)||0;
   defLim=parseFloat(g('iDL').value)||0;Fbv=parseFloat(g('iFb').value)||0;
   userX=g('iUX').value.split(',').map(s=>parseFloat(s.trim())).filter(n=>!isNaN(n));
   g('uxu').textContent=lu;
@@ -614,6 +642,25 @@ function readIn(){
   g('prMeta').textContent=`${spans.length} span(s) · ${curName()} · ${new Date().toLocaleDateString()}`;
 }
 
+/* Deflection check per span: δmax inside each span against that span's own L/x
+   (was: total beam length / x). */
+function deflSpans(){
+  if(!deD.length)return[];
+  return spans.map((sp,i)=>{const xa=nodeX[i],xb=nodeX[i+1];let dm=0,dx=xa;
+    deD.forEach(p=>{if(p.x>=xa-1e-9&&p.x<=xb+1e-9&&Math.abs(p.y)>dm){dm=Math.abs(p.y);dx=p.x;}});
+    const allow=defLim>0?sp.L/defLim:0;
+    return{i,L:sp.L,dm,x:dx,allow,ratio:allow>0?dm/allow:0,ok:allow>0?dm<=allow:true};});
+}
+function deflGov(){const a=deflSpans();return a.length?a.reduce((b,s2)=>s2.ratio>b.ratio?s2:b,a[0]):null;}
+/* Max shear stress: W-shape preset → average web shear V/(d·tw) (AISC Spec. G2.1, Aw = d·tw);
+   custom section → 1.5V/A (solid rectangle). */
+function tauOf(v){
+  if(shpW&&shpW.d>0&&shpW.tw>0)return{val:v/(shpW.d*shpW.tw),lbl:'V/(d·t<sub>w</sub>)',
+    tex:`\\tau_{\\max}=\\frac{|V|_{\\max}}{d\\,t_w}=\\frac{${v.toFixed(3)}}{${shpW.d.toPrecision(4)}\\times${shpW.tw.toPrecision(4)}}`};
+  if(Av>0)return{val:1.5*v/Av,lbl:'1.5|V|/A',tex:`\\tau_{\\max}=\\frac{3|V|_{\\max}}{2A}`};
+  return null;
+}
+
 /* STATS */
 function updStats(){
   if(!window._rkW){window._rkW=1;const _rk=renderKaTeX;renderKaTeX=function(){
@@ -624,8 +671,9 @@ function updStats(){
     g('pkV').textContent='';g('pkM').textContent='';if(g('pkD'))g('pkD').textContent='';
     return;}
   let h='';
+  if(secOn&&!(Ev>0&&Iv>0))h+=`<div style="grid-column:1/-1;background:#fff1f2;border:1.5px solid #fda4af;border-radius:9px;padding:10px 14px;color:#9f1239;font-weight:700;font-size:12px">⚠ Section properties: ${!(Ev>0)?'E':''}${!(Ev>0)&&!(Iv>0)?' and ':''}${!(Iv>0)?'I':''} must be greater than 0 (blank, zero or negative entered). Deflection is not computed until this is fixed.</div>`;
   nodes.forEach((nd2,j)=>{if(nd2.t==='free')return;const cl=CLRS[j%CLRS.length];
-    if(envOn){h+=`<div class="sc ${cl}"><div class="sc-l">R_${NN[j]} max</div><div class="sc-v">${env.R[j].mx.toFixed(3)}</div><div class="sc-u">${fu} · ${COMBOS[env.R[j].mc].name}</div></div>`;}
+    if(envOn){const Rj=env.R[j],up=Rj.mn<-1e-9;h+=`<div class="sc ${cl}"><div class="sc-l">R_${NN[j]} max / min</div><div class="sc-v">${Rj.mx.toFixed(3)}</div><div class="sc-u">${fu} · ${COMBOS[Rj.mc].name}<br><span style="${up?'color:#b91c1c;font-weight:700':''}">min ${Rj.mn.toFixed(3)}${up?' UPLIFT':''} · ${COMBOS[Rj.mnc]?COMBOS[Rj.mnc].name:''}</span></div></div>`;}
     else h+=`<div class="sc ${cl}"><div class="sc-l">R_${NN[j]}</div><div class="sc-v">${nodeR[j].v.toFixed(3)}</div><div class="sc-u">${fu}↑</div></div>`;});
   if(envOn){
     const vm=Math.max(...env.V.mx.map(p=>Math.abs(p.y)),...env.V.mn.map(p=>Math.abs(p.y)));
@@ -643,7 +691,7 @@ function updStats(){
       h+=`<div class="sc ${ok?'ctm':'crd'}"><div class="sc-l">σ max</div><div class="sc-v">${sg.toFixed(2)}</div><div class="sc-u">${fu}/${lu}²${Fbv>0?` / ${Fbv} ${ok?'✓':'✗'}`:''}</div></div>`;}
     if(deD.length){const dm=Math.max(...deD.map(p=>Math.abs(p.y)));
       let lim='',ok=true;
-      if(defLim>0){const allow=totL/defLim;ok=dm<=allow;lim=` / L/${defLim}=${allow.toFixed(4)} ${ok?'✓':'✗'}`;}
+      if(defLim>0){const gv=deflGov();ok=deflSpans().every(s2=>s2.ok);lim=` / span ${gv.i+1}: L/${defLim}=${gv.allow.toFixed(4)} ${ok?'✓':'✗'}`;}
       h+=`<div class="sc ${ok?'cam':'crd'}"><div class="sc-l">δ max</div><div class="sc-v">${dm.toFixed(4)}</div><div class="sc-u">${lu}${lim}</div></div>`;}
   }
   g('statsRow').innerHTML=h;
@@ -1066,7 +1114,7 @@ function drawDia(c,kind){
     if(Math.abs(P.y)<1e-6)return;
     const x=tx(P.x),y=ty(P.y);
     let txt=`${P.y.toFixed(2)} ${unit}`;
-    if(envOn&&lblC){const i=Math.round(P.x/totL*400);const ck=lblC[i];if(ck)txt+=` (${COMBOS[ck].name})`;}
+    if(envOn&&lblC){const i=d.indexOf(P);const ck=lblC[i];if(ck)txt+=` (${COMBOS[ck].name})`;}
     ctx.font='bold 9px system-ui';const tw=ctx.measureText(txt).width,bw=tw+10,bh=16;
     let bx=Math.max(PL,Math.min(x-bw/2,W-PR-bw));const by=ab?y-bh-7:y+7;
     ctx.fillStyle='#fff';ctx.strokeStyle=clr;ctx.lineWidth=1.3;ctx.beginPath();ctx.roundRect(bx,by,bw,bh,3);ctx.fill();ctx.stroke();
@@ -1110,8 +1158,8 @@ function drawDefl(){
   for(let i=0;i<=4;i++){const v=mn+rng*i/4,y=ty(v);ctx.strokeStyle=Math.abs(v)<1e-12?'#cbd5e1':'#f1f5f9';ctx.lineWidth=Math.abs(v)<1e-12?1.5:1;ctx.beginPath();ctx.moveTo(PL,y);ctx.lineTo(W-PR,y);ctx.stroke();}
   nodeX.slice(1,-1).forEach(nx=>{const xp=tx(nx);ctx.strokeStyle='rgba(100,116,139,.2)';ctx.setLineDash([3,3]);ctx.beginPath();ctx.moveTo(xp,PT);ctx.lineTo(xp,H-PB);ctx.stroke();ctx.setLineDash([]);});
   // limit line
-  if(defLim>0){const lim=totL/defLim;if(lim<=mx){const y=ty(lim);ctx.strokeStyle='#dc2626';ctx.setLineDash([6,3]);ctx.lineWidth=1.3;ctx.beginPath();ctx.moveTo(PL,y);ctx.lineTo(W-PR,y);ctx.stroke();ctx.setLineDash([]);
-    ctx.fillStyle='#dc2626';ctx.font='bold 9px system-ui';ctx.textAlign='left';ctx.fillText(`L/${defLim}=${lim.toFixed(4)}`,PL+4,y-4);}}
+  if(defLim>0)deflSpans().forEach(s2=>{const lim=s2.allow;if(lim<=mx){const y=ty(lim),x1=tx(nodeX[s2.i]),x2=tx(nodeX[s2.i+1]);ctx.strokeStyle='#dc2626';ctx.setLineDash([6,3]);ctx.lineWidth=1.3;ctx.beginPath();ctx.moveTo(x1,y);ctx.lineTo(x2,y);ctx.stroke();ctx.setLineDash([]);
+    ctx.fillStyle='#dc2626';ctx.font='bold 9px system-ui';ctx.textAlign='left';ctx.fillText(`L/${defLim}=${lim.toFixed(4)}`,x1+4,y-4);}});
   const gr=ctx.createLinearGradient(0,PT,0,PT+gH);gr.addColorStop(0,'rgba(8,145,178,.03)');gr.addColorStop(1,'rgba(8,145,178,.15)');
   ctx.beginPath();ctx.moveTo(tx(deD[0].x),z0);deD.forEach(p=>ctx.lineTo(tx(p.x),ty(p.y)));ctx.lineTo(tx(deD[deD.length-1].x),z0);ctx.closePath();ctx.fillStyle=gr;ctx.fill();
   ctx.beginPath();ctx.strokeStyle='#0891b2';ctx.lineWidth=2.2;ctx.lineJoin='round';deD.forEach((p,i)=>i===0?ctx.moveTo(tx(p.x),ty(p.y)):ctx.lineTo(tx(p.x),ty(p.y)));ctx.stroke();
@@ -1163,7 +1211,7 @@ function peakNote(d,color,above,comboLbl,unit){
   const P=d.reduce((m,p)=>Math.abs(p.y)>Math.abs(m.y)?p:m,d[0]);
   if(Math.abs(P.y)<1e-6)return null;
   let t=`${P.y.toFixed(2)} ${unit}`;
-  if(comboLbl){const i=Math.round(P.x/totL*400),ck=comboLbl[i];if(ck&&COMBOS[ck])t+=`<br>${COMBOS[ck].name}`;}
+  if(comboLbl){const i=d.indexOf(P),ck=comboLbl[i];if(ck&&COMBOS[ck])t+=`<br>${COMBOS[ck].name}`;}
   return{x:P.x,y:P.y,text:t,showarrow:true,arrowhead:0,arrowsize:1,arrowwidth:1.2,arrowcolor:color,
     ax:0,ay:above?-26:26,font:{size:9.5,color,family:PFONT.family},
     bgcolor:'#fff',bordercolor:color,borderwidth:1.2,borderpad:3,align:'center'};
@@ -1233,11 +1281,11 @@ function plotDefl(){
       fill:'tozeroy',fillcolor:'rgba(8,145,178,.13)',
       line:{color:'#0891b2',width:2.2},showlegend:false,
       hovertemplate:`x %{x:.3f} ${lu}<br>δ %{y:.5f} ${lu}<extra></extra>`});
-    if(defLim>0){const lim=totL/defLim;
-      shapes.push({type:'line',xref:'paper',x0:0,x1:1,y0:lim,y1:lim,
+    if(defLim>0)deflSpans().forEach(s2=>{const lim=s2.allow;
+      shapes.push({type:'line',xref:'x',x0:nodeX[s2.i],x1:nodeX[s2.i+1],y0:lim,y1:lim,
         line:{color:'#dc2626',width:1.3,dash:'dash'}});
-      anns.push({xref:'paper',x:0.01,y:lim,text:`limit L/${defLim} = ${lim.toFixed(4)} ${lu}`,
-        showarrow:false,xanchor:'left',yanchor:'bottom',font:{size:9,color:'#dc2626',family:PFONT.family}});}
+      anns.push({xref:'x',x:nodeX[s2.i],y:lim,text:`limit L/${defLim} = ${lim.toFixed(4)} ${lu}`,
+        showarrow:false,xanchor:'left',yanchor:'bottom',font:{size:9,color:'#dc2626',family:PFONT.family}});});
     const mP=deD.reduce((m,p)=>p.y>m.y?p:m,deD[0]);
     if(mP.y>1e-9)anns.push({x:mP.x,y:mP.y,text:`δ = ${mP.y.toFixed(5)} ${lu}`,showarrow:true,arrowhead:0,
       arrowwidth:1.2,arrowcolor:'#0891b2',ax:0,ay:26,font:{size:9.5,color:'#0891b2',family:PFONT.family},
@@ -1318,8 +1366,9 @@ function renderKaTeX(){
     html+=sec(N++,'Envelope Results — All Combinations',s3);
     // reactions
     let s4='';
-    nodes.forEach((nd2,j)=>{if(nd2.t==='free')return;s4+=kb(`R_{${NN[j]},\\max}=\\boxed{${env.R[j].mx.toFixed(4)}\\,\\text{${fu}}}\\;\\text{(${COMBOS[env.R[j].mc].name})}`);});
-    html+=sec(N++,'Maximum Support Reactions',s4);
+    nodes.forEach((nd2,j)=>{if(nd2.t==='free')return;s4+=kb(`R_{${NN[j]},\\max}=\\boxed{${env.R[j].mx.toFixed(4)}\\,\\text{${fu}}}\\;\\text{(${COMBOS[env.R[j].mc].name})}`);
+      s4+=kb(`R_{${NN[j]},\\min}=\\boxed{${env.R[j].mn.toFixed(4)}\\,\\text{${fu}}}\\;\\text{(${COMBOS[env.R[j].mnc]?COMBOS[env.R[j].mnc].name:''})}${env.R[j].mn<-1e-9?'\\;\\text{— UPLIFT}':''}`);});
+    html+=sec(N++,'Support Reactions — Envelope Max / Min',s4);
   } else {
     const fac=curFac();
     // Stiffness method
@@ -1341,7 +1390,9 @@ function renderKaTeX(){
     const tR=nodeR.reduce((s,r)=>s+(r?.v||0),0);
     nodes.forEach((nd2,j)=>{if(nd2.t==='free')return;
       s4+=kb(`R_{${NN[j]}}=\\boxed{${nodeR[j].v.toFixed(4)}\\,\\text{${fu}}}${Math.abs(nodeR[j].m)>1e-6?`,\\;M^R_{${NN[j]}}=${nodeR[j].m.toFixed(4)}\\,\\text{${fu}\\!\\cdot\\!${lu}}`:''}`);});
-    s4+=`<div class="bxg">${kb(`\\sum R=${tR.toFixed(4)}=\\sum F=${tF.toFixed(4)}\\,\\text{${fu}}\\;\\checkmark`)}</div>`;
+    const eqOK=Math.abs(tR-tF)<=1e-6*Math.max(1,Math.abs(tF));
+    s4+=eqOK?`<div class="bxg">${kb(`\\sum R=${tR.toFixed(4)}=\\sum F=${tF.toFixed(4)}\\,\\text{${fu}}\\;\\checkmark`)}</div>`
+      :`<div class="bxr">${kb(`\\sum R=${tR.toFixed(4)}\\neq\\sum F=${tF.toFixed(4)}\\,\\text{${fu}}\\;\\times`)}${p('<strong>Equilibrium check failed</strong> — the reactions do not balance the applied loads. Do not use these results; check the model.')}</div>`;
     html+=sec(N++,'Support Reactions',s4);
     // Critical
     let s5='';
@@ -1357,13 +1408,14 @@ function renderKaTeX(){
       if(cv>0){s6+=`<div class="bxr">${kb(`\\sigma_{\\max}=\\frac{|M|_{\\max}c}{I}=\\frac{${mm2.toFixed(3)}\\times${cv}}{${Iv}}=\\boxed{${(mm2*cv/Iv).toFixed(4)}\\,\\text{${fu}/${lu}^2}}`)}`;
         if(Fbv>0){const sg=mm2*cv/Iv,ok=sg<=Fbv;s6+=kb(`\\sigma_{\\max}=${sg.toFixed(3)}\\;${ok?'\\le':'>'}\\;\\sigma_{\\text{allow}}=${Fbv}\\,\\text{${fu}/${lu}^2}\\;\\Rightarrow\\;${ok?'\\text{OK}\\;\\checkmark':'\\text{NG}\\;\\times'}\\;\\left(\\tfrac{\\sigma}{\\sigma_{\\text{allow}}}=${(sg/Fbv*100).toFixed(1)}\\%\\right)`);}
         s6+=`</div>`;}
-      if(Av>0)s6+=`<div class="bxr">${kb(`\\tau_{\\max}=\\frac{3|V|_{\\max}}{2A}=\\boxed{${(1.5*mv2/Av).toFixed(4)}\\,\\text{${fu}/${lu}^2}}`)}</div>`;
+      const tq=tauOf(mv2);
+      if(tq)s6+=`<div class="bxr">${kb(`${tq.tex}=\\boxed{${tq.val.toFixed(4)}\\,\\text{${fu}/${lu}^2}}`)}${shpW?p(`${String(shpW.nm).replace(/[<>&]/g,'')}: average web shear on A<sub>w</sub> = d·t<sub>w</sub> (AISC 360 G2.1).`):''}</div>`;
       if(deD.length){const dm=Math.max(...deD.map(p2=>Math.abs(p2.y)));
-        s6+=`<div class="bxb">${p('<strong>Deflection</strong> — double integration of M/EI with δ=0 at supports:')}${kb(`\\delta_{\\max}=\\boxed{${dm.toFixed(6)}\\,\\text{${lu}}}`)}`;
-        if(defLim>0){const al=totL/defLim,ok=dm<=al;s6+=kb(`\\delta_{\\text{allow}}=L/${defLim}=${al.toFixed(5)}\\,\\text{${lu}}\\;\\Rightarrow\\;${ok?'\\text{OK}\\;\\checkmark':'\\text{NG}\\;\\times'}`);}
+        s6+=`<div class="bxb">${p('<strong>Deflection</strong> — double integration of M/EI with δ=0 at supports (cantilever: δ=0 and slope=0 at the fixed support):')}${kb(`\\delta_{\\max}=\\boxed{${dm.toFixed(6)}\\,\\text{${lu}}}`)}`;
+        if(defLim>0)deflSpans().forEach(s2=>{s6+=kb(`\\text{Span ${s2.i+1}: }\\delta_{\\max}=${s2.dm.toFixed(5)}\\;${s2.ok?'\\le':'>'}\\;L_{${s2.i+1}}/${defLim}=${s2.L}/${defLim}=${s2.allow.toFixed(5)}\\,\\text{${lu}}\\;\\Rightarrow\\;${s2.ok?'\\text{OK}\\;\\checkmark':'\\text{NG}\\;\\times'}`);});
         s6+=`</div>`;}
       html+=sec(N++,'Section Analysis',s6);
-    }
+    } else if(secOn)html+=sec(N++,'Section Analysis',`<div class="bxr">${p('<strong>E and I must both be greater than 0.</strong> A blank, zero or negative value was entered, so deflection and section results are not computed.')}</div>`);
   }
   if(userX.length){
     let su='';
@@ -1377,7 +1429,7 @@ function renderKaTeX(){
 
 /* EXPORT / IMPORT / PRINT */
 function gatherProject(){
-  return{projName:g('projNm').value,spans,nodes,loads,fu,lu,cid,envOn,secOn,Ev,Iv,cv,Av,defLim,Fbv,caseView,cases:CASES,combos:combosArr,userXs:g('iUX').value};
+  return{projName:g('projNm').value,spans,nodes,loads,fu,lu,cid,envOn,secOn,Ev,Iv,cv,Av,defLim,Fbv,caseView,cases:CASES,combos:combosArr,userXs:g('iUX').value,...(shpW?{shape:shpW}:{})};
 }
 function applyProject(d){
   spans=d.spans||spans;nodes=d.nodes||nodes;loads=d.loads||[];
@@ -1387,11 +1439,13 @@ function applyProject(d){
   fu=d.fu||'kip';lu=d.lu||'ft';cid=d.cid||'U';envOn=!!d.envOn;secOn=!!d.secOn;
   if(!COMBOS[cid])cid=combosArr[0].id;
   caseView=(d.caseView&&CASES.some(c2=>c2.id===d.caseView))?d.caseView:null;
-  Ev=d.Ev||Ev;Iv=d.Iv||Iv;cv=d.cv||cv;Av=d.Av||Av;defLim=d.defLim??360;Fbv=d.Fbv??0;
+  Ev=d.Ev!=null?d.Ev:Ev;Iv=d.Iv!=null?d.Iv:Iv;cv=d.cv||cv;Av=d.Av||Av;defLim=d.defLim??360;Fbv=d.Fbv??0;
   g('projNm').value=d.projName||'';g('iFU').value=fu;g('iLU').value=lu;refreshLC();
   g('envT').checked=envOn;g('secT').checked=secOn;g('secB').classList.toggle('hidden',!secOn);
   g('iE').value=Ev;g('iI').value=Iv;g('iC').value=cv;g('iA').value=Av;g('iDL').value=defLim;g('iFb').value=Fbv;
   if(d.userXs!=null)g('iUX').value=d.userXs;
+  shpW=(d.shape&&d.shape.d>0&&d.shape.tw>0)?{nm:String(d.shape.nm||''),d:+d.shape.d,tw:+d.shape.tw}:null; // optional; absent in older files
+  {const o=shpW?[...g('iShape').options].find(o2=>o2.text===shpW.nm):null;g('iShape').value=o?o.value:'';}
   loads.forEach(ld=>{if(!ld.nm)ld.nm=autoName(ld.type);});
   refreshDG();
   editId=null;renderCfg();renderLoads(true);schedule();
@@ -1410,17 +1464,19 @@ g('fIm').addEventListener('change',e=>{
 g('bPr').onclick=()=>{readIn();window.print();};
 
 /* EVENTS */
-['iFU','iLU'].forEach(id=>g(id).addEventListener('change',()=>{renderCfg();refreshDG();schedule();}));
+['iFU','iLU'].forEach(id=>g(id).addEventListener('change',()=>{renderCfg();refreshDG();schedule();toast('⚠ Units relabelled only — values were NOT converted');}));
 g('iLC').addEventListener('change',()=>{caseView=null;cid=g('iLC').value;renderCfg();refreshDG();schedule();});
 ['iE','iI','iC','iA','iDL','iFb'].forEach(id=>g(id).addEventListener('input',schedule));
+['iI','iC','iA'].forEach(id=>g(id).addEventListener('input',()=>{if(shpW){shpW=null;g('iShape').value='';}})); // edited by hand → custom section
 g('iUX').addEventListener('input',schedule);
 g('projNm').addEventListener('input',()=>{readIn();updateDirty();autoSave();});
 g('envT').addEventListener('change',e=>{envOn=e.target.checked;caseView=null;refreshDG();schedule();});
 g('secT').addEventListener('change',e=>{secOn=e.target.checked;g('secB').classList.toggle('hidden',!secOn);schedule();});
 g('iShape').addEventListener('change',e=>{
-  if(!e.target.value)return;
-  const[Iin,din,Ain]=e.target.value.split(',').map(Number);
+  if(!e.target.value){shpW=null;schedule();return;}
+  const[Iin,din,Ain,twin]=e.target.value.split(',').map(Number);
   const f=LCONV[lu];
+  shpW={nm:e.target.selectedOptions[0].text,d:+(din*f).toPrecision(6),tw:+(twin*f).toPrecision(6)};
   g('iI').value=(Iin*f*f*f*f).toPrecision(5);
   g('iC').value=(din/2*f).toPrecision(4);
   g('iA').value=(Ain*f*f).toPrecision(4);
@@ -1809,9 +1865,9 @@ function resultsRows(sep){
     tabR.forEach(r=>{const row=[r.x.toFixed(4),r.V.toFixed(4),r.M.toFixed(4)];if(deD.length)row.push((r.D||0).toFixed(6));row.push(r.t);rows.push(row);});
   }
   rows.push([]);
-  rows.push(envOn?['Node','Rmax ('+fu+')','Governing combo']:['Node','R ('+fu+')','M_R ('+fu+'·'+lu+')']);
+  rows.push(envOn?['Node','Rmax ('+fu+')','Governing combo','Rmin ('+fu+')','Governing combo (min)']:['Node','R ('+fu+')','M_R ('+fu+'·'+lu+')']);
   nodes.forEach((nd2,j)=>{if(nd2.t==='free')return;
-    rows.push(envOn?[NN[j],env.R[j].mx.toFixed(4),COMBOS[env.R[j].mc].name]
+    rows.push(envOn?[NN[j],env.R[j].mx.toFixed(4),COMBOS[env.R[j].mc].name,env.R[j].mn.toFixed(4),COMBOS[env.R[j].mnc]?COMBOS[env.R[j].mnc].name:'']
       :[NN[j],nodeR[j].v.toFixed(4),nodeR[j].m.toFixed(4)]);});
   return rows.map(r=>r.join(sep)).join('\n');
 }
@@ -1871,8 +1927,8 @@ async function buildReport(){
   if(loads.some(l=>l.off))h+=`<p class="rp-p" style="color:#b45309"><b>Note:</b> ${loads.filter(l=>l.off).length} load(s) are excluded from this analysis and contribute nothing to the results below.</p>`;
   // 3 — reactions
   h+=`<h2>3. Support Reactions</h2><table>`;
-  if(envOn){h+=`<tr><th>Node</th><th>Rmax (${fu})</th><th>Governing combination</th></tr>`;
-    nodes.forEach((nd2,j)=>{if(nd2.t==='free')return;h+=`<tr><td>${NN[j]}</td><td>${env.R[j].mx.toFixed(4)}</td><td>${COMBOS[env.R[j].mc].name}</td></tr>`;});}
+  if(envOn){h+=`<tr><th>Node</th><th>Rmax (${fu})</th><th>Governing combination</th><th>Rmin (${fu})</th><th>Governing combination (min)</th></tr>`;
+    nodes.forEach((nd2,j)=>{if(nd2.t==='free')return;h+=`<tr><td>${NN[j]}</td><td>${env.R[j].mx.toFixed(4)}</td><td>${COMBOS[env.R[j].mc].name}</td><td>${env.R[j].mn.toFixed(4)}${env.R[j].mn<-1e-9?' <b style="color:#b91c1c">UPLIFT</b>':''}</td><td>${COMBOS[env.R[j].mnc]?COMBOS[env.R[j].mnc].name:''}</td></tr>`;});}
   else{h+=`<tr><th>Node</th><th>R (${fu})</th><th>M<sub>R</sub> (${fu}·${lu})</th></tr>`;
     nodes.forEach((nd2,j)=>{if(nd2.t==='free')return;h+=`<tr><td>${NN[j]}</td><td>${nodeR[j].v.toFixed(4)}</td><td>${Math.abs(nodeR[j].m)>1e-9?nodeR[j].m.toFixed(4):'—'}</td></tr>`;});}
   h+=`</table>`;
@@ -1886,10 +1942,10 @@ async function buildReport(){
   h+=`<tr><td>|M|<sub>max</sub></td><td>${mm.toFixed(4)} ${fu}·${lu}</td><td>—</td><td>—</td></tr>`;
   if(secOn&&Iv>0&&cv>0){const sg=mm*cv/Iv;
     h+=`<tr><td>σ<sub>max</sub> = |M|c/I</td><td>${sg.toFixed(4)} ${fu}/${lu}²</td><td>${Fbv>0?Fbv+' '+fu+'/'+lu+'²':'—'}</td><td>${Fbv>0?(sg<=Fbv?'<b style="color:#15803d">OK ✓</b> ('+(sg/Fbv*100).toFixed(1)+'%)':'<b style="color:#b91c1c">NG ✗</b> ('+(sg/Fbv*100).toFixed(1)+'%)'):'—'}</td></tr>`;}
-  if(secOn&&Av>0)h+=`<tr><td>τ<sub>max</sub> = 1.5|V|/A</td><td>${(1.5*vm/Av).toFixed(4)} ${fu}/${lu}²</td><td>—</td><td>—</td></tr>`;
+  {const tq=secOn?tauOf(vm):null;if(tq)h+=`<tr><td>τ<sub>max</sub> = ${tq.lbl}${shpW?' ('+esc(shpW.nm)+')':''}</td><td>${tq.val.toFixed(4)} ${fu}/${lu}²</td><td>—</td><td>—</td></tr>`;}
   if(!envOn&&deD.length){const dm=Math.max(...deD.map(p=>Math.abs(p.y)));
-    const al=defLim>0?totL/defLim:0;
-    h+=`<tr><td>δ<sub>max</sub></td><td>${dm.toFixed(6)} ${lu}</td><td>${defLim>0?'L/'+defLim+' = '+al.toFixed(5)+' '+lu:'—'}</td><td>${defLim>0?(dm<=al?'<b style="color:#15803d">OK ✓</b>':'<b style="color:#b91c1c">NG ✗</b>'):'—'}</td></tr>`;}
+    if(defLim>0)deflSpans().forEach(s2=>{h+=`<tr><td>δ<sub>max</sub>, span ${s2.i+1}</td><td>${s2.dm.toFixed(6)} ${lu}</td><td>L/${defLim} = ${s2.L}/${defLim} = ${s2.allow.toFixed(5)} ${lu}</td><td>${s2.ok?'<b style="color:#15803d">OK ✓</b>':'<b style="color:#b91c1c">NG ✗</b>'}</td></tr>`;});
+    else h+=`<tr><td>δ<sub>max</sub></td><td>${dm.toFixed(6)} ${lu}</td><td>—</td><td>—</td></tr>`;}
   h+=`</table>`;
   // 5 — diagrams
   h+=`<h2>5. Diagrams</h2>`;
