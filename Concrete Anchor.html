@@ -77,31 +77,79 @@
         "F1554-55": { fut: 75000, fy: 55000 },
         "F1554-105": { fut: 125000, fy: 105000 },
     };
+    // Net tensile stress area A_se (in^2), UNC coarse threads (AISC Manual / ASME B1.1).
+    // Same values as ASE_TABLE in BasePlateAnchorDesigner.html. ACI 318-19 §17.6.1.2 / §17.7.1.2.
+    const ASE_TABLE = { 0.5: 0.142, 0.625: 0.226, 0.75: 0.334, 0.875: 0.462, 1.0: 0.606 };
+    // ACI 318-19 §17.3.1: f'c used in Ch. 17 calculations shall not exceed 10,000 psi (cast-in anchors).
+    const FC_MAX = 10000;
+    // ACI 318-19 §17.7.2.5 psi_c,V for CRACKED concrete (uncracked = 1.4 always).
+    const EDGE_REINF = {
+        none:     { psi: 1.0, label: "No edge reinf. (1.0)" },
+        bar:      { psi: 1.2, label: "Edge bar >= No.4 (1.2)" },
+        stirrups: { psi: 1.4, label: "Edge bar + stirrups <= 4 in (1.4)" }
+    };
+    const DEFAULT_PROJECT = { name: "Bridge A", job: "23-001", eng: "JD" };
+    const DEFAULT_INPUTS = {
+        fc: 4000, wc: 150, cracked: true, condB: true, seismic: false,
+        hef: 6.0,
+        c1: 12.0, c2: 12.0, c3: 12.0, c4: 12.0,
+        numAnchors: 4, sx: 6.0, sy: 6.0,
+        da: 0.75, grade: "F1554-36", type: "hex",
+        Nua: 5000, Vux: 2000, Vuy: 0, Mux: 1000, Muy: 0,
+        plateT: 0.5, plateLx: 2.0,
+        // Added fields (optional in saved files; these defaults are applied when missing)
+        ha: 24.0, edgeReinf: "none", plateFy: 36000, plateBeff: 4.0
+    };
 
     const TOOLTIPS = {
         "17.6.1.2": "Nominal Steel Strength in Tension",
         "17.5.3": "Strength Reduction Factors (phi)",
+        "17.6.2.1": "Concrete Breakout Strength in Tension (group)",
+        "17.6.2.1.2": "Effective embedment near three or more edges",
         "17.6.2.2": "Basic Concrete Breakout Strength",
         "17.6.2.3.1": "Modification Factor for Eccentricity",
         "17.6.3.1": "Nominal Pullout Strength",
         "17.6.4.1": "Side-Face Blowout Strength",
         "17.7.1.2": "Nominal Steel Strength in Shear",
+        "17.7.2.1": "Concrete Breakout Strength in Shear (group)",
         "17.7.2.2": "Basic Concrete Breakout Strength in Shear",
         "17.7.3.1": "Nominal Pryout Strength",
+        "17.8": "Tension and Shear Interaction",
         "App D": "Plate Yield Line Analysis (AISC Design Guide 1)"
     };
 
-    const fmt = (n, d=2) => n?.toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d }) || "0";
+    const fmt = (n, d=2) => (typeof n === 'number' && isFinite(n)) ? n.toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d }) : (n === Infinity ? "∞" : "—");
 
     // --- ENGINEERING LOGIC ---
+    // Coordinates: +x to the RIGHT (edge c3), +y to the TOP (edge c2). Edge distances c1..c4 are
+    // measured from the outermost anchors. +Vux acts toward c3, +Vuy acts toward c2.
+    // +Mux puts the +y (top) anchors in tension; +Muy puts the +x (right) anchors in tension.
+
+    // ACI 318-19 Table 19.2.4.1(a)/(b): lambda = 0.75 (wc <= 100), 0.0075 wc (100 < wc <= 135), 1.0 (wc > 135)
+    const lambdaFromWc = (wc) => Math.min(1.0, Math.max(0.75, 0.0075 * wc));
+
+    const EDGES = [
+        { k: 'L', name: 'Left (c1)',   axis: 'x', sign: -1, n: [-1, 0] },
+        { k: 'R', name: 'Right (c3)',  axis: 'x', sign:  1, n: [ 1, 0] },
+        { k: 'T', name: 'Top (c2)',    axis: 'y', sign:  1, n: [ 0, 1] },
+        { k: 'B', name: 'Bottom (c4)', axis: 'y', sign: -1, n: [ 0,-1] }
+    ];
+    const edgeLines = (c1, c2, c3, c4, numAnchors, sx, sy) => {
+        const dx = numAnchors > 1 ? sx/2 : 0, dy = numAnchors > 1 ? sy/2 : 0;
+        return { xL: -dx - c1, xR: dx + c3, yT: dy + c2, yB: -dy - c4 };
+    };
+    const edgeDist = (a, g, k) => k === 'L' ? a.x - g.xL : k === 'R' ? g.xR - a.x : k === 'T' ? g.yT - a.y : a.y - g.yB;
+    // anchors of `set` in the row closest to edge e
+    const leadRow = (set, e) => {
+        const co = a => e.axis === 'x' ? a.x : a.y;
+        const lead = e.sign > 0 ? Math.max(...set.map(co)) : Math.min(...set.map(co));
+        return set.filter(a => Math.abs(co(a) - lead) < 1e-6);
+    };
 
     const distributeLoads = (N, Vx, Vy, Mx, My, numAnchors, sx, sy) => {
         const V_resultant = Math.sqrt(Vx*Vx + Vy*Vy);
         const V_per_bolt = V_resultant / numAnchors; 
         
-        const M_res = Math.sqrt(Mx*Mx + My*My);
-        const e_prime_N = (N > 0) ? (M_res / N) : 0;
-
         const anchors = [];
         let N_max_bolt = 0;
 
@@ -124,9 +172,9 @@
             pos.forEach(p => {
                 const axial = N / 4;
                 let N_calc = axial;
-                // Add My effect (X-axis arm) - +My puts +X in Tension? Assume +M = Tension at +Coords for viz
+                // Add My effect (X-axis arm) - +My puts the +x anchors in tension (elastic bolt group)
                 if (p.x > 0) N_calc += (My / (2*sx)); else N_calc -= (My / (2*sx));
-                // Add Mx effect (Y-axis arm)
+                // Add Mx effect (Y-axis arm) - +Mx puts the +y anchors in tension
                 if (p.y > 0) N_calc += (Mx / (2*sy)); else N_calc -= (Mx / (2*sy));
                 
                 anchors.push({ id: p.id, x: p.x, y: p.y, N: N_calc, V: V_per_bolt });
@@ -136,118 +184,374 @@
             // Conservative: N/4 + |Mx|/2sy + |My|/2sx
             N_max_bolt = (N/4) + (Math.abs(My)/(2*sx)) + (Math.abs(Mx)/(2*sy)); 
         }
+        // Anchors in tension (ACI 318-19 §17.6.2.1 / §17.6.2.3.1 use only these for group breakout)
+        const tens = anchors.filter(a => a.N > 1e-6);
+        const sumT = tens.reduce((s, a) => s + a.N, 0);
 
         return {
-            val: { V_resultant, V_per_bolt, N_max_bolt, e_prime_N, anchors },
+            val: { V_resultant, V_per_bolt, N_max_bolt, anchors, tens, sumT },
             tex: {
                 V_res: { eq: `V_{ua} = \\sqrt{V_{ux}^2 + V_{uy}^2}`, res: fmt(V_resultant,0), unit: "lb" },
                 N_dist: { eq: numAnchors===4?`N_{max} = \\frac{N}{4} + \\frac{|M_x|}{2s_y} + \\frac{|M_y|}{2s_x}`:`N_{ua,i} = N_{ua}/1`, res: fmt(N_max_bolt,0), unit: "lb" },
-                e_prime: { eq: `e'_N = M_{res} / N_{ua}`, res: fmt(e_prime_N, 2), unit: "in" }
+                N_sumT: { eq: `N_{ua,g} = \\sum N_{ua,i}\\ (${tens.length}\\ \\text{anchors in tension})`, res: fmt(sumT,0), unit: "lb" }
             }
         };
     };
 
-    const calculateSteel = (da, gradeKey, N_max_bolt, V_per_bolt, seismic) => {
+    const calculateSteel = (da, gradeKey) => {
         const grade = STEEL_GRADES[gradeKey];
-        const AseN = 0.7854 * Math.pow(da, 2); 
-        const Nsa_single = AseN * grade.fut;
+        const AseN = ASE_TABLE[da];
+        const futa = Math.min(grade.fut, 1.9 * grade.fy, 125000);   // §17.6.1.2
+        const Nsa_single = AseN * futa;
         const phi_steel = 0.75; 
-        let phiNsa_single = phi_steel * Nsa_single * (seismic ? 0.75 : 1.0);
-        const Vsa_single = 0.6 * AseN * grade.fut;
+        const phiNsa_single = phi_steel * Nsa_single;
+        const Vsa_single = 0.6 * AseN * futa;
         const phi_shear_steel = 0.65;
-        let phiVsa_single = phi_shear_steel * Vsa_single * (seismic ? 0.75 : 1.0);
+        const phiVsa_single = phi_shear_steel * Vsa_single;
 
         return {
-            val: { AseN, phiNsa_single, phiVsa_single, fy: grade.fy },
+            val: { AseN, futa, phiNsa_single, phiVsa_single, fy: grade.fy },
             tex: {
-                Nsa: { eq: `N_{sa} = A_{se,N} f_{ut}`, sub: `${fmt(AseN,3)} \\cdot ${grade.fut}`, res: fmt(Nsa_single,0), unit: "lb" },
-                phiNsa: { eq: `\\phi N_{sa}`, sub: `${phi_steel} \\cdot ${fmt(Nsa_single,0)}`, res: fmt(phiNsa_single,0), unit: "lb" },
-                Vsa: { eq: `V_{sa} = 0.6 A_{se,N} f_{ut}`, sub: `0.6 \\cdot ${fmt(AseN,3)} \\cdot ${grade.fut}`, res: fmt(Vsa_single,0), unit: "lb" },
-                phiVsa: { eq: `\\phi V_{sa}`, sub: `${phi_shear_steel} \\cdot ${fmt(Vsa_single,0)}`, res: fmt(phiVsa_single,0), unit: "lb" }
+                futa: { eq: `f_{uta} = \\min(f_{ut}, 1.9 f_{ya}, 125000)`, sub: `\\min(${grade.fut}, ${fmt(1.9*grade.fy,0)}, 125000)`, res: fmt(futa,0), unit: "psi" },
+                Nsa: { eq: `N_{sa} = A_{se,N} f_{uta}`, sub: `${fmt(AseN,3)} \\cdot ${fmt(futa,0)}`, res: fmt(Nsa_single,0), unit: "lb" },
+                phiNsa: { eq: `\\phi N_{sa} = \\phi A_{se,N} f_{uta}`, sub: `${phi_steel} \\cdot ${fmt(AseN,3)} \\cdot ${fmt(futa,0)}`, res: fmt(phiNsa_single,0), unit: "lb" },
+                Vsa: { eq: `V_{sa} = 0.6 A_{se,V} f_{uta}`, sub: `0.6 \\cdot ${fmt(AseN,3)} \\cdot ${fmt(futa,0)}`, res: fmt(Vsa_single,0), unit: "lb" },
+                phiVsa: { eq: `\\phi V_{sa} = \\phi\\, 0.6 A_{se,V} f_{uta}`, sub: `${phi_shear_steel} \\cdot 0.6 \\cdot ${fmt(AseN,3)} \\cdot ${fmt(futa,0)}`, res: fmt(phiVsa_single,0), unit: "lb" }
             }
         };
     };
 
-    const calculateBreakoutTension = (hef, fc, wc, c1, c2, c3, c4, sx, sy, numAnchors, cracked, condB, seismic, e_prime_N) => {
-        const lambda = wc >= 135 ? 1.0 : (wc <= 100 ? 0.75 : 0.75 + (wc-100)/35 * 0.25);
-        const Nb = CONSTANTS.kc * lambda * Math.sqrt(fc) * Math.pow(hef, 1.5);
-        const Anco = 9 * Math.pow(hef, 2);
-        const limit = 1.5 * hef;
-        const w_x = Math.min(c1, limit) + (numAnchors > 1 ? sx : 0) + Math.min(c3, limit);
-        const w_y = Math.min(c2, limit) + (numAnchors > 2 ? sy : 0) + Math.min(c4, limit);
-        const Anc = w_x * w_y;
-        let psi_ecN = 1.0;
-        if (e_prime_N > 0) psi_ecN = 1.0 / (1.0 + (2.0 * e_prime_N) / (3.0 * hef));
-        const c_min = Math.min(c1, c2, c3, c4);
-        let psi_edN = 1.0;
-        if (c_min < 1.5 * hef) psi_edN = 0.7 + 0.3 * (c_min / (1.5 * hef));
+    // Concrete breakout of the anchor set `set` (ACI 318-19 §17.6.2). Used for tension breakout
+    // (set = anchors in tension, with psi_ec,N) and for pryout (set = all anchors, psi_ec,N = 1).
+    const breakoutGroup = (set, p) => {
+        const { hef, fcC, lambda, g, cracked, type, useEcc } = p;
+        const n = set.length;
+        const xs = set.map(a => a.x), ys = set.map(a => a.y);
+        const xmin = Math.min(...xs), xmax = Math.max(...xs), ymin = Math.min(...ys), ymax = Math.max(...ys);
+        const d = { L: xmin - g.xL, R: g.xR - xmax, T: g.yT - ymax, B: ymin - g.yB };
+        const dl = [d.L, d.R, d.T, d.B];
+        // §17.6.2.1.2: anchors < 1.5hef from three or more edges -> hef' = max(ca,max/1.5, s/3) <= hef
+        const near = dl.filter(v => v < 1.5 * hef);
+        const s = Math.max(xmax - xmin, ymax - ymin);
+        let hefC = hef, hefReduced = false, caMax = 0;
+        if (near.length >= 3) {
+            caMax = Math.max(...near);
+            const hr = Math.max(caMax / 1.5, s / 3);
+            if (hr < hef) { hefC = hr; hefReduced = true; }
+        }
+        const Anco = 9 * hefC * hefC;
+        const w_x = Math.min(d.L, 1.5 * hefC) + (xmax - xmin) + Math.min(d.R, 1.5 * hefC);
+        const w_y = Math.min(d.B, 1.5 * hefC) + (ymax - ymin) + Math.min(d.T, 1.5 * hefC);
+        const AncGeom = w_x * w_y;
+        const Anc = Math.min(AncGeom, n * Anco);                       // A_Nc <= n A_Nco
+        const Nb24 = CONSTANTS.kc * lambda * Math.sqrt(fcC) * Math.pow(hefC, 1.5);
+        // §17.6.2.2.3: cast-in headed bolts/studs with 11 <= hef <= 25 in. (alternative Eq.)
+        const altOK = type === 'hex' && hefC >= 11 && hefC <= 25;
+        const Nb16 = altOK ? 16 * lambda * Math.sqrt(fcC) * Math.pow(hefC, 5/3) : 0;
+        const Nb = Math.max(Nb24, Nb16);
+        // §17.6.2.3.1: e'_N = distance from the resultant tension of the tension anchors to their
+        // centroid, per axis; psi_ec,N = psi_ec,x * psi_ec,y
+        let eNx = 0, eNy = 0;
+        if (useEcc) {
+            const sN = set.reduce((s0, a) => s0 + a.N, 0);
+            if (sN > 0) {
+                const xr = set.reduce((s0, a) => s0 + a.N * a.x, 0) / sN, yr = set.reduce((s0, a) => s0 + a.N * a.y, 0) / sN;
+                const xc = xs.reduce((s0, v) => s0 + v, 0) / n, yc = ys.reduce((s0, v) => s0 + v, 0) / n;
+                eNx = Math.abs(xr - xc); eNy = Math.abs(yr - yc);
+                if (eNx < 1e-9) eNx = 0; if (eNy < 1e-9) eNy = 0;
+            }
+        }
+        const psi_ecx = 1.0 / (1.0 + (2.0 * eNx) / (3.0 * hefC));
+        const psi_ecy = 1.0 / (1.0 + (2.0 * eNy) / (3.0 * hefC));
+        const psi_ecN = psi_ecx * psi_ecy;
+        const c_min = Math.min(...dl);
+        const psi_edN = c_min >= 1.5 * hefC ? 1.0 : 0.7 + 0.3 * (c_min / (1.5 * hefC));
         const psi_cN = cracked ? 1.0 : 1.25;
-        const Ncb = (Anc / Anco) * psi_edN * psi_cN * psi_ecN * Nb;
-        const phi = condB ? 0.70 : 0.75;
-        const phiNcb = phi * Ncb * (seismic ? 0.75 : 1.0);
+        const Ncb = (Anc / Anco) * psi_ecN * psi_edN * psi_cN * Nb;
+        return { n, hef, hefC, hefReduced, caMax, s, nearCount: near.length, Anco, w_x, w_y, AncGeom, Anc, Nb24, Nb16, Nb, eNx, eNy, psi_ecx, psi_ecy, psi_ecN, c_min, psi_edN, psi_cN, Ncb };
+    };
 
+    const calculateBreakoutTension = (tens, p, condB, seismic, sumT) => {
+        const phi = condB ? 0.70 : 0.75;
+        const fSeis = seismic ? 0.75 : 1.0;     // §17.10.5.4
+        if (tens.length === 0) {
+            return { applicable: false, val: { phiNcb: Infinity, Ncb: 0, ratio: 0 },
+                     tex: { none: { eq: `\\text{No anchor in tension} \\Rightarrow \\text{breakout not applicable}`, res: "—", unit: "" } } };
+        }
+        const b = breakoutGroup(tens, { ...p, useEcc: true });
+        const phiNcb = phi * b.Ncb * fSeis;
+        const ratio = sumT / phiNcb;
+        const lam = p.lambda;
         return {
-            val: { Nb, Anc, Ncb, phiNcb, c_min, lambda },
+            applicable: true,
+            val: { ...b, phi, phiNcb, ratio, lambda: lam },
             tex: {
-                lambda: { eq: `\\lambda (w_c=${wc})`, res: fmt(lambda, 2), unit: "" },
-                Nb: { eq: `N_b = k_c \\lambda \\sqrt{f'_c} h_{ef}^{1.5}`, res: fmt(Nb,0), unit: "lb" },
-                Anc: { eq: `A_{Nc}`, sub: `${fmt(w_x,1)} \\times ${fmt(w_y,1)}`, res: fmt(Anc,1), unit: "in²" },
-                Ncb: { eq: `N_{cbg} = \\frac{A_{Nc}}{A_{Nco}} \\psi_{ed,N} \\psi_{c,N} \\psi_{ec,N} N_b`, res: fmt(Ncb,0), unit: "lb" },
-                phiNcb: { eq: `\\phi N_{cbg}`, res: fmt(phiNcb,0), unit: "lb" }
+                lambda: { eq: `\\lambda_a = \\lambda\\ (w_c=${p.wc}\\ \\text{pcf})`, sub: `\\min(1.0, \\max(0.75, 0.0075 w_c))`, res: fmt(lam, 3), unit: "" },
+                hef: { eq: b.hefReduced ? `h'_{ef} = \\max(c_{a,max}/1.5,\\ s/3)` : `h_{ef}\\ (\\text{${b.nearCount} edge(s)} < 1.5h_{ef},\\ \\text{no reduction})`,
+                       sub: b.hefReduced ? `\\max(${fmt(b.caMax,2)}/1.5,\\ ${fmt(b.s,2)}/3)` : null, res: fmt(b.hefC, 2), unit: "in" },
+                Nb: { eq: b.Nb16 > b.Nb24 ? `N_b = 16 \\lambda_a \\sqrt{f'_c} h_{ef}^{5/3}\\ (\\ge 24\\lambda_a\\sqrt{f'_c}h_{ef}^{1.5} = ${fmt(b.Nb24,0)})` : `N_b = k_c \\lambda_a \\sqrt{f'_c} h_{ef}^{1.5}`,
+                      sub: b.Nb16 > b.Nb24 ? `16 \\cdot ${fmt(lam,3)} \\sqrt{${fmt(p.fcC,0)}} \\cdot ${fmt(b.hefC,2)}^{5/3}` : `24 \\cdot ${fmt(lam,3)} \\sqrt{${fmt(p.fcC,0)}} \\cdot ${fmt(b.hefC,2)}^{1.5}`, res: fmt(b.Nb,0), unit: "lb" },
+                Anco: { eq: `A_{Nco} = 9 h_{ef}^2`, sub: `9 \\cdot ${fmt(b.hefC,2)}^2`, res: fmt(b.Anco,1), unit: "in²" },
+                Anc: { eq: `A_{Nc} = \\min(w_x w_y,\\ n A_{Nco})\\ (n=${b.n}\\ \\text{tension anchors})`, sub: `\\min(${fmt(b.w_x,2)} \\times ${fmt(b.w_y,2)},\\ ${b.n} \\cdot ${fmt(b.Anco,1)})`, res: fmt(b.Anc,1), unit: "in²" },
+                psi_ec: { eq: `\\psi_{ec,N} = \\frac{1}{1+\\frac{2e'_{N,x}}{3h_{ef}}} \\cdot \\frac{1}{1+\\frac{2e'_{N,y}}{3h_{ef}}}`, sub: `e'_{N,x}=${fmt(b.eNx,2)},\\ e'_{N,y}=${fmt(b.eNy,2)}`, res: fmt(b.psi_ecN,3), unit: "" },
+                psi_ed: { eq: `\\psi_{ed,N} = 0.7 + 0.3\\frac{c_{a,min}}{1.5h_{ef}} \\le 1.0`, sub: `c_{a,min} = ${fmt(b.c_min,2)}`, res: fmt(b.psi_edN,3), unit: "" },
+                psi_c: { eq: `\\psi_{c,N}\\ (${p.cracked ? '\\text{cracked}' : '\\text{uncracked}'})`, res: fmt(b.psi_cN,2), unit: "" },
+                Ncb: { eq: `N_{cbg} = \\frac{A_{Nc}}{A_{Nco}} \\psi_{ec,N} \\psi_{ed,N} \\psi_{c,N} \\psi_{cp,N} N_b`, sub: `\\frac{${fmt(b.Anc,1)}}{${fmt(b.Anco,1)}} \\cdot ${fmt(b.psi_ecN,3)} \\cdot ${fmt(b.psi_edN,3)} \\cdot ${fmt(b.psi_cN,2)} \\cdot 1.0 \\cdot ${fmt(b.Nb,0)}`, res: fmt(b.Ncb,0), unit: "lb" },
+                phiNcb: { eq: `\\phi N_{cbg}${seismic ? '\\cdot 0.75\\ (\\S 17.10.5.4)' : ''}`, sub: `${phi} \\cdot ${fmt(b.Ncb,0)}${seismic ? ' \\cdot 0.75' : ''}`, res: fmt(phiNcb,0), unit: "lb" },
+                ratio: { eq: `N_{ua,g} / \\phi N_{cbg}`, sub: `${fmt(sumT,0)} / ${fmt(phiNcb,0)}`, res: fmt(ratio,3), unit: "" }
             }
         };
     };
 
-    const calculatePullout = (fc, da, type, cracked, condB, seismic) => {
+    const calculatePullout = (fcC, da, type, cracked, seismic) => {
         const psi_c_p = cracked ? 1.0 : 1.4;
         let Np = 0, eqStr = "";
-        if (type === "hex") { const Abrg = 0.9 * da * da; Np = 8 * Abrg * fc; eqStr = `8 A_{brg} f'_c`; } 
-        else { const eh = 3 * da; Np = 0.9 * fc * eh * da; eqStr = `0.9 f'_c e_h d_a`; }
-        const Npn = Np * psi_c_p; 
-        const phi = condB ? 0.70 : 0.75;
-        let phiNpn = phi * Npn * (seismic ? 0.75 : 1.0);
-        return { val: { phiNpn }, tex: { Npn: { eq: `N_{pn}`, res: fmt(Npn,0), unit: "lb" }, phiNpn: { eq: `\\phi N_{pn}`, res: fmt(phiNpn,0), unit: "lb" } } };
+        if (type === "hex") { const Abrg = 0.9 * da * da; Np = 8 * Abrg * fcC; eqStr = `8 A_{brg} f'_c,\\ A_{brg}=0.9d_a^2=${fmt(Abrg,3)}`; }
+        else { const eh = 3 * da; Np = 0.9 * fcC * eh * da; eqStr = `0.9 f'_c e_h d_a,\\ e_h=3d_a`; }
+        const Npn = Np * psi_c_p;
+        const phi = 0.70;   // Table 17.5.3: pullout is always Condition B
+        const phiNpn = phi * Npn * (seismic ? 0.75 : 1.0);
+        return { val: { phiNpn, Npn }, tex: { Npn: { eq: `N_{pn} = \\psi_{c,P} N_p = \\psi_{c,P}\\, ${eqStr}`, res: fmt(Npn,0), unit: "lb" }, phiNpn: { eq: `\\phi N_{pn}${seismic ? '\\cdot 0.75' : ''}`, sub: `0.70 \\cdot ${fmt(Npn,0)}${seismic ? ' \\cdot 0.75' : ''}`, res: fmt(phiNpn,0), unit: "lb" } } };
     };
 
-    const calculateSideFaceBlowout = (hef, c1, c2, c3, c4, fc, da, type, condB, seismic) => {
-        const c_min = Math.min(c1, c2, c3, c4);
-        const isDeep = hef > 2.5 * c_min;
-        const isHeaded = type === "hex";
-        if (!isDeep || !isHeaded) return { val: { phiNsb: 999999 }, applicable: false };
+    // ACI 318-19 §17.6.4: checked at each edge where hef > 2.5 c_a1 for the tension anchors in the
+    // row nearest that edge. Corner factor (1 + c_a2/c_a1)/4 per §17.6.4.1.1; group factor
+    // (1 + s/6c_a1) per §17.6.4.2 when s < 6c_a1, else anchors checked individually.
+    const calculateSideFaceBlowout = (tens, g, hef, fcC, lambda, da, type, condB, seismic) => {
+        const na = { applicable: false, val: { phiNsb: Infinity, ratio: 0 } };
+        if (type !== "hex" || tens.length === 0) return na;
         const Abrg = 0.9 * da * da;
-        const Nsb = 160 * c_min * Math.sqrt(Abrg) * Math.sqrt(fc);
         const phi = condB ? 0.70 : 0.75;
-        let phiNsb = phi * Nsb * (seismic ? 0.75 : 1.0);
-        return { val: { phiNsb }, applicable: true, tex: { Nsb: { eq: `N_{sb}`, res: fmt(Nsb,0), unit: "lb" }, phiNsb: { eq: `\\phi N_{sb}`, res: fmt(phiNsb,0), unit: "lb" } } };
+        const fSeis = seismic ? 0.75 : 1.0;
+        const nsb = (ca1, ca2) => {
+            const corner = ca2 < 3 * ca1 ? (1 + Math.min(3, Math.max(1, ca2 / ca1))) / 4 : 1.0;
+            return { corner, Nsb: 160 * ca1 * Math.sqrt(Abrg) * lambda * Math.sqrt(fcC) * corner };
+        };
+        const checks = [];
+        EDGES.forEach(e => {
+            const row = leadRow(tens, e);
+            const ca1 = edgeDist(row[0], g, e.k);
+            if (!(hef > 2.5 * ca1)) return;
+            const perp = e.axis === 'x' ? ['T', 'B'] : ['L', 'R'];
+            const ca2Of = a => Math.min(edgeDist(a, g, perp[0]), edgeDist(a, g, perp[1]));
+            const along = row.map(a => e.axis === 'x' ? a.y : a.x);
+            const s = Math.max(...along) - Math.min(...along);
+            if (row.length > 1 && s < 6 * ca1) {
+                const ca2 = Math.min(...row.map(ca2Of));
+                const b = nsb(ca1, ca2);
+                const grp = 1 + s / (6 * ca1);
+                const Nsbg = grp * b.Nsb;
+                const Nua = row.reduce((s0, a) => s0 + a.N, 0);
+                const phiNsb = phi * Nsbg * fSeis;
+                checks.push({ edge: e.name, ca1, ca2, s, n: row.length, corner: b.corner, grp, Nsb: b.Nsb, Nsbg, phiNsb, Nua, ratio: Nua / phiNsb });
+            } else {
+                row.forEach(a => {
+                    const ca2 = ca2Of(a);
+                    const b = nsb(ca1, ca2);
+                    const phiNsb = phi * b.Nsb * fSeis;
+                    checks.push({ edge: e.name + ` (anchor ${a.id})`, ca1, ca2, s: 0, n: 1, corner: b.corner, grp: 1.0, Nsb: b.Nsb, Nsbg: b.Nsb, phiNsb, Nua: a.N, ratio: a.N / phiNsb });
+                });
+            }
+        });
+        if (!checks.length) return na;
+        const gv = checks.reduce((m, c) => c.ratio > m.ratio ? c : m, checks[0]);
+        return {
+            applicable: true, val: { phiNsb: gv.phiNsb, ratio: gv.ratio, gov: gv, checks },
+            tex: {
+                Nsb: { eq: `N_{sb} = 160 c_{a1} \\sqrt{A_{brg}} \\lambda_a \\sqrt{f'_c} \\cdot \\frac{1 + c_{a2}/c_{a1}}{4}\\ [\\text{${gv.edge}}]`, sub: `160 \\cdot ${fmt(gv.ca1,2)} \\sqrt{${fmt(Abrg,3)}} \\cdot ${fmt(lambda,3)} \\sqrt{${fmt(fcC,0)}} \\cdot ${fmt(gv.corner,3)}\\ (c_{a2}=${fmt(gv.ca2,2)})`, res: fmt(gv.Nsb,0), unit: "lb" },
+                Nsbg: { eq: `N_{sbg} = (1 + \\frac{s}{6c_{a1}}) N_{sb}`, sub: `${fmt(gv.grp,3)} \\cdot ${fmt(gv.Nsb,0)}\\ (s=${fmt(gv.s,2)},\\ n=${gv.n})`, res: fmt(gv.Nsbg,0), unit: "lb" },
+                phiNsb: { eq: `\\phi N_{sbg}${seismic ? '\\cdot 0.75' : ''}`, sub: `${phi} \\cdot ${fmt(gv.Nsbg,0)}${seismic ? ' \\cdot 0.75' : ''}`, res: fmt(gv.phiNsb,0), unit: "lb" },
+                ratio: { eq: `N_{ua,edge} / \\phi N_{sbg}`, sub: `${fmt(gv.Nua,0)} / ${fmt(gv.phiNsb,0)}`, res: fmt(gv.ratio,3), unit: "" }
+            }
+        };
     };
 
-    const calculateBreakoutShear = (hef, fc, c1, c2, c3, c4, da, numAnchors, sx, cracked, condB, seismic, Vux, Vuy) => {
-        let ca1_shear = c1;
-        if (Math.abs(Vux) >= Math.abs(Vuy)) ca1_shear = Vux >= 0 ? c3 : c1; else ca1_shear = Vuy >= 0 ? c4 : c2;
-        const le = Math.min(hef, 8*da);
-        const Vb = 7 * Math.pow(le/da, 0.2) * Math.sqrt(da) * Math.sqrt(fc) * Math.pow(ca1_shear, 1.5);
-        const Avco = 4.5 * Math.pow(ca1_shear, 2);
-        const width = (1.5 * ca1_shear) + (numAnchors > 1 ? sx : 0) + (1.5 * ca1_shear); 
-        const Avc = width * 1.5 * ca1_shear; 
-        const psi_cV = cracked ? 1.0 : 1.4;
-        const Vcbg = (Avc / Avco) * psi_cV * Vb; 
-        const phi = condB ? 0.70 : 0.75;
-        const phiVcbg = phi * Vcbg * (seismic ? 0.75 : 1.0);
-        return { val: { Vb, Vcbg, phiVcbg, ca1_shear }, tex: { Vb: { eq: `V_b`, res: fmt(Vb,0), unit: "lb" }, Vcbg: { eq: `V_{cbg}`, res: fmt(Vcbg,0), unit: "lb" }, phiVcbg: { eq: `\\phi V_{cbg}`, res: fmt(phiVcbg,0), unit: "lb" } } };
+    // Shear breakout toward edge e, full shear on the row nearest that edge (Fig. R17.7.2.1b Case 3).
+    // parallel = true: §17.7.2.1(c), shear parallel to edge e: psi_ed,V = 1.0 and 2x Vcbg.
+    const shearEdge = (anchors, e, g, p, parallel) => {
+        const row = leadRow(anchors, e);
+        const nRow = row.length;
+        const ca1 = edgeDist(row[0], g, e.k);
+        const along = row.map(a => e.axis === 'x' ? a.y : a.x);
+        const aMin = Math.min(...along), aMax = Math.max(...along);
+        const dNeg = e.axis === 'x' ? aMin - g.yB : aMin - g.xL;
+        const dPos = e.axis === 'x' ? g.yT - aMax : g.xR - aMax;
+        const width = (aMax - aMin) + Math.min(1.5 * ca1, dNeg) + Math.min(1.5 * ca1, dPos);
+        const depth = Math.min(1.5 * ca1, p.ha);
+        const Avco = 4.5 * ca1 * ca1;
+        const AvcGeom = width * depth;
+        const Avc = Math.min(AvcGeom, nRow * Avco);
+        const ca2 = Math.min(dNeg, dPos);
+        const psi_edV = parallel ? 1.0 : (ca2 >= 1.5 * ca1 ? 1.0 : 0.7 + 0.3 * ca2 / (1.5 * ca1));
+        const psi_hV = p.ha < 1.5 * ca1 ? Math.sqrt(1.5 * ca1 / p.ha) : 1.0;
+        // Loads act at the group centroid and the leading row is symmetric about it -> e'_V = 0
+        const eV = 0;
+        const psi_ecV = 1.0 / (1.0 + (2.0 * eV) / (3.0 * ca1));
+        const le = Math.min(p.hef, 8 * p.da);
+        const VbA = 7 * Math.pow(le / p.da, 0.2) * Math.sqrt(p.da) * p.lambda * Math.sqrt(p.fcC) * Math.pow(ca1, 1.5);
+        const VbB = 9 * p.lambda * Math.sqrt(p.fcC) * Math.pow(ca1, 1.5);
+        const Vb = Math.min(VbA, VbB);
+        const Vcbg = (parallel ? 2 : 1) * (Avc / Avco) * psi_ecV * psi_edV * p.psi_cV * psi_hV * Vb;
+        return { edge: e.name, parallel, nRow, ca1, ca2, width, depth, Avco, AvcGeom, Avc, psi_edV, psi_hV, eV, psi_ecV, psi_cV: p.psi_cV, le, VbA, VbB, Vb, Vcbg };
     };
 
-    const calculateBasePlate = (N_max, lx, fy, t_actual) => {
-        if (N_max <= 0) return { val: {dcr:0}, tex: { eq: "N \\le 0", res: "OK" } };
-        const beff = 4; const phi = 0.9;
+    const calculateBreakoutShear = (anchors, g, p, Vux, Vuy, condB) => {
+        const phi = condB ? 0.70 : 0.75;
+        const edges = EDGES.map(e => {
+            const vn = Vux * e.n[0] + Vuy * e.n[1];              // component pushing toward edge e
+            const vt = Math.abs(Vux * e.n[1] - Vuy * e.n[0]);    // component parallel to edge e
+            const perp = vn > 1e-9 ? shearEdge(anchors, e, g, p, false) : null;
+            const par = vt > 1e-9 ? shearEdge(anchors, e, g, p, true) : null;
+            const util = (perp ? vn / (phi * perp.Vcbg) : 0) + (par ? vt / (phi * par.Vcbg) : 0);
+            return { e, vn: Math.max(0, vn), vt, perp, par, util };
+        });
+        const gov = edges.reduce((m, x) => x.util > m.util ? x : m, edges[0]);
+        const c = gov.perp || gov.par;
+        if (!c) return { val: { ratio: 0, phiVcbg: Infinity, edges, gov: null }, tex: { none: { eq: `V_{ua} = 0`, res: "—", unit: "" } } };
+        const tag = c.parallel ? `\\text{parallel to ${gov.e.name}}` : `\\text{toward ${gov.e.name}}`;
+        const phiVcbg = phi * c.Vcbg;
+        return {
+            val: { ratio: gov.util, phiVcbg, Vb: c.Vb, Vcbg: c.Vcbg, ca1_shear: c.ca1, edges, gov, phi },
+            tex: {
+                gov: { eq: `\\text{Governing: ${gov.e.name}}:\\ V_{\\perp}=${fmt(gov.vn,0)},\\ V_{\\parallel}=${fmt(gov.vt,0)}\\ \\text{lb}`, res: null },
+                Vb: { eq: `V_b = \\min\\left(7(\\frac{l_e}{d_a})^{0.2}\\sqrt{d_a}\\lambda_a\\sqrt{f'_c}c_{a1}^{1.5},\\ 9\\lambda_a\\sqrt{f'_c}c_{a1}^{1.5}\\right)`, sub: `\\min(${fmt(c.VbA,0)},\\ ${fmt(c.VbB,0)}),\\ c_{a1}=${fmt(c.ca1,2)},\\ l_e=${fmt(c.le,2)}`, res: fmt(c.Vb,0), unit: "lb" },
+                Avc: { eq: `A_{Vc} = \\min(b \\cdot \\min(1.5c_{a1}, h_a),\\ n A_{Vco}),\\ A_{Vco}=4.5c_{a1}^2`, sub: `\\min(${fmt(c.width,2)} \\times ${fmt(c.depth,2)},\\ ${c.nRow} \\cdot ${fmt(c.Avco,1)})`, res: fmt(c.Avc,1), unit: "in²" },
+                psi: { eq: `\\psi_{ec,V}\\,\\psi_{ed,V}\\,\\psi_{c,V}\\,\\psi_{h,V}`, sub: `${fmt(c.psi_ecV,3)} \\cdot ${fmt(c.psi_edV,3)} \\cdot ${fmt(c.psi_cV,2)} \\cdot ${fmt(c.psi_hV,3)}\\ (c_{a2}=${fmt(c.ca2,2)})`, res: fmt(c.psi_ecV*c.psi_edV*c.psi_cV*c.psi_hV,3), unit: "" },
+                Vcbg: { eq: `V_{cbg} = ${c.parallel ? '2 \\cdot ' : ''}\\frac{A_{Vc}}{A_{Vco}} \\psi_{ec,V}\\psi_{ed,V}\\psi_{c,V}\\psi_{h,V} V_b\\ [${tag}]`, res: fmt(c.Vcbg,0), unit: "lb" },
+                phiVcbg: { eq: `\\phi V_{cbg}`, sub: `${phi} \\cdot ${fmt(c.Vcbg,0)}`, res: fmt(phiVcbg,0), unit: "lb" },
+                ratio: { eq: `\\frac{V_{\\perp}}{\\phi V_{cbg,\\perp}} + \\frac{V_{\\parallel}}{\\phi V_{cbg,\\parallel}}`, res: fmt(gov.util,3), unit: "" }
+            }
+        };
+    };
+
+    const calculateBasePlate = (N_max, lx, fy, t_actual, beff) => {
+        if (N_max <= 0) return { val: { treq: 0, dcr: 0 }, tex: { treq: { eq: "N_{max} \\le 0", res: "0", unit: "in" } } };
+        const phi = 0.9;
         const treq = Math.sqrt( (4 * N_max * lx) / (phi * fy * beff) );
         const dcr = treq / t_actual;
-        return { val: { treq, dcr }, tex: { treq: { eq: `t_{req}`, res: fmt(treq, 3), unit: "in" } } };
+        return { val: { treq, dcr }, tex: { treq: { eq: `t_{req} = \\sqrt{\\frac{4 N_{max} l_x}{\\phi F_y b_{eff}}}`, sub: `\\sqrt{\\frac{4 \\cdot ${fmt(N_max,0)} \\cdot ${fmt(lx,2)}}{0.9 \\cdot ${fmt(fy,0)} \\cdot ${fmt(beff,2)}}}`, res: fmt(treq, 3), unit: "in" } } };
     };
 
-    const calculatePryout = (Ncb_val, hef, condB, seismic) => {
-        const kcp = hef >= 2.5 ? 2.0 : 1.0; const Vcp = kcp * Ncb_val;
-        const phi = condB ? 0.70 : 0.75; let phiVcp = phi * Vcp * (seismic ? 0.75 : 1.0);
-        return { val: { phiVcp }, tex: { phiVcp: { eq: `\\phi V_{cp}`, res: fmt(phiVcp,0), unit: "lb" } } };
+    // §17.7.3: Vcpg = kcp Ncpg, Ncpg = Ncbg of ALL anchors (psi_ec,N = 1.0). Pryout phi = 0.70 always.
+    const calculatePryout = (anchors, p, hef) => {
+        const b = breakoutGroup(anchors, { ...p, useEcc: false });
+        const kcp = hef < 2.5 ? 1.0 : 2.0;
+        const Vcp = kcp * b.Ncb;
+        const phi = 0.70;
+        const phiVcp = phi * Vcp;
+        return { val: { phiVcp, Ncpg: b.Ncb, kcp }, tex: {
+            Ncp: { eq: `N_{cpg} = N_{cbg}\\ (\\text{all ${b.n} anchors},\\ \\psi_{ec,N}=1)`, sub: `\\frac{${fmt(b.Anc,1)}}{${fmt(b.Anco,1)}} \\cdot ${fmt(b.psi_edN,3)} \\cdot ${fmt(b.psi_cN,2)} \\cdot ${fmt(b.Nb,0)}`, res: fmt(b.Ncb,0), unit: "lb" },
+            phiVcp: { eq: `\\phi V_{cpg} = \\phi k_{cp} N_{cpg}`, sub: `0.70 \\cdot ${kcp} \\cdot ${fmt(b.Ncb,0)}`, res: fmt(phiVcp,0), unit: "lb" } } };
+    };
+
+    // Input validation: errors block the calculation (no NaN/Infinity results); warnings are shown.
+    const NUM_FIELDS = { fc: "f'c", wc: "Density wc", hef: "Embedment hef", c1: "Left c1", c2: "Top c2", c3: "Right c3", c4: "Bottom c4",
+        sx: "Spacing X", sy: "Spacing Y", ha: "Member thickness ha", Nua: "Tension Nua", Vux: "Shear Vux", Vuy: "Shear Vuy",
+        Mux: "Moment Mux", Muy: "Moment Muy", plateT: "Plate t", plateLx: "Plate cantilever lx", plateFy: "Plate Fy", plateBeff: "Plate b_eff" };
+    const validateInputs = (inp) => {
+        const errors = [], warnings = [];
+        const isNum = v => typeof v === 'number' && isFinite(v);
+        Object.entries(NUM_FIELDS).forEach(([k, lbl]) => {
+            if ((k === 'sx' || k === 'sy') && inp.numAnchors !== 4) return;
+            if (!isNum(inp[k])) errors.push(`${lbl}: blank or not a number.`);
+        });
+        if (!STEEL_GRADES[inp.grade]) errors.push(`Unknown anchor grade "${inp.grade}".`);
+        if (ASE_TABLE[inp.da] === undefined) errors.push(`Unsupported anchor diameter "${inp.da}".`);
+        if (inp.type !== 'hex' && inp.type !== 'hook') errors.push(`Unknown anchor type "${inp.type}".`);
+        if (inp.numAnchors !== 1 && inp.numAnchors !== 4) errors.push(`Number of anchors must be 1 or 4.`);
+        if (!EDGE_REINF[inp.edgeReinf]) errors.push(`Unknown edge reinforcement option "${inp.edgeReinf}".`);
+        if (errors.length) return { errors, warnings };
+        const pos = (k) => { if (!(inp[k] > 0)) errors.push(`${NUM_FIELDS[k]} must be greater than 0.`); };
+        ['fc', 'wc', 'hef', 'c1', 'c2', 'c3', 'c4', 'ha', 'plateT', 'plateFy', 'plateBeff'].forEach(pos);
+        if (inp.numAnchors === 4) { pos('sx'); pos('sy'); }
+        if (inp.plateLx < 0) errors.push(`Plate cantilever lx must not be negative.`);
+        if (errors.length) return { errors, warnings };
+        if (inp.fc > FC_MAX) warnings.push(`f'c = ${inp.fc} psi > 10,000 psi: f'c capped at 10,000 psi in all Ch. 17 calculations (§17.3.1).`);
+        const da = inp.da;
+        if (inp.numAnchors === 4 && Math.min(inp.sx, inp.sy) < 4 * da) warnings.push(`Anchor spacing ${Math.min(inp.sx, inp.sy)} in < 4d_a = ${fmt(4*da,2)} in (§17.9.2 minimum for cast-in anchors not torqued; 6d_a if torqued).`);
+        else if (inp.numAnchors === 4 && Math.min(inp.sx, inp.sy) < 6 * da) warnings.push(`Anchor spacing ${Math.min(inp.sx, inp.sy)} in < 6d_a = ${fmt(6*da,2)} in: not permitted if the anchors are torqued (§17.9.2).`);
+        const cmin = Math.min(inp.c1, inp.c2, inp.c3, inp.c4);
+        if (cmin < 6 * da) warnings.push(`Edge distance ${cmin} in < 6d_a = ${fmt(6*da,2)} in: not permitted if anchors are torqued; if not torqued, the cover requirements of §20.5.1.3 govern (§17.9.2).`);
+        if (inp.ha <= inp.hef) warnings.push(`Member thickness h_a = ${inp.ha} in <= h_ef = ${inp.hef} in: check embedment / member thickness.`);
+        if (inp.numAnchors === 1 && (inp.Mux !== 0 || inp.Muy !== 0)) warnings.push(`Single anchor: Mux/Muy are ignored (the anchor is loaded by Nua only).`);
+        if (inp.seismic) {
+            warnings.push(`Seismic: 0.75 applied to concrete breakout, pullout and side-face blowout in tension only (§17.10.5.4). The ductility / Ω0 / attachment-yield requirements of §17.10.5.3 and §17.10.6 are NOT checked by this tool.`);
+            if (!inp.cracked) warnings.push(`Seismic: concrete shall be assumed cracked unless shown to remain uncracked (§17.10.5.4).`);
+        }
+        if (inp.type === 'hook') warnings.push(`L-bolt: side-face blowout not applicable (headed anchors only); pullout uses e_h = 3d_a.`);
+        return { errors, warnings };
+    };
+
+    const computeAll = (inputs) => {
+        const v = validateInputs(inputs);
+        if (v.errors.length) return { errors: v.errors, warnings: v.warnings };
+        const warnings = v.warnings;
+        const { da, grade, type, numAnchors, hef, fc, wc, c1, c2, c3, c4, sx, sy, cracked, condB, seismic, Nua, Vux, Vuy, Mux, Muy, plateT, plateLx, ha, edgeReinf, plateFy, plateBeff } = inputs;
+        const fcC = Math.min(fc, FC_MAX);
+        const lambda = lambdaFromWc(wc);
+        const g = edgeLines(c1, c2, c3, c4, numAnchors, sx, sy);
+        const psi_cV = cracked ? EDGE_REINF[edgeReinf].psi : 1.4;
+        const p = { hef, fcC, lambda, g, cracked, type, wc, ha, da, psi_cV };
+
+        const loads = distributeLoads(Nua, Vux, Vuy, Mux, Muy, numAnchors, sx, sy);
+        const { anchors, tens, sumT, N_max_bolt, V_per_bolt, V_resultant } = loads.val;
+        const steel = calculateSteel(da, grade);
+        const tBreak = calculateBreakoutTension(tens, p, condB, seismic, sumT);
+        const pullout = calculatePullout(fcC, da, type, cracked, seismic);
+        const blowout = calculateSideFaceBlowout(tens, g, hef, fcC, lambda, da, type, condB, seismic);
+        const sBreak = calculateBreakoutShear(anchors, g, p, Vux, Vuy, condB);
+        const pryout = calculatePryout(anchors, p, hef);
+        const plate = calculateBasePlate(N_max_bolt, plateLx, plateFy, plateT, plateBeff);
+        if (tBreak.applicable && tBreak.val.hefReduced) warnings.push(`Tension breakout: anchors within 1.5h_ef of ${tBreak.val.nearCount} edges; h_ef reduced to ${fmt(tBreak.val.hefC,2)} in (§17.6.2.1.2).`);
+
+        const Nt = Math.max(0, N_max_bolt);
+        const checks = [
+            { key: 'Nsa', label: 'Steel tension (per anchor)', ref: '17.6.1', ratio: Nt / steel.val.phiNsa_single, kind: 'N' },
+            { key: 'Ncb', label: 'Concrete breakout, tension (group)', ref: '17.6.2', ratio: tBreak.applicable ? tBreak.val.ratio : 0, kind: 'N' },
+            { key: 'Npn', label: 'Pullout (per anchor)', ref: '17.6.3', ratio: Nt / pullout.val.phiNpn, kind: 'N' },
+            { key: 'Nsb', label: 'Side-face blowout', ref: '17.6.4', ratio: blowout.applicable ? blowout.val.ratio : 0, kind: 'N', na: !blowout.applicable },
+            { key: 'Vsa', label: 'Steel shear (per anchor)', ref: '17.7.1', ratio: V_per_bolt / steel.val.phiVsa_single, kind: 'V' },
+            { key: 'Vcb', label: 'Concrete breakout, shear', ref: '17.7.2', ratio: sBreak.val.ratio, kind: 'V' },
+            { key: 'Vcp', label: 'Pryout (group)', ref: '17.7.3', ratio: V_resultant / pryout.val.phiVcp, kind: 'V' },
+            { key: 'plate', label: 'Base plate (t_req / t)', ref: 'plate', ratio: plate.val.dcr, kind: 'P' }
+        ];
+        const utilN = Math.max(...checks.filter(c => c.kind === 'N').map(c => c.ratio));
+        const utilV = Math.max(...checks.filter(c => c.kind === 'V').map(c => c.ratio));
+        // ACI 318-19 §17.8
+        let interaction, intLimit, intRule;
+        if (utilV <= 0.2) { interaction = utilN; intLimit = 1.0; intRule = "V/φV ≤ 0.2: full tension strength, N/φN ≤ 1.0 (§17.8.1)"; }
+        else if (utilN <= 0.2) { interaction = utilV; intLimit = 1.0; intRule = "N/φN ≤ 0.2: full shear strength, V/φV ≤ 1.0 (§17.8.2)"; }
+        else { interaction = utilN + utilV; intLimit = 1.2; intRule = "N/φN + V/φV ≤ 1.2 (§17.8.3)"; }
+        const failing = checks.filter(c => c.ratio > 1.0);
+        const interactionOK = interaction <= intLimit;
+        const pass = interactionOK && failing.length === 0;
+
+        return { errors: [], warnings, loads, steel, tBreak, pullout, blowout, sBreak, pryout, plate, checks, utilN, utilV, interaction, intLimit, intRule, interactionOK, failing, pass, fcC, lambda, cminAll: Math.min(c1, c2, c3, c4) };
+    };
+
+    // Load a saved anchor.json: validate, keep known keys only, defaults for missing keys.
+    const sanitizeLoaded = (d) => {
+        if (!d || typeof d !== 'object' || !d.inputs || typeof d.inputs !== 'object' || Array.isArray(d.inputs)) throw new Error('File does not contain an "inputs" object (not a file saved by this tool).');
+        const inputs = { ...DEFAULT_INPUTS }, notes = [];
+        Object.keys(DEFAULT_INPUTS).forEach(k => {
+            const def = DEFAULT_INPUTS[k];
+            if (!(k in d.inputs)) { notes.push(`"${k}" not in file; default ${def} used.`); return; }
+            const v = d.inputs[k];
+            if (typeof def === 'number') {
+                const n = typeof v === 'number' ? v : (typeof v === 'string' && v.trim() !== '' ? Number(v) : NaN);
+                if (isFinite(n)) inputs[k] = n; else notes.push(`"${k}" invalid (${JSON.stringify(v)}); default ${def} used.`);
+            } else if (typeof def === 'boolean') {
+                if (typeof v === 'boolean') inputs[k] = v; else notes.push(`"${k}" invalid (${JSON.stringify(v)}); default ${def} used.`);
+            } else {
+                if (typeof v === 'string') inputs[k] = v; else notes.push(`"${k}" invalid (${JSON.stringify(v)}); default ${def} used.`);
+            }
+        });
+        if ('conditionB' in d.inputs) notes.push(`Legacy key "conditionB" ignored (it came from the old unbound checkbox and never affected results); "condB" = ${inputs.condB} used.`);
+        if (!d.version && inputs.Vuy !== 0) notes.push(`File saved by an older version: +Vuy now acts toward the TOP edge (c2), consistent with the anchor coordinates. Older versions checked +Vuy toward the BOTTOM edge (c4). Verify the sign of Vuy.`);
+        const pr = (d.project && typeof d.project === 'object') ? d.project : {};
+        const project = { ...DEFAULT_PROJECT };
+        ['name', 'job', 'eng'].forEach(k => { if (typeof pr[k] === 'string') project[k] = pr[k]; });
+        return { inputs, project, notes };
     };
 
     // --- COMPONENTS ---
@@ -317,7 +621,7 @@
     const InputRow = ({ label, value, onChange, unit, help }) => (
         <div className="mb-2">
             <div className="flex justify-between text-xs text-slate-400 mb-1"><span>{label}</span>{help && <span className="text-[9px] text-slate-500">{help}</span>}</div>
-            <div className="input-wrap"><input type="number" value={value} onChange={e => onChange(parseFloat(e.target.value))} className="input-field" /><span className="unit-label">{unit}</span></div>
+            <div className="input-wrap"><input type="number" value={(typeof value === 'number' && !isFinite(value)) ? '' : value} onChange={e => onChange(e.target.value === '' ? '' : parseFloat(e.target.value))} className="input-field" /><span className="unit-label">{unit}</span></div>
         </div>
     );
 
@@ -350,7 +654,8 @@
         const coneB = Math.min(slabB, cy + gy*scale + cone);
         
         const mag = Math.sqrt(Vux*Vux + Vuy*Vuy);
-        const angle = Math.atan2(Vuy, Vux) * 180 / Math.PI;
+        // SVG y points down; +Vuy acts toward +y (Top, c2), so negate for the drawing angle
+        const angle = Math.atan2(-Vuy, Vux) * 180 / Math.PI;
 
         return (
             <div className="w-full h-full relative bg-slate-950 overflow-hidden border-b border-slate-800">
@@ -373,7 +678,7 @@
                     <rect width="100%" height="100%" fill="url(#grid)" />
                     
                     <path d={`M ${slabL} ${slabT} L ${slabR} ${slabT} L ${slabR} ${slabB} L ${slabL} ${slabB} Z`} fill="#334155" stroke="#94a3b8" strokeWidth="2" opacity="0.5" />
-                    <rect x={coneL} y={coneT} width={Math.max(0, coneR-coneL)} height={Math.max(0, coneB-coneT)} fill={results.interaction > 1.2 ? "rgba(239,68,68,0.2)" : "rgba(16,185,129,0.2)"} stroke={results.interaction > 1.2 ? "#ef4444" : "#10b981"} strokeDasharray="4,4" />
+                    <rect x={coneL} y={coneT} width={Math.max(0, coneR-coneL)} height={Math.max(0, coneB-coneT)} fill={!results.pass ? "rgba(239,68,68,0.2)" : "rgba(16,185,129,0.2)"} stroke={!results.pass ? "#ef4444" : "#10b981"} strokeDasharray="4,4" />
                     
                     {/* Axes */}
                     <line x1={0} y1={cy} x2={W} y2={cy} stroke="cyan" strokeWidth="1" strokeDasharray="5,5" opacity="0.3" />
@@ -399,7 +704,7 @@
                     {view.shear && (Math.abs(Vux)>0 || Math.abs(Vuy)>0) && (
                         <g opacity="0.3">
                             {Math.abs(Vux)>0 && <line x1={cx} y1={cy} x2={cx+Vux/50} y2={cy} stroke="#facc15" strokeWidth="1" />}
-                            {Math.abs(Vuy)>0 && <line x1={cx} y1={cy} x2={cx} y2={cy+Vuy/50} stroke="#facc15" strokeWidth="1" />}
+                            {Math.abs(Vuy)>0 && <line x1={cx} y1={cy} x2={cx} y2={cy-Vuy/50} stroke="#facc15" strokeWidth="1" />}
                         </g>
                     )}
 
@@ -439,17 +744,10 @@
     // --- MAIN APP ---
 
     const App = () => {
-        const [project, setProject] = useState({ name: "Bridge A", job: "23-001", eng: "JD" });
-        const [inputs, setInputs] = useState({
-            fc: 4000, wc: 150, cracked: true, condB: true, seismic: false,
-            hef: 6.0, 
-            c1: 12.0, c2: 12.0, c3: 12.0, c4: 12.0, 
-            numAnchors: 4, sx: 6.0, sy: 6.0,
-            da: 0.75, grade: "F1554-36", type: "hex",
-            Nua: 5000, Vux: 2000, Vuy: 0, Mux: 1000, Muy: 0,
-            plateT: 0.5, plateLx: 2.0
-        });
+        const [project, setProject] = useState({ ...DEFAULT_PROJECT });
+        const [inputs, setInputs] = useState({ ...DEFAULT_INPUTS });
         const [reportMode, setReportMode] = useState(false);
+        const [loadMsg, setLoadMsg] = useState(null);   // { kind: 'error'|'info', lines: [] }
 
         const update = (k, v) => setInputs(p => ({...p, [k]: v}));
         const updateProj = (k, v) => setProject(p => ({...p, [k]: v}));
@@ -461,33 +759,30 @@
         };
 
         const handleSave = () => {
-            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify({project, inputs}));
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify({project, inputs, version: 2}));
             const a = document.createElement('a'); a.href = dataStr; a.download = "anchor.json"; a.click();
         };
         const handleLoad = (e) => {
+            const file = e.target.files && e.target.files[0];
+            e.target.value = '';   // allow re-loading the same file
+            if (!file) return;
             const fr = new FileReader();
-            fr.onload = e => { const d = JSON.parse(e.target.result); setProject(d.project); setInputs(d.inputs); };
-            fr.readAsText(e.target.files[0]);
+            fr.onload = ev => {
+                try {
+                    const d = JSON.parse(ev.target.result);
+                    const r = sanitizeLoaded(d);
+                    setProject(r.project); setInputs(r.inputs);
+                    setLoadMsg(r.notes.length ? { kind: 'info', lines: [`Loaded "${file.name}" with notes:`, ...r.notes] } : null);
+                } catch (err) {
+                    setLoadMsg({ kind: 'error', lines: [`Could not load "${file.name}": ${err.message}`, 'Current inputs were kept.'] });
+                }
+            };
+            fr.onerror = () => setLoadMsg({ kind: 'error', lines: [`Could not read "${file.name}".`] });
+            fr.readAsText(file);
         };
 
-        const res = useMemo(() => {
-            const { da, grade, type, numAnchors, hef, fc, wc, c1, c2, c3, c4, sx, sy, cracked, condB, seismic, Nua, Vux, Vuy, Mux, Muy, plateT, plateLx } = inputs;
-            
-            const loads = distributeLoads(Nua, Vux, Vuy, Mux, Muy, numAnchors, sx, sy);
-            const steel = calculateSteel(da, grade, loads.val.N_max_bolt, loads.val.V_per_bolt, seismic);
-            const tBreak = calculateBreakoutTension(hef, fc, wc, c1, c2, c3, c4, sx, sy, numAnchors, cracked, condB, seismic, loads.val.e_prime_N);
-            const pullout = calculatePullout(fc, da, type, cracked, condB, seismic);
-            const blowout = calculateSideFaceBlowout(hef, c1, c2, c3, c4, fc, da, type, condB, seismic);
-            const sBreak = calculateBreakoutShear(hef, fc, c1, c2, c3, c4, da, numAnchors, sx, cracked, condB, seismic, Vux, Vuy);
-            const pryout = calculatePryout(tBreak.val.Ncb, hef, condB, seismic);
-            const plate = calculateBasePlate(loads.val.N_max_bolt, plateLx, steel.val.fy, plateT);
-
-            const utilN = Math.max(loads.val.N_max_bolt/steel.val.phiNsa_single, Nua/tBreak.val.phiNcb, loads.val.N_max_bolt/pullout.val.phiNpn, blowout.applicable ? loads.val.N_max_bolt/blowout.val.phiNsb : 0);
-            const utilV = Math.max(loads.val.V_per_bolt/steel.val.phiVsa_single, loads.val.V_resultant/sBreak.val.phiVcbg, loads.val.V_resultant/pryout.val.phiVcp);
-            const interaction = utilN + utilV;
-
-            return { loads, steel, tBreak, pullout, blowout, sBreak, pryout, plate, utilN, utilV, interaction };
-        }, [inputs]);
+        const res = useMemo(() => computeAll(inputs), [inputs]);
+        const ok = res.errors.length === 0;
 
         return (
             <div className="flex h-screen w-full bg-slate-900 text-slate-200 font-sans overflow-hidden">
@@ -507,6 +802,10 @@
                             <input value={project.job} onChange={e=>updateProj('job',e.target.value)} className="w-1/2 bg-slate-800 text-xs border-b border-slate-600 pb-1 placeholder-slate-500" placeholder="Job #"/>
                             <input value={project.eng} onChange={e=>updateProj('eng',e.target.value)} className="w-1/2 bg-slate-800 text-xs border-b border-slate-600 pb-1 placeholder-slate-500" placeholder="Eng"/>
                         </div>
+                        {loadMsg && <div className={`mt-2 p-2 rounded text-[10px] border ${loadMsg.kind==='error'?'bg-red-900/40 border-red-700 text-red-200':'bg-amber-900/30 border-amber-700 text-amber-200'}`}>
+                            {loadMsg.lines.map((l,i)=><div key={i}>{l}</div>)}
+                            <button onClick={()=>setLoadMsg(null)} className="mt-1 underline">dismiss</button>
+                        </div>}
                     </div>
                     
                     <div className="p-4 space-y-6">
@@ -526,14 +825,15 @@
                                 <button onClick={()=>update('type','hex')} className={`flex-1 py-1 text-[10px] border rounded ${inputs.type==='hex'?'bg-slate-600 border-slate-500':'bg-slate-800 border-slate-700'}`}>HEX</button>
                                 <button onClick={()=>update('type','hook')} className={`flex-1 py-1 text-[10px] border rounded ${inputs.type==='hook'?'bg-slate-600 border-slate-500':'bg-slate-800 border-slate-700'}`}>L-BOLT</button>
                             </div>
-                            <label className="flex items-center gap-2 text-xs cursor-pointer"><input type="checkbox" checked={inputs.seismic} onChange={e=>update('seismic',e.target.checked)}/> Seismic (0.75)</label>
-                            <label className="flex items-center gap-2 text-xs cursor-pointer"><input type="checkbox" checked={inputs.conditionB} onChange={e=>update('conditionB',e.target.checked)}/> Cond. B (No Reinf)</label>
+                            <label className="flex items-center gap-2 text-xs cursor-pointer"><input type="checkbox" checked={inputs.seismic} onChange={e=>update('seismic',e.target.checked)}/> Seismic (0.75 on concrete tension, §17.10.5.4)</label>
+                            <label className="flex items-center gap-2 text-xs cursor-pointer"><input type="checkbox" checked={inputs.condB} onChange={e=>update('condB',e.target.checked)}/> Cond. B (No Reinf) — breakout/blowout φ 0.70; unchecked = Cond. A 0.75</label>
                         </div>
 
                         {/* 2. GEOMETRY */}
                         <div className="space-y-2">
                             <h2 className="text-xs font-bold text-slate-500 border-b border-slate-700 pb-1">2. GEOMETRY</h2>
                             <InputRow label="Embedment (hef)" value={inputs.hef} onChange={v=>update('hef',v)} unit="in" />
+                            <InputRow label="Member thickness (ha)" value={inputs.ha} onChange={v=>update('ha',v)} unit="in" help="ψh,V / A_Vc depth" />
                             <div className="grid grid-cols-2 gap-2">
                                 <InputRow label="Left (c1)" value={inputs.c1} onChange={v=>update('c1',v)} unit="in" />
                                 <InputRow label="Right (c3)" value={inputs.c3} onChange={v=>update('c3',v)} unit="in" />
@@ -564,11 +864,19 @@
                                     <option value="1.0">1.0"</option>
                                 </select>
                             </div>
+                            <div className="mb-2">
+                                <label className="text-xs text-slate-400">Shear edge reinf. ψc,V (cracked; §17.7.2.5)</label>
+                                <select value={inputs.edgeReinf} onChange={e=>update('edgeReinf',e.target.value)} className="input-field mt-1">
+                                    {Object.entries(EDGE_REINF).map(([k, o]) => <option key={k} value={k}>{o.label}</option>)}
+                                </select>
+                            </div>
                             <div className="p-2 border border-slate-700 rounded bg-slate-800/30">
                                 <div className="text-[10px] font-bold text-slate-500 mb-2">BASE PLATE CHECK</div>
                                 <div className="grid grid-cols-2 gap-2">
                                     <InputRow label="Thick (t)" value={inputs.plateT} onChange={v=>update('plateT',v)} unit="in" />
                                     <InputRow label="Cantilever (lx)" value={inputs.plateLx} onChange={v=>update('plateLx',v)} unit="in" />
+                                    <InputRow label="Plate Fy" value={inputs.plateFy} onChange={v=>update('plateFy',v)} unit="psi" />
+                                    <InputRow label="Width (b_eff)" value={inputs.plateBeff} onChange={v=>update('plateBeff',v)} unit="in" />
                                 </div>
                             </div>
                         </div>
@@ -585,25 +893,27 @@
                                 <InputRow label="Moment X (Mux)" value={inputs.Mux} onChange={v=>update('Mux',v)} unit="lb-in" />
                                 <InputRow label="Moment Y (Muy)" value={inputs.Muy} onChange={v=>update('Muy',v)} unit="lb-in" />
                             </div>
+                            <div className="text-[10px] text-slate-500 leading-snug">Signs: +x → Right (c3), +y → Top (c2). +Nua = tension. +Vux acts toward c3, +Vuy toward c2. +Mux puts the top (+y) anchors in tension; +Muy puts the right (+x) anchors in tension.</div>
                         </div>
                     </div>
                 </div>
 
                 {/* CENTER VISUALIZATION */}
                 <div className={`flex-1 bg-black flex flex-col ${reportMode?'hidden':''}`}>
-                    <Visualization inputs={inputs} results={res} />
+                    {ok ? <Visualization inputs={inputs} results={res} /> : <div className="w-full h-full flex items-center justify-center bg-slate-950 border-b border-slate-800"><div className="p-4 bg-red-900/40 border border-red-700 rounded text-sm text-red-200 max-w-md"><div className="font-bold mb-1">Input errors — no results calculated</div>{res.errors.map((m,i)=><div key={i}>• {m}</div>)}</div></div>}
                     <div className="p-4 bg-slate-900 text-center relative z-10 border-t border-slate-800">
-                        <div className="inline-block px-6 py-2 bg-slate-800 rounded border border-slate-700 shadow-xl">
+                        {ok ? <div className="inline-block px-6 py-2 bg-slate-800 rounded border border-slate-700 shadow-xl">
                              <div className="text-xs text-slate-400 uppercase tracking-widest mb-1">Interaction Ratio</div>
                              <div className="text-3xl font-black flex gap-2 items-baseline justify-center font-mono">
                                 <span className={res.utilN > 1 ? "text-red-500" : "text-slate-300"}>{fmt(res.utilN,2)}</span>
                                 <span className="text-slate-600 text-lg">+</span>
                                 <span className={res.utilV > 1 ? "text-red-500" : "text-slate-300"}>{fmt(res.utilV,2)}</span>
                                 <span className="text-slate-600 text-lg">=</span>
-                                <span className={res.interaction>1.2?"text-red-500":"text-emerald-400"}>{fmt(res.interaction,2)}</span>
+                                <span className={(res.utilN + res.utilV)>1.2?"text-red-500":"text-emerald-400"}>{fmt(res.utilN + res.utilV,2)}</span>
                              </div>
-                             <div className="text-[10px] mt-1 text-slate-500">Limit: 1.2</div>
-                        </div>
+                             <div className="text-[10px] mt-1 text-slate-500">{res.intRule}</div>
+                             <div className={`text-sm font-bold mt-1 ${res.pass?'text-emerald-400':'text-red-500'}`}>{res.pass ? 'OK — all checks ≤ 1.0 and §17.8 satisfied' : `NG — ${[...res.failing.map(c=>c.label + ' ' + fmt(c.ratio,2)), ...(res.interactionOK ? [] : [`interaction ${fmt(res.interaction,2)} > ${res.intLimit}`])].join('; ')}`}</div>
+                        </div> : <div className="inline-block px-6 py-2 text-red-400 font-bold">NO RESULT — fix input errors</div>}
                         <button onClick={()=>setReportMode(true)} className="ml-6 px-6 py-3 bg-blue-600 hover:bg-blue-500 rounded text-sm font-bold text-white shadow-lg transition-colors">VIEW REPORT</button>
                     </div>
                 </div>
@@ -624,13 +934,19 @@
                             </div>
                         </div>
 
-                        <div className="space-y-8">
+                        {!ok && <div className="p-4 bg-red-900/40 border border-red-700 rounded text-sm text-red-200"><div className="font-bold mb-1">Input errors — no results calculated</div>{res.errors.map((m,i)=><div key={i}>• {m}</div>)}</div>}
+                        {res.warnings && res.warnings.length > 0 && <div className="mb-6 p-3 bg-amber-900/20 border border-amber-700 rounded text-xs text-amber-200 space-y-1">
+                            <div className="font-bold">Warnings / notes</div>
+                            {res.warnings.map((m,i)=><div key={i}>• {m}</div>)}
+                        </div>}
+                        {ok && <div className="space-y-8">
                             <div>
                                 <h3 className="text-blue-400 font-bold border-b border-slate-600 mb-4 pb-1 uppercase tracking-wider text-sm">1. Tension Design</h3>
-                                
+
                                 <CalcBox title="Load Distribution" data={
                                     <>
                                         <EquationLine label="Max Bolt Tension" tex={res.loads.tex.N_dist}/>
+                                        <EquationLine label="Tension on Anchors in Tension (breakout demand)" tex={res.loads.tex.N_sumT}/>
                                         {inputs.numAnchors === 4 && <div className="mt-2">
                                             <div className="text-xs text-slate-400 mb-1 font-bold">Individual Anchor Forces:</div>
                                             <AnchorTable anchors={res.loads.val.anchors} N_max={res.loads.val.N_max_bolt} />
@@ -639,16 +955,29 @@
                                 } />
 
                                 <CalcBox title="Steel & Pullout" data={<>
+                                    <EquationLine label="Capped Tensile Strength" tex={res.steel.tex.futa} refCode="17.6.1.2"/>
                                     <EquationLine label="Steel Strength" tex={res.steel.tex.phiNsa} refCode="17.6.1.2"/>
-                                    <EquationLine label="Pullout Strength" tex={res.pullout.tex.phiNpn} refCode="17.6.3.1"/>
+                                    <EquationLine label="Pullout (nominal)" tex={res.pullout.tex.Npn} refCode="17.6.3.1"/>
+                                    <EquationLine label="Pullout Strength (φ = 0.70)" tex={res.pullout.tex.phiNpn} refCode="17.6.3.1"/>
                                 </>} />
-                                <CalcBox title="Concrete Breakout" data={<>
+                                <CalcBox title="Concrete Breakout" data={res.tBreak.applicable ? <>
+                                    <EquationLine label="Lightweight Factor" tex={res.tBreak.tex.lambda} refCode="17.6.2.2"/>
+                                    <EquationLine label="Embedment Used" tex={res.tBreak.tex.hef} refCode="17.6.2.1.2"/>
                                     <EquationLine label="Basic Strength" tex={res.tBreak.tex.Nb} refCode="17.6.2.2"/>
+                                    <EquationLine label="Single-Anchor Area" tex={res.tBreak.tex.Anco} refCode="17.6.2.1"/>
                                     <EquationLine label="Projected Area" tex={res.tBreak.tex.Anc} refCode="17.6.2.1"/>
+                                    <EquationLine label="Eccentricity Factor" tex={res.tBreak.tex.psi_ec} refCode="17.6.2.3.1"/>
+                                    <EquationLine label="Edge Factor" tex={res.tBreak.tex.psi_ed} refCode="17.6.2.1"/>
+                                    <EquationLine label="Cracking Factor" tex={res.tBreak.tex.psi_c} refCode="17.6.2.1"/>
+                                    <EquationLine label="Nominal Breakout" tex={res.tBreak.tex.Ncb} refCode="17.6.2.1"/>
                                     <EquationLine label="Breakout Strength" tex={res.tBreak.tex.phiNcb} refCode="17.6.2.1"/>
-                                </>} />
+                                    <EquationLine label="Breakout Ratio" tex={res.tBreak.tex.ratio} refCode="17.6.2.1"/>
+                                </> : <EquationLine label="Breakout" tex={res.tBreak.tex.none}/>} />
                                 {res.blowout.applicable && <CalcBox title="Side-Face Blowout" data={<>
+                                    <EquationLine label="Single Anchor (with corner factor)" tex={res.blowout.tex.Nsb} refCode="17.6.4.1"/>
+                                    <EquationLine label="Group Factor" tex={res.blowout.tex.Nsbg} refCode="17.6.4.1"/>
                                     <EquationLine label="Blowout Strength" tex={res.blowout.tex.phiNsb} refCode="17.6.4.1"/>
+                                    <EquationLine label="Blowout Ratio" tex={res.blowout.tex.ratio} refCode="17.6.4.1"/>
                                 </>} />}
                             </div>
 
@@ -656,12 +985,18 @@
                                 <h3 className="text-blue-400 font-bold border-b border-slate-600 mb-4 pb-1 uppercase tracking-wider text-sm">2. Shear Design</h3>
                                 <CalcBox title="Steel & Pryout" data={<>
                                     <EquationLine label="Steel Shear" tex={res.steel.tex.phiVsa} refCode="17.7.1.2"/>
-                                    <EquationLine label="Pryout" tex={res.pryout.tex.phiVcp} refCode="17.7.3.1"/>
+                                    <EquationLine label="Pryout Breakout Basis" tex={res.pryout.tex.Ncp} refCode="17.7.3.1"/>
+                                    <EquationLine label="Pryout (φ = 0.70)" tex={res.pryout.tex.phiVcp} refCode="17.7.3.1"/>
                                 </>} />
-                                <CalcBox title="Concrete Breakout" data={<>
+                                <CalcBox title="Concrete Breakout" data={res.sBreak.val.gov ? <>
+                                    <EquationLine label="Governing Edge" tex={res.sBreak.tex.gov} refCode="17.7.2.1"/>
                                     <EquationLine label="Basic Shear" tex={res.sBreak.tex.Vb} refCode="17.7.2.2"/>
+                                    <EquationLine label="Projected Area" tex={res.sBreak.tex.Avc} refCode="17.7.2.1"/>
+                                    <EquationLine label="Modification Factors" tex={res.sBreak.tex.psi} refCode="17.7.2.1"/>
+                                    <EquationLine label="Nominal Breakout" tex={res.sBreak.tex.Vcbg} refCode="17.7.2.1"/>
                                     <EquationLine label="Shear Capacity" tex={res.sBreak.tex.phiVcbg} refCode="17.7.2.1"/>
-                                </>} />
+                                    <EquationLine label="Breakout Ratio (per edge)" tex={res.sBreak.tex.ratio} refCode="17.7.2.1"/>
+                                </> : <EquationLine label="Breakout" tex={res.sBreak.tex.none}/>} />
                             </div>
 
                             <div>
@@ -676,12 +1011,31 @@
                                     </div>
                                     <div className="bg-slate-900 p-3 rounded border border-slate-700">
                                         <div className="text-xs text-slate-500 mb-1">Min Edge Dist</div>
-                                        <div className="font-mono text-lg">{fmt(res.tBreak.val.c_min, 2)} <span className="text-xs text-slate-500">in</span></div>
+                                        <div className="font-mono text-lg">{fmt(res.cminAll, 2)} <span className="text-xs text-slate-500">in</span></div>
                                         <div className="text-xs text-slate-500 mt-1">Actual</div>
                                     </div>
                                 </div>
+                                {res.plate.tex.treq.sub && <EquationLine label="Base Plate (simplified cantilever, b_eff input)" tex={res.plate.tex.treq}/>}
+                                <table className="w-full text-xs text-left border-collapse mt-2">
+                                    <thead><tr className="text-slate-400 border-b border-slate-600"><th className="py-1">Check</th><th className="py-1">ACI 318-19</th><th className="py-1 text-right">Ratio</th></tr></thead>
+                                    <tbody>
+                                        {res.checks.map(c => (
+                                            <tr key={c.key} className="border-b border-slate-700/50">
+                                                <td className="py-1 text-slate-300">{c.label}</td>
+                                                <td className="py-1 text-slate-500">{c.ref === 'plate' ? '—' : '§' + c.ref}</td>
+                                                <td className={`py-1 text-right font-mono ${c.ratio>1?'text-red-500 font-bold':'text-slate-300'}`}>{c.na ? 'n/a' : fmt(c.ratio,3)}</td>
+                                            </tr>
+                                        ))}
+                                        <tr className="border-b border-slate-700/50">
+                                            <td className="py-1 text-slate-300">Interaction: {res.intRule}</td>
+                                            <td className="py-1 text-slate-500">§17.8</td>
+                                            <td className={`py-1 text-right font-mono ${res.interactionOK?'text-slate-300':'text-red-500 font-bold'}`}>{fmt(res.interaction,3)} / {fmt(res.intLimit,1)}</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                                <div className={`mt-3 text-sm font-bold ${res.pass?'text-emerald-500':'text-red-500'}`}>{res.pass ? 'RESULT: OK' : 'RESULT: NG'}</div>
                             </div>
-                        </div>
+                        </div>}
 
                         {reportMode && <button onClick={()=>window.print()} className="mt-8 w-full py-4 bg-slate-700 font-bold no-print hover:bg-slate-600 text-white rounded shadow-lg">PRINT TO PDF</button>}
                     </div>
