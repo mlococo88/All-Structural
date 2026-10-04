@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Structural Tools</title>
+<style>
+:root{--bg:#f6f5f1;--card:#ffffff;--ink:#1d2329;--muted:#5d6670;--line:#dcd9d1;--accent:#1f5f8b;--tag:#eef3f7}
+@media (prefers-color-scheme: dark){:root{--bg:#15191d;--card:#1d2328;--ink:#e6e9ec;--muted:#9aa4ad;--line:#2e363d;--accent:#7cb7e0;--tag:#243039}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif}
+.wrap{max-width:1100px;margin:0 auto;padding:28px 16px 48px}
+h1{margin:0 0 4px;font-size:26px}
+.sub{color:var(--muted);margin:0 0 18px}
+#q{width:100%;max-width:420px;padding:9px 12px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--ink);font:inherit;margin-bottom:22px}
+h2{font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:26px 0 10px;border-bottom:1px solid var(--line);padding-bottom:6px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px}
+a.card{display:block;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px;color:inherit;text-decoration:none}
+a.card:hover{border-color:var(--accent)}
+.name{font-weight:600;color:var(--accent)}
+.desc{margin:4px 0 8px;color:var(--ink)}
+.tag{display:inline-block;background:var(--tag);color:var(--muted);border-radius:5px;padding:1px 7px;font-size:12px;margin:0 4px 4px 0}
+.note{margin-top:30px;color:var(--muted);font-size:13px}
+.hidden{display:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>Structural &amp; Bridge Engineering Tools</h1>
+<p class="sub">All tools in one place, grouped by discipline. Each opens in a new tab.</p>
+<input id="q" type="search" placeholder="Filter tools (e.g. pile, AASHTO, anchor)" aria-label="Filter tools">
+
+<section><h2>Bridge suite (linked apps)</h2><div class="grid">
+<a class="card" href="index.html" target="_blank"><div class="name">MCT Generator &amp; Rating</div><div class="desc">MIDAS Civil model generator, results post-processing, AASHTO MBE and AREMA load rating. Hub of the bridge suite.</div><span class="tag">AASHTO MBE</span><span class="tag">AREMA</span></a>
+<a class="card" href="lldf.html" target="_blank"><div class="name">LL &amp; DL Distribution</div><div class="desc">Live-load distribution factors per girder and dead-load distribution.</div><span class="tag">AASHTO 4.6.2.2</span><span class="tag">MassDOT</span></a>
+<a class="card" href="psbeam.html" target="_blank"><div class="name">PS-Girder</div><div class="desc">Prestressed concrete girder design: losses, stresses, flexure, shear, rating.</div><span class="tag">AASHTO LRFD Sec. 5</span></a>
+<a class="card" href="stgirder.html" target="_blank"><div class="name">ST-Girder</div><div class="desc">Steel plate girder design: flexure, shear, fatigue, stiffeners, studs, rating.</div><span class="tag">AASHTO LRFD Sec. 6</span></a>
+</div></section>
+
+<section><h2>Loads &amp; analysis</h2><div class="grid">
+<a class="card" href="Moving%20Load%20Generator.html" target="_blank"><div class="name">Moving Load Generator</div><div class="desc">Continuous-beam moving-load envelopes: HL-93, fatigue, HS20, Cooper E80 and rail.</div><span class="tag">AASHTO LRFD</span><span class="tag">AREMA</span></a>
+<a class="card" href="Bridge%20Substructure%20Loading.html" target="_blank"><div class="name">Bridge Substructure Loading</div><div class="desc">Substructure loads: DC/DW, LL, BR, CE, wind, temperature, water, ice, seismic, combinations.</div><span class="tag">AASHTO LRFD 10th</span></a>
+<a class="card" href="ASCE7-16%20Load%20Generator.html" target="_blank"><div class="name">ASCE 7-16 Load Generator</div><div class="desc">Building snow, wind, seismic ELF and load combinations.</div><span class="tag">ASCE 7-16</span><span class="tag">780 CMR</span></a>
+<a class="card" href="Shear%20and%20Moment%20Diagrams.html" target="_blank"><div class="name">Shear &amp; Moment Diagrams</div><div class="desc">Multi-span beam shear, moment and deflection with load cases and envelopes.</div><span class="tag">Analysis</span></a>
+</div></section>
+
+<section><h2>Superstructure &amp; rating</h2><div class="grid">
+<a class="card" href="Steel%20Bridge%20Beam%20Modules.html" target="_blank"><div class="name">GirderDetail (Steel Bridge Beam Modules)</div><div class="desc">Steel girder details: splices, stiffeners, studs, cross-frames, overhang, section, fatigue. Includes PlateLine sizing.</div><span class="tag">AASHTO LRFD 10th</span></a>
+<a class="card" href="Concrete%20Beam%20Capacity.html" target="_blank"><div class="name">Concrete Beam Design Suite</div><div class="desc">RC beam capacity, ASD rating and rebar development in one page.</div><span class="tag">ACI 318-19</span><span class="tag">AASHTO</span></a>
+<a class="card" href="Concrete%20Beam%20ASD.html" target="_blank"><div class="name">Concrete Beam ASD Rater</div><div class="desc">Working-stress RC beam capacity and inventory/operating rating (standalone).</div><span class="tag">AASHTO Std. Spec. 8.15</span></a>
+<a class="card" href="Stone%20Masonry%20Arch%20Load%20Rating.html" target="_blank"><div class="name">Stone Masonry Arch Load Rating</div><div class="desc">Inventory rating of masonry arches by elastic frame and influence lines.</div><span class="tag">MassDOT 7.2.7</span><span class="tag">MBE</span></a>
+</div></section>
+
+<section><h2>Substructure</h2><div class="grid">
+<a class="card" href="abutment_calculator.html" target="_blank"><div class="name">Abutment Calculator</div><div class="desc">Cantilever abutment: earth loads, stability, piles, stem/footing design.</div><span class="tag">AASHTO LRFD 10th</span></a>
+<a class="card" href="elastomeric_design_module.html" target="_blank"><div class="name">Elastomeric Bearing Design</div><div class="desc">Steel-reinforced and plain elastomeric bearings, Method A/B.</div><span class="tag">AASHTO 14.7</span></a>
+<a class="card" href="Retaining%20Wall%20Designer.html" target="_blank"><div class="name">Retaining Wall Designer</div><div class="desc">Cantilever retaining wall stability and structural design.</div><span class="tag">ACI 318-19</span><span class="tag">AASHTO LRFD 10th</span></a>
+</div></section>
+
+<section><h2>Foundations</h2><div class="grid">
+<a class="card" href="Pile%20Designer.html" target="_blank"><div class="name">Pile Designer</div><div class="desc">Micropiles, H-piles and integral-abutment piles with p-y lateral analysis.</div><span class="tag">AASHTO LRFD</span><span class="tag">FHWA</span></a>
+<a class="card" href="Spread%20Footing.html" target="_blank"><div class="name">Spread Footing</div><div class="desc">Spread and combined footings: bearing, stability, flexure, shear, pedestals.</div><span class="tag">ACI 318-19</span><span class="tag">ASCE 7-16</span></a>
+<a class="card" href="Light%20Pole%20and%20Sign%20Post.html" target="_blank"><div class="name">Light Pole &amp; Sign Post</div><div class="desc">Drilled-shaft foundations for light masts and sign posts. Not for AASHTO LRFDLTS highway supports.</div><span class="tag">IBC 2021</span><span class="tag">ASCE 7-22</span></a>
+</div></section>
+
+<section><h2>Connections &amp; anchorage</h2><div class="grid">
+<a class="card" href="BasePlateAnchorDesigner.html" target="_blank"><div class="name">Base Plate &amp; Anchor Designer</div><div class="desc">Column base plates with cast-in anchors and anchor reinforcement.</div><span class="tag">AISC DG1</span><span class="tag">ACI 318-19 Ch. 17</span></a>
+<a class="card" href="Concrete%20Anchor.html" target="_blank"><div class="name">Concrete Anchor</div><div class="desc">Single or 4-anchor cast-in anchor check.</div><span class="tag">ACI 318-19 Ch. 17</span></a>
+</div></section>
+
+<section><h2>Members &amp; detailing</h2><div class="grid">
+<a class="card" href="Steel%20Beam%20Design%20-%20AISC%2015th.html" target="_blank"><div class="name">Steel Beam Design</div><div class="desc">Multi-span steel beam analysis and design, composite, torsion, batch.</div><span class="tag">AISC 360-16</span></a>
+<a class="card" href="Timber%20Beam%20Check.html" target="_blank"><div class="name">Timber Beam Check</div><div class="desc">Sawn-lumber beam bending, shear, bearing and deflection.</div><span class="tag">NDS 2018</span></a>
+<a class="card" href="ACI%20Rebar%20Development%20Length.html" target="_blank"><div class="name">Rebar Development &amp; Splices</div><div class="desc">Development, hooks, compression and lap splices.</div><span class="tag">ACI 318-19</span><span class="tag">AASHTO 5.10.8</span></a>
+</div></section>
+
+<section><h2>Survey &amp; geometry</h2><div class="grid">
+<a class="card" href="Bridge%20Geometry.html" target="_blank"><div class="name">Bridge Geometry</div><div class="desc">Alignment, profile, cross-slope, top-of-deck and beam-seat elevations, State Plane map.</div><span class="tag">Geometry</span></a>
+</div></section>
+
+<p class="note">Fix history for each tool is in the <code>fixlog</code> folder; the review is in <code>AUDIT.md</code>. Keep this page in the same folder as the tools.</p>
+</div>
+<script>
+(function(){
+  var q=document.getElementById('q');
+  q.addEventListener('input',function(){
+    var t=q.value.trim().toLowerCase();
+    document.querySelectorAll('section').forEach(function(sec){
+      var shown=0;
+      sec.querySelectorAll('a.card').forEach(function(c){
+        var hit=!t||c.textContent.toLowerCase().indexOf(t)>=0;
+        c.classList.toggle('hidden',!hit); if(hit) shown++;
+      });
+      sec.classList.toggle('hidden',shown===0);
+    });
+  });
+})();
+</script>
+</body>
+</html>
