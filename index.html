@@ -1241,49 +1241,49 @@ const VEHICLE_GROUPS = [
       trailingLoad:0, trailingNote:'',
     },
     { name:"AASHTO Legal Type 3-3",   label:"Legal Type 3-3", code:"AASHTO LEGAL/PERMIT LOAD", defaultDLA:0,
-      gvwKips:80, description:'MBE Appendix D — 6-axle combination truck · 80k GVW = 40T',
-      axles:[{load:10,dist:0},{load:15.5,dist:15},{load:15.5,dist:19},
-             {load:15.5,dist:35},{load:15.5,dist:39},{load:8,dist:50}],
-      trailingLoad:0, trailingNote:'Approximate axle positions — verify against MBE Appendix D',
+      gvwKips:80, description:'MBE Appendix D6A — 6-axle combination truck · 12k, 12k, 12k, 16k, 14k, 14k @ 15\', 4\', 15\', 16\', 4\' · 80k GVW = 40T',
+      axles:[{load:12,dist:0},{load:12,dist:15},{load:12,dist:19},
+             {load:16,dist:34},{load:14,dist:50},{load:14,dist:54}],
+      trailingLoad:0, trailingNote:'',
     },
     { name:"AASHTO Legal Type 3S2",   label:"Legal Type 3S2", code:"AASHTO LEGAL/PERMIT LOAD", defaultDLA:0,
-      gvwKips:72, description:'MBE Appendix D — 5-axle tractor-semitrailer · 72k GVW = 36T',
-      axles:[{load:10,dist:0},{load:15.5,dist:15},{load:15.5,dist:19},
-             {load:15.5,dist:43},{load:15.5,dist:47}],
-      trailingLoad:0, trailingNote:'Approximate axle positions — verify against MBE Appendix D',
+      gvwKips:72, description:'MBE Appendix D6A — 5-axle tractor-semitrailer · 10k, 15.5k, 15.5k, 15.5k, 15.5k @ 11\', 4\', 22\', 4\' · 72k GVW = 36T',
+      axles:[{load:10,dist:0},{load:15.5,dist:11},{load:15.5,dist:15},
+             {load:15.5,dist:37},{load:15.5,dist:41}],
+      trailingLoad:0, trailingNote:'',
     },
     { name:"AASHTO Posting load SU4", label:"Posting SU4", code:"AASHTO LEGAL/PERMIT LOAD", defaultDLA:33,
-      gvwKips:54, description:'AASHTO posting vehicle — 4-axle SU truck · 54k GVW = 27T',
-      axles:[{load:10,dist:0},{load:11,dist:11},{load:11,dist:16.5},{load:22,dist:20.5}],
+      gvwKips:54, description:'MBE Appendix D6A posting vehicle — 4-axle SU truck · 12k, 8k, 17k, 17k @ 10\', 4\', 4\' · 54k GVW = 27T',
+      axles:[{load:12,dist:0},{load:8,dist:10},{load:17,dist:14},{load:17,dist:18}],
       trailingLoad:0, trailingNote:'',
     },
     { name:"AASHTO Posting load SU5", label:"Posting SU5", code:"AASHTO LEGAL/PERMIT LOAD", defaultDLA:0,
-      gvwKips:70, description:'AASHTO posting vehicle — 5-axle SU truck · 70k GVW = 35T',
-      axles:[{load:12,dist:0},{load:12,dist:11.5},{load:11.5,dist:17},{load:11.5,dist:21},{load:23,dist:25}],
+      gvwKips:62, description:'MBE Appendix D6A posting vehicle — 5-axle SU truck · 12k, 8k, 8k, 17k, 17k @ 10\', 4\', 4\', 4\' · 62k GVW = 31T',
+      axles:[{load:12,dist:0},{load:8,dist:10},{load:8,dist:14},{load:17,dist:18},{load:17,dist:22}],
       trailingLoad:0, trailingNote:'',
     },
     { name:"AASHTO Posting load SU6", label:"Posting SU6", code:"AASHTO LEGAL/PERMIT LOAD", defaultDLA:0,
-      gvwKips:87, description:'AASHTO posting vehicle — 6-axle SU truck · 87k GVW = 43.5T',
-      axles:[{load:12,dist:0},{load:12,dist:11.5},{load:12.5,dist:17},{load:12.5,dist:21},{load:19,dist:25},{load:19,dist:29}],
+      gvwKips:69.5, description:'MBE Appendix D6A posting vehicle — 6-axle SU truck · 11.5k, 8k, 8k, 17k, 17k, 8k @ 10\', 4\', 4\', 4\', 4\' · 69.5k GVW = 34.75T',
+      axles:[{load:11.5,dist:0},{load:8,dist:10},{load:8,dist:14},{load:17,dist:18},{load:17,dist:22},{load:8,dist:26}],
       trailingLoad:0, trailingNote:'',
     },
     { name:"AASHTO Posting load SU7", label:"Posting SU7", code:"AASHTO LEGAL/PERMIT LOAD", defaultDLA:0,
-      gvwKips:105, description:'AASHTO posting vehicle — 7-axle SU truck · 105k GVW = 52.5T',
-      axles:[{load:12,dist:0},{load:12,dist:11.5},{load:12.5,dist:17},{load:12.5,dist:21},
-             {load:19,dist:25},{load:19,dist:29},{load:18,dist:33}],
+      gvwKips:77.5, description:'MBE Appendix D6A posting vehicle — 7-axle SU truck · 11.5k, 8k, 8k, 17k, 17k, 8k, 8k @ 10\', 4\', 4\', 4\', 4\', 4\' · 77.5k GVW = 38.75T',
+      axles:[{load:11.5,dist:0},{load:8,dist:10},{load:8,dist:14},{load:17,dist:18},
+             {load:17,dist:22},{load:8,dist:26},{load:8,dist:30}],
       trailingLoad:0, trailingNote:'',
     },
   ]},
   { group:"FAST Act EV Loads", color:"#059669", vehicles:[
-    { name:"Type EV2", label:"EV2 Electric Vehicle", code:"FAST ACT EV LOADS", defaultDLA:33,
-      gvwKips:108, description:'FAST Act §1411 — 3-axle EV · 108k GVW = 54T · AASHTO LRFD 3.6.1.2.4',
-      axles:[{load:22.5,dist:0},{load:52.5,dist:15},{load:33,dist:21}],
+    { name:"Type EV2", label:"EV2 Emergency Vehicle", code:"FAST ACT EV LOADS", defaultDLA:33,
+      gvwKips:57.5, description:'FAST Act emergency vehicle (FHWA EV load-rating memo, 2016) — 2-axle EV · 24k steer + 33.5k rear @ 15\' · 57.5k GVW = 28.75T',
+      axles:[{load:24,dist:0},{load:33.5,dist:15}],
       trailingLoad:0, trailingNote:'',
     },
-    { name:"Type EV3", label:"EV3 Electric Vehicle", code:"FAST ACT EV LOADS", defaultDLA:33,
-      gvwKips:147, description:'FAST Act §1411 — 4-axle EV · 147k GVW = 73.5T · AASHTO LRFD 3.6.1.2.4',
-      axles:[{load:22.5,dist:0},{load:52.5,dist:15},{load:33,dist:21},{load:39,dist:25}],
-      trailingLoad:0, trailingNote:'Verify axle configuration against latest AASHTO LRFD',
+    { name:"Type EV3", label:"EV3 Emergency Vehicle", code:"FAST ACT EV LOADS", defaultDLA:33,
+      gvwKips:86, description:'FAST Act emergency vehicle (FHWA EV load-rating memo, 2016) — 3-axle EV · 24k steer + 31k + 31k tandem @ 15\', 4\' · 86k GVW = 43T',
+      axles:[{load:24,dist:0},{load:31,dist:15},{load:31,dist:19}],
+      trailingLoad:0, trailingNote:'',
     },
   ]},
   { group:"RIDOT Operating", color:"#b45309", vehicles:[
@@ -1507,40 +1507,40 @@ const W_SHAPES = [
 // Rolled W and S shapes database (for AREMA equivalent built-up conversion)
 // Properties: d=depth(in), bf=flange width(in), tf=flange thickness(in), tw=web thickness(in), Fy=yield strength(ksi)
 const ROLLED_SHAPES = {
-  'W14X22': {d:13.74, bf:5.04, tf:0.230, tw:0.230, Fy:50},
-  'W14X26': {d:13.91, bf:5.73, tf:0.255, tw:0.255, Fy:50},
-  'W14X30': {d:13.84, bf:6.73, tf:0.285, tw:0.270, Fy:50},
-  'W14X38': {d:14.10, bf:6.77, tf:0.313, tw:0.313, Fy:50},
-  'W14X48': {d:14.50, bf:8.03, tf:0.595, tw:0.340, Fy:50},
-  'W16X26': {d:15.69, bf:5.50, tf:0.250, tw:0.250, Fy:50},
-  'W16X40': {d:16.01, bf:6.99, tf:0.305, tw:0.305, Fy:50},
-  'W16X50': {d:16.26, bf:7.07, tf:0.380, tw:0.380, Fy:50},
-  'W16X67': {d:16.54, bf:8.25, tf:0.395, tw:0.395, Fy:50},
-  'W18X35': {d:17.61, bf:6.00, tf:0.300, tw:0.300, Fy:50},
-  'W18X50': {d:17.99, bf:7.50, tf:0.355, tw:0.300, Fy:50},
-  'W18X65': {d:18.35, bf:7.59, tf:0.450, tw:0.450, Fy:50},
-  'W21X44': {d:20.66, bf:6.50, tf:0.350, tw:0.350, Fy:50},
-  'W21X55': {d:20.84, bf:8.27, tf:0.375, tw:0.315, Fy:50},
-  'W21X68': {d:21.13, bf:8.27, tf:0.430, tw:0.430, Fy:50},
-  'W24X55': {d:23.57, bf:7.01, tf:0.395, tw:0.395, Fy:50},
-  'W24X68': {d:23.73, bf:8.99, tf:0.415, tw:0.385, Fy:50},
-  'W24X76': {d:23.92, bf:8.99, tf:0.440, tw:0.385, Fy:50},
-  'W24X94': {d:24.31, bf:9.07, tf:0.516, tw:0.516, Fy:50},
-  'W27X84': {d:26.71, bf:9.96, tf:0.475, tw:0.290, Fy:50},
-  'W27X94': {d:26.92, bf:9.99, tf:0.490, tw:0.490, Fy:50},
-  'W27X102': {d:26.92, bf:9.90, tf:0.515, tw:0.315, Fy:50},
-  'W27X114': {d:27.29, bf:10.07, tf:0.570, tw:0.570, Fy:50},
-  'W30X90': {d:29.65, bf:10.33, tf:0.470, tw:0.470, Fy:50},
-  'W30X108': {d:29.83, bf:10.48, tf:0.545, tw:0.315, Fy:50},
-  'W30X124': {d:30.17, bf:10.54, tf:0.625, tw:0.625, Fy:50},
-  'W36X135': {d:35.55, bf:11.95, tf:0.600, tw:0.600, Fy:50},
-  'W36X150': {d:36.19, bf:11.84, tf:0.625, tw:0.405, Fy:50},
-  'W36X170': {d:36.41, bf:12.03, tf:0.680, tw:0.680, Fy:50},
-  'W36X194': {d:36.69, bf:12.12, tf:0.765, tw:0.765, Fy:50},
-  'S12X31.8': {d:12.00, bf:5.08, tf:0.391, tw:0.260, Fy:36},
-  'S15X42.9': {d:15.00, bf:5.50, tf:0.411, tw:0.311, Fy:36},
-  'S18X54.7': {d:18.00, bf:6.00, tf:0.461, tw:0.359, Fy:36},
-  'S24X79.9': {d:24.00, bf:6.50, tf:0.500, tw:0.425, Fy:36},
+  'W14X22': {d:13.74, bf:5.00, tf:0.335, tw:0.230, Fy:50},
+  'W14X26': {d:13.91, bf:5.03, tf:0.420, tw:0.255, Fy:50},
+  'W14X30': {d:13.84, bf:6.73, tf:0.385, tw:0.270, Fy:50},
+  'W14X38': {d:14.10, bf:6.77, tf:0.515, tw:0.310, Fy:50},
+  'W14X48': {d:13.80, bf:8.03, tf:0.595, tw:0.340, Fy:50},
+  'W16X26': {d:15.69, bf:5.50, tf:0.345, tw:0.250, Fy:50},
+  'W16X40': {d:16.01, bf:6.99, tf:0.505, tw:0.305, Fy:50},
+  'W16X50': {d:16.26, bf:7.07, tf:0.630, tw:0.380, Fy:50},
+  'W16X67': {d:16.30, bf:10.20, tf:0.665, tw:0.395, Fy:50},
+  'W18X35': {d:17.70, bf:6.00, tf:0.425, tw:0.300, Fy:50},
+  'W18X50': {d:17.99, bf:7.50, tf:0.570, tw:0.355, Fy:50},
+  'W18X65': {d:18.35, bf:7.59, tf:0.750, tw:0.450, Fy:50},
+  'W21X44': {d:20.66, bf:6.50, tf:0.450, tw:0.350, Fy:50},
+  'W21X55': {d:20.84, bf:8.22, tf:0.522, tw:0.375, Fy:50},
+  'W21X68': {d:21.13, bf:8.27, tf:0.685, tw:0.430, Fy:50},
+  'W24X55': {d:23.57, bf:7.01, tf:0.505, tw:0.395, Fy:50},
+  'W24X68': {d:23.73, bf:8.97, tf:0.585, tw:0.415, Fy:50},
+  'W24X76': {d:23.92, bf:8.99, tf:0.680, tw:0.440, Fy:50},
+  'W24X94': {d:24.31, bf:9.07, tf:0.875, tw:0.515, Fy:50},
+  'W27X84': {d:26.71, bf:9.96, tf:0.640, tw:0.460, Fy:50},
+  'W27X94': {d:26.92, bf:9.99, tf:0.745, tw:0.490, Fy:50},
+  'W27X102': {d:27.10, bf:10.00, tf:0.830, tw:0.515, Fy:50},
+  'W27X114': {d:27.29, bf:10.07, tf:0.930, tw:0.570, Fy:50},
+  'W30X90': {d:29.50, bf:10.40, tf:0.610, tw:0.470, Fy:50},
+  'W30X108': {d:29.83, bf:10.48, tf:0.760, tw:0.545, Fy:50},
+  'W30X124': {d:30.17, bf:10.54, tf:0.930, tw:0.585, Fy:50},
+  'W36X135': {d:35.55, bf:11.95, tf:0.790, tw:0.600, Fy:50},
+  'W36X150': {d:35.90, bf:12.00, tf:0.940, tw:0.625, Fy:50},
+  'W36X170': {d:36.20, bf:12.03, tf:1.100, tw:0.680, Fy:50},
+  'W36X194': {d:36.50, bf:12.12, tf:1.260, tw:0.765, Fy:50},
+  'S12X31.8': {d:12.00, bf:5.00, tf:0.544, tw:0.350, Fy:36},
+  'S15X42.9': {d:15.00, bf:5.50, tf:0.622, tw:0.411, Fy:36},
+  'S18X54.7': {d:18.00, bf:6.00, tf:0.691, tw:0.461, Fy:36},
+  'S24X79.9': {d:24.00, bf:7.00, tf:0.870, tw:0.500, Fy:36},
   'S30X118': {d:30.00, bf:8.00, tf:0.625, tw:0.625, Fy:36},
   'S36X150': {d:36.00, bf:8.00, tf:0.625, tw:0.625, Fy:36},
 };
@@ -2800,9 +2800,30 @@ function midasComboName(baseName, vehName){
   const room = MIDAS_COMBO_NAME_MAX - suffix.length;
   return (base.slice(0, room) + suffix).slice(0, MIDAS_COMBO_NAME_MAX);
 }
+// Truncation to 20 chars can make two combos share a NAME (e.g. two long names with the
+// same first 16 characters). MIDAS needs unique *LOADCOMB names, so a repeat gets a
+// numeric mark ("_2", "_3", ...) ahead of the vehicle tag, with the base cut to fit
+// ("Strength I (ma_2-TRK"). A name that is already unique is written exactly as before.
+function uniqueComboName(baseName, vehName, used){
+  let n = midasComboName(baseName, vehName), k = 2;
+  while(used.has(n.toUpperCase())){
+    const tag    = shortVehTag(vehName);
+    const suffix = tag ? '-'+tag : '';
+    const num    = '_'+(k++);
+    n = cleanLCName(baseName||'').slice(0, Math.max(0, MIDAS_COMBO_NAME_MAX - suffix.length - num.length)) + num + suffix;
+  }
+  used.add(n.toUpperCase());
+  return n;
+}
+// The lane name the beam MCT writes (blank → 'Lane 1'). Every place that builds a
+// "<vehicle>_<lane>" moving-case name must use this, or combo MV terms stop matching.
+function mctLaneName(cfg){ return ((cfg&&cfg.laneName)||'').trim() || 'Lane 1'; }
+// Vehicles with no axle data (the RIDOT OP/BP placeholders) cannot be written as a MIDAS
+// *VEHICLE — a bare NAME= line is a malformed vehicle. Both generators skip them and say so.
+function vehicleHasAxles(v){ return !!(v && Array.isArray(v.axles) && v.axles.length); }
 
 function generateMCT(cfg) {
-  const { projectUser,projectDate,version,spans,elemsPerSpan,materialGrade,
+  const { projectUser,projectDate,version,spans,elemsPerSpan,
     section1Name,
     movingLoadCode,selectedVehicles,vehicleDLA,useGlobalDLA,globalDLA,
     laneName,laneWidth,laneWheelSpacing,sectionZones,
@@ -2812,6 +2833,9 @@ function generateMCT(cfg) {
   // (MIDAS *SECT-PSCVALUE VALUE/GEN) + a USER concrete material, instead of a steel DBUSER shape.
   // Properties (in²/in⁴/ksi) are auto-filled from the PS-Beam app; strong-axis I (user "Ix") → Iyy slot.
   const ps = (cfg.ps && cfg.ps.enabled) ? cfg.ps : null;
+  // A blank/missing grade used to throw at materialGrade.padEnd(); fall back to A36,
+  // the same default the GFS generator uses.
+  const materialGrade = (cfg.materialGrade||'').trim() || 'A36';
 
   // Ensure laneName has a default value (fix for MIDAS MCT import error)
   const safeLaneName = (laneName || '').trim() || 'Lane 1';
@@ -2915,10 +2939,16 @@ function generateMCT(cfg) {
 
   const totalElems=finalXs.length-1;
 
-  // Node ID: 101 + index in finalXs
+  // Node ID: 101 + index in finalXs. An x that is not a node used to fall silently to
+  // node 101 (the left end). Now it snaps to the NEAREST node and a WARNING comment is
+  // written to the MCT (shown by validateModel on the Generate tab).
   const nidOf=x=>{
-    const idx=finalXs.findIndex(fx=>Math.abs(fx-x)<TOL);
-    return 101+(idx>=0?idx:0);
+    let idx=finalXs.findIndex(fx=>Math.abs(fx-x)<TOL);
+    if(idx<0){
+      idx=finalXs.reduce((bi,fx,i)=>Math.abs(fx-x)<Math.abs(finalXs[bi]-x)?i:bi,0);
+      p(`; WARNING: no node at x = ${(+x).toFixed(4)} ft - snapped to nearest node ${101+idx} at x = ${finalXs[idx].toFixed(4)} ft. Check the support locations.`);
+    }
+    return 101+idx;
   };
 
   // Span boundary Xs (for constraints + lane starts)
@@ -3105,7 +3135,9 @@ function generateMCT(cfg) {
   }
   p(``);
 
-  const activeVehicles  = ALL_VEHICLES.filter(v=>selectedVehicles.includes(v.name));
+  const activeVehicles  = ALL_VEHICLES.filter(v=>selectedVehicles.includes(v.name)&&vehicleHasAxles(v));
+  ALL_VEHICLES.filter(v=>selectedVehicles.includes(v.name)&&!vehicleHasAxles(v)).forEach(v=>
+    p(`; WARNING: vehicle "${v.name}" has no axle data in this tool - NOT written to the MCT (no *VEHICLE, no moving load case). Define its axles before analysing it.`));
   // ── HL-93 design lane load (LRFD 3.6.1.2.4) ──────────────────────────────────
   // The lane load goes out as its own zero-axle user-defined vehicle rather than as
   // the W field of the truck/tandem. Reason: a *MVLDCASE SCALE multiplies everything
@@ -3194,6 +3226,7 @@ function generateMCT(cfg) {
 
   p(`*LOADCOMB    ; Combinations`,
     `; NAME=NAME, KIND, ACTIVE, bES, iTYPE, DESC, iSERV-TYPE, nLCOMTYPE, nSEISTYPE, LcomFactor`);
+  const usedComboNames = new Set();
   combosToWrite.forEach(combo=>{
     const dcF  = +(combo.dcFactor  ?? 1);
     const dwF  = +(combo.dwFactor  ?? combo.dcFactor ?? 1);
@@ -3212,8 +3245,20 @@ function generateMCT(cfg) {
       combo.terms.forEach(t=>{
         const lc=cleanLCName(t.lc);
         if(!lc || t.factor===0) return;
-        if(t.type==='MV'){ if(activeMVNames.has(lc)) mvParts.push(`MV, ${lc}, ${t.factor}`); }
+        if(t.type==='MV'){
+          if(activeMVNames.has(lc)) mvParts.push(`MV, ${lc}, ${t.factor}`);
+          else {
+            // Single-lane beam model: each vehicle has exactly one moving case. A term saved
+            // under an older/blank lane name ("<veh>_Lane") is mapped to the case written now.
+            const v = activeVehicles.filter(v=>lc.startsWith(v.name+'_')).sort((a,b)=>b.name.length-a.name.length)[0];
+            if(v){
+              p(`; WARNING: combo "${cleanLCName(combo.name)}" term "${lc}" mapped to moving case "${v.name}_${safeLaneName}" (lane name differs).`);
+              mvParts.push(`MV, ${v.name}_${safeLaneName}, ${t.factor}`);
+            } else p(`; WARNING: combo "${cleanLCName(combo.name)}" term "${lc}" is not a moving load case in this MCT - term dropped.`);
+          }
+        }
         else if(activeLCs.includes(lc)) stParts.push(`ST, ${lc}, ${t.factor}`);
+        else p(`; WARNING: combo "${cleanLCName(combo.name)}" term "${lc}" is not a static load case in this MCT - term dropped.`);
       });
     } else {
       // Factor-based (AASHTO presets): apply global DC/DW/LL to all active LCs
@@ -3232,13 +3277,13 @@ function generateMCT(cfg) {
         const vehName = mv.split(',')[1].trim().replace(`_${safeLaneName}`,'');
         const parts = [...stParts, mv];
         if(!parts.length) return;
-        p(`   NAME=${midasComboName(combo.name, vehName)}, STEEL, ${kind}, 0, 0, , 0, 0, 0, 1`);
+        p(`   NAME=${uniqueComboName(combo.name, vehName, usedComboNames)}, STEEL, ${kind}, 0, 0, , 0, 0, 0, 1`);
         p(`        ${parts.join(', ')}`, ``);
       });
     } else {
       const allParts = [...stParts, ...mvParts];
       if (!allParts.length) return;
-      p(`   NAME=${midasComboName(combo.name)}, STEEL, ${kind}, 0, 0, , 0, 0, 0, 1`);
+      p(`   NAME=${uniqueComboName(combo.name, '', usedComboNames)}, STEEL, ${kind}, 0, 0, , 0, 0, 0, 1`);
       p(`        ${allParts.join(', ')}`, ``);
     }
   });
@@ -4059,9 +4104,16 @@ function generateGFS_MCT(cfg) {
   p('');
 
   // ── Vehicles (AASHTO LRFD format: incremental spacings, trailing load) ──
-  p('*VEHICLE    ; Vehicles');
   const selVehs=(cfg.selectedVehicles||[]).map(n=>ALL_VEHICLES.find(v=>v.name===n)).filter(Boolean);
   if(!selVehs.length) selVehs.push(...ALL_VEHICLES.filter(v=>v.name==='AREMA-E80'));
+  // Vehicles with no axle data are blocked (see vehicleHasAxles) — remove them in place.
+  for(let i=selVehs.length-1;i>=0;i--) if(!vehicleHasAxles(selVehs[i])){
+    p(`; WARNING: vehicle "${selVehs[i].name}" has no axle data in this tool - NOT written to the MCT (no *VEHICLE, no moving load case). Define its axles before analysing it.`);
+    selVehs.splice(i,1);
+  }
+  // If every selected vehicle was blocked, write no moving-load blocks at all (empty
+  // *VEHICLE / *MVLDCASE sections) — the WARNING comments above say why.
+  if(selVehs.length) p('*VEHICLE    ; Vehicles');
   selVehs.forEach(v=>{
     const trail=v.trailingLoad||0;
     // See the main generator: YES = rail consist (W1,D1,W2,D2), NO = highway (W,PL,PLM,PLV).
@@ -4077,6 +4129,7 @@ function generateGFS_MCT(cfg) {
   p('');
 
   // ── Moving Load Cases (each vehicle on all stringer lanes) ──
+  if(selVehs.length){
   p('*MVLDCASE   ; Moving Load Cases');
   const laneNames=geo.stringers.map((_,i)=>`Stringer ${i+1} Lane`);
   const laneList=laneNames.join(', ');
@@ -4091,6 +4144,7 @@ function generateGFS_MCT(cfg) {
   // ── Move Control ──
   p('*MOVE-CTRL    ; Moving Load Analysis Control',
     '   EXACT, INF, 0, 10, 1, 0, 1, 0, 0.8, NODAL, YES, YES, YES, AXIAL, YES,   YES, NO, ,   YES, NO, ,   YES, NO, ,   YES, NO, ,   10, 1, 10, NO','');
+  }
 
   // ── Load Combinations ──
   const combos = (cfg.loadCombos||[]).filter(c=>c.active);
@@ -4103,6 +4157,7 @@ function generateGFS_MCT(cfg) {
     const writtenMV=new Set(selVehs.map(v=>`${v.name}_GFS`));
 
     p('*LOADCOMB    ; Combinations','; NAME=NAME, KIND, ACTIVE, bES, iTYPE, DESC, iSERV-TYPE, nLCOMTYPE, nSEISTYPE, LcomFactor');
+    const usedComboNames = new Set();
     combos.forEach(combo=>{
       const kind = validKinds[combo.kind] || 'SERVICE';
       let stParts = [], mvParts = [];
@@ -4126,13 +4181,13 @@ function generateGFS_MCT(cfg) {
       if (mvParts.length > 1) {
         mvParts.forEach(mv=>{
           const vehName = mv.split(',')[1].trim().replace(/_GFS$/,'');
-          p(`   NAME=${midasComboName(combo.name, vehName)}, STEEL, ${kind}, 0, 0, , 0, 0, 0, 1`);
+          p(`   NAME=${uniqueComboName(combo.name, vehName, usedComboNames)}, STEEL, ${kind}, 0, 0, , 0, 0, 0, 1`);
           p(`        ${[...stParts, mv].join(', ')}`, '');
         });
       } else {
         const allParts=[...stParts,...mvParts];
         if(!allParts.length) return;
-        p(`   NAME=${midasComboName(combo.name)}, STEEL, ${kind}, 0, 0, , 0, 0, 0, 1`);
+        p(`   NAME=${uniqueComboName(combo.name, '', usedComboNames)}, STEEL, ${kind}, 0, 0, , 0, 0, 0, 1`);
         p(`        ${allParts.join(', ')}`, '');
       }
     });
@@ -7090,6 +7145,13 @@ function StepMovingLoads({cfg,set}) {
                     </div>
                   )}
 
+                  {!hasAxles&&(
+                    <div style={{padding:'6px 12px',background:'#fef2f2',borderBottom:'1px solid #fecaca',
+                      fontSize:'10.5px',fontFamily:'monospace',color:'#b91c1c',fontWeight:600}}>
+                      ⚠ No axle data — this vehicle is NOT written to the MCT (no *VEHICLE / moving load case). Define its axles before analysing it.
+                    </div>
+                  )}
+
                   {/* Axle diagram — only when axle data exists */}
                   {hasAxles&&(
                     <div style={{padding:'10px 12px',background:'#fafafa',overflowX:'auto',
@@ -7228,8 +7290,8 @@ const AASHTO_PRESETS = [
   {id:'str5',  name:'Strength V',        kind:'STRENGTH',active:false,dcFactor:1.25,dwFactor:1.50,llFactor:1.35,note:'With wind on live load'},
   {id:'svc1',  name:'Service I',         kind:'SERVICE', active:false,dcFactor:1.00,dwFactor:1.00,llFactor:1.00,note:'Deflection, crack control (steel)'},
   {id:'svc2',  name:'Service II',        kind:'SERVICE', active:false,dcFactor:1.00,dwFactor:1.00,llFactor:1.30,note:'Steel yielding under LL+I'},
-  {id:'fat1',  name:'Fatigue I (LL)',    kind:'FATIGUE', active:false,dcFactor:0.00,dwFactor:0.00,llFactor:1.50,note:'Written as SERVICE in MCT — use MIDAS Fatigue Analysis for full fatigue check'},
-  {id:'fat2',  name:'Fatigue II (LL)',   kind:'FATIGUE', active:false,dcFactor:0.00,dwFactor:0.00,llFactor:0.75,note:'Written as SERVICE in MCT — use MIDAS Fatigue Analysis for full fatigue check'},
+  {id:'fat1',  name:'Fatigue I (LL)',    kind:'FATIGUE', active:false,dcFactor:0.00,dwFactor:0.00,llFactor:1.75,note:'Written as SERVICE in MCT — use MIDAS Fatigue Analysis for full fatigue check'},
+  {id:'fat2',  name:'Fatigue II (LL)',   kind:'FATIGUE', active:false,dcFactor:0.00,dwFactor:0.00,llFactor:0.80,note:'Written as SERVICE in MCT — use MIDAS Fatigue Analysis for full fatigue check'},
 ];
 
 // Build individual dead-load passthrough combos from the deadLoads array.
@@ -7323,7 +7385,7 @@ function buildPSBeamCombos(cfg) {
   // envelopes these; here each is its own combo so MIDAS reports the LL force effect.
   const vehicles = cfg.selectedVehicles||[];
   vehicles.forEach((vn,i)=>{
-    const lc = isGFS ? `${vn}_GFS` : `${vn}_${cfg.laneName||'Lane'}`;
+    const lc = isGFS ? `${vn}_GFS` : `${vn}_${mctLaneName(cfg)}`;
     // ASCII name: LL_<vehicle> (strip non-word chars from the vehicle name)
     out.push({id:'psb_ll_'+i, name:'LL_'+vn.replace(/[^A-Za-z0-9]+/g,''), kind:'SERVICE', active:true,
               note:note+' - LL envelope per MIDAS (DF and IM applied)',
@@ -7373,7 +7435,7 @@ function StepCombos({cfg,set}) {
     ? (cfg.selectedVehicles||[]).map(vn=>({lc:`${vn}_GFS`, label:vn, cat:'LL'}))
     : (cfg.selectedVehicles||[]).map(vn=>{
     const veh = ALL_VEHICLES.find(v=>v.name===vn);
-    return {lc:`${vn}_${cfg.laneName||'Lane'}`, label:veh?.label||vn, cat:'LL'};
+    return {lc:`${vn}_${mctLaneName(cfg)}`, label:veh?.label||vn, cat:'LL'};
   });
   const allAvailable = [...availableST, ...availableMV];
 
@@ -9015,6 +9077,16 @@ function validateModel(cfg){
     if(!(cfg.selectedVehicles||[]).length)
       warn('Vehicles','No vehicles selected — no moving load cases will be written');
   }
+  // Problems the generators record while writing, as "; WARNING:" comment lines: vehicles
+  // blocked for lack of axle data (error — they are not in the MCT), combo terms that were
+  // remapped or dropped, and support x-positions that had to snap to the nearest node.
+  try{
+    const txt = isGFS ? generateGFS_MCT(cfg) : generateMCT(cfg);
+    txt.split('\n').filter(l=>l.startsWith('; WARNING:')).forEach(l=>{
+      const msg=l.slice(10).trim();
+      if(/NOT written to the MCT/.test(msg)) err('Vehicles',msg); else warn('MCT',msg);
+    });
+  }catch(e){ err('MCT','MCT generation failed: '+(e?.message||e)); }
   return issues;
 }
 
@@ -9176,7 +9248,14 @@ const DEFAULT_FACTORS = [
 function parseBeamResults(text) {
   const rows = [];
   for (const line of text.trim().split('\n')) {
-    const parts = line.trim().split('\t').map(s=>s.trim()).filter(Boolean);
+    // Keep empty cells in place when the row is positionally intact (integer element in
+    // column 1, an I/J part in column 3): dropping them shifted every later column, so a
+    // blank Shear-z cell put Torsion into Shear-z, Moment-y into Torsion, and so on.
+    // Rows that do not fit that layout (e.g. doubled tab separators) keep the old
+    // drop-empty-cells parse, so nothing that parsed before stops parsing.
+    const raw   = line.trim().split('\t').map(s=>s.trim());
+    const parts = (raw.length >= 9 && /^\d+$/.test(raw[0]) && /^[IJ]/.test(raw[2]))
+      ? raw : raw.filter(Boolean);
     if (parts.length < 9) continue;
     const [elem, load, part, axial, shearY, shearZ, torsion, momentY, momentZ] = parts;
     const elemNum = parseInt(elem);
@@ -9694,11 +9773,11 @@ function computeComboRows(origRows, combo) {
 
 // ── MBE Rating Reference Tables ──────────────────────────────────────────────
 const VEHICLE_TONS = {
-  'HL-93TRK':36,'HL-93TDM':27.5,'H20-44':20,'HS20-44':36,
+  'HL-93TRK':36,'HL-93TDM':25,'H20-44':20,'HS20-44':36,
   'AASHTO Legal Type 3':25,'AASHTO Legal Type 3-3':40,'AASHTO Legal Type 3S2':36,
-  'AASHTO Posting load SU4':27,'AASHTO Posting load SU5':35,
-  'AASHTO Posting load SU6':43.5,'AASHTO Posting load SU7':52.5,
-  'Type EV2':54,'Type EV3':73.5,
+  'AASHTO Posting load SU4':27,'AASHTO Posting load SU5':31,
+  'AASHTO Posting load SU6':34.75,'AASHTO Posting load SU7':38.75,
+  'Type EV2':28.75,'Type EV3':43,
   'RI Operating load OP1':40,'RI Operating load OP2':40,'RI Operating load OP3':40,
   'RI Permit load BP1':45,'RI Permit load BP2':50,'RI Permit load BP3':55,'RI Permit load BP4':60,
   // Railroad / AREMA — GVW in tons (kips÷2) from image rating reference
@@ -9733,15 +9812,15 @@ const LRFR_FACTORS = {
       Inventory:{ DC:1.00,DW:1.00,LL:1.30 },
       Operating:{ DC:1.00,DW:1.00,LL:1.00 },
     },
-    'Fatigue I': { Any:{ DC:0,DW:0,LL:1.50 } },
-    'Fatigue II':{ Any:{ DC:0,DW:0,LL:0.75 } },
+    'Fatigue I': { Any:{ DC:0,DW:0,LL:1.75 } },   // AASHTO LRFD 10th Ed. Table 3.4.1-1
+    'Fatigue II':{ Any:{ DC:0,DW:0,LL:0.80 } },
   },
   LFR:{
     Inventory:{ DC:1.30,DW:1.30,LL:2.17 },
     Operating:{ DC:1.30,DW:1.30,LL:1.30 },
   },
 };
-// MBE Table 6A.4.2.3-1 — System factor φ_s
+// MBE Table 6A.4.2.4-1 — System factor φ_s
 const PHI_SYSTEM = {
   'Welded I-beam, multiple lanes':   1.00,
   'Welded I-beam, two-girder':       0.85,
@@ -9750,7 +9829,7 @@ const PHI_SYSTEM = {
   'Single load path structure':      0.85,
   'Custom':                          null,
 };
-// MBE Table 6A.4.2.3-2 — Condition factor φ_c
+// MBE Table 6A.4.2.3-1 — Condition factor φ_c
 const PHI_CONDITION = {
   'Good or Satisfactory (NBI ≥ 6)': 1.00,
   'Fair (NBI = 5)':                  0.95,
@@ -9794,7 +9873,7 @@ const FATIGUE_CATEGORIES = {
 // Fraction of trucks in lane by number of lanes (AASHTO 3.6.1.4)
 const FATIGUE_P = { 1:1.00, 2:0.85, 3:0.80 };
 // Fatigue load factors
-const FATIGUE_GAMMA = { 'I':1.5, 'II':0.75 };
+const FATIGUE_GAMMA = { 'I':1.75, 'II':0.80 };   // AASHTO LRFD 10th Ed. Table 3.4.1-1
 
 // AREMA Ch.15 §1.3.13 — Allowable fatigue stress range (ksi) by detail category
 const AREMA_SFT = { A:14, B:10, C:8, D:6, E:4, F:3 };
@@ -10780,13 +10859,25 @@ function vehicleGamLL(category, limitState, method, adtt) {
 // of its own to those. If the model carries it, the Rating tab must not apply IM again
 // — 1.33 × 1.33 = 1.77. Pure function of cfg: nothing is written to state, so turning
 // the DLA off in Step 5 restores the rating factor by itself.
-function mctCarriesImpact(cfg){
+// lcName (optional) is the LL load case being rated. The beam MCT names each moving
+// case "<vehicle>_<lane>", so the answer is per vehicle: a DLA-0 legal truck analysed
+// next to HL-93 does NOT carry IM even though HL-93 does. GFS mode never carries IM:
+// generateGFS_MCT writes a fixed VL scale of 0.5 with no (1+IM/100) term.
+function mctCarriesImpact(cfg, lcName){
+  if((cfg?.geomMode||'beam')==='gfs') return false;
   const sel = cfg?.selectedVehicles || [];
   if(!sel.length) return false;
   const dlaOf = n => cfg.useGlobalDLA
     ? (+cfg.globalDLA||0)
     : (+(cfg.vehicleDLA?.[n] ?? ALL_VEHICLES.find(v=>v.name===n)?.defaultDLA ?? 0)||0);
-  return sel.some(n=>dlaOf(n)>0);
+  const nm = typeof lcName==='string' ? lcName.trim() : '';
+  if(nm){
+    const hit = sel.filter(n=>nm===n || nm.includes(n+'_')).sort((a,b)=>b.length-a.length)[0];
+    if(hit) return dlaOf(hit)>0;
+  }
+  // Case not traceable to one vehicle: treat IM as carried only when EVERY selected
+  // vehicle carried it (otherwise IM is applied in the rating — the conservative side).
+  return sel.every(n=>dlaOf(n)>0);
 }
 // LL multiplier: g × (1+IM/100) × m × F1 × F2, with IM dropped when it is already
 // baked into the imported results.
@@ -11242,6 +11333,9 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
     if (z.type==='psconc') {
       const MnPos = computePSMn(z);
       const Vn    = z.dv>0 ? computePSVn(z) : (z.Vn||0);
+      // MnNeg placeholder: with no entered Mn⁻ the hogging capacity is taken as 0.7·Mn⁺.
+      // This is NOT a computed capacity — kept as-is, but warned about in the rating UI
+      // (psNegPlaceholder banner + zone card) so it is never used unknowingly.
       return { MnPos, MnNeg: z.MnNeg||MnPos*0.7, Vn,
                SbPos: z.Sb||0, StPos: z.St||0, fpe: z.fpe||0, fc: z.fc||5,
                _zone: z };
@@ -11445,8 +11539,8 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
   // the *MVLDCASE SCALE, so results imported from that model are already amplified.
   // Applying IM again here would square it (1.33² = 1.77). Derived, never written to
   // state — so it undoes itself the moment the DLA is turned off in Step 5.
-  const mctCarriesIM = useMemo(()=>mctCarriesImpact(cfg),
-    [JSON.stringify(cfg.selectedVehicles),JSON.stringify(cfg.vehicleDLA),cfg.useGlobalDLA,cfg.globalDLA]);
+  const mctCarriesIM = useMemo(()=>mctCarriesImpact(cfg, ratingLLposLC),
+    [JSON.stringify(cfg.selectedVehicles),JSON.stringify(cfg.vehicleDLA),cfg.useGlobalDLA,cfg.globalDLA,cfg.geomMode,ratingLLposLC]);
 
   // ratingLLScale combines LLDF × (1+IM/100) × MPF × U1 × U2 from ratingLLFactors
   const ratingLLScale  = ratingLLScaleOf(ratingLLFactors, mctCarriesIM);
@@ -11525,7 +11619,14 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
   };
 
   const phiC = PHI_CONDITION[ratingCondKey]??1.0;
-  const phiS = ratingSysKey==='Custom' ? ratingPhiSCustom : (PHI_SYSTEM[ratingSysKey]??1.0);
+  const phiSsel = ratingSysKey==='Custom' ? ratingPhiSCustom : (PHI_SYSTEM[ratingSysKey]??1.0);
+  // MBE Eq. 6A.4.2.1-3: φc·φs ≥ 0.85. Applied by raising the EFFECTIVE φs, so every
+  // φc·φs·φ product below (and in the report, which receives phiS) honours the floor.
+  // Rounded UP at 6 decimals so φc·φs never lands a hair under 0.85.
+  const phiCSfloored = phiC>0 && phiC*phiSsel < 0.85;
+  const phiS = phiCSfloored ? Math.ceil(0.85/phiC*1e6)/1e6 : phiSsel;
+  // PS-concrete zones with no Mn⁻ entered fall back to the 0.7·Mn⁺ placeholder in capAt().
+  const psNegPlaceholder = capZones.filter(z=>z.type==='psconc'&&!z.MnNeg);
 
   // Effective capacity preview (for the first/only zone, or global)
   const firstZone = capAt(totalBridgeForCap/2);
@@ -11722,8 +11823,8 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
     : null;
 
   // ── Fatigue — AASHTO MBE 6A.6.4 ─────────────────────────────────────────
-  // Fatigue I: RF = (ΔF)_TH / (γ_I · Δf)   where γ_I = 1.5
-  // Fatigue II: RF = (ΔF)_n / (γ_II · Δf)  where γ_II = 0.75
+  // Fatigue I: RF = (ΔF)_TH / (γ_I · Δf)   where γ_I = 1.75
+  // Fatigue II: RF = (ΔF)_n / (γ_II · Δf)  where γ_II = 0.80
   // Δf = stress range from fatigue vehicle = ΔM·12/Sx  (ksi)
   // (ΔF)_n = (A/N)^(1/3), N = 365·75·n·p·ADTT_SL
   const fatigueData = useMemo(()=>{
@@ -12116,7 +12217,9 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
     // Multiplier = F_gov(L_actual) / F_gov(L_ref) scales the LC results
     // to the correct magnitude for the actual span being rated.
     const longLC     = R2.arema_longLC     || '';
-    const long_L_ref = Math.max(1, +(R2.arema_long_L_ref ?? span));  // reference span in MIDAS LC (ft)
+    // 0 / blank / negative means "not set" → use the rated span (multiplier 1.0). The saved
+    // default is 0, which `??` lets through, and Math.max(1,·) then turned it into a 1 ft span.
+    const long_L_ref = Math.max(1, (+R2.arema_long_L_ref > 0 ? +R2.arema_long_L_ref : span));  // reference span in MIDAS LC (ft)
 
     // Compute braking and traction for actual span
     const F_brake_act  = 45 + 1.2 * span;                   // kips
@@ -12444,6 +12547,10 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
       // Use per-vehicle gamLL if defined, otherwise fall back to global
       const vGamLLinv = veh.gamLLinv != null ? veh.gamLLinv : gamLL;
       const vGamLLop  = veh.gamLLop  != null ? veh.gamLLop  : gamLL_op;
+      // IM is decided per vehicle: this vehicle's own MCT case may or may not carry it.
+      // vIMr rescales the shared LL scales from the rated case's IM state to this one's.
+      const vLLScale = ratingLLScaleOf(ratingLLFactors, mctCarriesImpact(cfg, veh.name));
+      const vIMr     = ratingLLScale>0 ? vLLScale/ratingLLScale : 1;
 
       const nodeResults = nodeList.map(node=>{
         const xPos = nodePositions[node]??0;
@@ -12465,8 +12572,8 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
         const Cvn    = phiC * phiS * ratingPhiV * cap.Vn;
 
         const p = { Mdc, Mdw, Vdc, Vdw, Mllpos, Mllneg, Vll, CmnPos, CmnNeg, Cvn };
-        const inv = computeNodeRF(p, gamDC, gamDW, vGamLLinv, ratingLLScale, ratingLLScaleMn, ratingLLScaleV);
-        const op  = computeNodeRF(p, gamDC, gamDW, vGamLLop,  ratingLLScale, ratingLLScaleMn, ratingLLScaleV);
+        const inv = computeNodeRF(p, gamDC, gamDW, vGamLLinv, ratingLLScale*vIMr, ratingLLScaleMn*vIMr, ratingLLScaleV*vIMr);
+        const op  = computeNodeRF(p, gamDC, gamDW, vGamLLop,  ratingLLScale*vIMr, ratingLLScaleMn*vIMr, ratingLLScaleV*vIMr);
         return { node, pos:xPos, inv, op, CmnPos:+CmnPos.toFixed(1), CmnNeg:+CmnNeg.toFixed(1), Cvn:+Cvn.toFixed(1) };
       }).filter(Boolean);
 
@@ -12494,7 +12601,8 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
     }).filter(Boolean);
   },[origRows, vehicleLCMap, cfg?.selectedVehicles, ratingDcLC, ratingDwLC,
      capZones, nodePositions, phiC, phiS, ratingPhiF, ratingPhiV,
-     gamDC, gamDW, gamLL, gamLL_op, ratingLLScale, ratingLLScaleMn, ratingLLScaleV]);
+     gamDC, gamDW, gamLL, gamLL_op, ratingLLScale, ratingLLScaleMn, ratingLLScaleV,
+     ratingLLFactors, cfg.geomMode, cfg.vehicleDLA, cfg.useGlobalDLA, cfg.globalDLA]);
 
   // Push rating state up so App can include it in the report
   useEffect(()=>{
@@ -13581,7 +13689,7 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
             <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'8px',marginBottom:'10px'}}>
               {/* Condition factor */}
               <div style={{gridColumn:'1/-1'}}>
-                <div style={{fontSize:'10px',fontFamily:'monospace',color:'#6b7280',marginBottom:'3px'}}>φ_c — Condition Factor (MBE Table 6A.4.2.3-2)</div>
+                <div style={{fontSize:'10px',fontFamily:'monospace',color:'#6b7280',marginBottom:'3px'}}>φ_c — Condition Factor (MBE Table 6A.4.2.3-1)</div>
                 <select style={{...INP,fontSize:'12px'}} value={ratingCondKey} onChange={e=>setRatingCondKey(e.target.value)}>
                   {Object.entries(PHI_CONDITION).map(([k,v])=>(
                     <option key={k} value={k}>{k} → φ_c = {v}</option>
@@ -13590,7 +13698,7 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
               </div>
               {/* System factor */}
               <div style={{gridColumn:'1/-1'}}>
-                <div style={{fontSize:'10px',fontFamily:'monospace',color:'#6b7280',marginBottom:'3px'}}>φ_s — System Factor (MBE Table 6A.4.2.3-1)</div>
+                <div style={{fontSize:'10px',fontFamily:'monospace',color:'#6b7280',marginBottom:'3px'}}>φ_s — System Factor (MBE Table 6A.4.2.4-1)</div>
                 <select style={{...INP,fontSize:'12px'}} value={ratingSysKey} onChange={e=>setRatingSysKey(e.target.value)}>
                   {Object.entries(PHI_SYSTEM).map(([k,v])=>(
                     <option key={k} value={k}>{k}{v!==null?' → φ_s = '+v:''}</option>
@@ -13612,6 +13720,12 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
               </div>
             </div>
             <div style={{padding:'7px 10px',background:'#f0fdf4',border:'1px solid #bbf7d0',borderRadius:'5px',fontSize:'11px',fontFamily:'monospace',color:'#166534'}}>
+              {psNegPlaceholder.length>0&&<div style={{color:'#b91c1c',fontWeight:600,marginBottom:'3px'}}>
+                ⚠ PS Conc zone{psNegPlaceholder.length>1?'s':''} {psNegPlaceholder.map(z=>capZones.indexOf(z)+1).join(', ')}: no Mn⁻ entered — the negative-moment rating uses a PLACEHOLDER Mn⁻ = 0.7·Mn⁺, not a computed capacity. Enter Mn⁻ for any hogging region.
+              </div>}
+              {phiCSfloored&&<div style={{color:'#b45309',fontWeight:600,marginBottom:'3px'}}>
+                ⚠ φ_c·φ_s = {phiC}·{phiSsel} = {(phiC*phiSsel).toFixed(3)} &lt; 0.85 → floored at 0.85 (MBE Eq. 6A.4.2.1-3); effective φ_s = {phiS}
+              </div>}
               φ_c={phiC} · φ_s={phiS} · φ_f={ratingPhiF} · φ_v={ratingPhiV}
               {capZones.length===1&&<> → C_M+={CmnPosPreview.toFixed(1)} ft·k &nbsp; C_M−={CmnNegPreview.toFixed(1)} ft·k &nbsp; C_V={CvnPreview.toFixed(1)} kips</>}
               {capZones.length>1&&<> · {capZones.length} capacity zones defined</>}
@@ -14670,6 +14784,9 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
                       return <>
                         φMn = {effMnP.toFixed(1)} ft·k &nbsp;·&nbsp; φVn = {effVn2.toFixed(1)} kips
                         <span style={STYLES.dimText}> &nbsp;(fps={fps.toFixed(1)} ksi · a={a.toFixed(2)} in)</span>
+                        {!z.MnNeg&&<div style={{color:'#b91c1c',fontWeight:600,marginTop:'3px'}}>
+                          ⚠ Mn⁻ not entered — rating uses placeholder Mn⁻ = 0.7·Mn⁺ = {(0.7*MnPos).toFixed(1)} ft·k (not a computed capacity)
+                        </div>}
                       </>;
                     })() : <>
                       φC → M⁺={effMnPos.toFixed(1)} &nbsp; M⁻={effMnNeg.toFixed(1)} &nbsp; V={effVn.toFixed(1)} &nbsp;
@@ -15065,9 +15182,9 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
                         ...(serviceIIData.length?[{ls:'Service II (Steel)',level:'—',gam:1.3,
                           gov:govServiceII,hasTons:false}]:[]),
                         ...(fatigueData.length&&govFatigue?[
-                          {ls:'Fatigue I',  level:'Infinite Life', gam:1.5,
+                          {ls:'Fatigue I',  level:'Infinite Life', gam:FATIGUE_GAMMA['I'],
                            gov:{...govFatigue, rfGov:govFatigue.rfI??null},  hasTons:false},
-                          {ls:'Fatigue II', level:'Finite Life',   gam:0.75,
+                          {ls:'Fatigue II', level:'Finite Life',   gam:FATIGUE_GAMMA['II'],
                            gov:{...govFatigue, rfGov:govFatigue.rfII??null}, hasTons:false},
                         ]:[]),
                         ...(psServiceIIIData.length&&govPS3?[{ls:'PS Service III',level:'Service',
@@ -15659,7 +15776,7 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
                 <div style={{fontSize:'13px',fontWeight:'600',color:'#111827',marginBottom:'4px'}}>Fatigue Limit State</div>
                 <div style={{fontSize:'11px',fontFamily:'monospace',color:'#6b7280',marginBottom:'12px',
                   padding:'7px 10px',background:'#fdf4ff',border:'1px solid #e9d5ff',borderRadius:'5px'}}>
-                  AASHTO MBE 6A.6.4 · Fatigue I: RF = (ΔF)_TH / (1.5·Δf) · Fatigue II: RF = (ΔF)_n / (0.75·Δf)
+                  AASHTO MBE 6A.6.4 · Fatigue I: RF = (ΔF)_TH / (1.75·Δf) · Fatigue II: RF = (ΔF)_n / (0.80·Δf)
                   &nbsp;·&nbsp; Δf = ΔM·12/Sx (ksi) · <strong>Sx required in Capacity Zones</strong>
                 </div>
 
@@ -15864,7 +15981,7 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
                   </div>
                   <div style={{padding:'6px 12px',background:'#f9fafb',borderTop:'1px solid #e5e7eb',
                     fontSize:'9.5px',fontFamily:'monospace',color:'#9ca3af'}}>
-                    Fatigue I γ=1.5 · Fatigue II γ=0.75 · N={((()=>{const p_=FATIGUE_P[Math.min(fatigueLanes,3)]??0.80;return(365*75*fatigueCyclesN*fatigueAdtt*p_).toExponential(2)})())} cycles · ADTT_SL={+(fatigueAdtt*(FATIGUE_P[Math.min(fatigueLanes,3)]??0.80)).toFixed(0)}
+                    Fatigue I γ=1.75 · Fatigue II γ=0.80 · N={((()=>{const p_=FATIGUE_P[Math.min(fatigueLanes,3)]??0.80;return(365*75*fatigueCyclesN*fatigueAdtt*p_).toExponential(2)})())} cycles · ADTT_SL={+(fatigueAdtt*(FATIGUE_P[Math.min(fatigueLanes,3)]??0.80)).toFixed(0)}
                   </div>
                 </>)}
               </div>
@@ -19187,7 +19304,7 @@ function generateReportHTML({ cfg, mctOutput, rows, nodePositions, ratingData,
             <tr><td>LL Scale — shear</td><td class="mono">×${(ratingLLScaleV||ratingLLScale||1).toFixed(4)}</td></tr>`:''}
             <tr><td>η Load Modifier</td><td class="mono">${ratingEta||1.0}</td></tr>
             <tr><td>φ_c (condition)</td><td class="mono">${phiC}</td></tr>
-            <tr><td>φ_s (system)</td><td class="mono">${phiS}</td></tr>
+            <tr><td>φ_s (system; effective, φ_c·φ_s ≥ 0.85 per MBE Eq. 6A.4.2.1-3)</td><td class="mono">${phiS}</td></tr>
             <tr><td>φ_f (flexure)</td><td class="mono">${ratingPhiF}</td></tr>
             <tr><td>φ_v (shear)</td><td class="mono">${ratingPhiV}</td></tr>
           </tbody>
@@ -20469,7 +20586,7 @@ function App() {
     const blob=new Blob([mctOutput],{type:'text/plain'});
     const url=URL.createObjectURL(blob);
     const a=document.createElement('a');a.href=url;
-    a.download=`${cfg.projectUser.replace(/\s+/g,'_')}_Bridge_Model.mct`;a.click();
+    a.download=`${(cfg.projectUser||'project').replace(/\s+/g,'_')}_Bridge_Model.mct`;a.click();
     URL.revokeObjectURL(url);
   };
 
