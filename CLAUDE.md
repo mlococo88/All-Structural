@@ -75,7 +75,12 @@ See `AUDIT.md` for the current inventory, known issues, and the work plan.
   some of them by file name (`index.html`, `lldf.html`, `psbeam.html`,
   `stgirder.html`, `elastomeric_design_module.html`).
 
-## 8. When unsure, ask
+## 8. Fix log
+
+- Every change to a tool is recorded in `fixlog/<tool file name without .html>.md`, in the same PR. See `fixlog/README.md` for the entry format.
+- Each entry must contain enough to re-apply the fix by hand: the function, anchor text, the exact before/after code, the governing provision, and a check case.
+
+## 9. When unsure, ask
 
 - If a requirement, code provision, edition, or intended behavior is unclear,
   **ask instead of assuming**.
