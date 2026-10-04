@@ -427,6 +427,9 @@ function lsGet(k){ try{return localStorage.getItem(k);}catch(e){return null;} }
 function lsSet(k,v){ try{localStorage.setItem(k,v);return true;}catch(e){return false;} }
 function beta1(fc){ return fc<=4?0.85:Math.max(0.65,0.85-0.05*(fc-4)); }
 function sqrtfc_psi(fc){ return Math.sqrt(fc*1000); }
+/* ACI 318-19 Table 20.2.2.4(a): fyt used for shear and torsion design <= 60 ksi (deformed bars).
+   AASHTO: input value used as entered. */
+function fytDesign(){ return S.code==='ACI' ? Math.min(S.mat.fyt,60) : S.mat.fyt; }
 
 /* =====================================================================
    §0 EQUATION BLOCK — symbolic, substituted, result, variables, code ref
@@ -463,7 +466,7 @@ function defaultState(){
           chk:&quot;&quot;,chkDate:&quot;&quot;,sheet:&quot;S-1&quot;},
     code:&quot;ACI&quot;,
     sec:{type:&quot;rect&quot;,bw:12,h:18,bf:36,hf:6},
-    mat:{fc:4,fy:60,fyt:60,dagg:1.0,lambda:1.0},
+    mat:{fc:4,fy:60,fyt:60,dagg:1.0,lambda:1.0,gamma3:0.67},
     cover:{cc:2.0,exposure:&quot;exposed&quot;,req:2.0,userEdited:false},
     layers:[{n:3,size:'5',face:'tension',dMan:null},
             {n:3,size:'5',face:'compression',dMan:null}],
@@ -566,7 +569,7 @@ function flexure(neg,layersOv){
     const c=(lo+hi)/2,a=B1*c;
     let net=Cc(a);
     T.forEach(L=>net-=L.As*fsOf(L.d,c));
-    C.forEach(L=>{ let f=L.As*fsOf(L.d,c); if(L.d<a) f-=L.As*0.85*fc; net-=f; });
+    C.forEach(L=>{ let f=L.As*fsOf(L.d,c); if(L.d<a) f+=L.As*0.85*fc; net-=f; });  /* fs<0 in compression: displaced concrete REDUCES |F| */
     if(net>0) hi=c; else lo=c;
   }
   const c=(lo+hi)/2, a=B1*c, ybar=ybarOf(a);
@@ -574,7 +577,7 @@ function flexure(neg,layersOv){
   const detail=G.map(L=>{
     const fs=fsOf(L.d,c);
     let F=L.As*fs, disp=0;
-    if(L.side==='C' &amp;&amp; L.d<a){ disp=L.As*0.85*fc; F-=disp; }
+    if(L.side==='C' &amp;&amp; L.d<a){ disp=L.As*0.85*fc; F+=disp; }  /* F<0 (compression); +disp reduces its magnitude */
     const arm=L.d-ybar, M=F*arm/12;
     Mn+=M;
     return {...L,eps:EPS_CU*(L.d-c)/c,fs,F,disp,arm,M,
@@ -611,9 +614,10 @@ function phiFlex(et,fy,code){
     if(et<=ety)   return {phi:0.75,cls:&quot;Compression Controlled&quot;};
     return {phi:0.75+0.15*(et-ety)/(0.005-ety),cls:&quot;Transition&quot;};
   }
-  if(et>=0.005) return {phi:0.90,cls:&quot;Tension Controlled&quot;};
+  const etl=ety+0.003;   /* ACI 318-19 Table 21.2.2: tension-controlled limit eps_ty + 0.003 (was 0.005) */
+  if(et>=etl) return {phi:0.90,cls:&quot;Tension Controlled&quot;};
   if(et<=ety)   return {phi:0.65,cls:&quot;Compression Controlled&quot;};
-  return {phi:0.65+0.25*(et-ety)/(0.005-ety),cls:&quot;Transition&quot;};
+  return {phi:0.65+0.25*(et-ety)/(etl-ety),cls:&quot;Transition&quot;};
 }
 
 /* =====================================================================
@@ -621,26 +625,36 @@ function phiFlex(et,fy,code){
    ACI 318-19 22.5 (simplified Vc) / AASHTO LRFD 5.7.3 sectional model
    ===================================================================== */
 function shear(F,Mu,Vu,sOv){
-  const {bw,h}=S.sec, fc=S.mat.fc, fy=S.mat.fy, fyt=S.mat.fyt, lam=S.mat.lambda;
+  const {bw,h}=S.sec, fc=S.mat.fc, fy=S.mat.fy, fyt=fytDesign(), lam=S.mat.lambda;
   const d=F.dCent||0.9*h;
   const dv=Math.max(0.9*d,0.72*h,d-F.a/2);
   const Av=S.stir.present ? S.stir.legs*REBAR[S.stir.size].a : 0;
   const s=(sOv!=null)?sOv:S.stir.s;
   const rt=sqrtfc_psi(fc);
   if(S.code==='AASHTO'){
-    const phi=0.90;
-    let beta=2.0,theta=45,eps_s=null;
+    const phi = lam<1 ? 0.80 : 0.90;   /* 5.5.4.2: shear 0.90 normal weight, 0.80 lightweight */
+    let beta=2.0,theta=45,eps_s=null,beta0=2.0,sxeF=1.0,MuUse=Mu;
+    /* Eq. 5.7.2.5-1: Av,min = 0.0316 lambda sqrt(f'c) bv s / fy */
+    const avMinA = s>0 ? 0.0316*lam*Math.sqrt(fc)*bw*s/fyt : 0;
+    const hasAvMin = S.stir.present &amp;&amp; s>0 &amp;&amp; Av>=avMinA-1e-12;
+    /* Eq. 5.7.3.4.2-7 crack spacing parameter, used only without Av,min. sx taken as dv (no
+       intermediate crack-control layers modelled); ag taken as 0 for f'c > 10 ksi (conservative). */
+    const sx=dv, ag=(fc>10?0:(S.mat.dagg||0));
+    const sxe=Math.max(12,Math.min(80,sx*1.38/(ag+0.63)));
     if(F.As>0 &amp;&amp; (Mu>0||Vu>0)){
-      eps_s=((Mu*12)/dv + Vu)/(ES*F.As);
+      MuUse=Math.max(Math.abs(Mu),Math.abs(Vu)*dv/12);   /* 5.7.3.4.2: |Mu| not less than |Vu|dv (k-ft) */
+      eps_s=((MuUse*12)/dv + Math.abs(Vu))/(ES*F.As);
       eps_s=Math.max(0,Math.min(0.006,eps_s));
-      beta=4.8/(1+750*eps_s);
+      beta0=4.8/(1+750*eps_s);
+      sxeF=hasAvMin?1.0:51/(39+sxe);                    /* Eq. 5.7.3.4.2-1 (with Av,min) / -2 (without) */
+      beta=beta0*sxeF;
       theta=29+3500*eps_s;
     }
-    const Vc=0.0316*beta*Math.sqrt(fc)*bw*dv;
+    const Vc=0.0316*beta*lam*Math.sqrt(fc)*bw*dv;       /* Eq. 5.7.3.3-3 */
     const Vs=S.stir.present? Av*fyt*dv/Math.tan(theta*Math.PI/180)/s : 0;
     const Vlim=0.25*fc*bw*dv;
     const Vn=Math.min(Vc+Vs,Vlim);
-    return {phi,d,dv,Av,s,beta,theta,eps_s,Vc,Vs,Vlim,Vn,phiVn:phi*Vn,
+    return {phi,d,dv,Av,s,beta,beta0,sxeF,sx,ag,sxe,hasAvMin,avMinA,MuUse,theta,eps_s,Vc,Vs,Vlim,Vn,phiVn:phi*Vn,
             governed:(Vc+Vs)>Vlim,method:'AASHTO sectional'};
   }
   const phi=0.75;
@@ -655,7 +669,7 @@ function shear(F,Mu,Vu,sOv){
   const lam_s_raw=Math.sqrt(2/(1+d/10));
   const lam_s=Math.min(1,lam_s_raw);
   const Vc_a=2*lam*rt*bw*d/1000;
-  const Vc_c=8*lam_s*lam*Math.cbrt(Math.max(rho_w,1e-9))*rt*bw*d/1000;
+  const Vc_c=8*lam_s*lam*Math.cbrt(Math.max(rho_w,1e-9))*Math.min(rt,100)*bw*d/1000;  /* 22.5.3.1: sqrt(f'c) <= 100 psi without Av,min */
   const Vc=stirAdequate? Vc_a : Vc_c;
   const Vs=S.stir.present? Av*fyt*d/s : 0;
   const VsMax=8*rt*bw*d/1000;                 /* ACI 22.5.1.2 upper limit */
@@ -675,7 +689,7 @@ function shear(F,Mu,Vu,sOv){
    ===================================================================== */
 function torsion(F,Tu_kft,Vu,sh){
   if(!S.tor.present || S.code!=='ACI') return null;
-  const {bw,h}=S.sec, fc=S.mat.fc, fy=S.mat.fy, fyt=S.mat.fyt, lam=S.mat.lambda;
+  const {bw,h}=S.sec, fc=S.mat.fc, fy=S.mat.fy, fyt=fytDesign(), lam=S.mat.lambda;
   const cc=S.cover.cc, ds=stirDia(), phi=0.75, rt=sqrtfc_psi(fc);
   const TuIn0=Tu_kft*12;                           /* k-ft -> k-in, as applied */
   const Acp=bw*h, pcp=2*(bw+h);
@@ -683,8 +697,9 @@ function torsion(F,Tu_kft,Vu,sh){
   const Aoh=x1*y1, ph=2*(x1+y1), Ao=0.85*Aoh;
   const th=Math.max(30,Math.min(60,S.tor.theta));
   const cot=1/Math.tan(th*Math.PI/180), tan=Math.tan(th*Math.PI/180);
-  const Tth=1.0*lam*rt*(Acp*Acp/pcp)/1000;         /* k-in, 22.7.4.1 */
-  const Tcr=4.0*lam*rt*(Acp*Acp/pcp)/1000;         /* k-in, 22.7.5.1 */
+  const rtT=Math.min(rt,100);                      /* 22.7.2.1: sqrt(f'c) <= 100 psi for Tth, Tcr */
+  const Tth=1.0*lam*rtT*(Acp*Acp/pcp)/1000;        /* k-in, 22.7.4.1 */
+  const Tcr=4.0*lam*rtT*(Acp*Acp/pcp)/1000;        /* k-in, 22.7.5.1 */
   /* ACI 22.7.3: where torsion arises from compatibility in an indeterminate
      member, T_u may be reduced to phi*T_cr because redistribution can occur. */
   const compat = (S.tor.kind==='compatibility');
@@ -716,7 +731,7 @@ function torsion(F,Tu_kft,Vu,sh){
   const AlT1=5*rt*Acp/(fy*1000);
   const AlT2=At_s*ph*(fyt/fy);
   const Al_min=Math.max(0,AlT1-AlT2);
-  const AtsFloor=0.175*bw/(fyt*1000);          /* ACI 9.6.4.2 floor on A_t/s */
+  const AtsFloor=25*bw/(fyt*1000);             /* 25 b_w/f_yt (f_yt in psi): term of ACI 9.6.4.3(b). Was the SI coefficient 0.175. */
   const AtsFloorOK=At_s>=AtsFloor-1e-12;
   /* 9.7.5.1 perimeter distribution: bars are entered as a total area, so the
      vertical spacing between the outermost tension/compression layers is the
@@ -786,8 +801,8 @@ function alAvailable(){
 function concreteE(){
   const fc=S.mat.fc, wc=0.145;
   if(S.code==='AASHTO')
-    return {Ec:33000*Math.pow(wc,1.5)*Math.sqrt(fc), ref:&quot;AASHTO 5.4.2.4&quot;,
-            expr:`E_c = 33{,}000\\,K_1 w_c^{1.5}\\sqrt{f'_c} = 33{,}000(1.0)(${fmt(wc,3)})^{1.5}\\sqrt{${fmt(fc)}}`};
+    return {Ec:120000*1.0*Math.pow(wc,2.0)*Math.pow(fc,0.33), ref:&quot;AASHTO Eq. 5.4.2.4-1&quot;,   /* K1 = 1.0 */
+            expr:`E_c = 120{,}000\\,K_1 w_c^{2.0}f'^{\\,0.33}_c = 120{,}000(1.0)(${fmt(wc,3)})^{2.0}(${fmt(fc)})^{0.33}`};
   return {Ec:57000*Math.sqrt(fc*1000)/1000, ref:&quot;ACI 19.2.2.1&quot;,
           expr:`E_c = 57{,}000\\sqrt{f'_c} = 57{,}000\\sqrt{${fmt(fc*1000,0)}\\text{ psi}}`};
 }
@@ -886,7 +901,7 @@ function servicecalc(F,neg){
    Every check carries its full derivation for the report.
    ===================================================================== */
 function detailing(F,sh,neg,govMu,Vu,tor){
-  const {bw,h}=S.sec, fc=S.mat.fc, fy=S.mat.fy, fyt=S.mat.fyt, dagg=S.mat.dagg;
+  const {bw,h}=S.sec, fc=S.mat.fc, fy=S.mat.fy, fyt=fytDesign(), dagg=S.mat.dagg;
   const cc=S.cover.cc, ds=stirDia(), rt=sqrtfc_psi(fc), code=S.code;
   const out=[];
   const add=(id,name,ref,have,need,cmp,unit,ok,deriv,na,naWhy)=>
@@ -941,10 +956,14 @@ function detailing(F,sh,neg,govMu,Vu,tor){
   }
 
   /* maximum steel via net tensile strain */
-  add(&quot;dEpsMin&quot;,&quot;Minimum net tensile strain&quot;,code==='ACI'?&quot;ACI 9.3.3.1&quot;:&quot;AASHTO 5.6.2.1&quot;,
+  /* ACI 9.3.3.1 beam minimum strain. AASHTO LRFD has no minimum net tensile strain for nonprestressed
+     members (ductility is handled through phi, 5.5.4.2), so for AASHTO this is ADVISORY only (N/A in pass/fail). */
+  add(&quot;dEpsMin&quot;,&quot;Minimum net tensile strain&quot;,code==='ACI'?&quot;ACI 9.3.3.1&quot;:&quot;Advisory (no AASHTO limit)&quot;,
     F.eps_t,0.004,&quot;\\ge&quot;,&quot;&quot;,F.eps_t>=0.004,
-    [[&quot;\\varepsilon_t\\ge 0.004&quot;,&quot;\\varepsilon_t=&quot;+fmt(F.eps_t,5)+&quot;\\ge 0.00400&quot;,
-      &quot;Limits the reinforcement ratio so the section fails in a ductile manner.&quot;]]);
+    [[&quot;\\varepsilon_t\\ge 0.004&quot;,&quot;\\varepsilon_t=&quot;+fmt(F.eps_t,5)+(F.eps_t>=0.004?&quot;\\ge&quot;:&quot;<&quot;)+&quot; 0.00400&quot;,
+      &quot;Limits the reinforcement ratio so the section fails in a ductile manner.&quot;]],
+    code!=='ACI',
+    code!=='ACI'?&quot;Advisory only \u2014 AASHTO LRFD has no minimum net tensile strain for nonprestressed members; ductility is handled through \u03c6 (Art. 5.5.4.2). For reference \u03b5_t = &quot;+fmt(F.eps_t,5)+(F.eps_t>=0.004?&quot; \u2265 &quot;:&quot; < &quot;)+&quot;0.004.&quot;:&quot;&quot;);
 
   /* stirrup detailing */
   if(S.stir.present){
@@ -974,11 +993,11 @@ function detailing(F,sh,neg,govMu,Vu,tor){
       /* AASHTO 5.7.2.6 is tiered on the shear stress vu = |Vu|/(phi*bv*dv):
          vu <  0.125 f'c : smax = min(0.8 dv, 24 in)
          vu >= 0.125 f'c : smax = min(0.4 dv, 12 in) */
-      const vu=(Vu||0)/(0.9*bw*sh.dv);
+      const vu=(Vu||0)/(sh.phi*bw*sh.dv);
       const tight=vu>=0.125*fc;
       sMax=tight?Math.min(0.4*sh.dv,12):Math.min(0.8*sh.dv,24); ref=&quot;AASHTO 5.7.2.6&quot;;
       dv2=[[&quot;v_u=\\dfrac{|V_u|}{\\phi b_v d_v}&quot;,
-        `v_u=\\dfrac{${fmt(Vu||0)}}{0.9(${fmt(bw)})(${fmt(sh.dv)})}=${fmt(vu,3)}\\text{ ksi}\\;${tight?&quot;\\ge&quot;:&quot;<&quot;}\\;0.125f'_c=${fmt(0.125*fc,3)}\\text{ ksi}`,
+        `v_u=\\dfrac{${fmt(Vu||0)}}{${fmt(sh.phi,2)}(${fmt(bw)})(${fmt(sh.dv)})}=${fmt(vu,3)}\\text{ ksi}\\;${tight?&quot;\\ge&quot;:&quot;<&quot;}\\;0.125f'_c=${fmt(0.125*fc,3)}\\text{ ksi}`,
         tight?&quot;High shear stress — the tighter limit applies.&quot;:&quot;Low shear stress tier.&quot;],
        [&quot;s_{max}=\\min(&quot;+(tight?&quot;0.4d_v&quot;:&quot;0.8d_v&quot;)+&quot;,\\;&quot;+(tight?&quot;12&quot;:&quot;24&quot;)+&quot;\\text{ in})&quot;,
         `\\min(${fmt((tight?0.4:0.8)*sh.dv)},\\;${tight?&quot;12&quot;:&quot;24&quot;})=${fmt(sMax)}\\text{ in}`,&quot;&quot;]];
@@ -996,9 +1015,9 @@ function detailing(F,sh,neg,govMu,Vu,tor){
        [&quot;\\dfrac{A_v}{s}=\\dfrac{&quot;+fmt(Av)+&quot;}{&quot;+fmt(s)+&quot;}=&quot;+fmt(av,4)+&quot;\\text{ in}^2/\\text{in}&quot;,&quot;&quot;,
         `${S.stir.legs}-leg #${S.stir.size} at ${fmt(s)} in.`]];
     } else {
-      avMin=0.0316*Math.sqrt(fc)*bw/fyt;
-      dv3=[[&quot;\\left(\\dfrac{A_v}{s}\\right)_{min}=0.0316\\sqrt{f'_c}\\dfrac{b_v}{f_y}&quot;,
-        `0.0316\\sqrt{${fmt(fc)}}\\dfrac{${fmt(bw)}}{${fmt(fyt)}}=${fmt(avMin,4)}\\text{ in}^2/\\text{in}`,&quot;f′c and fy in ksi.&quot;],
+      avMin=0.0316*S.mat.lambda*Math.sqrt(fc)*bw/fyt;   /* Eq. 5.7.2.5-1 with lambda */
+      dv3=[[&quot;\\left(\\dfrac{A_v}{s}\\right)_{min}=0.0316\\lambda\\sqrt{f'_c}\\dfrac{b_v}{f_y}&quot;,
+        `0.0316(${fmt(S.mat.lambda,2)})\\sqrt{${fmt(fc)}}\\dfrac{${fmt(bw)}}{${fmt(fyt)}}=${fmt(avMin,4)}\\text{ in}^2/\\text{in}`,&quot;f′c and fy in ksi.&quot;],
        [&quot;\\dfrac{A_v}{s}=&quot;+fmt(av,4)+&quot;\\text{ in}^2/\\text{in}&quot;,&quot;&quot;,&quot;&quot;]];
     }
     add(&quot;dAvMin&quot;,&quot;Minimum shear reinforcement&quot;,code==='ACI'?&quot;ACI 9.6.3.4&quot;:&quot;AASHTO 5.7.2.5&quot;,
@@ -1017,7 +1036,7 @@ function detailing(F,sh,neg,govMu,Vu,tor){
        decidable from a section alone is (d), h <= 10 in; it is applied.
        The one-way-slab, footing and joist exemptions depend on the member
        type, which this tool does not know, so they are stated, not applied. */
-    const phiV   = code==='ACI' ? 0.75 : 0.9;
+    const phiV   = code==='ACI' ? 0.75 : sh.phi;
     const halfVc = 0.5*phiV*(sh.Vc||0);
     const VuA    = Math.abs(Vu||0);
     const needAv = VuA > halfVc + 1e-9;
@@ -1034,9 +1053,9 @@ function detailing(F,sh,neg,govMu,Vu,tor){
         `\\max\\left(${fmt(a1,4)},\\;${fmt(a2,4)}\\right)=${fmt(avMin0,4)}\\text{ in}^2/\\text{in}`,
         a1>=a2?&quot;0.75√f′c term governs.&quot;:&quot;50·b_w/f_yt term governs.&quot;];
     } else {
-      avMin0=0.0316*Math.sqrt(fc)*bw/fyt;
-      avMinLine=[&quot;\\left(\\dfrac{A_v}{s}\\right)_{min}=0.0316\\sqrt{f'_c}\\dfrac{b_v}{f_y}&quot;,
-        `0.0316\\sqrt{${fmt(fc)}}\\dfrac{${fmt(bw)}}{${fmt(fyt)}}=${fmt(avMin0,4)}\\text{ in}^2/\\text{in}`,&quot;f′c and f_y in ksi.&quot;];
+      avMin0=0.0316*S.mat.lambda*Math.sqrt(fc)*bw/fyt;   /* Eq. 5.7.2.5-1 with lambda */
+      avMinLine=[&quot;\\left(\\dfrac{A_v}{s}\\right)_{min}=0.0316\\lambda\\sqrt{f'_c}\\dfrac{b_v}{f_y}&quot;,
+        `0.0316(${fmt(S.mat.lambda,2)})\\sqrt{${fmt(fc)}}\\dfrac{${fmt(bw)}}{${fmt(fyt)}}=${fmt(avMin0,4)}\\text{ in}^2/\\text{in}`,&quot;f′c and f_y in ksi.&quot;];
     }
 
     const dvA=[
@@ -1094,11 +1113,15 @@ function detailing(F,sh,neg,govMu,Vu,tor){
        [&quot;A_\\ell \\ge A_{\\ell,req}&quot;,
         `${fmt(tor.Al,3)}\\text{ in}^2\\;${tor.Al>=tor.Al_req-1e-9?&quot;\\ge&quot;:&quot;<&quot;}\\;${fmt(tor.Al_req,3)}\\text{ in}^2`,
         tor.Al>=tor.Al_req-1e-9?&quot;&quot;:&quot;The longitudinal steel is insufficient; T_n is limited by this leg.&quot;]]);
-    add(&quot;dTorAts&quot;,&quot;Minimum A_t/s for torsion&quot;,&quot;ACI 9.6.4.2&quot;,
+    /* 25 b_w/f_yt (in.-lb units) appears in ACI 318-19 only inside 9.6.4.3(b) for A_l,min (lesser of (a), (b)).
+       It is not a separate minimum on A_t/s, so it is shown for information (N/A in pass/fail). */
+    add(&quot;dTorAts&quot;,&quot;A_t/s vs 25b_w/f_yt (information)&quot;,&quot;ACI 9.6.4.3(b)&quot;,
       tor.At_s,tor.AtsFloor,&quot;\\ge&quot;,&quot;in\u00b2/in&quot;,tor.AtsFloorOK,
-      [[&quot;\\left(\\dfrac{A_t}{s}\\right)_{min}=\\dfrac{0.175\\,b_w}{f_{yt}}&quot;,
-        `\\left(\\dfrac{A_t}{s}\\right)_{min}=\\dfrac{0.175(${fmt(bw)}\\text{ in})}{${fmt(fyt*1000,0)}\\text{ psi}}=${fmt(tor.AtsFloor,6)}\\;\\tfrac{\\text{in}^2}{\\text{in}}`,
-        &quot;Floor on the transverse torsion steel used in Eq. 9.6.4.3.&quot;]]);
+      [[&quot;\\dfrac{25\\,b_w}{f_{yt}}&quot;,
+        `\\dfrac{25(${fmt(bw)}\\text{ in})}{${fmt(fyt*1000,0)}\\text{ psi}}=${fmt(tor.AtsFloor,6)}\\;\\tfrac{\\text{in}^2}{\\text{in}}`,
+        &quot;Term of 9.6.4.3(b). The tool conservatively uses expression (a) for A_\u2113,min.&quot;]],
+      true,
+      &quot;Information only (not a stand-alone requirement in ACI 318-19): A_t/s = &quot;+fmt(tor.At_s,5)+(tor.AtsFloorOK?&quot; \u2265 &quot;:&quot; < &quot;)+&quot;25b_w/f_yt = &quot;+fmt(tor.AtsFloor,5)+&quot; in\u00b2/in. The term enters 9.6.4.3(b) for A_\u2113,min; the tool conservatively uses expression (a).&quot;);
     add(&quot;dTorAlDist&quot;,&quot;Longitudinal torsion bar distribution&quot;,&quot;ACI 9.7.5.1&quot;,
       tor.alSpacingMax,12,&quot;\\le&quot;,&quot;in&quot;,tor.alDistOK,[],tor.alDistNA,
       tor.alDistNA?&quot;Longitudinal torsion bars are entered as a total area, not as individual bar positions, so the 12 in perimeter spacing of 9.7.5.1 cannot be verified automatically. Confirm by inspection that bars are placed at every corner of the closed stirrup and spaced no more than 12 in around p_h \u2014 for a section of this depth that normally requires intermediate bars at mid-depth.&quot;:&quot;&quot;);
@@ -1239,7 +1262,7 @@ function computeAll(){
       const At_s_req=tor.At_s_req;                      /* in^2/in, one leg */
       const av_prov=sh.Av/sh.s;                         /* in^2/in, all legs */
       const av_left=Math.max(0,av_prov-2*At_s_req);     /* remains for shear */
-      const Vs_left=av_left*S.mat.fyt*sh.d;
+      const Vs_left=av_left*fytDesign()*sh.d;
       const Vs_use=(S.code==='ACI')?Math.min(Vs_left,sh.VsMax):Vs_left;
       const Vn_left=(S.code==='ACI')?(sh.Vc+Vs_use)
                     :Math.min(sh.Vc+Vs_left,sh.Vlim);
@@ -1328,6 +1351,7 @@ function validate(){
   if(fc>15) W.push({code:&quot;Materials&quot;,msg:`f′c = ${fmt(fc)} ksi is outside the normal-strength range of this tool.`});
   if(fy>80 &amp;&amp; S.code==='ACI') W.push({code:&quot;ACI 20.2.2.4&quot;,msg:`f_y = ${fmt(fy)} ksi exceeds 80 ksi; ACI limits f_y for most flexural applications. Confirm the grade is permitted.`});
   if(fy>75 &amp;&amp; S.code==='AASHTO') W.push({code:&quot;AASHTO 5.4.3.1&quot;,msg:`f_y = ${fmt(fy)} ksi exceeds the 75 ksi AASHTO limit for most applications.`});
+  if(S.mat.fyt>60 &amp;&amp; S.code==='ACI') W.push({code:&quot;ACI 20.2.2.4&quot;,msg:`f_yt = ${fmt(S.mat.fyt)} ksi exceeds 60 ksi. Shear and torsion are computed with f_yt = 60 ksi (ACI Table 20.2.2.4(a)).`});
   /* proportions */
   if(h/bw>6) W.push({code:&quot;Proportion&quot;,msg:`Depth-to-width ratio h/b_w = ${fmt(h/bw)} is unusually slender; lateral stability of the compression zone is not evaluated by this tool.`});
   if(S.cover.cc<0.75) W.push({code:&quot;Cover&quot;,msg:`Clear cover of ${fmt(S.cover.cc)} in is below the 0.75 in absolute minimum for cast-in-place construction.`});
@@ -1503,6 +1527,8 @@ function buildInput(){
     fRow(b,&quot;f_yt (transverse)&quot;,numIn(()=>S.mat.fyt,v=>S.mat.fyt=v,&quot;5&quot;,&quot;fyt&quot;),&quot;ksi&quot;);
     fRow(b,&quot;Aggregate size&quot;,numIn(()=>S.mat.dagg,v=>S.mat.dagg=v,&quot;0.25&quot;,&quot;dagg&quot;),&quot;in&quot;);
     fRow(b,&quot;λ (lightweight)&quot;,numIn(()=>S.mat.lambda,v=>S.mat.lambda=v,&quot;0.05&quot;,&quot;lam&quot;),&quot;&quot;);
+    if(S.code==='AASHTO') fRow(b,&quot;γ₃ (bar spec., 5.6.3.3)&quot;,selIn([&quot;0.67&quot;,&quot;0.75&quot;,&quot;0.76&quot;],()=>String(S.mat.gamma3),v=>S.mat.gamma3=+v,
+      o=>o===&quot;0.67&quot;?&quot;0.67 — A615 Gr 60&quot;:(o===&quot;0.75&quot;?&quot;0.75 — A706 Gr 60&quot;:&quot;0.76 — A615 Gr 75&quot;),o=>o,&quot;gamma3&quot;),&quot;&quot;);
     b.appendChild(el(&quot;div&quot;,&quot;note&quot;,&quot;E_s = 29,000 ksi and ε_cu = 0.003 are fixed by code.&quot;));
   },P);
 
@@ -1866,7 +1892,7 @@ function allChecks(){
   const g=CC.govRow;
   if(g){
     if(S.code==='AASHTO'){
-      const need=Math.min(0.67*1.6*g.svc.Mcr,Math.abs(g.Mu)>0?1.33*Math.abs(g.Mu):Infinity);
+      const need=Math.min((S.mat.gamma3||0.67)*1.6*g.svc.Mcr,Math.abs(g.Mu)>0?1.33*Math.abs(g.Mu):Infinity);
       out.push({label:&quot;Minimum reinforcement&quot;,&quot;ref&quot;:&quot;AASHTO 5.6.3.3&quot;,
         dcr:g.phiMn>0?need/g.phiMn:null,combo:g.name,na:false,tab:&quot;tabServ&quot;});
     }
@@ -2178,7 +2204,7 @@ function workFlexure(b,r){
   }));
   b.appendChild(eqBlock({
     title:&quot;Force and moment contribution of the layer&quot;,
-    lines:[`F = A_s f_s${gL.disp>0?&quot; - A_s(0.85f'_c)&quot;:&quot;&quot;} = ${fmt(gL.As)}(${fmt(gL.fs,1)})${gL.disp>0?&quot; - &quot;+fmt(gL.disp,2):&quot;&quot;} = ${fmt(gL.F)}\\text{ kip}`,
+    lines:[`F = A_s f_s${gL.disp>0?&quot; + A_s(0.85f'_c)&quot;:&quot;&quot;} = ${fmt(gL.As)}(${fmt(gL.fs,1)})${gL.disp>0?&quot; + &quot;+fmt(gL.disp,2):&quot;&quot;} = ${fmt(gL.F)}\\text{ kip}`,
       `M = \\dfrac{F\\left(d-\\bar y\\right)}{12} = \\dfrac{${fmt(gL.F)}\\text{ kip}\\left(${fmt(gL.d)}-${fmt(F.ybar)}\\right)\\text{ in}}{12\\;\\text{in/ft}} = ${fmt(gL.M)}\\text{ k-ft}`],
     vars:[[&quot;A_s&quot;,&quot;Area of this layer&quot;,fmt(gL.As),&quot;in\u00b2&quot;],
           [&quot;\\bar y&quot;,&quot;Centroid of the concrete compression block&quot;,fmt(F.ybar),&quot;in&quot;],
@@ -2196,7 +2222,7 @@ function workFlexure(b,r){
       ref:&quot;ACI 22.2.2.4.1&quot;,
       lines:[`d' = ${fmt(L.d)}\\text{ in} < a = ${fmt(F.a)}\\text{ in}`,
         `\\Delta C = A'_s(0.85f'_c) = ${fmt(L.As)}(0.85)(${fmt(fc)}) = ${fmt(L.disp,2)}\\text{ kip}`,
-        `F = A'_s f'_s - \\Delta C = ${fmt(L.As)}(${fmt(L.fs,1)}) - ${fmt(L.disp,2)} = ${fmt(L.F)}\\text{ kip}`],
+        `F = A'_s f'_s + \\Delta C = ${fmt(L.As)}(${fmt(L.fs,1)}) + ${fmt(L.disp,2)} = ${fmt(L.F)}\\text{ kip}\\quad(f'_s<0\\text{ in compression})`],
       vars:[[&quot;d'&quot;,&quot;Depth to this compression layer&quot;,fmt(L.d),&quot;in&quot;],
             [&quot;a&quot;,&quot;Depth of the equivalent stress block&quot;,fmt(F.a),&quot;in&quot;],
             [&quot;\\Delta C&quot;,&quot;Concrete force removed to avoid counting the area twice&quot;,fmt(L.disp,2),&quot;kip&quot;],
@@ -2237,7 +2263,8 @@ function workFlexure(b,r){
   b.appendChild(eqBlock({
     title:&quot;Section classification and \u03c6&quot;,
     ref:S.code==='ACI'?&quot;ACI Table 21.2.2&quot;:&quot;AASHTO 5.5.4.2&quot;,
-    lines:[`\\varepsilon_t = ${fmt(F.eps_t,5)} \\;\\Rightarrow\\; \\text{${r.pf.cls}}`,
+    lines:[...(S.code==='ACI'?[`\\varepsilon_{tl} = \\varepsilon_{ty}+0.003 = ${fmt(fy/ES,5)}+0.003 = ${fmt(fy/ES+0.003,5)}`]:[]),
+      `\\varepsilon_t = ${fmt(F.eps_t,5)} \\;\\Rightarrow\\; \\text{${r.pf.cls}}`,
       `\\phi = ${fmt(r.pf.phi,3)}`],
     vars:[[&quot;\\phi&quot;,&quot;Strength reduction factor&quot;,fmt(r.pf.phi,3),&quot;&quot;]]
   }));
@@ -2301,7 +2328,7 @@ function buildShearTab(pg){
   });
 }
 function workShear(b,r){
-  const sh=r.sh, fc=S.mat.fc, bw=S.sec.bw, fyt=S.mat.fyt;
+  const sh=r.sh, fc=S.mat.fc, bw=S.sec.bw, fyt=fytDesign();
   b.appendChild(el(&quot;h3&quot;,null,&quot;Step 1 — Effective shear depth&quot;));
   b.appendChild(eqBlock({
     title:&quot;Effective depth used for shear&quot;,
@@ -2317,14 +2344,18 @@ function workShear(b,r){
     if(sh.eps_s!==null){
       b.appendChild(eqBlock({
         title:&quot;Longitudinal strain at mid-depth&quot;,ref:&quot;AASHTO Eq. 5.7.3.4.2-4&quot;,
-        lines:[`\\varepsilon_s = \\dfrac{|M_u|/d_v + |V_u|}{E_s A_s}`,
-          `|M_u| = ${fmt(Math.abs(r.Mu))}\\text{ k-ft}\\times 12\\;\\text{in/ft} = ${fmt(Math.abs(r.Mu)*12)}\\text{ k-in}`,
-          `\\varepsilon_s = \\dfrac{\\dfrac{${fmt(Math.abs(r.Mu)*12)}\\text{ k-in}}{${fmt(sh.dv)}\\text{ in}} + ${fmt(Math.abs(r.Vu))}\\text{ kip}}{29000\\text{ ksi}\\;(${fmt(r.F.As)}\\text{ in}^2)} = ${fmt(sh.eps_s,6)}`],
+        lines:[`\\varepsilon_s = \\dfrac{|M_u|/d_v + |V_u|}{E_s A_s},\\qquad |M_u| \\ge |V_u|\\,d_v`,
+          `|M_u| = \\max\\left(${fmt(Math.abs(r.Mu))},\\;\\dfrac{${fmt(Math.abs(r.Vu))}(${fmt(sh.dv)})}{12}\\right) = ${fmt(sh.MuUse)}\\text{ k-ft}\\times 12\\;\\text{in/ft} = ${fmt(sh.MuUse*12)}\\text{ k-in}`,
+          `\\varepsilon_s = \\dfrac{\\dfrac{${fmt(sh.MuUse*12)}\\text{ k-in}}{${fmt(sh.dv)}\\text{ in}} + ${fmt(Math.abs(r.Vu))}\\text{ kip}}{29000\\text{ ksi}\\;(${fmt(r.F.As)}\\text{ in}^2)} = ${fmt(sh.eps_s,6)}`],
         vars:[[&quot;A_s&quot;,&quot;Area of tension reinforcement&quot;,fmt(r.F.As),&quot;in\u00b2&quot;]]
       }));
       b.appendChild(eqBlock({
         title:&quot;Tension-softening factor and crack angle&quot;,ref:&quot;AASHTO Eq. 5.7.3.4.2-1, -2&quot;,
-        lines:[`\\beta = \\dfrac{4.8}{1+750\\varepsilon_s} = \\dfrac{4.8}{1+750(${fmt(sh.eps_s,6)})} = ${fmt(sh.beta,3)}`,
+        lines:[...(sh.hasAvMin
+            ? [`\\beta = \\dfrac{4.8}{1+750\\varepsilon_s} = \\dfrac{4.8}{1+750(${fmt(sh.eps_s,6)})} = ${fmt(sh.beta,3)}\\quad(A_v \\ge A_{v,min})`]
+            : [`A_v ${S.stir.present?&quot;= &quot;+fmt(sh.Av,3)+&quot; < A_{v,min} = &quot;+fmt(sh.avMinA,3)+&quot;\\text{ in}^2&quot;:&quot;= 0&quot;}\\;\\Rightarrow\\;\\text{Eq. 5.7.3.4.2-2}`,
+               `s_{xe} = \\dfrac{1.38\\,s_x}{a_g+0.63} = \\dfrac{1.38(${fmt(sh.sx)})}{${fmt(sh.ag,2)}+0.63},\\;12 \\le s_{xe} \\le 80 \\;\\Rightarrow\\; ${fmt(sh.sxe)}\\text{ in}\\quad(s_x = d_v)`,
+               `\\beta = \\dfrac{4.8}{1+750\\varepsilon_s}\\cdot\\dfrac{51}{39+s_{xe}} = ${fmt(sh.beta0,3)}\\times\\dfrac{51}{39+${fmt(sh.sxe)}} = ${fmt(sh.beta,3)}`]),
           `\\theta = 29 + 3500\\varepsilon_s = 29 + 3500(${fmt(sh.eps_s,6)}) = ${fmt(sh.theta,2)}^\\circ`],
         vars:[[&quot;\\beta&quot;,&quot;Factor for the tensile stress carried by cracked concrete&quot;,fmt(sh.beta,3),&quot;&quot;],
               [&quot;\\theta&quot;,&quot;Angle of inclination of the diagonal compression&quot;,fmt(sh.theta,2),&quot;deg&quot;]]
@@ -2337,8 +2368,8 @@ function workShear(b,r){
     b.appendChild(el(&quot;h3&quot;,null,&quot;Step 3 — Concrete and steel contributions&quot;));
     b.appendChild(eqBlock({
       title:&quot;Shear resisted by the concrete&quot;,ref:&quot;AASHTO Eq. 5.7.3.3-3&quot;,
-      lines:[`V_c = 0.0316\\,\\beta\\sqrt{f'_c}\\,b_v d_v`,
-        `V_c = 0.0316(${fmt(sh.beta,3)})\\sqrt{${fmt(fc)}\\text{ ksi}}(${fmt(bw)}\\text{ in})(${fmt(sh.dv)}\\text{ in}) = ${fmt(sh.Vc)}\\text{ kip}`],
+      lines:[`V_c = 0.0316\\,\\beta\\lambda\\sqrt{f'_c}\\,b_v d_v`,
+        `V_c = 0.0316(${fmt(sh.beta,3)})(${fmt(S.mat.lambda,2)})\\sqrt{${fmt(fc)}\\text{ ksi}}(${fmt(bw)}\\text{ in})(${fmt(sh.dv)}\\text{ in}) = ${fmt(sh.Vc)}\\text{ kip}`],
       vars:[[&quot;f'_c&quot;,&quot;Compressive strength (ksi in this expression)&quot;,fmt(fc),&quot;ksi&quot;],
             [&quot;b_v&quot;,&quot;Effective web width&quot;,fmt(bw),&quot;in&quot;]]
     }));
@@ -2375,7 +2406,7 @@ function workShear(b,r){
           `\\lambda_s = \\sqrt{\\dfrac{2}{1+d/10}} = \\sqrt{\\dfrac{2}{1+${fmt(sh.d)}/10}} = ${fmt(sh.lam_s_raw,3)}`,
           `\\lambda_s = \\min\\left(${fmt(sh.lam_s_raw,3)},\\;1.00\\right) = ${fmt(sh.lam_s,3)}`,
           `\\rho_w = \\dfrac{A_s}{b_w d} = \\dfrac{${fmt(r.F.As)}}{${fmt(bw)}(${fmt(sh.d)})} = ${fmt(sh.rho_w,5)}`,
-          `V_c = 8\\lambda_s\\lambda(\\rho_w)^{1/3}\\sqrt{f'_c}\\,b_w d = 8(${fmt(sh.lam_s,3)})(${fmt(S.mat.lambda,2)})(${fmt(sh.rho_w,5)})^{1/3}\\sqrt{${fmt(fc*1000,0)}\\text{ psi}}(${fmt(bw)}\\text{ in})(${fmt(sh.d)}\\text{ in}) = ${fmt(sh.Vc*1000,0)}\\text{ lb}`,
+          `V_c = 8\\lambda_s\\lambda(\\rho_w)^{1/3}\\sqrt{f'_c}\\,b_w d = 8(${fmt(sh.lam_s,3)})(${fmt(S.mat.lambda,2)})(${fmt(sh.rho_w,5)})^{1/3}${sqrtfc_psi(fc)>100?&quot;(100\\text{ psi, max per 22.5.3.1})&quot;:&quot;\\sqrt{&quot;+fmt(fc*1000,0)+&quot;\\text{ psi}}&quot;}(${fmt(bw)}\\text{ in})(${fmt(sh.d)}\\text{ in}) = ${fmt(sh.Vc*1000,0)}\\text{ lb}`,
           `V_c = \\dfrac{${fmt(sh.Vc*1000,0)}\\text{ lb}}{1000\\;\\text{lb/kip}} = ${fmt(sh.Vc)}\\text{ kip}`],
         vars:[[&quot;\\lambda_s&quot;,&quot;Size-effect modification factor&quot;+(sh.lam_s_raw>1.0005?&quot; — the formula gives &quot;+fmt(sh.lam_s_raw,3)+&quot;, capped at 1.0 by ACI 22.5.5.1.3, so no size-effect penalty applies&quot;:&quot;&quot;),fmt(sh.lam_s,3),&quot;&quot;],
               [&quot;\\rho_w&quot;,&quot;Longitudinal reinforcement ratio&quot;,fmt(sh.rho_w,5),&quot;&quot;]]
@@ -2499,7 +2530,7 @@ function buildTorTab(pg){
 }
 function workTorsion(b,r){
   const T=r.tor; if(!T){ b.appendChild(el(&quot;div&quot;,&quot;infoBox&quot;,&quot;Torsion is not enabled.&quot;)); return; }
-  const fc=S.mat.fc, fy=S.mat.fy, fyt=S.mat.fyt, bw=S.sec.bw, h=S.sec.h, cc=S.cover.cc, ds=stirDia();
+  const fc=S.mat.fc, fy=S.mat.fy, fyt=fytDesign(), bw=S.sec.bw, h=S.sec.h, cc=S.cover.cc, ds=stirDia();
   b.appendChild(el(&quot;h3&quot;,null,&quot;Step 1 — Torsional section properties&quot;));
   b.appendChild(eqBlock({
     title:&quot;Gross section enclosed by the outside perimeter&quot;,ref:&quot;ACI 22.7.4.1&quot;,
@@ -2524,7 +2555,7 @@ function workTorsion(b,r){
   b.appendChild(eqBlock({
     title:&quot;Threshold below which torsion may be neglected&quot;,ref:&quot;ACI 22.7.4.1(a)&quot;,
     lines:[`T_{th} = \\lambda\\sqrt{f'_c}\\left(\\dfrac{A_{cp}^2}{p_{cp}}\\right)`,
-      `T_{th} = ${fmt(S.mat.lambda,2)}\\sqrt{${fmt(fc*1000,0)}\\text{ psi}}\\left(\\dfrac{(${fmt(T.Acp)}\\text{ in}^2)^2}{${fmt(T.pcp)}\\text{ in}}\\right) = ${fmt(T.Tth*12*1000,0)}\\text{ lb-in}`,
+      `T_{th} = ${fmt(S.mat.lambda,2)}${sqrtfc_psi(fc)>100?&quot;(100\\text{ psi, max per 22.7.2.1})&quot;:&quot;\\sqrt{&quot;+fmt(fc*1000,0)+&quot;\\text{ psi}}&quot;}\\left(\\dfrac{(${fmt(T.Acp)}\\text{ in}^2)^2}{${fmt(T.pcp)}\\text{ in}}\\right) = ${fmt(T.Tth*12*1000,0)}\\text{ lb-in}`,
       `T_{th} = \\dfrac{${fmt(T.Tth*12*1000,0)}\\text{ lb-in}}{1000\\;\\text{lb/kip}\\times 12\\;\\text{in/ft}} = ${fmt(T.Tth)}\\text{ k-ft}`,
       `\\phi T_{th} = 0.75(${fmt(T.Tth)}\\text{ k-ft}) = ${fmt(0.75*T.Tth)}\\text{ k-ft}`],
     vars:[[&quot;T_{th}&quot;,&quot;Threshold torsion&quot;,fmt(T.Tth),&quot;k-ft&quot;],
@@ -2644,8 +2675,8 @@ function workTorsion(b,r){
     ref:&quot;ACI 22.7.6.1 / 9.5.4.3&quot;,
     lines:[`\\left(\\dfrac{A_v}{s}\\right)_{req,V} + 2\\left(\\dfrac{A_t}{s}\\right)_{req,T} \\le \\left(\\dfrac{A_v}{s}\\right)_{prov}`,
       `T_u = ${fmt(T.Tu)}\\text{ k-ft}\\times 12\\;\\text{in/ft} = ${fmt(T.Tu*12,1)}\\text{ k-in}`,
-      `\\left(\\dfrac{A_t}{s}\\right)_{req} = \\dfrac{T_u}{\\phi\\,2A_o f_{yt}\\cot\\theta} = \\dfrac{${fmt(T.Tu*12,1)}\\text{ k-in}}{0.75(2)(${fmt(T.Ao)}\\text{ in}^2)(${fmt(S.mat.fyt)}\\text{ ksi})(${fmt(T.cot,3)})} = ${fmt(T.At_s_req,5)}\\;\\tfrac{\\text{in}^2}{\\text{in}}`,
-      `\\left(\\dfrac{A_v}{s}\\right)_{req} = \\max\\left(\\dfrac{V_u/\\phi - V_c}{f_{yt}\\,d},\\;0\\right) = \\max\\left(\\dfrac{${fmt(Math.abs(r.Vu))}\\text{ kip}/0.75 - ${fmt(T.Vc_k)}\\text{ kip}}{(${fmt(S.mat.fyt)}\\text{ ksi})(${fmt(r.sh.d)}\\text{ in})},\\;0\\right) = ${fmt(T.Av_s_req,5)}\\;\\tfrac{\\text{in}^2}{\\text{in}}`,
+      `\\left(\\dfrac{A_t}{s}\\right)_{req} = \\dfrac{T_u}{\\phi\\,2A_o f_{yt}\\cot\\theta} = \\dfrac{${fmt(T.Tu*12,1)}\\text{ k-in}}{0.75(2)(${fmt(T.Ao)}\\text{ in}^2)(${fmt(fyt)}\\text{ ksi})(${fmt(T.cot,3)})} = ${fmt(T.At_s_req,5)}\\;\\tfrac{\\text{in}^2}{\\text{in}}`,
+      `\\left(\\dfrac{A_v}{s}\\right)_{req} = \\max\\left(\\dfrac{V_u/\\phi - V_c}{f_{yt}\\,d},\\;0\\right) = \\max\\left(\\dfrac{${fmt(Math.abs(r.Vu))}\\text{ kip}/0.75 - ${fmt(T.Vc_k)}\\text{ kip}}{(${fmt(fyt)}\\text{ ksi})(${fmt(r.sh.d)}\\text{ in})},\\;0\\right) = ${fmt(T.Av_s_req,5)}\\;\\tfrac{\\text{in}^2}{\\text{in}}`,
       ...((Math.abs(r.Vu)/0.75 - T.Vc_k)<0?[`\\text{The numerator is negative (}${fmt(Math.abs(r.Vu)/0.75-T.Vc_k)}\\text{ kip): the concrete alone carries the shear, so no stirrup area is required for shear and the value is taken as zero.}`]:[]),
       `${fmt(T.Av_s_req,5)} + 2(${fmt(T.At_s_req,5)}) = ${fmt(T.comb_req,5)} \\;${T.combVT_OK?&quot;\\le&quot;:&quot;>&quot;}\\; ${fmt(T.comb_prov,5)}\\;\\tfrac{\\text{in}^2}{\\text{in}}`],
     vars:[[&quot;(A_v/s)_{prov}&quot;,&quot;Total transverse steel provided per inch&quot;,fmt(T.comb_prov,5),&quot;in\u00b2/in&quot;],
@@ -2710,7 +2741,7 @@ function buildServTab(pg){
       vars:[[&quot;M_{cr}&quot;,&quot;Cracking moment&quot;,fmt(svc.Mcr),&quot;k-ft&quot;]]
     }));
     if(S.code==='AASHTO'){
-      const g1=1.6, g3=0.67;   /* flexural cracking variability; A615 ratio (5.6.3.3) */
+      const g1=1.6, g3=(S.mat.gamma3||0.67);   /* flexural cracking variability; gamma3 by bar specification (5.6.3.3) */
       const McrF=g3*g1*svc.Mcr;
       const need=Math.min(McrF,Math.abs(g.Mu)>0?1.33*Math.abs(g.Mu):Infinity);
       const ok=g.phiMn>=need-1e-9;
@@ -2720,7 +2751,7 @@ function buildServTab(pg){
           `M_{cr} = ${fmt(g3,2)}\\left(${fmt(g1,2)}\\times${fmt(svc.fr,3)}\\text{ ksi}\\right)\\dfrac{${fmt(svc.Ig,0)}\\text{ in}^4}{${fmt(svc.yt)}\\text{ in}} = ${fmt(McrF*12,1)}\\text{ k-in}`,
           `M_{cr} = \\dfrac{${fmt(McrF*12,1)}\\text{ k-in}}{12\\;\\text{in/ft}} = ${fmt(McrF)}\\text{ k-ft}`],
         vars:[[&quot;\\gamma_1&quot;,&quot;Flexural cracking variability factor&quot;,&quot;1.60&quot;,&quot;&quot;],
-              [&quot;\\gamma_3&quot;,&quot;Ratio of yield to ultimate (ASTM A615)&quot;,&quot;0.67&quot;,&quot;&quot;],
+              [&quot;\\gamma_3&quot;,&quot;Ratio of yield to ultimate (by bar specification)&quot;,fmt(g3,2),&quot;&quot;],
               [&quot;S_c&quot;,&quot;Section modulus, I_g/y_t&quot;,fmt(svc.Ig/svc.yt,0),&quot;in\u00b3&quot;]]
       }));
       b.appendChild(eqBlock({
@@ -3448,7 +3479,7 @@ function plotAssistV(divId){
       const thr=4*rt*bw*sh.d/1000;
       smax=(sh.Vs>thr)?Math.min(sh.d/4,12):Math.min(sh.d/2,24);
     } else {
-      const vu=Math.abs(gov.Vu)/(0.9*bw*sh.dv);
+      const vu=Math.abs(gov.Vu)/(sh.phi*bw*sh.dv);
       smax=(vu>=0.125*fc)?Math.min(0.4*sh.dv,12):Math.min(0.8*sh.dv,24);
     }
     if(sp<=smax+1e-9){ xsOK.push(sp); ysOK.push(sh.phiVn); }
@@ -3978,6 +4009,11 @@ else init();
         h_total: S.sec.h,
         d_eff:   (F &amp;&amp; isFinite(F.dCent)) ? +F.dCent.toFixed(2) : '',
         as:      (F &amp;&amp; isFinite(F.As))    ? +F.As.toFixed(2)    : '',
+        /* both senses, so the ASD tab can use the one matching its own moment sense */
+        d_pos:   (cc &amp;&amp; cc.both &amp;&amp; isFinite(cc.both.pos.F.dCent)) ? +cc.both.pos.F.dCent.toFixed(2) : '',
+        as_pos:  (cc &amp;&amp; cc.both &amp;&amp; isFinite(cc.both.pos.F.As))    ? +cc.both.pos.F.As.toFixed(2)    : '',
+        d_neg:   (cc &amp;&amp; cc.both &amp;&amp; isFinite(cc.both.neg.F.dCent)) ? +cc.both.neg.F.dCent.toFixed(2) : '',
+        as_neg:  (cc &amp;&amp; cc.both &amp;&amp; isFinite(cc.both.neg.F.As))    ? +cc.both.neg.F.As.toFixed(2)    : '',
         shape:   typ,
         proj:    (S &amp;&amp; S.proj) ? {name:S.proj.name,num:S.proj.num,subj:S.proj.subj,
                                   by:S.proj.by,date:S.proj.date,chk:S.proj.chk,
@@ -4369,6 +4405,24 @@ function grp(v){ if(!isFinite(v)) return &quot;—&quot;; return Math.round(v).t
 function tex(elm,src,disp){ if(window.katex){ try{ katex.render(src,elm,{throwOnError:false,displayMode:!!disp}); return; }catch(e){} } elm.textContent=src; }
 function lsGet(k){ try{return localStorage.getItem(k);}catch(e){return null;} }
 function lsSet(k,v){ try{localStorage.setItem(k,v);return true;}catch(e){return false;} }
+/* Allowable stresses tied to f'c / fy (psi), auto unless the user overrides a field.
+   Inventory fc = 0.40 f'c (AASHTO Std. Spec. 8.15.2.1.1). fs: inventory 20,000 psi Gr 40/50,
+   24,000 psi Gr 60 (8.15.2.2); operating 28,000 psi Gr 40, 36,000 psi Gr 60 (MBE 6B.6.2.3).
+   Other grades: no rule, value stays as entered. Operating fc is never auto (MassDOT value). */
+const AUTO_ALLOW=[&quot;fc_inv&quot;,&quot;fs_inv&quot;,&quot;fs_op&quot;];
+function autoAllow(fc,fy){
+  return {fc_inv: fc>0 ? +(0.40*fc).toFixed(1) : null,
+          fs_inv: (fy===40000||fy===50000)?20000:(fy===60000?24000:null),
+          fs_op:  fy===40000?28000:(fy===60000?36000:null)};
+}
+function applyAutoAllow(){
+  const a=autoAllow(+S.inherit.fc||0,+S.inherit.fy||0);
+  if(!S.allow.ovr) S.allow.ovr={fc_inv:false,fs_inv:false,fs_op:false};
+  AUTO_ALLOW.forEach(k=>{ if(!S.allow.ovr[k] &amp;&amp; a[k]!==null) S.allow[k]=a[k]; });
+  return a;
+}
+function allowTag(k){ const a=autoAllow(+S.inherit.fc||0,+S.inherit.fy||0);
+  return S.allow.ovr&amp;&amp;S.allow.ovr[k] ? &quot; (override)&quot; : (a[k]!==null ? &quot; (auto)&quot; : &quot; (input, no grade rule)&quot;); }
 
 /* §0 equation block — symbolic, substituted, result, variable table, code ref */
 function eqBlock(o){
@@ -4402,7 +4456,7 @@ function defaultState(){
           by:&quot;M. Lococo&quot;,date:new Date().toISOString().slice(0,10),
           chk:&quot;&quot;,chkDate:&quot;&quot;,sheet:&quot;R-1&quot;},
     mode:{momentType:&quot;pos&quot;, inv:true, op:true},
-    allow:{fc_inv:1200, fs_inv:20000, fc_op:1900, fs_op:28000},
+    allow:{fc_inv:1200, fs_inv:20000, fc_op:1900, fs_op:28000, ovr:{fc_inv:false,fs_inv:false,fs_op:false}},
     loads:{m_dl:250, m_ll:400},
     inherit:{fc:3000, fy:40000, b_eff:90, h_f:7.0, b_w:14, h_total:32, d_eff:28.5, as:8.00, shape:&quot;tee&quot;, src:false},
     ui:{tab:&quot;tabSummary&quot;, collapse:{}, rptOpts:null}
@@ -4420,6 +4474,12 @@ function mergeState(st){
   S={...d,...st};
   [&quot;proj&quot;,&quot;mode&quot;,&quot;allow&quot;,&quot;loads&quot;,&quot;inherit&quot;,&quot;ui&quot;].forEach(k=>{ S[k]={...d[k],...(st[k]||{})}; });
   if(!S.ui.collapse) S.ui.collapse={};
+  /* Older saves have no override flags: keep any saved allowable that differs from the f'c/fy-based
+     value as an override, so saved data is not silently replaced. */
+  const so=st.allow&amp;&amp;st.allow.ovr;
+  if(so &amp;&amp; typeof so===&quot;object&quot;) S.allow.ovr={fc_inv:!!so.fc_inv,fs_inv:!!so.fs_inv,fs_op:!!so.fs_op};
+  else { const a=autoAllow(+S.inherit.fc||0,+S.inherit.fy||0); S.allow.ovr={};
+    AUTO_ALLOW.forEach(k=>{ S.allow.ovr[k]=!!(st.allow &amp;&amp; st.allow[k]!==undefined &amp;&amp; a[k]!==null &amp;&amp; +st.allow[k]!==a[k]); }); }
 }
 
 /* =====================================================================
@@ -4535,8 +4595,8 @@ function buildInput(){
       [&quot;h_f&quot;,&quot;Flange thickness&quot;,fmt(I.h_f),&quot;in&quot;],
       [&quot;b_w&quot;,&quot;Web width&quot;,fmt(I.b_w),&quot;in&quot;],
       [&quot;h&quot;,&quot;Overall depth&quot;,fmt(I.h_total),&quot;in&quot;],
-      [&quot;d&quot;,&quot;Effective depth&quot;,fmt(I.d_eff),&quot;in&quot;],
-      [&quot;A_s&quot;,&quot;Tension steel area&quot;,fmt(I.as),&quot;in²&quot;]
+      [&quot;d&quot;,&quot;Effective depth&quot;+(typeof I.d_pos==='number'?(S.mode.momentType==='pos'?&quot; (+M)&quot;:&quot; (−M)&quot;):&quot;&quot;),fmt(typeof I.d_pos==='number'?(S.mode.momentType==='pos'?I.d_pos:I.d_neg):I.d_eff),&quot;in&quot;],
+      [&quot;A_s&quot;,&quot;Tension steel area&quot;+(typeof I.as_pos==='number'?(S.mode.momentType==='pos'?&quot; (+M)&quot;:&quot; (−M)&quot;):&quot;&quot;),fmt(typeof I.as_pos==='number'?(S.mode.momentType==='pos'?I.as_pos:I.as_neg):I.as),&quot;in²&quot;]
     ];
     rows.forEach(r=>{ const tr=el(&quot;tr&quot;);
       const s=el(&quot;td&quot;,&quot;s&quot;); tex(s,r[0],false); tr.appendChild(s);
@@ -4550,14 +4610,19 @@ function buildInput(){
 
   /* 3. Allowable stresses */
   mkSection(&quot;inAllow&quot;,NT(&quot;Allowable Stresses&quot;),b=>{
-    b.appendChild(el(&quot;div&quot;,&quot;note&quot;,&quot;AASHTO 8.15.2 service-level allowables. Defaults: f_c = 0.4 f'_c; &quot;+
-      &quot;f_s per steel grade / rating level.&quot;));
+    b.appendChild(el(&quot;div&quot;,&quot;note&quot;,&quot;AASHTO 8.15.2 service-level allowables, set automatically from f'_c and f_y (auto): &quot;+
+      &quot;f_c,inv = 0.40 f'_c; f_s,inv = 20,000 psi (Gr 40/50) or 24,000 psi (Gr 60); f_s,op = 28,000 psi (Gr 40) or 36,000 psi (Gr 60, MBE 6B.6.2.3). &quot;+
+      &quot;Typing a value overrides it. Operating f_c is always the entered value.&quot;));
     b.appendChild(el(&quot;div&quot;,&quot;grpMini&quot;,&quot;Inventory&quot;));
-    fRow(b,&quot;Concrete, f_{c,inv}&quot;,numIn(()=>S.allow.fc_inv,v=>S.allow.fc_inv=v,&quot;50&quot;,&quot;fcInv&quot;),&quot;psi&quot;);
-    fRow(b,&quot;Steel, f_{s,inv}&quot;,numIn(()=>S.allow.fs_inv,v=>S.allow.fs_inv=v,&quot;500&quot;,&quot;fsInv&quot;),&quot;psi&quot;);
+    fRow(b,&quot;Concrete, f_{c,inv}&quot;+allowTag(&quot;fc_inv&quot;),numIn(()=>S.allow.fc_inv,v=>{S.allow.fc_inv=v;S.allow.ovr.fc_inv=true;},&quot;50&quot;,&quot;fcInv&quot;),&quot;psi&quot;);
+    fRow(b,&quot;Steel, f_{s,inv}&quot;+allowTag(&quot;fs_inv&quot;),numIn(()=>S.allow.fs_inv,v=>{S.allow.fs_inv=v;S.allow.ovr.fs_inv=true;},&quot;500&quot;,&quot;fsInv&quot;),&quot;psi&quot;);
     b.appendChild(el(&quot;div&quot;,&quot;grpMini&quot;,&quot;Operating&quot;));
-    fRow(b,&quot;Concrete, f_{c,op}&quot;,numIn(()=>S.allow.fc_op,v=>S.allow.fc_op=v,&quot;50&quot;,&quot;fcOp&quot;),&quot;psi&quot;);
-    fRow(b,&quot;Steel, f_{s,op}&quot;,numIn(()=>S.allow.fs_op,v=>S.allow.fs_op=v,&quot;500&quot;,&quot;fsOp&quot;),&quot;psi&quot;);
+    fRow(b,&quot;Concrete, f_{c,op} (input)&quot;,numIn(()=>S.allow.fc_op,v=>S.allow.fc_op=v,&quot;50&quot;,&quot;fcOp&quot;),&quot;psi&quot;);
+    fRow(b,&quot;Steel, f_{s,op}&quot;+allowTag(&quot;fs_op&quot;),numIn(()=>S.allow.fs_op,v=>{S.allow.fs_op=v;S.allow.ovr.fs_op=true;},&quot;500&quot;,&quot;fsOp&quot;),&quot;psi&quot;);
+    const rb=el(&quot;button&quot;,null,&quot;↺ Recompute allowables from f′c / f_y&quot;); rb.type=&quot;button&quot;;
+    rb.style.cssText=&quot;font-size:11px;margin-top:6px;cursor:pointer&quot;;
+    rb.addEventListener(&quot;click&quot;,()=>{ S.allow.ovr={fc_inv:false,fs_inv:false,fs_op:false}; refresh(); });
+    b.appendChild(rb);
   },P);
 
   /* 4. Applied loads */
@@ -4573,15 +4638,20 @@ function buildInput(){
    COMPUTE ENGINE — AASHTO 8.15 working-stress analysis
    ===================================================================== */
 function compute(){
+  applyAutoAllow();
   const I=S.inherit, M=S.mode, A=S.allow, L=S.loads;
   const fc=Math.max(1,+I.fc||3000), fy=+I.fy||40000;
   const b_eff=+I.b_eff||0, h_f=+I.h_f||0, b_w=Math.max(0.01,+I.b_w||0);
-  const d=Math.max(0.01,+I.d_eff||1), h=+I.h_total||0, As=Math.max(0,+I.as||0);
   const isPos = M.momentType==='pos';
+  /* The Capacity tab sends d and A_s for BOTH senses (d_pos/as_pos, d_neg/as_neg); use the pair that
+     matches this tab's moment sense. Fall back to the single d_eff/as (older state or no live values). */
+  const dS=isPos?I.d_pos:I.d_neg, aS=isPos?I.as_pos:I.as_neg;
+  const bySense=(typeof dS==='number' &amp;&amp; isFinite(dS) &amp;&amp; typeof aS==='number' &amp;&amp; isFinite(aS));
+  const d=Math.max(0.01,+(bySense?dS:I.d_eff)||1), h=+I.h_total||0, As=Math.max(0,+(bySense?aS:I.as)||0);
   const shape = I.shape==='tee' ? 'tee' : 'rect';
   const b_calc = shape==='rect' ? b_w : (isPos ? b_eff : b_w);
 
-  const Ec=57000*Math.sqrt(fc), n=Math.max(1,Math.round(ES/Ec));
+  const Ec=57000*Math.sqrt(fc), n=Math.max(6,Math.round(ES/Ec));   /* Std. Spec. 8.15.3.4: nearest whole number, not less than 6 */
   const rho = As/(b_calc*d);
 
   const k_rect=Math.sqrt(2*rho*n+Math.pow(rho*n,2))-rho*n;
@@ -4750,7 +4820,7 @@ function buildAnalysisTab(pg){
       title:&quot;Modular ratio&quot;, ref:&quot;AASHTO 8.15.3 / 8.7.1&quot;,
       lines:[
         &quot;E_c = 57000\\sqrt{f'_c} = 57000\\sqrt{&quot;+grp(R.fc)+&quot;} = &quot;+grp(R.Ec)+&quot;\\ \\text{psi}&quot;,
-        &quot;n = \\dfrac{E_s}{E_c} = \\dfrac{29{,}000{,}000}{&quot;+grp(R.Ec)+&quot;} = &quot;+fmt(ES/R.Ec,2)+&quot; \\Rightarrow &quot;+R.n
+        &quot;n = \\dfrac{E_s}{E_c} = \\dfrac{29{,}000{,}000}{&quot;+grp(R.Ec)+&quot;} = &quot;+fmt(ES/R.Ec,2)+&quot; \\Rightarrow &quot;+R.n+(Math.round(ES/R.Ec)<6?&quot;\\;(\\text{not less than 6, 8.15.3.4})&quot;:&quot;&quot;)
       ],
       vars:[[&quot;E_s&quot;,&quot;Steel modulus&quot;,&quot;29,000,000&quot;,&quot;psi&quot;],[&quot;E_c&quot;,&quot;Concrete modulus&quot;,grp(R.Ec),&quot;psi&quot;],
             [&quot;n&quot;,&quot;Modular ratio (rounded)&quot;,R.n,&quot;&quot;]]
@@ -4992,6 +5062,7 @@ function doImport(file){ const rd=new FileReader();
    REFRESH + INIT
    ===================================================================== */
 function refresh(){
+  applyAutoAllow();
   const st=captureUI();
   buildProjGrid();
   buildInput();
@@ -5024,7 +5095,8 @@ function init(){
   window.addEventListener(&quot;message&quot;,function(e){
     const d=e&amp;&amp;e.data; if(!d||d.type!=='sharedInputs'||!d.data) return;
     const p=d.data;
-    const map={fc:'fc',fy:'fy',b_eff:'b_eff',h_f:'h_f',b_w:'b_w',h_total:'h_total',d_eff:'d_eff',as:'as'};
+    const map={fc:'fc',fy:'fy',b_eff:'b_eff',h_f:'h_f',b_w:'b_w',h_total:'h_total',d_eff:'d_eff',as:'as',
+               d_pos:'d_pos',as_pos:'as_pos',d_neg:'d_neg',as_neg:'as_neg'};
     Object.keys(map).forEach(k=>{ if(p[k]!==''&amp;&amp;p[k]!=null&amp;&amp;!isNaN(p[k])) S.inherit[k]=+p[k]; });
     if(p.shape) S.inherit.shape = (p.shape==='t-beam')?'tee':'rect';
     S.inherit.src=true;
@@ -5158,6 +5230,7 @@ input,select,textarea{font-family:inherit; font-size:13px;}
   padding:6px 9px; border-radius:2px; border:1px solid transparent; font-size:12px;}
 .check.pass{background:var(--passbg); border-color:#bcdcc2; color:var(--pass);}
 .check.fail{background:var(--failbg); border-color:#e6b6b6; color:var(--fail);}
+.check.info{background:#fff; border-color:var(--line2); color:var(--sub);}
 .check .lbl{font-weight:normal;}
 .check .st{font-weight:bold; text-transform:uppercase; letter-spacing:.5px;}
 .check .st .val{font-weight:normal; color:var(--ink);}
@@ -5271,7 +5344,8 @@ table.vars td.num{text-align:right; white-space:nowrap;}
    Single-file HTML. KaTeX + Plotly (CDN). LocalStorage persistence.
    ===================================================================== */
 
-const LS_KEY = &quot;rebar_aci_autosave_v1&quot;;
+const LS_KEY = &quot;rcsuite.rebar_autosave_v1&quot;;          // own autosave key for the suite's Dev tab (was shared with the standalone tool)
+const LS_KEY_OLD = &quot;rebar_aci_autosave_v1&quot;;          // standalone ACI Rebar Development Length.html autosave; read once for migration, never written or deleted
 const LS_PROJECTS = &quot;rebar_aci_projects_v1&quot;;
 
 /* Bar properties: db (in), area (in^2) */
@@ -5313,6 +5387,8 @@ function readInputs(){
     Atr:num('Atr'),                   // total area transverse steel crossing split, in^2
     sTr:num('sTr'),                   // spacing of transverse reinf, in
     nBars:num('nBars'),               // number of bars developed along split plane
+    barSpc:num('barSpc'),             // c-c spacing of developed bars, in (ACI 25.4.2.2 check; optional, blank = unknown)
+    psiRc:g('psiRc').value,           // ψr for compression development (ACI Table 25.4.9.3): &quot;1.0&quot; or &quot;0.75&quot;
     // excess reinforcement (ACI 25.4.10 / AASHTO λer)
     useExcess:g('useExcess').checked,
     asReq:num('asReq'),               // As required, in^2
@@ -5368,6 +5444,8 @@ function computeFactors(inp){
   const psiR = inp.hookConfined ? 1.0 : 1.6;
   const psiO = parseFloat(inp.hookLoc);
   const psiC_h = Math.min(inp.fc/15000 + 0.6, 1.0);
+  // ψr for compression development (ACI 318-19 25.4.9.2 / Table 25.4.9.3); 1.0 when not selected (old saved states)
+  const psiR_c = AASHTO ? 1.0 : (parseFloat(inp.psiRc) || 1.0);
 
   /* ---- AASHTO factors (5.10.8.2.1) ---- */
   // λrl reinforcement location (top bar) = 1.3; else 1.0
@@ -5385,7 +5463,7 @@ function computeFactors(inp){
   return {AASHTO,db,Ab,barNum,lambda,excess,excessRaw,
           sqrtFc,sqrtFc_raw,fc_ksi,fy_ksi,sqrtFc_ksi,sqrtFc_ksi_raw,
           psiT,psiE,psiS,psiG,psiTEcap,psiTEcapped,Ktr,cbKtr,cbKtr_raw,cbKtrCapped,
-          psiE_h,psiR,psiO,psiC_h,
+          psiE_h,psiR,psiO,psiC_h,psiR_c,
           lam_rl,lam_cf,lam_rlcf_cap,lam_rlcf_capped,lam_rc,lam_rc_raw,lam_rc_bounded};
 }
 
@@ -5412,7 +5490,7 @@ function calcHook(inp,f){
     // AASHTO hook mod factors: coating 1.2, confinement 0.8 if confined, else 1.0; lightweight per 5.10.8.2.4b
     const cf = parseFloat(inp.hookEpoxy)>1?1.2:1.0;
     const conf = inp.hookConfined?0.8:1.0;
-    const lw = inp.lightweight?1.3:1.0; // λ for lightweight hooks
+    const lw = 1/f.lambda; // AASHTO 10th Ed. 5.10.8.2.4a: l_dh = l_hb·(λrc·λcf)/λ, λ per 5.4.2.8 (was fixed ×1.3)
     const ldh_calc = lhb*cf*conf*lw*f.excess;
     const min1=8*f.db, min2=6;
     const ldh=Math.max(ldh_calc,min1,min2);
@@ -5437,8 +5515,8 @@ function calcComp(inp,f){
     const ldc = Math.max(ldc_calc, min);
     return {a,b,ldc_calc,min,ldc, gov: ldc===min?&quot;8in&quot;:(a>=b?&quot;eqA&quot;:&quot;eqB&quot;)};
   } else {
-    const a = (0.02*inp.fy)/(f.lambda*f.sqrtFc)*f.db;
-    const b = 0.0003*inp.fy*f.db;
+    const a = (0.02*inp.fy*f.psiR_c)/(f.lambda*f.sqrtFc)*f.db;   // ACI 25.4.9.2(a): fy·ψr/(50λ√f'c)·db
+    const b = 0.0003*inp.fy*f.psiR_c*f.db;                        // ACI 25.4.9.2(b): 0.0003·fy·ψr·db
     const base = Math.max(a,b);
     const ldc_calc = base*f.excess;
     const min = 8;
@@ -5456,6 +5534,17 @@ function classAEligible(inp,f){
   return {ratioOK, pctOK, eligible: ratioOK &amp;&amp; pctOK, known,
           ratio: (inp.asProv>0? inp.asReq/inp.asProv : null)};
 }
+
+/* ---------- ACI 25.4.2.2: fy >= 80 ksi bars spaced < 6 in. c-c need Ktr >= 0.5db ---------- */
+function ktrHSCheck(inp,f){
+  const relevant = !f.AASHTO &amp;&amp; inp.fy>=80000;
+  const known = inp.barSpc>0;
+  const applies = relevant &amp;&amp; known &amp;&amp; inp.barSpc<6;
+  const req = 0.5*f.db;
+  return {relevant, known, applies, req, ok: !applies || f.Ktr>=req};
+}
+/* ---------- ACI 25.5.1.1: no lap splices for #14 / #18 bars (except compression to #11 and smaller, 25.5.5.3) ---------- */
+function lapProhibited(inp,f){ return !f.AASHTO &amp;&amp; parseInt(inp.barSize)>=14; }
 
 /* ---------- Splices ---------- */
 function calcTensSplice(inp,f,tens){
@@ -5548,7 +5637,9 @@ function buildInputPanel(){
       <div class=&quot;field&quot;><label>s <span class=&quot;unit&quot;>(in)</span></label><input id=&quot;sTr&quot; type=&quot;number&quot; value=&quot;12&quot; step=&quot;0.5&quot; min=&quot;0&quot;></div>
       <div class=&quot;field&quot;><label>n bars</label><input id=&quot;nBars&quot; type=&quot;number&quot; value=&quot;1&quot; step=&quot;1&quot; min=&quot;1&quot;></div>
     </div>
-    <div class=&quot;hint&quot;>Leave A<sub>tr</sub>=0 for no transverse steel (conservative). K<sub>tr</sub>=40A<sub>tr</sub>/(s·n).</div>`)}
+    <div class=&quot;hint&quot;>Leave A<sub>tr</sub>=0 for no transverse steel (conservative). K<sub>tr</sub>=40A<sub>tr</sub>/(s·n).</div>
+    <div class=&quot;field&quot; style=&quot;margin-top:8px&quot;><label>Developed bars c-c spacing <span class=&quot;unit&quot;>(in, optional)</span></label>
+      <input id=&quot;barSpc&quot; type=&quot;number&quot; step=&quot;0.5&quot; min=&quot;0&quot; placeholder=&quot;for ACI 25.4.2.2 check (fy ≥ 80 ksi)&quot;></div>`)}
 
   ${panel(&quot;D2&quot;,&quot;Excess Reinforcement&quot;,false,`
     <div class=&quot;chk&quot;><input id=&quot;useExcess&quot; type=&quot;checkbox&quot;><label for=&quot;useExcess&quot;>Apply excess-reinforcement reduction (ACI 25.4.10 / AASHTO &amp;lambda;<sub>er</sub>)</label></div>
@@ -5556,18 +5647,25 @@ function buildInputPanel(){
       <div class=&quot;field&quot;><label>A<sub>s</sub> required <span class=&quot;unit&quot;>(in²)</span></label><input id=&quot;asReq&quot; type=&quot;number&quot; value=&quot;1.00&quot; step=&quot;0.01&quot; min=&quot;0&quot;></div>
       <div class=&quot;field&quot;><label>A<sub>s</sub> provided <span class=&quot;unit&quot;>(in²)</span></label><input id=&quot;asProv&quot; type=&quot;number&quot; value=&quot;1.00&quot; step=&quot;0.01&quot; min=&quot;0&quot;></div>
     </div>
-    <div class=&quot;hint&quot;>Reduces l_d by A<sub>s,req</sub>/A<sub>s,prov</sub>. Not permitted where full f<sub>y</sub> is required (seismic, etc.). Also drives Class A splice eligibility.</div>`)}
+    <div class=&quot;hint&quot;>Reduces l_d by A<sub>s,req</sub>/A<sub>s,prov</sub>. The tool does not check where the bar is, so <b>do not tick this</b> if any of these apply &amp;mdash; ACI 25.4.10.2: (a) at noncontinuous supports, (b) where anchorage or development for f<sub>y</sub> is required, (c) where bars are required to be continuous, (d) headed or mechanically anchored bars, (e) seismic-force-resisting systems in SDC D, E or F. AASHTO &amp;lambda;<sub>er</sub> (5.10.8.2.1c): not where development for f<sub>y</sub> is specifically required or for seismic (5.11) detailing. Never applied to splices. Also drives Class A splice eligibility.</div>`)}
 
   ${panel(&quot;E&quot;,&quot;Standard Hook Factors&quot;,false,`
     <div class=&quot;field&quot;><label>Epoxy Coating (&amp;psi;<sub>e</sub>)</label>
       <select id=&quot;hookEpoxy&quot;><option value=&quot;1.0&quot; selected>Uncoated (1.0)</option><option value=&quot;1.2&quot;>Epoxy/zinc-epoxy (1.2)</option></select></div>
     <div class=&quot;field&quot;><label>Location (&amp;psi;<sub>o</sub>)</label>
       <select id=&quot;hookLoc&quot;>
-        <option value=&quot;1.0&quot; selected>Confined / cover ≥2.5&amp;quot; (1.0)</option>
-        <option value=&quot;1.25&quot;>Other, terminating inside column (1.25)</option>
-        <option value=&quot;1.25&quot;>Side cover &amp;lt;2.5&amp;quot; (1.25)</option>
+        <option value=&quot;1.0&quot; selected>Inside column/wall core w/ side cover ≥2.5&amp;quot;, or side cover ≥6db (1.0)</option>
+        <option value=&quot;1.25&quot;>Other, e.g. side cover &amp;lt;2.5&amp;quot; (1.25)</option>
       </select></div>
     <div class=&quot;chk&quot;><input id=&quot;hookConfined&quot; type=&quot;checkbox&quot;><label for=&quot;hookConfined&quot;>Confining reinf. present &amp;rarr; &amp;psi;<sub>r</sub>=1.0 (else 1.6)</label></div>`)}
+
+  ${panel(&quot;E2&quot;,&quot;Compression Development (&amp;psi;<sub>r</sub>)&quot;,false,`
+    <div class=&quot;field&quot;><label>Confining Reinforcement (&amp;psi;<sub>r</sub>, ACI Table 25.4.9.3)</label>
+      <select id=&quot;psiRc&quot;>
+        <option value=&quot;1.0&quot; selected>Other (1.0)</option>
+        <option value=&quot;0.75&quot;>Enclosed in spiral, circular tie (db≥1/4&amp;quot;, pitch≤4&amp;quot;), #4 ties or hoops @ ≤4&amp;quot; c-c (0.75)</option>
+      </select></div>
+    <div class=&quot;hint&quot;>ACI only. AASHTO compression modifiers are not applied (conservative).</div>`)}
 
   ${panel(&quot;F&quot;,&quot;Splices&quot;,false,`
     <div class=&quot;field&quot;><label>Tension Lap Class</label>
@@ -5636,6 +5734,12 @@ function validate(inp,f){
     if (f.cbKtrCapped) w.push(`(c_b+K_tr)/d_b = ${fmt(f.cbKtr_raw,2)} exceeds 2.5; limited to 2.5 (ACI 25.4.2.4).`);
   }
   if (inp.fy >= 80000) w.push(`f_y = ${fmt(inp.fy,0)} psi: high-strength reinforcement. Verify the member is within the scope of ${cite} for this grade.`);
+  if (!f.AASHTO &amp;&amp; inp.fy >= 80000){
+    const k = ktrHSCheck(inp,f);
+    if (!k.known) w.push(`ACI 25.4.2.2: for f_y ≥ 80,000 psi bars spaced closer than 6 in. on center, K_tr ≥ 0.5d_b (${fmt(k.req,3)} in.) is required. Enter the developed-bar c-c spacing (panel D) to check this.`);
+    else if (!k.ok) w.push(`ACI 25.4.2.2 NOT satisfied: f_y ≥ 80,000 psi bars at ${fmt(inp.barSpc,2)} in. on center (&amp;lt; 6 in.) require K_tr ≥ 0.5d_b = ${fmt(k.req,3)} in.; provided K_tr = ${fmt(f.Ktr,3)} in. Add transverse reinforcement.`);
+  }
+  if (lapProhibited(inp,f)) w.push(`ACI 25.5.1.1: lap splices are not permitted for #${inp.barSize} bars. Use mechanical or welded splices. In compression, #14/#18 bars may be lap spliced only to #11 and smaller bars (25.5.5.3); the splice lengths shown for this bar size do not apply.`);
   if (inp.cb <= 0) w.push(&quot;c_b (cover / half-spacing) should be greater than 0.&quot;);
   if (inp.cb > 4) w.push(`c_b = ${fmt(inp.cb,2)}&quot; is unusually large; confirm cover/spacing input.`);
   if (inp.Atr>0 &amp;&amp; inp.sTr<=0) w.push(&quot;Transverse steel area A_tr entered but spacing s ≤ 0 — K_tr will be ignored.&quot;);
@@ -5867,7 +5971,7 @@ function tabHook(inp,f){
       <p>A hook works differently from a straight bar: instead of relying only on bond along its length, the bend bears mechanically against the concrete inside it, like an anchor. These factors adjust for how well that concrete core is protected.</p>
       <div class=&quot;vardef&quot;><span class=&quot;s&quot;>ψ_e = ${fmt(f.psiE_h,1)}</span> — Epoxy coating reduces the bond along the straight lead-in portion of the hook. 1.2 if coated, 1.0 if uncoated.</div>
       <div class=&quot;vardef&quot;><span class=&quot;s&quot;>ψ_r = ${fmt(f.psiR,1)}</span> — Confining reinforcement. Ties or stirrups wrapped around the hook resist the outward bursting force where the bend bears on the concrete. If that confinement is present per code, ψ_r = 1.0; without it, the length must grow by 60% (ψ_r = 1.6). This is often the single biggest driver of hook length.</div>
-      <div class=&quot;vardef&quot;><span class=&quot;s&quot;>ψ_o = ${fmt(f.psiO,2)}</span> — Location. A hook near a free edge (side cover < 2.5 in) or terminating inside a column has less surrounding concrete to bear against, so it splits earlier and needs a 1.25 penalty. Well-covered hooks use 1.0.</div>
+      <div class=&quot;vardef&quot;><span class=&quot;s&quot;>ψ_o = ${fmt(f.psiO,2)}</span> — Location (Table 25.4.3.2, #11 and smaller). 1.0 where the hook terminates inside a column or structural-wall core with side cover normal to the plane of the hook ≥ 2.5 in., or where that side cover is ≥ 6d_b. All other cases (e.g. a hook near a free edge with side cover < 2.5 in.) have less concrete to bear against and use 1.25.</div>
       <div class=&quot;vardef&quot;><span class=&quot;s&quot;>ψ_c = ${fmt(f.psiC_h,3)}</span> — Concrete strength (new in ACI 318-19). Stronger concrete bears harder against the hook, allowing a shorter length. Below 6,000 psi it gives a credit < 1.0; it caps at 1.0.</div>
       <div class=&quot;vardef&quot;><span class=&quot;s&quot;>λ = ${fmt(f.lambda,2)}</span> — Same lightweight penalty as tension.</div>
       <p><b>Why d_b^{1.5} instead of d_b?</b> Larger hooked bars concentrate more bearing force in the bend, splitting the concrete disproportionately. The 1.5 power makes big bars grow faster than a linear relationship would, matching test data.</p>`)
@@ -5907,16 +6011,16 @@ function tabHookAASHTO(inp,f,h){
   + subsec(&quot;2. Modification Factors&quot;,&quot;§5.10.8.2.4b&quot;, varTable([
       [&quot;\\lambda_{cf}&quot;,&quot;Coating (1.2 if epoxy)&quot;,fmt(h.cf,1),&quot;—&quot;],
       [&quot;\\lambda_{rc}&quot;,&quot;Confinement (0.8 if tied per code)&quot;,fmt(h.conf,1),&quot;—&quot;],
-      [&quot;\\lambda&quot;,&quot;Lightweight (1.3 if LW)&quot;,fmt(h.lw,1),&quot;—&quot;],
+      [&quot;\\lambda&quot;,&quot;Concrete density factor (divides; 0.75 if LW)&quot;,fmt(f.lambda,2),&quot;—&quot;],
     ])
     + note(`<div class=&quot;vardef&quot;><span class=&quot;s&quot;>λ_cf = ${fmt(h.cf,1)}</span> — 1.2 for epoxy-coated hooked bars, 1.0 uncoated.</div>
       <div class=&quot;vardef&quot;><span class=&quot;s&quot;>λ_rc = ${fmt(h.conf,1)}</span> — 0.8 where the hook is enclosed by ties/stirrups spaced ≤3d_b along the development length (with the first within 2d_b of the bend), else 1.0.</div>
-      <div class=&quot;vardef&quot;><span class=&quot;s&quot;>λ = ${fmt(h.lw,1)}</span> — 1.3 for lightweight concrete, 1.0 normalweight.</div>`))
+      <div class=&quot;vardef&quot;><span class=&quot;s&quot;>λ = ${fmt(f.lambda,2)}</span> — Concrete density modification factor (§5.4.2.8). It <em>divides</em> the length, as for straight bars, so lightweight (0.75) lengthens it by 1/0.75 = 1.33; 1.0 normalweight.</div>`))
   + excessBlock(inp,f)
   + subsec(&quot;3. Hook Development Length&quot;,&quot;Eq. 5.10.8.2.4a&quot;,
       eqBlock(&quot;Hook length&quot;,&quot;§5.10.8.2.4a&quot;,
-        &quot;l_{dh} = l_{hb}\\,\\lambda_{cf}\\,\\lambda_{rc}\\,\\lambda&quot;+(inp.useExcess?&quot;\\,\\lambda_{er}&quot;:&quot;&quot;)+&quot; \\ge \\max(8d_b, 6\\text{ in})&quot;,
-        `${fmt(h.lhb,2)}\\times ${fmt(h.cf,1)}\\times ${fmt(h.conf,1)}\\times ${fmt(h.lw,1)}${inp.useExcess?`\\times ${fmt(f.excess,3)}`:&quot;&quot;}`,
+        &quot;l_{dh} = l_{hb}\\,\\dfrac{\\lambda_{cf}\\,\\lambda_{rc}&quot;+(inp.useExcess?&quot;\\,\\lambda_{er}&quot;:&quot;&quot;)+&quot;}{\\lambda} \\ge \\max(8d_b, 6\\text{ in})&quot;,
+        `${fmt(h.lhb,2)}\\times\\dfrac{${fmt(h.cf,1)}\\times ${fmt(h.conf,1)}${inp.useExcess?`\\times ${fmt(f.excess,3)}`:&quot;&quot;}}{${fmt(f.lambda,2)}}`,
         `\\boxed{l_{dh} = ${fmt(h.ldh,2)}\\ \\text{in}}`));
 }
 
@@ -5965,6 +6069,7 @@ function tabComp(inp,f){
      and end bearing plus confinement contribute. The larger of two expressions governs, subject to an 8&amp;quot; floor.</div>`
   + subsec(&quot;1. Governing Expressions&quot;,&quot;§25.4.9.2&quot;, varTable([
       [&quot;f_y&quot;,&quot;Yield strength&quot;,fmt(inp.fy,0),&quot;psi&quot;],
+      [&quot;\\psi_r&quot;,&quot;Confining reinforcement (Table 25.4.9.3)&quot;,fmt(f.psiR_c,2),&quot;—&quot;],
       [&quot;\\lambda&quot;,&quot;Lightweight concrete&quot;,fmt(f.lambda,2),&quot;—&quot;],
       [&quot;\\sqrt{f'_c}&quot;,&quot;Capped at 100&quot;,fmt(f.sqrtFc,1),&quot;psi^{0.5}&quot;],
       [&quot;d_b&quot;,&quot;Bar diameter&quot;,fmt(f.db,3),&quot;in&quot;],
@@ -5976,12 +6081,12 @@ function tabComp(inp,f){
       <div class=&quot;vardef&quot;><span class=&quot;s&quot;>8 in absolute minimum</span> — A practical constructability floor for small bars.</div>
       <p>The code takes the largest of the three. Whichever governs is flagged in the result.</p>`)
     + eqBlock(&quot;Expression (a)&quot;,&quot;§25.4.9.2 (a)&quot;,
-        &quot;l_{dc,a} = \\dfrac{0.02\\,f_y}{\\lambda\\sqrt{f'_c}}\\,d_b&quot;,
-        `\\dfrac{0.02\\times ${fmt(inp.fy,0)}}{${fmt(f.lambda,2)}\\times ${fmt(f.sqrtFc,1)}}\\times ${fmt(f.db,3)}`,
+        &quot;l_{dc,a} = \\dfrac{f_y\\,\\psi_r}{50\\,\\lambda\\sqrt{f'_c}}\\,d_b&quot;,
+        `\\dfrac{${fmt(inp.fy,0)}\\times ${fmt(f.psiR_c,2)}}{50\\times ${fmt(f.lambda,2)}\\times ${fmt(f.sqrtFc,1)}}\\times ${fmt(f.db,3)}`,
         `l_{dc,a} = ${fmt(c.a,2)}\\ \\text{in}`)
     + eqBlock(&quot;Expression (b)&quot;,&quot;§25.4.9.2 (b)&quot;,
-        &quot;l_{dc,b} = 0.0003\\,f_y\\,d_b&quot;,
-        `0.0003\\times ${fmt(inp.fy,0)}\\times ${fmt(f.db,3)}`,
+        &quot;l_{dc,b} = 0.0003\\,f_y\\,\\psi_r\\,d_b&quot;,
+        `0.0003\\times ${fmt(inp.fy,0)}\\times ${fmt(f.psiR_c,2)}\\times ${fmt(f.db,3)}`,
         `l_{dc,b} = ${fmt(c.b,2)}\\ \\text{in}`)
     + eqBlock(&quot;Governing length&quot;,&quot;§25.4.9.1&quot;,
         &quot;l_{dc} = \\max\\!\\left(l_{dc,a},\\ l_{dc,b},\\ 8\\ \\text{in}\\right)&quot;+(inp.useExcess?&quot;\\times\\tfrac{A_{s,req}}{A_{s,prov}}&quot;:&quot;&quot;),
@@ -6028,6 +6133,7 @@ function tabTSplice(inp,f){
   + `<div class=&quot;narr&quot;>Tension lap splices are a multiple of the tension development length l_d. Class B (1.3 l_d) is the
      default; Class A (1.0 l_d) is permitted only where provided reinforcement is at least twice that required and no more
      than half the bars are spliced within the lap length (${ref}).</div>`
+  + (lapProhibited(inp,f)?`<div class=&quot;warnbox&quot; style=&quot;border-left-color:var(--fail);background:var(--failbg)&quot;><b style=&quot;color:var(--fail)&quot;>Lap splice NOT permitted (ACI 25.5.1.1).</b> #${inp.barSize} bars shall not be lap spliced in tension. Use a mechanical or welded splice. The length below is shown for reference only.</div>`:&quot;&quot;)
   + classABlock(inp,f)
   + subsec(&quot;1. Base Development Length&quot;,ref, varTable([
       [&quot;l_d&quot;,&quot;Tension development length (splice base, without excess-reinf reduction)&quot;,fmt(s.ldBase,2),&quot;in&quot;],
@@ -6052,6 +6158,7 @@ function tabCSplice(inp,f){
   const s = calcCompSplice(inp,f);
   const fyLE60 = inp.fy<=60000;
   return hero(&quot;Compression Lap Splice&quot;,&quot;ACI 318-19 §25.5.5&quot;,`${fmt(s.lsc,2)} in`,&quot;Required l_sc&quot;)
+  + (lapProhibited(inp,f)?`<div class=&quot;warnbox&quot; style=&quot;border-left-color:var(--fail);background:var(--failbg)&quot;><b style=&quot;color:var(--fail)&quot;>Lap splice of #${inp.barSize} to #${inp.barSize} NOT permitted (ACI 25.5.1.1).</b> In compression, #14/#18 bars may be lap spliced only to #11 and smaller bars (25.5.5.3), with l_sc per 25.5.5.2 (larger of l_dc of the larger bar and l_sc of the smaller bar). The length below is shown for reference only.</div>`:&quot;&quot;)
   + `<div class=&quot;narr&quot;>Compression lap splice length is a direct function of f_y and d_b. For f'c below 3,000 psi the
      length is increased by one-third (§25.5.5.1).</div>`
   + subsec(&quot;1. Splice Length&quot;,&quot;§25.5.5.1&quot;, varTable([
@@ -6090,8 +6197,8 @@ function tabBatch(inp,f){
     return `<tr style=&quot;${cur?'background:#f0e6e6;font-weight:bold;':''}&quot;>
       <td class=&quot;sym&quot;>#${b}</td><td class=&quot;num&quot;>${fmt(BAR[b].d,3)}</td>
       <td class=&quot;num&quot;>${fmt(t.ld,1)}</td><td class=&quot;num&quot;>${fmt(h.ldh,1)}</td>
-      <td class=&quot;num&quot;>${fmt(c.ldc,1)}</td><td class=&quot;num&quot;>${fmt(ts.lst,1)}</td>
-      <td class=&quot;num&quot;>${fmt(cs.lsc,1)}</td></tr>`;
+      <td class=&quot;num&quot;>${fmt(c.ldc,1)}</td><td class=&quot;num&quot;>${lapProhibited(bi,bf)?&quot;N/P*&quot;:fmt(ts.lst,1)}</td>
+      <td class=&quot;num&quot;>${lapProhibited(bi,bf)?&quot;N/P*&quot;:fmt(cs.lsc,1)}</td></tr>`;
   }).join(&quot;&quot;);
   return hero(&quot;Bar Development Schedule&quot;,codeName+&quot; — all bar sizes&quot;,`#${inp.barSize}`,&quot;current selection&quot;)
   + `<div class=&quot;narr&quot;>Every length below is computed with your current f'<sub>c</sub> = ${fmt(inp.fc,0)} psi, f<sub>y</sub> = ${fmt(inp.fy,0)} psi,
@@ -6106,7 +6213,7 @@ function tabBatch(inp,f){
         </tr></thead>
         <tbody>${rows}</tbody>
       </table>
-      <div class=&quot;hint&quot; style=&quot;margin-top:8px&quot;>All lengths in inches. Tension splice uses Class ${inp.tensClass}. ${inp.useExcess?`Excess-reinforcement reduction (×${fmt(f.excess,3)}) applied to development lengths but not splices, per code.`:&quot;No excess-reinforcement reduction applied.&quot;}</div>`)
+      <div class=&quot;hint&quot; style=&quot;margin-top:8px&quot;>All lengths in inches. Tension splice uses Class ${inp.tensClass}. ${inp.useExcess?`Excess-reinforcement reduction (×${fmt(f.excess,3)}) applied to development lengths but not splices, per code.`:&quot;No excess-reinforcement reduction applied.&quot;}${f.AASHTO?&quot;&quot;:&quot; *N/P = lap splice not permitted for #14/#18 bars (ACI 25.5.1.1); in compression they may be lapped only to #11 and smaller bars (25.5.5.3).&quot;}</div>`)
   + note(`<p>This schedule is the single most-used output for detailing: it lets you look up any bar's development and splice length at a glance for the current concrete/steel combination, rather than re-running each bar individually. Because every value obeys the same modification factors you set, it stays consistent with the detailed tabs.</p>`);
 }
 
@@ -6118,11 +6225,12 @@ function buildDashboard(inp,f){
         ts=calcTensSplice(inp,f,t), cs=calcCompSplice(inp,f);
   const e=classAEligible(inp,f);
   const checks = [
-    {lbl:&quot;Tension l_d ≥ 12 in&quot;, ok:t.ld>=12, val:fmt(t.ld,1)+&quot; in&quot;},
-    {lbl:&quot;Hook l_dh ≥ max(8d_b,6)&quot;, ok:h.ldh>=Math.max(h.min1,6), val:fmt(h.ldh,1)+&quot; in&quot;},
-    {lbl:&quot;Comp. l_dc ≥ 8 in&quot;, ok:c.ldc>=8, val:fmt(c.ldc,1)+&quot; in&quot;},
-    {lbl:&quot;Tension splice ≥ 12 in&quot;, ok:ts.lst>=12, val:fmt(ts.lst,1)+&quot; in&quot;},
-    {lbl:&quot;Comp. splice ≥ 12 in&quot;, ok:cs.lsc>=12, val:fmt(cs.lsc,1)+&quot; in&quot;},
+    // Display only: these minimums are applied with Math.max in the calcs, so they cannot fail.
+    {lbl:&quot;Tension l_d (12 in min applied)&quot;, info:true, val:fmt(t.ld,1)+&quot; in&quot;},
+    {lbl:&quot;Hook l_dh (8d_b / 6 in min applied)&quot;, info:true, val:fmt(h.ldh,1)+&quot; in&quot;},
+    {lbl:&quot;Comp. l_dc (8 in min applied)&quot;, info:true, val:fmt(c.ldc,1)+&quot; in&quot;},
+    {lbl:&quot;Tension splice (12 in min applied)&quot;, info:true, val:fmt(ts.lst,1)+&quot; in&quot;},
+    {lbl:&quot;Comp. splice (12 in min applied)&quot;, info:true, val:fmt(cs.lsc,1)+&quot; in&quot;},
     f.AASHTO
       ? {lbl:&quot;λ_rc within 0.4–1.0&quot;, ok:!f.lam_rc_bounded, val:fmt(f.lam_rc,2)}
       : {lbl:&quot;(c_b+K_tr)/d_b within 2.5&quot;, ok:!f.cbKtrCapped, val:fmt(f.cbKtr,2)},
@@ -6134,12 +6242,20 @@ function buildDashboard(inp,f){
   if(inp.tensClass===&quot;A&quot;){
     checks.push({lbl:&quot;Class A splice eligible&quot;, ok:e.eligible, val:e.known?(e.eligible?&quot;yes&quot;:&quot;no&quot;):&quot;unknown&quot;});
   }
+  const kHS = ktrHSCheck(inp,f);
+  if(kHS.relevant){
+    checks.push({lbl:&quot;K_tr ≥ 0.5d_b (25.4.2.2)&quot;, ok:kHS.known &amp;&amp; kHS.ok,
+      val:!kHS.known?&quot;spacing?&quot;:(kHS.applies?fmt(f.Ktr,2)+&quot; / &quot;+fmt(kHS.req,2):&quot;s ≥ 6 in&quot;)});
+  }
+  if(lapProhibited(inp,f)){
+    checks.push({lbl:&quot;Lap splice permitted (25.5.1.1)&quot;, ok:false, val:&quot;#&quot;+inp.barSize+&quot; N/P&quot;});
+  }
   const codeTag = f.AASHTO?&quot;AASHTO LRFD §5.10.8&quot;:&quot;ACI 318-19&quot;;
   const html = `<h3>Summary Dashboard — Code Checks <span style=&quot;font-weight:normal;color:#888&quot;>(${codeTag})</span></h3>
     <div class=&quot;checks&quot;>${checks.map(k=>`
-      <div class=&quot;check ${k.ok?&quot;pass&quot;:&quot;fail&quot;}&quot;>
+      <div class=&quot;check ${k.info?&quot;info&quot;:(k.ok?&quot;pass&quot;:&quot;fail&quot;)}&quot;>
         <span class=&quot;lbl&quot;>${k.lbl}</span>
-        <span class=&quot;st&quot;>${k.ok?&quot;OK&quot;:&quot;CHK&quot;} <span class=&quot;val&quot;>${k.val}</span></span>
+        <span class=&quot;st&quot;>${k.info?&quot;&quot;:(k.ok?&quot;OK&quot;:&quot;CHK&quot;)} <span class=&quot;val&quot;>${k.val}</span></span>
       </div>`).join(&quot;&quot;)}</div>`;
   document.getElementById('dashboard').innerHTML = html;
 }
@@ -6282,6 +6398,7 @@ function applyState(st){
   set('sTr',inp.sTr);set('nBars',inp.nBars);set('hookEpoxy',inp.hookEpoxy);
   set('hookConfined',inp.hookConfined);set('hookLoc',inp.hookLoc);set('tensClass',inp.tensClass);
   set('useExcess',inp.useExcess);set('asReq',inp.asReq);set('asProv',inp.asProv);set('pctSpliced',inp.pctSpliced);
+  set('barSpc',inp.barSpc);set('psiRc',inp.psiRc);   // optional (added later); absent in older saved states
   if(st.currentTab) currentTab=st.currentTab;
   if(st.chartMode) chartMode=st.chartMode;
   if(st.panels){
@@ -6307,7 +6424,8 @@ function saveProject(){
   const p=getProjects();
   if(p[name] &amp;&amp; !confirm(`Overwrite existing project &quot;${name}&quot;?`)) return;
   p[name]=collectState();
-  localStorage.setItem(LS_PROJECTS,JSON.stringify(p));
+  try{ localStorage.setItem(LS_PROJECTS,JSON.stringify(p)); }
+  catch(e){ alert(&quot;Could not save: browser storage is blocked or full. Use Export JSON instead.&quot;); return; }
   refreshProjectList(); document.getElementById('projSelect').value=name;
   alert(`Saved &quot;${name}&quot;.`);
 }
@@ -6321,7 +6439,9 @@ function deleteProject(){
   if(!name){alert(&quot;Select a project to delete.&quot;);return;}
   if(!confirm(`Delete &quot;${name}&quot;? This cannot be undone.`)) return;
   const p=getProjects(); delete p[name];
-  localStorage.setItem(LS_PROJECTS,JSON.stringify(p)); refreshProjectList();
+  try{ localStorage.setItem(LS_PROJECTS,JSON.stringify(p)); }
+  catch(e){ alert(&quot;Could not delete: browser storage is blocked or full.&quot;); return; }
+  refreshProjectList();
 }
 function exportJSON(){
   const blob=new Blob([JSON.stringify(collectState(),null,2)],{type:&quot;application/json&quot;});
@@ -6445,6 +6565,8 @@ function switchTab(name){
 }
 function init(){
   buildInputPanel();
+  // one-time migration: if this tab has no autosave of its own yet, start from the old shared one (left in place)
+  try{ if(localStorage.getItem(LS_KEY)===null){ const old=localStorage.getItem(LS_KEY_OLD); if(old!==null) localStorage.setItem(LS_KEY,old); } }catch(e){}
   // restore autosave
   let saved=null; try{saved=JSON.parse(localStorage.getItem(LS_KEY));}catch(e){}
   if(saved) applyState(saved);
