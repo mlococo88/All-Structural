@@ -64,19 +64,67 @@
         } from 'https://esm.sh/lucide-react@0.292.0';
 
         // --- DATABASE ---
+        // Species: name, specific gravity G and density (pcf, used for self-weight only).
+        // Strength/stiffness values come from the NDS tables below (REF_4A / REF_4B_SP), per grade.
         const DEFAULT_SPECIES = {
-            'DF-L': { name: 'Douglas Fir-Larch', G: 0.50, dens: 34, F_b: 900, F_v: 180, E: 1600000, F_c_perp: 625, Emin: 580000 },
-            'SP': { name: 'Southern Pine', G: 0.55, dens: 36, F_b: 850, F_v: 175, E: 1400000, F_c_perp: 565, Emin: 510000 },
-            'HF': { name: 'Hem-Fir', G: 0.43, dens: 30, F_b: 850, F_v: 150, E: 1300000, F_c_perp: 405, Emin: 470000 },
-            'SPF': { name: 'Spruce-Pine-Fir', G: 0.42, dens: 29, F_b: 875, F_v: 135, E: 1400000, F_c_perp: 425, Emin: 510000 },
+            'DF-L': { name: 'Douglas Fir-Larch', G: 0.50, dens: 34 },
+            'SP': { name: 'Southern Pine', G: 0.55, dens: 36 },
+            'HF': { name: 'Hem-Fir', G: 0.43, dens: 30 },
+            'SPF': { name: 'Spruce-Pine-Fir', G: 0.42, dens: 29 },
         };
 
         const GRADES_DB = {
-            'SS': { name: 'Select Structural', mod: 1.0 },
-            'No.1': { name: 'No. 1', mod: 0.85 },
-            'No.2': { name: 'No. 2', mod: 0.75 },
-            'Stud': { name: 'Stud', mod: 0.60 },
+            'SS': { name: 'Select Structural' },
+            'No.1': { name: 'No. 1' },
+            'No.2': { name: 'No. 2' },
+            'Stud': { name: 'Stud' },
         };
+
+        // NDS 2018 Supplement reference design values (ASD), visually graded dimension lumber 2"-4" thick.
+        // Array order: [Fb, Ft, Fv, Fc_perp, Fc, E, Emin] in psi. null = not built in (use Manual values).
+        // Table 4A (DF-L, HF, SPF): CF, CM, Cfu per the Table 4A footnotes are applied by the engine.
+        const REF_4A = {
+            'DF-L': { 'SS': [1500, 1000, 180, 625, 1700, 1900000, 690000], 'No.1': [1000, 675, 180, 625, 1500, 1700000, 620000], 'No.2': [900, 575, 180, 625, 1350, 1600000, 580000], 'Stud': [700, 450, 180, 625, 850, 1400000, 510000] },
+            'HF':   { 'SS': [1400, 925, 150, 405, 1500, 1600000, 580000], 'No.1': [975, 625, 150, 405, 1350, 1500000, 550000], 'No.2': [850, 525, 150, 405, 1300, 1300000, 470000], 'Stud': [675, 400, 150, 405, 800, 1200000, 440000] },
+            'SPF':  { 'SS': [1250, 700, 135, 425, 1400, 1500000, 550000], 'No.1': [875, 450, 135, 425, 1150, 1400000, 510000], 'No.2': [875, 450, 135, 425, 1150, 1400000, 510000], 'Stud': [675, 350, 135, 425, 725, 1200000, 440000] },
+        };
+        // Table 4B Southern Pine: values are tabulated per nominal width and already include size effects (CF = 1.0 for Fb,
+        // except 0.9 for widths over 12 in.). Only No.2 is built in; Ft and Fc are not entered (not used by this beam check).
+        const REF_4B_SP = {
+            'No.2': {
+                '2-4': [1100, null, 175, 565, null, 1400000, 510000],
+                '5-6': [1000, null, 175, 565, null, 1400000, 510000],
+                '8':   [925,  null, 175, 565, null, 1400000, 510000],
+                '10':  [800,  null, 175, 565, null, 1400000, 510000],
+                '12':  [750,  null, 175, 565, null, 1400000, 510000],
+            },
+        };
+        // Table 4A size factor CF for Fb, by nominal width (in.): [2" & 3" thick, 4" thick]. Grades SS, No.1, No.2, No.3.
+        const T4A_CF_FB = { 3: [1.5, 1.5], 4: [1.5, 1.5], 5: [1.4, 1.4], 6: [1.3, 1.3], 8: [1.2, 1.3], 10: [1.1, 1.2], 12: [1.0, 1.1], 14: [0.9, 1.0] };
+        // Table 4A size factor CF for Fb, Stud grade (8" and wider: Table 4A directs use of No.3 values, not built in).
+        const T4A_CF_FB_STUD = { 3: 1.1, 4: 1.1, 5: 1.0, 6: 1.0 };
+        // Table 4A / 4B flat use factor Cfu, by nominal width (in.): [2" & 3" thick, 4" thick].
+        const T4A_CFU = { 3: [1.00, 1.00], 4: [1.10, 1.00], 5: [1.10, 1.05], 6: [1.15, 1.05], 8: [1.15, 1.05], 10: [1.20, 1.10], 12: [1.20, 1.10], 14: [1.20, 1.10] };
+        // Load duration factors CD (NDS 2018 Table 2.3.2) by load type; a combination uses the shortest-duration load present.
+        const LOAD_CD = { D: 0.9, L: 1.0, S: 1.15, Lr: 1.25, W: 1.6 };
+        // ASD load combinations (ASCE 7-16 Sec. 2.4.1). Keys of the first six match the old loadCombo values (saved files).
+        const COMBOS = [
+            { key: 'D', name: 'D', f: { D: 1 } },
+            { key: 'D+L', name: 'D + L', f: { D: 1, L: 1 } },
+            { key: 'D+Lr', name: 'D + Lr', f: { D: 1, Lr: 1 } },
+            { key: 'D+S', name: 'D + S', f: { D: 1, S: 1 } },
+            { key: 'D+0.75(L+S)', name: 'D + 0.75L + 0.75S', f: { D: 1, L: 0.75, S: 0.75 } },
+            { key: 'D+0.6W', name: 'D + 0.6W', f: { D: 1, W: 0.6 } },
+            { key: 'D+0.75(L+Lr)', name: 'D + 0.75L + 0.75Lr', f: { D: 1, L: 0.75, Lr: 0.75 } },
+            { key: 'D+0.75L+0.45W+0.75Lr', name: 'D + 0.75L + 0.75(0.6W) + 0.75Lr', f: { D: 1, L: 0.75, W: 0.45, Lr: 0.75 } },
+            { key: 'D+0.75L+0.45W+0.75S', name: 'D + 0.75L + 0.75(0.6W) + 0.75S', f: { D: 1, L: 0.75, W: 0.45, S: 0.75 } },
+            { key: '0.6D+0.6W', name: '0.6D + 0.6W', f: { D: 0.6, W: 0.6 } },
+        ];
+        // Transient (live/snow/roof live) load cases used for the live-load deflection check.
+        const DEFL_TRANSIENT = [
+            { name: 'L', f: { L: 1 } }, { name: 'Lr', f: { Lr: 1 } }, { name: 'S', f: { S: 1 } },
+            { name: '0.75L + 0.75Lr', f: { L: 0.75, Lr: 0.75 } }, { name: '0.75L + 0.75S', f: { L: 0.75, S: 0.75 } },
+        ];
 
         const SIZES_DB = [
             { label: '2x4', b: 1.5, d: 3.5 }, { label: '2x6', b: 1.5, d: 5.5 },
@@ -86,6 +134,268 @@
             { label: '6x8', b: 5.5, d: 7.25 }, { label: '8x8', b: 7.25, d: 7.25 },
             { label: 'Custom', b: 0, d: 0 },
         ];
+
+        // --- CALCULATION ENGINE (NDS 2018, ASD) ---
+        // Nominal width group (in.) from actual dressed width d (in.). A non-standard width rounds UP to the next
+        // group, which gives the smaller (conservative) CF and, for SP, the smaller tabulated Fb.
+        const widthGroup = (d) => d <= 2.5 ? 3 : d <= 3.5 ? 4 : d <= 4.5 ? 5 : d <= 5.5 ? 6 : d <= 7.25 ? 8 : d <= 9.25 ? 10 : d <= 11.25 ? 12 : 14;
+        // Temperature factor Ct, NDS 2018 Table 2.3.3. 'High' is the old saved value and maps to 125-150 F.
+        const ctFactors = (temp, wet) => {
+            if (temp === '100-125') return { E: 0.9, other: wet ? 0.7 : 0.8 };
+            if (temp === '125-150' || temp === 'High') return { E: 0.9, other: wet ? 0.5 : 0.7 };
+            return { E: 1.0, other: 1.0 };
+        };
+
+        function runTimberCheck(inp) {
+            const errors = [];  // input/data problems: results are not valid
+            const fails = [];   // code limits violated: member is NG regardless of stress ratios
+            const notes = [];   // informational
+            const num = (v) => (typeof v === 'number' && isFinite(v)) ? v : NaN;
+            const L = num(inp.span);
+            const spacing = num(inp.spacing);
+            if (!(L > 0)) errors.push('Span must be greater than zero.');
+            if (!(spacing > 0)) errors.push('Spacing must be greater than zero.');
+
+            // Section and size class
+            const sz = SIZES_DB.find(s => s.label === inp.sizeLabel);
+            const isCustom = inp.sizeLabel === 'Custom' || !sz;
+            const b = isCustom ? num(inp.customB) : sz.b;
+            const d = isCustom ? num(inp.customD) : sz.d;
+            let cat = null, wg = null, thick4 = false;
+            if (!(b > 0) || !(d > 0)) errors.push('Section b and d must be greater than zero.');
+            else if (b > d) errors.push('b must not exceed d. Enter the section edgewise (b = thickness, d = width) and use Flat Use for loading on the wide face.');
+            else if (b >= 4.5) cat = 'timber';
+            else if (b <= 3.5) { cat = 'dim'; wg = widthGroup(d); thick4 = b > 2.5; }
+            else errors.push('Thickness between 3.5 in. and 4.5 in. is not a standard sawn-lumber size category.');
+
+            // Reference design values
+            const custom = (inp.customMaterials && !inp.isManual) ? inp.customMaterials[inp.species] : null;
+            const userVals = !!(inp.isManual || custom);
+            let ref = null, src = '', cfIncluded = false, G = NaN, dens = NaN;
+            if (userVals) {
+                const m = (inp.isManual ? inp.manualProps : custom) || {};
+                ref = { Fb: num(m.Fb), Ft: null, Fv: num(m.Fv), Fcp: num(m.FcPerp), Fc: null, E: num(m.E), Emin: num(m.Emin) };
+                G = num(m.G); dens = num(m.dens); cfIncluded = !!m.cfIncluded;
+                src = inp.isManual ? 'Manual (user-entered reference values)' : `Custom species "${inp.species}" (user-entered reference values)`;
+                if (![ref.Fb, ref.Fv, ref.Fcp, ref.E, ref.Emin].every(v => v > 0)) errors.push('Enter all reference design values (Fb, Fv, Fc⊥, E, Emin) greater than zero.');
+                if (inp.selfWeight && !(dens >= 0)) errors.push('Enter the density (pcf) for self-weight, or turn self-weight off.');
+            } else {
+                const sp = DEFAULT_SPECIES[inp.species];
+                const gName = GRADES_DB[inp.grade] ? GRADES_DB[inp.grade].name : String(inp.grade);
+                if (!sp) errors.push(`Unknown species "${inp.species}".`);
+                else if (!GRADES_DB[inp.grade]) errors.push(`Unknown grade "${inp.grade}".`);
+                else {
+                    G = sp.G; dens = sp.dens;
+                    let arr = null;
+                    if (cat === 'timber') errors.push('Timbers (5 in. x 5 in. and larger) use NDS Supplement Table 4D values, which are not built in. Use Manual values (Man).');
+                    else if (cat === 'dim') {
+                        if (inp.species === 'SP') {
+                            const grp = wg <= 4 ? '2-4' : wg <= 6 ? '5-6' : wg >= 12 ? '12' : String(wg);
+                            arr = REF_4B_SP[inp.grade] ? REF_4B_SP[inp.grade][grp] : null;
+                            cfIncluded = true;
+                            src = `NDS Supplement 2018 Table 4B, Southern Pine ${gName}, ${grp === '2-4' ? '2"-4"' : grp === '5-6' ? '5"-6"' : grp + '"'} wide`;
+                            if (!arr) errors.push(`Southern Pine ${gName} values (Table 4B) are not built in. Use Manual values (Man).`);
+                        } else if (inp.grade === 'Stud' && wg >= 8) {
+                            errors.push('Stud grade 8 in. and wider: Table 4A directs use of No.3 values, which are not built in. Use Manual values (Man).');
+                        } else {
+                            arr = REF_4A[inp.species] ? REF_4A[inp.species][inp.grade] : null;
+                            src = `NDS Supplement 2018 Table 4A, ${sp.name} ${gName}`;
+                            if (!arr) errors.push(`${sp.name} ${gName} values are not built in. Use Manual values (Man).`);
+                        }
+                    }
+                    if (arr) ref = { Fb: arr[0], Ft: arr[1], Fv: arr[2], Fcp: arr[3], Fc: arr[4], E: arr[5], Emin: arr[6] };
+                }
+            }
+
+            const flat = !!inp.flatUse;
+            if (flat && cat === 'timber') errors.push('Flat use of timbers is not supported (Table 4D flat-use factors are not built in).');
+
+            // Bearing
+            const lb = num(inp.bearingLen);
+            if (!(lb > 0)) errors.push('Bearing length must be greater than zero.');
+
+            // Point loads (positive = downward), validated against the span
+            const pls = (inp.pointLoads || []).map(p => ({ mag: num(p && p.mag), loc: num(p && p.loc), type: (p && LOAD_CD[p.type] !== undefined) ? p.type : 'D' }));
+            pls.forEach((p, i) => {
+                if (!isFinite(p.mag)) errors.push(`Point load ${i + 1}: magnitude is not a number.`);
+                if (!(p.loc >= 0 && p.loc <= L)) errors.push(`Point load ${i + 1}: location ${isFinite(p.loc) ? p.loc : '(blank)'} ft is outside the span (0 to ${L} ft).`);
+            });
+
+            const LLdiv = num(inp.deflLimitLL), TLdiv = num(inp.deflLimitTL);
+            if (!(LLdiv > 0) || !(TLdiv > 0)) errors.push('Deflection limits (L/n) must be greater than zero.');
+
+            const notch = isFinite(num(inp.notchDepth)) ? num(inp.notchDepth) : 0;
+
+            const base = { ok: false, errors, fails, notes, b, d, cat, wg, ref, src, flat, G, dens, userVals };
+            if (errors.length || !ref || !cat) return base;
+
+            // Orientation: bending width bw and bending depth dep
+            const bw = flat ? d : b;
+            const dep = flat ? b : d;
+            const A = b * d;
+            const S = bw * dep * dep / 6;
+            const I = bw * dep * dep * dep / 12;
+
+            // --- Adjustment factors (NDS 2018 Table 4.3.1, sawn lumber, ASD) ---
+            const wet = inp.moisture === 'Wet';
+            const useStudCF = !userVals && inp.grade === 'Stud';
+            let CF = 1.0, CFnote = '';
+            if (cat === 'dim') {
+                if (cfIncluded) { CF = (!userVals && inp.species === 'SP' && wg >= 14) ? 0.9 : 1.0; CFnote = !userVals ? 'Table 4B (size-specific values)' : 'included in entered Fb'; }
+                else if (useStudCF) { CF = T4A_CF_FB_STUD[wg]; CFnote = `Table 4A Stud, ${wg}" wide`; }
+                else { CF = T4A_CF_FB[wg][thick4 ? 1 : 0]; CFnote = `Table 4A, ${wg >= 14 ? '14"+' : wg + '"'} wide, ${thick4 ? '4"' : '2"-3"'} thick`; }
+            } else {
+                CF = (!cfIncluded && d > 12) ? Math.pow(12 / d, 1 / 9) : 1.0; CFnote = 'NDS 4.3.6.2, (12/d)^(1/9) for d > 12"';
+            }
+            // Wet service factor CM: Table 4A/4B footnotes (dimension lumber); Table 4D (timbers)
+            const CM = { Fb: 1.0, Fv: 1.0, Fcp: 1.0, E: 1.0 };
+            if (wet) {
+                if (cat === 'timber') { CM.Fcp = 0.67; }
+                else { CM.Fb = (ref.Fb * CF > 1150) ? 0.85 : 1.0; CM.Fv = 0.97; CM.Fcp = 0.67; CM.E = 0.9; }
+            }
+            const ct = ctFactors(inp.temp, wet);
+            const Ct = { Fb: ct.other, Fv: ct.other, Fcp: ct.other, E: ct.E };
+            const ciOn = !!inp.incising;
+            const Ci = { Fb: ciOn ? 0.80 : 1.0, Fv: ciOn ? 0.80 : 1.0, Fcp: 1.0, E: ciOn ? 0.95 : 1.0 };
+            const Cr = (inp.repetitive && cat === 'dim' && spacing <= 24) ? 1.15 : 1.0;
+            if (inp.repetitive && cat !== 'dim') notes.push('Cr applies to dimension lumber only (NDS 4.3.9); Cr = 1.0 used.');
+            if (inp.repetitive && cat === 'dim' && spacing > 24) notes.push('Cr requires spacing ≤ 24 in. (NDS 4.3.9); Cr = 1.0 used.');
+            const Cfu = (flat && cat === 'dim') ? T4A_CFU[wg][thick4 ? 1 : 0] : 1.0;
+            const Cb = (inp.bearingInterior && lb < 6) ? (lb + 0.375) / lb : 1.0;
+
+            // --- Beam stability (NDS 3.3.3) ---
+            const unb = num(inp.unbracedLen);
+            const lu = ((unb > 0) ? unb : L) * 12;
+            const luD = lu / dep;
+            const hasPL = pls.some(p => p.mag !== 0);
+            let le, leRule;
+            if (luD < 7) { le = 2.06 * lu; leRule = '2.06 lu (lu/d < 7)'; }
+            else if (hasPL && luD > 14.3) { le = 1.84 * lu; leRule = '1.84 lu (lu/d > 14.3; Table 3.3.3 footnote 1, loading not specified)'; }
+            else { le = 1.63 * lu + 3 * dep; leRule = hasPL ? '1.63 lu + 3d (7 ≤ lu/d ≤ 14.3; Table 3.3.3 footnote 1)' : '1.63 lu + 3d (lu/d ≥ 7, uniformly distributed load)'; }
+            const RB = Math.sqrt(le * dep / (bw * bw));
+            const stabilityApplies = dep > bw && inp.latSupport !== 'Continuous';
+            if (stabilityApplies && RB > 50) fails.push(`Slenderness RB = ${RB.toFixed(1)} exceeds 50 (NDS 3.3.3.7). Not permitted.`);
+            const Emin_p = ref.Emin * CM.E * Ct.E * Ci.E;
+            const E_p = ref.E * CM.E * Ct.E * Ci.E;
+            const FbE = 1.20 * Emin_p / (RB * RB);
+
+            // --- Notch (end notch on the tension face) ---
+            const hasNotch = notch > 0;
+            const dn = dep - notch;
+            if (notch < 0) { errors.push('Notch depth cannot be negative.'); return base; }
+            if (hasNotch && dn <= 0) { errors.push('Notch depth must be less than the member depth.'); return base; }
+            if (hasNotch && notch > dep / 4) fails.push(`End notch ${notch} in. exceeds d/4 = ${(dep / 4).toFixed(2)} in. (NDS 4.4.3.2). Not permitted.`);
+            const Cn = hasNotch ? Math.pow(dn / dep, 2) : 1.0;
+
+            // --- Loads (plf for uniform, lb for point) ---
+            const trib = spacing / 12;
+            const w_self = inp.selfWeight ? dens * A / 144 : 0;
+            const wu = { D: (inp.wDead || 0) * trib + w_self, L: (inp.wLive || 0) * trib, Lr: (inp.wRoofLive || 0) * trib, S: (inp.wSnow || 0) * trib, W: (inp.wWind || 0) * trib };
+
+            // Simple-span statics for a uniform load w (plf) and point loads P [{mag, loc}]
+            const beam = (w, P) => {
+                const RL = w * L / 2 + P.reduce((s, p) => s + p.mag * (L - p.loc) / L, 0);
+                const RR = w * L / 2 + P.reduce((s, p) => s + p.mag * p.loc / L, 0);
+                const V = (x, right) => RL - w * x - P.reduce((s, p) => s + ((p.loc < x || (right && p.loc === x)) ? p.mag : 0), 0);
+                const M = (x) => RL * x - w * x * x / 2 - P.reduce((s, p) => s + (p.loc < x ? p.mag * (x - p.loc) : 0), 0);
+                return { RL, RR, V, M };
+            };
+            // Stations: 100 equal divisions plus every point-load position
+            const xs = [...new Set([...Array.from({ length: 101 }, (_, i) => L * i / 100), ...pls.map(p => p.loc)])].sort((a, c) => a - c);
+            const plLocs = new Set(pls.map(p => p.loc));
+            const dft = dep / 12;
+            const shearRegion = L > 2 * dft ? [...new Set([...xs.filter(x => x >= dft && x <= L - dft), dft, L - dft])] : xs;
+
+            const combos = COMBOS.map(c => {
+                const present = Object.keys(c.f).filter(t => c.f[t] !== 0 && (wu[t] !== 0 || pls.some(p => p.type === t && p.mag !== 0)));
+                const CD = present.length ? Math.max(...present.map(t => LOAD_CD[t])) : LOAD_CD.D;
+                const w = Object.keys(c.f).reduce((s, t) => s + c.f[t] * wu[t], 0);
+                const P = pls.filter(p => c.f[p.type]).map(p => ({ mag: c.f[p.type] * p.mag, loc: p.loc }));
+                const bm = beam(w, P);
+                // Max moment: stations + zero-shear points inside each segment between point loads
+                let Mmax = 0, xM = 0;
+                const cand = [...xs];
+                const brk = [...new Set([0, ...P.map(p => p.loc), L])].sort((a, e) => a - e);
+                if (w !== 0) for (let k = 0; k < brk.length - 1; k++) { const x0 = brk[k] + bm.V(brk[k], true) / w; if (x0 > brk[k] && x0 < brk[k + 1]) cand.push(x0); }
+                cand.forEach(x => { const m = Math.abs(bm.M(x)); if (m > Mmax) { Mmax = m; xM = x; } });
+                // Design shear: max |V| between d from each support (NDS 3.4.3.1(a)); no x/d reduction of point loads
+                let Vd = 0, xV = 0;
+                shearRegion.forEach(x => { const v = Math.max(Math.abs(bm.V(x, false)), Math.abs(bm.V(x, true))); if (v > Vd) { Vd = v; xV = x; } });
+                const Rmax = Math.max(Math.abs(bm.RL), Math.abs(bm.RR));
+                const Rbear = Math.max(bm.RL, bm.RR, 0);
+                // Adjusted design values
+                const Fb_star = ref.Fb * CD * CM.Fb * Ct.Fb * CF * Ci.Fb * Cr;
+                let CL = 1.0;
+                if (stabilityApplies) {
+                    const r = FbE / Fb_star;
+                    CL = (1 + r) / 1.9 - Math.sqrt(Math.pow((1 + r) / 1.9, 2) - r / 0.95);
+                    if (!(CL <= 1.0)) CL = 1.0;
+                }
+                const Fb_p = Fb_star * CL * Cfu;
+                const Fv_p = ref.Fv * CD * CM.Fv * Ct.Fv * Ci.Fv;
+                const Fcp_p = ref.Fcp * CM.Fcp * Ct.Fcp * Ci.Fcp * Cb;
+                const fb = Mmax * 12 / S;
+                const fv = 1.5 * Vd / A;
+                const fvn = hasNotch ? 1.5 * Rmax / (bw * dn) : 0;
+                const fcp = Rbear / (bw * lb);
+                const r_b = fb / Fb_p, r_v1 = fv / Fv_p, r_vn = hasNotch ? fvn / (Fv_p * Cn) : 0, r_c = fcp / Fcp_p;
+                return { key: c.key, name: c.name, f: c.f, CD, w, P, bm, RL: bm.RL, RR: bm.RR, Mmax, xM, Vd, xV, Rmax, Rbear, Fb_star, CL, Fb_p, Fv_p, Fcp_p, fb, fv, fvn, fcp, r_b, r_v1, r_vn, r_v: Math.max(r_v1, r_vn), r_c };
+            });
+            const govBy = (k) => combos.reduce((g, c) => (c[k] > g[k] ? c : g), combos[0]);
+            const gov = { b: govBy('r_b'), v: govBy('r_v'), c: govBy('r_c') };
+            if (combos.some(c => c.RL < 0 || c.RR < 0)) notes.push('Net uplift reaction in at least one combination: provide an uplift connection, and check lateral bracing of the bottom (compression) edge.');
+
+            // --- Deflection (service loads; superposition of uniform and point loads) ---
+            const Lin = L * 12;
+            const defl = (w, P, x) => {
+                const xi = x * 12, wi = w / 12;
+                let y = wi * xi * (Lin * Lin * Lin - 2 * Lin * xi * xi + xi * xi * xi) / (24 * E_p * I);
+                P.forEach(p => {
+                    const a = p.loc * 12, bb = Lin - a;
+                    y += xi <= a ? p.mag * bb * xi * (Lin * Lin - bb * bb - xi * xi) / (6 * Lin * E_p * I)
+                                 : p.mag * a * (Lin - xi) * (2 * Lin * xi - xi * xi - a * a) / (6 * Lin * E_p * I);
+                });
+                return y;
+            };
+            const dType = {};
+            ['D', 'L', 'Lr', 'S'].forEach(t => { const P = pls.filter(p => p.type === t); dType[t] = xs.map(x => defl(wu[t], P, x)); });
+            const Kcr = num(inp.creepFactor) > 0 ? inp.creepFactor : 1.5;
+            const maxAbs = (arr) => arr.reduce((m, v) => Math.max(m, Math.abs(v)), 0);
+            const dD = maxAbs(dType.D);
+            let Dtr = 0, trName = 'L', Dtot = 0, totName = 'L';
+            DEFL_TRANSIENT.forEach(tc => {
+                const tr = xs.map((_, i) => Object.keys(tc.f).reduce((s, t) => s + tc.f[t] * dType[t][i], 0));
+                const trMax = maxAbs(tr);
+                const tot = maxAbs(tr.map((v, i) => Kcr * dType.D[i] + v));
+                if (trMax > Dtr) { Dtr = trMax; trName = tc.name; }
+                if (tot > Dtot) { Dtot = tot; totName = tc.name; }
+            });
+            const LLlim = Lin / LLdiv, TLlim = Lin / TLdiv;
+            const r_dLL = Dtr / LLlim, r_dTL = Dtot / TLlim;
+
+            // --- Diagrams for the selected (or governing) combination ---
+            const dc = combos.find(c => c.key === inp.loadCombo) || gov.b;
+            const shearData = [], momentData = [];
+            let maxV = 0, maxM = 0;
+            xs.forEach(x => {
+                const vs = plLocs.has(x) ? [dc.bm.V(x, false), dc.bm.V(x, true)] : [dc.bm.V(x, false)];
+                vs.forEach(v => { shearData.push({ x: (x / L) * 100, y: v }); if (Math.abs(v) > maxV) maxV = Math.abs(v); });
+                const m = dc.bm.M(x); momentData.push({ x: (x / L) * 100, y: m }); if (Math.abs(m) > maxM) maxM = Math.abs(m);
+            });
+
+            const dcr = { b: gov.b.r_b, v: gov.v.r_v, c: gov.c.r_c, def: Math.max(r_dLL, r_dTL) };
+            const ctrlList = [['Bending Moment', dcr.b], ['Shear', dcr.v], ['Bearing', dcr.c], ['Deflection', dcr.def]];
+            const ctrl = ctrlList.reduce((g, e) => (e[1] > g[1] ? e : g), ctrlList[0]);
+
+            return {
+                ...base, ok: true, bw, dep, A, S, I, thick4, cfIncluded,
+                CF, CFnote, CM, Ct, Ci, Cr, Cfu, Cb, lb, lu, luD, le, leRule, RB, stabilityApplies, Emin_p, E_p, FbE,
+                notch, hasNotch, dn, Cn, trib, w_self, wu, combos, gov,
+                defl: { dD, Dtr, trName, Dtot, totName, Kcr, LLlim, TLlim, LLdiv, TLdiv, r_dLL, r_dTL },
+                diag: { key: dc.key, name: dc.name, shearData, momentData, maxV, maxM },
+                dcr, ctrlName: ctrl[0], dcrMax: ctrl[1],
+            };
+        }
 
         // --- UI COMPONENTS ---
 
@@ -141,6 +451,21 @@
                 <div className="flex items-center justify-between">
                     <input type="number" value={value} onChange={(e)=>onChange(parseFloat(e.target.value)||0)} className="w-full bg-transparent text-sm font-mono font-medium outline-none dark:text-white" />
                 </div>
+            </div>
+        );
+
+        // Editor for user-entered reference design values (Manual mode and custom species)
+        const PropEditor = ({ title, vals, onChange }) => (
+            <div className="p-2 border rounded space-y-1 dark:border-slate-600">
+                <div className="text-[10px] font-bold uppercase opacity-60">{title}</div>
+                <div className="grid grid-cols-2 gap-1">
+                    {[['Fb','Fb (psi)'],['Fv','Fv (psi)'],['FcPerp','Fc⊥ (psi)'],['E','E (psi)'],['Emin','Emin (psi)'],['dens','Density (pcf)'],['G','G']].map(([k,l]) => (
+                        <label key={k} className="text-[10px]">{l}
+                            <input type="number" value={Number.isFinite(vals[k]) ? vals[k] : ''} onChange={e=>onChange({...vals, [k]: parseFloat(e.target.value)})} className="w-full p-1 text-xs border rounded dark:bg-slate-800 dark:border-slate-600"/>
+                        </label>
+                    ))}
+                </div>
+                <label className="flex items-center gap-2 text-[10px]"><input type="checkbox" checked={!!vals.cfIncluded} onChange={e=>onChange({...vals, cfIncluded: e.target.checked})}/> Fb already size-specific (CF = 1.0, e.g. SP Table 4B)</label>
             </div>
         );
 
@@ -206,7 +531,8 @@
         // --- INTERACTIVE DIAGRAMS ---
         const DiagramsPanel = ({ span, pointLoads, wTotal, shearData, momentData, maxV, maxM, isDark, hoverX, setHoverX }) => {
             const height = 80; 
-            const getVal = (data, x_pct) => data[Math.floor(x_pct * (data.length - 1))]?.y || 0;
+            // Stations are not uniformly spaced (point-load positions are included), so look up by x.
+            const getVal = (data, x_pct) => { let best = data[0]; for (const p of data) { if (p.x <= x_pct * 100) best = p; else break; } return best?.y || 0; };
             const valV = hoverX !== null ? getVal(shearData, hoverX/100) : 0;
             const valM = hoverX !== null ? getVal(momentData, hoverX/100) : 0;
             
@@ -285,7 +611,7 @@
                                 <span className="text-[10px] font-bold uppercase text-blue-600 tracking-wider">Moment (M)</span>
                             </div>
                             <div className="absolute top-3 right-4 text-xs font-mono font-bold text-blue-600 bg-blue-50 dark:bg-blue-900/30 px-2 py-1 rounded border border-blue-100 dark:border-blue-800">
-                                {hoverX !== null ? (valM/12).toFixed(0) : (maxM/12).toFixed(0)} ft-lb
+                                {hoverX !== null ? valM.toFixed(0) : maxM.toFixed(0)} ft-lb
                             </div>
                             <svg viewBox="0 0 100 80" className="w-full h-full" preserveAspectRatio="none">
                                 <Grid />
@@ -322,6 +648,7 @@
             const [span, setSpan] = useState(16);
             const [spacing, setSpacing] = useState(16);
             const [bearingLen, setBearingLen] = useState(3.5);
+            const [bearingInterior, setBearingInterior] = useState(false); // true = bearing >= 3 in. from member end (Cb permitted)
             const [unbracedLen, setUnbracedLen] = useState(0); // 0 = span
 
             // Loads
@@ -331,7 +658,7 @@
             const [wWind, setWWind] = useState(0);
             const [wRoofLive, setWRoofLive] = useState(0);
             const [pointLoads, setPointLoads] = useState([]); 
-            const [loadCombo, setLoadCombo] = useState('D+L');
+            const [loadCombo, setLoadCombo] = useState('GOV'); // combination shown in the V/M diagrams; all combinations are always checked
             const [selfWeight, setSelfWeight] = useState(true);
 
             // Material
@@ -341,7 +668,7 @@
             const [customB, setCustomB] = useState(1.5);
             const [customD, setCustomD] = useState(9.25);
             const [isManual, setIsManual] = useState(false);
-            const [manualProps, setManualProps] = useState({ Fb: 900, Fv: 180, E: 1600000, Emin: 580000, FcPerp: 625, G: 0.50, dens: 35 });
+            const [manualProps, setManualProps] = useState({ Fb: 900, Fv: 180, E: 1600000, Emin: 580000, FcPerp: 625, G: 0.50, dens: 35, cfIncluded: false });
 
             // Advanced Factors
             const [moisture, setMoisture] = useState('Dry');
@@ -356,146 +683,42 @@
             const [deflLimitTL, setDeflLimitTL] = useState(240);
             const [latSupport, setLatSupport] = useState('Continuous');
 
-            // --- CALCULATION ENGINE ---
-            // Safe parsing inputs
-            const span_safe = span || 0.1;
-            const spacing_safe = spacing || 0.1;
-
-            const b = sizeLabel === 'Custom' ? (customB || 0.1) : (SIZES_DB.find(s => s.label === sizeLabel)?.b || 1.5);
-            const d = sizeLabel === 'Custom' ? (customD || 0.1) : (SIZES_DB.find(s => s.label === sizeLabel)?.d || 9.25);
-            
-            // Prevent zeros
-            const b_safe = b > 0 ? b : 0.1;
-            const d_safe = d > 0 ? d : 0.1;
-
-            const Area = b_safe * d_safe;
-            const Sx = (b_safe * d_safe * d_safe) / 6;
-            const Ix = (b_safe * d_safe * d_safe * d_safe) / 12;
-            const BF = (b_safe * d_safe / 144) * span_safe;
+            // --- CALCULATION ENGINE (see runTimberCheck) ---
+            const res = runTimberCheck({ span, spacing, bearingLen, bearingInterior, unbracedLen, wDead, wLive, wSnow, wWind, wRoofLive, pointLoads, loadCombo, selfWeight,
+                species, grade, sizeLabel, customB, customD, isManual, manualProps, customMaterials, moisture, temp, incising, repetitive, flatUse,
+                creepFactor, notchDepth, deflLimitLL, deflLimitTL, latSupport });
+            const b = res.b, d = res.d;
+            const BF = (b > 0 && d > 0) ? (b * d / 144) * (span || 0) : 0;
             const Cost = BF * (costPerBF || 0);
-
-            // FIX: Add safeguard for Grade lookup to prevent NaN
-            const baseVals = useMemo(() => {
-                if (isManual) return manualProps;
-                const s = customMaterials[species] || DEFAULT_SPECIES[species];
-                const gMod = GRADES_DB[grade] ? GRADES_DB[grade].mod : 1.0; // Safety check here
-                return { Fb: s.F_b * gMod, Fv: s.F_v, E: s.E, Emin: s.Emin, FcPerp: s.F_c_perp, G: s.G, dens: s.dens };
-            }, [species, grade, isManual, manualProps, customMaterials]);
-
-            const trib = spacing_safe / 12;
-            const w_self = selfWeight ? (baseVals.dens * Area) / 144 : 0;
-            const w_D = (wDead || 0) * trib + w_self;
-            const w_L = (wLive || 0) * trib;
-            const w_S = (wSnow || 0) * trib;
-            const w_W = (wWind || 0) * trib;
-            const w_Lr = (wRoofLive || 0) * trib;
-
-            let w_total = 0;
-            let Cd = 1.0;
-            let comboName = "";
-
-            switch(loadCombo) {
-                case 'D': w_total = w_D; Cd = 0.9; comboName="0.9D"; break;
-                case 'D+L': w_total = w_D + w_L; Cd = 1.0; comboName="1.0D + 1.0L"; break;
-                case 'D+S': w_total = w_D + w_S; Cd = 1.15; comboName="1.0D + 1.0S"; break;
-                case 'D+Lr': w_total = w_D + w_Lr; Cd = 1.25; comboName="1.0D + 1.0Lr"; break;
-                case 'D+0.75(L+S)': w_total = w_D + 0.75*(w_L + w_S); Cd = 1.15; comboName="1.0D + 0.75L + 0.75S"; break;
-                case 'D+0.6W': w_total = w_D + 0.6*w_W; Cd = 1.6; comboName="1.0D + 0.6W"; break;
-                default: w_total = w_D + w_L; Cd = 1.0;
-            }
-
-            // Factors
-            const CM = moisture === 'Wet' ? 0.85 : 1.0;
-            const Ct = temp === 'High' ? 0.7 : 1.0;
-            const Ci = incising ? 0.80 : 1.0;
-            const Cr = (repetitive && spacing_safe <= 24) ? 1.15 : 1.0;
-            const Cfu = flatUse ? 1.1 : 1.0;
-            const Cb = ((bearingLen||3.5) + 0.375) / (bearingLen||3.5);
-            const CF = (d_safe > 12) ? Math.pow((12/d_safe), 1/9) : 1.0;
-
-            // Stability
-            const Lu = (unbracedLen > 0 ? unbracedLen : span_safe) * 12;
-            const le = 1.63 * Lu + 3 * d_safe;
-            const RB = Math.sqrt((le * d_safe) / (b_safe * b_safe));
-            const Emin_p = baseVals.Emin * CM * Ct * Ci;
-            const FbE = (1.20 * Emin_p) / (RB * RB);
-            const Fb_star = baseVals.Fb * Cd * CM * Ct * CF * Ci * Cr;
-            
-            let CL = 1.0;
-            // Only calc CL if depth > breadth per NDS
-            if (d_safe > b_safe && latSupport !== 'Continuous') {
-                 const ratio = FbE / (Fb_star || 1); // guard 0
-                 CL = (1 + ratio) / 1.9 - Math.sqrt(Math.pow((1 + ratio)/1.9, 2) - (ratio / 0.95));
-                 if (CL > 1.0 || isNaN(CL)) CL = 1.0;
-            }
-
-            // Adjusted Values
-            const Fb_p = baseVals.Fb * Cd * CM * Ct * CL * CF * Ci * Cfu * Cr;
-            const Fv_p = baseVals.Fv * Cd * CM * Ct * Ci;
-            const E_p = baseVals.E * CM * Ct * Ci;
-            const Fcp_p = baseVals.FcPerp * CM * Ct * Ci * Cb;
-
-            // Analysis
-            let R_left = (w_total * span_safe) / 2;
-            pointLoads.forEach(pl => R_left += ((pl.mag||0) * (span_safe - (pl.loc||0))) / span_safe);
-            
-            const pts = 100;
-            const dx = span_safe / pts;
-            let shearData = [], momentData = [];
-            let maxV = 0, maxM = 0;
-            for (let i=0; i<=pts; i++) {
-                const x = i * dx;
-                let V = R_left - w_total * x;
-                pointLoads.forEach(pl => { if (x > (pl.loc||0)) V -= (pl.mag||0); });
-                let M = R_left * x - (w_total * x * x) / 2;
-                pointLoads.forEach(pl => { if (x > (pl.loc||0)) M -= (pl.mag||0) * (x - (pl.loc||0)); });
-                shearData.push({x: (x/span_safe)*100, y: V});
-                momentData.push({x: (x/span_safe)*100, y: M});
-                if (Math.abs(V) > maxV) maxV = Math.abs(V);
-                if (Math.abs(M) > maxM) maxM = Math.abs(M);
-            }
-
-            // Critical Shear (Notch)
-            const d_ft = d_safe/12;
-            const dn_rat = (d_safe - (notchDepth||0)) / d_safe;
-            const Cn = (notchDepth||0) > 0 ? Math.pow(dn_rat, 2) : 1.0;
-            let V_crit = R_left - w_total * d_ft; // at d
-            pointLoads.forEach(pl => { if (d_ft > (pl.loc||0)) V_crit -= (pl.mag||0); });
-            V_crit = Math.abs(V_crit);
-            
-            // Deflection
-            const del_unif = (w) => (5 * (w/12) * Math.pow(span_safe*12, 4)) / (384 * E_p * Ix);
-            const del_D = del_unif(w_D);
-            const del_L = del_unif(wLive*trib); // Use Live component
-            const del_LT = del_D * (creepFactor||1.5) + del_L;
-            
-            const del_long_term = del_LT;
-
-            // Checks
-            const fb_actual = (maxM * 12) / Sx;
-            const fv_actual = (1.5 * V_crit) / (Area * ((notchDepth||0) > 0 ? dn_rat : 1));
-            const fcp_actual = R_left / (b_safe * (bearingLen||3.5));
-            
-            const dcr_b = fb_actual / (Fb_p || 1);
-            const dcr_v = fv_actual / ((Fv_p * Cn) || 1);
-            const dcr_c = fcp_actual / (Fcp_p || 1);
-            const dcr_def = del_long_term / ((span_safe*12)/(deflLimitTL||240));
+            const span_safe = span > 0 ? span : 0.1;
+            const gb = res.ok ? res.gov.b : null, gv = res.ok ? res.gov.v : null, gc = res.ok ? res.gov.c : null;
+            const f3 = (v) => (typeof v === 'number' && isFinite(v)) ? +v.toFixed(3) : v;
+            const lOver = (delta) => delta > 0 ? `L/${((span * 12) / delta).toFixed(0)}` : '—';
+            const ctrlDetail = !res.ok ? '' : res.ctrlName === 'Deflection'
+                ? (res.defl.r_dLL >= res.defl.r_dTL ? `Live/snow deflection (${res.defl.trName}) vs L/${res.defl.LLdiv}` : `Total deflection (Kcr·D + ${res.defl.totName}) vs L/${res.defl.TLdiv}`)
+                : (() => { const g = { 'Bending Moment': gb, 'Shear': gv, 'Bearing': gc }[res.ctrlName]; return `Governing combination: ${g.name} (CD = ${g.CD})`; })();
 
             // Helpers
             const showToast = (msg) => { setToast({show:true, msg}); setTimeout(()=>setToast({show:false, msg:''}), 3000); };
-            const addPointLoad = () => setPointLoads([...pointLoads, { mag: 500, loc: span_safe/2 }]);
+            const addPointLoad = () => setPointLoads([...pointLoads, { mag: 500, loc: span_safe/2, type: 'D' }]);
             const removePointLoad = (idx) => setPointLoads(pointLoads.filter((_,i)=>i!==idx));
             const updatePointLoad = (idx, field, val) => {
-                const newLoads = [...pointLoads];
-                newLoads[idx][field] = parseFloat(val) || 0;
+                const newLoads = pointLoads.map(p => ({ ...p }));
+                newLoads[idx][field] = field === 'type' ? val : (parseFloat(val) || 0);
                 setPointLoads(newLoads);
             };
             const addMaterial = () => {
                 const name = prompt("Enter Custom Species Name:");
-                if(name) setCustomMaterials({...customMaterials, [name]: DEFAULT_SPECIES['DF-L']});
+                if(!name) return;
+                if(DEFAULT_SPECIES[name]) { alert(`"${name}" is a built-in species. Choose another name.`); return; }
+                // Starts from the DF-L No.2 (Table 4A) reference values; edit them in the Material panel.
+                setCustomMaterials({...customMaterials, [name]: { Fb: 900, Fv: 180, FcPerp: 625, E: 1600000, Emin: 580000, G: 0.50, dens: 34, cfIncluded: false }});
+                setSpecies(name);
             };
             const saveProject = () => {
-                const data = { span, spacing, wDead, wLive, wSnow, wWind, species, grade, sizeLabel, loadCombo, projectInfo };
+                const data = { span, spacing, wDead, wLive, wSnow, wWind, species, grade, sizeLabel, loadCombo, projectInfo,
+                    wRoofLive, pointLoads, selfWeight, bearingLen, bearingInterior, unbracedLen, customB, customD, isManual, manualProps, customMaterials,
+                    moisture, temp, incising, repetitive, flatUse, creepFactor, notchDepth, costPerBF, deflLimitLL, deflLimitTL, latSupport };
                 const blob = new Blob([JSON.stringify(data, null, 2)], {type: "application/json"});
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a'); a.href = url; a.download = "timber_design.json"; a.click();
@@ -506,13 +729,50 @@
                 if(!file) return;
                 const reader = new FileReader();
                 reader.onload = (ev) => {
-                    const d = JSON.parse(ev.target.result);
-                    setSpan(d.span); setSpacing(d.spacing); setWDead(d.wDead); setWLive(d.wLive); setWSnow(d.wSnow || 0);
-                    setSpecies(d.species); setGrade(d.grade); setSizeLabel(d.sizeLabel); setLoadCombo(d.loadCombo || 'D+L');
-                    if(d.projectInfo) setProjectInfo(d.projectInfo);
-                    showToast("Project loaded");
+                    let d;
+                    try {
+                        d = JSON.parse(ev.target.result);
+                        if (!d || typeof d !== 'object' || Array.isArray(d)) throw new Error('file does not contain a project object');
+                    } catch (err) { alert('Could not open project file: ' + err.message); return; }
+                    try {
+                        // Older files (span, spacing, wDead, wLive, wSnow, wWind, species, grade, sizeLabel, loadCombo, projectInfo only)
+                        // still load; every missing field falls back to its default.
+                        const n = (v, def) => (typeof v === 'number' && isFinite(v)) ? v : def;
+                        const bo = (v, def) => typeof v === 'boolean' ? v : def;
+                        const st = (v, def, allowed) => (typeof v === 'string' && (!allowed || allowed.includes(v))) ? v : def;
+                        const cm = {};
+                        if (d.customMaterials && typeof d.customMaterials === 'object') Object.entries(d.customMaterials).forEach(([k, v]) => {
+                            if (!v || typeof v !== 'object' || DEFAULT_SPECIES[k]) return;
+                            cm[k] = { Fb: n(v.Fb, n(v.F_b, NaN)), Fv: n(v.Fv, n(v.F_v, NaN)), FcPerp: n(v.FcPerp, n(v.F_c_perp, NaN)), E: n(v.E, NaN), Emin: n(v.Emin, NaN), G: n(v.G, NaN), dens: n(v.dens, NaN), cfIncluded: bo(v.cfIncluded, false) };
+                        });
+                        const mp = (d.manualProps && typeof d.manualProps === 'object') ? d.manualProps : {};
+                        setSpan(n(d.span, 16)); setSpacing(n(d.spacing, 16)); setWDead(n(d.wDead, 15)); setWLive(n(d.wLive, 40)); setWSnow(n(d.wSnow, 0));
+                        setWWind(n(d.wWind, 0)); setWRoofLive(n(d.wRoofLive, 0));
+                        setCustomMaterials(cm);
+                        setSpecies(st(d.species, 'DF-L', [...Object.keys(DEFAULT_SPECIES), ...Object.keys(cm)]));
+                        setGrade(st(d.grade, 'No.2', Object.keys(GRADES_DB)));
+                        setSizeLabel(st(d.sizeLabel, '2x10', SIZES_DB.map(s => s.label)));
+                        setLoadCombo(st(d.loadCombo, 'GOV', ['GOV', ...COMBOS.map(c => c.key)]));
+                        setPointLoads(Array.isArray(d.pointLoads) ? d.pointLoads.filter(p => p && typeof p === 'object').map(p => ({ mag: n(p.mag, 0), loc: n(p.loc, 0), type: st(p.type, 'D', Object.keys(LOAD_CD)) })) : []);
+                        setSelfWeight(bo(d.selfWeight, true));
+                        setBearingLen(n(d.bearingLen, 3.5)); setBearingInterior(bo(d.bearingInterior, false)); setUnbracedLen(n(d.unbracedLen, 0));
+                        setCustomB(n(d.customB, 1.5)); setCustomD(n(d.customD, 9.25));
+                        setIsManual(bo(d.isManual, false));
+                        setManualProps({ Fb: n(mp.Fb, 900), Fv: n(mp.Fv, 180), E: n(mp.E, 1600000), Emin: n(mp.Emin, 580000), FcPerp: n(mp.FcPerp, 625), G: n(mp.G, 0.50), dens: n(mp.dens, 35), cfIncluded: bo(mp.cfIncluded, false) });
+                        setMoisture(st(d.moisture, 'Dry', ['Dry', 'Wet']));
+                        setTemp(d.temp === 'High' ? '125-150' : st(d.temp, 'Normal', ['Normal', '100-125', '125-150']));
+                        setIncising(bo(d.incising, false)); setRepetitive(bo(d.repetitive, true)); setFlatUse(bo(d.flatUse, false));
+                        setCreepFactor(n(d.creepFactor, 1.5)); setNotchDepth(n(d.notchDepth, 0)); setCostPerBF(n(d.costPerBF, 1.50));
+                        setDeflLimitLL(n(d.deflLimitLL, 360)); setDeflLimitTL(n(d.deflLimitTL, 240));
+                        setLatSupport(st(d.latSupport, 'Continuous', ['Continuous', 'Supports']));
+                        const pi = (d.projectInfo && typeof d.projectInfo === 'object') ? d.projectInfo : {};
+                        setProjectInfo({ client: st(pi.client, ''), job: st(pi.job, ''), designer: st(pi.designer, ''), notes: st(pi.notes, '') });
+                        showToast("Project loaded");
+                    } catch (err) { alert('Could not load project: ' + err.message); }
                 };
+                reader.onerror = () => alert('Could not read the file.');
                 reader.readAsText(file);
+                e.target.value = '';
             };
 
             return (
@@ -557,22 +817,23 @@
                              <Accordion title="Loads & Combinations" icon={ArrowDown} isOpen={openSections.loads} onToggle={()=>setOpenSections({...openSections, loads:!openSections.loads})} isDark={isDark}>
                                 <div className="space-y-3">
                                     <div className={`p-3 rounded-xl border shadow-sm ${isDark ? 'bg-slate-900/50 border-slate-700' : 'bg-blue-50/50 border-blue-100'}`}>
-                                        <label className="text-[10px] font-bold opacity-60 uppercase block mb-2">Governing Combo</label>
+                                        <label className="text-[10px] font-bold opacity-60 uppercase block mb-2">Diagram Combo (all combos are checked)</label>
                                         <select value={loadCombo} onChange={e=>setLoadCombo(e.target.value)} className={`w-full p-2 text-sm border rounded-lg font-medium outline-none focus:ring-2 focus:ring-blue-500 ${isDark ? 'bg-slate-800 border-slate-600' : 'bg-white border-blue-200'}`}>
-                                            <option value="D">D Only (Cd=0.9)</option>
-                                            <option value="D+L">D + L (Cd=1.0)</option>
-                                            <option value="D+S">D + S (Cd=1.15)</option>
-                                            <option value="D+Lr">D + Lr (Cd=1.25)</option>
-                                            <option value="D+0.75(L+S)">D + 0.75(L+S) (Cd=1.15)</option>
-                                            <option value="D+0.6W">D + 0.6W (Cd=1.6)</option>
+                                            <option value="GOV">Governing for bending (auto)</option>
+                                            {COMBOS.map(c => <option key={c.key} value={c.key}>{c.name}</option>)}
                                         </select>
                                     </div>
                                     <div className="grid grid-cols-2 gap-2">
-                                        <NumberInput label="Dead (D)" value={wDead} onChange={setWDead} />
-                                        <NumberInput label="Live (L)" value={wLive} onChange={setWLive} />
-                                        <NumberInput label="Snow (S)" value={wSnow} onChange={setWSnow} />
-                                        <NumberInput label="Wind (W)" value={wWind} onChange={setWWind} />
+                                        <NumberInput label="Dead (D) psf" value={wDead} onChange={setWDead} />
+                                        <NumberInput label="Live (L) psf" value={wLive} onChange={setWLive} />
+                                        <NumberInput label="Roof Live (Lr) psf" value={wRoofLive} onChange={setWRoofLive} />
+                                        <NumberInput label="Snow (S) psf" value={wSnow} onChange={setWSnow} />
+                                        <NumberInput label="Wind (W) psf, + down" value={wWind} onChange={setWWind} />
                                     </div>
+                                    <label className="flex justify-between items-center text-xs">
+                                        <span className="opacity-70">Include self-weight (in D)</span>
+                                        <input type="checkbox" checked={selfWeight} onChange={e=>setSelfWeight(e.target.checked)}/>
+                                    </label>
                                     <div className="border-t pt-2 dark:border-slate-700">
                                         <div className="flex justify-between items-center mb-1">
                                             <span className="text-[10px] font-bold opacity-60">POINT LOADS</span>
@@ -582,7 +843,10 @@
                                             <div key={i} className="flex items-center gap-1 mb-1">
                                                 <input type="number" value={pl.mag} onChange={e=>updatePointLoad(i,'mag',e.target.value)} className="w-16 p-1 text-xs border rounded dark:bg-slate-700 dark:border-slate-600" placeholder="lb"/>
                                                 <span className="text-[10px]">@</span>
-                                                <input type="number" value={pl.loc} onChange={e=>updatePointLoad(i,'loc',e.target.value)} className="w-12 p-1 text-xs border rounded dark:bg-slate-700 dark:border-slate-600" placeholder="ft"/>
+                                                <input type="number" value={pl.loc} onChange={e=>updatePointLoad(i,'loc',e.target.value)} className={`w-12 p-1 text-xs border rounded dark:bg-slate-700 ${(pl.loc >= 0 && pl.loc <= span) ? 'dark:border-slate-600' : 'border-red-500 bg-red-50'}`} placeholder="ft"/>
+                                                <select value={pl.type || 'D'} onChange={e=>updatePointLoad(i,'type',e.target.value)} className="p-1 text-xs border rounded dark:bg-slate-700 dark:border-slate-600">
+                                                    {Object.keys(LOAD_CD).map(t => <option key={t} value={t}>{t}</option>)}
+                                                </select>
                                                 <button onClick={()=>removePointLoad(i)} className="text-red-400"><Trash2 className="w-3 h-3"/></button>
                                             </div>
                                         ))}
@@ -597,6 +861,11 @@
                                     <select value={species} onChange={e=>setSpecies(e.target.value)} className="w-full p-2 text-xs border rounded dark:bg-slate-800 dark:border-slate-600">
                                         {Object.keys({...DEFAULT_SPECIES, ...customMaterials}).map(k=><option key={k} value={k}>{k}</option>)}
                                     </select>
+                                    {!customMaterials[species] && (
+                                        <select value={grade} onChange={e=>setGrade(e.target.value)} className="w-full p-2 text-xs border rounded dark:bg-slate-800 dark:border-slate-600">
+                                            {Object.keys(GRADES_DB).map(k=><option key={k} value={k}>{GRADES_DB[k].name}</option>)}
+                                        </select>
+                                    )}
                                     <div className="flex gap-2 items-center">
                                         <select value={sizeLabel} onChange={e=>setSizeLabel(e.target.value)} className="flex-1 p-2 text-xs border rounded dark:bg-slate-800 dark:border-slate-600 font-mono">{SIZES_DB.map(s=><option key={s.label} value={s.label}>{s.label}</option>)}</select>
                                         <button onClick={()=>setIsManual(!isManual)} className="text-[10px] underline opacity-60">{isManual?'Std':'Man'}</button>
@@ -604,6 +873,9 @@
                                     {sizeLabel === 'Custom' && (
                                         <div className="flex gap-2"><input placeholder="b" type="number" value={customB} onChange={e=>setCustomB(parseFloat(e.target.value))} className="w-1/2 p-1 border rounded"/><input placeholder="d" type="number" value={customD} onChange={e=>setCustomD(parseFloat(e.target.value))} className="w-1/2 p-1 border rounded"/></div>
                                     )}
+                                    {isManual && <PropEditor title="Manual reference values (NDS Supplement)" vals={manualProps} onChange={setManualProps} />}
+                                    {!isManual && customMaterials[species] && <PropEditor title={`Custom species "${species}" reference values`} vals={customMaterials[species]} onChange={v => setCustomMaterials({...customMaterials, [species]: v})} />}
+                                    {res.ref && <div className="text-[10px] font-mono opacity-70">{res.src}: Fb {res.ref.Fb}, Ft {res.ref.Ft ?? '—'}, Fv {res.ref.Fv}, Fc⊥ {res.ref.Fcp}, Fc {res.ref.Fc ?? '—'}, E {res.ref.E}, Emin {res.ref.Emin} psi</div>}
                                     <div className="flex gap-2 pt-2 border-t border-slate-100 dark:border-slate-700">
                                         <div className="w-1/2"><label className="text-[10px]">Notch Depth</label><input type="number" value={notchDepth} onChange={e=>setNotchDepth(parseFloat(e.target.value))} className="w-full p-1 text-xs border rounded"/></div>
                                         <div className="w-1/2"><label className="text-[10px]">Cost $/BF</label><input type="number" value={costPerBF} onChange={e=>setCostPerBF(parseFloat(e.target.value))} className="w-full p-1 text-xs border rounded"/></div>
@@ -617,7 +889,13 @@
                                 <div className="space-y-2 text-xs">
                                     <div className="flex items-center justify-between"><span className="opacity-70">Unbraced Len (ft)</span><input type="number" value={unbracedLen} onChange={e=>setUnbracedLen(parseFloat(e.target.value))} className="w-16 p-1 border rounded text-right" placeholder="Span"/></div>
                                     <div className="flex items-center justify-between"><span className="opacity-70">Bearing Len (in)</span><input type="number" value={bearingLen} onChange={e=>setBearingLen(parseFloat(e.target.value))} className="w-16 p-1 border rounded text-right"/></div>
+                                    <label className="flex justify-between items-center">
+                                        <span className="opacity-70">Bearing ≥ 3 in. from member end (Cb)</span>
+                                        <input type="checkbox" checked={bearingInterior} onChange={e=>setBearingInterior(e.target.checked)}/>
+                                    </label>
                                     <div className="flex items-center justify-between"><span className="opacity-70">Creep Factor</span><input type="number" value={creepFactor} onChange={e=>setCreepFactor(parseFloat(e.target.value))} className="w-16 p-1 border rounded text-right"/></div>
+                                    <div className="flex items-center justify-between"><span className="opacity-70">Live/snow defl. limit L/</span><input type="number" value={deflLimitLL} onChange={e=>setDeflLimitLL(parseFloat(e.target.value))} className="w-16 p-1 border rounded text-right"/></div>
+                                    <div className="flex items-center justify-between"><span className="opacity-70">Total defl. limit L/</span><input type="number" value={deflLimitTL} onChange={e=>setDeflLimitTL(parseFloat(e.target.value))} className="w-16 p-1 border rounded text-right"/></div>
                                     
                                     <label className="flex justify-between items-center pt-2 border-t dark:border-slate-700">
                                         <span className="opacity-70">Incised (Ci)</span>
@@ -632,8 +910,9 @@
                                         <div className="flex justify-between items-center mb-2">
                                             <span className="opacity-70">Temperature (Ct)</span>
                                             <select value={temp} onChange={e=>setTemp(e.target.value)} className="p-1 border rounded w-24">
-                                                <option value="Normal">Normal</option>
-                                                <option value="High">High</option>
+                                                <option value="Normal">≤ 100°F</option>
+                                                <option value="100-125">100–125°F</option>
+                                                <option value="125-150">125–150°F</option>
                                             </select>
                                         </div>
                                         <label className="flex justify-between items-center">
@@ -665,45 +944,61 @@
                                 <button onClick={()=>setActiveTab('report')} className={`px-4 py-1.5 text-xs font-bold rounded ${activeTab==='report'?'bg-white shadow text-blue-600':'text-slate-500'}`}>Detailed Report</button>
                              </div>
 
-                             {activeTab === 'analysis' && (
+                             {!res.ok && (
+                                <div className="p-6 rounded-2xl border border-red-300 bg-red-50 text-red-800 dark:bg-red-900/20 dark:border-red-800 dark:text-red-200">
+                                    <div className="flex items-center gap-2 font-bold mb-2"><AlertTriangle className="w-5 h-5"/> No results: input or design data required</div>
+                                    <ul className="list-disc pl-5 text-sm space-y-1">{res.errors.map((m,i)=><li key={i}>{m}</li>)}</ul>
+                                </div>
+                             )}
+
+                             {res.ok && activeTab === 'analysis' && (
                                 <div className="space-y-6 animate-in fade-in">
                                     {/* HERO STAT */}
                                     <div className={`p-6 rounded-2xl border ${isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-gradient-to-br from-blue-50 to-indigo-50 border-blue-100'} flex items-center justify-between`}>
                                         <div>
                                             <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-1">Controlling Limit State</h4>
                                             <div className="text-xl font-bold text-slate-800 dark:text-slate-100">
-                                                {Math.max(dcr_b, dcr_v, dcr_def) === dcr_b ? "Bending Moment" : Math.max(dcr_b, dcr_v, dcr_def) === dcr_v ? "Shear" : "Deflection"}
+                                                {res.fails.length ? 'Code limit violated (NG)' : res.ctrlName}
                                             </div>
+                                            <div className="text-xs font-mono opacity-60">{ctrlDetail}</div>
                                         </div>
                                         <div className="text-right">
-                                            <div className={`text-3xl font-bold ${Math.max(dcr_b, dcr_v, dcr_def) > 1 ? "text-red-500" : "text-emerald-500"}`}>
-                                                {(Math.max(dcr_b, dcr_v, dcr_def)*100).toFixed(1)}%
+                                            <div className={`text-3xl font-bold ${(res.dcrMax > 1 || res.fails.length) ? "text-red-500" : "text-emerald-500"}`}>
+                                                {(res.dcrMax*100).toFixed(1)}%
                                             </div>
-                                            <div className="text-xs font-mono opacity-50">Capacity Utilization</div>
+                                            <div className="text-xs font-mono opacity-50">Capacity Utilization (max of bending, shear, bearing, deflection)</div>
                                         </div>
                                     </div>
+
+                                    {(res.fails.length > 0 || res.notes.length > 0) && (
+                                        <div className="space-y-1 text-xs">
+                                            {res.fails.map((m,i)=><div key={'f'+i} className="p-2 rounded border border-red-300 bg-red-50 text-red-700 flex gap-2"><XCircle className="w-4 h-4 shrink-0"/>{m}</div>)}
+                                            {res.notes.map((m,i)=><div key={'n'+i} className="p-2 rounded border border-amber-300 bg-amber-50 text-amber-800 flex gap-2"><Info className="w-4 h-4 shrink-0"/>{m}</div>)}
+                                        </div>
+                                    )}
 
                                     {/* UNITY RINGS */}
                                     <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
                                         <div className={`rounded-2xl p-4 border shadow-sm flex flex-col items-center justify-center transition-all ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} hover:shadow-md`}>
-                                            <RadialProgress pct={dcr_b*100} label="Bending" sub={`${fb_actual.toFixed(0)} psi`} isDark={isDark} />
+                                            <RadialProgress pct={res.dcr.b*100} label="Bending" sub={`${gb.fb.toFixed(0)} psi · ${gb.name}`} isDark={isDark} />
                                         </div>
                                         <div className={`rounded-2xl p-4 border shadow-sm flex flex-col items-center justify-center transition-all ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} hover:shadow-md`}>
-                                            <RadialProgress pct={dcr_v*100} label="Shear" sub={`${fv_actual.toFixed(0)} psi`} isDark={isDark} />
+                                            <RadialProgress pct={res.dcr.v*100} label="Shear" sub={`${(gv.r_vn > gv.r_v1 ? gv.fvn : gv.fv).toFixed(0)} psi${gv.r_vn > gv.r_v1 ? ' (notch)' : ''} · ${gv.name}`} isDark={isDark} />
                                         </div>
                                         <div className={`rounded-2xl p-4 border shadow-sm flex flex-col items-center justify-center transition-all ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} hover:shadow-md`}>
-                                            <RadialProgress pct={dcr_def*100} label="Deflection" sub={`L/${(span*12/del_long_term).toFixed(0)}`} isDark={isDark} />
+                                            <RadialProgress pct={res.dcr.def*100} label="Deflection" sub={`LL ${lOver(res.defl.Dtr)} · TL ${lOver(res.defl.Dtot)}`} isDark={isDark} />
                                         </div>
                                         <div className={`rounded-2xl p-4 border shadow-sm flex flex-col items-center justify-center transition-all ${isDark ? 'bg-slate-800 border-slate-700' : 'bg-white border-slate-200'} hover:shadow-md`}>
-                                            <RadialProgress pct={dcr_c*100} label="Bearing" sub={`${fcp_actual.toFixed(0)} psi`} isDark={isDark} />
+                                            <RadialProgress pct={res.dcr.c*100} label="Bearing" sub={`${gc.fcp.toFixed(0)} psi · ${gc.name}`} isDark={isDark} />
                                         </div>
                                     </div>
 
-                                    <DiagramsPanel span={span} pointLoads={pointLoads} wTotal={w_total} shearData={shearData} momentData={momentData} maxV={maxV} maxM={maxM} isDark={isDark} hoverX={hoverX} setHoverX={setHoverX} />
+                                    <div className="text-[10px] font-mono opacity-60">Diagrams shown for: {res.diag.name}</div>
+                                    <DiagramsPanel span={span} pointLoads={pointLoads} shearData={res.diag.shearData} momentData={res.diag.momentData} maxV={res.diag.maxV} maxM={res.diag.maxM} isDark={isDark} hoverX={hoverX} setHoverX={setHoverX} />
                                 </div>
                              )}
 
-                             {activeTab === 'report' && (
+                             {res.ok && activeTab === 'report' && (
                                 <div className="bg-white p-8 rounded-xl shadow-sm border border-slate-200 dark:bg-slate-900 dark:border-slate-700 print:border-none print:shadow-none">
                                     <div className="flex justify-between border-b pb-4 mb-6">
                                         <div>
@@ -713,49 +1008,101 @@
                                         <div className="text-right text-xs font-mono opacity-60">
                                             <p>Ref: NDS 2018</p>
                                             <p>Method: ASD</p>
+                                            <p>Combos: ASCE 7-16 2.4.1</p>
                                         </div>
                                     </div>
 
+                                    {res.fails.length > 0 && <div className="mb-6 p-3 rounded border border-red-300 bg-red-50 text-red-700 text-xs space-y-1">{res.fails.map((m,i)=><div key={i}>NG: {m}</div>)}</div>}
+
                                     <EquationBlock title="1. Member & Geometric Properties" isDark={isDark} showTrace={true} equations={[
-                                        { label:"Area", sym:"A", formula:"b * d", sub:`${b} * ${d}`, res:Area.toFixed(2), unit:"in²", ref:"NDS 3.1" },
-                                        { label:"Modulus", sym:"S", formula:"b * d² / 6", sub:`${b} * ${d}² / 6`, res:Sx.toFixed(2), unit:"in³", ref:"NDS 3.1" },
-                                        { label:"Inertia", sym:"I", formula:"b * d³ / 12", sub:`${b} * ${d}³ / 12`, res:Ix.toFixed(1), unit:"in⁴", ref:"NDS 3.1" },
-                                        { label:"Self Weight", sym:"w_sw", formula:"ρ * A / 144", sub:`${baseVals.dens} * ${Area.toFixed(2)} / 144`, res:w_self.toFixed(1), unit:"plf", traceOnly:true },
+                                        { label:"Area", sym:"A", formula:"b * d", sub:`${b} * ${d}`, res:res.A.toFixed(2), unit:"in²", ref:"NDS 3.1" },
+                                        { label:"Modulus", sym:"S", formula:res.flat ? "d * b² / 6 (flat)" : "b * d² / 6", sub:`${res.bw} * ${res.dep}² / 6`, res:res.S.toFixed(2), unit:"in³", ref:"NDS 3.1" },
+                                        { label:"Inertia", sym:"I", formula:res.flat ? "d * b³ / 12 (flat)" : "b * d³ / 12", sub:`${res.bw} * ${res.dep}³ / 12`, res:res.I.toFixed(1), unit:"in⁴", ref:"NDS 3.1" },
+                                        { label:"Self Weight", sym:"w_sw", formula:"ρ * A / 144", sub:`${res.dens} * ${res.A.toFixed(2)} / 144`, res:res.w_self.toFixed(1), unit:"plf", traceOnly:true },
                                     ]} />
 
                                     <div className={`mb-6 p-4 rounded-lg border ${isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-white border-slate-200'} shadow-sm break-inside-avoid`}>
-                                        <h4 className={`text-xs font-bold uppercase tracking-wider mb-3 border-b pb-2 ${isDark ? 'text-blue-400 border-blue-900' : 'text-slate-600 border-slate-100'}`}>2. Adjustment Factors Summary</h4>
+                                        <h4 className={`text-xs font-bold uppercase tracking-wider mb-3 border-b pb-2 ${isDark ? 'text-blue-400 border-blue-900' : 'text-slate-600 border-slate-100'}`}>2. Reference Values & Adjustment Factors Summary</h4>
+                                        <div className="text-xs font-mono mb-2">{res.src}: Fb {res.ref.Fb}, Ft {res.ref.Ft ?? '—'}, Fv {res.ref.Fv}, Fc⊥ {res.ref.Fcp}, Fc {res.ref.Fc ?? '—'}, E {res.ref.E}, Emin {res.ref.Emin} psi (Ft, Fc not used: no axial load)</div>
                                         <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs font-mono">
-                                            <FactorRow label="CD (Duration)" val={Cd} note={loadCombo} isDark={isDark} />
-                                            <FactorRow label="CM (Wet)" val={CM} note={moisture} isDark={isDark} />
-                                            <FactorRow label="Ct (Temp)" val={Ct} note={temp} isDark={isDark} />
-                                            <FactorRow label="CL (Stability)" val={CL} note={CL<1?"Unbraced":"Braced"} isDark={isDark} />
-                                            <FactorRow label="CF (Size)" val={CF} note={`d=${d}"`} isDark={isDark} />
-                                            <FactorRow label="Ci (Incised)" val={Ci} note={incising?"Yes":"No"} isDark={isDark} />
-                                            <FactorRow label="Cr (Repetitive)" val={Cr} note={repetitive?"Yes":"No"} isDark={isDark} />
-                                            <FactorRow label="Cfu (Flat Use)" val={Cfu} note={flatUse?"Yes":"No"} isDark={isDark} />
+                                            <FactorRow label="CD (Duration)" val={gb.CD} note={gb.name} isDark={isDark} />
+                                            <FactorRow label="CM Fb" val={res.CM.Fb} note={moisture} isDark={isDark} />
+                                            <FactorRow label="CM Fv" val={res.CM.Fv} note={moisture} isDark={isDark} />
+                                            <FactorRow label="CM Fc⊥" val={res.CM.Fcp} note={moisture} isDark={isDark} />
+                                            <FactorRow label="CM E, Emin" val={res.CM.E} note={moisture} isDark={isDark} />
+                                            <FactorRow label="Ct Fb, Fv, Fc⊥" val={res.Ct.Fb} note={temp} isDark={isDark} />
+                                            <FactorRow label="Ct E, Emin" val={res.Ct.E} note={temp} isDark={isDark} />
+                                            <FactorRow label="CL (Stability)" val={gb.CL} note={res.stabilityApplies ? "Unbraced" : "Braced"} isDark={isDark} />
+                                            <FactorRow label="CF (Size, Fb)" val={res.CF} note={res.CFnote} isDark={isDark} />
+                                            <FactorRow label="Ci Fb, Fv" val={res.Ci.Fb} note={incising?"Yes":"No"} isDark={isDark} />
+                                            <FactorRow label="Ci E, Emin" val={res.Ci.E} note={incising?"Yes":"No"} isDark={isDark} />
+                                            <FactorRow label="Cr (Repetitive)" val={res.Cr} note={repetitive?"Yes":"No"} isDark={isDark} />
+                                            <FactorRow label="Cfu (Flat Use)" val={res.Cfu} note={flatUse?"Yes":"No"} isDark={isDark} />
+                                            <FactorRow label="Cb (Bearing Area)" val={res.Cb} note={bearingInterior ? "≥ 3 in. from end" : "End bearing"} isDark={isDark} />
                                         </div>
                                     </div>
 
-                                    <EquationBlock title="3. Beam Stability Factor (CL) Trace" isDark={isDark} showTrace={true} equations={[
-                                        { label:"Eff Length", sym:"le", formula:"1.63Lu + 3d", sub:`1.63(${Lu}) + 3(${d})`, res:le.toFixed(1), unit:"in", ref:"Table 3.3.3" },
-                                        { label:"Slenderness", sym:"RB", formula:"√(le*d/b²)", sub:`√(${le.toFixed(0)}*${d}/${b}²)`, res:RB.toFixed(2), unit:"", ref:"3.3.3.6" },
-                                        { label:"Crit Buckling", sym:"FbE", formula:"1.20*Emin'/RB²", sub:`1.20*${Emin_p}/ ${RB.toFixed(2)}²`, res:FbE.toFixed(0), unit:"psi", ref:"3.3.3.7" },
-                                        { label:"Stability", sym:"CL", formula:"Derived", sub:"Eq 3.3-6", res:CL.toFixed(3), unit:"", ref:"3.3.3.8" },
+                                    <EquationBlock title="3. Beam Stability Factor (CL) Trace" isDark={isDark} showTrace={true} equations={res.stabilityApplies ? [
+                                        { label:"Unbraced", sym:"lu/d", formula:"lu / d", sub:`${res.lu.toFixed(1)} / ${res.dep}`, res:res.luD.toFixed(2), unit:"", ref:"Table 3.3.3" },
+                                        { label:"Eff Length", sym:"le", formula:res.leRule, sub:`lu = ${res.lu.toFixed(1)}, d = ${res.dep}`, res:res.le.toFixed(1), unit:"in", ref:"Table 3.3.3" },
+                                        { label:"Slenderness", sym:"RB", formula:"√(le*d/b²) ≤ 50", sub:`√(${res.le.toFixed(0)}*${res.dep}/${res.bw}²)`, res:res.RB.toFixed(2), unit:"", ref:"3.3.3.6, 3.3.3.7" },
+                                        { label:"Crit Buckling", sym:"FbE", formula:"1.20*Emin'/RB²", sub:`1.20*${res.Emin_p.toFixed(0)}/ ${res.RB.toFixed(2)}²`, res:res.FbE.toFixed(0), unit:"psi", ref:"3.3.3.8" },
+                                        { label:"Fb*", sym:"Fb*", formula:"Fb·CD·CM·Ct·CF·Ci·Cr", sub:gb.name, res:gb.Fb_star.toFixed(0), unit:"psi", ref:"3.3.3.8" },
+                                        { label:"Stability", sym:"CL", formula:"Eq 3.3-6", sub:`FbE/Fb* = ${(res.FbE/gb.Fb_star).toFixed(3)}`, res:gb.CL.toFixed(3), unit:"", ref:"3.3.3.8" },
+                                    ] : [
+                                        { label:"Stability", sym:"CL", formula:"compression edge braced, or d ≤ b", sub:"—", res:"1.000", unit:"", ref:"3.3.3" },
                                     ]} />
 
                                     <EquationBlock title="4. Design Values & Adjustment Factors" isDark={isDark} showTrace={traceMode} equations={[
-                                        { label:"Adj Bending", sym:"Fb'", formula:"Fb * Factors", sub:`${baseVals.Fb} * ...`, res:Fb_p.toFixed(0), unit:"psi", ref:"Table 4.3.1" },
-                                        { label:"Adj Shear", sym:"Fv'", formula:"Fv * Factors", sub:`${baseVals.Fv} * ...`, res:(Fv_p * Cn).toFixed(0), unit:"psi", ref:"Table 4.3.1" },
-                                        { label:"Notch Factor", sym:"Cn", formula:"(dn/d)²", sub:`(${d-notchDepth}/${d})²`, res:Cn.toFixed(2), unit:"", ref:"3.4.3.2", traceOnly:true },
+                                        { label:"Adj Bending", sym:"Fb'", formula:"Fb·CD·CM·Ct·CL·CF·Ci·Cfu·Cr", sub:`${res.ref.Fb}·${gb.CD}·${res.CM.Fb}·${res.Ct.Fb}·${f3(gb.CL)}·${f3(res.CF)}·${res.Ci.Fb}·${res.Cfu}·${res.Cr}`, res:gb.Fb_p.toFixed(0), unit:"psi", ref:"Table 4.3.1" },
+                                        { label:"Adj Shear", sym:"Fv'", formula:"Fv·CD·CM·Ct·Ci", sub:`${res.ref.Fv}·${gv.CD}·${res.CM.Fv}·${res.Ct.Fv}·${res.Ci.Fv}`, res:gv.Fv_p.toFixed(0), unit:"psi", ref:"Table 4.3.1" },
+                                        { label:"Notch Factor", sym:"Cn", formula:"(dn/d)²", sub:`(${f3(res.dn)}/${res.dep})²`, res:res.Cn.toFixed(3), unit:"", ref:"3.4.3.2", traceOnly:true },
+                                        { label:"Adj Bearing", sym:"Fc⊥'", formula:"Fc⊥·CM·Ct·Ci·Cb", sub:`${res.ref.Fcp}·${res.CM.Fcp}·${res.Ct.Fcp}·${res.Ci.Fcp}·${f3(res.Cb)}`, res:gc.Fcp_p.toFixed(0), unit:"psi", ref:"Table 4.3.1, 3.10.4" },
+                                        { label:"Adj Modulus", sym:"E'", formula:"E·CM·Ct·Ci", sub:`${res.ref.E}·${res.CM.E}·${res.Ct.E}·${res.Ci.E}`, res:res.E_p.toFixed(0), unit:"psi", ref:"Table 4.3.1" },
+                                        { label:"Adj Emin", sym:"Emin'", formula:"Emin·CM·Ct·Ci", sub:`${res.ref.Emin}·${res.CM.E}·${res.Ct.E}·${res.Ci.E}`, res:res.Emin_p.toFixed(0), unit:"psi", ref:"Table 4.3.1" },
                                     ]} />
 
-                                    <EquationBlock title="5. Analysis & Stress Check" isDark={isDark} showTrace={traceMode} equations={[
-                                        { label:"Max Moment", sym:"Mmax", formula:"WL²/8 + ...", sub:"Superposition", res:(maxM/12).toFixed(0), unit:"ft-lb", ref:"Statics" },
-                                        { label:"Design Shear", sym:"V*", formula:"Vmax - w*d", sub:`${maxV.toFixed(0)} - ${w_total.toFixed(0)}*${(d/12).toFixed(2)}`, res:V_crit.toFixed(0), unit:"lb", ref:"3.4.3.1" },
-                                        { label:"Act Bending", sym:"fb", formula:"M / S", sub:`${maxM.toFixed(0)} / ${Sx.toFixed(2)}`, res:fb_actual.toFixed(0), unit:"psi", ref:"3.2.1" },
-                                        { label:"Act Shear", sym:"fv", formula:"1.5 V / A_net", sub:`1.5 * ${V_crit.toFixed(0)} / ${Area.toFixed(2)}`, res:fv_actual.toFixed(0), unit:"psi", ref:"3.4.1" },
+                                    <EquationBlock title="5. Analysis & Stress Check (governing combinations)" isDark={isDark} showTrace={traceMode} equations={[
+                                        { label:"Max Moment", sym:"Mmax", formula:"statics, uniform + point loads", sub:`${gb.name}, x = ${gb.xM.toFixed(2)} ft`, res:gb.Mmax.toFixed(0), unit:"ft-lb", ref:"Statics" },
+                                        { label:"Act Bending", sym:"fb", formula:"M × 12 / S", sub:`${gb.Mmax.toFixed(0)} × 12 / ${res.S.toFixed(2)}`, res:gb.fb.toFixed(0), unit:"psi", ref:"3.3.2" },
+                                        { label:"Bending", sym:"fb/Fb'", formula:"≤ 1.0", sub:`${gb.fb.toFixed(0)} / ${gb.Fb_p.toFixed(0)}`, res:gb.r_b.toFixed(3), unit:"", ref:gb.name },
+                                        { label:"Design Shear", sym:"V", formula:"max |V| between d from each support", sub:`${gv.name}, x = ${gv.xV.toFixed(2)} ft, d = ${(res.dep/12).toFixed(3)} ft`, res:gv.Vd.toFixed(0), unit:"lb", ref:"3.4.3.1(a)" },
+                                        { label:"Act Shear", sym:"fv", formula:"1.5 V / (b d)", sub:`1.5 × ${gv.Vd.toFixed(0)} / ${res.A.toFixed(2)}`, res:gv.fv.toFixed(1), unit:"psi", ref:"3.4.2" },
+                                        ...(res.hasNotch ? [
+                                            { label:"Notched End", sym:"fv,n", formula:"1.5 R / (b dn), R = full reaction", sub:`1.5 × ${gv.Rmax.toFixed(0)} / (${res.bw} × ${f3(res.dn)})`, res:gv.fvn.toFixed(1), unit:"psi", ref:"3.4.3.2(a)" },
+                                            { label:"Notch Ratio", sym:"fv,n/(Fv'Cn)", formula:"≤ 1.0", sub:`${gv.fvn.toFixed(1)} / (${gv.Fv_p.toFixed(0)} × ${res.Cn.toFixed(3)})`, res:gv.r_vn.toFixed(3), unit:"", ref:gv.name },
+                                        ] : []),
+                                        { label:"Shear", sym:"fv/Fv'", formula:"≤ 1.0", sub:`${gv.fv.toFixed(1)} / ${gv.Fv_p.toFixed(0)}`, res:gv.r_v1.toFixed(3), unit:"", ref:gv.name },
+                                        { label:"Reaction", sym:"R", formula:"max(R_left, R_right)", sub:`${gc.name}: ${gc.RL.toFixed(0)}, ${gc.RR.toFixed(0)}`, res:gc.Rbear.toFixed(0), unit:"lb", ref:"Statics" },
+                                        { label:"Bearing", sym:"fc⊥", formula:"R / (b lb)", sub:`${gc.Rbear.toFixed(0)} / (${res.bw} × ${res.lb})`, res:gc.fcp.toFixed(0), unit:"psi", ref:"3.10.2" },
+                                        { label:"Bearing", sym:"fc⊥/Fc⊥'", formula:"≤ 1.0", sub:`${gc.fcp.toFixed(0)} / ${gc.Fcp_p.toFixed(0)}`, res:gc.r_c.toFixed(3), unit:"", ref:gc.name },
                                     ]} />
+
+                                    <EquationBlock title="6. Deflection (service loads)" isDark={isDark} showTrace={traceMode} equations={[
+                                        { label:"Dead", sym:"ΔD", formula:"uniform + point loads", sub:`E' = ${res.E_p.toFixed(0)} psi, I = ${res.I.toFixed(1)} in⁴`, res:res.defl.dD.toFixed(3), unit:"in", ref:"3.5.1" },
+                                        { label:"Live/Snow", sym:"ΔLL", formula:"max of L, Lr, S, 0.75L+0.75(Lr or S)", sub:`governs: ${res.defl.trName}`, res:res.defl.Dtr.toFixed(3), unit:"in", ref:"3.5.1" },
+                                        { label:"LL Check", sym:"ΔLL/(L/n)", formula:`limit L/${res.defl.LLdiv}`, sub:`${res.defl.Dtr.toFixed(3)} / ${res.defl.LLlim.toFixed(3)}`, res:res.defl.r_dLL.toFixed(3), unit:"", ref:"IBC 1604.3" },
+                                        { label:"Total", sym:"ΔT", formula:"Kcr·ΔD + ΔLL", sub:`${res.defl.Kcr} × ΔD + Δ(${res.defl.totName})`, res:res.defl.Dtot.toFixed(3), unit:"in", ref:"3.5.2" },
+                                        { label:"TL Check", sym:"ΔT/(L/n)", formula:`limit L/${res.defl.TLdiv}`, sub:`${res.defl.Dtot.toFixed(3)} / ${res.defl.TLlim.toFixed(3)}`, res:res.defl.r_dTL.toFixed(3), unit:"", ref:"IBC 1604.3" },
+                                    ]} />
+
+                                    <div className={`mb-6 p-4 rounded-lg border ${isDark ? 'bg-slate-800/50 border-slate-700' : 'bg-white border-slate-200'} shadow-sm break-inside-avoid overflow-x-auto`}>
+                                        <h4 className={`text-xs font-bold uppercase tracking-wider mb-3 border-b pb-2 ${isDark ? 'text-blue-400 border-blue-900' : 'text-slate-600 border-slate-100'}`}>7. All ASD Load Combinations</h4>
+                                        <table className="w-full text-xs font-mono">
+                                            <thead><tr className="text-left opacity-60"><th className="pr-2">Combination</th><th className="pr-2">CD</th><th className="pr-2">w (plf)</th><th className="pr-2">R_L / R_R (lb)</th><th className="pr-2">M (ft-lb)</th><th className="pr-2">fb/Fb'</th><th className="pr-2">fv/Fv'</th><th className="pr-2">fc⊥/Fc⊥'</th></tr></thead>
+                                            <tbody>{res.combos.map(c => (
+                                                <tr key={c.key} className="border-t border-slate-100 dark:border-slate-700">
+                                                    <td className="pr-2">{c.name}</td><td className="pr-2">{c.CD}</td><td className="pr-2">{c.w.toFixed(1)}</td><td className="pr-2">{c.RL.toFixed(0)} / {c.RR.toFixed(0)}</td><td className="pr-2">{c.Mmax.toFixed(0)}</td>
+                                                    <td className={`pr-2 ${c === gb ? 'font-bold text-blue-600' : ''}`}>{c.r_b.toFixed(3)}</td>
+                                                    <td className={`pr-2 ${c === gv ? 'font-bold text-blue-600' : ''}`}>{c.r_v.toFixed(3)}</td>
+                                                    <td className={`pr-2 ${c === gc ? 'font-bold text-blue-600' : ''}`}>{c.r_c.toFixed(3)}</td>
+                                                </tr>
+                                            ))}</tbody>
+                                        </table>
+                                        <div className="text-[10px] opacity-60 mt-2">Bold = governing. CD is that of the shortest-duration load present in the combination (NDS 2.3.2). Point loads are included per their load type.</div>
+                                    </div>
+
+                                    {res.notes.length > 0 && <div className="mb-6 p-3 rounded border border-amber-300 bg-amber-50 text-amber-800 text-xs space-y-1">{res.notes.map((m,i)=><div key={i}>Note: {m}</div>)}</div>}
 
                                     {projectInfo.notes && <div className="mt-6 p-4 bg-slate-50 border rounded text-xs font-mono whitespace-pre-wrap">{projectInfo.notes}</div>}
                                 </div>
