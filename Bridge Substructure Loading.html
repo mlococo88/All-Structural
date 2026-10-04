@@ -3159,6 +3159,209 @@ async function rxImport(file) {
 /* vessel tab: say why no force is applied */
 { const cvh = cvHtml; cvHtml = function () { const h = cvh(), k = P.ui.sel, u = P.units[k]; if (!u || !u.cv || u.cv.on !== 'yes') return h; let parts = []; try { parts = hitParts(MODEL.G, MODEL.UG, k, num(u.cv.mhw), u.cv.hit); } catch (e) { }
     if (parts && parts.length) return h; return h.replace('<div class="card-b">', `<div class="card-b"><p style="color:var(--fail);margin-bottom:8px">The impact elevation El. ${f2(num(u.cv.mhw))} does not meet any column, wall, or cap of ${esc(u.name)}, so no vessel force is applied. Enter the mean high water elevation on the Units tab.</p>`); }; }
+/* ---------- superstructure reactions hand-off (HANDOFF.md §4.4, channel superReactions) ----------
+   Reactions tab: "Pull from PS-Beam / ST-Girder" (with a new-data marker) and "Import hand-off (JSON)".
+   Nothing is applied on page load. The dialog shows the source and every cell it will overwrite, and
+   the user maps the incoming girder line to SubLoads supports, bearing rows and girders. Only the
+   confirmed P.rx.data cells change; the source is kept in the new optional field P.rxSrc and shown on
+   the Reactions tab, the Dead load tab and the report. Values stay unfactored, in kip. */
+(function patchRxHandoff() {
+  const CH = 'superReactions', SCH = 'bridge-super-reactions', RID = 'subloads';
+  const BY = ['psbeam', 'stgirder', 'mct'];
+  const TOKIP = { kip: 1, kips: 1, k: 1, kn: 1 / 4.4482216152605, lb: 0.001, lbs: 0.001, lbf: 0.001 };   // force unit -> kip
+  const TOFT = { ft: 1, feet: 1, m: 1 / 0.3048 };                                                          // length unit -> ft
+  const LBL = { dc1: 'DC1', dc2: 'DC2', dw: 'DW' };
+  const BX = () => window.BridgeXfer;
+  const when = iso => { const d = new Date(iso); return isNaN(d) ? String(iso || '?') : d.toLocaleString(); };
+  const r3 = v => Math.round(v * 1000) / 1000;
+  let DLG = null;   // open dialog state
+
+  /* every published payload on the channel: the latest, plus the per-producer copies */
+  function candidates() {
+    const out = [], seen = {}, errs = [];
+    if (!BX()) return { list: out, errs: ['The hand-off helper is not available in this browser.'] };
+    const add = (r, via) => { if (r.ok) { const p = r.payload, key = (p.producer || '') + '|' + (p.producedAt || ''); if (!seen[key]) { seen[key] = 1; out.push(p); } } else if (!r.empty) errs.push(`${via}: ${r.error}`); };
+    add(BX().read(CH, SCH, 1), 'latest hand-off');
+    BY.forEach(id => add(BX().read(`${CH}.by.${id}`, SCH, 1), `copy from ${id}`));
+    out.sort((a, b) => String(b.producedAt || '').localeCompare(String(a.producedAt || '')));
+    return { list: out, errs };
+  }
+  /* validate one payload and convert it to kip / ft; returns { err } or { sups, labels, warns } */
+  function check(p) {
+    const f = Number.isFinite;
+    if (!p || p._schema !== SCH) return { err: `wrong data type (${(p && p._schema) || 'none'}), expected ${SCH}` };
+    if (!(p.schemaVersion <= 1)) return { err: `newer format (v${p.schemaVersion}) than this tool supports (v1)` };
+    if (p.factored !== false) return { err: p.factored === true ? 'the reactions are factored; SubLoads needs unfactored DC1, DC2 and DW' : 'the payload does not state that the reactions are unfactored (factored:false)' };
+    if (p.perGirder === false) return { err: 'the reactions are not per girder' };
+    const u = p.units || {}, kf = TOKIP[String(u.force || '').trim().toLowerCase()], lf = TOFT[String(u.length || 'ft').trim().toLowerCase()];
+    if (!kf) return { err: `force unit "${u.force || 'not stated'}" is not one SubLoads converts (kip, kN, lb)` };
+    if (!lf) return { err: `length unit "${u.length}" is not one SubLoads converts (ft, m)` };
+    if (!Array.isArray(p.supports) || !p.supports.length) return { err: 'there are no supports in the hand-off' };
+    const warns = [], labels = [], sups = [];
+    if (kf !== 1) warns.push(`Forces converted from ${u.force} to kip (× ${kf.toFixed(6)}).`);
+    for (let i = 0; i < p.supports.length; i++) {
+      const s = p.supports[i] || {}, id = String(s.id == null ? `Support ${i + 1}` : s.id), x = s.x == null ? NaN : +s.x;
+      if (s.x != null && !f(x)) return { err: `support ${id}: x is not a number` };
+      if (!Array.isArray(s.girders) || !s.girders.length) return { err: `support ${id}: no girders` };
+      const gs = [];
+      for (const g of s.girders) {
+        const lab = String((g && g.label) || 'girder'), v = {};
+        for (const c of ['DC1', 'DC2', 'DW']) { const n = g ? g[c] : undefined; if (typeof n !== 'number' || !f(n)) return { err: `support ${id}, ${lab}: ${c} is not a valid number` }; v[c.toLowerCase()] = n * kf; }
+        if (v.dc1 < 0 || v.dc2 < 0 || v.dw < 0) warns.push(`${id}, ${lab}: a negative (uplift) dead-load reaction is included.`);
+        if (labels.indexOf(lab) < 0) labels.push(lab);
+        gs.push({ label: lab, position: g.position || '', ...v });
+      }
+      sups.push({ id, x: f(x) ? x * lf : null, girders: gs });
+    }
+    return { sups, labels, warns };
+  }
+  /* default SubLoads support for a source support id; -1 = skip */
+  function defTarget(id, i, n) {
+    const s = String(id), nSup = P.units.length; let m;
+    if ((m = /support\s*(\d+)/i.exec(s))) { const k = +m[1] - 1; return k >= 0 && k < nSup ? k : -1; }
+    if ((m = /abut\w*\.?\s*(\d+)/i.exec(s))) return +m[1] === 1 ? 0 : nSup - 1;
+    if ((m = /pier\s*(\d+)/i.exec(s))) { const k = +m[1]; return k > 0 && k < nSup - 1 ? k : -1; }
+    const k = P.units.findIndex(u => u.name === s); return k >= 0 ? k : (i < nSup ? i : -1);
+  }
+  const isJoint = k => { const G = MODEL.G; return !!(G && G.sup && G.sup[k] && G.sup[k].joint); };
+  const nb = () => ((P.rx.data || [])[0] || []).length;
+  function presetGirders(preset, pos, idx) {
+    const n = nb(), all = [...Array(n)].map((_, j) => j), ext = n > 1 ? [0, n - 1] : [0], int = all.filter(j => j > 0 && j < n - 1);
+    if (preset === 'all') return all; if (preset === 'ext') return ext; if (preset === 'int') return int.length ? int : all;
+    if (preset === 'one') return idx >= 1 && idx <= n ? [idx - 1] : [];
+    return pos === 'exterior' ? ext : (int.length ? int : all);   // 'pos': girders of the same position
+  }
+  function gList(js) { return js.length ? js.map(j => `G${j + 1}`).join(', ') : 'none'; }
+
+  /* ---------- dialog ---------- */
+  function openDialog(list, via, errs) {
+    const G = MODEL.G; if (!G || G.E.length || !(P.rx.data || []).length) { flash('Fix the bridge input errors on the Summary tab first.', 'fail'); return; }
+    DLG = { list, via, errs: errs || [], pi: 0 }; pickSource(0);
+    let m = $('#rxh-modal'); if (!m) { m = document.createElement('div'); m.className = 'modal'; m.id = 'rxh-modal'; m.setAttribute('role', 'dialog'); m.setAttribute('aria-modal', 'true'); document.body.appendChild(m); }
+    m.hidden = false; renderDialog();
+  }
+  function pickSource(pi) {
+    const p = DLG.list[pi], c = check(p);
+    DLG.pi = pi; DLG.p = p; DLG.c = c; DLG.gl = 0;
+    if (c.err) return;
+    const gl = p.girderLine || {}, g0 = c.sups[0].girders[0];
+    DLG.pos = gl.position || g0.position || 'interior'; DLG.idx = +gl.beamIndex || 0;
+    DLG.preset = 'pos'; DLG.gir = presetGirders('pos', DLG.pos, DLG.idx); DLG.mode = 'replace';
+    DLG.map = c.sups.map((s, i) => { const k = defTarget(s.id, i, c.sups.length); return { k, side: i === 0 && c.sups.length > 1 ? 'ahead' : 'back' }; });
+  }
+  function plan() {   // the cells that will change: [{k, side, j, key, old, val}]
+    const c = DLG.c, out = [], lab = c.labels[DLG.gl], dup = {};
+    let err = '';
+    c.sups.forEach((s, i) => { const t = DLG.map[i]; if (t.k < 0) return; const side = isJoint(t.k) ? t.side : 'back', tag = `${t.k}.${side}`;
+      if (dup[tag]) err = `${s.id} and ${dup[tag]} both map to ${P.units[t.k].name}${isJoint(t.k) ? ` (${side} row)` : ''}. Map each to a different support or row, or skip one.`; dup[tag] = s.id;
+      const g = s.girders.find(x => x.label === lab); if (!g) return;
+      DLG.gir.forEach(j => ['dc1', 'dc2', 'dw'].forEach(c0 => { const key = side === 'ahead' ? c0 + 'a' : c0, row = P.rx.data[t.k][j], old = nz(row[key]);
+        out.push({ k: t.k, side, j, key, c0, old, val: r3(DLG.mode === 'add' ? old + g[c0] : g[c0]), src: s.id }); })); });
+    if (!err && !out.length) err = 'Nothing selected: map at least one support and pick at least one girder.';
+    return { cells: out, err };
+  }
+  function renderDialog() {
+    const m = $('#rxh-modal'), D = DLG, p = D.p, c = D.c;
+    const srcSel = D.list.length > 1 ? `<h3>Source</h3>${D.list.map((q, i) => `<label style="display:flex;gap:6px;align-items:center;font-size:.9rem"><input type="radio" name="rxh-src" data-rxh="src" value="${i}"${i === D.pi ? ' checked' : ''}> ${esc(BX().describe(q))}${q.girderLine && q.girderLine.label ? `, girder ${esc(q.girderLine.label)}` : ''}</label>`).join('')}` : '';
+    let h = `<div class="modal-box" style="width:min(760px,96vw)"><h2>Pull superstructure reactions</h2>${srcSel}`;
+    h += `<table class="mini-t" style="margin-top:8px"><tbody><tr><td class="lbl">Producer</td><td>${esc(p.producer || '?')}${p.producerFile ? ` (${esc(p.producerFile)})` : ''}</td></tr><tr><td class="lbl">Produced</td><td>${esc(when(p.producedAt))}</td></tr><tr><td class="lbl">Project</td><td>${esc([p.project && p.project.name, p.project && p.project.bridgeId].filter(Boolean).join(', ') || '(not stated)')}</td></tr>`;
+    if (!c.err) h += `<tr><td class="lbl">Girder line</td><td>${esc((p.girderLine && p.girderLine.label) || c.labels.join(', '))}${D.pos ? ` (${esc(D.pos)})` : ''}</td></tr><tr><td class="lbl">Basis</td><td>Unfactored, kip, per girder; IM ${p.imIncluded ? 'included' : 'not included'}, DF ${p.dfIncluded ? 'included' : 'not included'}</td></tr>`;
+    h += `</tbody></table>`;
+    if (Array.isArray(p.notes) && p.notes.length) h += `<h3>Notes from ${esc(p.producer || 'the producer')}</h3><ul style="margin:0 0 0 18px;font-size:.88rem;color:var(--text-dim)">${p.notes.map(n => `<li>${esc(n)}</li>`).join('')}</ul>`;
+    if (D.errs.length) h += `<p style="color:var(--warn);margin-top:6px">Not usable: ${esc(D.errs.join('; '))}</p>`;
+    if (c.err) { h += `<p style="color:var(--fail);margin-top:10px"><b>Refused:</b> ${esc(c.err)}. Nothing will be changed.</p><div class="modal-foot"><button type="button" class="btn" id="rxh-cancel">Close</button></div></div>`; m.innerHTML = h; return; }
+    if (c.warns.length) h += `<p style="color:var(--warn);margin-top:6px">${c.warns.map(esc).join('<br>')}</p>`;
+    if (c.labels.length > 1) h += `<h3>Source girder</h3><select data-rxh="gl">${c.labels.map((l, i) => `<option value="${i}"${i === D.gl ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select>`;
+    const opt = (k, sel) => `<option value="-1"${sel < 0 ? ' selected' : ''}>(skip)</option>` + P.units.map((u, i) => `<option value="${i}"${i === sel ? ' selected' : ''}>${esc(u.name)}</option>`).join('');
+    h += `<h3>Supports</h3><table class="mini-t"><thead><tr><th>From</th><th>DC1</th><th>DC2</th><th>DW</th><th>To SubLoads support</th><th>Bearing row</th></tr></thead><tbody>`;
+    const lab = c.labels[D.gl];
+    c.sups.forEach((s, i) => { const g = s.girders.find(x => x.label === lab), t = D.map[i];
+      h += `<tr><td class="lbl">${esc(s.id)}${s.x != null ? ` <small>(x = ${f2(s.x)} ft)</small>` : ''}</td>${g ? ['dc1', 'dc2', 'dw'].map(k => `<td style="text-align:right">${f2(g[k])}</td>`).join('') : '<td colspan="3">(no value for this girder)</td>'}<td><select data-rxh="k" data-i="${i}">${opt(i, t.k)}</select></td><td>${t.k >= 0 && isJoint(t.k) ? `<select data-rxh="side" data-i="${i}"><option value="back"${t.side === 'back' ? ' selected' : ''}>back (span behind)</option><option value="ahead"${t.side === 'ahead' ? ' selected' : ''}>ahead (span ahead)</option></select>` : '<span style="color:var(--muted)">single row</span>'}</td></tr>`; });
+    h += `</tbody></table>`;
+    const n = nb(), presets = [['pos', `Same position as the source (${D.pos === 'exterior' ? 'exterior: G1 and G' + n : 'interior: G2 to G' + (n - 1)})`], ['all', 'All girders'], ['int', 'Interior girders only'], ['ext', 'Exterior girders only (G1, G' + n + ')']].concat(D.idx >= 1 && D.idx <= n ? [['one', `Only G${D.idx} (the source beam number)`]] : []).concat([['custom', 'Custom (tick below)']]);
+    h += `<h3>Girders</h3><select data-rxh="preset">${presets.map(([v, l]) => `<option value="${v}"${v === D.preset ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select><div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:6px">${[...Array(n)].map((_, j) => `<label style="display:flex;gap:4px;align-items:center;font-size:.9rem"><input type="checkbox" data-rxh="g" value="${j}"${D.gir.indexOf(j) >= 0 ? ' checked' : ''}> G${j + 1}</label>`).join('')}</div>`;
+    h += `<h3>Existing values</h3><label style="display:flex;gap:6px;align-items:center;font-size:.9rem"><input type="radio" name="rxh-mode" data-rxh="mode" value="replace"${D.mode === 'replace' ? ' checked' : ''}> Replace them</label><label style="display:flex;gap:6px;align-items:center;font-size:.9rem"><input type="radio" name="rxh-mode" data-rxh="mode" value="add"${D.mode === 'add' ? ' checked' : ''}> Add to them (for example the other span's share at a continuous pier)</label>`;
+    const pl = plan();
+    h += `<h3>This will overwrite</h3>`;
+    if (pl.err) h += `<p style="color:var(--fail)">${esc(pl.err)}</p>`;
+    else { const grp = {}; pl.cells.forEach(x => { const t = `${P.units[x.k].name}${isJoint(x.k) ? ` (${x.side} row)` : ''}, G${x.j + 1}`; (grp[t] = grp[t] || []).push(`${LBL[x.c0]} ${f2(x.old)} → ${f2(x.val)}`); });
+      const ks = Object.keys(grp); h += `<div style="max-height:180px;overflow:auto;font-family:var(--mono,monospace);font-size:.8rem;border:1px solid var(--line,#ccc);border-radius:6px;padding:6px 8px">${ks.map(t => `${esc(t)}: ${esc(grp[t].join(', '))}`).join('<br>')}</div><p style="font-size:.85rem">${pl.cells.length} values (kip, unfactored) in ${ks.length} girder rows. Every other reaction is kept.</p>`; }
+    h += `<div class="modal-foot"><button type="button" class="btn" id="rxh-cancel">Cancel</button><button type="button" class="btn btn-primary" id="rxh-apply"${pl.err ? ' disabled' : ''}>Apply</button></div></div>`;
+    m.innerHTML = h;
+  }
+  function closeDialog() { const m = $('#rxh-modal'); if (m) { m.hidden = true; m.innerHTML = ''; } DLG = null; }
+  function applyDialog() {
+    const D = DLG, pl = plan(); if (pl.err) { flash(pl.err, 'fail'); return false; }
+    pl.cells.forEach(x => { P.rx.data[x.k][x.j][x.key] = x.val; });
+    const tg = {}; pl.cells.forEach(x => { const t = `${x.k}.${x.side}`; (tg[t] = tg[t] || { k: x.k, support: P.units[x.k].name, row: isJoint(x.k) ? x.side : '', from: x.src, girders: [] }); if (tg[t].girders.indexOf(x.j + 1) < 0) tg[t].girders.push(x.j + 1); });
+    const p = D.p, rec = { producer: p.producer || '', producerFile: p.producerFile || '', producedAt: p.producedAt || '', project: p.project || null,
+      girder: D.c.labels[D.gl], position: D.pos, mode: D.mode, via: D.via, adoptedAt: new Date().toISOString(), targets: Object.values(tg) };
+    P.rxSrc = (Array.isArray(P.rxSrc) ? P.rxSrc : []).concat([rec]).slice(-20);
+    if (BX()) BX().markAdopted(CH, RID, p.producedAt || '');
+    closeDialog(); buildSide(); recompute(); autosave();
+    flash(`Reactions from ${rec.producer} applied: ${pl.cells.length} values.`);
+    return true;
+  }
+  function pull() {
+    const r = candidates();
+    if (!r.list.length) { alert(r.errs.length ? `Cannot pull the reactions: ${r.errs.join('; ')}` : 'No superstructure reactions have been sent yet. In PS-Beam or ST-Girder click "Send reactions to Substructure Loading", then pull here.'); return; }
+    openDialog(r.list, 'pull', r.errs);
+  }
+  function importFile(file) {
+    if (!BX()) return;
+    BX().importFile(file, SCH, 1, r => { if (r.error) { alert(`Cannot import ${file.name}: ${r.error}`); return; } openDialog([r.payload], 'file: ' + file.name, []); });
+  }
+
+  /* ---------- source records: text used by the Reactions tab, Dead load tab and report ---------- */
+  function srcText(rec, k) {
+    const t = (rec.targets || []).filter(x => k == null || x.k === k);
+    const where = t.map(x => `${esc(x.support)}${x.row ? ` (${esc(x.row)} row)` : ''} G${(x.girders || []).join(', G')}`).join('; ');
+    return `${esc(rec.producer)}${rec.producerFile ? ` (${esc(rec.producerFile)})` : ''}, produced ${esc(when(rec.producedAt))}, girder ${esc(rec.girder)}${rec.position ? ` (${esc(rec.position)})` : ''}, ${rec.mode === 'add' ? 'added to existing values' : 'replaced'}${where ? `: ${where}` : ''}`;
+  }
+  const recsFor = k => (Array.isArray(P.rxSrc) ? P.rxSrc : []).filter(r => (r.targets || []).some(x => x.k === k));
+  const css = document.createElement('style'); css.textContent = `.itab.bx-new::after { content: ' \\2022'; color: var(--warn); } .rxh-new { color: var(--warn); font-size: .8rem; font-weight: 600; align-self: center; }`; document.head.appendChild(css);
+  const pr = paneRx; paneRx = function () {
+    let h = pr(); const isNew = BX() ? BX().isNew(CH, RID) : false; let latest = null;
+    if (isNew) { const r = BX().read(CH, SCH, 1); if (r.ok) latest = r.payload; }
+    const btns = `<button type="button" class="btn btn-sm" id="rx-pull" title="Pull the unfactored girder-line reactions sent by PS-Beam or ST-Girder (asks first)">Pull from PS-Beam / ST-Girder</button><button type="button" class="btn btn-sm" id="rx-hf-imp" title="Import a superReactions hand-off JSON file (asks first)">Import hand-off (JSON)</button><input type="file" id="rx-hf-in" accept=".json,application/json" hidden>${isNew ? `<span class="rxh-new">New data available${latest ? `: ${esc(latest.producer || '')}, ${esc(when(latest.producedAt))}` : ''}</span>` : ''}`;
+    h = h.replace('id="rx-clear">Clear all</button>', 'id="rx-clear">Clear all</button>' + btns);
+    const recs = Array.isArray(P.rxSrc) ? P.rxSrc : [];
+    if (recs.length) h = h.replace(/(id="rx-hf-in"[^>]*>[\s\S]*?<\/div>)/, `$1<p class="note" style="padding:6px 0 0"><b>Hand-off sources</b> (values may have been edited since):<br>${recs.map(r => srcText(r)).join('<br>')}</p>`);
+    let pos = 0; (P.units || []).forEach((u, k) => { const rs = recsFor(k), tag = `<div class="sec-h">${esc(u.name)}`; let i = h.indexOf(tag, pos);
+      while (i >= 0 && !/[< ]/.test(h.charAt(i + tag.length))) i = h.indexOf(tag, i + 1);   // "Pier 1" must not match "Pier 10"
+      if (i < 0) return; const e = h.indexOf('</div>', i); pos = e;
+      if (!rs.length) return; const r = rs[rs.length - 1], ins = ` <small title="${esc(srcText(r, k).replace(/<[^>]+>/g, ''))}">from ${esc(r.producer)}, ${esc(when(r.producedAt))}</small>`; h = h.slice(0, e) + ins + h.slice(e); pos = e + ins.length; });
+    return h;
+  };
+  const bs = buildSide; buildSide = function () { bs(); const t = document.querySelector('.itab[data-pane="rx"]'); if (t) { const n = BX() ? BX().isNew(CH, RID) : false; t.classList.toggle('bx-new', n); t.title = n ? 'New superstructure reactions are available to pull' : ''; } };
+  const dh = dlHtml; dlHtml = function () { const h = dh(), rs = recsFor(P.ui.sel); if (!rs.length) return h;
+    return h.replace('Superstructure loads at the bearings</h3>', `Superstructure loads at the bearings</h3><p class="note" style="padding:0 0 6px">Reactions hand-off: ${rs.map(r => srcText(r, P.ui.sel)).join('; ')}.</p>`); };
+  const be = basisExtra; basisExtra = function () { const h = be(), recs = Array.isArray(P.rxSrc) ? P.rxSrc : []; if (!recs.length) return h;
+    return h.replace(/(<td class="lbl">Superstructure reactions<\/td><td>[\s\S]*?)(<\/td><\/tr>)/, `$1<br>From hand-off: ${recs.map(r => srcText(r)).join('<br>')}$2`); };
+  document.addEventListener('click', e => {
+    const t = e.target.closest ? e.target.closest('button, input') : null; if (!t) return;
+    if (t.id === 'rx-pull') pull();
+    else if (t.id === 'rx-hf-imp') { const i = $('#rx-hf-in'); if (i) i.click(); }
+    else if (t.id === 'rxh-cancel') closeDialog();
+    else if (t.id === 'rxh-apply') applyDialog();
+    else if (t.id === 'rx-clear') { setTimeout(() => { const any = (P.rx.data || []).some(r => r.some(x => Object.keys(x).some(c => nz(x[c]) !== 0))); if (!any && P.rxSrc) { delete P.rxSrc; buildSide(); autosave(); } }, 0); }
+  });
+  document.addEventListener('change', e => {
+    const t = e.target; if (t.id === 'rx-hf-in' && t.files && t.files[0]) { importFile(t.files[0]); t.value = ''; return; }
+    if (!DLG || !t.dataset || !t.dataset.rxh) return; const D = DLG, w = t.dataset.rxh;
+    if (w === 'src') pickSource(+t.value);
+    else if (w === 'gl') D.gl = +t.value;
+    else if (w === 'k') D.map[+t.dataset.i].k = +t.value;
+    else if (w === 'side') D.map[+t.dataset.i].side = t.value;
+    else if (w === 'preset') { D.preset = t.value; if (t.value !== 'custom') D.gir = presetGirders(t.value, D.pos, D.idx); }
+    else if (w === 'g') { const j = +t.value; D.gir = t.checked ? [...new Set(D.gir.concat([j]))].sort((a, b) => a - b) : D.gir.filter(x => x !== j); D.preset = 'custom'; }
+    else if (w === 'mode') D.mode = t.value;
+    renderDialog();
+  });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && DLG) closeDialog(); });
+  window.addEventListener('storage', e => { if (e.key && e.key.indexOf('bridgeSuite.v1.' + CH) === 0 && P.ui.itab === 'rx') buildSide(); else if (e.key && e.key.indexOf('bridgeSuite.v1.' + CH) === 0) { const t = document.querySelector('.itab[data-pane="rx"]'); if (t) t.classList.toggle('bx-new', BX() ? BX().isNew(CH, RID) : false); } });
+  window.SubLoadsRxHandoff = { candidates, check, openDialog, applyDialog, closeDialog, plan, pull, state: () => DLG, defTarget };   // used by tests; no effect on results
+})();
 /* ---------- start ---------- */
 (function start() {
   P = defP();

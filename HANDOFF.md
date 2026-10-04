@@ -103,6 +103,13 @@ This matches the existing BridgeLocks "project" channel (`index.html`).
 - Unfactored dead-load reactions are given per girder, per support.
 - Live load is optional and informational, because Substructure Loading computes its own LL.
 - psbeam and stgirder model a single girder line: they send their girder, labelled by the design-beam selection, and say so in `notes`.
+- **Clarifications (added with the psbeam/stgirder → Substructure Loading connection):**
+  - *Two producers, one channel.* Each sender writes the channel key as usual and also keeps a copy of the same stamped payload at `bridgeSuite.v1.superReactions.by.<id>` (`psbeam`, `stgirder`, later `mct`). The receiver lists every valid copy, so the user can pick one when both girder apps have sent. `updatedAt` and `adopted.<receiverId>` stay on the channel key only.
+  - *Support ids.* A sender that does not know the bridge's support names may use `"Support n"`, numbered from the start of its own model (a simple span is `Support 1`, `Support 2`; span *i* of an imported MIDAS model is `Support i`, `Support i+1`). The receiver maps ids to its own supports in the pull dialog.
+  - *Optional fields.* `girderLine:{ label, position:"interior"|"exterior", beamIndex:<n>|null, source }`, `span:{ index:<n>|null, length:<ft> }`, `girders[].position`, and `liveLoad.vehicle` (text). Receivers must not require them.
+  - *DC1 content.* DC1 is everything on the non-composite girder: girder self-weight, deck and haunch, other non-composite DC and diaphragm point loads. `notes` list the terms.
+  - *Imported MIDAS demands.* When a sender works from imported MIDAS demands, its DC2/DW (and DC1 where imported) reactions are the imported shears at the two ends of the selected span, sign-corrected to + up. At an interior pier that is this span's share only, and `notes` say so; the receiver offers "add to the existing values" for the other span's share. `liveLoad` is `null` in that mode.
+  - *Receiver id.* Bridge Substructure Loading uses `receiverId` `subloads`.
 
 ### 4.5 `abutmentLoads`
 
