@@ -26,6 +26,7 @@
   select option{background:#fff;}
   input:focus,select:focus{border-color:#1d4ed8 !important;box-shadow:0 0 0 3px rgba(29,78,216,0.1);outline:none;}
   button:active{transform:translateY(1px);}
+  @media print{.bx-alltools,.bx-projbtns{display:none!important;}}
 </style>
 <!-- ═══════════════════════════════════════════════════════════════════════════
      Bridge Suite — shared DESIGN BEAM channel (v1)
@@ -1200,6 +1201,119 @@ try{ window.BridgeApps.boot('mct'); }catch(e){}
 })();
 </script>
 
+<script>
+/* BridgeXfer v1 — cross-tool hand-off helper. Spec: HANDOFF.md. Duplicated verbatim in each tool that sends or receives (CLAUDE.md §3). */
+(function(){
+  if(window.BridgeXfer) return;
+  var NS='bridgeSuite.v1.';
+  function lsOK(){ try{ var k='__bx_t'; localStorage.setItem(k,'1'); localStorage.removeItem(k); return true; }catch(e){ return false; } }
+  function sharedProject(){
+    try{ var m=JSON.parse(localStorage.getItem(NS+'projectMeta')||'null');
+      if(m && m._schema==='bridge-project-meta' && m.fields) return { name:m.fields.projectName||'', bridgeId:m.fields.bridgeId||'' };
+    }catch(e){}
+    return null;
+  }
+  function stamp(channel, payload, producer, producerFile){
+    var p={}; for(var k in payload) if(Object.prototype.hasOwnProperty.call(payload,k)) p[k]=payload[k];
+    p.schemaVersion = p.schemaVersion || 1;
+    p.producer = p.producer || producer || document.title;
+    p.producerFile = p.producerFile || producerFile || decodeURIComponent((location.pathname.split('/').pop()||''));
+    p.producedAt = new Date().toISOString();
+    if(!p.project) p.project = sharedProject() || { name:'', bridgeId:'' };
+    if(!p.notes) p.notes = [];
+    return p;
+  }
+  function publish(channel, payload, producer, producerFile){
+    if(!payload || !payload._schema) return { error:'payload has no _schema' };
+    var p=stamp(channel, payload, producer, producerFile);
+    if(!lsOK()) return { error:'Browser storage is not available. Use "Export hand-off (JSON)" instead.', payload:p };
+    try{
+      localStorage.setItem(NS+channel, JSON.stringify(p));
+      localStorage.setItem(NS+channel+'.updatedAt', p.producedAt);
+    }catch(e){ return { error:'Could not save hand-off (storage full?): '+e.message, payload:p }; }
+    return { ok:true, payload:p };
+  }
+  function validate(p, schema, maxVersion){
+    if(!p || typeof p!=='object') return 'not a hand-off object';
+    if(p._schema!==schema) return 'wrong data type ('+(p._schema||'none')+'), expected '+schema;
+    if(!(p.schemaVersion<= (maxVersion||1))) return 'newer format (v'+p.schemaVersion+') than this tool supports (v'+(maxVersion||1)+')';
+    return null;
+  }
+  function read(channel, schema, maxVersion){
+    var raw=null;
+    try{ raw=localStorage.getItem(NS+channel); }catch(e){ return { error:'Browser storage is not available.' }; }
+    if(!raw) return { error:'Nothing has been sent on this channel yet.' , empty:true };
+    var p; try{ p=JSON.parse(raw); }catch(e){ return { error:'Stored hand-off is corrupt.' }; }
+    var err=validate(p, schema, maxVersion); if(err) return { error:err };
+    return { ok:true, payload:p };
+  }
+  function markAdopted(channel, receiverId, producedAt){
+    try{ localStorage.setItem(NS+channel+'.adopted.'+receiverId, producedAt||''); }catch(e){}
+  }
+  function isNew(channel, receiverId){
+    try{
+      var at=localStorage.getItem(NS+channel+'.updatedAt'); if(!at) return false;
+      return at!==localStorage.getItem(NS+channel+'.adopted.'+receiverId);
+    }catch(e){ return false; }
+  }
+  function exportFile(channel, payload){
+    var p=payload; if(!p){ try{ p=JSON.parse(localStorage.getItem(NS+channel)); }catch(e){} }
+    if(!p) return { error:'Nothing to export.' };
+    var blob=new Blob([JSON.stringify(p,null,2)],{type:'application/json'});
+    var a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+    a.download=(p._schema||channel)+'_'+(p.producedAt||'').slice(0,19).replace(/[:T]/g,'-')+'.json';
+    document.body.appendChild(a); a.click(); setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 60000);
+    return { ok:true };
+  }
+  function importFile(file, schema, maxVersion, cb){
+    var fr=new FileReader();
+    fr.onload=function(){ var p; try{ p=JSON.parse(fr.result); }catch(e){ cb({ error:'File is not valid JSON.' }); return; }
+      var err=validate(p, schema, maxVersion); cb(err? { error:err } : { ok:true, payload:p }); };
+    fr.onerror=function(){ cb({ error:'Could not read file.' }); };
+    fr.readAsText(file);
+  }
+  function describe(p){ return (p.producer||'?')+' — '+(p.producedAt? new Date(p.producedAt).toLocaleString():'?')+((p.project&&p.project.name)?' — '+p.project.name:''); }
+  window.BridgeXfer={ NS:NS, publish:publish, read:read, validate:validate, markAdopted:markAdopted, isNew:isNew, exportFile:exportFile, importFile:importFile, describe:describe, sharedProject:sharedProject };
+})();
+/* Shared project info (HANDOFF.md §4.1): glue for the "Use shared project info" and
+   "Share project info" buttons. Uses BridgeXfer above. Duplicated per tool (CLAUDE.md §3).
+   share(own): own = {sharedKey: value} for the fields this tool has; the rest are sent as ''.
+   use(cur, apply): cur = {sharedKey: current value} for the fields this tool has. Shows what
+   will be overwritten, then calls apply(upd) with only the non-empty shared values that differ. */
+(function(){
+  if(window.BXProject) return;
+  var KEYS=['projectName','bridgeId','jobNo','client','location','preparedBy','checkedBy','date'];
+  var LABELS={projectName:'Project name',bridgeId:'Bridge ID',jobNo:'Job no.',client:'Client',location:'Location',
+              preparedBy:'Prepared by',checkedBy:'Checked by',date:'Date'};
+  function str(v){ return v==null?'':String(v); }
+  function share(own){
+    if(!window.BridgeXfer){ alert('Shared project info is not available in this browser.'); return null; }
+    var f={}; KEYS.forEach(function(k){ f[k]=str(own&&own[k]); });
+    var r=BridgeXfer.publish('projectMeta',{_schema:'bridge-project-meta',fields:f});
+    if(r.error) alert('Could not share project info: '+r.error);
+    else alert('Project info shared. Other tools can load it with "Use shared project info".');
+    return r;
+  }
+  function use(cur, apply){
+    if(!window.BridgeXfer){ alert('Shared project info is not available in this browser.'); return false; }
+    var r=BridgeXfer.read('projectMeta','bridge-project-meta',1);
+    if(r.error){ alert('No shared project info: '+r.error); return false; }
+    var f=r.payload.fields||{}, upd={}, lines=[], n=0;
+    Object.keys(cur||{}).forEach(function(k){
+      var v=str(f[k]); if(!v.trim()) return;          // never blank a field from an empty shared value
+      var c=str(cur[k]); if(v===c) return;
+      upd[k]=v; n++;
+      lines.push('  '+(LABELS[k]||k)+': "'+(c||'(blank)')+'" → "'+v+'"');
+    });
+    var src=BridgeXfer.describe(r.payload);
+    if(!n){ alert('Shared project info ('+src+') already matches this tool. Nothing to change.'); return false; }
+    if(!confirm('Use shared project info?\nFrom: '+src+'\n\nThis will overwrite:\n'+lines.join('\n'))) return false;
+    apply(upd);
+    return true;
+  }
+  window.BXProject={ KEYS:KEYS, share:share, use:use };
+})();
+</script>
 <script type="text/babel">
 const { useState, useMemo, useEffect, useRef } = React;
 /* Shared cross-app channel locks (see the BridgeLocks block above). */
@@ -3533,8 +3647,26 @@ function StepProject({cfg,set}) {
   const SH = {fontSize:'10px',fontFamily:'monospace',color:'#9ca3af',textTransform:'uppercase',
     letterSpacing:'0.07em',marginBottom:'10px',marginTop:'18px',paddingBottom:'5px',
     borderBottom:'1px solid #f3f4f6'};
+  /* Shared project info (HANDOFF.md §4.1). Date is kept as YYYY/M/D here (MIDAS *PROJINFO) and
+     exchanged as YYYY-MM-DD when it is in that form; anything else passes through unchanged. */
+  const bxToIso=d=>{const m=/^(\d{4})\/(\d{1,2})\/(\d{1,2})$/.exec(String(d||'').trim());
+    return m?`${m[1]}-${m[2].padStart(2,'0')}-${m[3].padStart(2,'0')}`:(d||'');};
+  const bxFromIso=d=>{const m=/^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(String(d||'').trim());
+    return m?`${m[1]}/${+m[2]}/${+m[3]}`:d;};
+  const BX_MAP={projectName:'projectName',bridgeId:'projectBridgeId',client:'projectClient',
+    location:'projectAddress',preparedBy:'projectUser',date:'projectDate'};
+  const bxOwn=()=>{const o={};Object.keys(BX_MAP).forEach(k=>{o[k]=cfg[BX_MAP[k]]||'';});o.date=bxToIso(o.date);return o;};
+  const bxShare=()=>{ if(window.BXProject) window.BXProject.share(bxOwn()); };
+  const bxUse=()=>{ if(window.BXProject) window.BXProject.use(bxOwn(),upd=>{
+    Object.keys(upd).forEach(k=>set(BX_MAP[k],k==='date'?bxFromIso(upd[k]):upd[k])); }); };
+  const BXB={background:'#fff',border:'1px solid #d1d5db',borderRadius:'5px',padding:'5px 10px',
+    cursor:'pointer',fontSize:'12px',color:'#374151',whiteSpace:'nowrap'};
 
   return (<div><StepHeader icon="📋" title="Project Information" sub="Project metadata, bridge identification, and MCT file header fields"/>
+    <div className="bx-projbtns" style={{display:'flex',gap:'8px',flexWrap:'wrap',maxWidth:'860px',marginBottom:'6px'}}>
+      <button style={BXB} onClick={bxUse} title="Fill these fields from the project info shared by another tool (asks first; never blanks a field)">Use shared project info</button>
+      <button style={BXB} onClick={bxShare} title="Share this project's name, bridge ID, client, location, engineer and date with the other tools">Share project info</button>
+    </div>
     <div style={{display:'flex',gap:'28px',flexWrap:'wrap',maxWidth:'860px'}}>
 
       {/* Column 1 — Project identity */}
@@ -20945,6 +21077,9 @@ function App() {
               : 'Bridge Beam Model Builder · v1.0'}
           </div>
         </div>
+        <a className="bx-alltools" href="tools.html" target="_top" title="Open the list of all tools"
+          style={{fontSize:'11.5px',color:'#6b7280',textDecoration:'none',border:'1px solid #e5e7eb',
+            borderRadius:'6px',padding:'4px 10px',whiteSpace:'nowrap'}}>← All tools</a>
         <div style={{marginLeft:'auto',display:'flex',alignItems:'center',gap:'12px'}}>
           {/* The beam every app in the suite is designing. In GFS mode the chip also
               flags a girder count that disagrees with the published roster. */}

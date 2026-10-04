@@ -60,13 +60,14 @@ tr.pier td{background:#f8fafc;font-weight:600}
 .deck{display:flex;flex-wrap:wrap;gap:10px;padding:10px 14px;border-bottom:1px solid #f1f5f9;align-items:flex-end}
 .deck .f{width:110px}
 @media(max-width:900px){.body{grid-template-columns:1fr}aside{position:static;max-height:none}.mets{grid-template-columns:repeat(2,1fr)}}
+@media print{.bx-alltools{display:none!important}}
 </style>
 </head>
 <body>
 
 <header class="hdr">
   <div><h1>BridgeLoad Pro — Continuous</h1><small>Moving live load · line girder · 1–4 spans</small></div>
-  <div><span id="status" class="st"></span><button class="hb" id="runBtn">Run</button><button class="hb pri" id="csvBtn">Export CSV</button></div>
+  <div><span id="status" class="st"></span><a class="hb bx-alltools" href="tools.html" target="_top" title="Open the list of all tools" style="text-decoration:none">&larr; All tools</a><button class="hb" id="runBtn">Run</button><button class="hb pri" id="csvBtn">Export CSV</button></div>
 </header>
 
 <div class="body">
@@ -1025,6 +1026,7 @@ document.body.insertAdjacentHTML('beforeend',`<div id="rptModal" class="mdl hidd
   <h3>Print Report</h3>
   <p class="hint">Each selected vehicle is analyzed with its own preset rules (uniform load, impact method, variable spacing, secondary vehicle, multi-vehicle case). Spans, girder section, distribution factors, LLF, and step sizes are shared.</p>
   <div class="g2"><div class="f"><label>Project</label><input id="rProj"></div><div class="f"><label>Computed by</label><input id="rBy"></div></div>
+  <div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn" id="bxProjUse" type="button" title="Fill Project and Computed by from the project info shared by another tool (asks first; never blanks a field)">Use shared project info</button><button class="btn" id="bxProjShare" type="button" title="Share Project and Computed by with the other tools">Share project info</button></div>
   <div class="lbl">Vehicles</div><div id="rVeh" class="rveh"></div>
   <div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn" id="rAll">All presets</button><button class="btn" id="rNone">None</button><button class="btn" id="rHwy">Highway</button><button class="btn" id="rRail">Rail</button></div>
   <label class="chk"><input type="checkbox" id="rFac" checked>Factored per girder (uncheck for unfactored per lane)</label>
@@ -1584,6 +1586,130 @@ function mlgRestore(){
 }
 
 initSelects(); renderSpans(); $('preset').value='HL93-Truck'; applyPreset('HL93-Truck'); renderSegs(); syncVis(); mlgRestore(); run();
+</script>
+<script>
+/* BridgeXfer v1 — cross-tool hand-off helper. Spec: HANDOFF.md. Duplicated verbatim in each tool that sends or receives (CLAUDE.md §3). */
+(function(){
+  if(window.BridgeXfer) return;
+  var NS='bridgeSuite.v1.';
+  function lsOK(){ try{ var k='__bx_t'; localStorage.setItem(k,'1'); localStorage.removeItem(k); return true; }catch(e){ return false; } }
+  function sharedProject(){
+    try{ var m=JSON.parse(localStorage.getItem(NS+'projectMeta')||'null');
+      if(m && m._schema==='bridge-project-meta' && m.fields) return { name:m.fields.projectName||'', bridgeId:m.fields.bridgeId||'' };
+    }catch(e){}
+    return null;
+  }
+  function stamp(channel, payload, producer, producerFile){
+    var p={}; for(var k in payload) if(Object.prototype.hasOwnProperty.call(payload,k)) p[k]=payload[k];
+    p.schemaVersion = p.schemaVersion || 1;
+    p.producer = p.producer || producer || document.title;
+    p.producerFile = p.producerFile || producerFile || decodeURIComponent((location.pathname.split('/').pop()||''));
+    p.producedAt = new Date().toISOString();
+    if(!p.project) p.project = sharedProject() || { name:'', bridgeId:'' };
+    if(!p.notes) p.notes = [];
+    return p;
+  }
+  function publish(channel, payload, producer, producerFile){
+    if(!payload || !payload._schema) return { error:'payload has no _schema' };
+    var p=stamp(channel, payload, producer, producerFile);
+    if(!lsOK()) return { error:'Browser storage is not available. Use "Export hand-off (JSON)" instead.', payload:p };
+    try{
+      localStorage.setItem(NS+channel, JSON.stringify(p));
+      localStorage.setItem(NS+channel+'.updatedAt', p.producedAt);
+    }catch(e){ return { error:'Could not save hand-off (storage full?): '+e.message, payload:p }; }
+    return { ok:true, payload:p };
+  }
+  function validate(p, schema, maxVersion){
+    if(!p || typeof p!=='object') return 'not a hand-off object';
+    if(p._schema!==schema) return 'wrong data type ('+(p._schema||'none')+'), expected '+schema;
+    if(!(p.schemaVersion<= (maxVersion||1))) return 'newer format (v'+p.schemaVersion+') than this tool supports (v'+(maxVersion||1)+')';
+    return null;
+  }
+  function read(channel, schema, maxVersion){
+    var raw=null;
+    try{ raw=localStorage.getItem(NS+channel); }catch(e){ return { error:'Browser storage is not available.' }; }
+    if(!raw) return { error:'Nothing has been sent on this channel yet.' , empty:true };
+    var p; try{ p=JSON.parse(raw); }catch(e){ return { error:'Stored hand-off is corrupt.' }; }
+    var err=validate(p, schema, maxVersion); if(err) return { error:err };
+    return { ok:true, payload:p };
+  }
+  function markAdopted(channel, receiverId, producedAt){
+    try{ localStorage.setItem(NS+channel+'.adopted.'+receiverId, producedAt||''); }catch(e){}
+  }
+  function isNew(channel, receiverId){
+    try{
+      var at=localStorage.getItem(NS+channel+'.updatedAt'); if(!at) return false;
+      return at!==localStorage.getItem(NS+channel+'.adopted.'+receiverId);
+    }catch(e){ return false; }
+  }
+  function exportFile(channel, payload){
+    var p=payload; if(!p){ try{ p=JSON.parse(localStorage.getItem(NS+channel)); }catch(e){} }
+    if(!p) return { error:'Nothing to export.' };
+    var blob=new Blob([JSON.stringify(p,null,2)],{type:'application/json'});
+    var a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+    a.download=(p._schema||channel)+'_'+(p.producedAt||'').slice(0,19).replace(/[:T]/g,'-')+'.json';
+    document.body.appendChild(a); a.click(); setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 60000);
+    return { ok:true };
+  }
+  function importFile(file, schema, maxVersion, cb){
+    var fr=new FileReader();
+    fr.onload=function(){ var p; try{ p=JSON.parse(fr.result); }catch(e){ cb({ error:'File is not valid JSON.' }); return; }
+      var err=validate(p, schema, maxVersion); cb(err? { error:err } : { ok:true, payload:p }); };
+    fr.onerror=function(){ cb({ error:'Could not read file.' }); };
+    fr.readAsText(file);
+  }
+  function describe(p){ return (p.producer||'?')+' — '+(p.producedAt? new Date(p.producedAt).toLocaleString():'?')+((p.project&&p.project.name)?' — '+p.project.name:''); }
+  window.BridgeXfer={ NS:NS, publish:publish, read:read, validate:validate, markAdopted:markAdopted, isNew:isNew, exportFile:exportFile, importFile:importFile, describe:describe, sharedProject:sharedProject };
+})();
+/* Shared project info (HANDOFF.md §4.1): glue for the "Use shared project info" and
+   "Share project info" buttons. Uses BridgeXfer above. Duplicated per tool (CLAUDE.md §3).
+   share(own): own = {sharedKey: value} for the fields this tool has; the rest are sent as ''.
+   use(cur, apply): cur = {sharedKey: current value} for the fields this tool has. Shows what
+   will be overwritten, then calls apply(upd) with only the non-empty shared values that differ. */
+(function(){
+  if(window.BXProject) return;
+  var KEYS=['projectName','bridgeId','jobNo','client','location','preparedBy','checkedBy','date'];
+  var LABELS={projectName:'Project name',bridgeId:'Bridge ID',jobNo:'Job no.',client:'Client',location:'Location',
+              preparedBy:'Prepared by',checkedBy:'Checked by',date:'Date'};
+  function str(v){ return v==null?'':String(v); }
+  function share(own){
+    if(!window.BridgeXfer){ alert('Shared project info is not available in this browser.'); return null; }
+    var f={}; KEYS.forEach(function(k){ f[k]=str(own&&own[k]); });
+    var r=BridgeXfer.publish('projectMeta',{_schema:'bridge-project-meta',fields:f});
+    if(r.error) alert('Could not share project info: '+r.error);
+    else alert('Project info shared. Other tools can load it with "Use shared project info".');
+    return r;
+  }
+  function use(cur, apply){
+    if(!window.BridgeXfer){ alert('Shared project info is not available in this browser.'); return false; }
+    var r=BridgeXfer.read('projectMeta','bridge-project-meta',1);
+    if(r.error){ alert('No shared project info: '+r.error); return false; }
+    var f=r.payload.fields||{}, upd={}, lines=[], n=0;
+    Object.keys(cur||{}).forEach(function(k){
+      var v=str(f[k]); if(!v.trim()) return;          // never blank a field from an empty shared value
+      var c=str(cur[k]); if(v===c) return;
+      upd[k]=v; n++;
+      lines.push('  '+(LABELS[k]||k)+': "'+(c||'(blank)')+'" → "'+v+'"');
+    });
+    var src=BridgeXfer.describe(r.payload);
+    if(!n){ alert('Shared project info ('+src+') already matches this tool. Nothing to change.'); return false; }
+    if(!confirm('Use shared project info?\nFrom: '+src+'\n\nThis will overwrite:\n'+lines.join('\n'))) return false;
+    apply(upd);
+    return true;
+  }
+  window.BXProject={ KEYS:KEYS, share:share, use:use };
+})();
+/* Shared project info: Print Report fields <-> HANDOFF.md §4.1 fields. */
+(function(){
+  var MAP={projectName:'rProj',preparedBy:'rBy'};
+  function el(id){ return document.getElementById(id); }
+  function own(){ var o={}; Object.keys(MAP).forEach(function(k){ var e=el(MAP[k]); o[k]=e?e.value:''; }); return o; }
+  var bu=el('bxProjUse'), bs=el('bxProjShare');
+  if(bs) bs.onclick=function(){ if(window.BXProject) BXProject.share(own()); };
+  if(bu) bu.onclick=function(){ if(!window.BXProject) return;
+    BXProject.use(own(), function(upd){ Object.keys(upd).forEach(function(k){ var e=el(MAP[k]); if(!e) return;
+      e.value=upd[k]; e.dispatchEvent(new Event('input',{bubbles:true})); }); }); };   // input event -> normal autosave
+})();
 </script>
 </body>
 </html>

@@ -118,3 +118,137 @@ Verification method for every item: the page was loaded in jsdom from origin/mai
 - O4. **Blank E or blank span length silently falls back to the default** (29,000 ksi / 100 ft) through `num()`. Not singular, so not changed; it could get a warning if wanted.
 - O5. **Edition label.** The page does not state the AASHTO edition. Label-only, not changed.
 - O6. **Dead code:** the original `exportCsv` near the end of the file is overridden earlier by the "CSV with |V|" version. Left as is (no behaviour change).
+
+## 2026-10-04 — PR: claude/step1-group1 (PR link added after merge)
+
+Feature (no result change): "← All tools" link to `tools.html` (`target="_top"`, hidden in print) and the shared project info buttons. No formula, factor, unit, storage key or saved format changed. New storage written only on "Share project info": `bridgeSuite.v1.projectMeta` and `bridgeSuite.v1.projectMeta.updatedAt` (HANDOFF.md §2/§4.1). The file keeps its CRLF line endings.
+
+Field mapping: projectName ↔ Project (`rProj`), preparedBy ↔ Computed by (`rBy`); both are in the Print Report dialog. Other fields: not in this tool. Writes set the value and dispatch `input`, which runs the existing autosave (`movingLoadGen.autosave.v1`, already includes rProj/rBy).
+
+### S1. Print rule for the link   [feature (no result change)]
+- **Where:** top `<style>` block (≈ line 62). Anchor text: `@media(max-width:900px){.body{`
+- **Problem:** none (feature). Approved step 1 of the cross-tool work: "← All tools" link and shared project info (HANDOFF.md §4.1).
+- **Governing provision:** n/a (no calculation, factor, unit or code reference touched).
+- **Before:**
+  ```css
+  @media(max-width:900px){.body{grid-template-columns:1fr}aside{position:static;max-height:none}.mets{grid-template-columns:repeat(2,1fr)}}
+  </style>
+  ```
+- **After:**
+  ```css
+  @media(max-width:900px){.body{grid-template-columns:1fr}aside{position:static;max-height:none}.mets{grid-template-columns:repeat(2,1fr)}}
+  @media print{.bx-alltools{display:none!important}}
+  </style>
+  ```
+- **Check case:** n/a, no computed value changes. Functional check: see How verified.
+- **How verified:** `node --check` on every plain inline script and @babel/standalone transpile of the text/babel block; BridgeXfer copy compared byte-for-byte with HANDOFF.md §5; whole page loaded in jsdom (React/ReactDOM/Babel from npm, other CDN scripts blocked); Share → Use round trip between lldf, Moving Load Generator, psbeam, stgirder and index with one shared localStorage; `git diff` shows only additions apart from the one header line that received the link.
+- **Other copies:** BridgeXfer v1 and the `BXProject` glue are also in index.html, lldf.html, psbeam.html, stgirder.html and Moving Load Generator.html (this PR).
+
+### S2. "← All tools" link in the header   [feature (no result change)]
+- **Where:** `<header class="hdr">`, right-hand button group (≈ line 69). Anchor text: `<span id="status" class="st"></span>`
+- **Problem:** none (feature). Approved step 1 of the cross-tool work: "← All tools" link and shared project info (HANDOFF.md §4.1).
+- **Governing provision:** n/a (no calculation, factor, unit or code reference touched).
+- **Before:**
+  ```html
+    <div><h1>BridgeLoad Pro — Continuous</h1><small>Moving live load · line girder · 1–4 spans</small></div>
+    <div><span id="status" class="st"></span><button class="hb" id="runBtn">Run</button><button class="hb pri" id="csvBtn">Export CSV</button></div>
+  </header>
+  ```
+- **After:**
+  ```html
+    <div><h1>BridgeLoad Pro — Continuous</h1><small>Moving live load · line girder · 1–4 spans</small></div>
+    <div><span id="status" class="st"></span><a class="hb bx-alltools" href="tools.html" target="_top" title="Open the list of all tools" style="text-decoration:none">&larr; All tools</a><button class="hb" id="runBtn">Run</button><button class="hb pri" id="csvBtn">Export CSV</button></div>
+  </header>
+  ```
+- **Check case:** n/a, no computed value changes. Functional check: see How verified.
+- **How verified:** `node --check` on every plain inline script and @babel/standalone transpile of the text/babel block; BridgeXfer copy compared byte-for-byte with HANDOFF.md §5; whole page loaded in jsdom (React/ReactDOM/Babel from npm, other CDN scripts blocked); Share → Use round trip between lldf, Moving Load Generator, psbeam, stgirder and index with one shared localStorage; `git diff` shows only additions apart from the one header line that received the link.
+- **Other copies:** BridgeXfer v1 and the `BXProject` glue are also in index.html, lldf.html, psbeam.html, stgirder.html and Moving Load Generator.html (this PR).
+
+### S3. "Use shared project info" / "Share project info" buttons   [feature (no result change)]
+- **Where:** Print Report modal, under Project / Computed by (≈ line 1028). Anchor text: `<input id="rProj">`
+- **Problem:** none (feature). Approved step 1 of the cross-tool work: "← All tools" link and shared project info (HANDOFF.md §4.1).
+- **Governing provision:** n/a (no calculation, factor, unit or code reference touched).
+- **Before:**
+  ```html
+    <div class="g2"><div class="f"><label>Project</label><input id="rProj"></div><div class="f"><label>Computed by</label><input id="rBy"></div></div>
+    <div class="lbl">Vehicles</div><div id="rVeh" class="rveh"></div>
+  ```
+- **After:**
+  ```html
+    <div class="g2"><div class="f"><label>Project</label><input id="rProj"></div><div class="f"><label>Computed by</label><input id="rBy"></div></div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn" id="bxProjUse" type="button" title="Fill Project and Computed by from the project info shared by another tool (asks first; never blanks a field)">Use shared project info</button><button class="btn" id="bxProjShare" type="button" title="Share Project and Computed by with the other tools">Share project info</button></div>
+    <div class="lbl">Vehicles</div><div id="rVeh" class="rveh"></div>
+  ```
+- **Check case:** n/a, no computed value changes. Functional check: see How verified.
+- **How verified:** `node --check` on every plain inline script and @babel/standalone transpile of the text/babel block; BridgeXfer copy compared byte-for-byte with HANDOFF.md §5; whole page loaded in jsdom (React/ReactDOM/Babel from npm, other CDN scripts blocked); Share → Use round trip between lldf, Moving Load Generator, psbeam, stgirder and index with one shared localStorage; `git diff` shows only additions apart from the one header line that received the link.
+- **Other copies:** BridgeXfer v1 and the `BXProject` glue are also in index.html, lldf.html, psbeam.html, stgirder.html and Moving Load Generator.html (this PR).
+
+### S4. BridgeXfer v1 + BXProject glue + field wiring   [feature (no result change)]
+- **Where:** new `<script>` at the end of `<body>` (≈ line 1589). Anchor text: `initSelects(); renderSpans();`
+- **Problem:** none (feature). Approved step 1 of the cross-tool work: "← All tools" link and shared project info (HANDOFF.md §4.1).
+- **Governing provision:** n/a (no calculation, factor, unit or code reference touched).
+- **Before:**
+  ```html
+  </script>
+  </body>
+  ```
+- **After:**
+  ```html
+  </script>
+  <script>
+  /* BridgeXfer v1 verbatim from HANDOFF.md §5 (73 lines, not repeated here) */
+  /* Shared project info (HANDOFF.md §4.1): glue for the "Use shared project info" and
+     "Share project info" buttons. Uses BridgeXfer above. Duplicated per tool (CLAUDE.md §3).
+     share(own): own = {sharedKey: value} for the fields this tool has; the rest are sent as ''.
+     use(cur, apply): cur = {sharedKey: current value} for the fields this tool has. Shows what
+     will be overwritten, then calls apply(upd) with only the non-empty shared values that differ. */
+  (function(){
+    if(window.BXProject) return;
+    var KEYS=['projectName','bridgeId','jobNo','client','location','preparedBy','checkedBy','date'];
+    var LABELS={projectName:'Project name',bridgeId:'Bridge ID',jobNo:'Job no.',client:'Client',location:'Location',
+                preparedBy:'Prepared by',checkedBy:'Checked by',date:'Date'};
+    function str(v){ return v==null?'':String(v); }
+    function share(own){
+      if(!window.BridgeXfer){ alert('Shared project info is not available in this browser.'); return null; }
+      var f={}; KEYS.forEach(function(k){ f[k]=str(own&&own[k]); });
+      var r=BridgeXfer.publish('projectMeta',{_schema:'bridge-project-meta',fields:f});
+      if(r.error) alert('Could not share project info: '+r.error);
+      else alert('Project info shared. Other tools can load it with "Use shared project info".');
+      return r;
+    }
+    function use(cur, apply){
+      if(!window.BridgeXfer){ alert('Shared project info is not available in this browser.'); return false; }
+      var r=BridgeXfer.read('projectMeta','bridge-project-meta',1);
+      if(r.error){ alert('No shared project info: '+r.error); return false; }
+      var f=r.payload.fields||{}, upd={}, lines=[], n=0;
+      Object.keys(cur||{}).forEach(function(k){
+        var v=str(f[k]); if(!v.trim()) return;          // never blank a field from an empty shared value
+        var c=str(cur[k]); if(v===c) return;
+        upd[k]=v; n++;
+        lines.push('  '+(LABELS[k]||k)+': "'+(c||'(blank)')+'" → "'+v+'"');
+      });
+      var src=BridgeXfer.describe(r.payload);
+      if(!n){ alert('Shared project info ('+src+') already matches this tool. Nothing to change.'); return false; }
+      if(!confirm('Use shared project info?\nFrom: '+src+'\n\nThis will overwrite:\n'+lines.join('\n'))) return false;
+      apply(upd);
+      return true;
+    }
+    window.BXProject={ KEYS:KEYS, share:share, use:use };
+  })();
+  /* Shared project info: Print Report fields <-> HANDOFF.md §4.1 fields. */
+  (function(){
+    var MAP={projectName:'rProj',preparedBy:'rBy'};
+    function el(id){ return document.getElementById(id); }
+    function own(){ var o={}; Object.keys(MAP).forEach(function(k){ var e=el(MAP[k]); o[k]=e?e.value:''; }); return o; }
+    var bu=el('bxProjUse'), bs=el('bxProjShare');
+    if(bs) bs.onclick=function(){ if(window.BXProject) BXProject.share(own()); };
+    if(bu) bu.onclick=function(){ if(!window.BXProject) return;
+      BXProject.use(own(), function(upd){ Object.keys(upd).forEach(function(k){ var e=el(MAP[k]); if(!e) return;
+        e.value=upd[k]; e.dispatchEvent(new Event('input',{bubbles:true})); }); }); };   // input event -> normal autosave
+  })();
+  </script>
+  </body>
+  ```
+- **Check case:** n/a, no computed value changes. Functional check: see How verified.
+- **How verified:** `node --check` on every plain inline script and @babel/standalone transpile of the text/babel block; BridgeXfer copy compared byte-for-byte with HANDOFF.md §5; whole page loaded in jsdom (React/ReactDOM/Babel from npm, other CDN scripts blocked); Share → Use round trip between lldf, Moving Load Generator, psbeam, stgirder and index with one shared localStorage; `git diff` shows only additions apart from the one header line that received the link.
+- **Other copies:** BridgeXfer v1 and the `BXProject` glue are also in index.html, lldf.html, psbeam.html, stgirder.html and Moving Load Generator.html (this PR).
