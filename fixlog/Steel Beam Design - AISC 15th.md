@@ -226,6 +226,400 @@ definition wins** (see O4). Every edit below was checked to be in the live (last
 - **How verified:** Every plain inline script syntax-checked (Node `vm.Script`, same parser as `node --check`); BridgeXfer block compared byte-for-byte with HANDOFF.md §5; page loaded in jsdom (CDN scripts not loaded) before and after the change with no new errors; Share → Use exercised between tools with jsdom localStorage (ASCE7-16 → ACI Rebar, Steel Beam → Shear and Moment, Concrete Beam Capacity shell against stub tab documents), including cancel, empty shared values (field kept), a non-ISO date on a date input (skipped), an empty channel and a wrong `_schema` (refused). `git diff` shows no removed lines other than the ones listed under Before. No calculation code was touched.
 - **Other copies of this code:** none. BridgeXfer v1 is also in: ACI Rebar Development Length.html, ASCE7-16 Load Generator.html, Concrete Beam Capacity.html (shell), Steel Beam Design - AISC 15th.html, Shear and Moment Diagrams.html.
 
+## 2026-10-04 — PR: claude/conn-asce7-steelbeam (PR link added after merge)
+### C1. Building-load hand-off receiver: "Pull from ASCE 7-16" and "Import hand-off (JSON)"   [feature: hand-off (no result change)]
+- **Date / type:** 2026-10-04, feature: hand-off (no result change).
+- **Where:** header `#projShare` row (anchor `onclick="bxShareProjectInfo()">Share project info</button>`); `loadTable()` (anchor `tdN.innerHTML=(ld.nm||'')`); `buildDeriveTab()` first line (anchor `function buildDeriveTab(pg){`, defined once); `buildPrintReport()` after the title block (anchor `pr.appendChild(tb);` followed by `if(isMember())pr.appendChild(`); one new `<script>` block after the shared-project-info script, before `</body>`. File uses CRLF; the inserted lines use CRLF too. All edited functions are defined once (see O4).
+- **Purpose:** reads channel `bridgeSuite.v1.buildingLoads` (`_schema:"bridge-building-loads"`, version ≤ 1). The dialog shows producer, time, project and the sender's notes; the user enters the tributary width TW (default = TW_L + TW_R of the Tributary Load Generator), picks the load types, the target case of each, the wind pressure (default roof uplift), all or selected spans, and "replace previously imported loads" (default) or "add". A live summary lists every load that will be removed and added and any new case; nothing changes until **Import** is clicked. Line load w (kip/ft) = p (psf) × TW (ft) / 1000. Imported loads are ordinary unfactored uniform loads tagged `ld.bx`; replace removes only tagged loads of the selected types. The source goes into the new optional field `S.bxSrc.buildingLoads` and is shown in the header, in the Load Derivation tab (with the conversion for every imported load) and at the top of the printed report. `BridgeXfer.markAdopted('buildingLoads','steelbeam',producedAt)` clears the "new data available" marker. Nothing runs on page load except refreshing that marker and the source line.
+- **Mapping:**
+
+| HANDOFF field | ASCE7-16 source (sender) | Steel Beam target (receiver) |
+|---|---|---|
+| `areaLoads.D` | `S.DLroof` (roof dead load input, psf, horizontal projection) | uniform load, case DL (default), w = D·TW/1000 |
+| `areaLoads.L` | not computed → `null` | row disabled ("not provided") |
+| `areaLoads.Lr` | `S.LrRoof` (roof live input, psf) | uniform load, case LR (created if missing), w = Lr·TW/1000 |
+| `areaLoads.S` | `R.snow.balanced` (design balanced roof snow, psf) | uniform load, case SL, w = S·TW/1000 |
+| `areaLoads.W.roofUplift` | most negative MWFRS roof pressure, all directions/zones/±GCpi (dashboard envelope) | uniform load, case WL, w = p·TW/1000 (negative = upward) — default wind choice |
+| `areaLoads.W.roofDown` | most positive MWFRS roof pressure | same, if chosen |
+| `areaLoads.W.wall` | larger of abs(windward wall at h) and abs(most negative leeward/side wall) | same, applied as + (beam load plane), if chosen |
+| `areaLoads.W.wallPressure` / `wallSuction` | windward wall at h (max of ±GCpi) / most negative leeward or side wall | same, sign as published, if chosen |
+| `areaLoads.R` | not computed → `null` | not imported |
+| `seismic.SDS, SD1, SDC` | `R.seis.SDS`, `.SD1`, `.SDC` (`null` if no tabulated Fa/Fv) | shown in the dialog, not imported |
+| `seismic.Ie` | `R.site.Ie` | shown, not imported |
+| `info.snow` (unbalanced, drift) | `R.snow.unbal`, `R.snow.driftGov` | warning in the dialog only; not imported |
+
+- **User choices (each logged in `S.bxSrc.buildingLoads`):** TW; spans; wind pressure (roofUplift default); target case per type; replace/add. Default ticks: a type is ticked only if it has a non-zero value, the target case is used by an active strength combination, and the Tributary Load Generator does not already apply a pressure to that case (so D is unticked in the default project, which already has 15 psf DL through the generator, and Lr is unticked because no combination uses LR).
+- **Validation:** `_schema`, `schemaVersion ≤ 1`, corrupt JSON (BridgeXfer); `units.pressure` must be `psf` or `kPa` (× 20.885434), anything else refused; `factored:true` refused; D, L, Lr, S must be finite and ≥ 0; every W value finite; `W.wall` ≥ 0; SDS, SD1, Ie finite and ≥ 0; TW must be > 0 and ≤ 200 ft; at least one type and one span.
+- **Governing provision:** none changed. No formula, factor or default changed; the only effect is adding loads the user confirms. Spec: HANDOFF.md §3, §4.7, §5.
+- **Before / After** (exact; each anchor occurs once):
+  1. Header buttons.
+     - Before:
+  ```html
+      <button type="button" onclick="bxShareProjectInfo()">Share project info</button>
+    </div>
+  ```
+     - After:
+  ```html
+      <button type="button" onclick="bxShareProjectInfo()">Share project info</button>
+      <button type="button" onclick="bxPullBuildingLoads()" title="Import nominal area loads (psf) from the ASCE 7-16 Load Generator as line loads (HANDOFF.md, channel buildingLoads)">Pull from ASCE 7-16<span id="bxBldNew" style="display:none;color:#FDE68A;font-weight:700"> &#9679; new data available</span></button>
+      <button type="button" onclick="document.getElementById('bxBldFile').click()">Import hand-off (JSON)</button><input type="file" id="bxBldFile" accept=".json,application/json" style="display:none" onchange="bxImportBuildingLoads(event)">
+      <span id="bxBldSrc" style="font-family:var(--font-ui);font-size:8pt;color:#C7D4E4;align-self:center"></span>
+    </div>
+  ```
+  2. `loadTable()` badge.
+     - Before:
+  ```js
+    tdN.innerHTML=(ld.nm||'')+(locked?'<span class="genBadge">'+(ld.gen.src==='sw'?'auto SW':'trib')+'</span>':'');
+  ```
+     - After:
+  ```js
+    tdN.innerHTML=(ld.nm||'')+(locked?'<span class="genBadge">'+(ld.gen.src==='sw'?'auto SW':'trib')+'</span>':'')+(ld.bx?'<span class="genBadge" title="Imported building load (hand-off); see the Load Derivation tab">imported</span>':'');
+  ```
+  3. `buildDeriveTab()`.
+     - Before:
+  ```js
+function buildDeriveTab(pg){
+  if(!S.trib.on&&!S.trib.sw){
+  ```
+     - After:
+  ```js
+function buildDeriveTab(pg){
+  if(typeof bxDeriveBuilding==='function')bxDeriveBuilding(pg);   /* imported building loads (HANDOFF.md §4.7) */
+  if(!S.trib.on&&!S.trib.sw){
+  ```
+  4. `buildPrintReport()`.
+     - Before:
+  ```js
+  tb.appendChild(tt);
+  pr.appendChild(tb);
+  if(isMember())pr.appendChild(
+  ```
+     - After:
+  ```js
+  tb.appendChild(tt);
+  pr.appendChild(tb);
+  if(typeof bxSourceLine==='function'&&bxSourceLine())pr.appendChild(el('div','note',bxSourceLine()));   /* hand-off source (HANDOFF.md §3.4) */
+  if(isMember())pr.appendChild(
+  ```
+  5. New script, inserted between the shared-project-info `</script>` and `</body>` (BridgeXfer v1 is already in this file from Step 1 and is reused):
+  ```html
+<script>
+/* Building-load hand-off receiver (HANDOFF.md §4.7, channel buildingLoads, sender: ASCE7-16 Load Generator.html).
+   "Pull from ASCE 7-16" / "Import hand-off (JSON)". Nothing is applied on page load: the user opens the dialog,
+   enters the tributary width and choices, reviews what will be removed and added, and clicks Import.
+   Imported loads are ordinary unfactored uniform loads (positive down) tagged ld.bx = {ch:'buildingLoads', ...}
+   so they can be found and replaced later. The source is kept in the new optional field S.bxSrc.buildingLoads. */
+(function(){
+  var CH='buildingLoads', SCHEMA='bridge-building-loads', MAXV=1, RID='steelbeam';
+  var TYPES=['D','L','Lr','S','W'];
+  var DEF_CASE={D:'DL',L:'LL',Lr:'LR',S:'SL',W:'WL'};
+  var TYPE_LBL={D:'Dead',L:'Live (floor)',Lr:'Roof live',S:'Snow',W:'Wind'};
+  var KPA_PSF=20.885434;   /* 1 kPa = 1000 N/m2 x 0.0208854 psf per N/m2 */
+  var WIND={
+    roofUplift:{lbl:'Roof uplift (most negative MWFRS roof pressure)', short:'roof uplift', abs:false},
+    roofDown:{lbl:'Roof downward (most positive MWFRS roof pressure)', short:'roof down', abs:false},
+    wall:{lbl:'Wall, governing magnitude (applied as + in the beam\u2019s load plane)', short:'wall', abs:true},
+    wallPressure:{lbl:'Wall, windward pressure (as published, + toward the wall)', short:'wall pressure', abs:false},
+    wallSuction:{lbl:'Wall, leeward/side suction (as published, \u2212 away from the wall)', short:'wall suction', abs:false}
+  };
+  function isNum(v){ return typeof v==='number' && isFinite(v); }
+  function f2(v,d){ return isNum(v) ? (Math.round(v*Math.pow(10,d==null?2:d))/Math.pow(10,d==null?2:d)).toString() : '\u2014'; }
+  function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+  function when(iso){ var d=new Date(iso); if(isNaN(d)) return String(iso||'?');
+    function p(n){ return (n<10?'0':'')+n; }
+    return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+' '+p(d.getHours())+':'+p(d.getMinutes()); }
+
+  /* ---- validate a payload and convert it to psf; returns {err:[], warn:[], psf:{D,L,Lr,S}, wind:{key:psf}, seis} ---- */
+  function check(p){
+    var out={err:[],warn:[],psf:{},wind:{},seis:null};
+    var e=BridgeXfer.validate(p,SCHEMA,MAXV); if(e){ out.err.push(e); return out; }
+    var u=(p.units&&p.units.pressure)||'', k=null;
+    if(u==='psf') k=1; else if(u==='kPa') k=KPA_PSF;
+    else { out.err.push('Unknown pressure unit "'+u+'". Only psf (or kPa, converted at 1 kPa = '+KPA_PSF+' psf) is accepted.'); return out; }
+    if(k!==1) out.warn.push('Pressures converted from kPa to psf (\u00D7 '+KPA_PSF+').');
+    if(p.factored===true){ out.err.push('The payload says its values are factored. This tool imports nominal (unfactored) loads only.'); return out; }
+    var a=p.areaLoads;
+    if(!a || typeof a!=='object'){ out.err.push('The payload has no areaLoads.'); return out; }
+    ['D','L','Lr','S'].forEach(function(t){
+      var v=a[t]; if(v===null || v===undefined){ out.psf[t]=null; return; }
+      if(!isNum(v)){ out.err.push(t+' is not a finite number ('+JSON.stringify(v)+').'); return; }
+      if(v<0){ out.err.push(t+' = '+v+' psf is negative; a gravity area load must be \u2265 0.'); return; }
+      out.psf[t]=v*k;
+    });
+    var W=a.W;
+    if(W!==null && W!==undefined){
+      if(typeof W!=='object') out.err.push('W is not an object.');
+      else Object.keys(WIND).forEach(function(key){
+        var v=W[key]; if(v===null || v===undefined) return;
+        if(!isNum(v)){ out.err.push('W.'+key+' is not a finite number ('+JSON.stringify(v)+').'); return; }
+        if(key==='wall' && v<0){ out.err.push('W.wall is a magnitude and must be \u2265 0 (got '+v+').'); return; }
+        out.wind[key]=v*k;
+      });
+      if(isNum(out.wind.roofUplift) && out.wind.roofUplift>0) out.warn.push('W.roofUplift is positive ('+f2(out.wind.roofUplift)+' psf): no MWFRS case gives net uplift.');
+    }
+    var s=p.seismic;
+    if(s && typeof s==='object'){
+      ['SDS','SD1','Ie'].forEach(function(key){ var v=s[key]; if(v!==null && v!==undefined && (!isNum(v) || v<0)) out.err.push('seismic.'+key+' is not a non-negative number.'); });
+      out.seis=s;
+    }
+    var any=['D','L','Lr','S'].some(function(t){ return isNum(out.psf[t]); }) || Object.keys(out.wind).length>0;
+    if(!out.err.length && !any) out.err.push('The payload contains no area load that can be imported.');
+    return out;
+  }
+
+  function caseUsed(id){ return S.combos.some(function(c){ return c.on!==false && (c.f[id]||0)!==0; }); }
+  function caseExists(id){ return S.cases.some(function(c){ return c.id===id; }); }
+  function defaults(chk){
+    var tw=(S.trib && (S.trib.twL+S.trib.twR)>0) ? S.trib.twL+S.trib.twR : 10;
+    var o={tw:tw, spans:'all', mode:'replace', wind:null, types:{}};
+    o.wind=isNum(chk.wind.roofUplift)?'roofUplift':(isNum(chk.wind.wall)?'wall':(Object.keys(chk.wind)[0]||null));
+    TYPES.forEach(function(t){
+      var v=(t==='W') ? (o.wind?chk.wind[o.wind]:null) : chk.psf[t];
+      var cs=DEF_CASE[t];
+      var dbl=S.trib && S.trib.on && (S.trib.p[cs]||0)!==0;
+      o.types[t]={on: isNum(v) && v!==0 && !dbl && caseUsed(cs), lc:cs};
+    });
+    return o;
+  }
+  /* ---- the import plan: exactly what will be removed and added. Pure apart from reading S. ---- */
+  function plan(p,chk,o){
+    var r={err:[],warn:[],remove:[],add:[],newCases:[],rows:[]};
+    var tw=+o.tw;
+    if(!isNum(tw) || tw<=0) r.err.push('Enter a tributary width greater than 0 ft.');
+    else if(tw>200) r.err.push('Tributary width '+tw+' ft is outside the accepted range (0 to 200 ft).');
+    var nsp=S.geom.spans.length, spans=null;
+    if(o.spans!=='all'){
+      spans=(o.spans||[]).filter(function(i){ return i>=0 && i<nsp; });
+      if(!spans.length) r.err.push('Select at least one span.');
+    }
+    var sel=TYPES.filter(function(t){ return o.types[t] && o.types[t].on; });
+    if(!sel.length) r.err.push('Select at least one load type to import.');
+    var seenCase={};
+    sel.forEach(function(t){
+      var psf=(t==='W') ? (o.wind?chk.wind[o.wind]:null) : chk.psf[t];
+      if(!isNum(psf)){ r.err.push(t+': no value in the hand-off.'); return; }
+      var wdef=(t==='W')?WIND[o.wind]:null;
+      var pUse=(wdef && wdef.abs) ? Math.abs(psf) : psf;
+      var lc=String(o.types[t].lc||DEF_CASE[t]).toUpperCase().replace(/\W/g,'').slice(0,4);
+      if(!lc){ r.err.push(t+': no target load case.'); return; }
+      if(!caseExists(lc) && r.newCases.indexOf(lc)<0) r.newCases.push(lc);
+      if(seenCase[lc]) r.warn.push(seenCase[lc]+' and '+t+' are both imported into case '+lc+'.');
+      seenCase[lc]=t;
+      if(caseExists(lc) && !caseUsed(lc)) r.warn.push('No active strength combination includes case '+lc+'; the imported '+t+' load has no effect on strength until you add a factor for '+lc+'.');
+      if(!caseExists(lc)) r.warn.push('Case '+lc+' will be created. No combination includes it yet: add its factors (e.g. ASCE 7-16 Sec. 2.3.1: 1.6(Lr or S or R) in combination 3, 0.5(Lr or S or R) in 2 and 4) or the load has no effect.');
+      if(S.trib && S.trib.on && (S.trib.p[lc]||0)!==0) r.warn.push('The Tributary Load Generator already applies '+S.trib.p[lc]+' psf to case '+lc+'. The imported '+t+' load acts in addition to it.');
+      if(t==='W' && (o.wind==='wall'||o.wind==='wallPressure'||o.wind==='wallSuction')) r.warn.push('Wall wind is applied in this beam\u2019s load plane (the tool\u2019s + direction). Use it only for a member spanning horizontally against the wall (e.g. a girt) and set the bracing to match.');
+      var w=pUse*tw/1000;
+      r.rows.push({type:t,psf:psf,pUse:pUse,lc:lc,tw:tw,klf:w,wind:(t==='W')?o.wind:null});
+      var nm='ASCE7 '+t+((t==='W')?' '+WIND[o.wind].short:'');
+      var tag={ch:CH,type:t,psf:pUse,tw:tw,producer:p.producer||'',producedAt:p.producedAt||''};
+      if(t==='W') tag.wind=o.wind;
+      if(spans===null) r.add.push({nm:nm,type:'uniform',lc:lc,allSpans:true,mag:w,off:false,bx:tag});
+      else spans.forEach(function(i){ r.add.push({nm:nm+' Sp'+(i+1),type:'uniform',lc:lc,allSpans:false,si:i,mag:w,off:false,bx:tag}); });
+    });
+    if(o.mode==='replace') S.loads.forEach(function(ld){ if(ld.bx && ld.bx.ch===CH && sel.indexOf(ld.bx.type)>=0) r.remove.push(ld); });
+    if(p.info && p.info.snow && p.info.snow.drift && sel.indexOf('S')>=0)
+      r.warn.push('The sender reports a snow drift (peak '+f2(p.info.snow.drift.peak)+' psf at '+p.info.snow.drift.location+'). It is NOT imported; add it as a trapezoidal load if this beam lies in the drift.');
+    if(S.mode && S.mode!=='beam') r.warn.push('The tool is in '+S.mode+' mode. Imported loads are used in Beam mode only.');
+    return r;
+  }
+  function apply(p,chk,o,via){
+    var r=plan(p,chk,o); if(r.err.length) return r;
+    r.newCases.forEach(function(id){ S.cases.push({id:id,name:id}); });
+    var rm=r.remove;
+    S.loads=S.loads.filter(function(ld){ return rm.indexOf(ld)<0; });
+    r.add.forEach(function(ld){ var x=JSON.parse(JSON.stringify(ld)); x.id=newLoadId(); S.loads.push(x); });
+    if(!S.bxSrc || typeof S.bxSrc!=='object') S.bxSrc={};
+    S.bxSrc.buildingLoads={producer:p.producer||'',producerFile:p.producerFile||'',producedAt:p.producedAt||'',
+      project:p.project||{name:'',bridgeId:''},code:p.code||'',via:via||'pull',adoptedAt:new Date().toISOString(),
+      tw:+o.tw,spans:(o.spans==='all')?'all':o.spans.slice(),mode:o.mode,wind:o.wind,
+      rows:r.rows.map(function(x){ return {type:x.type,psf:x.pUse,lc:x.lc,klf:x.klf,wind:x.wind}; }),
+      notes:(p.notes||[]).slice(0,20)};
+    BridgeXfer.markAdopted(CH,RID,p.producedAt);
+    r.ok=true;
+    return r;
+  }
+
+  /* ---- dialog ---- */
+  function openDialog(p,via){
+    var chk=check(p);
+    if(chk.err.length){ alert('Building loads hand-off refused:\n  '+chk.err.join('\n  ')); return null; }
+    var o=defaults(chk);
+    var old=document.getElementById('bxBldOverlay'); if(old) old.remove();
+    var ov=el('div'); ov.id='bxBldOverlay';
+    ov.style.cssText='position:fixed;inset:0;background:rgba(15,25,40,.45);z-index:60;display:flex;align-items:center;justify-content:center';
+    var box=el('div');
+    box.style.cssText='background:#fff;border-radius:8px;padding:14px 18px;width:720px;max-width:96vw;max-height:88vh;overflow:auto;font-family:var(--font-ui);font-size:9pt;box-shadow:0 12px 40px rgba(0,0,0,.3)';
+    ov.appendChild(box);
+    box.appendChild(el('div',null,'<b style="font-size:11pt">Import building loads from '+esc(p.producer||'?')+'</b>'));
+    box.appendChild(el('div','note','<b>Source:</b> '+esc(p.producer||'?')+(p.producerFile?' ('+esc(p.producerFile)+')':'')+
+      ' &middot; <b>sent</b> '+esc(when(p.producedAt))+' &middot; <b>project</b> '+esc((p.project&&p.project.name)||'\u2014')+
+      ' &middot; '+esc(p.code||'')+' &middot; nominal (unfactored) area loads'+(via==='file'?' &middot; from a JSON file':'')));
+    if(chk.warn.length) box.appendChild(el('div','warnBox',chk.warn.map(esc).join('<br>')));
+    if(p.notes && p.notes.length){
+      var nb=el('details'); nb.appendChild(el('summary','hint','Sender notes ('+p.notes.length+') \u2014 read before importing'));
+      nb.appendChild(el('div','note',p.notes.map(function(n){ return '&bull; '+esc(n); }).join('<br>'))); nb.open=true; box.appendChild(nb);
+    }
+    if(chk.seis) box.appendChild(el('div','hint','Seismic (information only, not imported): S<sub>DS</sub> = '+f2(chk.seis.SDS,3)+' g, S<sub>D1</sub> = '+f2(chk.seis.SD1,3)+' g, SDC '+esc(chk.seis.SDC||'\u2014')+', I<sub>e</sub> = '+f2(chk.seis.Ie)+'.'));
+    /* tributary width and spans */
+    var g=el('div'); g.style.cssText='display:flex;gap:16px;flex-wrap:wrap;align-items:center;margin:8px 0';
+    var twl=el('label',null,'<b>Tributary width</b> TW = '); var twi=document.createElement('input'); twi.type='number'; twi.step='0.5'; twi.value=o.tw; twi.style.width='70px'; twi.id='bxBldTW';
+    twl.appendChild(twi); twl.appendChild(document.createTextNode(' ft')); g.appendChild(twl);
+    var sp=el('div'); sp.innerHTML='<b>Spans:</b> ';
+    var ra=document.createElement('input'); ra.type='radio'; ra.name='bxBldSp'; ra.checked=true; ra.id='bxBldSpAll';
+    var rs=document.createElement('input'); rs.type='radio'; rs.name='bxBldSp'; rs.id='bxBldSpSel';
+    var la=el('label'); la.appendChild(ra); la.appendChild(document.createTextNode(' all (entire beam) '));
+    var ls=el('label'); ls.appendChild(rs); ls.appendChild(document.createTextNode(' selected: '));
+    sp.appendChild(la); sp.appendChild(ls);
+    var spChk=S.geom.spans.map(function(s,i){ var c=document.createElement('input'); c.type='checkbox'; c.checked=true; c.dataset.si=i;
+      var l=el('label'); l.appendChild(c); l.appendChild(document.createTextNode(' Sp'+(i+1)+' ('+f2(s.L)+' ft) ')); sp.appendChild(l); return c; });
+    g.appendChild(sp); box.appendChild(g);
+    box.appendChild(el('div','hint','Default TW is this beam\u2019s tributary width from the Tributary Load Generator (TW\u2097 + TW\u1D63). Line load w = p \u00D7 TW / 1000 (psf \u00D7 ft / 1000 = kip/ft).'));
+    /* load-type table */
+    var t=el('table','cfg'); t.style.margin='6px 0';
+    t.innerHTML='<tr><th>Import</th><th>Type</th><th>p (psf)</th><th>Into case</th><th>Conversion w = p \u00D7 TW / 1000</th></tr>';
+    var rowsUI={};
+    TYPES.forEach(function(ty){
+      var tr=el('tr');
+      var cb=document.createElement('input'); cb.type='checkbox'; cb.checked=!!o.types[ty].on; cb.dataset.ty=ty;
+      var td0=el('td'); td0.appendChild(cb); tr.appendChild(td0);
+      var td1=el('td',null,'<b>'+ty+'</b> '+TYPE_LBL[ty]); tr.appendChild(td1);
+      var td2=el('td'); tr.appendChild(td2);
+      if(ty==='W'){
+        var ws=document.createElement('select'); ws.id='bxBldWind';
+        Object.keys(WIND).forEach(function(k){ if(!isNum(chk.wind[k])) return;
+          var op=document.createElement('option'); op.value=k; op.textContent=WIND[k].lbl+': '+f2(chk.wind[k])+' psf'; ws.appendChild(op); });
+        if(o.wind) ws.value=o.wind;
+        if(!ws.options.length){ td2.textContent='not provided'; } else td2.appendChild(ws);
+        rowsUI.windSel=ws;
+      } else td2.textContent=isNum(chk.psf[ty]) ? f2(chk.psf[ty]) : 'not provided';
+      var td3=el('td'); var cs=document.createElement('select'); cs.dataset.ty=ty;
+      var ids=S.cases.map(function(c){ return c.id; }); if(ids.indexOf(DEF_CASE[ty])<0) ids.push(DEF_CASE[ty]);
+      ids.forEach(function(id){ var op=document.createElement('option'); op.value=id; op.textContent=id+(caseExists(id)?'':' (new case)'); cs.appendChild(op); });
+      cs.value=o.types[ty].lc; td3.appendChild(cs); tr.appendChild(td3);
+      var td4=el('td'); tr.appendChild(td4);
+      var avail=(ty==='W') ? (rowsUI.windSel && rowsUI.windSel.options.length>0) : isNum(chk.psf[ty]);
+      if(!avail){ cb.checked=false; cb.disabled=true; cs.disabled=true; }
+      rowsUI[ty]={cb:cb,cs:cs,conv:td4};
+      t.appendChild(tr);
+    });
+    box.appendChild(t);
+    /* mode */
+    var md=el('div'); md.innerHTML='<b>Existing imported loads:</b> ';
+    var mr=document.createElement('input'); mr.type='radio'; mr.name='bxBldMode'; mr.checked=true; mr.id='bxBldModeRep';
+    var ma=document.createElement('input'); ma.type='radio'; ma.name='bxBldMode'; ma.id='bxBldModeAdd';
+    var l1=el('label'); l1.appendChild(mr); l1.appendChild(document.createTextNode(' replace previously imported loads of the selected types '));
+    var l2=el('label'); l2.appendChild(ma); l2.appendChild(document.createTextNode(' add (keep them)'));
+    md.appendChild(l1); md.appendChild(l2); box.appendChild(md);
+    box.appendChild(el('div','hint','Your own loads and the generated (trib / self-weight) loads are never removed. Only loads tagged as imported from this channel can be replaced.'));
+    var sum=el('div'); sum.id='bxBldSummary'; box.appendChild(sum);
+    var row=el('div','btnRow'); row.style.marginTop='10px';
+    var go=el('button','btn primary','Import'); go.id='bxBldGo';
+    var ca=el('button','btn','Cancel');
+    row.appendChild(go); row.appendChild(ca); box.appendChild(row);
+
+    function read(){
+      o.tw=parseFloat(twi.value);
+      o.spans=ra.checked ? 'all' : spChk.filter(function(c){ return c.checked; }).map(function(c){ return +c.dataset.si; });
+      o.mode=mr.checked ? 'replace' : 'add';
+      if(rowsUI.windSel && rowsUI.windSel.options.length) o.wind=rowsUI.windSel.value;
+      TYPES.forEach(function(ty){ o.types[ty]={on:rowsUI[ty].cb.checked, lc:rowsUI[ty].cs.value}; });
+      return o;
+    }
+    function refresh(){
+      read();
+      var r=plan(p,chk,o);
+      TYPES.forEach(function(ty){
+        var x=r.rows.filter(function(q){ return q.type===ty; })[0];
+        var psf=(ty==='W') ? (o.wind?chk.wind[o.wind]:null) : chk.psf[ty];
+        var pu=(ty==='W' && o.wind && WIND[o.wind].abs && isNum(psf)) ? Math.abs(psf) : psf;
+        rowsUI[ty].conv.innerHTML=(isNum(pu) && isNum(o.tw)) ? (f2(pu)+' \u00D7 '+f2(o.tw)+' / 1000 = <b>'+f2(pu*o.tw/1000,4)+' kip/ft</b>'+(x?'':' <span class="hint">(not imported)</span>')) : '\u2014';
+      });
+      var h='';
+      if(r.err.length) h+='<div class="errBox">'+r.err.map(esc).join('<br>')+'</div>';
+      h+='<div class="note"><b>Will remove</b> ('+r.remove.length+'): '+(r.remove.length ? r.remove.map(function(ld){
+          return esc(ld.nm)+' ['+esc(ld.lc)+', '+f2(ld.mag,4)+' kip/ft, '+(ld.allSpans?'all spans':'Sp'+((ld.si||0)+1))+']'; }).join('; ') : 'nothing')+
+        '<br><b>Will add</b> ('+r.add.length+'): '+(r.add.length ? r.add.map(function(ld){
+          return esc(ld.nm)+' ['+esc(ld.lc)+', '+f2(ld.mag,4)+' kip/ft, '+(ld.allSpans?'all spans':'Sp'+(ld.si+1))+']'; }).join('; ') : 'nothing')+
+        (r.newCases.length ? '<br><b>New load cases:</b> '+r.newCases.map(esc).join(', ') : '')+
+        '<br><b>Also recorded:</b> the source (producer and time) in this project, shown in the header, the Load Derivation tab and the printed report.</div>';
+      if(r.warn.length) h+='<div class="warnBox">'+r.warn.map(esc).join('<br>')+'</div>';
+      sum.innerHTML=h;
+      go.disabled=!!r.err.length;
+      return r;
+    }
+    box.addEventListener('input',refresh); box.addEventListener('change',refresh);
+    ca.addEventListener('click',function(){ ov.remove(); });
+    go.addEventListener('click',function(){
+      var r=apply(p,chk,read(),via);
+      if(r.err.length){ refresh(); return; }
+      ov.remove();
+      schedule(true);
+      refreshBar();
+      toast('Imported '+r.add.length+' load(s) from '+(p.producer||'hand-off'));
+    });
+    document.body.appendChild(ov);
+    refresh();
+    return {overlay:ov, opts:o, chk:chk, refresh:refresh};
+  }
+
+  /* ---- source line (header, Load Derivation tab, printed report) ---- */
+  function sourceLine(){
+    var s=S.bxSrc && S.bxSrc.buildingLoads; if(!s) return '';
+    var n=S.loads.filter(function(ld){ return ld.bx && ld.bx.ch===CH; }).length;
+    return 'Building loads from '+(s.producer||'?')+', '+when(s.producedAt)+((s.project&&s.project.name)?' ('+s.project.name+')':'')+
+      (s.via==='file'?', via JSON file':'')+'; TW = '+f2(s.tw)+' ft'+(n?'':' \u2014 no imported loads remain in the load table');
+  }
+  function refreshBar(){
+    var nd=document.getElementById('bxBldNew'); if(nd) nd.style.display=BridgeXfer.isNew(CH,RID)?'inline':'none';
+    var sl=document.getElementById('bxBldSrc'); if(sl) sl.textContent=sourceLine();
+  }
+  window.bxPullBuildingLoads=function(){
+    var r=BridgeXfer.read(CH,SCHEMA,MAXV);
+    if(!r.ok){ alert('Pull from ASCE 7-16: '+r.error+(r.empty?'\n\nIn the ASCE 7-16 Load Generator, click "Send to other tools" first.':'')); return null; }
+    return openDialog(r.payload,'pull');
+  };
+  window.bxImportBuildingLoads=function(ev){
+    var f=ev && ev.target && ev.target.files && ev.target.files[0]; if(!f) return;
+    BridgeXfer.importFile(f,SCHEMA,MAXV,function(r){
+      if(!r.ok){ alert('Import hand-off: '+r.error); return; }
+      openDialog(r.payload,'file');
+    });
+    ev.target.value='';
+  };
+  window.bxDeriveBuilding=function(pg){
+    var s=S.bxSrc && S.bxSrc.buildingLoads;
+    var lds=S.loads.filter(function(ld){ return ld.bx && ld.bx.ch===CH; });
+    if(!s && !lds.length) return;
+    mkSection('dvBxBld','Imported Building Loads (hand-off)',function(body){
+      body.appendChild(el('div','note',esc(sourceLine())+'. Nominal (unfactored) ASCE 7-16 area loads converted to line loads with the tributary width entered at import: w = p\u00B7TW/1000. Load factors are applied by this tool\u2019s combinations.'));
+      lds.forEach(function(ld){
+        var b=ld.bx;
+        body.appendChild(eqBlock({
+          title:ld.nm+' \u2192 case '+ld.lc+(ld.allSpans?' (all spans)':' (span '+((ld.si||0)+1)+')')+(ld.off?' \u2014 switched off':''),
+          lines:['w_{'+ld.lc+'} = \\frac{p\\,TW}{1000} = \\frac{'+f2(b.psf)+'\\times'+f2(b.tw)+'}{1000} = \\mathbf{'+f2(ld.mag,4)+'}\\ \\text{kip/ft}'],
+          vars:[['p',f2(b.psf)+' psf',b.type+(b.wind?' ('+(WIND[b.wind]?WIND[b.wind].short:b.wind)+')':'')+', from '+(b.producer||'?')+', '+when(b.producedAt)],
+                ['TW',f2(b.tw)+' ft','tributary width entered at import']]
+        }));
+      });
+      if(s && s.notes && s.notes.length) body.appendChild(el('div','hint','Sender notes: '+s.notes.map(esc).join(' | ')));
+    },pg);
+  };
+  window.bxSourceLine=sourceLine;
+  window.bxBld={check:check,plan:plan,apply:apply,defaults:defaults,openDialog:openDialog,sourceLine:sourceLine,refreshBar:refreshBar};
+  refreshBar();
+  window.addEventListener('focus',refreshBar);
+  window.addEventListener('storage',refreshBar);
+  setInterval(refreshBar,2000);
+})();
+</script>
+  ```
+- **Saved data:** no existing key or format changed (`sbd_autosave_v1`, `sbd_projects_v1` keep their format). New optional fields: `S.bxSrc.buildingLoads` and `ld.bx` on imported loads; old projects without them load unchanged, and `mergeState` carries them through save/load/undo. New keys: only `bridgeSuite.v1.buildingLoads.adopted.steelbeam`.
+- **Check case:** default ASCE7-16 project sent; Steel Beam default beam (one 20 ft simple span, W18X50), TW = 8 ft, S + W (roof uplift) + Lr → LR imported. S: 30 × 8 / 1000 = **0.240 kip/ft** → SL-only reaction = 0.240 × 20 / 2 = 2.40 kip (solver gives 2.400). W: −34.43 × 8 / 1000 = **−0.2754 kip/ft** (upward) → WL. Lr: 20 × 8 / 1000 = 0.160 kip/ft → new case LR (not in any combination until the user adds it).
+- **How verified:** every plain inline script passes `node --check`. jsdom, shared localStorage stub: (1) no hand-off present → `AN` (V, M, reactions for every combination, service deflections, all DCRs) byte-identical to origin/main; (2) hand-off present but not pulled → identical again (no auto-apply), "new data available" shown; (3) Send (real ASCE7 code) → Pull → dialog defaults → Import: imported loads equal p × TW / 1000, user load and trib/self-weight loads kept, case LR created, `S.bxSrc` saved to `sbd_autosave_v1`, adoption marker written, indicator cleared, source shown in header, Load Derivation tab and printed report; (4) replace on span 2 only removes just the earlier imported S load, add keeps it, Cancel changes nothing, TW ≤ 0 or blank disables Import; (5) Export hand-off (JSON) → Import hand-off (JSON) in a fresh page applies the same values (`via:'file'`); (6) refused: wrong `_schema`, `schemaVersion:2`, corrupt stored JSON, non-numeric S, negative S, negative wall magnitude, unknown unit, `factored:true`, corrupt file, wrong-schema file; kPa converted (1 kPa → 20.885434 psf).
+- **Other copies of this code:** none. BridgeXfer v1 (unchanged) is also in ASCE7-16 Load Generator.html and the other Step 1 tools.
+- **Open items:** C&C (Ch. 30) pressures are not available from the sender and usually govern purlins/girts; snow drift and unbalanced snow are not imported (warning only); LR is not in the default combinations.
+
 ## Open items (not changed)
 - O1. **H3.3(c) buckling limit state** is not implemented, only warned (F5). Decide on the method (e.g. f_bx + σ_w ≤ φF_cr with F_cr = M_n/S_x from Chapter F, or a DG 9 interaction) before coding it as a check.
 - O2. **Batch mode** has no H3.3 buckling warning and keeps its existing tension note. Decide whether to add a matching batch note.
