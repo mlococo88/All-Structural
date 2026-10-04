@@ -3804,7 +3804,7 @@ tabs: { combos: 'Factors and loads', cap: 'Derivations', rptCombos: 'Distributio
       : `<div class="df-src df-lock"><b>No complete bridge yet.</b> Define the bridge in Preliminary sizing; this module unlocks as soon as the sizing has no input errors.</div>`;
     const kv = b ? `<table class="tbl df-kv"><tbody>${[['Spans', b.spans.map(s => f2(s)).join(' + ') + ' ft' + (b.cont ? ', continuous' : '')], ['Skew at supports', b.skews.map(s => f0(s) + '°').join(', ')], ['Girders', `${b.nb} at ${f2(b.S)} ft`], ['Overhangs L / R', `${f2(b.ohL)} / ${f2(b.ohR)} ft`], ['Barrier width', `${f2(b.barrier)} ft each side`], ['Deck', `t_s = ${f2(b.tsDeck)} in, haunch ${f2(b.haunch)} in, f′c = ${f2(b.fc)} ksi`], ['Barrier / FWS', `${f2(b.barW)} klf, ${f2(b.fws)} psf`]].map(([k, v]) => `<tr><td class="lbl">${k}</td><td class="val">${sub(v)}</td></tr>`).join('')}</tbody></table>` : '';
     return {
-      df_br: `<div class="pad" id="gm-src"></div>${secHd('sec-dfb', 'Bridge definition')}<div class="sec-body one-col" id="sec-dfb">${src}${kv}<button type="button" class="proj-btn" data-dfpl="1" style="width:100%">Open Preliminary sizing</button></div>
+      df_br: `<div class="pad" id="gm-src"></div>${secHd('sec-dfb', 'Bridge definition')}<div class="sec-body one-col" id="sec-dfb">${src}${kv}${gdLldfDfNote()}<button type="button" class="proj-btn" data-dfpl="1" style="width:100%">Open Preliminary sizing</button></div>
         ${secHd('sec-dfo', 'Options')}<div class="sec-body" id="sec-dfo">${fld('Gap between adjacent trucks (lever rule)', 'df.gap', 'ft')}<div></div>
           ${fld('K<sub>g</sub> basis', 'df.kg', '', 'sel', { full: true, options: [['max', 'Section at the maximum-moment point of each region'], ['avg', 'Length-weighted average over the span (or the negative-moment zone)'], ['simple', 'Simplified constants of Table 4.6.2.2.1-3 (preliminary)']] })}
           ${fld('Use these factors in Preliminary sizing and downstream', 'df.feed', '', 'sel', { full: true, options: [['yes', 'Yes: sizing demands (and everything sent from sizing) use these factors and dead loads'], ['no', 'No: sizing uses its built-in approximate factors']] })}
@@ -4256,7 +4256,7 @@ tabs: { combos: 'Results', cap: 'Method', drawings: 'Diagrams', rptCombos: 'Anal
         <p class="note full">${b && b.ok ? `Bridge from Preliminary sizing ("${esc(b.project)}"). Dead loads and live load distribution factors for the selected girder come from the LLDF and DLs module.` : 'Waiting for a complete bridge from Preliminary sizing.'}</p></div>
       ${secHd('sec-sal', 'Live load: distribution factors and impact')}<div class="sec-body" id="sec-sal">${fld('Dynamic load allowance, truck and tandem', 'sa.im', '%')}${fld('Dynamic load allowance, fatigue truck', 'sa.imf', '%')}
         <p class="note full">IM (Table 3.6.2.1-1: 33% for the design truck and tandem, 15% for fatigue) is not applied to the lane or pedestrian loads. It is also used by Preliminary sizing for the design demands.</p>
-        ${fld('Live load distribution factors', 'sa.dfSrc', '', 'sel', { full: true, options: [['module', 'From the LLDF and DLs module (selected girder)'], ['manual', 'Enter manually for this girder']] })}</div>
+        ${fld('Live load distribution factors', 'sa.dfSrc', '', 'sel', { full: true, options: [['module', 'From the LLDF and DLs module (selected girder)'], ['manual', 'Enter manually for this girder']] })}${gdLldfUi()}</div>
       <div id="sa-dfm-wrap">${secHd('sec-sadfm', 'Manual distribution factors')}<div class="sec-body" id="sec-sadfm">
         ${b && b.ok ? b.regions.map(rg => rg.kind === 'span' ? `<h4 class="sub-h full">${esc(rg.label)} (positive moment, shear)</h4>${fld('g moment', `sa.dfm.${rg.id}.gM`, '')}${fld('g shear', `sa.dfm.${rg.id}.gV`, '')}${fld('g fatigue moment', `sa.dfm.${rg.id}.fM`, '')}${fld('g fatigue shear', `sa.dfm.${rg.id}.fV`, '')}` : `<h4 class="sub-h full">${esc(rg.label)} (negative moment)</h4>${fld('g moment', `sa.dfm.${rg.id}.gM`, '')}<div></div>`).join('') : ''}
         <p class="note full">Each field is prefilled from the LLDF and DLs module the first time; any value you change applies to this analysis. Preliminary sizing continues to design with the LLDF and DLs module's factors.</p></div></div>
@@ -4496,7 +4496,7 @@ tabs: { combos: 'Results', cap: 'Method', drawings: 'Diagrams', rptCombos: 'Anal
       + card('dw-sad', 'Dead load deflection (camber)', `G${R.j + 1}, in, downward +`, saPlot(R, [[A(R.dTot), '#1f4e8c', 'Total'], [A(R.dS), '#7a8590', 'Steel', 1], [A(R.dDk), '#3f7fc4', 'Deck, haunch, SIP', 1], [A(R.dSD), '#12806e', 'DC2 + DW', 1]], X, 'd', true, null, 'd'))
       + card('dw-sai', 'Moment of inertia by stage', `G${R.j + 1}, in⁴`, saPlot(R, [[A(R.F.Is), '#7a8590', 'Steel'], [A(R.fe ? R.F.I3 : R.F.I3u), '#12806e', '3n'], [A(R.fe ? R.F.In : R.F.Inu), '#1f4e8c', 'n']], XV, 'I', false, R.fe ? R.F.crack : null, 'i') + `<p class="cap">Shaded: cracked zones, where both composite stages use the steel plus longitudinal reinforcement.</p>`);
   },
-  echo(R) { const b = R.b; return { kv: [['Bridge (from Preliminary sizing)', `"${esc(b.project)}"`], ['Spans', b.spans.map(s => f2(s)).join(' + ') + ' ft' + (R.cont ? ', continuous' : '')], ['Girder analyzed', `G${R.j + 1} (${R.ext ? 'exterior' : 'interior'}), b_eff = ${f2(R.beffFt)} ft`], ['Model', R.fe ? `Variable EI, staged, cracked (${R.F.mode === 'dl' ? 'dead-load negative region' : '15% rule'}), A_r = ${f2(nm(R.p.rebar))}%` : 'Constant EI'], ['Loads per girder', `DC1 deck ${f3(R.wDeck)} klf + steel; DC2 ${f3(R.wDC2)}; DW ${f3(R.wDW)}; PL ${f3(R.wPL)} klf`]] }; },
+  echo(R) { const b = R.b; return { kv: [['Bridge (from Preliminary sizing)', `"${esc(b.project)}"`], ['Spans', b.spans.map(s => f2(s)).join(' + ') + ' ft' + (R.cont ? ', continuous' : '')], ['Girder analyzed', `G${R.j + 1} (${R.ext ? 'exterior' : 'interior'}), b_eff = ${f2(R.beffFt)} ft`], ['Model', R.fe ? `Variable EI, staged, cracked (${R.F.mode === 'dl' ? 'dead-load negative region' : '15% rule'}), A_r = ${f2(nm(R.p.rebar))}%` : 'Constant EI'], ['Loads per girder', `DC1 deck ${f3(R.wDeck)} klf + steel; DC2 ${f3(R.wDC2)}; DW ${f3(R.wDW)}; PL ${f3(R.wPL)} klf`]].concat(gdLldfEcho(R)) }; },
   after(R) { const wrap = document.getElementById('sa-dfm-wrap'); if (wrap) wrap.hidden = R.p.dfSrc !== 'manual';
     const a = { method: R.p.method, crack: R.p.crack, rebar: nm(R.p.rebar), im: nm(R.p.im), imf: nm(R.p.imf) }, ba = R.b.analysis || {};
     if (R.man) { let filled = false; const dfm = P.sa.dfm || (P.sa.dfm = {}); R.DF.regions.forEach(rg => { const m = rg.members[R.j], o = dfm[rg.id] || (dfm[rg.id] = {}), set = (k, v) => { if (!(nm(o[k]) > 0)) { o[k] = +v.toFixed(4); filled = true; } };
@@ -4504,6 +4504,126 @@ tabs: { combos: 'Results', cap: 'Method', drawings: 'Diagrams', rptCombos: 'Anal
     if (ba.method !== a.method || ba.crack !== a.crack || Number(ba.rebar) !== a.rebar || Number(ba.im ?? 33) !== a.im || Number(ba.imf ?? 15) !== a.imf) { if (typeof PL_FRAME !== 'undefined' && PL_FRAME && PL_FRAME.contentWindow) PL_FRAME.contentWindow.postMessage({ type: 'gd-an', analysis: a }, '*'); } },
   inbox() { return null }, noInbox: 'This module takes the bridge from Preliminary sizing and the girder loads and factors from the LLDF and DLs module; nothing needs to be imported.'
 };
+/* ---------- Hand-off: "Pull from LL & DL" (HANDOFF.md §4.3, channel bridgeSuite.v1.lldf, _schema bridge-lldf-factors) ----------
+   Fills the EXISTING manual distribution factor inputs of the Structural analysis module (sa.dfSrc = 'manual', sa.dfm)
+   for the girder being analyzed, from the factors published by lldf.html. Nothing changes until the user confirms the
+   dialog; nothing is applied on page load. The source is kept in the new optional field P.sa.dfImport. No formula is
+   changed: the analysis uses the manual factors exactly as it does when they are typed in. */
+const GD_LLDF = { ch: 'lldf', schema: 'bridge-lldf-factors', ver: 1, rx: 'girderdetail' };
+let GD_LLDF_PENDING = null;
+const gdLldfProj = pl => { const p = pl && pl.project; return p && typeof p === 'object' ? String(p.name || '') : String(p || ''); };
+const gdLldfWhen = t => { const d = new Date(t); return t && isFinite(d) ? d.toLocaleString() : 'time unknown'; };
+function gdLldfIsNew() { try { return !!(window.BridgeXfer && BridgeXfer.isNew(GD_LLDF.ch, GD_LLDF.rx)); } catch (e) { return false; } }
+function gdLldfSrcHtml() {
+  const x = P && P.sa && P.sa.dfImport; if (!x) return '';
+  const inUse = P.sa.dfSrc === 'manual', gNow = Math.round(nm(P.sa.girder)), ok = inUse && gNow === x.girder;
+  return `<div class="df-src${ok ? '' : ' df-lock'}"><b>Source: ${esc(x.producer)}</b> (${esc(x.producerFile)}), produced ${esc(gdLldfWhen(x.producedAt))}${x.project ? `, project "${esc(x.project)}"` : ''}. Pulled ${esc(gdLldfWhen(x.adoptedAt))} for G${x.girder}, ${esc(x.basisLbl)}.${!inUse ? ' <b>Not in use:</b> the factors are set to come from the LLDF and DLs module.' : gNow !== x.girder ? ` <b>Check:</b> G${gNow} is now analyzed, but the manual factors were pulled for G${x.girder}. Pull again for this girder.` : ''}</div>`;
+}
+function gdLldfUi() {
+  return `<div class="full" id="gd-lldf-box"><div class="fa-imp"><button type="button" class="proj-btn" data-gdlldf="pull" title="Use the distribution factors published by LL &amp; DL Distribution (lldf.html) as the manual factors for this girder">Pull from LL &amp; DL <span id="gd-lldf-new" class="badge info"${gdLldfIsNew() ? '' : ' hidden'}>new data</span></button><button type="button" class="proj-btn" data-gdlldf="file">Import hand-off (JSON)</button></div><input type="file" id="gd-lldf-file" accept=".json,application/json" hidden>
+    <div id="gd-lldf-src">${gdLldfSrcHtml()}</div><p class="note">Pull fills the manual distribution factors below for the girder being analyzed, from the factors that LL &amp; DL Distribution (lldf.html) publishes. You see what changes and confirm first.</p></div>`;
+}
+function gdLldfDfNote() {
+  const x = P && P.sa && P.sa.dfImport; if (!x) return '';
+  return `<p class="note">Factors from ${esc(x.producer)} (produced ${esc(gdLldfWhen(x.producedAt))}) were pulled into Structural analysis as the manual factors for G${x.girder}${P.sa.dfSrc === 'manual' ? '' : ' (not in use there now)'}. The factors on this page are computed here and still feed Preliminary sizing.</p>`;
+}
+function gdLldfEcho(R) {
+  const x = P && P.sa && P.sa.dfImport; if (!x || !R.man) return [];
+  return [['Live load distribution factors', esc(`Manual, pulled from ${x.producer} (${x.producerFile}), produced ${gdLldfWhen(x.producedAt)}${x.project ? `, project "${x.project}"` : ''}; for G${x.girder}, ${x.basisLbl}${x.girder !== R.j + 1 ? `. NOTE: G${R.j + 1} is analyzed` : ''}. Lanes per girder; multiple presence and skew included by LL & DL; fatigue factors are one lane ÷ 1.2.`)]];
+}
+function gdLldfPaint() { const n = document.getElementById('gd-lldf-new'); if (n) n.hidden = !gdLldfIsNew(); const s = document.getElementById('gd-lldf-src'); if (s) s.innerHTML = gdLldfSrcHtml(); }
+/* Map a payload onto this bridge and girder. basis: 'type' = lldf's interior/exterior envelope for the analyzed girder's type;
+   'beam' = lldf's own beam with the same number (governing.byBeam). Returns the rows that would change, warnings and errors. */
+function gdLldfPlan(pl, basis) {
+  const err = [], warn = [], rows = [], unused = [], b = P.df && P.df.bridge;
+  if (!b || !b.ok || !Array.isArray(b.regions)) return { err: ['Define the complete bridge in Preliminary sizing first; the factors are mapped onto its spans and supports.'], warn, rows, unused };
+  const nb = b.nb, j = Math.round(nm(P.sa.girder)) - 1;
+  if (!(j >= 0 && j < nb)) return { err: [`Select a girder between G1 and G${nb} first.`], warn, rows, unused };
+  const ext = j === 0 || j === nb - 1, tKey = ext ? 'exterior' : 'interior';
+  // Units: bridge-lldf-factors v1 factors are dimensionless, in lanes per girder (HANDOFF.md §4.3). Anything else is refused.
+  if (pl.units && pl.units.df != null && !/lanes? per girder/i.test(String(pl.units.df))) err.push(`Unsupported distribution factor unit "${pl.units.df}". This tool takes lanes per girder.`);
+  const ls = Array.isArray(pl.spans) ? pl.spans : [];
+  if (!ls.length || !ls.every(v => typeof v === 'number' && isFinite(v) && v > 0)) err.push('The hand-off has no valid span lengths (positive numbers, ft).');
+  else if (ls.length !== b.spans.length) err.push(`Span count differs: LL & DL has ${ls.length} span${ls.length > 1 ? 's' : ''}, this bridge has ${b.spans.length}. Pull factors only for the same bridge.`);
+  else if (ls.some((L, i) => Math.abs(L - b.spans[i]) > 0.5)) warn.push(`Span lengths differ: LL & DL ${ls.map(f2).join(' + ')} ft, this bridge ${b.spans.map(f2).join(' + ')} ft.`);
+  const plNb = Number(pl.Nb);
+  if (pl.Nb != null && plNb !== nb) warn.push(`Number of girders differs: LL & DL ${esc(pl.Nb)}, this bridge ${nb}.`);
+  if (basis === 'beam' && plNb !== nb) err.push('"Same beam number" needs the same number of girders in both tools. Use the interior / exterior envelope.');
+  if (pl.bridgeType && pl.bridgeType !== 'a') warn.push(`LL & DL computed the factors for cross-section type (${esc(pl.bridgeType)}); this tool designs steel I-girders, type (a).`);
+  const skM = b.skews && b.skews.length ? Math.max(...b.skews.map(Math.abs)) : 0;
+  if (pl.skew != null && (typeof pl.skew !== 'number' || !isFinite(pl.skew))) err.push('The hand-off skew is not a number.');
+  else if (pl.skew != null && Math.abs(Math.abs(pl.skew) - skM) > 0.5) warn.push(`Skew differs: LL & DL ${f0(pl.skew)}°, this bridge up to ${f0(skM)}°.`);
+  const pick = g => !g || typeof g !== 'object' ? null : basis === 'beam' ? (g.byBeam || {})[String(j + 1)] || null : g[tKey] || null;
+  const pos = pick(pl.governing), neg = pick(pl.governingNeg);
+  if (!pos) err.push(`The hand-off has no positive-region factors for ${basis === 'beam' ? `beam ${j + 1}` : `the ${tKey} girder`}.`);
+  const num = (o, k, lbl, req) => { const v = o ? o[k] : undefined;
+    if (v == null) { if (req) err.push(`${lbl} is missing.`); return null; }
+    if (typeof v !== 'number' || !isFinite(v) || !(v > 0)) { err.push(`${lbl} is not a positive number (${esc(v)}).`); return null; } return v; };
+  let DF = null; try { DF = GM.df.compute(P.df); if (DF.errors.length) DF = null; } catch (e) { DF = null; }
+  const man = P.sa.dfSrc === 'manual', cur = (rid, k, mk) => { const v = nm(((P.sa.dfm || {})[rid] || {})[k]); if (man && v > 0) return { v, from: 'manual' };
+    const rg = DF && DF.regions.find(r => r.id === rid), m = rg && rg.members[j]; return { v: m ? m[mk] : null, from: 'LLDF and DLs module' }; };
+  const keep = (rg, k, lbl, mk) => { const c = cur(rg.id, k, mk), v = nm(((P.sa.dfm || {})[rg.id] || {})[k]); rows.push({ rid: rg.id, k, lbl: `${rg.label}: ${lbl}`, old: c.v, nu: null, keep: v > 0 ? `unchanged (${f3(v)}, manual)` : 'unchanged (from the LLDF and DLs module)' }); };
+  const spans = b.regions.filter(rg => rg.kind === 'span'), piers = b.regions.filter(rg => rg.kind !== 'span');
+  // Per span: governingBySpan[i] (that span alone, L = span i) when the payload has it for every span; otherwise the all-span envelope `governing`.
+  const bySpan = Array.isArray(pl.governingBySpan) && pl.governingBySpan.length === b.spans.length && spans.every(rg => pick(pl.governingBySpan[rg.i])) ? pl.governingBySpan : null;
+  if (pos) { let noFat = false;
+    spans.forEach(rg => { const o = bySpan ? pick(bySpan[rg.i]) : pos, sl = bySpan ? ` (span ${rg.i + 1})` : '';
+      const F = [['gM', num(o, 'gM', `Moment factor${sl}`, true), 'g moment', 'gM'], ['gV', num(o, 'gV', `Shear factor${sl}`, true), 'g shear', 'gV'],
+        ['fM', num(o, 'fatM', `Fatigue moment factor${sl}`, false), 'g fatigue moment', 'fatM'], ['fV', num(o, 'fatV', `Fatigue shear factor${sl}`, false), 'g fatigue shear', 'fatV']];
+      if (o.fatM == null || o.fatV == null) noFat = true;
+      F.forEach(([k, v, lbl, mk]) => v == null ? keep(rg, k, lbl, mk) : rows.push({ rid: rg.id, k, lbl: `${rg.label}: ${lbl}`, old: cur(rg.id, k, mk).v, nu: v })); });
+    if (noFat) warn.push('The hand-off has no fatigue factor for this girder; those fields are left unchanged.'); }
+  if (piers.length) {
+    if (!neg) { warn.push('The hand-off has no negative-moment factors (LL & DL was set up with one span?). The pier factors are left unchanged.'); piers.forEach(rg => keep(rg, 'gM', 'g moment', 'gM')); }
+    else { const g = num(neg, 'gM', 'Moment factor (negative region)', true); piers.forEach(rg => g == null ? keep(rg, 'gM', 'g moment', 'gM') : rows.push({ rid: rg.id, k: 'gM', lbl: `${rg.label}: g moment`, old: cur(rg.id, 'gM', 'gM').v, nu: g })); } }
+  else if (neg) unused.push('Negative-moment factors (this bridge has no interior supports)');
+  if (neg) unused.push('Negative-region shear and fatigue factors (this module uses the span factors for shear and fatigue)');
+  unused.push('Factors of the other girders, design lanes, K_g and the per-member table (shown in LL & DL)');
+  return { err: [...new Set(err)], warn, rows, unused, j, ext, tKey, basis, bySpan: !!bySpan, basisLbl: `${basis === 'beam' ? `LL & DL beam ${j + 1}` : `LL & DL ${tKey} envelope`}, ${bySpan ? 'per span' : 'all-span envelope'}` };
+}
+function gdLldfDialog(basis) {
+  const pl = GD_LLDF_PENDING && GD_LLDF_PENDING.pl; if (!pl) return; GD_LLDF_PENDING.basis = basis;
+  const plan = gdLldfPlan(pl, basis), notes = [].concat(Array.isArray(pl.notes) ? pl.notes : [], pl.note ? [pl.note] : []), sameNb = Number(pl.Nb) === (P.df.bridge && P.df.bridge.nb);
+  const li = a => a.length ? `<ul class="dlist">${a.map(s => `<li>${s}</li>`).join('')}</ul>` : '';
+  const tb = plan.rows.length ? `<div class="tscroll"><table class="tbl"><thead><tr><th>Field (Structural analysis, manual factors)</th><th class="right">Now in use</th><th class="right">After pull</th></tr></thead><tbody>${plan.rows.map(r => `<tr><td class="lbl">${esc(r.lbl)}</td><td class="val">${r.old == null ? '—' : f3(r.old)}</td><td class="val">${r.nu == null ? esc(r.keep) : `<b>${f3(r.nu)}</b>`}</td></tr>`).join('')}</tbody></table></div>` : '';
+  daModal(`<h3>Pull from LL &amp; DL Distribution</h3>
+    <p><b>From:</b> ${esc(pl.producer || 'LL & DL Distribution')} (${esc(pl.producerFile || 'lldf.html')}), produced ${esc(gdLldfWhen(pl.producedAt))}${gdLldfProj(pl) ? `, project "${esc(gdLldfProj(pl))}"` : ''}; via ${esc(GD_LLDF_PENDING.via)}.</p>
+    <p><b>For:</b> G${plan.j != null ? plan.j + 1 : '?'}${plan.j != null ? ` (${plan.ext ? 'exterior' : 'interior'})` : ''}, the girder selected in Structural analysis.</p>
+    <fieldset style="border:0;padding:0;margin:6px 0"><legend><b>Which LL &amp; DL factors to use</b></legend>
+      <label style="display:block"><input type="radio" name="gdlldf-basis" value="type"${basis === 'type' ? ' checked' : ''}> Envelope of LL &amp; DL's ${plan.tKey || 'interior / exterior'} girders (default; does not depend on the girder numbering)</label>
+      <label style="display:block"><input type="radio" name="gdlldf-basis" value="beam"${basis === 'beam' ? ' checked' : ''}${sameNb ? '' : ' disabled'}> LL &amp; DL's beam with the same number${sameNb ? '' : ' (needs the same number of girders)'}</label></fieldset>
+    <p class="note-p">Basis: lanes per girder; LL &amp; DL includes multiple presence and the skew corrections; the fatigue factors are the one-lane factor ÷ 1.2. ${plan.bySpan ? 'Each span gets LL &amp; DL\'s factors for that span (positive moment and shear, L = span); every pier gets LL &amp; DL\'s envelope over all interior supports (negative moment).' : 'This payload has no per-span factors, so every span gets LL &amp; DL\'s envelope over all spans (positive moment and shear), and every pier its envelope over all interior supports (negative moment).'} This sets "Live load distribution factors" to "Enter manually for this girder".</p>
+    ${plan.err.length ? `<div class="alert fail"><b>Cannot pull:</b>${li(plan.err)}</div>` : ''}${plan.warn.length ? `<div class="alert warn"><b>Check:</b>${li(plan.warn)}</div>` : ''}
+    ${tb}${plan.unused.length ? `<p class="note-p"><b>Not used:</b> ${plan.unused.map(esc).join('; ')}.</p>` : ''}${notes.length ? `<p class="note-p"><b>Notes from LL &amp; DL:</b> ${notes.map(esc).join(' ')}</p>` : ''}
+    <div class="ctl-row"><button type="button" class="proj-btn proj-btn-primary" data-gdlldf="apply"${plan.err.length ? ' disabled' : ''}>Apply these factors</button><button type="button" class="proj-btn" data-gdlldf="cancel">Cancel</button></div>`);
+}
+function gdLldfOffer(pl, via) { GD_LLDF_PENDING = { pl, via }; gdLldfDialog('type'); }
+function gdLldfApply() {
+  const pend = GD_LLDF_PENDING; if (!pend) return; const pl = pend.pl, plan = gdLldfPlan(pl, pend.basis || 'type'); if (plan.err.length) { gdLldfDialog(pend.basis || 'type'); return; }
+  const dfm = P.sa.dfm || (P.sa.dfm = {});
+  plan.rows.forEach(r => { if (r.nu != null) (dfm[r.rid] || (dfm[r.rid] = {}))[r.k] = r.nu; });
+  P.sa.dfSrc = 'manual';
+  P.sa.dfImport = { producer: String(pl.producer || 'LL & DL Distribution'), producerFile: String(pl.producerFile || 'lldf.html'), producedAt: String(pl.producedAt || ''), project: gdLldfProj(pl),
+    adoptedAt: new Date().toISOString(), girder: plan.j + 1, basis: plan.basis, basisLbl: plan.basisLbl, fields: plan.rows.filter(r => r.nu != null).map(r => `${r.rid}.${r.k}`) };
+  try { if (window.BridgeXfer) BridgeXfer.markAdopted(GD_LLDF.ch, GD_LLDF.rx, pl.producedAt); } catch (e) {}
+  GD_LLDF_PENDING = null; const md = document.getElementById('da-modal'); if (md) md.hidden = true;
+  gmBuildPanes('sa'); gmBuildPanes('df'); fillInputs(); recompute(); autosave(); flash(`Distribution factors pulled from LL & DL for G${plan.j + 1}.`);
+}
+function gdLldfPull() {
+  if (!window.BridgeXfer) { alert('The hand-off helper is not available in this browser.'); return; }
+  const r = BridgeXfer.read(GD_LLDF.ch, GD_LLDF.schema, GD_LLDF.ver);
+  if (r.error) { alert(r.empty ? 'Nothing has been published yet. In LL & DL Distribution (lldf.html) click "Send DFs to Design Apps", or use "Import hand-off (JSON)".' : `Cannot use the LL & DL hand-off: ${r.error}`); return; }
+  gdLldfOffer(r.payload, 'shared browser storage');
+}
+document.addEventListener('click', e => { const t = e.target.closest && e.target.closest('[data-gdlldf]'); if (!t) return; const a = t.dataset.gdlldf;
+  if (a === 'pull') gdLldfPull(); else if (a === 'file') { const f = document.getElementById('gd-lldf-file'); if (f) { f.value = ''; f.click(); } }
+  else if (a === 'apply') gdLldfApply(); else if (a === 'cancel') { GD_LLDF_PENDING = null; const md = document.getElementById('da-modal'); if (md) md.hidden = true; } });
+document.addEventListener('change', e => {
+  if (e.target.id === 'gd-lldf-file' && e.target.files && e.target.files[0]) { const file = e.target.files[0];
+    BridgeXfer.importFile(file, GD_LLDF.schema, GD_LLDF.ver, r => { if (r.error) { alert(`Cannot import the hand-off file: ${r.error}`); return; } gdLldfOffer(r.payload, `file ${file.name}`); }); return; }
+  if (e.target.name === 'gdlldf-basis') { gdLldfDialog(e.target.value); return; }
+  if (e.target.dataset && /^sa\.(girder|dfSrc)$/.test(e.target.dataset.k || '')) setTimeout(gdLldfPaint, 0); });
+window.addEventListener('storage', e => { if (!e.key || e.key.indexOf('bridgeSuite.v1.lldf') === 0) gdLldfPaint(); });
 /* stresses by construction stage at every node (tension +) */
 
 /* deck placement sequence (AASHTO LRFD 6.10.3.4): steel and other noncomposite load on the steel, then each pour's wet concrete on the
