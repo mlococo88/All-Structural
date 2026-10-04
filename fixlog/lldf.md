@@ -405,3 +405,75 @@ Field mapping: projectName ↔ Project (`mProject`), bridgeId ↔ Structure No. 
 - **Check case:** n/a, no computed value changes. Functional check: see How verified.
 - **How verified:** `node --check` on every plain inline script and @babel/standalone transpile of the text/babel block; BridgeXfer copy compared byte-for-byte with HANDOFF.md §5; whole page loaded in jsdom (React/ReactDOM/Babel from npm, other CDN scripts blocked); Share → Use round trip between lldf, Moving Load Generator, psbeam, stgirder and index with one shared localStorage; `git diff` shows only additions apart from the one header line that received the link.
 - **Other copies:** BridgeXfer v1 and the `BXProject` glue are also in index.html, lldf.html, psbeam.html, stgirder.html and Moving Load Generator.html (this PR).
+
+## 2026-10-04 — PR: claude/conn-lldf-movingload (PR link added after merge)
+
+Feature: hand-off (no result change). Sender side of lldf → Moving Load Generator (channel `bridgeSuite.v1.lldf`, HANDOFF.md §4.3). No formula, factor, default, unit, storage key or saved format changed. The DF payload keeps every existing field with the same values; new fields are additive and the existing receivers (index, psbeam, stgirder) ignore them. Because of the no-op-republish check, the first send after this change rewrites the key once.
+
+### H1. DF payload: per-span envelope, units and basis flags; build split from write; "Export DF hand-off (JSON)" button   [feature: hand-off (no result change)]
+- **Where:** `publishDF` in the "Bridge Suite integration (v1)" script (≈ line 3168). Anchor text: `function publishDF(silent)`. Toolbar button after `id="sendDFBtn"` (≈ line 326). Load-handler anchor: `var b=$('sendDFBtn'); if(b) b.addEventListener`.
+- **Problem:** none (feature). Moving Load Generator has a DF input per span, but lldf only published the envelope over all spans. lldf also had no file export for this channel.
+- **Governing provision:** n/a. `governingBySpan[i]` uses the existing `govRegions` with the single region `s<i>`, the same computation that `governing` already runs over all spans together.
+- **Before / After:** exact diff (`-` = before, `+` = after):
+  ```diff
+@@ -325,4 +325,5 @@ var st=document.createElement('style'); st.textContent=css;
+         <button class="btn" id="mctBackBtn" title="Back to the MCT analysis app">↩ MCT</button>
+         <button class="btn" id="sendDFBtn" title="Publish the computed distribution factors to shared storage so PS-Beam and ST-Girder can pull them">⇄ Send DFs to Design Apps</button>
++        <button class="btn" id="exportDFBtn" title="Download the DF hand-off (the same data as Send DFs) as a JSON file, for 'Import hand-off (JSON)' in another tool or a calc package">⇩ Export DF hand-off (JSON)</button>
+         <button class="btn" id="sendDLBtn" title="Publish the selected design beam's distributed dead load (DC1 / DC2 / DW, and pedestrian LL if any) so the MCT Generator's Loads tab can import it as beam UDLs">⇄ Send DL to MCT Loads</button>
+         <button class="btn" id="openPSBtn" title="Open the prestressed concrete design app (pull the DFs there with 'Pull from LL &amp; DL Distribution')">PS ↗</button>
+@@ -3166,9 +3167,14 @@ function flash(msg,bad){ var el=$('saveStatus'); if(!el) return; el.textContent=
+ /* ---------- OUT: publish the computed DFs ---------- */
+ function publishDF(silent){
+-  if(!lsOK()){ if(!silent) alert('Browser storage is unavailable — cannot publish. Use Export JSON instead.'); return false; }
++  if(!lsOK()){ if(!silent) alert('Browser storage is unavailable — cannot publish. Use "Export DF hand-off (JSON)" instead.'); return false; }
++  var payload=buildDFPayload(silent); if(!payload) return false;
++  return writeDF(payload,silent);
++}
++/* Builds the 'bridgeSuite.v1.lldf' payload (also used by "Export DF hand-off (JSON)"). */
++function buildDFPayload(silent){
+   var p,R;
+   try{ p=readInputs(); R=computeBridge(p); }
+-  catch(e){ if(!silent) alert('Compute failed — fix the inputs first.\n\n'+(e&&e.message||e)); return false; }
+-  if(!R||!R.members||!R.members.length){ if(!silent) alert('No results to send — recalculate first.'); return false; }
++  catch(e){ if(!silent) alert('Compute failed — fix the inputs first.\n\n'+(e&&e.message||e)); return null; }
++  if(!R||!R.members||!R.members.length){ if(!silent) alert('No results to send — recalculate first.'); return null; }
+   var r=function(v,d){ return (v==null||!isFinite(v))?null:+(+v).toFixed(d==null?4:d); };
+   var mem=R.members.map(function(m){ return {girder:m.label,type:m.type,S:r(m.S,3),
+@@ -3213,4 +3219,6 @@ function publishDF(silent){
+   var posGov=govRegions(spanRs.length?spanRs:['s0']);
+   var negGov=pierRs.length?govRegions(pierRs):null;
++  // Same envelope for each span on its own (index i = span i+1), for receivers with per-span DF inputs.
++  var bySpan=spanRs.map(function(rg){ return govRegions([rg]); });
+   var payload={_schema:'bridge-lldf-factors',schemaVersion:1,producer:'LL & DL Distribution',
+     producedAt:new Date().toISOString(),
+@@ -3223,7 +3231,13 @@ function publishDF(silent){
+     governing:posGov,          // positive-moment / shear governing across all spans
+     governingNeg:negGov,       // negative-moment governing across all interior supports; null if single-span
++    governingBySpan:bySpan,    // positive-region envelope per span (same shape as governing); added for Moving Load Generator
++    units:{spans:'ft',S:'ft',skew:'deg',laneWidth:'ft',df:'lanes per girder (dimensionless)'},
++    multiplePresenceIncluded:true, skewIncluded:true,   // gM/gV; fatM/fatV = one-lane ÷ 1.2 (no MPF), skew included
+     designBeam:(window.BridgeBeam&&window.BridgeBeam.get())||null,   // the suite-wide selected beam
+     beamRoster:(window.BridgeBeam&&window.BridgeBeam.roster())||null,// layout, classification, per-beam DL
+-    note:'governing = positive-region DFs (span L); governingNeg = negative-region DFs at interior supports (L = ½ of adjacent spans). gM/gV include multiple presence + skew; fatM/fatV are single-lane fatigue DFs. governing.byBeam / governingNeg.byBeam give the same envelope per individual girder, keyed by the 1-based beam number, so an app with a design beam selected can use that beam directly.'};
++    note:'governing = positive-region DFs (span L); governingNeg = negative-region DFs at interior supports (L = ½ of adjacent spans). gM/gV include multiple presence + skew; fatM/fatV are single-lane fatigue DFs. governing.byBeam / governingNeg.byBeam give the same envelope per individual girder, keyed by the 1-based beam number, so an app with a design beam selected can use that beam directly. governingBySpan[i] is the positive-region envelope for span i+1 alone.'};
++  return payload;
++}
++function writeDF(payload,silent){
+   try{
+     // Skip a no-op republish so a locked consumer is not woken by an identical payload.
+@@ -3585,4 +3599,8 @@ function mountLockToggle(btnId,ch){
+ window.addEventListener('load',function(){
+   var b=$('sendDFBtn'); if(b) b.addEventListener('click',function(){ publishDF(false); });
++  var xb=$('exportDFBtn'); if(xb) xb.addEventListener('click',function(){
++    var pl=buildDFPayload(false); if(!pl) return;
++    if(!window.BridgeXfer){ alert('Export is not available in this browser.'); return; }
++    var r=BridgeXfer.exportFile('lldf',pl); if(r&&r.error) alert(r.error); });
+   var dlb=$('sendDLBtn'); if(dlb) dlb.addEventListener('click',function(){ publishDL(false); });
+   var ps=$('openPSBtn'); if(ps) ps.addEventListener('click',function(){ bridgeNav('psbeam'); });
+  ```
+- **New payload fields:** `governingBySpan` (array, one entry per span, same shape as `governing`), `units` `{spans:"ft", S:"ft", skew:"deg", laneWidth:"ft", df:"lanes per girder (dimensionless)"}`, `multiplePresenceIncluded: true`, `skewIncluded: true`; `note` gains one sentence.
+- **Check case:** 2 spans 100 + 120 ft, skew 20°, defaults otherwise: `governingBySpan[0].interior` = gM 0.7598, gV 0.9898, fatM 0.4352, fatV 0.6617; `governingBySpan[1].interior` = 0.7234, 0.9929, 0.4081, 0.6638; `governing.interior` = 0.7598, 0.9929, 0.4352, 0.6638 (the max of the two, unchanged from before). Hand check of span 1: see Moving Load Generator.md, same PR.
+- **How verified:** `node --check` on every plain inline script of both files (no JSX in either). End-to-end in node/jsdom with one shared localStorage stub (64 checks, all pass): lldf.html loaded, set to 2 spans 100 + 120 ft, skew 20°, defaults otherwise (5 girders @ 9.75 ft, Kg = 1,255,067 in⁴), its real "Send DFs to Design Apps" button clicked; Moving Load Generator.html loaded on the same storage, real "Pull from LL & DL Distribution" → dialog → Apply. Inputs checked equal to the mapped values (interior: span 1 0.7598 / 0.9898, span 2 0.7234 / 0.9929, negative moment 0.7405); exterior and per-beam choices checked; spans only changed with the option ticked; rail DFs untouched; adopted marker written; `lldfSource` in the autosave and restored on reload; fatigue warning quotes g_fat 0.4352 / 0.6638 / 0.4208 and the analysis still uses the DF inputs; report has the source row. JSON export (lldf) → import (Moving Load) round trip. Refusals: wrong `_schema`, `schemaVersion` 2, corrupt JSON (storage and file), negative DF, DF as a string, non-finite span, `units.spans:"m"`. Hand check of span 1 interior: Table 4.6.2.2.2b-1, Kg/(12 L ts³) = 1,255,067 / (12 × 100 × 512) = 2.0428; g = 0.075 + (9.75/9.5)^0.6 (9.75/100)^0.2 (2.0428)^0.1 = 0.7598 (two lanes, governs over one lane 0.5222; skew 20° < 30° so no moment reduction); shear 0.2 + 9.75/12 − (9.75/35)² = 0.9349 × skew factor 1 + 0.20 (1/2.0428)^0.3 tan 20° = 1.0588 → 0.9898. Both match lldf and the values written into Moving Load. No result change: with no hand-off, Moving Load results (all 342 section/reaction extremes in the default, a 3-span and the fatigue configuration, plus the metric tiles and warnings) are byte-identical to the file before this change. lldf: the existing payload fields from the old and new files are identical (only timestamps differ).
+- **Other copies:** none (lldf is the only sender on this channel).
+- **Open items:** the payload still has `project` as a string and no `producerFile`, kept for the existing receivers; documented in HANDOFF.md §4.3.

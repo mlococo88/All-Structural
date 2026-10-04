@@ -1711,5 +1711,288 @@ initSelects(); renderSpans(); $('preset').value='HL93-Truck'; applyPreset('HL93-
       e.value=upd[k]; e.dispatchEvent(new Event('input',{bubbles:true})); }); }); };   // input event -> normal autosave
 })();
 </script>
+<script>
+/* ═══════════ Hand-off IN: distribution factors from LL & DL Distribution (lldf.html) ═══════════
+   HANDOFF.md §4.3, channel 'bridgeSuite.v1.lldf', _schema 'bridge-lldf-factors' v1. Receiver id 'movingLoad'.
+   Fills ONLY the highway DF inputs: per-span DF moment/shear (dfm#, dfv#) and the negative-moment DF
+   (dfNeg); optionally the spans when the user ticks it. Rail DFs are never touched. Fatigue DFs
+   (fatM/fatV) are shown in the dialog and the fatigue-truck warning but never applied, because this
+   tool has no per-vehicle DF. Never applies on page load. The source is kept in the saved state as
+   the new optional field 'lldfSource'. Uses BridgeXfer (above). */
+(function(){
+  var CH='lldf', SCHEMA='bridge-lldf-factors', VER=1, RID='movingLoad';
+  var DF_MAX=5, TOL=0.01;            // sanity bound (lanes per girder); span match tolerance (ft)
+  var SRC=null, applying=false, CUR=null;
+  function el(id){ return document.getElementById(id); }
+  function h(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+  function fin(v){ return typeof v==='number' && isFinite(v); }
+  function when(iso){ var d=new Date(iso); return isNaN(d.getTime())?String(iso||'?'):d.toLocaleString(); }
+  function projOf(p){ var pr=p&&p.project; if(pr&&typeof pr==='object') return [pr.name,pr.bridgeId].filter(Boolean).join(' / '); return pr?String(pr):''; }
+  function f4(v){ return fin(v)?String(+v.toFixed(4)):'—'; }
+
+  /* ---- validation: every number this tool uses or shows ---- */
+  function checkSet(s,path,errs){
+    if(s==null) return;
+    if(typeof s!=='object'){ errs.push(path+' is not an object'); return; }
+    ['gM','gV','fatM','fatV'].forEach(function(k){ var v=s[k]; if(v==null) return;
+      if(!fin(v)||!(v>0)||v>DF_MAX) errs.push(path+'.'+k+' = '+JSON.stringify(v)+' (must be a number > 0 and ≤ '+DF_MAX+')'); });
+  }
+  function checkEnv(e,path,errs){
+    if(e==null) return;
+    if(typeof e!=='object'){ errs.push(path+' is not an object'); return; }
+    checkSet(e.interior,path+'.interior',errs); checkSet(e.exterior,path+'.exterior',errs);
+    if(e.byBeam!=null){ if(typeof e.byBeam!=='object') errs.push(path+'.byBeam is not an object');
+      else Object.keys(e.byBeam).forEach(function(k){ if(!/^\d+$/.test(k)) errs.push(path+'.byBeam key "'+k+'" is not a beam number'); checkSet(e.byBeam[k],path+'.byBeam.'+k,errs); }); }
+  }
+  function validate(p){
+    var errs=[];
+    var u=p.units||{};
+    if(u.spans!=null && u.spans!=='ft') errs.push('spans are in "'+u.spans+'"; this tool needs ft (no conversion is defined)');
+    if(u.skew!=null && u.skew!=='deg') errs.push('skew is in "'+u.skew+'"; expected deg');
+    if(!Array.isArray(p.spans)||!p.spans.length) errs.push('no span lengths');
+    else p.spans.forEach(function(L,i){ if(!fin(L)||!(L>0)) errs.push('span '+(i+1)+' length = '+JSON.stringify(L)); });
+    if(p.skew!=null && (!fin(p.skew)||p.skew<0||p.skew>90)) errs.push('skew = '+JSON.stringify(p.skew));
+    if(p.Nb!=null && (!fin(p.Nb)||p.Nb<1||Math.round(p.Nb)!==p.Nb)) errs.push('Nb = '+JSON.stringify(p.Nb));
+    if(!p.governing||typeof p.governing!=='object') errs.push('no governing DFs');
+    checkEnv(p.governing,'governing',errs);
+    checkEnv(p.governingNeg,'governingNeg',errs);
+    if(p.governingBySpan!=null){
+      if(!Array.isArray(p.governingBySpan)) errs.push('governingBySpan is not a list');
+      else { if(Array.isArray(p.spans)&&p.governingBySpan.length!==p.spans.length) errs.push('governingBySpan has '+p.governingBySpan.length+' entries for '+p.spans.length+' spans');
+        p.governingBySpan.forEach(function(e,i){ checkEnv(e,'governingBySpan['+i+']',errs); }); }
+    }
+    return errs;
+  }
+
+  /* ---- girder choice ---- */
+  function beamInfo(p,n){ var b=p.beamRoster&&p.beamRoster.beams; if(!Array.isArray(b)) return null;
+    for(var i=0;i<b.length;i++) if(+b[i].i===+n) return b[i]; return null; }
+  function choices(p){
+    var g=p.governing||{}, out=[];
+    if(g.interior) out.push({v:'interior',t:'Interior girder (governing of all interior beams)'});
+    if(g.exterior) out.push({v:'exterior',t:'Exterior girder (governing of both exterior beams)'});
+    var by=g.byBeam||{}, dsel=p.designBeam&&p.designBeam.index;
+    Object.keys(by).sort(function(a,b){return a-b;}).forEach(function(k){
+      var b=beamInfo(p,k), lab=(b&&b.label)||('B'+k), cls=(b&&(b.clsLabel||b.type))||'';
+      out.push({v:'beam:'+k,t:'Beam '+lab+(cls?' — '+cls:'')+((+dsel===+k)?' (design beam selected in lldf)':'')});
+    });
+    return out;
+  }
+  function defChoice(p,ch){
+    var d=p.designBeam&&p.designBeam.index;
+    if(d!=null && ch.some(function(c){return c.v==='beam:'+d;})) return 'beam:'+d;
+    return ch.length?ch[0].v:'';
+  }
+  function choiceLabel(p,c){ var x=choices(p).filter(function(o){return o.v===c;})[0]; return x?x.t:c; }
+  function pick(env,c){
+    if(!env) return null;
+    if(c==='interior') return env.interior||null;
+    if(c==='exterior') return env.exterior||null;
+    if(c.indexOf('beam:')===0) return (env.byBeam||{})[c.slice(5)]||null;
+    return null;
+  }
+
+  /* ---- what will change ---- */
+  function curSpans(){ var n=+el('nSpans').value, a=[]; for(var i=0;i<n;i++) a.push(num('L'+i,100)); return a; }
+  function makePlan(p,c,setSpans,setNeg){
+    var errs=[], notes=[];
+    var mine=curSpans(), ls=p.spans, nL=ls.length;
+    var mismatch=(nL!==mine.length)||ls.some(function(L,i){ return Math.abs(L-mine[i])>TOL; });
+    var canSet=nL>=1 && nL<=4;
+    setSpans=!!(setSpans&&canSet&&mismatch);
+    var n=setSpans?nL:mine.length;
+    var perSpan=Array.isArray(p.governingBySpan) && p.governingBySpan.length===n && nL===n;
+    if(!perSpan) notes.push(Array.isArray(p.governingBySpan)
+      ? 'The span count differs, so lldf\'s governing envelope over all of its spans is applied to every span here.'
+      : 'This hand-off has no per-span DFs (older lldf), so lldf\'s governing envelope over all spans is applied to every span.');
+    var dfM=[], dfV=[];
+    for(var i=0;i<n;i++){
+      var s=pick(perSpan?p.governingBySpan[i]:p.governing,c);
+      if(!s||!fin(s.gM)||!fin(s.gV)){ errs.push('lldf has no moment/shear DF for the chosen girder'+(perSpan?' in span '+(i+1):'')+'.'); break; }
+      dfM.push(s.gM); dfV.push(s.gV);
+    }
+    var neg=null, ng=pick(p.governingNeg,c);
+    if(setNeg){
+      if(!p.governingNeg) notes.push('lldf has no interior supports (single span), so the negative-moment DF is left unchanged.');
+      else if(!ng||!fin(ng.gM)) notes.push('lldf has no negative-region DF for this girder, so the negative-moment DF is left unchanged.');
+      else neg=ng.gM;
+    }
+    var pos=pick(p.governing,c)||{};
+    var fat={M:fin(pos.fatM)?pos.fatM:null, V:fin(pos.fatV)?pos.fatV:null, negM:(ng&&fin(ng.fatM))?ng.fatM:null};
+    // overwrite list
+    var ch=[], row=function(lab,from,to){ if(String(from)!==String(to)) ch.push([lab,from,to]); };
+    if(setSpans){ row('Number of spans',mine.length,nL); ls.forEach(function(L,i){ row('Span '+(i+1)+' length (ft)',i<mine.length?mine[i]:'(new)',L); }); }
+    for(var k=0;k<dfM.length;k++){
+      var e1=el('dfm'+k), e2=el('dfv'+k);
+      row('Span '+(k+1)+' DF moment',e1?e1.value:'(new)',dfM[k]); row('Span '+(k+1)+' DF shear',e2?e2.value:'(new)',dfV[k]);
+    }
+    if(neg!=null) row('Negative moment DF',el('dfNeg').value||'(blank = span DF)',neg);
+    return {errs:errs,notes:notes,mismatch:mismatch,canSet:canSet,setSpans:setSpans,n:n,perSpan:perSpan,dfM:dfM,dfV:dfV,neg:neg,fat:fat,changes:ch,mine:mine};
+  }
+
+  /* ---- dialog ---- */
+  document.body.insertAdjacentHTML('beforeend','<div id="lxModal" class="mdl hidden"><div class="mdlc">'+
+    '<h3>Pull distribution factors from LL &amp; DL Distribution</h3>'+
+    '<div id="lxHead" style="font-size:12px;color:#334155;line-height:1.6"></div>'+
+    '<div class="f"><label>Girder to take the DFs for</label><select id="lxGirder"></select></div>'+
+    '<label class="chk"><input type="checkbox" id="lxNeg" checked>Set the negative-moment DF from lldf\'s interior-support (negative-region) DF</label>'+
+    '<div id="lxSpanWarn" class="warn hidden"></div>'+
+    '<label class="chk" id="lxSpansF"><input type="checkbox" id="lxSpans"><span id="lxSpansT">Also set the spans here to lldf\'s spans</span></label>'+
+    '<p class="hint" style="color:#475569">Basis: lldf\'s moment and shear DFs <b>include the multiple presence factor</b> (also in lever-rule cases, LRFD 3.6.1.1.2) <b>and the skew correction</b> (LRFD 4.6.2.2.2e / 4.6.2.2.3c). Do not apply either again. Units: lanes per girder, the same basis as the DF inputs here. Rail DF inputs are not changed.</p>'+
+    '<div id="lxFat" style="font-size:12px;background:#eef2ff;border:1px solid #c7d2fe;border-radius:6px;padding:8px 10px;line-height:1.6"></div>'+
+    '<div class="lbl">This will overwrite</div><div id="lxChanges" style="font-size:12px;line-height:1.6"></div>'+
+    '<div id="lxNotes" class="hint" style="color:#475569"></div>'+
+    '<div class="mdla"><button class="btn" id="lxCancel" type="button">Cancel</button><button class="btn pri" id="lxApply" type="button">Apply</button></div>'+
+    '<input type="file" id="lxFile" accept=".json,application/json" style="display:none">'+
+    '</div></div>');
+
+  function fatHtml(fat,label){
+    if(fat.M==null&&fat.V==null) return 'lldf sent no fatigue DFs for this girder.';
+    return '<b>Fatigue truck DFs (not applied):</b> g<sub>fat</sub> = <b>'+f4(fat.M)+'</b> moment, <b>'+f4(fat.V)+'</b> shear'+
+      (fat.negM!=null?', <b>'+f4(fat.negM)+'</b> negative moment at piers':'')+
+      ' — '+h(label)+'. One-lane DF ÷ 1.2 (multiple presence removed, LRFD 3.6.1.4.3b / C3.6.1.1.2), skew included. '+
+      'This tool has one DF set for all vehicles, so these are <b>not</b> written to the DF inputs; they are repeated in the fatigue-truck warning.';
+  }
+  function refresh(){
+    var p=CUR&&CUR.p; if(!p) return;
+    var c=el('lxGirder').value, P=makePlan(p,c,el('lxSpans').checked,el('lxNeg').checked);
+    CUR.plan=P;
+    var sw=el('lxSpanWarn');
+    if(P.mismatch){
+      sw.classList.remove('hidden');
+      sw.innerHTML='⚠ Spans differ. lldf: <b>'+p.spans.map(f4).join(' + ')+' ft</b> ('+p.spans.length+' span'+(p.spans.length>1?'s':'')+'). Here: <b>'+P.mine.map(function(v){return String(v);}).join(' + ')+' ft</b>. '+
+        'The DFs were computed for lldf\'s spans. Spans here are not changed unless you tick the box below.'+(P.canSet?'':' lldf has more than 4 spans, which this tool cannot model.');
+    } else sw.classList.add('hidden');
+    el('lxSpansF').classList.toggle('hidden',!P.mismatch);
+    el('lxSpans').disabled=!P.canSet;
+    el('lxSpansT').textContent='Also set the spans here to lldf\'s spans ('+p.spans.map(f4).join(' + ')+' ft)';
+    el('lxNeg').disabled=!p.governingNeg;
+    el('lxFat').innerHTML=fatHtml(P.fat,choiceLabel(p,c));
+    el('lxChanges').innerHTML=P.errs.length?'<span style="color:#b91c1c">'+P.errs.map(h).join('<br>')+'</span>'
+      : (P.changes.length?P.changes.map(function(r){ return h(r[0])+': '+h(r[1])+' → <b>'+h(r[2])+'</b>'; }).join('<br>')
+                         :'Nothing — the inputs already match.');
+    var nt=P.notes.slice(); if(P.perSpan&&P.n>1) nt.push('Per-span DFs: span i here gets lldf\'s positive-region DF for span i (L = that span).');
+    if(p.governingNeg&&el('lxNeg').checked) nt.push('Negative-moment DF = lldf\'s governing negative-region DF over all interior supports (L = mean of the adjacent spans); this tool has one negative-moment DF.');
+    if(p.note) nt.push('lldf note: '+p.note);
+    (Array.isArray(p.notes)?p.notes:[]).forEach(function(s){ nt.push('lldf: '+s); });
+    el('lxNotes').innerHTML=nt.map(h).join('<br>');
+    el('lxApply').disabled=!!P.errs.length;
+  }
+  function openDlg(p,via){
+    var errs=validate(p);
+    if(errs.length){ alert('Cannot use this DF hand-off from '+(p.producer||'?')+':\n• '+errs.join('\n• ')); return false; }
+    var ch=choices(p);
+    if(!ch.length){ alert('The DF hand-off has no interior, exterior or per-beam DFs.'); return false; }
+    CUR={p:p,via:via};
+    el('lxHead').innerHTML='From: <b>'+h(p.producer||'?')+'</b> ('+h(p.producerFile||'lldf.html')+') · sent '+h(when(p.producedAt))+
+      ' · project: '+h(projOf(p)||'(none)')+(via==='file'?' · from a JSON file':'')+
+      '<br>Bridge type '+h(p.bridgeType||'?')+' · N<sub>b</sub> = '+h(p.Nb!=null?p.Nb:'?')+' · skew '+h(p.skew!=null?p.skew:'?')+'° · spans '+h(p.spans.join(' + '))+' ft'+
+      (p.designLanes!=null?' · '+h(p.designLanes)+' design lanes':'');
+    el('lxGirder').innerHTML=ch.map(function(o){ return '<option value="'+h(o.v)+'">'+h(o.t)+'</option>'; }).join('');
+    el('lxGirder').value=defChoice(p,ch);
+    el('lxSpans').checked=false; el('lxNeg').checked=!!p.governingNeg;
+    refresh();
+    el('lxModal').classList.remove('hidden');
+    return true;
+  }
+  function apply(){
+    var p=CUR&&CUR.p, P=CUR&&CUR.plan; if(!p||!P||P.errs.length) return false;
+    var c=el('lxGirder').value;
+    applying=true;
+    try{
+      if(P.setSpans){
+        el('nSpans').value=String(p.spans.length); renderSpans();
+        p.spans.forEach(function(L,i){ el('L'+i).value=String(L); });
+        updateProps();
+      }
+      P.dfM.forEach(function(v,i){ el('dfm'+i).value=String(v); });
+      P.dfV.forEach(function(v,i){ el('dfv'+i).value=String(v); });
+      if(P.neg!=null) el('dfNeg').value=String(P.neg);
+    } finally { applying=false; }
+    SRC={producer:p.producer||'LL & DL Distribution', producerFile:p.producerFile||'lldf.html', producedAt:p.producedAt||'',
+      project:projOf(p), via:CUR.via, girder:c, girderLabel:choiceLabel(p,c), perSpan:P.perSpan, spansSet:P.setSpans,
+      negSet:P.neg!=null, multiplePresence:true, skew:true,
+      fatM:P.fat.M, fatV:P.fat.V, fatNegM:P.fat.negM, adoptedAt:new Date().toISOString(), edited:false};
+    if(window.BridgeXfer) BridgeXfer.markAdopted(CH,RID,p.producedAt);
+    el('lxModal').classList.add('hidden'); CUR=null;
+    syncVis(); paint(); run();      // run() also autosaves (wrapped in the save block)
+    return true;
+  }
+  el('lxGirder').addEventListener('change',refresh);
+  el('lxSpans').addEventListener('change',refresh);
+  el('lxNeg').addEventListener('change',refresh);
+  el('lxCancel').onclick=function(){ el('lxModal').classList.add('hidden'); CUR=null; };
+  el('lxApply').onclick=apply;
+
+  /* ---- sidebar buttons + source line ---- */
+  var hint=[].slice.call(el('dfT').parentNode.querySelectorAll('p.hint')).filter(function(x){ return /multiple presence/.test(x.textContent); })[0];
+  (hint||el('dfNeg').closest('.f')).insertAdjacentHTML('afterend',
+    '<div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn" id="lxPull" type="button" title="Fill the highway DF inputs from the distribution factors sent by LL &amp; DL Distribution (lldf). Shows what will change and asks first.">⇄ Pull from LL &amp; DL Distribution <span id="lxNew" class="hidden" style="background:#f59e0b;color:#fff;border-radius:8px;padding:0 6px;margin-left:3px;font-size:10px">new</span></button>'+
+    '<button class="btn" id="lxImport" type="button" title="Load a DF hand-off JSON file exported from LL &amp; DL Distribution">Import hand-off (JSON)</button></div>'+
+    '<div id="lxSrc" class="hint" style="color:#475569"></div>');
+  function srcText(){
+    if(!SRC) return '';
+    return 'Highway DFs from '+SRC.producer+', '+when(SRC.producedAt)+(SRC.project?' ('+SRC.project+')':'')+' — '+SRC.girderLabel+
+      (SRC.perSpan?', per span':', governing envelope over all spans')+(SRC.negSet?'; negative-moment DF from interior supports':'')+
+      (SRC.spansSet?'; spans set from lldf':'')+'; multiple presence and skew included'+
+      (SRC.edited?' — DF or span inputs edited after the pull':'');
+  }
+  function paint(){
+    var n=el('lxNew'); if(n) n.classList.toggle('hidden',!(window.BridgeXfer&&BridgeXfer.isNew(CH,RID)));
+    var s=el('lxSrc'); if(s) s.textContent=SRC?srcText():'';
+  }
+  el('lxPull').onclick=function(){
+    if(!window.BridgeXfer){ alert('Hand-off is not available in this browser.'); return; }
+    var r=BridgeXfer.read(CH,SCHEMA,VER);
+    if(r.error){ alert('Cannot pull DFs from LL & DL Distribution: '+r.error+(r.empty?'\n\nIn lldf.html click "Send DFs to Design Apps" first, or use "Import hand-off (JSON)".':'')); return; }
+    openDlg(r.payload,'storage');
+  };
+  el('lxImport').onclick=function(){ el('lxFile').click(); };
+  el('lxFile').onchange=function(e){ var f=e.target.files&&e.target.files[0]; if(!f) return; e.target.value='';
+    if(!window.BridgeXfer){ alert('Hand-off is not available in this browser.'); return; }
+    BridgeXfer.importFile(f,SCHEMA,VER,function(r){ if(r.error){ alert('Cannot import the DF hand-off: '+r.error); return; } openDlg(r.payload,'file'); }); };
+  window.addEventListener('storage',function(e){ if(!e.key||e.key.indexOf(BridgeXfer.NS+CH)===0) paint(); });
+  window.addEventListener('focus',paint);
+
+  /* manual edits after a pull are flagged in the source line */
+  document.addEventListener('input',function(e){
+    if(applying||!SRC||SRC.edited) return;
+    var id=e.target&&e.target.id||'';
+    if(/^(dfm\d|dfv\d|dfNeg|L\d|nSpans)$/.test(id)){ SRC.edited=true; paint(); }
+  },true);
+
+  /* ---- saved state: new optional field 'lldfSource' (old saves load unchanged) ---- */
+  var _snap=mlgSnapshot; mlgSnapshot=function(){ var d=_snap(); if(SRC) d.lldfSource=SRC; return d; };
+  var _apl=mlgApply; mlgApply=function(d){ _apl(d); SRC=(d&&d.lldfSource&&typeof d.lldfSource==='object')?d.lldfSource:null; paint(); };
+  try{ var sv=JSON.parse(localStorage.getItem(MLG_KEY)||'null');
+    if(sv&&sv.schema===MLG_SCHEMA&&sv.lldfSource&&typeof sv.lldfSource==='object') SRC=sv.lldfSource; }catch(e){}
+
+  /* ---- fatigue-truck warning: name the lldf fatigue DFs ---- */
+  function fatLine(){
+    if(!SRC||(SRC.fatM==null&&SRC.fatV==null)) return '';
+    return 'From '+SRC.producer+' ('+when(SRC.producedAt)+', '+SRC.girderLabel+'): use g_fat = '+f4(SRC.fatM)+' (moment) and '+f4(SRC.fatV)+' (shear)'+
+      (SRC.fatNegM!=null?', '+f4(SRC.fatNegM)+' (negative moment at piers)':'')+
+      ' — one-lane DF ÷ 1.2, skew included. They are NOT applied automatically; the DF inputs above hold lldf\'s strength DFs.';
+  }
+  var _an=analyze; analyze=function(m){
+    var R=_an(m);
+    try{ var t=(m&&m.short==='Fatigue'&&!m.rail)?fatLine():'';
+      if(t){ var i=-1; R.warn.forEach(function(w,k){ if(i<0&&/^LRFD fatigue truck/.test(w)) i=k; });
+        if(i>=0) R.warn[i]+=' '+t; else R.warn.push(t); } }catch(e){}
+    return R;
+  };
+
+  /* ---- printed report: DF source row ---- */
+  var _rh=reportHTML; reportHTML=function(out,o,base,dk){
+    var x=_rh(out,o,base,dk); if(!SRC) return x;
+    var row='<tr><td>Distribution factor source</td><td>'+h(srcText())+'</td></tr>';
+    return x.split('<tr><td>Distribution factors</td>').join(row+'<tr><td>Distribution factors</td>');
+  };
+
+  paint();
+  if(SRC) run();   // re-render so a restored fatigue warning shows the lldf g_fat (results unchanged)
+  window.MLGlldf={ openDlg:openDlg, apply:apply, refresh:refresh, validate:validate, makePlan:makePlan, src:function(){ return SRC; }, srcText:srcText };
+})();
+</script>
 </body>
 </html>
