@@ -367,7 +367,10 @@
         <div class="row"><label>Basic wind speed, V<span class="note">3-sec gust</span></label><div class="ctl"><input id="V" type="number" value="115"><span class="unit">mph</span></div></div>
         <div class="row"><label>Exposure</label><div class="ctl"><select id="expo"><option>B</option><option selected>C</option><option>D</option></select></div></div>
         <div class="row"><label>K<sub>zt</sub> topographic</label><div class="ctl"><input id="Kzt" type="number" value="1.0" step="0.05"><span class="unit">—</span></div></div>
-        <div class="row"><label>K<sub>d</sub> directionality</label><div class="ctl"><input id="Kd" type="number" value="0.85" step="0.05"><span class="unit">—</span></div></div>
+        <div class="row"><label>K<sub>d</sub> source<span class="note">ASCE 7-22 Table 26.6-1</span></label><div class="ctl"><select id="KdMode"><option value="auto" selected>Per component (Table 26.6-1)</option><option value="override">Single value (override)</option></select></div></div>
+        <div class="row"><label>K<sub>d</sub> directionality<span class="note">override value, used only when source = single value</span></label><div class="ctl"><input id="Kd" type="number" value="0.85" step="0.05"><span class="unit">—</span></div></div>
+        <p class="tbl-note" id="kdUsedNote" style="margin:-4px 0 8px 0"></p>
+        <p class="tbl-note" id="kdMigNote" style="margin:0 0 8px 0;display:none;color:#b45309"></p>
         <div class="row"><label>G gust factor</label><div class="ctl"><input id="G" type="number" value="0.85" step="0.05"><span class="unit">—</span></div></div>
       </div>
     </section>
@@ -1305,7 +1308,7 @@ function signWind(inp){
   const h=clr+s;                                   // ft, top of sign
   const zc=clr+s/2;                                 // ft, centroid height
   const Kzh=Kz(h,inp.expo);
-  const qh=0.00256*Kzh*inp.Kzt*inp.Kd*inp.G*inp.V*inp.V;   // velocity pressure at sign top
+  const qh=0.00256*Kzh*inp.Kzt*inp.KdSign*inp.G*inp.V*inp.V;   // velocity pressure at sign top (K_d of the solid sign)
   const As=B*s;                                     // ft^2 panel area
   const bs=B/s, sh=s/h;
   const cfAuto=signCfAB(sh,bs);
@@ -1895,10 +1898,10 @@ manPart("p2","2. Input Reference",[
  ["Basic wind speed, V","mph","Every velocity pressure; q \u221d V\u00b2","3-second gust at 33 ft in Exposure C, from the ASCE 7-22 maps or the local jurisdiction. Risk Category sets which map. A 10% error in V is a 21% error in pressure."],
  ["Exposure category","\u2014","K<sub>z</sub> profile through \u03b1 and z<sub>g</sub>","B suburban/wooded, C open terrain, D open water. Most light poles and highway signs are C. Choosing B when C applies under-predicts pressure by roughly 20\u201330% at low heights."],
  ["K<sub>zt</sub> topographic","\u2014","Multiplies velocity pressure","1.0 on level ground. Greater than 1.0 only on isolated hills, ridges, or escarpments per ASCE 7-22 §26.8. If you are not on a speed-up feature, leave it at 1.0."],
- ["K<sub>d</sub> directionality","\u2014","Multiplies velocity pressure","0.85 for round and rectangular members and for solid signs, per Table 26.6-1. It accounts for the reduced probability that the worst wind direction coincides with the worst structural direction."],
+ ["K<sub>d</sub> directionality","\u2014","Multiplies velocity pressure","Set per component from ASCE 7-22 Table 26.6-1 (source = per component): round mast or post (multi-sided treated as round) 1.0; square or rectangular HSS mast or post 0.90 (chimneys, tanks and similar structures, square); solid freestanding sign panel 0.85. Cables and fixtures take the mast value, a conservative assumption. Select source = single value to apply the K<sub>d</sub> input to every component instead. K<sub>d</sub> accounts for the reduced probability that the worst wind direction coincides with the worst structural direction."],
  ["G gust factor","\u2014","Wind force (applied once)","0.85 for a rigid structure. Flexible structures with a natural frequency below 1 Hz require a computed G<sub>f</sub>; tall slender poles can fall into this range."]
 ]}},
-{warn:"<b>K<sub>d</sub> and the load combinations.</b> ASCE 7 permits K<sub>d</sub> = 0.85 only when it is used with the standard load combinations. Do not apply K<sub>d</sub> and then use unfactored or non-standard combinations."},
+{warn:"<b>K<sub>d</sub> and the load combinations.</b> ASCE 7 permits the Table 26.6-1 K<sub>d</sub> values only when they are used with the standard load combinations. Do not apply K<sub>d</sub> and then use unfactored or non-standard combinations."},
 
 {h:"2.3 Pole or post"},
 {tbl:{head:["Input","Units","Feeds","Notes"],rows:[
@@ -2511,7 +2514,7 @@ function summaryHTML(ctx){
   H+=`<div class="step-label" style="margin-top:14px">Key design inputs</div>`;
   const sc=(typeof SOIL_CLASSES!=='undefined')?SOIL_CLASSES[inp.soilClass]:null;
   H+=`<table class="tbl"><tr><th style="text-align:left">Parameter</th><th style="text-align:left">Value</th><th style="text-align:left">Parameter</th><th style="text-align:left">Value</th></tr>
-    <tr><td style="text-align:left">Basic wind speed, V</td><td style="text-align:left">${fmt(inp.V,0)} mph (Exp. ${inp.expo})</td><td style="text-align:left">K_zt · K_d · G</td><td style="text-align:left">${fmt(inp.Kzt,2)} · ${fmt(inp.Kd,2)} · ${fmt(inp.G,2)}</td></tr>
+    <tr><td style="text-align:left">Basic wind speed, V</td><td style="text-align:left">${fmt(inp.V,0)} mph (Exp. ${inp.expo})</td><td style="text-align:left">K_zt · K_d · G</td><td style="text-align:left">${fmt(inp.Kzt,2)} · ${kdStr(inp)} · ${fmt(inp.G,2)}</td></tr>
     <tr><td style="text-align:left">Soil class</td><td style="text-align:left">${sc?sc.name:'Custom (geotech report)'}</td><td style="text-align:left">S₁ / q_allow</td><td style="text-align:left">${fmt(inp.S1,0)} psf/ft${isoFac!==1?' ×'+fmt(isoFac,0):''} / ${fmt(inp.qAllow,2)} ksf</td></tr>
     <tr><td style="text-align:left">Concrete f′c</td><td style="text-align:left">${fmt(inp.fc,0)} psi</td><td style="text-align:left">Reinforcement f_y</td><td style="text-align:left">${fmt(inp.fy,0)} psi</td></tr>
     <tr><td style="text-align:left">Constraint at grade</td><td style="text-align:left">${constraint==='non'?'Non-constrained':'Constrained'}</td><td style="text-align:left">Clear cover</td><td style="text-align:left">${fmt(inp.cover,1)} in</td></tr></table>`;
@@ -3584,7 +3587,7 @@ function buildSignReport(inp,sw,pw,allCombos,postDesigns,poleSeg){
   // 0. basis
   H+=`<details class="rpt-sec" open><summary><span class="tag">0</span><h3>Design basis — sign structure</h3><span class="arw">▶</span></summary><div class="rpt-body">`;
   H+=`<p class="varsub">Wind: ASCE 7-22 Chapter 29, solid freestanding sign (Fig. 29.3-1). Post section: ${({round:'round',square:'square',rect:'rectangular'})[poleSeg.shape]} HSS, prismatic. Foundation: IBC §1807.3 drilled shaft. Configuration: ${nPost===1?'monopole (single post)':'two posts, designed independently'}.</p>`;
-  H+=`<div class="subhead">Site &amp; wind</div><p class="varsub">V = ${inp.V} mph · Exposure ${inp.expo} · K_zt = ${n(inp.Kzt,2)} · K_d = ${n(inp.Kd,2)} · G = ${n(inp.G,2)}</p>`;
+  H+=`<div class="subhead">Site &amp; wind</div><p class="varsub">V = ${inp.V} mph · Exposure ${inp.expo} · K_zt = ${n(inp.Kzt,2)} · K_d = ${kdStr(inp)} · G = ${n(inp.G,2)}</p>`;
   H+=`<div class="subhead">Sign panel</div><p class="varsub">B = ${n(sw.B,1)} ft · s = ${n(sw.s,1)} ft · clearance = ${n(sw.clr,1)} ft · top h = ${n(sw.h,1)} ft · weight = ${n(inp.signWt,0)} lb${nPost===2?` · post spacing = ${n(inp.signSpacing,1)} ft`:''}</p>`;
   H+=`<div class="subhead">Post section</div><p class="varsub">${poleSeg.shape==='round'?`Ø ${n(inp.poleDiaBase,2)} in`:`${n(inp.poleDiaBase,2)}${poleSeg.shape==='rect'?` × ${n(inp.poleDepthBase,2)}`:''} in`} · wall ${n(inp.poleTwBase,3)} in · F_y = ${n(inp.poleFy,0)} ksi</p>`;
   H+=`<p class="eq-why" style="margin-top:8px"><b>Torsion is not evaluated</b> — see the limitation note below (§2).</p>`;
@@ -3653,8 +3656,24 @@ function buildSignReport(inp,sw,pw,allCombos,postDesigns,poleSeg){
   }
 }
 
+// Wind directionality factor K_d per ASCE 7-22 Table 26.6-1, by component.
+//   mast / post: round (and multi-sided treated as round) 1.0; square/rectangular HSS 0.90
+//   (chimneys, tanks and similar structures). Solid freestanding sign panel: 0.85.
+//   Cables and fixtures: the mast value (assumption, conservative).
+// KdMode 'override' applies the single K_d input to every component (pre-2026-10 behaviour).
+function kdComponents(){
+  const ov=($('KdMode')&&$('KdMode').value==='override');
+  const shp=$('poleShape')?$('poleShape').value:'round';
+  const mast=ov?num('Kd'):(shp==='round'?1.0:0.90);
+  return {mode:ov?'override':'auto', mast, sign:ov?num('Kd'):0.85};
+}
+function kdStr(inp){
+  const m=Number(inp.Kd).toFixed(2), sg=Number(inp.KdSign).toFixed(2);
+  if(inp.mode==='sign') return m+' (post) / '+sg+' (sign panel)'+(inp.KdMode==='override'?' [override]':'');
+  return m+(inp.KdMode==='override'?' [override]':' (mast, cables, fixtures)');
+}
 function calc(){
-  const inp={V:num('V'),expo:$('expo').value,Kzt:num('Kzt'),Kd:num('Kd'),G:num('G'),
+  const inp={V:num('V'),expo:$('expo').value,Kzt:num('Kzt'),Kd:kdComponents().mast,KdSign:kdComponents().sign,KdMode:kdComponents().mode,G:num('G'),
     H:num('H'),cfLum:num('cfLum'),poleShape:($('poleShape')?$('poleShape').value:'round'),
     poleDiaTop:num('poleDiaTop'),poleDiaBase:num('poleDiaBase'),
     poleDepthTop:num('poleDepthTop'),poleDepthBase:num('poleDepthBase'),cfPole:num('cfPole'),DL:num('DL'),
@@ -3681,6 +3700,7 @@ function calc(){
     signB:num('signB'),signS:num('signS'),signClr:num('signClr'),signWt:num('signWt'),signSpacing:num('signSpacing'),
     signCfMode:($('signCfMode')?$('signCfMode').value:'auto'),
     signCfMan:(num('signCfMan')||1.2)};
+  if($('kdUsedNote')) $('kdUsedNote').textContent='K_d used: '+kdStr(inp)+(inp.KdMode==='auto'?' — ASCE 7-22 Table 26.6-1; cables and fixtures take the mast value (conservative).':' — single value applied to every component.');
   // Section is prismatic unless it's a round light pole (only round poles taper). For
   // square/rectangular HSS — and for any sign post — the single (top) dimension & wall are
   // the constant section, so mirror them to the "base" fields the downstream code reads.
@@ -4803,7 +4823,7 @@ function signWindWorkedHTML(sw, inp){
   H+=step(`1 · Panel geometry &amp; velocity pressure ${ref('ASCE 7-22 §26.10, §29.3')}`);
   H+=`<p class="eq-why">The sign is a solid freestanding wall. The velocity pressure is evaluated at the top of the sign, h = clearance + panel height; K_z follows the exposure power-law profile.</p>`;
   H+=g(`h = ${fmt(sw.clr,1)}+${fmt(sw.s,1)} = ${fmt(sw.h,1)}\\ \\text{ft}\\qquad A_s = B\\,s = ${fmt(sw.B,1)}(${fmt(sw.s,1)}) = ${fmt(sw.As,1)}\\ \\text{ft}^2`);
-  H+=g(`q_h = 0.00256\\,K_z(h)K_{zt}K_d\\,G\\,V^2 = 0.00256(${fmt(sw.Kzh,3)})(${fmt(inp.Kzt,2)})(${fmt(inp.Kd,2)})(${fmt(inp.G,2)})(${inp.V})^2 = ${fmt(sw.qh,1)}\\ \\text{psf}`);
+  H+=g(`q_h = 0.00256\\,K_z(h)K_{zt}K_d\\,G\\,V^2 = 0.00256(${fmt(sw.Kzh,3)})(${fmt(inp.Kzt,2)})(${fmt(inp.KdSign,2)})(${fmt(inp.G,2)})(${inp.V})^2 = ${fmt(sw.qh,1)}\\ \\text{psf}`);
   H+=step(`2 · Force coefficient ${ref('ASCE 7-22 Fig. 29.3-1')}`);
   if(sw.cfManual){
     H+=`<p class="eq-why"><b>Manual override.</b> C_f has been set directly by the engineer; the Fig. 29.3-1 auto value is shown for comparison.</p>`;
@@ -4868,7 +4888,7 @@ function buildReport(inp,allCombos,gov,embed,struct){
   H+=`<div class="subhead">Codes &amp; method</div>`;
   H+=`<p class="varsub">Wind: ASCE 7 velocity pressure. Ice: ASCE 7 Ch. 10 glaze, with wind-on-ice at a reduced speed and no gust factor. Embedment: IBC §1807.3 (${constraint==='non'?'non-constrained':'constrained'}), governed by the worst ASD combination. Shaft: ACI 318, governed by the worst LRFD combination. Wind is enveloped at the worst direction for the pole and each cable; cable tension pulls combine as true plan vectors.</p>`;
   H+=`<div class="subhead">Site &amp; wind</div>`;
-  H+=`<p class="varsub">V = ${inp.V} mph &nbsp;·&nbsp; V<sub>ice</sub> = ${inp.Vice} mph &nbsp;·&nbsp; Exposure ${inp.expo} &nbsp;·&nbsp; K<sub>zt</sub> = ${n(inp.Kzt,2)} &nbsp;·&nbsp; K<sub>d</sub> = ${n(inp.Kd,2)} &nbsp;·&nbsp; G = ${n(inp.G,2)}</p>`;
+  H+=`<p class="varsub">V = ${inp.V} mph &nbsp;·&nbsp; V<sub>ice</sub> = ${inp.Vice} mph &nbsp;·&nbsp; Exposure ${inp.expo} &nbsp;·&nbsp; K<sub>zt</sub> = ${n(inp.Kzt,2)} &nbsp;·&nbsp; K<sub>d</sub> = ${kdStr(inp)} &nbsp;·&nbsp; G = ${n(inp.G,2)}</p>`;
   H+=`<div class="subhead">Pole</div>`;
   H+=`<p class="varsub">H = ${n(inp.H,1)} ft &nbsp;·&nbsp; Ø top = ${n(inp.poleDiaTop,1)} in, Ø base = ${n(inp.poleDiaBase,1)} in (avg ${n(pw.Davg_in,2)} in) &nbsp;·&nbsp; wall ${n(inp.poleTwTop,3)}/${n(inp.poleTwBase,3)} in &nbsp;·&nbsp; F<sub>y</sub> = ${n(inp.poleFy,0)} ksi &nbsp;·&nbsp; C<sub>f,pole</sub> = ${n(inp.cfPole,2)} &nbsp;·&nbsp; ${fxs.length} fixture(s), C<sub>f</sub> = ${n(inp.cfLum,2)}</p>`;
   H+=`<div class="subhead">Ice${cablesEnabled?' &amp; cable wind':''}</div>`;
@@ -5523,7 +5543,7 @@ function populateDetailStack(sfx, ctx){
 }
 
 // ================= PROJECT MANAGEMENT + AUTOSAVE =================
-const INPUT_IDS=['V','expo','Kzt','Kd','G','H','cfLum','poleShape','poleDiaTop','poleDiaBase','poleDepthTop','poleDepthBase','poleTwTop','poleTwBase','poleFy','poleDen','cfPole','DL','tIce','iceDen','Vice','cfCable','cableMethod','cableE','b','shaftShape','soilClass','bromsSoil','bromsC','bromsPhi','bromsGam','bromsPhiR','bromsOL','rebarMode','manBarSize','manBarN','manTieBar','manTieS','S1','qAllow','fc','fy','cover','minSteel','boltDia','boltGrade','boltQty','boltBC','boltTheta','boltHef','bpDia','signB','signS','signClr','signWt','signSpacing','signCfMode','signCfMan'];
+const INPUT_IDS=['V','expo','Kzt','Kd','KdMode','G','H','cfLum','poleShape','poleDiaTop','poleDiaBase','poleDepthTop','poleDepthBase','poleTwTop','poleTwBase','poleFy','poleDen','cfPole','DL','tIce','iceDen','Vice','cfCable','cableMethod','cableE','b','shaftShape','soilClass','bromsSoil','bromsC','bromsPhi','bromsGam','bromsPhiR','bromsOL','rebarMode','manBarSize','manBarN','manTieBar','manTieS','S1','qAllow','fc','fy','cover','minSteel','boltDia','boltGrade','boltQty','boltBC','boltTheta','boltHef','bpDia','signB','signS','signClr','signWt','signSpacing','signCfMode','signCfMan'];
 const LS_PROJECTS='lpp_projects_v1';   // {name: state}
 const LS_SESSION='lpp_session_v1';     // {state, activeName, dirty}
 let activeProject=null;   // name of loaded project, or null (unsaved/new)
@@ -5551,6 +5571,19 @@ function applyState(st){
   if(!st.inputs || st.inputs.poleDen===undefined) $('poleDen').value='490';
   if(!st.inputs || st.inputs.cableMethod===undefined) $('cableMethod').value='sag';
   if(!st.inputs || st.inputs.cableE===undefined) $('cableE').value='29000';
+  // K_d source (added 2026-10). Saves made before it have no KdMode: a stored K_d of 0.85 was the
+  // old single default and moves to the per-component ASCE 7-22 values; any other value is kept as an override.
+  { const mn=$('kdMigNote'); if(mn){ mn.style.display='none'; mn.textContent=''; }
+    if(st.inputs && st.inputs.KdMode===undefined && $('KdMode')){
+      const kdOld=parseFloat(st.inputs.Kd);
+      if(st.inputs.Kd===undefined || kdOld===0.85){
+        $('KdMode').value='auto';
+        if(mn && st.inputs.Kd!==undefined){ mn.textContent='Older save: K_d = 0.85 (the previous single default) has been replaced by the ASCE 7-22 Table 26.6-1 per-component values (round mast 1.0, square/rect. 0.90, sign 0.85). Results may differ from the saved run. To reproduce the old run, set K_d source = single value with K_d = 0.85.'; mn.style.display=''; }
+      } else {
+        $('KdMode').value='override';
+        if(mn){ mn.textContent='Older save: K_d = '+st.inputs.Kd+' was entered by the user and is kept as a single override value for every component.'; mn.style.display=''; }
+      }
+    } }
   $('rowE').style.display = $('cableMethod').value==='stiff' ? '' : 'none';
   // restore soil-class UI state without clobbering the stored S1/qAllow values
   if($('soilClass')) applySoilClass($('soilClass').value,{silent:true});

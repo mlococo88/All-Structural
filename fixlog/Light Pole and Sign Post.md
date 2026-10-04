@@ -271,13 +271,86 @@ Every check case below comes from running the page in node with jsdom. I wrapped
   The key name and the write in `switchTab` are unchanged.
 - **Check case:** stored value "foo" → before: no visible page (blank results area); after: the Geometry page shows. Stored "summary" opens Summary in both versions.
 
+## 2026-10-04 — Engineer decisions applied
+
+Check cases: jsdom runs of the page before and after this change (scratch harness `jsd/kd.js`, wrapping `evalCombo`, `solveEmbed`, `designRebar`, `anchorBolts`, `poleStress`/`signPostStress`, `signWind`). Units lb, ft, in.
+
+### F10. K_d per component from ASCE 7-22 Table 26.6-1 (engineer: "use ASCE")   [calc change] [more conservative for round poles/posts]
+- **Where:** new functions `kdComponents()` and `kdStr()` just above `calc()`; `calc()` inp object (anchor `Kd:kdComponents().mast`); `signWind` (anchor `inp.KdSign*inp.G*inp.V*inp.V`); Wind & site card (anchor `id="KdMode"`); `applyState` migration (anchor `// K_d source (added 2026-10)`); `INPUT_IDS`; report echoes; manual §Wind inputs table.
+- **Problem:** a single K_d = 0.85 was applied to every component. ASCE 7-22 Table 26.6-1 gives 0.85 for solid freestanding signs, but 1.0 for round chimneys, tanks and similar structures and 0.90 for square ones. The round mast was therefore under-loaded by 15%.
+- **Governing provision:** ASCE 7-22 §26.6 and Table 26.6-1 (the tool's stated wind basis).
+- **Rule now used (K_d source = "Per component", the default):**
+  - mast / sign post, round (multi-sided treated as round): 1.0;
+  - mast / sign post, square or rectangular HSS: 0.90;
+  - solid sign panel (Ch. 29, `signWind` q_h): 0.85;
+  - cables and fixtures: the mast value. **Assumption** (conservative); Table 26.6-1 has no row for them.
+  - "Single value (override)" applies the existing K_d input to every component, which is the old behaviour.
+- **Before:**
+  ```js
+  <div class="row"><label>K<sub>d</sub> directionality</label><div class="ctl"><input id="Kd" type="number" value="0.85" step="0.05"><span class="unit">—</span></div></div>
+  const inp={V:num('V'),expo:$('expo').value,Kzt:num('Kzt'),Kd:num('Kd'),G:num('G'),
+  const qh=0.00256*Kzh*inp.Kzt*inp.Kd*inp.G*inp.V*inp.V;   // velocity pressure at sign top
+  const INPUT_IDS=['V','expo','Kzt','Kd','G', …
+  ```
+- **After:**
+  ```js
+  <div class="row"><label>K<sub>d</sub> source<span class="note">ASCE 7-22 Table 26.6-1</span></label><div class="ctl"><select id="KdMode"><option value="auto" selected>Per component (Table 26.6-1)</option><option value="override">Single value (override)</option></select></div></div>
+  <div class="row"><label>K<sub>d</sub> directionality<span class="note">override value, used only when source = single value</span></label><div class="ctl"><input id="Kd" type="number" value="0.85" step="0.05"><span class="unit">—</span></div></div>
+  <p class="tbl-note" id="kdUsedNote" style="margin:-4px 0 8px 0"></p>
+  <p class="tbl-note" id="kdMigNote" style="margin:0 0 8px 0;display:none;color:#b45309"></p>
+
+  function kdComponents(){
+    const ov=($('KdMode')&&$('KdMode').value==='override');
+    const shp=$('poleShape')?$('poleShape').value:'round';
+    const mast=ov?num('Kd'):(shp==='round'?1.0:0.90);
+    return {mode:ov?'override':'auto', mast, sign:ov?num('Kd'):0.85};
+  }
+  function kdStr(inp){ … }   // display text, e.g. "1.00 (post) / 0.85 (sign panel)"
+
+  const inp={V:num('V'),expo:$('expo').value,Kzt:num('Kzt'),Kd:kdComponents().mast,KdSign:kdComponents().sign,KdMode:kdComponents().mode,G:num('G'),
+  const qh=0.00256*Kzh*inp.Kzt*inp.KdSign*inp.G*inp.V*inp.V;   // velocity pressure at sign top (K_d of the solid sign)
+  const INPUT_IDS=['V','expo','Kzt','Kd','KdMode','G', …
+  ```
+  `inp.Kd` now carries the mast/post value, so the mast (`poleWindNominal`), the sign post drag (`qzPost`), cables (`cableComponents`) and fixtures (`fixtureComponents`) use it without further edits. After `inp` is built, `calc()` writes the K_d used into `#kdUsedNote`. The report echoes (key-inputs table, pole report §0, sign report §0) now print `kdStr(inp)`. The sign worked example q_h prints `inp.KdSign`.
+- **Saved data / migration:** storage keys unchanged. `KdMode` is a new optional field in `inputs`. In `applyState`, a save without `KdMode` is migrated: a stored K_d of 0.85 (the old default) → source "Per component", and a visible note `#kdMigNote` says that the results may differ and how to reproduce the old run. Any other stored K_d → source "Single value (override)" with that value kept, plus a note. Saves that carry `KdMode` load as saved, with no note.
+- **Manual:** the K_d row of the wind input table (which recommended 0.85 for round and rectangular members) now states the per-component values. The K_d warning now refers to "the Table 26.6-1 K_d values" instead of "K_d = 0.85".
+- **Check case 1, default cabled light pole** (35 ft round tapered pole, 3 cables, 3 fixtures; governing 1.2D + 1.0W):
+  - Hand check: K_d 0.85 → 1.0 scales every wind force by 1/0.85 = 1.176. q_z,mid = 25.23 → 29.69 psf (25.23/0.85 = 29.68). F_pole = 350.3 → 412.2 lb. Fixture 1 q_z = 24.82 → 29.20 psf. Cable 1 w_h = 1.6744 → 1.9699 lb/ft.
+  - LRFD base moment M = 16,421 → 19,310 lb·ft (+17.6%); V = 669 → 787 lb.
+  - ASD (D + 0.6W) embedment moment 9,871 → 11,599 lb·ft; embedment d = 5.89 → 6.24 ft.
+  - Shaft: (12) #6, φM_n = 255,020 lb·ft, unchanged (min. steel governs).
+  - Anchors: T_max = 8,055 → 9,498 lb; tension ratio 0.400 → 0.471.
+  - Pole combined ratio 0.204 → 0.237.
+- **Check case 2, monopost sign** (default 12 × 6 ft panel, 10 ft clearance, round post):
+  - Sign panel q_h = 21.05 psf and F_A = 2,671.1 lb, unchanged (K_d 0.85 for both).
+  - Exposed post drag: q_z = 20.76 → 24.43 psf, F_post = 72.7 → 85.5 lb.
+  - LRFD base M_u = 35,087 → 35,151 lb·ft. ASD M = 21,052 → 21,091 lb·ft; embedment 8.30 → 8.31 ft.
+  - Anchors: T_max = 17,456 → 17,488 lb; ratio 0.866 → 0.867. Post ratio 1.482 → 1.485.
+  - Square HSS post (K_d 0.90): F_post 72.7 → 77.0 lb, M_u 35,087 → 35,109 lb·ft.
+- **Override check:** source = single value with K_d = 0.85 reproduces the old default pole exactly (M = 16,421 lb·ft).
+- **How verified:** `node --check` on the inline script (`syncheck.js`). jsdom runs before and after (`jsd/kd.js`). Migration test (`jsd/kdmig.js`): an old save with K_d 0.85 → auto with the note shown; an old save with 0.9 → override 0.9 with the note; a new save with override 0.85 → no note, and M = 16,421; the UI select switch recalculates. Smoke test `jsd/t6.js`: no error spans in pole and sign modes.
+- **Other copies of this code:** none known.
+
+### F11. Cable transverse wind: full w_h on every cable kept (engineer's decision)   [decision record] [no result change]
+- **Where:** `evalComboDir` / `cableComponents().react`, see F5. Anchor `const Hw = wh*c.L/2;`
+- **Decision:** the engineer keeps the full transverse wind w_h·L/2 on every cable, applied along the wind direction whatever the cable azimuth (F5 as written). It is not projected normal to each cable.
+- **Governing provision:** as F5.
+- **Before / After:** unchanged (F5 code).
+- **Check case:** F5 numbers stand. With F10's K_d = 1.0, cable 1 w_h is 1.9699 lb/ft.
+- **How verified:** no code change.
+- **Other copies of this code:** none known.
+
 ## Open items (not changed)
-- **O1. Kd = 0.85 recommended for round masts** (default and manual). ASCE 7-22 Table 26.6-1 gives 1.0 for round chimneys/tanks/similar structures, while 0.85 applies to solid signs and trussed towers. **Question:** which Kd do you want as the default for round light masts, and should the mast and sign use different Kd?
 - **O2. G for flexible poles:** G = 0.85 (rigid) is used, with no natural-frequency or G_f check. Decide whether to add an n₁ estimate and a warning.
 - **O3. P-δ / B1** amplification of first-order moments (AISC Ch. C) is not applied, and no warning was added. Decide whether to add a B1 estimate.
 - **O4. Wind-on-ice omits G** (conservative, about +18%). Left as is per the brief.
 - **O5. IBC §1806.3.4** cap (lateral bearing increase ≤ 15× the tabulated value) is not applied. Left as is per the brief.
 - **O6. A blank or zero pole height H or shaft diameter b crashes `calc()`** in `drawElev` ("Invalid array length"), in both the original and fixed files. The page then keeps the stale results. Input validation (AUDIT B12) was not in this brief.
-- **O7. Cable transverse reaction (F5)** uses the full w_h along the wind direction for every cable. Projecting it normal to each cable (w_h·|sin(φ−θ)|, directed normal to the cable) would be more accurate and less conservative. For the default pole this one assumption raises the base moment by 61%. Please confirm.
 - **O8. Shear breakout / side-face blowout (F7)** are not computed. A method for a bolt circle in a round shaft is needed if you want them implemented.
 - **O9. Pole/post combined stress** still uses the max-moment LRFD combination. Lower axial reduces the H1 ratio, so that combination governs for these structures, but it is not proven for every case.
+
+## Resolved items
+- **O1. Kd = 0.85 recommended for round masts** (default and manual). ASCE 7-22 Table 26.6-1 gives 1.0 for round chimneys/tanks/similar structures, while 0.85 applies to solid signs and trussed towers. **Question:** which Kd do you want as the default for round light masts, and should the mast and sign use different Kd?
+  - **RESOLVED 2026-10-04 (F10):** engineer: "use ASCE". K_d is set per component from ASCE 7-22 Table 26.6-1 (round 1.0, square/rect. 0.90, sign 0.85; cables and fixtures take the mast value). The single input is kept as an override.
+- **O7. Cable transverse reaction (F5)** uses the full w_h along the wind direction for every cable. Projecting it normal to each cable (w_h·|sin(φ−θ)|, directed normal to the cable) would be more accurate and less conservative. For the default pole this one assumption raises the base moment by 61%. Please confirm.
+  - **RESOLVED 2026-10-04 (F11):** engineer keeps the full w_h on every cable. No change.
