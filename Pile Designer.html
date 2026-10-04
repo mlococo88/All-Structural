@@ -772,10 +772,10 @@ const PHI_PRESETS = {
     ref: "AASHTO 10.9.3.10.2a/b (micropile axial); 6.5.4.2 (steel members)",
     options: [
       { name: "Micropile structural — Strength", set: { phiCC: 0.75, phiCU: 0.75, phiC: 0.90, phiF: 1.00, phiB: 0.70, phiV: 1.00 },
-        v: "guess", note: "φcc/φcu (10.9.3.10.2a/b) = 0.75 is UNVERIFIED — confirm from spec. φc=0.90, φf=1.00, φv=1.00 per 6.5.4.2 (cited). φb bearing = 0.70 (verify)." },
+        v: "guess", note: "φcc/φcu (10.9.3.10.2a/b) = 0.75 is UNVERIFIED — confirm from spec. φc seeded at 0.90 (6.5.4.2 composite); steel-only axial compression is 0.95 (6.5.4.2, 8th Ed.+). φf=1.00, φv=1.00 (steel) per 6.5.4.2 (cited); φv does not apply to cap punching. φb bearing = 0.70 (verify)." },
       { name: "General steel member — 6.5.4.2", set: { phiC: 0.90, phiF: 1.00, phiV: 1.00 },
-        v: "cited", note: "Steel: axial compression φc=0.90, flexure φf=1.00, shear φv=1.00 (6.5.4.2)." },
-      { name: "Extreme event (all → 1.0)", set: { phiCC: 1.00, phiCU: 1.00, phiC: 1.00, phiF: 1.00, phiB: 1.00, phiV: 1.00 },
+        v: "cited", note: "Steel: axial compression φc seeded at 0.90 (steel-only is 0.95 (6.5.4.2, 8th Ed.+); 0.90 is the composite value), flexure φf=1.00, shear φv=1.00 (6.5.4.2)." },
+      { name: "Extreme event (all → 1.0)", set: { phiCC: 1.00, phiCU: 1.00, phiC: 1.00, phiF: 1.00, phiB: 1.00, phiV: 1.00, phiVpunch: 1.00 },
         v: "guess", note: "Extreme limit state commonly takes structural φ = 1.0 — verify per project." }
     ]
   },
@@ -828,8 +828,9 @@ const PHI_INFO = {
     art: "AASHTO 6.5.4.2",
     what: "Applied to the nominal column compressive resistance in the simplified AASHTO buckling check (Module 10) and combined-loading interaction.",
     options: [
-      { v: "0.90", who: "Axial compression, steel members", mean: "AASHTO 6.5.4.2 for axial compression of steel members (and composite members).", cited: true },
-      { v: "0.80", who: "App current default", mean: "The app currently defaults to 0.80. Note this differs from the cited 6.5.4.2 value of 0.90 — resolve which applies to your basis before sealing.", cited: false }
+      { v: "0.95", who: "Axial compression, steel-only members", mean: "0.95 (6.5.4.2, 8th Ed.+) for axial compression of steel-only members.", cited: true },
+      { v: "0.90", who: "Axial compression, composite members", mean: "AASHTO 6.5.4.2 for axial compression of composite members (the value cited for steel-only before the 8th Ed.).", cited: true },
+      { v: "0.80", who: "App current default", mean: "The app currently defaults to 0.80 (conservative). It differs from 6.5.4.2: 0.95 steel-only (8th Ed.+), 0.90 composite — resolve which applies to your basis before sealing.", cited: false }
     ] },
   phiB: { key: "phiB", sym: "φ_b", title: "Bearing (pile head on concrete)",
     art: "AASHTO 6.5.4.2 / 5.6.5",
@@ -837,11 +838,18 @@ const PHI_INFO = {
     options: [
       { v: "0.70", who: "Bearing on concrete", mean: "Bearing resistance factor — verify against the controlling article for your bearing check (5.6.5 concrete bearing vs 6.5.4.2 steel bearing).", cited: false }
     ] },
-  phiV: { key: "phiV", sym: "φ_v", title: "Shear",
+  phiV: { key: "phiV", sym: "φ_v", title: "Shear (steel members)",
     art: "AASHTO 6.5.4.2",
-    what: "Applied to nominal shear resistance (e.g. casing shear, pile-head punching shear context).",
+    what: "Steel-member shear factor. It is NOT applied to the concrete cap punching check (that uses φv punch); it is kept for the presets and saved projects.",
     options: [
       { v: "1.00", who: "Shear, steel members", mean: "AASHTO 6.5.4.2 shear resistance factor for steel members.", cited: true }
+    ] },
+  phiVpunch: { key: "phiVpunch", sym: "φ_v,punch", title: "Cap punching shear (concrete)",
+    art: "AASHTO 5.5.4.2",
+    what: "Applied to the nominal two-way (punching) shear resistance of the cap concrete around the pile (Module 07).",
+    options: [
+      { v: "0.90", who: "Shear, normal-weight concrete", mean: "AASHTO 5.5.4.2 resistance factor for shear in normal-weight concrete.", cited: true },
+      { v: "1.00", who: "Extreme event", mean: "Extreme limit state (1.3.2.1) — verify per project.", cited: false }
     ] },
   phiUp: { key: "phiUp", sym: "φ_up", title: "Geotechnical uplift (tension bond)",
     art: "AASHTO 10.5.5.2.5",
@@ -1216,13 +1224,15 @@ function hpileSection({ d, bf, tf, tw, Fy, E }) {
      d,bf (in) section box dims ; embedTop(ft): depth from grade to pile head (0 if at grade) ;
      embedLen(ft): embedded length below grade ; smallGroup(bool)
    out: per-layer side contributions, tip, nominal & factored R for compression and uplift. */
-function hpileGeoCapacity({ layers, d, bf, embedTop, embedLen, smallGroup }) {
+function hpileGeoCapacity({ layers, d, bf, embedTop, embedLen, smallGroup, phiSand, phiClay, phiUp }) {
   const boxPerim_ft = 2 * (d + bf) / 12;   // ft (box perimeter)
   const boxArea_ft2 = (d * bf) / 144;      // ft^2 (box tip area)
   const grpFac = smallGroup ? 0.80 : 1.0;  // small-group 20% reduction on phi
+  // phi now comes from the H-pile inputs (hpPhiGeo / hpPhiGeoClay / hpPhiUp); the
+  // fallbacks are the Table 10.5.5.2.3-1 values this table used to hardcode.
   const PHI = {
-    sand_stat: 0.30, clay_stat: 0.35,      // Table 10.5.5.2.3-1 static, side+tip
-    sand_up: 0.25, clay_up: 0.25           // uplift (SPT / alpha)
+    sand_stat: phiSand != null ? phiSand : 0.30, clay_stat: phiClay != null ? phiClay : 0.35, // static, side+tip
+    sand_up: phiUp != null ? phiUp : 0.25, clay_up: phiUp != null ? phiUp : 0.25              // uplift (SPT / alpha)
   };
   const sorted = (layers || []).slice().sort((a, b) => a.topDepth - b.topDepth);
   const toe = embedTop + embedLen;         // depth (ft) to pile toe from grade
@@ -1573,6 +1583,15 @@ function bondHoleDia(I) {
 function computeAll(I, opts = {}) {
   const R = {}; // results
   const warn = [];
+  // Hard input errors (force the overall status to fail, shown in a banner) and notes.
+  const inputErrors = [], inputNotes = [];
+  R.inputErrors = inputErrors;
+  R.inputNotes = inputNotes;
+  if (I.pileType !== "hpile" && I.pileType !== "iab") {
+    if (!(I.OD > 0)) inputErrors.push("Casing OD must be greater than 0 (it is " + fmt(I.OD, 3) + " in). Bond, area and capacity results are not meaningful.");
+    if (!(I.phiGeo > 0)) inputErrors.push("Geotechnical \u03c6geo must be greater than 0 (it is " + fmt(I.phiGeo, 2) + "). The required bond length divides by it.");
+    if (!(I.tc > (I.corr || 0))) inputErrors.push("Casing wall t (" + fmt(I.tc, 3) + " in) must exceed the corrosion allowance (" + fmt(I.corr || 0, 3) + " in). The corroded casing has no wall, so casing area, D/t and flexure are not meaningful.");
+  }
 
   // ---- Materials / unit conversions ----
   const Es = I.E; // ksi
@@ -1739,22 +1758,36 @@ function computeAll(I, opts = {}) {
   const lim_Y = 0.45 * Es / fyc;
   const lim_pl = 0.07 * Es / fyc;
   const lim_31 = 0.31 * Es / fyc;
-  let Mn_j, flexMode;
+  let Mn_j, flexMode, flexMsg = "";
   const Mn_j1 = fyc * Zj / 12; // kip-ft (yielding)
-  if (Dt_ref <= lim_Y) {
-    Mn_j = Mn_j1;
-    flexMode = "Yielding";
-  }
   // local buckling branch (compact-noncompact)
   const Mn_j2 = (0.021 * Es / Dt_ref + fyc) * Sj / 12; // kip-ft
-  if (Dt_ref > lim_pl && Dt_ref < lim_31) {
-    // noncompact -> use Mn_j2, controlling is min
-    Mn_j = Math.min(Mn_j1, Mn_j2);
-    flexMode = "Local Buckling (noncompact)";
+  // slender branch (AASHTO 6.12.2.2.3): Mn = Fcr*S, Fcr = 0.33E/(D/t), for 0.31E/Fy < D/t <= 0.45E/Fy
+  const Fcr_j3 = 0.33 * Es / Dt_ref; // ksi
+  const Mn_j3 = Fcr_j3 * Sj / 12; // kip-ft
+  // D/t > 0.45E/Fy is outside 6.12.2.2.3 -> no flexural resistance credited (check fails, with a reason)
+  const flexNotPermitted = !(tc_r > 0) || !(Dt_ref <= lim_Y);
+  if (!(tc_r > 0)) {
+    Mn_j = 0;
+    flexMode = "Invalid: corroded wall thickness <= 0";
+    flexMsg = "Corroded casing wall t_r = t - corrosion = " + fmt(tc_r, 3) + " in is not positive, so the casing has no section. Reduce the corrosion allowance or increase the wall thickness.";
+  } else if (Dt_ref > lim_Y) {
+    Mn_j = 0;
+    flexMode = "Not permitted: D/t > 0.45E/Fy";
+    flexMsg = "Casing D/t = " + fmt(Dt_ref, 1) + " (joint basis, OD_r/(t_r/2)) exceeds the 0.45E/Fy = " + fmt(lim_Y, 1) + " limit of AASHTO 6.12.2.2.3. Circular tubes this slender are outside the scope of that article, so no flexural resistance is credited and the check FAILS. Use a thicker wall or a lower casing D/t.";
   } else if (Dt_ref <= lim_pl) {
     Mn_j = Mn_j1;
     flexMode = "Compact (yielding)";
+  } else if (Dt_ref <= lim_31) {
+    // noncompact -> use Mn_j2, controlling is min
+    Mn_j = Math.min(Mn_j1, Mn_j2);
+    flexMode = "Local Buckling (noncompact)";
+  } else {
+    // slender: 0.31E/Fy < D/t <= 0.45E/Fy
+    Mn_j = Mn_j3;
+    flexMode = "Local Buckling (slender)";
   }
+  const flexCompact = !flexNotPermitted && Dt_ref <= lim_pl;
   const phi_f = I.phiF;
   R.flex = {
     IDj,
@@ -1769,11 +1802,16 @@ function computeAll(I, opts = {}) {
     fyc,
     Mn_j1,
     Mn_j2,
+    Fcr_j3,
+    Mn_j3,
     Mn_j,
     flexMode,
+    flexNotPermitted,
+    flexCompact,
+    flexMsg,
     phi_f,
     phiMn: phi_f * Mn_j,
-    pass: phi_f * Mn_j >= Mmax,
+    pass: !flexNotPermitted && phi_f * Mn_j >= Mmax,
     Mmax
   };
 
@@ -1800,7 +1838,7 @@ function computeAll(I, opts = {}) {
   const Mr_comb = phi_f * Mn_comb; // factored flexural resistance
   const PuPr = Pu / Pr_col; // Pu/Pr (factored)
   const MuMr = Mu / Mr_comb; // Mu/Mr (factored)
-  const isCompact = /compact|yielding/i.test(flexMode) && !/noncompact/i.test(flexMode);
+  const isCompact = flexCompact; // D/t <= 0.07E/Fy only (same classification as the flexure check above)
   let interaction, eqUsed;
   if (!isCompact) {
     // noncompact casing -> additive form, Eq. 6.9.2.2.1-3 (valid for all members)
@@ -1843,7 +1881,7 @@ function computeAll(I, opts = {}) {
     isCompact,
     flexMode,
     slender_ok: slender < 120,
-    pass: interaction <= 1.0
+    pass: !flexNotPermitted && interaction <= 1.0
   };
 
   /* ---------- 5b. CFST COMPOSITE (AASHTO Art. 6.9.6) ---------- */
@@ -1865,7 +1903,8 @@ function computeAll(I, opts = {}) {
   const Po_cfst = 0.95 * fcGrout * Ac_c + Fyst_c * Ast_c + Fyb_c * Asb_c;
   // C'  Eq 6.9.6.3.2-7  (uses unfactored dead load Pdl)
   const Pdl = I.cfstPdl;
-  const Cp = 0.15 + Pdl / Po_cfst + (Ast_c + Asb_c) / (Ast_c + Asb_c + Ac_c);
+  const Cp_raw = 0.15 + Pdl / Po_cfst + (Ast_c + Asb_c) / (Ast_c + Asb_c + Ac_c);
+  const Cp = Math.min(Cp_raw, 0.9); // C' <= 0.9 (same cap as the p-y EI_aashto option)
   // stiffnesses
   const Ist_c = PI / 64 * (Math.pow(D_c, 4) - Math.pow(Di, 4));
   const rbar = dbar / 4;
@@ -2003,6 +2042,7 @@ function computeAll(I, opts = {}) {
     Ec,
     Po_cfst,
     Cp,
+    Cp_raw,
     Pdl,
     Ist_c,
     Isi_c,
@@ -2080,14 +2120,19 @@ function computeAll(I, opts = {}) {
     pass: phi_b * Pn_brg >= STL
   };
 
-  /* ---------- 7. PUNCHING SHEAR (5.8.4) ---------- */
+  /* ---------- 7. PUNCHING SHEAR (5.12.8.6.3) ---------- */
   const de_p = tcap - he;
   const dv = Math.max(0.9 * de_p, 0.72 * tcap);
-  const bo1 = PI * (OD + d_edge);
-  const bo2 = PI * (OD + d_edge) / 4 + 2 * d_edge;
+  // Critical perimeter at dv/2 from the pile face (AASHTO 5.12.8.6.3): interior circle of
+  // diameter OD + dv. Corner/edge truncation kept: quarter circle of the same radius plus two
+  // straight legs running to the cap edges (d_edge = pile-centre-to-edge distance).
+  const bo1 = PI * (OD + dv);
+  const bo2 = PI * (OD + dv) / 4 + 2 * d_edge;
   const bo = Math.min(bo1, bo2);
   const Vn = 0.125 * Math.sqrt(fc) * bo * dv; // kip (fc in ksi)
-  const phi_v = I.phiV;
+  // Concrete punching shear uses its own phi (5.5.4.2, shear = 0.90). The steel-member
+  // phiV presets (1.00) no longer reach this concrete check. phiVpunch is optional in saved data.
+  const phi_v = (I.phiVpunch != null) ? I.phiVpunch : 0.90;
   R.punch = {
     de_p,
     dv,
@@ -2196,7 +2241,7 @@ function computeAll(I, opts = {}) {
     bklA = _hp.A;                       // Ag; slender-element Aeff reduction is applied in the axial module
     bklR = _strong ? _hp.rx : _hp.ry;
     bklPo = (I.hpFy || 50) * bklA;
-    bklPhiC = 0.60;                     // H-pile, good driving, no tip (6.5.4.2)
+    bklPhiC = I.hpPhiC != null ? I.hpPhiC : 0.60; // H-pile phi_c input (6.5.4.2: 0.60 good driving / 0.50 severe)
   }
   const EI_bkl = Es * bklI; // kip-in^2
   const EI_bkl_ft = EI_bkl / 144; // kip-ft^2
@@ -2213,6 +2258,13 @@ function computeAll(I, opts = {}) {
     bklSoilIsSand = top.type === "sand";
     bklStiff = bklSoilIsSand ? top.nh : top.kh;
     bklSoilSrc = "layered profile (top layer: " + (top.type || "sand") + ")";
+    // nh/kh can be missing on layers imported before the soil-JSON importer stopped deleting
+    // them. Fall back to the new-row defaults (nh 60, kh 150) and say so, instead of NaN.
+    if (!(typeof bklStiff === "number" && isFinite(bklStiff) && bklStiff > 0)) {
+      bklStiff = bklSoilIsSand ? 60 : 150;
+      bklSoilSrc += " \u2014 \u26a0 top layer has no " + (bklSoilIsSand ? "n_h" : "k_h") + "; default " + bklStiff + " used";
+      inputNotes.push("Davisson fixity: the top soil layer has no " + (bklSoilIsSand ? "n_h" : "k_h") + " value, so the default " + (bklSoilIsSand ? "n_h = 60" : "k_h = 150") + " was used. Re-enter it in the soil profile if the buckling check matters.");
+    }
   } else {
     bklSoilIsSand = I.solverSoil === "cohesionless";
     bklStiff = bklSoilIsSand ? I.solverNh : I.solverKh;
@@ -2753,7 +2805,8 @@ function computeAll(I, opts = {}) {
       layers: (Array.isArray(I.soilLayers) ? I.soilLayers : []),
       d: I.hpD, bf: I.hpBf,
       embedTop: embedTop_ft, embedLen: embedLen_ft,
-      smallGroup: !!I.hpSmallGroup
+      smallGroup: !!I.hpSmallGroup,
+      phiSand: I.hpPhiGeo, phiClay: I.hpPhiGeoClay, phiUp: I.hpPhiUp
     });
     const comp_pass = geo.phiRn_comp >= STL;
     const up_pass = !enableTension || (geo.phiRn_up >= Tu);
@@ -2836,12 +2889,12 @@ function computeAll(I, opts = {}) {
       buckNote = "Nonlinear P-crit selected — press Compute in Module 10 (Buckling) to ramp thrust to instability.";
       Pn_axial = null; // resolved at render once pcr lands
     }
-    const phi_c_axial = 0.60;                     // 6.5.4.2 H-pile good driving, standalone axial
+    const phi_c_axial = I.hpPhiC != null ? I.hpPhiC : 0.60; // 6.5.4.2 H-pile axial (0.60 good driving / 0.50 severe)
     const phiPn_axial = Pn_axial != null ? phi_c_axial * Pn_axial : null;
     const axial_pass = phiPn_axial != null ? phiPn_axial >= STL : null;
 
     // -- Flexure (6.12): elastic Mn = Fy·S (governing axis), Mr = φf·Mn, φf=1.00. Plastic permitted (noted).
-    const phi_f = 1.00;
+    const phi_f = I.hpPhiF != null ? I.hpPhiF : 1.00;
     const Mn_elastic_kipin = Fy * S_sel;          // kip-in
     const Mn_elastic = Mn_elastic_kipin / 12;     // kip-ft
     const Mp_kipin = axisStrong ? (Fy * hp.Zx) : Math.min(Fy * hp.Zy, 1.5 * Fy * hp.Sy); // for the note only
@@ -2849,7 +2902,7 @@ function computeAll(I, opts = {}) {
     const flex_pass = phiMn >= Mu;
 
     // -- Combined axial + flexure (6.9.2.2.1): φc=0.70, φf=1.00 for interaction
-    const phi_c_comb = 0.70;
+    const phi_c_comb = I.hpPhiCcomb != null ? I.hpPhiCcomb : 0.70; // 6.5.4.2 combined axial+flexure, undamaged H-pile
     const Pn_comb = Pn_axial;                      // same Pn; may be null for pcrit until computed
     const Pr = Pn_comb != null ? phi_c_comb * Pn_comb : null;
     const Mr = phi_f * Mn_elastic;                 // kip-ft (governing axis; uniaxial for a pile)
@@ -2863,7 +2916,7 @@ function computeAll(I, opts = {}) {
     }
 
     // -- Shear (strong: 6.10.9.2 web; weak: 6.12.1.2.3a flanges). Unstiffened, k=5.0 strong / 1.2 weak.
-    const phi_v = 1.00;
+    const phi_v = I.hpPhiV != null ? I.hpPhiV : 1.00;
     let Vn, Vshear_area, shearAxisNote;
     if (axisStrong) {
       // web shear: Vp = 0.58 Fy D tw ; C per 6.10.9.3.2 (k=5.0). Rolled H-pile webs are stocky → C≈1.
@@ -2890,7 +2943,7 @@ function computeAll(I, opts = {}) {
     const shear_pass = phiVn >= Vu;
 
     // -- Tension (6.8 / 6.5.4.2): yield on gross φy·Fy·Ag (0.95); fracture on net φu·Fu·An (0.80). An≈Ag.
-    const phi_ty = 0.95, phi_tu = 0.80;
+    const phi_ty = I.hpPhiTy != null ? I.hpPhiTy : 0.95, phi_tu = I.hpPhiTu != null ? I.hpPhiTu : 0.80;
     const Fu = I.hpFu || 65;                       // ksi (A572-50 Fu=65 typical); user-overridable
     const Pny_tension = Fy * Ag;                    // yield on gross
     const Pnu_tension = Fu * Ag;                    // fracture on net (An=Ag for plain pile)
@@ -2913,7 +2966,7 @@ function computeAll(I, opts = {}) {
       // shear
       Vn, phiVn, Vu, phi_v, shear_pass, shearAxisNote, Vshear_area,
       // tension
-      phiPn_ty, phiPn_tu, phiPn_tension, strTension_pass, Fu,
+      phiPn_ty, phiPn_tu, phiPn_tension, strTension_pass, Fu, phi_ty, phi_tu,
       // pass rollup for non-pcrit checks (axial/combined may be null under pcrit until computed)
       Fy, Es
     };
@@ -3121,6 +3174,7 @@ function computeAll(I, opts = {}) {
   } else {
     R.allPass = R.geoChecks.pass && R.geo.pass && R.axial.cased_pass && R.axial.ucased_pass && R.flex.pass && R.comb.pass && R.bearing.pass && R.punch.pass && R.tests.verf_pass && R.tests.proof_pass && (!enableTension || geoUp_pass && strUp_pass) && (!enableBuckling || buck_pass) && (!I.cfstEnable || R.cfst.pass) && R.casingExt.pass && (!grpOn || (geoGroup_pass && block_pass)) && R.stability.pass;
   }
+  if (inputErrors.length) R.allPass = false;
   R.warn = warn;
   return R;
 }
@@ -4456,7 +4510,7 @@ function CapPlan({
       y: t.map(a => cy + rad * Math.sin(a))
     };
   };
-  const crit = circle(od / 2 + dedge / 2); // approximate bo circle
+  const crit = circle(od / 2 + ((isFinite(r.punch.dv) && r.punch.dv > 0) ? r.punch.dv : dedge) / 2); // approximate bo circle (dv/2 from face)
   const pile = circle(od / 2);
   const half = capW / 2;
   const shapes = [{
@@ -5298,7 +5352,7 @@ function downloadManual() {
     const a = document.createElement("a");
     a.href = url; a.download = "Micropile-LRFD-Designer-Manual.html";
     document.body.appendChild(a); a.click();
-    document.body.removeChild(a); URL.revokeObjectURL(url);
+    document.body.removeChild(a); setTimeout(() => URL.revokeObjectURL(url), 1000); // deferred: a sync revoke can cancel the download
   } catch (e) { alert("Manual download failed: " + e.message); }
 }
 const DEFAULT_INPUTS = {
@@ -5355,16 +5409,21 @@ const DEFAULT_INPUTS = {
   hpAxis: "strong",   // orientation of bending resistance driven into solver: "strong" (x-x) | "weak" (y-y)
   hpCapEmbed: 0,   // cap embedment depth below underside of cap (in) for fixity check
   hpCapEmbedK: 2.0, // fixity criterion multiplier × section depth (2×d nominal)
-  // Structural resistance factors (Section 6) — PLACEHOLDERS, flagged UNVERIFIED until confirmed vs AASHTO 10th Ed
-  hpPhiC: 0.53,    // axial compression (UNVERIFIED — may bundle severe-driving knockdown)
-  hpPhiF: 1.00,    // flexure (UNVERIFIED)
-  hpPhiTy: 0.95,   // tension, yield on gross (UNVERIFIED)
-  hpPhiTu: 0.80,   // tension, fracture on net (UNVERIFIED)
-  hpPhiV: 1.00,    // shear (UNVERIFIED)
-  // Geotechnical resistance factor for driven pile (Table 10.5.5.2.3-1) — PLACEHOLDER, UNVERIFIED
-  hpPhiGeo: 0.45,  // static-method side/tip (UNVERIFIED)
-  hpPhiUp: 0.35,   // uplift/tension geotech, Strength (UNVERIFIED)
-  hpDriveCond: "static_generic", // dropdown key for driving/verification condition (selects φgeo)
+  // Structural resistance factors (Section 6, AASHTO 6.5.4.2). These now DRIVE the H-pile calc.
+  // (Before hpPhiRev 2 the calc hardcoded 0.60/0.70/1.00/1.00/0.95/0.80 and a fixed geotech table,
+  //  while these fields held unused placeholders 0.53 / 0.45 / 0.35 that only the report printed.)
+  hpPhiC: 0.60,    // axial compression: 0.60 good driving, no pile tip; 0.50 severe driving with tip (6.5.4.2)
+  hpPhiCcomb: 0.70, // axial term of combined axial+flexure, undamaged H-pile (6.5.4.2)
+  hpPhiF: 1.00,    // flexure (6.5.4.2)
+  hpPhiTy: 0.95,   // tension, yield on gross (6.5.4.2)
+  hpPhiTu: 0.80,   // tension, fracture on net (6.5.4.2)
+  hpPhiV: 1.00,    // shear (6.5.4.2)
+  // Geotechnical resistance factors, driven pile static analysis (Table 10.5.5.2.3-1)
+  hpPhiGeo: 0.30,  // sand/silt: SPT (Meyerhof) side + tip
+  hpPhiGeoClay: 0.35, // clay: alpha-method side + 9Su tip (see open item on the clay tip)
+  hpPhiUp: 0.25,   // uplift: SPT / alpha method
+  hpDriveCond: "good", // "good" (phi_c 0.60) | "severe" (phi_c 0.50) | "static_generic" (custom / legacy)
+  hpPhiRev: 2,     // migration marker for the H-pile phi defaults (see mergeSavedInputs)
   hpSmallGroup: false, // apply Table 10.5.5.2.3-1 small-group 0.80 reduction on φ_stat  // Buckling / effective length for axial check
   hpK: 1.0,        // effective length factor (UNVERIFIED default; partially-embedded pile judgment)
   hpLu: 0,         // unbraced length for buckling (ft), 0 = soil-braced (no column buckling check)
@@ -5443,6 +5502,7 @@ const DEFAULT_INPUTS = {
   cover: 2.0,
   phiB: 0.70,
   phiV: 0.90,
+  phiVpunch: 0.90, // concrete punching shear (5.5.4.2); separate from steel phiV
   // tests
   AbVerf: 2.25,
   AbProof: 1.56,
@@ -5765,16 +5825,44 @@ function extractLpileInputs(raw) {
   inp.soilLayers = layers;
   return inp;
 }
+// Merge saved inputs (localStorage / project JSON / library) over the defaults.
+//  - A blank numeric field is stored as NaN, which JSON saves as null; a null must not
+//    override the default on reload, so it is restored to the default (and reported).
+//  - H-pile phi migration (hpPhiRev 2): before rev 2 the H-pile phi fields were unused
+//    placeholders (0.53 / 0.45 / 0.35) that only the report printed; the calc hardcoded
+//    0.60 / 0.30-0.35 / 0.25. A saved value equal to the old placeholder is moved to the value
+//    the calc actually used, so old projects compute exactly as before. Other values are kept.
+// The saved-data format is unchanged; only missing/null fields are filled.
+let LAST_LOAD_NOTES = [];
+function mergeSavedInputs(parsed) {
+  const out = { ...DEFAULT_INPUTS };
+  const restored = [], notes = [];
+  for (const k of Object.keys(parsed || {})) {
+    const v = parsed[k];
+    if (v === null && typeof DEFAULT_INPUTS[k] === "number") { restored.push(k); continue; }
+    out[k] = v;
+  }
+  if (restored.length) notes.push("Blank field(s) in the loaded data were restored to their defaults: " + restored.join(", ") + ". Check these inputs.");
+  if (parsed && parsed.hpPhiRev == null) {
+    const LEGACY = { hpPhiC: [0.53, 0.60], hpPhiGeo: [0.45, 0.30], hpPhiUp: [0.35, 0.25] };
+    const changed = [];
+    for (const k of Object.keys(LEGACY)) {
+      if (out[k] === LEGACY[k][0]) { out[k] = LEGACY[k][1]; changed.push(k + " " + LEGACY[k][0].toFixed(2) + " \u2192 " + LEGACY[k][1].toFixed(2)); }
+    }
+    if (out.hpDriveCond === "static_generic" && out.hpPhiC === 0.60) out.hpDriveCond = "good";
+    out.hpPhiRev = 2;
+    if (changed.length && out.pileType === "hpile") notes.push("H-pile resistance factors updated from the old unused placeholders (" + changed.join(", ") + ") to the values the calculation already used. Results are unchanged; the report now shows the factors actually applied.");
+  }
+  LAST_LOAD_NOTES = notes;
+  return out;
+}
 function loadSavedInputs() {
   try {
     const raw = window.localStorage ? window.localStorage.getItem(STORAGE_KEY) : null;
     if (!raw) return null;
     const parsed = JSON.parse(raw);
     // merge over defaults so new fields added in later versions still exist
-    return {
-      ...DEFAULT_INPUTS,
-      ...parsed
-    };
+    return mergeSavedInputs(parsed);
   } catch (e) {
     return null;
   }
@@ -6130,7 +6218,10 @@ function PrintReport({
       minWidth: "150px",
       textAlign: "center"
     }
-  }, r.allPass ? "ALL CHECKS SATISFIED" : "CHECKS REQUIRE REVIEW"))), /*#__PURE__*/React.createElement("div", {
+  }, r.allPass ? "ALL CHECKS SATISFIED" : "CHECKS REQUIRE REVIEW"))), ((r.inputErrors && r.inputErrors.length) || (r.inputNotes && r.inputNotes.length)) ? /*#__PURE__*/React.createElement("div", {
+    style: { marginTop: "6px", fontSize: "10px", color: "#8a2a2a" }
+  }, (r.inputErrors || []).map((m, i) => /*#__PURE__*/React.createElement("div", { key: "e" + i }, "\u26a0 Input error: ", m)),
+    (r.inputNotes || []).map((m, i) => /*#__PURE__*/React.createElement("div", { key: "n" + i, style: { color: "#7a4d15" } }, "\u26a0 Note: ", m))) : null, /*#__PURE__*/React.createElement("div", {
     className: "rpt-avoid",
     style: {
       display: "flex",
@@ -6232,7 +6323,7 @@ function PrintReport({
       ["Stickup above grade", (I.solverFree || 0) > 0 ? I.solverFree : null, "ft", ""],
       ["Cap embedment", I.hpCapEmbed, "in", "below cap underside"],
       ["Cap embedment criterion k", I.hpCapEmbedK, "\u00d7d", "fixed-head development"],
-      ["Driving condition", I.hpDriveCond, "", "sets \u03c6c per 6.5.4.2"],
+      ["Driving condition", I.hpDriveCond === "good" ? "good (no pile tip)" : I.hpDriveCond === "severe" ? "severe (pile tip)" : "custom", "", "sets \u03c6c per 6.5.4.2"],
       ["Small group (\u2264 5 piles)", I.hpSmallGroup ? "yes" : "no", "", "affects \u03c6 selection"]
     ] }),
 
@@ -6346,19 +6437,22 @@ function PrintReport({
       ["\u03c6 flexure", I.phiF, "", ""],
       ["\u03c6 axial (column/buckling)", I.phiC, "", ""],
       ["\u03c6 bearing", I.phiB, "", ""],
-      ["\u03c6 shear", I.phiV, "", ""],
+      ["\u03c6 shear (steel)", I.phiV, "", "not used for punching"],
+      ["\u03c6 punching shear (cap concrete)", r.punch ? r.punch.phi_v : null, "", "5.5.4.2"],
       ["\u03c6 uplift", I.phiUp, "", ""],
       ["\u03c6 tension", I.phiT, "", ""],
       ["\u03c6 CFST compression", r.cfst && r.cfst.enable ? I.cfstPhiC : null, "", "AASHTO 6.9.6"]
     ] }),
     (I.pileType === "hpile") && /*#__PURE__*/React.createElement(RptInputs, { title: "Resistance factors \u00b7 H-pile", rows: [
       ["\u03c6c axial compression", I.hpPhiC, "", "6.5.4.2"],
-      ["\u03c6f flexure", I.hpPhiF, "", ""],
-      ["\u03c6 tension \u2014 yielding", I.hpPhiTy, "", ""],
-      ["\u03c6 tension \u2014 fracture", I.hpPhiTu, "", ""],
-      ["\u03c6v shear", I.hpPhiV, "", ""],
-      ["\u03c6 geotechnical", I.hpPhiGeo, "", ""],
-      ["\u03c6 uplift", I.hpPhiUp, "", ""]
+      ["\u03c6c combined axial + flexure", I.hpPhiCcomb, "", "6.5.4.2"],
+      ["\u03c6f flexure", I.hpPhiF, "", "6.5.4.2"],
+      ["\u03c6 tension \u2014 yielding", I.hpPhiTy, "", "6.5.4.2"],
+      ["\u03c6 tension \u2014 fracture", I.hpPhiTu, "", "6.5.4.2"],
+      ["\u03c6v shear", I.hpPhiV, "", "6.5.4.2"],
+      ["\u03c6 geotechnical \u2014 sand/silt (SPT)", I.hpPhiGeo, "", "Table 10.5.5.2.3-1"],
+      ["\u03c6 geotechnical \u2014 clay (\u03b1, 9Su tip)", I.hpPhiGeoClay, "", "Table 10.5.5.2.3-1"],
+      ["\u03c6 uplift", I.hpPhiUp, "", "Table 10.5.5.2.3-1"]
     ] }),
 
     // ---- GROUP ----
@@ -6505,17 +6599,17 @@ function PrintReport({
       const line = (t) => /*#__PURE__*/React.createElement("div", { style: { fontFamily: "monospace", fontSize: "10px", margin: "2px 0" } }, t);
       let Pn = hs.Pn_axial, phiPn = hs.phiPn_axial, axPass = hs.axial_pass, Pr = hs.Pr, cRatio = hs.comb_ratio, cBranch = hs.comb_branch, cPass = hs.comb_pass2;
       if (hs.hasStickup && hs.buckMethod === "pcrit" && pcr && pcr.ok) {
-        const Pe = pcr.Pcr, rt = hs.Po / Pe; Pn = rt <= 2.25 ? Math.pow(0.658, rt) * hs.Po : 0.877 * Pe; phiPn = 0.60 * Pn; axPass = phiPn >= hs.STL;
-        Pr = 0.70 * Pn; const PuPr = hs.STL / Pr, MuMr = hs.Mr > 0 ? hs.Mu / hs.Mr : 0;
+        const Pe = pcr.Pcr, rt = hs.Po / Pe; Pn = rt <= 2.25 ? Math.pow(0.658, rt) * hs.Po : 0.877 * Pe; phiPn = hs.phi_c_axial * Pn; axPass = phiPn >= hs.STL;
+        Pr = hs.phi_c_comb * Pn; const PuPr = hs.STL / Pr, MuMr = hs.Mr > 0 ? hs.Mu / hs.Mr : 0;
         if (PuPr < 0.2) { cBranch = "<0.2"; cRatio = PuPr / 2 + MuMr; } else { cBranch = "≥0.2"; cRatio = PuPr + 8 / 9 * MuMr; } cPass = cRatio <= 1.0;
       }
       return /*#__PURE__*/React.createElement("div", null,
         line("Axial: Po = Fy·A = " + fmt(hs.Po, 0) + " kip · " + (hs.hasStickup ? ({davisson:"Davisson",deflmatch:"deflection-matched",pcrit:"nonlinear P-crit"}[r.buckling.bklTab] || "Davisson") : "fully braced") + (Pn != null ? " · Pn = " + fmt(Pn, 0) + " kip" : " · (compute Pcr)")),
-        phiPn != null && /*#__PURE__*/React.createElement(RptRow, { label: "Axial: φc·Pn ≥ STL (φc=0.60)", val: fmt(phiPn, 0) + " ≥ " + fmt(hs.STL, 0) + " kip", pass: axPass }),
+        phiPn != null && /*#__PURE__*/React.createElement(RptRow, { label: "Axial: φc·Pn ≥ STL (φc=" + fmt(hs.phi_c_axial, 2) + ")", val: fmt(phiPn, 0) + " ≥ " + fmt(hs.STL, 0) + " kip", pass: axPass }),
         line("Flexure: Mn = Fy·S = " + fmt(hs.Mn_elastic, 1) + " kip·ft (elastic; Mp = " + fmt(hs.Mp, 1) + " permitted)"),
-        /*#__PURE__*/React.createElement(RptRow, { label: "Flexure: φf·Mn ≥ Mu (φf=1.00)", val: fmt(hs.phiMn, 1) + " ≥ " + fmt(hs.Mu, 1) + " kip·ft", pass: hs.flex_pass }),
+        /*#__PURE__*/React.createElement(RptRow, { label: "Flexure: φf·Mn ≥ Mu (φf=" + fmt(hs.phi_f, 2) + ")", val: fmt(hs.phiMn, 1) + " ≥ " + fmt(hs.Mu, 1) + " kip·ft", pass: hs.flex_pass }),
         cRatio != null && /*#__PURE__*/React.createElement(RptRow, { label: "Combined " + (cBranch === "<0.2" ? "(6.9.2.2.1-1)" : "(6.9.2.2.1-2)") + " D/C", val: fmt(cRatio, 3) + " ≤ 1.0", pass: cPass }),
-        /*#__PURE__*/React.createElement(RptRow, { label: "Shear: φv·Vn ≥ Vu (φv=1.00)", val: fmt(hs.phiVn, 1) + " ≥ " + fmt(hs.Vu, 1) + " kip", pass: hs.shear_pass }),
+        /*#__PURE__*/React.createElement(RptRow, { label: "Shear: φv·Vn ≥ Vu (φv=" + fmt(hs.phi_v, 2) + ")", val: fmt(hs.phiVn, 1) + " ≥ " + fmt(hs.Vu, 1) + " kip", pass: hs.shear_pass }),
         hs.enableTension && /*#__PURE__*/React.createElement(RptRow, { label: "Tension: φ·Pn ≥ Tu", val: fmt(hs.phiPn_tension, 0) + " ≥ " + fmt(hs.Tu, 0) + " kip", pass: hs.strTension_pass }));
     })() : null),
   r.hpileHeadFix && r.hpileHeadFix.isFixedHead && /*#__PURE__*/React.createElement("div", { className: "rpt-section" }, /*#__PURE__*/React.createElement(RptHeading, { n: "06", title: "Head Fixity — Cap Embedment", code: "Detailing" }),
@@ -6746,10 +6840,14 @@ function PrintReport({
   }), /*#__PURE__*/React.createElement(Calc, {
     label: "Yielding moment",
     eq: `M_{n,Y} = f_{yc}Z/12 = ${fmt(r.flex.fyc, 0)}(${fmt(r.flex.Zj, 2)})/12 = ${fmt(r.flex.Mn_j1, 1)}\\ \\text{kip}\\cdot\\text{ft}`
-  }), /*#__PURE__*/React.createElement(Calc, {
+  }), r.flex.flexMode === "Local Buckling (slender)" && /*#__PURE__*/React.createElement(Calc, {
+    label: "Slender local-buckling moment",
+    eq: `F_{cr} = \\tfrac{0.33E}{D/t} = ${fmt(r.flex.Fcr_j3, 1)}\\ \\text{ksi},\\quad M_n = F_{cr}S/12 = ${fmt(r.flex.Mn_j3, 1)}\\ \\text{kip}\\cdot\\text{ft}`,
+    note: "0.31E/Fy < D/t \u2264 0.45E/Fy"
+  }), r.flex.flexNotPermitted && /*#__PURE__*/React.createElement(Narr, null, r.flex.flexMsg), /*#__PURE__*/React.createElement(Calc, {
     label: "Nominal flexural resistance",
     eq: `M_n = ${fmt(r.flex.Mn_j, 1)}\\ \\text{kip}\\cdot\\text{ft}`,
-    cite: "Eq. 6.12.2.2.3-1/-2"
+    cite: "Art. 6.12.2.2.3"
   }), /*#__PURE__*/React.createElement(RptCheck, {
     pass: r.flex.pass,
     eq: `\\phi_f M_n = ${fmt(r.flex.phiMn, 1)}\\ \\text{kip}\\cdot\\text{ft} \\;${r.flex.pass ? '\\geq' : '<'}\\; M_{max} = ${fmt(r.flex.Mmax, 1)}\\ \\text{kip}\\cdot\\text{ft}`
@@ -6883,7 +6981,7 @@ function PrintReport({
     result: `= ${fmt(r.punch.dv, 1)}\\ \\text{in}`
   }), /*#__PURE__*/React.createElement(Calc, {
     label: "Critical perimeter",
-    eq: `b_o = \\min(b_{o1},b_{o2}) = \\min(${fmt(r.punch.bo1, 1)},${fmt(r.punch.bo2, 1)})`,
+    eq: `b_o = \\min\\big(\\pi(OD+d_v),\\ \\tfrac{\\pi(OD+d_v)}{4}+2d_{edge}\\big) = \\min(${fmt(r.punch.bo1, 1)},${fmt(r.punch.bo2, 1)})`,
     result: `= ${fmt(r.punch.bo, 1)}\\ \\text{in}`
   }), /*#__PURE__*/React.createElement(Calc, {
     label: "Nominal shear resistance",
@@ -6892,7 +6990,7 @@ function PrintReport({
     cite: "Eq. 5.8.4.3.4-3"
   }), /*#__PURE__*/React.createElement(RptCheck, {
     pass: r.punch.pass,
-    eq: `\\phi_v V_n = ${fmt(r.punch.phiVn, 1)}\\ \\text{kip} \\;${r.punch.pass ? '\\geq' : '<'}\\; STL = ${fmt(I.STL, 0)}\\ \\text{kip}`
+    eq: `\\phi_v V_n = ${fmt(r.punch.phi_v, 2)}(${fmt(r.punch.Vn, 1)}) = ${fmt(r.punch.phiVn, 1)}\\ \\text{kip} \\;${r.punch.pass ? '\\geq' : '<'}\\; STL = ${fmt(I.STL, 0)}\\ \\text{kip}`
   }), r.punch.pass && /*#__PURE__*/React.createElement(Narr, null, "The factored punching resistance exceeds the demand; a bearing plate is not required for compression load transfer.")), /*#__PURE__*/React.createElement("div", {
     className: "rpt-section"
   }, /*#__PURE__*/React.createElement(RptHeading, {
@@ -7740,7 +7838,9 @@ function parseLP13O(text) {
 
 /* Standard micropile bar catalog. A615 Gr75 rebar areas are exact; the
    Gr150 (A722 threadbar) 1-3/4" and 2-1/2" areas are typical published
-   values — verify against the supplier catalog for sealed work. */
+   values — verify against the supplier catalog for sealed work.
+   Gr150 = ASTM A722 Type II, fpu = 150 ksi (ULTIMATE). Minimum yield
+   fpy = 0.80·fpu = 120 ksi, so the catalog sets fy = 120 (was 150). */
 /* Common micropile casing catalog (API pipe). Walls are standard API
    weights — secondary/mill pipe varies, so verify OD x wall x grade against
    the mill certs. Grade sets fyc. */
@@ -7784,11 +7884,11 @@ const BAR_CATALOG = [
   { id: "11-75", lbl: "#11 Gr75 (1.56)", Ab: 1.56, fy: 75 },
   { id: "14-75", lbl: "#14 Gr75 (2.25)", Ab: 2.25, fy: 75 },
   { id: "18-75", lbl: "#18 Gr75 (4.00)", Ab: 4.00, fy: 75 },
-  { id: "1-150", lbl: "1″ Gr150 (0.85)", Ab: 0.85, fy: 150 },
-  { id: "1.25-150", lbl: "1-1/4″ Gr150 (1.25)", Ab: 1.25, fy: 150 },
-  { id: "1.375-150", lbl: "1-3/8″ Gr150 (1.58)", Ab: 1.58, fy: 150 },
-  { id: "1.75-150", lbl: "1-3/4″ Gr150 (2.60†)", Ab: 2.60, fy: 150 },
-  { id: "2.5-150", lbl: "2-1/2″ Gr150 (5.19†)", Ab: 5.19, fy: 150 }
+  { id: "1-150", lbl: "1″ Gr150 (0.85)", Ab: 0.85, fy: 120 },
+  { id: "1.25-150", lbl: "1-1/4″ Gr150 (1.25)", Ab: 1.25, fy: 120 },
+  { id: "1.375-150", lbl: "1-3/8″ Gr150 (1.58)", Ab: 1.58, fy: 120 },
+  { id: "1.75-150", lbl: "1-3/4″ Gr150 (2.60†)", Ab: 2.60, fy: 120 },
+  { id: "2.5-150", lbl: "2-1/2″ Gr150 (5.19†)", Ab: 5.19, fy: 120 }
 ];
 function BarSelect({ I, set, areaKey, setGrade, label }) {
   const cur = BAR_CATALOG.find(b => Math.abs(b.Ab - I[areaKey]) < 0.005 && (!setGrade || Math.abs(b.fy - I.fyb) < 0.5));
@@ -7805,7 +7905,9 @@ function BarSelect({ I, set, areaKey, setGrade, label }) {
       }
     },
       /*#__PURE__*/React.createElement("option", { value: "custom" }, "custom — " + fmt(I[areaKey], 2) + " in²"),
-      BAR_CATALOG.map(b => /*#__PURE__*/React.createElement("option", { key: b.id, value: b.id }, b.lbl))));
+      BAR_CATALOG.map(b => /*#__PURE__*/React.createElement("option", { key: b.id, value: b.id }, b.lbl))),
+    setGrade && I.fyb >= 149.5 && /*#__PURE__*/React.createElement("div", { className: "text-[9px] mt-1 leading-snug", style: { color: "#b23b3b" } },
+      "\u26a0 fyb \u2265 150 ksi: for an ASTM A722 Gr150 threadbar, 150 ksi is the ULTIMATE strength (fpu). Yield fpy = 0.80\u00b7fpu = 120 ksi \u2014 re-select the bar or set fyb = 120."));
 }
 
 function LoadCasesCard({ cases, updCases, applyCase, runAllCases, caseRes, I, updCasesLimit, activeIdx, setActive, onRowEdit }) {
@@ -8940,8 +9042,10 @@ function normalizeSoilLayersImport(raw) {
     if (typeof r.su === "number" && typeof r.Su === "number" && r.Su > 0 && r.su > 0 && r.Su > r.su / 50) {
       warnings.push("Layer " + (i + 1) + ": su=" + r.su + " psf and Su=" + r.Su + " ksf are suspiciously close — Su should be roughly su/1000 (undrained strength in KIPS/sf, not lbs/sf). CHECK THIS BEFORE RUNNING THE CALC.");
     }
-    delete r.nh; delete r.kh;   // legacy uniform-soil fields; never read by the layered solver — drop
-    // so a stale value can't be mistaken for something that does something here.
+    // nh/kh are KEPT: the Davisson buckling fixity and the linear (Winkler) solver read them.
+    // (They used to be deleted here, which made buckling NaN after an import.) Backfill defaults.
+    if (!(typeof r.nh === "number" && isFinite(r.nh) && r.nh > 0)) { r.nh = 60; if (r.type === "sand") warnings.push("Layer " + (i + 1) + ": n_h missing — defaulted to 60 (Davisson fixity / linear solver). VERIFY."); }
+    if (!(typeof r.kh === "number" && isFinite(r.kh) && r.kh > 0)) { r.kh = 150; if (r.type !== "sand") warnings.push("Layer " + (i + 1) + ": k_h missing — defaulted to 150 (Davisson fixity / linear solver). VERIFY."); }
     return r;
   }).sort((a, b) => a.topDepth - b.topDepth);
 
@@ -10192,6 +10296,7 @@ function LayerStrip({
 }
 function App() {
   const [I, setI] = useState(() => loadSavedInputs() || DEFAULT_INPUTS);
+  const [loadNotes, setLoadNotes] = useState(() => LAST_LOAD_NOTES.slice());
   const [open, setOpen] = useState({
     1: true
   });
@@ -10304,10 +10409,8 @@ function App() {
         const data = JSON.parse(e.target.result);
         const inc = data && data.inputs ? data.inputs : data; // accept raw or wrapped
         if (inc && typeof inc === "object") {
-          setI({
-            ...DEFAULT_INPUTS,
-            ...inc
-          });
+          setI(mergeSavedInputs(inc));
+          setLoadNotes(LAST_LOAD_NOTES.slice());
           // restore the LPILE import if the project carried one
           if (data && data.lpile && data.lpile.ok) setLpileParse(data.lpile);
         } else {
@@ -10386,10 +10489,8 @@ function App() {
     const rec = library.find(p => p.id === id);
     if (!rec) return;
     if (window.confirm(`Load "${rec.name}"? This replaces your current inputs (your working session is auto-saved separately).`)) {
-      setI({
-        ...DEFAULT_INPUTS,
-        ...rec.inputs
-      });
+      setI(mergeSavedInputs(rec.inputs));
+      setLoadNotes(LAST_LOAD_NOTES.slice());
       setLpileParse(rec.lpile && rec.lpile.ok ? rec.lpile : null);
       setCurrentId(id);
     }
@@ -11053,16 +11154,16 @@ function App() {
           // per-case inputs + Extreme Event phi = 1.0 (uplift 0.8) per AASHTO 10.5.5.3
           const I2 = { ...I, STL: c.type === "tension" ? 0 : c.STL, Plat: c.Plat, pyMhead: c.Mhead || 0,
             Tu: c.type === "tension" ? c.STL : 0 };
-          if (c.type === "extreme") Object.assign(I2, { phiGeo: 1.0, phiCC: 1.0, phiCU: 1.0, phiF: 1.0, phiC: 1.0, phiB: 1.0, phiV: 1.0, phiT: 1.0, phiUp: 0.8 });
+          if (c.type === "extreme") Object.assign(I2, { phiGeo: 1.0, phiCC: 1.0, phiCU: 1.0, phiF: 1.0, phiC: 1.0, phiB: 1.0, phiV: 1.0, phiVpunch: 1.0, phiT: 1.0, phiUp: 0.8 });
           const R2 = computeAll(I2, { layered: !!activeLayers, pyMmax: Mx, Mmax_kft: Mx != null ? Mx : undefined, zMomentDecay: decay != null ? decay : undefined });
           const rat = (d, cap) => cap > 0 ? d / cap : null;
           return {
             name: c.name, type: c.type, Mmax: Mx != null ? Mx : R2.MmaxUsed, y0, prof: (typeof prof !== "undefined") ? prof : null,
             geoR: c.type === "service" ? null : rat(I2.STL, R2.geo.phiPn_geo),
             flexR: c.type === "service" ? null : rat(R2.MmaxUsed, R2.flex.phiMn),
-            combR: c.type === "service" ? null : R2.comb.ratio,
+            combR: c.type === "service" ? null : R2.comb.interaction, // P-M interaction value (was R2.comb.ratio = Po/Pe)
             buckR: (c.type === "service" || !R2.buckling.enable) ? null : rat(I2.STL, R2.buckling.phiPn_buck),
-            tenR: c.type === "tension" ? rat(I2.Tu, Math.min(R2.tension && R2.tension.phiPn_geoUp || 1e9, R2.tension && R2.tension.phiPn_strUp || 1e9)) : null,
+            tenR: c.type === "tension" ? rat(I2.Tu, Math.min(R2.tension && R2.tension.phiPn_up || 1e9, R2.tension && R2.tension.phiPn_tension_total || 1e9)) : null,
             svcR: c.type === "service" && y0 != null ? Math.abs(y0) / Math.max(I.deflLimit || 1, 0.01) : null,
             pass: c.type === "service" ? (y0 == null || Math.abs(y0) <= (I.deflLimit || 1)) : R2.allPass
           };
@@ -11389,7 +11490,7 @@ function App() {
           }
           const r_gyr = Aeff > 0 ? Math.sqrt(Ieff / Aeff) : null;
           const KLr = r_gyr ? KLeq_in / r_gyr : null;
-          const phi_c_used = I.pileType === "hpile" ? 0.60 : (I.phiC || 0.7);
+          const phi_c_used = I.pileType === "hpile" ? (I.hpPhiC != null ? I.hpPhiC : 0.60) : (I.phiC || 0.7);
           // ---- FACTORED AXIAL RESISTANCE (AASHTO LRFD 6.9.4.1.1) ----
           // BUG FIXED HERE (calc-affecting): this previously read
           //     phiPn_pcr = phi_c * Pcr
@@ -11693,7 +11794,11 @@ function App() {
     previewing: previewReport,
     onPrint: printReport,
     caseLabel: (cases && cases[activeIdx]) ? (cases[activeIdx].name || ("Case " + (activeIdx + 1))) : null
-  }), /*#__PURE__*/React.createElement("div", {
+  }), ((r.inputErrors && r.inputErrors.length) || (r.inputNotes && r.inputNotes.length) || loadNotes.length) ? /*#__PURE__*/React.createElement("div", {
+    className: "max-w-[1920px] mx-auto px-6 pt-3 no-print"
+  }, (r.inputErrors || []).map((m, i) => /*#__PURE__*/React.createElement("div", { key: "e" + i, className: "text-[11px] px-2 py-1 mb-1 rounded-sm", style: { background: "rgba(178,59,59,0.10)", color: "#8a2a2a", border: "1px solid rgba(178,59,59,0.35)" } }, /*#__PURE__*/React.createElement("b", null, "\u26a0 Input error: "), m)),
+    (r.inputNotes || []).concat(loadNotes).map((m, i) => /*#__PURE__*/React.createElement("div", { key: "n" + i, className: "text-[11px] px-2 py-1 mb-1 rounded-sm", style: { background: "rgba(201,98,46,0.10)", color: "#7a4d15", border: "1px solid rgba(201,98,46,0.30)" } }, /*#__PURE__*/React.createElement("b", null, "\u26a0 Note: "), m)),
+    loadNotes.length > 0 && /*#__PURE__*/React.createElement("button", { onClick: () => setLoadNotes([]), className: "text-[10px] text-slate-500 underline" }, "dismiss load notes")) : null, /*#__PURE__*/React.createElement("div", {
     className: "max-w-[1920px] mx-auto px-6 py-6 grid grid-cols-1 lg:grid-cols-[1fr_2fr] gap-6"
   }, /*#__PURE__*/React.createElement("aside", {
     className: "input-rail space-y-4 lg:sticky lg:self-start no-print",
@@ -12123,7 +12228,22 @@ function App() {
         /*#__PURE__*/React.createElement("option", { value: "weak" }, "Weak (y-y)"))),
     /*#__PURE__*/React.createElement("label", { className: "block" },
       /*#__PURE__*/React.createElement("span", { className: "text-[12px] text-[var(--blueprint)] font-medium leading-tight block mb-1" }, "Grade (ref)"),
-      /*#__PURE__*/React.createElement("input", { type: "text", value: I.hpGrade, onChange: e => set('hpGrade', e.target.value), className: "w-full text-[12px] border border-slate-300 rounded-sm px-2 py-1 bg-white font-mono-tech" }))) : /*#__PURE__*/React.createElement("div", {
+      /*#__PURE__*/React.createElement("input", { type: "text", value: I.hpGrade, onChange: e => set('hpGrade', e.target.value), className: "w-full text-[12px] border border-slate-300 rounded-sm px-2 py-1 bg-white font-mono-tech" })),
+    /*#__PURE__*/React.createElement("label", { className: "block col-span-2" },
+      /*#__PURE__*/React.createElement("span", { className: "text-[12px] text-[var(--blueprint)] font-medium leading-tight block mb-1" }, "Driving condition (sets \u03c6c, 6.5.4.2)"),
+      /*#__PURE__*/React.createElement("select", { value: I.hpDriveCond, onChange: e => { const v = e.target.value; set('hpDriveCond', v); if (v === "good") set('hpPhiC', 0.60); else if (v === "severe") set('hpPhiC', 0.50); }, className: "w-full text-[12px] border border-slate-300 rounded-sm px-2 py-1 bg-white" },
+        /*#__PURE__*/React.createElement("option", { value: "good" }, "Good driving, no pile tip (\u03c6c 0.60)"),
+        /*#__PURE__*/React.createElement("option", { value: "severe" }, "Severe driving, pile tip needed (\u03c6c 0.50)"),
+        /*#__PURE__*/React.createElement("option", { value: "static_generic" }, "Custom (\u03c6c as entered)"))),
+    /*#__PURE__*/React.createElement(Field, { label: "\u03c6c axial", value: I.hpPhiC, onChange: v => { set('hpPhiC', v); set('hpDriveCond', v === 0.60 ? "good" : v === 0.50 ? "severe" : "static_generic"); } }),
+    /*#__PURE__*/React.createElement(Field, { label: "\u03c6c combined", sub: "axial term, P-M", value: I.hpPhiCcomb, onChange: v => set('hpPhiCcomb', v) }),
+    /*#__PURE__*/React.createElement(Field, { label: "\u03c6f flexure", value: I.hpPhiF, onChange: v => set('hpPhiF', v) }),
+    /*#__PURE__*/React.createElement(Field, { label: "\u03c6v shear", value: I.hpPhiV, onChange: v => set('hpPhiV', v) }),
+    /*#__PURE__*/React.createElement(Field, { label: "\u03c6y tension yield", value: I.hpPhiTy, onChange: v => set('hpPhiTy', v) }),
+    /*#__PURE__*/React.createElement(Field, { label: "\u03c6u tension fracture", value: I.hpPhiTu, onChange: v => set('hpPhiTu', v) }),
+    /*#__PURE__*/React.createElement(Field, { label: "\u03c6 geo sand/silt", sub: "SPT side + tip", value: I.hpPhiGeo, onChange: v => set('hpPhiGeo', v) }),
+    /*#__PURE__*/React.createElement(Field, { label: "\u03c6 geo clay", sub: "\u03b1 side + 9Su tip", value: I.hpPhiGeoClay, onChange: v => set('hpPhiGeoClay', v) }),
+    /*#__PURE__*/React.createElement(Field, { label: "\u03c6 uplift", sub: "SPT / \u03b1 side", value: I.hpPhiUp, onChange: v => set('hpPhiUp', v) })) : /*#__PURE__*/React.createElement("div", {
     className: "grid grid-cols-2 gap-3"
   }, /*#__PURE__*/React.createElement(CasingSelect, { I: I, set: set }),
   /*#__PURE__*/React.createElement(Field, {
@@ -12248,7 +12368,7 @@ function App() {
       /*#__PURE__*/React.createElement("div", { className: "text-slate-500 mt-0.5" }, I.phiPresetNote.note)),
   /*#__PURE__*/React.createElement("div", {
     className: "grid grid-cols-3 gap-2"
-  }, [["φgeo", "phiGeo"], ["φcc", "phiCC"], ["φcu", "phiCU"], ["φf", "phiF"], ["φc", "phiC"], ["φb", "phiB"], ["φv", "phiV"], ["φup", "phiUp"], ["φt", "phiT"]].map(([lbl, key]) =>
+  }, [["φgeo", "phiGeo"], ["φcc", "phiCC"], ["φcu", "phiCU"], ["φf", "phiF"], ["φc", "phiC"], ["φb", "phiB"], ["φv", "phiV"], ["φup", "phiUp"], ["φt", "phiT"], ["φv punch", "phiVpunch"]].map(([lbl, key]) =>
     /*#__PURE__*/React.createElement("div", { key: key, className: "relative" },
       /*#__PURE__*/React.createElement(Field, { label: lbl, value: I[key], onChange: v => set(key, v) }),
       /*#__PURE__*/React.createElement("button", { title: "AASHTO definition & options", onClick: () => setPhiInfo({ open: true, key: key }),
@@ -12814,10 +12934,10 @@ function App() {
       /*#__PURE__*/React.createElement(Calc, { label: "Tip resistance", eq: `R_p=q_pA_p=${fmt(g.qp,2)}\\times ${fmt(g.boxArea_ft2,3)}=${fmt(g.Rp,1)}\\ \\text{kip}`, cite: "Eq. 10.7.3.8.6a-3" }),
       /*#__PURE__*/React.createElement(RptHeading, { n: "4", title: "Factored resistance & check", code: "AASHTO 10.7.3.8.6a" }),
       /*#__PURE__*/React.createElement(Calc, { label: "Nominal resistance", eq: `R_n=R_s+R_p=${fmt(g.Rs_comp,1)}+${fmt(g.Rp,1)}=${fmt(g.Rn_comp,1)}\\ \\text{kip}` }),
-      /*#__PURE__*/React.createElement(Calc, { label: "Factored resistance", eq: `\\phi_{stat}R_n=${fmt(g.phiRn_comp,1)}\\ \\text{kip}`, note: g.grpFac < 1 ? "incl. \u00d70.80 small-group" : "\u03c6=0.30 sand / 0.35 clay" }),
+      /*#__PURE__*/React.createElement(Calc, { label: "Factored resistance", eq: `\\phi_{stat}R_n=${fmt(g.phiRn_comp,1)}\\ \\text{kip}`, note: "\u03c6=" + fmt(g.PHI.sand_stat, 2) + " sand / " + fmt(g.PHI.clay_stat, 2) + " clay" + (g.grpFac < 1 ? ", incl. \u00d70.80 small-group" : "") }),
       /*#__PURE__*/React.createElement(RptCheck, { pass: g.comp_pass, eq: `\\phi_{stat}R_n=${fmt(g.phiRn_comp,1)}\\ \\text{kip}\\ ${g.comp_pass?"\\ge":"<"}\\ STL=${fmt(g.STL,0)}\\ \\text{kip}` }),
       g.enableTension && /*#__PURE__*/React.createElement("div", null,
-        /*#__PURE__*/React.createElement(RptHeading, { n: "5", title: "Uplift resistance", code: "\u03c6up=0.25 (Table 10.5.5.2.3-1)" }),
+        /*#__PURE__*/React.createElement(RptHeading, { n: "5", title: "Uplift resistance", code: "\u03c6up=" + fmt(g.PHI.sand_up, 2) + " (Table 10.5.5.2.3-1)" }),
         /*#__PURE__*/React.createElement(Narr, null, "In tension the tip is not credited; uplift is resisted by side resistance only, with a lower resistance factor reflecting the reduced reliability of side resistance in uplift."),
         /*#__PURE__*/React.createElement(Calc, { label: "Factored uplift", eq: `\\phi_{up}R_s=${fmt(g.phiRn_up,1)}\\ \\text{kip}`, cite: "skin only" }),
         /*#__PURE__*/React.createElement(RptCheck, { pass: g.up_pass, eq: `\\phi_{up}R_s=${fmt(g.phiRn_up,1)}\\ \\text{kip}\\ ${g.up_pass?"\\ge":"<"}\\ T_u=${fmt(g.Tu,0)}\\ \\text{kip}` })),
@@ -12827,8 +12947,8 @@ function App() {
   I.pileType === "hpile" && r.hpileStruct && /*#__PURE__*/React.createElement(Module, {
     idx: "03",
     title: "Structural Axial \u2014 Compression + Buckling",
-    code: "AASHTO 6.9.2.1 / 6.9.4.1 \u00b7 \u03c6c=0.60",
-    status: (() => { const hs = r.hpileStruct; if (!hs.hasStickup) return (0.60 * hs.Po) >= hs.STL;
+    code: "AASHTO 6.9.2.1 / 6.9.4.1 \u00b7 \u03c6c=" + fmt(r.hpileStruct.phi_c_axial, 2),
+    status: (() => { const hs = r.hpileStruct; if (!hs.hasStickup) return (hs.phi_c_axial * hs.Po) >= hs.STL;
       const bs = r.buckling && r.buckling.sel; return bs ? bs.pass : null; })(),
     open: open.HA,
     onToggle: () => setOpen(o => ({ ...o, HA: !o.HA }))
@@ -12838,7 +12958,7 @@ function App() {
     // which is section-aware and shares the identical column-curve closer with
     // the micropile. No stickup -> fully braced, Pn = Po.
     const bsel = r.buckling && r.buckling.sel;
-    let Pn = hs.Po, Pe = null, phiPn = 0.60 * hs.Po, pass = 0.60 * hs.Po >= hs.STL;
+    let Pn = hs.Po, Pe = null, phiPn = hs.phi_c_axial * hs.Po, pass = hs.phi_c_axial * hs.Po >= hs.STL;
     let needCompute = false, methodName = "Fully braced (no stickup)";
     if (hs.hasStickup) {
       const tabName = { davisson: "Davisson (closed form)", deflmatch: "Deflection-matched", pcrit: "Nonlinear P-crit" };
@@ -12903,13 +13023,13 @@ function App() {
               : ((hs.Po/Pe) <= 2.25
                   ? /*#__PURE__*/React.createElement(Calc, { label: "Inelastic buckling", eq: `P_n=\\left[0.658^{P_o/P_e}\\right]P_o=${fmt(Pn,0)}\\ \\text{kip}`, cite: "Eq. 6.9.4.1.1-1" })
                   : /*#__PURE__*/React.createElement(Calc, { label: "Elastic buckling", eq: `P_n=0.877P_e=${fmt(Pn,0)}\\ \\text{kip}`, cite: "Eq. 6.9.4.1.1-2" }))),
-      !needCompute && /*#__PURE__*/React.createElement(RptCheck, { pass: pass, eq: `\\phi_c P_n=0.60\\times ${fmt(Pn,0)}=${fmt(phiPn,0)}\\ \\text{kip}\\ ${pass?"\\ge":"<"}\\ STL=${fmt(hs.STL,0)}\\ \\text{kip}` }),
-      /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-400 mt-1" }, "\u03c6c = 0.60 (H-pile, good driving, no pile tip \u2014 6.5.4.2). For severe driving with a pile tip, \u03c6c = 0.50."));
+      !needCompute && /*#__PURE__*/React.createElement(RptCheck, { pass: pass, eq: `\\phi_c P_n=${fmt(hs.phi_c_axial,2)}\\times ${fmt(Pn,0)}=${fmt(phiPn,0)}\\ \\text{kip}\\ ${pass?"\\ge":"<"}\\ STL=${fmt(hs.STL,0)}\\ \\text{kip}` }),
+      /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-400 mt-1" }, "\u03c6c = " + fmt(hs.phi_c_axial, 2) + " used (H-pile input). AASHTO 6.5.4.2: 0.60 good driving, no pile tip; 0.50 severe driving with a pile tip."));
   })()),
   I.pileType === "hpile" && r.hpileStruct && /*#__PURE__*/React.createElement(Module, {
     idx: "04",
     title: "Structural Flexure \u2014 Elastic",
-    code: "AASHTO 6.12.1.2.1 / 6.12.2.2.1 \u00b7 \u03c6f=1.00",
+    code: "AASHTO 6.12.1.2.1 / 6.12.2.2.1 \u00b7 \u03c6f=" + fmt(r.hpileStruct.phi_f, 2),
     status: r.hpileStruct.flex_pass,
     open: open.HF,
     onToggle: () => setOpen(o => ({ ...o, HF: !o.HF }))
@@ -12921,7 +13041,7 @@ function App() {
       /*#__PURE__*/React.createElement(Calc, { label: hs.axisStrong ? "Strong-axis elastic modulus" : "Weak-axis elastic modulus", eq: hs.axisStrong ? `S_x=\\dfrac{I_x}{d/2}=\\dfrac{${fmt(hp.Ix,1)}}{${fmt(hp.d/2,2)}}=${fmt(hp.Sx,1)}\\ \\text{in}^3` : `S_y=\\dfrac{I_y}{b_f/2}=\\dfrac{${fmt(hp.Iy,1)}}{${fmt(hp.bf/2,2)}}=${fmt(hp.Sy,1)}\\ \\text{in}^3` }),
       /*#__PURE__*/React.createElement(RptHeading, { n: "2", title: "Nominal flexural resistance", code: "AASHTO 6.12 (elastic)" }),
       /*#__PURE__*/React.createElement(Calc, { label: "Elastic yield moment", eq: `M_n=F_yS=${fmt(hs.Fy,0)}\\times ${fmt(hs.S_sel,1)}=${fmt(hs.Mn_elastic*12,0)}\\ \\text{kip}\\cdot\\text{in}`, result: `=${fmt(hs.Mn_elastic,1)}\\ \\text{kip}\\cdot\\text{ft}` }),
-      /*#__PURE__*/React.createElement(Calc, { label: "Factored resistance", eq: `M_r=\\phi_f M_n=1.00\\times ${fmt(hs.Mn_elastic,1)}=${fmt(hs.phiMn,1)}\\ \\text{kip}\\cdot\\text{ft}`, cite: "\u03c6f=1.00, 6.5.4.2" }),
+      /*#__PURE__*/React.createElement(Calc, { label: "Factored resistance", eq: `M_r=\\phi_f M_n=${fmt(hs.phi_f,2)}\\times ${fmt(hs.Mn_elastic,1)}=${fmt(hs.phiMn,1)}\\ \\text{kip}\\cdot\\text{ft}`, cite: "\u03c6f=" + fmt(hs.phi_f, 2) + ", 6.5.4.2" }),
       /*#__PURE__*/React.createElement(RptCheck, { pass: hs.flex_pass, eq: `\\phi_f M_n=${fmt(hs.phiMn,1)}\\ \\text{kip}\\cdot\\text{ft}\\ ${hs.flex_pass?"\\ge":"<"}\\ M_u=${fmt(hs.Mu,1)}\\ \\text{kip}\\cdot\\text{ft}` }),
       /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-600 bg-slate-50 border border-slate-200 rounded-sm px-2 py-1.5 mt-1 leading-snug" },
         /*#__PURE__*/React.createElement("b", null, "Plastic reserve available: "), "AASHTO 6.12.2.2.1 permits ", /*#__PURE__*/React.createElement(RTex, { tex: `M_p=F_yZ=${fmt(hs.Mp,1)}\\ \\text{kip}\\cdot\\text{ft}` }), " (capped 1.6F\u1d67S weak-axis; H-shape weak-axis M\u209a=1.5F\u1d67S), subject to the flange local-buckling check of 6.12.2.2.1c. The elastic basis used here is conservative by ~", fmt(100 * (hs.Mp / hs.Mn_elastic - 1), 0), "%. The plastic capacity may be claimed with PE review of the flange compactness (\u03bb\u209a\u2091=0.38\u221a(E/F\u1d67\u2091), \u03bb\u1d63\u2091=1.0\u221a(E/F\u1d67\u2091))."));
@@ -12929,7 +13049,7 @@ function App() {
   I.pileType === "hpile" && r.hpileStruct && /*#__PURE__*/React.createElement(Module, {
     idx: "05",
     title: "Combined Axial + Flexure \u2014 Interaction",
-    code: "AASHTO 6.9.2.2.1 \u00b7 \u03c6c=0.70 \u03c6f=1.00",
+    code: "AASHTO 6.9.2.2.1 \u00b7 \u03c6c=" + fmt(r.hpileStruct.phi_c_comb, 2) + " \u03c6f=" + fmt(r.hpileStruct.phi_f, 2),
     status: (() => { const hs = r.hpileStruct; if (!hs.hasStickup || hs.buckMethod !== "pcrit") return hs.comb_pass2; return (pcr && pcr.ok) ? true : null; })(),
     open: open.HC,
     onToggle: () => setOpen(o => ({ ...o, HC: !o.HC }))
@@ -12937,7 +13057,7 @@ function App() {
     const hs = r.hpileStruct;
     let Pr = hs.Pr, ratio = hs.comb_ratio, branch = hs.comb_branch, pass = hs.comb_pass2, needCompute = false, Pn = hs.Pn_axial;
     if (hs.hasStickup && hs.buckMethod === "pcrit") {
-      if (pcr && pcr.ok) { const Pe = pcr.Pcr, rt = hs.Po / Pe; Pn = rt <= 2.25 ? Math.pow(0.658, rt) * hs.Po : 0.877 * Pe; Pr = 0.70 * Pn; const PuPr = hs.STL / Pr, MuMr = hs.Mr > 0 ? hs.Mu / hs.Mr : 0; if (PuPr < 0.2) { branch = "<0.2"; ratio = PuPr / 2 + MuMr; } else { branch = "\u22650.2"; ratio = PuPr + (8 / 9) * MuMr; } pass = ratio <= 1.0; }
+      if (pcr && pcr.ok) { const Pe = pcr.Pcr, rt = hs.Po / Pe; Pn = rt <= 2.25 ? Math.pow(0.658, rt) * hs.Po : 0.877 * Pe; Pr = hs.phi_c_comb * Pn; const PuPr = hs.STL / Pr, MuMr = hs.Mr > 0 ? hs.Mu / hs.Mr : 0; if (PuPr < 0.2) { branch = "<0.2"; ratio = PuPr / 2 + MuMr; } else { branch = "\u22650.2"; ratio = PuPr + (8 / 9) * MuMr; } pass = ratio <= 1.0; }
       else { needCompute = true; }
     }
     if (needCompute) return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement(Narr, null, "Nonlinear P-crit is selected. Compute ", /*#__PURE__*/React.createElement(RTex, { tex: "P_{cr}" }), " in the Structural Axial module first; the interaction below updates automatically."));
@@ -12945,8 +13065,8 @@ function App() {
     return /*#__PURE__*/React.createElement("div", null,
       /*#__PURE__*/React.createElement(Narr, null, "Members under combined axial compression and flexure must satisfy the AASHTO beam-column interaction. The form depends on the axial demand ratio ", /*#__PURE__*/React.createElement(RTex, { tex: "P_u/P_r" }), ": below 0.2 the axial term is halved, at or above 0.2 the flexural term carries the 8/9 factor. The resistances use ", /*#__PURE__*/React.createElement(RTex, { tex: "\\phi_c=0.70" }), " and ", /*#__PURE__*/React.createElement(RTex, { tex: "\\phi_f=1.00" }), " per the undamaged-H-pile values in 6.5.4.2."),
       /*#__PURE__*/React.createElement(RptHeading, { n: "1", title: "Factored resistances", code: "AASHTO 6.9.2.1 / 6.12" }),
-      /*#__PURE__*/React.createElement(Calc, { label: "Axial", eq: `P_r=\\phi_c P_n=0.70\\times ${fmt(Pn,0)}=${fmt(Pr,0)}\\ \\text{kip}`, cite: "\u03c6c=0.70" }),
-      /*#__PURE__*/React.createElement(Calc, { label: "Flexure", eq: `M_r=\\phi_f M_n=${fmt(hs.Mr,1)}\\ \\text{kip}\\cdot\\text{ft}`, cite: "\u03c6f=1.00" }),
+      /*#__PURE__*/React.createElement(Calc, { label: "Axial", eq: `P_r=\\phi_c P_n=${fmt(hs.phi_c_comb,2)}\\times ${fmt(Pn,0)}=${fmt(Pr,0)}\\ \\text{kip}`, cite: "\u03c6c=" + fmt(hs.phi_c_comb, 2) }),
+      /*#__PURE__*/React.createElement(Calc, { label: "Flexure", eq: `M_r=\\phi_f M_n=${fmt(hs.Mr,1)}\\ \\text{kip}\\cdot\\text{ft}`, cite: "\u03c6f=" + fmt(hs.phi_f, 2) }),
       /*#__PURE__*/React.createElement(RptHeading, { n: "2", title: "Demand ratios", code: "" }),
       /*#__PURE__*/React.createElement(Calc, { label: "Axial ratio", eq: `\\dfrac{P_u}{P_r}=\\dfrac{${fmt(hs.STL,0)}}{${fmt(Pr,0)}}=${fmt(PuPr,3)}`, cite: branch === "<0.2" ? "< 0.2" : "\u2265 0.2" }),
       /*#__PURE__*/React.createElement(Calc, { label: "Flexural ratio", eq: `\\dfrac{M_u}{M_r}=\\dfrac{${fmt(hs.Mu,1)}}{${fmt(hs.Mr,1)}}=${fmt(MuMr,3)}` }),
@@ -12957,7 +13077,7 @@ function App() {
   I.pileType === "hpile" && r.hpileStruct && /*#__PURE__*/React.createElement(Module, {
     idx: "07",
     title: "Structural Shear",
-    code: "AASHTO 6.10.9 / 6.12.1.2.3a \u00b7 \u03c6v=1.00",
+    code: "AASHTO 6.10.9 / 6.12.1.2.3a \u00b7 \u03c6v=" + fmt(r.hpileStruct.phi_v, 2),
     status: r.hpileStruct.shear_pass,
     open: open.HV,
     onToggle: () => setOpen(o => ({ ...o, HV: !o.HV }))
@@ -12972,14 +13092,14 @@ function App() {
       /*#__PURE__*/React.createElement(RptHeading, { n: "2", title: "Nominal shear resistance", code: "" }),
       /*#__PURE__*/React.createElement(Calc, { label: "Buckling coefficient", eq: hs.axisStrong ? `C=1.0\\ \\text{(stocky web, }d/t_w=${fmt(hp.web_htw,1)})` : `k=1.2` }),
       /*#__PURE__*/React.createElement(Calc, { label: "Nominal shear", eq: `V_n=CV_p=${fmt(hs.Vn,1)}\\ \\text{kip}`, cite: "Eq. 6.10.9.2-1" }),
-      /*#__PURE__*/React.createElement(Calc, { label: "Factored resistance", eq: `V_r=\\phi_v V_n=1.00\\times ${fmt(hs.Vn,1)}=${fmt(hs.phiVn,1)}\\ \\text{kip}`, cite: "\u03c6v=1.00, 6.5.4.2" }),
+      /*#__PURE__*/React.createElement(Calc, { label: "Factored resistance", eq: `V_r=\\phi_v V_n=${fmt(hs.phi_v,2)}\\times ${fmt(hs.Vn,1)}=${fmt(hs.phiVn,1)}\\ \\text{kip}`, cite: "\u03c6v=" + fmt(hs.phi_v, 2) + ", 6.5.4.2" }),
       /*#__PURE__*/React.createElement(RptCheck, { pass: hs.shear_pass, eq: `\\phi_v V_n=${fmt(hs.phiVn,1)}\\ \\text{kip}\\ ${hs.shear_pass?"\\ge":"<"}\\ V_u=${fmt(hs.Vu,1)}\\ \\text{kip}` }),
       /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-400 mt-1" }, "V\u1d64 taken as the pile-head lateral shear from the p\u2013y analysis."));
   })()),
   I.pileType === "hpile" && r.hpileStruct && r.hpileStruct.enableTension && /*#__PURE__*/React.createElement(Module, {
     idx: "09",
     title: "Structural Tension",
-    code: "AASHTO 6.8 / 6.5.4.2 \u00b7 \u03c6y=0.95 \u03c6u=0.80",
+    code: "AASHTO 6.8 / 6.5.4.2 \u00b7 \u03c6y=" + fmt(r.hpileStruct.phi_ty, 2) + " \u03c6u=" + fmt(r.hpileStruct.phi_tu, 2),
     status: r.hpileStruct.strTension_pass,
     open: open.HT,
     onToggle: () => setOpen(o => ({ ...o, HT: !o.HT }))
@@ -12987,10 +13107,10 @@ function App() {
     const hs = r.hpileStruct;
     return /*#__PURE__*/React.createElement("div", null,
       /*#__PURE__*/React.createElement(Narr, null, "The factored tensile resistance is the lesser of yielding on the gross section and fracture on the net section. For a plain driven pile without holes the net area equals the gross area, so yielding on gross typically governs."),
-      /*#__PURE__*/React.createElement(RptHeading, { n: "1", title: "Yielding on gross section", code: "\u03c6y=0.95" }),
-      /*#__PURE__*/React.createElement(Calc, { label: "Yield resistance", eq: `\\phi_y F_y A_g=0.95\\times ${fmt(hs.Fy,0)}\\times ${fmt(hs.Ag,2)}`, result: `=${fmt(hs.phiPn_ty,0)}\\ \\text{kip}` }),
-      /*#__PURE__*/React.createElement(RptHeading, { n: "2", title: "Fracture on net section", code: "\u03c6u=0.80" }),
-      /*#__PURE__*/React.createElement(Calc, { label: "Fracture resistance", eq: `\\phi_u F_u A_n=0.80\\times ${fmt(hs.Fu,0)}\\times ${fmt(hs.Ag,2)}`, result: `=${fmt(hs.phiPn_tu,0)}\\ \\text{kip}`, note: "A_n\u2248A_g (no holes)" }),
+      /*#__PURE__*/React.createElement(RptHeading, { n: "1", title: "Yielding on gross section", code: "\u03c6y=" + fmt(hs.phi_ty, 2) }),
+      /*#__PURE__*/React.createElement(Calc, { label: "Yield resistance", eq: `\\phi_y F_y A_g=${fmt(hs.phi_ty,2)}\\times ${fmt(hs.Fy,0)}\\times ${fmt(hs.Ag,2)}`, result: `=${fmt(hs.phiPn_ty,0)}\\ \\text{kip}` }),
+      /*#__PURE__*/React.createElement(RptHeading, { n: "2", title: "Fracture on net section", code: "\u03c6u=" + fmt(hs.phi_tu, 2) }),
+      /*#__PURE__*/React.createElement(Calc, { label: "Fracture resistance", eq: `\\phi_u F_u A_n=${fmt(hs.phi_tu,2)}\\times ${fmt(hs.Fu,0)}\\times ${fmt(hs.Ag,2)}`, result: `=${fmt(hs.phiPn_tu,0)}\\ \\text{kip}`, note: "A_n\u2248A_g (no holes)" }),
       /*#__PURE__*/React.createElement(RptCheck, { pass: hs.strTension_pass, eq: `\\phi P_n=\\min(${fmt(hs.phiPn_ty,0)},${fmt(hs.phiPn_tu,0)})=${fmt(hs.phiPn_tension,0)}\\ \\text{kip}\\ ${hs.strTension_pass?"\\ge":"<"}\\ T_u=${fmt(hs.Tu,0)}\\ \\text{kip}` }));
   })()),
   I.pileType === "hpile" && r.hpileHeadFix && r.hpileHeadFix.isFixedHead && /*#__PURE__*/React.createElement(Module, {
@@ -13701,6 +13821,15 @@ function App() {
     label: "Local-buckling moment",
     tex: `M_{n,LB}=\\big(\\tfrac{0.021E}{D/t}+f_{yc}\\big)S/12=${fmt(r.flex.Mn_j2, 1)}\\text{ kip}\\!\\cdot\\!\\text{ft}`
   }), /*#__PURE__*/React.createElement(DerivLine, {
+    label: "Slender limit",
+    tex: `0.45E/f_{yc}=0.45(${fmt(I.E, 0)})/${fmt(r.flex.fyc, 0)}=${fmt(r.flex.lim_Y, 1)}`
+  }), /*#__PURE__*/React.createElement(DerivLine, {
+    label: "Slender moment",
+    tex: `M_{n,S}=F_{cr}S/12,\\ F_{cr}=\\tfrac{0.33E}{D/t}=${fmt(r.flex.Fcr_j3, 1)}\\text{ ksi}\\Rightarrow M_{n,S}=${fmt(r.flex.Mn_j3, 1)}\\text{ kip}\\!\\cdot\\!\\text{ft}`
+  }), r.flex.flexNotPermitted && /*#__PURE__*/React.createElement("div", {
+    className: "text-[10px] my-1 px-2 py-1 rounded-sm",
+    style: { background: "rgba(178,59,59,0.08)", color: "#8a2a2a", border: "1px solid rgba(178,59,59,0.3)" }
+  }, "\u26a0 ", r.flex.flexMsg), /*#__PURE__*/React.createElement(DerivLine, {
     label: "Governing mode",
     tex: `\\text{${r.flex.flexMode || '—'}}\\Rightarrow M_n=${fmt(r.flex.Mn_j, 1)}\\text{ kip}\\!\\cdot\\!\\text{ft}`
   }), /*#__PURE__*/React.createElement("div", {
@@ -13829,7 +13958,7 @@ function App() {
     tex: `P_o=0.95f'_cA_c+F_{yst}A_{st}+F_{yb}A_{sb}=0.95(${fmt(r.cfst.fcGrout, 2)})(${fmt(r.cfst.Ac_c, 1)})+${fmt(I.fyc, 0)}(${fmt(r.cfst.Ast_c, 1)})+${fmt(I.fyb, 0)}(${fmt(r.cfst.Asb_c, 2)})=${fmt(r.cfst.Po_cfst, 0)}\\text{ kip}`
   }), /*#__PURE__*/React.createElement(DerivLine, {
     label: "Stiffness factor (Eq -7)",
-    tex: `C'=0.15+\\tfrac{P}{P_o}+\\tfrac{A_{st}+A_{sb}}{A_{st}+A_{sb}+A_c}=0.15+\\tfrac{${fmt(r.cfst.Pdl, 0)}}{${fmt(r.cfst.Po_cfst, 0)}}+\\tfrac{${fmt(r.cfst.Ast_c + r.cfst.Asb_c, 1)}}{${fmt(r.cfst.Ast_c + r.cfst.Asb_c + r.cfst.Ac_c, 1)}}=${fmt(r.cfst.Cp, 3)}`
+    tex: `C'=0.15+\\tfrac{P}{P_o}+\\tfrac{A_{st}+A_{sb}}{A_{st}+A_{sb}+A_c}=0.15+\\tfrac{${fmt(r.cfst.Pdl, 0)}}{${fmt(r.cfst.Po_cfst, 0)}}+\\tfrac{${fmt(r.cfst.Ast_c + r.cfst.Asb_c, 1)}}{${fmt(r.cfst.Ast_c + r.cfst.Asb_c + r.cfst.Ac_c, 1)}}=${fmt(r.cfst.Cp_raw, 3)}\\le 0.9\\Rightarrow C'=${fmt(r.cfst.Cp, 3)}`
   }), /*#__PURE__*/React.createElement(DerivLine, {
     label: "Moments of inertia",
     tex: `I_{st}=${fmt(r.cfst.Ist_c, 1)},\\;I_{si}=${fmt(r.cfst.Isi_c, 2)},\\;I_c=${fmt(r.cfst.Ic_c, 1)}\\text{ in}^4`
@@ -13945,7 +14074,7 @@ function App() {
     tex: `d_v=\\max(0.9d_e,\\,0.72t)=\\max(0.9(${fmt(r.punch.de_p, 1)}),0.72(${fmt(r.bearing.tcap, 1)}))=${fmt(r.punch.dv, 1)}\\text{ in}`
   }), /*#__PURE__*/React.createElement(DerivLine, {
     label: "Critical perimeter",
-    tex: `b_o=\\min(b_{o1},b_{o2})=\\min(${fmt(r.punch.bo1, 1)},${fmt(r.punch.bo2, 1)})=${fmt(r.punch.bo, 1)}\\text{ in}`
+    tex: `b_o=\\min\\big(\\pi(OD+d_v),\\tfrac{\\pi(OD+d_v)}{4}+2d_{edge}\\big)=\\min(${fmt(r.punch.bo1, 1)},${fmt(r.punch.bo2, 1)})=${fmt(r.punch.bo, 1)}\\text{ in}`
   }), /*#__PURE__*/React.createElement(DerivLine, {
     label: "Nominal shear (Eq 5.8.4.3.4-3)",
     tex: `V_n=0.125\\sqrt{f'_c}\\,b_o d_v=0.125\\sqrt{${fmt(I.fc / 1000, 2)}}(${fmt(r.punch.bo, 1)})(${fmt(r.punch.dv, 1)})=${fmt(r.punch.Vn, 1)}\\text{ kip}`
@@ -13953,7 +14082,7 @@ function App() {
     className: "mt-2"
   }, /*#__PURE__*/React.createElement(CheckRow, {
     pass: r.punch.pass,
-    tex: `\\phi_v V_n=${fmt(I.phiV, 2)}(${fmt(r.punch.Vn, 1)})=${fmt(r.punch.phiVn, 1)}\\text{ kip}${r.punch.pass ? ' \\geq ' : ' < '}STL=${fmt(I.STL, 0)}`,
+    tex: `\\phi_v V_n=${fmt(r.punch.phi_v, 2)}(${fmt(r.punch.Vn, 1)})=${fmt(r.punch.phiVn, 1)}\\text{ kip}${r.punch.pass ? ' \\geq ' : ' < '}STL=${fmt(I.STL, 0)}`,
     note: r.punch.pass ? "Bearing plate not required for compression load transfer." : ""
   }))), /*#__PURE__*/(I.pileType === "micropile") && React.createElement(Module, {
     idx: "08",
