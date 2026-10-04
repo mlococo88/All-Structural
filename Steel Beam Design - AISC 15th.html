@@ -39,6 +39,12 @@ body{font-family:var(--font-doc);font-size:10pt;color:var(--ink);background:#efe
 #projGrid label{display:block;font-family:var(--font-ui);font-size:7.5pt;text-transform:uppercase;letter-spacing:.5px;color:#B9C8DB;margin-bottom:1px}
 #projGrid input{width:100%;font-family:var(--font-ui);font-size:9pt;padding:3px 5px;border:1px solid #ffffff33;border-radius:3px;background:#ffffff14;color:#fff}
 #projGrid input::placeholder{color:#8FA3BC}
+#hdr .alltools{display:inline-block;margin-top:2px;font-family:var(--font-ui);font-size:8.5pt;color:#C7D4E4;text-decoration:none}
+#hdr .alltools:hover{color:#fff;text-decoration:underline}
+#projShare{display:flex;gap:6px;margin-top:5px}
+#projShare button{font-family:var(--font-ui);font-size:8pt;padding:2px 8px;border:1px solid #ffffff44;border-radius:3px;background:#ffffff14;color:#fff;cursor:pointer}
+#projShare button:hover{background:#ffffff2a}
+@media print{.alltools,#projShare{display:none!important}}
 #main{flex:1 1 auto;display:flex;min-height:0;overflow:hidden}
 #inputPanel{flex:0 0 33%;max-width:460px;min-width:340px;overflow-y:auto;border-right:2px solid var(--line);background:var(--panel);padding:9px 10px 40px}
 #outputPanel{flex:1 1 auto;min-width:0;overflow-y:auto;overflow-x:hidden;padding:0 14px 60px;background:var(--paper)}
@@ -160,10 +166,15 @@ textarea{min-height:64px;resize:vertical;font-family:var(--font-doc);font-size:1
       <div>
         <h1>Steel Beam Designer &mdash; AISC 360-16 (LRFD)</h1>
         <div class="byline">by Mario Lococo</div>
+        <a class="alltools" href="tools.html" target="_top">&larr; All tools</a>
       </div>
       <div class="stageTag" id="stageTag">Stage 1 &middot; Analysis Engine, Loads &amp; Sections &middot; strength checks arrive in Stage 2</div>
     </div>
     <div id="projGrid"></div>
+    <div id="projShare">
+      <button type="button" onclick="bxUseProjectInfo()">Use shared project info</button>
+      <button type="button" onclick="bxShareProjectInfo()">Share project info</button>
+    </div>
   </div>
   <div id="main">
     <div id="inputPanel"></div>
@@ -9988,6 +9999,116 @@ function colCurveFig(p,cc,D,Pu){
     legend:{font:{size:8.5},orientation:'h',y:1.18,x:1,xanchor:'right'},
     paper_bgcolor:'#fff',plot_bgcolor:'#fff',hovermode:'closest'}};
 }
+</script>
+<script>
+/* BridgeXfer v1 — cross-tool hand-off helper. Spec: HANDOFF.md. Duplicated verbatim in each tool that sends or receives (CLAUDE.md §3). */
+(function(){
+  if(window.BridgeXfer) return;
+  var NS='bridgeSuite.v1.';
+  function lsOK(){ try{ var k='__bx_t'; localStorage.setItem(k,'1'); localStorage.removeItem(k); return true; }catch(e){ return false; } }
+  function sharedProject(){
+    try{ var m=JSON.parse(localStorage.getItem(NS+'projectMeta')||'null');
+      if(m && m._schema==='bridge-project-meta' && m.fields) return { name:m.fields.projectName||'', bridgeId:m.fields.bridgeId||'' };
+    }catch(e){}
+    return null;
+  }
+  function stamp(channel, payload, producer, producerFile){
+    var p={}; for(var k in payload) if(Object.prototype.hasOwnProperty.call(payload,k)) p[k]=payload[k];
+    p.schemaVersion = p.schemaVersion || 1;
+    p.producer = p.producer || producer || document.title;
+    p.producerFile = p.producerFile || producerFile || decodeURIComponent((location.pathname.split('/').pop()||''));
+    p.producedAt = new Date().toISOString();
+    if(!p.project) p.project = sharedProject() || { name:'', bridgeId:'' };
+    if(!p.notes) p.notes = [];
+    return p;
+  }
+  function publish(channel, payload, producer, producerFile){
+    if(!payload || !payload._schema) return { error:'payload has no _schema' };
+    var p=stamp(channel, payload, producer, producerFile);
+    if(!lsOK()) return { error:'Browser storage is not available. Use "Export hand-off (JSON)" instead.', payload:p };
+    try{
+      localStorage.setItem(NS+channel, JSON.stringify(p));
+      localStorage.setItem(NS+channel+'.updatedAt', p.producedAt);
+    }catch(e){ return { error:'Could not save hand-off (storage full?): '+e.message, payload:p }; }
+    return { ok:true, payload:p };
+  }
+  function validate(p, schema, maxVersion){
+    if(!p || typeof p!=='object') return 'not a hand-off object';
+    if(p._schema!==schema) return 'wrong data type ('+(p._schema||'none')+'), expected '+schema;
+    if(!(p.schemaVersion<= (maxVersion||1))) return 'newer format (v'+p.schemaVersion+') than this tool supports (v'+(maxVersion||1)+')';
+    return null;
+  }
+  function read(channel, schema, maxVersion){
+    var raw=null;
+    try{ raw=localStorage.getItem(NS+channel); }catch(e){ return { error:'Browser storage is not available.' }; }
+    if(!raw) return { error:'Nothing has been sent on this channel yet.' , empty:true };
+    var p; try{ p=JSON.parse(raw); }catch(e){ return { error:'Stored hand-off is corrupt.' }; }
+    var err=validate(p, schema, maxVersion); if(err) return { error:err };
+    return { ok:true, payload:p };
+  }
+  function markAdopted(channel, receiverId, producedAt){
+    try{ localStorage.setItem(NS+channel+'.adopted.'+receiverId, producedAt||''); }catch(e){}
+  }
+  function isNew(channel, receiverId){
+    try{
+      var at=localStorage.getItem(NS+channel+'.updatedAt'); if(!at) return false;
+      return at!==localStorage.getItem(NS+channel+'.adopted.'+receiverId);
+    }catch(e){ return false; }
+  }
+  function exportFile(channel, payload){
+    var p=payload; if(!p){ try{ p=JSON.parse(localStorage.getItem(NS+channel)); }catch(e){} }
+    if(!p) return { error:'Nothing to export.' };
+    var blob=new Blob([JSON.stringify(p,null,2)],{type:'application/json'});
+    var a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+    a.download=(p._schema||channel)+'_'+(p.producedAt||'').slice(0,19).replace(/[:T]/g,'-')+'.json';
+    document.body.appendChild(a); a.click(); setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 60000);
+    return { ok:true };
+  }
+  function importFile(file, schema, maxVersion, cb){
+    var fr=new FileReader();
+    fr.onload=function(){ var p; try{ p=JSON.parse(fr.result); }catch(e){ cb({ error:'File is not valid JSON.' }); return; }
+      var err=validate(p, schema, maxVersion); cb(err? { error:err } : { ok:true, payload:p }); };
+    fr.onerror=function(){ cb({ error:'Could not read file.' }); };
+    fr.readAsText(file);
+  }
+  function describe(p){ return (p.producer||'?')+' — '+(p.producedAt? new Date(p.producedAt).toLocaleString():'?')+((p.project&&p.project.name)?' — '+p.project.name:''); }
+  window.BridgeXfer={ NS:NS, publish:publish, read:read, validate:validate, markAdopted:markAdopted, isNew:isNew, exportFile:exportFile, importFile:importFile, describe:describe, sharedProject:sharedProject };
+})();
+</script>
+<script>
+/* Shared project info (HANDOFF.md §4.1): "Use shared project info" / "Share project info".
+   Reads and writes the title-block inputs only, through their normal input events. */
+(function(){
+  var PRODUCER="Steel Beam Designer", FILE="Steel Beam Design - AISC 15th.html";
+  var MAP={projectName:'[data-fkey="proj_name"]', preparedBy:'[data-fkey="proj_by"]', checkedBy:'[data-fkey="proj_chk"]', date:'[data-fkey="proj_date"]'};
+  var KEYS=['projectName','bridgeId','jobNo','client','location','preparedBy','checkedBy','date'];
+  var LBL={projectName:'Project name',bridgeId:'Bridge ID',jobNo:'Job no.',client:'Client',location:'Location',
+           preparedBy:'Prepared by',checkedBy:'Checked by',date:'Date'};
+  function fld(k){ return MAP[k] ? document.querySelector(MAP[k]) : null; }
+  window.bxShareProjectInfo=function(){
+    var f={};
+    KEYS.forEach(function(k){ var e=fld(k); f[k]=e ? String(e.value||'') : ''; });
+    var r=BridgeXfer.publish('projectMeta',{_schema:'bridge-project-meta',fields:f},PRODUCER,FILE);
+    alert(r.ok ? 'Project info shared. Other tools can load it with "Use shared project info".' : r.error);
+  };
+  window.bxUseProjectInfo=function(){
+    var r=BridgeXfer.read('projectMeta','bridge-project-meta',1);
+    if(!r.ok){ alert('Shared project info: '+r.error); return; }
+    var f=r.payload.fields||{}, ch=[], skip=[];
+    KEYS.forEach(function(k){
+      var e=fld(k), v=(f[k]==null) ? '' : String(f[k]);
+      if(!e || v==='') return;   /* field not in this tool, or shared value empty: never blank a field */
+      if(e.type==='date' && !/^\d{4}-\d{2}-\d{2}$/.test(v)){ skip.push(LBL[k]+' ("'+v+'" is not a YYYY-MM-DD date)'); return; }
+      if(e.value!==v) ch.push({e:e,k:k,v:v});
+    });
+    var head='Shared project info from '+BridgeXfer.describe(r.payload);
+    var sk=skip.length ? '\n\nSkipped: '+skip.join('; ') : '';
+    if(!ch.length){ alert(head+'\n\nNothing to change: the matching fields already hold these values.'+sk); return; }
+    if(!confirm(head+'\n\nThese fields will be overwritten:\n'+ch.map(function(c){
+        return '  '+LBL[c.k]+': "'+c.e.value+'" → "'+c.v+'"'; }).join('\n')+sk+'\n\nContinue?')) return;
+    ch.forEach(function(c){ c.e.value=c.v; c.e.dispatchEvent(new Event('input',{bubbles:true})); });
+  };
+})();
 </script>
 </body>
 </html>

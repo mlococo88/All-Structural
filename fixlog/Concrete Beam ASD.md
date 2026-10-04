@@ -510,6 +510,32 @@ All edits were applied by scripted exact-string replacement (each Before block o
 - **Finding:** the review said the rebar `<line …` was missing `/>`. The full line does end with `stroke-dasharray="1,5" />` — the review's extract was truncated. jsdom parse of the generated SVG shows a closed `<line>` followed by a separate `<text>Steel</text>` element, before and after this PR.
 - **Action:** none.
 
+## 2026-10-04 — PR: claude/step1-group4 (PR link added after merge)
+### S1. "← All tools" link   [feature (no result change)]
+- **Date / type:** 2026-10-04, feature (no result change).
+- **Where:** Navbar, left group, after the "AASHTO Std. Specs / MassDOT" subtitle block.
+- **Purpose:** link back to `tools.html` (`target="_top"`, hidden in print).
+- **Field mapping:** **No title block** (no project, job, engineer or date fields), so no shared-project buttons were added and no BridgeXfer copy, per the brief. Link only.
+- **Governing provision:** none (no engineering change). Spec: HANDOFF.md §4.1 and §5.
+- **Before / After** (exact; edits applied in this order, each anchor occurs once; line endings preserved):
+  1.
+     - Before:
+  ```html
+                  <p class="text-[10px] text-slate-400 uppercase tracking-wider">AASHTO Std. Specs / MassDOT</p>
+              </div>
+  ```
+     - After:
+  ```html
+                  <p class="text-[10px] text-slate-400 uppercase tracking-wider">AASHTO Std. Specs / MassDOT</p>
+              </div>
+              <a href="tools.html" target="_top" class="no-print text-[11px] text-slate-400 hover:text-white">&larr; All tools</a>
+  ```
+- **Behaviour notes:** The link has the existing `no-print` class, which the page's `@media print` block hides.
+- **Saved data:** unchanged.
+- **Check case:** n/a (navigation link only).
+- **How verified:** inline script syntax-checked; page loaded in jsdom before/after with no new errors; link found with `target="_top"`. `git diff` adds one line and removes none.
+- **Other copies of this code:** none.
+
 ## Open items (not changed)
 - O1. **Operating fc = 1,900 psi default** (= 0.633f'c at 3,000 psi; MBE 6B.6.2.3 gives 0.60f'c = 1,800 psi). Kept as the default and as a plain input (not auto-computed), per the engineer's instruction. — Needs MassDOT confirmation of the source of 1,900 psi.
 - O2. **Steel allowables for grades other than 40/50/60** (e.g. unknown/structural grade 33, Gr 50 operating, Gr 75) have no auto rule: the field keeps whatever is entered and is tagged "(input (no grade rule))". — Confirm the values to use (MBE Table 6B.6.2.3-1) if these grades should be automated.
