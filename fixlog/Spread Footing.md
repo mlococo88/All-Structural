@@ -264,9 +264,25 @@ Line numbers are approximate, as of this fix. Search for the anchor text.
   ```
 - The export format is unchanged (no tag added), so the check recognises the file by its required sections.
 
+## 2026-10-04 — Engineer decisions applied
+
+### F12. Surcharge kept in the structural (Phase 2) resultant (engineer's decision)   [decision record] [no result change]
+- **Where:** `computePhase2`, `netResultant` / `bodyResultant` (see F8). Anchor: `const surF=fDsw*(R.surD||0)+fLsur*(R.surL||0);`
+- **Problem:** F8 asked the engineer whether to keep the surcharge in the structural resultant, since it lowers sagging moment and one-way shear slightly (−1% to −5%), or to revert it or apply it only where unfavourable.
+- **Decision:** the engineer keeps the surcharge in the structural resultant, as implemented in F8.
+- **Governing provision:** statics (as F8).
+- **Before / After:** unchanged (F8 code stands).
+- **Check case:** F8 numbers stand (2 × 2 pedestal, 8 × 8 × 2 ft footing, 1.4D: Mu+ (x) = 87.89 k-ft, Mu− (x) = 27.28 k-ft, Vu,x = 28.69 k).
+- **How verified:** no code change on this branch since F8.
+- **Other copies of this code:** none known.
+
 ## Open items (not changed)
 - **O1. Vesić inclination exponent m uses nominal B/L, not B'/L'.** Anchor: `const mxm=(2+B/L)/(1+B/L)`. Using B'/L' is the more common form (AASHTO 10.6.3.1.2a uses B'/L'). This changes bearing capacity and needs a decision. Question: should m use the effective B'/L'?
 - **O2. The depth factors dq/dc are always applied.** AASHTO 10.6.3.1.2a and common practice drop them when the soil above the base is not competent or may be removed. Recommendation: add a "use depth factors" option, default on to keep the current results. Needs a decision on the default.
 - **O3. Passive acts over the full Df across the full footing width** (`PpX=pf*0.5*Kp*gs*Df*Df*L`). The footing face only spans t. This is conservative by default (pf = 0) and is left as is. Question: should passive be limited to the footing thickness, or should pf stay as the user's control?
 - **O4. Compression dowel ℓdc does not cap √f'c at 100 psi** (`Ldc=Math.max(0.02*BAR_DIA[dSize]*fy/(lam*sq),...)`). ACI 318-19 25.4.1.4 applies to all development lengths. This was not in the task list, so it is raised here and not changed. Effect: only when f'c > 10 ksi.
 - **O5. ℓd cover assumption:** cb uses the bottom clear cover for both layers and assumes the side cover is no less than that. A separate side-cover input would sharpen this. Low priority.
+
+## Resolved items
+- **F8 note (item 8): surcharge in the structural resultant is less conservative for sagging moment and one-way shear. Keep, revert, or apply only where unfavourable?**
+  - **RESOLVED 2026-10-04 (F12):** engineer keeps the surcharge in the structural resultant. No code change.
