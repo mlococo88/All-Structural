@@ -370,7 +370,7 @@ var st=document.createElement('style'); st.textContent=css;
       <div class="given">
         <div class="frow typerow"><div class="fval"><select id="bridgeType">
           <option value="a">(a) Concrete deck on steel beams</option>
-          <option value="k">(k) Concrete deck on precast concrete I / bulb-tee beams</option>
+          <option value="k" selected>(k) Concrete deck on precast concrete I / bulb-tee beams</option>
           <option value="e">(e) Concrete deck on concrete T / double-T beams</option>
           <option value="bc">(b/c) Concrete deck on concrete spread box beams</option>
           <option value="d">(d) Cast-in-place concrete multicell box</option>
@@ -417,7 +417,7 @@ var st=document.createElement('style'); st.textContent=css;
             <div class="frow"><label>Beam depth <span class="sym">d</span></label><div class="fval"><input type="number" id="depth" value="54" step="1"/><span class="u">in</span></div></div>
             <div class="frow"><label>Beam shape <span class="sym">fig.</span></label><div class="fval"><select id="beamShape">
               <option value="steel-i">Steel I-beam</option>
-              <option value="aashto-i">AASHTO I-beam</option>
+              <option value="aashto-i" selected>AASHTO I-beam</option>
               <option value="bulb-tee">Bulb-tee</option>
               <option value="box">Box beam (voided)</option>
               <option value="deck-solid">Deck beam — solid</option>
@@ -1754,6 +1754,16 @@ function leverConfig(p,geo,j,N){
     let R=0; for(const o of off) R+=0.5*leverContribution(pos,Nb,j,s+o);
     if(!best||R>best.R+1e-9) best={R,s};
   }
+  /* R(s) is piecewise linear in s, with kinks only where a wheel crosses a girder line, so its
+     maximum is at such a position or at an end of the travel range. Test those exactly too, so
+     the 0.25-ft grid above cannot step over the peak. */
+  { const sMin=rw0+2, sMax=rw1-2-trainLen, cand=[sMax];
+    for(const u of pos) for(const o of off) cand.push(u-o);
+    for(const s of cand){
+      if(s<sMin-1e-9||s>sMax+1e-9) continue;
+      let R=0; for(const o of off) R+=0.5*leverContribution(pos,Nb,j,s+o);
+      if(!best||R>best.R+1e-9) best={R,s};
+    } }
   if(!best) return null;
   const m=multiplePresence(N);
   return {N,R:best.R,m,df:best.R*m,wheels:off.map(o=>best.s+o),gaps};
@@ -1763,6 +1773,11 @@ function leverAll(p,geo,j){
   for(let N=1;N<=geo.NL;N++){ const c=leverConfig(p,geo,j,N); if(c) cfgs.push(c); }
   const gov=cfgs.reduce((a,b)=>(!a||b.df>a.df)?b:a,null);
   return {cfgs,gov};
+}
+/* Governing lever-rule config with two or more trucks (every lane count N = 2..N_L, each with
+   its own multiple-presence factor). Used where the lever rule replaces the "2+ lanes" equation. */
+function leverMulti(p,geo,j){
+  return leverAll(p,geo,j).cfgs.filter(c=>c.N>=2).reduce((a,b)=>(!a||b.df>a.df)?b:a,null);
 }
 
 /* ---- rigid cross-section method, per side ---- */
@@ -1799,7 +1814,7 @@ function memberDF(p,geo,Kg,skew,j){
     if(type==="int"){
       let mom1=emp.mom1, mom2=emp.mom2, shr1=emp.shr1, shr2=emp.shr2, n3info=null, lvUsed=null;
       if(tooWide){ // S > 16 ft: equations out of range, lever rule governs moment and shear
-        const lv1=leverConfig(p,geo,j,1), lv2=leverConfig(p,geo,j,2);
+        const lv1=leverConfig(p,geo,j,1), lv2=leverMulti(p,geo,j);   // lv2 = governing of N = 2..N_L trucks
         lvUsed={lv1,lv2,eq:{mom1,mom2,shr1,shr2}};
         mom1=shr1=(lv1?lv1.df:0); mom2=shr2=(lv2?lv2.df:0);
       } else if(n3){ // Nb=3: moment = lesser of eqn or lever rule; shear = lever rule
@@ -1818,7 +1833,7 @@ function memberDF(p,geo,Kg,skew,j){
     const eM=0.77+de/9.1, eV=0.60+de/10;
     let mE=eM*emp.mom2, vE=eV*emp.shr2, n3info=null, lvUsed=null;
     if(tooWide){ // S > 16 ft: the e-factor rides on an out-of-range interior equation, so use the lever rule
-      const lv2=leverConfig(p,geo,j,2); lvUsed={lv2,eq:{mE,vE}};
+      const lv2=leverMulti(p,geo,j); lvUsed={lv2,eq:{mE,vE}};   // governing of N = 2..N_L trucks
       mE=lv2?lv2.df:0; vE=lv2?lv2.df:0;
     } else if(n3){ const lv2=leverConfig(p,geo,j,2); n3info={lv2,eqM:mE};
       mE=Math.min(mE,lv2?lv2.df:mE); vE=lv2?lv2.df:vE; }   // Nb=3: moment lesser of eqn/lever; shear lever
@@ -1829,9 +1844,14 @@ function memberDF(p,geo,Kg,skew,j){
     const momExt1=l1*skew.scfM, momExt2=Math.max(mE,rig.g)*skew.scfM;
     const shrExt1=l1*skew.scfV, shrExt2=Math.max(vE,rig.g)*skew.scfV;
     const base=(momExt1>=momExt2?"lever (1 ln)":(rig.g>mE?"rigid":"e-factor"));
+    // Fatigue (one truck): the exterior DF may not be less than the rigid-section value
+    // (4.6.2.2.2d), so the one-lane basis is the larger of lever rule and rigid method, n_L = 1.
+    const rig1=(rig.trials&&rig.trials.length)?rig.trials[0].g:0, fat1=Math.max(l1,rig1);
+    const fatOneM=fat1*skew.scfM, fatOneV=fat1*skew.scfV;
     return {j,label,type,S,de,side,bay,emp,lever1,eM,eV,mE,vE,rig,n3info,tooWide,lvUsed,
       r:{momExt1,momExt2,shrExt1,shrExt2},gM:Math.max(momExt1,momExt2),gV:Math.max(shrExt1,shrExt2),
-      fatM:fat(momExt1),fatV:fat(shrExt1),
+      fatM:fat(fatOneM),fatV:fat(fatOneV),fatOneM,fatOneV,
+      fatNote:(rig1>l1+1e-9)?`One-lane basis = rigid method with one lane loaded (${f3(rig1)}), which exceeds the one-lane lever rule (${f3(l1)}); the exterior DF may not be less than the rigid-section value (4.6.2.2.2d)`:"",
       method:tooWide?(base==="rigid"?"rigid (S>16)":"lever (S>16)"):base};
   }
 
@@ -1860,7 +1880,7 @@ function memberDF(p,geo,Kg,skew,j){
     const fV=skew.active?1.0+(Math.sqrt(p.L*p.depth/12.0)/(6.0*S))*skew.tan:1.0;  // Table 4.6.2.2.3c-1 (b,c)
     if(type==="int"){
       let mom1,mom2,shr1,shr2,lvUsed=null;
-      if(tooWide){ const lv1=leverConfig(p,geo,j,1),lv2=leverConfig(p,geo,j,2); lvUsed={lv1,lv2};
+      if(tooWide){ const lv1=leverConfig(p,geo,j,1),lv2=leverMulti(p,geo,j); lvUsed={lv1,lv2};
         mom1=shr1=(lv1?lv1.df:0); mom2=shr2=(lv2?lv2.df:0); }
       else { mom1=sp.mom1; mom2=sp.mom2; shr1=sp.shr1; shr2=sp.shr2; }
       mom1*=skew.scfM; mom2*=skew.scfM; shr1*=fV; shr2*=fV;
@@ -1871,7 +1891,7 @@ function memberDF(p,geo,Kg,skew,j){
     const lever1=leverConfig(p,geo,j,1), l1=lever1?lever1.df:0;
     const eM=0.97+de/28.5, eV=0.80+de/10;
     let mE,vE,lv2=null;
-    if(tooWide){ lv2=leverConfig(p,geo,j,2); mE=lv2?lv2.df:0; vE=lv2?lv2.df:0; }
+    if(tooWide){ lv2=leverMulti(p,geo,j); mE=lv2?lv2.df:0; vE=lv2?lv2.df:0; }
     else { mE=eM*sp.mom2; vE=eV*sp.shr2; }
     const momExt1=l1*skew.scfM, momExt2=mE*skew.scfM, shrExt1=l1*fV, shrExt2=vE*fV;
     return {j,label,type,S,de,side,sp,fV,tooWide,lever1,eM,eV,mE,vE,
@@ -1944,10 +1964,47 @@ function bridgeWarnings(p,geo,Kg){
   } else if(p.type==="slab") warn("Cast-in-place slab: equivalent-strip-width method; distribution factors are per 1-ft strip.","info");
   if(BEAM_SLAB.has(p.type)&&p.Nb===3) warn("N_b = 3: per Tables 4.6.2.2.2b/3a-1 the moment factors are the lesser of the equation or the lever rule, and shear uses the lever rule — applied automatically.","info");
   if(p.spans&&p.spans.length>1) warn(`Continuous structure: L = ${f1(p.L)} ft for the selected design region (${p.Ldesc||""}) per Table C4.6.2.2.1-2.`,"info");
+  { /* d_e range of applicability (Tables 4.6.2.2.2d-1 / 4.6.2.2.3b-1). memberDF clamps d_e for some
+       girder types; say so whenever d_e is outside the range, and say which way the clamp acts. */
+    let lo=null,hi=null,clampLo=false,clampHi=false;
+    if(BEAM_SLAB.has(p.type)){ lo=-1.0; hi=5.5; clampLo=true; }
+    else if(BOX.has(p.type)){ hi=2.0; clampHi=true; }
+    else if(p.type==="bc"){ lo=0.0; hi=4.5; clampLo=clampHi=true; }
+    else if(p.type==="d"){ lo=-2.0; hi=5.0; clampLo=clampHi=true; }
+    if(hi!=null) [["left",geo.deL],["right",geo.deR]].forEach(([nm,de])=>{
+      const rng=lo==null?`d_e ≤ ${f1(hi)} ft`:`${f1(lo)} ≤ d_e ≤ ${f1(hi)} ft`;
+      const head=`d_e = ${f2(de)} ft at the ${nm} exterior girder is outside the range ${rng} (Tables 4.6.2.2.2d-1 / 4.6.2.2.3b-1). `;
+      if(lo!=null&&de<lo-1e-9) warn(head+(clampLo?`d_e = ${f1(lo)} ft is used in the e-factors (clamped up; this raises e).`:`The e-factor equations are extrapolated.`));
+      else if(de>hi+1e-9) warn(head+(clampHi?`d_e = ${f1(hi)} ft is used in the e-factors (clamped DOWN; this LOWERS e and the exterior-girder DF, which is unconservative). Check the exterior girder by another method (e.g. lever rule / refined analysis).`:`The e-factor equations are extrapolated beyond their range; check the exterior girder by another method.`));
+    });
+  }
+  if(p.skew>60 && p.type!=="slab")
+    warn(`Skew θ = ${f0(p.skew)}° exceeds the 60° limit of Tables 4.6.2.2.2e-1 / 4.6.2.2.3c-1. θ = 60° is used for BOTH the moment reduction and the shear correction (capped). The table directs θ = 60° for the moment reduction; the shear correction is only defined up to 60°, so the obtuse-corner shear may be understated. Consider a refined analysis (4.6.3).`);
   return w;
 }
 
+/* Inputs that make the equations divide by zero or go non-finite. Blank fields read as 0.
+   computeBridge refuses to run with any of these, and run() lists them for the user. */
+function inputErrors(p){
+  const e=[], bad=v=>!(isFinite(v)&&v>0);
+  (p.spans||[]).forEach((L,i)=>{ if(bad(L)) e.push(`${p.spans.length>1?`Span ${i+1} length`:"Span length"} L is blank, zero or negative — enter a span length > 0 ft.`); });
+  (p.spacings||[]).forEach((S,i)=>{ if(bad(S)) e.push(`Beam spacing Beam ${i+1} → Beam ${i+2} is blank, zero or negative — enter a spacing > 0 ft.`); });
+  if(BEAM_SLAB.has(p.type)){
+    if(bad(p.ts)) e.push("Slab thickness t_s is blank, zero or negative — enter t_s > 0 in.");
+    if(bad(p.n*(p.I+p.A*p.eg*p.eg))) e.push("K_g = n(I + A·e_g²) is zero or negative — check n, I, A and e_g.");
+  }
+  if((p.type==="bc"||p.type==="d"||(BOX.has(p.type)&&p.skew>0))&&bad(p.depth)) e.push("Beam depth d is blank, zero or negative — enter d > 0 in.");
+  if(BOX.has(p.type)){
+    if(bad(p.boxB)) e.push("Box beam width b is blank, zero or negative.");
+    if(bad(p.boxI)) e.push("Box beam I is blank, zero or negative.");
+    if(bad(p.boxJ)) e.push("Box beam J is blank, zero or negative.");
+  }
+  return e;
+}
+
 function computeBridge(p){
+  const inErr=inputErrors(p);
+  if(inErr.length){ const er=new Error("Input error:\n"+inErr.join("\n")); er.inputErrors=inErr; throw er; }
   const geo=geometry(p);
   const Kg=BEAM_SLAB.has(p.type)?p.n*(p.I+p.A*p.eg*p.eg):null;
   const skew=skewFactors(p,geo,Kg);
@@ -1990,7 +2047,7 @@ function memberSteps(p,geo,Kg,skew,md){
 
   const fatStep=()=>{
     if(md.fatM==null&&md.fatV==null) return;
-    const oneM=(md.r&&(md.r.mom1!=null?md.r.mom1:md.r.momExt1)), oneV=(md.r&&(md.r.shr1!=null?md.r.shr1:md.r.shrExt1));
+    const oneM=md.fatOneM!=null?md.fatOneM:(md.r&&(md.r.mom1!=null?md.r.mom1:md.r.momExt1)), oneV=md.fatOneV!=null?md.fatOneV:(md.r&&(md.r.shr1!=null?md.r.shr1:md.r.shrExt1));
     const mLine=(typeof oneM==="number"&&Math.abs(oneM/1.2-md.fatM)<1e-6)
       ? `g_{M,fat}=\\frac{g^{M}_{1}}{1.20}=\\frac{${f3(oneM)}}{1.20}=\\boxed{${f3(md.fatM)}}`
       : `g_{M,fat}=\\boxed{${f3(md.fatM)}}`;
@@ -2059,7 +2116,7 @@ function memberSteps(p,geo,Kg,skew,md){
       const lv1=md.lvUsed&&md.lvUsed.lv1, lv2=md.lvUsed&&md.lvUsed.lv2;
       add("Spacing outside the table range — lever rule substituted",
         `S=${f2(S0)}\\ \\text{ft}>16.0\\ \\text{ft}\\;\\Rightarrow\\;g=g_{lever}`+
-        (lv1?`\\qquad g_{1\\,ln}=${f3(lv1.df)}`:"")+(lv2?`\\qquad g_{2+\\,ln}=${f3(lv2.df)}`:""),
+        (lv1?`\\qquad g_{1\\,ln}=${f3(lv1.df)}`:"")+(lv2?`\\qquad g_{2+\\,ln}=${f3(lv2.df)}\\ (${lv2.N}\\text{ trucks})`:""),
         "Tables 4.6.2.2.2b-1 / 4.6.2.2.3a-1",
         "The approximate equations apply only for 3.5 ≤ S ≤ 16.0 ft. The equations below are kept for reference; the governing factors come from the lever rule (Section 4L)"+
         (isExt?", except that the rigid cross-section method still applies and may govern.":"."),
@@ -2320,7 +2377,7 @@ const LS={ok:true,
 const PKEY="lldf_projects_v1", AKEY="lldf_autosave_v1";
 const DEFAULTS={app:"AASHTO-LLDF",version:1,
   meta:{mProject:"",mStruct:"",mBy:"",mChk:"",mDate:"",mSheet:"1 of 1"},
-  inputs:{type:"a",beamShape:"steel-i",spans:[120],region:"s0",ts:8,depth:54,skew:0,OL:4,OR:4,rL:1.5,rR:1.5,I:260730,A:789,eg:35.5,n:1,boxB:48,boxI:170000,boxJ:300000,spacings:[9.75,9.75,9.75,9.75],truckGaps:[4,4,4,4]}};
+  inputs:{type:"k",beamShape:"aashto-i",spans:[120],region:"s0",ts:8,depth:54,skew:0,OL:4,OR:4,rL:1.5,rR:1.5,I:260730,A:789,eg:35.5,n:1,boxB:48,boxI:170000,boxJ:300000,spacings:[9.75,9.75,9.75,9.75],truckGaps:[4,4,4,4]}};
 
 // ---- curb / railing / sidewalk inputs (edge treatment) ----
 function edgeInputs(){
@@ -2419,8 +2476,15 @@ function setNb(nb){
 
 let selectedMember=0;
 let truckShown="gov";   // "gov" or a truck count — controls Figure 2
+function showInputErrors(errs){
+  $("summaryTable").innerHTML=`<tbody><tr><td style="color:var(--governs);font-weight:600;text-align:left;white-space:normal">Cannot compute the distribution factors — fix ${errs.length>1?"these inputs":"this input"}:<br>${errs.join("<br>")}</td></tr></tbody>`;
+  $("steps").innerHTML=""; $("leverSection").style.display="none"; $("applSection").style.display="none";
+  renderNotes(errs.map(m=>({msg:"Input error: "+m,level:"warn"})));
+}
 function run(){
   const p=readInputs();
+  const inErr=inputErrors(p);
+  if(inErr.length){ showInputErrors(inErr); return; }
   const R=computeBridge(p);
   const {geo,Kg,skew,members,warnings}=R;
   selectedMember=Math.max(0,Math.min(selectedMember,p.Nb-1));
@@ -3752,7 +3816,10 @@ window.addEventListener('load',function(){
     const pile=(P,xL)=>{ const e=xL-xbar; return ub.map((x,i)=>P/N + Math.max(0, P*e*c[i]/S)); };  // no uplift relief
     const equal=P=>ub.map(()=>P/N);
     const two=(P,xL)=>{ const r=ub.map(()=>0); if(N===1){r[0]=P;return r;}
-      if(xL<=ub[0]) r[0]=P; else if(xL>=ub[N-1]) r[N-1]=P;
+      // Overhang load: simple-span lever about the first interior beam — P(1+a/S) on the exterior
+      // beam and −P·a/S on the next one (sums to P).
+      if(xL<=ub[0]){ const S1=ub[1]-ub[0], a=ub[0]-xL; if(S1>0){ r[0]=P*(1+a/S1); r[1]=-P*a/S1; } else r[0]=P; }
+      else if(xL>=ub[N-1]){ const S1=ub[N-1]-ub[N-2], a=xL-ub[N-1]; if(S1>0){ r[N-1]=P*(1+a/S1); r[N-2]=-P*a/S1; } else r[N-1]=P; }
       else { let k=0; while(k<N-2 && ub[k+1]<xL) k++; const t=(xL-ub[k])/((ub[k+1]-ub[k])||1); r[k]=P*(1-t); r[k+1]=P*t; } return r; };
     const applyDist=(P,x,d)=> d==="equal"?equal(P):(d==="two"?two(P,x):pile(P,x));
     // tributary deck widths
@@ -3897,7 +3964,7 @@ window.addEventListener('load',function(){
         return `<tr><td colspan="3" style="text-align:right;font-weight:600">Σ / bridge</td><td style="font-weight:700">${f3(sum('dc1'))}</td><td style="font-weight:700">${f3(sum('dc2'))}</td><td style="font-weight:700">${f3(sum('dw'))}</td><td style="font-weight:700">${f3(sum('pl'))}</td><td style="font-weight:700">${f3(sum('total'))}</td></tr>`; })();
     drawDistBars(rows);
     $("cap-mddist").textContent=`Per-beam superimposed dead load & pedestrian LL — ${mm?'MassDOT pile-cap':'AASHTO equal'} distribution (klf).`;
-    $("mdDistAssume").innerHTML=`Each load in the table above is distributed by its chosen method — <b>Equal</b> (Σ/N to all beams), <b>MassDOT pile-cap</b> (A=1, no uplift relief → each beam ≥ P/N), or <b>Two adjacent beams</b> (split by position to the beams either side). <b>DC1 shown here = deck slab by tributary area only</b> (t<sub>s</sub>=${p.ts}″ × ${f3(concUW())} kcf) <i>plus</i> any DC1-category loads you add. <b>Beam self-weight is excluded</b> — the girder carries its own weight directly in PS-Beam / ST-Girder, so including it here would double-count on handoff (for reference, this section would add ${f3(D.selfWt)} klf per beam at A = ${f2(p.A||0)} in² × ${D.steel?'0.490':'0.150'} kcf). Diaphragms/haunch/soffit are not auto-included — add them as DC1 rows if required. Adjacent box/deck (§3.8.2) modifications are pending the rest of that manual page. Step-by-step arithmetic for every load is in <b>§4D Dead Load Distribution</b> below.`;
+    $("mdDistAssume").innerHTML=`Each load in the table above is distributed by its chosen method — <b>Equal</b> (Σ/N to all beams), <b>MassDOT pile-cap</b> (A=1, no uplift relief → each beam ≥ P/N), or <b>Two adjacent beams</b> (split by position to the beams either side; a load on an overhang is levered about the first interior beam: P(1+a/S) to the exterior beam and −P·a/S to the next). <b>DC1 shown here = deck slab by tributary area only</b> (t<sub>s</sub>=${p.ts}″ × ${f3(concUW())} kcf) <i>plus</i> any DC1-category loads you add. <b>Beam self-weight is excluded</b> — the girder carries its own weight directly in PS-Beam / ST-Girder, so including it here would double-count on handoff (for reference, this section would add ${f3(D.selfWt)} klf per beam at A = ${f2(p.A||0)} in² × ${D.steel?'0.490':'0.150'} kcf). Diaphragms/haunch/soffit are not auto-included — add them as DC1 rows if required. Adjacent box/deck (§3.8.2) modifications are pending the rest of that manual page. Step-by-step arithmetic for every load is in <b>§4D Dead Load Distribution</b> below.`;
   }
   /* ===== 4D · dead-load distribution — step-by-step calculations ===== */
   let dlBuilt=false;
@@ -3980,7 +4047,7 @@ window.addEventListener('load',function(){
       vars:[{s:"P",d:"line load being distributed",v:"—",u:" klf"},
             {s:"x_L",d:"transverse position of the load from the left deck edge",v:"—",u:" ft"},
             {s:"e",d:"eccentricity of the load about the beam group centroid",v:"—",u:" ft"}],
-      note:`The <b>max[ ]</b> in the pile-cap expression is the <b>no-uplift-relief</b> rule of §3.5.3.4: a beam on the far side of the centroid is never credited with a reduction below its P/N<sub>b</sub> share, so the sum of the distributed reactions is generally larger than P. Wearing surface (DW) is distributed <b>Equal</b> per §3.5.3.5. Current method for auto-generated DC2 rows: <b>${mm?"MassDOT pile-cap":"Equal (typical AASHTO)"}</b>.`});
+      note:`<b>Two adjacent beams</b>, load on an overhang a beyond the exterior beam: R<sub>ext</sub> = P(1 + a/S), R<sub>next</sub> = −P·a/S (simple-span lever about the first interior beam, S = exterior bay). The <b>max[ ]</b> in the pile-cap expression is the <b>no-uplift-relief</b> rule of §3.5.3.4: a beam on the far side of the centroid is never credited with a reduction below its P/N<sub>b</sub> share, so the sum of the distributed reactions is generally larger than P. Wearing surface (DW) is distributed <b>Equal</b> per §3.5.3.5. Current method for auto-generated DC2 rows: <b>${mm?"MassDOT pile-cap":"Equal (typical AASHTO)"}</b>.`});
 
     /* --- 4D.5 worked example on the governing load --- */
     const pilecapLoads=D.perLoad.filter(q=>q.dist==="pilecap"&&Math.abs(q.P)>0);
