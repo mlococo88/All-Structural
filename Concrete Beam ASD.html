@@ -140,11 +140,13 @@
                         </summary>
                         <div class="grid grid-cols-2 gap-2 p-2 bg-slate-50 rounded border border-slate-100 text-xs">
                             <div class="text-center col-span-2 font-bold text-slate-400 text-[10px] tracking-wider">INVENTORY</div>
-                            <div class="inp-group mb-0"><label>fc allow</label><input id="fc_inv" value="1200" class="inp-field h-7 py-0 trigger-calc"></div>
-                            <div class="inp-group mb-0"><label>fs allow</label><input id="fs_inv" value="20000" class="inp-field h-7 py-0 trigger-calc"></div>
+                            <div class="inp-group mb-0"><label>fc allow <span id="fc_inv_src" class="font-normal text-slate-400"></span></label><input id="fc_inv" value="1200" class="inp-field h-7 py-0 trigger-calc"></div>
+                            <div class="inp-group mb-0"><label>fs allow <span id="fs_inv_src" class="font-normal text-slate-400"></span></label><input id="fs_inv" value="20000" class="inp-field h-7 py-0 trigger-calc"></div>
                             <div class="text-center col-span-2 font-bold text-slate-400 text-[10px] tracking-wider mt-2">OPERATING</div>
-                            <div class="inp-group mb-0"><label>fc allow</label><input id="fc_op" value="1900" class="inp-field h-7 py-0 trigger-calc"></div>
-                            <div class="inp-group mb-0"><label>fs allow</label><input id="fs_op" value="28000" class="inp-field h-7 py-0 trigger-calc"></div>
+                            <div class="inp-group mb-0"><label>fc allow <span class="font-normal text-slate-400">(input)</span></label><input id="fc_op" value="1900" class="inp-field h-7 py-0 trigger-calc"></div>
+                            <div class="inp-group mb-0"><label>fs allow <span id="fs_op_src" class="font-normal text-slate-400"></span></label><input id="fs_op" value="28000" class="inp-field h-7 py-0 trigger-calc"></div>
+                            <div class="col-span-2 text-[10px] text-slate-500 mt-1">(auto) = set from f'c / fy: inventory fc = 0.40f'c; fs = 20,000 (Gr 40/50) or 24,000 psi (Gr 60); operating fs = 28,000 (Gr 40) or 36,000 psi (Gr 60). Typing in a field overrides it. Operating fc is always the input value.</div>
+                            <button type="button" id="allow-reset" class="col-span-2 text-[10px] text-blue-600 hover:underline text-left">&#8634; Recompute allowables from f'c and fy</button>
                         </div>
                     </details>
                 </section>
@@ -346,6 +348,39 @@
             'as', 'm_dl', 'm_ll'
         ];
 
+        // --- Allowable stresses tied to f'c / fy (auto unless the user overrides a field) ---
+        // Inventory fc = 0.40 f'c (AASHTO Std. Spec. 8.15.2.1.1).
+        // fs: Inventory 20,000 psi Gr 40/50, 24,000 psi Gr 60 (Std. Spec. 8.15.2.2);
+        //     Operating 28,000 psi Gr 40, 36,000 psi Gr 60 (MBE 6B.6.2.3).
+        // Other grades: no rule here, the field stays as entered. Operating fc is never auto (user / MassDOT value).
+        const AUTO_ALLOW = ['fc_inv', 'fs_inv', 'fs_op'];
+        const allowOverride = { fc_inv: false, fs_inv: false, fs_op: false };
+        let loadNotice = '';
+        function autoAllowables(fc, fy) {
+            return {
+                fc_inv: fc > 0 ? +(0.40 * fc).toFixed(1) : null,
+                fs_inv: (fy === 40000 || fy === 50000) ? 20000 : (fy === 60000 ? 24000 : null),
+                fs_op: fy === 40000 ? 28000 : (fy === 60000 ? 36000 : null)
+            };
+        }
+        function applyAutoAllowables() {
+            const a = autoAllowables(parseFloat(document.getElementById('fc').value) || 0,
+                                     parseFloat(document.getElementById('fy').value) || 0);
+            const src = {};
+            AUTO_ALLOW.forEach(id => {
+                if (!allowOverride[id] && a[id] !== null) document.getElementById(id).value = a[id];
+                src[id] = allowOverride[id] ? 'override' : (a[id] !== null ? 'auto' : 'input (no grade rule)');
+                const tag = document.getElementById(id + '_src');
+                if (tag) tag.textContent = '(' + src[id] + ')';
+            });
+            return src;
+        }
+        function resetAllowables() {
+            AUTO_ALLOW.forEach(id => allowOverride[id] = false);
+            loadNotice = '';
+            calculate();
+        }
+
         // --- Initialization ---
         document.addEventListener('DOMContentLoaded', () => {
             // Rebar Picker Logic
@@ -356,6 +391,10 @@
                 calculate();
             };
             document.querySelectorAll('.trigger-bar').forEach(el => el.addEventListener('change', updateAs));
+
+            // Allowables: typing in an auto field marks it as a user override (registered before calculate)
+            AUTO_ALLOW.forEach(id => document.getElementById(id).addEventListener('input', () => { allowOverride[id] = true; }));
+            document.getElementById('allow-reset').addEventListener('click', resetAllowables);
 
             // Standard Inputs Logic
             document.querySelectorAll('.trigger-calc').forEach(el => {
@@ -402,6 +441,7 @@
         // --- Core Calculation Engine ---
         function calculate() {
             // 1. Harvest Inputs
+            const allowSrc = applyAutoAllowables();
             inputIds.forEach(id => {
                 state.inputs[id] = parseFloat(document.getElementById(id).value) || 0;
             });
@@ -421,13 +461,17 @@
                 b_calc = isPosMoment ? v.b_eff : v.b_w; // Pos uses eff width, Neg uses web
             }
 
-            // 2. Constants
-            if(v.fc <= 0) v.fc = 3000;
-            if(v.d_eff <= 0) v.d_eff = 20;
+            // 2. Input errors (previously f'c <= 0 was silently replaced by 3000 and d <= 0 by 20)
+            const errors = [];
+            if (!(v.fc > 0)) errors.push("Concrete strength f'c must be greater than 0.");
+            if (!(v.d_eff > 0)) errors.push("Effective depth d must be greater than 0.");
+            if (!(b_calc > 0)) errors.push("Section width (" + (shape === 't-beam' && isPosMoment ? "b_eff" : "b_w") + ") must be greater than 0.");
+            if (errors.length) { showInputErrors(errors); return; }
 
             const Es = 29000000;
             const Ec = 57000 * Math.sqrt(v.fc);
-            const n = Math.round(Es / Ec); 
+            const n_raw = Math.round(Es / Ec);
+            const n = Math.max(6, n_raw); // AASHTO Std. Spec. 8.15.3.4: nearest whole number, not less than 6
             const rho = v.as / (b_calc * v.d_eff);
 
             // 3. Neutral Axis (kd)
@@ -500,18 +544,29 @@
 
             // 5. Rating Factors
             // RF = (C - D) / L
-            const rf_inv = (M_inv - v.m_dl) / v.m_ll;
-            const rf_op = (M_op - v.m_dl) / v.m_ll;
+            const rf_inv = v.m_ll !== 0 ? (M_inv - v.m_dl) / v.m_ll : NaN; // guard M_LL+I = 0
+            const rf_op = v.m_ll !== 0 ? (M_op - v.m_dl) / v.m_ll : NaN;
 
             // --- Update UI ---
             updateUI({
                 isPosMoment, isTBeamAction, n, rho, kd, k, j, z, 
                 C_force_factor, M_inv, M_op, M_conc_inv, M_steel_inv, 
                 M_conc_op, M_steel_op,
-                rf_inv, rf_op, v, shape, b_calc
+                rf_inv, rf_op, v, shape, b_calc, n_raw, allowSrc
             });
 
             drawDiagram(v, kd, z, isTBeamAction, isPosMoment, shape);
+        }
+
+        // --- Input error display (no results shown) ---
+        function showInputErrors(errors) {
+            const badge = document.getElementById('control-badge');
+            badge.textContent = 'Input error';
+            badge.className = 'text-[10px] px-2 py-1 rounded border font-bold bg-red-50 text-red-600 border-red-200';
+            ['disp-Mc-inv', 'disp-Mc-op', 'disp-rf-inv', 'disp-rf-op'].forEach(id => document.getElementById(id).textContent = '--');
+            document.getElementById('report-content').innerHTML =
+                `<div class="text-sm text-red-700 bg-red-50 p-3 rounded border border-red-200"><strong>Input error — no results.</strong><ul class="list-disc pl-5 mt-1">${errors.map(m => `<li>${m}</li>`).join('')}</ul></div>`;
+            document.getElementById('svg-container').innerHTML = '';
         }
 
         // --- UI Renderer ---
@@ -529,7 +584,7 @@
             // RF Cards
             const setRF = (elId, val) => {
                 const el = document.getElementById(elId);
-                el.textContent = val.toFixed(3);
+                el.textContent = isFinite(val) ? val.toFixed(3) : 'n/a';
                 el.className = `text-3xl font-bold ${val < 1.0 ? 'text-red-300' : 'text-white'}`;
             };
             setRF('disp-rf-inv', res.rf_inv);
@@ -542,7 +597,11 @@
             // Report Generation
             let reportHTML = `
                 <div class="space-y-6">
-                    
+
+                    <!-- Scope note -->
+                    <div class="text-xs text-amber-800 bg-amber-50 p-3 rounded border border-amber-200"><strong>Scope:</strong> singly reinforced flexure only (working stress, AASHTO Std. Spec. 8.15). Compression steel (8.15.3, 2n&middot;A's) is ignored and ASD shear (8.15.5) is not checked.</div>
+                    ${loadNotice ? `<div class="text-xs text-red-700 bg-red-50 p-3 rounded border border-red-200">${loadNotice}</div>` : ''}
+
                     <!-- Params -->
                     <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs text-slate-600 bg-slate-50 p-4 rounded border border-slate-200">
                         <div><strong>Modular Ratio ($n$):</strong> $$${res.n}$$</div>
@@ -550,6 +609,7 @@
                         <div><strong>Neutral Axis ($k$):</strong> $$${res.k.toFixed(3)}$$</div>
                         <div><strong>Lever Arm ($j$):</strong> $$${res.j.toFixed(3)}$$</div>
                     </div>
+                    ${res.n_raw < 6 ? `<p class="text-xs text-slate-500 italic">$n = E_s/E_c$ rounds to ${res.n_raw}; the minimum $n = 6$ is used (Std. Spec. 8.15.3.4).</p>` : ''}
 
                     <!-- Neutral Axis -->
                     <div>
@@ -580,6 +640,7 @@
                     <!-- Capacities (Conditional) -->
                     <div>
                         <h4 class="text-sm font-bold text-slate-800 border-b pb-1 mb-2">3. Moment Capacity ($M_{all}$)</h4>
+                        <p class="text-xs text-slate-500 mb-2">Allowables (psi): $f_{c,inv}$ = ${res.v.fc_inv} (${res.allowSrc.fc_inv === 'auto' ? "0.40f'c" : res.allowSrc.fc_inv}); $f_{s,inv}$ = ${res.v.fs_inv} (${res.allowSrc.fs_inv === 'auto' ? 'by grade' : res.allowSrc.fs_inv}); $f_{c,op}$ = ${res.v.fc_op} (input); $f_{s,op}$ = ${res.v.fs_op} (${res.allowSrc.fs_op === 'auto' ? 'by grade' : res.allowSrc.fs_op}).</p>
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">`;
 
             if (showInv) {
@@ -611,13 +672,14 @@
                     <div>
                          <h4 class="text-sm font-bold text-slate-800 border-b pb-1 mb-2">4. Load Rating ($RF$)</h4>
                          <p class="text-sm text-slate-600 mb-2">Using Equation: $$RF = \\frac{C - M_{DL}}{M_{LL+I}}$$</p>
+                         ${res.v.m_ll === 0 ? '<p class="text-xs text-red-600 mb-2">M<sub>LL+I</sub> = 0: the rating factor is not defined (n/a).</p>' : ''}
                          <div class="flex gap-8">`;
             
             if (showInv) {
                 reportHTML += `
                             <div>
                                 <p class="text-xs font-mono text-slate-500">Inventory</p>
-                                <p class="math-display">$$RF_{inv} = \\frac{${res.M_inv.toFixed(1)} - ${res.v.m_dl}}{${res.v.m_ll}} = \\mathbf{${res.rf_inv.toFixed(3)}}$$</p>
+                                <p class="math-display">$$RF_{inv} = \\frac{${res.M_inv.toFixed(1)} - ${res.v.m_dl}}{${res.v.m_ll}} = \\mathbf{${isFinite(res.rf_inv) ? res.rf_inv.toFixed(3) : '\\text{n/a}'}}$$</p>
                             </div>`;
             }
 
@@ -625,7 +687,7 @@
                 reportHTML += `
                              <div>
                                 <p class="text-xs font-mono text-slate-500">Operating</p>
-                                <p class="math-display">$$RF_{op} = \\frac{${res.M_op.toFixed(1)} - ${res.v.m_dl}}{${res.v.m_ll}} = \\mathbf{${res.rf_op.toFixed(3)}}$$</p>
+                                <p class="math-display">$$RF_{op} = \\frac{${res.M_op.toFixed(1)} - ${res.v.m_dl}}{${res.v.m_ll}} = \\mathbf{${isFinite(res.rf_op) ? res.rf_op.toFixed(3) : '\\text{n/a}'}}$$</p>
                             </div>`;
             }
 
@@ -721,10 +783,18 @@
 
         // --- File Operations ---
         function saveToJson() {
-            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(state.inputs));
+            // Same flat {id: value} format as before, read from the form (not from the calc state),
+            // plus the selects/checkboxes and the allowable-override flags.
+            const data = {};
+            inputIds.forEach(id => { data[id] = parseFloat(document.getElementById(id).value) || 0; });
+            ['moment_type', 'section_shape', 'bar_count', 'bar_size'].forEach(id => { data[id] = document.getElementById(id).value; });
+            ['chk_inv', 'chk_op'].forEach(id => { data[id] = document.getElementById(id).checked; });
+            data._allowOverride = Object.assign({}, allowOverride);
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(data));
             const el = document.createElement('a');
             el.setAttribute("href", dataStr);
-            el.setAttribute("download", (document.getElementById('calc-name').value || "bridge-rating") + ".json");
+            const nameEl = document.getElementById('calc-name'); // no such field in this page; keep the fallback name
+            el.setAttribute("download", ((nameEl && nameEl.value) || "bridge-rating") + ".json");
             document.body.appendChild(el);
             el.click();
             el.remove();
@@ -734,15 +804,32 @@
             const file = e.target.files[0];
             if(!file) return;
             const reader = new FileReader();
-            reader.onload = function(e) {
-                const data = JSON.parse(e.target.result);
+            reader.onload = function(ev) {
+                let data;
+                try { data = JSON.parse(ev.target.result); } catch (err) { data = null; }
+                if (!data || typeof data !== 'object') { alert("Could not read JSON file."); return; }
                 Object.keys(data).forEach(k => {
                     const el = document.getElementById(k);
-                    if(el) el.value = data[k];
+                    if (!el) return;
+                    if (el.type === 'checkbox') el.checked = !!data[k];
+                    else el.value = data[k];
                 });
+                // Allowable overrides: newer files store the flags. Older files did not, so any saved
+                // allowable that differs from the f'c/fy-based value is kept as an override (not discarded).
+                const a = autoAllowables(parseFloat(data.fc) || 0, parseFloat(data.fy) || 0);
+                const hasFlags = data._allowOverride && typeof data._allowOverride === 'object';
+                AUTO_ALLOW.forEach(id => {
+                    allowOverride[id] = hasFlags ? !!data._allowOverride[id]
+                        : (data[id] !== undefined && a[id] !== null && parseFloat(data[id]) !== a[id]);
+                });
+                loadNotice = (!hasFlags && AUTO_ALLOW.some(id => allowOverride[id]))
+                    ? "Loaded file (older format): its allowable stresses differ from the f'c / fy-based values and were kept as overrides. Use \u201cRecompute allowables\u201d under Edit Allowable Stresses to use the code values."
+                    : '';
+                updateVisibility();
                 calculate();
             };
             reader.readAsText(file);
+            e.target.value = '';
         }
 
         function resetZoom() {
