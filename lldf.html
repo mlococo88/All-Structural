@@ -3472,14 +3472,11 @@ function applyGeom(g,token,silent){
     ['type','beamShape','I','A','eg','n','boxB','boxI','boxJ'].forEach(function(k){ delete inp[k]; });
     // A design app sends d_e (exterior web → rail face); LLDF works with overhang OL and rail rL.
     if(inp.OL==null&&g.de!=null){ var rL=+($('rL')&&$('rL').value)||0; inp.OL=+((+g.de)+rL).toFixed(2); }
-    if(isBG(g)){
-      // Bridge Geometry: overwrite ONLY the layout fields it sent. Start from the full current
-      // state so section, appurtenance, beam-class and figure inputs are left exactly as they are.
-      var full=serialize(false); full.inputs=Object.assign(full.inputs||{},inp);
-      applyState(full);
-    } else {
-      applyState({inputs:inp});
-    }
+    // Overwrite ONLY the layout fields the payload carries (every producer). Start from the full
+    // current state so section, appurtenance, beam-class, load-override, user-load and figure
+    // inputs are left exactly as they are -- applyState({inputs:inp}) alone used to reset those.
+    var full=serialize(false); full.inputs=Object.assign(full.inputs||{},inp);
+    applyState(full);
     var pn=projName(g);
     if(pn&&$('mProject')&&!$('mProject').value) $('mProject').value=pn;
     try{localStorage.setItem(K_GEOM_SEEN,token);}catch(e){}

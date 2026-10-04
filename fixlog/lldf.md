@@ -891,3 +891,57 @@ HUNK 11 (≈ line 3605 of the old file)
 - **Open items:**
   - O-H1. The existing prefill for MCT / PS-Beam / ST-Girder calls `applyState({inputs})`, which also clears reference figures, beam-class overrides, load overrides and user loads (the MassDOT module's `applyState` wrapper resets them when absent). Not changed for those producers; the Bridge Geometry path avoids it. Fix for all producers?
   - O-H2. Validation now refuses a negative skew or a non-positive t_s / depth from MCT / PS-Beam / ST-Girder too (they previously applied). Confirm this is wanted.
+
+## 2026-10-04 — PR: claude/fix-lldf-prefill-dataloss (PR link added after merge)
+
+### B1. Geometry prefill wiped figures, beam-class overrides, load overrides and user loads   [bug fix] [no result change for the geometry itself]
+- **Where:** Bridge Suite integration IIFE, function `applyGeom(g,token,silent)` (≈ line 3475). Anchor text: `var full=serialize(false); full.inputs=Object.assign(full.inputs||{},inp);`
+- **Problem:**
+  - Prefilling from an MCT Generator, PS-Beam or ST-Girder `bridgeSuite.v1.lldfGeom` payload called `applyState({inputs:inp})` with only the layout fields. This happened both when the banner's "Prefill" was clicked and when a locked auto-follow applied the payload.
+  - The base `applyState` resets the §3.9 reference images when `obj.figures` is absent. The MassDOT load-distribution module's `applyState` wrapper resets `state.beamClass`, `state.loadOverrides` and `state.userLoads` to empty when they are absent.
+  - So each prefill silently discarded:
+    - the engineer's reference figures;
+    - beam-classification overrides;
+    - edited auto-load positions/weights;
+    - added user loads.
+
+    Autosave then persisted the loss.
+  - The Bridge Geometry path, added in claude/conn-geometry-lldf, already applied the payload on top of the full current state. This fix uses that same path for every producer.
+  - The dead-load distribution could change after a prefill, because overrides and user loads were dropped. With the fix, only the geometry fields the payload carries change, which is what the banner promises.
+- **Governing provision:** n/a. No formula, factor, default, unit or code reference changed.
+- **Before:**
+  ```js
+      if(isBG(g)){
+        // Bridge Geometry: overwrite ONLY the layout fields it sent. Start from the full current
+        // state so section, appurtenance, beam-class and figure inputs are left exactly as they are.
+        var full=serialize(false); full.inputs=Object.assign(full.inputs||{},inp);
+        applyState(full);
+      } else {
+        applyState({inputs:inp});
+      }
+  ```
+- **After:**
+  ```js
+      // Overwrite ONLY the layout fields the payload carries (every producer). Start from the full
+      // current state so section, appurtenance, beam-class, load-override, user-load and figure
+      // inputs are left exactly as they are -- applyState({inputs:inp}) alone used to reset those.
+      var full=serialize(false); full.inputs=Object.assign(full.inputs||{},inp);
+      applyState(full);
+  ```
+  (On a tree without the Bridge Geometry connection, the Before is the single line `applyState({inputs:inp});`; replace it with the two lines `var full=…; applyState(full);`.)
+- **Check case:** lldf defaults, plus one reference image, beam-class override {1:"interior"}, load override {railL:{plf:0.5}}, one user load (DC2, x = 10 ft, 0.1 klf), Structure No. "B-77", I = 123,456 in⁴.
+  - **MCT payload** (spans 80/100, 6 beams @ 8, θ 20):
+    - Before the fix, the image, beam class, load override and user load were all lost.
+    - After the fix, all four are kept. Spans 80/100, spacings 8 ×5 and θ 20 are applied as before, and nothing else changes (I, type and title block are kept; a blank Project is filled from the payload as before).
+  - **PS-Beam payload** (span 110, 5 @ 9, t_s 8.5, d 63, θ 10, d_e 2.25): same result.
+    - t_s and d are applied.
+    - O_L = 2.25 ft, the same as before the fix (see open item O-B1).
+- **How verified:**
+  - `node --check` on all inline scripts.
+  - jsdom test `dataloss.js` (scratch): 10 failures on the pre-fix file, all pass after.
+  - The connection tests (e2e, legacy/lock, BG → lldf → Moving Load chain) still pass.
+  - No-hand-off regression: identical `computeBridge` results and `serialize(true)` against origin/main for 4 input sets.
+- **Other copies:** none (lldf-only code).
+- **Open items:**
+  - O-B1. `applyGeom` converts a sender's d_e to an overhang with `rL=+($('rL')&&$('rL').value)||0`, but lldf has no `#rL` element. So O_L = d_e, not d_e + the rail face offset (`faceL`/`railOffL`). This affects PS-Beam / ST-Girder prefills that send d_e. Not changed (it changes an input value) — fix to use `faceOffset("L")`?
+
