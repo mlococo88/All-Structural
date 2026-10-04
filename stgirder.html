@@ -539,6 +539,13 @@ var st=document.createElement('style'); st.textContent=css;
    once, directly, and every link to it is right from then on, whatever it is
    called. A path the engineer types in by hand is pinned and outranks both.
 
+   Sightings are filed BY FOLDER. The browser keeps one storage area for every
+   local file on the machine, so a bare file name is not enough: opening an
+   ST-Girder copy saved as "index.html" in some other folder used to tell the
+   MCT in this folder that ST-Girder was "index.html" -- which, here, is the
+   MCT itself. Now a sighting only answers for the folder it was made in, and
+   no app will ever resolve a sibling to its own file name.
+
    This block is byte-identical in index.html / psbeam.html / stgirder.html /
    lldf.html. Edit one, edit all four.
    ========================================================================== */
@@ -546,8 +553,11 @@ var st=document.createElement('style'); st.textContent=css;
   var KEY='bridgeSuite.v1.appPaths';
   var DEF={mct:'index.html', psbeam:'psbeam.html', stgirder:'stgirder.html', lldf:'lldf.html'};
   var NAMES={mct:'MCT Generator', psbeam:'PS-Beam', stgirder:'ST-Girder', lldf:'LL & DL Distribution'};
+  var ME='';                                   // which app this file is, set by boot()
+  var MAXDIRS=24;                              // folders remembered per app
   function read(){ try{ return JSON.parse(localStorage.getItem(KEY))||{}; }catch(e){ return {}; } }
   function write(o){ try{ localStorage.setItem(KEY,JSON.stringify(o)); return true; }catch(e){ return false; } }
+  function now(){ return new Date().toISOString(); }
   /* This app's own file name as the browser sees it. Decoded, because a name
      with a space arrives percent-encoded and the value is shown to a human. */
   function selfFile(){
@@ -557,28 +567,77 @@ var st=document.createElement('style'); st.textContent=css;
       return last;
     }catch(e){ return ''; }
   }
-  /* Record where this app lives. A sighting never overwrites a pinned path --
-     if the engineer said which file is PS-Beam, a stray copy does not get to
-     argue. */
+  /* The folder this file sits in, as a URL ending in "/". Every relative link
+     between the apps resolves against it, so it is what a sighting must be
+     filed under. */
+  function selfDir(){
+    try{
+      var h=String(location.href||'').split('#')[0].split('?')[0];
+      var i=h.lastIndexOf('/'); return i<0?'':h.slice(0,i+1);
+    }catch(e){ return ''; }
+  }
+  function same(a,b){ return String(a||'').toLowerCase()===String(b||'').toLowerCase(); }
+  function prune(at){
+    var ks=Object.keys(at); if(ks.length<=MAXDIRS) return at;
+    ks.sort(function(a,b){ return String((at[b]||{}).seenAt).localeCompare(String((at[a]||{}).seenAt)); });
+    var out={}; ks.slice(0,MAXDIRS).forEach(function(k){ out[k]=at[k]; }); return out;
+  }
+  /* What is recorded for an app, for THIS folder. Entries written before
+     sightings were filed by folder carry no folder at all; they are still
+     honoured, since they were almost always made next door. */
+  function entry(app){
+    var o=read(), e=o[app]; if(!e) return null;
+    var d=selfDir();
+    if(e.at&&e.at[d]) return {file:e.at[d].file, pinned:!!e.at[d].pinned, legacy:false};
+    if(e.file&&!e.dir) return {file:e.file, pinned:!!e.pinned, legacy:true};
+    return null;
+  }
+  /* Record where this app lives. A sighting never overwrites a pin made for
+     the same folder -- if the engineer said which file is PS-Beam, a stray
+     copy does not get to argue. */
   function register(app){
     var f=selfFile(); if(!f||!NAMES[app]) return '';
-    var o=read(), cur=o[app];
+    var d=selfDir(), o=read(), e=o[app]||{}, at=e.at||{}, cur=at[d];
     if(cur&&cur.pinned) return cur.file;
-    if(cur&&cur.file===f) return f;
-    o[app]={file:f, pinned:false, seenAt:new Date().toISOString()};
+    if(cur&&cur.file===f&&e.dir===d) return f;
+    at[d]={file:f, pinned:false, seenAt:now()};
+    at=prune(at);
+    // A pin from before folders were tracked keeps its place at the top level.
+    o[app]=(e.pinned&&!e.dir)
+      ? {file:e.file, pinned:true, seenAt:e.seenAt, at:at}
+      : {file:f, pinned:false, seenAt:now(), dir:d, at:at};
     write(o); return f;
   }
+  /* Point an app at a file for THIS folder (pinned unless told otherwise), or
+     forget what this folder knows about it with an empty name. Refuses to
+     point a sibling at this very file. */
   function set(app,file,pinned){
     if(!NAMES[app]) return false;
-    var o=read();
-    if(file) o[app]={file:String(file).trim(), pinned:pinned!==false, seenAt:new Date().toISOString()};
-    else delete o[app];
+    var d=selfDir(), o=read(), e=o[app]||{}, at=e.at||{};
+    var f=String(file||'').trim();
+    if(f){
+      if(ME&&app!==ME&&same(f,selfFile())) return false;
+      var r={file:f, pinned:pinned!==false, seenAt:now()};
+      at[d]=r;
+      o[app]={file:f, pinned:r.pinned, seenAt:r.seenAt, dir:d, at:prune(at)};
+    } else {
+      delete at[d];
+      if(!e.dir||e.dir===d){                  // the top level described this folder
+        if(Object.keys(at).length) o[app]={at:at}; else delete o[app];
+      } else o[app]=Object.assign({},e,{at:at});
+    }
     return write(o);
   }
-  function path(app){ var o=read(); return (o[app]&&o[app].file)||DEF[app]||''; }
-  function info(app){ var o=read(), e=o[app]||{};
-    return {app:app, name:NAMES[app]||app, file:e.file||DEF[app]||'',
-      pinned:!!e.pinned, known:!!e.file}; }
+  function path(app){
+    var e=entry(app), f=e&&e.file||'';
+    // Never send a sibling link back to this same file: that is how the MCT
+    // ended up framing a second copy of itself under the ST-Girder button.
+    if(f&&ME&&app!==ME&&same(f,selfFile())) f='';
+    return f||DEF[app]||'';
+  }
+  function info(app){ var e=entry(app);
+    return {app:app, name:NAMES[app]||app, file:path(app),
+      pinned:!!(e&&e.pinned), known:!!(e&&e.file)}; }
   function all(){ var out={}; Object.keys(NAMES).forEach(function(k){ out[k]=info(k); }); return out; }
   /* Tell whoever framed us who we are, so a wrong file is caught and named
      rather than silently displayed. Repeated for a couple of seconds because a
@@ -603,10 +662,10 @@ var st=document.createElement('style'); st.textContent=css;
       var d=e&&e.data; if(d&&d.source==='bridge-suite'&&d.whois) send();
     }); }catch(e){}
   }
-  function boot(app){ register(app); announce(app); }
+  function boot(app){ if(NAMES[app]) ME=app; register(app); announce(app); }
   /* Where to send the browser for a sibling app, honouring the recorded path. */
   function href(app){ return path(app); }
-  window.BridgeApps={ KEY:KEY, DEFAULTS:DEF, NAMES:NAMES, selfFile:selfFile,
+  window.BridgeApps={ KEY:KEY, DEFAULTS:DEF, NAMES:NAMES, selfFile:selfFile, selfDir:selfDir,
     register:register, announce:announce, boot:boot, set:set, path:path, href:href,
     info:info, all:all };
 })();
@@ -1602,11 +1661,20 @@ function buildExternal(ext, L, llf){
   };
   const hasDC1=slice.some(s=>s.M_DC1!==undefined);
   const swExcl=!!ext.selfWeightExcluded;               // MIDAS DC1 without girder self-weight → app adds it
+  // MIDAS reports element shear on the OPPOSITE sign convention to this app's closed-form
+  // simpleV()/diaV() (+V at the left support for gravity load). Left unflipped, an imported
+  // DC2/DW shear reads NEGATIVE at the left bearing where the app's own self-weight/DC1 shear
+  // reads positive, and |1.25(V1+V2)+1.5Vw| subtracts them. Negate the imported dead-load
+  // shears to match the app convention (same as PS-Beam's buildExternal). Moments agree
+  // (sagging +) and are untouched. V_LL is a magnitude envelope (max of |+|,|−|), so it is
+  // unaffected by the sign flip; the swapped branches are exposed as V_LLpos/V_LLneg for
+  // completeness (app-positive branch = minus MIDAS's most-negative branch).
   return { spanLen, slice, sel, hasDC1, swExcl,
-    M_DC1:(x)=>interp('M_DC1',x), V_DC1:(x)=>interp('V_DC1',x),        // k-ft / kip
-    M_DC2:(x)=>interp('M_DC2',x), V_DC2:(x)=>interp('V_DC2',x),
-    M_DW :(x)=>interp('M_DW',x),  V_DW :(x)=>interp('V_DW',x),
+    M_DC1:(x)=>interp('M_DC1',x), V_DC1:(x)=>-interp('V_DC1',x),       // k-ft / kip
+    M_DC2:(x)=>interp('M_DC2',x), V_DC2:(x)=>-interp('V_DC2',x),
+    M_DW :(x)=>interp('M_DW',x),  V_DW :(x)=>-interp('V_DW',x),
     M_LLpos:(x)=>interp('M_LLpos',x)*fPos, M_LLneg:(x)=>interp('M_LLneg',x)*fNeg,
+    V_LLpos:(x)=>-interp('V_LLneg',x)*fV, V_LLneg:(x)=>-interp('V_LLpos',x)*fV,
     V_LL:(x)=>{const p=interp('V_LLpos',x)*fV,n=interp('V_LLneg',x)*fV;return Math.max(Math.abs(p),Math.abs(n));},
     llFac:{pos:fPos,neg:fNeg,v:fV} };
 }
@@ -1762,17 +1830,21 @@ function llShearAt(L,x){
 }
 
 // Compression-flange nominal resistance Fnc = min(FLB, LTB), AASHTO 6.10.8.2.
-function flangeFnc(bfc,tfc,tw,D,Lb_in,Fyc,Es,Rb,Rh,Cb){
-  Cb=Cb||1.0; const FyrV=Math.max(0.5*Fyc,Math.min(0.7*Fyc,Fyc));
+// Dc = elastic web depth in compression for the section being checked (6.10.8.2.3-9 uses Dc,
+// not D); Fyw = web yield, for Fyr = min(0.7Fyc, Fyw) >= 0.5Fyc (6.10.8.2.2). Both default to
+// the old values (D, Fyc) only if a caller omits them.
+function flangeFnc(bfc,tfc,tw,D,Lb_in,Fyc,Es,Rb,Rh,Cb,Dc,Fyw){
+  Cb=Cb||1.0; const DcV=(Dc!==undefined&&isFinite(Dc))?Dc:D, FywV=(Fyw!==undefined&&isFinite(Fyw))?Fyw:Fyc;
+  const FyrV=Math.max(0.5*Fyc,Math.min(0.7*Fyc,FywV));
   const lf=bfc/(2*tfc), lpf=0.38*sqrt(Es/Fyc), lrf=0.56*sqrt(Es/FyrV);
   let FncFLB = lf<=lpf? Rb*Rh*Fyc : (1-(1-FyrV/(Rh*Fyc))*((lf-lpf)/(lrf-lpf)))*Rb*Rh*Fyc;
-  const rt=bfc/sqrt(12*(1+(D*tw)/(3*bfc*tfc)));       // 6.10.8.2.3-9
+  const rt=bfc/sqrt(12*(1+(DcV*tw)/(3*bfc*tfc)));     // 6.10.8.2.3-9 (Dc)
   const Lp=1.0*rt*sqrt(Es/Fyc), Lr=Math.PI*rt*sqrt(Es/FyrV);
   let FncLTB;
   if(Lb_in<=Lp) FncLTB=Rb*Rh*Fyc;
   else if(Lb_in<=Lr) FncLTB=Math.min(Cb*(1-(1-FyrV/(Rh*Fyc))*((Lb_in-Lp)/(Lr-Lp)))*Rb*Rh*Fyc, Rb*Rh*Fyc);
   else FncLTB=Math.min(Cb*Math.PI*Math.PI*Es*Rb/Math.pow(Lb_in/rt,2), Rb*Rh*Fyc);
-  return {Fnc:Math.min(FncFLB,FncLTB),FncFLB,FncLTB,lf,lpf,lrf,rt,Lp:Lp/12,Lr:Lr/12};
+  return {Fnc:Math.min(FncFLB,FncLTB),FncFLB,FncLTB,lf,lpf,lrf,rt,Lp:Lp/12,Lr:Lr/12,Fyr:FyrV,Dc:DcV};
 }
 // Web bend-buckling resistance Fcrw, AASHTO 6.10.1.9.1.
 function webFcrw(D,tw,Dc,Fyc,Fyw,Es,Rh){
@@ -1939,15 +2011,19 @@ function computeAll(inp){
       const Rb_=loadShedRbG(dims.D,dims.tw,dims.bft,dims.tft,cN_.Dc,Fyc,Es,compactWeb_);
       const RbNeg_=loadShedRbG(dims.D,dims.tw,dims.bfb,dims.tfb,cr_.DcNeg,Fyc,Es,false);
       const Mn_ = compact_? ((pl_.Dp<=0.1*pl_.Dt)? pl_.Mp/12 : (pl_.Mp/12)*(1.07-0.7*pl_.Dp/pl_.Dt)) : null;
-      const FncTop_=flangeFnc(dims.bft,dims.tft,dims.tw,dims.D,Lb_in,Fyc,Es,1.0,Rh_,1.0);   // constructibility (bare)
-      const FncNeg_=flangeFnc(dims.bfb,dims.tfb,dims.tw,dims.D,Lb_in,Fyc,Es,RbNeg_,Rh_,1.0);// −M: bottom flange comp.
-      const FncBotBare_=flangeFnc(dims.bfb,dims.tfb,dims.tw,dims.D,Lb_in,Fyc,Es,1.0,Rh_,1.0);// −M during constr. (bare)
+      const FncTop_=flangeFnc(dims.bft,dims.tft,dims.tw,dims.D,Lb_in,Fyc,Es,1.0,Rh_,1.0,bare_.Dc,Fyw);   // constructibility (bare)
+      const FncNeg_=flangeFnc(dims.bfb,dims.tfb,dims.tw,dims.D,Lb_in,Fyc,Es,RbNeg_,Rh_,1.0,cr_.DcNeg,Fyw);// −M: bottom flange comp.
+      const FncBotBare_=flangeFnc(dims.bfb,dims.tfb,dims.tw,dims.D,Lb_in,Fyc,Es,1.0,Rh_,1.0,clamp(bare_.ybar-dims.tfb,0,dims.D),Fyw);// −M during constr. (bare)
+      // Positive flexure, NONCOMPOSITE (deck off): the top flange is the compression flange and is
+      // braced only at the cross-frames, so 6.10.8.2 (FLB / LTB with Lb) governs, not Rb·Rh·Fyc
+      // (which is the composite-section value of 6.10.7.2.2). Composite sections are unchanged.
+      const FncPosNC_=deck.deckOn? null : flangeFnc(dims.bft,dims.tft,dims.tw,dims.D,Lb_in,Fyc,Es,Rb_,Rh_,1.0,cN_.Dc,Fyw);
       const Iyc_=dims.tft*Math.pow(dims.bft,3)/12, Iyt_=dims.tfb*Math.pow(dims.bfb,3)/12;
       return {i, x0:i?rawSegs[i-1].xEnd:0, x1:s.xEnd, dims,
         bare:bare_, cN:cN_, c3N:c3N_, pl:pl_, cr:cr_,
         compactWeb:compactWeb_, compact:compact_, Rh:Rh_, Rb:Rb_, RbNeg:RbNeg_,
         Mn_kft:Mn_, FncTop:FncTop_, FncNeg:FncNeg_, FncBotBare:FncBotBare_,
-        FncPos:Rb_*Rh_*Fyc, Fnt:Rh_*Fyf, Iyc:Iyc_, Iyt:Iyt_,
+        FncPos:FncPosNC_? FncPosNC_.Fnc : Rb_*Rh_*Fyc, FncPosNC:FncPosNC_, Fnt:Rh_*Fyf, Iyc:Iyc_, Iyt:Iyt_,
         ductOK:pl_.Dp<=0.42*pl_.Dt, wsw:bare_.A*0.490/144};
     });
     const segIdxAt=x=>{ for(let i=0;i<segP.length;i++) if(x<=segP[i].x1+1e-9) return i; return segP.length-1; };
@@ -2092,9 +2168,29 @@ function computeAll(inp){
     let posGov={r:0}, negBGov={r:0}, negTGov={r:0};
     const chartFlex=[];                                // per-station flexural capacity for the Flexure tab chart
     const flexCalc=[];                                 // per-station worked-calc data (Flexure location picker)
+    // 6.10.7.1.2 (Eq. 6.10.7.1.2-3): in a CONTINUOUS span a compact composite section in positive
+    // flexure is also limited to Mn <= 1.3RhMy (the B6.2 exemption for the pier sections is not
+    // evaluated by this app, so the cap is always applied). The span is treated as continuous when
+    // imported demands produce factored negative moment in it (hasNeg). My per D6.2.2, built from
+    // the same staged factored permanent stresses as stageF (DC1 on bare steel; DC2/DW on 3n):
+    //   My = MD1 + MD2 + MAD,  MAD = S_n·(Fyf − f_D1 − f_D2) for each flange, lesser flange governs.
+    const contSpan = useExt && hasNeg;
+    const yieldMy=(st,sg)=>{
+      const MD1=1.25*st.M1, MD2=1.25*st.M2+1.5*st.Mw;              // k-ft, factored permanent
+      const fd=stageF(st,1.25,1.25,1.5,0).pos;                      // ksi, fB tension+, fT compression+
+      const MADb=sg.cN.Sb*(Fyf-fd.fB)/12, MADt=sg.cN.StSteel*(Fyf-fd.fT)/12;
+      const MyB=MD1+MD2+MADb, MyT=MD1+MD2+MADt;
+      return {MD1,MD2,fDb:fd.fB,fDt:fd.fT,MADb,MADt,MyB,MyT,My:Math.min(MyB,MyT)};
+    };
     stations.forEach(st=>{ const sg=segP[st.si];
+      let MnSt=sg.Mn_kft, my13=null;
+      if(sg.compact && contSpan && st.Mu>0){
+        const y=yieldMy(st,sg), lim13=1.3*sg.Rh*y.My;
+        my13={...y, Rh:sg.Rh, lim13, MnMp:sg.Mn_kft, governs:lim13<sg.Mn_kft};
+        if(isFinite(lim13) && lim13<MnSt) MnSt=Math.max(lim13,0);
+      }
       // capacity as an equivalent moment (same stress→moment basis as the Rating tab's capM)
-      const capPos = sg.compact? phif*sg.Mn_kft
+      const capPos = sg.compact? phif*MnSt
         : phif*Math.min(sg.FncPos*sg.cN.StSteel, sg.Fnt*sg.cN.Sb)/12;
       // negative capacity always computed (rating/capacity export need it even when the
       // current demands have no −M); the Flexure chart only draws it when hasNeg.
@@ -2106,9 +2202,9 @@ function computeAll(inp){
       // ── +M worked-calc record (compact → Mp basis · noncompact composite → stress basis) ──
       const posC = sg.compact
         ? {compact:true, region:sg.pl.region, Mp:sg.pl.Mp/12, Dp:sg.pl.Dp, Dt:sg.pl.Dt,
-           ductRed:sg.pl.Dp>0.1*sg.pl.Dt, Mn:sg.Mn_kft, phiMn:phif*sg.Mn_kft,
-           capPos, Mu:st.Mu, dc: st.Mu>1e-6? st.Mu/(phif*sg.Mn_kft):0}
-        : {compact:false, Fnc:sg.FncPos, Fnt:sg.Fnt, Rb:sg.Rb, Rh:sg.Rh,
+           ductRed:sg.pl.Dp>0.1*sg.pl.Dt, Mn:MnSt, MnMp:sg.Mn_kft, my13, phiMn:phif*MnSt,
+           capPos, Mu:st.Mu, dc: st.Mu>1e-6? st.Mu/(phif*MnSt):0}
+        : {compact:false, Fnc:sg.FncPos, FncNC:sg.FncPosNC||null, Fnt:sg.Fnt, Rb:sg.Rb, Rh:sg.Rh,
            StSteel:sg.cN.StSteel, Sb:sg.cN.Sb, DcPos:sg.cN.Dc,
            fbuTop:fStg.pos.fT, fbuBot:fStg.pos.fB,
            capPos, Mu:st.Mu, dc: st.Mu>1e-6? Math.max(fStg.pos.fT/(phif*sg.FncPos), fStg.pos.fB/(phif*sg.Fnt)):0};
@@ -2122,9 +2218,12 @@ function computeAll(inp){
         Mu:st.Mu, Mun:st.Mun, hasNegDemand:st.Mun<-1, pos:posC, neg:negC});
       if(st.Mu>0){
         let r,mode;
-        if(sg.compact){ r=st.Mu/(phif*sg.Mn_kft); mode='Mp'; }
+        if(sg.compact){ r=st.Mu/(phif*MnSt); mode='Mp'; }
         else { r=Math.max(fStg.pos.fT/(phif*sg.FncPos), fStg.pos.fB/(phif*sg.Fnt)); mode='stress'; }
-        if(r>posGov.r) posGov={r,x:st.x,si:st.si,mode,Mu:st.Mu};
+        // governing flange (stress basis) — so the check row shows the demand/limit that sets r
+        const topGov=!sg.compact && fStg.pos.fT/(phif*sg.FncPos) >= fStg.pos.fB/(phif*sg.Fnt);
+        if(r>posGov.r) posGov={r,x:st.x,si:st.si,mode,Mu:st.Mu,Mn:sg.compact?MnSt:null,my13,
+          topGov, fGov:topGov?fStg.pos.fT:fStg.pos.fB, FGov:topGov?sg.FncPos:sg.Fnt};
       }
       if(hasNeg){
         if(fStg.neg.fB<0){ const r=Math.abs(fStg.neg.fB)/(phif*sg.FncNeg.Fnc);
@@ -2137,8 +2236,12 @@ function computeAll(inp){
     const stPos=stations.reduce((b,st)=>st.Mu>b.Mu?st:b,stations[0]);
     const fStr=stageF(stPos,1.25,1.25,1.5,1.75);
     const Mp_kft=sgPos.pl.Mp/12, Mn_kft=sgPos.Mn_kft;
-    const flexMode=sgPos.compact?'Compact composite — Mp basis (6.10.7.1)':'Noncompact composite — stress basis (6.10.7.2)';
-    const flex={phif,Mp_kft,Mn_kft,MuPeak,flexMode,flexDC:posGov.r,Fnc:sgPos.FncPos,Fnt:sgPos.Fnt,
+    const flexMode=sgPos.compact?'Compact composite — Mp basis (6.10.7.1)'
+      :(deck.deckOn?'Noncompact composite — stress basis (6.10.7.2)':'Noncomposite — stress basis, Fnc per 6.10.8.2 (FLB/LTB)');
+    // Governing Mn for a compact section: includes the 1.3RhMy continuous-span cap when it applies.
+    const MnGov=(sgPos.compact&&posGov.Mn!=null)? posGov.Mn : Mn_kft;
+    const flex={phif,Mp_kft,Mn_kft,MnGov,contSpan,my13:posGov.my13||null,MuPeak,flexMode,flexDC:posGov.r,Fnc:sgPos.FncPos,Fnt:sgPos.Fnt,
+      FncPosNC:sgPos.FncPosNC||null,composite:!!deck.deckOn,
       fbuTop:fStr.pos.fT,fbuBot:fStr.pos.fB,compact:sgPos.compact,Dp:sgPos.pl.Dp,Dt:sgPos.pl.Dt,
       ductOK:sgPos.ductOK,gov:posGov};
     // negative-region summary (1% deck reinforcement per 6.10.1.7)
@@ -2254,6 +2357,10 @@ function computeAll(inp){
     // one-lane moment DF ÷ 1.2 (removes the multiple-presence factor, LRFD 3.6.1.4.3b).
     const dfFat=(+inp.loads.fatM>0)? +inp.loads.fatM : (Ld.df? Ld.df.m1:Ld.dfm)/1.2;
     const fatDfSource=(+inp.loads.fatM>0)?'LL & DL Distribution (single-lane)':'auto: (1-lane moment DF)÷1.2';
+    // Shear effects (stud shear range 6.10.10.1.2, web special fatigue 6.10.5.3) use the one-lane
+    // SHEAR distribution factor ÷ 1.2 (4.6.2.2.3a, MPF removed per 3.6.1.4.3b), not the moment DF.
+    const dfFatV=(Ld.df? Ld.df.v1:Ld.dfv)/1.2;
+    const fatDfVSource='auto: (1-lane shear DF v₁)÷1.2';
     // Single-lane fraction p of truck traffic (Table 3.6.1.4.2-1) → (ADTT)SL = p·ADTT.
     const pFrac = fq.lanes>=3?0.80 : fq.lanes==2?0.85 : 1.00;
     const adttRaw=+fq.ADTT||1000;
@@ -2261,15 +2368,19 @@ function computeAll(inp){
     const nCyc = +fq.ncyc||1.0;                               // cycles per truck passage (Table 6.6.1.2.5-2)
     const lifeYr = +fq.designLife||75;                        // fatigue design life (yr)
     const Nfat = 365*lifeYr*nCyc*adttSL;                      // total stress-range cycles (6.6.1.2.5-3)
-    // Infinite-life crossover: Fatigue I governs when the finite-life resistance (A/N)^⅓ would
-    // exceed (ΔF)TH, i.e. when (ADTT)SL ≥ A / [(ΔF)TH³ · 365 · Y · n].
-    const adttSLcross = Acat/(Math.pow(THcat,3)*365*lifeYr*nCyc);
+    // Infinite-life crossover (basis of Table 6.6.1.2.3-2): Fatigue I (γ=1.75 vs (ΔF)TH) governs
+    // over Fatigue II (γ=0.80 vs (A/N)^⅓) when (A/N)^⅓ ≤ (0.80/1.75)(ΔF)TH, i.e. when
+    // (ADTT)SL ≥ A / [((0.80/1.75)(ΔF)TH)³ · 365 · Y · n]  (Cat C, 75 yr, n=1 → 1,684/day).
+    const fatGRatio = 0.80/1.75;
+    const adttSLcross = Acat/(Math.pow(fatGRatio*THcat,3)*365*lifeYr*nCyc);
     const recFatI = adttSL >= adttSLcross;                    // recommended limit state
     const lsMode = fq.lsMode || (fq.life==='finite'?'II':fq.life==='infinite'?'I':'auto');
     const fatInf = lsMode==='auto'? recFatI : (lsMode==='I');
     const gammaFat = fatInf?1.75:0.80;                        // load factor (Table 3.4.1-1)
-    // Nominal fatigue resistance (6.6.1.2.5-1/-2): Fatigue I → (ΔF)TH; Fatigue II → (A/N)^⅓ ≥ ½(ΔF)TH.
-    const FnFatII = Math.max(Math.pow(Acat/Nfat,1/3), THcat/2);
+    // Nominal fatigue resistance (6.6.1.2.5-1/-2): Fatigue I → (ΔF)TH; Fatigue II → (A/N)^⅓.
+    // (The old "≥ ½(ΔF)TH" floor belonged to the pre-2009 single-load-factor format; it is not
+    //  part of Eq. 6.6.1.2.5-2 for Fatigue II.)
+    const FnFatII = Math.pow(Acat/Nfat,1/3);
     const FnFat = fatInf? THcat : FnFatII;
     let fatGov={dfRange:0,si:0}, webFatGov={r:0};
     const chartFat=[];                                        // per-station fatigue demands for the Fatigue tab charts
@@ -2281,7 +2392,7 @@ function computeAll(inp){
       if(rng>fatGov.dfRange) fatGov={dfRange:rng,MfatR:Mf,MrangeR:Mrange,SbR:sg.cN.Sb,x:st.x,si:st.si};
       // special fatigue for webs (6.10.5.3): unfactored permanent + Fatigue I LL shear ≤ Vcr
       const Vperm=Math.abs(st.V1+st.V2+st.Vw);
-      const Vll=fatShearAt(Lft,st.x)*1.15*dfFat;             // fatigue-truck shear, single-lane, IM 1.15
+      const Vll=fatShearAt(Lft,st.x)*1.15*dfFatV;            // fatigue-truck shear, single-lane SHEAR DF, IM 1.15
       const Vf=Vperm+1.75*Vll;                                // Fatigue I factored (γ=1.75) per 6.10.5.3
       if(Vf/Vcr>webFatGov.r) webFatGov={r:Vf/Vcr,Vf,Vperm,Vll,x:st.x};
       chartFat.push({x:st.x, rng, Vf});
@@ -2291,7 +2402,7 @@ function computeAll(inp){
     const dfRange=fatGov.dfRange, MfatR=fatGov.MfatR;
     const fatigue={cat:fq.category||'C', Acat, TH:THcat,
       dfRange, MfatR, MrangeR:fatGov.MrangeR, SbR:fatGov.SbR, gammaFat, FnFat, FnFatII,
-      fatDC:gammaFat*dfRange/FnFat, fatInf, lsMode, recFatI, dfFat, fatDfSource,
+      fatDC:gammaFat*dfRange/FnFat, fatInf, lsMode, recFatI, dfFat, fatDfSource, dfFatV, fatDfVSource, fatGRatio,
       adttRaw, adttSL, pFrac, lanes:fq.lanes||2, adttIsSingleLane:fq.adttIsSingleLane!==false,
       nCyc, lifeYr, Nfat, adttSLcross, xGov:fatGov.x, webFatGov, Vcr, fatCalc};
 
@@ -2344,27 +2455,24 @@ function computeAll(inp){
     const nProv=nRow*Math.floor((Lft*12/2)/Math.max(pitch,1));
     /* 6.10.10.2 -- the stud resistance branch has to be the one that goes with the
        limit state the rest of the app already decided on (Step 2 of the Fatigue
-       tab): Fatigue I is the infinite-life check, Zr = 5.5d^2/2 against a shear
-       range factored by gamma = 1.75; Fatigue II is the finite-life check,
-       Zr = alpha*d^2 with gamma = 0.80. Taking max() of the two Zr branches while
-       leaving the shear range unfactored mixed them and left the demand about
-       1.6-1.75x low, so stud pitches that fail 6.10.10 came out passing. For any
-       N where Fatigue II legitimately applies alpha*d^2 already exceeds 5.5d^2/2,
-       so the branch below is not a relaxation of the old floor -- it just stops
-       that floor being handed to the infinite-life case. */
+       tab): Fatigue I is the infinite-life check, Zr = 5.5d^2 (Eq. 6.10.10.2-1)
+       against a shear range factored by gamma = 1.75; Fatigue II is the finite-life
+       check, Zr = alpha*d^2 (Eq. 6.10.10.2-2) with gamma = 0.80. The old
+       "alpha*d^2 >= 5.5d^2/2" floor belonged to the pre-2009 single-load-factor
+       (0.75) format and must not be paired with gamma = 1.75. */
     const alphaF=Math.max(34.5-4.28*(Math.log(Nfat)/Math.LN10),0);
     const dStud2=Math.pow(+inp.conn.studD,2);
-    const Zr=fatInf? 5.5*dStud2/2 : alphaF*dStud2;
+    const Zr=fatInf? 5.5*dStud2 : alphaF*dStud2;
     const yDeckNA=(bare.hs+deck.haunch+deck.ts/2)-cN.ybar, Qslab=(beff*deck.ts/n)*yDeckNA;
-    const VfatU=Ld.hl.Vtr*1.15*dfFat;                    // unfactored range: fatigue truck, IM 1.15, 1-lane DF
+    const VfatU=Ld.hl.Vtr*1.15*dfFatV;                   // unfactored range: HL-93 truck shear at support, IM 1.15, 1-lane SHEAR DF
     const Vfat=gammaFat*VfatU;                           // factored per the governing fatigue combination
     const Vsr=Vfat*Qslab/cN.I, pReq=nRow*Zr/Math.max(Vsr,1e-6);
     const conn={Asc,Qn,Qr,Pshear,nReq,nProv,strOK:nProv>=nReq,Zr,Vsr,pReq,pitch,pitchOK:pitch<=pReq,nRow,
-                Vfat,VfatU,gammaFat,fatInf,alphaF,Qslab,Icomp:cN.I};
+                Vfat,VfatU,gammaFat,fatInf,alphaF,Qslab,Icomp:cN.I,dfFatV,Vtr:Ld.hl.Vtr};
 
     /* ---------- Load rating (LRFR, MBE) — station-based ---------- */
     const rf=(C,dc,dw,ll,g)=>ll>1e-6? (C-1.25*dc-1.5*dw)/(g*ll) : 99;
-    const capM=sgPos.compact? phif*sgPos.Mn_kft
+    const capM=sgPos.compact? phif*MnGov
       : phif*Math.min(sgPos.FncPos*sgPos.cN.StSteel, sgPos.Fnt*sgPos.cN.Sb)/12;   // stress→moment approx
     const MDC=stPos.M1+stPos.M2, MDWr=stPos.Mw, MLLr=stPos.Ml;
     const VDC=Math.abs(stVGov.V1+stVGov.V2), VDWr=Math.abs(stVGov.Vw), VLLr=Math.abs(stVGov.Vl);
@@ -2394,8 +2502,14 @@ function computeAll(inp){
       if(negTGov.r>0) checks.push({n:'Neg flexure — top flange (tension)', t:'Neg tens', v:negTGov.fbu, lim:negTGov.lim, r:negTGov.r, u:'ksi', ref:'6.10.8.3', loc:negTGov.x});
       checks.push({n:'Long. deck reinf ≥ 1% (−M)', t:'1% rebar', v:neg.AsMin1pct, lim:neg.AsProv, r:neg.AsProv>0?neg.AsMin1pct/neg.AsProv:9, u:'in²', ref:'6.10.1.7', loc:negBGov.x||0});
     }
-    if(tStiff){ checks.push({n:'Transverse stiffener It', t:'Trns stiff', v:tStiff.ItReq, lim:tStiff.ItProv, r:tStiff.ItReq/tStiff.ItProv, u:'in⁴', ref:'6.10.11.1', loc:0}); }
+    if(tStiff){ checks.push({n:'Transverse stiffener It', t:'Trns stiff', v:tStiff.ItReq, lim:tStiff.ItProv, r:tStiff.ItReq/tStiff.ItProv, u:'in⁴', ref:'6.10.11.1', loc:0});
+      // 6.10.11.1.2 projecting width: lower bound max(2+D/30, bf/4), upper bound 16tp
+      checks.push({n:'Transverse stiffener width b_t ≥ min', t:'Stiff bt min', v:tStiff.btMin, lim:tStiff.bt, r:tStiff.btMin/Math.max(tStiff.bt,1e-6), u:'in', ref:'6.10.11.1.2', loc:0});
+      checks.push({n:'Transverse stiffener width b_t ≤ 16t_p', t:'Stiff bt max', v:tStiff.bt, lim:tStiff.btMax, r:tStiff.bt/Math.max(tStiff.btMax,1e-6), u:'in', ref:'6.10.11.1.2', loc:0}); }
+    // 6.10.9.3.3 end-panel stiffener spacing d_o ≤ 1.5D (only when the web is treated as stiffened)
+    if(stiffened) checks.push({n:'End-panel stiffener spacing d_o ≤ 1.5D', t:'End panel', v:doRaw, lim:doEndMax, r:doRaw/doEndMax, u:'in', ref:'6.10.9.3.3', loc:0});
     checks.push({n:'Bearing stiffener', t:'Brg stiff', v:VuPeak, lim:Math.min(RsbN,phic*Pn), r:VuPeak/Math.min(RsbN,phic*Pn), u:'kip', ref:'6.10.11.2', loc:0});
+    checks.push({n:'Bearing stiffener width b_b ≤ 0.48t_b√(E/F_ys)', t:'Brg bb', v:bb, lim:bbMax, r:bb/Math.max(bbMax,1e-6), u:'in', ref:'6.10.11.2.2', loc:0});
     checks.push({n:'Shear studs — strength', t:'Studs str', v:nReq, lim:nProv, r:nReq/Math.max(nProv,1), u:'#', ref:'6.10.10.4', loc:0});
     checks.push({n:'Shear studs — fatigue pitch', t:'Studs fat', v:pitch, lim:pReq, r:pitch/pReq, u:'in', ref:'6.10.10.2', loc:0});
 
@@ -2408,8 +2522,9 @@ function computeAll(inp){
       checks.push({n:'Deck overhang', t:'Deck OH', v:deckD.Mu_oh, lim:deckD.ohCap.phiMn, r:deckD.ohCap.dc, u:'k-ft/ft', ref:'13.4', loc:0});
     }
 
-    checks.push({n:'Strength flexure (+M)', t:'Flexure', v:sgPos.compact?stations[stations.findIndex(s=>s.x===posGov.x)]?.Mu||MuPeak:flex.fbuBot, lim:sgPos.compact?phif*sgPos.Mn_kft:phif*sgPos.Fnt, r:posGov.r, u:sgPos.compact?'k-ft':'ksi', ref:'6.10.7', loc:posGov.x||Lft/2});
-    if(sgPos.compact) checks.push({n:'Ductility Dp≤0.42Dt', t:'Ductility', v:sgPos.pl.Dp, lim:0.42*sgPos.pl.Dt, r:sgPos.pl.Dp/(0.42*sgPos.pl.Dt), u:'in', ref:'6.10.7.3', loc:posGov.x||Lft/2});
+    checks.push({n:'Strength flexure (+M)', t:'Flexure', v:sgPos.compact?stations[stations.findIndex(s=>s.x===posGov.x)]?.Mu||MuPeak:(posGov.fGov??flex.fbuBot), lim:sgPos.compact?phif*MnGov:phif*(posGov.FGov??sgPos.Fnt), r:posGov.r, u:sgPos.compact?'k-ft':'ksi', ref:'6.10.7', loc:posGov.x||Lft/2});
+    // 6.10.7.3 applies to every COMPOSITE section in positive flexure, compact or noncompact.
+    if(deck.deckOn) checks.push({n:'Ductility Dp≤0.42Dt', t:'Ductility', v:sgPos.pl.Dp, lim:0.42*sgPos.pl.Dt, r:sgPos.pl.Dp/(0.42*sgPos.pl.Dt), u:'in', ref:'6.10.7.3', loc:posGov.x||Lft/2});
     checks.push({n:'Strength shear', t:'Shear', v:VuPeak, lim:phiv*Vcr, r:shearDC, u:'kip', ref:'6.10.9', loc:shearR.xGov});
 
     const checksF=checks.map(c=>({...c,loc:c.loc||0,pass:c.r<=1.0001}));
@@ -3062,8 +3177,10 @@ function InputsTab({inp,set,R}){
       </div>
       <div style={{marginTop:9}}>
         <label style={{fontSize:11,color:'var(--ink2)',display:'flex',gap:7,alignItems:'center'}}>
-          <input type="checkbox" checked={geom.shored} onChange={e=>S('geom.shored',e.target.checked)}/>
-          Shored construction (deck DL on composite section)</label></div>
+          <input type="checkbox" checked={!!geom.shored} disabled
+            title="Not implemented — the analysis always places DC1 on the bare steel (unshored)."/>
+          Shored construction (deck DL on composite section) — <i>not implemented: DC1 is always applied to the bare steel section (unshored construction)</i></label>
+        {geom.shored&&<div className="hint" style={{color:'var(--warn)'}}>This project was saved with “shored” ticked. That option never affected the analysis; results are for unshored construction (conservative for flange stresses).</div>}</div>
     </Card>
 
     <Card title="Loads" refTag="LRFD 3.6 / 4.6.2.2">
@@ -3543,11 +3660,14 @@ function FlexTab({R}){
       {p.ductRed
         ? <ML s={Tx`M_n=M_p\!\left(1.07-0.7\tfrac{D_p}{D_t}\right)=${nx(p.Mp,0)}\!\left(1.07-0.7\tfrac{${nx(p.Dp,1)}}{${nx(p.Dt,1)}}\right)=${nx(p.Mn,0)}\;\text{k-ft}`}/>
         : <ML s={Tx`D_p=${nx(p.Dp,2)}\le 0.1D_t=${nx(0.1*p.Dt,2)}\;\Rightarrow\;M_n=M_p=${nx(p.Mn,0)}\;\text{k-ft}`}/>}
+      {p.my13&&<ML s={Tx`M_y=${nx(p.my13.MD1,0)}+${nx(p.my13.MD2,0)}+\min(${nx(p.my13.MADb,0)},${nx(p.my13.MADt,0)})=${nx(p.my13.My,0)}\;\text{k-ft}\qquad M_n=\min(${nx(p.MnMp,0)},\;1.3R_hM_y=${nx(p.my13.lim13,0)})=${nx(p.Mn,0)}\;\text{k-ft}\;(6.10.7.1.2\text{-}3)`}/>}
       <ML s={Tx`\frac{M_u}{\phi_fM_n}=\frac{${nx(p.Mu,0)}}{${nx(p.phiMn,0)}}=${nx(p.dc,3)}\;${p.dc<=1.0001?'\\checkmark':'\\text{N.G.}'}`}/>
       <div className="mnote">Compact composite section (6.10.7.1): capacity is the plastic moment M_p, reduced by the ductility term when D_p {'>'} 0.1D_t. Top (compression) flange is continuously braced by the deck, so LTB does not apply. φ_f = 1.0.</div>
     </React.Fragment>;
     return <React.Fragment>
-      <ML s={Tx`F_{nc}=R_bR_hF_{yc}=${nx(p.Rb,3)}\cdot${nx(p.Rh,3)}\cdot${nx(Fyc,0)}=${nx(p.Fnc,1)}\;\text{ksi}\qquad F_{nt}=R_hF_{yt}=${nx(p.Fnt,1)}\;\text{ksi}`}/>
+      {p.FncNC
+        ? <ML s={Tx`F_{nc}=\min(F_{nc,FLB},F_{nc,LTB})=\min(${nx(p.FncNC.FncFLB,1)},${nx(p.FncNC.FncLTB,1)})=${nx(p.Fnc,1)}\;\text{ksi}\;(6.10.8.2,\;\text{noncomposite})\qquad F_{nt}=R_hF_{yt}=${nx(p.Fnt,1)}\;\text{ksi}`}/>
+        : <ML s={Tx`F_{nc}=R_bR_hF_{yc}=${nx(p.Rb,3)}\cdot${nx(p.Rh,3)}\cdot${nx(Fyc,0)}=${nx(p.Fnc,1)}\;\text{ksi}\qquad F_{nt}=R_hF_{yt}=${nx(p.Fnt,1)}\;\text{ksi}`}/>}
       <ML s={Tx`f_{bu,top}=${nx(p.fbuTop,1)}\;/\;\phi_fF_{nc}=${nx(p.Fnc,1)}\qquad f_{bu,bot}=${nx(p.fbuBot,1)}\;/\;\phi_fF_{nt}=${nx(p.Fnt,1)}\;\text{ksi}`}/>
       <ML s={Tx`\frac{D}{C}=\max\!\left(\tfrac{${nx(p.fbuTop,1)}}{${nx(p.Fnc,1)}},\;\tfrac{${nx(p.fbuBot,1)}}{${nx(p.Fnt,1)}}\right)=${nx(p.dc,3)}\;${p.dc<=1.0001?'\\checkmark':'\\text{N.G.}'}`}/>
       <div className="mnote">Noncompact composite section (6.10.7.2): Strength I factored flange stresses f_bu (accumulated by construction stage) vs F_nc (compression, with load-shedding R_b and hybrid R_h) and F_nt (tension). D_c(comp web) = {fmt(p.DcPos,1)} in.</div>
@@ -3568,9 +3688,9 @@ function FlexTab({R}){
   };
   return (<div>
     <div className="bigres">
-      <div className={'br '+(pass?'p':'f')}><div className="l">{f.compact?'Mu / φMn':'Strength flexure D/C'}</div><div className="n">{fmt(f.flexDC,2)}</div><div className="u">{f.compact?fmt(f.MuPeak,0)+' / '+fmt(f.phif*f.Mn_kft,0)+' k-ft':'stress basis'}</div></div>
+      <div className={'br '+(pass?'p':'f')}><div className="l">{f.compact?'Mu / φMn':'Strength flexure D/C'}</div><div className="n">{fmt(f.flexDC,2)}</div><div className="u">{f.compact?fmt(f.MuPeak,0)+' / '+fmt(f.phif*f.MnGov,0)+' k-ft':'stress basis'}</div></div>
       <div className="br"><div className="l">Plastic moment Mp</div><div className="n">{fmt(f.Mp_kft,0)}</div><div className="u">k-ft · PNA {pl.region}</div></div>
-      {f.compact&&<div className={'br '+(dPass?'p':'f')}><div className="l">Ductility Dp / 0.42Dt</div><div className="n">{fmt(pl.Dp/(0.42*pl.Dt),2)}</div><div className="u">{fmt(pl.Dp,1)} / {fmt(0.42*pl.Dt,1)} in</div></div>}
+      {f.composite&&<div className={'br '+(dPass?'p':'f')}><div className="l">Ductility Dp / 0.42Dt</div><div className="n">{fmt(pl.Dp/(0.42*pl.Dt),2)}</div><div className="u">{fmt(pl.Dp,1)} / {fmt(0.42*pl.Dt,1)} in</div></div>}
     </div>
     <Card title="Moment Breakdown vs Capacity" refTag={fac?'factored components (Strength I)':'unfactored service components'}>
       <div style={{marginBottom:6}}>
@@ -3622,12 +3742,15 @@ function FlexTab({R}){
         {pl.Dp<=0.1*pl.Dt
           ? <ML s={Tx`D_p=${nx(pl.Dp,2)}\le 0.1D_t=${nx(0.1*pl.Dt,2)}\;\Rightarrow\; M_n=M_p=${nx(f.Mn_kft,0)}\;\text{k-ft}`}/>
           : <ML s={Tx`M_n=M_p\!\left(1.07-0.7\tfrac{D_p}{D_t}\right)=${nx(f.Mp_kft,0)}\!\left(1.07-0.7\tfrac{${nx(pl.Dp,1)}}{${nx(pl.Dt,1)}}\right)=${nx(f.Mn_kft,0)}\;\text{k-ft}`}/>}
-        <ML s={Tx`\frac{M_u}{\phi_f M_n}=\frac{${nx(f.MuPeak,0)}}{${nx(f.phif*f.Mn_kft,0)}}=${nx(f.flexDC,3)}\;${pass?'\\checkmark':'\\text{N.G.}'}`}/>
-        <div className="hint">Compact composite section in positive flexure (6.10.6.2.2 satisfied) — capacity is the plastic moment M_p, reduced by the ductility term when D_p {'>'} 0.1D_t. Simple span, so no 1.3 R_h M_y continuity cap. φ_f = 1.0; flange lateral bending f_ℓ = 0 (straight girder).</div>
+        {f.my13&&<ML s={Tx`M_y=M_{D1}+M_{D2}+M_{AD}=${nx(f.my13.MD1,0)}+${nx(f.my13.MD2,0)}+\min(${nx(f.my13.MADb,0)},${nx(f.my13.MADt,0)})=${nx(f.my13.My,0)}\;\text{k-ft}\qquad1.3R_hM_y=${nx(f.my13.lim13,0)}\;\text{k-ft}\;\Rightarrow\;M_n=${nx(f.MnGov,0)}\;\text{k-ft}`}/>}
+        <ML s={Tx`\frac{M_u}{\phi_f M_n}=\frac{${nx(f.gov&&f.gov.Mu||f.MuPeak,0)}}{${nx(f.phif*f.MnGov,0)}}=${nx(f.flexDC,3)}\;${pass?'\\checkmark':'\\text{N.G.}'}`}/>
+        <div className="hint">Compact composite section in positive flexure (6.10.6.2.2 satisfied) — capacity is the plastic moment M_p, reduced by the ductility term when D_p {'>'} 0.1D_t. {f.contSpan?'Continuous span (imported demands with negative moment): M_n is also limited to 1.3 R_h M_y (6.10.7.1.2-3), with M_y from the staged factored permanent stresses per D6.2.2 (DC1 on the steel, DC2/DW on the 3n section, M_AD on the n section, lesser flange). The B6.2 exemption is not evaluated.':'Simple span, so no 1.3 R_h M_y continuity cap.'} φ_f = 1.0; flange lateral bending f_ℓ = 0 (straight girder).</div>
       </React.Fragment> : <React.Fragment>
-        <ML s={Tx`F_{nc}=R_bR_hF_{yc}=${nx(f.Fnc,1)}\;\text{ksi}\qquad F_{nt}=R_hF_{yt}=${nx(f.Fnt,1)}\;\text{ksi}`}/>
+        {f.FncPosNC
+          ? <ML s={Tx`F_{nc}=\min(F_{nc,FLB},F_{nc,LTB})=\min(${nx(f.FncPosNC.FncFLB,1)},${nx(f.FncPosNC.FncLTB,1)})=${nx(f.Fnc,1)}\;\text{ksi}\;(L_b=${nx(R.geom.Lb,0)}',\;L_p=${nx(f.FncPosNC.Lp,1)}',\;L_r=${nx(f.FncPosNC.Lr,1)}')\qquad F_{nt}=R_hF_{yt}=${nx(f.Fnt,1)}\;\text{ksi}`}/>
+          : <ML s={Tx`F_{nc}=R_bR_hF_{yc}=${nx(f.Fnc,1)}\;\text{ksi}\qquad F_{nt}=R_hF_{yt}=${nx(f.Fnt,1)}\;\text{ksi}`}/>}
         <ML s={Tx`f_{bu,top}=${nx(f.fbuTop,1)}\le\phi_fF_{nc}\quad f_{bu,bot}=${nx(f.fbuBot,1)}\le\phi_fF_{nt}\;\Rightarrow\;\frac{D}{C}=${nx(f.flexDC,3)}\;${pass?'\\checkmark':'\\text{N.G.}'}`}/>
-        <div className="hint">Noncompact composite section (6.10.7.2): stress-based check on the Strength I factored flange stresses f_bu (accumulated by stage) against F_nc (compression, with load-shedding R_b and hybrid R_h) and F_nt (tension).</div>
+        <div className="hint">{f.composite?'Noncompact composite section (6.10.7.2): stress-based check on the Strength I factored flange stresses f_bu (accumulated by stage) against F_nc (compression, with load-shedding R_b and hybrid R_h) and F_nt (tension).':'Noncomposite section (deck off): the top flange is the compression flange, braced only at the cross-frames, so F_nc is the 6.10.8.2 value — the smaller of flange local buckling and lateral-torsional buckling over L_b (C_b = 1.0) — checked against the Strength I factored f_bu; F_nt = R_hF_yt for the tension flange (6.10.8.3).'}</div>
       </React.Fragment>}
     </Card>
     <Card title="Strength I flange stresses" refTag="staged · 1.25DC + 1.50DW + 1.75LL">
@@ -3904,8 +4027,7 @@ function FatigueTab({R}){
     else if(Math.abs(x-Lspan/2)<0.06) t.push('midspan');
     if(Math.abs(x-f.xGov)<0.06) t.push('peak Δf');
     return 'x = '+x.toFixed(1)+' ft'+(t.length?'  ·  '+t.join(', '):''); };
-  const AN13=Math.pow(f.Acat/Math.max(f.Nfat,1),1/3);        // raw (A/N)^⅓ before the ½(ΔF)TH floor
-  const halfTH=f.TH/2;
+  const AN13=Math.pow(f.Acat/Math.max(f.Nfat,1),1/3);        // (A/N)^⅓
   const lsName=f.fatInf?'Fatigue I':'Fatigue II';
   const recName=f.recFatI?'Fatigue I':'Fatigue II';
   const overridden=f.lsMode!=='auto' && ((f.lsMode==='I')!==f.recFatI);
@@ -3933,14 +4055,14 @@ function FatigueTab({R}){
 
     <Card title="Step 2 — Which limit state: Fatigue I or Fatigue II?" refTag="6.6.1.2.3 · infinite vs finite life"
       right={<span className="chip head" style={{background:f.fatInf?'#E8F5EC':'#FCF3E3',borderColor:f.fatInf?'var(--pass)':'var(--warn)',color:f.fatInf?'var(--pass)':'var(--warn)'}}>{lsName}</span>}>
-      <ML s={Tx`(\text{ADTT})_{SL,\,cross}=\dfrac{A}{(\Delta F)_{TH}^{3}\,(365)(Y)(n)}=\dfrac{${nx(f.Acat,0)}}{${nx(f.TH,1)}^{3}\cdot365\cdot${nx(f.lifeYr,0)}\cdot${nx(f.nCyc,2)}}=${nx(f.adttSLcross,0)}\;\text{trucks/day}`}/>
+      <ML s={Tx`(\text{ADTT})_{SL,\,cross}=\dfrac{A}{\left[\tfrac{0.80}{1.75}(\Delta F)_{TH}\right]^{3}(365)(Y)(n)}=\dfrac{${nx(f.Acat,0)}}{(${nx(f.fatGRatio,4)}\cdot${nx(f.TH,1)})^{3}\cdot365\cdot${nx(f.lifeYr,0)}\cdot${nx(f.nCyc,2)}}=${nx(f.adttSLcross,0)}\;\text{trucks/day}`}/>
       <ML s={Tx`(\text{ADTT})_{SL}=${nx(f.adttSL,0)}\;${f.recFatI?'\\ge':'<'}\;${nx(f.adttSLcross,0)}\;\Rightarrow\;\text{${recName} recommended}`}/>
       <div className="kv" style={{marginTop:6}}>
         <span className="k">Limit-state mode</span><span className="dots"></span><span className="v">{f.lsMode==='auto'?'AUTO (from crossover)':'MANUAL override'}</span>
         <span className="k">Governing limit state</span><span className="dots"></span><span className="v">{lsName} · γ = {fmt(f.gammaFat,2)}</span>
       </div>
       {overridden && <div className="callout" style={{background:'#FCF3E3',borderColor:'var(--warn)',color:'var(--warn)'}}>You have manually selected <b>{lsName}</b>, but the (ADTT)ₛₗ crossover recommends <b>{recName}</b>. Switch the Limit-state control on the Inputs tab to AUTO to follow the code check.</div>}
-      <div className="mnote">Fatigue&nbsp;I (γ = 1.75) is the infinite-life check used when traffic is heavy enough that the finite-life resistance would exceed the constant-amplitude threshold (ΔF)<sub>TH</sub>; the section is then designed for unlimited cycles. Fatigue&nbsp;II (γ = 0.80) is the finite-life check for lighter traffic, where resistance depends on the actual cycle count N.</div>
+      <div className="mnote">Fatigue&nbsp;I (γ = 1.75) is the infinite-life check used when traffic is heavy enough that the Fatigue&nbsp;I check governs over Fatigue&nbsp;II, i.e. when (A/N)<sup>⅓</sup>/0.80 ≥ (ΔF)<sub>TH</sub>/1.75 — the basis of Table 6.6.1.2.3-2 (e.g. category C, 75 yr: 1,680 trucks/day); the section is then designed for unlimited cycles. Fatigue&nbsp;II (γ = 0.80) is the finite-life check for lighter traffic, where resistance depends on the actual cycle count N.</div>
     </Card>
 
     <Card title="Step 3 — Detail category & nominal fatigue resistance (ΔF)ₙ" refTag="6.6.1.2.5 · category constants">
@@ -3955,9 +4077,8 @@ function FatigueTab({R}){
             <div className="mnote">Infinite-life resistance is the constant-amplitude fatigue threshold — independent of N.</div>
           </React.Fragment>
         : <React.Fragment>
-            <ML s={Tx`\left(\frac{A}{N}\right)^{1/3}=\left(\frac{${nx(f.Acat,0)}}{${nx(f.Nfat,0)}}\right)^{1/3}=${nx(AN13,2)}\;\text{ksi}\qquad\tfrac{1}{2}(\Delta F)_{TH}=${nx(halfTH,2)}\;\text{ksi}`}/>
-            <ML s={Tx`\text{Fatigue II:}\quad(\Delta F)_n=\max\!\left[(A/N)^{1/3},\;\tfrac12(\Delta F)_{TH}\right]=${nx(f.FnFat,2)}\;\text{ksi}${AN13>=halfTH?'\\;\\;(\\text{finite-life governs})':'\\;\\;(\\text{threshold floor governs})'}`}/>
-            <div className="mnote">Finite-life resistance falls with cycle count but is floored at half the constant-amplitude threshold (6.6.1.2.5-2).</div>
+            <ML s={Tx`\text{Fatigue II:}\quad(\Delta F)_n=\left(\frac{A}{N}\right)^{1/3}=\left(\frac{${nx(f.Acat,0)}}{${nx(f.Nfat,0)}}\right)^{1/3}=${nx(f.FnFat,2)}\;\text{ksi}`}/>
+            <div className="mnote">Finite-life resistance falls with cycle count (Eq. 6.6.1.2.5-2). There is no ½(ΔF)<sub>TH</sub> floor in the Fatigue&nbsp;I/II format.</div>
           </React.Fragment>}
     </Card>
 
@@ -4000,6 +4121,7 @@ function FatigueTab({R}){
     <Card title="Special fatigue requirement for webs" refTag="6.10.5.3 · Vu(fatigue) ≤ Vcr">
       {(()=>{ const w=f.webFatGov;
         return <React.Fragment>
+        <div className="mnote" style={{marginTop:0}}>Fatigue-truck shear uses the single-lane <b>shear</b> distribution factor {f.fatDfVSource} = <b>{fmt(f.dfFatV,3)}</b>, IM = 15%.</div>
         <ML s={Tx`V_{u}=V_{perm}+1.75\,V_{f,LL}=${nx(w.Vperm||0,0)}+1.75\cdot${nx(w.Vll||0,0)}=${nx(w.Vf||0,0)}\;\text{kip}`}/>
         <ML s={Tx`\frac{V_{u}}{V_{cr}}=\frac{${nx(w.Vf||0,0)}}{${nx(f.Vcr,0)}}=${nx(w.r,3)}\;${webPass?'\\checkmark':'\\text{N.G.}'}\qquad(\text{at }x=${nx(w.x||0,1)}')`}/>
         </React.Fragment>; })()}
@@ -4110,12 +4232,12 @@ function ConnTab({R}){
         ['pitch','Provided pitch',c.pitch,'in'],
       ]}/>
       <ML s={c.fatInf
-        ? Tx`Z_r=\tfrac{5.5}{2}d^{2}=${nx(c.Zr,2)}\;\tfrac{\text{kip}}{\text{stud}}\quad(\text{Fatigue I, infinite life})`
+        ? Tx`Z_r=5.5\,d^{2}=${nx(c.Zr,2)}\;\tfrac{\text{kip}}{\text{stud}}\quad(\text{Fatigue I, infinite life, Eq. 6.10.10.2-1})`
         : Tx`Z_r=\alpha d^{2}=(${nx(c.alphaF,2)})d^{2}=${nx(c.Zr,2)}\;\tfrac{\text{kip}}{\text{stud}}\quad(\text{Fatigue II, finite life})`}/>
-      <ML s={Tx`V_f=\gamma\,V_{tr}(1.15)\,DF=${nx(c.gammaFat,2)}\cdot${nx(c.VfatU,2)}=${nx(c.Vfat,2)}\;\text{kip}\qquad V_{sr}=\frac{V_f\,Q}{I}=\frac{${nx(c.Vfat,2)}\cdot${nx(c.Qslab,0)}}{${nx(c.Icomp,0)}}=${nx(c.Vsr,3)}\;\tfrac{\text{kip}}{\text{in}}`}/>
-      <div className="mnote">The load factor and the Z<sub>r</sub> branch are a pair (6.10.10.2 with Table 3.4.1-1): Fatigue&nbsp;I applies γ&nbsp;=&nbsp;1.75 against the infinite-life resistance 5.5d²/2, Fatigue&nbsp;II applies γ&nbsp;=&nbsp;0.80 against αd². Which one is in force is decided on the Fatigue tab and follows the same (ADTT)<sub>SL</sub> crossover as the flange check.</div>
+      <ML s={Tx`V_f=\gamma\,V_{tr}(1.15)\,g_{V,1}=${nx(c.gammaFat,2)}\cdot${nx(c.Vtr,2)}\cdot1.15\cdot${nx(c.dfFatV,3)}=${nx(c.gammaFat,2)}\cdot${nx(c.VfatU,2)}=${nx(c.Vfat,2)}\;\text{kip}\qquad V_{sr}=\frac{V_f\,Q}{I}=\frac{${nx(c.Vfat,2)}\cdot${nx(c.Qslab,0)}}{${nx(c.Icomp,0)}}=${nx(c.Vsr,3)}\;\tfrac{\text{kip}}{\text{in}}`}/>
+      <div className="mnote">The load factor and the Z<sub>r</sub> branch are a pair (6.10.10.2 with Table 3.4.1-1): Fatigue&nbsp;I applies γ&nbsp;=&nbsp;1.75 against the infinite-life resistance 5.5d², Fatigue&nbsp;II applies γ&nbsp;=&nbsp;0.80 against αd². Which one is in force is decided on the Fatigue tab and follows the same (ADTT)<sub>SL</sub> crossover as the flange check.</div>
       <ML s={Tx`p\le\frac{n\,Z_r}{V_{sr}}=\frac{${nx(c.nRow,0)}\cdot${nx(c.Zr,2)}}{${nx(c.Vsr,3)}}=${nx(c.pReq,1)}\;\text{in}\qquad p_{prov}=${nx(c.pitch,1)}\;${c.pitchOK?'\\le':'>'}\;p_{req}\;${c.pitchOK?'\\checkmark':'\\text{N.G.}'}`}/>
-      <div className="mnote">Z_r is the fatigue shear resistance of one stud (α = 34.5 − 4.28·log N, with the finite-life floor). V_sr = V_f·Q/I is the horizontal shear range per unit length from the fatigue truck on the short-term composite section. The required pitch is the closest fatigue-controlled spacing; the provided pitch must not exceed it.</div>
+      <div className="mnote">Z_r is the fatigue shear resistance of one stud (Fatigue&nbsp;II: α = 34.5 − 4.28·log N; Fatigue&nbsp;I: 5.5d²). V_sr = V_f·Q/I is the horizontal shear range per unit length from the fatigue truck on the short-term composite section. The required pitch is the closest fatigue-controlled spacing; the provided pitch must not exceed it.</div>
     </Deriv>
   </div>);
 }
@@ -4158,14 +4280,16 @@ function OptimizeTab({R,inp}){
     if(e.sec.useSegs&&Array.isArray(e.sec.segs))
       e.sec.segs=e.sec.segs.map(s=>({...s, tfb:+(Math.max(0.25,(+s.tfb||t)+(t-base))).toFixed(4)}));
     const Rr=computeAll(e);
+    // a swept size can make computeAll fail ({ok:false}, no checks) — show it as a gap, not a crash
+    if(!Rr.ok||!Array.isArray(Rr.checks)) return {t,flex:NaN,shear:NaN,serv:NaN,pass:false,err:Rr.error||'compute failed'};
     const g=k=>{const c=Rr.checks.find(x=>x.t===k); return c?c.r:0;};
     return {t,flex:Math.max(g('Flexure'),g('Neg flex')),shear:g('Shear'),serv:g('SrvII'),pass:Rr.ok&&Rr.checks.every(c=>c.pass)}; });
   return (<div>
     <Card title="Optimize — bottom-flange thickness" refTag="governing D/C vs plate size">
       <Fig h={300} data={[
-        {x:vals,y:rows.map(r=>r.flex),name:'Flexure',mode:'lines+markers',line:{color:'#1C4FC4'}},
-        {x:vals,y:rows.map(r=>r.shear),name:'Shear',mode:'lines+markers',line:{color:'#B3261E'}},
-        {x:vals,y:rows.map(r=>r.serv),name:'Service II',mode:'lines+markers',line:{color:'#15803D'}},
+        {x:vals,y:rows.map(r=>isFinite(r.flex)?r.flex:null),name:'Flexure',mode:'lines+markers',line:{color:'#1C4FC4'}},
+        {x:vals,y:rows.map(r=>isFinite(r.shear)?r.shear:null),name:'Shear',mode:'lines+markers',line:{color:'#B3261E'}},
+        {x:vals,y:rows.map(r=>isFinite(r.serv)?r.serv:null),name:'Service II',mode:'lines+markers',line:{color:'#15803D'}},
         {x:[vals[0],vals[vals.length-1]],y:[1,1],name:'D/C = 1',mode:'lines',line:{color:'#888',dash:'dot'}}]}
         layout={{yaxis:{title:'D/C'},xaxis:{title:'bottom flange tfb (in)'}}}/>
       <Tbl head={['tfb (in)','Flexure','Shear','Service II','All pass']}
