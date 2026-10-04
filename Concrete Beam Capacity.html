@@ -5344,7 +5344,8 @@ table.vars td.num{text-align:right; white-space:nowrap;}
    Single-file HTML. KaTeX + Plotly (CDN). LocalStorage persistence.
    ===================================================================== */
 
-const LS_KEY = &quot;rebar_aci_autosave_v1&quot;;
+const LS_KEY = &quot;rcsuite.rebar_autosave_v1&quot;;          // own autosave key for the suite's Dev tab (was shared with the standalone tool)
+const LS_KEY_OLD = &quot;rebar_aci_autosave_v1&quot;;          // standalone ACI Rebar Development Length.html autosave; read once for migration, never written or deleted
 const LS_PROJECTS = &quot;rebar_aci_projects_v1&quot;;
 
 /* Bar properties: db (in), area (in^2) */
@@ -6564,6 +6565,8 @@ function switchTab(name){
 }
 function init(){
   buildInputPanel();
+  // one-time migration: if this tab has no autosave of its own yet, start from the old shared one (left in place)
+  try{ if(localStorage.getItem(LS_KEY)===null){ const old=localStorage.getItem(LS_KEY_OLD); if(old!==null) localStorage.setItem(LS_KEY,old); } }catch(e){}
   // restore autosave
   let saved=null; try{saved=JSON.parse(localStorage.getItem(LS_KEY));}catch(e){}
   if(saved) applyState(saved);

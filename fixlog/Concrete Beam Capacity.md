@@ -1228,9 +1228,48 @@ Identical edits to branch claude/fix-rebar-dev (see fixlog/ACI Rebar Development
 - **How verified:** jsdom render.
 - **Other copies of this code:** `ACI Rebar Development Length.html` (standalone). The same edits, unescaped, are in branch `claude/fix-rebar-dev`.
 
+## 2026-10-04 — Engineer decisions applied
+
+### F21. Dev tab: its own autosave key `rcsuite.rebar_autosave_v1`, with one-time migration; projects key stays shared   [robustness / saved data] [no result change]
+- **Where:** Dev tab srcdoc (`suite-frame-dev`), constants at the top of the main script (anchor `const LS_KEY = &quot;rcsuite.rebar_autosave_v1&quot;;` in the file, `const LS_KEY = "rcsuite.rebar_autosave_v1";` unescaped), and `init()` (anchor `// one-time migration: if this tab has no autosave of its own yet`). The `autosave()` function is unchanged; it writes to `LS_KEY`, which is now the new key.
+- **Problem:** O2. The Dev tab and the standalone `ACI Rebar Development Length.html` shared the autosave key `rebar_aci_autosave_v1`. On Chromium `file://` they share one origin, so each tool's autosave overwrote the other's working state.
+- **Decision (engineer):** give the embedded Dev tab its own autosave key. Keep `rebar_aci_projects_v1` shared, so saved projects remain visible in both tools.
+- **Governing provision:** n/a (CLAUDE.md §5, saved data).
+- **Before** (unescaped; in the file `"` is `&quot;`):
+  ```js
+  const LS_KEY = "rebar_aci_autosave_v1";
+  const LS_PROJECTS = "rebar_aci_projects_v1";
+  …
+    // restore autosave
+    let saved=null; try{saved=JSON.parse(localStorage.getItem(LS_KEY));}catch(e){}
+  ```
+- **After** (unescaped):
+  ```js
+  const LS_KEY = "rcsuite.rebar_autosave_v1";          // own autosave key for the suite's Dev tab (was shared with the standalone tool)
+  const LS_KEY_OLD = "rebar_aci_autosave_v1";          // standalone ACI Rebar Development Length.html autosave; read once for migration, never written or deleted
+  const LS_PROJECTS = "rebar_aci_projects_v1";
+  …
+    // one-time migration: if this tab has no autosave of its own yet, start from the old shared one (left in place)
+    try{ if(localStorage.getItem(LS_KEY)===null){ const old=localStorage.getItem(LS_KEY_OLD); if(old!==null) localStorage.setItem(LS_KEY,old); } }catch(e){}
+    // restore autosave
+    let saved=null; try{saved=JSON.parse(localStorage.getItem(LS_KEY));}catch(e){}
+  ```
+  The added text has no `&` or `"`, so it needs no escaping inside the srcdoc. The two constant lines were escaped (`"` → `&quot;`). CRLF line endings were preserved.
+- **Saved data / migration:** the old key `rebar_aci_autosave_v1` is read once and copied into the new key **only if the new key is absent**. The old key is never altered or deleted. The projects key `rebar_aci_projects_v1` is unchanged and shared.
+- **Check case:**
+  - Migration statement, run in node with a localStorage stub:
+    - (A) only the old key `{"inp":{"barSize":"7"}}` → the new key is created with the same value; the old key is unchanged.
+    - (B) both keys present (old #7, new #9) → nothing is copied; the new key stays #9.
+    - (C) neither key → nothing is written.
+    - (D) new key only → unchanged.
+  - jsdom boot of the unescaped Dev srcdoc:
+    - Old autosave #7 plus a project store → the tab opens with bar #7. After an edit to #5 and `autosave()`, the new key holds #5, while the old key still holds #7 and `rebar_aci_projects_v1` is untouched.
+    - Both keys present (old #7, new #9) → the tab opens with #9.
+- **How verified:** unescaped the Dev srcdoc and ran `node --check` on its inline script: OK. Ran the migration stub test and the jsdom boot test (scratch `w/cbc_mig.js`), with no page errors.
+- **Other copies of this code:** the standalone `ACI Rebar Development Length.html` intentionally keeps the old key `rebar_aci_autosave_v1` (and the shared `rebar_aci_projects_v1`). It is not changed.
+
 ## Open items (not changed)
 - O1. **ACI 318-19 §9.3.3.1 beam minimum strain** (`dEpsMin`, ACI branch) still checks εt ≥ 0.004. The review believes 318-19 changed this to εty + 0.003; I am not certain of the 318-19 wording, so per instructions the code is unchanged. — Please confirm against your copy of ACI 318-19 §9.3.3.1. If it reads εty + 0.003, change `0.004` to `S.mat.fy/ES+0.003` in that check (ACI only).
-- O2. **Storage collision (shared rebar keys).** The Dev tab and the standalone `ACI Rebar Development Length.html` both use `rebar_aci_autosave_v1` / `rebar_aci_projects_v1`; on Chromium `file://` they share one origin, so autosaves overwrite each other and simultaneous project saves can race. Keys not changed (CLAUDE.md §5). — Decision needed: keep shared (projects visible in both, as now), or give the suite copy its own prefixed keys with a one-time migration that copies the existing data.
 - O3. **ACI Gr 60 εty.** F2 uses εty = fy/Es (0.002069 for Gr 60, so εtl = 0.005069). ACI 318-19 §21.2.2.1 permits εty = 0.002 for Grade 60, which would keep εtl = 0.005 and slightly raise φ in the transition zone. — Prefer the 0.002 permission for Gr 60?
 - O4. **AASHTO φ for fy > 75 ksi.** `phiFlex` AASHTO branch keeps εtl = 0.005 and εcl = fy/Es; AASHTO 10th Ed. 5.5.4.2 / 5.6.2.1 vary these for higher-strength bars (εtl up to 0.008 at 100 ksi). Not changed (edition detail not re-verified). The tool warns above 75 ksi.
 - O5. **AASHTO transverse-reinforcement yield limit** (fyt) not applied; the 60 ksi cap (F7) is ACI only. — Confirm the 10th Ed. limit to apply (5.4.3.1 / 5.7.2.8).
@@ -1247,3 +1286,7 @@ Identical edits to branch claude/fix-rebar-dev (see fixlog/ACI Rebar Development
 - O16. **CDN / libraries:** three.js r160 `build/three.min.js` path may 404 (UMD build removed); two Plotly and two KaTeX versions load. Not changed (no library changes without approval).
 - O17. **Default title block** "MBTA — Mini-Highs" / "M. Lococo" hardcoded in defaults. Not changed.
 - O18. **Dev tab open items** are the same as `fixlog/ACI Rebar Development Length.md` O1–O10 (headed bars not implemented, AASHTO #14/#18 lap rule, fixed λ = 0.75, etc.).
+
+## Resolved items
+- O2. **Storage collision (shared rebar keys).** The Dev tab and the standalone `ACI Rebar Development Length.html` both use `rebar_aci_autosave_v1` / `rebar_aci_projects_v1`; on Chromium `file://` they share one origin, so autosaves overwrite each other and simultaneous project saves can race. Keys not changed (CLAUDE.md §5). — Decision needed: keep shared (projects visible in both, as now), or give the suite copy its own prefixed keys with a one-time migration that copies the existing data.
+  - **RESOLVED 2026-10-04 (F21):** engineer accepted the recommendation. The Dev tab now has its own autosave key `rcsuite.rebar_autosave_v1`, with a one-time copy from `rebar_aci_autosave_v1` (the old key is left in place). `rebar_aci_projects_v1` stays shared.
