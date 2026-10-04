@@ -266,8 +266,8 @@ const RL=(label,axles,w,gap,o={})=>Object.assign({label,axles,udl:{mode:w>0?'tra
 const P={
   'HL93-Truck':HW('HL-93 Design Truck',[[8,0],[32,14],[32,14]],{vary:{k:3,min:14,max:30},secondary:'HL93-Tandem',multi:{on:true,scale:0.9,hmin:50,fixed:14}}),
   'HL93-Tandem':HW('HL-93 Design Tandem',[[25,0],[25,4]]),
-  'HS20':HW('HS20 Truck',[[8,0],[32,14],[32,14]],{udl:NOUDL,vary:{k:3,min:14,max:30},neglect:false,imp:{method:'const',val:1.30,onUdl:false}}),
-  'H20':HW('H20 Truck',[[8,0],[32,14]],{udl:NOUDL,neglect:false,imp:{method:'const',val:1.30,onUdl:false}}),
+  'HS20':HW('HS20 Truck — truck only (no Std. Spec. lane load)',[[8,0],[32,14],[32,14]],{udl:NOUDL,vary:{k:3,min:14,max:30},neglect:false,imp:{method:'const',val:1.30,onUdl:false}}),
+  'H20':HW('H20 Truck — truck only (no Std. Spec. lane load)',[[8,0],[32,14]],{udl:NOUDL,neglect:false,imp:{method:'const',val:1.30,onUdl:false}}),
   'E80':RL('AREMA Cooper E80',E80,8,5,{secondary:'E80-Alt'}),
   'E80-Alt':RL('Cooper E80 Alternate (4 × 100k)',sp(100,[0,5,6,5]),0,0),
   'F40PH':RL('F40PH Locomotive (280K)',sp(70,[0,9,24,9,14.17,9,24,9]),2,7),
@@ -397,6 +397,8 @@ function luSolve(A,n,b){
 
 // ═══════════ ANALYSIS ENGINE ═══════════
 function analyze(m){
+  if(!(m.E>0)) throw new Error(`E steel = ${m.E} ksi. E must be greater than 0 (the stiffness matrix is singular otherwise).`);
+  if(!m.spans.length||m.spans.some(l=>!(l>0))) throw new Error('Every span length must be greater than 0.');
   const ns=m.spans.length, sup=[0]; m.spans.forEach(l=>sup.push(sup[sup.length-1]+l)); const Lt=sup[ns];
   // Segment bounds
   const sb=[]; let c=0;
@@ -613,6 +615,8 @@ function analyze(m){
   if([...m.dfM,...m.dfV].some(v=>!(v>0))) warn.push('One or more distribution factors are zero or blank.');
   if(m.imp.method==='const'&&m.imp.val<1) warn.push('The impact multiplier is below 1.0.');
   if(m.axles.some(a=>!(a[0]>0))) warn.push('One or more axles have zero or negative load.');
+  if(m.short==='Fatigue'){const ll=m.llf,fl=Math.abs(ll-1.75)<1e-9||Math.abs(ll-0.80)<1e-9;
+    warn.push(`LRFD fatigue truck: the distribution factors and live load factor entered (LLF = ${ll}) are applied exactly as given. For fatigue use the ONE-LANE distribution factor divided by 1.2 to remove the multiple presence factor (LRFD 3.6.1.4.3b, C3.6.1.1.2), not the strength (multi-lane) DF, and γ = 1.75 (Fatigue I) or 0.80 (Fatigue II), Table 3.4.1-1.${fl?'':' The current LLF is not a fatigue load factor.'}`);}
 
   // Engine check: unit uniform load on all spans
   const th={1:[0.125,0.5],2:[-0.125,0.375],3:[-0.1,0.4],4:[-0.1071,0.3929]}[ns], L1=m.spans[0];
@@ -870,7 +874,7 @@ const _render2=render; render=function(){_render2();drawVehicle();};
 // ═══════════ ADDED UI: fatigue preset, LLF option, AREMA L basis, deflection card ═══════════
 P['Fatigue']=HW('LRFD Fatigue Truck (30 ft)',[[8,0],[32,14],[32,30]],{udl:NOUDL,imp:{method:'const',val:1.15,onUdl:false}});
 $('lls').options[0].text='Strength I / Fatigue I (1.75)';
-$('lls').options[4].insertAdjacentHTML('beforebegin','<option value="0.80">Fatigue II (0.80)</option>');
+$('lls').options[4].insertAdjacentHTML('beforebegin','<option value="0.80">Service III / Fatigue II (0.80)</option>');
 {const hn=$('impAF').querySelector('.hint');if(hn)hn.textContent='I% = 100/S + [40 − 3L²/1600 for L < 80 ft, else 16 + 600/(L − 30)]. Choose how L is defined below. With "span containing section", pier sections and interior reactions use the mean of the adjacent spans. Confirm the basis against the current AREMA Ch. 15 for your structure.';}
 $('impAF').insertAdjacentHTML('beforeend',`<div class="g2"><div class="f"><label>Impact length L basis</label><select id="aLb"><option value="span">Span containing section</option><option value="max">Longest span</option><option value="total">Total bridge length</option><option value="user">User-defined L</option></select></div><div class="f hidden" id="aLF"><label>User L (ft)</label><input id="aL" type="number" value="100" step="any"></div></div>`);
 $('aLb').addEventListener('input',()=>$('aLF').classList.toggle('hidden',$('aLb').value!=='user'));
@@ -1503,7 +1507,9 @@ function exportCsv(){
 // ═══════════ RUN & EVENTS ═══════════
 function run(){
   try{const t0=performance.now();RES=analyze(readModel());render();$('status').textContent=`Solved in ${Math.round(performance.now()-t0)} ms`;}
-  catch(err){$('status').textContent='Error: '+err.message;console.error(err);}
+  catch(err){$('status').textContent='Error: '+err.message;console.error(err);
+    ['mMp','mMn','mVp','mVn','mR'].forEach(id=>{const e=$(id);if(e)e.textContent='—';});
+    $('warns').classList.remove('hidden');$('warns').innerHTML='⚠ Analysis not run: '+esc(err.message)+'<br>⚠ The plots and tables below are from the previous run and are NOT current.';}
 }
 function schedule(){clearTimeout(timer);$('status').textContent='Updating…';timer=setTimeout(run,450);}
 
@@ -1526,7 +1532,58 @@ $('segDel').onclick=()=>{if(segs.length>1){segs.pop();renderSegs();schedule();}}
 $('runBtn').onclick=run; $('csvBtn').onclick=exportCsv;
 window.addEventListener('resize',()=>{clearTimeout(window._rz);window._rz=setTimeout(render,150);});
 
-initSelects(); renderSpans(); $('preset').value='HL93-Truck'; applyPreset('HL93-Truck'); renderSegs(); syncVis(); run();
+// ═══════════ SAVE / LOAD (autosave + JSON file) ═══════════
+// New state for this tool (no earlier saved format exists). Key is tool-prefixed because every
+// file:// page shares one localStorage origin in Chromium browsers.
+const MLG_KEY='movingLoadGen.autosave.v1', MLG_SCHEMA='movingLoadGen.v1';
+const MLG_EXTRA=['dCase','dDF','dLim','dIM','dDFr','dLimR','dBw','viewMode','rProj','rBy'];
+function mlgFields(){
+  const els=[...document.querySelectorAll('aside input[id], aside select[id]')];
+  MLG_EXTRA.forEach(id=>{const e=$(id);if(e&&!els.includes(e))els.push(e);});
+  return els;
+}
+function mlgSnapshot(){
+  readAxles();
+  const fields={};
+  mlgFields().forEach(e=>{fields[e.id]=e.type==='checkbox'?!!e.checked:e.value;});
+  return {app:'Moving Load Generator',schema:MLG_SCHEMA,savedAt:new Date().toISOString(),
+    nSpans:$('nSpans').value,axles:axles.map(a=>[+a[0],+a[1]]),segs:segs.map(sg=>({...sg})),fields};
+}
+function mlgApply(d){
+  if(!d||d.schema!==MLG_SCHEMA||!d.fields) throw new Error('Not a Moving Load Generator save file (schema '+MLG_SCHEMA+').');
+  const f=d.fields;
+  $('nSpans').value=String(d.nSpans||f.nSpans||'2'); renderSpans();
+  if(Array.isArray(d.axles)&&d.axles.length) axles=d.axles.map(a=>[+a[0]||0,+a[1]||0]);
+  renderAxles();
+  if(Array.isArray(d.segs)&&d.segs.length) segs=d.segs.map(sg=>{const o={};SF.forEach(k=>o[k]=+sg[k]||0);return o;});
+  Object.keys(f).forEach(id=>{const e=$(id);if(!e||id==='nSpans')return;if(e.type==='checkbox')e.checked=!!f[id];else e.value=f[id];});
+  renderSegs(); syncVis();
+  if($('aLF')&&$('aLb'))$('aLF').classList.toggle('hidden',$('aLb').value!=='user');
+}
+let mlgSaveT=null;
+function mlgAutosave(){clearTimeout(mlgSaveT);mlgSaveT=setTimeout(()=>{try{localStorage.setItem(MLG_KEY,JSON.stringify(mlgSnapshot()));}catch(e){}},400);}
+document.addEventListener('input',mlgAutosave); document.addEventListener('change',mlgAutosave);
+{const _runS=run; run=function(){_runS(); mlgAutosave();};}
+$('runBtn').insertAdjacentHTML('beforebegin','<button class="hb" id="mlgSave" title="Save all inputs to a JSON file">Save JSON</button><button class="hb" id="mlgOpen" title="Load inputs from a JSON file">Open JSON</button><button class="hb" id="mlgNew" title="Clear the autosave and start from the default inputs">New</button><input type="file" id="mlgFile" accept=".json,application/json" style="display:none">');
+$('mlgSave').onclick=()=>{
+  const d=mlgSnapshot(),blob=new Blob([JSON.stringify(d,null,1)],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+  a.download=`moving_load_${(d.fields.rProj||'project').replace(/[^\w.-]+/g,'_')}.json`;a.click();
+};
+$('mlgOpen').onclick=()=>$('mlgFile').click();
+$('mlgFile').onchange=e=>{const fl=e.target.files&&e.target.files[0];if(!fl)return;const rd=new FileReader();
+  rd.onload=()=>{try{mlgApply(JSON.parse(rd.result));run();}catch(err){alert('Could not load the file: '+err.message);}};
+  rd.readAsText(fl);e.target.value='';};
+$('mlgNew').onclick=()=>{if(!confirm('Clear the autosaved inputs and start from the defaults?'))return;try{localStorage.removeItem(MLG_KEY);}catch(e){}location.reload();};
+function mlgRestore(){
+  let raw=null;try{raw=localStorage.getItem(MLG_KEY);}catch(e){return;}
+  if(!raw)return;
+  try{mlgApply(JSON.parse(raw));}
+  catch(e){console.warn('Autosave not restored',e);
+    renderSpans();$('preset').value='HL93-Truck';applyPreset('HL93-Truck');segs=[{len:0,bt:16,tt:1,D:54,tw:0.5625,bb:18,tb:1.5,Io:0}];renderSegs();syncVis();}
+}
+
+initSelects(); renderSpans(); $('preset').value='HL93-Truck'; applyPreset('HL93-Truck'); renderSegs(); syncVis(); mlgRestore(); run();
 </script>
 </body>
 </html>
