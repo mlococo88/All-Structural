@@ -276,6 +276,141 @@ Line numbers are approximate, as of this fix. Search for the anchor text.
 - **How verified:** no code change on this branch since F8.
 - **Other copies of this code:** none known.
 
+## 2026-10-04 — "All tools" link and shared project info
+### F13. "← All tools" link; "Use shared project info" / "Share project info" buttons   [feature (no result change)]
+- **Date:** 2026-10-04. **Type:** feature (no result change). Approved by the engineer (step 1 of the cross-tool hand-off work, HANDOFF.md §4.1).
+- **What:** a small "← All tools" link to `tools.html` (`target="_top"`, because tools can be shown inside index.html's iframe), placed in the page heading block, above `<h1>Spread Footing Design Tool</h1>`. It is hidden in print.
+- **Shared project info:** two buttons in the new `noprint` row directly under the title block `#titleblock`.
+  - **Share** builds the full `fields` object (all 8 HANDOFF §4.1 fields, blank where this tool has no field) and calls `BridgeXfer.publish('projectMeta', {_schema:'bridge-project-meta', project:{name, bridgeId}, fields})`. Key: `bridgeSuite.v1.projectMeta` (+ `.updatedAt`).
+  - **Use** calls `BridgeXfer.read('projectMeta','bridge-project-meta',1)`, shows a confirm listing the producer, time, project and every field that will change (old → new), and writes only this tool's mapped fields. A blank shared value never blanks a field. Apply path: sets each `#titleblock [data-path]` input and dispatches a bubbling `input` event, so the existing `handleFieldChange` updates `state`, autosaves and recalculates. Records `bridgeSuite.v1.projectMeta.adopted.<id>`.
+- **Field mapping (shared → this tool):**
+
+  | Shared field | Tool field | Label |
+  |---|---|---|
+  | `projectName` | `meta.project` | Project Name |
+  | `jobNo` | `meta.number` | Project Number |
+  | `preparedBy` | `meta.calcBy` | Calculated By |
+  | `date` | `meta.calcDate` | Date |
+  | `checkedBy` | `meta.chkBy` | Checked By |
+
+  Not mapped: bridgeId, client, location. Checked Date (`meta.chkDate`) has no shared field.
+- **Helpers added:** a plain `<script>` with BridgeXfer v1 verbatim from HANDOFF.md §5, then a plain `<script>` with `ProjMetaUI` (shown in full in the After code below) and this tool's field map. Both sit before the tool's own script.
+- **Storage:** no existing key or saved-data format changed. New keys only: `bridgeSuite.v1.projectMeta`, `.updatedAt`, `.adopted.<id>` (HANDOFF.md §2).
+- **Where / Before / After** (each change is an insertion; the Before text is the anchor and is kept):
+  1. Anchor: `.titleblock input{width:100%;font-family:inherit;font-size:11px;padding:2px 4px;border:1px solid #bbb}`
+     - Before:
+       ```
+       .titleblock input{width:100%;font-family:inherit;font-size:11px;padding:2px 4px;border:1px solid #bbb}
+       ```
+     - After:
+       ```
+       .titleblock input{width:100%;font-family:inherit;font-size:11px;padding:2px 4px;border:1px solid #bbb}
+       .allToolsLink{font-size:10px;color:#1c4e80;text-decoration:none}
+       .allToolsLink:hover{text-decoration:underline}
+       @media print{.allToolsLink{display:none !important}}
+       ```
+  2. Anchor: `<div>`
+     - Before:
+       ```
+        <div>
+         <h1>Spread Footing Design Tool</h1>
+       ```
+     - After:
+       ```
+        <div>
+         <a class="allToolsLink noprint" href="tools.html" target="_top" title="Open the list of all tools">&larr; All tools</a>
+         <h1>Spread Footing Design Tool</h1>
+       ```
+  3. Anchor: `<div><label>Checked Date</label><input data-path="meta.chkDate"></div>`
+     - Before:
+       ```
+        <div><label>Checked Date</label><input data-path="meta.chkDate"></div>
+       </div>
+       ```
+     - After:
+       ```
+        <div><label>Checked Date</label><input data-path="meta.chkDate"></div>
+       </div>
+       <div class="noprint" style="margin:-4px 0 8px 0">
+        <button id="btnUseProjMeta" title="Fill the title block from project info shared by another tool">Use shared project info</button>
+        <button id="btnShareProjMeta" title="Make this title block available to the other tools">Share project info</button>
+       </div>
+       ```
+  4. Anchor: `<script>`
+     - Before:
+       ```
+
+
+       <script>
+       /* ================= helpers ================= */
+       ```
+     - After:
+       ```
+
+
+       <script>
+       /* BridgeXfer v1 verbatim from HANDOFF.md §5 (73 lines, starts "/* BridgeXfer v1 — cross-tool hand-off helper.", ends "})();") */
+       </script>
+       <script>
+       /* Shared project info buttons (HANDOFF.md §4.1, channel bridgeSuite.v1.projectMeta). Uses window.BridgeXfer.
+          map: [{shared:'<HANDOFF field>', key:'<this tool's field>', label:'<this tool's label>', accept:optional fn(v)->bool}]
+          values: { <tool key>: <current value> } */
+       (function(){
+         if(window.ProjMetaUI) return;
+         var FIELDS=['projectName','bridgeId','jobNo','client','location','preparedBy','checkedBy','date'];
+         function s(v){ return (v===undefined||v===null)?'':String(v); }
+         function share(map, values, producer, producerFile){
+           var fields={}; FIELDS.forEach(function(k){ fields[k]=''; });
+           map.forEach(function(m){ fields[m.shared]=s(values[m.key]); });
+           var r=window.BridgeXfer.publish('projectMeta', {_schema:'bridge-project-meta', project:{ name:fields.projectName, bridgeId:fields.bridgeId }, fields:fields}, producer, producerFile);
+           if(r.error){ alert('Could not share project info: '+r.error); return r; }
+           var lines=map.map(function(m){ return '  '+m.label+': '+(fields[m.shared]||'(blank)'); });
+           alert('Project info shared with the other tools:\n\n'+lines.join('\n'));
+           return r;
+         }
+         function use(map, values, receiverId){
+           var r=window.BridgeXfer.read('projectMeta','bridge-project-meta',1);
+           if(r.error){ alert('Shared project info: '+r.error+(r.empty?'\n\nOpen a tool that has project info and click "Share project info" first.':'')); return null; }
+           var p=r.payload, f=(p.fields&&typeof p.fields==='object')?p.fields:{}, patch={}, lines=[], skipped=[];
+           map.forEach(function(m){
+             var v=s(f[m.shared]);
+             if(v.trim()==='') return;                                   /* never blank a field */
+             if(m.accept && !m.accept(v)){ skipped.push('  '+m.label+': "'+v+'" (not a valid value here)'); return; }
+             if(v===s(values[m.key])) return;
+             patch[m.key]=v; lines.push('  '+m.label+': "'+s(values[m.key])+'" → "'+v+'"');
+           });
+           if(!lines.length){ alert('Shared project info ('+window.BridgeXfer.describe(p)+') has nothing new for this tool.'+(skipped.length?'\n\nNot used:\n'+skipped.join('\n'):'')); return null; }
+           if(!confirm('Use shared project info from '+window.BridgeXfer.describe(p)+'?\n\nThis will overwrite:\n'+lines.join('\n')+(skipped.length?'\n\nNot used:\n'+skipped.join('\n'):''))) return null;
+           window.BridgeXfer.markAdopted('projectMeta', receiverId, p.producedAt);
+           return patch;
+         }
+         window.ProjMetaUI={ share:share, use:use };
+       })();
+       /* Spread Footing: shared project info field map and buttons (title block #titleblock). */
+       (function(){
+         var MAP=[{shared:'projectName',key:'meta.project',label:'Project Name'},
+                  {shared:'jobNo',key:'meta.number',label:'Project Number'},
+                  {shared:'preparedBy',key:'meta.calcBy',label:'Calculated By'},
+                  {shared:'date',key:'meta.calcDate',label:'Date'},
+                  {shared:'checkedBy',key:'meta.chkBy',label:'Checked By'}];
+         function inp(k){ return document.querySelector('#titleblock [data-path="'+k+'"]'); }
+         function values(){ var v={}; MAP.forEach(function(m){ var i=inp(m.key); v[m.key]=i?i.value:''; }); return v; }
+         document.getElementById('btnShareProjMeta').addEventListener('click',function(){ ProjMetaUI.share(MAP, values(), 'Spread Footing', 'Spread Footing.html'); });
+         document.getElementById('btnUseProjMeta').addEventListener('click',function(){
+           var patch=ProjMetaUI.use(MAP, values(), 'spreadFooting'); if(!patch) return;
+           Object.keys(patch).forEach(function(k){ var i=inp(k); if(!i) return; i.value=patch[k]; i.dispatchEvent(new Event('input',{bubbles:true})); });
+         });
+       })();
+       </script>
+       <script>
+       /* ================= helpers ================= */
+       ```
+- **Governing provision:** none. UI and cross-tool data hand-off only (HANDOFF.md §2, §4.1, §5). No formula, factor, unit, code reference or computed result changed.
+- **Check case:** not applicable (no calculation touched). Functional check: Spread Footing shares {Project Name "Route 9 over Mill Brook", Project Number "J-2026-114", Calculated By "MRL", Date "2026-10-04", Checked By "JKD"}; Use in this tool fills the mapped fields; a blank shared value leaves the existing field unchanged.
+- **How verified:** `node --check` on every plain inline script; text/babel blocks transpiled with @babel/standalone; page loaded in jsdom with CDN libraries stubbed (React UMD served locally); Share → Use exercised across Spread Footing, BasePlateAnchorDesigner, Pile Designer, Concrete Anchor and Timber Beam Check (Timber: plain scripts in jsdom, the same calls its onClick handlers make, since it imports React from esm.sh) with a localStorage carried between pages; `git diff --numstat` shows only insertions.
+- **Other copies:** BridgeXfer v1 and `ProjMetaUI` are duplicated (CLAUDE.md §3) in Pile Designer.html, Spread Footing.html, BasePlateAnchorDesigner.html, Concrete Anchor.html and Timber Beam Check.html (this PR), plus any other tools that received BridgeXfer in their own step-1 PRs.
+- **`ProjMetaUI`:** given in full in the After code of the helper insertion above; the copy is identical in every tool listed.
+
 ## Open items (not changed)
 - **O1. Vesić inclination exponent m uses nominal B/L, not B'/L'.** Anchor: `const mxm=(2+B/L)/(1+B/L)`. Using B'/L' is the more common form (AASHTO 10.6.3.1.2a uses B'/L'). This changes bearing capacity and needs a decision. Question: should m use the effective B'/L'?
 - **O2. The depth factors dq/dc are always applied.** AASHTO 10.6.3.1.2a and common practice drop them when the soil above the base is not competent or may be removed. Recommendation: add a "use depth factors" option, default on to keep the current results. Needs a decision on the default.

@@ -378,6 +378,138 @@ All check-case numbers below came from running the real `computeAll()` (and the 
 - **How verified:** node run before/after.
 - **Other copies of this code:** the p-y `EI_aashto` in `App` already had the cap.
 
+## 2026-10-04 — "All tools" link and shared project info
+### F10. "← All tools" link; "Use shared project info" / "Share project info" buttons   [feature (no result change)]
+- **Date:** 2026-10-04. **Type:** feature (no result change). Approved by the engineer (step 1 of the cross-tool hand-off work, HANDOFF.md §4.1).
+- **What:** a small "← All tools" link to `tools.html` (`target="_top"`, because tools can be shown inside index.html's iframe), placed in the App header (`header.blueprint-grid`), first row of the hero. It is hidden in print.
+- **Shared project info:** two buttons in the "Project Info" panel in the input rail, after the Subject field.
+  - **Share** builds the full `fields` object (all 8 HANDOFF §4.1 fields, blank where this tool has no field) and calls `BridgeXfer.publish('projectMeta', {_schema:'bridge-project-meta', project:{name, bridgeId}, fields})`. Key: `bridgeSuite.v1.projectMeta` (+ `.updatedAt`). On Share, the placeholder defaults from `DEFAULT_INPUTS` ("Project Name", "Job No.", "ABC", "XYZ") are sent as blank (`pileProjShareValues`).
+  - **Use** calls `BridgeXfer.read('projectMeta','bridge-project-meta',1)`, shows a confirm listing the producer, time, project and every field that will change (old → new), and writes only this tool's mapped fields. A blank shared value never blanks a field. Apply path: `setI(s => ({...s, ...patch}))`, so the existing debounced autosave (`STORAGE_KEY`) and re-render run as for typing. Records `bridgeSuite.v1.projectMeta.adopted.<id>`.
+- **Field mapping (shared → this tool):**
+
+  | Shared field | Tool field | Label |
+  |---|---|---|
+  | `projectName` | `projName` | Project name |
+  | `jobNo` | `projNum` | Job no. |
+  | `preparedBy` | `projBy` | By |
+  | `checkedBy` | `projChk` | Chk |
+
+  Not mapped: bridgeId, client, location, date (the report date is computed as today, not an input). Subject (`projSubject`) has no shared field.
+- **Helpers added:** a plain `<script>` with BridgeXfer v1 verbatim from HANDOFF.md §5, then a plain `<script>` with `ProjMetaUI` (shown in full in the After code below) and this tool's field map. Both sit before the tool's own script.
+- **Storage:** no existing key or saved-data format changed. New keys only: `bridgeSuite.v1.projectMeta`, `.updatedAt`, `.adopted.<id>` (HANDOFF.md §2).
+- **Line endings:** this file uses CRLF; the inserted lines use CRLF too.
+- **Where / Before / After** (each change is an insertion; the Before text is the anchor and is kept):
+  1. Anchor: `}, /*#__PURE__*/React.createElement("span", null, "AASHTO LRFD BDS 10th Ed."),`
+     - Before:
+       ```
+         }, /*#__PURE__*/React.createElement("span", null, "AASHTO LRFD BDS 10th Ed."), 
+       ```
+     - After:
+       ```
+         }, /*#__PURE__*/React.createElement("a", {
+           href: "tools.html",
+           target: "_top",
+           title: "Open the list of all tools",
+           className: "no-print hover:text-white"
+         }, "\u2190 All tools"), /*#__PURE__*/React.createElement("span", {
+           className: "opacity-40 no-print"
+         }, "/"), /*#__PURE__*/React.createElement("span", null, "AASHTO LRFD BDS 10th Ed."), 
+       ```
+  2. Anchor: `onChange: v => setStr('projSubject', v)`
+     - Before:
+       ```
+           onChange: v => setStr('projSubject', v)
+         }))), 
+       ```
+     - After:
+       ```
+           onChange: v => setStr('projSubject', v)
+         }), /*#__PURE__*/React.createElement("div", {
+           className: "flex gap-2 no-print"
+         }, /*#__PURE__*/React.createElement("button", {
+           type: "button",
+           onClick: () => {
+             const patch = ProjMetaUI.use(PILE_PROJ_MAP, I, "pileDesigner");
+             if (patch) setI(s => ({
+               ...s,
+               ...patch
+             }));
+           },
+           title: "Fill the project info from project info shared by another tool",
+           className: "font-mono-tech text-[9px] px-1.5 py-1 rounded-sm border border-slate-300 text-slate-500 hover:bg-white"
+         }, "Use shared project info"), /*#__PURE__*/React.createElement("button", {
+           type: "button",
+           onClick: () => ProjMetaUI.share(PILE_PROJ_MAP, pileProjShareValues(I), "Pile Designer", "Pile Designer.html"),
+           title: "Make this project info available to the other tools",
+           className: "font-mono-tech text-[9px] px-1.5 py-1 rounded-sm border border-slate-300 text-slate-500 hover:bg-white"
+         }, "Share project info")))), 
+       ```
+  3. Anchor: `<div id="root"></div>`
+     - Before:
+       ```
+       <div id="root"></div>
+
+       <script>
+       const {
+       ```
+     - After:
+       ```
+       <div id="root"></div>
+
+       <script>
+       /* BridgeXfer v1 verbatim from HANDOFF.md §5 (73 lines, starts "/* BridgeXfer v1 — cross-tool hand-off helper.", ends "})();") */
+       </script>
+       <script>
+       /* Shared project info buttons (HANDOFF.md §4.1, channel bridgeSuite.v1.projectMeta). Uses window.BridgeXfer.
+          map: [{shared:'<HANDOFF field>', key:'<this tool's field>', label:'<this tool's label>', accept:optional fn(v)->bool}]
+          values: { <tool key>: <current value> } */
+       (function(){
+         if(window.ProjMetaUI) return;
+         var FIELDS=['projectName','bridgeId','jobNo','client','location','preparedBy','checkedBy','date'];
+         function s(v){ return (v===undefined||v===null)?'':String(v); }
+         function share(map, values, producer, producerFile){
+           var fields={}; FIELDS.forEach(function(k){ fields[k]=''; });
+           map.forEach(function(m){ fields[m.shared]=s(values[m.key]); });
+           var r=window.BridgeXfer.publish('projectMeta', {_schema:'bridge-project-meta', project:{ name:fields.projectName, bridgeId:fields.bridgeId }, fields:fields}, producer, producerFile);
+           if(r.error){ alert('Could not share project info: '+r.error); return r; }
+           var lines=map.map(function(m){ return '  '+m.label+': '+(fields[m.shared]||'(blank)'); });
+           alert('Project info shared with the other tools:\n\n'+lines.join('\n'));
+           return r;
+         }
+         function use(map, values, receiverId){
+           var r=window.BridgeXfer.read('projectMeta','bridge-project-meta',1);
+           if(r.error){ alert('Shared project info: '+r.error+(r.empty?'\n\nOpen a tool that has project info and click "Share project info" first.':'')); return null; }
+           var p=r.payload, f=(p.fields&&typeof p.fields==='object')?p.fields:{}, patch={}, lines=[], skipped=[];
+           map.forEach(function(m){
+             var v=s(f[m.shared]);
+             if(v.trim()==='') return;                                   /* never blank a field */
+             if(m.accept && !m.accept(v)){ skipped.push('  '+m.label+': "'+v+'" (not a valid value here)'); return; }
+             if(v===s(values[m.key])) return;
+             patch[m.key]=v; lines.push('  '+m.label+': "'+s(values[m.key])+'" → "'+v+'"');
+           });
+           if(!lines.length){ alert('Shared project info ('+window.BridgeXfer.describe(p)+') has nothing new for this tool.'+(skipped.length?'\n\nNot used:\n'+skipped.join('\n'):'')); return null; }
+           if(!confirm('Use shared project info from '+window.BridgeXfer.describe(p)+'?\n\nThis will overwrite:\n'+lines.join('\n')+(skipped.length?'\n\nNot used:\n'+skipped.join('\n'):''))) return null;
+           window.BridgeXfer.markAdopted('projectMeta', receiverId, p.producedAt);
+           return patch;
+         }
+         window.ProjMetaUI={ share:share, use:use };
+       })();
+       /* Pile Designer: shared project info field map (Project Info panel). Defaults ("Project Name", "Job No.", "ABC", "XYZ") are placeholders and are shared as blank. */
+       var PILE_PROJ_MAP=[{shared:'projectName',key:'projName',label:'Project name'},
+                          {shared:'jobNo',key:'projNum',label:'Job no.'},
+                          {shared:'preparedBy',key:'projBy',label:'By'},
+                          {shared:'checkedBy',key:'projChk',label:'Chk'}];
+       function pileProjShareValues(I){ var v={}; PILE_PROJ_MAP.forEach(function(m){ var d=(typeof DEFAULT_INPUTS!=='undefined')?DEFAULT_INPUTS[m.key]:undefined; v[m.key]=(I[m.key]===d)?'':I[m.key]; }); return v; }
+       </script>
+       <script>
+       const {
+       ```
+- **Governing provision:** none. UI and cross-tool data hand-off only (HANDOFF.md §2, §4.1, §5). No formula, factor, unit, code reference or computed result changed.
+- **Check case:** not applicable (no calculation touched). Functional check: Spread Footing shares {Project Name "Route 9 over Mill Brook", Project Number "J-2026-114", Calculated By "MRL", Date "2026-10-04", Checked By "JKD"}; Use in this tool fills the mapped fields; a blank shared value leaves the existing field unchanged.
+- **How verified:** `node --check` on every plain inline script; text/babel blocks transpiled with @babel/standalone; page loaded in jsdom with CDN libraries stubbed (React UMD served locally); Share → Use exercised across Spread Footing, BasePlateAnchorDesigner, Pile Designer, Concrete Anchor and Timber Beam Check (Timber: plain scripts in jsdom, the same calls its onClick handlers make, since it imports React from esm.sh) with a localStorage carried between pages; `git diff --numstat` shows only insertions plus the 2 anchor lines that were split to insert the new elements.
+- **Other copies:** BridgeXfer v1 and `ProjMetaUI` are duplicated (CLAUDE.md §3) in Pile Designer.html, Spread Footing.html, BasePlateAnchorDesigner.html, Concrete Anchor.html and Timber Beam Check.html (this PR), plus any other tools that received BridgeXfer in their own step-1 PRs.
+- **`ProjMetaUI`:** given in full in the After code of the helper insertion above; the copy is identical in every tool listed.
+
 ## Open items (not changed)
 - O1. **Uncased/cased structural axial: outer 0.85 factor and `fy = min(fyb, fyc)`** (`Rn_cased/Rn_ucased`, ≈ line 1675).
   - Neither AASHTO 10.9.3.10.2 nor FHWA NHI-05-039 Eq. 5-13 has the outer 0.85, and the uncased section has no casing, so min(fyb, fyc) is arbitrary there.

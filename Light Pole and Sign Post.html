@@ -149,6 +149,8 @@
   .projbar .pb-status{font-size:11.5px;color:#c9b8a8;font-style:italic}
   .projbar .pb-status.dirty{color:#f0c674;font-style:normal}
   .projbar .pb-status.saved{color:#8fca9b}
+  .projbar .pb-link{font-size:11.5px;color:#c9b8a8;text-decoration:none}
+  .projbar .pb-link:hover{color:#fff;text-decoration:underline}
   .projbar .pb-btns{margin-left:auto;display:flex;gap:7px;flex-wrap:wrap}
   .pbtn{font:inherit;font-size:12.5px;font-weight:600;cursor:pointer;border:1px solid #3a4657;background:#26303f;color:#e8e2d6;padding:6px 12px;border-radius:2px}
   .pbtn:hover{background:#31404f;border-color:#4a5769}
@@ -311,6 +313,7 @@
 </head>
 <body>
 <div class="projbar noprint">
+  <a class="pb-link" href="tools.html" target="_top" title="Open the list of all tools">&larr; All tools</a>
   <span class="pb-label">Project</span>
   <select id="projSelect" title="Recall a saved project"></select>
   <span class="pb-status" id="projStatus">—</span>

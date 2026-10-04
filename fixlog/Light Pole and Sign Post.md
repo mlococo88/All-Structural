@@ -340,6 +340,40 @@ Check cases: jsdom runs of the page before and after this change (scratch harnes
 - **How verified:** no code change.
 - **Other copies of this code:** none known.
 
+## 2026-10-04 — "All tools" link and shared project info
+### F12. "← All tools" link (no title block, so no project-info buttons)   [feature (no result change)]
+- **Date:** 2026-10-04. **Type:** feature (no result change). Approved by the engineer (step 1 of the cross-tool hand-off work, HANDOFF.md §4.1).
+- **What:** a small "← All tools" link to `tools.html` (`target="_top"`, because tools can be shown inside index.html's iframe), placed in the sticky project bar `.projbar` (already hidden in print), before the "Project" label. It is hidden in print.
+- **Storage:** unchanged.
+- **Where / Before / After** (each change is an insertion; the Before text is the anchor and is kept):
+  1. Anchor: `.projbar .pb-status.saved{color:#8fca9b}`
+     - Before:
+       ```
+         .projbar .pb-status.saved{color:#8fca9b}
+       ```
+     - After:
+       ```
+         .projbar .pb-status.saved{color:#8fca9b}
+         .projbar .pb-link{font-size:11.5px;color:#c9b8a8;text-decoration:none}
+         .projbar .pb-link:hover{color:#fff;text-decoration:underline}
+       ```
+  2. Anchor: `<div class="projbar noprint">`
+     - Before:
+       ```
+       <div class="projbar noprint">
+         <span class="pb-label">Project</span>
+       ```
+     - After:
+       ```
+       <div class="projbar noprint">
+         <a class="pb-link" href="tools.html" target="_top" title="Open the list of all tools">&larr; All tools</a>
+         <span class="pb-label">Project</span>
+       ```
+- **Governing provision:** none. UI and cross-tool data hand-off only (HANDOFF.md §2, §4.1, §5). No formula, factor, unit, code reference or computed result changed.
+- **Check case:** not applicable (no calculation touched). Functional check: the link opens `tools.html` in the top window.
+- **How verified:** `node --check` on every plain inline script; text/babel blocks transpiled with @babel/standalone; page loaded in jsdom with CDN libraries stubbed (React UMD served locally); Share → Use exercised across Spread Footing, BasePlateAnchorDesigner, Pile Designer, Concrete Anchor and Timber Beam Check (Timber: plain scripts in jsdom, the same calls its onClick handlers make, since it imports React from esm.sh) with a localStorage carried between pages; `git diff --numstat` shows only insertions.
+- **Other copies:** the same link is added to the other tools in the step-1 PRs. Light Pole and Sign Post has no title-block fields (its project bar only names saved projects), so it gets no BridgeXfer helper or project-info buttons.
+
 ## Open items (not changed)
 - **O2. G for flexible poles:** G = 0.85 (rigid) is used, with no natural-frequency or G_f check. Decide whether to add an n₁ estimate and a warning.
 - **O3. P-δ / B1** amplification of first-order moments (AISC Ch. C) is not applied, and no warning was added. Decide whether to add a B1 estimate.
