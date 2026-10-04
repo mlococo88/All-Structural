@@ -1,0 +1,308 @@
+# Fix log — stgirder.html
+
+Governing basis used for fixes: AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024), Section 6 (and App. D6); AASHTO MBE for rating (unchanged).
+
+## 2026-10-04 — PR: claude/fix-stgirder (PR link added after merge)
+
+Line numbers below are for the file **after** this PR. Every calculation change was checked by
+running the real `computeAll()` from the old (origin/main c58cb6d) and new file under node
+(Babel-standalone 7.23.5 transpile of the `text/babel` block), and every tab component was
+server-rendered with React 18.2.0 for 6 input variants without error.
+
+### F1. Shared `BridgeApps` block (bridgeSuite.v1.appPaths) replaced with the current copy   [bug fix] [no result change]
+- **Where:** plain `<script>` IIFE "SHARED APP PATHS · bridgeSuite.v1.appPaths" (≈ lines 526–671). Anchor text: `SHARED APP PATHS  ·  bridgeSuite.v1.appPaths`
+- **Problem:** stgirder carried an old version (no per-folder `at` map, no `selfDir`/`entry`/`prune`/`ME`/`same`). Every time ST-Girder opened, `register()` rewrote `appPaths.stgirder` as `{file,pinned:false,seenAt}` with no `dir`/`at`, erasing the per-folder record the other three apps keep. The other apps then read it through the legacy branch, which applies it to every folder (re-creating the cross-folder mis-link). `path()` also had no "never resolve a sibling to this same file" guard.
+- **Governing provision:** n/a
+- **Before:** the 87-line block at old lines 526–612 (md5 `bf6044ab55829d88103491de6ed28c2d`).
+- **After:** psbeam.html lines 616–761 copied verbatim (146 lines, md5 `9f13146d25d65ca78c685b5cccf061b6`). The `try{ window.BridgeApps.boot('stgirder'); }catch(e){}` line after it is unchanged.
+- **Check case:** `diff` of the block (from the `/* ====` line above `SHARED APP PATHS` to the `})();` before the `boot(` line) — stgirder.html 526–671 vs psbeam.html 616–761, index.html 272–417, lldf.html 645–790: **identical** (all four md5 `9f13146d25d65ca78c685b5cccf061b6`).
+- **Saved data:** the key `bridgeSuite.v1.appPaths` is unchanged. stgirder now writes the same entry format the other three apps already write; old flat entries are still read through the existing legacy branch (`if(e.file&&!e.dir)`), and an old top-level pin is preserved by `register()`.
+- **How verified:** diff/md5 as above; transpile + node `new Function` syntax check of every inline script.
+- **Other copies of this code:** index.html, lldf.html, psbeam.html, stgirder.html (now byte-identical in all four).
+
+### F2. MIDAS imported dead-load shears negated to the app sign convention   [calc change] [more conservative]
+- **Where:** function `buildExternal` (≈ line 1664–1677). Anchor: `V_DC1:(x)=>-interp('V_DC1',x)`
+- **Problem:** MIDAS element shear (exported signed by index.html) has the opposite sign to the app's `simpleV()`/`diaV()` (+V at the left support). stgirder used the imported V_DC1/V_DC2/V_DW raw and summed them with app-computed shears (DC1 + self-weight, or self-weight when `selfWeightExcluded`), so the components partly cancelled and Vu at the supports was understated. psbeam already negates (psbeam.html `buildExternal`).
+- **Governing provision:** AASHTO LRFD 10th Ed. Table 3.4.1-1 (Strength I combination 1.25DC + 1.50DW + 1.75LL) — sign consistency of the components, no formula change.
+- **Before:**
+  ```js
+    M_DC1:(x)=>interp('M_DC1',x), V_DC1:(x)=>interp('V_DC1',x),        // k-ft / kip
+    M_DC2:(x)=>interp('M_DC2',x), V_DC2:(x)=>interp('V_DC2',x),
+    M_DW :(x)=>interp('M_DW',x),  V_DW :(x)=>interp('V_DW',x),
+    M_LLpos:(x)=>interp('M_LLpos',x)*fPos, M_LLneg:(x)=>interp('M_LLneg',x)*fNeg,
+  ```
+- **After:** (plus an 8-line comment above `return {`)
+  ```js
+    M_DC1:(x)=>interp('M_DC1',x), V_DC1:(x)=>-interp('V_DC1',x),       // k-ft / kip
+    M_DC2:(x)=>interp('M_DC2',x), V_DC2:(x)=>-interp('V_DC2',x),
+    M_DW :(x)=>interp('M_DW',x),  V_DW :(x)=>-interp('V_DW',x),
+    M_LLpos:(x)=>interp('M_LLpos',x)*fPos, M_LLneg:(x)=>interp('M_LLneg',x)*fNeg,
+    V_LLpos:(x)=>-interp('V_LLneg',x)*fV, V_LLneg:(x)=>-interp('V_LLpos',x)*fV,
+  ```
+  `V_LL` (used by every check) is a magnitude envelope `max(|V_LLpos|,|V_LLneg|)` and is unchanged; `V_LLpos/V_LLneg` are added for parity with psbeam and are not used by any check.
+- **Consumers checked:** strength `Vu` (stations, ≈2094), constructibility `V1c` (≈2304, only mixes when `hasDC1 && selfWeightExcluded`), web special fatigue `Vperm` (≈2394), shear rating `VDC/VDWr` (≈2478, via `stVGov`). The Diagrams tab "view span" plot (≈3591) plots the raw imported station values in MIDAS convention, internally consistent; left unchanged (display only). When the file supplies DC1 including self-weight (`hasDC1 && !selfWeightExcluded`) all three dead shears flip together and every consumer uses |sum|, so results are unchanged in that case.
+- **Check case (run in node):** defaults (L = 120 ft, wDC1 = 1.178 klf app-computed), imported simple-span DC2 0.30 klf and DW 0.25 klf in MIDAS sign (V_DC2(0) = −18.0, V_DW(0) = −15.0 kip), |V_LL| = 90 kip at the support, no DC1 in the file. At x = 0, V1 = 1.178·60 = 70.68 kip.
+  - before: Vu = |1.25(70.68 − 18.0) + 1.5(−15.0)| + 1.75·90 = 43.35 + 157.5 = **200.85 kip** (D/C 0.363); web Vperm = 37.68 kip; shear rating VDC = 52.68, RF_inv = 2.948.
+  - after: Vu = |1.25(70.68 + 18.0) + 1.5(15.0)| + 157.5 = 133.35 + 157.5 = **290.85 kip** (D/C 0.526); Vperm = 103.68 kip; VDC = 88.68, RF_inv = 2.662.
+  - Same file with DC1 in the file (0.948 klf, self-weight excluded, app adds wsw = 0.230 klf): constructibility V1c(0) before −43.12 kip → after +70.68 kip; constructibility shear 54.80 → 89.25 kip.
+- **How verified:** node run of old/new `computeAll` (scratch `st_cases.js`).
+- **Other copies of this code:** psbeam.html `buildExternal` already has the negation (reference copy). index.html exports the signed values.
+
+### F3. Noncomposite (deck off) positive flexure uses 6.10.8.2 Fnc (FLB/LTB with Lb)   [calc change] [more conservative]
+- **Where:** `computeAll` segment loop (≈ line 2017–2026) and display in `FlexTab`. Anchor: `const FncPosNC_=deck.deckOn? null :`
+- **Problem:** with the deck off the section is noncomposite, but the positive-flexure compression flange used `Rb·Rh·Fyc` (the composite value, 6.10.7.2.2). A noncomposite top flange braced only at cross-frames must use Fnc = min(FLB, LTB) per 6.10.8.2.
+- **Governing provision:** AASHTO LRFD 10th Ed. 6.10.8.1.1 / 6.10.8.2.2 / 6.10.8.2.3 (Cb = 1.0 kept, as elsewhere in the app).
+- **Before:**
+  ```js
+        FncPos:Rb_*Rh_*Fyc, Fnt:Rh_*Fyf, Iyc:Iyc_, Iyt:Iyt_,
+  ```
+- **After:**
+  ```js
+      const FncPosNC_=deck.deckOn? null : flangeFnc(dims.bft,dims.tft,dims.tw,dims.D,Lb_in,Fyc,Es,Rb_,Rh_,1.0,cN_.Dc,Fyw);
+  ...
+        FncPos:FncPosNC_? FncPosNC_.Fnc : Rb_*Rh_*Fyc, FncPosNC:FncPosNC_, Fnt:Rh_*Fyf, Iyc:Iyc_, Iyt:Iyt_,
+  ```
+  (`cN_` is the bare section when the deck is off.) `flexMode` text now says "Noncomposite — stress basis, Fnc per 6.10.8.2 (FLB/LTB)"; the Flexure tab shows the FLB/LTB values. The "Strength flexure (+M)" check row now reports the demand/limit of the flange that governs the D/C (before, it always showed the bottom flange vs Fnt even when the top flange governed r) — display only, r unchanged by that part.
+- **Check case:** defaults with `deck.deckOn=false` (top flange 16×0.75, Lb = 20 ft, Rb = 0.977, Rh = 1.0, Dc = 38.28 in): rt = 3.732 in, Lp = 7.49 ft, Lr = 28.13 ft, FLB = 45.65 ksi, LTB = 39.95 ksi.
+  - before: Fnc = 0.977·1.0·50 = 48.83 ksi; fbu,top = 60.14 ksi → D/C = 1.232.
+  - after: Fnc = 39.95 ksi → D/C = 60.14/39.95 = **1.505**.
+- **How verified:** node run old/new.
+- **Other copies of this code:** none known.
+
+### F4. 1.3RhMy cap on Mn for compact composite sections in continuous spans   [calc change] [more conservative]
+- **Where:** `computeAll`, Strength I flexure station loop (≈ lines 2171–2230), `flex`/`MnGov` (≈2239), rating `capM` (≈2477), check row (≈2525); display in `FlexTab`. Anchor: `const contSpan = useExt && hasNeg;`
+- **Problem:** Eq. 6.10.7.1.2-3 (Mn ≤ 1.3RhMy in a continuous span) was not applied; Mp-based Mn could govern in continuous spans.
+- **Governing provision:** AASHTO LRFD 10th Ed. 6.10.7.1.2 (Eq. 6.10.7.1.2-3); My per App. D6.2.2 (staged: MD1 on the steel section, MD2 on the long-term 3n section, MAD on the short-term n section, lesser of the two flanges). The B6.2 exemption is not evaluated, so the cap is always applied when the span is continuous.
+- **Continuity test:** `useExt && hasNeg` — imported demands with factored negative moment in the selected span. Applied only at stations with Mu > 0 (positive-flexure region). The capped value also flows to the per-station capacity export (`capPos` → `bridgeSuite.v1.capacity` phiMn_pos) and the flexure rating.
+- **Before:**
+  ```js
+      const capPos = sg.compact? phif*sg.Mn_kft
+  ...
+        if(sg.compact){ r=st.Mu/(phif*sg.Mn_kft); mode='Mp'; }
+  ...
+    const capM=sgPos.compact? phif*sgPos.Mn_kft
+  ```
+- **After:**
+  ```js
+    const contSpan = useExt && hasNeg;
+    const yieldMy=(st,sg)=>{
+      const MD1=1.25*st.M1, MD2=1.25*st.M2+1.5*st.Mw;              // k-ft, factored permanent
+      const fd=stageF(st,1.25,1.25,1.5,0).pos;                      // ksi, fB tension+, fT compression+
+      const MADb=sg.cN.Sb*(Fyf-fd.fB)/12, MADt=sg.cN.StSteel*(Fyf-fd.fT)/12;
+      const MyB=MD1+MD2+MADb, MyT=MD1+MD2+MADt;
+      return {MD1,MD2,fDb:fd.fB,fDt:fd.fT,MADb,MADt,MyB,MyT,My:Math.min(MyB,MyT)};
+    };
+    stations.forEach(st=>{ const sg=segP[st.si];
+      let MnSt=sg.Mn_kft, my13=null;
+      if(sg.compact && contSpan && st.Mu>0){
+        const y=yieldMy(st,sg), lim13=1.3*sg.Rh*y.My;
+        my13={...y, Rh:sg.Rh, lim13, MnMp:sg.Mn_kft, governs:lim13<sg.Mn_kft};
+        if(isFinite(lim13) && lim13<MnSt) MnSt=Math.max(lim13,0);
+      }
+      const capPos = sg.compact? phif*MnSt
+  ...
+        if(sg.compact){ r=st.Mu/(phif*MnSt); mode='Mp'; }
+  ...
+    const MnGov=(sgPos.compact&&posGov.Mn!=null)? posGov.Mn : Mn_kft;
+    const capM=sgPos.compact? phif*MnGov
+  ```
+  (`posC.Mn/phiMn/dc` and the check `lim` use `MnSt`/`MnGov` likewise.)
+- **Check case:** defaults, imported span 1 of a 2×120 ft continuous girder (uniform DC1 1.25, DC2 0.30, DW 0.25 klf, +LL 1700 sin(πx/L), −LL to −1500 k-ft at the pier). Governing station x = 54 ft: M1 = 1212.5, M2 = 291.0, Mw = 242.5 k-ft; S_bare,b = 1688.0, S_3n,b = 2193.3, S_n,b = 2376.5 in³.
+  - MD1 = 1.25·1212.5 = 1515.6; MD2 = 1.25·291 + 1.5·242.5 = 727.5 k-ft.
+  - f_D,bot = 1515.6·12/1688.0 + 727.5·12/2193.3 = 10.775 + 3.980 = 14.755 ksi; MAD,bot = 2376.5·(50 − 14.755)/12 = 6980 k-ft (top flange MAD = 38,955, not governing).
+  - My = 1515.6 + 727.5 + 6980 = 9223 k-ft; 1.3·Rh·My = 1.3·1.0·9223 = 11,990 k-ft.
+  - before: Mn = Mp-basis 12,163 k-ft, D/C = 5177/12163 = 0.426, flex RF_inv = 3.381.
+  - after: Mn = min(12163, 11990) = **11,990 k-ft**, D/C = 0.432, flex RF_inv = 3.322.
+- **How verified:** node run old/new; hand values above match the run.
+- **Other copies of this code:** none known.
+
+### F5. Ductility Dp ≤ 0.42Dt checked for every composite positive section   [calc change] [more conservative]
+- **Where:** `computeAll` check list (≈ line 2524); `FlexTab` tile. Anchor: `if(deck.deckOn) checks.push({n:'Ductility Dp≤0.42Dt'`
+- **Problem:** only compact sections were checked; 6.10.7.3 applies to compact and noncompact composite sections in positive flexure.
+- **Governing provision:** AASHTO LRFD 10th Ed. 6.10.7.3.
+- **Before:** `if(sgPos.compact) checks.push({n:'Ductility Dp≤0.42Dt', ...` and tile `{f.compact&&<div ...Ductility`
+- **After:** `if(deck.deckOn) checks.push({n:'Ductility Dp≤0.42Dt', ...` and tile `{f.composite&&<div ...Ductility` (`flex.composite = !!deck.deckOn`).
+- **Check case:** D = 84, tw = 0.5625, top 12×0.625, bottom 24×2.5, ts = 7 in, beff = 60 in (noncompact, PNA in web): Dp = 72.9, Dt = 96.1, 0.42Dt = 40.4 in → before: no check; after: Dp/0.42Dt = **1.806 FAIL**.
+- **How verified:** node run old/new.
+- **Other copies of this code:** none known.
+
+### F6. Fatigue I/II crossover uses the 1.75 / 0.80 load-factor ratio   [calc change] [LESS conservative — corrects a conservative error]
+- **Where:** `computeAll` fatigue block (≈ line 2368–2372); Fatigue tab Step 2. Anchor: `const fatGRatio = 0.80/1.75;`
+- **Problem:** "auto" picked Fatigue I when (A/N)^⅓ ≤ (ΔF)TH. With γ = 1.75 (Fatigue I) and 0.80 (Fatigue II), Fatigue I governs only when (A/N)^⅓ ≤ (0.80/1.75)(ΔF)TH — the basis of Table 6.6.1.2.3-2 (Cat. C, 75 yr: 1,680/day). The app switched at 161/day for Cat. C.
+- **Governing provision:** AASHTO LRFD 10th Ed. 6.6.1.2.3 and Table 6.6.1.2.3-2; Table 3.4.1-1 (γ Fatigue I = 1.75, Fatigue II = 0.80).
+- **Before:**
+  ```js
+    const adttSLcross = Acat/(Math.pow(THcat,3)*365*lifeYr*nCyc);
+  ```
+- **After:**
+  ```js
+    const fatGRatio = 0.80/1.75;
+    const adttSLcross = Acat/(Math.pow(fatGRatio*THcat,3)*365*lifeYr*nCyc);
+  ```
+- **Check case:** Cat. C (A = 44×10⁸, TH = 10), 75 yr, n = 1. Crossover before 44e8/(1000·27375) = **160.7**/day → after 44e8/((0.4571·10)³·27375) = **1,682**/day (Table: 1,680). Defaults with ADTT_SL = 1000: before Fatigue I, γΔf/(ΔF)n = 1.75·3.723/10 = **0.652**; after Fatigue II, (ΔF)n = (44e8/2.7375e7)^⅓ = 5.437 ksi, 0.80·3.723/5.437 = **0.548**. ADTT_SL = 500: 0.652 → 0.435. ADTT_SL = 2000: Fatigue I in both (0.652).
+- **How verified:** node run old/new; table values reproduced for C (1,682) and C′ (973).
+- **Other copies of this code:** none known (index.html uses different fatigue factors; see AUDIT).
+
+### F7. Fatigue II resistance: ½(ΔF)TH floor removed   [calc change] [more conservative]
+- **Where:** `computeAll` (≈ line 2380); Fatigue tab Step 3. Anchor: `const FnFatII = Math.pow(Acat/Nfat,1/3);`
+- **Problem:** Eq. 6.6.1.2.5-2 for Fatigue II is (ΔF)n = (A/N)^⅓; the "≥ ½(ΔF)TH" floor belongs to the pre-2009 single-load-factor format. In auto mode the floor can never bind (Fatigue II is only chosen when (A/N)^⅓ ≥ 0.457TH); it only mattered when Fatigue II was forced manually at very high N.
+- **Governing provision:** AASHTO LRFD 10th Ed. 6.6.1.2.5, Eq. 6.6.1.2.5-2.
+- **Before:** `const FnFatII = Math.max(Math.pow(Acat/Nfat,1/3), THcat/2);`
+- **After:** `const FnFatII = Math.pow(Acat/Nfat,1/3);`
+- **Check case:** defaults, Fatigue II forced, ADTT_SL = 20,000: N = 5.475×10⁸, (A/N)^⅓ = 2.003 ksi; before (ΔF)n = max(2.003, 5.0) = 5.0, D/C 0.596 → after (ΔF)n = **2.003**, D/C **1.487**.
+- **How verified:** node run old/new.
+- **Other copies of this code:** none known.
+
+### F8. Stud fatigue resistance for Fatigue I: Zr = 5.5d²   [calc change] [LESS conservative — corrects a conservative error]
+- **Where:** `computeAll` shear connectors (≈ line 2462); Connectors tab formula/notes. Anchor: `const Zr=fatInf? 5.5*dStud2 : alphaF*dStud2;`
+- **Problem:** infinite-life Zr was 5.5d²/2 paired with γ = 1.75; 6.10.10.2 gives Zr = 5.5d² for Fatigue I (the ÷2 floor belonged to the old single-factor format). Required about twice the studs.
+- **Governing provision:** AASHTO LRFD 10th Ed. 6.10.10.2, Eq. 6.10.10.2-1 (Fatigue I) / -2 (Fatigue II).
+- **Before:** `const Zr=fatInf? 5.5*dStud2/2 : alphaF*dStud2;`
+- **After:** `const Zr=fatInf? 5.5*dStud2 : alphaF*dStud2;`
+- **Check case:** 7/8-in studs, Fatigue I: Zr before 5.5·0.7656/2 = 2.105 → after **4.211 kip** (FHWA example value 4.21). Combined with F9 at ADTT_SL = 2000 (defaults, 3 studs/row): before Vsr = 0.741 k/in, p_req = 3·2.105/0.741 = 8.52 in → after Vsr = 1.141 k/in, p_req = 3·4.211/1.141 = **11.07 in**.
+- **How verified:** node run old/new.
+- **Other copies of this code:** none known.
+
+### F9. Stud and web fatigue use the single-lane SHEAR DF (v1/1.2)   [calc change] [studs: more conservative per se; web: more conservative]
+- **Where:** `computeAll` fatigue block (≈ line 2359), web special fatigue (≈2392), studs (≈2464); notes on the Fatigue and Connectors tabs. Anchor: `const dfFatV=(Ld.df? Ld.df.v1:Ld.dfv)/1.2;`
+- **Problem:** the stud shear range (6.10.10.1.2) and the web special fatigue shear (6.10.5.3) were distributed with the single-lane **moment** DF (m1/1.2 or the LLDF fatM override).
+- **Governing provision:** AASHTO LRFD 10th Ed. 4.6.2.2.3a (one-lane shear DF), 3.6.1.4.3b (MPF removed for fatigue), 6.10.10.1.2, 6.10.5.3.
+- **Before:**
+  ```js
+      const Vll=fatShearAt(Lft,st.x)*1.15*dfFat;             // fatigue-truck shear, single-lane, IM 1.15
+  ...
+    const VfatU=Ld.hl.Vtr*1.15*dfFat;                    // unfactored range: fatigue truck, IM 1.15, 1-lane DF
+  ```
+- **After:**
+  ```js
+    const dfFatV=(Ld.df? Ld.df.v1:Ld.dfv)/1.2;
+    const fatDfVSource='auto: (1-lane shear DF v₁)÷1.2';
+  ...
+      const Vll=fatShearAt(Lft,st.x)*1.15*dfFatV;            // fatigue-truck shear, single-lane SHEAR DF, IM 1.15
+  ...
+    const VfatU=Ld.hl.Vtr*1.15*dfFatV;                   // unfactored range: HL-93 truck shear at support, IM 1.15, 1-lane SHEAR DF
+  ```
+- **Check case:** defaults (S = 9 ft, L = 120 ft): m1 = 0.468, v1 = 0.36 + 9/25 = 0.720. DF before 0.468/1.2 = 0.390 → after 0.720/1.2 = **0.600**. Web special fatigue: Vll 27.37 → 42.14 kip, Vf = 103.68 + 1.75·42.14 = 177.42 kip, D/C 0.274 → 0.321. Studs: VfatU = 66.40·1.15·DF = 29.77 → 45.82 kip.
+- **Note:** the LLDF `fatM` override still applies to the moment (flange) fatigue only. LLDF also publishes `fatV`, which this app does not read (OPEN O5). For an exterior girder the interior v1 is used (OPEN O5).
+- **How verified:** node run old/new.
+- **Other copies of this code:** none known.
+
+### F10. rt uses Dc; Fyr = min(0.7Fyc, Fyw) ≥ 0.5Fyc   [calc change] [rt: LESS conservative — corrects a conservative error; Fyr: more conservative for hybrids]
+- **Where:** function `flangeFnc` (≈ line 1836) and its three callers in the `computeAll` segment loop (≈2014–2016). Anchor: `function flangeFnc(bfc,tfc,tw,D,Lb_in,Fyc,Es,Rb,Rh,Cb,Dc,Fyw){`
+- **Problem:** Eq. 6.10.8.2.3-9 uses Dc (web depth in compression), the code used D (understating rt, Lp, Lr). Fyr ignored Fyw.
+- **Governing provision:** AASHTO LRFD 10th Ed. 6.10.8.2.3 (Eq. 6.10.8.2.3-9) and 6.10.8.2.2 (Fyr).
+- **Before:**
+  ```js
+  function flangeFnc(bfc,tfc,tw,D,Lb_in,Fyc,Es,Rb,Rh,Cb){
+    Cb=Cb||1.0; const FyrV=Math.max(0.5*Fyc,Math.min(0.7*Fyc,Fyc));
+  ...
+    const rt=bfc/sqrt(12*(1+(D*tw)/(3*bfc*tfc)));       // 6.10.8.2.3-9
+  ...
+        const FncTop_=flangeFnc(dims.bft,dims.tft,dims.tw,dims.D,Lb_in,Fyc,Es,1.0,Rh_,1.0);   // constructibility (bare)
+        const FncNeg_=flangeFnc(dims.bfb,dims.tfb,dims.tw,dims.D,Lb_in,Fyc,Es,RbNeg_,Rh_,1.0);// −M: bottom flange comp.
+        const FncBotBare_=flangeFnc(dims.bfb,dims.tfb,dims.tw,dims.D,Lb_in,Fyc,Es,1.0,Rh_,1.0);// −M during constr. (bare)
+  ```
+- **After:**
+  ```js
+  function flangeFnc(bfc,tfc,tw,D,Lb_in,Fyc,Es,Rb,Rh,Cb,Dc,Fyw){
+    Cb=Cb||1.0; const DcV=(Dc!==undefined&&isFinite(Dc))?Dc:D, FywV=(Fyw!==undefined&&isFinite(Fyw))?Fyw:Fyc;
+    const FyrV=Math.max(0.5*Fyc,Math.min(0.7*Fyc,FywV));
+  ...
+    const rt=bfc/sqrt(12*(1+(DcV*tw)/(3*bfc*tfc)));     // 6.10.8.2.3-9 (Dc)
+  ...
+    return {Fnc:Math.min(FncFLB,FncLTB),FncFLB,FncLTB,lf,lpf,lrf,rt,Lp:Lp/12,Lr:Lr/12,Fyr:FyrV,Dc:DcV};
+  ...
+        const FncTop_=flangeFnc(dims.bft,dims.tft,dims.tw,dims.D,Lb_in,Fyc,Es,1.0,Rh_,1.0,bare_.Dc,Fyw);   // constructibility (bare)
+        const FncNeg_=flangeFnc(dims.bfb,dims.tfb,dims.tw,dims.D,Lb_in,Fyc,Es,RbNeg_,Rh_,1.0,cr_.DcNeg,Fyw);// −M: bottom flange comp.
+        const FncBotBare_=flangeFnc(dims.bfb,dims.tfb,dims.tw,dims.D,Lb_in,Fyc,Es,1.0,Rh_,1.0,clamp(bare_.ybar-dims.tfb,0,dims.D),Fyw);// −M during constr. (bare)
+  ```
+  Dc per caller: bare section (constructibility, top flange); cracked steel+rebar section (−M, per D6.3.1); bare section with the bottom flange in compression (−M during erection).
+- **Check case:** defaults, constructibility top flange 16×0.75, tw = 0.5, D = 66, Dc(bare) = 38.28 in, Lb = 20 ft.
+  - rt before = 16/√(12(1 + 66·0.5/36)) = 3.336 in → after 16/√(12(1 + 38.28·0.5/36)) = **3.732 in**; Lp 6.70 → 7.49 ft, Lr 25.14 → 28.13 ft; Fnc(LTB) 39.18 → **40.91 ksi**; constructibility D/C 0.654 → 0.640.
+  - Hybrid Fyf = 70, Fyw = 36: Fyr before 0.7·70 = 49 → after min(49, 36) = **36 ksi** (≥ 35); constructibility Fnc 49.95 → **44.97 ksi**.
+- **How verified:** node run old/new.
+- **Other copies of this code:** none known.
+
+### F11. Optimize tab no longer crashes when a swept size fails   [bug fix] [no result change]
+- **Where:** `OptimizeTab` (≈ line 4272). Anchor: `if(!Rr.ok||!Array.isArray(Rr.checks)) return`
+- **Problem:** `Rr.checks.find` ran before `Rr.ok` was tested; a failed `computeAll` (`{ok:false}`, no `checks`) threw a TypeError and blanked the tab.
+- **Before:**
+  ```js
+      const Rr=computeAll(e);
+      const g=k=>{const c=Rr.checks.find(x=>x.t===k); return c?c.r:0;};
+  ...
+          {x:vals,y:rows.map(r=>r.flex),name:'Flexure',mode:'lines+markers',line:{color:'#1C4FC4'}},
+          {x:vals,y:rows.map(r=>r.shear),name:'Shear',mode:'lines+markers',line:{color:'#B3261E'}},
+          {x:vals,y:rows.map(r=>r.serv),name:'Service II',mode:'lines+markers',line:{color:'#15803D'}},
+  ```
+- **After:**
+  ```js
+      const Rr=computeAll(e);
+      // a swept size can make computeAll fail ({ok:false}, no checks) — show it as a gap, not a crash
+      if(!Rr.ok||!Array.isArray(Rr.checks)) return {t,flex:NaN,shear:NaN,serv:NaN,pass:false,err:Rr.error||'compute failed'};
+      const g=k=>{const c=Rr.checks.find(x=>x.t===k); return c?c.r:0;};
+  ...
+          {x:vals,y:rows.map(r=>isFinite(r.flex)?r.flex:null),name:'Flexure',mode:'lines+markers',line:{color:'#1C4FC4'}},
+          {x:vals,y:rows.map(r=>isFinite(r.shear)?r.shear:null),name:'Shear',mode:'lines+markers',line:{color:'#B3261E'}},
+          {x:vals,y:rows.map(r=>isFinite(r.serv)?r.serv:null),name:'Service II',mode:'lines+markers',line:{color:'#15803D'}},
+  ```
+- **Check case:** test copy with `computeAll` forced to return `{ok:false}` for part of the sweep, server-rendered with React 18.2.0: before → `TypeError: Cannot read properties of undefined (reading 'find')`; after → renders, failed rows show "—" and FAIL.
+- **How verified:** react-dom/server render in node.
+- **Other copies of this code:** none known.
+
+### F12. Stiffener width, end-panel spacing and bearing-stiffener width added to `checks`   [bug fix] [more conservative]
+- **Where:** `computeAll` "push remaining checks" (≈ lines 2502–2509). Anchor: `n:'Transverse stiffener width b_t ≥ min'`
+- **Problem:** `tStiff.widthOK`, `shearR.endSpcOK` and `bearing.widthOK` were computed and shown on their tabs but never pushed to `checks`, so a violation never showed FAIL in the summary/report.
+- **Governing provision:** AASHTO LRFD 10th Ed. 6.10.11.1.2 (2.0 + D/30 ≤ bt, bf/4 ≤ bt ≤ 16tp), 6.10.9.3.3 (end panel do ≤ 1.5D), 6.10.11.2.2 (bt ≤ 0.48tp√(E/Fys)). Limits unchanged; only reporting added.
+- **Before:**
+  ```js
+      if(tStiff){ checks.push({n:'Transverse stiffener It', t:'Trns stiff', v:tStiff.ItReq, lim:tStiff.ItProv, r:tStiff.ItReq/tStiff.ItProv, u:'in⁴', ref:'6.10.11.1', loc:0}); }
+      checks.push({n:'Bearing stiffener', ...});
+  ```
+- **After:**
+  ```js
+      if(tStiff){ checks.push({n:'Transverse stiffener It', t:'Trns stiff', v:tStiff.ItReq, lim:tStiff.ItProv, r:tStiff.ItReq/tStiff.ItProv, u:'in⁴', ref:'6.10.11.1', loc:0});
+        // 6.10.11.1.2 projecting width: lower bound max(2+D/30, bf/4), upper bound 16tp
+        checks.push({n:'Transverse stiffener width b_t ≥ min', t:'Stiff bt min', v:tStiff.btMin, lim:tStiff.bt, r:tStiff.btMin/Math.max(tStiff.bt,1e-6), u:'in', ref:'6.10.11.1.2', loc:0});
+        checks.push({n:'Transverse stiffener width b_t ≤ 16t_p', t:'Stiff bt max', v:tStiff.bt, lim:tStiff.btMax, r:tStiff.bt/Math.max(tStiff.btMax,1e-6), u:'in', ref:'6.10.11.1.2', loc:0}); }
+      // 6.10.9.3.3 end-panel stiffener spacing d_o ≤ 1.5D (only when the web is treated as stiffened)
+      if(stiffened) checks.push({n:'End-panel stiffener spacing d_o ≤ 1.5D', t:'End panel', v:doRaw, lim:doEndMax, r:doRaw/doEndMax, u:'in', ref:'6.10.9.3.3', loc:0});
+      checks.push({n:'Bearing stiffener', ...});
+      checks.push({n:'Bearing stiffener width b_b ≤ 0.48t_b√(E/F_ys)', t:'Brg bb', v:bb, lim:bbMax, r:bb/Math.max(bbMax,1e-6), u:'in', ref:'6.10.11.2.2', loc:0});
+  ```
+- **Check case:** defaults (D = 66, bt = 6, tp = 0.5, do = 60, bearing 7×0.75): bt,min = max(2 + 66/30, 16/4) = 4.20 → 0.70 OK; 16tp = 8.0 → 0.75 OK; 1.5D = 99 in → 60/99 = 0.606 OK; 0.48·0.75·√(29000/50) = 8.67 in → 7/8.67 = 0.807 OK. (Before: rows absent.)
+- **How verified:** node run.
+- **Other copies of this code:** none known.
+
+### F13. `shored` checkbox disabled with a note   [bug fix / display] [no result change]
+- **Where:** `InputsTab`, Span & Framing card (≈ line 3177). Anchor: `checked={!!geom.shored} disabled`
+- **Problem:** `geom.shored` was never read by `computeAll`; ticking it changed nothing while the label said "deck DL on composite section".
+- **Decision:** disabled (not wired). Wiring would move DC1 onto the composite section and change the stresses, deflections, constructibility, My (F4) and the MIDAS DC1 handling — too wide a change to make safely here. The saved field `geom.shored` is kept as-is (no data-format change); if a saved project has it ticked, a warning says the results are for unshored construction.
+- **Before:**
+  ```js
+            <input type="checkbox" checked={geom.shored} onChange={e=>S('geom.shored',e.target.checked)}/>
+            Shored construction (deck DL on composite section)</label></div>
+  ```
+- **After:**
+  ```js
+            <input type="checkbox" checked={!!geom.shored} disabled
+              title="Not implemented — the analysis always places DC1 on the bare steel (unshored)."/>
+            Shored construction (deck DL on composite section) — <i>not implemented: DC1 is always applied to the bare steel section (unshored construction)</i></label>
+          {geom.shored&&<div className="hint" style={{color:'var(--warn)'}}>This project was saved with “shored” ticked. That option never affected the analysis; results are for unshored construction (conservative for flange stresses).</div>}</div>
+  ```
+- **Check case:** n/a (no calculation reads the field). Render test with `shored:true` OK.
+- **Other copies of this code:** none known.
+
+## Open items (not changed)
+- O1. Flange lateral bending fℓ is ignored everywhere (constructibility 6.10.3.2, Service II ff + fℓ/2, Strength 6.10.7.1.1/6.10.8.1.1). Acceptable only for straight, unskewed girders without large overhang brackets — needs a design decision: add fℓ inputs (per region) or a UI warning tied to skew/overhang.
+- O2. No Service II load rating (MBE 6A.6.4.2.2, γLL 1.30/1.00 against 0.95RhFyf). The capacity export sends Sx and fServLim for the MCT to rate it; decide whether ST-Girder should rate it itself.
+- O3. Rating φc·φs hard-coded to 1.0 (MBE 6A.4.2.3/4: φc and φs, with φcφs ≥ 0.85). Needs two inputs with defaults 1.0; also the flexure RF mixes `sgPos` (governing D/C segment) capacity with `stPos` (max-Mu station) demands, and noncompact `capM` converts stresses to moment with short-term moduli for all stages.
+- O4. Exterior girder: effective width (4.6.2.6.1, S/2 + overhang) and deck DL tributary width still use S for an exterior girder; Mp/stresses overstated for exterior girders. Needs overhang geometry used in beff/DL.
+- O5. Fatigue DFs for exterior girders: single-lane moment DF uses interior m1/1.2 (unless LLDF `fatM` is pulled), and the new shear DF uses interior v1/1.2; exterior needs lever rule ÷ 1.2. LLDF already publishes `fatV`; reading it needs a new optional `loads.fatV` field — decide if wanted.
+- O6. Stud fatigue shear range uses the HL-93 design truck shear `Vtr` at the support (14-ft axle spacing), not the fatigue truck (30-ft) range per station (6.10.10.1.2 / 3.6.1.4.1). Using the fatigue truck would lower Vsr (less conservative); left as is pending confirmation.
+- O7. Continuous-span stud requirement 6.10.10.4.2 (P = Pp + Pn between pier and max +M) not implemented; strength studs count only (L/2)/pitch.
+- O8. Fatigue range with imported continuous demands still uses the simple-span fatigue truck `fatMomentAt` (6.6.1.2 / 3.6.1.4); negative-moment fatigue details (top flange, rebar) at piers are not checked.
+- O9. Hybrid details: Rh always takes the top flange as Afn (6.10.1.10.1); Rb uses the short-term composite Dc rather than staged Dc (D6.3.1). Low impact; needs hybrid-girder test cases.
+- O10. 1.3RhMy (F4): continuity is inferred from imported negative moment in the span (`useExt && hasNeg`); the B6.2 exemption is not evaluated. Confirm this trigger is acceptable.
+- O11. Report tab "φMn flexure" shows 0 for noncompact sections (display); modular ratio n forced ≥ 6 and rounded while `lldfGeom` sends nRaw — not in this PR's scope.
+- O12. Edition: the 10th Ed. (2024) Section 6 changes were not verified article-by-article. F6–F10 rely on provisions unchanged since the 2009 Fatigue I/II split (6.6.1.2.5, 6.10.10.2, Table 6.6.1.2.3-2 values A 690 … C 1,680 …) and on long-standing 6.10.8.2.3-9 / 6.10.7.1.2 / 6.10.7.3 text; please confirm against your 10th Ed. copy.
