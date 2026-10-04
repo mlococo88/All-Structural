@@ -201,9 +201,24 @@ All "before/after" numbers below were produced by running `computeEDM` from the 
 - **Abutment hand-off, return side (`sendPadBack`).** The PAD payload now also carries `A` (plan area; πD²/4 for circular) and `shape`. `D` was already sent. The abutment PR (`claude/fix-abutment`) consumes `D`/`A`.
 - **How verified:** `node --check` on every inline script. jsdom smoke test (`jsd/edm_dom.js`): all five tabs render for circ/rect × Method A/B and plain; thermal input and focus; hand-off INIT (rect and circular-equivalent); PAD payload; print report. No runtime errors.
 
+## 2026-10-04 — Engineer decisions applied
+
+### F11. Plain-pad G·S coefficient stays at 1.00 (engineer's decision)   [decision record] [no result change]
+- **Where:** `defaultState()`, anchor `GSplainA:1.00`; used in `computeEDM`, anchor `const sigGS=(isPlain()?+cf.GSplainA:1.25)*GminA*Sf;`
+- **Problem:** O2 asked whether the plain-pad coefficient should be lower than 1.00 (e.g. ≈0.55 for PEP under older specifications).
+- **Decision:** the engineer keeps c = 1.00. The default was verified to be 1.00 already on this branch, so no code change was made.
+- **Governing provision:** AASHTO LRFD 10th Ed. (2024), Art. 14.7.6.3.2 (plain pad σs ≤ c·G·S, with cap `coef.sigCapPlainA` = 0.80 ksi); coefficient per engineer.
+- **Before:**
+  ```js
+  coef:{ Da:1.4, DrRect:0.5, DrCirc:0.375, sigCapReinA:1.25, sigCapPlainA:0.80, GmethodA:0.150, DaCirc:1.0, GminA:0.130, GSplainA:1.00, upliftCircA:0.75 },
+  ```
+- **After:** unchanged (same line).
+- **Check case:** unchanged from F7 — σ_GS = 1.00·G_min·S, limit = min(σ_GS, 0.80 ksi). No numbers change.
+- **How verified:** `grep -n "GSplainA" elastomeric_design_module.html` — default `GSplainA:1.00` in `defaultState()`; the I-6 input still allows a project-specific override.
+- **Other copies of this code:** none known.
+
 ## Open items (not changed)
 - O1. **10th Ed. text not available in this environment.** F5 (1.25GS ≤ 1.25 ksi; no increase for "fixed against shear") and F6 (0.75 for circular) were made from my knowledge of the post-2009 AASHTO text, supported by DOT manual excerpts found by search. — Engineer to confirm both against the 10th Ed., Art. 14.7.6.3.2 and 14.7.6.3.5. The `fixedShear` toggle now affects only Method B stability.
-- O2. **Plain-pad G·S coefficient (F7).** Default 1.00 (FGP). For plain elastomeric pads (PEP), the 10th Ed. coefficient may be lower (older specifications used GS/1.8 ≈ 0.55GS for plain pads). — Engineer to confirm the coefficient for MassDOT 1 × 5 plain pads and set `coef.GSplainA`.
 - O3. **Plain-pad rotation check (14.7.6.3.5).** Not added; I am not confident of the 10th Ed. form for plain pads.
 - O4. **Construction tolerance on transverse rotation.** The MassDOT tolerance (0.03) is applied once (to the longitudinal rotation / resultant), per the existing §3.5.7.6 note. It is not applied to the rectangular transverse check (F3, F6). AASHTO 14.4.2.1's 0.005 rad may apply about each axis. — Engineer to decide.
 - O5. **Method A uplift G.** The uplift check still uses `GmethodA` = 0.150. The least favourable G for a minimum-stress check is the upper bound (0.200 for 60 durometer). Not changed (brief scope: stress limit only). Recommend an upper-bound G input.
@@ -213,3 +228,7 @@ All "before/after" numbers below were produced by running `computeEDM` from the 
 - O9. **Rotation sign handling.** The static rotation adds absolute values (camber usually opposes DL). Conservative; not changed.
 - O10. **postMessage origin.** The EDM `message` handler still checks only `d.app`; acceptable for `file://` (not in this brief).
 - O11. **Self-test.** The shape-factor case is still a literal expression, not engine code. Not changed.
+
+## Resolved items
+- O2. **Plain-pad G·S coefficient (F7).** Default 1.00 (FGP). For plain elastomeric pads (PEP), the 10th Ed. coefficient may be lower (older specifications used GS/1.8 ≈ 0.55GS for plain pads). — Engineer to confirm the coefficient for MassDOT 1 × 5 plain pads and set `coef.GSplainA`.
+  - **RESOLVED 2026-10-04 (F11):** engineer keeps the coefficient at 1.00. No code change; default already 1.00.
