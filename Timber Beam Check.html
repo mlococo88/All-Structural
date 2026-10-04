@@ -52,6 +52,121 @@
 <body class="bg-slate-50 text-slate-900 selection:bg-blue-100 selection:text-blue-900">
     <div id="root"></div>
 
+<script>
+/* BridgeXfer v1 — cross-tool hand-off helper. Spec: HANDOFF.md. Duplicated verbatim in each tool that sends or receives (CLAUDE.md §3). */
+(function(){
+  if(window.BridgeXfer) return;
+  var NS='bridgeSuite.v1.';
+  function lsOK(){ try{ var k='__bx_t'; localStorage.setItem(k,'1'); localStorage.removeItem(k); return true; }catch(e){ return false; } }
+  function sharedProject(){
+    try{ var m=JSON.parse(localStorage.getItem(NS+'projectMeta')||'null');
+      if(m && m._schema==='bridge-project-meta' && m.fields) return { name:m.fields.projectName||'', bridgeId:m.fields.bridgeId||'' };
+    }catch(e){}
+    return null;
+  }
+  function stamp(channel, payload, producer, producerFile){
+    var p={}; for(var k in payload) if(Object.prototype.hasOwnProperty.call(payload,k)) p[k]=payload[k];
+    p.schemaVersion = p.schemaVersion || 1;
+    p.producer = p.producer || producer || document.title;
+    p.producerFile = p.producerFile || producerFile || decodeURIComponent((location.pathname.split('/').pop()||''));
+    p.producedAt = new Date().toISOString();
+    if(!p.project) p.project = sharedProject() || { name:'', bridgeId:'' };
+    if(!p.notes) p.notes = [];
+    return p;
+  }
+  function publish(channel, payload, producer, producerFile){
+    if(!payload || !payload._schema) return { error:'payload has no _schema' };
+    var p=stamp(channel, payload, producer, producerFile);
+    if(!lsOK()) return { error:'Browser storage is not available. Use "Export hand-off (JSON)" instead.', payload:p };
+    try{
+      localStorage.setItem(NS+channel, JSON.stringify(p));
+      localStorage.setItem(NS+channel+'.updatedAt', p.producedAt);
+    }catch(e){ return { error:'Could not save hand-off (storage full?): '+e.message, payload:p }; }
+    return { ok:true, payload:p };
+  }
+  function validate(p, schema, maxVersion){
+    if(!p || typeof p!=='object') return 'not a hand-off object';
+    if(p._schema!==schema) return 'wrong data type ('+(p._schema||'none')+'), expected '+schema;
+    if(!(p.schemaVersion<= (maxVersion||1))) return 'newer format (v'+p.schemaVersion+') than this tool supports (v'+(maxVersion||1)+')';
+    return null;
+  }
+  function read(channel, schema, maxVersion){
+    var raw=null;
+    try{ raw=localStorage.getItem(NS+channel); }catch(e){ return { error:'Browser storage is not available.' }; }
+    if(!raw) return { error:'Nothing has been sent on this channel yet.' , empty:true };
+    var p; try{ p=JSON.parse(raw); }catch(e){ return { error:'Stored hand-off is corrupt.' }; }
+    var err=validate(p, schema, maxVersion); if(err) return { error:err };
+    return { ok:true, payload:p };
+  }
+  function markAdopted(channel, receiverId, producedAt){
+    try{ localStorage.setItem(NS+channel+'.adopted.'+receiverId, producedAt||''); }catch(e){}
+  }
+  function isNew(channel, receiverId){
+    try{
+      var at=localStorage.getItem(NS+channel+'.updatedAt'); if(!at) return false;
+      return at!==localStorage.getItem(NS+channel+'.adopted.'+receiverId);
+    }catch(e){ return false; }
+  }
+  function exportFile(channel, payload){
+    var p=payload; if(!p){ try{ p=JSON.parse(localStorage.getItem(NS+channel)); }catch(e){} }
+    if(!p) return { error:'Nothing to export.' };
+    var blob=new Blob([JSON.stringify(p,null,2)],{type:'application/json'});
+    var a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+    a.download=(p._schema||channel)+'_'+(p.producedAt||'').slice(0,19).replace(/[:T]/g,'-')+'.json';
+    document.body.appendChild(a); a.click(); setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 60000);
+    return { ok:true };
+  }
+  function importFile(file, schema, maxVersion, cb){
+    var fr=new FileReader();
+    fr.onload=function(){ var p; try{ p=JSON.parse(fr.result); }catch(e){ cb({ error:'File is not valid JSON.' }); return; }
+      var err=validate(p, schema, maxVersion); cb(err? { error:err } : { ok:true, payload:p }); };
+    fr.onerror=function(){ cb({ error:'Could not read file.' }); };
+    fr.readAsText(file);
+  }
+  function describe(p){ return (p.producer||'?')+' — '+(p.producedAt? new Date(p.producedAt).toLocaleString():'?')+((p.project&&p.project.name)?' — '+p.project.name:''); }
+  window.BridgeXfer={ NS:NS, publish:publish, read:read, validate:validate, markAdopted:markAdopted, isNew:isNew, exportFile:exportFile, importFile:importFile, describe:describe, sharedProject:sharedProject };
+})();
+</script>
+<script>
+/* Shared project info buttons (HANDOFF.md §4.1, channel bridgeSuite.v1.projectMeta). Uses window.BridgeXfer.
+   map: [{shared:'<HANDOFF field>', key:'<this tool's field>', label:'<this tool's label>', accept:optional fn(v)->bool}]
+   values: { <tool key>: <current value> } */
+(function(){
+  if(window.ProjMetaUI) return;
+  var FIELDS=['projectName','bridgeId','jobNo','client','location','preparedBy','checkedBy','date'];
+  function s(v){ return (v===undefined||v===null)?'':String(v); }
+  function share(map, values, producer, producerFile){
+    var fields={}; FIELDS.forEach(function(k){ fields[k]=''; });
+    map.forEach(function(m){ fields[m.shared]=s(values[m.key]); });
+    var r=window.BridgeXfer.publish('projectMeta', {_schema:'bridge-project-meta', project:{ name:fields.projectName, bridgeId:fields.bridgeId }, fields:fields}, producer, producerFile);
+    if(r.error){ alert('Could not share project info: '+r.error); return r; }
+    var lines=map.map(function(m){ return '  '+m.label+': '+(fields[m.shared]||'(blank)'); });
+    alert('Project info shared with the other tools:\n\n'+lines.join('\n'));
+    return r;
+  }
+  function use(map, values, receiverId){
+    var r=window.BridgeXfer.read('projectMeta','bridge-project-meta',1);
+    if(r.error){ alert('Shared project info: '+r.error+(r.empty?'\n\nOpen a tool that has project info and click "Share project info" first.':'')); return null; }
+    var p=r.payload, f=(p.fields&&typeof p.fields==='object')?p.fields:{}, patch={}, lines=[], skipped=[];
+    map.forEach(function(m){
+      var v=s(f[m.shared]);
+      if(v.trim()==='') return;                                   /* never blank a field */
+      if(m.accept && !m.accept(v)){ skipped.push('  '+m.label+': "'+v+'" (not a valid value here)'); return; }
+      if(v===s(values[m.key])) return;
+      patch[m.key]=v; lines.push('  '+m.label+': "'+s(values[m.key])+'" → "'+v+'"');
+    });
+    if(!lines.length){ alert('Shared project info ('+window.BridgeXfer.describe(p)+') has nothing new for this tool.'+(skipped.length?'\n\nNot used:\n'+skipped.join('\n'):'')); return null; }
+    if(!confirm('Use shared project info from '+window.BridgeXfer.describe(p)+'?\n\nThis will overwrite:\n'+lines.join('\n')+(skipped.length?'\n\nNot used:\n'+skipped.join('\n'):''))) return null;
+    window.BridgeXfer.markAdopted('projectMeta', receiverId, p.producedAt);
+    return patch;
+  }
+  window.ProjMetaUI={ share:share, use:use };
+})();
+/* Timber Beam Check: shared project info field map ("Project & Geometry" section). */
+var TBC_PROJ_MAP=[{shared:'client',key:'client',label:'Client'},
+                  {shared:'jobNo',key:'job',label:'Job #'},
+                  {shared:'preparedBy',key:'designer',label:'Designer'}];
+</script>
     <script type="text/babel" data-type="module">
         import React, { useState, useEffect, useMemo } from 'https://esm.sh/react@18.2.0';
         import { createRoot } from 'https://esm.sh/react-dom@18.2.0/client';
@@ -783,6 +898,7 @@
                     {/* HEADER */}
                     <header className={`sticky top-0 z-50 border-b backdrop-blur-xl px-6 py-4 flex justify-between items-center ${isDark ? 'bg-slate-900/80 border-slate-700' : 'bg-white/80 border-slate-200'} hide-print`}>
                         <div className="flex items-center gap-4">
+                            <a href="tools.html" target="_top" title="Open the list of all tools" className="text-xs text-slate-500 hover:text-indigo-500">&larr; All tools</a>
                             <div className="bg-indigo-600 p-2 rounded-lg"><Calculator className="text-white w-5 h-5"/></div>
                             <h1 className="font-bold text-lg">TimberStudio<span className="text-indigo-500">Complete</span></h1>
                         </div>
@@ -806,6 +922,10 @@
                                 <div className="grid grid-cols-2 gap-2 mb-2">
                                     <input className="w-full p-2 text-xs border rounded dark:bg-slate-800 dark:border-slate-600" placeholder="Job #" value={projectInfo.job} onChange={e=>setProjectInfo({...projectInfo, job:e.target.value})} />
                                     <input className="w-full p-2 text-xs border rounded dark:bg-slate-800 dark:border-slate-600" placeholder="Designer" value={projectInfo.designer} onChange={e=>setProjectInfo({...projectInfo, designer:e.target.value})} />
+                                </div>
+                                <div className="flex gap-2 mb-2 hide-print">
+                                    <button type="button" title="Fill the project fields from project info shared by another tool" onClick={()=>{ const patch = ProjMetaUI.use(TBC_PROJ_MAP, projectInfo, 'timberBeamCheck'); if (patch) setProjectInfo(pi => ({...pi, ...patch})); }} className="px-2 py-1 text-xs rounded border border-slate-200 hover:bg-slate-100 dark:border-slate-600 dark:hover:bg-slate-800">Use shared project info</button>
+                                    <button type="button" title="Make these project fields available to the other tools" onClick={()=>ProjMetaUI.share(TBC_PROJ_MAP, projectInfo, 'Timber Beam Check', 'Timber Beam Check.html')} className="px-2 py-1 text-xs rounded border border-slate-200 hover:bg-slate-100 dark:border-slate-600 dark:hover:bg-slate-800">Share project info</button>
                                 </div>
                                 <div className="pt-4 border-t dark:border-slate-700">
                                     <InputControl label="Span (ft)" value={span} onChange={setSpan} min={4} max={40} step={0.5} unit="ft" icon={Ruler} />

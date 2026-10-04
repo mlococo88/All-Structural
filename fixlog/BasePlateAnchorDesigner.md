@@ -390,6 +390,138 @@ h_ef 12″, 30×30×36 pedestal, f'c 4 ksi cracked, 1″ grout) unless stated.
 - PROFIS validation harness (`VALIDATION_CASES`): every target is unchanged except msa3a "Shear edge breakout φVcbg" 17,555 → 18,057 lb (F6). PROFIS itself prints 7,962, so the pre-existing gap there is unrelated.
 - Default model: breakout (T) 0.220 → 0.264; interaction 1.299 → 1.328; concrete bearing 0.224 → 0.268. Plate bending 0.547 → 0.574 (the governing combination moves to 0.9D+1.0W because of F10's Y).
 
+## 2026-10-04 — "All tools" link and shared project info
+### F17. "← All tools" link; "Use shared project info" / "Share project info" buttons   [feature (no result change)]
+- **Date:** 2026-10-04. **Type:** feature (no result change). Approved by the engineer (step 1 of the cross-tool hand-off work, HANDOFF.md §4.1).
+- **What:** a small "← All tools" link to `tools.html` (`target="_top"`, because tools can be shown inside index.html's iframe), placed in the `#hdr .titleRow`, above the `<h1>`. It is hidden in print.
+- **Shared project info:** two buttons in the new `#projMetaBtns` row directly under `#projGrid`.
+  - **Share** builds the full `fields` object (all 8 HANDOFF §4.1 fields, blank where this tool has no field) and calls `BridgeXfer.publish('projectMeta', {_schema:'bridge-project-meta', project:{name, bridgeId}, fields})`. Key: `bridgeSuite.v1.projectMeta` (+ `.updatedAt`).
+  - **Use** calls `BridgeXfer.read('projectMeta','bridge-project-meta',1)`, shows a confirm listing the producer, time, project and every field that will change (old → new), and writes only this tool's mapped fields. A blank shared value never blanks a field. Apply path: sets each `#projGrid` input (found by its label text) and dispatches a bubbling `input` event, so the existing `buildProjHeader` listener updates `S.proj`, autosaves and refreshes the project dropdown. Records `bridgeSuite.v1.projectMeta.adopted.<id>`.
+- **Field mapping (shared → this tool):**
+
+  | Shared field | Tool field | Label |
+  |---|---|---|
+  | `projectName` | `S.proj.name` | Project name |
+  | `jobNo` | `S.proj.num` | Project number |
+  | `preparedBy` | `S.proj.by` | Calculated by |
+  | `date` | `S.proj.date` | Date (only if YYYY-MM-DD; the field is `type="date"`) |
+  | `checkedBy` | `S.proj.chk` | Checked by |
+
+  Not mapped: bridgeId, client, location. Checked date (`S.proj.chkDate`) has no shared field.
+- **Helpers added:** a plain `<script>` with BridgeXfer v1 verbatim from HANDOFF.md §5, then a plain `<script>` with `ProjMetaUI` (shown in full in the After code below) and this tool's field map. Both sit before the tool's own script.
+- **Storage:** no existing key or saved-data format changed. New keys only: `bridgeSuite.v1.projectMeta`, `.updatedAt`, `.adopted.<id>` (HANDOFF.md §2).
+- **Where / Before / After** (each change is an insertion; the Before text is the anchor and is kept):
+  1. Anchor: `#hdrBtns button:hover{background:rgba(255,255,255,.18);border-color:rgba(255,255,255,.6);}`
+     - Before:
+       ```
+         #hdrBtns button:hover{background:rgba(255,255,255,.18);border-color:rgba(255,255,255,.6);}
+       ```
+     - After:
+       ```
+         #hdrBtns button:hover{background:rgba(255,255,255,.18);border-color:rgba(255,255,255,.6);}
+         #projMetaBtns{margin-top:5px;}
+         #projMetaBtns button{font-size:8.5pt;padding:2px 8px;background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.35);color:#fff;}
+         #projMetaBtns button:hover{background:rgba(255,255,255,.18);border-color:rgba(255,255,255,.6);}
+         #hdr .allToolsLink{font-size:8.5pt;color:#C7D4E4;text-decoration:none;font-family:var(--font-ui);}
+         #hdr .allToolsLink:hover{color:#fff;text-decoration:underline;}
+         @media print{ #hdr .allToolsLink,#projMetaBtns{display:none!important;} }
+       ```
+  2. Anchor: `<div>`
+     - Before:
+       ```
+             <div>
+               <h1>Base Plate &amp; Anchor Bolt Designer</h1>
+       ```
+     - After:
+       ```
+             <div>
+               <a class="allToolsLink" href="tools.html" target="_top" title="Open the list of all tools">&larr; All tools</a>
+               <h1>Base Plate &amp; Anchor Bolt Designer</h1>
+       ```
+  3. Anchor: `<div id="projGrid"></div>`
+     - Before:
+       ```
+           <div id="projGrid"></div>
+       ```
+     - After:
+       ```
+           <div id="projGrid"></div>
+           <div id="projMetaBtns">
+             <button id="btnUseProjMeta" title="Fill the project fields from project info shared by another tool">Use shared project info</button>
+             <button id="btnShareProjMeta" title="Make these project fields available to the other tools">Share project info</button>
+           </div>
+       ```
+  4. Anchor: `<div id="printReport"></div>`
+     - Before:
+       ```
+       <div id="printReport"></div>
+       <script>
+       ```
+     - After:
+       ```
+       <div id="printReport"></div>
+       <script>
+       /* BridgeXfer v1 verbatim from HANDOFF.md §5 (73 lines, starts "/* BridgeXfer v1 — cross-tool hand-off helper.", ends "})();") */
+       </script>
+       <script>
+       /* Shared project info buttons (HANDOFF.md §4.1, channel bridgeSuite.v1.projectMeta). Uses window.BridgeXfer.
+          map: [{shared:'<HANDOFF field>', key:'<this tool's field>', label:'<this tool's label>', accept:optional fn(v)->bool}]
+          values: { <tool key>: <current value> } */
+       (function(){
+         if(window.ProjMetaUI) return;
+         var FIELDS=['projectName','bridgeId','jobNo','client','location','preparedBy','checkedBy','date'];
+         function s(v){ return (v===undefined||v===null)?'':String(v); }
+         function share(map, values, producer, producerFile){
+           var fields={}; FIELDS.forEach(function(k){ fields[k]=''; });
+           map.forEach(function(m){ fields[m.shared]=s(values[m.key]); });
+           var r=window.BridgeXfer.publish('projectMeta', {_schema:'bridge-project-meta', project:{ name:fields.projectName, bridgeId:fields.bridgeId }, fields:fields}, producer, producerFile);
+           if(r.error){ alert('Could not share project info: '+r.error); return r; }
+           var lines=map.map(function(m){ return '  '+m.label+': '+(fields[m.shared]||'(blank)'); });
+           alert('Project info shared with the other tools:\n\n'+lines.join('\n'));
+           return r;
+         }
+         function use(map, values, receiverId){
+           var r=window.BridgeXfer.read('projectMeta','bridge-project-meta',1);
+           if(r.error){ alert('Shared project info: '+r.error+(r.empty?'\n\nOpen a tool that has project info and click "Share project info" first.':'')); return null; }
+           var p=r.payload, f=(p.fields&&typeof p.fields==='object')?p.fields:{}, patch={}, lines=[], skipped=[];
+           map.forEach(function(m){
+             var v=s(f[m.shared]);
+             if(v.trim()==='') return;                                   /* never blank a field */
+             if(m.accept && !m.accept(v)){ skipped.push('  '+m.label+': "'+v+'" (not a valid value here)'); return; }
+             if(v===s(values[m.key])) return;
+             patch[m.key]=v; lines.push('  '+m.label+': "'+s(values[m.key])+'" → "'+v+'"');
+           });
+           if(!lines.length){ alert('Shared project info ('+window.BridgeXfer.describe(p)+') has nothing new for this tool.'+(skipped.length?'\n\nNot used:\n'+skipped.join('\n'):'')); return null; }
+           if(!confirm('Use shared project info from '+window.BridgeXfer.describe(p)+'?\n\nThis will overwrite:\n'+lines.join('\n')+(skipped.length?'\n\nNot used:\n'+skipped.join('\n'):''))) return null;
+           window.BridgeXfer.markAdopted('projectMeta', receiverId, p.producedAt);
+           return patch;
+         }
+         window.ProjMetaUI={ share:share, use:use };
+       })();
+       /* BasePlateAnchorDesigner: shared project info field map and buttons (title block #projGrid). */
+       (function(){
+         var MAP=[{shared:'projectName',key:'Project name',label:'Project name'},
+                  {shared:'jobNo',key:'Project number',label:'Project number'},
+                  {shared:'preparedBy',key:'Calculated by',label:'Calculated by'},
+                  {shared:'date',key:'Date',label:'Date',accept:function(v){ return /^\d{4}-\d{2}-\d{2}$/.test(v); }},
+                  {shared:'checkedBy',key:'Checked by',label:'Checked by'}];
+         function inp(k){ var ls=document.querySelectorAll('#projGrid label'); for(var i=0;i<ls.length;i++){ var s=ls[i].querySelector('span'); if(s&&s.textContent===k) return ls[i].querySelector('input'); } return null; }
+         function values(){ var v={}; MAP.forEach(function(m){ var i=inp(m.key); v[m.key]=i?i.value:''; }); return v; }
+         document.getElementById('btnShareProjMeta').addEventListener('click',function(){ ProjMetaUI.share(MAP, values(), 'BasePlateAnchorDesigner', 'BasePlateAnchorDesigner.html'); });
+         document.getElementById('btnUseProjMeta').addEventListener('click',function(){
+           var patch=ProjMetaUI.use(MAP, values(), 'basePlateAnchor'); if(!patch) return;
+           Object.keys(patch).forEach(function(k){ var i=inp(k); if(!i) return; i.value=patch[k]; i.dispatchEvent(new Event('input',{bubbles:true})); });
+         });
+       })();
+       </script>
+       <script>
+       ```
+- **Governing provision:** none. UI and cross-tool data hand-off only (HANDOFF.md §2, §4.1, §5). No formula, factor, unit, code reference or computed result changed.
+- **Check case:** not applicable (no calculation touched). Functional check: Spread Footing shares {Project Name "Route 9 over Mill Brook", Project Number "J-2026-114", Calculated By "MRL", Date "2026-10-04", Checked By "JKD"}; Use in this tool fills the mapped fields; a blank shared value leaves the existing field unchanged.
+- **How verified:** `node --check` on every plain inline script; text/babel blocks transpiled with @babel/standalone; page loaded in jsdom with CDN libraries stubbed (React UMD served locally); Share → Use exercised across Spread Footing, BasePlateAnchorDesigner, Pile Designer, Concrete Anchor and Timber Beam Check (Timber: plain scripts in jsdom, the same calls its onClick handlers make, since it imports React from esm.sh) with a localStorage carried between pages; `git diff --numstat` shows only insertions.
+- **Other copies:** BridgeXfer v1 and `ProjMetaUI` are duplicated (CLAUDE.md §3) in Pile Designer.html, Spread Footing.html, BasePlateAnchorDesigner.html, Concrete Anchor.html and Timber Beam Check.html (this PR), plus any other tools that received BridgeXfer in their own step-1 PRs.
+- **`ProjMetaUI`:** given in full in the After code of the helper insertion above; the copy is identical in every tool listed.
+
 ## Open items (not changed)
 - O1. ASCE 7-22 generator details (the 0.2S term in the 2.3.6 seismic combinations, a separate S slot, the 0.5L option). Not changed, per the brief (OPEN). Decide which combinations the generator should produce.
 - O2. Stand-off rod buckling uses gross d and A_g (`standoffCompressionCheck`). The threaded root arguably governs (r = d_root/4, A = A_se or A_root). Not changed (OPEN). Confirm the intended basis.
