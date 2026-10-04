@@ -341,6 +341,9 @@ var st=document.createElement('style'); st.textContent=css;
       <div class="pb-group">
         <button class="btn sm" id="bxProjUse" title="Fill Project, Structure No., Calc. by, Checked and Date from the project info shared by another tool (asks first; never blanks a field)">Use shared project info</button>
         <button class="btn sm" id="bxProjShare" title="Share this calculation's project info with the other tools">Share project info</button>
+        <button class="btn sm" id="bxGeomPull" title="Review the girder layout another tool has sent (spans, spacing, skew, overhangs) and choose whether to apply it">Pull geometry</button>
+        <button class="btn sm" id="bxGeomImport" title="Load a geometry hand-off file (bridge-lldf-geometry JSON) exported by Bridge Geometry or a design app">Import hand-off (JSON)</button>
+        <input type="file" id="bxGeomFile" accept="application/json,.json" style="display:none" />
         <button class="btn sm" id="projExport" title="Download this calculation as a JSON file">Export JSON</button>
         <button class="btn sm" id="projImport" title="Load a calculation from a JSON file">Import JSON</button>
         <input type="file" id="projFile" accept="application/json,.json" style="display:none" />
@@ -2951,6 +2954,8 @@ function serialize(includeResults){
   const out={app:"AASHTO-LLDF",version:1,savedAt,meta,inputs};
   // Section 3.9 reference images travel with the project, alongside the inputs but not part of them.
   out.figures=(state.refImgs||[]).map(f=>({name:f.name||"",cap:f.cap||"",ref:f.ref||"",w:f.w||0,h:f.h||0,src:f.src}));
+  // Where the layout geometry last came from (bridgeSuite.v1.lldfGeom hand-off). New optional field; absent in older saves.
+  if(state.geomSource) out.geomSource=Object.assign({},state.geomSource);
   if(includeResults){
     try{
       const R=computeBridge(p), r=v=>typeof v==="number"?+v.toFixed(4):v;
@@ -2973,6 +2978,11 @@ function applyState(obj){
           .map(f=>({name:String(f.name||""),cap:String(f.cap||""),ref:String(f.ref||""),w:+f.w||0,h:+f.h||0,src:f.src}))
       : [];
     renderRefImgs();
+    // Optional source record of the last geometry hand-off adopted (HANDOFF.md §3.4). Older saves have none.
+    const gs=obj&&obj.geomSource;
+    state.geomSource=(gs&&typeof gs==="object")?{producer:String(gs.producer||""),producerFile:String(gs.producerFile||""),
+      producedAt:String(gs.producedAt||""),project:String(gs.project||""),
+      fields:Array.isArray(gs.fields)?gs.fields.map(String):[]}:null;
     if(Array.isArray(inp.spacings)&&inp.spacings.length>=1) state.spacings=inp.spacings.map(Number);
     renderSpacingTable();
     if(Array.isArray(inp.spans)&&inp.spans.length>=1) state.spans=inp.spans.map(Number);
@@ -3310,6 +3320,70 @@ function publishDL(silent){
 var bannerEl=null;
 function hideBanner(){ if(bannerEl){ bannerEl.remove(); bannerEl=null; } }
 function geomToken(g){ return (g&&((g.producedAt||'')+'@'+(g.producer||'')))||''; }
+/* ---- hand-off helpers (HANDOFF.md §3, §4.2) ----
+   `project` is a plain string from MCT / PS-Beam / ST-Girder and the envelope's
+   {name, bridgeId} object from Bridge Geometry; accept both. */
+function projName(g){ var p=g&&g.project; if(!p) return '';
+  if(typeof p==='string') return p;
+  if(typeof p==='object') return [p.name||'',p.bridgeId?('Bridge '+p.bridgeId):''].filter(Boolean).join(' · ');
+  return ''; }
+function isBG(g){ return !!g&&(g.producer==='Bridge Geometry'||g.producerFile==='Bridge Geometry.html'); }
+function fmtWhen(iso){ var d=new Date(iso); if(!iso||isNaN(d)) return '—';
+  var z=function(n){ return (n<10?'0':'')+n; };
+  return d.getFullYear()+'-'+z(d.getMonth()+1)+'-'+z(d.getDate())+' '+z(d.getHours())+':'+z(d.getMinutes()); }
+function escH(x){ return String(x==null?'':x).replace(/[&<>"]/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+/* Every number this receiver would use is checked before anything is applied (HANDOFF.md §3.2).
+   Units: the channel is feet / degrees; a payload that states any other unit is refused. */
+function validateGeom(g){
+  var e=[], i=(g&&g.inputs);
+  if(!g||typeof g!=='object') return ['not a geometry hand-off'];
+  if(!i||typeof i!=='object') return ['the hand-off has no inputs block'];
+  var fin=function(v){ return typeof v==='number'&&isFinite(v); };
+  if(g.units&&typeof g.units==='object'){
+    ['spans','spacings','OL','OR','de'].forEach(function(k){ if(g.units[k]!=null&&g.units[k]!=='ft') e.push(k+' is in "'+g.units[k]+'"; only ft is accepted'); });
+    if(g.units.skew!=null&&g.units.skew!=='deg') e.push('skew is in "'+g.units.skew+'"; only deg is accepted');
+  }
+  if(i.spans!=null){ if(!Array.isArray(i.spans)||!i.spans.length) e.push('spans must be a non-empty list');
+    else i.spans.forEach(function(v,k){ if(!fin(v)||v<=0) e.push('span '+(k+1)+' = '+v+' (must be a number > 0 ft)'); }); }
+  if(i.spacings!=null){ if(!Array.isArray(i.spacings)||!i.spacings.length) e.push('spacings must be a non-empty list');
+    else i.spacings.forEach(function(v,k){ if(!fin(v)||v<=0) e.push('spacing '+(k+1)+' = '+v+' (must be a number > 0 ft)'); }); }
+  if(g.Nb!=null&&(!fin(g.Nb)||g.Nb<2||Math.round(g.Nb)!==g.Nb)) e.push('Nb = '+g.Nb+' (must be a whole number ≥ 2)');
+  if(g.Nb!=null&&Array.isArray(i.spacings)&&i.spacings.length&&g.Nb!==i.spacings.length+1) e.push('Nb = '+g.Nb+' does not match '+i.spacings.length+' spacings');
+  if(i.skew!=null&&(!fin(i.skew)||i.skew<0||i.skew>=90)) e.push('skew = '+i.skew+' (must be 0 ≤ θ < 90 deg)');
+  ['OL','OR'].forEach(function(k){ if(i[k]!=null&&(!fin(i[k])||i[k]<0)) e.push(k+' = '+i[k]+' (must be a number ≥ 0 ft)'); });
+  ['ts','depth'].forEach(function(k){ if(i[k]!=null&&(!fin(i[k])||i[k]<=0)) e.push(k+' = '+i[k]+' (must be a number > 0)'); });
+  if(g.de!=null&&!fin(g.de)) e.push('d_e = '+g.de+' (must be a number)');
+  return e;
+}
+/* Exactly what a prefill will overwrite, current value -> incoming value, one line per field. */
+function geomOverwriteList(g){
+  var i=(g&&g.inputs)||{}, out=[], f=function(v){ return (v==null||v==='')?'—':String(v); };
+  if(Array.isArray(i.spans)) out.push('Spans: '+f((state.spans||[]).join(' / '))+' → '+i.spans.join(' / ')+' ft');
+  if(Array.isArray(i.spacings)){
+    out.push('Number of beams N_b: '+((state.spacings||[]).length+1)+' → '+(i.spacings.length+1));
+    out.push('Girder spacings: '+f((state.spacings||[]).join(' / '))+' → '+i.spacings.join(' / ')+' ft');
+  }
+  [['skew','Skew θ','deg'],['OL','Left overhang O_L','ft'],['OR','Right overhang O_R','ft'],['ts','Slab thickness t_s','in'],['depth','Beam depth d','in']].forEach(function(r){
+    if(i[r[0]]!=null&&$(r[0])) out.push(r[1]+': '+f($(r[0]).value)+' → '+i[r[0]]+' '+r[2]); });
+  if(i.OL==null&&g.de!=null&&$('OL')) out.push('Left overhang O_L: '+f($('OL').value)+' → d_e '+g.de+' ft + rail face offset');
+  return out;
+}
+/* The adopted source, on screen and in the printed calculation (HANDOFF.md §3.4). */
+function renderGeomSource(){
+  var gs=state.geomSource, el=document.getElementById('geomSrcLine');
+  if(!gs||!gs.producer){ if(el) el.style.display='none'; return; }
+  if(!el){ var tb=document.querySelector('#sheet .titleblock'); if(!tb) return;
+    el=document.createElement('div'); el.id='geomSrcLine';
+    el.style.cssText='margin:6px 0 0;padding:4px 8px;border:1px solid #c7d1db;border-left:4px solid #1c4fc4;font:12px/1.5 system-ui,sans-serif;color:#16212e';
+    tb.parentNode.insertBefore(el,tb.nextSibling); }
+  el.style.display='';
+  var LBL={spans:'spans',spacings:'girder spacing',skew:'skew',OL:'left overhang',OR:'right overhang',ts:'slab thickness',depth:'beam depth'};
+  var fl=(Array.isArray(gs.fields)&&gs.fields.length)?gs.fields.map(function(k){ return LBL[k]||k; }).join(', '):'layout';
+  el.innerHTML='<b>Layout geometry source:</b> '+escH(fl)
+    +' prefilled from <b>'+escH(gs.producer)+'</b>, '+escH(fmtWhen(gs.producedAt))
+    +(gs.project?' · project '+escH(gs.project):'')
+    +' <span style="color:#46586b">(inputs may have been edited since)</span>';
+}
 /* One line naming what moved, for the change log and the toast. Compares the
    incoming layout against what is on screen right now, not against the last
    payload -- the engineer may have edited these fields by hand since. */
@@ -3339,23 +3413,31 @@ function showBanner(g,token){
   bannerEl.style.cssText='max-width:1180px;margin:10px auto 0;padding:10px 14px;border:1.5px solid #1c4fc4;border-left:5px solid #1c4fc4;background:#eef4ff;font:13px/1.55 system-ui,sans-serif;color:#16212e;display:flex;flex-wrap:wrap;gap:10px;align-items:center';
   var spans=(g.inputs&&g.inputs.spans)||[];
   var txt=document.createElement('div'); txt.style.flex='1 1 320px';
-  txt.innerHTML='<b>Geometry received from '+(g.producer||'a design app')+'</b>'
-    +(g.project?' · '+g.project:'')+(g.memberLabel?' · '+g.memberLabel:'')
+  var pn=projName(g);
+  txt.innerHTML='<b>Geometry received from '+escH(g.producer||'a design app')+'</b>'
+    +' · '+escH(fmtWhen(g.producedAt))
+    +(pn?' · '+escH(pn):'')+(g.memberLabel?' · '+escH(g.memberLabel):'')
     +'<br><span style="font-size:12px;color:#46586b">'
     +(spans.length?spans.length+' span(s): '+spans.join(' / ')+' ft':'')
     +(g.inputs&&g.inputs.spacings?' · S = '+g.inputs.spacings[0]+' ft × '+((+g.Nb||g.inputs.spacings.length+1))+' beams':'')
     +(g.position?' · '+g.position+' girder':'')
-    +' — prefill this calculator? Your current inputs will be overwritten.</span>';
+    +' — prefill this calculator? Your current inputs will be overwritten.</span>'
+    // What exactly gets overwritten, and the producer's caveats (HANDOFF.md §2 notes, §3.1).
+    +'<div style="font-size:12px;margin-top:4px"><b>Will overwrite:</b><ul style="margin:2px 0 0 18px;padding:0">'
+    +geomOverwriteList(g).map(function(t){ return '<li>'+escH(t)+'</li>'; }).join('')+'</ul></div>'
+    +((Array.isArray(g.notes)&&g.notes.length)?'<div style="font-size:12px;margin-top:4px"><b>Notes from '+escH(g.producer||'the sender')+':</b><ul style="margin:2px 0 0 18px;padding:0">'
+      +g.notes.map(function(t){ return '<li>'+escH(t)+'</li>'; }).join('')+'</ul></div>':'');
   var yes=document.createElement('button'); yes.className='btn'; yes.textContent='Prefill from '+(g.producer||'design app');
   yes.style.cssText='background:#1c4fc4;color:#fff;border:1.5px solid #1c4fc4;padding:5px 12px;cursor:pointer;font-weight:600';
   var no=document.createElement('button'); no.className='btn'; no.textContent='Not now';
   no.style.cssText='background:#fff;border:1.5px solid #c7d1db;padding:5px 12px;cursor:pointer;color:#46586b';
   yes.onclick=function(){ applyGeom(g,token); };
-  no.onclick=function(){ try{localStorage.setItem(K_GEOM_SEEN,token);}catch(e){} hideBanner(); };
+  no.onclick=function(){ try{localStorage.setItem(K_GEOM_SEEN,token);}catch(e){} hideBanner(); paintGeomPull(); };
   bannerEl.appendChild(txt); bannerEl.appendChild(yes);
   // Locking from the banner does both halves at once: MCT starts republishing
   // on every layout change, and this app stops asking.
-  if(window.BridgeLocks&&BridgeLocks.ok()){
+  // Bridge Geometry hand-offs are never auto-followed (HANDOFF.md §3.5), so no Lock for them.
+  if(window.BridgeLocks&&BridgeLocks.ok()&&!isBG(g)){
     var lk=document.createElement('button'); lk.className='btn'; lk.textContent='\ud83d\udd13 Lock';
     lk.title='Follow this model\u2019s layout automatically. Spans, girder count, spacing and skew will update here whenever they change in MCT, without asking again.';
     lk.style.cssText='background:#fff7ed;border:1.5px solid #ea580c;padding:5px 12px;cursor:pointer;color:#9a3412;font-weight:600';
@@ -3373,6 +3455,11 @@ function showBanner(g,token){
 }
 function applyGeom(g,token,silent){
   try{
+    var bad=validateGeom(g);
+    if(bad.length){
+      if(!silent) alert('Geometry from '+(g&&g.producer||'the sender')+' was refused — nothing was changed:\n\n• '+bad.join('\n• '));
+      else flash('⚠ Geometry from '+(g&&g.producer||'the sender')+' refused: '+bad[0],true);
+      return false; }
     var what=silent?geomDelta(g):'';
     var inp=Object.assign({},g.inputs||{});
     // The geometry channel is LAYOUT ONLY: spans, spacing, skew, overhang, deck thickness.
@@ -3385,9 +3472,24 @@ function applyGeom(g,token,silent){
     ['type','beamShape','I','A','eg','n','boxB','boxI','boxJ'].forEach(function(k){ delete inp[k]; });
     // A design app sends d_e (exterior web → rail face); LLDF works with overhang OL and rail rL.
     if(inp.OL==null&&g.de!=null){ var rL=+($('rL')&&$('rL').value)||0; inp.OL=+((+g.de)+rL).toFixed(2); }
-    applyState({inputs:inp});
-    if(g.project&&$('mProject')&&!$('mProject').value) $('mProject').value=g.project;
+    if(isBG(g)){
+      // Bridge Geometry: overwrite ONLY the layout fields it sent. Start from the full current
+      // state so section, appurtenance, beam-class and figure inputs are left exactly as they are.
+      var full=serialize(false); full.inputs=Object.assign(full.inputs||{},inp);
+      applyState(full);
+    } else {
+      applyState({inputs:inp});
+    }
+    var pn=projName(g);
+    if(pn&&$('mProject')&&!$('mProject').value) $('mProject').value=pn;
     try{localStorage.setItem(K_GEOM_SEEN,token);}catch(e){}
+    // Record the source in the saved state (new optional field) and mark it adopted.
+    state.geomSource={producer:String(g.producer||''),producerFile:String(g.producerFile||''),
+      producedAt:String(g.producedAt||''),project:pn,
+      fields:['spans','spacings','skew','OL','OR','ts','depth'].filter(function(k){ return inp[k]!=null; })};
+    if(window.BridgeXfer) BridgeXfer.markAdopted('lldfGeom','lldf',g.producedAt||'');
+    renderGeomSource(); paintGeomPull();
+    if(typeof scheduleAutosave==='function') scheduleAutosave();
     hideBanner();
     if(silent){
       // Locked: no banner and no modal flash. The change log and the toast are
@@ -3520,13 +3622,53 @@ function checkGeom(){
   var token=geomToken(g);
   var seen=null; try{seen=localStorage.getItem(K_GEOM_SEEN);}catch(e){}
   if(seen===token) return;
+  var bad=validateGeom(g);
+  if(bad.length){ flash('⚠ Geometry from '+(g.producer||'a design app')+' refused: '+bad[0],true); return; }
   // Locked = standing consent. Adopt straight away and never raise the banner.
   // The version guard above still gets the last word: a payload this build
   // cannot read is reported, not silently swallowed.
-  if(window.BridgeLocks&&BridgeLocks.ok()&&BridgeLocks.isLocked('geometry')){
+  // Bridge Geometry is never auto-applied, even when locked: it always asks (HANDOFF.md §3.5).
+  if(!isBG(g)&&window.BridgeLocks&&BridgeLocks.ok()&&BridgeLocks.isLocked('geometry')){
     if(applyGeom(g,token,true)) return;
   }
   showBanner(g,token);
+}
+
+/* ---------- IN: explicit "Pull from <producer>" and "Import hand-off (JSON)" (HANDOFF.md §1, §3.1) ----------
+   Both only RAISE the prefill banner above; nothing is applied until "Prefill" is clicked there. */
+function _geomNewFlag(g){
+  if(!g) return false;
+  var at=null, seen=null; try{ at=localStorage.getItem(K_GEOM+'.updatedAt'); seen=localStorage.getItem(K_GEOM_SEEN); }catch(e){}
+  // Senders that use BridgeXfer stamp .updatedAt; the older senders (MCT / PS-Beam / ST-Girder) do not,
+  // so fall back to the banner's own "seen" token when .updatedAt does not belong to this payload.
+  if(window.BridgeXfer&&at&&at===g.producedAt) return BridgeXfer.isNew('lldfGeom','lldf');
+  return seen!==geomToken(g);
+}
+function paintGeomPull(){
+  var b=$('bxGeomPull'); if(!b) return;
+  var g=_geomAvail();
+  b.textContent=(g?'Pull from '+(g.producer||'design app'):'Pull geometry')+(_geomNewFlag(g)?' ●':'');
+  b.title=g?('Geometry sent by '+(g.producer||'a design app')+' at '+fmtWhen(g.producedAt)+(_geomNewFlag(g)?' — new data available, not yet adopted here':' — already adopted or dismissed')+'. Click to review it before applying.')
+           :'Nothing has been sent on the geometry channel yet. Use "Send to LL & DL" in Bridge Geometry (or a design app).';
+  b.style.fontWeight=_geomNewFlag(g)?'700':'';
+}
+function pullGeom(){
+  if(!window.BridgeXfer){ alert('Hand-off helper is not available in this browser.'); return; }
+  var r=BridgeXfer.read('lldfGeom','bridge-lldf-geometry',GEOM_SUPPORTED_VERSION);
+  if(r.error){ alert('Cannot pull geometry: '+r.error); return; }
+  var bad=validateGeom(r.payload);
+  if(bad.length){ alert('Geometry from '+(r.payload.producer||'the sender')+' was refused — nothing was changed:\n\n• '+bad.join('\n• ')); return; }
+  showBanner(r.payload,geomToken(r.payload));
+  if(bannerEl&&bannerEl.scrollIntoView) try{ bannerEl.scrollIntoView({block:'nearest'}); }catch(e){}
+}
+function importGeomFile(file){
+  if(!file||!window.BridgeXfer) return;
+  BridgeXfer.importFile(file,'bridge-lldf-geometry',GEOM_SUPPORTED_VERSION,function(r){
+    if(r.error){ alert('Cannot import this hand-off: '+r.error); return; }
+    var bad=validateGeom(r.payload);
+    if(bad.length){ alert('Geometry in this file was refused — nothing was changed:\n\n• '+bad.join('\n• ')); return; }
+    showBanner(r.payload,geomToken(r.payload));
+  });
 }
 
 /* ---------- wire up ---------- */
@@ -3622,8 +3764,17 @@ window.addEventListener('load',function(){
     window.run=function(){ var r=_run.apply(this,arguments); try{ autoPublish(); }catch(e){} return r; };
   }
   autoPublish();
+  var gp=$('bxGeomPull'); if(gp) gp.addEventListener('click',pullGeom);
+  var gi=$('bxGeomImport'), gf=$('bxGeomFile');
+  if(gi&&gf){ gi.addEventListener('click',function(){ gf.value=''; gf.click(); });
+    gf.addEventListener('change',function(){ importGeomFile(gf.files&&gf.files[0]); }); }
+  // Show the recorded source after any recalculation (project load, import, prefill).
+  if(typeof window.run==='function'){ var _run2=window.run;
+    window.run=function(){ var r=_run2.apply(this,arguments); try{ renderGeomSource(); }catch(e){} return r; }; }
+  renderGeomSource(); paintGeomPull();
   checkGeom();
   window.addEventListener('storage',function(e){ if(!e.key||e.key===K_GEOM) checkGeom(); });
+  window.addEventListener('storage',function(e){ if(!e.key||e.key.indexOf(K_GEOM)===0) paintGeomPull(); });
   // Locking from any app has to pull the pending layout in immediately rather
   // than waiting for MCT's next publish.
   if(window.BridgeLocks&&BridgeLocks.ok()) BridgeLocks.onChange(function(){ checkGeom(); });

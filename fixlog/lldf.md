@@ -477,3 +477,417 @@ Feature: hand-off (no result change). Sender side of lldf → Moving Load Genera
 - **How verified:** `node --check` on every plain inline script of both files (no JSX in either). End-to-end in node/jsdom with one shared localStorage stub (64 checks, all pass): lldf.html loaded, set to 2 spans 100 + 120 ft, skew 20°, defaults otherwise (5 girders @ 9.75 ft, Kg = 1,255,067 in⁴), its real "Send DFs to Design Apps" button clicked; Moving Load Generator.html loaded on the same storage, real "Pull from LL & DL Distribution" → dialog → Apply. Inputs checked equal to the mapped values (interior: span 1 0.7598 / 0.9898, span 2 0.7234 / 0.9929, negative moment 0.7405); exterior and per-beam choices checked; spans only changed with the option ticked; rail DFs untouched; adopted marker written; `lldfSource` in the autosave and restored on reload; fatigue warning quotes g_fat 0.4352 / 0.6638 / 0.4208 and the analysis still uses the DF inputs; report has the source row. JSON export (lldf) → import (Moving Load) round trip. Refusals: wrong `_schema`, `schemaVersion` 2, corrupt JSON (storage and file), negative DF, DF as a string, non-finite span, `units.spans:"m"`. Hand check of span 1 interior: Table 4.6.2.2.2b-1, Kg/(12 L ts³) = 1,255,067 / (12 × 100 × 512) = 2.0428; g = 0.075 + (9.75/9.5)^0.6 (9.75/100)^0.2 (2.0428)^0.1 = 0.7598 (two lanes, governs over one lane 0.5222; skew 20° < 30° so no moment reduction); shear 0.2 + 9.75/12 − (9.75/35)² = 0.9349 × skew factor 1 + 0.20 (1/2.0428)^0.3 tan 20° = 1.0588 → 0.9898. Both match lldf and the values written into Moving Load. No result change: with no hand-off, Moving Load results (all 342 section/reaction extremes in the default, a 3-span and the fatigue configuration, plus the metric tiles and warnings) are byte-identical to the file before this change. lldf: the existing payload fields from the old and new files are identical (only timestamps differ).
 - **Other copies:** none (lldf is the only sender on this channel).
 - **Open items:** the payload still has `project` as a string and no `producerFile`, kept for the existing receivers; documented in HANDOFF.md §4.3.
+
+## 2026-10-04 — PR: claude/conn-geometry-lldf (PR link added after merge)
+
+Feature (no result change): lldf receives the `bridgeSuite.v1.lldfGeom` hand-off from **Bridge Geometry** (HANDOFF.md §4.2), in addition to MCT / PS-Beam / ST-Girder. The existing prefill banner is reused and extended. Hunks are listed in file order; the code is exact.
+
+### H1. Geometry hand-off from Bridge Geometry: pull, import, validation, source record   [feature: hand-off (no result change)]
+- **Where:**
+  - Header `.projbar` → buttons. Anchor: `id="projExport"` (hunk 1).
+  - `serialize()` → anchor: `out.figures=(state.refImgs||[])` (hunk 2).
+  - `applyState()` → anchor: `renderRefImgs();` (hunk 3).
+  - Bridge Suite integration IIFE: `geomToken()` + new helpers `projName`, `isBG`, `fmtWhen`, `escH`, `validateGeom`, `geomOverwriteList`, `renderGeomSource` (hunk 4). Anchor: `function geomToken(g)`.
+  - `showBanner()` (hunks 5–6). Anchor: `Geometry received from`.
+  - `applyGeom()` (hunks 7–8). Anchor: `function applyGeom(g,token,silent)`.
+  - `checkGeom()` + new `_geomNewFlag`, `paintGeomPull`, `pullGeom`, `importGeomFile` (hunks 9–10). Anchor: `if(seen===token) return;`.
+  - `load` handler wiring (hunk 11). Anchor: `autoPublish();\n  checkGeom();`.
+- **Problem:** none (feature). Approved connection Bridge Geometry → lldf on channel `lldfGeom`.
+- **What changes for the user:**
+  - New buttons **"Pull from <producer>"** (shows ● when a payload is new and not adopted, via `BridgeXfer.isNew` when the sender stamps `.updatedAt`, else the banner's existing seen token) and **"Import hand-off (JSON)"**. Both only raise the banner.
+  - The banner also shows the time, the project (string or `{name,bridgeId}`), a "Will overwrite" list (current → new for every field sent) and the sender's `notes`.
+  - Every number is validated before use (spans, spacings > 0; Nb whole and = spacings + 1; 0 ≤ skew < 90; O_L/O_R ≥ 0; t_s, d > 0; d_e finite), and any unit other than ft/deg is refused. This check applies to all producers.
+  - A Bridge Geometry payload overwrites **only** spans, spacings/N_b, skew, O_L, O_R: it is applied on top of `serialize(false)`, so section, appurtenance, beam class, load overrides and figures are kept. Other producers keep the old `applyState({inputs})` path unchanged.
+  - Bridge Geometry payloads are never auto-applied, even when the geometry channel is locked, and the banner offers no Lock for them. MCT / PS-Beam / ST-Girder lock behaviour is unchanged.
+  - On adoption: `state.geomSource = {producer, producerFile, producedAt, project, fields}` (**new optional field** in the saved JSON and autosave; older saves load with none), `BridgeXfer.markAdopted('lldfGeom','lldf',producedAt)`, and a "Layout geometry source" line under the title block (inside `#sheet`, so it prints).
+- **Mapping (Bridge Geometry → lldf):**
+
+| Bridge Geometry (source) | Payload field | lldf input | Units |
+|---|---|---|---|
+| Chord distance between consecutive supports: `supportChordT(sta[i+1]) − supportChordT(sta[i])`, support centerlines (default) or bearing lines (choice) | `inputs.spans[]` | Span lengths L₁…Lₙ (`state.spans`) | ft, rounded 0.001 |
+| \|skew\| per support (degrees from the normal to the chord); largest (default), smallest or average (choice) | `inputs.skew` | Skew θ (`#skew`) | deg |
+| Differences of the sorted girder offsets (global, or one span's override set, choice) | `inputs.spacings[]` | Girder spacing table (`state.spacings`) | ft, rounded 0.001 |
+| Number of girders | `Nb` | N_b (= spacings + 1) | — |
+| girder 1 offset − left deck edge | `inputs.OL` | Left overhang O_L (`#OL`) | ft |
+| right deck edge − last girder offset | `inputs.OR` | Right overhang O_R (`#OR`) | ft |
+| shared project info, else library entry name | `project{name,bridgeId}` | Project (`#mProject`) only if blank | — |
+| (not sent) | `de:null` | lldf keeps its own curb/railing inputs; d_e unchanged in method | — |
+
+- **Governing provision:** n/a. No formula, factor, default, unit or code reference changed. The fields filled are the existing inputs of Art. 4.6.2.2 (L, S, N_b, θ) and the overhangs.
+- **Saved data:** no key or format changed. Added the optional `geomSource` field only. The hand-off keys used are `bridgeSuite.v1.lldfGeom`, `.lldfGeom.updatedAt`, `.lldfGeom.adopted.lldf` (HANDOFF.md §2) and the existing `.lldfGeom.seen`.
+
+HUNK 1 (≈ line 341 of the old file)
+- **Before:**
+  ```html
+          <button class="btn sm" id="bxProjUse" title="Fill Project, Structure No., Calc. by, Checked and Date from the project info shared by another tool (asks first; never blanks a field)">Use shared project info</button>
+          <button class="btn sm" id="bxProjShare" title="Share this calculation's project info with the other tools">Share project info</button>
+          <button class="btn sm" id="projExport" title="Download this calculation as a JSON file">Export JSON</button>
+          <button class="btn sm" id="projImport" title="Load a calculation from a JSON file">Import JSON</button>
+  ```
+- **After:**
+  ```html
+          <button class="btn sm" id="bxProjUse" title="Fill Project, Structure No., Calc. by, Checked and Date from the project info shared by another tool (asks first; never blanks a field)">Use shared project info</button>
+          <button class="btn sm" id="bxProjShare" title="Share this calculation's project info with the other tools">Share project info</button>
+          <button class="btn sm" id="bxGeomPull" title="Review the girder layout another tool has sent (spans, spacing, skew, overhangs) and choose whether to apply it">Pull geometry</button>
+          <button class="btn sm" id="bxGeomImport" title="Load a geometry hand-off file (bridge-lldf-geometry JSON) exported by Bridge Geometry or a design app">Import hand-off (JSON)</button>
+          <input type="file" id="bxGeomFile" accept="application/json,.json" style="display:none" />
+          <button class="btn sm" id="projExport" title="Download this calculation as a JSON file">Export JSON</button>
+          <button class="btn sm" id="projImport" title="Load a calculation from a JSON file">Import JSON</button>
+  ```
+
+HUNK 2 (≈ line 2951 of the old file)
+- **Before:**
+  ```js
+    // Section 3.9 reference images travel with the project, alongside the inputs but not part of them.
+    out.figures=(state.refImgs||[]).map(f=>({name:f.name||"",cap:f.cap||"",ref:f.ref||"",w:f.w||0,h:f.h||0,src:f.src}));
+    if(includeResults){
+      try{
+  ```
+- **After:**
+  ```js
+    // Section 3.9 reference images travel with the project, alongside the inputs but not part of them.
+    out.figures=(state.refImgs||[]).map(f=>({name:f.name||"",cap:f.cap||"",ref:f.ref||"",w:f.w||0,h:f.h||0,src:f.src}));
+    // Where the layout geometry last came from (bridgeSuite.v1.lldfGeom hand-off). New optional field; absent in older saves.
+    if(state.geomSource) out.geomSource=Object.assign({},state.geomSource);
+    if(includeResults){
+      try{
+  ```
+
+HUNK 3 (≈ line 2973 of the old file)
+- **Before:**
+  ```js
+        : [];
+      renderRefImgs();
+      if(Array.isArray(inp.spacings)&&inp.spacings.length>=1) state.spacings=inp.spacings.map(Number);
+      renderSpacingTable();
+  ```
+- **After:**
+  ```js
+        : [];
+      renderRefImgs();
+      // Optional source record of the last geometry hand-off adopted (HANDOFF.md §3.4). Older saves have none.
+      const gs=obj&&obj.geomSource;
+      state.geomSource=(gs&&typeof gs==="object")?{producer:String(gs.producer||""),producerFile:String(gs.producerFile||""),
+        producedAt:String(gs.producedAt||""),project:String(gs.project||""),
+        fields:Array.isArray(gs.fields)?gs.fields.map(String):[]}:null;
+      if(Array.isArray(inp.spacings)&&inp.spacings.length>=1) state.spacings=inp.spacings.map(Number);
+      renderSpacingTable();
+  ```
+
+HUNK 4 (≈ line 3297 of the old file)
+- **Before:**
+  ```js
+  function hideBanner(){ if(bannerEl){ bannerEl.remove(); bannerEl=null; } }
+  function geomToken(g){ return (g&&((g.producedAt||'')+'@'+(g.producer||'')))||''; }
+  /* One line naming what moved, for the change log and the toast. Compares the
+     incoming layout against what is on screen right now, not against the last
+  ```
+- **After:**
+  ```js
+  function hideBanner(){ if(bannerEl){ bannerEl.remove(); bannerEl=null; } }
+  function geomToken(g){ return (g&&((g.producedAt||'')+'@'+(g.producer||'')))||''; }
+  /* ---- hand-off helpers (HANDOFF.md §3, §4.2) ----
+     `project` is a plain string from MCT / PS-Beam / ST-Girder and the envelope's
+     {name, bridgeId} object from Bridge Geometry; accept both. */
+  function projName(g){ var p=g&&g.project; if(!p) return '';
+    if(typeof p==='string') return p;
+    if(typeof p==='object') return [p.name||'',p.bridgeId?('Bridge '+p.bridgeId):''].filter(Boolean).join(' · ');
+    return ''; }
+  function isBG(g){ return !!g&&(g.producer==='Bridge Geometry'||g.producerFile==='Bridge Geometry.html'); }
+  function fmtWhen(iso){ var d=new Date(iso); if(!iso||isNaN(d)) return '—';
+    var z=function(n){ return (n<10?'0':'')+n; };
+    return d.getFullYear()+'-'+z(d.getMonth()+1)+'-'+z(d.getDate())+' '+z(d.getHours())+':'+z(d.getMinutes()); }
+  function escH(x){ return String(x==null?'':x).replace(/[&<>"]/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+  /* Every number this receiver would use is checked before anything is applied (HANDOFF.md §3.2).
+     Units: the channel is feet / degrees; a payload that states any other unit is refused. */
+  function validateGeom(g){
+    var e=[], i=(g&&g.inputs);
+    if(!g||typeof g!=='object') return ['not a geometry hand-off'];
+    if(!i||typeof i!=='object') return ['the hand-off has no inputs block'];
+    var fin=function(v){ return typeof v==='number'&&isFinite(v); };
+    if(g.units&&typeof g.units==='object'){
+      ['spans','spacings','OL','OR','de'].forEach(function(k){ if(g.units[k]!=null&&g.units[k]!=='ft') e.push(k+' is in "'+g.units[k]+'"; only ft is accepted'); });
+      if(g.units.skew!=null&&g.units.skew!=='deg') e.push('skew is in "'+g.units.skew+'"; only deg is accepted');
+    }
+    if(i.spans!=null){ if(!Array.isArray(i.spans)||!i.spans.length) e.push('spans must be a non-empty list');
+      else i.spans.forEach(function(v,k){ if(!fin(v)||v<=0) e.push('span '+(k+1)+' = '+v+' (must be a number > 0 ft)'); }); }
+    if(i.spacings!=null){ if(!Array.isArray(i.spacings)||!i.spacings.length) e.push('spacings must be a non-empty list');
+      else i.spacings.forEach(function(v,k){ if(!fin(v)||v<=0) e.push('spacing '+(k+1)+' = '+v+' (must be a number > 0 ft)'); }); }
+    if(g.Nb!=null&&(!fin(g.Nb)||g.Nb<2||Math.round(g.Nb)!==g.Nb)) e.push('Nb = '+g.Nb+' (must be a whole number ≥ 2)');
+    if(g.Nb!=null&&Array.isArray(i.spacings)&&i.spacings.length&&g.Nb!==i.spacings.length+1) e.push('Nb = '+g.Nb+' does not match '+i.spacings.length+' spacings');
+    if(i.skew!=null&&(!fin(i.skew)||i.skew<0||i.skew>=90)) e.push('skew = '+i.skew+' (must be 0 ≤ θ < 90 deg)');
+    ['OL','OR'].forEach(function(k){ if(i[k]!=null&&(!fin(i[k])||i[k]<0)) e.push(k+' = '+i[k]+' (must be a number ≥ 0 ft)'); });
+    ['ts','depth'].forEach(function(k){ if(i[k]!=null&&(!fin(i[k])||i[k]<=0)) e.push(k+' = '+i[k]+' (must be a number > 0)'); });
+    if(g.de!=null&&!fin(g.de)) e.push('d_e = '+g.de+' (must be a number)');
+    return e;
+  }
+  /* Exactly what a prefill will overwrite, current value -> incoming value, one line per field. */
+  function geomOverwriteList(g){
+    var i=(g&&g.inputs)||{}, out=[], f=function(v){ return (v==null||v==='')?'—':String(v); };
+    if(Array.isArray(i.spans)) out.push('Spans: '+f((state.spans||[]).join(' / '))+' → '+i.spans.join(' / ')+' ft');
+    if(Array.isArray(i.spacings)){
+      out.push('Number of beams N_b: '+((state.spacings||[]).length+1)+' → '+(i.spacings.length+1));
+      out.push('Girder spacings: '+f((state.spacings||[]).join(' / '))+' → '+i.spacings.join(' / ')+' ft');
+    }
+    [['skew','Skew θ','deg'],['OL','Left overhang O_L','ft'],['OR','Right overhang O_R','ft'],['ts','Slab thickness t_s','in'],['depth','Beam depth d','in']].forEach(function(r){
+      if(i[r[0]]!=null&&$(r[0])) out.push(r[1]+': '+f($(r[0]).value)+' → '+i[r[0]]+' '+r[2]); });
+    if(i.OL==null&&g.de!=null&&$('OL')) out.push('Left overhang O_L: '+f($('OL').value)+' → d_e '+g.de+' ft + rail face offset');
+    return out;
+  }
+  /* The adopted source, on screen and in the printed calculation (HANDOFF.md §3.4). */
+  function renderGeomSource(){
+    var gs=state.geomSource, el=document.getElementById('geomSrcLine');
+    if(!gs||!gs.producer){ if(el) el.style.display='none'; return; }
+    if(!el){ var tb=document.querySelector('#sheet .titleblock'); if(!tb) return;
+      el=document.createElement('div'); el.id='geomSrcLine';
+      el.style.cssText='margin:6px 0 0;padding:4px 8px;border:1px solid #c7d1db;border-left:4px solid #1c4fc4;font:12px/1.5 system-ui,sans-serif;color:#16212e';
+      tb.parentNode.insertBefore(el,tb.nextSibling); }
+    el.style.display='';
+    var LBL={spans:'spans',spacings:'girder spacing',skew:'skew',OL:'left overhang',OR:'right overhang',ts:'slab thickness',depth:'beam depth'};
+    var fl=(Array.isArray(gs.fields)&&gs.fields.length)?gs.fields.map(function(k){ return LBL[k]||k; }).join(', '):'layout';
+    el.innerHTML='<b>Layout geometry source:</b> '+escH(fl)
+      +' prefilled from <b>'+escH(gs.producer)+'</b>, '+escH(fmtWhen(gs.producedAt))
+      +(gs.project?' · project '+escH(gs.project):'')
+      +' <span style="color:#46586b">(inputs may have been edited since)</span>';
+  }
+  /* One line naming what moved, for the change log and the toast. Compares the
+     incoming layout against what is on screen right now, not against the last
+  ```
+
+HUNK 5 (≈ line 3326 of the old file)
+- **Before:**
+  ```js
+    var spans=(g.inputs&&g.inputs.spans)||[];
+    var txt=document.createElement('div'); txt.style.flex='1 1 320px';
+    txt.innerHTML='<b>Geometry received from '+(g.producer||'a design app')+'</b>'
+      +(g.project?' · '+g.project:'')+(g.memberLabel?' · '+g.memberLabel:'')
+      +'<br><span style="font-size:12px;color:#46586b">'
+      +(spans.length?spans.length+' span(s): '+spans.join(' / ')+' ft':'')
+      +(g.inputs&&g.inputs.spacings?' · S = '+g.inputs.spacings[0]+' ft × '+((+g.Nb||g.inputs.spacings.length+1))+' beams':'')
+      +(g.position?' · '+g.position+' girder':'')
+      +' — prefill this calculator? Your current inputs will be overwritten.</span>';
+    var yes=document.createElement('button'); yes.className='btn'; yes.textContent='Prefill from '+(g.producer||'design app');
+    yes.style.cssText='background:#1c4fc4;color:#fff;border:1.5px solid #1c4fc4;padding:5px 12px;cursor:pointer;font-weight:600';
+  ```
+- **After:**
+  ```js
+    var spans=(g.inputs&&g.inputs.spans)||[];
+    var txt=document.createElement('div'); txt.style.flex='1 1 320px';
+    var pn=projName(g);
+    txt.innerHTML='<b>Geometry received from '+escH(g.producer||'a design app')+'</b>'
+      +' · '+escH(fmtWhen(g.producedAt))
+      +(pn?' · '+escH(pn):'')+(g.memberLabel?' · '+escH(g.memberLabel):'')
+      +'<br><span style="font-size:12px;color:#46586b">'
+      +(spans.length?spans.length+' span(s): '+spans.join(' / ')+' ft':'')
+      +(g.inputs&&g.inputs.spacings?' · S = '+g.inputs.spacings[0]+' ft × '+((+g.Nb||g.inputs.spacings.length+1))+' beams':'')
+      +(g.position?' · '+g.position+' girder':'')
+      +' — prefill this calculator? Your current inputs will be overwritten.</span>'
+      // What exactly gets overwritten, and the producer's caveats (HANDOFF.md §2 notes, §3.1).
+      +'<div style="font-size:12px;margin-top:4px"><b>Will overwrite:</b><ul style="margin:2px 0 0 18px;padding:0">'
+      +geomOverwriteList(g).map(function(t){ return '<li>'+escH(t)+'</li>'; }).join('')+'</ul></div>'
+      +((Array.isArray(g.notes)&&g.notes.length)?'<div style="font-size:12px;margin-top:4px"><b>Notes from '+escH(g.producer||'the sender')+':</b><ul style="margin:2px 0 0 18px;padding:0">'
+        +g.notes.map(function(t){ return '<li>'+escH(t)+'</li>'; }).join('')+'</ul></div>':'');
+    var yes=document.createElement('button'); yes.className='btn'; yes.textContent='Prefill from '+(g.producer||'design app');
+    yes.style.cssText='background:#1c4fc4;color:#fff;border:1.5px solid #1c4fc4;padding:5px 12px;cursor:pointer;font-weight:600';
+  ```
+
+HUNK 6 (≈ line 3338 of the old file)
+- **Before:**
+  ```js
+    no.style.cssText='background:#fff;border:1.5px solid #c7d1db;padding:5px 12px;cursor:pointer;color:#46586b';
+    yes.onclick=function(){ applyGeom(g,token); };
+    no.onclick=function(){ try{localStorage.setItem(K_GEOM_SEEN,token);}catch(e){} hideBanner(); };
+    bannerEl.appendChild(txt); bannerEl.appendChild(yes);
+    // Locking from the banner does both halves at once: MCT starts republishing
+    // on every layout change, and this app stops asking.
+    if(window.BridgeLocks&&BridgeLocks.ok()){
+      var lk=document.createElement('button'); lk.className='btn'; lk.textContent='\ud83d\udd13 Lock';
+      lk.title='Follow this model\u2019s layout automatically. Spans, girder count, spacing and skew will update here whenever they change in MCT, without asking again.';
+  ```
+- **After:**
+  ```js
+    no.style.cssText='background:#fff;border:1.5px solid #c7d1db;padding:5px 12px;cursor:pointer;color:#46586b';
+    yes.onclick=function(){ applyGeom(g,token); };
+    no.onclick=function(){ try{localStorage.setItem(K_GEOM_SEEN,token);}catch(e){} hideBanner(); paintGeomPull(); };
+    bannerEl.appendChild(txt); bannerEl.appendChild(yes);
+    // Locking from the banner does both halves at once: MCT starts republishing
+    // on every layout change, and this app stops asking.
+    // Bridge Geometry hand-offs are never auto-followed (HANDOFF.md §3.5), so no Lock for them.
+    if(window.BridgeLocks&&BridgeLocks.ok()&&!isBG(g)){
+      var lk=document.createElement('button'); lk.className='btn'; lk.textContent='\ud83d\udd13 Lock';
+      lk.title='Follow this model\u2019s layout automatically. Spans, girder count, spacing and skew will update here whenever they change in MCT, without asking again.';
+  ```
+
+HUNK 7 (≈ line 3360 of the old file)
+- **Before:**
+  ```js
+  function applyGeom(g,token,silent){
+    try{
+      var what=silent?geomDelta(g):'';
+      var inp=Object.assign({},g.inputs||{});
+  ```
+- **After:**
+  ```js
+  function applyGeom(g,token,silent){
+    try{
+      var bad=validateGeom(g);
+      if(bad.length){
+        if(!silent) alert('Geometry from '+(g&&g.producer||'the sender')+' was refused — nothing was changed:\n\n• '+bad.join('\n• '));
+        else flash('⚠ Geometry from '+(g&&g.producer||'the sender')+' refused: '+bad[0],true);
+        return false; }
+      var what=silent?geomDelta(g):'';
+      var inp=Object.assign({},g.inputs||{});
+  ```
+
+HUNK 8 (≈ line 3372 of the old file)
+- **Before:**
+  ```js
+      // A design app sends d_e (exterior web → rail face); LLDF works with overhang OL and rail rL.
+      if(inp.OL==null&&g.de!=null){ var rL=+($('rL')&&$('rL').value)||0; inp.OL=+((+g.de)+rL).toFixed(2); }
+      applyState({inputs:inp});
+      if(g.project&&$('mProject')&&!$('mProject').value) $('mProject').value=g.project;
+      try{localStorage.setItem(K_GEOM_SEEN,token);}catch(e){}
+      hideBanner();
+      if(silent){
+  ```
+- **After:**
+  ```js
+      // A design app sends d_e (exterior web → rail face); LLDF works with overhang OL and rail rL.
+      if(inp.OL==null&&g.de!=null){ var rL=+($('rL')&&$('rL').value)||0; inp.OL=+((+g.de)+rL).toFixed(2); }
+      if(isBG(g)){
+        // Bridge Geometry: overwrite ONLY the layout fields it sent. Start from the full current
+        // state so section, appurtenance, beam-class and figure inputs are left exactly as they are.
+        var full=serialize(false); full.inputs=Object.assign(full.inputs||{},inp);
+        applyState(full);
+      } else {
+        applyState({inputs:inp});
+      }
+      var pn=projName(g);
+      if(pn&&$('mProject')&&!$('mProject').value) $('mProject').value=pn;
+      try{localStorage.setItem(K_GEOM_SEEN,token);}catch(e){}
+      // Record the source in the saved state (new optional field) and mark it adopted.
+      state.geomSource={producer:String(g.producer||''),producerFile:String(g.producerFile||''),
+        producedAt:String(g.producedAt||''),project:pn,
+        fields:['spans','spacings','skew','OL','OR','ts','depth'].filter(function(k){ return inp[k]!=null; })};
+      if(window.BridgeXfer) BridgeXfer.markAdopted('lldfGeom','lldf',g.producedAt||'');
+      renderGeomSource(); paintGeomPull();
+      if(typeof scheduleAutosave==='function') scheduleAutosave();
+      hideBanner();
+      if(silent){
+  ```
+
+HUNK 9 (≈ line 3507 of the old file)
+- **Before:**
+  ```js
+    var seen=null; try{seen=localStorage.getItem(K_GEOM_SEEN);}catch(e){}
+    if(seen===token) return;
+    // Locked = standing consent. Adopt straight away and never raise the banner.
+    // The version guard above still gets the last word: a payload this build
+    // cannot read is reported, not silently swallowed.
+    if(window.BridgeLocks&&BridgeLocks.ok()&&BridgeLocks.isLocked('geometry')){
+      if(applyGeom(g,token,true)) return;
+    }
+  ```
+- **After:**
+  ```js
+    var seen=null; try{seen=localStorage.getItem(K_GEOM_SEEN);}catch(e){}
+    if(seen===token) return;
+    var bad=validateGeom(g);
+    if(bad.length){ flash('⚠ Geometry from '+(g.producer||'a design app')+' refused: '+bad[0],true); return; }
+    // Locked = standing consent. Adopt straight away and never raise the banner.
+    // The version guard above still gets the last word: a payload this build
+    // cannot read is reported, not silently swallowed.
+    // Bridge Geometry is never auto-applied, even when locked: it always asks (HANDOFF.md §3.5).
+    if(!isBG(g)&&window.BridgeLocks&&BridgeLocks.ok()&&BridgeLocks.isLocked('geometry')){
+      if(applyGeom(g,token,true)) return;
+    }
+  ```
+
+HUNK 10 (≈ line 3516 of the old file)
+- **Before:**
+  ```js
+  }
+
+  /* ---------- wire up ---------- */
+  // Navigate between suite apps: post to the parent MCT when embedded (stay in one window), else open/return.
+  ```
+- **After:**
+  ```js
+  }
+
+  /* ---------- IN: explicit "Pull from <producer>" and "Import hand-off (JSON)" (HANDOFF.md §1, §3.1) ----------
+     Both only RAISE the prefill banner above; nothing is applied until "Prefill" is clicked there. */
+  function _geomNewFlag(g){
+    if(!g) return false;
+    var at=null, seen=null; try{ at=localStorage.getItem(K_GEOM+'.updatedAt'); seen=localStorage.getItem(K_GEOM_SEEN); }catch(e){}
+    // Senders that use BridgeXfer stamp .updatedAt; the older senders (MCT / PS-Beam / ST-Girder) do not,
+    // so fall back to the banner's own "seen" token when .updatedAt does not belong to this payload.
+    if(window.BridgeXfer&&at&&at===g.producedAt) return BridgeXfer.isNew('lldfGeom','lldf');
+    return seen!==geomToken(g);
+  }
+  function paintGeomPull(){
+    var b=$('bxGeomPull'); if(!b) return;
+    var g=_geomAvail();
+    b.textContent=(g?'Pull from '+(g.producer||'design app'):'Pull geometry')+(_geomNewFlag(g)?' ●':'');
+    b.title=g?('Geometry sent by '+(g.producer||'a design app')+' at '+fmtWhen(g.producedAt)+(_geomNewFlag(g)?' — new data available, not yet adopted here':' — already adopted or dismissed')+'. Click to review it before applying.')
+             :'Nothing has been sent on the geometry channel yet. Use "Send to LL & DL" in Bridge Geometry (or a design app).';
+    b.style.fontWeight=_geomNewFlag(g)?'700':'';
+  }
+  function pullGeom(){
+    if(!window.BridgeXfer){ alert('Hand-off helper is not available in this browser.'); return; }
+    var r=BridgeXfer.read('lldfGeom','bridge-lldf-geometry',GEOM_SUPPORTED_VERSION);
+    if(r.error){ alert('Cannot pull geometry: '+r.error); return; }
+    var bad=validateGeom(r.payload);
+    if(bad.length){ alert('Geometry from '+(r.payload.producer||'the sender')+' was refused — nothing was changed:\n\n• '+bad.join('\n• ')); return; }
+    showBanner(r.payload,geomToken(r.payload));
+    if(bannerEl&&bannerEl.scrollIntoView) try{ bannerEl.scrollIntoView({block:'nearest'}); }catch(e){}
+  }
+  function importGeomFile(file){
+    if(!file||!window.BridgeXfer) return;
+    BridgeXfer.importFile(file,'bridge-lldf-geometry',GEOM_SUPPORTED_VERSION,function(r){
+      if(r.error){ alert('Cannot import this hand-off: '+r.error); return; }
+      var bad=validateGeom(r.payload);
+      if(bad.length){ alert('Geometry in this file was refused — nothing was changed:\n\n• '+bad.join('\n• ')); return; }
+      showBanner(r.payload,geomToken(r.payload));
+    });
+  }
+
+  /* ---------- wire up ---------- */
+  // Navigate between suite apps: post to the parent MCT when embedded (stay in one window), else open/return.
+  ```
+
+HUNK 11 (≈ line 3605 of the old file)
+- **Before:**
+  ```js
+    }
+    autoPublish();
+    checkGeom();
+    window.addEventListener('storage',function(e){ if(!e.key||e.key===K_GEOM) checkGeom(); });
+    // Locking from any app has to pull the pending layout in immediately rather
+    // than waiting for MCT's next publish.
+  ```
+- **After:**
+  ```js
+    }
+    autoPublish();
+    var gp=$('bxGeomPull'); if(gp) gp.addEventListener('click',pullGeom);
+    var gi=$('bxGeomImport'), gf=$('bxGeomFile');
+    if(gi&&gf){ gi.addEventListener('click',function(){ gf.value=''; gf.click(); });
+      gf.addEventListener('change',function(){ importGeomFile(gf.files&&gf.files[0]); }); }
+    // Show the recorded source after any recalculation (project load, import, prefill).
+    if(typeof window.run==='function'){ var _run2=window.run;
+      window.run=function(){ var r=_run2.apply(this,arguments); try{ renderGeomSource(); }catch(e){} return r; }; }
+    renderGeomSource(); paintGeomPull();
+    checkGeom();
+    window.addEventListener('storage',function(e){ if(!e.key||e.key===K_GEOM) checkGeom(); });
+    window.addEventListener('storage',function(e){ if(!e.key||e.key.indexOf(K_GEOM)===0) paintGeomPull(); });
+    // Locking from any app has to pull the pending layout in immediately rather
+    // than waiting for MCT's next publish.
+  ```
+
+- **Check case (Bridge Geometry Example 2, "3-Span Skewed Overpass"):** stations 11+00 / 12+50 / 14+00 / 15+50 on a tangent, skew 25° at all supports, girders −22.5 … +22.5 at 9 ft, deck edges ±26 ft. Sent: spans 150 / 150 / 150 ft, θ = 25°, spacings 9 × 5, N_b = 6, O_L = O_R = −22.5 − (−26) = 3.5 ft. After "Prefill", lldf (type k defaults) gives the interior g_M = 0.6438 and g_V = 0.959, and the exterior g_M = 0.800 and g_V = 0.868. Before (lldf defaults: L = 120, 5 @ 9.75, θ = 0) the values were interior 0.7234 / 0.9349 and exterior 0.8923 / 0.8923. The change is only in the inputs; the method is unchanged.
+- **How verified:** `node --check` on every inline script. jsdom end-to-end test with one shared localStorage stub: Bridge Geometry's real send dialog → lldf's real banner → Prefill. The inputs equal the payload, every other serialized input is unchanged, `geomSource` is saved, adopted is marked, the dot clears and the source line is in `#sheet`. The JSON export → import path was also tested. Wrong `_schema`, `schemaVersion` 2/3, corrupt JSON, a negative span, a non-numeric skew and `units.spans:"m"` are all refused (file and storage paths) with the inputs unchanged. An old-style MCT payload (string project, no units) still prefills as before, and the lock still auto-applies it, while a Bridge Geometry payload under lock only raises the banner. **No-hand-off regression:** the original and new lldf.html, run with an empty store, give identical `computeBridge` members/geo/Kg and identical `serialize(true)` for 4 input sets.
+- **Other copies:** BridgeXfer v1 (unchanged here) is in index.html, lldf.html, psbeam.html, stgirder.html, Moving Load Generator.html, Bridge Geometry.html.
+- **Open items:**
+  - O-H1. The existing prefill for MCT / PS-Beam / ST-Girder calls `applyState({inputs})`, which also clears reference figures, beam-class overrides, load overrides and user loads (the MassDOT module's `applyState` wrapper resets them when absent). Not changed for those producers; the Bridge Geometry path avoids it. Fix for all producers?
+  - O-H2. Validation now refuses a negative skew or a non-positive t_s / depth from MCT / PS-Beam / ST-Girder too (they previously applied). Confirm this is wanted.

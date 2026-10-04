@@ -95,14 +95,14 @@ The following files are **not reachable from `index.html`** and have no links in
 | `.handoffs`, `.latestId`, `.updatedAt`, `.adopted.<app>` | index (MCT demands) | psbeam, stgirder | `_schema` is `psbeam-external-demands` for **both** the PS and steel flavours (index :132); the two share one `handoffId` (see §4.1) |
 | `.lldf`, `.lldf.updatedAt` | lldf | index, psbeam, stgirder | index checks version only, **not `_schema`** (index :6596) |
 | `.dlLoads` | lldf | index, psbeam, stgirder | yes (`bridge-dl-loads`) |
-| `.lldfGeom`, `.lldfGeom.seen` | index (also psbeam/stgirder) | lldf | — index always sends `type:'a'` (steel) even for PS girders (index :19958) |
+| `.lldfGeom`, `.lldfGeom.seen` (+ `.updatedAt`, `.adopted.lldf` from Bridge Geometry) | index (also psbeam/stgirder, Bridge Geometry) | lldf | yes (`bridge-lldf-geometry`, version, every number; HANDOFF.md §4.2) — index always sends `type:'a'` (steel) even for PS girders (index :19958) |
 | `.psSection`, `.psSection.updatedAt` | psbeam | index, lldf | **no `_schema`/version check** (index :6024-6027, :6139) |
 | `.capacity`, `.capacity.updatedAt`, `.capacity.adopted.mct` | psbeam, stgirder | index | yes (`bridge-design-capacity`) |
 | `.designBeam`, `.beamRoster` | lldf / chip UI | all | yes |
 | `.geometryChanges` (+ `.updatedAt`, `.adopted.<app>`) | index, stgirder | others | — (human-readable diff only) |
 | `.locks`, `.syncLog.<app>`, `.lockSnap.<app>`, `.projects`, `.currentProjectId`, `.migrated.<app>`, `.appPaths`, `.demandsKind`, `.materials`, `.projectMeta` | shared | shared | — |
 
-`Bridge Geometry.html` does **not** take part. It neither reads nor writes any `bridgeSuite.*` key.
+`Bridge Geometry.html` takes part only as a sender on `.lldfGeom` ("Send to LL & DL", HANDOFF.md §4.2). It reads no `bridgeSuite.*` key except `.projectMeta` (for the project name in the envelope).
 
 ---
 
