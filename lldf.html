@@ -324,6 +324,7 @@ var st=document.createElement('style'); st.textContent=css;
         <label><input type="checkbox" id="liveUpdate" checked /> Live recalc</label>
         <button class="btn" id="mctBackBtn" title="Back to the MCT analysis app">↩ MCT</button>
         <button class="btn" id="sendDFBtn" title="Publish the computed distribution factors to shared storage so PS-Beam and ST-Girder can pull them">⇄ Send DFs to Design Apps</button>
+        <button class="btn" id="exportDFBtn" title="Download the DF hand-off (the same data as Send DFs) as a JSON file, for 'Import hand-off (JSON)' in another tool or a calc package">⇩ Export DF hand-off (JSON)</button>
         <button class="btn" id="sendDLBtn" title="Publish the selected design beam's distributed dead load (DC1 / DC2 / DW, and pedestrian LL if any) so the MCT Generator's Loads tab can import it as beam UDLs">⇄ Send DL to MCT Loads</button>
         <button class="btn" id="openPSBtn" title="Open the prestressed concrete design app (pull the DFs there with 'Pull from LL &amp; DL Distribution')">PS ↗</button>
         <button class="btn" id="openSTBtn" title="Open the composite steel design app (pull the DFs there with 'Pull from LL &amp; DL Distribution')">ST ↗</button>
@@ -3165,11 +3166,16 @@ function flash(msg,bad){ var el=$('saveStatus'); if(!el) return; el.textContent=
 
 /* ---------- OUT: publish the computed DFs ---------- */
 function publishDF(silent){
-  if(!lsOK()){ if(!silent) alert('Browser storage is unavailable — cannot publish. Use Export JSON instead.'); return false; }
+  if(!lsOK()){ if(!silent) alert('Browser storage is unavailable — cannot publish. Use "Export DF hand-off (JSON)" instead.'); return false; }
+  var payload=buildDFPayload(silent); if(!payload) return false;
+  return writeDF(payload,silent);
+}
+/* Builds the 'bridgeSuite.v1.lldf' payload (also used by "Export DF hand-off (JSON)"). */
+function buildDFPayload(silent){
   var p,R;
   try{ p=readInputs(); R=computeBridge(p); }
-  catch(e){ if(!silent) alert('Compute failed — fix the inputs first.\n\n'+(e&&e.message||e)); return false; }
-  if(!R||!R.members||!R.members.length){ if(!silent) alert('No results to send — recalculate first.'); return false; }
+  catch(e){ if(!silent) alert('Compute failed — fix the inputs first.\n\n'+(e&&e.message||e)); return null; }
+  if(!R||!R.members||!R.members.length){ if(!silent) alert('No results to send — recalculate first.'); return null; }
   var r=function(v,d){ return (v==null||!isFinite(v))?null:+(+v).toFixed(d==null?4:d); };
   var mem=R.members.map(function(m){ return {girder:m.label,type:m.type,S:r(m.S,3),
     gM:r(m.gM),gV:r(m.gV),fatM:r(m.fatM),fatV:r(m.fatV),method:m.method||'',
@@ -3212,6 +3218,8 @@ function publishDF(silent){
   for(var j=0;j<nsp-1;j++) pierRs.push('p'+j);
   var posGov=govRegions(spanRs.length?spanRs:['s0']);
   var negGov=pierRs.length?govRegions(pierRs):null;
+  // Same envelope for each span on its own (index i = span i+1), for receivers with per-span DF inputs.
+  var bySpan=spanRs.map(function(rg){ return govRegions([rg]); });
   var payload={_schema:'bridge-lldf-factors',schemaVersion:1,producer:'LL & DL Distribution',
     producedAt:new Date().toISOString(),
     project:($('mProject')&&$('mProject').value)||'',
@@ -3222,9 +3230,15 @@ function publishDF(silent){
     members:mem,
     governing:posGov,          // positive-moment / shear governing across all spans
     governingNeg:negGov,       // negative-moment governing across all interior supports; null if single-span
+    governingBySpan:bySpan,    // positive-region envelope per span (same shape as governing); added for Moving Load Generator
+    units:{spans:'ft',S:'ft',skew:'deg',laneWidth:'ft',df:'lanes per girder (dimensionless)'},
+    multiplePresenceIncluded:true, skewIncluded:true,   // gM/gV; fatM/fatV = one-lane ÷ 1.2 (no MPF), skew included
     designBeam:(window.BridgeBeam&&window.BridgeBeam.get())||null,   // the suite-wide selected beam
     beamRoster:(window.BridgeBeam&&window.BridgeBeam.roster())||null,// layout, classification, per-beam DL
-    note:'governing = positive-region DFs (span L); governingNeg = negative-region DFs at interior supports (L = ½ of adjacent spans). gM/gV include multiple presence + skew; fatM/fatV are single-lane fatigue DFs. governing.byBeam / governingNeg.byBeam give the same envelope per individual girder, keyed by the 1-based beam number, so an app with a design beam selected can use that beam directly.'};
+    note:'governing = positive-region DFs (span L); governingNeg = negative-region DFs at interior supports (L = ½ of adjacent spans). gM/gV include multiple presence + skew; fatM/fatV are single-lane fatigue DFs. governing.byBeam / governingNeg.byBeam give the same envelope per individual girder, keyed by the 1-based beam number, so an app with a design beam selected can use that beam directly. governingBySpan[i] is the positive-region envelope for span i+1 alone.'};
+  return payload;
+}
+function writeDF(payload,silent){
   try{
     // Skip a no-op republish so a locked consumer is not woken by an identical payload.
     var prevRaw=null; try{ prevRaw=localStorage.getItem(K_DF); }catch(e){}
@@ -3584,6 +3598,10 @@ function mountLockToggle(btnId,ch){
 
 window.addEventListener('load',function(){
   var b=$('sendDFBtn'); if(b) b.addEventListener('click',function(){ publishDF(false); });
+  var xb=$('exportDFBtn'); if(xb) xb.addEventListener('click',function(){
+    var pl=buildDFPayload(false); if(!pl) return;
+    if(!window.BridgeXfer){ alert('Export is not available in this browser.'); return; }
+    var r=BridgeXfer.exportFile('lldf',pl); if(r&&r.error) alert(r.error); });
   var dlb=$('sendDLBtn'); if(dlb) dlb.addEventListener('click',function(){ publishDL(false); });
   var ps=$('openPSBtn'); if(ps) ps.addEventListener('click',function(){ bridgeNav('psbeam'); });
   var st=$('openSTBtn'); if(st) st.addEventListener('click',function(){ bridgeNav('stgirder'); });

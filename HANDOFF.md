@@ -56,7 +56,7 @@ Fields marked *(existing)* already exist; their schemas are documented in `AUDIT
 |---|---|---|---|
 | `projectMeta` | `bridge-project-meta` | any tool | every tool |
 | `lldfGeom` *(existing)* | `bridge-lldf-geometry` | index (MCT), psbeam, stgirder, **Bridge Geometry** | lldf |
-| `lldf` *(existing)* | (version-checked) | lldf | index, psbeam, stgirder, **Moving Load Generator**, **Steel Bridge Beam Modules** |
+| `lldf` *(existing)* | `bridge-lldf-factors` | lldf | index, psbeam, stgirder, **Moving Load Generator**, **Steel Bridge Beam Modules** |
 | `dlLoads` *(existing)* | `bridge-dl-loads` | lldf | index, psbeam, stgirder |
 | `superReactions` | `bridge-super-reactions` | psbeam, stgirder, index (MCT) | Bridge Substructure Loading |
 | `abutmentLoads` | `bridge-abutment-loads` | Bridge Substructure Loading | abutment_calculator |
@@ -88,6 +88,13 @@ This matches the existing BridgeLocks "project" channel (`index.html`).
 - Moving Load Generator maps them to its per-span DF inputs. It must use the **fatigue** factors for the fatigue truck if it supports per-vehicle factors; otherwise it warns.
 - Steel Bridge Beam Modules maps them to its DF module.
 - Receivers must state whether multiple presence and skew are included; lldf includes both.
+- Existing envelope differences (kept for the existing receivers): lldf writes the keys itself, not through `BridgeXfer.publish`. `producer` is `"LL & DL Distribution"`, there is no `producerFile`, and `project` is a **string** (lldf's project field), not `{name, bridgeId}`. Receivers must accept both shapes.
+- Fields added for Moving Load Generator (additive; existing receivers ignore them):
+  - `governingBySpan`: array, one entry per span (index *i* = span *i*+1), each with the same shape as `governing` (`interior`, `exterior`, `byBeam`), computed for that span alone (L = that span).
+  - `units: { spans:"ft", S:"ft", skew:"deg", laneWidth:"ft", df:"lanes per girder (dimensionless)" }`. Payloads from before this field existed are also in ft/deg (lldf has no other unit system).
+  - `multiplePresenceIncluded: true`, `skewIncluded: true` (they describe `gM`/`gV`). `fatM`/`fatV` are the one-lane DF ÷ 1.2 (no multiple presence), skew included.
+- lldf also offers **"Export DF hand-off (JSON)"**, which writes the same payload to a file.
+- Moving Load Generator (receiver id `movingLoad`): the user picks interior, exterior or a single beam (`byBeam`), defaulting to lldf's design beam when present. `gM`/`gV` from `governingBySpan[i]` go to span *i* (or `governing` for every span when the span counts differ or the payload has no `governingBySpan`). `governingNeg.gM` goes to the one negative-moment DF. Spans are compared and only overwritten when the user ticks the option. `fatM`/`fatV` are shown and quoted in the fatigue-truck warning but not applied, because the tool has one DF set for all vehicles.
 
 ### 4.4 `superReactions`
 
