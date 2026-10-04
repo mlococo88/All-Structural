@@ -591,3 +591,148 @@ Line numbers are those of the fixed file. Every fix lists anchor text to search 
 - O13. `lldfGeom.inputs.type` is hard-coded `'a'` even for PS girders.
 - O14. Fatigue rating: no fatigue truck in the library, IM 15 % vs 33 %, no g/1.2 distribution (AUDIT A22 second half) — not in this PR's scope list.
 - O15. Rolled-shape dimensions, vehicle tons and fatigue preset factors already stored in saved projects are user data and are not rewritten; users must re-convert the shape / re-select the vehicle / re-apply the preset.
+
+## 2026-10-04 — PR: claude/step1-group1 (PR link added after merge)
+
+Feature (no result change): "← All tools" link to `tools.html` (`target="_top"`, hidden in print) and the shared project info buttons. No formula, factor, unit, storage key or saved format changed. New storage written only on "Share project info": `bridgeSuite.v1.projectMeta` and `bridgeSuite.v1.projectMeta.updatedAt` (HANDOFF.md §2/§4.1). The BridgeLocks registry already lists the `project` channel → `.projectMeta`; the payload carries a top-level `producedAt`, which `BridgeLocks.producedAt()` / `hasData()` read (checked in jsdom). The bridgeSuite bootstrap blocks are unchanged.
+
+Field mapping: projectName ↔ Project Name (`cfg.projectName`), bridgeId ↔ Bridge Name / Structure ID (`cfg.projectBridgeId`), client ↔ Client / Owner (`cfg.projectClient`), location ↔ Address / Location (`cfg.projectAddress`), preparedBy ↔ Engineer / User Initials (`cfg.projectUser`), date ↔ Date (`cfg.projectDate`; YYYY/M/D here, exchanged as YYYY-MM-DD when in that form). jobNo, checkedBy: not in this tool (sent as ""). Writes go through the existing `set()` → `cfg` → `mct_cfg_v3` autosave.
+
+### S1. Print rule for the new link and buttons   [feature (no result change)]
+- **Where:** top `<style>` block (≈ line 28). Anchor text: `button:active{transform:translateY(1px);}`
+- **Problem:** none (feature). Approved step 1 of the cross-tool work: "← All tools" link and shared project info (HANDOFF.md §4.1).
+- **Governing provision:** n/a (no calculation, factor, unit or code reference touched).
+- **Before:**
+  ```css
+    button:active{transform:translateY(1px);}
+  </style>
+  ```
+- **After:**
+  ```css
+    button:active{transform:translateY(1px);}
+    @media print{.bx-alltools,.bx-projbtns{display:none!important;}}
+  </style>
+  ```
+- **Check case:** n/a, no computed value changes. Functional check: see How verified.
+- **How verified:** `node --check` on every plain inline script and @babel/standalone transpile of the text/babel block; BridgeXfer copy compared byte-for-byte with HANDOFF.md §5; whole page loaded in jsdom (React/ReactDOM/Babel from npm, other CDN scripts blocked); Share → Use round trip between lldf, Moving Load Generator, psbeam, stgirder and index with one shared localStorage; `git diff` shows only additions apart from the one header line that received the link.
+- **Other copies:** BridgeXfer v1 and the `BXProject` glue are also in index.html, lldf.html, psbeam.html, stgirder.html and Moving Load Generator.html (this PR).
+
+### S2. BridgeXfer v1 + BXProject glue (plain script before the app)   [feature (no result change)]
+- **Where:** new `<script>` just before `<script type="text/babel">` (≈ line 1203). Anchor text: `<script type="text/babel">`
+- **Problem:** none (feature). Approved step 1 of the cross-tool work: "← All tools" link and shared project info (HANDOFF.md §4.1).
+- **Governing provision:** n/a (no calculation, factor, unit or code reference touched).
+- **Before:**
+  ```html
+
+  <script type="text/babel">
+  ```
+- **After:**
+  ```html
+
+  <script>
+  /* BridgeXfer v1 verbatim from HANDOFF.md §5 (73 lines, not repeated here) */
+  /* Shared project info (HANDOFF.md §4.1): glue for the "Use shared project info" and
+     "Share project info" buttons. Uses BridgeXfer above. Duplicated per tool (CLAUDE.md §3).
+     share(own): own = {sharedKey: value} for the fields this tool has; the rest are sent as ''.
+     use(cur, apply): cur = {sharedKey: current value} for the fields this tool has. Shows what
+     will be overwritten, then calls apply(upd) with only the non-empty shared values that differ. */
+  (function(){
+    if(window.BXProject) return;
+    var KEYS=['projectName','bridgeId','jobNo','client','location','preparedBy','checkedBy','date'];
+    var LABELS={projectName:'Project name',bridgeId:'Bridge ID',jobNo:'Job no.',client:'Client',location:'Location',
+                preparedBy:'Prepared by',checkedBy:'Checked by',date:'Date'};
+    function str(v){ return v==null?'':String(v); }
+    function share(own){
+      if(!window.BridgeXfer){ alert('Shared project info is not available in this browser.'); return null; }
+      var f={}; KEYS.forEach(function(k){ f[k]=str(own&&own[k]); });
+      var r=BridgeXfer.publish('projectMeta',{_schema:'bridge-project-meta',fields:f});
+      if(r.error) alert('Could not share project info: '+r.error);
+      else alert('Project info shared. Other tools can load it with "Use shared project info".');
+      return r;
+    }
+    function use(cur, apply){
+      if(!window.BridgeXfer){ alert('Shared project info is not available in this browser.'); return false; }
+      var r=BridgeXfer.read('projectMeta','bridge-project-meta',1);
+      if(r.error){ alert('No shared project info: '+r.error); return false; }
+      var f=r.payload.fields||{}, upd={}, lines=[], n=0;
+      Object.keys(cur||{}).forEach(function(k){
+        var v=str(f[k]); if(!v.trim()) return;          // never blank a field from an empty shared value
+        var c=str(cur[k]); if(v===c) return;
+        upd[k]=v; n++;
+        lines.push('  '+(LABELS[k]||k)+': "'+(c||'(blank)')+'" → "'+v+'"');
+      });
+      var src=BridgeXfer.describe(r.payload);
+      if(!n){ alert('Shared project info ('+src+') already matches this tool. Nothing to change.'); return false; }
+      if(!confirm('Use shared project info?\nFrom: '+src+'\n\nThis will overwrite:\n'+lines.join('\n'))) return false;
+      apply(upd);
+      return true;
+    }
+    window.BXProject={ KEYS:KEYS, share:share, use:use };
+  })();
+  </script>
+  <script type="text/babel">
+  ```
+- **Check case:** n/a, no computed value changes. Functional check: see How verified.
+- **How verified:** `node --check` on every plain inline script and @babel/standalone transpile of the text/babel block; BridgeXfer copy compared byte-for-byte with HANDOFF.md §5; whole page loaded in jsdom (React/ReactDOM/Babel from npm, other CDN scripts blocked); Share → Use round trip between lldf, Moving Load Generator, psbeam, stgirder and index with one shared localStorage; `git diff` shows only additions apart from the one header line that received the link.
+- **Other copies:** BridgeXfer v1 and the `BXProject` glue are also in index.html, lldf.html, psbeam.html, stgirder.html and Moving Load Generator.html (this PR).
+
+### S3. Shared project info handlers and the "Use shared project info" / "Share project info" buttons   [feature (no result change)]
+- **Where:** `StepProject()`: handlers after the `SH` style, buttons under the step header (≈ line 3649). Anchor text: `borderBottom:'1px solid #f3f4f6'};`
+- **Problem:** none (feature). Approved step 1 of the cross-tool work: "← All tools" link and shared project info (HANDOFF.md §4.1).
+- **Governing provision:** n/a (no calculation, factor, unit or code reference touched).
+- **Before:**
+  ```jsx
+      borderBottom:'1px solid #f3f4f6'};
+
+    return (<div><StepHeader icon="📋" title="Project Information" sub="Project metadata, bridge identification, and MCT file header fields"/>
+      <div style={{display:'flex',gap:'28px',flexWrap:'wrap',maxWidth:'860px'}}>
+  ```
+- **After:**
+  ```jsx
+      borderBottom:'1px solid #f3f4f6'};
+    /* Shared project info (HANDOFF.md §4.1). Date is kept as YYYY/M/D here (MIDAS *PROJINFO) and
+       exchanged as YYYY-MM-DD when it is in that form; anything else passes through unchanged. */
+    const bxToIso=d=>{const m=/^(\d{4})\/(\d{1,2})\/(\d{1,2})$/.exec(String(d||'').trim());
+      return m?`${m[1]}-${m[2].padStart(2,'0')}-${m[3].padStart(2,'0')}`:(d||'');};
+    const bxFromIso=d=>{const m=/^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(String(d||'').trim());
+      return m?`${m[1]}/${+m[2]}/${+m[3]}`:d;};
+    const BX_MAP={projectName:'projectName',bridgeId:'projectBridgeId',client:'projectClient',
+      location:'projectAddress',preparedBy:'projectUser',date:'projectDate'};
+    const bxOwn=()=>{const o={};Object.keys(BX_MAP).forEach(k=>{o[k]=cfg[BX_MAP[k]]||'';});o.date=bxToIso(o.date);return o;};
+    const bxShare=()=>{ if(window.BXProject) window.BXProject.share(bxOwn()); };
+    const bxUse=()=>{ if(window.BXProject) window.BXProject.use(bxOwn(),upd=>{
+      Object.keys(upd).forEach(k=>set(BX_MAP[k],k==='date'?bxFromIso(upd[k]):upd[k])); }); };
+    const BXB={background:'#fff',border:'1px solid #d1d5db',borderRadius:'5px',padding:'5px 10px',
+      cursor:'pointer',fontSize:'12px',color:'#374151',whiteSpace:'nowrap'};
+
+    return (<div><StepHeader icon="📋" title="Project Information" sub="Project metadata, bridge identification, and MCT file header fields"/>
+      <div className="bx-projbtns" style={{display:'flex',gap:'8px',flexWrap:'wrap',maxWidth:'860px',marginBottom:'6px'}}>
+        <button style={BXB} onClick={bxUse} title="Fill these fields from the project info shared by another tool (asks first; never blanks a field)">Use shared project info</button>
+        <button style={BXB} onClick={bxShare} title="Share this project's name, bridge ID, client, location, engineer and date with the other tools">Share project info</button>
+      </div>
+      <div style={{display:'flex',gap:'28px',flexWrap:'wrap',maxWidth:'860px'}}>
+  ```
+- **Check case:** n/a, no computed value changes. Functional check: see How verified.
+- **How verified:** `node --check` on every plain inline script and @babel/standalone transpile of the text/babel block; BridgeXfer copy compared byte-for-byte with HANDOFF.md §5; whole page loaded in jsdom (React/ReactDOM/Babel from npm, other CDN scripts blocked); Share → Use round trip between lldf, Moving Load Generator, psbeam, stgirder and index with one shared localStorage; `git diff` shows only additions apart from the one header line that received the link.
+- **Other copies:** BridgeXfer v1 and the `BXProject` glue are also in index.html, lldf.html, psbeam.html, stgirder.html and Moving Load Generator.html (this PR).
+
+### S4. "← All tools" link in the app header   [feature (no result change)]
+- **Where:** `App()` render, `<header>` (≈ line 21079). Anchor text: `<div style={{marginLeft:'auto',display:'flex',alignItems:'center',gap:'12px'}}>`
+- **Problem:** none (feature). Approved step 1 of the cross-tool work: "← All tools" link and shared project info (HANDOFF.md §4.1).
+- **Governing provision:** n/a (no calculation, factor, unit or code reference touched).
+- **Before:**
+  ```jsx
+          </div>
+          <div style={{marginLeft:'auto',display:'flex',alignItems:'center',gap:'12px'}}>
+  ```
+- **After:**
+  ```jsx
+          </div>
+          <a className="bx-alltools" href="tools.html" target="_top" title="Open the list of all tools"
+            style={{fontSize:'11.5px',color:'#6b7280',textDecoration:'none',border:'1px solid #e5e7eb',
+              borderRadius:'6px',padding:'4px 10px',whiteSpace:'nowrap'}}>← All tools</a>
+          <div style={{marginLeft:'auto',display:'flex',alignItems:'center',gap:'12px'}}>
+  ```
+- **Check case:** n/a, no computed value changes. Functional check: see How verified.
+- **How verified:** `node --check` on every plain inline script and @babel/standalone transpile of the text/babel block; BridgeXfer copy compared byte-for-byte with HANDOFF.md §5; whole page loaded in jsdom (React/ReactDOM/Babel from npm, other CDN scripts blocked); Share → Use round trip between lldf, Moving Load Generator, psbeam, stgirder and index with one shared localStorage; `git diff` shows only additions apart from the one header line that received the link.
+- **Other copies:** BridgeXfer v1 and the `BXProject` glue are also in index.html, lldf.html, psbeam.html, stgirder.html and Moving Load Generator.html (this PR).

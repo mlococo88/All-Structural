@@ -320,3 +320,26 @@ Check cases were run by loading the whole page in jsdom (CDN libraries absent) a
 - O5. **Curved or per-span-chorded girders.** The whole bridge is modelled on one straight abutment-to-abutment chord; the curved deck edges are not represented. — Modelling decision.
 - O6. **Datum and scale factor.** NAD83 is treated as WGS84 (≈1–1.5 m in New England), there is no combined grid/elevation scale factor, and there is no SPCS2022. This affects the map overlay only. — Decide whether to add `+towgs84`/NADCON and a CSF input.
 - O7. `projectToPGL` takes the first sign change of the along-tangent residual, which may not be the nearest station on reverse curves or near a curve centre. Not changed.
+
+## 2026-10-04 — PR: claude/step1-group1 (PR link added after merge)
+
+Feature (no result change): "← All tools" link to `tools.html` (`target="_top"`, class `noprint`, hidden by the existing print rule). **No title block:** this tool has no project / bridge ID / engineer / date fields (only the saved-library entry name), so the shared project info buttons and BridgeXfer were not added.
+
+### S1. "← All tools" link in the header   [feature (no result change)]
+- **Where:** `<header>` → `.htop` (≈ line 144). Anchor text: `<span class="ver">v0.3`
+- **Problem:** none (feature). Approved step 1 of the cross-tool work: "← All tools" link and shared project info (HANDOFF.md §4.1).
+- **Governing provision:** n/a (no calculation, factor, unit or code reference touched).
+- **Before:**
+  ```html
+      <span class="ver">v0.3 · spans · 3D · heatmap</span>
+    </div>
+  ```
+- **After:**
+  ```html
+      <span class="ver">v0.3 · spans · 3D · heatmap</span>
+      <a class="bx-alltools noprint" href="tools.html" target="_top" title="Open the list of all tools" style="margin-left:auto;font-size:11px;color:var(--ink-soft);text-decoration:none;">&larr; All tools</a>
+    </div>
+  ```
+- **Check case:** n/a, no computed value changes. Functional check: see How verified.
+- **How verified:** `node --check` on the inline script; page loaded in jsdom; link found. `git diff` is a single added line.
+- **Other copies:** BridgeXfer v1 and the `BXProject` glue are also in index.html, lldf.html, psbeam.html, stgirder.html and Moving Load Generator.html (this PR).
