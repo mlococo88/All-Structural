@@ -175,3 +175,111 @@ substring that changed. Search for the anchor text.
 - O7. **`crack: '15'` migration** (≈ line 4157): an old project with `crack = '15'` and no `crackV` is switched once to `'none'`. This is deliberate: '15' was the former default, it is not per 6.10.1.5, and an old saved '15' cannot be told apart from the old default. Not clearly a bug, so not changed. — If wanted: show a one-time notice when the migration happens, or keep '15' for projects that explicitly chose it (not possible to detect from saved data).
 - O8. **Splice report "V_r = 1.0(C)(V_p)" line** (≈ line 6349) prints C·V_p even when the tension-field equation is used, so the shown product does not equal the shown V_r for a stiffened web. Display only. — Fix the displayed expression in a later PR.
 - O9. Not addressed here (from the review, out of scope for this PR): GS uses max permanent-load factors only; Service II omits f_ℓ/2; bearing-stiffener hybrid strip double reduction; rolled-diaphragm hard-coded F_ub = 120; postMessage origin checks; PlateLine items (DC1-only noncompact check, 9th Ed. reference list, unguarded profile JSON.parse).
+
+## 2026-10-04 — PR: claude/step1-group2 (PR link added after merge)
+
+### F8. "← All tools" link + shared project info (HANDOFF.md §4.1)   [feature (no result change)]
+
+- **Type:** feature (no result change). No formulas, factors, units, code references, storage keys or saved-data formats were changed.
+- **What:** a small "← All tools" link to `tools.html` (`target="_top"`, hidden in print), and two buttons, **Use shared project info** and **Share project info**, in the Calculation header (Project tab). Share publishes `bridgeSuite.v1.projectMeta` (`_schema:"bridge-project-meta"`) with the tool's own fields, and `""` for fields it lacks. Use reads it with `BridgeXfer.read('projectMeta','bridge-project-meta',1)`, shows a confirm dialog listing each field that will be overwritten (old → new), writes only this tool's fields, never blanks a field when the shared value is blank, and writes through the tool's normal path (sets the input and dispatches a bubbling `input` event, so the tool's own handler updates its state and autosaves).
+- **Field mapping (shared `fields` key → this tool's input):**
+
+| shared field | this tool |
+|---|---|
+| `projectName` | `#f_meta_name` |
+| `bridgeId` | — (not in this tool; shared as `""`, ignored on Use) |
+| `jobNo` | `#f_meta_projNo` |
+| `client` | — (not in this tool; shared as `""`, ignored on Use) |
+| `location` | — (not in this tool; shared as `""`, ignored on Use) |
+| `preparedBy` | `#f_meta_compBy` |
+| `checkedBy` | `#f_meta_chkBy` |
+| `date` | `#f_meta_compDate` |
+
+- **Governing provision:** none (not a calculation change). Spec: HANDOFF.md §4.1 (channel) and §5 (helper).
+- **Check case:** Share with Project name "Route 9 over Mill Brook", Job no. "J-4471", Prepared by "M. Lococo", Checked by "A. Checker", Date "2026-10-04"; then Use in another tool → the mapped fields show those values after one confirm; unmapped fields are unchanged. Calculation results before/after: identical (no calculation code touched).
+
+**Edit 1 — link.** Where: page `<header>` (after the `.brand` block; anchor `<div class="hdr-spacer"></div>\n  <div class="hdr-group"><button type="button" class="btn" id="btn-designall"`), outer page only; the PlateLine iframe/base64 is not touched.
+- Before:
+```html
+  <div class="hdr-spacer"></div>
+  <div class="hdr-group"><button type="button" class="btn" id="btn-designall"
+```
+- After:
+```html
+  <a class="bx-all-tools" href="tools.html" target="_top" title="Open the list of all tools">&larr; All tools</a>
+  <div class="hdr-spacer"></div>
+  <div class="hdr-group"><button type="button" class="btn" id="btn-designall"
+```
+
+**Edit 2 — buttons.** Where: `buildSidebar()` → `project` pane → "Calculation header" (`sec-meta`); anchor `${fld('Checked date', 'meta.chkDate', '', 'text')}</div></div>`.
+- Before:
+```js
+<div class="pair">${fld('Checked by', 'meta.chkBy', '', 'text')}${fld('Checked date', 'meta.chkDate', '', 'text')}</div></div>
+```
+- After:
+```js
+<div class="pair">${fld('Checked by', 'meta.chkBy', '', 'text')}${fld('Checked date', 'meta.chkDate', '', 'text')}</div>
+        <div class="proj-row" style="grid-template-columns: 1fr 1fr"><button type="button" id="bx-pm-use" class="proj-btn" title="Fill this header from the project info shared by another tool">Use shared project info</button><button type="button" id="bx-pm-share" class="proj-btn" title="Share this header's project info with the other tools">Share project info</button></div></div>
+```
+
+**Edit 3 — CSS.** Where: end of the first `<style>` block in `<head>` (inserted just before its `</style>`).
+- Before: `</style>`
+- After:
+```css
+/* "All tools" link (outer page) */
+.bx-all-tools { font-size: 12px; color: var(--muted); text-decoration: none; white-space: nowrap; }
+.bx-all-tools:hover { color: var(--blue); text-decoration: underline; }
+@media print { .bx-all-tools { display: none !important; } }
+</style>
+```
+
+**Edit 4 — scripts.** Where: just before the first `</head>`.
+- Before: `</head>`
+- After:
+```html
+<script>
+/* BridgeXfer v1 verbatim from HANDOFF.md §5 (not repeated here) */
+</script>
+<script>
+/* Shared project info (HANDOFF.md §4.1, channel projectMeta): "Use shared project info" / "Share project info".
+   Uses BridgeXfer v1 above. Writes only the fields this tool has, through the tool's normal input path. */
+(function(){
+  var TOOL='Steel Bridge Beam Modules', FILE='Steel Bridge Beam Modules.html';
+  var MAP={ projectName:'#f_meta_name', bridgeId:'', jobNo:'#f_meta_projNo', client:'', location:'', preparedBy:'#f_meta_compBy', checkedBy:'#f_meta_chkBy', date:'#f_meta_compDate' }; // shared field -> this tool's input ('' = this tool has no such field)
+  var LBL={ projectName:'Project name', bridgeId:'Bridge ID', jobNo:'Job / project no.', client:'Client', location:'Location', preparedBy:'Prepared by', checkedBy:'Checked by', date:'Date' };
+  function el(k){ return MAP[k] ? document.querySelector(MAP[k]) : null; }
+  function share(){
+    var f={}; for(var k in LBL){ var e=el(k); f[k]=e ? String(e.value==null?'':e.value).trim() : ''; }
+    var r=BridgeXfer.publish('projectMeta',{ _schema:'bridge-project-meta', project:{ name:f.projectName, bridgeId:f.bridgeId }, fields:f }, TOOL, FILE);
+    alert(r.error ? 'Could not share project info: '+r.error : 'Project info shared. Other tools can load it with "Use shared project info".');
+  }
+  function use(){
+    var r=BridgeXfer.read('projectMeta','bridge-project-meta',1);
+    if(r.error){ alert(r.empty ? 'No shared project info yet. Click "Share project info" in a tool that has the project filled in.' : 'Cannot use shared project info: '+r.error); return; }
+    var f=r.payload.fields||{}, todo=[], lines=[], skipped=[];
+    for(var k in LBL){ var e=el(k); if(!e) continue;
+      var v=f[k]==null ? '' : String(f[k]).trim(); if(!v) continue;
+      if(e.type==='date' && !/^\d{4}-\d{2}-\d{2}$/.test(v)){ skipped.push(LBL[k]+' "'+v+'" (not a YYYY-MM-DD date)'); continue; }
+      if(v===e.value) continue;
+      todo.push([k,v]); lines.push('  '+LBL[k]+': "'+(e.value||'')+'" -> "'+v+'"'); }
+    var from='From: '+BridgeXfer.describe(r.payload);
+    if(!todo.length){ alert('Shared project info has nothing new for this tool.\n\n'+from+(skipped.length?'\n\nNot used: '+skipped.join('; '):'')); return; }
+    if(!confirm('Use shared project info?\n\n'+from+'\n\nThis will overwrite:\n'+lines.join('\n')+(skipped.length?'\n\nNot used: '+skipped.join('; '):'')+'\n\nBlank shared fields are left unchanged.')) return;
+    todo.forEach(function(t){ var e=el(t[0]); if(!e) return; e.value=t[1]; e.dispatchEvent(new Event('input',{ bubbles:true })); });
+  }
+  document.addEventListener('click', function(ev){
+    var b=ev.target && ev.target.closest ? ev.target.closest('#bx-pm-use,#bx-pm-share') : null; if(!b) return;
+    if(b.id==='bx-pm-use') use(); else share();
+  });
+})();
+</script>
+</head>
+```
+
+- **How verified:**
+  - `node --check` on every plain inline `<script>` of the old and new file: no failures in either (2 new scripts per file: helper + glue). The tool has no `text/babel` blocks.
+  - jsdom load with CDN scripts not fetched: the same load errors as the original file (none new); `window.BridgeXfer` exists; the link has `href="tools.html" target="_top"`.
+  - Share → Use run in jsdom between all six tools of this PR (30 pairs) with the localStorage entry copied across: every pair passed. The payload had `_schema:"bridge-project-meta"`, `schemaVersion:1`, all 8 `fields` keys, and `producedAt` equal to `bridgeSuite.v1.projectMeta.updatedAt`. Fields were written through the tool's own input handler and reached its saved state/autosave. A blank shared field never blanked a tool field; an empty channel and a wrong `_schema` gave a message and changed nothing.
+  - Diff check: at most one line is removed, the line replaced at the button anchor where that anchor is inside a JS template string; everything else is additions. No calculation code, storage key or saved-data format was touched.
+- **Other copies:** the BridgeXfer v1 helper is duplicated verbatim in every tool that uses it (CLAUDE.md §3; list in the PR). The glue block is the same in each tool of this PR except `TOOL`/`FILE` and the field map.
+- **Open items:** none.
