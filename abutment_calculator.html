@@ -411,7 +411,7 @@ function defaultState(){
       spanL:80.0, skew:0.0,         // span length & skew (for min support length)
       hw:0.0                        // water table height above BOTTOM of footing (ft); 0 = none
     },
-    mat:{fc:4.0, gc:0.150, fy:60.0, coverF:3.0, coverT:2.0}, // ksi, kcf, ksi, in (footing / wall+top)
+    mat:{fc:4.0, gc:0.150, fy:60.0, coverF:3.0, coverT:2.0, ag:0.75}, // ksi, kcf, ksi, in (footing / wall+top), max aggregate size (in) for the 5.7.3.4.2 s_xe
     soil:{
       method:"rankine",             // 'rankine' | 'coulomb'
       gamma:0.120, phi:32.0, delta:17.0, // backfill γ (kcf), φ (deg), wall friction δ (deg, Coulomb)
@@ -464,7 +464,9 @@ function defaultState(){
       gpEVmax:1.35, gpEVmin:1.00, gpEHmax:1.50, gpEHmin:0.90,
       llS1:1.75, llS5:1.35,       // γLL Strength I / Strength V
       wsS3:1.00, wsS5:1.00, wlS5:1.00,   // γWS = 1.00 since the 2017 (8th Ed.) wind revision — WS inputs are ultimate (115-mph-class) pressures [3.8.1, Table 3.4.1-1]
-      gTU:0.50, gCR:0.50          // γTU, γCR/SH (strength force effects; EOR confirm)
+      gTU:0.50, gCR:0.50,         // γTU, γCR/SH (strength force effects; EOR confirm)
+      gpDCmaxS4:1.50,             // γDC max for Strength IV [T.3.4.1-2]
+      vWS3:0, vWS5:80, vWSsvc:70  // wind speeds (mph): WS reactions are entered at V_III; 0/blank V_III = no per-limit-state scaling [T.3.8.1.1.2-1]
     },
     reinf:{
       gammaE:1.00, // exposure factor, crack control (1.00 Class 1 / 0.75 Class 2)
@@ -684,6 +686,11 @@ function migrate(){
   if(!S.ui.d3Tog) S.ui.d3Tog={piles:true,P:true,Vx:true,Vy:true,eh:true,ls:true,soil:true,water:true,dims:true,wire:false};
   if(!S.ui.vmSel) S.ui.vmSel="ls:Strength I";
   if(S.geom.Lftg===undefined) S.geom.Lftg=S.geom.Lab;   // footing length defaults to wall length (single-length model)
+  if(S.mat.ag===undefined) S.mat.ag=0.75;                 // max aggregate size (in), 5.7.3.4.2
+  if(S.factors.gpDCmaxS4===undefined) S.factors.gpDCmaxS4=1.50;   // Strength IV γDC max [T.3.4.1-2]
+  if(S.factors.vWS3===undefined) S.factors.vWS3=0;                 // 0 = WS not scaled per limit state (previous behaviour)
+  if(S.factors.vWS5===undefined) S.factors.vWS5=80;
+  if(S.factors.vWSsvc===undefined) S.factors.vWSsvc=70;
   if(!S.ui.rptOpts) S.ui.rptOpts={inputEcho:true, permFull:true, detailTables:true, viz3d:true, selftest:true, charts:true};
   else["inputEcho","permFull","detailTables","viz3d","selftest","charts"].forEach(k=>{ if(S.ui.rptOpts[k]===undefined) S.ui.rptOpts[k]=true; });
 }
@@ -738,6 +745,7 @@ function buildInputs(){
     ${inpRow("Reinforcement yield f<sub>y</sub>","mat.fy","ksi")}
     ${inpRow("Cover — footing (bottom/top)","mat.coverF","in")}
     ${inpRow("Cover — walls (earth face)","mat.coverT","in")}
+    ${inpRow("Max. aggregate size a<sub>g</sub>","mat.ag","in",{title:"Used in s_xe = s_x·1.38/(a_g+0.63) for the general shear procedure [5.7.3.4.2]"})}
   `);
 
   /* ---- I-3 Backfill & Earth Pressure ---- */
@@ -943,12 +951,15 @@ function buildInputs(){
     ${inpRow("γ DW max","factors.gpDWmax","–")}${inpRow("&nbsp;&nbsp;γ DW min","factors.gpDWmin","–")}
     ${inpRow("γ EV max","factors.gpEVmax","–")}${inpRow("&nbsp;&nbsp;γ EV min","factors.gpEVmin","–")}
     ${inpRow("γ EH max (active)","factors.gpEHmax","–")}${inpRow("&nbsp;&nbsp;γ EH min","factors.gpEHmin","–")}
+    ${inpRow("γ DC max — Strength IV","factors.gpDCmaxS4","–",{title:"Table 3.4.1-2: DC maximum 1.50 for Strength IV only"})}
     <div class="subhead">Transient loads — Table 3.4.1-1</div>
     ${inpRow("γ LL — Strength I (also BR, LS)","factors.llS1","–")}
     ${inpRow("γ LL — Strength V","factors.llS5","–")}
     ${inpRow("γ WS — Strength III","factors.wsS3","–",{title:"1.00 since the 2017 wind revision (ultimate wind speeds in 3.8.1). Use 1.40 only with pre-8th-edition service-level wind pressures."})}
     ${inpRow("γ WS — Strength V","factors.wsS5","–")}
     ${inpRow("γ WL — Strength V","factors.wlS5","–")}
+    ${inpRow("Wind speed V for the WS inputs (Strength III)","factors.vWS3","mph",{title:"Blank/0 = WS reactions used unscaled in Strength III, Strength V and Service I (previous behaviour). When entered, Strength V and Service I WS are scaled by (V_LS/V_III)² [Table 3.8.1.1.2-1]."})}
+    ${inpRow("&nbsp;&nbsp;Wind speed — Strength V","factors.vWS5","mph")}${inpRow("&nbsp;&nbsp;Wind speed — Service I","factors.vWSsvc","mph")}
     ${inpRow("γ TU (force effects)","factors.gTU","–",{title:"0.50 for strength force effects in most substructures; 1.20 for deformations. EOR to confirm."})}
     ${inpRow("γ CR/SH","factors.gCR","–")}
     <div class="in-note">All factors are editable constants for state-DOT overrides; the engineer of record is responsible for confirming values against the governing edition. Service I uses γ = 1.0 throughout.</div>
@@ -1102,6 +1113,15 @@ function pressMoment(segs,xa,xb,xs){ // moment about xs of pressure on [xa,xb], 
   return M;
 }
 
+/* contact-pressure distributions (x from the toe) for a resultant V at signed eccentricity e (+ = toward the toe).
+   |e| governs; the diagram is mirrored when the resultant lies on the heel side (e < 0) [10.6.1.3, 11.6.3.3]. */
+function meyerSegs(V,e,B,Lf){ const ea=Math.abs(e), Bp=B-2*ea; if(!(V>0)||!(Bp>0)) return null; const q=V/(Bp*Lf);
+  return e>=0? [{x0:0,x1:Bp,q0:q,q1:q}] : [{x0:B-Bp,x1:B,q0:q,q1:q}]; }
+function linSegs(V,e,B,Lf){ if(!(V>0)) return null; const ea=Math.abs(e);
+  if(ea<=B/6) return [{x0:0,x1:B,q0:V/(B*Lf)*(1+6*e/B),q1:V/(B*Lf)*(1-6*e/B)}];
+  const Lc=3*(B/2-ea); if(!(Lc>0)) return null; const qm=2*V/(Lc*Lf);
+  return e>=0? [{x0:0,x1:Lc,q0:qm,q1:0}] : [{x0:B-Lc,x1:B,q0:0,q1:qm}]; }
+
 /* ------------------------------------------------------------
    Calculated longitudinal loads: braking [3.6.4], uniform temperature [3.12.2],
    creep & shrinkage — via elastomeric pad shear F = G·A·Δ/h_rt [14.6.3.1].
@@ -1153,7 +1173,8 @@ function computeAll(){
   const xStemTopFront = xStemBack-g.tst;      // front face of stem at top
   const xBwFront = xStemBack-g.tbw;
   const xBrg = xBwFront-g.brgSetback;         // bearing line, from toe
-  const H = g.tf+g.soilH;                     // retained height at virtual back plane (heel end)
+  const hWedge = g.Lheel*Math.tan(deg2rad(+g.beta||0)); // sloping backfill: rise of the ground surface over the heel
+  const H = g.tf+g.soilH+hWedge;              // retained height at virtual back plane (heel end)
   const hTotal = g.tf+g.hstem+g.hbw;
   const xStemCenter = g.Ltoe+g.tsb/2;         // centroidal axis of the stem base section, from toe
   const eBrg = xStemCenter-xBrg;              // bearing offset from stem center; + = bearing toward toe (adds heel-face tension)
@@ -1200,8 +1221,10 @@ function computeAll(){
 
   /* EV — soil over heel (buoyant below WT) */
   const xHeel=xStemBack+g.Lheel/2;
-  const Wev=( S.soil.gamma*(g.soilH-hwSoil) + (S.soil.gamma-GAMMA_W)*hwSoil )*g.Lheel*Lab;
-  R.EV={W:Wev,x:xHeel, dry:g.soilH-hwSoil, sub:hwSoil};
+  const Wev0=( S.soil.gamma*(g.soilH-hwSoil) + (S.soil.gamma-GAMMA_W)*hwSoil )*g.Lheel*Lab;
+  const Wwedge=0.5*S.soil.gamma*g.Lheel*hWedge*Lab, xWedge=xStemBack+2*g.Lheel/3;   // soil wedge above the heel (sloping backfill)
+  const Wev=Wev0+Wwedge, xEV=Wev>0?(Wev0*xHeel+Wwedge*xWedge)/Wev:xHeel;
+  R.EV={W:Wev,x:xEV, dry:g.soilH-hwSoil, sub:hwSoil, W0:Wev0, Wwedge, xWedge, hWedge};
 
   /* ===== C-3 Earth pressure (EH), surcharge (LS) ===== */
   const {ka,iota}=computeKa();
@@ -1291,7 +1314,7 @@ function computeAll(){
     DCsub:{cls:"DC", V:DCsubV, Mv:DCsubM, Hx:0,Mh:0,Hy:0,Mt:0, desc:"Abutment concrete self-weight"},
     DCsup:{cls:"DC", V:agg.DC.P, Mv:agg.DC.P*xBrg, Hx:0,Mh:0,Hy:0, Mt:agg.DC.MtP, desc:"Superstructure DC reactions"},
     DW:  {cls:"DW", V:agg.DW.P, Mv:agg.DW.P*xBrg, Hx:0,Mh:0,Hy:0, Mt:agg.DW.MtP, desc:"Wearing surface / utilities"},
-    EV:  {cls:"EV", V:Wev, Mv:Wev*xHeel, Hx:0,Mh:0,Hy:0,Mt:0, desc:"Soil over heel"},
+    EV:  {cls:"EV", V:Wev, Mv:Wev*xEV, Hx:0,Mh:0,Hy:0,Mt:0, desc:"Soil over heel"+(Wwedge>0?" (incl. slope wedge)":"")},
     EHh: {cls:"EH", V:0,Mv:0, Hx:EHh, Mh:EHh*zEH, Hy:0,Mt:0, desc:"Active earth pressure — horizontal"},
     EHv: {cls:"EH", V:EHv, Mv:EHv*B, Hx:0,Mh:0,Hy:0,Mt:0, desc:"Active earth pressure — vertical component"},
     LSh: {cls:"LL", V:0,Mv:0, Hx:LSh, Mh:LSh*zLS, Hy:0,Mt:0, desc:"Live-load surcharge — horizontal"},
@@ -1342,12 +1365,16 @@ function computeAll(){
 
   /* ===== C-6 Limit states & γp permutation engine ===== */
   const F=S.factors;
+  // WS reactions are entered for Strength III (wind speed V_III); Strength V / Service I use (V_LS/V_III)² when V_III is given [T.3.8.1.1.2-1]
+  const vW3=+F.vWS3||0, wsF5=vW3>0?Math.pow((+F.vWS5||80)/vW3,2):1, wsFsv=vW3>0?Math.pow((+F.vWSsvc||70)/vW3,2):1;
+  R.wsScale={vW3,wsF5,wsFsv};
   const LIMITS={
     "Strength I":  {LL:+F.llS1, WS:0,        WL:0,       TU:+F.gTU, CR:+F.gCR, perm:true , liveOpt:true },
     "Strength III":{LL:0,       WS:+F.wsS3,  WL:0,       TU:+F.gTU, CR:+F.gCR, perm:true , liveOpt:false},
-    "Strength V":  {LL:+F.llS5, WS:+F.wsS5,  WL:+F.wlS5, TU:+F.gTU, CR:+F.gCR, perm:true , liveOpt:true },
+    "Strength IV": {LL:0,       WS:0,        WL:0,       TU:+F.gTU, CR:+F.gCR, perm:true , liveOpt:false, dcMax:(+F.gpDCmaxS4||1.50)},   // Table 3.4.1-1; γDC max 1.50 [T.3.4.1-2]
+    "Strength V":  {LL:+F.llS5, WS:+F.wsS5*wsF5,  WL:+F.wlS5, TU:+F.gTU, CR:+F.gCR, perm:true , liveOpt:true },
     "Constr — Str I":{LL:+S.constr.gLL||0, WS:0, WL:0, TU:0, CR:0, perm:true , liveOpt:(+S.constr.gLL||0)>0 , noSuper:true },
-    "Service I":   {LL:1.0,     WS:1.0,      WL:1.0,     TU:1.0,    CR:1.0,    perm:false, liveOpt:true }
+    "Service I":   {LL:1.0,     WS:1.0*wsFsv,      WL:1.0,     TU:1.0,    CR:1.0,    perm:false, liveOpt:true }
   };
   if(S.seismic.on) LIMITS["Extreme Event I"]={LL:+S.seismic.gEQll, WS:0, WL:0, TU:0, CR:0, EQ:1.0, perm:true, liveOpt:(+S.seismic.gEQll)>0, eq:true};
   R.LIMITS=LIMITS;
@@ -1368,6 +1395,7 @@ function computeAll(){
       else if(gr.cls==="LL") gamma = liveOn ? L.LL : 0;
       else if(gr.cls==="EQ") gamma = L.EQ||0;
       else gamma = L[gr.cls]; // TU, CR, WS, WL
+      if(gr.cls==="DC" && L.perm && L.dcMax && (perm.DC??1)===1) gamma = L.dcMax;   // Strength IV γDC max
       if(k==="LSv" && exclLSv) gamma=0;
       if((k==="LSvC") && exclLSv) gamma=0;
       if(gr.stage==="constr" && !L.noSuper) gamma=0;
@@ -1379,7 +1407,7 @@ function computeAll(){
     }
     const esOn=(+S.soil.esQ||0)>0;
     const lbl = L.perm
-      ? `${GP.DC[perm.DC].toFixed(2)}·DC + ${GP.DW[perm.DW].toFixed(2)}·DW + ${GP.EV[perm.EV].toFixed(2)}·EV + ${(L.eq?+S.seismic.gEHEQ:GP.EH[perm.EH]).toFixed(2)}·EH`
+      ? `${(perm.DC===1&&L.dcMax?L.dcMax:GP.DC[perm.DC]).toFixed(2)}·DC + ${GP.DW[perm.DW].toFixed(2)}·DW + ${GP.EV[perm.EV].toFixed(2)}·EV + ${(L.eq?+S.seismic.gEHEQ:GP.EH[perm.EH]).toFixed(2)}·EH`
         +(esOn?` + ${GP.ES[perm.ES??1].toFixed(2)}·ES`:"")
         +(liveOn&&L.LL?` + ${L.LL.toFixed(2)}·(LL,BR,LS)`:"")
         +(L.WS?` + ${L.WS.toFixed(2)}·WS`:"")+(L.WL?` + ${L.WL.toFixed(2)}·WL`:"")
@@ -1411,7 +1439,7 @@ function computeAll(){
     R.permTables[lsName]=rows;
   }
 
-  const STR_LIMITS=["Strength I","Strength III","Strength V","Constr — Str I"].concat(S.seismic.on&&LIMITS["Extreme Event I"]?["Extreme Event I"]:[]);
+  const STR_LIMITS=["Strength I","Strength III","Strength IV","Strength V","Constr — Str I"].concat(S.seismic.on&&LIMITS["Extreme Event I"]?["Extreme Event I"]:[]);
   function resFor(lsName){ const eq=LIMITS[lsName]&&LIMITS[lsName].eq;
     return { phiTau: eq? +S.seismic.phiTauEQ : fn.phiTau,
              phiB:   eq? +S.seismic.phiBEQ   : fn.phiB,
@@ -1446,44 +1474,47 @@ function computeAll(){
       for(const pl of permutations(lsName)){
         const c=comboEffects(lsName,pl.perm,pl.liveOn,true);
         if(c.V<=0) continue;
-        const xbar=(c.Mv-c.Mh)/c.V, e=B/2-xbar, dc=e/eLim;
-        if(dc>ecc.dc) ecc={dc, e, xbar, eLim, V:c.V, Mv:c.Mv, Mh:c.Mh, lbl:c.lbl, ls:lsName, c};
+        const xbar=(c.Mv-c.Mh)/c.V, eS=B/2-xbar, e=Math.abs(eS), dc=e/eLim;   // |e| [11.6.3.3]; eS < 0 = resultant on the heel side
+        if(dc>ecc.dc) ecc={dc, e, eSigned:eS, side:eS>=0?"toe":"heel", xbar, eLim, V:c.V, Mv:c.Mv, Mh:c.Mh, lbl:c.lbl, ls:lsName, c};
       }
     }
     R.checks.ecc=ecc;
     if(ecc.e>B/2) warn("Factored resultant falls outside the footing — the wall is unstable in overturning under the governing combination.","err");
 
     // ---- Bearing [10.6.3.1] ----
-    let brg={dc:-1};
+    let brg={dc:-1}, brgOut=false;
     for(const lsName of STR_LIMITS){
       for(const pl of permutations(lsName)){
         const c=comboEffects(lsName,pl.perm,pl.liveOn,false); // LSv included (adds demand)
         if(c.V<=0) continue;
-        const xbar=(c.Mv-c.Mh)/c.V, e=B/2-xbar;
+        const xbar=(c.Mv-c.Mh)/c.V, eS=B/2-xbar, e=Math.abs(eS);   // |e| [10.6.1.3]; pressure peak on the side of the resultant
         let q,Bp=NaN,qmax=NaN,mode;
         if(fn.matl==="soil"){
-          Bp=B-2*e; if(Bp<=0) continue;
+          Bp=B-2*e; if(Bp<=0){ brgOut=true; continue; }
           q=c.V/(Bp*Lftg); mode="uniform";
         }else{
           if(e<=B/6){ q=c.V/(B*Lftg)*(1+6*e/B); mode="trap"; }
-          else { q=2*c.V/(3*Lftg*(B/2-e)); mode="tri"; }
+          else if(e<B/2){ q=2*c.V/(3*Lftg*(B/2-e)); mode="tri"; }
+          else { brgOut=true; continue; }
         }
         const phiBls=resFor(lsName).phiB;
-        if(q/(phiBls*fn.qn)>brg.dc){ brg={dc:q/(phiBls*fn.qn), q, e, Bp, V:c.V, mode, phiB:phiBls, lbl:c.lbl, ls:lsName, c}; }
+        if(q/(phiBls*fn.qn)>brg.dc){ brg={dc:q/(phiBls*fn.qn), q, e, eSigned:eS, side:eS>=0?"toe":"heel", Bp, V:c.V, mode, phiB:phiBls, lbl:c.lbl, ls:lsName, c}; }
       }
     }
     R.checks.bearing=brg;
+    if(brgOut) warn("One or more strength permutations put the factored resultant outside the footing (B′ ≤ 0); they are excluded from the bearing check — see the eccentricity check.");
 
     // ---- Service I bearing (diagram + settlement flag) ----
     let sv={q:-1};
     for(const pl of permutations("Service I")){
       const c=comboEffects("Service I",pl.perm,pl.liveOn,false);
       if(c.V<=0) continue;
-      const xbar=(c.Mv-c.Mh)/c.V, e=B/2-xbar;
+      const xbar=(c.Mv-c.Mh)/c.V, eS=B/2-xbar, e=Math.abs(eS);   // |e|; diagram mirrored for a heel-side resultant
       let qmax,qmin,Lc=B,mode;
       if(e<=B/6){ qmax=c.V/(B*Lftg)*(1+6*e/B); qmin=c.V/(B*Lftg)*(1-6*e/B); mode="trap"; }
-      else { Lc=3*(B/2-e); qmax=2*c.V/(Lc*Lftg); qmin=0; mode="tri"; }
-      if(qmax>sv.q) sv={q:qmax,qmin,e,Lc,V:c.V,mode,lbl:c.lbl,c};
+      else if(e<B/2){ Lc=3*(B/2-e); qmax=2*c.V/(Lc*Lftg); qmin=0; mode="tri"; }
+      else continue;
+      if(qmax>sv.q) sv={q:qmax,qmin,e,eSigned:eS,side:eS>=0?"toe":"heel",Lc,V:c.V,mode,lbl:c.lbl,c};
     }
     R.serviceBearing=sv;
     if(sv.mode==="tri") warn("Service-level bearing pressure is triangular (resultant outside the middle third) — verify serviceability/settlement with the geotechnical engineer.");
@@ -1599,9 +1630,18 @@ function computeAll(){
     const Mcr=0.67*1.6*fr*Sc/12;                        // k-ft/ft (γ3·γ1·fr·Sc)
     const MuMin=Math.min(Mcr,1.33*o.Mu);
     const minOK=phiMn>=MuMin;
-    // shear [5.7.3.3] with β=2.0 simplified
+    // shear [5.7.3.3]: β = 2.0 only where 5.7.3.4.1 permits it; otherwise the general procedure [5.7.3.4.2] (no transverse reinforcement)
     const dv=Math.max(0.9*d,0.72*o.h);
-    const Vc=0.0316*2.0*Math.sqrt(m.fc)*b*dv;           // kips/ft
+    let betaMode=o.betaMode||"simple";
+    if(o.zeroShearDist!=null) betaMode = o.zeroShearDist<3*dv ? "simple" : "general";   // footings: zero-shear point within 3dv of the face
+    let betaV=2.0, epsS=null, sxe=null;
+    if(betaMode==="general"){
+      sxe=Math.min(80,Math.max(12, dv*1.38/((+m.ag||0.75)+0.63)));                 // s_x = d_v (no intermediate crack-control layers) [Eq. 5.7.3.4.2-7]
+      const MuIn=Math.max(Math.abs(o.Mu)*12, Math.abs(o.Vu)*dv);                    // |Mu| ≥ |Vu|·dv, k-in/ft
+      epsS=Math.min(0.006, Math.max(0, (MuIn/dv + Math.abs(o.Vu))/(29000*As)));     // N_u conservatively 0 [Eq. 5.7.3.4.2-4]
+      betaV=4.8/(1+750*epsS)*51/(39+sxe);                                             // [Eq. 5.7.3.4.2-2]
+    }
+    const Vc=0.0316*betaV*Math.sqrt(m.fc)*b*dv;         // kips/ft
     const phiVn=0.9*Vc;
     // crack control [5.6.7]
     const rho=As/(b*d), k=Math.sqrt(2*rho*nMod+Math.pow(rho*nMod,2))-rho*nMod, j=1-k/3;
@@ -1613,16 +1653,16 @@ function computeAll(){
     // development [5.10.8.2.1]
     const ld=Math.max(12, 2.4*bar.db*m.fy/Math.sqrt(m.fc));
     // shrinkage & temperature [5.10.6]
-    const hIn=o.h, LIn=b;
-    let AsST=1.30*b*hIn/(2*(b+hIn)*m.fy);
+    const hIn=o.hST||o.h, bST=o.bST||b;                 // b = least width, h = least thickness of the component (in) [Eq. 5.10.6-1]
+    let AsST=1.30*bST*hIn/(2*(bST+hIn)*m.fy);
     AsST=Math.min(0.60,Math.max(0.11,AsST));
     // skin (side-face) reinforcement note [5.6.7]: required when effective depth d_e > 3.0 ft (36 in)
     const skinNote = d>36;
     const skinAsk = skinNote ? Math.min(0.012*(d-30), (bar.Ab*12/o.sp)/4) : 0; // in²/ft per face (≤ As/4)
     if(!tensionCtrl) warn(`${o.name}: section is NOT tension-controlled (ε_t = ${fmt(epsT,4)} < 0.005) — φ reduced to ${fmt(phiF,3)} per the 5.5.4.2 transition; consider more depth or less steel.`);
     return {...o, As, AsReq, d, a, c:c2, beta1, epsT, tensionCtrl, phiF, phiMn, Sc, Mcr, MuMin, minOK,
-      dv, Vc, phiVn, dcFlex:o.Mu/phiMn, dcShear:o.Vu/phiVn,
-      rho,k,j,fss,dcBar:dc,betaS,sMax, crackOK:o.sp<=sMax, ld, AsST, gE, skinNote, skinAsk};
+      dv, Vc, phiVn, dcFlex:o.Mu/phiMn, dcShear:o.Vu/phiVn, betaMode, betaV, epsS, sxe,
+      rho,k,j,fss,dcBar:dc,betaS,sMax, crackOK:o.sp<=sMax, ld, AsST, bST, hST:hIn, gE, skinNote, skinAsk};
   }
 
   /* ---- Backwall ---- */
@@ -1637,7 +1677,8 @@ function computeAll(){
   R.bwDem={hbwRet,heqBW,Mbw_EH,Vbw_EH,Mbw_LS,Vbw_LS,MuBW,VuBW,MsBW,
     lbl:`${gEH_max.toFixed(2)}·EH + ${(+F.llS1).toFixed(2)}·LS (Strength I)`};
   R.checks.bwFlex=sectionCheck({name:"Backwall", h:g.tbw*12, cover:m.coverT, bar:S.reinf.bw.size,
-    sp:+S.reinf.bw.sp, Mu:MuBW, Vu:VuBW, Ms:MsBW, lbl:R.bwDem.lbl});
+    sp:+S.reinf.bw.sp, Mu:MuBW, Vu:VuBW, Ms:MsBW, lbl:R.bwDem.lbl,
+    bST:Math.min(Lab,g.hbw)*12, hST:g.tbw*12, betaMode:g.tbw*12<16?"simple":"general"});
 
   /* ---- Stem (at base, top of footing) ---- */
   const Hs=g.soilH, heqS=interpHeq(Hs);
@@ -1662,9 +1703,10 @@ function computeAll(){
     const HgirdPerFt=ns*( (L.LL? L.LL*groups.BR.Hx:0) + L.TU*groups.TU.Hx + L.CR*groups.CRSH.Hx
                       + L.WS*groups.WS.Hx + L.WL*groups.WL.Hx )/Lab;
     // vertical superstructure reactions (factored) act at xBrg → eccentric moment about stem center
-    const Pv = ns*( GP.DC[1]*groups.DCsup.V + GP.DW[1]*groups.DW.V + (L.LL?L.LL*groups.LL.V:0)
+    const gDCmx = L.dcMax||GP.DC[1];   // Strength IV: γDC max 1.50
+    const Pv = ns*( gDCmx*groups.DCsup.V + GP.DW[1]*groups.DW.V + (L.LL?L.LL*groups.LL.V:0)
              + L.WS*groups.WS.V + L.WL*groups.WL.V );
-    const MeccPerFt = ( Pv*(xSc-R.geo.xBrg) + GP.DC[1]*MselfEccTot )/Lab;
+    const MeccPerFt = ( Pv*(xSc-R.geo.xBrg) + gDCmx*MselfEccTot )/Lab;
     // seismic wall terms (per ft): ΔK increment over stem height + wall inertia (approx. arm mid-height)
     let Meq=0,Veq=0;
     if(L.eq&&R.seis&&isFinite(R.seis.dKh)){
@@ -1680,43 +1722,62 @@ function computeAll(){
     if(!stemGov||Mu>stemGov.Mu) stemGov={Mu,Vu,HgirdPerFt,MeccPerFt,Pv,Meq,ls:lsName,
       lbl:`${gEH_ls.toFixed(2)}·EH${esQ>0?` + ${GP.ES[1].toFixed(2)}·ES`:""}${L.LL?` + ${L.LL.toFixed(2)}·(LS,BR)`:""}${L.WS?` + ${L.WS.toFixed(2)}·WS`:""}${L.TU?` + ${L.TU.toFixed(2)}·TU/CR/SH`:""}${L.eq?" + 1.00·EQ":""} + P·e_brg (${lsName})`};
   }
-  const HgirdSvc=(groups.BR.Hx+groups.TU.Hx+groups.CRSH.Hx+groups.WS.Hx+groups.WL.Hx)/Lab;
-  const PvSvc=groups.DCsup.V+groups.DW.V+groups.LL.V+groups.WS.V+groups.WL.V;
+  const HgirdSvc=(groups.BR.Hx+groups.TU.Hx+groups.CRSH.Hx+wsFsv*groups.WS.Hx+groups.WL.Hx)/Lab;
+  const PvSvc=groups.DCsup.V+groups.DW.V+groups.LL.V+wsFsv*groups.WS.V+groups.WL.V;
   const MeccSvc=(PvSvc*(xSc-R.geo.xBrg)+MselfEccTot)/Lab;
   const MsStem=Mst_EH+Mst_LS+HgirdSvc*g.hstem+MeccSvc;
   R.stemDem={Hs,heqS,Mst_EH,Vst_EH,Mst_LS,Vst_LS,...stemGov,MsStem,HgirdSvc,eBrg:R.geo.eBrg,MselfEccTot,MeccSvc};
   if(g.hw>g.tf) warn("Water table above the top of footing: wall structural demands conservatively use moist unit weight over the full height (no buoyant reduction applied to wall pressures).");
   R.checks.stemFlex=sectionCheck({name:"Stem", h:g.tsb*12, cover:m.coverT, bar:S.reinf.stem.size,
-    sp:+S.reinf.stem.sp, Mu:stemGov.Mu, Vu:stemGov.Vu, Ms:MsStem, lbl:stemGov.lbl});
+    sp:+S.reinf.stem.sp, Mu:stemGov.Mu, Vu:stemGov.Vu, Ms:MsStem, lbl:stemGov.lbl,
+    bST:Math.min(Lab,g.hstem)*12, hST:Math.min(g.tst,g.tsb)*12, betaMode:g.tsb*12<16?"simple":"general"});
 
   /* ---- Toe & Heel ---- */
   let toeDem, heelDem;
   const wFoot=m.gc*g.tf;                          // footing self weight ksf
   const wSoilHeel=( gam*(g.soilH-hwSoil)+(gam-GAMMA_W)*hwSoil ); // ksf on heel
   const wLSv=gam*R.LS.heq;                        // vertical LS surcharge ksf
+  // slope wedge over the heel (triangular, 0 at the stem back face → γ·h_wedge at the heel end): per-ft shear and moment at the stem back face
+  const wedgeV=0.5*gam*R.EV.hWedge*g.Lheel, wedgeM=gam*R.EV.hWedge*g.Lheel*g.Lheel/3;
+  // per-ft heel loads for permutation c, with that permutation's own factors (consistent combination)
+  function heelLoads(c){ const cc=!!LIMITS[c.lsName].noSuper, gs=c.gset;
+    const gEV=gs[cc?"EVC":"EV"]||0, gDC=gs.DCsub||0, gLS=gs[cc?"LSvC":"LSv"]||0, gES=gs.ESv||0;
+    const wS=cc? gam*Math.min(R.constrC.hfC,g.soilH) : wSoilHeel, wL=cc? gam*R.constrC.heqC : wLSv;
+    const wDn=gEV*wS+gDC*wFoot+gLS*wL+gES*esQ;
+    return {gEV,gDC,gLS,gES,wDn, MheelDn:wDn*g.Lheel*g.Lheel/2+(cc?0:gEV*wedgeM), VheelDn:wDn*g.Lheel+(cc?0:gEV*wedgeV)}; }
+  R.heelLoads=heelLoads;
   if(fn.branch==="spread" && R.checks.bearing && R.checks.bearing.dc>=0){
     const bc=R.checks.bearing;
-    let segs;
-    if(fn.matl==="soil"){ segs=[{x0:0,x1:Math.max(0,bc.Bp),q0:bc.q,q1:bc.q}]; }
-    else{
-      if(bc.mode==="trap"){ const q0=bc.q, qL=bc.V/(B*Lftg)*(1-6*bc.e/B); segs=[{x0:0,x1:B,q0:q0,q1:qL}]; }
-      else{ const Lc=3*(B/2-bc.e); segs=[{x0:0,x1:Lc,q0:bc.q,q1:0}]; }
-    }
-    R.qSegs=segs;
-    // TOE — section at front face of stem
-    const VtoeUp=pressForce(segs,0,g.Ltoe), MtoeUp=pressMoment(segs,0,g.Ltoe,g.Ltoe);
-    const MtoeDn=0.9*wFoot*g.Ltoe*g.Ltoe/2, VtoeDn=0.9*wFoot*g.Ltoe;
+    // governing bearing case as used in the bearing check (diagram + equilibrium closure)
+    R.qSegs=(fn.matl==="soil"? meyerSegs(bc.V,bc.eSigned,B,Lftg) : linSegs(bc.V,bc.eSigned,B,Lftg))||[];
+    // TOE & HEEL — structural design uses the linear (trapezoidal/triangular) contact pressure [10.6.5, 11.6.3.2],
+    // evaluated for every strength permutation; the heel's downward loads use the same permutation's factors.
+    const MtoeDn=0.9*wFoot*g.Ltoe*g.Ltoe/2;
     const dvT=Math.max(0.9*(g.tf*12-m.coverF-BARS[S.reinf.toe.size].db/2),0.72*g.tf*12)/12; // ft
-    const VtoeUp_dv=pressForce(segs,0,Math.max(0,g.Ltoe-dvT));
-    toeDem={Mu:Math.max(0,MtoeUp-MtoeDn), Vu:Math.max(0,VtoeUp_dv-0.9*wFoot*Math.max(0,g.Ltoe-dvT)),
-      VtoeUp,MtoeUp,MtoeDn,dvT, lbl:bc.lbl+" ("+bc.ls+")", src:"bearing"};
-    // HEEL — section at back face of stem; downward soil+self+LS, upward pressure if any reaches heel
-    const wDn=(+F.gpEVmax)*wSoilHeel+(+F.gpDCmax)*wFoot+gLL_str*wLSv+GP.ES[1]*esQ;
-    const MheelDn=wDn*g.Lheel*g.Lheel/2, VheelDn=wDn*g.Lheel;
-    const MheelUp=pressMoment(segs,xStemBack,B,xStemBack), VheelUp=pressForce(segs,xStemBack,B);
-    heelDem={Mu:Math.max(0,MheelDn-MheelUp), Vu:Math.max(0,VheelDn-VheelUp),
-      wDn,MheelDn,VheelDn,MheelUp,VheelUp, face:"top",
-      lbl:`${(+F.gpEVmax).toFixed(2)}·EV + ${(+F.gpDCmax).toFixed(2)}·DC + ${gLL_str.toFixed(2)}·LS − bearing (governing case)`, src:"bearing"};
+    let tM=null,tV=null,hM=null,hV=null;
+    for(const lsName of STR_LIMITS){
+      for(const pl of permutations(lsName)){
+        const c=comboEffects(lsName,pl.perm,pl.liveOn,false);
+        if(c.V<=0) continue;
+        const eS=B/2-(c.Mv-c.Mh)/c.V, segs=linSegs(c.V,eS,B,Lftg); if(!segs) continue;
+        const VtoeUp=pressForce(segs,0,g.Ltoe), MtoeUp=pressMoment(segs,0,g.Ltoe,g.Ltoe);
+        const VtoeUp_dv=pressForce(segs,0,Math.max(0,g.Ltoe-dvT));
+        const tMu=Math.max(0,MtoeUp-MtoeDn), tVu=Math.max(0,VtoeUp_dv-0.9*wFoot*Math.max(0,g.Ltoe-dvT));
+        if(!tM||tMu>tM.Mu) tM={Mu:tMu,VtoeUp,MtoeUp,c,ls:lsName,eS,segs};
+        if(!tV||tVu>tV.Vu) tV={Vu:tVu,c,ls:lsName};
+        const hl=heelLoads(c), MheelUp=pressMoment(segs,xStemBack,B,xStemBack), VheelUp=pressForce(segs,xStemBack,B);
+        const hMu=Math.max(0,hl.MheelDn-MheelUp), hVu=Math.max(0,hl.VheelDn-VheelUp);
+        if(!hM||hMu>hM.Mu) hM={Mu:hMu,...hl,MheelUp,VheelUp,c,ls:lsName,eS};
+        if(!hV||hVu>hV.Vu) hV={Vu:hVu,c,ls:lsName};
+      }
+    }
+    if(tM){
+      toeDem={Mu:tM.Mu, Vu:tV.Vu, VtoeUp:tM.VtoeUp, MtoeUp:tM.MtoeUp, MtoeDn, dvT, eS:tM.eS, ls:tM.ls, lsV:tV.ls,
+        lbl:tM.c.lbl+" ("+tM.ls+")", src:"bearing"};
+      heelDem={Mu:hM.Mu, Vu:hV.Vu, wDn:hM.wDn, gEV:hM.gEV, gDC:hM.gDC, gLS:hM.gLS, gES:hM.gES, MheelDn:hM.MheelDn, VheelDn:hM.VheelDn,
+        MheelUp:hM.MheelUp, VheelUp:hM.VheelUp, wedgeM:hM.gEV*wedgeM, eS:hM.eS, ls:hM.ls, lsV:hV.ls, face:"top",
+        lbl:hM.c.lbl+" ("+hM.ls+") − linear bearing, same permutation", src:"bearing"};
+    }else{ toeDem={Mu:0,Vu:0,lbl:"—",src:"none"}; heelDem={Mu:0,Vu:0,face:"top",lbl:"—",src:"none"}; }
   }else if(fn.branch==="pile" && R.pile && R.pile.perLS){
     const det=R.checks.pileComp.det, act=activePiles();
     // per-foot upward line loads by pile row (x from footing CL)
@@ -1732,11 +1793,28 @@ function computeAll(){
     const MtoeDn=0.9*wFoot*g.Ltoe*g.Ltoe/2;
     toeDem={Mu:Math.max(0,MtoeUp-MtoeDn), Vu:Math.max(0,VtoeUp-0.9*wFoot*g.Ltoe),
       MtoeUp,VtoeUp,MtoeDn,rowArr, lbl:det.c?.lbl+" ("+R.checks.pileComp.ls+")", src:"pile"};
-    const wDn=(+F.gpEVmax)*wSoilHeel+(+F.gpDCmax)*wFoot+gLL_str*wLSv+GP.ES[1]*esQ;
-    const MheelDn=wDn*g.Lheel*g.Lheel/2, VheelDn=wDn*g.Lheel;
-    const Mnet=MheelDn-MheelUp;
-    heelDem={Mu:Math.abs(Mnet), Vu:Math.abs(VheelDn-VheelUp), face:Mnet>=0?"top":"bottom",
-      wDn,MheelDn,VheelDn,MheelUp,VheelUp, lbl:`${(+F.gpEVmax).toFixed(2)}·EV + ${(+F.gpDCmax).toFixed(2)}·DC + ${gLL_str.toFixed(2)}·LS − pile reactions`, src:"pile"};
+    // HEEL — every strength permutation; downward loads and pile reactions from the same permutation (consistent combination)
+    let hTop=null,hBot=null,hV=null;
+    for(const lsName of STR_LIMITS){
+      for(const pl of permutations(lsName)){
+        const c=comboEffects(lsName,pl.perm,pl.liveOn,false);
+        const loads=pileLoadsFor(c); if(!loads) continue;
+        let MhU=0,VhU=0;
+        act.forEach((pp,i)=>{ const xT=B/2+pp.x; if(xT>xStemBack){ VhU+=loads[i]/Lftg; MhU+=loads[i]/Lftg*(xT-xStemBack); } });
+        const hl=heelLoads(c), Mnet=hl.MheelDn-MhU, Vnet=Math.abs(hl.VheelDn-VhU);
+        const rec={Mnet,...hl,MheelUp:MhU,VheelUp:VhU,c,ls:lsName};
+        if(!hTop||Mnet>hTop.Mnet) hTop=rec;
+        if(!hBot||Mnet<hBot.Mnet) hBot=rec;
+        if(!hV||Vnet>hV.Vu) hV={Vu:Vnet,c,ls:lsName};
+      }
+    }
+    const hG=(hTop&&hTop.Mnet>0)? hTop : hBot;
+    if(hG){
+      heelDem={Mu:Math.abs(hG.Mnet), Vu:hV.Vu, face:hG.Mnet>=0?"top":"bottom",
+        wDn:hG.wDn, gEV:hG.gEV, gDC:hG.gDC, gLS:hG.gLS, gES:hG.gES, MheelDn:hG.MheelDn, VheelDn:hG.VheelDn, MheelUp:hG.MheelUp, VheelUp:hG.VheelUp,
+        wedgeM:hG.gEV*wedgeM, ls:hG.ls, lsV:hV.ls, lbl:hG.c.lbl+" ("+hG.ls+") − pile reactions, same permutation", src:"pile"};
+      if(hG===hTop && hBot && hBot.Mnet<0) warn(`Heel: some strength permutations (e.g. ${hBot.ls}) give BOTTOM tension (M = ${fmt(-hBot.Mnet)} kip-ft/ft) — the heel is checked for top steel only; check bottom steel by hand.`,"warn");
+    }else heelDem={Mu:0,Vu:0,face:"top",lbl:"—",src:"none"};
     if(heelDem.face==="bottom") warn("Heel net moment causes BOTTOM tension (pile reactions exceed downward load) — provided heel steel is assumed at the top; add bottom steel check by hand.","warn");
   }else{
     toeDem={Mu:0,Vu:0,lbl:"—",src:"none"}; heelDem={Mu:0,Vu:0,face:"top",lbl:"—",src:"none"};
@@ -1744,9 +1822,11 @@ function computeAll(){
   R.toeDem=toeDem; R.heelDem=heelDem;
   R.footWt={wFoot,wSoilHeel,wLSv};
   R.checks.toeFlex=sectionCheck({name:"Toe", h:g.tf*12, cover:m.coverF, bar:S.reinf.toe.size,
-    sp:+S.reinf.toe.sp, Mu:toeDem.Mu, Vu:toeDem.Vu, Ms:toeDem.Mu/1.4, lbl:toeDem.lbl});
+    sp:+S.reinf.toe.sp, Mu:toeDem.Mu, Vu:toeDem.Vu, Ms:toeDem.Mu/1.4, lbl:toeDem.lbl,
+    bST:Math.min(B,Lftg)*12, hST:g.tf*12, zeroShearDist:g.Ltoe*12});
   R.checks.heelFlex=sectionCheck({name:"Heel", h:g.tf*12, cover:m.coverF, bar:S.reinf.heel.size,
-    sp:+S.reinf.heel.sp, Mu:heelDem.Mu, Vu:heelDem.Vu, Ms:heelDem.Mu/1.4, lbl:heelDem.lbl});
+    sp:+S.reinf.heel.sp, Mu:heelDem.Mu, Vu:heelDem.Vu, Ms:heelDem.Mu/1.4, lbl:heelDem.lbl,
+    bST:Math.min(B,Lftg)*12, hST:g.tf*12, zeroShearDist:g.Lheel*12});
   // Service moments for footing crack control approximated as Mu/1.4 — flag it
   R.footingCrackNote="Footing service moments for crack control are approximated as M_u/1.4; refine by hand if crack control governs.";
 
@@ -1801,7 +1881,7 @@ function computeAll(){
   /* ===== C-14 Shear friction at stem-to-footing joint [AASHTO 5.7.4] ===== */
   {
     const PREP={monolithic:{c:0.40,mu:1.4,K1:0.25,K2:1.5,name:"cast monolithically"},
-                roughened:{c:0.28,mu:1.0,K1:0.30,K2:1.8,name:"against hardened concrete, roughened ¼ in"},
+                roughened:{c:0.24,mu:1.0,K1:0.25,K2:1.5,name:"against hardened concrete, roughened ¼ in"},   // 5.7.4.4 (normal-weight concrete against hardened, roughened concrete; 0.28/0.30/1.8 is for a CIP slab on girders)
                 smooth:{c:0.075,mu:0.6,K1:0.20,K2:0.8,name:"against hardened concrete, not roughened"}};
     const pr=PREP[S.joint?.prep||"roughened"];
     const Acv=(g.tsb*12)*12;                              // in²/ft (joint area per 1-ft strip)
@@ -1831,8 +1911,10 @@ function computeAll(){
     for(let i=0;i<S.beams.N;i++){
       const SI=GP.DC[1]*S.rx.DC[i].P+GP.DW[1]*S.rx.DW[i].P+(+F.llS1)*S.rx.LL[i].P;
       const SV=GP.DC[1]*S.rx.DC[i].P+GP.DW[1]*S.rx.DW[i].P+(+F.llS5)*S.rx.LL[i].P
-               +(+F.wsS5)*S.rx.WS[i].P+(+F.wlS5)*S.rx.WL[i].P;
+               +(+F.wsS5)*wsF5*S.rx.WS[i].P+(+F.wlS5)*S.rx.WL[i].P;
+      const SIV=LIMITS["Strength IV"].dcMax*S.rx.DC[i].P+GP.DW[1]*S.rx.DW[i].P;
       if(SI>Pu){Pu=SI;pgirder=i+1;pls="Strength I";}
+      if(SIV>Pu){Pu=SIV;pgirder=i+1;pls="Strength IV";}
       if(SV>Pu){Pu=SV;pgirder=i+1;pls="Strength V";}
     }
     const qb=Pu/A1;                                       // ksi
@@ -1876,9 +1958,7 @@ function computeAll(){
   function bearingSegsFor(c){
     if(fn.branch!=="spread"||c.V<=0) return null;
     const xbar=(c.Mv-c.Mh)/c.V, e=B/2-xbar;
-    if(fn.matl==="soil"){ const Bp=B-2*e; if(Bp<=0) return null; const q=c.V/(Bp*Lftg); return [{x0:0,x1:Bp,q0:q,q1:q}]; }
-    if(e<=B/6){ return [{x0:0,x1:B,q0:c.V/(B*Lftg)*(1+6*e/B),q1:c.V/(B*Lftg)*(1-6*e/B)}]; }
-    const Lc=3*(B/2-e); return [{x0:0,x1:Lc,q0:2*c.V/(Lc*Lftg),q1:0}];
+    return linSegs(c.V,e,B,Lftg);   // structural design of the footing: linear contact pressure [10.6.5], mirrored for a heel-side resultant
   }
   // per-pile axial loads for an arbitrary combo effect c
   function pileLoadsFor(c){
@@ -1931,7 +2011,7 @@ function computeAll(){
     // factor for a load class under the selection
     const fEH = isLS?(Lst.perm?GP.EH[1]:1.0):one("EH");
     const fEVmax = isLS?(Lst.perm?GP.EV[1]:1.0):one("EV");
-    const fDCmax = isLS?(Lst.perm?GP.DC[1]:1.0):one("DC");
+    const fDCmax = isLS?(Lst.perm?(Lst.dcMax||GP.DC[1]):1.0):one("DC");
     const fDCmin = isLS?(Lst.perm?GP.DC[0]:1.0):one("DC");
     const fDW = isLS?(Lst.perm?GP.DW[1]:1.0):one("DW");
     const fLS = isLS?Lst.LL:one("LS");
@@ -1996,7 +2076,8 @@ function computeAll(){
       const wLSv_ls=cctx? gam*R.constrC.heqC : wLSv;
       const wDn = isLS ? (fEVmax*wSoil_ls + fDCmax*wFoot + fLS*wLSv_ls + fES*esQv)
                        : ((key==="EV"?wSoilHeel:0) + (key==="DC"?wFoot:0) + (key==="LS"?wLSv:0) + (key==="ES"?esQv:0));
-      for(let i=0;i<NST;i++){ const xl=g.Lheel*i/(NST-1); st.push(xl); const xg=B-xl; w.push(qFn(xg) - wDn); }
+      const fWdg = cctx?0:(isLS?fEVmax:(key==="EV"?1:0)), hW=R.EV.hWedge;   // slope wedge: γ·h_wedge·(L_heel − x_l)/L_heel
+      for(let i=0;i<NST;i++){ const xl=g.Lheel*i/(NST-1); st.push(xl); const xg=B-xl; w.push(qFn(xg) - wDn - fWdg*gam*hW*(g.Lheel>0?(g.Lheel-xl)/g.Lheel:0)); }
       const r=integ(st,w,pts);
       vm.heel={pos:st, V:r.V, M:r.M, axis:"Distance from heel end (ft)",
         peakV:R.checks.heelFlex.Vu, peakM:R.checks.heelFlex.Mu, ref:"§5.4", shearAtDv:true};
@@ -2007,7 +2088,7 @@ function computeAll(){
   R.vmGamma = function(lsName){            // demand-side factor per load class, as used by the wall/diagram models
     const L=LIMITS[lsName]; if(!L) return null;
     const ns=L.noSuper?0:1;
-    return { DC:L.perm?GP.DC[1]:1, DW:ns*(L.perm?GP.DW[1]:1), LL:ns*L.LL, EV:L.perm?GP.EV[1]:1,
+    return { DC:L.perm?(L.dcMax||GP.DC[1]):1, DW:ns*(L.perm?GP.DW[1]:1), LL:ns*L.LL, EV:L.perm?GP.EV[1]:1,
       EH:L.eq? +S.seismic.gEHEQ : (L.perm?GP.EH[1]:1), LS:L.LL, ES:L.perm?GP.ES[1]:1,
       BR:ns*L.LL, TU:ns*L.TU, CRSH:ns*L.CR, WS:ns*L.WS, WL:ns*L.WL, ns };
   };
@@ -2022,8 +2103,8 @@ function computeAll(){
   {
     const keys=["DC","DW","LL","EV","EH","LS","BR","TU","CRSH","WS","WL","ES"];
     let sumStem=0,sumBw=0;
-    keys.forEach(k=>{ const v=buildVM("load:"+k);
-      sumStem+=v.stem.M[v.stem.M.length-1]; sumBw+=v.backwall.M[v.backwall.M.length-1]; });
+    keys.forEach(k=>{ const v=buildVM("load:"+k), f=(k==="WS"?wsFsv:1);   // Service I WS factor (V_SI/V_III)² when wind scaling is on
+      sumStem+=f*v.stem.M[v.stem.M.length-1]; sumBw+=f*v.backwall.M[v.backwall.M.length-1]; });
     const svc=buildVM("ls:Service I");
     R.superChk={ stemSum:sumStem, stemSvc:svc.stem.M[svc.stem.M.length-1],
                  bwSum:sumBw, bwSvc:svc.backwall.M[svc.backwall.M.length-1] };
@@ -2034,7 +2115,7 @@ function computeAll(){
      to the applied factored resultants. */
   R.closure=null;
   if(fn.branch==="spread" && R.checks.bearing && R.checks.bearing.dc>=0 && R.qSegs){
-    const bc=R.checks.bearing, xbar=B/2-bc.e;
+    const bc=R.checks.bearing, xbar=B/2-bc.eSigned;
     const Rq=pressForce(R.qSegs,0,B)*Lftg;
     const Mq=pressMoment(R.qSegs,0,B,0)*Lftg;      // about the toe
     R.closure={type:"spread", V:bc.V, Rq, dV:bc.V-Rq, Mv:bc.V*xbar, Mq, dM:bc.V*xbar-Mq, lbl:bc.lbl, ls:bc.ls};
@@ -2072,6 +2153,7 @@ function computeAll(){
       ["factors.gpDWmax",1.50,"γDW max [T.3.4.1-2]"],["factors.gpDWmin",0.65,"γDW min [T.3.4.1-2]"],
       ["factors.gpEVmax",1.35,"γEV max [T.3.4.1-2]"],["factors.gpEVmin",1.00,"γEV min [T.3.4.1-2]"],
       ["factors.gpEHmax",1.50,"γEH max (active) [T.3.4.1-2]"],["factors.gpEHmin",0.90,"γEH min [T.3.4.1-2]"],
+      ["factors.gpDCmaxS4",1.50,"γDC max Strength IV [T.3.4.1-2]"],
       ["factors.llS1",1.75,"γLL Strength I [T.3.4.1-1]"],["factors.llS5",1.35,"γLL Strength V [T.3.4.1-1]"],
       ["factors.wsS3",1.40,"γWS Strength III (design basis)"],["factors.wsS5",1.00,"γWS Strength V"],
       ["factors.wlS5",1.00,"γWL Strength V"],["factors.gTU",0.50,"γTU (force effects)"],["factors.gCR",0.50,"γCR/SH"],
@@ -2295,6 +2377,7 @@ function renderTabLoads(R){
     ${eqB("Vertical earth load over heel (EV)","AASHTO 3.5.1",[
       "W_{EV} = \\left[\\gamma\\,(h_{soil}-h_{w,s}) + (\\gamma-\\gamma_w)\\,h_{w,s}\\right] L_{heel}\\,L_{ab}",
       `W_{EV} = \\left[${fmtT(S.soil.gamma,3)}\\,(${fmtT(R.EV.dry)}) + ${fmtT(S.soil.gamma-GAMMA_W,4)}\\,(${fmtT(R.EV.sub)})\\right](${fmtT(g.Lheel)})(${fmtT(g.Lab)})`,
+      ...(R.EV.Wwedge>0?[`\\text{slope wedge: } \\tfrac{1}{2}\\gamma\\,L_{heel}\\,(L_{heel}\\tan\\beta)\\,L_{ab} = \\tfrac{1}{2}(${fmtT(S.soil.gamma,3)})(${fmtT(g.Lheel)})(${fmtT(R.EV.hWedge)})(${fmtT(g.Lab)}) = ${fmtT(R.EV.Wwedge)}\\ \\text{kip at } ${fmtT(R.EV.xWedge)}\\ \\text{ft}`]:[]),
       `W_{EV} = ${fmtT(R.EV.W)}\\ \\text{kip} \\quad\\text{at } \\bar{x} = ${fmtT(R.EV.x)}\\ \\text{ft from toe}`])}
   `);
   /* --- earth pressure --- */
@@ -2552,10 +2635,10 @@ function renderTabStab(R){
       ${eqB("Location of the resultant and eccentricity (moments about the toe)","AASHTO 11.6.3.3",[
         "\\bar{x} = \\dfrac{\\Sigma M_{V} - \\Sigma M_{H}}{\\Sigma V}\\,, \\qquad e = \\dfrac{B}{2} - \\bar{x}",
         `\\bar{x} = \\dfrac{${fmtT(ec.Mv)} - ${fmtT(ec.Mh)}}{${fmtT(ec.V)}} = ${fmtT(ec.xbar)}\\ \\text{ft}`,
-        `e = \\dfrac{${fmtT(geo.B)}}{2} - ${fmtT(ec.xbar)} = ${fmtT(ec.e)}\\ \\text{ft}`])}
+        `e = \\dfrac{${fmtT(geo.B)}}{2} - ${fmtT(ec.xbar)} = ${fmtT(ec.eSigned)}\\ \\text{ft}\\,, \\qquad |e| = ${fmtT(ec.e)}\\ \\text{ft}\\ (\\text{resultant on the ${ec.side} side})`])}
       ${eqB(`Limit for founding material: ${fn.matl}${LIMITS_HAS_EQ(R)?" (EE-I uses the extreme-event fraction)":""}`,"AASHTO 11.6.3.3, 11.6.5.1",[
         `e_{lim} = ${fmtT(ec.eLim)}\\ \\text{ft} \\quad(${(R.LIMITS[ec.ls]&&R.LIMITS[ec.ls].eq)?`${fmt(+S.seismic.eFracEQ,3)}·B \\text{ at EE-I}`:`${fmtT(fn.matl==="rock"?+fn.eFracRock:+fn.eFracSoil,3)}\\,B \\text{ at Strength — middle ${fn.matl==="rock"?"nine-tenths":"two-thirds"}}`})`])}
-      ${checkLine("Eccentricity",`\\dfrac{e}{e_{lim}} = \\dfrac{${fmtT(ec.e)}}{${fmtT(ec.eLim)}}`,ec.dc)}
+      ${checkLine("Eccentricity",`\\dfrac{|e|}{e_{lim}} = \\dfrac{${fmtT(ec.e)}}{${fmtT(ec.eLim)}}`,ec.dc)}
     `);
     const bc=R.checks.bearing;
     h+=panel("o-brg","3.3","Bearing Resistance [10.6.3.1]",`
@@ -2563,7 +2646,7 @@ function renderTabStab(R){
       <div class="eq-note">Governing permutation highlighted in <span class="xlink" data-jump="tab-comb|o-perm-${bc.ls.replace(/\s/g,"")}">Tab 2 §2.3 (${esc(bc.ls)})</span>; force × arm and equilibrium closure in <span class="xlink" data-jump="tab-stab|o-fbd">§3.0</span>.</div>
       ${fn.matl==="soil"
         ? eqB("Effective-width (Meyerhof) uniform pressure — soil","AASHTO 10.6.3.1, 10.6.1.3 (Eq. 10.6.1.3-1)",[
-            "B' = B - 2e\\,, \\qquad q_f = \\dfrac{\\Sigma V_f}{B'\\,L_{ftg}}",
+            "B' = B - 2|e|\\,, \\qquad q_f = \\dfrac{\\Sigma V_f}{B'\\,L_{ftg}}",
             `B' = ${fmtT(geo.B)} - 2(${fmtT(bc.e)}) = ${fmtT(bc.Bp)}\\ \\text{ft}`,
             `q_f = \\dfrac{${fmtT(bc.V)}}{(${fmtT(bc.Bp)})(${fmtT(g.Lftg)})} = ${fmtT(bc.q)}\\ \\text{ksf}`])
         : eqB(`Linear distribution — rock (${bc.mode==="trap"?"trapezoidal, e ≤ B/6":"triangular, e > B/6"})`,"AASHTO 10.6.3.1, 11.6.3.2",[
@@ -2576,7 +2659,7 @@ function renderTabStab(R){
         "q_n from the geotechnical report; φ_b per the governing limit state (extreme-event value at EE-I).")}
       ${checkLine("Bearing",`\\dfrac{q_f}{q_R} = \\dfrac{${fmtT(bc.q)}}{${fmtT((bc.phiB??fn.phiB)*fn.qn)}}`,bc.dc)}
       <div class="plotbox" id="brgPlot"></div>
-      <div class="figcap">Bearing-pressure distributions: Service I (trapezoidal/triangular) and governing Strength (effective uniform over B′ for soil; linear for rock). Toggle series in the legend.</div>
+      <div class="figcap">Bearing-pressure distributions: Service I (trapezoidal/triangular) and governing Strength (effective uniform over B′ for soil; linear for rock). |e| is used; the governing resultant is on the <b>${bc.side||"toe"}</b> side${bc.side==="heel"?" (diagram mirrored — peak at the heel)":""}. Toggle series in the legend.</div>
     `);
     const sv=R.serviceBearing;
     h+=panel("o-svc","3.4","Service I — Bearing, Settlement & Global Stability Flags [10.6.2, 11.6.2.3]",`
@@ -2750,10 +2833,13 @@ function sectionHTML(c, demHTML, secNo, title){
       "γ1 = 1.6 (other members), γ3 = 0.67 (A615 Gr 60).")}
     <div class="checkline ${c.minOK?"pass":"fail"}"><span class="flagchip ${c.minOK?"pass":"fail"}">${c.minOK?"PASS":"FAIL"}</span> Minimum reinforcement ${c.minOK?"satisfied":"NOT satisfied"}.</div>
     <div class="subhead">One-way shear [5.7.3]</div>
-    ${eqB("Concrete shear resistance (β = 2.0 simplified)","AASHTO 5.7.3.3 (Eq. 5.7.3.3-3), 5.7.2.8",[
+    ${eqB(c.betaMode==="general"?"Concrete shear resistance — general procedure, no transverse reinforcement":"Concrete shear resistance (β = 2.0 simplified)",c.betaMode==="general"?"AASHTO 5.7.3.3 (Eq. 5.7.3.3-3), 5.7.3.4.2 (Eqs. 5.7.3.4.2-2, -4, -7)":"AASHTO 5.7.3.3 (Eq. 5.7.3.3-3), 5.7.3.4.1",[
       "d_v = \\max(0.9d,\\,0.72h)\\,, \\qquad V_c = 0.0316\\,\\beta\\sqrt{f'_c}\\,b_v d_v",
-      `d_v = \\max(0.9\\times${fmtT(c.d)},\\,0.72\\times${fmtT(c.h,1)}) = ${fmtT(c.dv)}\\ \\text{in}`,
-      `\\varphi V_n = 0.90\\times0.0316(2.0)\\sqrt{${fmtT(m.fc,1)}}\\,(12)(${fmtT(c.dv)}) = ${fmtT(c.phiVn)}\\ \\text{kip/ft}`])}
+      `d_v = \\max(0.9\\times${fmtT(c.d)},\\,0.72\\times${fmtT(c.h,1)}) = ${fmtT(c.dv)}\\ \\text{in}`].concat(c.betaMode==="general"?[
+      `s_{xe} = d_v\\dfrac{1.38}{a_g+0.63} = ${fmtT(c.sxe)}\\ \\text{in}\\,(12 \\le s_{xe} \\le 80)\\,, \\qquad \\varepsilon_s = \\dfrac{|M_u|/d_v + |V_u|}{E_s A_s} = ${fmtT(c.epsS*1000,3)}\\times10^{-3}`,
+      `\\beta = \\dfrac{4.8}{1+750\\varepsilon_s}\\cdot\\dfrac{51}{39+s_{xe}} = ${fmtT(c.betaV,3)}`]:[]).concat([
+      `\\varphi V_n = 0.90\\times0.0316(${fmtT(c.betaV,3)})\\sqrt{${fmtT(m.fc,1)}}\\,(12)(${fmtT(c.dv)}) = ${fmtT(c.phiVn)}\\ \\text{kip/ft}`]),
+      c.betaMode==="general"?"β = 2.0 is not permitted here [5.7.3.4.1]: no minimum transverse reinforcement and h ≥ 16 in (walls), or the zero-shear point is not within 3d<sub>v</sub> of the face (footings). General procedure with s<sub>x</sub> = d<sub>v</sub>, N<sub>u</sub> = 0 (axial compression conservatively ignored), |M<sub>u</sub>| ≥ |V<sub>u</sub>|d<sub>v</sub>, 0 ≤ ε<sub>s</sub> ≤ 0.006.":"β = 2.0 permitted by 5.7.3.4.1 (footing with the zero-shear point within 3d<sub>v</sub> of the face, or h < 16 in).")}
     ${checkLine(c.name+" shear",`\\dfrac{V_u}{\\varphi V_n} = \\dfrac{${fmtT(c.Vu)}}{${fmtT(c.phiVn)}}`,c.dcShear)}
     <div class="subhead">Crack control [5.6.7]</div>
     ${eqB("Service steel stress (cracked elastic section) & spacing limit","AASHTO 5.6.7, Eq. 5.6.7-1 / 5.6.7-2",[
@@ -2764,7 +2850,7 @@ function sectionHTML(c, demHTML, secNo, title){
       Provided spacing s = ${fmt(c.sp,1)} in ${c.crackOK?"≤":">"} s<sub>max</sub> = ${fmt(c.sMax)} in &nbsp;(M<sub>s</sub> = ${fmt(c.Ms)} kip·ft/ft, γ<sub>e</sub> = ${fmt(c.gE)})</div>
     <div class="subhead">Shrinkage & temperature + development [5.10.6, 5.10.8]</div>
     ${eqB("S&T reinforcement (each face, each direction) & basic development length","AASHTO 5.10.6 (Eq. 5.10.6-1), 5.10.8.2.1a (Eq. 5.10.8.2.1a-2)",[
-      `A_{s,ST} \\ge \\dfrac{1.30\\,b\\,h}{2(b+h)f_y} = \\dfrac{1.30(12)(${fmtT(c.h,1)})}{2(12+${fmtT(c.h,1)})(${fmtT(m.fy,1)})} = ${fmtT(c.AsST)}\\ \\text{in}^2/\\text{ft} \\quad (0.11 \\le A_{s,ST} \\le 0.60)`,
+      `A_{s,ST} \\ge \\dfrac{1.30\\,b\\,h}{2(b+h)f_y} = \\dfrac{1.30(${fmtT(c.bST,1)})(${fmtT(c.hST,1)})}{2(${fmtT(c.bST,1)}+${fmtT(c.hST,1)})(${fmtT(m.fy,1)})} = ${fmtT(c.AsST)}\\ \\text{in}^2/\\text{ft} \\quad (0.11 \\le A_{s,ST} \\le 0.60;\\ b,\\,h = \\text{least width, least thickness of the component})`,
       `\\ell_d = \\dfrac{2.4\\,d_b\\,f_y}{\\sqrt{f'_c}} = \\dfrac{2.4(${fmtT(BARS[c.bar].db,3)})(${fmtT(m.fy,1)})}{\\sqrt{${fmtT(m.fc,1)}}} = ${fmtT(c.ld,1)}\\ \\text{in}`],
       "S&T applies to exposed faces not otherwise reinforced; development length shown with all modification factors = 1.0 — confirm hooks/embedment in detailing.")}
     ${c.skinNote?`<div class="note-box"><b>Side-face (skin) reinforcement [5.6.7]:</b> effective depth d = ${fmt(c.d,1)} in exceeds 3 ft (36 in), so longitudinal skin reinforcement is required on each side face over the lower h/2, with A<sub>sk</sub> ≥ 0.012(d − 30) = <b>${fmt(c.skinAsk)} in²/ft per face</b> (need not exceed A<sub>s</sub>/4). Provide and detail this steel — it is a note, not designed by the tool.</div>`:""}
@@ -2796,7 +2882,7 @@ function renderTabStruct(R){
         `V_{up} = \\int q\\,dx = ${fmtT(td.VtoeUp)}\\ \\text{kip/ft}\\,, \\qquad M_{up} = ${fmtT(td.MtoeUp)}\\ \\text{kip-ft/ft (about the face)}`,
         `M_{dn} = 0.90\\,\\gamma_c t_f \\dfrac{L_{toe}^2}{2} = 0.90(${fmtT(S.mat.gc,3)})(${fmtT(g.tf)})\\dfrac{(${fmtT(g.Ltoe)})^2}{2} = ${fmtT(td.MtoeDn)}\\ \\text{kip-ft/ft}`,
         `M_u = ${fmtT(td.Mu)}\\ \\text{kip-ft/ft}\\,, \\qquad V_u\\text{(at } d_v = ${fmtT(td.dvT)}\\ \\text{ft from face)} = ${fmtT(td.Vu)}\\ \\text{kip/ft}`],
-        "Pressure distribution from the governing strength bearing case (uniform over B′ on soil; linear on rock). Soil above the toe neglected (conservative).")
+        `Linear (trapezoidal/triangular) contact pressure for structural design [10.6.5], from the strength permutation that gives the largest toe moment (${esc(td.ls||"")}); V<sub>u</sub> from the permutation giving the largest shear (${esc(td.lsV||"")}). Soil above the toe neglected (conservative).`)
     : td.src==="pile"
     ? eqB("Toe demands — pile reactions minus footing self-weight, at front face of stem","Design basis §8.3",[
         `V_{up} = \\Sigma P_{row}/L_{ab} = ${fmtT(td.VtoeUp)}\\ \\text{kip/ft}\\,, \\qquad M_{up} = \\Sigma (P_{row}/L_{ab})\\,a_{row} = ${fmtT(td.MtoeUp)}\\ \\text{kip-ft/ft}`,
@@ -2807,10 +2893,10 @@ function renderTabStruct(R){
   h+=sectionHTML(cT, toeDemH, "5.3","Toe — Flexure & Shear (bottom reinforcement)");
   const hd=R.heelDem, cH=R.checks.heelFlex;
   const heelDemH = eqB(`Heel demands — downward soil + self-weight + LS minus ${hd.src==="pile"?"pile reactions":"upward bearing"}, at back face of stem`,"Design basis §8.4",[
-      `w_{dn} = \\gamma_{EV}w_{soil} + \\gamma_{DC}w_{ftg} + \\gamma_{LL}w_{LS} = ${fmtT(hd.wDn,3)}\\ \\text{ksf}`,
-      `M_{dn} = w_{dn}\\dfrac{L_{heel}^2}{2} = (${fmtT(hd.wDn,3)})\\dfrac{(${fmtT(g.Lheel)})^2}{2} = ${fmtT(hd.MheelDn)}\\ \\text{kip-ft/ft}\\,, \\qquad M_{up} = ${fmtT(hd.MheelUp)}\\ \\text{kip-ft/ft}`,
+      `w_{dn} = \\gamma_{EV}w_{soil} + \\gamma_{DC}w_{ftg} + \\gamma_{LL}w_{LS} + \\gamma_{ES}q_{ES} = ${fmtT(hd.gEV)}w_{soil} + ${fmtT(hd.gDC)}w_{ftg} + ${fmtT(hd.gLS)}w_{LS} + ${fmtT(hd.gES)}q_{ES} = ${fmtT(hd.wDn,3)}\\ \\text{ksf}`,
+      `M_{dn} = w_{dn}\\dfrac{L_{heel}^2}{2}${hd.wedgeM>0?" + \\gamma_{EV}\\,\\gamma\\,h_{wedge}\\dfrac{L_{heel}^2}{3}":""} = ${fmtT(hd.MheelDn)}\\ \\text{kip-ft/ft}\\,, \\qquad M_{up} = ${fmtT(hd.MheelUp)}\\ \\text{kip-ft/ft}`,
       `M_u = |M_{dn}-M_{up}| = ${fmtT(hd.Mu)}\\ \\text{kip-ft/ft (}${hd.face}\\text{ tension)}\\,, \\qquad V_u = ${fmtT(hd.Vu)}\\ \\text{kip/ft}`],
-      hd.src==="bearing"?"Upward bearing included only where the effective/linear pressure block reaches the heel.":"Pile rows behind the stem back face reduce (or reverse) the downward heel moment.");
+      (hd.src==="bearing"?"Upward bearing from the linear (trapezoidal/triangular) contact pressure [10.6.5].":"Pile rows behind the stem back face reduce (or reverse) the downward heel moment.")+` Every strength permutation is evaluated with its own factors on both the downward loads and the reaction (consistent combination); governing: ${esc(hd.ls||"")}${hd.lsV&&hd.lsV!==hd.ls?`, V<sub>u</sub> from ${esc(hd.lsV)}`:""}.`);
   h+=sectionHTML(cH, heelDemH, "5.4","Heel — Flexure & Shear ("+hd.face+" reinforcement)");
 
   /* ---- 5.5 Shear friction at stem base ---- */
@@ -2840,7 +2926,7 @@ function renderTabStruct(R){
       `A_1 = L_{pad}\\,W_{pad} = ${fmtT(bg.padL,1)}\\times${fmtT(bg.padW,1)} = ${fmtT(bs.A1,0)}\\ \\text{in}^2\\,, \\qquad q_b = \\dfrac{P_u}{A_1} = \\dfrac{${fmtT(bs.Pu)}}{${fmtT(bs.A1,0)}} = ${fmtT(bs.qb,3)}\\ \\text{ksi}`,
       `m = \\sqrt{A_2/A_1} \\le 2 \\;\\Rightarrow\\; m = ${fmtT(bs.m,3)} \\quad(\\text{from seat spread, } w_{seat}=${fmtT(bs.A2note,1)}\\text{ in})`,
       `q_R = \\varphi_b\\,(0.85 f'_c)\\,m = ${fmtT(bs.phiB,2)}(0.85\\times${fmtT(m.fc,1)})(${fmtT(bs.m,3)}) = ${fmtT(bs.qR,3)}\\ \\text{ksi}`],
-      "P_u is the most heavily loaded single bearing (γ_DC,max·DC + γ_DW,max·DW + γ_LL·LL + wind), evaluated at Strength I and V. A₂ is the geometrically-similar confined area available on the seat; m is floored at 1.0 (no spread benefit) and capped at 2.0.")}
+      "P_u is the most heavily loaded single bearing (γ_DC,max·DC + γ_DW,max·DW + γ_LL·LL + wind), evaluated at Strength I, IV and V. A₂ is the geometrically-similar confined area available on the seat; m is floored at 1.0 (no spread benefit) and capped at 2.0.")}
     ${checkLine("Bearing on concrete",`\\dfrac{q_b}{q_R} = \\dfrac{${fmtT(bs.qb,3)}}{${fmtT(bs.qR,3)}}`,bs.dc)}
     <div class="subhead">Bearing-seat reinforcement (provision)</div>
     <div class="note-box">AASHTO provides <b>no closed-form demand</b> for seat reinforcement under a bearing; a reinforcement mat under each bearing is a prescriptive detailing requirement, with a <b>strut-and-tie evaluation [5.8]</b> required for heavy or edge-loaded bearings. Provided mat: <b>#${bg.seatBar} @ ${fmt(+bg.seatSp,1)} in each way = ${fmt(sm.AsMat)} in²/ft</b>.</div>
@@ -2853,7 +2939,7 @@ function renderTabStruct(R){
   {
     const rf=S.reinf, bgm=S.bearing, ld=(c)=>fmt(c.ld,0);
     const cS=R.checks.stemFlex, cBW=R.checks.bwFlex, cT=R.checks.toeFlex, cHl=R.checks.heelFlex;
-    const AsST=Math.min(0.60,Math.max(0.11,1.30*12*(g.tsb*12)/(2*(12+g.tsb*12)*S.mat.fy)));
+    const AsST=Math.max(cS.AsST,cBW.AsST,cT.AsST);   // governing Eq. 5.10.6-1 value of the stem, backwall and footing
     const stSp=Math.min(12,Math.floor(BARS["5"].Ab*12/AsST));
     const lenStem=g.hstem+g.tf-S.mat.coverF/12+1.0, lenBW=g.hbw+cBW.ld/12,
           lenToe=g.Ltoe+g.tsb+cT.ld/12, lenHeel=g.Lheel+g.tsb+cHl.ld/12;
@@ -2916,7 +3002,7 @@ function drawRebarSketch(){
 const VM_SEL_GROUPS=[
   ["Limit-state combinations (factored)",[
     ["ls:Strength I","Strength I"],["ls:Strength III","Strength III"],
-    ["ls:Strength V","Strength V"],["ls:Constr — Str I","Construction — Str I (no superstructure)"],
+    ["ls:Strength IV","Strength IV"],["ls:Strength V","Strength V"],["ls:Constr — Str I","Construction — Str I (no superstructure)"],
     ["ls:Service I","Service I"]]],
   ["Individual loads (unfactored, γ = 1.0)",[
     ["load:DC","DC — dead load (self-wt + superstructure)"],["load:DW","DW — wearing surface / utilities"],
@@ -3384,17 +3470,22 @@ function drawChartsFor(tabId,R){
     if(S.fnd.matl==="soil"){ xst=[0,bc.Bp,bc.Bp,B]; qst=[bc.q,bc.q,0,0]; }
     else if(bc.mode==="trap"){ xst=[0,B]; qst=[bc.q,bc.V/(B*(+S.geom.Lftg||S.geom.Lab))*(1-6*bc.e/B)]; }
     else { const Lc=3*(B/2-bc.e); xst=[0,Lc,Lc,B]; qst=[bc.q,0,0,0]; }
+    // heel-side resultant: mirror the diagrams about the footing centre (peak at the heel)
+    const mir=(xs,qs)=>{ const n=xs.length; return [xs.map((x,i)=>B-xs[n-1-i]), qs.map((q,i)=>qs[n-1-i])]; };
+    if(sv.side==="heel") [xsv,qsv]=mir(xsv,qsv);
+    if(bc.side==="heel") [xst,qst]=mir(xst,qst);
     const qR=S.fnd.phiB*S.fnd.qn;
     const bAnno=[], bShapes=[];
     // effective-width shading + resultant/eccentricity callout (soil branch)
     if(S.fnd.matl==="soil" && bc.Bp){
-      bShapes.push({type:"rect",x0:0,x1:bc.Bp,y0:0,y1:bc.q,fillcolor:"rgba(198,40,40,0.07)",line:{width:0},layer:"below"});
-      const xr=bc.Bp/2;
+      const xb0=bc.side==="heel"?B-bc.Bp:0;
+      bShapes.push({type:"rect",x0:xb0,x1:xb0+bc.Bp,y0:0,y1:bc.q,fillcolor:"rgba(198,40,40,0.07)",line:{width:0},layer:"below"});
+      const xr=xb0+bc.Bp/2;
       bShapes.push({type:"line",x0:xr,x1:xr,y0:0,y1:bc.q,line:{color:"#7a2020",dash:"dot",width:1.3}});
       bAnno.push({x:xr,y:bc.q,text:"resultant",showarrow:true,arrowhead:2,ax:0,ay:-22,font:{family:"Times New Roman",size:10.5,color:"#7a2020"},bgcolor:"rgba(255,255,255,.85)"});
     }
     bAnno.push({xref:"paper",yref:"paper",x:0.98,y:0.96,xanchor:"right",align:"right",showarrow:false,
-      text:`B′ = ${fmt(bc.Bp||B)} ft · e = ${fmt(bc.e||0)} ft<br>q<sub>max</sub> = ${fmt(bc.q)} ksf · φ<sub>b</sub>q<sub>n</sub> = ${fmt(qR)} ksf`,
+      text:`B′ = ${fmt(bc.Bp||B)} ft · |e| = ${fmt(bc.e||0)} ft (${bc.side||"toe"} side)<br>q<sub>max</sub> = ${fmt(bc.q)} ksf · φ<sub>b</sub>q<sub>n</sub> = ${fmt(qR)} ksf`,
       font:{family:"Times New Roman",size:11,color:"#333"},bgcolor:"rgba(255,255,255,.88)",bordercolor:"#bbb",borderwidth:1,borderpad:3});
     Plotly.react("brgPlot",[
       {x:xsv,y:qsv,name:"Service I ("+sv.mode+")",mode:"lines",fill:"tozeroy",line:{color:"#1a7f37"},hovertemplate:"x=%{x:.2f} ft<br>q=%{y:.2f} ksf<extra>Service</extra>"},
@@ -3404,7 +3495,7 @@ function drawChartsFor(tabId,R){
   }
   if(tabId==="tab-found" && vis("pilePlot") && R.pile && R.pile.perLS){
     const nAll=S.piles.coords.length, act=activePiles();
-    const traces=[]; const colors={"Strength I":"#1f3a5f","Strength III":"#7c6a46","Strength V":"#5b7fa6","Service I":"#1a7f37"};
+    const traces=[]; const colors={"Strength I":"#1f3a5f","Strength III":"#7c6a46","Strength IV":"#8a5a2b","Strength V":"#5b7fa6","Service I":"#1a7f37"};
     for(const [ls,rr] of Object.entries(R.pile.perLS)){
       if(!rr.best.loads) continue;
       const xs=[],ys=[];
@@ -3752,7 +3843,7 @@ async function captureD3(R){
    Runs the frozen benchmark input (the hand-verified built-in example) through the
    LIVE engine and compares key results to baked expected values. Any drift means a
    regression (or an intentional change that requires re-baking). */
-window.__ST_EXPECT={"k_a (Rankine)": 0.3072585245224683, "P_a (kip/ft)": 8.92278755213248, "EH_h total (kip)": 392.6026522938291, "ΣDC wall (kip)": 722.6999999999999, "EV (kip)": 501.5999999999999, "h_eq (ft)": 2, "Sliding D/C": 1.1527595856623034, "Sliding R_R (kip)": 510.8645252361067, "Eccentricity e (ft)": 2.465267469172704, "Bearing q_f (ksf)": 7.502750812839938, "Bearing D/C": 0.9262655324493752, "Seat N_req (in)": 11.12, "Stem M_u (kip·ft/ft)": 110.15268922678449, "Stem φM_n (kip·ft/ft)": 302.7336470588236, "Shear-friction D/C": 0.05177218522624396, "Bearing-seat q_b (ksi)": 0.5711805555555556};
+window.__ST_EXPECT={"k_a (Rankine)": 0.3072585245224683, "P_a (kip/ft)": 8.92278755213248, "EH_h total (kip)": 392.6026522938291, "ΣDC wall (kip)": 722.6999999999999, "EV (kip)": 501.5999999999999, "h_eq (ft)": 2, "Sliding D/C": 1.1527595856623034, "Sliding R_R (kip)": 510.8645252361067, "Eccentricity e (ft)": 2.465267469172704, "Bearing q_f (ksf)": 7.502750812839938, "Bearing D/C": 0.9262655324493752, "Seat N_req (in)": 11.12, "Stem M_u (kip·ft/ft)": 110.15268922678449, "Stem φM_n (kip·ft/ft)": 302.7336470588236, "Shear-friction D/C": 0.05702500795507431, "Bearing-seat q_b (ksi)": 0.5711805555555556};
 /* Baked from the hand-verified built-in example (Rankine ka, Pa, EHh, sliding, bearing, stem Mu
    each independently hand-checked during validation). If the engine or the built-in defaults are
    intentionally changed, re-validate by hand and re-bake these values. */
@@ -4154,7 +4245,7 @@ document.getElementById("btnRunCmp").addEventListener("click",()=>{
 
 /* ---------- project manager ---------- */
 function getProjects(){ try{return JSON.parse(localStorage.getItem(PROJ_KEY))||{};}catch(e){return {};} }
-function setProjects(o){ localStorage.setItem(PROJ_KEY,JSON.stringify(o)); }
+function setProjects(o){ try{ localStorage.setItem(PROJ_KEY,JSON.stringify(o)); return true; }catch(e){ alert("Could not save to this browser's local storage ("+e.message+"). Use Export JSON for a backup."); return false; } }
 document.getElementById("btnSaveProj").addEventListener("click",()=>{
   const name=prompt("Project name to save as:",S.proj.name||"Untitled");
   if(!name) return;
@@ -4164,7 +4255,7 @@ document.getElementById("btnSaveProj").addEventListener("click",()=>{
   S.meta.revs.push({n:name, ts:Date.now(), fp:(window.LAST_R&&window.LAST_R.fingerprint)||""});
   S.meta.revs=S.meta.revs.slice(-10);
   all[name]={state:clone(S), ts:Date.now()};
-  setProjects(all);
+  if(!setProjects(all)) return;
   document.getElementById("saveStatus").textContent=`project "${name}" saved`;
   markSavedFp();
 });
@@ -4241,7 +4332,7 @@ function edmPayload(){
   return {app:"abutment-edm",type:"INIT",payload:{
     bearing:{padL:+br.padL,padW:+br.padW,G:+br.G,hrt:+br.hrt},
     loads:{Pdl:rep.Pdl,Pll:rep.Pll,deltaS:deltaS,thetaLL:0.004},
-    thermal:{span:+g.spanL,alpha:+Lg.cte,dT:Math.max(+Lg.dTrise,+Lg.dTfall),factor:+Lg.thermalFactor},
+    thermal:{span:+g.spanL,alpha:+Lg.cte,dT:Math.max(+Lg.dTrise,+Lg.dTfall),factor:(+Lg.thermalFactor||1.2)},
     girders:girders
   }};
 }
@@ -4250,15 +4341,25 @@ document.getElementById("btnOpenEDM").addEventListener("click",()=>{
   if(!EDM_WIN){ alert("Pop-up blocked. Allow pop-ups, or open elastomeric_design_module.html manually (keep it in the same folder) and use Import JSON."); return; }
   document.getElementById("saveStatus").textContent="EDM opened — handing off inputs…";
 });
+function fromEDM(src){   // accept messages only from the EDM window this page opened (or one opened by this page before a reload)
+  if(!src) return false; if(EDM_WIN && src===EDM_WIN) return true;
+  try{ return src.opener===window; }catch(e){ return false; } }
 window.addEventListener("message",ev=>{
   const d=ev.data; if(!d||d.app!=="abutment-edm") return;
+  if(!fromEDM(ev.source)) return;
   if(d.type==="EDM_READY"){ try{ (ev.source||EDM_WIN).postMessage(edmPayload(),"*"); document.getElementById("saveStatus").textContent="inputs handed off to EDM"; }catch(e){} }
   if(d.type==="PAD"){ const p=d.payload||{};
     if(p.G) S.bearing.G=+p.G; if(p.hrt) S.bearing.hrt=+p.hrt;
+    let circNote="";
     if(p.padL) S.bearing.padL=+p.padL; if(p.padW) S.bearing.padW=+p.padW;
+    if(!p.padL && !p.padW && +p.D>0){   // circular pad: L = D along the span, W = A/D so that L·W = πD²/4 (equal area for the pad shear force and seat bearing)
+      const D=+p.D, A=(+p.A>0)?+p.A:Math.PI*D*D/4;
+      S.bearing.padL=D; S.bearing.padW=+(A/D).toFixed(4);
+      circNote=` · circular pad D = ${D.toFixed(2)} in entered as L = D, W = πD/4 = ${(A/D).toFixed(2)} in (equal area)`;
+    }
     if(p.nBrgPerGird) S.bearing.nBrgPerGird=+p.nBrgPerGird;
     buildInputs(); recalcAll(); scheduleSave();
-    document.getElementById("saveStatus").textContent="pad received from EDM — thermal/creep force updated"+(p.govDC?` (D/C ${(+p.govDC).toFixed(2)})`:"");
+    document.getElementById("saveStatus").textContent="pad received from EDM — thermal/creep force updated"+(p.govDC?` (D/C ${(+p.govDC).toFixed(2)})`:"")+circNote;
   }
 });
 
