@@ -1417,6 +1417,11 @@ function classifyFlex(p){
   const mk=(lam,lp,lr,cs)=>({lam,lp,lr,case:cs,cls:lam<=lp?'compact':lam<=lr?'noncompact':'slender'});
   if(p._kind==='I'||p._kind==='C'){
     const lamF=(p._kind==='I')?p.bf/(2*p.tf):p.bf/p.tf;
+    if(p._kind==='I'&&p._built){ /* built-up I: Table B4.1b case 11, lambda_r = 0.95 sqrt(kc E/FL); doubly symmetric, so FL = 0.7Fy (F4-6a) */
+      const kc=Math.max(0.35,Math.min(0.76,4/SQ(p.htw))),FL=0.7*Fy;
+      const fl=mk(lamF,0.38*rt,0.95*SQ(kc*E/FL),'11');fl.kc=kc;fl.FL=FL;
+      return{flange:fl,web:mk(p.htw,3.76*rt,5.70*rt,'15')};
+    }
     return{flange:mk(lamF,0.38*rt,1.0*rt,'10'),web:mk(p.htw,3.76*rt,5.70*rt,'15')};
   }
   if(p._kind==='R'){
@@ -1432,6 +1437,11 @@ function classifyComp(p){
   const mk=(lam,lr,cs)=>({lam,lr,case:cs,cls:lam<=lr?'nonslender':'slender'});
   if(p._kind==='I'||p._kind==='C'){
     const lamF=(p._kind==='I')?p.bf/(2*p.tf):p.bf/p.tf;
+    if(p._kind==='I'&&p._built){ /* built-up I: Table B4.1a case 2, lambda_r = 0.64 sqrt(kc E/Fy) */
+      const kc=Math.max(0.35,Math.min(0.76,4/SQ(p.htw)));
+      const fl=mk(lamF,0.64*SQ(kc*E/Fy),'2');fl.kc=kc;
+      return{flange:fl,web:mk(p.htw,1.49*rt,'5')};
+    }
     return{flange:mk(lamF,0.56*rt,'1'),web:mk(p.htw,1.49*rt,'5')};
   }
   if(p._kind==='R')return{wallB:mk(p.btdes,1.40*rt,'6'),wallH:mk(p.htdes,1.40*rt,'6')};
@@ -1695,7 +1705,7 @@ function compStrength(p,Lcx,Lcy,Lcz){
   if(p._kind==='I'){
     if(cc.flange.cls==='slender'){const r=beOf(p.bf/2,p.tf,cc.flange.lam,cc.flange.lr,0.22,1.49);
       Ae-=4*r.red;eff.push({el:'flanges (4 half-widths)',...r});}
-    if(cc.web.cls==='slender'){const r=beOf(p.hClear,p.tw,cc.web.lam,cc.web.lr,0.22,1.49);
+    if(cc.web.cls==='slender'){const r=beOf(p.hClear,p.tw,cc.web.lam,cc.web.lr,0.18,1.31); /* Table E7.1 case (a): stiffened element (web) */
       Ae-=r.red;eff.push({el:'web',...r});}
   }else if(p._kind==='R'){
     if(cc.wallB.cls==='slender'){const r=beOf(p.bFlat,p.tdes,cc.wallB.lam,cc.wallB.lr,0.20,1.38);
@@ -1982,6 +1992,12 @@ function buildDesignChecks(D,A){
   const iGov=gv(c=>({d:c.inter.value,c}));
   if(iGov)D.checks.push({label:'Interaction',ref:iGov.c.inter.eq,dcr:iGov.d,combo:iGov.c.name,tab:'tabInter',
     dem:iGov.c.inter.value,cap:1.0,unit:'\u2014',capSym:'limit'});
+  const tenC=D.perCombo.filter(c=>c.man&&(+c.man.Pu||0)<0);
+  if(tenC.length)D.warns.push('Axial TENSION (P\u1D64 < 0) is entered for: '+tenC.map(c=>c.name).join(', ')+'. Tension is NOT checked: Chapter D (tensile yielding and rupture) and the \u00A7H1.2 interaction are not implemented, and the tension is left out of the H1-1 interaction. Check the member in tension and its connections separately.'+(D.perCombo.some(c=>c.h33)?' (The \u00A7H3.3 stress sum includes |P\u1D64|/A.)':''));
+  const h33B=D.perCombo.filter(c=>c.h33&&c.flexGov&&!c.flexGov.blocked&&c.flexGov.phiMn>0&&c.flexGov.phiMn*12/D.p.Sx<0.9*D.p.mat.Fy*(1-1e-9));
+  if(h33B.length){const c=h33B.reduce((m,q)=>(q.h33.fbx+q.h33.sigW)/(q.flexGov.phiMn*12/D.p.Sx)>(m.h33.fbx+m.h33.sigW)/(m.flexGov.phiMn*12/D.p.Sx)?q:m,h33B[0]);
+    const pF=c.flexGov.phiMn*12/D.p.Sx,fb=c.h33.fbx+c.h33.sigW;
+    D.warns.push('\u00A7H3.3 open-section torsion: the normal-stress check compares f\u2099 with \u03C6F\u1D67 only; the buckling limit state of \u00A7H3.3(c) is NOT checked. Flexural buckling (LTB or local buckling) governs below yield for '+h33B.map(q=>q.name).join(', ')+'. Worst: '+c.name+', \u03C6M\u2099/S\u2093 = '+fmt(pF,2)+' ksi < \u03C6F\u1D67 = '+fmt(0.9*D.p.mat.Fy,2)+' ksi; f\u1D47\u2093 + \u03C3\u1D42 = '+fmt(fb,2)+' ksi, indicative ratio (f\u1D47\u2093 + \u03C3\u1D42)/(\u03C6M\u2099/S\u2093) = '+fmt(fb/pF,3)+' (not a code DCR). Verify the buckling limit state by hand.');}
   if(D.j10){
     const wGov=gv(c=>{let m=null;(c.j10||[]).forEach(r=>{if(r.dcrWLY!=null&&(!m||r.dcrWLY>m.d))m={d:r.dcrWLY,c,r};});return m;});
     D.checks.push(wGov?{label:'Web local yielding',ref:'J10.2',dcr:wGov.d,combo:wGov.c.name,detail:wGov.r.label,tab:'tabJ10',
@@ -3137,7 +3153,7 @@ function classFlexBlock(body,p,D){
   const Fy=p.mat.Fy;
   const rows=[];
   if(p._kind==='I'||p._kind==='C'){
-    rows.push(['Flange (B4.1b case 10)','\u03BB = b/t = '+fmt(D.clsF.flange.lam,2),fmt(D.clsF.flange.lp,2),fmt(D.clsF.flange.lr,2),D.clsF.flange.cls]);
+    rows.push(['Flange (B4.1b case '+D.clsF.flange.case+')','\u03BB = b/t = '+fmt(D.clsF.flange.lam,2),fmt(D.clsF.flange.lp,2),fmt(D.clsF.flange.lr,2),D.clsF.flange.cls]);
     rows.push(['Web (case 15)','\u03BB = h/t\u1D65 = '+fmt(D.clsF.web.lam,2),fmt(D.clsF.web.lp,2),fmt(D.clsF.web.lr,2),D.clsF.web.cls]);
   }else if(p._kind==='R'){
     rows.push(['Flange, major (case 17)','\u03BB = b/t = '+fmt(D.clsF.x.flange.lam,2),fmt(D.clsF.x.flange.lp,2),fmt(D.clsF.x.flange.lr,2),D.clsF.x.flange.cls]);
@@ -3909,7 +3925,7 @@ manPart('pS','V-b. Strength Methodology',[
 {h:'Compression (Chapter E)'},
 {p:'Flexural buckling about both axes (E3) with user L\u1D9C and K; torsional buckling (E4) added for doubly symmetric I-shapes using L\u1D9C\u1DBB. F\u1D9C\u02B3 = 0.658^(F\u1D67/F\u2091)F\u1D67 for F\u1D67/F\u2091 \u2264 2.25, else 0.877F\u2091.'},
 {h3:'Slender compression elements \u2014 area, not stress'},
-{p:'<b>AISC 360-16 eliminated the Q-factor.</b> Slenderness is taken on the <b>area</b>: P\u2099 = F\u1D9C\u02B3A\u2091 (Eq. E7-1), where A\u2091 is assembled from reduced effective widths b\u2091 (Eqs. E7-2 to E7-4, with c\u2081/c\u2082 = 0.22/1.49 for most elements and 0.20/1.38 for square and rectangular HSS walls; round sections use the closed-form effective area of \u00A7E7.2). F\u1D9C\u02B3 is computed from the <b>full</b> F\u1D67 and is not reduced.'},
+{p:'<b>AISC 360-16 eliminated the Q-factor.</b> Slenderness is taken on the <b>area</b>: P\u2099 = F\u1D9C\u02B3A\u2091 (Eq. E7-1), where A\u2091 is assembled from reduced effective widths b\u2091 (Eqs. E7-2 to E7-4, with c\u2081/c\u2082 = 0.18/1.31 for I-shape webs (Table E7.1 case (a)), 0.20/1.38 for square and rectangular HSS walls (case (b)), and 0.22/1.49 for all other elements such as flanges (case (c)); round sections use the closed-form effective area of \u00A7E7.2). F\u1D9C\u02B3 is computed from the <b>full</b> F\u1D67 and is not reduced.'},
 {p:'This differs from AISC 360-10 and earlier, where F\u1D9C\u02B3 was reduced by Q = Q\u209B\u00B7Q\u2090 and applied to the gross area A\u1D4D. The AISC Design Examples v14.0 use the Q method, so compression results in this tool will not match those examples for slender-element sections \u2014 the difference is the Specification edition, not an error. It also removes the iteration the old method needed (f = P\u2099/A\u2091).'},
 {p:'A slender classification does not automatically cost capacity: Eq. E7-2 gives b\u2091 = b whenever \u03BB \u2264 \u03BB\u1D63\u221A(F\u1D67/F\u1D9C\u02B3). Because the Table B4.1a limits are written at F\u1D67 while the element only ever reaches F\u1D9C\u02B3, the effective threshold is relaxed. The Compression tab reports the threshold alongside \u03BB and states plainly when a slender element yields no reduction.'},
 {h:'Interaction (Chapter H)'},
@@ -4414,7 +4430,7 @@ function memberDesignAll(A){
       if(D.tors.blocked)C.torsBlocked=D.tors.blocked;
       else{C.phiTn=D.tors.phiTn/12;C.dcrT=Math.abs(r.Tu)/C.phiTn;C.torsNeglect=C.dcrT<=0.20;}
     }
-    const rx=C.flexGov.dcr===Infinity?0:C.flexGov.dcr,ry=C.dcrMy||0,rp=C.dcrP||0;
+    const rx=C.flexGov.dcr,ry=C.dcrMy||0,rp=C.dcrP||0;   /* a blocked flexure check (dcr = Infinity) makes the interaction FAIL, as in beam mode */
     if(C.dcrT!=null&&!C.torsNeglect){
       const vr=(C.dcrVx||0)+(C.dcrVy||0);
       C.inter={eq:'H3-6',value:(rp+rx+ry)+Math.pow(vr+C.dcrT,2),terms:{P:rp,Mx:rx,My:ry,V:vr,T:C.dcrT}};
@@ -5365,7 +5381,7 @@ function torsionOpen(p,cfg){
 /* ---- §H3.3 combination with the other member demands ---- */
 function h33Check(p,tor,dem){
   const Fy=p.mat.Fy,phi=0.90;
-  const fa=(dem.Pu||0)/p.A;
+  const fa=Math.abs(dem.Pu||0)/p.A;   /* magnitude: an axial tension stress adds to the bending stress on the tension side */
   const fbx=(Math.abs(dem.Mux||0)*12)/p.Sx;
   const fby=(Math.abs(dem.Muy||0)*12)/p.Sy;
   const fvx=(Math.abs(dem.Vux||0))/(p.d*p.tw);
@@ -9470,7 +9486,8 @@ function classFlexBlock(body,p,D){
     const bF=(p._kind==='I')?(p.bf/2):p.bf;
     push('Flange',c.flange,(p._kind==='I')?'\\tfrac{b_f}{2t_f}':'\\tfrac{b_f}{t_f}',
       (p._kind==='I')?('\\tfrac{'+fmt(p.bf,3)+'}{2('+fmt(p.tf,3)+')}'):('\\tfrac{'+fmt(p.bf,3)+'}{'+fmt(p.tf,3)+'}'),
-      '0.38\\sqrt{E/F_y}','1.0\\sqrt{E/F_y}',c.flange.case);
+      '0.38\\sqrt{E/F_y}',c.flange.case==='11'?'0.95\\sqrt{k_cE/F_L}':'1.0\\sqrt{E/F_y}',c.flange.case);
+    if(c.flange.case==='11')eqs.push('\\text{built-up flange (case 11): }k_c=4/\\sqrt{h/t_w}='+fmt(c.flange.kc,3)+'\\ (0.35\\le k_c\\le 0.76),\\quad F_L=0.7F_y='+fmt(c.flange.FL,1)+'\\text{ ksi}');
     push('Web',c.web,'\\tfrac{h}{t_w}','\\tfrac{'+fmt(webH(p),3)+'}{'+fmt(p.tw,3)+'}',
       '3.76\\sqrt{E/F_y}','5.70\\sqrt{E/F_y}',c.web.case);
     eqs.push('\\text{where }h='+fmt(webH(p),3)+'\\text{ in is the clear web depth and }b_f/2='+fmt(bF,3)+'\\text{ in the flange half-width}');
@@ -9556,7 +9573,7 @@ function compTermsBlock(body,p,cc,D){
       }
     });
     body.appendChild(eqBlock({title:'Effective width of each slender element',ref:'Eqs. E7-2 to E7-4',lines:el2,
-      vars:[['c_1,c_2','0.22, 1.49 (0.20, 1.38 for HSS walls)','Table E7.1']]}));
+      vars:[['c_1,c_2','0.18, 1.31 for I-shape webs; 0.20, 1.38 for HSS walls; 0.22, 1.49 for flanges','Table E7.1']]}));
   }
   body.appendChild(eqBlock({title:'Effective area',ref:cc.eff.length?'\u00A7E7':'= A_g',
     lines:[subEq('A_e','A_g-\\Sigma(b-b_e)t',fmt(p.A,3)+'-'+fmt(p.A-cc.Ae,4),fmt(cc.Ae,3),'in^2')]}));
