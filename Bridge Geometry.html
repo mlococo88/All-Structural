@@ -39,6 +39,16 @@
   .cols { display: grid; grid-template-columns: minmax(0, 420px) minmax(0, 1fr); gap: 26px; align-items: start; }
   .cols > div { min-width: 0; }
   @media (max-width: 1020px){ .cols { grid-template-columns: 1fr; } }
+  /* print: the active tab only, without the project bar, tab strip, inputs and buttons */
+  @media print {
+    body { background:#fff; }
+    header { border-bottom:1px solid #000; padding:0 0 4px; }
+    header .projbar, header .tabs, #lib_panel, .noprint, button, fieldset { display:none !important; }
+    .tabpane { display:none !important; } .tabpane.active { display:block !important; }
+    main { padding:8px 0 0; max-width:none; }
+    #tbl_wrap, #seat_tbl_wrap { overflow:visible !important; }
+    table { font-size:9px; } thead { display:table-header-group; } tr { page-break-inside:avoid; }
+  }
   fieldset { border: 1px solid var(--graphite); border-radius: 2px; margin: 0 0 14px; padding: 10px 12px 12px; background: rgba(255,255,255,.18); }
   legend { font-size: 10.5px; text-transform: uppercase; letter-spacing: .1em; color: var(--ink-soft); padding: 0 6px; }
   label { display: block; font-size: 11px; color: var(--ink-soft); margin: 8px 0 2px; letter-spacing: .03em; }
@@ -167,6 +177,7 @@
 </header>
 
 <main>
+  <div id="geom_err" style="display:none; border:2px solid var(--oxide); background:#fbeee9; color:var(--ink); padding:8px 12px; margin:0 0 14px; font-size:13px;"></div>
   <!-- TAB 1: ALIGNMENT -->
   <section class="tabpane active" id="pane-align" role="tabpanel">
     <p class="note" style="font-size:12px; margin-bottom:14px;">Define the roadway geometry the bridge follows: the <strong>horizontal alignment</strong> (the path in plan — tangents, curves, spirals) and the <strong>vertical profile</strong> (elevation along the route — grades and vertical curves). Everything else in the tool is positioned relative to this. Graphics at the bottom show the result.</p>
@@ -246,7 +257,7 @@
           <legend>global default</legend>
           <div class="row2">
             <div><label>Mode</label><select id="x_mode_global" title="Crown = deck falls both directions from the crown point (normal road section). Superelevation = deck is a single planar grade across the full width (banked through a curve)."><option value="crown">crown</option><option value="super">superelevation</option></select></div>
-            <div><label>Cross-slope rate <span class="unit">(decimal, 0.02=2%)</span></label><input type="number" id="x_rate_global" value="0.02" step="0.001" title="Cross slope as a decimal (0.02 = 2%). For crown, the fall on each side; for super, the planar grade across the deck."></div>
+            <div><label>Cross-slope rate <span class="unit">(decimal, 0.02=2%)</span></label><input type="number" id="x_rate_global" value="0.02" step="0.001" title="Cross slope as a decimal (0.02 = 2%). For crown, the fall on each side. For super, the planar grade across the deck: a POSITIVE rate raises the RIGHT side (looking up-station), a negative rate raises the left. On a right-hand curve (R &gt; 0) the inside is the right, so the rate is negative."></div>
           </div>
           <div class="row2">
             <div><label>Crown reference</label><select id="crown_ref" title="What the crown offset is measured from, and how the crown line runs. PGL: crown offset is from the PGL and the crown follows the horizontal alignment (curve). construction reference line: crown offset is from the construction reference line and the crown is a straight line parallel to the construction reference line chord."><option value="pgl">PGL (follows alignment curve)</option><option value="bcl">Construction ref line (straight)</option></select></div>
@@ -317,7 +328,7 @@
       <div>
         <h2 class="sec">Substructure Units</h2>
         <div style="overflow-x:auto;"><table class="subtbl" id="subtbl"></table></div>
-        <p class="note">Skew measured from alignment normal (0° = perpendicular). Dual bearing offset = distance back/ahead of unit station.</p>
+        <p class="note">Skew is measured from the normal to the straight abutment-to-abutment chord (the construction reference line between the two abutments), not from the radial line of the PGL; 0° = support perpendicular to that chord. On a tangent alignment the two are the same. Dual bearing offset = distance back/ahead of unit station.</p>
 
         <h2 class="sec">Per-span girder &amp; deck-edge overrides</h2>
         <p class="note" style="margin-top:-6px;">Most bridges use the same girders and deck width everywhere &mdash; if so, you can ignore this table entirely; every span uses the global values above. Use it only when a particular span differs (e.g. a span has a different number of girders, a flared deck, or a different edge offset). Each greyed cell shows the global value it would inherit; type a value to override just that span (it turns solid), or clear it to revert.</p>
@@ -464,6 +475,7 @@
         </fieldset>
       </div>
     </div>
+    <div class="noprint" style="display:flex; gap:8px; margin:6px 0;"><button class="sm ghost" type="button" onclick="exportTableCSV('tbl_wrap','top-of-deck')" title="Download the table above as a CSV file.">Export CSV</button><button class="sm ghost" type="button" onclick="window.print()" title="Print this tab.">Print</button></div>
     <div id="tbl_wrap" style="overflow-x:auto;"></div>
 
     <h2 class="sec" style="margin-top:26px;">Validation · known points</h2>
@@ -491,6 +503,7 @@
   <section class="tabpane" id="pane-seat" role="tabpanel">
     <h2 class="sec">Beam Seat Elevations · at bearing lines</h2>
     <p class="note" style="margin-top:-6px;">Seat = top-of-deck − deck thickness − (min haunch + camber) − beam depth − bearing assembly. One row per bearing line; dual-bearing piers report back &amp; ahead separately, each using its own span's camber/depth/bearing.</p>
+    <div class="noprint" style="display:flex; gap:8px; margin:6px 0;"><button class="sm ghost" type="button" onclick="exportTableCSV('seat_tbl_wrap','beam-seat')" title="Download the beam-seat table as a CSV file.">Export CSV</button><button class="sm ghost" type="button" onclick="window.print()" title="Print this tab.">Print</button></div>
     <div id="seat_tbl_wrap" style="overflow-x:auto;"></div>
 
     <h2 class="sec" style="margin-top:24px;">Cross-sections at each bearing line</h2>
@@ -518,12 +531,12 @@
             <div><label>State Plane datum</label>
               <select id="map_datum">
                 <option value="2249">MA Mainland — NAD83 (US ft)</option>
-                <option value="2802">MA Island — NAD83 (US ft)</option>
+                <option value="2250">MA Island — NAD83 (US ft)</option>
                 <option value="3438">RI — NAD83 (US ft)</option>
                 <option value="2234">CT — NAD83 (US ft)</option>
                 <option value="3437">NH — NAD83 (US ft)</option>
                 <option value="2260">NY East — NAD83 (US ft)</option>
-                <option value="32111">NJ — NAD83 (US ft)</option>
+                <option value="3424">NJ — NAD83 (US ft)</option>
               </select>
             </div>
             <div><label>Coordinate units</label>
@@ -762,19 +775,37 @@ function buildCrossSection(globalMode, globalRate, controls, pgl, crown){
       return { mode: f<0.5?cps[i].mode:cps[i+1].mode, rate: cps[i].rate+(cps[i+1].rate-cps[i].rate)*f }; } }
     return {mode:globalMode, rate:globalRate};
   }
+  // Left and right cross-slopes of one control, as dz per ft of offset (+ = rising toward the right,
+  // looking up-station). Crown falls both ways from the crown: right -|r|, left +|r|. Super is one
+  // plane: both r, so a positive super rate raises the right side.
+  function sidesOf(mode, rate){ return (mode==='crown') ? {L:Math.abs(rate), R:-Math.abs(rate)} : {L:rate, R:rate}; }
+  // Between two controls the LEFT and RIGHT slopes are interpolated independently, so each side of the
+  // deck rotates linearly and no edge jumps. (The mode used to flip at the midpoint between controls,
+  // e.g. 0.96 ft at an edge 12 ft out between crown 2% and super 6% 100 ft apart.) At the controls,
+  // and wherever both controls have the same mode and sign, the result is unchanged.
+  function slopesAt(s){
+    if(cps.length===0) return sidesOf(globalMode, globalRate);
+    if(s<=cps[0].sta) return sidesOf(cps[0].mode, cps[0].rate);
+    const n=cps.length-1;
+    if(s>=cps[n].sta) return sidesOf(cps[n].mode, cps[n].rate);
+    for(let i=0;i<n;i++){ if(s>=cps[i].sta&&s<=cps[i+1].sta){
+      const span=cps[i+1].sta-cps[i].sta, f=(span>0)?(s-cps[i].sta)/span:0;
+      const a=sidesOf(cps[i].mode,cps[i].rate), b=sidesOf(cps[i+1].mode,cps[i+1].rate);
+      return { L:a.L+(b.L-a.L)*f, R:a.R+(b.R-a.R)*f }; } }
+    return sidesOf(globalMode, globalRate);
+  }
+  function shapeAbout(sl, o, c){ return ((o>=c)?sl.R:sl.L)*(o-c); }
   // cross-slope shape, then anchored so dz=0 at the PGL (deck = profile elevation there)
-  function dz(s, off){ const {mode,rate}=rateAt(s);
-    const shape = (o)=> (mode==='crown') ? -Math.abs(rate)*Math.abs(o-crownOff) : rate*(o-crownOff);
-    return shape(off) - shape(pgl); }
+  function dz(s, off){ const sl=slopesAt(s);
+    return shapeAbout(sl,off,crownOff) - shapeAbout(sl,pgl,crownOff); }
   // dz about an explicit crown offset (used by the chord model where the crown varies along the bridge).
   // Anchored so dz=0 at the PGL (offset 0). When a station is given, uses the per-unit
   // cross-slope controls (rateAt) like dz(); otherwise falls back to the global mode/rate.
   function dzAbout(off, crownO, s){
-    const mr = (s!=null) ? rateAt(s) : {mode:globalMode, rate:globalRate};
-    const shape = (o)=> (mr.mode==='crown') ? -Math.abs(mr.rate)*Math.abs(o-crownO) : mr.rate*(o-crownO);
-    return shape(off) - shape(pgl);
+    const sl = (s!=null) ? slopesAt(s) : sidesOf(globalMode, globalRate);
+    return shapeAbout(sl,off,crownO) - shapeAbout(sl,pgl,crownO);
   }
-  return { rateAt, dz, dzAbout, controls:cps, pgl, crown:crownOff };
+  return { rateAt, slopesAt, dz, dzAbout, controls:cps, pgl, crown:crownOff };
 }
 
 /* ===== ALIGNMENT / PROFILE / GIRDER INPUT STATE ===== */
@@ -1112,10 +1143,11 @@ function buildEngine(){
   }
   function supportChordT(sta){
     if(!CH) return 0;
-    // construction reference line offset at this station, interpolated between abutment offsets by station fraction
-    const st=abutStations(); const {a1,a2}=abutOffsets();
-    const f=(st.s2===st.s1)?0:Math.max(0,Math.min(1,(sta-st.s1)/(st.s2-st.s1)));
-    const off=a1+(a2-a1)*f;
+    // construction reference line offset at this station: the exact intersection of the PGL normal at
+    // `sta` with the straight reference-line chord (bclOffAtSta), not a linear interpolation of the two
+    // abutment offsets. On a curve the two differ, which used to shift interior supports (and every
+    // grid row) along the chord, e.g. 0.78 ft at a pier one third of the way across R = 800, 300 ft.
+    const off=bclOffAtSta(sta);
     const bp=pglOffsetPoint(align, sta, off);           // construction reference line point at the support
     return ((bp.x-CH.P1.x)*CH.ux + (bp.y-CH.P1.y)*CH.uy);  // distance along chord from Abut1
   }
@@ -1247,7 +1279,38 @@ function sectionCutEnds(sta, cut, over){
 }
 
 /* ===== MAIN COMPUTE ===== */
+/* Inputs that make the geometry undefined (a curve with R = 0, a spiral of zero or negative length,
+   repeated or decreasing profile stations) used to turn every result into NaN with no message. They
+   now stop the computation and say why. */
+function geometryInputErrors(){
+  const errs=[];
+  ELEMS.forEach((e,i)=>{
+    if(e.type==='crv'){
+      if(!(isFinite(+e.R) && Math.abs(+e.R)>0)) errs.push(`Alignment row ${i+1}: the curve radius R is ${(e.R===''||e.R==null)?'blank':e.R}. Enter a non-zero radius (positive curves right, negative curves left).`);
+      const Lc=curveLength(e); if(!(isFinite(Lc) && Lc>0)) errs.push(`Alignment row ${i+1}: the curve length must be greater than zero.`);
+    } else if(e.type==='spi'){
+      if(!(isFinite(+e.L) && +e.L>0)) errs.push(`Alignment row ${i+1}: the spiral length L is ${e.L}. A spiral needs a length greater than zero.`);
+      if(!isFinite(+e.Rin) || !isFinite(+e.Rout)) errs.push(`Alignment row ${i+1}: the spiral radii must be numbers (0 = tangent end).`);
+    } else if(e.type==='tan'){
+      if(!(isFinite(+e.L) && +e.L>=0)) errs.push(`Alignment row ${i+1}: the tangent length must be zero or positive.`);
+    }
+  });
+  for(let i=1;i<VPIS.length;i++){
+    if(!(VPIS[i].sta>VPIS[i-1].sta)) errs.push(`Vertical profile point ${i+1}: station ${formatStation(VPIS[i].sta)} is not greater than point ${i} (${formatStation(VPIS[i-1].sta)}). Repeated or decreasing stations make the grade undefined.`);
+  }
+  return errs;
+}
+function showGeomErrors(errs){
+  const d=document.getElementById('geom_err'); if(!d) return;
+  if(!errs.length){ d.style.display='none'; d.innerHTML=''; return; }
+  const esc=s=>String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+  d.innerHTML='<b>Geometry input error — computation stopped.</b> The tables, drawings and map still show the last valid geometry and are <b>not</b> current until this is corrected:<ul style="margin:4px 0 0 18px; padding:0;">'+
+    errs.map(e=>'<li>'+esc(e)+'</li>').join('')+'</ul>';
+  d.style.display='block';
+}
 function compute(){
+  const gErr=geometryInputErrors(); showGeomErrors(gErr);
+  if(gErr.length){ if(_autosaveArmed) autosave(); return; }
   ENG=buildEngine();
   { const R=sectionStaRange();
     if(ACTIVE_STA===null||ACTIVE_STA<R.s0-1e-6||ACTIVE_STA>R.s1+1e-6) ACTIVE_STA=(R.s0+R.s1)/2; }
@@ -2530,7 +2593,7 @@ function buildSeatTable(){
   if(su.length<2){ wrap.innerHTML='<p class="note">Define at least two substructure units to generate beam seats.</p>'; return; }
   const data=seatData();
   const gcols=ENG.globalGirders;
-  let h='<table class="wide"><thead><tr><th class="lbl" title="The bearing line: a support centerline, or back/ahead bearing at a dual-bearing pier.">Bearing line</th><th class="lbl" title="Station of this bearing line.">Station</th><th title="Skew of the support, degrees from the alignment normal.">Skew°</th><th class="lbl" title="The span this bearing belongs to (its camber/depth/bearing come from this span).">Span</th>';
+  let h='<table class="wide"><thead><tr><th class="lbl" title="The bearing line: a support centerline, or back/ahead bearing at a dual-bearing pier.">Bearing line</th><th class="lbl" title="Station of this bearing line.">Station</th><th title="Skew of the support, degrees from the normal to the abutment-to-abutment chord (construction reference line).">Skew°</th><th class="lbl" title="The span this bearing belongs to (its camber/depth/bearing come from this span).">Span</th>';
   gcols.forEach((o,k)=>h+=`<th title="Beam-seat elevation for girder ${k+1} (offset ${(o-bridgeCL()).toFixed(2)} ft from the construction reference line) at this bearing line.">G${k+1}@${(o-bridgeCL()).toFixed(2)}</th>`);
   h+='</tr></thead><tbody>';
   data.forEach(r=>{
@@ -2696,7 +2759,7 @@ function buildDerived(){
   const fmtOff=(v)=>isNaN(v)?'&mdash;':`${v>=0?'+':''}${v.toFixed(3)} <span style="color:var(--ink-soft);font-size:10px">${ftin(v)}</span>`;
   const R=[
     ['Station', V.map(v=>formatStation(v.sta))],
-    ['Skew (from perpendicular)', V.map(v=>v.skew.toFixed(2)+'&deg;')],
+    ['Skew (from chord normal)', V.map(v=>v.skew.toFixed(2)+'&deg;')],
     ['PGL bearing', V.map(v=>azimuthToQuadrant(v.brg/DEG))],
     ['Construction ref line &larr; from PGL', V.map(v=>fmtOff(v.bcl))],
     ['Crown &larr; from PGL', V.map(v=>fmtOff(v.crown))],
@@ -2917,7 +2980,7 @@ function renderElemTable(){
   const rd=alignmentRowData();
   const warnings=[];
   let h='<thead><tr><th>#</th><th title="Tangent (straight), Curve (circular arc), or Spiral (clothoid transition).">Type</th><th title="Station where this element begins (computed from the chain).">Begin Sta</th><th title="Station where this element ends. For a tangent you may type this to set its length; for curves/spirals it is computed from the geometry.">End Sta</th>'+
-        '<th title="Radius (ft) of a circular curve. Positive curves right, negative curves left.">R</th><th title="Spiral radius at its entry end (ft). Use a large/zero value for the tangent end.">R-in</th><th title="Spiral radius at its exit end (ft).">R-out</th><th title="How a curve is defined: by its length (L) or by its central/deflection angle (\u0394).">By</th><th title="Central deflection angle of the curve, in degrees-minutes-seconds (e.g. 14\u00b026\u201911\u2033). Used when \u2018By\u2019 = \u0394.">\u0394 (DMS)</th><th title="Arc length of the element (ft).">Length</th>'+
+        '<th title="Radius (ft) of a circular curve. Positive curves right, negative curves left.">R</th><th title="Spiral radius at its entry end (ft), signed like R: positive = curving right, negative = curving left, 0 = tangent end. It should equal the radius of the element before it.">R-in</th><th title="Spiral radius at its exit end (ft), signed like R (negative = left, 0 = tangent end). It should equal the radius of the element after it.">R-out</th><th title="How a curve is defined: by its length (L) or by its central/deflection angle (\u0394).">By</th><th title="Central deflection angle of the curve, in degrees-minutes-seconds (e.g. 14\u00b026\u201911\u2033). Used when \u2018By\u2019 = \u0394.">\u0394 (DMS)</th><th title="Arc length of the element (ft).">Length</th>'+
         '<th title="Bearing of the alignment at the start of this element (azimuth and quadrant).">Brg Begin</th><th title="Bearing of the alignment at the end of this element.">Brg End</th><th></th></tr></thead><tbody>';
   ELEMS.forEach((e,i)=>{
     const isTan=e.type==='tan', isCrv=e.type==='crv', isSpi=e.type==='spi';
@@ -2954,6 +3017,19 @@ function renderElemTable(){
     </tr>`;
   });
   h+='</tbody>'; t.innerHTML=h;
+  // Radius continuity and sign at spiral joints (warnings only; the geometry is still built as entered).
+  // Curvature is compared as 1/R so that 0 means a tangent end. Curve-to-curve (compound) and
+  // tangent-to-curve joints are not checked: only a spiral promises continuous curvature.
+  { const kOf=r=>(+r)?1/(+r):0;
+    const rs=k=>(k===0)?'tangent (0)':(1/k).toFixed(2);
+    for(let i=0;i<ELEMS.length-1;i++){ const a=ELEMS[i], b=ELEMS[i+1];
+      if(a.type!=='spi' && b.type!=='spi') continue;
+      const kEnd=(a.type==='tan')?0:(a.type==='crv')?kOf(a.R):kOf(a.Rout);
+      const kBeg=(b.type==='tan')?0:(b.type==='crv')?kOf(b.R):kOf(b.Rin);
+      if(Math.abs(kEnd-kBeg)>1e-9+1e-3*Math.max(Math.abs(kEnd),Math.abs(kBeg)))
+        warnings.push(`Rows ${i+1}→${i+2}: radius not continuous (row ${i+1} ends at R = ${rs(kEnd)}, row ${i+2} starts at R = ${rs(kBeg)})`+
+          ((kEnd*kBeg<0)?' — opposite signs, which makes a reverse curve. A left-hand spiral needs negative radii.':'.'));
+    } }
   const warnEl=document.getElementById('elem_warn'); if(warnEl) warnEl.textContent = warnings.join('  ');
   t.querySelectorAll('input,select').forEach(el=>el.addEventListener('change',ev=>{
     const i=+ev.target.dataset.i,f=ev.target.dataset.f; let v=ev.target.value;
@@ -3069,6 +3145,10 @@ function renderVProfTable(){
     for(let j=i+1;j<VPIS.length-1;j++){ const cj=cd[j]; if(!cj||cj.bvcSta==null) continue;
       if(cj.bvcSta < ci.evcSta-1e-6){ warn.push(`PVI ${i} and PVI ${j} vertical curves overlap (EVC ${formatStation(ci.evcSta)} past BVC ${formatStation(cj.bvcSta)}).`); }
       break; } }
+  // each vertical curve must lie between its neighbouring profile points (warnings only)
+  for(let i=1;i<VPIS.length-1;i++){ const c=cd[i]; if(!c||c.bvcSta==null) continue;
+    if(c.bvcSta < VPIS[i-1].sta-1e-6) warn.push(`PVI ${i}: BVC ${formatStation(c.bvcSta)} is before the previous point (${formatStation(VPIS[i-1].sta)}); shorten the curve.`);
+    if(c.evcSta > VPIS[i+1].sta+1e-6) warn.push(`PVI ${i}: EVC ${formatStation(c.evcSta)} is past the next point (${formatStation(VPIS[i+1].sta)}); shorten the curve.`); }
   const w=document.getElementById('vprof_warn'); if(w) w.textContent=warn.join('  ');
   t.querySelectorAll('input').forEach(el=>el.addEventListener('change',ev=>{
     const i=+ev.target.dataset.i,f=ev.target.dataset.f; let v=ev.target.value;
@@ -3141,7 +3221,7 @@ function renderOvrGrid(){
 /* ===== SUBSTRUCTURE TABLE UI ===== */
 function renderSubTable(){
   const t=document.getElementById('subtbl');
-  let h='<thead><tr><th></th><th class="lbl">Name</th><th title="Centerline station of this support (NNN+NN.NN).">Station</th><th title="Skew angle in degrees, measured from the alignment normal. 0 = support perpendicular to the alignment.">Skew°</th><th title="Single = one bearing line at the support station. Double = two bearing lines, back and ahead of the station (typical at piers).">Bearing</th><th title="For a double bearing, the distance (ft) each bearing line sits back/ahead of the support station.">Offset</th><th title="Left curb offset (ft from the construction reference line) at this support; blank uses the global curb. Interpolated linearly between supports.">Curb L</th><th title="Right curb offset (ft from the construction reference line) at this support; blank uses the global curb. Interpolated linearly between supports.">Curb R</th><th title="Optional cross-section override at this support (crown/super); blank uses the global cross-section.">X-sec</th><th title="Cross-slope rate for this support\u2019s override, as a decimal.">Rate</th></tr></thead><tbody>';
+  let h='<thead><tr><th></th><th class="lbl">Name</th><th title="Centerline station of this support (NNN+NN.NN).">Station</th><th title="Skew angle in degrees, measured from the normal to the straight abutment-to-abutment chord (construction reference line). 0 = support perpendicular to that chord, which on a curve is not radial to the PGL.">Skew°</th><th title="Single = one bearing line at the support station. Double = two bearing lines, back and ahead of the station (typical at piers).">Bearing</th><th title="For a double bearing, the distance (ft) each bearing line sits back/ahead of the support station.">Offset</th><th title="Left curb offset (ft from the construction reference line) at this support; blank uses the global curb. Interpolated linearly between supports.">Curb L</th><th title="Right curb offset (ft from the construction reference line) at this support; blank uses the global curb. Interpolated linearly between supports.">Curb R</th><th title="Optional cross-section override at this support (crown/super); blank uses the global cross-section.">X-sec</th><th title="Cross-slope rate for this support\u2019s override, as a decimal.">Rate</th></tr></thead><tbody>';
   UNITS.forEach((u,i)=>{
     h+=`<tr>
       <td><span class="utag ${u.type}">${u.type}</span></td>
@@ -3475,13 +3555,17 @@ function loadValidationSet(){
 /* ===== SITE MAP TAB (Leaflet + proj4) ===== */
 const MAP_DEFS = {
   2249:"+proj=lcc +lat_1=42.68333333333333 +lat_2=41.71666666666667 +lat_0=41 +lon_0=-71.5 +x_0=200000.0001016 +y_0=750000 +ellps=GRS80 +units=us-ft +no_defs",
-  2802:"+proj=lcc +lat_1=41.48333333333333 +lat_2=41.28333333333333 +lat_0=41 +lon_0=-70.5 +x_0=500000.0001016001 +y_0=0 +ellps=GRS80 +units=us-ft +no_defs",
+  2250:"+proj=lcc +lat_1=41.48333333333333 +lat_2=41.28333333333333 +lat_0=41 +lon_0=-70.5 +x_0=500000.0001016001 +y_0=0 +ellps=GRS80 +units=us-ft +no_defs",
   3438:"+proj=tmerc +lat_0=41.08333333333334 +lon_0=-71.5 +k=0.99999375 +x_0=100000 +y_0=0 +ellps=GRS80 +units=us-ft +no_defs",
   2234:"+proj=lcc +lat_1=41.86666666666667 +lat_2=41.2 +lat_0=40.83333333333334 +lon_0=-72.75 +x_0=304800.6096 +y_0=152400.3048 +ellps=GRS80 +units=us-ft +no_defs",
   3437:"+proj=tmerc +lat_0=42.5 +lon_0=-71.66666666666667 +k=0.9999666666666667 +x_0=300000 +y_0=0 +ellps=GRS80 +units=us-ft +no_defs",
   2260:"+proj=tmerc +lat_0=38.83333333333334 +lon_0=-74.5 +k=0.9999 +x_0=150000 +y_0=0 +ellps=GRS80 +units=us-ft +no_defs",
-  32111:"+proj=tmerc +lat_0=38.83333333333334 +lon_0=-74.5 +k=0.9999 +x_0=150000 +y_0=0 +ellps=GRS80 +units=us-ft +no_defs"
+  3424:"+proj=tmerc +lat_0=38.83333333333334 +lon_0=-74.5 +k=0.9999 +x_0=150000 +y_0=0 +ellps=GRS80 +units=us-ft +no_defs"
 };
+// Codes used before the labels were corrected (2802 and 32111 are not the ftUS zones). Projects saved
+// with them keep working: they are mapped to the correct code on load, and resolve here too.
+const MAP_EPSG_OLD={'2802':'2250','32111':'3424'};
+MAP_DEFS[2802]=MAP_DEFS[2250]; MAP_DEFS[32111]=MAP_DEFS[3424];
 const MAP_WGS="+proj=longlat +datum=WGS84 +no_defs";
 // US survey feet per meter (exact: 1 m = 3937/1200 usft) and per international foot
 // (exact: 1 ift = 0.3048 m = 0.3048*3937/1200 = 0.999998 usft). The latter was previously
@@ -3498,8 +3582,19 @@ function neToLL(N,E){ const [lng,lat]=proj4(MAP_DEFS[mapEpsg()], MAP_WGS, [mapTo
 function usftToMap(v){ const u=mapUnits(); return u==='m'?v/MAP_USPERM : u==='ift'?v/MAP_USPERIFT : v; }
 // [lat,lng] -> {N,E} in the chosen units (inverse of neToLL)
 function llToNE(lat,lng){ const [Eus,Nus]=proj4(MAP_WGS, MAP_DEFS[mapEpsg()], [lng,lat]); return { N:usftToMap(Nus), E:usftToMap(Eus) }; }
+// Engine plan points are the POB (entered in the map's coordinate units) plus alignment geometry that is
+// always in feet. Only the POB is converted by the units selector; the feet-based offsets from it are not
+// (they used to be scaled by 3.2808 in "meters" mode, drawing the bridge 3.28x too long).
+function mapPOB(){ const gx=document.getElementById('h_x0'), gy=document.getElementById('h_y0');
+  return { x:+(gx?gx.value:0)||0, y:+(gy?gy.value:0)||0 }; }
+// engine (x,y) -> State Plane {E,N} in US survey feet
+function engToUS(x,y){ const P=mapPOB(); return { E:mapToUSft(P.x)+(x-P.x), N:mapToUSft(P.y)+(y-P.y) }; }
+// State Plane {E,N} in US survey feet -> engine (x,y)
+function usToEng(E,N){ const P=mapPOB(); return { x:P.x+(E-mapToUSft(P.x)), y:P.y+(N-mapToUSft(P.y)) }; }
+// [lat,lng] -> engine (x,y), for picking on the map
+function llToEng(lat,lng){ const [Eus,Nus]=proj4(MAP_WGS, MAP_DEFS[mapEpsg()], [lng,lat]); return usToEng(Eus,Nus); }
 // engine plan point -> [lat,lng]; engine x=Easting, y=Northing
-function xyToLL(x,y){ return neToLL(y,x); }
+function xyToLL(x,y){ const u=engToUS(x,y); const [lng,lat]=proj4(MAP_DEFS[mapEpsg()], MAP_WGS, [u.E, u.N]); return [lat,lng]; }
 
 function ensureMap(){
   if(LMAP) return true;
@@ -3640,11 +3735,11 @@ function setPickMode(on){ pickMode=on;
   const hint=document.getElementById('pick_hint'); if(hint) hint.textContent = on ? 'Click the map to drop a point. Toggle off to pan/zoom normally.' : '';
 }
 function onMapPickClick(e){ if(!pickMode) return;
-  const ll=e.latlng; let ne; try{ ne=llToNE(ll.lat,ll.lng); }catch(err){ setMapStatus('Could not convert that location — check the datum.',true); return; }
+  const ll=e.latlng; let ne, eg; try{ ne=llToNE(ll.lat,ll.lng); eg=llToEng(ll.lat,ll.lng); }catch(err){ setMapStatus('Could not convert that location — check the datum.',true); return; }
   let sta=null, off=null;
-  if(ENG){ try{ const pr=ENG.deckPointAtXY(ne.E, ne.N); sta=pr.sta; off=pr.off; }catch(err){} }
-  const el=pickElev(sta,off,{x:ne.E,y:ne.N});
-  const offB=(ENG&&ENG.chordOffsetAtXY)?ENG.chordOffsetAtXY(ne.E,ne.N):null;
+  if(ENG){ try{ const pr=ENG.deckPointAtXY(eg.x, eg.y); sta=pr.sta; off=pr.off; }catch(err){} }
+  const el=pickElev(sta,off,{x:eg.x,y:eg.y});
+  const offB=(ENG&&ENG.chordOffsetAtXY)?ENG.chordOffsetAtXY(eg.x,eg.y):null;
   PICKPTS.push({ id:++pickN, label:'P'+pickN, lat:ll.lat, lng:ll.lng, N:ne.N, E:ne.E, sta, off, offB,
     pave: el?el.pave:null, deck: el?el.deck:null, outside: el?el.outside:false });
   renderPickLayer(); renderPickTable(); markDirty();
@@ -3711,8 +3806,9 @@ function addPickFromStaOff(){
   const offB=ENG.chordOffsetAtXY?ENG.chordOffsetAtXY(pt.x,pt.y):null;
   const el=pickElev(pr.sta,pr.off,{x:pt.x,y:pt.y});
   const typed=(document.getElementById('pick_label').value||'').trim();
+  const usPt=engToUS(pt.x,pt.y);   // N/E are reported in the map's coordinate units
   PICKPTS.push({ id:++pickN, label:typed||('P'+pickN), lat:ll[0], lng:ll[1],
-    N:pt.y, E:pt.x, sta:pr.sta, off:pr.off, offB,
+    N:usftToMap(usPt.N), E:usftToMap(usPt.E), sta:pr.sta, off:pr.off, offB,
     pave:el?el.pave:null, deck:el?el.deck:null, outside:el?el.outside:false });
   renderPickLayer(); renderPickTable(); markDirty();
   document.getElementById('pick_label').value='';
@@ -3724,11 +3820,11 @@ function clearPickPoints(){ PICKPTS=[]; pickN=0; if(PICKLAYER&&LMAP){ LMAP.remov
 // re-derive N/E (from the fixed map location, via the current datum/units) and Station/Offset
 // (from the current alignment) for every picked point. Call when datum, units, or the bridge change.
 function recomputePickPoints(){ if(PICKPTS.length===0) return;
-  PICKPTS.forEach(p=>{ try{ const ne=llToNE(p.lat,p.lng); p.N=ne.N; p.E=ne.E; }catch(e){}
-    if(ENG){ try{ const pr=ENG.deckPointAtXY(p.E,p.N); p.sta=pr.sta; p.off=pr.off; }catch(e){ p.sta=null; p.off=null; } }
+  PICKPTS.forEach(p=>{ let eg=null; try{ const ne=llToNE(p.lat,p.lng); p.N=ne.N; p.E=ne.E; eg=llToEng(p.lat,p.lng); }catch(e){}
+    if(ENG && eg){ try{ const pr=ENG.deckPointAtXY(eg.x,eg.y); p.sta=pr.sta; p.off=pr.off; }catch(e){ p.sta=null; p.off=null; } }
     else { p.sta=null; p.off=null; }
-    p.offB=(ENG&&ENG.chordOffsetAtXY)?ENG.chordOffsetAtXY(p.E,p.N):null;
-    const el=pickElev(p.sta,p.off,{x:p.E,y:p.N}); p.pave=el?el.pave:null; p.deck=el?el.deck:null; p.outside=el?el.outside:false; });
+    p.offB=(ENG&&ENG.chordOffsetAtXY&&eg)?ENG.chordOffsetAtXY(eg.x,eg.y):null;
+    const el=eg?pickElev(p.sta,p.off,{x:eg.x,y:eg.y}):null; p.pave=el?el.pave:null; p.deck=el?el.deck:null; p.outside=el?el.outside:false; });
   renderPickLayer(); renderPickTable();
 }
 function exportPickCSV(){ if(PICKPTS.length===0) return;
@@ -4209,7 +4305,8 @@ function applyProject(p){
   else if(p.VBEGIN && p.VROWS){ VPIS.length=0; let cur={sta:p.VBEGIN.sta,elev:p.VBEGIN.elev,L:0}; VPIS.push(cur);
     p.VROWS.forEach(r=>{ const e=cur.elev+(r.grade/100)*(r.endSta-cur.sta); cur={sta:r.endSta,elev:e,L:r.vc||0}; VPIS.push(cur); });
     if(VPIS.length) VPIS[VPIS.length-1].L=0; }
-  if(p.scalars) for(const id in p.scalars){ const el=document.getElementById(id); if(el){ if(el.type==='checkbox') el.checked=!!p.scalars[id]; else el.value=p.scalars[id]; } }
+  if(p.scalars) for(const id in p.scalars){ const el=document.getElementById(id); if(el){ if(el.type==='checkbox') el.checked=!!p.scalars[id];
+    else el.value=(id==='map_datum' && MAP_EPSG_OLD[p.scalars[id]]) ? MAP_EPSG_OLD[p.scalars[id]] : p.scalars[id]; } }
   ACTIVE_STA = (typeof p.activeSta==='number') ? p.activeSta : null;
   renderElemTable(); renderVProfTable(); renderGirderTable(); renderSubTable(); renderSpanTable(); renderOvrGrid(); renderValTable(); renderHValTable();
   compute();
@@ -4291,6 +4388,19 @@ function loadProjectFromFile(file){
       else setStatus('not a valid project file'); }
     catch(e){ setStatus('could not read file'); } };
   reader.readAsText(file);
+}
+
+/* ===== CSV export of the output tables ===== */
+function tableCSV(wrapId){
+  const t=document.querySelector('#'+wrapId+' table'); if(!t) return '';
+  const q=s=>{ s=String(s).replace(/\s+/g,' ').trim(); return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s; };
+  return [...t.querySelectorAll('tr')].map(tr=>[...tr.children].map(c=>q(c.textContent)).join(',')).join('\n');
+}
+function exportTableCSV(wrapId, base){
+  const csv=tableCSV(wrapId); if(!csv){ setStatus('nothing to export'); return; }
+  const blob=new Blob([csv],{type:'text/csv'}); const url=URL.createObjectURL(blob); const a=document.createElement('a');
+  a.href=url; a.download=`${base}-${new Date().toISOString().slice(0,10)}.csv`; document.body.appendChild(a); a.click();
+  document.body.removeChild(a); URL.revokeObjectURL(url);
 }
 
 /* ===== NAMED BRIDGE LIBRARY (localStorage) ===== */
@@ -4449,7 +4559,7 @@ const EXAMPLE_BRIDGES=[
     VPIS:[{sta:1000,elev:210.00,L:0},{sta:1500,elev:214.00,L:0}],
     GIRDERS:[-14,-7,0,7,14],
     UNITS:[_exUnit('abut','Abut 1',1180,15),_exUnit('abut','Abut 2',1320,15)],
-    scalars:_exScalars({ nspans:'1', h_brg0:'S80E', x_mode_global:'super', x_rate_global:'0.05',
+    scalars:_exScalars({ nspans:'1', h_brg0:'S80E', x_mode_global:'super', x_rate_global:'-0.05',  // right-hand curve: inside (right) low
       edge_l:'-18', edge_r:'18', curb_l:'-16', curb_r:'16' }) }),
   _exProj('Example 5 — 5-Span River Crossing',{
     ELEMS:[{type:'tan',L:1000,R:0,Rin:0,Rout:0,curveMode:'L',deltaStr:''}],
