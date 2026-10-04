@@ -1789,6 +1789,10 @@ function shapePayload(inp,g,cp){
            th:(g.isBox||g.isDeck)?0:(+inp.th||0) } };   // haunch: girder top → deck soffit
 }
 function Ec(fc,wc){ return 120000*wc*wc*Math.pow(fc,0.33); } // LRFD 5.4.2.4
+// Time-development factor, LRFD Eq. 5.4.2.3.2-5 (2015 Interim onward; 10th Ed.):
+//   ktd = t / [12(100 − 4f'ci)/(f'ci + 20) + t]   (t in days, f'ci in ksi)
+// (replaces the pre-2015 form t/(61 − 4f'ci + t)).
+function ktdAASHTO(t,fci){ return t/(12*(100-4*fci)/(fci+20)+t); }
 // Weak-axis (lateral) moment of inertia and St-Venant torsion J of the BARE GIRDER — for the MIDAS
 // line-girder model. The deck is NOT a full-width composite flange for one girder's weak-axis bending
 // (it spans transversely between girders), so weak-axis I is the girder alone → always < strong-axis
@@ -1999,7 +2003,7 @@ function losses(inp,g,cp,ss,Mg_mid){ // Mg_mid kip-in
   // ---- Refined method 5.9.3.4 ----
   const ks=Math.max(1.45-0.13*m.VS,1.0);
   const khs=2.00-0.014*m.H, khc=1.56-0.008*m.H, kf=5/(1+m.fci);
-  const ktd=t=>t/(61-4*m.fci+t);
+  const ktd=t=>ktdAASHTO(t,m.fci);                  // Eq. 5.4.2.3.2-5
   const eShID=ks*khs*kf*ktd(m.td-m.ti)*0.48e-3;
   const eShIF=ks*khs*kf*ktd(m.tfin-m.ti)*0.48e-3;
   const psi=(t,ti)=>1.9*ks*khc*kf*ktd(t-ti)*Math.pow(ti,-0.118);
@@ -2046,7 +2050,7 @@ function hl93(L){
   for(let xm=-30;xm<=L+30;xm+=0.25){
     Mfat=Math.max(Mfat,
       mAtMid([[xm,8],[xm+14,32],[xm+44,32]]),
-      mAtMid([[xm,32],[xm+14,32],[xm+44,8]]));
+      mAtMid([[xm,32],[xm+30,32],[xm+44,8]]));          // reversed: 32 –30 ft– 32 –14 ft– 8
   }
   return {Mtr,Mtd,Mln,Vtr,Vtd,Vln,Mfat,
           M:1.33*Math.max(Mtr,Mtd)+Mln, V:1.33*Math.max(Vtr,Vtd)+Vln};
@@ -2231,7 +2235,7 @@ function deckCalc(inp,g,cp){
   const Mu_neg=1.25*MDC_neg+1.50*MDW_neg+1.75*MLL_neg;
   // capacity: bottom bars (positive), top bars (negative)
   const cap=(barA,sp,cover,Mu)=>{
-    const As=barA*12/sp;                         // in^2/ft
+    const As=(+sp>0)? barA*12/sp : 0;            // in^2/ft — spacing ≤ 0 is an input error: no steel credited (was ∞)
     const dbar=Math.sqrt(barA*4/Math.PI);        // equivalent bar diameter, in
     const dEff=ts-cover-dbar/2;                  // to bar centroid
     const a=As*fy/(0.85*fcd*12);
@@ -2275,14 +2279,32 @@ function distFactors(inp,g,cp){ // Type (k) I-girder, or NEXT double-tee; LRFD 4
     // Use AASHTO type (i) double-tee moment DF (interior), in units of lanes per beam:
     // 1 lane: 0.06+(S/14)^0.4 ... but for spread/adjacent tees the deck-width formula is used.
     const Sf=Wd/12;                                  // beam width, ft (acts as 'S' for tees)
-    const m1=0.06+Math.pow(Sf/14,0.4)*Math.pow(Sf/L,0.3); // simplified (Kg term ~1 for tees)
-    const m2=0.075+Math.pow(Sf/9.5,0.6)*Math.pow(Sf/L,0.2);
-    const v1=0.36+Sf/25, v2=0.2+Sf/12-Math.pow(Sf/35,2);
     const th=clamp(+ld.skew||0,0,60), tanT=Math.tan(th*Math.PI/180);
-    const skM=th<30?1:1-0.25*Math.pow(tanT,1.5);
-    const skV=1+0.20*tanT;
+    // Kg term (Table 4.6.2.2.2b-1, types a/e/k and i/j acting as a unit): with a composite CIP
+    // topping (ts > 0) Kg = n(I + A·eg²) of the basic beam is available, so the full expression is
+    // used, together with the matching skew factors (4.6.2.2.2e c1, 4.6.2.2.3c). With no topping
+    // (ts = 0) the "slab" is the integral flange and Kg is not defined here, so the simplified
+    // (Kg term = 1) form is kept as before.
+    const hasKg=(+ts>0);
+    const nEIx=cp.Ecg/Math.max(cp.Ecd,1e-6);
+    const egN=hasKg? (g.h+(+inp.th||0)+ts/2)-g.yb : 0;
+    const KgN=hasKg? nEIx*(g.I+g.A*egN*egN) : 0;
+    const ts3N=hasKg? ts**3 : 1;
+    const kgtN=hasKg? Math.pow(KgN/(12*L*ts3N),0.1) : 1;
+    const m1=0.06+Math.pow(Sf/14,0.4)*Math.pow(Sf/L,0.3)*kgtN;
+    const m2=0.075+Math.pow(Sf/9.5,0.6)*Math.pow(Sf/L,0.2)*kgtN;
+    const v1=0.36+Sf/25, v2=0.2+Sf/12-Math.pow(Sf/35,2);
+    let skM, skV;
+    if(hasKg){
+      const c1N=th<30?0:0.25*Math.pow(KgN/(12*L*ts3N),0.25)*Math.pow(Sf/L,0.5);
+      skM=1-c1N*Math.pow(tanT,1.5);
+      skV=1+0.20*Math.pow(12*L*ts3N/KgN,0.3)*tanT;
+    } else {
+      skM=th<30?1:1-0.25*Math.pow(tanT,1.5);
+      skV=1+0.20*tanT;
+    }
     const dfmRaw=Math.max(m1,m2), dfvRaw=Math.max(v1,v2);
-    return {Kg:0,eg:0,m1,m2,v1,v2,skM,skV,th,ext:false,lever:0,eM:0,eV:0,rigid:0,rigidNL:0,
+    return {Kg:KgN,eg:egN,kgt:kgtN,kgOmitted:!hasKg,m1,m2,v1,v2,skM,skV,th,ext:false,lever:0,eM:0,eV:0,rigid:0,rigidNL:0,
             dfmRaw,dfvRaw,dfm:dfmRaw*skM,dfv:dfvRaw*skV,isNext:true,Sf};
   }
   const nEI=cp.Ecg/cp.Ecd;
@@ -2329,7 +2351,13 @@ function distFactors(inp,g,cp){ // Type (k) I-girder, or NEXT double-tee; LRFD 4
 /* ================= FLEXURE (LRFD 5.6.3) ================= */
 function flexure(inp,g,cp,ss,x,Pe_fpe){
   const a_=ss.at(x);
-  const Aps=a_.Aps; if(Aps<=0)return{phiMn:0,phi:1};
+  const Aps=a_.Aps;
+  // No effective strand at this section (none defined, or all still inside transfer/debond): zero
+  // capacity, but return every field so dv, the MCFT shear and the tables stay finite (was
+  // {phiMn:0,phi:1} only → dv = NaN → NaN everywhere downstream).
+  if(Aps<=0){ const fcd0=(+inp.ts)>0? inp.mat.fcd : inp.mat.fc;
+    return {c:0,a:0,fps:0,fpsFull:0,devGov:false,dp:cp.hc,dpFull:cp.hc,dt:cp.hc,et:0.005,phi:1,rect:true,
+            Mn:0,phiMn:0,b1:clamp(0.85-0.05*(fcd0-4),0.65,0.85)}; }
   const fpu=+inp.str.fpu, k=inp.str.lowlax?0.28:0.38;
   // compression material & flange: composite topping if present, else the girder's own top flange
   const hasTop=(+inp.ts)>0;
@@ -2461,8 +2489,9 @@ function computeAll(inp){
   if(+inp.mat.fci<2.5) warns.push(`Release strength f′ci = ${fmt(inp.mat.fci,1)} ksi is unusually low; check the value.`);
   if(+inp.th<0) warns.push(`Haunch height is negative (${fmt(inp.th,2)}″) — set it to 0 or a positive build-up.`);
   if(+inp.ts<0) warns.push(`Deck thickness is negative (${fmt(inp.ts,2)}″).`);
-  if(ss.Ntot<1 && ss.nh<1)
-    warns.push(`No prestressing strands defined — the girder is modeled as unstressed; flexural and stress results are not meaningful for a prestressed design.`);
+  const noStrands = ss.Ntot<1 || !(ss.Aps>0);
+  if(noStrands)
+    warns.push(`No prestressing strands defined — the girder is modeled as unstressed. Flexure, shear and stress results are not meaningful; the "Prestressing strands" check fails until at least one strand row (or harped strands) is entered.`);
   { const ys=[...new Set(ss.rows.map(r=>+r.y))].sort((a,b)=>a-b);
     for(let i=1;i<ys.length;i++) if(ys[i]-ys[i-1]<2-1e-9)
       warns.push(`Strand rows at y = ${ys[i-1]}″ and ${ys[i]}″ are closer than the standard 2″ vertical grid.`);
@@ -2506,13 +2535,18 @@ function computeAll(inp){
   // ---- external (MIDAS) demands, if imported & a span is selected ----
   // LL adjustment = DF × MPF, applied to the imported envelope. Impact (IM) is NOT applied here —
   // the MIDAS generator now includes the dynamic load allowance in the imported live load.
-  const _mpf=(+inp.loads.extLLmpf||1);
-  const extLL={ pos:(+inp.loads.extDFpos||1)*_mpf,
-                neg:(+inp.loads.extDFneg||1)*_mpf,
-                v  :(+inp.loads.extDFv  ||1)*_mpf };
+  // A blank/missing factor defaults to 1.0; an entered 0 is kept as 0 (it used to become 1.0
+  // silently through `||1`) and is flagged below.
+  const fac1=(v)=>{ if(v===''||v===null||v===undefined) return 1; const n=+v; return isFinite(n)? n : 1; };
+  const _mpf=fac1(inp.loads.extLLmpf);
+  const extLL={ pos:fac1(inp.loads.extDFpos)*_mpf,
+                neg:fac1(inp.loads.extDFneg)*_mpf,
+                v  :fac1(inp.loads.extDFv)*_mpf };
   const ext = inp.external && inp.external._schema==='psbeam-external-demands'
               ? buildExternal({...inp.external, _selSpan:inp.external._selSpan}, L, extLL) : null;
   const useExt = !!ext;
+  if(useExt){ const z=[['DF +M',extLL.pos],['DF −M',extLL.neg],['DF V',extLL.v]].filter(q=>!(q[1]>0)).map(q=>q[0]);
+    if(z.length) warns.push(`Imported-demand live-load factor ${z.join(', ')} (× MPF) is 0 — that live-load effect is zeroed. Enter the distribution factor (blank = 1.0).`); }
 
   // component force-effect functions (kip-in moment, kip shear).
   // App always computes the NON-COMPOSITE loads on the bare girder: girder self-weight AND DC1
@@ -2606,7 +2640,7 @@ function computeAll(inp){
   if(+inp.ts>0){
     const m=inp.mat, ddt=m.tfin-m.td;
     const ksd=Math.max(1.45-0.13*m.VS,1.0), khsd=2.00-0.014*m.H, khcd=1.56-0.008*m.H, kfd=5/(1+m.fcd);
-    const ktdD=ddt/(61-4*m.fcd+ddt);
+    const ktdD=ktdAASHTO(ddt,m.fcd);                 // Eq. 5.4.2.3.2-5
     const eDdf=ksd*khsd*kfd*ktdD*0.48e-3;                          // deck free shrinkage strain
     const psiD=1.9*ksd*khcd*kfd*ktdD*Math.pow(1,-0.118);           // deck creep (loaded young, ti≈1d)
     const Acd=cp.beff*(+inp.ts), edd=cp.hc-(+inp.ts)/2-cp.ybc;     // deck area & cg above comp. centroid
@@ -2770,6 +2804,25 @@ function computeAll(inp){
   const Mdnc=Mg(L/2)+Mdc1(L/2);
   const Mcr=Math.max(1.0*((1.6*fr+1.1*fcpe)*cp.Sbc-Mdnc*(cp.Sbc/g.Sb-1)),(1.6*fr+1.1*fcpe)*cp.Sbc*0); 
   const minMr=Math.min(Mcr,1.33*MuMid);
+  // Strength flexure (5.6.3.2) and minimum reinforcement (5.6.3.3) governed over the FULL span
+  // (flexFull), not midspan only: harp points, debond terminations and continuous (MIDAS) demands
+  // can put the peak Mu/φMn away from L/2. Only stations with positive Mu are positive-flexure
+  // checks; the pier (−M) check is separate (continuity). Mcr per station uses the prestress and
+  // eccentricity at that station (ss.at(x), transfer ramp included) and the noncomposite moment there.
+  let flexGov=null, minGov=null;
+  flexFull.forEach(r=>{
+    if(!(r.Mu>0) || !(r.phiMn>0)) return;
+    const rf=r.Mu/r.phiMn;
+    if(!flexGov || rf>flexGov.r) flexGov={x:r.x,Mu:r.Mu,phiMn:r.phiMn,r:rf};
+    const xs_=clamp(Math.min(r.x,L-r.x), 0, L/2), a_=ss.at(xs_);
+    const PeX=a_.Aps*fpe, fcpeX=PeX/g.A+PeX*a_.e/g.Sb;
+    const MdncX=Mg(r.x)+Mdc1(r.x);
+    const McrX=Math.max(1.0*((1.6*fr+1.1*fcpeX)*cp.Sbc-MdncX*(cp.Sbc/g.Sb-1)),0);
+    const reqX=Math.min(McrX,1.33*r.Mu), rm=reqX/r.phiMn;
+    if(!minGov || rm>minGov.r) minGov={x:r.x,Mu:r.Mu,phiMn:r.phiMn,Mcr:McrX,fcpe:fcpeX,req:reqX,r:rm};
+  });
+  if(!flexGov) flexGov={x:L/2,Mu:MuMid,phiMn:fMid.phiMn,r:MuMid/fMid.phiMn};
+  if(!minGov) minGov={x:L/2,Mu:MuMid,phiMn:fMid.phiMn,Mcr,fcpe,req:minMr,r:minMr/fMid.phiMn};
 
   // shear (general procedure 5.7.3.4.2) at stations
   const fy=+inp.opt.fy, Av=+inp.opt.stirAv, phiV=0.9, fpo=0.7*inp.str.fpu;
@@ -2779,7 +2832,19 @@ function computeAll(inp){
   // demand there, evaluated with the development length available = Lpad/2 + endOh from the girder end.
   // Remaining rows from the critical section (d_v) inward carry the full 5.7.3.5-1 demand.
   const xBear=Math.max((+inp.opt.Lpad||0)/24, 0);   // inside edge of the bearing pad = Lpad/2 from the CL (ft)
-  const shStations=[{x:xBear,isBearing:true},...[dvEst,0.1*L,0.15*L,0.2*L,0.25*L,0.3*L,0.4*L,0.5*L].map(x=>({x,isBearing:false}))];
+  // Stations cover the FULL span (left half mirrored to the right), so the far/pier end is checked
+  // when imported continuous demands are asymmetric. A station is also placed just past each change
+  // in stirrup spacing (end of the end zone, both ends) where the wider interior spacing starts.
+  const shLeft=[dvEst,0.1*L,0.15*L,0.2*L,0.25*L,0.3*L,0.4*L];
+  const ezX=(+inp.opt.endZoneLen||0)*L;
+  if(ezX>dvEst && ezX<L/2-0.05 && (+inp.opt.sEnd)!==(+inp.opt.sInt)) shLeft.push(ezX+0.01);
+  const shStations=[{x:xBear,isBearing:true},
+    ...shLeft.map(x=>({x,isBearing:false})),
+    {x:0.5*L,isBearing:false},
+    ...shLeft.map(x=>({x:L-x,isBearing:false})),
+    {x:L-xBear,isBearing:true}]
+    .filter((st,i,a)=>a.findIndex(o=>Math.abs(o.x-st.x)<1e-6&&o.isBearing===st.isBearing)===i)
+    .sort((a,b)=>a.x-b.x||(b.isBearing-a.isBearing));
   const shear=shStations.map(({x,isBearing})=>{
     const gr_=grid.reduce((b,q)=>Math.abs(q.x-x)<Math.abs(b.x-x)?q:b,grid[0]);
     const f=flexure(inp,g,cp,ss,x,fpe);
@@ -2814,7 +2879,7 @@ function computeAll(inp){
     const sMax=vu<0.125*m.fc? Math.min(0.8*dv,24):Math.min(0.4*dv,12);
     const sMinR=Av*fy/(0.0316*sqrt(m.fc)*g.bw);
     const sGov=Math.min(sReq,sMax,sMinR);
-    const sProv=(x<=inp.opt.endZoneLen*L)?+inp.opt.sEnd:+inp.opt.sInt;
+    const sProv=(Math.min(x,L-x)<=inp.opt.endZoneLen*L)?+inp.opt.sEnd:+inp.opt.sInt;   // end zone at BOTH ends
     const Vs=Av*fy*dv*cot/sProv;
     const Vn=Math.min(Vc+Vs+Vp,0.25*m.fc*g.bw*dv+Vp);
     // Transverse reinforcement is required where Vu > 0.5·φ·(Vc+Vp) (5.7.2.3). WHERE it is required,
@@ -2958,7 +3023,9 @@ function computeAll(inp){
             sizeOK:rSize<=1.0001, spOK:rSp<=1.0001, extOK:rExt<=1.0001,
             pass:exempt||gov.r<=1.0001};
   })();
-  const iface=shear.slice(0,3).map(r=>{
+  // Interface shear (5.7.4) at EVERY shear station over the full span (including the station just
+  // past each stirrup-spacing change), not only the first three end stations.
+  const iface=shear.map(r=>{
     const dvi=r.dv, bvi=g.btf;
     const vui=r.Vu/(bvi*dvi), Vui=vui*bvi*12; // per 12in length
     const c=0.28,mu=1.0,Acv=bvi*12;
@@ -2971,9 +3038,19 @@ function computeAll(inp){
     const fcWeak=Math.min(+inp.mat.fcd||m.fc, m.fc);
     const VniCap=Math.min(0.3*fcWeak*Acv, 1.8*Acv);
     const capOK=Vui/phiV<=VniCap;
-    return {x:r.x,vui,Vui,AvfReq:Math.max(AvfReq,0),AvfMin,AvfProv,VniCap,capOK,
-            ok:(AvfProv>=Math.max(AvfReq,AvfMin)||Vui/phiV<=c*Acv)&&capOK};
+    // 5.7.4.2: the minimum A_vf may be waived for a roughened (0.25 in. amplitude) girder/slab
+    // interface only where the factored interface shear stress v_ui < 0.210 ksi and all vertical
+    // shear reinforcement is extended across the interface. (Was: waived when V_ui/φ ≤ c·A_cv,
+    // i.e. v_ui ≤ 0.252 ksi.)
+    const minWaived=vui<0.210;
+    const VniProv=c*Acv+mu*AvfProv*fy;                       // kip/ft (P_c = 0)
+    const rStr=(Vui/phiV)/Math.max(VniProv,1e-9), rCap=(Vui/phiV)/Math.max(VniCap,1e-9);
+    const rMin=minWaived? 0 : AvfMin/Math.max(AvfProv,1e-9);
+    const rIf=Math.max(rStr,rCap,rMin);
+    return {x:r.x,vui,Vui,AvfReq:Math.max(AvfReq,0),AvfMin,AvfProv,VniCap,capOK,minWaived,VniProv,rStr,rCap,rMin,r:rIf,
+            ok:(AvfProv>=AvfReq-1e-9)&&(minWaived||AvfProv>=AvfMin-1e-9)&&capOK};
   });
+  const wIface=iface.reduce((b,q)=>q.r>b.r?q:b,iface[0]);
 
   // camber & deflections (midspan, inches; + = up)
   const Eci=lo.Eci, Ecf=cp.Ecg, Ig=g.I, IcC=cp.Ic;
@@ -3028,7 +3105,8 @@ function computeAll(inp){
   // handling (lifting/hauling) & deck design (optional modules)
   let handling=null, deck=null;
   if(inp.handling&&inp.handling.on) handling=handlingCalc(inp,g,cp,ss,fpe,fpi,lo.Eci);
-  if(inp.deck&&inp.deck.on) deck=deckCalc(inp,g,cp);
+  if(inp.deck&&inp.deck.on){ deck=deckCalc(inp,g,cp);
+    if(!(+inp.deck.sTop>0)||!(+inp.deck.sBot>0)) warns.push(`Deck bar spacing must be greater than 0 (top ${inp.deck.sTop}″, bottom ${inp.deck.sBot}″) — no deck steel is credited where it is 0.`); }
 
   // continuity for LL + SIDL: negative moment over the pier (optional)
   let cont=null;
@@ -3064,7 +3142,7 @@ function computeAll(inp){
     if(cn.restraint){
       const Phi = lo.ref.psiBIF;                       // ultimate creep coefficient (AASHTO 5.4.2.3)
       const tconn = m.td;                              // continuity established at deck placement
-      const PhiConn = lo.ref? (1.9*lo.ref.ks*lo.ref.khc*lo.ref.kf*Math.pow(m.ti,-0.118)*((m.tfin-tconn)/(61-4*m.fci+(m.tfin-tconn)))) : Phi;
+      const PhiConn = lo.ref? (1.9*lo.ref.ks*lo.ref.khc*lo.ref.kf*Math.pow(m.ti,-0.118)*ktdAASHTO(m.tfin-tconn,m.fci)) : Phi;
       // fraction of the restraint realized for loads present BEFORE continuity (PCA):
       const cfBefore = Phi>1e-6? (1-Math.exp(-Phi))/Phi : 1;     // ~ (1-e^-Φ)/Φ
       const develBefore = 1-Math.exp(-Phi);                       // (1-e^-Φ)
@@ -3084,7 +3162,7 @@ function computeAll(inp){
       // the girder, inducing hogging curvature at the pier). The restrained moment is relaxed by
       // creep over the remaining life: M_sh = ε_diff·E_d·A_d·e_d / (1+0.7ψ) · (develBefore).
       const ddt=m.tfin-m.td, kf=lo.ref.kf;
-      const eDeckSh = lo.ref.ks*(2.00-0.014*m.H)*kf*(ddt/(61-4*m.fcd+ddt))*0.48e-3;  // deck free shrinkage
+      const eDeckSh = lo.ref.ks*(2.00-0.014*m.H)*kf*ktdAASHTO(ddt,m.fcd)*0.48e-3;  // deck free shrinkage
       const Acd=cp.beff*(+inp.ts), edComp=cp.hc-(+inp.ts)/2-cp.ybc;                  // deck cg above comp. centroid
       const Msh = -(eDeckSh*cp.Ecd*Acd*edComp)/(1+0.7*lo.ref.psiBDF)*cfBefore*0.5; // k-in (hogging -), gradually-applied strain relaxed by cf; 0.5 partial-restraint factor
       const Mrestraint = Mps_cr + Mdl_cr + Msh;                   // net, k-in
@@ -3205,14 +3283,18 @@ function computeAll(inp){
     {n:'Srv tens (top)',v:wS2T.s2Top,lim:-lim.srvT,r:wS2T.s2Top<0? -wS2T.s2Top/lim.srvT:0,loc:wS2T.x,u:'ksi'},
     {n:'Srv III tens',v:wS3.s3Bot,lim:-lim.srvT,r:wS3.s3Bot<0? -wS3.s3Bot/lim.srvT:0,loc:wS3.x,u:'ksi'},
     {n:'Deck comp',v:wDkC.dkC,lim:lim.dkC2,r:wDkC.dkC/lim.dkC2,loc:wDkC.x,u:'ksi'},
-    {n:'Flexure',v:MuMid/12,lim:fMid.phiMn/12,r:MuMid/fMid.phiMn,loc:L/2,u:'k-ft'},
-    {n:'Min reinf',v:minMr/12,lim:fMid.phiMn/12,r:minMr/fMid.phiMn,loc:L/2,u:'k-ft'},
+    {n:'Flexure',v:flexGov.Mu/12,lim:flexGov.phiMn/12,r:flexGov.r,loc:flexGov.x,u:'k-ft'},
+    {n:'Min reinf',v:minGov.req/12,lim:minGov.phiMn/12,r:minGov.r,loc:minGov.x,u:'k-ft'},
     {n:'Shear',v:wShear.Vu,lim:phiV*wShear.Vn,r:wShear.dc,loc:wShear.x,u:'kip'},
     {n:'Long. reinf (5.7.3.5)',v:wLong.Tdem,lim:wLong.Tcap,r:wLong.Tcap>0?wLong.Tdem/wLong.Tcap:0,loc:wLong.x,u:'kip'},
+    (wIface.rMin>=wIface.rStr&&wIface.rMin>=wIface.rCap)
+      ? {n:'Interface shear (5.7.4)',v:wIface.AvfMin,lim:wIface.AvfProv,r:wIface.r,loc:wIface.x,u:'in²/ft'}
+      : {n:'Interface shear (5.7.4)',v:wIface.Vui/phiV,lim:(wIface.rCap>=wIface.rStr?wIface.VniCap:wIface.VniProv),r:wIface.r,loc:wIface.x,u:'kip/ft'},
     {n:'Splitting steel (5.9.4.4)',v:splitDem,lim:splitPr,r:splitDC,loc:0,u:'kip'},
     {n:'Fatigue I (strand)',v:fat.dfStrand,lim:fat.fatLimit,r:fat.dc,loc:L/2,u:'ksi'},
     {n:'LL deflection',v:cam.dLL,lim:cam.llLim,r:cam.dLL/cam.llLim,loc:L/2,u:'in'},
   ];
+  if(noStrands) checks.unshift({n:'Prestressing strands',v:0,lim:1,r:Infinity,loc:0,u:'strands'});
   // Box and slab beams are exempt, so the check is omitted entirely rather than pushed
   // as a trivially-green row that would read as "verified".
   if(!conf.exempt) checks.push({n:'Confinement steel (5.9.4.4.2)',v:conf.gov.v,lim:conf.gov.lim,r:conf.dc,loc:0,u:'in'});
@@ -3236,7 +3318,7 @@ function computeAll(inp){
   const checksF=checks.map(c=>({...c,pass:c.r<=1.0001}));
 
   return {g,cp,ss,lo,refFin,LT,totalLoss,fpe,fpeGain,gains,fpi,pctLoss,lim,grid,flexGrid,flexFull,fMid,MuMid,shearDiag,diagrams,
-          Mcr,minMr,fcpe,fr,shear,wShear,wLong,ldBonded,ldDebond,iface,AsSplit,AsSplitProv,splitPr,splitDem,splitDC,splitN_need,splitDir,splitH,splitZone,conf,relSteel,cam,fat,handling,deck,
+          Mcr,minMr,fcpe,fr,flexGov,minGov,shear,wShear,wLong,ldBonded,ldDebond,iface,wIface,AsSplit,AsSplitProv,splitPr,splitDem,splitDC,splitN_need,splitDir,splitH,splitZone,conf,relSteel,cam,fat,handling,deck,
           rating,svcRating,shrRating,vehRatings,crack,haunch,useExt,ext:useExt?{sel:ext.sel,spanLen:ext.spanLen,nStations:ext.slice.length,
             member:inp.external.member,liveLoadType:inp.external.liveLoadType,
             dfApplied:inp.external.distributionFactorApplied,imApplied:inp.external.impactApplied,
@@ -4706,7 +4788,7 @@ function InputsTab({inp,set,R,selRow,setSelRow,editedRows,flashRow,editLog,clear
               </div>}
               {!R.error&&<div className="hint">HL-93: M_truck = <b>{fmt(R.hl.Mtr,0)}</b>, M_tandem = <b>{fmt(R.hl.Mtd,0)}</b>, M_lane = <b>{fmt(R.hl.Mln,0)} k-ft</b> → 1.33·truck + lane = <b>{fmt(R.hl.M,0)} k-ft/lane</b><br/>
               {R.df.ext?<React.Fragment>Exterior: lever rule (1 ln, m=1.2) = <b>{fmt(R.df.lever,3)}</b> · e·DF_int = <b>{fmt(R.df.eM*R.df.m2,3)}</b> (e = {fmt(R.df.eM,3)}) · rigid section ({R.df.rigidNL} ln) = <b>{fmt(R.df.rigid,3)}</b><br/></React.Fragment>
-              :<React.Fragment>Interior: DF_m = max({fmt(R.df.m1,3)}, {fmt(R.df.m2,3)}) (eq. 4.6.2.2.2b-1, K_g = {fmt(R.df.Kg,0)} in⁴)<br/></React.Fragment>}
+              :<React.Fragment>Interior: DF_m = max({fmt(R.df.m1,3)}, {fmt(R.df.m2,3)}) (eq. 4.6.2.2.2b-1, K_g = {fmt(R.df.Kg,0)} in⁴){R.df.isNext?(R.df.kgOmitted?' · NEXT, no topping: K_g term omitted (taken as 1.0)':' · NEXT: S = beam width '+fmt(R.df.Sf,2)+' ft, (K_g/12Lt_s³)^0.1 = '+fmt(R.df.kgt,3)):''}<br/></React.Fragment>}
               {R.df.th>0&&<React.Fragment>Skew {fmt(R.df.th,0)}°: moment × <b>{fmt(R.df.skM,3)}</b> (4.6.2.2.2e) · shear × <b>{fmt(R.df.skV,3)}</b> (4.6.2.2.3c)<br/></React.Fragment>}
               DF_m = <b>{fmt(R.dfm,3)}</b> · DF_v = <b>{fmt(R.dfv,3)}</b> → <b>M_LL+IM = {fmt(R.MLL,0)} k-ft</b> · <b>V_LL+IM = {fmt(R.VLL,0)} kip</b></div>}
               {!R.error&&(R.g.isBox||R.g.isDeck)&&inp.loads.dfAuto&&<div className="callout warn">⚠ <b>Adjacent box / deck beams use different distribution-factor equations</b> (LRFD 4.6.2.2.2b type f/g with the I/J torsion term), which this app does not auto-compute. The auto DF above uses the I-girder (type k) formula and may be significantly off for adjacent-beam bridges. Compute DF_m and DF_v per Table 4.6.2.2.2b-1 / 4.6.2.2.3a-1 and enter them with the MANUAL toggle.</div>}
@@ -5037,8 +5119,8 @@ function LossesTab({inp,R}){
   const lo=R.lo, rf=lo.ref, fin=R.refFin, useRef_=inp.opt.lossMethod==='refined';
   const g=R.g,cp=R.cp,ss=R.ss,m=inp.mat,Ep=+inp.str.Ep,em=ss.eMid;
   const X1=g.I+em*em*g.A, MgM=R.wG*R.L*R.L/8*12;
-  const ktdID=(m.td-m.ti)/(61-4*m.fci+(m.td-m.ti)), ktdIF=(m.tfin-m.ti)/(61-4*m.fci+(m.tfin-m.ti)),
-        ktdDF=(m.tfin-m.td)/(61-4*m.fci+(m.tfin-m.td));
+  const ktdID=ktdAASHTO(m.td-m.ti,m.fci), ktdIF=ktdAASHTO(m.tfin-m.ti,m.fci),
+        ktdDF=ktdAASHTO(m.tfin-m.td,m.fci), ktdK=12*(100-4*m.fci)/(m.fci+20);
   const gh=1.7-0.01*m.H, gst=5/(1+m.fci);
   const Mbar=inp.loads.wBar*R.L*R.L/8*12, Mdw=inp.loads.wDW*R.L*R.L/8*12;
   const rMid=R.grid.reduce((b,r)=>Math.abs(r.x-R.L/2)<Math.abs(b.x-R.L/2)?r:b,R.grid[0]);
@@ -5092,7 +5174,7 @@ function LossesTab({inp,R}){
       </table>
       <div className="hint" style={{marginTop:4}}>“H” = harped group (at its midspan CG). Permanent stage shown without elastic gains; with permanent gains credited, add ≈ {fmt(R.gains.permanent+R.gains.deckShr,2)} ksi (see Elastic Gains). Total P_e = <b>{fmt(S.tot.Ppe,0)} kip</b> = A_ps·f_pe (group).</div>
 
-      <Deriv title={`Worked example — row at y = ${fmt(rows[0].y,1)}″ (e = ${fmt(rows[0].e,1)}″)`} refTag="one row; table covers all">
+      {rows.length>0&&<Deriv title={`Worked example — row at y = ${fmt(rows[0].y,1)}″ (e = ${fmt(rows[0].e,1)}″)`} refTag="one row; table covers all">
         <Step d="Eccentricity stress factor (this row vs the strand-group centroid)">
           <ML s={Tx`r_i=\dfrac{1/A_g+e_i\,e_{cg}/I_g}{1/A_g+e_{cg}^2/I_g}=\dfrac{1/${nx(S.ref.Ag,0)}+(${nx(rows[0].e,1)})(${nx(S.ref.ecg,1)})/${nx(S.ref.Ig,0)}}{1/${nx(S.ref.Ag,0)}+(${nx(S.ref.ecg,1)})^2/${nx(S.ref.Ig,0)}}=${nx(rows[0].fac,3)}`}/>
         </Step>
@@ -5107,7 +5189,7 @@ function LossesTab({inp,R}){
         <Step d="Permanent (final) — less all long-term losses (eccentricity-dependent share scaled)">
           <ML s={Tx`f_{pe}=f_{pbt}-r_i\,\Delta f_{pES}-\Delta f_{pLT,i}=${nx(rows[0].fpe,1)}\;\mathrm{ksi}\qquad P=${nx(rows[0].Ppe,0)}\;\mathrm{kip}`}/>
         </Step>
-      </Deriv>
+      </Deriv>}
       </React.Fragment>;})()}
     </Card>
 
@@ -5158,7 +5240,7 @@ function LossesTab({inp,R}){
       ]}/>
       <Step d="Section & material factors" r="5.4.2.3">
         <ML s={Tx`k_s=\max(1.45-0.13\tfrac{V}{S},1.0)=${nx(rf.ks,3)}\quad k_{hs}=2.00-0.014H=${nx(rf.khs,3)}\quad k_{hc}=1.56-0.008H=${nx(rf.khc,3)}\quad k_f=\frac{5}{1+f'_{ci}}=${nx(rf.kf,3)}`}/>
-        <ML s={Tx`k_{td}(t)=\frac{t}{61-4f'_{ci}+t}:\;\;k_{td}^{id}=\frac{${nx(m.td-m.ti,0)}}{${nx(61-4*m.fci,1)}+${nx(m.td-m.ti,0)}}=${nx(ktdID,3)}\quad k_{td}^{if}=${nx(ktdIF,3)}\quad k_{td}^{df}=${nx(ktdDF,3)}`}/>
+        <ML s={Tx`k_{td}(t)=\frac{t}{12\left(\frac{100-4f'_{ci}}{f'_{ci}+20}\right)+t}:\;\;k_{td}^{id}=\frac{${nx(m.td-m.ti,0)}}{${nx(ktdK,1)}+${nx(m.td-m.ti,0)}}=${nx(ktdID,3)}\quad k_{td}^{if}=${nx(ktdIF,3)}\quad k_{td}^{df}=${nx(ktdDF,3)}`}/>
       </Step>
       <Step d="Shrinkage strains & creep coefficients" r="5.4.2.3.2/3">
         <ML s={Tx`\varepsilon_{bid}=k_s k_{hs} k_f k_{td}^{id}(0.48\times10^{-3})=${nx(rf.eShID*1e6,1)}\times10^{-6}\quad \varepsilon_{bif}=${nx(rf.eShIF*1e6,1)}\times10^{-6}`}/>
@@ -5552,10 +5634,10 @@ function FlexTab({inp,R}){
   const togKeys=['SW','DC1','DC2','DW','LLpos',...(R.cont?['LLneg']:[]),'Mu','phiMn',...(R.cont?['phiMnNeg']:[])];
   return(<div>
     <div className="bigres">
-      <div className={'br '+(ok9?'p':'f')}><div className="l">Mu / φMn @ midspan</div><div className="n">{fmt(R.MuMid/f.phiMn,3)}</div><div className="u">{fmt(R.MuMid/12,0)} / {fmt(f.phiMn/12,0)} k-ft</div></div>
+      <div className={'br '+(ok9?'p':'f')}><div className="l">Mu / φMn (governing)</div><div className="n">{fmt(R.flexGov.r,3)}</div><div className="u">{fmt(R.flexGov.Mu/12,0)} / {fmt(R.flexGov.phiMn/12,0)} k-ft @ x = {fmt(R.flexGov.x,1)} ft{Math.abs(R.flexGov.x-L/2)>0.01?' · midspan '+fmt(R.MuMid/f.phiMn,3):''}</div></div>
       <div className="br"><div className="l">f_ps</div><div className="n">{fmt(f.fps,1)}</div><div className="u">ksi · c = {fmt(f.c,2)}″ ({f.rect?'rectangular':'T-section'})</div></div>
       <div className="br"><div className="l">φ (ε_t = {fmt(f.et*1000,1)}‰)</div><div className="n">{fmt(f.phi,2)}</div><div className="u">5.5.4.2 · {f.et>=0.005?'tension-controlled':'transition'}</div></div>
-      <div className={'br '+(okMin?'p':'f')}><div className="l">Min reinf (5.6.3.3)</div><div className="n">{fmt(R.minMr/f.phiMn,2)}</div><div className="u">min(Mcr, 1.33Mu)/φMn</div></div>
+      <div className={'br '+(okMin?'p':'f')}><div className="l">Min reinf (5.6.3.3)</div><div className="n">{fmt(R.minGov.r,2)}</div><div className="u">min(Mcr, 1.33Mu)/φMn @ x = {fmt(R.minGov.x,1)} ft</div></div>
       {R.cont&&<div className={'br '+(R.checks.at(-1).pass?'p':'f')}><div className="l">−Mu / −φMn @ pier</div><div className="n">{fmt(R.cont.dc,3)}</div><div className="u">{fmt(R.cont.MuN/12,0)} / {fmt(R.cont.phiMnN/12,0)} k-ft</div></div>}
     </div>
     <Card title="Moment Breakdown vs Capacity" refTag={factored?'factored (Strength I)':'unfactored service components'}>
@@ -5635,12 +5717,12 @@ function FlexTab({inp,R}){
           <ML s={f.rect?Tx`M_n=A_{ps}f_{ps}\left(d_p-\frac{a}{2}\right)=${nx(rMid.Aps,3)}(${nx(f.fps,1)})\left(${nx(f.dp,2)}-\frac{${nx(f.a,2)}}{2}\right)=${nx(f.Mn,0)}\;\mathrm{k\text{-}in}=${nx(f.Mn/12,0)}\;\mathrm{k\text{-}ft}`
             :Tx`M_n=A_{ps}f_{ps}(d_p-\tfrac a2)+0.85f'_{cd}(b_{eff}-b_{tf})h_f(\tfrac a2-\tfrac{h_f}2)=${nx(f.Mn/12,0)}\;\mathrm{k\text{-}ft}`}/>
           <ML s={Tx`\varepsilon_t=0.003\left(\frac{d_t}{c}-1\right)=0.003\left(\frac{${nx(f.dt,2)}}{${nx(f.c,2)}}-1\right)=${nx(f.et*1000,2)}\times10^{-3}\Rightarrow\phi=0.75+0.25\frac{\varepsilon_t-0.002}{0.003}\le1.0=${nx(f.phi,3)}`}/>
-          <ML s={Tx`\phi M_n=${nx(f.phi,3)}(${nx(f.Mn/12,0)})=${nx(f.phiMn/12,0)}\ge M_u=${nx(R.MuMid/12,0)}\;\mathrm{k\text{-}ft}\quad\frac{M_u}{\phi M_n}=${nx(R.MuMid/f.phiMn,3)}\;${(ck.find(c=>c.n==='Flexure')||{}).pass?'\\checkmark':'\\text{N.G.}'}`}/>
+          <ML s={Tx`\phi M_n=${nx(f.phi,3)}(${nx(f.Mn/12,0)})=${nx(f.phiMn/12,0)}\ge M_u=${nx(R.MuMid/12,0)}\;\mathrm{k\text{-}ft}\quad\frac{M_u}{\phi M_n}=${nx(R.MuMid/f.phiMn,3)}\;${(R.MuMid<=f.phiMn*1.0001)?'\\checkmark':'\\text{N.G.}'}`}/>
         </Step>
         <Step d="Minimum reinforcement" r="5.6.3.3">
           <ML s={Tx`f_r=0.24\sqrt{f'_c}=${nx(R.fr,3)}\;\mathrm{ksi}\qquad f_{cpe}=\frac{P_e}{A_g}+\frac{P_e e_m}{S_b}=${nx(PeMid/g.A,3)}+${nx(PeMid*ss.eMid/g.Sb,3)}=${nx(R.fcpe,3)}\;\mathrm{ksi}`}/>
           <ML s={Tx`M_{cr}=\gamma_3\left[(\gamma_1 f_r+\gamma_2 f_{cpe})S_{bc}-M_{dnc}\left(\tfrac{S_{bc}}{S_b}-1\right)\right]=1.0\left[(1.6\cdot${nx(R.fr,3)}+1.1\cdot${nx(R.fcpe,3)})${nx(cp.Sbc,0)}-${nx(rMid.Mg+rMid.Mdk,0)}\left(\tfrac{${nx(cp.Sbc,0)}}{${nx(g.Sb,0)}}-1\right)\right]=${nx(R.Mcr/12,0)}\;\mathrm{k\text{-}ft}`}/>
-          <ML s={Tx`\phi M_n\ge\min(M_{cr},1.33M_u)=\min(${nx(R.Mcr/12,0)},${nx(1.33*R.MuMid/12,0)})=${nx(R.minMr/12,0)}\;\mathrm{k\text{-}ft}\;${(ck.find(c=>c.n==='Min reinf')||{}).pass?'\\checkmark':'\\text{N.G.}'}`}/>
+          <ML s={Tx`\phi M_n\ge\min(M_{cr},1.33M_u)=\min(${nx(R.Mcr/12,0)},${nx(1.33*R.MuMid/12,0)})=${nx(R.minMr/12,0)}\;\mathrm{k\text{-}ft}\;${(R.minMr<=f.phiMn*1.0001)?'\\checkmark':'\\text{N.G.}'}`}/>
         </Step>
       </Deriv>;})()}
 
@@ -5797,7 +5879,8 @@ function ShearTab({inp,R}){
       </Deriv>;})()}
     <Card title="Interface Shear (Girder/Deck)" refTag="LRFD 5.7.4 — roughened, c=0.28 ksi, μ=1.0">
       <Tbl head={['x (ft)','vui (ksi)','Avf req (in²/ft)','Avf min','Avf prov','Status']}
-        rows={R.iface.map(r=>({c:[fmt(r.x,1),fmt(r.vui,3),fmt(r.AvfReq,3),fmt(r.AvfMin,3),fmt(r.AvfProv,3),PF(r.ok)]}))}/>
+        rows={R.iface.map(r=>({c:[fmt(r.x,1),fmt(r.vui,3),fmt(r.AvfReq,3),r.minWaived?'waived':fmt(r.AvfMin,3),fmt(r.AvfProv,3),PF(r.ok)]}))}/>
+      <div className="hint">Checked at every shear station over the full span, including the station just past each change in stirrup spacing. The minimum A<sub>vf</sub> (0.05A<sub>cv</sub>/f<sub>y</sub>) is waived only where v<sub>ui</sub> {'<'} 0.210 ksi (5.7.4.2: roughened 0.25-in. amplitude girder/slab interface, all vertical shear reinforcement extended into the deck). Governing: x = {fmt(R.wIface.x,1)} ft, D/C = {fmt(R.wIface.r,2)}.</div>
     </Card>
     <div className="callout">End-region / transfer checks — anchorage-zone <b>splitting &amp; bursting</b> (5.9.4.4), <b>confinement</b> (5.9.4.4.2) and the <b>release-tension bonded steel</b> (5.9.2.3.1b), with an end-region reinforcement diagram — are on the dedicated <b>Anchorage Zone</b> tab.</div>
   </div>);
@@ -6544,8 +6627,8 @@ function ReportTab({inp,R}){
         Ic5=g.btf*cp.n*th**3/12, Ic6=Ah*(yh-cp.ybc)**2;
   const cgsNum=[...ss.rows.map(r=>`${r.n}\\cdot ${r.y}`),...(ss.nh>0?[`${ss.nh}\\cdot ${ss.hp.yMid}`]:[])].join('+');
   const em=ss.eMid, X1=g.I+em*em*g.A, MgM=R.wG*L*L/8*12;
-  const ktdID=(m.td-m.ti)/(61-4*m.fci+(m.td-m.ti)), ktdIF=(m.tfin-m.ti)/(61-4*m.fci+(m.tfin-m.ti)),
-        ktdDF=(m.tfin-m.td)/(61-4*m.fci+(m.tfin-m.td));
+  const ktdID=ktdAASHTO(m.td-m.ti,m.fci), ktdIF=ktdAASHTO(m.tfin-m.ti,m.fci),
+        ktdDF=ktdAASHTO(m.tfin-m.td,m.fci), ktdK=12*(100-4*m.fci)/(m.fci+20);
   const gh=1.7-0.01*m.H, gst=5/(1+m.fci);
   const Mbar=inp.loads.wBar*L*L/8*12, Mdw=inp.loads.wDW*L*L/8*12, MLLm=R.MLL*12;
   const PeMid=rMid.Aps*R.fpe;
@@ -6704,7 +6787,7 @@ function ReportTab({inp,R}){
       <Step d="Time-development & humidity factors" r="LRFD 5.4.2.3">
         <ML s={Tx`k_s=\max(1.45-0.13\,V\!/\!S,\;1.0)=\max(1.45-0.13(${nx(m.VS,2)}),1.0)=${nx(rf.ks,3)}`}/>
         <ML s={Tx`k_{hs}=2.00-0.014H=2.00-0.014(${nx(m.H,0)})=${nx(rf.khs,3)}\qquad k_{hc}=1.56-0.008H=${nx(rf.khc,3)}\qquad k_f=\frac{5}{1+f'_{ci}}=\frac{5}{1+${nx(m.fci,1)}}=${nx(rf.kf,3)}`}/>
-        <ML s={Tx`k_{td}(t)=\frac{t}{61-4f'_{ci}+t}:\quad k_{td}(t_d-t_i)=\frac{${nx(m.td-m.ti,0)}}{${nx(61-4*m.fci,1)}+${nx(m.td-m.ti,0)}}=${nx(ktdID,3)}\qquad k_{td}(t_f-t_i)=${nx(ktdIF,3)}`}/>
+        <ML s={Tx`k_{td}(t)=\frac{t}{12\left(\frac{100-4f'_{ci}}{f'_{ci}+20}\right)+t}:\quad k_{td}(t_d-t_i)=\frac{${nx(m.td-m.ti,0)}}{${nx(ktdK,1)}+${nx(m.td-m.ti,0)}}=${nx(ktdID,3)}\qquad k_{td}(t_f-t_i)=${nx(ktdIF,3)}`}/>
       </Step>
       <Step d="Shrinkage strains" r="LRFD 5.4.2.3.3">
         <ML s={Tx`\varepsilon_{bid}=k_s k_{hs} k_f\,k_{td}(t_d-t_i)\,(0.48\times10^{-3})=${nx(rf.ks,3)}(${nx(rf.khs,3)})(${nx(rf.kf,3)})(${nx(ktdID,3)})(0.48\times10^{-3})=${nx(rf.eShID*1e6,1)}\times10^{-6}`}/>
@@ -6881,12 +6964,12 @@ function ReportTab({inp,R}){
           Tx`M_n=A_{ps}f_{ps}\left(d_p-\frac{a}{2}\right)=${nx(rMid.Aps,3)}(${nx(f.fps,1)})\left(${nx(f.dp,2)}-\frac{${nx(f.a,2)}}{2}\right)=${nx(f.Mn,0)}\;\mathrm{k\text{-}in}=${nx(f.Mn/12,0)}\;\mathrm{k\text{-}ft}`
           :Tx`M_n=A_{ps}f_{ps}\left(d_p-\tfrac{a}{2}\right)+0.85f'_{cd}(b_{eff}-b_{tf})h_f\left(\tfrac{a}{2}-\tfrac{h_f}{2}\right)=${nx(f.Mn/12,0)}\;\mathrm{k\text{-}ft}`}/>
         <ML s={Tx`\varepsilon_t=0.003\left(\frac{d_t}{c}-1\right)=0.003\left(\frac{${nx(f.dt,2)}}{${nx(f.c,2)}}-1\right)=${nx(f.et*1000,2)}\times10^{-3}\quad\Rightarrow\quad\phi=0.75+0.25\frac{\varepsilon_t-0.002}{0.003}\le 1.0=${nx(f.phi,3)}`}/>
-        <ML s={Tx`\phi M_n=${nx(f.phi,3)}(${nx(f.Mn/12,0)})=${nx(f.phiMn/12,0)}\;\mathrm{k\text{-}ft}\ge M_u=${nx(R.MuMid/12,0)}\;\mathrm{k\text{-}ft}\quad\frac{M_u}{\phi M_n}=${nx(R.MuMid/f.phiMn,3)}\;${(ck.find(c=>c.n==='Flexure')||{}).pass?'\\checkmark':'\\text{N.G.}'}`}/>
+        <ML s={Tx`\phi M_n=${nx(f.phi,3)}(${nx(f.Mn/12,0)})=${nx(f.phiMn/12,0)}\;\mathrm{k\text{-}ft}\ge M_u=${nx(R.MuMid/12,0)}\;\mathrm{k\text{-}ft}\quad\frac{M_u}{\phi M_n}=${nx(R.MuMid/f.phiMn,3)}\;${(R.MuMid<=f.phiMn*1.0001)?'\\checkmark':'\\text{N.G.}'}`}/>
       </Step>
       <Step d="Minimum reinforcement" r="LRFD 5.6.3.3">
         <ML s={Tx`f_r=0.24\sqrt{f'_c}=0.24\sqrt{${nx(m.fc,1)}}=${nx(R.fr,3)}\;\mathrm{ksi}\qquad f_{cpe}=\frac{P_e}{A_g}+\frac{P_e e_m}{S_b}=${nx(PeMid/g.A,3)}+${nx(PeMid*ss.eMid/g.Sb,3)}=${nx(R.fcpe,3)}\;\mathrm{ksi}`}/>
         <ML s={Tx`M_{cr}=\gamma_3\left[(\gamma_1 f_r+\gamma_2 f_{cpe})S_{bc}-M_{dnc}\left(\frac{S_{bc}}{S_b}-1\right)\right]=1.0\left[(1.6\cdot${nx(R.fr,3)}+1.1\cdot${nx(R.fcpe,3)})${nx(cp.Sbc,0)}-${nx(rMid.Mg+rMid.Mdk,0)}\left(\frac{${nx(cp.Sbc,0)}}{${nx(g.Sb,0)}}-1\right)\right]=${nx(R.Mcr/12,0)}\;\mathrm{k\text{-}ft}`}/>
-        <ML s={Tx`\phi M_n\ge\min(M_{cr},\,1.33M_u)=\min(${nx(R.Mcr/12,0)},\,${nx(1.33*R.MuMid/12,0)})=${nx(R.minMr/12,0)}\;\mathrm{k\text{-}ft}\;${(ck.find(c=>c.n==='Min reinf')||{}).pass?'\\checkmark':'\\text{N.G.}'}`}/>
+        <ML s={Tx`\phi M_n\ge\min(M_{cr},\,1.33M_u)=\min(${nx(R.Mcr/12,0)},\,${nx(1.33*R.MuMid/12,0)})=${nx(R.minMr/12,0)}\;\mathrm{k\text{-}ft}\;${(R.minMr<=f.phiMn*1.0001)?'\\checkmark':'\\text{N.G.}'}`}/>
       </Step>
     </CalcSec>
 
