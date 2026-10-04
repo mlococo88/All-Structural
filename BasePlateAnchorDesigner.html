@@ -450,7 +450,15 @@ function abrgOf(){
           (exact?"":" \u2014 nearest tabulated diameter")+")",
     na:false, exact};
 }
-function agrade(id){ return LIB.anchorGrades.find(g=>g.id===id)||LIB.anchorGrades[0]; }
+function agrade(id){ const g=LIB.anchorGrades.find(g=>g.id===id)||LIB.anchorGrades[0];
+  /* ASTM A449 strength depends on diameter: ≤ 1 in. 92/120 ksi; > 1 to 1-1/2 in.
+     81/105 ksi; > 1-1/2 to 3 in. 58/90 ksi. (Previously fixed at 81/105.) */
+  if(g.id==="a449"){
+    const d=(typeof S!=="undefined" && S && S.anchor)? S.anchor.dia : 1.0;
+    const r = (d<=1.0+1e-9)? {Fy:92,Fu:120} : (d<=1.5+1e-9)? {Fy:81,Fu:105} : {Fy:58,Fu:90};
+    return Object.assign({}, g, r);
+  }
+  return g; }
 function pgrade(id){ return LIB.plateGrades.find(g=>g.id===id)||LIB.plateGrades[0]; }
 function rgrade(id){ return LIB.rebarGrades.find(g=>g.id===id)||LIB.rebarGrades[0]; }
 function rebarOf(sz){ return LIB.rebar.find(r=>r.size===sz)||LIB.rebar[3]; }
@@ -609,7 +617,7 @@ function defaultState(){
   return {
     proj:{name:"Untitled",num:"",by:"",date:new Date().toISOString().slice(0,10),chk:"",chkDate:""},
     /* geometry: plate */
-    plate:{ B:18, N:18, t:1.5, exc_x:0, exc_y:0, grade:"a36" },   /* B along x (width), N along y (length) */
+    plate:{ B:18, N:18, t:1.5, exc_x:0, exc_y:0, grade:"a36", holeDia:0 },   /* B along x (width), N along y (length); holeDia 0 = AISC DG1 Table 2.3 oversized hole */
     /* column footprint — for schematic + DG1 bearing interface */
     col:{ shapeType:"W", shape:"W12X65", custom:false, d:12.1, b:12.0 },   /* d along y, b along x */
     /* anchors: layout by faces */
@@ -1028,6 +1036,7 @@ function dg1Uniaxial(Pc, M, L, Wb, fpmax, f){
      caller, so return a well-defined zero rather than an indeterminate 0/0. */
   if(Math.abs(Pc)<=1e-9 && Math.abs(M)<=1e-9){
     out.e=0; out.ecrit=L/2; out.regime="none"; out.Y=0; out.Tu=0; out.q=0; out.qmin=0;
+    out.bearDCR=0; out.bearBasis="none";
     return out;
   }
   const e = (Math.abs(Pc)>1e-9)? M/Pc : Infinity;   /* eccentricity, in */
@@ -1039,11 +1048,25 @@ function dg1Uniaxial(Pc, M, L, Wb, fpmax, f){
     /* SMALL eccentricity: full bearing, no anchor tension.
        Trapezoidal/triangular bearing. Peak stress: */
     out.regime="small";
-    out.Y = L;               /* full length in compression (may be partial trapezoid) */
     out.Tu = 0;
-    /* peak bearing q = Pc/(Wb*L) * (1 + 6e/L)  */
-    out.q = (Pc/(Wb*L))*(1 + 6*e/L);
-    out.qmin = (Pc/(Wb*L))*(1 - 6*e/L);
+    if(e <= L/6 + 1e-12){
+      /* kern: full-length linear (trapezoidal) bearing, peak q = Pc/(Wb·L)·(1 + 6e/L).
+         Kept for e ≤ N/6 because it is more conservative than DG1's uniform block there. */
+      out.Y = L;
+      out.q = (Pc/(Wb*L))*(1 + 6*e/L);
+      out.qmin = (Pc/(Wb*L))*(1 - 6*e/L);
+      out.smallBasis="trapezoid";
+    } else {
+      /* e > N/6: the trapezoid would need tension in the concrete (q_min < 0) and,
+         beyond N/3, under-predicts the peak. Use the AISC DG1 (2nd Ed. §3.3)
+         small-moment uniform-stress block: Y = N − 2e, f_p = P/(B·Y). */
+      out.Y = L - 2*e;
+      out.q = Pc/(Wb*out.Y);
+      out.qmin = 0;
+      out.smallBasis="DG1 uniform block, Y = N − 2e";
+    }
+    out.bearDCR = out.q/fpmax;          /* f_p / f_p,max */
+    out.bearBasis = "q/fp";
     return out;
   }
   /* LARGE eccentricity (or net uplift): anchor tension develops.
@@ -1077,6 +1100,14 @@ function dg1Uniaxial(Pc, M, L, Wb, fpmax, f){
   /* quadratic a*Y^2 + b*Y + c = 0 ; take physically valid root (0<Y<L) */
   const disc=b*b-4*a*c;
   let Y=NaN;
+  /* DG1 large-moment solution exists only if (f + N/2)² ≥ 2P(e + f)/q, i.e.
+     disc ≥ 0. Equivalent utilisation: required moment about the anchor line
+     over the largest moment the bearing block can supply at f_p,max,
+        DCR = (P·f + M) / [f_p,max·B·(f + N/2)²/2]   (≤ 1.0 ⇔ a solution exists)
+     This replaces the old bearing DCR, which was 1.00 by construction. */
+  out.bearDCR = (Pc*f + M) / (0.5*fpmax*Wb*Math.pow(f + L/2, 2));
+  out.bearBasis = "moment";
+  out.noSolution = !(disc>=0);
   if(disc>=0){
     const r1=(-b+Math.sqrt(disc))/(2*a), r2=(-b-Math.sqrt(disc))/(2*a);
     [r1,r2].forEach(r=>{ if(r>1e-6 && r<=L+1e-6){ if(isNaN(Y)||Math.abs(r-L/2)<Math.abs(Y-L/2)) Y=r; } });
@@ -1101,7 +1132,17 @@ function bearingCap(){
   const A1_w = (G.present && G.taper==="1to1")? P.B + 2*G.tg : P.B; /* grout spread 1:1 */
   const A1_l = (G.present && G.taper==="1to1")? P.N + 2*G.tg : P.N;
   const A1=A1_w*A1_l;
-  const A2=Math.min(C.Bx,3*A1_w)*Math.min(C.By,3*A1_l); /* frustum limit ~ per §22.8.3.2 */
+  /* ACI 318-19 §22.8.3.2 / AISC J8: A2 is the largest area of the supporting
+     surface that is GEOMETRICALLY SIMILAR to and CONCENTRIC with A1. The plate
+     (and A1) may be offset on the pedestal by (plate_off_x, plate_off_y), so the
+     similar area grows by the same factor k in both directions until it meets
+     the nearest pedestal edge:  k = min[(Bx/2 − |ox|)/(A1_w/2), (By/2 − |oy|)/(A1_l/2)].
+     (Previously A2 = min(Bx,3A1_w)·min(By,3A1_l): neither similar nor concentric
+     for an offset plate or a non-proportional pedestal.) The 1:2 frustum depth
+     limit against the pedestal height is not checked. */
+  const oX=Math.abs(C.plate_off_x||0), oY=Math.abs(C.plate_off_y||0);
+  const kSim=Math.max(1, Math.min((C.Bx/2-oX)/(A1_w/2), (C.By/2-oY)/(A1_l/2)));
+  const A2=A1*kSim*kSim;
   let sqrtRatio=Math.sqrt(A2/A1); if(sqrtRatio>2) sqrtRatio=2;
   let fp = 0.85*fc*sqrtRatio;
   const phi=0.65;
@@ -1196,7 +1237,7 @@ function pullout(){
 }
 
 /* ---- projected-area helper for tension breakout, group in a rectangular field ---- */
-function tensionBreakoutGroup(nT, ca_min, eccX, eccY){
+function tensionBreakoutGroup(nT, ca_min, eccX, eccY, tensPts, condA){
   const C=S.conc, A=S.anchor;
   const fc=Math.min(C.fc,10);
   const g=anchorGeom();
@@ -1207,10 +1248,19 @@ function tensionBreakoutGroup(nT, ca_min, eccX, eccY){
   /* ANco = 9 hef^2 ; ANc = projected area of the group bounded by 1.5hef and edges */
   const ANco=9*hef*hef;
   const pxo=C.plate_off_x||0, pyo=C.plate_off_y||0;
-  const x1=Math.max(g.xmin-1.5*hef, -C.Bx/2 - pxo), x2=Math.min(g.xmax+1.5*hef, C.Bx/2 - pxo);
-  const y1=Math.max(g.ymin-1.5*hef, -C.By/2 - pyo), y2=Math.min(g.ymax+1.5*hef, C.By/2 - pyo);
-  const ANc=Math.max(0,(x2-x1))*Math.max(0,(y2-y1));
+  /* ACI 318-19 §17.6.2.1 / Fig. R17.6.2.1(b): A_Nc is the projected area of the
+     anchors IN TENSION — the same anchors whose centroid defines e'_N for
+     ψ_ec,N. (Previously the extents of ALL anchors were used, which overstated
+     A_Nc when moment puts only part of the group in tension.) tensPts omitted
+     or empty → all anchors (pure uplift / no tension: unchanged behaviour). */
+  const tp=(tensPts&&tensPts.length)? tensPts : g.pts;
+  const ext=breakoutExtents(tp, hef, C, pxo, pyo);
+  const ANc=ext.ANc;
   const ANcRatio=Math.min(ANc/ANco, nT);
+  /* All-anchor cone, retained for PRYOUT (§17.7.3 uses the group of anchors
+     resisting shear). Ratio cap kept exactly as before so pryout is unchanged. */
+  const extAll=breakoutExtents(g.pts, hef, C, pxo, pyo);
+  const ANcAll=extAll.ANc, ANcRatioAll=Math.min(ANcAll/ANco, nT);
   /* Nb: kc=24 cast-in; alt 16 form for 11<=hef<=25 — use larger (§17.6.2.2.3) */
   const kc=24, lam=1.0;
   const Nb1=kc*lam*Math.sqrt(fc*1000)/1000*Math.pow(hef,1.5);
@@ -1234,10 +1284,12 @@ function tensionBreakoutGroup(nT, ca_min, eccX, eccY){
   const psi_ec2 = Math.min(1.0, 1/(1 + (2*eN2)/(3*hef)));
   const psi_ec = psi_ec1*psi_ec2;
   const eN = Math.hypot(eN1,eN2);  /* resultant, for reporting only */
-  /* ACI 318-19 Table 17.5.3, concrete tension (breakout): Condition A 0.75, Condition B 0.70 */
-  const phi = S.tRebar.present?0.75:0.70;
+  /* ACI 318-19 Table 17.5.3, concrete tension (breakout): Condition A 0.75, Condition B 0.70.
+     Condition A only when supplementary reinforcement is present AND its
+     intercept check shows it crossing the failure surface (condA === true). */
+  const phi = (condA===true)?0.75:0.70;
   const Ncbg=ANcRatio*psi_ec*psi_ed*psi_c*psi_cp*Nb;
-  return {phi,hef,hefNom,hefEff:he,fc,ANco,ANc,ANcRatio,Nb1,NbAlt,useAlt,Nb,psi_ed,psi_c,psi_cp,psi_ec,psi_ec1,psi_ec2,eN1,eN2,eN,ca,isCorner,nearEdges,Ncbg,phiNcbg:phi*Ncbg,
+  return {phi,hef,hefNom,hefEff:he,fc,ANco,ANc,ANcRatio,ANcAll,ANcRatioAll,nTensPts:tp.length,Nb1,NbAlt,useAlt,Nb,psi_ed,psi_c,psi_cp,psi_ec,psi_ec1,psi_ec2,eN1,eN2,eN,ca,isCorner,nearEdges,Ncbg,phiNcbg:phi*Ncbg,
     steps:[
       {title:"Basic breakout strength of single anchor (tension)",ref:"ACI 318-19 §17.6.2.2.1, Eq.(17.6.2.2.1)"+(useAlt?" & §17.6.2.2.3":""),
        lines:[
@@ -1256,7 +1308,7 @@ function tensionBreakoutGroup(nT, ca_min, eccX, eccY){
       {title:"Projected areas & modification factors",ref:"§17.6.2.1",
        lines:[
         "A_{Nco}=9h_{ef}^2 = 9\\times"+fmt(hef,2)+"^2 = "+fmt(ANco,1)+"\\ \\text{in}^2",
-        "A_{Nc}="+fmt(ANc,1)+"\\ \\text{in}^2\\quad(\\text{group cone, clipped by edges})",
+        "A_{Nc}="+fmt(ANc,1)+"\\ \\text{in}^2\\quad(\\text{cone of the "+tp.length+" anchor"+(tp.length>1?"s":"")+" in tension, clipped by edges})",
         "\\psi_{ec1,N}="+(eN1>1e-6?"\\frac{1}{1+2("+fmt(eN1,2)+")/(3\\times"+fmt(hef,2)+")}="+fmt(psi_ec1,3):"1.000")+"\\qquad \\psi_{ec2,N}="+(eN2>1e-6?"\\frac{1}{1+2("+fmt(eN2,2)+")/(3\\times"+fmt(hef,2)+")}="+fmt(psi_ec2,3):"1.000"),
         "\\psi_{ed,N}="+(ca>=1.5*hef?"1.0":"0.7+0.3\\frac{"+fmt(ca,2)+"}{1.5\\times"+fmt(hef,2)+"}="+fmt(psi_ed,3))],
        vars:[["\\psi_{ec1,N}\\times\\psi_{ec2,N}",fmt(psi_ec1,3)+" \u00d7 "+fmt(psi_ec2,3)+" = "+fmt(psi_ec,3),"per-axis eccentricity factors, e'_N1="+fmt(eN1,2)+"\", e'_N2="+fmt(eN2,2)+"\" \u2014 applied as a product per \u00a717.6.2.3 (matches PROFIS \u03c8_ec1,N \u00b7 \u03c8_ec2,N)"],
@@ -1268,8 +1320,21 @@ function tensionBreakoutGroup(nT, ca_min, eccX, eccY){
         "\\phi N_{cbg}=\\phi\\frac{A_{Nc}}{A_{Nco}}\\psi_{ec,N}\\psi_{ed,N}\\psi_{c,N}\\psi_{cp,N}N_b",
         "\\phi N_{cbg}="+fmt(phi)+"\\times"+fmt(ANcRatio,3)+"\\times"+fmt(psi_ec,2)+"\\times"+fmt(psi_ed,3)+"\\times"+fmt(psi_c,2)+"\\times"+fmt(psi_cp,2)+"\\times"+fmt(Nb,2)+
           "="+fmt(phi*Ncbg,2)+"\\ \\text{kip}"],
-       vars:[["\\phi",fmt(phi,2),S.tRebar.present?"Condition A, supplementary reinforcement §17.5.3(c)":"Condition B, no supplementary reinforcement §17.5.3(c)"]]}
+       vars:[["\\phi",fmt(phi,2),(condA===true)?"Condition A — supplementary reinforcement crosses the failure surface (intercept check passes), Table 17.5.3":(S.tRebar.present?"Condition B — reinforcement present but its intercept check does not pass, Table 17.5.3":"Condition B, no supplementary reinforcement, Table 17.5.3")]]}
     ])};
+}
+
+/* Projected tension-breakout rectangle (§17.6.2.1) for a set of anchor points:
+   1.5·h_ef beyond the outermost points, clipped by the pedestal edges.
+   Shared by tensionBreakoutGroup() and drawBreakout() so they cannot drift. */
+function breakoutExtents(pts, hef, C, pxo, pyo){
+  const xs=pts.map(p=>p.x), ys=pts.map(p=>p.y);
+  const xmin=Math.min(...xs), xmax=Math.max(...xs), ymin=Math.min(...ys), ymax=Math.max(...ys);
+  const ux1=xmin-1.5*hef, ux2=xmax+1.5*hef, uy1=ymin-1.5*hef, uy2=ymax+1.5*hef;
+  const x1=Math.max(ux1, -C.Bx/2 - pxo), x2=Math.min(ux2, C.Bx/2 - pxo);
+  const y1=Math.max(uy1, -C.By/2 - pyo), y2=Math.min(uy2, C.By/2 - pyo);
+  return {xmin,xmax,ymin,ymax,ux1,ux2,uy1,uy2,x1,x2,y1,y2,
+          ANc:Math.max(0,(x2-x1))*Math.max(0,(y2-y1))};
 }
 
 /* ---- SIDE-FACE BLOWOUT §17.6.4 (headed anchor near an edge, deep embedment) ---- */
@@ -1303,7 +1368,7 @@ function sfbEdgeDemand(combo, g){
   return best.N;
 }
 
-function sideFaceBlowout(nT, ca1){
+function sideFaceBlowout(nT, ca1, condA){
   const C=S.conc, A=S.anchor, sp=anchorSpec(A.dia);
   const hef=A.hef, fc=Math.min(C.fc,10);
   const applies = ca1 < 0.4*hef;   /* §17.6.4.1 trigger */
@@ -1316,25 +1381,44 @@ function sideFaceBlowout(nT, ca1){
   }
   const ab=abrgOf();
   const Abrg=ab.Abrg;
-  /* ACI 318-19 Table 17.5.3, concrete tension (side-face blowout): Cond. A 0.75, Cond. B 0.70 */
-  const phi = S.tRebar.present?0.75:0.70;
-  const Nsb=160*ca1*Math.sqrt(Abrg)*1.0*Math.sqrt(fc*1000)/1000; /* kip, single anchor */
-  /* §17.6.4.2 group factor: for multiple headed anchors along the edge spaced s < 6·ca1,
-     Nsbg = Nsb·(1 + s/(6·ca1)), where s is the spacing of the outer anchors along the edge. */
+  /* ACI 318-19 Table 17.5.3, concrete tension (side-face blowout): Cond. A 0.75, Cond. B 0.70
+     (Condition A only when the reinforcement intercept check passes — conditionA()) */
+  const phi = (condA===true)?0.75:0.70;
   const g=anchorGeom();
   /* spacing along the near edge: if the near edge is an x-edge, use y-spacing (along edge), else x-spacing */
   const nearIsX = Math.min(g.ca_x_pos,g.ca_x_neg) <= Math.min(g.ca_y_pos,g.ca_y_neg);
+  const sEdge0 = nearIsX ? (g.sy||0) : (g.sx||0);
+  const groupApplies0 = (nT>1 && sEdge0>1e-6 && sEdge0 < 6*ca1);
+  /* §17.6.4.1.1 corner factor: if c_a2 < 3·c_a1, N_sb of a SINGLE headed anchor
+     is multiplied by (1 + c_a2/c_a1)/4 with 1.0 ≤ c_a2/c_a1 ≤ 3.0. c_a2 = the
+     smaller edge distance perpendicular to c_a1. Not applied when the
+     §17.6.4.2 group equation governs: there N_sb is taken from Eq.(17.6.4.1)
+     "without modification for a perpendicular edge distance". */
+  const ca2 = nearIsX ? Math.min(g.ca_y_pos,g.ca_y_neg) : Math.min(g.ca_x_pos,g.ca_x_neg);
+  const cornerApplies = (ca2 < 3*ca1) && !groupApplies0;
+  const c21 = Math.min(Math.max(ca2/ca1, 1.0), 3.0);
+  const alphaCorner = cornerApplies ? (1 + c21)/4 : 1.0;
+  const Nsb0=160*ca1*Math.sqrt(Abrg)*1.0*Math.sqrt(fc*1000)/1000; /* kip, single anchor, Eq.(17.6.4.1) */
+  const Nsb=alphaCorner*Nsb0;
+  /* §17.6.4.2 group factor: for multiple headed anchors along the edge spaced s < 6·ca1,
+     Nsbg = Nsb·(1 + s/(6·ca1)), where s is the spacing of the outer anchors along the edge. */
   const sEdge = nearIsX ? (g.sy||0) : (g.sx||0);
   const groupApplies = (nT>1 && sEdge>1e-6 && sEdge < 6*ca1);
   const alphaGroup = groupApplies ? (1 + sEdge/(6*ca1)) : 1.0;
   const Nsbg = alphaGroup*Nsb;
-  return {na:false,phi,ca1,Abrg,Nsb,Nsbg,alphaGroup,sEdge,groupApplies,phiNsb:phi*Nsbg,
+  return {na:false,phi,ca1,ca2,Abrg,Nsb0,alphaCorner,cornerApplies,Nsb,Nsbg,alphaGroup,sEdge,groupApplies,phiNsb:phi*Nsbg,
     steps:[
-      {title:"Side-face blowout strength (single headed anchor)",ref:"§17.6.4.1, Eq.(17.6.4.1)",
+      {title:"Side-face blowout strength (single headed anchor)",ref:"§17.6.4.1, Eq.(17.6.4.1); corner §17.6.4.1.1",
        lines:[
         "N_{sb}=160\\,c_{a1}\\sqrt{A_{brg}}\\,\\lambda_a\\sqrt{f'_c}",
-        "N_{sb}="+"160\\times"+fmt(ca1,2)+"\\times\\sqrt{"+fmt(Abrg,2)+"}\\times\\sqrt{"+fmt(fc*1000,0)+"}="+fmt(Nsb,2)+"\\ \\text{kip}"],
-       vars:[["c_{a1}",fmt(ca1,2)+" in","edge distance to nearest edge"],["A_{brg}",fmt(Abrg,2)+" in^2","head bearing area"]]},
+        "N_{sb}="+"160\\times"+fmt(ca1,2)+"\\times\\sqrt{"+fmt(Abrg,2)+"}\\times\\sqrt{"+fmt(fc*1000,0)+"}="+fmt(Nsb0,2)+"\\ \\text{kip}",
+        cornerApplies
+          ? "c_{a2}="+fmt(ca2,2)+"<3c_{a1}\\Rightarrow N_{sb}\\times\\frac{1+c_{a2}/c_{a1}}{4}="+fmt(Nsb0,2)+"\\times\\frac{1+"+fmt(c21,3)+"}{4}="+fmt(Nsb,2)+"\\ \\text{kip}"
+          : (groupApplies0 ? "\\text{group along the edge (§17.6.4.2): } N_{sb}\\text{ without perpendicular-edge modification}"
+                           : "c_{a2}="+fmt(ca2,2)+"\\ge 3c_{a1}\\Rightarrow\\text{no corner reduction}")],
+       vars:[["c_{a1}",fmt(ca1,2)+" in","edge distance to nearest edge"],["A_{brg}",fmt(Abrg,2)+" in^2","head bearing area"],
+             ["c_{a2}",fmt(ca2,2)+" in","perpendicular edge distance"],
+             ["\\alpha_{corner}",fmt(alphaCorner,3),cornerApplies?"(1 + c_a2/c_a1)/4 with 1.0 \u2264 c_a2/c_a1 \u2264 3.0, §17.6.4.1.1":(groupApplies0?"1.0 \u2014 group equation \u00a717.6.4.2 uses N_sb without perpendicular-edge modification":"1.0 (c_a2 \u2265 3c_a1)")]]},
       {title:"Group modification for multiple anchors along the edge",ref:"§17.6.4.2, Eq.(17.6.4.2)",
        lines:[
         groupApplies
@@ -1375,7 +1459,7 @@ function sideFaceBlowout(nT, ca1){
    one and the worst governs. This is our reading of the general clause rather
    than something the figure spells out, and it is labelled as such in the
    output and the manual.                                                    */
-function shearCases(cb){
+function shearCases(cb, condA){
   const g=anchorGeom(), C=S.conc;
   /* accept either a RAW combination ({Vx,Vy}) or a COMPUTED one (which carries
      the factored input under .raw and the magnitude as .Vres) */
@@ -1433,7 +1517,7 @@ function shearCases(cb){
 
   /* ---- evaluate each case with the SAME breakout math the main check uses --- */
   list.forEach(c=>{
-    const sb=shearBreakout(c.nRes, c.row.ca1, C.H, dir, c.row.setback);
+    const sb=shearBreakout(c.nRes, c.row.ca1, C.H, dir, c.row.setback, condA);
     c.sb=sb; c.ca1=sb.ca1; c.phiVcbg=sb.phiVcbg;
     c.dcr = sb.phiVcbg>1e-9? (c.V/sb.phiVcbg) : Infinity;
   });
@@ -1453,7 +1537,7 @@ function shearCases(cb){
           generalised: rows.length>2};
 }
 
-function shearBreakout(nV, ca1, ha, shearDir, caOffset){
+function shearBreakout(nV, ca1, ha, shearDir, caOffset, condA){
   const C=S.conc, A=S.anchor, sp=anchorSpec(A.dia);
   const fc=Math.min(C.fc,10), da=sp.d;
   const g=anchorGeom();
@@ -1482,8 +1566,9 @@ function shearBreakout(nV, ca1, ha, shearDir, caOffset){
     psi_cV = 1.0; psi_cV_why = "cracked, no supplementary reinforcement (§17.7.2.5)";
   }
   const psi_hV = (ha<1.5*ca1)? Math.sqrt(1.5*ca1/ha) : 1.0;
-  /* ACI 318-19 Table 17.5.3, concrete shear (breakout): Condition A 0.75, Condition B 0.70 */
-  const phi = S.vRebar.present?0.75:0.70;
+  /* ACI 318-19 Table 17.5.3, concrete shear (breakout): Condition A 0.75, Condition B 0.70
+     (Condition A only when the hairpin intercept check passes — conditionA()) */
+  const phi = (condA===true)?0.75:0.70;
   /* Evaluate breakout toward each of the four edges; the smallest governs (corner check §17.7.2). */
   const edgeList=[
     {name:"+x", ca1:g.ca_x_pos, ca2:Math.min(g.ca_y_pos,g.ca_y_neg)},
@@ -1492,23 +1577,38 @@ function shearBreakout(nV, ca1, ha, shearDir, caOffset){
     {name:"-y", ca1:g.ca_y_neg, ca2:Math.min(g.ca_x_pos,g.ca_x_neg)}
   ];
   function evalEdge(e, parallel){
-    const c1=Math.max(e.ca1,0.01);
+    const c1raw=Math.max(e.ca1,0.01);
+    const isX = (e.name==="+x"||e.name==="-x");
+    /* §17.7.2.1.2 — narrow, thin member: where c_a2 < 1.5c_a1 on BOTH sides
+       and h_a < 1.5c_a1, c_a1 used in A_Vc, A_Vco, V_b, ψ_ed,V and ψ_h,V is
+       limited to the largest of c_a2,max/1.5, h_a/1.5 and s/3, where s is the
+       maximum spacing perpendicular to the shear between anchors in the group. */
+    const pP = isX ? g.ca_y_pos : g.ca_x_pos, pN = isX ? g.ca_y_neg : g.ca_x_neg;
+    let c1=c1raw, narrow=null;
+    if(pP<1.5*c1raw && pN<1.5*c1raw && ha<1.5*c1raw){
+      const along=[...new Set(g.pts.map(p=>+(isX?p.y:p.x).toFixed(6)))].sort((a,b)=>a-b);
+      let sMax=0; for(let i=1;i<along.length;i++) sMax=Math.max(sMax, along[i]-along[i-1]);
+      const lim=Math.max(Math.max(pP,pN)/1.5, ha/1.5, sMax/3);
+      if(lim<c1raw){ c1=Math.max(lim,0.01); narrow={c1raw, lim, ca2max:Math.max(pP,pN), sMax}; }
+    }
     /* Basic single-anchor shear breakout Vb — ACI 318-19 §17.7.2.2.1:
          (a) Eq.(17.7.2.2.1a): Vb = 7 (le/da)^0.2 sqrt(da) λa sqrt(f'c) ca1^1.5
          (b) Eq.(17.7.2.2.1b): Vb = 9 λa sqrt(f'c) ca1^1.5   [independent of hef]
        For CAST-IN headed studs, headed bolts and hooked bolts, Vb is the LESSER of the
        two. Post-installed anchors use (a) only. Hilti PROFIS prints Eq.(b) for cast-in
        headed anchors, which is the governing (lesser) value in typical geometries. */
+    /* ACI 318-19 §17.7.2.2.1: V_b is the lesser of (a) and (b) for ALL anchor
+       types covered here, including a plain rod (only welded studs, §17.7.2.2.2,
+       use a different (a)). Previously the plain-rod case used (a) alone. */
     const castInHeaded = (S.anchor.head!=="plainrod");
     const VbA=7*Math.pow(le/da,0.2)*Math.sqrt(da)*1.0*Math.sqrt(fc*1000)/1000*Math.pow(c1,1.5);
     const VbB=9*1.0*Math.sqrt(fc*1000)/1000*Math.pow(c1,1.5);
-    const Vb = castInHeaded ? Math.min(VbA,VbB) : VbA;
-    const VbGov = (!castInHeaded) ? "a" : (VbB<=VbA ? "b" : "a");
+    const Vb = Math.min(VbA,VbB);
+    const VbGov = (VbB<=VbA ? "b" : "a");
     const AVco=4.5*c1*c1;
     /* Case 3 (row closest to edge): the projected area is the leading row's width along the
        edge × depth (1.5c1), clipped by 1.5c1 beyond the outer anchors, by the perpendicular
        concrete edges, and by member thickness ha. §17.7.2.1, Fig. R17.7.2.1b Case 3. */
-    const isX = (e.name==="+x"||e.name==="-x");
     /* extent of anchors ALONG the edge (perpendicular to shear direction) */
     const alongMin = isX ? g.ymin : g.xmin;
     const alongMax = isX ? g.ymax : g.xmax;
@@ -1528,8 +1628,10 @@ function shearBreakout(nV, ca1, ha, shearDir, caOffset){
     /* §17.7.2.1(c): shear PARALLEL to an edge — evaluate as if perpendicular with
        psi_ed,V = 1.0, and twice the resulting Vcbg is permitted. */
     if(parallel) psi_edV=1.0;
-    const Vcbg=AVcRatio*1.0*psi_edV*psi_cV*psi_hV*Vb*(parallel?2:1);
-    return {name:e.name+(parallel?" (parallel)":""),parallel:!!parallel,ca1:c1,ca2:e.ca2,Vb,VbA,VbB,VbGov,castInHeaded,AVco,AVc,AVcRatio,psi_edV,width,depth,Vcbg,phiVcbg:phi*Vcbg};
+    /* ψ_h,V with the §17.7.2.1.2-limited c_a1 (never larger than the value used before) */
+    const psi_hV_e = narrow ? Math.min(psi_hV, (ha<1.5*c1)? Math.sqrt(1.5*c1/ha) : 1.0) : psi_hV;
+    const Vcbg=AVcRatio*1.0*psi_edV*psi_cV*psi_hV_e*Vb*(parallel?2:1);
+    return {name:e.name+(parallel?" (parallel)":""),parallel:!!parallel,ca1:c1,ca2:e.ca2,Vb,VbA,VbB,VbGov,castInHeaded,AVco,AVc,AVcRatio,psi_edV,psi_hV:psi_hV_e,narrow,width,depth,Vcbg,phiVcbg:phi*Vcbg};
   }
   /* CRITICAL-ROW SET-BACK (ACI Fig. R17.7.2.1b Case 2). §17.7.2.1.1 lets the
      half-pyramid be projected from "the axis of the anchor row selected as
@@ -1566,13 +1668,16 @@ function shearBreakout(nV, ca1, ha, shearDir, caOffset){
   const VbA=gov.VbA, VbB=gov.VbB, VbGov=gov.VbGov, castInHeaded=gov.castInHeaded;
   const width=gov.width, depth=gov.depth;
   ca1=gov.ca1;
+  const narrow=gov.narrow;
+  const psi_hVg=gov.psi_hV;
   const isCorner=(gov.ca2<1.5*gov.ca1);
-  return {phi,ca1,ca2,ha,le,da,Vb,VbA,VbB,VbGov,castInHeaded,AVco,AVc,AVcRatio,psi_edV,psi_cV,psi_cV_why,psi_hV,width,depth,Vcbg,phiVcbg:phi*Vcbg,govEdge:gov.name,isCorner,evals,
+  return {phi,ca1,ca2,ha,le,da,Vb,VbA,VbB,VbGov,castInHeaded,AVco,AVc,AVcRatio,psi_edV,psi_cV,psi_cV_why,psi_hV:psi_hVg,narrow,width,depth,Vcbg,phiVcbg:phi*Vcbg,govEdge:gov.name,isCorner,evals,
     steps:[
       {title:"Step 1 — Governing edge and geometry",ref:"ACI 318-19 §17.7.2.1, Fig. R17.7.2.1(b)",
        lines:[
         "\\text{Shear pushes toward the }"+gov.name+"\\text{ edge}\\quad\\Rightarrow\\quad c_{a1}="+fmt(ca1,3)+"\\ \\text{in},\\ \\ c_{a2}="+fmt(ca2,3)+"\\ \\text{in}",
-        "\\ell_e=\\min(h_{ef},\\,8d_a)=\\min("+fmt(S.anchor.hef,3)+",\\,8\\times"+fmt(da,3)+")="+fmt(le,3)+"\\ \\text{in}"],
+        "\\ell_e=\\min(h_{ef},\\,8d_a)=\\min("+fmt(S.anchor.hef,3)+",\\,8\\times"+fmt(da,3)+")="+fmt(le,3)+"\\ \\text{in}"]
+        .concat(narrow? ["\\text{§17.7.2.1.2 narrow/thin member: } c_{a1}=\\max\\left(\\frac{c_{a2,max}}{1.5},\\frac{h_a}{1.5},\\frac{s}{3}\\right)=\\max\\left(\\frac{"+fmt(narrow.ca2max,2)+"}{1.5},\\frac{"+fmt(ha,2)+"}{1.5},\\frac{"+fmt(narrow.sMax,2)+"}{3}\\right)="+fmt(ca1,3)+"\\ \\text{in (was "+fmt(narrow.c1raw,3)+")}"] : []),
        vars:[["c_{a1}",fmt(ca1,3)+" in","edge distance in the direction of shear (to the "+gov.name+" edge)"],
              ["c_{a2}",fmt(ca2,3)+" in","perpendicular edge distance"+(isCorner?" — CORNER controls (c_a2 < 1.5c_a1)":"")],
              ["h_a",fmt(ha,3)+" in","member thickness"],
@@ -1588,7 +1693,7 @@ function shearBreakout(nV, ca1, ha, shearDir, caOffset){
              ["Eq.(b)",fmt((VbB)*forceFactor(),3)+" "+forceUnit(),"Eq.(17.7.2.2.1b) — independent of h_{ef}"],
              ["governs","Eq.(17.7.2.2.1"+VbGov+")", castInHeaded
                 ? "cast-in headed/hooked anchors: V_b is the LESSER of (a) and (b). PROFIS prints Eq.(b) for these anchors."
-                : "plain rod (no head): Eq.(a) applies"],
+                : "plain rod: V_b is also the LESSER of (a) and (b), §17.7.2.2.1"],
              ["\\lambda_a","1.000","normalweight concrete"],
              ["f'_c",fmt(fc,2)+" ksi = "+fmt(fc*1000,0)+" psi","concrete strength"]]},
 
@@ -1608,21 +1713,19 @@ function shearBreakout(nV, ca1, ha, shearDir, caOffset){
         "\\psi_{ed,V}="+(ca2>=1.5*ca1
             ? "1.000\\quad(c_{a2}\\ge1.5c_{a1})"
             : "0.7+0.3\\frac{c_{a2}}{1.5c_{a1}}=0.7+0.3\\times\\frac{"+fmt(ca2,3)+"}{1.5\\times"+fmt(ca1,3)+"}="+fmt(psi_edV,4)),
-        "\\psi_{h,V}="+(ha<1.5*ca1
-            ? "\\sqrt{\\frac{1.5c_{a1}}{h_a}}=\\sqrt{\\frac{1.5\\times"+fmt(ca1,3)+"}{"+fmt(ha,3)+"}}="+fmt(psi_hV,4)
-            : "1.000\\quad(h_a\\ge1.5c_{a1})"),
+        "\\psi_{h,V}="+fmt(psi_hVg,4),
         "\\psi_{c,V}="+fmt(psi_cV,3)],
        vars:[["\\psi_{ec,V}","1.000","shear eccentricity (e'_V = 0 for this model)"],
              ["\\psi_{ed,V}",fmt(psi_edV,4),ca2>=1.5*ca1?"far from the perpendicular edge":"reduced by the near perpendicular edge (corner)"],
              ["\\psi_{c,V}",fmt(psi_cV,3),psi_cV_why],
-             ["\\psi_{h,V}",fmt(psi_hV,4),ha<1.5*ca1?"thin member: h_a < 1.5c_{a1}":"h_a \\ge 1.5c_{a1} \\Rightarrow 1.0"]]},
+             ["\\psi_{h,V}",fmt(psi_hVg,4),psi_hVg>1?"thin member: \\sqrt{1.5c_{a1}/h_a} (h_a < 1.5c_{a1})":"h_a \\ge 1.5c_{a1} \\Rightarrow 1.0"]]},
 
       {title:"Step 5 — Concrete breakout strength of the group in shear",ref:"ACI 318-19 §17.7.2.1b, Eq.(17.7.2.1b); \\phi per Table 17.5.3",
        lines:[
         "V_{cbg}=\\frac{A_{Vc}}{A_{Vc0}}\\,\\psi_{ec,V}\\,\\psi_{ed,V}\\,\\psi_{c,V}\\,\\psi_{h,V}\\,V_b",
-        "V_{cbg}="+fmt(AVcRatio,4)+"\\times1.000\\times"+fmt(psi_edV,4)+"\\times"+fmt(psi_cV,3)+"\\times"+fmt(psi_hV,4)+"\\times"+fmt(Vb,3)+"="+fmt(Vcbg,3)+"\\ \\text{kip}",
+        "V_{cbg}="+fmt(AVcRatio,4)+"\\times1.000\\times"+fmt(psi_edV,4)+"\\times"+fmt(psi_cV,3)+"\\times"+fmt(psi_hVg,4)+"\\times"+fmt(Vb,3)+"="+fmt(Vcbg,3)+"\\ \\text{kip}",
         "\\phi V_{cbg}="+fmt(phi,2)+"\\times"+fmt(Vcbg,3)+"="+fmt(phi*Vcbg,3)+"\\ \\text{kip}"],
-       vars:[["\\phi",fmt(phi,2),S.vRebar.present?"Condition A, supplementary reinforcement §17.5.3(c)":"Condition B, no supplementary reinforcement §17.5.3(c)"],
+       vars:[["\\phi",fmt(phi,2),(condA===true)?"Condition A — hairpins cross the failure surface (intercept check passes), Table 17.5.3":(S.vRebar.present?"Condition B — reinforcement present but its intercept check does not pass, Table 17.5.3":"Condition B, no supplementary reinforcement, Table 17.5.3")],
              ["governing edge",gov.name,"checked all edges the shear pushes toward; this one gave the lowest capacity"]]}
     ]};
 }
@@ -1634,27 +1737,31 @@ function shearBreakout(nV, ca1, ha, shearDir, caOffset){
 function pryout(nV, tb){
   const A=S.anchor;
   const kcp = (A.hef>=2.5)?2.0:1.0;
-  /* ACI 318-19 Table 17.5.3, concrete shear (pryout): Condition A 0.75, Condition B 0.70 */
-  const phi = S.vRebar.present?0.75:0.70;
+  /* ACI 318-19 Table 17.5.3: pullout and PRYOUT always take the Condition B value
+     (0.70 for cast-in anchors), whether or not supplementary reinforcement is
+     present. (Previously 0.75 when shear rebar was present.) */
+  const phi = 0.70;
   /* PROFIS/ACI: pryout uses the group tension breakout with the eccentricity factor
      removed (the pry force acts concentrically through the group centroid) but ALL
      other factors retained — including psi_ed,N. Verified against PROFIS report
      section 4.3, which lists psi_ec1,N = psi_ec2,N = 1.000 while still showing
      psi_ed,N = 0.957 in the same Calculations block. */
-  const Ncbg = tb.ANcRatio * tb.psi_ed * tb.psi_c * tb.psi_cp * tb.Nb;
+  /* Pryout uses the cone of ALL anchors (ANcAll), not the tension-anchor cone
+     that tension breakout now uses — numerically identical to the previous code. */
+  const Ncbg = tb.ANcRatioAll * tb.psi_ed * tb.psi_c * tb.psi_cp * tb.Nb;
   const Vcpg = kcp*Ncbg;
   const fcUse=Math.min(S.conc.fc,10);
   return {phi,kcp,Ncbg,Vcpg,phiVcpg:phi*Vcpg,
-    ANc:tb.ANc,ANco:tb.ANco,ANcRatio:tb.ANcRatio,psi_ed:tb.psi_ed,psi_c:tb.psi_c,
+    ANc:tb.ANcAll,ANco:tb.ANco,ANcRatio:tb.ANcRatioAll,psi_ed:tb.psi_ed,psi_c:tb.psi_c,
     psi_cp:tb.psi_cp,psi_ec_tension:tb.psi_ec,Nb:tb.Nb,hef:tb.hef,ca:tb.ca,NcbgTension:tb.Ncbg,
     steps:[
       {title:"Step 1 — Projected areas (same breakout cone as tension)",ref:"ACI 318-19 §17.6.2.1, Fig. R17.6.2.1(b)",
        lines:[
         "A_{Nc0} = 9\\,h_{ef}^2 = 9\\times("+fmt(tb.hef,3)+")^2 = "+fmt(tb.ANco,2)+"\\ \\text{in}^2",
-        "A_{Nc} = "+fmt(tb.ANc,2)+"\\ \\text{in}^2\\quad\\text{(group cone, clipped at member edges)}",
-        "\\frac{A_{Nc}}{A_{Nc0}} = \\frac{"+fmt(tb.ANc,2)+"}{"+fmt(tb.ANco,2)+"} = "+fmt(tb.ANcRatio,4)],
+        "A_{Nc} = "+fmt(tb.ANcAll,2)+"\\ \\text{in}^2\\quad\\text{(group cone, clipped at member edges)}",
+        "\\frac{A_{Nc}}{A_{Nc0}} = \\frac{"+fmt(tb.ANcAll,2)+"}{"+fmt(tb.ANco,2)+"} = "+fmt(tb.ANcRatioAll,4)],
        vars:[["h_{ef}",fmt(tb.hef,3)+" in","effective embedment used for breakout"],
-             ["A_{Nc}",fmt(tb.ANc,2)+" in^2","projected failure area of the anchor group"],
+             ["A_{Nc}",fmt(tb.ANcAll,2)+" in^2","projected failure area of the anchor group (all anchors)"],
              ["A_{Nc0}",fmt(tb.ANco,2)+" in^2","projected area of one anchor, no edge effects"]]},
 
       {title:"Step 2 — Basic single-anchor breakout strength",ref:"ACI 318-19 §17.6.2.2.1, Eq.(17.6.2.2.1)",
@@ -1680,7 +1787,7 @@ function pryout(nV, tb){
       {title:"Step 4 — Concentric group breakout N_cbg",ref:"ACI 318-19 Eq.(17.6.2.1b)",
        lines:[
         "N_{cbg} = \\frac{A_{Nc}}{A_{Nc0}}\\,\\psi_{ec,N}\\,\\psi_{ed,N}\\,\\psi_{c,N}\\,\\psi_{cp,N}\\,N_b",
-        "N_{cbg} = "+fmt(tb.ANcRatio,4)+"\\times1.000\\times"+fmt(tb.psi_ed,4)+"\\times"+fmt(tb.psi_c,3)+"\\times"+fmt(tb.psi_cp,3)+"\\times"+fmt(tb.Nb,3)+" = "+fmt(Ncbg,3)+"\\ \\text{kip}"],
+        "N_{cbg} = "+fmt(tb.ANcRatioAll,4)+"\\times1.000\\times"+fmt(tb.psi_ed,4)+"\\times"+fmt(tb.psi_c,3)+"\\times"+fmt(tb.psi_cp,3)+"\\times"+fmt(tb.Nb,3)+" = "+fmt(Ncbg,3)+"\\ \\text{kip}"],
        vars:[["N_{cbg}",fmt((Ncbg)*forceFactor(),3)+" "+forceUnit(),"group breakout used for pryout"],
              ["tension N_{cbg}",fmt((tb.Ncbg)*forceFactor(),3)+" "+forceUnit(),"the tension-breakout value, which also includes \\psi_{ec,N}="+fmt(tb.psi_ec,4)]]},
 
@@ -1689,7 +1796,7 @@ function pryout(nV, tb){
         "V_{cpg} = k_{cp}\\,N_{cbg} = "+fmt(kcp,1)+"\\times"+fmt(Ncbg,3)+" = "+fmt(Vcpg,3)+"\\ \\text{kip}",
         "\\phi V_{cpg} = "+fmt(phi,2)+"\\times"+fmt(Vcpg,3)+" = "+fmt(phi*Vcpg,3)+"\\ \\text{kip}"],
        vars:[["k_{cp}",fmt(kcp,1),A.hef>=2.5?"h_{ef} \\ge 2.5 in \\Rightarrow k_{cp}=2.0 (§17.7.3.1)":"h_{ef} < 2.5 in \\Rightarrow k_{cp}=1.0"],
-             ["\\phi",fmt(phi,2),S.vRebar.present?"Condition A, supplementary reinforcement §17.5.3(c)":"Condition B, no supplementary reinforcement §17.5.3(c)"]]}
+             ["\\phi",fmt(phi,2),"pryout: always Condition B (0.70) for cast-in anchors, ACI 318-19 Table 17.5.3"]]}
     ]};
 }
 
@@ -2008,6 +2115,32 @@ function computeAll(){
    back to presence-gating, which is harmless there: that call only reads
    sbk.govEdge / sbk.ca1, which are computed regardless of the mode list.
    The result is cached per-CC (computeAll returns a fresh object each run). */
+/* ---- Condition A gating (ACI 318-19 Table 17.5.3 / R17.5.3) ---------------
+   Condition A (φ = 0.75 for concrete breakout / side-face blowout) requires
+   supplementary reinforcement that actually CROSSES the assumed failure
+   surface. Mere presence of rebar is not enough. Condition A is granted only
+   when the reinforcement's intercept check credits at least one bar/leg
+   (nEff > 0); otherwise Condition B (0.70) applies. Pullout and pryout are
+   always Condition B. The nested call made from shearRebarIntercept() →
+   comboCapacities() returns false; that call only reads the governing edge
+   and c_a1, which do not depend on φ. Cached per computeAll() result. */
+let __condAGuard=false;
+function conditionA(kind, cc){
+  const R=(kind==="tension")? S.tRebar : S.vRebar;
+  if(!R || !R.present || !cc || __condAGuard) return false;
+  if(!cc.__condA) cc.__condA={};
+  if(cc.__condA[kind]!==undefined) return cc.__condA[kind];
+  __condAGuard=true;
+  let ok=false;
+  try{
+    const ic=(kind==="tension")? tensionRebarIntercept(cc) : shearRebarIntercept(cc);
+    ok=!!(ic && ic.nEff>0);
+  }catch(e){ ok=false; }
+  finally{ __condAGuard=false; }
+  cc.__condA[kind]=ok;
+  return ok;
+}
+
 let __justGuard=false;
 function substitutionJustified(cc){
   if(__justGuard || typeof rebarJustified!=="function")
@@ -2032,9 +2165,13 @@ function comboCapacities(cc, combo){
   /* TENSION modes */
   const st = steelTension(nT);
   const po = pullout(); po.phiGroup = po.phiNpn*nT; /* group pullout */
-  const tb = tensionBreakoutGroup(nT, ca_minT, combo.eccN_x, combo.eccN_y);
+  /* Condition A (Table 17.5.3) only where the supplementary reinforcement's
+     intercept check passes — see conditionA() */
+  const condAT = conditionA("tension", cc), condAV = conditionA("shear", cc);
+  const tensPts = (combo.perAnchor||[]).filter(p=>p.t>1e-9);
+  const tb = tensionBreakoutGroup(nT, ca_minT, combo.eccN_x, combo.eccN_y, tensPts, condAT);
   const ca1 = Math.min(g.ca_x_pos,g.ca_x_neg,g.ca_y_pos,g.ca_y_neg);
-  const sfb = sideFaceBlowout(nT, ca1);
+  const sfb = sideFaceBlowout(nT, ca1, condAT);
   /* ---- enveloped tension capacity -------------------------------------------
      THE DEMAND BASIS DIFFERS BY MODE, and ACI 318-19 Table 17.5.2 separates
      "individual anchor" from "anchor group" columns precisely for this reason:
@@ -2097,7 +2234,7 @@ function comboCapacities(cc, combo){
   const shearDir={x:combo.raw.Vx/Vr, y:combo.raw.Vy/Vr};
   /* the critical row is whichever the governing case selected, so the breakout
      must be projected from THAT row's axis (§17.7.2.1.1) */
-  const sbk = shearBreakout(nV, ca1v, C.H, shearDir, combo.vCaseOffset||0);
+  const sbk = shearBreakout(nV, ca1v, C.H, shearDir, combo.vCaseOffset||0, condAV);
   const pry = pryout(nV, tb);
   /* Shear bases mirror the tension ones: steel rupture and stand-off bending are
      per-bolt; breakout and pryout envelop the group. */
@@ -2225,8 +2362,12 @@ function plateBending(combo, cc){
   const phi=0.90, Fy=pg.Fy;
   const col=colDims();
   const isW=(!S.col.custom && S.col.shapeType==="W");
-  const m=(P.N-0.95*col.d)/2;
-  const n=(P.B-(isW?0.80:0.95)*col.b)/2;
+  /* AISC DG1 / Manual Part 14: round HSS and pipe use 0.80·D for BOTH m and n
+     (previously the rectangular-HSS 0.95 factors were applied to round HSS) */
+  const isRound=(!S.col.custom && S.col.shapeType!=="W" && hssOf(S.col.shape).kind==="HSSround");
+  const fM=isRound?0.80:0.95, fN=isRound?0.80:(isW?0.80:0.95);
+  const m=(P.N-fM*col.d)/2;
+  const n=(P.B-fN*col.b)/2;
 
   /* λn′ — W-shapes ONLY (DG1 §3.1.3) */
   const dcol=col.d, bcol=col.b;
@@ -2260,7 +2401,7 @@ function plateBending(combo, cc){
 
   /* tension side — arm to the nearest DG1 critical section */
   const Tu_per=combo.Tu_per;
-  const faceY=0.95*dcol/2, faceX=(isW?0.80:0.95)*bcol/2;
+  const faceY=fM*dcol/2, faceX=fN*bcol/2;
   let hx=0,hy=0,ht=-1;
   (combo.perAnchor||[]).forEach(pa=>{ if(pa.t>ht){ht=pa.t;hx=Math.abs(pa.x);hy=Math.abs(pa.y);} });
   const armCands=[];
@@ -2268,7 +2409,7 @@ function plateBending(combo, cc){
   if(hx-faceX>1e-9) armCands.push(hx-faceX);
   let armT, armNote;
   if(armCands.length){ armT=Math.min(...armCands);
-    armNote="highest-tension anchor to the nearest DG1 critical section (0.95d / "+(isW?"0.80b_f":"0.95b")+")"; }
+    armNote="highest-tension anchor to the nearest DG1 critical section ("+(isRound?"0.80D / 0.80D":("0.95d / "+(isW?"0.80b_f":"0.95b")))+")"; }
   else { armT=Math.min(S.anchor.edx,S.anchor.edy);
     armNote="anchor lies INSIDE the column footprint — cantilever to a column face is undefined; falling back to the edge distance. Verify plate bending locally (web bending per DG1 Step 3)."; }
   const beff=Math.max(P.B,P.N)/2;
@@ -2281,7 +2422,9 @@ function plateBending(combo, cc){
     Tu_per,armT,armNote,beff,Mu_t,tReqT,tReq,tp:P.t,dcr,
     steps:[
       {title:"Cantilever dimensions (DG1)",ref:"AISC DG1 §3.1",
-       lines:["m=\\frac{N-0.95d}{2}="+fmt(m,2)+"\\ \\text{in}\\quad n=\\frac{B-"+(isW?"0.80b_f":"0.95b")+"}{2}="+fmt(n,2)+"\\ \\text{in}"]
+       lines:[(isRound
+          ? "m=\\frac{N-0.80D}{2}="+fmt(m,2)+"\\ \\text{in}\\quad n=\\frac{B-0.80D}{2}="+fmt(n,2)+"\\ \\text{in}\\quad\\text{(round HSS/pipe)}"
+          : "m=\\frac{N-0.95d}{2}="+fmt(m,2)+"\\ \\text{in}\\quad n=\\frac{B-"+(isW?"0.80b_f":"0.95b")+"}{2}="+fmt(n,2)+"\\ \\text{in}")]
          .concat(isW? ["n'=\\frac{\\sqrt{d\\,b_f}}{4}="+fmt(nprime,2)+"\\ \\text{in},\\quad X=\\frac{4db_f}{(d+b_f)^2}\\cdot\\frac{P_u}{\\phi_cP_p}="+fmt(Xr,3)+",\\quad \\lambda="+fmt(lam,3)+",\\quad \\lambda n'="+fmt(lam_nprime,2)+"\\ \\text{in}"]
                     : ["\\text{(HSS/pipe/custom: the }\\lambda n'\\text{ term is not used — DG1 \u00a73.1.3)}"]),
        vars:[["\\ell",fmt(cant,2)+" in","candidate cantilevers"+(isW?" incl. λn′":" (m, n only per §3.1.3)")]]},
@@ -2305,11 +2448,32 @@ function plateBending(combo, cc){
     ]};
 }
 
+/* AISC DG1 (2nd Ed.) Table 2.3 / AISC Manual Table 14-2: recommended anchor-rod
+   hole diameters in base plates (rod d → hole d_h, in). Sizes between table
+   rows are interpolated on the oversize; below 3/4 in. the 3/4 in. oversize
+   (+9/16) is used. */
+const DG1_HOLE=[[0.750,1.3125],[0.875,1.5625],[1.000,1.8125],[1.250,2.0625],
+                [1.500,2.3125],[1.750,2.750],[2.000,3.250],[2.500,3.750]];
+function anchorHoleDG1(d){
+  const T=DG1_HOLE;
+  const hit=T.find(r=>Math.abs(r[0]-d)<1e-6);
+  if(hit) return {dh:hit[1], exact:true};
+  if(d<T[0][0]) return {dh:d+(T[0][1]-T[0][0]), exact:false};
+  if(d>T[T.length-1][0]) return {dh:d+(T[T.length-1][1]-T[T.length-1][0]), exact:false};
+  for(let i=1;i<T.length;i++){ if(d<T[i][0]){
+    const o0=T[i-1][1]-T[i-1][0], o1=T[i][1]-T[i][0], f=(d-T[i-1][0])/(T[i][0]-T[i-1][0]);
+    return {dh:d+o0+f*(o1-o0), exact:false}; } }
+  return {dh:d+0.0625, exact:false};
+}
 /* bolt-hole tearout / edge in the plate under shear (AISC J3.10) */
 function plateTearout(combo){
   const P=S.plate, pg=pgrade(P.grade), sp=anchorSpec(S.anchor.dia);
   const phi=0.75, Fu=pg.Fu, t=P.t;
-  const dh=sp.d+0.0625;   /* std hole ~ d+1/16 for anchors (oversized common; use +1/16 min) */
+  /* Anchor-rod holes in base plates are OVERSIZED: AISC DG1 Table 2.3 (Manual
+     Table 14-2). Previously a standard d + 1/16 hole was assumed, which
+     overstated l_c. S.plate.holeDia > 0 overrides (e.g. a drilled hole). */
+  const hs=anchorHoleDG1(sp.d);
+  const dh=(P.holeDia>0)? P.holeDia : hs.dh;
   const lc=Math.min(S.anchor.edx,S.anchor.edy)-dh/2;  /* clear distance to edge */
   const Rn_to=1.2*lc*t*Fu;   /* tearout */
   const Rn_br=2.4*sp.d*t*Fu; /* bearing */
@@ -2324,7 +2488,7 @@ function plateTearout(combo){
         "\\phi R_n="+fmt(phi)+"\\min(1.2\\times"+fmt(lc,2)+"\\times"+fmt(t,2)+"\\times"+fmt(Fu,0)+",\\;2.4\\times"+fmt(sp.d,3)+"\\times"+fmt(t,2)+"\\times"+fmt(Fu,0)+")="+fmt(phi*Rn,2)+"\\ \\text{kip}",
         "\\text{DCR}=V_u/\\phi R_n="+fmt(Vu,2)+"/"+fmt(phi*Rn,2)+"="+fmt(dcr,2)],
        vars:[["l_c",fmt(lc,2)+" in","clear distance, hole edge to plate edge"],
-             ["d_h",fmt(dh,3)+" in","hole diameter"],["F_u",fmt(Fu,0)+" ksi","plate tensile strength"]]}
+             ["d_h",fmt(dh,3)+" in",(P.holeDia>0)?"hole diameter (user input)":("hole diameter, AISC DG1 Table 2.3 oversized anchor-rod hole"+(hs.exact?"":" (interpolated/extrapolated — d not tabulated)"))],["F_u",fmt(Fu,0)+" ksi","plate tensile strength"]]}
     ]};
 }
 
@@ -2576,7 +2740,7 @@ function tensionDevLengths(Rin){
   const psi_e = R.epoxy?1.5:1.0;
   const psi_te = Math.min(psi_t*psi_e, 1.7);
   const psi_s = (db<=0.75)?0.8:1.0;
-  const psi_g = (fy>=80)?1.15:1.0;
+  const psi_g = (fy>=100)?1.3:((fy>=80)?1.15:1.0);   /* ACI 318-19 Table 25.4.2.5: Gr 40/60 1.0, Gr 80 1.15, Gr 100 1.3 */
   const cb = Math.min(R.cover + db/2, (R.spacing>0?R.spacing/2:R.cover + db/2));
   const Ktr = R.Ktr||0;
   const conf = Math.min((cb+Ktr)/db, 2.5);
@@ -3606,20 +3770,36 @@ function bearingCheck(cc){
       ]};
   }
   const bc=cc.bc;
-  let qmax=0, gov="—";
-  cc.combos.forEach(c=>{ const q=Math.max(c.resX.q||0,c.resY.q||0); if(q>qmax){qmax=q;gov=c.name;} });
-  const dcr=qmax/bc.phiFp;
-  return {bc,qmax,gov,dcr,
+  /* Bearing utilisation per combination and axis (DG1):
+       small eccentricity → f_p/f_p,max (trapezoid for e ≤ N/6, uniform block Y = N − 2e beyond)
+       large eccentricity → the bearing block is at f_p,max over Y BY CONSTRUCTION, so
+         q/f_p,max ≡ 1.00 says nothing. The meaningful measure is whether the Y
+         solution exists: (P·f + M)/[f_p,max·B·(f+N/2)²/2] ≤ 1.0 (see dg1Uniaxial). */
+  let qmax=0, gov="—", dcr=0, basis="q/fp", govAxis="";
+  cc.combos.forEach(c=>{
+    const q=Math.max(c.resX.q||0,c.resY.q||0); if(q>qmax) qmax=q;
+    [["about y (along B)",c.resX],["about x (along N)",c.resY]].forEach(([ax,r])=>{
+      const d=(r && r.bearDCR!==undefined)? r.bearDCR : ((r&&r.q)||0)/bc.phiFp;
+      if(isNaN(d) || d>dcr){ dcr=isNaN(d)?Infinity:d; gov=c.name; basis=(r&&r.bearBasis)||"q/fp"; govAxis=ax; }
+    });
+  });
+  const largeGov=(basis==="moment");
+  return {bc,qmax,gov,dcr,basis,govAxis,
     steps:[
-      {title:"Concrete bearing capacity",ref:"ACI 318-19 §14.5.5 / §22.8",
+      {title:"Concrete bearing capacity",ref:"ACI 318-19 §14.5.5 / §22.8; AISC DG1 2nd Ed. §3.3",
        lines:[
         "\\phi f_p=\\phi(0.85f'_c)\\sqrt{A_2/A_1}\\le \\phi(1.7f'_c)",
         "\\phi f_p="+fmt(bc.phi)+"\\times0.85\\times"+fmt(bc.fc,2)+"\\times"+fmt(bc.sqrtRatio,2)+"="+fmt(bc.phiFp,2)+"\\ \\text{ksi}"+(bc.groutGoverns?"\\;(\\text{grout governs})":""),
-        "\\text{DCR}=q_{max}/\\phi f_p="+fmt(qmax,2)+"/"+fmt(bc.phiFp,2)+"="+fmt(dcr,2)],
+        largeGov
+          ? "\\text{Large eccentricity ("+gov+", "+govAxis+"): bearing governed by the DG1 Y solution, } \\text{DCR}=\\frac{P_uf+M_u}{f_{p,max}B(f+N/2)^2/2}="+fmtDCR(dcr,2)
+          : "\\text{DCR}=f_p/\\phi f_p,\\ \\text{max over combinations and axes}="+fmtDCR(dcr,2)+"\\quad(q_{max}="+fmt(qmax,2)+"\\ \\text{ksi})"],
        vars:[["A_1",fmt(bc.A1,1)+" in^2","loaded area (grout footprint)"],
-             ["A_2",fmt(bc.A2,1)+" in^2","supporting area (frustum-limited)"],
+             ["A_2",fmt(bc.A2,1)+" in^2","largest supporting area geometrically similar to and concentric with A_1 (plate offset included)"],
              ["\\sqrt{A_2/A_1}",fmt(bc.sqrtRatio,2),"≤ 2.0"],
-             ["\\phi","0.65","bearing on concrete"]]}
+             ["\\phi","0.65","bearing on concrete"],
+             ["basis",largeGov?"DG1 Y solution":"f_p / φf_p",largeGov
+               ? "large eccentricity: f_p = φf_p over Y by construction; DCR = required moment about the anchor line / maximum bearing-block moment (≤ 1.0 ⇔ DG1 (f+N/2)² ≥ 2P(e+f)/q has a solution)"
+               : "small eccentricity: trapezoid peak for e ≤ N/6; DG1 uniform block f_p = P/(B(N−2e)) for e > N/6"]]}
     ]};
 }
 
@@ -3634,6 +3814,8 @@ function buildInputPanel(){
     fRow(body,"Plate width B (x)",numInput(()=>S.plate.B,v=>S.plate.B=v,0.5),"in");
     fRow(body,"Plate length N (y)",numInput(()=>S.plate.N,v=>S.plate.N=v,0.5),"in");
     fRow(body,"Plate thickness t",numInput(()=>S.plate.t,v=>S.plate.t=v,0.125),"in");
+    fRow(body,"Anchor hole dia. d_h",numInput(()=>S.plate.holeDia||0,v=>S.plate.holeDia=v,0.0625),"in",
+      "0 = AISC DG1 Table 2.3 oversized hole ("+fmt(anchorHoleDG1(S.anchor.dia).dh,4)+"″ for this rod). Used in the tearout check.");
     fRow(body,"Plate grade",selInput(LIB.plateGrades,()=>S.plate.grade,v=>S.plate.grade=v,o=>o.name,o=>o.id),"");
     /* column shape picker */
     fRow(body,"Column type",selInput([["W","W-shape"],["HSS","HSS (square/rect/round)"],["custom","Custom d × b"]],
@@ -4140,7 +4322,7 @@ function buildInputPanel(){
    OUTPUT — tabs, dashboard, worked calculations
    ===================================================================== */
 let CC=null;   /* cached computeAll result */
-function statusOf(dcr,na){ return na?"na":(dcr>1.0001?"fail":"pass"); }
+function statusOf(dcr,na){ return na?"na":((dcr>1.0001||isNaN(dcr))?"fail":"pass"); }   /* NaN = broken calc → FAIL, never PASS */
 
 function TABS(){
   const t=[["tabInput","Input & Schematics"],["tabSummary","Summary"],
@@ -4196,7 +4378,9 @@ function buildOutput(){
   if(VALIDATION.blockers && VALIDATION.blockers.length){
     pg.innerHTML="";
     const b=el("div","errBox");
-    b.innerHTML="<b>Output withheld — the configuration violates a mandatory ACI 318-19 limit.</b><br><br>"+
+    const codeOnly=VALIDATION.blockers.every(e=>e.code && e.code.indexOf("§17")===0);
+    b.innerHTML=(codeOnly? "<b>Output withheld — the configuration violates a mandatory ACI 318-19 limit.</b><br><br>"
+                         : "<b>Output withheld — invalid input, or a configuration with no valid solution.</b><br><br>")+
       VALIDATION.blockers.map(e=>"• "+(e.code?("<b>"+e.code+"</b> — "):"")+e.msg).join("<br>")+
       "<br><br>These are not modelling preferences. Capacities computed on this "+
       "configuration would describe an anchorage the code does not permit, so no "+
@@ -4297,7 +4481,7 @@ function dcrMatrix(){
     if(la && la.phiVMs>1e-12) put("so","Stand-off bending","lever arm", (c.Vu_per||0)/la.phiVMs);
     put("int","Interaction","§17.8", interaction(cap.tDCR(c,cap.govTfor(c)),1,cap.vDCR(c,cap.govVfor(c)),1).dcr);
     let worst=-1, worstKey=null;
-    Object.keys(d).forEach(k=>{ if(isFinite(d[k]) && d[k]>worst){ worst=d[k]; worstKey=k; } });
+    Object.keys(d).forEach(k=>{ const v=isNaN(d[k])?Infinity:d[k]; if(v>worst){ worst=v; worstKey=k; } });   /* NaN/∞ count as worst, not skipped */
     return {combo:c.name, ci:c.ci, dcr:d, worst, worstKey};
   });
   return {modes,rows};
@@ -4413,7 +4597,7 @@ function worstDCRNow(){
     CC=computeAll();
     const checks=allChecks();
     let w=0, who="—";
-    checks.forEach(c=>{ if(!c.na && isFinite(c.dcr) && c.dcr>w){ w=c.dcr; who=c.label; } });
+    checks.forEach(c=>{ const v=isNaN(c.dcr)?Infinity:c.dcr; if(!c.na && v>w){ w=v; who=c.label; } });
     CC=saveCC;
     return {dcr:w, mode:who};
   }catch(e){ return {dcr:Infinity, mode:"error"}; }
@@ -4596,7 +4780,7 @@ function snapshotEvaluate(snap){
     const out={};
     let worst=0, worstMode="—";
     checks.forEach(c=>{ out[c.label]={dcr:c.dcr, na:c.na};
-      if(!c.na && isFinite(c.dcr) && c.dcr>worst){ worst=c.dcr; worstMode=c.label; } });
+      const v=isNaN(c.dcr)?Infinity:c.dcr; if(!c.na && v>worst){ worst=v; worstMode=c.label; } });
     return {checks:out, worst, worstMode, ok:true};
   }catch(e){
     return {checks:{}, worst:Infinity, worstMode:"error", ok:false, err:e.message};
@@ -4642,7 +4826,7 @@ function buildCompare(pg){
     /* evaluate current + each snapshot */
     const cur=(()=>{ const checks=allChecks(); const o={}; let w=0,wm="—";
       checks.forEach(c=>{ o[c.label]={dcr:c.dcr,na:c.na};
-        if(!c.na&&isFinite(c.dcr)&&c.dcr>w){w=c.dcr;wm=c.label;} });
+        const v=isNaN(c.dcr)?Infinity:c.dcr; if(!c.na&&v>w){w=v;wm=c.label;} });
       return {checks:o,worst:w,worstMode:wm,ok:true}; })();
     const evals=snaps.map(snapshotEvaluate);
 
@@ -4736,12 +4920,21 @@ function buildSummary(pg){
     dash.appendChild(chip);
   });
   /* overall */
-  const worst=checks.reduce((m,c)=>(!c.na&&c.dcr>m)?c.dcr:m,0);
+  const worst=checks.reduce((m,c)=>{ const v=isNaN(c.dcr)?Infinity:c.dcr; return (!c.na&&v>m)?v:m; },0);
   const box=el("div",worst>1?"errBox":"okBox",
     worst>1? "One or more checks FAIL — maximum DCR = "+fmtDCR(worst)+". See red chips."
            : "All checks pass — maximum DCR = "+fmtDCR(worst)+".");
   pg.appendChild(box);
 
+  /* seismic banner — repeated here so it prints with the Summary */
+  { const SL=S.serviceLoads||{};
+    if(SL.useSeismic || SL.useOmega){
+      const sb=el("div","errBox");
+      sb.innerHTML="<b>SEISMIC — ACI 318-19 &sect;17.10 NOT IMPLEMENTED.</b> Seismic (E) and/or &Omega;&#8320; combinations are enabled in the load generator, "+
+        "but the &sect;17.10 requirements (0.75 factor on concrete-governed tension &sect;17.10.5.4; ductile-steel / attachment / &Omega;&#8320; options &sect;17.10.5.3 and &sect;17.10.6) are not applied. "+
+        "A pass here does not demonstrate seismic anchorage compliance.";
+      pg.appendChild(sb);
+    } }
   /* anchor-reinforcement substitution status */
   ["tension","shear"].forEach(k=>{
     const j=rebarJustified(k,CC);
@@ -4978,7 +5171,7 @@ function buildPlateTab(pg){
             ["f_{p,max}",fmt(CC.bc.fp_gov,2)+" ksi","max bearing stress (unfactored nominal)"]]}));
     body.appendChild(el("div","note", c.ecc_regime==="large"
       ? "Large eccentricity in at least one axis → anchors develop tension. Bearing acts over a partial length Y; tension resultant resisted by the tension-side anchors."
-      : "Small eccentricity → full bearing, anchors nominally without tension (resultant within the kern)."));
+      : "Small eccentricity → anchors nominally without tension. Bearing over the full length (trapezoid) for e ≤ L/6; for e > L/6 the DG1 uniform-stress block over Y = L − 2e is used."));
   },pg);
 
   mkSection("pbBend","2. Base Plate Bending",body=>{
@@ -5180,6 +5373,7 @@ function buildConcTab(pg){
   const c=CC.combos[S.detailCombo], cap=comboCapacities(CC,c);
   mkSection("coBrg","1. Concrete Bearing",body=>{ const b=bearingCheck(CC); renderSteps(body,b.steps);
     if(b.na) body.appendChild(el("div","okBox","Not applicable — open stand-off (no grout). Compression is carried by the anchor rods; see the rod compression check on the Anchor Bolts tab."));
+    else if(b.basis==="moment") dcrBox(body,b.dcr,false,null);   /* DG1 Y-solution utilisation — not a stress ratio */
     else dcrBox(body,b.dcr,false,
       {load:b.qmax,cap:b.qmax/(b.dcr||1),unit:"ksi",dec:3,
        loadSym:"q_max",capSym:"\u03c6f_p",basis:"peak bearing stress under the plate ("+b.gov+")"}); },pg);
@@ -7072,17 +7266,21 @@ function drawBreakout(body,c){
   const he=hefEffective(), hef=he.hefEff;
   const pxo=C.plate_off_x||0, pyo=C.plate_off_y||0;
 
-  /* un-clipped and clipped extents — mirrors tensionBreakoutGroup() exactly */
-  const ux1=g.xmin-1.5*hef, ux2=g.xmax+1.5*hef;
-  const uy1=g.ymin-1.5*hef, uy2=g.ymax+1.5*hef;
-  const x1=Math.max(ux1,-C.Bx/2-pxo), x2=Math.min(ux2,C.Bx/2-pxo);
-  const y1=Math.max(uy1,-C.By/2-pyo), y2=Math.min(uy2,C.By/2-pyo);
-  const ANc=Math.max(0,x2-x1)*Math.max(0,y2-y1);
+  /* un-clipped and clipped extents — same helper as tensionBreakoutGroup():
+     the projected area of the anchors IN TENSION (§17.6.2.1); all anchors when
+     none are in tension */
+  const tensB=(c&&c.perAnchor)? c.perAnchor.filter(p=>p.t>1e-9) : [];
+  const ext=breakoutExtents(tensB.length? tensB : g.pts, hef, C, pxo, pyo);
+  const ux1=ext.ux1, ux2=ext.ux2, uy1=ext.uy1, uy2=ext.uy2;
+  const x1=ext.x1, x2=ext.x2, y1=ext.y1, y2=ext.y2;
+  const ANc=ext.ANc;
   const ANco=9*hef*hef;
 
   /* fit the canvas to whichever is bigger: pedestal or the un-clipped cone */
-  const spanX=Math.max(C.Bx, ux2-ux1)*1.08;
-  const spanY=Math.max(C.By, uy2-uy1)*1.08;
+  /* the tension-anchor cone need not be centred on the plate, so fit to its
+     farthest extent from the origin (identical to the old fit for a centred cone) */
+  const spanX=Math.max(C.Bx, 2*Math.max(Math.abs(ux1),Math.abs(ux2)))*1.08;
+  const spanY=Math.max(C.By, 2*Math.max(Math.abs(uy1),Math.abs(uy2)))*1.08;
   const W=620,H=500,pad=76;
   const sc=Math.min((W-2*pad)/spanX,(H-2*pad)/spanY);
   const cx=W/2,cy=H/2+8; const s=svg(W,H);
@@ -7098,8 +7296,8 @@ function drawBreakout(body,c){
   }
   /* pedestal */
   rect(s,X(-C.Bx/2-pxo),Y(C.By/2-pyo),C.Bx*sc,C.By*sc,"#f2efe8","#555",1.2);
-  /* A_Nco reference square, centred on the anchor cluster centroid */
-  const gcx=(g.xmin+g.xmax)/2, gcy=(g.ymin+g.ymax)/2, side=3*hef;
+  /* A_Nco reference square, centred on the tension-anchor cluster centroid */
+  const gcx=(ext.xmin+ext.xmax)/2, gcy=(ext.ymin+ext.ymax)/2, side=3*hef;
   tip(rect(s,X(gcx-side/2),Y(gcy+side/2),side*sc,side*sc,"none","#1f4e79",1.1,"2 3"),
     "A_Nco = 9\u00b7h_ef\u00b2 = "+fmt(ANco,1)+" in\u00b2\n"+
     "Reference area of ONE anchor with no edge or spacing effects (\u00a717.6.2.1.4).\n"+
@@ -7107,7 +7305,7 @@ function drawBreakout(body,c){
   txt(s,X(gcx-side/2)+3,Y(gcy+side/2)+11,"A_Nco = 9h²ef","lblTxt","start",8.5,"#1f4e79");
   /* the actual clipped group area */
   tip(rect(s,X(x1),Y(y2),(x2-x1)*sc,(y2-y1)*sc,"rgba(183,28,28,.14)","#b71c1c",1.6),
-    "A_Nc = "+fmt(ANc,1)+" in\u00b2 \u2014 the projected failure area actually available.\n"+
+    "A_Nc = "+fmt(ANc,1)+" in\u00b2 \u2014 the projected failure area of the anchors in tension (§17.6.2.1).\n"+
     fmt(x2-x1,2)+"\u2033 \u00d7 "+fmt(y2-y1,2)+"\u2033"+(clipped?"  (clipped by the concrete edges)":""));
 
   /* anchors, tension vs compression from the governing combination */
@@ -8393,6 +8591,40 @@ function buildVisualTab(pg){
 let VALIDATION={errs:[],warns:[],blockers:[]};
 function validateInputs(){
   const warns=[],errs=[]; const P=S.plate,A=S.anchor,C=S.conc,sp=anchorSpec(A.dia),g=anchorGeom();
+  /* ---- critical inputs: blank, zero or negative → blocking input error ----
+     A blank number field is stored as 0. Previously that ran silently into
+     divisions by zero; the NaN/∞ DCRs were then skipped by isFinite() filters
+     so a check could drop out of the governing result. */
+  { const bad=[];
+    [["f'c",C.fc,"ksi"],["h_ef",A.hef,"in"],["plate thickness t",P.t,"in"],["plate width B",P.B,"in"],
+     ["plate length N",P.N,"in"],["pedestal depth H",C.H,"in"],["pedestal width Bx",C.Bx,"in"],["pedestal width By",C.By,"in"]]
+      .forEach(([n,v,u])=>{ if(!(typeof v==="number" && isFinite(v) && v>0)) bad.push(n+" = "+(v===undefined||v===null||v===""?"(blank)":v)+" "+u); });
+    if(bad.length) errs.push({block:true, code:"input",
+      msg:"Missing, zero or negative input: "+bad.join("; ")+". A blank field is read as 0. Enter a positive value."});
+    /* ---- AISC DG1 large-eccentricity solution must exist ---- */
+    if(!bad.length){
+      const soV0=standoffParams();
+      const bcV=bearingCap(), noSol=[];
+      (S.combos||[]).forEach(cb=>{
+        const Pc=-(cb.P||0);
+        const rX=dg1Uniaxial(Math.max(Pc,0), Math.abs(cb.My||0), P.B, P.N, bcV.phiFp, P.B/2-A.edx);
+        const rY=dg1Uniaxial(Math.max(Pc,0), Math.abs(cb.Mx||0), P.N, P.B, bcV.phiFp, P.N/2-A.edy);
+        if(rX.noSolution) noSol.push((cb.name||"(unnamed)")+" (My, DCR "+fmt(rX.bearDCR,2)+")");
+        if(rY.noSolution) noSol.push((cb.name||"(unnamed)")+" (Mx, DCR "+fmt(rY.bearDCR,2)+")");
+      });
+      if(noSol.length){
+        const m="Base plate too small for the applied moment: the AISC DG1 large-eccentricity equation has no real solution, (f + N/2)² < 2P(e + f)/q, in "+
+          noSol.join("; ")+". DG1 requires the plate to be enlarged (or bearing increased).";
+        if(soV0.hasStandoff && !soV0.groutFilled) warns.push(m+" (Open stand-off: plate bearing model is indicative only.)");
+        else errs.push({block:true, code:"DG1", msg:m});
+      }
+    }
+  }
+  { const SL=S.serviceLoads||{};
+    if(SL.useSeismic || SL.useOmega)
+      errs.push({block:false, code:"§17.10",
+        msg:"SEISMIC: seismic (E) and/or overstrength (Ω₀) load combinations are enabled in the ASCE 7-22 generator, but ACI 318-19 §17.10 is NOT implemented in this tool — no 0.75 factor on concrete-governed tension (§17.10.5.4), no ductility / Ω₀ anchorage options (§17.10.5.3, §17.10.6). Results for seismic combinations do not demonstrate §17.10 compliance; verify separately."});
+  }
   if(A.hef < 6*A.dia) warns.push("hef = "+fmt(A.hef,1)+'" is less than 6·d = '+fmt(6*A.dia,1)+'" (typical minimum embedment guidance).');
   if(C.fc>10) warns.push("f'c = "+C.fc+" ksi exceeds the 10 ksi cast-in breakout cap (§17.3.1); calculations use 10 ksi for breakout.");
   if(A.edx<=0||A.edy<=0) errs.push({block:true, code:"geometry",
@@ -9393,7 +9625,7 @@ function buildVCaseTab(pg){
 
   /* governing combination = the one whose controlling case has the worst DCR */
   let best=null;
-  combos.forEach(cb=>{ const r=shearCases(cb);
+  combos.forEach(cb=>{ const r=shearCases(cb, conditionA("shear", CC));
     if(r.applicable && (!best || r.used.dcr>best.r.used.dcr)) best={cb,r}; });
 
   mkSection("vcIntro","1. Basis and Case Selection",body=>{
@@ -10734,6 +10966,7 @@ manPart("p4a","4A. Base Plate Mechanics",[
 {p:"The resultant falls close enough to the plate centroid that the entire plate stays in compression, or at least that a bearing block alone can equilibrate the load. <b>The anchors carry no tension.</b> Bearing stress varies linearly across the plate, trapezoidal or triangular, with a peak of"},
 {eq:"q_{max} = \\frac{P}{B\\,L}\\left(1 + \\frac{6e}{L}\\right)"},
 {p:"This is the familiar combined axial-plus-bending stress formula. When <i>e</i> = <i>L</i>/6 the minimum stress reaches zero — that is the classical kern limit, and beyond it part of the plate would need to carry tension through bearing, which is impossible."},
+{p:"For L/6 &lt; e &le; e<sub>crit</sub> the program therefore uses the AISC DG1 (2nd Ed. §3.3) uniform-stress block instead: Y = L &minus; 2e and f<sub>p</sub> = P/(B&middot;Y). For e &le; L/6 the linear (trapezoidal) peak above is kept because it is the more conservative of the two there. In the large-eccentricity regime the bearing stress equals f<sub>p,max</sub> by construction, so the bearing DCR reported is (P&middot;f + M)/[f<sub>p,max</sub>&middot;B&middot;(f + L/2)&sup2;/2], which is &le; 1.0 exactly when DG1's Y solution exists; if it does not, the plate is too small and output is withheld."},
 {h3:"Large eccentricity (e > e_crit)"},
 {p:"The resultant lands far enough out that equilibrium is impossible without an anchor tension force. The plate now behaves like a reinforced concrete section: a compression block near one edge, a tension force in the anchors near the other. DG1 solves the equilibrium by writing force and moment balance and eliminating the unknown bearing length <i>Y</i>, which produces a cubic:"},
 {eqn:["Y^3 + C_2\\,Y^2 + C_1\\,Y + C_0 = 0",
@@ -11010,11 +11243,12 @@ manPart("p4c","4C. Shear & Interaction",[
  ["Steel in tension (ductile)","0.75","0.75"],
  ["Steel in shear (ductile)","0.65","0.65"],
  ["Concrete breakout, tension","0.75","<b>0.70</b>"],
- ["Pullout","0.75","<b>0.70</b>"],
+ ["Pullout","<b>0.70</b> (always Condition B)","<b>0.70</b>"],
  ["Side-face blowout","0.75","<b>0.70</b>"],
  ["Concrete breakout, shear","0.75","<b>0.70</b>"],
- ["Pryout","0.75","<b>0.70</b>"]
+ ["Pryout","<b>0.70</b> (always Condition B)","<b>0.70</b>"]
 ]}},
+{note:"This program grants Condition A (0.75) to tension breakout and side-face blowout only when the tension-reinforcement intercept check credits at least one bar crossing the failure surface, and to shear breakout only when the hairpin intercept check credits at least one leg. Reinforcement that is merely present gets Condition B (0.70). Pullout and pryout are always 0.70."},
 {p:"<b>Condition A</b> applies where supplementary reinforcement crosses the potential failure surface and ties the failure prism into the member. <b>Condition B</b> applies where such reinforcement is absent — and also, per the PROFIS warning text, where pullout or pryout strength governs. Condition B is the default and the correct assumption unless you have detailed and shown the reinforcement."},
 {key:"Note that the steel factors do not change with condition — reinforcement does not make a bolt stronger. And note that concrete limit states get <b>0.70</b>, not 0.65. The 0.65 value belongs to steel in shear only. Mixing these up shifts every concrete capacity by about 7%."}
 ]);
