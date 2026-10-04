@@ -109,6 +109,7 @@
   .btn.mini{padding:6px 12px;font-size:12px}
   .disclaim{font-size:11.5px;color:var(--ink-soft);margin-top:14px;max-width:82ch;line-height:1.6}
   .flag{font-size:12px;padding:8px 12px;border-left:3px solid var(--warn);background:#fbf6e9;color:#5e4a16;margin-top:10px;border-radius:0 2px 2px 0}
+  .errNum{color:#b00020;font-weight:700}
   .flag.bad{border-left-color:var(--bad);background:#fbeeee;color:#6a1f1f}
   .flag.ok{border-left-color:var(--ok);background:#eef6ef;color:#244e30}
   /* cable rows */
@@ -866,7 +867,34 @@
 <script>
 const $=id=>document.getElementById(id);
 const num=id=>parseFloat($(id).value)||0;
-const fmt=(x,d=2)=>(isFinite(x)?x:0).toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d});
+// NaN / ±Infinity / undefined must never print as a plausible number (it used to print "0.00",
+// so a broken result looked like zero). Non-finite values print "ERR"; markErr() below paints
+// every "ERR" token red wherever it lands in the page (HTML, textContent or tables).
+const fmt=(x,d=2)=>(typeof x==='number'&&isFinite(x))?x.toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d}):'ERR';
+function markErr(root){
+  if(!root) return;
+  const skip=el=>!el||(el.closest&&el.closest('svg,.katex,.errNum,script,style,textarea,select,option'));
+  const wrap=tn=>{
+    if(!/\bERR\b/.test(tn.data)||skip(tn.parentElement)) return;
+    const parts=tn.data.split(/\b(ERR)\b/), frag=document.createDocumentFragment();
+    parts.forEach(p=>{ if(p==='ERR'){ const s=document.createElement('span'); s.className='errNum'; s.title='Non-finite result (NaN or ∞) — check the inputs'; s.textContent='ERR'; frag.appendChild(s); }
+                       else if(p) frag.appendChild(document.createTextNode(p)); });
+    tn.parentNode.replaceChild(frag,tn);
+  };
+  if(root.nodeType===3){ wrap(root); return; }
+  if(root.nodeType!==1||skip(root)) return;
+  const w=document.createTreeWalker(root,NodeFilter.SHOW_TEXT,null), list=[];
+  while(w.nextNode()) list.push(w.currentNode);
+  list.forEach(wrap);
+}
+try{
+  if(window.MutationObserver && document.body){
+    new MutationObserver(ms=>ms.forEach(m=>{
+      if(m.type==='characterData') markErr(m.target);
+      else m.addedNodes.forEach(nd=>markErr(nd));
+    })).observe(document.body,{childList:true,subtree:true,characterData:true});
+  }
+}catch(e){}
 const RAD=Math.PI/180;
 
 function Kz(h,expo){const P={B:[7.0,1200],C:[9.5,900],D:[11.5,700]}[expo];const z=Math.max(h,15);return 2.01*Math.pow(z/P[1],2/P[0]);}
@@ -1142,8 +1170,12 @@ function cableComponents(c,inp){
       const wR = Math.hypot(wv, wh);
       const Hpull = pullFromLoad(wR);                    // along-cable pull (plan), lb
       const Vc = wv*c.L/2;                                // vertical support reaction, lb
+      // Transverse (wind) support reaction: each end of a cable under a transverse line load wh
+      // carries half the span load, wh·L/2, in the direction of the load — the horizontal
+      // counterpart of Vc = wv·L/2. It acts along the WIND direction (applied by the caller).
+      const Hw = wh*c.L/2;                                // lb
       const Hx=Hpull*Math.cos(c.th*RAD), Hy=Hpull*Math.sin(c.th*RAD);
-      return {Ht:Hpull, Vc, Hh:0, Hx, Hy, wRes:wR, Hpull};
+      return {Ht:Hpull, Vc, Hh:0, Hw, Hx, Hy, wRes:wR, Hpull};
     },
     // pure per-source support reactions, in global and cable-local axes.
     componentReactions(){
@@ -1241,13 +1273,26 @@ function signCfAB(sh, bs){
 function signCaseC(bs, sh){
   const factor = sh>0.8 ? Math.max(0,1.8-sh) : 1;   // Note 4 reduction
   const regs=[];
+  // Fig. 29.3-1 Case C: for B/s ≤ 10 the strip beyond 3s is ONE region '3s to 10s'; for
+  // B/s ≥ 13 it is split into '3s to 4s', '4s to 5s', '5s to 10s' and '>10s'. The two sets are
+  // mutually exclusive (using both double-counted the 3s–10s strip). Between 10 and 13 the
+  // split strips are interpolated from the B/s = 10 value of '3s to 10s' (0.95) to their own
+  // B/s = 13 values; the '>10s' strip (which only exists for B/s > 10) takes 0.55.
+  const SPLIT=['3s to 4s','4s to 5s','5s to 10s','>10s'];
+  const r310=SIGN_C_REGIONS.find(r=>r.lab==='3s to 10s');
+  const v310at10=r310.v[SIGN_C_BS.indexOf(10)];
   SIGN_C_REGIONS.forEach(r=>{
+    const isSplit=SPLIT.indexOf(r.lab)>=0;
+    if(r.lab==='3s to 10s' && bs>10) return;          // replaced by the split strips
+    if(isSplit && bs<=10) return;                      // split strips only exist beyond B/s = 10
     // only rows with a defined value at this B/s (interpolate across defined cols)
     const cols=[], vals=[];
     r.v.forEach((v,idx)=>{ if(v!==null){cols.push(SIGN_C_BS[idx]); vals.push(v);} });
+    if(isSplit){ cols.unshift(10); vals.unshift(r.lab==='>10s'?0.55:v310at10); }
     if(vals.length===0) return;
-    if(bs<cols[0]) return;               // region not applicable below its range
-    const cf=interp1(cols,vals,bs)*factor;
+    // below a row's first tabulated B/s the strip, if it exists at all (signWind drops a
+    // zero-width strip), takes the first tabulated value rather than zero load
+    const cf=(bs<cols[0]? vals[0] : interp1(cols,vals,bs))*factor;
     regs.push({lab:r.lab, cf});
   });
   return {regs, factor};
@@ -1487,6 +1532,31 @@ function poleSegments(inp){
   }
   return {segs,dz,totalW:cumW,shape,taper};
 }
+// The BASE section (z = 0, top of base plate) as a pseudo-segment with the same fields as a
+// segment. Segment rows are taken at mid-height (lowest at H/20), so the section at the base
+// plate — maximum moment, and on a tapered pole the largest D/t region near the handhole/weld —
+// was never checked. Base dimensions (f = 1), all pole weight above.
+function poleBaseSection(poleSeg, inp){
+  const shape=poleSeg.shape||'round';
+  const Db=inp.poleDiaBase, Htb=inp.poleDepthBase!==undefined?inp.poleDepthBase:Db, tb=inp.poleTwBase;
+  const dims = shape==='round' ? {D:Db,t:tb} : (shape==='square'?{B:Db,t:tb}:{B:Db,Ht:Htb,t:tb});
+  const p=hssProps(shape,dims);
+  return {i:'Base', zTop:0, zBot:0, zMid:0, shape,
+    Do:(shape==='round'?p.Do:p.B), Di:(shape==='round'?p.Di:undefined), tw:tb, B:p.B, Ht:p.Ht,
+    A_in2:p.A, I_in4:p.I_min, Ix:p.Ix, Iy:p.Iy, Sx:p.Sx, Sy:p.Sy, Zx:p.Zx, Zy:p.Zy,
+    Z_in3:p.S_min, r_in:Math.min(p.rx,p.ry), rx:p.rx, ry:p.ry,
+    Dt_ratio:p.slend, slendKind:p.slendKind, wSeg:0, cumWabove:poleSeg.totalW, dz:0, fMid:1};
+}
+// AISC 360-16 applicability / slender-element flags for a stress row set:
+//  • F8 applies to round HSS only for D/t < 0.45E/Fy (§F8 scope; Table B4.1b note) — a CHECK;
+//  • compression elements beyond Table B4.1a λr (round 0.11E/Fy, rect walls 1.40√(E/Fy)) are
+//    slender and §E7 effective-area reduction is NOT applied by this tool — a WARNING.
+function hssLimitFlags(rows, shape, E, Fy){
+  const maxSl=Math.max(...rows.map(r=>r.Dt));
+  const dtLim=0.45*E/Fy;
+  const lrC = shape==='round' ? 0.11*E/Fy : 1.40*Math.sqrt(E/Fy);
+  return {maxSl, dtLim, dtOK: shape!=='round' || maxSl<dtLim, lrC, e7Slender: maxSl>lrC};
+}
 
 // KaTeX worked example for a selected pole segment
 function renderPoleExample(poleSeg, inp){
@@ -1569,7 +1639,7 @@ function evalComboDir(key,inp,comps,fxs,pw,phi){
   // Wind on the cable drives an along-cable catenary pull, so its direction is set by the
   // cable, not the wind. The wind AZIMUTH therefore does not rotate the cable pull; only the
   // magnitude of the wind term matters. (Consistent with the along-cable pull model.)
-  let cx=0,cy=0,sV=0,hcNum=0,hcDen=0;
+  let cx=0,cy=0,sV=0,hcNum=0,hcDen=0,sHw=0,MHw=0;
   comps.forEach(cp=>{
     const wv=f.D*cp.D_v + f.Di*cp.Di_v;      // factored vertical distributed (dead+ice)
     const wh=f.W*cp.W_h + f.Wi*cp.Wi_h;      // factored wind distributed (bare/iced)
@@ -1577,6 +1647,7 @@ function evalComboDir(key,inp,comps,fxs,pw,phi){
     perC.push({cp,wv,wh,...r});
     cx+=r.Hx; cy+=r.Hy; sV+=r.Vc;
     hcNum+=r.Ht*cp.c.hc; hcDen+=r.Ht;
+    sHw+=r.Hw; MHw+=r.Hw*cp.c.hc;            // transverse wind reaction wh·L/2 at the attach height
   });
   const cableRes=Math.hypot(cx,cy), cableAng=Math.atan2(cy,cx)/RAD;
   const hcEff=hcDen>0?hcNum/hcDen:(comps[0]?comps[0].c.hc:inp.H);
@@ -1584,6 +1655,11 @@ function evalComboDir(key,inp,comps,fxs,pw,phi){
   // cable pull acts at the effective attach height -> overturning moment along the pull direction
   Mx+=cx*hcEff; My+=cy*hcEff;
   N+=sV;
+  // transverse cable wind reaction (Σ wh·L/2) acts along the wind direction, at each cable's
+  // attach height (conservatively taken as the full wind line load regardless of azimuth,
+  // consistent with the along-cable pull model above)
+  Vx+=sHw*cw; Vy+=sHw*sw;
+  Mx+=MHw*cw; My+=MHw*sw;
 
   // ---------- fixtures ----------
   fxs.forEach(fc=>{
@@ -1614,7 +1690,7 @@ function evalComboDir(key,inp,comps,fxs,pw,phi){
 
   return {key,fam:f.fam,name:f.name,factors:f,phi,
           Vx,Vy,Mx,My,P,M,Mang,h,axial:N,
-          cableRes,cableAng,hcEff,sV,poleWind,poleWindM,
+          cableRes,cableAng,hcEff,sV,poleWind,poleWindM,cableWindH:sHw,cableWindM:MHw,
           per:perC, perF,
           M_cable:Math.hypot(cx,cy)*hcEff, M_pole:poleWindM};
 }
@@ -2361,11 +2437,15 @@ function collectChecks(ctx){
   push('Tie spacing','ACI 318-19 §25.7.2.1',T.s,T.sLimit,'in');
   push('Soil bearing','IBC Table 1806.2',found.bearing.q,found.bearing.qAllow,'ksf');
   if(b){
-    push('Anchor tension','ACI 318-19 Ch.17',b.Tmax,b.phiNn,'lb');
-    push('Anchor shear','ACI 318-19 Ch.17',b.Vb,b.phiVn,'lb');
-    push('Anchor T–V interaction','ACI 318-19 §17.8',b.inter,(b.vr>0.2&&b.tr>0.2)?1.2:1.0,'—',b.interOK);
+    // each anchor check from its own governing LRFD combination (byCheck), when available
+    const bT=(b.byCheck&&b.byCheck.T)||b, bV=(b.byCheck&&b.byCheck.V)||b, bI=(b.byCheck&&b.byCheck.I)||b;
+    push('Anchor tension','ACI 318-19 Ch.17',bT.Tmax,bT.phiNn,'lb');
+    push('Anchor shear','ACI 318-19 Ch.17',bV.Vb,bV.phiVn,'lb');
+    push('Anchor T–V interaction','ACI 318-19 §17.8',bI.inter,(bI.vr>0.2&&bI.tr>0.2)?1.2:1.0,'—',bI.interOK);
   }
   if(pstress&&pstress.govRow) push('Post combined stress','AISC 360 §H1.1',pstress.govRow.ratio,1.0,'—',pstress.govRow.ok);
+  if(pstress&&pstress.lim&&pstress.shape==='round')
+    push('Round HSS D/t < 0.45E/Fy','AISC 360-16 §F8 scope',pstress.lim.maxSl,pstress.lim.dtLim,'—',pstress.lim.dtOK);
   return C;
 }
 function summaryHTML(ctx){
@@ -2385,6 +2465,15 @@ function summaryHTML(ctx){
   H+=`<div class="chipwrap">`;
   allChecks.forEach(c=>{H+=`<span class="chk ${c.ok?'ok':'bad'}">${c.ok?'✓':'✕'} ${c.name}${c.label?' · '+c.label:''}</span>`;});
   H+=`</div>`;
+  // ---- items this tool does NOT check (never shown as a pass) ----
+  const warnL=[];
+  if(stacks.some(st=>st.found&&st.found.bolts)){
+    const sfb=stacks.some(st=>st.found.bolts&&st.found.bolts.sfbApplies);
+    warnL.push('<b>Anchor concrete breakout in shear (ACI 318-19 §17.7.2) is NOT CHECKED</b>'+(sfb?'; <b>side-face blowout (§17.6.4) applies (c<sub>a1</sub> &lt; 0.4h<sub>ef</sub>) and is NOT CHECKED</b>':'')+' — verify separately.');
+  }
+  if(stacks.some(st=>st.pstress&&st.pstress.lim&&st.pstress.lim.e7Slender))
+    warnL.push('Pole/post wall is a <b>slender compression element</b> (λ &gt; λ<sub>r</sub>, AISC 360-16 Table B4.1a); the §E7 effective-area reduction is <b>not applied</b>, so the axial capacity is unconservative — verify.');
+  if(warnL.length) H+=`<div class="flag" style="background:#fbeeea;border-color:#e0a390;color:#8a2318;margin:8px 0">${warnL.join('<br>')}</div>`;
   // ---- design summary ----
   H+=`<div class="step-label" style="margin-top:14px">Design — as ${stacks[0].found.reo.manual?'specified (check mode)':'designed'}</div>`;
   H+=`<table class="tbl"><tr><th style="text-align:left">Item</th>${stacks.map(st=>`<th>${st.label||'Value'}</th>`).join('')}</tr>`;
@@ -2632,10 +2721,11 @@ function poleStress(inp,poleSeg,comps,fxs,pw,gov){
 
   const fList=fxs.map(fc=>({hf:fc.hf, Fw:f.W*fc.Fw + f.Wi*fc.Fwi, Wg:f.D*fc.Wdead+f.Di*fc.Wice,
                             ex:fc.ex, ey:fc.ey}));
-  const cList=gov.per.map(r=>({hc:r.cp.c.hc, Hx:r.Hx, Hy:r.Hy, Vc:r.Vc}));
+  // cable reactions: along-cable pull (Hx,Hy) + transverse wind reaction Hw along the wind direction
+  const cList=gov.per.map(r=>({hc:r.cp.c.hc, Hx:r.Hx+(r.Hw||0)*cw, Hy:r.Hy+(r.Hw||0)*sw, Vc:r.Vc}));
   const wMast=(gov.poleWind)/inp.H;
 
-  const rows=poleSeg.segs.map(s=>{
+  const rows=poleSeg.segs.concat([poleBaseSection(poleSeg,inp)]).map(s=>{
     const z=s.zMid;
     let Mx=0,My=0, Vx=0,Vy=0, N=0;
     fList.forEach(fc=>{ if(fc.hf>=z){
@@ -2684,8 +2774,9 @@ function poleStress(inp,poleSeg,comps,fxs,pw,gov){
             ratio, form, ok:ratio<=1.0,
             Z:(shape==='round'?s.Sx:Math.min(s.Sx,s.Sy)), Fcr:mnx.Fcr, Fb:phib*mnx.Fcr, Fa:phic*Fy};
   });
-  const govRow = prismatic ? rows[rows.length-1] : rows.reduce((a,x)=>x.ratio>a.ratio?x:a);
-  return {rows, govRow, lam_p, lam_r, E, Fy, shape, prismatic, Kfac, phib, phic};
+  // rows[last] is now the BASE section (z = 0); prismatic → base governs, tapered → worst row
+  const govRow = prismatic ? rows[rows.length-1] : rows.reduce((a,x)=>(isNaN(x.ratio)||x.ratio>a.ratio)?x:a);
+  return {rows, govRow, lam_p, lam_r, E, Fy, shape, prismatic, Kfac, phib, phic, lim:hssLimitFlags(rows,shape,E,Fy)};
 }
 
 // ================= AUTO-SIZED SHAFT REINFORCEMENT =================
@@ -2844,7 +2935,7 @@ function circSegCentroidY(R,a){
   return R - c;                           // from top fiber
 }
 
-function designRebar(inp,Mu,Pu,Vu){
+function designRebar(inp,Mu,Pu,Vu,demands){
   const b_in=inp.b*12;
   const shape=inp.shaftShape||'round';
   const sq=shape==='square';
@@ -2853,6 +2944,16 @@ function designRebar(inp,Mu,Pu,Vu){
   const rhoMin=inp.minSteel==='full'?0.01:0.005;
   const AsMin=rhoMin*Ag, AsMax=0.08*Ag;
   const fc=inp.fc, fy=inp.fy;
+  // Every LRFD combination's (Mu, Pu) pair must be satisfied: the P–M capacity depends on the
+  // axial load, so a low-axial case (0.9D + W) can govern at equal or smaller moment.
+  // demands omitted → the single (Mu, Pu) pair, exactly as before. The pair with the highest
+  // Mu/φMn is reported as governing (choice.govDem).
+  const DEM=(demands&&demands.length)? demands : [{Mu,Pu}];
+  const capAll=(As,nb,rb)=>{ let gv=null;
+    DEM.forEach(dm=>{ const cap=pmCapacity(shape,b_in,As,nb,rb,fc,fy,dm.Pu);
+      const u = dm.Mu<=0 ? 0 : (cap.phiMn>0 ? dm.Mu/cap.phiMn : Infinity);
+      if(!gv || u>gv.u || isNaN(u)) gv={u,cap,dm}; });
+    return gv; };
 
   // ---- MANUAL CHECK MODE: verify the user-specified reinforcement instead of designing ----
   const manual = inp.rebarMode==='manual';
@@ -2865,14 +2966,14 @@ function designRebar(inp,Mu,Pu,Vu){
     const perim = sq ? 8*rbar : 2*Math.PI*rbar;
     const sClear=perim/nBars - bar.d;
     const As=nBars*bar.a;
-    const cap=pmCapacity(shape, b_in, As, nBars, rbar, fc, fy, Pu);
+    const gv=capAll(As, nBars, rbar), cap=gv.cap;
     const checks={
       spacing: sClear >= Math.max(1.5, 1.5*bar.d),           // ACI §25.2.3
       rhoMin:  As >= AsMin*(1-1e-9),                          // §10.6.1.1 / §10.3.1.2 basis
       rhoMax:  As <= AsMax,                                   // §10.6.1.1 (8%)
-      flex:    cap.phiMn >= Mu                                // §22.4 strength
+      flex:    gv.u <= 1                                      // §22.4 strength, every LRFD combination
     };
-    choice={bar,n:nBars,As,rbar,sClear,phiMn:cap.phiMn,rho:As/Ag,c:cap.c,cap,
+    choice={bar,n:nBars,As,rbar,sClear,phiMn:cap.phiMn,rho:As/Ag,c:cap.c,cap,govDem:gv.dm,
             manual:true, manTie:tieSel, checks, ok:Object.values(checks).every(Boolean)};
   }
   // ---- AUTO DESIGN MODE: iterate bar size & count to satisfy BOTH min steel and φMn ≥ Mu ----
@@ -2888,9 +2989,9 @@ function designRebar(inp,Mu,Pu,Vu){
       const perim = sq ? 8*rbar : 2*Math.PI*rbar;
       const sClear=perim/n - bar.d;
       if(sClear<Math.max(1.5, 1.5*bar.d)) continue;    // ACI §25.2 clear spacing
-      const cap=pmCapacity(shape, b_in, As, n, rbar, fc, fy, Pu);
-      if(cap.phiMn>=Mu){
-        choice={bar,n,As,rbar,sClear,phiMn:cap.phiMn,rho:As/Ag,c:cap.c,cap};
+      const gv=capAll(As, n, rbar);
+      if(gv.u<=1){
+        choice={bar,n,As,rbar,sClear,phiMn:gv.cap.phiMn,rho:As/Ag,c:gv.cap.c,cap:gv.cap,govDem:gv.dm};
         break outer;
       }
     }
@@ -2899,9 +3000,9 @@ function designRebar(inp,Mu,Pu,Vu){
   if(!choice){
     const bar=barByName('#11'), n=24, As=n*bar.a;
     const rbar=b_in/2-cover-dtie-bar.d/2;
-    const cap=pmCapacity(shape,b_in,As,n,rbar,fc,fy,Pu);
+    const gv=capAll(As, n, rbar), cap=gv.cap;
     const perimF = sq ? 8*rbar : 2*Math.PI*rbar;
-    choice={bar,n,As,rbar,sClear:perimF/n-bar.d,phiMn:cap.phiMn,rho:As/Ag,c:cap.c,cap,over:true};
+    choice={bar,n,As,rbar,sClear:perimF/n-bar.d,phiMn:cap.phiMn,rho:As/Ag,c:cap.c,cap,govDem:gv.dm,over:true};
   }
 
   // ---- ties ----
@@ -2974,7 +3075,8 @@ function anchorBolts(inp,gov,struct){
   for(let k=0;k<n;k++){
     const ang=th0 + k*360/n;
     const y=R*Math.cos((ang-thM)*RAD);      // signed dist along moment direction (in)
-    bolts.push({k:k+1,ang,y});
+    const v=R*Math.sin((ang-thM)*RAD);      // perpendicular coordinate (in), for A_Nc / e'_N
+    bolts.push({k:k+1,ang,y,v});
     sumY2+=y*y;
   }
   // elastic tension distribution: T_i = Mu·y_i/Σy² − Pu/n
@@ -3004,23 +3106,51 @@ function anchorBolts(inp,gov,struct){
   const Rproj=R + 1.5*hef;                            // unclipped projection radius
   const ca1=Redge - R;                               // edge distance from outer bolt to shaft face (in)
   const capR=Math.min(Rproj, Redge);                 // clipped by the shaft face
-  const ANc=Math.PI*capR*capR;                       // projected breakout area (in²) — circular cap
-  const arABar=Math.min(1, ANc/(n*ANco));            // ratio used in Ncbg (per-anchor Anco × n)
+  const ANcAll=Math.PI*capR*capR;                    // whole-group area (circular cap) — used for PRYOUT only
+  const arABar=Math.min(1, ANcAll/(n*ANco));         // ratio used in Ncbg (per-anchor Anco × n)
   // ψ_ed,N edge modification §17.6.2.4
   const camin=ca1;
   const psi_ed = camin>=1.5*hef ? 1.0 : 0.7 + 0.3*camin/(1.5*hef);
-  // ψ_ec,N eccentricity §17.6.2.3 — e'N = eccentricity of resultant tension from group centroid.
-  // For our symmetric circle under pure moment the tension resultant acts through the group
-  // centroid line, so e'N ≈ 0 → ψ_ec = 1.0 (documented). Kept general:
-  const eN=0;
-  const psi_ec = 1/(1 + 2*eN/(3*hef));               // ≤1.0
   const psi_c=1.0;                                    // §17.6.2.5 cracked concrete (conservative)
   const psi_cp=1.0;                                   // §17.6.2.6 cast-in → 1.0
+  // TENSION breakout uses the projected area of the anchors IN TENSION only (ACI 318-19
+  // §17.6.2.1, Fig. R17.6.2.1(b)): the union of the 3h_ef × 3h_ef squares around each
+  // tension bolt (axes along / across the moment direction), clipped by the shaft face,
+  // capped at n_T·A_Nco. Integrated numerically on a grid. (Previously the full bolt-circle
+  // cap was used for every case, overstating A_Nc when only part of the circle is in tension.)
+  const tb=tension.length? tension : bolts;           // no tension → all (breakout then irrelevant)
+  let ANcT=0;
+  { const NG=240, h=1.5*hef, L=2*Redge, dA=(L/NG)*(L/NG);
+    for(let i=0;i<NG;i++){ const u=-Redge+(i+0.5)*L/NG;
+      for(let j=0;j<NG;j++){ const w=-Redge+(j+0.5)*L/NG;
+        if(u*u+w*w>Redge*Redge) continue;
+        for(let q=0;q<tb.length;q++){ if(Math.abs(u-tb[q].y)<=h && Math.abs(w-tb[q].v)<=h){ ANcT+=dA; break; } }
+      } } }
+  const ANc=Math.min(ANcT, tb.length*ANco);
+  // ψ_ec,N §17.6.2.3 — e'_N = offset of the tension resultant from the centroid of the TENSION
+  // anchors, per axis (along / across the moment direction), factors multiplied.
+  let eN1=0, eN2=0;
+  if(Tsum>0){
+    const uR=tension.reduce((s,b)=>s+b.T*b.y,0)/Tsum, vR=tension.reduce((s,b)=>s+b.T*b.v,0)/Tsum;
+    const uC=tension.reduce((s,b)=>s+b.y,0)/tension.length, vC=tension.reduce((s,b)=>s+b.v,0)/tension.length;
+    eN1=Math.abs(uR-uC); eN2=Math.abs(vR-vC);
+  }
+  const eN=Math.hypot(eN1,eN2);
+  const psi_ec = Math.min(1,1/(1 + 2*eN1/(3*hef)))*Math.min(1,1/(1 + 2*eN2/(3*hef)));
   // group nominal breakout §17.6.2.1b:  Ncbg = (ANc/ANco)·ψ_ec·ψ_ed·ψ_c·ψ_cp·Nb
   const Ncbg = (ANc/ANco)*psi_ec*psi_ed*psi_c*psi_cp*Nb;
+  // pryout keeps the whole-group cone, no eccentricity (unchanged from the previous version)
+  const NcbgAll = (ANcAll/ANco)*psi_ed*psi_c*psi_cp*Nb;
   const hasAnchRe = anchRe==='yes';
-  const phiBrk = 0.75;                                // §17.5.3 (Condition B, supplementary reinf or anchor reinf)
+  // ACI 318-19 Table 17.5.3: Condition A (0.75) needs supplementary reinforcement crossing the
+  // failure surface — taken as the user's "anchor reinforcement: Provided" selection. With
+  // "None" the anchors are Condition B → φ = 0.70. (Previously 0.75 always, labelled "Condition B".)
+  const phiBrk = hasAnchRe ? 0.75 : 0.70;
+  const brkCond = hasAnchRe ? 'Condition A' : 'Condition B';
   const phiNcbg = phiBrk*Ncbg;
+  // side-face blowout §17.6.4 applies to headed anchors with c_a1 < 0.4·h_ef — NOT computed
+  // here (reported as "not checked" when it applies); shear breakout §17.7.2 is NOT computed.
+  const sfbApplies = ca1 < 0.4*hef;
 
   // ---- pullout (ACI §17.6.3), cast-in heavy hex head ----
   // Abrg = bearing area of head ≈ heavy hex: 0.5·(3d)·(3d)·(√3/2)-... use table approx.
@@ -3032,7 +3162,7 @@ function anchorBolts(inp,gov,struct){
 
   // ---- concrete pryout in shear (ACI §17.7.3) ----
   const kcp=hef>=2.5?2.0:1.0;
-  const Vcp=kcp*Ncbg;                        // §17.7.3.1 uses Ncbg for the group
+  const Vcp=kcp*NcbgAll;                     // §17.7.3.1 uses Ncbg of the whole group (all bolts)
   const phiVcp=0.70*Vcp;
 
   // ---- governing tension capacity (per anchor for steel/pullout; group for breakout) ----
@@ -3057,7 +3187,7 @@ function anchorBolts(inp,gov,struct){
 
   return {d,gr,n,BC,R,hef,th0,thM,Ase,bolts,sumY2,Tmax,Vb,tension,nT,Tsum,Mu,Pu,Vu,fc,lam,
           futa,Nsa,phiNsa,Vsa,phiVsa,
-          kc,Nb,ANco,ANc,Redge,Rproj,capR,ca1,psi_ed,psi_ec,eN,psi_c,psi_cp,Ncbg,phiNcbg,phiBrk,hasAnchRe,
+          kc,Nb,ANco,ANc,ANcAll,ANcT,Redge,Rproj,capR,ca1,psi_ed,psi_ec,eN,eN1,eN2,psi_c,psi_cp,Ncbg,NcbgAll,phiNcbg,phiBrk,brkCond,hasAnchRe,sfbApplies,
           Abrg,Np,Npn,phiNp,kcp,Vcp,phiVcp,phiNn,phiVn,tgov,tr,vr,inter,interOK,
           m,beff,Fyp,tpReq,Dpole};
 }
@@ -3078,17 +3208,50 @@ function solveEmbed(P,M,h,inp){
   return {d,rows};
 }
 
+// Anchor bolts for EVERY LRFD combination (each at its own governing wind azimuth). The bolt
+// tension depends on Mu·y/Σy² − Pu/n, so the lowest-axial combination (0.9D + W) can govern
+// even at equal moment. Returns the overall governing case (highest of tension, shear and
+// interaction utilisation) with byCheck = {T, V, I}: the governing case for EACH check.
+function anchorsAllCombos(inp, cands){
+  const res=cands.map(c=>{ const b=anchorBolts(inp,{Mang:c.Mang||0},{Mu:c.M,Pu:c.axial,Vu:c.P}); b.comboName=c.name; return b; });
+  const lim=b=>(b.vr>0.2&&b.tr>0.2)?1.2:1.0;
+  const pick=f=>res.reduce((a,x)=>(isNaN(f(x))||f(x)>f(a))?x:a, res[0]);
+  const T=pick(b=>b.tr), V=pick(b=>b.vr), I=pick(b=>b.inter/lim(b));
+  const gov=pick(b=>Math.max(b.tr,b.vr,b.inter/lim(b)));
+  return Object.assign({}, gov, {byCheck:{T,V,I}, allCombos:res});
+}
+
+// Rows appended to every anchor limit-state table: the ACI Ch.17 modes this tool does NOT
+// compute (shown prominently, never as a pass), and the governing LRFD combination per check.
+function boltNotCheckedRows(b){
+  const red='color:#a02818;font-weight:700;text-align:left';
+  let h=`<tr><td style="text-align:left">Concrete breakout in shear (§17.7.2)</td><td colspan="4" style="${red}">NOT CHECKED — anchors near the shaft face are often governed by shear breakout; verify separately.</td></tr>`;
+  h+= b.sfbApplies
+    ? `<tr><td style="text-align:left">Side-face blowout (§17.6.4)</td><td colspan="4" style="${red}">NOT CHECKED — applies (c<sub>a1</sub> = ${fmt(b.ca1,1)} in &lt; 0.4h<sub>ef</sub> = ${fmt(0.4*b.hef,1)} in); verify separately.</td></tr>`
+    : `<tr><td style="text-align:left">Side-face blowout (§17.6.4)</td><td colspan="4" style="text-align:left">N/A — c<sub>a1</sub> = ${fmt(b.ca1,1)} in ≥ 0.4h<sub>ef</sub> = ${fmt(0.4*b.hef,1)} in (§17.6.4.1)</td></tr>`;
+  if(b.byCheck) h+=`<tr><td colspan="5" style="text-align:left;font-size:11px">Governing LRFD combination (all combinations checked, 0.9D + W included): tension <b>${b.byCheck.T.comboName}</b> · shear <b>${b.byCheck.V.comboName}</b> · interaction <b>${b.byCheck.I.comboName}</b>. Rows above show <b>${b.comboName}</b>; φ<sub>breakout</sub> = ${fmt(b.phiBrk,2)} (${b.brkCond}).</td></tr>`;
+  return h;
+}
+
 // ================= SHARED FOUNDATION STACK =================
 // Given ASD demand (P,M,h,axial) and LRFD demand (Mu,Pu,Vu), run embedment, rebar, bearing,
 // and anchor bolts. Used by both the light-pole path and each sign post.
-function designFoundationStack(inp, asd, lrfd, MangLRFD){
+function designFoundationStack(inp, asd, lrfd, MangLRFD, lrfdAll, asdAll){
   const emb=solveEmbed(asd.P, asd.M, asd.h, inp);
   const d=emb.d, ratio=d/inp.b;
-  const Mu=lrfd.M, Pu=lrfd.axial, Vu=lrfd.P;
-  const reo=designRebar(inp, Mu, Pu, Vu);
-  const bearing=bearingCheck(inp, asd.axial);
-  const bolts=anchorBolts(inp, {Mang:(MangLRFD!==undefined?MangLRFD:0)}, {Mu,Pu,Vu});
-  return {emb,d,ratio,Mu,Pu,Vu,reo,bearing,bolts,
+  // Shaft P–M and anchors: EVERY LRFD combination (each at its own governing wind direction),
+  // governing case per check. lrfdAll omitted → the single max-moment case, as before.
+  const cands=(lrfdAll&&lrfdAll.length)? lrfdAll
+    : [{name:lrfd.name, M:lrfd.M, axial:lrfd.axial, P:lrfd.P, Mang:(MangLRFD!==undefined?MangLRFD:0)}];
+  const Vu=Math.max(...cands.map(c=>c.P));
+  const reo=designRebar(inp, lrfd.M, lrfd.axial, Vu, cands.map(c=>({Mu:c.M,Pu:c.axial,name:c.name})));
+  const gd=reo.long.govDem||{Mu:lrfd.M,Pu:lrfd.axial,name:lrfd.name};
+  const Mu=gd.Mu, Pu=gd.Pu;
+  // soil bearing: the MAXIMUM-axial ASD combination (not the max-moment one)
+  const asdB=(asdAll&&asdAll.length)? asdAll.reduce((a,x)=>x.axial>a.axial?x:a) : asd;
+  const bearing=bearingCheck(inp, asdB.axial); bearing.axial=asdB.axial; bearing.comboName=asdB.name;
+  const bolts=anchorsAllCombos(inp, cands);
+  return {emb,d,ratio,Mu,Pu,Vu,reo,bearing,bolts,shaftCombo:gd.name,
           shearOK:reo.tie.phiVc>=Vu, As:reo.long.As, AsMin:reo.AsMin,
           pick:`(${reo.long.n}) ${reo.long.bar.n}`, Ag:reo.Ag, phiVc:reo.tie.phiVc, dEff:reo.tie.dEff};
 }
@@ -3124,9 +3287,11 @@ function calcSign(inp){
                        phi:gLRFD.phi||0, per:[], poleWind:inp.__signPostWind||0,
                        poleWindM:0, Mang:gLRFD.phi||0};
     const found=designFoundationStack(inp,
-      {P:gASD.P,M:gASD.M,h:gASD.h,axial:gASD.axial},
-      {P:gLRFD.P,M:gLRFD.M,axial:gLRFD.axial},
-      gLRFD.phi||0);
+      {P:gASD.P,M:gASD.M,h:gASD.h,axial:gASD.axial,name:gASD.name},
+      {P:gLRFD.P,M:gLRFD.M,axial:gLRFD.axial,name:gLRFD.name},
+      gLRFD.phi||0,
+      lrfdCombos.map(x=>({name:x.name, M:x.M, axial:x.axial, P:x.P, Mang:x.phi||0})),
+      asdCombos.map(x=>({name:x.name, axial:x.axial})));
     // pole (post) stress: build a minimal gov with this post's LRFD force as a top point load
     const pstress=signPostStress(inp,poleSeg,pw,gLRFD,sw);
     postDesigns.push({p:p+1,gASD,gLRFD,found,pstress});
@@ -3150,7 +3315,7 @@ function signPostStress(inp,poleSeg,pw,gLRFD,sw){
   const Fsign=gLRFD.Fp||0;                 // factored wind share on this post (lb)
   const zsign=gLRFD.zarm||sw.zA;           // height of the sign resultant
   const wMast=(sw.Fpost>0 && sw.postExpH>0)?(f.W*sw.Fpost)/sw.postExpH:0;   // post self-wind per ft over EXPOSED (clearance) height only
-  const rows=poleSeg.segs.map(s=>{
+  const rows=poleSeg.segs.concat([poleBaseSection(poleSeg,inp)]).map(s=>{
     const z=s.zMid;
     let M=0,V=0,N=0;
     if(zsign>=z){ V+=Fsign; M+=Fsign*(zsign-z); }
@@ -3183,9 +3348,9 @@ function signPostStress(inp,poleSeg,pw,gLRFD,sw){
             Z:s.Sx,Fcr:mn.Fcr,Fb:phib*mn.Fcr,Fa:phic*Fy,ratio,form,ok:ratio<=1.0};
   });
   const fcr0=hssFcr(shape,poleSeg.segs[0].Dt_ratio,Fy,E);
-  // prismatic post → base governs
+  // prismatic post → base governs; rows[last] is now the BASE section itself (z = 0)
   const govRow=rows[rows.length-1];
-  return {rows,govRow,lam_p:fcr0.lp,lam_r:fcr0.lr,E,Fy,shape,prismatic:true,Kfac,phib,phic};
+  return {rows,govRow,lam_p:fcr0.lp,lam_r:fcr0.lr,E,Fy,shape,prismatic:true,Kfac,phib,phic,lim:hssLimitFlags(rows,shape,E,Fy)};
 }
 
 // ================= SIGN RENDER =================
@@ -3562,9 +3727,14 @@ function calc(){
   const emb=solveEmbed(govASD.P,govASD.M,govASD.h,inp);
   const d=emb.d, rows=emb.rows, ratio=d/inp.b;
 
-  // SHAFT is a strength/LRFD check -> use governing LRFD combination
-  const Mu=govLRFD.M, Pu=govLRFD.axial, Vu=govLRFD.P;
-  const reo=designRebar(inp,Mu,Pu,Vu);
+  // SHAFT is a strength/LRFD check -> EVERY LRFD combination (each at its governing wind
+  // direction); the P–M design must satisfy all of them, and the governing pair is reported.
+  // Shear uses the largest LRFD base shear.
+  const lrfdCands=lrfdList.map(r=>({name:r.name, M:r.M, axial:r.axial, P:r.P, Mang:r.Mang}));
+  const VuMax=Math.max(...lrfdCands.map(c=>c.P));
+  const reo=designRebar(inp,govLRFD.M,govLRFD.axial,VuMax,lrfdCands.map(c=>({Mu:c.M,Pu:c.axial,name:c.name})));
+  const shaftGov=reo.long.govDem||{Mu:govLRFD.M,Pu:govLRFD.axial,name:govLRFD.name};
+  const Mu=shaftGov.Mu, Pu=shaftGov.Pu, Vu=VuMax;
   const Ag=reo.Ag, AsMin=reo.AsMin, As=reo.long.As;
   const pick=`(${reo.long.n}) ${reo.long.bar.n}`+(reo.manual?` — checked${(reo.long.ok&&(!reo.tie.checks||reo.tie.checks.ok))?'':' (NG)'}`:'');
   const phiVc=reo.tie.phiVc, shearOK=phiVc>=Vu;
@@ -3573,18 +3743,19 @@ function calc(){
   // pole combined stress (governing wind direction of the governing LRFD combo)
   const pstress=poleStress(inp,poleSeg,comps,fxs,pw,govLRFD);
 
-  // soil bearing (service / ASD gravity — use governing ASD axial)
-  const bearing=bearingCheck(inp, govASD.axial);
+  // soil bearing (service / ASD gravity) — the MAXIMUM-axial ASD combination, not the
+  // max-moment one (e.g. D + 0.7Di carries more axial than D + 0.6W)
+  const govAxASD=asdList.reduce((a,x)=>x.axial>a.axial?x:a);
+  const bearing=bearingCheck(inp, govAxASD.axial); bearing.axial=govAxASD.axial; bearing.comboName=govAxASD.name;
 
-  // anchor bolts (LRFD)
-  const struct0={Mu,Pu,Vu};
-  const bolts=anchorBolts(inp,govLRFD,struct0);
+  // anchor bolts (LRFD) — every LRFD combination, governing case per check (0.9D + W included)
+  const bolts=anchorsAllCombos(inp, lrfdCands);
 
   // ---- headline outputs (embedment from ASD gov) ----
   $('oDepth').innerHTML=fmt(d,2)+'<span class="u"> ft</span>';
   $('oDia').innerHTML=fmt(inp.b,2)+'<span class="u"> ft</span>';
   $('oRatio').textContent=fmt(ratio,2);
-  $('oCase').textContent='ASD '+govASD.name+'  (embedment) · LRFD '+govLRFD.name+'  (shaft)';
+  $('oCase').textContent='ASD '+govASD.name+'  (embedment) · LRFD '+shaftGov.name+'  (shaft P–M)';
   $('oP').textContent=fmt(govASD.P,0)+' lb';
   $('oM').textContent=fmt(govASD.M,0)+' lb·ft';
   $('oH').textContent=fmt(govASD.h,2)+' ft';
@@ -3596,7 +3767,7 @@ function calc(){
   if(ratio>10)f+=`<div class="flag bad">d/b = ${fmt(ratio,1)} exceeds the rigid range — run a p-y / LPILE lateral analysis.</div>`;
   else if(ratio<3)f+=`<div class="flag">d/b = ${fmt(ratio,1)} is shallow for rigid-pier behavior; verify assumptions.</div>`;
   else f+=`<div class="flag ok">d/b = ${fmt(ratio,1)} within rigid short-pier range.</div>`;
-  f+=`<div class="flag ok">Embedment governed by ASD <b>${govASD.name}</b>; shaft governed by LRFD <b>${govLRFD.name}</b>.</div>`;
+  f+=`<div class="flag ok">Embedment governed by ASD <b>${govASD.name}</b>; shaft P–M governed by LRFD <b>${shaftGov.name}</b> (all LRFD combinations checked); soil bearing by ASD <b>${govAxASD.name}</b> (max axial); anchors: tension <b>${bolts.byCheck.T.comboName}</b>, shear <b>${bolts.byCheck.V.comboName}</b>, interaction <b>${bolts.byCheck.I.comboName}</b>.</div>`;
   if(!cablesEnabled){
     f+=`<div class="flag">Catenary system disabled — foundation driven by pole wind, fixtures, and self-weight only.</div>`;
   } else if(cables.length>=2){
@@ -3842,6 +4013,7 @@ function calc(){
     bt+=row('Pullout, per bolt (§17.6.3)',bolts.Tmax,bolts.phiNp);
     bt+=row('Steel shear, per bolt (§17.7.1)',bolts.Vb,bolts.phiVsa);
     bt+=row('Concrete pryout, group (§17.7.3)',bolts.Vu,bolts.phiVcp);
+    bt+=boltNotCheckedRows(bolts);
     $('boltTbl').innerHTML=bt;
     $('oBoltInt').innerHTML=`${fmt(bolts.inter,2)} ${bolts.vr<=0.2||bolts.tr<=0.2?'(uncoupled)':'≤ 1.2'} <span class="pill ${bolts.interOK?'ok':'bad'}">${bolts.interOK?'OK':'NG'}</span>`;
     $('oBoltBp').textContent=fmt(bolts.tpReq,3)+' in  (A36 base plate)';
@@ -3855,7 +4027,7 @@ function calc(){
   renderDemandExample(govASD,inp);
   renderEmbedExample(emb,inp,govASD.P,govASD.M,govASD.h);
   renderRebarExample(reo,inp,Mu,Pu,Vu);
-  renderBearingExample(bearing,govASD.axial,inp);
+  renderBearingExample(bearing,bearing.axial,inp);
   // Broms reference check — LRFD demands, kip units per AASHTO
   renderBromsExample(bromsEmbedment(inp, govLRFD.M/1000, govLRFD.P/1000), inp, govLRFD, Mu);
   // ---- summary tab (reads the same objects the tabs above consume) ----
@@ -3902,7 +4074,7 @@ function poleWorkedBody(pstress, inp, r){
   let H='';
 
   H+=step(`1 · Factored demands at this section (z = ${fmt(r.z,2)} ft), governing LRFD combination`);
-  H+=`<p class="eq-why">Axial, moment, and shear from everything above the cut are resolved along the governing wind direction. ${pstress.prismatic?'The post is prismatic, so capacity is constant and the base section (maximum moment) governs — this is that section.':'The section is tapered; every segment is checked and the worst demand/capacity ratio is shown.'}</p>`;
+  H+=`<p class="eq-why">Axial, moment, and shear from everything above the cut are resolved along the governing wind direction. ${pstress.prismatic?'The post is prismatic, so capacity is constant and the base section (maximum moment) governs — this is that section.':'The section is tapered; every segment (at mid-height) and the base section at z = 0 are checked and the worst demand/capacity ratio is shown.'}</p>`;
   H+=g(`P_r = ${fmt(r.Pr,2)}\\ \\text{kip}\\qquad M_r = ${fmt(r.M*12/1000,1)}\\ \\text{kip}{\\cdot}\\text{in} = ${fmt(r.M,0)}\\ \\text{lb}{\\cdot}\\text{ft}`);
 
   H+=step(`2 · Section properties — derived`);
@@ -4009,15 +4181,18 @@ function boltWorkedHTML(bo,inp){
   H+=`<p class="eq-why">Projected concrete failure areas — a single anchor projects a 1.5h<sub>ef</sub> cone in every direction; the bolt group's projection is capped by the shaft face at radius R<sub>edge</sub>:</p>`;
   H+=g(`A_{Nco} = 9h_{ef}^2 = 9(${fmt(bo.hef,1)})^2 = ${fmt(bo.ANco,0)}\\ \\text{in}^2`);
   H+=g(`R_{proj} = R_{bolt}+1.5h_{ef} = ${fmt(bo.R,1)}+${fmt(1.5*bo.hef,1)} = ${fmt(bo.Rproj,1)}\\text{ in},\\ \\ \\text{clip to }R_{edge}=${fmt(bo.Redge,1)}\\text{ in}`);
-  H+=g(`A_{Nc} = \\pi\\,[\\min(R_{proj},R_{edge})]^2 = \\pi(${fmt(bo.capR,1)})^2 = ${fmt(bo.ANc,0)}\\ \\text{in}^2`);
+  H+=g(`A_{Nc,all} = \\pi\\,[\\min(R_{proj},R_{edge})]^2 = \\pi(${fmt(bo.capR,1)})^2 = ${fmt(bo.ANcAll,0)}\\ \\text{in}^2\\quad(\\text{whole group — pryout only})`);
+  H+=`<p class="eq-why">Tension breakout uses only the anchors <b>in tension</b> (§17.6.2.1): A<sub>Nc</sub> is the union of the 3h<sub>ef</sub> × 3h<sub>ef</sub> squares around the ${bo.tension.length} tension bolt${bo.tension.length===1?'':'s'}, clipped by the shaft face (numerical integration), and capped at n<sub>T</sub>·A<sub>Nco</sub>:</p>`;
+  H+=g(`A_{Nc} = \\min\\left(${fmt(bo.ANcT,0)},\\ ${bo.tension.length||bo.n}\\times${fmt(bo.ANco,0)}\\right) = ${fmt(bo.ANc,0)}\\ \\text{in}^2`);
   H+=`<p class="eq-why">Modification factors: edge (ψ<sub>ed,N</sub>), eccentricity (ψ<sub>ec,N</sub>), cracking (ψ<sub>c,N</sub>), and cast-in splitting (ψ<sub>cp,N</sub> = 1.0):</p>`;
   const edEq = bo.ca1>=1.5*bo.hef
       ? `\\psi_{ed,N} = 1.0\\quad(c_{a,min}=${fmt(bo.ca1,1)}\\ge 1.5h_{ef}=${fmt(1.5*bo.hef,1)})`
       : `\\psi_{ed,N} = 0.7+0.3\\frac{c_{a,min}}{1.5h_{ef}} = 0.7+0.3\\frac{${fmt(bo.ca1,1)}}{${fmt(1.5*bo.hef,1)}} = ${fmt(bo.psi_ed,3)}`;
   H+=g(edEq);
-  H+=g(`\\psi_{ec,N} = ${fmt(bo.psi_ec,2)}\\ (e'_N\\approx0,\\text{ symmetric})\\qquad \\psi_{c,N} = ${fmt(bo.psi_c,1)}\\qquad \\psi_{cp,N} = ${fmt(bo.psi_cp,1)}`);
+  H+=g(`\\psi_{ec,N} = \\frac{1}{1+\\frac{2e'_{N1}}{3h_{ef}}}\\cdot\\frac{1}{1+\\frac{2e'_{N2}}{3h_{ef}}} = ${fmt(bo.psi_ec,3)}\\ (e'_{N1}=${fmt(bo.eN1,2)},\\ e'_{N2}=${fmt(bo.eN2,2)}\\text{ in, tension anchors})\\qquad \\psi_{c,N} = ${fmt(bo.psi_c,1)}\\qquad \\psi_{cp,N} = ${fmt(bo.psi_cp,1)}`);
   H+=g(`N_{cbg} = \\frac{A_{Nc}}{A_{Nco}}\\,\\psi_{ec,N}\\psi_{ed,N}\\psi_{c,N}\\psi_{cp,N}\\,N_b = \\frac{${fmt(bo.ANc,0)}}{${fmt(bo.ANco,0)}}(${fmt(bo.psi_ec,2)})(${fmt(bo.psi_ed,3)})(${fmt(bo.psi_c,1)})(${fmt(bo.psi_cp,1)})(${fmt(bo.Nb,0)})`);
   H+=g(`N_{cbg} = ${fmt(bo.Ncbg,0)}\\ \\text{lb}\\quad\\Rightarrow\\quad \\phi N_{cbg} = ${fmt(bo.phiBrk,2)}N_{cbg} = ${fmt(bo.phiNcbg,0)}\\ \\text{lb}`);
+  H+=`<p class="eq-why">φ = ${fmt(bo.phiBrk,2)} — ${bo.brkCond} (ACI 318-19 Table 17.5.3): ${bo.hasAnchRe?'reinforcement is selected as provided, taken as supplementary reinforcement crossing the failure surface':'no anchor/supplementary reinforcement selected'}.</p>`;
   if(bo.hasAnchRe){
     H+=`<p class="eq-result">Anchor reinforcement is provided, so per §17.5.2.1 the breakout limit state is carried by the developed tie cage and need not govern the anchor tension. φN<sub>cbg</sub> = ${fmt(bo.phiNcbg,0)} lb is shown for reference.</p>`;
   } else {
@@ -4038,7 +4213,8 @@ function boltWorkedHTML(bo,inp){
 
   // 6 — pryout
   H+=step(`6 · Concrete pryout in shear, V<sub>cpg</sub> ${ref('§17.7.3')}`);
-  H+=g(`k_{cp} = ${fmt(bo.kcp,1)}\\ (h_{ef}${bo.hef>=2.5?'\\ge':'<'}2.5\\text{ in})\\qquad V_{cpg} = k_{cp}\\,N_{cbg} = ${fmt(bo.kcp,1)}(${fmt(bo.Ncbg,0)}) = ${fmt(bo.Vcp,0)}\\ \\text{lb}`);
+  H+=g(`N_{cbg,all} = \\frac{A_{Nc,all}}{A_{Nco}}\\psi_{ed,N}\\psi_{c,N}\\psi_{cp,N}N_b = ${fmt(bo.NcbgAll,0)}\\ \\text{lb}\\quad(\\text{whole group, }\\psi_{ec,N}=1)`);
+  H+=g(`k_{cp} = ${fmt(bo.kcp,1)}\\ (h_{ef}${bo.hef>=2.5?'\\ge':'<'}2.5\\text{ in})\\qquad V_{cpg} = k_{cp}\\,N_{cbg,all} = ${fmt(bo.kcp,1)}(${fmt(bo.NcbgAll,0)}) = ${fmt(bo.Vcp,0)}\\ \\text{lb}`);
   H+=g(`\\phi V_{cpg} = 0.70V_{cpg} = ${fmt(bo.phiVcp,0)}\\ \\text{lb}`);
 
   // 7 — governing capacities + interaction
@@ -4418,9 +4594,10 @@ function demandWorkedHTML(gov, inp){
   H+=`<p class="eq-why">The embedment is a service-level (ASD) check. The governing combination is <b>${gov.name||'—'}</b>${gov.phi!==undefined?`, with wind toward φ = ${fmt(gov.phi,0)}°`:''}. Everything above grade is assembled as vectors in the plan frame so opposing contributions genuinely cancel.</p>`;
   if(gov.per && gov.per.length){
     H+=`<p class="eq-why"><b>Per-cable factored reactions</b> — each cable's factored vertical line load w_v and wind line load w_h produce an along-cable pull H∥ and a vertical reaction V_c; the pulls resolve to global X/Y:</p>`;
-    H+=`<table class="tbl"><tr><th>Cable</th><th>w_v<span class="sym">(lb/ft)</span></th><th>w_h<span class="sym">(lb/ft)</span></th><th>H∥<span class="sym">(lb)</span></th><th>V_c<span class="sym">(lb)</span></th><th>H_x<span class="sym">(lb)</span></th><th>H_y<span class="sym">(lb)</span></th></tr>`;
-    gov.per.forEach((r,i)=>{H+=`<tr><td>C${i+1}</td><td>${fmt(r.wv,3)}</td><td>${fmt(r.wh,3)}</td><td>${fmt(r.Hpull,0)}</td><td>${fmt(r.Vc,0)}</td><td>${fmt(r.Hx,0)}</td><td>${fmt(r.Hy,0)}</td></tr>`;});
+    H+=`<table class="tbl"><tr><th>Cable</th><th>w_v<span class="sym">(lb/ft)</span></th><th>w_h<span class="sym">(lb/ft)</span></th><th>H∥<span class="sym">(lb)</span></th><th>V_c<span class="sym">(lb)</span></th><th>H_x<span class="sym">(lb)</span></th><th>H_y<span class="sym">(lb)</span></th><th>H_w = w_h·L/2<span class="sym">(lb, along wind)</span></th></tr>`;
+    gov.per.forEach((r,i)=>{H+=`<tr><td>C${i+1}</td><td>${fmt(r.wv,3)}</td><td>${fmt(r.wh,3)}</td><td>${fmt(r.Hpull,0)}</td><td>${fmt(r.Vc,0)}</td><td>${fmt(r.Hx,0)}</td><td>${fmt(r.Hy,0)}</td><td>${fmt(r.Hw||0,0)}</td></tr>`;});
     H+=`</table>`;
+    H+=`<p class="eq-why">H_w is each cable's transverse wind support reaction (half the span's wind line load), applied along the wind direction at the cable attach height in addition to the along-cable pull.</p>`;
   }
   H+=step(`2 · Resultant base shear &amp; overturning moment (vector sum)`);
   if(gov.Vx!==undefined){
@@ -4800,7 +4977,7 @@ function buildReport(inp,allCombos,gov,embed,struct){
 
   // ---- 4c. Pole combined stress ----
   H+=`<details class="rpt-sec"><summary><span class="tag">4c</span><h3>Pole combined stress — AISC 360-16 (LRFD)</h3><span class="arw">▶</span></summary><div class="rpt-body">`;
-  H+=`<p class="eq-why">The pole is checked as a cantilevered HSS. ${pstress.prismatic?'The section is prismatic, so the base (maximum moment) governs.':'Each of the ten segments is checked; the worst is shown.'} The full derivation — section classification (§F8/§F7), nominal flexure M<sub>n</sub> from the plastic modulus, compression P<sub>n</sub> by Chapter E flexural buckling (K = 2.1 flagpole), and the §H1.1 interaction — is given below with numbers substituted.</p>`;
+  H+=`<p class="eq-why">The pole is checked as a cantilevered HSS. ${pstress.prismatic?'The section is prismatic, so the base (maximum moment) governs.':'Each of the ten segments (at mid-height) and the base section at z = 0 is checked; the worst is shown.'} The full derivation — section classification (§F8/§F7), nominal flexure M<sub>n</sub> from the plastic modulus, compression P<sub>n</sub> by Chapter E flexural buckling (K = 2.1 flagpole), and the §H1.1 interaction — is given below with numbers substituted.</p>`;
   const pr=pstress.govRow;
   H+=poleWorkedReportHTML(pstress, inp, pr);
   H+=`<table class="matrix"><caption>Interaction at every segment (governing wind direction). Highlighted row governs.</caption><thead><tr><th>Seg</th><th>z<span class="sym">ft</span></th><th>${pstress.rows[0]?pstress.rows[0].slendKind:'D/t'}</th><th>Class</th><th>P_r<span class="sym">kip</span></th><th>M_r<span class="sym">k·in</span></th><th>φP_n<span class="sym">kip</span></th><th>φM_n<span class="sym">k·in</span></th><th>H1.1</th></tr></thead><tbody>`;
@@ -4868,7 +5045,7 @@ function buildReport(inp,allCombos,gov,embed,struct){
   H+=eqB(
     'Vertical bearing pressure at the base',
     `The axial load N is divided by the circular base area A_base = π/4·b². The result is checked against the allowable bearing q_allow.`,
-    `A_{base}=\\frac{\\pi}{4}b^2=\\frac{\\pi}{4}(${n(b,2)})^2=${n(bearing.Abase,2)}\\ \\text{ft}^2\\qquad q=\\frac{N}{A_{base}}=\\frac{${n(govASD.axial,0)}/1000}{${n(bearing.Abase,2)}}=${n(bearing.q,2)}\\ \\text{ksf}`,
+    `A_{base}=\\frac{\\pi}{4}b^2=\\frac{\\pi}{4}(${n(b,2)})^2=${n(bearing.Abase,2)}\\ \\text{ft}^2\\qquad q=\\frac{N}{A_{base}}=\\frac{${n(bearing.axial!==undefined?bearing.axial:govASD.axial,0)}/1000}{${n(bearing.Abase,2)}}=${n(bearing.q,2)}\\ \\text{ksf}`,
     `q = ${n(bearing.q,2)} ksf ${bearing.ok?'≤':'>'} q_allow = ${n(bearing.qAllow,2)} ksf — ${bearing.ok?'bearing is adequate':'bearing exceeded; increase shaft diameter or improve bearing stratum'} (utilization ${n(bearing.ratio*100,0)}%).`,
     'IBC Table 1806.2');
   H+=`</div></details>`;
@@ -5318,6 +5495,7 @@ function populateDetailStack(sfx, ctx){
   bt+=row('Pullout, per bolt (§17.6.3)',bolts.Tmax,bolts.phiNp);
   bt+=row('Steel shear, per bolt (§17.7.1)',bolts.Vb,bolts.phiVsa);
   bt+=row('Concrete pryout, group (§17.7.3)',bolts.Vu,bolts.phiVcp);
+  bt+=boltNotCheckedRows(bolts);
   S('boltTbl').innerHTML=bt;
   S('oBoltInt').innerHTML=`${fmt(bolts.inter,2)} ${bolts.vr<=0.2||bolts.tr<=0.2?'(uncoupled)':'≤ 1.2'} <span class="pill ${bolts.interOK?'ok':'bad'}">${bolts.interOK?'OK':'NG'}</span>`;
   S('oBoltBp').textContent=fmt(bolts.tpReq,3)+' in  (A36 base plate)';
@@ -5339,7 +5517,7 @@ function populateDetailStack(sfx, ctx){
   renderDemandExample(asd, inp, sfx);
   renderEmbedExample({d, rows:ctx.rows||[]}, inp, asd.P, asd.M, asd.h, sfx);
   renderRebarExample(reo, inp, Mu, Pu, Vu, sfx);
-  renderBearingExample(bearing, asd.axial, inp, sfx);
+  renderBearingExample(bearing, (bearing.axial!==undefined?bearing.axial:asd.axial), inp, sfx);
   // Broms reference check per post (LRFD demands, kip units per AASHTO)
   renderBromsExample(bromsEmbedment(inp, Mu/1000, Vu/1000), inp, {name:ctx.lrfdName||'governing LRFD'}, Mu, sfx);
 }
@@ -5621,7 +5799,12 @@ function applyPostSelection(){
   refreshProjectList(activeProject||'');
   updateStatus();
   // restore last active tab
-  try{ const t=localStorage.getItem('activeTab'); if(t) switchTab(t); }catch(e){}
+  // 'activeTab' is a generic key shared by every file:// page in Chromium. Keep the key, but
+  // only honour a stored value that is one of THIS tool's tab names; anything else is ignored
+  // (a foreign value used to hide every tab page).
+  try{ const t=localStorage.getItem('activeTab');
+       const valid=Array.from(document.querySelectorAll('#tabBar button')).some(b=>b.dataset.tab===t);
+       if(t && valid) switchTab(t); }catch(e){}
 })();
 
 // KaTeX loads with defer; re-render once ready
