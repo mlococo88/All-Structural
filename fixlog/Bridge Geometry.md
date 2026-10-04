@@ -343,3 +343,252 @@ Feature (no result change): "← All tools" link to `tools.html` (`target="_top"
 - **Check case:** n/a, no computed value changes. Functional check: see How verified.
 - **How verified:** `node --check` on the inline script; page loaded in jsdom; link found. `git diff` is a single added line.
 - **Other copies:** BridgeXfer v1 and the `BXProject` glue are also in index.html, lldf.html, psbeam.html, stgirder.html and Moving Load Generator.html (this PR).
+
+## 2026-10-04 — PR: claude/conn-geometry-lldf (PR link added after merge)
+
+Feature (no result change): Bridge Geometry becomes a sender on `bridgeSuite.v1.lldfGeom` (HANDOFF.md §4.2) for the LL & DL Distribution tool (lldf.html).
+
+### H1. "Send to LL & DL" and "Export hand-off (JSON)"   [feature: hand-off (no result change)]
+- **Where:**
+  - Header `.projbar`, after the Import JSON file input. Anchor: `<input type="file" id="proj_file"` (hunk 1).
+  - End of file: two new plain `<script>` blocks after the main script. The first is the BridgeXfer v1 paste (verbatim from HANDOFF.md §5). The second is the hand-off code (`bgxBuildLldfGeom`, review dialog). Anchor: `</script>\n</body>` (hunk 2).
+- **Problem:** none (feature). Approved connection Bridge Geometry → lldf.
+- **What it does:**
+  - Both buttons open a review dialog. It has three choices, a preview of every value and the notes, and the buttons Send / Export / Cancel. Send calls `BridgeXfer.publish('lldfGeom', …)`, which writes the key and `.updatedAt`. Export downloads the same payload.
+  - The dialog only reads this tool's state. It writes nothing into Bridge Geometry's project, library or autosave, and no output table changes.
+  - **Spans** = distance along the straight abutment-to-abutment chord (construction reference line) between the chord projections of the support points (`ENG.supportChordT`). The default is between support centerlines; the choice is between bearing lines (the last bearing line of support i to the first bearing line of support i+1).
+  - **Skew** = |skew| per support, measured from the normal to that chord. The default sent value is the largest; the choices are the smallest or the average. All per-support values are listed in `notes`.
+  - **Spacings** = differences of the sorted girder offsets (global by default, or the chosen span's override set). They are measured perpendicular to the reference line.
+  - **O_L / O_R** = deck edge to exterior girder centerline.
+  - When there are fewer than two girders, no spacing, overhangs or N_b are sent, and `notes` say so. When other spans have their own layout, the `notes` say that layout was not sent.
+- **Mapping:**
+
+| Bridge Geometry (source) | Payload field | lldf input | Units |
+|---|---|---|---|
+| Chord distance between consecutive supports: `supportChordT(sta[i+1]) − supportChordT(sta[i])`, support centerlines (default) or bearing lines (choice) | `inputs.spans[]` | Span lengths L₁…Lₙ (`state.spans`) | ft, rounded 0.001 |
+| \|skew\| per support (degrees from the normal to the chord); largest (default), smallest or average (choice) | `inputs.skew` | Skew θ (`#skew`) | deg |
+| Differences of the sorted girder offsets (global, or one span's override set, choice) | `inputs.spacings[]` | Girder spacing table (`state.spacings`) | ft, rounded 0.001 |
+| Number of girders | `Nb` | N_b (= spacings + 1) | — |
+| girder 1 offset − left deck edge | `inputs.OL` | Left overhang O_L (`#OL`) | ft |
+| right deck edge − last girder offset | `inputs.OR` | Right overhang O_R (`#OR`) | ft |
+| shared project info, else library entry name | `project{name,bridgeId}` | Project (`#mProject`) only if blank | — |
+| (not sent) | `de:null` | lldf keeps its own curb/railing inputs; d_e unchanged in method | — |
+
+- **Governing provision:** n/a. No formula, factor, unit or code reference changed. Every geometric quantity is read from existing engine functions (`buildEngine().supportChordT`, `bearingLinesFor`, `GIRDERS`, `SPAN_OV`, `edgesForSpan`, `sortedUnits`).
+
+HUNK 1 (≈ line 156 of the old file)
+- **Before:**
+  ```html
+      <button class="sm ghost" id="proj_load" title="Import a bridge from a JSON file.">Import JSON</button>
+      <input type="file" id="proj_file" accept="application/json,.json" style="display:none">
+      <span class="note" id="save_status" style="margin-left:auto;">—</span>
+    </div>
+  ```
+- **After:**
+  ```html
+      <button class="sm ghost" id="proj_load" title="Import a bridge from a JSON file.">Import JSON</button>
+      <input type="file" id="proj_file" accept="application/json,.json" style="display:none">
+      <span class="sep" style="display:inline-block;width:1px;height:18px;background:var(--graphite);margin:0 2px;"></span>
+      <button class="sm ghost" id="bgx_send" type="button" title="Send spans, girder spacing, skew and overhangs to the LL &amp; DL Distribution tool (lldf.html). You review the values and choices first; LL &amp; DL asks again before applying anything.">Send to LL &amp; DL</button>
+      <button class="sm ghost" id="bgx_export" type="button" title="Download the same LL &amp; DL geometry hand-off as a JSON file (for another browser or device, or the calc package).">Export hand-off (JSON)</button>
+      <span class="note" id="save_status" style="margin-left:auto;">—</span>
+    </div>
+  ```
+
+HUNK 2 (≈ line 4615 of the old file)
+- **Before:**
+  ```html
+  else { setStatus('autosave OFF — browser storage blocked here. Use Export JSON to save.'); }
+  </script>
+  </body>
+  </html>
+  ```
+- **After:**
+  ```html
+  else { setStatus('autosave OFF — browser storage blocked here. Use Export JSON to save.'); }
+  </script>
+  <script>
+  /* BridgeXfer v1 verbatim from HANDOFF.md §5 (not repeated here) */
+  </script>
+  <script>
+  /* ===== Hand-off: Bridge Geometry -> LL & DL Distribution (lldf.html) =====
+     Channel bridgeSuite.v1.lldfGeom, _schema 'bridge-lldf-geometry' (HANDOFF.md §4.2). Writes the shape
+     lldf.html already consumes (its K_GEOM reader): inputs.spans / inputs.spacings / inputs.skew /
+     inputs.OL / inputs.OR, plus Nb. Read-only on this tool's state: nothing here changes any
+     geometry result, and nothing is saved in this tool's project format. Uses BridgeXfer above. */
+  (function(){
+    'use strict';
+    const r3=v=>+(+v).toFixed(3), r2=v=>+(+v).toFixed(2);
+    const escT=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+    /* Build the payload. opt = {spanBasis:'cl'|'brg', skewRule:'max'|'min'|'mean', girders:'global'|'<span no.>'}.
+       Returns {payload, summary[]} or {error}. */
+    function bgxBuildLldfGeom(opt){
+      opt=opt||{};
+      const spanBasis=(opt.spanBasis==='brg')?'brg':'cl';
+      const skewRule=(['max','min','mean'].indexOf(opt.skewRule)>=0)?opt.skewRule:'max';
+      const gsrc=opt.girders||'global';
+      const gErr=geometryInputErrors();
+      if(gErr.length) return {error:'Fix the geometry input errors first: '+gErr[0]};
+      const su=sortedUnits();
+      if(su.length<2) return {error:'Define at least two supports (Abut 1 and Abut 2) first.'};
+      let E; try{ E=buildEngine(); }catch(e){ return {error:'The geometry engine failed: '+(e&&e.message||e)}; }
+      if(!E||!E.chord) return {error:'No abutment-to-abutment chord: define at least two supports first.'};
+
+      // ---- spans: distance ALONG THE CHORD (construction reference line) between support points ----
+      const spans=[];
+      for(let i=0;i<su.length-1;i++){
+        let a=su[i].sta, b=su[i+1].sta;
+        if(spanBasis==='brg'){ const A=bearingLinesFor(su[i]), B=bearingLinesFor(su[i+1]); a=A[A.length-1].sta; b=B[0].sta; }
+        const L=E.supportChordT(b)-E.supportChordT(a);
+        if(!(isFinite(L)&&L>0)) return {error:'Span '+(i+1)+' ('+su[i].name+' to '+su[i+1].name+') has no positive length along the chord. Check the support stations'+(spanBasis==='brg'?' and pier bearing offsets':'')+'.'};
+        spans.push(r3(L));
+      }
+
+      // ---- skew: per support, from the normal to the chord; the sign is dropped ----
+      const sk=su.map(u=>Math.abs(+u.skew||0));
+      if(sk.some(v=>!isFinite(v)||v>=90)) return {error:'A support skew is not a number between -90 and 90 degrees.'};
+      const skewVal=r2(skewRule==='min'?Math.min.apply(null,sk):(skewRule==='mean'?sk.reduce((s,v)=>s+v,0)/sk.length:Math.max.apply(null,sk)));
+
+      // ---- girders and deck edges (ft from the construction reference line, left negative) ----
+      let offs, eL, eR, layoutLbl;
+      if(gsrc==='global'){
+        offs=GIRDERS.slice(); eL=+document.getElementById('edge_l').value; eR=+document.getElementById('edge_r').value;
+        layoutLbl='the global girder offsets and deck edges';
+      } else {
+        const s=+gsrc, ov=SPAN_OV[s]||{}, b=bridgeCL(), ed=edgesForSpan(s);
+        offs=(ov.girders||GIRDERS).slice(); eL=ed.l-b; eR=ed.r-b;
+        layoutLbl='the span '+s+' girder offsets and deck edges';
+      }
+      offs=offs.map(Number).filter(v=>isFinite(v)).sort((x,y)=>x-y);
+      const inputs={spans:spans, skew:skewVal};
+      const notes=[], units={spans:'ft', skew:'deg'};
+      let Nb=null;
+      if(offs.length>=2){
+        const sp=[]; for(let k=1;k<offs.length;k++) sp.push(r3(offs[k]-offs[k-1]));
+        if(sp.some(v=>!(v>0))) return {error:'Two girders have the same offset. Fix the girder table first.'};
+        inputs.spacings=sp; Nb=offs.length; units.spacings='ft';
+        const OL=offs[0]-eL, OR=eR-offs[offs.length-1];
+        if(isFinite(OL)&&OL>=0){ inputs.OL=r3(OL); units.OL='ft'; }
+        else notes.push('Left overhang not sent: the left deck edge is not outside girder 1.');
+        if(isFinite(OR)&&OR>=0){ inputs.OR=r3(OR); units.OR='ft'; }
+        else notes.push('Right overhang not sent: the right deck edge is not outside the last girder.');
+      } else {
+        notes.push('No girder spacing sent: Bridge Geometry has fewer than two girders in '+layoutLbl+'. Only spans and skew are sent.');
+      }
+
+      // ---- notes the receiver must display (HANDOFF.md §2, §4.2) ----
+      notes.unshift(
+        'Spans are measured along the straight abutment-to-abutment chord (the construction reference line), between '
+          +(spanBasis==='brg'?'bearing lines (pier bearing offsets applied; abutments at their bearing line)':'support centerlines (the support stations)')
+          +'. On a curved alignment these differ from the PGL station differences in the Bridge Geometry span summary. Rounded to 0.001 ft.',
+        'Skew is measured at each support from the normal to the construction reference line chord (0 deg = support square to the chord); the sign is dropped. '
+          +'Per support: '+su.map((u,i)=>u.name+' '+sk[i].toFixed(2)).join(', ')+' deg. Sent: the '
+          +(skewRule==='min'?'smallest':(skewRule==='mean'?'average':'largest'))+' |skew| = '+skewVal.toFixed(2)+' deg.',
+        (Nb?('Girder spacings and overhangs are from '+layoutLbl+', measured perpendicular to the reference line (girders are parallel to it), girders numbered left to right looking up-station. '
+          +'Overhang = deck edge to exterior girder centerline. No barrier face or d_e is sent; LL & DL keeps its own curb/railing inputs.'):'')
+      );
+      if(notes[2]==='') notes.splice(2,1);
+      const diff=[]; for(let s=1;s<su.length;s++){ const ov=SPAN_OV[s]; if(ov&&(ov.girders||ov.edgeL!=null||ov.edgeR!=null)&&String(s)!==String(gsrc)) diff.push(s); }
+      if(diff.length) notes.push('Span'+(diff.length>1?'s ':' ')+diff.join(', ')+' '+(diff.length>1?'have':'has')+' a different girder or deck-edge layout in Bridge Geometry, which was NOT sent.');
+      if(spans.length>6) notes.push('Bridge Geometry has '+spans.length+' spans; LL & DL is built for up to 6.');
+
+      const shared=(window.BridgeXfer&&BridgeXfer.sharedProject())||null;
+      const project=(shared&&(shared.name||shared.bridgeId))?shared:{name:(typeof CURRENT_NAME!=='undefined'&&CURRENT_NAME)||'', bridgeId:''};
+      const payload={_schema:'bridge-lldf-geometry', schemaVersion:1,
+        producer:'Bridge Geometry', producerFile:'Bridge Geometry.html', producedAt:new Date().toISOString(),
+        project:project, units:units, notes:notes,
+        basis:{spans:(spanBasis==='brg'?'chord, bearing lines':'chord, support centerlines'), skew:skewRule, girders:gsrc},
+        de:null, inputs:inputs};
+      if(Nb) payload.Nb=Nb;
+      const summary=[
+        ['Spans', spans.map(v=>v.toFixed(3)).join(' / ')+' ft'],
+        ['Skew θ', skewVal.toFixed(2)+'°'],
+        ['Beams N_b', Nb?String(Nb):'— (not sent)'],
+        ['Girder spacings', inputs.spacings?inputs.spacings.map(v=>v.toFixed(3)).join(' / ')+' ft':'— (not sent)'],
+        ['Overhang O_L / O_R', (inputs.OL!=null?inputs.OL.toFixed(3):'—')+' / '+(inputs.OR!=null?inputs.OR.toFixed(3):'—')+' ft'],
+        ['Project', project.name||'—']
+      ];
+      return {payload:payload, summary:summary};
+    }
+    window.bgxBuildLldfGeom=bgxBuildLldfGeom;
+
+    /* ---- review dialog: the engineer sees and picks the assumptions before anything is sent ---- */
+    let dlg=null;
+    function opts(){ return { spanBasis:dlg.querySelector('#bgx_span').value, skewRule:dlg.querySelector('#bgx_skew').value, girders:dlg.querySelector('#bgx_gird').value }; }
+    function refresh(){
+      const r=bgxBuildLldfGeom(opts()), out=dlg.querySelector('#bgx_prev');
+      const ok=!r.error;
+      dlg.querySelector('#bgx_do_send').disabled=!ok; dlg.querySelector('#bgx_do_export').disabled=!ok;
+      if(!ok){ out.innerHTML='<p style="color:var(--oxide);margin:6px 0">'+escT(r.error)+'</p>'; return null; }
+      out.innerHTML='<table style="font-size:12px;margin:6px 0"><tbody>'+r.summary.map(x=>'<tr><td class="lbl" style="text-align:left">'+escT(x[0])+'</td><td style="text-align:left">'+escT(x[1])+'</td></tr>').join('')+'</tbody></table>'
+        +'<p class="note" style="margin:4px 0 0">Notes sent with the data (shown in LL &amp; DL):</p><ul class="note" style="margin:2px 0 0 18px;padding:0">'+r.payload.notes.map(t=>'<li>'+escT(t)+'</li>').join('')+'</ul>';
+      return r;
+    }
+    function openDlg(){
+      if(!dlg){
+        dlg=document.createElement('div'); dlg.className='noprint'; dlg.id='bgx_dlg';
+        dlg.style.cssText='position:fixed;inset:0;z-index:60;background:rgba(0,0,0,.35);display:flex;align-items:flex-start;justify-content:center;overflow:auto;padding:40px 12px';
+        dlg.innerHTML='<div style="background:var(--vellum);color:var(--ink);border:1px solid var(--ink);max-width:640px;width:100%;padding:14px 16px;font-size:13px">'
+          +'<h2 class="sec" style="margin-top:0">Send geometry to LL &amp; DL Distribution</h2>'
+          +'<p class="note" style="margin-top:0">LL &amp; DL shows these values and asks before it overwrites anything. Pick how the values are taken from this bridge:</p>'
+          +'<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px">'
+          +'<div><label>Span length between</label><select id="bgx_span"><option value="cl" selected>support centerlines</option><option value="brg">bearing lines</option></select></div>'
+          +'<div><label>Skew sent (one value)</label><select id="bgx_skew"><option value="max" selected>largest |skew|</option><option value="min">smallest |skew|</option><option value="mean">average |skew|</option></select></div>'
+          +'<div><label>Girder layout from</label><select id="bgx_gird"></select></div></div>'
+          +'<div id="bgx_prev"></div>'
+          +'<div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap"><button class="sm" id="bgx_do_send" type="button">Send to LL &amp; DL</button>'
+          +'<button class="sm ghost" id="bgx_do_export" type="button">Export hand-off (JSON)</button>'
+          +'<button class="sm ghost" id="bgx_cancel" type="button" style="margin-left:auto">Cancel</button></div></div>';
+        document.body.appendChild(dlg);
+        ['#bgx_span','#bgx_skew','#bgx_gird'].forEach(id=>dlg.querySelector(id).addEventListener('change',refresh));
+        dlg.querySelector('#bgx_cancel').addEventListener('click',()=>{ dlg.style.display='none'; });
+        dlg.querySelector('#bgx_do_send').addEventListener('click',()=>{
+          const r=refresh(); if(!r) return;
+          if(!window.BridgeXfer){ alert('Hand-off helper is not available.'); return; }
+          const res=BridgeXfer.publish('lldfGeom', r.payload, 'Bridge Geometry', 'Bridge Geometry.html');
+          if(res.error){ alert('Not sent: '+res.error); return; }
+          dlg.style.display='none';
+          setStatus('sent to LL & DL — open lldf.html and click "Pull from Bridge Geometry"');
+        });
+        dlg.querySelector('#bgx_do_export').addEventListener('click',()=>{
+          const r=refresh(); if(!r) return;
+          const res=window.BridgeXfer?BridgeXfer.exportFile('lldfGeom', r.payload):{error:'Hand-off helper is not available.'};
+          if(res.error){ alert(res.error); return; }
+          setStatus('hand-off JSON exported');
+        });
+      }
+      // girder-layout choices: the global set, plus each span (marked when it has its own overrides)
+      const sel=dlg.querySelector('#bgx_gird'), prev=sel.value||'global', su=sortedUnits();
+      let h='<option value="global">global offsets</option>';
+      for(let s=1;s<su.length;s++){ const ov=SPAN_OV[s]; const own=ov&&(ov.girders||ov.edgeL!=null||ov.edgeR!=null);
+        h+='<option value="'+s+'">span '+s+(own?' (own layout)':'')+'</option>'; }
+      sel.innerHTML=h; sel.value=[...sel.options].some(o=>o.value===prev)?prev:'global';
+      dlg.style.display='flex';
+      refresh();
+    }
+    window.bgxOpenLldfGeom=openDlg;
+    const bs=document.getElementById('bgx_send'), be=document.getElementById('bgx_export');
+    if(bs) bs.addEventListener('click',openDlg);
+    if(be) be.addEventListener('click',openDlg);
+  })();
+  </script>
+  </body>
+  </html>
+  ```
+
+- **Check case (hand-checkable, the fresh-page demo bridge with Abut 1 skew 10°, Pier 1 15°, Abut 2 −5°):**
+  - Supports: stations 0+00 / 5+00 / 10+00 on the demo alignment (POB due east; tangent 200, spiral 150, curve R 800 L 300, spiral 150, tangent 200). The alignment is symmetric about 5+00.
+  - Chord: Abut 1 (0, 0) to Abut 2 (934.856, −270.087), so chord length = √(934.856² + 270.087²) = 973.089 ft.
+  - The pier point (467.428, −135.044) lies on the chord at t = √(467.428² + 135.044²) = 486.544 ft. Spans = 486.544 / 486.544 ft, against station differences of 500 / 500.
+  - Skew sent = max(10, 15, 5) = 15.00°.
+  - Girders −18 / −6 / 6 / 18 give spacings 12 / 12 / 12 ft and N_b = 4. O_L = −18 − (−24) = 6 ft, and O_R = 24 − 18 = 6 ft.
+  - Example 2 (tangent): spans 150 × 3 (bearing-line choice: 147.5 / 145 / 147.5). Example 3 (curved): chord spans 124.582 / 124.166, against station differences 125 / 125.
+- **How verified:**
+  - `node --check` on all three inline scripts. The BridgeXfer copy is byte-identical to HANDOFF.md §5 and to the lldf.html copy.
+  - jsdom end-to-end test with lldf (see `fixlog/lldf.md`, same PR).
+  - **No result change:** the original and new file, loaded in jsdom, give identical Top-of-Deck, Beam-Seat and derived tables and identical `serializeProject()` for the default bridge and all 5 example bridges.
+- **Other copies:** BridgeXfer v1 is also in index.html, lldf.html, psbeam.html, stgirder.html and Moving Load Generator.html.
+- **Open items:**
+  - O-H1. Deck thickness (`d_slab`) and beam depth are not sent; lldf's t_s and d stay as entered. Send them too?
+  - O-H2. When skews differ between supports, lldf can only take one θ. The default is the largest |θ|: it is conservative for the shear correction, but it gives the largest moment reduction. Please confirm the default.

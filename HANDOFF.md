@@ -81,6 +81,21 @@ This matches the existing BridgeLocks "project" channel (`index.html`).
 
 - Bridge Geometry must write exactly the shape `lldf.html` already consumes. `lldf.html` is the reference: see `K_GEOM` and its reader. Span lengths, girder spacings and skew are in **feet** and **degrees**.
 - Bridge Geometry sets `producer:"Bridge Geometry"` and adds `notes` stating that the spans are measured along the abutment-to-abutment chord, and how skew is defined.
+- Shape Bridge Geometry writes (clarified when it became a sender):
+
+  ```js
+  { ...envelope, _schema:"bridge-lldf-geometry", producer:"Bridge Geometry", producerFile:"Bridge Geometry.html",
+    project:{ name:"", bridgeId:"" },            // envelope object (§2); MCT / PS-Beam / ST-Girder still send a plain string
+    units:{ spans:"ft", spacings:"ft", skew:"deg", OL:"ft", OR:"ft" },
+    basis:{ spans:"chord, support centerlines"|"chord, bearing lines", skew:"max"|"min"|"mean", girders:"global"|"<span no.>" },
+    Nb:<girders>, de:null,                       // Nb only when spacings are sent; d_e is not sent
+    inputs:{ spans:[ft…], spacings:[ft…, left to right], skew:<deg, ≥0>, OL:<ft>, OR:<ft> } }
+  ```
+
+  - `inputs` uses lldf's own input names. `OL`/`OR` are deck edge to exterior girder centerline. `spacings`, `OL`, `OR` and `Nb` are left out when Bridge Geometry has fewer than two girders, and the `notes` say so.
+  - The engineer picks the `basis` choices in Bridge Geometry's send dialog; each choice is also stated in `notes`.
+- lldf (receiver) accepts `project` as a string or an object, refuses any unit other than ft/deg, and validates every number. It has a **"Pull from <producer>"** button with a new-data dot and **"Import hand-off (JSON)"**. Both raise its existing prefill banner, which lists what will be overwritten and the sender's `notes`. It records the adopted source as the optional `geomSource` field in its saved state, and prints it below the title block.
+- lldf's "Lock" (auto-follow) on this channel stays for MCT, PS-Beam and ST-Girder. It is **not** offered for, and never auto-applies, a Bridge Geometry payload (§3.5).
 
 ### 4.3 `lldf` (existing; new receivers)
 
