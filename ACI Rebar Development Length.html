@@ -111,6 +111,7 @@ input,select,textarea{font-family:inherit; font-size:13px;}
   padding:6px 9px; border-radius:2px; border:1px solid transparent; font-size:12px;}
 .check.pass{background:var(--passbg); border-color:#bcdcc2; color:var(--pass);}
 .check.fail{background:var(--failbg); border-color:#e6b6b6; color:var(--fail);}
+.check.info{background:#fff; border-color:var(--line2); color:var(--sub);}
 .check .lbl{font-weight:normal;}
 .check .st{font-weight:bold; text-transform:uppercase; letter-spacing:.5px;}
 .check .st .val{font-weight:normal; color:var(--ink);}
@@ -265,6 +266,8 @@ function readInputs(){
     Atr:num('Atr'),                   // total area transverse steel crossing split, in^2
     sTr:num('sTr'),                   // spacing of transverse reinf, in
     nBars:num('nBars'),               // number of bars developed along split plane
+    barSpc:num('barSpc'),             // c-c spacing of developed bars, in (ACI 25.4.2.2 check; optional, blank = unknown)
+    psiRc:g('psiRc').value,           // ψr for compression development (ACI Table 25.4.9.3): "1.0" or "0.75"
     // excess reinforcement (ACI 25.4.10 / AASHTO λer)
     useExcess:g('useExcess').checked,
     asReq:num('asReq'),               // As required, in^2
@@ -320,6 +323,8 @@ function computeFactors(inp){
   const psiR = inp.hookConfined ? 1.0 : 1.6;
   const psiO = parseFloat(inp.hookLoc);
   const psiC_h = Math.min(inp.fc/15000 + 0.6, 1.0);
+  // ψr for compression development (ACI 318-19 25.4.9.2 / Table 25.4.9.3); 1.0 when not selected (old saved states)
+  const psiR_c = AASHTO ? 1.0 : (parseFloat(inp.psiRc) || 1.0);
 
   /* ---- AASHTO factors (5.10.8.2.1) ---- */
   // λrl reinforcement location (top bar) = 1.3; else 1.0
@@ -337,7 +342,7 @@ function computeFactors(inp){
   return {AASHTO,db,Ab,barNum,lambda,excess,excessRaw,
           sqrtFc,sqrtFc_raw,fc_ksi,fy_ksi,sqrtFc_ksi,sqrtFc_ksi_raw,
           psiT,psiE,psiS,psiG,psiTEcap,psiTEcapped,Ktr,cbKtr,cbKtr_raw,cbKtrCapped,
-          psiE_h,psiR,psiO,psiC_h,
+          psiE_h,psiR,psiO,psiC_h,psiR_c,
           lam_rl,lam_cf,lam_rlcf_cap,lam_rlcf_capped,lam_rc,lam_rc_raw,lam_rc_bounded};
 }
 
@@ -364,7 +369,7 @@ function calcHook(inp,f){
     // AASHTO hook mod factors: coating 1.2, confinement 0.8 if confined, else 1.0; lightweight per 5.10.8.2.4b
     const cf = parseFloat(inp.hookEpoxy)>1?1.2:1.0;
     const conf = inp.hookConfined?0.8:1.0;
-    const lw = inp.lightweight?1.3:1.0; // λ for lightweight hooks
+    const lw = 1/f.lambda; // AASHTO 10th Ed. 5.10.8.2.4a: l_dh = l_hb·(λrc·λcf)/λ, λ per 5.4.2.8 (was fixed ×1.3)
     const ldh_calc = lhb*cf*conf*lw*f.excess;
     const min1=8*f.db, min2=6;
     const ldh=Math.max(ldh_calc,min1,min2);
@@ -389,8 +394,8 @@ function calcComp(inp,f){
     const ldc = Math.max(ldc_calc, min);
     return {a,b,ldc_calc,min,ldc, gov: ldc===min?"8in":(a>=b?"eqA":"eqB")};
   } else {
-    const a = (0.02*inp.fy)/(f.lambda*f.sqrtFc)*f.db;
-    const b = 0.0003*inp.fy*f.db;
+    const a = (0.02*inp.fy*f.psiR_c)/(f.lambda*f.sqrtFc)*f.db;   // ACI 25.4.9.2(a): fy·ψr/(50λ√f'c)·db
+    const b = 0.0003*inp.fy*f.psiR_c*f.db;                        // ACI 25.4.9.2(b): 0.0003·fy·ψr·db
     const base = Math.max(a,b);
     const ldc_calc = base*f.excess;
     const min = 8;
@@ -408,6 +413,17 @@ function classAEligible(inp,f){
   return {ratioOK, pctOK, eligible: ratioOK && pctOK, known,
           ratio: (inp.asProv>0? inp.asReq/inp.asProv : null)};
 }
+
+/* ---------- ACI 25.4.2.2: fy >= 80 ksi bars spaced < 6 in. c-c need Ktr >= 0.5db ---------- */
+function ktrHSCheck(inp,f){
+  const relevant = !f.AASHTO && inp.fy>=80000;
+  const known = inp.barSpc>0;
+  const applies = relevant && known && inp.barSpc<6;
+  const req = 0.5*f.db;
+  return {relevant, known, applies, req, ok: !applies || f.Ktr>=req};
+}
+/* ---------- ACI 25.5.1.1: no lap splices for #14 / #18 bars (except compression to #11 and smaller, 25.5.5.3) ---------- */
+function lapProhibited(inp,f){ return !f.AASHTO && parseInt(inp.barSize)>=14; }
 
 /* ---------- Splices ---------- */
 function calcTensSplice(inp,f,tens){
@@ -500,7 +516,9 @@ function buildInputPanel(){
       <div class="field"><label>s <span class="unit">(in)</span></label><input id="sTr" type="number" value="12" step="0.5" min="0"></div>
       <div class="field"><label>n bars</label><input id="nBars" type="number" value="1" step="1" min="1"></div>
     </div>
-    <div class="hint">Leave A<sub>tr</sub>=0 for no transverse steel (conservative). K<sub>tr</sub>=40A<sub>tr</sub>/(s·n).</div>`)}
+    <div class="hint">Leave A<sub>tr</sub>=0 for no transverse steel (conservative). K<sub>tr</sub>=40A<sub>tr</sub>/(s·n).</div>
+    <div class="field" style="margin-top:8px"><label>Developed bars c-c spacing <span class="unit">(in, optional)</span></label>
+      <input id="barSpc" type="number" step="0.5" min="0" placeholder="for ACI 25.4.2.2 check (fy ≥ 80 ksi)"></div>`)}
 
   ${panel("D2","Excess Reinforcement",false,`
     <div class="chk"><input id="useExcess" type="checkbox"><label for="useExcess">Apply excess-reinforcement reduction (ACI 25.4.10 / AASHTO &lambda;<sub>er</sub>)</label></div>
@@ -508,18 +526,25 @@ function buildInputPanel(){
       <div class="field"><label>A<sub>s</sub> required <span class="unit">(in²)</span></label><input id="asReq" type="number" value="1.00" step="0.01" min="0"></div>
       <div class="field"><label>A<sub>s</sub> provided <span class="unit">(in²)</span></label><input id="asProv" type="number" value="1.00" step="0.01" min="0"></div>
     </div>
-    <div class="hint">Reduces l_d by A<sub>s,req</sub>/A<sub>s,prov</sub>. Not permitted where full f<sub>y</sub> is required (seismic, etc.). Also drives Class A splice eligibility.</div>`)}
+    <div class="hint">Reduces l_d by A<sub>s,req</sub>/A<sub>s,prov</sub>. The tool does not check where the bar is, so <b>do not tick this</b> if any of these apply &mdash; ACI 25.4.10.2: (a) at noncontinuous supports, (b) where anchorage or development for f<sub>y</sub> is required, (c) where bars are required to be continuous, (d) headed or mechanically anchored bars, (e) seismic-force-resisting systems in SDC D, E or F. AASHTO &lambda;<sub>er</sub> (5.10.8.2.1c): not where development for f<sub>y</sub> is specifically required or for seismic (5.11) detailing. Never applied to splices. Also drives Class A splice eligibility.</div>`)}
 
   ${panel("E","Standard Hook Factors",false,`
     <div class="field"><label>Epoxy Coating (&psi;<sub>e</sub>)</label>
       <select id="hookEpoxy"><option value="1.0" selected>Uncoated (1.0)</option><option value="1.2">Epoxy/zinc-epoxy (1.2)</option></select></div>
     <div class="field"><label>Location (&psi;<sub>o</sub>)</label>
       <select id="hookLoc">
-        <option value="1.0" selected>Confined / cover ≥2.5&quot; (1.0)</option>
-        <option value="1.25">Other, terminating inside column (1.25)</option>
-        <option value="1.25">Side cover &lt;2.5&quot; (1.25)</option>
+        <option value="1.0" selected>Inside column/wall core w/ side cover ≥2.5&quot;, or side cover ≥6db (1.0)</option>
+        <option value="1.25">Other, e.g. side cover &lt;2.5&quot; (1.25)</option>
       </select></div>
     <div class="chk"><input id="hookConfined" type="checkbox"><label for="hookConfined">Confining reinf. present &rarr; &psi;<sub>r</sub>=1.0 (else 1.6)</label></div>`)}
+
+  ${panel("E2","Compression Development (&psi;<sub>r</sub>)",false,`
+    <div class="field"><label>Confining Reinforcement (&psi;<sub>r</sub>, ACI Table 25.4.9.3)</label>
+      <select id="psiRc">
+        <option value="1.0" selected>Other (1.0)</option>
+        <option value="0.75">Enclosed in spiral, circular tie (db≥1/4&quot;, pitch≤4&quot;), #4 ties or hoops @ ≤4&quot; c-c (0.75)</option>
+      </select></div>
+    <div class="hint">ACI only. AASHTO compression modifiers are not applied (conservative).</div>`)}
 
   ${panel("F","Splices",false,`
     <div class="field"><label>Tension Lap Class</label>
@@ -588,6 +613,12 @@ function validate(inp,f){
     if (f.cbKtrCapped) w.push(`(c_b+K_tr)/d_b = ${fmt(f.cbKtr_raw,2)} exceeds 2.5; limited to 2.5 (ACI 25.4.2.4).`);
   }
   if (inp.fy >= 80000) w.push(`f_y = ${fmt(inp.fy,0)} psi: high-strength reinforcement. Verify the member is within the scope of ${cite} for this grade.`);
+  if (!f.AASHTO && inp.fy >= 80000){
+    const k = ktrHSCheck(inp,f);
+    if (!k.known) w.push(`ACI 25.4.2.2: for f_y ≥ 80,000 psi bars spaced closer than 6 in. on center, K_tr ≥ 0.5d_b (${fmt(k.req,3)} in.) is required. Enter the developed-bar c-c spacing (panel D) to check this.`);
+    else if (!k.ok) w.push(`ACI 25.4.2.2 NOT satisfied: f_y ≥ 80,000 psi bars at ${fmt(inp.barSpc,2)} in. on center (&lt; 6 in.) require K_tr ≥ 0.5d_b = ${fmt(k.req,3)} in.; provided K_tr = ${fmt(f.Ktr,3)} in. Add transverse reinforcement.`);
+  }
+  if (lapProhibited(inp,f)) w.push(`ACI 25.5.1.1: lap splices are not permitted for #${inp.barSize} bars. Use mechanical or welded splices. In compression, #14/#18 bars may be lap spliced only to #11 and smaller bars (25.5.5.3); the splice lengths shown for this bar size do not apply.`);
   if (inp.cb <= 0) w.push("c_b (cover / half-spacing) should be greater than 0.");
   if (inp.cb > 4) w.push(`c_b = ${fmt(inp.cb,2)}" is unusually large; confirm cover/spacing input.`);
   if (inp.Atr>0 && inp.sTr<=0) w.push("Transverse steel area A_tr entered but spacing s ≤ 0 — K_tr will be ignored.");
@@ -819,7 +850,7 @@ function tabHook(inp,f){
       <p>A hook works differently from a straight bar: instead of relying only on bond along its length, the bend bears mechanically against the concrete inside it, like an anchor. These factors adjust for how well that concrete core is protected.</p>
       <div class="vardef"><span class="s">ψ_e = ${fmt(f.psiE_h,1)}</span> — Epoxy coating reduces the bond along the straight lead-in portion of the hook. 1.2 if coated, 1.0 if uncoated.</div>
       <div class="vardef"><span class="s">ψ_r = ${fmt(f.psiR,1)}</span> — Confining reinforcement. Ties or stirrups wrapped around the hook resist the outward bursting force where the bend bears on the concrete. If that confinement is present per code, ψ_r = 1.0; without it, the length must grow by 60% (ψ_r = 1.6). This is often the single biggest driver of hook length.</div>
-      <div class="vardef"><span class="s">ψ_o = ${fmt(f.psiO,2)}</span> — Location. A hook near a free edge (side cover < 2.5 in) or terminating inside a column has less surrounding concrete to bear against, so it splits earlier and needs a 1.25 penalty. Well-covered hooks use 1.0.</div>
+      <div class="vardef"><span class="s">ψ_o = ${fmt(f.psiO,2)}</span> — Location (Table 25.4.3.2, #11 and smaller). 1.0 where the hook terminates inside a column or structural-wall core with side cover normal to the plane of the hook ≥ 2.5 in., or where that side cover is ≥ 6d_b. All other cases (e.g. a hook near a free edge with side cover < 2.5 in.) have less concrete to bear against and use 1.25.</div>
       <div class="vardef"><span class="s">ψ_c = ${fmt(f.psiC_h,3)}</span> — Concrete strength (new in ACI 318-19). Stronger concrete bears harder against the hook, allowing a shorter length. Below 6,000 psi it gives a credit < 1.0; it caps at 1.0.</div>
       <div class="vardef"><span class="s">λ = ${fmt(f.lambda,2)}</span> — Same lightweight penalty as tension.</div>
       <p><b>Why d_b^{1.5} instead of d_b?</b> Larger hooked bars concentrate more bearing force in the bend, splitting the concrete disproportionately. The 1.5 power makes big bars grow faster than a linear relationship would, matching test data.</p>`)
@@ -859,16 +890,16 @@ function tabHookAASHTO(inp,f,h){
   + subsec("2. Modification Factors","§5.10.8.2.4b", varTable([
       ["\\lambda_{cf}","Coating (1.2 if epoxy)",fmt(h.cf,1),"—"],
       ["\\lambda_{rc}","Confinement (0.8 if tied per code)",fmt(h.conf,1),"—"],
-      ["\\lambda","Lightweight (1.3 if LW)",fmt(h.lw,1),"—"],
+      ["\\lambda","Concrete density factor (divides; 0.75 if LW)",fmt(f.lambda,2),"—"],
     ])
     + note(`<div class="vardef"><span class="s">λ_cf = ${fmt(h.cf,1)}</span> — 1.2 for epoxy-coated hooked bars, 1.0 uncoated.</div>
       <div class="vardef"><span class="s">λ_rc = ${fmt(h.conf,1)}</span> — 0.8 where the hook is enclosed by ties/stirrups spaced ≤3d_b along the development length (with the first within 2d_b of the bend), else 1.0.</div>
-      <div class="vardef"><span class="s">λ = ${fmt(h.lw,1)}</span> — 1.3 for lightweight concrete, 1.0 normalweight.</div>`))
+      <div class="vardef"><span class="s">λ = ${fmt(f.lambda,2)}</span> — Concrete density modification factor (§5.4.2.8). It <em>divides</em> the length, as for straight bars, so lightweight (0.75) lengthens it by 1/0.75 = 1.33; 1.0 normalweight.</div>`))
   + excessBlock(inp,f)
   + subsec("3. Hook Development Length","Eq. 5.10.8.2.4a",
       eqBlock("Hook length","§5.10.8.2.4a",
-        "l_{dh} = l_{hb}\\,\\lambda_{cf}\\,\\lambda_{rc}\\,\\lambda"+(inp.useExcess?"\\,\\lambda_{er}":"")+" \\ge \\max(8d_b, 6\\text{ in})",
-        `${fmt(h.lhb,2)}\\times ${fmt(h.cf,1)}\\times ${fmt(h.conf,1)}\\times ${fmt(h.lw,1)}${inp.useExcess?`\\times ${fmt(f.excess,3)}`:""}`,
+        "l_{dh} = l_{hb}\\,\\dfrac{\\lambda_{cf}\\,\\lambda_{rc}"+(inp.useExcess?"\\,\\lambda_{er}":"")+"}{\\lambda} \\ge \\max(8d_b, 6\\text{ in})",
+        `${fmt(h.lhb,2)}\\times\\dfrac{${fmt(h.cf,1)}\\times ${fmt(h.conf,1)}${inp.useExcess?`\\times ${fmt(f.excess,3)}`:""}}{${fmt(f.lambda,2)}}`,
         `\\boxed{l_{dh} = ${fmt(h.ldh,2)}\\ \\text{in}}`));
 }
 
@@ -917,6 +948,7 @@ function tabComp(inp,f){
      and end bearing plus confinement contribute. The larger of two expressions governs, subject to an 8&quot; floor.</div>`
   + subsec("1. Governing Expressions","§25.4.9.2", varTable([
       ["f_y","Yield strength",fmt(inp.fy,0),"psi"],
+      ["\\psi_r","Confining reinforcement (Table 25.4.9.3)",fmt(f.psiR_c,2),"—"],
       ["\\lambda","Lightweight concrete",fmt(f.lambda,2),"—"],
       ["\\sqrt{f'_c}","Capped at 100",fmt(f.sqrtFc,1),"psi^{0.5}"],
       ["d_b","Bar diameter",fmt(f.db,3),"in"],
@@ -928,12 +960,12 @@ function tabComp(inp,f){
       <div class="vardef"><span class="s">8 in absolute minimum</span> — A practical constructability floor for small bars.</div>
       <p>The code takes the largest of the three. Whichever governs is flagged in the result.</p>`)
     + eqBlock("Expression (a)","§25.4.9.2 (a)",
-        "l_{dc,a} = \\dfrac{0.02\\,f_y}{\\lambda\\sqrt{f'_c}}\\,d_b",
-        `\\dfrac{0.02\\times ${fmt(inp.fy,0)}}{${fmt(f.lambda,2)}\\times ${fmt(f.sqrtFc,1)}}\\times ${fmt(f.db,3)}`,
+        "l_{dc,a} = \\dfrac{f_y\\,\\psi_r}{50\\,\\lambda\\sqrt{f'_c}}\\,d_b",
+        `\\dfrac{${fmt(inp.fy,0)}\\times ${fmt(f.psiR_c,2)}}{50\\times ${fmt(f.lambda,2)}\\times ${fmt(f.sqrtFc,1)}}\\times ${fmt(f.db,3)}`,
         `l_{dc,a} = ${fmt(c.a,2)}\\ \\text{in}`)
     + eqBlock("Expression (b)","§25.4.9.2 (b)",
-        "l_{dc,b} = 0.0003\\,f_y\\,d_b",
-        `0.0003\\times ${fmt(inp.fy,0)}\\times ${fmt(f.db,3)}`,
+        "l_{dc,b} = 0.0003\\,f_y\\,\\psi_r\\,d_b",
+        `0.0003\\times ${fmt(inp.fy,0)}\\times ${fmt(f.psiR_c,2)}\\times ${fmt(f.db,3)}`,
         `l_{dc,b} = ${fmt(c.b,2)}\\ \\text{in}`)
     + eqBlock("Governing length","§25.4.9.1",
         "l_{dc} = \\max\\!\\left(l_{dc,a},\\ l_{dc,b},\\ 8\\ \\text{in}\\right)"+(inp.useExcess?"\\times\\tfrac{A_{s,req}}{A_{s,prov}}":""),
@@ -980,6 +1012,7 @@ function tabTSplice(inp,f){
   + `<div class="narr">Tension lap splices are a multiple of the tension development length l_d. Class B (1.3 l_d) is the
      default; Class A (1.0 l_d) is permitted only where provided reinforcement is at least twice that required and no more
      than half the bars are spliced within the lap length (${ref}).</div>`
+  + (lapProhibited(inp,f)?`<div class="warnbox" style="border-left-color:var(--fail);background:var(--failbg)"><b style="color:var(--fail)">Lap splice NOT permitted (ACI 25.5.1.1).</b> #${inp.barSize} bars shall not be lap spliced in tension. Use a mechanical or welded splice. The length below is shown for reference only.</div>`:"")
   + classABlock(inp,f)
   + subsec("1. Base Development Length",ref, varTable([
       ["l_d","Tension development length (splice base, without excess-reinf reduction)",fmt(s.ldBase,2),"in"],
@@ -1004,6 +1037,7 @@ function tabCSplice(inp,f){
   const s = calcCompSplice(inp,f);
   const fyLE60 = inp.fy<=60000;
   return hero("Compression Lap Splice","ACI 318-19 §25.5.5",`${fmt(s.lsc,2)} in`,"Required l_sc")
+  + (lapProhibited(inp,f)?`<div class="warnbox" style="border-left-color:var(--fail);background:var(--failbg)"><b style="color:var(--fail)">Lap splice of #${inp.barSize} to #${inp.barSize} NOT permitted (ACI 25.5.1.1).</b> In compression, #14/#18 bars may be lap spliced only to #11 and smaller bars (25.5.5.3), with l_sc per 25.5.5.2 (larger of l_dc of the larger bar and l_sc of the smaller bar). The length below is shown for reference only.</div>`:"")
   + `<div class="narr">Compression lap splice length is a direct function of f_y and d_b. For f'c below 3,000 psi the
      length is increased by one-third (§25.5.5.1).</div>`
   + subsec("1. Splice Length","§25.5.5.1", varTable([
@@ -1042,8 +1076,8 @@ function tabBatch(inp,f){
     return `<tr style="${cur?'background:#f0e6e6;font-weight:bold;':''}">
       <td class="sym">#${b}</td><td class="num">${fmt(BAR[b].d,3)}</td>
       <td class="num">${fmt(t.ld,1)}</td><td class="num">${fmt(h.ldh,1)}</td>
-      <td class="num">${fmt(c.ldc,1)}</td><td class="num">${fmt(ts.lst,1)}</td>
-      <td class="num">${fmt(cs.lsc,1)}</td></tr>`;
+      <td class="num">${fmt(c.ldc,1)}</td><td class="num">${lapProhibited(bi,bf)?"N/P*":fmt(ts.lst,1)}</td>
+      <td class="num">${lapProhibited(bi,bf)?"N/P*":fmt(cs.lsc,1)}</td></tr>`;
   }).join("");
   return hero("Bar Development Schedule",codeName+" — all bar sizes",`#${inp.barSize}`,"current selection")
   + `<div class="narr">Every length below is computed with your current f'<sub>c</sub> = ${fmt(inp.fc,0)} psi, f<sub>y</sub> = ${fmt(inp.fy,0)} psi,
@@ -1058,7 +1092,7 @@ function tabBatch(inp,f){
         </tr></thead>
         <tbody>${rows}</tbody>
       </table>
-      <div class="hint" style="margin-top:8px">All lengths in inches. Tension splice uses Class ${inp.tensClass}. ${inp.useExcess?`Excess-reinforcement reduction (×${fmt(f.excess,3)}) applied to development lengths but not splices, per code.`:"No excess-reinforcement reduction applied."}</div>`)
+      <div class="hint" style="margin-top:8px">All lengths in inches. Tension splice uses Class ${inp.tensClass}. ${inp.useExcess?`Excess-reinforcement reduction (×${fmt(f.excess,3)}) applied to development lengths but not splices, per code.`:"No excess-reinforcement reduction applied."}${f.AASHTO?"":" *N/P = lap splice not permitted for #14/#18 bars (ACI 25.5.1.1); in compression they may be lapped only to #11 and smaller bars (25.5.5.3)."}</div>`)
   + note(`<p>This schedule is the single most-used output for detailing: it lets you look up any bar's development and splice length at a glance for the current concrete/steel combination, rather than re-running each bar individually. Because every value obeys the same modification factors you set, it stays consistent with the detailed tabs.</p>`);
 }
 
@@ -1070,11 +1104,12 @@ function buildDashboard(inp,f){
         ts=calcTensSplice(inp,f,t), cs=calcCompSplice(inp,f);
   const e=classAEligible(inp,f);
   const checks = [
-    {lbl:"Tension l_d ≥ 12 in", ok:t.ld>=12, val:fmt(t.ld,1)+" in"},
-    {lbl:"Hook l_dh ≥ max(8d_b,6)", ok:h.ldh>=Math.max(h.min1,6), val:fmt(h.ldh,1)+" in"},
-    {lbl:"Comp. l_dc ≥ 8 in", ok:c.ldc>=8, val:fmt(c.ldc,1)+" in"},
-    {lbl:"Tension splice ≥ 12 in", ok:ts.lst>=12, val:fmt(ts.lst,1)+" in"},
-    {lbl:"Comp. splice ≥ 12 in", ok:cs.lsc>=12, val:fmt(cs.lsc,1)+" in"},
+    // Display only: these minimums are applied with Math.max in the calcs, so they cannot fail.
+    {lbl:"Tension l_d (12 in min applied)", info:true, val:fmt(t.ld,1)+" in"},
+    {lbl:"Hook l_dh (8d_b / 6 in min applied)", info:true, val:fmt(h.ldh,1)+" in"},
+    {lbl:"Comp. l_dc (8 in min applied)", info:true, val:fmt(c.ldc,1)+" in"},
+    {lbl:"Tension splice (12 in min applied)", info:true, val:fmt(ts.lst,1)+" in"},
+    {lbl:"Comp. splice (12 in min applied)", info:true, val:fmt(cs.lsc,1)+" in"},
     f.AASHTO
       ? {lbl:"λ_rc within 0.4–1.0", ok:!f.lam_rc_bounded, val:fmt(f.lam_rc,2)}
       : {lbl:"(c_b+K_tr)/d_b within 2.5", ok:!f.cbKtrCapped, val:fmt(f.cbKtr,2)},
@@ -1086,12 +1121,20 @@ function buildDashboard(inp,f){
   if(inp.tensClass==="A"){
     checks.push({lbl:"Class A splice eligible", ok:e.eligible, val:e.known?(e.eligible?"yes":"no"):"unknown"});
   }
+  const kHS = ktrHSCheck(inp,f);
+  if(kHS.relevant){
+    checks.push({lbl:"K_tr ≥ 0.5d_b (25.4.2.2)", ok:kHS.known && kHS.ok,
+      val:!kHS.known?"spacing?":(kHS.applies?fmt(f.Ktr,2)+" / "+fmt(kHS.req,2):"s ≥ 6 in")});
+  }
+  if(lapProhibited(inp,f)){
+    checks.push({lbl:"Lap splice permitted (25.5.1.1)", ok:false, val:"#"+inp.barSize+" N/P"});
+  }
   const codeTag = f.AASHTO?"AASHTO LRFD §5.10.8":"ACI 318-19";
   const html = `<h3>Summary Dashboard — Code Checks <span style="font-weight:normal;color:#888">(${codeTag})</span></h3>
     <div class="checks">${checks.map(k=>`
-      <div class="check ${k.ok?"pass":"fail"}">
+      <div class="check ${k.info?"info":(k.ok?"pass":"fail")}">
         <span class="lbl">${k.lbl}</span>
-        <span class="st">${k.ok?"OK":"CHK"} <span class="val">${k.val}</span></span>
+        <span class="st">${k.info?"":(k.ok?"OK":"CHK")} <span class="val">${k.val}</span></span>
       </div>`).join("")}</div>`;
   document.getElementById('dashboard').innerHTML = html;
 }
@@ -1234,6 +1277,7 @@ function applyState(st){
   set('sTr',inp.sTr);set('nBars',inp.nBars);set('hookEpoxy',inp.hookEpoxy);
   set('hookConfined',inp.hookConfined);set('hookLoc',inp.hookLoc);set('tensClass',inp.tensClass);
   set('useExcess',inp.useExcess);set('asReq',inp.asReq);set('asProv',inp.asProv);set('pctSpliced',inp.pctSpliced);
+  set('barSpc',inp.barSpc);set('psiRc',inp.psiRc);   // optional (added later); absent in older saved states
   if(st.currentTab) currentTab=st.currentTab;
   if(st.chartMode) chartMode=st.chartMode;
   if(st.panels){
@@ -1259,7 +1303,8 @@ function saveProject(){
   const p=getProjects();
   if(p[name] && !confirm(`Overwrite existing project "${name}"?`)) return;
   p[name]=collectState();
-  localStorage.setItem(LS_PROJECTS,JSON.stringify(p));
+  try{ localStorage.setItem(LS_PROJECTS,JSON.stringify(p)); }
+  catch(e){ alert("Could not save: browser storage is blocked or full. Use Export JSON instead."); return; }
   refreshProjectList(); document.getElementById('projSelect').value=name;
   alert(`Saved "${name}".`);
 }
@@ -1273,7 +1318,9 @@ function deleteProject(){
   if(!name){alert("Select a project to delete.");return;}
   if(!confirm(`Delete "${name}"? This cannot be undone.`)) return;
   const p=getProjects(); delete p[name];
-  localStorage.setItem(LS_PROJECTS,JSON.stringify(p)); refreshProjectList();
+  try{ localStorage.setItem(LS_PROJECTS,JSON.stringify(p)); }
+  catch(e){ alert("Could not delete: browser storage is blocked or full."); return; }
+  refreshProjectList();
 }
 function exportJSON(){
   const blob=new Blob([JSON.stringify(collectState(),null,2)],{type:"application/json"});
