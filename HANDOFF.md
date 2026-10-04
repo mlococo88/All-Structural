@@ -128,14 +128,27 @@ This matches the existing BridgeLocks "project" channel (`index.html`).
 
 ```js
 { ...envelope, _schema:"bridge-building-loads", code:"ASCE 7-16",
-  units:{ pressure:"psf" },
-  areaLoads:{ D:null|<psf>, L:null|<psf>, Lr:null|<psf>, S:<psf flat-roof/sloped design snow>,
-              W:{ roofUplift:<psf>, roofDown:<psf>, wall:<psf> }, R:null },
-  seismic:{ SDS, SD1, SDC, Ie } }
+  units:{ pressure:"psf", seismic:"SDS and SD1 in g; Ie dimensionless; SDC a letter", length:"ft", angle:"deg" },
+  factored:false,
+  signConvention:"<in words: wind + toward the surface (down on a roof), − away (uplift); D, Lr, S down on the horizontal projection>",
+  areaLoads:{ D:null|<psf>, L:null|<psf>, Lr:null|<psf>, S:<psf design balanced roof snow>,
+              W:{ roofUplift:<psf, most negative roof pressure>, roofDown:<psf, most positive roof pressure>,
+                  wall:null|<psf, magnitude ≥ 0>, wallPressure:null|<psf>, wallSuction:null|<psf>,
+                  basis:{ roofUplift:"<case/zone/GCpi>", roofDown:"…", wall:"…", wallPressure:"…", wallSuction:"…" } },
+              R:null },
+  seismic:{ SDS:null|<g>, SD1:null|<g>, SDC:null|"A"…"F", Ie },
+  info:{ snow:{ pfDes, ps, balanced, unbalanced:null|{windward, leewardUniform, leewardPeak, surchargeLength},
+                drift:null|{location, peak, surcharge, width} },     // psf / ft, information only
+         roof:{ type, slopeDeg }, qh, G, GCpi, enclosure } }
 ```
 
-- Values are nominal (unfactored).
-- Steel Beam Design converts them to line loads using a **tributary width entered by the user**.
+- Values are nominal (unfactored); `factored` is always `false`.
+- **ASCE7-16 Load Generator (sender)** fills the fields from what it computes:
+  - `D` and `Lr` are the roof dead and roof live loads entered in that tool (inputs, on the horizontal projection). `L` (floor live) and `R` (rain) are not computed, so they are `null`.
+  - `S` is the design balanced roof snow load (`R.snow.balanced`: Sec. 7.3/7.4 with the Sec. 7.3.4 minimum and the Sec. 7.10 rain-on-snow surcharge where they apply). Unbalanced snow and drift are **not** in `S`; they are sent under `info.snow` and in `notes`, as information only.
+  - Wind values are **MWFRS** pressures (Ch. 27 Part 1), net of internal pressure: `roofUplift`/`roofDown` are the most negative/positive roof pressures over all wind directions, zones and both GCpi signs (the dashboard's "Wind Pressure Envelope"). `wallPressure` is the largest windward-wall pressure at the mean roof height, `wallSuction` the most negative leeward or side-wall pressure, and `wall` the larger magnitude of the two. `basis` names the case, zone and GCpi sign of each. For an open canopy (free roof) the roof values are the net free-roof pressures and the wall fields are `null`. Components-and-cladding (Ch. 30) pressures are not computed, and `notes` says so.
+  - `seismic` values are `null` when the tool has no tabulated site coefficient (site-specific analysis required).
+- **Steel Beam Design (receiver)** converts them to uniform line loads, w (kip/ft) = p (psf) × TW (ft) / 1000, using a **tributary width entered by the user** in the pull dialog. The user also picks the load types (D, L, Lr, S, W), the target load case for each (defaults DL, LL, LR, SL, WL; a missing case is created), which wind pressure applies, all spans or selected spans, and "replace previously imported loads" or "add". Imported loads are tagged `ld.bx = { ch:"buildingLoads", type, psf, tw, producer, producedAt, wind? }`; only tagged loads are ever replaced. Accepted pressure units: `psf`, or `kPa` (converted at 1 kPa = 20.885434 psf); anything else is refused. Seismic values are shown, not imported.
 
 ### 4.8 `memberReactions`
 

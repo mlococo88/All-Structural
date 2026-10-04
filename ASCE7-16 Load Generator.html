@@ -213,6 +213,8 @@ svg.sch .ld{stroke:var(--bad);fill:var(--bad)}
     <div id="tbactions">
       <button class="btn pri" onclick="openPrint()">Print / PDF</button>
       <button class="btn" id="xlbtn" onclick="doExcel()">Excel calculation</button>
+      <button class="btn" type="button" onclick="bxSendBuildingLoads()" title="Publish the nominal area loads (psf) and seismic parameters for Steel Beam Design (HANDOFF.md, channel buildingLoads)">Send to other tools</button>
+      <button class="btn" type="button" onclick="bxExportBuildingLoads()" title="Save the same hand-off as a JSON file">Export hand-off (JSON)</button>
     </div>
     <div id="tbshare">
       <button class="btn" type="button" onclick="bxUseProjectInfo()">Use shared project info</button>
@@ -4562,6 +4564,118 @@ window.addEventListener("DOMContentLoaded",()=>{
     if(!confirm(head+'\n\nThese fields will be overwritten:\n'+ch.map(function(c){
         return '  '+LBL[c.k]+': "'+c.e.value+'" → "'+c.v+'"'; }).join('\n')+sk+'\n\nContinue?')) return;
     ch.forEach(function(c){ c.e.value=c.v; c.e.dispatchEvent(new Event('input',{bubbles:true})); });
+  };
+})();
+</script>
+<script>
+/* Building-load hand-off (HANDOFF.md §4.7, channel buildingLoads): "Send to other tools" / "Export hand-off (JSON)".
+   Reads the results already computed by solve() (R) and the inputs (S). Nothing here changes a calculation. */
+(function(){
+  var PRODUCER="ASCE 7-16 Building Load Generator", FILE="ASCE7-16 Load Generator.html";
+  function r2(v){ return Math.round(v*100)/100; }
+  function fin(v){ return (typeof v==="number" && isFinite(v)) ? v : null; }
+  /* most negative and most positive of a list of {p, tag} */
+  function env(list){
+    var lo=null, hi=null;
+    list.forEach(function(o){ if(fin(o.p)===null) return;
+      if(!lo || o.p<lo.p) lo=o; if(!hi || o.p>hi.p) hi=o; });
+    return { lo:lo, hi:hi };
+  }
+  window.bxBuildingLoadsPayload=function(){
+    if(!R || (R.err && R.err.length) || !R.snow || !R.wind || !R.geom || !R.site)
+      return { error:"The calculation is blocked or incomplete, so there is nothing to send. Clear the blocking errors first." };
+    var g=R.geom, sn=R.snow, notes=[];
+    /* ---- roof wind: the same envelope the dashboard shows (Wind Pressure Envelope by Direction) ---- */
+    var roof=[], wallP=[], wallS=[];
+    if(g.free){
+      if(R.free){
+        R.free.cases.forEach(function(f){
+          roof.push({p:f.pW, tag:"free roof (Fig. 27.3-4/5) case "+f.name+", windward half"});
+          roof.push({p:f.pL, tag:"free roof (Fig. 27.3-4/5) case "+f.name+", leeward half"}); });
+        R.free.longCases.forEach(function(f){
+          roof.push({p:f.p, tag:"free roof (Fig. 27.3-7) case "+f.name+", "+f.band+" from the windward edge"}); });
+      }
+    } else {
+      R.cases.forEach(function(c){
+        (c.roofRows||[]).forEach(function(r){
+          roof.push({p:r.pPos, tag:"MWFRS roof, wind "+c.id+", "+r.label+", +GCpi"});
+          roof.push({p:r.pNeg, tag:"MWFRS roof, wind "+c.id+", "+r.label+", −GCpi"});
+          if(r.pMaxPos!==undefined){
+            roof.push({p:r.pMaxPos, tag:"MWFRS roof, wind "+c.id+", "+r.label+" (alternate Cp = −0.18), +GCpi"});
+            roof.push({p:r.pMaxNeg, tag:"MWFRS roof, wind "+c.id+", "+r.label+" (alternate Cp = −0.18), −GCpi"});
+          }
+        });
+        var ww=c.wwTable[c.wwTable.length-1];
+        wallP.push({p:ww.pPos, tag:"MWFRS windward wall at z = "+r2(ww.z)+" ft, wind "+c.id+", +GCpi"});
+        wallP.push({p:ww.pNeg, tag:"MWFRS windward wall at z = "+r2(ww.z)+" ft, wind "+c.id+", −GCpi"});
+        wallS.push({p:c.pLW.pPos, tag:"MWFRS leeward wall, wind "+c.id+", +GCpi"});
+        wallS.push({p:c.pLW.pNeg, tag:"MWFRS leeward wall, wind "+c.id+", −GCpi"});
+        wallS.push({p:c.pSide.pPos, tag:"MWFRS side wall, wind "+c.id+", +GCpi"});
+        wallS.push({p:c.pSide.pNeg, tag:"MWFRS side wall, wind "+c.id+", −GCpi"});
+      });
+    }
+    var re=env(roof), we=env(wallP), se=env(wallS);
+    var W={ roofUplift:re.lo?re.lo.p:null, roofDown:re.hi?re.hi.p:null,
+            wall:null, wallPressure:we.hi?we.hi.p:null, wallSuction:se.lo?se.lo.p:null,
+            basis:{ roofUplift:re.lo?re.lo.tag:"", roofDown:re.hi?re.hi.tag:"",
+                    wallPressure:we.hi?we.hi.tag:"", wallSuction:se.lo?se.lo.tag:"" } };
+    if(W.wallPressure!==null || W.wallSuction!==null){
+      var a=Math.abs(W.wallPressure||0), b=Math.abs(W.wallSuction||0);
+      W.wall=Math.max(a,b); W.basis.wall=(a>=b)?W.basis.wallPressure:W.basis.wallSuction;
+    }
+    /* ---- snow: design balanced roof snow; unbalanced and drift are information only ---- */
+    var info={ snow:{ pfDes:fin(sn.pfDes), ps:fin(sn.ps), balanced:fin(sn.balanced),
+      unbalanced: sn.unbal && sn.unbal.applies ? { windward:fin(sn.unbal.windward), leewardUniform:fin(sn.unbal.leewardUniform),
+        leewardPeak:fin(sn.unbal.leewardPeak), surchargeLength:fin(sn.unbal.surchargeLen) } : null,
+      drift: sn.driftGov ? { location:String(sn.driftGov.label||("drift "+sn.driftGov.idx)), peak:fin(sn.driftGov.pTotal),
+        surcharge:fin(sn.driftGov.pd), width:fin(sn.driftGov.w) } : null },
+      roof:{ type:S.roofType, slopeDeg:fin(g.theta) }, qh:fin(R.wind.qh.q), G:R.wind.G, GCpi:R.enc&&R.enc.gcpi?R.enc.gcpi.p:null,
+      enclosure:R.enc?R.enc.cls:"" };
+    var q=R.seis||{}, hasSeis=(q.Fa!==null && q.Fa!==undefined);
+    var payload={ _schema:"bridge-building-loads", schemaVersion:1, code:"ASCE 7-16",
+      project:{ name:(document.getElementById("tb_project")||{}).value||"", bridgeId:"" },
+      units:{ pressure:"psf", seismic:"SDS and SD1 in g; Ie dimensionless; SDC a letter", length:"ft", angle:"deg" },
+      factored:false,
+      signConvention:"Wind: positive acts toward (into) the surface, negative away from it (suction). On a roof, positive is downward and negative is uplift. D, Lr and S act downward on the horizontal projection of the roof.",
+      areaLoads:{ D:fin(S.DLroof), L:null, Lr:fin(S.LrRoof), S:fin(sn.balanced), W:W, R:null },
+      seismic:{ SDS:hasSeis?fin(q.SDS):null, SD1:hasSeis?fin(q.SD1):null, SDC:hasSeis?q.SDC:null, Ie:fin(R.site.Ie) },
+      info:info,
+      notes:notes };
+    var p=BridgeXfer.sharedProject(); if(p && (p.name||p.bridgeId) && !payload.project.name) payload.project=p;
+    notes.push("All values are nominal (unfactored) ASCE 7-16 area loads in psf. Apply the load factors and combinations of the receiving tool.");
+    notes.push("D is the roof dead load entered in this tool (on the horizontal projection) and Lr the roof live load entered here; they are inputs, not computed. L (floor live) and R (rain) are not computed by this tool and are sent as null.");
+    notes.push("S = "+r2(sn.balanced)+" psf is the design balanced roof snow load (Sec. 7.3/7.4, including the Sec. 7.3.4 minimum and the Sec. 7.10 rain-on-snow surcharge where they apply). Unbalanced snow"+
+      (info.snow.unbalanced?" (windward "+r2(info.snow.unbalanced.windward)+" psf, leeward peak "+r2(info.snow.unbalanced.leewardPeak!==null?info.snow.unbalanced.leewardPeak:info.snow.unbalanced.leewardUniform)+" psf)":" (not required here)")+
+      " and drift are NOT included in S.");
+    if(info.snow.drift) notes.push("Information only, not included in S: governing drift at "+info.snow.drift.location+", peak "+r2(info.snow.drift.peak)+" psf (surcharge "+r2(info.snow.drift.surcharge)+" psf over "+r2(info.snow.drift.width)+" ft). Apply it separately where the member lies in the drift.");
+    notes.push("Wind pressures are MWFRS pressures (Ch. 27 Part 1, directional procedure), q_h = "+r2(info.qh)+" psf, G = "+info.G+(info.GCpi!==null?", GCpi = ±"+info.GCpi:"")+". Components and cladding pressures (Ch. 30) are NOT computed by this tool and usually govern purlins, girts and roof or wall beams with small tributary areas; check them separately.");
+    if(W.roofUplift!==null) notes.push("roofUplift = "+r2(W.roofUplift)+" psf: most negative roof pressure of all MWFRS cases and zones ("+W.basis.roofUplift+").");
+    if(W.roofDown!==null) notes.push("roofDown = "+r2(W.roofDown)+" psf: most positive roof pressure of all MWFRS cases and zones ("+W.basis.roofDown+")"+(W.roofDown<=0?"; no case gives a net downward pressure, so this is the least uplift.":"."));
+    if(W.wall!==null) notes.push("wall = "+r2(W.wall)+" psf: larger magnitude of the windward wall pressure at the mean roof height ("+r2(W.wallPressure)+" psf) and the most negative leeward or side wall pressure ("+r2(W.wallSuction)+" psf). Basis: "+W.basis.wall+".");
+    else notes.push("No wall pressures: the building is modelled as an open canopy (free roof).");
+    if(info.roof.slopeDeg>0.01) notes.push("Roof slope "+r2(info.roof.slopeDeg)+"°: wind pressures act normal to the roof surface; snow, D and Lr act on the horizontal projection.");
+    if(!hasSeis) notes.push("SDS, SD1 and SDC are null: "+((q.ssReason||[]).join(" ")||"no tabulated site coefficient."));
+    var blk=(R.xchecks||[]).filter(function(c){ return c.sev==="err"; }).map(function(c){ return c.name+": "+c.msg; })
+      .concat((R.checks||[]).filter(function(c){ return c.state==="err"; }).map(function(c){ return c.name+": "+c.detail; }));
+    if(blk.length) notes.push("The sender's status register shows Blocked items; resolve them before relying on these loads: "+blk.join(" | "));
+    return { ok:true, payload:payload };
+  };
+  window.bxSendBuildingLoads=function(){
+    var b=bxBuildingLoadsPayload(); if(!b.ok){ alert(b.error); return; }
+    var r=BridgeXfer.publish("buildingLoads", b.payload, PRODUCER, FILE);
+    if(!r.ok){ alert(r.error); return; }
+    var a=r.payload.areaLoads;
+    function f(v){ return v===null||v===undefined ? "n/a" : (typeof v==="number" ? String(r2(v)) : String(v)); }
+    alert("Building loads sent (nominal, psf):\n  D = "+f(a.D)+", Lr = "+f(a.Lr)+", S = "+f(a.S)+
+      "\n  W roof uplift = "+f(a.W.roofUplift)+", roof down = "+f(a.W.roofDown)+", wall = "+f(a.W.wall)+
+      "\n  SDS = "+f(r.payload.seismic.SDS)+", SD1 = "+f(r.payload.seismic.SD1)+", SDC = "+f(r.payload.seismic.SDC)+", Ie = "+f(r.payload.seismic.Ie)+
+      "\n\nOpen Steel Beam Design and click \"Pull from ASCE 7-16\".");
+  };
+  window.bxExportBuildingLoads=function(){
+    var b=bxBuildingLoadsPayload(); if(!b.ok){ alert(b.error); return; }
+    var p=b.payload;   /* stamped here, not published: the file export does not change what other tools see */
+    p.producer=PRODUCER; p.producerFile=FILE; p.producedAt=new Date().toISOString();
+    var e=BridgeXfer.exportFile("buildingLoads", p); if(!e.ok) alert(e.error);
   };
 })();
 </script>
