@@ -465,6 +465,163 @@ Note on the code below: strings in the file use JavaScript `\uXXXX` escapes for 
 - **How verified:** Every plain inline script syntax-checked (Node `vm.Script`, same parser as `node --check`); BridgeXfer block compared byte-for-byte with HANDOFF.md §5; page loaded in jsdom (CDN scripts not loaded) before and after the change with no new errors; Share → Use exercised between tools with jsdom localStorage (ASCE7-16 → ACI Rebar, Steel Beam → Shear and Moment, Concrete Beam Capacity shell against stub tab documents), including cancel, empty shared values (field kept), a non-ISO date on a date input (skipped), an empty channel and a wrong `_schema` (refused). `git diff` shows no removed lines other than the ones listed under Before. No calculation code was touched.
 - **Other copies of this code:** none. BridgeXfer v1 is also in: ACI Rebar Development Length.html, ASCE7-16 Load Generator.html, Concrete Beam Capacity.html (shell), Steel Beam Design - AISC 15th.html, Shear and Moment Diagrams.html.
 
+## 2026-10-04 — PR: claude/conn-asce7-steelbeam (PR link added after merge)
+### C1. Building-load hand-off sender: "Send to other tools" and "Export hand-off (JSON)"   [feature: hand-off (no result change)]
+- **Date / type:** 2026-10-04, feature: hand-off (no result change).
+- **Where:** two buttons added at the end of `#tbactions` (anchor `onclick="doExcel()">Excel calculation</button>` inside `<div id="tbactions">`), and one new `<script>` block inserted right after the shared-project-info script, before `</body>` (anchor: the line `ch.forEach(function(c){ c.e.value=c.v; ...` followed by `};`, `})();`, `</script>`, `</body>`). The scripts after `</html>` are unchanged.
+- **Purpose:** publishes channel `bridgeSuite.v1.buildingLoads` (`_schema:"bridge-building-loads"`, HANDOFF.md §4.7) with nominal area loads in psf and the seismic parameters, for Steel Beam Design. "Export hand-off (JSON)" stamps the same payload and downloads it; it does not publish. The builder only reads `S` and the existing `solve()` result `R`; it refuses to send while `R.err` is non-empty.
+- **Mapping:**
+
+| HANDOFF field | ASCE7-16 source (sender) | Steel Beam target (receiver) |
+|---|---|---|
+| `areaLoads.D` | `S.DLroof` (roof dead load input, psf, horizontal projection) | uniform load, case DL (default), w = D·TW/1000 |
+| `areaLoads.L` | not computed → `null` | row disabled ("not provided") |
+| `areaLoads.Lr` | `S.LrRoof` (roof live input, psf) | uniform load, case LR (created if missing), w = Lr·TW/1000 |
+| `areaLoads.S` | `R.snow.balanced` (design balanced roof snow, psf) | uniform load, case SL, w = S·TW/1000 |
+| `areaLoads.W.roofUplift` | most negative MWFRS roof pressure, all directions/zones/±GCpi (dashboard envelope) | uniform load, case WL, w = p·TW/1000 (negative = upward) — default wind choice |
+| `areaLoads.W.roofDown` | most positive MWFRS roof pressure | same, if chosen |
+| `areaLoads.W.wall` | larger of abs(windward wall at h) and abs(most negative leeward/side wall) | same, applied as + (beam load plane), if chosen |
+| `areaLoads.W.wallPressure` / `wallSuction` | windward wall at h (max of ±GCpi) / most negative leeward or side wall | same, sign as published, if chosen |
+| `areaLoads.R` | not computed → `null` | not imported |
+| `seismic.SDS, SD1, SDC` | `R.seis.SDS`, `.SD1`, `.SDC` (`null` if no tabulated Fa/Fv) | shown in the dialog, not imported |
+| `seismic.Ie` | `R.site.Ie` | shown, not imported |
+| `info.snow` (unbalanced, drift) | `R.snow.unbal`, `R.snow.driftGov` | warning in the dialog only; not imported |
+
+- **Governing provision:** none changed. Values are read from the existing calculation (ASCE 7-16 Sec. 7.3/7.4 snow, Ch. 27 Part 1 MWFRS wind, Sec. 11.4/11.6 seismic) exactly as the dashboard shows them. Spec: HANDOFF.md §4.7 (updated in the same PR) and §5.
+- **Before / After** (exact; each anchor occurs once):
+  1. Buttons.
+     - Before:
+  ```html
+      <button class="btn" id="xlbtn" onclick="doExcel()">Excel calculation</button>
+    </div>
+  ```
+     - After:
+  ```html
+      <button class="btn" id="xlbtn" onclick="doExcel()">Excel calculation</button>
+      <button class="btn" type="button" onclick="bxSendBuildingLoads()" title="Publish the nominal area loads (psf) and seismic parameters for Steel Beam Design (HANDOFF.md, channel buildingLoads)">Send to other tools</button>
+      <button class="btn" type="button" onclick="bxExportBuildingLoads()" title="Save the same hand-off as a JSON file">Export hand-off (JSON)</button>
+    </div>
+  ```
+  2. New script, inserted between the shared-project-info `</script>` and `</body>` (BridgeXfer v1 is already in this file from Step 1 and is reused, not pasted again):
+  ```html
+<script>
+/* Building-load hand-off (HANDOFF.md §4.7, channel buildingLoads): "Send to other tools" / "Export hand-off (JSON)".
+   Reads the results already computed by solve() (R) and the inputs (S). Nothing here changes a calculation. */
+(function(){
+  var PRODUCER="ASCE 7-16 Building Load Generator", FILE="ASCE7-16 Load Generator.html";
+  function r2(v){ return Math.round(v*100)/100; }
+  function fin(v){ return (typeof v==="number" && isFinite(v)) ? v : null; }
+  /* most negative and most positive of a list of {p, tag} */
+  function env(list){
+    var lo=null, hi=null;
+    list.forEach(function(o){ if(fin(o.p)===null) return;
+      if(!lo || o.p<lo.p) lo=o; if(!hi || o.p>hi.p) hi=o; });
+    return { lo:lo, hi:hi };
+  }
+  window.bxBuildingLoadsPayload=function(){
+    if(!R || (R.err && R.err.length) || !R.snow || !R.wind || !R.geom || !R.site)
+      return { error:"The calculation is blocked or incomplete, so there is nothing to send. Clear the blocking errors first." };
+    var g=R.geom, sn=R.snow, notes=[];
+    /* ---- roof wind: the same envelope the dashboard shows (Wind Pressure Envelope by Direction) ---- */
+    var roof=[], wallP=[], wallS=[];
+    if(g.free){
+      if(R.free){
+        R.free.cases.forEach(function(f){
+          roof.push({p:f.pW, tag:"free roof (Fig. 27.3-4/5) case "+f.name+", windward half"});
+          roof.push({p:f.pL, tag:"free roof (Fig. 27.3-4/5) case "+f.name+", leeward half"}); });
+        R.free.longCases.forEach(function(f){
+          roof.push({p:f.p, tag:"free roof (Fig. 27.3-7) case "+f.name+", "+f.band+" from the windward edge"}); });
+      }
+    } else {
+      R.cases.forEach(function(c){
+        (c.roofRows||[]).forEach(function(r){
+          roof.push({p:r.pPos, tag:"MWFRS roof, wind "+c.id+", "+r.label+", +GCpi"});
+          roof.push({p:r.pNeg, tag:"MWFRS roof, wind "+c.id+", "+r.label+", −GCpi"});
+          if(r.pMaxPos!==undefined){
+            roof.push({p:r.pMaxPos, tag:"MWFRS roof, wind "+c.id+", "+r.label+" (alternate Cp = −0.18), +GCpi"});
+            roof.push({p:r.pMaxNeg, tag:"MWFRS roof, wind "+c.id+", "+r.label+" (alternate Cp = −0.18), −GCpi"});
+          }
+        });
+        var ww=c.wwTable[c.wwTable.length-1];
+        wallP.push({p:ww.pPos, tag:"MWFRS windward wall at z = "+r2(ww.z)+" ft, wind "+c.id+", +GCpi"});
+        wallP.push({p:ww.pNeg, tag:"MWFRS windward wall at z = "+r2(ww.z)+" ft, wind "+c.id+", −GCpi"});
+        wallS.push({p:c.pLW.pPos, tag:"MWFRS leeward wall, wind "+c.id+", +GCpi"});
+        wallS.push({p:c.pLW.pNeg, tag:"MWFRS leeward wall, wind "+c.id+", −GCpi"});
+        wallS.push({p:c.pSide.pPos, tag:"MWFRS side wall, wind "+c.id+", +GCpi"});
+        wallS.push({p:c.pSide.pNeg, tag:"MWFRS side wall, wind "+c.id+", −GCpi"});
+      });
+    }
+    var re=env(roof), we=env(wallP), se=env(wallS);
+    var W={ roofUplift:re.lo?re.lo.p:null, roofDown:re.hi?re.hi.p:null,
+            wall:null, wallPressure:we.hi?we.hi.p:null, wallSuction:se.lo?se.lo.p:null,
+            basis:{ roofUplift:re.lo?re.lo.tag:"", roofDown:re.hi?re.hi.tag:"",
+                    wallPressure:we.hi?we.hi.tag:"", wallSuction:se.lo?se.lo.tag:"" } };
+    if(W.wallPressure!==null || W.wallSuction!==null){
+      var a=Math.abs(W.wallPressure||0), b=Math.abs(W.wallSuction||0);
+      W.wall=Math.max(a,b); W.basis.wall=(a>=b)?W.basis.wallPressure:W.basis.wallSuction;
+    }
+    /* ---- snow: design balanced roof snow; unbalanced and drift are information only ---- */
+    var info={ snow:{ pfDes:fin(sn.pfDes), ps:fin(sn.ps), balanced:fin(sn.balanced),
+      unbalanced: sn.unbal && sn.unbal.applies ? { windward:fin(sn.unbal.windward), leewardUniform:fin(sn.unbal.leewardUniform),
+        leewardPeak:fin(sn.unbal.leewardPeak), surchargeLength:fin(sn.unbal.surchargeLen) } : null,
+      drift: sn.driftGov ? { location:String(sn.driftGov.label||("drift "+sn.driftGov.idx)), peak:fin(sn.driftGov.pTotal),
+        surcharge:fin(sn.driftGov.pd), width:fin(sn.driftGov.w) } : null },
+      roof:{ type:S.roofType, slopeDeg:fin(g.theta) }, qh:fin(R.wind.qh.q), G:R.wind.G, GCpi:R.enc&&R.enc.gcpi?R.enc.gcpi.p:null,
+      enclosure:R.enc?R.enc.cls:"" };
+    var q=R.seis||{}, hasSeis=(q.Fa!==null && q.Fa!==undefined);
+    var payload={ _schema:"bridge-building-loads", schemaVersion:1, code:"ASCE 7-16",
+      project:{ name:(document.getElementById("tb_project")||{}).value||"", bridgeId:"" },
+      units:{ pressure:"psf", seismic:"SDS and SD1 in g; Ie dimensionless; SDC a letter", length:"ft", angle:"deg" },
+      factored:false,
+      signConvention:"Wind: positive acts toward (into) the surface, negative away from it (suction). On a roof, positive is downward and negative is uplift. D, Lr and S act downward on the horizontal projection of the roof.",
+      areaLoads:{ D:fin(S.DLroof), L:null, Lr:fin(S.LrRoof), S:fin(sn.balanced), W:W, R:null },
+      seismic:{ SDS:hasSeis?fin(q.SDS):null, SD1:hasSeis?fin(q.SD1):null, SDC:hasSeis?q.SDC:null, Ie:fin(R.site.Ie) },
+      info:info,
+      notes:notes };
+    var p=BridgeXfer.sharedProject(); if(p && (p.name||p.bridgeId) && !payload.project.name) payload.project=p;
+    notes.push("All values are nominal (unfactored) ASCE 7-16 area loads in psf. Apply the load factors and combinations of the receiving tool.");
+    notes.push("D is the roof dead load entered in this tool (on the horizontal projection) and Lr the roof live load entered here; they are inputs, not computed. L (floor live) and R (rain) are not computed by this tool and are sent as null.");
+    notes.push("S = "+r2(sn.balanced)+" psf is the design balanced roof snow load (Sec. 7.3/7.4, including the Sec. 7.3.4 minimum and the Sec. 7.10 rain-on-snow surcharge where they apply). Unbalanced snow"+
+      (info.snow.unbalanced?" (windward "+r2(info.snow.unbalanced.windward)+" psf, leeward peak "+r2(info.snow.unbalanced.leewardPeak!==null?info.snow.unbalanced.leewardPeak:info.snow.unbalanced.leewardUniform)+" psf)":" (not required here)")+
+      " and drift are NOT included in S.");
+    if(info.snow.drift) notes.push("Information only, not included in S: governing drift at "+info.snow.drift.location+", peak "+r2(info.snow.drift.peak)+" psf (surcharge "+r2(info.snow.drift.surcharge)+" psf over "+r2(info.snow.drift.width)+" ft). Apply it separately where the member lies in the drift.");
+    notes.push("Wind pressures are MWFRS pressures (Ch. 27 Part 1, directional procedure), q_h = "+r2(info.qh)+" psf, G = "+info.G+(info.GCpi!==null?", GCpi = ±"+info.GCpi:"")+". Components and cladding pressures (Ch. 30) are NOT computed by this tool and usually govern purlins, girts and roof or wall beams with small tributary areas; check them separately.");
+    if(W.roofUplift!==null) notes.push("roofUplift = "+r2(W.roofUplift)+" psf: most negative roof pressure of all MWFRS cases and zones ("+W.basis.roofUplift+").");
+    if(W.roofDown!==null) notes.push("roofDown = "+r2(W.roofDown)+" psf: most positive roof pressure of all MWFRS cases and zones ("+W.basis.roofDown+")"+(W.roofDown<=0?"; no case gives a net downward pressure, so this is the least uplift.":"."));
+    if(W.wall!==null) notes.push("wall = "+r2(W.wall)+" psf: larger magnitude of the windward wall pressure at the mean roof height ("+r2(W.wallPressure)+" psf) and the most negative leeward or side wall pressure ("+r2(W.wallSuction)+" psf). Basis: "+W.basis.wall+".");
+    else notes.push("No wall pressures: the building is modelled as an open canopy (free roof).");
+    if(info.roof.slopeDeg>0.01) notes.push("Roof slope "+r2(info.roof.slopeDeg)+"°: wind pressures act normal to the roof surface; snow, D and Lr act on the horizontal projection.");
+    if(!hasSeis) notes.push("SDS, SD1 and SDC are null: "+((q.ssReason||[]).join(" ")||"no tabulated site coefficient."));
+    var blk=(R.xchecks||[]).filter(function(c){ return c.sev==="err"; }).map(function(c){ return c.name+": "+c.msg; })
+      .concat((R.checks||[]).filter(function(c){ return c.state==="err"; }).map(function(c){ return c.name+": "+c.detail; }));
+    if(blk.length) notes.push("The sender's status register shows Blocked items; resolve them before relying on these loads: "+blk.join(" | "));
+    return { ok:true, payload:payload };
+  };
+  window.bxSendBuildingLoads=function(){
+    var b=bxBuildingLoadsPayload(); if(!b.ok){ alert(b.error); return; }
+    var r=BridgeXfer.publish("buildingLoads", b.payload, PRODUCER, FILE);
+    if(!r.ok){ alert(r.error); return; }
+    var a=r.payload.areaLoads;
+    function f(v){ return v===null||v===undefined ? "n/a" : (typeof v==="number" ? String(r2(v)) : String(v)); }
+    alert("Building loads sent (nominal, psf):\n  D = "+f(a.D)+", Lr = "+f(a.Lr)+", S = "+f(a.S)+
+      "\n  W roof uplift = "+f(a.W.roofUplift)+", roof down = "+f(a.W.roofDown)+", wall = "+f(a.W.wall)+
+      "\n  SDS = "+f(r.payload.seismic.SDS)+", SD1 = "+f(r.payload.seismic.SD1)+", SDC = "+f(r.payload.seismic.SDC)+", Ie = "+f(r.payload.seismic.Ie)+
+      "\n\nOpen Steel Beam Design and click \"Pull from ASCE 7-16\".");
+  };
+  window.bxExportBuildingLoads=function(){
+    var b=bxBuildingLoadsPayload(); if(!b.ok){ alert(b.error); return; }
+    var p=b.payload;   /* stamped here, not published: the file export does not change what other tools see */
+    p.producer=PRODUCER; p.producerFile=FILE; p.producedAt=new Date().toISOString();
+    var e=BridgeXfer.exportFile("buildingLoads", p); if(!e.ok) alert(e.error);
+  };
+})();
+</script>
+  ```
+- **Saved data:** no existing key or format changed (`asce7bldg.projects`, `asce7bldg.autosave` untouched). New keys are only the HANDOFF channel keys `bridgeSuite.v1.buildingLoads` and `bridgeSuite.v1.buildingLoads.updatedAt`, written on "Send to other tools".
+- **Check case:** default project (Melrose MA, Risk II, 120 × 50 ft flat roof, h = 36 ft, Exp. C). Sent: D = 15, Lr = 20, S = 30 psf; W.roofUplift = −34.43 psf (wind +Y, zone 0 to h/2, +GCpi); roofDown = +0.85; wall = 27.05 (windward at h, −GCpi); wallSuction = −24.38; SDS = 0.3094 g, SD1 = 0.1104 g, SDC B, Ie = 1.0. Hand check of roofUplift: q_h = 0.00256·K_z·K_zt·K_d·K_e·V² = 0.00256 × 1.0209 × 1.0 × 0.85 × 1.0 × 119² = 31.45 psf; wind +Y: L = 50 ft, h/L = 36/50 = 0.72, Cp = −0.9 + (0.72 − 0.5)/0.5 × (−1.3 + 0.9) = −1.076 (Fig. 27.3-1, parallel, 0 to h/2); p = q_h·G·Cp − q_i·GCpi = 31.45 × 0.85 × (−1.076) − 31.45 × 0.18 = −28.77 − 5.66 = **−34.43 psf**.
+- **How verified:** every plain inline script passes `node --check`; jsdom run of the real page: `solve()` output identical to origin/main (JSON of `R`); `bxBuildingLoadsPayload()` checked against `R` for the default project, a 6:12 gable with a lower-roof drift (unbalanced and drift sent under `info.snow` only), an open canopy (wall fields `null`), Site Class F (seismic `null`) and a blocked calculation (refused). End-to-end Send → Steel Beam Pull test, see the Steel Beam fix log C1.
+- **Other copies of this code:** none. BridgeXfer v1 (unchanged) is also in: ACI Rebar Development Length.html, Concrete Beam Capacity.html, Steel Beam Design - AISC 15th.html, Shear and Moment Diagrams.html, and the other Step 1 tools.
+
 ## Open items (not changed)
 - O1. Unbalanced snow (Sec. 7.6.1) uses `W` with no lower bound on lu, while drifts use `max(lu, 25 ft)` (`figHd`). Fig. 7.6-1 / Sec. 7.6.1 text should be checked for whether a 20 ft minimum applies to the unbalanced hd. — Not changed: the edition text was not available to confirm. — Engineer to confirm the floor (if any) for the unbalanced drift and for `figHd`.
 - O2. Hurricane-prone region test: `hurricaneProne = (S.jur==="MA") || (site.V>115)`. It treats all of Massachusetts as hurricane-prone and uses the risk-category wind speed rather than the Risk Category II speed. The Risk Category I exemption for glazing protection is also unverified. — Needs 780 CMR / ASCE 7-16 Sec. 26.2 / 26.12.3 confirmation for MA. — Engineer decision.
