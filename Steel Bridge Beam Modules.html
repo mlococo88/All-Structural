@@ -1164,6 +1164,8 @@ function gdCompute(P) {
   if (num(Dm.MLLp) < 0) errors.push('M_LL+ must be zero or positive.'); if (num(Dm.MLLn) > 0) errors.push('M_LL− must be zero or negative.');
   if (!(num(B.gap) >= 0)) errors.push('Gap between girder ends must be zero or positive.');
   if (S.code !== '8' && S.prs === 'yes' && !(num(S.Fyr) > 0)) errors.push('Rebar yield strength F_yr must be positive when P_rs is included.');
+  if (S.web === 'stiffened' && !(num(S.do) > 0)) errors.push('Stiffener spacing d_o must be positive when the web shear resistance basis is "Stiffened" (select "Unstiffened" if there are no transverse stiffeners).');
+  if (Number.isInteger(+P.web.nr) && Number.isInteger(+P.web.nc) && +P.web.nr * +P.web.nc < 2) errors.push('Web splice: at least two bolts are needed on each side of the splice (rows × columns ≥ 2); a one-bolt group has no polar moment of inertia.');
   if (errors.length) return { errors };
 
   const secL = { ...Object.fromEntries(Object.entries(S.L).map(([k, v]) => [k, num(v)])) }, secR = { ...Object.fromEntries(Object.entries(S.R).map(([k, v]) => [k, num(v)])) };
@@ -1205,21 +1207,21 @@ function gdCompute(P) {
   });
 
   /* ---- web shear resistance of the smaller section ---- */
-  const tw = sm.tw, FyW = gW.Fy, k = S.web === 'stiffened' ? 5 + 5 / (num(S.do) / D) ** 2 : 5, r = Math.sqrt(ES * k / FyW), lam = D / tw;
+  const tw = sm.tw, FyW = gW.Fy, stiffW = S.web === 'stiffened' && num(S.do) <= 3 * D + 1e-9, k = stiffW ? 5 + 5 / (num(S.do) / D) ** 2 : 5, r = Math.sqrt(ES * k / FyW), lam = D / tw;
   const Cv = lam <= 1.12 * r ? 1 : lam <= 1.40 * r ? 1.12 * r / lam : 1.57 / lam ** 2 * (ES * k / FyW), Vp = 0.58 * FyW * D * tw;
   let Vn, vnExpr;
-  if (S.web === 'stiffened') {
+  if (stiffW) {   // 6.10.9.1: interior panels with d_o > 3D are unstiffened
     const dD = num(S.do) / D, rat = 2 * D * tw / (sm.botB * sm.botT + sm.topB * sm.topT);
     Vn = rat <= 2.5 ? Vp * (Cv + 0.87 * (1 - Cv) / Math.sqrt(1 + dD ** 2)) : Vp * (Cv + 0.87 * (1 - Cv) / (Math.sqrt(1 + dD ** 2) + dD));
     vnExpr = { k, C: Cv, Vp, rat, dD, eq: rat <= 2.5 ? '6.10.9.3.2-2' : '6.10.9.3.2-8' };
-  } else { Vn = Cv * Vp; vnExpr = { k, C: Cv, Vp, eq: '6.10.9.2-1' }; }
+  } else { Vn = Cv * Vp; vnExpr = { k, C: Cv, Vp, eq: '6.10.9.2-1', over3D: S.web === 'stiffened' }; }
   const phVn = PHI.v * Vn;
 
   /* ---- flange design forces (strength) ---- */
   const Fy = gF.Fy, Fu = gF.Fu, aT = num(S.aT), aB = num(S.aB);
-  const nhT = 2 * +P.top.nl, nhB = 2 * +P.bot.nl, dh = bolt.dh;
+  const nhT = 2 * +P.top.nl, nhB = 2 * +P.bot.nl, dh = bolt.dh, dn = dh + 0.0625;   // dn: hole width deducted for net area, standard hole + 1/16 in (6.8.3)
   const flg = { top: { b: sm.topB, t: sm.topT, a: aT, nh: nhT }, bot: { b: sm.botB, t: sm.botT, a: aB, nh: nhB } };
-  Object.values(flg).forEach(f => { f.Ag = f.b * f.t; f.An = f.Ag - f.nh * dh * f.t; f.Ae = Math.min(PHI.u * Fu / (PHI.y * Fy) * f.An, f.Ag); });
+  Object.values(flg).forEach(f => { f.Ag = f.b * f.t; f.An = f.Ag - f.nh * dn * f.t; f.Ae = Math.min(PHI.u * Fu / (PHI.y * Fy) * f.An, f.Ag); });
   combos.filter(c => c.type === 'str').forEach(c => {
     const rt = Math.abs(c.ft) / (PHI.f * aT * Fy), rb = Math.abs(c.fb) / (PHI.f * aB * Fy);
     const cf = rb >= rt ? 'bot' : 'top', nc = cf === 'bot' ? 'top' : 'bot';
@@ -1238,7 +1240,7 @@ function gdCompute(P) {
   });
   /* ---- 10th Edition (6.13.6.1.3): flange design yield resistance and flange-couple moment ---- */
   const code = S.code === '8' ? '8' : '10';
-  const pfyOf = (b, t, nh) => { const Ag = b * t, An = Ag - nh * dh * t, Ae0 = PHI.u * Fu / (PHI.y * Fy) * An, Ae = Math.min(Ae0, Ag); return { b, t, Ag, An, Ae0, Ae, P: Fy * Ae }; };
+  const pfyOf = (b, t, nh) => { const Ag = b * t, An = Ag - nh * dn * t, Ae0 = PHI.u * Fu / (PHI.y * Fy) * An, Ae = Math.min(Ae0, Ag); return { b, t, Ag, An, Ae0, Ae, P: Fy * Ae }; };
   const Pfy = {};
   ['top', 'bot'].forEach(k => { const nh = k === 'top' ? nhT : nhB, fb = s => k === 'top' ? [s.topB, s.topT] : [s.botB, s.botT];
     const L = pfyOf(...fb(secL), nh), Rr = pfyOf(...fb(secR), nh); Pfy[k] = L.P <= Rr.P ? { ...L, side: 'L', L, R: Rr } : { ...Rr, side: 'R', L, R: Rr }; });
@@ -1292,25 +1294,25 @@ function gdCompute(P) {
     const slip1 = Kh * Ks * Ns * Pt, slip = n * slip1;
     // block shear: region from the part's end to the last row, bounded in width by bolt lines (shear planes) or free edges;
     // each pattern is compared with the share of force delivered by the bolts on or inside the block
-    const bs = (t, Fy_, Fu_, Lend, planes, AtnLen, share, name) => { const Lv = Lend + (nr - 1) * s, Agv = planes * Lv * t, Anv = planes * (Lv - (nr - 0.5) * dh) * t, Atn = AtnLen * t;
+    const bs = (t, Fy_, Fu_, Lend, planes, AtnLen, share, name) => { const Lv = Lend + (nr - 1) * s, Agv = planes * Lv * t, Anv = planes * (Lv - (nr - 0.5) * dn) * t, Atn = AtnLen * t;
       const a = 0.58 * Fu_ * Anv + Fu_ * Atn, b = 0.58 * Fy_ * Agv + Fu_ * Atn; return { name, planes, share, Lv, Agv, Anv, Atn, a, b, Rr: PHI.bs * Rp * Math.min(a, b) }; };
     const eo = bo / 2 - yOut, blk = [];
     const flangeBlocks = (sd, b, t) => { const ee = b / 2 - yOut;
-      blk.push({ part: `Flange, ${sd === 'L' ? 'left' : 'right'}`, force: 'flange', ...bs(t, gF.Fy, gF.Fu, ef, 2, 2 * (ee - dh / 2), 1 / nl, 'edge strips outside the outer lines') });
-      if (nl > 1) blk.push({ part: `Flange, ${sd === 'L' ? 'left' : 'right'}`, force: 'flange', ...bs(t, gF.Fy, gF.Fu, ef, 2, 2 * ((b / 2 - g0) - (nl - 0.5) * dh), 1, 'blocks from the inner lines to the edges') }); };
+      blk.push({ part: `Flange, ${sd === 'L' ? 'left' : 'right'}`, force: 'flange', ...bs(t, gF.Fy, gF.Fu, ef, 2, 2 * (ee - dn / 2), 1 / nl, 'edge strips outside the outer lines') });
+      if (nl > 1) blk.push({ part: `Flange, ${sd === 'L' ? 'left' : 'right'}`, force: 'flange', ...bs(t, gF.Fy, gF.Fu, ef, 2, 2 * ((b / 2 - g0) - (nl - 0.5) * dn), 1, 'blocks from the inner lines to the edges') }); };
     flangeBlocks('L', bL, tL); flangeBlocks('R', bR, tR);
-    blk.push({ part: 'Outer plate', force: 'o', ...bs(to, gP.Fy, gP.Fu, ep, 2, 2 * (eo - dh / 2), 1 / nl, 'edge strips outside the outer lines') });
-    if (nl > 1) blk.push({ part: 'Outer plate', force: 'o', ...bs(to, gP.Fy, gP.Fu, ep, 2, 2 * ((bo / 2 - g0) - (nl - 0.5) * dh), 1, 'blocks from the inner lines to the edges') });
-    blk.push({ part: 'Outer plate', force: 'o', ...bs(to, gP.Fy, gP.Fu, ep, 2, 2 * yOut - (2 * nl - 1) * dh, 1, 'central block between the outer lines') });
+    blk.push({ part: 'Outer plate', force: 'o', ...bs(to, gP.Fy, gP.Fu, ep, 2, 2 * (eo - dn / 2), 1 / nl, 'edge strips outside the outer lines') });
+    if (nl > 1) blk.push({ part: 'Outer plate', force: 'o', ...bs(to, gP.Fy, gP.Fu, ep, 2, 2 * ((bo / 2 - g0) - (nl - 0.5) * dn), 1, 'blocks from the inner lines to the edges') });
+    blk.push({ part: 'Outer plate', force: 'o', ...bs(to, gP.Fy, gP.Fu, ep, 2, 2 * yOut - (2 * nl - 1) * dn, 1, 'central block between the outer lines') });
     if (inner) {
       const eIn = g0 - yiI, eOut = yiO - yOut;
-      blk.push({ part: 'Inner plates', force: 'i', ...bs(ti, gP.Fy, gP.Fu, ep, 4, 2 * (eIn + eOut - dh), nl === 1 ? 1 : 2 / nl, 'edge strips on both edges') });
-      blk.push({ part: 'Inner plates', force: 'i', ...bs(ti, gP.Fy, gP.Fu, ep, 2, 2 * ((yiO - g0) - (nl - 0.5) * dh), 1, 'block from the web-side line to the outside edge') });
-      blk.push({ part: 'Inner plates', force: 'i', ...bs(ti, gP.Fy, gP.Fu, ep, 2, 2 * ((yOut - yiI) - (nl - 0.5) * dh), 1, 'block from the outside line to the web-side edge') });
-      if (nl > 1) blk.push({ part: 'Inner plates', force: 'i', ...bs(ti, gP.Fy, gP.Fu, ep, 4, 2 * (nl - 1) * (gg - dh), 1, 'central block between the extreme lines') });
+      blk.push({ part: 'Inner plates', force: 'i', ...bs(ti, gP.Fy, gP.Fu, ep, 4, 2 * (eIn + eOut - dn), nl === 1 ? 1 : 2 / nl, 'edge strips on both edges') });
+      blk.push({ part: 'Inner plates', force: 'i', ...bs(ti, gP.Fy, gP.Fu, ep, 2, 2 * ((yiO - g0) - (nl - 0.5) * dn), 1, 'block from the web-side line to the outside edge') });
+      blk.push({ part: 'Inner plates', force: 'i', ...bs(ti, gP.Fy, gP.Fu, ep, 2, 2 * ((yOut - yiI) - (nl - 0.5) * dn), 1, 'block from the outside line to the web-side edge') });
+      if (nl > 1) blk.push({ part: 'Inner plates', force: 'i', ...bs(ti, gP.Fy, gP.Fu, ep, 4, 2 * (nl - 1) * (gg - dn), 1, 'central block between the extreme lines') });
     }
     // plate resistances
-    const An_o = Math.min(Ao - 2 * nl * dh * to, 0.85 * Ao), An_i = inner ? Math.min(Ai - 2 * nl * dh * ti, 0.85 * Ai) : 0;
+    const An_o = Math.min(Ao - 2 * nl * dn * to, 0.85 * Ao), An_i = inner ? Math.min(Ai - 2 * nl * dn * ti, 0.85 * Ai) : 0;
     const plate = { o: { A: Ao, An: An_o, y: PHI.y * gP.Fy * Ao, u: PHI.u * gP.Fu * An_o, c: PHI.c * gP.Fy * Ao }, i: inner ? { A: Ai, An: An_i, y: PHI.y * gP.Fy * Ai, u: PHI.u * gP.Fu * An_i, c: PHI.c * gP.Fy * Ai } : null };
     fl[key] = { key, nl, nr, g0, g: gg, s, ef, ep, bo, to, inner, bi, ti, bL, bR, tL, tR, bmin, yOut, yiO, yiI, n, Ns, Lconn, red, Rn1, phR1, Ao, Ai, Asp, equal, tfill, fillSide, sides, slip1, slip, blk, plate, eo,
       Lpl: gap + 2 * (ef + (nr - 1) * s + ep) };
@@ -1337,7 +1339,7 @@ function gdCompute(P) {
   const LcW = Math.min(ew - dh / 2, ncw > 1 ? sh - dh : Infinity, nrw > 1 ? sv - dh : Infinity), LcP = Math.min(ewp - dh / 2, ev - dh / 2, ncw > 1 ? sh - dh : Infinity, nrw > 1 ? sv - dh : Infinity);
   const brgW = PHI.bb * Math.min(2.4 * d * tw * gW.Fu, 1.2 * LcW * tw * gW.Fu), brgP = PHI.bb * Math.min(2.4 * d * 2 * twp * gP.Fu, 1.2 * LcP * 2 * twp * gP.Fu);
   const webForce = (V, Mw, H, useE = true) => { const Mt = Mw + (useE ? V * e : 0), Rx = Math.abs(H) / nw + Mt * dym / Ip, Ry = V / nw + Mt * dxm / Ip; return { Mt, Rx, Ry, R: Math.hypot(Rx, Ry) }; };
-  const Awp = 2 * hw * twp, Swp = 2 * twp * hw ** 2 / 6, Avn = 2 * (hw - nrw * dh) * twp;
+  const Awp = 2 * hw * twp, Swp = 2 * twp * hw ** 2 / 6, Avn = 2 * (hw - nrw * dn) * twp;
   const web = { nrw, ncw, sv, sh, ew, ewp, hw, twp, xbar, e, nw, Ip, dxm, dym, redW, phRw, slipW, ev, LcW, LcP, brgW, brgP, Awp, Swp, Avn,
     Vy: PHI.v * 0.58 * gP.Fy * Awp, Vr: PHI.vu * 0.58 * gP.Fu * Avn, bolts };
   const eS = code === '8' || B.eccS !== 'excl', eV = code === '8' || B.eccV === 'incl';
@@ -1467,7 +1469,7 @@ function gdChecks(R) {
       R.combos.filter(k => k.type === 'str').forEach(cb => { const w = cb.wb, r = w.R / W.phRw;
         c.items.push({ loc: cb.id, cells: [f2(cb.Vuw), f2(w.Mt), f2(cb.Huw), f2(w.R), f2(W.phRw), f2(r)], r, st: st(w.R, W.phRw),
           work: T`\begin{aligned}M_t &= ${X10 ? (R.eS ? T`V_re = ${f2(cb.Vuw)}(${f2(W.e)})` : '0') : T`${f2(cb.Muw)} + ${f2(cb.Vuw)}(${f2(W.e)})`} = ${f2(w.Mt)}\ \text{kip-in} \\ R_x &= \frac{|${f2(cb.Huw)}|}{${W.nw}} + \frac{${f2(w.Mt)}(${f2(W.dym)})}{${f2(W.Ip)}} = ${f2(w.Rx)}\ \text{kip}, \quad R_y = \frac{${f2(cb.Vuw)}}{${W.nw}} + \frac{${f2(w.Mt)}(${f2(W.dxm)})}{${f2(W.Ip)}} = ${f2(w.Ry)}\ \text{kip} \\ R_u &= \sqrt{${f2(w.Rx)}^2 + ${f2(w.Ry)}^2} = ${f2(w.R)}\ \text{kip} \;${ge(W.phRw, w.R) ? '\\le' : '>'}\; \phi_sR_n = 0.80\left[${R.thrF.toFixed(2)}(${f3(R.bolt.Ab)})(${f0(R.Fub)})(2)${W.redW < 1 ? '(0.83)' : ''}\right] = ${f2(W.phRw)}\ \text{kip}\end{aligned}`,
-          where: X10 ? [['V<sub>r</sub>', `Factored shear resistance of the smaller web, φ<sub>v</sub>V<sub>n</sub> (6.13.6.1.3c): ${P.sec.web}, C = ${f3(R.Cv)}, V<sub>p</sub> = ${f2(R.Vp)} kip`, f2(cb.Vuw), 'kip'], ['H<sub>w</sub>', cb.Huw > 0 ? 'Excess moment carried by the web (MT1)' : 'Flange splices carry the full moment (MT1)', f2(cb.Huw), 'kip'], ['e', R.eS ? 'Eccentricity of V<sub>r</sub> about the bolt group included (Bolts tab)' : 'Eccentricity neglected (Bolts tab)', f2(R.eS ? W.e : 0), 'in'], ['x<sub>max</sub>, y<sub>max</sub>', 'Distance from group centroid to the corner bolt', `${f2(W.dxm)}, ${f2(W.dym)}`, 'in']] : [['V<sub>uw</sub>', cb.ruleV === 'low' ? `1.5V<sub>u</sub> since V<sub>u</sub> = ${f2(cb.Vu)} < 0.5φ<sub>v</sub>V<sub>n</sub> = ${f2(0.5 * R.phVn)} (6.13.6.1.4b-1)` : `(V<sub>u</sub> + φ<sub>v</sub>V<sub>n</sub>)/2 = (${f2(cb.Vu)} + ${f2(R.phVn)})/2 (6.13.6.1.4b-2)`, f2(cb.Vuw), 'kip'],
+          where: X10 ? [['V<sub>r</sub>', `Factored shear resistance of the smaller web, φ<sub>v</sub>V<sub>n</sub> (6.13.6.1.3c): ${P.sec.web}${R.vnExpr.over3D ? ' (d<sub>o</sub> > 3D, treated as unstiffened per 6.10.9.1)' : ''}, C = ${f3(R.Cv)}, V<sub>p</sub> = ${f2(R.Vp)} kip`, f2(cb.Vuw), 'kip'], ['H<sub>w</sub>', cb.Huw > 0 ? 'Excess moment carried by the web (MT1)' : 'Flange splices carry the full moment (MT1)', f2(cb.Huw), 'kip'], ['e', R.eS ? 'Eccentricity of V<sub>r</sub> about the bolt group included (Bolts tab)' : 'Eccentricity neglected (Bolts tab)', f2(R.eS ? W.e : 0), 'in'], ['x<sub>max</sub>, y<sub>max</sub>', 'Distance from group centroid to the corner bolt', `${f2(W.dxm)}, ${f2(W.dym)}`, 'in']] : [['V<sub>uw</sub>', cb.ruleV === 'low' ? `1.5V<sub>u</sub> since V<sub>u</sub> = ${f2(cb.Vu)} < 0.5φ<sub>v</sub>V<sub>n</sub> = ${f2(0.5 * R.phVn)} (6.13.6.1.4b-1)` : `(V<sub>u</sub> + φ<sub>v</sub>V<sub>n</sub>)/2 = (${f2(cb.Vu)} + ${f2(R.phVn)})/2 (6.13.6.1.4b-2)`, f2(cb.Vuw), 'kip'],
             ['M<sub>uw</sub>', 'Design moment carried by the web (6.13.6.1.4b-3)', f2(cb.Muw), 'kip-in'], ['H<sub>uw</sub>', 'Design horizontal force carried by the web (6.13.6.1.4b-4)', f2(cb.Huw), 'kip'],
             ['x<sub>max</sub>, y<sub>max</sub>', 'Distance from group centroid to the corner bolt', `${f2(W.dxm)}, ${f2(W.dym)}`, 'in']] }); });
       add(c);
@@ -1492,7 +1494,7 @@ function gdChecks(R) {
     {
       const c = { id: 'WS4', grp, title: 'Web splice plates, shear', ref: 'AASHTO LRFD 6.13.5.3', src: 'Code',
         sym: X10 ? T`V_r \le \phi_v0.58F_yA_{vg}, \qquad V_r \le \phi_{vu}0.58F_uA_{vn}` : T`V_{uw} \le \phi_v0.58F_yA_{vg}, \qquad V_{uw} \le \phi_{vu}0.58F_uA_{vn}`, cols: ['Combination, mode', X10 ? 'V_r (kip)' : 'V_uw (kip)', 'Resistance (kip)', 'Ratio'], items: [],
-        note: `Two plates, ${frac(W.hw)} × ${frac(W.twp)} in. A_vg = ${f2(W.Awp)} in², A_vn = 2(h − n_r d_h)t = ${f2(W.Avn)} in².` };
+        note: `Two plates, ${frac(W.hw)} × ${frac(W.twp)} in. A_vg = ${f2(W.Awp)} in², A_vn = 2(h − n_r(d_h + 1/16))t = ${f2(W.Avn)} in².` };
       R.combos.filter(k => k.type === 'str').forEach(cb => [['shear yielding', W.Vy, T`1.0(0.58)(${f0(R.gP.Fy)})(${f2(W.Awp)})`], ['shear rupture', W.Vr, T`0.80(0.58)(${f0(R.gP.Fu)})(${f2(W.Avn)})`]].forEach(([mn, cap, ex]) => { const r = cb.Vuw / cap;
         c.items.push({ loc: `${cb.id}, ${mn}`, cells: [f2(cb.Vuw), f2(cap), f2(r)], r, st: st(cb.Vuw, cap), work: T`${ex} = ${f2(cap)}\ \text{kip} \;${ge(cap, cb.Vuw) ? '\\ge' : '<'}\; ${f2(cb.Vuw)}\ \text{kip}` }); }));
       add(c);
@@ -2063,7 +2065,7 @@ const MAN = [
 <h3>Method</h3><p>The default is the AASHTO LRFD <b>10th Edition</b> (Article 6.13.6.1.3, the simplified method introduced with the 8th Edition errata and adopted in the 9th). The 8th Edition method (Article 6.13.6.1.4, design stresses F<sub>cf</sub> and F<sub>ncf</sub>, with M<sub>uw</sub> and H<sub>uw</sub> in the web) can be selected on the Section tab for checking older designs; it is described at the end of this part and of Part 6.</p>
 <h3>Flange design force (6.13.6.1.3b)</h3>
 <div class="eq-math">\\[P_{fy} = F_{yf}A_e, \\qquad A_e = \\frac{\\phi_uF_u}{\\phi_yF_{yf}}A_n \\le A_g\\]</div>
-<p>Each flange splice and its bolts develop P<sub>fy</sub> of the smaller flange on either side of the splice, independent of the applied loads. φ<sub>u</sub> = 0.80, φ<sub>y</sub> = 0.95; A<sub>n</sub> deducts the nominal hole diameter for each bolt line across the flange (6.8.3). The A<sub>e</sub> ≤ A<sub>g</sub> limit is applied to both tension and compression flanges, as the design method does (AISC Steel Bridge Design Handbook, Ch. 14). Because P<sub>fy</sub> can act in either direction, the plates are checked in tension (yielding, fracture, block shear) and in compression.</p>
+<p>Each flange splice and its bolts develop P<sub>fy</sub> of the smaller flange on either side of the splice, independent of the applied loads. φ<sub>u</sub> = 0.80, φ<sub>y</sub> = 0.95; A<sub>n</sub> deducts the standard hole diameter plus 1/16 in for each bolt line across the flange (6.8.3). The A<sub>e</sub> ≤ A<sub>g</sub> limit is applied to both tension and compression flanges, as the design method does (AISC Steel Bridge Design Handbook, Ch. 14). Because P<sub>fy</sub> can act in either direction, the plates are checked in tension (yielding, fracture, block shear) and in compression.</p>
 <h3>Moment resistance of the flange splices</h3>
 <div class="eq-math">\\[M_r = \\begin{cases}P_{fy,bot}\\left(\\dfrac{t_{bf}}{2} + D + t_{tf} + t_h + \\dfrac{t_s}{2}\\right) & \\text{positive flexure (composite)} \\\\ \\min(P_{fy,top},\\ P_{fy,bot})\\left(\\dfrac{t_{bf}}{2} + D + \\dfrac{t_{tf}}{2}\\right) & \\text{negative flexure and deck casting}\\end{cases}\\]</div>
 <p>If the factored moment exceeds M<sub>r</sub>, the web carries the excess as a horizontal force H<sub>w</sub> = (M<sub>u</sub> − M<sub>r</sub>)/A<sub>w</sub> at mid-depth of the web (check MT1 reports this as advisory; the web checks carry it). A<sub>w</sub> is measured from web mid-depth to mid-deck in positive flexure and to the flange with spare capacity in negative flexure. Optionally the deck reinforcement P<sub>rs</sub> = F<sub>yr</sub>A<sub>r</sub> may be added in negative flexure; the program then forms the couple of the top flange plus rebar in tension with the bottom flange in compression, scaling both tension forces when their sum exceeds P<sub>fy,bot</sub> (a program interpretation; confirm with your owner's policy).</p>
@@ -2391,7 +2393,7 @@ tabs: { combos: 'Demands', rptCombos: 'Design demands' },
     regions: [{ name: 'Abut. 1 to max. positive, Span 1', kind: 'end', x1: 0, x2: 44, D: 60, tw: 0.5625, topB: 16, topT: 0.75, botB: 16, botT: 1.125, pD: 60, ptw: 0.5625, ptopB: 18, ptopT: 1.5, pbotB: 18, pbotT: 1.5 }] },
   rowSpec: SC_ZSPEC, rowPath: 'zones', rowLbl: 'Zone', rowSpec2: SC_RSPEC, rowPath2: 'regions', rowLbl2: 'Region',
   panes() { return {
-    sc_gen: `<div class="pad" id="gm-src"></div>${secHd('sec-scs', 'Studs')}<div class="sec-body" id="sec-scs">${fld('Stud diameter', 'sc.d', '', 'sel', { options: [['0.75', '3/4 in'], ['0.875', '7/8 in']] })}${fld('Stud height h', 'sc.h', 'in', 'dim')}${fld('Transverse spacing', 'sc.st', 'in', 'dim')}${fld('Stud F<sub>u</sub>', 'sc.Fu', 'ksi')}${fld('Q<sub>n</sub> per 10th Ed. (0 = use 9th Ed. eq.)', 'sc.Qn10', 'kip', 'num', { full: true })}<p class="note">The 10th Edition revised the stud strength equation (6.10.10.4.3). Enter Q<sub>n</sub> from your copy of the specification; with 0 the module uses the 9th Edition equation, which may be unconservative.</p></div>
+    sc_gen: `<div class="pad" id="gm-src"></div>${secHd('sec-scs', 'Studs')}<div class="sec-body" id="sec-scs">${fld('Stud diameter', 'sc.d', '', 'sel', { options: [['0.75', '3/4 in'], ['0.875', '7/8 in'], ['1', '1 in']] })}${fld('Stud height h', 'sc.h', 'in', 'dim')}${fld('Transverse spacing', 'sc.st', 'in', 'dim')}${fld('Stud F<sub>u</sub>', 'sc.Fu', 'ksi')}${fld('Q<sub>n</sub> per 10th Ed. (0 = use 9th Ed. eq.)', 'sc.Qn10', 'kip', 'num', { full: true })}<p class="note">The 10th Edition revised the stud strength equation (6.10.10.4.3). Enter Q<sub>n</sub> from your copy of the specification; with 0 the module uses the 9th Edition equation, which may be unconservative.</p></div>
       ${secHd('sec-scspl', 'Field splices (no studs over splice plates)')}<div class="sec-body" id="sec-scspl">${fld('Splice stations', 'sc.splX', 'ft', 'text', { full: true })}${fld('Top splice plate length', 'sc.splL', 'ft')}${fld('Clearance at each plate end', 'sc.splC', 'in')}</div>
       ${secHd('sec-scd', 'Deck and composite section')}<div class="sec-body" id="sec-scd">${fld('f′<sub>c</sub>', 'sc.fc', 'ksi')}${fld('w<sub>c</sub>', 'sc.wc', 'kcf')}${fld('K<sub>1</sub>', 'sc.K1', '')}${nFld('sc')}${fld('Structural t<sub>s</sub>', 'sc.ts', 'in')}${fld('Haunch', 'sc.hh', 'in')}${fld('Total deck thickness', 'sc.tdeck', 'in')}${fld('b<sub>eff</sub>', 'sc.beff', 'in')}${fld('Flange grade', 'sc.gF', '', 'sel', { options: GR })}${fld('Web grade', 'sc.gW', '', 'sel', { options: GR })}</div>
       ${secHd('sec-scf', 'Fatigue')}<div class="sec-body" id="sec-scf">${fld('γ Fatigue I', 'sc.gam.fat', '')}${fld('Skew > 20° or curved', 'sc.skew', '', 'sel', { options: [['no', 'No'], ['yes', 'Yes']] })}${fld('Cross-frame force range F<sub>rc</sub>', 'sc.Frc', 'kip')}${fld('Effective deck length w', 'sc.wv', 'in')}
@@ -2439,7 +2441,7 @@ tabs: { combos: 'Demands', rptCombos: 'Design demands' },
         [['Provided', r.parts.map(q => `${esc(q.z.name)}: ${f2(q.L)} ft at ${f2(q.z.p)} in × ${q.z.nr} = ${q.n}`).join('; ') + (r.cov + 1e-6 < r.x2 - r.x1 ? `; <b>zones cover only ${f2(r.cov)} of ${f2(r.x2 - r.x1)} ft</b>` : ''), f0(r.nprov), 'studs']]))); 
       if (!c.items.length) c.naWhy = 'No strength regions entered.'; out.add(c); }
     { const c = { id: 'SC3', grp: 'Detailing', title: 'Pitch limits', ref: 'AASHTO LRFD 6.10.10.1.2', src: 'Code', sym: T`4d \le p \le 48\ \text{in}\ (24\ \text{in if}\ D < 24\ \text{in})`, cols: ['Zone', 'p (in)', 'Min. (in)', 'Max. (in)'], items: [] };
-      R.zones.forEach(z => { const ok = ge(z.p, 4 * d) && ge(z.pmax, z.p); c.items.push({ loc: z.name, cells: [f2(z.p), f2(4 * d), f2(z.pmax)], st: ok ? 'pass' : 'fail', r: Math.max(4 * d / z.p, z.p / z.pmax), work: T`6(${f3(d)}) = ${f2(4 * d)} \le p = ${f2(z.p)} \le ${f2(z.pmax)}\ \text{in}${ok ? '' : T`\ \text{(not satisfied)}`}` }); }); out.add(c); }
+      R.zones.forEach(z => { const ok = ge(z.p, 4 * d) && ge(z.pmax, z.p); c.items.push({ loc: z.name, cells: [f2(z.p), f2(4 * d), f2(z.pmax)], st: ok ? 'pass' : 'fail', r: Math.max(4 * d / z.p, z.p / z.pmax), work: T`4(${f3(d)}) = ${f2(4 * d)} \le p = ${f2(z.p)} \le ${f2(z.pmax)}\ \text{in}${ok ? '' : T`\ \text{(not satisfied)}`}` }); }); out.add(c); }
     { const c = { id: 'SC4', grp: 'Detailing', title: 'Transverse spacing and edge distance', ref: 'AASHTO LRFD 6.10.10.1.3', src: 'Code', sym: T`s_t \ge 4d, \qquad \text{clear distance to flange edge} \ge 1.0\ \text{in}`, cols: ['Zone, item', 'Value (in)', 'Limit (in)'], items: [] };
       R.zones.forEach(z => { if (z.nr > 1) c.items.push({ loc: `${z.name}, transverse spacing`, cells: [f2(R.st), f2(4 * d)], st: ge(R.st, 4 * d) ? 'pass' : 'fail', r: 4 * d / R.st, work: T`s_t = ${f2(R.st)} \;${GE(R.st, 4 * d)}\; 4(${f3(d)}) = ${f2(4 * d)}\ \text{in}` });
         c.items.push({ loc: `${z.name}, edge distance`, cells: [f2(z.edge), '1.00'], st: ge(z.edge, 1) ? 'pass' : 'fail', r: 1 / z.edge, work: T`\frac{${f2(z.topB)} - (${z.nr} - 1)(${f2(R.st)}) - ${f3(d)}}{2} = ${f2(z.edge)} \;${GE(z.edge, 1)}\; 1.00\ \text{in}` }); }); out.add(c); }
@@ -2487,10 +2489,10 @@ function scPlanSVG(R) {
   for (let xi = p / 2; xi < L; xi += p) for (let q = 0; q < n; q++) e += `<circle cx="${ox + xi * s2}" cy="${oy + (q - (n - 1) / 2) * st * s2}" r="${d / 2 * s2}" fill="#fff" stroke="${DC.plS}" stroke-width="1.4"/>`;
   const dimH = (xa, xb, y, t) => `<path d="M${xa} ${y}H${xb}M${xa} ${y - 5}v10M${xb} ${y - 5}v10" stroke="#17212b" stroke-width=".7"/><text x="${(xa + xb) / 2}" y="${y - 6}" class="sv-t sv-sm" text-anchor="middle">${t}</text>`;
   const dimV = (ya, yb, x, t) => `<path d="M${x} ${ya}V${yb}M${x - 5} ${ya}h10M${x - 5} ${yb}h10" stroke="#17212b" stroke-width=".7"/><text x="${x + 8}" y="${(ya + yb) / 2 + 4}" class="sv-t sv-sm">${t}</text>`;
-  const xr = ox + L * s2 + 18; e += dimH(ox + p / 2 * s2, ox + 1.5 * p * s2, oy - bf / 2 * s2 - 14, `pitch ${frac(p)}″ (≥ 6d = ${frac(6 * d)}″)`);
+  const xr = ox + L * s2 + 18; e += dimH(ox + p / 2 * s2, ox + 1.5 * p * s2, oy - bf / 2 * s2 - 14, `pitch ${frac(p)}″ (≥ 4d = ${frac(4 * d)}″)`);
   if (n > 1) e += dimV(oy - g0 / 2 * s2, oy - (g0 / 2 - st) * s2, xr, `${frac(st)}″ transverse (≥ 4d = ${frac(4 * d)}″)`);
   e += dimV(oy - bf / 2 * s2, oy - (g0 / 2 + d / 2) * s2, xr + (n > 1 ? 150 : 0), `${frac(clr)}″ clear to edge (≥ 1″)`) + dimV(oy - bf / 2 * s2, oy + bf / 2 * s2, ox - 22, `b_f ${frac(bf)}″`).replace('x="' + (ox - 14), 'x="' + (ox - 90));
-  e += `<text x="${ox}" y="${oy + bf / 2 * s2 + 34}" class="sv-t">Typical plan, ${esc(zt.name || '')}, to scale: ${n} studs per row, ${frac(d)}″ dia. × ${frac(R.h)}″, ${[p >= 6 * d - 1e-6 ? '' : 'PITCH < 6d', n < 2 || st >= 4 * d - 1e-6 ? '' : 'TRANSVERSE < 4d', clr >= 1 - 1e-6 ? '' : 'CLEAR EDGE < 1″'].filter(Boolean).join(', ') || 'spacing and edge limits met (6.10.10.1.2 to 6.10.10.1.4)'}</text>`;
+  e += `<text x="${ox}" y="${oy + bf / 2 * s2 + 34}" class="sv-t">Typical plan, ${esc(zt.name || '')}, to scale: ${n} studs per row, ${frac(d)}″ dia. × ${frac(R.h)}″, ${[p >= 4 * d - 1e-6 ? '' : 'PITCH < 4d', n < 2 || st >= 4 * d - 1e-6 ? '' : 'TRANSVERSE < 4d', clr >= 1 - 1e-6 ? '' : 'CLEAR EDGE < 1″'].filter(Boolean).join(', ') || 'spacing and edge limits met (6.10.10.1.2 to 6.10.10.1.4)'}</text>`;
   return `<svg class="dwg" viewBox="0 0 ${Wpx} ${oy + bf / 2 * s2 + 50}" xmlns="http://www.w3.org/2000/svg"><defs><pattern id="schatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><path d="M0 0V6" stroke="#c0392b" stroke-width="1"/></pattern></defs>${o}${e}</svg>`;
 }
 function scPitchSVG(R) {
@@ -2585,7 +2587,7 @@ tabs: { combos: 'Member forces', rptCombos: 'Loads and member forces' },
     ['V', 'Kz', 'G', 'Cd'].forEach(k => { if (!(nm(p.wind[k]) >= 0)) errors.push(`Wind "${k}" must be zero or positive.`); });
     const mem = {}; CF_MEM.forEach(([k, l]) => { const m = p.mem[k], dims = m.sec === 'custom' ? [nm(m.b1), nm(m.b2), nm(m.t)] : ANGLES[m.sec];
       if (!dims || !(dims[0] > 0 && dims[1] > 0 && dims[2] > 0 && dims[2] < Math.min(dims[0], dims[1]))) errors.push(`${l}: angle dimensions are invalid.`); else mem[k] = { k, l, name: m.sec === 'custom' ? `L${f2(dims[0])}x${f2(dims[1])}x${frac(dims[2])}` : m.sec.replace(' (LLV)', ''), ...angleProps(...dims) }; });
-    const C = p.conn, n = +C.n; if (!(Number.isInteger(n) && n >= 1)) errors.push('Bolts per member end must be a whole number.');
+    const C = p.conn, n = +C.n; if (!(Number.isInteger(n) && n >= 1)) errors.push('Bolts per member end must be a whole number.'); else if (n < 2) errors.push('Bolts per member end must be at least 2 (AASHTO LRFD 6.13.1; with one bolt the shear lag factor U is undefined).');
     ['s', 'e', 'tg'].forEach(k => { if (!(nm(C[k]) > 0)) errors.push(`Connection "${k}" must be positive.`); });
     ['StrI', 'Con'].forEach(c => ['top', 'bot', 'diag'].forEach(k => { if (!isFinite(nm(p.user[c][k]))) errors.push(`User force ${c} ${k} must be a number.`); }));
     if (errors.length) return { errors };
@@ -2637,14 +2639,14 @@ tabs: { combos: 'Member forces', rptCombos: 'Loads and member forces' },
     const frames = EL.filter(e => e.k !== 'web');
     combos.forEach(cb => { cb.f = frames.map(e => { const w = Math.abs(e.unit * cb.wind) + Math.abs(e.ubr * (cb.Mbr || 0)), u = cb.user ? nm(cb.user[e.k]) : 0; return { e, w, u, br: Math.abs(e.ubr * (cb.Mbr || 0)), T: Math.max(0, u + w), Cc: Math.max(0, -(u - w)) }; }); });
     // member design demands (max over combos, per member group)
-    const Fy = GD_GR[p.gA].Fy, Fu = GD_GR[p.gA].Fu, bolt = BOLT[C.d], Fub = FUB[C.gr], thr = C.thr === 'excl' ? 0.56 : 0.45, s = nm(C.s), e0 = nm(C.e), tg = nm(C.tg), Fug = GD_GR[p.gG].Fu, dh = bolt.dh;
+    const Fy = GD_GR[p.gA].Fy, Fu = GD_GR[p.gA].Fu, bolt = BOLT[C.d], Fub = FUB[C.gr], thr = C.thr === 'excl' ? 0.56 : 0.45, s = nm(C.s), e0 = nm(C.e), tg = nm(C.tg), Fug = GD_GR[p.gG].Fu, dh = bolt.dh, dn = dh + 0.0625;   // dn: net-area hole width (6.8.3)
     Object.values(mem).forEach(m => { const els = frames.filter(e => e.k === m.k); m.L = Math.max(...els.map(e => e.L)); m.els = els;
       m.Tu = 0; m.Cu = 0; m.cT = ''; m.cC = ''; combos.forEach(cb => cb.f.filter(q => q.e.k === m.k).forEach(q => { if (q.T > m.Tu) { m.Tu = q.T; m.cT = cb.id; } if (q.Cc > m.Cu) { m.Cu = q.Cc; m.cC = cb.id; } }));
       m.lrx = m.L / m.rx; m.KLr = m.lrx <= 80 ? 72 + 0.75 * m.lrx : Math.min(32 + 1.25 * m.lrx, 200);
       m.bt = m.b1 / m.t; m.lim = 0.45 * Math.sqrt(ES / Fy); m.Q = m.bt <= m.lim ? 1 : m.bt <= 0.91 * Math.sqrt(ES / Fy) ? 1.34 - 0.76 * m.bt * Math.sqrt(Fy / ES) : 0.53 * ES / (Fy * m.bt ** 2);
       m.bt2 = m.b2 / m.t; if (m.bt2 > m.bt) { m.bt = m.bt2; m.Q = m.bt <= m.lim ? 1 : m.bt <= 0.91 * Math.sqrt(ES / Fy) ? 1.34 - 0.76 * m.bt * Math.sqrt(Fy / ES) : 0.53 * ES / (Fy * m.bt ** 2); }
       m.Po = m.Q * Fy * m.A; m.Pe = Math.PI ** 2 * ES * m.A / m.KLr ** 2; m.Pn = m.Pe >= 0.44 * m.Po ? Math.pow(0.658, m.Po / m.Pe) * m.Po : 0.877 * m.Pe; m.Pr = 0.95 * m.Pn;
-      m.Pyr = PHI.y * Fy * m.A; m.An = m.A - dh * m.t; m.Lc = (n - 1) * s; m.U = n >= 4 ? 0.80 : n === 3 ? 0.60 : n === 2 ? Math.max(0, 1 - m.xbar / m.Lc) : 0; m.Pur = PHI.u * Fu * m.An * m.U;
+      m.Pyr = PHI.y * Fy * m.A; m.An = m.A - dn * m.t; m.Lc = (n - 1) * s; m.U = n >= 4 ? 0.80 : n === 3 ? 0.60 : n === 2 ? Math.max(0, 1 - m.xbar / m.Lc) : 0; m.Pur = PHI.u * Fu * m.An * m.U;
       m.slC = m.L / m.rz; m.slT = m.L / m.rz; m.Fmax = Math.max(m.Tu, m.Cu);
       m.phRb = PHI.s * thr * bolt.Ab * Fub; m.boltR = n * m.phRb;
       const brg = (t, F) => { let tot = 0; for (let i = 0; i < n; i++) { const Lc = i === 0 ? e0 - dh / 2 : s - dh; tot += Math.min(2.4 * bolt.d * t * F, 1.2 * Lc * t * F); } return PHI.bb * tot; };
@@ -2662,7 +2664,7 @@ tabs: { combos: 'Member forces', rptCombos: 'Loads and member forces' },
         T`\begin{aligned}\frac{\ell}{r_x} &= \frac{${f2(m.L)}}{${f3(m.rx)}} = ${f2(m.lrx)}, \quad \left(\frac{KL}{r}\right)_{eff} = ${m.lrx <= 80 ? T`72 + 0.75(${f2(m.lrx)})` : T`32 + 1.25(${f2(m.lrx)})`} = ${f2(m.KLr)} \\ P_e &= \frac{\pi^2(29{,}000)(${f3(m.A)})}{${f2(m.KLr)}^2} = ${f2(m.Pe)}, \quad P_o = QF_yA_g = ${f3(m.Q)}(${f0(R.Fy)})(${f3(m.A)}) = ${f2(m.Po)} \\ P_n &= ${m.Pe >= 0.44 * m.Po ? T`0.658^{${f3(m.Po / m.Pe)}}(${f2(m.Po)})` : T`0.877(${f2(m.Pe)})`} = ${f2(m.Pn)}, \quad P_r = 0.95P_n = ${f2(m.Pr)}\ \text{kip} \;${GE(m.Pr, m.Cu)}\; P_u = ${f2(m.Cu)}\ \text{kip}\end{aligned}`,
         [['A, r<sub>x</sub>, r<sub>z</sub>', `${m.name}`, `${f3(m.A)}, ${f3(m.rx)}, ${f3(m.rz)}`, 'in², in'], ['ℓ', 'Longest work-point length in the group', f2(m.L), 'in'], ['b/t', `Limit 0.45√(E/F<sub>y</sub>) = ${f2(m.lim)}`, f2(m.bt), '']]))); out.add(c); }
     { const c = { id: 'CF2', grp: 'Members', title: 'Tension resistance', ref: 'AASHTO LRFD 6.8.2.1, Table 6.8.2.2-1', src: 'Code', sym: T`P_u \le \min\left(\phi_yF_yA_g,\ \phi_uF_uA_nU\right)`, cols: ['Member', 'T_u (kip)', 'Yield (kip)', 'Fracture (kip)', 'Ratio'], items: [],
-        note: `U for a single angle bolted through one leg: 0.80 with four or more bolts in the line of force, 0.60 with three, 1 − x̄/L with two (Table 6.8.2.2-1). A_n deducts one standard hole (${f3(R.dh)} in).` };
+        note: `U for a single angle bolted through one leg: 0.80 with four or more bolts in the line of force, 0.60 with three, 1 − x̄/L with two (Table 6.8.2.2-1). A_n deducts one standard hole plus 1/16 in (${f3(R.dh + 0.0625)} in, 6.8.3).` };
       M.forEach(m => { const cap = Math.min(m.Pyr, m.Pur); c.items.push(rc(`${m.l} (${m.name}), ${m.cT || '—'}`, [f2(m.Tu), f2(m.Pyr), f2(m.Pur), f2(m.Tu / cap)], m.Tu, cap,
         T`\phi_yF_yA_g = 0.95(${f0(R.Fy)})(${f3(m.A)}) = ${f2(m.Pyr)}, \quad \phi_uF_uA_nU = 0.80(${f0(R.Fu)})(${f3(m.An)})(${f3(m.U)}) = ${f2(m.Pur)}\ \text{kip} \;${GE(cap, m.Tu)}\; ${f2(m.Tu)}\ \text{kip}`,
         [['U', R.n >= 3 ? `${R.n} bolts in the line of force` : `1 − x̄/L = 1 − ${f3(m.xbar)}/${f2(m.Lc)}`, f3(m.U), '']])); }); out.add(c); }
@@ -6326,9 +6328,9 @@ function renderCombos() {
         body += eq(`${k === 'top' ? 'Top' : 'Bottom'} flange design force (${q.tension ? 'tension' : 'compression'})`, q.tension ? '6.13.6.1.3, Eq. 6.13.6.1.4c-2' : '6.13.6.1.3',
           q.tension ? T`A_e = \frac{\phi_uF_u}{\phi_yF_{yt}}A_n = \frac{0.80(${f0(R.Fu)})}{0.95(${f0(R.Fy)})}(${f2(fl.An)}) = ${f2(PHI.u * R.Fu / (PHI.y * R.Fy) * fl.An)} \;\Rightarrow\; A_e = ${f2(fl.Ae)}\ \text{in}^2 \ (\le A_g = ${f2(fl.Ag)}), \qquad P_{fu} = ${f2(q.F)}(${f2(fl.Ae)}) = ${f2(q.P)}\ \text{kip}`
                     : T`P_{fu} = F\,A_g = ${f2(q.F)}(${f2(fl.Ag)}) = ${f2(q.P)}\ \text{kip}`,
-          q.tension ? [['A<sub>n</sub>', `A<sub>g</sub> − ${fl.nh} holes × d<sub>h</sub> × t = ${f2(fl.Ag)} − ${fl.nh}(${f3(R.bolt.dh)})(${f3(fl.t)})`, f2(fl.An), 'in²']] : null); });
+          q.tension ? [['A<sub>n</sub>', `A<sub>g</sub> − ${fl.nh} holes × (d<sub>h</sub> + 1/16) × t = ${f2(fl.Ag)} − ${fl.nh}(${f3(R.bolt.dh + 0.0625)})(${f3(fl.t)})`, f2(fl.An), 'in²']] : null); });
       body += eq('Web design forces', '6.13.6.1.4b, Eq. 6.13.6.1.4b-1 to -4', T`\begin{aligned}\phi_vV_n &= ${f2(R.phVn)}\ \text{kip}, \quad V_{uw} = ${cb.ruleV === 'low' ? T`1.5V_u = 1.5(${f2(cb.Vu)})` : T`\frac{V_u + \phi_vV_n}{2} = \frac{${f2(cb.Vu)} + ${f2(R.phVn)}}{2}`} = ${f2(cb.Vuw)}\ \text{kip} \\ M_{uw} &= \frac{t_wD^2}{12}|R_hF_{cf} - R_{cf}f_{ncf}| = \frac{${f3(R.tw)}(${f2(R.D)})^2}{12}|${f2(R.Rh)}(${f2(Math.sign(cb.fcf || 1) * cb.Fcf)}) - ${f3(cb.Rcf)}(${f2(cb.fncf)})| = ${f2(cb.Muw)}\ \text{kip-in} \\ H_{uw} &= \frac{t_wD}{2}(R_hF_{cf} + R_{cf}f_{ncf}) = \frac{${f3(R.tw)}(${f2(R.D)})}{2}(${f2(R.Rh * Math.sign(cb.fcf || 1) * cb.Fcf)} + ${f3(cb.Rcf)}(${f2(cb.fncf)})) = ${f2(cb.Huw)}\ \text{kip}\end{aligned}`,
-        [['φ<sub>v</sub>V<sub>n</sub>', `Web shear resistance of the smaller section, ${P.sec.web}, k = ${f2(R.k)}, C = ${f3(R.Cv)}, V<sub>p</sub> = ${f2(R.Vp)} kip (Eq. ${R.vnExpr.eq})`, f2(R.phVn), 'kip'], ['F<sub>cf</sub>, f<sub>ncf</sub>', 'Signed: tension positive', `${f2(Math.sign(cb.fcf || 1) * cb.Fcf)}, ${f2(cb.fncf)}`, 'ksi']]);
+        [['φ<sub>v</sub>V<sub>n</sub>', `Web shear resistance of the smaller section, ${P.sec.web}${R.vnExpr.over3D ? ' (d<sub>o</sub> > 3D, treated as unstiffened per 6.10.9.1)' : ''}, k = ${f2(R.k)}, C = ${f3(R.Cv)}, V<sub>p</sub> = ${f2(R.Vp)} kip (Eq. ${R.vnExpr.eq})`, f2(R.phVn), 'kip'], ['F<sub>cf</sub>, f<sub>ncf</sub>', 'Signed: tension positive', `${f2(Math.sign(cb.fcf || 1) * cb.Fcf)}, ${f2(cb.fncf)}`, 'ksi']]);
     } else {
       body += eq('Slip forces', cb.type === 'sv' ? '6.13.6.1.3, 6.13.6.1.4b' : '6.13.6.1.3 (deck placement)', T`\begin{aligned}P_{s,top} &= \frac{|${f2(cb.ft)}|}{${f2(R.Rh)}}(${f2(R.flg.top.Ag)}) = ${f2(cb.Ps.top)}\ \text{kip}, \qquad P_{s,bot} = \frac{|${f2(cb.fb)}|}{${f2(R.Rh)}}(${f2(R.flg.bot.Ag)}) = ${f2(cb.Ps.bot)}\ \text{kip} \\ M_w &= \frac{t_wD^2}{12}|f_{top} - f_{bot}| = ${f2(cb.Mw)}\ \text{kip-in}, \qquad H_w = \frac{t_wD}{2}(f_{top} + f_{bot}) = ${f2(cb.Hw)}\ \text{kip}, \qquad V_w = ${f2(cb.Vw)}\ \text{kip}\end{aligned}`);
     }
@@ -6340,7 +6342,7 @@ function renderCombos() {
 
 function pfyCard(R) {
   const row = (k, lbl) => { const q = R.Pfy[k]; return ['L', 'R'].map(sd => { const s = q[sd]; return eq(`${lbl}, ${sd === 'L' ? 'left' : 'right'} of splice: ${frac(s.b)} × ${frac(s.t)}`, 'Eq. 6.13.6.1.3b-1, -2',
-    T`A_n = ${f2(s.Ag)} - ${k === 'top' ? R.fl.top.nl * 2 : R.fl.bot.nl * 2}(${f3(R.bolt.dh)})(${f3(s.t)}) = ${f2(s.An)}, \quad A_e = \frac{\phi_uF_u}{\phi_yF_{yf}}A_n = \frac{0.80(${f0(R.Fu)})}{0.95(${f0(R.Fy)})}(${f2(s.An)}) = ${f2(s.Ae0)} \to ${f2(s.Ae)}\ \text{in}^2, \quad P_{fy} = F_{yf}A_e = ${f0(R.Fy)}(${f2(s.Ae)}) = ${f2(s.P)}\ \text{kip}`); }).join('')
+    T`A_n = ${f2(s.Ag)} - ${k === 'top' ? R.fl.top.nl * 2 : R.fl.bot.nl * 2}(${f3(R.bolt.dh + 0.0625)})(${f3(s.t)}) = ${f2(s.An)}, \quad A_e = \frac{\phi_uF_u}{\phi_yF_{yf}}A_n = \frac{0.80(${f0(R.Fu)})}{0.95(${f0(R.Fy)})}(${f2(s.An)}) = ${f2(s.Ae0)} \to ${f2(s.Ae)}\ \text{in}^2, \quad P_{fy} = F_{yf}A_e = ${f0(R.Fy)}(${f2(s.Ae)}) = ${f2(s.P)}\ \text{kip}`); }).join('')
     + `<p class="note-p"><b>${lbl} design force: P<sub>fy</sub> = ${f2(q.P)} kip</b> (the ${q.side === 'L' ? 'left' : 'right'} flange is smaller). A<sub>e</sub> ≤ A<sub>g</sub> is applied to both tension and compression flanges, as the design method does.</p>`; };
   return card('cb-pfy', 'Flange splice design forces, P_fy', 'AASHTO LRFD 6.13.6.1.3b', `<p class="note-p">Each flange splice and its bolts are proportioned to develop the design yield resistance of the smaller flange on either side of the splice, independent of the applied loads. The forces below are used for bolt shear, bearing, splice plates, and block shear (TF and BF checks).</p>${row('top', 'Top flange')}${row('bot', 'Bottom flange')}`
     + eq('Flange-couple lever arms', 'C6.13.6.1.3b', T`A_{pos} = \frac{t_{bf}}{2} + D + t_{tf} + t_h + \frac{t_s}{2} = ${f2(R.Apos)}\ \text{in}, \qquad A_{neg} = \frac{t_{bf}}{2} + D + \frac{t_{tf}}{2} = ${f2(R.Aneg)}\ \text{in}, \qquad A_{w,pos} = \frac{D}{2} + t_{tf} + t_h + \frac{t_s}{2} = ${f2(R.AwPos)}\ \text{in}`)
@@ -6425,7 +6427,7 @@ function renderReportHead() {
     <table class="tb"><tr><td><span>Project</span>${esc(mt.name)}</td><td><span>Computed by</span>${esc(mt.compBy)}</td><td><span>Date</span>${esc(mt.compDate)}</td></tr><tr><td><span>Subject</span>${esc(mt.subject)}</td><td><span>Checked by</span>${esc(mt.chkBy)}</td><td><span>Date</span>${esc(mt.chkDate)}</td></tr><tr><td colspan="3"><span>Task</span>${esc(mt.task)}</td></tr></table>
     <h2 class="rpt-h">Input echo</h2>${P.source ? `<p class="note-p">Demands source: ${esc(P.source)}</p>` : ''}
     <div class="g2">${kv([['Web depth D', frac(R.D), 'in'], ['Grades: flange / web / plates', `${P.sec.gF} / ${P.sec.gW} / ${P.sec.gP}`], ['Left: t_w, top, bottom', `${frac(R.secL.tw)}; ${frac(R.secL.topB)} × ${frac(R.secL.topT)}; ${frac(R.secL.botB)} × ${frac(R.secL.botT)}`, 'in'], ['Right: t_w, top, bottom', `${frac(R.secR.tw)}${P.sec.same?.web ? ' (= left)' : ''}; ${frac(R.secR.topB)} × ${frac(R.secR.topT)}${P.sec.same?.top ? ' (= left)' : ''}; ${frac(R.secR.botB)} × ${frac(R.secR.botT)}${P.sec.same?.bot ? ' (= left)' : ''}`, 'in'],
-      ['Deck t_s / haunch / b_eff', `${f2(num2(P.sec.ts))} / ${f2(num2(P.sec.hh))} / ${f2(num2(P.sec.beff))}`, 'in'], ['Concrete f′c / w_c / K_1', `${f2(R.MR.fc)} ksi / ${R.MR.wc.toFixed(3)} kcf / ${f2(R.MR.K1)}`], ['Modular ratio n (computed)', `${R.MR.n0.toFixed(2)}${R.MR.rule === 'round' ? ` → ${R.MR.n} (rounded)` : ''}; E_c = ${Math.round(R.MR.Ec).toLocaleString('en-US')} ksi`], ['Rebar A_r / depth', `${f2(num2(P.sec.Ar))} in² / ${f2(num2(P.sec.dr))} in`], ['R_h / α top / α bottom', `${f2(R.Rh)} / ${f2(num2(P.sec.aT))} / ${f2(num2(P.sec.aB))}`], ['Web shear basis', `${P.sec.web}${P.sec.web === 'stiffened' ? `, d_o = ${f2(num2(P.sec.do))} in` : ''}`], ['Design method', R.code === '10' ? `AASHTO LRFD 10th Ed. 6.13.6.1.3; deck rebar in negative M_r: ${P.sec.prs === 'yes' ? `yes, F_yr = ${P.sec.Fyr} ksi` : 'no'}` : 'AASHTO LRFD 8th Ed. 6.13.6.1.4'], ['Web eccentricity, strength / slip', `${P.bolts.eccS === 'excl' ? 'neglected' : 'included'} / ${P.bolts.eccV === 'incl' ? 'included' : 'neglected'}`],
+      ['Deck t_s / haunch / b_eff', `${f2(num2(P.sec.ts))} / ${f2(num2(P.sec.hh))} / ${f2(num2(P.sec.beff))}`, 'in'], ['Concrete f′c / w_c / K_1', `${f2(R.MR.fc)} ksi / ${R.MR.wc.toFixed(3)} kcf / ${f2(R.MR.K1)}`], ['Modular ratio n (computed)', `${R.MR.n0.toFixed(2)}${R.MR.rule === 'round' ? ` → ${R.MR.n} (rounded)` : ''}; E_c = ${Math.round(R.MR.Ec).toLocaleString('en-US')} ksi`], ['Rebar A_r / depth', `${f2(num2(P.sec.Ar))} in² / ${f2(num2(P.sec.dr))} in`], ['R_h / α top / α bottom', `${f2(R.Rh)} / ${f2(num2(P.sec.aT))} / ${f2(num2(P.sec.aB))}`], ['Web shear basis', `${P.sec.web}${P.sec.web === 'stiffened' ? `, d_o = ${f2(num2(P.sec.do))} in${R.vnExpr && R.vnExpr.over3D ? ' (> 3D: treated as unstiffened, 6.10.9.1)' : ''}` : ''}`], ['Design method', R.code === '10' ? `AASHTO LRFD 10th Ed. 6.13.6.1.3; deck rebar in negative M_r: ${P.sec.prs === 'yes' ? `yes, F_yr = ${P.sec.Fyr} ksi` : 'no'}` : 'AASHTO LRFD 8th Ed. 6.13.6.1.4'], ['Web eccentricity, strength / slip', `${P.bolts.eccS === 'excl' ? 'neglected' : 'included'} / ${P.bolts.eccV === 'incl' ? 'included' : 'neglected'}`],
       ['M: DC1 / DC2 / DW', `${f2(num2(P.dem.MDC1))} / ${f2(num2(P.dem.MDC2))} / ${f2(num2(P.dem.MDW))}`, 'kip-ft'], ['M: LL+ / LL− / CLL', `${f2(num2(P.dem.MLLp))} / ${f2(num2(P.dem.MLLn))} / ${f2(num2(P.dem.MCL))}`, 'kip-ft'], ['V: DC1 / DC2 / DW / LL / CLL', `${f2(num2(P.dem.VDC1))} / ${f2(num2(P.dem.VDC2))} / ${f2(num2(P.dem.VDW))} / ${f2(num2(P.dem.VLL))} / ${f2(num2(P.dem.VCL))}`, 'kip'], ['Fatigue ΔM + / −', `${f2(num2(P.dem.dMp))} / ${f2(num2(P.dem.dMn))}`, 'kip-ft']])}
     ${kv([['Bolts', `${frac(R.bolt.d)} in F3125 ${P.bolts.gr}, threads ${P.bolts.thr === 'excl' ? 'excluded' : 'included'}`], ['Faying surface / holes', `Class ${P.bolts.cls} / standard, ${P.bolts.prep}`], ['Gap', frac(R.gap), 'in'], ...fs('top'), ...fs('bot'), ['Web plates', `2 − ${frac(R.web.hw)} × ${frac(R.web.twp)}`, 'in'], ['Web bolts: rows × columns per side', `${R.web.nrw} × ${R.web.ncw}`], ['Web pitches v / h, end distances', `${frac(R.web.sv)} / ${frac(R.web.sh)}; ${frac(R.web.ew)}, ${frac(R.web.ewp)}`, 'in'],
       ['Load factors DC / DW / LL', `${P.gam.dcMax}–${P.gam.dcMin} / ${P.gam.dwMax}–${P.gam.dwMin} / ${P.gam.llS} (Str), ${P.gam.llSv} (Serv II)`]])}</div>
