@@ -350,6 +350,105 @@ Verification method for every item: the page was loaded in jsdom from origin/mai
 - **How verified:** jsdom (no errors).
 - **Other copies of this code:** none.
 
+## 2026-10-04 — PR: claude/step1-group4 (PR link added after merge)
+### S1. "← All tools" link and shared project info   [feature (no result change)]
+- **Date / type:** 2026-10-04, feature (no result change).
+- **Where:** CSS after `#projNm{width:200px;font-size:12px}`, header `.brand` line (replaced: link appended inside it), `#projNm` wrapped in a flex `div` with a two-button column, and two new `<script>` blocks before `</body>`.
+- **Purpose:** link back to `tools.html` (`target="_top"`, hidden in print); "Use shared project info" / "Share project info" on the `bridgeSuite.v1.projectMeta` channel (`_schema:"bridge-project-meta"`, HANDOFF.md §4.1). Use reads with `BridgeXfer.read('projectMeta','bridge-project-meta',1)`, shows a confirm listing every field that will be overwritten (old → new), writes only fields this tool has, never blanks a field when the shared value is empty, and skips a non-`YYYY-MM-DD` value for a date input.
+- **Field mapping:** projNm → projectName. Nothing else maps (sent as ""): bridgeId, jobNo, client, location, preparedBy, checkedBy, date.
+- **Governing provision:** none (no engineering change). Spec: HANDOFF.md §4.1 and §5.
+- **Before / After** (exact; edits applied in this order, each anchor occurs once; line endings preserved):
+  1.
+     - Before:
+  ```html
+  #projNm{width:200px;font-size:12px}
+  ```
+     - After:
+  ```html
+  #projNm{width:200px;font-size:12px}
+  .alltools{font-size:11px;font-weight:500;color:var(--mu);text-decoration:none;margin-left:6px}
+  .alltools:hover{color:var(--bl);text-decoration:underline}
+  .pshare{display:flex;flex-direction:column;gap:2px}
+  .pshare .btn{font-size:10px;padding:1px 7px}
+  @media print{.alltools,.pshare{display:none!important}}
+  ```
+  2.
+     - Before:
+  ```html
+  <path d="M3 6h18M3 12h18M3 18h18"/></svg>Beam Pro</div>
+  ```
+     - After:
+  ```html
+  <path d="M3 6h18M3 12h18M3 18h18"/></svg>Beam Pro<a class="alltools" href="tools.html" target="_top">&larr; All tools</a></div>
+  ```
+  3.
+     - Before:
+  ```html
+    <input id="projNm" type="text" placeholder="Project name…" value="">
+  ```
+     - After:
+  ```html
+    <div style="display:flex;align-items:center;gap:6px">
+    <input id="projNm" type="text" placeholder="Project name…" value="">
+    <div class="pshare">
+      <button class="btn btn-s" type="button" onclick="bxUseProjectInfo()">Use shared project info</button>
+      <button class="btn btn-s" type="button" onclick="bxShareProjectInfo()">Share project info</button>
+    </div>
+    </div>
+  ```
+  4. Final `</body>`.
+     - Before:
+  ```html
+  </body>
+  ```
+     - After (the first `<script>` holds BridgeXfer v1 verbatim from HANDOFF.md §5, shown here as a placeholder comment):
+  ```html
+  <script>
+  /* (BridgeXfer v1 verbatim from HANDOFF.md §5) */
+  </script>
+  <script>
+  /* Shared project info (HANDOFF.md §4.1): "Use shared project info" / "Share project info".
+     Reads and writes the title-block inputs only, through their normal input events. */
+  (function(){
+    var PRODUCER="Multi-Span Beam Pro", FILE="Shear and Moment Diagrams.html";
+    var MAP={projectName:'#projNm'};
+    var KEYS=['projectName','bridgeId','jobNo','client','location','preparedBy','checkedBy','date'];
+    var LBL={projectName:'Project name',bridgeId:'Bridge ID',jobNo:'Job no.',client:'Client',location:'Location',
+             preparedBy:'Prepared by',checkedBy:'Checked by',date:'Date'};
+    function fld(k){ return MAP[k] ? document.querySelector(MAP[k]) : null; }
+    window.bxShareProjectInfo=function(){
+      var f={};
+      KEYS.forEach(function(k){ var e=fld(k); f[k]=e ? String(e.value||'') : ''; });
+      var r=BridgeXfer.publish('projectMeta',{_schema:'bridge-project-meta',fields:f},PRODUCER,FILE);
+      alert(r.ok ? 'Project info shared. Other tools can load it with "Use shared project info".' : r.error);
+    };
+    window.bxUseProjectInfo=function(){
+      var r=BridgeXfer.read('projectMeta','bridge-project-meta',1);
+      if(!r.ok){ alert('Shared project info: '+r.error); return; }
+      var f=r.payload.fields||{}, ch=[], skip=[];
+      KEYS.forEach(function(k){
+        var e=fld(k), v=(f[k]==null) ? '' : String(f[k]);
+        if(!e || v==='') return;   /* field not in this tool, or shared value empty: never blank a field */
+        if(e.type==='date' && !/^\d{4}-\d{2}-\d{2}$/.test(v)){ skip.push(LBL[k]+' ("'+v+'" is not a YYYY-MM-DD date)'); return; }
+        if(e.value!==v) ch.push({e:e,k:k,v:v});
+      });
+      var head='Shared project info from '+BridgeXfer.describe(r.payload);
+      var sk=skip.length ? '\n\nSkipped: '+skip.join('; ') : '';
+      if(!ch.length){ alert(head+'\n\nNothing to change: the matching fields already hold these values.'+sk); return; }
+      if(!confirm(head+'\n\nThese fields will be overwritten:\n'+ch.map(function(c){
+          return '  '+LBL[c.k]+': "'+c.e.value+'" → "'+c.v+'"'; }).join('\n')+sk+'\n\nContinue?')) return;
+      ch.forEach(function(c){ c.e.value=c.v; c.e.dispatchEvent(new Event('input',{bubbles:true})); });
+    };
+  })();
+  </script>
+  </body>
+  ```
+- **Behaviour notes:** Use dispatches `input` on `#projNm`, so the existing listener runs `readIn(); updateDirty(); autoSave();` (`beamProAuto`, unchanged).
+- **Saved data:** no existing key or format changed. New keys are only the HANDOFF channel keys `bridgeSuite.v1.projectMeta` and `bridgeSuite.v1.projectMeta.updatedAt`, written on "Share project info".
+- **Check case:** n/a, no computed result changes. Hand check: open the tool, type a project name, click "Share project info"; open another tool, click "Use shared project info", accept the confirm; the name appears and survives a reload.
+- **How verified:** Every plain inline script syntax-checked (Node `vm.Script`, same parser as `node --check`); BridgeXfer block compared byte-for-byte with HANDOFF.md §5; page loaded in jsdom (CDN scripts not loaded) before and after the change with no new errors; Share → Use exercised between tools with jsdom localStorage (ASCE7-16 → ACI Rebar, Steel Beam → Shear and Moment, Concrete Beam Capacity shell against stub tab documents), including cancel, empty shared values (field kept), a non-ISO date on a date input (skipped), an empty channel and a wrong `_schema` (refused). `git diff` shows no removed lines other than the ones listed under Before. No calculation code was touched.
+- **Other copies of this code:** none. BridgeXfer v1 is also in: ACI Rebar Development Length.html, ASCE7-16 Load Generator.html, Concrete Beam Capacity.html (shell), Steel Beam Design - AISC 15th.html, Shear and Moment Diagrams.html.
+
 ## Open items (not changed)
 - O1. **Unit conversion.** Only a notice was added (F8). Real conversion would scale spans, loads (4 types), E, I, c, A, σ, user stations and the W-shape d/t_w, and would need a decision on saved projects. Recommend it as a separate PR if wanted.
 - O2. **Roller → pin silent conversion** (`solve()`: `nodes.forEach(n2=>{if(n2.t==='roller')n2.t='pin';})`). Log only, as instructed. Pin and roller are mechanically identical in this model (no axial DOF), so no result is affected. The node dropdown offers only Pin/Fixed/Free, and the templates and "+ span" create 'roller', which is converted on the first solve. The only visible effect is the drawn symbol and the saved value. A proper fix means adding a "Roller" option (a UI change); not done.

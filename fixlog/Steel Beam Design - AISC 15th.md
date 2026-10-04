@@ -127,6 +127,105 @@ definition wins** (see O4). Every edit below was checked to be in the live (last
 - **How verified:** node run of `memberDesignAll`.
 - **Other copies of this code:** batch mode (`batchCheckRow` → `h33Check`) does not show this warning (see O2).
 
+## 2026-10-04 — PR: claude/step1-group4 (PR link added after merge)
+### S1. "← All tools" link and shared project info   [feature (no result change)]
+- **Date / type:** 2026-10-04, feature (no result change).
+- **Where:** CSS after `#projGrid input::placeholder{color:#8FA3BC}`, `#hdr` markup after `<div class="byline">by Mario Lococo</div>`, new `#projShare` row after `<div id="projGrid"></div>`, and two new `<script>` blocks before `</body>`.
+- **Purpose:** link back to `tools.html` (`target="_top"`, hidden in print); "Use shared project info" / "Share project info" on the `bridgeSuite.v1.projectMeta` channel (`_schema:"bridge-project-meta"`, HANDOFF.md §4.1). Use reads with `BridgeXfer.read('projectMeta','bridge-project-meta',1)`, shows a confirm listing every field that will be overwritten (old → new), writes only fields this tool has, never blanks a field when the shared value is empty, and skips a non-`YYYY-MM-DD` value for a date input.
+- **Field mapping:** S.proj.name (`data-fkey="proj_name"`) → projectName; S.proj.by → preparedBy; S.proj.chk → checkedBy; S.proj.date → date. Not in this tool's inputs (sent as ""): bridgeId, jobNo, client, location. Subject, Task and Checked date are not mapped. (`S.proj.num` / `S.proj.client` are read by the report but have no input, so they are neither sent nor written.)
+- **Governing provision:** none (no engineering change). Spec: HANDOFF.md §4.1 and §5.
+- **Before / After** (exact; edits applied in this order, each anchor occurs once; line endings preserved):
+  1.
+     - Before:
+  ```html
+  #projGrid input::placeholder{color:#8FA3BC}
+  ```
+     - After:
+  ```html
+  #projGrid input::placeholder{color:#8FA3BC}
+  #hdr .alltools{display:inline-block;margin-top:2px;font-family:var(--font-ui);font-size:8.5pt;color:#C7D4E4;text-decoration:none}
+  #hdr .alltools:hover{color:#fff;text-decoration:underline}
+  #projShare{display:flex;gap:6px;margin-top:5px}
+  #projShare button{font-family:var(--font-ui);font-size:8pt;padding:2px 8px;border:1px solid #ffffff44;border-radius:3px;background:#ffffff14;color:#fff;cursor:pointer}
+  #projShare button:hover{background:#ffffff2a}
+  @media print{.alltools,#projShare{display:none!important}}
+  ```
+  2.
+     - Before:
+  ```html
+          <div class="byline">by Mario Lococo</div>
+  ```
+     - After:
+  ```html
+          <div class="byline">by Mario Lococo</div>
+          <a class="alltools" href="tools.html" target="_top">&larr; All tools</a>
+  ```
+  3.
+     - Before:
+  ```html
+      <div id="projGrid"></div>
+  ```
+     - After:
+  ```html
+      <div id="projGrid"></div>
+      <div id="projShare">
+        <button type="button" onclick="bxUseProjectInfo()">Use shared project info</button>
+        <button type="button" onclick="bxShareProjectInfo()">Share project info</button>
+      </div>
+  ```
+  4. Final `</body>`.
+     - Before:
+  ```html
+  </body>
+  ```
+     - After (the first `<script>` holds BridgeXfer v1 verbatim from HANDOFF.md §5, shown here as a placeholder comment):
+  ```html
+  <script>
+  /* (BridgeXfer v1 verbatim from HANDOFF.md §5) */
+  </script>
+  <script>
+  /* Shared project info (HANDOFF.md §4.1): "Use shared project info" / "Share project info".
+     Reads and writes the title-block inputs only, through their normal input events. */
+  (function(){
+    var PRODUCER="Steel Beam Designer", FILE="Steel Beam Design - AISC 15th.html";
+    var MAP={projectName:'[data-fkey="proj_name"]', preparedBy:'[data-fkey="proj_by"]', checkedBy:'[data-fkey="proj_chk"]', date:'[data-fkey="proj_date"]'};
+    var KEYS=['projectName','bridgeId','jobNo','client','location','preparedBy','checkedBy','date'];
+    var LBL={projectName:'Project name',bridgeId:'Bridge ID',jobNo:'Job no.',client:'Client',location:'Location',
+             preparedBy:'Prepared by',checkedBy:'Checked by',date:'Date'};
+    function fld(k){ return MAP[k] ? document.querySelector(MAP[k]) : null; }
+    window.bxShareProjectInfo=function(){
+      var f={};
+      KEYS.forEach(function(k){ var e=fld(k); f[k]=e ? String(e.value||'') : ''; });
+      var r=BridgeXfer.publish('projectMeta',{_schema:'bridge-project-meta',fields:f},PRODUCER,FILE);
+      alert(r.ok ? 'Project info shared. Other tools can load it with "Use shared project info".' : r.error);
+    };
+    window.bxUseProjectInfo=function(){
+      var r=BridgeXfer.read('projectMeta','bridge-project-meta',1);
+      if(!r.ok){ alert('Shared project info: '+r.error); return; }
+      var f=r.payload.fields||{}, ch=[], skip=[];
+      KEYS.forEach(function(k){
+        var e=fld(k), v=(f[k]==null) ? '' : String(f[k]);
+        if(!e || v==='') return;   /* field not in this tool, or shared value empty: never blank a field */
+        if(e.type==='date' && !/^\d{4}-\d{2}-\d{2}$/.test(v)){ skip.push(LBL[k]+' ("'+v+'" is not a YYYY-MM-DD date)'); return; }
+        if(e.value!==v) ch.push({e:e,k:k,v:v});
+      });
+      var head='Shared project info from '+BridgeXfer.describe(r.payload);
+      var sk=skip.length ? '\n\nSkipped: '+skip.join('; ') : '';
+      if(!ch.length){ alert(head+'\n\nNothing to change: the matching fields already hold these values.'+sk); return; }
+      if(!confirm(head+'\n\nThese fields will be overwritten:\n'+ch.map(function(c){
+          return '  '+LBL[c.k]+': "'+c.e.value+'" → "'+c.v+'"'; }).join('\n')+sk+'\n\nContinue?')) return;
+      ch.forEach(function(c){ c.e.value=c.v; c.e.dispatchEvent(new Event('input',{bubbles:true})); });
+    };
+  })();
+  </script>
+  </body>
+  ```
+- **Behaviour notes:** Use dispatches `input` on the `txtInput` fields, so the existing handler sets `S.proj[key]` and calls `schedule()` (recompute, `autosave()`, undo history). The header grows by one short button row.
+- **Saved data:** no existing key or format changed. New keys are only the HANDOFF channel keys `bridgeSuite.v1.projectMeta` and `bridgeSuite.v1.projectMeta.updatedAt`, written on "Share project info".
+- **Check case:** n/a, no computed result changes. Hand check: open the tool, type a project name, click "Share project info"; open another tool, click "Use shared project info", accept the confirm; the name appears and survives a reload.
+- **How verified:** Every plain inline script syntax-checked (Node `vm.Script`, same parser as `node --check`); BridgeXfer block compared byte-for-byte with HANDOFF.md §5; page loaded in jsdom (CDN scripts not loaded) before and after the change with no new errors; Share → Use exercised between tools with jsdom localStorage (ASCE7-16 → ACI Rebar, Steel Beam → Shear and Moment, Concrete Beam Capacity shell against stub tab documents), including cancel, empty shared values (field kept), a non-ISO date on a date input (skipped), an empty channel and a wrong `_schema` (refused). `git diff` shows no removed lines other than the ones listed under Before. No calculation code was touched.
+- **Other copies of this code:** none. BridgeXfer v1 is also in: ACI Rebar Development Length.html, ASCE7-16 Load Generator.html, Concrete Beam Capacity.html (shell), Steel Beam Design - AISC 15th.html, Shear and Moment Diagrams.html.
+
 ## Open items (not changed)
 - O1. **H3.3(c) buckling limit state** is not implemented, only warned (F5). Decide on the method (e.g. f_bx + σ_w ≤ φF_cr with F_cr = M_n/S_x from Chapter F, or a DG 9 interaction) before coding it as a check.
 - O2. **Batch mode** has no H3.3 buckling warning and keeps its existing tension note. Decide whether to add a matching batch note.

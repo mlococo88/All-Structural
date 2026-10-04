@@ -473,6 +473,117 @@ All edits were applied by scripted exact-string replacement (each Before block o
 - **How verified:** jsdom render.
 - **Other copies of this code:** `Concrete Beam Capacity.html`, Dev tab (`suite-frame-dev` srcdoc, ≈ standalone line + 5048). That copy is HTML-escaped (`&` → `&amp;`, `"` → `&quot;`). The same edits are applied there in branch `claude/fix-concrete-capacity` (separate PR).
 
+## 2026-10-04 — PR: claude/step1-group4 (PR link added after merge)
+### S1. "← All tools" link and shared project info   [feature (no result change)]
+- **Date / type:** 2026-10-04, feature (no result change).
+- **Where:** Title bar markup (`<div class="byline">by Mario Lococo</div>`), CSS (`.titleblock .full{grid-column:1/3;}` and the `@media print` block), `buildInputPanel()` panel A "Title Block" template (anchor `<input id="chkDate" type="date"></div>`), and two new `<script>` blocks just before the final `</body>`.
+- **Purpose:** link back to `tools.html` (`target="_top"`, hidden in print); "Use shared project info" / "Share project info" on the `bridgeSuite.v1.projectMeta` channel (`_schema:"bridge-project-meta"`, HANDOFF.md §4.1). Use reads with `BridgeXfer.read('projectMeta','bridge-project-meta',1)`, shows a confirm listing every field that will be overwritten (old → new), writes only fields this tool has, never blanks a field when the shared value is empty, and skips a non-`YYYY-MM-DD` value for a date input.
+- **Field mapping:** projName → projectName; projNo → jobNo; calcBy → preparedBy; chkBy → checkedBy; calcDate (date input) → date. Not in this tool (sent as ""): bridgeId, client, location. "Checked Date" is not mapped.
+- **Governing provision:** none (no engineering change). Spec: HANDOFF.md §4.1 and §5.
+- **Before / After** (exact; edits applied in this order, each anchor occurs once; line endings preserved):
+  1.
+     - Before:
+  ```html
+  .titleblock .full{grid-column:1/3;}
+  ```
+     - After:
+  ```html
+  .titleblock .full{grid-column:1/3;}
+  .alltools{display:inline-block; margin-top:3px; font-size:12px; color:var(--accent2); text-decoration:none;}
+  .alltools:hover{text-decoration:underline;}
+  ```
+  2.
+     - Before:
+  ```html
+    .note .note-body{padding-top:2px;}
+  }
+  ```
+     - After:
+  ```html
+    .note .note-body{padding-top:2px;}
+    .alltools{display:none!important;}
+  }
+  ```
+  3.
+     - Before:
+  ```html
+      <div class="byline">by Mario Lococo</div>
+    </div>
+  ```
+     - After:
+  ```html
+      <div class="byline">by Mario Lococo</div>
+      <a class="alltools" href="tools.html" target="_top">&larr; All tools</a>
+    </div>
+  ```
+  4.
+     - Before:
+  ```html
+        <div class="field"><label>Checked Date</label><input id="chkDate" type="date"></div>
+      </div>`)}
+  ```
+     - After:
+  ```html
+        <div class="field"><label>Checked Date</label><input id="chkDate" type="date"></div>
+      </div>
+      <div class="btnrow" style="margin-top:8px;">
+        <button type="button" class="btn small" onclick="bxUseProjectInfo()">Use shared project info</button>
+        <button type="button" class="btn small" onclick="bxShareProjectInfo()">Share project info</button>
+      </div>`)}
+  ```
+  5. Final `</body>`.
+     - Before:
+  ```html
+  </body>
+  ```
+     - After (the first `<script>` holds BridgeXfer v1 verbatim from HANDOFF.md §5, shown here as a placeholder comment):
+  ```html
+  <script>
+  /* (BridgeXfer v1 verbatim from HANDOFF.md §5) */
+  </script>
+  <script>
+  /* Shared project info (HANDOFF.md §4.1): "Use shared project info" / "Share project info".
+     Reads and writes the title-block inputs only, through their normal input events. */
+  (function(){
+    var PRODUCER="Rebar Development & Splice Calculator", FILE="ACI Rebar Development Length.html";
+    var MAP={projectName:'#projName', jobNo:'#projNo', preparedBy:'#calcBy', checkedBy:'#chkBy', date:'#calcDate'};
+    var KEYS=['projectName','bridgeId','jobNo','client','location','preparedBy','checkedBy','date'];
+    var LBL={projectName:'Project name',bridgeId:'Bridge ID',jobNo:'Job no.',client:'Client',location:'Location',
+             preparedBy:'Prepared by',checkedBy:'Checked by',date:'Date'};
+    function fld(k){ return MAP[k] ? document.querySelector(MAP[k]) : null; }
+    window.bxShareProjectInfo=function(){
+      var f={};
+      KEYS.forEach(function(k){ var e=fld(k); f[k]=e ? String(e.value||'') : ''; });
+      var r=BridgeXfer.publish('projectMeta',{_schema:'bridge-project-meta',fields:f},PRODUCER,FILE);
+      alert(r.ok ? 'Project info shared. Other tools can load it with "Use shared project info".' : r.error);
+    };
+    window.bxUseProjectInfo=function(){
+      var r=BridgeXfer.read('projectMeta','bridge-project-meta',1);
+      if(!r.ok){ alert('Shared project info: '+r.error); return; }
+      var f=r.payload.fields||{}, ch=[], skip=[];
+      KEYS.forEach(function(k){
+        var e=fld(k), v=(f[k]==null) ? '' : String(f[k]);
+        if(!e || v==='') return;   /* field not in this tool, or shared value empty: never blank a field */
+        if(e.type==='date' && !/^\d{4}-\d{2}-\d{2}$/.test(v)){ skip.push(LBL[k]+' ("'+v+'" is not a YYYY-MM-DD date)'); return; }
+        if(e.value!==v) ch.push({e:e,k:k,v:v});
+      });
+      var head='Shared project info from '+BridgeXfer.describe(r.payload);
+      var sk=skip.length ? '\n\nSkipped: '+skip.join('; ') : '';
+      if(!ch.length){ alert(head+'\n\nNothing to change: the matching fields already hold these values.'+sk); return; }
+      if(!confirm(head+'\n\nThese fields will be overwritten:\n'+ch.map(function(c){
+          return '  '+LBL[c.k]+': "'+c.e.value+'" → "'+c.v+'"'; }).join('\n')+sk+'\n\nContinue?')) return;
+      ch.forEach(function(c){ c.e.value=c.v; c.e.dispatchEvent(new Event('input',{bubbles:true})); });
+    };
+  })();
+  </script>
+  </body>
+  ```
+- **Behaviour notes:** Use writes the inputs and dispatches a bubbling `input` event, so the existing `#inputPanel` listener runs `render()`, which autosaves (`rebar_aci_autosave_v1`, unchanged format).
+- **Saved data:** no existing key or format changed. New keys are only the HANDOFF channel keys `bridgeSuite.v1.projectMeta` and `bridgeSuite.v1.projectMeta.updatedAt`, written on "Share project info".
+- **Check case:** n/a, no computed result changes. Hand check: open the tool, type a project name, click "Share project info"; open another tool, click "Use shared project info", accept the confirm; the name appears and survives a reload.
+- **How verified:** Every plain inline script syntax-checked (Node `vm.Script`, same parser as `node --check`); BridgeXfer block compared byte-for-byte with HANDOFF.md §5; page loaded in jsdom (CDN scripts not loaded) before and after the change with no new errors; Share → Use exercised between tools with jsdom localStorage (ASCE7-16 → ACI Rebar, Steel Beam → Shear and Moment, Concrete Beam Capacity shell against stub tab documents), including cancel, empty shared values (field kept), a non-ISO date on a date input (skipped), an empty channel and a wrong `_schema` (refused). `git diff` shows no removed lines other than the ones listed under Before. No calculation code was touched.
+- **Other copies of this code:** The same Rebar app is embedded in `Concrete Beam Capacity.html` (Development & Splice tab). That embedded copy was **not** changed; the Concrete Beam Capacity shell writes its title block from outside instead (see that tool's log). BridgeXfer v1 is also in: ACI Rebar Development Length.html, ASCE7-16 Load Generator.html, Concrete Beam Capacity.html (shell), Steel Beam Design - AISC 15th.html, Shear and Moment Diagrams.html.
+
 ## Open items (not changed)
 - O1. **Headed deformed bars (ACI 318-19 §25.4.4; AASHTO 10th Ed. 5.10.8.2.4c) not implemented.** — Not done here: a clean implementation needs a new tab, a schedule column, a print section and new inputs (ψp needs Att/Ahs and bar spacing; plus the 25.4.4.1 applicability limits: bar ≤ #11, Abrg ≥ 4Ab, clear cover ≥ 2db, c-c spacing ≥ 3db, normalweight concrete), and the same change must be mirrored by hand into the escaped copy in `Concrete Beam Capacity.html`. That is a sizeable UI addition. — Decision needed: do you want a "Headed Bar" tab (ACI l_dt = fy·ψe·ψp·ψo·ψc/(75λ√f'c)·db^1.5 ≥ max(8db, 6 in.)), and should the AASHTO branch be included?
 - O2. **AASHTO: lap splices of #14/#18.** The new N/P flag is applied in ACI mode only. I believe AASHTO 5.10.8.4 also restricts lap splices to #11 and smaller, but I did not confirm the 10th Ed. wording/article. — Confirm the AASHTO article; if confirmed, `lapProhibited()` can drop its `!f.AASHTO` condition.

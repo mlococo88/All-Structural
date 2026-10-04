@@ -1268,6 +1268,121 @@ Identical edits to branch claude/fix-rebar-dev (see fixlog/ACI Rebar Development
 - **How verified:** unescaped the Dev srcdoc and ran `node --check` on its inline script: OK. Ran the migration stub test and the jsdom boot test (scratch `w/cbc_mig.js`), with no page errors.
 - **Other copies of this code:** the standalone `ACI Rebar Development Length.html` intentionally keeps the old key `rebar_aci_autosave_v1` (and the shared `rebar_aci_projects_v1`). It is not changed.
 
+## 2026-10-04 — PR: claude/step1-group4 (PR link added after merge)
+### S1. "← All tools" link and shared project info   [feature (no result change)]
+- **Date / type:** 2026-10-04, feature (no result change).
+- **Where:** Outer shell only: shell `<style>` (after `.suite-frame-wrap iframe{...}`), `#suite-nav` (after the "Development & Splice" tab button), and two new `<script>` blocks before the final `</body>`. **No srcdoc content was changed.**
+- **Purpose:** link back to `tools.html` (`target="_top"`, hidden in print); "Use shared project info" / "Share project info" on the `bridgeSuite.v1.projectMeta` channel (`_schema:"bridge-project-meta"`, HANDOFF.md §4.1). Use reads with `BridgeXfer.read('projectMeta','bridge-project-meta',1)`, shows a confirm listing every field that will be overwritten (old → new), writes only fields this tool has, never blanks a field when the shared value is empty, and skips a non-`YYYY-MM-DD` value for a date input.
+- **Field mapping:** Beam Capacity and ASD tabs: `data-fkey="pg_Project"` → projectName; `pg_Project No.` → jobNo; `pg_Calculated By` → preparedBy; `pg_Checked By` → checkedBy; `pg_Date` (date input) → date. Development & Splice tab: projName, projNo, calcBy, chkBy, calcDate (date input), as in ACI Rebar Development Length.html. Not in this tool (sent as ""): bridgeId, client, location. Subject, Sheet and Checked Date are not mapped.
+- **Governing provision:** none (no engineering change). Spec: HANDOFF.md §4.1 and §5.
+- **Before / After** (exact; edits applied in this order, each anchor occurs once; line endings preserved):
+  1.
+     - Before:
+  ```html
+    .suite-frame-wrap iframe{width:100%;height:100%;border:0;display:block;background:#fff;}
+  </style>
+  ```
+     - After:
+  ```html
+    .suite-frame-wrap iframe{width:100%;height:100%;border:0;display:block;background:#fff;}
+    #suite-xfer{margin-left:auto;display:flex;align-items:center;gap:6px;padding-left:10px;}
+    #suite-xfer .alltools{font-size:11.5px;color:#c7d4e4;text-decoration:none;white-space:nowrap;margin-right:4px;}
+    #suite-xfer .alltools:hover{color:#fff;text-decoration:underline;}
+    #suite-xfer button{font-size:11px;padding:3px 9px;border:1px solid rgba(255,255,255,.25);border-radius:4px;
+      background:rgba(255,255,255,.06);color:#c7d4e4;cursor:pointer;white-space:nowrap;}
+    #suite-xfer button:hover{background:rgba(255,255,255,.14);color:#fff;}
+    @media print{#suite-xfer{display:none!important;}}
+  </style>
+  ```
+  2.
+     - Before:
+  ```html
+      <button class="suite-tab" id="suite-tab-dev" data-target="dev"><span class="dot"></span>Development &amp; Splice</button>
+    </nav>
+  ```
+     - After:
+  ```html
+      <button class="suite-tab" id="suite-tab-dev" data-target="dev"><span class="dot"></span>Development &amp; Splice</button>
+      <div id="suite-xfer">
+        <a class="alltools" href="tools.html" target="_top">&larr; All tools</a>
+        <button type="button" onclick="bxUseProjectInfo()" title="Fill the title blocks of all three tabs from the shared project info">Use shared project info</button>
+        <button type="button" onclick="bxShareProjectInfo()" title="Share the title block of the active tab with the other tools">Share project info</button>
+      </div>
+    </nav>
+  ```
+  3. Final `</body>`.
+     - Before:
+  ```html
+  </body>
+  ```
+     - After (the first `<script>` holds BridgeXfer v1 verbatim from HANDOFF.md §5, shown here as a placeholder comment):
+  ```html
+  <script>
+  /* (BridgeXfer v1 verbatim from HANDOFF.md §5) */
+  </script>
+  <script>
+  /* Shared project info (HANDOFF.md §4.1): "Use shared project info" / "Share project info".
+     The title-block inputs live in the three embedded tabs (srcdoc iframes, which have this page's
+     origin). The shell reads/writes those inputs directly through their normal input events; the
+     embedded apps themselves are not modified. Share reads the active tab; Use writes every tab. */
+  (function(){
+    var PRODUCER='Concrete Beam Design Suite', FILE='Concrete Beam Capacity.html';
+    var PG={projectName:'[data-fkey="pg_Project"]', jobNo:'[data-fkey="pg_Project No."]',
+            preparedBy:'[data-fkey="pg_Calculated By"]', checkedBy:'[data-fkey="pg_Checked By"]', date:'[data-fkey="pg_Date"]'};
+    var APPS=[
+      {id:'capacity', name:'Beam Capacity',        frame:'suite-frame-capacity', map:PG},
+      {id:'asd',      name:'ASD Beam Calcs',       frame:'suite-frame-asd',      map:PG},
+      {id:'dev',      name:'Development & Splice', frame:'suite-frame-dev',
+       map:{projectName:'#projName', jobNo:'#projNo', preparedBy:'#calcBy', checkedBy:'#chkBy', date:'#calcDate'}}];
+    var KEYS=['projectName','bridgeId','jobNo','client','location','preparedBy','checkedBy','date'];
+    var LBL={projectName:'Project name',bridgeId:'Bridge ID',jobNo:'Job no.',client:'Client',location:'Location',
+             preparedBy:'Prepared by',checkedBy:'Checked by',date:'Date'};
+    function doc(a){ try{ var fr=document.getElementById(a.frame); return fr ? fr.contentDocument : null; }catch(e){ return null; } }
+    function fld(a,d,k){ try{ return (d && a.map[k]) ? d.querySelector(a.map[k]) : null; }catch(e){ return null; } }
+    function active(){
+      var t=document.querySelector('.suite-tab.active'), id=t ? t.getAttribute('data-target') : 'capacity';
+      for(var i=0;i<APPS.length;i++) if(APPS[i].id===id) return APPS[i];
+      return APPS[0];
+    }
+    window.bxShareProjectInfo=function(){
+      var a=active(), d=doc(a);
+      if(!d || !fld(a,d,'projectName')){ alert('Could not read the title block of the '+a.name+' tab. Wait for it to load, then try again.'); return; }
+      var f={};
+      KEYS.forEach(function(k){ var e=fld(a,d,k); f[k]=e ? String(e.value||'') : ''; });
+      var r=BridgeXfer.publish('projectMeta',{_schema:'bridge-project-meta',fields:f},PRODUCER+' — '+a.name,FILE);
+      alert(r.ok ? 'Project info from the '+a.name+' tab shared. Other tools can load it with "Use shared project info".' : r.error);
+    };
+    window.bxUseProjectInfo=function(){
+      var r=BridgeXfer.read('projectMeta','bridge-project-meta',1);
+      if(!r.ok){ alert('Shared project info: '+r.error); return; }
+      var f=r.payload.fields||{}, ch=[], skip=[], lines=[];
+      APPS.forEach(function(a){
+        var d=doc(a); if(!d) return;
+        KEYS.forEach(function(k){
+          var e=fld(a,d,k), v=(f[k]==null) ? '' : String(f[k]);
+          if(!e || v==='') return;   /* field not in this tab, or shared value empty: never blank a field */
+          if(e.type==='date' && !/^\d{4}-\d{2}-\d{2}$/.test(v)){ skip.push(a.name+' / '+LBL[k]+' ("'+v+'" is not a YYYY-MM-DD date)'); return; }
+          if(e.value!==v){ ch.push({e:e,v:v}); lines.push('  '+a.name+' / '+LBL[k]+': "'+e.value+'" → "'+v+'"'); }
+        });
+      });
+      var head='Shared project info from '+BridgeXfer.describe(r.payload);
+      var sk=skip.length ? '\n\nSkipped: '+skip.join('; ') : '';
+      if(!ch.length){ alert(head+'\n\nNothing to change: the matching fields already hold these values.'+sk); return; }
+      if(!confirm(head+'\n\nThese fields will be overwritten:\n'+lines.join('\n')+sk+'\n\nContinue?')) return;
+      ch.forEach(function(c){ c.e.value=c.v; c.e.dispatchEvent(new Event('input',{bubbles:true})); });
+      /* let Beam Capacity re-send its project identity to the ASD tab over the existing bridge */
+      try{ var cf=document.getElementById('suite-frame-capacity'); if(cf && cf.contentWindow) cf.contentWindow.postMessage({type:'requestShared'},'*'); }catch(e){}
+    };
+  })();
+  </script>
+  </body>
+  ```
+- **Behaviour notes:** **Design choice (logged as asked):** the buttons live in the shell, not inside the HTML-escaped srcdoc apps. srcdoc iframes have the shell's origin, so the shell reads and writes the tabs' title-block inputs directly and dispatches a bubbling `input` event, which runs each tab's own handler (`set(...)` + `autosave()` in Capacity/ASD; `render()` → autosave in Development & Splice). This avoids editing escaped code. **Share** reads the active tab. **Use** writes every tab that has the field (one confirm lists tab / field / old → new) and then posts the existing `{type:'requestShared'}` message to the Capacity tab, so the existing bridge re-sends the project identity to the ASD tab (the ASD tab inherits `proj` from Capacity). If a tab's document cannot be reached, it is skipped; Share then shows a message.
+- **Saved data:** no existing key or format changed. New keys are only the HANDOFF channel keys `bridgeSuite.v1.projectMeta` and `bridgeSuite.v1.projectMeta.updatedAt`, written on "Share project info".
+- **Check case:** n/a, no computed result changes. Hand check: open the tool, type a project name, click "Share project info"; open another tool, click "Use shared project info", accept the confirm; the name appears and survives a reload.
+- **How verified:** Every plain inline script syntax-checked (Node `vm.Script`, same parser as `node --check`); BridgeXfer block compared byte-for-byte with HANDOFF.md §5; page loaded in jsdom (CDN scripts not loaded) before and after the change with no new errors; Share → Use exercised between tools with jsdom localStorage (ASCE7-16 → ACI Rebar, Steel Beam → Shear and Moment, Concrete Beam Capacity shell against stub tab documents), including cancel, empty shared values (field kept), a non-ISO date on a date input (skipped), an empty channel and a wrong `_schema` (refused). `git diff` shows no removed lines other than the ones listed under Before. No calculation code was touched.
+- **Other copies of this code:** none (the embedded apps are untouched). BridgeXfer v1 is also in: ACI Rebar Development Length.html, ASCE7-16 Load Generator.html, Concrete Beam Capacity.html (shell), Steel Beam Design - AISC 15th.html, Shear and Moment Diagrams.html.
+
 ## Open items (not changed)
 - O1. **ACI 318-19 §9.3.3.1 beam minimum strain** (`dEpsMin`, ACI branch) still checks εt ≥ 0.004. The review believes 318-19 changed this to εty + 0.003; I am not certain of the 318-19 wording, so per instructions the code is unchanged. — Please confirm against your copy of ACI 318-19 §9.3.3.1. If it reads εty + 0.003, change `0.004` to `S.mat.fy/ES+0.003` in that check (ACI only).
 - O3. **ACI Gr 60 εty.** F2 uses εty = fy/Es (0.002069 for Gr 60, so εtl = 0.005069). ACI 318-19 §21.2.2.1 permits εty = 0.002 for Grade 60, which would keep εtl = 0.005 and slightly raise φ in the transition zone. — Prefer the 0.002 permission for Gr 60?

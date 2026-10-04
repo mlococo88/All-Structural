@@ -36,6 +36,13 @@
   .suite-frame-wrap{position:absolute;inset:0;display:none;}
   .suite-frame-wrap.active{display:block;}
   .suite-frame-wrap iframe{width:100%;height:100%;border:0;display:block;background:#fff;}
+  #suite-xfer{margin-left:auto;display:flex;align-items:center;gap:6px;padding-left:10px;}
+  #suite-xfer .alltools{font-size:11.5px;color:#c7d4e4;text-decoration:none;white-space:nowrap;margin-right:4px;}
+  #suite-xfer .alltools:hover{color:#fff;text-decoration:underline;}
+  #suite-xfer button{font-size:11px;padding:3px 9px;border:1px solid rgba(255,255,255,.25);border-radius:4px;
+    background:rgba(255,255,255,.06);color:#c7d4e4;cursor:pointer;white-space:nowrap;}
+  #suite-xfer button:hover{background:rgba(255,255,255,.14);color:#fff;}
+  @media print{#suite-xfer{display:none!important;}}
 </style>
 </head>
 <body>
@@ -47,6 +54,11 @@
     <button class="suite-tab active" id="suite-tab-capacity" data-target="capacity"><span class="dot"></span>Beam Capacity</button>
     <button class="suite-tab" id="suite-tab-asd" data-target="asd"><span class="dot"></span>ASD Beam Calcs</button>
     <button class="suite-tab" id="suite-tab-dev" data-target="dev"><span class="dot"></span>Development &amp; Splice</button>
+    <div id="suite-xfer">
+      <a class="alltools" href="tools.html" target="_top">&larr; All tools</a>
+      <button type="button" onclick="bxUseProjectInfo()" title="Fill the title blocks of all three tabs from the shared project info">Use shared project info</button>
+      <button type="button" onclick="bxShareProjectInfo()" title="Share the title block of the active tab with the other tools">Share project info</button>
+    </div>
   </nav>
   <div id="suite-stage">
     <div class="suite-frame-wrap active" data-app="capacity">
@@ -6623,6 +6635,136 @@ window.addEventListener('DOMContentLoaded',()=>{
       b.addEventListener('click', function(){ show(b.getAttribute('data-target')); });
     });
   });
+})();
+</script>
+<script>
+/* BridgeXfer v1 — cross-tool hand-off helper. Spec: HANDOFF.md. Duplicated verbatim in each tool that sends or receives (CLAUDE.md §3). */
+(function(){
+  if(window.BridgeXfer) return;
+  var NS='bridgeSuite.v1.';
+  function lsOK(){ try{ var k='__bx_t'; localStorage.setItem(k,'1'); localStorage.removeItem(k); return true; }catch(e){ return false; } }
+  function sharedProject(){
+    try{ var m=JSON.parse(localStorage.getItem(NS+'projectMeta')||'null');
+      if(m && m._schema==='bridge-project-meta' && m.fields) return { name:m.fields.projectName||'', bridgeId:m.fields.bridgeId||'' };
+    }catch(e){}
+    return null;
+  }
+  function stamp(channel, payload, producer, producerFile){
+    var p={}; for(var k in payload) if(Object.prototype.hasOwnProperty.call(payload,k)) p[k]=payload[k];
+    p.schemaVersion = p.schemaVersion || 1;
+    p.producer = p.producer || producer || document.title;
+    p.producerFile = p.producerFile || producerFile || decodeURIComponent((location.pathname.split('/').pop()||''));
+    p.producedAt = new Date().toISOString();
+    if(!p.project) p.project = sharedProject() || { name:'', bridgeId:'' };
+    if(!p.notes) p.notes = [];
+    return p;
+  }
+  function publish(channel, payload, producer, producerFile){
+    if(!payload || !payload._schema) return { error:'payload has no _schema' };
+    var p=stamp(channel, payload, producer, producerFile);
+    if(!lsOK()) return { error:'Browser storage is not available. Use "Export hand-off (JSON)" instead.', payload:p };
+    try{
+      localStorage.setItem(NS+channel, JSON.stringify(p));
+      localStorage.setItem(NS+channel+'.updatedAt', p.producedAt);
+    }catch(e){ return { error:'Could not save hand-off (storage full?): '+e.message, payload:p }; }
+    return { ok:true, payload:p };
+  }
+  function validate(p, schema, maxVersion){
+    if(!p || typeof p!=='object') return 'not a hand-off object';
+    if(p._schema!==schema) return 'wrong data type ('+(p._schema||'none')+'), expected '+schema;
+    if(!(p.schemaVersion<= (maxVersion||1))) return 'newer format (v'+p.schemaVersion+') than this tool supports (v'+(maxVersion||1)+')';
+    return null;
+  }
+  function read(channel, schema, maxVersion){
+    var raw=null;
+    try{ raw=localStorage.getItem(NS+channel); }catch(e){ return { error:'Browser storage is not available.' }; }
+    if(!raw) return { error:'Nothing has been sent on this channel yet.' , empty:true };
+    var p; try{ p=JSON.parse(raw); }catch(e){ return { error:'Stored hand-off is corrupt.' }; }
+    var err=validate(p, schema, maxVersion); if(err) return { error:err };
+    return { ok:true, payload:p };
+  }
+  function markAdopted(channel, receiverId, producedAt){
+    try{ localStorage.setItem(NS+channel+'.adopted.'+receiverId, producedAt||''); }catch(e){}
+  }
+  function isNew(channel, receiverId){
+    try{
+      var at=localStorage.getItem(NS+channel+'.updatedAt'); if(!at) return false;
+      return at!==localStorage.getItem(NS+channel+'.adopted.'+receiverId);
+    }catch(e){ return false; }
+  }
+  function exportFile(channel, payload){
+    var p=payload; if(!p){ try{ p=JSON.parse(localStorage.getItem(NS+channel)); }catch(e){} }
+    if(!p) return { error:'Nothing to export.' };
+    var blob=new Blob([JSON.stringify(p,null,2)],{type:'application/json'});
+    var a=document.createElement('a'); a.href=URL.createObjectURL(blob);
+    a.download=(p._schema||channel)+'_'+(p.producedAt||'').slice(0,19).replace(/[:T]/g,'-')+'.json';
+    document.body.appendChild(a); a.click(); setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 60000);
+    return { ok:true };
+  }
+  function importFile(file, schema, maxVersion, cb){
+    var fr=new FileReader();
+    fr.onload=function(){ var p; try{ p=JSON.parse(fr.result); }catch(e){ cb({ error:'File is not valid JSON.' }); return; }
+      var err=validate(p, schema, maxVersion); cb(err? { error:err } : { ok:true, payload:p }); };
+    fr.onerror=function(){ cb({ error:'Could not read file.' }); };
+    fr.readAsText(file);
+  }
+  function describe(p){ return (p.producer||'?')+' — '+(p.producedAt? new Date(p.producedAt).toLocaleString():'?')+((p.project&&p.project.name)?' — '+p.project.name:''); }
+  window.BridgeXfer={ NS:NS, publish:publish, read:read, validate:validate, markAdopted:markAdopted, isNew:isNew, exportFile:exportFile, importFile:importFile, describe:describe, sharedProject:sharedProject };
+})();
+</script>
+<script>
+/* Shared project info (HANDOFF.md §4.1): "Use shared project info" / "Share project info".
+   The title-block inputs live in the three embedded tabs (srcdoc iframes, which have this page's
+   origin). The shell reads/writes those inputs directly through their normal input events; the
+   embedded apps themselves are not modified. Share reads the active tab; Use writes every tab. */
+(function(){
+  var PRODUCER='Concrete Beam Design Suite', FILE='Concrete Beam Capacity.html';
+  var PG={projectName:'[data-fkey="pg_Project"]', jobNo:'[data-fkey="pg_Project No."]',
+          preparedBy:'[data-fkey="pg_Calculated By"]', checkedBy:'[data-fkey="pg_Checked By"]', date:'[data-fkey="pg_Date"]'};
+  var APPS=[
+    {id:'capacity', name:'Beam Capacity',        frame:'suite-frame-capacity', map:PG},
+    {id:'asd',      name:'ASD Beam Calcs',       frame:'suite-frame-asd',      map:PG},
+    {id:'dev',      name:'Development & Splice', frame:'suite-frame-dev',
+     map:{projectName:'#projName', jobNo:'#projNo', preparedBy:'#calcBy', checkedBy:'#chkBy', date:'#calcDate'}}];
+  var KEYS=['projectName','bridgeId','jobNo','client','location','preparedBy','checkedBy','date'];
+  var LBL={projectName:'Project name',bridgeId:'Bridge ID',jobNo:'Job no.',client:'Client',location:'Location',
+           preparedBy:'Prepared by',checkedBy:'Checked by',date:'Date'};
+  function doc(a){ try{ var fr=document.getElementById(a.frame); return fr ? fr.contentDocument : null; }catch(e){ return null; } }
+  function fld(a,d,k){ try{ return (d && a.map[k]) ? d.querySelector(a.map[k]) : null; }catch(e){ return null; } }
+  function active(){
+    var t=document.querySelector('.suite-tab.active'), id=t ? t.getAttribute('data-target') : 'capacity';
+    for(var i=0;i<APPS.length;i++) if(APPS[i].id===id) return APPS[i];
+    return APPS[0];
+  }
+  window.bxShareProjectInfo=function(){
+    var a=active(), d=doc(a);
+    if(!d || !fld(a,d,'projectName')){ alert('Could not read the title block of the '+a.name+' tab. Wait for it to load, then try again.'); return; }
+    var f={};
+    KEYS.forEach(function(k){ var e=fld(a,d,k); f[k]=e ? String(e.value||'') : ''; });
+    var r=BridgeXfer.publish('projectMeta',{_schema:'bridge-project-meta',fields:f},PRODUCER+' — '+a.name,FILE);
+    alert(r.ok ? 'Project info from the '+a.name+' tab shared. Other tools can load it with "Use shared project info".' : r.error);
+  };
+  window.bxUseProjectInfo=function(){
+    var r=BridgeXfer.read('projectMeta','bridge-project-meta',1);
+    if(!r.ok){ alert('Shared project info: '+r.error); return; }
+    var f=r.payload.fields||{}, ch=[], skip=[], lines=[];
+    APPS.forEach(function(a){
+      var d=doc(a); if(!d) return;
+      KEYS.forEach(function(k){
+        var e=fld(a,d,k), v=(f[k]==null) ? '' : String(f[k]);
+        if(!e || v==='') return;   /* field not in this tab, or shared value empty: never blank a field */
+        if(e.type==='date' && !/^\d{4}-\d{2}-\d{2}$/.test(v)){ skip.push(a.name+' / '+LBL[k]+' ("'+v+'" is not a YYYY-MM-DD date)'); return; }
+        if(e.value!==v){ ch.push({e:e,v:v}); lines.push('  '+a.name+' / '+LBL[k]+': "'+e.value+'" → "'+v+'"'); }
+      });
+    });
+    var head='Shared project info from '+BridgeXfer.describe(r.payload);
+    var sk=skip.length ? '\n\nSkipped: '+skip.join('; ') : '';
+    if(!ch.length){ alert(head+'\n\nNothing to change: the matching fields already hold these values.'+sk); return; }
+    if(!confirm(head+'\n\nThese fields will be overwritten:\n'+lines.join('\n')+sk+'\n\nContinue?')) return;
+    ch.forEach(function(c){ c.e.value=c.v; c.e.dispatchEvent(new Event('input',{bubbles:true})); });
+    /* let Beam Capacity re-send its project identity to the ASD tab over the existing bridge */
+    try{ var cf=document.getElementById('suite-frame-capacity'); if(cf && cf.contentWindow) cf.contentWindow.postMessage({type:'requestShared'},'*'); }catch(e){}
+  };
 })();
 </script>
 </body>
