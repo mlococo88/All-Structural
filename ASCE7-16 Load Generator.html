@@ -278,7 +278,7 @@ const TOPO_TAB={"2D ridge":{K1:{B:1.30,C:1.45,D:1.55},gamma:3.0,mu_up:1.5,mu_dn:
  "2D escarpment":{K1:{B:0.75,C:0.85,D:0.95},gamma:2.5,mu_up:1.5,mu_dn:4.0},
  "3D axisymmetric hill":{K1:{B:0.95,C:1.05,D:1.15},gamma:4.0,mu_up:1.5,mu_dn:1.5}};
 const IMP={I:{s:0.80,e:1.00},II:{s:1.00,e:1.00},III:{s:1.10,e:1.25},IV:{s:1.20,e:1.50}};
-const CE_TAB={B:{full:0.9,partial:1.0,shelt:1.2},C:{full:0.9,partial:1.0,shelt:1.1},D:{full:0.8,partial:0.9,shelt:1.2}};
+const CE_TAB={B:{full:0.9,partial:1.0,shelt:1.2},C:{full:0.9,partial:1.0,shelt:1.1},D:{full:0.8,partial:0.9,shelt:1.0}};
 const CE_ROUGH={B:"Surface Roughness B",C:"Surface Roughness C",D:"Surface Roughness D"};
 const CT_TAB=[["All structures except as indicated below",1.0],
  ["Structures kept just above freezing, and others with cold ventilated roofs (R > 25)",1.1],
@@ -354,12 +354,19 @@ const SFRS=[
  ["Special reinforced concrete moment frame",8.0,3.0,5.5,                     {B:"NL",C:"NL",D:"NL",E:"NL",F:"NL"}],
  ["Intermediate reinforced concrete moment frame",5.0,3.0,4.5,                {B:"NL",C:"NL",D:"NP",E:"NP",F:"NP"}],
  ["Ordinary reinforced concrete moment frame",3.0,3.0,2.5,                    {B:"NL",C:"NP",D:"NP",E:"NP",F:"NP"}],
- ["Special reinforced concrete shear wall",6.0,2.5,5.0,                       {B:"NL",C:"NL",D:160,E:160,F:100}],
- ["Ordinary reinforced concrete shear wall",5.0,2.5,4.5,                      {B:"NL",C:"NL",D:"NP",E:"NP",F:"NP"}],
- ["Special reinforced masonry shear wall",5.0,2.5,3.5,                        {B:"NL",C:"NL",D:160,E:100,F:100}],
+ ["Special reinforced concrete shear wall, building frame system (B.4)",6.0,2.5,5.0,{B:"NL",C:"NL",D:160,E:160,F:100}],
+ ["Ordinary reinforced concrete shear wall, building frame system (B.5)",5.0,2.5,4.5,{B:"NL",C:"NL",D:"NP",E:"NP",F:"NP"}],
+ ["Special reinforced concrete shear wall, bearing wall system (A.1)",5.0,2.5,5.0,{B:"NL",C:"NL",D:160,E:160,F:100}],
+ ["Ordinary reinforced concrete shear wall, bearing wall system (A.2)",4.0,2.5,4.0,{B:"NL",C:"NP",D:"NP",E:"NP",F:"NP"}],
+ ["Special reinforced masonry shear wall, bearing wall system (A.7)",5.0,2.5,3.5,{B:"NL",C:"NL",D:160,E:160,F:100}],
  ["Light-frame walls sheathed with wood structural panels",6.5,3.0,4.0,       {B:"NL",C:"NL",D:65,E:65,F:65}],
  ["Cantilevered column system, ordinary steel moment frame",1.25,1.25,1.25,   {B:35,C:35,D:"NP",E:"NP",F:"NP"}],
  ["Steel systems not specifically detailed for seismic resistance",3.0,3.0,3.0,{B:"NL",C:"NL",D:"NP",E:"NP",F:"NP"}]];
+/* Labels used before the building-frame / bearing-wall rows were distinguished. Saved projects store the
+   label, so restore() maps these to the row that carries the same R, Omega_0 and C_d as before. */
+const SFRS_OLD={"Special reinforced concrete shear wall":"Special reinforced concrete shear wall, building frame system (B.4)",
+ "Ordinary reinforced concrete shear wall":"Ordinary reinforced concrete shear wall, building frame system (B.5)",
+ "Special reinforced masonry shear wall":"Special reinforced masonry shear wall, bearing wall system (A.7)"};
 
 /* ==================================================================
    Section B : HELPERS
@@ -398,10 +405,17 @@ function calcKzt(s,z){
   if(s.topoType==="None") return {kzt:1,none:true,K1:0,K2:0,K3:0,z:z};
   const T=TOPO_TAB[s.topoType],HLh=s.topoLh>0?s.topoH/s.topoLh:0;
   const K1r=T.K1[s.expCat], K1=K1r*Math.min(HLh,0.5);
+  /* Fig. 26.8-1 note 2: for H/Lh > 0.5, substitute 2H for Lh when evaluating K2 and K3 */
+  const LhEff=(HLh>0.5)?2*s.topoH:s.topoLh;
   const mu=(s.topoX>=0)?T.mu_up:T.mu_dn;
-  const K2=Math.max(0,1-Math.abs(s.topoX)/(mu*s.topoLh));
-  const K3=Math.exp(-T.gamma*Math.max(z,0)/s.topoLh);
-  return {kzt:Math.pow(1+K1*K2*K3,2),HLh,K1r,K1,K2,K3,mu,gamma:T.gamma,upwind:s.topoX>=0,capped:HLh>0.5,z:z};
+  const K2=Math.max(0,1-Math.abs(s.topoX)/(mu*LhEff));
+  const K3=Math.exp(-T.gamma*Math.max(z,0)/LhEff);
+  /* Sec. 26.8.1 conditions (4) and (5), the two that can be checked from the inputs */
+  const Hmin=(s.expCat==="B")?60:15;
+  const notApplic=[];
+  if(HLh<0.2) notApplic.push("H/L\u2095 = "+HLh.toFixed(3)+" is less than 0.2 (condition 4)");
+  if(s.topoH<Hmin) notApplic.push("H = "+s.topoH+" ft is less than "+Hmin+" ft for Exposure "+s.expCat+" (condition 5)");
+  return {kzt:Math.pow(1+K1*K2*K3,2),HLh,K1r,K1,K2,K3,mu,gamma:T.gamma,upwind:s.topoX>=0,capped:HLh>0.5,LhEff:LhEff,notApplic:notApplic,z:z};
 }
 function calcCs(theta,Ct,slip){
   let lo,branch;
@@ -615,7 +629,9 @@ function solve(S){
 
   /* ---------- Sec. 7.7 and 7.8 snow drift ---------- */
   sn.gamma = Math.min(0.13*sn.pg+14, 30);                       /* Eq. 7.7-1 */
-  sn.hb = sn.gamma>0 ? sn.balanced/sn.gamma : 0;                /* balanced snow depth */
+  /* h_b is based on p_s alone: the rain-on-snow surcharge (Sec. 7.10) and the minimum load p_m (Sec. 7.3.4)
+     are separate uniform cases and are not used in determining or combined with drift */
+  sn.hb = sn.gamma>0 ? sn.ps/sn.gamma : 0;                      /* balanced snow depth */
   const figHd = lu => Math.max(0, 0.43*Math.pow(Math.max(lu,25),1/3)*Math.pow(sn.pg+10,0.25)-1.5);
   sn.drifts = (S.drifts||[]).map((d,i)=>{
     const o={...d, idx:i+1, msg:[], required:true, reason:""};
@@ -632,12 +648,15 @@ function solve(S){
       o.gov = o.hdLee>=o.hdWind ? "leeward" : "windward";
     } else if(d.kind==="adjacent"){
       o.luLee=Math.max(d.luUpper,25); o.hdLee=figHd(o.luLee);
-      o.hdWind=0; o.gov="leeward";
-      /* Sec. 7.7.2: the drift height is the smaller of h_d and (6h - s)/6,
-         and the horizontal extent the smaller of 6h_d and (6h - s) */
+      /* Sec. 7.7.2: the leeward drift height is the smaller of h_d and (6h - s)/6,
+         and its horizontal extent the smaller of 6h_d and (6h - s). Windward drifts
+         follow Sec. 7.7.1 using the lower roof length, truncated at the edge of the lower roof. */
       o.sepOK = (d.sep < 20) && (d.sep < 6*o.hObs);
       o.hd672 = (6*o.hObs - d.sep)/6;
-      o.hdRaw = o.sepOK ? Math.min(o.hdLee, Math.max(0,o.hd672)) : 0;
+      o.hdLee772 = o.sepOK ? Math.min(o.hdLee, Math.max(0,o.hd672)) : 0;
+      o.luWind=Math.max(d.luLower||0,25); o.hdWind=o.sepOK ? 0.75*figHd(o.luWind) : 0;
+      o.hdRaw = Math.max(o.hdLee772, o.hdWind);
+      o.gov = o.hdLee772>=o.hdWind ? "leeward" : "windward";
       o.extCap = Math.max(0, 6*o.hObs - d.sep);
       if(!o.sepOK){ o.required=false; o.reason="Separation s = "+R2(d.sep)+" ft is not less than both 20 ft and 6h = "+R2(6*o.hObs)+" ft, so Sec. 7.7.2 does not require a drift."; }
     } else {
@@ -659,12 +678,14 @@ function solve(S){
     }
     if(o.required){
       /* Sec. 7.7.1: cap the drift at the clear height and widen it accordingly */
-      if(o.hdRaw <= o.hc){ o.hd=o.hdRaw; o.w=4*o.hd; o.capped=false; }
+      /* Sec. 7.7.2: a leeward drift on an adjacent lower structure extends 6h_d; all other drifts 4h_d */
+      const wMult=(d.kind==="adjacent"&&o.gov==="leeward")?6:4;
+      if(o.hdRaw <= o.hc){ o.hd=o.hdRaw; o.w=wMult*o.hd; o.capped=false; }
       else { o.hd=o.hc; o.w=Math.min(4*o.hdRaw*o.hdRaw/o.hc, 8*o.hc); o.capped=true; }
-      if(d.kind==="adjacent") o.w=Math.min(o.w, o.extCap);
+      if(d.kind==="adjacent"&&o.gov==="leeward") o.w=Math.min(o.w, o.extCap);
       o.pd = o.hd*sn.gamma;
-      o.pTotal = sn.balanced + o.pd;
-    } else { o.hd=0; o.w=0; o.pd=0; o.pTotal=sn.balanced; }
+      o.pTotal = sn.ps + o.pd;
+    } else { o.hd=0; o.w=0; o.pd=0; o.pTotal=sn.ps; }
     return o;
   });
   sn.driftGov = sn.drifts.filter(d=>d.required).reduce((a,b)=>(!a||b.pTotal>a.pTotal)?b:a, null);
@@ -714,7 +735,11 @@ function solve(S){
         const r=tblPick(keys,per,c.hL,S.tblMode);
         return {v:r.v, per:per, i0:r.i0, i1:r.i1, f:r.f};
       };
-      const wn=across(k=>Tn.ww[k].neg), wp=across(k=>Tn.ww[k].pos);
+      /* Fig. 27.3-1: at theta = 60 deg the windward coefficient is 0.01*theta = 0.6 (positive). Interpolation is
+         between values of the same sign only, with 0.0 assumed where none is given (note 3), so the 60 deg
+         column is 0.6 for the positive row and 0.0 for the negative row when interpolating 45 to 60 deg. */
+      const at60=(arr,v)=>arr.map((x,j)=>Tn.theta[j]>=60?v:x);
+      const wn=across(k=>at60(Tn.ww[k].neg,0.0)), wp=across(k=>at60(Tn.ww[k].pos,0.6));
       const lw=(function(){const per=grp.map(k=>tblPick(Tn.lw.thetas,Tn.lw[k],g.theta,S.tblMode).v);
         const r=tblPick(keys,per,c.hL,S.tblMode); return {v:r.v,per:per,i0:r.i0,i1:r.i1,f:r.f};})();
       c.CpWWroofNeg=wn.v; c.CpWWroofPos=wp.v; c.CpLWroof=lw.v;
@@ -835,7 +860,9 @@ function solve(S){
   /* ---------- E.8 Chapter 29 elements ---------- */
   R.elems=S.elems.map((e,i)=>{
     const o={...e,idx:i+1,msg:[]};
-    const kd=e.type==="wall"?0.85:(e.section||"").startsWith("Round")?1.00:(e.section||"").startsWith("Hexagonal")?0.95:0.90;
+    /* Table 26.6-1: hexagonal 0.95, octagonal 1.00. The Fig. 29.4-1 row covers both shapes, so the
+       octagonal (larger) value is used for it. */
+    const kd=e.type==="wall"?0.85:(e.section||"").startsWith("Round")?1.00:(e.section||"").startsWith("Hexagonal")?1.00:0.90;
     o.kd=kd;
     if(e.type==="wall"){
       o.s=e.zTop-e.zBot; o.h=e.zTop;
@@ -926,7 +953,16 @@ function solve(S){
     const fa=cleanInterp(FA_TAB.Ss,faRow,site.Ss), fv=cleanInterp(FV_TAB.S1,fvRow,site.S1);
     if(fa===null||fv===null){ sq.Fa=null; sq.Fv=null; sq.noCoef=true; sq.siteSpecific=true;
       sq.ssReason.push("Table 11.4-1 or 11.4-2 marks this combination of site class and mapped acceleration as requiring a site response analysis per Sec. 11.4.8; no coefficient is tabulated."); }
-    else { sq.Fa=fa.v; sq.Fv=fv.v; sq.faTrace=fa; sq.fvTrace=fv; }
+    else { sq.Fa=fa.v; sq.Fv=fv.v; sq.faTrace=fa; sq.fvTrace=fv;
+      sq.FaTab=fa.v; sq.FvTab=fv.v; sq.siteRule=null;
+      /* Sec. 11.4.3 site coefficient rules, both opt-in (default off reproduces the tabulated values) */
+      if(S.siteClass==="B" && S.siteBnoVs){ sq.Fa=1.0; sq.Fv=1.0;
+        sq.siteRule="Site Class B without site-specific shear wave velocity measurement: Sec. 11.4.3 requires F\u2090 = F\u1d65 = 1.0 in place of the tabulated "+RN(fa.v,2)+" and "+RN(fv.v,2)+"."; }
+      if(S.siteClass==="D" && S.siteDefaultD && fa.v<1.2){ sq.Fa=1.2;
+        sq.siteRule="Site Class D used as the default site class (Sec. 11.4.2): Sec. 11.4.3 requires F\u2090 \u2265 1.2, so F\u2090 = 1.2 in place of the tabulated "+RN(fa.v,3)+"."; }
+      else if(S.siteClass==="D" && S.siteDefaultD){
+        sq.siteRule="Site Class D used as the default site class (Sec. 11.4.2): the tabulated F\u2090 = "+RN(fa.v,3)+" already satisfies the Sec. 11.4.3 minimum of 1.2."; }
+    }
   } else { sq.Fa=null; sq.Fv=null; sq.noCoef=true; sq.siteSpecific=true;
     sq.ssReason.push("Site Class F requires a site response analysis; no site coefficient is tabulated."); }
   if(sq.Fa!==null){
@@ -948,18 +984,31 @@ function solve(S){
     sq.TL=S.TL;
     sq.CsBase=sq.SDS/(sq.R/sq.Ie);
     sq.CsMax=(sq.Tused<=sq.TL)? sq.SD1/(sq.Tused*(sq.R/sq.Ie)) : sq.SD1*sq.TL/(sq.Tused*sq.Tused*(sq.R/sq.Ie));
+    /* Sec. 11.4.8 Exception 2: Site Class D with S1 >= 0.2 may use the mapped values without a
+       site-specific analysis provided Cs is taken by Eq. 12.8-2 for T <= 1.5Ts and as 1.5 times
+       Eq. 12.8-3 (TL >= T > 1.5Ts) or Eq. 12.8-4 (T > TL) above that. */
+    sq.exc1148=(S.siteClass==="D" && site.S1>=0.2);
+    if(sq.exc1148){
+      sq.Ts=sq.SDS>0?sq.SD1/sq.SDS:0;
+      sq.CsMaxTab=sq.CsMax;
+      sq.CsMax=(sq.Tused<=1.5*sq.Ts)? Infinity : 1.5*sq.CsMaxTab;
+      sq.ssReason=sq.ssReason.map(r=>r.indexOf("unless the exception is satisfied")>=0
+        ? "Site Class D with S\u2081 \u2265 0.2: Sec. 11.4.8 Exception 2 is applied in place of a site-specific ground motion analysis. C\u209b is taken from Eq. 12.8-2 for T \u2264 1.5T\u209b and as 1.5 times Eq. 12.8-3 or 12.8-4 above that. The exception applies to the equivalent lateral force procedure; other uses of the spectrum need the site-specific analysis."
+        : r);
+    }
     sq.CsMin=Math.max(0.044*sq.SDS*sq.Ie,0.01);
     sq.CsMinS1=(site.S1>=0.6)?0.5*site.S1/(sq.R/sq.Ie):null;
-    sq.Cs=Math.min(Math.max(sq.CsMin,Math.min(sq.CsBase,sq.CsMax)), sq.CsBase);
+    sq.Cs=Math.max(Math.min(sq.CsBase,sq.CsMax), sq.CsMin);
     if(sq.CsMinS1!==null) sq.Cs=Math.max(sq.Cs,sq.CsMinS1);
     sq.Wt=S.seisW;
     sq.Vbase=sq.Cs*sq.Wt;
     sq.k=(sq.Tused<=0.5)?1:(sq.Tused>=2.5?2:1+(sq.Tused-0.5)/2);
     /* levels are worked from the top down, which is the order the story shear accumulates */
     const lv=S.levels.filter(l=>l.w>0).slice().sort((a,b)=>b.h-a.h);
-    const sumWH=lv.reduce((t,l)=>t+l.w*Math.pow(l.h,sq.k),0);
-    sq.levels=lv.map(l=>{const whk=l.w*Math.pow(l.h,sq.k);
-      const Cvx=sumWH>0?whk/sumWH:0; return {...l,whk,Cvx,Fx:Cvx*sq.Vbase};});
+    /* Eq. 12.8-12: h_x is the height above the base, not the level elevation on the grade datum */
+    const sumWH=lv.reduce((t,l)=>t+l.w*Math.pow(Math.max(0,l.h-S.baseElev),sq.k),0);
+    sq.levels=lv.map(l=>{const hx=Math.max(0,l.h-S.baseElev), whk=l.w*Math.pow(hx,sq.k);
+      const Cvx=sumWH>0?whk/sumWH:0; return {...l,hx,whk,Cvx,Fx:Cvx*sq.Vbase};});
     /* Sec. 12.8.4 story shear and Sec. 12.8.5 overturning moment */
     let acc=0;
     sq.levels.forEach((L,j)=>{
@@ -981,6 +1030,7 @@ function solve(S){
     {id:"LRFD-1",txt:"1.4D",                                  D:1.4,L:0,  S:0,  W:0,  E:0,  useLr:false},
     {id:"LRFD-2",txt:"1.2D + 1.6L + 0.5(L\u1d63 or S)",       D:1.2,L:1.6,S:0.5,W:0,  E:0,  useLr:true},
     {id:"LRFD-3",txt:"1.2D + 1.6(L\u1d63 or S) + 1.0L",       D:1.2,L:1.0,S:1.6,W:0,  E:0,  useLr:true},
+    {id:"LRFD-3W",txt:"1.2D + 1.6(L\u1d63 or S) + 0.5W",      D:1.2,L:0,  S:1.6,W:0.5,E:0,  useLr:true},
     {id:"LRFD-4",txt:"1.2D + 1.0W + 1.0L + 0.5(L\u1d63 or S)",D:1.2,L:1.0,S:0.5,W:1.0,E:0,  useLr:true},
     {id:"LRFD-5",txt:"1.2D + 1.0E + 1.0L + 0.2S",             D:1.2,L:1.0,S:0.2,W:0,  E:1.0,useLr:false},
     {id:"LRFD-6",txt:"0.9D + 1.0W",                           D:0.9,L:0,  S:0,  W:1.0,E:0,  useLr:false},
@@ -1090,9 +1140,10 @@ function solve(S){
             R2(sn.driftGov.pTotal)+" psf over "+R2(sn.driftGov.w)+" ft at "+sn.driftGov.label
           : "All "+sn.drifts.length+" locations entered are exempt; see the Snow tab for the reason at each")
        : "No drift locations have been entered. Parapets, adjacent higher roofs and rooftop projections all trigger Sec. 7.7 or 7.8 and must be entered to be evaluated.","s-snow");
-  st("Topographic factor, Sec. 26.8",w.kzt.none?"na":(w.kzt.capped?"warn":"ok"),
+  st("Topographic factor, Sec. 26.8",w.kzt.none?"na":((w.kzt.capped||w.kzt.notApplic.length)?"warn":"ok"),
      w.kzt.none?"No abrupt topographic change; K_zt = 1.0"
-       :"K_zt = "+RN(w.kzt.kzt,3)+" at the mean roof height, varying with z through K_3"+(w.kzt.capped?", with H/L_h capped at 0.5":""),"s-windp");
+       :"K_zt = "+RN(w.kzt.kzt,3)+" at the mean roof height, varying with z through K_3"+(w.kzt.capped?", with H/L_h capped at 0.5 for K_1 and L_h = 2H for K_2 and K_3":"")+
+        (w.kzt.notApplic.length?". Sec. 26.8.1 applicability not met: "+w.kzt.notApplic.join("; "):""),"s-windp");
   st("Velocity pressure, Eq. 26.10-1","ok","q_h = "+R2(w.qh.q)+" psf at h = "+R2(g.h)+" ft","s-windp");
   st("Rigid structure assumption, Sec. 26.11","warn",
      "G = "+R2(w.G)+" assumes a rigid structure (n\u2081 \u2265 1 Hz). The natural frequency is not computed.","s-windp",true);
@@ -1255,7 +1306,7 @@ const DEF={
  topoType:"None", topoH:20, topoLh:60, topoX:25,
  Goverride:false, Gval:0.85, windFlow:"Clear", tblMode:"interp",
  siteClass:"D", seisSysType:"All other structural systems", sfrs:"Steel systems not specifically detailed for seismic resistance",
- hn:36, TL:6, seisW:1200, useTa:true, rho:1.0, baseElev:0,
+ hn:36, TL:6, seisW:1200, useTa:true, rho:1.0, baseElev:0, siteDefaultD:false, siteBnoVs:false,
  levels:[{name:"Roof",h:36,w:600},{name:"Level 2",h:18,w:600}],
  elems:[],
  drifts:[],
@@ -1689,11 +1740,11 @@ function buildInputs(){
     } else {
       mk("Elevation difference to the upper roof","h","ft","hRoofDiff");
       mk("Length of the upper roof (leeward fetch)","l\u1d64","ft","luUpper");
-      if(d.kind==="lower") mk("Length of this lower roof (windward fetch)","l\u1d64","ft","luLower");
+      if(d.kind==="lower"||d.kind==="adjacent") mk("Length of this lower roof (windward fetch)","l\u1d64","ft","luLower");
       if(d.kind==="adjacent") mk("Horizontal separation between structures","s","ft","sep");
       box.appendChild(el("div","hint",d.kind==="lower"
         ? "The larger of the leeward and windward drifts governs, per Sec. 7.7.1."
-        : "Sec. 7.7.2 requires the separation to be less than both 20 ft and 6h for a drift to apply."));
+        : "Sec. 7.7.2 requires the separation to be less than both 20 ft and 6h for a drift to apply. The leeward drift (upper roof length) and the windward drift (lower roof length, 0.75 times Fig. 7.6-1) are both evaluated and the larger governs."));
     }
     b.appendChild(box);
   });
@@ -1748,7 +1799,9 @@ function buildInputs(){
   /* ================= SEISMIC ================= */
   if(T==="seis"){
   let b=panel(host,"i-seis",++n+".","Site and System","ASCE 7-16 Ch. 11 / 12");
-  inRow(b,"Site class","","",sel("siteClass",["A","B","C","D","E","F"]));
+  inRow(b,"Site class","","",sel("siteClass",["A","B","C","D","E","F"],null,true));
+  if(S.siteClass==="D") b.appendChild(chk("siteDefaultD","Site Class D is the default site class (soil properties not known, Sec. 11.4.2): F\u2090 \u2265 1.2 per Sec. 11.4.3"));
+  if(S.siteClass==="B") b.appendChild(chk("siteBnoVs","Site Class B without a measured shear wave velocity: F\u2090 = F\u1d65 = 1.0 per Sec. 11.4.3"));
   b.appendChild(el("div","hint","Site Class F, Site Class E with S\u209b \u2265 1.0, and Site Class D or E with S\u2081 \u2265 0.2 all trigger Sec. 11.4.8."));
   selWide(b,"Period coefficient case (Table 12.8-2)","seisSysType",CT_X.map(r=>r[0]));
   const fs=el("select");
@@ -2214,12 +2267,13 @@ function renderSnow(host){
   } else {
     vars(b,[["p<sub>g</sub>","Ground snow load",R2(sn.pg)+" psf",R.site.source],
             ["\u03B3","Snow density",R2(sn.gamma)+" pcf","Eq. 7.7-1"],
-            ["p<sub>s</sub>","Balanced snow load on this roof",R2(sn.balanced)+" psf","Sec. 7.3, 7.4"],
+            ["p<sub>s</sub>","Balanced snow load on this roof, without rain-on-snow or p<sub>m</sub>",R2(sn.ps)+" psf","Sec. 7.4; Sec. 7.10, 7.3.4"],
             ["h<sub>b</sub>","Balanced snow depth",R2(sn.hb)+" ft","p<sub>s</sub> / \u03B3"]]);
     eq(b,"Snow density","ASCE 7-16 Eq. 7.7-1","\\gamma = 0.13\\,p_g + 14 \\le 30\\ \\text{pcf}",
       "\\gamma = 0.13("+R2(sn.pg)+") + 14","\\gamma = "+R2(sn.gamma)+"\\ \\text{pcf}");
     eq(b,"Balanced snow depth","ASCE 7-16 Sec. 7.7.1","h_b = \\dfrac{p_s}{\\gamma}",
-      "h_b = \\dfrac{"+R2(sn.balanced)+"}{"+R2(sn.gamma)+"}","h_b = "+R2(sn.hb)+"\\ \\text{ft}");
+      "h_b = \\dfrac{"+R2(sn.ps)+"}{"+R2(sn.gamma)+"}","h_b = "+R2(sn.hb)+"\\ \\text{ft}");
+    if(sn.balanced>sn.ps+1e-9) note(b,"The balanced design load of "+R2(sn.balanced)+" psf includes the rain-on-snow surcharge (Sec. 7.10) or the minimum load p<sub>m</sub> (Sec. 7.3.4). Both are separate uniform load cases that are not used in determining, or combined with, drift loads, so h<sub>b</sub> and the drift totals below use p<sub>s</sub> = "+R2(sn.ps)+" psf.");
     dtable(b,"Drift locations",
       ["#","Location","Provision","h (ft)","h\u1d9c (ft)","h\u1d9c/h\u1d47","h\u1d48 (ft)","w (ft)","p\u1d48 (psf)","Peak total (psf)","Required"],
       sn.drifts.map(d=>[{v:d.idx},{v:esc(d.label)},
@@ -2249,8 +2303,13 @@ function renderSnow(host){
       } else if(d.kind==="adjacent"){
         eq(sb,"Leeward drift height from the adjacent roof","ASCE 7-16 Fig. 7.6-1","h_d = 0.43\\,l_u^{1/3}(p_g+10)^{1/4} - 1.5",
           "h_d = 0.43("+R2(d.luLee)+")^{1/3}("+R2(sn.pg)+"+10)^{1/4} - 1.5","h_d = "+R2(d.hdLee)+"\\ \\text{ft}");
-        eq(sb,"Separation limit","ASCE 7-16 Sec. 7.7.2","h_d \\le \\dfrac{6h - s}{6}",
-          "\\dfrac{6("+R2(d.hObs)+") - "+R2(S.drifts[i].sep)+"}{6} = "+R2(d.hd672),"h_d = "+R2(d.hdRaw)+"\\ \\text{ft}");
+        eq(sb,"Separation limit","ASCE 7-16 Sec. 7.7.2","h_{d,lee} \\le \\dfrac{6h - s}{6}",
+          "\\dfrac{6("+R2(d.hObs)+") - "+R2(S.drifts[i].sep)+"}{6} = "+R2(d.hd672),"h_{d,lee} = "+R2(d.hdLee772)+"\\ \\text{ft}");
+        eq(sb,"Windward drift height on the lower roof","ASCE 7-16 Sec. 7.7.2, 7.7.1","h_{d,wind} = 0.75\\left[0.43\\,l_u^{1/3}(p_g+10)^{1/4} - 1.5\\right]",
+          "h_{d,wind} = 0.75\\left[0.43("+R2(d.luWind)+")^{1/3}("+R2(sn.pg)+"+10)^{1/4} - 1.5\\right]","h_{d,wind} = "+R2(d.hdWind)+"\\ \\text{ft}");
+        eq(sb,"Governing drift height",null,"h_d = \\max(h_{d,lee},\\ h_{d,wind})",
+          "h_d = \\max("+R2(d.hdLee772)+",\\ "+R2(d.hdWind)+")","h_d = "+R2(d.hdRaw)+"\\ \\text{ft}\\quad("+d.gov+")");
+        if(d.gov==="windward") note(sb,"The windward drift forms on the lower roof at its edge facing the higher structure. Sec. 7.7.2 permits it to be truncated at the edge of the lower roof.");
       } else {
         eq(sb,"Windward drift height","ASCE 7-16 Sec. 7.8","h_d = 0.75\\left[0.43\\,l_u^{1/3}(p_g+10)^{1/4} - 1.5\\right]",
           "h_d = 0.75\\left[0.43("+R2(d.luWind)+")^{1/3}("+R2(sn.pg)+"+10)^{1/4} - 1.5\\right]","h_d = "+R2(d.hdRaw)+"\\ \\text{ft}");
@@ -2260,16 +2319,18 @@ function renderSnow(host){
         eq(sb,"Drift height, capped at the clear height",null,"h_d = h_c","h_d = "+R2(d.hc),"h_d = "+R2(d.hd)+"\\ \\text{ft}");
         eq(sb,"Drift width","ASCE 7-16 Sec. 7.7.1","w = \\dfrac{4h_d^2}{h_c} \\le 8h_c",
           "w = \\min\\left(\\dfrac{4("+R2(d.hdRaw)+")^2}{"+R2(d.hc)+"},\\ 8("+R2(d.hc)+")\\right)","w = "+R2(d.w)+"\\ \\text{ft}");
+      } else if(d.kind==="adjacent"&&d.gov==="leeward"){
+        eq(sb,"Drift width","ASCE 7-16 Sec. 7.7.2","w = \\min(6h_d,\\ 6h - s)","w = \\min(6("+R2(d.hd)+"),\\ "+R2(d.extCap)+")","w = "+R2(d.w)+"\\ \\text{ft}");
       } else {
         eq(sb,"Drift width","ASCE 7-16 Sec. 7.7.1","w = 4h_d","w = 4("+R2(d.hd)+")","w = "+R2(d.w)+"\\ \\text{ft}");
       }
       eq(sb,"Maximum drift surcharge intensity","ASCE 7-16 Sec. 7.7.1","p_d = h_d\\,\\gamma",
         "p_d = "+R2(d.hd)+"("+R2(sn.gamma)+")","p_d = "+R2(d.pd)+"\\ \\text{psf}");
       eq(sb,"Peak total load at the obstruction",null,"p_{max} = p_s + p_d",
-        "p_{max} = "+R2(sn.balanced)+" + "+R2(d.pd),"p_{max} = "+R2(d.pTotal)+"\\ \\text{psf}");
+        "p_{max} = "+R2(sn.ps)+" + "+R2(d.pd),"p_{max} = "+R2(d.pTotal)+"\\ \\text{psf}");
     });
     if(sn.driftGov) note(b,"<b>Governing drift:</b> "+esc(sn.driftGov.label)+" at "+R2(sn.driftGov.pTotal)+
-      " psf peak, falling linearly to the balanced "+R2(sn.balanced)+" psf at "+R2(sn.driftGov.w)+
+      " psf peak, falling linearly to the balanced "+R2(sn.ps)+" psf at "+R2(sn.driftGov.w)+
       " ft from the obstruction. This is a <b>local</b> surcharge; apply it to the members within that width, not as a uniform roof load.","w");
     note(b,"Sliding snow (Sec. 7.9), drift on the upper roof of a stepped roof, and drift against obstructions on a sloped roof "+
       "in the across-slope direction are not generated by this version.");
@@ -2311,13 +2372,15 @@ function renderWindP(host){
         return [{v:k,cls:h},{v:t.K1.B.toFixed(2),cls:h},{v:t.K1.C.toFixed(2),cls:h},{v:t.K1.D.toFixed(2),cls:h},
                 {v:t.gamma.toFixed(1),cls:h},{v:t.mu_up.toFixed(1),cls:h},{v:t.mu_dn.toFixed(1),cls:h}];}));
     eq(b,"Feature slope",null,"H/L_h","H/L_h = "+R2(S.topoH)+"/"+R2(S.topoLh),"H/L_h = "+RN(kz.HLh,3));
-    if(kz.capped) note(b,"H/L\u2095 exceeds 0.5. Fig. 26.8-1 requires H/L\u2095 to be taken as 0.5; the capped value is used for K\u2081.","w");
+    if(kz.capped) note(b,"H/L\u2095 exceeds 0.5. Fig. 26.8-1 note 2 requires H/L\u2095 to be taken as 0.5 for K\u2081 and 2H = "+R2(kz.LhEff)+" ft to be substituted for L\u2095 when evaluating K\u2082 and K\u2083.","w");
+    if(kz.notApplic.length) note(b,"<b>Sec. 26.8.1 applicability.</b> "+esc(kz.notApplic.join("; "))+". Where any of the five conditions of Sec. 26.8.1 is not met, the topographic effect need not be applied (K\u1d22\u209C = 1.0). K\u1d22\u209C is still computed here, which is conservative; confirm the feature and decide.","w");
+    else note(b,"Sec. 26.8.1 conditions (4) H/L\u2095 \u2265 0.2 and (5) H \u2265 15 ft (Exposure C, D) or 60 ft (Exposure B) are met. Conditions (1) to (3), isolation of the feature, protrusion above upwind terrain by a factor of two, and location in the upper half of the hill or near the crest, cannot be checked from the inputs and must be confirmed by the engineer.");
     eq(b,"K\u2081","Fig. 26.8-1","K_1 = \\left[\\dfrac{K_1}{H/L_h}\\right]\\min(H/L_h,0.5)",
       "K_1 = "+R2(kz.K1r)+"("+RN(Math.min(kz.HLh,0.5),3)+")","K_1 = "+RN(kz.K1,4));
     eq(b,"K\u2082","Fig. 26.8-1","K_2 = 1 - \\dfrac{|x|}{\\mu L_h}",
-      "K_2 = 1 - \\dfrac{|"+R2(S.topoX)+"|}{"+R2(kz.mu)+"("+R2(S.topoLh)+")}","K_2 = "+RN(kz.K2,4));
+      "K_2 = 1 - \\dfrac{|"+R2(S.topoX)+"|}{"+R2(kz.mu)+"("+R2(kz.LhEff)+")}","K_2 = "+RN(kz.K2,4));
     eq(b,"K\u2083 at the mean roof height","Fig. 26.8-1","K_3 = e^{-\\gamma z/L_h}",
-      "K_3 = e^{-"+R2(kz.gamma)+"("+R2(R.geom.h)+")/"+R2(S.topoLh)+"}","K_3 = "+RN(kz.K3,4));
+      "K_3 = e^{-"+R2(kz.gamma)+"("+R2(R.geom.h)+")/"+R2(kz.LhEff)+"}","K_3 = "+RN(kz.K3,4));
     eq(b,"Topographic factor at the mean roof height","Eq. 26.8-1","K_{zt} = (1+K_1K_2K_3)^2",
       "K_{zt} = (1+"+RN(kz.K1,4)+"\\cdot"+RN(kz.K2,4)+"\\cdot"+RN(kz.K3,4)+")^2","K_{zt} = "+RN(kz.kzt,4));
     note(b,"<b>K<sub>zt</sub> is not a single number for the building.</b> K\u2083 decays with height, so K<sub>zt</sub> is "+
@@ -2700,6 +2763,7 @@ function renderSeis(host){
           ["\u2014","Site class",S.siteClass,"Ch. 20"],
           ["I<sub>e</sub>","Seismic importance factor",R2(st.Ie),"Table 1.5-2"]]);
   if(q.siteSpecific) q.ssReason.forEach(r=>note(b,esc(r),"w"));
+  if(q.siteRule) note(b,esc(q.siteRule),"w");
   if(q.Fa===null){ note(b,"No site coefficient is tabulated for Site Class "+S.siteClass+" at S\u209b = "+RN(st.Ss,3)+" g and S\u2081 = "+RN(st.S1,3)+" g. ASCE 7-16 Sec. 11.4.8 requires a site response analysis in this case, and this tool will not extrapolate the tables. Perform the site-specific analysis and enter the resulting parameters elsewhere.","e"); return; }
   dtable(b,"Table 11.4-1 \u2014 short-period site coefficient F\u2090",
     ["Site Class"].concat(FA_TAB.Ss.map((s,i)=>(i===0?"\u2264 ":i===FA_TAB.Ss.length-1?"\u2265 ":"")+s.toFixed(2))),
@@ -2780,19 +2844,27 @@ function renderSeis(host){
   }
   eq(b,"Base value","ASCE 7-16 Eq. 12.8-2","C_s = \\dfrac{S_{DS}}{R/I_e}",
     "C_s = \\dfrac{"+RN(q.SDS,4)+"}{"+R2(q.R)+"/"+R2(q.Ie)+"}","C_s = "+RN(q.CsBase,4));
+  if(q.exc1148){
+    eq(b,"Sec. 11.4.8 Exception 2, transition period","ASCE 7-16 Sec. 11.4.8, 11.4.6","T_s = \\dfrac{S_{D1}}{S_{DS}}",
+      "T_s = \\dfrac{"+RN(q.SD1,4)+"}{"+RN(q.SDS,4)+"},\\quad 1.5T_s = "+RN(1.5*q.Ts,4)+"\\ \\text{s}",
+      "T = "+RN(q.Tused,4)+"\\ \\text{s}\\ "+(q.Tused<=1.5*q.Ts?"\\le":">")+"\\ 1.5T_s");
+    note(b,q.Tused<=1.5*q.Ts
+      ? "Sec. 11.4.8 Exception 2: T \u2264 1.5T\u209b, so C\u209b is determined by Eq. 12.8-2 and the Eq. 12.8-3 upper limit below is not applied."
+      : "Sec. 11.4.8 Exception 2: T > 1.5T\u209b, so C\u209b is taken as 1.5 times the value of Eq. "+(q.Tused<=q.TL?"12.8-3":"12.8-4")+" ("+RN(q.CsMaxTab,4)+" \u00D7 1.5 = "+RN(q.CsMax,4)+").","w");
+  }
   eq(b,"Upper limit","ASCE 7-16 Eq. 12.8-3 / 12.8-4",
     q.Tused<=q.TL?"C_{s,max} = \\dfrac{S_{D1}}{T\\,(R/I_e)} \\quad (T \\le T_L)"
                  :"C_{s,max} = \\dfrac{S_{D1}\\,T_L}{T^2(R/I_e)} \\quad (T > T_L)",
     q.Tused<=q.TL?"C_{s,max} = \\dfrac{"+RN(q.SD1,4)+"}{"+RN(q.Tused,4)+"("+R2(q.R)+"/"+R2(q.Ie)+")}"
                  :"C_{s,max} = \\dfrac{"+RN(q.SD1,4)+"("+R2(q.TL)+")}{"+RN(q.Tused,4)+"^2("+R2(q.R)+"/"+R2(q.Ie)+")}",
-    "C_{s,max} = "+RN(q.CsMax,4));
+    "C_{s,max} = "+(q.exc1148?RN(q.CsMaxTab,4)+(isFinite(q.CsMax)?"\\times 1.5 = "+RN(q.CsMax,4)+"\\ (\\text{Sec. 11.4.8 Exc. 2})":"\\ (\\text{not applied, Sec. 11.4.8 Exc. 2})"):RN(q.CsMax,4)));
   eq(b,"Lower limit","ASCE 7-16 Eq. 12.8-5","C_{s,min} = \\max\\left(0.044\\,S_{DS}I_e,\\ 0.01\\right)",
     "C_{s,min} = \\max\\left(0.044("+RN(q.SDS,4)+")("+R2(q.Ie)+"),\\ 0.01\\right)","C_{s,min} = "+RN(q.CsMin,4));
   if(q.CsMinS1!==null) eq(b,"Additional lower limit where S\u2081 \u2265 0.6g","ASCE 7-16 Eq. 12.8-6",
     "C_{s,min} = \\dfrac{0.5\\,S_1}{R/I_e}","C_{s,min} = \\dfrac{0.5("+RN(st.S1,3)+")}{"+R2(q.R)+"/"+R2(q.Ie)+"}","C_{s,min} = "+RN(q.CsMinS1,4));
   eq(b,"Governing seismic response coefficient",null,
     "C_s = \\min\\!\\left(C_{s,base},\\ C_{s,max}\\right) \\ \\text{but not less than} \\ C_{s,min}",
-    "C_s = \\min\\!\\left("+RN(q.CsBase,4)+",\\ "+RN(q.CsMax,4)+"\\right),\\ \\ge "+RN(q.CsMin,4),"C_s = "+RN(q.Cs,4));
+    "C_s = \\min\\!\\left("+RN(q.CsBase,4)+",\\ "+(isFinite(q.CsMax)?RN(q.CsMax,4):"\\infty")+"\\right),\\ \\ge "+RN(q.CsMin,4),"C_s = "+RN(q.Cs,4));
 
   b=panel(host,"o-se5",++n+".","Base Shear and Vertical Distribution","ASCE 7-16 Sec. 12.8.1 / 12.8.3");
   eq(b,"Seismic base shear","ASCE 7-16 Eq. 12.8-1","V = C_s\\,W",
@@ -2813,14 +2885,14 @@ function renderSeis(host){
       "produced. Open the story schedule editor from the Seismic input tab.","w");
   } else {
     dtable(b,"Vertical distribution of the base shear, Sec. 12.8.3",
-      ["Level","h\u2093 (ft)","w\u2093 (kip)","w\u2093h\u2093\u1d4f","C\u1d65\u2093","F\u2093 (kip)"],
-      q.levels.map(L=>[{v:esc(L.name)},{v:R2(L.h)},{v:R2(L.w)},{v:RN(L.whk,2)},{v:RN(L.Cvx,4)},{v:R2(L.Fx),cls:"hl"}])
+      ["Level","h\u2093 above base (ft)","w\u2093 (kip)","w\u2093h\u2093\u1d4f","C\u1d65\u2093","F\u2093 (kip)"],
+      q.levels.map(L=>[{v:esc(L.name)},{v:R2(L.hx)},{v:R2(L.w)},{v:RN(L.whk,2)},{v:RN(L.Cvx,4)},{v:R2(L.Fx),cls:"hl"}])
         .concat([[{v:"Sum"},{v:""},{v:R2(q.sumW)},{v:RN(q.sumWH,2)},{v:"1.0000"},{v:R2(q.sumFx)}]]),
-      "Levels are listed top down, which is the order the story shear accumulates.");
+      "Levels are listed top down, which is the order the story shear accumulates. h\u2093 is measured from the base at elevation "+R2(q.baseElev)+" ft, per Eq. 12.8-12.");
     const L0=q.levels[0];
     eq(b,"Worked derivation \u2014 "+L0.name,"ASCE 7-16 Eq. 12.8-11, 12.8-12",
       "C_{vx} = \\dfrac{w_x h_x^k}{\\sum w_i h_i^k}, \\qquad F_x = C_{vx}V",
-      "C_{vx} = \\dfrac{"+R2(L0.w)+"("+R2(L0.h)+")^{"+RN(q.k,3)+"}}{"+RN(q.sumWH,2)+"} = "+RN(L0.Cvx,4),
+      "C_{vx} = \\dfrac{"+R2(L0.w)+"("+R2(L0.hx)+")^{"+RN(q.k,3)+"}}{"+RN(q.sumWH,2)+"} = "+RN(L0.Cvx,4),
       "F_x = "+RN(L0.Cvx,4)+"("+R2(q.Vbase)+") = "+R2(L0.Fx)+"\\ \\text{kip}");
     if(Math.abs(q.sumW-q.Wt)>0.01*Math.max(q.Wt,1))
       note(b,"The sum of the level weights ("+R2(q.sumW)+" kip) differs from the effective seismic weight entered ("+R2(q.Wt)+
@@ -2830,7 +2902,7 @@ function renderSeis(host){
     note(sb,"The story shear V\u2093 in any story is the sum of the lateral forces at and above that level, per Sec. 12.8.4. "+
       "The overturning moment at a level is the sum of the forces above it times their height above that level, per Sec. 12.8.5, "+
       "with the overturning factor \u03C4 taken as 1.0.");
-    dtable(sb,null,["Level","h\u2093 (ft)","F\u2093 (kip)","Story below","Story ht (ft)","V\u2093 (kip)","M\u2093 (kip-ft)"],
+    dtable(sb,null,["Level","Elevation (ft)","F\u2093 (kip)","Story below","Story ht (ft)","V\u2093 (kip)","M\u2093 (kip-ft)"],
       q.levels.map((L,j)=>[{v:esc(L.name)},{v:R2(L.h)},{v:R2(L.Fx)},
         {v:(q.levels[j+1]?esc(q.levels[j+1].name):"base")+" to "+esc(L.name)},
         {v:R2(L.hs)},{v:R2(L.Vx),cls:"hl"},{v:R2(L.Mx)}])
@@ -2955,7 +3027,7 @@ function renderComb(host){
     [["ASD-1","D"],["ASD-2","D + L"],["ASD-3","D + (L\u1d63 or S or R)"],
      ["ASD-4","D + 0.75L + 0.75(L\u1d63 or S or R)"],["ASD-5","D + 0.6W"],
      ["ASD-6","D + 0.75L + 0.75(0.6W) + 0.75(L\u1d63 or S or R)"],["ASD-7","0.6D + 0.6W"],
-     ["ASD-8","D + 0.7E"],["ASD-9","D + 0.75L + 0.75(0.7E) + 0.75(L\u1d63 or S or R)"],
+     ["ASD-8","D + 0.7E"],["ASD-9","D + 0.75L + 0.75(0.7E) + 0.75S"],
      ["ASD-10","0.6D + 0.7E"]].map(r=>[{v:r[0]},{v:r[1]}]),
     "Seismic combinations include E\u1d65 within E per Sec. 12.4.2.");
   if(R.maAsd){
@@ -4187,6 +4259,7 @@ function snapshot(){
 }
 function restore(o){
   S=Object.assign(JSON.parse(JSON.stringify(DEF)),o);
+  if(S.sfrs && SFRS_OLD[S.sfrs]) S.sfrs=SFRS_OLD[S.sfrs];   /* labels renamed; same R, Omega_0, C_d */
   S.open=o.open||{};
   Object.keys(S.tb||{}).forEach(k=>{ const i=document.getElementById("tb_"+k); if(i) i.value=S.tb[k]; });
   buildInputs(); recalc();
@@ -4194,7 +4267,19 @@ function restore(o){
 let saveTimer=null;
 function autosave(){
   clearTimeout(saveTimer);
-  saveTimer=setTimeout(()=>{ try{ localStorage.setItem(LSA, JSON.stringify(snapshot())); }catch(e){} },350);
+  saveTimer=setTimeout(()=>{ try{ localStorage.setItem(LSA, JSON.stringify(snapshot())); autosaveNotice(false); }catch(e){ autosaveNotice(true); } },350);
+}
+/* a failed autosave (storage full or blocked) is shown on screen rather than swallowed */
+function autosaveNotice(fail){
+  let d=document.getElementById("asce7AutosaveWarn");
+  if(!fail){ if(d) d.remove(); return; }
+  if(d) return;
+  d=document.createElement("div"); d.id="asce7AutosaveWarn"; d.className="noprint";
+  d.style.cssText="position:fixed;left:12px;bottom:12px;z-index:9999;max-width:460px;background:#fff3cd;border:1px solid #b58105;color:#5a3d00;padding:8px 12px;font-size:10pt;box-shadow:0 2px 6px rgba(0,0,0,.25)";
+  d.innerHTML="<b>Autosave failed.</b> Browser storage is full or unavailable, so changes are not being kept between sessions. "+
+    "Use Export JSON on the Project tab to keep this work. (Every tool opened from disk in Chrome or Edge shares one storage quota.) "+
+    '<button class="btn" style="margin-left:6px" onclick="this.parentNode.remove()">Dismiss</button>';
+  document.body.appendChild(d);
 }
 function projects(){ try{ return JSON.parse(localStorage.getItem(LSK)||"{}"); }catch(e){ return {}; } }
 function refreshProjects(){
@@ -4218,7 +4303,9 @@ function doSave(){
 }
 function doLoad(n){ const p=projects(); if(!p[n]) return; restore(p[n]); const e2=document.getElementById("savename"); if(e2) e2.value=n; }
 function doDelete(n){ if(!confirm('Delete "'+n+'" from this machine? This cannot be undone.')) return;
-  const p=projects(); delete p[n]; localStorage.setItem(LSK, JSON.stringify(p)); refreshProjects(); }
+  const p=projects(); delete p[n];
+  try{ localStorage.setItem(LSK, JSON.stringify(p)); }catch(e){ alert("Local storage is unavailable; the project could not be deleted."); return; }
+  refreshProjects(); }
 function doReset(){ if(!confirm("Reset every input to the defaults? Unsaved work will be lost.")) return;
   restore(JSON.parse(JSON.stringify(DEF))); }
 function doExportJSON(){
@@ -4785,7 +4872,7 @@ function buildWorkbook(S,R,ExcelJS,tb){
   if(sn.drifts && sn.drifts.length){
     textRow("Snow drift, Sec. 7.7 and 7.8");
     out("gam2","Snow density","\u03B3",{formula:"MIN(0.13*"+A("pg")+"+14,30)",result:sn.gamma},NF.pcf,"Eq. 7.7-1");
-    out("hb","Balanced snow depth","h_b",{formula:A("psdes")+"/"+A("gam2"),result:sn.hb},NF.f3,"Sec. 7.7.1");
+    out("hb","Balanced snow depth","h_b",{formula:A("ps")+"/"+A("gam2"),result:sn.hb},NF.f3,"Sec. 7.7.1; p_s without rain-on-snow or p_m (Sec. 7.10, 7.3.4)");
     table("Drift locations",
       ["#","Location","Provision","h (ft)","h_c (ft)","h_c/h_b","h_d (ft)","w (ft)","p_d (psf)","Peak total (psf)","Required"],
       sn.drifts.map(d=>[d.idx,d.label,
@@ -4799,7 +4886,7 @@ function buildWorkbook(S,R,ExcelJS,tb){
     if(sn.driftGov){
       inp("hdg","Governing drift height","h_d", sn.driftGov.hd, NF.f, sn.driftGov.label);
       out("pdg","Governing drift surcharge","p_d",{formula:A("hdg")+"*"+A("gam2"),result:sn.driftGov.pd},NF.p,"Sec. 7.7.1");
-      out("pmaxg","Peak total load at the obstruction","p_{max}",{formula:A("psdes")+"+"+A("pdg"),result:sn.driftGov.pTotal},NF.p,"Sec. 7.7.1");
+      out("pmaxg","Peak total load at the obstruction","p_{max}",{formula:A("ps")+"+"+A("pdg"),result:sn.driftGov.pTotal},NF.p,"Sec. 7.7.1");
       statusRow("Governing drift location", sn.driftGov.label, false);
     }
     sn.drifts.filter(d=>!d.required).forEach(d=>noteRow("Exempt \u2014 "+d.label+": "+d.reason));
@@ -4925,7 +5012,11 @@ function buildWorkbook(S,R,ExcelJS,tb){
       {formula:"INDEX("+faB+","+A("sc")+","+A("faCol")+")+"+A("faF")+
         "*(IFERROR(INDEX("+faB+","+A("sc")+","+A("faCol")+"+1),INDEX("+faB+","+A("sc")+","+A("faCol")+"))"+
         "-INDEX("+faB+","+A("sc")+","+A("faCol")+"))",
-       result:q.Fa},NF.n3,"Table 11.4-1");
+       result:q.FaTab},NF.n3,"Table 11.4-1");
+    if(q.siteRule){
+      /* Sec. 11.4.3 rule in force: the adjusted F_a / F_v rows (FaU, FvU) follow Table 11.4-2 and feed S_MS / S_M1 */
+      noteRow(q.siteRule);
+    }
     const fvH="B"+fvT.header+":G"+fvT.header, fvB="B"+fvT.first+":G"+fvT.last;
     out("fvCol","Bracketing column in Table 11.4-2","j",
       {formula:"IFERROR(MATCH(MIN("+A("S1")+",0.6),"+fvH+",1),1)",result:Math.max(1,q.fvTrace.i0+1)},NF.n2,"MATCH on the header row, clamped to the tabulated range");
@@ -4938,9 +5029,17 @@ function buildWorkbook(S,R,ExcelJS,tb){
       {formula:"INDEX("+fvB+","+A("sc")+","+A("fvCol")+")+"+A("fvF")+
         "*(IFERROR(INDEX("+fvB+","+A("sc")+","+A("fvCol")+"+1),INDEX("+fvB+","+A("sc")+","+A("fvCol")+"))"+
         "-INDEX("+fvB+","+A("sc")+","+A("fvCol")+"))",
-       result:q.Fv},NF.n3,"Table 11.4-2");
-    out("SMS","MCE_R short-period acceleration","S_{MS}",{formula:A("Fa")+"*"+A("Ss"),result:q.SMS},NF.g,"Eq. 11.4-1");
-    out("SM1","MCE_R 1-second acceleration","S_{M1}",{formula:A("Fv")+"*"+A("S1"),result:q.SM1},NF.g,"Eq. 11.4-2");
+       result:q.FvTab},NF.n3,"Table 11.4-2");
+    const bNoVs=(S.siteClass==="B"&&S.siteBnoVs), dDef=(S.siteClass==="D"&&S.siteDefaultD);
+    if(bNoVs||dDef){
+      out("FaU","Short-period site coefficient used","F_a",
+        {formula:bNoVs?"1":"MAX(1.2,"+A("Fa")+")",result:q.Fa},NF.n3,"Sec. 11.4.3");
+      out("FvU","Long-period site coefficient used","F_v",
+        {formula:bNoVs?"1":A("Fv"),result:q.Fv},NF.n3,"Sec. 11.4.3");
+    }
+    const FaRef=(bNoVs||dDef)?"FaU":"Fa", FvRef=(bNoVs||dDef)?"FvU":"Fv";
+    out("SMS","MCE_R short-period acceleration","S_{MS}",{formula:A(FaRef)+"*"+A("Ss"),result:q.SMS},NF.g,"Eq. 11.4-1");
+    out("SM1","MCE_R 1-second acceleration","S_{M1}",{formula:A(FvRef)+"*"+A("S1"),result:q.SM1},NF.g,"Eq. 11.4-2");
     out("SDS","Design short-period acceleration","S_{DS}",{formula:"2/3*"+A("SMS"),result:q.SDS},NF.g,"Eq. 11.4-3");
     out("SD1","Design 1-second acceleration","S_{D1}",{formula:"2/3*"+A("SM1"),result:q.SD1},NF.g,"Eq. 11.4-4");
     const iv=(S.risk==="IV")?1:0;
@@ -4969,10 +5068,15 @@ function buildWorkbook(S,R,ExcelJS,tb){
       {formula:A("SDS")+"/("+A("Rr")+"/"+A("Ie")+")",result:q.CsBase},NF.n,"Eq. 12.8-2");
     out("Csx","Upper limit on the response coefficient","C_{s,max}",
       {formula:"IF("+A("Tus")+"<="+A("TL")+","+A("SD1")+"/("+A("Tus")+"*("+A("Rr")+"/"+A("Ie")+")),"+A("SD1")+"*"+A("TL")+"/("+A("Tus")+"^2*("+A("Rr")+"/"+A("Ie")+")))",
-       result:q.CsMax},NF.n,"Eq. 12.8-3, 12.8-4");
+       result:q.exc1148?q.CsMaxTab:q.CsMax},NF.n,"Eq. 12.8-3, 12.8-4");
     out("Csn","Lower limit on the response coefficient","C_{s,min}",
       {formula:"MAX(0.044*"+A("SDS")+"*"+A("Ie")+",0.01"+(q.CsMinS1!==null?",0.5*"+A("S1")+"/("+A("Rr")+"/"+A("Ie")+")":"")+")",
        result:q.CsMinS1!==null?Math.max(q.CsMin,q.CsMinS1):q.CsMin},NF.n,"Eq. 12.8-5, 12.8-6");
+    if(q.exc1148){
+      out("Cs","Seismic response coefficient","C_s",
+        {formula:"MAX(IF("+A("Tus")+"<=1.5*"+A("SD1")+"/"+A("SDS")+","+A("Csb")+",MIN("+A("Csb")+",1.5*"+A("Csx")+")),"+A("Csn")+")",result:q.Cs},NF.n,"Sec. 12.8.1.1 with Sec. 11.4.8 Exception 2");
+      noteRow("Site Class D with S_1 >= 0.2: Sec. 11.4.8 Exception 2 is applied. C_s is Eq. 12.8-2 for T <= 1.5T_s (T_s = S_D1/S_DS) and 1.5 times Eq. 12.8-3 or 12.8-4 above that.");
+    } else
     out("Cs","Seismic response coefficient","C_s",
       {formula:"MAX(MIN("+A("Csb")+","+A("Csx")+"),"+A("Csn")+")",result:q.Cs},NF.n,"Sec. 12.8.1.1");
     out("Vb","Seismic base shear","V",{formula:A("Cs")+"*"+A("Wt"),result:q.Vbase},NF.k,"Eq. 12.8-1");
@@ -4982,11 +5086,11 @@ function buildWorkbook(S,R,ExcelJS,tb){
       {formula:"0.2*"+A("SDS")+"*"+A("Dl"),result:q.Ev},NF.p,"Sec. 12.4.2.2");
     if(q.levels.length){
       table("Vertical distribution, story shear and overturning, Sec. 12.8.3 to 12.8.5",
-        ["Level","h_x (ft)","w_x (kip)","w_x h_x^k","C_vx","F_x (kip)","V_x (kip)","M_x (kip-ft)","Story ht (ft)","",""],
-        q.levels.map(L=>[L.name,{v:L.h,fmt:NF.f},{v:L.w,fmt:NF.k},{v:L.whk,fmt:NF.n2},{v:L.Cvx,fmt:NF.n},
-          {v:L.Fx,fmt:NF.k},{v:L.Vx,fmt:NF.k,hl:true},{v:L.Mx,fmt:NF.n2},{v:L.hs,fmt:NF.f},"",""])
-          .concat([["Base",{v:q.baseElev,fmt:NF.f},{v:q.sumW,fmt:NF.k},{v:q.sumWH,fmt:NF.n2},1,
-            {v:q.sumFx,fmt:NF.k},{v:q.Vbase,fmt:NF.k,hl:true},{v:q.Mbase,fmt:NF.n2,hl:true},"","",""]]),
+        ["Level","h_x above base (ft)","w_x (kip)","w_x h_x^k","C_vx","F_x (kip)","V_x (kip)","M_x (kip-ft)","Story ht (ft)","Elevation (ft)",""],
+        q.levels.map(L=>[L.name,{v:L.hx,fmt:NF.f},{v:L.w,fmt:NF.k},{v:L.whk,fmt:NF.n2},{v:L.Cvx,fmt:NF.n},
+          {v:L.Fx,fmt:NF.k},{v:L.Vx,fmt:NF.k,hl:true},{v:L.Mx,fmt:NF.n2},{v:L.hs,fmt:NF.f},{v:L.h,fmt:NF.f},""])
+          .concat([["Base",{v:0,fmt:NF.f},{v:q.sumW,fmt:NF.k},{v:q.sumWH,fmt:NF.n2},1,
+            {v:q.sumFx,fmt:NF.k},{v:q.Vbase,fmt:NF.k,hl:true},{v:q.Mbase,fmt:NF.n2,hl:true},"",{v:q.baseElev,fmt:NF.f},""]]),
         "Levels are listed top down. V_x on a level's row is the shear in the story immediately below that level, per Sec. 12.8.4. M_x is the overturning moment at that level from the forces above it, per Sec. 12.8.5 with the overturning factor taken as 1.0.");
       out("Vbase2","Total base shear","V",{formula:A("Cs")+"*"+A("Wt"),result:q.Vbase},NF.k,"Eq. 12.8-1");
       out("Mbase","Base overturning moment","M_0", q.Mbase, NF.n2,"Sec. 12.8.5");
