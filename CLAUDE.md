@@ -4,7 +4,8 @@ This repo is a collection of single-file HTML structural/bridge engineering
 tools. They are used by a licensed PE for real design work. **Accuracy and
 stability matter more than code elegance.**
 
-See `AUDIT.md` for the current inventory, known issues, and the work plan.
+See `AUDIT.md` for the current inventory, known issues, and the work plan, and
+`HANDOFF.md` for how tools pass data to each other.
 
 ## 1. Single-file, no-install architecture
 
@@ -68,7 +69,7 @@ See `AUDIT.md` for the current inventory, known issues, and the work plan.
 
 ## 7. Scope of changes
 
-- **One tool per PR** unless the engineer says otherwise.
+- **One tool per PR** unless the engineer says otherwise. Exception (approved 2026-10-04): a cross-tool connection (see `HANDOFF.md`) may change the sending and receiving tools in one PR.
 - Keep diffs minimal and focused on the task. No drive-by reformatting,
   renaming, or reorganizing.
 - Do not move, rename, or delete tool files unless asked. Other tools link to
