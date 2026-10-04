@@ -208,7 +208,7 @@ Severity tags: **[U]** = unconservative (could pass something that should fail);
 | 18 | `ASCE7-16 Load Generator.html:399-403` | For H/Lh > 0.5, **Lh is not replaced by 2H** in K2/K3 (Fig. 26.8-1 note 2). **[U]** | High |
 | 19 | `Light Pole and Sign Post.html:3558-3580` | Anchor and shaft demands come only from the max-moment combination, so **0.9D + W never governs bolt tension**. **[U]** | High |
 | 20 | `Light Pole and Sign Post.html:2639, 3154` | Pole/post checked at segment mid-heights only. **The base section is never checked.** **[U]** | High |
-| 21 | `Steel Bridge Beam Modules.html:2441-2442, 4838` | Stud pitch check passes at **4d**; AASHTO 6.10.10.1.2 requires 6d. The auto-designer can select 4–5 in pitch. **[U]** | High |
+| 21 | `Steel Bridge Beam Modules.html:2441-2442, 4838` | ~~Stud pitch check passes at 4d (6d required)~~ **Withdrawn (2026-10-04):** AASHTO LRFD **10th Ed.** reduced the 6.10.10.1.2 minimum pitch from 6d to 4d, so the tool is correct under the 10th Ed. Only the work string and plan drawing mislabelled it (fixed in PR #2). | — |
 | 22 | `Steel Beam Design - AISC 15th.html:1698` **[spot-checked]** | E7 effective width for I-shape **webs** uses 0.22/1.49; Table E7.1 case (a) gives 0.18/1.31. **[U]** | High |
 | 23 | `Timber Beam Check.html:412, 371-373` | Flat-use applies Cfu but keeps the **edgewise** S and I. Grossly unconservative. **[U]** | High |
 | 24 | `Timber Beam Check.html:439-440, 462-464, 477` | Shear and bearing use **only the left reaction**. **[U]** for unsymmetric point loads. | High |
@@ -296,7 +296,7 @@ The engine was run in Node and matches hand values: truck M at midspan of a 100 
 
 | Location | What | Why | Conf. |
 |---|---|---|---|
-| :2441-2442, :4838 | SC3 `ge(z.p, 4*d)`, displayed as "6(d) = 4d"; auto-designer searches down to 4d | AASHTO 6.10.10.1.2: pitch ≥ 6d (4d is the *transverse* limit). **[U]** | High |
+| :2441-2442, :4838 | SC3 `ge(z.p, 4*d)`, displayed as "6(d) = 4d" | **Withdrawn:** the 10th Ed. minimum pitch is 4d, so the check is correct; only the label was wrong (fixed). Under the 9th Ed. it would be 6d. | — |
 | :1222, :1242, :1313, :1340, :2647 | Net area deducts the standard hole size (bolt + 1/16 in) | AASHTO 6.8.3 deducts the hole size + 1/16 in (bolt + 1/8 in). **[U]** for fracture and block shear. **verify** wording in your edition. | Medium |
 | :1104 etc. | Ec uses wc = 0.150 kcf (the dead-load unit weight) | Table 3.5.1-1 / 5.4.2.4: use plain-concrete wc (0.145) for Ec. n is about 7% low. | Medium |
 | :2777, :3003, :3107, :3327, PL:2177 | Lp = **1.1** rt√(E/Fyc), labelled 10th Ed. | 9th Ed. uses 1.0rt. **verify** the 10th Ed. change. PlateLine cites the 9th Ed. **[U]** if the 9th governs. | Low-Med |
@@ -1000,7 +1000,7 @@ Items marked **❓** need your decision on the provision, edition or owner rule 
 | A11 | `BasePlateAnchorDesigner.html` | Side-face blowout corner factor; A_Nc from tension anchors only | M |
 | A12 | `BasePlateAnchorDesigner.html` | Round HSS 0.8D; plate-too-small (`disc<0`) as a blocking error; plain-rod V_b min(a,b) | M |
 | A13 | `BasePlateAnchorDesigner.html` | Narrow-member c_a1 limit §17.7.2.1.2; seismic banner when Ω0/seismic combos are on | M |
-| A14 | `Steel Bridge Beam Modules.html` | Stud pitch minimum 6d in SC3 and in the auto-designer search; d_o validation in the splice module | L |
+| A14 | `Steel Bridge Beam Modules.html` | d_o validation in the splice module (the stud-pitch item was withdrawn: 4d is correct under the 10th Ed.) | L |
 | A15 | `stgirder.html` | Negate imported MIDAS shears (match psbeam :2408-2418); add a check case with a MIDAS file | M |
 | A16 | `stgirder.html` | Noncomposite (deck-off) positive flexure uses 6.10.8.2 Fnc; 1.3RhMy cap for continuous spans; ductility for all sections | M |
 | A17 | `stgirder.html` | Shear DF and fatigue truck for stud and web fatigue; replace the old `BridgeApps` block with the current copy (sync snippet, list the four files) | M |
