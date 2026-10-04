@@ -304,6 +304,78 @@ Line numbers are approximate, as of this fix. Search for the anchor text. The fi
 - **Where:** the footing tab, "Factored self-weight of footing" eq.
 - The label printed `1.2 γc tf`, but the code uses 0.90 (`wu_toe_down = 0.90*γc*tf`). The label now reads 0.9.
 
+## 2026-10-04 — Engineer decisions applied
+
+### F14. SI/US units toggle removed; the tool is US customary only (engineer: "No SI")   [UI removal / robustness] [no result change]
+- **Where:** header `#unit-seg` group (anchor `<div class="hdr-group">`, next to the `#basis-seg` group); `scheduleAutosave()` (anchor `localStorage.setItem(AUTO_KEY, JSON.stringify({ fields: snapshotFields(), ts: Date.now(), name }));`); `restoreSession()` (anchor `// The tool is US customary only (SI toggle removed).`); the `UNIT TOGGLE` block before `// 3D VIEW TAB`; `syncHeaderControls()` and the header listeners in the UI-shell script.
+- **Problem:** F1 only disabled the SI button. The engineer decided that the tool will not support SI, so the toggle UI and its dead conversion path are removed.
+- **Governing provision:** n/a.
+- **Before:**
+  ```html
+      <span class="hdr-lbl" id="units-lbl">Units</span>
+      <div class="seg" role="group" aria-labelledby="units-lbl" id="unit-seg">
+        <button type="button" data-units="US" aria-pressed="true" title="US customary (ft, in, lb, psi)">US</button>
+        <button type="button" data-units="SI" aria-pressed="false" disabled title="SI mode is disabled: the calculation engine works in US customary units only. Enter all inputs in ft, in, lb, psi.">SI</button>
+      </div>
+      <span class="vh" id="unit-label">US customary (ft, in, lb, psi)</span>
+  ```
+  ```js
+      const units = (typeof _units !== 'undefined') ? _units : 'US';   // optional field (absent in older autosaves)
+      localStorage.setItem(AUTO_KEY, JSON.stringify({ fields: snapshotFields(), ts: Date.now(), name, units }));
+  …
+      // An autosave explicitly tagged as SI is converted back to US customary (the engine is
+      // US-only). Older autosaves carry no unit tag and cannot be identified, so they are
+      // restored unchanged.
+      if (auto.units === 'SI' && typeof UNIT_DEFS !== 'undefined') {
+        Object.entries(UNIT_DEFS).forEach(([id, def]) => {
+          const el = document.getElementById(id);
+          if (!el) return;
+          const v = parseFloat(el.value);
+          if (!isNaN(v) && v !== 0) el.value = parseFloat((v / def.k).toFixed(def.dUS + 2));
+        });
+      }
+  …
+  // ================================================================
+  // UNIT TOGGLE — US Customary ↔ SI Metric
+  // Converts input field values + labels in-place
+  // ================================================================
+  let _units = 'US';  // 'US' or 'SI'
+  const UNIT_DEFS = { Hs: {…}, tf: {…}, … wt_depth: {…} };   // 24 entries
+  function toggleUnits() { … onInputChange(); }               // whole function (block is 69 lines incl. UNIT_DEFS)
+  …
+    const u = (typeof _units !== 'undefined') ? _units : 'US';
+    document.querySelectorAll('#unit-seg button').forEach(b =>
+      b.setAttribute('aria-pressed', String(b.dataset.units === u)));
+  …
+  document.querySelectorAll('#unit-seg button').forEach(b => b.addEventListener('click', () => {
+    if (b.dataset.units !== _units) toggleUnits();
+    syncHeaderControls();
+  }));
+  ```
+- **After:** the header HTML, the `UNIT TOGGLE` block, the two `#unit-seg` lines in `syncHeaderControls()` and the `#unit-seg` click listener are deleted. Autosave and restore become:
+  ```js
+      localStorage.setItem(AUTO_KEY, JSON.stringify({ fields: snapshotFields(), ts: Date.now(), name }));
+  …
+      // The tool is US customary only (SI toggle removed). An optional `units` field written by
+      // an earlier build is ignored; if it says 'SI', warn once that the values may be metric,
+      // then rewrite the autosave without the field so the warning does not repeat.
+      if (auto.units !== undefined) {
+        if (auto.units === 'SI') {
+          setTimeout(() => alert('The last autosaved session was saved while the SI units option was selected, so some input values may be in SI (m, mm, kN, MPa). This tool works in US customary units only (ft, in, lb, psi, pcf). Check every input before using the results.'), 0);
+        }
+        try { const a2 = Object.assign({}, auto); delete a2.units; localStorage.setItem(AUTO_KEY, JSON.stringify(a2)); } catch(e){}
+      }
+  ```
+- **Saved data:** the key `retaincalcpro.autosave.v1` and its `{fields, ts, name}` format are unchanged; this is the format on `main`. The optional `units` field that F1 added is no longer written. An autosave that carries it still loads, and the field is ignored. If it is `'SI'`, the values are restored **as stored, without conversion**, and a warning is shown once. The F1 SI→US auto-conversion is removed with `UNIT_DEFS`. Project saves and JSON export/import are not affected.
+- **Check case (jsdom boot with a seeded autosave, scratch `jsd/rw_si.js`):**
+  - No autosave: no alert; f'c = 4000, Hs = 12.
+  - Old autosave without `units` (Hs 14): no alert; Hs = 14.
+  - Autosave `units:'US'` (Hs 15): no alert; Hs = 15; the stored autosave is rewritten without `units`.
+  - Autosave `units:'SI'` {f'c 27.6, Hs 3.66}: one alert; values restored as 27.6 / 3.66; the stored autosave is rewritten without `units`, so the next boot shows no alert.
+  - No page errors in any case. The `#unit-seg` element is absent.
+- **How verified:** `node --check` on all 4 inline scripts (`syncheck.js`). A grep for `_units|UNIT_DEFS|toggleUnits|unit-seg|units-lbl|unit-label|data-units` finds no matches, so nothing references the removed code. The jsdom boot test above. The engine (`getInputs`/`calcAll`) is untouched, so US results do not change.
+- **Other copies of this code:** none known.
+
 ## Open items (not changed)
 - **O1. AASHTO q_n = 3·q_a default** ("estimate" mode). This is a back-calculated resistance, and it is unconservative if q_a is settlement-controlled. Needs a decision: make "From geotech report" the default, or warn more strongly. Not changed.
 - **O2. Rock bearing distribution.** The 0.45B option still uses a uniform Meyerhof B'. AASHTO 10.6.5 / 11.6.3.2 call for a triangular or trapezoidal distribution on rock, and φb = 0.45 for rock is not automatic. Needs a decision.
@@ -316,3 +388,7 @@ Line numbers are approximate, as of this fix. Search for the anchor text. The fi
   - The stem design uses the horizontal pressure Ka·γ·h with the Coulomb Ka. It does not take cos(δ + ω), which is conservative.
   - The Coulomb surcharge thrust `Pa_sur_h = Ka·q·H'` is kept fully horizontal (conservative).
   - The ACI factored resultant (`SumVu`) omits the barrier weight and the uplift, in both the max and the new min case, unchanged.
+
+## Resolved items
+- **F1: SI toggle disabled pending a decision on SI support.**
+  - **RESOLVED 2026-10-04 (F14):** engineer: "No SI". The toggle and its conversion code are removed; the tool is US customary only.

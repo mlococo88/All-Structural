@@ -651,12 +651,6 @@ window.MathJax = {
       <button type="button" data-basis="ACI" aria-pressed="true">ACI 318-19</button>
       <button type="button" data-basis="AASHTO" aria-pressed="false">AASHTO LRFD</button>
     </div>
-    <span class="hdr-lbl" id="units-lbl">Units</span>
-    <div class="seg" role="group" aria-labelledby="units-lbl" id="unit-seg">
-      <button type="button" data-units="US" aria-pressed="true" title="US customary (ft, in, lb, psi)">US</button>
-      <button type="button" data-units="SI" aria-pressed="false" disabled title="SI mode is disabled: the calculation engine works in US customary units only. Enter all inputs in ft, in, lb, psi.">SI</button>
-    </div>
-    <span class="vh" id="unit-label">US customary (ft, in, lb, psi)</span>
     <button type="button" class="btn btn-primary" onclick="generateReport()"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2.5v7.5M4.75 6.75 8 10l3.25-3.25M3 13h10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Export report</span></button>
   </div>
 </header>
@@ -5144,8 +5138,7 @@ function scheduleAutosave() {
   _autoTimer = setTimeout(() => {
     const name = (document.getElementById('proj_name')?.value || '').trim();
     try {
-      const units = (typeof _units !== 'undefined') ? _units : 'US';   // optional field (absent in older autosaves)
-      localStorage.setItem(AUTO_KEY, JSON.stringify({ fields: snapshotFields(), ts: Date.now(), name, units }));
+      localStorage.setItem(AUTO_KEY, JSON.stringify({ fields: snapshotFields(), ts: Date.now(), name }));
       const dot = document.getElementById('proj_autosave_dot');
       if (dot) { dot.style.opacity='1'; setTimeout(()=>{ if(dot) dot.style.opacity='0.25'; }, 800); }
     } catch(e){}
@@ -5179,16 +5172,14 @@ function restoreSession() {
     const auto = JSON.parse(localStorage.getItem(AUTO_KEY) || 'null');
     if (auto && auto.fields) {
       restoreFields(auto.fields);
-      // An autosave explicitly tagged as SI is converted back to US customary (the engine is
-      // US-only). Older autosaves carry no unit tag and cannot be identified, so they are
-      // restored unchanged.
-      if (auto.units === 'SI' && typeof UNIT_DEFS !== 'undefined') {
-        Object.entries(UNIT_DEFS).forEach(([id, def]) => {
-          const el = document.getElementById(id);
-          if (!el) return;
-          const v = parseFloat(el.value);
-          if (!isNaN(v) && v !== 0) el.value = parseFloat((v / def.k).toFixed(def.dUS + 2));
-        });
+      // The tool is US customary only (SI toggle removed). An optional `units` field written by
+      // an earlier build is ignored; if it says 'SI', warn once that the values may be metric,
+      // then rewrite the autosave without the field so the warning does not repeat.
+      if (auto.units !== undefined) {
+        if (auto.units === 'SI') {
+          setTimeout(() => alert('The last autosaved session was saved while the SI units option was selected, so some input values may be in SI (m, mm, kN, MPa). This tool works in US customary units only (ft, in, lb, psi, pcf). Check every input before using the results.'), 0);
+        }
+        try { const a2 = Object.assign({}, auto); delete a2.units; localStorage.setItem(AUTO_KEY, JSON.stringify(a2)); } catch(e){}
       }
       if (auto.name) { const pn=document.getElementById('proj_name'); if(pn) pn.value=auto.name; }
       return true;
@@ -7917,75 +7908,6 @@ if (document.readyState === 'loading') {
   setTimeout(() => URL.revokeObjectURL(url), 60000);
 }
 
-// ================================================================
-// UNIT TOGGLE — US Customary ↔ SI Metric
-// Converts input field values + labels in-place
-// ================================================================
-let _units = 'US';  // 'US' or 'SI'
-
-const UNIT_DEFS = {
-  // id : { label_US, label_SI, factor_to_SI, dec_US, dec_SI }
-  Hs:      { lUS:'Stem Height Hs', lSI:'Stem Height Hs', unit_US:'ft', unit_SI:'m', k: 0.3048, dUS:1, dSI:2 },
-  tf:      { lUS:'Ftg Thickness tf', lSI:'Ftg Thickness tf', unit_US:'in', unit_SI:'mm', k: 25.4, dUS:0, dSI:0 },
-  ts_bot:  { lUS:'Stem Width — Base', lSI:'Stem Width — Base', unit_US:'in', unit_SI:'mm', k: 25.4, dUS:0, dSI:0 },
-  ts_top:  { lUS:'Stem Width — Top', lSI:'Stem Width — Top', unit_US:'in', unit_SI:'mm', k: 25.4, dUS:0, dSI:0 },
-  Lt:      { lUS:'Toe Length Lt', lSI:'Toe Length Lt', unit_US:'ft', unit_SI:'m', k: 0.3048, dUS:1, dSI:2 },
-  Lh:      { lUS:'Heel Length Lh', lSI:'Heel Length Lh', unit_US:'ft', unit_SI:'m', k: 0.3048, dUS:1, dSI:2 },
-  Df_add:  { lUS:'Soil Cover — Toe', lSI:'Soil Cover — Toe', unit_US:'ft', unit_SI:'m', k: 0.3048, dUS:2, dSI:3 },
-  gamma_s: { lUS:'Unit Weight γs', lSI:'Unit Weight γs', unit_US:'pcf', unit_SI:'kN/m³', k: 0.15709, dUS:0, dSI:2 },
-  coh:     { lUS:'Cohesion c', lSI:'Cohesion c', unit_US:'psf', unit_SI:'kPa', k: 0.04788, dUS:0, dSI:2 },
-  qa:      { lUS:'Allow. Bearing qa', lSI:'Allow. Bearing qa', unit_US:'psf', unit_SI:'kPa', k: 0.04788, dUS:0, dSI:1 },
-  q_sur:   { lUS:'Surcharge qs', lSI:'Surcharge qs', unit_US:'psf', unit_SI:'kPa', k: 0.04788, dUS:0, dSI:1 },
-  gamma_w: { lUS:'γw Water', lSI:'γw Water', unit_US:'pcf', unit_SI:'kN/m³', k: 0.15709, dUS:1, dSI:2 },
-  fc:      { lUS:"f'c (Concrete)", lSI:"f'c (Concrete)", unit_US:'psi', unit_SI:'MPa', k: 0.006895, dUS:0, dSI:1 },
-  fy:      { lUS:'fy (Steel)', lSI:'fy (Steel)', unit_US:'psi', unit_SI:'MPa', k: 0.006895, dUS:0, dSI:0 },
-  cov_stem:{ lUS:'Cover — Stem (back)', lSI:'Cover — Stem (back)', unit_US:'in', unit_SI:'mm', k: 25.4, dUS:2, dSI:0 },
-  cov_ftg: { lUS:'Cover — Ftg (bot)', lSI:'Cover — Ftg (bot)', unit_US:'in', unit_SI:'mm', k: 25.4, dUS:2, dSI:0 },
-  gamma_c: { lUS:'Concrete Unit Weight γc', lSI:'Concrete Unit Weight γc', unit_US:'pcf', unit_SI:'kN/m³', k: 0.15709, dUS:0, dSI:2 },
-  col_DL:  { lUS:'Dead Load PDL', lSI:'Dead Load PDL', unit_US:'kip', unit_SI:'kN', k: 4.44822, dUS:1, dSI:1 },
-  col_LL:  { lUS:'Live Load PLL', lSI:'Live Load PLL', unit_US:'kip', unit_SI:'kN', k: 4.44822, dUS:1, dSI:1 },
-  col_SL:  { lUS:'Snow Load PSL', lSI:'Snow Load PSL', unit_US:'kip', unit_SI:'kN', k: 4.44822, dUS:1, dSI:1 },
-  col_WL:  { lUS:'Wind Load PWL', lSI:'Wind Load PWL', unit_US:'kip', unit_SI:'kN', k: 4.44822, dUS:1, dSI:1 },
-  col_Ldist:{ lUS:'Distribution Length Ldist', lSI:'Distribution Length Ldist', unit_US:'ft', unit_SI:'m', k: 0.3048, dUS:1, dSI:2 },
-  dk:      { lUS:'Shear Key Depth dk', lSI:'Shear Key Depth dk', unit_US:'in', unit_SI:'mm', k: 25.4, dUS:0, dSI:0 },
-  wt_depth:{ lUS:'Water Table Depth', lSI:'Water Table Depth', unit_US:'ft', unit_SI:'m', k: 0.3048, dUS:1, dSI:2 },
-};
-
-function toggleUnits() {
-  const toSI = (_units === 'US');
-  // SI mode is DISABLED. The engine (getInputs/calcAll) reads every field as US customary,
-  // and only some fields were converted, so SI mode produced meaningless results. Switching
-  // to SI is blocked; switching back to US (from a state that somehow is SI) is still allowed.
-  if (toSI) {
-    alert('SI units are disabled in this version: the calculation engine works in US customary units only (ft, in, lb, psi, pcf). Enter all inputs in US units.');
-    return;
-  }
-  _units = toSI ? 'SI' : 'US';
-
-  Object.entries(UNIT_DEFS).forEach(([id, def]) => {
-    const el = document.getElementById(id);
-    if (!el) return;
-
-    // Convert value
-    const v = parseFloat(el.value);
-    if (!isNaN(v) && v !== 0) {
-      const newV = toSI ? (v * def.k) : (v / def.k);
-      el.value = parseFloat(newV.toFixed(toSI ? def.dSI : def.dUS));
-    }
-
-    // Update unit label (the .iw-unit span next to input)
-    const unitSpan = el.closest('.iw')?.querySelector('.iw-unit');
-    if (unitSpan) unitSpan.textContent = toSI ? def.unit_SI : def.unit_US;
-  });
-
-  // Update header label and button
-  document.getElementById('unit-label').textContent = toSI
-    ? 'SI metric (m, mm, kN, MPa)'
-    : 'US customary (ft, in, lb, psi)';
-
-  // Trigger recalc
-  onInputChange();
-}
 
 // ================================================================
 // 3D VIEW TAB — Three.js interactive model
@@ -8492,9 +8414,6 @@ function syncHeaderControls() {
   const basis = document.getElementById('design_basis')?.value || 'ACI';
   document.querySelectorAll('#basis-seg button').forEach(b =>
     b.setAttribute('aria-pressed', String(b.dataset.basis === basis)));
-  const u = (typeof _units !== 'undefined') ? _units : 'US';
-  document.querySelectorAll('#unit-seg button').forEach(b =>
-    b.setAttribute('aria-pressed', String(b.dataset.units === u)));
 }
 window.syncHeaderControls = syncHeaderControls;
 
@@ -8503,10 +8422,6 @@ document.querySelectorAll('#basis-seg button').forEach(b => b.addEventListener('
   if (sel.value === b.dataset.basis) return;
   sel.value = b.dataset.basis;
   sel.dispatchEvent(new Event('change', { bubbles: true }));
-  syncHeaderControls();
-}));
-document.querySelectorAll('#unit-seg button').forEach(b => b.addEventListener('click', () => {
-  if (b.dataset.units !== _units) toggleUnits();
   syncHeaderControls();
 }));
 syncHeaderControls();
