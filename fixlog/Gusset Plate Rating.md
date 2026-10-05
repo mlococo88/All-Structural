@@ -108,13 +108,21 @@ Governing basis: AASHTO MBE 3rd Ed. (with interims) Art. 6A.6.12.6 and AASHTO LR
 - **All LFR fastener values:** rivets φF_v = 30 ksi (unknown origin, taken equal to A502 Gr. 1), 30 (Gr. 1), 38 (Gr. 2); bolts 46 (A325), 57 (A490), × 0.80 with threads included; long-joint 0.80 above 50 in; bearing 1.8 d t F_u / 0.9 L_c t F_u.
 - **LFR plate resistance factors** (φ_y 0.95, φ_u 0.80, φ_bs 0.80, φ_vy 1.00, φ_vu 0.80) and **LFR K = 1.2** for Whitmore buckling (FHWA-IF-09-014 as recalled). LFR Ω = 0.74 (FHWA) vs LRFR Ω = 0.88 (MBE/NCHRP W-197) are kept separate as the brief requires.
 - **φ_vy = 1.00** for LRFR gross shear yielding of the partial plane.
-- **A_n ≤ 0.85 A_g** applied to the Whitmore net section (LRFD 6.13.5.2); it governs the validation case. Set to 1.0 if not applicable to gussets.
+- **A_n ≤ 0.85 A_g** applied to the Whitmore net section (LRFD 6.13.5.2); it governs the validation case. Since C4 (2026-10-05) a switch, code parameter `capAnOn` (default 1 = applied; 0 = A_n = W_n Σt); the ratio `capAn` remains.
 - **Filler reduction applied to rivets** (LRFD 6.13.6.1.5 is written for bolts); γ is taken as t_filler / t_plate (thinnest gusset plate), an approximation of A_f/A_p.
 - **Counteracting dead load factors:** γ_DC,min 0.90, γ_DW,min 0.65 (LRFR) and A1,min 1.0 (LFR) are judgment.
 - **Condition and system factors** default 1.0; MBE Table 6A.4.2.4-1 lists φ_s = 0.90 for riveted members in truss bridges. Confirm what the owner applies to gusset plates.
 - **Article numbers** of MBE 6A.6.12.6.x and LRFD 6.14.2.8.x sub-articles are cited as recalled.
 - **Unknown-steel presets** (MBE Table 6A.6.2.1-1): before 1905 26/52, 1905–1936 30/60, 1936–1963 33/66, after 1963 36/66 ksi.
-- **Geometric conventions to confirm:** Whitmore spread from the row farthest from the WP to the row nearest it; L_mid stop = nearest other-member fastener-field outline or plate edge; block shear only for tension, rectangular block; automatic shear planes through the top/bottom line of chord fasteners (through the holes).
+
+#### Confirmed
+
+Moved here from "Needs verification" (engineer-confirmed 2026-10-05, see C4.4):
+
+- **Whitmore section:** 30° spread from the first fastener row (the row farthest from the WP) to the row nearest the WP (code parameter `thW` now shows "engineer-confirmed 2026-10-05").
+- **L_mid:** average of three lengths to the nearest fastener line of another member or the plate edge.
+- **Block shear:** tension only (rectangular block).
+- **Partial shear planes:** automatic planes through the top and bottom lines of chord fasteners (through the holes).
 
 #### Validation (hand checks)
 
@@ -162,7 +170,7 @@ Hand values were computed independently with a short node script of the formulas
   - O3. Free-edge slenderness / edge buckling; localized section loss along specific planes (loss is uniform per plate now).
   - O4. Eccentric fastener groups; unequal force sharing between plates of different thickness.
   - O5. 3D view (three.js r128) — Phase 2. (Done: see C2 below.)
-  - O6. Live load concurrency: shear-plane and chord ΔF demands treat the entered member LL forces as concurrent; envelope forces from different truck positions should be entered as separate columns.
+  - O6. Live load concurrency: shear-plane and chord ΔF demands treat the entered member LL forces as concurrent; envelope forces from different truck positions should be entered as separate columns. (Answered 2026-10-05: kept, note added; see C4.2.)
   - O7. MIDAS import supports the long table format (Elem, Load, Part, Axial); direct .mct/result-file import is not implemented.
   - O8. All items under "Needs verification".
 
@@ -242,7 +250,7 @@ Hand values were computed independently with a short node script of the formulas
   - Chromium (Playwright): screenshots of the import preview (irregular pattern, removed members, ezdxf R2010 file) and of the Drawing tab after Apply reviewed; no page errors (only the blocked Google Fonts request).
 - **Other copies:** none (the new code is only in this file).
 - **Open items:**
-  - O11. Irregular fastener patterns (missing, staggered or unevenly pitched holes) can only be imported as the best-fit regular grid, because the model stores rows × gage lines at one pitch. The best fit may count holes that are not in the drawing (unconservative for fastener shear and bearing); the warning lists each one. Storing irregular patterns would need new project fields (a format change with a migration) — not done.
+  - O11. Irregular fastener patterns (missing, staggered or unevenly pitched holes) can only be imported as the best-fit regular grid, because the model stores rows × gage lines at one pitch. The best fit may count holes that are not in the drawing (unconservative for fastener shear and bearing); the warning lists each one. Storing irregular patterns would need new project fields (a format change with a migration) — not done. (2026-10-05: Apply now needs a confirmation tick; see C4.3.)
   - O12. Non-ASCII text is written as `\U+XXXX` (AutoCAD shows it as the character; ezdxf leaves R12 text as written).
   - O13. Opening the exported R12 file in AutoCAD and MicroStation themselves was not possible here (checked with ezdxf and with this tool's own reader).
 
@@ -263,3 +271,149 @@ Units: inches (the import converts ft, mm, cm, m from `$INSUNITS`). Origin = wor
 | other | — | Ignored (counted) |
 
 GP-DATA keys: `FORMAT` (written, ignored), `PROJECT`, `BRIDGE`, `JOINT`, `NP` (plates), `T_PLATE`, `STEEL` (A36, u1905, u1936, u1963, u1964, A572, custom), `FY`, `FU` (only with STEEL=custom), `CHORD` (continuous, spliced); per member `M<n>.NAME`, `.ROLE` (chord, web), `.SECTION` (box, H, W, L), `.DESC`, `.W` (width in the plate plane), `.D2` (width out of plane), `.CUT` (member end from WP), `.FASTENER` (r0, r1, r2, A325, A490), `.D` (fastener diameter), `.HOLE` (standard, oversize; a number = hole diameter, checked only), `.PREP` (drilled, punched), `.THREADS` (excl, incl), `.NS` (1, 2), `.TF` (filler thickness). New member: add layers `GP-M<n>-WL` and `GP-M<n>-BOLT` with the next n.
+
+## 2026-10-05 — PR: claude/gusset-followup1 (PR link added after merge)
+
+### C4. Engineer's answers (2026-10-05): 0.85 A_g cap switch, live-load concurrency note, DXF best-fit confirmation, confirmed geometry conventions   [calculation option added; default results unchanged]
+
+Four items from the engineer's answers to the Phase 1–3 open questions. φ_c = φ_s = 1.0 defaults are kept (engineer: keep).
+
+#### C4.1 Whitmore net section: A_n ≤ 0.85 A_g made a switch (code parameter `capAnOn`, default 1 = applied)
+
+- **Before:** the Whitmore net section was always capped: A_n = min(W_n Σt, capAn × W_g Σt) with capAn = 0.85 (editable ratio).
+- **After:** new code parameter `capAnOn` (Code parameters tab, group "Material and geometry", directly below `capAn`): "Apply A_n ≤ 0.85 A_g to the Whitmore net section (1 = yes, 0 = no)", default **1**, reference LRFD 10th Ed. 6.13.5.2, "verify" + "least certain" badges (same as `capAn`). 1 (any value ≥ 0.5): A_n = min(W_n Σt, capAn × W_g Σt), exactly as before. 0: A_n = W_n Σt (net Whitmore area only). The `capAn` ratio is unchanged and is used only when the switch is on. The calc sheet (Checks tab and report) shows which branch was used: the equation is `A_n = min(W_n Σt, 0.85 W_g Σt)` or `A_n = W_n Σt`, and the "where" table has a new row A_n saying "limit applied: 0.85 W_g Σt governs (W_n Σt = …)" / "limit applied: W_n Σt governs (0.85 W_g Σt = …)" / "limit is not applied (code parameter switched off)". When the switch is off, `capAn` is no longer listed among the check's parameters (`keys`); `capAnOn` always is.
+- **Governing provision:** AASHTO LRFD 10th Ed. (2024) Art. 6.13.5.2 (A_n ≤ 0.85 A_g for splice and connection elements in tension); the Whitmore section per LRFD 10th Ed. Art. 6.14.2.8 and MBE 3rd Ed. Art. 6A.6.12.6.7. Whether the 0.85 limit applies to gusset plates is the engineer's decision (switch).
+- **Saved data:** no format change. Code parameters are stored only as overrides in `data.code` (a key is written only when its value differs from the default) and are merged over the defaults by `GPR.prm()` (`const o = { ...PDEF }; … o[k] = +code[k]`). A project, autosave (`gussetRating.autosave.v1`), saved project (`gussetRating.projects.v1`) or exported JSON written before this change has no `capAnOn` key and therefore gets the default 1 = cap on = old behaviour. Turning the cap off writes the additive key `data.code.capAnOn = 0`. An older copy of the tool ignores the unknown key (`prm()` only copies keys that exist in `PDEF`) and applies the cap. DXF GP-DATA does not carry code parameters (unchanged).
+- **Where (anchors):**
+  - `PARAMS` (engine, `const PARAMS = [`): new row inserted after the `capAn` row (anchor `'Set to 1.0 if the 0.85 A_g limit is not applied to gusset plates.'],`).
+
+    Before:
+
+    ```js
+        ['capAn', 'both', 'Material and geometry', 'A_n/A_g', 'Upper limit on A_n/A_g for the Whitmore net section (connection element)', 0.85, '', 'LRFD 10th Ed. 6.13.5.2', 1, 'Set to 1.0 if the 0.85 A_g limit is not applied to gusset plates.'],
+    ```
+
+    After:
+
+    ```js
+        ['capAn', 'both', 'Material and geometry', 'A_n/A_g', 'Upper limit on A_n/A_g for the Whitmore net section (connection element)', 0.85, '', 'LRFD 10th Ed. 6.13.5.2', 1, 'Set to 1.0 if the 0.85 A_g limit is not applied to gusset plates.'],
+        ['capAnOn', 'both', 'Material and geometry', '-', 'Apply A_n ≤ 0.85 A_g to the Whitmore net section (1 = yes, 0 = no)', 1, '', 'LRFD 10th Ed. 6.13.5.2', 1, 'Yes: A_n = min(W_n Σt, (A_n/A_g limit above) × W_g Σt). No: A_n = W_n Σt (net Whitmore area only).'],
+    ```
+  - `capWF()` (engine, anchor `function capWF(g, meth)`): the four lines of the function.
+
+    Before:
+
+    ```js
+        function capWF(g, meth) { const lrfr = meth === 'lrfr', phi = lrfr ? p.phiU : p.phiUL, W = g.W, An0 = W.Wn * sumT, Ag = W.Wg * sumT, An = Math.min(An0, p.capAn * Ag), Rn = Fu * An * p.U, C = phi * Rn;
+          return { C, phi, sym: T`\phi_uP_{nu} = \phi_u\,F_u\,A_n\,U, \quad A_n = \min\left(W_n\textstyle\sum t,\ ${f2(p.capAn)}\,W_g\sum t\right)`, subst: T`A_n = \min(${f3(W.Wn)}(${f4(sumT)}),\ ${f2(p.capAn)}(${f3(W.Wg)})(${f4(sumT)})) = ${f3(An)}\ \text{in}^2, \quad \phi_uP_{nu} = ${f2(phi)}(${f1(Fu)})(${f3(An)})(${f2(p.U)}) = ${f1(C)}\ \text{kip}`,
+            where: [whitWhere(g), wr('W<sub>n</sub>', `Net Whitmore width: W<sub>g</sub> − Σ(d<sub>h</sub> + ${f4(p.dNet)}) for the ${W.cross.length} hole${W.cross.length === 1 ? '' : 's'} on the section${W.ovN != null ? ' (overridden)' : ''}`, f3(W.Wn), 'in', W.ovN != null ? 'Override' : 'LRFD 6.8.3'), wr('U', 'Shear-lag factor', f2(p.U), '', 'LRFD 6.13.5.2'), wr('φ<sub>u</sub>', 'Resistance factor, fracture', f2(phi), '', lrfr ? 'LRFD 6.5.4.2' : 'FHWA-IF-09-014'), ...plateWhere()],
+            keys: ['thW', 'dNet', 'U', 'capAn', lrfr ? 'phiU' : 'phiUL'], An, An0 }; }
+    ```
+
+    After:
+
+    ```js
+        function capWF(g, meth) { const lrfr = meth === 'lrfr', phi = lrfr ? p.phiU : p.phiUL, W = g.W, An0 = W.Wn * sumT, Ag = W.Wg * sumT, capOn = p.capAnOn >= 0.5, An = capOn ? Math.min(An0, p.capAn * Ag) : An0, Rn = Fu * An * p.U, C = phi * Rn;
+          return { C, phi, sym: capOn ? T`\phi_uP_{nu} = \phi_u\,F_u\,A_n\,U, \quad A_n = \min\left(W_n\textstyle\sum t,\ ${f2(p.capAn)}\,W_g\sum t\right)` : T`\phi_uP_{nu} = \phi_u\,F_u\,A_n\,U, \quad A_n = W_n\textstyle\sum t`, subst: (capOn ? T`A_n = \min(${f3(W.Wn)}(${f4(sumT)}),\ ${f2(p.capAn)}(${f3(W.Wg)})(${f4(sumT)})) = ${f3(An)}\ \text{in}^2` : T`A_n = ${f3(W.Wn)}(${f4(sumT)}) = ${f3(An)}\ \text{in}^2`) + T`, \quad \phi_uP_{nu} = ${f2(phi)}(${f1(Fu)})(${f3(An)})(${f2(p.U)}) = ${f1(C)}\ \text{kip}`,
+            where: [whitWhere(g), wr('W<sub>n</sub>', `Net Whitmore width: W<sub>g</sub> − Σ(d<sub>h</sub> + ${f4(p.dNet)}) for the ${W.cross.length} hole${W.cross.length === 1 ? '' : 's'} on the section${W.ovN != null ? ' (overridden)' : ''}`, f3(W.Wn), 'in', W.ovN != null ? 'Override' : 'LRFD 6.8.3'), wr('A<sub>n</sub>', capOn ? `Net area, A<sub>n</sub> ≤ ${f2(p.capAn)} A<sub>g</sub> limit applied: ${An < An0 - 1e-9 ? `${f2(p.capAn)} W<sub>g</sub>Σt governs (W<sub>n</sub>Σt = ${f3(An0)} in²)` : `W<sub>n</sub>Σt governs (${f2(p.capAn)} W<sub>g</sub>Σt = ${f3(p.capAn * Ag)} in²)`}` : `Net area W<sub>n</sub>Σt; the A<sub>n</sub> ≤ ${f2(p.capAn)} A<sub>g</sub> limit is not applied (code parameter switched off)`, f3(An), 'in²', 'LRFD 6.13.5.2'), wr('U', 'Shear-lag factor', f2(p.U), '', 'LRFD 6.13.5.2'), wr('φ<sub>u</sub>', 'Resistance factor, fracture', f2(phi), '', lrfr ? 'LRFD 6.5.4.2' : 'FHWA-IF-09-014'), ...plateWhere()],
+            keys: ['thW', 'dNet', 'U', ...(capOn ? ['capAn'] : []), 'capAnOn', lrfr ? 'phiU' : 'phiUL'], An, An0 }; }
+    ```
+- **Check case (validation model, `GPR.validationModel()`, default parameters otherwise):** diagonal D, 2 lines × 4 rows, gage 5 in, pitch 3 in; two 1/2 in A36 plates (Σt = 1.0 in, F_u = 58 ksi); φ_u = 0.80 (LRFR and LFR), U = 1.0.
+  - W_g = 5 + 2(3 × 3) tan 30° = 5 + 10.392 = 15.392 in; W_n = 15.392 − 2(15/16 + 1/16) = 13.392 in.
+  - **Switch on (default, = before):** W_n Σt = 13.392 in²; 0.85 W_g Σt = 0.85 × 15.392 × 1.0 = 13.083 in²; A_n = min(13.392, 13.083) = **13.083 in²** (0.85 A_g governs); φ_u P_nu = 0.80 × 58 × 13.083 × 1.0 = **607.07 kip** (303.54 kip per plate).
+  - **Switch off:** A_n = W_n Σt = 13.392 × (0.5 + 0.5) = **13.392 in²** (6.696 in² per plate); φ_u P_nu = 0.80 × 58 × 13.392 × 1.0 = **621.40 kip** (310.70 kip per plate). Tool: 621.402945 kip.
+  - D-WF rating factors (DC 40, DW 6, HL-93 60, HS20 50 kip): LRFR Inventory (607.07 − 1.25 × 40 − 1.50 × 6)/(1.75 × 60) = 548.07/105 = 5.220 → (621.40 − 59)/105 = 562.40/105 = **5.356**; LRFR Operating 548.07/81 = 6.766 → 562.40/81 = **6.943**; LFR Inventory (607.07 − 1.3 × 46)/(2.17 × 50) = 547.27/108.5 = 5.044 → 561.60/108.5 = **5.176**; LFR Operating 547.27/65 = 8.420 → 561.60/65 = **8.640**. Reversal columns: fracture not applicable (compression).
+  - **Fracture does not govern any rating** in the validation model: governing remains D-FS (LRFR Inventory 1.564, Operating 2.027; LFR Inventory 2.109, Operating 3.521; reversal 3.759 / 4.872), switch on or off.
+  - Default 5-member model: only L2-U2 (vertical) changes: W_g = 21.166 in, W_n = 19.166 in, Σt = 1.0 in; on: A_n = min(19.166, 0.85 × 21.166 = 17.991) = 17.991 in², φP = 0.80 × 58 × 17.991 = 834.78 kip; off: A_n = 19.166 in², φP = 889.29 kip; RF (LRFR Inv / Op, LFR Inv / Op) 8.06 / 10.45 / 8.93 / 14.90 → 8.63 / 11.18 / 9.56 / 15.95. The diagonals L2-U1 / L2-U3 are not affected (W_n/W_g = 22.547/26.547 = 0.849 < 0.85, so W_n governs either way: 1000.86 kip). Governing RFs unchanged (LRFR Inventory 1.172 L2-U1-FS, LFR Inventory 1.403 L2-U1-WB).
+
+#### C4.2 Live-load concurrency: note only (no calculation change)
+
+- **Decision (engineer, 2026-10-05):** keep the calculation. Forces in one live-load column are treated as one concurrent load position for the shear-plane demand V = Σ F_i (u_i · e) and the chord ΔF = Σ F_i (u_i · u_right), as in NCHRP Web-Only Document 197 / FHWA-IF-09-014 (concurrent member forces from the same loading).
+- **Text added** (constant `CONC_NOTE`, defined after `demandHtml()`): "Forces in each live-load column are treated as concurrent (same load position). If envelope forces are entered, verify they are concurrent; envelopes of different load positions may be unconservative or conservative."
+  - Forces input tab, `paneForces()`: after `<p class="note">Unfactored, total for the joint (both gusset plates). LL includes impact (IM) and distribution. Positive = tension.</p>` added `<p class="note">${CONC_NOTE} This applies to the shear-plane checks and the chord force difference ΔF.</p>`.
+  - Calc sheet (Checks tab and report), `demandHtml(c)`: after the demand table, for checks without a member (`c.mem == null`: the chord ΔF checks CH-FS / CH-BR and every shear-plane check) added `<p class="note-p"><b>Live load concurrency.</b> ${CONC_NOTE}</p>`. Member checks are unchanged.
+  - `demandHtml()` return line (anchor `return `<p class="note-p"><b>Demand.</b>`):
+
+    Before:
+
+    ```js
+      return `<p class="note-p"><b>Demand.</b> ${what}.</p><div class="tscroll"><table class="tbl narrow"><thead><tr><th>Load</th><th class="right">Value (kip)</th></tr></thead><tbody><tr><td class="lbl">DC</td><td class="val">${f2(c.dem.DC)}</td></tr><tr><td class="lbl">DW</td><td class="val">${f2(c.dem.DW)}</td></tr>${P.ll.map((l, k) => `<tr><td class="lbl">${esc(l.name)} (LL+IM)</td><td class="val">${f2(c.dem.LL[k])}</td></tr>`).join('')}</tbody></table></div>`;
+    }
+    ```
+
+    After:
+
+    ```js
+      return `<p class="note-p"><b>Demand.</b> ${what}.</p><div class="tscroll"><table class="tbl narrow"><thead><tr><th>Load</th><th class="right">Value (kip)</th></tr></thead><tbody><tr><td class="lbl">DC</td><td class="val">${f2(c.dem.DC)}</td></tr><tr><td class="lbl">DW</td><td class="val">${f2(c.dem.DW)}</td></tr>${P.ll.map((l, k) => `<tr><td class="lbl">${esc(l.name)} (LL+IM)</td><td class="val">${f2(c.dem.LL[k])}</td></tr>`).join('')}</tbody></table></div>${c.mem != null ? '' : `<p class="note-p"><b>Live load concurrency.</b> ${CONC_NOTE}</p>`}`;
+    }
+    const CONC_NOTE = 'Forces in each live-load column are treated as concurrent (same load position). If envelope forces are entered, verify they are concurrent; envelopes of different load positions may be unconservative or conservative.';
+    ```
+- **Governing provision:** none changed (text only). **Check case:** results unchanged (engine dump identical, see How verified).
+
+#### C4.3 DXF import: irregular hole pattern needs a confirmation before Apply
+
+- **Before:** an irregular pattern was imported as the best-fit regular grid with a hole-by-hole warning only; Apply was enabled whenever there were changes.
+- **After:** `GPDXF.toModel()` returns `irregular: [{ n, tag }]`, one entry per member whose best-fit grid differs from the drawing (`fitPattern(...).issues` not empty: a hole moved off its grid position by more than 1/16 in, a grid position with no hole (added by the fit), or several holes at one grid position). The import dialog then shows a red box with the checkbox `#cad-fit-ok`: "I confirm the best-fit regular grid is acceptable for M3 (L2-U1), … (the model may count holes not in the drawing, which is unconservative for fastener shear and bearing). Required to apply." Apply stays disabled until it is ticked (`cadApplyState()`, re-evaluated on the checkbox `change`), and `cadApply()` itself refuses (alert "Tick the box to confirm the best-fit regular hole pattern, or Cancel.", model and autosave unchanged) when it is not ticked. The removed-members checkbox (`#cad-rm-ok`) is unchanged. Imports with regular patterns are unaffected.
+- **Where (anchors):** `toModel()`: `const nm = P.members.length, newMembers = [], removed = [], added = [];` → `…, added = [], irregular = [];`; before `if (F.issues.length) W.push(` added `if (F.issues.length) irregular.push({ n, tag });`; `return { Q, changes, warnings: W, errors: E, removed, added, fits, raw, present };` → `… removed, added, irregular, fits, raw, present };` (and the comment above `function toModel`). UI below.
+  - `cadShow()` / `cadApply()` / change listener:
+
+    Before:
+
+    ```js
+      const pv = GPDXF.previewPair(P, res), ch = res.changes, W = res.warnings, rm = res.removed;
+      $('#cad-apply').hidden = false; $('#cad-apply').disabled = !ch.length; $('#cad-modal').hidden = false;
+    function cadApply() {
+      const res = CAD_RES; if (!res || res.error) return;
+    document.addEventListener('change', e => { if (e.target.id === 'cad-tpl') { CAD_TPL = e.target.value; return; } if (e.target.id !== 'cad-file') return; const f = e.target.files[0]; if (!f) return; const rd = new FileReader();
+    ```
+
+    After:
+
+    ```js
+      const pv = GPDXF.previewPair(P, res), ch = res.changes, W = res.warnings, rm = res.removed, irr = res.irregular || [];
+        ${irr.length ? `<div class="alert fail"><label class="ck-row" style="padding:0"><input type="checkbox" id="cad-fit-ok"><label for="cad-fit-ok">I confirm the best-fit regular grid is acceptable for <b>${irr.map(r => esc(r.tag)).join(', ')}</b> (the model may count holes not in the drawing, which is unconservative for fastener shear and bearing). Required to apply.</label></label></div>` : ''}
+      $('#cad-apply').hidden = false; cadApplyState(); $('#cad-modal').hidden = false;
+    /* Apply is enabled only with changes and, for an irregular hole pattern, the best-fit confirmation ticked */
+    const cadFitOk = res => !(res.irregular || []).length || !!($('#cad-fit-ok') || {}).checked;
+    function cadApplyState() { const res = CAD_RES, b = $('#cad-apply'); if (!b || !res || res.error) return; b.disabled = !res.changes.length || !cadFitOk(res); }
+    function cadApply() {
+      const res = CAD_RES; if (!res || res.error) return;
+      if (!cadFitOk(res)) { alert('Tick the box to confirm the best-fit regular hole pattern, or Cancel.'); cadApplyState(); return; }
+    document.addEventListener('change', e => { if (e.target.id === 'cad-tpl') { CAD_TPL = e.target.value; return; } if (e.target.id === 'cad-fit-ok') { cadApplyState(); return; } if (e.target.id !== 'cad-file') return; const f = e.target.files[0]; if (!f) return; const rd = new FileReader();
+    ```
+  - The checkbox line is inserted directly after the removed-members `${rm.length ? `<div class="alert fail">…Required to apply.</label></label></div>` : ''}` line in `cadShow()`.
+  - `methodHtml()`: "An irregular pattern is imported as the best-fit regular pattern and every difference is listed hole by hole." → "…hole by hole; Apply stays disabled until the box confirming the best-fit grid is ticked."
+- **Governing provision:** none (input control; LRFD 10th Ed. 6.13.2.7 fastener shear and 6.13.2.9 bearing are the checks that would be unconservative with extra holes). **Check case:** test file `13_varying_pitch.dxf` (pitch 3.1 in with holes ±0.1–0.2 in off the grid on M3): checkbox for "M3 (L2-U1)", Apply disabled; `cadApply()` refused; ticked → enabled → applied. `06_irregular.dxf` (M4 one hole moved, one missing; M5 4 missing): checkbox for "M4 (L2-U3), M5 (L2-U2)"; Apply disabled (also no changes). `07_extra_member.dxf` (regular): no checkbox, Apply enabled.
+
+#### C4.4 Geometry conventions confirmed by the engineer (2026-10-05)
+
+- Confirmed: Whitmore 30° spread from the first fastener row (the row farthest from the WP, where the member force enters the plate) to the row nearest the WP; L_mid = average of three lengths to the nearest fastener line of another member or the plate edge; block shear for tension only; automatic shear planes through the top and bottom chord fastener lines. See "Confirmed" (under "Needs verification" in C1).
+- In the tool only `thW` (Whitmore spread angle) carried a "verify" badge for these conventions. It now shows "engineer-confirmed 2026-10-05" (green badge) on the Code parameters tab and "engineer-confirmed 2026-10-05" in the Status column of the report's code-parameter table. The L_mid, block-shear and shear-plane conventions had no badge or "verify" note in the tool (only in this fix log), so nothing else in the tool changed. Every other parameter keeps its flags (rivet strengths, LFR K, LFR φ factors, fastener values and the rest remain "verify" / "least certain").
+  - `PARAMS` row `thW` and the row mapping:
+
+    Before:
+
+    ```js
+        ['thW', 'both', 'Material and geometry', '\\theta_W', 'Whitmore spread angle, each side', 30, 'deg', 'LRFD 10th Ed. 6.14.2.8 (C6.14.2.8); MBE 3rd Ed. 6A.6.12.6.7, 6A.6.12.6.8', 0, 'Spread from the outer fasteners of the row farthest from the work point to the row nearest it.'],
+      ].map(r => ({ key: r[0], meth: r[1], grp: r[2], sym: r[3], desc: r[4], def: r[5], unit: r[6], ref: r[7], unc: !!r[8], note: r[9] }));
+    ```
+
+    After:
+
+    ```js
+        ['thW', 'both', 'Material and geometry', '\\theta_W', 'Whitmore spread angle, each side', 30, 'deg', 'LRFD 10th Ed. 6.14.2.8 (C6.14.2.8); MBE 3rd Ed. 6A.6.12.6.7, 6A.6.12.6.8', 0, 'Spread from the outer fasteners of the row farthest from the work point to the row nearest it.', 'engineer-confirmed 2026-10-05'],
+      ].map(r => ({ key: r[0], meth: r[1], grp: r[2], sym: r[3], desc: r[4], def: r[5], unit: r[6], ref: r[7], unc: !!r[8], note: r[9], conf: r[10] || '' }));
+    ```
+  - `renderParams()`: `<td><span class="badge warn">verify</span>${p.unc ?` → `<td>${p.conf ? `<span class="badge pass" title="Convention confirmed by the engineer">${esc(p.conf)}</span>` : '<span class="badge warn">verify</span>'}${p.unc ?`
+  - `crParams()`: `<td>verify${p.unc ? '; least certain' : ''}` → `<td>${p.conf ? esc(p.conf) : 'verify'}${p.unc ? '; least certain' : ''}`
+- **Governing provision:** none changed (status label only; θ_W = 30° per LRFD 10th Ed. 6.14.2.8 / MBE 3rd Ed. 6A.6.12.6.7 unchanged).
+
+#### How verified (C4)
+
+- `node --check` on every inline script (7 blocks): pass.
+- Engine dump in node, before (main 60b469a) and after, default and validation models, default parameters: every check capacity (both methods, both directions), every RF, warnings, shear-plane demands, Whitmore W_g / W_n / L_mid and block-shear lengths written to JSON: `cmp` identical. With `capAnOn = 0` the only differences are L2-U2-WF (default model) and D-WF (validation model), values as in the check case above; governing RFs and warnings unchanged.
+- Old saved data (jsdom): main (60b469a) with the validation model and overrides `{Om: 0.8, capAn: 0.9, phiSr: 0.75}`: its autosave blob and its exported project JSON (no `capAnOn` key) loaded into the new file (autosave at boot; JSON through Import): `data.code` unchanged, `capAnOn` resolves to 1, every capacity, RF, warning and Whitmore / L_mid value identical to main; default model identical to main.
+- jsdom UI: `capAnOn` row (value 1, LRFD 10th Ed. 6.13.5.2, verify + least certain); `thW` row shows "engineer-confirmed 2026-10-05" and no "verify" (only parameter so marked); D-WF calc sheet shows "limit applied … 0.85 W_g Σt governs", 607.1 kip; typing 0 stores `code.capAnOn = 0` (autosave format `{data, name}` unchanged), D-WF shows "not applied", 621.4 kip; concurrency note on the Forces tab, in SP1-Y and CH-FS calc sheets and in the report, not on member checks; DXF irregular-pattern tests as in C4.3; all other gp3 test DXFs: checkbox shown only when `irregular` is not empty.
+- Phase 1–3 regression scripts re-run on the new file: Phase 3 jsdom CAD test (31 PASS, no runtime errors), DXF test cases and round trips (output identical to main), Phase 2 and Phase 1 jsdom smoke tests (every tab and input tab renders; validation 17 of 17 match; only differences are the expected page-size changes and paste timestamps).
+- **Other copies:** none.
+- **Open items:** O6 (live-load concurrency) is answered: kept as is, with the note (C4.2). O11 (irregular DXF patterns) is now guarded by the confirmation (C4.3); the model still cannot represent irregular patterns.

@@ -1217,7 +1217,7 @@ const GPR = (function () {
   const PARAMS = [
     // shared geometry and detailing
     ['E', 'both', 'Material and geometry', 'E', 'Modulus of elasticity of steel', 29000, 'ksi', 'LRFD 10th Ed. 6.4.1', 0, ''],
-    ['thW', 'both', 'Material and geometry', '\\theta_W', 'Whitmore spread angle, each side', 30, 'deg', 'LRFD 10th Ed. 6.14.2.8 (C6.14.2.8); MBE 3rd Ed. 6A.6.12.6.7, 6A.6.12.6.8', 0, 'Spread from the outer fasteners of the row farthest from the work point to the row nearest it.'],
+    ['thW', 'both', 'Material and geometry', '\\theta_W', 'Whitmore spread angle, each side', 30, 'deg', 'LRFD 10th Ed. 6.14.2.8 (C6.14.2.8); MBE 3rd Ed. 6A.6.12.6.7, 6A.6.12.6.8', 0, 'Spread from the outer fasteners of the row farthest from the work point to the row nearest it.', 'engineer-confirmed 2026-10-05'],
     ['hStd', 'both', 'Material and geometry', '\\Delta_{std}', 'Standard hole: hole diameter minus fastener diameter', 0.0625, 'in', 'LRFD 10th Ed. Table 6.13.2.4.2-1', 0, 'Rivet holes are taken as d + 1/16 in, the same as standard bolt holes.'],
     ['hOv78', 'both', 'Material and geometry', '\\Delta_{ovs}', 'Oversize hole allowance, d ≤ 7/8 in', 0.1875, 'in', 'LRFD 10th Ed. Table 6.13.2.4.2-1', 0, ''],
     ['hOv1', 'both', 'Material and geometry', '\\Delta_{ovs}', 'Oversize hole allowance, d = 1 in', 0.25, 'in', 'LRFD 10th Ed. Table 6.13.2.4.2-1', 0, ''],
@@ -1227,6 +1227,7 @@ const GPR = (function () {
     ['fillRv', 'both', 'Material and geometry', '-', 'Apply the filler reduction to rivets (1 = yes, 0 = no)', 1, '', 'LRFD 10th Ed. 6.13.6.1.5 (written for bolts)', 1, 'The LRFD filler provision is written for bolts; applying it to rivets is a judgment.'],
     ['U', 'both', 'Material and geometry', 'U', 'Shear-lag factor on the Whitmore net section', 1.0, '', 'LRFD 10th Ed. 6.13.5.2, 6.14.2.8; MBE 6A.6.12.6.7', 0, ''],
     ['capAn', 'both', 'Material and geometry', 'A_n/A_g', 'Upper limit on A_n/A_g for the Whitmore net section (connection element)', 0.85, '', 'LRFD 10th Ed. 6.13.5.2', 1, 'Set to 1.0 if the 0.85 A_g limit is not applied to gusset plates.'],
+    ['capAnOn', 'both', 'Material and geometry', '-', 'Apply A_n ≤ 0.85 A_g to the Whitmore net section (1 = yes, 0 = no)', 1, '', 'LRFD 10th Ed. 6.13.5.2', 1, 'Yes: A_n = min(W_n Σt, (A_n/A_g limit above) × W_g Σt). No: A_n = W_n Σt (net Whitmore area only).'],
     ['Ubs', 'both', 'Material and geometry', 'U_{bs}', 'Block shear tension-stress factor', 1.0, '', 'LRFD 10th Ed. 6.13.4', 0, 'Uniform tension stress.'],
     ['RpD', 'both', 'Material and geometry', 'R_p', 'Hole reduction factor, drilled or subpunched and reamed holes', 1.0, '', 'LRFD 10th Ed. 6.13.4', 0, ''],
     ['RpP', 'both', 'Material and geometry', 'R_p', 'Hole reduction factor, holes punched full size', 0.90, '', 'LRFD 10th Ed. 6.13.4', 0, ''],
@@ -1287,7 +1288,7 @@ const GPR = (function () {
     ['A2i', 'lfr', 'LFR load factors', 'A_2', 'Live load factor, inventory', 2.17, '', 'MBE 3rd Ed. 6B.4.3', 0, ''],
     ['A2o', 'lfr', 'LFR load factors', 'A_2', 'Live load factor, operating (also legal and permit loads)', 1.3, '', 'MBE 3rd Ed. 6B.4.3', 0, ''],
     ['A1min', 'lfr', 'LFR load factors', 'A_{1,min}', 'Dead load factor when dead load counteracts the live load effect', 1.0, '', 'Judgment (not given in MBE 6B)', 1, '']
-  ].map(r => ({ key: r[0], meth: r[1], grp: r[2], sym: r[3], desc: r[4], def: r[5], unit: r[6], ref: r[7], unc: !!r[8], note: r[9] }));
+  ].map(r => ({ key: r[0], meth: r[1], grp: r[2], sym: r[3], desc: r[4], def: r[5], unit: r[6], ref: r[7], unc: !!r[8], note: r[9], conf: r[10] || '' }));
   const PDEF = Object.fromEntries(PARAMS.map(p => [p.key, p.def]));
   const PBY = Object.fromEntries(PARAMS.map(p => [p.key, p]));
   function prm(code) { const o = { ...PDEF }; if (code) Object.keys(code).forEach(k => { if (k in o && isFinite(+code[k]) && code[k] !== '' && code[k] !== null) o[k] = +code[k]; }); return o; }
@@ -1548,10 +1549,10 @@ const GPR = (function () {
 
     function capWY(g, meth) { const lrfr = meth === 'lrfr', phi = lrfr ? p.phiY : p.phiYL, W = g.W, Ag = W.Wg * sumT, Rn = Fy * Ag, C = phi * Rn;
       return { C, phi, sym: T`\phi_yP_{ny} = \phi_y\,F_y\,W_g\sum t`, subst: T`\phi_yP_{ny} = ${f2(phi)}(${f1(Fy)})(${f3(W.Wg)})(${f4(sumT)}) = ${f1(C)}\ \text{kip}`, where: [whitWhere(g), wr('φ<sub>y</sub>', 'Resistance factor, yielding', f2(phi), '', lrfr ? 'LRFD 6.5.4.2' : 'FHWA-IF-09-014'), ...plateWhere()], keys: ['thW', lrfr ? 'phiY' : 'phiYL'] }; }
-    function capWF(g, meth) { const lrfr = meth === 'lrfr', phi = lrfr ? p.phiU : p.phiUL, W = g.W, An0 = W.Wn * sumT, Ag = W.Wg * sumT, An = Math.min(An0, p.capAn * Ag), Rn = Fu * An * p.U, C = phi * Rn;
-      return { C, phi, sym: T`\phi_uP_{nu} = \phi_u\,F_u\,A_n\,U, \quad A_n = \min\left(W_n\textstyle\sum t,\ ${f2(p.capAn)}\,W_g\sum t\right)`, subst: T`A_n = \min(${f3(W.Wn)}(${f4(sumT)}),\ ${f2(p.capAn)}(${f3(W.Wg)})(${f4(sumT)})) = ${f3(An)}\ \text{in}^2, \quad \phi_uP_{nu} = ${f2(phi)}(${f1(Fu)})(${f3(An)})(${f2(p.U)}) = ${f1(C)}\ \text{kip}`,
-        where: [whitWhere(g), wr('W<sub>n</sub>', `Net Whitmore width: W<sub>g</sub> − Σ(d<sub>h</sub> + ${f4(p.dNet)}) for the ${W.cross.length} hole${W.cross.length === 1 ? '' : 's'} on the section${W.ovN != null ? ' (overridden)' : ''}`, f3(W.Wn), 'in', W.ovN != null ? 'Override' : 'LRFD 6.8.3'), wr('U', 'Shear-lag factor', f2(p.U), '', 'LRFD 6.13.5.2'), wr('φ<sub>u</sub>', 'Resistance factor, fracture', f2(phi), '', lrfr ? 'LRFD 6.5.4.2' : 'FHWA-IF-09-014'), ...plateWhere()],
-        keys: ['thW', 'dNet', 'U', 'capAn', lrfr ? 'phiU' : 'phiUL'], An, An0 }; }
+    function capWF(g, meth) { const lrfr = meth === 'lrfr', phi = lrfr ? p.phiU : p.phiUL, W = g.W, An0 = W.Wn * sumT, Ag = W.Wg * sumT, capOn = p.capAnOn >= 0.5, An = capOn ? Math.min(An0, p.capAn * Ag) : An0, Rn = Fu * An * p.U, C = phi * Rn;
+      return { C, phi, sym: capOn ? T`\phi_uP_{nu} = \phi_u\,F_u\,A_n\,U, \quad A_n = \min\left(W_n\textstyle\sum t,\ ${f2(p.capAn)}\,W_g\sum t\right)` : T`\phi_uP_{nu} = \phi_u\,F_u\,A_n\,U, \quad A_n = W_n\textstyle\sum t`, subst: (capOn ? T`A_n = \min(${f3(W.Wn)}(${f4(sumT)}),\ ${f2(p.capAn)}(${f3(W.Wg)})(${f4(sumT)})) = ${f3(An)}\ \text{in}^2` : T`A_n = ${f3(W.Wn)}(${f4(sumT)}) = ${f3(An)}\ \text{in}^2`) + T`, \quad \phi_uP_{nu} = ${f2(phi)}(${f1(Fu)})(${f3(An)})(${f2(p.U)}) = ${f1(C)}\ \text{kip}`,
+        where: [whitWhere(g), wr('W<sub>n</sub>', `Net Whitmore width: W<sub>g</sub> − Σ(d<sub>h</sub> + ${f4(p.dNet)}) for the ${W.cross.length} hole${W.cross.length === 1 ? '' : 's'} on the section${W.ovN != null ? ' (overridden)' : ''}`, f3(W.Wn), 'in', W.ovN != null ? 'Override' : 'LRFD 6.8.3'), wr('A<sub>n</sub>', capOn ? `Net area, A<sub>n</sub> ≤ ${f2(p.capAn)} A<sub>g</sub> limit applied: ${An < An0 - 1e-9 ? `${f2(p.capAn)} W<sub>g</sub>Σt governs (W<sub>n</sub>Σt = ${f3(An0)} in²)` : `W<sub>n</sub>Σt governs (${f2(p.capAn)} W<sub>g</sub>Σt = ${f3(p.capAn * Ag)} in²)`}` : `Net area W<sub>n</sub>Σt; the A<sub>n</sub> ≤ ${f2(p.capAn)} A<sub>g</sub> limit is not applied (code parameter switched off)`, f3(An), 'in²', 'LRFD 6.13.5.2'), wr('U', 'Shear-lag factor', f2(p.U), '', 'LRFD 6.13.5.2'), wr('φ<sub>u</sub>', 'Resistance factor, fracture', f2(phi), '', lrfr ? 'LRFD 6.5.4.2' : 'FHWA-IF-09-014'), ...plateWhere()],
+        keys: ['thW', 'dNet', 'U', ...(capOn ? ['capAn'] : []), 'capAnOn', lrfr ? 'phiU' : 'phiUL'], An, An0 }; }
     function whitWhere(g) { const W = g.W; return wr('W<sub>g</sub>', `Gross Whitmore width: g<sub>s</sub> + 2L tan θ<sub>W</sub> = ${f3(g.gS)} + 2(${f3(g.Lc)})tan ${f1(p.thW)}° = ${f3(W.Wfull)}${W.clipA || W.clipB ? `, clipped at the plate edge to ${f3(W.WgAuto)}` : ''}${W.ovG != null ? ' (overridden)' : ''}`, f3(W.Wg), 'in', W.ovG != null ? 'Override' : 'LRFD 6.14.2.8'); }
     function capBS(g, m, meth) { const lrfr = meth === 'lrfr', phi = lrfr ? p.phiBS : p.phiBSL, B = g.B, Rp = m.fast.prep === 'punched' ? p.RpP : p.RpD;
       const Avg = B.Lvg * sumT, Avn = B.Lvn * sumT, Atg = B.Ltg * sumT, Atn = B.Ltn * sumT, r1 = Rp * (0.58 * Fu * Avn + p.Ubs * Fu * Atn), r2 = Rp * (0.58 * Fy * Avg + p.Ubs * Fu * Atn), Rn = Math.min(r1, r2), C = phi * Rn;
@@ -2356,7 +2357,7 @@ const GPDXF = (function () {
   }
 
   /* ---------- map the parsed drawing onto a copy of the current model ---------- */
-  /* returns { Q (candidate model), changes:[{grp, field, cur, imp}], warnings, errors, removed:[{i,id}], added:[n], fits:{n:fit}, raw } */
+  /* returns { Q (candidate model), changes:[{grp, field, cur, imp}], warnings, errors, removed:[{i,id}], added:[n], irregular:[{n,tag}] (best-fit grid differs from the drawing), fits:{n:fit}, raw } */
   function toModel(P, raw) {
     const Q = JSON.parse(JSON.stringify(P)), p = GPR.prm(P.code), W = raw.warnings.slice(), E = [], fits = {};
     // plate
@@ -2378,7 +2379,7 @@ const GPDXF = (function () {
       else Q.plates[j ? 'Fu' : 'Fy'] = r.v; });
       if (st && st[2] != null && 'STEEL' in data && data.STEEL !== '') { Q.plates.Fy = st[2]; Q.plates.Fu = st[3]; } }
     // members
-    const nm = P.members.length, newMembers = [], removed = [], added = [];
+    const nm = P.members.length, newMembers = [], removed = [], added = [], irregular = [];
     if (present.length) {
       const gaps = []; for (let n = 1; n <= Math.max(...present); n++) if (!present.includes(n) && n <= nm) gaps.push(n);
       present.forEach(n => { const M = raw.members[n], base = n <= nm ? JSON.parse(JSON.stringify(P.members[n - 1])) : null, isNew = !base;
@@ -2401,6 +2402,7 @@ const GPDXF = (function () {
         if (M.holes.length) { const thr = num(m.ang) * PI / 180, F = fitPattern(M.holes, thr); fits[n] = F;
           const f = m.fast; f.nR = F.nR; f.nL = F.nL; f.e = r6(F.e); if (F.nR > 1) f.p = r6(F.p); f.off = r6(F.off);
           if (F.nL > 1) { const gs = gStr(F.gages), cg = gageList(base ? base.fast.g : '', F.nL); if (!(cg.length === F.gages.length && cg.every((x, j) => Math.abs(x - r6(F.gages[j])) < 1e-6))) f.g = gs; }
+          if (F.issues.length) irregular.push({ n, tag });
           if (F.issues.length) W.push(`${tag}: the hole pattern is not a regular grid; the best-fit regular pattern (${F.nR} rows × ${F.nL} gage lines${F.nR > 1 ? `, pitch ${fs(F.p)} in` : ''}) was imported, so the model has ${F.nR * F.nL} holes where the drawing has ${M.holes.length}. Differences, hole by hole: ${F.issues.join('; ')}.`);
           if (!(F.e > 0)) W.push(`${tag}: the row nearest the WP is at ${fs(F.e)} in (not beyond the WP); check the work-line direction.`);
           const ds = M.holes.map(h => h.dh).sort((a, b) => a - b), dh = ds[Math.floor(ds.length / 2)];
@@ -2433,7 +2435,7 @@ const GPDXF = (function () {
     if (raw.fill.length) W.push(`GP-FILL: ${raw.fill.length} filler outline${raw.fill.length > 1 ? 's' : ''} (information only; the filler thickness is M<n>.TF).`);
     const changes = diff(P, Q, removed, added);
     const v = GPR.validate(Q); if (v.E.length) W.push(`After import the model has input errors (ratings are blocked until fixed): ${v.E.join(' ')}`);
-    return { Q, changes, warnings: W, errors: E, removed, added, fits, raw, present };
+    return { Q, changes, warnings: W, errors: E, removed, added, irregular, fits, raw, present };
   }
   function memberGeoChanged(a, b) { return GEO_F.some(([path, kind]) => !same(getPath(a, path), getPath(b, path), kind, a, b)); }
   const GEO_F = [['ang', 'ang'], ['cut', 'n'], ['sec.w', 'n'], ['fast.d', 'n'], ['fast.hole', 's'], ['fast.nR', 'n'], ['fast.nL', 'n'], ['fast.p', 'p'], ['fast.g', 'g'], ['fast.e', 'n'], ['fast.off', 'n']];
@@ -2624,6 +2626,7 @@ function paneForces() {
     <p class="note">A design column is rated at Inventory and Operating. Legal and permit columns use the γ<sub>LL</sub> entered (LRFR) or A<sub>2</sub> operating (LFR). For a member with stress reversal, add a second column with the opposite-sign live load.</p></div>
   ${secHd('sec-frc', 'Member forces (kip, tension +)')}<div class="sec-body one-col" id="sec-frc"><div class="tscroll"><table class="atbl ftbl"><thead>${head}</thead><tbody>${rows}</tbody></table></div>
     <p class="note">Unfactored, total for the joint (both gusset plates). LL includes impact (IM) and distribution. Positive = tension.</p>
+    <p class="note">${CONC_NOTE} This applies to the shear-plane checks and the chord force difference ΔF.</p>
     <div class="proj-row" style="grid-template-columns:1fr 1fr"><button type="button" class="proj-btn" data-act="pasteWide">Paste from spreadsheet…</button><button type="button" class="proj-btn" data-act="pasteMidas">Paste MIDAS truss forces…</button></div>
     <div id="src-note"></div><div id="eqm-note"></div></div>`;
 }
@@ -2829,8 +2832,9 @@ const LSNAME = { fs: 'Fastener shear', brg: 'Bearing at fastener holes', wy: 'Wh
 function dirLabel(c, dk) { if (c.mem != null) return dk === '+' ? 'member in tension' : 'member in compression'; if (c.chord) return dk === '+' ? `ΔF toward ${P.members[c.chord.i0].id}` : `ΔF toward ${P.members[c.chord.i1].id}`; return 'either direction'; }
 function demandHtml(c) {
   const what = c.mem != null ? `Member force F (tension +), as entered` : c.chord ? `Chord force difference ΔF = Σ F<sub>i</sub>(u<sub>i</sub> · u<sub>${esc(P.members[c.chord.i0].id)}</sub>) (+ toward ${esc(P.members[c.chord.i0].id)})` : `Shear along the plane, V = Σ F<sub>i</sub>(u<sub>i</sub> · e) over the loaded-side members (${R.planes[c.plane].mem.map(i => esc(P.members[i].id)).join(', ')})`;
-  return `<p class="note-p"><b>Demand.</b> ${what}.</p><div class="tscroll"><table class="tbl narrow"><thead><tr><th>Load</th><th class="right">Value (kip)</th></tr></thead><tbody><tr><td class="lbl">DC</td><td class="val">${f2(c.dem.DC)}</td></tr><tr><td class="lbl">DW</td><td class="val">${f2(c.dem.DW)}</td></tr>${P.ll.map((l, k) => `<tr><td class="lbl">${esc(l.name)} (LL+IM)</td><td class="val">${f2(c.dem.LL[k])}</td></tr>`).join('')}</tbody></table></div>`;
+  return `<p class="note-p"><b>Demand.</b> ${what}.</p><div class="tscroll"><table class="tbl narrow"><thead><tr><th>Load</th><th class="right">Value (kip)</th></tr></thead><tbody><tr><td class="lbl">DC</td><td class="val">${f2(c.dem.DC)}</td></tr><tr><td class="lbl">DW</td><td class="val">${f2(c.dem.DW)}</td></tr>${P.ll.map((l, k) => `<tr><td class="lbl">${esc(l.name)} (LL+IM)</td><td class="val">${f2(c.dem.LL[k])}</td></tr>`).join('')}</tbody></table></div>${c.mem != null ? '' : `<p class="note-p"><b>Live load concurrency.</b> ${CONC_NOTE}</p>`}`;
 }
+const CONC_NOTE = 'Forces in each live-load column are treated as concurrent (same load position). If envelope forces are entered, verify they are concurrent; envelopes of different load positions may be unconservative or conservative.';
 function checkBody(c, opt = {}) {
   if (c.na) return `<div class="alert info"><b>Not applicable.</b> ${esc(c.na)}</div>`;
   let b = demandHtml(c);
@@ -2884,7 +2888,7 @@ function renderParams() {
   const grp = [...new Set(GPR.PARAMS.map(p => p.grp))], meths = activeMeth(), nOv = Object.keys(P.code).length;
   let h = `<div class="alert warn"><b>Defaults must be verified.</b> ${esc(VERIFY_NOTE)}</div><div class="ctl-row"><button type="button" class="dg-btn" data-act="resetCode">Reset all to defaults</button><span class="n-dim">${nOv ? `${nOv} value${nOv > 1 ? 's' : ''} changed from the default (highlighted).` : 'All values at their defaults.'}</span></div>`;
   grp.forEach(g => { const ps = GPR.PARAMS.filter(p => p.grp === g); const m = ps[0].meth; if (m !== 'both' && !meths.includes(m)) return;
-    h += card('cp-' + g.replace(/\W+/g, '-'), esc(g), m === 'both' ? 'LRFR and LFR' : METH[m], `<div class="tscroll"><table class="tbl ptbl"><thead><tr><th>Symbol</th><th>Parameter</th><th class="right">Value</th><th class="right">Default</th><th>Unit</th><th>Reference</th><th></th></tr></thead><tbody>${ps.map(p => `<tr${p.unc ? ' class="row-warn"' : ''}><td>${p.sym === '-' ? '' : `\\(${p.sym}\\)`}</td><td class="lbl">${sub(p.desc)}${p.note ? `<br><small class="n-dim">${sub(p.note)}</small>` : ''}</td><td class="pin"><input type="text" inputmode="decimal" data-k="code.${p.key}" data-t="code" aria-label="${esc(p.desc)}"></td><td class="val">${p.def}</td><td class="unit">${p.unit}</td><td class="lbl small">${esc(p.ref)}</td><td><span class="badge warn">verify</span>${p.unc ? ' <span class="badge fail" title="Least certain default; listed under Needs verification">least certain</span>' : ''}</td></tr>`).join('')}</tbody></table></div>`); });
+    h += card('cp-' + g.replace(/\W+/g, '-'), esc(g), m === 'both' ? 'LRFR and LFR' : METH[m], `<div class="tscroll"><table class="tbl ptbl"><thead><tr><th>Symbol</th><th>Parameter</th><th class="right">Value</th><th class="right">Default</th><th>Unit</th><th>Reference</th><th></th></tr></thead><tbody>${ps.map(p => `<tr${p.unc ? ' class="row-warn"' : ''}><td>${p.sym === '-' ? '' : `\\(${p.sym}\\)`}</td><td class="lbl">${sub(p.desc)}${p.note ? `<br><small class="n-dim">${sub(p.note)}</small>` : ''}</td><td class="pin"><input type="text" inputmode="decimal" data-k="code.${p.key}" data-t="code" aria-label="${esc(p.desc)}"></td><td class="val">${p.def}</td><td class="unit">${p.unit}</td><td class="lbl small">${esc(p.ref)}</td><td>${p.conf ? `<span class="badge pass" title="Convention confirmed by the engineer">${esc(p.conf)}</span>` : '<span class="badge warn">verify</span>'}${p.unc ? ' <span class="badge fail" title="Least certain default; listed under Needs verification">least certain</span>' : ''}</td></tr>`).join('')}</tbody></table></div>`); });
   $('#tab-params').innerHTML = h; fillInputs();
 }
 
@@ -2945,7 +2949,7 @@ function methodHtml() { return `<div class="man-part active">
   <ul><li>Coordinates: inches, origin at the work point (WP), +x along the chord (to the right), +y up. Keep the WP at 0,0.</li>
   <li><b>GP-PLATE</b>: one closed polyline, the plate outline (the largest is used if there are several; separate lines and arcs are joined). Collinear points are removed and the outline is made counterclockwise.</li>
   <li><b>GP-M&lt;n&gt;-WL</b>: a LINE from the WP outward, the work line of member n (n = 1, 2, … in the order of the Members tab). It gives the angle θ (rounded to 0.01°). Without it the angle is taken from the hole pattern (warning).</li>
-  <li><b>GP-M&lt;n&gt;-BOLT</b>: CIRCLEs, the holes of member n (diameter = hole diameter). They are grouped into gage lines (across the member) and rows (along it) with a 1/16 in tolerance, giving rows, gage lines, pitch, gages, WP to inner row and transverse offset. An irregular pattern is imported as the best-fit regular pattern and every difference is listed hole by hole. The fastener diameter is kept if the circles match it, otherwise taken from M&lt;n&gt;.D or inferred as hole − 1/16 in (warning).</li>
+  <li><b>GP-M&lt;n&gt;-BOLT</b>: CIRCLEs, the holes of member n (diameter = hole diameter). They are grouped into gage lines (across the member) and rows (along it) with a 1/16 in tolerance, giving rows, gage lines, pitch, gages, WP to inner row and transverse offset. An irregular pattern is imported as the best-fit regular pattern and every difference is listed hole by hole; Apply stays disabled until the box confirming the best-fit grid is ticked. The fastener diameter is kept if the circles match it, otherwise taken from M&lt;n&gt;.D or inferred as hole − 1/16 in (warning).</li>
   <li><b>GP-M&lt;n&gt;-OUTL</b>: member outline (export: information; import: compared with the width and member end, warning only).</li>
   <li><b>GP-SPLICE</b> chord splice line and <b>GP-FILL</b> filler outlines: information only (a splice line with a continuous chord gives a warning).</li>
   <li><b>GP-DATA</b>: TEXT or MTEXT lines KEY=VALUE, lengths in inches and strengths in ksi; a blank value keeps the current value. Keys: PROJECT, BRIDGE, JOINT, NP (number of plates), T_PLATE, STEEL (${GPR.STEEL.map(q => q[0]).join(', ')}), FY, FU (used only with STEEL=custom), CHORD (continuous, spliced); per member M&lt;n&gt;.NAME, ROLE (chord, web), SECTION (box, H, W, L), DESC, W (width in the plate plane), D2, CUT (member end from WP), FASTENER (${Object.keys(GPR.FAST).join(', ')}), D (fastener diameter), HOLE (standard, oversize; a number is read as the hole diameter and only checked), PREP (drilled, punched), THREADS (excl, incl), NS (1, 2), TF (filler thickness). Unknown keys and invalid values are reported and ignored.</li>
@@ -2990,7 +2994,7 @@ const cadName = s => (String(s || 'gusset').replace(/[^\w\-]+/g, '_').replace(/^
 function cadShow(res, file) {
   CAD_RES = res; CAD_FILE = file; const box = $('#cad-body'); $('#cad-title').textContent = `Import DXF: ${file}`;
   if (res.error) { $('#cad-sub').textContent = ''; box.innerHTML = `<div class="alert fail"><b>The file could not be read.</b><br>${esc(res.error)}</div>`; $('#cad-apply').hidden = true; $('#cad-modal').hidden = false; return; }
-  const pv = GPDXF.previewPair(P, res), ch = res.changes, W = res.warnings, rm = res.removed;
+  const pv = GPDXF.previewPair(P, res), ch = res.changes, W = res.warnings, rm = res.removed, irr = res.irregular || [];
   $('#cad-sub').textContent = `Units: ${res.raw.units}. Apply replaces only the geometry and the GP-DATA values listed below; member forces, live load columns, code parameters and rating settings are not changed. Undo import is available until the next edit.`;
   let grp = '', rows = '';
   ch.forEach(c => { if (c.grp !== grp) { grp = c.grp; rows += `<tr class="cad-grp"><td colspan="3">${esc(grp)}</td></tr>`; } rows += `<tr class="${c.kind === 'del' ? 'row-fail' : c.kind === 'add' ? 'row-warn' : ''}"><td class="lbl">${esc(c.field)}</td><td class="val">${esc(c.cur)}</td><td class="val"><b>${esc(c.imp)}</b></td></tr>`; });
@@ -2998,11 +3002,16 @@ function cadShow(res, file) {
     <p class="cap"><span class="lgd"><i style="border-color:#252d29;background:#f4f1e8"></i>plate</span><span class="lgd"><i style="border-color:#c3352b"></i>work line</span><span class="lgd"><i style="border-color:#2c7a4b"></i>member outline</span><span class="lgd"><i style="border-color:#1d56a3;border-radius:50%"></i>hole</span><span class="lgd"><i style="border-color:#c3352b;background:rgba(195,53,43,.25);border-radius:50%"></i>hole off the regular pattern</span><span class="lgd"><i style="border-color:#c3352b;border-style:dashed;border-radius:50%"></i>missing hole (added by the best fit)</span></p>
     ${W.length ? `<div class="alert warn"><b>${W.length} warning${W.length > 1 ? 's' : ''}</b><ul class="err-list">${W.map(w => `<li>${esc(w)}</li>`).join('')}</ul></div>` : '<div class="alert info">No warnings.</div>'}
     ${rm.length ? `<div class="alert fail"><label class="ck-row" style="padding:0"><input type="checkbox" id="cad-rm-ok"><label for="cad-rm-ok">Remove ${rm.length === 1 ? 'member' : 'members'} <b>${rm.map(r => esc(r.id)).join(', ')}</b> and ${rm.length === 1 ? 'its' : 'their'} forces (not in the drawing). Required to apply.</label></label></div>` : ''}
+    ${irr.length ? `<div class="alert fail"><label class="ck-row" style="padding:0"><input type="checkbox" id="cad-fit-ok"><label for="cad-fit-ok">I confirm the best-fit regular grid is acceptable for <b>${irr.map(r => esc(r.tag)).join(', ')}</b> (the model may count holes not in the drawing, which is unconservative for fastener shear and bearing). Required to apply.</label></label></div>` : ''}
     <h4 class="sub-h">Changes (${ch.length})</h4>${ch.length ? `<div class="tscroll"><table class="tbl cad-tbl"><thead><tr><th>Field</th><th class="right">Current</th><th class="right">Imported</th></tr></thead><tbody>${rows}</tbody></table></div>` : '<p class="note-p">The drawing matches the current model: nothing would change.</p>'}`;
-  $('#cad-apply').hidden = false; $('#cad-apply').disabled = !ch.length; $('#cad-modal').hidden = false;
+  $('#cad-apply').hidden = false; cadApplyState(); $('#cad-modal').hidden = false;
 }
+/* Apply is enabled only with changes and, for an irregular hole pattern, the best-fit confirmation ticked */
+const cadFitOk = res => !(res.irregular || []).length || !!($('#cad-fit-ok') || {}).checked;
+function cadApplyState() { const res = CAD_RES, b = $('#cad-apply'); if (!b || !res || res.error) return; b.disabled = !res.changes.length || !cadFitOk(res); }
 function cadApply() {
   const res = CAD_RES; if (!res || res.error) return;
+  if (!cadFitOk(res)) { alert('Tick the box to confirm the best-fit regular hole pattern, or Cancel.'); cadApplyState(); return; }
   if (res.removed.length && !($('#cad-rm-ok') || {}).checked) { alert('Tick the box to confirm removing the members that are not in the drawing, or Cancel.'); return; }
   const prev = clone(P), ui = P.ui; P = GPR.normalize(res.Q); P.ui = { ...ui, open: res.added.length || res.removed.length ? {} : ui.open };
   CAD_UNDO = { P: prev, file: CAD_FILE }; CAD_RES = null; $('#cad-modal').hidden = true;
@@ -3017,7 +3026,7 @@ document.addEventListener('click', e => { const id = e.target.id; if (!id || !/^
   else if (id === 'cad-undo') cadUndo();
   else if (id === 'cad-cancel') { $('#cad-modal').hidden = true; CAD_RES = null; }
   else if (id === 'cad-apply') cadApply(); });
-document.addEventListener('change', e => { if (e.target.id === 'cad-tpl') { CAD_TPL = e.target.value; return; } if (e.target.id !== 'cad-file') return; const f = e.target.files[0]; if (!f) return; const rd = new FileReader();
+document.addEventListener('change', e => { if (e.target.id === 'cad-tpl') { CAD_TPL = e.target.value; return; } if (e.target.id === 'cad-fit-ok') { cadApplyState(); return; } if (e.target.id !== 'cad-file') return; const f = e.target.files[0]; if (!f) return; const rd = new FileReader();
   rd.onload = () => { let res; try { res = GPDXF.importDxf(P, new Uint8Array(rd.result)); } catch (er) { res = { error: 'The file could not be read: ' + (er && er.message || er) }; } cadShow(res, f.name); };
   rd.onerror = () => cadShow({ error: 'The browser could not read the file.' }, f.name); rd.readAsArrayBuffer(f); e.target.value = ''; });
 
@@ -3070,7 +3079,7 @@ function crInputs() {
   const frc = `<table class="cr-tbl cr-wide"><thead><tr><th>Member</th><th>DC</th><th>DW</th>${P.ll.map(c => `<th>${esc(c.name)} (${c.kind}, ${c.use === 'both' ? 'LRFR + LFR' : c.use.toUpperCase()}${c.kind !== 'design' ? `, γ<sub>LL</sub> = ${f2(num(c.gL))}` : ''})</th>`).join('')}</tr></thead><tbody>${P.members.map(m => `<tr><td>${esc(m.id)}</td><td class="n">${f2(num(m.F.DC))}</td><td class="n">${f2(num(m.F.DW))}</td>${m.F.LL.map(x => `<td class="n">${f2(num(x))}</td>`).join('')}</tr>`).join('')}</tbody></table><p class="cr-note">Unfactored member forces in kip, tension positive, for the whole joint (both plates); live load includes impact and distribution.${P.src ? ' Source: ' + esc(P.src) + '.' : ''}</p>`;
   return [{ t: 'Gusset plates and rating basis', h: plates }, { t: 'Plate outline', h: poly }, { t: 'Members and fasteners', h: mem }, { t: 'Member forces', h: frc }];
 }
-function crParams() { const meths = activeMeth(); return `<p class="cr-p">${esc(VERIFY_NOTE)}</p><table class="cr-tbl cr-wide"><thead><tr><th>Parameter</th><th>Value</th><th>Default</th><th>Unit</th><th>Reference</th><th>Status</th></tr></thead><tbody>${GPR.PARAMS.filter(p => p.meth === 'both' || meths.includes(p.meth)).map(p => { const v = R.p[p.key], ch = v !== p.def; return `<tr><td>${p.meth === 'both' ? '' : METH[p.meth] + ': '}${sub(p.desc)}</td><td class="n">${ch ? `<b>${v}</b>` : v}</td><td class="n">${p.def}</td><td>${p.unit}</td><td>${esc(p.ref)}</td><td>verify${p.unc ? '; least certain' : ''}${ch ? '; changed' : ''}</td></tr>`; }).join('')}</tbody></table>`; }
+function crParams() { const meths = activeMeth(); return `<p class="cr-p">${esc(VERIFY_NOTE)}</p><table class="cr-tbl cr-wide"><thead><tr><th>Parameter</th><th>Value</th><th>Default</th><th>Unit</th><th>Reference</th><th>Status</th></tr></thead><tbody>${GPR.PARAMS.filter(p => p.meth === 'both' || meths.includes(p.meth)).map(p => { const v = R.p[p.key], ch = v !== p.def; return `<tr><td>${p.meth === 'both' ? '' : METH[p.meth] + ': '}${sub(p.desc)}</td><td class="n">${ch ? `<b>${v}</b>` : v}</td><td class="n">${p.def}</td><td>${p.unit}</td><td>${esc(p.ref)}</td><td>${p.conf ? esc(p.conf) : 'verify'}${p.unc ? '; least certain' : ''}${ch ? '; changed' : ''}</td></tr>`; }).join('')}</tbody></table>`; }
 function buildReport(o) {
   const mt = P.meta, toc = []; let n = 0, body = '';
   const H1 = t => { n++; toc.push({ n, t, id: `cr-s${n}`, subs: [] }); return `<h2 class="cr-h1" id="cr-s${n}">${n}. ${esc(t)}:</h2>`; };
