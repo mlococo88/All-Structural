@@ -176,6 +176,8 @@ textarea{min-height:64px;resize:vertical;font-family:var(--font-doc);font-size:1
       <button type="button" onclick="bxShareProjectInfo()">Share project info</button>
       <button type="button" onclick="bxPullBuildingLoads()" title="Import nominal area loads (psf) from the ASCE 7-16 Load Generator as line loads (HANDOFF.md, channel buildingLoads)">Pull from ASCE 7-16<span id="bxBldNew" style="display:none;color:#FDE68A;font-weight:700"> &#9679; new data available</span></button>
       <button type="button" onclick="document.getElementById('bxBldFile').click()">Import hand-off (JSON)</button><input type="file" id="bxBldFile" accept=".json,application/json" style="display:none" onchange="bxImportBuildingLoads(event)">
+      <button type="button" onclick="bxSendMemberReactions('send')" title="Publish the unfactored support reactions by load type for the base plate and spread footing tools (HANDOFF.md, channel memberReactions)">Send to other tools</button>
+      <button type="button" onclick="bxSendMemberReactions('export')" title="Save the same support-reaction hand-off as a JSON file">Export hand-off (JSON)</button>
       <span id="bxBldSrc" style="font-family:var(--font-ui);font-size:8pt;color:#C7D4E4;align-self:center"></span>
     </div>
   </div>
@@ -10423,6 +10425,189 @@ function colCurveFig(p,cc,D,Pu){
   window.addEventListener('focus',refreshBar);
   window.addEventListener('storage',refreshBar);
   setInterval(refreshBar,2000);
+})();
+</script>
+<script>
+/* Member-reaction hand-off sender (HANDOFF.md §4.8, channel memberReactions; receivers: BasePlateAnchorDesigner.html,
+   Spread Footing.html). "Send to other tools" / "Export hand-off (JSON)" open a small dialog where the user assigns each
+   load case to a load type (D, L, Lr, S, W, E or "other"); the payload is then built from this tool's own stiffness
+   solution of each load case ALONE (factor 1.0 on that case, 0 on every other case), i.e. unfactored reactions.
+   Read-only with respect to the design: nothing here changes an input or a result. The case-to-type choice is kept
+   in the new optional field S.bxSend.memberReactions. */
+(function(){
+  var CH='memberReactions', SCHEMA='bridge-member-reactions';
+  var PRODUCER='Steel Beam Designer', FILE='Steel Beam Design - AISC 15th.html';
+  var TYPES=['D','L','Lr','S','W','E'];
+  var TYPE_LBL={D:'Dead',L:'Live',Lr:'Roof live',S:'Snow',W:'Wind',E:'Seismic'};
+  function isNum(v){ return typeof v==='number' && isFinite(v); }
+  function r6(v){ var r=Math.round(v*1e6)/1e6; return (r===0)?0:r; }   /* also turns -0 into 0 */
+  function f2(v,d){ return isNum(v) ? v.toFixed(d==null?2:d) : '—'; }
+  function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+  /* default load type of a case, from its id or name; null = "other" (sent only per case) */
+  function guessType(cs){
+    var id=String(cs.id||'').toUpperCase(), nm=String(cs.name||'').toLowerCase();
+    var BY_ID={D:'D',DL:'D',DEAD:'D',L:'L',LL:'L',LIVE:'L',LR:'Lr',RL:'Lr',ROOF:'Lr',S:'S',SL:'S',SNOW:'S',W:'W',WL:'W',WIND:'W',E:'E',EL:'E',EQ:'E'};
+    if(BY_ID[id]) return BY_ID[id];
+    if(/^dead/.test(nm)) return 'D';
+    if(/^roof\s*live/.test(nm)) return 'Lr';
+    if(/^live/.test(nm)) return 'L';
+    if(/^snow/.test(nm)) return 'S';
+    if(/^wind/.test(nm)) return 'W';
+    if(/^(seismic|earthquake)/.test(nm)) return 'E';
+    return null;
+  }
+  function savedMap(){ return (S.bxSend && S.bxSend.memberReactions && S.bxSend.memberReactions.caseType) || {}; }
+  function defaultMap(){
+    var sv=savedMap(), m={};
+    S.cases.forEach(function(cs){ m[cs.id]=Object.prototype.hasOwnProperty.call(sv,cs.id) ? sv[cs.id] : guessType(cs); });
+    return m;
+  }
+  /* ---- build the payload from the current model. caseType: {caseId: 'D'|...|null}. Returns {err:[], payload} ---- */
+  function build(caseType){
+    var out={err:[],warn:[],payload:null};
+    if(S.mode && S.mode!=='beam'){ out.err.push('The tool is in '+S.mode+' mode. Support reactions exist only in Beam mode (a solved beam model).'); return out; }
+    var an=computeAll();
+    if(!an || (an.blockers && an.blockers.length)){ out.err.push('The beam model cannot be solved: '+((an&&an.blockers)||['no analysis']).join(' ')); return out; }
+    var Iin4=an.sect ? an.sect.Ix : 1, nX=nodeXs();
+    var sup=[];
+    S.geom.nodes.forEach(function(nd,j){ if(nd.t!=='free') sup.push(j); });
+    var perCase={};
+    S.cases.forEach(function(cs){
+      var fac={}; fac[cs.id]=1;
+      perCase[cs.id]=solveFor(fac,Iin4).R;
+    });
+    var used={};
+    TYPES.forEach(function(t){ used[t]=S.cases.filter(function(cs){ return caseType[cs.id]===t; }).map(function(cs){ return cs.id; }); });
+    var supports=sup.map(function(j){
+      var fixed=S.geom.nodes[j].t==='fixed';
+      var s={ id:NN[j], node:j, x:r6(nX[j]), support:S.geom.nodes[j].t, byLoadType:{}, byCase:{}, factored:false };
+      S.cases.forEach(function(cs){
+        var R=perCase[cs.id][j];
+        /* R.v = support reaction on the beam, + up; the beam pushes on the support with the same magnitude, so V (+ down on the support) = R.v.
+           R.m = reaction couple on the beam, + CCW; the beam exerts -R.m on the support (+ CCW). */
+        var V=r6(R.v), M=fixed ? r6(-R.m) : 0;
+        if(!isNum(V) || !isNum(M)) out.err.push('Case '+cs.id+' gives a non-finite reaction at support '+NN[j]+'.');
+        s.byCase[cs.id]={ V:V, M:M, type:caseType[cs.id]||null, name:cs.name||cs.id };
+      });
+      TYPES.forEach(function(t){
+        if(!used[t].length) return;
+        var V=0, M=0; used[t].forEach(function(id){ V+=s.byCase[id].V; M+=s.byCase[id].M; });
+        s.byLoadType[t]={ V:r6(V), M:r6(M) };
+      });
+      return s;
+    });
+    if(!supports.length) out.err.push('The beam has no supports.');
+    var notes=[
+      'Unfactored support reactions from Steel Beam Designer’s stiffness analysis of each load case alone (factor 1.0 on that case, 0 on all others). Load factors are applied by the receiving tool.',
+      'Sign convention: V + = downward force exerted by the beam on the support (compression into a column or pedestal below); uplift is negative. M (fixed supports only) = moment exerted by the beam on the support, + = counter-clockwise in the beam elevation (x from support '+NN[sup[0]||0]+' toward the last support, y up). Pin and roller supports carry no moment (M = 0).',
+      'Beam: '+S.geom.spans.length+' span(s) '+S.geom.spans.map(function(sp){ return f2(sp.L)+' ft'; }).join(' + ')+'; supports '+S.geom.nodes.map(function(n,j){ return NN[j]+' '+n.t; }).join(', ')+'; section '+(S.section.label||'?')+' '+(S.section.grade||'')+'.',
+      (S.trib && S.trib.sw) ? 'Self-weight of the beam is included in case DL.' : 'Self-weight of the beam is NOT included (switched off in this tool).',
+      'Loads switched off in the load table are excluded. Live load acts on all spans at once (no pattern loading).'
+    ];
+    TYPES.forEach(function(t){ if(used[t].length>1) notes.push(t+' = sum of cases '+used[t].join(' + ')+'.'); });
+    var other=S.cases.filter(function(cs){ return !caseType[cs.id]; }).map(function(cs){ return cs.id; });
+    if(other.length) notes.push('Case(s) '+other.join(', ')+' are not assigned to a load type; they are sent only under byCase.');
+    var caseMap={}; S.cases.forEach(function(cs){ caseMap[cs.id]=caseType[cs.id]||null; });
+    out.payload={
+      _schema:SCHEMA, schemaVersion:1, producer:PRODUCER, producerFile:FILE,
+      project:{ name:(S.proj&&S.proj.name)||'', bridgeId:'' },
+      units:{ force:'kip', moment:'kip-ft', length:'ft' },
+      factored:false,
+      signConvention:'V: + = downward force of the beam on the support (beam pushing down); uplift negative. M: moment exerted by the beam on a fixed support, + = counter-clockwise in the beam elevation (x along the beam from the first support, y up); 0 at pin/roller supports.',
+      member:{ section:S.section.label||'', grade:S.section.grade||'', spans:S.geom.spans.map(function(sp){ return sp.L; }), totalLength:r6(totalL()) },
+      cases:S.cases.map(function(cs){ return { id:cs.id, name:cs.name||cs.id, type:caseType[cs.id]||null }; }),
+      caseMap:caseMap,
+      supports:supports,
+      notes:notes
+    };
+    return out;
+  }
+
+  function openDialog(action){
+    var old=document.getElementById('bxMrOverlay'); if(old) old.remove();
+    if(S.mode && S.mode!=='beam'){ alert('Send support reactions: the tool is in '+S.mode+' mode. Support reactions exist only in Beam mode.'); return null; }
+    var map=defaultMap();
+    var ov=el('div'); ov.id='bxMrOverlay';
+    ov.style.cssText='position:fixed;inset:0;background:rgba(15,25,40,.45);z-index:60;display:flex;align-items:center;justify-content:center';
+    var box=el('div');
+    box.style.cssText='background:#fff;border-radius:8px;padding:14px 18px;width:760px;max-width:96vw;max-height:88vh;overflow:auto;font-family:var(--font-ui);font-size:9pt;box-shadow:0 12px 40px rgba(0,0,0,.3)';
+    ov.appendChild(box);
+    box.appendChild(el('div',null,'<b style="font-size:11pt">'+(action==='export'?'Export':'Send')+' support reactions (unfactored, by load type)</b>'));
+    box.appendChild(el('div','note','For the Base Plate &amp; Anchor Designer and the Spread Footing tool. Each case is analysed alone with factor 1.0. '+
+      '<b>V + = downward on the support</b> (beam pushing down); uplift is negative. <b>M</b> (fixed supports only) = moment of the beam on the support, + counter-clockwise in the beam elevation.'));
+    var t=el('table','cfg'); t.style.margin='6px 0';
+    var ct=el('div');
+    var res=el('div');
+    var sels={};
+    function drawCases(){
+      ct.innerHTML='';
+      var tb=el('table','cfg'); tb.innerHTML='<tr><th>Load case</th><th>Send as load type</th></tr>';
+      S.cases.forEach(function(cs){
+        var tr=el('tr'); tr.appendChild(el('td',null,'<b>'+esc(cs.id)+'</b> '+esc(cs.name||'')));
+        var td=el('td'), s=document.createElement('select'); s.dataset.cs=cs.id;
+        TYPES.concat(['']).forEach(function(ty){ var o=document.createElement('option'); o.value=ty; o.textContent=ty?ty+' — '+TYPE_LBL[ty]:'other (per case only)'; s.appendChild(o); });
+        s.value=map[cs.id]||''; td.appendChild(s); tr.appendChild(td); tb.appendChild(tr); sels[cs.id]=s;
+      });
+      ct.appendChild(tb);
+    }
+    drawCases(); box.appendChild(ct);
+    box.appendChild(el('div','hint','Cases given the same type are added together (e.g. a superimposed dead case with DL). Give pattern live-load cases the type "other" so they are not added.'));
+    box.appendChild(res);
+    var row=el('div','btnRow'); row.style.marginTop='10px';
+    var go=el('button','btn primary',action==='export'?'Export hand-off (JSON)':'Send to other tools'); go.id='bxMrGo';
+    var alt=el('button','btn',action==='export'?'Also send to other tools':'Also export JSON');
+    var ca=el('button','btn','Cancel');
+    row.appendChild(go); row.appendChild(alt); row.appendChild(ca); box.appendChild(row);
+    var cur=null;
+    function read(){ Object.keys(sels).forEach(function(id){ map[id]=sels[id].value||null; }); return map; }
+    function refresh(){
+      cur=build(read());
+      var h='';
+      if(cur.err.length) h+='<div class="errBox">'+cur.err.map(esc).join('<br>')+'</div>';
+      if(cur.payload){
+        var p=cur.payload, tys=TYPES.filter(function(ty){ return p.supports.length && p.supports[0].byLoadType[ty]; });
+        var hasM=p.supports.some(function(s){ return s.support==='fixed'; });
+        h+='<table class="cfg" style="margin:6px 0"><tr><th>Support</th><th>x (ft)</th><th>Type</th>'+tys.map(function(ty){ return '<th>'+ty+' V (kip)'+(hasM?'<br>M (kip·ft)':'')+'</th>'; }).join('')+'</tr>'+
+          p.supports.map(function(s){ return '<tr><td>'+esc(s.id)+'</td><td>'+f2(s.x)+'</td><td>'+esc(s.support)+'</td>'+tys.map(function(ty){
+            var r=s.byLoadType[ty]; return '<td>'+f2(r.V,3)+(hasM?'<br>'+(s.support==='fixed'?f2(r.M,3):'—'):'')+'</td>'; }).join('')+'</tr>'; }).join('')+'</table>';
+        h+='<div class="hint">'+p.notes.map(esc).join('<br>')+'</div>';
+      }
+      res.innerHTML=h;
+      go.disabled=alt.disabled=!!cur.err.length;
+    }
+    function remember(){
+      if(!S.bxSend || typeof S.bxSend!=='object') S.bxSend={};
+      var m={}; S.cases.forEach(function(cs){ m[cs.id]=map[cs.id]||null; });
+      S.bxSend.memberReactions={ caseType:m };
+      if(typeof autosave==='function') autosave();
+    }
+    function doSend(){
+      var r=BridgeXfer.publish(CH,cur.payload,PRODUCER,FILE);
+      if(!r.ok){ alert('Send to other tools: '+r.error); return null; }
+      cur.payload=r.payload; return r;
+    }
+    function doExport(){
+      var p=cur.payload; if(!p.producedAt){ var st=JSON.parse(JSON.stringify(p)); st.producedAt=new Date().toISOString(); if(!st.notes) st.notes=[]; p=st; }
+      return BridgeXfer.exportFile(CH,p);
+    }
+    box.addEventListener('change',refresh);
+    ca.addEventListener('click',function(){ ov.remove(); });
+    go.addEventListener('click',function(){
+      refresh(); if(cur.err.length) return; remember();
+      if(action==='export'){ doExport(); ov.remove(); toast('Reaction hand-off exported'); }
+      else if(doSend()){ ov.remove(); toast('Support reactions sent ('+cur.payload.supports.length+' supports)'); }
+    });
+    alt.addEventListener('click',function(){
+      refresh(); if(cur.err.length) return; remember();
+      if(action==='export'){ if(doSend()) toast('Support reactions sent'); }
+      else { doExport(); toast('Reaction hand-off exported'); }
+    });
+    document.body.appendChild(ov);
+    refresh();
+    return { overlay:ov, map:map, refresh:refresh, current:function(){ return cur; } };
+  }
+  window.bxSendMemberReactions=openDialog;
+  window.bxMr={ build:build, defaultMap:defaultMap, guessType:guessType, openDialog:openDialog };
 })();
 </script>
 </body>

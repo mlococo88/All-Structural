@@ -411,6 +411,333 @@ Line numbers are approximate, as of this fix. Search for the anchor text.
 - **Other copies:** BridgeXfer v1 and `ProjMetaUI` are duplicated (CLAUDE.md §3) in Pile Designer.html, Spread Footing.html, BasePlateAnchorDesigner.html, Concrete Anchor.html and Timber Beam Check.html (this PR), plus any other tools that received BridgeXfer in their own step-1 PRs.
 - **`ProjMetaUI`:** given in full in the After code of the helper insertion above; the copy is identical in every tool listed.
 
+## 2026-10-05 — PR: claude/conn-steelbeam-reactions (PR link added after merge)
+### C1. Member-reaction hand-off receiver: "Pull from Steel Beam" and "Import hand-off (JSON)"   [feature: hand-off (no result change)]
+- **Date / type:** 2026-10-05, feature: hand-off (no result change).
+- **Where:** the row under the title block (anchor `<button id="btnShareProjMeta" title="Make this title block available to the other tools">Share project info</button>`); `renderPrintHeader()` (anchor `+(m.chkDate||'\u2013')+'</td></tr></table>';`); one new `<script>` block at the end of the file, just before `</body>` (anchor `Member-reaction hand-off receiver`).
+- **Purpose:** reads channel `bridgeSuite.v1.memberReactions` (HANDOFF.md §4.8) and fills one pedestal's unfactored by-load-type rows `state.peds[i].loads[row]` from one beam support.
+- **Sign convention verified:** "P positive = downward (compression on soil)" (Pedestals section note and the dashboard note). The sender's V is + down, so **P = V** (no sign change). +My shifts the soil resultant toward +x, +Mx toward +y.
+- **Mapping:**
+
+| Hand-off (support chosen by the user) | Footing target (pedestal chosen by the user) |
+|---|---|
+| `byLoadType.D` | row D: `P = V` (kips) |
+| `byLoadType.L` | row L: `P = V` |
+| `byLoadType.Lr` | row Lr: `P = V` |
+| `byLoadType.S` | row S: `P = V` |
+| `byLoadType.W` | row Wx (default) or Wy: `P = V` |
+| `byLoadType.E` | not imported (no seismic type in this tool); warned if non-zero |
+| `byCase` "other" cases | listed; default "do not import" |
+| `M` (fixed supports) | beam toward +x: `My = −M` (default); −x: `My = +M`; +y: `Mx = −M`; −y: `Mx = +M`; or not imported |
+
+- **User choices (logged in `state.bxSrc.memberReactions`):** support (default the first); pedestal (default the first); row per load type (defaults above; all-zero rows not imported); moment orientation (default +x); replace (default) or add; "also set the other components to 0" (default off).
+- **Validation:** as BasePlateAnchorDesigner (same `check()`): `_schema`, version, corrupt JSON, `factored:true`, units (kip/lb, kip-ft/kip-in/lb-ft/lb-in), finite V and M. A warning is shown when the tool is in Direct factored mode (rows filled but unused).
+- **Governing provision:** none changed. No formula, factor or default changed; the only effect is filling inputs the user confirms.
+- **Before / After** (exact):
+  1. Buttons under the title block.
+     - Before:
+  ```html
+ <button id="btnShareProjMeta" title="Make this title block available to the other tools">Share project info</button>
+</div>
+  ```
+     - After:
+  ```html
+ <button id="btnShareProjMeta" title="Make this title block available to the other tools">Share project info</button>
+ <button id="btnPullMemberReactions" type="button" onclick="bxPullMemberReactions()" title="Import unfactored support reactions from Steel Beam Design into one pedestal's loads by type (HANDOFF.md, channel memberReactions)">Pull from Steel Beam<span id="bxMrNew" style="display:none;color:#b45309;font-weight:bold"> &#9679; new data available</span></button>
+ <button id="btnImportMemberReactions" type="button" onclick="document.getElementById('bxMrFile').click()">Import hand-off (JSON)</button><input type="file" id="bxMrFile" accept=".json,application/json" style="display:none" onchange="bxImportMemberReactions(event)">
+ <span id="bxMrSrc" style="font-size:11px;font-style:italic"></span>
+</div>
+  ```
+  2. `renderPrintHeader()`, after the title-block table assignment.
+     - Before:
+  ```js
+ '<tr><td>'+(m.project||'\u2013')+ … +(m.chkDate||'\u2013')+'</td></tr></table>';
+}
+  ```
+     - After:
+  ```js
+ '<tr><td>'+(m.project||'\u2013')+ … +(m.chkDate||'\u2013')+'</td></tr></table>';
+ if(typeof sfMrSourceLine==='function'&&sfMrSourceLine()){const sp=document.createElement('p');sp.style.cssText='font-size:10px;margin:2px 0';sp.textContent=sfMrSourceLine();$('#printHeader').appendChild(sp);}   /* hand-off source (HANDOFF.md §3.4) */
+}
+  ```
+  3. New script, inserted just before `</body>` (Before: nothing). After:
+  ```html
+<script>
+/* Member-reaction hand-off receiver (HANDOFF.md §4.8, channel memberReactions, sender: Steel Beam Design - AISC 15th.html).
+   "Pull from Steel Beam" / "Import hand-off (JSON)". Nothing is applied on page load. The user picks a beam support
+   and a target pedestal, maps each load type to the pedestal's by-load-type rows (D, L, Lr, S, Wx, Wy), chooses how a
+   fixed-support moment is oriented on the footing axes, picks replace or add, reviews what will change, and confirms.
+   Values are unfactored, kip and kip-ft, P + = down in both tools (no sign change on P).
+   The source is kept in the new optional field state.bxSrc.memberReactions. */
+(function(){
+  var CH='memberReactions', SCHEMA='bridge-member-reactions', MAXV=1, RID='spreadFooting';
+  var SRC_TYPES=['D','L','Lr','S','W','E'];
+  var SRC_LBL={D:'Dead',L:'Live',Lr:'Roof live',S:'Snow',W:'Wind',E:'Seismic'};
+  var DEF_ROW={D:'D',L:'L',Lr:'Lr',S:'S',W:'Wx',E:''};
+  var FORCE={kip:1,kips:1,k:1,lb:0.001,lbf:0.001,lbs:0.001};               /* -> kip */
+  var MOMENT={'kip-ft':1,'kip·ft':1,'k-ft':1,'ft-kip':1,'kip-in':1/12,'lb-ft':0.001,'ft-lb':0.001,'lb-in':0.001/12};   /* -> kip-ft */
+  /* beam elevation x (first support -> last) along footing ... : component and factor applied to the sender's M (+CCW) */
+  var AXIS={'+x':{c:'My',k:-1,lbl:'+x (My = −M)'},'-x':{c:'My',k:1,lbl:'−x (My = +M)'},
+            '+y':{c:'Mx',k:-1,lbl:'+y (Mx = −M)'},'-y':{c:'Mx',k:1,lbl:'−y (Mx = +M)'},none:{c:null,k:0,lbl:'do not import M'}};
+  function isNum(v){ return typeof v==='number' && isFinite(v); }
+  function f2(v,d){ return isNum(v) ? (Math.abs(v)<1e-12?0:v).toFixed(d==null?2:d) : '—'; }
+  function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+  function h(tag,cls,html){ var e=document.createElement(tag); if(cls) e.className=cls; if(html!==undefined) e.innerHTML=html; return e; }
+  function when(iso){ var d=new Date(iso); if(isNaN(d)) return String(iso||'?');
+    function p(n){ return (n<10?'0':'')+n; }
+    return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+' '+p(d.getHours())+':'+p(d.getMinutes()); }
+  function projName(p){ return (p.project && typeof p.project==='object') ? (p.project.name||'') : String(p.project||''); }
+
+  /* ---- validate and convert to kip / kip-ft ---- */
+  function check(p){
+    var out={err:[],warn:[],sups:[]};
+    var e=BridgeXfer.validate(p,SCHEMA,MAXV); if(e){ out.err.push(e); return out; }
+    if(p.factored===true){ out.err.push('The payload says its reactions are factored. This tool imports unfactored loads by type only.'); return out; }
+    var u=p.units||{}, kf=FORCE[u.force], km=MOMENT[u.moment];
+    if(!kf){ out.err.push('Unknown force unit "'+(u.force||'')+'". Accepted: kip, or lb (converted ÷ 1000).'); return out; }
+    if(!km){ out.err.push('Unknown moment unit "'+(u.moment||'')+'". Accepted: kip-ft, kip-in, lb-ft, lb-in.'); return out; }
+    if(kf!==1) out.warn.push('Forces converted from '+u.force+' to kip (× '+kf+').');
+    if(km!==1) out.warn.push('Moments converted from '+u.moment+' to kip-ft (× '+km+').');
+    if(!Array.isArray(p.supports) || !p.supports.length){ out.err.push('The payload has no supports.'); return out; }
+    p.supports.forEach(function(s,i){
+      if(!s || typeof s!=='object'){ out.err.push('Support '+(i+1)+' is not an object.'); return; }
+      if(s.factored===true){ out.err.push('Support '+(s.id||i+1)+' is marked factored.'); return; }
+      var sid=String(s.id==null?(i+1):s.id);
+      if(s.x!==undefined && s.x!==null && !isNum(s.x)) out.err.push('Support '+sid+': x is not a finite number.');
+      var rows=[];
+      function rd(src,key,label,type){
+        if(!src || typeof src!=='object'){ out.err.push('Support '+sid+', '+label+': not an object.'); return; }
+        if(!isNum(src.V)){ out.err.push('Support '+sid+', '+label+': V is not a finite number ('+JSON.stringify(src.V)+').'); return; }
+        if(src.M!==undefined && src.M!==null && !isNum(src.M)){ out.err.push('Support '+sid+', '+label+': M is not a finite number ('+JSON.stringify(src.M)+').'); return; }
+        rows.push({key:key,label:label,type:type,V:src.V*kf,M:(isNum(src.M)?src.M:0)*km});
+      }
+      var bt=s.byLoadType;
+      if(!bt || typeof bt!=='object'){ out.err.push('Support '+sid+' has no byLoadType.'); return; }
+      Object.keys(bt).forEach(function(t){
+        if(SRC_TYPES.indexOf(t)<0){ out.warn.push('Support '+sid+': unknown load type "'+t+'" is listed as "other".'); rd(bt[t],'t:'+t,t+' (unknown type)',null); return; }
+        rd(bt[t],'t:'+t,t+' — '+SRC_LBL[t],t);
+      });
+      rows.sort(function(a,b){ return (a.type?SRC_TYPES.indexOf(a.type):99)-(b.type?SRC_TYPES.indexOf(b.type):99); });
+      if(s.byCase && typeof s.byCase==='object') Object.keys(s.byCase).forEach(function(cid){
+        var c=s.byCase[cid]; if(c && c.type) return;
+        rd(c,'c:'+cid,'case '+cid+(c&&c.name&&c.name!==cid?' ('+c.name+')':'')+' — not assigned to a type',null);
+      });
+      out.sups.push({id:sid,x:s.x,support:s.support||'',rows:rows});
+    });
+    if(!out.err.length && !out.sups.some(function(s){ return s.rows.length; })) out.err.push('The payload contains no reactions.');
+    return out;
+  }
+  /* default mapping for one support: D/L/Lr/S to the same row, W to Wx, E and "other" cases and all-zero rows -> do not import */
+  function defaultMap(s){
+    var m={}; s.rows.forEach(function(r){ m[r.key]=(r.type && (Math.abs(r.V)>1e-9 || Math.abs(r.M)>1e-9)) ? DEF_ROW[r.type] : ''; }); return m;
+  }
+  function defaults(chk){
+    var o={sup:0,ped:0,mode:'replace',zeroOther:false,axis:'+x',map:defaultMap(chk.sups[0])};
+    return o;
+  }
+  /* ---- plan: exactly what will change. Pure apart from reading state. ---- */
+  function plan(p,chk,o){
+    var r={err:[],warn:[],changes:[],rows:[],set:{}};
+    var s=chk.sups[o.sup]; if(!s){ r.err.push('Pick a support.'); return r; }
+    var ped=state.peds[o.ped]; if(!ped){ r.err.push('Pick a pedestal (add one first if there is none).'); return r; }
+    var ax=AXIS[o.axis]||AXIS.none;
+    var add={}, from={};
+    s.rows.forEach(function(row){
+      var tr=o.map[row.key]||'';
+      if(row.type==='E' && !tr && (Math.abs(row.V)>1e-9 || Math.abs(row.M)>1e-9)) r.warn.push('E (seismic) is not imported: this tool has no seismic load type (see its scope notes).');
+      if(!tr) return;
+      if(TYPES.indexOf(tr)<0){ r.err.push('Unknown target row '+tr+'.'); return; }
+      var a=add[tr]=add[tr]||{P:0}; a.P+=row.V;
+      if(Math.abs(row.M)>1e-9){
+        if(ax.c){ a[ax.c]=(a[ax.c]||0)+ax.k*row.M; }
+        else r.warn.push(row.label.split(' —')[0]+': the fixed-support moment M = '+f2(row.M,3)+' kip·ft is not imported (you chose "do not import M").');
+      }
+      (from[tr]=from[tr]||[]).push(row.label.split(' —')[0]);
+      r.rows.push({from:row.label.split(' —')[0],row:tr,V:row.V,M:row.M,Mc:(ax.c&&Math.abs(row.M)>1e-9)?ax.c:null,Mv:(ax.c&&Math.abs(row.M)>1e-9)?ax.k*row.M:0});
+    });
+    var used=Object.keys(add);
+    if(!used.length) r.err.push('Map at least one load type to a pedestal row.');
+    used.forEach(function(tr){
+      if(from[tr].length>1) r.warn.push(from[tr].join(' + ')+' are added together into row '+tr+'.');
+      var cur=(ped.loads&&ped.loads[tr])||{P:0,Vx:0,Vy:0,Mx:0,My:0}, nw={};
+      ['P','Vx','Vy','Mx','My'].forEach(function(k){
+        var old=+cur[k]||0, v;
+        if(k in add[tr]) v=(o.mode==='add'?old:0)+add[tr][k];
+        else if(o.zeroOther) v=0;
+        else return;
+        v=Math.round(v*1e6)/1e6;
+        if(v!==old || k==='P'){ nw[k]=v; r.changes.push({row:tr,field:k,from:old,to:v}); }
+      });
+      r.set[tr]=nw;
+      if(!o.zeroOther && ['Vx','Vy','Mx','My'].some(function(k){ return !(k in add[tr]) && (+cur[k]||0)!==0; }))
+        r.warn.push('Row '+tr+' of '+ped.label+' keeps its existing shear/moment ('+['Vx','Vy','Mx','My'].filter(function(k){ return !(k in add[tr]) && (+cur[k]||0)!==0; }).map(function(k){ return k+' '+f2(+cur[k]); }).join(', ')+'). Tick the option to set them to 0.');
+    });
+    if(state.loadMode==='direct') r.warn.push('The footing is in Direct factored mode. The by-load-type rows are filled but not used until you switch "Load input mode" to "By load type".');
+    if(s.support==='fixed' && ax.c) r.warn.push('Fixed support: M is applied as '+ax.c+' = '+(ax.k<0?'−':'+')+'M (beam runs toward footing '+o.axis+'). Check this orientation against your framing plan.');
+    return r;
+  }
+  function apply(p,chk,o,via){
+    var r=plan(p,chk,o); if(r.err.length) return r;
+    var ped=state.peds[o.ped];
+    Object.keys(r.set).forEach(function(tr){
+      if(!ped.loads[tr]) ped.loads[tr]={P:0,Vx:0,Vy:0,Mx:0,My:0};
+      Object.keys(r.set[tr]).forEach(function(k){ ped.loads[tr][k]=r.set[tr][k]; });
+    });
+    if(!state.bxSrc || typeof state.bxSrc!=='object') state.bxSrc={};
+    var s=chk.sups[o.sup];
+    state.bxSrc.memberReactions={producer:p.producer||'',producerFile:p.producerFile||'',producedAt:p.producedAt||'',
+      project:p.project||'',via:via||'pull',adoptedAt:new Date().toISOString(),
+      support:s.id,supportType:s.support,pedestal:ped.label,pedIndex:o.ped,mode:o.mode,zeroOther:!!o.zeroOther,axis:o.axis,
+      rows:r.rows.map(function(x){ return {from:x.from,row:x.row,V:x.V,M:x.M,Mc:x.Mc,Mv:x.Mv}; }),
+      notes:(p.notes||[]).slice(0,20)};
+    BridgeXfer.markAdopted(CH,RID,p.producedAt);
+    r.ok=true;
+    return r;
+  }
+
+  function openDialog(p,via){
+    var chk=check(p);
+    if(chk.err.length){ alert('Support-reaction hand-off refused:\n  '+chk.err.join('\n  ')); return null; }
+    if(!state.peds || !state.peds.length){ alert('Pull from Steel Beam: add a pedestal first.'); return null; }
+    var o=defaults(chk);
+    var old=document.getElementById('bxMrOverlay'); if(old) old.remove();
+    var ov=h('div'); ov.id='bxMrOverlay';
+    ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:200;display:flex;align-items:center;justify-content:center';
+    var box=h('div'); box.style.cssText='background:#fff;border:2px solid #333;padding:12px 16px;width:820px;max-width:96vw;max-height:88vh;overflow:auto;font-size:12px';
+    ov.appendChild(box);
+    box.appendChild(h('div',null,'<b style="font-size:14px">Import support reactions from '+esc(p.producer||'?')+'</b>'));
+    box.appendChild(h('div','note','<b>Source:</b> '+esc(p.producer||'?')+(p.producerFile?' ('+esc(p.producerFile)+')':'')+
+      ' &middot; <b>sent</b> '+esc(when(p.producedAt))+' &middot; <b>project</b> '+esc(projName(p)||'—')+
+      ' &middot; unfactored reactions'+(via==='file'?' &middot; from a JSON file':'')));
+    box.appendChild(h('div','warnbox','Beam reactions give the pedestal <b>axial load P</b> (and a moment only at a fixed beam support). Shear Vx, Vy is zero unless you add it. '+
+      'Sign: P + = down in both tools (no sign change); uplift arrives as negative P. Values are applied unfactored to the chosen load-type rows; this tool’s own ASCE 7-16 combinations then apply.'));
+    if(chk.warn.length) box.appendChild(h('div','warnbox',chk.warn.map(esc).join('<br>')));
+    if(p.notes && p.notes.length){
+      var nb=h('details'); nb.appendChild(h('summary',null,'Sender notes ('+p.notes.length+')'));
+      nb.appendChild(h('div','note',p.notes.map(function(n){ return '&bull; '+esc(n); }).join('<br>'))); nb.open=true; box.appendChild(nb);
+    }
+    var g=h('div'); g.style.cssText='display:flex;gap:16px;flex-wrap:wrap;align-items:center;margin:8px 0';
+    var sl=h('label',null,'<b>Beam support</b> '); var ss=document.createElement('select'); ss.id='bxMrSup';
+    chk.sups.forEach(function(s,i){ var op=document.createElement('option'); op.value=i; op.textContent=s.id+(isNum(s.x)?' (x = '+f2(s.x)+' ft'+(s.support?', '+s.support:'')+')':''); ss.appendChild(op); });
+    sl.appendChild(ss); g.appendChild(sl);
+    var pl=h('label',null,'<b>Target pedestal</b> '); var ps=document.createElement('select'); ps.id='bxMrPed';
+    state.peds.forEach(function(pd,i){ var op=document.createElement('option'); op.value=i; op.textContent=pd.label+' (x = '+pd.x+', y = '+pd.y+' ft)'; ps.appendChild(op); });
+    pl.appendChild(ps); g.appendChild(pl);
+    box.appendChild(g);
+    var tw=h('div'); box.appendChild(tw);
+    var axw=h('div'); axw.style.margin='6px 0'; box.appendChild(axw);
+    var md=h('div'); md.style.margin='6px 0';
+    md.innerHTML='<b>Existing loads in the target rows:</b> '+
+      '<label><input type="radio" name="bxMrMode" id="bxMrRep" checked> replace</label> '+
+      '<label><input type="radio" name="bxMrMode" id="bxMrAdd"> add</label> '+
+      '<span class="note">(only P, and the moment component if one is imported)</span><br>'+
+      '<label><input type="checkbox" id="bxMrZero"> also set the other components (Vx, Vy and the other moments) of the target rows to 0</label>';
+    box.appendChild(md);
+    var sum=h('div'); box.appendChild(sum);
+    var row=h('div'); row.style.cssText='display:flex;gap:8px;justify-content:flex-end;margin-top:10px;border-top:1px solid #ccc;padding-top:8px';
+    var ca=h('button',null,'Cancel'); var go=h('button',null,'<b>Import</b>'); go.id='bxMrGo';
+    row.appendChild(ca); row.appendChild(go); box.appendChild(row);
+    var sels={}, axSel=null;
+    function drawRows(){
+      var s=chk.sups[o.sup]; tw.innerHTML=''; sels={};
+      var t=h('table','tbl');
+      t.innerHTML='<tr><th>From '+esc(p.producer||'sender')+'</th><th>P = V (kips, + down)</th><th>M (kip-ft)</th><th>Into pedestal row</th></tr>';
+      s.rows.forEach(function(row){
+        var tr=h('tr');
+        tr.appendChild(h('td',null,esc(row.label)));
+        tr.appendChild(h('td',null,f2(row.V,3)));
+        tr.appendChild(h('td',null,Math.abs(row.M)>1e-9?f2(row.M,3):'0'));
+        var td=h('td'), se=document.createElement('select'); se.dataset.key=row.key;
+        TYPES.concat(['']).forEach(function(t2){ var op=document.createElement('option'); op.value=t2; op.textContent=t2?t2+' — '+TYPE_DESC[t2]:'do not import'; se.appendChild(op); });
+        se.value=o.map[row.key]||''; td.appendChild(se); tr.appendChild(td); sels[row.key]=se;
+        t.appendChild(tr);
+      });
+      tw.appendChild(t);
+      var hasM=s.rows.some(function(r2){ return Math.abs(r2.M)>1e-9; });
+      axw.innerHTML=''; axSel=null;
+      if(hasM){
+        axw.appendChild(h('span',null,'<b>Fixed-support moment.</b> The beam (from its first support toward its last) runs toward footing '));
+        axSel=document.createElement('select'); axSel.id='bxMrAxis';
+        Object.keys(AXIS).forEach(function(k){ var op=document.createElement('option'); op.value=k; op.textContent=AXIS[k].lbl; axSel.appendChild(op); });
+        axSel.value=o.axis; axw.appendChild(axSel);
+        axw.appendChild(h('div','note','The beam tool sends M + = counter-clockwise in the beam elevation. A CCW moment at the pedestal top shifts the soil resultant back along the beam, so My = −M when the beam runs toward +x (this tool: +My shifts the resultant toward +x).'));
+      } else axw.appendChild(h('div','note','No moment at this support (pin or roller): only P is imported.'));
+    }
+    function read(){
+      o.sup=+ss.value; o.ped=+ps.value;
+      Object.keys(sels).forEach(function(k){ o.map[k]=sels[k].value; });
+      if(axSel) o.axis=axSel.value;
+      o.mode=document.getElementById('bxMrAdd').checked?'add':'replace';
+      o.zeroOther=document.getElementById('bxMrZero').checked;
+      return o;
+    }
+    function refresh(){
+      read();
+      var r=plan(p,chk,o), x='';
+      if(r.err.length) x+='<div class="warnbox" style="color:#b71c1c;font-weight:bold">'+r.err.map(esc).join('<br>')+'</div>';
+      var ped=state.peds[o.ped];
+      x+='<div style="margin:6px 0"><b>Will change</b> (pedestal '+esc(ped?ped.label:'?')+', unfactored): '+(r.changes.length? r.changes.map(function(c){
+        return c.row+' '+c.field+': '+f2(c.from,3)+' → <b>'+f2(c.to,3)+'</b> '+(c.field==='Mx'||c.field==='My'?'kip-ft':'kips'); }).join('; ') : 'nothing')+
+        '<br><b>Also recorded:</b> the source (producer and time) in this project, shown above the inputs and in the printed report.</div>';
+      if(r.warn.length) x+='<div class="warnbox">'+r.warn.map(esc).join('<br>')+'</div>';
+      sum.innerHTML=x; go.disabled=!!r.err.length;
+      return r;
+    }
+    drawRows();
+    ss.addEventListener('change',function(){ o.sup=+ss.value; o.map=defaultMap(chk.sups[o.sup]); drawRows(); refresh(); });
+    box.addEventListener('change',function(e){ if(e.target!==ss) refresh(); });
+    ca.addEventListener('click',function(){ ov.remove(); });
+    go.addEventListener('click',function(){
+      var r=apply(p,chk,read(),via);
+      if(r.err.length){ refresh(); return; }
+      ov.remove();
+      buildPedCards(); saveAuto(); recalc();
+      refreshBar();
+    });
+    document.body.appendChild(ov);
+    refresh();
+    return {overlay:ov, opts:o, chk:chk, refresh:refresh, drawRows:drawRows};
+  }
+
+  function sourceLine(){
+    var s=state && state.bxSrc && state.bxSrc.memberReactions; if(!s) return '';
+    return 'Loads on '+(s.pedestal||'?')+' ('+(s.rows||[]).map(function(x){ return x.row; }).filter(function(v,i,a){ return a.indexOf(v)===i; }).join(', ')+
+      ') from '+(s.producer||'?')+' support '+(s.support||'?')+', '+when(s.producedAt)+
+      ((s.project&&(s.project.name||typeof s.project==='string'))?' ('+(s.project.name||s.project)+')':'')+(s.via==='file'?', via JSON file':'')+
+      (s.mode==='add'?', added to existing':'');
+  }
+  function refreshBar(){
+    var nd=document.getElementById('bxMrNew'); if(nd) nd.style.display=BridgeXfer.isNew(CH,RID)?'inline':'none';
+    var sl=document.getElementById('bxMrSrc'); if(sl) sl.textContent=sourceLine();
+  }
+  window.bxPullMemberReactions=function(){
+    var r=BridgeXfer.read(CH,SCHEMA,MAXV);
+    if(!r.ok){ alert('Pull from Steel Beam: '+r.error+(r.empty?'\n\nIn Steel Beam Design, click "Send to other tools" first.':'')); return null; }
+    return openDialog(r.payload,'pull');
+  };
+  window.bxImportMemberReactions=function(ev){
+    var f=ev && ev.target && ev.target.files && ev.target.files[0]; if(!f) return;
+    BridgeXfer.importFile(f,SCHEMA,MAXV,function(r){
+      if(!r.ok){ alert('Import hand-off: '+r.error); return; }
+      openDialog(r.payload,'file');
+    });
+    ev.target.value='';
+  };
+  window.sfMrSourceLine=sourceLine;
+  window.bxMr={check:check,plan:plan,apply:apply,defaults:defaults,openDialog:openDialog,sourceLine:sourceLine,refreshBar:refreshBar};
+  refreshBar();
+  window.addEventListener('focus',refreshBar);
+  window.addEventListener('storage',refreshBar);
+  setInterval(refreshBar,2000);
+})();
+</script>
+  ```
+- **Saved data:** no existing key or format changed (`sfd_auto`, `sfd_projects`, the JSON export). New optional field `state.bxSrc.memberReactions` (kept by `Object.assign(defaultState(), saved)`). New key: only `bridgeSuite.v1.memberReactions.adopted.spreadFooting`.
+- **Check case:** default Steel Beam project, support A → Ped 2: D.P 150 → **2.000**, L.P 80 → **4.000** kips; S (20) and Wx (Vx 8) untouched because the beam's S and W reactions are 0. Fixed–fixed variant, support A → Ped 1: M_D = −6.667 kip·ft → D.My = **+6.667** (beam toward +x); wind −20 psf → Wx.P = **−2.000** (uplift).
+- **How verified:** every plain inline script of the three files passes `node --check` (no JSX in these files). jsdom end-to-end test with one shared localStorage stub (56 assertions, all pass): the default Steel Beam project is sent through the real dialog (`bxSendMemberReactions('send')` → Send), then pulled in BasePlateAnchorDesigner and Spread Footing through their real dialogs and Import buttons; inputs asserted equal to the mapped values; export (`Export hand-off (JSON)` blob) re-imported through `Import hand-off (JSON)` in both receivers; wrong `_schema`, `schemaVersion: 2` (pull and file), `factored: true`, unit `kN`, non-finite V, no supports, and corrupt JSON are all refused with no change. No-result-change check: with no hand-off present, original (origin/main) and modified files give byte-identical results on the default state (Steel Beam `computeAll()` for the default beam and a 2-span pin/pin/fixed beam with wind and snow, plus the rendered tab text; BasePlate `allChecks()`, `generateCombos()` and the print report; Spread Footing `computeAll()`, `computePhase2()` and the print header).
+- **Other copies of this code:** the receiver logic (`check`, unit tables) is duplicated in BasePlateAnchorDesigner.html (CLAUDE.md §3). BridgeXfer v1 unchanged.
+- **Open items:** the tool has no seismic (E) load type, so E reactions are not imported.
+
 ## Open items (not changed)
 - **O1. Vesić inclination exponent m uses nominal B/L, not B'/L'.** Anchor: `const mxm=(2+B/L)/(1+B/L)`. Using B'/L' is the more common form (AASHTO 10.6.3.1.2a uses B'/L'). This changes bearing capacity and needs a decision. Question: should m use the effective B'/L'?
 - **O2. The depth factors dq/dc are always applied.** AASHTO 10.6.3.1.2a and common practice drop them when the soil above the base is not competent or may be removed. Recommendation: add a "use depth factors" option, default on to keep the current results. Needs a decision on the default.
