@@ -429,6 +429,10 @@ dialog h3{margin-top:0;}
     <button id="btnCompare" title="Compare two saved projects (inputs + D/C side by side)">Compare…</button>
     <button id="btnSelfTest" title="Re-run the built-in validation benchmark through the live engine">Self-Test</button>
     <button id="btnOpenEDM" title="Open the Elastomeric Bearing Design Module and hand off geometry, loads and thermal movement">↗ Open EDM (Bearing Design)</button>
+    <button id="axh-pull" title="Pull the abutment loads sent by Bridge Substructure Loading (asks first; nothing changes until you apply)">Pull from SubLoads<span id="axh-new" class="axh-new" hidden> ● new data</span></button>
+    <button id="axh-imp" title="Import an abutmentLoads hand-off JSON file, or a SubLoads &quot;Export abutments&quot; file (asks first)">Import hand-off (JSON)</button>
+    <input type="file" id="axh-file" accept=".json,application/json" style="display:none">
+    <span id="axh-src" class="axh-src"></span>
     <span class="spacer"></span>
     <span id="fpBadge" title="Fingerprint of the current input set — printed on the report so a reviewer can confirm the PDF matches these exact inputs" style="font-size:0.8rem;color:#555;border:1px dashed #bbb;border-radius:3px;padding:1px 7px;"></span>
     <span id="saveStatus"></span>
@@ -4737,6 +4741,306 @@ function init(){
   setTimeout(()=>{ try{ runSelfTest(); recalcAll(); }catch(e){ console.warn("self-test:",e); } },1200);
 }
 document.addEventListener("DOMContentLoaded",init);
+</script>
+<script>
+/* ---------- SubLoads abutment loads hand-off (HANDOFF.md §4.5, channel abutmentLoads) ----------
+   Toolbar: "Pull from SubLoads" (new-data marker) and "Import hand-off (JSON)" (also reads a SubLoads
+   "Export abutments" file). Nothing is applied on page load. The dialog shows the source, lets the user
+   pick the abutment and the groups to import, shows every input it will overwrite (current -> new) and
+   every field it does not use, and applies only after "Apply". Values go into the existing inputs only;
+   no calculation changes. The source is kept in the new optional field S.subloadsSrc, shown in the
+   toolbar and printed in the report. Uses BridgeXfer v1 (top of this file). */
+(function(){
+  const CH='abutmentLoads', SCH='bridge-abutment-loads', RID='abutment';
+  const BX=()=>window.BridgeXfer;
+  const fin=Number.isFinite, r3=v=>Math.round(v*1000)/1000;
+  const when=iso=>{ const d=new Date(iso); return isNaN(d)?String(iso||"?"):d.toLocaleString(); };
+  const nfmt=v=>v===undefined||v===null||v===""?"—":(typeof v==="number"?String(r3(v)):String(v));
+  let DLG=null;
+
+  /* accept the envelope payload, or a raw SubLoads "Export abutments" file (schema subloads-abutment-v1) */
+  function normalize(p){
+    if(p && !p._schema && p.schema==="subloads-abutment-v1"){
+      return Object.assign({}, p, { _schema:SCH, schemaVersion:1, producer:"Bridge Substructure Loading (Export abutments file)", producerFile:"Bridge Substructure Loading.html",
+        producedAt:p.exported||"", project:{ name:(p.project&&p.project.name)||"", bridgeId:"" }, meta:p.project,
+        units:Object.assign({ bearingPad:"in", shearModulus:"ksi" }, p.units||{}), factored:false, perGirder:true, _raw:true,
+        notes:["Read from a SubLoads \"Export abutments\" file (subloads-abutment-v1): unfactored by definition of that format."] });
+    }
+    return p;
+  }
+  const isPGV=o=>o&&fin(o.P)&&fin(o.Vx)&&fin(o.Vy);
+  const arrN=(a,n)=>Array.isArray(a)&&a.length===n&&a.every(v=>typeof v==="number"&&fin(v));
+  const arrG=(a,n)=>Array.isArray(a)&&a.length===n&&a.every(isPGV);
+  function hardOK(path,v){ const h=(typeof VALID!=="undefined"&&VALID[path])?VALID[path].hard:null; return fin(v)&&(!h||(v>=h[0]&&v<=h[1])); }
+
+  /* validate the payload; returns {err} or {abuts:[...], bad:[...]} */
+  function check(p){
+    if(!p||typeof p!=="object") return { err:"not a hand-off object" };
+    if(p._schema!==SCH) return { err:"wrong data type ("+(p._schema||p.schema||"none")+"), expected "+SCH };
+    if(!(p.schemaVersion<=1)) return { err:"newer format (v"+p.schemaVersion+") than this tool supports (v1)" };
+    if(p.factored!==false) return { err:p.factored===true?"the loads are factored; the calculator needs unfactored reactions":"the hand-off does not state that the loads are unfactored (factored:false)" };
+    if(p.perGirder===false) return { err:"the reactions are not per girder" };
+    const u=p.units||{}, fu=String(u.force||"").trim().toLowerCase(), lu=String(u.length||"").trim().toLowerCase(), pu=String(u.bearingPad||"in").trim().toLowerCase();
+    if(fu!=="kip"&&fu!=="kips") return { err:"force unit \""+(u.force||"not stated")+"\" is not kip; the calculator works in kip and does not convert" };
+    if(lu!=="ft") return { err:"length unit \""+(u.length||"not stated")+"\" is not ft; the calculator works in ft and does not convert" };
+    if(pu!=="in") return { err:"bearing pad unit \""+u.bearingPad+"\" is not in" };
+    if(!Array.isArray(p.abutments)||!p.abutments.length) return { err:"there are no abutments in the hand-off" };
+    const abuts=[], bad=[];
+    p.abutments.forEach((a,k)=>{ const nm=String((a&&a.name)||("Abutment "+(k+1)));
+      if(!a||a.error){ bad.push(nm+": "+((a&&a.error)||"empty")); return; }
+      const e=parseAbut(a,p); if(e.err) bad.push(nm+": "+e.err); else abuts.push(e); });
+    if(!abuts.length) return { err:"no usable abutment: "+bad.join("; ") };
+    return { abuts, bad };
+  }
+  function parseAbut(a,p){
+    const gs=a.girders, L=a.loadCases||{}, nb=Array.isArray(gs)?gs.length:0;
+    if(!nb) return { err:"no girders" };
+    const y=gs.map(g=>g&&+g.y); if(!y.every(fin)) return { err:"a girder offset y is not a number" };
+    if(!arrN(L.DC1,nb)||!arrN(L.DC2,nb)||!arrN(L.DW,nb)) return { err:"DC1/DC2/DW are missing or not numbers for every girder" };
+    const LL=L.LL||{};
+    if(!arrN(LL.concurrentForMaxSeatTotal,nb)||!arrN(LL.envelopeMax,nb)) return { err:"LL+IM values are missing or not numbers" };
+    const o={ name:String(a.name), a, nb, y, L, end:a.end==="end"?"end":"begin", warns:[], gerr:{} };
+    // optional groups: a bad group is disabled with its reason, not the whole abutment
+    o.br=L.BR&&arrG(L.BR.girders,nb)?L.BR.girders:null; if(!o.br) o.gerr.br="no valid BR values";
+    o.tu=L.TU&&arrG(L.TU.rise,nb)&&arrG(L.TU.fall,nb)?L.TU:null; if(!o.tu) o.gerr.tu="no valid TU values";
+    o.sh=L.SH==null?null:(arrG(L.SH,nb)?L.SH:"bad"); if(o.sh===null) o.gerr.crsh="SubLoads has no creep/shrinkage case for this abutment"; else if(o.sh==="bad"){ o.sh=null; o.gerr.crsh="SH values are not valid numbers"; }
+    const W=L.WS||{}; o.wsC=W.III&&Array.isArray(W.III.cases)&&W.III.cases.length&&W.III.cases.every(c=>arrG(c.girders,nb))?W.III.cases:null;
+    if(!o.wsC) o.gerr.ws="no valid Strength III wind cases";
+    o.wsGov=L.WSgoverningStrIII&&fin(+L.WSgoverningStrIII.index)&&o.wsC&&o.wsC[+L.WSgoverningStrIII.index]?+L.WSgoverningStrIII.index:0;
+    o.spd={ III:W.III&&+W.III.speedMph, V:W.V&&+W.V.speedMph, SI:W.SI&&+W.SI.speedMph };
+    o.spdOK=[o.spd.III,o.spd.V,o.spd.SI].every(v=>fin(v)&&v>0);
+    o.wlC=L.WL&&Array.isArray(L.WL.cases)&&L.WL.cases.length&&L.WL.cases.every(c=>arrG(c.girders,nb))?L.WL.cases:null;
+    if(!o.wlC) o.gerr.wl="no valid wind-on-live-load cases";
+    o.wlGov=o.wlC&&L.WL.governing&&o.wlC[+L.WL.governing.index]?+L.WL.governing.index:0;
+    if(nb<2||nb>13) o.gerr.layout="the calculator takes 2 to 13 beams; SubLoads sent "+nb;
+    // geometry (ft) mapped to the calculator's names
+    const G=a.geometry||{}, E=G.elevations||{}, ci=a.calculatorInput||{}, cg=ci.geom||{};
+    const span=fin(+cg.spanL)?+cg.spanL:(p.bridge&&Array.isArray(p.bridge.spans)&&p.bridge.spans.length?+(o.end==="end"?p.bridge.spans[p.bridge.spans.length-1]:p.bridge.spans[0]):NaN);
+    o.geom=[["geom.hbw",+G.backwallHeight,"Backwall height h_bw","ft"],["geom.tbw",+G.backwallThickness,"Backwall thickness t_bw","ft"],
+      ["geom.hstem",+G.stemHeight,"Stem height","ft"],["geom.tst",+G.stemThickness,"Stem thickness, top","ft"],["geom.tsb",+G.stemThickness,"Stem thickness, bottom (SubLoads stem is prismatic)","ft"],
+      ["geom.brgSetback",+G.stemThickness-(+G.bearingToStemFront)-(+G.backwallThickness),"Bearing setback from backwall front = t_stem − (bearing to stem front) − t_bw","ft"],
+      ["geom.Ltoe",+G.toe,"Toe length","ft"],["geom.Lheel",+G.heel,"Heel length","ft"],["geom.tf",+G.footingThickness,"Footing thickness","ft"],
+      ["geom.Lab",+G.stemLengthAlongSkew,"Wall length (along skew)","ft"],["geom.Lftg",+G.stemLengthAlongSkew,"Footing length (= SubLoads stem length along skew)","ft"],
+      ["geom.soilH",(+E.topOfBackwall)-(+E.topOfFooting),"Soil height over heel = top of backwall − top of footing","ft"],
+      ["geom.spanL",span,"Span length (adjacent span)","ft"],["geom.skew",+a.skewDeg,"Skew","deg"],
+      ["fnd.Df",(+E.ground)-(+E.bottomOfFooting),"Footing embedment D_f = ground − bottom of footing (passive)","ft"]];
+    if(ci.mat&&ci.mat.gc!=null) o.geom.push(["mat.gc",+ci.mat.gc,"Concrete unit weight","kcf"]);
+    if(p.bridge&&p.bridge.roadwayWidth!=null) o.geom.push(["longit.roadwayW",+p.bridge.roadwayWidth,"Clear roadway width (used only by the calculator's own BR)","ft"]);
+    const gBad=o.geom.filter(g=>!hardOK(g[0],g[1])).map(g=>g[2]+" = "+nfmt(g[1]));
+    if(gBad.length) o.gerr.geom="out of the calculator's accepted range or not a number: "+gBad.join("; ");
+    if(fin(+G.footingWidth)&&Math.abs((+G.toe)+(+G.stemThickness)+(+G.heel)-(+G.footingWidth))>0.01) o.warns.push("SubLoads footing width "+nfmt(+G.footingWidth)+" ft ≠ toe + stem + heel = "+nfmt((+G.toe)+(+G.stemThickness)+(+G.heel))+" ft; the calculator uses toe + stem + heel.");
+    const B=a.bearings||{};
+    o.brg=[["bearing.padL",+B.padLengthIn,"Pad length (along span)","in"],["bearing.padW",+B.padWidthIn,"Pad width (transverse)","in"],["bearing.G",+B.shearModulusKsi,"Elastomer shear modulus G","ksi"],["bearing.hrt",+B.rubberThicknessIn,"Total elastomer thickness h_rt","in"],["bearing.nBrgPerGird",1,"Bearings per girder (SubLoads: one per girder)",""]];
+    if(B.type!=="elastomeric") o.gerr.brg="SubLoads bearing type is "+(B.type||"not stated")+", not elastomeric";
+    else { const bb=o.brg.filter(g=>!hardOK(g[0],g[1])).map(g=>g[2]+" = "+nfmt(g[1])); if(bb.length) o.gerr.brg="out of range or not a number: "+bb.join("; "); }
+    o.As=ci.seismic?+ci.seismic.As:(L.EQ?+L.EQ.As:NaN);
+    if(!hardOK("seismic.As",o.As)) o.gerr.seis="no valid A_s";
+    o.dT=L.TU?[+L.TU.riseDegF,+L.TU.fallDegF]:[NaN,NaN];
+    if(!(hardOK("longit.dTrise",o.dT[0])&&hardOK("longit.dTfall",o.dT[1]))) o.gerr.therm="no valid temperature range";
+    [].concat(L.DC1,L.DC2,L.DW).forEach(v=>{ if(v<0&&!o._neg){ o._neg=1; o.warns.push("A negative (uplift) dead-load reaction is included."); } });
+    return o;
+  }
+
+  /* ---------- the groups the user can pick ---------- */
+  const GROUPS=[
+    ["layout","Girder layout: number of beams and offsets",true],
+    ["dc","DC per girder (DC1 + DC2)",true],["dw","DW per girder",true],["ll","LL+IM per girder",true],
+    ["ws","WS: wind on structure (Strength III case)",true],["wl","WL: wind on live load",true],
+    ["br","BR: braking (SubLoads share)",false],["tu","TU: uniform temperature (SubLoads share)",false],["crsh","CR/SH (SubLoads share)",false],
+    ["geom","Abutment geometry",true],["brg","Bearing pad",true],["seis","Seismic A_s",true],["therm","Temperature range ΔT rise / fall",false]];
+  const WHY={
+    layout:"Needed when the beam count or offsets differ; the reaction rows are per girder.",
+    dc:"DC1 (non-composite) and DC2 (composite) are summed: the calculator has one DC row and both take γDC.",
+    ll:"Total LL+IM bearing reactions per girder, with IM and multiple presence already included (not per lane). The calculator applies no IM, MPF or distribution of its own to these rows.",
+    ws:"P (the overturning couple and uplift), Vx (toward the span) and Vy, per girder. SubLoads already took this abutment's share, so the calculator's WS share is set to 100%.",
+    wl:"P, Vx and Vy per girder for the chosen case. The calculator's WS share (it applies to WS and WL) is set to 100%.",
+    br:"Off by default: the calculator can compute BR itself (HL-93, its own lanes and share). SubLoads' value is its stiffness share of the bridge's braking force, which can be much smaller or larger. If ticked: Vx only, BR share set to 100% and the calculator's own BR switched off.",
+    tu:"Off by default: the calculator can compute TU from its own pad shear. If ticked: Vx only, TU share set to 100% and the calculator's own TU switched off.",
+    crsh:"Off by default: the calculator can compute CR/SH from its own pad shear. If ticked: |Vx| of the SubLoads SH case, CR/SH share set to 100% and the calculator's own CR/SH switched off.",
+    geom:"Fills the I-1 geometry from the SubLoads abutment unit. Soil, backfill and water inputs are not sent and stay as they are.",
+    brg:"Elastomeric pad size and properties (used by the calculator's own TU/CR·SH pad shear and the seat checks).",
+    seis:"Site acceleration coefficient A_s only; the Extreme Event I on/off switch and the other seismic inputs are not changed.",
+    therm:"Only used by the calculator's own TU generator."};
+
+  function rxRow(t,c,vals){ return { lbl:t+" "+c+" (G1…G"+vals.length+")", paths:vals.map((_,i)=>"rx."+t+"."+i+"."+c), vals:vals.map(r3) }; }
+  function one(path,val,lbl){ return { lbl, paths:[path], vals:[val] }; }
+  function gsel(o,st){ return o.end==="end"&&st.ySys==="span"?-1:1; }   // transverse sign: +1 as sent, −1 mirrored
+  function tuSet(o,st){ const sx=a=>a.reduce((t,g)=>t+g.Vx,0); return st.tu==="rise"?o.tu.rise:st.tu==="fall"?o.tu.fall:(sx(o.tu.fall)>=sx(o.tu.rise)?o.tu.fall:o.tu.rise); }
+
+  /* plan: sections of {lbl, paths, vals} for the ticked groups */
+  function plan(o,st){
+    const on=k=>st.on[k]&&!o.gerr[k], sg=gsel(o,st), secs=[], L=o.L;
+    const add=(k,items)=>{ if(items.length) secs.push({ k, title:(GROUPS.find(g=>g[0]===k)||[k,k])[1], items }); };
+    if(on("layout")){ const ys=o.y.map(v=>r3(sg*v)), sp=ys.slice(1).map((v,i)=>r3(Math.abs(v-ys[i])));
+      add("layout",[one("beams.N",o.nb,"Number of beams N"),one("beams.mode","position","Position entry mode"),{ lbl:"Beam offsets from CL (ft)", paths:["beams.positions"], vals:[ys] },
+        { lbl:"Beam spacings (ft, for reference)", paths:["beams.spacings"], vals:[sp] },one("beams.eqSpacing",sp[0]||0,"Equal spacing (ft)"),one("beams.groupOff",0,"Group offset (ft)")]); }
+    if(on("dc")) add("dc",[rxRow("DC","P",L.DC1.map((v,i)=>v+L.DC2[i]))]);
+    if(on("dw")) add("dw",[rxRow("DW","P",L.DW)]);
+    if(on("ll")) add("ll",[rxRow("LL","P",st.ll==="env"?L.LL.envelopeMax:L.LL.concurrentForMaxSeatTotal)]);
+    if(on("ws")){ const g=o.wsC[st.ws].girders, it=[rxRow("WS","P",g.map(x=>x.P)),rxRow("WS","Vx",g.map(x=>x.Vx)),rxRow("WS","Vy",g.map(x=>sg*x.Vy))];
+      if(st.spd&&o.spdOK) it.push(one("factors.vWS3",o.spd.III,"Wind speed V for the WS inputs (Strength III), mph"),one("factors.vWS5",o.spd.V,"Wind speed, Strength V, mph"),one("factors.vWSsvc",o.spd.SI,"Wind speed, Service I, mph"));
+      add("ws",it); }
+    if(on("wl")){ const g=o.wlC[st.wl].girders; add("wl",[rxRow("WL","P",g.map(x=>x.P)),rxRow("WL","Vx",g.map(x=>x.Vx)),rxRow("WL","Vy",g.map(x=>sg*x.Vy))]); }
+    if(on("br")) add("br",[rxRow("BR","Vx",o.br.map(x=>x.Vx))]);
+    if(on("tu")) add("tu",[rxRow("TU","Vx",tuSet(o,st).map(x=>x.Vx))]);
+    if(on("crsh")) add("crsh",[rxRow("CRSH","Vx",o.sh.map(x=>Math.abs(x.Vx)))]);
+    if(on("geom")) add("geom",o.geom.map(g=>one(g[0],r3(g[1]),g[2]+" ("+g[3]+")")));
+    if(on("brg")) add("brg",o.brg.map(g=>one(g[0],r3(g[1]),g[2]+(g[3]?" ("+g[3]+")":""))));
+    if(on("seis")) add("seis",[one("seismic.As",r3(o.As),"Acceleration coefficient A_s")]);
+    if(on("therm")) add("therm",[one("longit.dTrise",r3(o.dT[0]),"Design temperature rise (°F)"),one("longit.dTfall",r3(o.dT[1]),"Design temperature fall (°F)")]);
+    // linked settings: SubLoads horizontal forces are already this abutment's share
+    const sh=[], d=S.dist||{}, lk=[];
+    if(on("br")) sh.push("shBR"); if(on("tu")) sh.push("shTU"); if(on("crsh")) sh.push("shCR"); if(on("ws")||on("wl")) sh.push("shWS");
+    if(sh.length){
+      if(d.model!=="manual"){ lk.push(one("dist.model","manual","Longitudinal distribution model"));
+        if(d.model==="fixed") ["shBR","shTU","shCR","shWS"].forEach(k=>{ if(sh.indexOf(k)<0&&+d[k]!==100) lk.push(one("dist."+k,100,"Share "+k.slice(2)+" (%) — keeps the fixed-bearing 100% for a load not imported")); }); }
+      sh.forEach(k=>{ if(+d[k]!==100||d.model!=="manual") lk.push(one("dist."+k,100,"Share "+k.slice(2)+" to this abutment (%)")); });
+    }
+    const Lg=S.longit||{};
+    [["br","computeBR"],["tu","computeTU"],["crsh","computeCRSH"]].forEach(([g,k])=>{ if(on(g)&&Lg[k]) lk.push(one("longit."+k,false,"Calculator's own "+g.toUpperCase()+" generator")); });
+    if(lk.length) secs.push({ k:"linked", title:"Linked calculator settings", items:lk });
+    return secs;
+  }
+
+  /* fields the calculator does not use, and why */
+  function unused(o,st){
+    const L=o.L, u=[];
+    u.push(["LL+IM "+(st.ll==="env"?"concurrent set (max total at the bridge seat)":"per-bearing envelope maxima")+", envelope minima, lanes loaded, multiple presence","the calculator has one LL+IM row; the other set is not concurrent with it, and IM / multiple presence are already inside the values"]);
+    u.push(["BR P (overturning couple) and Vy","the calculator's BR row is Vx only, applied at the bridge seat; it does not model the couple from the 6-ft application height [3.6.4]"]);
+    u.push(["CE (centrifugal force)",L.CE?"the calculator has no CE row; NOT imported, add it by hand if it matters":"none for this abutment"]);
+    if(o.wsC) u.push(["WS: "+(o.wsC.length-1)+" other Strength III cases, and the Strength V, Service I and Service IV sets","the calculator has one WS set (scaled to Strength V / Service I by (V_LS/V_III)² only when V_III is entered); SubLoads' 0.30 klf minimum and vertical uplift apply to Strength III only"]);
+    if(o.wlC) u.push(["WL: "+(o.wlC.length-1)+" other cases","the calculator has one WL set"]);
+    u.push(["TU Vy and the "+(st.tu==="rise"?"fall":st.tu==="fall"?"rise":"other (rise or fall)")+" case","the calculator's TU row is Vx only, one direction"]);
+    u.push(["FR (bearing friction)","the calculator has no FR row"]);
+    u.push(["SH P and Vy","the calculator's CR/SH row is Vx only"]);
+    u.push(["EQ (superstructure seismic force"+(L.EQ&&L.EQ.basis?", "+L.EQ.basis:"")+")","the calculator computes its own superstructure inertia A_s·(DC+DW)·share for Extreme Event I and its own seat connection force 0.10·(DC+DW); SubLoads' basis (3.10.9.2 0.15/0.25 or elastic) differs, so it is not imported"]);
+    u.push(["Approach slab reaction",L.approachSlab?"the calculator has no approach slab load; NOT imported":"none sent"]);
+    u.push(["Bearing fixity, type, height, pedestal, seat and girder elevations; girder stations; unit station","no matching calculator input (the calculator works from the bridge seat)"]);
+    u.push(["Footing width, deck / seat / ground elevations","the calculator derives B = toe + stem + heel and uses heights, not elevations"]);
+    u.push(["Bridge data: spans, skews of other units, girder spacings, deck width, design lanes, IM %","no matching input (roadway width is used, in the geometry group)"]);
+    u.push(["calculatorInput block","not read directly; the same values are mapped here from the load cases and geometry (it is used only for the concrete unit weight and A_s)"]);
+    u.push(["Earth pressure, soil, backfill, water","not sent; the calculator computes earth loads from its own soil inputs"]);
+    return u;
+  }
+
+  /* ---------- dialog ---------- */
+  function css(){ if(document.getElementById("axh-css")) return; const s=document.createElement("style"); s.id="axh-css";
+    s.textContent=".axh-new{color:#c62828;font-weight:700}.axh-src{font-size:.8rem;color:#555}"+
+      "#axh-ov{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:9999;display:flex;align-items:flex-start;justify-content:center;overflow:auto;padding:24px 8px}"+
+      "#axh-dlg{background:#fff;color:#1a1a1a;max-width:980px;width:100%;border-radius:6px;padding:14px 18px;box-shadow:0 6px 30px rgba(0,0,0,.3);font-size:.86rem}"+
+      "#axh-dlg h3{margin:0 0 6px 0;font-size:1.05rem}#axh-dlg h4{margin:12px 0 4px 0;font-size:.92rem}#axh-dlg table{border-collapse:collapse;width:100%;margin:4px 0}"+
+      "#axh-dlg td,#axh-dlg th{border:1px solid #ddd;padding:2px 6px;text-align:left;vertical-align:top}#axh-dlg .axh-grp{margin:3px 0}#axh-dlg .axh-why{color:#555;font-size:.8rem;margin-left:22px}"+
+      "#axh-dlg .axh-err{color:#c62828}#axh-dlg .axh-warn{color:#b26a00}#axh-dlg .axh-btns{display:flex;gap:8px;justify-content:flex-end;margin-top:12px}#axh-dlg select{max-width:100%}"+
+      "@media print{#axh-pull,#axh-imp,#axh-ov{display:none !important}}";
+    document.head.appendChild(s); }
+  function open(p){
+    p=normalize(p); const c=check(p);
+    if(c.err){ alert("Cannot use this hand-off: "+c.err); return; }
+    const o0=c.abuts[0], st={ ai:0, ySys:"sent", ll:"conc", ws:o0.wsGov, wl:o0.wlGov, tu:"gov", spd:+(S.factors&&S.factors.vWS3)>0, on:{} };
+    GROUPS.forEach(g=>{ st.on[g[0]]=g[2]; }); if(!(o0.As>0)) st.on.seis=false;
+    DLG={ p, c, st }; css(); render();
+  }
+  function close(){ const ov=document.getElementById("axh-ov"); if(ov) ov.remove(); DLG=null; }
+  function cellTxt(v){ return Array.isArray(v)?v.map(nfmt).join(", "):nfmt(v); }
+  function render(){
+    const { p, c, st }=DLG, o=c.abuts[st.ai], secs=plan(o,st);
+    let h="<h3>Pull abutment loads from SubLoads</h3>";
+    h+="<div><b>From:</b> "+esc(p.producer||"?")+" — "+esc(when(p.producedAt))+"<br><b>Project:</b> "+esc((p.project&&p.project.name)||"(none)")+((p.project&&p.project.bridgeId)?" ("+esc(p.project.bridgeId)+")":"")+
+      " &nbsp;·&nbsp; <b>This calculator:</b> "+esc(S.proj&&S.proj.name||"(none)")+"<br><b>Basis:</b> unfactored, kip / ft, per girder; Vx + toward the span (the calculator's + toward the toe), P + down.</div>";
+    const notes=(p.notes||[]).concat(o.a.notes||[]);
+    if(notes.length) h+="<h4>Sender notes</h4><ul>"+notes.map(n=>"<li>"+esc(n)+"</li>").join("")+"</ul><div class='axh-why'>Here, shares and the calculator's own BR / TU / CR·SH generators change only for the groups you tick below.</div>";
+    if(c.bad.length) h+="<div class='axh-warn'>Not usable: "+esc(c.bad.join("; "))+"</div>";
+    h+="<h4>Choices</h4><table>";
+    h+="<tr><td>Abutment</td><td><select data-axh='ai'>"+c.abuts.map((a,i)=>"<option value='"+i+"'"+(i===st.ai?" selected":"")+">"+esc(a.name)+" ("+a.end+" of bridge, "+a.nb+" girders)</option>").join("")+"</select></td></tr>";
+    h+="<tr><td>Transverse +Y (girder offsets and wind V<sub>y</sub>)</td><td><select data-axh='ySys'><option value='sent'"+(st.ySys==="sent"?" selected":"")+">+ to the left looking ahead station (as sent)</option><option value='span'"+(st.ySys==="span"?" selected":"")+">+ to the left looking from the backfill toward the span</option></select>"+(o.end==="begin"?" <span class='axh-why'>(the same for this abutment)</span>":" <span class='axh-why'>(mirrors y and V<sub>y</sub> for this abutment)</span>")+"</td></tr>";
+    h+="<tr><td>LL+IM set</td><td><select data-axh='ll'><option value='conc'"+(st.ll==="conc"?" selected":"")+">Concurrent set for the maximum total at the bridge seat (SubLoads' choice for this calculator)</option><option value='env'"+(st.ll==="env"?" selected":"")+">Per-bearing maxima (envelope, not concurrent: conservative for the total)</option></select></td></tr>";
+    if(o.wsC) h+="<tr><td>WS case (Strength III, "+nfmt(o.spd.III)+" mph)</td><td><select data-axh='ws'>"+o.wsC.map((x,i)=>"<option value='"+i+"'"+(i===st.ws?" selected":"")+">"+esc(x.name)+(i===o.wsGov?" (largest horizontal force)":"")+"</option>").join("")+"</select><br><label><input type='checkbox' data-axh='spd'"+(st.spd?" checked":"")+(o.spdOK?"":" disabled")+"> Also set the calculator's wind speeds from SubLoads: V<sub>III</sub> = "+nfmt(o.spd.III)+", V<sub>V</sub> = "+nfmt(o.spd.V)+", V<sub>Service I</sub> = "+nfmt(o.spd.SI)+" mph</label><div class='axh-why'>Unticked, V<sub>III</sub> stays "+nfmt(+S.factors.vWS3||0)+" mph"+(+S.factors.vWS3>0?" — the imported WS would then be scaled with the wrong base speed":" (0 = the Strength III WS is used unscaled in Strength V and Service I: conservative)")+". Ticked by default only when the calculator already scales WS.</div></td></tr>";
+    if(o.wlC) h+="<tr><td>WL case</td><td><select data-axh='wl'>"+o.wlC.map((x,i)=>"<option value='"+i+"'"+(i===st.wl?" selected":"")+">"+esc(x.name)+(i===o.wlGov?" (largest horizontal force)":"")+"</option>").join("")+"</select></td></tr>";
+    if(o.tu) h+="<tr><td>TU case</td><td><select data-axh='tu'><option value='gov'"+(st.tu==="gov"?" selected":"")+">Larger push toward the span (SubLoads' choice)</option><option value='rise'"+(st.tu==="rise"?" selected":"")+">Rise ("+nfmt(+o.L.TU.riseDegF)+" °F)</option><option value='fall'"+(st.tu==="fall"?" selected":"")+">Fall ("+nfmt(+o.L.TU.fallDegF)+" °F)</option></select></td></tr>";
+    h+="</table><h4>Groups to import</h4>";
+    GROUPS.forEach(([k,lab])=>{ const dis=o.gerr[k]; h+="<div class='axh-grp'><label><input type='checkbox' data-axh-g='"+k+"'"+(st.on[k]&&!dis?" checked":"")+(dis?" disabled":"")+"> <b>"+esc(lab)+"</b></label>"+(dis?" <span class='axh-err'>— not available: "+esc(dis)+"</span>":"")+"<div class='axh-why'>"+esc(WHY[k]||"")+"</div></div>"; });
+    const nMis=(st.on.layout&&!o.gerr.layout)?0:(+S.beams.N!==o.nb?1:0), rxOn=["dc","dw","ll","ws","wl","br","tu","crsh"].some(k=>st.on[k]&&!o.gerr[k]);
+    const errs=[]; if(nMis&&rxOn) errs.push("The calculator has "+S.beams.N+" beams and SubLoads sent "+o.nb+": tick \"Girder layout\" to import per-girder reactions.");
+    const warns=o.warns.slice();
+    if((st.on.ws&&!o.gerr.ws)!==(st.on.wl&&!o.gerr.wl)) warns.push("The calculator uses one longitudinal share for WS and WL; it is set to 100% for the imported one, so the other is also taken at 100%.");
+    if(st.on.ws&&!o.gerr.ws&&!st.spd&&+S.factors.vWS3>0&&Math.abs(+S.factors.vWS3-o.spd.III)>1e-6) warns.push("The calculator's V_III is "+nfmt(+S.factors.vWS3)+" mph but the imported WS is at "+nfmt(o.spd.III)+" mph: tick \"Also set the calculator's wind speeds\".");
+    if(!(st.on.layout&&!o.gerr.layout)&&rxOn&&!nMis) warns.push("Girder layout not imported: the calculator's own beam offsets are kept for the P·y moments.");
+    if(st.on.layout&&!o.gerr.layout&&S.piles&&S.piles.enabled) warns.push("Pile layout is not changed; check it against the imported beam offsets and geometry.");
+    if(warns.length) h+="<h4>Warnings</h4><ul>"+warns.map(w=>"<li class='axh-warn'>"+esc(w)+"</li>").join("")+"</ul>";
+    if(errs.length) h+="<ul>"+errs.map(w=>"<li class='axh-err'><b>"+esc(w)+"</b></li>").join("")+"</ul>";
+    h+="<h4>This will overwrite (current → new)</h4>";
+    if(!secs.length) h+="<p>Nothing selected.</p>";
+    secs.forEach(s=>{ h+="<table><tr><th colspan='3'>"+esc(s.title)+"</th></tr>"+s.items.map(it=>{ const cur=it.paths.length===1?getPath(S,it.paths[0]):it.paths.map(q=>getPath(S,q)), nv=it.paths.length===1?it.vals[0]:it.vals;
+      return "<tr><td style='width:32%'>"+esc(it.lbl)+"</td><td>"+esc(cellTxt(cur))+"</td><td><b>"+esc(cellTxt(nv))+"</b></td></tr>"; }).join("")+"</table>"; });
+    h+="<h4>Sent but not used</h4><table><tr><th>Field</th><th>Why</th></tr>"+unused(o,st).map(r=>"<tr><td>"+esc(r[0])+"</td><td>"+esc(r[1])+"</td></tr>").join("")+"</table>";
+    h+="<div class='axh-btns'><button type='button' id='axh-cancel'>Cancel</button><button type='button' id='axh-apply' class='primary'"+(errs.length||!secs.length?" disabled":"")+">Apply to the calculator</button></div>";
+    let ov=document.getElementById("axh-ov");
+    if(!ov){ ov=document.createElement("div"); ov.id="axh-ov"; ov.innerHTML="<div id='axh-dlg' role='dialog' aria-modal='true' aria-label='Pull abutment loads from SubLoads'></div>"; document.body.appendChild(ov); }
+    ov.querySelector("#axh-dlg").innerHTML=h;
+  }
+  function apply(){
+    const { p, c, st }=DLG, o=c.abuts[st.ai], secs=plan(o,st);
+    if(!secs.length) return;
+    if(typeof pushUndo==="function") pushUndo("subloads-handoff:"+Date.now());
+    const items=[].concat.apply([],secs.map(s=>s.items));
+    const isLay=it=>/^beams\./.test(it.paths[0]);
+    items.filter(isLay).forEach(it=>it.paths.forEach((q,i)=>setPath(S,q,Array.isArray(it.vals[i])?it.vals[i].slice():it.vals[i])));
+    migrate();                                                   // sizes the reaction matrix to N
+    items.filter(it=>!isLay(it)).forEach(it=>it.paths.forEach((q,i)=>setPath(S,q,it.vals[i])));
+    const grp=secs.filter(s=>s.k!=="linked").map(s=>s.k);
+    S.subloadsSrc={ producer:p.producer||"", producedAt:p.producedAt||"", project:(p.project&&p.project.name)||"", abutment:o.name, groups:grp,
+      choices:{ ll:grp.indexOf("ll")>=0?st.ll:null, ws:grp.indexOf("ws")>=0?o.wsC[st.ws].name:null, wl:grp.indexOf("wl")>=0?o.wlC[st.wl].name:null, tu:grp.indexOf("tu")>=0?st.tu:null,
+        ySign:o.end==="end"&&st.ySys==="span"?"mirrored (+ left looking from the backfill toward the span)":"as sent (+ left looking ahead station)", windSpeeds:grp.indexOf("ws")>=0&&st.spd&&o.spdOK }, appliedAt:new Date().toISOString() };
+    migrate(); buildInputs(); recalcAll(); scheduleSave(); if(typeof refreshProjHeader==="function") refreshProjHeader();
+    if(BX()&&p.producedAt&&!p._raw) BX().markAdopted(CH,RID,p.producedAt);
+    close(); paint();
+    const ss=document.getElementById("saveStatus"); if(ss) ss.textContent="loads pulled from SubLoads ("+o.name+")";
+  }
+
+  /* ---------- toolbar state, report line ---------- */
+  const GL={ layout:"layout", dc:"DC", dw:"DW", ll:"LL+IM", ws:"WS", wl:"WL", br:"BR", tu:"TU", crsh:"CR/SH", geom:"geometry", brg:"bearing", seis:"A_s", therm:"ΔT" };
+  function srcText(){ const s=S.subloadsSrc; if(!s||!s.producedAt&&!s.producer) return "";
+    return "Loads from "+(s.producer||"SubLoads")+", "+when(s.producedAt)+(s.project?" ("+s.project+")":"")+": "+(s.abutment||"")+" — "+(s.groups||[]).map(g=>GL[g]||g).join(", "); }
+  function paint(){
+    const n=document.getElementById("axh-new"); if(n) n.hidden=!(BX()&&BX().isNew(CH,RID));
+    const s=document.getElementById("axh-src"); if(s) s.textContent=srcText();
+  }
+  window.addEventListener("storage",paint); window.addEventListener("focus",paint);
+  if(typeof recalcAll==="function"){ const rc=recalcAll; recalcAll=function(){ const r=rc.apply(this,arguments); try{ paint(); }catch(e){} return r; }; }
+  if(typeof buildReport==="function"){ const br=buildReport; buildReport=async function(){ const r=await br.apply(this,arguments);
+    try{ const t=srcText(), sub=document.querySelector("#report .rpt-sub"); if(t&&sub){ const s=S.subloadsSrc, ch=s.choices||{}, d=document.createElement("div"); d.className="rpt-sub"; d.id="axh-rpt-src";
+      d.textContent=t+". Choices: "+[ch.ll?"LL+IM "+(ch.ll==="env"?"per-bearing maxima":"concurrent set for the maximum at the seat"):"", ch.ws?"WS "+ch.ws+(ch.windSpeeds?", wind speeds from SubLoads":""):"", ch.wl?"WL "+ch.wl:"", ch.tu?"TU "+ch.tu:"", "transverse "+ch.ySign].filter(Boolean).join("; ")+".";
+      sub.parentNode.insertBefore(d,sub.nextSibling); } }catch(e){}
+    return r; }; }
+
+  document.addEventListener("click",ev=>{
+    const t=ev.target; if(!t||!t.closest) return;
+    if(t.closest("#axh-pull")){
+      if(!BX()){ alert("The hand-off helper is not available in this browser."); return; }
+      const r=BX().read(CH,SCH,1);
+      if(r.error){ alert(r.empty?"Nothing has been sent yet. In Bridge Substructure Loading, click \"Send to Abutment Calculator\" (or use \"Import hand-off (JSON)\")." :"Cannot use the SubLoads hand-off: "+r.error); return; }
+      open(r.payload); return; }
+    if(t.closest("#axh-imp")){ const f=document.getElementById("axh-file"); if(f) f.click(); return; }
+    if(t.id==="axh-cancel"){ close(); return; }
+    if(t.id==="axh-apply"){ apply(); return; }
+  });
+  document.addEventListener("change",ev=>{
+    const t=ev.target; if(!t) return;
+    if(t.id==="axh-file"){ const f=t.files&&t.files[0]; if(!f) return;
+      const fr=new FileReader(); fr.onload=()=>{ let p; try{ p=JSON.parse(fr.result); }catch(e){ alert("Import failed: the file is not valid JSON."); return; } open(p); };
+      fr.onerror=()=>alert("Import failed: could not read the file."); fr.readAsText(f); t.value=""; return; }
+    if(!DLG||!t.closest||!t.closest("#axh-dlg")) return;
+    ev.stopPropagation();
+    const st=DLG.st, k=t.getAttribute("data-axh"), g=t.getAttribute("data-axh-g");
+    if(g){ st.on[g]=t.checked; }
+    else if(k==="ai"){ st.ai=+t.value; const o=DLG.c.abuts[st.ai]; st.ws=o.wsGov; st.wl=o.wlGov; st.on.seis=o.As>0; }
+    else if(k==="spd"){ st.spd=t.checked; }
+    else if(k==="ws"||k==="wl"){ st[k]=+t.value; }
+    else if(k){ st[k]=t.value; }
+    render();
+  },true);
+  paint();
+})();
 </script>
 </body>
 </html>

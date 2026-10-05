@@ -443,3 +443,66 @@ Governing basis used for fixes: AASHTO LRFD Bridge Design Specifications, 10th E
 - **How verified:** `node --check` on every plain inline script (3). jsdom end-to-end run with a shared localStorage stub: real sender buttons in psbeam/stgirder, then this pull / import / apply code; 44 checks pass, including the refusals (wrong `_schema`, `schemaVersion` 2, corrupt file, corrupt stored payload, factored payload, non-numeric DC1, unknown force unit), the kN conversion, add mode, choosing between two producers, autosave and Save/Open. With no hand-off, every tab of every unit (64 renders) and the report basis rows are byte-identical to the old file (origin/main 6761b2f). `git diff` for this file is additions only.
 - **Other copies:** none (receiver code is only in this tool). BridgeXfer v1 unchanged.
 - **Open items:** the dialog's "Same position as the source" default applies one designed girder line to every girder of that position; the engineer decides whether that is appropriate (exterior girders usually carry different DC2/DW).
+
+## 2026-10-05 — PR: claude/conn-subloads-abutment (PR link added after merge)
+
+### F7. Send abutment loads to the abutment calculator (HANDOFF.md §4.5, channel `abutmentLoads`)   [feature: hand-off (no result change)]
+- **Where:** main script, directly after the "Export abutments" click handler. Anchor text: `document.addEventListener('click', e => { if (e.target.id === 'btn-abx') exportAbutments(); });`
+- **Problem:** none (feature). AUDIT S12 / D8: the `subloads-abutment-v1` export had no importer.
+- **Governing provision:** n/a. No formula, factor, default or unit changed. `abutExportData()` and the "Export abutments" file are unchanged.
+- **What it does:** two header buttons after "Export abutments": **Send to Abutment Calculator** (`BridgeXfer.publish('abutmentLoads', …)`) and **Export hand-off (JSON)** (`BridgeXfer.exportFile`). The payload is `abutExportData()` with its top-level fields kept and the envelope added: `_schema:"bridge-abutment-loads"`, `schemaVersion:1`, `producer:"Bridge Substructure Loading"`, `producerFile`, `project:{name, bridgeId}` (the export's `project` block moves to `meta`), `units` (the export's units plus `bearingPad:"in"`, `shearModulus:"ksi"`, `unitWeight:"kcf"`, `windSpeed:"mph"`, `temperature:"degF"`, `angle:"deg"`, `elevation:"ft"`), `factored:false`, `perGirder:true`, `imIncluded:true`, `dfIncluded:true`, `multiplePresenceIncluded:true`, `basis` and `notes` (the LL basis and the sign convention in words). Abutments that could not be exported are named in `notes`.
+- **Before:**
+```js
+document.addEventListener('click', e => { if (e.target.id === 'btn-abx') exportAbutments(); });
+```
+- **After:** that line, followed by:
+```js
+/* ---------- abutment loads hand-off (HANDOFF.md §4.5, channel abutmentLoads) ----------
+   "Send to Abutment Calculator" publishes the subloads-abutment-v1 export above (abutExportData, unchanged)
+   wrapped in the BridgeXfer envelope; "Export hand-off (JSON)" writes the same payload to a file.
+   The "Export abutments" file is unchanged. Nothing here changes a SubLoads result. */
+function abutHandoffPayload() {
+  const G = MODEL.G; if (!G || G.E.length) return { err: 'Fix the input errors on the Summary tab first.' };
+  if (!P.units.some(u => u.type === 'abut')) return { err: 'This bridge has no abutment units to send.' };
+  let j; try { j = abutExportData(); } catch (e) { return { err: 'The abutment export failed: ' + e.message }; }
+  const good = j.abutments.filter(a => !a.error);
+  if (!good.length) return { err: 'No abutment could be exported: ' + j.abutments.map(a => `${a.name}: ${a.error}`).join('; ') };
+  const sp = window.BridgeXfer && BridgeXfer.sharedProject ? BridgeXfer.sharedProject() : null;
+  const p = Object.assign({}, j, {
+    _schema: 'bridge-abutment-loads', schemaVersion: 1, producer: 'Bridge Substructure Loading', producerFile: 'Bridge Substructure Loading.html',
+    project: { name: P.meta.name || '', bridgeId: (sp && sp.bridgeId) || '' }, meta: j.project,
+    units: Object.assign({}, j.units, { bearingPad: 'in', shearModulus: 'ksi', unitWeight: 'kcf', windSpeed: 'mph', temperature: 'degF', angle: 'deg', elevation: 'ft' }),
+    factored: false, perGirder: true, imIncluded: true, dfIncluded: true, multiplePresenceIncluded: true,
+    basis: { LL: 'LL+IM bearing reactions per girder from the SubLoads lane search (all loaded lanes, IM and multiple presence included); not per lane', horizontal: 'BR, TU, CR/SH, WS, WL, FR, EQ are this abutment\'s stiffness share, split equally among the girders', signs: 'P + down; Vx + toward the span (toward the toe); Vy + left looking ahead station; y + left looking ahead station' },
+    notes: [
+      'Unfactored loads in kip; lengths in ft unless the field name says otherwise.',
+      'LL+IM values are total bearing reactions per girder with IM and multiple presence already included (not per lane).',
+      'Vx is + toward the span (toward the toe); Vy and girder offsets y are + to the left looking ahead station; P is + downward.',
+      'Horizontal forces are already this abutment\'s share (stiffness distribution in SubLoads), split equally among the girders.',
+      'Earth pressure, soil and backfill properties are not sent: the abutment calculator computes them.'].concat(j.abutments.filter(a => a.error).map(a => `${a.name} was not exported: ${a.error}`)) });
+  return { p, n: good.length };
+}
+(function patchAbxHandoff() {
+  const g = document.querySelector('.hdr-group'), ax = document.getElementById('btn-abx');
+  if (g && ax && !document.getElementById('btn-abx-send')) {
+    const mk = (id, txt, tip) => { const bt = document.createElement('button'); bt.type = 'button'; bt.className = 'btn'; bt.id = id; bt.textContent = txt; bt.title = tip; return bt; };
+    const s = mk('btn-abx-send', 'Send to Abutment Calculator', 'Send to other tools: publish the abutment loads (channel abutmentLoads) for "Pull from SubLoads" in the abutment design calculator');
+    const x = mk('btn-abx-hf', 'Export hand-off (JSON)', 'Write the abutmentLoads hand-off to a file, for "Import hand-off (JSON)" in the abutment design calculator');
+    g.insertBefore(x, ax.nextSibling); g.insertBefore(s, x);
+  }
+})();
+document.addEventListener('click', e => {
+  const id = e.target && e.target.id; if (id !== 'btn-abx-send' && id !== 'btn-abx-hf') return;
+  if (!window.BridgeXfer) return flash('The hand-off helper is not available in this browser.', 'fail');
+  const b = abutHandoffPayload(); if (b.err) return flash(b.err, 'fail');
+  if (id === 'btn-abx-hf') { const r = BridgeXfer.exportFile('abutmentLoads', Object.assign({}, b.p, { producedAt: new Date().toISOString() })); return r.error ? flash(r.error, 'fail') : flash(`Exported the abutment loads hand-off (${b.n} abutment${b.n > 1 ? 's' : ''}).`); }
+  const r = BridgeXfer.publish('abutmentLoads', b.p, 'Bridge Substructure Loading', 'Bridge Substructure Loading.html');
+  if (r.error) return flash(r.error, 'fail');
+  flash(`Sent ${b.n} abutment${b.n > 1 ? 's' : ''} to the abutment calculator. Open it and click "Pull from SubLoads".`);
+});
+```
+- **Mapping:** see `fixlog/abutment_calculator.md` F12 (receiver side).
+- **Check case:** default project (three spans 110/140/110 ft, 5 girders, skew 15°), Abut. 1, G1: DC1 43.6 + DC2 13.5 = 57.1 kip, DW 8.2 kip, LL+IM (concurrent) 65.95 kip; Σ over 5 girders: DC 295.7, DW 41.0, LL+IM 300.73 kip.
+- **How verified:** `node --check` on every plain inline script (3). jsdom with a shared localStorage stub: "Send" writes `bridgeSuite.v1.abutmentLoads` and `.updatedAt` (= `producedAt`); "Export hand-off (JSON)" writes the same `abutments`; `abutExportData()` and the "Export abutments" file are identical to the old file (apart from the `exported` time stamp). See abutment_calculator F12 for the end-to-end run.
+- **Other copies:** BridgeXfer v1 (unchanged) is in both tools. The mapping code is only in the receiver.
+- **Open items:** see the PR (seismic connection force, wind per limit state, `calculatorInput.beams.mode:"positions"` vs the calculator's `"position"`).

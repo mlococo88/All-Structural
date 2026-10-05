@@ -2587,6 +2587,49 @@ function exportAbutments() {
   const mh = manualHtml; manualHtml = function () { return mh().replace('<h3>Files</h3>', `<h3>Abutment export</h3><p><b>Export abutments</b> writes one JSON file (schema subloads-abutment-v1) with every abutment's geometry, bearings, girder positions, and unfactored reactions per girder for every load case: DC1, DC2, DW, LL+IM (the concurrent set for the maximum at the bridge seat and the per-bearing envelopes), BR, CE, WS for each limit state and wind direction, WL, TU rise and fall, FR, SH, and EQ. A <i>calculatorInput</i> block matches the Bridge Abutment Design Calculator's inputs (beam positions, reaction matrix, geometry, bearing, and 100% shares). V<sub>x</sub> is + toward the span, V<sub>y</sub> + to the left looking ahead station, P + downward. Earth pressure is left to the calculator.</p><h3>Files</h3>`); };
 })();
 document.addEventListener('click', e => { if (e.target.id === 'btn-abx') exportAbutments(); });
+/* ---------- abutment loads hand-off (HANDOFF.md §4.5, channel abutmentLoads) ----------
+   "Send to Abutment Calculator" publishes the subloads-abutment-v1 export above (abutExportData, unchanged)
+   wrapped in the BridgeXfer envelope; "Export hand-off (JSON)" writes the same payload to a file.
+   The "Export abutments" file is unchanged. Nothing here changes a SubLoads result. */
+function abutHandoffPayload() {
+  const G = MODEL.G; if (!G || G.E.length) return { err: 'Fix the input errors on the Summary tab first.' };
+  if (!P.units.some(u => u.type === 'abut')) return { err: 'This bridge has no abutment units to send.' };
+  let j; try { j = abutExportData(); } catch (e) { return { err: 'The abutment export failed: ' + e.message }; }
+  const good = j.abutments.filter(a => !a.error);
+  if (!good.length) return { err: 'No abutment could be exported: ' + j.abutments.map(a => `${a.name}: ${a.error}`).join('; ') };
+  const sp = window.BridgeXfer && BridgeXfer.sharedProject ? BridgeXfer.sharedProject() : null;
+  const p = Object.assign({}, j, {
+    _schema: 'bridge-abutment-loads', schemaVersion: 1, producer: 'Bridge Substructure Loading', producerFile: 'Bridge Substructure Loading.html',
+    project: { name: P.meta.name || '', bridgeId: (sp && sp.bridgeId) || '' }, meta: j.project,
+    units: Object.assign({}, j.units, { bearingPad: 'in', shearModulus: 'ksi', unitWeight: 'kcf', windSpeed: 'mph', temperature: 'degF', angle: 'deg', elevation: 'ft' }),
+    factored: false, perGirder: true, imIncluded: true, dfIncluded: true, multiplePresenceIncluded: true,
+    basis: { LL: 'LL+IM bearing reactions per girder from the SubLoads lane search (all loaded lanes, IM and multiple presence included); not per lane', horizontal: 'BR, TU, CR/SH, WS, WL, FR, EQ are this abutment\'s stiffness share, split equally among the girders', signs: 'P + down; Vx + toward the span (toward the toe); Vy + left looking ahead station; y + left looking ahead station' },
+    notes: [
+      'Unfactored loads in kip; lengths in ft unless the field name says otherwise.',
+      'LL+IM values are total bearing reactions per girder with IM and multiple presence already included (not per lane).',
+      'Vx is + toward the span (toward the toe); Vy and girder offsets y are + to the left looking ahead station; P is + downward.',
+      'Horizontal forces are already this abutment\'s share (stiffness distribution in SubLoads), split equally among the girders.',
+      'Earth pressure, soil and backfill properties are not sent: the abutment calculator computes them.'].concat(j.abutments.filter(a => a.error).map(a => `${a.name} was not exported: ${a.error}`)) });
+  return { p, n: good.length };
+}
+(function patchAbxHandoff() {
+  const g = document.querySelector('.hdr-group'), ax = document.getElementById('btn-abx');
+  if (g && ax && !document.getElementById('btn-abx-send')) {
+    const mk = (id, txt, tip) => { const bt = document.createElement('button'); bt.type = 'button'; bt.className = 'btn'; bt.id = id; bt.textContent = txt; bt.title = tip; return bt; };
+    const s = mk('btn-abx-send', 'Send to Abutment Calculator', 'Send to other tools: publish the abutment loads (channel abutmentLoads) for "Pull from SubLoads" in the abutment design calculator');
+    const x = mk('btn-abx-hf', 'Export hand-off (JSON)', 'Write the abutmentLoads hand-off to a file, for "Import hand-off (JSON)" in the abutment design calculator');
+    g.insertBefore(x, ax.nextSibling); g.insertBefore(s, x);
+  }
+})();
+document.addEventListener('click', e => {
+  const id = e.target && e.target.id; if (id !== 'btn-abx-send' && id !== 'btn-abx-hf') return;
+  if (!window.BridgeXfer) return flash('The hand-off helper is not available in this browser.', 'fail');
+  const b = abutHandoffPayload(); if (b.err) return flash(b.err, 'fail');
+  if (id === 'btn-abx-hf') { const r = BridgeXfer.exportFile('abutmentLoads', Object.assign({}, b.p, { producedAt: new Date().toISOString() })); return r.error ? flash(r.error, 'fail') : flash(`Exported the abutment loads hand-off (${b.n} abutment${b.n > 1 ? 's' : ''}).`); }
+  const r = BridgeXfer.publish('abutmentLoads', b.p, 'Bridge Substructure Loading', 'Bridge Substructure Loading.html');
+  if (r.error) return flash(r.error, 'fail');
+  flash(`Sent ${b.n} abutment${b.n > 1 ? 's' : ''} to the abutment calculator. Open it and click "Pull from SubLoads".`);
+});
 /* =====================================================================
    Earth loads (3.11, 11.6.5): abutments EH / EV / LS / ES / seismic M-O and the
    construction stage; soil over pier footings (EV). Equations follow the

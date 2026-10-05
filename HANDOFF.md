@@ -138,6 +138,11 @@ This matches the existing BridgeLocks "project" channel (`index.html`).
 
 - The payload is the existing SubLoads `subloads-abutment-v1` export, wrapped in the envelope, with `_schema:"bridge-abutment-loads"`.
 - The abutment calculator maps it onto its inputs, and lists every field it does not use.
+- **Clarifications (added with the SubLoads → abutment calculator connection):**
+  - *Shape.* The export's top-level fields (`schema:"subloads-abutment-v1"`, `app`, `exported`, `specification`, `bridge`, `abutments[]`) are kept as they are. The envelope `project` is `{ name, bridgeId }`; the export's own project block (`P.meta`) moves to `meta`. `units` is the export's `units` plus `bearingPad:"in"`, `shearModulus:"ksi"`, `unitWeight:"kcf"`, `windSpeed:"mph"`, `temperature:"degF"`, `angle:"deg"`, `elevation:"ft"`.
+  - *Basis flags.* `factored:false`, `perGirder:true`, and for LL `imIncluded:true`, `dfIncluded:true`, `multiplePresenceIncluded:true`: the LL+IM values are total bearing reactions per girder from SubLoads' lane search, not per lane. `basis` states this and the sign convention in words (P + down; Vx + toward the span; Vy and y + left looking ahead station). Horizontal forces are already this abutment's stiffness share.
+  - *Sender.* SubLoads' header has **"Send to Abutment Calculator"** (publishes) and **"Export hand-off (JSON)"**. Its "Export abutments" file is unchanged.
+  - *Receiver.* `abutment_calculator.html` uses `receiverId` `abutment`. "Pull from SubLoads" (with a new-data marker) and "Import hand-off (JSON)" open one dialog. The import also reads a raw `subloads-abutment-v1` file. It accepts only kip / ft (pads in inches) and refuses `factored` ≠ `false`. The user picks the abutment, the transverse sign (as sent, or + left looking from the backfill toward the span), the LL set (concurrent for the maximum at the seat, or per-bearing maxima), the WS and WL cases, the TU case, and which groups to import. BR, TU and CR/SH default to **not** imported, because the calculator can compute them itself. When one is imported, its share is set to 100% and the calculator's own generator is switched off. Any imported WS/WL sets the shared WS share to 100%. The source is saved in the new optional field `S.subloadsSrc` and printed in the report.
 
 ### 4.6 `foundationLoads`
 
