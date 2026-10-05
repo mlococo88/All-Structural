@@ -184,6 +184,28 @@ This matches the existing BridgeLocks "project" channel (`index.html`).
 ```
 
 - Receivers (base plate, spread footing) let the user pick one support. They import its reactions as column load cases by type, and then apply their own combinations.
+- Shape Steel Beam Design writes (clarified when the channel was built; all additions are optional for receivers):
+
+  ```js
+  { ...envelope, _schema:"bridge-member-reactions", producer:"Steel Beam Designer", producerFile:"Steel Beam Design - AISC 15th.html",
+    project:{ name:"<the tool's project name>", bridgeId:"" },
+    units:{ force:"kip", moment:"kip-ft", length:"ft" }, factored:false,
+    signConvention:"<in words, see below>",
+    member:{ section:"W18X50", grade:"A992", spans:[ft…], totalLength:<ft> },
+    cases:[ { id:"DL", name:"Dead", type:"D"|"L"|"Lr"|"S"|"W"|"E"|null } ],   // every load case of the beam
+    caseMap:{ DL:"D", LL:"L", … },                                          // same, as a map; null = "other"
+    supports:[ { id:"A", node:0, x:<ft>, support:"pin"|"roller"|"fixed",
+                 byLoadType:{ D:{V,M}, … },          // only the types that at least one case is assigned to
+                 byCase:{ DL:{V,M,type,name}, … },   // every case, including "other" cases
+                 factored:false } ] }
+  ```
+
+  - **Sign convention.** `V` + = downward force exerted by the beam on the support (compression into the column or pedestal below); uplift is negative. `M` = moment exerted by the beam on a **fixed** support, + = counter-clockwise in the beam elevation (x along the beam from the first support toward the last, y up); `M = 0` at pin and roller supports. Free (cantilever-tip) nodes are not supports and are not sent.
+  - **Basis.** Each case is solved alone with factor 1.0 by the tool's own stiffness analysis (`solveFor({case:1})`), so values are unfactored. The user assigns each case to a load type in the send dialog (defaults from the case id/name: DL→D, LL→L, LR→Lr, SL→S, WL→W, EL/EQ→E; anything else "other"). Cases with the same type are **added** into `byLoadType` (stated in `notes`); "other" cases (e.g. pattern live cases) are sent only under `byCase`. The choice is remembered in Steel Beam's new optional field `S.bxSend.memberReactions`.
+  - Only Beam mode has reactions; Member-check and Batch modes refuse to send.
+- **BasePlateAnchorDesigner** (receiver id `basePlate`): fills `S.serviceLoads.cases[slot].P` of its ASCE 7-22 generator. Its internal convention is **P + = tension**, so **P = −V**. Default mapping: same type → same slot; all-zero types and "other" cases → not imported. Replace (default) or add to P. Shear and moment are not imported (beam reactions give column axial only; the moment at a fixed beam support is not a column-base moment); existing `Vx`/`Vy`/`Mx`/`My` are kept unless the user ticks "set to 0". Combinations are regenerated only if the user ticks that option. Its generator does not use slot S (Lr and S share the roof-live term), and the dialog warns. Source: new optional field `S.bxSrc.memberReactions`, shown in the header and the printed report.
+- **Spread Footing** (receiver id `spreadFooting`): the user picks a support and a target pedestal; values go to that pedestal's by-load-type rows (`peds[i].loads[row]`, kips / kip-ft). P + = down in both tools, so **P = V**. Default mapping D/L/Lr/S → same row, W → Wx; E is not imported (the tool has no seismic type). A fixed-support `M` is applied as `My = ∓M` (beam toward footing ±x) or `Mx = ∓M` (±y), chosen by the user (default +x, i.e. `My = −M`), or not imported. Replace (default) or add; other components are kept unless the user ticks "set to 0". Source: new optional field `state.bxSrc.memberReactions`, shown under the title block and in the printed report header.
+- Both receivers accept force in kip or lb, and moment in kip-ft, kip-in, lb-ft or lb-in, converting explicitly; anything else, `factored:true`, or a non-finite number is refused.
 
 ## 5. Shared helper (copy into each tool that sends or receives)
 

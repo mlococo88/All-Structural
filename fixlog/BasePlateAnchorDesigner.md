@@ -522,6 +522,313 @@ h_ef 12″, 30×30×36 pedestal, f'c 4 ksi cracked, 1″ grout) unless stated.
 - **Other copies:** BridgeXfer v1 and `ProjMetaUI` are duplicated (CLAUDE.md §3) in Pile Designer.html, Spread Footing.html, BasePlateAnchorDesigner.html, Concrete Anchor.html and Timber Beam Check.html (this PR), plus any other tools that received BridgeXfer in their own step-1 PRs.
 - **`ProjMetaUI`:** given in full in the After code of the helper insertion above; the copy is identical in every tool listed.
 
+## 2026-10-05 — PR: claude/conn-steelbeam-reactions (PR link added after merge)
+### C1. Member-reaction hand-off receiver: "Pull from Steel Beam" and "Import hand-off (JSON)"   [feature: hand-off (no result change)]
+- **Date / type:** 2026-10-05, feature: hand-off (no result change).
+- **Where:** header `#projMetaBtns` (anchor `<button id="btnShareProjMeta" title="Make these project fields available to the other tools">Share project info</button>`); `buildPrintReport()` after the title block (anchor `holder.appendChild(hg);`, first occurrence inside `buildPrintReport`); one new `<script>` block at the end of the file, just before `</body>` (anchor `Member-reaction hand-off receiver`).
+- **Purpose:** reads channel `bridgeSuite.v1.memberReactions` (HANDOFF.md §4.8) and fills the ASCE 7-22 generator's SERVICE loads `S.serviceLoads.cases[slot].P` for one beam support.
+- **Sign convention verified:** this tool stores **P + = tension (uplift)**, compression negative (`defaultState()` comment "P positive = tension/uplift, negative = compression (gravity)"; default D.P = −100; `axialSign()` only flips entry/display). The sender's V is + down, so **P = −V**.
+- **Mapping:**
+
+| Hand-off (support chosen by the user) | Base plate target |
+|---|---|
+| `byLoadType.D.V` | `S.serviceLoads.cases.D.P = −V` (kip) |
+| `byLoadType.L.V` | `cases.L.P = −V` |
+| `byLoadType.Lr.V` | `cases.Lr.P = −V` |
+| `byLoadType.S.V` | `cases.S.P = −V` (warning: the generator does not use slot S; map to Lr if snow governs) |
+| `byLoadType.W.V` | `cases.W.P = −V` |
+| `byLoadType.E.V` | `cases.E.P = −V` (used only with seismic/Ω₀ combinations on) |
+| `byCase` "other" cases | listed; default "do not import"; any slot may be chosen |
+| `M` (fixed supports) | not imported (shown; the beam-support moment is not a column-base moment) |
+
+- **User choices (logged in `S.bxSrc.memberReactions`):** support (default the first); slot per row (default same type; all-zero rows and "other" cases → not imported); replace P (default) or add to P; "also set Vx, Vy, Mx, My of the target slots to 0" (default off); "regenerate the load combinations now" (default off — combinations unchanged until the user regenerates).
+- **Validation:** `_schema`, `schemaVersion ≤ 1`, corrupt JSON (BridgeXfer); `factored:true` refused; `units.force` kip or lb (÷1000), `units.moment` kip-ft/kip-in/lb-ft/lb-in, else refused; every V and M finite; at least one support with reactions.
+- **Governing provision:** none changed. No formula, factor or default changed; `generateCombos()` is called unchanged only when the user ticks regenerate.
+- **Before / After** (exact):
+  1. Header buttons.
+     - Before:
+  ```html
+      <button id="btnShareProjMeta" title="Make these project fields available to the other tools">Share project info</button>
+    </div>
+  ```
+     - After:
+  ```html
+      <button id="btnShareProjMeta" title="Make these project fields available to the other tools">Share project info</button>
+      <button id="btnPullMemberReactions" type="button" onclick="bxPullMemberReactions()" title="Import unfactored support reactions from Steel Beam Design into the ASCE 7-22 service loads (HANDOFF.md, channel memberReactions)">Pull from Steel Beam<span id="bxMrNew" style="display:none;color:#b45309;font-weight:bold"> &#9679; new data available</span></button>
+      <button id="btnImportMemberReactions" type="button" onclick="document.getElementById('bxMrFile').click()">Import hand-off (JSON)</button><input type="file" id="bxMrFile" accept=".json,application/json" style="display:none" onchange="bxImportMemberReactions(event)">
+      <span id="bxMrSrc" style="font-size:9pt;font-style:italic"></span>
+    </div>
+  ```
+  2. `buildPrintReport()`.
+     - Before:
+  ```js
+  holder.appendChild(hg);
+  ```
+     - After:
+  ```js
+  holder.appendChild(hg);
+  if(typeof bxMrSourceLine==="function"&&bxMrSourceLine()) holder.appendChild(el("div","note",bxMrSourceLine()));   /* hand-off source (HANDOFF.md §3.4) */
+  ```
+  3. New script, inserted just before `</body>` (Before: nothing). After:
+  ```html
+<script>
+/* Member-reaction hand-off receiver (HANDOFF.md §4.8, channel memberReactions, sender: Steel Beam Design - AISC 15th.html).
+   "Pull from Steel Beam" / "Import hand-off (JSON)". Nothing is applied on page load. The user picks one support,
+   maps each load type to a slot of the ASCE 7-22 generator's SERVICE loads (S.serviceLoads.cases), chooses replace
+   or add, reviews exactly what will change, and confirms. Only the P of the chosen slots changes (and Vx/Vy/Mx/My are
+   zeroed only if the user ticks that option); the combinations are regenerated only if the user ticks that option.
+   Sign: the sender's V is + DOWN on the support; this tool stores P + = TENSION (uplift), so P = -V.
+   The source is kept in the new optional field S.bxSrc.memberReactions. */
+(function(){
+  var CH='memberReactions', SCHEMA='bridge-member-reactions', MAXV=1, RID='basePlate';
+  var SLOTS=['D','L','Lr','S','W','E'];
+  var SLOT_LBL={D:'Dead',L:'Live',Lr:'Roof live',S:'Snow',W:'Wind',E:'Seismic'};
+  var FORCE={kip:1,kips:1,k:1,lb:0.001,lbf:0.001,lbs:0.001};               /* -> kip */
+  var MOMENT={'kip-ft':1,'kip·ft':1,'k-ft':1,'ft-kip':1,'kip-in':1/12,'lb-ft':0.001,'ft-lb':0.001,'lb-in':0.001/12};   /* -> kip-ft */
+  function isNum(v){ return typeof v==='number' && isFinite(v); }
+  function f2(v,d){ return isNum(v) ? (Math.abs(v)<1e-12?0:v).toFixed(d==null?2:d) : '—'; }
+  function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+  function h(tag,cls,html){ var e=document.createElement(tag); if(cls) e.className=cls; if(html!==undefined) e.innerHTML=html; return e; }
+  function when(iso){ var d=new Date(iso); if(isNaN(d)) return String(iso||'?');
+    function p(n){ return (n<10?'0':'')+n; }
+    return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+' '+p(d.getHours())+':'+p(d.getMinutes()); }
+  function projName(p){ return (p.project && typeof p.project==='object') ? (p.project.name||'') : String(p.project||''); }
+
+  /* ---- validate and convert to kip / kip-ft; returns {err, warn, sups:[{id,x,support,rows:[{key,label,type,V,M}]}]} ---- */
+  function check(p){
+    var out={err:[],warn:[],sups:[]};
+    var e=BridgeXfer.validate(p,SCHEMA,MAXV); if(e){ out.err.push(e); return out; }
+    if(p.factored===true){ out.err.push('The payload says its reactions are factored. This tool imports unfactored (service) loads only.'); return out; }
+    var u=p.units||{}, kf=FORCE[u.force], km=MOMENT[u.moment];
+    if(!kf){ out.err.push('Unknown force unit "'+(u.force||'')+'". Accepted: kip, or lb (converted ÷ 1000).'); return out; }
+    if(!km){ out.err.push('Unknown moment unit "'+(u.moment||'')+'". Accepted: kip-ft, kip-in, lb-ft, lb-in.'); return out; }
+    if(kf!==1) out.warn.push('Forces converted from '+u.force+' to kip (× '+kf+').');
+    if(!Array.isArray(p.supports) || !p.supports.length){ out.err.push('The payload has no supports.'); return out; }
+    p.supports.forEach(function(s,i){
+      if(!s || typeof s!=='object'){ out.err.push('Support '+(i+1)+' is not an object.'); return; }
+      if(s.factored===true){ out.err.push('Support '+(s.id||i+1)+' is marked factored.'); return; }
+      var sid=String(s.id==null?(i+1):s.id);
+      if(s.x!==undefined && s.x!==null && !isNum(s.x)) out.err.push('Support '+sid+': x is not a finite number.');
+      var rows=[];
+      function rd(src,key,label,type){
+        if(!src || typeof src!=='object'){ out.err.push('Support '+sid+', '+label+': not an object.'); return; }
+        if(!isNum(src.V)){ out.err.push('Support '+sid+', '+label+': V is not a finite number ('+JSON.stringify(src.V)+').'); return; }
+        if(src.M!==undefined && src.M!==null && !isNum(src.M)){ out.err.push('Support '+sid+', '+label+': M is not a finite number ('+JSON.stringify(src.M)+').'); return; }
+        rows.push({key:key,label:label,type:type,V:src.V*kf,M:(isNum(src.M)?src.M:0)*km});
+      }
+      var bt=s.byLoadType;
+      if(!bt || typeof bt!=='object'){ out.err.push('Support '+sid+' has no byLoadType.'); return; }
+      Object.keys(bt).forEach(function(t){
+        if(SLOTS.indexOf(t)<0){ out.warn.push('Support '+sid+': unknown load type "'+t+'" is listed as "other".'); rd(bt[t],'t:'+t,t+' (unknown type)',null); return; }
+        rd(bt[t],'t:'+t,t+' — '+SLOT_LBL[t],t);
+      });
+      rows.sort(function(a,b){ return (a.type?SLOTS.indexOf(a.type):99)-(b.type?SLOTS.indexOf(b.type):99); });
+      if(s.byCase && typeof s.byCase==='object') Object.keys(s.byCase).forEach(function(cid){
+        var c=s.byCase[cid]; if(c && c.type) return;   /* already inside byLoadType */
+        rd(c,'c:'+cid,'case '+cid+(c&&c.name&&c.name!==cid?' ('+c.name+')':'')+' — not assigned to a type',null);
+      });
+      out.sups.push({id:sid,x:s.x,support:s.support||'',rows:rows});
+    });
+    if(!out.err.length && !out.sups.some(function(s){ return s.rows.length; })) out.err.push('The payload contains no reactions.');
+    return out;
+  }
+  /* default mapping for one support: same load type -> same slot; "other" cases and all-zero rows -> do not import */
+  function defaultMap(s){
+    var m={}; s.rows.forEach(function(r){ m[r.key]=(r.type && (Math.abs(r.V)>1e-9 || Math.abs(r.M)>1e-9)) ? r.type : ''; }); return m;
+  }
+  function defaults(chk){
+    var o={sup:0,mode:'replace',zeroOther:false,regen:false,map:defaultMap(chk.sups[0])};
+    return o;
+  }
+  /* ---- plan: exactly what will change. Pure apart from reading S. ---- */
+  function plan(p,chk,o){
+    var r={err:[],warn:[],changes:[],rows:[],slots:{}};
+    var s=chk.sups[o.sup]; if(!s){ r.err.push('Pick a support.'); return r; }
+    var SL=S.serviceLoads;
+    if(!SL || !SL.cases){ r.err.push('This project has no service-load table.'); return r; }
+    var add={}, from={};
+    s.rows.forEach(function(row){
+      var slot=o.map[row.key]||'';
+      if(!slot) return;
+      if(SLOTS.indexOf(slot)<0){ r.err.push('Unknown target slot '+slot+'.'); return; }
+      var P=-row.V;   /* + down on support -> tension-positive P */
+      add[slot]=(add[slot]||0)+P; (from[slot]=from[slot]||[]).push(row.label.split(' —')[0]);
+      r.rows.push({from:row.label.split(' —')[0],slot:slot,V:row.V,P:P,M:row.M});
+      if(Math.abs(row.M)>1e-9) r.warn.push(row.label.split(' —')[0]+': the fixed-support moment M = '+f2(row.M,3)+' kip·ft is NOT transferred. It is the moment at the beam’s support, not at the column base; enter any base moment yourself.');
+    });
+    var used=Object.keys(add);
+    if(!used.length) r.err.push('Map at least one load type to a slot.');
+    used.forEach(function(slot){
+      if(from[slot].length>1) r.warn.push(from[slot].join(' + ')+' are added together into slot '+slot+'.');
+      var c=SL.cases[slot]||{P:0,Vx:0,Vy:0,Mx:0,My:0};
+      var oldP=c.P||0, newP=(o.mode==='add'?oldP:0)+add[slot];
+      newP=Math.round(newP*1e6)/1e6;
+      r.slots[slot]={P:newP};
+      r.changes.push({slot:slot,field:'P',from:oldP,to:newP});
+      if(o.zeroOther) ['Vx','Vy','Mx','My'].forEach(function(k){ if((c[k]||0)!==0){ r.changes.push({slot:slot,field:k,from:c[k],to:0}); r.slots[slot][k]=0; } });
+      else if(['Vx','Vy','Mx','My'].some(function(k){ return (c[k]||0)!==0; }))
+        r.warn.push('Slot '+slot+' keeps its existing shear/moment (Vx '+f2(c.Vx||0)+', Vy '+f2(c.Vy||0)+' kip; Mx '+f2((c.Mx||0)/12)+', My '+f2((c.My||0)/12)+' kip·ft). Tick the option below to set them to 0.');
+    });
+    if(add.S!==undefined) r.warn.push('The ASCE 7-22 generator in this tool does not use the S (snow) slot: Lr and S share the roof-live term (open item O1 in its fix log). Snow put in slot S has no effect on the combinations; map it to Lr if snow governs the roof load.');
+    if(add.E!==undefined && !(SL.useSeismic||SL.useOmega)) r.warn.push('Slot E is used only when the seismic or overstrength combinations are switched on in the generator.');
+    if(o.regen){
+      var save=JSON.parse(JSON.stringify(SL.cases));
+      used.forEach(function(slot){ var c=SL.cases[slot]=SL.cases[slot]||{P:0,Vx:0,Vy:0,Mx:0,My:0}; Object.keys(r.slots[slot]).forEach(function(k){ c[k]=r.slots[slot][k]; }); });
+      try{ r.combos=generateCombos(); } finally { SL.cases=save; }
+      if(!r.combos.length) r.err.push('Regenerating would produce no combinations (all service loads zero or no combination set selected).');
+    }
+    return r;
+  }
+  function apply(p,chk,o,via){
+    var r=plan(p,chk,o); if(r.err.length) return r;
+    var SL=S.serviceLoads;
+    Object.keys(r.slots).forEach(function(slot){
+      var c=SL.cases[slot]=SL.cases[slot]||{P:0,Vx:0,Vy:0,Mx:0,My:0};
+      Object.keys(r.slots[slot]).forEach(function(k){ c[k]=r.slots[slot][k]; });
+    });
+    if(o.regen && r.combos){ S.combos=r.combos; S.detailCombo=0; }
+    if(!S.bxSrc || typeof S.bxSrc!=='object') S.bxSrc={};
+    var s=chk.sups[o.sup];
+    S.bxSrc.memberReactions={producer:p.producer||'',producerFile:p.producerFile||'',producedAt:p.producedAt||'',
+      project:p.project||'',via:via||'pull',adoptedAt:new Date().toISOString(),
+      support:s.id,supportType:s.support,mode:o.mode,zeroOther:!!o.zeroOther,regen:!!o.regen,
+      rows:r.rows.map(function(x){ return {from:x.from,slot:x.slot,V:x.V,P:x.P}; }),
+      notes:(p.notes||[]).slice(0,20)};
+    BridgeXfer.markAdopted(CH,RID,p.producedAt);
+    r.ok=true;
+    return r;
+  }
+
+  function openDialog(p,via){
+    var chk=check(p);
+    if(chk.err.length){ alert('Support-reaction hand-off refused:\n  '+chk.err.join('\n  ')); return null; }
+    var o=defaults(chk);
+    var old=document.getElementById('bxMrOverlay'); if(old) old.remove();
+    var ov=h('div','modal'); ov.id='bxMrOverlay';
+    var box=h('div','modalBox wide'); ov.appendChild(box);
+    box.appendChild(h('h3',null,'Import support reactions from '+esc(p.producer||'?')));
+    box.appendChild(h('div','note','<b>Source:</b> '+esc(p.producer||'?')+(p.producerFile?' ('+esc(p.producerFile)+')':'')+
+      ' &middot; <b>sent</b> '+esc(when(p.producedAt))+' &middot; <b>project</b> '+esc(projName(p)||'—')+
+      ' &middot; unfactored reactions'+(via==='file'?' &middot; from a JSON file':'')));
+    box.appendChild(h('div','warnBox','<b>Beam reactions give column AXIAL load only.</b> Shear (Vx, Vy) and moment (Mx, My) at the base plate are zero unless you add them yourself. '+
+      'Sign: the beam tool sends V + = downward on the support; this tool uses <b>P + = tension (uplift)</b>, so <b>P = −V</b> (a 2.0 kip downward reaction becomes P = −2.00 kip).'));
+    if(chk.warn.length) box.appendChild(h('div','warnBox',chk.warn.map(esc).join('<br>')));
+    if(p.notes && p.notes.length){
+      var nb=h('details'); nb.appendChild(h('summary',null,'Sender notes ('+p.notes.length+')'));
+      nb.appendChild(h('div','note',p.notes.map(function(n){ return '&bull; '+esc(n); }).join('<br>'))); nb.open=true; box.appendChild(nb);
+    }
+    var g=h('div'); g.style.cssText='display:flex;gap:16px;flex-wrap:wrap;align-items:center;margin:8px 0';
+    var sl=h('label',null,'<b>Support (column)</b> '); var ss=document.createElement('select'); ss.id='bxMrSup';
+    chk.sups.forEach(function(s,i){ var op=document.createElement('option'); op.value=i; op.textContent=s.id+(isNum(s.x)?' (x = '+f2(s.x)+' ft'+(s.support?', '+s.support:'')+')':''); ss.appendChild(op); });
+    sl.appendChild(ss); g.appendChild(sl); box.appendChild(g);
+    var tw=h('div'); box.appendChild(tw);
+    var md=h('div'); md.style.margin='6px 0';
+    md.innerHTML='<b>Existing service loads in the target slots:</b> '+
+      '<label><input type="radio" name="bxMrMode" id="bxMrRep" checked> replace P</label> '+
+      '<label><input type="radio" name="bxMrMode" id="bxMrAdd"> add to P</label><br>'+
+      '<label><input type="checkbox" id="bxMrZero"> also set Vx, Vy, Mx, My of the target slots to 0</label><br>'+
+      '<label><input type="checkbox" id="bxMrRegen"> regenerate the load combinations from the service loads now (replaces the '+S.combos.length+' current combination'+(S.combos.length===1?'':'s')+')</label>';
+    box.appendChild(md);
+    var sum=h('div'); box.appendChild(sum);
+    var foot=h('div','modalFoot');
+    var ca=h('button',null,'Cancel'); var go=h('button','primary','Import'); go.id='bxMrGo';
+    foot.appendChild(ca); foot.appendChild(go); box.appendChild(foot);
+    var sels={};
+    function drawRows(){
+      var s=chk.sups[o.sup]; tw.innerHTML=''; sels={};
+      var t=h('table','tbl');
+      t.innerHTML='<tr><th class="lft">From '+esc(p.producer||'sender')+'</th><th>V (kip, + down)</th><th>M (kip·ft)</th><th>Into service-load slot</th><th>P = −V (kip, + tension)</th></tr>';
+      s.rows.forEach(function(row){
+        var tr=h('tr');
+        tr.appendChild(h('td','lft',esc(row.label)));
+        tr.appendChild(h('td',null,f2(row.V,3)));
+        tr.appendChild(h('td',null,Math.abs(row.M)>1e-9?f2(row.M,3)+' (not transferred)':'0'));
+        var td=h('td'), se=document.createElement('select'); se.dataset.key=row.key;
+        SLOTS.concat(['']).forEach(function(sl2){ var op=document.createElement('option'); op.value=sl2; op.textContent=sl2?sl2+' — '+SLOT_LBL[sl2]:'do not import'; se.appendChild(op); });
+        se.value=o.map[row.key]||''; td.appendChild(se); tr.appendChild(td); sels[row.key]=se;
+        tr.appendChild(h('td',null,f2(-row.V,3)));
+        t.appendChild(tr);
+      });
+      tw.appendChild(t);
+    }
+    function read(){
+      o.sup=+ss.value;
+      Object.keys(sels).forEach(function(k){ o.map[k]=sels[k].value; });
+      o.mode=document.getElementById('bxMrAdd').checked?'add':'replace';
+      o.zeroOther=document.getElementById('bxMrZero').checked;
+      o.regen=document.getElementById('bxMrRegen').checked;
+      return o;
+    }
+    function refresh(){
+      read();
+      var r=plan(p,chk,o), x='';
+      if(r.err.length) x+='<div class="warnBox" style="color:#8c1d1d;font-weight:bold">'+r.err.map(esc).join('<br>')+'</div>';
+      x+='<div class="note" style="font-style:normal"><b>Will change</b> (service loads, internal units kip / P + tension): '+(r.changes.length? r.changes.map(function(c){
+        var isM=(c.field==='Mx'||c.field==='My');
+        return 'slot '+c.slot+' '+c.field+': '+(isM?f2(c.from/12,3)+' → '+f2(c.to/12,3)+' kip·ft':f2(c.from,3)+' → <b>'+f2(c.to,3)+'</b> kip'); }).join('; ') : 'nothing')+
+        '<br><b>Load combinations:</b> '+(o.regen && r.combos ? 'replaced by '+r.combos.length+' generated combination'+(r.combos.length===1?'':'s')+'.' :
+          'NOT changed. The design uses the current combinations until you click “Generate from service loads (ASCE 7-22)” or tick the option above.')+
+        '<br><b>Also recorded:</b> the source (producer and time) in this project, shown in the header and the printed report.</div>';
+      if(r.warn.length) x+='<div class="warnBox">'+r.warn.map(esc).join('<br>')+'</div>';
+      sum.innerHTML=x; go.disabled=!!r.err.length;
+      return r;
+    }
+    drawRows();
+    ss.addEventListener('change',function(){ o.sup=+ss.value; o.map=defaultMap(chk.sups[o.sup]); drawRows(); refresh(); });
+    box.addEventListener('change',function(e){ if(e.target!==ss) refresh(); });
+    ca.addEventListener('click',function(){ ov.remove(); });
+    go.addEventListener('click',function(){
+      var r=apply(p,chk,read(),via);
+      if(r.err.length){ refresh(); return; }
+      ov.remove();
+      autosave();
+      try{ buildInputPanel(); buildTabs(); }catch(e){}
+      refreshBar();
+    });
+    document.body.appendChild(ov);
+    refresh();
+    return {overlay:ov, opts:o, chk:chk, refresh:refresh, drawRows:drawRows};
+  }
+
+  function sourceLine(){
+    var s=S.bxSrc && S.bxSrc.memberReactions; if(!s) return '';
+    return 'Service loads '+(s.rows||[]).map(function(x){ return x.slot; }).filter(function(v,i,a){ return a.indexOf(v)===i; }).join(', ')+
+      ' (P) from '+(s.producer||'?')+' support '+(s.support||'?')+', '+when(s.producedAt)+
+      ((s.project&&(s.project.name||typeof s.project==='string'))?' ('+(s.project.name||s.project)+')':'')+(s.via==='file'?', via JSON file':'')+
+      (s.mode==='add'?', added to existing':'');
+  }
+  function refreshBar(){
+    var nd=document.getElementById('bxMrNew'); if(nd) nd.style.display=BridgeXfer.isNew(CH,RID)?'inline':'none';
+    var sl=document.getElementById('bxMrSrc'); if(sl) sl.textContent=sourceLine();
+  }
+  window.bxPullMemberReactions=function(){
+    var r=BridgeXfer.read(CH,SCHEMA,MAXV);
+    if(!r.ok){ alert('Pull from Steel Beam: '+r.error+(r.empty?'\n\nIn Steel Beam Design, click "Send to other tools" first.':'')); return null; }
+    return openDialog(r.payload,'pull');
+  };
+  window.bxImportMemberReactions=function(ev){
+    var f=ev && ev.target && ev.target.files && ev.target.files[0]; if(!f) return;
+    BridgeXfer.importFile(f,SCHEMA,MAXV,function(r){
+      if(!r.ok){ alert('Import hand-off: '+r.error); return; }
+      openDialog(r.payload,'file');
+    });
+    ev.target.value='';
+  };
+  window.bxMrSourceLine=sourceLine;
+  window.bxMr={check:check,plan:plan,apply:apply,defaults:defaults,openDialog:openDialog,sourceLine:sourceLine,refreshBar:refreshBar};
+  document.addEventListener('DOMContentLoaded',function(){ setTimeout(refreshBar,200); });
+  window.addEventListener('focus',refreshBar);
+  window.addEventListener('storage',refreshBar);
+  setInterval(refreshBar,2000);
+})();
+</script>
+  ```
+- **Saved data:** no existing key or format changed (`bpad_autosave_v1`, `bpad_projects_v1`, `bpad_lastproject_v1`). New optional field `S.bxSrc.memberReactions` (kept by `mergeState`, which copies unknown top-level keys). New key: only `bridgeSuite.v1.memberReactions.adopted.basePlate`.
+- **Check case:** default Steel Beam project, support A: D V = 2.000 kip (+ down) → `cases.D.P` −100.000 → **−2.000**; L V = 4.000 → `cases.L.P` −40.000 → **−4.000**; S and W reactions are 0, so their slots are left alone by default (W keeps P 20, Vx 12, My 200). Add mode again: D.P = −2 − 2 = −4.000; with regenerate ticked, 1.4D gives P = 1.4 × (−4.000) = **−5.600 kip**.
+- **How verified:** every plain inline script of the three files passes `node --check` (no JSX in these files). jsdom end-to-end test with one shared localStorage stub (56 assertions, all pass): the default Steel Beam project is sent through the real dialog (`bxSendMemberReactions('send')` → Send), then pulled in BasePlateAnchorDesigner and Spread Footing through their real dialogs and Import buttons; inputs asserted equal to the mapped values; export (`Export hand-off (JSON)` blob) re-imported through `Import hand-off (JSON)` in both receivers; wrong `_schema`, `schemaVersion: 2` (pull and file), `factored: true`, unit `kN`, non-finite V, no supports, and corrupt JSON are all refused with no change. No-result-change check: with no hand-off present, original (origin/main) and modified files give byte-identical results on the default state (Steel Beam `computeAll()` for the default beam and a 2-span pin/pin/fixed beam with wind and snow, plus the rendered tab text; BasePlate `allChecks()`, `generateCombos()` and the print report; Spread Footing `computeAll()`, `computePhase2()` and the print header).
+- **Other copies of this code:** the receiver logic (`check`, unit tables) is duplicated in Spread Footing.html (CLAUDE.md §3). BridgeXfer v1 unchanged.
+- **Open items:** the generator does not use slot S (existing O1); a beam-support moment is never transferred.
+
 ## Open items (not changed)
 - O1. ASCE 7-22 generator details (the 0.2S term in the 2.3.6 seismic combinations, a separate S slot, the 0.5L option). Not changed, per the brief (OPEN). Decide which combinations the generator should produce.
 - O2. Stand-off rod buckling uses gross d and A_g (`standoffCompressionCheck`). The threaded root arguably governs (r = d_root/4, A = A_se or A_root). Not changed (OPEN). Confirm the intended basis.
