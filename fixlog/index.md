@@ -736,3 +736,9 @@ Field mapping: projectName ↔ Project Name (`cfg.projectName`), bridgeId ↔ Br
 - **Check case:** n/a, no computed value changes. Functional check: see How verified.
 - **How verified:** `node --check` on every plain inline script and @babel/standalone transpile of the text/babel block; BridgeXfer copy compared byte-for-byte with HANDOFF.md §5; whole page loaded in jsdom (React/ReactDOM/Babel from npm, other CDN scripts blocked); Share → Use round trip between lldf, Moving Load Generator, psbeam, stgirder and index with one shared localStorage; `git diff` shows only additions apart from the one header line that received the link.
 - **Other copies:** BridgeXfer v1 and the `BXProject` glue are also in index.html, lldf.html, psbeam.html, stgirder.html and Moving Load Generator.html (this PR).
+
+## 2026-10-04 — PR: claude/conn-reactions-subloads (PR link added after merge)
+
+No code change in this file.
+
+- **OPEN (superReactions sender, HANDOFF.md §4.4):** index.html (MCT) is listed as a sender of `superReactions`, but its results do not contain support reactions per load case (it writes the MIDAS model and imports member force envelopes; no reaction table is read). It was therefore not connected in this PR. Needed: a MIDAS reaction-table import (DC1/DC2/DW per support per girder) before index.html can send reactions.

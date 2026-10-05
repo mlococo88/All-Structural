@@ -407,3 +407,188 @@ Field mapping: projectName ↔ Project (`inp.proj.name`), preparedBy ↔ By (`in
 - **Check case:** n/a, no computed value changes. Functional check: see How verified.
 - **How verified:** `node --check` on every plain inline script and @babel/standalone transpile of the text/babel block; BridgeXfer copy compared byte-for-byte with HANDOFF.md §5; whole page loaded in jsdom (React/ReactDOM/Babel from npm, other CDN scripts blocked); Share → Use round trip between lldf, Moving Load Generator, psbeam, stgirder and index with one shared localStorage; `git diff` shows only additions apart from the one header line that received the link.
 - **Other copies:** BridgeXfer v1 and the `BXProject` glue are also in index.html, lldf.html, psbeam.html, stgirder.html and Moving Load Generator.html (this PR).
+
+## 2026-10-04 — PR: claude/conn-reactions-subloads (PR link added after merge)
+
+Feature: hand-off (no result change). PS-Beam sends the **unfactored** DC1, DC2 and DW end reactions of its one girder line to Bridge Substructure Loading on channel `superReactions` (HANDOFF.md §4.4). Nothing is sent automatically: only the new "Send reactions to Substructure Loading" button writes `bridgeSuite.v1.superReactions`, `bridgeSuite.v1.superReactions.updatedAt` and the per-producer copy `bridgeSuite.v1.superReactions.by.psbeam`. "Export hand-off (JSON)" writes the same payload to a file. No formula, factor, default, unit, storage key or saved format changed; the bridgeSuite bootstrap blocks and the BridgeXfer copy are unchanged (BridgeXfer v1 already in this file from step 1).
+
+Mapping:
+
+| Payload field | Source in this tool |
+|---|---|
+| `supports[].id` | `Support 1`, `Support 2` (simple span); `Support i`, `Support i+1` for imported MIDAS span i |
+| `supports[].x` (ft) | 0 and L; MIDAS: span start x0 and x0 + span length |
+| `girders[0].label` | shared design beam label (`BridgeBeam.get().label`) while the position follows it (`loads.posAuto`), else the Girder ID of the title block, else "Interior/Exterior girder" |
+| `girders[0].position` | `inp.loads.pos` |
+| `DC1` (kip) | `(wG + wDk)·L/2` + diaphragms by statics, with `wG` = girder self-weight, `wDk` = deck + haunch + `loads.wNC` (`R.wG`, `R.wDk`); same diaphragm filter as `computeAll`. Also in MIDAS mode (PS-Beam always computes DC1 itself) |
+| `DC2` (kip) | `wBar·L/2`; MIDAS: `V_DC2(0)` and `−V_DC2(L)` from `buildExternal` (already sign-flipped) |
+| `DW` (kip) | `wDW·L/2`; MIDAS: `V_DW(0)` and `−V_DW(L)` |
+| `liveLoad` | simple span only: per lane `max(Vtr, Vtd) + Vln` from `hl93(L)` (no IM, no DF), Rmin 0; `null` in MIDAS mode |
+| `factored` / `imIncluded` / `dfIncluded` / `perGirder` | `false` / `false` / `false` / `true` |
+| `project` | shared project info if present, else `{name: inp.proj.name}` |
+
+### R1. superReactions sender glue (plain script after the BXProject glue)   [feature: hand-off (no result change)]
+- **Where:** new `<script>` right after the BXProject block, before `<script type="text/babel" …>`. Anchor text: `window.BXSuperRx={ send:send, exportJSON:exportJSON, summary:summary, stamp:stamp };`
+- **Problem:** none (feature). Approved step 2 of the cross-tool work.
+- **Governing provision:** n/a (no calculation, factor, unit or code reference touched).
+- **Before:**
+```html
+  window.BXProject={ KEYS:KEYS, share:share, use:use };
+})();
+</script>
+<script type="text/babel" data-presets="env,react">
+```
+- **After:** the same lines, with this block inserted after the first `</script>`:
+```html
+<script>
+/* superReactions sender glue (HANDOFF.md §4.4): "Send reactions to Substructure Loading" and
+   "Export hand-off (JSON)". Uses BridgeXfer above. Duplicated verbatim in psbeam.html and
+   stgirder.html (CLAUDE.md §3). build() returns {payload} or {error}; it runs on click only.
+   The payload goes to bridgeSuite.v1.superReactions, and a copy to
+   bridgeSuite.v1.superReactions.by.<id>, so Substructure Loading can choose when both girder
+   apps have sent. */
+(function(){
+  if(window.BXSuperRx) return;
+  function f2(v){ return (+v).toFixed(2); }
+  function summary(p){
+    var L=[];
+    (p.supports||[]).forEach(function(s){ (s.girders||[]).forEach(function(g){
+      L.push('  '+s.id+' (x = '+f2(s.x)+' ft), '+g.label+': DC1 '+f2(g.DC1)+', DC2 '+f2(g.DC2)+', DW '+f2(g.DW)+' kip'); }); });
+    if(p.liveLoad&&p.liveLoad.supports) L.push('  Live load per lane, no IM, no DF (information only): '
+      +p.liveLoad.supports.map(function(s){ return s.id+' '+f2(s.Rmax)+' kip'; }).join(', '));
+    return L.join('\n');
+  }
+  function stamp(payload, producer, file){
+    var p={}; for(var k in payload) if(Object.prototype.hasOwnProperty.call(payload,k)) p[k]=payload[k];
+    p.schemaVersion=p.schemaVersion||1; p.producer=p.producer||producer; p.producerFile=p.producerFile||file;
+    p.producedAt=new Date().toISOString();
+    if(!p.project) p.project=BridgeXfer.sharedProject()||{ name:'', bridgeId:'' };
+    if(!p.notes) p.notes=[];
+    return p;
+  }
+  function built(build){
+    if(!window.BridgeXfer){ alert('The hand-off helper is not available in this browser.'); return null; }
+    var b=null; try{ b=build(); }catch(e){ b={ error:e.message||String(e) }; }
+    if(!b||b.error||!b.payload){ alert('Cannot build the reactions hand-off: '+((b&&b.error)||'no results')+'.'); return null; }
+    return b.payload;
+  }
+  function send(build, producer, file, id){
+    var payload=built(build); if(!payload) return null;
+    var r=BridgeXfer.publish('superReactions', payload, producer, file);
+    if(r.error){ alert('Could not send the reactions: '+r.error); return r; }
+    try{ localStorage.setItem(BridgeXfer.NS+'superReactions.by.'+id, JSON.stringify(r.payload)); }catch(e){}
+    alert('Reactions sent to Substructure Loading (unfactored, kip, one girder line):\n\n'+summary(r.payload)
+      +'\n\nIn Bridge Substructure Loading, Reactions tab, click "Pull from PS-Beam / ST-Girder".');
+    return r;
+  }
+  function exportJSON(build, producer, file){
+    var payload=built(build); if(!payload) return null;
+    var p=stamp(payload, producer, file), r=BridgeXfer.exportFile('superReactions', p);
+    if(r.error) alert('Could not export: '+r.error);
+    return p;
+  }
+  window.BXSuperRx={ send:send, exportJSON:exportJSON, summary:summary, stamp:stamp };
+})();
+</script>
+```
+- **Check case:** n/a, no computed value changes.
+- **How verified:** `node --check` on every plain inline script and @babel/standalone 7.23.5 transpile of the `text/babel` block. jsdom end-to-end run with one shared localStorage stub (React 18.2.0 / Babel from npm, other CDN scripts empty): the real "Send reactions to Substructure Loading" and "Export hand-off (JSON)" buttons on the default project, then the real pull / import / apply code in Bridge Substructure Loading (44 checks, all pass; numbers in the PR). `computeAll(DEFAULTS)` of the old (origin/main 6761b2f) and new file serialised and compared: identical. `git diff` for this file is additions only.
+- **Other copies:** this glue is duplicated verbatim in psbeam.html and stgirder.html (CLAUDE.md §3). BridgeXfer v1 is in every tool listed in the PR.
+
+### R2. `bxSuperRxPayload(inp,R)` (module scope of the app, before `computeAll`)   [feature: hand-off (no result change)]
+- **Where:** new function directly above `function computeAll(inp){` (≈ line 2643). Anchor text: `function bxSuperRxPayload(inp,R){`
+- **Problem:** none (feature). Builds the payload from the load terms `computeAll()` already returns; called only by the two buttons.
+- **Governing provision:** statics of the app's own simple-span load model (R = wL/2 per uniform load; point load P at a: R_left = P(L−a)/L, R_right = Pa/L). No AASHTO provision is applied or changed.
+- **Before:**
+```js
+function computeAll(inp){
+ try{
+```
+- **After:**
+```js
+/* ===== superReactions hand-off (HANDOFF.md §4.4) =====
+   UNFACTORED end reactions of this one girder line, per load type, for Bridge Substructure
+   Loading. Reads the load terms computeAll() already produced (R.wG, R.wDk, R.wBar, R.wDW, R.L,
+   the same diaphragm filter, and buildExternal() for an active MIDAS import). Changes no result. */
+function bxSuperRxPayload(inp,R){
+  if(!R||R.error) return {error:'the design has an input error'+(R&&R.error?' ('+R.error+')':'')};
+  const L=+R.L; if(!(L>0)) return {error:'the span length is not positive'};
+  const half=w=>(+w)*L/2;                                                 // simple span: R = wL/2 at each end
+  const diaph=(inp.loads.diaph||[]).filter(d=>+d.P>0 && +d.a>=0 && +d.a<=L);  // same filter as computeAll
+  const diaL=diaph.reduce((s,d)=>s+(+d.P)*(L-(+d.a))/L,0), diaR=diaph.reduce((s,d)=>s+(+d.P)*(+d.a)/L,0);
+  // DC1 here = everything on the bare girder: self-weight + deck/haunch (+ non-composite extra) + diaphragms
+  const dc1=[half(R.wG)+half(R.wDk)+diaL, half(R.wG)+half(R.wDk)+diaR];
+  let dc2=[half(R.wBar),half(R.wBar)], dw=[half(R.wDW),half(R.wDW)];
+  let ids=['Support 1','Support 2'], xs=[0,L], span={index:null,length:+L.toFixed(3)}, live=null;
+  const pos=inp.loads.pos==='exterior'?'exterior':'interior';
+  const BB=window.BridgeBeam, db=(BB&&inp.loads.posAuto!==false)?BB.get():null;
+  const label=(db&&db.label)?db.label:(String((inp.proj&&inp.proj.girderId)||'').trim()||(pos==='exterior'?'Exterior girder':'Interior girder'));
+  const notes=['Single girder line: '+label+' ('+pos+') designed in PS-Beam. The values are for this one girder; Substructure Loading decides which girders they apply to.',
+    'Unfactored. DC1 = girder self-weight '+R.wG.toFixed(3)+' klf + deck/haunch and other non-composite DC '+R.wDk.toFixed(3)+' klf'+(diaph.length?' + '+diaph.length+' diaphragm point load(s)':'')+', all on the non-composite girder. DC2 = barrier / SIDL. DW = wearing surface.'];
+  if(R.useExt&&inp.external){
+    const ext=buildExternal({...inp.external,_selSpan:inp.external._selSpan},L,{pos:1,neg:1,v:1});
+    if(!ext) return {error:'the imported MIDAS demands could not be read'};
+    const sL=ext.spanLen, sel=ext.sel||{}, i=Math.max(1,+sel.idx||1), x0=+sel.x0||0;
+    dc2=[ext.V_DC2(0),-ext.V_DC2(sL)]; dw=[ext.V_DW(0),-ext.V_DW(sL)];    // V_ already sign-flipped to + up at the left end
+    ids=['Support '+i,'Support '+(i+1)]; xs=[x0,x0+sL]; span={index:i,length:+sL.toFixed(3)};
+    notes.push('MIDAS import active (span '+i+'): DC2 and DW are the imported shears at the two ends of this span, sign-corrected to reactions (+ up). At an interior pier they are this span\'s share only; add the share of the adjacent span. DC1 is computed by PS-Beam on the simple non-composite span (L = '+L.toFixed(2)+' ft).');
+  } else {
+    notes.push('Simple span L = '+L.toFixed(2)+' ft: R = wL/2 for each uniform load; diaphragm point loads by statics.');
+    const hl=R.hl;
+    if(hl&&isFinite(hl.Vtr)&&isFinite(hl.Vtd)&&isFinite(hl.Vln)){
+      const Rmax=Math.max(hl.Vtr,hl.Vtd)+hl.Vln;
+      live={basis:'per lane, no IM, no DF',vehicle:'HL-93: max(design truck, design tandem) + lane load, simple span',
+        supports:ids.map(id=>({id,Rmax:+Rmax.toFixed(3),Rmin:0}))};
+      notes.push('Live load is information only: one lane on the simple span, no IM, no DF, no multiple presence.');
+    }
+  }
+  const r3=v=>+(+v).toFixed(3);
+  return {payload:{_schema:'bridge-super-reactions',schemaVersion:1,
+    project:(window.BridgeXfer&&BridgeXfer.sharedProject())||{name:(inp.proj&&inp.proj.name)||'',bridgeId:''},
+    units:{force:'kip',length:'ft'},factored:false,imIncluded:false,dfIncluded:false,perGirder:true,
+    girderLine:{label,position:pos,beamIndex:db?db.index:null,source:R.useExt?'PS-Beam DC1 + MIDAS DC2/DW':'PS-Beam simple span'},
+    span,
+    supports:ids.map((id,k)=>({id,x:r3(xs[k]),girders:[{label,position:pos,DC1:r3(dc1[k]),DC2:r3(dc2[k]),DW:r3(dw[k])}]})),
+    liveLoad:live,notes}};
+}
+function computeAll(inp){
+ try{
+```
+- **Check case (default project):** see the PR body; DC1 = w_DC1·L/2 is hand-checked there.
+- **How verified:** `node --check` on every plain inline script and @babel/standalone 7.23.5 transpile of the `text/babel` block. jsdom end-to-end run with one shared localStorage stub (React 18.2.0 / Babel from npm, other CDN scripts empty): the real "Send reactions to Substructure Loading" and "Export hand-off (JSON)" buttons on the default project, then the real pull / import / apply code in Bridge Substructure Loading (44 checks, all pass; numbers in the PR). `computeAll(DEFAULTS)` of the old (origin/main 6761b2f) and new file serialised and compared: identical. `git diff` for this file is additions only.
+- **Other copies:** stgirder.html / psbeam.html carry their own version (different load terms).
+
+### R3. Send / export handlers in `App()`   [feature: hand-off (no result change)]
+- **Where:** `App()`, right after `bxUseProject`. Anchor text: `const bxSendRx=()=>`
+- **Before:**
+```jsx
+    setInp(p=>({...p,proj:{...p.proj,...pp}})); }); };
+```
+- **After:**
+```jsx
+    setInp(p=>({...p,proj:{...p.proj,...pp}})); }); };
+  /* superReactions hand-off (HANDOFF.md §4.4): send / export the unfactored end reactions of this girder line. */
+  const bxSendRx=()=>{ if(window.BXSuperRx) window.BXSuperRx.send(()=>bxSuperRxPayload(inp,R),'PS-Beam','psbeam.html','psbeam'); else alert('The hand-off helper is not available in this browser.'); };
+  const bxExportRx=()=>{ if(window.BXSuperRx) window.BXSuperRx.exportJSON(()=>bxSuperRxPayload(inp,R),'PS-Beam','psbeam.html'); else alert('The hand-off helper is not available in this browser.'); };
+```
+- **Check case:** n/a, no computed value changes.
+- **How verified:** `node --check` on every plain inline script and @babel/standalone 7.23.5 transpile of the `text/babel` block. jsdom end-to-end run with one shared localStorage stub (React 18.2.0 / Babel from npm, other CDN scripts empty): the real "Send reactions to Substructure Loading" and "Export hand-off (JSON)" buttons on the default project, then the real pull / import / apply code in Bridge Substructure Loading (44 checks, all pass; numbers in the PR). `computeAll(DEFAULTS)` of the old (origin/main 6761b2f) and new file serialised and compared: identical. `git diff` for this file is additions only.
+
+### R4. The two buttons, next to Export JSON   [feature: hand-off (no result change)]
+- **Where:** `App()` render, title-block `btnrow noprint`. Anchor text: `Send reactions to Substructure Loading</button>`
+- **Before:**
+```jsx
+          <button className="btn sm" onClick={exportJSON}>Export JSON</button>
+```
+- **After:**
+```jsx
+          <button className="btn sm ghost" onClick={bxSendRx} title="Send the unfactored DC1, DC2 and DW end reactions of this girder line (kip) to Bridge Substructure Loading">Send reactions to Substructure Loading</button>
+          <button className="btn sm ghost" onClick={bxExportRx} title="Save the same reactions hand-off as a JSON file (for Import hand-off in Substructure Loading, or a calc package)">Export hand-off (JSON)</button>
+          <span style={{width:1,height:20,background:'var(--line)',margin:'0 3px'}}></span>
+          <button className="btn sm" onClick={exportJSON}>Export JSON</button>
+```
+- **Check case:** n/a, no computed value changes.
+- **How verified:** `node --check` on every plain inline script and @babel/standalone 7.23.5 transpile of the `text/babel` block. jsdom end-to-end run with one shared localStorage stub (React 18.2.0 / Babel from npm, other CDN scripts empty): the real "Send reactions to Substructure Loading" and "Export hand-off (JSON)" buttons on the default project, then the real pull / import / apply code in Bridge Substructure Loading (44 checks, all pass; numbers in the PR). `computeAll(DEFAULTS)` of the old (origin/main 6761b2f) and new file serialised and compared: identical. `git diff` for this file is additions only.
+- **Open items:**
+  - O-R1. MIDAS mode: the reactions are the imported shears at x = 0 and x = L of the selected span, i.e. exactly what this app uses at those stations. If the MIDAS file has a single station at an interior pier, the value there can belong to the adjacent span; Substructure Loading warns on negative dead-load reactions, but the engineer should check pier values in this mode.
+  - O-R2. index.html (MCT) is not a sender yet: its results hold no support reactions per load case (see fixlog/index.md).
