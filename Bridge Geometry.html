@@ -155,6 +155,7 @@
     <button class="sm ghost" id="proj_save" title="Export the current bridge as a JSON file.">Export JSON</button>
     <button class="sm ghost" id="proj_load" title="Import a bridge from a JSON file.">Import JSON</button>
     <input type="file" id="proj_file" accept="application/json,.json" style="display:none">
+    <button class="sm ghost" id="dxf_export" type="button" title="Download the plan (alignment, supports, girders, deck edges, elevations) and optionally the profile as a DXF drawing, in State Plane or local coordinates.">Export DXF</button>
     <span class="sep" style="display:inline-block;width:1px;height:18px;background:var(--graphite);margin:0 2px;"></span>
     <button class="sm ghost" id="bgx_send" type="button" title="Send spans, girder spacing, skew and overhangs to the LL &amp; DL Distribution tool (lldf.html). You review the values and choices first; LL &amp; DL asks again before applying anything.">Send to LL &amp; DL</button>
     <button class="sm ghost" id="bgx_export" type="button" title="Download the same LL &amp; DL geometry hand-off as a JSON file (for another browser or device, or the calc package).">Export hand-off (JSON)</button>
@@ -4853,6 +4854,410 @@ else { setStatus('autosave OFF — browser storage blocked here. Use Export JSON
   const bs=document.getElementById('bgx_send'), be=document.getElementById('bgx_export');
   if(bs) bs.addEventListener('click',openDlg);
   if(be) be.addEventListener('click',openDlg);
+})();
+</script>
+<script>
+/* ===== DXF export: plan (+ optional profile) as an ASCII DXF R12 drawing =====
+   Everything is drawn from the same engine calls the plan, the deck plan and the output tables use
+   (ENG.align elements, ENG.deckAtSupport, ENG.deckPointCW, ENG.chordExtent, ENG.supportChordT,
+   seatData(), ENG.prof.elevAt, pickElev). Read-only on this tool's state: no geometry result, no
+   project field and no saved format is changed. The only storage it touches is its own option key,
+   bridgeGeomEngine.dxfExport.v1 (export settings, per browser).
+   The writer helpers (fmt, enc, entity emitters, HEADER/TABLES assembly) are adapted from the DXF R12
+   writer in Gusset Plate Rating.html (GPDXF.write). Shared snippet, kept duplicated (CLAUDE.md §3).
+   Layers: BG-ALIGN, BG-ALIGN-TICK, BG-ALIGN-TEXT, BG-BRG-CL, BG-BRG, BG-BRG-TEXT, BG-GIRDER, BG-DECK,
+   BG-CURB, BG-REFLINE, BG-ELEV-PT, BG-ELEV-TEXT, BG-PICK, BG-NOTES, BG-PROF, BG-PROF-TAN,
+   BG-PROF-GRID, BG-PROF-BRG, BG-PROF-TEXT. */
+(function(){
+  'use strict';
+  const OPT_KEY='bridgeGeomEngine.dxfExport.v1';
+  const DEF={ coord:'auto', align:true, brg:true, girder:true, deck:true, curb:true, ref:true, elev:true,
+    pick:true, notes:true, profile:true, tickInt:50, margin:100, textH:'', elevDec:2, profVE:5, profX:'', profY:'' };
+
+  /* ---------- writer: ASCII DXF R12 (AC1009), CRLF (adapted from Gusset Plate Rating.html GPDXF.write) ---------- */
+  const fmt = x => { let s = (Math.abs(x) < 5e-9 ? 0 : x).toFixed(8); if (s.indexOf('.') >= 0) s = s.replace(/0+$/, '').replace(/\.$/, ''); return s === '-0' ? '0' : s; };
+  function enc(s) { return String(s ?? '').replace(/[\r\n\t]+/g, ' ').replace(/[^\x20-\x7e]/g, c => { const cp = c.codePointAt(0); return '\\U+' + cp.toString(16).toUpperCase().padStart(4, '0'); }).slice(0, 250); }
+  function makeWriter(){
+    const L = [], ent = [], bb = [Infinity, Infinity, -Infinity, -Infinity];
+    const grow = (x, y) => { if (!isFinite(x) || !isFinite(y)) return; bb[0] = Math.min(bb[0], x); bb[1] = Math.min(bb[1], y); bb[2] = Math.max(bb[2], x); bb[3] = Math.max(bb[3], y); };
+    const g = (c, v) => ent.push(String(c).padStart(3), String(v));
+    const ok = (...p) => p.every(q => isFinite(q[0]) && isFinite(q[1]));
+    let n = 0;
+    const W = {
+      bb, count: () => n,
+      layer(name, col, lt = 'CONTINUOUS') { if (!L.some(l => l[0] === name)) L.push([name, col, lt]); return name; },
+      line(ly, a, b) { if (!ok(a, b)) return; n++; g(0, 'LINE'); g(8, ly); g(10, fmt(a[0])); g(20, fmt(a[1])); g(30, 0); g(11, fmt(b[0])); g(21, fmt(b[1])); g(31, 0); grow(a[0], a[1]); grow(b[0], b[1]); },
+      pline(ly, pts, closed = false) { if (pts.length < 2 || !ok(...pts)) return; n++; g(0, 'POLYLINE'); g(8, ly); g(66, 1); g(10, 0); g(20, 0); g(30, 0); g(70, closed ? 1 : 0);
+        pts.forEach(q => { g(0, 'VERTEX'); g(8, ly); g(10, fmt(q[0])); g(20, fmt(q[1])); g(30, 0); grow(q[0], q[1]); }); g(0, 'SEQEND'); g(8, ly); },
+      circle(ly, c, r) { if (!ok(c) || !(r > 0)) return; n++; g(0, 'CIRCLE'); g(8, ly); g(10, fmt(c[0])); g(20, fmt(c[1])); g(30, 0); g(40, fmt(r)); grow(c[0] - r, c[1] - r); grow(c[0] + r, c[1] + r); },
+      // counter-clockwise from a0 to a1 (degrees), as DXF defines an ARC
+      arc(ly, c, r, a0, a1) { if (!ok(c) || !(r > 0)) return; n++; g(0, 'ARC'); g(8, ly); g(10, fmt(c[0])); g(20, fmt(c[1])); g(30, 0); g(40, fmt(r)); g(50, fmt(a0)); g(51, fmt(a1));
+        let sw = ((a1 - a0) % 360 + 360) % 360; for (let k = 0; k <= 32; k++) { const t = (a0 + sw * k / 32) * Math.PI / 180; grow(c[0] + r * Math.cos(t), c[1] + r * Math.sin(t)); } },
+      point(ly, p, z) { if (!ok(p)) return; n++; g(0, 'POINT'); g(8, ly); g(10, fmt(p[0])); g(20, fmt(p[1])); g(30, fmt(isFinite(z) ? z : 0)); grow(p[0], p[1]); },
+      // o = {rot (deg), ha 0 left / 1 center / 2 right, va 0 baseline / 1 bottom / 2 middle / 3 top}
+      text(ly, at, h, s, o = {}) { if (!ok(at) || !(h > 0)) return; n++; const rot = o.rot || 0, ha = o.ha || 0, va = o.va || 0;
+        g(0, 'TEXT'); g(8, ly); g(10, fmt(at[0])); g(20, fmt(at[1])); g(30, 0); g(40, fmt(h)); g(1, enc(s));
+        if (rot) g(50, fmt(rot)); if (ha) g(72, ha); if (ha || va) { g(11, fmt(at[0])); g(21, fmt(at[1])); g(31, 0); } if (va) g(73, va);
+        const w = 0.62 * h * String(s).length, x0 = ha === 1 ? -w / 2 : ha === 2 ? -w : 0, y0 = va === 2 ? -h / 2 : va === 3 ? -h : 0;
+        const c = Math.cos(rot * Math.PI / 180), sn = Math.sin(rot * Math.PI / 180);
+        [[x0, y0], [x0 + w, y0], [x0, y0 + h], [x0 + w, y0 + h]].forEach(q => grow(at[0] + q[0] * c - q[1] * sn, at[1] + q[0] * sn + q[1] * c)); },
+      finish(hd) {
+        const o = [], h = (c, v) => o.push(String(c).padStart(3), String(v));
+        const b = isFinite(bb[0]) ? bb : [0, 0, 0, 0];
+        h(0, 'SECTION'); h(2, 'HEADER');
+        h(9, '$ACADVER'); h(1, 'AC1009'); h(9, '$INSBASE'); h(10, 0); h(20, 0); h(30, 0);
+        h(9, '$EXTMIN'); h(10, fmt(b[0])); h(20, fmt(b[1])); h(30, 0); h(9, '$EXTMAX'); h(10, fmt(b[2])); h(20, fmt(b[3])); h(30, 0);
+        h(9, '$LTSCALE'); h(40, fmt(hd.ltscale || 1)); h(9, '$INSUNITS'); h(70, hd.insunits || 0); h(0, 'ENDSEC');
+        h(0, 'SECTION'); h(2, 'TABLES');
+        h(0, 'TABLE'); h(2, 'LTYPE'); h(70, 3);
+        h(0, 'LTYPE'); h(2, 'CONTINUOUS'); h(70, 0); h(3, 'Solid line'); h(72, 65); h(73, 0); h(40, 0);
+        h(0, 'LTYPE'); h(2, 'DASHED'); h(70, 0); h(3, '__ __ __ __'); h(72, 65); h(73, 2); h(40, 0.75); h(49, 0.5); h(49, -0.25);
+        h(0, 'LTYPE'); h(2, 'CENTER'); h(70, 0); h(3, '____ _ ____ _'); h(72, 65); h(73, 4); h(40, 2); h(49, 1.25); h(49, -0.25); h(49, 0.25); h(49, -0.25);
+        h(0, 'ENDTAB');
+        h(0, 'TABLE'); h(2, 'LAYER'); h(70, L.length); L.forEach(([nm, c, lt]) => { h(0, 'LAYER'); h(2, nm); h(70, 0); h(62, c); h(6, lt); }); h(0, 'ENDTAB');
+        h(0, 'TABLE'); h(2, 'STYLE'); h(70, 1); h(0, 'STYLE'); h(2, 'STANDARD'); h(70, 0); h(40, 0); h(41, 1); h(50, 0); h(71, 0); h(42, 0.2); h(3, 'txt'); h(4, ''); h(0, 'ENDTAB');
+        h(0, 'ENDSEC');
+        h(0, 'SECTION'); h(2, 'BLOCKS'); h(0, 'ENDSEC');
+        h(0, 'SECTION'); h(2, 'ENTITIES'); o.push(...ent); h(0, 'ENDSEC'); h(0, 'EOF');
+        return { text: o.join('\r\n') + '\r\n', layers: L.map(l => l[0]) };
+      }
+    };
+    return W;
+  }
+
+  /* ---------- small helpers ---------- */
+  const deg = r => r * 180 / Math.PI;
+  const n360 = a => ((a % 360) + 360) % 360;
+  function niceH(v){ const L=[0.05,0.1,0.15,0.2,0.25,0.3,0.4,0.5,0.75,1,1.25,1.5,2,2.5,3,4,5,6,8,10,12,15,20,25,30,40,50];
+    let best=L[0]; L.forEach(x=>{ if(x<=v) best=x; }); return best; }
+  // reading direction kept upright: returns {rot, flip}
+  function upright(v){ let a=n360(deg(Math.atan2(v[1],v[0]))); const flip=(a>90+1e-9 && a<=270+1e-9); if(flip) a=n360(a+180); return {rot:a, flip}; }
+  function unit(v){ const l=Math.hypot(v[0],v[1])||1; return [v[0]/l, v[1]/l]; }
+  const add=(p,v,s)=>[p[0]+v[0]*s, p[1]+v[1]*s];
+  const r4=x=>+(+x).toFixed(4);
+  function hasSP(){ const P=mapPOB(); return (P.x!==0 || P.y!==0); }
+  function zoneText(){ const s=document.getElementById('map_datum'); return s&&s.selectedOptions&&s.selectedOptions[0]?s.selectedOptions[0].text:''; }
+  function unitsText(){ const s=document.getElementById('map_units'); return s&&s.selectedOptions&&s.selectedOptions[0]?s.selectedOptions[0].text:'US survey ft'; }
+
+  /* Build the DXF. opt as DEF. Returns {text, layers, warnings, stats, frame} or {error}. frame (the
+     coordinate map) is returned for verification only. */
+  function build(opt){
+    const o=Object.assign({}, DEF, opt||{});
+    const gErr=geometryInputErrors();
+    if(gErr.length) return {error:'Fix the geometry input errors first: '+gErr[0]};
+    const E=ENG; const su=sortedUnits();
+    if(!E) return {error:'Compute the bridge first.'};
+    if(su.length<2 || !E.chord) return {error:'Define at least two supports (Abut 1 and Abut 2) first.'};
+    const warnings=[];
+    const CH=E.chord;
+    let coord=o.coord==='auto' ? (hasSP()?'sp':'local') : o.coord;
+    if(coord==='sp' && !hasSP()) warnings.push('The POB Northing/Easting are 0, 0, so the "State Plane" coordinates are just the alignment frame.');
+    // ---- coordinate frame: engine (x = E, y = N, feet from the POB) -> drawing (X, Y) ----
+    let T, k, insunits, basis=[];
+    if(coord==='sp'){
+      // the Site Map's own conversion: POB in the chosen units, alignment geometry in feet (engToUS / usftToMap)
+      T=(x,y)=>{ const u=engToUS(x,y); return [usftToMap(u.E), usftToMap(u.N)]; };
+      k=usftToMap(1); insunits=(mapUnits()==='m')?6:2;
+      basis.push('Coordinates: State Plane Easting (X), Northing (Y). Zone: '+zoneText()+', EPSG:'+mapEpsg()+'. Units: '+unitsText()+' (as set on the Site Map tab).');
+      if(mapUnits()!=='usft') basis.push('The POB is in '+unitsText()+'; the alignment geometry (feet) is converted from the POB, as the Site Map does. Elevations and stations stay in feet.');
+    } else {
+      const O=CH.P1, ux=CH.ux, uy=CH.uy;
+      T=(x,y)=>{ const dx=x-O.x, dy=y-O.y; return [dx*ux+dy*uy, -dx*uy+dy*ux]; };
+      k=1; insunits=2;
+      basis.push('Coordinates: local. Origin = construction reference line at Abut 1 (Sta '+formatStation(CH.s1)+', N '+O.y.toFixed(4)+', E '+O.x.toFixed(4)+').');
+      basis.push('+X along the reference line toward Abut 2 (bearing '+azimuthToQuadrant(n360(deg(Math.atan2(ux,uy))))+'), +Y to the left. Units: feet.');
+    }
+    const TP=p=>T(p.x,p.y);
+    const W=makeWriter();
+    const LY={
+      align:W.layer('BG-ALIGN',1,'CENTER'), tick:W.layer('BG-ALIGN-TICK',1), atext:W.layer('BG-ALIGN-TEXT',1),
+      brgcl:W.layer('BG-BRG-CL',4,'CENTER'), brg:W.layer('BG-BRG',5,'DASHED'), btext:W.layer('BG-BRG-TEXT',4),
+      gird:W.layer('BG-GIRDER',8), deck:W.layer('BG-DECK',7), curb:W.layer('BG-CURB',3,'DASHED'), ref:W.layer('BG-REFLINE',6,'CENTER'),
+      ept:W.layer('BG-ELEV-PT',2), etext:W.layer('BG-ELEV-TEXT',2), pick:W.layer('BG-PICK',30), notes:W.layer('BG-NOTES',7),
+      prof:W.layer('BG-PROF',1), ptan:W.layer('BG-PROF-TAN',8,'DASHED'), pgrid:W.layer('BG-PROF-GRID',9), pbrg:W.layer('BG-PROF-BRG',4,'DASHED'), ptext:W.layer('BG-PROF-TEXT',7)
+    };
+    const s1=su[0].sta, s2=su[su.length-1].sta;
+    const margin=Math.max(0, +o.margin||0);
+    const sA=Math.max(E.align.staStart, s1-margin), sB=Math.min(E.align.staEnd, s2+margin);
+    const bw=bridgeCL();
+    const lineCW=(ly,tA,tB,w)=>W.line(ly, TP(E.deckPointCW(tA,w)), TP(E.deckPointCW(tB,w)));
+    // per-span chord-parallel line at a PGL-coord offset, ends exactly as the deck plan draws them
+    // (end spans run to the skewed deck end, interior ends at the support's chord station)
+    function spanLine(ly, i, off){ const w=off-bw, ext=E.chordExtent(w);
+      const tA=(i===0)?ext.t0:E.supportChordT(su[i].sta), tB=(i===su.length-2)?ext.t1:E.supportChordT(su[i+1].sta);
+      lineCW(ly,tA,tB,w); }
+
+    /* ===== 1. plan linework (geometry first, so the text height can be scaled to it) ===== */
+    const alignStats={lines:0, arcs:0, plines:0};
+    if(o.align){
+      const els=E.align.elems, typed=(els.length===ELEMS.length);
+      els.forEach((el,i)=>{
+        const a=Math.max(sA,el.staStart), b=Math.min(sB,el.staEnd); if(!(b-a>1e-6)) return;
+        const typ=typed?elemType(i):'?';
+        if(typ==='tan'){ W.line(LY.align, TP(el.at(a)), TP(el.at(b))); alignStats.lines++; return; }
+        if(typ==='crv'){
+          const pa=el.at(a), pb=el.at(b), pm=el.at((a+b)/2), kk=(pb.brg-pa.brg)/(b-a);
+          if(Math.abs(kk)>1e-12){
+            // centre from the curve's own start point and bearing (makeCurve), checked against its end and mid points
+            const cx=pa.x+Math.cos(pa.brg)/kk, cy=pa.y-Math.sin(pa.brg)/kk, r=1/Math.abs(kk);
+            if([pb,pm].every(p=>Math.abs(Math.hypot(p.x-cx,p.y-cy)-r)<1e-6)){
+              const C=T(cx,cy), A=TP(pa), B=TP(pb), M=TP(pm);
+              const an=P=>n360(deg(Math.atan2(P[1]-C[1],P[0]-C[0])));
+              const a0=an(A), a1=an(B), am=an(M);
+              const ccw=n360(am-a0) < n360(a1-a0);
+              W.arc(LY.align, C, r*k, ccw?a0:a1, ccw?a1:a0); alignStats.arcs++; return;
+            }
+          }
+        }
+        // spiral (or anything else): polyline through the element's own interpolation nodes
+        const N=200, Lel=el.staEnd-el.staStart, sts=[a];
+        for(let j=1;j<N;j++){ const s=el.staStart+Lel*j/N; if(s>a+1e-9 && s<b-1e-9) sts.push(s); }
+        sts.push(b); W.pline(LY.align, sts.map(s=>TP(el.at(s)))); alignStats.plines++;
+      });
+    }
+    if(o.ref){
+      const e0=E.chordExtent(0); lineCW(LY.ref, e0.t0, e0.t1, 0);
+      // true deck centerline, per span, where it differs from the reference line (as the deck plan draws it)
+      for(let i=0;i<su.length-1;i++){ const dcl=deckCenterOffset(i+1); if(Math.abs(dcl-bw)>1e-6) spanLine(LY.ref, i, dcl); }
+    }
+    if(o.deck){
+      for(let i=0;i<su.length-1;i++){ const ed=edgesForSpan(i+1); spanLine(LY.deck,i,ed.l); spanLine(LY.deck,i,ed.r); }
+      // deck ends along the abutment skew lines
+      [su[0], su[su.length-1]].forEach((u,j)=>{ const ed=edgesForSpan(j===0?1:su.length-1);
+        W.line(LY.deck, TP(E.deckAtSupport({sta:u.sta,skew:u.skew},ed.l)), TP(E.deckAtSupport({sta:u.sta,skew:u.skew},ed.r))); });
+    }
+    if(o.girder){ for(let i=0;i<su.length-1;i++) girdersForSpan(i+1).forEach(off=>spanLine(LY.gird,i,off)); }
+    if(o.curb){
+      const anyCurb=['curb_l','curb_r'].some(id=>{ const el=document.getElementById(id); return el&&el.value!==''; }) || su.some(u=>(u.curbL!=null&&u.curbL!=='')||(u.curbR!=null&&u.curbR!==''));
+      if(anyCurb){ ['L','R'].forEach(side=>{ const pts=[];
+        for(let i=0;i<su.length-1;i++){ const a=su[i].sta, b=su[i+1].sta, n=10;
+          for(let j=(i===0?0:1);j<=n;j++){ const s=a+(b-a)*j/n; pts.push(TP(E.deckPointCW(E.supportChordT(s), curbAt(s,side)-bw))); } }
+        W.pline(LY.curb, pts); }); }
+    }
+    const supLines=[];   // {u, A, B, bl?}
+    if(o.brg || o.elev){
+      su.forEach(u=>{ const span=Math.max(1,Math.min(su.length-1,spanOfSta(u.sta))), ed=edgesForSpan(span);
+        const A=TP(E.deckAtSupport({sta:u.sta,skew:u.skew},ed.l)), B=TP(E.deckAtSupport({sta:u.sta,skew:u.skew},ed.r));
+        supLines.push({u, A, B, cl:true});
+        bearingLinesFor(u).forEach(bl=>{ if(Math.abs(bl.sta-u.sta)<1e-6) return;
+          const ed2=edgesForSpan(bearingSpan(u,bl,su));
+          supLines.push({u, bl, A:TP(E.deckAtSupport(bl,ed2.l)), B:TP(E.deckAtSupport(bl,ed2.r)), cl:false}); }); });
+      if(o.brg) supLines.forEach(s=>W.line(s.cl?LY.brgcl:LY.brg, s.A, s.B));
+    }
+    const geomBB=W.bb.slice();
+    const ext=Math.max(geomBB[2]-geomBB[0], geomBB[3]-geomBB[1]);
+    const h=(+o.textH>0)?+o.textH:niceH(isFinite(ext)&&ext>0?ext/200:1);
+    const dec=(+o.elevDec===3)?3:2;
+    // drawing direction of the chord (up-station along the bridge)
+    const chordDir=unit((()=>{ const a=T(CH.P1.x,CH.P1.y), b=T(CH.P2.x,CH.P2.y); return [b[0]-a[0], b[1]-a[1]]; })());
+
+    /* ===== 2. alignment ticks, station labels and key points ===== */
+    if(o.align){
+      const iv=Math.max(1,+o.tickInt||50), hl=0.75*h/k;
+      for(let st=Math.ceil((sA-1e-9)/iv)*iv; st<=sB+1e-6; st+=iv){
+        const a=E.align.at(st), nr=a.brg+Math.PI/2, rn=[Math.sin(nr),Math.cos(nr)];   // right normal (engine)
+        const p0=[a.x+rn[0]*hl, a.y+rn[1]*hl], p1=[a.x-rn[0]*hl, a.y-rn[1]*hl];
+        W.line(LY.tick, T(p0[0],p0[1]), T(p1[0],p1[1]));
+        const L0=T(p1[0],p1[1]), P=TP(a), dir=unit([L0[0]-P[0], L0[1]-P[1]]), u=upright(dir), at=add(L0,dir,0.4*h);
+        W.text(LY.atext, at, h, formatStation(st), {rot:u.rot, ha:u.flip?2:0, va:2});
+      }
+      const els=E.align.elems, keys=[];
+      for(let i=0;i<els.length-1;i++){ const lbl=transitionLabel(elemType(i), elemType(i+1)); if(lbl) keys.push([lbl, els[i].staEnd]); }
+      keys.push(['POB', E.align.staStart], ['POE', E.align.staEnd]);
+      keys.forEach(([lbl,st])=>{ if(st<sA-1e-6 || st>sB+1e-6) return;
+        const a=E.align.at(st), P=TP(a), nr=a.brg+Math.PI/2, Q=T(a.x+Math.sin(nr), a.y+Math.cos(nr)), dir=unit([Q[0]-P[0],Q[1]-P[1]]), u=upright(dir);
+        W.circle(LY.tick, P, 0.4*h);
+        W.text(LY.atext, add(P,dir,1.2*h), h, lbl+' '+formatStation(st), {rot:u.rot, ha:u.flip?2:0, va:2}); });
+    }
+
+    /* ===== 3. support / bearing labels ===== */
+    if(o.brg){
+      supLines.forEach(s=>{
+        if(s.cl){ const dir=unit([s.A[0]-s.B[0], s.A[1]-s.B[1]]), u=upright(dir), U=s.u;
+          const txt=U.name+' CL  Sta '+formatStation(U.sta)+'  Skew '+(+(+U.skew||0).toFixed(4))+'°';
+          W.text(LY.btext, add(s.A,dir,0.8*h), h, txt, {rot:u.rot, ha:u.flip?2:0, va:2});
+        } else { const dir=unit([s.B[0]-s.A[0], s.B[1]-s.A[1]]), u=upright(dir);
+          const rd=u.flip?[-dir[0],-dir[1]]:dir, up=[-rd[1], rd[0]];          // reading direction and its "up"
+          const ahead=s.bl.sta>s.u.sta, upIsAhead=(up[0]*chordDir[0]+up[1]*chordDir[1])>0;
+          W.text(LY.btext, add(s.B,dir,0.6*h), 0.7*h, s.bl.label+'  Sta '+formatStation(s.bl.sta), {rot:u.rot, ha:u.flip?2:0, va:(ahead===upIsAhead)?1:3});
+        }
+      });
+    }
+
+    /* ===== 4. elevations at girder x bearing-line points (the Beam-Seat table's own data) ===== */
+    let elevCount=0;
+    if(o.elev){
+      const ur=upright(chordDir), rd=ur.flip?[-chordDir[0],-chordDir[1]]:chordDir, up=[-rd[1], rd[0]];
+      seatData().forEach(r=>{
+        const back=(r.sta<r.unit.sta-1e-9) || (r.unit===su[su.length-1]);   // label into the span this bearing serves
+        const side=back?-1:1;                                                 // -1 = down-station side
+        const ha=(side*(rd[0]*chordDir[0]+rd[1]*chordDir[1])>0)?0:2;
+        r.seats.forEach(s=>{ const p=E.deckAtSupport({sta:r.sta, skew:r.skew}, s.off), P=TP(p);
+          W.point(LY.ept, P, s.deckZ*k); const c=0.3*h;
+          W.line(LY.ept, [P[0]-c,P[1]-c], [P[0]+c,P[1]+c]); W.line(LY.ept, [P[0]-c,P[1]+c], [P[0]+c,P[1]-c]);
+          const at=add(P, chordDir, side*0.6*h);
+          W.text(LY.etext, add(at,up,0.2*h), 0.8*h, 'TD '+s.deckZ.toFixed(dec), {rot:ur.rot, ha, va:1});
+          W.text(LY.etext, add(at,up,-0.2*h), 0.8*h, 'BS '+s.seatZ.toFixed(dec), {rot:ur.rot, ha, va:3});
+          elevCount++; });
+      });
+    }
+
+    /* ===== 5. picked points (Site Map) ===== */
+    let pickCount=0;
+    if(o.pick && typeof PICKPTS!=='undefined' && PICKPTS.length){
+      if(typeof proj4==='undefined') warnings.push('Picked points were left out: the map library (proj4) did not load, so their positions cannot be converted.');
+      else PICKPTS.forEach(p=>{ try{
+        // the same derivation the pick table uses (recomputePickPoints)
+        const eg=llToEng(p.lat,p.lng), pr=E.deckPointAtXY(eg.x,eg.y), el=pickElev(pr.sta,pr.off,{x:eg.x,y:eg.y}), P=T(eg.x,eg.y);
+        W.point(LY.pick, P, el?el.deck*k:0); W.circle(LY.pick, P, 0.35*h);
+        W.text(LY.pick, add(P,[1,1],0.5*h), 0.8*h, p.label||'', {va:1});
+        W.text(LY.pick, add(P,[1,-1],0.5*h), 0.6*h, 'Sta '+formatStation(pr.sta)+'  Off '+pr.off.toFixed(2)+(el?'  TD '+el.deck.toFixed(3):'')+(el&&el.outside?' (outside deck)':''), {va:3});
+        pickCount++; }catch(e){ warnings.push('Picked point '+(p.label||'')+' could not be converted.'); } });
+    }
+
+    /* ===== 6. title block notes, below the plan ===== */
+    const planBB=W.bb.slice();
+    let yCur=planBB[1]-3*h;
+    if(o.notes){
+      const shared=(window.BridgeXfer&&BridgeXfer.sharedProject&&BridgeXfer.sharedProject())||null;
+      const lines=[
+        ['BRIDGE GEOMETRY - PLAN'+(o.profile?' AND PROFILE':''), 1.5*h],
+        ['Project: '+((shared&&shared.name)||'-')+'   Bridge: '+((typeof CURRENT_NAME!=='undefined'&&CURRENT_NAME)||'(unsaved)'), h],
+        ['Alignment: POB Sta '+formatStation(E.align.staStart)+', N '+(+document.getElementById('h_y0').value||0)+', E '+(+document.getElementById('h_x0').value||0)+', bearing '+azimuthToQuadrant(parseBearingToAzimuth(document.getElementById('h_brg0').value)||0)+'; POE Sta '+formatStation(E.align.staEnd)+'. Drawn Sta '+formatStation(sA)+' to '+formatStation(sB)+'.', h],
+        ...basis.map(t=>[t,h]),
+        ['Vertical datum: as entered in the vertical profile (not specified in the tool). Elevations and stations in feet.', h],
+        ['TD = top of deck, BS = beam seat at each girder x bearing line (Beam Seat Output tab). FG = finished grade = profile (top of pavement).', h],
+        ['Layers: BG-ALIGN (PGL, arcs = circular curves, polylines = spirals), -TICK, -TEXT; BG-BRG-CL support CL; BG-BRG bearing lines; BG-GIRDER; BG-DECK; BG-CURB; BG-REFLINE; BG-ELEV-PT/-TEXT; BG-PICK; BG-PROF*.', h],
+        ['Generated by Bridge Geometry (Bridge Geometry.html) on '+new Date().toISOString().slice(0,16).replace('T',' ')+'. Verify against the survey before use.', h]
+      ];
+      lines.forEach(([t,hh])=>{ W.text(LY.notes, [planBB[0], yCur], hh, t); yCur-=1.7*hh; });
+      yCur-=2*h;
+    }
+
+    /* ===== 7. profile along the PGL ===== */
+    let profFrame=null;
+    if(o.profile){
+      const VE=(+o.profVE>0)?+o.profVE:5, n=Math.min(2000, Math.max(50, Math.ceil((sB-sA)/2)));
+      const S=[], Z=[]; for(let i=0;i<=n;i++){ const s=sA+(sB-sA)*i/n; S.push(s); Z.push(E.prof.elevAt(s)); }
+      const zmin=Math.min(...Z), zmax=Math.max(...Z);
+      let ei=1; [0.5,1,2,5,10,20,50,100].some(c=>{ ei=c; return (zmax-zmin)/c<=8 && c*VE*k>=1.5*h; });   // labels must not overlap
+      const zlo=Math.floor(zmin/ei)*ei-ei, zhi=Math.ceil(zmax/ei)*ei+ei;
+      const Hgt=(zhi-zlo)*VE*k;
+      // bearing-line labels stand above the frame: reserve their length so they clear the notes
+      const brgTxt=[]; su.forEach(u=>bearingLinesFor(u).forEach(bl=>{ if(bl.sta<sA-1e-6||bl.sta>sB+1e-6) return;
+        const fg=E.prof.elevAt(bl.sta), td=E.getDeckPoint(bl.sta,0).z;
+        brgTxt.push([bl, fg, bl.label+'  Sta '+formatStation(bl.sta)+'  FG '+fg.toFixed(dec)+'  TD@PGL '+td.toFixed(dec)]); }));
+      const topGap=2*h+Math.max(0,...brgTxt.map(b=>0.62*0.7*h*b[2].length));
+      const X0=(o.profX!==''&&isFinite(+o.profX))?+o.profX:planBB[0];
+      const Y0=(o.profY!==''&&isFinite(+o.profY))?+o.profY:(yCur-topGap-Hgt);
+      const PX=s=>X0+(s-sA)*k, PY=z=>Y0+(z-zlo)*VE*k;
+      profFrame={X0,Y0,sA,zlo,VE,k};
+      W.pline(LY.pgrid, [[PX(sA),PY(zlo)],[PX(sB),PY(zlo)],[PX(sB),PY(zhi)],[PX(sA),PY(zhi)]], true);
+      const iv=Math.max(1,+o.tickInt||50), siv=((sB-sA)/iv>40)?stationInterval(sB-sA):iv;
+      for(let st=Math.ceil((sA-1e-9)/siv)*siv; st<=sB+1e-6; st+=siv){ W.line(LY.pgrid,[PX(st),PY(zlo)],[PX(st),PY(zhi)]);
+        W.text(LY.ptext,[PX(st),PY(zlo)-0.6*h],0.8*h,formatStation(st),{rot:90,ha:2,va:2}); }
+      for(let z=zlo; z<=zhi+1e-9; z+=ei){ W.line(LY.pgrid,[PX(sA),PY(z)],[PX(sB),PY(z)]);
+        W.text(LY.ptext,[PX(sA)-0.6*h,PY(z)],0.8*h,(+z.toFixed(3)).toFixed(ei<1?1:0),{ha:2,va:2}); }
+      W.pline(LY.prof, S.map((s,i)=>[PX(s),PY(Z[i])]));
+      // PVI tangents (dashed), clipped to the drawn station range
+      const pv=E.prof.pvis;
+      for(let i=0;i<pv.length-1;i++){ const a=pv[i], b=pv[i+1]; const ca=Math.max(sA,a.sta), cb=Math.min(sB,b.sta); if(!(cb>ca)) continue;
+        const zf=s=>a.elev+(b.elev-a.elev)*(s-a.sta)/(b.sta-a.sta); W.line(LY.ptan,[PX(ca),PY(zf(ca))],[PX(cb),PY(zf(cb))]);
+        const sm=(ca+cb)/2; W.text(LY.ptext,[PX(sm),PY(zf(sm))+1.2*h],0.8*h,((a.gradeOut*100)>=0?'+':'')+(a.gradeOut*100).toFixed(3)+'%',{ha:1,va:1}); }
+      pv.forEach((v,i)=>{ if(v.sta<sA-1e-6||v.sta>sB+1e-6) return;
+        const nm=(i===0)?'START':(i===pv.length-1)?'END':'PVI';
+        W.circle(LY.prof,[PX(v.sta),PY(v.elev)],0.35*h);
+        W.text(LY.ptext,[PX(v.sta),PY(v.elev)+1.0*h],0.8*h,nm+' '+formatStation(v.sta)+'  EL '+v.elev.toFixed(3)+(v.L>0?'  VC '+(+v.L.toFixed(3))+' ft':''),{ha:1,va:1});
+        if(v.L>0) [['BVC',v.sta-v.L/2],['EVC',v.sta+v.L/2]].forEach(([t,st])=>{ if(st<sA-1e-6||st>sB+1e-6) return; const z=E.prof.elevAt(st);
+          W.circle(LY.prof,[PX(st),PY(z)],0.25*h);
+          W.text(LY.ptext,[PX(st),PY(z)-1.0*h],0.7*h,t+' '+formatStation(st)+'  EL '+z.toFixed(3),{ha:1,va:3}); }); });
+      // bearing lines: finished grade (profile) and top of deck on the PGL, as the Top-of-Deck table's PGL column
+      brgTxt.forEach(([bl,fg,t])=>{
+        W.line(LY.pbrg,[PX(bl.sta),PY(zlo)],[PX(bl.sta),PY(zhi)+0.5*h]);
+        W.text(LY.ptext,[PX(bl.sta)-0.15*h,PY(zhi)+0.8*h],0.7*h,t,{rot:90,va:0}); });
+      const yT=PY(zlo)-0.6*h-0.62*0.8*h*11-1.5*h;   // below the rotated station labels
+      W.text(LY.ptext,[PX(sA),yT],1.2*h,'PROFILE ALONG PGL - FINISHED GRADE (TOP OF PAVEMENT) - VERTICAL EXAGGERATION '+VE+'x');
+      W.text(LY.ptext,[PX(sA),yT-1.6*h],0.7*h,'Horizontal: 1 drawing unit = '+(k===1?'1 ft':(1/k).toFixed(6)+' ft')+' of station from Sta '+formatStation(sA)+'. Vertical: elevation x '+VE+', datum EL '+zlo+' ft at the bottom of the frame.');
+    }
+
+    const out=W.finish({insunits, ltscale:Math.max(0.01, 2*h)});
+    return { text:out.text, layers:out.layers, warnings, coord, k, h, stats:{entities:W.count(), align:alignStats, elev:elevCount, pick:pickCount},
+      frame:{T, profFrame} };
+  }
+
+  /* ---------- options (per browser, own key) ---------- */
+  function loadOpts(){ try{ const r=localStorage.getItem(OPT_KEY); if(r){ const p=JSON.parse(r); if(p&&typeof p==='object') return Object.assign({},DEF,p); } }catch(e){} return Object.assign({},DEF); }
+  function saveOpts(o){ try{ localStorage.setItem(OPT_KEY, JSON.stringify(o)); }catch(e){} }
+
+  /* ---------- dialog ---------- */
+  let dlg=null;
+  const CHK=[['align','alignment (PGL), station ticks &amp; labels, PC/PT/TS/SC points'],['brg','support centerlines &amp; bearing lines, with labels'],
+    ['girder','girder lines'],['deck','deck edges &amp; deck ends'],['curb','curb lines'],['ref','construction reference line &amp; deck CL'],
+    ['elev','elevations at girder &times; bearing points (TD, BS)'],['pick','picked points (Site Map)'],['notes','title block notes'],['profile','profile view (below the plan)']];
+  function readDlg(){ const q=id=>dlg.querySelector('#'+id), o={};
+    o.coord=q('dxf_coord').value; CHK.forEach(([k])=>o[k]=q('dxf_c_'+k).checked);
+    o.tickInt=+q('dxf_tick').value; o.margin=+q('dxf_margin').value; o.textH=q('dxf_th').value.trim(); o.elevDec=+q('dxf_dec').value;
+    o.profVE=+q('dxf_ve').value; o.profX=q('dxf_px').value.trim(); o.profY=q('dxf_py').value.trim(); return o; }
+  function refresh(){
+    const o=readDlg(), msg=dlg.querySelector('#dxf_msg');
+    const r=build(o); const okb=dlg.querySelector('#dxf_do');
+    if(r.error){ okb.disabled=true; msg.innerHTML='<span style="color:var(--oxide)">'+r.error.replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]))+'</span>'; return null; }
+    okb.disabled=false;
+    msg.innerHTML=(r.coord==='sp'?'State Plane':'Local')+' &middot; '+r.stats.entities+' entities on '+r.layers.length+' layers &middot; text height '+r.h+' &middot; '+(r.text.length/1024).toFixed(0)+' KB'
+      +(r.warnings.length?'<br><span style="color:var(--oxide)">'+r.warnings.join('<br>')+'</span>':'');
+    return r;
+  }
+  function openDlg(){
+    if(!dlg){
+      dlg=document.createElement('div'); dlg.className='noprint'; dlg.id='dxf_dlg';
+      dlg.style.cssText='position:fixed;inset:0;z-index:60;background:rgba(0,0,0,.35);display:flex;align-items:flex-start;justify-content:center;overflow:auto;padding:40px 12px';
+      dlg.innerHTML='<div style="background:var(--vellum);color:var(--ink);border:1px solid var(--ink);max-width:680px;width:100%;padding:14px 16px;font-size:13px">'
+        +'<h2 class="sec" style="margin-top:0">Export DXF (plan, optional profile)</h2>'
+        +'<p class="note" style="margin-top:0">An ASCII DXF (R12) of the computed geometry: the same alignment, deck, girder and support lines as the plan and deck plan, and the elevations from the output tables. For the survey base file in Civil 3D or MicroStation.</p>'
+        +'<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px">'
+        +'<div><label>Coordinates</label><select id="dxf_coord"><option value="sp">State Plane (E, N)</option><option value="local">Local (x along ref line, y left)</option></select></div>'
+        +'<div><label>Station ticks every <span class="unit">(ft)</span></label><select id="dxf_tick"><option>10</option><option>25</option><option selected>50</option><option>100</option><option>200</option></select></div>'
+        +'<div><label>Alignment past abutments <span class="unit">(ft)</span></label><input type="number" id="dxf_margin" min="0" step="10"></div>'
+        +'<div><label>Text height <span class="unit">(drawing units)</span></label><input type="text" id="dxf_th" placeholder="auto"></div>'
+        +'<div><label>Elevation decimals</label><select id="dxf_dec"><option value="2">2 (as the tables)</option><option value="3">3</option></select></div>'
+        +'<div></div>'
+        +'<div><label>Profile vert. exaggeration</label><input type="number" id="dxf_ve" min="1" step="1"></div>'
+        +'<div><label>Profile origin X</label><input type="text" id="dxf_px" placeholder="auto (below plan)"></div>'
+        +'<div><label>Profile origin Y</label><input type="text" id="dxf_py" placeholder="auto (below plan)"></div>'
+        +'</div>'
+        +'<div style="display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:10px">'+CHK.map(([k,t])=>'<label class="cfg"><input type="checkbox" id="dxf_c_'+k+'"> '+t+'</label>').join('')+'</div>'
+        +'<p class="note" id="dxf_basis" style="margin:8px 0 0"></p>'
+        +'<p class="note" style="margin:6px 0 0">Layers: <b>BG-ALIGN</b> (PGL; circular curves as arcs, spirals as polylines), <b>BG-ALIGN-TICK</b>, <b>BG-ALIGN-TEXT</b>; <b>BG-BRG-CL</b> support centerlines, <b>BG-BRG</b> back/ahead bearing lines, <b>BG-BRG-TEXT</b>; <b>BG-GIRDER</b>; <b>BG-DECK</b>; <b>BG-CURB</b>; <b>BG-REFLINE</b>; <b>BG-ELEV-PT</b> (points at top-of-deck elevation) and <b>BG-ELEV-TEXT</b> (TD / BS); <b>BG-PICK</b>; <b>BG-NOTES</b>; profile on <b>BG-PROF</b>, <b>BG-PROF-TAN</b>, <b>BG-PROF-GRID</b>, <b>BG-PROF-BRG</b>, <b>BG-PROF-TEXT</b>. Verify against the survey.</p>'
+        +'<p class="note" id="dxf_msg" style="margin:8px 0 0"></p>'
+        +'<div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap"><button class="sm" id="dxf_do" type="button">Download DXF</button>'
+        +'<button class="sm ghost" id="dxf_cancel" type="button" style="margin-left:auto">Cancel</button></div></div>';
+      document.body.appendChild(dlg);
+      dlg.addEventListener('change', refresh);
+      dlg.querySelector('#dxf_cancel').addEventListener('click',()=>{ dlg.style.display='none'; });
+      dlg.querySelector('#dxf_do').addEventListener('click',()=>{
+        const r=refresh(); if(!r) return;
+        const o=readDlg(); saveOpts(o);
+        const nm=String((typeof CURRENT_NAME!=='undefined'&&CURRENT_NAME)||'bridge').replace(/[^A-Za-z0-9._-]+/g,'_').slice(0,60);
+        const blob=new Blob([r.text],{type:'application/dxf'}); const a=document.createElement('a');
+        a.href=URL.createObjectURL(blob); a.download='bridge-geometry_'+nm+'_'+(r.coord==='sp'?'stateplane':'local')+'_'+new Date().toISOString().slice(0,10)+'.dxf';
+        document.body.appendChild(a); a.click(); setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 60000);
+        dlg.style.display='none'; setStatus('DXF exported');
+      });
+    }
+    const o=loadOpts(), q=id=>dlg.querySelector('#'+id), sp=hasSP();
+    const cs=q('dxf_coord'); cs.querySelector('option[value=sp]').disabled=!sp;
+    cs.value=(o.coord==='sp'&&sp)?'sp':(o.coord==='local'?'local':(sp?'sp':'local'));
+    CHK.forEach(([k])=>q('dxf_c_'+k).checked=!!o[k]);
+    q('dxf_tick').value=String(o.tickInt); if(!q('dxf_tick').value) q('dxf_tick').value='50';
+    q('dxf_margin').value=o.margin; q('dxf_th').value=o.textH; q('dxf_dec').value=String(o.elevDec===3?3:2);
+    q('dxf_ve').value=o.profVE; q('dxf_px').value=o.profX; q('dxf_py').value=o.profY;
+    q('dxf_basis').textContent=sp?('State Plane uses the POB Northing/Easting and the datum and units on the Site Map tab ('+zoneText()+', '+unitsText()+').')
+      :'State Plane is not available: the POB Northing/Easting are 0, 0. Enter them on the Alignment tab to export in State Plane.';
+    dlg.style.display='flex';
+    refresh();
+  }
+  window.bgDxfBuild=build; window.bgDxfOpen=openDlg;
+  const b=document.getElementById('dxf_export'); if(b) b.addEventListener('click',openDlg);
 })();
 </script>
 </body>
