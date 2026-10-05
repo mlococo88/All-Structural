@@ -187,6 +187,9 @@ table.ldtbl input{width:58px;font-family:inherit;font-size:11px;border:1px solid
  <button id="btnPullMemberReactions" type="button" onclick="bxPullMemberReactions()" title="Import unfactored support reactions from Steel Beam Design into one pedestal's loads by type (HANDOFF.md, channel memberReactions)">Pull from Steel Beam<span id="bxMrNew" style="display:none;color:#b45309;font-weight:bold"> &#9679; new data available</span></button>
  <button id="btnImportMemberReactions" type="button" onclick="document.getElementById('bxMrFile').click()">Import hand-off (JSON)</button><input type="file" id="bxMrFile" accept=".json,application/json" style="display:none" onchange="bxImportMemberReactions(event)">
  <span id="bxMrSrc" style="font-size:11px;font-style:italic"></span>
+ <br><button id="btnPullFoundationLoads" type="button" onclick="bxPullFoundationLoads()" title="Import one factored foundation-load case (Strength / Extreme Event, top of footing) from the abutment calculator or Bridge Substructure Loading into one pedestal's Direct factored loads (HANDOFF.md, channel foundationLoads)">Pull from Abutment / SubLoads<span id="bxFlNew" style="display:none;color:#b45309;font-weight:bold"> &#9679; new data available</span></button>
+ <button id="btnImportFoundationLoads" type="button" onclick="document.getElementById('bxFlFile').click()" title="Import a foundationLoads hand-off JSON file">Import hand-off (JSON)</button><input type="file" id="bxFlFile" accept=".json,application/json" style="display:none" onchange="bxImportFoundationLoads(event)">
+ <span id="bxFlSrc" style="font-size:11px;font-style:italic"></span>
 </div>
 
 <div class="main">
@@ -2331,6 +2334,7 @@ function renderPrintHeader(){
  '<table class="tbl" style="width:100%"><tr><th>Project</th><th>No.</th><th>Calc By</th><th>Date</th><th>Checked By</th><th>Date</th></tr>'+
  '<tr><td>'+(m.project||'\u2013')+'</td><td>'+(m.number||'\u2013')+'</td><td>'+(m.calcBy||'\u2013')+'</td><td>'+(m.calcDate||'\u2013')+'</td><td>'+(m.chkBy||'\u2013')+'</td><td>'+(m.chkDate||'\u2013')+'</td></tr></table>';
  if(typeof sfMrSourceLine==='function'&&sfMrSourceLine()){const sp=document.createElement('p');sp.style.cssText='font-size:10px;margin:2px 0';sp.textContent=sfMrSourceLine();$('#printHeader').appendChild(sp);}   /* hand-off source (HANDOFF.md §3.4) */
+ if(typeof sfFlSourceLine==='function'&&sfFlSourceLine()){const sp=document.createElement('p');sp.style.cssText='font-size:10px;margin:2px 0';sp.textContent=sfFlSourceLine();$('#printHeader').appendChild(sp);}   /* foundationLoads hand-off source (HANDOFF.md §3.4) */
 }
 </script>
 <script>
@@ -5131,6 +5135,257 @@ buildManualTab();
   };
   window.sfMrSourceLine=sourceLine;
   window.bxMr={check:check,plan:plan,apply:apply,defaults:defaults,openDialog:openDialog,sourceLine:sourceLine,refreshBar:refreshBar};
+  refreshBar();
+  window.addEventListener('focus',refreshBar);
+  window.addEventListener('storage',refreshBar);
+  setInterval(refreshBar,2000);
+})();
+</script>
+<script>
+/* Foundation-load hand-off receiver (HANDOFF.md §4.6, channel foundationLoads; senders: abutment_calculator.html,
+   Bridge Substructure Loading.html). "Pull from Abutment / SubLoads" / "Import hand-off (JSON)". Nothing is applied
+   on page load. Decision (fix log C2): this tool's by-load-type rows take UNFACTORED loads by type and build their own
+   ASCE 7-16 combinations, so a foundation-load case (a combination) never goes there. One FACTORED case
+   (Strength / Extreme Event) is imported into one pedestal's "Direct factored (LRFD envelope)" set
+   (state.peds[i].direct, applied at the top of the pedestal). Service cases are listed but not importable.
+   Cases given at the bottom of the footing or pile cap, or at a pile point of fixity, are refused: this tool adds
+   the footing self-weight and the soil itself. The user picks the source, case, pedestal and axis mapping;
+   the moment can be referred from the top of footing to the top of the pedestal (− V·h). The source is kept in
+   the new optional field state.bxSrc.foundationLoads. */
+(function(){
+  var CH='foundationLoads', SCHEMA='bridge-foundation-loads', MAXV=1, RID='spreadFooting', BY=['abutment','subloads'];
+  var FORCE={kip:1,kips:1,k:1,lb:0.001,lbf:0.001,lbs:0.001};               /* -> kip */
+  var MOMENT={'kip-ft':1,'kip·ft':1,'k-ft':1,'ft-kip':1,'kip-in':1/12,'lb-ft':0.001,'ft-lb':0.001,'lb-in':0.001/12};   /* -> kip-ft */
+  var AX=['+x','-x','+y','-y'], AXL={'+x':'+x of the hand-off','-x':'−x of the hand-off','+y':'+y of the hand-off','-y':'−y of the hand-off'};
+  var OK_LEVEL={topOfFooting:1,baseOfWall:1,baseOfColumn:1}, BAD_LEVEL={bottomOfFooting:'the bottom of the footing',bottomOfPileCap:'the bottom of the pile cap',pointOfFixity:'a pile or shaft point of fixity'};
+  function isNum(v){ return typeof v==='number' && isFinite(v); }
+  function f2(v,d){ return isNum(v) ? (Math.abs(v)<1e-12?0:v).toFixed(d==null?2:d) : '—'; }
+  function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+  function h(tag,cls,html){ var e=document.createElement(tag); if(cls) e.className=cls; if(html!==undefined) e.innerHTML=html; return e; }
+  function when(iso){ var d=new Date(iso); if(isNaN(d)) return String(iso||'?');
+    function p(n){ return (n<10?'0':'')+n; }
+    return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+' '+p(d.getHours())+':'+p(d.getMinutes()); }
+  function projName(p){ return (p.project && typeof p.project==='object') ? (p.project.name||'') : String(p.project||''); }
+
+  /* ---- validate and convert to kip / kip-ft (same check as Pile Designer's receiver) ---- */
+  function check(p){
+    var out={err:[],warn:[],cases:[]};
+    var e=BridgeXfer.validate(p,SCHEMA,MAXV); if(e){ out.err.push(e); return out; }
+    var u=p.units||{}, kf=FORCE[u.force], km=MOMENT[u.moment];
+    if(!kf){ out.err.push('Unknown force unit "'+(u.force||'')+'". Accepted: kip, or lb (converted ÷ 1000).'); return out; }
+    if(!km){ out.err.push('Unknown moment unit "'+(u.moment||'')+'". Accepted: kip-ft, kip-in, lb-ft, lb-in.'); return out; }
+    if(u.length!==undefined && u.length!=='ft'){ out.err.push('Unknown length unit "'+u.length+'". Accepted: ft.'); return out; }
+    if(kf!==1) out.warn.push('Forces converted from '+u.force+' to kip (× '+kf+').');
+    if(km!==1) out.warn.push('Moments converted from '+u.moment+' to kip-ft (× '+km+').');
+    if(!Array.isArray(p.cases) || !p.cases.length){ out.err.push('The payload has no load cases.'); return out; }
+    p.cases.forEach(function(c,i){
+      var nm=(c && c.name) ? String(c.name) : 'case '+(i+1);
+      if(!c || typeof c!=='object'){ out.err.push('Case '+(i+1)+' is not an object.'); return; }
+      if(typeof c.factored!=='boolean'){ out.err.push(nm+': "factored" must be true or false.'); return; }
+      var v={}, bad=[];
+      ['P','Vx','Vy','Mx','My'].forEach(function(k){ if(!isNum(c[k])) bad.push(k+' = '+JSON.stringify(c[k])); else v[k]=c[k]*(k[0]==='M'?km:kf); });
+      if(bad.length){ out.err.push(nm+': not a finite number: '+bad.join(', ')+'.'); return; }
+      out.cases.push({i:i,name:nm,limitState:String(c.limitState||''),factored:c.factored,governs:c.governs||'',combination:c.combination||'',P:v.P,Vx:v.Vx,Vy:v.Vy,Mx:v.Mx,My:v.My});
+    });
+    return out;
+  }
+  /* where the forces act: from reference.level, else from the location text */
+  function level(p){
+    var r=p.reference&&p.reference.level; if(r) return String(r);
+    var t=String(p.location||'').toLowerCase();
+    if(/bottom of (the )?(footing|pile cap|cap)/.test(t)) return 'bottomOfFooting';
+    if(/point of fixity/.test(t)) return 'pointOfFixity';
+    if(/top of (the )?footing|base of (the )?(wall|column)/.test(t)) return 'topOfFooting';
+    return '';
+  }
+  /* receiver axes from the hand-off axes: rx/ry each '+x','-x','+y','-y'; moments follow (effect-based convention) */
+  function mapAxes(c,ax){
+    function comp(a){ var s=a.charAt(0)==='-'?-1:1, k=a.charAt(1); return {V:s*(k==='x'?c.Vx:c.Vy), M:s*(k==='x'?c.My:c.Mx)}; }
+    var X=comp(ax.x), Y=comp(ax.y);
+    return {P:c.P, Vx:X.V, Vy:Y.V, Mx:Y.M, My:X.M};
+  }
+  /* every valid payload on the channel (one per sender), newest first */
+  function candidates(){
+    var keys=BY.map(function(b){ return BridgeXfer.NS+CH+'.by.'+b; }).concat([BridgeXfer.NS+CH]), seen={}, out=[];
+    keys.forEach(function(k){ var raw=null; try{ raw=localStorage.getItem(k); }catch(e){}
+      if(!raw) return; var p; try{ p=JSON.parse(raw); }catch(e){ return; }
+      if(BridgeXfer.validate(p,SCHEMA,MAXV)) return;
+      var id=(p.producer||'')+'|'+(p.producedAt||''); if(seen[id]) return; seen[id]=1; out.push(p); });
+    out.sort(function(a,b){ return String(b.producedAt||'').localeCompare(String(a.producedAt||'')); });
+    return out;
+  }
+  function defaults(chk){
+    var best=-1; chk.cases.forEach(function(c,j){ if(c.factored && (best<0 || c.P>chk.cases[best].P)) best=j; });
+    return {ci:best, ped:0, ax:{x:'+x',y:'+y'}, hCorr:true, toDirect:state.loadMode!=='direct', zeroOther:false, confirmLevel:false};
+  }
+  /* ---- plan: exactly what will change. Pure apart from reading state. ---- */
+  function plan(p,chk,o){
+    var r={err:[],warn:[],changes:[],set:null};
+    var lev=level(p);
+    if(BAD_LEVEL[lev]) r.err.push('These loads act at '+BAD_LEVEL[lev]+' ('+(p.location||lev)+'). Spread Footing needs the loads at the top of the footing (base of the column or wall): it adds the footing self-weight, the soil over the footing and the shear couple itself, so loads at the bottom would count them twice. In the sender, pick the top-of-footing level (SubLoads) — the abutment calculator only sends bottom-of-footing loads.');
+    else if(!OK_LEVEL[lev] && !o.confirmLevel) r.err.push('The payload does not say where the loads act ("'+(p.location||'')+'"). Tick the box to confirm they act at the top of the footing.');
+    var c=chk.cases[o.ci];
+    if(!c) r.err.push(chk.cases.some(function(x){ return x.factored; }) ? 'Pick a factored case.' : 'The payload has no factored case. This tool takes factored (Strength / Extreme Event) loads only, in its Direct factored mode; service combinations cannot be split into its unfactored load types.');
+    else if(!c.factored) r.err.push(c.name+' is a service case (factored:false). It cannot be imported: the by-load-type rows take unfactored loads by type, not combinations, and the Direct mode takes factored loads.');
+    if(o.ax.x.charAt(1)===o.ax.y.charAt(1)) r.err.push('Map footing x and y to different hand-off axes.');
+    var ped=state.peds[o.ped]; if(!ped) r.err.push('Pick a pedestal.');
+    if(r.err.length) return r;
+    var m=mapAxes(c,o.ax), hp=Math.max(+ped.h||0,0), on=state.stab.shearCouple!=='off';
+    var corr=o.hCorr && on && hp>0;
+    if(corr){ m.My-=m.Vx*hp; m.Mx-=m.Vy*hp; }
+    var cur=ped.direct||{P:0,Vx:0,Vy:0,Mx:0,My:0}, set={};
+    ['P','Vx','Vy','Mx','My'].forEach(function(k){ var v=Math.round(m[k]*1e6)/1e6; set[k]=v; r.changes.push({what:ped.label+' direct '+k,from:+cur[k]||0,to:v,u:k[0]==='M'?'kip-ft':'kips'}); });
+    r.set=set; r.mapped=m; r.corr=corr; r.h=hp;
+    if(o.toDirect && state.loadMode!=='direct') r.changes.push({what:'Load input mode',from:'By load type',to:'Direct factored',u:''});
+    if(!o.toDirect && state.loadMode!=='direct') r.warn.push('The footing stays in "By load type" mode: the imported direct set is stored but not used until you switch "Load input mode" to "Direct factored".');
+    var others=state.peds.map(function(pd,i){ return {pd:pd,i:i}; }).filter(function(x){ return x.i!==o.ped && ['P','Vx','Vy','Mx','My'].some(function(k){ return (+(x.pd.direct||{})[k]||0)!==0; }); });
+    if(o.zeroOther) others.forEach(function(x){ ['P','Vx','Vy','Mx','My'].forEach(function(k){ var old=+(x.pd.direct||{})[k]||0; if(old!==0) r.changes.push({what:x.pd.label+' direct '+k,from:old,to:0,u:k[0]==='M'?'kip-ft':'kips'}); }); });
+    else if(others.length) r.warn.push('In Direct mode the other pedestals\' direct loads also act: '+others.map(function(x){ return x.pd.label+' (P '+f2(+x.pd.direct.P||0)+' k)'; }).join(', ')+'. Tick the option to set them to 0 if the hand-off is the whole load on the footing.');
+    if(hp>0 && on) r.warn.push(corr ? 'Moments referred from the top of the footing to the top of the pedestal: My = My,TOF − Vx·h, Mx = Mx,TOF − Vy·h, h = '+f2(hp)+' ft. With the tool\'s couple V·(t + h) the moment at the bottom of the footing is My,TOF + Vx·t.'
+      : 'The pedestal is '+f2(hp)+' ft tall and the tool applies V at its top (couple V·(t + h)): without the correction the moment at the footing base is overstated by V·h.');
+    if(!on) r.warn.push('"Shear couple" is set to Exclude: the tool adds no V·(t + h) moment, so the moment at the bottom of the footing will miss V·t.');
+    if(hp>0) r.warn.push('The tool also adds the self-weight of the '+f2(hp)+' ft pedestal; '+(p.producer||'the sender')+'\'s top-of-footing P already includes the column or wall above. Set the pedestal height to 0 if the pedestal is that column or wall.');
+    r.warn.push('Direct mode adds the footing and pedestal self-weight and the soil over the footing at 1.2 (0.9 where they resist), the ASCE 7-16 bracket of this tool — not AASHTO γp. Bearing is checked with factored loads against the allowable bearing.');
+    if(p.includes && p.includes.earthPressure) r.warn.push('The case includes earth pressure on the stem (abutment). This tool adds no earth pressure on its own.');
+    return r;
+  }
+  function apply(p,chk,o,via){
+    var r=plan(p,chk,o); if(r.err.length) return r;
+    var ped=state.peds[o.ped], c=chk.cases[o.ci];
+    if(!ped.direct) ped.direct={P:0,Vx:0,Vy:0,Mx:0,My:0};
+    Object.keys(r.set).forEach(function(k){ ped.direct[k]=r.set[k]; });
+    if(o.toDirect) state.loadMode='direct';
+    if(o.zeroOther) state.peds.forEach(function(pd,i){ if(i!==o.ped) pd.direct={P:0,Vx:0,Vy:0,Mx:0,My:0}; });
+    if(!state.bxSrc || typeof state.bxSrc!=='object') state.bxSrc={};
+    state.bxSrc.foundationLoads={producer:p.producer||'',producerFile:p.producerFile||'',producedAt:p.producedAt||'',
+      project:p.project||'',via:via||'pull',adoptedAt:new Date().toISOString(),
+      element:p.element||null,location:p.location||'',caseName:c.name,limitState:c.limitState,
+      sent:{P:c.P,Vx:c.Vx,Vy:c.Vy,Mx:c.Mx,My:c.My},applied:r.set,pedestal:ped.label,pedIndex:o.ped,
+      axes:{x:o.ax.x,y:o.ax.y},heightCorrection:r.corr?r.h:0,toDirect:!!o.toDirect,zeroOther:!!o.zeroOther,
+      notes:(p.notes||[]).slice(0,20)};
+    BridgeXfer.markAdopted(CH,RID,p.producedAt);
+    r.ok=true;
+    return r;
+  }
+
+  function openDialog(list,via){
+    if(!state.peds || !state.peds.length){ alert('Foundation loads: add a pedestal first.'); return null; }
+    var si=0, p=list[0], chk=check(p);
+    if(chk.err.length){ alert('Foundation-load hand-off refused:\n  '+chk.err.join('\n  ')); return null; }
+    var o=defaults(chk);
+    var old=document.getElementById('bxFlOverlay'); if(old) old.remove();
+    var ov=h('div'); ov.id='bxFlOverlay';
+    ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:200;display:flex;align-items:center;justify-content:center';
+    var box=h('div'); box.style.cssText='background:#fff;border:2px solid #333;padding:12px 16px;width:900px;max-width:96vw;max-height:90vh;overflow:auto;font-size:12px';
+    ov.appendChild(box);
+    var head=h('div'); box.appendChild(head);
+    var body=h('div'); box.appendChild(body);
+    var sum=h('div'); box.appendChild(sum);
+    var row=h('div'); row.style.cssText='display:flex;gap:8px;justify-content:flex-end;margin-top:10px;border-top:1px solid #ccc;padding-top:8px';
+    var ca=h('button',null,'Cancel'); var go=h('button',null,'<b>Import</b>'); go.id='bxFlGo';
+    row.appendChild(ca); row.appendChild(go); box.appendChild(row);
+    function opt(sel,val,txt,on){ var op=document.createElement('option'); op.value=val; op.textContent=txt; if(on) op.selected=true; sel.appendChild(op); }
+    function draw(){
+      head.innerHTML='';
+      head.appendChild(h('div',null,'<b style="font-size:14px">Import foundation loads</b>'));
+      if(list.length>1){ var sl=h('label',null,'<b>Sender</b> '), ss=document.createElement('select'); ss.id='bxFlSrcSel';
+        list.forEach(function(q,i){ opt(ss,i,(q.producer||'?')+' — '+when(q.producedAt)+((q.element&&q.element.label)?' — '+q.element.label:''),i===si); });
+        sl.appendChild(ss); head.appendChild(sl); }
+      head.appendChild(h('div','note','<b>Source:</b> '+esc(p.producer||'?')+(p.producerFile?' ('+esc(p.producerFile)+')':'')+
+        ' &middot; <b>sent</b> '+esc(when(p.producedAt))+' &middot; <b>project</b> '+esc(projName(p)||'—')+
+        (p.element?' &middot; <b>element</b> '+esc((p.element.type||'')+' '+(p.element.label||'')):'')+(via==='file'?' &middot; from a JSON file':'')+
+        '<br><b>Location:</b> '+esc(p.location||'—')+'<br><b>Sign convention (sender):</b> '+esc(p.signConvention||'—')+
+        (p.axes?'<br><b>Axes (sender):</b> x: '+esc(p.axes.x||'')+'; y: '+esc(p.axes.y||''):'')));
+      head.appendChild(h('div','warnbox','This tool takes <b>one factored case per pedestal</b>, in its <b>Direct factored (LRFD envelope)</b> mode, applied at the top of the pedestal. '+
+        'Its by-load-type rows take unfactored loads by type and are never filled from a combination. Service cases are shown but cannot be imported. '+
+        'This tool: P + = down; +Vx, +Vy toward +x, +y; +My moves the soil resultant toward +x, +Mx toward +y — the same effect-based convention as the hand-off, so only the axes are mapped.'));
+      if(chk.warn.length) head.appendChild(h('div','warnbox',chk.warn.map(esc).join('<br>')));
+      if(p.notes && p.notes.length){ var nb=h('details'); nb.appendChild(h('summary',null,'Sender notes ('+p.notes.length+')'));
+        nb.appendChild(h('div','note',p.notes.map(function(n){ return '&bull; '+esc(n); }).join('<br>'))); nb.open=true; head.appendChild(nb); }
+      body.innerHTML='';
+      var t=h('table','tbl'); t.innerHTML='<tr><th></th><th>Case</th><th>Factored</th><th>P (k)</th><th>Vx</th><th>Vy</th><th>Mx (k-ft)</th><th>My</th></tr>';
+      chk.cases.forEach(function(c,j){ var tr=h('tr');
+        tr.innerHTML='<td>'+(c.factored?'<input type="radio" name="bxFlCase" value="'+j+'"'+(j===o.ci?' checked':'')+'>':'')+'</td><td title="'+esc(c.combination)+'">'+esc(c.name)+'</td><td>'+(c.factored?'yes':'no — not importable')+'</td><td>'+f2(c.P,1)+'</td><td>'+f2(c.Vx,1)+'</td><td>'+f2(c.Vy,1)+'</td><td>'+f2(c.Mx,1)+'</td><td>'+f2(c.My,1)+'</td>';
+        if(!c.factored) tr.style.color='#888'; t.appendChild(tr); });
+      var tw=h('div'); tw.style.cssText='max-height:30vh;overflow:auto'; tw.appendChild(t); body.appendChild(tw);
+      var g=h('div'); g.style.cssText='display:flex;gap:16px;flex-wrap:wrap;align-items:center;margin:8px 0';
+      var pl=h('label',null,'<b>Target pedestal</b> '), ps=document.createElement('select'); ps.id='bxFlPed';
+      state.peds.forEach(function(pd,i){ opt(ps,i,pd.label+' (x = '+pd.x+', y = '+pd.y+' ft, h = '+pd.h+' ft)',i===o.ped); }); pl.appendChild(ps); g.appendChild(pl);
+      ['x','y'].forEach(function(a){ var lb=h('label',null,'<b>Footing +'+a+' =</b> '), se=document.createElement('select'); se.id='bxFlAx'+a;
+        AX.forEach(function(k){ opt(se,k,AXL[k],o.ax[a]===k); }); lb.appendChild(se); g.appendChild(lb); });
+      body.appendChild(g);
+      var lev=level(p), ped=state.peds[o.ped], x='';
+      if(!OK_LEVEL[lev] && !BAD_LEVEL[lev]) x+='<label><input type="checkbox" id="bxFlLev"'+(o.confirmLevel?' checked':'')+'> the loads act at the top of the footing (base of the column or wall)</label><br>';
+      if(ped && (+ped.h||0)>0) x+='<label><input type="checkbox" id="bxFlH"'+(o.hCorr?' checked':'')+'> refer the moments from the top of the footing to the top of this '+f2(+ped.h)+' ft pedestal (M − V·h), because this tool applies V at the pedestal top</label><br>';
+      if(state.loadMode!=='direct') x+='<label><input type="checkbox" id="bxFlDirect"'+(o.toDirect?' checked':'')+'> switch "Load input mode" to Direct factored (the by-load-type rows are kept, unused)</label><br>';
+      if(state.peds.length>1) x+='<label><input type="checkbox" id="bxFlZero"'+(o.zeroOther?' checked':'')+'> set the other pedestals\' direct loads to 0</label>';
+      body.appendChild(h('div',null,x));
+    }
+    function read(){
+      var r=document.querySelector('input[name="bxFlCase"]:checked'); if(r) o.ci=+r.value;
+      var e; if((e=document.getElementById('bxFlPed'))) o.ped=+e.value;
+      if((e=document.getElementById('bxFlAxx'))) o.ax.x=e.value; if((e=document.getElementById('bxFlAxy'))) o.ax.y=e.value;
+      if((e=document.getElementById('bxFlH'))) o.hCorr=e.checked; if((e=document.getElementById('bxFlDirect'))) o.toDirect=e.checked;
+      if((e=document.getElementById('bxFlZero'))) o.zeroOther=e.checked; if((e=document.getElementById('bxFlLev'))) o.confirmLevel=e.checked;
+      return o;
+    }
+    function refresh(){
+      var r=plan(p,chk,o), x='';
+      if(r.err.length) x+='<div class="warnbox" style="color:#b71c1c;font-weight:bold">'+r.err.map(esc).join('<br>')+'</div>';
+      else x+='<div style="margin:6px 0"><b>Will change</b> (factored, kips / kip-ft): '+r.changes.map(function(c){
+        return esc(c.what)+': '+(typeof c.from==='number'?f2(c.from,3):esc(c.from))+' → <b>'+(typeof c.to==='number'?f2(c.to,3):esc(c.to))+'</b>'; }).join('; ')+
+        '<br><b>Also recorded:</b> the source (producer, time, case) in this project, shown above the inputs and in the printed report.</div>';
+      if(r.warn.length) x+='<div class="warnbox">'+r.warn.map(esc).join('<br>')+'</div>';
+      sum.innerHTML=x; go.disabled=!!r.err.length;
+      return r;
+    }
+    function full(){ draw(); refresh(); }
+    box.addEventListener('change',function(e){
+      if(e.target && e.target.id==='bxFlSrcSel'){ si=+e.target.value; p=list[si]; chk=check(p);
+        if(chk.err.length){ sum.innerHTML='<div class="warnbox" style="color:#b71c1c">'+chk.err.map(esc).join('<br>')+'</div>'; go.disabled=true; return; }
+        o=defaults(chk); full(); return; }
+      read(); if(e.target && e.target.id==='bxFlPed'){ full(); return; } refresh();
+    });
+    ca.addEventListener('click',function(){ ov.remove(); });
+    go.addEventListener('click',function(){
+      var r=apply(p,chk,read(),via);
+      if(r.err.length){ refresh(); return; }
+      ov.remove();
+      bindStaticInputs(); buildPedCards(); saveAuto(); recalc();
+      refreshBar();
+    });
+    document.body.appendChild(ov);
+    full();
+    return {overlay:ov, opts:o, chk:chk, refresh:refresh, plan:function(){ return plan(p,chk,o); }};
+  }
+
+  function sourceLine(){
+    var s=state && state.bxSrc && state.bxSrc.foundationLoads; if(!s) return '';
+    return 'Direct factored loads on '+(s.pedestal||'?')+' from '+(s.producer||'?')+(s.element&&s.element.label?' ('+s.element.label+')':'')+', '+when(s.producedAt)+
+      ((s.project&&(s.project.name||typeof s.project==='string'))?', project '+(s.project.name||s.project):'')+': '+(s.caseName||'?')+
+      ' at '+(s.location||'?')+'; footing +x = hand-off '+((s.axes&&s.axes.x)||'?')+', +y = '+((s.axes&&s.axes.y)||'?')+
+      (s.heightCorrection?'; moments referred to the pedestal top (h = '+s.heightCorrection+' ft)':'')+(s.via==='file'?'; via JSON file':'');
+  }
+  function refreshBar(){
+    var nd=document.getElementById('bxFlNew'); if(nd) nd.style.display=BridgeXfer.isNew(CH,RID)?'inline':'none';
+    var sl=document.getElementById('bxFlSrc'); if(sl) sl.textContent=sourceLine();
+  }
+  window.bxPullFoundationLoads=function(){
+    var list=candidates();
+    if(!list.length){ var r=BridgeXfer.read(CH,SCHEMA,MAXV);
+      alert('Pull foundation loads: '+(r.ok?'no valid payload.':r.error)+(r.empty?'\n\nIn the abutment calculator or Bridge Substructure Loading, click "Send foundation loads" first.':'')); return null; }
+    return openDialog(list,'pull');
+  };
+  window.bxImportFoundationLoads=function(ev){
+    var f=ev && ev.target && ev.target.files && ev.target.files[0]; if(!f) return;
+    BridgeXfer.importFile(f,SCHEMA,MAXV,function(r){
+      if(!r.ok){ alert('Import hand-off: '+r.error); return; }
+      openDialog([r.payload],'file');
+    });
+    ev.target.value='';
+  };
+  window.sfFlSourceLine=sourceLine;
+  window.bxFl={check:check,level:level,mapAxes:mapAxes,candidates:candidates,plan:plan,apply:apply,defaults:defaults,openDialog:openDialog,sourceLine:sourceLine,refreshBar:refreshBar};
   refreshBar();
   window.addEventListener('focus',refreshBar);
   window.addEventListener('storage',refreshBar);

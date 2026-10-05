@@ -433,6 +433,7 @@ dialog h3{margin-top:0;}
     <button id="axh-imp" title="Import an abutmentLoads hand-off JSON file, or a SubLoads &quot;Export abutments&quot; file (asks first)">Import hand-off (JSON)</button>
     <input type="file" id="axh-file" accept=".json,application/json" style="display:none">
     <span id="axh-src" class="axh-src"></span>
+    <button id="fdx-send" title="Send to other tools: the factored and service load combinations at the bottom of the footing / pile cap, per limit state (channel foundationLoads), for Pile Designer and Spread Footing; the dialog also offers Export hand-off (JSON)">Send foundation loads</button>
     <span class="spacer"></span>
     <span id="fpBadge" title="Fingerprint of the current input set — printed on the report so a reviewer can confirm the PDF matches these exact inputs" style="font-size:0.8rem;color:#555;border:1px dashed #bbb;border-radius:3px;padding:1px 7px;"></span>
     <span id="saveStatus"></span>
@@ -5040,6 +5041,129 @@ document.addEventListener("DOMContentLoaded",init);
     render();
   },true);
   paint();
+})();
+</script>
+<script>
+/* ---------- foundation loads hand-off (HANDOFF.md §4.6, channel foundationLoads) ----------
+   Toolbar "Send foundation loads" opens a dialog; "Send to other tools" publishes, "Export hand-off (JSON)"
+   writes the same payload to a file. The cases are the calculator's own limit-state permutations
+   (R.comboEffects over R.permutations, LS surcharge included as in the bearing and pile checks), at the
+   bottom of the footing: about the footing centre (spread footing) or about the pile-group centroid (pile
+   branch). Per limit state the permutations giving V max, V min, My max, My min and the largest horizontal
+   resultant are sent, plus in the pile branch the permutations that govern its pile table (duplicates merged). Reads window.LAST_R only; no calculation changes.
+   Uses BridgeXfer v1 (top of this file). */
+(function(){
+  const CH="foundationLoads", SCH="bridge-foundation-loads", SID="abutment";
+  const r3=v=>Math.round((+v||0)*1000)/1000;
+  const escH=s=>String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]));
+  const SIGN="P + = downward (compression on the foundation). x = horizontal, normal to the abutment (along the footing width B), + toward the toe, i.e. toward the span (the calculator's driving direction of Hx). y = horizontal, along the abutment, + in the direction of positive beam offsets (the calculator's beam-position axis). Vx, Vy = horizontal force on the foundation, + toward +x, +y. Mx = moment about the x axis, + when it moves the resultant toward +y, so e_y = Mx/P (the calculator's M_t). My = moment about the y axis, + when it moves the resultant toward +x (toward the toe), so e_x = My/P.";
+  const lsOut=ls=>ls==="Constr — Str I"?"Strength I (construction stage)":ls;
+  const factored=ls=>ls!=="Service I";
+  /* all cases the payload can carry, per limit state, from the current results */
+  function cases(R, lsSel){
+    const B=R.geo.B, pile=S.fnd.branch==="pile" && R.pile && R.pile.n>0, out=[];
+    const xc=pile? R.pile.xgcT : B/2, yc=pile? R.pile.ygc : 0;
+    Object.keys(R.LIMITS).forEach(ls=>{
+      if(lsSel && !lsSel.includes(ls)) return;
+      const all=[];
+      for(const pl of R.permutations(ls)){
+        const c=R.comboEffects(ls,pl.perm,pl.liveOn,false);
+        const My=c.V*xc-c.Mv+c.Mh, Mx=c.Mt-c.V*yc;   // about the reference point; + toward the toe / + toward +y
+        all.push({c, v:{P:r3(c.V), Vx:r3(c.Hx), Vy:r3(c.Hy), Mx:r3(Mx), My:r3(My)}, H:Math.hypot(c.Hx,c.Hy)});
+      }
+      if(!all.length) return;
+      const pick=(f,s)=>all.reduce((b,a)=>s*f(a)>s*f(b)+1e-9?a:b,all[0]);
+      const sameV=(a,b)=>["P","Vx","Vy","Mx","My"].every(k=>a.v[k]===b.v[k]);
+      const mine=[], put=(a,tag)=>{ const same=mine.find(m=>sameV(m.a,a)); if(same){ same.tags.push(tag); return; } mine.push({a,tags:[tag]}); };
+      [["V max",a=>a.v.P,1],["V min",a=>a.v.P,-1],["My max",a=>a.v.My,1],["My min",a=>a.v.My,-1],["H max",a=>a.H,1]].forEach(([tag,f,s])=>put(pick(f,s),tag));
+      if(pile && R.pile.perLS && R.pile.perLS[ls]){   // the permutations that govern this calculator's own pile table
+        const q=R.pile.perLS[ls], find=c=>c&&all.find(a=>a.c.V===c.V&&a.c.Mv===c.Mv&&a.c.Mh===c.Mh&&a.c.Hx===c.Hx&&a.c.Mt===c.Mt&&a.c.Hy===c.Hy);
+        const b1=find(q.best&&q.best.c), b2=find(q.worstMin&&q.worstMin.c); if(b1) put(b1,"pile P max"); if(b2) put(b2,"pile P min"); }
+      mine.forEach(m=>{ const g=m.tags.join(", "), c=m.a.c;
+        out.push(Object.assign({ id:ls+":"+g, name:lsOut(ls)+" — "+g, limitState:lsOut(ls), factored:factored(ls) }, m.a.v,
+          { governs:g, combination:c.lbl+(c.liveOn?"":" (no live load)") })); });
+    });
+    return out;
+  }
+  function build(lsSel){
+    const R=window.LAST_R; if(!R||!R.LIMITS||!R.permutations) return { err:"No results yet: fix the input errors first." };
+    const pile=S.fnd.branch==="pile" && R.pile && R.pile.n>0;
+    if(S.fnd.branch==="pile" && !pile) return { err:"Pile branch with no active piles: activate piles first." };
+    const cs=cases(R,lsSel); if(!cs.length) return { err:"Pick at least one limit state." };
+    const nErr=(typeof WARNINGS!=="undefined"?WARNINGS:[]).filter(w=>w.level==="err").length;
+    const sp=window.BridgeXfer&&BridgeXfer.sharedProject?BridgeXfer.sharedProject():null;
+    const B=R.geo.B;
+    const p={ _schema:SCH, schemaVersion:1, producer:"Abutment Calculator", producerFile:"abutment_calculator.html",
+      project:{ name:(S.proj&&S.proj.name)||"", bridgeId:(sp&&sp.bridgeId)||"" },
+      units:{ force:"kip", moment:"kip-ft", length:"ft" },
+      element:{ type:"abutment", label:(S.proj&&S.proj.name)||"Abutment" },
+      location: pile? "bottom of pile cap (footing), pile-group centroid ("+r3(R.pile.xgcT)+" ft from the toe, "+r3(R.pile.ygc)+" ft from the abutment centreline)"
+                    : "bottom of footing, footing centre ("+r3(B/2)+" ft from the toe, on the abutment centreline)",
+      reference:{ level: pile?"bottomOfPileCap":"bottomOfFooting", point: pile?"pileGroupCentroid":"footingCentre", fromToe: r3(pile?R.pile.xgcT:B/2), fromCentreline: r3(pile?R.pile.ygc:0) },
+      includes:{ footingWeight:true, soilOverFooting:true, earthPressure:true },
+      axes:{ x:"horizontal, normal to the abutment, + toward the toe (toward the span)", y:"horizontal, along the abutment, + toward positive beam offsets" },
+      geometry:{ footingWidthB:r3(B), footingLength:r3(+S.geom.Lftg||+S.geom.Lab), footingThickness:r3(S.geom.tf) },
+      signConvention:SIGN, cases:cs,
+      notes:[
+        "Each limit state's load-factor permutations (γp max/min of DC, DW, EV, EH, ES, with and without live load) are the calculator's own; per limit state the permutations giving V max, V min, My max, My min and the largest horizontal resultant are sent, identical ones merged"+(pile?"; in the pile branch also the permutations that give the largest and smallest pile reaction in the calculator's pile table (\"pile P max\", \"pile P min\").":"."),
+        "Strength and Extreme Event cases are factored (factored:true); Service I has load factors of 1.0 (factored:false).",
+        "Every case includes the abutment and footing self-weight, the soil over the heel (EV), the earth pressure (EH, ES, LS) and the superstructure loads, at the bottom of the footing.",
+        "The vertical live-load surcharge over the heel (LSv) is included in every case, as in the calculator's bearing and pile checks; its sliding and eccentricity checks leave it out where it helps.",
+        pile? "Moments are about the pile-group centroid. My is + toward the toe here (the calculator's pile table uses ex + toward the heel)." : "Moments are about the footing centre (B/2 from the toe, on the abutment centreline).",
+        "Load factors per AASHTO LRFD 10th Ed. Tables 3.4.1-1 and 3.4.1-2 as set in the calculator."]
+        .concat(nErr?["The calculator reported "+nErr+" input error(s) when these loads were sent; check them."]:[]) };
+    return { p, n:cs.length };
+  }
+  let DLG=null;
+  function css(){ if(document.getElementById("fdx-css")) return; const s=document.createElement("style"); s.id="fdx-css";
+    s.textContent="#fdx-ov{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:9999;display:flex;align-items:flex-start;justify-content:center;overflow:auto;padding:24px 8px}"+
+      "#fdx-dlg{background:#fff;color:#1a1a1a;max-width:980px;width:100%;border-radius:6px;padding:14px 18px;box-shadow:0 6px 30px rgba(0,0,0,.3);font-size:.86rem}"+
+      "#fdx-dlg h3{margin:0 0 6px 0;font-size:1.05rem}#fdx-dlg table{border-collapse:collapse;width:100%;margin:4px 0}#fdx-dlg td,#fdx-dlg th{border:1px solid #ddd;padding:2px 6px;text-align:left}"+
+      "#fdx-dlg td.n{text-align:right}#fdx-dlg .fdx-btns{display:flex;gap:8px;justify-content:flex-end;margin-top:12px}#fdx-dlg .fdx-note{color:#555;font-size:.8rem}"+
+      "@media print{#fdx-send,#fdx-ov{display:none !important}}";
+    document.head.appendChild(s); }
+  function close(){ const ov=document.getElementById("fdx-ov"); if(ov) ov.remove(); DLG=null; }
+  function render(){
+    const R=window.LAST_R, lss=Object.keys(R.LIMITS); if(!DLG.sel) DLG.sel=lss.slice();
+    const b=build(DLG.sel); DLG.b=b;
+    let ov=document.getElementById("fdx-ov"); if(!ov){ ov=document.createElement("div"); ov.id="fdx-ov"; document.body.appendChild(ov); }
+    const f=v=>escH(r3(v));
+    ov.innerHTML="<div id='fdx-dlg' role='dialog' aria-label='Send foundation loads'><h3>Send foundation loads</h3>"+
+      "<div>Factored and service load combinations at the bottom of the footing / pile cap, per limit state, for Pile Designer and Spread Footing (channel foundationLoads).</div>"+
+      "<div style='margin:6px 0'>"+lss.map(ls=>"<label style='margin-right:12px'><input type='checkbox' data-fdx-ls='"+escH(ls)+"'"+(DLG.sel.includes(ls)?" checked":"")+"> "+escH(lsOut(ls))+"</label>").join("")+"</div>"+
+      (b.err?"<div style='color:#c62828'>"+escH(b.err)+"</div>":
+        "<div class='fdx-note'><b>Location:</b> "+escH(b.p.location)+"<br><b>Sign convention:</b> "+escH(SIGN)+"</div>"+
+        "<div style='max-height:42vh;overflow:auto'><table><tr><th>Case</th><th>Factored</th><th>P (kip)</th><th>Vx</th><th>Vy</th><th>Mx (kip-ft)</th><th>My</th></tr>"+
+        b.p.cases.map(c=>"<tr><td title='"+escH(c.combination)+"'>"+escH(c.name)+"</td><td>"+(c.factored?"yes":"no")+"</td><td class='n'>"+f(c.P)+"</td><td class='n'>"+f(c.Vx)+"</td><td class='n'>"+f(c.Vy)+"</td><td class='n'>"+f(c.Mx)+"</td><td class='n'>"+f(c.My)+"</td></tr>").join("")+"</table></div>")+
+      "<div class='fdx-btns'><button id='fdx-cancel'>Cancel</button><button id='fdx-export'"+(b.err?" disabled":"")+">Export hand-off (JSON)</button><button class='primary' id='fdx-go'"+(b.err?" disabled":"")+">Send to other tools</button></div></div>";
+  }
+  function open(){
+    if(!window.BridgeXfer){ alert("The hand-off helper is not available in this browser."); return null; }
+    if(!window.LAST_R){ alert("No results yet: fix the input errors first."); return null; }
+    DLG={ sel:null }; css(); render(); return DLG;
+  }
+  function send(how){
+    const b=DLG&&DLG.b; if(!b||b.err) return;
+    const ss=document.getElementById("saveStatus");
+    if(how==="export"){ const r=BridgeXfer.exportFile(CH,Object.assign({},b.p,{ producedAt:new Date().toISOString() })); if(r.error){ alert(r.error); return; } close(); if(ss) ss.textContent="foundation loads exported ("+b.n+" cases)"; return; }
+    const r=BridgeXfer.publish(CH,b.p,"Abutment Calculator","abutment_calculator.html");
+    if(r.error){ alert("Could not send: "+r.error); return; }
+    try{ localStorage.setItem("bridgeSuite.v1."+CH+".by."+SID, JSON.stringify(r.payload)); }catch(e){}
+    close(); if(ss) ss.textContent="foundation loads sent ("+b.n+" cases) — pull them in Pile Designer";
+  }
+  document.addEventListener("click",ev=>{
+    const t=ev.target; if(!t||!t.closest) return;
+    if(t.closest("#fdx-send")){ open(); return; }
+    if(t.id==="fdx-cancel"){ close(); return; }
+    if(t.id==="fdx-go"){ send("send"); return; }
+    if(t.id==="fdx-export"){ send("export"); return; }
+  });
+  document.addEventListener("change",ev=>{
+    const t=ev.target; if(!DLG||!t||!t.closest||!t.closest("#fdx-dlg")) return;
+    ev.stopPropagation();
+    const ls=t.getAttribute("data-fdx-ls"); if(ls){ DLG.sel=t.checked?DLG.sel.concat([ls]):DLG.sel.filter(x=>x!==ls); render(); }
+  },true);
+  window.AbutFoundationHandoff={ build, cases, open, send, close, state:()=>DLG };   // used by tests; no effect on results
 })();
 </script>
 </body>
