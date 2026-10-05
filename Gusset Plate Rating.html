@@ -1043,6 +1043,17 @@ input.ovr, select.ovr { outline: 2px solid #c98a1b; outline-offset: -1px; backgr
 #v3-op { width: 90px; }
 .crdoc img.v3snap { display: block; width: 100%; max-height: 7.5in; object-fit: contain; border: 1px solid #c8c8c8; }
 @media (max-width: 900px) { .v3-wrap { height: 60vh; } }
+/* CAD (DXF) exchange (Phase 3) */
+.cad-box { width: min(1120px, 96vw); }
+.cad-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 8px; }
+.cad-fig { border: 1px solid var(--border); border-radius: var(--r); background: #fff; padding: 6px 8px; margin: 0; min-width: 0; }
+.cad-fig figcaption { font-size: 12.5px; font-weight: 600; color: var(--text); margin-bottom: 4px; }
+.cad-svg { width: 100%; height: auto; max-height: 44vh; display: block; }
+.cad-tbl tr.cad-grp td { font-weight: 650; background: var(--sidebar); color: var(--text); }
+.cad-tbl td.val { white-space: nowrap; }
+#cad-msg .hint { margin-top: 2px; }
+#cad-apply:disabled { opacity: .45; cursor: not-allowed; }
+@media (max-width: 700px) { .cad-pair { grid-template-columns: 1fr; } }
 </style>
 <script>
 window.MathJax = { tex: { inlineMath: [['\\(','\\)']], displayMath: [['\\[','\\]']], processEscapes: true }, svg: { fontCache: "global", displayAlign: 'left', displayIndent: '0' },
@@ -1162,7 +1173,7 @@ window.MathJax = { tex: { inlineMath: [['\\(','\\)']], displayMath: [['\\[','\\]
 <header>
   <div class="brand">
     <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" fill="#17212b"/><path d="M5 24h22M9 24 14 11h4l5 13" fill="none" stroke="#8fa3e6" stroke-width="1.4"/><path d="M16 24V8M4 24 16 8 28 24" fill="none" stroke="#fff" stroke-width="1.2" stroke-dasharray="2 1.6"/><g fill="#fff"><circle cx="12" cy="21" r="1.3"/><circle cx="20" cy="21" r="1.3"/><circle cx="16" cy="17" r="1.3"/></g></svg>
-    <div class="brand-text"><span class="logo-name">Gusset Plate Rating</span><span class="brand-sub">by Mario Lococo, <span class="logo-pill">truss gusset plates, AASHTO MBE 6A.6.12.6 (LRFR) and 6B (LFR), Phase 2</span></span></div>
+    <div class="brand-text"><span class="logo-name">Gusset Plate Rating</span><span class="brand-sub">by Mario Lococo, <span class="logo-pill">truss gusset plates, AASHTO MBE 6A.6.12.6 (LRFR) and 6B (LFR), Phase 3</span></span></div>
   </div>
   <a class="bx-all-tools" href="tools.html" target="_top" title="Open the list of all tools">&larr; All tools</a>
   <div class="hdr-spacer"></div>
@@ -1187,6 +1198,7 @@ window.MathJax = { tex: { inlineMath: [['\\(','\\)']], displayMath: [['\\[','\\]
 </main>
 </div>
 <div class="modal" id="pst-modal" hidden><div class="modal-box wide" role="dialog" aria-labelledby="pst-title"><h2 id="pst-title">Paste</h2><p id="pst-help"></p><textarea id="pst-text" spellcheck="false" placeholder="Paste here (Ctrl+V)"></textarea><div id="pst-map"></div><div id="pst-prev"></div><div class="modal-foot"><button type="button" class="btn" id="pst-cancel">Cancel</button><button type="button" class="btn btn-primary" id="pst-apply">Apply</button></div></div></div>
+<div class="modal" id="cad-modal" hidden><div class="modal-box wide cad-box" role="dialog" aria-labelledby="cad-title"><h2 id="cad-title">Import DXF</h2><p id="cad-sub"></p><div id="cad-body"></div><div class="modal-foot"><button type="button" class="btn" id="cad-cancel">Cancel</button><button type="button" class="btn btn-primary" id="cad-apply">Apply</button></div></div></div>
 <div id="calc-rpt" class="crdoc"></div>
 <script>
 /* =====================================================================
@@ -2042,6 +2054,450 @@ const GP3D = (function () {
 </script>
 <script>
 /* =====================================================================
+   Gusset Plate Rating: CAD exchange (DXF) (Phase 3). Pure functions, no DOM.
+   Writes ASCII DXF R12 (AC1009); reads ASCII DXF R12 and later.
+   Reads and writes geometry only; never changes an engineering formula or parameter.
+   Layer scheme (inches, origin = work point, +x along the chord, +y up):
+     GP-PLATE  closed polyline: plate outline          GP-M<n>-WL    LINE: member n work line (from the WP outward)
+     GP-M<n>-BOLT  CIRCLEs: holes (diameter = hole)    GP-M<n>-OUTL  member n outline (informational; width check)
+     GP-SPLICE  chord splice line (informational)      GP-FILL  filler outlines (informational)
+     GP-DATA  TEXT KEY=VALUE (inches, ksi)              GP-NOTES  title block / notes (ignored on import)
+   ===================================================================== */
+const GPDXF = (function () {
+  'use strict';
+  const PI = Math.PI, num = GPR.num, TOL = 1 / 16, TOLD = 1 / 64;
+  const r6 = x => { const y = Math.round(x * 1e6) / 1e6; return Object.is(y, -0) ? 0 : y; };
+  const fmt = x => { let s = (Math.abs(x) < 5e-9 ? 0 : x).toFixed(8); if (s.indexOf('.') >= 0) s = s.replace(/0+$/, '').replace(/\.$/, ''); return s === '-0' ? '0' : s; };
+  const fs = x => isFinite(x) ? String(r6(x)) : '';
+  const deg = r => r * 180 / PI;
+  const norm360 = a => { let x = a % 360; if (x < 0) x += 360; if (x >= 360 - 1e-9) x -= 360; return x; };
+
+  /* ---------- fastener layout (same rules as the engine's memberGeom; duplicated here, the engine is not changed) ---------- */
+  function gageList(g, nL) { if (nL < 2) return []; let a = String(g ?? '').split(/[,;\s]+/).map(num).filter(x => isFinite(x)); if (!a.length) a = [NaN]; const out = []; for (let i = 0; i < nL - 1; i++) out.push(a[Math.min(i, a.length - 1)]); return out; }
+  function holeDia(f, p) { const d = num(f.d); if (f.hole === 'oversize') return d + (d <= 0.875 + 1e-9 ? p.hOv78 : d <= 1 + 1e-9 ? p.hOv1 : p.hOvL); return d + p.hStd; }
+  function memGeo(m, p) {
+    const f = m.fast, th = num(m.ang) * PI / 180, u = [Math.cos(th), Math.sin(th)], v = [-Math.sin(th), Math.cos(th)];
+    const nR = Math.round(num(f.nR)), nL = Math.round(num(f.nL)), pitch = num(f.p), e = num(f.e), off = num(f.off) || 0;
+    const P_ = (s, t) => [u[0] * s + v[0] * t, u[1] * s + v[1] * t];
+    const ok = isFinite(th) && nR >= 1 && nL >= 1 && isFinite(e) && (nR === 1 || isFinite(pitch));
+    const gl = gageList(f.g, nL), acc = [0]; gl.forEach(g => acc.push(acc[acc.length - 1] + g)); const tot = acc[acc.length - 1];
+    const ts = acc.map(a => a - tot / 2 + off), ss = ok ? Array.from({ length: nR }, (_, k) => e + k * (nR > 1 ? pitch : 0)) : [];
+    const dh = holeDia(f, p), holes = [];
+    if (ok && ts.every(isFinite) && isFinite(dh)) ss.forEach((s, k) => ts.forEach((t, j) => holes.push({ row: k, line: j, s, t, x: P_(s, t)[0], y: P_(s, t)[1], dh })));
+    return { ok: ok && ts.every(isFinite), th, u, v, P: P_, nR, nL, pitch, e, off, ts, ss, dh, holes, sOut: ss.length ? ss[ss.length - 1] : (isFinite(e) ? e : 0), w: num(m.sec.w) || 0, cut: num(m.cut) || 0, tf: num(f.tf) || 0 };
+  }
+
+  /* ---------- GP-DATA keys (each maps to an existing model field; lengths in inches, strengths in ksi) ---------- */
+  const ENUM = {
+    steel: () => GPR.STEEL.map(s => s[0]), chord: () => ['continuous', 'spliced'], role: () => ['chord', 'web'], sec: () => ['box', 'H', 'W', 'L'],
+    grade: () => Object.keys(GPR.FAST), hole: () => ['standard', 'oversize'], prep: () => ['drilled', 'punched'], thr: () => ['excl', 'incl'], ns: () => ['1', '2']
+  };
+  const GKEYS = [ // [KEY, path, kind, template value written?]
+    ['PROJECT', 'meta.projectName', 'text', 0], ['BRIDGE', 'meta.bridgeId', 'text', 0], ['JOINT', 'meta.joint', 'text', 0],
+    ['NP', 'plates.n', 'int1', 0], ['T_PLATE', 'plates.t', 'pos', 0], ['STEEL', 'plates.steel', 'steel', 0], ['FY', 'plates.Fy', 'pos', 0], ['FU', 'plates.Fu', 'pos', 0],
+    ['CHORD', 'chord', 'chord', 1]];
+  const MKEYS = [
+    ['NAME', 'id', 'name', 0], ['ROLE', 'role', 'role', 1], ['SECTION', 'sec.type', 'sec', 0], ['DESC', 'sec.desc', 'text', 0], ['W', 'sec.w', 'nonneg', 1], ['D2', 'sec.d2', 'nonneg', 0], ['CUT', 'cut', 'nonneg', 1],
+    ['FASTENER', 'fast.grade', 'grade', 0], ['D', 'fast.d', 'pos', 1], ['HOLE', 'fast.hole', 'hole', 1], ['PREP', 'fast.prep', 'prep', 0], ['THREADS', 'fast.thr', 'thr', 0], ['NS', 'fast.Ns', 'ns', 0], ['TF', 'fast.tf', 'nonneg', 0]];
+  const getPath = (o, p) => p.split('.').reduce((a, k) => a == null ? a : a[k], o);
+  const setPath = (o, p, v) => { const ks = p.split('.'); let a = o; ks.slice(0, -1).forEach(k => { if (a[k] == null || typeof a[k] !== 'object') a[k] = {}; a = a[k]; }); a[ks[ks.length - 1]] = v; };
+  function outVal(v, kind) { if (kind === 'text' || kind === 'name') return String(v ?? ''); if (['steel', 'chord', 'role', 'sec', 'grade', 'hole', 'prep', 'thr', 'ns'].includes(kind)) return String(v ?? ''); const x = num(v); return isFinite(x) ? fs(x) : String(v ?? ''); }
+  /* parse one DATA value: returns { v } or { err } */
+  function inVal(raw, kind) {
+    const s = String(raw).trim();
+    if (kind === 'text') return { v: s };
+    if (kind === 'name') return s ? { v: s } : { err: 'must not be empty' };
+    if (ENUM[kind]) { const list = ENUM[kind](), hit = list.find(x => x.toLowerCase() === s.toLowerCase()); if (hit) return { v: kind === 'ns' ? +hit : hit }; return { err: `must be one of ${list.join(', ')}` }; }
+    const x = num(s); if (!isFinite(x)) return { err: 'is not a number' };
+    if (kind === 'int1') return Number.isInteger(x) && x >= 1 ? { v: x } : { err: 'must be a whole number of at least 1' };
+    if (kind === 'pos') return x > 0 ? { v: x } : { err: 'must be positive' };
+    if (kind === 'nonneg') return x >= 0 ? { v: x } : { err: 'must be zero or positive' };
+    return { v: x };
+  }
+
+  /* ---------- templates (data: plate outline + members taken from the built-in 5-member example) ---------- */
+  const TEMPLATES = [
+    { key: 't5', label: '5 members: continuous chord + vertical + two diagonals', short: '5-member panel point', ids: ['L1-L2', 'L2-L3', 'L2-U1', 'L2-U3', 'L2-U2'], poly: null },
+    { key: 't4d', label: '4 members: continuous chord + two diagonals (Warren)', short: '4-member panel point, chord + 2 diagonals', ids: ['L1-L2', 'L2-L3', 'L2-U1', 'L2-U3'], poly: null },
+    { key: 't4v', label: '4 members: continuous chord + vertical + diagonal (Pratt)', short: '4-member panel point, chord + vertical + diagonal', ids: ['L1-L2', 'L2-L3', 'L2-U2', 'L2-U3'], poly: [[-24, -9], [24, -9], [24, 9], [33.25, 28.25], [22.125, 37.625], [-8, 37.625], [-24, 9]] },
+    { key: 't3', label: '3 members: continuous chord + vertical', short: '3-member panel point, chord + vertical', ids: ['L1-L2', 'L2-L3', 'L2-U2'], poly: [[-24, -9], [24, -9], [24, 9], [10, 32], [-10, 32], [-24, 9]] }
+  ];
+  function templateModel(key) { const t = TEMPLATES.find(q => q.key === key) || TEMPLATES[0], d = GPR.defaults();
+    d.members = t.ids.map(id => d.members.find(m => m.id === id)); if (t.poly) d.plates.poly = t.poly.map(q => q.slice());
+    d.meta = { ...d.meta, projectName: '', joint: '', subject: '' }; return GPR.normalize(d); }
+
+  /* ---------- writer: ASCII DXF R12 (AC1009), CRLF ---------- */
+  const COLORS = { PLATE: 7, WL: 1, OUTL: 3, BOLT: 5, SPLICE: 6, FILL: 8, DATA: 2, NOTES: 4 };
+  function enc(s) { return String(s ?? '').replace(/[\r\n\t]+/g, ' ').replace(/[^\x20-\x7e]/g, c => { const cp = c.codePointAt(0); return '\\U+' + cp.toString(16).toUpperCase().padStart(4, '0'); }).slice(0, 250); }
+  /* opt: { template: bool, title } -> { text, warnings, layers } */
+  function write(P, opt = {}) {
+    const p = GPR.prm(P.code), W = [], L = [], ent = [], bb = [Infinity, Infinity, -Infinity, -Infinity];
+    const grow = (x, y) => { if (!isFinite(x) || !isFinite(y)) return; bb[0] = Math.min(bb[0], x); bb[1] = Math.min(bb[1], y); bb[2] = Math.max(bb[2], x); bb[3] = Math.max(bb[3], y); };
+    const g = (c, v) => ent.push(String(c).padStart(3), String(v));
+    const layer = (name, col, lt = 'CONTINUOUS') => { if (!L.some(l => l[0] === name)) L.push([name, col, lt]); return name; };
+    const line = (ly, a, b) => { g(0, 'LINE'); g(8, ly); g(10, fmt(a[0])); g(20, fmt(a[1])); g(30, 0); g(11, fmt(b[0])); g(21, fmt(b[1])); g(31, 0); grow(a[0], a[1]); grow(b[0], b[1]); };
+    const pline = (ly, pts, closed = true) => { g(0, 'POLYLINE'); g(8, ly); g(66, 1); g(10, 0); g(20, 0); g(30, 0); g(70, closed ? 1 : 0);
+      pts.forEach(q => { g(0, 'VERTEX'); g(8, ly); g(10, fmt(q[0])); g(20, fmt(q[1])); g(30, 0); grow(q[0], q[1]); }); g(0, 'SEQEND'); g(8, ly); };
+    const circle = (ly, c, r) => { g(0, 'CIRCLE'); g(8, ly); g(10, fmt(c[0])); g(20, fmt(c[1])); g(30, 0); g(40, fmt(r)); grow(c[0] - r, c[1] - r); grow(c[0] + r, c[1] + r); };
+    const text = (ly, at, h, s) => { g(0, 'TEXT'); g(8, ly); g(10, fmt(at[0])); g(20, fmt(at[1])); g(30, 0); g(40, fmt(h)); g(1, enc(s)); grow(at[0], at[1]); grow(at[0] + 0.62 * h * String(s).length, at[1] + h); };
+    const poly = (P.plates.poly || []).map(q => [num(q[0]), num(q[1])]);
+    layer('0', 7);
+    const LP = layer('GP-PLATE', COLORS.PLATE);
+    if (poly.length >= 3 && poly.every(q => isFinite(q[0]) && isFinite(q[1]))) pline(LP, poly); else W.push('The plate outline is incomplete; GP-PLATE was left empty.');
+    P.members.forEach((m, i) => { const n = i + 1, G = memGeo(m, p);
+      const LW = layer(`GP-M${n}-WL`, COLORS.WL, 'CENTER'), LO = layer(`GP-M${n}-OUTL`, COLORS.OUTL), LB = layer(`GP-M${n}-BOLT`, COLORS.BOLT);
+      if (!isFinite(G.th)) { W.push(`Member ${n} (${m.id}): the angle is not a number; it was not drawn.`); return; }
+      const Lw = Math.max(G.sOut, G.cut) + 12; line(LW, [0, 0], G.P(Lw, 0));
+      if (G.w > 0) { const s1 = Math.max(G.sOut + 6, G.cut + 6); pline(LO, [G.P(G.cut, -G.w / 2), G.P(s1, -G.w / 2), G.P(s1, G.w / 2), G.P(G.cut, G.w / 2)]); }
+      if (!G.ok || !G.holes.length) W.push(`Member ${n} (${m.id}): the fastener pattern is incomplete; no holes were drawn.`);
+      else G.holes.forEach(h => circle(LB, [h.x, h.y], h.dh / 2));
+      if (G.tf > 0 && G.holes.length) { const ed = 1.5, tmn = Math.min(...G.ts), tmx = Math.max(...G.ts), LF = layer('GP-FILL', COLORS.FILL, 'DASHED');
+        pline(LF, [G.P(G.e - ed, tmn - ed), G.P(G.sOut + ed, tmn - ed), G.P(G.sOut + ed, tmx + ed), G.P(G.e - ed, tmx + ed)]); }
+    });
+    if (P.chord === 'spliced') { const ch = P.members.filter(m => m.role === 'chord'), hw = Math.max(6, ...ch.map(m => (num(m.sec.w) || 0) / 2 + 2)); line(layer('GP-SPLICE', COLORS.SPLICE, 'DASHED'), [0, -hw], [0, hw]); }
+    // data block to the right of the drawing, notes below it
+    const x0 = isFinite(bb[2]) ? bb[2] + 12 : 40, yTop = isFinite(bb[3]) ? bb[3] : 30, H = 0.75, LD = layer('GP-DATA', COLORS.DATA), LN = layer('GP-NOTES', COLORS.NOTES);
+    const rows = [['FORMAT', 'GPR-DXF-1']];
+    const tv = (k, v, inTpl) => opt.template && !inTpl ? '' : v;
+    GKEYS.forEach(([k, path, kind, t]) => rows.push([k, tv(k, outVal(getPath(P, path), kind), t)]));
+    P.members.forEach((m, i) => MKEYS.forEach(([k, path, kind, t]) => rows.push([`M${i + 1}.${k}`, tv(k, outVal(getPath(m, path), kind), t)])));
+    text(LN, [x0, yTop + 2.2], 1.0, 'GP-DATA (KEY=VALUE, inches and ksi; blank value = keep the current model value)');
+    rows.forEach(([k, v], j) => text(LD, [x0, yTop - j * 1.5 * H], H, `${k}=${v}`));
+    const bx0 = isFinite(bb[0]) ? bb[0] : -40, yN = (isFinite(bb[1]) ? Math.min(bb[1], yTop - rows.length * 1.5 * H) : -20) - 6, h2 = 0.85;
+    const notes = [
+      `GUSSET PLATE RATING - ${opt.template ? 'DXF TEMPLATE: ' + (opt.title || '') : 'MODEL EXPORT' + (opt.title ? ': ' + opt.title : '')}`,
+      'Units: inches. Origin = work point (WP). +x along the chord (to the right), +y up. Do not move the WP.',
+      'GP-PLATE: one closed polyline = plate outline.  GP-M<n>-WL: LINE from the WP outward = work line of member n (gives the angle).',
+      'GP-M<n>-BOLT: CIRCLES = holes of member n (diameter = hole diameter).  GP-M<n>-OUTL: member outline (information, width check).',
+      'GP-SPLICE: chord splice line (information).  GP-FILL: filler outline (information).  GP-NOTES: ignored on import.',
+      'GP-DATA: TEXT KEY=VALUE (plate, chord and member data, inches and ksi). Unknown keys are reported; blank values keep the current value.',
+      'Add a member: new layers GP-M<n>-WL / -BOLT with the next number n. Explode blocks; save as ASCII DXF (R12 or later).'];
+    notes.forEach((s, j) => text(LN, [bx0, yN - j * 1.6 * h2], j ? h2 : 1.1, s));
+    const nb = [bb[0] - 2, bb[1] - 2, bb[2] + 2, bb[3] + 2]; pline(LN, [[nb[0], nb[1]], [nb[2], nb[1]], [nb[2], nb[3]], [nb[0], nb[3]]]);
+    circle(LN, [0, 0], 0.4); line(LN, [-1, 0], [1, 0]); line(LN, [0, -1], [0, 1]);
+    // assemble
+    const o = [], h = (c, v) => o.push(String(c).padStart(3), String(v));
+    h(0, 'SECTION'); h(2, 'HEADER');
+    h(9, '$ACADVER'); h(1, 'AC1009'); h(9, '$INSBASE'); h(10, 0); h(20, 0); h(30, 0);
+    h(9, '$EXTMIN'); h(10, fmt(bb[0])); h(20, fmt(bb[1])); h(30, 0); h(9, '$EXTMAX'); h(10, fmt(bb[2])); h(20, fmt(bb[3])); h(30, 0);
+    h(9, '$LTSCALE'); h(40, 1); h(9, '$INSUNITS'); h(70, 1); h(0, 'ENDSEC');
+    h(0, 'SECTION'); h(2, 'TABLES');
+    h(0, 'TABLE'); h(2, 'LTYPE'); h(70, 3);
+    h(0, 'LTYPE'); h(2, 'CONTINUOUS'); h(70, 0); h(3, 'Solid line'); h(72, 65); h(73, 0); h(40, 0);
+    h(0, 'LTYPE'); h(2, 'DASHED'); h(70, 0); h(3, '__ __ __ __'); h(72, 65); h(73, 2); h(40, 0.75); h(49, 0.5); h(49, -0.25);
+    h(0, 'LTYPE'); h(2, 'CENTER'); h(70, 0); h(3, '____ _ ____ _'); h(72, 65); h(73, 4); h(40, 2); h(49, 1.25); h(49, -0.25); h(49, 0.25); h(49, -0.25);
+    h(0, 'ENDTAB');
+    h(0, 'TABLE'); h(2, 'LAYER'); h(70, L.length); L.forEach(([n, c, lt]) => { h(0, 'LAYER'); h(2, n); h(70, 0); h(62, c); h(6, lt); }); h(0, 'ENDTAB');
+    h(0, 'TABLE'); h(2, 'STYLE'); h(70, 1); h(0, 'STYLE'); h(2, 'STANDARD'); h(70, 0); h(40, 0); h(41, 1); h(50, 0); h(71, 0); h(42, 0.2); h(3, 'txt'); h(4, ''); h(0, 'ENDTAB');
+    h(0, 'ENDSEC');
+    h(0, 'SECTION'); h(2, 'BLOCKS'); h(0, 'ENDSEC');
+    h(0, 'SECTION'); h(2, 'ENTITIES'); o.push(...ent); h(0, 'ENDSEC'); h(0, 'EOF');
+    return { text: o.join('\r\n') + '\r\n', warnings: W, layers: L.map(l => l[0]) };
+  }
+  function exportModel(P, title) { return write(P, { template: false, title }); }
+  function exportTemplate(key) { const t = TEMPLATES.find(q => q.key === key) || TEMPLATES[0]; return write(templateModel(t.key), { template: true, title: t.short }); }
+
+  /* ---------- reader ---------- */
+  function decode(input) {
+    if (typeof input === 'string') { if (/^AutoCAD Binary DXF/.test(input)) return { error: 'This is a binary DXF. Save it as an ASCII DXF (AutoCAD: SAVEAS, DXF, ASCII; MicroStation: Save As DXF) and import that file.' }; if (/^AC10\d\d/.test(input)) return { error: 'This is a DWG drawing, not a DXF. Save it as an ASCII DXF and import that file.' }; return { text: input }; }
+    const b = input instanceof Uint8Array ? input : new Uint8Array(input), head = String.fromCharCode(...b.slice(0, 22));
+    if (/^AutoCAD Binary DXF/.test(head)) return { error: 'This is a binary DXF. Save it as an ASCII DXF (AutoCAD: SAVEAS, DXF, ASCII; MicroStation: Save As DXF) and import that file.' };
+    if (/^AC10\d\d/.test(head)) return { error: 'This is a DWG drawing, not a DXF. Save it as an ASCII DXF and import that file.' };
+    let bin = ''; for (let i = 0; i < b.length; i += 8192) bin += String.fromCharCode.apply(null, b.subarray(i, i + 8192));
+    let text = null;
+    if (typeof TextDecoder !== 'undefined') { try { text = new TextDecoder('utf-8', { fatal: true }).decode(b); } catch (e) { try { text = new TextDecoder('windows-1252').decode(b); } catch (e2) {} } }
+    else { try { text = decodeURIComponent(escape(bin)); } catch (e) {} }
+    return { text: text != null ? text : bin };
+  }
+  const uDec = s => String(s).replace(/\\U\+([0-9A-Fa-f]{4})/g, (_, h) => String.fromCharCode(parseInt(h, 16))).replace(/%%[dD]/g, '°').replace(/%%[pP]/g, '±').replace(/%%[cC]/g, 'Ø').replace(/%%%/g, '%');
+  function mtextPlain(s) {
+    let t = String(s);
+    t = t.replace(/\\[Pp]/g, '\n').replace(/\\~/g, ' ').replace(/\\S([^;]*?)[\^#/]([^;]*?);/g, '$1/$2');
+    t = t.replace(/\\[fFhHcCtTqQwWaApP][^;\\{}]*;/g, '').replace(/\\[LlOoKkNn]/g, '');
+    t = t.replace(/\\([\\{}])/g, (_, c) => '\u0001' + c.charCodeAt(0) + '\u0002').replace(/[{}]/g, '').replace(/\u0001(\d+)\u0002/g, (_, c) => String.fromCharCode(+c));
+    return uDec(t);
+  }
+  /* tokenise + walk sections; returns { error } or { hdr, ents, blocksSeen } */
+  function tokens(text) {
+    const ln = String(text).replace(/^﻿/, '').split(/\r\n|\r|\n/); const pr = [];
+    for (let i = 0; i + 1 < ln.length; i += 2) { const cs = ln[i].trim(); if (cs === '' && i >= ln.length - 2) break; const c = /^-?\d+$/.test(cs) ? parseInt(cs, 10) : NaN;
+      if (!isFinite(c)) return { error: `Not a readable ASCII DXF: line ${i + 1} should hold a group code but reads "${cs.slice(0, 40)}".` }; pr.push([c, ln[i + 1].trim()]); }
+    return { pr };
+  }
+  function structure(pr) {
+    const hdr = {}, ents = []; let sec = null, cur = null, hv = null, any = false;
+    for (let i = 0; i < pr.length; i++) { const [c, v] = pr[i];
+      if (c === 0 && v === 'SECTION') { const n = pr[i + 1]; sec = n && n[0] === 2 ? n[1].toUpperCase() : '?'; i++; cur = null; hv = null; any = true; continue; }
+      if (c === 0 && v === 'ENDSEC') { sec = null; cur = null; continue; }
+      if (c === 0 && v === 'EOF') break;
+      if (sec === 'HEADER') { if (c === 9) { hv = v.toUpperCase(); hdr[hv] = {}; } else if (hv) hdr[hv][c] = v; continue; }
+      if (sec === 'ENTITIES') { if (c === 0) { cur = { type: v.toUpperCase(), g: [] }; ents.push(cur); } else if (cur) cur.g.push([c, v]); }
+    }
+    if (!any) return { error: 'Not a DXF file: no SECTION found. Save the drawing as an ASCII DXF.' };
+    return { hdr, ents };
+  }
+  const first = (g, c, d) => { const q = g.find(x => x[0] === c); return q ? q[1] : d; };
+  const fnum = (g, c, d = 0) => { const x = parseFloat(first(g, c, d)); return isFinite(x) ? x : d; };
+  function bulgePts(a, b, bulge) { if (!bulge || Math.abs(bulge) < 1e-12) return []; const th = 4 * Math.atan(bulge), dx = b[0] - a[0], dy = b[1] - a[1], c = Math.hypot(dx, dy); if (c < 1e-12) return [];
+    const dd = (c / 2) / Math.tan(th / 2), mx = (a[0] + b[0]) / 2, my = (a[1] + b[1]) / 2, nx = -dy / c, ny = dx / c, cx = mx + nx * dd, cy = my + ny * dd, r = Math.hypot(a[0] - cx, a[1] - cy), a1 = Math.atan2(a[1] - cy, a[0] - cx);
+    const n = Math.max(2, Math.ceil(Math.abs(th) / (5 * PI / 180))), out = []; for (let k = 1; k < n; k++) { const t = a1 + th * k / n; out.push([cx + r * Math.cos(t), cy + r * Math.sin(t)]); } return out; }
+  function arcPts(cx, cy, r, s, e) { let a = s * PI / 180, b = e * PI / 180; while (b <= a + 1e-12) b += 2 * PI; const n = Math.max(2, Math.ceil((b - a) / (5 * PI / 180))), o = []; for (let k = 0; k <= n; k++) { const t = a + (b - a) * k / n; o.push([cx + r * Math.cos(t), cy + r * Math.sin(t)]); } return o; }
+  /* decode entities into simple records: {kind:'line'|'pl'|'circle'|'text', layer, pts, closed, c, r, s} */
+  function entities(ents) {
+    const out = [], skipped = {}, notes = []; let inserts = 0, paper = 0, i = 0;
+    const mir = (gg, pts) => fnum(gg, 230, 1) < 0 ? pts.map(q => [-q[0], q[1]]) : pts;
+    while (i < ents.length) { const e = ents[i++], gg = e.g, layer = String(first(gg, 8, '0')).toUpperCase();
+      if (+first(gg, 67, 0) === 1) { paper++; if (e.type === 'POLYLINE') while (i < ents.length && ents[i].type !== 'SEQEND') i++; if (e.type === 'POLYLINE') i++; continue; }
+      if (e.type === 'LINE') out.push({ kind: 'line', layer, pts: [[fnum(gg, 10), fnum(gg, 20)], [fnum(gg, 11), fnum(gg, 21)]] });
+      else if (e.type === 'CIRCLE') { const c = mir(gg, [[fnum(gg, 10), fnum(gg, 20)]])[0]; out.push({ kind: 'circle', layer, c, r: fnum(gg, 40) }); }
+      else if (e.type === 'ARC') out.push({ kind: 'pl', layer, closed: false, pts: mir(gg, arcPts(fnum(gg, 10), fnum(gg, 20), fnum(gg, 40), fnum(gg, 50), fnum(gg, 51))), arc: true });
+      else if (e.type === 'LWPOLYLINE') { const vs = []; gg.forEach(([c, v]) => { if (c === 10) vs.push({ x: parseFloat(v), y: 0, b: 0 }); else if (c === 20 && vs.length) vs[vs.length - 1].y = parseFloat(v); else if (c === 42 && vs.length) vs[vs.length - 1].b = parseFloat(v) || 0; });
+        const closed = (+first(gg, 70, 0) & 1) === 1; out.push({ kind: 'pl', layer, closed, pts: mir(gg, expand(vs, closed)) }); }
+      else if (e.type === 'POLYLINE') { const fl = +first(gg, 70, 0), vs = []; while (i < ents.length && ents[i].type === 'VERTEX') { const q = ents[i++].g; if ((+first(q, 70, 0) & 16)) continue; vs.push({ x: fnum(q, 10), y: fnum(q, 20), b: fnum(q, 42, 0) }); } if (i < ents.length && ents[i].type === 'SEQEND') i++;
+        if (fl & (16 | 64)) { skipped['POLYLINE (mesh)'] = (skipped['POLYLINE (mesh)'] || 0) + 1; continue; }
+        const closed = (fl & 1) === 1, pts = expand(vs, closed); out.push({ kind: 'pl', layer, closed, pts: (fl & 8) ? pts : mir(gg, pts) }); }
+      else if (e.type === 'TEXT') out.push({ kind: 'text', layer, s: uDec(first(gg, 1, '')), c: mir(gg, [[fnum(gg, 10), fnum(gg, 20)]])[0], h: fnum(gg, 40, 1) });
+      else if (e.type === 'MTEXT') { const s = gg.filter(x => x[0] === 3).map(x => x[1]).join('') + first(gg, 1, ''); out.push({ kind: 'text', layer, s: mtextPlain(s), c: [fnum(gg, 10), fnum(gg, 20)], h: fnum(gg, 40, 1), mtext: true }); }
+      else if (e.type === 'INSERT') inserts++;
+      else if (e.type === 'VERTEX' || e.type === 'SEQEND') { /* stray */ }
+      else skipped[e.type] = (skipped[e.type] || 0) + 1;
+    }
+    return { recs: out, skipped, inserts, paper };
+  }
+  function expand(vs, closed) { const pts = []; vs.forEach((v, k) => { pts.push([v.x, v.y]); const nx = vs[k + 1] || (closed ? vs[0] : null); if (nx && v.b) pts.push(...bulgePts([v.x, v.y], [nx.x, nx.y], v.b)); }); return pts; }
+
+  const UNITS = { 1: ['inches', 1], 2: ['feet', 12], 4: ['millimetres', 1 / 25.4], 5: ['centimetres', 1 / 2.54], 6: ['metres', 1000 / 25.4] };
+  /* parse a DXF (string or bytes) -> { error } or { raw } (geometry in inches, grouped by the layer scheme) */
+  function parse(input) {
+    const d = decode(input); if (d.error) return { error: d.error };
+    const t = tokens(d.text); if (t.error) return { error: t.error };
+    const s = structure(t.pr); if (s.error) return { error: s.error };
+    const W = [], hdr = s.hdr, iu = hdr.$INSUNITS ? parseInt(hdr.$INSUNITS[70], 10) : null; let units = 'inches', k = 1;
+    if (iu == null || iu === 0) { W.push(`The drawing has no units ($INSUNITS ${iu == null ? 'absent' : '= 0, unitless'}); inches were assumed.${hdr.$MEASUREMENT && +hdr.$MEASUREMENT[70] === 1 ? ' Note: $MEASUREMENT says the drawing is metric; check the scale.' : ''}`); }
+    else if (UNITS[iu]) { units = UNITS[iu][0]; k = UNITS[iu][1]; if (iu !== 1) W.push(`Drawing units are ${units} ($INSUNITS = ${iu}); coordinates were converted to inches (× ${fs(k)}).`); }
+    else return { error: `The drawing units ($INSUNITS = ${iu}) are not supported. Use inches, feet, millimetres, centimetres or metres.` };
+    const E = entities(s.ents), sc = q => [q[0] * k, q[1] * k];
+    const raw = { units, k, plate: [], plateOpen: [], members: {}, splice: [], fill: [], data: [], other: {}, skipped: E.skipped, inserts: E.inserts, paper: E.paper, warnings: W, nEnt: s.ents.length };
+    const mem = n => raw.members[n] || (raw.members[n] = { wl: [], outl: [], holes: [], bad: 0 });
+    E.recs.forEach(r => { const ly = r.layer, m = ly.match(/^GP-M(\d+)-(WL|OUTL|BOLT)$/);
+      if (r.pts) r.pts = r.pts.map(sc); if (r.c) r.c = sc(r.c); if (r.r != null) r.r *= k;
+      if (ly === 'GP-PLATE') { if (r.kind === 'pl' && (r.closed || (r.pts.length > 3 && Math.hypot(r.pts[0][0] - r.pts[r.pts.length - 1][0], r.pts[0][1] - r.pts[r.pts.length - 1][1]) < 0.01))) raw.plate.push(r.pts); else if (r.kind === 'line' || r.kind === 'pl') raw.plateOpen.push(r.pts); else raw.other[ly + ' (' + r.kind + ')'] = (raw.other[ly + ' (' + r.kind + ')'] || 0) + 1; }
+      else if (m) { const M = mem(+m[1]);
+        if (m[2] === 'WL') { if (r.kind === 'line' || (r.kind === 'pl' && !r.closed && !r.arc)) M.wl.push([r.pts[0], r.pts[r.pts.length - 1]]); else M.bad++; }
+        else if (m[2] === 'OUTL') { if (r.kind === 'pl' || r.kind === 'line') M.outl.push(r.pts); else M.bad++; }
+        else { if (r.kind === 'circle') M.holes.push({ x: r.c[0], y: r.c[1], dh: 2 * r.r }); else M.bad++; } }
+      else if (ly === 'GP-SPLICE') raw.splice.push(r);
+      else if (ly === 'GP-FILL') raw.fill.push(r);
+      else if (ly === 'GP-DATA') { if (r.kind === 'text') String(r.s).split(/\n/).forEach(x => { if (x.trim()) raw.data.push(x.trim()); }); else raw.other['GP-DATA (' + r.kind + ')'] = (raw.other['GP-DATA (' + r.kind + ')'] || 0) + 1; }
+      else if (ly === 'GP-NOTES') { /* ignored */ }
+      else raw.other[ly] = (raw.other[ly] || 0) + 1; });
+    // chain open GP-PLATE pieces (exploded outlines) into closed loops
+    if (raw.plateOpen.length) { const ch = chain(raw.plateOpen); raw.plate.push(...ch.loops); if (ch.left) W.push(`GP-PLATE: ${ch.left} open line/arc piece${ch.left > 1 ? 's' : ''} that do not form a closed outline were ignored.`); if (ch.loops.length) W.push(`GP-PLATE: the outline was assembled from ${raw.plateOpen.length - ch.left} separate lines/arcs; a closed polyline is preferred.`); }
+    if (E.inserts) W.push(`${E.inserts} block reference${E.inserts > 1 ? 's' : ''} (INSERT) ignored: explode blocks before export.`);
+    const sk = Object.entries(E.skipped); if (sk.length) W.push(`Ignored entity types: ${sk.map(([t, n]) => `${t} × ${n}`).join(', ')}.`);
+    if (E.paper) W.push(`${E.paper} paper-space entit${E.paper > 1 ? 'ies' : 'y'} ignored (only model space is read).`);
+    const ot = Object.entries(raw.other); if (ot.length) W.push(`${ot.reduce((a, [, n]) => a + n, 0)} entities on other layers ignored (${ot.map(([l, n]) => `${l} × ${n}`).join(', ')}).`);
+    if (!raw.plate.length && !Object.keys(raw.members).length && !raw.data.length) return { error: 'Nothing on the GP- layers was found. Start from a template downloaded from this tool (layers GP-PLATE, GP-M1-WL, GP-M1-BOLT, …).', raw };
+    return { raw };
+  }
+  function chain(pieces) {
+    const tol = 0.01, d = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]), left = pieces.map(p => p.slice()), loops = [];
+    while (left.length) { let cur = left.shift(), grew = true;
+      while (grew && d(cur[0], cur[cur.length - 1]) > tol) { grew = false;
+        for (let j = 0; j < left.length; j++) { const p = left[j], end = cur[cur.length - 1];
+          if (d(end, p[0]) <= tol) { cur = cur.concat(p.slice(1)); left.splice(j, 1); grew = true; break; }
+          if (d(end, p[p.length - 1]) <= tol) { cur = cur.concat(p.slice().reverse().slice(1)); left.splice(j, 1); grew = true; break; } } }
+      if (cur.length > 3 && d(cur[0], cur[cur.length - 1]) <= tol) loops.push(cur.slice(0, -1)); else { left.unshift(cur); break; } }
+    return { loops, left: left.length };
+  }
+
+  /* ---------- polygon helpers ---------- */
+  const area = q => { let s = 0; for (let i = 0; i < q.length; i++) { const a = q[i], b = q[(i + 1) % q.length]; s += a[0] * b[1] - a[1] * b[0]; } return s / 2; };
+  function simplify(pts) {
+    let q = pts.map(p => [p[0], p[1]]); const dd = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
+    q = q.filter((p, i) => i === 0 || dd(p, q[i - 1]) > 1e-4); while (q.length > 1 && dd(q[0], q[q.length - 1]) <= 1e-4) q.pop();
+    let ch = true; while (ch && q.length > 3) { ch = false; for (let i = 0; i < q.length; i++) { const a = q[(i - 1 + q.length) % q.length], b = q[i], c = q[(i + 1) % q.length], L = dd(a, c);
+      if (L > 1e-9 && Math.abs((c[0] - a[0]) * (b[1] - a[1]) - (c[1] - a[1]) * (b[0] - a[0])) / L < 1e-3 && ((b[0] - a[0]) * (c[0] - a[0]) + (b[1] - a[1]) * (c[1] - a[1])) > 0 && dd(a, b) < L) { q.splice(i, 1); ch = true; break; } } }
+    if (area(q) < 0) q = [q[0], ...q.slice(1).reverse()];
+    return q.map(p => [r6(p[0]), r6(p[1])]);
+  }
+
+  /* ---------- fastener pattern fit ---------- */
+  const median = a => { const s = a.slice().sort((x, y) => x - y), n = s.length; return n % 2 ? s[(n - 1) / 2] : (s[n / 2 - 1] + s[n / 2]) / 2; };
+  /* 1-D clusters (gap > tol starts a new one); centre = median */
+  function clusters(vals, tol) { const s = vals.map((v, i) => [v, i]).sort((a, b) => a[0] - b[0]), out = []; s.forEach(([v, i]) => { const c = out[out.length - 1]; if (c && v - c.last <= tol) { c.ix.push(i); c.last = v; } else out.push({ ix: [i], last: v }); }); return out.map(c => ({ ix: c.ix, c: median(c.ix.map(i => vals[i])) })); }
+  /* best-fit regular pattern: gage lines = the well-populated clusters across the member (any spacing; the model stores a gage list);
+     rows at a constant pitch between the first and the last well-populated row (both kept exactly); every hole is assigned to the nearest grid point */
+  function fitPattern(holes, th) {
+    const u = [Math.cos(th), Math.sin(th)], v = [-Math.sin(th), Math.cos(th)], loc = holes.map(h => ({ ...h, s: h.x * u[0] + h.y * u[1], t: h.x * v[0] + h.y * v[1] }));
+    const P_ = (s, t) => [u[0] * s + v[0] * t, u[1] * s + v[1] * t], main = cs => { const mx = Math.max(...cs.map(c => c.ix.length)); return cs.filter(c => c.ix.length >= Math.max(1, mx / 2)); };
+    const Lm = main(clusters(loc.map(h => h.t), TOL)), tc = Lm.map(c => c.c), nL = tc.length;
+    const Rm = main(clusters(loc.map(h => h.s), TOL)), rc = Rm.map(c => c.c);
+    let e = rc[0], p = null;
+    if (rc.length > 1) { const d = rc.slice(1).map((x, k) => x - rc[k]), p0 = median(d);
+      const kl = Math.round((rc[rc.length - 1] - rc[0]) / p0); p = kl > 0 ? (rc[rc.length - 1] - rc[0]) / kl : p0; e = rc[0]; }
+    const kOf = s => p ? Math.round((s - e) / p) : 0, jOf = t => { let b = 0; tc.forEach((x, j) => { if (Math.abs(t - x) < Math.abs(t - tc[b])) b = j; }); return b; };
+    let kmin = Infinity, kmax = -Infinity; loc.forEach(h => { const k = kOf(h.s); kmin = Math.min(kmin, k); kmax = Math.max(kmax, k); });
+    if (p) e += kmin * p; const nR = p ? kmax - kmin + 1 : 1, sReg = k => e + k * (p || 0);
+    const gages = tc.slice(1).map((t, j) => t - tc[j]), off = (tc[0] + tc[nL - 1]) / 2, issues = [], odd = loc.map(() => false), grid = Array.from({ length: nR }, () => Array(nL).fill(0)), at = [];
+    loc.forEach((h, i) => { const k = kOf(h.s) - (p ? kmin : 0), j = jOf(h.t); at[i] = [k, j]; grid[k][j]++; const dv = Math.hypot(h.s - sReg(k), h.t - tc[j]);
+      if (dv > TOL) { odd[i] = true; issues.push(`hole at (${fs(h.x)}, ${fs(h.y)}) is ${fs(dv)} in from its grid position (row ${k + 1}, gage line ${j + 1}: ${fs(h.s - sReg(k))} in along, ${fs(h.t - tc[j])} in across the member)`); } });
+    const missing = [];
+    grid.forEach((r, k) => r.forEach((n, j) => { const q = P_(sReg(k), tc[j]); if (n === 0) { missing.push(q); issues.push(`no hole at row ${k + 1}, gage line ${j + 1} (expected at (${fs(q[0])}, ${fs(q[1])}))`); }
+      else if (n > 1) { at.forEach((a, i) => { if (a[0] === k && a[1] === j) odd[i] = true; }); issues.push(`${n} holes at row ${k + 1}, gage line ${j + 1} (near (${fs(q[0])}, ${fs(q[1])}))`); } }));
+    return { nR, nL, e, p, gages, off, issues, missing, loc, odd };
+  }
+  function gStr(gs) { if (!gs.length) return null; const r = gs.map(r6); return r.every(g => Math.abs(g - r[0]) < 1e-6) ? String(r[0]) : r.join(', '); }
+  function angleFromHoles(holes) {
+    const n = holes.length; if (!n) return null; const cx = holes.reduce((a, h) => a + h.x, 0) / n, cy = holes.reduce((a, h) => a + h.y, 0) / n, ca = Math.atan2(cy, cx);
+    if (n < 2) return ca; let sxx = 0, syy = 0, sxy = 0; holes.forEach(h => { const dx = h.x - cx, dy = h.y - cy; sxx += dx * dx; syy += dy * dy; sxy += dx * dy; });
+    const a1 = 0.5 * Math.atan2(2 * sxy, sxx - syy), cand = [a1, a1 + PI / 2, a1 + PI, a1 - PI / 2], dif = a => Math.abs(Math.atan2(Math.sin(a - ca), Math.cos(a - ca)));
+    return cand.sort((a, b) => dif(a) - dif(b))[0];
+  }
+
+  /* ---------- map the parsed drawing onto a copy of the current model ---------- */
+  /* returns { Q (candidate model), changes:[{grp, field, cur, imp}], warnings, errors, removed:[{i,id}], added:[n], fits:{n:fit}, raw } */
+  function toModel(P, raw) {
+    const Q = JSON.parse(JSON.stringify(P)), p = GPR.prm(P.code), W = raw.warnings.slice(), E = [], fits = {};
+    // plate
+    if (raw.plate.length) { const ps = raw.plate.map(simplify).filter(q => q.length >= 3).sort((a, b) => Math.abs(area(b)) - Math.abs(area(a)));
+      if (raw.plate.length > 1) W.push(`GP-PLATE has ${raw.plate.length} closed outlines; the largest (area ${fs(Math.abs(area(ps[0])))} in²) was used.`);
+      if (ps.length && Math.abs(area(ps[0])) > 1e-6) Q.plates.poly = ps[0]; else W.push('GP-PLATE: the outline has zero area; the current outline is kept.'); }
+    else W.push('No closed plate outline on GP-PLATE; the current plate outline is kept.');
+    // data
+    const data = {}, seen = {};
+    raw.data.forEach(line => { const m = line.match(/^\s*([A-Za-z0-9_.]+)\s*=(.*)$/); if (!m) { W.push(`GP-DATA: "${line}" is not KEY=VALUE; ignored.`); return; } const k = m[1].toUpperCase(); if (k in seen) W.push(`GP-DATA: ${k} is given twice; the last value is used.`); seen[k] = 1; data[k] = m[2].trim(); });
+    const nums = Object.keys(raw.members).map(Number).filter(n => n >= 1).sort((a, b) => a - b), present = nums.filter(n => raw.members[n].wl.length || raw.members[n].holes.length);
+    nums.filter(n => !present.includes(n)).forEach(n => W.push(`GP-M${n}: only an outline (no work line, no holes); member ${n} was not read.`));
+    if (!present.length) { W.push('No member work lines or holes (GP-M<n>-WL, GP-M<n>-BOLT) were found; the members are kept as they are.'); }
+    const dkeys = new Set(['FORMAT']); const used = k => dkeys.add(k);
+    // top-level keys
+    GKEYS.forEach(([k, path, kind]) => { if (!(k in data)) return; used(k); if (data[k] === '') return; const r = inVal(data[k], kind); if (r.err) { W.push(`GP-DATA: ${k}=${data[k]} ${r.err}; ignored.`); return; } if (k === 'FY' || k === 'FU') return; setPath(Q, path, r.v); });
+    { const st = GPR.STEEL.find(s => s[0] === Q.plates.steel); ['FY', 'FU'].forEach((k, j) => { if (!(k in data) || data[k] === '') return; const r = inVal(data[k], 'pos'); if (r.err) return;
+      if (st && st[2] != null) { if (Math.abs(r.v - st[2 + j]) > 1e-9) W.push(`GP-DATA: ${k}=${data[k]} ignored because the steel is the preset "${st[1]}" (F${j ? 'u' : 'y'} = ${st[2 + j]} ksi). Set STEEL=custom to enter it.`); }
+      else Q.plates[j ? 'Fu' : 'Fy'] = r.v; });
+      if (st && st[2] != null && 'STEEL' in data && data.STEEL !== '') { Q.plates.Fy = st[2]; Q.plates.Fu = st[3]; } }
+    // members
+    const nm = P.members.length, newMembers = [], removed = [], added = [];
+    if (present.length) {
+      const gaps = []; for (let n = 1; n <= Math.max(...present); n++) if (!present.includes(n) && n <= nm) gaps.push(n);
+      present.forEach(n => { const M = raw.members[n], base = n <= nm ? JSON.parse(JSON.stringify(P.members[n - 1])) : null, isNew = !base;
+        const m = base || GPR.normalize({ members: [{}] }).members[0]; if (isNew) { m.id = ''; m.F = { DC: 0, DW: 0, LL: P.ll.map(() => 0) }; m.ovr = { wG: '', wN: '', lmid: '', bsLvg: '', bsLvn: '', bsLtg: '', bsLtn: '' }; added.push(n); }
+        const tag = `M${n}${base ? ` (${base.id})` : ''}`;
+        // member data keys
+        MKEYS.forEach(([k, path, kind]) => { const key = `M${n}.${k}`; if (!(key in data)) return; used(key); if (data[key] === '') return;
+          if (k === 'HOLE' && isFinite(num(data[key])) && num(data[key]) > 0) { m.__dhData = num(data[key]); return; }
+          const r = inVal(data[key], kind); if (r.err) { W.push(`GP-DATA: ${key}=${data[key]} ${r.err}; ignored.`); return; } setPath(m, path, r.v); });
+        // angle
+        let th = null;
+        if (M.wl.length) { if (M.wl.length > 1) W.push(`${tag}: ${M.wl.length} work lines; the longest was used.`);
+          const wl = M.wl.slice().sort((a, b) => Math.hypot(b[1][0] - b[0][0], b[1][1] - b[0][1]) - Math.hypot(a[1][0] - a[0][0], a[1][1] - a[0][1]))[0];
+          const d0 = Math.hypot(...wl[0]), d1 = Math.hypot(...wl[1]), a = d0 <= d1 ? wl[0] : wl[1], b = d0 <= d1 ? wl[1] : wl[0], L = Math.hypot(b[0] - a[0], b[1] - a[1]);
+          if (L < 1e-6) W.push(`${tag}: the work line has zero length.`); else { th = Math.atan2(b[1] - a[1], b[0] - a[0]); const perp = Math.abs(a[0] * (b[1] - a[1]) - a[1] * (b[0] - a[0])) / L;
+            if (perp > TOL) W.push(`${tag}: the work line does not pass through the WP (it misses it by ${fs(perp)} in); its direction was used for the angle.`); } }
+        if (th == null && M.holes.length) { th = angleFromHoles(M.holes); W.push(`${tag}: no work line on GP-M${n}-WL; the angle (${fs(Math.round(norm360(deg(th)) * 100) / 100)}°) was taken from the principal axis of the hole pattern. Check it.`); }
+        if (th != null) { let a = Math.round(norm360(deg(th)) * 100) / 100; if (a >= 360) a -= 360; const cur = num(m.ang); if (!(isFinite(cur) && Math.abs(norm360(cur - a + 180) - 180) < 0.005)) { m.ang = a; if (base && isFinite(cur) && Math.abs(norm360(cur - a + 180) - 180) > 1) W.push(`${tag}: the work-line angle changes from ${fs(cur)}° to ${fs(a)}°; the member forces are kept as entered: check them.`); } }
+        // holes
+        if (M.holes.length) { const thr = num(m.ang) * PI / 180, F = fitPattern(M.holes, thr); fits[n] = F;
+          const f = m.fast; f.nR = F.nR; f.nL = F.nL; f.e = r6(F.e); if (F.nR > 1) f.p = r6(F.p); f.off = r6(F.off);
+          if (F.nL > 1) { const gs = gStr(F.gages), cg = gageList(base ? base.fast.g : '', F.nL); if (!(cg.length === F.gages.length && cg.every((x, j) => Math.abs(x - r6(F.gages[j])) < 1e-6))) f.g = gs; }
+          if (F.issues.length) W.push(`${tag}: the hole pattern is not a regular grid; the best-fit regular pattern (${F.nR} rows × ${F.nL} gage lines${F.nR > 1 ? `, pitch ${fs(F.p)} in` : ''}) was imported, so the model has ${F.nR * F.nL} holes where the drawing has ${M.holes.length}. Differences, hole by hole: ${F.issues.join('; ')}.`);
+          if (!(F.e > 0)) W.push(`${tag}: the row nearest the WP is at ${fs(F.e)} in (not beyond the WP); check the work-line direction.`);
+          const ds = M.holes.map(h => h.dh).sort((a, b) => a - b), dh = ds[Math.floor(ds.length / 2)];
+          if (ds[ds.length - 1] - ds[0] > TOLD) W.push(`${tag}: hole diameters vary from ${fs(ds[0])} to ${fs(ds[ds.length - 1])} in; ${fs(dh)} in (median) was used.`);
+          const dKey = `M${n}.D` in data && data[`M${n}.D`] !== '' && !inVal(data[`M${n}.D`], 'pos').err;
+          if (!dKey) { const keep = base && Math.abs(holeDia(m.fast, p) - dh) <= TOLD;
+            if (!keep) { let d; if (m.fast.hole === 'oversize') { d = [0.625, 0.75, 0.875, 1, 1.125, 1.25, 1.375, 1.5].find(x => Math.abs(holeDia({ ...m.fast, d: x }, p) - dh) <= TOLD); } if (d == null) d = dh - p.hStd; const d16 = Math.round(d * 16) / 16; if (Math.abs(d - d16) < 0.002) d = d16; m.fast.d = r6(d);
+              W.push(`${tag}: fastener diameter d = ${fs(m.fast.d)} in was inferred from the hole circles (${fs(dh)} in, ${m.fast.hole} holes)${base ? `; it was ${fs(num(base.fast.d))} in` : ''}. Give M${n}.D in GP-DATA to set it.`); } }
+          const hd = holeDia(m.fast, p); if (Math.abs(hd - dh) > TOLD) W.push(`${tag}: the hole circles are ${fs(dh)} in, but d = ${fs(num(m.fast.d))} in with ${m.fast.hole} holes gives ${fs(hd)} in; the model uses ${fs(hd)} in.`);
+          if (m.__dhData != null && Math.abs(m.__dhData - dh) > TOLD) W.push(`${tag}: GP-DATA M${n}.HOLE=${fs(m.__dhData)} in does not match the hole circles (${fs(dh)} in).`);
+        } else W.push(`${tag}: no holes on GP-M${n}-BOLT; ${base ? 'the current fastener pattern is kept' : 'a default fastener pattern was used'}.`);
+        delete m.__dhData;
+        if (M.bad) W.push(`${tag}: ${M.bad} entit${M.bad > 1 ? 'ies' : 'y'} of the wrong kind on the GP-M${n} layers ignored (WL: LINE; BOLT: CIRCLE; OUTL: polyline).`);
+        // outline check
+        if (M.outl.length && isFinite(num(m.ang))) { const t2 = num(m.ang) * PI / 180, u = [Math.cos(t2), Math.sin(t2)], v = [-Math.sin(t2), Math.cos(t2)], pts = M.outl.flat(), ts = pts.map(q => q[0] * v[0] + q[1] * v[1]), ss = pts.map(q => q[0] * u[0] + q[1] * u[1]);
+          const w = Math.max(...ts) - Math.min(...ts), wm = num(m.sec.w) || 0, s0 = Math.min(...ss), cut = num(m.cut) || 0;
+          if (wm > 0 && Math.abs(w - wm) > TOL) W.push(`${tag}: the outline on GP-M${n}-OUTL is ${fs(w)} in wide; the model width in the plate plane is ${fs(wm)} in (not changed; outlines are information only${'M' + n + '.W' in data ? '' : `; set M${n}.W in GP-DATA to change it`}).`);
+          if (Math.abs(s0 - cut) > TOL) W.push(`${tag}: the outline starts ${fs(s0)} in from the WP; the member end in the model is ${fs(cut)} in (not changed; set M${n}.CUT in GP-DATA to change it).`); }
+        if (isNew) { if (!String(m.id).trim()) { let id = `M${n}`, k = 2; const ids = new Set([...P.members.map(x => x.id), ...newMembers.map(x => x.id)]); while (ids.has(id)) id = `M${n}-${k++}`; m.id = id; }
+          W.push(`${m.id}: new member (GP-M${n}) with default section and fastener data (unless given in GP-DATA) and zero forces: forces needed.`); }
+        if (!isNew && Object.values(m.ovr || {}).some(x => x !== '' && x != null) && memberGeoChanged(base, m)) W.push(`${tag}: has derived-geometry overrides (Whitmore, L_mid or block shear) and its geometry changed; check the overrides.`);
+        newMembers.push(m); });
+      for (let i = 0; i < nm; i++) if (!present.includes(i + 1)) removed.push({ i, id: P.members[i].id });
+      if (gaps.length && removed.length) W.push(`Member numbers ${gaps.map(n => 'M' + n).join(', ')} are missing from the drawing; those members would be removed.`);
+      Q.members = newMembers; if (added.length || removed.length) Q.ui.open = {};
+      const ids = Q.members.map(m => m.id), dup = ids.filter((x, j) => ids.indexOf(x) !== j); if (dup.length) W.push(`Member labels used twice after import: ${[...new Set(dup)].join(', ')}. Rename them.`);
+    }
+    Object.keys(data).forEach(k => { if (!dkeys.has(k)) { const mm = k.match(/^M(\d+)\./); W.push(mm && !present.includes(+mm[1]) && MKEYS.some(q => `M${mm[1]}.${q[0]}` === k) ? `GP-DATA: ${k} refers to member ${mm[1]}, which has no work line or holes in the drawing; ignored.` : `GP-DATA: unknown key ${k}; ignored.`); } });
+    if (raw.splice.length && Q.chord === 'continuous') W.push(`GP-SPLICE has ${raw.splice.length} entit${raw.splice.length > 1 ? 'ies' : 'y'}, but the chord is continuous through the joint. Set CHORD=spliced (or the Chord input) if the chord is spliced here.`);
+    if (raw.fill.length) W.push(`GP-FILL: ${raw.fill.length} filler outline${raw.fill.length > 1 ? 's' : ''} (information only; the filler thickness is M<n>.TF).`);
+    const changes = diff(P, Q, removed, added);
+    const v = GPR.validate(Q); if (v.E.length) W.push(`After import the model has input errors (ratings are blocked until fixed): ${v.E.join(' ')}`);
+    return { Q, changes, warnings: W, errors: E, removed, added, fits, raw, present };
+  }
+  function memberGeoChanged(a, b) { return GEO_F.some(([path, kind]) => !same(getPath(a, path), getPath(b, path), kind, a, b)); }
+  const GEO_F = [['ang', 'ang'], ['cut', 'n'], ['sec.w', 'n'], ['fast.d', 'n'], ['fast.hole', 's'], ['fast.nR', 'n'], ['fast.nL', 'n'], ['fast.p', 'p'], ['fast.g', 'g'], ['fast.e', 'n'], ['fast.off', 'n']];
+  const MEM_F = [['id', 's', 'Label'], ['role', 's', 'Role'], ['ang', 'ang', 'Work-line angle θ (deg)'], ['cut', 'n', 'Member end from WP (in)'], ['sec.type', 's', 'Section type'], ['sec.w', 'n', 'Width in the plate plane (in)'], ['sec.d2', 'n', 'Width out of plane (in)'], ['sec.desc', 's', 'Section description'],
+    ['fast.grade', 's', 'Fastener'], ['fast.d', 'n', 'Diameter d (in)'], ['fast.hole', 's', 'Hole size'], ['fast.prep', 's', 'Hole making'], ['fast.thr', 's', 'Bolt threads'], ['fast.Ns', 'n', 'Shear planes per fastener'], ['fast.tf', 'n', 'Filler thickness (in)'],
+    ['fast.nR', 'n', 'Rows'], ['fast.nL', 'n', 'Gage lines'], ['fast.p', 'p', 'Pitch p (in)'], ['fast.g', 'g', 'Gage(s) g (in)'], ['fast.e', 'n', 'WP to inner row (in)'], ['fast.off', 'n', 'Transverse offset (in)']];
+  const TOP_F = [['meta.projectName', 's', 'Project name'], ['meta.bridgeId', 's', 'Bridge ID'], ['meta.joint', 's', 'Joint'], ['plates.n', 'n', 'Number of plates'], ['plates.t', 'n', 'Plate thickness t (in)'], ['plates.steel', 's', 'Steel'], ['plates.Fy', 'n', 'F_y (ksi)'], ['plates.Fu', 'n', 'F_u (ksi)'], ['chord', 's', 'Chord']];
+  function same(a, b, kind, ma, mb) {
+    if (kind === 's') return String(a ?? '') === String(b ?? '');
+    if (kind === 'ang') { const x = num(a), y = num(b); return isFinite(x) && isFinite(y) ? Math.abs(norm360(x - y + 180) - 180) < 1e-6 : String(a) === String(b); }
+    if (kind === 'g') { const n = Math.round(num(mb ? mb.fast.nL : 0)); if (Math.round(num(ma.fast.nL)) !== n) return String(a) === String(b); if (n < 2) return true; const x = gageList(a, n), y = gageList(b, n); return x.every((q, j) => Math.abs(q - y[j]) < 1e-6); }
+    if (kind === 'p') { const n = Math.round(num(mb ? mb.fast.nR : 0)); if (n === 1 && Math.round(num(ma.fast.nR)) === 1) return true; }
+    const x = num(a), y = num(b); return isFinite(x) && isFinite(y) ? Math.abs(x - y) < 1e-6 : String(a ?? '') === String(b ?? '');
+  }
+  const show = (v, kind) => { if (v == null || v === '') return '—'; if (kind === 's') return String(v); const x = num(v); return isFinite(x) ? fs(x) : String(v); };
+  function diff(P, Q, removed, added) {
+    const C = [], pa = P.plates.poly || [], pb = Q.plates.poly || [];
+    const polySame = pa.length === pb.length && pa.every((q, i) => Math.abs(num(q[0]) - pb[i][0]) < 1e-6 && Math.abs(num(q[1]) - pb[i][1]) < 1e-6);
+    if (!polySame) { C.push({ grp: 'Plate outline', field: 'Vertices', cur: String(pa.length), imp: String(pb.length) });
+      for (let i = 0; i < Math.max(pa.length, pb.length); i++) { const a = pa[i], b = pb[i], sa = a ? `(${show(a[0], 'n')}, ${show(a[1], 'n')})` : '—', sb = b ? `(${show(b[0], 'n')}, ${show(b[1], 'n')})` : '—'; if (sa !== sb) C.push({ grp: 'Plate outline', field: `Vertex ${i + 1} (x, y)`, cur: sa, imp: sb }); } }
+    TOP_F.forEach(([path, kind, lbl]) => { const a = getPath(P, path), b = getPath(Q, path); if (!same(a, b, kind)) C.push({ grp: 'Plate, chord and header', field: lbl, cur: show(a, kind), imp: show(b, kind) }); });
+    const ai = new Set(removed.map(r => r.i)); let qi = 0;
+    for (let i = 0; i < P.members.length; i++) { if (ai.has(i)) { C.push({ grp: `Member ${i + 1}: ${P.members[i].id}`, field: 'Member', cur: 'present', imp: 'REMOVED (with its forces)', kind: 'del' }); continue; }
+      const a = P.members[i], b = Q.members[qi++]; if (!b) break; MEM_F.forEach(([path, kind, lbl]) => { const x = getPath(a, path), y = getPath(b, path); if (!same(x, y, kind, a, b)) C.push({ grp: `Member ${i + 1}: ${a.id}`, field: lbl, cur: show(x, kind), imp: show(y, kind) }); }); }
+    for (; qi < Q.members.length; qi++) { const b = Q.members[qi]; C.push({ grp: `New member: ${b.id}`, field: 'Member', cur: '—', imp: 'ADDED (forces = 0)', kind: 'add' }); MEM_F.forEach(([path, kind, lbl]) => C.push({ grp: `New member: ${b.id}`, field: lbl, cur: '—', imp: show(getPath(b, path), kind), kind: 'add' })); }
+    return C;
+  }
+  function importDxf(P, input) { const r = parse(input); if (r.error) return { error: r.error }; return toModel(P, r.raw); }
+
+  /* ---------- preview SVG (pure string): the current model and the drawing as read, same scale ---------- */
+  function bbox(sets) { const b = [Infinity, Infinity, -Infinity, -Infinity]; sets.forEach(q => { if (q && isFinite(q[0]) && isFinite(q[1])) { b[0] = Math.min(b[0], q[0]); b[1] = Math.min(b[1], q[1]); b[2] = Math.max(b[2], q[0]); b[3] = Math.max(b[3], q[1]); } }); return b; }
+  function modelPrims(P) { const p = GPR.prm(P.code), o = { poly: (P.plates.poly || []).map(q => [num(q[0]), num(q[1])]), wl: [], outl: [], holes: [], miss: [], lbl: [] };
+    P.members.forEach((m, i) => { const G = memGeo(m, p); if (!isFinite(G.th)) return; const L = Math.max(G.sOut, G.cut) + 12; o.wl.push([[0, 0], G.P(L, 0)]); o.lbl.push([G.P(L + 2, 0), `${i + 1}: ${m.id}`]);
+      if (G.w > 0) { const s1 = Math.max(G.sOut + 6, G.cut + 6); o.outl.push([G.P(G.cut, -G.w / 2), G.P(s1, -G.w / 2), G.P(s1, G.w / 2), G.P(G.cut, G.w / 2)]); } G.holes.forEach(h => o.holes.push({ x: h.x, y: h.y, dh: h.dh })); }); return o; }
+  function rawPrims(res) { const raw = res.raw, o = { poly: res.Q.plates.poly, extra: raw.plate.length > 1 ? raw.plate.slice() : [], wl: [], outl: [], holes: [], miss: [], lbl: [], splice: raw.splice.map(r => r.pts || []).filter(x => x.length) };
+    Object.entries(raw.members).forEach(([n, M]) => { M.wl.forEach(w => o.wl.push(w)); M.outl.forEach(q => o.outl.push(q)); const F = res.fits[n];
+      M.holes.forEach((h, i) => o.holes.push({ ...h, odd: !!(F && F.odd[i]) })); if (F) F.missing.forEach(q => o.miss.push({ x: q[0], y: q[1], dh: M.holes[0] ? M.holes[0].dh : 1 }));
+      const w = M.wl[0], id = res.Q.members[res.present.indexOf(+n)]; const end = w ? (Math.hypot(...w[0]) > Math.hypot(...w[1]) ? w[0] : w[1]) : (M.holes[0] ? [M.holes[0].x, M.holes[0].y] : null); if (end) o.lbl.push([[end[0] * 1.04, end[1] * 1.04], `${n}${id ? ': ' + id.id : ''}`]); });
+    return o; }
+  function svg(o, box, title) {
+    const [x0, y0, x1, y1] = box, w = x1 - x0, h = y1 - y0, sc = Math.max(w, h) / 100, F = v => (+v).toFixed(2), pt = q => `${F(q[0])},${F(-q[1])}`;
+    let s = `<svg class="cad-svg" viewBox="${F(x0)} ${F(-y1)} ${F(w)} ${F(h)}" role="img" aria-label="${title}"><g fill="none" stroke-linejoin="round">`;
+    (o.extra || []).forEach(q => s += `<polygon points="${q.map(pt).join(' ')}" stroke="#9aa39d" stroke-width="${F(sc * 0.25)}" stroke-dasharray="${F(sc)} ${F(sc)}"/>`);
+    if (o.poly && o.poly.length > 2) s += `<polygon points="${o.poly.map(q => pt([num(q[0]), num(q[1])])).join(' ')}" fill="#f4f1e8" stroke="#252d29" stroke-width="${F(sc * 0.45)}"/>`;
+    o.outl.forEach(q => s += `<polyline points="${q.concat([q[0]]).map(pt).join(' ')}" stroke="#2c7a4b" stroke-width="${F(sc * 0.25)}"/>`);
+    (o.splice || []).forEach(q => s += `<polyline points="${q.map(pt).join(' ')}" stroke="#7048e8" stroke-width="${F(sc * 0.35)}" stroke-dasharray="${F(sc * 1.2)} ${F(sc * 0.8)}"/>`);
+    o.wl.forEach(q => s += `<line x1="${F(q[0][0])}" y1="${F(-q[0][1])}" x2="${F(q[1][0])}" y2="${F(-q[1][1])}" stroke="#c3352b" stroke-width="${F(sc * 0.25)}" stroke-dasharray="${F(sc * 2.2)} ${F(sc * 0.7)} ${F(sc * 0.5)} ${F(sc * 0.7)}"/>`);
+    o.holes.forEach(q => s += `<circle cx="${F(q.x)}" cy="${F(-q.y)}" r="${F(q.dh / 2)}" stroke="${q.odd ? '#c3352b' : '#1d56a3'}" stroke-width="${F(sc * (q.odd ? 0.45 : 0.25))}"${q.odd ? ' fill="rgba(195,53,43,.25)"' : ''}/>`);
+    o.miss.forEach(q => s += `<circle cx="${F(q.x)}" cy="${F(-q.y)}" r="${F(q.dh / 2)}" stroke="#c3352b" stroke-width="${F(sc * 0.3)}" stroke-dasharray="${F(sc * 0.5)} ${F(sc * 0.4)}"/>`);
+    s += `</g><circle cx="0" cy="0" r="${F(sc * 0.8)}" fill="#252d29"/>`;
+    o.lbl.forEach(([q, t]) => s += `<text x="${F(q[0])}" y="${F(-q[1])}" font-size="${F(sc * 2.6)}" fill="#252d29" text-anchor="middle" dominant-baseline="middle">${String(t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))}</text>`);
+    return s + '</svg>';
+  }
+  function previewPair(P, res) { const a = modelPrims(P), b = rawPrims(res); const pts = [];
+    [a, b].forEach(o => { (o.poly || []).forEach(q => pts.push([num(q[0]), num(q[1])])); o.wl.forEach(q => pts.push(...q)); o.outl.forEach(q => pts.push(...q)); o.holes.forEach(h => pts.push([h.x, h.y])); (o.extra || []).forEach(q => pts.push(...q)); o.lbl.forEach(l => pts.push(l[0])); });
+    pts.push([0, 0]); const bb = bbox(pts), m = Math.max(bb[2] - bb[0], bb[3] - bb[1]) * 0.06 + 2; const box = [bb[0] - m, bb[1] - m, bb[2] + m, bb[3] + m];
+    return { cur: svg(a, box, 'Current model'), imp: svg(b, box, 'Drawing as read') }; }
+
+  return { TEMPLATES, templateModel, write, exportModel, exportTemplate, parse, toModel, importDxf, previewPair, memGeo, fitPattern, simplify, mtextPlain, MKEYS, GKEYS, UNITS };
+})();
+if (typeof module !== 'undefined' && module.exports) module.exports = GPDXF;
+</script>
+<script>
+/* =====================================================================
    Gusset Plate Rating: user interface (layout and calc-sheet style follow GirderDetail, Steel Bridge Beam Modules.html)
    ===================================================================== */
 const T = String.raw;
@@ -2154,6 +2610,7 @@ function memberBlock(m, i) {
 }
 function paneMembers() { return `<div class="pad"><p class="hint static">Each member: work line from the work point (WP) at angle θ; fastener rows along the member starting at the row nearest the WP; gage lines centred on the work line plus the transverse offset (+ to the left looking out along the member). Gages: one value, or a list between adjacent lines.</p>
   <div class="proj-row" style="grid-template-columns:1fr 1fr"><button type="button" class="proj-btn" data-act="addMember">Add member</button><button type="button" class="proj-btn" data-act="tpl5">Load 5-member template</button></div></div>
+  ${secHd('sec-cad', 'CAD (DXF)')}<div class="sec-body one-col" id="sec-cad">${cadPane()}</div>
   ${secHd('sec-mem', `Members (${P.members.length})`)}<div class="sec-body one-col" id="sec-mem">${P.members.map(memberBlock).join('')}</div>`; }
 
 function paneForces() {
@@ -2187,7 +2644,7 @@ function fillInputs() {
   const ps = $('#f_plates_steel'); if (ps) { const custom = P.plates.steel === 'custom'; ['#f_plates_Fy', '#f_plates_Fu'].forEach(s => { const e = $(s); if (e) { e.readOnly = !custom; e.classList.toggle('locked', !custom); } }); }
 }
 function onInput(e) {
-  const el = e.target; if (!el.dataset || !el.dataset.k) return;
+  const el = e.target; if (!el.dataset || !el.dataset.k) return; cadEdited();
   const k = el.dataset.k, t = el.dataset.t; let v;
   if (t === 'code') { const key = k.slice(5), x = el.value.trim(); if (x === '' || (isFinite(+x) && +x === GPR.PDEF[key])) delete P.code[key]; else P.code[key] = isFinite(+x) ? +x : x; el.classList.toggle('err', x !== '' && !isFinite(+x)); el.classList.toggle('ovr', key in P.code); schedule(); return; }
   if (t === 'bool') v = el.checked;
@@ -2225,7 +2682,7 @@ const ACT = {
   loadValidation() { if (!confirm('Replace the current inputs with the validation model? (Save your project first if needed.)')) return false; const ui = P.ui; P = GPR.validationModel(); P.ui = { ...P.ui, otab: ui.otab, itab: ui.itab }; CUR = ''; buildSidebar(); }
 };
 function nextId(base) { let id = base, n = 2; while (P.members.some(m => m.id === id)) id = base + n++; return id; }
-document.addEventListener('click', e => { const b = e.target.closest('[data-act]'); if (!b || !ACT[b.dataset.act]) return; const r = ACT[b.dataset.act](b.dataset.i != null ? +b.dataset.i : undefined); if (r === false || r === 'norebuild') return; rebuild(); recompute(); autosave(); });
+document.addEventListener('click', e => { const b = e.target.closest('[data-act]'); if (!b || !ACT[b.dataset.act]) return; const r = ACT[b.dataset.act](b.dataset.i != null ? +b.dataset.i : undefined); if (r === false || r === 'norebuild') return; cadEdited(); rebuild(); recompute(); autosave(); });
 
 /* ---------- compute + render ---------- */
 function recompute() {
@@ -2484,6 +2941,16 @@ function methodHtml() { return `<div class="man-part active">
   <h3>Summing the two plates</h3><p>Member forces are entered for the whole joint (both gusset plates). Plate resistances (bearing, Whitmore, block shear, buckling, shear planes) are computed for each plate with its own thickness after section loss and added. Fastener shear counts one shear plane per plate for fasteners in single shear on each face (N = fasteners per plate × number of plates), or two shear planes per fastener when the fasteners pass through both plates (N = fasteners per plate × 2). This assumes the member force divides between the plates in proportion to their resistances (equal plates share equally).</p>
   <h3>Continuous chord</h3><p>When the chord is continuous through the joint, the chord fasteners on both sides together transfer the chord force difference ΔF = F<sub>right</sub> − F<sub>left</sub> (along the chord) to the gusset plates: fastener shear and bearing are checked for ΔF on the combined group; the long-joint length is the overall length of the chord fastener field. Whitmore and block shear do not apply to a continuous chord.</p>
   <h3>Rating</h3><p>LRFR: RF = (φ<sub>c</sub>φ<sub>s</sub>φR<sub>n</sub> − γ<sub>DC</sub>DC − γ<sub>DW</sub>DW)/(γ<sub>LL</sub>(LL+IM)). LFR: RF = (C − A<sub>1</sub>D)/(A<sub>2</sub>L(1+I)). The live load direction decides which limit states apply. Dead load opposite to the live load effect uses γ<sub>DC,min</sub>, γ<sub>DW,min</sub> (LRFR) or A<sub>1,min</sub> (LFR). Live load forces of different members are treated as concurrent for the shear planes and the chord ΔF (conservative only if the entered forces are a concurrent set; otherwise use separate columns).</p>
+  <h3>CAD (DXF) exchange</h3><p>Members tab, “CAD (DXF)”: download a template (3, 4 or 5 members), export the current model, or import a DXF. Files are ASCII DXF R12 (AC1009) in inches; the import reads ASCII DXF R12 and later (LINE, LWPOLYLINE with arcs, POLYLINE, CIRCLE, ARC, TEXT, MTEXT) and converts feet, millimetres, centimetres or metres ($INSUNITS) to inches. Binary DXF and DWG are not read: save as ASCII DXF. Explode blocks before saving.</p>
+  <ul><li>Coordinates: inches, origin at the work point (WP), +x along the chord (to the right), +y up. Keep the WP at 0,0.</li>
+  <li><b>GP-PLATE</b>: one closed polyline, the plate outline (the largest is used if there are several; separate lines and arcs are joined). Collinear points are removed and the outline is made counterclockwise.</li>
+  <li><b>GP-M&lt;n&gt;-WL</b>: a LINE from the WP outward, the work line of member n (n = 1, 2, … in the order of the Members tab). It gives the angle θ (rounded to 0.01°). Without it the angle is taken from the hole pattern (warning).</li>
+  <li><b>GP-M&lt;n&gt;-BOLT</b>: CIRCLEs, the holes of member n (diameter = hole diameter). They are grouped into gage lines (across the member) and rows (along it) with a 1/16 in tolerance, giving rows, gage lines, pitch, gages, WP to inner row and transverse offset. An irregular pattern is imported as the best-fit regular pattern and every difference is listed hole by hole. The fastener diameter is kept if the circles match it, otherwise taken from M&lt;n&gt;.D or inferred as hole − 1/16 in (warning).</li>
+  <li><b>GP-M&lt;n&gt;-OUTL</b>: member outline (export: information; import: compared with the width and member end, warning only).</li>
+  <li><b>GP-SPLICE</b> chord splice line and <b>GP-FILL</b> filler outlines: information only (a splice line with a continuous chord gives a warning).</li>
+  <li><b>GP-DATA</b>: TEXT or MTEXT lines KEY=VALUE, lengths in inches and strengths in ksi; a blank value keeps the current value. Keys: PROJECT, BRIDGE, JOINT, NP (number of plates), T_PLATE, STEEL (${GPR.STEEL.map(q => q[0]).join(', ')}), FY, FU (used only with STEEL=custom), CHORD (continuous, spliced); per member M&lt;n&gt;.NAME, ROLE (chord, web), SECTION (box, H, W, L), DESC, W (width in the plate plane), D2, CUT (member end from WP), FASTENER (${Object.keys(GPR.FAST).join(', ')}), D (fastener diameter), HOLE (standard, oversize; a number is read as the hole diameter and only checked), PREP (drilled, punched), THREADS (excl, incl), NS (1, 2), TF (filler thickness). Unknown keys and invalid values are reported and ignored.</li>
+  <li><b>GP-NOTES</b> (title block and notes) and all other layers are ignored on import (counts reported).</li>
+  <li>Import shows the current model and the drawing side by side, every change (field, current, imported) and the warnings. Apply replaces only these geometry and data fields; member forces, live load columns, code parameters, shear-plane definitions and rating settings stay. A member added in the drawing gets default section and fastener data and zero forces; members missing from the drawing are removed only after their removal is ticked. Undo import restores the previous inputs until the next edit.</li></ul>
   <h3>Not included in Phase 1</h3><ul>${SCOPE_OUT.map(s => `<li>${s}</li>`).join('')}</ul></div>`; }
 function renderMethod() { $('#tab-method').innerHTML = methodHtml(); }
 
@@ -2496,7 +2963,7 @@ const store = () => { try { return JSON.parse(localStorage.getItem(KEY_PR) || '{
 const putStore = s => { try { localStorage.setItem(KEY_PR, JSON.stringify(s)); return true; } catch (e) { flash('Could not save (browser storage full or blocked). Use Export JSON.', 'fail'); return false; } };
 function flash(m, c = 'pass') { const el = $('#proj_msg'); if (!el) return; el.textContent = m; el.style.color = c === 'fail' ? 'var(--fail)' : 'var(--pass)'; clearTimeout(flash.t); flash.t = setTimeout(() => el.textContent = '', 4000); }
 function refreshList() { const el = $('#proj_list'); if (!el) return; const n = Object.keys(store()).sort(); el.innerHTML = n.length ? n.map(x => `<option ${x === CUR ? 'selected' : ''}>${esc(x)}</option>`).join('') : '<option value="">No saved projects</option>'; }
-function loadData(d, name) { P = GPR.normalize(d); CUR = name || ''; buildSidebar(); fillInputs(); setITab(P.ui.itab || 'project'); applyCollapse(); recompute(); setOTab(P.ui.otab || 'summary'); autosave(); }
+function loadData(d, name) { cadEdited(); P = GPR.normalize(d); CUR = name || ''; buildSidebar(); fillInputs(); setITab(P.ui.itab || 'project'); applyCollapse(); recompute(); setOTab(P.ui.otab || 'summary'); autosave(); }
 document.addEventListener('click', e => { const id = e.target.id; if (!id || !/^pb_/.test(id)) return;
   if (id === 'pb_save') { const n = CUR || P.meta.subject || prompt('Save project as:'); if (!n) return; const s = store(); s[n] = clone(P); if (putStore(s)) { CUR = n; refreshList(); flash(`Saved "${n}".`); } }
   else if (id === 'pb_saveas') { const n = prompt('Save project as:', P.meta.subject || ''); if (!n) return; const s = store(); if (s[n] && !confirm(`"${n}" exists. Overwrite it?`)) return; s[n] = clone(P); if (putStore(s)) { CUR = n; refreshList(); flash(`Saved "${n}".`); } }
@@ -2507,6 +2974,52 @@ document.addEventListener('click', e => { const id = e.target.id; if (!id || !/^
   else if (id === 'pb_new') { if (confirm('Replace the current inputs with the built-in 5-member example?')) loadData(GPR.defaults(), ''); } });
 document.addEventListener('change', e => { if (e.target.id !== 'pb_file') return; const f = e.target.files[0]; if (!f) return; const rd = new FileReader();
   rd.onload = () => { let j; try { j = JSON.parse(rd.result); } catch (er) { flash('That file is not valid JSON.', 'fail'); return; } const r = GPR.importProject(j); if (r.error) { flash(r.error, 'fail'); return; } loadData(r.data, ''); flash(`Imported ${f.name}.`); }; rd.readAsText(f); e.target.value = ''; });
+
+/* ---------- CAD (DXF) exchange (Phase 3): template, export, import with preview, Apply / Cancel / Undo ---------- */
+let CAD_TPL = 't5', CAD_RES = null, CAD_UNDO = null, CAD_FILE = '';
+function cadPane() { return `<p class="note">Exchange the plate outline, member work lines and hole patterns with AutoCAD, MicroStation or any CAD program as an ASCII DXF (inches, origin at the work point, +x along the chord, +y up). Layer scheme: Method tab, “CAD (DXF) exchange”.</p>
+    <div class="ig full"><label for="cad-tpl">Template</label><select id="cad-tpl">${GPDXF.TEMPLATES.map(t => `<option value="${t.key}" ${t.key === CAD_TPL ? 'selected' : ''}>${esc(t.label)}</option>`).join('')}</select></div>
+    <div class="proj-row" style="grid-template-columns:1fr 1fr"><button type="button" class="proj-btn" id="cad-dl-tpl">Download template</button><button type="button" class="proj-btn" id="cad-export">Export current model</button></div>
+    <div class="proj-row" style="grid-template-columns:1fr 1fr"><button type="button" class="proj-btn proj-btn-primary" id="cad-import">Import DXF…</button><button type="button" class="proj-btn" id="cad-undo"${CAD_UNDO ? '' : ' hidden'}>Undo import</button></div>
+    <input type="file" id="cad-file" accept=".dxf,.DXF,.dwg,.DWG" hidden><div id="cad-msg" role="status"></div>`; }
+function cadMsg(m, c = 'pass') { const el = $('#cad-msg'); if (!el) return; el.innerHTML = m ? `<p class="hint" style="color:${c === 'fail' ? 'var(--fail)' : c === 'warn' ? 'var(--warn)' : 'var(--text-dim)'}">${m}</p>` : ''; }
+/* any edit after an import ends the undo */
+function cadEdited() { if (!CAD_UNDO) return; CAD_UNDO = null; const b = $('#cad-undo'); if (b) b.hidden = true; }
+function cadDownload(text, name) { const b = new Blob([text], { type: 'application/dxf' }); const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = name; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 60000); }
+const cadName = s => (String(s || 'gusset').replace(/[^\w\-]+/g, '_').replace(/^_+|_+$/g, '') || 'gusset');
+function cadShow(res, file) {
+  CAD_RES = res; CAD_FILE = file; const box = $('#cad-body'); $('#cad-title').textContent = `Import DXF: ${file}`;
+  if (res.error) { $('#cad-sub').textContent = ''; box.innerHTML = `<div class="alert fail"><b>The file could not be read.</b><br>${esc(res.error)}</div>`; $('#cad-apply').hidden = true; $('#cad-modal').hidden = false; return; }
+  const pv = GPDXF.previewPair(P, res), ch = res.changes, W = res.warnings, rm = res.removed;
+  $('#cad-sub').textContent = `Units: ${res.raw.units}. Apply replaces only the geometry and the GP-DATA values listed below; member forces, live load columns, code parameters and rating settings are not changed. Undo import is available until the next edit.`;
+  let grp = '', rows = '';
+  ch.forEach(c => { if (c.grp !== grp) { grp = c.grp; rows += `<tr class="cad-grp"><td colspan="3">${esc(grp)}</td></tr>`; } rows += `<tr class="${c.kind === 'del' ? 'row-fail' : c.kind === 'add' ? 'row-warn' : ''}"><td class="lbl">${esc(c.field)}</td><td class="val">${esc(c.cur)}</td><td class="val"><b>${esc(c.imp)}</b></td></tr>`; });
+  box.innerHTML = `<div class="cad-pair"><figure class="cad-fig"><figcaption>Current model</figcaption>${pv.cur}</figure><figure class="cad-fig"><figcaption>Drawing as read</figcaption>${pv.imp}</figure></div>
+    <p class="cap"><span class="lgd"><i style="border-color:#252d29;background:#f4f1e8"></i>plate</span><span class="lgd"><i style="border-color:#c3352b"></i>work line</span><span class="lgd"><i style="border-color:#2c7a4b"></i>member outline</span><span class="lgd"><i style="border-color:#1d56a3;border-radius:50%"></i>hole</span><span class="lgd"><i style="border-color:#c3352b;background:rgba(195,53,43,.25);border-radius:50%"></i>hole off the regular pattern</span><span class="lgd"><i style="border-color:#c3352b;border-style:dashed;border-radius:50%"></i>missing hole (added by the best fit)</span></p>
+    ${W.length ? `<div class="alert warn"><b>${W.length} warning${W.length > 1 ? 's' : ''}</b><ul class="err-list">${W.map(w => `<li>${esc(w)}</li>`).join('')}</ul></div>` : '<div class="alert info">No warnings.</div>'}
+    ${rm.length ? `<div class="alert fail"><label class="ck-row" style="padding:0"><input type="checkbox" id="cad-rm-ok"><label for="cad-rm-ok">Remove ${rm.length === 1 ? 'member' : 'members'} <b>${rm.map(r => esc(r.id)).join(', ')}</b> and ${rm.length === 1 ? 'its' : 'their'} forces (not in the drawing). Required to apply.</label></label></div>` : ''}
+    <h4 class="sub-h">Changes (${ch.length})</h4>${ch.length ? `<div class="tscroll"><table class="tbl cad-tbl"><thead><tr><th>Field</th><th class="right">Current</th><th class="right">Imported</th></tr></thead><tbody>${rows}</tbody></table></div>` : '<p class="note-p">The drawing matches the current model: nothing would change.</p>'}`;
+  $('#cad-apply').hidden = false; $('#cad-apply').disabled = !ch.length; $('#cad-modal').hidden = false;
+}
+function cadApply() {
+  const res = CAD_RES; if (!res || res.error) return;
+  if (res.removed.length && !($('#cad-rm-ok') || {}).checked) { alert('Tick the box to confirm removing the members that are not in the drawing, or Cancel.'); return; }
+  const prev = clone(P), ui = P.ui; P = GPR.normalize(res.Q); P.ui = { ...ui, open: res.added.length || res.removed.length ? {} : ui.open };
+  CAD_UNDO = { P: prev, file: CAD_FILE }; CAD_RES = null; $('#cad-modal').hidden = true;
+  rebuild(); recompute(); autosave();
+  cadMsg(`Imported ${esc(CAD_FILE)}: ${res.changes.length} change${res.changes.length > 1 ? 's' : ''}${res.warnings.length ? `, ${res.warnings.length} warning${res.warnings.length > 1 ? 's' : ''}` : ''}${res.added.length ? '. New members have zero forces: enter them on the Forces tab' : ''}. Undo import is available until the next edit.`, res.added.length ? 'warn' : 'pass');
+}
+function cadUndo() { if (!CAD_UNDO) return; const f = CAD_UNDO.file; P = CAD_UNDO.P; CAD_UNDO = null; rebuild(); recompute(); autosave(); cadMsg(`Import of ${esc(f)} undone.`); }
+document.addEventListener('click', e => { const id = e.target.id; if (!id || !/^cad-/.test(id)) return;
+  if (id === 'cad-dl-tpl') { const t = GPDXF.TEMPLATES.find(q => q.key === CAD_TPL) || GPDXF.TEMPLATES[0]; cadDownload(GPDXF.exportTemplate(t.key).text, `gusset_template_${t.key.slice(1)}-member${t.key === 't4d' ? '_chord_2diag' : t.key === 't4v' ? '_chord_vert_diag' : ''}.dxf`); cadMsg(`Template downloaded: ${esc(t.label)}.`); }
+  else if (id === 'cad-export') { const w = GPDXF.exportModel(P, P.meta.joint || P.meta.subject || ''); cadDownload(w.text, cadName(P.meta.subject || P.meta.joint) + '.dxf'); cadMsg(w.warnings.length ? `Exported, with notes: ${esc(w.warnings.join(' '))}` : 'Exported the current model to DXF.', w.warnings.length ? 'warn' : 'pass'); }
+  else if (id === 'cad-import') $('#cad-file').click();
+  else if (id === 'cad-undo') cadUndo();
+  else if (id === 'cad-cancel') { $('#cad-modal').hidden = true; CAD_RES = null; }
+  else if (id === 'cad-apply') cadApply(); });
+document.addEventListener('change', e => { if (e.target.id === 'cad-tpl') { CAD_TPL = e.target.value; return; } if (e.target.id !== 'cad-file') return; const f = e.target.files[0]; if (!f) return; const rd = new FileReader();
+  rd.onload = () => { let res; try { res = GPDXF.importDxf(P, new Uint8Array(rd.result)); } catch (er) { res = { error: 'The file could not be read: ' + (er && er.message || er) }; } cadShow(res, f.name); };
+  rd.onerror = () => cadShow({ error: 'The browser could not read the file.' }, f.name); rd.readAsArrayBuffer(f); e.target.value = ''; });
 
 /* ---------- paste importers ---------- */
 let PST = null;
@@ -2537,7 +3050,7 @@ document.addEventListener('input', e => { if (e.target.id === 'pst-text') { clea
 document.addEventListener('change', e => { if (e.target.closest && e.target.closest('#pst-modal') && e.target.id !== 'pst-text') pstPreview(); });
 document.addEventListener('click', e => { if (e.target.id === 'pst-cancel') { $('#pst-modal').hidden = true; PST = null; }
   if (e.target.id === 'pst-apply') { const r = pstResult(); if (!r || !r.list.length) { alert('Nothing to apply. Map at least one member and one value column.'); return; }
-    r.list.forEach(x => { const m = P.members[x.idx]; Object.entries(x.set).forEach(([k, v]) => { if (k === 'DC') m.F.DC = v; else if (k === 'DW') m.F.DW = v; else m.F.LL[+k.slice(2)] = v; }); });
+    cadEdited(); r.list.forEach(x => { const m = P.members[x.idx]; Object.entries(x.set).forEach(([k, v]) => { if (k === 'DC') m.F.DC = v; else if (k === 'DW') m.F.DW = v; else m.F.LL[+k.slice(2)] = v; }); });
     P.src = `${PST.kind === 'wide' ? 'Spreadsheet paste' : 'MIDAS truss force table paste'}, ${new Date().toLocaleString()}, ${r.list.length} member${r.list.length > 1 ? 's' : ''}`; $('#pst-modal').hidden = true; PST = null; rebuild(['forces']); recompute(); autosave(); flash('Forces applied.'); } });
 
 /* ---------- calculation-sheet report (same document style as GirderDetail) ---------- */
@@ -2577,7 +3090,7 @@ function buildReport(o) {
   const front = `<section class="cr-cover"><div class="cr-cover-t"><h1>Gusset Plate Rating</h1><p>${esc(mt.joint || '')}</p><p class="cr-cover-p">${esc(mt.projectName || '')}${mt.bridgeId ? ', Bridge ' + esc(mt.bridgeId) : ''}</p></div></section>
     <section class="cr-front"><h2 class="cr-h1 cr-nonum">References:</h2><table class="cr-refs">${CR_REFS.map(([a, b]) => `<tr><td>${a}</td><td>${b}</td></tr>`).join('')}</table>
     <h2 class="cr-h1 cr-nonum">Table of contents:</h2><ol class="cr-toc">${toc.map(s => `<li><a href="#${s.id}" data-crjump="${s.id}">${s.n}. ${esc(s.t)}</a>${s.subs.length ? `<ol>${s.subs.map((q, i) => `<li><a href="#${q.id}" data-crjump="${q.id}">${s.n}.${i + 1}. ${esc(q.t)}</a></li>`).join('')}</ol>` : ''}</li>`).join('')}</ol>
-    <p class="cr-p cr-small">Prepared with Gusset Plate Rating (Phase 2). Equations are shown symbolically, then with values substituted, then with the result. Units: kip, in, ksi unless noted.</p></section>`;
+    <p class="cr-p cr-small">Prepared with Gusset Plate Rating (Phase 3). Equations are shown symbolically, then with values substituted, then with the result. Units: kip, in, ksi unless noted.</p></section>`;
   window.CR_TOC = toc; return front + body;
 }
 const crEsc = s => String(s ?? '').replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, ' ');
@@ -2639,7 +3152,7 @@ function boot() {
   $('#tab-params').addEventListener('input', onInput);
   $$('.itab').forEach(b => b.addEventListener('click', () => setITab(b.dataset.pane)));
   $$('.tab-btn').forEach(b => b.addEventListener('click', () => setOTab(b.dataset.tab)));
-  $$('.mtab').forEach(b => b.addEventListener('click', () => { P.method = b.dataset.meth; fillInputs(); recompute(); autosave(); }));
+  $$('.mtab').forEach(b => b.addEventListener('click', () => { cadEdited(); P.method = b.dataset.meth; fillInputs(); recompute(); autosave(); }));
   $('#btn-print').addEventListener('click', () => { if (P.ui.otab !== 'report') setOTab('report'); setTimeout(() => printCalcReport(crOpts()), 50); });
   $('#btn-inputs').addEventListener('click', () => $('#app').classList.toggle('inputs-hidden'));
   setITab(P.ui.itab || 'project'); applyCollapse(); recompute(); setOTab(P.ui.otab || 'summary');
