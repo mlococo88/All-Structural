@@ -1,0 +1,167 @@
+# Fix log — Gusset Plate Rating.html
+
+Governing basis: AASHTO MBE 3rd Ed. (with interims) Art. 6A.6.12.6 and AASHTO LRFD 10th Ed. (2024) Art. 6.13 and 6.14.2.8, with NCHRP Web-Only Document 197, for LRFR; AASHTO MBE 3rd Ed. Section 6B with FHWA-IF-09-014 (and AASHTO Standard Specifications 17th Ed. Art. 10.54, 10.56) for LFR.
+
+**The reference documents were not available when this tool was written.** Every code coefficient is an editable parameter (Code parameters tab), each with its default, article reference and a "verify" badge. The values flagged "least certain" are listed under "Needs verification" below. The engineer must confirm all of them before using results.
+
+## 2026-10-05 — PR: claude/gusset-phase1 (PR link added after merge)
+
+### C1. New tool: Gusset Plate Rating (Phase 1: engine, 2D drawing, calc sheet)   [new tool]
+
+- **Type:** new file `Gusset Plate Rating.html` (single file, no build step). CDN: MathJax 3.2.2 (pinned, `cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-svg.js`; already used by Steel Bridge Beam Modules), Google Fonts Barlow (as GirderDetail). No other libraries. three.js is not used yet (3D is Phase 2).
+- **Look and feel:** CSS, header, binder-tab module bar, sidebar input tabs, status bar, cards, "where" tables, badges and the calculation-sheet report/print CSS are copied from `Steel Bridge Beam Modules.html` (GirderDetail) and stay duplicated (CLAUDE.md §3). The "where" table has an added source column.
+- **Storage (new keys only):** `gussetRating.autosave.v1` (`{data, name}`), `gussetRating.projects.v1` (map name → project). Export/import JSON: `{ _schema:"gusset-rating-project", version:1, app:"Gusset Plate Rating", savedAt, data }`; import refuses another `_schema` or a newer version.
+- **Hand-off:** the "← All tools" link, the BridgeXfer v1 helper (verbatim from HANDOFF.md §5) and "Use / Share project info" on channel `bridgeSuite.v1.projectMeta` (all eight fields mapped, see HANDOFF.md §4.1). No other channel.
+- **Other copies:** the BridgeXfer v1 helper is duplicated verbatim in every tool that uses it; this file adds one more copy. The project-info glue is the same as in the other tools except `TOOL`/`FILE` and the field map.
+
+#### Method as implemented (units kip, in, ksi; member forces tension +, unfactored, whole joint)
+
+- **Geometry.** Origin at the work point (WP), +x along the chord, +y up. Plate = polygon of (x, y) vertices. Member i: work line at angle θ (from +x, CCW), unit vector u = (cos θ, sin θ), v = (−sin θ, cos θ). Fastener rows at s = e + k·p (k = 0 … n_r − 1; e = WP to the row nearest the WP); gage lines at t = cumulative gages centred on the work line + transverse offset. Hole d_h = d + 1/16 (standard) or per LRFD Table 6.13.2.4.2-1 (oversize). Net width per hole d_h + 1/16 (= d + 1/8, LRFD 6.8.3).
+- **Whitmore section** (each web member): W = g_s + 2L tan 30°, with g_s = spread of the outer gage lines and L = (n_r − 1)p, placed perpendicular to the member at the row nearest the WP, centred on the fastener group; clipped at the plate polygon (the part inside the plate that contains the centre). Not clipped at adjacent members; a warning is given when it crosses another member's outline. Net width W_n = W_g − Σ(d_h + 1/16) over every hole (any member) whose centre is within d_h/2 of the section. Overridable.
+- **L_mid:** average of L1, L2, L3 measured from the two ends and the middle of the clipped Whitmore section, parallel to the member toward the WP, to the nearest fastener-field outline of another member (a continuous chord's two fields count as one) or the plate edge (NCHRP W-197 / MBE 6A.6.12.6.8 as implemented). Overridable.
+- **Block shear** (tension only): tension plane across the row nearest the WP between the outer gage lines (L_tg = g_s, L_tn = g_s − (n_ℓ − 1)(d_h + 1/16)); two shear planes along the outer gage lines from that row to the plate edge in the member direction (L_vg = L_v1 + L_v2 from the polygon, L_vn = L_vg − 2(n_r − 0.5)(d_h + 1/16)). Single-line patterns: N/A. Overridable.
+- **Partial shear planes:** automatic planes through the top and bottom lines of chord fasteners (loaded side above / below), plus user planes through two points (loaded side: away from the WP, or left/right). L_g = total length of the line inside the polygon; L_n = L_g − Σ(d_h + 1/16) for holes on the line. Demand V = Σ F_i (u_i · e) over members whose fastener centroid is on the loaded side. Overridable.
+- **Continuous chord:** the two chord members' fasteners together carry ΔF = Σ F_i (u_i · u_right) (fastener shear and bearing); long-joint length = overall length of the chord field. No Whitmore/block shear for the chord. "Spliced" mode checks each chord member like a web member (splice plates ignored, warning).
+- **Summing plates:** plate resistances are computed per plate with its own thickness after section loss (uniform per plate) and added. Fastener shear planes N = (fasteners per plate) × N_p for single shear on each face, or × 2 when fasteners pass through both plates (`Ns = 2`).
+- **Resistances (LRFR):** fastener shear φ_s N F_v A_b R_L R_F (rivets) or φ_s N (0.56 or 0.45) A_b F_ub R_L R_F (bolts); bearing φ_bb Σ_plates Σ_holes min(2.4 d t F_u, 1.2 L_c t F_u), L_c in the direction the fastener pushes on the plate (tension: away from the WP; compression: toward it), to the next hole of the same group or to the plate edge; Whitmore yield φ_y F_y W_g Σt; fracture φ_u F_u U min(W_n Σt, 0.85 W_g Σt); block shear φ_bs R_p (0.58 F_u A_vn + U_bs F_u A_tn) ≤ φ_bs R_p (0.58 F_y A_vg + U_bs F_u A_tn); buckling φ_c P_n with LRFD 6.9.4.1.1 (P_e = π²E A_g/(K L_mid/r)², r = t/√12, K = 0.5); shear yield φ_vy 0.58 F_y A_g Ω (Ω = 0.88); shear fracture φ_vu 0.58 F_u A_vn.
+- **Resistances (LFR):** same geometry; fastener φF_v from Std. Spec. Table 10.56A; bearing min(1.8 d t F_u, 0.9 L_c t F_u) (φ included); compression φ_c A_s F_cr with Std. Spec. 10.54.1.1 column curve, K = 1.2; shear yield Ω = 0.74; other φ as LRFR. All flagged.
+- **Rating:** LRFR RF = (φ_cφ_s C − γ_DC DC − γ_DW DW)/(γ_LL (LL+IM)), φ_cφ_s ≥ 0.85; LFR RF = (C − A1 D)/(A2 L(1+I)). Each live load column is rated where its sign matches the limit state (tension-only: WY, WF, BS; compression-only: WB; both: FS, BR, planes, chord). Dead load opposite to the live load uses γ_DC,min = 0.90, γ_DW,min = 0.65 (LRFR) or A1,min = 1.0 (LFR). Design columns → Inventory/Operating; legal/permit → column γ_LL (LRFR) or A2 operating (LFR).
+- **Inputs:** project block; plates (number, t, steel presets incl. MBE Table 6A.6.2.1-1 unknown steels, F_y, F_u, loss per plate as thickness or %); polygon table with preview; members (any number; label, role, θ, section type and widths for the drawing, fastener type/grade/d/threads/hole size/hole making, rows × lines, pitch, gage list, WP-to-inner-row, offset, shear planes, filler); live load columns; forces typed, pasted from a spreadsheet (column mapping + preview) or pasted from a MIDAS truss force table (Elem/Load/Part/Axial; element → member and load case → DC/DW/LL mapping, summed, scale factor, preview).
+- **Default model:** 5-member Warren-with-verticals lower-chord panel point L2: continuous chord L1-L2 / L2-L3 (4 lines × 6 rows, 4 in gage/pitch), diagonals at 130° and 50° (4 lines × 6 rows, 3.5 in gage, 3 in pitch, inner row 26 in from the WP), vertical at 90° (2 lines × 5 rows); 7/8 in rivets, pre-1936/unknown; two 1/2 in A36 plates.
+
+#### Code parameters (defaults)
+
+| Key | Method | Parameter | Default | Unit | Reference | Flag |
+|---|---|---|---|---|---|---|
+| `E` | Both | Modulus of elasticity of steel | 29000 | ksi | LRFD 10th Ed. 6.4.1 | verify |
+| `thW` | Both | Whitmore spread angle, each side | 30 | deg | LRFD 10th Ed. 6.14.2.8 (C6.14.2.8); MBE 3rd Ed. 6A.6.12.6.7, 6A.6.12.6.8 | verify |
+| `hStd` | Both | Standard hole: hole diameter minus fastener diameter | 0.0625 | in | LRFD 10th Ed. Table 6.13.2.4.2-1 | verify |
+| `hOv78` | Both | Oversize hole allowance, d ≤ 7/8 in | 0.1875 | in | LRFD 10th Ed. Table 6.13.2.4.2-1 | verify |
+| `hOv1` | Both | Oversize hole allowance, d = 1 in | 0.25 | in | LRFD 10th Ed. Table 6.13.2.4.2-1 | verify |
+| `hOvL` | Both | Oversize hole allowance, d ≥ 1 1/8 in | 0.3125 | in | LRFD 10th Ed. Table 6.13.2.4.2-1 | verify |
+| `dNet` | Both | Added to the hole diameter for net width (net width per hole = d_h + Δ) | 0.0625 | in | LRFD 10th Ed. 6.8.3 | verify |
+| `fillT` | Both | Filler thickness at and above which the filler reduction applies | 0.25 | in | LRFD 10th Ed. 6.13.6.1.5 | verify |
+| `fillRv` | Both | Apply the filler reduction to rivets (1 = yes, 0 = no) | 1 |  | LRFD 10th Ed. 6.13.6.1.5 (written for bolts) | verify — **least certain** |
+| `U` | Both | Shear-lag factor on the Whitmore net section | 1 |  | LRFD 10th Ed. 6.13.5.2, 6.14.2.8; MBE 6A.6.12.6.7 | verify |
+| `capAn` | Both | Upper limit on A_n/A_g for the Whitmore net section (connection element) | 0.85 |  | LRFD 10th Ed. 6.13.5.2 | verify — **least certain** |
+| `Ubs` | Both | Block shear tension-stress factor | 1 |  | LRFD 10th Ed. 6.13.4 | verify |
+| `RpD` | Both | Hole reduction factor, drilled or subpunched and reamed holes | 1 |  | LRFD 10th Ed. 6.13.4 | verify |
+| `RpP` | Both | Hole reduction factor, holes punched full size | 0.9 |  | LRFD 10th Ed. 6.13.4 | verify |
+| `phiSr` | LRFR | Rivets in shear | 0.8 |  | MBE 3rd Ed. 6A.6.12.6.2 | verify — **least certain** |
+| `phiSb` | LRFR | High-strength bolts in shear | 0.8 |  | LRFD 10th Ed. 6.5.4.2 | verify |
+| `phiBB` | LRFR | Bearing of fasteners on the gusset plate | 0.8 |  | LRFD 10th Ed. 6.5.4.2 | verify |
+| `phiY` | LRFR | Tension yielding, Whitmore gross section | 0.95 |  | LRFD 10th Ed. 6.5.4.2 | verify |
+| `phiU` | LRFR | Tension fracture, Whitmore net section | 0.8 |  | LRFD 10th Ed. 6.5.4.2 | verify |
+| `phiBS` | LRFR | Block shear rupture | 0.8 |  | LRFD 10th Ed. 6.5.4.2 | verify |
+| `phiC` | LRFR | Compression, Whitmore section | 0.9 |  | LRFD 10th Ed. 6.5.4.2 | verify |
+| `phiVY` | LRFR | Shear yielding, gross plane | 1 |  | LRFD 10th Ed. 6.5.4.2; MBE 6A.6.12.6.6 | verify — **least certain** |
+| `phiVU` | LRFR | Shear fracture, net plane | 0.8 |  | LRFD 10th Ed. 6.5.4.2; MBE 6A.6.12.6.6 | verify |
+| `FvR0` | LRFR | Rivet nominal shear strength: built before 1936 or of unknown origin | 23 | ksi | MBE 3rd Ed. 6A.6.12.5.1, Table 6A.6.12.5.1-1 | verify — **least certain** |
+| `FvR1` | LRFR | Rivet nominal shear strength: ASTM A502 Grade 1 | 29 | ksi | MBE 3rd Ed. Table 6A.6.12.5.1-1 | verify — **least certain** |
+| `FvR2` | LRFR | Rivet nominal shear strength: ASTM A502 Grade 2 | 35 | ksi | MBE 3rd Ed. Table 6A.6.12.5.1-1 | verify — **least certain** |
+| `cBx` | LRFR | Bolt shear coefficient, threads excluded (R_n = c A_b F_ub N_s) | 0.56 |  | LRFD 10th Ed. Eq. 6.13.2.7-1 | verify |
+| `cBi` | LRFR | Bolt shear coefficient, threads included | 0.45 |  | LRFD 10th Ed. Eq. 6.13.2.7-2 | verify |
+| `Fu325` | LRFR | Bolt tensile strength, F3125 Grade A325 | 120 | ksi | LRFD 10th Ed. 6.4.3.1 | verify |
+| `Fu490` | LRFR | Bolt tensile strength, F3125 Grade A490 | 150 | ksi | LRFD 10th Ed. 6.4.3.1 | verify |
+| `LjB` | LRFR | Bolts: connection length above which the long-joint factor applies | 38 | in | LRFD 10th Ed. 6.13.2.7 | verify |
+| `RjB` | LRFR | Bolts: long-joint reduction factor | 0.83 |  | LRFD 10th Ed. 6.13.2.7 | verify |
+| `LjR` | LRFR | Rivets: connection length above which the long-joint factor applies | 50 | in | MBE 3rd Ed. 6A.6.12.5.1 | verify — **least certain** |
+| `RjR` | LRFR | Rivets: long-joint reduction factor | 0.8 |  | MBE 3rd Ed. 6A.6.12.5.1 | verify — **least certain** |
+| `brA` | LRFR | Bearing coefficient on d t F_u | 2.4 |  | LRFD 10th Ed. Eq. 6.13.2.9-1 | verify |
+| `brB` | LRFR | Bearing coefficient on L_c t F_u | 1.2 |  | LRFD 10th Ed. Eq. 6.13.2.9-2 | verify |
+| `K` | LRFR | Effective length factor, Whitmore compression | 0.5 |  | LRFD 10th Ed. 6.14.2.8; MBE 3rd Ed. 6A.6.12.6.8; NCHRP W-197 | verify |
+| `Om` | LRFR | Shear reduction factor, partial shear planes | 0.88 |  | MBE 3rd Ed. 6A.6.12.6.6; LRFD 10th Ed. 6.14.2.8; NCHRP W-197 | verify |
+| `gDC` | LRFR | Dead load DC | 1.25 |  | MBE 3rd Ed. Table 6A.4.2.2-1 | verify |
+| `gDW` | LRFR | Dead load DW | 1.5 |  | MBE 3rd Ed. Table 6A.4.2.2-1 | verify |
+| `gDCmin` | LRFR | DC when it counteracts the live load effect | 0.9 |  | LRFD 10th Ed. Table 3.4.1-2 | verify — **least certain** |
+| `gDWmin` | LRFR | DW when it counteracts the live load effect | 0.65 |  | LRFD 10th Ed. Table 3.4.1-2 | verify — **least certain** |
+| `gInv` | LRFR | Live load, design load inventory | 1.75 |  | MBE 3rd Ed. Table 6A.4.2.2-1 | verify |
+| `gOp` | LRFR | Live load, design load operating | 1.35 |  | MBE 3rd Ed. Table 6A.4.2.2-1 | verify |
+| `phiCSmin` | LRFR | Lower limit on the product of condition and system factors | 0.85 |  | MBE 3rd Ed. Eq. 6A.4.2.1-3 | verify |
+| `FvR0L` | LFR | Rivet design shear strength: built before 1936 or of unknown origin | 30 | ksi | FHWA-IF-09-014; AASHTO Std. Spec. 17th Ed. Table 10.56A | verify — **least certain** |
+| `FvR1L` | LFR | Rivet design shear strength: ASTM A502 Grade 1 | 30 | ksi | AASHTO Std. Spec. 17th Ed. Table 10.56A | verify — **least certain** |
+| `FvR2L` | LFR | Rivet design shear strength: ASTM A502 Grade 2 | 38 | ksi | AASHTO Std. Spec. 17th Ed. Table 10.56A | verify — **least certain** |
+| `Fv325L` | LFR | Bolt design shear strength: A325, threads excluded | 46 | ksi | AASHTO Std. Spec. 17th Ed. Table 10.56A | verify — **least certain** |
+| `Fv490L` | LFR | Bolt design shear strength: A490, threads excluded | 57 | ksi | AASHTO Std. Spec. 17th Ed. Table 10.56A | verify — **least certain** |
+| `thrL` | LFR | Bolts with threads in the shear plane: factor on φF_v | 0.8 |  | AASHTO Std. Spec. 17th Ed. 10.56.1.3.2 | verify — **least certain** |
+| `LjL` | LFR | Connection length above which the long-joint factor applies (rivets and bolts) | 50 | in | FHWA-IF-09-014 | verify — **least certain** |
+| `RjL` | LFR | Long-joint reduction factor (rivets and bolts) | 0.8 |  | FHWA-IF-09-014 | verify — **least certain** |
+| `brAL` | LFR | Bearing coefficient on d t F_u (φ included) | 1.8 |  | AASHTO Std. Spec. 17th Ed. 10.56.1.3.2 | verify — **least certain** |
+| `brBL` | LFR | Bearing coefficient on L_c t F_u (φ included) | 0.9 |  | AASHTO Std. Spec. 17th Ed. 10.56.1.3.2 | verify — **least certain** |
+| `phiYL` | LFR | Tension yielding, Whitmore gross section | 0.95 |  | FHWA-IF-09-014 | verify — **least certain** |
+| `phiUL` | LFR | Tension fracture, Whitmore net section | 0.8 |  | FHWA-IF-09-014 | verify — **least certain** |
+| `phiBSL` | LFR | Block shear rupture | 0.8 |  | FHWA-IF-09-014 | verify — **least certain** |
+| `phiCL` | LFR | Compression (P_u = φ_c A_s F_cr) | 0.85 |  | AASHTO Std. Spec. 17th Ed. 10.54.1.1; FHWA-IF-09-014 | verify |
+| `KL` | LFR | Effective length factor, Whitmore compression | 1.2 |  | FHWA-IF-09-014 | verify — **least certain** |
+| `phiVYL` | LFR | Shear yielding, gross plane | 1 |  | FHWA-IF-09-014 | verify — **least certain** |
+| `OmL` | LFR | Shear reduction factor, partial shear planes | 0.74 |  | FHWA-IF-09-014 | verify |
+| `phiVUL` | LFR | Shear fracture, net plane | 0.8 |  | FHWA-IF-09-014 | verify — **least certain** |
+| `A1` | LFR | Dead load factor | 1.3 |  | MBE 3rd Ed. 6B.4.3 | verify |
+| `A2i` | LFR | Live load factor, inventory | 2.17 |  | MBE 3rd Ed. 6B.4.3 | verify |
+| `A2o` | LFR | Live load factor, operating (also legal and permit loads) | 1.3 |  | MBE 3rd Ed. 6B.4.3 | verify |
+| `A1min` | LFR | Dead load factor when dead load counteracts the live load effect | 1 |  | Judgment (not given in MBE 6B) | verify — **least certain** |
+
+#### Needs verification (least certain defaults)
+
+- **Rivet shear strengths, LRFR** (MBE Table 6A.6.12.5.1-1 as recalled): F_v = 23 ksi (before 1936 or unknown origin), 29 ksi (A502 Gr. 1), 35 ksi (A502 Gr. 2). The table, its row labels and any grip-length or long-joint adjustments must be checked. Rivet φ_s = 0.80.
+- **Rivet long-joint reduction, LRFR:** 0.80 above 50 in (not certain the MBE applies one to rivets).
+- **All LFR fastener values:** rivets φF_v = 30 ksi (unknown origin, taken equal to A502 Gr. 1), 30 (Gr. 1), 38 (Gr. 2); bolts 46 (A325), 57 (A490), × 0.80 with threads included; long-joint 0.80 above 50 in; bearing 1.8 d t F_u / 0.9 L_c t F_u.
+- **LFR plate resistance factors** (φ_y 0.95, φ_u 0.80, φ_bs 0.80, φ_vy 1.00, φ_vu 0.80) and **LFR K = 1.2** for Whitmore buckling (FHWA-IF-09-014 as recalled). LFR Ω = 0.74 (FHWA) vs LRFR Ω = 0.88 (MBE/NCHRP W-197) are kept separate as the brief requires.
+- **φ_vy = 1.00** for LRFR gross shear yielding of the partial plane.
+- **A_n ≤ 0.85 A_g** applied to the Whitmore net section (LRFD 6.13.5.2); it governs the validation case. Set to 1.0 if not applicable to gussets.
+- **Filler reduction applied to rivets** (LRFD 6.13.6.1.5 is written for bolts); γ is taken as t_filler / t_plate (thinnest gusset plate), an approximation of A_f/A_p.
+- **Counteracting dead load factors:** γ_DC,min 0.90, γ_DW,min 0.65 (LRFR) and A1,min 1.0 (LFR) are judgment.
+- **Condition and system factors** default 1.0; MBE Table 6A.4.2.4-1 lists φ_s = 0.90 for riveted members in truss bridges. Confirm what the owner applies to gusset plates.
+- **Article numbers** of MBE 6A.6.12.6.x and LRFD 6.14.2.8.x sub-articles are cited as recalled.
+- **Unknown-steel presets** (MBE Table 6A.6.2.1-1): before 1905 26/52, 1905–1936 30/60, 1936–1963 33/66, after 1963 36/66 ksi.
+- **Geometric conventions to confirm:** Whitmore spread from the row farthest from the WP to the row nearest it; L_mid stop = nearest other-member fastener-field outline or plate edge; block shear only for tension, rectangular block; automatic shear planes through the top/bottom line of chord fasteners (through the holes).
+
+#### Validation (hand checks)
+
+Validation model (`GPR.validationModel()`, also on the Validation tab): one diagonal D at θ = 45°, 2 lines × 4 rows of 7/8 in A502 Gr. 1 rivets, gage 5 in, pitch 3 in, inner row 20 in from the WP (rows at s = 20, 23, 26, 29 in), drilled standard holes d_h = 15/16 in, net width per hole 1.000 in; two 1/2 in A36 plates (F_y 36, F_u 58 ksi); plate end edge perpendicular to the diagonal at s = 30.5 in; plate side edges at t = ±8.485 in; continuous two-line chord with holes at y = 0 and y = −5 in, x = ±1.5 … ±16.5 in; rectangular plate part x = ±20 in, y = ±8 in. Forces on D: DC = +40, DW = +6, HL-93 = +60 (LRFR), HS20 = +50 (LFR), HL-93 reversal = −40 kip. Default code parameters.
+
+| Quantity | Hand calculation | Hand | Tool |
+|---|---|---|---|
+| A_b | π(0.875)²/4 | 0.6013 in² | 0.6013 |
+| Fastener shear, LRFR | 0.80 × (8 × 2 = 16 planes) × 29 × 0.6013 × 1.0 × 1.0 | 223.21 kip | 223.21 |
+| Fastener shear, LFR | 16 × 30 × 0.6013 | 288.63 kip | 288.63 |
+| Bearing per hole | 2.4(0.875)(0.5)(58) = 60.90; end row (tension): L_c = 1.5 − 0.46875 = 1.03125 → 1.2(1.03125)(0.5)(58) = 35.89; interior L_c = 3 − 0.9375 = 2.0625 → 71.78 > 60.90 | | |
+| Bearing, LRFR, tension | 0.80 × 2 plates × 2 lines × (3 × 60.90 + 35.89) | 699.48 kip | 699.48 |
+| Bearing, LRFR, compression | 0.80 × 2 × 8 × 60.90 (L_c to the WP side is large) | 779.52 kip | 779.52 |
+| Whitmore W_g | 5 + 2(3 × 3) tan 30° = 5 + 10.392 (not clipped) | 15.392 in | 15.392 |
+| Whitmore W_n | 15.392 − 2 × 1.000 | 13.392 in | 13.392 |
+| Whitmore yield, LRFR | 0.95 × 36 × 15.392 × (2 × 0.5) | 526.42 kip | 526.42 |
+| Whitmore fracture, LRFR | A_n = min(13.392, 0.85 × 15.392 = 13.083) = 13.083 in²; 0.80 × 58 × 13.083 × 1.0 | 607.07 kip | 607.07 |
+| Block shear, per plate | A_vg = 2(10.5)(0.5) = 10.5; A_vn = (21 − 2 × 3.5 × 1.0)(0.5) = 7.0; A_tn = (5 − 1.0)(0.5) = 2.0; 0.58(58)(7.0) + 58(2.0) = 351.48; cap 0.58(36)(10.5) + 116 = 335.24 | 335.24 kip | |
+| Block shear, LRFR | 0.80 × 2 × 335.24 | 536.38 kip | 536.38 |
+| L1, L2, L3 | Whitmore ends at y = 14.142 ∓ 5.442 = 8.700, 19.584; middle y = 14.142; distance to the chord top line y = 0 along the 45° line = y√2: 12.304, 20.000, 27.696 | | |
+| L_mid | (12.304 + 20.000 + 27.696)/3 | 20.000 in | 20.000 |
+| Buckling, LRFR | r = 0.5/√12 = 0.14434; KL/r = 0.5(20)/0.14434 = 69.28; A_g = 7.696 in²/plate; P_e/P_o = π²(29000)/69.28² / 36 = 1.6564 ≥ 0.44; P_n = 0.658^(1/1.6564)(36)(7.696) = 215.20/plate; 0.90 × 2 × 215.20 | 387.35 kip | 387.36 |
+| Buckling, LFR | KL/r = 1.2(20)/0.14434 = 166.28 > C_c = √(2π²E/F_y) = 126.10; F_cr = π²E/(KL/r)² = 10.352 ksi; 0.85 × 2 × 7.696 × 10.352 | 135.44 kip | 135.44 |
+| Shear plane (top chord line, y = 0) | L_g = 40.0 in; 12 chord holes → L_n = 40 − 12(1.0) = 28.0 in | | |
+| Shear yield, LRFR | 1.00 × 0.58 × 36 × 40 × (2 × 0.5) × 0.88 | 734.98 kip | 734.98 |
+| Shear fracture, LRFR | 0.80 × 0.58 × 58 × 28 × 1.0 | 753.54 kip | 753.54 |
+| Plane demand, DC | members above y = 0: D only; 40 cos 45° | 28.284 kip | 28.284 |
+| RF, LRFR Inventory (D-FS, governs) | (1.00 × 223.21 − 1.25 × 40 − 1.50 × 6)/(1.75 × 60) = 164.21/105 | 1.564 | 1.564 |
+| RF, LFR Inventory (D-FS, governs) | (288.63 − 1.3 × 46)/(2.17 × 50) = 228.83/108.5 | 2.109 | 2.109 |
+| RF, LRFR Inventory, reversal (D-WB) | LL = −40 (compression), dead load counteracts: (387.36 + 0.90 × 40 + 0.65 × 6)/(1.75 × 40) | 6.10 | 6.10 |
+
+Hand values were computed independently with a short node script of the formulas above (not the tool engine); the Validation tab runs the engine on the same model and compares 17 quantities (all match within 0.05 %).
+
+**Default 5-member model results** (default parameters): LRFR Inventory HL-93 RF = 1.17 (L2-U1/L2-U3 rivet shear), LRFR Operating 1.52; LFR Inventory HS20 1.40 (L2-U1 Whitmore buckling, K = 1.2), LFR Operating 2.34. Shear plane above the chord: LRFR Inventory 1.76.
+
+- **How verified:**
+  - `node --check` on every inline script of the file (5 blocks): no failures.
+  - Engine run in node on the default and validation models; 17 validation quantities match the independent hand calculation.
+  - jsdom load (CDN scripts not fetched): every main tab (Summary, Drawing, Checks, Rating, Code parameters, Validation, Report, Method) and every input tab renders with no runtime error; editing t = 7/16 in and Ω = 0.80 recomputes and autosaves under `gussetRating.autosave.v1`; add member / LL column / plane / vertex; spreadsheet paste (tab with header, unknown member reported, applied); MIDAS paste (Elem/Load/Part/Axial, J-end duplicates dropped, DC1 + DC2 summed into DC); Share project info → `bridgeSuite.v1.projectMeta`, then Use shared project info in a second window fills the fields through the input handler and reaches the autosave; Export JSON; Print report builds the calc sheet. The only jsdom message is its CSS parser not understanding the `@page` margin boxes (same code as GirderDetail; browsers accept it).
+  - Parser unit tests in node: tab/comma/quoted CSV with thousands separators, header detection, row-order matching, non-numeric cells, MIDAS header detection and error, project export/import round trip (identical RFs), wrong `_schema` / newer version refused, invalid inputs reported.
+  - Chromium (Playwright) with MathJax 3.2.2 served locally: all 172 equations on the Checks tab and the report typeset with no MathJax errors; screenshots reviewed.
+- **Open items (Phase 2/3):**
+  - O1. Chord splice check and combined shear/axial/moment on a plane (NCHRP W-197); spliced chord currently checked through the gusset only.
+  - O2. Whitmore clipping at adjacent members (warning only now).
+  - O3. Free-edge slenderness / edge buckling; localized section loss along specific planes (loss is uniform per plate now).
+  - O4. Eccentric fastener groups; unequal force sharing between plates of different thickness.
+  - O5. 3D view (three.js r128) — Phase 2.
+  - O6. Live load concurrency: shear-plane and chord ΔF demands treat the entered member LL forces as concurrent; envelope forces from different truck positions should be entered as separate columns.
+  - O7. MIDAS import supports the long table format (Elem, Load, Part, Axial); direct .mct/result-file import is not implemented.
+  - O8. All items under "Needs verification".
