@@ -1323,6 +1323,33 @@ const GPR = (function () {
   /* distance from p (inside) along d to where the line leaves the polygon */
   function rayExit(p, d, poly) { const iv = intervalAt(p, d, poly, 0); return iv ? iv[1] : null; }
   function raySeg(p, d, a, b) { const e = sub(b, a), den = crs(d, e); if (Math.abs(den) < 1e-12) return null; const w = sub(a, p), t = crs(w, e) / den, s = crs(w, d) / den; return (s >= -1e-9 && s <= 1 + 1e-9 && t > 1e-9) ? t : null; }
+  /* L_mid length from a point q of the Whitmore section (an end, clipped or not, or the middle) along the unit direction d (toward the WP), to the nearest
+     fastener-field outline in `stops` or the plate edge. The plate is the closed outline, so the edge a clipped end lies on is not a stop and a ray running
+     along an edge stays in the plate. If the plate does not continue from q in direction d (q on an edge or corner, d pointing out of the plate), the length
+     is measured along the plate edge from q, over the edges that advance in direction d, and is the distance gained in direction d.
+     Orientation-independent: the result depends only on the geometry relative to q and d. */
+  function lmidLen(q, d, poly, stops) {
+    const n = poly.length, cand = [0, ...lineHits(q, d, poly)];
+    poly.forEach(v => { const w = sub(v, q); if (Math.abs(crs(d, w)) < 1e-7) cand.push(dot(w, d)); });
+    const u = []; cand.filter(t => t > -1e-7).sort((a, b) => a - b).forEach(t => { if (!u.length || t - u[u.length - 1] > 1e-7) u.push(t); });
+    let L = 0; for (let k = 0; k + 1 < u.length; k++) { if (!inside(add(q, mul(d, (u[k] + u[k + 1]) / 2)), poly)) break; L = u[k + 1]; }
+    if (L > 1e-7) { let what = 'plate edge';
+      stops.forEach(st => { const fd = st.poly; for (let k = 0; k < fd.length; k++) { const t = raySeg(q, d, fd[k], fd[(k + 1) % fd.length]); if (t != null && t < L - 1e-9) { L = t; what = `fastener line of ${st.name}`; } } });
+      return { L, what, end: add(q, mul(d, L)) }; }
+    // the plate does not continue from q in direction d: walk along the plate edge in both directions, keep the larger gain
+    let vi = poly.findIndex(v => vlen(sub(v, q)) < 1e-6), ei = vi < 0 ? poly.findIndex((a, k) => distSeg(q, a, poly[(k + 1) % n]) < 1e-6) : -1;
+    let best = { L: 0, what: 'plate edge (the plate does not extend toward the work point from this point)', end: q };
+    if (vi < 0 && ei < 0) return best;
+    [1, -1].forEach(s => { let idx = vi >= 0 ? vi + s : (s > 0 ? ei + 1 : ei), cur = q, hit = null; const path = [q];
+      for (let step = 0; step < n; step++) { const v = poly[((idx % n) + n) % n], e = sub(v, cur), le = vlen(e);
+        if (le < 1e-9) { idx += s; continue; }
+        if (dot(e, d) <= 1e-9 * le) break;   // this edge does not advance toward the work point
+        let tm = 1, w = null; stops.forEach(st => { const fd = st.poly; for (let k = 0; k < fd.length; k++) { const t = raySeg(cur, e, fd[k], fd[(k + 1) % fd.length]); if (t != null && t < tm) { tm = t; w = st.name; } } });
+        if (w) { hit = w; cur = add(cur, mul(e, tm)); path.push(cur); break; }
+        cur = v; path.push(cur); idx += s; }
+      const L = dot(sub(cur, q), d);
+      if (L > best.L + 1e-9) best = { L, what: hit ? `fastener line of ${hit}, measured along the plate edge` : 'plate edge, measured along the edge', end: cur, path }; });
+    return best; }
   function segSeg(a, b, c, d) { const r = sub(b, a), s = sub(d, c), den = crs(r, s); if (Math.abs(den) < 1e-12) return false; const w = sub(c, a), t = crs(w, s) / den, u = crs(w, r) / den; return t >= -1e-9 && t <= 1 + 1e-9 && u >= -1e-9 && u <= 1 + 1e-9; }
   function segInPolyCross(a, b, poly) { if (pip(a, poly) || pip(b, poly)) return true; for (let i = 0; i < poly.length; i++) if (segSeg(a, b, poly[i], poly[(i + 1) % poly.length])) return true; return false; }
   function polyArea(poly) { let s = 0; for (let i = 0; i < poly.length; i++) s += crs(poly[i], poly[(i + 1) % poly.length]); return s / 2; }
@@ -1471,11 +1498,9 @@ const GPR = (function () {
         W.ovG = ovr(m.ovr.wG); W.ovN = ovr(m.ovr.wN); W.Wg = W.ovG ?? W.WgAuto; W.Wn = W.ovN ?? Math.min(W.WnAuto, W.Wg);
         W.adj = P.members.map((q, j) => j !== i && segInPolyCross(W.A, W.B, G[j].body(span)) ? q.id : null).filter(Boolean);
         if (W.adj.length && !isChordCont(i)) warn.push(`Member ${m.id}: the Whitmore section crosses the outline of ${W.adj.join(', ')}. It is clipped at the plate edges only, not at adjacent members (verify; MBE 6A.6.12.6.8).`);
-        // L_mid: from the two ends and the middle of the Whitmore section, parallel to the member, toward the work point
-        const dir = mul(g.u, -1), pts = [['end 1', W.A], ['middle', add(W.A, mul(sub(W.B, W.A), 0.5))], ['end 2', W.B]];
-        W.L3 = pts.map(([nm, q]) => { let best = rayExit(q, dir, poly), what = 'plate edge'; if (best == null) { best = NaN; what = 'outside the plate'; }
-          stops.forEach(st => { if (st.j.includes(i)) return; const fd = st.poly; for (let k = 0; k < 4; k++) { const t = raySeg(q, dir, fd[k], fd[(k + 1) % 4]); if (t != null && t < best - 1e-9) { best = t; what = `fastener line of ${st.name}`; } } });
-          return { nm, q, L: best, what, end: add(q, mul(dir, best)) }; });
+        // L_mid: from the two ends (clipped or not) and the middle of the Whitmore section, parallel to the member, toward the work point (same rule for every point: lmidLen)
+        const dir = mul(g.u, -1), pts = [['end 1', W.A], ['middle', add(W.A, mul(sub(W.B, W.A), 0.5))], ['end 2', W.B]], other = stops.filter(st => !st.j.includes(i));
+        W.L3 = pts.map(([nm, q]) => ({ nm, q, ...lmidLen(q, dir, poly, other) }));
         W.LmidAuto = (W.L3[0].L + W.L3[1].L + W.L3[2].L) / 3; W.ovL = ovr(m.ovr.lmid); W.Lmid = W.ovL ?? W.LmidAuto;
       }
       g.W = W;
@@ -1483,7 +1508,7 @@ const GPR = (function () {
       const B = { ok: g.nL >= 2 };
       if (B.ok) { const a1 = g.P(g.sIn, g.tmin), a2 = g.P(g.sIn, g.tmax), L1 = rayExit(a1, g.u, poly), L2 = rayExit(a2, g.u, poly);
         B.a1 = a1; B.a2 = a2; B.L1 = L1; B.L2 = L2; B.e1 = L1 != null ? add(a1, mul(g.u, L1)) : null; B.e2 = L2 != null ? add(a2, mul(g.u, L2)) : null;
-        if (L1 == null || L2 == null) { B.ok = false; B.why = 'An outer gage line at the inner row is outside the plate.'; }
+        if (L1 == null || L2 == null) { B.ok = false; B.geoErr = true; B.why = 'An outer gage line at the inner row is outside the plate.'; }
         else { B.LvgAuto = L1 + L2; B.LvnAuto = B.LvgAuto - 2 * (g.nR - 0.5) * g.dn; B.LtgAuto = g.gS; B.LtnAuto = g.gS - (g.nL - 1) * g.dn;
           B.Lvg = ovr(m.ovr.bsLvg) ?? B.LvgAuto; B.Lvn = ovr(m.ovr.bsLvn) ?? B.LvnAuto; B.Ltg = ovr(m.ovr.bsLtg) ?? B.LtgAuto; B.Ltn = ovr(m.ovr.bsLtn) ?? B.LtnAuto;
           B.ov = ['bsLvg', 'bsLvn', 'bsLtg', 'bsLtn'].filter(k => ovr(m.ovr[k]) != null); }
@@ -1572,9 +1597,9 @@ const GPR = (function () {
       const subst = lrfr ? T`\frac{KL_{mid}}{r} = \frac{${f2(K)}(${f3(L)})}{${f4(q.r)}} = ${f2(q.KLr)}, \quad P_e = \frac{\pi^2(${f0(E)})(${f3(q.Ag)})}{(${f2(q.KLr)})^2} = ${f1(q.Pe)}, \quad P_o = ${f1(Fy)}(${f3(q.Ag)}) = ${f1(q.Po)}, \quad \frac{P_e}{P_o} = ${f3(q.ratio)} ${q.ratio >= 0.44 ? T`\ge 0.44 \Rightarrow P_n = 0.658^{P_o/P_e}P_o = 0.658^{${f4(1 / q.ratio)}}(${f1(q.Po)}) = ${f1(q.pn)}` : T`< 0.44 \Rightarrow P_n = 0.877P_e = ${f1(q.pn)}`}\ \text{kip per plate}${Np > 1 ? (per.every(z => Math.abs(z.t - q.t) < 1e-9) ? T`; \ \times ${Np}\ \text{plates}` : T`; \ \text{plates: } ${per.map(z => f1(z.pn)).join(' + ')}`) : ''}; \quad \phi_cP_n = ${f2(phi)}(${f1(Pn)}) = ${f1(C)}\ \text{kip}`
         : T`\frac{KL_{mid}}{r} = \frac{${f2(K)}(${f3(L)})}{${f4(q.r)}} = ${f2(q.KLr)}\ ${q.eq === 'inelastic' ? T`\le C_c = ${f2(q.Cc)} \Rightarrow F_{cr} = F_y\left[1 - \frac{F_y}{4\pi^2E}\left(\frac{KL}{r}\right)^2\right] = ${f2(q.Fcr)}` : T`> C_c = ${f2(q.Cc)} \Rightarrow F_{cr} = \frac{\pi^2E}{(KL/r)^2} = ${f2(q.Fcr)}`}\ \text{ksi}, \quad C = \phi_c W_g\textstyle\sum t\,F_{cr} = ${per.some(z => Math.abs(z.t - q.t) > 1e-9) ? T`\phi_c\sum_{plates}W_gtF_{cr} = ${f2(phi)}(${f1(Pn)})` : T`${f2(phi)}(${f3(W.Wg)})(${f4(sumT)})(${f2(q.Fcr)})`} = ${f1(C)}\ \text{kip}`;
       return { C, phi, sym: lrfr ? T`\phi_cP_n,\ P_n = \begin{cases}0.658^{P_o/P_e}P_o & P_e/P_o \ge 0.44\\ 0.877P_e & P_e/P_o < 0.44\end{cases},\ P_e = \frac{\pi^2EA_g}{(KL_{mid}/r)^2},\ r = \frac{t}{\sqrt{12}}` : T`C = \phi_c\,A_s\,F_{cr},\ r = \frac{t}{\sqrt{12}}`, subst,
-        where: [whitWhere(g), wr('L<sub>mid</sub>', `Average of L<sub>1</sub>, L<sub>2</sub>, L<sub>3</sub> from the Whitmore ends and middle toward the work point, parallel to the member: ${W.L3.map(z => `${f3(z.L)} (${escH(z.what)})`).join(', ')}${W.ovL != null ? ' (overridden)' : ''}`, f3(L), 'in', W.ovL != null ? 'Override' : 'NCHRP W-197; MBE 6A.6.12.6.8'),
+        where: [whitWhere(g), wr('L<sub>mid</sub>', `Average of L<sub>1</sub>, L<sub>2</sub>, L<sub>3</sub> from the Whitmore ends and middle toward the work point, parallel to the member: ${W.L3.map(z => `${f3(z.L)} (${escH(z.what)})`).join(', ')}${W.ovL != null ? ' (overridden)' : ''}${W.clipA || W.clipB ? `. Whitmore end clipped at the plate edge: measured by the same rule as an unclipped end; the plate edge the end lies on does not stop the line${W.L3.some(z => z.path) ? ', and where the plate does not continue toward the work point from that end the length is measured along the plate edge (distance gained parallel to the member)' : ''}` : ''}`, f3(L), 'in', W.ovL != null ? 'Override' : 'NCHRP W-197; MBE 6A.6.12.6.8'),
           wr('K', 'Effective length factor', f2(K), '', lrfr ? 'LRFD 6.14.2.8' : 'FHWA-IF-09-014'), wr('E', 'Modulus of elasticity', f0(E), 'ksi', 'LRFD 6.4.1'), wr('φ<sub>c</sub>', 'Resistance factor, compression', f2(phi), '', lrfr ? 'LRFD 6.5.4.2' : 'Std. Spec. 10.54.1.1'), ...plateWhere()],
-        keys: ['thW', 'E', lrfr ? 'K' : 'KL', lrfr ? 'phiC' : 'phiCL'], per, Pn }; }
+        keys: ['thW', 'E', lrfr ? 'K' : 'KL', lrfr ? 'phiC' : 'phiCL'], per, Pn, ...(isFinite(C) ? {} : { why: `the buckling resistance is not a number (L_mid = ${isFinite(L) ? f3(L) + ' in' : 'not a number'}, W_g = ${isFinite(W.Wg) ? f3(W.Wg) + ' in' : 'not a number'})` }) }; }
     function capPV(pl, meth, kind) { const lrfr = meth === 'lrfr';
       if (kind === 'pvy') { const phi = lrfr ? p.phiVY : p.phiVYL, Om = lrfr ? p.Om : p.OmL, Ag = pl.Lg * sumT, C = phi * 0.58 * Fy * Ag * Om;
         return { C, phi, sym: T`\phi_{vy}V_{ny} = \phi_{vy}\,0.58\,F_y\,A_g\,\Omega`, subst: T`\phi_{vy}V_{ny} = ${f2(phi)}(0.58)(${f1(Fy)})(${f3(pl.Lg)})(${f4(sumT)})(${f2(Om)}) = ${f1(C)}\ \text{kip}`,
@@ -1619,9 +1644,12 @@ const GPR = (function () {
         mk({ id: `${nm}-WY`, ls: 'wy', grp: 'Whitmore tension', mem: i, who: nm, title: `${nm}: Whitmore section, tension yielding`, dirs: '+', dem, cap: { lrfr: { '+': wy.lrfr }, lfr: { '+': wy.lfr } } });
         mk({ id: `${nm}-WF`, ls: 'wf', grp: 'Whitmore tension', mem: i, who: nm, title: `${nm}: Whitmore section, tension fracture`, dirs: '+', dem, cap: { lrfr: { '+': wf.lrfr }, lfr: { '+': wf.lfr } } });
         mk({ id: `${nm}-WB`, ls: 'wb', grp: 'Whitmore compression', mem: i, who: nm, title: `${nm}: Whitmore section, compression buckling`, dirs: '-', dem, cap: { lrfr: { '-': wb.lrfr }, lfr: { '-': wb.lfr } } });
-      } else warn.push(`Member ${nm}: ${g.W.err}`);
+      } else { warn.push(`Member ${nm}: ${g.W.err}`); const why = `${g.W.err} The Whitmore section could not be placed.`;
+        mk({ id: `${nm}-WY`, ls: 'wy', grp: 'Whitmore tension', mem: i, who: nm, title: `${nm}: Whitmore section, tension yielding`, dirs: '+', dem, err: why, cap: {} });
+        mk({ id: `${nm}-WF`, ls: 'wf', grp: 'Whitmore tension', mem: i, who: nm, title: `${nm}: Whitmore section, tension fracture`, dirs: '+', dem, err: why, cap: {} });
+        mk({ id: `${nm}-WB`, ls: 'wb', grp: 'Whitmore compression', mem: i, who: nm, title: `${nm}: Whitmore section, compression buckling`, dirs: '-', dem, err: why, cap: {} }); }
       if (g.B.ok) mk({ id: `${nm}-BS`, ls: 'bs', grp: 'Block shear', mem: i, who: nm, title: `${nm}: block shear rupture (tension)`, dirs: '+', dem, cap: { lrfr: { '+': capBS(g, m, 'lrfr') }, lfr: { '+': capBS(g, m, 'lfr') } } });
-      else mk({ id: `${nm}-BS`, ls: 'bs', grp: 'Block shear', mem: i, who: nm, title: `${nm}: block shear rupture (tension)`, dirs: '+', dem, na: g.B.why, cap: {} });
+      else mk({ id: `${nm}-BS`, ls: 'bs', grp: 'Block shear', mem: i, who: nm, title: `${nm}: block shear rupture (tension)`, dirs: '+', dem, ...(g.B.geoErr ? { err: g.B.why } : { na: g.B.why }), cap: {} });
     });
     if (P.chord === 'continuous' && chordIdx.length === 2) {
       const [i0, i1] = Math.cos(num(P.members[chordIdx[0]].ang) * PI / 180) >= Math.cos(num(P.members[chordIdx[1]].ang) * PI / 180) ? chordIdx : [chordIdx[1], chordIdx[0]];   // i0: right-hand chord (reference axis)
@@ -1633,7 +1661,8 @@ const GPR = (function () {
       mk({ id: 'CH-FS', ls: 'fs', grp: 'Fastener shear', mem: null, chord: chordInfo, who: lbl, title: `${lbl}: chord fasteners, force difference ΔF`, dirs: 'any', dem, cap: { lrfr: { '+': fsL, '-': fsL }, lfr: { '+': fsF, '-': fsF } } });
       mk({ id: 'CH-BR', ls: 'brg', grp: 'Bearing', mem: null, chord: chordInfo, who: lbl, title: `${lbl}: bearing at chord fastener holes, ΔF`, dirs: 'any', dem,
         cap: { lrfr: { '+': capBRG(hs, axis, 'lrfr', `toward ${P.members[i0].id}`), '-': capBRG(hs, mul(axis, -1), 'lrfr', `toward ${P.members[i1].id}`) }, lfr: { '+': capBRG(hs, axis, 'lfr', `toward ${P.members[i0].id}`), '-': capBRG(hs, mul(axis, -1), 'lfr', `toward ${P.members[i1].id}`) } } });
-    } else if (P.chord === 'spliced' && chordIdx.length) warn.push('Chord spliced at the joint: each chord member is checked like a web member for its full force through the gusset plates only; any splice plates are ignored (conservative). The chord splice check is not in Phase 1.');
+    } else if (P.chord === 'spliced' && chordIdx.length === 1) warn.push('Chord ends at the joint (single chord member): the chord member is checked like a web member for its full force through the gusset plates (chord mode "spliced at the joint"); there is no chord force-difference (ΔF) check.');
+    else if (P.chord === 'spliced' && chordIdx.length) warn.push('Chord spliced at the joint: each chord member is checked like a web member for its full force through the gusset plates only; any splice plates are ignored (conservative). The chord splice check is not in Phase 1.');
     planes.forEach((pl, k) => { const id = `SP${k + 1}`;
       if (!pl.mem.length) { mk({ id: id + '-Y', ls: 'pvy', grp: 'Partial shear plane', plane: k, who: pl.nm, title: `${pl.nm}: shear yielding`, dirs: 'any', dem: pl.dem, na: 'No member fastener group lies on the loaded side of this plane.', cap: {} }); return; }
       const y = { lrfr: capPV(pl, 'lrfr', 'pvy'), lfr: capPV(pl, 'lfr', 'pvy') }, u = { lrfr: capPV(pl, 'lrfr', 'pvu'), lfr: capPV(pl, 'lfr', 'pvu') };
@@ -1645,8 +1674,12 @@ const GPR = (function () {
     /* ----- rating ----- */
     const CASES = ratingCases(P, p), fac = { phiC: num(P.fac.phiC), phiS: num(P.fac.phiS) };
     checks.forEach(c => { c.rf = CASES.map(cs => c.na ? null : rfOne(c, cs, p, fac)); });
-    const gov = CASES.map((cs, j) => { let best = null; checks.forEach(c => { const r = c.rf[j]; if (r && (!best || r.RF < best.r.RF)) best = { c, r }; }); return best; });
-    return { errors: [], warnings: warn, P, p, poly, ts, Np, Fy, Fu, G, holes, planes, checks, cases: CASES, gov, eqm, span, stops };
+    // governing check per case. A check that applies to the case but could not be computed (r.err) is never skipped: the case is then incomplete,
+    // gov[j] = { c, r } of the first failed check (r.err set), inc = every failed check, low = lowest computed RF (for information only).
+    const gov = CASES.map((cs, j) => { let best = null; const inc = []; checks.forEach(c => { const r = c.rf[j]; if (!r) return; if (r.err) { inc.push({ c, r }); return; } if (!best || r.RF < best.r.RF) best = { c, r }; });
+      return inc.length ? { c: inc[0].c, r: inc[0].r, inc, low: best } : best ? { ...best, inc } : null; });
+    const incomplete = checks.flatMap(c => c.rf.map((r, j) => r && r.err ? { c, j, err: r.err } : null).filter(Boolean));
+    return { errors: [], warnings: warn, P, p, poly, ts, Np, Fy, Fu, G, holes, planes, checks, cases: CASES, gov, incomplete, eqm, span, stops };
   }
 
   function ratingCases(P, p) { const out = [];
@@ -1655,9 +1688,16 @@ const GPR = (function () {
       if (F) { if (c.kind === 'design') { out.push({ meth: 'lfr', k, lvl: 'Inventory', g: p.A2i, gKey: 'A2i' }, { meth: 'lfr', k, lvl: 'Operating', g: p.A2o, gKey: 'A2o' }); } else out.push({ meth: 'lfr', k, lvl: `Operating (${c.kind})`, g: p.A2o, gKey: 'A2o' }); } });
     out.forEach(cs => { cs.name = P.ll[cs.k].name; cs.label = `${cs.meth === 'lrfr' ? 'LRFR' : 'LFR'} ${cs.lvl}, ${cs.name}`; }); return out; }
 
-  function rfOne(c, cs, p, fac) { const L = c.dem.LL[cs.k]; if (!isFinite(L) || Math.abs(L) < 1e-9) return null;
+  /* rating factor of check c for rating case cs: null = not applicable (no live load effect, or the limit state does not apply in its direction);
+     { err } = applies but could not be computed (non-finite capacity, demand, factor, RF or D/C, or the check itself failed: c.err) */
+  function rfOne(c, cs, p, fac) { const L = c.dem.LL[cs.k]; if (!isFinite(L)) return { err: `the live load effect (${cs.name}) is not a number` }; if (Math.abs(L) < 1e-9) return null;
     const d = L > 0 ? 1 : -1, dk = d > 0 ? '+' : '-'; if ((c.dirs === '+' && d < 0) || (c.dirs === '-' && d > 0)) return null;
+    if (c.err) return { err: c.err };
     const cap = c.cap[cs.meth] && c.cap[cs.meth][dk]; if (!cap) return null;
+    const r = rfCalc(c, cs, p, fac, cap, d, L), why = !isFinite(cap.C) ? (cap.why || `the resistance is not a number (C = ${cap.C})`) : !(isFinite(r.DC ?? r.D) && isFinite(r.DW ?? 0)) ? 'the dead load demand is not a number'
+      : !isFinite(cs.g) ? 'the live load factor is not a number' : !isFinite(r.RF) ? `the rating factor is not a number (RF = ${r.RF})` : !isFinite(r.DCr) ? `D/C is not a number (resistance C = ${f1(r.C)} kip)` : '';
+    return why ? { ...r, err: why } : r; }
+  function rfCalc(c, cs, p, fac, cap, d, L) {
     const DC = c.dem.DC * d, DW = c.dem.DW * d, LL = Math.abs(L);
     if (cs.meth === 'lrfr') { const phcs0 = fac.phiC * fac.phiS, phcs = Math.max(phcs0, p.phiCSmin), C = phcs * cap.C, gDC = DC >= 0 ? p.gDC : p.gDCmin, gDW = DW >= 0 ? p.gDW : p.gDWmin, Dt = gDC * DC + gDW * DW, den = cs.g * LL, RF = (C - Dt) / den;
       return { RF, d, cap, C, phcs, phcs0, gDC, gDW, DC, DW, LL, Dt, den, DCr: (Dt + den) / C,
@@ -1854,7 +1894,7 @@ const GP3D = (function () {
     const T3 = THREE, root = new T3.Group(), Lay = S.layers, Pm = R.P, G = R.G, Np = R.Np;
     const j = +P.ui.dcCase || 0, cs = R.cases[j], useDC = Lay.dc !== false && !!cs;
     const notes = [], labels = [], dcCol = d => DCOL[dcCls(d)];
-    const govOf = pred => { let b = null; R.checks.forEach(c => { if (!pred(c)) return; const r = c.rf[j]; if (r && (!b || r.DCr > b.dc)) b = { dc: r.DCr, id: c.id }; }); return b; };
+    const govOf = pred => { let b = null; R.checks.forEach(c => { if (!pred(c)) return; const r = c.rf[j]; const dc = r && (r.err ? Infinity : r.DCr); if (r && (!b || dc > b.dc)) b = { dc, id: c.id }; }); return b; };   // could not be computed: Infinity (red)
     const isCont = i => Pm.chord === 'continuous' && Pm.members[i].role === 'chord';
     const ofMem = (c, i) => c.mem === i || (!!c.chord && isCont(i));
     const plateGov = govOf(c => ['wy', 'wf', 'wb', 'bs', 'pvy', 'pvu'].includes(c.ls));
@@ -2008,7 +2048,7 @@ const GP3D = (function () {
   }
   function caption() {
     const c = $('#v3-cap'), n = $('#v3-notes'); if (!c) return; const cs = V.case;
-    c.innerHTML = (V.useDC && cs ? `Colours: governing D/C for <b>${esc(cs.label)}</b> (members: all their limit states; plates: Whitmore, block shear and shear planes; fasteners: shear and bearing): <span style="color:${DCOL.pass}">■</span> ≤ 0.85, <span style="color:${DCOL.warn}">■</span> 0.85 to 1.00, <span style="color:${DCOL.fail}">■</span> &gt; 1.00, <span style="color:${DCOL.na}">■</span> not applicable for this case. ` : '')
+    c.innerHTML = (V.useDC && cs ? `Colours: governing D/C for <b>${esc(cs.label)}</b> (members: all their limit states; plates: Whitmore, block shear and shear planes; fasteners: shear and bearing): <span style="color:${DCOL.pass}">■</span> ≤ 0.85, <span style="color:${DCOL.warn}">■</span> 0.85 to 1.00, <span style="color:${DCOL.fail}">■</span> &gt; 1.00 or could not be computed, <span style="color:${DCOL.na}">■</span> not applicable for this case. ` : '')
       + 'Thick line on the plate face: Whitmore section; dashed: 30° spread; violet arrows: L<sub>1</sub> to L<sub>3</sub>; red bands: partial shear planes through the plates. Drag to orbit, right-drag or Shift-drag to pan, scroll to zoom.';
     if (n) n.innerHTML = V.notes.map(t => `<li>${t}</li>`).join('');
   }
@@ -2718,7 +2758,9 @@ function updateAuto() { $$('[data-auto]').forEach(el => { const [a, i, k] = el.d
   el.placeholder = v != null && isFinite(v) ? `auto ${f3(v)}` : 'auto'; });
   const n = $('#eqm-note'); if (n) n.innerHTML = eqmNote(); const s = $('#src-note'); if (s) s.innerHTML = P.src ? `<p class="hint static">Forces source: ${esc(P.src)}</p>` : '';
   const a = $('#poly-area'); if (a) a.textContent = `Area ${f1(Math.abs(GPR.geo.polyArea(R.poly)))} in²`; }
-function eqmNote() { const bad = R.eqm.filter(e => e.rel > 0.02); return `<p class="hint${bad.length ? '' : ' static'}">Joint equilibrium of the member forces (ΣF): ${R.eqm.map(e => `${esc(e.name)} ${f1(e.R)} kip`).join(', ')}.${bad.length ? ' A residual can be an applied panel-point load (e.g. a floorbeam reaction); otherwise check the forces. Shear-plane demands use only the members on the loaded side.' : ''}</p>`; }
+const oneChord = () => P.members.filter(m => m.role === 'chord').length === 1;   // chord ends at the joint (heel joint)
+const HEEL_EQM = 'The joint has one chord member (the chord ends at the joint, e.g. a heel joint): the residual is the bearing (support) reaction, not an input error.';
+function eqmNote() { const bad = R.eqm.filter(e => e.rel > 0.02); return `<p class="hint${bad.length ? '' : ' static'}">Joint equilibrium of the member forces (ΣF): ${R.eqm.map(e => `${esc(e.name)} ${f1(e.R)} kip`).join(', ')}.${bad.length ? (oneChord() ? ' ' + HEEL_EQM + ' Shear-plane demands use only the members on the loaded side.' : ' A residual can be an applied panel-point load (e.g. a floorbeam reaction); otherwise check the forces. Shear-plane demands use only the members on the loaded side.') : ''}</p>`; }
 function updateCaseSel() { const s = $('#f_ui_dcCase'); if (!s) return; s.innerHTML = R.cases.map((c, j) => `<option value="${j}">${esc(c.label)}</option>`).join('') || '<option value="0">—</option>'; if (!(P.ui.dcCase < R.cases.length)) P.ui.dcCase = 0; s.value = String(P.ui.dcCase); }
 
 /* ---------- shared HTML pieces ---------- */
@@ -2732,43 +2774,52 @@ function applyCollapse() {
 }
 const activeMeth = () => P.method === 'lrfr' ? ['lrfr'] : P.method === 'lfr' ? ['lfr'] : ['lrfr', 'lfr'];
 const caseIdx = () => R.cases.map((c, j) => j);
-function minRF(c) { let b = null; c.rf.forEach((r, j) => { if (r && (!b || r.RF < b.r.RF)) b = { r, j }; }); return b; }
-function chkStatus(c) { if (c.na) return 'na'; const b = minRF(c); return b ? rfCls(b.r.RF) : 'na'; }
+/* lowest RF of a check over the cases; a case that applies but could not be computed (r.err) comes first and is never skipped */
+function minRF(c) { let b = null; c.rf.forEach((r, j) => { if (!r) return; if (r.err) { if (!b || !b.r.err) b = { r, j }; return; } if (b && b.r.err) return; if (!b || r.RF < b.r.RF) b = { r, j }; }); return b; }
+function chkStatus(c) { if (c.na) return 'na'; const b = minRF(c); return b ? rCls(b.r) : 'na'; }
 const rfBadge = (rf, lbl) => rf == null ? '<span class="badge na">n/a</span>' : `<span class="badge ${rfCls(rf)}">${lbl ? lbl + ' ' : ''}RF ${f2(rf)}</span>`;
+const ERR_BADGE = '<span class="badge fail" title="Could not be computed">error</span>';
+const rCls = r => r == null ? 'na' : r.err ? 'fail' : rfCls(r.RF);                 // class of one rating result (error = fail colour)
+const rTxt = r => r == null ? '—' : r.err ? 'error' : f2(r.RF);                    // text of one rating result
+const govInc = g => !!(g && g.inc && g.inc.length);                               // rating case incomplete (a check that applies could not be computed)
+const govTxt = g => !g ? '—' : govInc(g) ? 'incomplete' : f2(g.r.RF);
+const govIds = g => !g ? '' : govInc(g) ? g.inc.map(x => x.c.id).join(', ') : g.c.id;
+const incNote = () => { const n = new Set(R.incomplete.map(x => x.c.id)).size; return n ? `${n} check${n > 1 ? 's' : ''} could not be computed` : ''; };
 
 /* ---------- status bar ---------- */
 function renderStatus() {
-  const low = R.gov.filter(Boolean), worst = low.slice().sort((a, b) => a.r.RF - b.r.RF)[0], nFail = low.filter(g => g.r.RF < 1).length;
-  const v = !worst ? { cls: 'pass', ico: '–', t: 'No live load effect to rate' } : nFail ? { cls: 'fail', ico: '✕', t: `${nFail} rating case${nFail > 1 ? 's' : ''} with RF < 1.00` } : { cls: 'pass', ico: '✓', t: 'All rating factors ≥ 1.00' };
-  const chips = R.cases.map((c, j) => { const g = R.gov[j]; return `<button type="button" class="chip ${g ? rfCls(g.r.RF) : ''}" data-goto="${g ? g.c.id : ''}" title="${esc(c.label)}${g ? ': ' + esc(g.c.title) : ''}"><b>${g ? f2(g.r.RF) : '—'}</b>${esc(c.meth.toUpperCase())} ${esc(c.lvl)}, ${esc(c.name)}</button>`; }).join('');
+  const low = R.gov.filter(g => g && !govInc(g)), worst = low.slice().sort((a, b) => a.r.RF - b.r.RF)[0], nFail = low.filter(g => g.r.RF < 1).length;
+  const v = R.incomplete.length ? { cls: 'fail', ico: '!', t: `Rating incomplete: ${incNote()}` } : !worst ? { cls: 'pass', ico: '–', t: 'No live load effect to rate' } : nFail ? { cls: 'fail', ico: '✕', t: `${nFail} rating case${nFail > 1 ? 's' : ''} with RF < 1.00` } : { cls: 'pass', ico: '✓', t: 'All rating factors ≥ 1.00' };
+  const chips = R.cases.map((c, j) => { const g = R.gov[j]; return `<button type="button" class="chip ${g ? rCls(g.r) : ''}" data-goto="${g ? g.c.id : ''}" title="${esc(c.label)}${g ? ': ' + (govInc(g) ? 'incomplete, could not be computed: ' + esc(govIds(g)) : esc(g.c.title)) : ''}"><b>${govTxt(g)}</b>${esc(c.meth.toUpperCase())} ${esc(c.lvl)}, ${esc(c.name)}</button>`; }).join('');
   $('#status-bar').innerHTML = `<div class="verdict ${v.cls}"><span class="vd-ico">${v.ico}</span>${v.t}</div><div class="sb-msg">${R.warnings.length ? R.warnings.length + ' warning' + (R.warnings.length > 1 ? 's' : '') : 'No warnings'}</div><div class="chips">${chips}</div>`;
-  ['both', 'lrfr', 'lfr'].forEach(m => { const el = document.querySelector(`.mtab-s[data-s="${m}"]`); if (!el) return; const gs = R.gov.filter((g, j) => g && (m === 'both' || R.cases[j].meth === m)); const mn = gs.length ? Math.min(...gs.map(g => g.r.RF)) : null; el.textContent = P.method === m && mn != null ? f2(mn) : ''; el.className = 'mtab-s' + (P.method === m && mn != null ? (mn < 1 ? ' fail' : mn < 1.2 ? ' warn' : ' pass') : ''); });
+  ['both', 'lrfr', 'lfr'].forEach(m => { const el = document.querySelector(`.mtab-s[data-s="${m}"]`); if (!el) return; const gs = R.gov.filter((g, j) => g && (m === 'both' || R.cases[j].meth === m)); if (gs.some(govInc)) { el.textContent = P.method === m ? 'error' : ''; el.className = 'mtab-s' + (P.method === m ? ' err' : ''); return; } const mn = gs.length ? Math.min(...gs.map(g => g.r.RF)) : null; el.textContent = P.method === m && mn != null ? f2(mn) : ''; el.className = 'mtab-s' + (P.method === m && mn != null ? (mn < 1 ? ' fail' : mn < 1.2 ? ' warn' : ' pass') : ''); });
   $$('.mtab').forEach(b => b.setAttribute('aria-selected', String(b.dataset.meth === P.method)));
 }
 
 /* ---------- summary ---------- */
 function renderSummary() {
-  const low = R.gov.filter(Boolean), worst = low.slice().sort((a, b) => a.r.RF - b.r.RF)[0], nFail = low.filter(g => g.r.RF < 1).length;
-  const head = `<div class="sc"><div class="sc-head ${nFail ? 'fail' : 'pass'}"><div class="sc-verdict"><span class="sc-ico">${nFail ? '✕' : '✓'}</span><div><h2>${nFail ? `${nFail} of ${R.cases.length} rating case${R.cases.length > 1 ? 's' : ''} below 1.00` : low.length ? 'All rating factors are at least 1.00' : 'No rating cases'}</h2>
+  const low = R.gov.filter(g => g && !govInc(g)), worst = low.slice().sort((a, b) => a.r.RF - b.r.RF)[0], nFail = low.filter(g => g.r.RF < 1).length, nInc = R.gov.filter(govInc).length, inc = nInc > 0;
+  const head = `<div class="sc"><div class="sc-head ${nFail || inc ? 'fail' : 'pass'}"><div class="sc-verdict"><span class="sc-ico">${inc ? '!' : nFail ? '✕' : '✓'}</span><div><h2>${inc ? `Rating incomplete: ${incNote()} (${nInc} of ${R.cases.length} rating case${R.cases.length > 1 ? 's' : ''} affected)` : nFail ? `${nFail} of ${R.cases.length} rating case${R.cases.length > 1 ? 's' : ''} below 1.00` : low.length ? 'All rating factors are at least 1.00' : 'No rating cases'}</h2>
       <p>${esc(P.meta.joint || 'Gusset plate connection')}: ${R.Np} plate${R.Np > 1 ? 's' : ''} ${R.ts.map(frac).join(' + ')} in, F<sub>y</sub> = ${f1(R.Fy)} ksi; ${P.members.length} members; ${R.checks.filter(c => !c.na).length} limit-state checks; methods: ${activeMeth().map(m => METH[m]).join(' and ')}.</p></div></div>
-    <div class="sc-gov"><div class="k">Lowest rating factor</div><div class="v ${worst && worst.r.RF < 1 ? 'fail' : 'pass'}">${worst ? f2(worst.r.RF) : '—'}</div><div class="w">${worst ? `${esc(R.cases[R.gov.indexOf(worst)].label)}; ${esc(worst.c.id)}` : ''}</div></div></div>
-    <div class="kq">${R.cases.map((c, j) => { const g = R.gov[j]; return `<div><span>${esc(c.label)}</span><b class="${g ? 'n-' + rfCls(g.r.RF) : ''}">${g ? f2(g.r.RF) : '—'}</b> <small class="n-dim">${g ? esc(g.c.id) : ''}</small></div>`; }).join('')}</div></div>`;
+    <div class="sc-gov"><div class="k">Lowest rating factor</div>${inc ? `<div class="v fail">Incomplete</div><div class="w">Not determined: ${esc(incNote())}; see below.</div>` : `<div class="v ${worst && worst.r.RF < 1 ? 'fail' : 'pass'}">${worst ? f2(worst.r.RF) : '—'}</div><div class="w">${worst ? `${esc(R.cases[R.gov.indexOf(worst)].label)}; ${esc(worst.c.id)}` : ''}</div>`}</div></div>
+    <div class="kq">${R.cases.map((c, j) => { const g = R.gov[j]; return `<div><span>${esc(c.label)}</span><b class="${g ? 'n-' + rCls(g.r) : ''}">${govTxt(g)}</b> <small class="n-dim">${g ? esc(govIds(g)) : ''}</small></div>`; }).join('')}</div></div>`;
   const vfy = `<div class="alert warn"><b>Verify the code parameters.</b> ${esc(VERIFY_NOTE)} See the Code parameters tab; items marked “least certain” are listed in the fix log under “Needs verification”.</div>`;
+  const errC = R.incomplete.length ? `<div class="alert fail"><b>Rating incomplete. These checks apply but could not be computed; the governing rating factor of the affected cases is not determined.</b><ul class="err-list">${[...new Set(R.incomplete.map(x => x.c))].map(c => `<li><a href="#" data-goto="${esc(c.id)}">${esc(c.id)}</a> (${esc(c.title)}): could not be computed: ${esc(R.incomplete.find(x => x.c === c).err)}. Cases: ${R.incomplete.filter(x => x.c === c).map(x => esc(R.cases[x.j].label)).join('; ')}.</li>`).join('')}</ul></div>` : '';
   const warns = R.warnings.length ? card('sum-warn', `Warnings (${R.warnings.length})`, '', `<ul class="dlist">${R.warnings.map(w => `<li>${esc(w)}</li>`).join('')}</ul>`) : '';
   // governing RF per member (row) per case (column)
   const rows = []; const who = [...new Set(R.checks.map(c => c.who))];
-  who.forEach(w => { const cs = R.checks.filter(c => c.who === w && !c.na); if (!cs.length) return; rows.push(`<tr><td class="lbl">${esc(w)}</td>${R.cases.map((cc, j) => { let b = null; cs.forEach(c => { const r = c.rf[j]; if (r && (!b || r.RF < b.r.RF)) b = { r, c }; }); const gov = b && R.gov[j] && R.gov[j].c === b.c; return `<td class="val${gov ? ' govc' : ''}">${b ? `<a href="#" data-goto="${b.c.id}" class="n-${rfCls(b.r.RF)}">${f2(b.r.RF)}</a> <small class="n-dim">${b.c.id.split('-').pop()}</small>` : '—'}</td>`; }).join('')}</tr>`); });
+  who.forEach(w => { const cs = R.checks.filter(c => c.who === w && !c.na); if (!cs.length) return; rows.push(`<tr><td class="lbl">${esc(w)}</td>${R.cases.map((cc, j) => { let b = null; cs.forEach(c => { const r = c.rf[j]; if (!r || (b && b.r.err)) return; if (r.err || !b || r.RF < b.r.RF) b = { r, c }; }); const gov = b && R.gov[j] && R.gov[j].c === b.c; return `<td class="val${gov ? ' govc' : ''}">${b ? `<a href="#" data-goto="${b.c.id}" class="n-${rCls(b.r)}">${rTxt(b.r)}</a> <small class="n-dim">${b.c.id.split('-').pop()}</small>` : '—'}</td>`; }).join('')}</tr>`); });
   const tbl = card('sum-mem', 'Governing rating factor by member or plane', '', `<p class="note-p">Lowest RF over the limit states of each member or plane, with the governing limit state (FS fastener shear, BR bearing, WY/WF Whitmore yield/fracture, WB Whitmore buckling, BS block shear, Y/U shear plane yield/fracture). The governing value of each rating case is highlighted. Click a value for its derivation.</p><div class="tscroll"><table class="tbl sumtbl"><thead><tr><th>Member / plane</th>${R.cases.map(c => `<th class="right">${esc(c.meth.toUpperCase())} ${esc(c.lvl)}<br><span class="n-dim">${esc(c.name)}</span></th>`).join('')}</tr></thead><tbody>${rows.join('')}</tbody></table></div>`);
-  const eqmC = card('sum-eqm', 'Joint equilibrium of the entered forces', '', `<table class="tbl narrow"><thead><tr><th>Load</th><th class="right">ΣF<sub>x</sub> (kip)</th><th class="right">ΣF<sub>y</sub> (kip)</th><th class="right">|ΣF| / max |F|</th></tr></thead><tbody>${R.eqm.map(e => `<tr><td class="lbl">${esc(e.name)}</td><td class="val">${f1(e.Rx)}</td><td class="val">${f1(e.Ry)}</td><td class="val">${f3(e.rel)}</td></tr>`).join('')}</tbody></table><p class="note-p">ΣF of the member forces acting on the joint (F u, with u pointing from the work point along each member). A residual is the applied panel-point load (for example a floorbeam reaction) or an inconsistency in the forces.</p>`);
+  const eqmC = card('sum-eqm', 'Joint equilibrium of the entered forces', '', `<table class="tbl narrow"><thead><tr><th>Load</th><th class="right">ΣF<sub>x</sub> (kip)</th><th class="right">ΣF<sub>y</sub> (kip)</th><th class="right">|ΣF| / max |F|</th></tr></thead><tbody>${R.eqm.map(e => `<tr><td class="lbl">${esc(e.name)}</td><td class="val">${f1(e.Rx)}</td><td class="val">${f1(e.Ry)}</td><td class="val">${f3(e.rel)}</td></tr>`).join('')}</tbody></table><p class="note-p">ΣF of the member forces acting on the joint (F u, with u pointing from the work point along each member). A residual is the applied panel-point load (for example a floorbeam reaction) or an inconsistency in the forces.${oneChord() ? ' ' + HEEL_EQM : ''}</p>`);
   const scope = card('sum-scope', 'Not included in Phase 1', '', `<ul class="dlist">${SCOPE_OUT.map(s => `<li>${s}</li>`).join('')}</ul>`);
-  $('#tab-summary').innerHTML = vfy + head + tbl + warns + eqmC + scope;
+  $('#tab-summary').innerHTML = vfy + head + errC + tbl + warns + eqmC + scope;
 }
 const SCOPE_OUT = ['Chord splice and combined shear, axial and moment on a plane (NCHRP W-197 combined check); a spliced chord is checked through the gusset plates only', 'Clipping of the Whitmore section at adjacent members (a warning is given when it crosses one)', 'Edge-buckling (free edge slenderness) and plate yielding near the work point under combined actions', 'Localized section loss (loss is applied uniformly to each plate)', 'Fastener groups loaded eccentrically; fasteners are assumed to share the member force equally', 'Fatigue and serviceability (slip) of bolted connections'];
 
 /* ---------- drawing ---------- */
 const DCOL = { pass: '#2c7a4b', warn: '#c98a1b', fail: '#c3352b', na: '#9aa39d' };
 const dcCls = dc => dc == null ? 'na' : dc > 1 + 1e-9 ? 'fail' : dc > 0.85 ? 'warn' : 'pass';
-function dcOf(ids) { const j = +P.ui.dcCase || 0; let mx = null; ids.forEach(id => { const c = R.checks.find(q => q.id === id); const r = c && c.rf[j]; if (r && (mx == null || r.DCr > mx)) mx = r.DCr; }); return mx; }
+function dcOf(ids) { const j = +P.ui.dcCase || 0; let mx = null; ids.forEach(id => { const c = R.checks.find(q => q.id === id); const r = c && c.rf[j]; const dc = r && (r.err ? Infinity : r.DCr); if (r && (mx == null || dc > mx)) mx = dc; }); return mx; }   // could not be computed: Infinity (red)
 let VB = null;
 function svgDrawing(opt = {}) {
   const V = opt.static ? { members: true, fasteners: true, whitmore: true, planes: true, block: true, lmid: true, labels: true, dc: true } : P.ui.view, poly = R.poly, G = R.G;
@@ -2793,7 +2844,7 @@ function svgDrawing(opt = {}) {
     if (V.whitmore && W.ok) { const c = colFor([`${m.id}-WY`, `${m.id}-WF`, `${m.id}-WB`]), o1 = g.P(g.sOut, g.tmin), o2 = g.P(g.sOut, g.tmax), e1 = add2(W.c, mul2(g.v, -W.hw)), e2 = add2(W.c, mul2(g.v, W.hw));
       h += `<line x1="${X(o1[0])}" y1="${Y(o1[1])}" x2="${X(e1[0])}" y2="${Y(e1[1])}" stroke="${c}" stroke-width="${sw}" stroke-dasharray="${sc * 0.8} ${sc * 0.6}"/><line x1="${X(o2[0])}" y1="${Y(o2[1])}" x2="${X(e2[0])}" y2="${Y(e2[1])}" stroke="${c}" stroke-width="${sw}" stroke-dasharray="${sc * 0.8} ${sc * 0.6}"/>`;
       h += `<line x1="${X(W.A[0])}" y1="${Y(W.A[1])}" x2="${X(W.B[0])}" y2="${Y(W.B[1])}" stroke="${c}" stroke-width="${sw * 3}"><title>${esc(m.id)} Whitmore: W_g = ${f2(W.Wg)} in, W_n = ${f2(W.Wn)} in</title></line>`; }
-    if (V.lmid && W.ok && W.L3) W.L3.forEach(z => { if (!isFinite(z.L)) return; h += `<line x1="${X(z.q[0])}" y1="${Y(z.q[1])}" x2="${X(z.end[0])}" y2="${Y(z.end[1])}" stroke="#7048e8" stroke-width="${sw * 0.8}" marker-end="url(#gp-arr)"><title>${esc(m.id)} ${z.nm}: ${f2(z.L)} in to ${esc(z.what)}</title></line>`; });
+    if (V.lmid && W.ok && W.L3) W.L3.forEach(z => { if (!isFinite(z.L)) return; h += z.path ? `<polyline points="${z.path.map(pt).join(' ')}" fill="none" stroke="#7048e8" stroke-width="${sw * 0.8}" marker-end="url(#gp-arr)"><title>${esc(m.id)} ${z.nm}: ${f2(z.L)} in to ${esc(z.what)}</title></polyline>` : `<line x1="${X(z.q[0])}" y1="${Y(z.q[1])}" x2="${X(z.end[0])}" y2="${Y(z.end[1])}" stroke="#7048e8" stroke-width="${sw * 0.8}" marker-end="url(#gp-arr)"><title>${esc(m.id)} ${z.nm}: ${f2(z.L)} in to ${esc(z.what)}</title></line>`; });
     if (V.block && g.B.ok) { const c = colFor([`${m.id}-BS`]); h += `<polyline points="${[g.B.e1, g.B.a1, g.B.a2, g.B.e2].map(pt).join(' ')}" fill="none" stroke="${c}" stroke-width="${sw * 1.4}" stroke-dasharray="${sc * 0.3} ${sc * 0.5}"><title>${esc(m.id)} block shear</title></polyline>`; }
   });
   // fasteners
@@ -2812,7 +2863,7 @@ function renderDrawing() {
   $('#tab-drawing').innerHTML = card('dw-main', 'Gusset plate, members, fasteners and derived geometry', 'To scale, inches', `<div class="ctl-row">${chip('members', 'Members', '#4c6ef5')}${chip('fasteners', 'Fasteners', '#252d29')}${chip('whitmore', 'Whitmore sections', '#1d56a3')}${chip('lmid', 'L_mid', '#7048e8')}${chip('block', 'Block shear', '#9c6a0e')}${chip('planes', 'Shear planes', '#c3352b')}${chip('labels', 'Labels', '#78827c')}${chip('dc', 'Colour by D/C', '#2c7a4b')}
     <span class="crv-sp"></span><button type="button" class="dg-btn" data-zoom="in">Zoom in</button><button type="button" class="dg-btn" data-zoom="out">Zoom out</button><button type="button" class="dg-btn" data-zoom="fit">Fit</button></div>
     <div class="dwg-wrap gdwrap" id="gd-wrap">${svgDrawing()}</div>
-    <p class="cap">${V.dc ? `Colours: D/C for <b>${cs ? esc(cs.label) : '—'}</b> (choose the case on the Rating input tab): <span style="color:${DCOL.pass}">■</span> ≤ 0.85, <span style="color:${DCOL.warn}">■</span> 0.85 to 1.00, <span style="color:${DCOL.fail}">■</span> &gt; 1.00, <span style="color:${DCOL.na}">■</span> not applicable for this case. ` : ''}Thick line: Whitmore section (clipped at the plate edge); thin dashed lines: 30° spread from the outer fasteners of the row farthest from the work point. Violet arrows: L<sub>1</sub>, L<sub>2</sub>, L<sub>3</sub> for L<sub>mid</sub>. Dotted: block-shear path. Dashed: partial shear planes. Scroll to zoom, drag to pan, hover for values.</p>`)
+    <p class="cap">${V.dc ? `Colours: D/C for <b>${cs ? esc(cs.label) : '—'}</b> (choose the case on the Rating input tab): <span style="color:${DCOL.pass}">■</span> ≤ 0.85, <span style="color:${DCOL.warn}">■</span> 0.85 to 1.00, <span style="color:${DCOL.fail}">■</span> &gt; 1.00 or could not be computed, <span style="color:${DCOL.na}">■</span> not applicable for this case. ` : ''}Thick line: Whitmore section (clipped at the plate edge); thin dashed lines: 30° spread from the outer fasteners of the row farthest from the work point. Violet arrows: L<sub>1</sub>, L<sub>2</sub>, L<sub>3</sub> for L<sub>mid</sub>. Dotted: block-shear path. Dashed: partial shear planes. Scroll to zoom, drag to pan, hover for values.</p>`)
     + card('dw-geo', 'Derived geometry', '', geoTables());
 }
 function geoTables() {
@@ -2842,21 +2893,26 @@ const LSNAME = { fs: 'Fastener shear', brg: 'Bearing at fastener holes', wy: 'Wh
 function dirLabel(c, dk) { if (c.mem != null) return dk === '+' ? 'member in tension' : 'member in compression'; if (c.chord) return dk === '+' ? `ΔF toward ${P.members[c.chord.i0].id}` : `ΔF toward ${P.members[c.chord.i1].id}`; return 'either direction'; }
 function demandHtml(c) {
   const what = c.mem != null ? `Member force F (tension +), as entered` : c.chord ? `Chord force difference ΔF = Σ F<sub>i</sub>(u<sub>i</sub> · u<sub>${esc(P.members[c.chord.i0].id)}</sub>) (+ toward ${esc(P.members[c.chord.i0].id)})` : `Shear along the plane, V = Σ F<sub>i</sub>(u<sub>i</sub> · e) over the loaded-side members (${R.planes[c.plane].mem.map(i => esc(P.members[i].id)).join(', ')})`;
-  return `<p class="note-p"><b>Demand.</b> ${what}.</p><div class="tscroll"><table class="tbl narrow"><thead><tr><th>Load</th><th class="right">Value (kip)</th></tr></thead><tbody><tr><td class="lbl">DC</td><td class="val">${f2(c.dem.DC)}</td></tr><tr><td class="lbl">DW</td><td class="val">${f2(c.dem.DW)}</td></tr>${P.ll.map((l, k) => `<tr><td class="lbl">${esc(l.name)} (LL+IM)</td><td class="val">${f2(c.dem.LL[k])}</td></tr>`).join('')}</tbody></table></div>${c.mem != null ? '' : `<p class="note-p"><b>Live load concurrency.</b> ${CONC_NOTE}</p>`}`;
+  return `<p class="note-p"><b>Demand.</b> ${what}.</p><div class="tscroll"><table class="tbl narrow"><thead><tr><th>Load</th><th class="right">Value (kip)</th></tr></thead><tbody><tr><td class="lbl">DC</td><td class="val">${f2(c.dem.DC)}</td></tr><tr><td class="lbl">DW</td><td class="val">${f2(c.dem.DW)}</td></tr>${P.ll.map((l, k) => `<tr><td class="lbl">${esc(l.name)} (LL+IM)</td><td class="val">${f2(c.dem.LL[k])}</td></tr>`).join('')}</tbody></table></div>${c.mem != null ? '' : `<p class="note-p"><b>Live load concurrency.</b> ${CONC_NOTE}</p>`}${c.plane != null && oneChord() && ['above', 'below'].includes(R.planes[c.plane].kind) ? `<p class="note-p"><b>Heel joint.</b> ${HEEL_SP}</p>` : ''}`;
 }
+const HEEL_SP = 'Shear only. At a heel joint the end-post vertical component (F sin θ) also crosses this plane and is balanced by the bearing reaction; check combined effects separately if they may govern.';
 const CONC_NOTE = 'Forces in each live-load column are treated as concurrent (same load position). If envelope forces are entered, verify they are concurrent; envelopes of different load positions may be unconservative or conservative.';
 function checkBody(c, opt = {}) {
   if (c.na) return `<div class="alert info"><b>Not applicable.</b> ${esc(c.na)}</div>`;
-  let b = demandHtml(c);
+  const errs = R.cases.map((cs, j) => [cs, c.rf[j]]).filter(([cs, r]) => r && r.err);
+  if (c.err) return `<div class="alert fail"><b>Could not be computed:</b> ${esc(c.err)}${errs.length ? ` Rating cases affected (rating incomplete): ${errs.map(([cs]) => esc(cs.label)).join('; ')}.` : ' No rating case has a live load effect in the direction this limit state applies to.'}</div>` + demandHtml(c);
+  let b = (errs.length ? `<div class="alert fail"><b>Could not be computed</b> for ${errs.map(([cs, r]) => `${esc(cs.label)}: ${esc(r.err)}`).join('; ')}. The rating is incomplete for ${errs.length > 1 ? 'these cases' : 'this case'}.</div>` : '') + demandHtml(c);
   activeMeth().forEach(meth => { const caps = c.cap[meth]; if (!caps) return; const dks = Object.keys(caps), same = dks.length === 2 && caps['+'] === caps['-'];
     (same ? ['+'] : dks).forEach(dk => { const q = caps[dk];
       b += eq(`${METH[meth]} resistance${same ? '' : `, ${dirLabel(c, dk)}`}${verifyBadge((q.keys || []).filter(k => GPR.PBY[k] && GPR.PBY[k].unc), 'verify')}`, c.ref[meth], [q.sym, q.subst], q.where); if (q.note) b += `<p class="note-p">${sub(q.note)}</p>`; });
-    const rows = R.cases.map((cs, j) => [cs, c.rf[j], j]).filter(([cs, r]) => cs.meth === meth && r);
+    const rowsAll = R.cases.map((cs, j) => [cs, c.rf[j], j]).filter(([cs, r]) => cs.meth === meth && r), rows = rowsAll.filter(([cs, r]) => !r.err), rowsErr = rowsAll.filter(([cs, r]) => r.err);
     const skipped = R.cases.filter((cs, j) => cs.meth === meth && !c.rf[j]);
+    const errTr = rowsErr.map(([cs, r]) => `<tr><td class="lbl">${esc(cs.lvl)}, ${esc(cs.name)}</td><td class="val">${f1(r.C)}</td><td class="val">—</td><td class="val n-fail" title="${esc(r.err)}">error</td></tr>`).join('');
+    if (rowsErr.length && !rows.length) b += `<div class="tscroll"><table class="tbl narrow"><thead><tr><th>Rating case</th><th class="right">C (kip)</th><th class="right">D/C</th><th class="right">RF</th></tr></thead><tbody>${errTr}</tbody></table></div>`;
     if (rows.length) { const g = rows.reduce((a, x) => x[1].RF < a[1].RF ? x : a);
       const show = opt.gov ? [g] : rows;
       b += eq(`${METH[meth]} rating factor${show.length > 1 ? 's' : ''}`, meth === 'lrfr' ? 'MBE 3rd Ed. Eq. 6A.4.2.1-1' : 'MBE 3rd Ed. Eq. 6B.4.1-1', show.map(([cs, r]) => T`\text{${cs.lvl}, ${texEsc(cs.name)} }${meth === 'lrfr' ? T`(\gamma_{LL} = ${f2(cs.g)})` : T`(A_2 = ${f2(cs.g)})`}:\quad ${r.tex}`), meth === 'lrfr' ? [['φ<sub>c</sub>φ<sub>s</sub>', `Condition × system factor (${f2(num(P.fac.phiC))} × ${f2(num(P.fac.phiS))}, not less than ${f2(R.p.phiCSmin)})`, f2(g[1].phcs), '', 'MBE 6A.4.2.1-3'], ['γ<sub>DC</sub>, γ<sub>DW</sub>', 'Dead load factors; minimum values where the dead load counteracts the live load', `${f2(R.p.gDC)}, ${f2(R.p.gDW)} (${f2(R.p.gDCmin)}, ${f2(R.p.gDWmin)})`, '', 'MBE Table 6A.4.2.2-1'], ['DC, DW, LL', 'Taken in the direction of the live load effect (opposite sign: counteracting)', '', '', 'Demand above']] : [['A<sub>1</sub>', 'Dead load factor (A<sub>1,min</sub> where D counteracts L)', `${f2(R.p.A1)} (${f2(R.p.A1min)})`, '', 'MBE 6B.4.3'], ['D', 'DC + DW, in the direction of the live load effect', '', '', 'Demand above']], g[1].RF < 1 ? 'eq-fail' : '');
-      b += `<div class="tscroll"><table class="tbl narrow"><thead><tr><th>Rating case</th><th class="right">C (kip)</th><th class="right">D/C</th><th class="right">RF</th></tr></thead><tbody>${rows.map(([cs, r]) => `<tr class="${r === g[1] ? 'gov' : ''}"><td class="lbl">${esc(cs.lvl)}, ${esc(cs.name)}${r === g[1] && rows.length > 1 ? ' <span class="gov-tag">lowest</span>' : ''}</td><td class="val">${f1(r.C)}</td><td class="val">${f3(r.DCr)}</td><td class="val n-${rfCls(r.RF)}">${f2(r.RF)}</td></tr>`).join('')}</tbody></table></div>`; }
+      b += `<div class="tscroll"><table class="tbl narrow"><thead><tr><th>Rating case</th><th class="right">C (kip)</th><th class="right">D/C</th><th class="right">RF</th></tr></thead><tbody>${rows.map(([cs, r]) => `<tr class="${r === g[1] ? 'gov' : ''}"><td class="lbl">${esc(cs.lvl)}, ${esc(cs.name)}${r === g[1] && rows.length > 1 ? ' <span class="gov-tag">lowest</span>' : ''}</td><td class="val">${f1(r.C)}</td><td class="val">${f3(r.DCr)}</td><td class="val n-${rfCls(r.RF)}">${f2(r.RF)}</td></tr>`).join('')}${errTr}</tbody></table></div>`; }
     if (skipped.length) b += `<p class="note-p">${skipped.map(cs => `${esc(cs.lvl)}, ${esc(cs.name)}`).join('; ')}: ${c.dirs === 'any' ? 'no live load effect' : `not applicable (this limit state applies to the member in ${c.dirs === '+' ? 'tension' : 'compression'}, and the live load effect is zero or of the other sign)`}.</p>`;
   });
   return b;
@@ -2864,11 +2920,11 @@ function checkBody(c, opt = {}) {
 const texEsc = s => String(s).replace(/[\\{}$&#^_%~]/g, c => '\\' + (c === '\\' ? 'backslash ' : c));
 function renderChecks() {
   const groups = [...new Set(R.checks.map(c => c.who))];
-  let h = `<div class="ctl-row"><button type="button" class="dg-btn" data-exp="checks">Expand all</button><button type="button" class="dg-btn" data-col="checks">Collapse all</button><button type="button" class="dg-btn" id="col-ok">Collapse all but RF &lt; 1</button></div>`;
+  let h = `<div class="ctl-row"><button type="button" class="dg-btn" data-exp="checks">Expand all</button><button type="button" class="dg-btn" data-col="checks">Collapse all</button><button type="button" class="dg-btn" id="col-ok">Collapse all but RF &lt; 1 and errors</button></div>`;
   groups.forEach(w => { h += `<h3 class="grp-hd">${esc(w)}</h3>`;
-    R.checks.filter(c => c.who === w).forEach(c => { const m = minRF(c); h += card('chk-' + c.id, `<span class="cid">${esc(c.id)}</span>${esc(LSNAME[c.ls])}`, '', `<p class="rpt-jump"><a href="#" data-rptjump="cr-chk-${esc(c.id)}">Open in the report</a></p>` + checkBody(c), `${verifyBadge(c.unc)}${c.na ? '<span class="badge na">N/A</span>' : rfBadge(m ? m.r.RF : null, 'min')}`); }); });
+    R.checks.filter(c => c.who === w).forEach(c => { const m = minRF(c); h += card('chk-' + c.id, `<span class="cid">${esc(c.id)}</span>${esc(LSNAME[c.ls])}`, '', `<p class="rpt-jump"><a href="#" data-rptjump="cr-chk-${esc(c.id)}">Open in the report</a></p>` + checkBody(c), `${verifyBadge(c.unc)}${c.na ? '<span class="badge na">N/A</span>' : c.err || (m && m.r.err) ? ERR_BADGE : rfBadge(m ? m.r.RF : null, 'min')}`); }); });
   $('#tab-checks').innerHTML = h;
-  $('#col-ok').onclick = () => { R.checks.forEach(c => { const m = minRF(c); if (m && m.r.RF < 1) delete P.ui.col['chk-' + c.id]; else P.ui.col['chk-' + c.id] = true; }); applyCollapse(); autosave(); };
+  $('#col-ok').onclick = () => { R.checks.forEach(c => { const m = minRF(c); if (c.err || (m && (m.r.err || m.r.RF < 1))) delete P.ui.col['chk-' + c.id]; else P.ui.col['chk-' + c.id] = true; }); applyCollapse(); autosave(); };
 }
 function gotoCheck(id) { if (!id) return; setOTab('checks'); delete P.ui.col['chk-' + id]; applyCollapse(); setTimeout(() => document.getElementById('chk-' + id)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80); }
 document.addEventListener('click', e => { const g = e.target.closest('[data-goto]'); if (g) { e.preventDefault(); gotoCheck(g.dataset.goto); } });
@@ -2880,12 +2936,12 @@ document.addEventListener('click', e => { const h = e.target.closest('.cc-hd'); 
 function ratingMatrix(forReport) {
   const live = R.checks.filter(c => !c.na);
   const head = `<tr><th>Check</th><th>Member / plane</th><th>Limit state</th>${R.cases.map(c => `<th class="right">${esc(c.meth.toUpperCase())} ${esc(c.lvl)}<br>${esc(c.name)}</th>`).join('')}</tr>`;
-  const body = live.map(c => `<tr><td>${forReport ? esc(c.id) : `<a href="#" class="cid-link" data-goto="${esc(c.id)}">${esc(c.id)}</a>`}</td><td class="lbl">${esc(c.who)}</td><td class="lbl">${esc(LSNAME[c.ls])}</td>${R.cases.map((cs, j) => { const r = c.rf[j], gov = R.gov[j] && R.gov[j].c === c; return `<td class="${forReport ? 'n' : 'val'}${gov ? ' govc' : ''}">${r ? `<span class="${forReport ? '' : 'n-' + rfCls(r.RF)}">${f2(r.RF)}</span>` : '—'}</td>`; }).join('')}</tr>`).join('');
-  const foot = `<tr class="tot"><td colspan="3">Governing</td>${R.cases.map((cs, j) => { const g = R.gov[j]; return `<td class="${forReport ? 'n' : 'val'}">${g ? `<b>${f2(g.r.RF)}</b><br><small>${esc(g.c.id)}</small>` : '—'}</td>`; }).join('')}</tr>`;
+  const body = live.map(c => `<tr><td>${forReport ? esc(c.id) : `<a href="#" class="cid-link" data-goto="${esc(c.id)}">${esc(c.id)}</a>`}</td><td class="lbl">${esc(c.who)}</td><td class="lbl">${esc(LSNAME[c.ls])}</td>${R.cases.map((cs, j) => { const r = c.rf[j], gov = R.gov[j] && R.gov[j].c === c && !govInc(R.gov[j]); return `<td class="${forReport ? 'n' : 'val'}${gov ? ' govc' : ''}">${r ? `<span class="${forReport ? '' : 'n-' + rCls(r)}"${r.err ? ` title="Could not be computed: ${esc(r.err)}"` : ''}>${r.err && forReport ? 'error (could not be computed)' : rTxt(r)}</span>` : '—'}</td>`; }).join('')}</tr>`).join('');
+  const foot = `<tr class="tot"><td colspan="3">Governing</td>${R.cases.map((cs, j) => { const g = R.gov[j]; return `<td class="${forReport ? 'n' : 'val'}">${g ? `<b${govInc(g) && !forReport ? ' class="n-fail"' : ''}>${govTxt(g)}</b><br><small>${esc(govInc(g) ? 'not computed: ' + govIds(g) : g.c.id)}</small>` : '—'}</td>`; }).join('')}</tr>`;
   return `<table class="${forReport ? 'cr-tbl cr-wide' : 'tbl sumtbl rtbl'}"><thead>${head}</thead><tbody>${body}${foot}</tbody></table>`;
 }
 function renderRating() {
-  const caseRows = R.cases.map((c, j) => `<tr><td class="lbl">${esc(c.label)}</td><td>${c.meth === 'lrfr' ? `γ<sub>LL</sub> = ${f2(c.g)}${c.gKey ? '' : ' (column input)'}` : `A<sub>2</sub> = ${f2(c.g)}`}</td><td class="val">${R.gov[j] ? f2(R.gov[j].r.RF) : '—'}</td><td>${R.gov[j] ? `<a href="#" data-goto="${esc(R.gov[j].c.id)}">${esc(R.gov[j].c.title)}</a>` : ''}</td></tr>`).join('');
+  const caseRows = R.cases.map((c, j) => `<tr><td class="lbl">${esc(c.label)}</td><td>${c.meth === 'lrfr' ? `γ<sub>LL</sub> = ${f2(c.g)}${c.gKey ? '' : ' (column input)'}` : `A<sub>2</sub> = ${f2(c.g)}`}</td><td class="val${govInc(R.gov[j]) ? ' n-fail' : ''}">${govTxt(R.gov[j])}</td><td>${govInc(R.gov[j]) ? `Not determined; could not be computed: ${R.gov[j].inc.map(x => `<a href="#" data-goto="${esc(x.c.id)}">${esc(x.c.id)}</a>`).join(', ')}` : R.gov[j] ? `<a href="#" data-goto="${esc(R.gov[j].c.id)}">${esc(R.gov[j].c.title)}</a>` : ''}</td></tr>`).join('');
   $('#tab-rating').innerHTML = card('rt-cases', 'Rating cases', 'MBE 6A.4.2.1-1 (LRFR), 6B.4.1-1 (LFR)', `<div class="tscroll"><table class="tbl"><thead><tr><th>Case</th><th>Live load factor</th><th class="right">Governing RF</th><th>Governing check</th></tr></thead><tbody>${caseRows}</tbody></table></div>
       ${eq('LRFR rating factor', 'MBE 3rd Ed. Eq. 6A.4.2.1-1', T`RF = \frac{C - \gamma_{DC}DC - \gamma_{DW}DW}{\gamma_{LL}(LL + IM)}, \qquad C = \phi_c\phi_s\phi R_n,\ \ \phi_c\phi_s \ge ${f2(R.p.phiCSmin)}`)}
       ${eq('LFR rating factor', 'MBE 3rd Ed. Eq. 6B.4.1-1', T`RF = \frac{C - A_1D}{A_2L(1 + I)}, \qquad A_1 = ${f2(R.p.A1)},\ A_2 = ${f2(R.p.A2i)}\ (\text{inventory}),\ ${f2(R.p.A2o)}\ (\text{operating})`)}
@@ -2949,7 +3005,7 @@ function methodHtml() { return `<div class="man-part active">
   <h3>Scope</h3><p>Rating of bolted or riveted steel truss gusset-plate connections by LRFR (AASHTO MBE 3rd Ed. 6A.6.12.6, resistances per AASHTO LRFD 10th Ed. 6.14.2.8 and 6.13, and NCHRP Web-Only Document 197) and by LFR (MBE Section 6B, resistances per FHWA-IF-09-014).</p>
   <h3>Geometry</h3><ul><li>Origin at the work point (WP), +x along the chord, +y up. Each member has a work line at angle θ and a fastener pattern of rows (along the member, the first at distance e from the WP, then at pitch p) and gage lines (centred on the work line plus a transverse offset).</li>
   <li><b>Whitmore section:</b> lines at θ<sub>W</sub> (default 30°) spread from the outer fasteners of the row farthest from the WP to the row nearest it; W = g<sub>s</sub> + 2L tan θ<sub>W</sub>, clipped at the plate edges (not at adjacent members; a warning is given). Net width deducts d<sub>h</sub> + Δ for every hole on the section.</li>
-  <li><b>L<sub>mid</sub>:</b> the average of the three lengths from the two ends and the middle of the Whitmore section, measured parallel to the member toward the WP, to the nearest fastener line of another member or the plate edge. A continuous chord's fastener field counts as one.</li>
+  <li><b>L<sub>mid</sub>:</b> the average of the three lengths from the two ends and the middle of the Whitmore section, measured parallel to the member toward the WP, to the nearest fastener line of another member or the plate edge. A continuous chord's fastener field counts as one. A Whitmore end clipped at the plate edge is measured by the same rule, with the plate taken as its closed outline: the edge the end lies on does not stop the line, and a line running along a plate edge stays in the plate. Where the plate does not continue from the end toward the WP (the end lies on an edge or corner and the line would leave the plate at once), the length is measured along the plate edge from the end, over the edges that advance toward the WP, to a fastener line or to where the edge turns away; it is the distance gained parallel to the member. The rule does not depend on the orientation of the joint: a mirrored (upper-chord) or rotated joint gives the same L<sub>mid</sub>.</li>
   <li><b>Block shear (tension):</b> tension plane across the row nearest the WP between the outer gage lines; two shear planes along the outer gage lines from that row to the plate edge.</li>
   <li><b>Partial shear planes:</b> automatic planes through the top and bottom lines of chord fasteners, plus user planes through two points. Gross length = length of the line inside the plate; net length deducts the holes on the line. Demand = component along the plane of the resultant of the forces of the members whose fastener centroids lie on the loaded side.</li></ul>
   <h3>Summing the two plates</h3><p>Member forces are entered for the whole joint (both gusset plates). Plate resistances (bearing, Whitmore, block shear, buckling, shear planes) are computed for each plate with its own thickness after section loss and added. Fastener shear counts one shear plane per plate for fasteners in single shear on each face (N = fasteners per plate × number of plates), or two shear planes per fastener when the fasteners pass through both plates (N = fasteners per plate × 2). This assumes the member force divides between the plates in proportion to their resistances (equal plates share equally).</p>
@@ -3100,8 +3156,8 @@ function buildReport(o) {
   if (o.inputs) { body += `<section class="cr-sec">${H1('Input parameters')}`; crInputs().forEach(s => body += `<div class="cr-sub">${H2(s.t)}<div class="cr-body">${s.h}</div></div>`); body += `</section>`; }
   if (o.params) body += `<section class="cr-sec">${H1('Code parameters')}<div class="cr-body">${crParams()}</div></section>`;
   if (o.geometry) body += `<section class="cr-sec">${H1('Derived geometry')}<div class="cr-body">${geoTables()}<p class="cr-note">Joint equilibrium of the entered forces, |ΣF|: ${R.eqm.map(e => `${esc(e.name)} ${f1(e.R)} kip`).join('; ')}.</p></div></section>`;
-  if (o.checks) { const ws = [...new Set(R.checks.map(c => c.who))]; ws.forEach(w => { body += `<section class="cr-sec">${H1(w)}`; R.checks.filter(c => c.who === w).forEach(c => { const m = minRF(c); body += `<div class="cr-sub">${H2(`${LSNAME[c.ls]} (${c.id})`, c.unc.length ? 'contains parameters to verify' : '', 'cr-chk-' + c.id)}<div class="cr-body">${checkBody(c, { gov: o.detail === 'gov' }).replace(/<span class="badge[^"]*"[^>]*>[^<]*<\/span>/g, '')}</div>${c.na ? '' : `<div class="cr-line cr-res"><div class="cr-d">Lowest rating factor:</div><div class="cr-m"><b>${m ? f2(m.r.RF) : '—'}</b>${m ? ` (${esc(R.cases[m.j].label)})` : ''}</div><div class="cr-r ${m && m.r.RF < 1 ? 'cr-st-fail' : ''}"><b>${m ? (m.r.RF < 1 ? 'RF < 1.00' : 'RF ≥ 1.00') : 'n/a'}</b></div></div>`}</div>`; }); body += `</section>`; }); }
-  if (o.rating) body += `<section class="cr-sec cr-break">${H1('Rating summary')}<div class="cr-body">${ratingMatrix(true)}</div><p class="cr-p cr-concl"><b>Governing:</b> ${R.cases.map((c, j) => `${esc(c.label)}: RF = ${R.gov[j] ? `${f2(R.gov[j].r.RF)} (${esc(R.gov[j].c.id)})` : '—'}`).join('; ')}.</p></section>`;
+  if (o.checks) { const ws = [...new Set(R.checks.map(c => c.who))]; ws.forEach(w => { body += `<section class="cr-sec">${H1(w)}`; R.checks.filter(c => c.who === w).forEach(c => { const m = minRF(c); body += `<div class="cr-sub">${H2(`${LSNAME[c.ls]} (${c.id})`, c.unc.length ? 'contains parameters to verify' : '', 'cr-chk-' + c.id)}<div class="cr-body">${checkBody(c, { gov: o.detail === 'gov' }).replace(/<span class="badge[^"]*"[^>]*>[^<]*<\/span>/g, '')}</div>${c.na ? '' : m && m.r.err ? `<div class="cr-line cr-res"><div class="cr-d">Lowest rating factor:</div><div class="cr-m"><b>not determined</b> (could not be computed for ${esc(R.cases[m.j].label)})</div><div class="cr-r cr-st-fail"><b>ERROR</b></div></div>` : `<div class="cr-line cr-res"><div class="cr-d">Lowest rating factor:</div><div class="cr-m"><b>${m ? f2(m.r.RF) : '—'}</b>${m ? ` (${esc(R.cases[m.j].label)})` : ''}</div><div class="cr-r ${m && m.r.RF < 1 ? 'cr-st-fail' : ''}"><b>${m ? (m.r.RF < 1 ? 'RF < 1.00' : 'RF ≥ 1.00') : 'n/a'}</b></div></div>`}</div>`; }); body += `</section>`; }); }
+  if (o.rating) body += `<section class="cr-sec cr-break">${H1('Rating summary')}<div class="cr-body">${ratingMatrix(true)}</div><p class="cr-p cr-concl"><b>Governing:</b> ${R.cases.map((c, j) => `${esc(c.label)}: RF = ${govInc(R.gov[j]) ? `not determined, rating incomplete (could not be computed: ${esc(govIds(R.gov[j]))})` : R.gov[j] ? `${f2(R.gov[j].r.RF)} (${esc(R.gov[j].c.id)})` : '—'}`).join('; ')}.</p></section>`;
   if (o.drawing) body += `<section class="cr-sec cr-break">${H1('Drawing')}<div class="cr-sub cr-fig">${svgDrawing({ static: true })}<p class="cap">Plate outline, members, fasteners, Whitmore sections (thick), 30° spread lines, L<sub>1</sub> to L<sub>3</sub> (arrows), block-shear paths (dotted) and shear planes (dashed); colours by D/C for ${R.cases[+P.ui.dcCase || 0] ? esc(R.cases[+P.ui.dcCase || 0].label) : '—'}.</p></div></section>`;
   if (o.view3d) body += GP3D.reportSection(H1);
   if (o.validation) { const v = VAL || runValidation(); if (!v.err) body += `<section class="cr-sec">${H1('Validation (hand checks)')}<p class="cr-p">Built-in validation model with the default code parameters (see the fix log for the hand calculation).</p><table class="cr-tbl cr-wide"><thead><tr><th>Quantity</th><th>Hand</th><th>Tool</th><th>Unit</th><th>Status</th></tr></thead><tbody>${v.rows.map(r => `<tr><td>${sub(r.what)}</td><td class="n">${r.hand}</td><td class="n">${r.unit === 'in' || r.unit === '' ? f4(r.tool) : f2(r.tool)}</td><td>${r.unit}</td><td>${r.ok ? 'match' : 'DIFFERS'}</td></tr>`).join('')}</tbody></table></section>`; }
