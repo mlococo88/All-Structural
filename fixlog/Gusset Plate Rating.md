@@ -124,7 +124,7 @@ Moved here from "Needs verification" (engineer-confirmed 2026-10-05, see C4.4):
 - **Block shear:** tension only (rectangular block).
 - **Partial shear planes:** automatic planes through the top and bottom lines of chord fasteners (through the holes).
 - **L_mid at a clipped Whitmore end** (C6.1 rule: closed plate outline; along the plate edge where the plate does not continue toward the WP): engineer-confirmed 2026-10-05 (see C7; closes O14).
-- **L_mid along a plate edge stops at the other member's fastener field** (O18): engineer's decision 2026-10-05, implemented in C7.
+- **L_mid along a plate edge stops at the other member's fastener field** (O18): engineer's decision 2026-10-05, implemented in C7. A field counts even when another field lies between it and the edge (engineer's decision 2026-10-05: rule kept; the tool warns in that case, C8).
 
 #### Validation (hand checks)
 
@@ -870,4 +870,121 @@ Exact before/after (unified diff against main 98dc651, zero context lines):
 - **Open items:**
   - O14: closed (rule engineer-confirmed 2026-10-05).
   - O18: closed by C7.
-  - New, for the engineer (not changed): a field "alongside" is any other member's field whose projection on the edge path is ahead of the start, however far it is from the edge, also when another field lies in between (e.g. the continuous chord in the default model stops at the diagonal L2-U3, 14.191 in, although the chord's own field lies between the edge and the diagonal). This only affects continuous chords (L_mid not used) in the models tested. Say if a field should count only when nothing lies between it and the edge.
+  - (Closed by C8, 2026-10-05: the engineer keeps the rule; the tool now warns when the stopping field is not directly beside the edge.) New, for the engineer (not changed): a field "alongside" is any other member's field whose projection on the edge path is ahead of the start, however far it is from the edge, also when another field lies in between (e.g. the continuous chord in the default model stops at the diagonal L2-U3, 14.191 in, although the chord's own field lies between the edge and the diagonal). This only affects continuous chords (L_mid not used) in the models tested. Say if a field should count only when nothing lies between it and the edge.
+
+## 2026-10-05 — PR: claude/gusset-lmid-warn (PR link added after merge)
+
+### C8. Warning when an L_mid length along a plate edge is stopped by a fastener field that is not directly beside the edge   [warning only; no calculation change]
+
+Engineer's decision (2026-10-05), on the open item raised in C7: **keep the C7 rule unchanged** (no calculation change) and warn in the app when a length along a plate edge was stopped by a fastener field that is not directly beside the edge, so the engineer can judge it. Example: the default model's continuous chord, L1-L2 end 2 along the bottom edge, stops at the L2-U3 diagonal's field (14.191 in) although the chord's own field lies between the edge and the diagonal.
+
+#### C8.1 Criterion (as implemented)
+
+- **Which lengths:** only the L_1 / L_2 / L_3 lengths that C7 stopped along a plate edge (`edgeStop`, straight line along an edge or the along-edge walk; "where its fastener field starts alongside the plate edge"). Nothing else is examined.
+- **Test:** at the stop point S, draw the line perpendicular to the edge path toward the stopping field (the side of the field outline's vertex centroid). h = distance from S along that line to the stopping field's outline (`G[j].field`, the same outline C7 uses). The field is **not directly beside the edge** when any other fastener field (any member's, the member's own included; a continuous chord's two members count as one field) lies on the segment from S to that point (the segment shortened by 1e-6 in at both ends, so fields that only touch S or the stopping field do not count). This is the "another field lies between" criterion; no distance threshold is used (h is reported for information).
+- **Ordinary case, no warning:** a field directly beside the edge, e.g. a spliced chord stopping at the other chord's first fastener line (default spliced: S = (1.5, −9), h = 3.0 in to L2-L3's field, nothing between).
+- **Length if ignored:** `lmidLen()` run again from the same point with the stopping field removed from the stops, i.e. to the next stop (which may be another field, the plate edge, or the turn of the edge). L_mid if ignored = average with each flagged length replaced by that value.
+- **Orientation independent:** the test uses only the geometry relative to S and the edge direction; mirrored and rotated joints give the same flags (test below).
+
+#### C8.2 Where it shows
+
+- **Warnings list** (Summary "Warnings" card, status-bar count, report "Warnings:" list): one warning per member, e.g. "Member L1-L2, L_mid: L3 (end 2) stops along the plate edge where the fastener field of L2-U3 starts alongside the edge, but that field is 32.292 in from the edge at the stop and the fastener field of L1-L2 / L2-L3 (continuous chord) lies between; length used 14.191 in, 25.500 in if that field were ignored (to the plate edge). Automatic L_mid 14.564 in (18.333 in if ignored), not used in any check (continuous chord member, no Whitmore buckling check). Judge whether this stop applies (rule C7, engineer's decision 2026-10-05)." For a member with a WB check it says "used in the Whitmore buckling check <id>-WB"; with an L_mid override, "not used: L_mid is overridden".
+- **Whitmore buckling calc sheet** (Checks tab and report), L_mid "where" row, appended: "Warning, stopping field not directly beside the edge: L3 (end 2) stops at the fastener field of …, which is … in from the edge at the stop, with the fastener field of … between; … in used, … in if that field were ignored (…); L_mid would be … in. Judge whether this stop applies". Only members with a WB check have this row.
+- **Method tab**, L_mid item: one sentence stating the criterion.
+
+#### C8.3 §4 statement: no calculation change
+
+No formula, factor, unit, L_mid, capacity or rating changes. The engine only gains read-only information: `edgeStop()` also returns the stopping field object (`st`); `lmidLen()` also returns `stop` and `e` (unit edge direction at the stop) for edge stops; the new `farField()` and the warning are computed after `W.LmidAuto` / `W.Lmid` and do not feed back. Checked: 56-model engine dump (every capacity, RF, governing check, W_g, W_n, L_1–L_3, L_mid and block-shear length) identical to main e831071; only the warnings lists differ (below). Governing provision of the underlying rule unchanged: L_mid per NCHRP Web-Only Document 197 / AASHTO MBE 3rd Ed. Art. 6A.6.12.6.8, measurement along the plate edge per C7 (tool interpretation, engineer's decision 2026-10-05).
+
+#### C8.4 Check case (hand)
+
+Default model (continuous chord L1-L2 / L2-L3, 4 lines × 6 rows, 4 in gage / pitch, first row 1.5 in from the WP; bottom plate edge y = −9).
+- Fields: chord (one field) x −21.5 … 21.5, y −6 … 6; L2-U3 corners (20.734, 16.543), (30.376, 28.033), (22.333, 34.782), (12.691, 23.292); L2-U2 x −2.5 … 2.5, y 14 … 28.
+- L1-L2 end 2: q = (−1.5, −9), path along the bottom edge in +x. C7: L2-U3's projection on the edge starts at x = 12.691 → S = (12.691, −9), L_3 = 12.691 − (−1.5) = 14.191 in (unchanged).
+- Perpendicular at S (x = 12.691, upward): reaches L2-U3's outline at its corner (12.691, 23.292): h = 23.292 − (−9) = 32.292 in. The segment x = 12.691, y −9 … 23.292 crosses the chord field (y −6 … 6, x −21.5 … 21.5) → flagged; L2-U2 (x ≤ 2.5) is not on it.
+- Ignoring L2-U3: no other field starts alongside the bottom edge ahead of q (L2-U2 projects onto x −2.5 … 2.5, which already contains q.x = −1.5, so it does not stop the length, C7 rule) → plate edge x = 24: 24 − (−1.5) = 25.500 in.
+- L_mid = (4.000 + 25.500 + 14.191)/3 = 14.564 in used; (4.000 + 25.500 + 25.500)/3 = 18.333 in if ignored. Continuous chord member: no WB check, not used.
+- L2-L3 end 1 is the mirror image (L2-U1, 14.191 / 25.500 in).
+- Ordinary case: chord spliced, L1-L2 end 2 stops at L2-L3's field at S = (1.5, −9), h = 3.0 in, the segment x = 1.5, y −9 … −6 crosses no field (L1-L2's own field ends at x = −1.5) → no warning.
+- Member with a WB check (synthetic, test only): chord spliced and L2-L3 turned to 30°. L1-L2 end 2 now stops at L2-U3 (14.191 in) with L2-L3's rotated field between → warning "used in the Whitmore buckling check L1-L2-WB", L_mid 6.318 in used, 10.088 in if ignored; L2-L3 end 1 stops along the edge at L2-U2 (3.835 in, h = 23.0 in, own field between; 7.299 in if ignored, to L1-L2's field).
+
+#### Models that now show the warning (56-model set)
+
+19 models gain warnings, all for continuous chord members (L_mid not used in any check): `default`, `mirror_default`, `tpl_t5`, `tpl_t5_Fpos`, `tpl_t5_Fneg`, `tpl_t4d`, `tpl_t4d_Fpos`, `tpl_t4d_Fneg`, `tpl_t5u`, `tpl_t5u_Fpos`, `tpl_t5u_Fneg` (two warnings each: both chord members, 14.191 → 25.500 in; L_mid 14.564 → 18.333 in, `t4d` 20.243 → 24.012 in); `tpl_t4v`, `tpl_t4v_Fpos`, `tpl_t4v_Fneg`, `tpl_t4u`, `tpl_t4u_Fpos`, `tpl_t4u_Fneg` (one: L1-L2 / U1-U2); `validation`, `mirror_validation` (one: CL, 13.874 → 21.500 in, L_mid 19.178 → 21.720 in). No spliced, heel or rotated-spliced model is flagged. No member with a WB check is flagged in the 56 models.
+
+#### Where (anchors) and exact code
+
+All changes are in `Gusset Plate Rating.html`: engine (`const GPR`) `edgeStop()` (anchor `const take = (t, st) =>`), `lmidLen()` straight-line edge stop (anchor `edge: true, stop: es.st, e: d`) and along-edge walk (anchor `hitSt = null, hitU = null`), new `farField()` just before `function segSeg(`, the warning in `compute()` after `W.LmidAuto = ` (anchor `// C8 (warning only, no calculation change)`), the L_mid "where" row of `capWB()` (anchor `Warning, stopping field not directly beside the edge`), and the Method tab L_mid item (anchor `The tool warns (no change to L<sub>mid</sub>)`).
+
+Exact before/after (unified diff against main e831071, zero context lines):
+
+```diff
+@@ -1337 +1337 @@ const GPR = (function () {
+-     Returns the nearest stop { t, name } with t <= len, or null. */
++     Returns the nearest stop { t, name, st } with t <= len (st = the stopping field), or null. */
+@@ -1339 +1339 @@ const GPR = (function () {
+-    let best = null; const take = (t, name) => { if (t <= len + 1e-9 && (!best || t < best.t - 1e-9)) best = { t: Math.max(0, t), name }; };
++    let best = null; const take = (t, st) => { if (t <= len + 1e-9 && (!best || t < best.t - 1e-9)) best = { t: Math.max(0, t), name: st.name, st }; };
+@@ -1341 +1341 @@ const GPR = (function () {
+-      edgeIv.forEach(([s0, s1]) => { if (a > s0 + 1e-9) { if (a <= s1 + 1e-9) take(a, st.name); } else if (b >= s0 - 1e-9 && !(atStart && s0 <= 1e-9)) take(s0, st.name); });
++      edgeIv.forEach(([s0, s1]) => { if (a > s0 + 1e-9) { if (a <= s1 + 1e-9) take(a, st); } else if (b >= s0 - 1e-9 && !(atStart && s0 <= 1e-9)) take(s0, st); });
+@@ -1345 +1345 @@ const GPR = (function () {
+-        if (o0 > 1e-9) take(o0, st.name); else if (o1 >= -1e-9 && !atStart) take(0, st.name); } });
++        if (o0 > 1e-9) take(o0, st); else if (o1 >= -1e-9 && !atStart) take(0, st); } });
+@@ -1358 +1358 @@ const GPR = (function () {
+-      if (es && es.t < L - 1e-9) return { L: es.t, what: `fastener line of ${es.name} (where its fastener field starts alongside the plate edge)`, end: add(q, mul(d, es.t)), edge: true };
++      if (es && es.t < L - 1e-9) return { L: es.t, what: `fastener line of ${es.name} (where its fastener field starts alongside the plate edge)`, end: add(q, mul(d, es.t)), edge: true, stop: es.st, e: d };
+@@ -1364 +1364 @@ const GPR = (function () {
+-    [1, -1].forEach(s => { let idx = vi >= 0 ? vi + s : (s > 0 ? ei + 1 : ei), cur = q, hit = null, hitE = false; const path = [q];
++    [1, -1].forEach(s => { let idx = vi >= 0 ? vi + s : (s > 0 ? ei + 1 : ei), cur = q, hit = null, hitE = false, hitSt = null, hitU = null; const path = [q];
+@@ -1368,3 +1368,3 @@ const GPR = (function () {
+-        let tm = 1, w = null, wE = false; stops.forEach(st => { const fd = st.poly; for (let k = 0; k < fd.length; k++) { const t = raySeg(cur, e, fd[k], fd[(k + 1) % fd.length]); if (t != null && t < tm) { tm = t; w = st.name; } } });
+-        const es = edgeStop(cur, mul(e, 1 / le), le, [[0, le]], stops, cur === q); if (es && es.t / le < tm - 1e-12) { tm = es.t / le; w = es.name; wE = true; }   // field starts alongside the edge
+-        if (w) { hit = w; hitE = wE; cur = add(cur, mul(e, tm)); if (tm * le > 1e-9) path.push(cur); break; }
++        let tm = 1, w = null, wE = false, wSt = null; stops.forEach(st => { const fd = st.poly; for (let k = 0; k < fd.length; k++) { const t = raySeg(cur, e, fd[k], fd[(k + 1) % fd.length]); if (t != null && t < tm) { tm = t; w = st.name; } } });
++        const es = edgeStop(cur, mul(e, 1 / le), le, [[0, le]], stops, cur === q); if (es && es.t / le < tm - 1e-12) { tm = es.t / le; w = es.name; wE = true; wSt = es.st; }   // field starts alongside the edge
++        if (w) { hit = w; hitE = wE; if (wE) { hitSt = wSt; hitU = mul(e, 1 / le); } cur = add(cur, mul(e, tm)); if (tm * le > 1e-9) path.push(cur); break; }
+@@ -1373 +1373 @@ const GPR = (function () {
+-      if (L > best.L + 1e-9) best = { L, what: hit ? `fastener line of ${hit}${hitE ? ' (where its fastener field starts alongside the plate edge)' : ''}, measured along the plate edge` : 'plate edge, measured along the edge', end: cur, path, ...(hitE ? { edge: true } : {}) }; });
++      if (L > best.L + 1e-9) best = { L, what: hit ? `fastener line of ${hit}${hitE ? ' (where its fastener field starts alongside the plate edge)' : ''}, measured along the plate edge` : 'plate edge, measured along the edge', end: cur, path, ...(hitE ? { edge: true, stop: hitSt, e: hitU } : {}) }; });
+@@ -1374,0 +1375,13 @@ const GPR = (function () {
++  /* Distant-field flag (C8, warning only; L_mid is not changed): for an L_mid length z stopped along a plate edge by another member's fastener field
++     (z.edge, z.stop = that field, z.end = stop point S, z.e = unit direction of the edge path at S), look from S perpendicular to the edge toward that
++     field. h = distance from S to the field outline along that perpendicular. The field is "not directly beside the edge" when any other fastener field
++     in `all` (including the member's own) lies on that perpendicular segment between S and the field. Returns { name, h, between, Lalt, altWhat } with
++     the length if the stopping field were ignored (lmidLen with that field removed from `stops`), or null in the ordinary case. */
++  function farField(z, q, d, poly, stops, all) {
++    if (!z.edge || !z.stop || !z.e || !isFinite(z.L)) return null;
++    const S = z.end, fd = z.stop.poly, cen = mul(fd.reduce((a, v) => add(a, v), [0, 0]), 1 / fd.length); let n = [-z.e[1], z.e[0]]; if (dot(sub(cen, S), n) < 0) n = mul(n, -1);
++    const hs = lineHits(S, n, fd).filter(t => t > -1e-7); if (!hs.length) return null; const h = hs[0]; if (h < 1e-6) return null;
++    const a = add(S, mul(n, 1e-6)), b = add(S, mul(n, h - 1e-6)), between = all.filter(st => st !== z.stop && segInPolyCross(a, b, st.poly)).map(st => st.name);
++    if (!between.length) return null;
++    const alt = lmidLen(q, d, poly, stops.filter(st => st !== z.stop));
++    return { name: z.stop.name, h, between, Lalt: alt.L, altWhat: alt.what }; }
+@@ -1526,0 +1540,5 @@ const GPR = (function () {
++        // C8 (warning only, no calculation change): a length along the plate edge stopped by a fastener field that is not directly beside the edge
++        W.L3.forEach(z => { const ff = farField(z, z.q, dir, poly, other, stops); if (ff) z.far = ff; });
++        if (W.L3.some(z => z.far)) { W.LmidAlt = W.L3.reduce((s, z) => s + (z.far ? z.far.Lalt : z.L), 0) / 3;
++          const use = isChordCont(i) ? 'not used in any check (continuous chord member, no Whitmore buckling check)' : W.ovL != null ? `not used: L_mid is overridden (${f3(W.ovL)} in)` : `used in the Whitmore buckling check ${m.id}-WB`;
++          warn.push(`Member ${m.id}, L_mid: ${W.L3.map((z, k) => z.far ? `L${k + 1} (${z.nm}) stops along the plate edge where the fastener field of ${z.far.name} starts alongside the edge, but that field is ${f3(z.far.h)} in from the edge at the stop and the fastener field of ${z.far.between.join(', ')} lies between; length used ${f3(z.L)} in, ${f3(z.far.Lalt)} in if that field were ignored (to the ${z.far.altWhat})` : null).filter(Boolean).join('; ')}. Automatic L_mid ${f3(W.LmidAuto)} in (${f3(W.LmidAlt)} in if ignored), ${use}. Judge whether this stop applies (rule C7, engineer's decision 2026-10-05).`); }
+@@ -1622 +1640 @@ const GPR = (function () {
+-        where: [whitWhere(g), wr('L<sub>mid</sub>', `Average of L<sub>1</sub>, L<sub>2</sub>, L<sub>3</sub> from the Whitmore ends and middle toward the work point, parallel to the member: ${W.L3.map(z => `${f3(z.L)} (${escH(z.what)})`).join(', ')}${W.ovL != null ? ' (overridden)' : ''}${W.clipA || W.clipB ? `. Whitmore end clipped at the plate edge: measured by the same rule as an unclipped end; the plate edge the end lies on does not stop the line${W.L3.some(z => z.path) ? ', and where the plate does not continue toward the work point from that end the length is measured along the plate edge (distance gained parallel to the member)' : ''} (rule confirmed by the engineer 2026-10-05)` : ''}${W.L3.some(z => z.edge) ? '. A length along the plate edge stops where the fastener field of another member starts alongside the edge, i.e. at the start of the projection of that member\'s fastener-field outline onto the edge (engineer\'s decision 2026-10-05)' : ''}`, f3(L), 'in', W.ovL != null ? 'Override' : 'NCHRP W-197; MBE 6A.6.12.6.8'),
++        where: [whitWhere(g), wr('L<sub>mid</sub>', `Average of L<sub>1</sub>, L<sub>2</sub>, L<sub>3</sub> from the Whitmore ends and middle toward the work point, parallel to the member: ${W.L3.map(z => `${f3(z.L)} (${escH(z.what)})`).join(', ')}${W.ovL != null ? ' (overridden)' : ''}${W.clipA || W.clipB ? `. Whitmore end clipped at the plate edge: measured by the same rule as an unclipped end; the plate edge the end lies on does not stop the line${W.L3.some(z => z.path) ? ', and where the plate does not continue toward the work point from that end the length is measured along the plate edge (distance gained parallel to the member)' : ''} (rule confirmed by the engineer 2026-10-05)` : ''}${W.L3.some(z => z.edge) ? '. A length along the plate edge stops where the fastener field of another member starts alongside the edge, i.e. at the start of the projection of that member\'s fastener-field outline onto the edge (engineer\'s decision 2026-10-05)' : ''}${W.L3.some(z => z.far) ? `. <b>Warning, stopping field not directly beside the edge:</b> ${W.L3.map((z, k) => z.far ? `L<sub>${k + 1}</sub> (${z.nm}) stops at the fastener field of ${escH(z.far.name)}, which is ${f3(z.far.h)} in from the edge at the stop, with the fastener field of ${escH(z.far.between.join(', '))} between; ${f3(z.L)} in used, ${f3(z.far.Lalt)} in if that field were ignored (to the ${escH(z.far.altWhat)})` : null).filter(Boolean).join('; ')}; L<sub>mid</sub> would be ${f3(W.LmidAlt)} in. Judge whether this stop applies` : ''}`, f3(L), 'in', W.ovL != null ? 'Override' : 'NCHRP W-197; MBE 6A.6.12.6.8'),
+@@ -3030 +3048 @@ function methodHtml() { return `<div class="man-part active">
+-  <li><b>L<sub>mid</sub>:</b> the average of the three lengths from the two ends and the middle of the Whitmore section, measured parallel to the member toward the WP, to the nearest fastener line of another member or the plate edge. A continuous chord's fastener field counts as one. A Whitmore end clipped at the plate edge is measured by the same rule, with the plate taken as its closed outline: the edge the end lies on does not stop the line, and a line running along a plate edge stays in the plate. Where the plate does not continue from the end toward the WP (the end lies on an edge or corner and the line would leave the plate at once), the length is measured along the plate edge from the end, over the edges that advance toward the WP, to a fastener line or to where the edge turns away; it is the distance gained parallel to the member. <span class="badge pass" title="Convention confirmed by the engineer">engineer-confirmed 2026-10-05</span> Where a length runs along a plate edge (a free top or bottom edge, or the measurement along the edge), it also stops where the fastener field of another member starts alongside it: at the first point where the line enters the projection of that member's fastener-field outline (the outline through the outer hole centres) onto the line. A field that is already alongside the point the length starts from does not stop it; a line that touches or runs along a fastener-field outline stops there. <span class="badge pass" title="Convention confirmed by the engineer">engineer's decision 2026-10-05</span> The rule does not depend on the orientation of the joint: a mirrored (upper-chord) or rotated joint gives the same L<sub>mid</sub>.</li>
++  <li><b>L<sub>mid</sub>:</b> the average of the three lengths from the two ends and the middle of the Whitmore section, measured parallel to the member toward the WP, to the nearest fastener line of another member or the plate edge. A continuous chord's fastener field counts as one. A Whitmore end clipped at the plate edge is measured by the same rule, with the plate taken as its closed outline: the edge the end lies on does not stop the line, and a line running along a plate edge stays in the plate. Where the plate does not continue from the end toward the WP (the end lies on an edge or corner and the line would leave the plate at once), the length is measured along the plate edge from the end, over the edges that advance toward the WP, to a fastener line or to where the edge turns away; it is the distance gained parallel to the member. <span class="badge pass" title="Convention confirmed by the engineer">engineer-confirmed 2026-10-05</span> Where a length runs along a plate edge (a free top or bottom edge, or the measurement along the edge), it also stops where the fastener field of another member starts alongside it: at the first point where the line enters the projection of that member's fastener-field outline (the outline through the outer hole centres) onto the line. A field that is already alongside the point the length starts from does not stop it; a line that touches or runs along a fastener-field outline stops there. <span class="badge pass" title="Convention confirmed by the engineer">engineer's decision 2026-10-05</span> The tool warns (no change to L<sub>mid</sub>) when the stopping field is not directly beside the edge: another member's fastener field (the member's own included) lies on the line from the stop point perpendicular to the edge, between the edge and the stopping field. The warning gives the length used and the length if that field were ignored. The rule does not depend on the orientation of the joint: a mirrored (upper-chord) or rotated joint gives the same L<sub>mid</sub>.</li>
+```
+
+#### How verified (C8)
+
+- `node --check` on every inline script (7 blocks): pass.
+- Engine dumps, main e831071 vs this branch, 56 models: every capacity, RF, governing check, W_g, W_n, L_1–L_3, L_mid and block-shear length identical; only the warnings lists differ (19 models, listed above). Synthetic WB cases (chord spliced, L2-L3 at 20°, 30°, 35°, 40°): all checks, RFs and L_mid identical to main.
+- Mirror / rotation: the 25 pairs of C6 / C7 (`gl/sym.js`): all identical; the new warnings, normalised for member ids and end 1 ↔ end 2, are identical over the same 25 pairs plus default / validation rotated 137° and 30°, default mirrored + rotated 250°, and the synthetic WB case mirrored and rotated (137°, 250°).
+- jsdom: default model loaded from an autosave written by main: results identical; Warnings card (2), status bar "2 warnings", report Warnings list show the flag; Validation tab 17 of 17; Method tab sentence present; synthetic WB case: warnings name L1-L2-WB / L2-L3-WB, L1-L2-WB calc sheet L_mid row and report show the warning, L2-U1-WB does not; spliced default: no flag; all tabs render; no runtime errors.
+- Chromium (Playwright): Summary Warnings card (default), L1-L2-WB calc sheet and report Warnings list (synthetic WB case); reviewed; no page errors.
+- DXF: Phase 3 round trips (`gp3/rt.js`) and hand-written DXF cases (`gp3/cases.js`): output identical to main.
+- Saved data: no key or format change (`gussetRating.autosave.v1`, `gussetRating.projects.v1`, export JSON, DXF unchanged); nothing new is saved.
+- **Other copies:** none.
+- **Open items:**
+  - The C7 open item ("should a field count only when nothing lies between it and the edge?"): closed by C8 (engineer: keep the rule, warn).
+  - None new.
