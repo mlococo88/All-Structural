@@ -3471,7 +3471,10 @@ function applyGeom(g,token,silent){
     //    then persisted the reset. Strip both so the classification the engineer picked sticks.
     ['type','beamShape','I','A','eg','n','boxB','boxI','boxJ'].forEach(function(k){ delete inp[k]; });
     // A design app sends d_e (exterior web → rail face); LLDF works with overhang OL and rail rL.
-    if(inp.OL==null&&g.de!=null){ var rL=+($('rL')&&$('rL').value)||0; inp.OL=+((+g.de)+rL).toFixed(2); }
+    // rL is this tool's governing barrier-face offset from the deck edge (faceOffset, from the
+    // current railing/curb/sidewalk inputs), so d_e(LLDF) = OL - rL reproduces the sent d_e.
+    // (Previously read a non-existent #rL element, so rL was always 0 and OL = d_e.)
+    if(inp.OL==null&&g.de!=null){ var rL=+faceOffset("L")||0; inp.OL=+((+g.de)+rL).toFixed(2); }
     // Overwrite ONLY the layout fields the payload carries (every producer). Start from the full
     // current state so section, appurtenance, beam-class, load-override, user-load and figure
     // inputs are left exactly as they are -- applyState({inputs:inp}) alone used to reset those.

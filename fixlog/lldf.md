@@ -945,3 +945,23 @@ HUNK 11 (≈ line 3605 of the old file)
 - **Open items:**
   - O-B1. `applyGeom` converts a sender's d_e to an overhang with `rL=+($('rL')&&$('rL').value)||0`, but lldf has no `#rL` element. So O_L = d_e, not d_e + the rail face offset (`faceL`/`railOffL`). This affects PS-Beam / ST-Girder prefills that send d_e. Not changed (it changes an input value) — fix to use `faceOffset("L")`?
 
+
+## 2026-10-05 — PR: claude/fix-lldf-de-railface
+
+### F-rail. d_e from PS-Beam / ST-Girder now includes the rail-face offset   [calc input change] [more conservative]
+- **Where:** `applyGeom` in the Bridge Suite integration block (≈ line 3474). Anchor text: `if(inp.OL==null&&g.de!=null)`
+- **Problem:** a design app sends d_e (exterior web → barrier face). LLDF stores the overhang OL and computes d_e = OL − rL, where rL = `faceOffset("L")` (the barrier-face offset from the deck edge). The conversion read rL from a `#rL` element that does not exist, so rL was always 0 and OL = d_e. LLDF therefore used d_e − rL, which is too small by the rail-face offset. The engineer approved the fix on 2026-10-05.
+- **Governing provision:** AASHTO LRFD 10th Ed. Art. 4.6.2.2.1 (d_e definition) and Table 4.6.2.2.2d-1 (e = 0.77 + d_e/9.1).
+- **Before:**
+  ```js
+  if(inp.OL==null&&g.de!=null){ var rL=+($('rL')&&$('rL').value)||0; inp.OL=+((+g.de)+rL).toFixed(2); }
+  ```
+- **After:**
+  ```js
+  if(inp.OL==null&&g.de!=null){ var rL=+faceOffset("L")||0; inp.OL=+((+g.de)+rL).toFixed(2); }
+  ```
+- **Check case:** PS-Beam payload with d_e = 2.25 ft, 5 girders @ 9 ft, L = 110 ft, t_s 8.5 in, skew 10°, depth 63 in. LLDF default rail face = 1.50 ft.
+  - Before: OL = 2.25, d_e(LLDF) = 0.75. e_M = 0.77 + 0.75/9.1 = 0.852. Exterior gM = 0.744 (rigid governs), gV = 0.767, fatM = 0.528.
+  - After: OL = 3.75, d_e(LLDF) = 2.25, matching the sent value. e_M = 0.77 + 2.25/9.1 = 1.017. Exterior gM = 0.833 (one-lane lever rule governs), gV = 0.859, fatM = 0.694.
+- **How verified:** jsdom, with lldf's real prefill button on main vs the fixed file (`railface.js`, `railface2.js`). The earlier data-loss test still passes, except its old-mapping assertion for OL, which now correctly reads 3.75.
+- **Other copies of this code:** none. The open item recorded in #36 is now resolved.
