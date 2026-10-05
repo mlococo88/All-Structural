@@ -988,3 +988,28 @@ Exact before/after (unified diff against main e831071, zero context lines):
 - **Open items:**
   - The C7 open item ("should a field count only when nothing lies between it and the edge?"): closed by C8 (engineer: keep the rule, warn).
   - None new.
+
+### C9 — 2026-10-05 — Hide the distant-field L_mid warning when that L_mid is not used (warning display only)
+
+- **Engineer's decision (2026-10-05):** hide the C8 warning when the L_mid it is about is not used in any check.
+- **Where:** `GPR` engine, member geometry loop. Anchor: `// C8 (warning only, no calculation change): a length along the plate edge stopped by a fastener field that is not directly beside the edge`. Also `methodHtml()`, the L_mid item (anchor: `The warning gives the length used and the length if that field were ignored.`).
+- **Before:**
+  ```js
+          warn.push(`Member ${m.id}, L_mid: ${W.L3.map(
+  ```
+- **After:**
+  ```js
+          // C9: warn only when this L_mid is used in a check (hidden for a continuous chord member or an overridden L_mid)
+          if (!isChordCont(i) && W.ovL == null) warn.push(`Member ${m.id}, L_mid: ${W.L3.map(
+  ```
+  Method tab, appended after "…if that field were ignored.": `It is shown only when that L<sub>mid</sub> is used in a Whitmore buckling check (not for a continuous chord member or an overridden L<sub>mid</sub>).`
+- **Problem:** the C8 warning appeared on every continuous chord member (default model 2 warnings, validation model 1), although a continuous chord has no Whitmore buckling check, so the flagged L_mid is never used.
+- **Governing provision:** none changed (warning display only). L_mid per NCHRP W-197 / MBE 3rd Ed. 6A.6.12.6.8 with the C7 rule, unchanged.
+- **Check case:**
+  - Default model: L_mid warnings 2 → 0; every check result and L_mid identical.
+  - Validation model: 1 → 0.
+  - Synthetic WB case (chord spliced, L2-L3 at 30°): 2 → 2 (L1-L2-WB and L2-L3-WB still warn; the calc-sheet note is unchanged).
+  - Same case with L1-L2 L_mid overridden to 10 in: only L2-L3 warns.
+- **How verified:** `node --check` on all 7 inline scripts: pass. The synthetic WB cases at 20°, 30°, 35° and 40° have identical capacities, RFs and L_mid to main (`o19/wbcmp.js`). Default and synthetic models: identical RFs and L_mid, warning counts as above (`o19/c9chk.js`).
+- **Other copies:** none.
+- **Open items:** none.
