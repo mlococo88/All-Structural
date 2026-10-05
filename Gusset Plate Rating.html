@@ -1025,6 +1025,24 @@ input.ovr, select.ovr { outline: 2px solid #c98a1b; outline-offset: -1px; backgr
 .mtab-s.pass { background: color-mix(in oklab, var(--pass) 14%, transparent); color: var(--pass); padding: 0 5px; }
 @media (max-width: 900px) { .gdwg { height: 60vh; } }
 @media print { .gdwg { height: auto; max-height: 9in; } .dg-btn, .dg-chip { display: none !important; } }
+/* 3D view (Phase 2) */
+.v3-wrap { position: relative; height: 68vh; min-height: 420px; background: #fff; border: 1px solid var(--border); border-radius: var(--r); overflow: hidden; }
+.v3-wrap canvas.v3-cv { display: block; width: 100%; height: 100%; cursor: grab; touch-action: none; }
+.v3-wrap canvas.v3-cv:active { cursor: grabbing; }
+.v3-lbls { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.v3-lbl { position: absolute; transform: translate(-50%, -100%); background: rgba(255,255,255,.93); border: 1px solid var(--border-hi); border-left: 4px solid var(--lc, #17212b); border-radius: 4px; padding: 2px 7px; font-size: 11px; line-height: 1.35; white-space: nowrap; color: var(--text); }
+.v3-lbl b { font-weight: 650; }
+.v3-lbl.sm { padding: 1px 5px; font-size: 10.5px; }
+.v3-msg { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 24px; text-align: center; font-size: 13px; line-height: 1.5; color: var(--text-dim); background: #fff; }
+.v3-msg[hidden] { display: none; }
+.v3-ctl .v3-grp { font-size: 11.5px; color: var(--muted); }
+.v3-lb { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--text-dim); white-space: nowrap; }
+.v3-lb input[type=checkbox] { width: auto; height: auto; margin: 0; }
+.v3-lb select { width: auto; max-width: 260px; height: 28px; padding: 0 6px; font-size: 12px; }
+.v3-lb input.v3-num { width: 64px; height: 28px; padding: 0 6px; font-size: 12px; }
+#v3-op { width: 90px; }
+.crdoc img.v3snap { display: block; width: 100%; max-height: 7.5in; object-fit: contain; border: 1px solid #c8c8c8; }
+@media (max-width: 900px) { .v3-wrap { height: 60vh; } }
 </style>
 <script>
 window.MathJax = { tex: { inlineMath: [['\\(','\\)']], displayMath: [['\\[','\\]']], processEscapes: true }, svg: { fontCache: "global", displayAlign: 'left', displayIndent: '0' },
@@ -1144,7 +1162,7 @@ window.MathJax = { tex: { inlineMath: [['\\(','\\)']], displayMath: [['\\[','\\]
 <header>
   <div class="brand">
     <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" fill="#17212b"/><path d="M5 24h22M9 24 14 11h4l5 13" fill="none" stroke="#8fa3e6" stroke-width="1.4"/><path d="M16 24V8M4 24 16 8 28 24" fill="none" stroke="#fff" stroke-width="1.2" stroke-dasharray="2 1.6"/><g fill="#fff"><circle cx="12" cy="21" r="1.3"/><circle cx="20" cy="21" r="1.3"/><circle cx="16" cy="17" r="1.3"/></g></svg>
-    <div class="brand-text"><span class="logo-name">Gusset Plate Rating</span><span class="brand-sub">by Mario Lococo, <span class="logo-pill">truss gusset plates, AASHTO MBE 6A.6.12.6 (LRFR) and 6B (LFR), Phase 1</span></span></div>
+    <div class="brand-text"><span class="logo-name">Gusset Plate Rating</span><span class="brand-sub">by Mario Lococo, <span class="logo-pill">truss gusset plates, AASHTO MBE 6A.6.12.6 (LRFR) and 6B (LFR), Phase 2</span></span></div>
   </div>
   <a class="bx-all-tools" href="tools.html" target="_top" title="Open the list of all tools">&larr; All tools</a>
   <div class="hdr-spacer"></div>
@@ -1161,10 +1179,10 @@ window.MathJax = { tex: { inlineMath: [['\\(','\\)']], displayMath: [['\\[','\\]
 <main class="main">
   <div class="status-bar" id="status-bar"></div>
   <nav class="tab-bar" id="tab-bar">
-    <button type="button" class="tab-btn active" data-tab="summary">Summary</button><button type="button" class="tab-btn" data-tab="drawing">Drawing</button><button type="button" class="tab-btn" data-tab="checks">Checks</button><button type="button" class="tab-btn" data-tab="rating">Rating</button><button type="button" class="tab-btn" data-tab="params">Code parameters</button><button type="button" class="tab-btn" data-tab="validation">Validation</button><button type="button" class="tab-btn" data-tab="report">Report</button><button type="button" class="tab-btn" data-tab="method">Method</button>
+    <button type="button" class="tab-btn active" data-tab="summary">Summary</button><button type="button" class="tab-btn" data-tab="drawing">Drawing</button><button type="button" class="tab-btn" data-tab="3d">3D</button><button type="button" class="tab-btn" data-tab="checks">Checks</button><button type="button" class="tab-btn" data-tab="rating">Rating</button><button type="button" class="tab-btn" data-tab="params">Code parameters</button><button type="button" class="tab-btn" data-tab="validation">Validation</button><button type="button" class="tab-btn" data-tab="report">Report</button><button type="button" class="tab-btn" data-tab="method">Method</button>
   </nav>
   <div class="tab-panels">
-    <div class="tab-panel active" id="tab-summary"></div><div class="tab-panel" id="tab-drawing"></div><div class="tab-panel" id="tab-checks"></div><div class="tab-panel" id="tab-rating"></div><div class="tab-panel" id="tab-params"></div><div class="tab-panel" id="tab-validation"></div><div class="tab-panel" id="tab-report"></div><div class="tab-panel" id="tab-method"></div>
+    <div class="tab-panel active" id="tab-summary"></div><div class="tab-panel" id="tab-drawing"></div><div class="tab-panel" id="tab-3d"></div><div class="tab-panel" id="tab-checks"></div><div class="tab-panel" id="tab-rating"></div><div class="tab-panel" id="tab-params"></div><div class="tab-panel" id="tab-validation"></div><div class="tab-panel" id="tab-report"></div><div class="tab-panel" id="tab-method"></div>
   </div>
 </main>
 </div>
@@ -1682,6 +1700,348 @@ if (typeof module !== 'undefined' && module.exports) module.exports = GPR;
 </script>
 <script>
 /* =====================================================================
+   Gusset Plate Rating: 3D view (Phase 2). Drawing only: reads the model (P) and the engine results (R), never changes a result.
+   three.js r128 and its OrbitControls are loaded from the CDN only when the 3D tab (or the report snapshot) needs them;
+   every other tab works without them. View options are kept under their own key gussetRating.view3d.v1 (not in the project data).
+   Units: inches. Origin at the work point, +x along the chord, +y up in the plate plane, +z out of plane.
+   ===================================================================== */
+const GP3D = (function () {
+  'use strict';
+  const KEY = 'gussetRating.view3d.v1';
+  const SRC = ['https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js', 'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js'];
+  const LAYERS = [['plates', 'Gusset plates', '#8c96a0'], ['members', 'Members', '#4c6ef5'], ['fasteners', 'Fasteners', '#252d29'], ['fillers', 'Fillers', '#b8892f'], ['work', 'Work lines and WP', '#78827c'], ['whitmore', 'Whitmore sections', '#1d56a3'], ['planes', 'Shear planes', '#c3352b'], ['lmid', 'L_mid', '#7048e8'], ['labels', 'Labels', '#17212b'], ['dc', 'Colour by D/C', '#2c7a4b']];
+  const MEMCOL = ['#4c6ef5', '#2b8a3e', '#c2255c', '#e8590c', '#7048e8', '#1098ad', '#5c940d', '#a61e4d'];   // same palette as the 2D drawing
+  const PLATE_COL = '#aeb8c2', FAST_COL = '#3b4148', FILL_COL = '#c9a24a';
+  const VIEWS = { front: [0, 0, 1], top: [0, 1, 0.002], side: [1, 0, 0], iso: [0.8, 0.6, 1.1] };
+
+  /* ---------- view options (own key; per browser, not per project) ---------- */
+  function loadS() { const o = { layers: {}, transp: true, opacity: 0.45, stub: 12, rpt: false }; LAYERS.forEach(([k]) => o.layers[k] = true);
+    let s = null; try { s = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) {}
+    if (s && typeof s === 'object') { LAYERS.forEach(([k]) => { if (s.layers && typeof s.layers[k] === 'boolean') o.layers[k] = s.layers[k]; });
+      if (typeof s.transp === 'boolean') o.transp = s.transp; if (isFinite(+s.opacity) && s.opacity !== null) o.opacity = Math.min(0.9, Math.max(0.1, +s.opacity));
+      if (isFinite(+s.stub) && s.stub !== null && +s.stub >= 0) o.stub = +s.stub; if (typeof s.rpt === 'boolean') o.rpt = s.rpt; }
+    return o; }
+  const S = loadS();
+  function saveS() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} }
+
+  /* ---------- lazy library load ---------- */
+  let LIB = 'idle'; const waiters = [];
+  const haveLib = () => !!(window.THREE && window.THREE.WebGLRenderer && window.THREE.OrbitControls);
+  function needLib(cb) {
+    if (haveLib()) { LIB = 'ready'; if (cb) cb(true); return; }
+    if (cb) waiters.push(cb); if (LIB === 'loading') return; LIB = 'loading';
+    let to = null;
+    const done = ok => { if (LIB !== 'loading') return; clearTimeout(to); LIB = ok ? 'ready' : 'failed'; waiters.splice(0).forEach(f => { try { f(ok); } catch (e) { console.error(e); } }); };
+    to = setTimeout(() => done(false), 20000);
+    const add = (src, next) => { const s = document.createElement('script'); s.src = src; s.async = true; s.onload = next; s.onerror = () => done(false); document.head.appendChild(s); };
+    const step2 = () => { if (!window.THREE) { done(false); return; } if (window.THREE.OrbitControls) { done(true); return; } add(SRC[1], () => done(!!window.THREE.OrbitControls)); };
+    if (window.THREE) step2(); else add(SRC[0], step2);
+  }
+
+  /* ---------- state ---------- */
+  const V = { renderer: null, controls: null, scene: null, camera: null, root: null, bounds: null, dirty: true, viewSet: false, labels: [], notes: [], plateMats: [], cap: '', snapR: null, tmr: null, errs: null };
+
+  /* ---------- tab skeleton ---------- */
+  function shell() {
+    const chip = ([k, l, c]) => `<label class="dg-chip" style="--chip:${c}"><input type="checkbox" data-v3="${k}"><span class="dg-dot"></span>${l === 'L_mid' ? 'L<sub>mid</sub>' : l}</label>`;
+    const body = `<div class="ctl-row">${LAYERS.map(chip).join('')}</div>
+      <div class="ctl-row v3-ctl"><span class="v3-grp">View</span>${['front', 'top', 'side', 'iso'].map(v => `<button type="button" class="dg-btn" data-v3view="${v}">${v === 'iso' ? 'Iso' : v[0].toUpperCase() + v.slice(1)}</button>`).join('')}<button type="button" class="dg-btn" data-v3view="fit">Fit</button>
+        <label class="v3-lb"><input type="checkbox" id="v3-transp"> Transparent plates</label><input type="range" id="v3-op" min="0.1" max="0.9" step="0.05" aria-label="Plate opacity" title="Plate opacity">
+        <label class="v3-lb">Member stub <input type="number" id="v3-stub" class="v3-num" min="0" step="1"> in</label>
+        <label class="v3-lb">D/C for <select id="v3-case"></select></label><span class="crv-sp"></span><button type="button" class="dg-btn" id="v3-png">Screenshot (PNG)</button></div>
+      <div class="v3-wrap" id="v3-wrap"><div class="v3-lbls" id="v3-lbls"></div><div class="v3-msg" id="v3-msg" hidden></div></div>
+      <p class="cap" id="v3-cap"></p><ul class="dlist v3-notes" id="v3-notes"></ul>`;
+    return card('v3-main', '3D view of the connection', 'Inches; drawn from the inputs, no calculation', body);
+  }
+  function syncControls() {
+    LAYERS.forEach(([k]) => { const e = document.querySelector(`[data-v3="${k}"]`); if (e) e.checked = S.layers[k] !== false; });
+    const t = $('#v3-transp'); if (t) t.checked = S.transp; const o = $('#v3-op'); if (o) { o.value = String(S.opacity); o.disabled = !S.transp; }
+    const st = $('#v3-stub'); if (st && document.activeElement !== st) st.value = String(S.stub);
+    const cs = $('#v3-case'); if (cs && R && R.cases) { cs.innerHTML = R.cases.map((c, j) => `<option value="${j}">${esc(c.label)}</option>`).join('') || '<option value="0">—</option>'; cs.value = String(+P.ui.dcCase || 0); }
+  }
+  function showMsg(html) { const m = $('#v3-msg'); if (!m) return; m.innerHTML = html; m.hidden = false; const l = $('#v3-lbls'); if (l) l.innerHTML = ''; }
+  function hideMsg() { const m = $('#v3-msg'); if (m) m.hidden = true; }
+  const failMsg = () => `<b>The 3D view could not be loaded.</b><span>It needs three.js r128 from cdn.jsdelivr.net, which did not load (offline or blocked). All other tabs work without it.</span><button type="button" class="dg-btn" id="v3-retry">Try again</button>`;
+
+  /* ---------- public: render the tab ---------- */
+  function render() {
+    const host = document.getElementById('tab-3d'); if (!host) return;
+    if (!host.querySelector('#v3-wrap')) { host.innerHTML = shell(); applyCollapse(); }
+    syncControls();
+    if (!R || R.errors.length) { showErrors(); return; }
+    if (!haveLib()) {
+      if (LIB === 'failed') { showMsg(failMsg()); return; }
+      showMsg('Loading the 3D library (three.js r128) …');
+      needLib(() => { if (P.ui.otab === '3d') render(); });
+      return;
+    }
+    if (!ensureRenderer()) return;
+    hideMsg();
+    clearTimeout(V.tmr);
+    V.tmr = setTimeout(() => { if (V.dirty || !V.root) rebuild(); if (resize() && !V.viewSet && V.root) { setView('iso', true); V.viewSet = true; } draw(); }, V.root ? 120 : 0);
+  }
+  function markDirty() { V.dirty = true; }
+  function showErrors() { V.dirty = true; const host = document.getElementById('tab-3d'); if (!host) return; if (!host.querySelector('#v3-wrap')) { host.innerHTML = shell(); applyCollapse(); } const e = R && R.errors && R.errors.length ? R.errors : null; if (e) showMsg(`<b>The 3D view is unavailable until the input errors are fixed.</b><span>${e.map(esc).join('<br>')}</span>`); }
+
+  /* ---------- renderer, camera, controls ---------- */
+  function initScene() {
+    if (V.scene) return;
+    const T3 = THREE; V.scene = new T3.Scene(); V.scene.background = new T3.Color(0xffffff);
+    V.scene.add(new T3.HemisphereLight(0xffffff, 0x8a9096, 0.75));
+    V.camera = new T3.PerspectiveCamera(30, 1.6, 0.5, 5000);
+    const dl = new T3.DirectionalLight(0xffffff, 0.6); dl.position.set(1.5, 2.5, 1); V.camera.add(dl); V.scene.add(V.camera);
+  }
+  function ensureRenderer() {
+    initScene();
+    const wrap = $('#v3-wrap'); if (!wrap) return false;
+    if (V.renderer) { if (V.renderer.domElement.parentNode !== wrap) wrap.insertBefore(V.renderer.domElement, wrap.firstChild); return true; }
+    let r = null; try { r = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true }); } catch (e) { r = null; }
+    if (!r || !r.getContext()) { showMsg('<b>WebGL is not available in this browser.</b><span>The 3D view needs WebGL. All other tabs work without it.</span>'); return false; }
+    r.setPixelRatio(Math.min(2, window.devicePixelRatio || 1)); r.domElement.className = 'v3-cv'; wrap.insertBefore(r.domElement, wrap.firstChild);
+    V.renderer = r; V.controls = new THREE.OrbitControls(V.camera, r.domElement); V.controls.screenSpacePanning = true; V.controls.addEventListener('change', draw);
+    if (window.ResizeObserver) new ResizeObserver(() => { if (resize()) draw(); }).observe(wrap); else window.addEventListener('resize', () => { if (resize()) draw(); });
+    return true;
+  }
+  function resize() {
+    const wrap = $('#v3-wrap'); if (!V.renderer || !wrap) return false; const w = wrap.clientWidth, h = wrap.clientHeight; if (!w || !h) return false;
+    const c = V.renderer.domElement, pr = V.renderer.getPixelRatio();
+    if (c.width !== Math.floor(w * pr) || c.height !== Math.floor(h * pr)) { V.renderer.setSize(w, h, false); V.camera.aspect = w / h; V.camera.updateProjectionMatrix(); }
+    return true;
+  }
+  function draw() {
+    const wrap = $('#v3-wrap'); if (!V.renderer || !V.root || !wrap || !wrap.clientWidth || !wrap.clientHeight) return;
+    V.renderer.render(V.scene, V.camera); placeLabels();
+  }
+  function setView(name, quiet) {
+    if (!V.bounds || !V.camera) return; const T3 = THREE, cam = V.camera;
+    const c = V.bounds.getCenter(new T3.Vector3()), r = Math.max(1, V.bounds.getBoundingSphere(new T3.Sphere()).radius);
+    const cur = V.controls ? cam.position.clone().sub(V.controls.target) : new T3.Vector3(...VIEWS.iso);
+    const d = (VIEWS[name] ? new T3.Vector3(...VIEWS[name]) : (cur.lengthSq() > 1e-9 ? cur : new T3.Vector3(...VIEWS.iso))).normalize();
+    const tv = Math.tan(cam.fov * Math.PI / 360), th = tv * cam.aspect, rt = new T3.Vector3().crossVectors(new T3.Vector3(0, 1, 0), d).normalize(), up = new T3.Vector3().crossVectors(d, rt);
+    let dist = r * 0.5; const bb = V.bounds;   // fit the eight corners of the bounding box in both screen directions
+    [bb.min.x, bb.max.x].forEach(x => [bb.min.y, bb.max.y].forEach(y => [bb.min.z, bb.max.z].forEach(z => { const q = new T3.Vector3(x, y, z).sub(c), dz = q.dot(d);
+      dist = Math.max(dist, dz + Math.abs(q.dot(rt)) / th, dz + Math.abs(q.dot(up)) / tv); })));
+    dist *= 1.12;
+    cam.position.copy(c).addScaledVector(d, dist); cam.near = Math.max(0.05, dist / 100); cam.far = dist * 20; cam.updateProjectionMatrix(); cam.lookAt(c);
+    if (V.controls) { V.controls.target.copy(c); V.controls.update(); }
+    if (!quiet) draw();
+  }
+
+  /* ---------- scene ---------- */
+  function disposeTree(o) { o.traverse(n => { if (n.geometry) n.geometry.dispose(); const m = n.material; if (m) (Array.isArray(m) ? m : [m]).forEach(x => x.dispose()); }); }
+  function rebuild() {
+    if (!R || R.errors.length || !haveLib()) return; initScene();
+    if (V.root) { V.scene.remove(V.root); disposeTree(V.root); V.root = null; }
+    V.root = build(); V.scene.add(V.root); V.dirty = false;
+    V.bounds = new THREE.Box3().setFromObject(V.root);
+    buildLabels(); caption();
+  }
+
+  function build() {
+    const T3 = THREE, root = new T3.Group(), Lay = S.layers, Pm = R.P, G = R.G, Np = R.Np;
+    const j = +P.ui.dcCase || 0, cs = R.cases[j], useDC = Lay.dc !== false && !!cs;
+    const notes = [], labels = [], dcCol = d => DCOL[dcCls(d)];
+    const govOf = pred => { let b = null; R.checks.forEach(c => { if (!pred(c)) return; const r = c.rf[j]; if (r && (!b || r.DCr > b.dc)) b = { dc: r.DCr, id: c.id }; }); return b; };
+    const isCont = i => Pm.chord === 'continuous' && Pm.members[i].role === 'chord';
+    const ofMem = (c, i) => c.mem === i || (!!c.chord && isCont(i));
+    const plateGov = govOf(c => ['wy', 'wf', 'wb', 'bs', 'pvy', 'pvu'].includes(c.ls));
+    const std = col => new T3.MeshStandardMaterial({ color: col, metalness: 0.1, roughness: 0.7 });
+    const basic = {}; const bmat = col => basic[col] || (basic[col] = new T3.MeshBasicMaterial({ color: col, side: T3.DoubleSide }));
+    const edgeMat = new T3.LineBasicMaterial({ color: 0x1f2a33, transparent: true, opacity: 0.45 });
+    const grp = name => { const g = new T3.Group(); g.name = name; root.add(g); return g; };
+    const gPl = grp('plates'), gMe = grp('members'), gFa = grp('fasteners'), gFi = grp('fillers'), gWo = grp('work'), gWh = grp('whitmore'), gSp = grp('planes'), gLm = grp('lmid');
+    gPl.visible = Lay.plates !== false; gMe.visible = Lay.members !== false; gFa.visible = Lay.fasteners !== false; gFi.visible = Lay.fillers !== false;
+    gWo.visible = Lay.work !== false; gWh.visible = Lay.whitmore !== false; gSp.visible = Lay.planes !== false; gLm.visible = Lay.lmid !== false;
+
+    /* member section sizes for the drawing (in-plane width w, out-of-plane width d2); missing → box from the gage lines */
+    const secs = Pm.members.map((m, i) => { const w = num(m.sec.w), d2 = num(m.sec.d2); return { w, d2, bbox: !(w > 0) || !(d2 > 0), type: m.sec.type }; });
+    const d2Known = secs.filter(s => s.d2 > 0).map(s => s.d2), d2Def = d2Known.length ? Math.max(...d2Known) : 12;
+    secs.forEach((s, i) => { const g = G[i]; if (!s.bbox) return; const w0 = s.w > 0, d0 = s.d2 > 0;
+      if (!w0) s.w = g.gS + 2 * Math.max(1.5, 1.75 * g.d); if (!d0) s.d2 = d2Def;
+      notes.push(`${esc(Pm.members[i].id)}: section ${!w0 && !d0 ? 'widths are' : !w0 ? 'width in the plate plane is' : 'width out of plane is'} not entered; drawn as a plain box ${f2(s.w)} in${!w0 ? ' (outer gage lines plus edge distance)' : ''} by ${f2(s.d2)} in${!d0 ? (d2Known.length ? ' (widest entered member)' : ' (assumed)') : ''}.`); });
+    secs.forEach(s => { s.te = Math.max(0.1, Math.min(0.5, s.w / 8, s.d2 / 8)); });
+
+    /* plates: inner faces on the widest member face (+ filler); plates alternate +z / −z, extra plates stack outward */
+    const zIn = Math.max(...Pm.members.map((m, i) => secs[i].d2 / 2 + Math.max(0, num(m.fast.tf) || 0)));
+    const stack = { '1': 0, '-1': 0 }, PZ = R.ts.map((t, k) => { const sd = Np === 1 || k % 2 === 0 ? 1 : -1, a = zIn + stack[sd]; stack[sd] += t; return { sd, a, b: a + t, t }; });
+    const headH = Math.max(0, ...Pm.members.map((m, i) => ((GPR.FAST[m.fast.grade] || {}).kind === 'bolt' ? 0.625 : 0.55) * G[i].d));
+    const zOut = { '1': zIn + stack['1'], '-1': zIn + stack['-1'] }, zF = zOut['1'] + headH + 0.05, zBack = Np === 1 ? -zIn : -zOut['-1'];
+    const pCol = useDC ? dcCol(plateGov && plateGov.dc) : PLATE_COL, pTint = useDC ? '#' + new T3.Color(pCol).lerp(new T3.Color('#e3e7eb'), 0.55).getHexString() : PLATE_COL;
+    const shape = new T3.Shape(R.poly.map(q => new T3.Vector2(q[0], q[1])));
+    V.plateMats = [];
+    PZ.forEach(pz => { const geo = new T3.ExtrudeGeometry(shape, { depth: pz.t, bevelEnabled: false, curveSegments: 1 });
+      const mt = new T3.MeshStandardMaterial({ color: pTint, metalness: 0.15, roughness: 0.65, transparent: S.transp, opacity: S.transp ? S.opacity : 1, depthWrite: !S.transp, side: S.transp ? T3.DoubleSide : T3.FrontSide });
+      V.plateMats.push(mt); const me = new T3.Mesh(geo, mt), ed = new T3.LineSegments(new T3.EdgesGeometry(geo), new T3.LineBasicMaterial({ color: 0x252d29 }));
+      me.position.z = ed.position.z = pz.sd > 0 ? pz.a : -pz.b; me.renderOrder = 2; gPl.add(me, ed); });
+    if (R.ts.some(t => Math.abs(t - num(Pm.plates.t)) > 1e-9)) notes.push(`Plates are drawn with the thickness used after section loss (${R.ts.map(f3).join(', ')} in).`);
+    if (Np > 2) notes.push(`${Np} plates: drawn alternately on the +z and −z faces, extra plates stacked outward.`);
+    if (Np === 1) notes.push('One gusset plate: drawn on the +z face.');
+
+    /* local member frame: x = along the work line (s), y = transverse in the plate plane (t), z = out of plane */
+    const frame = g => { const o = new T3.Group(); o.matrixAutoUpdate = false; o.matrix.makeBasis(new T3.Vector3(g.u[0], g.u[1], 0), new T3.Vector3(g.v[0], g.v[1], 0), new T3.Vector3(0, 0, 1)); return o; };
+    const zr = (sd, a, b) => sd > 0 ? [a, b] : [-b, -a];
+    const unit = { shank: new T3.CylinderGeometry(1, 1, 1, 16), dome: new T3.SphereGeometry(1, 16, 8, 0, 2 * Math.PI, 0, Math.PI / 2), hex: new T3.CylinderGeometry(1, 1, 1, 6), washer: new T3.CylinderGeometry(1, 1, 1, 24) };
+    const Y = new T3.Vector3(0, 1, 0), qUp = new T3.Quaternion().setFromUnitVectors(Y, new T3.Vector3(0, 0, 1)), qDn = new T3.Quaternion().setFromUnitVectors(Y, new T3.Vector3(0, 0, -1));
+    const usedUnits = new Set();
+
+    Pm.members.forEach((m, i) => {
+      const g = G[i], s = secs[i], hw = s.w / 2, hd = s.d2 / 2, te = s.te, type = s.type;
+      const spliced = Pm.chord === 'spliced' && m.role === 'chord';
+      const s0 = Math.max(spliced ? 0.25 : 0, num(m.cut) || 0), s1 = g.sOut + Math.max(1.5, S.stub);
+      const mg = memGov(i), col = useDC ? dcCol(mg && mg.dc) : MEMCOL[i % MEMCOL.length], mm = std(col);
+      const fm = frame(g); gMe.add(fm);
+      const bx = (t0, t1, z0, z1, mt = mm, sa = s0, sb = s1, host = fm) => { if (sb - sa < 1e-6 || t1 - t0 < 1e-6 || z1 - z0 < 1e-6) return; const geo = new T3.BoxGeometry(sb - sa, t1 - t0, z1 - z0), me = new T3.Mesh(geo, mt); me.position.set((sa + sb) / 2, (t0 + t1) / 2, (z0 + z1) / 2); host.add(me);
+        const ed = new T3.LineSegments(new T3.EdgesGeometry(geo), edgeMat); ed.position.copy(me.position); host.add(ed); };
+      let zc;   // depth of the inner face of the connected element (fastener grip ends here when it does not pass through the member)
+      if (s.bbox) { bx(-hw, hw, -hd, hd, new T3.MeshStandardMaterial({ color: col, transparent: true, opacity: 0.35, depthWrite: false })); zc = hd - te; }
+      else if (type === 'H' || type === 'W') { const tf = type === 'W' ? Math.min(te * 1.2, hd / 3) : te, tw = te * 0.7;
+        [1, -1].forEach(sd => bx(-hw, hw, ...zr(sd, hd - tf, hd))); bx(-tw / 2, tw / 2, -hd + tf, hd - tf); zc = hd - tf; }
+      else if (type === 'L') { const leg = Math.max(0.5, Math.min(0.6 * s.w, hd - te - 0.25));
+        [1, -1].forEach(sd => { bx(-hw, hw, ...zr(sd, hd - te, hd)); bx(hw - te, hw, ...zr(sd, hd - te - leg, hd - te)); }); zc = hd - te; }
+      else { const bf = Math.max(0.5, Math.min(Math.max(0.22 * s.w, 2.5), hd - te - 0.25));   // built-up box / channel pair: webs on the plates, flanges turned in
+        [1, -1].forEach(sd => { bx(-hw, hw, ...zr(sd, hd - te, hd)); bx(hw - te, hw, ...zr(sd, hd - te - bf, hd - te)); bx(-hw, -hw + te, ...zr(sd, hd - te - bf, hd - te)); });
+        const desc = String(m.sec.desc || '');
+        if (/cover/i.test(desc)) { const up = g.v[1] < -1e-9 ? -1 : 1; if (up > 0) bx(hw, hw + te, -hd, hd); else bx(-hw - te, -hw, -hd, hd); }
+        if (/lac/i.test(desc)) { const pts = [], step = Math.max(4, (2 * hd - 2 * te) * 0.9); [1, -1].forEach(st => { let k = 0; for (let x = s0 + 1; x + step <= s1 - 0.5; x += step, k++) { const za = (k % 2 ? 1 : -1) * (hd - te), zb = -za; pts.push(new T3.Vector3(x, st * (hw + 0.03), za), new T3.Vector3(x + step, st * (hw + 0.03), zb)); } });
+          if (pts.length) fm.add(new T3.LineSegments(new T3.BufferGeometry().setFromPoints(pts), new T3.LineBasicMaterial({ color: 0x252d29 }))); }
+        zc = hd - te; }
+      if (spliced) notes.push(`${esc(m.id)}: chord spliced at the joint; drawn with a small gap at the work point (splice plates are not drawn).`);
+
+      /* fillers between the member face and the plate(s) */
+      const tfl = Math.max(0, num(m.fast.tf) || 0);
+      if (tfl > 0) { const ff = frame(g); gFi.add(ff); const fmt = std(FILL_COL), sa = Math.max(s0, g.sIn - 1.75 * g.d - 0.5), sb = Math.min(s1, g.sOut + 1.75 * g.d + 0.5), ta = Math.max(-hw, g.tmin - 1.75 * g.d), tb = Math.min(hw, g.tmax + 1.75 * g.d);
+        (Np === 1 ? [1] : [1, -1]).forEach(sd => bx(ta, tb, ...zr(sd, hd, hd + tfl), fmt, sa, sb, ff)); }
+      if (hd + tfl < zIn - 1e-6) notes.push(`${esc(m.id)}: out-of-plane width ${f3(s.d2)} in${tfl > 0 ? ` plus ${f3(tfl)} in filler` : ''} is less than the clear space between the plates (${f3(2 * zIn)} in); the ${f3(zIn - hd - tfl)} in gap each side is drawn as is.`);
+
+      /* fasteners at every hole of this member */
+      const fd = GPR.FAST[m.fast.grade] || { kind: 'rivet' }, kind = fd.kind, d = g.d, Ns = num(m.fast.Ns) === 2 ? 2 : 1;
+      const fg = govOf(c => ofMem(c, i) && (c.ls === 'fs' || c.ls === 'brg')), fcol = useDC ? dcCol(fg && fg.dc) : FAST_COL;
+      const inst = { shank: [], dome: [], hex: [], washer: [] }, M = () => new T3.Matrix4();
+      const slab = (part, x, y, za, zb, r) => inst[part].push(M().compose(new T3.Vector3(x, y, (za + zb) / 2), qUp, new T3.Vector3(r, Math.max(1e-3, Math.abs(zb - za)), r)));
+      const dome = (x, y, z, o) => inst.dome.push(M().compose(new T3.Vector3(x, y, z), o > 0 ? qUp : qDn, new T3.Vector3(0.8 * d, 0.55 * d, 0.8 * d)));
+      const F = 1.5 * d + 0.125, Rc = F / 2 / Math.cos(Math.PI / 6), hh = 0.625 * d, nh = 0.875 * d, wt = 0.16, so = 0.3 * d;
+      const fastener = (x, y, zH, zN, o) => {   // head face zH (head outward = o), nut / inner face zN (outward = −o)
+        if (kind === 'rivet') { slab('shank', x, y, zH, zN, d / 2); dome(x, y, zH, o); dome(x, y, zN, -o); return; }
+        slab('hex', x, y, zH, zH + o * hh, Rc); slab('washer', x, y, zN, zN - o * wt, d); slab('hex', x, y, zN - o * wt, zN - o * (wt + nh), Rc); slab('shank', x, y, zH, zN - o * (wt + nh + so), d / 2); };
+      g.holes.forEach(h => { if (Ns === 2) fastener(h.x, h.y, zOut['1'], Np === 1 ? -hd : -zOut['-1'], 1);
+        else { fastener(h.x, h.y, zOut['1'], zc, 1); if (Np > 1) fastener(h.x, h.y, -zOut['-1'], -zc, -1); } });
+      const fmt = std(fcol);
+      Object.entries(inst).forEach(([k, arr]) => { if (!arr.length) return; usedUnits.add(k); const im = new T3.InstancedMesh(unit[k], fmt, arr.length); im.frustumCulled = false; arr.forEach((mx, n) => im.setMatrixAt(n, mx)); im.instanceMatrix.needsUpdate = true; gFa.add(im); });
+
+      /* label */
+      const LL = cs ? num(m.F.LL[cs.k]) : NaN, lc = cs ? `${esc(cs.name)} ${f1(LL)} kip${LL > 1e-9 ? ' (T)' : LL < -1e-9 ? ' (C)' : ''}` : '';
+      const wl = g.P(s1 + 3, 0);
+      labels.push({ p: [wl[0], wl[1], 0], col: useDC ? dcCol(mg && mg.dc) : MEMCOL[i % MEMCOL.length], lines: [esc(m.id), `${lc}${lc ? '; ' : ''}DC ${f1(num(m.F.DC))}, DW ${f1(num(m.F.DW))}`, mg ? `D/C ${f2(mg.dc)} (${esc(mg.id)})` : 'D/C n/a for this case'] });
+    });
+    Object.keys(unit).forEach(k => { if (!usedUnits.has(k)) unit[k].dispose(); });
+
+    /* overlays on the +z plate face */
+    const ribbon = (host, A, B, z, wid, col, dash) => { const dx = B[0] - A[0], dy = B[1] - A[1], L = Math.hypot(dx, dy); if (!(L > 1e-6)) return; const ux = dx / L, uy = dy / L, segs = [];
+      if (dash) { for (let a = 0; a < L; a += dash[0] + dash[1]) segs.push([a, Math.min(L, a + dash[0])]); } else segs.push([0, L]);
+      const pos = []; segs.forEach(([a, b]) => { const p = (t, w) => [A[0] + ux * t - uy * w, A[1] + uy * t + ux * w, z]; const q = [p(a, -wid / 2), p(b, -wid / 2), p(b, wid / 2), p(a, wid / 2)]; pos.push(...q[0], ...q[1], ...q[2], ...q[0], ...q[2], ...q[3]); });
+      const geo = new T3.BufferGeometry(); geo.setAttribute('position', new T3.Float32BufferAttribute(pos, 3)); host.add(new T3.Mesh(geo, bmat(col))); };
+    const arrow = (host, A, B, z, col) => { const dx = B[0] - A[0], dy = B[1] - A[1], L = Math.hypot(dx, dy); if (!(L > 1.7)) return; const c = new T3.Mesh(new T3.ConeGeometry(0.55, 1.6, 12), bmat(col)); c.position.set(B[0] - dx / L * 0.8, B[1] - dy / L * 0.8, z); c.rotation.z = Math.atan2(dy, dx) - Math.PI / 2; host.add(c); };
+    const add2 = (a, b) => [a[0] + b[0], a[1] + b[1]], mul2 = (a, k) => [a[0] * k, a[1] * k];
+    // work lines and WP
+    Pm.members.forEach((m, i) => { const g = G[i]; ribbon(gWo, [0, 0], g.P(g.sOut + Math.max(1.5, S.stub) + 2, 0), zF + 0.01, 0.16, '#5f6a64', [2.2, 1.0]); });
+    const wp = new T3.Mesh(new T3.SphereGeometry(0.7, 16, 12), bmat('#252d29')); wp.position.set(0, 0, zF); gWo.add(wp);
+    // Whitmore sections, spread lines and L_mid
+    Pm.members.forEach((m, i) => { const g = G[i], W = g.W; if (isCont(i) || !W || !W.ok) return;
+      const wg = govOf(c => c.mem === i && ['wy', 'wf', 'wb'].includes(c.ls)), c = useDC ? dcCol(wg && wg.dc) : '#1d56a3';
+      ribbon(gWh, W.A, W.B, zF + 0.02, 0.6, c);
+      const o1 = g.P(g.sOut, g.tmin), o2 = g.P(g.sOut, g.tmax), e1 = add2(W.c, mul2(g.v, -W.hw)), e2 = add2(W.c, mul2(g.v, W.hw));
+      ribbon(gWh, o1, e1, zF + 0.02, 0.14, c, [0.8, 0.6]); ribbon(gWh, o2, e2, zF + 0.02, 0.14, c, [0.8, 0.6]);
+      (W.L3 || []).forEach(z => { if (!isFinite(z.L)) return; ribbon(gLm, z.q, z.end, zF + 0.03, 0.16, '#7048e8'); arrow(gLm, z.q, z.end, zF + 0.03, '#7048e8'); }); });
+    // partial shear planes: through the plate stack, and dashed on the face
+    R.planes.forEach((pl, k) => { const sg = govOf(c => c.id === `SP${k + 1}-Y` || c.id === `SP${k + 1}-U`), c = useDC ? dcCol(sg && sg.dc) : '#c3352b';
+      const mt = new T3.MeshBasicMaterial({ color: c, transparent: true, opacity: 0.22, side: T3.DoubleSide, depthWrite: false });
+      (pl.segs || []).forEach(([A, B]) => { const geo = new T3.BufferGeometry(), za = zBack - 0.02, zb = zOut['1'] + 0.02;
+        geo.setAttribute('position', new T3.Float32BufferAttribute([A[0], A[1], za, B[0], B[1], za, B[0], B[1], zb, A[0], A[1], za, B[0], B[1], zb, A[0], A[1], zb], 3)); const me = new T3.Mesh(geo, mt); me.renderOrder = 3; gSp.add(me);
+        ribbon(gSp, A, B, zF + 0.025, 0.3, c, [1.6, 0.8]); });
+      if (pl.segs && pl.segs.length) { const A = pl.segs[0][0]; labels.push({ p: [A[0], A[1], zF], col: c, lines: [`SP${k + 1}`], small: true, layer: 'planes' }); } });
+    // plate label at the highest vertex
+    const top = R.poly.reduce((a, q) => q[1] > a[1] ? q : a, R.poly[0]);
+    labels.push({ p: [top[0], top[1], zOut['1']], col: pCol === PLATE_COL ? '#5f6a64' : pCol, lines: [`Gusset plates: ${Np} × ${frac(num(Pm.plates.t))} in`, plateGov ? `D/C ${f2(plateGov.dc)} (${esc(plateGov.id)})` : 'D/C n/a for this case'], layer: 'plates' });
+
+    notes.unshift('Member element thicknesses, channel flange widths and fastener head, nut and washer sizes are nominal drawing sizes (not inputs). Fasteners with one shear plane per plate are drawn through the plate and the member element on each face; with two planes, through the whole member.');
+    V.notes = notes; V.labels = labels; V.case = cs; V.useDC = useDC;
+    return root;
+    function memGov(i) { return govOf(c => ofMem(c, i)); }
+  }
+
+  /* ---------- labels: HTML overlay on screen, drawn into the canvas for PNG / report ---------- */
+  function buildLabels() { const host = $('#v3-lbls'); if (!host) return; host.innerHTML = V.labels.map((lb, n) => `<div class="v3-lbl${lb.small ? ' sm' : ''}" data-n="${n}" style="--lc:${lb.col}">${lb.lines.map((l, k) => k ? `<div>${l}</div>` : `<b>${l}</b>`).join('')}</div>`).join(''); }
+  const lblOn = lb => S.layers.labels !== false && (!lb.layer || S.layers[lb.layer] !== false);
+  function proj(p, cam, W, H) { const v = new THREE.Vector3(p[0], p[1], p[2]).project(cam); if (!(v.z > -1 && v.z < 1)) return null; return [(v.x + 1) / 2 * W, (1 - v.y) / 2 * H]; }
+  function placeLabels() { const host = $('#v3-lbls'); if (!host) return; if (host.children.length !== V.labels.length) buildLabels(); const W = host.clientWidth, H = host.clientHeight;
+    [...host.children].forEach(el => { const lb = V.labels[+el.dataset.n], q = lb && lblOn(lb) ? proj(lb.p, V.camera, W, H) : null; el.style.display = q ? '' : 'none'; if (q) { el.style.left = q[0].toFixed(1) + 'px'; el.style.top = q[1].toFixed(1) + 'px'; } }); }
+  const plain = s => String(s).replace(/<[^>]+>/g, '').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&amp;/g, '&');
+  function composite(rnd, cam, kk) {
+    rnd.render(V.scene, cam); const src = rnd.domElement, W = src.width, H = src.height, k = kk || W / Math.max(1, src.clientWidth || W / rnd.getPixelRatio());
+    const cv = document.createElement('canvas'); cv.width = W; cv.height = H; const x = cv.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, W, H); x.drawImage(src, 0, 0);
+    const font = (sz, b) => `${b ? '600 ' : ''}${sz * k}px "Segoe UI", Arial, sans-serif`;
+    V.labels.forEach(lb => { if (!lblOn(lb)) return; const q = proj(lb.p, cam, W, H); if (!q) return; const lines = lb.lines.map(plain), lh = 14 * k, pad = 5 * k;
+      const wd = Math.max(...lines.map((l, n) => { x.font = font(11, n === 0); return x.measureText(l).width; })) + 2 * pad + 4 * k, ht = lines.length * lh + pad, x0 = q[0] - wd / 2, y0 = q[1] - ht;
+      x.fillStyle = 'rgba(255,255,255,0.93)'; x.fillRect(x0, y0, wd, ht); x.strokeStyle = '#c3c9c1'; x.lineWidth = k; x.strokeRect(x0, y0, wd, ht); x.fillStyle = lb.col; x.fillRect(x0, y0, 4 * k, ht);
+      lines.forEach((l, n) => { x.font = font(11, n === 0); x.fillStyle = '#17212b'; x.fillText(l, x0 + 4 * k + pad, y0 + pad / 2 + (n + 0.8) * lh); }); });
+    x.font = font(12, true); x.fillStyle = '#17212b'; x.fillText(plain(`${P.meta.projectName || ''}${P.meta.joint ? ' — ' + P.meta.joint : ''}`), 12 * k, 20 * k);
+    if (V.useDC && V.case) { x.font = font(11); let px = 12 * k; const py = H - 14 * k; x.fillText(`D/C for ${V.case.label}:`, px, py); px += x.measureText(`D/C for ${V.case.label}:`).width + 10 * k;
+      [['pass', '≤ 0.85'], ['warn', '0.85 to 1.00'], ['fail', '> 1.00'], ['na', 'n/a']].forEach(([c, t]) => { x.fillStyle = DCOL[c]; x.fillRect(px, py - 9 * k, 10 * k, 10 * k); x.fillStyle = '#17212b'; x.fillText(t, px + 14 * k, py); px += x.measureText(t).width + 28 * k; }); }
+    return cv.toDataURL('image/png');
+  }
+  function screenshot() {
+    if (!V.renderer || !V.root) return; resize(); const url = composite(V.renderer, V.camera); placeLabels();
+    const a = document.createElement('a'); a.href = url; a.download = `${String(P.meta.joint || 'gusset').replace(/[^\w.-]+/g, '_').replace(/^_+|_+$/g, '') || 'gusset'}_3D.png`; document.body.appendChild(a); a.click(); setTimeout(() => a.remove(), 1000);
+  }
+  function caption() {
+    const c = $('#v3-cap'), n = $('#v3-notes'); if (!c) return; const cs = V.case;
+    c.innerHTML = (V.useDC && cs ? `Colours: governing D/C for <b>${esc(cs.label)}</b> (members: all their limit states; plates: Whitmore, block shear and shear planes; fasteners: shear and bearing): <span style="color:${DCOL.pass}">■</span> ≤ 0.85, <span style="color:${DCOL.warn}">■</span> 0.85 to 1.00, <span style="color:${DCOL.fail}">■</span> &gt; 1.00, <span style="color:${DCOL.na}">■</span> not applicable for this case. ` : '')
+      + 'Thick line on the plate face: Whitmore section; dashed: 30° spread; violet arrows: L<sub>1</sub> to L<sub>3</sub>; red bands: partial shear planes through the plates. Drag to orbit, right-drag or Shift-drag to pan, scroll to zoom.';
+    if (n) n.innerHTML = V.notes.map(t => `<li>${t}</li>`).join('');
+  }
+
+  /* ---------- report snapshot (optional section, off by default) ---------- */
+  function snapshot() {
+    if (!haveLib() || !R || R.errors.length) return null; initScene(); if (V.dirty || !V.root) rebuild(); if (!V.root) return null;
+    if (!V.snapR) { try { V.snapR = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true }); } catch (e) { V.snapR = null; } if (!V.snapR || !V.snapR.getContext()) { V.snapR = null; return null; } }
+    const w = 1500, h = 950; V.snapR.setPixelRatio(1); V.snapR.setSize(w, h, false);
+    const cam = V.camera.clone(); cam.aspect = w / h; cam.updateProjectionMatrix();
+    if (!V.viewSet) { const keep = V.camera; V.camera = cam; setView('iso', true); V.camera = keep; }
+    return composite(V.snapR, cam, 1.7);
+  }
+  function reportSection(H1) {
+    const head = H1('3D view');
+    if (!haveLib()) { if (LIB !== 'failed') needLib(() => { CR_STALE = true; if (P.ui.otab === 'report') renderReportTab(); });
+      return `<section class="cr-sec cr-break">${head}<p class="cr-p">${LIB === 'failed' ? 'The 3D snapshot is not available: three.js could not be loaded (offline or blocked).' : 'The 3D view is loading (three.js); the snapshot appears here when it is ready.'}</p></section>`; }
+    const url = snapshot();
+    if (!url) return `<section class="cr-sec cr-break">${head}<p class="cr-p">The 3D snapshot is not available (WebGL could not start in this browser).</p></section>`;
+    return `<section class="cr-sec cr-break">${head}<div class="cr-sub cr-fig"><img class="v3snap" src="${url}" alt="3D view of the gusset-plate connection"><p class="cap">3D view of the connection drawn from the inputs (view as set on the 3D tab). ${V.useDC && V.case ? `Colours by governing D/C for ${esc(V.case.label)}: green ≤ 0.85, amber 0.85 to 1.00, red &gt; 1.00, grey not applicable. ` : ''}Member element thicknesses and fastener head sizes are nominal drawing sizes. For information only; the calculation uses the 2D geometry.</p></div></section>`;
+  }
+  const reportOn = () => S.rpt === true;
+  const reportChip = () => `<label class="crv-chip" title="Static picture of the 3D view (needs three.js)"><input type="checkbox" data-v3rpt ${S.rpt ? 'checked' : ''}>3D view (snapshot)</label>`;
+
+  /* ---------- events ---------- */
+  document.addEventListener('change', e => {
+    const t = e.target; if (!t || !t.closest) return;
+    const ly = t.closest('[data-v3]'); if (ly) { S.layers[ly.dataset.v3] = ly.checked; saveS(); if (ly.dataset.v3 === 'labels') { placeLabels(); return; } V.dirty = true; render(); return; }
+    if (t.id === 'v3-transp') { S.transp = t.checked; saveS(); V.dirty = true; syncControls(); render(); return; }
+    if (t.id === 'v3-stub') { const v = num(t.value); if (isFinite(v) && v >= 0) { S.stub = v; saveS(); V.dirty = true; render(); } return; }
+    if (t.id === 'v3-case') { P.ui.dcCase = +t.value || 0; const s = $('#f_ui_dcCase'); if (s) s.value = t.value; DIRTY.add('drawing'); crMarkStale(); autosave(); V.dirty = true; render(); return; }
+    if (t.matches && t.matches('[data-v3rpt]')) { S.rpt = t.checked; saveS(); if (S.rpt && !haveLib()) needLib(() => { CR_STALE = true; if (P.ui.otab === 'report') renderReportTab(); }); CR_STALE = true; renderReportTab(); }
+  });
+  document.addEventListener('input', e => { const t = e.target; if (!t || t.id !== 'v3-op') return; S.opacity = Math.min(0.9, Math.max(0.1, +t.value || 0.45)); saveS(); V.plateMats.forEach(m => { m.opacity = S.opacity; }); draw(); });
+  document.addEventListener('click', e => {
+    const t = e.target; if (!t || !t.closest) return;
+    const v = t.closest('[data-v3view]'); if (v) { if (V.root) setView(v.dataset.v3view); return; }
+    if (t.id === 'v3-png') { screenshot(); return; }
+    if (t.id === 'v3-retry') { LIB = 'idle'; render(); }
+  });
+
+  return { render, markDirty, showErrors, reportSection, reportOn, reportChip, needLib, state: () => ({ lib: LIB, dirty: V.dirty, labels: V.labels.length, notes: V.notes.slice(), bounds: V.bounds ? [V.bounds.min.toArray(), V.bounds.max.toArray()] : null }) };
+})();
+</script>
+<script>
+/* =====================================================================
    Gusset Plate Rating: user interface (layout and calc-sheet style follow GirderDetail, Steel Bridge Beam Modules.html)
    ===================================================================== */
 const T = String.raw;
@@ -1872,16 +2232,16 @@ function recompute() {
   R = GPR.compute(P);
   if (R.errors.length) { renderErrors(); return; }
   renderStatus(); updateAuto(); updateCaseSel(); drawPreview();
-  ['summary', 'drawing', 'checks', 'rating', 'params', 'validation'].forEach(t => DIRTY.add(t)); crMarkStale();
+  ['summary', 'drawing', 'checks', 'rating', 'params', 'validation'].forEach(t => DIRTY.add(t)); crMarkStale(); GP3D.markDirty();
   renderTab(P.ui.otab);
 }
-function renderTab(t) { if (!R) return; if (R.errors.length) return; const f = { summary: renderSummary, drawing: renderDrawing, checks: renderChecks, rating: renderRating, params: renderParams, validation: renderValidation, method: renderMethod, report: renderReportTab }[t]; if (!f) return;
-  if (t === 'report') { f(); return; } if (DIRTY.has(t) || !$('#tab-' + t).innerHTML) { f(); DIRTY.delete(t); applyCollapse(); typeset($('#tab-' + t)); } }
+function renderTab(t) { if (!R) return; if (R.errors.length) return; const f = { summary: renderSummary, drawing: renderDrawing, checks: renderChecks, rating: renderRating, params: renderParams, validation: renderValidation, method: renderMethod, report: renderReportTab, '3d': GP3D.render }[t]; if (!f) return;
+  if (t === 'report' || t === '3d') { f(); return; } if (DIRTY.has(t) || !$('#tab-' + t).innerHTML) { f(); DIRTY.delete(t); applyCollapse(); typeset($('#tab-' + t)); } }
 function typeset(root) { if (!root || !(window.MathJax && MathJax.typesetPromise)) return; try { MathJax.typesetClear([root]); } catch (e) {} MathJax.typesetPromise([root]).catch(() => {}); }
 function renderErrors() { crMarkStale();
   $('#status-bar').innerHTML = `<div class="verdict fail"><span class="vd-ico">!</span>Input error</div><div class="sb-msg">${R.errors.length} problem${R.errors.length > 1 ? 's' : ''} must be fixed.</div>`;
   const h = `<div class="alert fail"><b>Ratings are blocked until these inputs are fixed.</b><ul class="err-list">${R.errors.map(e => `<li>${esc(e)}</li>`).join('')}</ul></div>`;
-  ['summary', 'drawing', 'checks', 'rating'].forEach(t => $('#tab-' + t).innerHTML = h); DIRTY.clear(); drawPreview(); }
+  ['summary', 'drawing', 'checks', 'rating'].forEach(t => $('#tab-' + t).innerHTML = h); DIRTY.clear(); GP3D.showErrors(); drawPreview(); }
 function updateAuto() { $$('[data-auto]').forEach(el => { const [a, i, k] = el.dataset.auto.split('.'); let v = null;
   if (a === 'm') { const g = R.G[+i]; if (g) v = { wG: g.W.WgAuto, wN: g.W.WnAuto, lmid: g.W.LmidAuto, bsLvg: g.B.LvgAuto, bsLvn: g.B.LvnAuto, bsLtg: g.B.LtgAuto, bsLtn: g.B.LtnAuto }[k]; }
   else if (a === 'pl') { const pl = R.planes.find(q => q.qi === +i); if (pl) v = k === 'Lg' ? pl.LgAuto : pl.LnAuto; }
@@ -1933,7 +2293,7 @@ function renderSummary() {
   const scope = card('sum-scope', 'Not included in Phase 1', '', `<ul class="dlist">${SCOPE_OUT.map(s => `<li>${s}</li>`).join('')}</ul>`);
   $('#tab-summary').innerHTML = vfy + head + tbl + warns + eqmC + scope;
 }
-const SCOPE_OUT = ['Chord splice and combined shear, axial and moment on a plane (NCHRP W-197 combined check); a spliced chord is checked through the gusset plates only', 'Clipping of the Whitmore section at adjacent members (a warning is given when it crosses one)', 'Edge-buckling (free edge slenderness) and plate yielding near the work point under combined actions', 'Localized section loss (loss is applied uniformly to each plate)', 'Fastener groups loaded eccentrically; fasteners are assumed to share the member force equally', 'Fatigue and serviceability (slip) of bolted connections', '3D view (Phase 2)'];
+const SCOPE_OUT = ['Chord splice and combined shear, axial and moment on a plane (NCHRP W-197 combined check); a spliced chord is checked through the gusset plates only', 'Clipping of the Whitmore section at adjacent members (a warning is given when it crosses one)', 'Edge-buckling (free edge slenderness) and plate yielding near the work point under combined actions', 'Localized section loss (loss is applied uniformly to each plate)', 'Fastener groups loaded eccentrically; fasteners are assumed to share the member force equally', 'Fatigue and serviceability (slip) of bolted connections'];
 
 /* ---------- drawing ---------- */
 const DCOL = { pass: '#2c7a4b', warn: '#c98a1b', fail: '#c3352b', na: '#9aa39d' };
@@ -2186,7 +2546,7 @@ const CR_REFS = [['AASHTO MBE', 'AASHTO Manual for Bridge Evaluation, 3rd Ed., w
   ['NCHRP W-197', 'Ocel, J. M., Guidelines for the Load and Resistance Factor Design and Rating of Riveted and Bolted Gusset-Plate Connections for Steel Bridges, NCHRP Web-Only Document 197 (2013)'], ['FHWA-IF-09-014', 'FHWA, Load Rating Guidance and Examples for Bolted and Riveted Gusset Plates in Truss Bridges (2009)'], ['AASHTO Std. Spec.', 'AASHTO Standard Specifications for Highway Bridges, 17th Ed. (2002), Art. 10.54, 10.56 (LFR fastener and column strengths)']];
 let CR_STALE = true, CR_T = null, CR_PENDING = null;
 const CR_CLOSED = new Set();
-function crOpts() { const r = P.ui.rpt || {}; const o = {}; CR_OPTS.forEach(([k]) => o[k] = r[k] !== false && !(k === 'method' && !r.method)); o.detail = r.detail || 'full'; return o; }
+function crOpts() { const r = P.ui.rpt || {}; const o = {}; CR_OPTS.forEach(([k]) => o[k] = r[k] !== false && !(k === 'method' && !r.method)); o.detail = r.detail || 'full'; o.view3d = GP3D.reportOn(); return o; }
 function crMarkStale() { CR_STALE = true; if (P && P.ui.otab === 'report') { clearTimeout(CR_T); CR_T = setTimeout(() => renderReportTab(), 600); } }
 const kvT = rows => `<table class="cr-tbl"><tbody>${rows.map(([k, v, u]) => `<tr><td>${k}</td><td class="n">${v}</td><td>${u || ''}</td></tr>`).join('')}</tbody></table>`;
 function crInputs() {
@@ -2211,12 +2571,13 @@ function buildReport(o) {
   if (o.checks) { const ws = [...new Set(R.checks.map(c => c.who))]; ws.forEach(w => { body += `<section class="cr-sec">${H1(w)}`; R.checks.filter(c => c.who === w).forEach(c => { const m = minRF(c); body += `<div class="cr-sub">${H2(`${LSNAME[c.ls]} (${c.id})`, c.unc.length ? 'contains parameters to verify' : '', 'cr-chk-' + c.id)}<div class="cr-body">${checkBody(c, { gov: o.detail === 'gov' }).replace(/<span class="badge[^"]*"[^>]*>[^<]*<\/span>/g, '')}</div>${c.na ? '' : `<div class="cr-line cr-res"><div class="cr-d">Lowest rating factor:</div><div class="cr-m"><b>${m ? f2(m.r.RF) : '—'}</b>${m ? ` (${esc(R.cases[m.j].label)})` : ''}</div><div class="cr-r ${m && m.r.RF < 1 ? 'cr-st-fail' : ''}"><b>${m ? (m.r.RF < 1 ? 'RF < 1.00' : 'RF ≥ 1.00') : 'n/a'}</b></div></div>`}</div>`; }); body += `</section>`; }); }
   if (o.rating) body += `<section class="cr-sec cr-break">${H1('Rating summary')}<div class="cr-body">${ratingMatrix(true)}</div><p class="cr-p cr-concl"><b>Governing:</b> ${R.cases.map((c, j) => `${esc(c.label)}: RF = ${R.gov[j] ? `${f2(R.gov[j].r.RF)} (${esc(R.gov[j].c.id)})` : '—'}`).join('; ')}.</p></section>`;
   if (o.drawing) body += `<section class="cr-sec cr-break">${H1('Drawing')}<div class="cr-sub cr-fig">${svgDrawing({ static: true })}<p class="cap">Plate outline, members, fasteners, Whitmore sections (thick), 30° spread lines, L<sub>1</sub> to L<sub>3</sub> (arrows), block-shear paths (dotted) and shear planes (dashed); colours by D/C for ${R.cases[+P.ui.dcCase || 0] ? esc(R.cases[+P.ui.dcCase || 0].label) : '—'}.</p></div></section>`;
+  if (o.view3d) body += GP3D.reportSection(H1);
   if (o.validation) { const v = VAL || runValidation(); if (!v.err) body += `<section class="cr-sec">${H1('Validation (hand checks)')}<p class="cr-p">Built-in validation model with the default code parameters (see the fix log for the hand calculation).</p><table class="cr-tbl cr-wide"><thead><tr><th>Quantity</th><th>Hand</th><th>Tool</th><th>Unit</th><th>Status</th></tr></thead><tbody>${v.rows.map(r => `<tr><td>${sub(r.what)}</td><td class="n">${r.hand}</td><td class="n">${r.unit === 'in' || r.unit === '' ? f4(r.tool) : f2(r.tool)}</td><td>${r.unit}</td><td>${r.ok ? 'match' : 'DIFFERS'}</td></tr>`).join('')}</tbody></table></section>`; }
   if (o.method) body += `<section class="cr-sec cr-break">${H1('Appendix: method')}<div class="cr-man">${methodHtml()}</div></section>`;
   const front = `<section class="cr-cover"><div class="cr-cover-t"><h1>Gusset Plate Rating</h1><p>${esc(mt.joint || '')}</p><p class="cr-cover-p">${esc(mt.projectName || '')}${mt.bridgeId ? ', Bridge ' + esc(mt.bridgeId) : ''}</p></div></section>
     <section class="cr-front"><h2 class="cr-h1 cr-nonum">References:</h2><table class="cr-refs">${CR_REFS.map(([a, b]) => `<tr><td>${a}</td><td>${b}</td></tr>`).join('')}</table>
     <h2 class="cr-h1 cr-nonum">Table of contents:</h2><ol class="cr-toc">${toc.map(s => `<li><a href="#${s.id}" data-crjump="${s.id}">${s.n}. ${esc(s.t)}</a>${s.subs.length ? `<ol>${s.subs.map((q, i) => `<li><a href="#${q.id}" data-crjump="${q.id}">${s.n}.${i + 1}. ${esc(q.t)}</a></li>`).join('')}</ol>` : ''}</li>`).join('')}</ol>
-    <p class="cr-p cr-small">Prepared with Gusset Plate Rating (Phase 1). Equations are shown symbolically, then with values substituted, then with the result. Units: kip, in, ksi unless noted.</p></section>`;
+    <p class="cr-p cr-small">Prepared with Gusset Plate Rating (Phase 2). Equations are shown symbolically, then with values substituted, then with the result. Units: kip, in, ksi unless noted.</p></section>`;
   window.CR_TOC = toc; return front + body;
 }
 const crEsc = s => String(s ?? '').replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, ' ');
@@ -2242,7 +2603,7 @@ async function renderReportTab() {
   const sc = $('.tab-panels'), keep = sc ? sc.scrollTop : 0, wasBuilt = !!host.querySelector('.crv-doc');
   if (CR_STALE || !wasBuilt) { const o = crOpts(), doc = buildReport(o), toc = window.CR_TOC || [];
     const chip = ([k, l]) => `<label class="crv-chip"><input type="checkbox" data-crtog="${k}" ${o[k] ? 'checked' : ''}>${l}</label>`;
-    host.innerHTML = `<div class="crv"><div class="crv-bar"><div class="crv-tog" role="group" aria-label="Report sections">${CR_OPTS.map(chip).join('')}</div>
+    host.innerHTML = `<div class="crv"><div class="crv-bar"><div class="crv-tog" role="group" aria-label="Report sections">${CR_OPTS.map(chip).join('')}${GP3D.reportChip()}</div>
       <label class="crv-det">Detail <select id="crv-detail"><option value="full">Every rating case worked</option><option value="gov">Lowest rating case only</option></select></label>
       <span class="crv-sp"></span><button type="button" class="dg-btn" id="crv-exp">Expand all</button><button type="button" class="dg-btn" id="crv-col">Collapse all</button><button type="button" class="btn btn-primary" id="crv-print">Print this report</button></div>
       <div class="crv-body"><nav class="crv-toc" aria-label="Report contents">${toc.map(s => `<a href="#${s.id}" data-crjump="${s.id}" class="crv-l1">${s.n}. ${esc(s.t)}</a>${s.subs.map((q, i) => `<a href="#${q.id}" data-crjump="${q.id}" class="crv-l2">${s.n}.${i + 1} ${esc(q.t)}</a>`).join('')}`).join('')}</nav>

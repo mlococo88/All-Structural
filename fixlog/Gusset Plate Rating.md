@@ -161,7 +161,47 @@ Hand values were computed independently with a short node script of the formulas
   - O2. Whitmore clipping at adjacent members (warning only now).
   - O3. Free-edge slenderness / edge buckling; localized section loss along specific planes (loss is uniform per plate now).
   - O4. Eccentric fastener groups; unequal force sharing between plates of different thickness.
-  - O5. 3D view (three.js r128) — Phase 2.
+  - O5. 3D view (three.js r128) — Phase 2. (Done: see C2 below.)
   - O6. Live load concurrency: shear-plane and chord ΔF demands treat the entered member LL forces as concurrent; envelope forces from different truck positions should be entered as separate columns.
   - O7. MIDAS import supports the long table format (Elem, Load, Part, Axial); direct .mct/result-file import is not implemented.
   - O8. All items under "Needs verification".
+
+## 2026-10-05 — PR: claude/gusset-phase2 (PR link added after merge)
+
+### C2. 3D view of the connection (Phase 2)   [new feature; no calculation changes]
+
+- **Type:** display only. New "3D" tab (after Drawing) and an optional "3D view (snapshot)" section in the Report (off by default). **No engineering formula, load factor, resistance factor, parameter default, unit or code reference was changed.** The engine `<script>` (`const GPR = (function () {` … `})();`) is byte-for-byte identical to Phase 1.
+- **Library:** three.js **r128**, pinned: `https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js` and `https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js`. Loaded lazily (script tags added only when the 3D tab or the report snapshot needs them; 20 s timeout). If the CDN is unreachable the 3D tab shows "The 3D view could not be loaded … All other tabs work without it." with a "Try again" button; if WebGL is unavailable it says so. All other tabs work without three.js.
+- **Storage (new key only):** `gussetRating.view3d.v1` = `{ layers: {plates, members, fasteners, fillers, work, whitmore, planes, lmid, labels, dc}, transp, opacity, stub, rpt }` (3D view options and the report-snapshot checkbox; per browser, not per project). `gussetRating.autosave.v1`, `gussetRating.projects.v1` and the project export/import JSON are unchanged (no new fields in the project data). The 3D tab's "D/C for" selector writes the existing `ui.dcCase` field, the same one as the Rating input tab. `ui.otab` may now hold `'3d'` (an older copy of the tool shows an empty panel for that value until another tab is clicked).
+- **What is drawn** (inches; origin at the WP, +x along the chord, +y up in the plate plane, z out of plane), all from the model and the engine geometry (`R.G`, `R.poly`, `R.ts`, `R.planes`):
+  - Gusset plates: the plate polygon extruded by each plate's thickness after section loss (`R.ts`). Inner faces at z = ±max(d2/2 + filler) over the members; plate 1 on +z, plate 2 on −z, extra plates stacked outward alternately; one plate: +z only. Transparent toggle and opacity slider.
+  - Members: a stub from the member end (`cut`) to the last fastener row + stub length (view option, default 12 in, minimum 1.5 in), built from the section type and its two widths: box/channel pair = two channels with webs on the plates and flanges turned in (a cover plate on the upper side if the description contains "cover"; lacing lines if it contains "lac"); built-up H/I and rolled W = flanges on the plates, web at the work line; angle/double angle = one angle per face. Missing widths: plain box sized from the outer gage lines plus edge distance (and the widest entered member out of plane), with a note. Continuous chord: the two chord stubs meet at the WP; spliced chord: 1/4 in gap at the WP, with a note. Element thicknesses, flange widths and fastener head/nut/washer sizes are nominal drawing sizes (stated under the view).
+  - Fasteners at every hole (`g.holes`): one shear plane per plate → plate(s) + member element on each face; two planes → through the whole member. Rivets: shank + button heads both ends; bolts: shank + hex head + washer + hex nut.
+  - Fillers (`fast.tf` > 0) between the member face and the plate(s), over the fastener field.
+  - Overlays (toggles), on the +z face just above the fastener heads: work lines + WP, Whitmore section (`W.A`–`W.B`) with the 30° spread lines, L1/L2/L3 arrows, partial shear planes (also as translucent bands through the plate stack), labels (member, live-load force of the selected case with T/C, DC, DW, governing D/C and check id; plate label; SP labels).
+  - Colour by D/C for the rating case selected (same scale and colours `DCOL`/`dcCls` as the 2D drawing): members = all their checks (continuous chord: CH-FS, CH-BR); plates = Whitmore, block shear, shear planes; fastener groups = fastener shear and bearing. Legend under the view and in the PNG.
+- **Controls:** orbit/pan/zoom (OrbitControls), Front / Top / Side / Iso / Fit, layer chips, transparent plates + opacity, member stub length, D/C case, Screenshot (PNG; labels and legend drawn into the image; `preserveDrawingBuffer: true`). The scene is rebuilt (geometries and materials disposed) only when the model changes **and** the 3D tab is shown (or a report snapshot is needed); rendering is on demand (no animation loop); ResizeObserver handles resizing.
+- **Edits to existing code (UI script; anchors for re-applying by hand):**
+  - CSS: block `/* 3D view (Phase 2) */` appended before `</style>` after `@media print { .gdwg { … } }`.
+  - Header pill: `…6B (LFR), Phase 1</span>` → `…6B (LFR), Phase 2</span>`; report front page `Prepared with Gusset Plate Rating (Phase 1).` → `(Phase 2).`
+  - Tab bar: after `data-tab="drawing">Drawing</button>` added `<button type="button" class="tab-btn" data-tab="3d">3D</button>`; panels: after `<div class="tab-panel" id="tab-drawing"></div>` added `<div class="tab-panel" id="tab-3d"></div>`.
+  - New `<script>` defining `const GP3D = (function () { … })();` inserted immediately before the UI script (`Gusset Plate Rating: user interface`).
+  - `recompute()`: `… DIRTY.add(t)); crMarkStale();` → `… DIRTY.add(t)); crMarkStale(); GP3D.markDirty();`
+  - `renderTab(t)`: `report: renderReportTab }[t]; if (!f) return;` / `if (t === 'report') { f(); return; }` → `report: renderReportTab, '3d': GP3D.render }[t]; if (!f) return;` / `if (t === 'report' || t === '3d') { f(); return; }`
+  - `renderErrors()`: `DIRTY.clear(); drawPreview(); }` → `DIRTY.clear(); GP3D.showErrors(); drawPreview(); }`
+  - `SCOPE_OUT`: removed the last item `'3D view (Phase 2)'`.
+  - `crOpts()`: `o.detail = r.detail || 'full'; return o; }` → `o.detail = r.detail || 'full'; o.view3d = GP3D.reportOn(); return o; }`
+  - `buildReport(o)`: before `if (o.validation) {` added `if (o.view3d) body += GP3D.reportSection(H1);`
+  - `renderReportTab()`: `${CR_OPTS.map(chip).join('')}</div>` → `${CR_OPTS.map(chip).join('')}${GP3D.reportChip()}</div>`
+- **Governing provision:** none (display only).
+- **Check case:** results unchanged. Default 5-member model: LRFR Inventory HL-93 RF = 1.172 (L2-U1-FS), Operating 1.519; LFR Inventory HS20 1.403 (L2-U1-WB), Operating 2.342 — before and after. Validation model: LRFR Inv 1.564 / Op 2.027, LFR Inv 2.109 / Op 3.521, reversal LRFR Inv 3.759 / Op 4.872 (all D-FS) — before and after; Validation tab 17 of 17 match.
+- **How verified:**
+  - `node --check` on every inline script (6 blocks): pass.
+  - Engine in node (engine script extracted from the file) on the default and validation models, before and after: every check's capacity (both methods, both directions), every RF of every case, the governing RF per case, the warnings and the Whitmore/L_mid/block-shear geometry written to JSON and compared — identical (`cmp`). The engine script block is byte-identical.
+  - jsdom with every external resource refused (THREE undefined): all 9 tabs render; the 3D tab shows the fallback message and "Try again" with no runtime error; layer chips, view buttons, Screenshot and Try again do nothing harmful; the 3D "D/C for" select updates `ui.dcCase` and the Rating-tab select; an input error shows on the 3D tab and clears when fixed; Report: the 3D chip is present and off by default; switching it on adds a "3D view" section that says the snapshot is unavailable; Print builds; autosave keys and `ui`/`ui.rpt` fields unchanged; only new key `gussetRating.view3d.v1`; reload with the 3D tab saved as current works.
+  - Chromium (Playwright, three.js r128 and OrbitControls served locally by routing the two CDN URLs): default 5-member model (Iso, Front, Top, Side, opaque plates), validation model (Iso, Front), and a variant (spliced chord, 3 plates with loss on one, A325 bolts with two shear planes, A490 bolts with a 1 in filler, W, L and missing-dimension sections). Screenshots reviewed: members on their work lines on the correct side, fasteners at the hole positions of the 2D drawing, plates on both faces of the members, Whitmore/L_mid/shear-plane overlays in the same places as the 2D drawing. PNG download and the report snapshot (1500 × 950 image) work; no page errors.
+- **Other copies:** none (the new code is only in this file).
+- **Open items:**
+  - O5 (3D view) closed by this entry.
+  - O9. The 3D member stubs use nominal element thicknesses and flange widths because Phase 1 stores only the two outer widths and a description of each section. If true section dimensions are wanted in the 3D view, section fields would have to be added to the project data (a format change needing a migration) — not done.
+  - O10. Members narrower than the clear space between the plates and without a filler are drawn with the gap (noted under the view); the tool does not check fit-up.
