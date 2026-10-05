@@ -510,6 +510,358 @@ All check-case numbers below came from running the real `computeAll()` (and the 
 - **Other copies:** BridgeXfer v1 and `ProjMetaUI` are duplicated (CLAUDE.md §3) in Pile Designer.html, Spread Footing.html, BasePlateAnchorDesigner.html, Concrete Anchor.html and Timber Beam Check.html (this PR), plus any other tools that received BridgeXfer in their own step-1 PRs.
 - **`ProjMetaUI`:** given in full in the After code of the helper insertion above; the copy is identical in every tool listed.
 
+## 2026-10-05 — PR: claude/conn-foundation-loads (PR link added after merge)
+
+### F11. Pull foundation loads from the abutment calculator / SubLoads (HANDOFF.md §4.6, channel `foundationLoads`)   [feature: hand-off (no result change)]
+- **Where:** (1) a new plain `<script>` before the main application script; anchor text `<script>\nconst {\n  useState,` (inserted just before it, after the `pileProjShareValues` script). (2) `PrintReport`, "Project" input rows; anchor `["Checked by", I.projChk, "", ""],`. (3) `App`, Project Info panel, after the "Share project info" button; anchor `"Share project info"))))`.
+- **Problem:** none (feature).
+- **Governing provision:** n/a. No formula, factor, default or unit changed. The receiver reads `deriveLoadPoints`, `deriveGroupCases`, `computeCapDist` (for the default centroid, with cap/stem weight off), `caseIsZero`, `pileWidth` and writes inputs only through `setI` after **Import**.
+- **What it does:** **Pull from Abutment / SubLoads** (● new data from `BridgeXfer.isNew('foundationLoads','pileDesigner')`) and **Import hand-off (JSON)**. Nothing is applied on page load. The dialog lists every valid sender copy (`.by.abutment`, `.by.subloads`, the channel key), shows producer, time, project, element, location, the sender's sign convention and notes, the cases, and exactly what will change. Refused in integral-abutment mode.
+- **Load-case structure checked:** the LRFD case table (`I.loadCases`: `{name, type: strength|extreme|service|tension, STL kip, Plat kip, Mhead kip-ft}`) holds **per-pile** loads; each row is checked with its own φ set (Extreme Event φ = 1.0, service rows for deflection only). The group workspace (`I.loadPoints` + `I.groupCases`, mags `{P, Vx, Vy, Mx, My}` kip / kip-ft) holds cap loads and emits one "Group ▦" row per case for the governing pile. A footing / pile-cap resultant therefore goes to the group workspace by default.
+- **Mapping:**
+
+| Hand-off case (axes mapped: pile +x/+y = ± hand-off x or y, default identity) | Group workspace target (default) | Single-pile table target (only after "acts on one pile" is ticked) |
+|---|---|---|
+| `P` (+ down) | `mags[pt].P` | `STL = |P|`; type `tension` when P < 0 |
+| `Vx`, `Vy` | `mags[pt].Vx`, `.Vy` | lateral `Plat` = √(Vx² + Vy²) (default), or |Vx| or |Vy| |
+| `Mx`, `My` (effect-based, same as `Mx_eff = Mx + Vy·z + P·e_y`) | `mags[pt].Mx`, `.My` | `Mhead` = 0 (default) or |M| in the same plane |
+| `factored`, `limitState` | type `strength`; `extreme` for an Extreme Event limit state; `service` when `factored:false` | same (tension overrides) |
+| reference point | load location "Foundation hand-off" at (x, y) entered in pile coordinates, default = centroid of the current layout; z = 0 | — |
+| `includes.footingWeight` | offers to switch off `capIncludeWeight` / `stemEnable` (default on) | — |
+
+  Other choices: turn on `groupEnable` (default on), replace previously imported rows (default; only rows tagged `_bx.ch = "foundationLoads"` are removed) or add. Source: new optional field `I.foundationSrc` (`producer, producerFile, producedAt, project, element, location, target, cases, axes, point, lateral, moment, mode, via, adoptedAt, notes`), saved with the inputs, shown under the project buttons and printed in the report's "Project" input rows.
+- **Before / After** (exact):
+  1. New script. Before: `</script>` (end of the `pileProjShareValues` script) followed by `<script>` / `const {` / `  useState,`. After — inserted between them:
+```html
+/* Foundation-load hand-off receiver (HANDOFF.md §4.6, channel foundationLoads; senders: abutment_calculator.html,
+   Bridge Substructure Loading.html). Project panel: "Pull from Abutment / SubLoads" (new-data marker) and
+   "Import hand-off (JSON)". Nothing is applied on page load. The dialog shows the source, the sender's sign
+   convention, every case, and exactly what will change; it applies only on "Import". Two targets, the user's choice:
+   - Pile group workspace (default): each case becomes one group load case (groupCases, type strength / extreme /
+     service from the case's factored flag and limit state) acting at one load location "Foundation hand-off"
+     (loadPoints, z = 0) placed at the reference point (default: the pile-group centroid). The existing rigid-cap
+     distribution then gives each pile's load and adds a "Group ▦" row per case to the LRFD case table.
+   - Single-pile LRFD case table: each case becomes one row (STL = P, lateral and head moment as chosen), only for
+     loads that act on ONE pile.
+   Hand-off and group workspace use the same effect-based moment convention (+My moves the resultant toward +x,
+   +Mx toward +y; P + down), so only the axes are mapped. Imported rows carry a "_bx" tag; "replace" removes only
+   tagged rows. The source is kept in the new optional input field I.foundationSrc (saved with the inputs,
+   printed in the report). No calculation changes. Uses BridgeXfer v1 (above). */
+(function(){
+  if(window.PileFoundationXfer) return;
+  var CH='foundationLoads', SCHEMA='bridge-foundation-loads', MAXV=1, RID='pileDesigner', BY=['abutment','subloads'];
+  var FORCE={kip:1,kips:1,k:1,lb:0.001,lbf:0.001,lbs:0.001};               /* -> kip */
+  var MOMENT={'kip-ft':1,'kip·ft':1,'k-ft':1,'ft-kip':1,'kip-in':1/12,'lb-ft':0.001,'ft-lb':0.001,'lb-in':0.001/12};   /* -> kip-ft */
+  var AX=['+x','-x','+y','-y'], AXL={'+x':'+x of the hand-off','-x':'−x of the hand-off','+y':'+y of the hand-off','-y':'−y of the hand-off'};
+  var PT_NAME='Foundation hand-off';
+  function isNum(v){ return typeof v==='number' && isFinite(v); }
+  function f2(v,d){ return isNum(v) ? (Math.abs(v)<1e-12?0:v).toFixed(d==null?2:d) : '—'; }
+  function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+  function h(tag,css,html){ var e=document.createElement(tag); if(css) e.style.cssText=css; if(html!==undefined) e.innerHTML=html; return e; }
+  function when(iso){ var d=new Date(iso); if(isNaN(d)) return String(iso||'?');
+    function p(n){ return (n<10?'0':'')+n; }
+    return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+' '+p(d.getHours())+':'+p(d.getMinutes()); }
+  function projName(p){ return (p.project && typeof p.project==='object') ? (p.project.name||'') : String(p.project||''); }
+  function r6(v){ return Math.round(v*1e6)/1e6; }
+  function short(p){ return /abut/i.test(p.producer||'')?'Abut':/substructure|subloads/i.test(p.producer||'')?'SubLoads':(p.producer||'Hand-off'); }
+
+  /* ---- validate and convert to kip / kip-ft (same check as Spread Footing's receiver) ---- */
+  function check(p){
+    var out={err:[],warn:[],cases:[]};
+    var e=BridgeXfer.validate(p,SCHEMA,MAXV); if(e){ out.err.push(e); return out; }
+    var u=p.units||{}, kf=FORCE[u.force], km=MOMENT[u.moment];
+    if(!kf){ out.err.push('Unknown force unit "'+(u.force||'')+'". Accepted: kip, or lb (converted ÷ 1000).'); return out; }
+    if(!km){ out.err.push('Unknown moment unit "'+(u.moment||'')+'". Accepted: kip-ft, kip-in, lb-ft, lb-in.'); return out; }
+    if(u.length!==undefined && u.length!=='ft'){ out.err.push('Unknown length unit "'+u.length+'". Accepted: ft.'); return out; }
+    if(kf!==1) out.warn.push('Forces converted from '+u.force+' to kip (× '+kf+').');
+    if(km!==1) out.warn.push('Moments converted from '+u.moment+' to kip-ft (× '+km+').');
+    if(!Array.isArray(p.cases) || !p.cases.length){ out.err.push('The payload has no load cases.'); return out; }
+    p.cases.forEach(function(c,i){
+      var nm=(c && c.name) ? String(c.name) : 'case '+(i+1);
+      if(!c || typeof c!=='object'){ out.err.push('Case '+(i+1)+' is not an object.'); return; }
+      if(typeof c.factored!=='boolean'){ out.err.push(nm+': "factored" must be true or false.'); return; }
+      var v={}, bad=[];
+      ['P','Vx','Vy','Mx','My'].forEach(function(k){ if(!isNum(c[k])) bad.push(k+' = '+JSON.stringify(c[k])); else v[k]=c[k]*(k[0]==='M'?km:kf); });
+      if(bad.length){ out.err.push(nm+': not a finite number: '+bad.join(', ')+'.'); return; }
+      out.cases.push({i:i,name:nm,limitState:String(c.limitState||''),factored:c.factored,governs:c.governs||'',combination:c.combination||'',P:v.P,Vx:v.Vx,Vy:v.Vy,Mx:v.Mx,My:v.My});
+    });
+    return out;
+  }
+  function mapAxes(c,ax){
+    function comp(a){ var s=a.charAt(0)==='-'?-1:1, k=a.charAt(1); return {V:s*(k==='x'?c.Vx:c.Vy), M:s*(k==='x'?c.My:c.Mx)}; }
+    var X=comp(ax.x), Y=comp(ax.y);
+    return {P:c.P, Vx:X.V, Vy:Y.V, Mx:Y.M, My:X.M};
+  }
+  function caseType(c){ return !c.factored ? 'service' : (/extreme/i.test(c.limitState) ? 'extreme' : 'strength'); }
+  function candidates(){
+    var keys=BY.map(function(b){ return BridgeXfer.NS+CH+'.by.'+b; }).concat([BridgeXfer.NS+CH]), seen={}, out=[];
+    keys.forEach(function(k){ var raw=null; try{ raw=localStorage.getItem(k); }catch(e){}
+      if(!raw) return; var p; try{ p=JSON.parse(raw); }catch(e){ return; }
+      if(BridgeXfer.validate(p,SCHEMA,MAXV)) return;
+      var id=(p.producer||'')+'|'+(p.producedAt||''); if(seen[id]) return; seen[id]=1; out.push(p); });
+    out.sort(function(a,b){ return String(b.producedAt||'').localeCompare(String(a.producedAt||'')); });
+    return out;
+  }
+  /* pile-group centroid of the current layout (read-only use of the app's own computeCapDist) */
+  function centroid(I){
+    try{ var w=(typeof pileWidth==='function')?pileWidth(I):0;
+      var g={nRows:I.groupNrows,nCols:I.groupNcols,s_in:(I.groupSpacingIn&&I.groupSpacingIn>0?I.groupSpacingIn:(I.groupSpacingDia||3)*w)};
+      var cd=computeCapDist(Object.assign({},I,{capIncludeWeight:false,stemEnable:false}),g,[]); return {x:r6(cd.cx),y:r6(cd.cy),n:cd.n}; }
+    catch(e){ return {x:0,y:0,n:0}; }
+  }
+  function tagged(o){ return !!(o && o._bx && o._bx.ch===CH); }
+  function defaults(chk,I){
+    var c=centroid(I);
+    return {target:'group', sel:chk.cases.map(function(){ return true; }), ax:{x:'+x',y:'+y'}, px:c.x, py:c.y, mode:'replace',
+      groupOn:true, wtOff:true, lat:'res', mom:'zero', single:false};
+  }
+  /* ---- plan: exactly what will change. Pure: reads I, returns the patch. ---- */
+  function plan(p,chk,o,I){
+    var r={err:[],warn:[],changes:[],patch:{},rows:[]};
+    if(I.pileType==='iab') r.err.push('Integral-abutment mode takes the unfactored gravity load per pile (MassDOT simplified method), not foundation load cases. Switch the pile type to micropile or H-pile to import.');
+    if(o.ax.x.charAt(1)===o.ax.y.charAt(1)) r.err.push('Map pile x and y to different hand-off axes.');
+    var picked=chk.cases.filter(function(c,j){ return o.sel[j]; });
+    if(!picked.length) r.err.push('Tick at least one case.');
+    if(o.target==='single' && !o.single) r.err.push('Single-pile target: tick the box to confirm these loads act on one pile. A footing or pile-cap resultant must go to the pile group workspace.');
+    if(o.target==='group' && (!isNum(o.px) || !isNum(o.py))) r.err.push('Enter the reference-point location (x, y) in pile coordinates.');
+    if(r.err.length) return r;
+    var src={ch:CH,producer:p.producer||'',producedAt:p.producedAt||''}, sh=short(p);
+    if(o.target==='group'){
+      var pts=deriveLoadPoints(I).map(function(x){ return Object.assign({},x); }), gcs=deriveGroupCases(I).map(function(x){ return Object.assign({},x); });
+      var pt=pts.filter(tagged)[0], nextPt=pts.reduce(function(m,x){ return Math.max(m,x.id||0); },0)+1;
+      if(pt && o.mode==='replace'){ if(pt.x!==o.px||pt.y!==o.py||pt.z!==0) r.changes.push('Load location "'+pt.name+'": (x, y, z) = ('+f2(pt.x)+', '+f2(pt.y)+', '+f2(pt.z||0)+') → ('+f2(o.px)+', '+f2(o.py)+', 0) ft'); pt.x=o.px; pt.y=o.py; pt.z=0; pt.atStemTop=false; pt._bx=src; }
+      else { pt={id:nextPt,name:PT_NAME,x:o.px,y:o.py,z:0,_bx:src}; pts.push(pt); r.changes.push('New load location "'+PT_NAME+'" #'+pt.id+' at (x, y, z) = ('+f2(o.px)+', '+f2(o.py)+', 0) ft'); }
+      var keep=gcs, removed=[];
+      if(o.mode==='replace'){ keep=gcs.filter(function(c){ if(tagged(c)){ removed.push(c.name); return false; } return true; }); }
+      if(removed.length) r.changes.push('Remove '+removed.length+' previously imported group case(s): '+removed.join('; '));
+      var nextId=gcs.reduce(function(m,c){ return Math.max(m,c.id||0); },0)+1, add=[];
+      picked.forEach(function(c){ var m=mapAxes(c,o.ax), mags={}; mags[pt.id]={P:r6(m.P),Vx:r6(m.Vx),Vy:r6(m.Vy),Mx:r6(m.Mx),My:r6(m.My)};
+        var g={id:nextId++,name:sh+': '+c.name,type:caseType(c),mags:mags,_bx:Object.assign({case:c.name},src)}; add.push(g);
+        r.rows.push({name:g.name,type:g.type,P:m.P,Vx:m.Vx,Vy:m.Vy,Mx:m.Mx,My:m.My}); });
+      r.changes.push('Add '+add.length+' group load case(s) at "'+pt.name+'" (table below)');
+      var others=keep.filter(function(c){ return !tagged(c) && !caseIsZero(c); });
+      if(others.length) r.warn.push('The group workspace keeps '+others.length+' other non-zero case(s) ('+others.map(function(c){ return c.name; }).join('; ')+'); they also become Group ▦ rows in the LRFD table.');
+      r.patch.loadPoints=pts; r.patch.groupCases=keep.concat(add);
+      if(!I.groupEnable){ if(o.groupOn){ r.patch.groupEnable=true; r.changes.push('"Apply pile group to the design": off → on'); } else r.warn.push('"Apply pile group to the design" is off: the imported group cases are stored but not used until you turn it on (Pile Group Workspace).'); }
+      var inc=p.includes||{};
+      if(inc.footingWeight && (I.capIncludeWeight || I.stemEnable)){
+        if(o.wtOff){ if(I.capIncludeWeight){ r.patch.capIncludeWeight=false; r.changes.push('Cap self-weight + soil surcharge: on → off (the hand-off already includes the footing weight and soil)'); }
+          if(I.stemEnable){ r.patch.stemEnable=false; r.changes.push('Stem wall self-weight: on → off (the hand-off already includes the wall)'); } }
+        else r.warn.push('The hand-off includes the footing/cap weight and the soil, and this tool also adds its cap'+(I.stemEnable?' and stem':'')+' self-weight: they are counted twice.');
+      } else if(!inc.footingWeight && I.capIncludeWeight===false) r.warn.push('The hand-off does not include the footing/cap weight ('+(p.location||'')+'). Turn on the cap self-weight in the Pile Group Workspace if the cap is not otherwise counted.');
+      var pnt=p.reference&&p.reference.point;
+      if(pnt!=='pileGroupCentroid') r.warn.push('The hand-off moments are about the '+(pnt==='footingCentre'?'footing centre':pnt==='unitCentre'?'unit centre':'sender\'s reference point')+'. The location (x, y) above must be that point in pile coordinates; the default is the pile-group centroid ('+f2(centroid(I).x)+', '+f2(centroid(I).y)+'), i.e. it assumes the group is centred on it.');
+      r.warn.push('z = 0: the moments are taken as given at the pile heads (the hand-off level, '+(p.location||'')+'); no V·z is added.');
+    } else {
+      var base=(Array.isArray(I.loadCases)&&I.loadCases.length)? I.loadCases.filter(function(c){ return c && !(typeof c.name==='string' && c.name.indexOf('Group ▦')===0); }) : [{name:'Case 1 — Strength',type:'strength',STL:I.STL,Plat:I.Plat,Mhead:I.pyMhead||0}];
+      var kept=base, gone=[];
+      if(o.mode==='replace') kept=base.filter(function(c){ if(tagged(c)){ gone.push(c.name); return false; } return true; });
+      if(gone.length) r.changes.push('Remove '+gone.length+' previously imported LRFD case(s): '+gone.join('; '));
+      var rows=[];
+      picked.forEach(function(c){ var m=mapAxes(c,o.ax), V, M;
+        if(o.lat==='x'){ V=m.Vx; M=m.My; } else if(o.lat==='y'){ V=m.Vy; M=m.Mx; } else { V=Math.hypot(m.Vx,m.Vy); M=Math.hypot(m.Mx,m.My); }
+        var t=caseType(c); if(c.P<0) t='tension';
+        var row={name:sh+': '+c.name,type:t,STL:r6(Math.abs(c.P)),Plat:r6(Math.abs(V)),Mhead:o.mom==='same'?r6(Math.abs(M)):0,_bx:Object.assign({case:c.name},src)};
+        rows.push(row); r.rows.push({name:row.name,type:row.type,P:row.STL,V:row.Plat,M:row.Mhead}); });
+      r.changes.push('Add '+rows.length+' LRFD load case row(s) (table below)');
+      r.patch.loadCases=kept.concat(rows);
+      if(picked.some(function(c){ return c.P<0; })) r.warn.push('Cases with net uplift (P < 0) become "tension" rows with STL = |P|.');
+      r.warn.push('Lateral = '+(o.lat==='res'?'√(Vx² + Vy²)':'V'+o.lat)+'; head moment = '+(o.mom==='same'?(o.lat==='res'?'√(Mx² + My²)':'|M| in the same plane')+', entered as positive (same sense as the lateral load)':'0 (not imported)')+'.');
+      if(I.groupEnable) r.warn.push('The pile group is applied: the group workspace still adds its own Group ▦ rows.');
+    }
+    var nf=picked.filter(function(c){ return !c.factored; }).length;
+    if(nf) r.warn.push(nf+' service case(s) (factored:false) are imported as type "service" (deflection check only).');
+    r.patch.foundationSrc={producer:p.producer||'',producerFile:p.producerFile||'',producedAt:p.producedAt||'',project:p.project||'',
+      element:p.element||null,location:p.location||'',target:o.target,cases:picked.map(function(c){ return c.name; }),
+      axes:{x:o.ax.x,y:o.ax.y},point:o.target==='group'?{x:o.px,y:o.py,z:0}:null,lateral:o.target==='single'?o.lat:null,moment:o.target==='single'?o.mom:null,mode:o.mode,
+      notes:(p.notes||[]).slice(0,20)};
+    return r;
+  }
+  function apply(p,chk,o,I,setter,via){
+    var r=plan(p,chk,o,I); if(r.err.length) return r;
+    var patch=Object.assign({},r.patch); patch.foundationSrc=Object.assign({},patch.foundationSrc,{via:via||'pull',adoptedAt:new Date().toISOString()});
+    setter(function(s){ return Object.assign({},s,patch); });
+    BridgeXfer.markAdopted(CH,RID,p.producedAt);
+    r.ok=true; r.applied=patch;
+    setTimeout(refreshBar,0);
+    return r;
+  }
+  function openDialog(list,I,setter,via){
+    var si=0, p=list[0], chk=check(p);
+    if(chk.err.length){ alert('Foundation-load hand-off refused:\n  '+chk.err.join('\n  ')); return null; }
+    var o=defaults(chk,I);
+    var old=document.getElementById('pfxOverlay'); if(old) old.remove();
+    var ov=h('div','position:fixed;inset:0;background:rgba(8,18,28,.55);z-index:1000;display:flex;align-items:center;justify-content:center;font-family:system-ui,sans-serif'); ov.id='pfxOverlay';
+    var box=h('div','background:#fff;color:#1a1a1a;border-radius:6px;padding:12px 16px;width:960px;max-width:96vw;max-height:90vh;overflow:auto;font-size:12px;line-height:1.4'); ov.appendChild(box);
+    var head=h('div'), body=h('div'), sum=h('div'); box.appendChild(head); box.appendChild(body); box.appendChild(sum);
+    var row=h('div','display:flex;gap:8px;justify-content:flex-end;margin-top:10px;border-top:1px solid #ccc;padding-top:8px');
+    var ca=h('button','padding:3px 10px;border:1px solid #94a3b8;border-radius:3px','Cancel'), go=h('button','padding:3px 10px;border:1px solid #14304a;border-radius:3px;background:#14304a;color:#fff','<b>Import</b>'); go.id='pfxGo'; ca.id='pfxCancel';
+    row.appendChild(ca); row.appendChild(go); box.appendChild(row);
+    var WB='background:#fff8e1;border:1px solid #f9a825;padding:5px 8px;margin:4px 0', TB='border-collapse:collapse;width:100%;margin:4px 0', TD='border:1px solid #ddd;padding:1px 5px';
+    function opt(sel,val,txt,on){ var op=document.createElement('option'); op.value=val; op.textContent=txt; if(on) op.selected=true; sel.appendChild(op); }
+    function draw(){
+      head.innerHTML='';
+      head.appendChild(h('div',null,'<b style="font-size:14px">Import foundation loads</b>'));
+      if(list.length>1){ var sl=h('label',null,'<b>Sender</b> '), ss=document.createElement('select'); ss.id='pfxSrcSel';
+        list.forEach(function(q,i){ opt(ss,i,(q.producer||'?')+' — '+when(q.producedAt)+((q.element&&q.element.label)?' — '+q.element.label:''),i===si); }); sl.appendChild(ss); head.appendChild(sl); }
+      head.appendChild(h('div','color:#334155;margin:4px 0','<b>Source:</b> '+esc(p.producer||'?')+(p.producerFile?' ('+esc(p.producerFile)+')':'')+
+        ' &middot; <b>sent</b> '+esc(when(p.producedAt))+' &middot; <b>project</b> '+esc(projName(p)||'—')+
+        (p.element?' &middot; <b>element</b> '+esc((p.element.type||'')+' '+(p.element.label||'')):'')+(via==='file'?' &middot; from a JSON file':'')+
+        '<br><b>Location:</b> '+esc(p.location||'—')+'<br><b>Sign convention (sender):</b> '+esc(p.signConvention||'—')+
+        (p.axes?'<br><b>Axes (sender):</b> x: '+esc(p.axes.x||'')+'; y: '+esc(p.axes.y||''):'')));
+      head.appendChild(h('div',WB,'This tool (pile group workspace): P + = down; +Vx, +Vy toward +x, +y of the pile coordinates; M<sub>x,eff</sub> = Mx + Vy·z + P·e<sub>y</sub> and M<sub>y,eff</sub> = My + Vx·z + P·e<sub>x</sub>, so +My moves the resultant toward +x and +Mx toward +y — the same effect-based convention as the hand-off. Only the axes are mapped.'));
+      if(chk.warn.length) head.appendChild(h('div',WB,chk.warn.map(esc).join('<br>')));
+      if(p.notes && p.notes.length){ var nb=h('details'); nb.appendChild(h('summary',null,'Sender notes ('+p.notes.length+')'));
+        nb.appendChild(h('div','color:#475569',p.notes.map(function(n){ return '&bull; '+esc(n); }).join('<br>'))); nb.open=true; head.appendChild(nb); }
+      body.innerHTML='';
+      var tg=h('div','margin:6px 0','<b>Target:</b> <label><input type="radio" name="pfxTarget" value="group"'+(o.target==='group'?' checked':'')+'> Pile group workspace (footing / pile-cap resultant, distributed to the piles)</label> &nbsp; '+
+        '<label><input type="radio" name="pfxTarget" value="single"'+(o.target==='single'?' checked':'')+'> Single-pile LRFD case table</label>');
+      body.appendChild(tg);
+      var t=h('table',TB); t.innerHTML='<tr><th style="'+TD+'"><input type="checkbox" id="pfxAll"'+(o.sel.every(Boolean)?' checked':'')+'></th><th style="'+TD+'">Case</th><th style="'+TD+'">Factored</th><th style="'+TD+'">→ type</th><th style="'+TD+'">P (k)</th><th style="'+TD+'">Vx</th><th style="'+TD+'">Vy</th><th style="'+TD+'">Mx (k-ft)</th><th style="'+TD+'">My</th></tr>';
+      chk.cases.forEach(function(c,j){ var tr=h('tr');
+        tr.innerHTML='<td style="'+TD+'"><input type="checkbox" data-pfx-case="'+j+'"'+(o.sel[j]?' checked':'')+'></td><td style="'+TD+'" title="'+esc(c.combination)+'">'+esc(c.name)+'</td><td style="'+TD+'">'+(c.factored?'yes':'no')+'</td><td style="'+TD+'">'+((o.target==='single'&&c.P<0)?'tension':caseType(c))+'</td>'+
+          ['P','Vx','Vy','Mx','My'].map(function(k){ return '<td style="'+TD+';text-align:right">'+f2(c[k],1)+'</td>'; }).join('');
+        t.appendChild(tr); });
+      var tw=h('div','max-height:28vh;overflow:auto'); tw.appendChild(t); body.appendChild(tw);
+      var g=h('div','display:flex;gap:14px;flex-wrap:wrap;align-items:center;margin:8px 0');
+      ['x','y'].forEach(function(a){ var lb=h('label',null,'<b>Pile +'+a+' =</b> '), se=document.createElement('select'); se.id='pfxAx'+a;
+        AX.forEach(function(k){ opt(se,k,AXL[k],o.ax[a]===k); }); lb.appendChild(se); g.appendChild(lb); });
+      body.appendChild(g);
+      var x='';
+      if(o.target==='group'){
+        x+='<div><b>Reference point in pile coordinates:</b> x <input id="pfxPx" type="number" step="any" value="'+o.px+'" style="width:70px"> y <input id="pfxPy" type="number" step="any" value="'+o.py+'" style="width:70px"> ft, z = 0 '+
+          '<span style="color:#64748b">(default: centroid of the current '+centroid(I).n+'-pile layout)</span></div>';
+        if(!I.groupEnable) x+='<label><input type="checkbox" id="pfxGrpOn"'+(o.groupOn?' checked':'')+'> turn on "Apply pile group to the design"</label><br>';
+        if(p.includes && p.includes.footingWeight && (I.capIncludeWeight||I.stemEnable)) x+='<label><input type="checkbox" id="pfxWt"'+(o.wtOff?' checked':'')+'> switch off this tool\'s cap'+(I.stemEnable?' and stem':'')+' self-weight (the hand-off already includes them)</label><br>';
+      } else {
+        x+='<div><label><input type="checkbox" id="pfxSingle"'+(o.single?' checked':'')+'> these loads act on <b>one</b> pile (e.g. a single shaft); a footing or pile-cap resultant must use the group workspace</label></div>'+
+          '<div><b>Lateral load</b> <select id="pfxLat">'+[['res','resultant √(Vx² + Vy²)'],['x','Vx (pile x)'],['y','Vy (pile y)']].map(function(q){ return '<option value="'+q[0]+'"'+(o.lat===q[0]?' selected':'')+'>'+q[1]+'</option>'; }).join('')+'</select> '+
+          '<b>Head moment</b> <select id="pfxMom"><option value="zero"'+(o.mom==='zero'?' selected':'')+'>0 (not imported)</option><option value="same"'+(o.mom==='same'?' selected':'')+'>|M| in the same plane, + with the lateral load</option></select></div>';
+      }
+      x+='<div><b>Previously imported rows:</b> <label><input type="radio" name="pfxMode" value="replace"'+(o.mode==='replace'?' checked':'')+'> replace</label> <label><input type="radio" name="pfxMode" value="add"'+(o.mode==='add'?' checked':'')+'> keep and add</label> <span style="color:#64748b">(rows you entered yourself are never removed)</span></div>';
+      body.appendChild(h('div',null,x));
+    }
+    function read(){
+      var e, r=document.querySelector('input[name="pfxTarget"]:checked'); if(r) o.target=r.value;
+      var m=document.querySelector('input[name="pfxMode"]:checked'); if(m) o.mode=m.value;
+      Array.prototype.forEach.call(box.querySelectorAll('input[data-pfx-case]'),function(cb){ o.sel[+cb.getAttribute('data-pfx-case')]=cb.checked; });
+      if((e=document.getElementById('pfxAxx'))) o.ax.x=e.value; if((e=document.getElementById('pfxAxy'))) o.ax.y=e.value;
+      if((e=document.getElementById('pfxPx'))) o.px=parseFloat(e.value); if((e=document.getElementById('pfxPy'))) o.py=parseFloat(e.value);
+      if((e=document.getElementById('pfxGrpOn'))) o.groupOn=e.checked; if((e=document.getElementById('pfxWt'))) o.wtOff=e.checked;
+      if((e=document.getElementById('pfxSingle'))) o.single=e.checked; if((e=document.getElementById('pfxLat'))) o.lat=e.value; if((e=document.getElementById('pfxMom'))) o.mom=e.value;
+      return o;
+    }
+    function refresh(){
+      var r=plan(p,chk,o,I), x='';
+      if(r.err.length) x+='<div style="'+WB+';color:#b71c1c;font-weight:bold">'+r.err.map(esc).join('<br>')+'</div>';
+      else {
+        x+='<div style="margin:6px 0"><b>Will change:</b><ul style="margin:2px 0 2px 18px">'+r.changes.map(function(c){ return '<li>'+esc(c)+'</li>'; }).join('')+
+          '<li>Record the source (producer, time, cases) in the inputs (I.foundationSrc); shown in the project panel and printed in the report.</li></ul></div>';
+        var t='<table style="'+TB+'"><tr>'+(o.target==='group'?['New group case','type','P','Vx','Vy','Mx','My']:['New LRFD row','type','axial STL','lateral','M head']).map(function(s){ return '<th style="'+TD+'">'+s+'</th>'; }).join('')+'</tr>'+
+          r.rows.map(function(q){ return '<tr><td style="'+TD+'">'+esc(q.name)+'</td><td style="'+TD+'">'+q.type+'</td>'+(o.target==='group'?['P','Vx','Vy','Mx','My']:['P','V','M']).map(function(k){ return '<td style="'+TD+';text-align:right">'+f2(q[k],2)+'</td>'; }).join('')+'</tr>'; }).join('')+'</table>';
+        x+='<div style="max-height:22vh;overflow:auto">'+t+'</div>';
+      }
+      if(r.warn.length) x+='<div style="'+WB+'">'+r.warn.map(esc).join('<br>')+'</div>';
+      sum.innerHTML=x; go.disabled=!!r.err.length;
+      return r;
+    }
+    function full(){ draw(); refresh(); }
+    box.addEventListener('change',function(e){
+      var t=e.target; if(!t) return;
+      if(t.id==='pfxSrcSel'){ si=+t.value; p=list[si]; chk=check(p);
+        if(chk.err.length){ sum.innerHTML='<div style="'+WB+';color:#b71c1c">'+chk.err.map(esc).join('<br>')+'</div>'; go.disabled=true; return; }
+        o=defaults(chk,I); full(); return; }
+      if(t.id==='pfxAll'){ o.sel=o.sel.map(function(){ return t.checked; }); full(); return; }
+      read(); if(t.name==='pfxTarget' || t.getAttribute('data-pfx-case')!==null){ full(); return; } refresh();
+    });
+    box.addEventListener('input',function(e){ if(e.target && (e.target.id==='pfxPx'||e.target.id==='pfxPy')){ read(); refresh(); } });
+    ca.addEventListener('click',function(){ ov.remove(); });
+    go.addEventListener('click',function(){ var r=apply(p,chk,read(),I,setter,via); if(r.err.length){ refresh(); return; } ov.remove(); });
+    document.body.appendChild(ov);
+    full();
+    return {overlay:ov, opts:o, chk:chk, refresh:refresh, read:read};
+  }
+  function sourceLine(I){
+    var s=I && I.foundationSrc; if(!s || !s.producedAt && !s.producer) return '';
+    return (s.target==='single'?'LRFD case rows':'Pile-group load cases')+' from '+(s.producer||'?')+(s.element&&s.element.label?' ('+s.element.label+')':'')+', '+when(s.producedAt)+
+      ((s.project&&(s.project.name||typeof s.project==='string'))?', project '+(s.project.name||s.project):'')+': '+((s.cases||[]).length)+' case(s) at '+(s.location||'?')+
+      '; pile +x = hand-off '+((s.axes&&s.axes.x)||'?')+', +y = '+((s.axes&&s.axes.y)||'?')+(s.point?'; at ('+s.point.x+', '+s.point.y+') ft':'')+(s.via==='file'?'; via JSON file':'');
+  }
+  function refreshBar(){ var nd=document.getElementById('pfxNew'); if(nd) nd.hidden=!BridgeXfer.isNew(CH,RID); }
+  function pull(I,setter){
+    var list=candidates();
+    if(!list.length){ var r=BridgeXfer.read(CH,SCHEMA,MAXV);
+      alert('Pull foundation loads: '+(r.ok?'no valid payload.':r.error)+(r.empty?'\n\nIn the abutment calculator or Bridge Substructure Loading, click "Send foundation loads" first.':'')); return null; }
+    return openDialog(list,I,setter,'pull');
+  }
+  function importFile(ev,I,setter){
+    var f=ev && ev.target && ev.target.files && ev.target.files[0]; if(!f) return;
+    BridgeXfer.importFile(f,SCHEMA,MAXV,function(r){
+      if(!r.ok){ alert('Import hand-off: '+r.error); return; }
+      openDialog([r.payload],I,setter,'file');
+    });
+    ev.target.value='';
+  }
+  window.PileFoundationXfer={check:check,mapAxes:mapAxes,candidates:candidates,centroid:centroid,defaults:defaults,plan:plan,apply:apply,openDialog:openDialog,sourceLine:sourceLine,refreshBar:refreshBar,pull:pull,importFile:importFile};
+  window.addEventListener('focus',refreshBar);
+  window.addEventListener('storage',refreshBar);
+  setInterval(refreshBar,2000);
+})();
+</script>
+<script>
+```
+  2. `PrintReport`, Project rows. Before:
+```js
+      ["Checked by", I.projChk, "", ""],
+```
+     After:
+```js
+      ["Checked by", I.projChk, "", ""],
+      ["Foundation loads from", (window.PileFoundationXfer && PileFoundationXfer.sourceLine(I)) || null, "", "hand-off (HANDOFF.md §4.6)"],
+```
+  3. `App`, Project Info panel. Before:
+```js
+  }, "Share project info")))), /*#__PURE__*/(I.pileType === "iab") && /*#__PURE__*/React.createElement(Panel, {
+```
+     After:
+```js
+  }, "Share project info")), /*#__PURE__*/React.createElement("div", {
+    className: "flex gap-2 no-print"
+  }, /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    id: "pfxPull",
+    onClick: () => PileFoundationXfer.pull(I, setI),
+    title: "Pull foundation load cases sent by the abutment calculator or Bridge Substructure Loading (channel foundationLoads; asks first, nothing changes until you import)",
+    className: "font-mono-tech text-[9px] px-1.5 py-1 rounded-sm border border-slate-300 text-slate-500 hover:bg-white"
+  }, "Pull from Abutment / SubLoads", /*#__PURE__*/React.createElement("span", {
+    id: "pfxNew",
+    hidden: true,
+    style: { color: "#b45309", fontWeight: 700 }
+  }, " ● new data")), /*#__PURE__*/React.createElement("button", {
+    type: "button",
+    id: "pfxImp",
+    onClick: () => { const f = document.getElementById("pfxFile"); if (f) f.click(); },
+    title: "Import a foundationLoads hand-off JSON file (asks first)",
+    className: "font-mono-tech text-[9px] px-1.5 py-1 rounded-sm border border-slate-300 text-slate-500 hover:bg-white"
+  }, "Import hand-off (JSON)"), /*#__PURE__*/React.createElement("input", {
+    type: "file",
+    id: "pfxFile",
+    accept: ".json,application/json",
+    style: { display: "none" },
+    onChange: e => PileFoundationXfer.importFile(e, I, setI)
+  })), I.foundationSrc && /*#__PURE__*/React.createElement("div", {
+    id: "pfxSrc",
+    className: "text-[9px] text-slate-500 italic leading-snug"
+  }, PileFoundationXfer.sourceLine(I)))), /*#__PURE__*/(I.pileType === "iab") && /*#__PURE__*/React.createElement(Panel, {
+```
+- **Check case:**
+  - Abutment default → group workspace: "Strength I — V max" P = 3153.435 kip, My = 3495.453 kip-ft at the centroid (1.75, 1.75) ft, z = 0; `computeCapDist` gives ΣP = 3153.435 and M_y,eff = 3495.453 (no V·z, no P·e).
+  - Abutment pile branch (24 piles) → same coordinates, pile +x = hand-off −x (the calculator's pile x is + toward the heel): largest pile axial for "Strength I — My max, pile P max" = **211.213 kip** = the calculator's pile table.
+  - SubLoads Pier 1 bottom of footing, pile +x = hand-off +y, pile +y = hand-off −x: Vx = Vy, Vy = −Vx, My = Mx, Mx = −My (asserted for the first case).
+- **How verified:** `node --check` on every plain inline script of the four changed files (abutment 13, SubLoads 3, Pile Designer 4, Spread Footing 18 blocks; none is JSX — Pile Designer is pre-compiled `React.createElement`). End-to-end in jsdom with one shared localStorage stub (React UMD served locally): **79 of 79 assertions pass** — abutment default → Pile Designer; abutment pile branch → Pile Designer with the same pile layout; SubLoads Pier 2 top of footing → Spread Footing; SubLoads Pier 1 bottom of footing → Pile Designer (rotated axes); JSON export → import into both receivers; refusals (wrong `_schema`, `schemaVersion` 2 and 3, kN units, non-finite P, missing `factored`, corrupt JSON file, corrupt stored payload, nothing sent, service-only payload into the footing, integral-abutment mode). No-hand-off invariance against the pre-change files: abutment `computeAll()` (dashboard, every permutation table, Input ID); SubLoads `combine()` envelopes and `concurrentSets()` of every unit and `abutExportData()`; Spread Footing `computeAll()` + `computePhase2()` (by-type and Direct mode); Pile Designer `computeAll(DEFAULT_INPUTS)` and the rendered app text (identical apart from the two new buttons). The earlier e2e suites still pass on this branch: memberReactions (Steel Beam → BasePlate / Spread Footing, 56/56) and abutmentLoads (SubLoads → abutment, 57/57).
+- **Other copies:** `check()`, `mapAxes()` and `candidates()` are duplicated in Spread Footing.html (CLAUDE.md §3). BridgeXfer v1 unchanged.
+- **Open items:** the reference point defaults to the pile-group centroid (assumes the footing centre coincides with it); single-pile mode enters |M| with the sense of the lateral load.
+
 ## Open items (not changed)
 - O1. **Uncased/cased structural axial: outer 0.85 factor and `fy = min(fyb, fyc)`** (`Rn_cased/Rn_ucased`, ≈ line 1675).
   - Neither AASHTO 10.9.3.10.2 nor FHWA NHI-05-039 Eq. 5-13 has the outer 0.85, and the uncased section has no casing, so min(fyb, fyc) is arbitrary there.

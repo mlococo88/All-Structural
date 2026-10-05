@@ -3405,6 +3405,125 @@ async function rxImport(file) {
   window.addEventListener('storage', e => { if (e.key && e.key.indexOf('bridgeSuite.v1.' + CH) === 0 && P.ui.itab === 'rx') buildSide(); else if (e.key && e.key.indexOf('bridgeSuite.v1.' + CH) === 0) { const t = document.querySelector('.itab[data-pane="rx"]'); if (t) t.classList.toggle('bx-new', BX() ? BX().isNew(CH, RID) : false); } });
   window.SubLoadsRxHandoff = { candidates, check, openDialog, applyDialog, closeDialog, plan, pull, state: () => DLG, defTarget };   // used by tests; no effect on results
 })();
+/* ---------- foundation loads hand-off (HANDOFF.md §4.6, channel foundationLoads) ----------
+   "Send foundation loads" opens a dialog: pick the unit, the level (reference point) and the limit states.
+   For each limit state the payload carries the concurrent sets of the Combinations tab (comboEval with a
+   target sign: P max/min, M_t max/min, M_l max/min, duplicates merged) at the chosen resultant level.
+   SubLoads M_t -> Mx, M_l -> My, V_l -> Vx, V_t -> Vy (sign convention below). "Send to other tools"
+   publishes; "Export hand-off (JSON)" writes the same payload to a file. Reads results only; nothing
+   here changes a SubLoads result. Uses BridgeXfer v1 (top of this file). */
+(function () {
+  const CH = 'foundationLoads', SCH = 'bridge-foundation-loads', SID = 'subloads';
+  const LEVELS = { 'top of footing': 'topOfFooting', 'bottom of footing': 'bottomOfFooting', 'base of wall': 'baseOfWall', 'point of fixity': 'pointOfFixity' };
+  const ELT = { abut: 'abutment', mcb: 'bent', pile: 'bent', ham: 'pier', wall: 'pier' };
+  const r3 = v => Math.round((+v || 0) * 1000) / 1000, strip = s => String(s).replace(/<[^>]+>/g, '');
+  const SIGN = 'P + = downward (compression on the foundation). Axes are local to the unit: x is horizontal and normal to the bearing line, + ahead station; y is horizontal along the bearing line, + to the left looking ahead station. Vx, Vy = horizontal force on the foundation, + toward +x, +y (SubLoads V_l = Vx, V_t = Vy). Mx = moment about the x axis, + when it moves the resultant toward +y (more compression on the +y side), so e_y = Mx/P (SubLoads M_t). My = moment about the y axis, + when it moves the resultant toward +x, so e_x = My/P (SubLoads M_l).';
+  function levels(k) {
+    const r = unitRes(k); if (r.err) return [];
+    return r.UM.defs.map(d => d.grp === 'Resultant' && (d.label.match(/^Axial, (.+)$/) || [])[1]).filter(l => l && LEVELS[l]);
+  }
+  function idx(defs, lev) { const f = lab => defs.findIndex(d => d.grp === 'Resultant' && d.label === `${lab}, ${lev}`); return { P: f('Axial'), Mt: f('M<sub>t</sub>'), Ml: f('M<sub>l</sub>'), Vt: f('V<sub>t</sub>'), Vl: f('V<sub>l</sub>') }; }
+  function combos(k) { return COMBOS.filter(c => { try { return !!comboComps(k, c); } catch (e) { return false; } }); }
+  const isFact = c => /^Str|^EE/.test(c.id);
+  const lsName = c => c.id === 'StrC' ? 'Strength I (construction stage)' : c.name;
+  function defLevel(k) { const L = levels(k); return L.includes('bottom of footing') ? 'bottom of footing' : L[0] || ''; }
+  /* build the payload for unit k at level lev for the limit-state ids in ids */
+  function build(k, lev, ids) {
+    const G = MODEL.G; if (!G || G.E.length) return { err: 'Fix the input errors on the Summary tab first.' };
+    const u = P.units[k]; if (!u) return { err: 'Pick a unit.' };
+    const r = unitRes(k); if (r.err) return { err: `${u.name}: ${r.err}` };
+    if (!LEVELS[lev] || !levels(k).includes(lev)) return { err: `${u.name} has no resultant at "${lev}".` };
+    const q = idx(r.UM.defs, lev); if (Object.values(q).some(i => i < 0)) return { err: `${u.name}: the resultant at "${lev}" is incomplete.` };
+    const cs = combos(k).filter(c => ids.includes(c.id)); if (!cs.length) return { err: 'Pick at least one limit state.' };
+    const cases = [];
+    cs.forEach(c => {
+      const mine = [];
+      [['P', 'P'], ['Mt', 'Mx (M_t)'], ['Ml', 'My (M_l)']].forEach(([key, lab]) => [1, -1].forEach(s => {
+        const e = comboEval(k, c, q[key], s); if (!e) return; const v = e.v;
+        const vals = { P: r3(v[q.P]), Vx: r3(v[q.Vl]), Vy: r3(v[q.Vt]), Mx: r3(v[q.Mt]), My: r3(v[q.Ml]) };
+        const tag = `${lab} ${s > 0 ? 'max' : 'min'}`, same = mine.find(m => ['P', 'Vx', 'Vy', 'Mx', 'My'].every(f => m[f] === vals[f]));
+        if (same) { same.governs.push(tag); return; }
+        mine.push(Object.assign({ limitState: lsName(c), factored: isFact(c) }, vals, { governs: [tag], combination: e.used.join(' + ') }));
+      }));
+      mine.forEach(m => { m.governs = m.governs.join(', '); m.name = `${lsName(c)} — ${m.governs}`; m.id = `${c.id}:${m.governs}`; cases.push(m); });
+    });
+    if (!cases.length) return { err: 'No combination could be evaluated for this unit.' };
+    const abut = u.type === 'abut', bot = lev === 'bottom of footing';
+    const point = abut ? 'footing centre (moments about the footing centre)' : 'unit centre on the bearing line (centre of the cap length; the footing centre when the footing is centred under the unit)';
+    const sp = window.BridgeXfer && BridgeXfer.sharedProject ? BridgeXfer.sharedProject() : null;
+    const p = {
+      _schema: SCH, schemaVersion: 1, producer: 'Bridge Substructure Loading', producerFile: 'Bridge Substructure Loading.html',
+      project: { name: P.meta.name || '', bridgeId: (sp && sp.bridgeId) || '' },
+      units: { force: 'kip', moment: 'kip-ft', length: 'ft' },
+      element: { type: ELT[u.type] || 'pier', label: u.name, unitIndex: k },
+      location: `${lev}, ${point}`,
+      reference: { level: LEVELS[lev], point: abut ? 'footingCentre' : 'unitCentre' },
+      includes: { footingWeight: bot, soilOverFooting: bot, earthPressure: abut },
+      axes: { x: 'horizontal, normal to the bearing line, + ahead station' + (abut ? (k === 0 ? ' (toward the span for this abutment)' : ' (away from the span, toward the backfill, for this abutment)') : ''), y: 'horizontal, along the bearing line, + to the left looking ahead station' },
+      signConvention: SIGN,
+      cases,
+      notes: [
+        `${u.name} (${ELT[u.type] || u.type}), ${lev}. One case per limit state and target: the concurrent set that maximises or minimises P, M_t or M_l (Combinations tab, "Concurrent design sets"); identical sets are merged and their targets listed in "governs".`,
+        'Strength and Extreme Event cases are factored (factored:true). Service cases have load factors of 1.0 (factored:false).',
+        'LL+IM is included where the limit state has live load (lane search, multiple presence; IM dropped for footings below ground per 3.6.2.1).',
+        bot ? 'Bottom of footing: includes the footing self-weight and the soil over the footing (EV)' + (abut ? ', and the earth loads at the footing level (virtual back plane).' : '.') : 'Top of footing: excludes the footing self-weight and the soil over the footing' + (abut ? '; includes the earth loads on the stem.' : '.'),
+        abut ? 'Abutment: Mx is about the abutment centreline; My is about the footing centre.' : 'Mx is about the centre of the cap length; My is about the bearing line (CL pier).',
+        'Load factors are SubLoads\' (editable per limit state; AASHTO LRFD 10th Ed. Table 3.4.1-1 defaults). Each case gives every load the same factor and arrangement (a concurrent set).'] };
+    return { p, n: cases.length, unit: u.name };
+  }
+  let DLG = null;
+  function close() { const m = document.getElementById('fdx-modal'); if (m) m.remove(); DLG = null; }
+  function render() {
+    const d = DLG, k = d.k, L = levels(k), cs = combos(k);
+    if (!L.includes(d.lev)) d.lev = defLevel(k);
+    if (!d.ids) d.ids = cs.map(c => c.id);
+    const b = build(k, d.lev, d.ids); d.b = b;
+    let m = document.getElementById('fdx-modal'); if (!m) { m = document.createElement('div'); m.id = 'fdx-modal'; m.className = 'modal'; document.body.appendChild(m); }
+    const prev = b.err ? `<p style="color:var(--fail)">${esc(b.err)}</p>` : `<div class="tscroll" style="max-height:38vh;overflow:auto"><table class="tbl"><thead><tr><th>Case</th><th>Factored</th><th class="right">P (kip)</th><th class="right">Vx</th><th class="right">Vy</th><th class="right">Mx (kip-ft)</th><th class="right">My</th></tr></thead><tbody>${b.p.cases.map(c => `<tr><td title="${esc(c.combination)}">${esc(c.name)}</td><td>${c.factored ? 'yes' : 'no'}</td><td class="val">${f1(c.P)}</td><td class="val">${f1(c.Vx)}</td><td class="val">${f1(c.Vy)}</td><td class="val">${f0(c.Mx)}</td><td class="val">${f0(c.My)}</td></tr>`).join('')}</tbody></table></div>`;
+    m.innerHTML = `<div class="modal-box" role="dialog" aria-label="Send foundation loads" style="width:min(860px,96vw)"><h2>Send foundation loads</h2>
+      <p>Combined loads at the bottom of a substructure unit, per limit state, for Pile Designer and Spread Footing (channel foundationLoads).</p>
+      <div style="display:flex;gap:16px;flex-wrap:wrap;margin:8px 0"><label>Unit <select id="fdx-unit">${P.units.map((x, i) => `<option value="${i}"${i === k ? ' selected' : ''}>${esc(x.name)}</option>`).join('')}</select></label>
+      <label>Reference level <select id="fdx-lev">${L.map(l => `<option value="${esc(l)}"${l === d.lev ? ' selected' : ''}>${esc(l)}</option>`).join('') || '<option value="">(none)</option>'}</select></label></div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">${cs.map(c => `<label><input type="checkbox" data-fdx-ls="${c.id}"${d.ids.includes(c.id) ? ' checked' : ''}> ${esc(lsName(c))}</label>`).join('')}</div>
+      <p class="note" style="margin-top:6px">${esc(SIGN)}</p>
+      ${b.err ? '' : `<p class="note">${esc(b.p.location)}. ${esc(b.p.notes[3])}</p>`}
+      ${prev}
+      <div class="modal-foot"><button type="button" class="btn" id="fdx-cancel">Cancel</button><button type="button" class="btn" id="fdx-export"${b.err ? ' disabled' : ''}>Export hand-off (JSON)</button><button type="button" class="btn btn-primary" id="fdx-send"${b.err ? ' disabled' : ''}>Send to other tools</button></div></div>`;
+    m.hidden = false;
+  }
+  function open() {
+    const G = MODEL.G; if (!G || G.E.length) return flash('Fix the input errors on the Summary tab first.', 'fail');
+    if (!window.BridgeXfer) return flash('The hand-off helper is not available in this browser.', 'fail');
+    const k = Math.min(Math.max(P.ui.sel || 0, 0), P.units.length - 1);
+    DLG = { k, lev: defLevel(k), ids: null }; render(); return DLG;
+  }
+  function send(how) {
+    const b = DLG && DLG.b; if (!b || b.err) return;
+    if (how === 'export') { const r = BridgeXfer.exportFile(CH, Object.assign({}, b.p, { producedAt: new Date().toISOString() })); if (r.error) return flash(r.error, 'fail'); close(); return flash(`Exported ${b.n} foundation load case${b.n > 1 ? 's' : ''} (${b.unit}).`); }
+    const r = BridgeXfer.publish(CH, b.p, 'Bridge Substructure Loading', 'Bridge Substructure Loading.html');
+    if (r.error) return flash(r.error, 'fail');
+    try { localStorage.setItem('bridgeSuite.v1.' + CH + '.by.' + SID, JSON.stringify(r.payload)); } catch (e) { }
+    close(); flash(`Sent ${b.n} foundation load case${b.n > 1 ? 's' : ''} (${b.unit}). Open Pile Designer or Spread Footing and pull them.`);
+  }
+  (function addButton() {
+    const g = document.querySelector('.hdr-group'), dx = document.getElementById('btn-dxf');
+    if (g && dx && !document.getElementById('btn-fdx')) { const bt = document.createElement('button'); bt.type = 'button'; bt.className = 'btn'; bt.id = 'btn-fdx'; bt.textContent = 'Send foundation loads'; bt.title = 'Send to other tools: factored and service loads at the bottom of a unit, per limit state (channel foundationLoads), for Pile Designer and Spread Footing; or export them as a hand-off JSON file'; g.insertBefore(bt, dx); }
+  })();
+  document.addEventListener('click', e => {
+    const id = e.target && e.target.id;
+    if (id === 'btn-fdx') open();
+    else if (id === 'fdx-cancel') close();
+    else if (id === 'fdx-send') send('send');
+    else if (id === 'fdx-export') send('export');
+  });
+  document.addEventListener('change', e => {
+    if (!DLG || !e.target) return; const t = e.target;
+    if (t.id === 'fdx-unit') { DLG.k = +t.value; DLG.lev = defLevel(DLG.k); DLG.ids = null; render(); }
+    else if (t.id === 'fdx-lev') { DLG.lev = t.value; render(); }
+    else if (t.dataset && t.dataset.fdxLs) { const c = t.dataset.fdxLs; DLG.ids = t.checked ? DLG.ids.concat([c]) : DLG.ids.filter(x => x !== c); render(); }
+  });
+  window.SubLoadsFoundationHandoff = { build, levels, open, send, close, state: () => DLG };   // used by tests; no effect on results
+})();
 /* ---------- start ---------- */
 (function start() {
   P = defP();
