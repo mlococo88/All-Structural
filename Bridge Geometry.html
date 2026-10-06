@@ -209,6 +209,11 @@
     <h2 class="sec">Vertical Profile</h2>
     <fieldset>
       <legend>PVIs · first row is Start point, last is End point; interior rows are PVIs with vertical curves</legend>
+      <div style="display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; margin-bottom:8px;">
+        <div><label>Vertical datum</label><select id="vdatum_sys" title="Vertical datum of the elevations entered below. Label only — no datum conversion is applied. Shown on the output tables, prints and DXF export.">
+          <option value="">Not specified</option><option value="NAVD88">NAVD 88</option><option value="NGVD29">NGVD 29</option><option value="local">Local / project datum</option><option value="other">Other…</option></select></div>
+        <div id="vdatum_txt_box" style="display:none;"><label>Datum description</label><input type="text" id="vdatum_txt" maxlength="120" placeholder="Project datum, BM #12 EL 100.00" title="Describe the datum (e.g. benchmark and its elevation). Label only — no datum conversion is applied."></div>
+      </div>
       <div style="overflow-x:auto;"><table class="subtbl" id="vprof_tbl"></table></div>
       <button class="sm ghost" id="vpvi_add" style="margin-top:8px;">+ PVI</button>
       <div class="note" id="vprof_warn" style="color:var(--oxide); margin-top:6px;"></div>
@@ -229,7 +234,7 @@
       <div id="svg_plan_a" class="plotbox" style="height:520px"></div>
     </div>
     <div class="svgcard">
-      <div class="cap"><span>Profile</span><span class="note" style="text-transform:none;letter-spacing:0;">click to set station · hover the grade line for sta / elev / grade · drag pan</span>
+      <div class="cap"><span>Profile</span><span class="pill vdatum_pill" style="text-transform:none;letter-spacing:0;" title="Label only — no datum conversion is applied.">datum: not specified</span><span class="note" style="text-transform:none;letter-spacing:0;">click to set station · hover the grade line for sta / elev / grade · drag pan</span>
         <span class="gctrl" data-svg="svg_prof_a"><button data-zin>+</button><button data-zout>−</button><button data-reset>reset</button><span class="sep"></span><button data-svgexp>SVG</button></span>
       </div>
       <div id="svg_prof_a" class="plotbox" style="height:340px"></div>
@@ -480,6 +485,7 @@
         </fieldset>
       </div>
     </div>
+    <p class="note vdatum_cap" style="margin:6px 0 0;" title="Label only — no datum conversion is applied.">Elevations in feet · vertical datum: not specified</p>
     <div class="noprint" style="display:flex; gap:8px; margin:6px 0;"><button class="sm ghost" type="button" onclick="exportTableCSV('tbl_wrap','top-of-deck')" title="Download the table above as a CSV file.">Export CSV</button><button class="sm ghost" type="button" onclick="window.print()" title="Print this tab.">Print</button></div>
     <div id="tbl_wrap" style="overflow-x:auto;"></div>
 
@@ -508,6 +514,7 @@
   <section class="tabpane" id="pane-seat" role="tabpanel">
     <h2 class="sec">Beam Seat Elevations · at bearing lines</h2>
     <p class="note" style="margin-top:-6px;">Seat = top-of-deck − deck thickness − (min haunch + camber) − beam depth − bearing assembly. One row per bearing line; dual-bearing piers report back &amp; ahead separately, each using its own span's camber/depth/bearing.</p>
+    <p class="note vdatum_cap" style="margin:6px 0 0;" title="Label only — no datum conversion is applied.">Elevations in feet · vertical datum: not specified</p>
     <div class="noprint" style="display:flex; gap:8px; margin:6px 0;"><button class="sm ghost" type="button" onclick="exportTableCSV('seat_tbl_wrap','beam-seat')" title="Download the beam-seat table as a CSV file.">Export CSV</button><button class="sm ghost" type="button" onclick="window.print()" title="Print this tab.">Print</button></div>
     <div id="seat_tbl_wrap" style="overflow-x:auto;"></div>
 
@@ -4272,8 +4279,24 @@ const STORAGE_KEY = 'bridgeGeomEngine.project.v1';
 const LIBRARY_KEY = 'bridgeGeomEngine.library.v1';
 let CURRENT_NAME = null; // name of the loaded library entry, if any
 const SCALAR_IDS = ['h_sta0','h_x0','h_y0','h_brg0','nspans','x_mode_global','x_rate_global',
-  'x_pivot','sec_cut','sec_surf','cont_int','heat_surf','crown_ref','crown_off','crown_off_a1','crown_off_a2','bcl_off','bcl_off_a1','bcl_off_a2','edge_l','edge_r','curb_l','curb_r','d_slab','d_haunch','d_beam','d_bearing','d_camber','d_hma','divs','rep_mode','rep_div','val_tol','map_datum','map_units'];
+  'x_pivot','sec_cut','sec_surf','cont_int','heat_surf','crown_ref','crown_off','crown_off_a1','crown_off_a2','bcl_off','bcl_off_a1','bcl_off_a2','edge_l','edge_r','curb_l','curb_r','d_slab','d_haunch','d_beam','d_bearing','d_camber','d_hma','divs','rep_mode','rep_div','val_tol','map_datum','map_units','vdatum_sys','vdatum_txt'];
 
+// Vertical datum: a label only (scalars vdatum_sys / vdatum_txt). Elevations are never converted.
+// '' = not specified (the default for new projects and for saves made before the field existed).
+const VDATUM_NAMES={ NAVD88:'NAVD 88', NGVD29:'NGVD 29', local:'Local / project datum', other:'Other' };
+function vDatumLabel(){ // null when not specified
+  const sys=(document.getElementById('vdatum_sys')||{}).value||'', txt=((document.getElementById('vdatum_txt')||{}).value||'').trim();
+  if(!sys) return null;
+  if(sys==='local') return VDATUM_NAMES.local+(txt?': '+txt:'');
+  if(sys==='other') return txt||'Other (not described)';
+  return VDATUM_NAMES[sys]||sys;
+}
+function renderVDatum(){
+  const sys=(document.getElementById('vdatum_sys')||{}).value||'', lab=vDatumLabel();
+  const box=document.getElementById('vdatum_txt_box'); if(box) box.style.display=(sys==='local'||sys==='other')?'':'none';
+  document.querySelectorAll('.vdatum_cap').forEach(el=>{ el.textContent='Elevations in feet · vertical datum: '+(lab||'not specified'); });
+  document.querySelectorAll('.vdatum_pill').forEach(el=>{ el.textContent='datum: '+(lab||'not specified'); });
+}
 function serializeProject(){
   const scalars={}; SCALAR_IDS.forEach(id=>{ const el=document.getElementById(id); if(el) scalars[id]= el.type==='checkbox'?el.checked:el.value; });
   return { version:1, savedAt:new Date().toISOString(), name:CURRENT_NAME,
@@ -4310,9 +4333,12 @@ function applyProject(p){
   else if(p.VBEGIN && p.VROWS){ VPIS.length=0; let cur={sta:p.VBEGIN.sta,elev:p.VBEGIN.elev,L:0}; VPIS.push(cur);
     p.VROWS.forEach(r=>{ const e=cur.elev+(r.grade/100)*(r.endSta-cur.sta); cur={sta:r.endSta,elev:e,L:r.vc||0}; VPIS.push(cur); });
     if(VPIS.length) VPIS[VPIS.length-1].L=0; }
+  // vertical datum: saves without the field (older versions) read as "not specified"
+  ['vdatum_sys','vdatum_txt'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
   if(p.scalars) for(const id in p.scalars){ const el=document.getElementById(id); if(el){ if(el.type==='checkbox') el.checked=!!p.scalars[id];
     else el.value=(id==='map_datum' && MAP_EPSG_OLD[p.scalars[id]]) ? MAP_EPSG_OLD[p.scalars[id]] : p.scalars[id]; } }
   ACTIVE_STA = (typeof p.activeSta==='number') ? p.activeSta : null;
+  renderVDatum();
   renderElemTable(); renderVProfTable(); renderGirderTable(); renderSubTable(); renderSpanTable(); renderOvrGrid(); renderValTable(); renderHValTable();
   compute();
   // restore Site Map plan overlays (base64 images + control points). Safe if map libs aren't up yet.
@@ -4500,11 +4526,15 @@ function freshDefaults(){
   const su=sortedUnits(); su[0].sta=0; su[1].sta=500; su[2].sta=1000;
   if(UNITS[1]) UNITS[1].skew=15;
   ACTIVE_STA=null;
+  ['vdatum_sys','vdatum_txt'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; }); renderVDatum();
   renderElemTable(); renderVProfTable(); renderGirderTable(); renderSubTable(); renderSpanTable(); renderOvrGrid(); renderValTable(); renderHValTable();
   compute();
 }
 
 // wiring for persistence buttons
+document.getElementById('vdatum_sys').addEventListener('change',()=>{ renderVDatum(); markDirty(); });
+document.getElementById('vdatum_txt').addEventListener('input',()=>{ renderVDatum(); markDirty(); });
+renderVDatum();
 document.getElementById('proj_save').addEventListener('click', downloadProject);
 document.getElementById('proj_load').addEventListener('click', ()=>document.getElementById('proj_file').click());
 document.getElementById('proj_file').addEventListener('change', e=>{ if(e.target.files[0]) loadProjectFromFile(e.target.files[0]); });
@@ -5116,6 +5146,7 @@ else { setStatus('autosave OFF — browser storage blocked here. Use Export JSON
     }
 
     /* ===== 6. title block notes, below the plan ===== */
+    const vdLab=(typeof vDatumLabel==='function')?vDatumLabel():null;   // label only
     const planBB=W.bb.slice();
     let yCur=planBB[1]-3*h;
     if(o.notes){
@@ -5125,7 +5156,7 @@ else { setStatus('autosave OFF — browser storage blocked here. Use Export JSON
         ['Project: '+((shared&&shared.name)||'-')+'   Bridge: '+((typeof CURRENT_NAME!=='undefined'&&CURRENT_NAME)||'(unsaved)'), h],
         ['Alignment: POB Sta '+formatStation(E.align.staStart)+', N '+(+document.getElementById('h_y0').value||0)+', E '+(+document.getElementById('h_x0').value||0)+', bearing '+azimuthToQuadrant(parseBearingToAzimuth(document.getElementById('h_brg0').value)||0)+'; POE Sta '+formatStation(E.align.staEnd)+'. Drawn Sta '+formatStation(sA)+' to '+formatStation(sB)+'.', h],
         ...basis.map(t=>[t,h]),
-        ['Vertical datum: as entered in the vertical profile (not specified in the tool). Elevations and stations in feet.', h],
+        [(vdLab?'Vertical datum: '+vdLab+' (label only - elevations as entered in the vertical profile, no datum conversion).':'Vertical datum: as entered in the vertical profile (not specified in the tool).')+' Elevations and stations in feet.', h],
         ['TD = top of deck, BS = beam seat at each girder x bearing line (Beam Seat Output tab). FG = finished grade = profile (top of pavement).', h],
         ['Layers: BG-ALIGN (PGL, arcs = circular curves, polylines = spirals), -TICK, -TEXT; BG-BRG-CL support CL; BG-BRG bearing lines; BG-GIRDER; BG-DECK; BG-CURB; BG-REFLINE; BG-ELEV-PT/-TEXT; BG-PICK; BG-PROF*.', h],
         ['Generated by Bridge Geometry (Bridge Geometry.html) on '+new Date().toISOString().slice(0,16).replace('T',' ')+'. Verify against the survey before use.', h]
@@ -5176,7 +5207,7 @@ else { setStatus('autosave OFF — browser storage blocked here. Use Export JSON
         W.line(LY.pbrg,[PX(bl.sta),PY(zlo)],[PX(bl.sta),PY(zhi)+0.5*h]);
         W.text(LY.ptext,[PX(bl.sta)-0.15*h,PY(zhi)+0.8*h],0.7*h,t,{rot:90,va:0}); });
       const yT=PY(zlo)-0.6*h-0.62*0.8*h*11-1.5*h;   // below the rotated station labels
-      W.text(LY.ptext,[PX(sA),yT],1.2*h,'PROFILE ALONG PGL - FINISHED GRADE (TOP OF PAVEMENT) - VERTICAL EXAGGERATION '+VE+'x');
+      W.text(LY.ptext,[PX(sA),yT],1.2*h,'PROFILE ALONG PGL - FINISHED GRADE (TOP OF PAVEMENT) - VERTICAL EXAGGERATION '+VE+'x - VERTICAL DATUM: '+(vdLab||'NOT SPECIFIED'));
       W.text(LY.ptext,[PX(sA),yT-1.6*h],0.7*h,'Horizontal: 1 drawing unit = '+(k===1?'1 ft':(1/k).toFixed(6)+' ft')+' of station from Sta '+formatStation(sA)+'. Vertical: elevation x '+VE+', datum EL '+zlo+' ft at the bottom of the frame.');
     }
 
