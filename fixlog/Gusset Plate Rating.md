@@ -1013,3 +1013,467 @@ Exact before/after (unified diff against main e831071, zero context lines):
 - **How verified:** `node --check` on all 7 inline scripts: pass. The synthetic WB cases at 20°, 30°, 35° and 40° have identical capacities, RFs and L_mid to main (`o19/wbcmp.js`). Default and synthetic models: identical RFs and L_mid, warning counts as above (`o19/c9chk.js`).
 - **Other copies:** none.
 - **Open items:** none.
+
+## 2026-10-06 — PR: claude/gusset-custom-holes (PR link added after merge)
+
+### C10. Custom (irregular) hole patterns: hole table, DXF import without best fit, limit states generalized to arbitrary holes (s²/4g)   [calculation change for custom patterns only; every grid member computes exactly as before]
+
+Engineer's request (2026-10-06): "Make this more universal so that custom bolt patterns can be accepted." Until now a member's fasteners could only be a regular grid (rows × gage lines, pitch, gage list, offset), and an irregular DXF hole pattern was forced to a best-fit grid (C3 warning + C4 confirmation box). Engineer's decisions: (a) DXF import keeps the holes exactly as drawn; (b) a hole table per member (along, across), editable, add/delete, paste from Excel; holes drawn in 2D/3D exactly there; (c) stagger s²/4g (LRFD 10th Ed. 6.8.3) on every net section that crosses holes, searching the straight path and zig-zag paths and using the minimum net length; (d) Whitmore spread from the outer holes of the row farthest from the WP (convention confirmed again).
+
+#### C10.1 Model and saved data (§5)
+
+- **Member fields (additive):** `pattern: 'grid' | 'custom'` and `holes: [[along, across], ...]` (inches, member-local: along = from the WP along the work line, + outward; across = + to the left looking out along the member). `memberDef()` defaults them to `'grid'` and `[]`, so old projects, autosaves, named projects and JSON exports load unchanged and give identical results (verified, C10.6). One hole diameter per member, from the existing fastener fields (d, hole size).
+- **Grid fields of a custom member:** kept filled with the best-fit grid (`GPDXF.fitPattern`, refreshed on every table edit). This copy does not use them; they exist only so that an older copy of the tool, which ignores `pattern`/`holes`, computes with the nearest grid rather than stale values.
+- **JSON project files:** `SCHEMA_VERSION` 1 → 2. A file is written as **version 2 only when a member has a custom pattern**; grid-only projects are still written as version 1 and open in older copies. Older copies check `version <= 1` on import, so they **refuse** a version-2 file ("The project is version 2; this tool reads version 1.") instead of computing with the grid fields. This copy reads versions 1 and 2. `data.v` stays 1 (unused).
+- **Browser storage** (`gussetRating.autosave.v1`, `gussetRating.projects.v1`): keys and format unchanged; members simply carry the two new fields. An older copy opening such an autosave/named project has no version check: it ignores the hole list and computes with the best-fit grid in the grid fields (verified: case 1 autosave opened in main gives L2-U1-FS LRFR 531.09 kip, the 24-hole best fit, instead of 486.83 kip). Noted in the PR.
+- No migration is needed: absent `pattern` means grid; nothing is renamed or removed.
+
+#### C10.2 Generalized rules (each documented in the Method tab and in the calc sheet "where" rows; checks of a custom member carry a "custom holes: verify" badge)
+
+Rows = holes grouped by along offset, gage lines = grouped by across offset, 1/16 in tolerance (`groups1`, centre = median). sIn / sOut = row nearest / farthest from the WP. For a rectangular grid every rule below reduces to the previous grid formula; grid members still run the original code lines unchanged (`memberGeom` grid branch, block-shear grid formulas, no stagger search).
+
+| Limit state | Grid (unchanged) | Custom (generalized) |
+|---|---|---|
+| Fastener shear | N = n_r n_ℓ × planes; L_j = (n_r − 1)p | N = number of holes × planes (`nf = g.holes.length`, identical integer for grids); L_j = sOut − sIn |
+| Bearing | per hole, L_c to next hole in line or edge | same per-hole rule (`lcHoles`, unchanged code) with the actual neighbours |
+| Whitmore gross | g_s + 2L tan θ_W, g_s = outer gage lines, L = (n_r − 1)p | g_s = across spread of the holes of the row farthest from the WP, centred on them; L = sOut − sIn; section through the row nearest the WP. Warning if a hole lies outside the spread lines |
+| Whitmore net | W_g − Σ(d_h + Δ), holes within d_h/2 of the line (any member) | max of that deduction and the best staggered chain (below) through the member's own holes within the Whitmore ends and within s_b = 2√(W_g d_n) beyond the line, plus the holes on the line |
+| Block shear | L_vn = L_vg − 2(n_r − 0.5)d_n; L_tg = g_s; L_tn = g_s − (n_ℓ − 1)d_n | same planes (tension across row sIn between the outer holes t_min…t_max of the whole pattern; shear along t_min and t_max to the edge). Each plane: holes with centre within d_h/2 counted (corner hole at sIn half), or a staggered chain within s_b = 2√(L d_n) if it deducts more; each plane minimized on its own (conservative). Missing corner hole → warning, rectangle still used |
+| Partial shear planes | L_g − Σ(d_h + Δ) of holes within d_h/2 | when any member is custom: max of that and, per plate interval of the line, the best chain through the holes on the line plus custom members' holes within s_b = 2√(L d_n,max) |
+| L_mid fields | rectangle through the outer hole centres | convex hull of the hole centres (`hull`), = that rectangle for a grid; continuous chord field unchanged (rectangle along the chord enclosing all chord holes) |
+| Chord ΔF | N = Σ n_r n_ℓ; L_j from hole projections | N from actual holes; L_j unchanged (already hole based) |
+| Drawing / 3D / DXF | grid holes | actual holes (`g.holes`); Whitmore spread drawn from `g.wo` = outer holes of the far row |
+
+**Staggered chain (`chainDed`, LRFD 10th Ed. 6.8.3):** net = gross − Σ w + Σ s²/4g over consecutive holes of a path, s = offset perpendicular to the section line, g = spacing along it (consecutive holes must be more than 1/16 in apart along the line). Dynamic programming over the candidate holes sorted along the line gives the path with the largest deduction D = Σw − Σs²/4g; optional fixed end points (block-shear corners). The section uses D only when it exceeds the straight-line deduction by more than 1e-9 in. A path may run entirely through a nearby row (no stagger terms), so the net width is never taken larger than at a row within the band. **Band s_b = 2√(L d_n):** a single step of more than s_b from the line costs s²/4g ≥ s_b²/(4L) = d_n, i.e. at least one hole's deduction.
+
+**Why grids cannot change:** for a rectangular grid's own holes every monotone path has at most one hole per gage line (or row) and every stagger term is ≥ 0, so no path deducts more than the straight line through a full row/line; in any case grid members never run the search (all-grid joints: partial planes skip it too).
+
+**Inputs and warnings (no check changed):** errors — no holes, a hole without numbers, along offset ≤ 0, two holes within 1/16 in (`holeErrors`). Warnings — hole outside the plate (existing warning), spacing < 3d (LRFD 10th Ed. 6.13.2.6.1), hole outside the Whitmore spread, missing block-shear corner hole.
+
+#### C10.3 §4 callouts
+
+1. **Fastener count N** (`fsGroup`). Before: `nf = g.nR * g.nL`. After: `nf = g.holes.length`. Grid: identical integer. Custom: actual holes. MBE 3rd Ed. 6A.6.12.6.3 / LRFD 10th Ed. 6.13.2.7. Check: case 1, N = 22 × 2 = 44 planes, φR = 0.80(44)(23)(0.6013) = 486.83 kip (was 48 planes, 531.09 kip).
+2. **Long-joint length L_j** (custom): sOut − sIn (grid (n_r − 1)p unchanged). LRFD 6.13.2.7, MBE 6A.6.12.5.1. Case 1: 41 − 26 = 15 in < 50 in, R_L = 1.0 (same as grid).
+3. **Whitmore gross width** (custom): g_s from the far row only (convention C4, θ_W = 30°), L = sOut − sIn. LRFD 10th Ed. 6.14.2.8, MBE 6A.6.12.6.7. Case 2: far row = one hole (30.5, +1.5) → g_s = 0, W = 0 + 2(10.5) tan 30° = 12.124 in (grid validation diagonal: 5 + 2(9) tan 30° = 15.392 in).
+4. **Net widths/lengths with s²/4g** (custom): before, holes within d_h/2 of the line only; after, max of that and the staggered chain. LRFD 10th Ed. 6.8.3 (s²/4g); applied to Whitmore (6.14.2.8, 6.13.5.2), block shear A_vn / A_tn (6.13.4), partial plane A_vn (6.13.5.3, MBE 6A.6.12.6.6). Case 2 Whitmore: 1.000 → 1.8125 in deduction, W_n 11.124 → 10.312 in.
+5. **Block shear net lengths** (custom): counted per plane with half corner holes + chain. LRFD 10th Ed. 6.13.4. Case 1: L_tn 7.500 → 8.500 in (one interior hole of the row nearest the WP removed), φR 916.90 → 963.30 kip.
+6. **L_mid fastener field** (custom): convex hull of hole centres. NCHRP W-197 / MBE 6A.6.12.6.8 with C7 rule. Case 1: L_mid 11.010 in (unchanged, the removed holes are inside the hull).
+
+No load factor, resistance factor, unit, code parameter or edition changes. Grid members: no computed result changes (C10.6).
+
+#### C10.4 Check cases (hand)
+
+Default code parameters, two 1/2 in A36 plates (Σt = 1.0 in, F_y 36, F_u 58 ksi), 7/8 in rivets r0 (F_v 23 ksi LRFR, φ_s 0.80; 30 ksi LFR), d_h = 0.9375, d_n = d_h + 1/16 = 1.000 in.
+
+**Case 1 — default model, M3 L2-U1 (6 rows × 4 lines, e = 26, p = 3, g = 3.5 → t = −5.25, −1.75, 1.75, 5.25) with row 1 / gage line 2 (26, −1.75) and row 3 / gage line 3 (32, 1.75) removed: 22 holes.** Before = what the original tool produced from a DXF with these 22 circles (C3/C4 best-fit grid: the full 6 × 4 grid, 24 holes, confirmation box); after = custom, exact holes (same result whether imported from that DXF or typed/pasted).
+
+- Fastener shear LRFR: 0.80 × (22 × 2) × 23 × π(0.875)²/4 = 0.80 × 44 × 23 × 0.6013 = **486.83 kip** (before 0.80 × 48 × 23 × 0.6013 = 531.09). LFR: 44 × 30 × 0.6013 = 793.74 (before 865.90).
+- Whitmore: g_s = 10.5 (far row complete), L = 15, W = 10.5 + 2(15) tan 30° = 27.821, clipped at the plate to W_g = 25.570 in (unchanged). Straight line at s = 26 crosses 3 holes → 3.000 in; the chain search finds the full row at s = 29 (4 holes, 3 in from the line, inside s_b = 2√(25.570 × 1.0) = 10.113 in, no stagger terms) → 4.000 in governs → W_n = 21.570 in (unchanged; the missing row-1 hole does not raise W_n because row 2 is complete).
+- Block shear: L1 = 17.040, L2 = 17.018, L_vg = 34.058 in. Shear planes t = −5.25 and t = 5.25: 6 holes each, corner half → 5.5 + 5.5 = 11 → L_vn = 23.058 (unchanged). Tension plane at s = 26, t −5.25…5.25: holes at −5.25 (½), 1.75 (1), 5.25 (½) = 2 → L_tn = 10.5 − 2 = **8.500 in** (before 7.500). R_n = min(0.58(58)(23.058) + 58(8.5), 0.58(36)(34.058) + 58(8.5)) = min(1268.67, 1204.13); φR = 0.80 × 1204.13 = **963.30 kip** (before 0.80 × (711.13 + 435) = 916.90).
+- Bearing LRFR: tension 2296.27 → 2101.39, compression 2338.56 → 2143.68 kip (2 fewer holes). WY 874.50, WF 1000.86, WB 767.40 / 576.32 kip, L_mid 11.010 in: unchanged.
+- RFs (L2-U1 in compression, default forces): FS LRFR Inv / Op / LFR Inv / Op **1.1718 / 1.5189 / 2.5634 / 4.2789 → 1.0032 / 1.3004 / 2.2743 / 3.7963**; BR 8.06 / 10.44 / 7.88 / 13.15 → 7.32 / 9.48 / 7.15 / 11.93; WB unchanged 2.07 / 2.69 / 1.40 / 2.34. Governing: LRFR Inv **1.17 → 1.00 (L2-U1-FS)**, LRFR Op 1.52 → 1.30 (L2-U1-FS), LFR Inv 1.40 (L2-U1-WB, unchanged), LFR Op 2.34 (WB, unchanged). With the L2-U1 forces reversed (tension, test only): BS RF 2.64 / 3.42 / 2.77 / 4.62 → 2.82 / 3.65 / 2.95 / 4.93; WY, WF unchanged.
+- The best-fit grid was therefore unconservative for fastener shear and bearing by 24/22 (9 %).
+
+**Case 2 — staggered pattern: validation model, diagonal D (45°) with 2 lines at g = 3 in (t = −1.5, +1.5) staggered by s = 1.5 in: line A at s = 20, 23, 26, 29; line B at 21.5, 24.5, 27.5, 30.5 (8 holes).**
+
+- Rows (1/16 in): 8 rows of one hole. Row nearest the WP: s = 20 (hole A1). Far row: s = 30.5 (one hole, t = +1.5) → g_s = 0, centre t = +1.5, L = 30.5 − 20 = 10.5. W = 0 + 2(10.5)(0.57735) = **12.124 in** (not clipped). Warning: holes A3 (26, −1.5) and A4 (29, −1.5) lie outside the spread lines (half-width at s = 29: 1.5 × tan 30° = 0.866 about t = 1.5).
+- Whitmore net: straight line at s = 20 crosses A1 only → 1.000. Band s_b = 2√(12.124 × 1.0) = 6.964 in (holes up to s = 26.96). Best chain A1 (s = 20, t = −1.5) → B1 (21.5, +1.5): s = 1.5, g = 3.0, s²/4g = 2.25/12 = 0.1875; D = 2(1.000) − 0.1875 = **1.8125 in** (> 1.000) → W_n = 12.124 − 1.8125 = **10.312 in**. (Only two gage lines, so no path has more than two holes; equal-value chains A2→B2 etc. are not larger.)
+- WY LRFR: 0.95 × 36 × 12.124 × 1.0 = **414.65 kip**. WF: A_n = min(10.312, 0.85 × 12.124 = 10.306) = 10.306 → 0.80 × 58 × 10.306 = **478.18 kip**.
+- Block shear: t_min = −1.5, t_max = +1.5, L_tg = 3.0; corner (20, −1.5) has hole A1 (½), corner (20, +1.5) has none (warning). Tension: A1 ½ → L_tn = 3 − 0.5 = **2.5**; no intermediate holes. Shear t = −1.5: A1 ½ + A2, A3, A4 = 3.5; chain via line B costs 3²/(4 × 1.5) = 1.5 > 1.0 per hole, not used. Shear t = +1.5: B1…B4 = 4.0. L1 = L2 = 10.500, L_vg = 21.000, L_vn = 21.0 − 7.5 = **13.500**. R_n = min(0.58(58)(13.5) + 58(2.5), 0.58(36)(21.0) + 58(2.5)) = min(599.14, 583.48) → φR = 0.80 × 583.48 = **466.79 kip**.
+- Fastener shear unchanged (8 holes): 223.21 kip LRFR. L_mid 21.500 in (field = hull of the 8 holes); WB LRFR 293.35 kip.
+- RFs (validation forces): WY 3.39 / 4.39 / 3.27 / 5.46, WF 3.99 / 5.18 / 3.86 / 6.44, BS 3.88 / 5.03 / 3.75 / 6.26 (grid validation diagonal: WY 4.45, WF 5.22, BS 4.55 LRFR Inv); governing remains D-FS 1.56 / 2.03 / 2.11 / 3.52.
+- Partial plane SP1 (chord top line): chain computed (12.000 in, the 12 chord holes on the line) equals the straight deduction → L_n = 28.000 in, unchanged.
+
+**Case 3 — a custom pattern that is an exact grid gives the same results as the grid member.** Every member of the default, validation and default-spliced models converted to custom with its grid holes ("Convert to custom"): 132 + 82 + 188 capacities and RFs compared, maximum relative difference **0** (bit-identical); same governing checks; same warnings (no custom-only warnings). Converting back ("Grid") restores the grid fields; results identical.
+
+#### C10.5 UI (§6: grid UI unchanged)
+
+- Members tab, each member: "Fastener pattern: Grid | Custom" switch (the existing `.seg` control). Grid shows the existing fields unchanged. Custom = "Convert to custom" (copies the current grid holes into the table) and shows the hole table (along, across, fractions accepted, × to delete), "Add hole", count, "Paste from Excel" (two columns, tab or comma, header row optional; Replace the table / Add to the table), and validation (errors: duplicates, missing numbers, along ≤ 0; warnings: outside the plate, spacing < 3d). "Grid" converts back only when the holes form an exact regular grid (within 1/16 in); otherwise it is disabled with the reason in its tooltip and a note.
+- Checks/report: "custom holes: verify" badge; W_n, A_vn, A_tn, A_vn (planes) "where" rows show the hole counts and any governing staggered path with its s²/4g terms; inputs section lists every hole of each custom member; Method tab section "Custom (irregular) hole patterns".
+- DXF import: no best-fit and no confirmation checkbox (C4 checkbox path removed: `cadFitOk`, `#cad-fit-ok`, the "hole off the regular pattern / missing hole" legend); preview shows holes as read; the change table lists "Holes (pattern, count)" per member; an info box names the custom members. Export writes the actual holes. A custom member whose drawn holes equal its own stays custom unchanged (exact round trip).
+
+#### C10.6 How verified
+
+- `node --check` on all 7 inline scripts: pass.
+- **Grid models:** 56-model set (`gl/models.js`: default, validation, all templates with ± forces, spliced, mirrored, rotated). Engine dump, main 381e299 vs this branch: rounded dump (`gl/dump.js`) byte-identical; full-precision dump (every capacity, RF, D/C, LaTeX substitution string, "where" rows, warnings, W_g, W_n, L_1–L_3, L_mid, block-shear lengths, plane lengths, L_mid stop polygons) **byte-identical**.
+- Prior suites, main vs branch, identical output: `gl/sym.js` (25 mirror/rotation pairs), `o19/symw.js`, `o18/unit.js` (L_mid unit cases), `o19/hand.js`, `o19/c9chk.js`, `gp3/rt.js` (DXF round trips). `gp3/cases.js` (hand-written DXFs) differs only as intended: `06_irregular` and `13_varying_pitch` now import as custom (06: governing LRFR Inv 1.172 → 0.766, L2-U2-FS with the 6 drawn holes instead of the 10-hole best fit), and every import lists the new "Holes (pattern, count)" row.
+- Mirror/rotation with custom members (`gch/symc.js`): 5 custom models vs their mirror images (holes [a, c] → [a, −c]) and 2 models rotated 30°, 137°, 250°: all identical.
+- Custom DXF round trips (`gch/rtc.js`): case 1, case 2, an all-custom joint, a custom vertical with filler, an exact-grid custom member: export → import onto itself = 0 changes, holes identical, results identical; onto the all-grid model = custom with exactly the exported holes, results identical.
+- Check cases 1–3 (`gch/cases.js`): numbers above; case 1 "before" taken from main importing the 22-hole DXF.
+- jsdom (`gch/dom.js`, 45 checks): old autosave, old JSON (version 1) and old named project from main load with identical results; switch; Convert to custom (24 rows, results identical); delete; edit with a fraction; spacing/duplicate/outside-plate messages; paste with header (tab) and without (comma); autosave content; JSON version 2 / 1; main refuses version 2; DXF import of the 22-hole drawing (no checkbox, change row, Apply, autosave, Undo); 2D drawing 104 circles; badges; report hole list; Method text; every tab renders; Validation 17 of 17; no runtime errors.
+- Chromium (Playwright): hole table and paste box, 2D drawing (case 1 zoom, case 2), 3D view, L2-U1-WF calc sheet, DXF import preview and change table; reviewed.
+
+- **Other copies:** none (the DXF module's `memGeo` duplicates the engine layout inside this file; both updated).
+- **Open items (questions for the engineer):**
+  1. Whitmore for staggered patterns: with 1/16 in row grouping, the "row farthest from the WP" of a staggered pattern is a single hole (g_s = 0, case 2). Should the far "row" include holes within one stagger distance (e.g. the last two staggered rows) for the spread?
+  2. Whitmore net width: a path through a nearby full row (within s_b) is allowed to govern (case 1 keeps W_n = 21.570 in). Confirm, or restrict paths to ones that cross the Whitmore line.
+  3. Band s_b = 2√(L d_n) for the stagger search: confirm, or give a fixed band (e.g. one pitch).
+  4. Block shear with a missing corner hole: the rectangle between the outer lines is used (warning). Should other block shapes (stepped / L-shaped) be searched?
+  5. Bearing L_c "in line" test (centres offset < mean hole radius) for staggered holes offset between d_h/2 and d_h: those holes are not treated as in line (edge distance used instead). Keep?
+  6. Older copies opening an autosave / named project with a custom member compute with the best-fit grid (no version check in browser storage). Acceptable, or should the custom member's grid fields be made invalid so older copies stop with an input error?
+
+Exact before/after (unified diff against main 381e299, zero context lines; anchors are the hunk headers' function names and the comments containing "C10"):
+
+```diff
+@@ -101,0 +102,5 @@ header {
++.seg button:disabled { opacity: .45; cursor: not-allowed; }
++.pat-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
++.pat-row .pat-lbl { font-size: 12px; font-weight: 600; color: var(--text-dim); }
++.hole-box { display: grid; gap: 8px; }
++.hole-box .atbl input { padding: 0 22px 0 6px !important; }
+@@ -1214 +1219,3 @@ const GPR = (function () {
+-  const SCHEMA = 'gusset-rating-project', SCHEMA_VERSION = 1;
++  /* project file version: 1 = grid fastener patterns only; 2 (C10) = may contain custom hole patterns. A file is written as version 2 only when a member
++     has a custom pattern, so older copies of the tool (which read version 1 only) refuse it instead of computing with the grid fields. */
++  const SCHEMA = 'gusset-rating-project', SCHEMA_VERSION = 2;
+@@ -1391,0 +1399,32 @@ const GPR = (function () {
++  /* ---------- C10: custom (irregular) hole patterns ---------- */
++  const TOLH = 1 / 16;   // holes of a custom pattern within 1/16 in along (across) the member form one row (gage line)
++  const medianOf = a => { const s = a.slice().sort((x, y) => x - y), n = s.length; return n % 2 ? s[(n - 1) / 2] : (s[n / 2 - 1] + s[n / 2]) / 2; };
++  /* 1-D groups (a gap larger than tol starts a new group), ascending: c = group centres (median), of = group index of each value */
++  function groups1(vals, tol) { const o = vals.map((x, i) => [x, i]).sort((a, b) => a[0] - b[0]), gs = [], of = [];
++    o.forEach(([x, i]) => { const g = gs[gs.length - 1]; if (g && x - g.last <= tol) { g.ix.push(i); g.last = x; } else gs.push({ ix: [i], last: x }); });
++    gs.forEach((g, k) => g.ix.forEach(i => { of[i] = k; })); return { c: gs.map(g => medianOf(g.ix.map(i => vals[i]))), of }; }
++  /* convex hull, counterclockwise (collinear points: the two extremes; one point: itself) */
++  function hull(pts) { const s = pts.map(q => [q[0], q[1]]).sort((a, b) => a[0] - b[0] || a[1] - b[1]), cr = (o, a, b) => crs(sub(a, o), sub(b, o)), lo = [], up = [];
++    if (s.length < 3) return s;
++    s.forEach(q => { while (lo.length >= 2 && cr(lo[lo.length - 2], lo[lo.length - 1], q) <= 1e-9) lo.pop(); lo.push(q); });
++    for (let i = s.length - 1; i >= 0; i--) { const q = s[i]; while (up.length >= 2 && cr(up[up.length - 2], up[up.length - 1], q) <= 1e-9) up.pop(); up.push(q); }
++    lo.pop(); up.pop(); return lo.concat(up); }
++  /* Staggered holes on a net section (LRFD 10th Ed. 6.8.3): net length = gross length − Σ(d_h + Δ) + Σ s²/4g over consecutive holes of the path.
++     chainDed returns the path (chain) of holes that removes the most, ded = Σ w − Σ s²/(4g), with s = offset of consecutive holes perpendicular to
++     the section line and g = their spacing along it (consecutive holes must be more than 1/16 in apart along the line).
++     pts: [{ a: position along the line, c: perpendicular offset, w: deduction, h }]; A / B: points the chain must start / end at ({ a, c, w }), or null
++     (free end at the plate edge). Result: { v: deduction, chain: [pts], terms: [{ s, g, x: s²/4g }] }. */
++  function chainDed(pts, A, B) {
++    const q = pts.filter(x => (!A || x.a - A.a > TOLH) && (!B || B.a - x.a > TOLH)).sort((x, y) => x.a - y.a), n = q.length, val = [], prv = [];
++    const cost = (x, y) => (y.c - x.c) * (y.c - x.c) / (4 * (y.a - x.a)), ok = (x, y) => y.a - x.a > TOLH;
++    for (let i = 0; i < n; i++) { let best = A ? A.w - cost(A, q[i]) : 0, bp = -1;
++      for (let j = 0; j < i; j++) if (ok(q[j], q[i])) { const x = val[j] - cost(q[j], q[i]); if (x > best + 1e-9) { best = x; bp = j; } }   // ties: the first chain found
++      val[i] = q[i].w + best; prv[i] = bp; }
++    let bv, bi = -1;
++    if (B) { bv = A ? A.w - cost(A, B) : 0; for (let i = 0; i < n; i++) { const x = val[i] - cost(q[i], B); if (x > bv + 1e-9) { bv = x; bi = i; } } bv += B.w; }
++    else { bv = A ? A.w : 0; for (let i = 0; i < n; i++) if (val[i] > bv + 1e-9) { bv = val[i]; bi = i; } }
++    const chain = []; for (let i = bi; i >= 0; i = prv[i]) chain.unshift(q[i]);
++    const path = [...(A ? [A] : []), ...chain, ...(B ? [B] : [])], terms = [];
++    for (let k = 1; k < path.length; k++) { const s = path[k].c - path[k - 1].c, g = path[k].a - path[k - 1].a; if (Math.abs(s) > 1e-9) terms.push({ s, g, x: s * s / (4 * g) }); }
++    return { v: bv, chain, terms }; }
++
+@@ -1393 +1432,4 @@ const GPR = (function () {
+-  function memberDef(o) { return deepMerge({ id: 'M', role: 'web', ang: 0, sec: { type: 'box', w: 12, d2: 12, desc: '' }, cut: 0,
++  /* pattern (C10): 'grid' = rows × gage lines from the fast fields (absent in older files: grid); 'custom' = holes [[along, across], ...] in inches,
++     member-local (along from the WP, + outward; across + to the left looking out along the member). The grid fields of a custom member hold the
++     best-fit grid for older copies of the tool only; this copy does not use them. */
++  function memberDef(o) { return deepMerge({ id: 'M', role: 'web', ang: 0, sec: { type: 'box', w: 12, d2: 12, desc: '' }, cut: 0, pattern: 'grid', holes: [],
+@@ -1398 +1440 @@ const GPR = (function () {
+-      v: SCHEMA_VERSION,
++      v: 1,
+@@ -1450,0 +1493 @@ const GPR = (function () {
++    if (m.pattern === 'custom') return customGeom(m, idx, p, u, v);
+@@ -1460 +1503,16 @@ const GPR = (function () {
+-      field: [P_(sIn, tmin), P_(sOut, tmin), P_(sOut, tmax), P_(sIn, tmax)], w, cut, body: (sEnd) => [P_(cut, -w / 2), P_(sEnd, -w / 2), P_(sEnd, w / 2), P_(cut, w / 2)] };
++      field: [P_(sIn, tmin), P_(sOut, tmin), P_(sOut, tmax), P_(sIn, tmax)], w, cut, body: (sEnd) => [P_(cut, -w / 2), P_(sEnd, -w / 2), P_(sEnd, w / 2), P_(cut, w / 2)],
++      custom: false, wo: [P_(sOut, tmin), P_(sOut, tmax)] };
++  }
++  /* C10: geometry of a custom pattern, with the same meaning as for a grid. Rows = holes grouped by the along offset (1/16 in), gage lines = grouped by
++     the across offset. sIn / sOut = the row nearest to / farthest from the WP; gS, tc = across extent and centre of the farthest row's holes (Whitmore spread);
++     Lc = sOut − sIn; tmin / tmax = outer holes of the whole pattern; field (L_mid stops) = convex hull of the hole centres; wo = Whitmore spread origins. */
++  function customGeom(m, idx, p, u, v) {
++    const f = m.fast, P_ = (s, t) => add(mul(u, s), mul(v, t)), d = num(f.d), dh = holeDia(f, p), dn = dh + p.dNet;
++    const hs = (m.holes || []).map(q => [num((q || [])[0]), num((q || [])[1])]), Rg = groups1(hs.map(q => q[0]), TOLH), Lg = groups1(hs.map(q => q[1]), TOLH);
++    const holes = hs.map(([s, t], k) => { const xy = P_(s, t); return { m: idx, row: Rg.of[k], line: Lg.of[k], s, t, x: xy[0], y: xy[1], d, dh, dn }; });
++    const ss = Rg.c, ts = Lg.c, nR = ss.length, nL = ts.length, sIn = ss[0], sOut = ss[nR - 1], tmin = Math.min(...hs.map(q => q[1])), tmax = Math.max(...hs.map(q => q[1]));
++    const t1st = holes.filter(h => h.row === nR - 1).map(h => h.t), t1 = Math.min(...t1st), t2 = Math.max(...t1st), n = hs.length;
++    const w = num(m.sec.w) || 0, cut = num(m.cut) || 0, cs = hs.reduce((a, q) => a + q[0], 0) / n, ct = hs.reduce((a, q) => a + q[1], 0) / n;
++    return { u, v, P: P_, nR, nL, pitch: NaN, e: sIn, off: (tmin + tmax) / 2, ts, ss, gl: ts.slice(1).map((t, j) => t - ts[j]), d, dh, dn, holes, tmin, tmax, tc: (t1 + t2) / 2, gS: t2 - t1, Lc: sOut - sIn, sIn, sOut,
++      centroid: P_(cs, ct), field: hull(holes.map(h => [h.x, h.y])), w, cut, body: (sEnd) => [P_(cut, -w / 2), P_(sEnd, -w / 2), P_(sEnd, w / 2), P_(cut, w / 2)],
++      custom: true, wo: [P_(sOut, t1), P_(sOut, t2)], t1, t2 };
+@@ -1463,0 +1522,7 @@ const GPR = (function () {
++  /* C10: errors in a custom hole list (no holes, a hole without numbers, along offset not beyond the WP, two holes at the same position) */
++  function holeErrors(m) { const E = [], hs = Array.isArray(m.holes) ? m.holes : [], q = hs.map(h => [num((h || [])[0]), num((h || [])[1])]);
++    if (!hs.length) E.push('the custom fastener pattern has no holes.');
++    q.forEach(([a, c], k) => { if (!isFinite(a) || !isFinite(c)) E.push(`hole ${k + 1}: enter numbers for along and across.`); else if (!(a > 0)) E.push(`hole ${k + 1}: the along offset must be positive (beyond the work point).`); });
++    const dup = []; for (let i = 0; i < q.length; i++) for (let j = i + 1; j < q.length; j++) if (Math.hypot(q[i][0] - q[j][0], q[i][1] - q[j][1]) <= TOLH) dup.push(`${i + 1} and ${j + 1}`);
++    if (dup.length) E.push(`holes ${dup.slice(0, 6).join(', ')}${dup.length > 6 ? ' and others' : ''} are at the same position (within 1/16 in); delete the duplicate.`);
++    return E; }
+@@ -1478,0 +1544,2 @@ const GPR = (function () {
++      if (m.pattern === 'custom') { holeErrors(m).forEach(x => E.push(`${nm}: ${x}`)); }   // C10: custom pattern (the grid fields are not used)
++      else {
+@@ -1481 +1548 @@ const GPR = (function () {
+-      if (num(f.nL) > 1 && gageList(f.g, Math.round(num(f.nL))).some(g => !(g > 0))) E.push(`${nm}: gages must be positive numbers.`);
++      if (num(f.nL) > 1 && gageList(f.g, Math.round(num(f.nL))).some(g => !(g > 0))) E.push(`${nm}: gages must be positive numbers.`); }
+@@ -1482,0 +1550 @@ const GPR = (function () {
++      if (m.pattern !== 'custom') {
+@@ -1484 +1552 @@ const GPR = (function () {
+-      if (!isFinite(num(f.off))) E.push(`${nm}: transverse offset must be a number.`);
++      if (!isFinite(num(f.off))) E.push(`${nm}: transverse offset must be a number.`); }
+@@ -1512,0 +1581,6 @@ const GPR = (function () {
++    // C10, custom patterns (warnings only): spacing below 3d; holes outside the Whitmore spread lines from the row farthest from the WP
++    G.forEach((g, i) => { if (!g.custom) return; const id = P.members[i].id, hs = g.holes, close = [];
++      for (let a = 0; a < hs.length; a++) for (let b = a + 1; b < hs.length; b++) { const s = Math.hypot(hs[a].x - hs[b].x, hs[a].y - hs[b].y); if (s < 3 * g.d - 1e-9) close.push([s, a, b]); }
++      if (close.length) { close.sort((x, y) => x[0] - y[0]); warn.push(`Member ${id} (custom holes): ${close.length} pair${close.length > 1 ? 's' : ''} of holes closer than 3d = ${f3(3 * g.d)} in (closest: holes ${close[0][1] + 1} and ${close[0][2] + 1}, ${f3(close[0][0])} in apart); check the minimum spacing (LRFD 10th Ed. 6.13.2.6.1). Warning only; the checks are not changed.`); }
++      const tn = Math.tan(p.thW * PI / 180), out = hs.filter(h => Math.abs(h.t - g.tc) > g.gS / 2 + (g.sOut - h.s) * tn + 1e-6);
++      if (out.length) warn.push(`Member ${id} (custom holes): ${out.length} hole${out.length > 1 ? 's lie' : ' lies'} outside the ${f1(p.thW)}° Whitmore spread lines from the outer holes of the row farthest from the WP (hole${out.length > 1 ? 's' : ''} ${out.map(h => hs.indexOf(h) + 1).join(', ')}). The Whitmore section is still taken from that row (convention C4); verify it for this pattern.`); });
+@@ -1525,0 +1600,19 @@ const GPR = (function () {
++    /* ----- C10: block shear lengths of a custom pattern. The same planes as for a grid: tension plane across the row nearest the WP (s = sIn) between
++       the outer lines of the pattern (t = tmin, tmax); shear planes along t = tmin and t = tmax from that row outward to the plate edge. Net length of each
++       plane: gross − Σ(d_h + Δ) of the member's holes on it (centre within d_h/2; a hole at a corner, where the planes meet, counts half), or the
++       staggered chain (s²/4g) through the member's holes within s_b = 2√(L d_n) of the plane that deducts more; each plane on its own (conservative).
++       For a rectangular grid this gives 2(n_r − 0.5) and (n_ℓ − 1) holes, as before. A missing corner hole is reported (verify). ----- */
++    function bsCustom(g, B, L1, L2) { const hs = g.holes, dn = g.dn, id = P.members[hs[0].m].id;
++      const corner = t => hs.find(h => Math.abs(h.s - g.sIn) <= TOLH && Math.abs(h.t - t) <= TOLH) || null, c1 = corner(g.tmin), c2 = corner(g.tmax);
++      const shear = (tk, ck, Lk) => { const on = hs.filter(h => Math.abs(h.t - tk) < h.dh / 2 - 1e-9 && h.s >= g.sIn - TOLH), K = on.length - (ck ? 0.5 : 0), band = 2 * Math.sqrt(Lk * dn);
++        const ch = chainDed(hs.filter(h => h !== ck && Math.abs(h.t - tk) <= band + 1e-9).map(h => ({ a: h.s - g.sIn, c: h.t - tk, w: dn, h })), { a: ck ? ck.s - g.sIn : 0, c: ck ? ck.t - tk : 0, w: ck ? dn / 2 : 0 }, null);
++        return { n: on.length, K, straight: K * dn, band, ...ch, used: ch.v > K * dn + 1e-9 }; };
++      const Ltg = g.tmax - g.tmin, on = hs.filter(h => Math.abs(h.s - g.sIn) < h.dh / 2 - 1e-9 && h.t >= g.tmin - TOLH && h.t <= g.tmax + TOLH), Kt = on.reduce((s, h) => s + (h === c1 || h === c2 ? 0.5 : 1), 0), bt = 2 * Math.sqrt(Ltg * dn);
++      const cht = chainDed(hs.filter(h => h !== c1 && h !== c2 && h.s - g.sIn <= bt + 1e-9).map(h => ({ a: h.t, c: h.s - g.sIn, w: dn, h })),
++        { a: c1 ? c1.t : g.tmin, c: c1 ? c1.s - g.sIn : 0, w: c1 ? dn / 2 : 0 }, { a: c2 ? c2.t : g.tmax, c: c2 ? c2.s - g.sIn : 0, w: c2 ? dn / 2 : 0 });
++      const s1 = shear(g.tmin, c1, L1), s2 = shear(g.tmax, c2, L2), t = { n: on.length, K: Kt, straight: Kt * dn, band: bt, ...cht, used: cht.v > Kt * dn + 1e-9 };
++      B.cust = { s1, s2, t, c1: !!c1, c2: !!c2 }; B.LvgAuto = L1 + L2;
++      B.LvnAuto = B.LvgAuto - (s1.used || s2.used ? Math.max(s1.v, s1.straight) + Math.max(s2.v, s2.straight) : (s1.K + s2.K) * dn);
++      B.LtgAuto = Ltg; B.LtnAuto = Ltg - (t.used ? t.v : Kt * dn);
++      if (!c1 || !c2) warn.push(`Member ${id} (custom holes), block shear: no hole at ${!c1 && !c2 ? 'either end' : 'one end'} of the row nearest the WP (at the outer line${!c1 && !c2 ? 's' : ''} t = ${[!c1 ? f3(g.tmin) : null, !c2 ? f3(g.tmax) : null].filter(x => x != null).join(' and ')} in). The block is taken as the rectangle between the outer lines of the pattern from that row to the plate edge; other block shapes are not searched (verify).`); }
++
+@@ -1532,0 +1626,5 @@ const GPR = (function () {
++        // C10, custom pattern: staggered chains (s²/4g) through the member's own holes within the band s_b = 2√(W_g d_n) beyond the Whitmore line and
++        // within its ends, and the holes on the line; the larger deduction governs (a grid's own holes cannot give a larger one: no change for grids)
++        if (g.custom) { const ded0 = W.WgAuto - W.WnAuto, band = 2 * Math.sqrt(Math.max(0, W.WgAuto) * g.dn), loc = h => ({ a: dot(sub([h.x, h.y], c), g.v), c: dot(sub([h.x, h.y], c), g.u), w: h.dn, h });
++          const cand = [...new Set([...W.cross, ...g.holes.filter(h => { const q = loc(h); return q.a >= tA - 1e-9 && q.a <= tB + 1e-9 && Math.abs(q.c) <= band + 1e-9; })])];
++          const ch = chainDed(cand.map(loc), null, null); W.stag = { band, straight: ded0, ...ch, used: ch.v > ded0 + 1e-9 }; if (W.stag.used) W.WnAuto = W.WgAuto - ch.v; }
+@@ -1553 +1651,3 @@ const GPR = (function () {
+-        else { B.LvgAuto = L1 + L2; B.LvnAuto = B.LvgAuto - 2 * (g.nR - 0.5) * g.dn; B.LtgAuto = g.gS; B.LtnAuto = g.gS - (g.nL - 1) * g.dn;
++        else if (g.custom) bsCustom(g, B, L1, L2);   // C10: same planes, holes counted along each plane (corner hole half) with staggered chains
++        else { B.LvgAuto = L1 + L2; B.LvnAuto = B.LvgAuto - 2 * (g.nR - 0.5) * g.dn; B.LtgAuto = g.gS; B.LtnAuto = g.gS - (g.nL - 1) * g.dn; }
++        if (B.ok) {
+@@ -1567 +1667 @@ const GPR = (function () {
+-    function fsGroup(m, g, meth, Lj) { const f = m.fast, fd = FAST[f.grade], d = g.d, Ab = PI * d * d / 4, Ns = num(f.Ns) === 2 ? 2 : 1, nf = g.nR * g.nL, nfast = nf * (Ns === 2 ? 1 : Np), planes = nfast * Ns;
++    function fsGroup(m, g, meth, Lj) { const f = m.fast, fd = FAST[f.grade], d = g.d, Ab = PI * d * d / 4, Ns = num(f.Ns) === 2 ? 2 : 1, nf = g.holes.length, nfast = nf * (Ns === 2 ? 1 : Np), planes = nfast * Ns;
+@@ -1579,0 +1680,5 @@ const GPR = (function () {
++    /* C10: text for a staggered (s²/4g) net-section deduction of a custom pattern; st = { v, straight, chain, terms, band, used } */
++    const stagTxt = st => { if (!st) return ''; if (!st.used) return `; custom holes: no staggered path (s²/4g) through holes within ${f3(st.band)} in of the line deducts more (rule C10, verify)`;
++      const sx = st.terms.reduce((s, q) => s + q.x, 0), nh = st.chain.length;
++      return st.terms.length ? `; custom holes: a staggered path through ${nh} hole${nh === 1 ? '' : 's'} governs: Σ(d<sub>h</sub> + Δ) − Σ s²/4g = ${f3(st.v + sx)} − (${st.terms.map(q => `${f3(Math.abs(q.s))}²/(4 × ${f3(q.g)})`).join(' + ')}) = ${f3(st.v)} in, more than ${f3(st.straight)} in on the straight line (LRFD 6.8.3; rule C10, verify)`
++        : `; custom holes: the path through the ${nh} holes of a nearby row (within ${f3(st.band)} in, no stagger) governs: Σ(d<sub>h</sub> + Δ) = ${f3(st.v)} in, more than ${f3(st.straight)} in on the straight line (rule C10, verify)`; };
+@@ -1620 +1725 @@ const GPR = (function () {
+-        where: [whitWhere(g), wr('W<sub>n</sub>', `Net Whitmore width: W<sub>g</sub> − Σ(d<sub>h</sub> + ${f4(p.dNet)}) for the ${W.cross.length} hole${W.cross.length === 1 ? '' : 's'} on the section${W.ovN != null ? ' (overridden)' : ''}`, f3(W.Wn), 'in', W.ovN != null ? 'Override' : 'LRFD 6.8.3'), wr('A<sub>n</sub>', capOn ? `Net area, A<sub>n</sub> ≤ ${f2(p.capAn)} A<sub>g</sub> limit applied: ${An < An0 - 1e-9 ? `${f2(p.capAn)} W<sub>g</sub>Σt governs (W<sub>n</sub>Σt = ${f3(An0)} in²)` : `W<sub>n</sub>Σt governs (${f2(p.capAn)} W<sub>g</sub>Σt = ${f3(p.capAn * Ag)} in²)`}` : `Net area W<sub>n</sub>Σt; the A<sub>n</sub> ≤ ${f2(p.capAn)} A<sub>g</sub> limit is not applied (code parameter switched off)`, f3(An), 'in²', 'LRFD 6.13.5.2'), wr('U', 'Shear-lag factor', f2(p.U), '', 'LRFD 6.13.5.2'), wr('φ<sub>u</sub>', 'Resistance factor, fracture', f2(phi), '', lrfr ? 'LRFD 6.5.4.2' : 'FHWA-IF-09-014'), ...plateWhere()],
++        where: [whitWhere(g), wr('W<sub>n</sub>', `Net Whitmore width: W<sub>g</sub> − Σ(d<sub>h</sub> + ${f4(p.dNet)}) for the ${W.cross.length} hole${W.cross.length === 1 ? '' : 's'} on the section${stagTxt(W.stag)}${W.ovN != null ? ' (overridden)' : ''}`, f3(W.Wn), 'in', W.ovN != null ? 'Override' : 'LRFD 6.8.3'), wr('A<sub>n</sub>', capOn ? `Net area, A<sub>n</sub> ≤ ${f2(p.capAn)} A<sub>g</sub> limit applied: ${An < An0 - 1e-9 ? `${f2(p.capAn)} W<sub>g</sub>Σt governs (W<sub>n</sub>Σt = ${f3(An0)} in²)` : `W<sub>n</sub>Σt governs (${f2(p.capAn)} W<sub>g</sub>Σt = ${f3(p.capAn * Ag)} in²)`}` : `Net area W<sub>n</sub>Σt; the A<sub>n</sub> ≤ ${f2(p.capAn)} A<sub>g</sub> limit is not applied (code parameter switched off)`, f3(An), 'in²', 'LRFD 6.13.5.2'), wr('U', 'Shear-lag factor', f2(p.U), '', 'LRFD 6.13.5.2'), wr('φ<sub>u</sub>', 'Resistance factor, fracture', f2(phi), '', lrfr ? 'LRFD 6.5.4.2' : 'FHWA-IF-09-014'), ...plateWhere()],
+@@ -1622 +1727 @@ const GPR = (function () {
+-    function whitWhere(g) { const W = g.W; return wr('W<sub>g</sub>', `Gross Whitmore width: g<sub>s</sub> + 2L tan θ<sub>W</sub> = ${f3(g.gS)} + 2(${f3(g.Lc)})tan ${f1(p.thW)}° = ${f3(W.Wfull)}${W.clipA || W.clipB ? `, clipped at the plate edge to ${f3(W.WgAuto)}` : ''}${W.ovG != null ? ' (overridden)' : ''}`, f3(W.Wg), 'in', W.ovG != null ? 'Override' : 'LRFD 6.14.2.8'); }
++    function whitWhere(g) { const W = g.W; return wr('W<sub>g</sub>', `Gross Whitmore width: g<sub>s</sub> + 2L tan θ<sub>W</sub> = ${f3(g.gS)} + 2(${f3(g.Lc)})tan ${f1(p.thW)}° = ${f3(W.Wfull)}${W.clipA || W.clipB ? `, clipped at the plate edge to ${f3(W.WgAuto)}` : ''}${W.ovG != null ? ' (overridden)' : ''}${g.custom ? '. Custom holes: g<sub>s</sub> = spread of the holes of the row farthest from the WP, L = distance from that row to the row nearest the WP (rule C10, verify)' : ''}`, f3(W.Wg), 'in', W.ovG != null ? 'Override' : 'LRFD 6.14.2.8'); }
+@@ -1628,3 +1733,3 @@ const GPR = (function () {
+-          wr('A<sub>vn</sub>', `Net shear area: [L<sub>vg</sub> − 2(n<sub>r</sub> − 0.5)(d<sub>h</sub> + Δ)]Σt, n<sub>r</sub> = ${g.nR}`, `${f3(B.Lvn)} × ${f4(sumT)} = ${f3(Avn)}`, 'in²', 'LRFD 6.8.3'),
+-          wr('A<sub>tg</sub>', 'Gross tension area: spread of the outer gage lines × Σt', `${f3(B.Ltg)} × ${f4(sumT)} = ${f3(Atg)}`, 'in²', 'Geometry'),
+-          wr('A<sub>tn</sub>', `Net tension area: [g<sub>s</sub> − (n<sub>ℓ</sub> − 1)(d<sub>h</sub> + Δ)]Σt, n<sub>ℓ</sub> = ${g.nL}`, `${f3(B.Ltn)} × ${f4(sumT)} = ${f3(Atn)}`, 'in²', 'LRFD 6.8.3'),
++          wr('A<sub>vn</sub>', B.cust ? `Net shear area: [L<sub>vg</sub> − Σ(d<sub>h</sub> + Δ)]Σt; custom holes on the two planes: ${B.cust.s1.n} and ${B.cust.s2.n} (${[B.cust.c1, B.cust.c2].filter(Boolean).length ? 'the hole at the row nearest the WP counts half' : 'no hole at the corners'})${B.cust.s1.used || B.cust.s2.used ? [B.cust.s1, B.cust.s2].map((q, k) => q.used ? stagTxt(q).replace('; custom holes: a', `; plane ${k + 1}: a`) : '').join('') : stagTxt(B.cust.s1)}` : `Net shear area: [L<sub>vg</sub> − 2(n<sub>r</sub> − 0.5)(d<sub>h</sub> + Δ)]Σt, n<sub>r</sub> = ${g.nR}`, `${f3(B.Lvn)} × ${f4(sumT)} = ${f3(Avn)}`, 'in²', 'LRFD 6.8.3'),
++          wr('A<sub>tg</sub>', `Gross tension area: spread of the outer gage lines × Σt${B.cust ? ' (custom holes: outer holes of the whole pattern)' : ''}`, `${f3(B.Ltg)} × ${f4(sumT)} = ${f3(Atg)}`, 'in²', 'Geometry'),
++          wr('A<sub>tn</sub>', B.cust ? `Net tension area: [L<sub>tg</sub> − Σ(d<sub>h</sub> + Δ)]Σt; custom holes on the plane: ${B.cust.t.n} (holes at the ends count half)${stagTxt(B.cust.t)}` : `Net tension area: [g<sub>s</sub> − (n<sub>ℓ</sub> − 1)(d<sub>h</sub> + Δ)]Σt, n<sub>ℓ</sub> = ${g.nL}`, `${f3(B.Ltn)} × ${f4(sumT)} = ${f3(Atn)}`, 'in²', 'LRFD 6.8.3'),
+@@ -1650 +1755 @@ const GPR = (function () {
+-        where: [wr('A<sub>vn</sub>', `Net area of the plane: [L<sub>g</sub> − Σ(d<sub>h</sub> + Δ)]Σt, ${pl.cross.length} hole${pl.cross.length === 1 ? '' : 's'} on the plane${pl.ovN != null ? ' (length overridden)' : ''}`, `${f3(pl.Ln)} × ${f4(sumT)} = ${f3(An)}`, 'in²', 'LRFD 6.8.3'), wr('φ<sub>vu</sub>', 'Resistance factor, shear fracture', f2(phi), '', lrfr ? 'LRFD 6.5.4.2' : 'FHWA-IF-09-014'), ...plateWhere()], keys: ['dNet', lrfr ? 'phiVU' : 'phiVUL'] }; }
++        where: [wr('A<sub>vn</sub>', `Net area of the plane: [L<sub>g</sub> − Σ(d<sub>h</sub> + Δ)]Σt, ${pl.cross.length} hole${pl.cross.length === 1 ? '' : 's'} on the plane${stagTxt(pl.stag)}${pl.ovN != null ? ' (length overridden)' : ''}`, `${f3(pl.Ln)} × ${f4(sumT)} = ${f3(An)}`, 'in²', 'LRFD 6.8.3'), wr('φ<sub>vu</sub>', 'Resistance factor, shear fracture', f2(phi), '', lrfr ? 'LRFD 6.5.4.2' : 'FHWA-IF-09-014'), ...plateWhere()], keys: ['dNet', lrfr ? 'phiVU' : 'phiVUL'] }; }
+@@ -1660 +1765,8 @@ const GPR = (function () {
+-      const cross = holes.filter(h => segs.some(([A, B]) => distSeg([h.x, h.y], A, B) < h.dh / 2 - 1e-9)), LnAuto = LgAuto - cross.reduce((s, h) => s + h.dn, 0);
++      const cross = holes.filter(h => segs.some(([A, B]) => distSeg([h.x, h.y], A, B) < h.dh / 2 - 1e-9)); let LnAuto = LgAuto - cross.reduce((s, h) => s + h.dn, 0), stag = null;
++      // C10: with custom patterns in the joint, staggered chains (s²/4g) along each part of the line inside the plate, through the holes on the line and the
++      // holes of custom patterns within s_b = 2√(L d_n) of it; the larger deduction governs (no change when every member is a grid)
++      if (G.some(g => g.custom)) { const ded0 = LgAuto - LnAuto, dnx = Math.max(...holes.map(h => h.dn)), loc = h => ({ a: dot(sub([h.x, h.y], a), e), c: crs(e, sub([h.x, h.y], a)), w: h.dn, h }); let v = 0, bmax = 0; const terms = [], chain = [];
++        segs.forEach(([A, B], k) => { const band = 2 * Math.sqrt((iv[k][1] - iv[k][0]) * dnx); bmax = Math.max(bmax, band);
++          const ch = chainDed(holes.filter(h => { const q = loc(h); return distSeg([h.x, h.y], A, B) < h.dh / 2 - 1e-9 || (G[h.m].custom && q.a >= iv[k][0] - 1e-9 && q.a <= iv[k][1] + 1e-9 && Math.abs(q.c) <= band + 1e-9); }).map(loc), null, null);
++          v += ch.v; terms.push(...ch.terms); chain.push(...ch.chain); });
++        stag = { band: bmax, straight: ded0, v, terms, chain, used: v > ded0 + 1e-9 }; if (stag.used) LnAuto = LgAuto - v; }
+@@ -1671 +1783 @@ const GPR = (function () {
+-      planes.push({ qi, nm, kind: q.kind, a, e, iv, segs, LgAuto, LnAuto, Lg, Ln, ovG, ovN, cross, mem, comp, dem, sign });
++      planes.push({ qi, nm, kind: q.kind, a, e, iv, segs, LgAuto, LnAuto, Lg, Ln, ovG, ovN, cross, mem, comp, dem, sign, stag });
+@@ -1713 +1825,2 @@ const GPR = (function () {
+-    checks.forEach(c => { c.ref = ref[c.ls]; c.unc = [...new Set(Object.values(c.cap).flatMap(o => Object.values(o).flatMap(q => q.keys || [])))].filter(k => PBY[k] && PBY[k].unc); });
++    checks.forEach(c => { c.ref = ref[c.ls]; c.unc = [...new Set(Object.values(c.cap).flatMap(o => Object.values(o).flatMap(q => q.keys || [])))].filter(k => PBY[k] && PBY[k].unc);
++      c.cust = c.mem != null ? G[c.mem].custom : c.chord ? G[c.chord.i0].custom || G[c.chord.i1].custom : c.plane != null ? !!planes[c.plane].stag : false; });   // C10: uses a custom hole pattern (generalized rules, verify)
+@@ -1787 +1900 @@ const GPR = (function () {
+-  function exportProject(P) { return { _schema: SCHEMA, version: SCHEMA_VERSION, app: 'Gusset Plate Rating', savedAt: new Date().toISOString(), data: P }; }
++  function exportProject(P) { return { _schema: SCHEMA, version: (P.members || []).some(m => m.pattern === 'custom') ? 2 : 1, app: 'Gusset Plate Rating', savedAt: new Date().toISOString(), data: P }; }
+@@ -1791 +1904 @@ const GPR = (function () {
+-    parseTable, guessWide, applyWide, parseMidas, applyMidas, autoLoadTarget, exportProject, importProject, SCHEMA, SCHEMA_VERSION, geo: { pip, lineIntervals, rayExit, distSeg, polyArea } };
++    parseTable, guessWide, applyWide, parseMidas, applyMidas, autoLoadTarget, exportProject, importProject, SCHEMA, SCHEMA_VERSION, geo: { pip, lineIntervals, rayExit, distSeg, polyArea, hull, inside }, holeErrors, chainDed, TOLH };
+@@ -1954 +2067 @@ const GP3D = (function () {
+-      if (!w0) s.w = g.gS + 2 * Math.max(1.5, 1.75 * g.d); if (!d0) s.d2 = d2Def;
++      if (!w0) s.w = g.tmax - g.tmin + 2 * Math.max(1.5, 1.75 * g.d); if (!d0) s.d2 = d2Def;
+@@ -2046 +2159 @@ const GP3D = (function () {
+-      const o1 = g.P(g.sOut, g.tmin), o2 = g.P(g.sOut, g.tmax), e1 = add2(W.c, mul2(g.v, -W.hw)), e2 = add2(W.c, mul2(g.v, W.hw));
++      const o1 = g.wo[0], o2 = g.wo[1], e1 = add2(W.c, mul2(g.v, -W.hw)), e2 = add2(W.c, mul2(g.v, W.hw));
+@@ -2163,0 +2277,4 @@ const GPDXF = (function () {
++    if (m.pattern === 'custom') {   // C10: the holes as entered (member-local along, across)
++      const dh = holeDia(f, p), hs = (m.holes || []).map(q => [num((q || [])[0]), num((q || [])[1])]), okC = isFinite(th) && hs.length > 0 && hs.every(q => isFinite(q[0]) && isFinite(q[1])) && isFinite(dh);
++      const holes = okC ? hs.map(([s, t], k) => ({ row: k, line: 0, s, t, x: P_(s, t)[0], y: P_(s, t)[1], dh })) : [], ss = hs.map(q => q[0]);
++      return { ok: okC, custom: true, th, u, v, P: P_, nR: NaN, nL: NaN, pitch: NaN, e: okC ? Math.min(...ss) : NaN, off: 0, ts: hs.map(q => q[1]), ss, dh, holes, sOut: okC ? Math.max(...ss) : 0, w: num(m.sec.w) || 0, cut: num(m.cut) || 0, tf: num(f.tf) || 0 }; }
+@@ -2451 +2568 @@ const GPDXF = (function () {
+-  /* returns { Q (candidate model), changes:[{grp, field, cur, imp}], warnings, errors, removed:[{i,id}], added:[n], irregular:[{n,tag}] (best-fit grid differs from the drawing), fits:{n:fit}, raw } */
++  /* returns { Q (candidate model), changes:[{grp, field, cur, imp}], warnings, errors, removed:[{i,id}], added:[n], custom:[{n,tag,nH}] (imported as a custom hole pattern), fits:{n:fit} (grid members), raw } */
+@@ -2473 +2590 @@ const GPDXF = (function () {
+-    const nm = P.members.length, newMembers = [], removed = [], added = [], irregular = [];
++    const nm = P.members.length, newMembers = [], removed = [], added = [], custom = [];
+@@ -2493,5 +2610,9 @@ const GPDXF = (function () {
+-        if (M.holes.length) { const thr = num(m.ang) * PI / 180, F = fitPattern(M.holes, thr); fits[n] = F;
+-          const f = m.fast; f.nR = F.nR; f.nL = F.nL; f.e = r6(F.e); if (F.nR > 1) f.p = r6(F.p); f.off = r6(F.off);
+-          if (F.nL > 1) { const gs = gStr(F.gages), cg = gageList(base ? base.fast.g : '', F.nL); if (!(cg.length === F.gages.length && cg.every((x, j) => Math.abs(x - r6(F.gages[j])) < 1e-6))) f.g = gs; }
+-          if (F.issues.length) irregular.push({ n, tag });
+-          if (F.issues.length) W.push(`${tag}: the hole pattern is not a regular grid; the best-fit regular pattern (${F.nR} rows × ${F.nL} gage lines${F.nR > 1 ? `, pitch ${fs(F.p)} in` : ''}) was imported, so the model has ${F.nR * F.nL} holes where the drawing has ${M.holes.length}. Differences, hole by hole: ${F.issues.join('; ')}.`);
++        if (M.holes.length) { const thr = num(m.ang) * PI / 180, F = fitPattern(M.holes, thr), loc = F.loc.map(h => [r6(h.s), r6(h.t)]);
++          // C10: an exact regular grid (every hole within 1/16 in of its grid point, none missing) -> grid as before; otherwise a custom pattern with the
++          // holes exactly as drawn (no best fit). A custom member whose holes are unchanged stays custom with its own values.
++          if (base && base.pattern === 'custom' && sameHoles(base.holes, loc)) { m.pattern = 'custom'; m.holes = base.holes; custom.push({ n, tag, nH: loc.length }); }
++          else { const f = m.fast; f.nR = F.nR; f.nL = F.nL; f.e = r6(F.e); if (F.nR > 1) f.p = r6(F.p); f.off = r6(F.off);
++            if (F.nL > 1) { const gs = gStr(F.gages), cg = gageList(base ? base.fast.g : '', F.nL); if (!(cg.length === F.gages.length && cg.every((x, j) => Math.abs(x - r6(F.gages[j])) < 1e-6))) f.g = gs; }
++            if (!F.issues.length) { m.pattern = 'grid'; m.holes = []; fits[n] = F; }
++            else { m.pattern = 'custom'; m.holes = loc; custom.push({ n, tag, nH: loc.length });   // the grid fields keep the best-fit grid for older copies of the tool only
++              W.push(`${tag}: the hole pattern is not a regular grid; it was imported as a custom pattern with the ${M.holes.length} holes exactly as drawn (offsets along and across the member). For information, the differences from the nearest regular grid: ${F.issues.join('; ')}.`); } }
+@@ -2529 +2650 @@ const GPDXF = (function () {
+-    return { Q, changes, warnings: W, errors: E, removed, added, irregular, fits, raw, present };
++    return { Q, changes, warnings: W, errors: E, removed, added, custom, fits, raw, present };
+@@ -2530,0 +2652,3 @@ const GPDXF = (function () {
++  /* C10: the same set of holes (any order), each within 1e-4 in */
++  function sameHoles(a, b) { const x = (a || []).map(q => [num(q[0]), num(q[1])]), y = (b || []).map(q => [num(q[0]), num(q[1])]); if (x.length !== y.length) return false; const used = new Set();
++    return x.every(q => { const j = y.findIndex((r, k) => !used.has(k) && Math.abs(q[0] - r[0]) <= 1e-4 && Math.abs(q[1] - r[1]) <= 1e-4); if (j < 0) return false; used.add(j); return true; }); }
+@@ -2532 +2656 @@ const GPDXF = (function () {
+-  const GEO_F = [['ang', 'ang'], ['cut', 'n'], ['sec.w', 'n'], ['fast.d', 'n'], ['fast.hole', 's'], ['fast.nR', 'n'], ['fast.nL', 'n'], ['fast.p', 'p'], ['fast.g', 'g'], ['fast.e', 'n'], ['fast.off', 'n']];
++  const GEO_F = [['ang', 'ang'], ['cut', 'n'], ['sec.w', 'n'], ['fast.d', 'n'], ['fast.hole', 's'], ['fast.nR', 'n'], ['fast.nL', 'n'], ['fast.p', 'p'], ['fast.g', 'g'], ['fast.e', 'n'], ['fast.off', 'n'], ['pattern', 's'], ['holes', 'h']];
+@@ -2538,0 +2663 @@ const GPDXF = (function () {
++    if (kind === 'h') return sameHoles(a, b);
+@@ -2543,0 +2669,5 @@ const GPDXF = (function () {
++  /* C10: hole count and pattern of a member for the change table; holes in plate coordinates for the comparison */
++  const GRID_F = ['fast.nR', 'fast.nL', 'fast.p', 'fast.g', 'fast.e', 'fast.off'];
++  const holeN = m => m.pattern === 'custom' ? (m.holes || []).length : Math.round(num(m.fast.nR)) * Math.round(num(m.fast.nL));
++  const holeTxt = m => `${m.pattern === 'custom' ? 'custom' : 'grid'}, ${holeN(m)} hole${holeN(m) === 1 ? '' : 's'}`;
++  const holesXY = m => { const G = memGeo(m, GPR.prm({})); return G.holes.map(h => [h.x, h.y]); };
+@@ -2553,2 +2683,3 @@ const GPDXF = (function () {
+-      const a = P.members[i], b = Q.members[qi++]; if (!b) break; MEM_F.forEach(([path, kind, lbl]) => { const x = getPath(a, path), y = getPath(b, path); if (!same(x, y, kind, a, b)) C.push({ grp: `Member ${i + 1}: ${a.id}`, field: lbl, cur: show(x, kind), imp: show(y, kind) }); }); }
+-    for (; qi < Q.members.length; qi++) { const b = Q.members[qi]; C.push({ grp: `New member: ${b.id}`, field: 'Member', cur: '—', imp: 'ADDED (forces = 0)', kind: 'add' }); MEM_F.forEach(([path, kind, lbl]) => C.push({ grp: `New member: ${b.id}`, field: lbl, cur: '—', imp: show(getPath(b, path), kind), kind: 'add' })); }
++      const a = P.members[i], b = Q.members[qi++]; if (!b) break; MEM_F.forEach(([path, kind, lbl]) => { if (b.pattern === 'custom' && GRID_F.includes(path)) return; const x = getPath(a, path), y = getPath(b, path); if (!same(x, y, kind, a, b)) C.push({ grp: `Member ${i + 1}: ${a.id}`, field: lbl, cur: show(x, kind), imp: show(y, kind) }); });
++      if (String(a.pattern) !== String(b.pattern) || !sameHoles(holesXY(a), holesXY(b))) C.push({ grp: `Member ${i + 1}: ${a.id}`, field: 'Holes (pattern, count)', cur: holeTxt(a), imp: holeTxt(b) + (a.pattern === b.pattern && holeN(a) === holeN(b) ? ' (positions changed)' : '') }); }
++    for (; qi < Q.members.length; qi++) { const b = Q.members[qi]; C.push({ grp: `New member: ${b.id}`, field: 'Member', cur: '—', imp: 'ADDED (forces = 0)', kind: 'add' }); MEM_F.forEach(([path, kind, lbl]) => { if (b.pattern === 'custom' && GRID_F.includes(path)) return; C.push({ grp: `New member: ${b.id}`, field: lbl, cur: '—', imp: show(getPath(b, path), kind), kind: 'add' }); }); C.push({ grp: `New member: ${b.id}`, field: 'Holes (pattern, count)', cur: '—', imp: holeTxt(b), kind: 'add' }); }
+@@ -2682 +2813 @@ function memberBlock(m, i) {
+-  return `<div class="row-blk mem-blk${open ? '' : ' closed'}" data-mi="${i}"><div class="row-hd"><button type="button" class="mem-tog" data-act="togMember" data-i="${i}" aria-expanded="${open}">${CHEV}</button><span>${esc(m.id)}</span><small class="n-dim">${m.role === 'chord' ? 'chord' : 'web'}, ${f1(num(m.ang))}°</small>
++  return `<div class="row-blk mem-blk${open ? '' : ' closed'}" data-mi="${i}"><div class="row-hd"><button type="button" class="mem-tog" data-act="togMember" data-i="${i}" aria-expanded="${open}">${CHEV}</button><span>${esc(m.id)}</span><small class="n-dim">${m.role === 'chord' ? 'chord' : 'web'}, ${f1(num(m.ang))}°${m.pattern === 'custom' ? `, custom holes (${(m.holes || []).length})` : ''}</small>
+@@ -2692,0 +2824 @@ function memberBlock(m, i) {
++      ${patSwitch(m, i)}${m.pattern === 'custom' ? holePane(m, i) : `
+@@ -2695 +2827 @@ function memberBlock(m, i) {
+-      ${fld('WP to inner row', `members.${i}.fast.e`, 'in', 'dim', { note: 'row nearest WP' })}${fld('Transverse offset', `members.${i}.fast.off`, 'in', 'dim', { note: '+ left of member' })}
++      ${fld('WP to inner row', `members.${i}.fast.e`, 'in', 'dim', { note: 'row nearest WP' })}${fld('Transverse offset', `members.${i}.fast.off`, 'in', 'dim', { note: '+ left of member' })}`}
+@@ -2704 +2836 @@ function memberBlock(m, i) {
+-function paneMembers() { return `<div class="pad"><p class="hint static">Each member: work line from the work point (WP) at angle θ; fastener rows along the member starting at the row nearest the WP; gage lines centred on the work line plus the transverse offset (+ to the left looking out along the member). Gages: one value, or a list between adjacent lines.</p>
++function paneMembers() { return `<div class="pad"><p class="hint static">Each member: work line from the work point (WP) at angle θ; fastener rows along the member starting at the row nearest the WP; gage lines centred on the work line plus the transverse offset (+ to the left looking out along the member). Gages: one value, or a list between adjacent lines. For an irregular hole pattern choose the fastener pattern “Custom” and list each hole (along, across).</p>
+@@ -2708,0 +2841,55 @@ function paneMembers() { return `<div class="pad"><p class="hint static">Each me
++/* ---------- C10: custom (irregular) fastener patterns ---------- */
++const r6u = x => { const y = Math.round(x * 1e6) / 1e6; return Object.is(y, -0) ? 0 : y; };
++/* is the hole list an exact regular grid (rows at a constant pitch × gage lines, every hole within 1/16 in of its grid point, none missing)? */
++function gridFit(m) { const hs = (m.holes || []).map(q => [num((q || [])[0]), num((q || [])[1])]);
++  if (!hs.length || hs.some(q => !isFinite(q[0]) || !isFinite(q[1]))) return { ok: false, why: 'Enter numbers for every hole first.' };
++  const F = GPDXF.fitPattern(hs.map(q => ({ x: q[0], y: q[1] })), 0);
++  return F.issues.length ? { ok: false, F, why: `The holes are not a regular grid (rows at a constant pitch × gage lines): ${F.issues.slice(0, 3).join('; ')}${F.issues.length > 3 ? '; …' : ''}.` } : { ok: true, F }; }
++/* grid fields from a fit (the exact grid on Convert to grid; the best fit kept in a custom member's grid fields for older copies of the tool only) */
++function setGridFields(m, F) { const f = m.fast; f.nR = F.nR; f.nL = F.nL; f.e = r6u(F.e); if (F.nR > 1) f.p = r6u(F.p); f.off = r6u(F.off);
++  if (F.nL > 1) { const g = F.gages.map(r6u); f.g = g.every(x => Math.abs(x - g[0]) < 1e-6) ? String(g[0]) : g.join(', '); } }
++function syncFit(m) { if (m.pattern !== 'custom') return; const r = gridFit(m); if (r.F && r.F.nR >= 1 && r.F.nL >= 1 && isFinite(r.F.e) && (r.F.nR === 1 || r.F.p > 0)) setGridFields(m, r.F); }
++/* the current grid holes, member-local (along, across) */
++function gridHoles(m) { return GPDXF.memGeo(m, GPR.prm(P.code)).holes.map(h => [r6u(h.s), r6u(h.t)]); }
++function patSwitch(m, i) { const cu = m.pattern === 'custom', gf = cu ? gridFit(m) : { ok: true };
++  return `<div class="full pat-row"><span class="pat-lbl">Fastener pattern</span><div class="seg" role="group" aria-label="Fastener pattern of ${esc(m.id)}">
++    <button type="button" id="hgrid-${i}" data-hact="toGrid" data-i="${i}" aria-pressed="${!cu}"${cu && !gf.ok ? ' disabled' : ''} title="${cu ? (gf.ok ? 'Convert to grid: the holes form an exact regular grid' : esc('Convert to grid is not available. ' + gf.why)) : 'Rows × gage lines'}">Grid</button>
++    <button type="button" data-hact="toCustom" data-i="${i}" aria-pressed="${cu}" title="${cu ? 'Custom: hole table' : 'Convert to custom: copies the current grid holes into a table, where single holes can be moved or deleted'}">Custom</button></div>
++    ${cu ? `<span class="lbl-note" id="hgridwhy-${i}">${gf.ok ? 'The holes form an exact grid: Grid converts back.' : 'Grid is not available: not a regular grid.'}</span>` : ''}</div>`; }
++function holePane(m, i) { const hs = m.holes || [];
++  const rows = hs.map((q, k) => `<tr><td class="an">${k + 1}</td><td>${cell(`members.${i}.holes.${k}.0`, 'dim', 'in')}</td><td>${cell(`members.${i}.holes.${k}.1`, 'dim', 'in')}</td><td class="ax"><button type="button" class="x-btn" data-hact="delHole" data-i="${i}" data-h="${k}" title="Delete hole ${k + 1}">×</button></td></tr>`).join('');
++  return `<div class="full hole-box"><p class="note">Hole centres in inches: <b>along</b> the member from the WP (+ outward) and <b>across</b> it (+ to the left looking out along the member). All holes have the diameter set above. Holes within 1/16 in along (across) the member form one row (gage line).</p>
++    <table class="atbl"><thead><tr><th></th><th>Along (in)</th><th>Across (in)</th><th></th></tr></thead><tbody>${rows || '<tr><td colspan="4" class="n-dim">No holes.</td></tr>'}</tbody></table>
++    <div class="arr-foot"><button type="button" class="proj-btn" data-hact="addHole" data-i="${i}">Add hole</button><span class="arr-sum" id="hcount-${i}">${hs.length} hole${hs.length === 1 ? '' : 's'}</span></div>
++    <div class="ig full"><label for="hpaste-${i}">Paste from Excel <span class="lbl-note">two columns: along, across (tab or comma); a header row is optional</span></label><textarea id="hpaste-${i}" rows="3" placeholder="Along&#9;Across&#10;26&#9;-5.25&#10;26&#9;-1.75"></textarea></div>
++    <div class="proj-row" style="grid-template-columns:1fr 1fr"><button type="button" class="proj-btn" data-hact="pasteReplace" data-i="${i}">Replace the table</button><button type="button" class="proj-btn" data-hact="pasteAdd" data-i="${i}">Add to the table</button></div>
++    <div id="hval-${i}">${holeVal(m)}</div></div>`; }
++/* validation under the hole table: errors (ratings blocked; duplicates are errors) and warnings (outside the plate, spacing < 3d: warnings only) */
++function holeVal(m) { const E = GPR.holeErrors(m), W = [], th = num(m.ang) * Math.PI / 180, d = num(m.fast.d), poly = (P.plates.poly || []).map(q => [num(q[0]), num(q[1])]);
++  const hs = (m.holes || []).map((q, k) => ({ k, s: num((q || [])[0]), t: num((q || [])[1]) })).filter(q => isFinite(q.s) && isFinite(q.t));
++  if (isFinite(th) && poly.length >= 3 && poly.every(q => isFinite(q[0]) && isFinite(q[1]))) { const out = hs.filter(q => !GPR.geo.inside([Math.cos(th) * q.s - Math.sin(th) * q.t, Math.sin(th) * q.s + Math.cos(th) * q.t], poly)).map(q => q.k + 1);
++    if (out.length) W.push(`Hole${out.length > 1 ? 's' : ''} ${out.join(', ')} ${out.length > 1 ? 'are' : 'is'} outside the plate outline.`); }
++  if (d > 0) { const cl = []; for (let a = 0; a < hs.length; a++) for (let b = a + 1; b < hs.length; b++) { const x = Math.hypot(hs[a].s - hs[b].s, hs[a].t - hs[b].t); if (x < 3 * d - 1e-9 && x > GPR.TOLH) cl.push(`${hs[a].k + 1}–${hs[b].k + 1} (${f3(x)} in)`); }
++    if (cl.length) W.push(`Spacing less than 3d = ${f3(3 * d)} in (LRFD 10th Ed. 6.13.2.6.1; warning only, the checks are not changed): holes ${cl.slice(0, 8).join(', ')}${cl.length > 8 ? ` and ${cl.length - 8} more pairs` : ''}.`); }
++  return (E.length ? `<div class="alert fail" style="margin:0"><b>Fix before rating:</b> ${E.map(esc).join(' ')}</div>` : '') + (W.length ? `<div class="alert warn" style="margin:${E.length ? '6px' : '0'} 0 0">${W.map(esc).join(' ')}</div>` : '') + (!E.length && !W.length ? `<p class="hint static" style="margin:0">${hs.length} hole${hs.length === 1 ? '' : 's'}; no duplicates, all inside the plate, spacing at least 3d.</p>` : ''); }
++function holeRefresh(i) { const m = P.members[i]; if (!m || m.pattern !== 'custom') return; const v = $('#hval-' + i); if (v) v.innerHTML = holeVal(m); const c = $('#hcount-' + i); if (c) c.textContent = `${(m.holes || []).length} hole${(m.holes || []).length === 1 ? '' : 's'}`;
++  const gf = gridFit(m), b = $('#hgrid-' + i), w = $('#hgridwhy-' + i); if (b) { b.disabled = !gf.ok; b.title = gf.ok ? 'Convert to grid: the holes form an exact regular grid' : 'Convert to grid is not available. ' + gf.why; } if (w) w.textContent = gf.ok ? 'The holes form an exact grid: Grid converts back.' : 'Grid is not available: not a regular grid.'; }
++/* pasted text -> holes; a first row that is not two numbers is taken as a header */
++function parseHoles(text) { const t = GPR.parseTable(text), out = [], bad = [];
++  t.rows.forEach((r, n) => { const a = num(r[0]), c = num(r[1]); if (r.length >= 2 && isFinite(a) && isFinite(c)) out.push([a, c]); else if (!(n === 0 && !out.length)) bad.push(n + 1); });
++  return { holes: out, bad }; }
++const HACT = {
++  toCustom(i) { const m = P.members[i]; if (m.pattern === 'custom') return false; m.holes = gridHoles(m); m.pattern = 'custom'; },
++  toGrid(i) { const m = P.members[i]; if (m.pattern !== 'custom') return false; const r = gridFit(m); if (!r.ok) { alert(r.why); return false; } setGridFields(m, r.F); m.pattern = 'grid'; m.holes = []; },
++  addHole(i) { const m = P.members[i], hs = m.holes || (m.holes = []), q = hs.map(h => [num(h[0]), num(h[1])]).filter(h => isFinite(h[0]) && isFinite(h[1])); hs.push(q.length ? [r6u(Math.max(...q.map(h => h[0])) + 3), q[q.length - 1][1]] : [6, 0]); },
++  delHole(i, k) { P.members[i].holes.splice(k, 1); },
++  pasteReplace(i) { return HACT.paste(i, true); }, pasteAdd(i) { return HACT.paste(i, false); },
++  paste(i, replace) { const ta = $('#hpaste-' + i), r = parseHoles(ta ? ta.value : ''), m = P.members[i];
++    if (!r.holes.length) { alert('No holes found. Paste two columns of numbers (along, across), tab or comma separated.'); return false; }
++    if (r.bad.length && !confirm(`Row${r.bad.length > 1 ? 's' : ''} ${r.bad.join(', ')} ${r.bad.length > 1 ? 'are' : 'is'} not two numbers and will be skipped. Continue?`)) return false;
++    if (replace && (m.holes || []).length && !confirm(`Replace the ${m.holes.length} holes of ${m.id} with the ${r.holes.length} pasted holes?`)) return false;
++    m.holes = replace ? r.holes : [...(m.holes || []), ...r.holes]; }
++};
++document.addEventListener('click', e => { const b = e.target.closest('[data-hact]'); if (!b || !HACT[b.dataset.hact] || b.disabled) return; const i = +b.dataset.i, m = P.members[i]; if (!m) return;
++  const r = HACT[b.dataset.hact](i, b.dataset.h != null ? +b.dataset.h : undefined); if (r === false) return; syncFit(m); cadEdited(); P.ui.open['m' + i] = true; rebuild(['members']); recompute(); autosave(); });
++
+@@ -2751,0 +2939 @@ function onInput(e) {
++  if (/^members\.\d+\.holes\./.test(k)) { const mi = +k.split('.')[1]; syncFit(P.members[mi]); holeRefresh(mi); }   // C10: custom hole table
+@@ -2822,0 +3011 @@ const ERR_BADGE = '<span class="badge fail" title="Could not be computed">error<
++const CUST_BADGE = '<span class="badge warn" title="Uses a custom hole pattern: the limit-state rules generalized to arbitrary holes (fix log C10, Method tab). Verify.">custom holes: verify</span>';
+@@ -2885 +3074 @@ function svgDrawing(opt = {}) {
+-    if (V.whitmore && W.ok) { const c = colFor([`${m.id}-WY`, `${m.id}-WF`, `${m.id}-WB`]), o1 = g.P(g.sOut, g.tmin), o2 = g.P(g.sOut, g.tmax), e1 = add2(W.c, mul2(g.v, -W.hw)), e2 = add2(W.c, mul2(g.v, W.hw));
++    if (V.whitmore && W.ok) { const c = colFor([`${m.id}-WY`, `${m.id}-WF`, `${m.id}-WB`]), o1 = g.wo[0], o2 = g.wo[1], e1 = add2(W.c, mul2(g.v, -W.hw)), e2 = add2(W.c, mul2(g.v, W.hw));
+@@ -2917 +3106 @@ function geoTables() {
+-    <p class="note-p">Net widths deduct d<sub>h</sub> + ${f4(R.p.dNet)} in for every hole whose centre is within d<sub>h</sub>/2 of the line (any member). "ovr": the value was overridden on the input tab.</p>`;
++    <p class="note-p">Net widths deduct d<sub>h</sub> + ${f4(R.p.dNet)} in for every hole whose centre is within d<sub>h</sub>/2 of the line (any member)${R.G.some(g => g.custom) ? '; with custom hole patterns, a staggered path (s²/4g, LRFD 6.8.3) is used where it deducts more (Method tab, C10)' : ''}. "ovr": the value was overridden on the input tab.</p>`;
+@@ -2966 +3155 @@ function renderChecks() {
+-    R.checks.filter(c => c.who === w).forEach(c => { const m = minRF(c); h += card('chk-' + c.id, `<span class="cid">${esc(c.id)}</span>${esc(LSNAME[c.ls])}`, '', `<p class="rpt-jump"><a href="#" data-rptjump="cr-chk-${esc(c.id)}">Open in the report</a></p>` + checkBody(c), `${verifyBadge(c.unc)}${c.na ? '<span class="badge na">N/A</span>' : c.err || (m && m.r.err) ? ERR_BADGE : rfBadge(m ? m.r.RF : null, 'min')}`); }); });
++    R.checks.filter(c => c.who === w).forEach(c => { const m = minRF(c); h += card('chk-' + c.id, `<span class="cid">${esc(c.id)}</span>${esc(LSNAME[c.ls])}`, '', `<p class="rpt-jump"><a href="#" data-rptjump="cr-chk-${esc(c.id)}">Open in the report</a></p>` + checkBody(c), `${c.cust ? CUST_BADGE : ''}${verifyBadge(c.unc)}${c.na ? '<span class="badge na">N/A</span>' : c.err || (m && m.r.err) ? ERR_BADGE : rfBadge(m ? m.r.RF : null, 'min')}`); }); });
+@@ -3051,0 +3241,9 @@ function methodHtml() { return `<div class="man-part active">
++  <h3>Custom (irregular) hole patterns <span class="badge warn" title="Generalized rules; verify">verify</span></h3>
++  <p>A member's fasteners are either a <b>grid</b> (rows × gage lines, as above) or <b>custom</b>: a list of holes, each given by its offset <b>along</b> the member from the WP (+ outward) and <b>across</b> it (+ to the left looking out along the member), all with the member's hole diameter. Holes within 1/16 in along (across) the member form one row (gage line). The limit states use the same definitions as for a grid, applied to the actual holes; for a rectangular grid each rule below gives exactly the grid result, and grid members are computed exactly as before (fix log C10).</p>
++  <ul><li><b>Fastener shear:</b> N = number of holes × shear planes; long-joint length L<sub>j</sub> = distance along the member between the extreme holes. Continuous chord: N and L<sub>j</sub> from the actual holes of both chord members.</li>
++  <li><b>Bearing:</b> for each hole, L<sub>c</sub> in the force direction to the nearest hole in line (centres offset less than half the sum of the radii) or to the plate edge, as for a grid, with the actual neighbours.</li>
++  <li><b>Whitmore section:</b> spread at θ<sub>W</sub> from the outer holes of the row farthest from the WP (g<sub>s</sub> = their spread across the member, centred on them) to the line through the row nearest the WP (L = distance between the two rows). A warning is given when a hole lies outside the spread lines.</li>
++  <li><b>Staggered holes (s²/4g, LRFD 10th Ed. 6.8.3):</b> on every net section of a custom pattern, the net length is the gross length minus Σ(d<sub>h</sub> + Δ) plus Σ s²/4g over consecutive holes of a path (s = offset of two consecutive holes perpendicular to the section line, g = their spacing along it). The tool searches the straight line and every zig-zag path, through holes ordered along the section, within the band s<sub>b</sub> = 2√(L d<sub>n</sub>) of the line (L = gross length of the section, d<sub>n</sub> = d<sub>h</sub> + Δ; a step of more than s<sub>b</sub> costs at least d<sub>n</sub>), and uses the path that deducts the most. A path may run through the holes of a nearby row without touching the line itself, so the net width is not taken larger than at a row within the band. Whitmore: the member's own holes within the Whitmore ends, plus every hole on the line. Partial shear planes: the holes on the line plus the holes of custom members within the band. Each net length is minimized on its own (conservative).</li>
++  <li><b>Block shear:</b> tension plane across the row nearest the WP between the outer holes of the whole pattern (across); shear planes along those two outer lines from that row to the plate edge. Net lengths deduct the member's holes on each plane (centre within d<sub>h</sub>/2; a hole at a corner, where the planes meet, counts half), or a staggered path within the band if it deducts more. If there is no hole at a corner, the rectangle is still used and a warning is given (other block shapes are not searched).</li>
++  <li><b>L<sub>mid</sub>:</b> a member's fastener field is the convex hull of its hole centres (for a grid, the rectangle through the outer hole centres, as before); a continuous chord's field is the rectangle along the chord that encloses all chord holes, as before.</li>
++  <li><b>Inputs and warnings:</b> holes need numbers, an along offset beyond the WP and distinct positions (two holes within 1/16 in: error). Holes outside the plate and spacing below 3d (LRFD 10th Ed. 6.13.2.6.1) are warnings only. “Convert to custom” copies the grid holes into the table; “Grid” converts back only when the holes form an exact regular grid (within 1/16 in).</li></ul>
+@@ -3059 +3257 @@ function methodHtml() { return `<div class="man-part active">
+-  <li><b>GP-M&lt;n&gt;-BOLT</b>: CIRCLEs, the holes of member n (diameter = hole diameter). They are grouped into gage lines (across the member) and rows (along it) with a 1/16 in tolerance, giving rows, gage lines, pitch, gages, WP to inner row and transverse offset. An irregular pattern is imported as the best-fit regular pattern and every difference is listed hole by hole; Apply stays disabled until the box confirming the best-fit grid is ticked. The fastener diameter is kept if the circles match it, otherwise taken from M&lt;n&gt;.D or inferred as hole − 1/16 in (warning).</li>
++  <li><b>GP-M&lt;n&gt;-BOLT</b>: CIRCLEs, the holes of member n (diameter = hole diameter). They are grouped into gage lines (across the member) and rows (along it) with a 1/16 in tolerance. A regular grid (every hole within 1/16 in of its grid point, none missing) gives rows, gage lines, pitch, gages, WP to inner row and transverse offset; any other pattern is imported as a custom pattern with the holes exactly as drawn (no best fit). A custom member whose holes did not change keeps its values. Export writes the actual holes. The fastener diameter is kept if the circles match it, otherwise taken from M&lt;n&gt;.D or inferred as hole − 1/16 in (warning).</li>
+@@ -3064 +3262 @@ function methodHtml() { return `<div class="man-part active">
+-  <li>Import shows the current model and the drawing side by side, every change (field, current, imported) and the warnings. Apply replaces only these geometry and data fields; member forces, live load columns, code parameters, shear-plane definitions and rating settings stay. A member added in the drawing gets default section and fastener data and zero forces; members missing from the drawing are removed only after their removal is ticked. Undo import restores the previous inputs until the next edit.</li></ul>
++  <li>Import shows the current model and the drawing side by side (holes as read), every change (field, current, imported; the hole pattern and count of each member) and the warnings. Apply replaces only these geometry and data fields; member forces, live load columns, code parameters, shear-plane definitions and rating settings stay. A member added in the drawing gets default section and fastener data and zero forces; members missing from the drawing are removed only after their removal is ticked. Undo import restores the previous inputs until the next edit.</li></ul>
+@@ -3104 +3302 @@ function cadShow(res, file) {
+-  const pv = GPDXF.previewPair(P, res), ch = res.changes, W = res.warnings, rm = res.removed, irr = res.irregular || [];
++  const pv = GPDXF.previewPair(P, res), ch = res.changes, W = res.warnings, rm = res.removed, cus = res.custom || [];
+@@ -3109 +3307 @@ function cadShow(res, file) {
+-    <p class="cap"><span class="lgd"><i style="border-color:#252d29;background:#f4f1e8"></i>plate</span><span class="lgd"><i style="border-color:#c3352b"></i>work line</span><span class="lgd"><i style="border-color:#2c7a4b"></i>member outline</span><span class="lgd"><i style="border-color:#1d56a3;border-radius:50%"></i>hole</span><span class="lgd"><i style="border-color:#c3352b;background:rgba(195,53,43,.25);border-radius:50%"></i>hole off the regular pattern</span><span class="lgd"><i style="border-color:#c3352b;border-style:dashed;border-radius:50%"></i>missing hole (added by the best fit)</span></p>
++    <p class="cap"><span class="lgd"><i style="border-color:#252d29;background:#f4f1e8"></i>plate</span><span class="lgd"><i style="border-color:#c3352b"></i>work line</span><span class="lgd"><i style="border-color:#2c7a4b"></i>member outline</span><span class="lgd"><i style="border-color:#1d56a3;border-radius:50%"></i>hole (as drawn)</span></p>
+@@ -3112 +3310 @@ function cadShow(res, file) {
+-    ${irr.length ? `<div class="alert fail"><label class="ck-row" style="padding:0"><input type="checkbox" id="cad-fit-ok"><label for="cad-fit-ok">I confirm the best-fit regular grid is acceptable for <b>${irr.map(r => esc(r.tag)).join(', ')}</b> (the model may count holes not in the drawing, which is unconservative for fastener shear and bearing). Required to apply.</label></label></div>` : ''}
++    ${cus.length ? `<div class="alert info"><b>Custom hole patterns:</b> ${cus.map(r => `${esc(r.tag)} (${r.nH} holes)`).join(', ')} ${cus.length > 1 ? 'are' : 'is'} read with the holes exactly as drawn (not a regular grid; see the Members tab, fastener pattern “Custom”).</div>` : ''}
+@@ -3116,3 +3314,2 @@ function cadShow(res, file) {
+-/* Apply is enabled only with changes and, for an irregular hole pattern, the best-fit confirmation ticked */
+-const cadFitOk = res => !(res.irregular || []).length || !!($('#cad-fit-ok') || {}).checked;
+-function cadApplyState() { const res = CAD_RES, b = $('#cad-apply'); if (!b || !res || res.error) return; b.disabled = !res.changes.length || !cadFitOk(res); }
++/* Apply is enabled only when something would change */
++function cadApplyState() { const res = CAD_RES, b = $('#cad-apply'); if (!b || !res || res.error) return; b.disabled = !res.changes.length; }
+@@ -3121 +3317,0 @@ function cadApply() {
+-  if (!cadFitOk(res)) { alert('Tick the box to confirm the best-fit regular hole pattern, or Cancel.'); cadApplyState(); return; }
+@@ -3136 +3332 @@ document.addEventListener('click', e => { const id = e.target.id; if (!id || !/^
+-document.addEventListener('change', e => { if (e.target.id === 'cad-tpl') { CAD_TPL = e.target.value; return; } if (e.target.id === 'cad-fit-ok') { cadApplyState(); return; } if (e.target.id !== 'cad-file') return; const f = e.target.files[0]; if (!f) return; const rd = new FileReader();
++document.addEventListener('change', e => { if (e.target.id === 'cad-tpl') { CAD_TPL = e.target.value; return; } if (e.target.id !== 'cad-file') return; const f = e.target.files[0]; if (!f) return; const rd = new FileReader();
+@@ -3185 +3381 @@ function crInputs() {
+-  const mem = `<table class="cr-tbl cr-wide"><thead><tr><th>Member</th><th>Role</th><th>θ (deg)</th><th>Section</th><th>Fastener</th><th>d (in)</th><th>Rows × lines</th><th>p (in)</th><th>g (in)</th><th>e (in)</th><th>Offset (in)</th><th>Planes</th><th>Filler (in)</th><th>Holes</th></tr></thead><tbody>${P.members.map(m => { const f = m.fast; return `<tr><td>${esc(m.id)}</td><td>${m.role}</td><td class="n">${f1(num(m.ang))}</td><td>${esc((SECT.find(s => s[0] === m.sec.type) || [0, ''])[1])}${m.sec.desc ? ', ' + esc(m.sec.desc) : ''}, ${frac(num(m.sec.w))} in wide</td><td>${esc(GPR.FAST[f.grade].lbl)}${GPR.FAST[f.grade].kind === 'bolt' ? `, threads ${f.thr === 'incl' ? 'included' : 'excluded'}` : ''}</td><td class="n">${frac(num(f.d))}</td><td class="n">${f.nR} × ${f.nL}</td><td class="n">${frac(num(f.p))}</td><td class="n">${esc(f.g)}</td><td class="n">${frac(num(f.e))}</td><td class="n">${frac(num(f.off) || 0)}</td><td class="n">${f.Ns}</td><td class="n">${frac(num(f.tf) || 0)}</td><td>${f.hole}, ${f.prep}</td></tr>`; }).join('')}</tbody></table>`;
++  const mem = `<table class="cr-tbl cr-wide"><thead><tr><th>Member</th><th>Role</th><th>θ (deg)</th><th>Section</th><th>Fastener</th><th>d (in)</th><th>Rows × lines</th><th>p (in)</th><th>g (in)</th><th>e (in)</th><th>Offset (in)</th><th>Planes</th><th>Filler (in)</th><th>Holes</th></tr></thead><tbody>${P.members.map(m => { const f = m.fast; return `<tr><td>${esc(m.id)}</td><td>${m.role}</td><td class="n">${f1(num(m.ang))}</td><td>${esc((SECT.find(s => s[0] === m.sec.type) || [0, ''])[1])}${m.sec.desc ? ', ' + esc(m.sec.desc) : ''}, ${frac(num(m.sec.w))} in wide</td><td>${esc(GPR.FAST[f.grade].lbl)}${GPR.FAST[f.grade].kind === 'bolt' ? `, threads ${f.thr === 'incl' ? 'included' : 'excluded'}` : ''}</td><td class="n">${frac(num(f.d))}</td>${m.pattern === 'custom' ? `<td class="n">custom, ${(m.holes || []).length} holes</td><td class="n">—</td><td class="n">—</td><td class="n">—</td><td class="n">—</td>` : `<td class="n">${f.nR} × ${f.nL}</td><td class="n">${frac(num(f.p))}</td><td class="n">${esc(f.g)}</td><td class="n">${frac(num(f.e))}</td><td class="n">${frac(num(f.off) || 0)}</td>`}<td class="n">${f.Ns}</td><td class="n">${frac(num(f.tf) || 0)}</td><td>${f.hole}, ${f.prep}</td></tr>`; }).join('')}</tbody></table>`;
+@@ -3187 +3383,3 @@ function crInputs() {
+-  return [{ t: 'Gusset plates and rating basis', h: plates }, { t: 'Plate outline', h: poly }, { t: 'Members and fasteners', h: mem }, { t: 'Member forces', h: frc }];
++  const cus = P.members.map((m, i) => [m, i]).filter(([m]) => m.pattern === 'custom');   // C10: custom hole patterns, every hole listed
++  const holes = cus.map(([m, i]) => { const g = R.G[i]; return `<p class="cr-note"><b>${esc(m.id)}</b>: ${g.holes.length} holes, ${g.nR} row${g.nR > 1 ? 's' : ''} and ${g.nL} gage line${g.nL > 1 ? 's' : ''} (holes within 1/16 in grouped); along = from the WP along the member, across = + to the left looking out along the member.</p><table class="cr-tbl"><thead><tr><th>Hole</th><th>Along (in)</th><th>Across (in)</th><th>x (in)</th><th>y (in)</th></tr></thead><tbody>${g.holes.map((h, k) => `<tr><td>${k + 1}</td><td class="n">${f3(h.s)}</td><td class="n">${f3(h.t)}</td><td class="n">${f3(h.x)}</td><td class="n">${f3(h.y)}</td></tr>`).join('')}</tbody></table>`; }).join('');
++  return [{ t: 'Gusset plates and rating basis', h: plates }, { t: 'Plate outline', h: poly }, { t: 'Members and fasteners', h: mem }, ...(cus.length ? [{ t: 'Custom hole patterns', h: holes }] : []), { t: 'Member forces', h: frc }];
+@@ -3200 +3398 @@ function buildReport(o) {
+-  if (o.checks) { const ws = [...new Set(R.checks.map(c => c.who))]; ws.forEach(w => { body += `<section class="cr-sec">${H1(w)}`; R.checks.filter(c => c.who === w).forEach(c => { const m = minRF(c); body += `<div class="cr-sub">${H2(`${LSNAME[c.ls]} (${c.id})`, c.unc.length ? 'contains parameters to verify' : '', 'cr-chk-' + c.id)}<div class="cr-body">${checkBody(c, { gov: o.detail === 'gov' }).replace(/<span class="badge[^"]*"[^>]*>[^<]*<\/span>/g, '')}</div>${c.na ? '' : m && m.r.err ? `<div class="cr-line cr-res"><div class="cr-d">Lowest rating factor:</div><div class="cr-m"><b>not determined</b> (could not be computed for ${esc(R.cases[m.j].label)})</div><div class="cr-r cr-st-fail"><b>ERROR</b></div></div>` : `<div class="cr-line cr-res"><div class="cr-d">Lowest rating factor:</div><div class="cr-m"><b>${m ? f2(m.r.RF) : '—'}</b>${m ? ` (${esc(R.cases[m.j].label)})` : ''}</div><div class="cr-r ${m && m.r.RF < 1 ? 'cr-st-fail' : ''}"><b>${m ? (m.r.RF < 1 ? 'RF < 1.00' : 'RF ≥ 1.00') : 'n/a'}</b></div></div>`}</div>`; }); body += `</section>`; }); }
++  if (o.checks) { const ws = [...new Set(R.checks.map(c => c.who))]; ws.forEach(w => { body += `<section class="cr-sec">${H1(w)}`; R.checks.filter(c => c.who === w).forEach(c => { const m = minRF(c); body += `<div class="cr-sub">${H2(`${LSNAME[c.ls]} (${c.id})`, [c.unc.length ? 'contains parameters to verify' : '', c.cust ? 'custom hole pattern: generalized rules, verify' : ''].filter(Boolean).join('; '), 'cr-chk-' + c.id)}<div class="cr-body">${checkBody(c, { gov: o.detail === 'gov' }).replace(/<span class="badge[^"]*"[^>]*>[^<]*<\/span>/g, '')}</div>${c.na ? '' : m && m.r.err ? `<div class="cr-line cr-res"><div class="cr-d">Lowest rating factor:</div><div class="cr-m"><b>not determined</b> (could not be computed for ${esc(R.cases[m.j].label)})</div><div class="cr-r cr-st-fail"><b>ERROR</b></div></div>` : `<div class="cr-line cr-res"><div class="cr-d">Lowest rating factor:</div><div class="cr-m"><b>${m ? f2(m.r.RF) : '—'}</b>${m ? ` (${esc(R.cases[m.j].label)})` : ''}</div><div class="cr-r ${m && m.r.RF < 1 ? 'cr-st-fail' : ''}"><b>${m ? (m.r.RF < 1 ? 'RF < 1.00' : 'RF ≥ 1.00') : 'n/a'}</b></div></div>`}</div>`; }); body += `</section>`; }); }
+```
