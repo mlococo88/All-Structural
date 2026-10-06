@@ -1043,3 +1043,105 @@ Feature (**no calculation changes**): an **Export DXF** button that downloads th
 })();
 </script>
   ```
+
+## 2026-10-06 — PR: claude/bridge-geometry-datum (PR link added after merge)
+
+Feature (**no calculation changes**): a **Vertical datum** label on the Alignment tab, shown on the output tables, prints, the profile graphic and the DXF export. Engineer's decisions 2026-10-06: add the field; keep the profile labels PVI / BVC / EVC (closes O-X2 as "keep"; O-X4 is resolved by this entry).
+
+### D1. Vertical datum field (label only)   [feature (no result change)] [saved data: additive field]
+- **Where (anchors; line numbers approximate):**
+  1. Alignment tab, Vertical Profile fieldset (~line 211). Anchor: `<legend>PVIs · first row is Start point`. Inserted directly after the legend line:
+     ```html
+           <div style="display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; margin-bottom:8px;">
+             <div><label>Vertical datum</label><select id="vdatum_sys" title="Vertical datum of the elevations entered below. Label only — no datum conversion is applied. Shown on the output tables, prints and DXF export.">
+               <option value="">Not specified</option><option value="NAVD88">NAVD 88</option><option value="NGVD29">NGVD 29</option><option value="local">Local / project datum</option><option value="other">Other…</option></select></div>
+             <div id="vdatum_txt_box" style="display:none;"><label>Datum description</label><input type="text" id="vdatum_txt" maxlength="120" placeholder="Project datum, BM #12 EL 100.00" title="Describe the datum (e.g. benchmark and its elevation). Label only — no datum conversion is applied."></div>
+           </div>
+     ```
+  2. Profile graphic caption (~line 237). Before:
+     ```html
+           <div class="cap"><span>Profile</span><span class="note" style="text-transform:none;letter-spacing:0;">click to set station
+     ```
+     After:
+     ```html
+           <div class="cap"><span>Profile</span><span class="pill vdatum_pill" style="text-transform:none;letter-spacing:0;" title="Label only — no datum conversion is applied.">datum: not specified</span><span class="note" style="text-transform:none;letter-spacing:0;">click to set station
+     ```
+  3. Top-of-Deck table (~line 488) and Beam Seat table (~line 517): one caption line inserted directly **before** each `<div class="noprint" …><button … onclick="exportTableCSV('tbl_wrap','top-of-deck')"` and `…exportTableCSV('seat_tbl_wrap','beam-seat')"` line (outside the table, so it prints but is not part of the CSV):
+     ```html
+         <p class="note vdatum_cap" style="margin:6px 0 0;" title="Label only — no datum conversion is applied.">Elevations in feet · vertical datum: not specified</p>
+     ```
+  4. `SCALAR_IDS` (anchor `const SCALAR_IDS = ['h_sta0'`): the list end `'map_datum','map_units'];` becomes `'map_datum','map_units','vdatum_sys','vdatum_txt'];`, and these helpers are inserted directly before `function serializeProject(){`:
+     ```js
+     // Vertical datum: a label only (scalars vdatum_sys / vdatum_txt). Elevations are never converted.
+     // '' = not specified (the default for new projects and for saves made before the field existed).
+     const VDATUM_NAMES={ NAVD88:'NAVD 88', NGVD29:'NGVD 29', local:'Local / project datum', other:'Other' };
+     function vDatumLabel(){ // null when not specified
+       const sys=(document.getElementById('vdatum_sys')||{}).value||'', txt=((document.getElementById('vdatum_txt')||{}).value||'').trim();
+       if(!sys) return null;
+       if(sys==='local') return VDATUM_NAMES.local+(txt?': '+txt:'');
+       if(sys==='other') return txt||'Other (not described)';
+       return VDATUM_NAMES[sys]||sys;
+     }
+     function renderVDatum(){
+       const sys=(document.getElementById('vdatum_sys')||{}).value||'', lab=vDatumLabel();
+       const box=document.getElementById('vdatum_txt_box'); if(box) box.style.display=(sys==='local'||sys==='other')?'':'none';
+       document.querySelectorAll('.vdatum_cap').forEach(el=>{ el.textContent='Elevations in feet · vertical datum: '+(lab||'not specified'); });
+       document.querySelectorAll('.vdatum_pill').forEach(el=>{ el.textContent='datum: '+(lab||'not specified'); });
+     }
+     ```
+  5. `applyProject(p)`: directly before the line `if(p.scalars) for(const id in p.scalars){`, insert
+     ```js
+       // vertical datum: saves without the field (older versions) read as "not specified"
+       ['vdatum_sys','vdatum_txt'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+     ```
+     and directly after `ACTIVE_STA = (typeof p.activeSta==='number') ? p.activeSta : null;` insert `  renderVDatum();`.
+  6. `freshDefaults()`: after `  ACTIVE_STA=null;` insert
+     ```js
+       ['vdatum_sys','vdatum_txt'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; }); renderVDatum();
+     ```
+  7. After the comment `// wiring for persistence buttons` insert
+     ```js
+     document.getElementById('vdatum_sys').addEventListener('change',()=>{ renderVDatum(); markDirty(); });
+     document.getElementById('vdatum_txt').addEventListener('input',()=>{ renderVDatum(); markDirty(); });
+     renderVDatum();
+     ```
+  8. DXF export, `build()` section 6. After `/* ===== 6. title block notes, below the plan ===== */` insert
+     ```js
+         const vdLab=(typeof vDatumLabel==='function')?vDatumLabel():null;   // label only
+     ```
+     Notes line, before:
+     ```js
+             ['Vertical datum: as entered in the vertical profile (not specified in the tool). Elevations and stations in feet.', h],
+     ```
+     after:
+     ```js
+             [(vdLab?'Vertical datum: '+vdLab+' (label only - elevations as entered in the vertical profile, no datum conversion).':'Vertical datum: as entered in the vertical profile (not specified in the tool).')+' Elevations and stations in feet.', h],
+     ```
+     Profile title (section 7), before:
+     ```js
+           W.text(LY.ptext,[PX(sA),yT],1.2*h,'PROFILE ALONG PGL - FINISHED GRADE (TOP OF PAVEMENT) - VERTICAL EXAGGERATION '+VE+'x');
+     ```
+     after:
+     ```js
+           W.text(LY.ptext,[PX(sA),yT],1.2*h,'PROFILE ALONG PGL - FINISHED GRADE (TOP OF PAVEMENT) - VERTICAL EXAGGERATION '+VE+'x - VERTICAL DATUM: '+(vdLab||'NOT SPECIFIED'));
+     ```
+- **Problem:** none (feature). Elevations were output without any statement of their vertical datum; the DXF notes said "not specified in the tool" (O-X4).
+- **What it does:** a select (Not specified / NAVD 88 / NGVD 29 / Local / project datum / Other…) plus a description box shown for Local and Other. Default for new projects, the demo reset and every save made before this change: **Not specified** (NAVD 88 is not assumed). The label appears in the Top-of-Deck and Beam Seat table captions (on screen and in print; the print stylesheet hides fieldsets and buttons, not these captions), on the Profile graphic caption, in the DXF title notes (unchanged wording when Not specified) and on the DXF profile title. **Label only: no elevation is converted between datums** (the tooltips say so).
+- **Saved data (CLAUDE.md §5):**
+  - No storage key changed. Project JSON (`bridgeGeomEngine.project.v1` autosave, library `bridgeGeomEngine.library.v1`, Export / Import JSON) gets two **additive** entries inside the existing `scalars` object: `vdatum_sys` (`''`, `'NAVD88'`, `'NGVD29'`, `'local'`, `'other'`) and `vdatum_txt` (string). `version` stays **1**: no bump, because the existing loader already tolerates unknown scalars (it skips any id with no matching element), so an older copy of the tool still opens new files. A bump would make older copies reject new files (`applyProject` requires `version===1`).
+  - Old saves / old exported JSON (no `vdatum_*`): load unchanged and show "Not specified" (the loader clears both fields before reading the scalars, so a previously loaded project's datum is not carried over). Re-saved by the new tool, the JSON is identical except for the two added scalars (both `''`).
+  - New file in an **older copy** of the tool: `applyProject` returns true, no error or warning, identical results; the two scalars are silently ignored and are **dropped on its next autosave or export** (all other data kept). Re-open the file in the current tool to keep the datum.
+  - The bridgeSuite hand-offs are unchanged: the datum is **not** added to `projectMeta` or `lldfGeom` (one tool per PR).
+  - CSV exports are unchanged: the Top-of-Deck / Beam-Seat / picked-point CSVs are a plain header row plus data rows with no comment or metadata convention, so a datum line would break column parsing; the datum is not written to the CSV.
+- **Governing provision:** n/a (label; no calculation).
+- **Check case (demo bridge, Reset):** Beam Seat table, Abut 1 brg, G1..G4 = 95.71 / 95.88 / 95.84 / 95.61 with the datum Not specified and with NAVD 88 (same numbers; only the caption changes from "vertical datum: not specified" to "vertical datum: NAVD 88"). DXF notes with Other "Project datum, BM #12 EL 100.00": `Vertical datum: Project datum, BM #12 EL 100.00 (label only - elevations as entered in the vertical profile, no datum conversion). Elevations and stations in feet.`
+- **How verified:**
+  - `node --check` on all four inline scripts.
+  - jsdom, main vs. this branch: Top-of-Deck (both modes), Beam Seat, derived geometry, span summary and 63 `getDeckPoint` samples identical for the demo, the 5 examples and the custom curved case. The DXF re-parse checks (42 variants: alignment, ticks, support CLs, elevation points and z, TD / BS text against the tables, profile grade line and FG labels, extents) give results identical to main. Textual DXF diff against main (datum Not specified): only the timestamp line, and in the 22 files with a profile the profile title gains ` - VERTICAL DATUM: NOT SPECIFIED`; the notes line is unchanged. ezdxf 1.4.4 recover + audit: 0 errors, 0 fixes on those 43 exports and on 3 exports with a datum set.
+  - Load tests: old exported JSON from main (6 cases) and old autosave from main (3 cases, page booted on that key) load with "Not specified" and identical tables; Other (text with an em dash and quotes), Local + text, NAVD 88 and NGVD 29 round-trip through Export/Import JSON and through autosave + reload; `freshDefaults` resets to Not specified; Load validation set leaves the datum alone; main's `applyProject` accepts a new file with identical results.
+  - Chromium (Playwright): the field with Other + description, the Profile pill, the Top-of-Deck and Beam Seat captions on screen and in print media; no page errors.
+- **Other copies:** none.
+- **Open items:**
+  - O-D1. Carrying the datum in a hand-off (e.g. an optional field on `projectMeta` or `lldfGeom`) needs a HANDOFF.md change and the receiving tools: not done here.
+  - O-D2. The datum is not written to the CSV exports (see above). If wanted, it could go in an extra column or in the file name; say which.
+  - O-D3. The heatmap, cross-section, 3D and Site Map views show elevations without the datum label; the table captions on the same tabs carry it.
