@@ -125,6 +125,7 @@ Moved here from "Needs verification" (engineer-confirmed 2026-10-05, see C4.4):
 - **Partial shear planes:** automatic planes through the top and bottom lines of chord fasteners (through the holes).
 - **L_mid at a clipped Whitmore end** (C6.1 rule: closed plate outline; along the plate edge where the plate does not continue toward the WP): engineer-confirmed 2026-10-05 (see C7; closes O14).
 - **L_mid along a plate edge stops at the other member's fastener field** (O18): engineer's decision 2026-10-05, implemented in C7. A field counts even when another field lies between it and the edge (engineer's decision 2026-10-05: rule kept; the tool warns in that case, C8).
+- **Custom hole patterns (C10), engineer's answers 2026-10-06 (see C11):** the Whitmore far row of a staggered pattern includes the next row when it is staggered and at most one pitch away, each spread line starting at its own outer hole (rule C11, amended 2026-10-07); a path through a nearby complete row inside the band may govern the Whitmore net width (confirmed); block shear with a missing corner hole uses the rectangle and warns, and stepped block shapes are not searched (engineer's decision); the bearing "in line" test (centre offset < mean radius) is kept for staggered holes (confirmed); custom members are stored with rows / gage lines = 0 so older copies stop with an input error (decision). Still to verify: the stagger search band s_b = 2√(L d_n); not answered: a partly staggered next row (not grouped).
 
 #### Validation (hand checks)
 
@@ -1104,7 +1105,7 @@ Default code parameters, two 1/2 in A36 plates (Σt = 1.0 in, F_y 36, F_u 58 ksi
 - Chromium (Playwright): hole table and paste box, 2D drawing (case 1 zoom, case 2), 3D view, L2-U1-WF calc sheet, DXF import preview and change table; reviewed.
 
 - **Other copies:** none (the DXF module's `memGeo` duplicates the engine layout inside this file; both updated).
-- **Open items (questions for the engineer):**
+- **Open items (questions for the engineer):** (answered 2026-10-06 except 3, see C11)
   1. Whitmore for staggered patterns: with 1/16 in row grouping, the "row farthest from the WP" of a staggered pattern is a single hole (g_s = 0, case 2). Should the far "row" include holes within one stagger distance (e.g. the last two staggered rows) for the spread?
   2. Whitmore net width: a path through a nearby full row (within s_b) is allowed to govern (case 1 keeps W_n = 21.570 in). Confirm, or restrict paths to ones that cross the Whitmore line.
   3. Band s_b = 2√(L d_n) for the stagger search: confirm, or give a fixed band (e.g. one pitch).
@@ -1476,4 +1477,260 @@ Exact before/after (unified diff against main 381e299, zero context lines; ancho
 @@ -3200 +3398 @@ function buildReport(o) {
 -  if (o.checks) { const ws = [...new Set(R.checks.map(c => c.who))]; ws.forEach(w => { body += `<section class="cr-sec">${H1(w)}`; R.checks.filter(c => c.who === w).forEach(c => { const m = minRF(c); body += `<div class="cr-sub">${H2(`${LSNAME[c.ls]} (${c.id})`, c.unc.length ? 'contains parameters to verify' : '', 'cr-chk-' + c.id)}<div class="cr-body">${checkBody(c, { gov: o.detail === 'gov' }).replace(/<span class="badge[^"]*"[^>]*>[^<]*<\/span>/g, '')}</div>${c.na ? '' : m && m.r.err ? `<div class="cr-line cr-res"><div class="cr-d">Lowest rating factor:</div><div class="cr-m"><b>not determined</b> (could not be computed for ${esc(R.cases[m.j].label)})</div><div class="cr-r cr-st-fail"><b>ERROR</b></div></div>` : `<div class="cr-line cr-res"><div class="cr-d">Lowest rating factor:</div><div class="cr-m"><b>${m ? f2(m.r.RF) : '—'}</b>${m ? ` (${esc(R.cases[m.j].label)})` : ''}</div><div class="cr-r ${m && m.r.RF < 1 ? 'cr-st-fail' : ''}"><b>${m ? (m.r.RF < 1 ? 'RF < 1.00' : 'RF ≥ 1.00') : 'n/a'}</b></div></div>`}</div>`; }); body += `</section>`; }); }
 +  if (o.checks) { const ws = [...new Set(R.checks.map(c => c.who))]; ws.forEach(w => { body += `<section class="cr-sec">${H1(w)}`; R.checks.filter(c => c.who === w).forEach(c => { const m = minRF(c); body += `<div class="cr-sub">${H2(`${LSNAME[c.ls]} (${c.id})`, [c.unc.length ? 'contains parameters to verify' : '', c.cust ? 'custom hole pattern: generalized rules, verify' : ''].filter(Boolean).join('; '), 'cr-chk-' + c.id)}<div class="cr-body">${checkBody(c, { gov: o.detail === 'gov' }).replace(/<span class="badge[^"]*"[^>]*>[^<]*<\/span>/g, '')}</div>${c.na ? '' : m && m.r.err ? `<div class="cr-line cr-res"><div class="cr-d">Lowest rating factor:</div><div class="cr-m"><b>not determined</b> (could not be computed for ${esc(R.cases[m.j].label)})</div><div class="cr-r cr-st-fail"><b>ERROR</b></div></div>` : `<div class="cr-line cr-res"><div class="cr-d">Lowest rating factor:</div><div class="cr-m"><b>${m ? f2(m.r.RF) : '—'}</b>${m ? ` (${esc(R.cases[m.j].label)})` : ''}</div><div class="cr-r ${m && m.r.RF < 1 ? 'cr-st-fail' : ''}"><b>${m ? (m.r.RF < 1 ? 'RF < 1.00' : 'RF ≥ 1.00') : 'n/a'}</b></div></div>`}</div>`; }); body += `</section>`; }); }
+```
+
+## 2026-10-06 — PR: claude/gusset-custom-holes-2 (PR link added after merge)
+
+### C11. Engineer's answers to the C10 questions (2026-10-06, amended 2026-10-07): staggered far row for the Whitmore spread (per-hole origins, one-pitch limit); older copies stop with an input error for custom members in browser storage; confirmations recorded   [calculation change: Whitmore section of custom patterns whose far row is staggered; every grid member and every other custom pattern computes exactly as before]
+
+Engineer's answers to the six C10 questions (PR #53), 2026-10-06:
+
+1. **Whitmore far row for staggered patterns: YES.** The far row includes the holes within one stagger distance. Implemented as rule C11 (C11.1).
+2. **A path through a nearby complete row inside the band may govern the Whitmore net width: YES, confirmed.** No calculation change. When such a path governs, the calc sheet W_n row now says "engineer-confirmed 2026-10-06 for the Whitmore net width"; the Method tab says the same.
+3. **Stagger search band s_b = 2√(L d_n): not answered.** Unchanged; still marked "verify" (calc sheet and Method tab). Open item.
+4. **Stepped block-shear shapes: NO.** The rectangle and the missing-corner warning stay. The warning and the Method tab now record "stepped block shapes are not searched (engineer's decision 2026-10-06)". No calculation change.
+5. **Bearing "in line" test for staggered holes: YES, keep.** Recorded as confirmed in the Method tab. No calculation change.
+6. **Older copies must stop with an input error** instead of rating a custom member as its best-fit grid from browser storage. Implemented (C11.3). No calculation change in this copy.
+
+Engineer's answers to the open items of the first C11 draft, 2026-10-07:
+
+- **(a) Spread origin:** each spread line starts at its own outer hole, at that hole's along offset (the more conservative option). The Whitmore line stays through the row nearest the WP.
+- **(b) Stagger limit:** the staggered next row is grouped only when s_st ≤ one pitch. Pitch = the pattern's typical row spacing, defined in C11.1.
+- **(c) Stagger search band:** left as is, still "verify".
+- **(d) Partly staggered next row:** not answered. Kept as is (not grouped) and still listed as an open item.
+
+The "custom holes: verify" badge stays on every check that uses a custom pattern.
+
+#### C11.1 Rule C11: the far row of a staggered pattern (Whitmore spread)
+
+Where:
+- `customGeom()` (engine): anchors `const rowH = k => holes.filter(h => h.row === k), pitchR =` and `const sAt = t =>`.
+- Whitmore block of `compute()`: anchor `const fsp = g.custom && g.far.stag ?`.
+
+Grid members and custom members without a grouped far row run the C10 lines unchanged (`fsp` is null).
+
+- **Rows.** Rows are the C10 rows: holes grouped by along offset with a 1/16 in tolerance, row centre = median. They are sorted from the WP outward; row n−1 is the farthest.
+- **Pitch.** pitch = the median of the along distances between consecutive rows, ss[k+1] − ss[k] for k = 0 … n−2 (`medianOf`: with an even count, the mean of the middle two).
+- **Grouping.** Row n−2 is grouped with the farthest row (the **far row**) when both of these hold:
+  - (i) it is **staggered**: none of its holes is within 1/16 in across of a hole of the farthest row, so they share no gage line;
+  - (ii) the stagger distance s_st = s(n−1) − s(n−2) ≤ pitch + 1/16 in.
+
+  The far row then holds every hole within one stagger distance of the farthest hole. Otherwise the far row is the farthest row alone, as in C10. "Otherwise" covers: only one row; a next row sharing a gage line (including a partly staggered next row); s_st more than one pitch. No grid can change: every row shares every gage line.
+- **g_s:** the across spread of the far-row holes, t1 … t2 (`g.gS`, `g.tc` = mid-point).
+- **Spread lines (engineer's decision 2026-10-07):** each starts at the **outer far-row hole on its side, at that hole's own along offset**: (s1, t1) and (s2, t2), `g.wo`. If several far-row holes have the outer t, the farthest one is used; with a staggered pair this never happens, because the two rows share no gage line.
+  - Half-widths at the line through the row nearest the WP: a1 = (tc − t1) + (s1 − sIn) tan θ_W and a2 = (t2 − tc) + (s2 − sIn) tan θ_W.
+  - **W = a1 + a2 = g_s + (L1 + L2) tan θ_W**, with L1 = s1 − sIn and L2 = s2 − sIn.
+  - The section is centred between its ends: hw = (a1 + a2)/2, centre at t = tc + (a2 − a1)/2. Plate clipping, W_n, L_mid (ends and middle of the section) and the drawings then work as before.
+- **The Whitmore line** still passes through the row nearest the WP (s = sIn). The row nearest the WP is not grouped. A staggered companion row there is already covered by the s²/4g net width (C10): in case 2 the chain A1 → B1 governs W_n. g.Lc = sOut − sIn (the long-joint length L_j) is unchanged.
+- **Text and drawing:**
+  - The W_g "where" row reads "g_s + (L1 + L2) tan θ_W = …" and gives s_st, the pitch, the hole count and t1, t2.
+  - The geometry table shows L as "L1 / L2".
+  - The "holes outside the spread lines" warning uses the two spread lines.
+  - The 2D and 3D spread lines start at the two holes. The dotted leader of the first draft was removed: it is no longer needed.
+
+#### C11.2 §4 callout: Whitmore gross width of a custom pattern with a staggered far row
+
+- **Before (main / C10):** g_s = across spread of the holes of the row farthest from the WP. A single far hole of a staggered pattern gives g_s = 0. W = g_s + 2L tan θ_W with L = sOut − sIn.
+- **First C11 draft (a8036ce, not merged):** g_s from both rows; both lines start at the farthest row; no pitch limit.
+- **After (C11):** g_s from the far row as defined in C11.1, with the pitch limit. Each line starts at its own outer hole: W = g_s + (L1 + L2) tan θ_W.
+- **Governing provisions:** AASHTO LRFD 10th Ed. Art. 6.14.2.8 (Whitmore section, θ_W = 30°); MBE 3rd Ed. 6A.6.12.6.7 and 6A.6.12.6.8 (buckling, L_mid). Where the spread starts is the tool's convention (C4, now C11). No load factor, resistance factor, unit or edition changes.
+- **Effect versus C10:** less conservative for these patterns. W_g grows, so the WY, WF and WB capacities rise. It is more conservative than the first draft.
+
+**Check case 1: C10 case 2, validation model, diagonal D (45°), 2 lines at g = 3 in, staggered by s = 1.5 in.**
+- Line A: (20, −1.5), (23, −1.5), (26, −1.5), (29, −1.5). Line B: (21.5, +1.5), (24.5, +1.5), (27.5, +1.5), (30.5, +1.5).
+- Two 1/2 in A36 plates (Σt = 1.0 in, F_y 36, F_u 58 ksi). d_n = 1.000 in. tan 30° = 0.577350.
+- Rows: 20, 21.5, …, 30.5. Spacings are all 1.5, so pitch = 1.5. Row 29 (t = −1.5) shares no gage line with row 30.5 (t = +1.5), and s_st = 1.5 ≤ 1.5 + 1/16, so the far row = (29, −1.5) + (30.5, +1.5). sIn = 20.
+
+| Step | Main / C10 | First draft (a8036ce) | **C11** |
+|---|---|---|---|
+| g_s, origins | 0; both at (30.5, +1.5) | 3.000; both at s = 30.5 | 3.000; (29, −1.5) and (30.5, +1.5) |
+| Spread | 0 + 2(10.5)(0.57735) | 3 + 2(10.5)(0.57735) | a1 = 1.5 + 9(0.57735) = 6.696; a2 = 1.5 + 10.5(0.57735) = 7.562 |
+| W_g (in) | 12.124 | 15.124 | **14.258** = 3 + 19.5(0.57735) (not clipped; centre t = +0.433) |
+| W_n = W_g − 1.8125 (chain A1→B1: 2(1.000) − 1.5²/(4·3)) | 10.312 | 13.312 | **12.446** |
+| WY = 0.95(36)(W_g)(1.0) (kip) | 414.65 | 517.25 | **487.63** = 34.2 × 14.258 |
+| WF = 0.80(58) min(W_n, 0.85 W_g) (kip) | 478.18 (10.306) | 596.50 (12.856) | **562.35** = 46.4 × min(12.446, 12.120) |
+| L_mid: L1 / L2 / L3 (in) | 15.438 / 21.500 / 27.562 → 21.500 | 12.438 / 20.000 / 27.562 → 20.000 | 13.304 / 20.433 / 27.562 → **20.433** |
+| WB LRFR (kip) | 293.35 | 380.61 | **354.87**: KL/r = 0.5(20.433)/0.1443 = 70.78; A = 7.129; P_e = π²(29000)(7.129)/70.78² = 407.3; P_o = 256.6; 0.658^0.6302 × 256.6 = 197.1 per plate; 0.90 × 394.3 |
+| WB LFR (kip) | 92.32 | 133.09 | **120.20**: 1.2(20.433)/0.1443 = 169.88 > 126.10 → F_cr 9.92 ksi; 0.85(14.258)(1.0)(9.92) |
+| RF WY (LRFR Inv / Op / LFR Inv / Op) | 3.39 / 4.39 / 3.27 / 5.46 | 4.36 / 5.66 / 4.22 / 7.04 | **4.08 / 5.29 / 3.94 / 6.58** |
+| RF WF | 3.99 / 5.18 / 3.86 / 6.44 | 5.12 / 6.64 / 4.95 / 8.26 | **4.79 / 6.21 / 4.63 / 7.73** |
+| RF WB (reversal, LRFR Inv / Op) | 4.76 / 6.17 | 6.01 / 7.79 | **5.64 / 7.31** |
+
+- L_mid points: the ends are c ∓ 7.129 v, with the section centre c = P(20, 0.433) = (13.836, 14.448). L = y / sin 45° to the chord fastener line at y = 0. Example, end 1: (18.877, 9.407) → 9.407/0.70711 = 13.304.
+- Block shear (466.79 kip), fastener shear, bearing and the governing results (D-FS 1.56 / 2.03 / 2.11 / 3.52) are unchanged.
+- C10 warned that holes 3 and 4 lie outside the spread lines; that warning is now gone.
+
+**Check case 2: regular alternating 3-2-3-2 pattern** (upper-chord template t5, L2-U3).
+- Holes: rows 26 / 32 at t = −5.25, 0, 5.25 and rows 29 / 35 at t = ±2.6. Pitch 3. sIn = 26.
+- Row 32 shares no gage line with row 35, and s_st = 3 ≤ 3, so it is grouped. g_s = 10.5. The outer holes (32, ±5.25) give L1 = L2 = 6.
+- W = 10.5 + 12(0.57735) = **17.428 in**. Main/C10: 5.2 + 2(9)(0.57735) = 15.592. First draft: 10.5 + 2(9)(0.57735) = 20.892.
+- WY 533.26 / 714.52 → **596.04**; WF 584.28 / 823.99 → **669.47**; WB LRFR 444.73 / 614.15 → **502.55**, LFR 267.90 / 425.30 → **319.45** kip (C10 / first draft → C11).
+- RF WY (LRFR Inv): 2.01 / 2.91 → **2.32**. RF WF: 2.26 / 3.45 → **2.69**.
+- The suite's irregular 3-2-3-2 model (C10 symmetry model c5) has rows at 26, 28, 30, 33. There pitch = 2 and s_st = 3 > 2, so it is **not grouped**. It is back to the C10 values (W_g 13.283; the first draft gave 18.583).
+
+**Check case 3: vertical with filler** (C10 round-trip model; L2-U2 holes (13.3125, −2.4375), (16.8125, 2.5), (20.3, −2.4375), (23.8, 2.5), (27.3, −2.4375); 3/8 in filler).
+- Pitch = median(3.5, 3.4875, 3.5, 3.5) = 3.5. s_st = 3.5, so the row is grouped.
+- g_s = 2.5 + 2.4375 = 4.9375. L1 = 27.3 − 13.3125 = 13.9875 (hole at t = −2.4375) and L2 = 23.8 − 13.3125 = 10.4875.
+- W = 4.9375 + 24.475(0.57735) = **19.068 in**. C10: 16.151; first draft: 21.089.
+- W_n 14.767 / 19.705 → **17.684**. WY 552.38 / 721.24 → **652.13**; WF 637.01 / 831.75 → **752.05**; WB LRFR 505.92 / 660.58 → **597.29**, LFR 436.79 / 570.32 → **515.67** kip.
+- RF WY: 5.13 / 6.88 → **6.16**; RF WF: 6.01 / 8.03 → **7.20** (LRFR Inv). L_mid 7.312 is unchanged. Governing is unchanged.
+
+**Other custom models in the suite** (synthetic; from `c11/cmpc.js`, C10 → C11). The "every member custom" models (c3 spliced, c4 continuous, round-trip allcustom: one hole in five deleted, every other hole moved 0.75 in) group a single far hole with the row 0.75 in nearer.
+- L2-U1: W_g 18.187 → 25.570.
+- L2-U3: W_g 18.187 → 22.070.
+- L1-L2 / L2-L3: W_g 18.980 → 22.547 and 22.980 → 26.547.
+- Governing:
+  - c3 and allcustom: LFR Inv / Op −0.443 / −0.740 (L1-L2-WY) → −0.403 / −0.673 (L1-L2-FS);
+  - c4: 0.426 / 0.711 → 1.398 / 2.334 (L2-U1-WB).
+- C10 case 1 (far row complete) and the DXF import cases: no result change. Only the confirmation texts changed.
+
+#### C11.3 Saved data (§5): older copies stop with an input error
+
+- **Before (C10):** the grid fields of a custom member held the best-fit grid (`syncFit` → `setGridFields`). An older copy of the tool (main before C10, 381e299 / cd402fa, which ignores `pattern` / `holes`) opening an autosave or named project rated that grid. Example: case 1 gave L2-U1-FS 531.09 kip instead of 486.83 kip.
+- **After (C11):** a custom member is stored with **`fast.nR = 0` and `fast.nL = 0`** (rows and gage lines).
+  - The older copy's `validate()` rejects this: "Member 3 (L2-U1): rows must be a whole number of at least 1." and "… gage lines must be a whole number of at least 1."
+  - It shows "Input error" and computes nothing.
+  - The other grid fields (p, g, e, offset) are left as they were and are not used.
+- **Where `GPR.blankGrid(m)` is applied:**
+  - `normalize()`: every load (autosave on start-up, named project, JSON import, DXF Apply);
+  - `syncFit()`: every hole-table action and edit (was: the best-fit grid);
+  - the DXF import of a custom pattern;
+  - `autosave()` and `putStore()` before writing, as a safeguard.
+- **This copy never uses those fields for a custom member** (`validate`, `customGeom` and `memGeo` skip them).
+  - "Grid" (Convert to grid) rebuilds every grid field from the holes (`gridFit` → `setGridFields`). It was tested with stored rows = 0: the result is grid 6 × 4, p 3, g 3.5, e 26, offset 0, identical to the default.
+  - The DXF change table no longer lists the grid fields of a member that is custom on either side. The "Holes (pattern, count)" row describes it.
+- **Existing C10 autosaves and named projects** (custom member with best-fit grid fields) load unchanged with identical results. They need no migration beyond the normal load.
+  - The best-fit counts are derived data this copy never used. They are replaced by 0 in memory and on the next save.
+  - The holes and every other field are kept.
+  - Grid-only projects are unchanged.
+- **JSON export:** as in C10. A file is version 2 only when a member is custom (it now carries rows 0); otherwise version 1. The older copy refuses version 2: "The project is version 2; this tool reads version 1." The C10 copy (5add80b) and this copy import it with identical results.
+- **The C10 copy opening data written by this copy:** it works, because it ignores the grid fields of custom members. It applies the C10 Whitmore rule (case 2: WY 414.65 kip instead of 487.63 kip).
+- **Keys unchanged:** `gussetRating.autosave.v1`, `gussetRating.projects.v1`.
+
+#### C11.4 How verified
+
+- `node --check` on all 7 inline scripts: pass.
+- **Grid models:** the 56-model full-precision dump and the rounded dump are **byte-identical** to main 381e299 and to C10 (5add80b). The full dump covers every capacity, RF, LaTeX and "where" text, the warnings, W_g, W_n, L_1–L_3, block-shear and plane lengths, and the L_mid stop polygons.
+- **Prior suites:** identical output (`gl/sym.js` 25 pairs, `o19/symw.js`, `o18/unit.js`, `o19/hand.js`, `o19/c9chk.js`, `gp3/rt.js` DXF round trips). `gp3/cases.js` (DXF import cases) is identical to C10.
+- **Custom patterns:**
+  - mirror / rotation (`gch/symc.js`, 11 pairs, including the staggered case 2 and the asymmetric per-hole origins): identical;
+  - DXF round trips (`gch/rtc.js`, 5 models): exact;
+  - exact-grid custom = grid: 402 capacities and RFs, difference 0.
+- **C10 / first draft → C11 comparison** of every custom model (`c11/cmpc.js`): only the changes in C11.2 and the confirmation texts.
+- **jsdom:**
+  - The C10 suite: 46 checks. The autosave expectation is now rows = gage lines = 0, and the older copy now gives an input error.
+  - `c11/dom6.js`: 22 checks.
+    - C10 saves load here with identical results and are stored with rows 0.
+    - Convert to custom, paste and table edits keep rows at 0. Convert to grid rebuilds the grid from the holes.
+    - The autosave, the named project and the version-2 JSON are written with rows 0.
+    - **Main before C10 (381e299 = cd402fa for this file), opening this copy's autosave and named project, gives an input error with no checks computed.** Every tab and the Members pane render without runtime errors. It refuses the version-2 JSON.
+    - The C10 copy reads this copy's data with identical results.
+- **Chromium:** case-2 2D drawing (full and zoomed), 3D view and the D-WY calc card; reviewed. The spread lines start at holes (29, −1.5) and (30.5, +1.5). The 14.258 in section passes through A1 and is centred 0.433 in off the work line.
+
+- **Other copies:** none. The DXF module and the engine are both in this file.
+- **Open items:**
+  1. Stagger search band s_b = 2√(L d_n) (C10 question 3): still to be confirmed; marked "verify".
+  2. Partly staggered next row (some of its holes on a gage line of the farthest row): not grouped. Not answered yet.
+
+Exact before/after: unified diff against main 5add80b, zero context lines. The anchors are the hunk headers' function names and the comments containing "C11".
+
+```diff
+@@ -1433,2 +1433,5 @@ const GPR = (function () {
+-     member-local (along from the WP, + outward; across + to the left looking out along the member). The grid fields of a custom member hold the
+-     best-fit grid for older copies of the tool only; this copy does not use them. */
++     member-local (along from the WP, + outward; across + to the left looking out along the member). This copy does not use the grid fields of a
++     custom member. C11 (engineer's decision 2026-10-06): their rows and gage-line counts are stored as 0 (blankGrid, applied on every load and edit),
++     so that an older copy of the tool, which ignores pattern / holes, stops with an input error ("rows must be a whole number of at least 1")
++     instead of rating a grid. */
++  function blankGrid(m) { if (m && m.pattern === 'custom' && m.fast) { m.fast.nR = 0; m.fast.nL = 0; } return m; }
+@@ -1482 +1485 @@ const GPR = (function () {
+-  function normalize(P) { const D = defaults(), Q = deepMerge(D, P || {}); Q.members = (Q.members || []).map(m => memberDef(m)); Q.ll = (Q.ll || []).map(c => ({ name: 'LL', kind: 'design', use: 'both', gL: 1.75, ...c }));
++  function normalize(P) { const D = defaults(), Q = deepMerge(D, P || {}); Q.members = (Q.members || []).map(m => blankGrid(memberDef(m))); Q.ll = (Q.ll || []).map(c => ({ name: 'LL', kind: 'design', use: 'both', gL: 1.75, ...c }));
+@@ -1508 +1511,6 @@ const GPR = (function () {
+-     Lc = sOut − sIn; tmin / tmax = outer holes of the whole pattern; field (L_mid stops) = convex hull of the hole centres; wo = Whitmore spread origins. */
++     Lc = sOut − sIn; tmin / tmax = outer holes of the whole pattern; field (L_mid stops) = convex hull of the hole centres; wo = Whitmore spread origins.
++     C11 (engineer's decisions 2026-10-06 / 2026-10-07): the far row of a staggered pattern = the farthest row plus the next row when that next row is
++     staggered (none of its holes within 1/16 in across of a hole of the farthest row) and s_st (along distance between the two rows) ≤ pitch + 1/16 in,
++     pitch = median of the along distances between consecutive rows of the pattern. gS / tc from the holes of both rows. Each spread line starts at the
++     outer far-row hole on its side, at that hole's own along offset (wo; s1, s2); the Whitmore line stays through the row nearest the WP (sIn);
++     Lc = sOut − sIn is unchanged (L_j). A next row that is not staggered or farther than one pitch (and every grid) changes nothing. */
+@@ -1514 +1522,6 @@ const GPR = (function () {
+-    const t1st = holes.filter(h => h.row === nR - 1).map(h => h.t), t1 = Math.min(...t1st), t2 = Math.max(...t1st), n = hs.length;
++    const rowH = k => holes.filter(h => h.row === k), pitchR = nR >= 2 ? medianOf(ss.slice(1).map((x, k) => x - ss[k])) : NaN, sSt = nR >= 2 ? sOut - ss[nR - 2] : NaN;   // C11
++    const offLine = nR >= 2 && !rowH(nR - 2).some(h => rowH(nR - 1).some(q => Math.abs(q.t - h.t) <= TOLH)), stag = offLine && sSt <= pitchR + TOLH;
++    const farH = stag ? [...rowH(nR - 2), ...rowH(nR - 1)] : rowH(nR - 1);
++    const t1st = farH.map(h => h.t), t1 = Math.min(...t1st), t2 = Math.max(...t1st), n = hs.length;
++    const sAt = t => Math.max(...farH.filter(h => h.t === t).map(h => h.s)), s1 = stag ? sAt(t1) : sOut, s2 = stag ? sAt(t2) : sOut;
++    const far = { stag, offLine, sSt, pitch: pitchR, holes: farH, s1, s2 };
+@@ -1518 +1531 @@ const GPR = (function () {
+-      custom: true, wo: [P_(sOut, t1), P_(sOut, t2)], t1, t2 };
++      custom: true, wo: [P_(s1, t1), P_(s2, t2)], t1, t2, far };
+@@ -1585,2 +1598,3 @@ const GPR = (function () {
+-      const tn = Math.tan(p.thW * PI / 180), out = hs.filter(h => Math.abs(h.t - g.tc) > g.gS / 2 + (g.sOut - h.s) * tn + 1e-6);
+-      if (out.length) warn.push(`Member ${id} (custom holes): ${out.length} hole${out.length > 1 ? 's lie' : ' lies'} outside the ${f1(p.thW)}° Whitmore spread lines from the outer holes of the row farthest from the WP (hole${out.length > 1 ? 's' : ''} ${out.map(h => hs.indexOf(h) + 1).join(', ')}). The Whitmore section is still taken from that row (convention C4); verify it for this pattern.`); });
++      const tn = Math.tan(p.thW * PI / 180), out = g.far.stag ? hs.filter(h => h.t < g.t1 - (g.far.s1 - h.s) * tn - 1e-6 || h.t > g.t2 + (g.far.s2 - h.s) * tn + 1e-6)
++        : hs.filter(h => Math.abs(h.t - g.tc) > g.gS / 2 + (g.sOut - h.s) * tn + 1e-6);
++      if (out.length) warn.push(`Member ${id} (custom holes): ${out.length} hole${out.length > 1 ? 's lie' : ' lies'} outside the ${f1(p.thW)}° Whitmore spread lines from the outer holes of the ${g.far.stag ? 'far row (the row farthest from the WP and the staggered row next to it, each spread line from its own outer hole, rule C11)' : 'row farthest from the WP'} (hole${out.length > 1 ? 's' : ''} ${out.map(h => hs.indexOf(h) + 1).join(', ')}). The Whitmore section is still taken from that row (convention C4); verify it for this pattern.`); });
+@@ -1617 +1631 @@ const GPR = (function () {
+-      if (!c1 || !c2) warn.push(`Member ${id} (custom holes), block shear: no hole at ${!c1 && !c2 ? 'either end' : 'one end'} of the row nearest the WP (at the outer line${!c1 && !c2 ? 's' : ''} t = ${[!c1 ? f3(g.tmin) : null, !c2 ? f3(g.tmax) : null].filter(x => x != null).join(' and ')} in). The block is taken as the rectangle between the outer lines of the pattern from that row to the plate edge; other block shapes are not searched (verify).`); }
++      if (!c1 || !c2) warn.push(`Member ${id} (custom holes), block shear: no hole at ${!c1 && !c2 ? 'either end' : 'one end'} of the row nearest the WP (at the outer line${!c1 && !c2 ? 's' : ''} t = ${[!c1 ? f3(g.tmin) : null, !c2 ? f3(g.tmax) : null].filter(x => x != null).join(' and ')} in). The block is taken as the rectangle between the outer lines of the pattern from that row to the plate edge; stepped block shapes are not searched (engineer's decision 2026-10-06). Verify the block for this pattern.`); }
+@@ -1621 +1635,4 @@ const GPR = (function () {
+-      const hw = g.gS / 2 + g.Lc * Math.tan(p.thW * PI / 180), c = g.P(g.sIn, g.tc), iv = intervalAt(c, g.v, poly, 0);
++      // C11: staggered far row of a custom pattern: each spread line from its own outer hole (s1, t1) / (s2, t2) to the line through the row nearest the WP;
++      // the section is centred between its two ends (half-widths a1, a2)
++      const fsp = g.custom && g.far.stag ? (() => { const tn = Math.tan(p.thW * PI / 180), a1 = g.tc - g.t1 + (g.far.s1 - g.sIn) * tn, a2 = g.t2 - g.tc + (g.far.s2 - g.sIn) * tn; return { a1, a2, hw: (a1 + a2) / 2, tc: g.tc + (a2 - a1) / 2 }; })() : null;
++      const hw = fsp ? fsp.hw : g.gS / 2 + g.Lc * Math.tan(p.thW * PI / 180), c = g.P(g.sIn, fsp ? fsp.tc : g.tc), iv = intervalAt(c, g.v, poly, 0);
+@@ -1681 +1698 @@ const GPR = (function () {
+-    const stagTxt = st => { if (!st) return ''; if (!st.used) return `; custom holes: no staggered path (s²/4g) through holes within ${f3(st.band)} in of the line deducts more (rule C10, verify)`;
++    const stagTxt = (st, wh) => { if (!st) return ''; if (!st.used) return `; custom holes: no staggered path (s²/4g) through holes within ${f3(st.band)} in of the line deducts more (rule C10, verify)`;
+@@ -1684 +1701 @@ const GPR = (function () {
+-        : `; custom holes: the path through the ${nh} holes of a nearby row (within ${f3(st.band)} in, no stagger) governs: Σ(d<sub>h</sub> + Δ) = ${f3(st.v)} in, more than ${f3(st.straight)} in on the straight line (rule C10, verify)`; };
++        : `; custom holes: the path through the ${nh} holes of a nearby row (within ${f3(st.band)} in, no stagger) governs: Σ(d<sub>h</sub> + Δ) = ${f3(st.v)} in, more than ${f3(st.straight)} in on the straight line (rule C10${wh ? ', engineer-confirmed 2026-10-06 for the Whitmore net width' : ', verify'})`; };
+@@ -1725 +1742 @@ const GPR = (function () {
+-        where: [whitWhere(g), wr('W<sub>n</sub>', `Net Whitmore width: W<sub>g</sub> − Σ(d<sub>h</sub> + ${f4(p.dNet)}) for the ${W.cross.length} hole${W.cross.length === 1 ? '' : 's'} on the section${stagTxt(W.stag)}${W.ovN != null ? ' (overridden)' : ''}`, f3(W.Wn), 'in', W.ovN != null ? 'Override' : 'LRFD 6.8.3'), wr('A<sub>n</sub>', capOn ? `Net area, A<sub>n</sub> ≤ ${f2(p.capAn)} A<sub>g</sub> limit applied: ${An < An0 - 1e-9 ? `${f2(p.capAn)} W<sub>g</sub>Σt governs (W<sub>n</sub>Σt = ${f3(An0)} in²)` : `W<sub>n</sub>Σt governs (${f2(p.capAn)} W<sub>g</sub>Σt = ${f3(p.capAn * Ag)} in²)`}` : `Net area W<sub>n</sub>Σt; the A<sub>n</sub> ≤ ${f2(p.capAn)} A<sub>g</sub> limit is not applied (code parameter switched off)`, f3(An), 'in²', 'LRFD 6.13.5.2'), wr('U', 'Shear-lag factor', f2(p.U), '', 'LRFD 6.13.5.2'), wr('φ<sub>u</sub>', 'Resistance factor, fracture', f2(phi), '', lrfr ? 'LRFD 6.5.4.2' : 'FHWA-IF-09-014'), ...plateWhere()],
++        where: [whitWhere(g), wr('W<sub>n</sub>', `Net Whitmore width: W<sub>g</sub> − Σ(d<sub>h</sub> + ${f4(p.dNet)}) for the ${W.cross.length} hole${W.cross.length === 1 ? '' : 's'} on the section${stagTxt(W.stag, true)}${W.ovN != null ? ' (overridden)' : ''}`, f3(W.Wn), 'in', W.ovN != null ? 'Override' : 'LRFD 6.8.3'), wr('A<sub>n</sub>', capOn ? `Net area, A<sub>n</sub> ≤ ${f2(p.capAn)} A<sub>g</sub> limit applied: ${An < An0 - 1e-9 ? `${f2(p.capAn)} W<sub>g</sub>Σt governs (W<sub>n</sub>Σt = ${f3(An0)} in²)` : `W<sub>n</sub>Σt governs (${f2(p.capAn)} W<sub>g</sub>Σt = ${f3(p.capAn * Ag)} in²)`}` : `Net area W<sub>n</sub>Σt; the A<sub>n</sub> ≤ ${f2(p.capAn)} A<sub>g</sub> limit is not applied (code parameter switched off)`, f3(An), 'in²', 'LRFD 6.13.5.2'), wr('U', 'Shear-lag factor', f2(p.U), '', 'LRFD 6.13.5.2'), wr('φ<sub>u</sub>', 'Resistance factor, fracture', f2(phi), '', lrfr ? 'LRFD 6.5.4.2' : 'FHWA-IF-09-014'), ...plateWhere()],
+@@ -1727 +1744 @@ const GPR = (function () {
+-    function whitWhere(g) { const W = g.W; return wr('W<sub>g</sub>', `Gross Whitmore width: g<sub>s</sub> + 2L tan θ<sub>W</sub> = ${f3(g.gS)} + 2(${f3(g.Lc)})tan ${f1(p.thW)}° = ${f3(W.Wfull)}${W.clipA || W.clipB ? `, clipped at the plate edge to ${f3(W.WgAuto)}` : ''}${W.ovG != null ? ' (overridden)' : ''}${g.custom ? '. Custom holes: g<sub>s</sub> = spread of the holes of the row farthest from the WP, L = distance from that row to the row nearest the WP (rule C10, verify)' : ''}`, f3(W.Wg), 'in', W.ovG != null ? 'Override' : 'LRFD 6.14.2.8'); }
++    function whitWhere(g) { const W = g.W; return wr('W<sub>g</sub>', `${g.custom && g.far.stag ? `Gross Whitmore width: g<sub>s</sub> + (L<sub>1</sub> + L<sub>2</sub>) tan θ<sub>W</sub> = ${f3(g.gS)} + (${f3(g.far.s1 - g.sIn)} + ${f3(g.far.s2 - g.sIn)})tan ${f1(p.thW)}° = ${f3(W.Wfull)}` : `Gross Whitmore width: g<sub>s</sub> + 2L tan θ<sub>W</sub> = ${f3(g.gS)} + 2(${f3(g.Lc)})tan ${f1(p.thW)}° = ${f3(W.Wfull)}`}${W.clipA || W.clipB ? `, clipped at the plate edge to ${f3(W.WgAuto)}` : ''}${W.ovG != null ? ' (overridden)' : ''}${g.custom ? (g.far.stag ? `. Custom holes, staggered far row (rule C11, engineer's decisions 2026-10-06 / 2026-10-07): the row farthest from the WP and the staggered row ${f3(g.far.sSt)} in nearer the WP (≤ pitch ${f3(g.far.pitch)} in; ${g.far.holes.length} holes); g<sub>s</sub> = ${f3(g.t2)} − (${f3(g.t1)}) = spread of their holes; each spread line starts at its own outer hole; L<sub>1</sub>, L<sub>2</sub> = along distance from the outer hole at t = ${f3(g.t1)} / ${f3(g.t2)} in to the row nearest the WP (verify)` : '. Custom holes: g<sub>s</sub> = spread of the holes of the row farthest from the WP, L = distance from that row to the row nearest the WP (rule C10, verify)') : ''}`, f3(W.Wg), 'in', W.ovG != null ? 'Override' : 'LRFD 6.14.2.8'); }
+@@ -1904 +1921 @@ const GPR = (function () {
+-    parseTable, guessWide, applyWide, parseMidas, applyMidas, autoLoadTarget, exportProject, importProject, SCHEMA, SCHEMA_VERSION, geo: { pip, lineIntervals, rayExit, distSeg, polyArea, hull, inside }, holeErrors, chainDed, TOLH };
++    parseTable, guessWide, applyWide, parseMidas, applyMidas, autoLoadTarget, exportProject, importProject, SCHEMA, SCHEMA_VERSION, geo: { pip, lineIntervals, rayExit, distSeg, polyArea, hull, inside }, holeErrors, chainDed, TOLH, blankGrid };
+@@ -2613 +2630 @@ const GPDXF = (function () {
+-          if (base && base.pattern === 'custom' && sameHoles(base.holes, loc)) { m.pattern = 'custom'; m.holes = base.holes; custom.push({ n, tag, nH: loc.length }); }
++          if (base && base.pattern === 'custom' && sameHoles(base.holes, loc)) { m.pattern = 'custom'; m.holes = base.holes; GPR.blankGrid(m); custom.push({ n, tag, nH: loc.length }); }
+@@ -2617 +2634 @@ const GPDXF = (function () {
+-            else { m.pattern = 'custom'; m.holes = loc; custom.push({ n, tag, nH: loc.length });   // the grid fields keep the best-fit grid for older copies of the tool only
++            else { m.pattern = 'custom'; m.holes = loc; GPR.blankGrid(m); custom.push({ n, tag, nH: loc.length });   // C11: rows / gage lines stored as 0 (older copies stop with an input error)
+@@ -2683 +2700 @@ const GPDXF = (function () {
+-      const a = P.members[i], b = Q.members[qi++]; if (!b) break; MEM_F.forEach(([path, kind, lbl]) => { if (b.pattern === 'custom' && GRID_F.includes(path)) return; const x = getPath(a, path), y = getPath(b, path); if (!same(x, y, kind, a, b)) C.push({ grp: `Member ${i + 1}: ${a.id}`, field: lbl, cur: show(x, kind), imp: show(y, kind) }); });
++      const a = P.members[i], b = Q.members[qi++]; if (!b) break; MEM_F.forEach(([path, kind, lbl]) => { if ((a.pattern === 'custom' || b.pattern === 'custom') && GRID_F.includes(path)) return; const x = getPath(a, path), y = getPath(b, path); if (!same(x, y, kind, a, b)) C.push({ grp: `Member ${i + 1}: ${a.id}`, field: lbl, cur: show(x, kind), imp: show(y, kind) }); });
+@@ -2848 +2865 @@ function gridFit(m) { const hs = (m.holes || []).map(q => [num((q || [])[0]), nu
+-/* grid fields from a fit (the exact grid on Convert to grid; the best fit kept in a custom member's grid fields for older copies of the tool only) */
++/* grid fields from a fit (the exact grid on Convert to grid; C11: from the holes only, not from the stored grid fields of the custom member) */
+@@ -2851 +2868 @@ function setGridFields(m, F) { const f = m.fast; f.nR = F.nR; f.nL = F.nL; f.e =
+-function syncFit(m) { if (m.pattern !== 'custom') return; const r = gridFit(m); if (r.F && r.F.nR >= 1 && r.F.nL >= 1 && isFinite(r.F.e) && (r.F.nR === 1 || r.F.p > 0)) setGridFields(m, r.F); }
++function syncFit(m) { GPR.blankGrid(m); }   // C11: a custom member's rows / gage lines are stored as 0 (was C10: the best-fit grid)
+@@ -3100 +3117 @@ function geoTables() {
+-  const rowsW = P.members.map((m, i) => { const g = R.G[i], W = g.W; if (R.P.chord === 'continuous' && m.role === 'chord') return ''; return `<tr><td class="lbl">${esc(m.id)}</td><td class="val">${f3(g.gS)}</td><td class="val">${f3(g.Lc)}</td><td class="val">${f3(W.Wfull)}</td><td class="val">${W.ok ? f3(W.WgAuto) + (W.clipA || W.clipB ? ' (clipped)' : '') : '—'}</td><td class="val">${W.ok ? f3(W.Wg) : '—'}${W.ovG != null ? ' ovr' : ''}</td><td class="val">${W.ok ? f3(W.Wn) : '—'}${W.ovN != null ? ' ovr' : ''}</td><td class="val">${W.ok ? W.L3.map(z => f2(z.L)).join(' / ') : '—'}</td><td class="val">${W.ok ? f3(W.Lmid) : '—'}${W.ovL != null ? ' ovr' : ''}</td></tr>`; }).join('');
++  const rowsW = P.members.map((m, i) => { const g = R.G[i], W = g.W; if (R.P.chord === 'continuous' && m.role === 'chord') return ''; return `<tr><td class="lbl">${esc(m.id)}</td><td class="val">${f3(g.gS)}</td><td class="val">${g.custom && g.far.stag ? `${f3(g.far.s1 - g.sIn)} / ${f3(g.far.s2 - g.sIn)}` : f3(g.Lc)}</td><td class="val">${f3(W.Wfull)}</td><td class="val">${W.ok ? f3(W.WgAuto) + (W.clipA || W.clipB ? ' (clipped)' : '') : '—'}</td><td class="val">${W.ok ? f3(W.Wg) : '—'}${W.ovG != null ? ' ovr' : ''}</td><td class="val">${W.ok ? f3(W.Wn) : '—'}${W.ovN != null ? ' ovr' : ''}</td><td class="val">${W.ok ? W.L3.map(z => f2(z.L)).join(' / ') : '—'}</td><td class="val">${W.ok ? f3(W.Lmid) : '—'}${W.ovL != null ? ' ovr' : ''}</td></tr>`; }).join('');
+@@ -3244,4 +3261,5 @@ function methodHtml() { return `<div class="man-part active">
+-  <li><b>Bearing:</b> for each hole, L<sub>c</sub> in the force direction to the nearest hole in line (centres offset less than half the sum of the radii) or to the plate edge, as for a grid, with the actual neighbours.</li>
+-  <li><b>Whitmore section:</b> spread at θ<sub>W</sub> from the outer holes of the row farthest from the WP (g<sub>s</sub> = their spread across the member, centred on them) to the line through the row nearest the WP (L = distance between the two rows). A warning is given when a hole lies outside the spread lines.</li>
+-  <li><b>Staggered holes (s²/4g, LRFD 10th Ed. 6.8.3):</b> on every net section of a custom pattern, the net length is the gross length minus Σ(d<sub>h</sub> + Δ) plus Σ s²/4g over consecutive holes of a path (s = offset of two consecutive holes perpendicular to the section line, g = their spacing along it). The tool searches the straight line and every zig-zag path, through holes ordered along the section, within the band s<sub>b</sub> = 2√(L d<sub>n</sub>) of the line (L = gross length of the section, d<sub>n</sub> = d<sub>h</sub> + Δ; a step of more than s<sub>b</sub> costs at least d<sub>n</sub>), and uses the path that deducts the most. A path may run through the holes of a nearby row without touching the line itself, so the net width is not taken larger than at a row within the band. Whitmore: the member's own holes within the Whitmore ends, plus every hole on the line. Partial shear planes: the holes on the line plus the holes of custom members within the band. Each net length is minimized on its own (conservative).</li>
+-  <li><b>Block shear:</b> tension plane across the row nearest the WP between the outer holes of the whole pattern (across); shear planes along those two outer lines from that row to the plate edge. Net lengths deduct the member's holes on each plane (centre within d<sub>h</sub>/2; a hole at a corner, where the planes meet, counts half), or a staggered path within the band if it deducts more. If there is no hole at a corner, the rectangle is still used and a warning is given (other block shapes are not searched).</li>
++  <li><b>Bearing:</b> for each hole, L<sub>c</sub> in the force direction to the nearest hole in line (centres offset less than half the sum of the radii) or to the plate edge, as for a grid, with the actual neighbours. Staggered holes offset by more than that are not in line (the edge or the next hole in line governs): engineer-confirmed 2026-10-06.</li>
++  <li><b>Whitmore section:</b> spread at θ<sub>W</sub> from the outer holes of the far row (g<sub>s</sub> = their spread across the member, centred on them) to the line through the row nearest the WP (L = distance between the farthest row and the row nearest the WP). A warning is given when a hole lies outside the spread lines.
++    <br><b>Far row of a staggered pattern</b> (rule C11, engineer's decisions 2026-10-06 and 2026-10-07): the far row is the row farthest from the WP plus the next row toward the WP when (a) that next row is staggered, i.e. none of its holes is on the same gage line (within 1/16 in across) as a hole of the farthest row, and (b) the stagger distance s<sub>st</sub> (along distance between the two rows) is at most one pitch (+ 1/16 in), the pitch being the median of the along distances between consecutive rows of the pattern. g<sub>s</sub> is the across spread of the holes of both rows. <b>Each spread line starts at the outer far-row hole on its side, at that hole's own along offset</b>, so W = g<sub>s</sub> + (L<sub>1</sub> + L<sub>2</sub>) tan θ<sub>W</sub> with L<sub>1</sub>, L<sub>2</sub> = along distance from each of the two outer holes to the row nearest the WP; the section is centred between its two ends. Otherwise (next row not staggered, only partly staggered, or farther than one pitch) the far row is the farthest row alone, as before; a grid is never changed. The row nearest the WP is not grouped: the Whitmore line stays through the hole(s) nearest the WP, and a staggered companion row near the WP is taken into account by the s²/4g net width below. The long-joint length L<sub>j</sub> is not affected.</li>
++  <li><b>Staggered holes (s²/4g, LRFD 10th Ed. 6.8.3):</b> on every net section of a custom pattern, the net length is the gross length minus Σ(d<sub>h</sub> + Δ) plus Σ s²/4g over consecutive holes of a path (s = offset of two consecutive holes perpendicular to the section line, g = their spacing along it). The tool searches the straight line and every zig-zag path, through holes ordered along the section, within the band s<sub>b</sub> = 2√(L d<sub>n</sub>) of the line (L = gross length of the section, d<sub>n</sub> = d<sub>h</sub> + Δ; a step of more than s<sub>b</sub> costs at least d<sub>n</sub>), and uses the path that deducts the most. A path may run through the holes of a nearby row without touching the line itself, so the net width is not taken larger than at a row within the band (for the Whitmore net width: engineer-confirmed 2026-10-06). The band s<sub>b</sub> itself is still to be confirmed (verify). Whitmore: the member's own holes within the Whitmore ends, plus every hole on the line. Partial shear planes: the holes on the line plus the holes of custom members within the band. Each net length is minimized on its own (conservative).</li>
++  <li><b>Block shear:</b> tension plane across the row nearest the WP between the outer holes of the whole pattern (across); shear planes along those two outer lines from that row to the plate edge. Net lengths deduct the member's holes on each plane (centre within d<sub>h</sub>/2; a hole at a corner, where the planes meet, counts half), or a staggered path within the band if it deducts more. If there is no hole at a corner, the rectangle is still used and a warning is given; stepped block shapes are not searched (engineer's decision 2026-10-06).</li>
+@@ -3249 +3267,2 @@ function methodHtml() { return `<div class="man-part active">
+-  <li><b>Inputs and warnings:</b> holes need numbers, an along offset beyond the WP and distinct positions (two holes within 1/16 in: error). Holes outside the plate and spacing below 3d (LRFD 10th Ed. 6.13.2.6.1) are warnings only. “Convert to custom” copies the grid holes into the table; “Grid” converts back only when the holes form an exact regular grid (within 1/16 in).</li></ul>
++  <li><b>Inputs and warnings:</b> holes need numbers, an along offset beyond the WP and distinct positions (two holes within 1/16 in: error). Holes outside the plate and spacing below 3d (LRFD 10th Ed. 6.13.2.6.1) are warnings only. “Convert to custom” copies the grid holes into the table; “Grid” converts back only when the holes form an exact regular grid (within 1/16 in), with the grid taken from the holes.</li>
++  <li><b>Saved data and older copies</b> (C11, engineer's decision 2026-10-06): a custom member is saved with its holes; its rows and gage lines (grid fields) are saved as 0, so that a copy of this tool older than custom patterns stops with an input error (“rows must be a whole number of at least 1”) instead of rating a grid in place of the holes. Project files with a custom member are version 2, which older copies refuse.</li></ul>
+@@ -3270 +3289 @@ let asT = null;
+-function autosave() { if (!LS) return; clearTimeout(asT); asT = setTimeout(() => { try { localStorage.setItem(KEY_AS, JSON.stringify({ data: P, name: CUR })); const d = $('#proj_autosave_dot'); if (d) { d.style.opacity = 1; setTimeout(() => d.style.opacity = .25, 500); } } catch (e) {} }, 300); }
++function autosave() { if (!LS) return; clearTimeout(asT); asT = setTimeout(() => { try { (P.members || []).forEach(GPR.blankGrid); localStorage.setItem(KEY_AS, JSON.stringify({ data: P, name: CUR })); /* C11: custom members saved with rows / gage lines = 0 */ const d = $('#proj_autosave_dot'); if (d) { d.style.opacity = 1; setTimeout(() => d.style.opacity = .25, 500); } } catch (e) {} }, 300); }
+@@ -3272 +3291 @@ const store = () => { try { return JSON.parse(localStorage.getItem(KEY_PR) || '{
+-const putStore = s => { try { localStorage.setItem(KEY_PR, JSON.stringify(s)); return true; } catch (e) { flash('Could not save (browser storage full or blocked). Use Export JSON.', 'fail'); return false; } };
++const putStore = s => { try { Object.values(s).forEach(d => ((d && d.members) || []).forEach(GPR.blankGrid)); localStorage.setItem(KEY_PR, JSON.stringify(s)); /* C11: as autosave */ return true; } catch (e) { flash('Could not save (browser storage full or blocked). Use Export JSON.', 'fail'); return false; } };
 ```
