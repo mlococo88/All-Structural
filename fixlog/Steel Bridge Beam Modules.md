@@ -481,3 +481,25 @@ window.addEventListener('storage', e => { if (!e.key || e.key.indexOf('bridgeSui
 - **Other copies:** none (the CDN tags are per file; PlateLine exists only inside this file).
 - **Open items (found, not changed):**
   - The DXF export installs `ezdxf` with `micropip.install('ezdxf')` (in `dxfPy`, anchor `micropip.install('ezdxf')`), with no version, so it takes the newest ezdxf on PyPI that installs in Pyodide 0.26.4 (PyPI latest today: 1.4.4, requires Python ≥ 3.10). Not changed: it is a Python package, not a CDN tag, and DXF export could not be run here (Pyodide is blocked in the sandbox), so a pinned version could not be tested. Needs: a decision on whether to pin it (e.g. `micropip.install('ezdxf==<version>')`) and a DXF export test with network access.
+
+## 2026-10-09 — Pin ezdxf for DXF export
+
+### P2. `micropip.install('ezdxf')` pinned to `ezdxf==1.4.4`   [library pin, no calculation change]
+- **Engineer's decision (2026-10-09):** pin the ezdxf version used by DXF export (open item from P1).
+- **Where:** the DXF loader that starts Pyodide on first use. Anchor: `/* paper space layouts: the drawing is written by ezdxf running in the browser (Pyodide), loaded on first use */` (≈ line 5858); the install call is a few lines below.
+- **Before:**
+  ```js
+  await py.runPythonAsync("import micropip\nawait micropip.install('ezdxf')");
+  ```
+- **After:**
+  ```js
+  await py.runPythonAsync("import micropip\nawait micropip.install('ezdxf==1.4.4')");
+  ```
+- **Why:** without a version, micropip installs the newest ezdxf from PyPI on every first export, so a future ezdxf release could change or break the DXF output without warning. 1.4.4 is the version the unpinned call installs today, so today's output is unchanged.
+- **Checks:**
+  - PyPI has `ezdxf-1.4.4-py3-none-any.whl` (pure Python, `Requires-Python >=3.10`), which micropip can install in Pyodide v0.26.4 (Python 3.12). Its dependencies (pyparsing ≥ 3.0, typing_extensions ≥ 4.6, numpy, fonttools) are still resolved by micropip/Pyodide as before (numpy is loaded from Pyodide's own packages).
+  - The embedded writer `GD_DXF_PY` was extracted and executed against ezdxf 1.4.4 in CPython: it loads without errors (defines `build`).
+  - `node --check` on every inline script: pass.
+  - Not run here: an end-to-end DXF export in the browser (the Pyodide CDN is blocked in the test environment). **The engineer should run one DXF export after this change.**
+- **Other copies:** none (PlateLine does not use ezdxf).
+- **Open items:** ezdxf's own dependencies are not pinned (they are resolved by micropip); Pyodide itself is already pinned at v0.26.4.

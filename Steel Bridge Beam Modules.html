@@ -5862,7 +5862,7 @@ async function dxfPy(msg) {
   msg('Loading the Python runtime (first export only)...');
   if (!window.loadPyodide) await new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'https://cdn.jsdelivr.net/pyodide/v0.26.4/full/pyodide.js'; sc.onload = res; sc.onerror = () => rej(new Error('Could not load the Python runtime from the internet.')); document.head.appendChild(sc); });
   const py = await loadPyodide(); msg('Loading the DXF library (first export only)...');
-  await py.loadPackage(['micropip', 'numpy']); await py.runPythonAsync("import micropip\nawait micropip.install('ezdxf')"); py.runPython(GD_DXF_PY); DXF_PY = py; return py;
+  await py.loadPackage(['micropip', 'numpy']); await py.runPythonAsync("import micropip\nawait micropip.install('ezdxf==1.4.4')"); py.runPython(GD_DXF_PY); DXF_PY = py; return py;
 }
 async function dxfDownloadLayouts() {
   let r; try { r = dxfBuild(true); } catch (e) { console.error(e); alert('DXF export failed: ' + e.message); return; }
