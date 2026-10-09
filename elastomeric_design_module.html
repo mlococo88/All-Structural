@@ -70,6 +70,15 @@ table.itbl input{width:80px;font-family:inherit;font-size:12.5px;border:1px soli
 .tab{font-size:13px;padding:6px 12px;border:1px solid var(--line);border-bottom:none;border-radius:5px 5px 0 0;background:var(--panel);cursor:pointer;}
 .tab.active{background:var(--navy);color:#fff;border-color:var(--navy);}
 .tabpane{display:none;}.tabpane.active{display:block;}
+/* input panel tabs (edmInputTabs) — same look as the output #tabbar */
+#edmInTabs{position:sticky;top:0;z-index:5;display:flex;flex-wrap:wrap;gap:3px;margin:-12px -14px 8px;padding:8px 14px 0;background:#fff;border-bottom:2px solid var(--navy);}
+#edmInTabs .edmInTab{display:inline-flex;align-items:center;font-family:inherit;font-size:13px;padding:6px 12px;border:1px solid var(--line);border-bottom:none;border-radius:5px 5px 0 0;background:var(--panel);color:#1a1a1a;cursor:pointer;}
+#edmInTabs .edmInTab:hover{background:var(--panel-h);}
+#edmInTabs .edmInTab[aria-selected="true"]{background:var(--navy);color:#fff;border-color:var(--navy);}
+#edmInTabs .edmInTab:focus-visible{outline:2px solid var(--navy-lt);outline-offset:1px;}
+.edmInDot{display:none;width:7px;height:7px;border-radius:50%;background:var(--bad);margin-left:6px;box-shadow:0 0 0 1.5px #fff;}
+.edmInTab.has-err .edmInDot{display:inline-block;}
+.edmInTab[hidden],.edmInPane[hidden]{display:none !important;}
 /* equation blocks */
 .eqb{margin:7px 0;border-left:2px solid #dfe2d6;padding:2px 0 2px 10px;}
 .eqb .eqtitle{font-size:13.5px;font-weight:bold;color:#243;}
@@ -425,6 +434,7 @@ function buildInputs(){
   h+=panel("in-assum","I-7","Engineering Assumptions",`
     <textarea data-path="assumptions">${esc(S.assumptions)}</textarea>`);
   document.getElementById("inputPanel").innerHTML=h;
+  edmInputTabs();   // move the cards just built into the input tabs
   // derived readouts
   const R=LAST;
   if(R){
@@ -433,6 +443,91 @@ function buildInputs(){
     const rd=document.getElementById("rotDeriv");
     if(rd) rd.innerHTML=`Design rotation θ<sub>s</sub> = √(long²+trans²)+tol = <b>${fmt(R.rot.thTotal,4)} rad</b> · σ<sub>TL</sub> = <b>${fmt(R.sigTL,3)} ksi</b>`;
   }
+}
+/* ---------- input panel tabs (UI only) ----------
+   buildInputs() still builds every card into #inputPanel exactly as before;
+   edmInputTabs() then MOVES the finished card nodes into one pane per tab.
+   Nothing is rebuilt, so every data-path / data-cid, the handlers and the
+   values are untouched. The active tab is remembered per browser in
+   localStorage key edm_v1_inputTab (never in S, so the autosave, saved
+   projects, JSON export and the Abutment hand-off are unchanged). */
+const EDM_IN_TABS=[["project","Project"],["pad","Pad"],["mat","Materials"],["loads","Loads"],["code","Code"],["assum","Assumptions"]];
+const EDM_IN_SEC={"in-proj":"project","in-type":"pad","in-geom":"pad","in-mat":"mat","in-loads":"loads","in-tog":"code","in-coef":"code","in-assum":"assum"};
+const EDM_IN_KEY="edm_v1_inputTab";
+let edmInTabCur=null;   // in-memory copy, so the tab survives rebuilds even without storage
+function edmInTabGet(){ if(edmInTabCur)return edmInTabCur; try{ return localStorage.getItem(EDM_IN_KEY)||""; }catch(e){ return ""; } }
+function edmInTabSet(t){ edmInTabCur=t; try{ localStorage.setItem(EDM_IN_KEY,t); }catch(e){} }
+function edmInputTabs(){
+  const P=document.getElementById("inputPanel"); if(!P)return;
+  const bar=document.createElement("div"); bar.id="edmInTabs"; bar.setAttribute("role","tablist"); bar.setAttribute("aria-label","Input groups");
+  const panes={};
+  EDM_IN_TABS.forEach(([k,lab])=>{
+    const b=document.createElement("button"); b.type="button"; b.className="edmInTab"; b.id="edmInTab_"+k; b.dataset.pane=k;
+    b.setAttribute("role","tab"); b.setAttribute("aria-controls","edmInPane_"+k);
+    const s=document.createElement("span"); s.textContent=lab; b.appendChild(s);
+    const dot=document.createElement("span"); dot.className="edmInDot"; dot.setAttribute("aria-hidden","true"); b.appendChild(dot);
+    b.addEventListener("click",()=>edmSetInTab(k,true));
+    b.addEventListener("keydown",edmInTabKey);
+    bar.appendChild(b);
+    const pn=document.createElement("div"); pn.className="edmInPane"; pn.id="edmInPane_"+k; pn.setAttribute("role","tabpanel");
+    pn.setAttribute("aria-labelledby","edmInTab_"+k);
+    panes[k]=pn;
+  });
+  // move the built nodes; a node not in the map stays with the card before it
+  let cur="project";
+  Array.from(P.childNodes).forEach(n=>{
+    const cid=n.getAttribute&&n.getAttribute("data-cid");
+    if(cid&&EDM_IN_SEC[cid])cur=EDM_IN_SEC[cid];
+    panes[cur].appendChild(n);
+  });
+  P.appendChild(bar);
+  EDM_IN_TABS.forEach(([k])=>{ P.appendChild(panes[k]); document.getElementById("edmInTab_"+k).hidden=!panes[k].childNodes.length; });
+  let t=edmInTabGet();
+  if(!panes[t]||!panes[t].childNodes.length)t="project";
+  edmSetInTab(t,false);
+  edmInputTabMarks();
+}
+function edmSetInTab(t,remember){
+  EDM_IN_TABS.forEach(([k])=>{
+    const b=document.getElementById("edmInTab_"+k),pn=document.getElementById("edmInPane_"+k); if(!b||!pn)return;
+    const on=(k===t);
+    b.setAttribute("aria-selected",on?"true":"false"); b.tabIndex=on?0:-1;
+    pn.hidden=!on;
+  });
+  if(remember)edmInTabSet(t);
+}
+function edmInTabKey(e){
+  const vis=EDM_IN_TABS.map(([k])=>document.getElementById("edmInTab_"+k)).filter(b=>b&&!b.hidden);
+  const i=vis.indexOf(e.currentTarget); let j=-1;
+  if(e.key==="ArrowRight"||e.key==="ArrowDown")j=(i+1)%vis.length;
+  else if(e.key==="ArrowLeft"||e.key==="ArrowUp")j=(i-1+vis.length)%vis.length;
+  else if(e.key==="Home")j=0;
+  else if(e.key==="End")j=vis.length-1;
+  if(j<0)return;
+  e.preventDefault(); edmSetInTab(vis[j].dataset.pane,true); vis[j].focus();
+}
+/* red dot on a tab holding an input that this tool's validation flags as an
+   input error (the red "err" warnings of computeEDM, which name the input),
+   or a number field the browser cannot parse */
+function edmInputTabMarks(){
+  if(!document.getElementById("edmInTabs"))return;
+  const bad={};
+  const mark=n=>{ const pn=n&&n.closest(".edmInPane"); if(pn)bad[pn.id.replace("edmInPane_","")]=1; };
+  const byPath=p=>document.querySelector('#inputPanel [data-path="'+p+'"]');
+  document.querySelectorAll("#inputPanel .edmInPane input").forEach(i=>{ if(i.validity&&i.validity.badInput)mark(i); });
+  ((LAST&&LAST.warn)||[]).forEach(w=>{
+    if(w.cls!=="err")return;
+    const m=/^Input error: ([\w.]+) = /.exec(w.msg);
+    if(m)mark(byPath(m[1]));
+    else if(/^Input error: total service load/.test(w.msg)){ mark(byPath("loads.Pdl")); }
+    else if(/^Δs = .*> 2\.5 in/.test(w.msg))mark(byPath("loads.deltaS"));
+    else if(/^Steel laminate < 0\.1196/.test(w.msg))mark(byPath("geom.tSteel"));
+  });
+  EDM_IN_TABS.forEach(([k])=>{
+    const b=document.getElementById("edmInTab_"+k); if(!b)return;
+    b.classList.toggle("has-err",!!bad[k]);
+    b.title=bad[k]?"An input on this tab needs attention":"";
+  });
 }
 </script>
 
@@ -592,6 +687,7 @@ function buildInputsDerived(){
   const R=LAST; if(!R)return;
   const gd=document.getElementById("geomDeriv"); if(gd) gd.innerHTML=`Plan area A = <b>${fmt(R.A,1)} in²</b> · shape factor S = <b>${fmt(R.S)}</b> · total elastomer h<sub>rt</sub> = <b>${fmt(R.hrt,3)} in</b>`;
   const rd=document.getElementById("rotDeriv"); if(rd) rd.innerHTML=`Design rotation θ<sub>s</sub> = <b>${fmt(R.rot.thTotal,4)} rad</b> · σ<sub>TL</sub> = <b>${fmt(R.sigTL,3)} ksi</b>`;
+  edmInputTabMarks();   // refresh the input-tab error dots
 }
 function renderDashboard(R){
   const items=R.dash.map(d=>`<div class="dash-item${d.pass===false?" fail":""}" data-goto="tab-des"><span class="lamp ${d.pass===null?"na":d.pass?"ok":"bad"}"></span>${d.name} ${d.dc!=null&&d.dc>0?"("+fmt(d.dc)+")":""}</div>`).join("");

@@ -340,3 +340,72 @@ All "before/after" numbers below were produced by running `computeEDM` from the 
   - Diff check: at most one line is removed, the line replaced at the button anchor where that anchor is inside a JS template string; everything else is additions. No calculation code, storage key or saved-data format was touched.
 - **Other copies:** the BridgeXfer v1 helper is duplicated verbatim in every tool that uses it (CLAUDE.md §3; list in the PR). The glue block is the same in each tool of this PR except `TOOL`/`FILE` and the field map.
 - **Open items:** none.
+
+## 2026-10-09 — PR: claude/tabs-elastomeric (PR link added after merge)
+
+### T1. Input panel split into tabs   [UI only — no calculation change]
+- **Date / type:** 2026-10-09, UI only (no result change). Engineer's request of 2026-10-09: "Go through all the apps and make sure they are all formatted with the input panel having tabs rather than one long scrolling input panel." Same approach as `Steel Beam Design - AISC 15th.html` T1. The tab strip uses this tool's own look (the same tab style as the output `#tabbar`: panel-grey tabs, navy active tab, navy rule underneath).
+- **How it works:** `buildInputs()` still builds all eight cards into `#inputPanel` exactly as before (same HTML string). Right after it sets `innerHTML`, the new `edmInputTabs()` **moves** the finished card nodes into one pane per tab. Nothing is rebuilt, so every `data-path`, `data-cid`, `data-rebuild`, id (`geomDeriv`, `rotDeriv`, `bx-pm-use`, `bx-pm-share`), the document-level event handlers and the values are unchanged. The pad-type and method logic still decides which inputs exist inside each card. No card is mode-dependent, so no tab is ever empty; a tab whose pane is empty would be hidden. A node not in the map stays in the tab of the card before it.
+- **Tabs (in order) and the cards in each** (`data-cid` in brackets):
+
+| Tab | Cards |
+|---|---|
+| Project | Project / Title Block (`in-proj`), incl. "Use shared project info" / "Share project info" |
+| Pad | I-1 Bearing Type & Design Method (`in-type`), I-2 Pad Geometry (`in-geom`) |
+| Materials | I-3 Materials (`in-mat`) |
+| Loads | I-4 Loads & Movements (`in-loads`) |
+| Code | I-5 MassDOT ↔ AASHTO Toggles (`in-tog`), I-6 Code Coefficients (`in-coef`) |
+| Assumptions | I-7 Engineering Assumptions (`in-assum`) |
+
+- **Error marker:** a red dot on a tab holding an input that this tool's own validation flags as an **input error** (the red `err` warnings from `computeEDM` — `Input error: <path> = …` names the input; total service load zero → `loads.Pdl`; Δs > 2.5 in → `loads.deltaS`; steel laminate < 0.1196 in → `geom.tSteel`), or a number field the browser cannot parse (`validity.badInput`). The amber advisory warnings (typical-range, approval notes) do not set the dot. Refreshed after every rebuild and every recalculation (`buildInputsDerived`).
+- **Keyboard / accessibility:** `role="tablist"`, `role="tab"` with `aria-selected` and `aria-controls`, `role="tabpanel"` with `aria-labelledby`; roving `tabindex`; ←/→ (and ↑/↓), Home and End move between the visible tabs.
+- **New storage key:** `edm_v1_inputTab` (localStorage, plain string: `project`, `pad`, `mat`, `loads`, `code` or `assum`), following the tool's `edm_v1_` prefix. Every read and write is in try/catch; an in-memory copy keeps the tab across rebuilds when storage is blocked. It is **not** stored in `S`, so the autosave (`edm_v1_autosave`), saved projects (`edm_v1_projects`), the JSON export/import, the Abutment postMessage hand-off and `bridgeSuite.v1.projectMeta` are unchanged. The output tab (`S.ui.tab`) and card collapse state (`S.ui.collapse`) are unchanged. No existing key or format changed.
+- **Abutment hand-off:** unchanged. `applyHandoff()` calls `buildInputs()` as before; the remembered input tab stays selected (the hand-off does not focus an input). Nothing in the tool scrolls to or focuses an input programmatically, so no "go to input" path needed a tab switch.
+- **Print:** unchanged. `@media print` hides `.layout` and `#inputPanel`; the report is built from the output tabs into `#report`. The input tabs never print.
+- **Narrow screens:** the strip wraps (`flex-wrap`) and is sticky at the top of the input panel while the page scrolls. No horizontal page scroll at 400 px (document scroll width = 400).
+- **Governing provision:** none (no engineering change).
+- **Before / After** (file uses LF; each edited function is defined once):
+  1. CSS. Anchor (unchanged): `.tabpane{display:none;}.tabpane.active{display:block;}`. Inserted right after it:
+     ```css
+     /* input panel tabs (edmInputTabs) — same look as the output #tabbar */
+     #edmInTabs{position:sticky;top:0;z-index:5;display:flex;flex-wrap:wrap;gap:3px;margin:-12px -14px 8px;padding:8px 14px 0;background:#fff;border-bottom:2px solid var(--navy);}
+     #edmInTabs .edmInTab{display:inline-flex;align-items:center;font-family:inherit;font-size:13px;padding:6px 12px;border:1px solid var(--line);border-bottom:none;border-radius:5px 5px 0 0;background:var(--panel);color:#1a1a1a;cursor:pointer;}
+     #edmInTabs .edmInTab:hover{background:var(--panel-h);}
+     #edmInTabs .edmInTab[aria-selected="true"]{background:var(--navy);color:#fff;border-color:var(--navy);}
+     #edmInTabs .edmInTab:focus-visible{outline:2px solid var(--navy-lt);outline-offset:1px;}
+     .edmInDot{display:none;width:7px;height:7px;border-radius:50%;background:var(--bad);margin-left:6px;box-shadow:0 0 0 1.5px #fff;}
+     .edmInTab.has-err .edmInDot{display:inline-block;}
+     .edmInTab[hidden],.edmInPane[hidden]{display:none !important;}
+     ```
+     (Class names are deliberately not `.tab`: the document click handler treats any `.tab` as an output tab.)
+  2. `buildInputs()`. Before:
+     ```js
+       document.getElementById("inputPanel").innerHTML=h;
+       // derived readouts
+     ```
+     After:
+     ```js
+       document.getElementById("inputPanel").innerHTML=h;
+       edmInputTabs();   // move the cards just built into the input tabs
+       // derived readouts
+     ```
+  3. New block inserted right after the end of `buildInputs()` (before the `</script>` that closes SECTION B; anchor: the comment `/* ---------- input panel tabs (UI only) ----------`): constants `EDM_IN_TABS`, `EDM_IN_SEC`, `EDM_IN_KEY`, and functions `edmInTabGet`, `edmInTabSet`, `edmInputTabs`, `edmSetInTab`, `edmInTabKey`, `edmInputTabMarks` (about 85 lines; copy the block from the file, from that comment down to the `</script>`).
+  4. `buildInputsDerived()`. Before (last line of the function):
+     ```js
+       const rd=document.getElementById("rotDeriv"); if(rd) rd.innerHTML=`Design rotation θ<sub>s</sub> = <b>${fmt(R.rot.thTotal,4)} rad</b> · σ<sub>TL</sub> = <b>${fmt(R.sigTL,3)} ksi</b>`;
+     }
+     ```
+     After:
+     ```js
+       const rd=document.getElementById("rotDeriv"); if(rd) rd.innerHTML=`Design rotation θ<sub>s</sub> = <b>${fmt(R.rot.thTotal,4)} rad</b> · σ<sub>TL</sub> = <b>${fmt(R.sigTL,3)} ksi</b>`;
+       edmInputTabMarks();   // refresh the input-tab error dots
+     }
+     ```
+- **Check case:** default state (circular, Method B): dashboard "All 6 checks PASS · governing D/C = 0.80" before and after. Set h_ri = 0 → before and after: "1 input error(s)"; after: red dot on the Pad tab only.
+- **How verified:**
+  - `node --check` on every inline script of the old and new file: all pass.
+  - Headless Chromium (Playwright 1.56, KaTeX 0.16.11 and Plotly 2.35.2 served locally at the pinned versions), main vs branch, 11 scenarios: default; rectangular; plain; Method A; rectangular + Method A; all four toggles changed; edited inputs (P_DL, h_ri, D_r, G, project name); h_ri = 0; Δs = 3; P_DL = P_LL = 0; and the Abutment hand-off (an opener page that answers `EDM_READY` with an `INIT` payload incl. 3 girders, then receives the `PAD` message). Identical in every scenario: dashboard text, the text of all five output tabs, the print report text (timestamp masked), the full state `S`, all results (`LAST`), the autosave JSON, the save → load round trip, and the "Send Pad to Abutment" payload (download and postMessage). The list of input `data-path`s (with type and value), input-panel ids and `data-cid`s is identical, and every input is in exactly one pane.
+  - Tab UI: keyboard (arrows wrap, Home/End), remembered tab after a pad-type rebuild and after reload, in-memory fallback with localStorage blocked, card collapse still works, "Use shared project info" fills the Project tab, error dots for h_ri = 0 (Pad), Δs > 2.5 and zero load (Loads), t_s < 0.1196 (Pad), unparsable f′c (Materials), cleared when fixed. No console errors.
+  - Screenshots of every tab at 1400 px and 400 px inspected.
+- **Other copies of this code:** none.
+- **Open items:** none.
