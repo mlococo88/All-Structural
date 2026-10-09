@@ -1994,5 +1994,114 @@ initSelects(); renderSpans(); $('preset').value='HL93-Truck'; applyPreset('HL93-
   window.MLGlldf={ openDlg:openDlg, apply:apply, refresh:refresh, validate:validate, makePlan:makePlan, src:function(){ return SRC; }, srcText:srcText };
 })();
 </script>
+<script>
+/* ═══════════ INPUT PANEL TABS (UI only — no calculation change) ═══════════
+   Every <details> section of the input panel (<aside>) is built exactly as before by the
+   scripts above; this block then MOVES the finished section nodes into one tab pane per
+   section. Nothing is rebuilt, so every id, data-i/data-k, handler and value is untouched;
+   the delegated 'input' listeners on <aside> and the 'aside input[id]' save selector still
+   see every field, in the same document order. Repeating blocks (axles, girder segments,
+   span / DF rows) are re-rendered into their existing containers, so they stay in their tab.
+   The active tab is remembered per browser in localStorage key 'movingLoadGen.inputTab.v1'
+   (same prefix as the autosave key 'movingLoadGen.autosave.v1'); it is NOT part of the
+   autosave, the Save JSON file or any hand-off. */
+(function(){
+  var TABS=[['spans','Spans'],['girder','Girder'],['vehicle','Vehicle'],['rules','Rules'],['impact','Impact'],['factors','Factors']];
+  var SEC={'Spans':'spans','Girder Section':'girder','Vehicle':'vehicle','Load Model Rules':'rules','Impact':'impact','Factors & Analysis':'factors'};
+  /* the tool's own warnings / analysis errors, mapped to the tab holding the input they name */
+  var MSG=[
+    [/^E steel|^Every span length/,'spans'],
+    [/^Segment lengths reach|^A segment has invalid geometry/,'girder'],
+    [/^One or more axles have zero/,'vehicle'],
+    [/^Variable spacing|^The multi-vehicle case needs|^A uniform load mode is selected/,'rules'],
+    [/^The impact multiplier/,'impact'],
+    [/^One or more distribution factors/,'factors']];
+  var KEY='movingLoadGen.inputTab.v1', cur=null;
+  function tget(){ if(cur) return cur; try{ return localStorage.getItem(KEY)||''; }catch(e){ return ''; } }
+  function tset(t){ cur=t; try{ localStorage.setItem(KEY,t); }catch(e){} }
+  var A=document.querySelector('aside'); if(!A) return;
+  document.head.insertAdjacentHTML('beforeend','<style>'+
+    '#mlgInTabs{position:sticky;top:0;z-index:5;display:flex;flex-wrap:wrap;background:#fff;border-bottom:1px solid #e2e8f0;padding:0 6px}'+
+    '#mlgInTabs .mlgInTab{display:inline-flex;align-items:center;padding:10px 6px 8px;border:0;border-bottom:2px solid transparent;margin-bottom:-1px;background:none;cursor:pointer;font-family:inherit;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#64748b}'+
+    '#mlgInTabs .mlgInTab:hover{color:#334155;background:#f8fafc}'+
+    '#mlgInTabs .mlgInTab[aria-selected="true"]{color:#4f46e5;border-bottom-color:#4f46e5;background:#eef2ff}'+
+    '#mlgInTabs .mlgInTab:focus-visible{outline:2px solid #6366f1;outline-offset:-2px}'+
+    '.mlgInDot{display:none;width:7px;height:7px;border-radius:50%;background:#dc2626;margin-left:5px;box-shadow:0 0 0 1.5px #fff}'+
+    '.mlgInTab.has-err .mlgInDot{display:inline-block}'+
+    '.mlgInTab[hidden],.mlgInPane[hidden]{display:none!important}'+
+    '@media(max-width:900px){aside{overflow:visible}#mlgInTabs{top:var(--mlgHdrH,54px);margin-top:calc(var(--mlgHdrH,54px) - 54px)}}'+
+    '@media print{#mlgInTabs{display:none!important}.mlgInPane[hidden]{display:block!important}}'+
+    '</style>');
+  var bar=document.createElement('div'); bar.id='mlgInTabs'; bar.setAttribute('role','tablist'); bar.setAttribute('aria-label','Input groups');
+  var panes={};
+  TABS.forEach(function(t){
+    var b=document.createElement('button'); b.type='button'; b.className='mlgInTab'; b.id='mlgInTab_'+t[0]; b.dataset.pane=t[0];
+    b.setAttribute('role','tab'); b.setAttribute('aria-controls','mlgInPane_'+t[0]);
+    var s=document.createElement('span'); s.textContent=t[1]; b.appendChild(s);
+    var d=document.createElement('span'); d.className='mlgInDot'; d.setAttribute('aria-hidden','true'); b.appendChild(d);
+    b.addEventListener('click',function(){ setTab(t[0],true); });
+    b.addEventListener('keydown',onKey);
+    bar.appendChild(b);
+    var p=document.createElement('div'); p.className='mlgInPane'; p.id='mlgInPane_'+t[0];
+    p.setAttribute('role','tabpanel'); p.setAttribute('aria-labelledby','mlgInTab_'+t[0]);
+    panes[t[0]]=p;
+  });
+  /* move the built nodes; a node not in the map stays with the section before it */
+  var c='spans';
+  Array.prototype.slice.call(A.childNodes).forEach(function(n){
+    var sm=n.tagName==='DETAILS'&&n.querySelector('summary'), k=sm&&SEC[sm.textContent.trim()];
+    if(k) c=k;
+    panes[c].appendChild(n);
+  });
+  A.appendChild(bar);
+  TABS.forEach(function(t){ A.appendChild(panes[t[0]]); document.getElementById('mlgInTab_'+t[0]).hidden=!panes[t[0]].querySelector('details,input,select'); });
+  function setTab(t,remember){
+    TABS.forEach(function(x){
+      var b=document.getElementById('mlgInTab_'+x[0]), p=panes[x[0]], on=x[0]===t;
+      b.setAttribute('aria-selected',on?'true':'false'); b.tabIndex=on?0:-1; p.hidden=!on;
+    });
+    if(remember){ tset(t); A.scrollTop=0; }
+  }
+  function onKey(e){
+    var vis=TABS.map(function(x){ return document.getElementById('mlgInTab_'+x[0]); }).filter(function(b){ return !b.hidden; });
+    var i=vis.indexOf(e.currentTarget), j=-1;
+    if(e.key==='ArrowRight'||e.key==='ArrowDown') j=(i+1)%vis.length;
+    else if(e.key==='ArrowLeft'||e.key==='ArrowUp') j=(i-1+vis.length)%vis.length;
+    else if(e.key==='Home') j=0;
+    else if(e.key==='End') j=vis.length-1;
+    if(j<0) return;
+    e.preventDefault(); setTab(vis[j].dataset.pane,true); vis[j].focus();
+  }
+  /* red dot: a number the browser cannot parse, or a warning / analysis error of the tool
+     itself that names an input on that tab */
+  function marks(){
+    var bad={};
+    A.querySelectorAll('.mlgInPane input').forEach(function(i){
+      if(i.validity&&i.validity.badInput){ var p=i.closest('.mlgInPane'); if(p) bad[p.id.replace('mlgInPane_','')]=1; }
+    });
+    var st=(document.getElementById('status')||{}).textContent||'', msgs=[];
+    if(/^Error: /.test(st)) msgs.push(st.slice(7));
+    else if(typeof RES!=='undefined'&&RES&&RES.warn) msgs=RES.warn;
+    msgs.forEach(function(w){ MSG.forEach(function(r){ if(r[0].test(w)) bad[r[1]]=1; }); });
+    TABS.forEach(function(t){
+      var b=document.getElementById('mlgInTab_'+t[0]);
+      b.classList.toggle('has-err',!!bad[t[0]]);
+      b.title=bad[t[0]]?'An input on this tab needs attention':'';
+    });
+  }
+  /* narrow screens (<= 900 px, panel above the results): the header buttons can wrap below
+     its fixed 54 px height, so the tab strip sticks (and starts) below the header's real height */
+  var hdr=document.querySelector('.hdr');
+  function hdrFit(){ if(hdr) A.style.setProperty('--mlgHdrH',Math.max(54,hdr.scrollHeight)+'px'); }
+  window.addEventListener('resize',hdrFit);
+  var stEl=document.getElementById('status');
+  if(stEl&&window.MutationObserver) new MutationObserver(function(){ marks(); hdrFit(); }).observe(stEl,{childList:true,characterData:true,subtree:true});
+  hdrFit();
+  A.addEventListener('input',marks); A.addEventListener('change',marks);
+  var t=tget(); if(!panes[t]||document.getElementById('mlgInTab_'+t).hidden) t='spans';
+  setTab(t,false);
+  marks();
+})();
+</script>
 </body>
 </html>
