@@ -5773,10 +5773,21 @@ function distributeCards(){
   const sgStack=$('sgStackContainer');
   if(sgStack && sgStack.parentElement===src){ $('page-shaft').appendChild(sgStack); }
 }
+// Output tab is remembered under this tool's own key. The old generic 'activeTab' key is only read
+// once, by lppMigrateOutTab() at boot, and is never written or removed (other file:// pages may use it).
+const LPP_OUT_KEY='lpp_activeTab_v1';
+function lppOutTabValid(t){ return !!t && Array.from(document.querySelectorAll('#tabBar button')).some(b=>b.dataset.tab===t); }
+function lppMigrateOutTab(){
+  try{
+    if(localStorage.getItem(LPP_OUT_KEY)!==null) return;          // new key already set: nothing to do
+    const old=localStorage.getItem('activeTab');
+    if(lppOutTabValid(old)) localStorage.setItem(LPP_OUT_KEY, old); // copy only a valid output-tab id of THIS tool
+  }catch(e){}
+}
 function switchTab(name){
   document.querySelectorAll('#tabBar button').forEach(b=>b.classList.toggle('on', b.dataset.tab===name));
   document.querySelectorAll('.tabpage').forEach(p=>p.classList.toggle('on', p.dataset.page===name));
-  try{ localStorage.setItem('activeTab', name); }catch(e){}
+  try{ localStorage.setItem(LPP_OUT_KEY, name); }catch(e){}
 }
 document.querySelectorAll('#tabBar button').forEach(b=>b.onclick=()=>switchTab(b.dataset.tab));
 
@@ -5948,12 +5959,12 @@ function lppInputTabMarks(){
   refreshProjectList(activeProject||'');
   updateStatus();
   // restore last active tab
-  // 'activeTab' is a generic key shared by every file:// page in Chromium. Keep the key, but
-  // only honour a stored value that is one of THIS tool's tab names; anything else is ignored
-  // (a foreign value used to hide every tab page).
-  try{ const t=localStorage.getItem('activeTab');
-       const valid=Array.from(document.querySelectorAll('#tabBar button')).some(b=>b.dataset.tab===t);
-       if(t && valid) switchTab(t); }catch(e){}
+  // One-time migration from the old generic 'activeTab' key (shared by every file:// page in
+  // Chromium) to 'lpp_activeTab_v1'. Only a stored value that is one of THIS tool's tab names is
+  // honoured; anything else is ignored (a foreign value used to hide every tab page).
+  lppMigrateOutTab();
+  try{ const t=localStorage.getItem(LPP_OUT_KEY);
+       if(lppOutTabValid(t)) switchTab(t); }catch(e){}
 })();
 
 // KaTeX loads with defer; re-render once ready

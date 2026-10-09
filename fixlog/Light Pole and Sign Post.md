@@ -414,6 +414,78 @@ Check cases: jsdom runs of the page before and after this change (scratch harnes
   - Screenshots of every tab at 1400 px and 400 px.
 - **Other copies:** none.
 
+## 2026-10-09 — Output-tab localStorage key renamed (branch claude/lightpole-key)
+### F14. `activeTab` → `lpp_activeTab_v1`, with migration   [storage key] [no result change]
+- **Date:** 2026-10-09. **Type:** saved-data key change with migration (CLAUDE.md §5). No calculation change. Engineer's decision (2026-10-09) on O10: rename the generic key to `lpp_activeTab_v1`.
+- **What:** the remembered output tab (Geometry, Summary, Loading, Post, Anchors, Shaft, Report, Manual) is now stored under `lpp_activeTab_v1`. At start-up, if `lpp_activeTab_v1` is absent (`getItem` returns `null`) and the old `activeTab` key holds one of this tool's output-tab ids, that value is copied to the new key. Any other old value (another tool's value, "foo", empty) is not copied. The old `activeTab` key is **never written or removed**, so any other page on the same file:// origin that uses that name keeps its value. After the migration the tool reads and writes only `lpp_activeTab_v1`. Every storage access is in try/catch; with storage blocked the page opens on Geometry and tabs still switch.
+- **Other tools using `activeTab` as a storage key:** none. A repo-wide search (all `.html` files) for `'activeTab'` / `"activeTab"` finds only this tool. `Timber Beam Check.html`, `Stone Masonry Arch Load Rating.html` and `Retaining Wall Designer.html` use `activeTab` only as a JS variable or function name, not as a storage key. The old key is left in place anyway (it may also exist from other copies or older versions of tools).
+- **Where / Before / After:**
+  1. `switchTab()`. Anchor: `function switchTab(name){`
+     - Before:
+       ```js
+       function switchTab(name){
+         document.querySelectorAll('#tabBar button').forEach(b=>b.classList.toggle('on', b.dataset.tab===name));
+         document.querySelectorAll('.tabpage').forEach(p=>p.classList.toggle('on', p.dataset.page===name));
+         try{ localStorage.setItem('activeTab', name); }catch(e){}
+       }
+       ```
+     - After:
+       ```js
+       // Output tab is remembered under this tool's own key. The old generic 'activeTab' key is only read
+       // once, by lppMigrateOutTab() at boot, and is never written or removed (other file:// pages may use it).
+       const LPP_OUT_KEY='lpp_activeTab_v1';
+       function lppOutTabValid(t){ return !!t && Array.from(document.querySelectorAll('#tabBar button')).some(b=>b.dataset.tab===t); }
+       function lppMigrateOutTab(){
+         try{
+           if(localStorage.getItem(LPP_OUT_KEY)!==null) return;          // new key already set: nothing to do
+           const old=localStorage.getItem('activeTab');
+           if(lppOutTabValid(old)) localStorage.setItem(LPP_OUT_KEY, old); // copy only a valid output-tab id of THIS tool
+         }catch(e){}
+       }
+       function switchTab(name){
+         document.querySelectorAll('#tabBar button').forEach(b=>b.classList.toggle('on', b.dataset.tab===name));
+         document.querySelectorAll('.tabpage').forEach(p=>p.classList.toggle('on', p.dataset.page===name));
+         try{ localStorage.setItem(LPP_OUT_KEY, name); }catch(e){}
+       }
+       ```
+  2. Boot IIFE, tab restore (the F9 code). Anchor: `// restore last active tab`
+     - Before:
+       ```js
+         // restore last active tab
+         // 'activeTab' is a generic key shared by every file:// page in Chromium. Keep the key, but
+         // only honour a stored value that is one of THIS tool's tab names; anything else is ignored
+         // (a foreign value used to hide every tab page).
+         try{ const t=localStorage.getItem('activeTab');
+              const valid=Array.from(document.querySelectorAll('#tabBar button')).some(b=>b.dataset.tab===t);
+              if(t && valid) switchTab(t); }catch(e){}
+       ```
+     - After:
+       ```js
+         // restore last active tab
+         // One-time migration from the old generic 'activeTab' key (shared by every file:// page in
+         // Chromium) to 'lpp_activeTab_v1'. Only a stored value that is one of THIS tool's tab names is
+         // honoured; anything else is ignored (a foreign value used to hide every tab page).
+         lppMigrateOutTab();
+         try{ const t=localStorage.getItem(LPP_OUT_KEY);
+              if(lppOutTabValid(t)) switchTab(t); }catch(e){}
+       ```
+- **Governing provision:** none. No formula, factor, unit, code reference or computed result changed. Saved-data rule: CLAUDE.md §5.
+- **Check case** (storage before load → tab shown, keys after load):
+  | Before load | Tab shown | `lpp_activeTab_v1` after | `activeTab` after |
+  |---|---|---|---|
+  | nothing (fresh browser) | Geometry | absent (written on first click) | absent |
+  | `activeTab`="summary" | Summary | "summary" (migrated) | "summary" (kept) |
+  | `activeTab`="foo", "" or "analysis" | Geometry | absent | unchanged |
+  | `lpp_activeTab_v1`="report", `activeTab`="summary" | Report | "report" | "summary" |
+  | `lpp_activeTab_v1`="bogus", `activeTab`="summary" | Geometry (no re-migration once the new key exists) | "bogus" | "summary" |
+  | storage blocked (getter throws) | Geometry; clicking Post works | — | — |
+  Clicking a tab writes only `lpp_activeTab_v1`; `activeTab` keeps its old value (e.g. "report" stays "report" after clicking Anchors, and Anchors comes back after a reload).
+- **How verified:**
+  - `node --check` on the inline script, main and branch.
+  - Headless Chromium (Playwright, file:// URL, KaTeX 0.16.9 served locally): every row of the table above, on main and branch. Main gives the expected old behaviour (reads/writes `activeTab` only). No page errors or console errors in any case, including storage blocked.
+  - Default page: the text of all 8 output tab pages plus the `lpp_session_v1` autosave are byte-identical between main and branch.
+- **Other copies:** none.
+
 ## Open items (not changed)
 - **O2. G for flexible poles:** G = 0.85 (rigid) is used, with no natural-frequency or G_f check. Decide whether to add an n₁ estimate and a warning.
 - **O3. P-δ / B1** amplification of first-order moments (AISC Ch. C) is not applied, and no warning was added. Decide whether to add a B1 estimate.
@@ -422,7 +494,6 @@ Check cases: jsdom runs of the page before and after this change (scratch harnes
 - **O6. A blank or zero pole height H or shaft diameter b crashes `calc()`** in `drawElev` ("Invalid array length"), in both the original and fixed files. The page then keeps the stale results. Input validation (AUDIT B12) was not in this brief.
 - **O8. Shear breakout / side-face blowout (F7)** are not computed. A method for a bolt circle in a round shaft is needed if you want them implemented.
 - **O9. Pole/post combined stress** still uses the max-moment LRFD combination. Lower axial reduces the H1 ratio, so that combination governs for these structures, but it is not proven for every case.
-- **O10. Generic `activeTab` localStorage key** (output tabs, `switchTab`). Every file:// page in Chromium shares this name, and CLAUDE.md §5 forbids generic names. It was left unchanged in F9 and F13 because changing a key needs a migration. Decide whether to move it to `lpp_activeTab_v1` and migrate the old value.
 - **O11. Horizontal page scroll at 400 px** (pre-existing, same on main: scrollWidth 649 px). The fixture and cable tables have 8–9 input columns with a 52 px minimum width, and they make the single-column layout wider than the screen. The new input tab strip wraps inside the column, but the column itself is wider than 400 px in light-pole mode. Sign mode fits. Fixing this needs a table layout change.
 - **O12. Hidden pole-only output cards keep stale text in sign mode** (pre-existing). After switching to sign mode, the hidden `.poleOnly` / fixture / cable output cards still hold the last light-pole numbers until a reload, which shows "—" instead. They are not shown or printed (`display:none`), so displayed results are not affected.
 
@@ -431,3 +502,5 @@ Check cases: jsdom runs of the page before and after this change (scratch harnes
   - **RESOLVED 2026-10-04 (F10):** engineer: "use ASCE". K_d is set per component from ASCE 7-22 Table 26.6-1 (round 1.0, square/rect. 0.90, sign 0.85; cables and fixtures take the mast value). The single input is kept as an override.
 - **O7. Cable transverse reaction (F5)** uses the full w_h along the wind direction for every cable. Projecting it normal to each cable (w_h·|sin(φ−θ)|, directed normal to the cable) would be more accurate and less conservative. For the default pole this one assumption raises the base moment by 61%. Please confirm.
   - **RESOLVED 2026-10-04 (F11):** engineer keeps the full w_h on every cable. No change.
+- **O10. Generic `activeTab` localStorage key** (output tabs, `switchTab`). Every file:// page in Chromium shares this name, and CLAUDE.md §5 forbids generic names. It was left unchanged in F9 and F13 because changing a key needs a migration. Decide whether to move it to `lpp_activeTab_v1` and migrate the old value.
+  - **RESOLVED 2026-10-09 (F14):** engineer: rename to `lpp_activeTab_v1`. The old value is migrated once if it is a valid output-tab id; the old `activeTab` key is left in place and no longer written.
