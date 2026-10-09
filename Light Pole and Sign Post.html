@@ -38,6 +38,17 @@
   .tabpage{display:none}
   .tabpage.on{display:block}
   .tabpage>section.card:first-child{margin-top:0}
+  /* ---- input panel tabs (lppInputTabs; UI only) ---- */
+  #lppInTabs{display:flex;gap:2px;flex-wrap:wrap;border-bottom:2px solid var(--ink);margin:16px 0 14px;position:sticky;top:0;background:var(--paper);z-index:6;padding-top:4px}
+  #lppInTabs .lppInTab{display:inline-flex;align-items:center;font-family:inherit;font-size:13px;font-weight:600;letter-spacing:.02em;border:1px solid var(--line);border-bottom:0;background:#efeae0;color:var(--ink-soft);padding:7px 11px;cursor:pointer;border-radius:3px 3px 0 0;margin-bottom:-2px}
+  #lppInTabs .lppInTab:hover:not([aria-selected="true"]){background:#f6f3ec}
+  #lppInTabs .lppInTab[aria-selected="true"]{background:var(--panel);color:var(--accent-deep);border-color:var(--ink);border-bottom:2px solid var(--panel);box-shadow:0 -2px 0 var(--accent-deep) inset}
+  #lppInTabs .lppInTab:focus-visible{outline:2px solid var(--steel);outline-offset:-2px}
+  .lppInDot{display:none;width:7px;height:7px;border-radius:50%;background:var(--bad);margin-left:6px;box-shadow:0 0 0 1.5px #fff}
+  .lppInTab.has-err .lppInDot{display:inline-block}
+  .lppInTab[hidden],.lppInPane[hidden]{display:none!important}
+  .lppInPane>section.card:first-child{margin-top:0}
+  @media(max-width:900px){#lppInTabs{position:static}}
   /* two-post side-by-side */
   .post-cols{display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:start}
   @media(max-width:1100px){.post-cols{grid-template-columns:1fr}}
@@ -1011,6 +1022,7 @@ function applyMode(){
   show('rowPoleHt', !sign);
   show('rowSignHt', sign);
   show('rowSignCfMan', sign && $('signCfMode') && $('signCfMode').value==='manual');
+  lppInTabsSync();   // input tabs: hide a tab whose cards are all hidden in this mode
   // ---- masthead: title + description track the active module ----
   let eyebrow, title, subtxt;
   if(!sign){
@@ -5814,7 +5826,108 @@ function applyPostSelection(){
   });
 }
 
+// ================= INPUT PANEL TABS (UI only) =================
+// The input cards are written in the HTML exactly as before; lppInputTabs() MOVES each
+// existing card node into one pane per tab, so every id, handler and value is untouched
+// (inputs stay inside .col-in, so the .col-in input wiring still finds them). The mode
+// card (Light pole / Sign) stays above the tab strip. The active tab is remembered per
+// browser in localStorage key lpp_inputTab_v1 -- never in the project state, the session
+// autosave or the saved projects.
+const LPP_IN_TABS=[['wind','Wind & site'],['pole','Pole'],['fix','Fixtures'],['cables','Cables'],
+  ['ice','Ice'],['shaft','Shaft & soil'],['anchors','Anchors']];
+// card -> tab, keyed by an element id inside the card
+const LPP_IN_CARD=[['V','wind'],['H','pole'],['signB','pole'],['fixTbl','fix'],['cablesOn','cables'],
+  ['tIce','ice'],['shaftShape','shaft'],['boltDia','anchors']];
+const LPP_IN_KEY='lpp_inputTab_v1';
+let lppInTabCur=null;   // in-memory copy, so the tab survives without storage
+function lppInTabGet(){ if(lppInTabCur) return lppInTabCur; try{ return localStorage.getItem(LPP_IN_KEY)||''; }catch(e){ return ''; } }
+function lppInTabSet(t){ lppInTabCur=t; try{ localStorage.setItem(LPP_IN_KEY,t); }catch(e){} }
+function lppInputTabs(){
+  const col=document.querySelector('.col-in'); if(!col||$('lppInTabs')) return;
+  const bar=document.createElement('div'); bar.id='lppInTabs';
+  bar.setAttribute('role','tablist'); bar.setAttribute('aria-label','Input groups');
+  const panes={};
+  LPP_IN_TABS.forEach(([k,lab])=>{
+    const b=document.createElement('button'); b.type='button'; b.className='lppInTab';
+    b.id='lppInTab_'+k; b.dataset.pane=k;
+    b.setAttribute('role','tab'); b.setAttribute('aria-controls','lppInPane_'+k);
+    const sp=document.createElement('span'); sp.className='lppInLab'; sp.textContent=lab; b.appendChild(sp);
+    const dot=document.createElement('span'); dot.className='lppInDot'; dot.setAttribute('aria-hidden','true'); b.appendChild(dot);
+    b.addEventListener('click',()=>lppSetInTab(k,true));
+    b.addEventListener('keydown',lppInTabKey);
+    bar.appendChild(b);
+    const pn=document.createElement('div'); pn.className='lppInPane'; pn.id='lppInPane_'+k;
+    pn.setAttribute('role','tabpanel'); pn.setAttribute('aria-labelledby','lppInTab_'+k);
+    panes[k]=pn;
+  });
+  // move the existing nodes; anything not in the map stays with the card before it
+  let cur='wind';
+  Array.from(col.childNodes).forEach(n=>{
+    if(n.id==='modeCard') return;
+    if(n.nodeType===1){ const m=LPP_IN_CARD.find(([id])=>n.querySelector('#'+id)); if(m) cur=m[1]; }
+    panes[cur].appendChild(n);
+  });
+  const mode=$('modeCard');
+  if(mode&&mode.nextSibling) col.insertBefore(bar,mode.nextSibling); else col.appendChild(bar);
+  LPP_IN_TABS.forEach(([k])=>col.appendChild(panes[k]));
+  col.addEventListener('input',lppInputTabMarks);
+  col.addEventListener('change',lppInputTabMarks);
+  lppInTabsSync();
+}
+// a card counts as shown unless it (inline style) is display:none
+function lppPaneShown(pn){ return Array.from(pn.children).some(c=>c.style.display!=='none'); }
+// called at start-up and by applyMode(): hide empty tabs, relabel Pole/Post, pick the tab to show
+function lppInTabsSync(){
+  if(!$('lppInTabs')) return;
+  LPP_IN_TABS.forEach(([k])=>{ $('lppInTab_'+k).hidden=!lppPaneShown($('lppInPane_'+k)); });
+  const lab=$('lppInTab_pole').querySelector('.lppInLab');
+  if(lab) lab.textContent=(appMode==='sign')?'Post & sign':'Pole';
+  let t=lppInTabGet();
+  if(!$('lppInTab_'+t)||$('lppInTab_'+t).hidden){
+    const first=LPP_IN_TABS.find(([k])=>!$('lppInTab_'+k).hidden); t=first?first[0]:'wind';
+  }
+  lppSetInTab(t,false);
+  lppInputTabMarks();
+}
+function lppSetInTab(t,remember){
+  LPP_IN_TABS.forEach(([k])=>{
+    const b=$('lppInTab_'+k), pn=$('lppInPane_'+k); if(!b||!pn) return;
+    const on=(k===t);
+    b.setAttribute('aria-selected',on?'true':'false'); b.tabIndex=on?0:-1;
+    pn.hidden=!on;
+  });
+  if(remember){ lppInTabSet(t); const c=document.querySelector('.col-in'); if(c) c.scrollTop=0; }
+}
+function lppInTabKey(e){
+  const vis=LPP_IN_TABS.map(([k])=>$('lppInTab_'+k)).filter(b=>b&&!b.hidden);
+  const i=vis.indexOf(e.currentTarget); let j=-1;
+  if(e.key==='ArrowRight'||e.key==='ArrowDown') j=(i+1)%vis.length;
+  else if(e.key==='ArrowLeft'||e.key==='ArrowUp') j=(i-1+vis.length)%vis.length;
+  else if(e.key==='Home') j=0;
+  else if(e.key==='End') j=vis.length-1;
+  if(j<0) return;
+  e.preventDefault(); lppSetInTab(vis[j].dataset.pane,true); vis[j].focus();
+}
+// red dot on a tab holding a shown number field the browser cannot parse (the tool has
+// no other per-input validation state)
+function lppInputTabMarks(){
+  if(!$('lppInTabs')) return;
+  const bad={};
+  document.querySelectorAll('.col-in .lppInPane input').forEach(inp=>{
+    if(!(inp.validity&&inp.validity.badInput)) return;
+    const pn=inp.closest('.lppInPane'); if(!pn) return;
+    for(let n=inp; n&&n!==pn; n=n.parentElement){ if(n.style&&n.style.display==='none') return; }
+    bad[pn.id.replace('lppInPane_','')]=1;
+  });
+  LPP_IN_TABS.forEach(([k])=>{
+    const b=$('lppInTab_'+k); if(!b) return;
+    b.classList.toggle('has-err',!!bad[k]);
+    b.title=bad[k]?'An input on this tab needs attention':'';
+  });
+}
+
 (function boot(){
+  lppInputTabs();   // move the input cards into the input tabs (before any state is applied)
   renderManual();
   distributeCards();
   if($('soilClass')) applySoilClass($('soilClass').value,{silent:true});
