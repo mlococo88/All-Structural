@@ -603,3 +603,108 @@ function computeAll(inp){
 - **Open items:**
   - O-R1. MIDAS mode: the reactions are the imported shears at x = 0 and x = L of the selected span, i.e. exactly what this app uses at those stations. If the MIDAS file has a single station at an interior pier, the value there can belong to the adjacent span; Substructure Loading warns on negative dead-load reactions, but the engineer should check pier values in this mode.
   - O-R2. index.html (MCT) is not a sender yet: its results hold no support reactions per load case (see fixlog/index.md).
+
+## 2026-10-09 — PR: claude/tabs-stgirder (PR link added after merge)
+### T1. Inputs page split into sub-tabs   [UI only — no calculation change]
+- **Date / type:** 2026-10-09, UI only (no result change). Engineer's request (2026-10-09): "Go through all the apps and make sure they are all formatted with the input panel having tabs rather than one long scrolling input panel."
+- **How it works:** this tool has no input sidebar: "Inputs" is one of the top-level result tabs, a full-width page of 7 cards next to the Live Geometry column. A sub-tab strip is added at the top of that page (below the imported-demands banner, which stays visible on every sub-tab). Every card is still rendered exactly as before, in the same order; each group of cards is wrapped in a plain `<div className="stgInPane" hidden={...}>` and the inactive ones are hidden with the `hidden` attribute. Nothing unmounts, and no state, handler or value binding changes. The page layout (two columns, full width) is unchanged.
+- **Tabs (in order) and the cards in each:**
+
+| Sub-tab | Cards |
+|---|---|
+| Section | Girder Section — built-up plate; Negative-Moment Region — deck reinforcement |
+| Materials | Materials |
+| Deck | Deck & Composite |
+| Span & Framing | Span & Framing |
+| Loads | Loads |
+| Stiffeners / Studs / Fatigue | Stiffeners, Connectors & Fatigue |
+
+- **New storage key:** `stgirder.inputTab.v1` (localStorage, value = tab key, e.g. `loads`). It is per browser and follows the tool's `stgirder.` prefix. It is written only when a sub-tab is clicked, and never into `stgirder.session`, the projects or the exported JSON. Reads and writes are in try/catch, with an in-memory copy so the tab survives switching to another result tab and back. Existing keys and formats are unchanged.
+- **Red dot:** a sub-tab gets a red dot (title "An input on this tab needs attention") when one of its editable number fields is blank or holds an entry the browser cannot parse (e.g. a lone "-"). This tool has no other per-field validation; a section-engine error already replaces the whole page with the "Input error" callout, as before.
+- **Print:** the sub-tab strip is hidden and all panes are shown, so printing the Inputs page gives the same output as before.
+- **Go-to-input links:** none exist in this tool (no `scrollIntoView` / `focus()` calls on inputs), so nothing else needed to change.
+- **Where / anchors (approx. lines):**
+  1. CSS, after `.gfx{position:sticky;top:12px}` (~line 55). Added:
+     ```css
+/* Inputs page sub-tabs (UI only — see stgInTabs in InputsTab) */
+.stgInTabs{position:sticky;top:0;z-index:7;display:flex;flex-wrap:wrap;gap:0;margin:0 0 14px;background:var(--sheet);border-bottom:1.5px solid var(--ink)}
+.stgInTab{display:inline-flex;align-items:center;font-family:var(--sans);font-stretch:75%;font-weight:700;font-size:11.5px;letter-spacing:.6px;text-transform:uppercase;
+  padding:7px 12px 6px;border:none;background:transparent;color:var(--ink2);cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-1.5px}
+.stgInTab:hover{color:var(--ink)}
+.stgInTab[aria-selected="true"]{color:var(--blue);border-bottom-color:var(--blue)}
+.stgInTab:focus-visible{outline:2px solid var(--blue);outline-offset:-2px}
+.stgInDot{display:none;width:7px;height:7px;border-radius:50%;background:var(--fail);margin-left:6px}
+.stgInTab.has-err .stgInDot{display:inline-block}
+.stgInPane[hidden]{display:none!important}
+     ```
+  2. `@media print` rule (~line 141). Before: `.tabs,.btnrow,.noprint{display:none!important}.cols{grid-template-columns:1fr}.card{break-inside:avoid}}`. After: the same, then `\n  .stgInTabs{display:none!important}.stgInPane[hidden]{display:block!important}}` before the closing brace.
+  3. Immediately before `function InputsTab({inp,set,R}){` (module scope) and at the top of its body. Added (the `function InputsTab` line is unchanged):
+     ```js
+/* ---------- Inputs page sub-tabs (UI only) ----------
+   Every input card is still rendered exactly as before; the cards of the
+   inactive sub-tabs are only hidden with the `hidden` attribute, so nothing
+   unmounts and no state, handler or value binding changes. The active sub-tab
+   is remembered per browser in localStorage key stgirder.inputTab.v1 (never in
+   the inputs object, so the session autosave and the project JSON are
+   unchanged). Print shows every pane. */
+const STG_IN_TABS=[
+  ['section','Section'],['mat','Materials'],['deck','Deck'],
+  ['span','Span & Framing'],['loads','Loads'],['details','Stiffeners / Studs / Fatigue']];
+const STG_IN_KEY='stgirder.inputTab.v1';
+let stgInTabCur=null;   /* in-memory copy: survives the Inputs page unmounting, even without storage */
+function stgInTabGet(){ if(stgInTabCur) return stgInTabCur;
+  let t=''; try{ t=window.localStorage.getItem(STG_IN_KEY)||''; }catch(e){}
+  return STG_IN_TABS.some(([k])=>k===t)?t:'section'; }
+function stgInTabSet(t){ stgInTabCur=t; try{ window.localStorage.setItem(STG_IN_KEY,t); }catch(e){} }
+/* red dot: a number field in the pane the browser cannot parse, or one left
+   blank (Num stores '' for an empty field) */
+function stgInBadPanes(root){
+  const bad={}; if(!root) return bad;
+  root.querySelectorAll('.stgInPane').forEach(pn=>{
+    const k=pn.getAttribute('data-pane');
+    pn.querySelectorAll('input[type="number"]').forEach(i=>{
+      if(i.disabled||i.readOnly) return;
+      if((i.validity&&i.validity.badInput)||i.value==='') bad[k]=1; });
+  });
+  return bad;
+}
+function InputsTab({inp,set,R}){
+  const [inTab,setInTabSt]=useState(stgInTabGet);
+  const [inBad,setInBad]=useState({});
+  const inRoot=useRef(null);
+  const pickInTab=(t,focus)=>{ setInTabSt(t); stgInTabSet(t);
+    if(focus){ const b=document.getElementById('stgInTab_'+t); if(b) b.focus(); } };
+  const inTabKey=e=>{ const ks=STG_IN_TABS.map(([k])=>k), i=ks.indexOf(inTab); let j=-1;
+    if(e.key==='ArrowRight'||e.key==='ArrowDown') j=(i+1)%ks.length;
+    else if(e.key==='ArrowLeft'||e.key==='ArrowUp') j=(i-1+ks.length)%ks.length;
+    else if(e.key==='Home') j=0;
+    else if(e.key==='End') j=ks.length-1;
+    if(j<0) return; e.preventDefault(); pickInTab(ks[j],true); };
+  const markIn=()=>{ const b=stgInBadPanes(inRoot.current);
+    setInBad(prev=>{ const a=Object.keys(prev).sort().join(), c=Object.keys(b).sort().join(); return a===c?prev:b; }); };
+  React.useLayoutEffect(markIn);
+  /* an unparsable entry (e.g. a lone "-") fires no React change, so also re-check
+     on native input events; deferred so React's controlled-input handling runs first */
+  useEffect(()=>{ const el=inRoot.current; if(!el) return; let h=0;
+    const onIn=()=>{ clearTimeout(h); h=setTimeout(markIn,0); };
+    el.addEventListener('input',onIn);
+    return ()=>{ clearTimeout(h); el.removeEventListener('input',onIn); }; },[]);
+  /* plain <div> wrappers (not a component defined here) so React never remounts the cards */
+  const paneP=k=>({className:'stgInPane','data-pane':k,id:'stgInPane_'+k,role:'tabpanel',
+    'aria-labelledby':'stgInTab_'+k,hidden:inTab!==k});
+     ```
+  4. In the `return` of `InputsTab`: `return (<div>` became `return (<div ref={inRoot}>`. After the imported-demands banner (`{extActive&&<div className="callout" ...}`, ending `</div>}`) the strip was added:
+     ```jsx
+    <div className="stgInTabs" role="tablist" aria-label="Input groups">{STG_IN_TABS.map(([k,l])=>
+      <button key={k} type="button" role="tab" id={'stgInTab_'+k} aria-controls={'stgInPane_'+k}
+        aria-selected={inTab===k?'true':'false'} tabIndex={inTab===k?0:-1}
+        className={'stgInTab'+(inBad[k]?' has-err':'')} title={inBad[k]?'An input on this tab needs attention':undefined}
+        onClick={()=>pickInTab(k)} onKeyDown={inTabKey}>
+        <span>{l}</span><span className="stgInDot" aria-hidden="true"></span></button>)}</div>
+     ```
+     followed by `<div {...paneP('section')}>`. Then `</div>` + `<div {...paneP('<k>')}>` was inserted before each of the cards `Materials`, `Deck & Composite`, `Span & Framing`, `Loads`, `Stiffeners, Connectors & Fatigue` (keys `mat`, `deck`, `span`, `loads`, `details`), and one `</div>` after the last card's `</Card>`. The cards themselves were not edited.
+- **Note on the input listener:** the native `input` listener runs `markIn` in a `setTimeout(...,0)`. A first draft called it synchronously, and that reset a controlled number field to its old value when it was cleared (main lets it go blank). The deferred version behaves like main, and the comparison below checks this by typing into fields.
+- **Governing provision / check case:** n/a, no computed value changes. Default project before and after: status band 25/26 PASS (Studs fat 1.02), M_LL+IM = 2,503 k-ft, V_LL+IM = 112 kip, Strength I +M_u = 8,381 k-ft, V_u = 328 kip. Identical.
+- **How verified:** @babel/standalone 7.23.5 transpile of the `text/babel` block plus `node --check` on all 8 inline scripts (main and branch): pass. Headless Chromium 1194 (Playwright), with React 18.2.0, React-DOM 18.2.0, Babel 7.23.5, Plotly 2.27.0 and KaTeX 0.16.9 served locally at the pinned versions. Google Fonts were blocked in both runs. origin/main and the branch were compared over 18 scenarios: default; the 4 section presets; 3 other steel grades; flange transitions on; deck design on; noncomposite; LL manual; exterior girder; typed edits (Span L, bft, haunch, ADTT); Es blank; MIDAS envelope import (2-span continuous with section.zones) on span 1 and span 2; and Export → Reset → Import round trip. In every scenario these were **identical**: the text of every result tab, the Inputs page text, the inventory and values of all inputs, the status band, the `stgirder.session` autosave, the exported JSON, the `bridgeSuite.v1.*` key set and the superReactions, capacity (Send capacity to MCT Rating) and lldfGeom (Send geometry to LL & DL) payloads (timestamps masked). The round trip was exact on both. The branch adds no console errors (both have the same NaN SVG warnings in the Es-blank case). UI checks: all 63 default inputs are in exactly one pane, with none outside; no dot in the default state; dot on blank and unparsable entries, and it clears; arrow/Home/End keys; the key survives a reload and a result-tab switch; sticky strip; the strip wraps at 400 px; print shows all 6 panes. Screenshots of every sub-tab at 1500 px and 400 px were checked.
+- **Other copies of this code:** none. The bridgeSuite / BridgeXfer shared snippets were not touched.
+- **Open items:** at 400 px the page scrolls sideways because of the title block (`.tb-grid`, 532 px). This happens on main too and was not changed.

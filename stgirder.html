@@ -53,6 +53,16 @@ html,body{background:var(--paper);color:var(--ink);font-family:var(--sans);font-
 .cols-full{padding-top:16px}
 @media(max-width:1080px){.cols{grid-template-columns:1fr}.gfx{position:static}}
 .gfx{position:sticky;top:12px}
+/* Inputs page sub-tabs (UI only — see stgInTabs in InputsTab) */
+.stgInTabs{position:sticky;top:0;z-index:7;display:flex;flex-wrap:wrap;gap:0;margin:0 0 14px;background:var(--sheet);border-bottom:1.5px solid var(--ink)}
+.stgInTab{display:inline-flex;align-items:center;font-family:var(--sans);font-stretch:75%;font-weight:700;font-size:11.5px;letter-spacing:.6px;text-transform:uppercase;
+  padding:7px 12px 6px;border:none;background:transparent;color:var(--ink2);cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-1.5px}
+.stgInTab:hover{color:var(--ink)}
+.stgInTab[aria-selected="true"]{color:var(--blue);border-bottom-color:var(--blue)}
+.stgInTab:focus-visible{outline:2px solid var(--blue);outline-offset:-2px}
+.stgInDot{display:none;width:7px;height:7px;border-radius:50%;background:var(--fail);margin-left:6px}
+.stgInTab.has-err .stgInDot{display:inline-block}
+.stgInPane[hidden]{display:none!important}
 .card{border:1.5px solid var(--ink);margin-bottom:16px;background:var(--sheet)}
 .card-h{display:flex;justify-content:space-between;align-items:center;border-bottom:1.5px solid var(--ink);padding:6px 11px 6px;background:var(--paper)}
 .card-h .t{font-stretch:75%;font-weight:700;font-size:12.5px;letter-spacing:1.1px;text-transform:uppercase}
@@ -128,7 +138,8 @@ table.eng tr.tot td{border-top:1.5px solid var(--ink);font-weight:600}
 .soonbox .ph{font-stretch:75%;font-weight:800;font-size:15px;letter-spacing:1px;text-transform:uppercase;color:var(--ink);margin-bottom:6px}
 .soonbox .ds{font-size:12.5px;line-height:1.6;max-width:640px;margin:0 auto}
 @media print{body{background:#fff}.sheet{box-shadow:none;margin:0;max-width:none;border-width:1.5px}
-  .tabs,.btnrow,.noprint{display:none!important}.cols{grid-template-columns:1fr}.card{break-inside:avoid}}
+  .tabs,.btnrow,.noprint{display:none!important}.cols{grid-template-columns:1fr}.card{break-inside:avoid}
+  .stgInTabs{display:none!important}.stgInPane[hidden]{display:block!important}}
 
 /* Geometry change notice — informational, so it uses the suite's steady
    "available" orange rather than the amber reserved for conflicts. */
@@ -3036,7 +3047,58 @@ function LockAutoSync({inp,set}){
   return null;
 }
 
+/* ---------- Inputs page sub-tabs (UI only) ----------
+   Every input card is still rendered exactly as before; the cards of the
+   inactive sub-tabs are only hidden with the `hidden` attribute, so nothing
+   unmounts and no state, handler or value binding changes. The active sub-tab
+   is remembered per browser in localStorage key stgirder.inputTab.v1 (never in
+   the inputs object, so the session autosave and the project JSON are
+   unchanged). Print shows every pane. */
+const STG_IN_TABS=[
+  ['section','Section'],['mat','Materials'],['deck','Deck'],
+  ['span','Span & Framing'],['loads','Loads'],['details','Stiffeners / Studs / Fatigue']];
+const STG_IN_KEY='stgirder.inputTab.v1';
+let stgInTabCur=null;   /* in-memory copy: survives the Inputs page unmounting, even without storage */
+function stgInTabGet(){ if(stgInTabCur) return stgInTabCur;
+  let t=''; try{ t=window.localStorage.getItem(STG_IN_KEY)||''; }catch(e){}
+  return STG_IN_TABS.some(([k])=>k===t)?t:'section'; }
+function stgInTabSet(t){ stgInTabCur=t; try{ window.localStorage.setItem(STG_IN_KEY,t); }catch(e){} }
+/* red dot: a number field in the pane the browser cannot parse, or one left
+   blank (Num stores '' for an empty field) */
+function stgInBadPanes(root){
+  const bad={}; if(!root) return bad;
+  root.querySelectorAll('.stgInPane').forEach(pn=>{
+    const k=pn.getAttribute('data-pane');
+    pn.querySelectorAll('input[type="number"]').forEach(i=>{
+      if(i.disabled||i.readOnly) return;
+      if((i.validity&&i.validity.badInput)||i.value==='') bad[k]=1; });
+  });
+  return bad;
+}
 function InputsTab({inp,set,R}){
+  const [inTab,setInTabSt]=useState(stgInTabGet);
+  const [inBad,setInBad]=useState({});
+  const inRoot=useRef(null);
+  const pickInTab=(t,focus)=>{ setInTabSt(t); stgInTabSet(t);
+    if(focus){ const b=document.getElementById('stgInTab_'+t); if(b) b.focus(); } };
+  const inTabKey=e=>{ const ks=STG_IN_TABS.map(([k])=>k), i=ks.indexOf(inTab); let j=-1;
+    if(e.key==='ArrowRight'||e.key==='ArrowDown') j=(i+1)%ks.length;
+    else if(e.key==='ArrowLeft'||e.key==='ArrowUp') j=(i-1+ks.length)%ks.length;
+    else if(e.key==='Home') j=0;
+    else if(e.key==='End') j=ks.length-1;
+    if(j<0) return; e.preventDefault(); pickInTab(ks[j],true); };
+  const markIn=()=>{ const b=stgInBadPanes(inRoot.current);
+    setInBad(prev=>{ const a=Object.keys(prev).sort().join(), c=Object.keys(b).sort().join(); return a===c?prev:b; }); };
+  React.useLayoutEffect(markIn);
+  /* an unparsable entry (e.g. a lone "-") fires no React change, so also re-check
+     on native input events; deferred so React's controlled-input handling runs first */
+  useEffect(()=>{ const el=inRoot.current; if(!el) return; let h=0;
+    const onIn=()=>{ clearTimeout(h); h=setTimeout(markIn,0); };
+    el.addEventListener('input',onIn);
+    return ()=>{ clearTimeout(h); el.removeEventListener('input',onIn); }; },[]);
+  /* plain <div> wrappers (not a component defined here) so React never remounts the cards */
+  const paneP=k=>({className:'stgInPane','data-pane':k,id:'stgInPane_'+k,role:'tabpanel',
+    'aria-labelledby':'stgInTab_'+k,hidden:inTab!==k});
   const S=(path,v)=>{ const nx={...inp}; let o=nx; const ks=path.split('.');
     for(let i=0;i<ks.length-1;i++){o[ks[i]]={...o[ks[i]]}; o=o[ks[i]];}
     o[ks.at(-1)]=v; set(nx); };
@@ -3230,7 +3292,7 @@ function InputsTab({inp,set,R}){
   const segAdd=()=>{ const last=sec.segs.at(-1)||{xEnd:geom.L,bft:sec.bft,tft:sec.tft,bfb:sec.bfb,tfb:sec.tfb};
     set({...inp, sec:{...sec, segs:[...sec.segs,{...last, xEnd:geom.L}]}}); };
   const segDel=i=>set({...inp, sec:{...sec, segs:sec.segs.filter((_,j)=>j!==i)}});
-  return (<div>
+  return (<div ref={inRoot}>
     {extActive&&<div className="callout" style={{marginTop:0,marginBottom:14,borderColor:'var(--blue)',background:'#EEF4FF'}}>
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'baseline',flexWrap:'wrap',gap:8}}>
         <b>Running on imported demands (continuous member)</b>
@@ -3253,6 +3315,13 @@ function InputsTab({inp,set,R}){
       </div>}
       {selSpan&&<div style={{fontSize:11.5,marginTop:6}}>Active: <b>Span {selSpan.idx}</b> ({fmt(selSpan.len,1)} ft). Negative envelope values at the span ends drive the 6.10.8 pier checks.</div>}
     </div>}
+    <div className="stgInTabs" role="tablist" aria-label="Input groups">{STG_IN_TABS.map(([k,l])=>
+      <button key={k} type="button" role="tab" id={'stgInTab_'+k} aria-controls={'stgInPane_'+k}
+        aria-selected={inTab===k?'true':'false'} tabIndex={inTab===k?0:-1}
+        className={'stgInTab'+(inBad[k]?' has-err':'')} title={inBad[k]?'An input on this tab needs attention':undefined}
+        onClick={()=>pickInTab(k)} onKeyDown={inTabKey}>
+        <span>{l}</span><span className="stgInDot" aria-hidden="true"></span></button>)}</div>
+    <div {...paneP('section')}>
     <Card title="Girder Section — built-up plate" refTag="web + two flanges (singly-symmetric OK)">
       <div className="frow">
         <Sel l="Starting section" v={inp.preset} set={applyPreset} opts={Object.keys(PRESETS)}/>
@@ -3304,6 +3373,9 @@ function InputsTab({inp,set,R}){
       {R&&R.ok&&<div className="hint">Used where the member sees negative moment (imported continuous envelopes): the deck concrete is neglected in tension and the section is <b>steel + this reinforcement</b>. Minimum 1% of the deck area (6.10.1.7) = <b>{fmt(0.01*R.beff*R.deck.ts,2)} in²</b>{R.hasNeg?<span> — provided {fmt(+inp.negM.As||0,2)} in² {(+inp.negM.As||0)>=0.01*R.beff*R.deck.ts?'✓':'✗'}</span>:<span> (no negative demand in the current model — simple span)</span>}.</div>}
     </Card>
 
+    </div>
+
+    <div {...paneP('mat')}>
     <Card title="Materials" refTag="AASHTO 6.4.1">
       <div className="frow">
         <Sel l="Steel grade" v={mat.grade} set={applyGrade} opts={Object.keys(GRADES)}/>
@@ -3319,6 +3391,9 @@ function InputsTab({inp,set,R}){
       </div>
     </Card>
 
+    </div>
+
+    <div {...paneP('deck')}>
     <Card title="Deck & Composite" refTag="6.10.1.1 · 4.6.2.6">
       <div style={{marginBottom:8}}>
         <label style={{fontSize:11,color:'var(--ink2)',display:'flex',gap:7,alignItems:'center'}}>
@@ -3376,6 +3451,9 @@ function InputsTab({inp,set,R}){
       </React.Fragment>}
     </Card>
 
+    </div>
+
+    <div {...paneP('span')}>
     <Card title="Span & Framing" refTag="geometry">
       <div className="frow">
         <Num l="Span L" u="ft" v={geom.L} set={v=>S('geom.L',v)} step={1}/>
@@ -3391,6 +3469,9 @@ function InputsTab({inp,set,R}){
         {geom.shored&&<div className="hint" style={{color:'var(--warn)'}}>This project was saved with “shored” ticked. That option never affected the analysis; results are for unshored construction (conservative for flange stresses).</div>}</div>
     </Card>
 
+    </div>
+
+    <div {...paneP('loads')}>
     <Card title="Loads" refTag="LRFD 3.6 / 4.6.2.2">
       {(()=>{const LG=({tag,title,note,color})=><div style={{display:'flex',alignItems:'baseline',gap:8,
         margin:'2px 0 6px',paddingBottom:3,borderBottom:'1px solid var(--line2)'}}>
@@ -3519,6 +3600,9 @@ function InputsTab({inp,set,R}){
       </React.Fragment>;})()}
     </Card>
 
+    </div>
+
+    <div {...paneP('details')}>
     <Card title="Stiffeners, Connectors & Fatigue" refTag="6.10.11 / 6.10.10 / 6.6.1">
       <div className="grouplabel">Transverse & bearing stiffeners</div>
       <div style={{marginBottom:6}}><label style={{fontSize:11,color:'var(--ink2)',display:'flex',gap:7,alignItems:'center'}}>
@@ -3569,6 +3653,7 @@ function InputsTab({inp,set,R}){
       </div>
       <div className="hint" style={{margin:'2px 0 0'}}>{(+inp.loads.fatM>0)?<span>A single-lane fatigue distribution factor <b>{fmt(+inp.loads.fatM,3)}</b> is pulled from the LL &amp; DL Distribution app and will be used for the stress range. Clear it on the Loads card to fall back to the DF÷1.2 estimate.</span>:<span>The single-lane fatigue distribution factor is estimated as (1-lane moment DF)÷1.2 (removes multiple presence). Pull an exact value from the LL &amp; DL Distribution app if desired.</span>}</div>
     </Card>
+    </div>
   </div>);
 }
 
