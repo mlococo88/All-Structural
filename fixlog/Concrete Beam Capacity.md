@@ -1383,6 +1383,275 @@ Identical edits to branch claude/fix-rebar-dev (see fixlog/ACI Rebar Development
 - **How verified:** Every plain inline script syntax-checked (Node `vm.Script`, same parser as `node --check`); BridgeXfer block compared byte-for-byte with HANDOFF.md §5; page loaded in jsdom (CDN scripts not loaded) before and after the change with no new errors; Share → Use exercised between tools with jsdom localStorage (ASCE7-16 → ACI Rebar, Steel Beam → Shear and Moment, Concrete Beam Capacity shell against stub tab documents), including cancel, empty shared values (field kept), a non-ISO date on a date input (skipped), an empty channel and a wrong `_schema` (refused). `git diff` shows no removed lines other than the ones listed under Before. No calculation code was touched.
 - **Other copies of this code:** none (the embedded apps are untouched). BridgeXfer v1 is also in: ACI Rebar Development Length.html, ASCE7-16 Load Generator.html, Concrete Beam Capacity.html (shell), Steel Beam Design - AISC 15th.html, Shear and Moment Diagrams.html.
 
+## 2026-10-09 — Input panel tabs (branch claude/tabs-concretebeamcapacity)
+### T1. Input panels of all three sub-apps split into tabs   [UI only — no calculation change]
+- **Date:** 2026-10-09. **Type:** UI only. No calculation change. Engineer's request (2026-10-09): "make sure they are all formatted with the input panel having tabs rather than one long scrolling input panel."
+- **What:** each sub-app still builds its input sections exactly as before; a new function then **moves** the finished section nodes into one pane per tab (same approach as `Steel Beam Design - AISC 15th.html`). Nothing is rebuilt, so every id, `data-fkey`, handler and value is unchanged, and the sections keep their original document order and numbering. Capacity and ASD rebuild their input panel on every `refresh()`, so the move runs at the end of each `buildInput()`; the active tab is held in memory as well as in storage, so it survives the rebuild, and the existing `captureUI()`/`restoreUI()` keep the focus and caret while typing. The tab buttons carry a `data-fkey`, so `restoreUI()` also keeps keyboard focus on them. Sections that appear only in some modes keep doing so; a tab with no sections is hidden.
+
+  **Beam Capacity** (`#suite-frame-capacity`; section numbers as shown for ACI, AASHTO renumbers them without gaps as before):
+
+  | Tab | Sections |
+  |---|---|
+  | Section | 1. Section Geometry |
+  | Materials & Cover | 2. Materials, 3. Cover & Exposure |
+  | Reinforcement | 4. Reinforcement Layers, 5. Transverse Reinforcement |
+  | Checks | 6. Torsion (ACI only; not built for AASHTO), 7. Crack Control |
+  | Loads | 8. Load Combinations |
+  | Assumptions | 9. Engineering Assumptions |
+
+  **ASD Beam Calcs** (`#suite-frame-asd`). Tabs were added because the four cards are about 1,100 px tall in a 713 px panel at 1400×900 (the panel scrolls); with tabs each pane fits without scrolling.
+
+  | Tab | Sections |
+  |---|---|
+  | Mode & Section | 1. Analysis Mode, 2. From Beam Capacity (moment sense selects which d and A_s are shown) |
+  | Allowables | 3. Allowable Stresses |
+  | Loads | 4. Applied Load Effects |
+
+  **Development & Splice** (`#suite-frame-dev`): synced with `ACI Rebar Development Length.html` fix log T1 (PR #64). Same six tabs: Project (A) | Code & Material (B) | Tension (C, D, D2) | Hook & Comp. (E, E2) | Splices (F) | Assumptions & Save (G, H).
+
+- **Tab strip:** sticky at the top of the scrolling input panel, wraps on narrow screens. Capacity and ASD strips reuse the look of each app's own output tab bar (`#tabBar`: slate buttons, rounded tops, active tab in the panel colour). ARIA `tablist`/`tab`/`tabpanel`; Left/Right/Up/Down (wrapping), Home, End.
+- **Error marker (red dot):** Capacity: a `validate()` blocker that comes from an input (code "Geometry" → Section, except "Layer n depth d … falls outside the section" → Reinforcement; "Reinforcement" → Reinforcement; "Stirrups" → Reinforcement; "Loads" → Loads), or a number input the browser cannot parse. Warnings and notes set no dot. ASD: an `.errBox`/`.warnBox` inside a section (today only "No live values received yet" in From Beam Capacity), or an unparseable number input. Dev: as in the standalone (T1 there).
+- **New storage keys (per browser; never in `S`, the autosave, saved projects or the JSON export):** `rcbeam_v2_inputTab_v1` (Capacity, prefix of `rcbeam_v2_auto` / `rcbeam_v2_projects`), `asd_v1_inputTab_v1` (ASD, prefix of `asd_v1_auto` / `asd_v1_projects`), `rebar_aci_inputTab_v1` (Dev; shared with the standalone ACI Rebar tool, as `rebar_aci_projects_v1` already is). All reads and writes are in try/catch with an in-memory fallback. No existing key or saved format changed.
+- **Print:** unchanged. Capacity and ASD print `#printReport` (built from the outputs) and hide `#app` in print media; the Dev copy prints `#printroot` as before.
+- **Escaping:** all code below sits inside `srcdoc="…"`. It is given un-escaped; when re-applying by hand write every `&` as `&amp;` and every `"` as `&quot;` (the blocks use single quotes, so in practice only `&&` → `&amp;&amp;` and the `&` in labels). `<` and `>` are left as-is, like the rest of the srcdoc. CRLF line endings kept. All changes are insertions; no existing line was changed or removed.
+- **Where / Before / After — Beam Capacity** (restrict each search to the `suite-frame-capacity` srcdoc; each anchor occurs once there):
+  1. CSS. Anchor (kept): `table.cbT button:hover{color:var(--red-600)}`. Insert after it:
+  ```css
+/* ---- input panel tabs (rcbInputTabs; UI only) ---- */
+#rcbInTabs{position:sticky;top:-10px;z-index:12;display:flex;flex-wrap:wrap;gap:3px;margin:-10px -12px 6px;
+  padding:7px 12px 0;background:var(--slate-100);border-bottom:1px solid var(--color-border)}
+#rcbInTabs .rcbInTab{display:inline-flex;align-items:center;font-family:var(--font-ui);font-size:9pt;padding:5px 10px;
+  cursor:pointer;border:1px solid var(--color-border);border-bottom:none;background:var(--slate-200);
+  border-radius:5px 5px 0 0;color:#334155;position:relative;top:1px}
+#rcbInTabs .rcbInTab:hover{background:#dde2e8}
+#rcbInTabs .rcbInTab[aria-selected='true']{background:var(--color-bg);color:var(--ink);font-weight:600;
+  border-bottom:1px solid var(--color-bg)}
+#rcbInTabs .rcbInTab:focus-visible{outline:2px solid var(--blue-600);outline-offset:-2px}
+.rcbInDot{display:none;width:7px;height:7px;border-radius:50%;background:var(--fail);margin-left:6px}
+.rcbInTab.has-err .rcbInDot{display:inline-block}
+.rcbInTab[hidden],.rcbInPane[hidden]{display:none!important}
+  ```
+  2. JS. Anchor (kept): the end of `mkSection()`: `  parent.appendChild(sec); return sec;` / `}`. Insert after it (before the `TITLE BLOCK (§13)` banner):
+  ```js
+/* =====================================================================
+   INPUT PANEL TABS (UI only)
+   buildInput() still builds every section into #inputPanel exactly as
+   before; rcbInputTabs() then MOVES the finished section nodes into one
+   pane per tab, in their original order. Nothing is rebuilt, so ids,
+   data-fkey keys, handlers and values are untouched. The active tab is
+   remembered per browser in localStorage key rcbeam_v2_inputTab_v1 (never
+   in S, so the autosave, saved projects and the JSON export are unchanged).
+   ===================================================================== */
+const RCB_IN_TABS=[
+  ['section','Section'],['materials','Materials & Cover'],['reinf','Reinforcement'],
+  ['checks','Checks'],['loads','Loads'],['assume','Assumptions']];
+const RCB_IN_SEC={inSection:'section',inMat:'materials',inCover:'materials',
+  inRebar:'reinf',inStir:'reinf',inTor:'checks',inCrack:'checks',
+  inLoads:'loads',inAssume:'assume'};
+/* validate() blockers that come from an input, mapped to the section holding it */
+const RCB_IN_BLOCK=[
+  [b=>/^Layer \d+ depth/.test(b.msg),'inRebar'],
+  [b=>b.code==='Geometry','inSection'],
+  [b=>b.code==='Reinforcement','inRebar'],
+  [b=>b.code==='Stirrups','inStir'],
+  [b=>b.code==='Loads','inLoads']];
+const RCB_IN_KEY='rcbeam_v2_inputTab_v1';
+let rcbInTabCur=null;   /* in-memory copy, so the tab survives rebuilds even without storage */
+function rcbInTabGet(){ if(rcbInTabCur) return rcbInTabCur; try{ return localStorage.getItem(RCB_IN_KEY)||''; }catch(e){ return ''; } }
+function rcbInTabSet(t){ rcbInTabCur=t; try{ localStorage.setItem(RCB_IN_KEY,t); }catch(e){} }
+function rcbInputTabs(P){
+  const bar=el('div'); bar.id='rcbInTabs'; bar.setAttribute('role','tablist'); bar.setAttribute('aria-label','Input groups');
+  const panes={};
+  RCB_IN_TABS.forEach(([k,lab])=>{
+    const b=tag(el('button','rcbInTab'),'rcbInTab_'+k); b.type='button'; b.id='rcbInTab_'+k; b.dataset.pane=k;
+    b.setAttribute('role','tab'); b.setAttribute('aria-controls','rcbInPane_'+k);
+    b.appendChild(el('span',null,lab));
+    const dot=el('span','rcbInDot'); dot.setAttribute('aria-hidden','true'); b.appendChild(dot);
+    b.addEventListener('click',()=>rcbSetInTab(k,true));
+    b.addEventListener('keydown',rcbInTabKey);
+    bar.appendChild(b);
+    const pn=el('div','rcbInPane'); pn.id='rcbInPane_'+k; pn.setAttribute('role','tabpanel');
+    pn.setAttribute('aria-labelledby','rcbInTab_'+k);
+    panes[k]=pn;
+  });
+  /* move the built nodes; a node not in the map stays with the section before it */
+  let cur='section';
+  Array.from(P.childNodes).forEach(n=>{
+    if(n.id&&RCB_IN_SEC[n.id]) cur=RCB_IN_SEC[n.id];
+    panes[cur].appendChild(n);
+  });
+  P.appendChild(bar);
+  RCB_IN_TABS.forEach(([k])=>{
+    P.appendChild(panes[k]);
+    document.getElementById('rcbInTab_'+k).hidden=!panes[k].childNodes.length;
+  });
+  let t=rcbInTabGet();
+  if(!panes[t]||!panes[t].childNodes.length) t='section';
+  rcbSetInTab(t,false);
+  rcbInputTabMarks();
+}
+function rcbSetInTab(t,remember){
+  RCB_IN_TABS.forEach(([k])=>{
+    const b=document.getElementById('rcbInTab_'+k), pn=document.getElementById('rcbInPane_'+k); if(!b||!pn) return;
+    const on=(k===t);
+    b.setAttribute('aria-selected',on?'true':'false'); b.tabIndex=on?0:-1;
+    pn.hidden=!on;
+  });
+  if(remember){ rcbInTabSet(t); const P=document.getElementById('inputPanel'); if(P) P.scrollTop=0; }
+}
+function rcbInTabKey(e){
+  const vis=RCB_IN_TABS.map(([k])=>document.getElementById('rcbInTab_'+k)).filter(b=>b&&!b.hidden);
+  const i=vis.indexOf(e.currentTarget); let j=-1;
+  if(e.key==='ArrowRight'||e.key==='ArrowDown') j=(i+1)%vis.length;
+  else if(e.key==='ArrowLeft'||e.key==='ArrowUp') j=(i-1+vis.length)%vis.length;
+  else if(e.key==='Home') j=0;
+  else if(e.key==='End') j=vis.length-1;
+  if(j<0) return;
+  e.preventDefault(); rcbSetInTab(vis[j].dataset.pane,true); vis[j].focus();
+}
+/* red dot on a tab holding an input named in a validate() blocker, or a
+   number field the browser cannot parse (display only) */
+function rcbInputTabMarks(){
+  if(!document.getElementById('rcbInTabs')) return;
+  const bad={};
+  const mark=n=>{ const pn=n&&n.closest('.rcbInPane'); if(pn) bad[pn.id.replace('rcbInPane_','')]=1; };
+  ((VALIDATION&&VALIDATION.blockers)||[]).forEach(b=>{
+    const m=RCB_IN_BLOCK.find(r=>r[0](b)); if(m) mark(document.getElementById(m[1])); });
+  document.querySelectorAll('#inputPanel .rcbInPane input').forEach(i=>{ if(i.validity&&i.validity.badInput) mark(i); });
+  RCB_IN_TABS.forEach(([k])=>{
+    const b=document.getElementById('rcbInTab_'+k); if(!b) return;
+    b.classList.toggle('has-err',!!bad[k]);
+    b.title=bad[k]?'An input on this tab needs attention':'';
+  });
+}
+  ```
+  3. `buildInput()`. Anchor (kept): the end of the last section: `    b.appendChild(ta);` / `  },P);`. Insert before the closing `}` of `buildInput()`:
+  ```js
+  rcbInputTabs(P);   /* move the sections just built into the input tabs (UI only) */
+  ```
+- **Where / Before / After — ASD Beam Calcs** (restrict each search to the `suite-frame-asd` srcdoc):
+  1. CSS. Anchor (kept): `table.cbT button:hover{color:var(--red-600)}`. Insert after it:
+  ```css
+/* ---- input panel tabs (asdInputTabs; UI only) ---- */
+#asdInTabs{position:sticky;top:-10px;z-index:12;display:flex;flex-wrap:wrap;gap:3px;margin:-10px -12px 6px;
+  padding:7px 12px 0;background:var(--slate-100);border-bottom:1px solid var(--color-border)}
+#asdInTabs .asdInTab{display:inline-flex;align-items:center;font-family:var(--font-ui);font-size:9pt;padding:5px 10px;
+  cursor:pointer;border:1px solid var(--color-border);border-bottom:none;background:var(--slate-200);
+  border-radius:5px 5px 0 0;color:#334155;position:relative;top:1px}
+#asdInTabs .asdInTab:hover{background:#dde2e8}
+#asdInTabs .asdInTab[aria-selected='true']{background:var(--color-bg);color:var(--ink);font-weight:600;
+  border-bottom:1px solid var(--color-bg)}
+#asdInTabs .asdInTab:focus-visible{outline:2px solid var(--blue-600);outline-offset:-2px}
+.asdInDot{display:none;width:7px;height:7px;border-radius:50%;background:var(--fail);margin-left:6px}
+.asdInTab.has-err .asdInDot{display:inline-block}
+.asdInTab[hidden],.asdInPane[hidden]{display:none!important}
+  ```
+  2. JS. Anchor (kept): the end of `mkSection()`: `  parent.appendChild(sec); return sec;` / `}`. Insert after it (before the `INPUT PANEL` banner):
+  ```js
+/* =====================================================================
+   INPUT PANEL TABS (UI only)
+   buildInput() still builds every section into #inputPanel exactly as
+   before; asdInputTabs() then MOVES the finished section nodes into one
+   pane per tab, in their original order. Nothing is rebuilt, so ids,
+   data-fkey keys, handlers and values are untouched. The active tab is
+   remembered per browser in localStorage key asd_v1_inputTab_v1 (never
+   in S, so the autosave, saved projects and the JSON export are unchanged).
+   ===================================================================== */
+const ASD_IN_TABS=[['section','Mode & Section'],['allow','Allowables'],['loads','Loads']];
+const ASD_IN_SEC={inMode:'section',inInherit:'section',inAllow:'allow',inLoads:'loads'};
+const ASD_IN_KEY='asd_v1_inputTab_v1';
+let asdInTabCur=null;   /* in-memory copy, so the tab survives rebuilds even without storage */
+function asdInTabGet(){ if(asdInTabCur) return asdInTabCur; try{ return localStorage.getItem(ASD_IN_KEY)||''; }catch(e){ return ''; } }
+function asdInTabSet(t){ asdInTabCur=t; try{ localStorage.setItem(ASD_IN_KEY,t); }catch(e){} }
+function asdInputTabs(P){
+  const bar=el('div'); bar.id='asdInTabs'; bar.setAttribute('role','tablist'); bar.setAttribute('aria-label','Input groups');
+  const panes={};
+  ASD_IN_TABS.forEach(([k,lab])=>{
+    const b=tagf(el('button','asdInTab'),'asdInTab_'+k); b.type='button'; b.id='asdInTab_'+k; b.dataset.pane=k;
+    b.setAttribute('role','tab'); b.setAttribute('aria-controls','asdInPane_'+k);
+    b.appendChild(el('span',null,lab));
+    const dot=el('span','asdInDot'); dot.setAttribute('aria-hidden','true'); b.appendChild(dot);
+    b.addEventListener('click',()=>asdSetInTab(k,true));
+    b.addEventListener('keydown',asdInTabKey);
+    bar.appendChild(b);
+    const pn=el('div','asdInPane'); pn.id='asdInPane_'+k; pn.setAttribute('role','tabpanel');
+    pn.setAttribute('aria-labelledby','asdInTab_'+k);
+    panes[k]=pn;
+  });
+  /* move the built nodes; a node not in the map stays with the section before it */
+  let cur='section';
+  Array.from(P.childNodes).forEach(n=>{
+    if(n.id&&ASD_IN_SEC[n.id]) cur=ASD_IN_SEC[n.id];
+    panes[cur].appendChild(n);
+  });
+  P.appendChild(bar);
+  ASD_IN_TABS.forEach(([k])=>{
+    P.appendChild(panes[k]);
+    document.getElementById('asdInTab_'+k).hidden=!panes[k].childNodes.length;
+  });
+  let t=asdInTabGet();
+  if(!panes[t]||!panes[t].childNodes.length) t='section';
+  asdSetInTab(t,false);
+  asdInputTabMarks();
+}
+function asdSetInTab(t,remember){
+  ASD_IN_TABS.forEach(([k])=>{
+    const b=document.getElementById('asdInTab_'+k), pn=document.getElementById('asdInPane_'+k); if(!b||!pn) return;
+    const on=(k===t);
+    b.setAttribute('aria-selected',on?'true':'false'); b.tabIndex=on?0:-1;
+    pn.hidden=!on;
+  });
+  if(remember){ asdInTabSet(t); const P=document.getElementById('inputPanel'); if(P) P.scrollTop=0; }
+}
+function asdInTabKey(e){
+  const vis=ASD_IN_TABS.map(([k])=>document.getElementById('asdInTab_'+k)).filter(b=>b&&!b.hidden);
+  const i=vis.indexOf(e.currentTarget); let j=-1;
+  if(e.key==='ArrowRight'||e.key==='ArrowDown') j=(i+1)%vis.length;
+  else if(e.key==='ArrowLeft'||e.key==='ArrowUp') j=(i-1+vis.length)%vis.length;
+  else if(e.key==='Home') j=0;
+  else if(e.key==='End') j=vis.length-1;
+  if(j<0) return;
+  e.preventDefault(); asdSetInTab(vis[j].dataset.pane,true); vis[j].focus();
+}
+/* red dot on a tab whose section shows an error/warning box (e.g. no live
+   values received from Beam Capacity), or holding a number field the
+   browser cannot parse (display only) */
+function asdInputTabMarks(){
+  if(!document.getElementById('asdInTabs')) return;
+  const bad={};
+  const mark=n=>{ const pn=n&&n.closest('.asdInPane'); if(pn) bad[pn.id.replace('asdInPane_','')]=1; };
+  document.querySelectorAll('#inputPanel .asdInPane .errBox,#inputPanel .asdInPane .warnBox').forEach(mark);
+  document.querySelectorAll('#inputPanel .asdInPane input').forEach(i=>{ if(i.validity&&i.validity.badInput) mark(i); });
+  ASD_IN_TABS.forEach(([k])=>{
+    const b=document.getElementById('asdInTab_'+k); if(!b) return;
+    b.classList.toggle('has-err',!!bad[k]);
+    b.title=bad[k]?'An input on this tab needs attention':'';
+  });
+}
+  ```
+  3. `buildInput()`. Anchor (kept): the end of section 4: `      "RF = (C − M_DL) / M_{LL+I}."));` / `  },P);`. Insert before the closing `}` of `buildInput()`:
+  ```js
+  asdInputTabs(P);   /* move the sections just built into the input tabs (UI only) */
+  ```
+- **Where / Before / After — Development & Splice** (restrict to the `suite-frame-dev` srcdoc): the four insertions of `fixlog/ACI Rebar Development Length.md` T1, copied verbatim from `ACI Rebar Development Length.html` and escaped:
+  1. CSS block `/* ---- Input panel tabs (rebarInputTabs; UI only) ---- */` (13 lines) after `.panel.collapsed .panel-body{display:none;}`.
+  2. JS block `INPUT PANEL TABS (UI only)` … end of `rebarInputTabMarks()` (104 lines) between the end of `togglePanel()` and the `VALIDATION` banner.
+  3. `  rebarInputTabMarks(w);   // input tabs: red dot on a tab with an input that needs attention (display only)` after `  updateCodeHint(inp);` in `render()`.
+  4. `  rebarInputTabs();   // move the input panels into the input tabs (before any state is applied)` after `  buildInputPanel();` in `init()`.
+- **Problem:** UI request only (one long scrolling input panel). No result change.
+- **Governing provision:** none. No formula, factor, unit, code reference or computed result changed.
+- **Check case:** not applicable. Results are identical, see below.
+- **How verified:**
+  - Each srcdoc extracted and HTML-unescaped, then `node --check` on every inline script of the shell and of the three sub-apps, main and branch (7 blocks each, 0 failures). The un-escaped main → branch diff of each sub-app is insertions only (Capacity 106 lines, ASD 95, Dev 119).
+  - Dev copy against the standalone: a line diff of `ACI Rebar Development Length.html` before → after PR #64 and of the un-escaped Dev srcdoc main → branch gives the same four insertions, at the same anchor lines, with identical text.
+  - Headless Chromium (Playwright, Chromium 1194). Libraries served locally at the pinned versions (`npm pack`): KaTeX 0.16.11 and 0.16.9, Plotly 2.32.0 (`plotly.js-dist-min`, same build as cdn.plot.ly) and 2.27.0, three.js 0.160.0.
+  - Main and branch compared in 30 states. Capacity (15): default, signed moments on all three combinations, AASHTO, T-beam, torsion off, crack control user f_s, crack control computed f_s, stirrups off, manual layer depth, b_w = 0 (blocked), stirrup s = 0 (blocked), layer d outside the section (blocked), changed materials/bars/cover with T_u, added layer and combination, title block + assumptions. ASD (8): default, negative moment, Inventory off, Operating off, allowable overrides, applied moments, M_LL+I = 0, no live values. Dev (7): default, AASHTO, ACI modifiers, confinement, excess reinforcement invalid, low f′c with c_b = 0, title block. In every state these were identical: the HTML of every output tab (Plotly data; Plotly random ids normalised), the status chip, the output tab bar, `VALIDATION`, the printed report (`#printReport` / `#printroot`, timestamp removed), `S` / `collectState()` (= Export JSON content), the autosave (`rcbeam_v2_auto`, `asd_v1_auto`, `rcsuite.rebar_autosave_v1`), the saved-project lists after Save, Save → Load and Import (`mergeState`) round trips, the state after a reload, all input values in panel order, the localStorage key list, and the `bridgeSuite.v1.projectMeta` payload from the shell's "Share project info" (`producedAt` removed). Cross-frame link: for every Capacity state, the `sharedInputs` messages Capacity posted, the ASD tab's `S.inherit` / `S.proj`, its status chip and its Summary output were identical.
+  - Every input, select, textarea, button and section in each `#inputPanel` is present in both, in the same order (Capacity 61 / 55 AASHTO / 63 T-beam / 58 no stirrups; ASD 14; Dev 50), each in exactly one pane.
+  - No console errors or page errors (main or branch).
+  - Checked (scripted): clicks; arrows with wrap-around, Home, End and focus; tab remembered across reload; bogus stored value → first tab; localStorage throwing → tabs still work, results normal; typing in an input keeps its tab and focus across the rebuild; red dot on and off for b_w = 0, h_f ≥ h, stirrup s = 0, layer d = 30 in. (Capacity) and no live values (ASD); AASHTO hides the Torsion section and the Checks tab keeps Crack Control; a Capacity edit made in a tab still reaches the ASD tab; strip stays at the top when the panel scrolls; no horizontal scroll at 400 px in Capacity and ASD (the Dev sub-app scrolls 354 px sideways at 400 px in main as well; unchanged).
+  - Screenshots of every tab of the three sub-apps at 1400 px and 400 px.
+- **Other copies:** the Dev tab code is the shared snippet also in `ACI Rebar Development Length.html` (now identical, modulo srcdoc escaping). The Capacity and ASD tab code exists only here (the standalone `Concrete Beam ASD.html` has its own, different tab code, `cbasd_inputTab_v1`, fix log there).
+
 ## Open items (not changed)
 - O1. **ACI 318-19 §9.3.3.1 beam minimum strain** (`dEpsMin`, ACI branch) still checks εt ≥ 0.004. The review believes 318-19 changed this to εty + 0.003; I am not certain of the 318-19 wording, so per instructions the code is unchanged. — Please confirm against your copy of ACI 318-19 §9.3.3.1. If it reads εty + 0.003, change `0.004` to `S.mat.fy/ES+0.003` in that check (ACI only).
 - O3. **ACI Gr 60 εty.** F2 uses εty = fy/Es (0.002069 for Gr 60, so εtl = 0.005069). ACI 318-19 §21.2.2.1 permits εty = 0.002 for Grade 60, which would keep εtl = 0.005 and slightly raise φ in the transition zone. — Prefer the 0.002 permission for Gr 60?
