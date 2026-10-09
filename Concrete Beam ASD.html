@@ -54,6 +54,16 @@
         ::-webkit-scrollbar { width: 6px; height: 6px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+
+        /* Input panel tabs (cbasdInputTabs; UI only) */
+        #cbasdInTabs { position: sticky; top: 0; z-index: 5; display: flex; flex-wrap: wrap; gap: 0 0.125rem; margin-left: -1rem; margin-right: -1rem; padding: 0.25rem 1rem 0; background: #fff; border-bottom: 1px solid #e2e8f0; }
+        .cbasdInTab { display: inline-flex; align-items: center; gap: 0.3rem; margin-bottom: -1px; padding: 0.5rem 0.375rem 0.4rem; background: none; border: 0; border-bottom: 2px solid transparent; font-size: 0.6875rem; font-weight: 700; text-transform: uppercase; color: #64748b; cursor: pointer; white-space: nowrap; }
+        .cbasdInTab:hover { color: #334155; }
+        .cbasdInTab[aria-selected="true"] { color: #0f172a; border-bottom-color: #2563eb; }
+        .cbasdInTab:focus-visible { outline: 2px solid #93c5fd; outline-offset: -2px; border-radius: 0.25rem 0.25rem 0 0; }
+        .cbasdInDot { display: none; width: 7px; height: 7px; border-radius: 50%; background: #dc2626; }
+        .cbasdInTab.has-err .cbasdInDot { display: inline-block; }
+        .cbasdInTab[hidden], .cbasdInPane[hidden] { display: none !important; }
     </style>
 </head>
 <body class="h-screen flex flex-col overflow-hidden">
@@ -382,8 +392,86 @@
             calculate();
         }
 
+        // --- Input panel tabs (UI only) ---
+        // The four input <section>s are MOVED (not rebuilt) into one pane per tab, so every
+        // id, handler and value is untouched. The Analysis Mode box stays above the tab strip.
+        // The active tab is remembered per browser in localStorage 'cbasd_inputTab_v1'
+        // (never in the saved JSON file).
+        const CBASD_IN_TABS = [['mat', 'Materials', 'fc'], ['geom', 'Geometry', 'b_w'], ['reinf', 'Reinforcement', 'as'], ['loads', 'Loads', 'm_dl']];
+        const CBASD_IN_KEY = 'cbasd_inputTab_v1';
+        // input errors listed by calculate() -> the input each one names
+        const CBASD_IN_ERR = [[/^Concrete strength f'c/, 'fc'], [/^Effective depth d/, 'd_eff'], [/^Section width \(b_eff\)/, 'b_eff'], [/^Section width \(b_w\)/, 'b_w']];
+        let cbasdInTabCur = null; // in-memory copy, used when storage is blocked
+        function cbasdInTabGet() { if (cbasdInTabCur) return cbasdInTabCur; try { return localStorage.getItem(CBASD_IN_KEY) || ''; } catch (e) { return ''; } }
+        function cbasdInTabSet(t) { cbasdInTabCur = t; try { localStorage.setItem(CBASD_IN_KEY, t); } catch (e) {} }
+        function cbasdInputTabs() {
+            const bar = document.createElement('div');
+            bar.id = 'cbasdInTabs';
+            bar.setAttribute('role', 'tablist'); bar.setAttribute('aria-label', 'Input groups');
+            CBASD_IN_TABS.forEach(([k, lab, key], i) => {
+                const sec = document.getElementById(key).closest('section');
+                const b = document.createElement('button');
+                b.type = 'button'; b.className = 'cbasdInTab'; b.id = 'cbasdInTab_' + k; b.dataset.pane = k;
+                b.setAttribute('role', 'tab'); b.setAttribute('aria-controls', 'cbasdInPane_' + k);
+                const t = document.createElement('span'); t.textContent = lab; b.appendChild(t);
+                const dot = document.createElement('span'); dot.className = 'cbasdInDot'; dot.setAttribute('aria-hidden', 'true'); b.appendChild(dot);
+                b.addEventListener('click', () => cbasdSetInTab(k, true));
+                b.addEventListener('keydown', cbasdInTabKey);
+                bar.appendChild(b);
+                const pn = document.createElement('div');
+                pn.className = 'cbasdInPane'; pn.id = 'cbasdInPane_' + k; pn.dataset.pane = k;
+                pn.setAttribute('role', 'tabpanel'); pn.setAttribute('aria-labelledby', 'cbasdInTab_' + k);
+                sec.parentNode.insertBefore(pn, sec);
+                if (i === 0) sec.parentNode.insertBefore(bar, pn);
+                pn.appendChild(sec);
+            });
+            let t = cbasdInTabGet();
+            if (!CBASD_IN_TABS.some(([k]) => k === t)) t = CBASD_IN_TABS[0][0];
+            cbasdSetInTab(t, false);
+        }
+        function cbasdSetInTab(t, remember) {
+            CBASD_IN_TABS.forEach(([k]) => {
+                const b = document.getElementById('cbasdInTab_' + k), pn = document.getElementById('cbasdInPane_' + k);
+                const on = (k === t);
+                b.setAttribute('aria-selected', on ? 'true' : 'false'); b.tabIndex = on ? 0 : -1;
+                pn.hidden = !on;
+            });
+            if (remember) cbasdInTabSet(t);
+        }
+        function cbasdInTabKey(e) {
+            const vis = CBASD_IN_TABS.map(([k]) => document.getElementById('cbasdInTab_' + k)).filter(b => b && !b.hidden);
+            const i = vis.indexOf(e.currentTarget); let j = -1;
+            if (e.key === 'ArrowRight' || e.key === 'ArrowDown') j = (i + 1) % vis.length;
+            else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') j = (i - 1 + vis.length) % vis.length;
+            else if (e.key === 'Home') j = 0;
+            else if (e.key === 'End') j = vis.length - 1;
+            if (j < 0) return;
+            e.preventDefault(); cbasdSetInTab(vis[j].dataset.pane, true); vis[j].focus();
+        }
+        // Red dot on a tab holding an input named in calculate()'s input errors, a number field
+        // the browser cannot parse, or a non-blank allowable-stress text field that is not a number.
+        // Flange inputs hidden for a rectangular section are ignored.
+        function cbasdInputTabMarks(errors) {
+            if (!document.getElementById('cbasdInTabs')) return;
+            const bad = {};
+            const mark = el => { const pn = el && el.closest('.cbasdInPane'); if (pn) bad[pn.dataset.pane] = 1; };
+            (errors || []).forEach(m => { const r = CBASD_IN_ERR.find(x => x[0].test(m)); if (r) mark(document.getElementById(r[1])); });
+            document.querySelectorAll('.cbasdInPane input').forEach(i => {
+                const fl = i.closest('.flange-input');
+                if (fl && fl.style.display === 'none') return;
+                if ((i.validity && i.validity.badInput) || (i.type === 'text' && i.value.trim() !== '' && isNaN(parseFloat(i.value)))) mark(i);
+            });
+            CBASD_IN_TABS.forEach(([k]) => {
+                const b = document.getElementById('cbasdInTab_' + k);
+                b.classList.toggle('has-err', !!bad[k]);
+                b.title = bad[k] ? 'An input on this tab needs attention' : '';
+            });
+        }
+
         // --- Initialization ---
         document.addEventListener('DOMContentLoaded', () => {
+            cbasdInputTabs(); // move the input sections into the input tabs (UI only)
+
             // Rebar Picker Logic
             const updateAs = () => {
                 const count = parseFloat(document.getElementById('bar_count').value);
@@ -561,6 +649,7 @@
 
         // --- Input error display (no results shown) ---
         function showInputErrors(errors) {
+            cbasdInputTabMarks(errors); // input tabs: red dot (UI only)
             const badge = document.getElementById('control-badge');
             badge.textContent = 'Input error';
             badge.className = 'text-[10px] px-2 py-1 rounded border font-bold bg-red-50 text-red-600 border-red-200';
@@ -699,6 +788,7 @@
                 </div>
             `;
             document.getElementById('report-content').innerHTML = reportHTML;
+            cbasdInputTabMarks([]); // input tabs: red dot (UI only)
             
             // Force re-render of whole body to catch headers and new content
             if(window.renderMathInElement) {

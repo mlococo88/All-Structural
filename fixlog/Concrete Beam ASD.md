@@ -536,6 +536,140 @@ All edits were applied by scripted exact-string replacement (each Before block o
 - **How verified:** inline script syntax-checked; page loaded in jsdom before/after with no new errors; link found with `target="_top"`. `git diff` adds one line and removes none.
 - **Other copies of this code:** none.
 
+## 2026-10-09 — Input panel tabs (branch claude/tabs-concreteasd)
+### T1. Input panel split into tabs   [UI only — no calculation change]
+- **Date:** 2026-10-09. **Type:** UI only. No calculation change. Engineer's request (2026-10-09): "make sure they are all formatted with the input panel having tabs rather than one long scrolling input panel."
+- **What:** when the page starts, `cbasdInputTabs()` moves the four existing input `<section>` nodes of the sidebar into one tab pane each. Nothing is rebuilt, so every id, class (`trigger-calc`, `trigger-bar`, `flange-input`), handler and value stays the same. The **Analysis Mode** box (moment type, section shape, Inventory/Operating checkboxes) stays **above** the tab strip, because the section shape changes which Geometry inputs show. The "v2.2.0 • Build 2025" footer stays below the panes.
+
+  | Tab | Sections (unchanged inside) |
+  |---|---|
+  | (above the strip, always visible) | Analysis Mode |
+  | Materials | Materials: f'c, fy, and the "Edit Allowable Stresses" `<details>` (fc/fs inventory and operating allowables, Recompute button) |
+  | Geometry | Section Geometry: b_eff and h_f (hidden for a rectangular section, as today), b_w, h, d |
+  | Reinforcement | Reinforcement: bar count, bar size, A_s |
+  | Loads | Applied Loads: M_DL, M_LL+I |
+
+  No tab is ever empty: the rectangular-section mode hides only b_eff and h_f, so Geometry still holds b_w, h and d. No tab-hiding logic was needed (the keyboard handler still skips hidden tabs).
+- **Storage:** the tool had **no** localStorage/sessionStorage before (Save/Load JSON file only). New key `cbasd_inputTab_v1` (new tool prefix `cbasd_` = Concrete Beam ASD; no other tool uses it). It holds the active input tab (`mat`, `geom`, `reinf` or `loads`), per browser. It is written only when a tab is clicked or picked with the keyboard. Reads and writes are wrapped in try/catch, with an in-memory fallback. An unknown stored value falls back to Materials. The JSON file format written by `saveToJson()` is unchanged; the tab is not in it.
+- **Error marker:** a red dot on a tab holding (a) an input named in the input-error list that `calculate()` passes to `showInputErrors()` (f'c ≤ 0 → Materials; d ≤ 0, b_eff ≤ 0 or b_w ≤ 0 → Geometry), (b) a number field with `validity.badInput` (e.g. "400e"), or (c) a non-blank allowable-stress text field (these four inputs have no `type`) that `parseFloat` cannot read (the tool silently uses 0 for it). b_eff and h_f are ignored while hidden for a rectangular section. Marks are refreshed at the start of `showInputErrors()` and after the report is written in `updateUI()`.
+- **Keyboard / ARIA:** `role=tablist/tab/tabpanel`, `aria-selected`, `aria-controls`, `aria-labelledby`, roving tabindex. Arrow keys, Home and End move between tabs.
+- **Focus / scroll:** the tool has no code that focuses or scrolls to an input (Load JSON only sets values), so nothing else needed to switch tabs.
+- **Print:** unchanged. `@media print` already hides `aside` (and it has `no-print`); the tab strip is inside it.
+- **Where / Before / After** (all insertions; the Before text is the anchor and is kept; the file's CRLF line endings are preserved):
+  1. CSS. Anchor (Before): `        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }` followed by `    </style>`.
+     After: insert between them a blank line and:
+  ```css
+        /* Input panel tabs (cbasdInputTabs; UI only) */
+        #cbasdInTabs { position: sticky; top: 0; z-index: 5; display: flex; flex-wrap: wrap; gap: 0 0.125rem; margin-left: -1rem; margin-right: -1rem; padding: 0.25rem 1rem 0; background: #fff; border-bottom: 1px solid #e2e8f0; }
+        .cbasdInTab { display: inline-flex; align-items: center; gap: 0.3rem; margin-bottom: -1px; padding: 0.5rem 0.375rem 0.4rem; background: none; border: 0; border-bottom: 2px solid transparent; font-size: 0.6875rem; font-weight: 700; text-transform: uppercase; color: #64748b; cursor: pointer; white-space: nowrap; }
+        .cbasdInTab:hover { color: #334155; }
+        .cbasdInTab[aria-selected="true"] { color: #0f172a; border-bottom-color: #2563eb; }
+        .cbasdInTab:focus-visible { outline: 2px solid #93c5fd; outline-offset: -2px; border-radius: 0.25rem 0.25rem 0 0; }
+        .cbasdInDot { display: none; width: 7px; height: 7px; border-radius: 50%; background: #dc2626; }
+        .cbasdInTab.has-err .cbasdInDot { display: inline-block; }
+        .cbasdInTab[hidden], .cbasdInPane[hidden] { display: none !important; }
+  ```
+  2. JS. Anchor (Before): `        // --- Initialization ---` followed by `        document.addEventListener('DOMContentLoaded', () => {`.
+     After: insert before `// --- Initialization ---`:
+  ```js
+        // --- Input panel tabs (UI only) ---
+        // The four input <section>s are MOVED (not rebuilt) into one pane per tab, so every
+        // id, handler and value is untouched. The Analysis Mode box stays above the tab strip.
+        // The active tab is remembered per browser in localStorage 'cbasd_inputTab_v1'
+        // (never in the saved JSON file).
+        const CBASD_IN_TABS = [['mat', 'Materials', 'fc'], ['geom', 'Geometry', 'b_w'], ['reinf', 'Reinforcement', 'as'], ['loads', 'Loads', 'm_dl']];
+        const CBASD_IN_KEY = 'cbasd_inputTab_v1';
+        // input errors listed by calculate() -> the input each one names
+        const CBASD_IN_ERR = [[/^Concrete strength f'c/, 'fc'], [/^Effective depth d/, 'd_eff'], [/^Section width \(b_eff\)/, 'b_eff'], [/^Section width \(b_w\)/, 'b_w']];
+        let cbasdInTabCur = null; // in-memory copy, used when storage is blocked
+        function cbasdInTabGet() { if (cbasdInTabCur) return cbasdInTabCur; try { return localStorage.getItem(CBASD_IN_KEY) || ''; } catch (e) { return ''; } }
+        function cbasdInTabSet(t) { cbasdInTabCur = t; try { localStorage.setItem(CBASD_IN_KEY, t); } catch (e) {} }
+        function cbasdInputTabs() {
+            const bar = document.createElement('div');
+            bar.id = 'cbasdInTabs';
+            bar.setAttribute('role', 'tablist'); bar.setAttribute('aria-label', 'Input groups');
+            CBASD_IN_TABS.forEach(([k, lab, key], i) => {
+                const sec = document.getElementById(key).closest('section');
+                const b = document.createElement('button');
+                b.type = 'button'; b.className = 'cbasdInTab'; b.id = 'cbasdInTab_' + k; b.dataset.pane = k;
+                b.setAttribute('role', 'tab'); b.setAttribute('aria-controls', 'cbasdInPane_' + k);
+                const t = document.createElement('span'); t.textContent = lab; b.appendChild(t);
+                const dot = document.createElement('span'); dot.className = 'cbasdInDot'; dot.setAttribute('aria-hidden', 'true'); b.appendChild(dot);
+                b.addEventListener('click', () => cbasdSetInTab(k, true));
+                b.addEventListener('keydown', cbasdInTabKey);
+                bar.appendChild(b);
+                const pn = document.createElement('div');
+                pn.className = 'cbasdInPane'; pn.id = 'cbasdInPane_' + k; pn.dataset.pane = k;
+                pn.setAttribute('role', 'tabpanel'); pn.setAttribute('aria-labelledby', 'cbasdInTab_' + k);
+                sec.parentNode.insertBefore(pn, sec);
+                if (i === 0) sec.parentNode.insertBefore(bar, pn);
+                pn.appendChild(sec);
+            });
+            let t = cbasdInTabGet();
+            if (!CBASD_IN_TABS.some(([k]) => k === t)) t = CBASD_IN_TABS[0][0];
+            cbasdSetInTab(t, false);
+        }
+        function cbasdSetInTab(t, remember) {
+            CBASD_IN_TABS.forEach(([k]) => {
+                const b = document.getElementById('cbasdInTab_' + k), pn = document.getElementById('cbasdInPane_' + k);
+                const on = (k === t);
+                b.setAttribute('aria-selected', on ? 'true' : 'false'); b.tabIndex = on ? 0 : -1;
+                pn.hidden = !on;
+            });
+            if (remember) cbasdInTabSet(t);
+        }
+        function cbasdInTabKey(e) {
+            const vis = CBASD_IN_TABS.map(([k]) => document.getElementById('cbasdInTab_' + k)).filter(b => b && !b.hidden);
+            const i = vis.indexOf(e.currentTarget); let j = -1;
+            if (e.key === 'ArrowRight' || e.key === 'ArrowDown') j = (i + 1) % vis.length;
+            else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') j = (i - 1 + vis.length) % vis.length;
+            else if (e.key === 'Home') j = 0;
+            else if (e.key === 'End') j = vis.length - 1;
+            if (j < 0) return;
+            e.preventDefault(); cbasdSetInTab(vis[j].dataset.pane, true); vis[j].focus();
+        }
+        // Red dot on a tab holding an input named in calculate()'s input errors, a number field
+        // the browser cannot parse, or a non-blank allowable-stress text field that is not a number.
+        // Flange inputs hidden for a rectangular section are ignored.
+        function cbasdInputTabMarks(errors) {
+            if (!document.getElementById('cbasdInTabs')) return;
+            const bad = {};
+            const mark = el => { const pn = el && el.closest('.cbasdInPane'); if (pn) bad[pn.dataset.pane] = 1; };
+            (errors || []).forEach(m => { const r = CBASD_IN_ERR.find(x => x[0].test(m)); if (r) mark(document.getElementById(r[1])); });
+            document.querySelectorAll('.cbasdInPane input').forEach(i => {
+                const fl = i.closest('.flange-input');
+                if (fl && fl.style.display === 'none') return;
+                if ((i.validity && i.validity.badInput) || (i.type === 'text' && i.value.trim() !== '' && isNaN(parseFloat(i.value)))) mark(i);
+            });
+            CBASD_IN_TABS.forEach(([k]) => {
+                const b = document.getElementById('cbasdInTab_' + k);
+                b.classList.toggle('has-err', !!bad[k]);
+                b.title = bad[k] ? 'An input on this tab needs attention' : '';
+            });
+        }
+
+  ```
+     and as the first lines inside the DOMContentLoaded handler (then a blank line):
+  ```js
+            cbasdInputTabs(); // move the input sections into the input tabs (UI only)
+  ```
+  3. `showInputErrors()`. Anchor (Before): `        function showInputErrors(errors) {`
+     After: add as its first line: `            cbasdInputTabMarks(errors); // input tabs: red dot (UI only)`
+  4. `updateUI()`. Anchor (Before): `            document.getElementById('report-content').innerHTML = reportHTML;`
+     After: add on the next line: `            cbasdInputTabMarks([]); // input tabs: red dot (UI only)`
+- **Problem:** UI request only (one long scrolling input panel). No result change.
+- **Governing provision:** none. No formula, factor, unit, code reference or computed result changed.
+- **Check case:** not applicable. Results are identical, see below.
+- **How verified:**
+  - `node --check` on the inline script, main and branch.
+  - Headless Chromium (Playwright, Chromium 1194). CDNs are blocked here, so libraries were routed locally: KaTeX 0.16.9 (the pinned version, `npm pack`); `@phosphor-icons/web` 2.1.2 (current version; the tag is unpinned); the unpinned Tailwind Play CDN was replaced by CSS compiled with Tailwind CLI 3.4.19 (current v3) from the main and branch files, injected by a small stand-in script. Google Fonts blocked (same in main; system font fallback).
+  - Main and branch compared in 16 states: default, rectangular, negative moment, negative + rectangular, Inventory off, Operating off, Gr 60 with f'c 4000, fs_inv override, override then Recompute, bar picker 5 #10, T-beam action (h_f 3, A_s 14), f'c = 0, d = 0, b_eff = 0, M_LL+I = 0, non-numeric fc_op. In every state these were identical: the text and HTML of `<main>` (cards, report, SVG), the show/hide state of flange inputs and result blocks, all sidebar values, the (auto)/(override) tags, and the saved JSON (`saveToJson` download). Save → Load JSON round trip into a fresh page: identical in main and branch. Loading an older-format file (no `_allowOverride`): identical.
+  - All 23 sidebar controls (inputs, selects, button, details/summary) are present in the same order in both; each is in exactly one pane, except the four Analysis Mode controls, which are above the strip by design.
+  - No console errors (other than the blocked Google Fonts request, same in main).
+  - Checked: keyboard Right/Left (wraps)/Home/End; red dot on and off for f'c = 0, d = 0, b_eff = 0 (not shown when rectangular), fs_op = "abc", M_LL+I "400e"; tab remembered across reload; bogus stored value → Materials; localStorage blocked → tabs still work, results normal; Load JSON keeps the active tab; print media hides `aside`; strip stays stuck at the top of the scrolling sidebar.
+  - Screenshots of every tab (and Geometry in rectangular mode) at 1400 px and 400 px. The strip fits on one line at both widths.
+- **Other copies:** none.
+
 ## Open items (not changed)
 - O1. **Operating fc = 1,900 psi default** (= 0.633f'c at 3,000 psi; MBE 6B.6.2.3 gives 0.60f'c = 1,800 psi). Kept as the default and as a plain input (not auto-computed), per the engineer's instruction. — Needs MassDOT confirmation of the source of 1,900 psi.
 - O2. **Steel allowables for grades other than 40/50/60** (e.g. unknown/structural grade 33, Gr 50 operating, Gr 75) have no auto rule: the field keeps whatever is entered and is tagged "(input (no grade rule))". — Confirm the values to use (MBE Table 6B.6.2.3-1) if these grades should be automated.
@@ -545,3 +679,4 @@ All edits were applied by scripted exact-string replacement (each Before block o
 - O6. **Negative-moment T-beam** uses b_w; there is no Art. 8.10.1 effective-flange-width check on b_eff. Not changed.
 - O7. `renderMathInElement(document.body, …)` re-typesets the whole page on every keystroke (slow but harmless). Not changed.
 - O8. No edition is stated in the tool ("AASHTO 8.15.2"). Not changed. — Confirm the Standard Specifications edition to cite.
+- O9. **Narrow screens (about 400 px)**: the sidebar is a fixed 380 px column beside `<main>`, so `<main>` is squeezed to a sliver and the navbar text wraps. Same before and after the tabs change (the body has `overflow: hidden`, so there is no page scroll). Not changed (UI layout, CLAUDE.md §6). — Decide whether a stacked mobile layout is wanted.
