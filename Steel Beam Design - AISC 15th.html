@@ -2784,7 +2784,7 @@ function drawSchematic(){
         }
         d+=' L'+sx(L)+' '+yDeck;
         add('path',{d:d+' Z',fill:'#C9CFD6',stroke:'none'});
-        add('path',{d,fill:'none',stroke:'#2F3B4A','stroke-width':1},'Metal deck, ribs perpendicular to the beam (rib spacing illustrative)');
+        add('path',{d,fill:'none',stroke:'#2F3B4A','stroke-width':1},'Metal deck, ribs perpendicular to the beam (rib spacing '+(dg.pitchGiven?fmt(dg.pitch,1)+' in':'illustrative')+')');
       }else add('line',{x1:sx(0),y1:yBot,x2:sx(L),y2:yBot,stroke:'#2F3B4A','stroke-width':1,'stroke-dasharray':'2 2'},'Metal deck, ribs perpendicular to the beam');
     }else if(hasDeck){
       add('rect',{x:sx(0),y:yDeck,width:sx(L)-sx(0),height:yBot-yDeck,fill:'#C9CFD6',stroke:'none'},'Metal deck, ribs parallel to the beam (rib over the beam)');
@@ -4107,7 +4107,7 @@ manPart('pS','V-b. Strength Methodology',[
 {p:'\u00A7I3.2a(1) is available only where h/t\u1D65 \u2264 3.76\u221A(E/F\u1D67); a section that fails that limit is blocked rather than switched silently to the elastic distribution of \u00A7I3.2a(2), which is not implemented.'},
 {warn:'<b>Not checked in the composite module:</b> construction-stage strength and deflection on the bare steel section (unshored erection \u2014 switch composite off to check it), camber, stud detailing and spacing limits (\u00A7I8.2d), deck attachment (\u00A7I3.2c), negative-moment composite action with slab reinforcement (\u00A7I3.2b), concrete breakout, and ponding. Shear is always carried by the steel section alone and is checked on the V\u2093 tab.'},
 {h3:'Slab geometry'},
-{p:'The three depths are entered separately and stack from the top of the steel beam: haunch, deck rib height h\u1D63, and the solid concrete <b>above</b> the deck. Y\u1D9C\u2092\u2099 is their sum and is displayed as you type, so \u201Cslab thickness\u201D can never be confused with \u201Ctop of steel to top of slab\u201D. The fraction of rib concrete counted in A\u1D9C is an input: 0.50 and 1.00 are offered as defaults for perpendicular and parallel ribs, and 0 neglects the ribs entirely, which is the common conservative office practice. It only changes the answer when concrete crushing governs.'},
+{p:'The three depths are entered separately and stack from the top of the steel beam: haunch, deck rib height h\u1D63, and the solid concrete <b>above</b> the deck. Y\u1D9C\u2092\u2099 is their sum and is displayed as you type, so \u201Cslab thickness\u201D can never be confused with \u201Ctop of steel to top of slab\u201D. The rib concrete in A\u1D9C follows \u00A7I3.2c: with the ribs perpendicular to the beam the concrete below the top of the deck is neglected; with the ribs parallel the rib concrete is included as b\u2091\u2093\u2093h\u1D63w\u1D63/s\u1D63, which needs the deck rib spacing s\u1D63 (blank \u2192 ribs not counted, with a warning). It only changes the answer when concrete crushing governs. The \u201Crib concrete in the wet-slab weight\u201D input sets only the construction-stage slab weight.'},
 {h3:'R\u209a and e_mid-ht'},
 {p:'For perpendicular ribs the position factor is taken from the code rule rather than a judgement call: R\u209a = 0.75 when e_mid-ht \u2265 2 in. and 0.60 below it, where e_mid-ht is the distance from the stud shank to the deck web at mid-rib height in the load-bearing direction. Intermediate values such as 0.70 do not appear in \u00A7I8.2a.'},
 {h3:'Deck and anchor requirements'},
@@ -6440,7 +6440,9 @@ async function xlChecks(X,p,D,mem,Fy,E){
     X.line('\u2026 in inches','beff',N2(cmp.ew.beff,2),'in','',{dp:2});
     X.line('Solid slab above deck','t',N2(cmp.sa.tAbove,2),'in','',{kind:'in'});
     X.line('Deck rib height','hr',N2(cmp.sa.hr,2),'in','',{kind:'in'});
-    X.line('Rib concrete counted','f',N2(cmp.sa.fill,3),'\u2014','',{kind:'in',dp:3});
+    if(cmp.sa.sr)X.line('Deck rib spacing','sr',N2(cmp.sa.sr,2),'in','',{kind:'in'});
+    X.line('Rib concrete counted in Ac','f',N2(cmp.sa.fill,3),'\u2014','\u00A7I3.2c',{dp:3});
+    if(cmp.sa.hr>0)X.note(cmp.sa.note);
     X.line('Top of steel to top of slab','Ycon',N2(cmp.Ycon,2),'in','',{dp:2,ref:'Ycon'});
     X.line('Concrete strength','f\u2032c',N2(compCfg().fc,2),'ksi','',{kind:'in',ref:'fc'});
     X.line('Concrete unit weight','wc',N2(compCfg().wc,0),'lb/ft\u00B3','',{kind:'in',dp:0});
@@ -7900,11 +7902,27 @@ function slabGeom(cfg){
 function slabArea(cfg,beff){
   const g=slabGeom(cfg);
   const tAbove=g.tSolid;
-  const fill=(cfg.orient==='perp')?(cfg.ribFill!=null?cfg.ribFill:0.5):
-             (cfg.orient==='para')?(cfg.ribFill!=null?cfg.ribFill:1.0):0;
   const hr=g.hr;
-  return{tAbove,hr,fill,haunch:g.haunch,Ycon:g.Ycon,Ac:beff*(tAbove+hr*fill),
-    note:hr>0?('slab above deck '+fmt(tAbove,2)+' in plus '+fmt(100*fill,0)+'% of the '+fmt(hr,2)+' in ribs'):'solid slab'};
+  /* AISC 360-16 Sec. I3.2c: ribs perpendicular to the beam -> the concrete below the top of
+     the deck is neglected in A_c; ribs parallel -> the rib concrete is included, as
+     b_eff * h_r * (w_r / s_r). Without a valid rib spacing s_r (w_r <= s_r) the ribs are
+     not counted (conservative) and a warning is raised. cfg.ribFill is no longer used here
+     (it now sets only the wet-concrete weight in the construction stage). */
+  let fill=0,warn=null,note='solid slab';
+  if(hr>0&&cfg.orient==='para'){
+    const wr=cfg.wr,sr=cfg.sr;
+    if(sr>0&&wr>0&&wr<=sr){
+      fill=wr/sr;
+      note='slab above deck '+fmt(tAbove,2)+' in plus the rib concrete, w\u1D63/s\u1D63 = '+fmt(wr,2)+'/'+fmt(sr,2)+' = '+fmt(fill,3)+' of the '+fmt(hr,2)+' in ribs (\u00A7I3.2c, ribs parallel)';
+    }else{
+      warn='Deck ribs parallel to the beam: enter the deck rib spacing s\u1D63 (with w\u1D63 \u2264 s\u1D63). Until then the rib concrete is NOT counted in A\u1D9C, which is conservative; \u00A7I3.2c requires it to be included.';
+      note='slab above deck '+fmt(tAbove,2)+' in only \u2014 the rib concrete is not counted until the rib spacing s\u1D63 is entered';
+    }
+  }else if(hr>0)note='slab above deck '+fmt(tAbove,2)+' in only \u2014 the concrete below the top of the deck is neglected (\u00A7I3.2c, ribs perpendicular)';
+  const out={tAbove,hr,fill,haunch:g.haunch,Ycon:g.Ycon,Ac:beff*(tAbove+hr*fill),note};
+  if(warn)out.warn=warn;
+  if(cfg.orient==='para'&&fill>0)out.sr=cfg.sr;
+  return out;
 }
 /* ---- §I3.2a plastic flexural strength ---- */
 function compositeMn(p,cfg){
@@ -7928,6 +7946,7 @@ function compositeMn(p,cfg){
   }
   const beff=ew.beff;
   const sa=slabArea(cfg,beff);out.sa=sa;
+  if(sa.warn)out.warns.push(sa.warn);
   const fc=cfg.fc||4;
   out.Cconc=0.85*fc*sa.Ac;
   out.Py=p.A*Fy;out.Csteel=out.Py;
@@ -8003,10 +8022,13 @@ function compositeDetailing(p,cfg,r){
       d<=2.5*p.tf+1e-9,'\u00A7I8.1 (not welded over the web)');
     const Ls=cfg.studLen;
     if(Ls>0){
-      add('Stud length above deck','\u2265 h\u1D63 + 1\u00BD in = '+fmt(g.hr+1.5,2)+' in',fmt(Ls,2)+' in',Ls>=g.hr+1.5-1e-9,'\u00A7I3.2c');
-      add('Stud length','L \u2265 4d\u209b\u2090 = '+fmt(4*d,2)+' in',fmt(Ls,2)+' in',Ls>=4*d-1e-9,'\u00A7I8.1');
-      const cov=g.Ycon-g.haunch-Ls;
-      add('Cover above stud','\u2265 \u00BD in',fmt(cov,2)+' in',cov>=0.5-1e-9,'\u00A7I3.2c');
+      /* the stud is welded to the top of the flange and passes through any haunch and the deck */
+      const proj=Ls-g.haunch-g.hr;
+      add('Stud projection above the '+(g.hr>0?'deck':(g.haunch>0?'haunch':'flange')),'\u2265 1\u00BD in',
+        'L \u2212 haunch \u2212 h\u1D63 = '+fmt(Ls,2)+' \u2212 '+fmt(g.haunch,2)+' \u2212 '+fmt(g.hr,2)+' = '+fmt(proj,2)+' in',proj>=1.5-1e-9,'\u00A7I3.2c');
+      add('Stud length','L \u2265 4d\u209B\u2090 = '+fmt(4*d,2)+' in',fmt(Ls,2)+' in',Ls>=4*d-1e-9,'\u00A7I8.1');
+      const cov=g.Ycon-Ls;
+      add('Cover above stud','\u2265 \u00BD in','Y\u1D9C\u2092\u2099 \u2212 L = '+fmt(g.Ycon,2)+' \u2212 '+fmt(Ls,2)+' = '+fmt(cov,2)+' in',cov>=0.5-1e-9,'\u00A7I3.2c');
     }
     const s=cfg.pitch;
     if(s>0){
@@ -8024,7 +8046,8 @@ function compositeSelfTest(){
   try{
     /* --- Design Example I.2: W24x76, 50% composite --- */
     let p=sectionFor('W','W24X76','A992');
-    let cfg={L:30,sLeft:10,sRight:10,tSlab:7.5,hr:3.0,orient:'perp',ribFill:0.5,fc:4,wc:145,mode:'pct',pct:50};
+    /* deck ribs parallel to the girder, w_r = 6 in at s_r = 12 in: A_c = 90(4.5) + 90(3)(6/12) = 540 in^2 */
+    let cfg={L:30,sLeft:10,sRight:10,tSlab:7.5,hr:3.0,orient:'para',wr:6,sr:12,fc:4,wc:145,mode:'pct',pct:50};
     let r=compositeMn(p,cfg);
     add('I.2','W24\u00D776 \u2014 effective width b\u2091\u2093\u2093',r.ew.beffFt,7.5,'ft',0.005);
     add('I.2','\u2026 concrete area A\u1D9C',r.sa.Ac,540,'in\u00B2',0.005);
@@ -8139,6 +8162,11 @@ function compositeInputs(body){
   if(c.orient!=='none'){
     fRow(body,'Deck rib height  h\u1D63',numInput(()=>c.hr,v=>{c.hr=v;},0.5,'cpHr'),'in');
     fRow(body,'Average rib width  w\u1D63',numInput(()=>c.wr,v=>{c.wr=v;},0.5,'cpWr'),'in',c.orient==='para'?'w\u1D63/h\u1D63 sets R\u1D4D (\u00A7I8.2a)':'\u00A7I3.2c requires w\u1D63 \u2265 2 in');
+    fRow(body,'Deck rib spacing  s\u1D63',numInput(()=>c.sr,v=>{if(v==null)delete c.sr;else c.sr=v;},0.5,'cpSr'),'in',
+      c.orient==='para'?'centre-to-centre of the ribs. Required for ribs parallel to the beam: A\u1D9C includes the rib concrete b\u2091\u2093\u2093h\u1D63w\u1D63/s\u1D63 (\u00A7I3.2c)':
+      'centre-to-centre of the ribs; used for the drawings only (ribs perpendicular: the rib concrete is neglected in A\u1D9C, \u00A7I3.2c)');
+    if(c.orient==='para'&&!(c.sr>0&&c.wr>0&&c.wr<=c.sr))
+      body.appendChild(el('div','warnBox','Ribs parallel to the beam: enter the deck rib spacing s\u1D63 (w\u1D63 \u2264 s\u1D63). Until then the rib concrete is <b>not</b> counted in A\u1D9C (conservative).'));
   }
   fRow(body,'Solid concrete ABOVE the deck',numInput(()=>c.tSolid,v=>{c.tSolid=v;},0.5,'cpTs'),'in','not the total slab depth');
   {
@@ -8147,8 +8175,8 @@ function compositeInputs(body){
       ' = <b>'+fmt(g.Ycon,2)+' in</b>'));
   }
   if(c.orient!=='none')
-    fRow(body,'Rib concrete included in A\u1D9C',numInput(()=>c.ribFill,v=>{c.ribFill=v;},0.05,'cpFill'),'\u2014',
-      'fraction of the rib depth counted; blank \u2192 '+(c.orient==='perp'?'0.50':'1.00')+'. Enter 0 to neglect the ribs entirely.');
+    fRow(body,'Rib concrete in the wet-slab weight',numInput(()=>c.ribFill,v=>{c.ribFill=v;},0.05,'cpFill'),'\u2014',
+      'construction-stage slab weight only: fraction of the rib depth taken as concrete; blank \u2192 '+(c.orient==='perp'?'0.50':'1.00')+'. A\u1D9C no longer uses this: it follows \u00A7I3.2c (ribs perpendicular: neglected; ribs parallel: w\u1D63/s\u1D63).');
   fRow(body,'Concrete strength  f\u2032\u1D9C',numInput(()=>c.fc,v=>{c.fc=v;},0.5,'cpFc'),'ksi');
   fRow(body,'Concrete unit weight  w\u1D9C',numInput(()=>c.wc,v=>{c.wc=v;},5,'cpWc'),'lb/ft\u00B3','145 normal weight, 110\u2013115 lightweight');
   body.appendChild(el('div','hint','<b>Horizontal shear transfer</b>'));
@@ -8256,15 +8284,16 @@ function constructionStage(p,r){
 }
 /* ---- slab and metal-deck drawing helpers (drawing only: nothing here feeds a
    calculation). The deck is drawn in its real orientation from the entered h_r
-   and w_r. Rib spacing is not an input, so the drawn spacing is illustrative:
+   and w_r, and the rib spacing s_r when entered; otherwise the drawn spacing is illustrative:
    p = max(6 in, 2 w_r), rounded to 0.5 in. Each concrete rib is a trapezoid of
    average width w_r, narrower at the bottom (on the beam) than at the top. ---- */
 function deckDrawGeom(c){
   const g=slabGeom(c);
   const wr=Math.max(0.5,c.wr||6);
-  const pitch=Math.round(Math.max(6,2*wr)*2)/2;
+  const srOK=c.sr>0&&c.sr>=wr;   /* entered rib spacing, else illustrative */
+  const pitch=srOK?c.sr:Math.round(Math.max(6,2*wr)*2)/2;
   const f=Math.max(0,Math.min(0.8*g.hr,0.9*wr,0.9*(pitch-wr)));
-  return{hr:g.hr,ha:g.haunch,ts:g.tSolid,Ycon:g.Ycon,wr,pitch,wTop:wr+f/2,wBot:wr-f/2};
+  return{hr:g.hr,ha:g.haunch,ts:g.tSolid,Ycon:g.Ycon,wr,pitch,pitchGiven:srOK,wTop:wr+f/2,wBot:wr-f/2};
 }
 /* rib centres k*p (one rib on x = 0), keeping only ribs that fit inside [x0, x1] */
 function deckCentres(x0,x1,dg){
@@ -8288,12 +8317,12 @@ function studShapes(shapes,xc,yBase,Ls,d){
   shapes.push({type:'rect',x0:xc-d/2,x1:xc+d/2,y0:yBase,y1:yBase+Ls-hh,fillcolor:'#3E5470',line:{color:'#16304F',width:0.6}});
   shapes.push({type:'rect',x0:xc-hw/2,x1:xc+hw/2,y0:yBase+Ls-hh,y1:yBase+Ls,fillcolor:'#3E5470',line:{color:'#16304F',width:0.6}});
 }
-/* stud length to draw: the entered length, or h_r + 1.5 in (at least 4d) when none is entered.
-   The base is drawn at the top of the haunch, matching the cover check in compDetailing. */
+/* stud length to draw: the entered length, or haunch + h_r + 1.5 in (at least 4d) when none is
+   entered. The stud is welded to the top of the flange (y = 0), as in compositeDetailing. */
 function studDrawLen(c,dg){
   const d=c.dia||0.75;
   if(c.studLen>0)return{Ls:c.studLen,given:true};
-  return{Ls:Math.min(Math.max(4*d,dg.hr+1.5),Math.max(4*d,dg.Ycon-dg.ha-0.5)),given:false};
+  return{Ls:Math.min(Math.max(4*d,dg.ha+dg.hr+1.5),Math.max(4*d,dg.Ycon-0.5)),given:false};
 }
 /* =====================================================================
    COMPOSITE CROSS SECTION  (Plotly, to scale)
@@ -8316,8 +8345,7 @@ function compXsecFig(p,r,opts){
      and the deck high flute (dashed) lies beyond the cut. */
   const dg=deckDrawGeom(c),DECK='#2F3B4A';
   if(hr>0){
-    const fill=(c.orient==='perp')?(c.ribFill!=null?c.ribFill:0.5):
-               (c.orient==='para')?(c.ribFill!=null?c.ribFill:1.0):0;
+    const fill=(r.sa&&r.sa.fill)||0;   /* the fraction the calculation used (Sec. I3.2c) */
     if(c.orient==='para'){
       const cs=deckCentres(-beff/2,beff/2,dg);
       cs.forEach(xc=>shapes.push({type:'path',path:pathStr(ribPoly(xc,dg)),fillcolor:CONC,opacity:.75,
@@ -8329,9 +8357,8 @@ function compXsecFig(p,r,opts){
       shapes.push({type:'line',x0:-beff/2,x1:beff/2,y0:ha,y1:ha,line:{color:DECK,width:1.6}});
       shapes.push({type:'line',x0:-beff/2,x1:beff/2,y0:ha+hr,y1:ha+hr,line:{color:DECK,width:1,dash:'dash'}});
     }
-    if(fill>0&&fill<1)shapes.push({type:'line',x0:-beff/2,x1:beff/2,y0:ha+hr*(1-fill),y1:ha+hr*(1-fill),
-      line:{color:'#5A6B80',width:0.8,dash:'dot'}});
-    anns.push({x:beff/2,y:ha+hr*(1-fill/2),text:'A<sub>c</sub> counts '+fmt(100*fill,0)+'% of h<sub>r</sub> over b<sub>eff</sub> ',showarrow:false,
+    anns.push({x:beff/2,y:ha+hr/2,text:(c.orient==='para'?(fill>0?('A<sub>c</sub> includes the rib concrete (w<sub>r</sub>/s<sub>r</sub> = '+fmt(fill,2)+') '):
+      'rib concrete not counted in A<sub>c</sub> \u2014 enter s<sub>r</sub> '):'rib concrete neglected in A<sub>c</sub> (\u00A7I3.2c) '),showarrow:false,
       xanchor:'right',font:{size:8.5,color:'#5A6B80'},bgcolor:'rgba(255,255,255,.8)'});
   }
   if(ha>0)shapes.push({type:'rect',x0:-p.bf/2*1.3,x1:p.bf/2*1.3,y0:0,y1:ha,
@@ -8345,8 +8372,8 @@ function compXsecFig(p,r,opts){
   if(c.dia>0){
     const sd=studDrawLen(c,dg),n=(c.orient==='perp')?Math.max(1,Math.min(3,Math.round(c.nRib||1))):1;
     const sp=n>1?Math.min(4*c.dia,(p.bf-1.6*c.dia)/(n-1)):0;
-    for(let i=0;i<n;i++)studShapes(shapes,(i-(n-1)/2)*sp,ha,sd.Ls,c.dia);
-    anns.push({x:-(n-1)/2*sp-0.8*c.dia,y:ha+sd.Ls,ax:-34,ay:-16,text:'stud \u00D8'+fmt(c.dia,3)+'" \u00D7 '+fmt(sd.Ls,2)+'"'+(sd.given?'':' (length illustrative)'),
+    for(let i=0;i<n;i++)studShapes(shapes,(i-(n-1)/2)*sp,0,sd.Ls,c.dia);
+    anns.push({x:-(n-1)/2*sp-0.8*c.dia,y:sd.Ls,ax:-34,ay:-16,text:'stud \u00D8'+fmt(c.dia,3)+'" \u00D7 '+fmt(sd.Ls,2)+'"'+(sd.given?'':' (length illustrative)'),
       showarrow:true,arrowhead:2,arrowsize:0.8,arrowcolor:'#64748B',xanchor:'right',font:{size:8.5,color:'#334155'},bgcolor:'rgba(255,255,255,.85)'});
   }
   /* --- stress blocks --- */
@@ -8452,7 +8479,7 @@ function compElevFig(p,r,opts){
       for(let k=-n;k<=n;k++)studX.push(k*sPitch);
     }
     const sd=studDrawLen(c,dg);
-    studX.forEach(xc=>studShapes(shapes,xc,ha,sd.Ls,c.dia));
+    studX.forEach(xc=>studShapes(shapes,xc,0,sd.Ls,c.dia));
   }
   /* break lines at the ends of the partial view */
   [x0,x1].forEach(x=>shapes.push({type:'line',x0:x,x1:x,y0:-p.d-1,y1:Ycon+1,line:{color:'#94A3B8',width:1,dash:'dashdot'}}));
@@ -8473,7 +8500,7 @@ function compElevFig(p,r,opts){
   dimV(-p.d,0,x0-padX*0.85,'d = '+fmt(p.d,2)+'"');
   if(hr>0&&c.orient==='perp'&&cs.length>1){
     const i0=Math.max(0,Math.floor(cs.length/2)-1);
-    dimH(cs[i0],cs[i0+1],-p.d-padY*0.45,'rib spacing '+fmt(dg.pitch,1)+'" (illustrative)');
+    dimH(cs[i0],cs[i0+1],-p.d-padY*0.45,(dg.pitchGiven?'s<sub>r</sub> = ':'rib spacing ')+fmt(dg.pitch,1)+'"'+(dg.pitchGiven?'':' (illustrative)'));
     anns.push({x:cs[i0+1],y:ha+0.05*hr,ax:36,ay:34,text:'w<sub>r</sub> = '+fmt(c.wr,2)+'" (average)',showarrow:true,arrowhead:2,
       arrowsize:0.8,arrowcolor:'#64748B',font:{size:9,color:'#334155'},bgcolor:'rgba(255,255,255,.9)'});
   }else if(studX.length>1){
@@ -8499,8 +8526,8 @@ function deckViewNote(view){
   let t;
   if(!(hr>0))t='Solid slab (no deck).';
   else if(c.orient==='perp')t=view==='x'?'Metal deck, ribs <b>perpendicular</b> to the beam: this section is cut through a rib, so the rib concrete is full width; the dashed line is the deck high flute beyond the cut.':
-    'Metal deck, ribs <b>perpendicular</b> to the beam: the rib profile is seen along the beam. Rib spacing illustrative.';
-  else t=view==='x'?'Metal deck, ribs <b>parallel</b> to the beam: the flutes are cut by this section, with a rib centred on the beam. Rib spacing illustrative.':
+    'Metal deck, ribs <b>perpendicular</b> to the beam: the rib profile is seen along the beam. '+(deckDrawGeom(c).pitchGiven?'Rib spacing s\u1D63 as entered.':'Rib spacing not entered: drawn spacing illustrative.');
+  else t=view==='x'?'Metal deck, ribs <b>parallel</b> to the beam: the flutes are cut by this section, with a rib centred on the beam. '+(deckDrawGeom(c).pitchGiven?'Rib spacing s\u1D63 as entered.':'Rib spacing not entered: drawn spacing illustrative.'):
     'Metal deck, ribs <b>parallel</b> to the beam: this view is cut along the rib over the beam, so the rib concrete is continuous; the dashed line is the deck high flute beyond the cut.';
   return el('div','hint',t);
 }
@@ -8513,7 +8540,7 @@ function compElevBlock(body,p,r,opts){
   const node=plotHolder(body,id,h);
   fitHolder(node,fig,h);
   regPlot(id,fig);
-  body.appendChild(el('div','hint','Drawn to scale (equal x and y scales); drawing only. h<sub>r</sub>, w<sub>r</sub>, the slab depths, the stud diameter and the stud length and pitch are the entered values. Rib spacing is not an input, so the drawn rib spacing is illustrative; where no stud length or pitch is entered, the drawn one is illustrative and labelled.'));
+  body.appendChild(el('div','hint','Drawn to scale (equal x and y scales); drawing only. h<sub>r</sub>, w<sub>r</sub>, the slab depths, the rib spacing s\u1D63, the stud diameter and the stud length and pitch are the entered values; the studs are welded to the top flange. Where s\u1D63, the stud length or the pitch is not entered, the drawn one is illustrative and labelled.'));
 }
 function compXsecBlock(body,p,r,opts){
   const id=(opts&&opts.id)||'xsecComp';
@@ -9127,7 +9154,7 @@ BATCH_HELP.cFc="Concrete cylinder strength, ksi. Blank \u2192 4.0.";
 BATCH_HELP.cWc='Concrete unit weight, lb/ft\u00B3. Blank \u2192 145 (normal weight); use 110\u2013115 for lightweight.';
 BATCH_HELP.cSp='Beam spacing used for the \u00A7I3.1a effective width (half each side). Blank \u2192 8 ft.';
 BATCH_HELP.cPct='Percentage of full composite action. Blank \u2192 100%.';
-BATCH_HELP.cOr='PERP, PARA or NONE. Blank \u2192 PERP. Sets the rib concrete counted in A\u1D9C and the R\u1D4D/R\u209a factors.';
+BATCH_HELP.cOr='PERP, PARA or NONE. Blank \u2192 PERP. Sets the R\u1D4D/R\u209A factors. A\u1D9C counts the slab above the deck only: rib concrete is neglected for PERP (\u00A7I3.2c), and for PARA the template has no rib width or spacing, so the ribs are not counted (conservative, with a warning).';
 /* ---- extend the per-row check ---- */
 const __batchCheckRowBase=null;
 function batchExtras(R){
@@ -9632,7 +9659,7 @@ function compXsecBlock(body,p,r,opts){
   regPlot(id,fig);
   body.appendChild(el('div','hint','Drawn to scale (equal x and y scales) from the resolved geometry; the drawn slab width is the effective width b\u2091\u2093\u2093, not the full slab. '+
     (opts.geomOnly?'':'Red is the plastic compression block, blue the yielded tension zone, and the dash-dot line is the plastic neutral axis that produced M\u2099 above. ')+
-    (slabGeom(compCfg()).hr>0?'The metal deck is drawn in its entered orientation: ribs perpendicular to the beam \u2014 the section is cut through a rib (the dashed line is the deck high flute beyond); ribs parallel \u2014 the flutes are cut, with a rib centred on the beam. The drawn rib spacing is illustrative (not an input).':'')));
+    (slabGeom(compCfg()).hr>0?'The metal deck is drawn in its entered orientation: ribs perpendicular to the beam \u2014 the section is cut through a rib (the dashed line is the deck high flute beyond); ribs parallel \u2014 the flutes are cut, with a rib centred on the beam. '+(deckDrawGeom(compCfg()).pitchGiven?'The rib spacing is the entered s\u1D63.':'The rib spacing s\u1D63 is not entered, so the drawn spacing is illustrative.'):'')));
 }
 /* ---- Schematic & Inputs: show the member, not just the loading ---- */
 function buildSchemTab(pg){
