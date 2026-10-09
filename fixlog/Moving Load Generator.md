@@ -571,3 +571,153 @@ Default girder: lldf's design beam (`designBeam.index`) if `byBeam` has it, othe
 - **How verified:** `node --check` on every plain inline script of both files (no JSX in either). End-to-end in node/jsdom with one shared localStorage stub (64 checks, all pass): lldf.html loaded, set to 2 spans 100 + 120 ft, skew 20°, defaults otherwise (5 girders @ 9.75 ft, Kg = 1,255,067 in⁴), its real "Send DFs to Design Apps" button clicked; Moving Load Generator.html loaded on the same storage, real "Pull from LL & DL Distribution" → dialog → Apply. Inputs checked equal to the mapped values (interior: span 1 0.7598 / 0.9898, span 2 0.7234 / 0.9929, negative moment 0.7405); exterior and per-beam choices checked; spans only changed with the option ticked; rail DFs untouched; adopted marker written; `lldfSource` in the autosave and restored on reload; fatigue warning quotes g_fat 0.4352 / 0.6638 / 0.4208 and the analysis still uses the DF inputs; report has the source row. JSON export (lldf) → import (Moving Load) round trip. Refusals: wrong `_schema`, `schemaVersion` 2, corrupt JSON (storage and file), negative DF, DF as a string, non-finite span, `units.spans:"m"`. Hand check of span 1 interior: Table 4.6.2.2.2b-1, Kg/(12 L ts³) = 1,255,067 / (12 × 100 × 512) = 2.0428; g = 0.075 + (9.75/9.5)^0.6 (9.75/100)^0.2 (2.0428)^0.1 = 0.7598 (two lanes, governs over one lane 0.5222; skew 20° < 30° so no moment reduction); shear 0.2 + 9.75/12 − (9.75/35)² = 0.9349 × skew factor 1 + 0.20 (1/2.0428)^0.3 tan 20° = 1.0588 → 0.9898. Both match lldf and the values written into Moving Load. No result change: with no hand-off, Moving Load results (all 342 section/reaction extremes in the default, a 3-span and the fatigue configuration, plus the metric tiles and warnings) are byte-identical to the file before this change. lldf: the existing payload fields from the old and new files are identical (only timestamps differ).
 - **Other copies:** BridgeXfer v1 is also in index.html, lldf.html, psbeam.html, stgirder.html and the other step-1 tools (unchanged here). The receiver block exists only in this file.
 - **Open items:** (1) This tool has one negative-moment DF; lldf's `governingNeg` is the envelope over all interior supports, so for 3–4 spans the larger pier DF is used at every pier (conservative). (2) Fatigue DFs are not applied because the DFs are not per vehicle; a per-vehicle DF would be a separate change.
+
+## 2026-10-09 — PR: claude/tabs-movingload (PR link added after merge)
+
+### T1. Input panel split into tabs   [UI only — no calculation change]
+- **Date / type:** 2026-10-09, UI only (no result change). Engineer's request of 2026-10-09: "Go through all the apps and make sure they are all formatted with the input panel having tabs rather than one long scrolling input panel." Same approach as `Steel Beam Design - AISC 15th.html` T1: build every section exactly as before, then **move** the finished DOM nodes into tab panes.
+- **Where:** one new `<script>` block inserted at the very end of the file, after the last existing `</script>` (the lldf hand-off receiver, anchor `window.MLGlldf={ openDlg:openDlg`) and before `</body>`. No existing line was edited.
+- **How it works:** the scripts above still build all six `<details>` sections of the input panel (`<aside>`), including the Girder Section panel that is inserted after "Spans" at load. The new block then **moves** each `<details>` node into one tab pane (`div.mlgInPane` with `role="tabpanel"`) under a new tab strip (`#mlgInTabs`, `role="tablist"`). The section is identified by its `<summary>` text; a node not in the map stays with the section before it. Nothing is rebuilt or re-templated, so every id, `data-i` / `data-k`, value and handler is unchanged. The delegated `input` listeners on `<aside>` and the save selector `aside input[id], aside select[id]` still see every field, in the same document order (so the autosave and Save JSON are identical, key order included). The repeating blocks — axle rows (`#axles`), girder segment blocks (`#segList`) and the span / DF rows (`#spanInputs`, `#dfT`) — are re-rendered into their existing containers, which are inside their tab, so added axles / segments / spans land in the right tab. Each section keeps its own collapsible `<summary>` header. A tab with no inputs is hidden (none is, today: this tool has no modes that remove a whole section).
+- **Tabs (in order) and the sections in each:**
+
+| Tab | Section (`<summary>` text) | Inputs |
+|---|---|---|
+| Spans | Spans | number of spans, span lengths `L0..L3`, `Es` |
+| Girder | Girder Section (`#secPanel`) | composite, deck (n, b_eff, t_s, haunch, haunch reference, include haunch), segment blocks (`data-i` / `data-k`), + Segment / − Last |
+| Vehicle | Vehicle | preset, axle rows, + Axle / − Last axle |
+| Rules | Load Model Rules | uniform load mode / w / gap / truncation, variable spacing, neglect axles, both directions, secondary vehicle, multi-vehicle case |
+| Impact | Impact | method, multiplier, AREMA S / ballast / L basis / user L, impact on uniform load |
+| Factors | Factors & Analysis | limit state, LLF, highway DFs, negative-moment DF, rail DFs / rail option, Pull from LL & DL Distribution / Import hand-off, position and spacing steps, refine option |
+
+- **Error marker:** a red dot on a tab when (a) a number field in it holds text the browser cannot parse (`validity.badInput`), or (b) the tool's own warning box / analysis error names an input on it: `E steel …` / `Every span length …` → Spans; `Segment lengths reach …` / `A segment has invalid geometry …` → Girder; `One or more axles have zero …` → Vehicle; `Variable spacing …` / `The multi-vehicle case needs …` / `A uniform load mode is selected …` → Rules; `The impact multiplier …` → Impact; `One or more distribution factors …` → Factors. The advisory fatigue-truck note is not marked (it is shown for every fatigue run, whatever the inputs). Refreshed on every input and after every run (observer on `#status`). Reads `RES.warn` and `#status` only; nothing in the analysis was touched.
+- **Keyboard / accessibility:** `role="tablist"` / `role="tab"` (`aria-selected`, `aria-controls`) / `role="tabpanel"` (`aria-labelledby`); roving `tabindex`; ←/→ (and ↑/↓), Home and End move between the visible tabs.
+- **New storage key:** `movingLoadGen.inputTab.v1` (localStorage, plain string: `spans`, `girder`, `vehicle`, `rules`, `impact` or `factors`), same prefix as the existing autosave key `movingLoadGen.autosave.v1`. It remembers the active input tab per browser. Every read and write is in try/catch, with an in-memory copy when storage is blocked. It is **not** part of the autosave, the Save JSON file or any hand-off; no existing key or format changed.
+- **Programmatic focus / scroll:** nothing in this tool focuses or scrolls to an input in the panel (the only `scrollIntoView` calls target result cards in `<main>`), and Open JSON / autosave restore / lldf pull only set values; so no tab switching is needed for them.
+- **Print:** the printed report is a separate window built from data, unchanged. For a browser print of the page itself, `@media print` hides the tab strip and shows every pane, so the page prints all sections as before.
+- **Narrow screens (≤ 900 px, panel above the results):** the tab strip wraps. The existing header has a fixed 54 px height and its buttons already spill below it at narrow widths (unchanged, see open item); so in this range the strip starts and sticks at the header's real height (`--mlgHdrH` = header `scrollHeight`, measured on load, resize and each run), and `aside` gets `overflow:visible` there so the strip can stick to the page. No horizontal page scroll at 400 px (document scroll width = 400). Desktop: sticky at the top of the scrolling panel, one row.
+- **Governing provision:** none (no engineering change).
+- **Before / After** (file uses CRLF; the inserted lines use CRLF):
+  - Before (anchor, end of file, unchanged):
+    ```html
+      window.MLGlldf={ openDlg:openDlg, apply:apply, refresh:refresh, validate:validate, makePlan:makePlan, src:function(){ return SRC; }, srcText:srcText };
+    })();
+    </script>
+    </body>
+    </html>
+    ```
+  - After: the following block inserted between that `</script>` and `</body>`:
+    ```html
+    <script>
+    /* ═══════════ INPUT PANEL TABS (UI only — no calculation change) ═══════════
+       Every <details> section of the input panel (<aside>) is built exactly as before by the
+       scripts above; this block then MOVES the finished section nodes into one tab pane per
+       section. Nothing is rebuilt, so every id, data-i/data-k, handler and value is untouched;
+       the delegated 'input' listeners on <aside> and the 'aside input[id]' save selector still
+       see every field, in the same document order. Repeating blocks (axles, girder segments,
+       span / DF rows) are re-rendered into their existing containers, so they stay in their tab.
+       The active tab is remembered per browser in localStorage key 'movingLoadGen.inputTab.v1'
+       (same prefix as the autosave key 'movingLoadGen.autosave.v1'); it is NOT part of the
+       autosave, the Save JSON file or any hand-off. */
+    (function(){
+      var TABS=[['spans','Spans'],['girder','Girder'],['vehicle','Vehicle'],['rules','Rules'],['impact','Impact'],['factors','Factors']];
+      var SEC={'Spans':'spans','Girder Section':'girder','Vehicle':'vehicle','Load Model Rules':'rules','Impact':'impact','Factors & Analysis':'factors'};
+      /* the tool's own warnings / analysis errors, mapped to the tab holding the input they name */
+      var MSG=[
+        [/^E steel|^Every span length/,'spans'],
+        [/^Segment lengths reach|^A segment has invalid geometry/,'girder'],
+        [/^One or more axles have zero/,'vehicle'],
+        [/^Variable spacing|^The multi-vehicle case needs|^A uniform load mode is selected/,'rules'],
+        [/^The impact multiplier/,'impact'],
+        [/^One or more distribution factors/,'factors']];
+      var KEY='movingLoadGen.inputTab.v1', cur=null;
+      function tget(){ if(cur) return cur; try{ return localStorage.getItem(KEY)||''; }catch(e){ return ''; } }
+      function tset(t){ cur=t; try{ localStorage.setItem(KEY,t); }catch(e){} }
+      var A=document.querySelector('aside'); if(!A) return;
+      document.head.insertAdjacentHTML('beforeend','<style>'+
+        '#mlgInTabs{position:sticky;top:0;z-index:5;display:flex;flex-wrap:wrap;background:#fff;border-bottom:1px solid #e2e8f0;padding:0 6px}'+
+        '#mlgInTabs .mlgInTab{display:inline-flex;align-items:center;padding:10px 6px 8px;border:0;border-bottom:2px solid transparent;margin-bottom:-1px;background:none;cursor:pointer;font-family:inherit;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#64748b}'+
+        '#mlgInTabs .mlgInTab:hover{color:#334155;background:#f8fafc}'+
+        '#mlgInTabs .mlgInTab[aria-selected="true"]{color:#4f46e5;border-bottom-color:#4f46e5;background:#eef2ff}'+
+        '#mlgInTabs .mlgInTab:focus-visible{outline:2px solid #6366f1;outline-offset:-2px}'+
+        '.mlgInDot{display:none;width:7px;height:7px;border-radius:50%;background:#dc2626;margin-left:5px;box-shadow:0 0 0 1.5px #fff}'+
+        '.mlgInTab.has-err .mlgInDot{display:inline-block}'+
+        '.mlgInTab[hidden],.mlgInPane[hidden]{display:none!important}'+
+        '@media(max-width:900px){aside{overflow:visible}#mlgInTabs{top:var(--mlgHdrH,54px);margin-top:calc(var(--mlgHdrH,54px) - 54px)}}'+
+        '@media print{#mlgInTabs{display:none!important}.mlgInPane[hidden]{display:block!important}}'+
+        '</style>');
+      var bar=document.createElement('div'); bar.id='mlgInTabs'; bar.setAttribute('role','tablist'); bar.setAttribute('aria-label','Input groups');
+      var panes={};
+      TABS.forEach(function(t){
+        var b=document.createElement('button'); b.type='button'; b.className='mlgInTab'; b.id='mlgInTab_'+t[0]; b.dataset.pane=t[0];
+        b.setAttribute('role','tab'); b.setAttribute('aria-controls','mlgInPane_'+t[0]);
+        var s=document.createElement('span'); s.textContent=t[1]; b.appendChild(s);
+        var d=document.createElement('span'); d.className='mlgInDot'; d.setAttribute('aria-hidden','true'); b.appendChild(d);
+        b.addEventListener('click',function(){ setTab(t[0],true); });
+        b.addEventListener('keydown',onKey);
+        bar.appendChild(b);
+        var p=document.createElement('div'); p.className='mlgInPane'; p.id='mlgInPane_'+t[0];
+        p.setAttribute('role','tabpanel'); p.setAttribute('aria-labelledby','mlgInTab_'+t[0]);
+        panes[t[0]]=p;
+      });
+      /* move the built nodes; a node not in the map stays with the section before it */
+      var c='spans';
+      Array.prototype.slice.call(A.childNodes).forEach(function(n){
+        var sm=n.tagName==='DETAILS'&&n.querySelector('summary'), k=sm&&SEC[sm.textContent.trim()];
+        if(k) c=k;
+        panes[c].appendChild(n);
+      });
+      A.appendChild(bar);
+      TABS.forEach(function(t){ A.appendChild(panes[t[0]]); document.getElementById('mlgInTab_'+t[0]).hidden=!panes[t[0]].querySelector('details,input,select'); });
+      function setTab(t,remember){
+        TABS.forEach(function(x){
+          var b=document.getElementById('mlgInTab_'+x[0]), p=panes[x[0]], on=x[0]===t;
+          b.setAttribute('aria-selected',on?'true':'false'); b.tabIndex=on?0:-1; p.hidden=!on;
+        });
+        if(remember){ tset(t); A.scrollTop=0; }
+      }
+      function onKey(e){
+        var vis=TABS.map(function(x){ return document.getElementById('mlgInTab_'+x[0]); }).filter(function(b){ return !b.hidden; });
+        var i=vis.indexOf(e.currentTarget), j=-1;
+        if(e.key==='ArrowRight'||e.key==='ArrowDown') j=(i+1)%vis.length;
+        else if(e.key==='ArrowLeft'||e.key==='ArrowUp') j=(i-1+vis.length)%vis.length;
+        else if(e.key==='Home') j=0;
+        else if(e.key==='End') j=vis.length-1;
+        if(j<0) return;
+        e.preventDefault(); setTab(vis[j].dataset.pane,true); vis[j].focus();
+      }
+      /* red dot: a number the browser cannot parse, or a warning / analysis error of the tool
+         itself that names an input on that tab */
+      function marks(){
+        var bad={};
+        A.querySelectorAll('.mlgInPane input').forEach(function(i){
+          if(i.validity&&i.validity.badInput){ var p=i.closest('.mlgInPane'); if(p) bad[p.id.replace('mlgInPane_','')]=1; }
+        });
+        var st=(document.getElementById('status')||{}).textContent||'', msgs=[];
+        if(/^Error: /.test(st)) msgs.push(st.slice(7));
+        else if(typeof RES!=='undefined'&&RES&&RES.warn) msgs=RES.warn;
+        msgs.forEach(function(w){ MSG.forEach(function(r){ if(r[0].test(w)) bad[r[1]]=1; }); });
+        TABS.forEach(function(t){
+          var b=document.getElementById('mlgInTab_'+t[0]);
+          b.classList.toggle('has-err',!!bad[t[0]]);
+          b.title=bad[t[0]]?'An input on this tab needs attention':'';
+        });
+      }
+      /* narrow screens (<= 900 px, panel above the results): the header buttons can wrap below
+         its fixed 54 px height, so the tab strip sticks (and starts) below the header's real height */
+      var hdr=document.querySelector('.hdr');
+      function hdrFit(){ if(hdr) A.style.setProperty('--mlgHdrH',Math.max(54,hdr.scrollHeight)+'px'); }
+      window.addEventListener('resize',hdrFit);
+      var stEl=document.getElementById('status');
+      if(stEl&&window.MutationObserver) new MutationObserver(function(){ marks(); hdrFit(); }).observe(stEl,{childList:true,characterData:true,subtree:true});
+      hdrFit();
+      A.addEventListener('input',marks); A.addEventListener('change',marks);
+      var t=tget(); if(!panes[t]||document.getElementById('mlgInTab_'+t).hidden) t='spans';
+      setTab(t,false);
+      marks();
+    })();
+    </script>
+    ```
+- **Check case:** n/a for results. Default (2 × 100 ft, HL-93 truck, Strength I, DF 1.00): Max +M 3932.2 kip-ft, Max −M −4049.2 kip-ft, Max +V 227.7 kips, Max −V −227.6 kips, Max reaction 365.4 kips — before and after. Set E steel = 0: status "Error: E steel = 0 ksi …", red dot on Spans. Set span 1 DF moment = 0: warning "One or more distribution factors are zero or blank.", red dot on Factors.
+- **How verified:** `node --check` on all four inline scripts. Headless Chromium (Playwright), original file (origin/main) vs this branch, in the same sequence: default; all 13 presets (12 + Custom); 1, 3, 4, 2 spans; uniform load modes lane / trail / full / none; AREMA impact; multi-vehicle; + Segment; + Axle; E = 0 error; DF = 0 warning. For every step the whole results text of `<main>`, the status, the warning box, every results canvas (size + image data), `mlgSnapshot()` and the autosave JSON (`savedAt` removed) are **identical**. Save → load round trip (`mlgSnapshot` → `mlgApply` → `mlgSnapshot`) identical. FHWA benchmark and closed-form check text identical. Print Report (all presets, tenth-point tables) HTML identical. "Share project info" `bridgeSuite.v1.projectMeta` payload identical (timestamp removed). lldf hand-off: buttons present; pull + apply of a test payload gives identical results and saved state (`adoptedAt` removed). Input inventory (tag, id, name, class, `data-i`, `data-k`, type) of all 99 inputs / selects identical; all 71 in the panel are each in exactly one pane (Spans 4, Girder 23, Vehicle 9, Rules 14, Impact 7, Factors 14). Keyboard (→, End, → wraps, Home, ←), tab remembered after reload, red dots (above, plus typed "1e" in E → Spans), print media (tab strip hidden, all 6 panes shown) checked. No horizontal scroll at 1400 px or 400 px. Console errors: only the tool's own `console.error` for the deliberate E = 0 case, the same on main. Screenshots of every tab at 1400 px and 400 px inspected.
+- **Other copies of this code:** none.
+- **Open items:** (1) Pre-existing, not changed: at narrow widths (seen at 400 px) the header's buttons wrap beyond its fixed 54 px height; some spill below it and the top ones are cut off above the page. The tab strip is placed below the spill, but the header itself was left as it is. (2) The Spans hint still says the girder is defined "in the Girder Section panel below"; it is now on the Girder tab (text left unchanged).
