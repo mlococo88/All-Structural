@@ -1040,6 +1040,85 @@ Line numbers are approximate, as of this fix. Search for the anchor text.
 - **Other copies:** `check()`, `mapAxes()` and `candidates()` are duplicated in Pile Designer.html (CLAUDE.md §3). BridgeXfer v1 unchanged.
 - **Open items:** Direct mode brackets self-weight with ASCE 7-16 1.2 / 0.9 rather than AASHTO γp, and checks bearing with factored loads against an allowable value (existing behaviour, unchanged); one case per pedestal (no multi-case sweep in Direct mode).
 
+## 2026-10-09 — PR: claude/tabs-spreadfooting (PR link added after merge)
+### T1. Input panel split into tabs   [UI only — no calculation change]
+- **Date / type:** 2026-10-09, UI only (no result change). Engineer's request (2026-10-09): "Go through all the apps and make sure they are all formatted with the input panel having tabs rather than one long scrolling input panel." Same approach as `Steel Beam Design - AISC 15th.html` T1: the input sections stay in the page exactly as before and are **moved** into tab panes; the tab strip is drawn in this tool's own style (the same button-tab look as the output `.tabbar`).
+- **How it works:** the new `sfdInputTabs()` runs once at start-up, before `loadAuto()`. It moves the nine existing `<details class="sec">` nodes of `#inputPanel` into one `.sfdInPane` per tab and puts the tab strip (`#sfdInTabs`) on top. Nothing is rebuilt or re-templated, so every `data-path`, id and handler is unchanged and `bindStaticInputs()` (which selects `#inputPanel [data-path]`) still finds every field. The pedestal cards (one per pedestal, up to 10) are still built by `buildPedCards()` into `#pedContainer`, which sits inside `sec-peds`, so a pedestal that is added, removed, loaded, undone or imported by a hand-off always lands on the Pedestals & Loads tab. A tab with no section would be hidden (none is mode-dependent in this tool; the rows that show/hide with Bearing basis, q_allow override, friction basis and self-weight mode still do so inside their sections exactly as before).
+- **Tabs (in order) and the sections in each** (section id in brackets):
+
+| Tab | Sections |
+|---|---|
+| Project | Project Manager (`sec-proj`) |
+| Geometry | Footing Geometry (`sec-geom`) |
+| Materials | Materials (`sec-mat`), Footing Reinforcement (Phase 2) (`sec-rebar`) |
+| Soil | Soil & Bearing Capacity (`sec-soil`), Soil Cover on Footing (EV) (`sec-ev`) |
+| Stability | Stability Parameters (`sec-stab`) |
+| Pedestals & Loads | Pedestals & Applied Loads (`sec-peds`: load input mode, sign convention, one card per pedestal, + Add Pedestal) |
+| Assumptions | Engineering Assumptions (`sec-assump`) |
+
+  The title block, the shared-project-info buttons and the hand-off buttons (above the two panels) are not part of the input panel and are unchanged.
+- **Error marker:** a red dot on a tab when one of its inputs is in error: a number field the browser cannot parse (`validity.badInput`), or a red **ERROR** message from the existing input validation in `computeAll()` that names one of its inputs (B, L, t → Geometry; f'c, f_y, covers, γc → Materials; Vesić φ/c, direct q_a, φ, c, FS_b, γs → Soil; μ, passive fraction → Stability; pedestal size / height / footprint off the footing / no pedestals → Pedestals & Loads). Design results (eccentricity limit, unstable combination, Phase 2 skipped) and amber warnings do not set a dot. Refreshed at the end of every `recalc()`.
+- **Hand-offs:** after "Pull from Abutment / SubLoads" or "Pull from Steel Beam" (or their Import buttons) is confirmed, the input panel switches to the Pedestals & Loads tab so the pedestal loads just filled are in view. What is filled is unchanged.
+- **Keyboard / accessibility:** `role="tablist"`, `role="tab"` with `aria-selected` and `aria-controls`, `role="tabpanel"` with `aria-labelledby`; roving `tabindex`; ←/→ (and ↑/↓), Home and End move between the tabs.
+- **New storage key:** `sfd_inputTab_v1` (localStorage, plain string: `project`, `geom`, `mat`, `soil`, `stab`, `peds` or `assump`). It remembers the active input tab per browser. Every read and write is in try/catch, with an in-memory fallback when storage is blocked. It is **not** stored in `state`, so the autosave (`sfd_auto`), saved projects (`sfd_projects`), the project JSON export/import and the `bridgeSuite.v1.*` hand-offs are unchanged. No existing key or format changed.
+- **Print:** unchanged. `@media print` already hides the whole `.inp` input panel (the report prints the output panel and the input echo), so the tab strip does not print.
+- **Narrow screens:** the tab strip wraps (`flex-wrap`, two rows at the default panel width) and is sticky at the top of the scrolling input panel. Existing layout note: below 900 px the panel keeps its `min-width:400px` next to the output panel, so the page already scrolls sideways at 400 px (document width 972 px before and after); this was not changed.
+- **Governing provision:** none (no engineering change).
+- **Before / After** (exact; file uses LF):
+  1. CSS. Before (anchor, unchanged):
+     ```css
+     .tabpage.active{display:block}
+     ```
+     After: the following lines inserted right after it:
+     ```css
+     /* input panel tabs (sfdInputTabs) - same look as the output .tabbar */
+     #sfdInTabs{position:sticky;top:0;z-index:5;display:flex;flex-wrap:wrap;gap:2px 0;margin:0 0 8px 0;padding-top:2px;background:#fafafa;border-bottom:2px solid #7a8aa0}
+     #sfdInTabs .sfdInTab{display:inline-flex;align-items:center;border:1px solid #7a8aa0;border-bottom:none;margin:0 2px -2px 0;background:#e2e8ef;font-size:12px;padding:5px 8px}
+     #sfdInTabs .sfdInTab:hover{background:#dbe4ee}
+     #sfdInTabs .sfdInTab[aria-selected="true"]{background:#fff;border-bottom:2px solid #fff;font-weight:bold}
+     #sfdInTabs .sfdInTab:focus-visible{outline:2px solid #1c4e80;outline-offset:-2px}
+     .sfdInDot{display:none;width:7px;height:7px;border-radius:50%;background:#c62828;margin-left:5px}
+     .sfdInTab.has-err .sfdInDot{display:inline-block}
+     .sfdInTab[hidden],.sfdInPane[hidden]{display:none!important}
+     ```
+  2. New block inserted right after the line `document.addEventListener('change',e=>{if(e.target.tagName==='SELECT')handleFieldChange(e.target);});` (end of the input-binding script; anchor: the comment `/* ---------- input panel tabs (UI only) ----------`): constants `SFD_IN_TABS`, `SFD_IN_SEC`, `SFD_IN_ERR`, `SFD_IN_KEY`, and functions `sfdInTabGet`, `sfdInTabSet`, `sfdInputTabs`, `sfdSetInTab`, `sfdInTabKey`, `sfdInputTabMarks` (about 90 lines; copy the block from the file, from that comment down to the `</script>` after `sfdInputTabMarks`).
+  3. `recalc()`. Before:
+     ```js
+      renderPrintHeader();
+      if(typeof buildManualTab==='function'&&$('#manualHost')&&!$('#manualHost').childNodes.length)buildManualTab();
+     ```
+     After:
+     ```js
+      renderPrintHeader();
+      sfdInputTabMarks();
+      if(typeof buildManualTab==='function'&&$('#manualHost')&&!$('#manualHost').childNodes.length)buildManualTab();
+     ```
+  4. Start-up script. Before:
+     ```js
+     <script>
+     loadAuto();
+     bindStaticInputs();
+     ```
+     After:
+     ```js
+     <script>
+     sfdInputTabs();   /* move the input sections into the input tabs */
+     loadAuto();
+     bindStaticInputs();
+     ```
+  5. Both hand-off dialogs' Import handlers (memberReactions: `buildPedCards(); saveAuto(); recalc();`; foundationLoads: `bindStaticInputs(); buildPedCards(); saveAuto(); recalc();`), each followed by `refreshBar();`. After, one line added after `refreshBar();` in each:
+     ```js
+           if(typeof sfdSetInTab==='function') sfdSetInTab('peds',true);   /* show the pedestal loads just filled */
+     ```
+- **Check case:** default inputs (B 10 × L 8 × t 2.5 ft, Df 4 ft, f'c 4000 psi, Vesić φ 32°, Ped 1 D 120 / L 60 / Wx Vx 8, Ped 2 D 150 / L 80 / S 20 / Wx Vx 8). Before and after: Bearing (service) DCR 0.64 (D + 0.75L + 0.45(+Wx) + 0.75S); Overturning FS 20.62 (report only); Sliding x FS 7.69; Flexure DCR 0.30 (A_s < A_s,min, top x → FAIL); One-way shear max DCR 0.55; Punching max DCR 0.32; Concrete bearing DCR 0.22; Pedestal axial DCR 0.42. Identical.
+- **How verified** (Chromium 1194 headless via Playwright; KaTeX 0.16.11, Plotly 2.35.2 and three.js 0.160.0 served from local copies of the same pinned versions):
+  - `node --check` on all 18 inline scripts: pass.
+  - 16 scenarios run in the original (origin/main) and the edited file: default; Direct factored load mode; direct q_a; q_allow override + direct μ + self-weight override + AASHTO eccentricity limit; top mat + assumptions text; B = 0 (fatal); f'c < 0 and passive fraction 2; pedestal off the footing; add a pedestal and load it; remove a pedestal; Save → change → Load round trip; Reset; Undo; foundationLoads hand-off (SubLoads Pier 2 payload, through the real dialog); memberReactions hand-off (through the real dialog); Share project info. For each: the text of the dashboard, warnings, self-consistency checks, every output tab (Schematic, Combinations, Bearing, Stability, Footing Design, Pedestal Design, Manual) and the print header, the autosave JSON, the `state` JSON (the hand-off `adoptedAt` clock time masked), the `bridgeSuite.v1.*` keys and the hand-off source lines are **identical**; all six hand-off / project-info buttons present.
+  - Input inventory (every input/select/textarea/button in the panel, with id, `data-path` and value): identical sets before and after in every scenario (152 elements by default, 102 in Direct mode, 197 with 3 pedestals), each in exactly one tab pane; pedestal cards always in the Pedestals & Loads pane (also right after "+ Add Pedestal").
+  - Interaction: tab remembered across reload; keyboard navigation; sticky strip while the panel scrolls; an unparseable Df puts a dot on Geometry; B = 0 → Geometry, f'c < 0 → Materials, passive fraction 2 → Stability, pedestal off the footing → Pedestals & Loads; with localStorage throwing, tabs still work and results still render; print media hides the input panel as before; no console errors.
+  - Screenshots of every tab at 1400 px and 400 px widths were checked.
+- **Other copies of this code:** none (the same pattern, with its own names, is in `Steel Beam Design - AISC 15th.html`).
+
 ## Open items (not changed)
 - **O1. Vesić inclination exponent m uses nominal B/L, not B'/L'.** Anchor: `const mxm=(2+B/L)/(1+B/L)`. Using B'/L' is the more common form (AASHTO 10.6.3.1.2a uses B'/L'). This changes bearing capacity and needs a decision. Question: should m use the effective B'/L'?
 - **O2. The depth factors dq/dc are always applied.** AASHTO 10.6.3.1.2a and common practice drop them when the soil above the base is not competent or may be removed. Recommendation: add a "use depth factors" option, default on to keep the current results. Needs a decision on the default.
