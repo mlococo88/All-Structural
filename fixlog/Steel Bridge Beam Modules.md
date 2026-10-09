@@ -447,3 +447,37 @@ window.addEventListener('storage', e => { if (!e.key || e.key.indexOf('bridgeSui
 - **How verified:** `node --check` of every inline script. End-to-end in jsdom with one shared localStorage stub: lldf.html's real "Send DFs" publish → GirderDetail's real Pull button/dialog/Apply (the bridge was produced by the embedded PlateLine's own `bridgeDef()` and delivered through the real `gd-bridge` message handler); asserted all 14 mapped inputs, `sa.dfSrc`, `sa.dfImport` (also in the autosave), the adoption marker, the indicator, the source in the module, the LLDF and DLs note and the report echo; G1 with "same beam number"; a payload without `governingBySpan`; lldf's "Export DF hand-off (JSON)" file → "Import hand-off (JSON)"; refusals for wrong `_schema`, `schemaVersion` 2, corrupt JSON, negative/string/NaN DFs, wrong span count, wrong DF units, wrong-schema file. With no hand-off, the original and new files give identical Structural analysis arrays (gMi, LL±, fatigue, Strength I M/V, echo), identical LLDF and DLs factors and identical report echo for G1 and G2. 52/52 checks pass.
 - **Other copies:** the BridgeXfer v1 helper already in this file (from Step 1) is reused unchanged.
 - **Open items:** the manual factors are per girder; after changing the analyzed girder the module shows a "pull again" warning rather than re-mapping automatically. The PlateLine base64 block was not touched.
+
+## 2026-10-09 — PR: claude/pin-girderdetail (PR link added after merge)
+
+### P1. MathJax pinned to 3.2.2 (main page and embedded PlateLine)   [no calculation change]
+- **Date / type:** 2026-10-09, library pinning only (CLAUDE.md §2). Engineer's decision 2026-10-09: pin the libraries. No code, formula, UI, storage key or file-format change.
+- **Where (2 places):**
+  1. Main page `<head>` scripts, ≈ line 1049. Anchor text: `npm/mathjax@3/es5/tex-svg.js" async></script>` (the line just after the `window.MathJax = {` config).
+  2. Inside the embedded PlateLine app: the base64 string `const PL_B64 = '...'` (≈ line 2344). In the decoded PlateLine HTML the tag is at ≈ line 907, just after its own `window.MathJax = {` config.
+- **Before / After (exact, identical in both places):**
+
+| Library | Before | After |
+|---|---|---|
+| MathJax (tex-svg) | `<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js" async></script>` | `<script src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-svg.js" async></script>` |
+
+- **Version chosen:** **3.2.2**, the latest 3.x on npm (published 2022-06-08). It is what `@3` resolves to today, so the tool gets the same code as before (the page reports `MathJax.version` = 3.2.2 on main too). Gusset Plate Rating already uses `mathjax@3.2.2`. MathJax 4.x (npm `latest` = 4.1.3) was not considered: new major.
+- **How to re-apply the PlateLine part by hand:** base64-decode the `PL_B64` string (standard alphabet, with `=` padding, one line, no line breaks; the decoded bytes are UTF-8 HTML with LF line endings). Replace the one occurrence of `mathjax@3/es5/tex-svg.js` with `mathjax@3.2.2/es5/tex-svg.js`. Base64-encode again the same way (no line wrapping) and put it back between the quotes. The string grows from 556,048 to 556,056 characters (decoded 417,036 → 417,040 bytes). Base64 text before the change point (first 66,647 characters) is unchanged; everything after it shifts, as expected for a 4-byte insertion.
+- **Left as is (already pinned or fixed releases):**
+  - three.js `cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js` (fixed release r128) and `cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js`.
+  - Plotly `cdnjs.cloudflare.com/ajax/libs/plotly.js/2.27.0/plotly.min.js` (main page and PlateLine).
+  - Pyodide `cdn.jsdelivr.net/pyodide/v0.26.4/full/pyodide.js` (dynamic load in `dxfPy`, DXF export only); `micropip` and `numpy` come from that Pyodide release's own package set.
+  - Google Fonts stylesheet (main page and PlateLine).
+  - PlateLine has no other external URLs (decoded and searched: only Google Fonts, MathJax, Plotly and the SVG namespace).
+- **Check case:** default example ("Example 3-span continuous", 110 + 140 + 110 ft, 5 girders @ 9.50 ft). Main and branch both show, in Preliminary sizing (PlateLine): "Proportions satisfy the code limits checked", 46 checks, 44 OK, 28.58 psf, 91.57 kip per girder, 228.92 tons; and the same text in all 12 detail modules.
+- **How verified:**
+  - Script check: the decoded PlateLine from main and branch differ in exactly one line (the MathJax tag); the outer file, with the base64 string masked, differs in exactly one line (the MathJax tag). Base64 decode → encode round-trips byte-exactly on both.
+  - Headless Chromium (Playwright). CDNs are blocked in the sandbox, so each URL was served from the npm tarball of that exact version (mathjax 3.2.2, three 0.128.0, plotly.js-dist-min 2.27.0). Every module tab (Preliminary sizing + 12 modules) was opened on main and on the branch:
+    - `MathJax.version` 3.2.2 in both the main page and the PlateLine iframe; typeset `mjx-container` counts identical per module (e.g. Field splice 107, LLDF and DLs 90, PlateLine 106); no `merror` nodes; no raw `\(` left in the detail modules.
+    - Module text and PlateLine text identical. The only difference is the time stamp of the bridge hand-off ("received … PM") and the autosave `ts` fields.
+    - `girderdetail_autosave_v1` and `plateline_autosave_v1` identical apart from `ts`.
+    - No console errors. The branch requested only `mathjax@3.2.2` (from both the page and the PlateLine iframe), never `mathjax@3/`.
+- **Not verifiable here:** the live jsDelivr response (blocked in the sandbox). Before merging, open the file once from `file://` with network access and confirm the equations render in a detail module and in Preliminary sizing.
+- **Other copies:** none (the CDN tags are per file; PlateLine exists only inside this file).
+- **Open items (found, not changed):**
+  - The DXF export installs `ezdxf` with `micropip.install('ezdxf')` (in `dxfPy`, anchor `micropip.install('ezdxf')`), with no version, so it takes the newest ezdxf on PyPI that installs in Pyodide 0.26.4 (PyPI latest today: 1.4.4, requires Python ≥ 3.10). Not changed: it is a Python package, not a CDN tag, and DXF export could not be run here (Pyodide is blocked in the sandbox), so a pinned version could not be tested. Needs: a decision on whether to pin it (e.g. `micropip.install('ezdxf==<version>')`) and a DXF export test with network access.
