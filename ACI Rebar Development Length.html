@@ -64,6 +64,19 @@ input,select,textarea{font-family:inherit; font-size:13px;}
 .panel-body{padding:12px 14px;}
 .panel.collapsed .panel-body{display:none;}
 
+/* ---- Input panel tabs (rebarInputTabs; UI only) ---- */
+#rebarInTabs{position:sticky; top:0; z-index:5; display:flex; flex-wrap:wrap;
+  background:var(--paper); border-bottom:2px solid var(--ink);}
+#rebarInTabs .rebarInTab{display:inline-flex; align-items:center; padding:8px 10px; border:none;
+  background:transparent; font-size:12px; font-weight:bold; text-transform:uppercase; letter-spacing:.4px;
+  color:var(--sub); border-bottom:3px solid transparent; margin-bottom:-2px;}
+#rebarInTabs .rebarInTab:hover{color:var(--ink);}
+#rebarInTabs .rebarInTab[aria-selected='true']{color:var(--accent); border-bottom-color:var(--accent);}
+#rebarInTabs .rebarInTab:focus-visible{outline:2px solid var(--accent2); outline-offset:-2px;}
+.rebarInDot{display:none; width:7px; height:7px; border-radius:50%; background:var(--fail); margin-left:5px;}
+.rebarInTab.has-err .rebarInDot{display:inline-block;}
+.rebarInTab[hidden],.rebarInPane[hidden]{display:none!important;}
+
 /* ---- Inputs ---- */
 .field{margin-bottom:10px;}
 .field label{display:block; font-size:11px; font-weight:bold; color:var(--sub);
@@ -600,6 +613,110 @@ function togglePanel(head){
   p.classList.toggle('collapsed');
   head.querySelector('.tw').textContent = p.classList.contains('collapsed')?"▶":"▼";
   autosave();
+}
+
+/* =====================================================================
+   INPUT PANEL TABS (UI only)
+   buildInputPanel() still builds every panel A-H exactly as before;
+   rebarInputTabs() then MOVES the finished .panel nodes into one pane per
+   tab, in their original order, so every id, handler, value and the
+   collectState() panel order are untouched. The active tab is remembered
+   per browser in localStorage key rebar_aci_inputTab_v1 (shared with the
+   embedded copy in Concrete Beam Capacity.html); it is never part of the
+   autosave, saved projects or the JSON export.
+   ===================================================================== */
+const REBAR_IN_TABS=[
+  ['project','Project'],['material','Code &amp; Material'],['tension','Tension'],
+  ['hookcomp','Hook &amp; Comp.'],['splices','Splices'],['notes','Assumptions &amp; Save']];
+const REBAR_IN_PANEL={A:'project',B:'material',C:'tension',D:'tension',D2:'tension',
+  E:'hookcomp',E2:'hookcomp',F:'splices',G:'notes',H:'notes'};
+/* validate() messages that point at an input, mapped to the panel holding it */
+const REBAR_IN_WARN=[
+  [/^f'c must be a positive/,'B'],
+  [/^c_b \(cover/,'D'],[/^c_b = .*unusually large/,'D'],
+  [/^Transverse steel area A_tr entered/,'D'],[/^ACI 25\.4\.2\.2/,'D'],
+  [/^As,req .*exceeds As,prov/,'D2'],[/^As,provided must be/,'D2']];
+const REBAR_IN_KEY='rebar_aci_inputTab_v1';
+let rebarInTabCur=null;   /* in-memory copy, used when storage is blocked */
+function rebarInTabGet(){ if(rebarInTabCur) return rebarInTabCur; try{ return localStorage.getItem(REBAR_IN_KEY)||''; }catch(e){ return ''; } }
+function rebarInTabSet(t){ rebarInTabCur=t; try{ localStorage.setItem(REBAR_IN_KEY,t); }catch(e){} }
+function rebarInputTabs(){
+  const P=document.getElementById('inputPanel'); if(!P||document.getElementById('rebarInTabs')) return;
+  const bar=document.createElement('div');
+  bar.id='rebarInTabs'; bar.setAttribute('role','tablist'); bar.setAttribute('aria-label','Input groups');
+  const panes={};
+  REBAR_IN_TABS.forEach(([k,lab])=>{
+    const b=document.createElement('button');
+    b.type='button'; b.className='rebarInTab'; b.id='rebarInTab_'+k; b.dataset.pane=k;
+    b.setAttribute('role','tab'); b.setAttribute('aria-controls','rebarInPane_'+k);
+    b.innerHTML='<span>'+lab+'</span><span class=\'rebarInDot\' aria-hidden=\'true\'></span>';
+    b.addEventListener('click',()=>rebarSetInTab(k,true));
+    b.addEventListener('keydown',rebarInTabKey);
+    bar.appendChild(b);
+    const pn=document.createElement('div');
+    pn.className='rebarInPane'; pn.id='rebarInPane_'+k;
+    pn.setAttribute('role','tabpanel'); pn.setAttribute('aria-labelledby','rebarInTab_'+k);
+    panes[k]=pn;
+  });
+  /* move the built nodes; anything not in the map stays with the panel before it */
+  let cur=REBAR_IN_TABS[0][0];
+  Array.from(P.childNodes).forEach(n=>{
+    const id=n.getAttribute ? n.getAttribute('data-panel') : null;
+    if(id && REBAR_IN_PANEL[id]) cur=REBAR_IN_PANEL[id];
+    panes[cur].appendChild(n);
+  });
+  P.appendChild(bar);
+  REBAR_IN_TABS.forEach(([k])=>{
+    P.appendChild(panes[k]);
+    document.getElementById('rebarInTab_'+k).hidden=!panes[k].querySelector('.panel');
+  });
+  const ok=k=>!!panes[k] && !document.getElementById('rebarInTab_'+k).hidden;
+  let t=rebarInTabGet();
+  if(!ok(t)) t=REBAR_IN_TABS.map(x=>x[0]).find(ok)||REBAR_IN_TABS[0][0];
+  rebarSetInTab(t,false);
+}
+function rebarSetInTab(t,remember){
+  REBAR_IN_TABS.forEach(([k])=>{
+    const b=document.getElementById('rebarInTab_'+k), pn=document.getElementById('rebarInPane_'+k);
+    if(!b||!pn) return;
+    const on=(k===t);
+    b.setAttribute('aria-selected',on?'true':'false'); b.tabIndex=on?0:-1;
+    pn.hidden=!on;
+  });
+  if(remember){ rebarInTabSet(t); const P=document.getElementById('inputPanel'); if(P) P.scrollTop=0; }
+}
+/* show the tab that holds element el (call before any code focuses or scrolls to an input) */
+function rebarShowInTabFor(el){
+  const pn=(el && el.closest) ? el.closest('.rebarInPane') : null;
+  if(pn) rebarSetInTab(pn.id.replace('rebarInPane_',''),false);
+}
+function rebarInTabKey(e){
+  const vis=REBAR_IN_TABS.map(([k])=>document.getElementById('rebarInTab_'+k)).filter(b=>b && !b.hidden);
+  const i=vis.indexOf(e.currentTarget); let j=-1;
+  if(e.key==='ArrowRight'||e.key==='ArrowDown') j=(i+1)%vis.length;
+  else if(e.key==='ArrowLeft'||e.key==='ArrowUp') j=(i-1+vis.length)%vis.length;
+  else if(e.key==='Home') j=0;
+  else if(e.key==='End') j=vis.length-1;
+  if(j<0) return;
+  e.preventDefault(); rebarSetInTab(vis[j].dataset.pane,true); vis[j].focus();
+}
+/* red dot on a tab whose inputs need attention: a number the browser cannot
+   parse, an input marked .inwarn, the f'c hint warning, or a validate()
+   message (w) that names one of its inputs. Display only. */
+function rebarInputTabMarks(w){
+  if(!document.getElementById('rebarInTabs')) return;
+  const bad={};
+  const mark=n=>{ const pn=(n && n.closest) ? n.closest('.rebarInPane') : null; if(pn) bad[pn.id.replace('rebarInPane_','')]=1; };
+  const panel=id=>document.querySelector('#inputPanel .panel[data-panel=\''+id+'\']');
+  document.querySelectorAll('#inputPanel .rebarInPane input').forEach(i=>{ if(i.validity && i.validity.badInput) mark(i); });
+  document.querySelectorAll('#inputPanel .rebarInPane .inwarn').forEach(mark);
+  const fh=document.getElementById('fcHint'); if(fh && fh.textContent.trim()) mark(fh);
+  (w||[]).forEach(s=>{ const m=REBAR_IN_WARN.find(r=>r[0].test(s)); if(m) mark(panel(m[1])); });
+  REBAR_IN_TABS.forEach(([k])=>{
+    const b=document.getElementById('rebarInTab_'+k); if(!b) return;
+    b.classList.toggle('has-err',!!bad[k]);
+    b.title=bad[k]?'An input on this tab needs attention':'';
+  });
 }
 
 /* =====================================================================
@@ -1198,6 +1315,7 @@ function render(){
   document.getElementById('tabcontent').innerHTML = warnHTML(w) + body + sch;
   fcHintUpdate(inp);
   updateCodeHint(inp);
+  rebarInputTabMarks(w);   // input tabs: red dot on a tab with an input that needs attention (display only)
   typeset(document.getElementById('tabcontent'));
   if(currentTab==="tension") drawChart(inp,f);
   autosave();
@@ -1452,6 +1570,7 @@ function switchTab(name){
 }
 function init(){
   buildInputPanel();
+  rebarInputTabs();   // move the input panels into the input tabs (before any state is applied)
   // restore autosave
   let saved=null; try{saved=JSON.parse(localStorage.getItem(LS_KEY));}catch(e){}
   if(saved) applyState(saved);
