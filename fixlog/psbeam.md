@@ -705,3 +705,132 @@ function computeAll(inp){
 - **Open items:**
   - O-T1. A blank MIDAS DF / multiple-presence box (taken as 1.0 by `computeAll`) gets a red dot, since the UI does not say blank is allowed there. Say if you want those excluded.
   - O-T2. Clicking a strand in the Live Geometry drawing selects a strand row but does not switch to the Strands sub-tab (it never scrolled before either). Can be added if wanted.
+
+## 2026-10-09 — PR: claude/psbeam-subtab-followup (PR link added after merge)
+
+Follow-up to T1 (open items O-T1 and O-T2), per the engineer's decisions of 2026-10-09.
+
+### T2. Blank imported-LL DF / multiple-presence boxes: "blank — 1.0 used"   [UI only — no calculation change]
+- **Date / type:** 2026-10-09, UI only (no result change). Engineer's decision on O-T1: "include DF boxes with a 1.0 used". The boxes stay in the red-dot check, and the UI now says that the calculation uses 1.0 when they are blank: an inline hint under each blank box, and the dot's tooltip.
+- **Boxes covered:** all four appear only while a MIDAS import is active (Loads card → LL section): `DF — positive moment` (`inp.loads.extDFpos`), `DF — negative moment` (`extDFneg`), `DF — shear` (`extDFv`) and `Multiple presence (m)` (`extLLmpf`). Confirmed in `computeAll()` (anchor `const fac1=(v)=>{ if(v===''||v===null||v===undefined) return 1;`): each of the four goes through `fac1`, so blank (`''`, `null` or missing) → 1.0. An entered 0 stays 0 and raises the existing warning. No other DF / MPF box is treated this way. The non-MIDAS `dfm` / `dfv` boxes do not go through `fac1` and were not marked.
+- **Before / After** (exact):
+  1. `Num` component. Anchor: `const Num=({l,u,v,set,step=0.1,min,driven,src,sub`.
+     Before:
+     ```jsx
+     const Num=({l,u,v,set,step=0.1,min,driven,src,sub})=>(
+       <div className="fld"><label>{l}</label><div className="fwrap">
+         <input type="number" step={step} min={min} value={v}
+     ```
+     After:
+     ```jsx
+     const Num=({l,u,v,set,step=0.1,min,driven,src,sub,blank1})=>(
+       <div className="fld"><label>{l}</label><div className="fwrap">
+         <input type="number" step={step} min={min} value={v} data-blank1={blank1?'1':undefined}
+     ```
+     In the same component, right after `    {sub&&<span className="sub">{sub}</span>}` (the line followed by `{driven&&src?<span className="bl-src">`), inserted:
+     ```jsx
+         {blank1&&(v===''||v===null||v===undefined)?<span className="sub">blank — 1.0 used</span>:null}
+     ```
+  2. `InputsTab()`, the four boxes. Anchor: `<Num l="DF — positive moment"`. On each of the four `<Num … driven={lldfLocked} src={lldfSrc}/>` lines (`DF — positive moment`, `DF — negative moment`, `DF — shear`, `Multiple presence (m)`), `src={lldfSrc}/>` → `src={lldfSrc} blank1/>`.
+  3. Red-dot check (module scope, before `function PsbInTabs`). Before:
+     ```jsx
+     /* Red dot: a pane holds an editable number box that is empty, holds text the
+        browser cannot parse, or is outside its own min/max. A box with a placeholder
+        (the section-property overrides) is meant to be left blank, so blank is fine there. */
+     function psbInPaneBad(el){ if(!el) return false;
+       const ins=el.querySelectorAll('input[type="number"]');
+       for(let i=0;i<ins.length;i++){ const x=ins[i]; if(x.disabled||x.readOnly) continue; const vy=x.validity||{};
+         if((x.value===''&&!x.placeholder)||vy.badInput||vy.rangeUnderflow||vy.rangeOverflow) return true; }
+       return false; }
+     ```
+     After:
+     ```jsx
+     /* Red dot: a pane holds an editable number box that is empty, holds text the
+        browser cannot parse, or is outside its own min/max. A box with a placeholder
+        (the section-property overrides) is meant to be left blank, so blank is fine there.
+        A blank box marked data-blank1 (the imported-LL DF / multiple-presence boxes,
+        which computeAll takes as 1.0 when blank) still gets the dot, but its tooltip
+        says 1.0 is used. Returns '' (fine), 'bad', 'blank1' or 'both'. */
+     function psbInPaneState(el){ if(!el) return '';
+       let bad=false, b1=false;
+       const ins=el.querySelectorAll('input[type="number"]');
+       for(let i=0;i<ins.length;i++){ const x=ins[i]; if(x.disabled||x.readOnly) continue; const vy=x.validity||{};
+         if(vy.badInput||vy.rangeUnderflow||vy.rangeOverflow) bad=true;
+         else if(x.value===''&&!x.placeholder){ if(x.getAttribute('data-blank1')==='1') b1=true; else bad=true; } }
+       return bad&&b1?'both':bad?'bad':b1?'blank1':''; }
+     const PSB_IN_DOT_TIP={bad:'A number in this group is empty or not valid',
+       blank1:'A DF / multiple-presence box is blank — 1.0 used',
+       both:'A number in this group is empty or not valid; a blank DF / multiple-presence box uses 1.0'};
+     ```
+  4. `PsbInTabs()`: `const bad=marks.indexOf(k)>=0;` → `const bad=!!marks[k];` and `title={bad?'A number in this group is empty or not valid':undefined}` → `title={bad?PSB_IN_DOT_TIP[marks[k]]:undefined}`.
+  5. `InputsTab()`. Before:
+     ```jsx
+       const [inMarks,setInMarks]=useState([]);
+       useEffect(()=>{ const m=PSB_IN_TABS.map(t=>t[0]).filter(k=>psbInPaneBad(document.getElementById('psbInPane-'+k)));
+         if(m.join()!==inMarks.join()) setInMarks(m); });
+     ```
+     After:
+     ```jsx
+       const [inMarks,setInMarks]=useState({});   // {sub-tab key: 'bad'|'blank1'|'both'}
+       useEffect(()=>{ const m={}; PSB_IN_TABS.forEach(t=>{ const st=psbInPaneState(document.getElementById('psbInPane-'+t[0])); if(st) m[t[0]]=st; });
+         if(JSON.stringify(m)!==JSON.stringify(inMarks)) setInMarks(m); });
+     ```
+- **Governing provision:** none changed. For reference only: DF per LRFD 4.6.2.2 and multiple presence per LRFD 3.6.1.1.2 (labels in the card, unchanged).
+- **Check case (shows no result change):** MIDAS import (2-span test file, span 1) with DF +M = DF −M = DF V = m = 1.0 gives status band S0. Clearing each box in turn, and then all four at once, gives a status band identical to S0 (blank = 1.0) and identical to main for the same blank inputs. Export JSON is identical to main. The combined-factors line reads +M = −M = V = 1.000 in both.
+- **How verified:** see T3.
+- **Other copies:** none.
+
+### T3. Strand clicked in the Live Geometry drawing → Strands sub-tab   [UI only — no calculation change]
+- **Date / type:** 2026-10-09, UI only. Engineer's decision on O-T2: clicking a strand in the drawing (which selects its row) also switches the Inputs sub-tab to "Strands" and scrolls the selected row into view.
+- **Where the drawing appears:** `CrossSection` is rendered in one place only: the Live Geometry card beside the Inputs page (`tab==='inputs'`). No other top-level tab shows it, so the switch never needs to change the top-level tab.
+- **Behaviour:** only a click that *selects* a strand switches the sub-tab. A click that deselects, a click in "+ add strands" mode and the row nudge / remove buttons do not. The switch goes through the normal sub-tab setter, so `psbeam.inputTab.v1` remembers "strands" just as it does for a manual click. If the Strands card is folded, the pane (card header) is scrolled into view instead and the fold state is left alone. A pick is not replayed when the Inputs page is left and re-opened.
+- **Before / After** (exact):
+  1. `CrossSection` signature. `function CrossSection({inp,R,set,selRow,setSelRow,flashRow,logEdit,revertStrands,strandsDirty}){` → `function CrossSection({inp,R,set,selRow,setSelRow,flashRow,logEdit,revertStrands,strandsDirty,onPickStrand}){`
+  2. `CrossSection`, strand `<circle>` click. Before:
+     ```jsx
+                 if(addMode){return;} setSel(selRow===s.ri&&selSlot===s.slot?null:{ri:s.ri,slot:s.slot});}):undefined}/>;})}
+     ```
+     After:
+     ```jsx
+                 if(addMode){return;} const off=selRow===s.ri&&selSlot===s.slot; setSel(off?null:{ri:s.ri,slot:s.slot});
+                 if(!off&&onPickStrand) onPickStrand(s.ri);}):undefined}/>;})}
+     ```
+  3. `InputsTab` signature: `…,editLog,clearLog}){` → `…,editLog,clearLog,strandPick}){`. Inserted right after the `inMarks` effect (T2 item 5):
+     ```jsx
+       // A strand clicked in the Live Geometry drawing selects its row: show the
+       // Strands sub-tab and bring that row into view (the card itself if it is folded).
+       // Only picks made while this page is open count (not an old one on re-mount).
+       const pickAtMount=useRef(strandPick);
+       useEffect(()=>{ if(!strandPick||strandPick===pickAtMount.current) return; setInTab('strands');
+         const t=setTimeout(()=>{ const pane=document.getElementById('psbInPane-strands'); if(!pane) return;
+           const tr=pane.querySelector('tr[data-psb-row="'+strandPick.ri+'"]');
+           const el=(tr&&tr.offsetParent!==null)?tr:pane;
+           try{ el.scrollIntoView({block:tr&&el===tr?'center':'start'}); }catch(e){} },0);
+         return ()=>clearTimeout(t); },[strandPick]);
+     ```
+  4. Strand row table in `InputsTab`: `return <tr key={i} onClick={()=>setSelRow&&setSelRow(isSel?null:i)}` → `return <tr key={i} data-psb-row={i} onClick={()=>setSelRow&&setSelRow(isSel?null:i)}`
+  5. `App()`. Inserted right after `  const [selRow,setSelRow]=useState(null);`:
+     ```jsx
+       const [strandPick,setStrandPick]=useState(null);   // {ri}, a new object per click: a strand clicked in the drawing -> Inputs "Strands" sub-tab
+     ```
+     `<InputsTab … clearLog={clearLog}/>` → `<InputsTab … clearLog={clearLog} strandPick={strandPick}/>`. Under the `<CrossSection … logEdit={logEdit}` line, a new prop line `              onPickStrand={ri=>setStrandPick({ri})}` was inserted before `revertStrands=…`.
+- **New storage keys:** none. `strandPick` is React state only and is never saved.
+- **Governing provision:** none (no engineering change).
+- **Check case:** n/a, no computed value changes.
+- **How verified (T2 and T3):**
+  - `node --check` on all 8 inline scripts, for main and branch. The `text/babel` block was transpiled first with @babel/standalone 7.23.5.
+  - Headless Chromium (Playwright), main (598eef4) vs branch, with the clock frozen. The pinned React 18.2.0 / ReactDOM 18.2.0 / Babel 7.23.5 / Plotly 2.27.0 / KaTeX 0.16.9 were served locally.
+  - The T1 comparison set: default; Continuity + Handling + Deck + overrides ON; Custom; BIII-36 box; NEXT 36F; MIDAS 2-span import (span 1, then span 2); blank Area per leg. Compared for each: every top-level tab's text, every Inputs control, the status band, Export JSON, all localStorage before and after "Send reactions to Substructure Loading", the hand-off export file, and an Export → Import → Export round trip. All identical.
+  - T2: each of the four boxes blank, then all four. Status band and Export JSON identical to main and to the 1.0 values. The "blank — 1.0 used" line appears under each blank box only. The Loads sub-tab dot tooltip reads "A DF / multiple-presence box is blank — 1.0 used". With another Loads box also blank, the combined tooltip shows.
+  - T3, all starting from the Geometry sub-tab:
+    - Clicking a strand selects the Strands sub-tab, sets `psbeam.inputTab.v1` = `strands`, and highlights row 1 inside the viewport.
+    - Clicking the same strand again (deselect) stays on Strands.
+    - Clicking another strand selects row 3, in view.
+    - Leaving Inputs and coming back on Geometry stays on Geometry.
+    - With the Strands card folded, the click switches the sub-tab and scrolls the pane in, with no error.
+    - A click in "+ add strands" mode does not switch.
+  - No console errors. The only console message is Babel's existing "deoptimised the styling" note, which main shows too.
+- **Other copies:** none (the `bridgeSuite.v1.*` bootstrap / BridgeXfer code was not touched).
+- **Open items (found, not changed):**
+  - O-T3. The "Combined factors (DF×MPF)" line under these boxes uses `(+x||1)`. An *entered 0* therefore shows as 1.000 there, while `computeAll` uses 0 (and warns). This affects the display only. Blank correctly shows 1.000. Say if the line should show 0.
+  - O-T4. `lldfMineFor()` reads a blank DF / MPF box as 0 (`+''`), not 1.0. This is used for the "before" values when locking to the LL & DL app and for the unlock snapshot (`BL.saveSnap`). So: a blank box → Lock → Unlock → "Restore the values you had before locking?" → OK would restore **0**, not blank. That zeroes that live-load effect, and the existing warning fires. The confirm dialog does show "… → 0". Found by reading the code, not run. This is pre-existing and not changed here, because it touches the hand-off snapshot. Fix if wanted: snapshot the raw value, or `fac1` it.
