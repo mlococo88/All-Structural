@@ -1395,3 +1395,142 @@ Replace everything from the line `    // --- CONSTANTS ---` up to (not including
                          {reportMode && <button onClick={()=>window.print()} className="mt-8 w-full py-4 bg-slate-700 font-bold no-print hover:bg-slate-600 text-white rounded shadow-lg">PRINT TO PDF</button>}
                      </div>
 ````
+
+## 2026-10-09 — PR: claude/tabs-concreteanchor (PR link added after merge)
+### T1. Input panel split into tabs   [UI only — no calculation change]
+- **Date / type:** 2026-10-09, UI only (no result change). Requested by the engineer on 2026-10-09: "Go through all the apps and make sure they are all formatted with the input panel having tabs rather than one long scrolling input panel."
+- **How it works (React):** the four existing input groups in the left panel are now the tab panes. All four are **always rendered**. The inactive ones only get the HTML `hidden` attribute (display: none). Nothing is moved, rebuilt or unmounted, so the React state, keys, `value`s and `onChange` handlers of every input are unchanged. The tab strip sits at the bottom of the existing sticky header (under the project fields and the shared-project-info buttons), so it stays visible while the panel scrolls. It uses the tool's own button classes (active = the blue SINGLE/GROUP look `bg-blue-600 border-blue-500`, inactive = `bg-slate-800 border-slate-600`) and wraps onto a second row in the 320 px panel. Clicking a tab scrolls the panel back to the top.
+- **Tabs (in order) and the groups in each:**
+
+| Tab | Group (heading, unchanged) | Inputs |
+|---|---|---|
+| System | 1. SYSTEM | CENTER / EDGE / CORNER presets, SINGLE / GROUP, HEX / L-BOLT, Seismic, Cond. B |
+| Geometry | 2. GEOMETRY | h_ef, h_a, c1, c3, c2, c4, Spacing X / Y (group only, shown/hidden as before) |
+| Member & Anchor | 3. MEMBER & ANCHOR | f'c, w_c, diameter, ψc,V edge reinf., base plate t, l_x, F_y, b_eff |
+| Loads | 4. FACTORED LOADS | N_ua, V_ux, V_uy, M_ux, M_uy, sign note |
+
+  The project header (← All tools, title, save/load, Project Name, Job #, Eng, Use/Share shared project info, load message) stays above the tabs and is not part of any tab. No tab is ever empty, so none is hidden.
+- **Error marker:** a red dot (and the tooltip "An input on this tab needs attention") on a tab when a `validateInputs()` **error** names one of its inputs:
+  - "<label>: blank or not a number." or "<label> must …" (labels from `NUM_FIELDS`, mapped to tabs by `CA_IN_FIELD_TAB`);
+  - unknown grade / diameter / edge reinforcement → Member & Anchor;
+  - unknown anchor type / number of anchors → System.
+
+  A number the browser cannot parse reaches the tool as `''`, so it shows as "blank or not a number" and sets the dot. Warnings (shown in the report) do not set a dot. `validateInputs()` stops at the first stage that has errors, so the dots follow the error list the tool shows.
+- **Keyboard / accessibility:** `role="tablist"` / `role="tab"` (`aria-selected`, `aria-controls`, roving `tabIndex`) / `role="tabpanel"` (`aria-labelledby`); ←/→ (and ↑/↓), Home and End move between tabs and focus the new tab.
+- **Go-to-input:** the tool has no code that scrolls to or focuses an input (checked: no `focus()` / `scrollIntoView`). Project load and presets only change state; the active tab stays as it is.
+- **New storage key:** `concreteAnchor_inputTab_v1` (localStorage, plain string `system`, `geom`, `member` or `loads`). The prefix is this tool's existing hand-off receiver id `concreteAnchor` (the tool had no own localStorage key before). Read and write are in try/catch, with an in-memory copy (`caInTabMem`) when storage is blocked; an unknown value falls back to `system`. It is **not** part of the saved JSON (`{project, inputs, version: 2}`), which is unchanged, as are the `bridgeSuite.v1.*` keys.
+- **Print:** unchanged. In report mode the input panel is hidden, as before. In edit mode a browser print still shows every input group: the print CSS shows the hidden panes (`.ca-inpane[hidden]{display:block}`) and restores the old 1.5 rem gap between groups; the tab strip is `no-print`. Print-emulated full-page screenshots are pixel-identical to main in both modes.
+- **Narrow screens:** unchanged from main. At 400 px the three-column layout (`w-80` panel + centre + `w-[450px]` report panel) already squeezes the input panel to 1 px on main. This change does not alter that (open item O15).
+- **Governing provision:** none (no engineering change). No formula, factor, unit or code reference touched.
+- **Where / Before / After** (file uses CRLF; the inserted lines use CRLF too):
+  1. Print CSS. Anchor: `.text-slate-200, .text-slate-300 { color: black !important; }` (inside `@media print`). Inserted after it:
+     ```css
+                 /* input panel tabs: print every pane, spaced as the old space-y-6 list */
+                 .ca-inpane[hidden] { display: block !important; }
+                 .ca-inpane + .ca-inpane { margin-top: 1.5rem !important; }
+     ```
+  2. Helpers. Anchor: `    // --- MAIN APP ---`. Inserted just before it:
+     ```js
+         // --- INPUT PANEL TABS (UI only) ---
+         // The four input groups are always rendered; the inactive ones only get the `hidden`
+         // attribute, so no input is unmounted and its state, key and handler are unchanged.
+         // The active tab is remembered per browser in localStorage key concreteAnchor_inputTab_v1
+         // (never in the project JSON). An in-memory copy keeps it when storage is blocked.
+         const CA_IN_TABS = [['system', 'System'], ['geom', 'Geometry'], ['member', 'Member & Anchor'], ['loads', 'Loads']];
+         const CA_IN_FIELD_TAB = { hef: 'geom', ha: 'geom', c1: 'geom', c2: 'geom', c3: 'geom', c4: 'geom', sx: 'geom', sy: 'geom',
+             fc: 'member', wc: 'member', plateT: 'member', plateLx: 'member', plateFy: 'member', plateBeff: 'member',
+             Nua: 'loads', Vux: 'loads', Vuy: 'loads', Mux: 'loads', Muy: 'loads' };
+         const CA_IN_KEY = 'concreteAnchor_inputTab_v1';
+         let caInTabMem = '';
+         const caInTabGet = () => {
+             let t = caInTabMem;
+             if (!t) { try { t = localStorage.getItem(CA_IN_KEY) || ''; } catch (e) { t = ''; } }
+             return CA_IN_TABS.some(([k]) => k === t) ? t : 'system';
+         };
+         const caInTabSet = (t) => { caInTabMem = t; try { localStorage.setItem(CA_IN_KEY, t); } catch (e) {} };
+         // Red dot: a validateInputs() error (blank / unparseable / out-of-range input) on one of the tab's inputs.
+         const caInTabErrs = (errors) => {
+             const bad = {};
+             errors.forEach(m => {
+                 Object.entries(NUM_FIELDS).forEach(([k, l]) => { if (m.startsWith(l + ':') || m.startsWith(l + ' must')) bad[CA_IN_FIELD_TAB[k]] = true; });
+                 if (/^(Unknown anchor grade|Unsupported anchor diameter|Unknown edge reinforcement)/.test(m)) bad.member = true;
+                 if (/^(Unknown anchor type|Number of anchors)/.test(m)) bad.system = true;
+             });
+             return bad;
+         };
+
+     ```
+  3. `App` state. Anchor: `const [loadMsg, setLoadMsg] = useState(null);`. Line inserted after it:
+     ```js
+             const [inTab, setInTabState] = useState(caInTabGet);   // input panel tab (UI only)
+     ```
+  4. `App` handlers. Anchor: `        const ok = res.errors.length === 0;`. Inserted after it:
+     ```js
+             const inErr = caInTabErrs(res.errors);
+             const setInTab = (t, btn) => {
+                 setInTabState(t); caInTabSet(t);
+                 const sc = btn && btn.closest('.overflow-y-auto'); if (sc) sc.scrollTop = 0;
+             };
+             const onInTabKey = (e) => {
+                 const ks = CA_IN_TABS.map(([k]) => k), i = ks.indexOf(inTab);
+                 let j = -1;
+                 if (e.key === 'ArrowRight' || e.key === 'ArrowDown') j = (i + 1) % ks.length;
+                 else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') j = (i - 1 + ks.length) % ks.length;
+                 else if (e.key === 'Home') j = 0;
+                 else if (e.key === 'End') j = ks.length - 1;
+                 if (j < 0) return;
+                 e.preventDefault();
+                 const b = document.getElementById('caInTab_' + ks[j]);
+                 setInTab(ks[j], b); if (b) b.focus();
+             };
+     ```
+  5. Tab strip. Anchor: the load-message box's `dismiss` button and its closing `</div>}`, the last item in the sticky header. Inserted after that `</div>}` and before the header's closing `</div>`:
+     ```jsx
+                             <div role="tablist" aria-label="Input groups" className="no-print flex flex-wrap gap-1 mt-3">
+                                 {CA_IN_TABS.map(([k, lab]) => (
+                                     <button key={k} type="button" role="tab" id={'caInTab_' + k} aria-controls={'caInPane_' + k} aria-selected={inTab === k} tabIndex={inTab === k ? 0 : -1}
+                                         title={inErr[k] ? 'An input on this tab needs attention' : undefined}
+                                         onClick={e => setInTab(k, e.currentTarget)} onKeyDown={onInTabKey}
+                                         className={`flex-1 flex items-center justify-center gap-1 px-2 py-1 text-[10px] font-bold uppercase whitespace-nowrap border rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 ${inTab === k ? 'bg-blue-600 border-blue-500 text-white' : 'bg-slate-800 border-slate-600 text-slate-400 hover:bg-slate-700'}`}>
+                                         <span>{lab}</span>{inErr[k] && <span aria-hidden="true" className="inline-block w-1.5 h-1.5 rounded-full bg-red-500"></span>}
+                                     </button>
+                                 ))}
+                             </div>
+     ```
+  6. The four group divs: the line after each of `{/* 1. SYSTEM */}`, `{/* 2. GEOMETRY */}`, `{/* 3. MEMBER */}` and `{/* 4. LOADS */}`. The LOADS line has one extra leading space, which is kept. Before: `<div className="space-y-2">`. After (shown for SYSTEM; the others use `geom`, `member` and `loads`):
+     ```jsx
+     <div className="space-y-2 ca-inpane" id="caInPane_system" role="tabpanel" aria-labelledby="caInTab_system" hidden={inTab !== 'system'}>
+     ```
+- **Check case:** default inputs: a 4-anchor 3/4 in. F1554-36 hex group, h_ef 6 in., f'c 4000 psi, c = 12 in. on all sides, N_ua 5000 lb, V_ux 2000 lb, M_ux 1000 lb-in. Main and branch both show the interaction 0.18 + 0.16 = 0.35 and "OK — all checks ≤ 1.0 and §17.8 satisfied". The full report text is identical.
+- **How verified:**
+  - JSX transpiled with @babel/standalone 7.29.10 (latest 7.x) and with 8.0.7 (what the unpinned `@babel/standalone` URL resolves to today). `node --check` on both plain scripts and the transpiled app: pass, for main and branch.
+  - Headless Chromium (Playwright). CDNs are blocked here, so these were served from local npm copies: React/ReactDOM 18.3.1 (current `@18`), @babel/standalone 7.29.10 and KaTeX 0.16.9. The Tailwind Play CDN was replaced by CSS built with tailwindcss 3.4.19 from both files. The page also renders with Babel 8.0.7.
+  - 11 scenarios were run on main and on the branch:
+    - default;
+    - the CENTER, EDGE and CORNER presets;
+    - SINGLE;
+    - L-BOLT + Seismic + Cond. A;
+    - member edits (1.0 in., stirrups ψc,V, f'c 12000, t 0.75);
+    - load edits (N_ua −3000, V_uy 1500, M_uy 20000, c1 3);
+    - blank h_ef;
+    - plate F_y 0 + blank V_ux;
+    - report mode.
+
+    For each, these are **identical**: the centre panel text, the report panel text, the input inventory (37 inputs/buttons, 35 in SINGLE mode, with type, value and label) and the print-emulated input-panel text and size. Every input is in exactly one pane: header 7, System 9, Geometry 8 (6 in SINGLE mode), Member & Anchor 8, Loads 5.
+  - Save → load: the downloaded JSON is byte-identical to main, and loading it in a fresh page gives the same state on both. "Share project info" writes the same `bridgeSuite.v1.projectMeta` payload (timestamp excluded).
+  - Print-emulated full-page screenshots in edit mode and report mode: pixel-identical to main.
+  - Dots:
+    - a blank h_ef puts a dot on Geometry, and fixing it clears the dot;
+    - typing `-` (unparseable) puts a dot on Geometry;
+    - F_y 0 + a blank V_ux puts a dot on Loads only, because the tool reports the blank-input stage first.
+  - Interaction:
+    - the keys →, →, End, →, ←, Home, ←, ↓, ↑ select and focus the expected tab;
+    - typing in a field keeps the tab and the focus;
+    - the tab is remembered after a reload;
+    - with localStorage throwing, tab switching still works;
+    - no console errors. The only console message is Babel's usual "in-browser transformer" warning, which main also shows.
+  - Screenshots of every tab at 1600 px and 400 px were checked.
+- **Other copies of this code:** none.
+- **Open items (found, not changed):**
+  - O15. At 400 px wide the input panel collapses to 1 px, on main and on the branch alike. The three columns do not stack, and the page body has `overflow-hidden`. Not changed: the layout is outside this brief (CLAUDE.md §6). Needs: a decision on whether the tool should get a narrow-screen layout.
+  - O1 still applies: React 18 (development UMD), `@babel/standalone` and the Tailwind Play CDN are unpinned. `@babel/standalone` "latest" is now **8.0.7** (Babel 8). The page still renders with it here, but the version can change under the tool without notice. Not changed (CLAUDE.md §2).
