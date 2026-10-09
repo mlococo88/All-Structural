@@ -592,3 +592,116 @@ function computeAll(inp){
 - **Open items:**
   - O-R1. MIDAS mode: the reactions are the imported shears at x = 0 and x = L of the selected span, i.e. exactly what this app uses at those stations. If the MIDAS file has a single station at an interior pier, the value there can belong to the adjacent span; Substructure Loading warns on negative dead-load reactions, but the engineer should check pier values in this mode.
   - O-R2. index.html (MCT) is not a sender yet: its results hold no support reactions per load case (see fixlog/index.md).
+
+## 2026-10-09 — PR: claude/tabs-psbeam (PR link added after merge)
+
+### T1. Inputs page split into sub-tabs   [UI only — no calculation change]
+- **Date / type:** 2026-10-09, UI only (no result change). Engineer's request (2026-10-09): "Go through all the apps and make sure they are all formatted with the input panel having tabs rather than one long scrolling input panel." In this tool the inputs are not a sidebar: "Inputs" is one of the top-level tabs, a page of 10 cards next to the Live Geometry panel. A sub-tab strip now sits at the top of that page and groups the 10 cards. The page layout (cards column + Live Geometry column) is unchanged.
+- **How it works (React):** `InputsTab()` still renders every card exactly as before, in the same order. Each group of cards is wrapped in one `<div className="psbInPane" role="tabpanel">`; the inactive panes only get the `hidden` attribute. Nothing is unmounted or re-created when the sub-tab changes, so the card fold state, every `u('…')` setter, the strand-row table, the LL & DL / dead-load / geometry lock controls and the MIDAS banner work exactly as before. The MIDAS banner (span picker), the "Read the import guide" line and the "Detailing warnings" callout stay above the panes and show on every sub-tab, as they did above the cards.
+- **Sub-tabs (in order) and the cards in each:**
+
+| Sub-tab | Cards |
+|---|---|
+| Geometry | Girder & Bridge Geometry |
+| Materials | Materials & Time |
+| Strands | Prestressing Strands |
+| Loads | Loads; Continuity for LL + SIDL |
+| Handling & Deck | Handling — Lifting & Hauling; Deck Design (Transverse) |
+| Analysis Options | Analysis Options |
+| Reinforcement | Shear & Longitudinal Reinforcement (Trial); End-Region / Anchorage Zone |
+
+  The order is the existing card order, so no card moved. No card is mode-dependent (Continuity, Handling and Deck keep their ON/OFF switch in the card header), so no sub-tab is ever empty or hidden.
+- **Error marker:** red dot on a sub-tab whose pane holds an editable number box that is empty, holds text the browser cannot parse (`validity.badInput`), or is outside its own `min`/`max`. Boxes with a placeholder (the gross-section overrides, meant to be left blank) and read-only boxes driven by a lock are skipped. Refreshed after every render. Note: when `computeAll()` returns `R.error` the app shows the input-error callout instead of the whole tab area (unchanged), so the dot only covers the non-fatal cases.
+- **Go-to-input links:** none exist in this tool (no code scrolls to or focuses an input), so nothing else needed a sub-tab switch.
+- **Keyboard / accessibility:** `role="tablist"` / `role="tab"` (`aria-selected`, `aria-controls`) / `role="tabpanel"` (`aria-labelledby`); roving `tabindex`; ←/→, Home and End move between the sub-tabs.
+- **New storage key:** `psbeam.inputTab.v1` (localStorage, plain string: `geom`, `mat`, `strands`, `loads`, `hd`, `opts` or `reinf`; follows the tool's `psbeam.*` prefix). Remembers the active sub-tab per browser. Read and write in try/catch with an in-memory fallback. **Not** in `inp`, so the autosave `psbeam.inputs.v1`, `psbeam.ui.v1`, the project library `psbeam.projects.v1`, Export/Import JSON, the MIDAS import and every `bridgeSuite.v1.*` hand-off are unchanged. No existing key or format changed.
+- **Print:** unchanged. Printing while on the Inputs tab still prints every card: `@media print` shows the hidden panes (same idea as the existing `.card-b{display:block!important}` for collapsed cards) and hides the sub-tab strip (`noprint`). The Report tab does not use the Inputs page.
+- **Narrow screens:** the strip wraps (`flex-wrap`) and is sticky at the top of the window while the Inputs page scrolls. Existing layout note: at 400 px the page already scrolls sideways (document width 637 px before, because of wide tables in the Loads / Strands cards); this was not changed.
+- **Governing provision:** none (no engineering change).
+- **Before / After** (exact; insertions only, no existing line changed or removed):
+  1. CSS. Anchor (unchanged): `.tab:focus-visible{outline:2px solid var(--blue);outline-offset:-2px}`. Inserted right after it:
+     ```css
+     /* Inputs page sub-tabs (PsbInTabs, UI only): same look as the main .tab strip, one size down */
+     .psbInTabs{position:sticky;top:0;z-index:20;display:flex;flex-wrap:wrap;gap:0;background:var(--sheet);border-bottom:1.5px solid var(--ink);margin:0 0 14px;padding-top:2px}
+     .psbInTab{display:inline-flex;align-items:center;font-family:var(--sans);font-stretch:75%;font-weight:700;font-size:11.5px;letter-spacing:.6px;text-transform:uppercase;
+       padding:7px 11px 6px;border:none;background:transparent;color:var(--ink2);cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-1.5px}
+     .psbInTab:hover{color:var(--ink)}
+     .psbInTab[aria-selected="true"]{color:var(--blue);border-bottom-color:var(--blue)}
+     .psbInTab:focus-visible{outline:2px solid var(--blue);outline-offset:-2px}
+     .psbInDot{display:none;width:7px;height:7px;border-radius:50%;background:var(--fail);margin-left:6px}
+     .psbInTab.has-err .psbInDot{display:inline-block}
+     .psbInPane[hidden]{display:none}
+     ```
+  2. Print CSS. Anchor (unchanged): `  .card-b{display:block!important}   /* a card collapsed on screen still prints */`. Inserted right after it:
+     ```css
+       .psbInPane[hidden]{display:block!important}   /* every input sub-tab pane prints, as before */
+     ```
+  3. Module scope of the `text/babel` script, right before `function InputsTab({inp,set,R,selRow,setSelRow,editedRows,flashRow,editLog,clearLog}){`:
+     ```jsx
+     /* ---------- Inputs page sub-tabs (UI only) ----------
+        Every input card is still rendered exactly as before; each group of cards is
+        wrapped in one pane and the inactive panes are only hidden (the `hidden`
+        attribute), never unmounted, so card state, handlers and bound values are
+        untouched and print still shows every card. The active sub-tab is remembered
+        per browser in localStorage key psbeam.inputTab.v1 (never in inp, so the
+        autosave, the project library and the JSON export are unchanged). */
+     const PSB_IN_TABS=[['geom','Geometry'],['mat','Materials'],['strands','Strands'],['loads','Loads'],
+       ['hd','Handling & Deck'],['opts','Analysis Options'],['reinf','Reinforcement']];
+     const PSB_IN_KEY='psbeam.inputTab.v1';
+     let psbInTabMem=null;   // in-memory fallback when storage is blocked
+     function psbInTabLoad(){ let v=psbInTabMem; try{ const s=localStorage.getItem(PSB_IN_KEY); if(s) v=s; }catch(e){}
+       return PSB_IN_TABS.some(t=>t[0]===v)?v:'geom'; }
+     function psbInTabSave(v){ psbInTabMem=v; try{ localStorage.setItem(PSB_IN_KEY,v); }catch(e){} }
+     /* Red dot: a pane holds an editable number box that is empty, holds text the
+        browser cannot parse, or is outside its own min/max. A box with a placeholder
+        (the section-property overrides) is meant to be left blank, so blank is fine there. */
+     function psbInPaneBad(el){ if(!el) return false;
+       const ins=el.querySelectorAll('input[type="number"]');
+       for(let i=0;i<ins.length;i++){ const x=ins[i]; if(x.disabled||x.readOnly) continue; const vy=x.validity||{};
+         if((x.value===''&&!x.placeholder)||vy.badInput||vy.rangeUnderflow||vy.rangeOverflow) return true; }
+       return false; }
+     function PsbInTabs({tab,setTab,marks}){
+       const ref=useRef(null);
+       const onKey=e=>{ const n=PSB_IN_TABS.length, i=PSB_IN_TABS.findIndex(t=>t[0]===tab); let j=-1;
+         if(e.key==='ArrowRight') j=(i+1)%n; else if(e.key==='ArrowLeft') j=(i-1+n)%n;
+         else if(e.key==='Home') j=0; else if(e.key==='End') j=n-1;
+         if(j<0) return; e.preventDefault(); const k=PSB_IN_TABS[j][0]; setTab(k);
+         const b=ref.current&&ref.current.querySelector('#psbInTab-'+k); if(b) b.focus(); };
+       return <div ref={ref} className="psbInTabs noprint" role="tablist" aria-label="Input groups" onKeyDown={onKey}>
+         {PSB_IN_TABS.map(([k,l])=>{ const bad=marks.indexOf(k)>=0;
+           return <button key={k} type="button" role="tab" id={'psbInTab-'+k} aria-controls={'psbInPane-'+k}
+             aria-selected={tab===k} tabIndex={tab===k?0:-1} className={'psbInTab'+(bad?' has-err':'')}
+             title={bad?'A number in this group is empty or not valid':undefined}
+             onClick={()=>setTab(k)}>{l}<span className="psbInDot" aria-hidden="true"></span></button>; })}
+       </div>;
+     }
+     ```
+  4. `InputsTab()`, right after `  const [showHelp,setShowHelp]=useState(false);`:
+     ```jsx
+       // Inputs page sub-tabs (UI only; see PsbInTabs)
+       const [inTab,setInTabS]=useState(psbInTabLoad);
+       const setInTab=k=>{ setInTabS(k); psbInTabSave(k); };
+       const inPane=k=>({className:'psbInPane',role:'tabpanel',id:'psbInPane-'+k,'aria-labelledby':'psbInTab-'+k,hidden:inTab!==k});
+       const [inMarks,setInMarks]=useState([]);
+       useEffect(()=>{ const m=PSB_IN_TABS.map(t=>t[0]).filter(k=>psbInPaneBad(document.getElementById('psbInPane-'+k)));
+         if(m.join()!==inMarks.join()) setInMarks(m); });
+     ```
+  5. `InputsTab()` render, right after `    {showHelp&&<MidasHelp onClose={()=>setShowHelp(false)}/>}`:
+     ```jsx
+         <PsbInTabs tab={inTab} setTab={setInTab} marks={inMarks}/>
+     ```
+  6. Pane wrappers (each line inserted on its own line, 4-space indent):
+     - before `    <Card title="Girder & Bridge Geometry"`: `    <div {...inPane('geom')}>`
+     - before `    <Card title="Materials & Time"`: `    </div>` then `    <div {...inPane('mat')}>`
+     - before `    <Card title="Prestressing Strands"`: `    </div>` then `    <div {...inPane('strands')}>`
+     - before `    <Card title="Loads" refTag="LRFD 3.6 / 4.6.2.2" fold>`: `    </div>` then `    <div {...inPane('loads')}>`
+     - before `    <Card title="Handling — Lifting & Hauling"`: `    </div>` then `    <div {...inPane('hd')}>`
+     - before `    <Card title="Analysis Options"`: `    </div>` then `    <div {...inPane('opts')}>`
+     - before `    <Card title="Shear &amp; Longitudinal Reinforcement (Trial)"`: `    </div>` then `    <div {...inPane('reinf')}>`
+     - after the `    </Card>` that closes `End-Region / Anchorage Zone` (the last card, just before `  </div>);`): `    </div>`
+- **Check case:** n/a, no computed value changes.
+- **How verified:** `node --check` on all 8 inline scripts, with the `text/babel` block transpiled by @babel/standalone 7.23.5 (presets env, react), for main and branch. Headless Chromium (Playwright) with the pinned React 18.2.0 / ReactDOM 18.2.0 / Babel 7.23.5 / Plotly 2.27.0 / KaTeX 0.16.9 served locally from npm packs, main (origin/main 3cfe453) vs branch, clock frozen. Scenarios: default; Continuity + Handling + Deck + section overrides ON; Custom girder; AASHTO BIII-36 box; NEXT 36F; MIDAS `psbeam-external-demands` import of a 2-span file with span 1 and then span 2 picked; a blank field (Area per leg). For each: text of every top-level tab (Inputs cards + every control's type/value/label, Section Props … Report, status band), Export JSON, all localStorage (autosave, `psbeam.*`, `bridgeSuite.v1.*` incl. psSection publisher) before and after "Send reactions to Substructure Loading", the "Export hand-off (JSON)" file, and an Export → Import → Export round trip in a fresh page: all identical (only difference: the test folder name inside `bridgeSuite.v1.appPaths`, normalised). Branch UI checks: 10 cards, each in exactly one pane; keyboard ←/→/Home/End; sub-tab kept after reload and after leaving and returning to the Inputs tab; storage blocked → works from memory; print media shows all 7 panes and hides the strip; red dot on the right sub-tab for a blank Materials field and for a blank field on a hidden sub-tab; no dot in the default or all-ON states; no console errors. `git diff` is additions only.
+- **Other copies:** none (the `bridgeSuite.v1.*` bootstrap / BridgeXfer code was not touched).
+- **Open items:**
+  - O-T1. A blank MIDAS DF / multiple-presence box (taken as 1.0 by `computeAll`) gets a red dot, since the UI does not say blank is allowed there. Say if you want those excluded.
+  - O-T2. Clicking a strand in the Live Geometry drawing selects a strand row but does not switch to the Strands sub-tab (it never scrolled before either). Can be added if wanted.
