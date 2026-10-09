@@ -1795,3 +1795,173 @@ Not used (listed in the dialog with the reason): the other LL set, lanes loaded 
 - **How verified:** `node --check` on every plain inline script of the four changed files (abutment 13, SubLoads 3, Pile Designer 4, Spread Footing 18 blocks; none is JSX — Pile Designer is pre-compiled `React.createElement`). End-to-end in jsdom with one shared localStorage stub (React UMD served locally): **79 of 79 assertions pass** — abutment default → Pile Designer; abutment pile branch → Pile Designer with the same pile layout; SubLoads Pier 2 top of footing → Spread Footing; SubLoads Pier 1 bottom of footing → Pile Designer (rotated axes); JSON export → import into both receivers; refusals (wrong `_schema`, `schemaVersion` 2 and 3, kN units, non-finite P, missing `factored`, corrupt JSON file, corrupt stored payload, nothing sent, service-only payload into the footing, integral-abutment mode). No-hand-off invariance against the pre-change files: abutment `computeAll()` (dashboard, every permutation table, Input ID); SubLoads `combine()` envelopes and `concurrentSets()` of every unit and `abutExportData()`; Spread Footing `computeAll()` + `computePhase2()` (by-type and Direct mode); Pile Designer `computeAll(DEFAULT_INPUTS)` and the rendered app text (identical apart from the two new buttons). The earlier e2e suites still pass on this branch: memberReactions (Steel Beam → BasePlate / Spread Footing, 56/56) and abutmentLoads (SubLoads → abutment, 57/57).
 - **Other copies:** BridgeXfer v1 (unchanged) is in all four tools. The sender code exists only here.
 - **Open items:** (1) cases include the vertical LS over the heel even where it helps stability (the calculator's sliding and eccentricity checks leave it out); (2) the transverse axis y is the calculator's beam-offset axis, which is not tied to a bridge direction; (3) the footing is assumed centred on the abutment centreline for Mx (spread branch).
+
+## 2026-10-09 — PR: claude/tabs-abutment (PR link added after merge)
+
+### F14. Input column split into tabs   [UI only — no calculation change]
+- **Date / type:** 2026-10-09, UI only (no result change). Engineer's request (2026-10-09): "Go through all the apps and make sure they are all formatted with the input panel having tabs rather than one long scrolling input panel." Same approach as `Steel Beam Design - AISC 15th.html` (fix log T1).
+- **How it works:** `buildInputs()` still builds every input panel (I-1 … I-12, `data-cid="in-…"`) into `#inputCol` exactly as before. Right after the `innerHTML` assignment, the new `abutInputTabs(P)` **moves** the finished panel nodes into one pane per tab. Nothing is rebuilt or re-templated, so every `data-path`, `id`, delegated handler, collapse state (`S.ui.collapse`) and value is unchanged. Panel numbering is kept as is (I-1 … I-6, I-6b, I-7 [pile branch only], I-8 … I-12).
+- **Tabs (in order) and the panels in each** (`data-cid` in brackets):
+
+| Tab | Panels |
+|---|---|
+| Geometry | I-1 Geometry (`in-geom`), I-2 Materials (`in-mat`) |
+| Soil & Foundation | I-3 Backfill & Earth Pressure (`in-soil`), I-4 Foundation (`in-fnd`), I-7 Pile Group Layout & Resistances (`in-piles`, pile branch only) |
+| Girders | I-5 Girders — Layout & Reaction Matrix (`in-beams`), I-6 Longitudinal Distribution (`in-dist`), I-6b Longitudinal Load Calculation (`in-longit`) |
+| Factors | I-8 Load & Resistance Factors (`in-fact`) |
+| Rebar & Bearings | I-9 Reinforcement (`in-reinf`), I-10 Bearings & Bearing Seat (`in-brg`) |
+| Seismic | I-11 Seismic — Extreme Event I (`in-seis`) |
+| Assumptions | I-12 Engineering Assumptions (`in-assum`) |
+
+  I-7 is built after I-6b, so moving it into "Soil & Foundation" changes its DOM position only. `updateDerivedInInputs()` indexes `#inputCol .derived` [0] and [1], which are both in I-1 and stay first. A tab with no panel is hidden (none is empty in any current mode). The project title block and toolbar are in the page header, not in the input column, and are unchanged.
+- **Error marker:** a red dot on a tab holding an input that `markFieldValidity()` marks `bad` (outside the VALID hard limits) or `warnf` (outside the typical range), or a number the browser cannot parse (`validity.badInput`). The tab's tooltip says which. `abutInputTabMarks()` runs at the end of `markFieldValidity()`, so it follows every rebuild and every recalc (`updateDerivedInInputs()`).
+- **Keyboard / accessibility:** `role="tablist"`, `role="tab"` with `aria-selected` / `aria-controls`, `role="tabpanel"` with `aria-labelledby`; roving `tabindex`; ←/→ (and ↑/↓), Home and End.
+- **Layout:** the tab strip uses the look of the existing output tab bar (`.tabbar .tab`: `--panel-h` tabs, navy active tab, navy 2 px rule). It is sticky at the top of the viewport while the input column is in view (the column has no scroll box of its own; the page scrolls), and wraps on narrow screens. When a tab is clicked while the column top is scrolled above the viewport, the page scrolls back so the start of the new pane is visible.
+- **New storage key:** `abutcalc_inputTab_v1` (localStorage, plain string: `geom`, `found`, `gird`, `fact`, `detail`, `seis` or `assum`). Every read/write is in try/catch, with an in-memory copy so the tab survives rebuilds when storage is blocked. It is **not** in `S`, so the autosave (`abutcalc_v1_autosave`), saved projects (`abutcalc_v1_projects`), Export/Import JSON and the `bridgeSuite.v1.*` hand-offs are unchanged. (`S.ui.tab` is the existing *output* tab and is untouched.)
+- **Jump links:** nothing in the tool scrolls to or focuses an input-column field (the dashboard and `.xlink` jumps all target output panels through `gotoPanel()` / `activateTab()`), so no jump code needed changing. Project load, Import JSON, Undo, Reset and the SubLoads hand-off all call `buildInputs()`, which re-applies the remembered tab.
+- **Print:** unchanged. The existing print CSS hides `.wrap` (the whole app, input column included); the report is built separately in `#report`.
+- **Governing provision:** none (no engineering change).
+- **Before / After** (exact; LF line endings; `buildInputs` and `markFieldValidity` are each defined once):
+  1. CSS. Anchor (unchanged): `.tabpage.active{display:block;}`. After: these lines inserted right after it:
+     ```css
+     /* input column tabs (abutInputTabs) — same look as the output .tabbar */
+     #abutInTabs{position:sticky;top:0;z-index:20;display:flex;flex-wrap:wrap;gap:2px;margin:0 0 10px 0;padding-top:4px;
+       background:#f2f2ec;border-bottom:2px solid var(--navy);}
+     #abutInTabs .abutInTab{display:inline-flex;align-items:center;background:var(--panel-h);border:1px solid var(--line);border-bottom:none;
+       border-radius:4px 4px 0 0;padding:4px 10px;font-weight:bold;color:#4a4a42;}
+     #abutInTabs .abutInTab:hover{background:#e4e7dd;}
+     #abutInTabs .abutInTab[aria-selected="true"]{background:var(--navy);color:#fff;border-color:var(--navy);}
+     #abutInTabs .abutInTab:focus-visible{outline:2px solid var(--navy-lt);outline-offset:1px;}
+     .abutInDot{display:none;width:7px;height:7px;border-radius:50%;background:var(--fail);margin-left:6px;box-shadow:0 0 0 1.5px #fff;}
+     .abutInTab.has-err .abutInDot{display:inline-block;}
+     .abutInTab[hidden],.abutInPane[hidden]{display:none !important;}
+     ```
+  2. New block inserted immediately before the comment `/* ---------- beam position computation (shared by input & calc) ---------- */` (i.e. right after `function panel(...)`):
+     ```js
+     /* ---------- input column tabs (UI only) ----------
+        buildInputs() still builds every panel into #inputCol exactly as before;
+        abutInputTabs() then MOVES the finished panel nodes into one pane per tab.
+        Nothing is rebuilt, so data-path / data-cid, the delegated handlers and the
+        collapse state are untouched. The active tab is remembered per browser in
+        localStorage key abutcalc_inputTab_v1 (never in S, so the autosave, the
+        saved projects and the JSON export are unchanged). */
+     const ABUT_IN_TABS=[
+       ['geom','Geometry'],['found','Soil & Foundation'],['gird','Girders'],
+       ['fact','Factors'],['detail','Rebar & Bearings'],['seis','Seismic'],['assum','Assumptions']];
+     const ABUT_IN_SEC={
+       'in-geom':'geom','in-mat':'geom',
+       'in-soil':'found','in-fnd':'found','in-piles':'found',
+       'in-beams':'gird','in-dist':'gird','in-longit':'gird',
+       'in-fact':'fact',
+       'in-reinf':'detail','in-brg':'detail',
+       'in-seis':'seis',
+       'in-assum':'assum'};
+     const ABUT_IN_KEY='abutcalc_inputTab_v1';
+     let abutInTabCur=null;   /* in-memory copy: the tab survives rebuilds even without storage */
+     function abutInTabGet(){ if(abutInTabCur) return abutInTabCur; try{ return localStorage.getItem(ABUT_IN_KEY)||''; }catch(e){ return ''; } }
+     function abutInTabSet(t){ abutInTabCur=t; try{ localStorage.setItem(ABUT_IN_KEY,t); }catch(e){} }
+     function abutInputTabs(P){
+       const bar=document.createElement('div');
+       bar.id='abutInTabs'; bar.setAttribute('role','tablist'); bar.setAttribute('aria-label','Input groups');
+       const panes={};
+       ABUT_IN_TABS.forEach(([k,lab])=>{
+         const b=document.createElement('button');
+         b.type='button'; b.className='abutInTab'; b.id='abutInTab_'+k; b.dataset.pane=k;
+         b.setAttribute('role','tab'); b.setAttribute('aria-controls','abutInPane_'+k);
+         const sp=document.createElement('span'); sp.textContent=lab; b.appendChild(sp);
+         const dot=document.createElement('span'); dot.className='abutInDot'; dot.setAttribute('aria-hidden','true'); b.appendChild(dot);
+         b.addEventListener('click',()=>abutSetInTab(k,true));
+         b.addEventListener('keydown',abutInTabKey);
+         bar.appendChild(b);
+         const pn=document.createElement('div');
+         pn.className='abutInPane'; pn.id='abutInPane_'+k; pn.setAttribute('role','tabpanel');
+         pn.setAttribute('aria-labelledby','abutInTab_'+k);
+         panes[k]=pn;
+       });
+       /* move the built panels; a node not in the map stays with the panel before it */
+       let cur=ABUT_IN_TABS[0][0];
+       Array.from(P.childNodes).forEach(n=>{
+         const cid=n.getAttribute&&n.getAttribute('data-cid');
+         if(cid&&ABUT_IN_SEC[cid]) cur=ABUT_IN_SEC[cid];
+         panes[cur].appendChild(n);
+       });
+       P.appendChild(bar);
+       ABUT_IN_TABS.forEach(([k])=>{
+         P.appendChild(panes[k]);
+         document.getElementById('abutInTab_'+k).hidden=!panes[k].querySelector('.panel');
+       });
+       let t=abutInTabGet();
+       if(!panes[t]||!panes[t].querySelector('.panel')) t=ABUT_IN_TABS[0][0];
+       abutSetInTab(t,false);
+     }
+     function abutSetInTab(t,remember){
+       ABUT_IN_TABS.forEach(([k])=>{
+         const b=document.getElementById('abutInTab_'+k), pn=document.getElementById('abutInPane_'+k); if(!b||!pn) return;
+         const on=(k===t);
+         b.setAttribute('aria-selected',on?'true':'false'); b.tabIndex=on?0:-1;
+         pn.hidden=!on;
+       });
+       if(remember){
+         abutInTabSet(t);
+         /* keep the tab strip in view when switching from far down a long pane */
+         const bar=document.getElementById('abutInTabs'), col=document.getElementById('inputCol');
+         if(bar&&col){ const top=col.getBoundingClientRect().top; if(top<0) window.scrollBy(0,top); }
+       }
+     }
+     function abutInTabKey(e){
+       const vis=ABUT_IN_TABS.map(([k])=>document.getElementById('abutInTab_'+k)).filter(b=>b&&!b.hidden);
+       const i=vis.indexOf(e.currentTarget); let j=-1;
+       if(e.key==='ArrowRight'||e.key==='ArrowDown') j=(i+1)%vis.length;
+       else if(e.key==='ArrowLeft'||e.key==='ArrowUp') j=(i-1+vis.length)%vis.length;
+       else if(e.key==='Home') j=0;
+       else if(e.key==='End') j=vis.length-1;
+       if(j<0) return;
+       e.preventDefault(); abutSetInTab(vis[j].dataset.pane,true); vis[j].focus();
+     }
+     /* red dot on a tab holding an input that this tool marks bad (hard-limit error)
+        or warnf (outside the typical range), or a number the browser cannot parse */
+     function abutInputTabMarks(){
+       if(!document.getElementById('abutInTabs')) return;
+       const bad={}, warnOnly={};
+       document.querySelectorAll('#inputCol .abutInPane input, #inputCol .abutInPane select').forEach(i=>{
+         const pn=i.closest('.abutInPane'); if(!pn) return;
+         const k=pn.id.replace('abutInPane_','');
+         if(i.classList.contains('bad')||(i.validity&&i.validity.badInput)) bad[k]=1;
+         else if(i.classList.contains('warnf')) warnOnly[k]=1;
+       });
+       ABUT_IN_TABS.forEach(([k])=>{
+         const b=document.getElementById('abutInTab_'+k); if(!b) return;
+         const on=!!(bad[k]||warnOnly[k]);
+         b.classList.toggle('has-err',on);
+         b.title=bad[k]?'An input on this tab has an error':(warnOnly[k]?'An input on this tab is outside its typical range':'');
+       });
+     }
+     ```
+  3. `buildInputs()`. Before:
+     ```js
+       document.getElementById("inputCol").innerHTML=html;
+       markFieldValidity();
+     ```
+     After:
+     ```js
+       document.getElementById("inputCol").innerHTML=html;
+       abutInputTabs(document.getElementById("inputCol"));   /* move the panels just built into the input tabs */
+       markFieldValidity();
+     ```
+  4. `markFieldValidity()`. Before:
+     ```js
+         else if(v<r.typ[0]||v>r.typ[1]) el.classList.add("warnf");
+       });
+     }
+     ```
+     After:
+     ```js
+         else if(v<r.typ[0]||v>r.typ[1]) el.classList.add("warnf");
+       });
+       abutInputTabMarks();
+     }
+     ```
+- **Check case:** default project, Input ID **11D4F07F-29CD**, identical before and after; every dashboard D/C and every output tab's text identical (see How verified).
+- **How verified:** `node --check` on all 13 inline scripts. Headless Chromium (Playwright; KaTeX 0.16.11, Plotly 2.35.2 and three.js 0.128.0 served locally at the pinned versions; `Date` fixed so time stamps match), main vs branch: default; pile branch; pile branch in coordinate mode; seismic on; BR/TU/CR·SH calculated; Coulomb + rock + passive + manual share + position mode + N = 5; bad inputs (h_stem = −5, f′c = 25). For each: Input ID, dashboard, warnings, all 8 output tabs' text, `S`, the autosave, the `.derived` read-outs, the foundation-loads hand-off payload (`AbutFoundationHandoff.build`) and the hand-off buttons identical; the input list (tag/type/data-path/id/class) identical apart from the 7 new tab buttons, every input in exactly one pane. Export JSON → Import JSON, and Save Project → Reset Defaults → Projects… Load: identical results, identical exported file and saved-projects store. SubLoads "Send to Abutment Calculator" (default SubLoads project) → Pull from SubLoads → Apply: identical dialog text and identical results. Tab UI: arrow/Home/End keys, remembered tab after a rebuild and after reload, key not in the autosave, sticky strip at top 0 when scrolled, red dot appears for h_stem = −5 and clears when fixed, input column hidden in print media, storage that throws (tabs still work). No console errors on either version. At 400 px the page has the same 132 px horizontal overflow on main and on the branch (from existing content, not the tab strip, which wraps).
+- **Other copies:** none (the tab code exists only in this file; the Steel Beam version is a separate implementation).
+- **Open items:** the pre-existing 132 px horizontal overflow at 400 px width (existing content; not changed here).

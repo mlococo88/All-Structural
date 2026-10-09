@@ -151,6 +151,17 @@ table.itbl td.ro{background:var(--panel);color:#333;}
 .tabbar .tab.active{background:var(--navy);color:#fff;border-color:var(--navy);}
 .tabpage{display:none;padding-top:10px;}
 .tabpage.active{display:block;}
+/* input column tabs (abutInputTabs) — same look as the output .tabbar */
+#abutInTabs{position:sticky;top:0;z-index:20;display:flex;flex-wrap:wrap;gap:2px;margin:0 0 10px 0;padding-top:4px;
+  background:#f2f2ec;border-bottom:2px solid var(--navy);}
+#abutInTabs .abutInTab{display:inline-flex;align-items:center;background:var(--panel-h);border:1px solid var(--line);border-bottom:none;
+  border-radius:4px 4px 0 0;padding:4px 10px;font-weight:bold;color:#4a4a42;}
+#abutInTabs .abutInTab:hover{background:#e4e7dd;}
+#abutInTabs .abutInTab[aria-selected="true"]{background:var(--navy);color:#fff;border-color:var(--navy);}
+#abutInTabs .abutInTab:focus-visible{outline:2px solid var(--navy-lt);outline-offset:1px;}
+.abutInDot{display:none;width:7px;height:7px;border-radius:50%;background:var(--fail);margin-left:6px;box-shadow:0 0 0 1.5px #fff;}
+.abutInTab.has-err .abutInDot{display:inline-block;}
+.abutInTab[hidden],.abutInPane[hidden]{display:none !important;}
 
 /* ================= DASHBOARD ================= */
 #dashboard{background:var(--paper);border:1.5px solid var(--navy);border-radius:3px;padding:8px 12px;margin-bottom:12px;}
@@ -723,6 +734,105 @@ function panel(id, no, title, bodyHTML, extraHead=""){
     <div class="p-body">${bodyHTML}</div></div>`;
 }
 
+/* ---------- input column tabs (UI only) ----------
+   buildInputs() still builds every panel into #inputCol exactly as before;
+   abutInputTabs() then MOVES the finished panel nodes into one pane per tab.
+   Nothing is rebuilt, so data-path / data-cid, the delegated handlers and the
+   collapse state are untouched. The active tab is remembered per browser in
+   localStorage key abutcalc_inputTab_v1 (never in S, so the autosave, the
+   saved projects and the JSON export are unchanged). */
+const ABUT_IN_TABS=[
+  ['geom','Geometry'],['found','Soil & Foundation'],['gird','Girders'],
+  ['fact','Factors'],['detail','Rebar & Bearings'],['seis','Seismic'],['assum','Assumptions']];
+const ABUT_IN_SEC={
+  'in-geom':'geom','in-mat':'geom',
+  'in-soil':'found','in-fnd':'found','in-piles':'found',
+  'in-beams':'gird','in-dist':'gird','in-longit':'gird',
+  'in-fact':'fact',
+  'in-reinf':'detail','in-brg':'detail',
+  'in-seis':'seis',
+  'in-assum':'assum'};
+const ABUT_IN_KEY='abutcalc_inputTab_v1';
+let abutInTabCur=null;   /* in-memory copy: the tab survives rebuilds even without storage */
+function abutInTabGet(){ if(abutInTabCur) return abutInTabCur; try{ return localStorage.getItem(ABUT_IN_KEY)||''; }catch(e){ return ''; } }
+function abutInTabSet(t){ abutInTabCur=t; try{ localStorage.setItem(ABUT_IN_KEY,t); }catch(e){} }
+function abutInputTabs(P){
+  const bar=document.createElement('div');
+  bar.id='abutInTabs'; bar.setAttribute('role','tablist'); bar.setAttribute('aria-label','Input groups');
+  const panes={};
+  ABUT_IN_TABS.forEach(([k,lab])=>{
+    const b=document.createElement('button');
+    b.type='button'; b.className='abutInTab'; b.id='abutInTab_'+k; b.dataset.pane=k;
+    b.setAttribute('role','tab'); b.setAttribute('aria-controls','abutInPane_'+k);
+    const sp=document.createElement('span'); sp.textContent=lab; b.appendChild(sp);
+    const dot=document.createElement('span'); dot.className='abutInDot'; dot.setAttribute('aria-hidden','true'); b.appendChild(dot);
+    b.addEventListener('click',()=>abutSetInTab(k,true));
+    b.addEventListener('keydown',abutInTabKey);
+    bar.appendChild(b);
+    const pn=document.createElement('div');
+    pn.className='abutInPane'; pn.id='abutInPane_'+k; pn.setAttribute('role','tabpanel');
+    pn.setAttribute('aria-labelledby','abutInTab_'+k);
+    panes[k]=pn;
+  });
+  /* move the built panels; a node not in the map stays with the panel before it */
+  let cur=ABUT_IN_TABS[0][0];
+  Array.from(P.childNodes).forEach(n=>{
+    const cid=n.getAttribute&&n.getAttribute('data-cid');
+    if(cid&&ABUT_IN_SEC[cid]) cur=ABUT_IN_SEC[cid];
+    panes[cur].appendChild(n);
+  });
+  P.appendChild(bar);
+  ABUT_IN_TABS.forEach(([k])=>{
+    P.appendChild(panes[k]);
+    document.getElementById('abutInTab_'+k).hidden=!panes[k].querySelector('.panel');
+  });
+  let t=abutInTabGet();
+  if(!panes[t]||!panes[t].querySelector('.panel')) t=ABUT_IN_TABS[0][0];
+  abutSetInTab(t,false);
+}
+function abutSetInTab(t,remember){
+  ABUT_IN_TABS.forEach(([k])=>{
+    const b=document.getElementById('abutInTab_'+k), pn=document.getElementById('abutInPane_'+k); if(!b||!pn) return;
+    const on=(k===t);
+    b.setAttribute('aria-selected',on?'true':'false'); b.tabIndex=on?0:-1;
+    pn.hidden=!on;
+  });
+  if(remember){
+    abutInTabSet(t);
+    /* keep the tab strip in view when switching from far down a long pane */
+    const bar=document.getElementById('abutInTabs'), col=document.getElementById('inputCol');
+    if(bar&&col){ const top=col.getBoundingClientRect().top; if(top<0) window.scrollBy(0,top); }
+  }
+}
+function abutInTabKey(e){
+  const vis=ABUT_IN_TABS.map(([k])=>document.getElementById('abutInTab_'+k)).filter(b=>b&&!b.hidden);
+  const i=vis.indexOf(e.currentTarget); let j=-1;
+  if(e.key==='ArrowRight'||e.key==='ArrowDown') j=(i+1)%vis.length;
+  else if(e.key==='ArrowLeft'||e.key==='ArrowUp') j=(i-1+vis.length)%vis.length;
+  else if(e.key==='Home') j=0;
+  else if(e.key==='End') j=vis.length-1;
+  if(j<0) return;
+  e.preventDefault(); abutSetInTab(vis[j].dataset.pane,true); vis[j].focus();
+}
+/* red dot on a tab holding an input that this tool marks bad (hard-limit error)
+   or warnf (outside the typical range), or a number the browser cannot parse */
+function abutInputTabMarks(){
+  if(!document.getElementById('abutInTabs')) return;
+  const bad={}, warnOnly={};
+  document.querySelectorAll('#inputCol .abutInPane input, #inputCol .abutInPane select').forEach(i=>{
+    const pn=i.closest('.abutInPane'); if(!pn) return;
+    const k=pn.id.replace('abutInPane_','');
+    if(i.classList.contains('bad')||(i.validity&&i.validity.badInput)) bad[k]=1;
+    else if(i.classList.contains('warnf')) warnOnly[k]=1;
+  });
+  ABUT_IN_TABS.forEach(([k])=>{
+    const b=document.getElementById('abutInTab_'+k); if(!b) return;
+    const on=!!(bad[k]||warnOnly[k]);
+    b.classList.toggle('has-err',on);
+    b.title=bad[k]?'An input on this tab has an error':(warnOnly[k]?'An input on this tab is outside its typical range':'');
+  });
+}
+
 /* ---------- beam position computation (shared by input & calc) ---------- */
 function beamPositions(){
   const b=S.beams, N=b.N;
@@ -1145,6 +1255,7 @@ function buildInputs(){
   `);
 
   document.getElementById("inputCol").innerHTML=html;
+  abutInputTabs(document.getElementById("inputCol"));   /* move the panels just built into the input tabs */
   markFieldValidity();
   drawBeamSketch("beamSketchIn", 320);
 }
@@ -1158,6 +1269,7 @@ function markFieldValidity(){
     if(!isFinite(v)||v<r.hard[0]||v>r.hard[1]) el.classList.add("bad");
     else if(v<r.typ[0]||v>r.typ[1]) el.classList.add("warnf");
   });
+  abutInputTabMarks();
 }
 function collectInputWarnings(){
   for(const [p,r] of Object.entries(VALID)){
