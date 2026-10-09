@@ -47,6 +47,15 @@ body{font-family:var(--font-doc);font-size:10pt;color:var(--ink);background:#efe
 @media print{.alltools,#projShare{display:none!important}}
 #main{flex:1 1 auto;display:flex;min-height:0;overflow:hidden}
 #inputPanel{flex:0 0 33%;max-width:460px;min-width:340px;overflow-y:auto;border-right:2px solid var(--line);background:var(--panel);padding:9px 10px 40px}
+/* input panel tabs (sbdInputTabs) */
+#sbdInTabs{position:sticky;top:-9px;z-index:12;display:flex;flex-wrap:wrap;gap:2px;margin:-9px -10px 8px;padding:7px 10px 0;background:var(--panel);border-bottom:2px solid var(--accent)}
+#sbdInTabs .sbdInTab{display:inline-flex;align-items:center;font-family:var(--font-ui);font-size:9pt;padding:5px 10px;border:1px solid var(--line);border-bottom:none;background:var(--slate-100);color:#41546E;cursor:pointer;border-radius:5px 5px 0 0}
+#sbdInTabs .sbdInTab:hover{background:#EFF4FA}
+#sbdInTabs .sbdInTab[aria-selected="true"]{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:600}
+#sbdInTabs .sbdInTab:focus-visible{outline:2px solid #BFD3F2;outline-offset:1px}
+.sbdInDot{display:none;width:7px;height:7px;border-radius:50%;background:var(--fail);margin-left:6px;box-shadow:0 0 0 1.5px #fff}
+.sbdInTab.has-err .sbdInDot{display:inline-block}
+.sbdInTab[hidden],.sbdInPane[hidden]{display:none!important}
 #outputPanel{flex:1 1 auto;min-width:0;overflow-y:auto;overflow-x:hidden;padding:0 14px 60px;background:var(--paper)}
 #tabBar{position:sticky;top:0;z-index:15;background:var(--paper);border-bottom:2px solid var(--accent);padding:7px 0 0;display:flex;flex-wrap:wrap;gap:2px}
 #tabBar button{font-family:var(--font-ui);font-size:9pt;padding:5px 11px;border:1px solid var(--line);border-bottom:none;background:var(--slate-100);color:#41546E;cursor:pointer;border-radius:5px 5px 0 0}
@@ -2066,6 +2075,104 @@ function buildProjHeader(){
     i.placeholder=lab;d.appendChild(i);g.appendChild(d);
   });
 }
+/* ---------- input panel tabs (UI only) ----------
+   rebuildInputs() still builds every section into #inputPanel exactly as
+   before; sbdInputTabs() then MOVES the finished section nodes into one pane
+   per tab. Nothing is rebuilt, so data-fkey / data-secid, the handlers and
+   the bound values are untouched. The active tab is remembered per browser
+   in localStorage key sbd_inputTab_v1 (never in S, so the autosave and the
+   project JSON are unchanged). */
+const SBD_IN_TABS=[
+  ['project','Project'],['batch','Batch'],['geom','Geometry'],
+  ['section','Section'],['loads','Loads'],['checks','Checks']];
+const SBD_IN_SEC={
+  inAssume:'project',inProj:'project',
+  inBatch:'batch',
+  inGeom:'geom',inBrace:'geom',inBrace2:'geom',inComp:'geom',
+  inSect:'section',inComp2:'section',inStiff:'section',
+  inCombo:'loads',inTrib:'loads',inLoads:'loads',inMember:'loads',inMemSW:'loads',inMan:'loads',inTor:'loads',
+  inJ10:'checks',inMemDefl:'checks',inOpts:'checks',inDesign:'checks'};
+/* analysis blockers that come from an input, mapped to the section holding it */
+const SBD_IN_BLOCK=[
+  [/^Span \d+ has non-positive length/,'inGeom'],
+  [/mechanism/i,'inGeom'],
+  [/^Member check mode: enter an unbraced length/,'inBrace2'],
+  [/^Add at least one load case/,'inMember'],
+  [/^Self-weight is enabled but no span/,'inMemSW'],
+  [/^No members loaded/,'inBatch']];
+const SBD_IN_KEY='sbd_inputTab_v1';
+let sbdInTabCur=null;   /* in-memory copy, so the tab survives rebuilds even without storage */
+function sbdInTabGet(){if(sbdInTabCur)return sbdInTabCur;try{return localStorage.getItem(SBD_IN_KEY)||'';}catch(e){return '';}}
+function sbdInTabSet(t){sbdInTabCur=t;try{localStorage.setItem(SBD_IN_KEY,t);}catch(e){}}
+function sbdInputTabs(P){
+  const bar=el('div');bar.id='sbdInTabs';bar.setAttribute('role','tablist');bar.setAttribute('aria-label','Input groups');
+  const panes={};
+  SBD_IN_TABS.forEach(([k,lab])=>{
+    const b=el('button','sbdInTab');b.type='button';b.id='sbdInTab_'+k;b.dataset.pane=k;
+    b.setAttribute('role','tab');b.setAttribute('aria-controls','sbdInPane_'+k);
+    b.appendChild(el('span',null,lab));
+    const dot=el('span','sbdInDot');dot.setAttribute('aria-hidden','true');b.appendChild(dot);
+    b.addEventListener('click',()=>sbdSetInTab(k,true));
+    b.addEventListener('keydown',sbdInTabKey);
+    bar.appendChild(b);
+    const pn=el('div','sbdInPane');pn.id='sbdInPane_'+k;pn.setAttribute('role','tabpanel');
+    pn.setAttribute('aria-labelledby','sbdInTab_'+k);
+    panes[k]=pn;
+  });
+  /* move the built nodes; a section not in the map stays with the one before it */
+  let cur='project';
+  Array.from(P.childNodes).forEach(n=>{
+    const sid=n.getAttribute&&n.getAttribute('data-secid');
+    if(sid&&SBD_IN_SEC[sid])cur=SBD_IN_SEC[sid];
+    panes[cur].appendChild(n);
+  });
+  P.appendChild(bar);
+  SBD_IN_TABS.forEach(([k])=>{
+    P.appendChild(panes[k]);
+    $('sbdInTab_'+k).hidden=!panes[k].childNodes.length;
+  });
+  let t=sbdInTabGet();
+  if(!panes[t]||!panes[t].childNodes.length)t=(isBatch()?'batch':'project');
+  sbdSetInTab(t,false);
+  sbdInputTabMarks();
+}
+function sbdSetInTab(t,remember){
+  SBD_IN_TABS.forEach(([k])=>{
+    const b=$('sbdInTab_'+k),pn=$('sbdInPane_'+k);if(!b||!pn)return;
+    const on=(k===t);
+    b.setAttribute('aria-selected',on?'true':'false');b.tabIndex=on?0:-1;
+    pn.hidden=!on;
+  });
+  if(remember){sbdInTabSet(t);const P=$('inputPanel');if(P)P.scrollTop=0;}
+}
+function sbdInTabKey(e){
+  const vis=SBD_IN_TABS.map(([k])=>$('sbdInTab_'+k)).filter(b=>b&&!b.hidden);
+  const i=vis.indexOf(e.currentTarget);let j=-1;
+  if(e.key==='ArrowRight'||e.key==='ArrowDown')j=(i+1)%vis.length;
+  else if(e.key==='ArrowLeft'||e.key==='ArrowUp')j=(i-1+vis.length)%vis.length;
+  else if(e.key==='Home')j=0;
+  else if(e.key==='End')j=vis.length-1;
+  if(j<0)return;
+  e.preventDefault();sbdSetInTab(vis[j].dataset.pane,true);vis[j].focus();
+}
+/* red dot on a tab whose inputs carry an error: an error box inside one of its
+   sections, a number field the browser cannot parse, or an analysis blocker
+   that names one of its inputs */
+function sbdInputTabMarks(){
+  if(!$('sbdInTabs'))return;
+  const bad={};
+  const mark=n=>{const pn=n&&n.closest('.sbdInPane');if(pn)bad[pn.id.replace('sbdInPane_','')]=1;};
+  document.querySelectorAll('#inputPanel .sbdInPane .errBox').forEach(mark);
+  document.querySelectorAll('#inputPanel .sbdInPane input').forEach(i=>{if(i.validity&&i.validity.badInput)mark(i);});
+  const sec=id=>document.querySelector('#inputPanel [data-secid="'+id+'"]');
+  ((AN&&AN.blockers)||[]).forEach(b=>{const m=SBD_IN_BLOCK.find(r=>r[0].test(b));if(m)mark(sec(m[1]));});
+  if(AN&&AN.comp&&AN.comp.blocked)mark(sec('inComp2'));
+  SBD_IN_TABS.forEach(([k])=>{
+    const b=$('sbdInTab_'+k);if(!b)return;
+    b.classList.toggle('has-err',!!bad[k]);
+    b.title=bad[k]?'An input on this tab needs attention':'';
+  });
+}
 function rebuildInputs(){
   const st=captureUI();
   const P=$('inputPanel');P.innerHTML='';
@@ -2312,6 +2419,7 @@ function rebuildInputs(){
     body.appendChild(el('div','hint','Import accepts both this app\u2019s projects and legacy Shear &amp; Moment Diagram exports (auto-converted to kip / ft). Saved projects live in this browser\u2019s local storage \u2014 export JSON for backup or transfer.'));
   },P,{noNum:true});
   __secNum=numHold;
+  sbdInputTabs(P);   /* move the sections just built into the input tabs */
   restoreUI(st);
 }
 function comboTable(list,isSvc){
@@ -2471,6 +2579,7 @@ function schedule(structural){
     computeAll();
     if(structural)rebuildInputs();
     renderTab();
+    sbdInputTabMarks();   /* refresh the input-tab error dots */
     autosave();pushHist();
     $('updDot').classList.remove('show');
   },160);

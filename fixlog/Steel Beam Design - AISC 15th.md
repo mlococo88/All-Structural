@@ -846,6 +846,81 @@ function buildDeriveTab(pg){
 - **Other copies of this code:** none. BridgeXfer v1 (unchanged, from Step 1) is reused.
 - **Open items:** reactions are for each case as loaded (live load on all spans, no pattern loading); the sender adds cases of the same type, so pattern cases must be marked "other".
 
+## 2026-10-09 — PR: claude/steel-beam-input-tabs (PR link added after merge)
+### T1. Input panel split into tabs   [UI only — no calculation change]
+- **Date / type:** 2026-10-09, UI only (no result change). Requested by the engineer on 2026-10-08: "I want the input panel to be split up into different tabs. Similar to some of the more recent apps we've built." The pattern follows `Gusset Plate Rating.html` (tab strip at the top of the input sidebar, one pane per tab, collapsible cards inside), drawn in this tool's own style (the same button-tab look as the output `#tabBar`).
+- **How it works:** `rebuildInputs()` still builds every input section into `#inputPanel` exactly as before. At its end, the new `sbdInputTabs(P)` **moves** the finished nodes into one pane per tab. Nothing is rebuilt, so every `data-fkey`, `data-secid`, event handler and bound value is unchanged, and the mode logic (`MSKIP`, `BEAM_HIDDEN`, `MEMBER_HIDDEN`, `BATCH_HIDDEN`, `extraInputSections`) still decides which sections exist. A tab whose pane is empty in the current mode is hidden. A section that is not in the map stays in the tab of the section before it.
+- **Tabs (in order) and the sections in each** (`data-secid` in brackets):
+
+| Tab | Beam mode | Member mode | Batch mode |
+|---|---|---|---|
+| Project | Mode selector, Engineering Assumptions (`inAssume`), Project Save / Load (`inProj`) | same | same |
+| Batch | — (hidden) | — (hidden) | Batch Member Check (`inBatch`) |
+| Geometry | Geometry & Supports (`inGeom`), Lateral Bracing & C_b (`inBrace2`), Compression Effective Lengths (`inComp`) | Lateral Bracing & C_b (`inBrace2`: member span, L_b, C_b), Compression Effective Lengths (`inComp`) | hidden |
+| Section | Section & Material (`inSect`), Composite Action (`inComp2`), Web Stiffeners (`inStiff`) | same | hidden |
+| Loads | Load Cases & Combinations (`inCombo`), Tributary Load Generator (`inTrib`), Applied Loads (`inLoads`), Manual Member Demands per Combination (`inMan`), Torsion (`inTor`) | Load Cases — Factored Demands (`inMember`), Beam Self-Weight (`inMemSW`), Torsion (`inTor`) | hidden |
+| Checks | Concentrated Forces J10 (`inJ10`), Output Stations (`inOpts`) | Concentrated Forces J10 (`inJ10`), Deflection Check (`inMemDefl`) | hidden |
+
+  (`inBrace` is always skipped by `MSKIP` in this file; it is mapped to Geometry in case it ever shows. `inDesign` exists only in a dead duplicate of `extraInputSections`, see O4; it is mapped to Checks.)
+- **Error marker:** a red dot on a tab when one of its inputs needs attention: an `.errBox` inside one of its sections, a number field the browser cannot parse (`validity.badInput`), an analysis blocker that names one of its inputs (span length or mechanism → `inGeom`; member L_b → `inBrace2`; no load case → `inMember`; self-weight span → `inMemSW`; no batch members → `inBatch`), or a blocked composite check (`AN.comp.blocked` → `inComp2`). Refreshed after every rebuild and every recalculation.
+- **Keyboard / accessibility:** `role="tablist"`, `role="tab"` with `aria-selected` and `aria-controls`, `role="tabpanel"` with `aria-labelledby`; roving `tabindex`; ←/→ (and ↑/↓), Home and End move between the visible tabs.
+- **New storage key:** `sbd_inputTab_v1` (localStorage, plain string: `project`, `batch`, `geom`, `section`, `loads` or `checks`). It remembers the active input tab per browser. Every read and write is in try/catch, and an in-memory copy keeps the tab across rebuilds when storage is blocked. It is **not** stored in `S`, so the autosave (`sbd_autosave_v1`), saved projects (`sbd_projects_v1`), the project JSON export/import and the hand-offs are unchanged. No existing key or format changed.
+- **Print:** unchanged. Print hides the whole `#app` (the print report is built separately in `#printReport`), so the input panel and its tab strip do not print, as before.
+- **Narrow screens:** the tab strip wraps (`flex-wrap`); it is sticky at the top of the scrolling input panel. No horizontal page scroll at 400 px (document scroll width = 400).
+- **Governing provision:** none (no engineering change).
+- **Before / After** (exact; file uses CRLF, inserted lines use CRLF; every function edited is defined once in the file — `rebuildInputs`, `schedule`):
+  1. CSS. Before (anchor, unchanged):
+     ```css
+     #inputPanel{flex:0 0 33%;max-width:460px;min-width:340px;overflow-y:auto;border-right:2px solid var(--line);background:var(--panel);padding:9px 10px 40px}
+     ```
+     After: the following lines inserted right after it (before `#outputPanel{`):
+     ```css
+     /* input panel tabs (sbdInputTabs) */
+     #sbdInTabs{position:sticky;top:-9px;z-index:12;display:flex;flex-wrap:wrap;gap:2px;margin:-9px -10px 8px;padding:7px 10px 0;background:var(--panel);border-bottom:2px solid var(--accent)}
+     #sbdInTabs .sbdInTab{display:inline-flex;align-items:center;font-family:var(--font-ui);font-size:9pt;padding:5px 10px;border:1px solid var(--line);border-bottom:none;background:var(--slate-100);color:#41546E;cursor:pointer;border-radius:5px 5px 0 0}
+     #sbdInTabs .sbdInTab:hover{background:#EFF4FA}
+     #sbdInTabs .sbdInTab[aria-selected="true"]{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:600}
+     #sbdInTabs .sbdInTab:focus-visible{outline:2px solid #BFD3F2;outline-offset:1px}
+     .sbdInDot{display:none;width:7px;height:7px;border-radius:50%;background:var(--fail);margin-left:6px;box-shadow:0 0 0 1.5px #fff}
+     .sbdInTab.has-err .sbdInDot{display:inline-block}
+     .sbdInTab[hidden],.sbdInPane[hidden]{display:none!important}
+     ```
+  2. New functions inserted immediately before `function rebuildInputs(){` (anchor: the comment `/* ---------- input panel tabs (UI only) ----------`): constants `SBD_IN_TABS`, `SBD_IN_SEC`, `SBD_IN_BLOCK`, `SBD_IN_KEY`, and functions `sbdInTabGet`, `sbdInTabSet`, `sbdInputTabs`, `sbdSetInTab`, `sbdInTabKey`, `sbdInputTabMarks` (about 100 lines; copy the block from the file, from that comment down to the line before `function rebuildInputs(){`).
+  3. End of `rebuildInputs()`. Before:
+     ```js
+       __secNum=numHold;
+       restoreUI(st);
+     }
+     ```
+     After:
+     ```js
+       __secNum=numHold;
+       sbdInputTabs(P);   /* move the sections just built into the input tabs */
+       restoreUI(st);
+     }
+     ```
+  4. `schedule()`. Before:
+     ```js
+         renderTab();
+         autosave();pushHist();
+     ```
+     After:
+     ```js
+         renderTab();
+         sbdInputTabMarks();   /* refresh the input-tab error dots */
+         autosave();pushHist();
+     ```
+- **Check case:** default project (W18X50, 20 ft simple span, trib 5 + 5 ft, DL 15 / LL 40 psf). Before and after: governing Flexure M_x DCR 0.116 (1.2DL + 1.6LL + 0.5SL, M_u = 44.00 kip-ft, φM_n = 378.75 kip-ft); Shear V_x DCR 0.046 (V_u = 8.80 kip, φV_n = 191.70 kip); Deflection L/240 DCR 0.093. Identical.
+- **How verified** (Chromium 1194 headless via Playwright, the CDN libraries served from local copies of the same pinned versions):
+  - `node --check` on all 5 inline scripts: pass.
+  - 13 scenarios run in the original and the edited file: default; 2-span beam with point, uniform and trapezoidal loads, calculated C_b, stiffeners, J10 bearing lengths, open-section torsion and manual demands; composite with deck perpendicular, deck parallel (stud mode, haunch) and solid slab; member mode (self-weight, deflection, J10, tension case); member mode composite; member mode with a missing L_b (blocked); composite on an HSS (blocked); batch with 4 rows (one unknown shape, one composite); empty batch; HSS. For each: the full analysis object `AN` (JSON), the text of every output tab (16 in beam mode, 13 in member, 3 in batch; includes the Validation tab, i.e. every built-in example check), and the autosave JSON are **identical** before and after.
+  - Input inventory (every `data-secid`, `data-fkey`, input/select/textarea/button in the panel): identical lists before and after in every scenario, and each element sits in exactly one tab pane (0 unplaced).
+  - Save → Load round trip through the panel's own buttons: state identical; saved copy identical.
+  - Hand-off: "Send to other tools" publishes the same `bridgeSuite.v1.memberReactions` payload (minus the timestamp) as before; all five hand-off functions present.
+  - Interaction: active tab remembered across rebuilds (e.g. "+ Point"), page reload, and mode switches; keyboard navigation; a non-numeric span length puts a dot on Geometry and clears when fixed; with localStorage throwing, the tab still survives rebuilds; no console errors.
+  - Screenshots of every tab in beam, member and batch modes at 1400 px and 400 px widths were checked.
+- **Other copies of this code:** none.
+
 ## Open items (not changed)
 - O1. **H3.3(c) buckling limit state** is not implemented, only warned (F5). Decide on the method (e.g. f_bx + σ_w ≤ φF_cr with F_cr = M_n/S_x from Chapter F, or a DG 9 interaction) before coding it as a check.
 - O2. **Batch mode** has no H3.3 buckling warning and keeps its existing tension note. Decide whether to add a matching batch note.
@@ -853,3 +928,4 @@ function buildDeriveTab(pg){
 - O4. **Duplicate function definitions** (`TABS` ×4, `renderTab`, `buildSummaryTab`, `shearMajor`, `compositeFor`, `constructionStage`, `buildMxTab`, `buildServiceTab`, `memberDefl`, `openTorsionFor`, `regPlot`, `xsecBlock`, `classFlexBlock`, …). Only the last definition runs. **Not cleaned up**, per instruction. F2 also updated the label in the dead earlier `classFlexBlock` (≈ line 3136) so the two copies do not disagree.
 - O5. Calculated-C_b window clipped to the moment-sign region (lines ≈ 1817–1829). Not in scope; the default C_b = 1 is conservative.
 - O6. The open-section torque is a single value applied to every strength combination (not scaled per combination). Not in scope.
+- O7. **New localStorage key `sbd_inputTab_v1`** (T1, active input tab). The storage-key column of AUDIT.md still lists only `sbd_autosave_v1` and `sbd_projects_v1`; it was not edited in this PR (one tool per PR). Add the key to AUDIT.md in a later housekeeping PR.
