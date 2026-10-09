@@ -3627,14 +3627,15 @@ const Card=({title,refTag,right,children,fold})=>{
    (or a one-line qualifier) on the right. */
 const SubH=({t,r})=>(<div className="subh"><span>{t}</span>{r&&<span className="sref">{r}</span>}</div>);
 /* `sub` is the grey helper line that hangs under a label in a .rows layout. */
-const Num=({l,u,v,set,step=0.1,min,driven,src,sub})=>(
+const Num=({l,u,v,set,step=0.1,min,driven,src,sub,blank1})=>(
   <div className="fld"><label>{l}</label><div className="fwrap">
-    <input type="number" step={step} min={min} value={v}
+    <input type="number" step={step} min={min} value={v} data-blank1={blank1?'1':undefined}
       readOnly={!!driven} title={driven?('Driven by '+(src||'a locked shared channel')+' — unlock to edit.'):undefined}
       className={driven?'bl-driven':undefined}
       onChange={e=>{ if(driven) return; set(e.target.value===''?'':+e.target.value); }}/>
     </div>{u?<span className="unit">{u}</span>:<span className="unit"></span>}
     {sub&&<span className="sub">{sub}</span>}
+    {blank1&&(v===''||v===null||v===undefined)?<span className="sub">blank — 1.0 used</span>:null}
     {driven&&src?<span className="bl-src">{src}</span>:null}</div>);
 const Sel=({l,v,set,opts,sub})=>(
   <div className="fld sel"><label>{l}</label><div className="fwrap">
@@ -3761,7 +3762,7 @@ function strandXY(R,view){ // returns [{x,y,h,ri,db,slot}] in girder coords (in)
       pts.push({x:(col-0.5)*2,y:cg+(row-(rows-1)/2)*2,h:true});}}
   return pts;
 }
-function CrossSection({inp,R,set,selRow,setSelRow,flashRow,logEdit,revertStrands,strandsDirty}){
+function CrossSection({inp,R,set,selRow,setSelRow,flashRow,logEdit,revertStrands,strandsDirty,onPickStrand}){
   const [view,setView]=useState('mid');
   const [addMode,setAddMode]=useState(false);
   const editable=!!set && !R.error;
@@ -3869,7 +3870,8 @@ function CrossSection({inp,R,set,selRow,setSelRow,flashRow,logEdit,revertStrands
           stroke={isSel?'#16212E':(inSelRow?'#1C4FC4':'#fff')} strokeWidth={isSel?1.8:(inSelRow?1.3:0.6)}
           style={editable&&!s.h?{cursor:'pointer'}:{}}
           onClick={editable&&!s.h?(e=>{e.stopPropagation();
-            if(addMode){return;} setSel(selRow===s.ri&&selSlot===s.slot?null:{ri:s.ri,slot:s.slot});}):undefined}/>;})}
+            if(addMode){return;} const off=selRow===s.ri&&selSlot===s.slot; setSel(off?null:{ri:s.ri,slot:s.slot});
+            if(!off&&onPickStrand) onPickStrand(s.ri);}):undefined}/>;})}
       <line x1={X(-g.bbf/2)-6} x2={X(g.bbf/2)+6} y1={Y(ybLbl)} y2={Y(ybLbl)} stroke="var(--strand)" strokeDasharray="3 3" strokeWidth="1"/>
       <text x={cx} y={Y(Htot)-12} fontSize="9.5" textAnchor="middle" fontFamily="var(--mono)">b_eff = {fmt(cp.beff,0)}″</text>
       <text x={X(-Math.max(cp.beff,g.bbf)/2)-6} y={(Y(0)+Y(g.h))/2} fontSize="9.5" fontFamily="var(--mono)" textAnchor="middle" transform={`rotate(-90 ${X(-Math.max(cp.beff,g.bbf)/2)-6} ${(Y(0)+Y(g.h))/2})`}>h = {g.h}″</text>
@@ -4414,12 +4416,20 @@ function psbInTabLoad(){ let v=psbInTabMem; try{ const s=localStorage.getItem(PS
 function psbInTabSave(v){ psbInTabMem=v; try{ localStorage.setItem(PSB_IN_KEY,v); }catch(e){} }
 /* Red dot: a pane holds an editable number box that is empty, holds text the
    browser cannot parse, or is outside its own min/max. A box with a placeholder
-   (the section-property overrides) is meant to be left blank, so blank is fine there. */
-function psbInPaneBad(el){ if(!el) return false;
+   (the section-property overrides) is meant to be left blank, so blank is fine there.
+   A blank box marked data-blank1 (the imported-LL DF / multiple-presence boxes,
+   which computeAll takes as 1.0 when blank) still gets the dot, but its tooltip
+   says 1.0 is used. Returns '' (fine), 'bad', 'blank1' or 'both'. */
+function psbInPaneState(el){ if(!el) return '';
+  let bad=false, b1=false;
   const ins=el.querySelectorAll('input[type="number"]');
   for(let i=0;i<ins.length;i++){ const x=ins[i]; if(x.disabled||x.readOnly) continue; const vy=x.validity||{};
-    if((x.value===''&&!x.placeholder)||vy.badInput||vy.rangeUnderflow||vy.rangeOverflow) return true; }
-  return false; }
+    if(vy.badInput||vy.rangeUnderflow||vy.rangeOverflow) bad=true;
+    else if(x.value===''&&!x.placeholder){ if(x.getAttribute('data-blank1')==='1') b1=true; else bad=true; } }
+  return bad&&b1?'both':bad?'bad':b1?'blank1':''; }
+const PSB_IN_DOT_TIP={bad:'A number in this group is empty or not valid',
+  blank1:'A DF / multiple-presence box is blank — 1.0 used',
+  both:'A number in this group is empty or not valid; a blank DF / multiple-presence box uses 1.0'};
 function PsbInTabs({tab,setTab,marks}){
   const ref=useRef(null);
   const onKey=e=>{ const n=PSB_IN_TABS.length, i=PSB_IN_TABS.findIndex(t=>t[0]===tab); let j=-1;
@@ -4428,22 +4438,32 @@ function PsbInTabs({tab,setTab,marks}){
     if(j<0) return; e.preventDefault(); const k=PSB_IN_TABS[j][0]; setTab(k);
     const b=ref.current&&ref.current.querySelector('#psbInTab-'+k); if(b) b.focus(); };
   return <div ref={ref} className="psbInTabs noprint" role="tablist" aria-label="Input groups" onKeyDown={onKey}>
-    {PSB_IN_TABS.map(([k,l])=>{ const bad=marks.indexOf(k)>=0;
+    {PSB_IN_TABS.map(([k,l])=>{ const bad=!!marks[k];
       return <button key={k} type="button" role="tab" id={'psbInTab-'+k} aria-controls={'psbInPane-'+k}
         aria-selected={tab===k} tabIndex={tab===k?0:-1} className={'psbInTab'+(bad?' has-err':'')}
-        title={bad?'A number in this group is empty or not valid':undefined}
+        title={bad?PSB_IN_DOT_TIP[marks[k]]:undefined}
         onClick={()=>setTab(k)}>{l}<span className="psbInDot" aria-hidden="true"></span></button>; })}
   </div>;
 }
-function InputsTab({inp,set,R,selRow,setSelRow,editedRows,flashRow,editLog,clearLog}){
+function InputsTab({inp,set,R,selRow,setSelRow,editedRows,flashRow,editLog,clearLog,strandPick}){
   const [showHelp,setShowHelp]=useState(false);
   // Inputs page sub-tabs (UI only; see PsbInTabs)
   const [inTab,setInTabS]=useState(psbInTabLoad);
   const setInTab=k=>{ setInTabS(k); psbInTabSave(k); };
   const inPane=k=>({className:'psbInPane',role:'tabpanel',id:'psbInPane-'+k,'aria-labelledby':'psbInTab-'+k,hidden:inTab!==k});
-  const [inMarks,setInMarks]=useState([]);
-  useEffect(()=>{ const m=PSB_IN_TABS.map(t=>t[0]).filter(k=>psbInPaneBad(document.getElementById('psbInPane-'+k)));
-    if(m.join()!==inMarks.join()) setInMarks(m); });
+  const [inMarks,setInMarks]=useState({});   // {sub-tab key: 'bad'|'blank1'|'both'}
+  useEffect(()=>{ const m={}; PSB_IN_TABS.forEach(t=>{ const st=psbInPaneState(document.getElementById('psbInPane-'+t[0])); if(st) m[t[0]]=st; });
+    if(JSON.stringify(m)!==JSON.stringify(inMarks)) setInMarks(m); });
+  // A strand clicked in the Live Geometry drawing selects its row: show the
+  // Strands sub-tab and bring that row into view (the card itself if it is folded).
+  // Only picks made while this page is open count (not an old one on re-mount).
+  const pickAtMount=useRef(strandPick);
+  useEffect(()=>{ if(!strandPick||strandPick===pickAtMount.current) return; setInTab('strands');
+    const t=setTimeout(()=>{ const pane=document.getElementById('psbInPane-strands'); if(!pane) return;
+      const tr=pane.querySelector('tr[data-psb-row="'+strandPick.ri+'"]');
+      const el=(tr&&tr.offsetParent!==null)?tr:pane;
+      try{ el.scrollIntoView({block:tr&&el===tr?'center':'start'}); }catch(e){} },0);
+    return ()=>clearTimeout(t); },[strandPick]);
   const u=(path,v)=>{ const o=JSON.parse(JSON.stringify(inp));
     const ks=path.split('.'); let t=o; ks.slice(0,-1).forEach(k=>t=t[k]); t[ks.at(-1)]=v; set(o); };
   const rowU=(i,k,v)=>{const o={...inp,rows:inp.rows.map((r,j)=>j===i?{...r,[k]:v}:r)};set(o); if(flashRow)flashRow(i);};
@@ -4809,7 +4829,7 @@ function InputsTab({inp,set,R,selRow,setSelRow,editedRows,flashRow,editLog,clear
         <thead><tr><th>Row</th><th>No.</th><th>y (in)</th><th>No. debonded</th><th>Debond length ea. end (ft)</th><th></th></tr></thead>
         <tbody>{inp.rows.map((r,i)=>{
           const isSel=selRow===i, isEdited=editedRows&&editedRows[i];
-          return <tr key={i} onClick={()=>setSelRow&&setSelRow(isSel?null:i)}
+          return <tr key={i} data-psb-row={i} onClick={()=>setSelRow&&setSelRow(isSel?null:i)}
             style={{cursor:setSelRow?'pointer':'default',
               boxShadow:isSel?'inset 3px 0 0 var(--blue)':(isEdited?'inset 3px 0 0 #15803D':'none'),
               background:isSel?'#F2F7FF':(isEdited?'#F0FBF3':'transparent'),
@@ -5022,13 +5042,13 @@ function InputsTab({inp,set,R,selRow,setSelRow,editedRows,flashRow,editLog,clear
             <div className="hint" style={{marginBottom:8}}>Imported {inp.external.liveLoadType||'HL-93'} envelope from MIDAS, with the <b>dynamic load allowance (impact) already included</b>. Apply the distribution factor (per effect) and multiple-presence below if they are <i>not</i> already in the envelope (each defaults to 1.0 = no adjustment). Distribution factors are entered separately for positive moment, negative moment, and shear (AASHTO 4.6.2.2 gives different DFs for each).</div>
             <SubH t="Distribution factors" r="per effect · LRFD 4.6.2.2"/>
             <div className="frow rows">
-              <Num l="DF — positive moment" v={inp.loads.extDFpos} set={v=>u('loads.extDFpos',v)} step={0.05} min={0} driven={lldfLocked} src={lldfSrc}/>
-              <Num l="DF — negative moment" v={inp.loads.extDFneg} set={v=>u('loads.extDFneg',v)} step={0.05} min={0} driven={lldfLocked} src={lldfSrc}/>
-              <Num l="DF — shear" v={inp.loads.extDFv} set={v=>u('loads.extDFv',v)} step={0.05} min={0} driven={lldfLocked} src={lldfSrc}/>
+              <Num l="DF — positive moment" v={inp.loads.extDFpos} set={v=>u('loads.extDFpos',v)} step={0.05} min={0} driven={lldfLocked} src={lldfSrc} blank1/>
+              <Num l="DF — negative moment" v={inp.loads.extDFneg} set={v=>u('loads.extDFneg',v)} step={0.05} min={0} driven={lldfLocked} src={lldfSrc} blank1/>
+              <Num l="DF — shear" v={inp.loads.extDFv} set={v=>u('loads.extDFv',v)} step={0.05} min={0} driven={lldfLocked} src={lldfSrc} blank1/>
             </div>
             <SubH t="Multiple presence" r="LRFD 3.6.1.1.2"/>
             <div className="frow rows">
-              <Num l="Multiple presence (m)" v={inp.loads.extLLmpf} set={v=>u('loads.extLLmpf',v)} step={0.05} min={0} driven={lldfLocked} src={lldfSrc}/>
+              <Num l="Multiple presence (m)" v={inp.loads.extLLmpf} set={v=>u('loads.extLLmpf',v)} step={0.05} min={0} driven={lldfLocked} src={lldfSrc} blank1/>
             </div>
             <div className="hint" style={{marginTop:6}}>Combined factors (DF×MPF): +M = <b>{fmt((+inp.loads.extDFpos||1)*(+inp.loads.extLLmpf||1),3)}</b>, −M = <b>{fmt((+inp.loads.extDFneg||1)*(+inp.loads.extLLmpf||1),3)}</b>, V = <b>{fmt((+inp.loads.extDFv||1)*(+inp.loads.extLLmpf||1),3)}</b>. Impact is already in the imported LL, so it is not applied here. Resulting governing M_LL ≈ <b>{fmt(R.MLL,0)} k-ft</b>, V_LL ≈ <b>{fmt(R.VLL,0)} kip</b> (see Diagrams).</div>
           </React.Fragment>
@@ -7953,6 +7973,7 @@ function App(){
   const resetAll=()=>{ if(window.confirm('Reset all inputs to defaults? This clears the undo history and the saved session on this device.')){ clearSaved(); undoStack.current=[]; redoStack.current=[]; setInpRaw(DEFAULTS); setHistTick(t=>t+1); } };
   // shared strand selection (row index) + recently-edited row flash, linking table <-> graphic
   const [selRow,setSelRow]=useState(null);
+  const [strandPick,setStrandPick]=useState(null);   // {ri}, a new object per click: a strand clicked in the drawing -> Inputs "Strands" sub-tab
   const [editedRows,setEditedRows]=useState({});   // {ri: timestamp}
   const flashRow=ri=>{ setEditedRows(e=>({...e,[ri]:Date.now()})); };
   useEffect(()=>{ if(!Object.keys(editedRows).length)return;
@@ -8137,9 +8158,10 @@ function App(){
         <button key={k} className={'tab'+(tab===k?' on':'')} onClick={()=>setTab(k)}>{l}</button>)}</div>
       {tab==='inputs'?
         <div className="cols">
-          <div><InputsTab inp={inp} set={setInp} R={R} selRow={selRow} setSelRow={setSelRow} editedRows={editedRows} flashRow={flashRow} editLog={editLog} clearLog={clearLog}/></div>
+          <div><InputsTab inp={inp} set={setInp} R={R} selRow={selRow} setSelRow={setSelRow} editedRows={editedRows} flashRow={flashRow} editLog={editLog} clearLog={clearLog} strandPick={strandPick}/></div>
           <div className="gfx"><Card title="Live Geometry" refTag="auto-updates">
             <CrossSection inp={inp} R={R} set={setInp} selRow={selRow} setSelRow={setSelRow} flashRow={flashRow} logEdit={logEdit}
+              onPickStrand={ri=>setStrandPick({ri})}
               revertStrands={revertStrands} strandsDirty={JSON.stringify(strandBaseline.current)!==JSON.stringify(inp.rows)}/><Elevation inp={inp} R={R}/></Card></div>
         </div>
       :<div className="cols-full">
