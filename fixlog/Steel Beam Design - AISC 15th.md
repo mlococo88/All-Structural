@@ -1111,6 +1111,92 @@ Engineer's decisions of 2026-10-09 on open items O8 (rib concrete in A_c) and O9
 - **How verified:** as A1; screenshots of the detailing table and drawings in `scratchpad/sbdac/`.
 - **Other copies of this code:** none.
 
+## 2026-10-09 — PR: claude/steel-beam-rib-block (PR link added after merge)
+Engineer's decision of 2026-10-09 on open item O11: compute the concrete compression block through the actual rib concrete.
+
+### R1. Compression block below the top of the deck uses the rib concrete only (ribs parallel, s_r entered)   [calc change] [more conservative]
+- **Where:**
+  - `compositeMn` (defined once; anchor `/* compression block */`, followed by `let a=C/(0.85*fc*beff),d1=sa.Ycon-a/2;`).
+  - Display: the M_x tab "Compression block and plastic neutral axis" equation block (anchor `block continues in the rib concrete`); the d₁ description; the Excel composite block (anchor `if(cmp.ribBlock){`); and the stress-block drawing in `compXsecFig` (anchor `slab part full width, rib part on the drawn ribs only`).
+- **Problem:**
+  - When C needs a depth a = C/(0.85f′_c b_eff) greater than the solid slab t above the deck, the tool kept a full-width rectangle of depth a and d₁ = Y_con − a/2, and warned "verify by hand".
+  - With ribs parallel to the beam, the concrete below the top of the deck is only the rib concrete. The real block is deeper, its centroid is lower, and d₁ (so M_n) was overstated.
+  - This can happen only with ribs parallel and s_r entered. With ribs perpendicular, or parallel with s_r blank, A_c = b_eff·t, so a ≤ t always. For a solid slab, h_r = 0.
+- **Governing provision:**
+  - AISC 360-16 §I3.2a(1), plastic stress distribution: a uniform 0.85f′_c stress on the concrete in compression, Commentary Fig. C-I3.3 and Eq. C-I3-10.
+  - §I3.2c(3) as decided in A1: rib concrete b_eff·h_r·w_r/s_r.
+  - Manual Part 3 I_LB with Y2 = d₁, the tool's existing definition.
+- **Model:**
+  - Full width b_eff over the depth t, then the rib width b_rib = b_eff·w_r/s_r for a depth y into the ribs, from 0.85f′_c(b_eff·t + b_rib·y) = C.
+  - a = t + y, and d₁ = Y_con − ȳ, where ȳ is the centroid of the two-part block below the slab top.
+  - The average rib width w_r is used as a rectangle. The trapezoidal rib shape is not an input; this is stated on the M_x tab.
+  - y ≤ h_r always, because C ≤ 0.85f′_c A_c.
+  - Everything that uses d₁ follows: M_n (C-I3-10) and Y2 for I_LB, then the composite deflections. The PNA in the steel (x, d₂) does not depend on the concrete block and is unchanged. When C = A_sF_y the PNA is the bottom of the block, a = t + y.
+  - The "verify by hand" warning is removed for this case. It stays in the code for any other a > t case, which cannot occur at present.
+- **Before:**
+  ```js
+    const a=C/(0.85*fc*beff);
+    out.a=a;
+    if(a>sa.tAbove+1e-9)out.warns.push('The compression block a = '+fmt(a,2)+
+      ' in extends below the top of the deck (solid slab depth '+fmt(sa.tAbove,2)+
+      ' in). The rectangular-block assumption is no longer exact; verify by hand.');
+    out.Ycon=sa.Ycon;
+    out.d1=out.Ycon-a/2;
+  ```
+- **After:**
+  ```js
+    let a=C/(0.85*fc*beff),d1=sa.Ycon-a/2;
+    if(a>sa.tAbove+1e-9&&sa.hr>0&&sa.fill>0){
+      /* ribs parallel with s_r entered: ... */
+      const t=sa.tAbove,bRib=beff*sa.fill,Areq=C/(0.85*fc),Atop=beff*t;
+      const y=Math.min(sa.hr,(Areq-Atop)/bRib),Arib=bRib*y;
+      const ybar=(Atop*t/2+Arib*(t+y/2))/(Atop+Arib);
+      out.ribBlock={t,bRib,Areq,Atop,y,Arib,ybar,aRect:a};
+      a=t+y;
+      d1=sa.Ycon-ybar;
+    }else if(a>sa.tAbove+1e-9)out.warns.push('The compression block a = '+fmt(a,2)+
+      ' in extends below the top of the deck (solid slab depth '+fmt(sa.tAbove,2)+
+      ' in). The rectangular-block assumption is no longer exact; verify by hand.');
+    out.a=a;
+    out.Ycon=sa.Ycon;
+    out.d1=d1;
+  ```
+  (`sa.fill` > 0 only for ribs parallel with a valid s_r, see A1.)
+- **Worked check cases.** Common data: W36X150 A992 (A_s = 44.3 in², d = 35.9 in, d₃ = 17.95 in, A_sF_y = 2215 kip); 30 ft simple span; b_eff = 90 in; f′_c = 4 ksi; h_r = 3 in, w_r = 6 in, s_r = 12 in, so b_rib = 90·6/12 = 45 in; M_u = 112.5 kip-ft.
+  - **(b) t = 4.5 in, Y_con = 7.5 in, 100 % composite:** A_c = 90(4.5 + 3·0.5) = 540 in²; C = 0.85·4·540 = 1836 kip (< 2215, concrete governs).
+    - Rectangle: a = 1836/306 = 6.00 in > t.
+    - Required block area = 1836/3.4 = 540 in²; slab part 90·4.5 = 405 in²; y = (540 − 405)/45 = **3.00 in** (the full rib depth); a = 7.50 in.
+    - ȳ = (405·2.25 + 135·6.00)/540 = **3.1875 in**.
+    - d₁: before 7.50 − 3.00 = 4.50 in → after 7.50 − 3.19 = **4.31 in**.
+    - C_s = (2215 − 1836)/2 = 189.5 kip; x = 0.316 in; d₂ = 0.158 in (unchanged).
+    - M_n = 1836(4.3125 + 0.158) + 2215(17.95 − 0.158) = 47 617 kip-in (before 47 961).
+    - **φM_n = 3597.1 → 3571.3 kip-ft (−0.7 %)**; DCR M_x 0.0313 → 0.0315.
+    - Y_ENA 28.12 → 28.04 in; **I_LB = 19 159 → 18 991 in⁴**; composite LL deflection 0.0164 → 0.0165 in; total composite deflection DCR 0.0641 → 0.0642.
+    - Governing unchanged: pre-composite flexure, DCR 0.191.
+    - Warning "verify by hand" → removed.
+  - **(e) Thinner slab, part-way into the ribs: t = 2.5 in, Y_con = 5.5 in, 80 % composite.**
+    - A_c = 90(2.5 + 1.5) = 360 in²; C_max = min(1224, 2215) = 1224 kip; C = 0.8·1224 = 979.2 kip.
+    - Rectangle: a = 979.2/306 = 3.20 in > t.
+    - Required area = 979.2/3.4 = 288.0 in²; slab part 225.0 in²; y = 63.0/45 = **1.40 in**; a = 3.90 in.
+    - ȳ = (225·1.25 + 63·(2.5 + 0.7))/288 = **1.677 in**.
+    - d₁: before 5.5 − 1.60 = 3.90 in → after 5.5 − 1.677 = **3.823 in**.
+    - PNA in the web, x = 2.665 in, d₂ = 0.586 in (unchanged).
+    - M_n 42 854 → 42 779 kip-in; **φM_n = 3214.0 → 3208.4 kip-ft (−0.2 %)**; DCR 0.0350 → 0.0351.
+    - **I_LB = 15 524 → 15 478 in⁴**; LL deflection 0.0202 → 0.0203 in.
+    - Governing unchanged: pre-composite flexure, DCR 0.159.
+    - The PNA-in-web warning stays; "verify by hand" is removed.
+  - **(f) a ≤ t, unchanged:** W21X50 (A_sF_y = 735 kip), t = 4.5 in, ribs parallel s_r = 12. C = 735 kip (steel governs); a = 735/306 = 2.40 in ≤ 4.5; d₁ = 7.5 − 1.20 = 6.30 in; φM_n = 920.5 kip-ft; I_LB = 3034 in⁴. Identical before and after.
+  - Ribs perpendicular, ribs parallel without s_r, and solid slab: identical (A1 cases (a), (c); compSolid).
+- **Validation tab:** all 17 benchmarks, 30 design-example, 25 composite and 4 torsion checks pass; the Validation tab text is identical. Design Example I.2 (parallel deck): a = 1.83 in ≤ t, so it is not affected.
+- **How verified:** Chromium harness, 18 scenarios against main (1792a13): the 12 regression scenarios, A1 cases (a)–(d), and new cases (e) and (f).
+  - Results (`AN`), output text and autosave are identical in every scenario except (b) and (e), where only a, d₁, M_n, φM_n, Y_ENA, I_LB, the composite deflections, the removed warning and the new derivation lines change.
+  - Save/load round trip and the reaction hand-off are identical.
+  - `node --check` on all inline scripts.
+  - The Excel export lines were syntax-checked only; ExcelJS loads from a CDN that is blocked in the test environment.
+  - Screenshots in `scratchpad/sbdrib/`.
+- **Saved projects whose results change (intended):** composite with ribs parallel, s_r entered, and the block deeper than t (concrete crushing governs, or partial composite with a thin slab). Only possible since A1 added s_r.
+- **Other copies of this code:** none.
+
 ## Open items (not changed)
 - O1. **H3.3(c) buckling limit state** is not implemented, only warned (F5). Decide on the method (e.g. f_bx + σ_w ≤ φF_cr with F_cr = M_n/S_x from Chapter F, or a DG 9 interaction) before coding it as a check.
 - O2. **Batch mode** has no H3.3 buckling warning and keeps its existing tension note. Decide whether to add a matching batch note.
@@ -1122,5 +1208,5 @@ Engineer's decisions of 2026-10-09 on open items O8 (rib concrete in A_c) and O9
 - O8. **Resolved 2026-10-09 by A1** (engineer's decision: perpendicular → 0 %, parallel → w_r/s_r with a new s_r input). **Rib concrete counted in A_c (defaults 0.50 perpendicular, 1.00 parallel).** Found while drawing D1; **not changed** (calculation). `slabArea` uses A_c = b_eff (t + fill·h_r). With parallel ribs and fill 1.00 this is the full b_eff × h_r rectangle, including the voids between the ribs (about half of it for w_r = 6 in at a 12 in rib spacing). My reading of AISC 360-16 §I3.2c is that concrete below the top of the deck is neglected in A_c for ribs perpendicular to the beam, and included for ribs parallel to the beam, where it is the rib concrete, not the voids. If so, both defaults can overstate A_c, and so C = 0.85f′_c A_c, when concrete crushing governs (the manual says the input only changes the answer then). Please confirm the provision and decide on the defaults; a parallel default of w_r / rib spacing would need a rib-spacing input.
 - O9. **Resolved 2026-10-09 by A2** (studs are welded to the flange). **Stud base and the §I3.2c cover check with a haunch.** The cover check takes cover = Y_con − haunch − L_s, i.e. the stud starts at the top of the haunch; D1 draws it that way. If studs are welded to the flange through the haunch, the cover is over-estimated by the haunch depth. Not changed; confirm which is intended.
 - O10. **Resolved 2026-10-09 by A1** (s_r is now an input; drawings use it). **Rib spacing is not an input.** The D1 drawings use an illustrative spacing max(6 in, 2w_r), labelled as such. Add an input only if the drawings need to show the real deck profile.
-- O11. **Compression block in the ribs with parallel deck.** When a > t (C reaches into the ribs), the tool keeps a uniform-width block of depth a = C/(0.85f′_c b_eff) and d₁ = Y_con − a/2, and warns "verify by hand". With parallel ribs the true block under the slab is only the rib width, so its centroid is lower. In A1 case (b), the true centroid is 3.19 in below the slab top, not 3.00 in, so d₁ = 4.31 in rather than 4.50 in and M_n is about 0.7 % high. Pre-existing; not changed. Decide whether to compute the block through the ribs.
+- O11. **Resolved 2026-10-09 by R1** (block computed through the rib concrete). **Compression block in the ribs with parallel deck.** When a > t (C reaches into the ribs), the tool keeps a uniform-width block of depth a = C/(0.85f′_c b_eff) and d₁ = Y_con − a/2, and warns "verify by hand". With parallel ribs the true block under the slab is only the rib width, so its centroid is lower. In A1 case (b), the true centroid is 3.19 in below the slab top, not 3.00 in, so d₁ = 4.31 in rather than 4.50 in and M_n is about 0.7 % high. Pre-existing; not changed. Decide whether to compute the block through the ribs.
 - O12. **Batch template has no rib width or rib spacing columns.** After A1, batch PERP rows count no rib concrete (§I3.2c) and PARA rows count none either, with a warning. Add `w_r` / `s_r` columns only if batch PARA rows need the rib concrete.
