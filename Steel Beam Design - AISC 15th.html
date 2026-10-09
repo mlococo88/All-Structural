@@ -6466,10 +6466,16 @@ async function xlChecks(X,p,D,mem,Fy,E){
     X.line('Horizontal shear used','C',N2(cmp.C,1),'kip','\u00A7I3.2d','',{dp:1,ref:'Chz'});
     X.line('Composite action','%',N2(cmp.pct,1),'%',cmp.full?'full composite':'partial composite','',{dp:1});
     X.eq('a = C / (0.85 f\u2032c beff) = '+S2(cmp.C,1)+' / (0.85 \u00D7 '+S2(compCfg().fc,2)+' \u00D7 '+S2(cmp.ew.beff,1)+')');
+    if(cmp.ribBlock){
+      const rb=cmp.ribBlock;
+      X.note('a = '+S2(rb.aRect,3)+' in > t = '+S2(rb.t,2)+' in: the block continues in the rib concrete only (ribs parallel), width b_rib = beff\u00B7wr/sr = '+S2(rb.bRib,2)+' in (average rib width as a rectangle).');
+      X.eq('y = (C/(0.85 f\u2032c) \u2212 beff\u00B7t) / b_rib = ('+S2(rb.Areq,1)+' \u2212 '+S2(rb.Atop,1)+') / '+S2(rb.bRib,2)+' = '+S2(rb.y,3)+' in;  centroid below slab top = '+S2(rb.ybar,3)+' in');
+      X.line('Compression block depth (t + y)','a',N2(cmp.a,3),'in','computed by app','',{dp:3});
+    }else
     X.line('Compression block depth','a',{formula:'\u00ABChz\u00BB/(0.85*\u00ABfc\u00BB*\u00ABbeff\u00BB*12)',result:N2(cmp.a,3)},'in','',{dp:3});
     X.line('Steel in compression','Cs',N2(cmp.Cs,1),'kip','',{dp:1});
     X.line('PNA below top of steel','x',N2(cmp.x,3),'in',cmp.pnaWhere,'',{dp:3});
-    X.line('Lever arm to concrete force','d1',N2(cmp.d1,3),'in','Ycon \u2212 a/2','',{dp:3});
+    X.line('Lever arm to concrete force','d1',N2(cmp.d1,3),'in',cmp.ribBlock?'Ycon \u2212 block centroid':'Ycon \u2212 a/2','',{dp:3});
     X.line('Lever arm to steel compression','d2',N2(cmp.d2,3),'in','',{dp:3});
     X.line('Half depth of steel','d3',N2(cmp.d3,3),'in','d/2','',{dp:3});
     X.eq('Mn = C(d1 + d2) + Py(d3 \u2212 d2)   [Commentary Eq. C-I3-10]');
@@ -7967,13 +7973,25 @@ function compositeMn(p,cfg){
   if(out.pct<25&&!out.full)out.warns.push('Composite action is '+fmt(out.pct,0)+
     '% \u2014 below the 25% commonly taken as the practical lower limit for partial composite action (\u00A7I3.2d Commentary); slip and deflection may govern.');
   /* compression block */
-  const a=C/(0.85*fc*beff);
-  out.a=a;
-  if(a>sa.tAbove+1e-9)out.warns.push('The compression block a = '+fmt(a,2)+
+  let a=C/(0.85*fc*beff),d1=sa.Ycon-a/2;
+  if(a>sa.tAbove+1e-9&&sa.hr>0&&sa.fill>0){
+    /* ribs parallel with s_r entered: the block continues below the top of the deck in the rib
+       concrete only, b_rib = b_eff*w_r/s_r (the average rib width w_r taken as a rectangle; the
+       trapezoid geometry is not an input). 0.85 f'c (b_eff t + b_rib y) = C gives the depth y into
+       the ribs; d1 is taken from the centroid of this two-part block. y <= h_r always, because
+       C <= 0.85 f'c A_c = 0.85 f'c (b_eff t + b_rib h_r). */
+    const t=sa.tAbove,bRib=beff*sa.fill,Areq=C/(0.85*fc),Atop=beff*t;
+    const y=Math.min(sa.hr,(Areq-Atop)/bRib),Arib=bRib*y;
+    const ybar=(Atop*t/2+Arib*(t+y/2))/(Atop+Arib);
+    out.ribBlock={t,bRib,Areq,Atop,y,Arib,ybar,aRect:a};
+    a=t+y;
+    d1=sa.Ycon-ybar;
+  }else if(a>sa.tAbove+1e-9)out.warns.push('The compression block a = '+fmt(a,2)+
     ' in extends below the top of the deck (solid slab depth '+fmt(sa.tAbove,2)+
     ' in). The rectangular-block assumption is no longer exact; verify by hand.');
+  out.a=a;
   out.Ycon=sa.Ycon;
-  out.d1=out.Ycon-a/2;
+  out.d1=d1;
   /* steel in compression */
   const Cs=Math.max(0,(out.Py-C)/2);
   out.Cs=Cs;
@@ -8378,6 +8396,12 @@ function compXsecFig(p,r,opts){
   }
   /* --- stress blocks --- */
   if(!opts.noStress&&!opts.geomOnly){
+    if(r.ribBlock){   /* slab part full width, rib part on the drawn ribs only (average width w_r) */
+      shapes.push({type:'rect',x0:-beff/2,x1:beff/2,y0:Ycon-r.ribBlock.t,y1:Ycon,
+        fillcolor:COMP,opacity:.35,line:{color:COMP,width:1}});
+      deckCentres(-beff/2,beff/2,dg).forEach(xc=>shapes.push({type:'rect',x0:xc-dg.wr/2,x1:xc+dg.wr/2,y0:Ycon-r.a,y1:Ycon-r.ribBlock.t,
+        fillcolor:COMP,opacity:.35,line:{color:COMP,width:1}}));
+    }else
     shapes.push({type:'rect',x0:-beff/2,x1:beff/2,y0:Ycon-r.a,y1:Ycon,
       fillcolor:COMP,opacity:.35,line:{color:COMP,width:1}});
     anns.push({x:beff/2,y:Ycon-r.a/2,text:'0.85f\u2032c   C = '+fmt(r.C,0)+' kip ',showarrow:false,
@@ -9347,12 +9371,16 @@ function compositeFlexSections(pg,p,r){
   mkSection('cpMn','Composite Flexural Strength \u2014 Plastic Stress Distribution',body=>{
     body.appendChild(el('div','note','\u00A7I3.2a(1) applies because h/t\u1D65 = '+fmt(r.htw,1)+' \u2264 3.76\u221A(E/F\u1D67) = '+fmt(r.htwLim,1)+'.'));
     body.appendChild(eqBlock({title:'Compression block and plastic neutral axis',ref:'Comm. Fig. C-I3.3',
-      lines:['a=\\tfrac{C}{0.85f\\prime_cb_{eff}}=\\mathbf{'+fmt(r.a,3)+'\\ \\text{in}}'+(r.a<=r.sa.tAbove?('\\le '+fmt(r.sa.tAbove,2)+'\\ \\checkmark'):''),
-        'C_s=\\tfrac{A_sF_y-C}{2}=\\mathbf{'+fmt(r.Cs,1)+'}\\ \\text{kip};\\qquad x=\\mathbf{'+fmt(r.x,3)+'\\ \\text{in}}\\ \\text{\u2014 '+r.pnaWhere+'}']}));
+      lines:(r.ribBlock?(rb=>['\\tfrac{C}{0.85f\\prime_cb_{eff}}='+fmt(rb.aRect,3)+'\\ \\text{in}>t='+fmt(rb.t,2)+'\\ \\text{in}\\Rightarrow\\text{block continues in the rib concrete}',
+          'b_{rib}=b_{eff}\\tfrac{w_r}{s_r}='+fmt(rb.bRib,2)+'\\ \\text{in};\\quad y=\\tfrac{C/(0.85f\\prime_c)-b_{eff}t}{b_{rib}}=\\tfrac{'+fmt(rb.Areq,1)+'-'+fmt(rb.Atop,1)+'}{'+fmt(rb.bRib,2)+'}=\\mathbf{'+fmt(rb.y,3)+'\\ \\text{in}}',
+          'a=t+y=\\mathbf{'+fmt(r.a,3)+'\\ \\text{in}};\\quad \\bar y=\\tfrac{b_{eff}t\\cdot t/2+b_{rib}y\\,(t+y/2)}{b_{eff}t+b_{rib}y}=\\mathbf{'+fmt(rb.ybar,3)+'\\ \\text{in}}\\ \\text{below the slab top}'])(r.ribBlock):
+        ['a=\\tfrac{C}{0.85f\\prime_cb_{eff}}=\\mathbf{'+fmt(r.a,3)+'\\ \\text{in}}'+(r.a<=r.sa.tAbove?('\\le '+fmt(r.sa.tAbove,2)+'\\ \\checkmark'):'')]).concat([
+        'C_s=\\tfrac{A_sF_y-C}{2}=\\mathbf{'+fmt(r.Cs,1)+'}\\ \\text{kip};\\qquad x=\\mathbf{'+fmt(r.x,3)+'\\ \\text{in}}\\ \\text{\u2014 '+r.pnaWhere+'}'])}));
+    if(r.ribBlock)body.appendChild(el('div','hint','Ribs parallel to the beam: below the top of the deck the block acts on the rib concrete only, width b\u2091\u2093\u2093w\u1D63/s\u1D63, with the average rib width w\u1D63 taken as a rectangle (the trapezoidal rib shape is not an input).'));
     body.appendChild(eqBlock({title:'Nominal flexural strength',ref:'Comm. Eq. C-I3-10',
       lines:['M_n=C(d_1+d_2)+P_y(d_3-d_2)='+fmt(r.C,0)+'('+fmt(r.d1,3)+'+'+fmt(r.d2,3)+')+'+fmt(r.Py,0)+'('+fmt(r.d3,3)+'-'+fmt(r.d2,3)+')=\\mathbf{'+fmt(r.Mn,0)+'}\\ \\text{kip\u00B7in}',
         '\\phi_bM_n=0.90\\times '+fmt(r.Mn/12,1)+'=\\mathbf{'+fmt(r.phiMn/12,1)+'\\ \\text{kip\u00B7ft}}'],
-      vars:[['d_1',fmt(r.d1,3)+' in','Y_{con} \u2212 a/2'],['d_2',fmt(r.d2,3)+' in','to the steel compression centroid'],
+      vars:[['d_1',fmt(r.d1,3)+' in',r.ribBlock?'Y_{con} \u2212 centroid of the slab + rib block':'Y_{con} \u2212 a/2'],['d_2',fmt(r.d2,3)+' in','to the steel compression centroid'],
         ['d_3',fmt(r.d3,3)+' in','d/2']]}));
     const D=AN.design,bare=D&&D.capTop?D.capTop.phiMn/12:null;
     if(bare)body.appendChild(el('div','okBox','\u03C6M\u2099 composite = <b>'+fmt(r.phiMn/12,1)+' kip\u00B7ft</b> vs bare steel '+
