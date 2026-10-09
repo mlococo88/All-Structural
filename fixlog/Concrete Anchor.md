@@ -1534,3 +1534,40 @@ Replace everything from the line `    // --- CONSTANTS ---` up to (not including
 - **Open items (found, not changed):**
   - O15. At 400 px wide the input panel collapses to 1 px, on main and on the branch alike. The three columns do not stack, and the page body has `overflow-hidden`. Not changed: the layout is outside this brief (CLAUDE.md §6). Needs: a decision on whether the tool should get a narrow-screen layout.
   - O1 still applies: React 18 (development UMD), `@babel/standalone` and the Tailwind Play CDN are unpinned. `@babel/standalone` "latest" is now **8.0.7** (Babel 8). The page still renders with it here, but the version can change under the tool without notice. Not changed (CLAUDE.md §2).
+
+## 2026-10-09 — PR: claude/pin-concreteanchor (PR link added after merge)
+### P1. CDN library versions pinned   [no calculation change; resolves the pinning part of O1]
+- **Date / type:** 2026-10-09, library pinning only (CLAUDE.md §2). Engineer's decision 2026-10-09: pin the libraries. No code, formula, UI, storage key or file-format change.
+- **Where:** `<head>`, lines 9–14 (approx.). Anchor text: `<!-- React Framework -->` and `<!-- Tailwind CSS -->`.
+- **Before / After (exact):**
+
+| Library | Before | After |
+|---|---|---|
+| React | `<script src="https://unpkg.com/react@18/umd/react.development.js"></script>` | `<script src="https://unpkg.com/react@18.3.1/umd/react.development.js"></script>` |
+| ReactDOM | `<script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>` | `<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js"></script>` |
+| @babel/standalone | `<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>` | `<script src="https://unpkg.com/@babel/standalone@7.29.10/babel.min.js"></script>` |
+| Tailwind Play CDN | `<script src="https://cdn.tailwindcss.com"></script>` | `<script src="https://cdn.tailwindcss.com/3.4.17"></script>` |
+| KaTeX CSS / JS | `https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css` / `.../katex.min.js` | unchanged (already pinned) |
+
+- **Versions chosen:**
+  - React / ReactDOM **18.3.1**: the last 18.x release on npm (2024-04-26), and what `@18` resolves to today, so the tool gets the same code as before. The **development** build is kept. Switching to `production.min.js` would be a separate decision. It would be smaller and faster and would drop the dev-mode warnings, but it is not part of this change.
+  - @babel/standalone **7.29.10**: the latest 7.x on npm (`v7` dist-tag, published 2026-10-07). The unpinned URL now serves **8.0.7** (Babel 8, a new major). The tool was written for Babel 7. The 7.29.10 package contains `babel.min.js` at the package root.
+  - Tailwind **3.4.17** via the versioned Play CDN path `https://cdn.tailwindcss.com/<version>`. Another tool in this repo already uses this path format (`https://cdn.tailwindcss.com/3.4.5`).
+- **Check case:** default inputs: a 4-anchor 3/4 in. F1554-36 hex group, h_ef 6 in., f'c 4000 psi, N_ua 5000 lb, V_ux 2000 lb, M_ux 1000 lb-in. Main and branch both show the interaction 0.18 + 0.16 = 0.35 and "OK — all checks ≤ 1.0 and §17.8 satisfied".
+- **How verified:**
+  - Inline scripts parse (`vm.Script`) after the JSX is transpiled with @babel/standalone 7.29.10.
+  - Headless Chromium (Playwright). CDNs are blocked in the sandbox, so each URL was served from the npm tarball of exactly that version.
+    - Main = what the unpinned URLs serve today: React/ReactDOM 18.3.1 and Babel 8.0.7. Tailwind latest v3 was emulated with CSS built by tailwindcss 3.4.19.
+    - Branch = the pinned URLs: React/ReactDOM 18.3.1 and Babel 7.29.10. Tailwind was emulated with CSS built by tailwindcss 3.4.17.
+    - The generated Tailwind CSS is byte-identical between 3.4.17 and 3.4.19 apart from the version comment.
+  - The same 11 scenarios as the tabs PR were run: default, CENTER, EDGE, CORNER, SINGLE, L-BOLT + Seismic + Cond. A, member edits, load edits, blank h_ef, plate F_y 0 + blank V_ux, and report mode.
+    - Identical on main and branch: centre-panel text, report text, input inventory (with values), tab error dots, print-emulated input-panel text and size, and full-page screenshots (default, CORNER, SINGLE, report; pixel-identical).
+    - Save → load: the downloaded JSON is byte-identical, and the round trip restores the same state.
+    - "Share project info" writes the same `bridgeSuite.v1.projectMeta` payload.
+    - No console errors.
+  - The same run was repeated with main on Babel 7.29.10: also identical.
+- **Not verifiable here:** the live CDN responses, because outbound access to unpkg and cdn.tailwindcss.com is blocked in the sandbox. Before merging, open the file once from `file://` with network access and confirm that it renders. The Tailwind path in particular has to be checked: `cdn.tailwindcss.com/3.4.17` could not be fetched here.
+- **Other copies:** none (the CDN tags are per file).
+- **Open items:** O1, part 1 (pinning) is resolved by this entry. Still open:
+  - the React development vs production build;
+  - Tailwind Play CDN vs a static stylesheet (the Play CDN is meant for development).
