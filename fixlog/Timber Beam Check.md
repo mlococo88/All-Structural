@@ -613,6 +613,130 @@ Factor tables entered (Table 4A footnotes; Table 4B uses the same Cfu and wet-se
 - **Other copies:** BridgeXfer v1 and `ProjMetaUI` are duplicated (CLAUDE.md §3) in Pile Designer.html, Spread Footing.html, BasePlateAnchorDesigner.html, Concrete Anchor.html and Timber Beam Check.html (this PR), plus any other tools that received BridgeXfer in their own step-1 PRs.
 - **`ProjMetaUI`:** given in full in the After code of the helper insertion above; the copy is identical in every tool listed.
 
+## 2026-10-09 — PR: claude/tabs-timber (PR link added after merge)
+
+### T1. Input panel split into tabs   [UI only — no calculation change]
+- **Date / type:** 2026-10-09, UI only (no result change). Engineer's request of 2026-10-09: "Go through all the apps and make sure they are all formatted with the input panel having tabs rather than one long scrolling input panel."
+- **Approach (React):** this tool is a React app, so DOM nodes are not moved (React owns them). Each of the four existing `<Accordion>` groups is wrapped, unchanged, in a `<div role="tabpanel" hidden={inTab !== '…'}>`. **All four panes are always rendered**; the inactive ones are only hidden (`hidden` attribute → `display:none` via Tailwind preflight). Nothing unmounts, so every input keeps its state, key and handler, and the accordions still open and close as before. A small `InputTabs` component draws the tab strip as the first child of the scrolling input column.
+- **Tabs (in order) and the sections in each:**
+
+| Tab | Section (Accordion title) | Inputs |
+|---|---|---|
+| Project & Geometry | Project & Geometry | Client, Job #, Designer, Use / Share shared project info, Span (ft), Spacing (in) |
+| Loads | Loads & Combinations | Diagram combo, D / L / Lr / S / W (psf), Include self-weight, point loads (+ Add, magnitude, location, type, delete) |
+| Material | Material & Section | Species (+ Add Custom), grade, size, Std/Man, custom b and d, Manual reference values / custom species values (PropEditor), Notch depth, Cost $/BF |
+| Factors | Advanced Factors | Unbraced length, bearing length, bearing ≥ 3 in. from end (Cb), creep factor, L/ deflection limits, Ci, Cr, Ct, Cfu, CM, lateral support |
+
+  The mode-dependent controls (grade select hidden for a custom species, custom b/d for size "Custom", PropEditor in Manual mode or for a custom species) are inside their accordions and show/hide exactly as before. No tab is ever empty, so none is hidden.
+- **Error marker:** a red dot on a tab when (a) `runTimberCheck` reports an input error that names an input on it (`TBC_IN_ERR`: `Span/Spacing must …` → Project & Geometry; `Point load …` → Loads; section, reference-value, density, species/grade, timber, SP/Stud "not built in", flat-use-of-timbers and notch messages → Material; `Bearing length …` / `Deflection limits …` → Factors), (b) a field in it has the tool's own red error border (`border-red-500`, today the point-load location outside the span), or (c) a number field holds text the browser cannot parse (`validity.badInput`). Refreshed on every render and on every `input` event in the panel. Note: React restores a controlled number field at once, so in practice (c) rarely persists; a blanked field becomes NaN and, where the engine treats that as an error, (a) marks it.
+- **Keyboard / accessibility:** `role="tablist"` / `role="tab"` (`aria-selected`, `aria-controls`) / `role="tabpanel"` (`aria-labelledby`); roving `tabIndex`; ←/→ (and ↑/↓) wrap, Home and End; focus follows the selected tab.
+- **Look:** same style as the tool's own "Visual Analysis / Detailed Report" switch (`p-1 rounded-lg bg-slate-200`, buttons `px-3 py-1.5 text-xs font-bold rounded`, selected `bg-white shadow text-blue-600`; dark: `bg-slate-800` / `bg-slate-700 text-blue-400`). Sticky (`sticky top-0`) at the top of the scrolling input column, wraps (`flex-wrap`) on narrow screens. One row on desktop; two rows at 400 px.
+- **New storage key:** `tbc_inputTab_v1` (localStorage, plain string `project`, `loads`, `material` or `factors`). This tool had no storage key of its own (file save/load only); the prefix `tbc` follows its existing `TBC_PROJ_MAP` identifier. Written only when the user picks a tab; every read and write is in try/catch, with an in-memory copy when storage is blocked; an unknown stored value falls back to Project & Geometry. It is **not** in the saved project JSON (`timber_design.json`) or any hand-off; no existing key or format changed.
+- **Programmatic focus / scroll:** nothing in this tool focuses or scrolls to an input. Open project (file) and "Use shared project info" only set React state, which reaches hidden panes too; so no tab switching is needed.
+- **Print:** the whole input column has `hide-print` (unchanged), so nothing printed changes. Checked: the body text under print media is identical on main and on this branch in all scenarios.
+- **Governing provision:** none (no engineering change).
+- **Where / Before / After** (file uses CRLF; the inserted lines use CRLF):
+  1. Anchor `        // --- MAIN APP ---` (just above `function UniversalTimberStudio()`). Before: nothing. After: this block inserted just above the anchor (shown without the file's leading indent: 8 spaces in item 1, 12 in item 3):
+    ```jsx
+    // --- INPUT PANEL TABS (UI only) ---
+    // The four input accordions are wrapped in tab panes. Every pane is always rendered and the
+    // inactive ones are only hidden (hidden attribute), so no input unmounts and all state,
+    // keys and handlers are unchanged. The active tab is remembered per browser in localStorage
+    // key tbc_inputTab_v1 (never in the saved project file).
+    const TBC_IN_TABS = [['project', 'Project & Geometry'], ['loads', 'Loads'], ['material', 'Material'], ['factors', 'Factors']];
+    const TBC_IN_KEY = 'tbc_inputTab_v1';
+    let tbcInTabMem = null; // in-memory copy, used when storage is unavailable
+    const tbcInTabGet = () => { if (tbcInTabMem) return tbcInTabMem; try { return localStorage.getItem(TBC_IN_KEY) || ''; } catch (e) { return ''; } };
+    const tbcInTabSet = (t) => { tbcInTabMem = t; try { localStorage.setItem(TBC_IN_KEY, t); } catch (e) {} };
+    // runTimberCheck input errors, mapped to the tab that holds the input
+    const TBC_IN_ERR = [
+        [/^(Span|Spacing) must/, 'project'],
+        [/^Point load /, 'loads'],
+        [/^(Section b and d|b must not exceed d|Thickness between|Enter all reference design values|Enter the density|Unknown species|Unknown grade|Timbers |Southern Pine |Stud grade |Flat use of timbers|Notch depth)/, 'material'],
+        [/ values are not built in/, 'material'],
+        [/^(Bearing length|Deflection limits)/, 'factors'],
+    ];
+    const InputTabs = ({ active, onSelect, marks, isDark }) => {
+        const onKey = (e) => {
+            const i = TBC_IN_TABS.findIndex(([k]) => k === active);
+            let j = -1;
+            if (e.key === 'ArrowRight' || e.key === 'ArrowDown') j = (i + 1) % TBC_IN_TABS.length;
+            else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') j = (i - 1 + TBC_IN_TABS.length) % TBC_IN_TABS.length;
+            else if (e.key === 'Home') j = 0;
+            else if (e.key === 'End') j = TBC_IN_TABS.length - 1;
+            if (j < 0) return;
+            e.preventDefault();
+            const k = TBC_IN_TABS[j][0];
+            onSelect(k);
+            const b = document.getElementById('tbcInTab_' + k); if (b) b.focus();
+        };
+        return (
+            <div className={`sticky top-0 z-10 pb-1 ${isDark ? 'bg-slate-900' : 'bg-slate-50'}`}>
+                <div role="tablist" aria-label="Input groups" className={`flex flex-wrap gap-1 p-1 rounded-lg ${isDark ? 'bg-slate-800' : 'bg-slate-200'}`}>
+                    {TBC_IN_TABS.map(([k, lab]) => {
+                        const on = k === active;
+                        return (
+                            <button key={k} type="button" role="tab" id={'tbcInTab_' + k} aria-controls={'tbcInPane_' + k} aria-selected={on ? 'true' : 'false'} tabIndex={on ? 0 : -1}
+                                title={marks[k] ? 'An input on this tab needs attention' : undefined}
+                                onClick={() => onSelect(k)} onKeyDown={onKey}
+                                className={`flex items-center px-3 py-1.5 text-xs font-bold rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${on ? (isDark ? 'bg-slate-700 shadow text-blue-400' : 'bg-white shadow text-blue-600') : 'text-slate-500'}`}>
+                                {lab}
+                                {marks[k] && <span aria-hidden="true" className="ml-1.5 inline-block w-1.5 h-1.5 rounded-full bg-red-500"></span>}
+                            </button>
+                        );
+                    })}
+                </div>
+            </div>
+        );
+    };
+    ```
+  2. Anchor `const [openSections, setOpenSections] = useState(` in `UniversalTimberStudio`. After: these lines inserted right after that line (12-space indent in the file):
+    ```jsx
+    const [inTab, setInTab] = useState(() => { const t = tbcInTabGet(); return TBC_IN_TABS.some(([k]) => k === t) ? t : 'project'; }); // input panel tab (UI only)
+    const [inDomMarks, setInDomMarks] = useState('');
+    ```
+  3. Anchor `            // Helpers` (after `const ctrlDetail = …`). After: this block inserted just above the anchor (shown without the file's leading indent: 8 spaces in item 1, 12 in item 3):
+    ```jsx
+    // Input tab error dots: an input error reported by runTimberCheck, a field shown with a red
+    // border, or a number field the browser cannot parse.
+    const inPanelRef = React.useRef(null);
+    const selectInTab = (t) => { setInTab(t); tbcInTabSet(t); if (inPanelRef.current) inPanelRef.current.scrollTop = 0; };
+    const checkInDom = () => {
+        if (!inPanelRef.current) return;
+        const bad = TBC_IN_TABS.filter(([k]) => {
+            const pn = document.getElementById('tbcInPane_' + k); if (!pn) return false;
+            return !!pn.querySelector('.border-red-500') || Array.from(pn.querySelectorAll('input')).some(i => i.validity && i.validity.badInput);
+        }).map(([k]) => k).join(',');
+        setInDomMarks(m => m === bad ? m : bad);
+    };
+    useEffect(checkInDom);
+    const inMarks = {};
+    (res.errors || []).forEach(m => { const r = TBC_IN_ERR.find(x => x[0].test(m)); if (r) inMarks[r[1]] = true; });
+    inDomMarks.split(',').forEach(k => { if (k) inMarks[k] = true; });
+    ```
+  4. Anchor `{/* CONTROLS */}`. The input column `<div>` gets a ref and an input handler, and the tab strip is its first child:
+    - Before:
+      ```jsx
+      <div className="lg:col-span-4 space-y-4 hide-print h-[calc(100vh-120px)] overflow-y-auto pr-2 custom-scrollbar">
+      ```
+    - After:
+      ```jsx
+      <div ref={inPanelRef} onInput={checkInDom} className="lg:col-span-4 space-y-4 hide-print h-[calc(100vh-120px)] overflow-y-auto pr-2 custom-scrollbar">
+      (existing whitespace-only line kept)
+           <InputTabs active={inTab} onSelect={selectInTab} marks={inMarks} isDark={isDark} />
+      ```
+  5. Each of the four `<Accordion …> … </Accordion>` groups (anchors `{/* 1. PROJECT */}`, `{/* 2. LOADS */}`, `{/* 3. MATERIAL */}`, `{/* 4. FACTORS */}`) is wrapped, with no other change: the line `<div role="tabpanel" id="tbcInPane_<k>" aria-labelledby="tbcInTab_<k>" hidden={inTab !== '<k>'}>` is inserted right after the comment line, and a line `</div>` right after the closing `</Accordion>`, with `<k>` = `project`, `loads`, `material`, `factors` respectively. The Accordion lines themselves are unchanged.
+- **Check case:** not applicable (no calculation touched). Functional check: default DF-L No.2 2x10, 16 ft at 16 in., D 15 / L 40 psf → 120.8 % Bending Moment, D + L, identical on main and branch; the 2026-10-04 worked check case (14 ft, D 10 psf) → identical report text.
+- **How verified:**
+  - Every inline script passes `node --check`; the `text/babel` block was transpiled first with @babel/standalone **8.0.7** (preset react, module), which is the version the unpinned unpkg URL serves today.
+  - Headless Chromium (Playwright), page opened from `file://`. The CDNs are blocked in the test environment, so requests were served locally: @babel/standalone 8.0.7 and lucide 1.54.0 (the versions the unpinned `@babel/standalone` and `lucide@latest` URLs resolve to today); Tailwind 3.4.19 CSS compiled from the page's classes in place of the unpinned Play CDN script; React 18.2.0, react-dom 18.2.0/client and lucide-react 0.292.0 (the exact esm.sh versions) bundled to ESM with esbuild.
+  - main vs branch, 9 scenarios (default; worked check case; Manual + Custom 3.5 x 11.25 + two point loads + notch + supports-only bracing + wet/incised/100–125 °F; HF SS 2x6 flat use; SP No.2 2x12; custom species; 6x8 timber error; SP SS + point load outside span + zero bearing + zero L/ limit; point-load error only), each loaded through the tool's own Open file input: Visual Analysis text, Detailed Report text (trace on and off), print-media body text, Save JSON file, and the ordered list of all input controls with values — **all identical** (66 comparisons; the report timestamp and the timing-dependent toast text are masked). Save → Open → Save round trip identical. Opening a file while the Factors tab is active gives the same results. "Share project info" payload (`bridgeSuite.v1.projectMeta`, minus `producedAt`) and "Use shared project info" → saved JSON identical.
+  - Every input control (38 at defaults: Project & Geometry 8, Loads 9, Material 8, Factors 13, counting buttons) is present in the same order with the same value, and each is inside exactly one tab pane.
+  - Tab clicks, ←/→/Home/End, focus, remembered tab after reload, unknown stored value, storage blocked (tabs still work, no errors), value kept across tab switches, red dots (Loads for a point load outside the span; Factors for a blank bearing length; Material for 6x8; three tabs for the multi-error file) and their clearing, sticky strip while the panel is scrolled, ARIA pairs. No console errors.
+  - Screenshots of every tab at 1440 px and 400 px, dark mode, Manual values and an error dot were reviewed.
+- **Open items:** at 400 px the existing header (logo, title, Trace / Save / Open / dark buttons) is 557 px wide and causes a horizontal page scroll; this is the same on main and is not caused by the tabs (the tab strip and input panel fit within 400 px). Not changed (UI outside the input panel). The unpinned libraries are already logged as O1.
+- **Other copies:** none (UI code specific to this tool).
+
 ## Open items (not changed)
 - O1. **Libraries.** These are logged OPEN per the instructions; the CDN tags were not changed:
   - `@babel/standalone` is unpinned (unpkg).

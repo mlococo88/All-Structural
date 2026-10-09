@@ -745,6 +745,58 @@ var TBC_PROJ_MAP=[{shared:'client',key:'client',label:'Client'},
             );
         };
 
+        // --- INPUT PANEL TABS (UI only) ---
+        // The four input accordions are wrapped in tab panes. Every pane is always rendered and the
+        // inactive ones are only hidden (hidden attribute), so no input unmounts and all state,
+        // keys and handlers are unchanged. The active tab is remembered per browser in localStorage
+        // key tbc_inputTab_v1 (never in the saved project file).
+        const TBC_IN_TABS = [['project', 'Project & Geometry'], ['loads', 'Loads'], ['material', 'Material'], ['factors', 'Factors']];
+        const TBC_IN_KEY = 'tbc_inputTab_v1';
+        let tbcInTabMem = null; // in-memory copy, used when storage is unavailable
+        const tbcInTabGet = () => { if (tbcInTabMem) return tbcInTabMem; try { return localStorage.getItem(TBC_IN_KEY) || ''; } catch (e) { return ''; } };
+        const tbcInTabSet = (t) => { tbcInTabMem = t; try { localStorage.setItem(TBC_IN_KEY, t); } catch (e) {} };
+        // runTimberCheck input errors, mapped to the tab that holds the input
+        const TBC_IN_ERR = [
+            [/^(Span|Spacing) must/, 'project'],
+            [/^Point load /, 'loads'],
+            [/^(Section b and d|b must not exceed d|Thickness between|Enter all reference design values|Enter the density|Unknown species|Unknown grade|Timbers |Southern Pine |Stud grade |Flat use of timbers|Notch depth)/, 'material'],
+            [/ values are not built in/, 'material'],
+            [/^(Bearing length|Deflection limits)/, 'factors'],
+        ];
+        const InputTabs = ({ active, onSelect, marks, isDark }) => {
+            const onKey = (e) => {
+                const i = TBC_IN_TABS.findIndex(([k]) => k === active);
+                let j = -1;
+                if (e.key === 'ArrowRight' || e.key === 'ArrowDown') j = (i + 1) % TBC_IN_TABS.length;
+                else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') j = (i - 1 + TBC_IN_TABS.length) % TBC_IN_TABS.length;
+                else if (e.key === 'Home') j = 0;
+                else if (e.key === 'End') j = TBC_IN_TABS.length - 1;
+                if (j < 0) return;
+                e.preventDefault();
+                const k = TBC_IN_TABS[j][0];
+                onSelect(k);
+                const b = document.getElementById('tbcInTab_' + k); if (b) b.focus();
+            };
+            return (
+                <div className={`sticky top-0 z-10 pb-1 ${isDark ? 'bg-slate-900' : 'bg-slate-50'}`}>
+                    <div role="tablist" aria-label="Input groups" className={`flex flex-wrap gap-1 p-1 rounded-lg ${isDark ? 'bg-slate-800' : 'bg-slate-200'}`}>
+                        {TBC_IN_TABS.map(([k, lab]) => {
+                            const on = k === active;
+                            return (
+                                <button key={k} type="button" role="tab" id={'tbcInTab_' + k} aria-controls={'tbcInPane_' + k} aria-selected={on ? 'true' : 'false'} tabIndex={on ? 0 : -1}
+                                    title={marks[k] ? 'An input on this tab needs attention' : undefined}
+                                    onClick={() => onSelect(k)} onKeyDown={onKey}
+                                    className={`flex items-center px-3 py-1.5 text-xs font-bold rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${on ? (isDark ? 'bg-slate-700 shadow text-blue-400' : 'bg-white shadow text-blue-600') : 'text-slate-500'}`}>
+                                    {lab}
+                                    {marks[k] && <span aria-hidden="true" className="ml-1.5 inline-block w-1.5 h-1.5 rounded-full bg-red-500"></span>}
+                                </button>
+                            );
+                        })}
+                    </div>
+                </div>
+            );
+        };
+
         // --- MAIN APP ---
         function UniversalTimberStudio() {
             // State
@@ -754,6 +806,8 @@ var TBC_PROJ_MAP=[{shared:'client',key:'client',label:'Client'},
             const [hoverX, setHoverX] = useState(null);
             const [toast, setToast] = useState({ show: false, msg: '' });
             const [openSections, setOpenSections] = useState({ project: true, loads: true, material: true, factors: true }); // Open by default
+            const [inTab, setInTab] = useState(() => { const t = tbcInTabGet(); return TBC_IN_TABS.some(([k]) => k === t) ? t : 'project'; }); // input panel tab (UI only)
+            const [inDomMarks, setInDomMarks] = useState('');
 
             // Data
             const [customMaterials, setCustomMaterials] = useState({});
@@ -812,6 +866,23 @@ var TBC_PROJ_MAP=[{shared:'client',key:'client',label:'Client'},
             const ctrlDetail = !res.ok ? '' : res.ctrlName === 'Deflection'
                 ? (res.defl.r_dLL >= res.defl.r_dTL ? `Live/snow deflection (${res.defl.trName}) vs L/${res.defl.LLdiv}` : `Total deflection (Kcr·D + ${res.defl.totName}) vs L/${res.defl.TLdiv}`)
                 : (() => { const g = { 'Bending Moment': gb, 'Shear': gv, 'Bearing': gc }[res.ctrlName]; return `Governing combination: ${g.name} (CD = ${g.CD})`; })();
+
+            // Input tab error dots: an input error reported by runTimberCheck, a field shown with a red
+            // border, or a number field the browser cannot parse.
+            const inPanelRef = React.useRef(null);
+            const selectInTab = (t) => { setInTab(t); tbcInTabSet(t); if (inPanelRef.current) inPanelRef.current.scrollTop = 0; };
+            const checkInDom = () => {
+                if (!inPanelRef.current) return;
+                const bad = TBC_IN_TABS.filter(([k]) => {
+                    const pn = document.getElementById('tbcInPane_' + k); if (!pn) return false;
+                    return !!pn.querySelector('.border-red-500') || Array.from(pn.querySelectorAll('input')).some(i => i.validity && i.validity.badInput);
+                }).map(([k]) => k).join(',');
+                setInDomMarks(m => m === bad ? m : bad);
+            };
+            useEffect(checkInDom);
+            const inMarks = {};
+            (res.errors || []).forEach(m => { const r = TBC_IN_ERR.find(x => x[0].test(m)); if (r) inMarks[r[1]] = true; });
+            inDomMarks.split(',').forEach(k => { if (k) inMarks[k] = true; });
 
             // Helpers
             const showToast = (msg) => { setToast({show:true, msg}); setTimeout(()=>setToast({show:false, msg:''}), 3000); };
@@ -914,9 +985,11 @@ var TBC_PROJ_MAP=[{shared:'client',key:'client',label:'Client'},
                     <main className="max-w-8xl mx-auto p-6 grid grid-cols-1 lg:grid-cols-12 gap-8">
                         
                         {/* CONTROLS */}
-                        <div className="lg:col-span-4 space-y-4 hide-print h-[calc(100vh-120px)] overflow-y-auto pr-2 custom-scrollbar">
+                        <div ref={inPanelRef} onInput={checkInDom} className="lg:col-span-4 space-y-4 hide-print h-[calc(100vh-120px)] overflow-y-auto pr-2 custom-scrollbar">
                              
+                             <InputTabs active={inTab} onSelect={selectInTab} marks={inMarks} isDark={isDark} />
                              {/* 1. PROJECT */}
+                             <div role="tabpanel" id="tbcInPane_project" aria-labelledby="tbcInTab_project" hidden={inTab !== 'project'}>
                              <Accordion title="Project & Geometry" icon={Briefcase} isOpen={openSections.project} onToggle={()=>setOpenSections({...openSections, project:!openSections.project})} isDark={isDark}>
                                 <input className="w-full p-2 text-xs border rounded mb-2 dark:bg-slate-800 dark:border-slate-600" placeholder="Client" value={projectInfo.client} onChange={e=>setProjectInfo({...projectInfo, client:e.target.value})} />
                                 <div className="grid grid-cols-2 gap-2 mb-2">
@@ -932,8 +1005,10 @@ var TBC_PROJ_MAP=[{shared:'client',key:'client',label:'Client'},
                                     <InputControl label="Spacing (in)" value={spacing} onChange={setSpacing} min={6} max={48} step={2} unit="in" icon={ArrowDown} />
                                 </div>
                              </Accordion>
+                             </div>
 
                              {/* 2. LOADS */}
+                             <div role="tabpanel" id="tbcInPane_loads" aria-labelledby="tbcInTab_loads" hidden={inTab !== 'loads'}>
                              <Accordion title="Loads & Combinations" icon={ArrowDown} isOpen={openSections.loads} onToggle={()=>setOpenSections({...openSections, loads:!openSections.loads})} isDark={isDark}>
                                 <div className="space-y-3">
                                     <div className={`p-3 rounded-xl border shadow-sm ${isDark ? 'bg-slate-900/50 border-slate-700' : 'bg-blue-50/50 border-blue-100'}`}>
@@ -973,8 +1048,10 @@ var TBC_PROJ_MAP=[{shared:'client',key:'client',label:'Client'},
                                     </div>
                                 </div>
                              </Accordion>
+                             </div>
 
                              {/* 3. MATERIAL */}
+                             <div role="tabpanel" id="tbcInPane_material" aria-labelledby="tbcInTab_material" hidden={inTab !== 'material'}>
                              <Accordion title="Material & Section" icon={Settings} isOpen={openSections.material} onToggle={()=>setOpenSections({...openSections, material:!openSections.material})} isDark={isDark}>
                                 <div className="space-y-2">
                                     <div className="flex justify-between items-center"><span className="text-xs font-bold text-slate-500">SPECIES</span> <button onClick={addMaterial} className="text-[10px] text-blue-500 hover:underline">+ Add Custom</button></div>
@@ -1003,8 +1080,10 @@ var TBC_PROJ_MAP=[{shared:'client',key:'client',label:'Client'},
                                     <div className="text-[10px] text-emerald-600 font-mono text-right">Est. Cost: ${Cost.toFixed(2)}</div>
                                 </div>
                              </Accordion>
+                             </div>
 
                              {/* 4. FACTORS */}
+                             <div role="tabpanel" id="tbcInPane_factors" aria-labelledby="tbcInTab_factors" hidden={inTab !== 'factors'}>
                              <Accordion title="Advanced Factors" icon={MoreHorizontal} isOpen={openSections.factors} onToggle={()=>setOpenSections({...openSections, factors:!openSections.factors})} isDark={isDark}>
                                 <div className="space-y-2 text-xs">
                                     <div className="flex items-center justify-between"><span className="opacity-70">Unbraced Len (ft)</span><input type="number" value={unbracedLen} onChange={e=>setUnbracedLen(parseFloat(e.target.value))} className="w-16 p-1 border rounded text-right" placeholder="Span"/></div>
@@ -1053,6 +1132,7 @@ var TBC_PROJ_MAP=[{shared:'client',key:'client',label:'Client'},
                                     </div>
                                 </div>
                              </Accordion>
+                             </div>
                         </div>
 
                         {/* RIGHT: RESULTS */}
