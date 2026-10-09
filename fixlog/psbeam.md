@@ -834,3 +834,92 @@ Follow-up to T1 (open items O-T1 and O-T2), per the engineer's decisions of 2026
 - **Open items (found, not changed):**
   - O-T3. The "Combined factors (DF×MPF)" line under these boxes uses `(+x||1)`. An *entered 0* therefore shows as 1.000 there, while `computeAll` uses 0 (and warns). This affects the display only. Blank correctly shows 1.000. Say if the line should show 0.
   - O-T4. `lldfMineFor()` reads a blank DF / MPF box as 0 (`+''`), not 1.0. This is used for the "before" values when locking to the LL & DL app and for the unlock snapshot (`BL.saveSnap`). So: a blank box → Lock → Unlock → "Restore the values you had before locking?" → OK would restore **0**, not blank. That zeroes that live-load effect, and the existing warning fires. The confirm dialog does show "… → 0". Found by reading the code, not run. This is pre-existing and not changed here, because it touches the hand-off snapshot. Fix if wanted: snapshot the raw value, or `fac1` it.
+
+## 2026-10-09 — PR: claude/psbeam-lock-blank (PR link added after merge)
+
+Fixes open items O-T4 and O-T3 (above), per the engineer's decision of 2026-10-09.
+
+### T4. LL & DL lock: a blank imported-LL DF / MPF box came back as 0 after Unlock → Restore   [BUG FIX — changes results only in that scenario]
+- **Date / type:** 2026-10-09, bug fix in the lock snapshot / restore path. No formula, factor, unit or code reference changed.
+- **Problem (reproduced on main 5b01018 in headless Chromium):** the four imported-LL boxes (`DF — positive moment` `loads.extDFpos`, `DF — negative moment` `extDFneg`, `DF — shear` `extDFv`, `Multiple presence (m)` `extLLmpf`) are taken as **1.0** by `computeAll()` when blank (`fac1`). `lldfMineFor()` turns them into numbers with `+v`, so a blank box became **0** in the pre-lock snapshot (`BL.saveSnap(LOCK_APP,'lldf',lldfMine())`). Blank → Lock → Unlock → "Restore the values you had before locking?" → OK then wrote 0 into the box, which zeroes that live-load effect (and the existing "… is 0 — that live-load effect is zeroed" warning fires). The dialog read "DF +M 0.650 → 0.000". Unconservative.
+- **Fix:** the snapshot keeps a blank box as `''` (blank), so Restore puts it back blank and `fac1` uses 1.0 again. The restore dialog shows `blank (1.0 used)` for such a box instead of `0.000`. `lldfMineFor()` itself is unchanged, so the values the lock *adopts* and the change-log / toast text are exactly as before.
+- **Other fields in the lock snapshot / restore path, checked for blank → 0:**
+  | Field (channel) | Blank in the calculation | Snapshot blank → 0 matters? | Changed? |
+  |---|---|---|---|
+  | `extDFpos`, `extDFneg`, `extDFv`, `extLLmpf` (lldf, MIDAS mode) | 1.0 (`fac1`) | **yes** | **fixed** |
+  | `fatM` (lldf, both modes) | `+'' > 0` false → auto (DF÷1.2), same as 0; no input box (set only by a pull or "clear → auto" = 0) | no | no |
+  | `dfm`, `dfv` (lldf, HL-93 mode) | the boxes store `+e.target.value`, so they can never be blank (blank is stored as 0); `+inp.loads.dfm` | no | no |
+  | `wBar`, `wDW` (dlLoads) | `+inp.loads.wBar` / `inp.loads.wBar*…` → 0 | no (calc identical; after Restore the box shows `0` instead of blank, display only) | no |
+- **New storage keys / format:** none. The snapshot is still `bridgeSuite.v1.lockSnap.psbeam` → `{lldf:{at,data:{…}}}`; a blank box is now stored as `""` instead of `0`. A snapshot already saved by an older copy (with `0`) cannot be told apart from an entered 0 and is restored as 0, exactly as before; it is cleared on the next unlock. An older snapshot holding `null` (a box that was missing from an old project) is now shown as `blank (1.0 used)`; restoring it behaves as before (`fac1(null)` = 1.0).
+- **Before / After** (exact):
+  1. Module scope, right after `function lldfMineFor(inp){ … }` (anchor `  : {dfm:+inp.loads.dfm, dfv:+inp.loads.dfv, fatM:+inp.loads.fatM}; }`), inserted:
+     ```jsx
+     /* The imported-LL DF / multiple-presence boxes: computeAll (fac1) takes a blank
+        box as 1.0, not 0. The pre-lock snapshot and the unlock "restore" prompt must
+        therefore keep a blank box blank instead of turning it into 0 via +''. */
+     const LLDF_BLANK1={extDFpos:1,extDFneg:1,extDFv:1,extLLmpf:1};
+     function isBlank1(v){ return v===''||v===null||v===undefined; }
+     function extFac1(v){ if(isBlank1(v)) return 1; const n=+v; return isFinite(n)? n : 1; }   // same rule as fac1 in computeAll
+     function lldfSnapFor(inp){ const m=lldfMineFor(inp);
+       if(extActiveOf(inp)) Object.keys(LLDF_BLANK1).forEach(k=>{ if(isBlank1(inp.loads[k])) m[k]=''; });
+       return m; }
+     function lldfBackDeltas(mine,snap){ const B='blank (1.0 used)', out=[];
+       Object.keys(snap).forEach(k=>{ const a=mine[k], b=snap[k];
+         if(LLDF_BLANK1[k]&&(isBlank1(a)||isBlank1(b))){ if(isBlank1(a)&&isBlank1(b)) return;
+           const d=LLDF_DIG[k]; out.push({key:k, label:LLDF_LABELS[k], from:isBlank1(a)?B:(+a).toFixed(d), to:isBlank1(b)?B:(+b).toFixed(d)}); }
+         else out.push(...BL.deltas({[k]:a},{[k]:b},LLDF_LABELS,LLDF_DIG)); });
+       return out; }
+     ```
+     (`lldfBackDeltas` hands every pair without a blank to the shared `BL.deltas`, key by key in the same order, so those lines are unchanged.)
+  2. `InputsTab()` → `toggleLLDFLock`, lock branch. Before:
+     ```jsx
+           BL.saveSnap(LOCK_APP,'lldf',lldfMine());
+     ```
+     After:
+     ```jsx
+           BL.saveSnap(LOCK_APP,'lldf',lldfSnapFor(inp));   // blank DF/MPF box stays blank (1.0), not 0
+     ```
+  3. Same function, unlock branch. Before:
+     ```jsx
+             const back=BL.deltas(lldfMine(),s.data,LLDF_LABELS,LLDF_DIG);
+     ```
+     After:
+     ```jsx
+             const back=lldfBackDeltas(lldfSnapFor(inp),s.data);
+     ```
+     The restore itself (`set(p=>({...p, loads:{...p.loads, ...s.data}}))`) is unchanged; it now writes `''` back for a box that was blank.
+- **Governing provision:** none changed. For reference: LL distribution factors AASHTO LRFD 10th Ed. (2024) Art. 4.6.2.2; multiple presence Art. 3.6.1.1.2; Strength I load factors Table 3.4.1-1. The rule "blank = 1.0, entered 0 = 0" is the existing `fac1` in `computeAll()` (unchanged).
+- **Check case (run in headless Chromium, main vs branch):** PCI BT-72 default girder, MIDAS 2-span test import (span 1, L = 100 ft, M_LL+ = 3,000 k-ft at midspan, M_LL− = −450 k-ft there, V_LL = 95 kip at the support), LL & DL publish g_M(+M) = 0.65, g_M(−M) = 0.60, g_V = 0.72 (interior). `DF — positive moment` cleared (blank); the other three boxes = 1.0. Lock → (factors adopted: 0.65 / 0.60 / 0.72 / 1.0) → Unlock → Restore OK.
+  - Hand check: M_LL+IM = DF × m × M_LL,MIDAS = 1.0 × 1.0 × 3,000 = **3,000 k-ft** (blank). With DF = 0: the +M envelope is 0 × 3,000 = 0, and the displayed governing |M_LL| becomes 450 k-ft (the −M envelope at midspan). Midspan M_u = 1.25 M_DC + 1.50 M_DW + 1.75 M_LL+ loses 1.75 × 3,000 = 5,250 k-ft.
+  - | Result | Blank, never locked | main after Restore (DF +M = 0) | branch after Restore (blank) |
+    |---|---|---|---|
+    | Restore dialog line | — | `DF +M  0.650 → 0.000` | `DF +M  0.650 → blank (1.0 used)` |
+    | Box after restore | blank | `0` | blank ("blank — 1.0 used") |
+    | M_LL (governing) | 3,000 k-ft | 450 k-ft | 3,000 k-ft |
+    | M_u (Strength I, midspan) | 9,177 k-ft | 3,927 k-ft | 9,177 k-ft |
+    | Flexure ratio M_u/φM_n (φM_n = 13,639 k-ft) | 0.673 | 0.288 | 0.673 |
+    | RF_inv / RF_opr (Rating tab, flexure) | 1.85 / 2.40 | 12.33 / 15.99 | 1.85 / 2.40 |
+    | Service I top comp., full load | 1.541 ksi @ 50 ft (0.30) | 1.032 ksi @ 30 ft (0.20) | 1.541 ksi @ 50 ft (0.30) |
+    | Deck compression (SIDL + LL) | 0.797 ksi | 0.149 ksi | 0.797 ksi |
+    | Status band: Shear | 0.74 | 0.63 | 0.74 |
+    RF check: RF_inv × M_LL is the same capacity left for LL in both: 1.85 × 3,000 = 5,550 ≈ 12.33 × 450 = 5,549 k-ft. M_u check: 9,177 − 3,927 = 5,250 = 1.75 × 3,000 (the +M LL term removed).
+  - The same run with the other boxes: `DF — shear` blank → main restored 0, V_LL 95 → 0 kip, status Shear 0.74 → 0.22; `Multiple presence (m)` blank → main restored 0, M_LL and V_LL both 0, RF_inv 1.85 → 99.00, Shear 0.74 → 0.22; `DF — negative moment` blank → main restored 0, −M envelope zeroed (Diagrams LL− column all 0, Report warning). On the branch every one of the four restores blank, and every result tab, the status band and Export JSON are identical to the blank-never-locked state.
+
+### T5. "Combined factors (DF×MPF)" line uses the calculation's blank / 0 rule   [display only]
+- **Date / type:** 2026-10-09, display only (O-T3). The line used `(+x||1)`, so an *entered 0* showed 1.000 while `computeAll` uses 0. It now uses `extFac1` (T4 item 1), the same rule as `fac1`: blank → 1.0, entered 0 → 0. Any other value shows as before.
+- **Before / After** (exact), `InputsTab()`, anchor `Combined factors (DF×MPF): +M = <b>{fmt(`:
+  - Before: `+M = <b>{fmt((+inp.loads.extDFpos||1)*(+inp.loads.extLLmpf||1),3)}</b>, −M = <b>{fmt((+inp.loads.extDFneg||1)*(+inp.loads.extLLmpf||1),3)}</b>, V = <b>{fmt((+inp.loads.extDFv||1)*(+inp.loads.extLLmpf||1),3)}</b>.`
+  - After: `+M = <b>{fmt(extFac1(inp.loads.extDFpos)*extFac1(inp.loads.extLLmpf),3)}</b>, −M = <b>{fmt(extFac1(inp.loads.extDFneg)*extFac1(inp.loads.extLLmpf),3)}</b>, V = <b>{fmt(extFac1(inp.loads.extDFv)*extFac1(inp.loads.extLLmpf),3)}</b>.`
+- **Governing provision:** none (display only).
+- **Check case:** MIDAS import, `DF — shear` = 0 entered, others 1.0: main shows `V = 1.000`, branch shows `V = 0.000` (calculation uses 0 in both: V_LL ≈ 0 kip, warning shown). Blank boxes still show 1.000; 0.9 × 1.2 still shows 1.080.
+
+### How verified (T4 and T5)
+- `node --check` on all 8 inline scripts (the `text/babel` block transpiled with @babel/standalone 7.23.5), main and branch.
+- Headless Chromium (Playwright), main (origin/main 5b01018) vs branch, clock frozen, pinned React 18.2.0 / ReactDOM 18.2.0 / Babel 7.23.5 / Plotly 2.27.0 / KaTeX 0.16.9 served locally.
+- Reproduction: Blank → Lock → Unlock → Restore OK for each of the four boxes, main and branch (table above). Branch: snapshot holds `""`, box blank after restore, every result tab + status band + Export JSON identical to before locking. No console errors.
+- Other lock scenarios, main vs branch (dialog texts, locked and final Export JSON, the snapshot key, all localStorage, every result tab, status band): MIDAS with numeric boxes (0.9, 1.2) and with all 1.0; MIDAS with `DF — shear` = 0 entered (only the combined-factors line differs, as intended); MIDAS with two blank boxes → Unlock → Cancel; HL-93 (non-MIDAS) lock/unlock with OK and with Cancel; dead-load lock with a blank DC2 box and DW = 0.05 (HL-93). All identical to main except, as intended: (a) entered 0: the combined-factors line reads `V = 0.000` (main `1.000`); (b) two blank boxes → Cancel: the snapshot holds `""` instead of `0` and the dialog reads `blank (1.0 used)` instead of `0.000` / `0.00`; the values kept after Cancel, Export JSON and all results are identical.
+- The T1 comparison set (default; all-ON; Custom; BIII-36; NEXT 36F; MIDAS span 1 / span 2; blank Area per leg; hand-off export; Send reactions; Export → Import → Export round trip): rerun with `cmp.mjs`, 0 differences.
+- **Other copies:** none. The `bridgeSuite.v1.*` bootstrap / BridgeLocks code (`BL.deltas`, `saveSnap`, `adopt`) was not touched.
+- **Open items (found, not changed):**
+  - O-T5. When locking, the "before" values in the lock's change-log entry and toast still come from `lldfMineFor()`, so a blank box is logged as `0.000 → 0.650`. This is text only (nothing is restored from it), and it is produced inside the shared `BL.adopt`. Left as is.
+  - O-T6. After a dead-load (`dlLoads`) restore, a DC2 / DW box that was blank shows `0`. Same calculation (blank = 0 there); display only.

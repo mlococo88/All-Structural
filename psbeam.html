@@ -4319,6 +4319,21 @@ const LLDF_DIG={extDFpos:3,extDFneg:3,extDFv:3,extLLmpf:2,fatM:3,dfm:3,dfv:3};
 function lldfMineFor(inp){ return extActiveOf(inp)
   ? {extDFpos:+inp.loads.extDFpos, extDFneg:+inp.loads.extDFneg, extDFv:+inp.loads.extDFv, extLLmpf:+inp.loads.extLLmpf, fatM:+inp.loads.fatM}
   : {dfm:+inp.loads.dfm, dfv:+inp.loads.dfv, fatM:+inp.loads.fatM}; }
+/* The imported-LL DF / multiple-presence boxes: computeAll (fac1) takes a blank
+   box as 1.0, not 0. The pre-lock snapshot and the unlock "restore" prompt must
+   therefore keep a blank box blank instead of turning it into 0 via +''. */
+const LLDF_BLANK1={extDFpos:1,extDFneg:1,extDFv:1,extLLmpf:1};
+function isBlank1(v){ return v===''||v===null||v===undefined; }
+function extFac1(v){ if(isBlank1(v)) return 1; const n=+v; return isFinite(n)? n : 1; }   // same rule as fac1 in computeAll
+function lldfSnapFor(inp){ const m=lldfMineFor(inp);
+  if(extActiveOf(inp)) Object.keys(LLDF_BLANK1).forEach(k=>{ if(isBlank1(inp.loads[k])) m[k]=''; });
+  return m; }
+function lldfBackDeltas(mine,snap){ const B='blank (1.0 used)', out=[];
+  Object.keys(snap).forEach(k=>{ const a=mine[k], b=snap[k];
+    if(LLDF_BLANK1[k]&&(isBlank1(a)||isBlank1(b))){ if(isBlank1(a)&&isBlank1(b)) return;
+      const d=LLDF_DIG[k]; out.push({key:k, label:LLDF_LABELS[k], from:isBlank1(a)?B:(+a).toFixed(d), to:isBlank1(b)?B:(+b).toFixed(d)}); }
+    else out.push(...BL.deltas({[k]:a},{[k]:b},LLDF_LABELS,LLDF_DIG)); });
+  return out; }
 function lldfTheirsFor(inp,r){ return extActiveOf(inp)
   ? {extDFpos:r.gMpos, extDFneg:r.gMneg, extDFv:r.gV, extLLmpf:1.0, fatM:r.fatM}
   : {dfm:r.gMpos, dfv:r.gV, fatM:r.fatM}; }
@@ -4517,7 +4532,7 @@ function InputsTab({inp,set,R,selRow,setSelRow,editedRows,flashRow,editLog,clear
     if(on){
       const r=lldfResolve();
       if(r.why){ alert(r.why+'\n\nPublish the factors first, then lock.'); return; }
-      BL.saveSnap(LOCK_APP,'lldf',lldfMine());
+      BL.saveSnap(LOCK_APP,'lldf',lldfSnapFor(inp));   // blank DF/MPF box stays blank (1.0), not 0
       BL.lock('lldf',LOCK_APP);
       const ds=BL.adopt({app:LOCK_APP, channel:'lldf', before:lldfMine(), after:lldfTheirs(r),
         labels:LLDF_LABELS, digits:LLDF_DIG, source:r.src, apply:()=>applyLLDF(r)});
@@ -4527,7 +4542,7 @@ function InputsTab({inp,set,R,selRow,setSelRow,editedRows,flashRow,editLog,clear
       LOCK_SIG.lldf='';
       const s=BL.takeSnap(LOCK_APP,'lldf');
       if(s&&s.data){
-        const back=BL.deltas(lldfMine(),s.data,LLDF_LABELS,LLDF_DIG);
+        const back=lldfBackDeltas(lldfSnapFor(inp),s.data);
         if(back.length&&window.confirm('Distribution factors unlocked.\n\nRestore the values you had before locking?\n\n  '+back.map(function(d){return d.label+'  '+d.from+' → '+d.to;}).join('\n  ')))
           set(p=>({...p, loads:{...p.loads, ...s.data}}));
         else BL.toast('Distribution factors unlocked','Manual control — the current values were kept.');
@@ -5050,7 +5065,7 @@ function InputsTab({inp,set,R,selRow,setSelRow,editedRows,flashRow,editLog,clear
             <div className="frow rows">
               <Num l="Multiple presence (m)" v={inp.loads.extLLmpf} set={v=>u('loads.extLLmpf',v)} step={0.05} min={0} driven={lldfLocked} src={lldfSrc} blank1/>
             </div>
-            <div className="hint" style={{marginTop:6}}>Combined factors (DF×MPF): +M = <b>{fmt((+inp.loads.extDFpos||1)*(+inp.loads.extLLmpf||1),3)}</b>, −M = <b>{fmt((+inp.loads.extDFneg||1)*(+inp.loads.extLLmpf||1),3)}</b>, V = <b>{fmt((+inp.loads.extDFv||1)*(+inp.loads.extLLmpf||1),3)}</b>. Impact is already in the imported LL, so it is not applied here. Resulting governing M_LL ≈ <b>{fmt(R.MLL,0)} k-ft</b>, V_LL ≈ <b>{fmt(R.VLL,0)} kip</b> (see Diagrams).</div>
+            <div className="hint" style={{marginTop:6}}>Combined factors (DF×MPF): +M = <b>{fmt(extFac1(inp.loads.extDFpos)*extFac1(inp.loads.extLLmpf),3)}</b>, −M = <b>{fmt(extFac1(inp.loads.extDFneg)*extFac1(inp.loads.extLLmpf),3)}</b>, V = <b>{fmt(extFac1(inp.loads.extDFv)*extFac1(inp.loads.extLLmpf),3)}</b>. Impact is already in the imported LL, so it is not applied here. Resulting governing M_LL ≈ <b>{fmt(R.MLL,0)} k-ft</b>, V_LL ≈ <b>{fmt(R.VLL,0)} kip</b> (see Diagrams).</div>
           </React.Fragment>
           : <React.Fragment>
             <div style={{display:'flex',gap:10,alignItems:'center',flexWrap:'wrap'}}>
