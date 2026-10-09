@@ -67,6 +67,15 @@ table.ldtbl input{width:58px;font-family:inherit;font-size:11px;border:1px solid
 .tabbar button.active{background:#fff;border-bottom:2px solid #fff;font-weight:bold}
 .tabpage{display:none;background:#fff;border:1px solid #7a8aa0;border-top:none;padding:10px}
 .tabpage.active{display:block}
+/* input panel tabs (sfdInputTabs) - same look as the output .tabbar */
+#sfdInTabs{position:sticky;top:0;z-index:5;display:flex;flex-wrap:wrap;gap:2px 0;margin:0 0 8px 0;padding-top:2px;background:#fafafa;border-bottom:2px solid #7a8aa0}
+#sfdInTabs .sfdInTab{display:inline-flex;align-items:center;border:1px solid #7a8aa0;border-bottom:none;margin:0 2px -2px 0;background:#e2e8ef;font-size:12px;padding:5px 8px}
+#sfdInTabs .sfdInTab:hover{background:#dbe4ee}
+#sfdInTabs .sfdInTab[aria-selected="true"]{background:#fff;border-bottom:2px solid #fff;font-weight:bold}
+#sfdInTabs .sfdInTab:focus-visible{outline:2px solid #1c4e80;outline-offset:-2px}
+.sfdInDot{display:none;width:7px;height:7px;border-radius:50%;background:#c62828;margin-left:5px}
+.sfdInTab.has-err .sfdInDot{display:inline-block}
+.sfdInTab[hidden],.sfdInPane[hidden]{display:none!important}
 .eq{margin:8px 0 16px 0;padding-left:4px}
 .eqt{font-weight:bold;font-size:12px;border-bottom:1px dotted #bbb;padding-bottom:2px;margin-bottom:2px}
 .eqr{float:right;font-style:italic;font-weight:normal;color:#333;font-size:11px}
@@ -736,6 +745,99 @@ function handleFieldChange(inp){
 }
 document.addEventListener('input',e=>handleFieldChange(e.target));
 document.addEventListener('change',e=>{if(e.target.tagName==='SELECT')handleFieldChange(e.target);});
+/* ---------- input panel tabs (UI only) ----------
+   The input sections are still written in the page exactly as before;
+   sfdInputTabs() MOVES those <details class="sec"> nodes into one pane per
+   tab. Nothing is rebuilt, so every data-path, id and handler is untouched,
+   and the pedestal cards keep being built into #pedContainer (inside
+   sec-peds), so added / removed pedestals stay on the Pedestals & Loads tab.
+   The active tab is remembered per browser in localStorage key
+   sfd_inputTab_v1 (never in state, so autosave and the project JSON are
+   unchanged). */
+const SFD_IN_TABS=[
+ ['project','Project'],['geom','Geometry'],['mat','Materials'],['soil','Soil'],
+ ['stab','Stability'],['peds','Pedestals &amp; Loads'],['assump','Assumptions']];
+const SFD_IN_SEC={
+ 'sec-proj':'project','sec-geom':'geom','sec-mat':'mat','sec-rebar':'mat',
+ 'sec-soil':'soil','sec-ev':'soil','sec-stab':'stab','sec-peds':'peds','sec-assump':'assump'};
+/* input errors from computeAll() (red ERROR boxes), mapped to the tab holding the input */
+const SFD_IN_ERR=[
+ [/^Footing dimensions B, L, t/,'geom'],
+ [/^Vesi\u0107 mode: \u03c6 \u2248 0|^Direct mode: allowable bearing|^Friction angle \u03c6 cannot|^Cohesion c cannot|^Bearing capacity factor of safety|^Soil unit weight must/,'soil'],
+ [/^Concrete strength f'c|^Steel yield f_y|^Cover cannot be negative|^Top and bottom cover together|^Concrete unit weight cannot/,'mat'],
+ [/^Friction coefficient \u03bc cannot|^Passive fraction mobilized/,'stab'],
+ [/^Pedestal ".*": (plan dimensions|height cannot|footprint extends)|^No pedestals defined/,'peds']];
+const SFD_IN_KEY='sfd_inputTab_v1';
+let sfdInTabCur=null;   /* in-memory copy, used when storage is blocked */
+function sfdInTabGet(){if(sfdInTabCur)return sfdInTabCur;try{return localStorage.getItem(SFD_IN_KEY)||'';}catch(e){return '';}}
+function sfdInTabSet(t){sfdInTabCur=t;try{localStorage.setItem(SFD_IN_KEY,t);}catch(e){}}
+function sfdInputTabs(){
+ const P=document.getElementById('inputPanel');if(!P||document.getElementById('sfdInTabs'))return;
+ const bar=el('div');bar.id='sfdInTabs';bar.setAttribute('role','tablist');bar.setAttribute('aria-label','Input groups');
+ const panes={};
+ SFD_IN_TABS.forEach(([k,lab])=>{
+  const b=el('button','sfdInTab');b.type='button';b.id='sfdInTab_'+k;b.dataset.pane=k;
+  b.setAttribute('role','tab');b.setAttribute('aria-controls','sfdInPane_'+k);
+  b.appendChild(el('span',null,lab));
+  const dot=el('span','sfdInDot');dot.setAttribute('aria-hidden','true');b.appendChild(dot);
+  b.addEventListener('click',()=>sfdSetInTab(k,true));
+  b.addEventListener('keydown',sfdInTabKey);
+  bar.appendChild(b);
+  const pn=el('div','sfdInPane');pn.id='sfdInPane_'+k;pn.setAttribute('role','tabpanel');
+  pn.setAttribute('aria-labelledby','sfdInTab_'+k);
+  panes[k]=pn;
+ });
+ /* move the existing nodes; anything not in the map stays with the section before it */
+ let cur='project';
+ Array.from(P.childNodes).forEach(n=>{
+  if(n.id&&SFD_IN_SEC[n.id])cur=SFD_IN_SEC[n.id];
+  panes[cur].appendChild(n);
+ });
+ P.appendChild(bar);
+ SFD_IN_TABS.forEach(([k])=>{
+  P.appendChild(panes[k]);
+  document.getElementById('sfdInTab_'+k).hidden=!panes[k].querySelector('details.sec');
+ });
+ let t=sfdInTabGet();
+ if(!panes[t]||document.getElementById('sfdInTab_'+t).hidden)t='project';
+ sfdSetInTab(t,false);
+}
+function sfdSetInTab(t,remember){
+ SFD_IN_TABS.forEach(([k])=>{
+  const b=document.getElementById('sfdInTab_'+k),pn=document.getElementById('sfdInPane_'+k);if(!b||!pn)return;
+  const on=(k===t);
+  b.setAttribute('aria-selected',on?'true':'false');b.tabIndex=on?0:-1;
+  pn.hidden=!on;
+ });
+ if(remember){sfdInTabSet(t);const P=document.getElementById('inputPanel');if(P)P.scrollTop=0;}
+}
+function sfdInTabKey(e){
+ const vis=SFD_IN_TABS.map(([k])=>document.getElementById('sfdInTab_'+k)).filter(b=>b&&!b.hidden);
+ const i=vis.indexOf(e.currentTarget);let j=-1;
+ if(e.key==='ArrowRight'||e.key==='ArrowDown')j=(i+1)%vis.length;
+ else if(e.key==='ArrowLeft'||e.key==='ArrowUp')j=(i-1+vis.length)%vis.length;
+ else if(e.key==='Home')j=0;
+ else if(e.key==='End')j=vis.length-1;
+ if(j<0)return;
+ e.preventDefault();sfdSetInTab(vis[j].dataset.pane,true);vis[j].focus();
+}
+/* red dot on a tab with an input error: a red ERROR box from the input
+   validation that names one of its inputs, or a number field the browser
+   cannot parse */
+function sfdInputTabMarks(){
+ if(!document.getElementById('sfdInTabs'))return;
+ const bad={};
+ document.querySelectorAll('#inputPanel .sfdInPane input').forEach(i=>{
+  if(i.validity&&i.validity.badInput){const pn=i.closest('.sfdInPane');if(pn)bad[pn.id.replace('sfdInPane_','')]=1;}});
+ ((typeof R!=='undefined'&&R&&R.W)||[]).forEach(w=>{
+  if(w.lvl!=='err')return;
+  const m=SFD_IN_ERR.find(r=>r[0].test(w.msg));if(m)bad[m[1]]=1;});
+ SFD_IN_TABS.forEach(([k])=>{
+  const b=document.getElementById('sfdInTab_'+k);if(!b)return;
+  b.classList.toggle('has-err',!!bad[k]);
+  b.title=bad[k]?'An input on this tab has an error':'';
+ });
+}
 </script>
 <script>
 /* ================= combination generation (ASCE 7-16) ================= */
@@ -2458,6 +2560,7 @@ function recalc(){
  else{['tab-schem','tab-combos','tab-bearing','tab-stab','tab-footdes','tab-peddes'].forEach(id=>{$('#'+id).innerHTML='';});}
  if($('#tab-3d').classList.contains('active')||$('#v3dwrap'))renderView3D();
  renderPrintHeader();
+ sfdInputTabMarks();
  if(typeof buildManualTab==='function'&&$('#manualHost')&&!$('#manualHost').childNodes.length)buildManualTab();
 }
 let rcTimer=null;
@@ -4368,6 +4471,7 @@ function showInspect(i){
 }
 </script>
 <script>
+sfdInputTabs();   /* move the input sections into the input tabs */
 loadAuto();
 bindStaticInputs();
 buildPedCards();
@@ -5103,6 +5207,7 @@ buildManualTab();
       ov.remove();
       buildPedCards(); saveAuto(); recalc();
       refreshBar();
+      if(typeof sfdSetInTab==='function') sfdSetInTab('peds',true);   /* show the pedestal loads just filled */
     });
     document.body.appendChild(ov);
     refresh();
@@ -5353,6 +5458,7 @@ buildManualTab();
       ov.remove();
       bindStaticInputs(); buildPedCards(); saveAuto(); recalc();
       refreshBar();
+      if(typeof sfdSetInTab==='function') sfdSetInTab('peds',true);   /* show the pedestal loads just filled */
     });
     document.body.appendChild(ov);
     full();
