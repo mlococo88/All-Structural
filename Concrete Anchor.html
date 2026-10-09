@@ -60,6 +60,9 @@
             .calc-line { border-color: #ccc; }
             .bg-slate-900 { background-color: white !important; border: 1px solid #ddd !important; color: black !important; }
             .text-slate-200, .text-slate-300 { color: black !important; }
+            /* input panel tabs: print every pane, spaced as the old space-y-6 list */
+            .ca-inpane[hidden] { display: block !important; }
+            .ca-inpane + .ca-inpane { margin-top: 1.5rem !important; }
         }
     </style>
 </head>
@@ -856,6 +859,34 @@ var CA_PROJ_MAP=[{shared:'projectName',key:'name',label:'Project Name'},
         );
     };
 
+    // --- INPUT PANEL TABS (UI only) ---
+    // The four input groups are always rendered; the inactive ones only get the `hidden`
+    // attribute, so no input is unmounted and its state, key and handler are unchanged.
+    // The active tab is remembered per browser in localStorage key concreteAnchor_inputTab_v1
+    // (never in the project JSON). An in-memory copy keeps it when storage is blocked.
+    const CA_IN_TABS = [['system', 'System'], ['geom', 'Geometry'], ['member', 'Member & Anchor'], ['loads', 'Loads']];
+    const CA_IN_FIELD_TAB = { hef: 'geom', ha: 'geom', c1: 'geom', c2: 'geom', c3: 'geom', c4: 'geom', sx: 'geom', sy: 'geom',
+        fc: 'member', wc: 'member', plateT: 'member', plateLx: 'member', plateFy: 'member', plateBeff: 'member',
+        Nua: 'loads', Vux: 'loads', Vuy: 'loads', Mux: 'loads', Muy: 'loads' };
+    const CA_IN_KEY = 'concreteAnchor_inputTab_v1';
+    let caInTabMem = '';
+    const caInTabGet = () => {
+        let t = caInTabMem;
+        if (!t) { try { t = localStorage.getItem(CA_IN_KEY) || ''; } catch (e) { t = ''; } }
+        return CA_IN_TABS.some(([k]) => k === t) ? t : 'system';
+    };
+    const caInTabSet = (t) => { caInTabMem = t; try { localStorage.setItem(CA_IN_KEY, t); } catch (e) {} };
+    // Red dot: a validateInputs() error (blank / unparseable / out-of-range input) on one of the tab's inputs.
+    const caInTabErrs = (errors) => {
+        const bad = {};
+        errors.forEach(m => {
+            Object.entries(NUM_FIELDS).forEach(([k, l]) => { if (m.startsWith(l + ':') || m.startsWith(l + ' must')) bad[CA_IN_FIELD_TAB[k]] = true; });
+            if (/^(Unknown anchor grade|Unsupported anchor diameter|Unknown edge reinforcement)/.test(m)) bad.member = true;
+            if (/^(Unknown anchor type|Number of anchors)/.test(m)) bad.system = true;
+        });
+        return bad;
+    };
+
     // --- MAIN APP ---
 
     const App = () => {
@@ -863,6 +894,7 @@ var CA_PROJ_MAP=[{shared:'projectName',key:'name',label:'Project Name'},
         const [inputs, setInputs] = useState({ ...DEFAULT_INPUTS });
         const [reportMode, setReportMode] = useState(false);
         const [loadMsg, setLoadMsg] = useState(null);   // { kind: 'error'|'info', lines: [] }
+        const [inTab, setInTabState] = useState(caInTabGet);   // input panel tab (UI only)
 
         const update = (k, v) => setInputs(p => ({...p, [k]: v}));
         const updateProj = (k, v) => setProject(p => ({...p, [k]: v}));
@@ -898,6 +930,23 @@ var CA_PROJ_MAP=[{shared:'projectName',key:'name',label:'Project Name'},
 
         const res = useMemo(() => computeAll(inputs), [inputs]);
         const ok = res.errors.length === 0;
+        const inErr = caInTabErrs(res.errors);
+        const setInTab = (t, btn) => {
+            setInTabState(t); caInTabSet(t);
+            const sc = btn && btn.closest('.overflow-y-auto'); if (sc) sc.scrollTop = 0;
+        };
+        const onInTabKey = (e) => {
+            const ks = CA_IN_TABS.map(([k]) => k), i = ks.indexOf(inTab);
+            let j = -1;
+            if (e.key === 'ArrowRight' || e.key === 'ArrowDown') j = (i + 1) % ks.length;
+            else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') j = (i - 1 + ks.length) % ks.length;
+            else if (e.key === 'Home') j = 0;
+            else if (e.key === 'End') j = ks.length - 1;
+            if (j < 0) return;
+            e.preventDefault();
+            const b = document.getElementById('caInTab_' + ks[j]);
+            setInTab(ks[j], b); if (b) b.focus();
+        };
 
         return (
             <div className="flex h-screen w-full bg-slate-900 text-slate-200 font-sans overflow-hidden">
@@ -926,11 +975,21 @@ var CA_PROJ_MAP=[{shared:'projectName',key:'name',label:'Project Name'},
                             {loadMsg.lines.map((l,i)=><div key={i}>{l}</div>)}
                             <button onClick={()=>setLoadMsg(null)} className="mt-1 underline">dismiss</button>
                         </div>}
+                        <div role="tablist" aria-label="Input groups" className="no-print flex flex-wrap gap-1 mt-3">
+                            {CA_IN_TABS.map(([k, lab]) => (
+                                <button key={k} type="button" role="tab" id={'caInTab_' + k} aria-controls={'caInPane_' + k} aria-selected={inTab === k} tabIndex={inTab === k ? 0 : -1}
+                                    title={inErr[k] ? 'An input on this tab needs attention' : undefined}
+                                    onClick={e => setInTab(k, e.currentTarget)} onKeyDown={onInTabKey}
+                                    className={`flex-1 flex items-center justify-center gap-1 px-2 py-1 text-[10px] font-bold uppercase whitespace-nowrap border rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 ${inTab === k ? 'bg-blue-600 border-blue-500 text-white' : 'bg-slate-800 border-slate-600 text-slate-400 hover:bg-slate-700'}`}>
+                                    <span>{lab}</span>{inErr[k] && <span aria-hidden="true" className="inline-block w-1.5 h-1.5 rounded-full bg-red-500"></span>}
+                                </button>
+                            ))}
+                        </div>
                     </div>
                     
                     <div className="p-4 space-y-6">
                         {/* 1. SYSTEM */}
-                        <div className="space-y-2">
+                        <div className="space-y-2 ca-inpane" id="caInPane_system" role="tabpanel" aria-labelledby="caInTab_system" hidden={inTab !== 'system'}>
                             <h2 className="text-xs font-bold text-slate-500 border-b border-slate-700 pb-1">1. SYSTEM</h2>
                             <div className="flex gap-1">
                                 <button onClick={()=>setPreset('center')} className="flex-1 py-1 bg-slate-800 border border-slate-600 text-[10px] rounded hover:bg-slate-700">CENTER</button>
@@ -950,7 +1009,7 @@ var CA_PROJ_MAP=[{shared:'projectName',key:'name',label:'Project Name'},
                         </div>
 
                         {/* 2. GEOMETRY */}
-                        <div className="space-y-2">
+                        <div className="space-y-2 ca-inpane" id="caInPane_geom" role="tabpanel" aria-labelledby="caInTab_geom" hidden={inTab !== 'geom'}>
                             <h2 className="text-xs font-bold text-slate-500 border-b border-slate-700 pb-1">2. GEOMETRY</h2>
                             <InputRow label="Embedment (hef)" value={inputs.hef} onChange={v=>update('hef',v)} unit="in" />
                             <InputRow label="Member thickness (ha)" value={inputs.ha} onChange={v=>update('ha',v)} unit="in" help="ψh,V / A_Vc depth" />
@@ -969,7 +1028,7 @@ var CA_PROJ_MAP=[{shared:'projectName',key:'name',label:'Project Name'},
                         </div>
 
                         {/* 3. MEMBER */}
-                        <div className="space-y-2">
+                        <div className="space-y-2 ca-inpane" id="caInPane_member" role="tabpanel" aria-labelledby="caInTab_member" hidden={inTab !== 'member'}>
                             <h2 className="text-xs font-bold text-slate-500 border-b border-slate-700 pb-1">3. MEMBER & ANCHOR</h2>
                             <div className="grid grid-cols-2 gap-2">
                                 <InputRow label="Conc. f'c" value={inputs.fc} onChange={v=>update('fc',v)} unit="psi" />
@@ -1002,7 +1061,7 @@ var CA_PROJ_MAP=[{shared:'projectName',key:'name',label:'Project Name'},
                         </div>
                         
                         {/* 4. LOADS */}
-                         <div className="space-y-2">
+                         <div className="space-y-2 ca-inpane" id="caInPane_loads" role="tabpanel" aria-labelledby="caInTab_loads" hidden={inTab !== 'loads'}>
                             <h2 className="text-xs font-bold text-slate-500 border-b border-slate-700 pb-1">4. FACTORED LOADS</h2>
                             <InputRow label="Tension (Nua)" value={inputs.Nua} onChange={v=>update('Nua',v)} unit="lb" />
                             <div className="grid grid-cols-2 gap-2">
