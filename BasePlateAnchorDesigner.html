@@ -46,6 +46,15 @@
   #hdrBtns{display:flex;gap:6px;align-items:center;flex-wrap:wrap;}
   #main{flex:1 1 auto;display:flex;min-height:0;}
   #inputPanel{flex:0 0 33%;max-width:33%;border-right:1px solid var(--color-border);overflow-y:auto;background:var(--color-bg);padding:10px 12px 60px;font-family:var(--font-ui);font-size:9.5pt;}
+  /* input panel tabs (bpadInputTabs) — same button-tab look as the output #tabBar */
+  #bpadInTabs{position:sticky;top:-10px;z-index:12;display:flex;flex-wrap:wrap;gap:2px;margin:-10px -12px 0;padding:8px 12px 0;background:var(--color-bg);border-bottom:2px solid var(--ink);}
+  #bpadInTabs .bpadInTab{display:inline-flex;align-items:center;border:1px solid var(--color-border);border-bottom:none;border-radius:6px 6px 0 0;font-size:9pt;font-family:var(--font-ui);padding:5px 10px;background:var(--slate-100);color:#475569;}
+  #bpadInTabs .bpadInTab:hover{background:#E8ECF1;color:var(--color-fg);}
+  #bpadInTabs .bpadInTab[aria-selected="true"]{background:var(--paper);font-weight:600;color:var(--color-primary);box-shadow:inset 0 3px 0 var(--color-secondary);}
+  #bpadInTabs .bpadInTab:focus-visible{outline:none;box-shadow:inset 0 3px 0 var(--color-secondary),0 0 0 2px rgba(37,99,235,.3);}
+  .bpadInDot{display:none;width:7px;height:7px;border-radius:50%;background:var(--fail);margin-left:6px;box-shadow:0 0 0 1.5px #fff;}
+  .bpadInTab.has-err .bpadInDot{display:inline-block;}
+  .bpadInTab[hidden],.bpadInPane[hidden]{display:none!important;}
   #outputPanel{flex:1 1 67%;overflow-y:auto;padding:0 16px 80px;background:var(--paper);}
   h2.secTitle{font-size:12pt;margin:0;}
   h3{font-size:11pt;margin:10px 0 4px;}
@@ -1021,6 +1030,7 @@ function restoreUI(st){
   if(st.key){
     const el=document.querySelector('[data-fkey="'+st.key+'"]');
     if(el){
+      bpadShowInTabOf(el);   /* input tabs: make sure its pane is the visible one */
       el.focus({preventScroll:true});
       if(st.selStart!=null && el.setSelectionRange){
         try{ el.setSelectionRange(st.selStart, st.selEnd); }catch(e){}
@@ -4456,6 +4466,120 @@ function buildInputPanel(){
     body.appendChild(ta);
     body.appendChild(el("div","note","Echoed in the on-screen output and the PDF report."));
   },P);
+  bpadInputTabs(P);   /* move the sections just built into the input tabs */
+}
+
+/* ---------- input panel tabs (UI only) ----------
+   buildInputPanel() still builds every section into #inputPanel exactly as
+   before; bpadInputTabs() then MOVES the finished section nodes into one pane
+   per tab. Nothing is rebuilt, so data-fkey / data-secid, the handlers and the
+   bound values are untouched. The active tab is remembered per browser in
+   localStorage key bpad_inputTab_v1 (never in S, so the autosave, saved
+   projects and the project JSON are unchanged). */
+const BPAD_IN_TABS=[
+  ['plate','Plate & Anchors'],['standoff','Stand-off'],['pedestal','Pedestal'],
+  ['dist','Distribution'],['reinf','Reinforcement'],['loads','Loads'],['assume','Assumptions']];
+const BPAD_IN_SEC={
+  inGeom:'plate',inAnchor:'plate',
+  inGrout:'standoff',inLevNut:'standoff',
+  inConc:'pedestal',
+  inShear:'dist',inForceModel:'dist',
+  inTRebar:'reinf',inVRebar:'reinf',
+  inLoads:'loads',
+  inAssume:'assume'};
+const BPAD_IN_KEY='bpad_inputTab_v1';
+let bpadInTabCur=null;   /* in-memory copy, so the tab survives rebuilds even without storage */
+function bpadInTabGet(){ if(bpadInTabCur) return bpadInTabCur; try{ return localStorage.getItem(BPAD_IN_KEY)||''; }catch(e){ return ''; } }
+function bpadInTabSet(t){ bpadInTabCur=t; try{ localStorage.setItem(BPAD_IN_KEY,t); }catch(e){} }
+function bpadInputTabs(P){
+  const bar=el("div"); bar.id="bpadInTabs"; bar.setAttribute("role","tablist"); bar.setAttribute("aria-label","Input groups");
+  const panes={};
+  BPAD_IN_TABS.forEach(([k,lab])=>{
+    const b=el("button","bpadInTab"); b.type="button"; b.id="bpadInTab_"+k; b.dataset.pane=k;
+    b.setAttribute("role","tab"); b.setAttribute("aria-controls","bpadInPane_"+k);
+    b.appendChild(el("span",null,lab));
+    const dot=el("span","bpadInDot"); dot.setAttribute("aria-hidden","true"); b.appendChild(dot);
+    b.addEventListener("click",()=>bpadSetInTab(k,true));
+    b.addEventListener("keydown",bpadInTabKey);
+    bar.appendChild(b);
+    const pn=el("div","bpadInPane"); pn.id="bpadInPane_"+k; pn.setAttribute("role","tabpanel");
+    pn.setAttribute("aria-labelledby","bpadInTab_"+k);
+    panes[k]=pn;
+  });
+  /* move the built nodes; a node not in the map stays with the section before it */
+  let cur=BPAD_IN_TABS[0][0];
+  Array.from(P.childNodes).forEach(n=>{
+    const sid=n.getAttribute&&n.getAttribute("data-secid");
+    if(sid&&BPAD_IN_SEC[sid]) cur=BPAD_IN_SEC[sid];
+    panes[cur].appendChild(n);
+  });
+  P.appendChild(bar);
+  BPAD_IN_TABS.forEach(([k])=>{
+    P.appendChild(panes[k]);
+    document.getElementById("bpadInTab_"+k).hidden=!panes[k].childNodes.length;
+  });
+  if(!P.__bpadInWired){   /* P persists across rebuilds: wire the dot refresh once */
+    P.__bpadInWired=true;
+    P.addEventListener("input",()=>bpadInputTabMarks());
+  }
+  let t=bpadInTabGet();
+  if(!panes[t]||!panes[t].childNodes.length) t=BPAD_IN_TABS.map(x=>x[0]).find(k=>panes[k].childNodes.length)||BPAD_IN_TABS[0][0];
+  bpadSetInTab(t,false);
+  bpadInputTabMarks();
+}
+function bpadSetInTab(t,remember){
+  BPAD_IN_TABS.forEach(([k])=>{
+    const b=document.getElementById("bpadInTab_"+k), pn=document.getElementById("bpadInPane_"+k); if(!b||!pn) return;
+    const on=(k===t);
+    b.setAttribute("aria-selected",on?"true":"false"); b.tabIndex=on?0:-1;
+    pn.hidden=!on;
+  });
+  if(remember){ bpadInTabSet(t); const P=document.getElementById("inputPanel"); if(P) P.scrollTop=0; }
+}
+function bpadInTabKey(e){
+  const vis=BPAD_IN_TABS.map(([k])=>document.getElementById("bpadInTab_"+k)).filter(b=>b&&!b.hidden);
+  const i=vis.indexOf(e.currentTarget); let j=-1;
+  if(e.key==="ArrowRight"||e.key==="ArrowDown") j=(i+1)%vis.length;
+  else if(e.key==="ArrowLeft"||e.key==="ArrowUp") j=(i-1+vis.length)%vis.length;
+  else if(e.key==="Home") j=0;
+  else if(e.key==="End") j=vis.length-1;
+  if(j<0) return;
+  e.preventDefault(); bpadSetInTab(vis[j].dataset.pane,true); vis[j].focus();
+}
+/* switch to the tab holding an input element (used before focusing it) */
+function bpadShowInTabOf(node){
+  const pn=node&&node.closest&&node.closest(".bpadInPane");
+  if(pn&&pn.hidden) bpadSetInTab(pn.id.replace("bpadInPane_",""),false);
+}
+/* input errors from validateInputs() (the red messages above the output),
+   mapped to the section holding the input they name */
+function bpadValSecs(e){
+  const out=[], m=e.msg||"";
+  if(e.code==="input"){
+    if(/plate (thickness|width|length)/.test(m)) out.push("inGeom");
+    if(/h_ef/.test(m)) out.push("inAnchor");
+    if(/f'c|pedestal/.test(m)) out.push("inConc");
+  }
+  else if(e.code==="DG1") out.push("inGeom");
+  else if(e.code==="geometry"||e.code==="\u00a717.9.2") out.push("inAnchor");
+  else if(e.code==="\u00a717.10"||!e.code) out.push("inLoads");   /* seismic combinations / load unit error */
+  return out;
+}
+/* red dot on a tab whose inputs carry an error: an error box inside one of its
+   sections, a number field the browser cannot parse, or an input error from
+   validateInputs() that names one of its inputs */
+function bpadInputTabMarks(){
+  if(!document.getElementById("bpadInTabs")) return;
+  const bad={};
+  const mark=n=>{ const pn=n&&n.closest&&n.closest(".bpadInPane"); if(pn) bad[pn.id.replace("bpadInPane_","")]=1; };
+  document.querySelectorAll("#inputPanel .bpadInPane .errBox").forEach(mark);
+  document.querySelectorAll("#inputPanel .bpadInPane input").forEach(i=>{ if(i.validity&&i.validity.badInput) mark(i); });
+  ((VALIDATION&&VALIDATION.errs)||[]).forEach(e=>bpadValSecs(e).forEach(id=>mark(document.querySelector('#inputPanel [data-secid="'+id+'"]'))));
+  BPAD_IN_TABS.forEach(([k])=>{
+    const b=document.getElementById("bpadInTab_"+k); if(!b) return;
+    b.classList.toggle("has-err",!!bad[k]);
+    b.title=bad[k]?"An input on this tab needs attention":"";
+  });
 }
 
 /* =====================================================================
@@ -8850,6 +8974,7 @@ function validateInputs(){
     warns.forEach(t=>{ const d=el("div","valWarn"); d.textContent="\u26a0 "+t; box.appendChild(d); });
   }
   VALIDATION={errs:norm, warns, blockers};
+  bpadInputTabMarks();   /* refresh the input-tab error dots */
   return norm.length===0;
 }
 

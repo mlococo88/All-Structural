@@ -839,3 +839,125 @@ h_ef 12″, 30×30×36 pedestal, f'c 4 ksi cracked, 1″ grout) unless stated.
 - O7. Pryout keeps its old ratio cap `min(A_Nc,all/A_Nco, nT)` (nT = tension-anchor count) so its result is unchanged. Per §17.7.3 the cap would be the number of anchors in the group (less conservative when A_Nc,all/A_Nco > nT). Confirm.
 - O8. Condition A is decided by "the intercept check credits ≥ 1 bar/leg" (F7). If you want a stricter rule (all bars effective) or an explicit "Condition A" input, say so.
 - O9. F6 (§17.7.2.1.2) and F10 (uniform block) reduce DCRs in some cases. Both follow the code text / the reviewer's instruction, but please confirm.
+
+## 2026-10-09 — PR: claude/tabs-baseplate (PR link added after merge)
+### T1. Input panel split into tabs   [UI only — no calculation change]
+- **Date / type:** 2026-10-09, UI only (no result change). Requested by the engineer on 2026-10-09: "Go through all the apps and make sure they are all formatted with the input panel having tabs rather than one long scrolling input panel." Same approach as `Steel Beam Design - AISC 15th.html` T1: build every section as before, then move the built nodes into tab panes. Drawn in this tool's own style (the same button-tab look as the output `#tabBar`).
+- **How it works:** `buildInputPanel()` still builds the 11 numbered input cards into `#inputPanel` exactly as before. At its end the new `bpadInputTabs(P)` **moves** the finished `.sec` nodes into one pane per tab. Nothing is rebuilt or re-templated, so every `data-fkey`, `data-secid`, handler, bound value and collapse state (`S.ui.collapse`) is unchanged. Every caller goes through `buildInputPanel()` (`refreshAll`, `init`, project Load, Import JSON, Restore All, PROFIS import, the member-reaction hand-off), so all of them get the tabs. A tab whose pane is empty is hidden. None is empty today, because all 11 cards are always built. A card not in the map stays in the tab of the card before it.
+- **Tabs (in order) and the cards in each** (`data-secid` in brackets):
+
+| Tab | Cards |
+|---|---|
+| Plate & Anchors | 1. Plate & Column Geometry (`inGeom`), 2. Anchors (cast-in headed) (`inAnchor`) |
+| Stand-off | 3. Grout & Stand-off (`inGrout`), 4. Stand-off Bending Summary (`inLevNut`) |
+| Pedestal | 5. Concrete Pedestal (`inConc`) |
+| Distribution | 6. Shear Distribution (`inShear`), 7. Anchor Force Distribution (`inForceModel`) |
+| Reinforcement | 8. Tension Reinforcement (`inTRebar`), 9. Shear Reinforcement (Hairpins) (`inVRebar`) |
+| Loads | 10. Load Combinations (pre-factored, LRFD) (`inLoads`) |
+| Assumptions | 11. Engineering Assumptions (`inAssume`) |
+
+- **Error marker:** a red dot appears on a tab when one of its inputs needs attention. That means one of these:
+  - an `.errBox` inside one of its cards (for example, plain threaded rod in card 2);
+  - a number field the browser cannot parse (`validity.badInput`);
+  - a `validateInputs()` error (the red lines above the output) that names one of its inputs:
+    - blank, zero or negative critical input: plate t, B or N → `inGeom`; h_ef → `inAnchor`; f'c or pedestal H, Bx, By → `inConc`;
+    - `DG1` plate too small → `inGeom`;
+    - `geometry` (edge distance) and `§17.9.2` spacing → `inAnchor`;
+    - `§17.10` seismic banner and the load-unit plausibility error → `inLoads`.
+
+  Warnings (amber) do not set a dot. The dots are refreshed at the end of `validateInputs()` and on every `input` event in the panel.
+- **Keyboard / accessibility:** `role="tablist"`, `role="tab"` with `aria-selected` and `aria-controls`, `role="tabpanel"` with `aria-labelledby`; roving `tabindex`; ←/→ (and ↑/↓), Home and End move between the visible tabs.
+- **Focus restore:** after each rebuild, `restoreUI()` re-focuses the field being typed in. It now first switches to the tab holding that field (`bpadShowInTabOf`). This tool has no other "go to input" links.
+- **New storage key:** `bpad_inputTab_v1` (localStorage, plain string: `plate`, `standoff`, `pedestal`, `dist`, `reinf`, `loads` or `assume`). It remembers the active input tab per browser. Every read and write is in try/catch, and an in-memory copy keeps the tab across rebuilds when storage is blocked. It is **not** stored in `S`. These are unchanged: the autosave (`bpad_autosave_v1`), saved projects (`bpad_projects_v1`), `bpad_lastproject_v1`, the project JSON export/import, Backup All / Restore All, and the `bridgeSuite.v1.*` hand-offs. No existing key or format changed.
+- **Print:** unchanged. Print hides `#main`, and the report is built separately in `#printReport` from the output pages. So the input panel and its tab strip are not printed, as before.
+- **Narrow screens:** the tab strip wraps (`flex-wrap`) and is sticky at the top of the scrolling input panel. At 400 px the page already scrolls horizontally on main: the document is 784 px wide because of the six-column project header (`#projGrid`). This change leaves that as it is (784 px before and after); see O11.
+- **Governing provision:** none (no engineering change).
+- **Before / After** (file uses LF):
+  1. CSS. Anchor (unchanged): `  #inputPanel{flex:0 0 33%;max-width:33%;border-right:1px solid var(--color-border);overflow-y:auto;` … After: these lines inserted right after it, before `  #outputPanel{`:
+     ```css
+       /* input panel tabs (bpadInputTabs) — same button-tab look as the output #tabBar */
+       #bpadInTabs{position:sticky;top:-10px;z-index:12;display:flex;flex-wrap:wrap;gap:2px;margin:-10px -12px 0;padding:8px 12px 0;background:var(--color-bg);border-bottom:2px solid var(--ink);}
+       #bpadInTabs .bpadInTab{display:inline-flex;align-items:center;border:1px solid var(--color-border);border-bottom:none;border-radius:6px 6px 0 0;font-size:9pt;font-family:var(--font-ui);padding:5px 10px;background:var(--slate-100);color:#475569;}
+       #bpadInTabs .bpadInTab:hover{background:#E8ECF1;color:var(--color-fg);}
+       #bpadInTabs .bpadInTab[aria-selected="true"]{background:var(--paper);font-weight:600;color:var(--color-primary);box-shadow:inset 0 3px 0 var(--color-secondary);}
+       #bpadInTabs .bpadInTab:focus-visible{outline:none;box-shadow:inset 0 3px 0 var(--color-secondary),0 0 0 2px rgba(37,99,235,.3);}
+       .bpadInDot{display:none;width:7px;height:7px;border-radius:50%;background:var(--fail);margin-left:6px;box-shadow:0 0 0 1.5px #fff;}
+       .bpadInTab.has-err .bpadInDot{display:inline-block;}
+       .bpadInTab[hidden],.bpadInPane[hidden]{display:none!important;}
+     ```
+  2. `restoreUI()`. Before:
+     ```js
+         if(el){
+           el.focus({preventScroll:true});
+     ```
+     After:
+     ```js
+         if(el){
+           bpadShowInTabOf(el);   /* input tabs: make sure its pane is the visible one */
+           el.focus({preventScroll:true});
+     ```
+  3. End of `buildInputPanel()`. Before:
+     ```js
+         body.appendChild(el("div","note","Echoed in the on-screen output and the PDF report."));
+       },P);
+     }
+     ```
+     After:
+     ```js
+         body.appendChild(el("div","note","Echoed in the on-screen output and the PDF report."));
+       },P);
+       bpadInputTabs(P);   /* move the sections just built into the input tabs */
+     }
+     ```
+     A new block follows right after that closing brace, before the `OUTPUT — tabs, dashboard, worked calculations` banner. It starts at the comment `/* ---------- input panel tabs (UI only) ----------` and holds:
+     - constants `BPAD_IN_TABS`, `BPAD_IN_SEC`, `BPAD_IN_KEY`;
+     - functions `bpadInTabGet`, `bpadInTabSet`, `bpadInputTabs`, `bpadSetInTab`, `bpadInTabKey`, `bpadShowInTabOf`, `bpadValSecs`, `bpadInputTabMarks`.
+
+     It is about 110 lines; copy the block from the file.
+  4. End of `validateInputs()`. Before:
+     ```js
+       VALIDATION={errs:norm, warns, blockers};
+       return norm.length===0;
+     ```
+     After:
+     ```js
+       VALIDATION={errs:norm, warns, blockers};
+       bpadInputTabMarks();   /* refresh the input-tab error dots */
+       return norm.length===0;
+     ```
+- **Check case:** the default project. Inputs: 18 × 18 × 1.5 in. A36 plate, W12X65 column, 2×2 anchors of 1.0 in. F1554 Gr. 36, h_ef 12 in., f'c 4 ksi, 30 × 30 × 36 in. pedestal, and the three default combinations. The `allChecks()` JSON, the text of every output tab and the print report text are identical before and after.
+- **How verified:** Chromium headless via Playwright. KaTeX 0.16.11, three 0.160.0, Plotly 2.32.0 and pdf.js 3.11.174 were served from local copies of the same pinned versions.
+  - `node --check` on all 4 inline scripts: pass.
+  - 8 scenarios were run in origin/main and in the edited file:
+    - default;
+    - tension and shear rebar on;
+    - open stand-off (no clamp, no grout);
+    - clamped stand-off, HSS column, lb / lb-ft units and the elastic force model;
+    - custom column, plain threaded rod, 3×3 anchors, front-row shear and uncracked concrete;
+    - blocked (t = 0, f'c = 0);
+    - §17.9.2 spacing violation;
+    - implausible load with the seismic flag set.
+
+    For each scenario these are **identical**: the input inventory (every input, select, textarea and button in the panel, with its id, `data-fkey`, card and value), the card list, `allChecks()`, the text of every output tab (including Validation and User Manual), the `bpad_autosave_v1` JSON and the print report text. Every input sits in exactly one tab pane (0 unplaced).
+  - Save → Load round trip through the header buttons: the saved project and the loaded state are identical to main, and saved equals loaded.
+  - Hand-offs:
+    - all four buttons are present;
+    - "Share project info" writes the same `bridgeSuite.v1.projectMeta` payload (minus the timestamp);
+    - "Pull from Steel Beam" with a test `memberReactions` payload gives the same `S.serviceLoads` and source line.
+  - PROFIS import through the real dialog. `extractPdfText` was stubbed with report text lines, because no PROFIS PDF is available here. The resulting `S` and the Loads card are identical to main, and so are the field values on these tabs:
+    - Plate & Anchors: B 20, N 22, t 1.25; 3/4 in. F1554 Gr. 55, h_ef 15;
+    - Stand-off: grout 1.5 in.;
+    - Pedestal: f'c 5, H 40.
+  - Interaction:
+    - arrow, Home and End keys move between tabs;
+    - the active tab and the focus are kept while typing, although the panel rebuilds on each keystroke;
+    - the tab is remembered after a reload;
+    - `restoreUI` switches to the tab of the field it focuses;
+    - a blank plate thickness puts a dot on Plate & Anchors, and the dot clears when it is fixed;
+    - with localStorage throwing, the tab still survives rebuilds;
+    - no console errors from the new code.
+  - Screenshots of every tab at 1400 px and 400 px were checked.
+- **Other copies of this code:** none.
+- **Open items (found, not changed):**
+  - O10. Typing a decimal into a number field can lose the decimal point. Typing `5.5` into f'c with Playwright's keyboard gives 55, both on main and on this branch. The panel is rebuilt on every keystroke, and the number input does not keep the intermediate `5.`. Please check this by hand in a browser. Not changed, because it is outside this brief.
+  - O11. At 400 px the page scrolls horizontally because of the six-column project header (`#projGrid`, at least 120 px per column). This was there before this change and was not changed.
