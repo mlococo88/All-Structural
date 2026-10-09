@@ -670,12 +670,36 @@ All edits were applied by scripted exact-string replacement (each Before block o
   - Screenshots of every tab (and Geometry in rectangular mode) at 1400 px and 400 px. The strip fits on one line at both widths.
 - **Other copies:** none.
 
+## 2026-10-09 — PR: claude/pin-concreteasd (PR link added after merge)
+
+### L1. CDN library versions pinned   [libraries — no calculation change]
+- **Engineer's decision (2026-10-09):** pin the libraries (CLAUDE.md §2: exact versions in CDN URLs). Resolves O5.
+- **Where:** the `<head>` of the file, lines ≈ 9 and 11. Anchors: `<!-- Tailwind CSS -->`, `<!-- Phosphor Icons -->`. Each library stays on its existing host.
+- **Before / After (exact lines, 4-space indent, CRLF):**
+  ```html
+  -    <script src="https://cdn.tailwindcss.com"></script>
+  +    <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  -    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+  +    <script src="https://unpkg.com/@phosphor-icons/web@2.1.2/src/index.js"></script>
+  ```
+- **Versions chosen (npm registry checked 2026-10-09):**
+  - `@phosphor-icons/web` **2.1.2**: the `latest` dist-tag (published 2025-03-31), so it is the version the bare URL serves today. The package has no `unpkg`/`browser` field, so unpkg serves `main` = `src/index.js`; the pinned URL names that file explicitly. That script injects six stylesheets that are already pinned inside the package (`https://cdn.jsdelivr.net/npm/@phosphor-icons/web@2.1.2/src/<weight>/style.css`), which load the icon fonts from the same pinned folder.
+  - Tailwind Play CDN **3.4.17** (`cdn.tailwindcss.com/<version>` path form, as already used by `Timber Beam Check.html` and `Concrete Anchor.html`). The page sets no `tailwind.config`.
+- **Not changed:** KaTeX 0.16.9 (`katex.min.css`, `katex.min.js`, `contrib/auto-render.min.js` on jsDelivr) is already pinned, and its fonts load relative to the pinned CSS. Google Fonts (`@import` of Inter and JetBrains Mono) is a stylesheet and needs no pin. No other `<script>`/`<link>` tags and no other dynamically loaded URLs in the file (checked for `createElement('script'|'link')`, `import(`, `fetch(`, `.src =`).
+- **Check case:** not applicable (no calculation touched). Default inputs give M_all = 353.3 k-ft (Inventory) and 494.7 k-ft (Operating), RF 0.258 / 0.612, identical on main and branch.
+- **How verified:**
+  - The CDNs are blocked in the test environment, so each URL was served locally in headless Chromium (Playwright, Chromium 1194, `file://`). main: `@phosphor-icons/web` 2.1.2 (what the bare URL serves today, `npm pack`) and Tailwind 3.4.19 CSS (current v3) compiled from the page's classes. Branch: `@phosphor-icons/web` 2.1.2 and Tailwind 3.4.17 CSS compiled from the page's classes (stand-in for the Play CDN script, which is not on npm). Both: KaTeX 0.16.9. A request log confirmed each page fetched exactly its own URLs (main: `cdn.tailwindcss.com/`, `unpkg.com/@phosphor-icons/web`; branch: `cdn.tailwindcss.com/3.4.17`, `unpkg.com/@phosphor-icons/web@2.1.2/src/index.js`; all other URLs the same).
+  - The compiled Tailwind 3.4.17 and 3.4.19 CSS for this page differ only in the version banner comment.
+  - main vs branch, the same 16 states as the tabs entry (T1) plus loading an older-format JSON: text and HTML of `<main>` (cards, report, SVG), show/hide state, all sidebar values, (auto)/(override) tags, saved JSON, Save → Load round trip, computed style of every element, Phosphor icon glyphs and loaded fonts → **all identical**. Full-page screenshots: identical in one run; in other runs a few states differed only in small bands (header buttons, result numbers) caught mid-transition, a different set each run, visually identical when compared side by side.
+  - No console errors other than the blocked Google Fonts request (same on main).
+- **Other copies:** none.
+
 ## Open items (not changed)
 - O1. **Operating fc = 1,900 psi default** (= 0.633f'c at 3,000 psi; MBE 6B.6.2.3 gives 0.60f'c = 1,800 psi). Kept as the default and as a plain input (not auto-computed), per the engineer's instruction. — Needs MassDOT confirmation of the source of 1,900 psi.
 - O2. **Steel allowables for grades other than 40/50/60** (e.g. unknown/structural grade 33, Gr 50 operating, Gr 75) have no auto rule: the field keeps whatever is entered and is tagged "(input (no grade rule))". — Confirm the values to use (MBE Table 6B.6.2.3-1) if these grades should be automated.
 - O3. **MBE modular-ratio table** (e.g. n = 10 for f'c 3,000–3,999 psi for older bridges) is not applied; the tool uses n = round(29,000,000 / (57,000√f'c)) ≥ 6. — Decide whether the MBE table should govern for rating.
 - O4. **Compression steel (8.15.3, 2n·A's) and ASD shear (8.15.5)** are still not modelled. A visible scope note was added. — Implementing them is a feature addition; decide if wanted.
-- O5. **CDN dependencies**: Tailwind Play CDN (unpinned, dev-only runtime) and `@phosphor-icons/web` (unpinned, resolves to latest). Not changed (CLAUDE.md §2: no version changes unless asked). — Pin or replace?
+- O5. **CDN dependencies**: versions pinned 2026-10-09 (L1): Tailwind Play CDN 3.4.17, `@phosphor-icons/web@2.1.2`. Still open: the Tailwind Play CDN is meant for development only.
 - O6. **Negative-moment T-beam** uses b_w; there is no Art. 8.10.1 effective-flange-width check on b_eff. Not changed.
 - O7. `renderMathInElement(document.body, …)` re-typesets the whole page on every keystroke (slow but harmless). Not changed.
 - O8. No edition is stated in the tool ("AASHTO 8.15.2"). Not changed. — Confirm the Standard Specifications edition to cite.
