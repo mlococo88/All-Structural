@@ -47,6 +47,15 @@ body{font-family:var(--font-doc);font-size:10pt;color:var(--ink);background:#efe
 @media print{.alltools,#projShare{display:none!important}}
 #main{flex:1 1 auto;display:flex;min-height:0;overflow:hidden}
 #inputPanel{flex:0 0 33%;max-width:460px;min-width:340px;overflow-y:auto;border-right:2px solid var(--line);background:var(--panel);padding:9px 10px 40px}
+/* input panel tabs (sbdInputTabs) */
+#sbdInTabs{position:sticky;top:-9px;z-index:12;display:flex;flex-wrap:wrap;gap:2px;margin:-9px -10px 8px;padding:7px 10px 0;background:var(--panel);border-bottom:2px solid var(--accent)}
+#sbdInTabs .sbdInTab{display:inline-flex;align-items:center;font-family:var(--font-ui);font-size:9pt;padding:5px 10px;border:1px solid var(--line);border-bottom:none;background:var(--slate-100);color:#41546E;cursor:pointer;border-radius:5px 5px 0 0}
+#sbdInTabs .sbdInTab:hover{background:#EFF4FA}
+#sbdInTabs .sbdInTab[aria-selected="true"]{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:600}
+#sbdInTabs .sbdInTab:focus-visible{outline:2px solid #BFD3F2;outline-offset:1px}
+.sbdInDot{display:none;width:7px;height:7px;border-radius:50%;background:var(--fail);margin-left:6px;box-shadow:0 0 0 1.5px #fff}
+.sbdInTab.has-err .sbdInDot{display:inline-block}
+.sbdInTab[hidden],.sbdInPane[hidden]{display:none!important}
 #outputPanel{flex:1 1 auto;min-width:0;overflow-y:auto;overflow-x:hidden;padding:0 14px 60px;background:var(--paper)}
 #tabBar{position:sticky;top:0;z-index:15;background:var(--paper);border-bottom:2px solid var(--accent);padding:7px 0 0;display:flex;flex-wrap:wrap;gap:2px}
 #tabBar button{font-family:var(--font-ui);font-size:9pt;padding:5px 11px;border:1px solid var(--line);border-bottom:none;background:var(--slate-100);color:#41546E;cursor:pointer;border-radius:5px 5px 0 0}
@@ -2066,6 +2075,104 @@ function buildProjHeader(){
     i.placeholder=lab;d.appendChild(i);g.appendChild(d);
   });
 }
+/* ---------- input panel tabs (UI only) ----------
+   rebuildInputs() still builds every section into #inputPanel exactly as
+   before; sbdInputTabs() then MOVES the finished section nodes into one pane
+   per tab. Nothing is rebuilt, so data-fkey / data-secid, the handlers and
+   the bound values are untouched. The active tab is remembered per browser
+   in localStorage key sbd_inputTab_v1 (never in S, so the autosave and the
+   project JSON are unchanged). */
+const SBD_IN_TABS=[
+  ['project','Project'],['batch','Batch'],['geom','Geometry'],
+  ['section','Section'],['loads','Loads'],['checks','Checks']];
+const SBD_IN_SEC={
+  inAssume:'project',inProj:'project',
+  inBatch:'batch',
+  inGeom:'geom',inBrace:'geom',inBrace2:'geom',inComp:'geom',
+  inSect:'section',inComp2:'section',inStiff:'section',
+  inCombo:'loads',inTrib:'loads',inLoads:'loads',inMember:'loads',inMemSW:'loads',inMan:'loads',inTor:'loads',
+  inJ10:'checks',inMemDefl:'checks',inOpts:'checks',inDesign:'checks'};
+/* analysis blockers that come from an input, mapped to the section holding it */
+const SBD_IN_BLOCK=[
+  [/^Span \d+ has non-positive length/,'inGeom'],
+  [/mechanism/i,'inGeom'],
+  [/^Member check mode: enter an unbraced length/,'inBrace2'],
+  [/^Add at least one load case/,'inMember'],
+  [/^Self-weight is enabled but no span/,'inMemSW'],
+  [/^No members loaded/,'inBatch']];
+const SBD_IN_KEY='sbd_inputTab_v1';
+let sbdInTabCur=null;   /* in-memory copy, so the tab survives rebuilds even without storage */
+function sbdInTabGet(){if(sbdInTabCur)return sbdInTabCur;try{return localStorage.getItem(SBD_IN_KEY)||'';}catch(e){return '';}}
+function sbdInTabSet(t){sbdInTabCur=t;try{localStorage.setItem(SBD_IN_KEY,t);}catch(e){}}
+function sbdInputTabs(P){
+  const bar=el('div');bar.id='sbdInTabs';bar.setAttribute('role','tablist');bar.setAttribute('aria-label','Input groups');
+  const panes={};
+  SBD_IN_TABS.forEach(([k,lab])=>{
+    const b=el('button','sbdInTab');b.type='button';b.id='sbdInTab_'+k;b.dataset.pane=k;
+    b.setAttribute('role','tab');b.setAttribute('aria-controls','sbdInPane_'+k);
+    b.appendChild(el('span',null,lab));
+    const dot=el('span','sbdInDot');dot.setAttribute('aria-hidden','true');b.appendChild(dot);
+    b.addEventListener('click',()=>sbdSetInTab(k,true));
+    b.addEventListener('keydown',sbdInTabKey);
+    bar.appendChild(b);
+    const pn=el('div','sbdInPane');pn.id='sbdInPane_'+k;pn.setAttribute('role','tabpanel');
+    pn.setAttribute('aria-labelledby','sbdInTab_'+k);
+    panes[k]=pn;
+  });
+  /* move the built nodes; a section not in the map stays with the one before it */
+  let cur='project';
+  Array.from(P.childNodes).forEach(n=>{
+    const sid=n.getAttribute&&n.getAttribute('data-secid');
+    if(sid&&SBD_IN_SEC[sid])cur=SBD_IN_SEC[sid];
+    panes[cur].appendChild(n);
+  });
+  P.appendChild(bar);
+  SBD_IN_TABS.forEach(([k])=>{
+    P.appendChild(panes[k]);
+    $('sbdInTab_'+k).hidden=!panes[k].childNodes.length;
+  });
+  let t=sbdInTabGet();
+  if(!panes[t]||!panes[t].childNodes.length)t=(isBatch()?'batch':'project');
+  sbdSetInTab(t,false);
+  sbdInputTabMarks();
+}
+function sbdSetInTab(t,remember){
+  SBD_IN_TABS.forEach(([k])=>{
+    const b=$('sbdInTab_'+k),pn=$('sbdInPane_'+k);if(!b||!pn)return;
+    const on=(k===t);
+    b.setAttribute('aria-selected',on?'true':'false');b.tabIndex=on?0:-1;
+    pn.hidden=!on;
+  });
+  if(remember){sbdInTabSet(t);const P=$('inputPanel');if(P)P.scrollTop=0;}
+}
+function sbdInTabKey(e){
+  const vis=SBD_IN_TABS.map(([k])=>$('sbdInTab_'+k)).filter(b=>b&&!b.hidden);
+  const i=vis.indexOf(e.currentTarget);let j=-1;
+  if(e.key==='ArrowRight'||e.key==='ArrowDown')j=(i+1)%vis.length;
+  else if(e.key==='ArrowLeft'||e.key==='ArrowUp')j=(i-1+vis.length)%vis.length;
+  else if(e.key==='Home')j=0;
+  else if(e.key==='End')j=vis.length-1;
+  if(j<0)return;
+  e.preventDefault();sbdSetInTab(vis[j].dataset.pane,true);vis[j].focus();
+}
+/* red dot on a tab whose inputs carry an error: an error box inside one of its
+   sections, a number field the browser cannot parse, or an analysis blocker
+   that names one of its inputs */
+function sbdInputTabMarks(){
+  if(!$('sbdInTabs'))return;
+  const bad={};
+  const mark=n=>{const pn=n&&n.closest('.sbdInPane');if(pn)bad[pn.id.replace('sbdInPane_','')]=1;};
+  document.querySelectorAll('#inputPanel .sbdInPane .errBox').forEach(mark);
+  document.querySelectorAll('#inputPanel .sbdInPane input').forEach(i=>{if(i.validity&&i.validity.badInput)mark(i);});
+  const sec=id=>document.querySelector('#inputPanel [data-secid="'+id+'"]');
+  ((AN&&AN.blockers)||[]).forEach(b=>{const m=SBD_IN_BLOCK.find(r=>r[0].test(b));if(m)mark(sec(m[1]));});
+  if(AN&&AN.comp&&AN.comp.blocked)mark(sec('inComp2'));
+  SBD_IN_TABS.forEach(([k])=>{
+    const b=$('sbdInTab_'+k);if(!b)return;
+    b.classList.toggle('has-err',!!bad[k]);
+    b.title=bad[k]?'An input on this tab needs attention':'';
+  });
+}
 function rebuildInputs(){
   const st=captureUI();
   const P=$('inputPanel');P.innerHTML='';
@@ -2312,6 +2419,7 @@ function rebuildInputs(){
     body.appendChild(el('div','hint','Import accepts both this app\u2019s projects and legacy Shear &amp; Moment Diagram exports (auto-converted to kip / ft). Saved projects live in this browser\u2019s local storage \u2014 export JSON for backup or transfer.'));
   },P,{noNum:true});
   __secNum=numHold;
+  sbdInputTabs(P);   /* move the sections just built into the input tabs */
   restoreUI(st);
 }
 function comboTable(list,isSvc){
@@ -2471,6 +2579,7 @@ function schedule(structural){
     computeAll();
     if(structural)rebuildInputs();
     renderTab();
+    sbdInputTabMarks();   /* refresh the input-tab error dots */
     autosave();pushHist();
     $('updDot').classList.remove('show');
   },160);
@@ -2658,6 +2767,32 @@ function drawSchematic(){
     add('line',{x1:x2,y1:y-4,x2:x2,y2:y+4,stroke:'#64748B'});
     txt((x1+x2)/2,y-4,fmt(sp.L,2)+' ft',9.5,'middle','#334155');
   });
+  /* composite slab and deck above the beam (drawing only; not to vertical scale) */
+  const cmpOn=!!(S.composite&&S.composite.on&&AN&&AN.comp&&!AN.comp.blocked);
+  if(cmpOn){
+    const c=S.composite,dg=deckDrawGeom(c),hasDeck=dg.hr>0;
+    const yTop=beamY-16,yDeck=hasDeck?beamY-9:beamY-4,yBot=beamY-4;
+    add('rect',{x:sx(0),y:yTop,width:sx(L)-sx(0),height:yDeck-yTop,fill:'#C9CFD6',stroke:'#8A929B','stroke-width':0.8},
+      'Concrete slab, '+fmt(dg.ts,2)+' in above the deck (composite)');
+    if(hasDeck&&c.orient==='perp'){
+      const ppi=(sx(L)-sx(0))/(L*12);
+      if(dg.pitch*ppi>=4){
+        let d='M'+sx(0)+' '+yDeck;
+        for(let xi=dg.pitch/2;xi+dg.wTop/2<=L*12;xi+=dg.pitch){
+          d+=' L'+(sx(0)+(xi-dg.wTop/2)*ppi)+' '+yDeck+' L'+(sx(0)+(xi-dg.wBot/2)*ppi)+' '+yBot+
+             ' L'+(sx(0)+(xi+dg.wBot/2)*ppi)+' '+yBot+' L'+(sx(0)+(xi+dg.wTop/2)*ppi)+' '+yDeck;
+        }
+        d+=' L'+sx(L)+' '+yDeck;
+        add('path',{d:d+' Z',fill:'#C9CFD6',stroke:'none'});
+        add('path',{d,fill:'none',stroke:'#2F3B4A','stroke-width':1},'Metal deck, ribs perpendicular to the beam (rib spacing illustrative)');
+      }else add('line',{x1:sx(0),y1:yBot,x2:sx(L),y2:yBot,stroke:'#2F3B4A','stroke-width':1,'stroke-dasharray':'2 2'},'Metal deck, ribs perpendicular to the beam');
+    }else if(hasDeck){
+      add('rect',{x:sx(0),y:yDeck,width:sx(L)-sx(0),height:yBot-yDeck,fill:'#C9CFD6',stroke:'none'},'Metal deck, ribs parallel to the beam (rib over the beam)');
+      add('line',{x1:sx(0),y1:yBot,x2:sx(L),y2:yBot,stroke:'#2F3B4A','stroke-width':1.2});
+      add('line',{x1:sx(0),y1:yDeck,x2:sx(L),y2:yDeck,stroke:'#2F3B4A','stroke-width':0.8,'stroke-dasharray':'4 3'});
+    }
+  }
+  const nPreLoads=svg.childNodes.length;
   /* loads */
   let mxW=0,mxP=0;
   S.loads.forEach(ld=>{
@@ -2700,6 +2835,12 @@ function drawSchematic(){
       txt(px,beamY-30,ld.nm+'='+fmt(ld.mag,1),8.5,'middle',col,true);
     }
   });
+  if(cmpOn){   /* lift the load graphics clear of the slab band */
+    const gL=document.createElementNS(SVGNS,'g');gL.setAttribute('transform','translate(0,-12)');
+    Array.from(svg.childNodes).slice(nPreLoads).forEach(n=>gL.appendChild(n));svg.appendChild(gL);
+    txt(W-PR,29,'Composite slab \u00B7 '+(S.composite.orient==='perp'?'deck ribs \u22A5 beam':S.composite.orient==='para'?'deck ribs \u2225 beam':'solid slab')+
+      ' \u00B7 slab and deck not to vertical scale',8.5,'end','#5A6B80');
+  }
   /* bracing annotation */
   txt(PL,16,'Top flange: '+(S.bracing.topCont?'continuously braced':('Lb = '+fmt(S.bracing.LbTop,1)+' ft')),9,'start','#0F766E',true);
   txt(PL,29,'Bottom flange: Lb = '+(S.bracing.LbBot!=null?fmt(S.bracing.LbBot,1)+' ft':'support-to-support (default)'),9,'start','#0F766E');
@@ -8113,6 +8254,47 @@ function constructionStage(p,r){
   out.simpleOnly=true;
   return out;
 }
+/* ---- slab and metal-deck drawing helpers (drawing only: nothing here feeds a
+   calculation). The deck is drawn in its real orientation from the entered h_r
+   and w_r. Rib spacing is not an input, so the drawn spacing is illustrative:
+   p = max(6 in, 2 w_r), rounded to 0.5 in. Each concrete rib is a trapezoid of
+   average width w_r, narrower at the bottom (on the beam) than at the top. ---- */
+function deckDrawGeom(c){
+  const g=slabGeom(c);
+  const wr=Math.max(0.5,c.wr||6);
+  const pitch=Math.round(Math.max(6,2*wr)*2)/2;
+  const f=Math.max(0,Math.min(0.8*g.hr,0.9*wr,0.9*(pitch-wr)));
+  return{hr:g.hr,ha:g.haunch,ts:g.tSolid,Ycon:g.Ycon,wr,pitch,wTop:wr+f/2,wBot:wr-f/2};
+}
+/* rib centres k*p (one rib on x = 0), keeping only ribs that fit inside [x0, x1] */
+function deckCentres(x0,x1,dg){
+  const out=[],n=Math.ceil(Math.max(Math.abs(x0),Math.abs(x1))/dg.pitch)+1;
+  for(let k=-n;k<=n;k++){const xc=k*dg.pitch;if(xc-dg.wTop/2>=x0-1e-9&&xc+dg.wTop/2<=x1+1e-9)out.push(xc);}
+  return out;
+}
+function ribPoly(xc,dg){
+  return[[xc-dg.wBot/2,dg.ha],[xc+dg.wBot/2,dg.ha],[xc+dg.wTop/2,dg.ha+dg.hr],[xc-dg.wTop/2,dg.ha+dg.hr]];
+}
+/* the deck sheet: high flute at the top of the ribs, dropping into each rib */
+function deckSheetPath(x0,x1,cs,dg){
+  const yT=dg.ha+dg.hr,yB=dg.ha,pts=[[x0,yT]];
+  cs.forEach(xc=>{pts.push([xc-dg.wTop/2,yT],[xc-dg.wBot/2,yB],[xc+dg.wBot/2,yB],[xc+dg.wTop/2,yT]);});
+  pts.push([x1,yT]);
+  return 'M '+pts.map(q=>fmt(q[0],4)+','+fmt(q[1],4)).join(' L ');
+}
+/* headed stud: shank of diameter d from yBase, head 1.6d wide and 0.375 in thick */
+function studShapes(shapes,xc,yBase,Ls,d){
+  const hh=Math.min(0.375,Ls*0.25),hw=1.6*d;
+  shapes.push({type:'rect',x0:xc-d/2,x1:xc+d/2,y0:yBase,y1:yBase+Ls-hh,fillcolor:'#3E5470',line:{color:'#16304F',width:0.6}});
+  shapes.push({type:'rect',x0:xc-hw/2,x1:xc+hw/2,y0:yBase+Ls-hh,y1:yBase+Ls,fillcolor:'#3E5470',line:{color:'#16304F',width:0.6}});
+}
+/* stud length to draw: the entered length, or h_r + 1.5 in (at least 4d) when none is entered.
+   The base is drawn at the top of the haunch, matching the cover check in compDetailing. */
+function studDrawLen(c,dg){
+  const d=c.dia||0.75;
+  if(c.studLen>0)return{Ls:c.studLen,given:true};
+  return{Ls:Math.min(Math.max(4*d,dg.hr+1.5),Math.max(4*d,dg.Ycon-dg.ha-0.5)),given:false};
+}
 /* =====================================================================
    COMPOSITE CROSS SECTION  (Plotly, to scale)
    Steel shape, haunch, deck ribs, slab, the plastic neutral axis and
@@ -8128,22 +8310,29 @@ function compXsecFig(p,r,opts){
   /* --- concrete: solid slab --- */
   shapes.push({type:'rect',x0:-beff/2,x1:beff/2,y0:ha+hr,y1:Ycon,
     fillcolor:CONC,opacity:.75,line:{color:CEDGE,width:1.2},layer:'below'});
-  /* --- deck ribs: draw the counted fraction solid, the rest as voids --- */
+  /* --- metal deck, drawn in its real orientation (drawing only) ---
+     ribs parallel to the beam: the flutes are cut by this section, one rib centred on the beam;
+     ribs perpendicular: the section is cut through a rib, so the rib concrete is full width
+     and the deck high flute (dashed) lies beyond the cut. */
+  const dg=deckDrawGeom(c),DECK='#2F3B4A';
   if(hr>0){
-    const wrIn=Math.max(1,c.wr||6);
-    const pitch=wrIn*2;
-    const n=Math.max(1,Math.round(beff/pitch));
     const fill=(c.orient==='perp')?(c.ribFill!=null?c.ribFill:0.5):
                (c.orient==='para')?(c.ribFill!=null?c.ribFill:1.0):0;
-    for(let i=0;i<n;i++){
-      const x0=-beff/2+i*(beff/n),x1=x0+(beff/n)*Math.max(0.05,Math.min(1,fill));
-      shapes.push({type:'rect',x0,x1,y0:ha,y1:ha+hr,fillcolor:CONC,opacity:.75,
+    if(c.orient==='para'){
+      const cs=deckCentres(-beff/2,beff/2,dg);
+      cs.forEach(xc=>shapes.push({type:'path',path:pathStr(ribPoly(xc,dg)),fillcolor:CONC,opacity:.75,
+        line:{color:CEDGE,width:0.8},layer:'below'}));
+      shapes.push({type:'path',path:deckSheetPath(-beff/2,beff/2,cs,dg),line:{color:DECK,width:1.6}});
+    }else{
+      shapes.push({type:'rect',x0:-beff/2,x1:beff/2,y0:ha,y1:ha+hr,fillcolor:CONC,opacity:.75,
         line:{color:CEDGE,width:0.8},layer:'below'});
+      shapes.push({type:'line',x0:-beff/2,x1:beff/2,y0:ha,y1:ha,line:{color:DECK,width:1.6}});
+      shapes.push({type:'line',x0:-beff/2,x1:beff/2,y0:ha+hr,y1:ha+hr,line:{color:DECK,width:1,dash:'dash'}});
     }
-    shapes.push({type:'rect',x0:-beff/2,x1:beff/2,y0:ha,y1:ha+hr,fillcolor:'rgba(0,0,0,0)',
-      line:{color:CEDGE,width:1.2,dash:'dot'}});
-    anns.push({x:-beff/2,y:ha+hr/2,text:' deck ribs \u2014 '+fmt(100*fill,0)+'% counted',showarrow:false,
-      xanchor:'left',font:{size:8.5,color:'#5A6B80'},bgcolor:'rgba(255,255,255,.8)'});
+    if(fill>0&&fill<1)shapes.push({type:'line',x0:-beff/2,x1:beff/2,y0:ha+hr*(1-fill),y1:ha+hr*(1-fill),
+      line:{color:'#5A6B80',width:0.8,dash:'dot'}});
+    anns.push({x:beff/2,y:ha+hr*(1-fill/2),text:'A<sub>c</sub> counts '+fmt(100*fill,0)+'% of h<sub>r</sub> over b<sub>eff</sub> ',showarrow:false,
+      xanchor:'right',font:{size:8.5,color:'#5A6B80'},bgcolor:'rgba(255,255,255,.8)'});
   }
   if(ha>0)shapes.push({type:'rect',x0:-p.bf/2*1.3,x1:p.bf/2*1.3,y0:0,y1:ha,
     fillcolor:CONC,opacity:.6,line:{color:CEDGE,width:1},layer:'below'});
@@ -8152,8 +8341,16 @@ function compXsecFig(p,r,opts){
   const sPath=gm.paths.map(pa=>'M '+pa.map(q=>fmt(q[0],4)+','+fmt(q[1]-p.d/2,4)).join(' L ')+' Z').join(' ');
   shapes.push({type:'path',path:sPath,fillcolor:STEEL,opacity:.6,fillrule:'evenodd',
     line:{color:EDGE,width:1.5}});
+  /* --- headed studs across the flange (drawing only): studs per rib for perpendicular deck, else one --- */
+  if(c.dia>0){
+    const sd=studDrawLen(c,dg),n=(c.orient==='perp')?Math.max(1,Math.min(3,Math.round(c.nRib||1))):1;
+    const sp=n>1?Math.min(4*c.dia,(p.bf-1.6*c.dia)/(n-1)):0;
+    for(let i=0;i<n;i++)studShapes(shapes,(i-(n-1)/2)*sp,ha,sd.Ls,c.dia);
+    anns.push({x:-(n-1)/2*sp-0.8*c.dia,y:ha+sd.Ls,ax:-34,ay:-16,text:'stud \u00D8'+fmt(c.dia,3)+'" \u00D7 '+fmt(sd.Ls,2)+'"'+(sd.given?'':' (length illustrative)'),
+      showarrow:true,arrowhead:2,arrowsize:0.8,arrowcolor:'#64748B',xanchor:'right',font:{size:8.5,color:'#334155'},bgcolor:'rgba(255,255,255,.85)'});
+  }
   /* --- stress blocks --- */
-  if(!opts.noStress){
+  if(!opts.noStress&&!opts.geomOnly){
     shapes.push({type:'rect',x0:-beff/2,x1:beff/2,y0:Ycon-r.a,y1:Ycon,
       fillcolor:COMP,opacity:.35,line:{color:COMP,width:1}});
     anns.push({x:beff/2,y:Ycon-r.a/2,text:'0.85f\u2032c   C = '+fmt(r.C,0)+' kip ',showarrow:false,
@@ -8175,10 +8372,12 @@ function compXsecFig(p,r,opts){
   }
   /* --- PNA --- */
   const yPNA=(r.x>0)?-r.x:(Ycon-r.a);
+  if(!opts.geomOnly){
   shapes.push({type:'line',x0:-beff/2,x1:beff/2,y0:yPNA,y1:yPNA,
     line:{color:'#B45309',width:2,dash:'dashdot'}});
   anns.push({x:-beff/2,y:yPNA,text:'PNA'+(r.x>0?(' \u2014 '+fmt(r.x,3)+' in below top of steel'):' in the slab')+' ',
     showarrow:false,xanchor:'left',yshift:9,font:{size:9,color:'#B45309'},bgcolor:'rgba(255,255,255,.9)'});
+  }
   /* --- dimensions --- */
   const padX=beff*0.09, padY=(Ycon+p.d)*0.30, pad=Math.min(padX,padY);
   const dimH=(x0,x1,y,txt)=>{
@@ -8196,8 +8395,9 @@ function compXsecFig(p,r,opts){
   dimV(0,Ycon,beff/2+padX*0.80,'Y<sub>con</sub> = '+fmt(Ycon,2)+'"');
   dimV(-p.d,0,-beff/2-padX*0.80,'d = '+fmt(p.d,2)+'"');
   if(hr>0)dimV(ha,ha+hr,-beff/2-padX*0.32,'h<sub>r</sub> = '+fmt(hr,2)+'"');
-  dimV(Ycon-r.a,Ycon,-beff/2+padX*0.32,'a = '+fmt(r.a,2)+'"');
-  const hov=[{x:0,y:Ycon-r.a/2,t:'Compression block<br>a = '+fmt(r.a,3)+' in<br>C = '+fmt(r.C,1)+' kip'},
+  if(!opts.geomOnly)dimV(Ycon-r.a,Ycon,-beff/2+padX*0.32,'a = '+fmt(r.a,2)+'"');
+  else dimV(ha+hr,Ycon,-beff/2+padX*0.32,'t = '+fmt(ts,2)+'"');
+  const hov=[{x:0,y:Ycon-r.a/2,t:opts.geomOnly?('Concrete slab<br>Y<sub>con</sub> = '+fmt(Ycon,2)+' in'):('Compression block<br>a = '+fmt(r.a,3)+' in<br>C = '+fmt(r.C,1)+' kip')},
     {x:0,y:-p.d/2,t:p.lbl+'<br>A\u209b = '+fmt(p.A,2)+' in\u00B2<br>A\u209bF\u1D67 = '+fmt(r.Py,0)+' kip'},
     {x:0,y:(ha+hr+Ycon)/2,t:'Solid slab '+fmt(ts,2)+' in<br>f\u2032c = '+fmt(c.fc,2)+' ksi'}];
   data.push({x:hov.map(h=>h.x),y:hov.map(h=>h.y),mode:'markers',
@@ -8210,6 +8410,110 @@ function compXsecFig(p,r,opts){
     yaxis:{range:yr,visible:false,scaleanchor:'x',scaleratio:1},
     shapes,annotations:anns,showlegend:false,
     paper_bgcolor:'#fff',plot_bgcolor:'#fff',hovermode:'closest'}};
+}
+/* ---- partial elevation along the beam (longitudinal section on the beam
+   centre line), to scale: drawing only. Ribs perpendicular to the beam show their
+   trapezoidal profile here; ribs parallel to the beam are cut lengthwise (one rib
+   sits over the beam), so the rib concrete is continuous and the deck high
+   flute lies beyond the cut. ---- */
+function compElevFig(p,r,opts){
+  opts=opts||{};
+  const c=compCfg(),dg=deckDrawGeom(c);
+  const hr=dg.hr,ha=dg.ha,Ycon=dg.Ycon,ts=dg.ts;
+  const shapes=[],anns=[],data=[];
+  const STEEL='#5B7290',EDGE='#16304F',CONC='#C9CFD6',CEDGE='#8A929B',DECK='#2F3B4A';
+  const Lw=Math.max(48,4*dg.pitch),x0=-Lw/2,x1=Lw/2;
+  /* steel beam in elevation: web face, top and bottom flanges */
+  shapes.push({type:'rect',x0,x1,y0:-p.d,y1:0,fillcolor:STEEL,opacity:.22,line:{color:EDGE,width:1},layer:'below'});
+  shapes.push({type:'rect',x0,x1,y0:-p.tf,y1:0,fillcolor:STEEL,opacity:.6,line:{color:EDGE,width:1.2}});
+  shapes.push({type:'rect',x0,x1,y0:-p.d,y1:-p.d+p.tf,fillcolor:STEEL,opacity:.6,line:{color:EDGE,width:1.2}});
+  if(ha>0)shapes.push({type:'rect',x0,x1,y0:0,y1:ha,fillcolor:CONC,opacity:.6,line:{color:CEDGE,width:1},layer:'below'});
+  shapes.push({type:'rect',x0,x1,y0:ha+hr,y1:Ycon,fillcolor:CONC,opacity:.75,line:{color:CEDGE,width:1.2},layer:'below'});
+  let cs=[];
+  if(hr>0){
+    if(c.orient==='perp'){
+      cs=deckCentres(x0,x1,dg);
+      cs.forEach(xc=>shapes.push({type:'path',path:pathStr(ribPoly(xc,dg)),fillcolor:CONC,opacity:.75,
+        line:{color:CEDGE,width:0.8},layer:'below'}));
+      shapes.push({type:'path',path:deckSheetPath(x0,x1,cs,dg),line:{color:DECK,width:1.6}});
+    }else{
+      shapes.push({type:'rect',x0,x1,y0:ha,y1:ha+hr,fillcolor:CONC,opacity:.75,line:{color:CEDGE,width:0.8},layer:'below'});
+      shapes.push({type:'line',x0,x1,y0:ha,y1:ha,line:{color:DECK,width:1.6}});
+      shapes.push({type:'line',x0,x1,y0:ha+hr,y1:ha+hr,line:{color:DECK,width:1,dash:'dash'}});
+    }
+  }
+  /* studs: in the ribs for perpendicular deck, otherwise at the entered pitch (12 in illustrative if none) */
+  let studX=[],pitchGiven=false,sPitch=0;
+  if(c.dia>0){
+    if(hr>0&&c.orient==='perp')studX=cs;
+    else{
+      pitchGiven=c.pitch>0;sPitch=pitchGiven?c.pitch:12;
+      const n=Math.floor((Lw/2-1)/sPitch);
+      for(let k=-n;k<=n;k++)studX.push(k*sPitch);
+    }
+    const sd=studDrawLen(c,dg);
+    studX.forEach(xc=>studShapes(shapes,xc,ha,sd.Ls,c.dia));
+  }
+  /* break lines at the ends of the partial view */
+  [x0,x1].forEach(x=>shapes.push({type:'line',x0:x,x1:x,y0:-p.d-1,y1:Ycon+1,line:{color:'#94A3B8',width:1,dash:'dashdot'}}));
+  const padX=Lw*0.07,padY=(Ycon+p.d)*0.28,pad=Math.min(padX,padY);
+  const dimH=(a,b,y,txt)=>{
+    shapes.push({type:'line',x0:a,x1:b,y0:y,y1:y,line:{color:'#64748B',width:1}});
+    [a,b].forEach(x=>shapes.push({type:'line',x0:x,x1:x,y0:y-pad*0.18,y1:y+pad*0.18,line:{color:'#64748B',width:1}}));
+    anns.push({x:(a+b)/2,y,text:txt,showarrow:false,yshift:-10,font:{size:9,color:'#334155'},bgcolor:'rgba(255,255,255,.9)'});
+  };
+  const dimV=(a,b,x,txt)=>{
+    shapes.push({type:'line',x0:x,x1:x,y0:a,y1:b,line:{color:'#64748B',width:1}});
+    [a,b].forEach(y=>shapes.push({type:'line',x0:x-pad*0.18,x1:x+pad*0.18,y0:y,y1:y,line:{color:'#64748B',width:1}}));
+    anns.push({x,y:(a+b)/2,text:txt,showarrow:false,textangle:-90,xshift:-11,font:{size:9,color:'#334155'},bgcolor:'rgba(255,255,255,.9)'});
+  };
+  dimV(0,Ycon,x1+padX*0.85,'Y<sub>con</sub> = '+fmt(Ycon,2)+'"');
+  dimV(ha+hr,Ycon,x1+padX*0.35,'t = '+fmt(ts,2)+'"');
+  if(hr>0)dimV(ha,ha+hr,x0-padX*0.35,'h<sub>r</sub> = '+fmt(hr,2)+'"');
+  dimV(-p.d,0,x0-padX*0.85,'d = '+fmt(p.d,2)+'"');
+  if(hr>0&&c.orient==='perp'&&cs.length>1){
+    const i0=Math.max(0,Math.floor(cs.length/2)-1);
+    dimH(cs[i0],cs[i0+1],-p.d-padY*0.45,'rib spacing '+fmt(dg.pitch,1)+'" (illustrative)');
+    anns.push({x:cs[i0+1],y:ha+0.05*hr,ax:36,ay:34,text:'w<sub>r</sub> = '+fmt(c.wr,2)+'" (average)',showarrow:true,arrowhead:2,
+      arrowsize:0.8,arrowcolor:'#64748B',font:{size:9,color:'#334155'},bgcolor:'rgba(255,255,255,.9)'});
+  }else if(studX.length>1){
+    const i0=Math.max(0,Math.floor(studX.length/2)-1);
+    dimH(studX[i0],studX[i0+1],-p.d-padY*0.45,'stud pitch '+fmt(sPitch,1)+'"'+(pitchGiven?'':' (not entered \u2014 illustrative)'));
+  }
+  const hov=[{x:0,y:(ha+hr+Ycon)/2,t:'Solid slab '+fmt(ts,2)+' in above the deck'},{x:0,y:-p.d/2,t:p.lbl+' (elevation)'}];
+  if(hr>0)hov.push({x:(cs.length?cs[0]:0),y:ha+hr/2,t:'Deck rib h<sub>r</sub> = '+fmt(hr,2)+' in, w<sub>r</sub> = '+fmt(c.wr,2)+' in'});
+  data.push({x:hov.map(h=>h.x),y:hov.map(h=>h.y),mode:'markers',marker:{size:16,color:'rgba(0,0,0,0)'},
+    hoverinfo:'text',text:hov.map(h=>h.t),showlegend:false});
+  const xr=[x0-padX*1.5,x1+padX*1.5],yr=[-p.d-padY*0.9,Ycon+padY*0.5];
+  return{data,layout:{
+    title:opts.title?{text:opts.title,font:{size:11,family:'Arial'},x:0}:undefined,
+    margin:{l:28,r:28,t:opts.title?28:14,b:20},height:opts.height||320,
+    xaxis:{range:xr,visible:false},
+    yaxis:{range:yr,visible:false,scaleanchor:'x',scaleratio:1},
+    shapes,annotations:anns,showlegend:false,
+    paper_bgcolor:'#fff',plot_bgcolor:'#fff',hovermode:'closest'}};
+}
+/* one-line statement of what each view shows for the entered deck orientation */
+function deckViewNote(view){
+  const c=compCfg(),hr=slabGeom(c).hr;
+  let t;
+  if(!(hr>0))t='Solid slab (no deck).';
+  else if(c.orient==='perp')t=view==='x'?'Metal deck, ribs <b>perpendicular</b> to the beam: this section is cut through a rib, so the rib concrete is full width; the dashed line is the deck high flute beyond the cut.':
+    'Metal deck, ribs <b>perpendicular</b> to the beam: the rib profile is seen along the beam. Rib spacing illustrative.';
+  else t=view==='x'?'Metal deck, ribs <b>parallel</b> to the beam: the flutes are cut by this section, with a rib centred on the beam. Rib spacing illustrative.':
+    'Metal deck, ribs <b>parallel</b> to the beam: this view is cut along the rib over the beam, so the rib concrete is continuous; the dashed line is the deck high flute beyond the cut.';
+  return el('div','hint',t);
+}
+function compElevBlock(body,p,r,opts){
+  opts=opts||{};
+  const id=opts.id||'elevComp';
+  const h=opts.height||320;
+  body.appendChild(deckViewNote('e'));
+  const fig=compElevFig(p,r,Object.assign({title:'Partial elevation along the beam (section on the beam centre line), about '+fmt(Math.max(48,4*deckDrawGeom(compCfg()).pitch)/12,0)+' ft shown'},opts));
+  const node=plotHolder(body,id,h);
+  fitHolder(node,fig,h);
+  regPlot(id,fig);
+  body.appendChild(el('div','hint','Drawn to scale (equal x and y scales); drawing only. h<sub>r</sub>, w<sub>r</sub>, the slab depths, the stud diameter and the stud length and pitch are the entered values. Rib spacing is not an input, so the drawn rib spacing is illustrative; where no stud length or pitch is entered, the drawn one is illustrative and labelled.'));
 }
 function compXsecBlock(body,p,r,opts){
   const id=(opts&&opts.id)||'xsecComp';
@@ -8971,6 +9275,7 @@ function compositeFlexSections(pg,p,r){
   (r.warns||[]).forEach(w=>pg.appendChild(el('div','warnBox',w)));
   mkSection('cpFig','Composite Cross Section',body=>{
     compXsecBlock(body,p,r,{title:p.lbl+'  \u00B7  b\u2091\u2093\u2093 = '+fmt(r.ew.beffFt,2)+' ft  \u00B7  '+fmt(r.pct,0)+'% composite'});
+    compElevBlock(body,p,r,{id:'elevComp'});
   },pg);
   mkSection('cpEW','Effective Width of the Concrete Slab',body=>{
     body.appendChild(el('div','note','\u00A7I3.1a: the effective width each side of the beam centreline is the least of one-eighth of the span, one-half the distance to the adjacent beam, and the distance to the slab edge.'));
@@ -9320,11 +9625,14 @@ function compXsecBlock(body,p,r,opts){
   opts=opts||{};
   const id=opts.id||'xsecComp';
   const h=opts.height||400;
+  body.appendChild(deckViewNote('x'));
   const fig=compXsecFig(p,r,opts);
   const node=plotHolder(body,id,h);
   fitHolder(node,fig,h);
   regPlot(id,fig);
-  body.appendChild(el('div','hint','Drawn to scale (equal x and y scales) from the resolved geometry. Red is the plastic compression block, blue the yielded tension zone, and the dash-dot line is the plastic neutral axis that produced M\u2099 above. Deck ribs are drawn at the fraction of rib concrete counted in A\u1D9C \u2014 the drawn rib pitch is indicative, not a deck profile.'));
+  body.appendChild(el('div','hint','Drawn to scale (equal x and y scales) from the resolved geometry; the drawn slab width is the effective width b\u2091\u2093\u2093, not the full slab. '+
+    (opts.geomOnly?'':'Red is the plastic compression block, blue the yielded tension zone, and the dash-dot line is the plastic neutral axis that produced M\u2099 above. ')+
+    (slabGeom(compCfg()).hr>0?'The metal deck is drawn in its entered orientation: ribs perpendicular to the beam \u2014 the section is cut through a rib (the dashed line is the deck high flute beyond); ribs parallel \u2014 the flutes are cut, with a rib centred on the beam. The drawn rib spacing is illustrative (not an input).':'')));
 }
 /* ---- Schematic & Inputs: show the member, not just the loading ---- */
 function buildSchemTab(pg){
@@ -9365,6 +9673,14 @@ function buildSchemTab(pg){
     }
     body.appendChild(t);
     body.appendChild(el('div','hint','The full resolved property list, with the source of each value and any overrides, is on the Section Properties tab.'));
+  },pg);
+  if(AN.comp&&!AN.comp.blocked&&AN.comp.ew)mkSection('schComp','Composite Slab and Deck',body=>{
+    const c=compCfg();
+    body.appendChild(el('div','note','<b>'+DECK_ORIENT[c.orient]+'</b> \u00B7 slab above the deck '+fmt(slabGeom(c).tSolid,2)+' in'+
+      (c.orient!=='none'?' \u00B7 h\u1D63 = '+fmt(c.hr,2)+' in, w\u1D63 = '+fmt(c.wr,2)+' in':'')+(c.haunch>0?' \u00B7 haunch '+fmt(c.haunch,2)+' in':'')+
+      ' \u00B7 b\u2091\u2093\u2093 = '+fmt(AN.comp.ew.beffFt,2)+' ft'));
+    compXsecBlock(body,p,AN.comp,{id:'xsecCompSch',geomOnly:true,noStress:true,height:340,title:'Cross section  \u00B7  b\u2091\u2093\u2093 = '+fmt(AN.comp.ew.beffFt,2)+' ft'});
+    compElevBlock(body,p,AN.comp,{id:'elevCompSch',height:300});
   },pg);
   mkSection('schBrace','Bracing and Design Parameters',body=>{
     const t=el('table','tbl');
