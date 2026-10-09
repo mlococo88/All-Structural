@@ -970,6 +970,147 @@ function buildDeriveTab(pg){
 - **How verified:** the same Chromium harness as T1, against the original file (main): `AN` (all results) and the autosave JSON identical in all 13 scenarios; save/load round trip and the reaction hand-off identical; output-tab text identical except the new notes and hints, the SVG titles of the slab band, and the section numbers after the new Schematic section (every decimal number in the M_x tab text is identical; the Schematic tab only gains the echoed slab depths and b_eff). `node --check` on all inline scripts. Screenshots of the Schematic tab (beam schematic, cross section, Composite Slab and Deck) and the M_x tab composite figures for non-composite, solid slab, deck perpendicular, deck parallel (with a 1 in haunch) and member-mode parallel deck were inspected: the orientations are as described above; the non-composite graphics are pixel-identical to before.
 - **Other copies of this code:** none (the dead first `compXsecBlock` keeps its old hint; see O4).
 
+## 2026-10-09 — PR: claude/steel-beam-composite-ac (PR link added after merge)
+Engineer's decisions of 2026-10-09 on open items O8 (rib concrete in A_c) and O9 (stud cover with a haunch).
+
+### A1. Rib concrete in A_c follows §I3.2c: ribs perpendicular → neglected; ribs parallel → b_eff·h_r·w_r/s_r (new input s_r)   [calc change] [more conservative]
+- **Where:** `slabArea` (defined once; anchor `function slabArea(cfg,beff){`) and `compositeMn` (defined once; anchor `const sa=slabArea(cfg,beff);out.sa=sa;`). Display and records: `compositeInputs` (new input after "Average rib width"; anchor `'Deck rib spacing  s\u1D63'`), the relabelled `ribFill` input (anchor `'Rib concrete in the wet-slab weight'`), the Excel composite block (anchor `X.line('Rib concrete counted in Ac'`), the user manual paragraph (anchor `The rib concrete in A\u1D9C follows \u00A7I3.2c`), `BATCH_HELP.cOr`, and the drawings (`deckDrawGeom`, `compXsecFig` A_c label, `deckViewNote`, `compElevBlock` / live `compXsecBlock` hints, `drawSchematic` deck title).
+- **Problem:** A_c = b_eff (t + f·h_r) used a rib fraction f taken from the `ribFill` input, with blank defaults of 0.50 for ribs perpendicular to the beam and 1.00 for ribs parallel.
+  - For perpendicular ribs, §I3.2c says the concrete below the top of the deck is neglected in A_c.
+  - For parallel ribs, f = 1.00 counted the whole b_eff × h_r rectangle, voids included, instead of only the rib concrete.
+  - Both overstate A_c, and so C′ = 0.85f′_c A_c, whenever concrete crushing governs C.
+- **Governing provision:** AISC 360-16 §I3.2c, Formed Steel Deck:
+  - ribs perpendicular to the steel beam: the concrete below the top of the steel deck is neglected in the composite section properties and in A_c;
+  - ribs parallel: the concrete below the top of the deck is included in A_c.
+  - The engineer's decision fixes the parallel rib area as b_eff·h_r·(w_r/s_r).
+  - The effect carries through Commentary Eqs. C-I3-6 and C-I3-10 (C, a, PNA, M_n) and the Manual Part 3 lower-bound I_LB (Q_F = ΣQ_n/F_y and Y2 = Y_con − a/2).
+- **What the old `ribFill` input does now:** saved as `S.composite.ribFill` (number or null; input key `cpFill`; label was "Rib concrete included in A_c").
+  - It was used in two places: A_c (`slabArea`), and the construction-stage wet-concrete weight (`constructionStage`, t_eq = t + f·h_r + haunch, both copies).
+  - It is **removed from the A_c path**, because §I3.2c now fixes the rule.
+  - It is **kept for the wet-slab weight**, which is a load, not A_c, and is unchanged. The input is relabelled "Rib concrete in the wet-slab weight" and its tooltip now says it no longer affects A_c.
+  - The stored field and its format are unchanged.
+- **New input:** "Deck rib spacing s_r" (in, centre to centre), saved as the optional field `S.composite.sr`.
+  - It is shown when there is a deck. It is not given a default, so projects without it save and load exactly as before (CLAUDE.md §5: additive, no migration needed).
+  - Blanking the input deletes the field.
+  - Ribs parallel and s_r blank or invalid (s_r ≤ 0, w_r ≤ 0 or w_r > s_r): the rib concrete is **not counted** (conservative). A warning appears in the inputs, in the composite warnings on the M_x tab, and in batch rows.
+  - Ribs perpendicular: s_r is used only for the drawings.
+  - The drawings use s_r when entered and drop the "illustrative" label.
+- **Batch mode:** the template has no rib width or spacing columns. PERP rows now count no rib concrete. PARA rows count none either, with a per-row warning. The `cOr` help text says so. No template columns were added.
+- **Before:**
+  ```js
+  function slabArea(cfg,beff){
+    const g=slabGeom(cfg);
+    const tAbove=g.tSolid;
+    const fill=(cfg.orient==='perp')?(cfg.ribFill!=null?cfg.ribFill:0.5):
+               (cfg.orient==='para')?(cfg.ribFill!=null?cfg.ribFill:1.0):0;
+    const hr=g.hr;
+    return{tAbove,hr,fill,haunch:g.haunch,Ycon:g.Ycon,Ac:beff*(tAbove+hr*fill),
+      note:hr>0?('slab above deck '+fmt(tAbove,2)+' in plus '+fmt(100*fill,0)+'% of the '+fmt(hr,2)+' in ribs'):'solid slab'};
+  }
+  ```
+- **After:**
+  ```js
+  function slabArea(cfg,beff){
+    const g=slabGeom(cfg);
+    const tAbove=g.tSolid;
+    const hr=g.hr;
+    /* AISC 360-16 Sec. I3.2c: ... */
+    let fill=0,warn=null,note='solid slab';
+    if(hr>0&&cfg.orient==='para'){
+      const wr=cfg.wr,sr=cfg.sr;
+      if(sr>0&&wr>0&&wr<=sr){ fill=wr/sr; note='... w\u1D63/s\u1D63 = ... (\u00A7I3.2c, ribs parallel)'; }
+      else{ warn='Deck ribs parallel to the beam: enter the deck rib spacing s\u1D63 ... NOT counted in A\u1D9C ...'; note='...'; }
+    }else if(hr>0)note='slab above deck ... only \u2014 the concrete below the top of the deck is neglected (\u00A7I3.2c, ribs perpendicular)';
+    const out={tAbove,hr,fill,haunch:g.haunch,Ycon:g.Ycon,Ac:beff*(tAbove+hr*fill),note};
+    if(warn)out.warn=warn;
+    if(cfg.orient==='para'&&fill>0)out.sr=cfg.sr;
+    return out;
+  }
+  ```
+  (full text in the file), and in `compositeMn`, after `const sa=slabArea(cfg,beff);out.sa=sa;`:
+  ```js
+    if(sa.warn)out.warns.push(sa.warn);
+  ```
+- **Worked check cases.** Common data: W36X150, A992 (A_s = 44.3 in², F_y = 50 ksi, d = 35.9 in, b_f = 12.0 in, I_x = 9040 in⁴); simple span 30 ft; beam spacing 8 ft each side; b_eff = 2·min(L/8 = 3.75, s/2 = 4.0) = 7.50 ft = 90.0 in; f′_c = 4 ksi; t = 4.5 in above a 3 in deck (h_r = 3.0 in, w_r = 6.0 in); haunch 0; Y_con = 7.50 in; 100 % composite (C = C_max); A_sF_y = 2215 kip. Default trib loads (5 + 5 ft, DL 15 / LL 40 psf); construction stage super DL 15 psf, LL 50 psf. M_u = 112.5 kip-ft.
+  - **(a) Ribs perpendicular.**
+    - Before (f = 0.50): A_c = 90(4.5 + 0.5·3) = 540 in²; C′ = 0.85·4·540 = 1836 kip < 2215, so C = 1836 kip.
+      - a = 1836/(0.85·4·90) = 6.00 in (> t, so the block-into-ribs warning was shown).
+      - C_s = (2215 − 1836)/2 = 189.5 kip; x = 189.5/(12.0·50) = 0.316 in; d₁ = 7.50 − 3.00 = 4.50 in; d₂ = 0.158 in; d₃ = 17.95 in.
+      - M_n = 1836(4.50 + 0.158) + 2215(17.95 − 0.158) = 47 961 kip-in; **φM_n = 3597.1 kip-ft**; DCR = 112.5/3597.1 = 0.0313.
+      - I_LB = 19 159 in⁴; composite LL deflection 0.0164 in, DCR 0.0164.
+    - After (f = 0): A_c = 90·4.5 = 405 in²; C′ = 0.85·4·405 = 1377 kip = C.
+      - a = 1377/306 = 4.50 in (= t, no warning).
+      - C_s = (2215 − 1377)/2 = 419 kip; x = 419/600 = 0.698 in; d₁ = 7.50 − 2.25 = 5.25 in; d₂ = 0.349 in.
+      - M_n = 1377(5.25 + 0.349) + 2215(17.95 − 0.349) = 46 696 kip-in; **φM_n = 3502.2 kip-ft (−2.6 %)**; DCR 0.0321.
+      - Q_F = 27.54 in², Y_ENA = 26.84 in, **I_LB = 18 181 in⁴ (−5.1 %)**; LL deflection 0.0173 in; total composite deflection DCR 0.0557 → 0.0565.
+    - Governing check unchanged (pre-composite flexure, DCR 0.167).
+  - **(b) Ribs parallel, s_r = 12 in.**
+    - Before (f = 1.00): A_c = 90·7.5 = 675 in²; C′ = 2295 kip > A_sF_y, so C = 2215 kip (PNA in the slab).
+      - a = 7.24 in; d₁ = 7.50 − 3.62 = 3.88 in.
+      - M_n = 2215(3.881) + 2215(17.95) = 48 355 kip-in; **φM_n = 3626.6 kip-ft**; I_LB = 19 596 in⁴; LL deflection 0.0160 in.
+    - After: w_r/s_r = 6/12 = 0.50; A_c = 90(4.5 + 3·0.50) = 540 in²; C′ = 1836 kip = C.
+      - The rest is identical to (a) before: a = 6.00 in (the block-into-ribs warning remains, see O11).
+      - **φM_n = 3597.1 kip-ft (−0.8 %)**; **I_LB = 19 159 in⁴**; LL deflection 0.0164 in.
+    - Governing check unchanged.
+  - **(c) Ribs parallel, s_r blank.**
+    - Before: as (b) before.
+    - After: f = 0 with the warning "enter the deck rib spacing s_r …"; A_c = 405 in², the same as (a) after: **φM_n = 3502.2 kip-ft (−3.4 %)**, I_LB = 18 181 in⁴, LL deflection 0.0173 in.
+  - **Q_n / ΣQ_n:** unchanged. §I8.2a stud strength does not depend on A_c. In stud mode only C_max moves, and C = min(ΣQ_n, C_max).
+  - **Construction stage:** unchanged; it still uses the `ribFill` weight fraction. For example, (a) t_eq = 4.5 + 0.5·3 = 6.0 in and w_slab = 0.725 kip/ft before and after.
+- **Validation tab:**
+  - All 25 composite checks, all 30 design-example checks, all 17 analysis benchmarks and all 4 torsion checks still pass; the Validation tab text is identical.
+  - One test **input** was corrected, and no published reference value was changed. Design Example I.2 (W24X76 girder, 50 % composite) has the deck ribs parallel to the girder. The test had modelled it as "perpendicular, f = 0.50", which reproduced the published A_c = 540 in² only because 0.50 equals w_r/s_r = 6/12.
+  - Under the new rule that old modelling would give A_c = 90·4.5 = 405 in² and 0.85f′_cA_c = 1377 kip. Those would fail the published 540 in² and 1840 kip rows. C = 560 kip, a, x, M_n and φM_n are unaffected because C_max = A_sF_y = 1120 kip.
+  - The test now models I.2 as ribs parallel with w_r = 6 in and s_r = 12 in. It gives A_c = 90(4.5) + 90(3)(6/12) = 540 in² and 1836 kip, matching the published values.
+  - Examples I.1 and III.1 (perpendicular deck) are unaffected because steel yielding governs C_max. The new rule's A_c for I.1 (120 × 4.5 = 540 in², 1836 kip) is the published I.1 value; that row is not a test.
+  - The ENERCALC EC-5 agreement case (perpendicular, f = 5/12) is unaffected because steel governs.
+- **Results that change in existing saved projects (intended):** any composite project with a metal deck where 0.85f′_cA_c governed C_max, or would govern after the change.
+  - **Ribs perpendicular:** A_c drops by b_eff·h_r·f (f was 0.50 by default, or the entered `ribFill`).
+  - **Ribs parallel:** A_c drops to b_eff(t + h_r w_r/s_r). If s_r is not entered (every existing project), it drops to b_eff·t with a warning until s_r is entered.
+  - Where steel yielding governs C_max, nothing changes except C′ itself.
+  - Solid slabs and non-composite projects: no change.
+- **How verified:** same Chromium harness as T1/D1. The 12 regression scenarios plus 4 worked cases (16) were compared against main (926aeaf).
+  - Non-composite, solid-slab composite, member, batch-empty and HSS scenarios: `AN`, all output text and the autosave JSON are identical.
+  - Deck scenarios: only C′, A_c, the rib fraction, the notes and the new warning change, plus C, a, PNA, M_n, I_LB and deflections where concrete governs.
+  - The autosave JSON is identical in all 16 (s_r is stored only when entered).
+  - Save/load round trip and the reaction hand-off are identical.
+  - An old project with a parallel deck and no s_r, restored from `sbd_autosave_v1`, loads with A_c = 405 in² and the warning.
+  - `node --check` on all inline scripts.
+- **Other copies of this code:** none (`slabArea` and `compositeMn` are defined once). Both copies of `constructionStage` keep the weight fraction unchanged.
+
+### A2. Stud projection and cover measured from the top of the flange (stud welded to the flange, through the haunch)   [calc change] [more conservative where a haunch is used]
+- **Where:** `compositeDetailing` (defined once; anchor `/* the stud is welded to the top of the flange and passes through any haunch and the deck */`); drawings `studDrawLen` and the `studShapes(\u2026)` calls in `compXsecFig` and `compElevFig` (stud base y = 0 instead of y = haunch).
+- **Problem:** the checks took the stud as starting at the top of the haunch.
+  - Projection check: L_s ≥ h_r + 1½ in.
+  - Cover: Y_con − haunch − L_s.
+  - The engineer confirmed the studs are welded to the beam flange. With a haunch the projection above the deck was therefore overstated by the haunch depth (unconservative), and the cover was understated.
+- **Governing provision:** AISC 360-16 §I3.2c: studs extend at least 1½ in above the top of the steel deck, with at least ½ in of concrete cover above them. §I8.1, L ≥ 4d_sa, is unchanged.
+- **Before:**
+  ```js
+        add('Stud length above deck','\u2265 h\u1D63 + 1\u00BD in = '+fmt(g.hr+1.5,2)+' in',fmt(Ls,2)+' in',Ls>=g.hr+1.5-1e-9,'\u00A7I3.2c');
+        ...
+        const cov=g.Ycon-g.haunch-Ls;
+        add('Cover above stud','\u2265 \u00BD in',fmt(cov,2)+' in',cov>=0.5-1e-9,'\u00A7I3.2c');
+  ```
+- **After:**
+  ```js
+        const proj=Ls-g.haunch-g.hr;
+        add('Stud projection above the '+(g.hr>0?'deck':(g.haunch>0?'haunch':'flange')),'\u2265 1\u00BD in',
+          'L \u2212 haunch \u2212 h\u1D63 = '+...+' = '+fmt(proj,2)+' in',proj>=1.5-1e-9,'\u00A7I3.2c');
+        ...
+        const cov=g.Ycon-Ls;
+        add('Cover above stud','\u2265 \u00BD in','Y\u1D9C\u2092\u2099 \u2212 L = '+...+' = '+fmt(cov,2)+' in',cov>=0.5-1e-9,'\u00A7I3.2c');
+  ```
+- **Worked check case (d):** W21X50, ribs perpendicular, haunch 1.0 in, h_r = 3.0 in, t = 4.5 in, so Y_con = 8.50 in; stud ¾ in × 5.00 in.
+  - Before: 5.00 ≥ 3.00 + 1.50 = 4.50, **OK**; cover = 8.50 − 1.00 − 5.00 = 2.50 in, OK.
+  - After: projection = 5.00 − 1.00 − 3.00 = **1.00 in < 1.50, NG**; cover = 8.50 − 5.00 = **3.50 in**, OK.
+  - Without a haunch the numbers are unchanged, only shown as expressions. Example (a)–(c): projection 5.00 − 0 − 3.00 = 2.00 in (before: 5.00 ≥ 4.50), cover 7.50 − 5.00 = 2.50 in (unchanged).
+  - With no deck and no haunch, projection = L_s, as before.
+  - The detailing table is a requirement list on the M_x tab, not a D/C check, so the governing check and the D/C values are unchanged.
+  - In the same case A1 also changes C′ = 0.85·4·90·4.5 = 1377 kip (was 1836). C = ΣQ_n = 20 × 21.54 = 430.7 kip and φM_n are unchanged, because the studs govern.
+- **How verified:** as A1; screenshots of the detailing table and drawings in `scratchpad/sbdac/`.
+- **Other copies of this code:** none.
+
 ## Open items (not changed)
 - O1. **H3.3(c) buckling limit state** is not implemented, only warned (F5). Decide on the method (e.g. f_bx + σ_w ≤ φF_cr with F_cr = M_n/S_x from Chapter F, or a DG 9 interaction) before coding it as a check.
 - O2. **Batch mode** has no H3.3 buckling warning and keeps its existing tension note. Decide whether to add a matching batch note.
@@ -978,6 +1119,8 @@ function buildDeriveTab(pg){
 - O5. Calculated-C_b window clipped to the moment-sign region (lines ≈ 1817–1829). Not in scope; the default C_b = 1 is conservative.
 - O6. The open-section torque is a single value applied to every strength combination (not scaled per combination). Not in scope.
 - O7. **New localStorage key `sbd_inputTab_v1`** (T1, active input tab). The storage-key column of AUDIT.md still lists only `sbd_autosave_v1` and `sbd_projects_v1`; it was not edited in this PR (one tool per PR). Add the key to AUDIT.md in a later housekeeping PR.
-- O8. **Rib concrete counted in A_c (defaults 0.50 perpendicular, 1.00 parallel).** Found while drawing D1; **not changed** (calculation). `slabArea` uses A_c = b_eff (t + fill·h_r). With parallel ribs and fill 1.00 this is the full b_eff × h_r rectangle, including the voids between the ribs (about half of it for w_r = 6 in at a 12 in rib spacing). My reading of AISC 360-16 §I3.2c is that concrete below the top of the deck is neglected in A_c for ribs perpendicular to the beam, and included for ribs parallel to the beam, where it is the rib concrete, not the voids. If so, both defaults can overstate A_c, and so C = 0.85f′_c A_c, when concrete crushing governs (the manual says the input only changes the answer then). Please confirm the provision and decide on the defaults; a parallel default of w_r / rib spacing would need a rib-spacing input.
-- O9. **Stud base and the §I3.2c cover check with a haunch.** The cover check takes cover = Y_con − haunch − L_s, i.e. the stud starts at the top of the haunch; D1 draws it that way. If studs are welded to the flange through the haunch, the cover is over-estimated by the haunch depth. Not changed; confirm which is intended.
-- O10. **Rib spacing is not an input.** The D1 drawings use an illustrative spacing max(6 in, 2w_r), labelled as such. Add an input only if the drawings need to show the real deck profile.
+- O8. **Resolved 2026-10-09 by A1** (engineer's decision: perpendicular → 0 %, parallel → w_r/s_r with a new s_r input). **Rib concrete counted in A_c (defaults 0.50 perpendicular, 1.00 parallel).** Found while drawing D1; **not changed** (calculation). `slabArea` uses A_c = b_eff (t + fill·h_r). With parallel ribs and fill 1.00 this is the full b_eff × h_r rectangle, including the voids between the ribs (about half of it for w_r = 6 in at a 12 in rib spacing). My reading of AISC 360-16 §I3.2c is that concrete below the top of the deck is neglected in A_c for ribs perpendicular to the beam, and included for ribs parallel to the beam, where it is the rib concrete, not the voids. If so, both defaults can overstate A_c, and so C = 0.85f′_c A_c, when concrete crushing governs (the manual says the input only changes the answer then). Please confirm the provision and decide on the defaults; a parallel default of w_r / rib spacing would need a rib-spacing input.
+- O9. **Resolved 2026-10-09 by A2** (studs are welded to the flange). **Stud base and the §I3.2c cover check with a haunch.** The cover check takes cover = Y_con − haunch − L_s, i.e. the stud starts at the top of the haunch; D1 draws it that way. If studs are welded to the flange through the haunch, the cover is over-estimated by the haunch depth. Not changed; confirm which is intended.
+- O10. **Resolved 2026-10-09 by A1** (s_r is now an input; drawings use it). **Rib spacing is not an input.** The D1 drawings use an illustrative spacing max(6 in, 2w_r), labelled as such. Add an input only if the drawings need to show the real deck profile.
+- O11. **Compression block in the ribs with parallel deck.** When a > t (C reaches into the ribs), the tool keeps a uniform-width block of depth a = C/(0.85f′_c b_eff) and d₁ = Y_con − a/2, and warns "verify by hand". With parallel ribs the true block under the slab is only the rib width, so its centroid is lower. In A1 case (b), the true centroid is 3.19 in below the slab top, not 3.00 in, so d₁ = 4.31 in rather than 4.50 in and M_n is about 0.7 % high. Pre-existing; not changed. Decide whether to compute the block through the ribs.
+- O12. **Batch template has no rib width or rib spacing columns.** After A1, batch PERP rows count no rib concrete (§I3.2c) and PARA rows count none either, with a warning. Add `w_r` / `s_r` columns only if batch PARA rows need the rib concrete.
