@@ -737,13 +737,37 @@ Factor tables entered (Table 4A footnotes; Table 4B uses the same Cfu and wet-se
 - **Open items:** at 400 px the existing header (logo, title, Trace / Save / Open / dark buttons) is 557 px wide and causes a horizontal page scroll; this is the same on main and is not caused by the tabs (the tab strip and input panel fit within 400 px). Not changed (UI outside the input panel). The unpinned libraries are already logged as O1.
 - **Other copies:** none (UI code specific to this tool).
 
+## 2026-10-09 — PR: claude/pin-timber (PR link added after merge)
+
+### L1. CDN library versions pinned   [libraries — no calculation change]
+- **Engineer's decision (2026-10-09):** pin the libraries (CLAUDE.md §2: exact versions in CDN URLs). Resolves the "pin the versions" half of O1.
+- **Where:** the `<head>` of the file, lines ≈ 9, 12 and 15. Anchors: `<!-- Tailwind CSS -->`, `<!-- Babel for React -->`, `<!-- Lucide Icons -->`. Each library stays on its existing host.
+- **Before / After (exact lines, 4-space indent, CRLF):**
+  ```html
+  -    <script src="https://cdn.tailwindcss.com"></script>
+  +    <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  -    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  +    <script src="https://unpkg.com/@babel/standalone@7.29.10/babel.min.js"></script>
+  -    <script src="https://unpkg.com/lucide@latest"></script>
+  +    <script src="https://unpkg.com/lucide@1.54.0"></script>
+  ```
+- **Versions chosen (npm registry checked 2026-10-09):**
+  - `@babel/standalone` **7.29.10**: the latest 7.x release. The unpinned URL now resolves to 8.0.7 (a new major); the tool was written for Babel 7.
+  - `lucide` **1.54.0**: the version `@latest` serves today. The page does not use the `lucide` global (icons come from `lucide-react@0.292.0` via esm.sh), so any version works; unpkg serves the package's `unpkg` field, `dist/umd/lucide.min.js`.
+  - Tailwind Play CDN **3.4.17** (`cdn.tailwindcss.com/<version>` path form, as already used by `Pile Designer.html` with 3.4.5). The page sets no `tailwind.config`.
+- **Not changed:** the esm.sh imports are already exact (`react@18.2.0`, `react-dom@18.2.0/client`, `lucide-react@0.292.0`); esm.sh is not on the CLAUDE.md host list but pre-dates it and was not moved. Google Fonts is a stylesheet and needs no pin.
+- **Check case:** not applicable (no calculation touched). Default DF-L No.2 2x10, 16 ft at 16 in., D 15 / L 40 psf and the 2026-10-04 worked check case (14 ft, D 10 psf → 84.4 % Bending Moment, D + L) give identical results on main and branch.
+- **How verified:**
+  - The CDNs are blocked in the test environment, so each URL was served locally in headless Chromium (Playwright, `file://`). main: @babel/standalone 8.0.7 and lucide 1.54.0 (what the unpinned URLs serve today) and Tailwind 3.4.19 CSS compiled from the page's classes. Branch: @babel/standalone 7.29.10, lucide 1.54.0 and Tailwind 3.4.17 CSS compiled from the page's classes (stand-in for the Play CDN script, which is not on npm). Both: React 18.2.0, react-dom 18.2.0/client and lucide-react 0.292.0 bundled to ESM with esbuild. A request log confirmed each page fetched exactly its own URLs.
+  - The compiled Tailwind 3.4.17 and 3.4.19 CSS for this page differ only in the version banner comment.
+  - main vs branch, the same 9 scenarios as the tabs entry (default, worked check case, Manual + custom section + point loads + notch, HF SS flat, SP No.2, custom species, 6x8 error, multi-error, point-load error), each loaded through the tool's Open file input: Visual Analysis text, Detailed Report text (trace on and off), print-media text, saved project JSON, all 38 input controls with values, Save → Open → Save round trip, load while the Factors tab is active, "Share project info" payload and "Use shared project info" → **all identical** (66 comparisons). No console errors on either page.
+  - Full-page screenshots (light and dark) compared pixel by pixel: dark identical; light differs only by the timing-dependent "Project saved successfully" toast.
+- **Other copies:** none.
+
 ## Open items (not changed)
-- O1. **Libraries.** These are logged OPEN per the instructions; the CDN tags were not changed:
-  - `@babel/standalone` is unpinned (unpkg).
-  - `lucide@latest` is unpinned and unused (icons come from `lucide-react@0.292.0` via esm.sh).
+- O1. **Libraries.** Versions pinned 2026-10-09 (L1): `@babel/standalone@7.29.10`, `lucide@1.54.0` (unused), Tailwind Play CDN 3.4.17. Still open:
   - Tailwind Play CDN (`cdn.tailwindcss.com`) is meant for development only.
-  - esm.sh serves React 18.2.0 and lucide-react.
-  - Decision needed: pin the versions, or precompile and inline the app.
+  - esm.sh serves React 18.2.0 and lucide-react (exact versions) and is not on the CLAUDE.md host list.
 - O2. **Southern Pine SS, No.1 and Stud (Table 4B)**, and the SP Ft/Fc values, were not entered because I am not confident of them. The tool asks for Manual values. Decision: supply the values from the Supplement to add.
 - O3. **Table 4D timbers** (Beams & Stringers, Posts & Timbers) values are not built in, and flat use of timbers is blocked. Recommendation: add DF-L/HF/SP Table 4D values from the Supplement if timbers are needed.
 - O4. **NDS 3.4.3.1(b)** permits reducing concentrated loads within d of a support by x/d. This is not applied, which is conservative. Decision: add it as an option?
