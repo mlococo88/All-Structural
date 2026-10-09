@@ -262,3 +262,43 @@ Default check model used below: the tool's default inputs (circular arch, span 4
   - Diff check: at most one line is removed, the line replaced at the button anchor where that anchor is inside a JS template string; everything else is additions. No calculation code, storage key or saved-data format was touched.
 - **Other copies:** the BridgeXfer v1 helper is duplicated verbatim in every tool that uses it (CLAUDE.md §3; list in the PR). The glue block is the same in each tool of this PR except `TOOL`/`FILE` and the field map.
 - **Open items:** none.
+
+## 2026-10-09 — PR: claude/tabs-arch (PR link added after merge)
+
+### T1. Input panel split into tabs   [UI only — no calculation change]
+
+- **Date / type:** 2026-10-09, UI only (no result change). Engineer's request (2026-10-09): "make sure they are all formatted with the input panel having tabs rather than one long scrolling input panel." Same approach as `Steel Beam Design - AISC 15th.html` T1: build every card exactly as before, then move the finished nodes into tab panes. The tab strip uses this tool's own output tab look (`#tabs`: band-coloured tabs, ink underline, Times).
+- **How it works:** `inputPanel()` is unchanged and still returns the same HTML. At each of the four places that set `$("inPanel").innerHTML=inputPanel()` (`init`, the `loadMode` change handler in `bind`, `restore`, and the "Start a new calculation" button in `wireProject`) the new `archInputTabs($("inPanel"))` runs right after `UI.wire(...)` and **moves** the card nodes into one `div.inPane` per tab. Nothing is rebuilt, so every id, handler, value, collapse state and the `.vchk` checkboxes are untouched, and the loading mode still decides whether the Track and Tie Data card exists. A tab with no card is hidden (none is empty in either mode).
+- **Tabs (in order) and the cards in each** (card id in brackets):
+
+| Tab | Highway mode | Railroad mode |
+|---|---|---|
+| Geometry | Arch Geometry (`ip_geo`), Ring Depth (`ip_ring`, incl. the deterioration editor) | same |
+| Fill & Dead Load | Roadway Grade & Fill (`ip_grade`), Superimposed Dead Load (`ip_sdl`) | same |
+| Materials & Loads | Materials & Loads (`ip_mat`) | same (the shallow-fill rows are absent in rail mode, as before) |
+| Vehicles | Rating Vehicles (`ip_veh`) | Rating Vehicles (`ip_veh`), Track and Tie Data (`ip_track`) |
+| Project | Engineering Assumptions (`ip_assume`), Project Files (`ip_proj`) | same |
+
+- **Error marker:** a red dot on a tab when (a) a number field in it cannot be parsed by the browser (`validity.badInput`), or (b) `render()` stopped on an input error (the "Input error" / "The model cannot be built" message) whose text names an input on that tab. `render()` passes the message to `archInTabMarks()` in both catch blocks and clears it after a successful build. Message → card map (`IN_ERR`): track offset → `ip_track`; superimposed load line / weight / barrel width → `ip_sdl`; cover / wearing surface thickness / grade line below extrados → `ip_grade`; modulus E / allowable f_a → `ip_mat`; ring depth / depth override / deterioration station / too many releases → `ip_ring`; measured points / span / rise / curve fit → `ip_geo`. "Cannot read the line …" goes to `ip_geo` when that line is in the measured-points box, otherwise `ip_ring` (overrides).
+- **Programmatic focus:** the only input focus in the tool (Save with an empty name focuses `projName`) now calls `inTabReveal()` first. The output "jump" links go to output cards only and are unchanged.
+- **Keyboard / accessibility:** `role="tablist"` (`aria-label="Input groups"`), `role="tab"` with `aria-selected`/`aria-controls` and roving `tabindex`, `role="tabpanel"` with `aria-labelledby`; ←/→ (and ↑/↓), Home, End.
+- **New storage key:** `stoneArchLR.inputTab_v1` (localStorage, plain string `geo`, `fill`, `mat`, `veh` or `proj`), remembers the active input tab per browser. Reads and writes are in try/catch with an in-memory fallback. It is **not** in `snapshot()`, so `stoneArchLR.autosave`, `stoneArchLR.projects`, the JSON export/import and `bridgeSuite.v1.projectMeta` are unchanged. No existing key or format changed.
+- **Print:** unchanged. Print hides `#wrap` (input and output panels) and prints the report built in `#rptHost`, which reads values by id, so hidden panes do not affect it.
+- **Narrow screens:** the strip wraps (`flex-wrap`) and is sticky at the top of the scrolling input panel (below 1050 px, where the panel stops scrolling, it sticks to the top of the window).
+- **Governing provision:** none (no engineering change).
+- **Before / After** (file uses LF):
+  1. CSS. Anchor (unchanged): `.tabpane{display:none;} .tabpane.on{display:block;}`. After it, inserted the block starting `/* ---------- input panel tabs (archInputTabs) — same look as the output #tabs ---------- */` through `.inTab[hidden],.inPane[hidden]{display:none !important;}` (12 lines: `#inTabs`, `.inTab`, `.inTabDot`, `.has-err`).
+  2. New code inserted immediately before `/* ---------------- init ---------------- */` (anchor: `/* ---------------- input panel tabs (UI only) ----------------`): `IN_TABS`, `IN_SEC`, `IN_TAB_KEY`, `inTabGet`, `inTabSet`, `archInputTabs`, `setInTab`, `inTabKey`, `inTabReveal`, `IN_ERR`, `archInTabMarks` (copy from the file, from that comment down to the line before the init comment).
+  3. `restore()`, `init()` and the `loadMode` branch of `bind`: after
+     ```js
+     $("inPanel").innerHTML=inputPanel();
+     UI.wire($("inPanel"));
+     ```
+     added `archInputTabs($("inPanel"));` on the next line (three places).
+  4. `wireProject()`, `bReset`: before `$("inPanel").innerHTML=inputPanel(); UI.wire($("inPanel"));` — after the same line with ` archInputTabs($("inPanel"));` appended.
+  5. `wireProject()`, `bSave`: before `projMsg("Enter a project name first.",true);$("projName").focus();return;` — after `projMsg("Enter a project name first.",true);inTabReveal($("projName"));$("projName").focus();return;`.
+  6. `render()`: `archInTabMarks(e.message);` added as the first line of the `readP()` catch block and after `M=null;` in the `buildModel` catch block; `archInTabMarks("");` added after the `buildModel` try/catch, before `results=[];`.
+- **Check case:** n/a (no calculation change). Default arch (40 ft span, 10 ft rise, 24 in ring, HS20 etc.): every output tab's text identical before and after.
+- **How verified:** `node --check` on all 15 inline scripts. Headless Chromium (Playwright), `origin/main` vs branch, with KaTeX 0.16.9 and Plotly 2.27.0 (the pinned versions) served locally: the text of all 13 output tabs and `snapshot()` identical for highway default, measured geometry typed/pasted into the survey box, grade by springing covers + depth override + SDL line items pasted + a deterioration row, after error states, railroad mode with track offsets pasted, and after save → change → load and page reload (autosave restore); saved-project JSON, exported JSON and the `bridgeSuite.v1.projectMeta` payload identical; the list of input/select/textarea/button ids, classes and checkbox values identical in both modes, each in exactly one pane; red dots checked for E = 0, a bad SDL line, a bad override line and an unparsable number; tab remembered across reload and when storage throws; arrow/Home/End keys; "Start a new calculation" gives the same state and output as before; no console errors. Screenshots of every tab at 1500 and 400 px. The only differences in output text were the Rating Summary's own run-time note ("Computed in x s", printed only when a sweep takes over 0.4 s), which varies from run to run. At 400 px the page is 534 px wide on both main and the branch. The cause is the existing header title block (`#tblk{min-width:420px}`), not the tab strip, and it was left alone.
+- **Other copies:** none.
+- **Open items:** none.
