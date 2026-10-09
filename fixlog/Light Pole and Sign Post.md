@@ -374,6 +374,46 @@ Check cases: jsdom runs of the page before and after this change (scratch harnes
 - **How verified:** `node --check` on every plain inline script; text/babel blocks transpiled with @babel/standalone; page loaded in jsdom with CDN libraries stubbed (React UMD served locally); Share → Use exercised across Spread Footing, BasePlateAnchorDesigner, Pile Designer, Concrete Anchor and Timber Beam Check (Timber: plain scripts in jsdom, the same calls its onClick handlers make, since it imports React from esm.sh) with a localStorage carried between pages; `git diff --numstat` shows only insertions.
 - **Other copies:** the same link is added to the other tools in the step-1 PRs. Light Pole and Sign Post has no title-block fields (its project bar only names saved projects), so it gets no BridgeXfer helper or project-info buttons.
 
+## 2026-10-09 — Input panel tabs (branch claude/tabs-lightpole)
+### F13. Input panel split into tabs   [UI only — no calculation change]
+- **Date:** 2026-10-09. **Type:** UI only. No calculation change. Engineer's request (2026-10-09): "make sure they are all formatted with the input panel having tabs rather than one long scrolling input panel."
+- **What:** the input cards in `.col-in` are moved into tab panes when the page starts. The Light pole / Sign mode card stays above the tab strip, so it is always visible. Nothing is rebuilt. `lppInputTabs()` moves the existing `<section class="card">` nodes, so every id, handler and value stays the same. All inputs stay inside `.col-in`, so the existing `.col-in input, .col-in select` wiring still finds them.
+
+  | Tab | Light pole mode | Sign mode |
+  |---|---|---|
+  | Wind & site | 1 Wind & site | 1 Wind & site |
+  | Pole / **Post & sign** (label follows the mode) | 2 Pole | 2 Post + 2b Sign panel |
+  | Fixtures | 3 Luminaires & fixtures | hidden (card hidden by `applyMode`) |
+  | Cables | 4 Catenary cables (also shown when "Enabled" is unticked, as today) | hidden |
+  | Ice | 5 Ice & wind-on-ice | hidden |
+  | Shaft & soil | 6 Shaft & soil | 6 Shaft & soil |
+  | Anchors | 7 Anchor bolts & base plate | 7 Anchor bolts & base plate |
+
+  `applyMode()` still shows and hides cards and rows exactly as before. Afterwards it calls `lppInTabsSync()`, which hides any tab whose cards are all `display:none`. If the shown tab becomes hidden, the first visible tab is shown instead. The remembered tab comes back when the user returns to light-pole mode.
+- **Storage:** new key `lpp_inputTab_v1` (follows the tool's `lpp_` prefix). It holds the active input tab, per browser. It is written only when a tab is clicked or picked with the keyboard. Reads and writes are wrapped in try/catch, with an in-memory fallback. An unknown stored value falls back to the first visible tab. The key is not part of `captureState()`, so `lpp_session_v1`, `lpp_projects_v1` and saved projects are unchanged. Existing keys are unchanged, including the generic `activeTab` (output tabs, see F9 and O10).
+- **Error marker:** a red dot on a tab that holds a shown number input with `validity.badInput` (text the browser cannot parse, e.g. "4000e"). The tool has no other per-input error state: `num()` turns blank or bad text into 0, and only the outputs show "ERR" (F1). Inputs in rows or cards hidden by the mode are ignored.
+- **Keyboard / ARIA:** `role=tablist/tab/tabpanel`, `aria-selected`, `aria-controls`, roving tabindex. Arrow keys, Home and End move between visible tabs.
+- **Print:** unchanged. `@media print` already hides `.col-in` (the whole input column), and the tab strip is inside it.
+- **Where / Before / After** (all insertions; the Before text is the anchor and is kept):
+  1. CSS. Anchor: `.tabpage>section.card:first-child{margin-top:0}`
+     - After it, insert the block that starts `/* ---- input panel tabs (lppInputTabs; UI only) ---- */`: `#lppInTabs` (sticky, wraps, styled like the output `.tabbar`), `.lppInTab`, `.lppInDot`, `[hidden]` rules, and `@media(max-width:900px){#lppInTabs{position:static}}`. At ≤ 900 px the column no longer scrolls on its own; the page does.
+  2. `applyMode()`. Anchor: `show('rowSignCfMan', sign && $('signCfMode') && $('signCfMode').value==='manual');`
+     - After it, insert: `lppInTabsSync();   // input tabs: hide a tab whose cards are all hidden in this mode`
+  3. JS. Anchor: `(function boot(){` followed by `renderManual();`
+     - Before `(function boot(){`, insert the block `// ================= INPUT PANEL TABS (UI only) =================`, which defines `LPP_IN_TABS`, `LPP_IN_CARD` (card → tab, keyed by an input id inside each card: V, H, signB, fixTbl, cablesOn, tIce, shaftShape, boltDia), `LPP_IN_KEY='lpp_inputTab_v1'`, `lppInTabGet/Set`, `lppInputTabs`, `lppPaneShown`, `lppInTabsSync`, `lppSetInTab`, `lppInTabKey` and `lppInputTabMarks`.
+     - As the first line of `boot()`, insert: `lppInputTabs();   // move the input cards into the input tabs (before any state is applied)`
+- **Governing provision:** none. No formula, factor, unit, code reference or computed result changed.
+- **Check case:** not applicable. Results are identical, see below.
+- **How verified:**
+  - `node --check` on the inline script, main and branch.
+  - Headless Chromium (Playwright 1.56, Chromium 1194). KaTeX 0.16.9 (the pinned version) was served locally from `npm pack`.
+  - Main and branch were compared in 9 states: default pole, cables disabled, square HSS, manual rebar, Broms cohesive, monopost sign, two-post sign, two-post sign with manual C_f, and sign → pole. In every state these were identical: the text of all 8 output tab pages, every output SVG, `captureState()` JSON, the `lpp_session_v1` autosave, save → load round trip (`commitSave` → `applyState`), and the page after a reload (session restore). In the sign states, reload changes the text of the hidden light-pole-only output cards (stale pole values before the reload, "—" after). This happens the same way in main, so it is not caused by this change (O12). The branch writes no new key unless a tab is clicked.
+  - All 109 inputs, selects and buttons in the input column (by id, data-i/data-k, data-v) are present in both. Every one is in exactly one pane, except the four mode-card buttons, which are above the strip by design.
+  - No console errors.
+  - Checked by hand: keyboard End/Home/arrow keys, red dot on and off ("4000e" in f′c), tab remembered across reload, sign → pole tab restore, a bogus stored value falls back to the first tab, print media hides `.col-in`.
+  - Screenshots of every tab at 1400 px and 400 px.
+- **Other copies:** none.
+
 ## Open items (not changed)
 - **O2. G for flexible poles:** G = 0.85 (rigid) is used, with no natural-frequency or G_f check. Decide whether to add an n₁ estimate and a warning.
 - **O3. P-δ / B1** amplification of first-order moments (AISC Ch. C) is not applied, and no warning was added. Decide whether to add a B1 estimate.
@@ -382,6 +422,9 @@ Check cases: jsdom runs of the page before and after this change (scratch harnes
 - **O6. A blank or zero pole height H or shaft diameter b crashes `calc()`** in `drawElev` ("Invalid array length"), in both the original and fixed files. The page then keeps the stale results. Input validation (AUDIT B12) was not in this brief.
 - **O8. Shear breakout / side-face blowout (F7)** are not computed. A method for a bolt circle in a round shaft is needed if you want them implemented.
 - **O9. Pole/post combined stress** still uses the max-moment LRFD combination. Lower axial reduces the H1 ratio, so that combination governs for these structures, but it is not proven for every case.
+- **O10. Generic `activeTab` localStorage key** (output tabs, `switchTab`). Every file:// page in Chromium shares this name, and CLAUDE.md §5 forbids generic names. It was left unchanged in F9 and F13 because changing a key needs a migration. Decide whether to move it to `lpp_activeTab_v1` and migrate the old value.
+- **O11. Horizontal page scroll at 400 px** (pre-existing, same on main: scrollWidth 649 px). The fixture and cable tables have 8–9 input columns with a 52 px minimum width, and they make the single-column layout wider than the screen. The new input tab strip wraps inside the column, but the column itself is wider than 400 px in light-pole mode. Sign mode fits. Fixing this needs a table layout change.
+- **O12. Hidden pole-only output cards keep stale text in sign mode** (pre-existing). After switching to sign mode, the hidden `.poleOnly` / fixture / cable output cards still hold the last light-pole numbers until a reload, which shows "—" instead. They are not shown or printed (`display:none`), so displayed results are not affected.
 
 ## Resolved items
 - **O1. Kd = 0.85 recommended for round masts** (default and manual). ASCE 7-22 Table 26.6-1 gives 1.0 for round chimneys/tanks/similar structures, while 0.85 applies to solid signs and trussed towers. **Question:** which Kd do you want as the default for round light masts, and should the mast and sign use different Kd?
