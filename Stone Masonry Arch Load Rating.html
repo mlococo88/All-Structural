@@ -109,6 +109,18 @@ button.pri:hover{background:#000;}
   border-color:var(--ink);border-bottom:2px solid var(--sheet);margin-bottom:-2px;}
 #tabs button:hover{background:var(--sheet);color:var(--ink);}
 .tabpane{display:none;} .tabpane.on{display:block;}
+/* ---------- input panel tabs (archInputTabs) — same look as the output #tabs ---------- */
+#inTabs{display:flex;gap:0;border-bottom:2px solid var(--ink);margin-bottom:12px;flex-wrap:wrap;
+  position:sticky;top:0;background:var(--paper);z-index:20;padding-top:2px;}
+#inTabs .inTab{display:inline-flex;align-items:center;border:1px solid var(--line);border-bottom:none;
+  background:var(--band);padding:5px 11px;font-size:.99rem;margin-right:3px;color:var(--soft);}
+#inTabs .inTab[aria-selected="true"]{background:var(--sheet);color:var(--ink);font-weight:700;
+  border-color:var(--ink);border-bottom:2px solid var(--sheet);margin-bottom:-2px;}
+#inTabs .inTab:hover{background:var(--sheet);color:var(--ink);}
+#inTabs .inTab:focus-visible{outline:2px solid var(--blue);outline-offset:1px;}
+.inTabDot{display:none;width:7px;height:7px;border-radius:50%;background:var(--bad);margin-left:6px;}
+.inTab.has-err .inTabDot{display:inline-block;}
+.inTab[hidden],.inPane[hidden]{display:none !important;}
 /* Rating Summary. The governing cell has to survive being printed in black and
    white, so it carries a border and the word "governs" rather than colour alone
    — a shaded cell that photocopies flat is worthless in a calc package. */
@@ -11178,6 +11190,7 @@ const TABS=[["sum","Summary"],["geo","Model"],["dl","Dead Load"],["ll","Live Loa
 function render(){
   let p;
   try{p=readP();}catch(e){
+    archInTabMarks(e.message);
     $("panes").innerHTML=msg("err","Input error",esc(e.message));
     $("tabs").innerHTML="";if($("focusBar"))$("focusBar").innerHTML="";return;
   }
@@ -11186,12 +11199,14 @@ function render(){
   try{M=ARCH.buildModel(p);}
   catch(e){
     M=null;
+    archInTabMarks(e.message);
     $("tabs").innerHTML="";if($("focusBar"))$("focusBar").innerHTML="";
     $("panes").innerHTML=msg("err","The model cannot be built",
       esc(e.message)+"<br><br>The calculation is stopped rather than returning a number that looks legitimate. "+
       "Correct the input above.");
     return;
   }
+  archInTabMarks("");
   results=[];
   for(const v of ARCH.vehiclesFor(p.loadMode)){
     if(!p.vehicles.includes(v.id))continue;
@@ -12038,6 +12053,7 @@ function restore(o){
   if(o.fields.vehicles!=null)F.vehicles=String(o.fields.vehicles);
   $("inPanel").innerHTML=inputPanel();
   UI.wire($("inPanel"));
+  archInputTabs($("inPanel"));
   /* A session saved before v2026.08.10 may carry shallowRule = "spread", the
      old control that applied the 1.75H spread at every depth. That control is
      gone; the identical result is now a credited spread of 1.75H. Map it, so an
@@ -12230,7 +12246,7 @@ function wireProject(){
     F.loadMode="hwy"; F.vehicles=ARCH.VEHICLES.map(v=>v.id).join(",");
     animVehId=null;ndVeh=null;ndPos=null;ndNode=null;xsNode=null;
     impText="";impParsed=null;impCmp=null;impErr="";activeTab="sum";
-    $("inPanel").innerHTML=inputPanel(); UI.wire($("inPanel"));
+    $("inPanel").innerHTML=inputPanel(); UI.wire($("inPanel")); archInputTabs($("inPanel"));
     TB.forEach(t=>{if($(t)&&t!=="tbDate")$(t).value="";});
     if($("tbDate"))$("tbDate").value=new Date().toISOString().slice(0,10);
     bind(); wireProject(); refreshProjSel(); showAutoInfo(); syncCond(); render(); autosave();
@@ -12238,7 +12254,7 @@ function wireProject(){
   };
   $("bSave").onclick=()=>{
     const nm=($("projName").value||"").trim();
-    if(!nm){projMsg("Enter a project name first.",true);$("projName").focus();return;}
+    if(!nm){projMsg("Enter a project name first.",true);inTabReveal($("projName"));$("projName").focus();return;}
     const ps=projects(), existed=!!ps[nm];
     curProj=nm; ps[nm]=snapshot(); setProjects(ps); refreshProjSel(nm);
     autosave(); showAutoInfo();
@@ -12691,11 +12707,115 @@ function syncCond(){
   if($("rowsGends"))$("rowsGends").style.display=ends?"":"none";
 }
 
+/* ---------------- input panel tabs (UI only) ----------------
+   inputPanel() still builds every card into #inPanel exactly as before;
+   archInputTabs() then MOVES the finished card nodes into one pane per tab.
+   Nothing is rebuilt, so every id, handler and value is untouched, and the
+   loading mode still decides whether the Track and Tie Data card exists. The
+   active tab is remembered per browser in localStorage key
+   stoneArchLR.inputTab_v1 — never in snapshot(), so the autosave, the saved
+   projects and the JSON export are unchanged. */
+const IN_TABS=[["geo","Geometry"],["fill","Fill &amp; Dead Load"],["mat","Materials &amp; Loads"],
+  ["veh","Vehicles"],["proj","Project"]];
+const IN_SEC={ip_geo:"geo",ip_ring:"geo",ip_grade:"fill",ip_sdl:"fill",ip_mat:"mat",
+  ip_veh:"veh",ip_track:"veh",ip_assume:"proj",ip_proj:"proj"};
+const IN_TAB_KEY="stoneArchLR.inputTab_v1";
+let inTabCur=null, inErrLast="";
+function inTabGet(){if(inTabCur)return inTabCur;try{return localStorage.getItem(IN_TAB_KEY)||"";}catch(e){return "";}}
+function inTabSet(t){inTabCur=t;try{localStorage.setItem(IN_TAB_KEY,t);}catch(e){}}
+function archInputTabs(P){
+  const bar=document.createElement("div");
+  bar.id="inTabs";bar.setAttribute("role","tablist");bar.setAttribute("aria-label","Input groups");
+  const panes={};
+  IN_TABS.forEach(([k,lab])=>{
+    const b=document.createElement("button");
+    b.type="button";b.className="inTab";b.id="inTab_"+k;b.dataset.pane=k;
+    b.setAttribute("role","tab");b.setAttribute("aria-controls","inPane_"+k);
+    b.innerHTML=`<span>${lab}</span><span class="inTabDot" aria-hidden="true"></span>`;
+    b.addEventListener("click",()=>setInTab(k,true));
+    b.addEventListener("keydown",inTabKey);
+    bar.appendChild(b);
+    const pn=document.createElement("div");
+    pn.className="inPane";pn.id="inPane_"+k;
+    pn.setAttribute("role","tabpanel");pn.setAttribute("aria-labelledby","inTab_"+k);
+    panes[k]=pn;
+  });
+  /* a node not in the map stays with the card before it */
+  let cur=IN_TABS[0][0];
+  Array.from(P.childNodes).forEach(n=>{
+    if(n.id&&IN_SEC[n.id])cur=IN_SEC[n.id];
+    panes[cur].appendChild(n);
+  });
+  P.appendChild(bar);
+  IN_TABS.forEach(([k])=>{
+    P.appendChild(panes[k]);
+    $("inTab_"+k).hidden=!panes[k].querySelector(".pnl");
+  });
+  let t=inTabGet();
+  if(!panes[t]||$("inTab_"+t).hidden)t=IN_TABS[0][0];
+  setInTab(t,false);
+  archInTabMarks(inErrLast);
+}
+function setInTab(t,remember){
+  IN_TABS.forEach(([k])=>{
+    const b=$("inTab_"+k),pn=$("inPane_"+k); if(!b||!pn)return;
+    const on=(k===t);
+    b.setAttribute("aria-selected",on?"true":"false");b.tabIndex=on?0:-1;
+    pn.hidden=!on;
+  });
+  if(remember){inTabSet(t);const P=$("inPanel");if(P)P.scrollTop=0;}
+}
+function inTabKey(e){
+  const vis=IN_TABS.map(([k])=>$("inTab_"+k)).filter(b=>b&&!b.hidden);
+  const i=vis.indexOf(e.currentTarget); let j=-1;
+  if(e.key==="ArrowRight"||e.key==="ArrowDown")j=(i+1)%vis.length;
+  else if(e.key==="ArrowLeft"||e.key==="ArrowUp")j=(i-1+vis.length)%vis.length;
+  else if(e.key==="Home")j=0;
+  else if(e.key==="End")j=vis.length-1;
+  if(j<0)return;
+  e.preventDefault();setInTab(vis[j].dataset.pane,true);vis[j].focus();
+}
+/* Show the tab holding an element before anything focuses or scrolls to it. */
+function inTabReveal(node){
+  const pn=node&&node.closest&&node.closest(".inPane");
+  if(pn&&pn.hidden)setInTab(pn.id.replace("inPane_",""),true);
+}
+/* The input error that stopped render(), mapped to the card holding the input
+   it names. Messages come from readP() and ARCH.buildModel(). */
+const IN_ERR=[
+  [/^Track offset/,"ip_track"],
+  [/superimposed load line|^The weight on the line|barrel width/i,"ip_sdl"],
+  [/^(Cover at the|Fill cover at the crown|Wearing surface thickness)|^Grade line passes/,"ip_grade"],
+  [/^The masonry modulus|^The allowable compressive/,"ip_mat"],
+  [/^Ring depth|depth override|deterioration station|moment releases are entered/,"ip_ring"],
+  [/measured|^The span is|^The rise is|could be fitted|could not be fitted|fit type|^Need at least 3/i,"ip_geo"]];
+/* red dot on a tab holding: the card named by the current input error, or a
+   number field the browser cannot parse */
+function archInTabMarks(err){
+  inErrLast=err||"";
+  if(!$("inTabs"))return;
+  const bad={};
+  const mark=n=>{const pn=n&&n.closest&&n.closest(".inPane");if(pn)bad[pn.id.replace("inPane_","")]=1;};
+  document.querySelectorAll("#inPanel .inPane input").forEach(i=>{if(i.validity&&i.validity.badInput)mark(i);});
+  if(inErrLast){
+    let m=inErrLast.match(/^Cannot read the line "([^"]*)"/), id=null;
+    if(m)id=($("geoMode")&&$("geoMode").value==="measured"&&$("measPts")&&$("measPts").value.indexOf(m[1])>=0)?"ip_geo":"ip_ring";
+    else{const r=IN_ERR.find(q=>q[0].test(inErrLast));if(r)id=r[1];}
+    if(id)mark($(id));
+  }
+  IN_TABS.forEach(([k])=>{
+    const b=$("inTab_"+k); if(!b)return;
+    b.classList.toggle("has-err",!!bad[k]);
+    b.title=bad[k]?"An input on this tab needs attention":"";
+  });
+}
+
 /* ---------------- init ---------------- */
 let bind=null;
 function init(){
   $("inPanel").innerHTML=inputPanel();
   UI.wire($("inPanel"));
+  archInputTabs($("inPanel"));
   const today=new Date().toISOString().slice(0,10);
   if($("tbDate")&&!$("tbDate").value)$("tbDate").value=today;
 
@@ -12713,6 +12833,7 @@ function init(){
           const snap=snapshot();
           $("inPanel").innerHTML=inputPanel();
           UI.wire($("inPanel"));
+          archInputTabs($("inPanel"));
           for(const k in snap.fields)if($(k)&&k!=="vehicles"&&k!=="loadMode")$(k).value=snap.fields[k];
           $("loadMode").value=e2.value;
           document.querySelectorAll(".vchk").forEach(cb=>{cb.checked=true;});
