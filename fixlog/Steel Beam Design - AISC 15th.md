@@ -921,6 +921,55 @@ function buildDeriveTab(pg){
   - Screenshots of every tab in beam, member and batch modes at 1400 px and 400 px widths were checked.
 - **Other copies of this code:** none.
 
+### D1. Composite graphics show the slab, the metal deck in its real orientation, and the studs   [drawing only — no calculation change]
+- **Date / type:** 2026-10-09, drawing only (no result change). Requested by the engineer on 2026-10-08: "When a composite beam is used, I want the graphics to show the slab as well, and the stay-in-place forms, if selected, should be shown in the correct orientation in the graphic."
+- **What the tool already has (inputs used, none added):** composite on/off; deck orientation `S.composite.orient` (`perp` ribs perpendicular to the beam, `para` ribs parallel, `none` solid slab; input "Deck orientation"); rib height h_r (`hr`); average rib width w_r (`wr`); solid concrete above the deck (`tSolid`); haunch (`haunch`); rib fill counted in A_c (`ribFill`); studs: diameter (`dia`), studs per rib (`nRib`, perpendicular deck), length after welding (`studLen`), pitch (`pitch`). Rib spacing is **not** an input, and there is no actual slab-width input (only beam spacings and edge distances), so the drawings use the effective width b_eff and say so.
+- **Graphics before:** (1) Beam Schematic (SVG elevation, Schematic tab): the bare beam only. (2) Composite Cross Section (Plotly, M_x tab, `compXsecFig`): slab, haunch and stress blocks, but the deck was a row of rectangles whose width was the counted fraction of rib concrete, with the same look for both orientations. (3) Bare steel cross sections (Schematic, Section, M_x, Compression tabs): unchanged, they show the steel properties.
+- **Graphics after:**
+  - **Composite Cross Section** (`compXsecFig`): ribs **parallel** to the beam: trapezoidal flutes cut by the section, one rib centred on the beam, deck sheet drawn as a line following the profile. Ribs **perpendicular**: the section is cut through a rib, so the rib concrete is full width, the deck sheet is the line at the bottom of the rib, and the deck high flute beyond the cut is dashed. Solid slab: plain slab. Headed studs drawn on the flange (studs per rib for perpendicular deck, else one; transverse spacing 4d, kept within the flange). The part of h_r counted in A_c is labelled (dotted line when 0 < fill < 1).
+  - **New: Partial elevation along the beam** (`compElevFig`, about 4 ft, longitudinal section on the beam centre line, to scale): ribs **perpendicular**: trapezoidal rib profile along the beam with a stud in each rib; ribs **parallel**: cut along the rib over the beam, so the rib concrete is continuous, deck line at the rib bottom, high flute beyond dashed; solid slab: plain. Studs at the entered pitch (12 in, labelled illustrative, when none is entered). Dimensions: d, h_r, t, Y_con, rib spacing or stud pitch, w_r.
+  - **New section on the Schematic tab: "Composite Slab and Deck"** (beam mode, composite on and not blocked): the composite cross section without stress blocks, PNA or a (`opts.geomOnly`) plus the partial elevation, and a one-line note of orientation, depths and b_eff.
+  - **M_x tab, Composite Cross Section:** the partial elevation added under the existing section.
+  - **Beam Schematic (SVG):** when composite is on, a slab band above the beam with the deck: perpendicular ribs drawn as small trapezoids at the illustrative spacing (a dashed line if the spacing is under 4 px), parallel ribs as a continuous band; label "Composite slab · deck ribs ⊥/∥ beam · slab and deck not to vertical scale". The load graphics are lifted 12 px so they sit on top of the slab band.
+  - Each plot has a one-line note above it saying what the view shows for the entered orientation; the hint under the composite cross section now says the drawn width is b_eff and that the rib spacing is illustrative.
+- **Drawing assumptions (stated on the drawings):** rib spacing p = max(6 in, 2w_r) rounded to 0.5 in, "illustrative"; each concrete rib is a trapezoid of average width w_r, w_r ± f/2 at top/bottom with f = min(0.8h_r, 0.9w_r, 0.9(p − w_r)); stud length = entered length, or h_r + 1.5 in (at least 4d, below the slab top) labelled "length illustrative"; stud head 1.6d wide, 0.375 in thick; the stud base is drawn at the top of the haunch, which is what the existing §I3.2c cover check assumes (cover = Y_con − haunch − L_s), see O9.
+- **Governing provision:** none changed. The orientation shown follows AISC 360-16 §I3.2c (deck ribs perpendicular or parallel to the steel beam) as already implemented in the tool.
+- **Before / After** (file uses CRLF, inserted lines use CRLF; every edited function is either defined once or the last (live) copy, see O4):
+  1. New helpers inserted immediately before the banner `COMPOSITE CROSS SECTION  (Plotly, to scale)` (anchor `function deckDrawGeom(c){`): `deckDrawGeom`, `deckCentres`, `ribPoly`, `deckSheetPath`, `studShapes`, `studDrawLen`. Copy the block from the file.
+  2. `compXsecFig` (defined once). Before:
+     ```js
+       /* --- deck ribs: draw the counted fraction solid, the rest as voids --- */
+       if(hr>0){
+         const wrIn=Math.max(1,c.wr||6);
+         const pitch=wrIn*2;
+         const n=Math.max(1,Math.round(beff/pitch));
+         const fill=(c.orient==='perp')?(c.ribFill!=null?c.ribFill:0.5):
+                    (c.orient==='para')?(c.ribFill!=null?c.ribFill:1.0):0;
+         for(let i=0;i<n;i++){
+           const x0=-beff/2+i*(beff/n),x1=x0+(beff/n)*Math.max(0.05,Math.min(1,fill));
+           shapes.push({type:'rect',x0,x1,y0:ha,y1:ha+hr,fillcolor:CONC,opacity:.75,
+             line:{color:CEDGE,width:0.8},layer:'below'});
+         }
+         shapes.push({type:'rect',x0:-beff/2,x1:beff/2,y0:ha,y1:ha+hr,fillcolor:'rgba(0,0,0,0)',
+           line:{color:CEDGE,width:1.2,dash:'dot'}});
+         anns.push({x:-beff/2,y:ha+hr/2,text:' deck ribs — '+fmt(100*fill,0)+'% counted',showarrow:false,
+           xanchor:'left',font:{size:8.5,color:'#5A6B80'},bgcolor:'rgba(255,255,255,.8)'});
+       }
+     ```
+     After: the block starting `/* --- metal deck, drawn in its real orientation (drawing only) ---` (parallel: `deckCentres` + `ribPoly` + `deckSheetPath`; perpendicular: full-width rib rectangle, deck line at `ha`, dashed line at `ha+hr`; label `A<sub>c</sub> counts …% of h<sub>r</sub> over b<sub>eff</sub>`). After the steel shape, new block `/* --- headed studs across the flange (drawing only) … */`. Also: `if(!opts.noStress){` → `if(!opts.noStress&&!opts.geomOnly){`; the PNA line and label wrapped in `if(!opts.geomOnly){ … }`; `dimV(Ycon-r.a,Ycon,…,'a = '…)` → `if(!opts.geomOnly)dimV(…'a = '…); else dimV(ha+hr,Ycon,…,'t = '…);`; the first hover item shows "Concrete slab, Y_con" when `geomOnly`. The fill fraction and every value read are the same expressions as before.
+  3. New `compElevFig`, `deckViewNote` and `compElevBlock`, inserted before the **dead** first copy of `compXsecBlock` (anchor `function compElevFig(p,r,opts){`); each is defined once.
+  4. Live (last) `compXsecBlock`: adds `body.appendChild(deckViewNote('x'));` before the plot. Hint before:
+     ```js
+     'Drawn to scale (equal x and y scales) from the resolved geometry. Red is the plastic compression block, blue the yielded tension zone, and the dash-dot line is the plastic neutral axis that produced Mₙ above. Deck ribs are drawn at the fraction of rib concrete counted in Aᶜ — the drawn rib pitch is indicative, not a deck profile.'
+     ```
+     After: "Drawn to scale … the drawn slab width is the effective width b_eff, not the full slab." + (unless `geomOnly`) the unchanged stress-block sentence + (if h_r > 0) "The metal deck is drawn in its entered orientation: … The drawn rib spacing is illustrative (not an input)." The dead first copy of `compXsecBlock` is not edited.
+  5. `compositeFlexSections` (defined once), section `cpFig`: after `compXsecBlock(…)` add `compElevBlock(body,p,r,{id:'elevComp'});`.
+  6. Live (last) `buildSchemTab`: new section `schComp` "Composite Slab and Deck" after `schXsec` (anchor `mkSection('schComp','Composite Slab and Deck'`), shown when `AN.comp&&!AN.comp.blocked&&AN.comp.ew`.
+  7. `drawSchematic` (defined once): before `/* loads */`, new block `/* composite slab and deck above the beam … */` and `const nPreLoads=svg.childNodes.length;`; before `/* bracing annotation */`, the load nodes are moved into `<g transform="translate(0,-12)">` and the label is added, both only when composite is on.
+- **Check case:** W21X50, A992, 30 ft simple span, trib 5 + 5 ft, composite with b_eff = 7.50 ft (90 in), h_r = 3 in, w_r = 6 in, t = 4.5 in, Y_con = 7.50 in, 60 % composite, studs ¾ in × 5 in, 2 per rib. Before and after: C = 441 kip, a = 1.44 in, PNA 0.450 in below the top of steel (M_x tab), identical. Drawing check: perpendicular ribs → full-width rib concrete in the cross section and a trapezoid every 12 in in the elevation (bottom width 4.8 in, top 7.2 in, average 6.0 in = w_r); parallel ribs → the same trapezoids across the cross section, one on the beam centre line (x = 0), and continuous rib concrete in the elevation.
+- **How verified:** the same Chromium harness as T1, against the original file (main): `AN` (all results) and the autosave JSON identical in all 13 scenarios; save/load round trip and the reaction hand-off identical; output-tab text identical except the new notes and hints, the SVG titles of the slab band, and the section numbers after the new Schematic section (every decimal number in the M_x tab text is identical; the Schematic tab only gains the echoed slab depths and b_eff). `node --check` on all inline scripts. Screenshots of the Schematic tab (beam schematic, cross section, Composite Slab and Deck) and the M_x tab composite figures for non-composite, solid slab, deck perpendicular, deck parallel (with a 1 in haunch) and member-mode parallel deck were inspected: the orientations are as described above; the non-composite graphics are pixel-identical to before.
+- **Other copies of this code:** none (the dead first `compXsecBlock` keeps its old hint; see O4).
+
 ## Open items (not changed)
 - O1. **H3.3(c) buckling limit state** is not implemented, only warned (F5). Decide on the method (e.g. f_bx + σ_w ≤ φF_cr with F_cr = M_n/S_x from Chapter F, or a DG 9 interaction) before coding it as a check.
 - O2. **Batch mode** has no H3.3 buckling warning and keeps its existing tension note. Decide whether to add a matching batch note.
@@ -929,3 +978,6 @@ function buildDeriveTab(pg){
 - O5. Calculated-C_b window clipped to the moment-sign region (lines ≈ 1817–1829). Not in scope; the default C_b = 1 is conservative.
 - O6. The open-section torque is a single value applied to every strength combination (not scaled per combination). Not in scope.
 - O7. **New localStorage key `sbd_inputTab_v1`** (T1, active input tab). The storage-key column of AUDIT.md still lists only `sbd_autosave_v1` and `sbd_projects_v1`; it was not edited in this PR (one tool per PR). Add the key to AUDIT.md in a later housekeeping PR.
+- O8. **Rib concrete counted in A_c (defaults 0.50 perpendicular, 1.00 parallel).** Found while drawing D1; **not changed** (calculation). `slabArea` uses A_c = b_eff (t + fill·h_r). With parallel ribs and fill 1.00 this is the full b_eff × h_r rectangle, including the voids between the ribs (about half of it for w_r = 6 in at a 12 in rib spacing). My reading of AISC 360-16 §I3.2c is that concrete below the top of the deck is neglected in A_c for ribs perpendicular to the beam, and included for ribs parallel to the beam, where it is the rib concrete, not the voids. If so, both defaults can overstate A_c, and so C = 0.85f′_c A_c, when concrete crushing governs (the manual says the input only changes the answer then). Please confirm the provision and decide on the defaults; a parallel default of w_r / rib spacing would need a rib-spacing input.
+- O9. **Stud base and the §I3.2c cover check with a haunch.** The cover check takes cover = Y_con − haunch − L_s, i.e. the stud starts at the top of the haunch; D1 draws it that way. If studs are welded to the flange through the haunch, the cover is over-estimated by the haunch depth. Not changed; confirm which is intended.
+- O10. **Rib spacing is not an input.** The D1 drawings use an illustrative spacing max(6 in, 2w_r), labelled as such. Add an input only if the drawings need to show the real deck profile.
