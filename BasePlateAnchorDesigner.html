@@ -1046,9 +1046,10 @@ function numInput(get,set,step,key){
      (so "-", "1.", "0.0" aren't normalized mid-entry); otherwise show the model value. */
   const k=i.getAttribute("data-fkey");
   i.value = (window.__editingKey===k && window.__editingRaw!=null)? window.__editingRaw : get();
+  i.__bpadSet=set;   /* refreshAll() may keep this node and hand it the setter of its rebuilt twin */
   i.addEventListener("input",()=>{
     window.__editingKey=k; window.__editingRaw=i.value;
-    const v=parseFloat(i.value); set(isNaN(v)?0:v); refreshAll();
+    const v=parseFloat(i.value); i.__bpadSet(isNaN(v)?0:v); refreshAll();
   });
   i.addEventListener("blur",()=>{ if(window.__editingKey===k){ window.__editingKey=null; window.__editingRaw=null; } });
   return i;
@@ -9585,7 +9586,23 @@ function refreshAll(){
   const st=captureUI();
   autosave();
   __fieldSeq=0;            /* deterministic keys: same field gets same key each rebuild */
+  /* A number input's .value hides unfinished text ("5." reads as "5", "-" as ""),
+     so a rebuilt copy cannot show what is being typed. Keep the live node instead. */
+  const ae=document.activeElement;
+  const keep=(ae && ae.__bpadSet && st.key && st.key===window.__editingKey &&
+              ae.closest && ae.closest("#inputPanel"))? ae : null;
+  const rowLab=n=>{ const r=n.closest(".fRow"); const l=r&&r.querySelector("label"); return l?l.textContent:null; };
+  const keepLab=keep? rowLab(keep) : null;
   buildInputPanel();
+  if(keep){
+    const twin=document.querySelector('#inputPanel [data-fkey="'+st.key+'"]');
+    if(twin && twin!==keep && twin.__bpadSet && twin.type===keep.type && rowLab(twin)===keepLab){
+      keep.__bpadSet=twin.__bpadSet;
+      [...keep.attributes].forEach(a=>{ if(!twin.hasAttribute(a.name)) keep.removeAttribute(a.name); });
+      [...twin.attributes].forEach(a=>keep.setAttribute(a.name,a.value));
+      twin.replaceWith(keep);
+    }
+  }
   buildTabs();
   restoreUI(st);
 }

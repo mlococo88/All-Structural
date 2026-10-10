@@ -2129,7 +2129,8 @@ const GP3D = (function () {
         if (/lac/i.test(desc)) { const pts = [], step = Math.max(4, (2 * hd - 2 * te) * 0.9); [1, -1].forEach(st => { let k = 0; for (let x = s0 + 1; x + step <= s1 - 0.5; x += step, k++) { const za = (k % 2 ? 1 : -1) * (hd - te), zb = -za; pts.push(new T3.Vector3(x, st * (hw + 0.03), za), new T3.Vector3(x + step, st * (hw + 0.03), zb)); } });
           if (pts.length) fm.add(new T3.LineSegments(new T3.BufferGeometry().setFromPoints(pts), new T3.LineBasicMaterial({ color: 0x252d29 }))); }
         zc = hd - te; }
-      if (spliced) notes.push(`${esc(m.id)}: chord spliced at the joint; drawn with a small gap at the work point (splice plates are not drawn).`);
+      if (spliced) notes.push(Pm.members.filter(q => q.role === 'chord').length === 1 ? `${esc(m.id)}: chord ends at the joint (single chord member); drawn with a small gap at the work point.`   // O15: heel joint, no splice
+        : `${esc(m.id)}: chord spliced at the joint; drawn with a small gap at the work point (splice plates are not drawn).`);
 
       /* fillers between the member face and the plate(s) */
       const tfl = Math.max(0, num(m.fast.tf) || 0);
@@ -2380,7 +2381,7 @@ const GPDXF = (function () {
       if (G.tf > 0 && G.holes.length) { const ed = 1.5, tmn = Math.min(...G.ts), tmx = Math.max(...G.ts), LF = layer('GP-FILL', COLORS.FILL, 'DASHED');
         pline(LF, [G.P(G.e - ed, tmn - ed), G.P(G.sOut + ed, tmn - ed), G.P(G.sOut + ed, tmx + ed), G.P(G.e - ed, tmx + ed)]); }
     });
-    if (P.chord === 'spliced') { const ch = P.members.filter(m => m.role === 'chord'), hw = Math.max(6, ...ch.map(m => (num(m.sec.w) || 0) / 2 + 2)); line(layer('GP-SPLICE', COLORS.SPLICE, 'DASHED'), [0, -hw], [0, hw]); }
+    if (P.chord === 'spliced' && P.members.filter(m => m.role === 'chord').length >= 2) { const ch = P.members.filter(m => m.role === 'chord'), hw = Math.max(6, ...ch.map(m => (num(m.sec.w) || 0) / 2 + 2)); line(layer('GP-SPLICE', COLORS.SPLICE, 'DASHED'), [0, -hw], [0, hw]); }
     // data block to the right of the drawing, notes below it
     const x0 = isFinite(bb[2]) ? bb[2] + 12 : 40, yTop = isFinite(bb[3]) ? bb[3] : 30, H = 0.75, LD = layer('GP-DATA', COLORS.DATA), LN = layer('GP-NOTES', COLORS.NOTES);
     const rows = [['FORMAT', 'GPR-DXF-1']];
