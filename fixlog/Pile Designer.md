@@ -2385,6 +2385,924 @@ index 7c4fca1..266eea6 100644
          /*#__PURE__*/React.createElement("button", { type: "button", className: "ci-btn", onClick: onPreview, "aria-pressed": !!previewing }, previewing ? "Close preview" : "Preview report"),
 ```
 
+## 2026-10-10 — PR: claude/pile-graphics (PR link added after merge)
+
+### F14. New graphics: soil profile beside the pile, p-y curves (Figure F-3), pile cross-sections; Soil profile input tab   [UI only] [no calculation change]
+- **Date:** 2026-10-10. **Type:** UI only (presentation). Engineer's decision 2026-10-10: "Do 1, 3, 5" (soil profile beside the pile, p-y curves, pile cross-sections), and the addition the same day: "Can we make the soil profile its own input tab rather than buried inside of a tab." Two commits: (a) the graphics, (b) the input tab (see "F14, part b" below).
+- **What changed, part a (graphics):**
+  - **Soil profile & pile elevation** (`SoilPileProfile`, static SVG). A boring-log column of the tool's own soil layers (`I.soilLayers`, sorted by top depth), coloured and hatched by the layer `type` (sand / soft clay / stiff clay / weak rock; the tool has no "fill" type), with depth ticks below grade and the pile drawn to the same depth scale beside it (widths schematic). Each layer has a label (leader line, collision-free stack): number, type, top–bottom depth, the p-y model and static/cyclic, and only the values the tool reads, with the solver's own defaults (`ly.gamma || 120` etc.): sand γ, φ, k; clay γ, sᵤ, ε₅₀; weak rock qᵤ, Eₘ, RQD; H-pile adds the static axial values (N̄1₆₀ or Sᵤ and α, "0 (not entered)" when blank, as `hpileGeoCapacity` reads them); the linear basis with layered soil adds n_h / k_h. Hover (SVG `<title>`) shows the full layer values on screen. No groundwater level is an input of this tool, so none is drawn (note under the figure).
+    - Micropile: cap, cap embedment, casing (head → casing tip), plunge zone, grouted bond zone (hole d_h), bar, pile head / top of bond / casing tip / toe marks, dimension lines L_cased, plunge, L_b,eff, L_bond and stickup, and the bond value β and d_h (one value for the bond zone, not per layer). Depths below grade are the tool's head-datum depths minus the stickup (`I.solverFree`), the datum the p-y solver uses. With "Buckling" on, the unsupported depth below grade where the solver removes the soil springs (`pyRes.setup.unsupBelowGrade_in`) is hatched "no p-y springs (L_u)".
+    - H-pile: cap, cap embedment, section to the embedded length below grade (`I.solverLembed`, as the input and Module G define it), stickup and L_embed dimensions. Where the p-y model's pile ends at a different depth (see O25) a red dashed "p-y model toe" mark is drawn.
+    - Integral abutment: abutment cap, 2 ft embedment, 3 ft crushed-stone trench, pile to the required length, L_f line, Tier 2 scour band; soil column = the MassDOT soil type (Simplified Method), plus a second column of the project layers when Tier 2 uses the layered profile.
+    - Placed in **Module G** (Geometry & limits tab) in place of the old Plotly `PileElevation` in all three modes (the `PileElevation` function is kept, no longer referenced). The old micropile elevation drew the casing tip and toe at their head-datum depths below grade, i.e. 3 ft too deep at the default 3 ft stickup; the new drawing uses the solver's datum. Module G's grid column is widened (`pd-geom-grid`, 560 px from 1280 px up).
+  - **Figure F-3: p-y curves at selected depths** (`PyCurvesFig`, `PyCurvesChart`, static SVG + table). A figure card on the **Lateral (p-y)** tab after Module 02 (CSS order 21).
+    - Nonlinear p-y basis: the curves are evaluated with the solver's own objects. The `pyRes` memo now also returns `pNode: res2.p` (the solver's nodal soil reactions) and `setup: { soilAt, stick_in, L_in, D, soilTop_in, unsupBelowGrade_in, nNodes, gPM, gYM }` (the soil records with their Georgiadis offsets, datum and multipliers the solve used). Nothing else in the memo changes and nothing reads these fields except the figure. Each curve is `|pyPofY(model, y, z, prm, f_m, f_y)|` at the solver node nearest the requested depth; the mobilised point is the solver's nodal y (`pyRes.records[i].defl`) and nodal p (`pyRes.pNode[i]`). The table lists depth, model + static/cyclic (cyclic applies to sand and soft clay only; the tool has no cyclic stiff-clay or weak-rock form), width b (d_h below the casing tip where entered), Georgiadis z_e, f_m·p_u, y, p, p/p_u and |p − p(y)|. f_m = `I.pyPM` and f_y = `I.pyYM` are applied exactly as the solver applies them; group row factors reach the solver only through f_m ("Apply avg fm"), which the note states.
+    - Default depths: mid-depth of each layer between the top of the springs and the depth where |M| decays to 5 % of M_max (`pyRes.zMomentDecay`), the head region (one pile width below the top of the springs) and the depth of M_max; at most 8 curves. The engineer can remove depths (chip ×) and add depths; a user list is remembered per browser in the **new key `micropile_lrfd_pyCurveDepths_v1`** (array of ft below grade; removed = automatic). Not in project data.
+    - Linear (Winkler) basis: the straight springs p = E_s·y with E_s from the solver's `subgradeAt()` and the linear solution's deflections. "Input Mmax (from LPILE)": a note that the curves are those of the LPILE model (no curves drawn). Integral abutment: no Lateral tab (Tier 2 already plots its own p-y curves).
+    - Curves are computed once per solve (memoised on `pyRes` and the depth list), not while typing elsewhere.
+  - **Pile cross-sections** (`PileSectionsFig`, static SVG + tables), a card at the top of the **Structural** tab (CSS order 29).
+    - Micropile, one scale for both: cased section (nominal OD dashed with the corrosion band hatched, corroded steel ring OD_r–ID hatched, grout core, bar as the tool's equivalent round bar 2√(A_b/π)), dimensions OD and ID, callouts t / t_r, corrosion / OD_r, grout f′c, bar A_b / Ø_eq; uncased bond-zone section (hole d_h, grout, bar). Tables with the tool's computed values only: A_cas, A_g (cased, uncased), A_b, I_cas (`r.comb.Icas`), S_j / Z_j (`r.flex`), EI casing only, EI used by the p-y solver, EI uncased. Centralisers and couplers are not modelled by the tool and are not drawn.
+    - H-pile: I-section to scale with b_f and d dimensions, t_f / t_w / h_w callouts, the bending axis used (heavy dash-dot) and the other axis (light); table from `r.hpileStruct.hp` (A_g, A_eff when slender, I, S, Z, r, governing-axis I and S, EI to the p-y solver, p-y bearing width). **The tool has no H-pile corrosion input**, so no corroded outline is drawn; the note says the section and properties are nominal.
+  - **Printed report** (each figure in its print-chooser group, default ticked, kept on one page, static SVG): Figure G-1 soil profile in "G" (micropile, H-pile; group Geometry & limits) and in "01b Section & Soil" (integral abutment; group Simplified Method); Figure S-1 cross-sections at the start of "03" (micropile) / "03–09" (H-pile) (group Structural); Figure F-3 in its own block headed "02F" after Figure F-2 (group Lateral). `PrintReport` takes a new `gfx` prop (linear solution, active layers, F-3 depths, EI values). Page counts at the defaults: micropile 9 → 13, H-pile 7 → 9, integral abutment 4 → 5.
+- **Not changed:** `computeAll`, `solvePyPile`, `buildPySetup`, every p-y model, every check and every displayed result; storage keys `micropile_lrfd_inputs_v1`, `micropile_lrfd_lpile_v1`, `micropile_lrfd_outTab_v1`, `micropile_lrfd_printSel_v1`, IndexedDB `micropile_lrfd_db`; the saved / exported JSON; `bridgeSuite.v1.projectMeta` and `foundationLoads`; library tags and versions (no new library: plain SVG).
+- **New storage key (per browser, UI only, never in project data):** `micropile_lrfd_pyCurveDepths_v1`, read/written in try/catch.
+- **Governing provision:** none (presentation only). No formula, factor, unit, default or code reference changed.
+- **Check case (p-y curves, independent evaluation):** micropile defaults with layers sand (0–5 ft, γ 120, φ 34°, k 110) / soft clay (5–9 ft, γ 110, sᵤ 600 psf, ε₅₀ 0.02) / stiff clay (9–25 ft, γ 120, sᵤ 2500 psf, ε₅₀ 0.006) / sand (25 ft+, γ 62, φ 38°, k 125), user depths 1, 3, 6, 8, 12, 20 ft. The plotted points (91 per curve, read from the rendered figure's data) were compared with a separate implementation of Reese, Cox & Koop (1974) sand (wedge / flow p_s, A/B factors, parabola, initial k·z line), Matlock (1970) soft clay (static and cyclic) and the tool's Welch & Reese stiff-clay form (Matlock p_u, ½p_u(y/y₅₀)^¼, 16 y₅₀), using the solver's Georgiadis equivalent depth: P_lat = 12 kip, static, f_m = f_y = 1: max relative difference 2.3·10⁻¹⁶; P_lat = 5 kip, cyclic, f_m = 0.70, f_y = 1.20: 3.3·10⁻¹⁶. The mobilised points lie on their curves: |p_solver − p(y)| ≤ 6·10⁻¹⁴ lb/in at every depth (e.g. z = 6.10 ft soft clay, z_e = 7.82 ft: y = 0.9103 in, p = 180.497 lb/in both ways). The Georgiadis offsets themselves were not re-derived.
+- **How verified:**
+  - `node --check` on all four inline scripts (pre-compiled `React.createElement`; no JSX to transpile).
+  - Headless Chromium with the pinned libraries served locally (React 18.3.1, three r128, KaTeX 0.16.9, Plotly 2.32.0, Tailwind 3.4.5 compiled from the file's classes), origin/main vs branch, all three modes with every module expanded, at the defaults and with a four-layer profile (sand / soft clay / stiff clay / sand with N̄1₆₀, Sᵤ, α; integral abutment with Tier 2 on): `.main-col` text and report text identical after removing the new figures and the old/new elevation drawings (2271 / 1065 / 440 numbers at the defaults; 2297 / 1109 / 874 layered; 2279 and 2307 for an edited project), module statuses identical, autosave JSON, `Save .json` export, IndexedDB record and `bridgeSuite.v1.projectMeta` share payload identical. No console errors.
+  - Screenshots at 1500 and 400 px of every new graphic in all three modes, and Letter PDFs of the report (defaults and layered) looked at page by page: figures not split, nothing clipped. No horizontal page scroll at 400 px (the drawings scroll inside their own box below about 470 px).
+- **Other copies:** none.
+- **Re-applying by hand:** the exact before/after is the unified diff below (CRLF stripped; the file uses CRLF). Hunks in order:
+  1. CSS appended at the end of the head `<style>`. Anchor: `.print-only table[data-fit="6"]`.
+  2. New graphics block (`GFX_*`, `gfxRich`, `gfxSub`, `GfxPatterns`, `gfxVDim`, `soilProfileModel`, `SoilPileProfile`, `PYD_KEY`, `pyCurveSet`, `PyCurvesChart`, `PyCurvesFig`, `PileSectionsFig`, `GfxCard`, `GfxRptFig`) before `function InteractionDiagram({`.
+  3. `PrintReport` `gfx` prop; figures in report G (micropile anchor `fmt(I.phiGeo, 2)`; H-pile anchor `" kip·ft"))));`), 01b (anchor `+ ", k = " + b.soil.k + " pci")`), 03 (anchor `code: "AASHTO 10.9.3.10.2"`), 03–09, and the F-3 block after `"Figure F-2: ...`.
+  4. `App`: `pyDepths` state; `pyRes` memo `pNode` / `setup` (anchor `mphi: I.pyEIvar && mphiC ?`); `gfx` on both `PrintReport`s; Module G `PileElevation` → `SoilPileProfile` (3 places) and `pd-geom-grid`; H-pile S-1 card before H-pile Module 03; F-3 card and micropile S-1 card before micropile Module 03.
+
+```diff
+diff --git a/Pile Designer.html b/Pile Designer.html
+index 266eea6..26e16f1 100644
+--- a/Pile Designer.html	
++++ b/Pile Designer.html	
+@@ -412,6 +412,35 @@
+   .print-only table[data-fit="8"], .print-only table[data-fit="8"] td, .print-only table[data-fit="8"] th { font-size: 7.5pt !important; }
+   .print-only table[data-fit="7"], .print-only table[data-fit="7"] td, .print-only table[data-fit="7"] th { font-size: 7pt !important; }
+   .print-only table[data-fit="6"], .print-only table[data-fit="6"] td, .print-only table[data-fit="6"] th { font-size: 6.3pt !important; }
++  /* ==========================================================
++     PILE GRAPHICS (2026-10-10, presentation only, fix log F14)
++     ----------------------------------------------------------
++     Soil profile beside the pile (Soil profile input tab, Module G, report),
++     Figure F-3 p-y curves (Lateral tab, report 02F), pile cross-sections
++     (Structural tab, report 03). Static SVG; no calculation is touched.
++  ========================================================== */
++  .pd-gfx-card { font-family: var(--f-ui); }
++  .pd-gfx-head { display: flex; align-items: center; gap: 12px; padding: 8px 16px; background-image: linear-gradient(#F6F8FA, #EDF1F5); border-bottom: 1px solid var(--pd-line); }
++  .pd-gfx-title { font-family: var(--f-ui); font-size: 14.5px; font-weight: 600; color: var(--navy-800); line-height: 1.25; }
++  .pd-gfx-sub { font-size: 10.5px; color: #6B7A8F; }
++  .pd-gfx-body { padding: 12px 16px 14px; }
++  .pd-gfx-scroll { overflow-x: auto; max-width: 100%; }
++  .pd-gfx-note { font-family: var(--f-ui); font-size: 10.5px; color: #5A6B80; line-height: 1.45; margin-top: 6px; }
++  .pd-gfx-note > div + div { margin-top: 2px; }
++  .app-shell .pd-gfx-fig table.pd-gfx-tbl th { background: #DCE6F1; color: var(--navy-900); border: 1px solid #B9C8DB; padding: 2px 5px; font-weight: 600; }
++  .pd-xs-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px 20px; align-items: start; }
++  .pd-xs-title { font-family: var(--f-ui); font-size: 12px; font-weight: 600; color: var(--navy-800); margin-bottom: 4px; }
++  .print-only .pd-xs-grid { grid-template-columns: 1fr 1fr; gap: 6px 14px; }
++  .pd-pyd { display: flex; flex-wrap: wrap; align-items: center; gap: 5px 6px; font-family: var(--f-ui); font-size: 11.5px; color: #41546E; margin-bottom: 8px; }
++  .pd-pyd-lbl { font-weight: 600; margin-right: 2px; }
++  .pd-pyd-chip { display: inline-flex; align-items: center; gap: 4px; border: 1px solid #C6CFDA; background: #fff; border-radius: 12px; padding: 1px 8px; font-size: 11.5px; color: var(--navy-800); cursor: pointer; }
++  .pd-pyd-chip:hover { border-color: var(--no); color: var(--no); }
++  .pd-pyd-sw { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
++  .app-shell input.pd-pyd-in { width: 70px; font-size: 11.5px; padding: 2px 5px; border: 1px solid #C6CFDA; border-radius: 3px; }
++  .pd-pyd-btn { font-family: var(--f-ui); font-size: 11.5px; padding: 2px 9px; border: 1px solid var(--navy-800); color: var(--navy-800); background: #fff; border-radius: 4px; cursor: pointer; }
++  .pd-pyd-btn:hover { background: #EFF4FA; }
++  @media (min-width: 1280px) { .pd-geom-grid { grid-template-columns: minmax(0, 560px) minmax(260px, 1fr); } }
++  .pd-soilprof-fig { border: 1px solid var(--pd-line); border-radius: 4px; background: #fff; padding: 4px; }
+ </style>
+ </head>
+ <body>
+@@ -4899,6 +4928,661 @@ function PileElevation({
+     height: 360
+   });
+ }
++/* ============================================================
++   PILE GRAPHICS (2026-10-10, presentation only - fix log F14)
++   ------------------------------------------------------------
++   SoilPileProfile : boring-log column of the tool's own soil inputs, with
++                     the pile drawn to the same depth scale (Module G and
++                     the report, all three pile types).
++   PyCurvesFig     : Figure F-3, the p-y curves the nonlinear solver uses at
++                     selected depths, with the point mobilised under the
++                     active load case. It reads the solver's own setup
++                     (pyRes.setup: soilAt, datum, multipliers) and nodal
++                     solution (pyRes.records, pyRes.pNode) and evaluates
++                     pyPofY, the function the solver calls. The linear
++                     (Winkler) basis shows its linear springs (subgradeAt).
++   PileSectionsFig : micropile cased / uncased sections and the H-pile
++                     section, to scale and dimensioned, with the tool's
++                     computed properties.
++   Static SVG (prints as drawn); on screen, hover shows an SVG <title>.
++   Nothing here feeds back into a result.
++============================================================ */
++const GFX_FONT = PLOT_FONT;
++const GFX_INK = "#16304F", GFX_INK2 = "#1c4f73", GFX_MUTED = "#5A6B80", GFX_ACC = "#c9622e", GFX_RED = "#B91C1C";
++const GFX_SOIL = {
++  sand: { label: "Sand", fill: "#EEDFAE", ink: "#A7883A" },
++  clay: { label: "Soft clay", fill: "#D3DFD6", ink: "#6C8A7B" },
++  stiffclay: { label: "Stiff clay", fill: "#B3C6BB", ink: "#4D6D60" },
++  weakrock: { label: "Weak rock", fill: "#CFCAC1", ink: "#7A7366" }
++};
++const GFX_PY_MODEL = { sand: "Reese et al. (1974) sand", clay: "Matlock (1970) soft clay", stiffclay: "Welch & Reese (1972) stiff clay", weakrock: "Reese (1997) weak rock", sandapi: "API RP 2A sand", user: "user curve" };
++const GFX_COLS = ["#16304F", "#c9622e", "#2f6f3e", "#3d6a94", "#8a5a1f", "#7a4a7a", "#0f766e", "#B91C1C"];
++function gfxType(t) { return GFX_SOIL[t] ? t : "sand"; }
++function useGfxId(tag) {
++  const raw = React.useId ? React.useId() : "x";
++  return "pdg" + tag + String(raw).replace(/[^A-Za-z0-9]/g, "");
++}
++function gfxNiceStep(range, target) {
++  if (!(range > 0)) return 1;
++  const raw = range / Math.max(target, 1), p = Math.pow(10, Math.floor(Math.log10(raw))), m = raw / p;
++  return (m <= 1 ? 1 : m <= 2 ? 2 : m <= 2.5 ? 2.5 : m <= 5 ? 5 : 10) * p;
++}
++function gfxNiceUp(v) {
++  if (!(v > 0)) return 1;
++  const p = Math.pow(10, Math.floor(Math.log10(v))), m = v / p;
++  return (m <= 1 ? 1 : m <= 1.5 ? 1.5 : m <= 2 ? 2 : m <= 2.5 ? 2.5 : m <= 3 ? 3 : m <= 4 ? 4 : m <= 5 ? 5 : m <= 6 ? 6 : m <= 8 ? 8 : 10) * p;
++}
++/* text with "_x" / "_{xy}" subscripts as SVG tspans (dy shift, back after) */
++function gfxRich(str, size) {
++  const e = React.createElement, out = [], sh = (size || 9) * 0.24;
++  const re = /_(\{[^}]*\}|[A-Za-z0-9\u03b1-\u03c9,]+)/g;
++  let last = 0, m, k = 0, down = false;
++  const plain = t => { if (!t) return; if (down) { out.push(e("tspan", { key: k++, dy: -sh }, t)); down = false; } else out.push(t); };
++  while ((m = re.exec(str))) {
++    plain(str.slice(last, m.index));
++    const sub = m[1].charAt(0) === "{" ? m[1].slice(1, -1) : m[1];
++    out.push(e("tspan", { key: k++, dy: down ? 0 : sh, fontSize: (size || 9) * 0.75 }, sub));
++    down = true;
++    last = re.lastIndex;
++  }
++  plain(str.slice(last));
++  if (down) out.push(e("tspan", { key: k++, dy: -sh }, "\u200b"));
++  return out;
++}
++/* same, for HTML text: "_x" -> <sub> */
++function gfxSub(str) {
++  const e = React.createElement, out = [];
++  const re = /_(\{[^}]*\}|[A-Za-z0-9\u03b1-\u03c9,]+)/g;
++  let last = 0, m, k = 0;
++  str = String(str);
++  while ((m = re.exec(str))) {
++    if (m.index > last) out.push(str.slice(last, m.index));
++    out.push(e("sub", { key: k++ }, m[1].charAt(0) === "{" ? m[1].slice(1, -1) : m[1]));
++    last = re.lastIndex;
++  }
++  if (last < str.length) out.push(str.slice(last));
++  return out;
++}
++function gfxPlain(str) { return String(str).replace(/_\{([^}]*)\}/g, "$1").replace(/_/g, ""); }
++function GfxText({ x, y, s, size, fill, anchor, weight, rot, halo, italic, title }) {
++  const e = React.createElement;
++  return e("text", {
++    x, y, fontSize: size || 9, fill: fill || GFX_INK, textAnchor: anchor || "start", fontWeight: weight || 400,
++    fontFamily: GFX_FONT, fontStyle: italic ? "italic" : "normal",
++    transform: rot ? "rotate(" + rot + " " + x + " " + y + ")" : undefined,
++    stroke: halo ? "#fff" : undefined, strokeWidth: halo ? 3 : undefined, paintOrder: halo ? "stroke" : undefined, strokeLinejoin: halo ? "round" : undefined
++  }, title ? e("title", null, title) : null, gfxRich(String(s), size || 9));
++}
++function GfxPatterns({ id }) {
++  const e = React.createElement;
++  const pat = (k, w, h, kids) => e("pattern", { id: id + "-" + k, key: k, patternUnits: "userSpaceOnUse", width: w, height: h }, kids);
++  const diag = "M0,7 L7,0 M-1,1 L1,-1 M6,8 L8,6";
++  return e("defs", null,
++    pat("sand", 7, 7, [e("rect", { key: 0, width: 7, height: 7, fill: GFX_SOIL.sand.fill }), e("circle", { key: 1, cx: 2, cy: 2, r: 0.8, fill: GFX_SOIL.sand.ink }), e("circle", { key: 2, cx: 5.5, cy: 5.2, r: 0.6, fill: GFX_SOIL.sand.ink })]),
++    pat("clay", 7, 7, [e("rect", { key: 0, width: 7, height: 7, fill: GFX_SOIL.clay.fill }), e("path", { key: 1, d: diag, stroke: GFX_SOIL.clay.ink, strokeWidth: 0.7 })]),
++    pat("stiffclay", 7, 7, [e("rect", { key: 0, width: 7, height: 7, fill: GFX_SOIL.stiffclay.fill }), e("path", { key: 1, d: diag + " M0,0 L7,7 M-1,6 L1,8 M6,-1 L8,1", stroke: GFX_SOIL.stiffclay.ink, strokeWidth: 0.6 })]),
++    pat("weakrock", 14, 8, [e("rect", { key: 0, width: 14, height: 8, fill: GFX_SOIL.weakrock.fill }), e("path", { key: 1, d: "M0,0.5 H14 M0,4.5 H14 M4,0.5 V4.5 M11,4.5 V8.5", stroke: GFX_SOIL.weakrock.ink, strokeWidth: 0.7 })]),
++    pat("grout", 6, 6, [e("rect", { key: 0, width: 6, height: 6, fill: "#E3E8ED" }), e("circle", { key: 1, cx: 1.5, cy: 1.5, r: 0.55, fill: "#8996A3" }), e("circle", { key: 2, cx: 4.4, cy: 4.1, r: 0.45, fill: "#8996A3" })]),
++    pat("steel", 4, 4, [e("rect", { key: 0, width: 4, height: 4, fill: "#7C95B0" }), e("path", { key: 1, d: "M0,4 L4,0 M-1,1 L1,-1 M3,5 L5,3", stroke: "#1E3A5F", strokeWidth: 0.8 })]),
++    pat("corr", 4, 4, [e("rect", { key: 0, width: 4, height: 4, fill: "#F7E1D1" }), e("path", { key: 1, d: "M0,0 L4,4 M-1,3 L1,5 M3,-1 L5,1", stroke: GFX_ACC, strokeWidth: 0.6 })]),
++    pat("stone", 9, 8, [e("rect", { key: 0, width: 9, height: 8, fill: "#DDDAD3" }), e("circle", { key: 1, cx: 2.2, cy: 2.2, r: 1.3, fill: "none", stroke: "#8A8579", strokeWidth: 0.6 }), e("circle", { key: 2, cx: 6.5, cy: 5.6, r: 1.5, fill: "none", stroke: "#8A8579", strokeWidth: 0.6 })]),
++    pat("void", 6, 6, [e("rect", { key: 0, width: 6, height: 6, fill: "#FFFFFF" }), e("path", { key: 1, d: diag, stroke: "#9AA7B4", strokeWidth: 0.5 })]));
++}
++/* vertical dimension line with end ticks and a rotated label */
++function gfxVDim(e, key, x, ya, yb, label, color) {
++  const y0 = Math.min(ya, yb), y1 = Math.max(ya, yb), span = y1 - y0;
++  if (!(span > 0.5)) return null;
++  const kids = [
++    e("line", { key: "l", x1: x, x2: x, y1: y0, y2: y1, stroke: color, strokeWidth: 0.9 }),
++    e("line", { key: "a", x1: x - 3.5, x2: x + 3.5, y1: y0, y2: y0, stroke: color, strokeWidth: 0.9 }),
++    e("line", { key: "b", x1: x - 3.5, x2: x + 3.5, y1: y1, y2: y1, stroke: color, strokeWidth: 0.9 })
++  ];
++  const tl = gfxPlain(label).length * 4.6;
++  if (span >= tl + 6) kids.push(e(GfxText, { key: "t", x: x - 3, y: (y0 + y1) / 2, s: label, size: 8.5, fill: color, anchor: "middle", rot: -90, halo: true }));
++  else kids.push(e(GfxText, { key: "t", x: x + 5, y: (y0 + y1) / 2 + 3, s: label, size: 8, fill: color, halo: true }));
++  return e("g", { key }, kids);
++}
++
++/* ---------- 1. soil profile beside the pile ---------- */
++function gfxSortedLayers(I) {
++  const rows = (Array.isArray(I.soilLayers) && I.soilLayers.length ? I.soilLayers : []).slice().sort((a, b) => (a.topDepth || 0) - (b.topDepth || 0));
++  return rows;
++}
++/* label lines for one entered layer: only properties the tool reads */
++function gfxLayerLines(ly, I, opts) {
++  const t = gfxType(ly.type), isClay = t === "clay" || t === "stiffclay", L = [];
++  if (opts.py) L.push("p-y: " + GFX_PY_MODEL[t] + (I.pyCyclic && t !== "stiffclay" && t !== "weakrock" ? ", cyclic" : ", static"));
++  if (t === "weakrock") L.push("q_u " + fmt(ly.qu == null ? 1.0 : ly.qu, 2) + " ksi · E_m " + fmt(ly.Em == null ? 300 : ly.Em, 0) + " ksi · RQD " + fmt(ly.rqd == null ? 50 : ly.rqd, 0) + "%");
++  else if (isClay) L.push("γ " + fmt(ly.gamma || 110, 0) + " pcf · s_u " + fmt(ly.su || 1000, 0) + " psf · ε_50 " + fmt(ly.eps50 || 0.02, 3));
++  else L.push("γ " + fmt(ly.gamma || 120, 0) + " pcf · φ " + fmt(ly.phi || 32, 1) + "° · k " + fmt(ly.k || 90, 0) + " pci");
++  if (opts.hpile) {
++    const st = ly.staticType || (isClay ? "clay" : "sand");
++    if (st === "clay") L.push("axial (α-method): S_u " + (ly.Su != null ? fmt(ly.Su, 2) + " ksf" : "0 (not entered)") + " · α " + fmt(ly.alpha != null ? ly.alpha : 0.5, 2));
++    else L.push("axial (SPT, " + st + "): N̄_160 " + (ly.N60 != null ? fmt(ly.N60, 0) : "0 (not entered)"));
++  }
++  if (opts.linear) L.push(t === "sand" ? "linear: n_h " + fmt(ly.nh || 0, 0) + " kip/ft³" : "linear: k_h " + fmt(ly.kh || 0, 0) + " kip/ft²");
++  return L;
++}
++function soilProfileModel(I, r, pyRes) {
++  const isIab = I.pileType === "iab", isHP = I.pileType === "hpile";
++  const M = { cols: [], parts: [], marks: [], dims: [], notes: [], warn: null, kind: I.pileType };
++  if (isIab) {
++    const b = r.iab;
++    const pileLen = b ? b.reqLength : 30, Lf = b ? b.Lf : 20;
++    const scour = (I.iabTier2 && I.iabScourDepth > 0) ? I.iabScourDepth : 0;
++    M.top = -3; M.toe = pileLen; M.head = -2; M.capTop = -3; M.capBot = 0; M.Lf = Lf; M.scour = scour;
++    if (b) {
++      const s = b.soil, clay = s.c != null;
++      M.cols.push({ title: "MassDOT", layers: [{ top: 0, bot: null, type: clay ? (/Stiff/.test(s.name) ? "stiffclay" : "clay") : "sand",
++        head: "Soil type " + b.si, sub: s.name + " — MassDOT Table 3.10.11-1",
++        lines: [clay ? "γ " + fmt(s.gamma, 0) + " pcf · c " + fmt(s.c, 0) + " psf · ε_50 " + fmt(s.e50, 3) + " · k " + fmt(s.k, 0) + " pci" : "γ " + fmt(s.gamma, 0) + " pcf · φ " + fmt(s.phi, 0) + "° · k " + fmt(s.k, 0) + " pci"] }] });
++      const t2 = b.tier2;
++      if ((t2 && t2.nlLayeredUsed) || (I.iabTier2 && I.iabNlSoilSource === "layered")) {
++        const rows = gfxSortedLayers(I);
++        const use = rows.length ? rows : [{ topDepth: 0, type: "sand", gamma: 120, phi: 32, k: 90 }];
++        M.cols.push({ title: "Tier 2", layers: use.map((ly, k) => ({ top: Math.max(ly.topDepth || 0, 0), bot: k + 1 < use.length ? Math.max(use[k + 1].topDepth || 0, 0) : null, type: gfxType(ly.type),
++          head: "T2-" + (k + 1) + " · " + GFX_SOIL[gfxType(ly.type)].label, sub: "project layer (Tier 2 p-y)",
++          lines: gfxLayerLines(ly, I, { py: true }) })) });
++      }
++    }
++    M.parts.push({ kind: "abut" }, { kind: "trench", from: 0, to: 3 }, { kind: "hpile", from: -2, to: pileLen, label: b ? b.sect.label : "HP" });
++    M.marks.push({ d: pileLen, s: "tip " + fmt(pileLen, 1) + " ft" });
++    if (Lf < pileLen) M.marks.push({ d: Lf, s: "depth to fixity L_f " + fmt(Lf, 1) + " ft", dash: true, color: GFX_ACC });
++    M.dims.push({ col: 0, a: 0, b: pileLen, s: "pile below grade " + fmt(pileLen, 1) + " ft", c: GFX_INK2 });
++    M.dims.push({ col: 1, a: -2, b: 0, s: "embed 2 ft", c: GFX_ACC });
++    M.notes.push("Abutment: pile embedded 2 ft into the cap, 3 ft crushed-stone trench below it (MassDOT §3.10.10).");
++    if (scour > 0) M.notes.push("Scour / exposed depth " + fmt(scour, 1) + " ft (Tier 2): no soil resistance over this depth.");
++    return M;
++  }
++  const s = I.solverFree || 0;
++  const rows = gfxSortedLayers(I);
++  const useRows = rows.length ? rows : [{ topDepth: 0, type: "sand", gamma: 120, phi: 32, k: 90 }];
++  if (!rows.length) M.notes.push("No soil layers entered — the p-y solver uses its default sand layer (shown).");
++  const opts = { py: true, hpile: isHP, linear: I.lateralSource === "solver" && !!I.solverLayered };
++  M.cols.push({ title: "", layers: useRows.map((ly, k) => ({ top: Math.max(ly.topDepth || 0, 0), bot: k + 1 < useRows.length ? Math.max(useRows[k + 1].topDepth || 0, 0) : null, type: gfxType(ly.type),
++    head: (k + 1) + " · " + GFX_SOIL[gfxType(ly.type)].label, lines: gfxLayerLines(ly, I, opts) })) });
++  M.head = -s; M.capBot = -s; M.capTop = -s - 1.5;
++  const setup = pyRes && pyRes.ok && pyRes.setup ? pyRes.setup : null;
++  if (setup && setup.unsupBelowGrade_in > 0) M.unsup = { from: Math.max(setup.stick_in / 12, 0) - s + 0, to: Math.max(setup.stick_in / 12, 0) - s + setup.unsupBelowGrade_in / 12 };
++  if (isHP) {
++    const embedLen = Math.max(I.solverLembed || 30, 1);
++    M.toe = embedLen;
++    M.parts.push({ kind: "cap", embed: (I.hpCapEmbed || 0) / 12, embedIn: I.hpCapEmbed || 0 }, { kind: "hpile", from: -s, to: embedLen, label: "HP " + fmt(I.hpD, 2) + "×" + fmt(I.hpBf, 2) });
++    M.marks.push({ d: embedLen, s: "toe " + fmt(embedLen, 1) + " ft" });
++    if (s > 0) M.dims.push({ col: 0, a: 0, b: -s, s: "stickup " + fmt(s, 1) + " ft", c: GFX_ACC });
++    M.dims.push({ col: 1, a: 0, b: embedLen, s: "L_embed = " + fmt(embedLen, 1) + " ft", c: GFX_INK2 });
++    if (setup) {
++      const modelToe = (setup.L_in - setup.stick_in) / 12;
++      if (Math.abs(modelToe - embedLen) > 0.05) M.marks.push({ d: modelToe, s: "p-y model toe " + fmt(modelToe, 1) + " ft", dash: true, color: GFX_RED, right: true });
++    }
++    M.top = Math.min(M.capTop, 0);
++    return M;
++  }
++  const g = r.geo;
++  const tipD = g.casingTip - s, tobD = g.topOfBond - s, toeD = g.bondBottom - s;
++  M.toe = toeD;
++  M.parts.push({ kind: "cap", embed: (I.capEmbed || 0) / 12, embedIn: I.capEmbed || 0 },
++    { kind: "hole", from: tobD, to: toeD, dh: g.dh },
++    { kind: "casing", from: -s, to: tipD },
++    { kind: "plunge", from: tobD, to: tipD },
++    { kind: "bar", from: -s - Math.min((I.capEmbed || 0) / 12, 1.5), to: toeD });
++  if (s !== 0) M.marks.push({ d: -s, s: "head " + (s > 0 ? "+" : "−") + fmt(Math.abs(s), 1) + " ft" });
++  M.marks.push({ d: tobD, s: "top of bond " + fmt(tobD, 1) + " ft" }, { d: tipD, s: "casing tip " + fmt(tipD, 1) + " ft" }, { d: toeD, s: "toe " + fmt(toeD, 1) + " ft" });
++  if (s > 0) M.dims.push({ col: 0, a: 0, b: -s, s: "stickup " + fmt(s, 1) + " ft", c: GFX_ACC });
++  M.dims.push({ col: 1, a: -s, b: tipD, s: "L_cased " + fmt(g.L_cased, 1) + " ft", c: GFX_INK2 });
++  M.dims.push({ col: 2, a: tobD, b: tipD, s: "plunge " + fmt(g.L_plunge, 1), c: GFX_ACC });
++  M.dims.push({ col: 2, a: tipD, b: toeD, s: "L_b,eff " + fmt(Math.max(g.L_bond - g.L_plunge, 0), 1) + " ft", c: GFX_ACC });
++  M.dims.push({ col: 3, a: tobD, b: toeD, s: "L_bond " + fmt(g.L_bond, 1) + " ft", c: GFX_INK2 });
++  M.notes.push("Bond zone: grout-to-ground bond β = " + fmt(g.beta_ksf, 2) + " ksf over the hole d_h = " + fmt(g.dh, 3) + " in (one value for the bond zone; not per layer).");
++  if (!g.geomValid) M.warn = "Geometry inconsistent (plunge > bond length, or cased length < plunge).";
++  M.top = Math.min(M.capTop, 0);
++  return M;
++}
++function SoilPileProfile({ I, r, pyRes, print }) {
++  const e = React.createElement;
++  const id = useGfxId("sp");
++  const M = soilProfileModel(I, r, pyRes);
++  const isIab = M.kind === "iab", isHP = M.kind === "hpile";
++  // ---- horizontal layout ----
++  const nCol = Math.max(M.cols.length, 1), colW = 30, colGap = 4;
++  const xCol0 = 38, colsR = xCol0 + nCol * colW + (nCol - 1) * colGap;
++  const xc = colsR + 98, bandR = xc + 86, xL = bandR + 10, W = xL + 238;
++  // ---- label blocks (one per layer, all columns), sorted by depth ----
++  const blocks = [];
++  M.cols.forEach((c, ci) => c.layers.forEach((ly, li) => blocks.push({ ci, li, ly, h: 12 + (ly.sub ? 11 : 0) + 11 * ly.lines.length })));
++  // ---- vertical layout ----
++  const dTop = M.top - 1;
++  const lastTop = blocks.reduce((m, b) => Math.max(m, b.ly.top), 0);
++  const dBot = Math.max(M.toe, lastTop + 2, ...M.marks.map(m => m.d)) + Math.max(3, 0.08 * M.toe);
++  const needH = blocks.reduce((s2, b) => s2 + b.h + 6, 0);
++  const plotH = Math.max(isIab ? 360 : 400, needH + 10);
++  const yT = 20, ppf = plotH / (dBot - dTop), Y = d => yT + (d - dTop) * ppf;
++  const H = yT + plotH + 46;
++  const els = [];
++  // depth axis
++  const step = gfxNiceStep(dBot - dTop, 9);
++  for (let v = Math.ceil(dTop / step) * step; v <= dBot + 1e-9; v += step) {
++    els.push(e("line", { key: "tk" + v, x1: xCol0 - 4, x2: xCol0, y1: Y(v), y2: Y(v), stroke: GFX_MUTED, strokeWidth: 0.8 }));
++    els.push(e(GfxText, { key: "tl" + v, x: xCol0 - 6, y: Y(v) + 3, s: fmt(Math.abs(v) < 1e-9 ? 0 : v, step < 1 ? 1 : 0), size: 8.5, fill: GFX_MUTED, anchor: "end" }));
++  }
++  els.push(e(GfxText, { key: "ax", x: 10, y: Y((dTop + dBot) / 2), s: "depth below grade (ft)", size: 9, fill: GFX_MUTED, anchor: "middle", rot: -90 }));
++  // soil columns + band behind the pile
++  const visBot = ly => Math.min(ly.bot == null ? dBot : ly.bot, dBot);
++  M.cols.forEach((c, ci) => {
++    const x0 = xCol0 + ci * (colW + colGap);
++    if (c.title) els.push(e(GfxText, { key: "ct" + ci, x: x0 + colW / 2, y: yT - 6, s: c.title, size: 8, fill: GFX_MUTED, anchor: "middle" }));
++    c.layers.forEach((ly, li) => {
++      const t0 = Math.max(ly.top, 0), t1 = visBot(ly);
++      if (!(t1 > t0)) return;
++      const tip = gfxPlain(ly.head + (ly.sub ? " — " + ly.sub : "") + "\n" + fmt(ly.top, 1) + " ft to " + (ly.bot == null ? "end of model" : fmt(ly.bot, 1) + " ft") + "\n" + ly.lines.join("\n"));
++      els.push(e("rect", { key: "c" + ci + "-" + li, x: x0, y: Y(t0), width: colW, height: Y(t1) - Y(t0), fill: "url(#" + id + "-" + ly.type + ")", stroke: GFX_SOIL[ly.type].ink, strokeWidth: 0.7 }, e("title", null, tip)));
++      if (ci === 0) {
++        els.push(e("rect", { key: "b" + li, x: colsR, y: Y(t0), width: bandR - colsR, height: Y(t1) - Y(t0), fill: GFX_SOIL[ly.type].fill, opacity: 0.55 }, e("title", null, tip)));
++        if (li > 0) els.push(e("line", { key: "bl" + li, x1: colsR, x2: bandR, y1: Y(t0), y2: Y(t0), stroke: GFX_SOIL[ly.type].ink, strokeWidth: 0.6, strokeDasharray: "4 3" }));
++      }
++    });
++  });
++  // unsupported zone (p-y springs removed)
++  if (M.unsup && M.unsup.to > M.unsup.from) {
++    els.push(e("rect", { key: "uz", x: colsR, y: Y(M.unsup.from), width: bandR - colsR, height: Y(M.unsup.to) - Y(M.unsup.from), fill: "url(#" + id + "-void)", opacity: 0.9 }, e("title", null, "Unsupported length below grade: the p-y soil springs are removed over this depth (Module 10 L_u).")));
++    els.push(e(GfxText, { key: "uzt", x: colsR + 4, y: Y((M.unsup.from + M.unsup.to) / 2) + 3, s: "no p-y springs (L_u)", size: 8, fill: GFX_MUTED, halo: true }));
++  }
++  if (M.scour > 0) {
++    els.push(e("rect", { key: "sc", x: colsR, y: Y(0), width: bandR - colsR, height: Y(M.scour) - Y(0), fill: "rgba(42,130,201,0.16)", stroke: "#2a82c9", strokeWidth: 0.8, strokeDasharray: "4 3" }, e("title", null, "Scour / exposed depth " + fmt(M.scour, 1) + " ft (Tier 2)")));
++    els.push(e(GfxText, { key: "sct", x: bandR - 4, y: Y(M.scour / 2) + 3, s: "scour " + fmt(M.scour, 1) + " ft", size: 8, fill: "#1f6fae", anchor: "end", halo: true }));
++  }
++  // grade line
++  els.push(e("line", { key: "gr", x1: xCol0, x2: bandR, y1: Y(0), y2: Y(0), stroke: GFX_INK, strokeWidth: 1.8 }));
++  els.push(e(GfxText, { key: "grt", x: bandR - 3, y: Y(0) + 11, s: "grade", size: 8.5, fill: GFX_INK, anchor: "end", halo: true }));
++  // ---- pile ----
++  const wC = 8;
++  let wMax = wC;
++  M.parts.forEach((p, k) => {
++    if (p.kind === "abut") {
++      els.push(e("rect", { key: "ab", x: xc - 46, y: Y(M.capTop), width: 92, height: Y(M.capBot) - Y(M.capTop), fill: GFX_INK }, e("title", null, "Abutment cap (pile embedded 2 ft)")));
++      els.push(e(GfxText, { key: "abt", x: xc, y: (Y(M.capTop) + Y(M.capBot)) / 2 + 3, s: "ABUTMENT", size: 8, fill: "#fff", anchor: "middle" }));
++    } else if (p.kind === "trench") {
++      els.push(e("rect", { key: "tr", x: xc - 24, y: Y(p.from), width: 48, height: Y(p.to) - Y(p.from), fill: "url(#" + id + "-stone)", stroke: "#8A8579", strokeWidth: 0.6, strokeDasharray: "3 2" }, e("title", null, "Crushed-stone trench, 3 ft below the cap")));
++      els.push(e(GfxText, { key: "trt", x: xc + 27, y: Y((p.from + p.to) / 2) + 3, s: "crushed stone", size: 8, fill: GFX_MUTED, halo: true }));
++    } else if (p.kind === "cap") {
++      els.push(e("rect", { key: "cap", x: xc - 34, y: Y(M.capTop), width: 68, height: Y(M.capBot) - Y(M.capTop), fill: GFX_INK }, e("title", null, "Pile cap (drawn 1.5 ft thick, schematic); pile embedded " + fmt(p.embedIn, 1) + " in")));
++      els.push(e(GfxText, { key: "capt", x: xc, y: (Y(M.capTop) + Y(M.capBot)) / 2 + 3, s: "CAP", size: 8, fill: "#fff", anchor: "middle" }));
++      if (p.embed > 0) {
++        const eb = Math.min(p.embed, M.capBot - M.capTop);
++        els.push(e("rect", { key: "emb", x: xc - wC - 1, y: Y(M.capBot - eb), width: 2 * wC + 2, height: Y(M.capBot) - Y(M.capBot - eb), fill: "rgba(201,98,46,0.45)", stroke: GFX_ACC, strokeWidth: 0.8 }, e("title", null, "Cap embedment " + fmt(p.embedIn, 1) + " in")));
++        els.push(e(GfxText, { key: "embt", x: xc + 37, y: (Y(M.capBot - eb) + Y(M.capBot)) / 2 + 3, s: "embed " + fmt(p.embedIn, 1) + " in", size: 8, fill: GFX_ACC }));
++      }
++    } else if (p.kind === "hole") {
++      const wH = Math.max(5, Math.min(13, wC * (p.dh / Math.max(I.OD, 0.1))));
++      wMax = Math.max(wMax, wH);
++      els.push(e("rect", { key: "hole", x: xc - wH, y: Y(p.from), width: 2 * wH, height: Y(p.to) - Y(p.from), fill: "url(#" + id + "-grout)", stroke: GFX_INK, strokeWidth: 0.7 }, e("title", null, "Bond zone: grouted hole d_h = " + fmt(p.dh, 3) + " in, " + fmt(p.from, 1) + " to " + fmt(p.to, 1) + " ft below grade")));
++    } else if (p.kind === "casing") {
++      els.push(e("rect", { key: "cas", x: xc - wC, y: Y(p.from), width: 2 * wC, height: Y(p.to) - Y(p.from), fill: "url(#" + id + "-steel)", stroke: GFX_INK, strokeWidth: 0.8 }, e("title", null, "Casing OD " + fmt(I.OD, 3) + " in, wall " + fmt(I.tc, 3) + " in (corroded " + fmt(I.tc - (I.corr || 0), 3) + " in); head to casing tip " + fmt(r.geo.L_cased, 1) + " ft")));
++    } else if (p.kind === "plunge") {
++      if (p.to - p.from > 0.01) els.push(e("rect", { key: "pl", x: xc - wMax - 3, y: Y(p.from), width: 2 * wMax + 6, height: Y(p.to) - Y(p.from), fill: "rgba(201,98,46,0.18)", stroke: GFX_ACC, strokeWidth: 0.9, strokeDasharray: "3 2" }, e("title", null, "Plunge: casing overlaps the top of the bond zone by " + fmt(p.to - p.from, 1) + " ft")));
++    } else if (p.kind === "bar") {
++      els.push(e("line", { key: "bar", x1: xc, x2: xc, y1: Y(p.from), y2: Y(p.to), stroke: GFX_ACC, strokeWidth: 2 }, e("title", null, "Central bar A_b " + fmt(I.Ab, 2) + " in²")));
++    } else if (p.kind === "hpile") {
++      const wF = 9;
++      wMax = Math.max(wMax, wF);
++      const y0 = Y(p.from), y1 = Y(p.to);
++      els.push(e("g", { key: "hp" },
++        e("title", null, p.label + (isIab ? "" : " — d " + fmt(I.hpD, 2) + " in, b_f " + fmt(I.hpBf, 2) + " in, " + (I.hpAxis === "weak" ? "weak" : "strong") + "-axis bending")),
++        e("rect", { x: xc - wF, y: y0, width: 2.4, height: y1 - y0, fill: GFX_INK2 }),
++        e("rect", { x: xc + wF - 2.4, y: y0, width: 2.4, height: y1 - y0, fill: GFX_INK2 }),
++        e("rect", { x: xc - 0.9, y: y0, width: 1.8, height: y1 - y0, fill: GFX_INK2 }),
++        e("rect", { x: xc - wF, y: y1 - 1.6, width: 2 * wF, height: 1.6, fill: GFX_INK2 })));
++      els.push(e(GfxText, { key: "hpt", x: xc - wF - 4, y: (y0 + y1) / 2, s: p.label, size: 8, fill: GFX_INK2, anchor: "middle", rot: -90, halo: true }));
++    }
++  });
++  // elevation marks (left of the pile)
++  M.marks.forEach((m, k) => {
++    const y = Y(m.d), col = m.color || GFX_INK;
++    if (m.right) {
++      els.push(e("line", { key: "mk" + k, x1: xc - wMax - 4, x2: bandR, y1: y, y2: y, stroke: col, strokeWidth: 0.9, strokeDasharray: "4 3" }));
++      els.push(e(GfxText, { key: "mt" + k, x: bandR - 3, y: y + 10, s: m.s, size: 8, fill: col, anchor: "end", halo: true }));
++      return;
++    }
++    els.push(e("line", { key: "mk" + k, x1: m.dash ? colsR : xc - wMax - 14, x2: m.dash ? bandR : xc - wMax - 1, y1: y, y2: y, stroke: col, strokeWidth: 0.9, strokeDasharray: m.dash ? "5 3" : undefined }));
++    els.push(e(GfxText, { key: "mt" + k, x: xc - wMax - 16, y: y + 3, s: m.s, size: 8.5, fill: col, anchor: "end", halo: true }));
++  });
++  // dimension lines (right of the pile)
++  M.dims.forEach((dm, k) => { const el = gfxVDim(e, "dm" + k, xc + wMax + 14 + dm.col * 17, Y(dm.a), Y(dm.b), dm.s, dm.c); if (el) els.push(el); });
++  // layer labels with leaders (collision-free stack)
++  const want = blocks.map(b => { const t0 = Math.max(b.ly.top, 0), t1 = visBot(b.ly); return { ...b, mid: Y((t0 + Math.max(t1, t0)) / 2), y: Y(t0) + 2 }; });
++  want.sort((a, b2) => a.y - b2.y);
++  let cur = yT;
++  want.forEach(b => { b.y = Math.max(b.y, cur); cur = b.y + b.h + 6; });
++  for (let k = want.length - 1, lim = yT + plotH; k >= 0; k--) { if (want[k].y + want[k].h > lim) want[k].y = lim - want[k].h; lim = want[k].y - 6; }
++  want.forEach((b, k) => {
++    const ly = b.ly, x0 = xCol0 + b.ci * (colW + colGap);
++    const tip = gfxPlain(ly.head + (ly.sub ? " — " + ly.sub : "") + "\n" + ly.lines.join("\n"));
++    els.push(e("polyline", { key: "ld" + k, points: (b.ci === 0 ? bandR : x0 + colW) + "," + b.mid + " " + (xL - 4) + "," + (b.y + 4) + " " + (xL - 1) + "," + (b.y + 4), fill: "none", stroke: "#9AA7B4", strokeWidth: 0.7 }));
++    const kids = [e("title", { key: "t" }, tip),
++      e(GfxText, { key: "h", x: xL, y: b.y + 8, s: ly.head + " · " + fmt(ly.top, 1) + (ly.bot == null ? " ft and below" : "–" + fmt(ly.bot, 1) + " ft"), size: 9.5, weight: 600, fill: GFX_INK })];
++    let yy = b.y + 8;
++    if (ly.sub) { yy += 11; kids.push(e(GfxText, { key: "s", x: xL, y: yy, s: ly.sub, size: 8.5, fill: GFX_MUTED, italic: true })); }
++    ly.lines.forEach((ln, j) => { yy += 11; kids.push(e(GfxText, { key: "l" + j, x: xL, y: yy, s: ln, size: 9, fill: "#334155" })); });
++    els.push(e("g", { key: "lb" + k }, kids));
++  });
++  // legend
++  const types = [];
++  M.cols.forEach(c => c.layers.forEach(ly => { if (types.indexOf(ly.type) < 0) types.push(ly.type); }));
++  let lx = xCol0;
++  const ly0 = yT + plotH + 18;
++  types.forEach((t, k) => {
++    els.push(e("rect", { key: "lg" + k, x: lx, y: ly0 - 8, width: 14, height: 10, fill: "url(#" + id + "-" + t + ")", stroke: GFX_SOIL[t].ink, strokeWidth: 0.6 }));
++    els.push(e(GfxText, { key: "lgt" + k, x: lx + 18, y: ly0, s: GFX_SOIL[t].label, size: 8.5, fill: "#334155" }));
++    lx += 26 + GFX_SOIL[t].label.length * 5;
++  });
++  const leg2 = isIab ? [["steel", "H-pile"], ["stone", "crushed stone"]] : isHP ? [["steel", "H-pile"]] : [["steel", "casing"], ["grout", "grout"]];
++  leg2.forEach((l, k) => {
++    els.push(e("rect", { key: "lq" + k, x: lx, y: ly0 - 8, width: 14, height: 10, fill: "url(#" + id + "-" + l[0] + ")", stroke: GFX_INK, strokeWidth: 0.5 }));
++    els.push(e(GfxText, { key: "lqt" + k, x: lx + 18, y: ly0, s: l[1], size: 8.5, fill: "#334155" }));
++    lx += 26 + l[1].length * 5;
++  });
++  if (!isIab && !isHP) { els.push(e("line", { key: "lbar", x1: lx, x2: lx + 14, y1: ly0 - 3, y2: ly0 - 3, stroke: GFX_ACC, strokeWidth: 2 })); els.push(e(GfxText, { key: "lbart", x: lx + 18, y: ly0, s: "bar", size: 8.5, fill: "#334155" })); lx += 44; }
++  els.push(e(GfxText, { key: "lsc", x: W - 4, y: ly0 + 14, s: "depth to scale; widths not to scale", size: 8, fill: GFX_MUTED, anchor: "end", italic: true }));
++  if (M.warn) els.push(e(GfxText, { key: "warn", x: colsR + 4, y: yT + 10, s: "⚠ " + M.warn, size: 9, fill: GFX_RED, weight: 600, halo: true }));
++  const svg = e("svg", { viewBox: "0 0 " + W + " " + H, width: "100%", role: "img", "aria-label": "Soil profile and pile elevation", style: { display: "block", width: "100%", height: "auto", minWidth: print ? 0 : "430px", maxWidth: print ? "5.6in" : (W * 1.25) + "px", margin: print ? "0 auto" : 0, fontFamily: GFX_FONT } },
++    e(GfxPatterns, { id }), els);
++  const notes = M.notes.concat(["Layers, depths and properties are the tool's soil layer inputs. No groundwater level is an input; γ is entered per layer (effective unit weight below the water table)."]);
++  return e("div", { className: "pd-gfx-fig", "data-pd-gfx": "soil" },
++    e("div", { className: print ? "" : "pd-gfx-scroll" }, svg),
++    e("div", { className: "pd-gfx-note", style: print ? { fontSize: "7.5px", color: "#475569", marginTop: "3px", lineHeight: 1.4 } : undefined }, notes.map((n, k) => e("div", { key: k }, gfxSub(n)))));
++}
++
++/* ---------- 3. p-y curves at selected depths (Figure F-3) ---------- */
++const PYD_KEY = "micropile_lrfd_pyCurveDepths_v1";
++function readPyDepths() {
++  try { const v = JSON.parse(window.localStorage.getItem(PYD_KEY) || "null"); if (Array.isArray(v)) return v.filter(x => typeof x === "number" && isFinite(x)).slice(0, 12); } catch (e) {}
++  return null; // null = automatic depths
++}
++function savePyDepths(v) { try { if (v == null) window.localStorage.removeItem(PYD_KEY); else window.localStorage.setItem(PYD_KEY, JSON.stringify(v)); } catch (e) {} }
++/* default depths: mid-depth of each layer within the active lateral zone (top of
++   the soil springs to the depth where |M| decays to 5 % of Mmax), the head
++   region (one pile width below the top of the springs) and the depth of Mmax */
++function gfxAutoDepths(rows, dTop, dBot, headD, zMmax) {
++  const out = [];
++  rows.forEach((ly, k) => {
++    const t = Math.max(ly.topDepth || 0, 0), b = k + 1 < rows.length ? Math.max(rows[k + 1].topDepth || 0, 0) : Infinity;
++    const a = Math.max(t, dTop), c = Math.min(b, dBot);
++    if (c - a > 0.05) out.push({ d: (a + c) / 2, why: "mid-depth of layer " + (k + 1) + " in the active zone" });
++  });
++  out.push({ d: headD, why: "head region" });
++  if (zMmax != null && isFinite(zMmax) && zMmax >= dTop) out.push({ d: zMmax, why: "depth of M_max" });
++  return out;
++}
++function pyCurveSet(I, pyRes, solved, activeLayers, userDepths) {
++  const src = I.lateralSource;
++  if (src === "input") return { kind: "na", msg: "Not available — the lateral basis is “Input Mmax (from LPILE)”, so the p-y curves are those of the external LPILE model; this tool does not evaluate them. Select “Nonlinear p-y (built-in)” in Module 02 to plot the curves the built-in solver uses." };
++  const rowsAll = gfxSortedLayers(I);
++  if (src === "py") {
++    if (!pyRes || !pyRes.ok || !pyRes.setup || !pyRes.pNode || !pyRes.records) return { kind: "na", msg: "No converged p-y solution" + (pyRes && pyRes.msg ? " (" + pyRes.msg + ")" : "") + " — curves are shown once the solve converges." };
++    const S = pyRes.setup, n = S.nNodes, h = S.L_in / n;
++    const nodeD = i => (i * h - S.stick_in) / 12;
++    let iTop = 0;
++    while (iTop <= n && S.soilAt(iTop * h).model === "none") iTop++;
++    if (iTop > n) return { kind: "na", msg: "No soil springs act on the pile." };
++    const dTop = nodeD(iTop), dToe = nodeD(n);
++    const zd = pyRes.zMomentDecay;
++    const dBot = (zd != null && isFinite(zd) && zd > dTop) ? Math.min(zd, dToe) : dToe;
++    const rows = rowsAll.length ? rowsAll : [{ topDepth: 0, type: "sand" }];
++    const auto = gfxAutoDepths(rows, dTop, dBot, dTop + S.D / 12, pyRes.zMmax);
++    const req = userDepths ? userDepths.map(d => ({ d, why: "user depth" })) : auto;
++    const seen = {}, curves = [];
++    req.slice().sort((a, b) => a.d - b.d).forEach(q => {
++      const i = Math.min(Math.max(Math.round((S.stick_in + q.d * 12) / h), iTop), n);
++      if (seen[i]) return;
++      const z = i * h, s2 = S.soilAt(z);
++      if (s2.model === "none" || !s2.prm) return;
++      seen[i] = 1;
++      const ySigned = pyRes.records[i].defl;
++      const yMob = Math.abs(ySigned), pSolver = Math.abs(pyRes.pNode[i]);
++      const pOnCurve = Math.abs(pyPofY(s2.model, ySigned, z, s2.prm, S.gPM, S.gYM));
++      const ze = pyEffDepth(z, s2.prm);
++      const pu = S.gPM * PY[s2.model].pu(ze, s2.prm);
++      const cyc = (s2.model === "sand" || s2.model === "clay" || s2.model === "sandapi") ? (s2.prm.cyclic ? "cyclic" : "static") : (I.pyCyclic ? "static (no cyclic form)" : "static");
++      curves.push({ i, z, dReq: q.d, d: nodeD(i), why: q.why, model: s2.model, prm: s2.prm, b: s2.prm.D, yMob, pSolver, pOnCurve, ze: ze / 12, pu, ratio: pu > 1e-9 ? pSolver / pu : null, cyc });
++    });
++    const use = curves.slice(0, 8);
++    const ymax = gfxNiceUp(Math.max(2.5 * Math.max(0, ...use.map(c => c.yMob)), 0.1));
++    use.forEach(c => {
++      const pts = [];
++      for (let k = 0; k <= 90; k++) { const yv = ymax * k / 90; pts.push([yv, Math.abs(pyPofY(c.model, yv, c.z, c.prm, S.gPM, S.gYM))]); }
++      c.pts = pts;
++    });
++    return { kind: "py", curves: use, ymax, auto, user: !!userDepths, gPM: S.gPM, gYM: S.gYM, h, dTop, dBot, more: curves.length > use.length };
++  }
++  // linear (Winkler) basis: the springs are linear, p = E_s(z) y
++  if (!solved || !solved.z || !solved.y) return { kind: "na", msg: "No linear solution available." };
++  const n = solved.z.length - 1, dz = solved.dz;
++  const fallback = { soilType: I.solverSoil, nh: I.solverNh, kh: I.solverKh };
++  const rows = activeLayers || [{ topDepth: 0, type: I.solverSoil === "cohesionless" ? "sand" : "clay" }];
++  const dToe = solved.z[n];
++  const zd = solved.zMomentDecay;
++  const dBot = (zd != null && isFinite(zd) && zd > 0) ? Math.min(zd, dToe) : dToe;
++  const auto = gfxAutoDepths(rows, 0, dBot, pileWidth(I) / 12, solved.zMmax);
++  const req = userDepths ? userDepths.map(d => ({ d, why: "user depth" })) : auto;
++  const seen = {}, curves = [];
++  req.slice().sort((a, b) => a.d - b.d).forEach(q => {
++    const i = Math.min(Math.max(Math.round(q.d / dz), 0), n);
++    if (seen[i]) return;
++    seen[i] = 1;
++    const kft = subgradeAt(solved.z[i], activeLayers, fallback);   // kip/ft per ft of deflection (the solver's k)
++    const Es = kft * 1000 / 144;                                     // lb/in per in
++    const yMob = Math.abs(solved.y[i]) * 12, pSolver = Es * yMob;
++    const isSand = activeLayers ? (function () { let L = activeLayers[0]; for (const t of activeLayers) { if (solved.z[i] >= t.topDepth) L = t; else break; } return L.type === "sand"; })() : I.solverSoil === "cohesionless";
++    curves.push({ i, d: solved.z[i], dReq: q.d, why: q.why, model: "linear", Es, kft, yMob, pSolver, pOnCurve: Es * yMob, spring: isSand ? "E_s = n_h·z" : "E_s = k_h" });
++  });
++  const use = curves.slice(0, 8);
++  const ymax = gfxNiceUp(Math.max(2.5 * Math.max(0, ...use.map(c => c.yMob)), 0.1));
++  use.forEach(c => { c.pts = [[0, 0], [ymax, c.Es * ymax]]; });
++  return { kind: "linear", curves: use, ymax, auto, user: !!userDepths, dz, more: curves.length > use.length };
++}
++function PyCurvesChart({ set }) {
++  const e = React.createElement;
++  const W = 660, H = 300, x0 = 62, x1 = 446, y0 = 14, y1 = 252;
++  const curves = set.curves;
++  const pmax = gfxNiceUp(1.04 * Math.max(1e-6, ...curves.map(c => Math.max(c.pSolver, ...c.pts.map(p => p[1])))));
++  const X = v => x0 + (v / set.ymax) * (x1 - x0), Yp = v => y1 - (v / pmax) * (y1 - y0);
++  const els = [];
++  const sx = gfxNiceStep(set.ymax, 6), sy = gfxNiceStep(pmax, 6);
++  for (let v = 0; v <= set.ymax + 1e-9; v += sx) {
++    els.push(e("line", { key: "gx" + v, x1: X(v), x2: X(v), y1: y0, y2: y1, stroke: "#E2E8F0", strokeWidth: 0.8 }));
++    els.push(e(GfxText, { key: "tx" + v, x: X(v), y: y1 + 13, s: fmt(v, sx < 0.01 ? 3 : sx < 0.1 ? 2 : sx < 1 ? 2 : 1), size: 9, fill: GFX_MUTED, anchor: "middle" }));
++  }
++  for (let v = 0; v <= pmax + 1e-9; v += sy) {
++    els.push(e("line", { key: "gy" + v, x1: x0, x2: x1, y1: Yp(v), y2: Yp(v), stroke: "#E2E8F0", strokeWidth: 0.8 }));
++    els.push(e(GfxText, { key: "ty" + v, x: x0 - 5, y: Yp(v) + 3, s: fmt(v, sy < 1 ? 2 : 0), size: 9, fill: GFX_MUTED, anchor: "end" }));
++  }
++  els.push(e("rect", { key: "fr", x: x0, y: y0, width: x1 - x0, height: y1 - y0, fill: "none", stroke: GFX_INK, strokeWidth: 0.9 }));
++  els.push(e(GfxText, { key: "xt", x: (x0 + x1) / 2, y: H - 14, s: "y — pile deflection (in)", size: 9.5, fill: GFX_INK, anchor: "middle" }));
++  els.push(e(GfxText, { key: "yt", x: 14, y: (y0 + y1) / 2, s: "p — soil resistance (lb/in)", size: 9.5, fill: GFX_INK, anchor: "middle", rot: -90 }));
++  curves.forEach((c, k) => {
++    const col = GFX_COLS[k % GFX_COLS.length];
++    const pts = c.pts.filter(p => p[1] <= pmax * 1.0001).map(p => X(p[0]).toFixed(2) + "," + Yp(p[1]).toFixed(2)).join(" ");
++    els.push(e("polyline", { key: "c" + k, points: pts, fill: "none", stroke: col, strokeWidth: 1.8 }, e("title", null, "z = " + fmt(c.d, 2) + " ft below grade — " + (c.model === "linear" ? "linear spring" : GFX_PY_MODEL[c.model] || c.model))));
++    els.push(e("circle", { key: "m" + k, cx: X(Math.min(c.yMob, set.ymax)), cy: Yp(c.pSolver), r: 4.2, fill: col, stroke: "#fff", strokeWidth: 1.4 },
++      e("title", null, "Mobilised at z = " + fmt(c.d, 2) + " ft: y = " + fmt(c.yMob, 4) + " in, p = " + fmt(c.pSolver, 2) + " lb/in")));
++  });
++  // legend
++  curves.forEach((c, k) => {
++    const col = GFX_COLS[k % GFX_COLS.length], ly = y0 + 6 + k * 28;
++    els.push(e("line", { key: "lg" + k, x1: x1 + 14, x2: x1 + 34, y1: ly, y2: ly, stroke: col, strokeWidth: 2 }));
++    els.push(e("circle", { key: "lc" + k, cx: x1 + 24, cy: ly, r: 3.2, fill: col, stroke: "#fff", strokeWidth: 1 }));
++    els.push(e(GfxText, { key: "lt" + k, x: x1 + 40, y: ly + 3, s: "z = " + fmt(c.d, 1) + " ft · " + (c.model === "linear" ? "linear" : GFX_SOIL[c.model] ? GFX_SOIL[c.model].label.toLowerCase() : c.model), size: 9, weight: 600, fill: GFX_INK }));
++    els.push(e(GfxText, { key: "lu" + k, x: x1 + 40, y: ly + 14, s: "y " + fmt(c.yMob, 3) + " in · p " + fmt(c.pSolver, 1) + " lb/in", size: 8.5, fill: GFX_MUTED }));
++  });
++  return e("svg", { viewBox: "0 0 " + W + " " + H, width: "100%", role: "img", "aria-label": "p-y curves at selected depths", style: { display: "block", width: "100%", height: "auto", maxWidth: W + "px", fontFamily: GFX_FONT } }, els);
++}
++function PyCurvesFig({ I, pyRes, solved, activeLayers, depths, setDepths, print }) {
++  const e = React.createElement;
++  const [txt, setTxt] = React.useState("");
++  const set = React.useMemo(() => {
++    try { return pyCurveSet(I, pyRes, solved, activeLayers, depths); } catch (err) { return { kind: "na", msg: "Curves could not be drawn: " + err.message }; }
++  }, [I.lateralSource, I.pyCyclic, I.solverSoil, I.solverNh, I.solverKh, I.pileType, I.OD, I.hpD, I.hpBf, I.hpAxis, JSON.stringify(I.soilLayers), pyRes, solved, activeLayers, JSON.stringify(depths)]);
++  const cap = { fontSize: "7.5px", color: "#475569", marginTop: "3px", lineHeight: 1.4 };
++  if (set.kind === "na") return e("div", { className: "pd-gfx-fig", "data-pd-gfx": "py" }, e("div", { className: print ? "" : "pd-gfx-note", style: print ? cap : undefined }, set.msg));
++  const lin = set.kind === "linear";
++  const shown = set.curves.map(c => c.d);
++  const commit = list => { const v = list.filter(x => isFinite(x) && x >= 0).sort((a, b) => a - b).slice(0, 12); setDepths(v); savePyDepths(v); };
++  const editor = print ? null : e("div", { className: "pd-pyd no-print" },
++    e("span", { className: "pd-pyd-lbl" }, set.user ? "Depths (ft below grade, yours):" : "Depths (ft below grade, automatic):"),
++    shown.map((d, k) => e("button", { key: k, type: "button", className: "pd-pyd-chip", title: "Remove this depth", onClick: () => commit((set.user ? depths : shown).filter((x, j) => (set.user ? Math.abs(x - set.curves[k].dReq) > 1e-9 : j !== k))) },
++      e("span", { className: "pd-pyd-sw", style: { background: GFX_COLS[k % GFX_COLS.length] } }), fmt(d, 1), " ×")),
++    e("input", { type: "number", step: "0.5", min: 0, value: txt, placeholder: "depth", "aria-label": "Add a p-y curve depth, ft below grade", className: "pd-pyd-in", onChange: ev => setTxt(ev.target.value),
++      onKeyDown: ev => { if (ev.key === "Enter") { const v = parseFloat(txt); if (isFinite(v)) { commit((set.user ? depths : shown).concat([v])); setTxt(""); } } } }),
++    e("button", { type: "button", className: "pd-pyd-btn", onClick: () => { const v = parseFloat(txt); if (isFinite(v)) { commit((set.user ? depths : shown).concat([v])); setTxt(""); } } }, "Add"),
++    set.user && e("button", { type: "button", className: "pd-pyd-btn", onClick: () => { setDepths(null); savePyDepths(null); } }, "Automatic depths"));
++  const th = { padding: "2px 5px", textAlign: "right", fontWeight: 600, whiteSpace: "nowrap" };
++  const td = { padding: "1.5px 5px", textAlign: "right", fontFamily: "monospace", whiteSpace: "nowrap" };
++  const head = lin ? ["", "depth (ft)", "spring", "E_s (lb/in²)", "y (in)", "p (lb/in)"]
++    : ["", "depth (ft)", "p-y model", "b (in)", "z_e (ft)", "f_m·p_u (lb/in)", "y (in)", "p (lb/in)", "p / p_u", "|p − p(y)|"];
++  const table = e("table", { className: "pd-gfx-tbl", style: { borderCollapse: "collapse", width: "100%", fontSize: print ? "8px" : "10.5px", marginTop: "4px" } },
++    e("thead", null, e("tr", null, head.map((h2, k) => e("th", { key: k, style: k === 2 ? { ...th, textAlign: "left" } : th }, gfxSub(h2))))),
++    e("tbody", null, set.curves.map((c, k) => e("tr", { key: k, style: { borderTop: "1px solid #E4E7EB" } },
++      e("td", { style: td }, e("span", { style: { display: "inline-block", width: "10px", height: "10px", borderRadius: "50%", background: GFX_COLS[k % GFX_COLS.length], verticalAlign: "middle" } })),
++      e("td", { style: td, title: c.why + (Math.abs(c.d - c.dReq) > 0.005 ? "; requested " + fmt(c.dReq, 2) + " ft, nearest solver node" : "") }, fmt(c.d, 2)),
++      lin ? [e("td", { key: "a", style: { ...td, textAlign: "left", fontFamily: "inherit" } }, gfxSub(c.spring)), e("td", { key: "b", style: td }, fmt(c.Es, 1)), e("td", { key: "c", style: td }, fmt(c.yMob, 4)), e("td", { key: "d", style: td }, fmt(c.pSolver, 2))]
++        : [e("td", { key: "a", style: { ...td, textAlign: "left", fontFamily: "inherit" } }, (GFX_PY_MODEL[c.model] || c.model) + ", " + c.cyc),
++          e("td", { key: "b", style: td }, fmt(c.b, 2)), e("td", { key: "c", style: td }, fmt(c.ze, 2)), e("td", { key: "d", style: td }, fmt(c.pu, 1)),
++          e("td", { key: "e", style: td }, fmt(c.yMob, 4)), e("td", { key: "f", style: td }, fmt(c.pSolver, 2)), e("td", { key: "g", style: td }, c.ratio == null ? "—" : fmt(c.ratio, 3)),
++          e("td", { key: "h", style: td }, Math.abs(c.pSolver - c.pOnCurve).toExponential(1))]))));
++  const notes = lin
++    ? ["Linear (Winkler) basis: the springs are straight lines p = E_s·y with E_s = n_h·z (sand) or k_h (clay) per layer, read with the solver's own subgradeAt(); node spacing " + fmt(set.dz, 3) + " ft. ● = deflection of the linear solution at that depth (active case).",
++       "There are no nonlinear p-y curves on this basis; select “Nonlinear p-y (built-in)” to see them."]
++    : ["Curves are the solver's own springs: pyPofY() with the same soil records, Georgiadis equivalent depth z_e, pile width b (d_h below the casing tip where entered) and multipliers, p = f_m·p(y/f_y) with f_m = " + fmt(set.gPM, 2) + ", f_y = " + fmt(set.gYM, 2) + ". Group row factors (Module 11) reach the solver only through f_m (“Apply avg fm”); they are not applied per row.",
++       "● = point mobilised under the active load case: y from the solution at the solver node nearest each depth (node spacing " + fmt(set.h, 2) + " in) and p = the solver's nodal reaction; |p − p(y)| shows it lies on its curve. " + (I.pyCyclic ? "Cyclic loading selected: cyclic forms apply to sand and soft clay; stiff clay and weak rock have no cyclic form in the tool." : "Static loading.") + "" + (set.curves.some(c => c.model === "weakrock") ? " Weak rock values are plotted as the solver uses them (uncalibrated model)." : ""),
++       set.user ? "Depths: your list (saved in this browser)." : "Automatic depths: mid-depth of each layer between the top of the springs (" + fmt(set.dTop, 1) + " ft) and the depth where M decays to 5 % of M_max (" + fmt(set.dBot, 1) + " ft), the head region (one pile width below the top of the springs) and the depth of M_max."];
++  if (set.more) notes.push("Only the first 8 depths are drawn.");
++  return e("div", { className: "pd-gfx-fig", "data-pd-gfx": "py" },
++    editor,
++    e("div", { className: print ? "" : "pd-gfx-scroll" }, e("div", { style: { minWidth: print ? 0 : "520px" } }, e(PyCurvesChart, { set }))),
++    e("div", { className: print ? "" : "pd-gfx-scroll" }, table),
++    e("div", { className: print ? "" : "pd-gfx-note", style: print ? cap : undefined }, notes.map((n, k) => e("div", { key: k }, gfxSub(n)))));
++}
++
++/* ---------- 5. pile cross-sections ---------- */
++function gfxHDim(e, key, xa, xb, y, label, color, ext) {
++  const x0 = Math.min(xa, xb), x1 = Math.max(xa, xb);
++  return e("g", { key },
++    ext ? e("line", { x1: x0, x2: x0, y1: ext, y2: y + (ext < y ? 3 : -3), stroke: color, strokeWidth: 0.5 }) : null,
++    ext ? e("line", { x1: x1, x2: x1, y1: ext, y2: y + (ext < y ? 3 : -3), stroke: color, strokeWidth: 0.5 }) : null,
++    e("line", { x1: x0, x2: x1, y1: y, y2: y, stroke: color, strokeWidth: 0.9 }),
++    e("path", { d: "M" + x0 + "," + y + " l5,-2.5 v5 z M" + x1 + "," + y + " l-5,-2.5 v5 z", fill: color }),
++    e(GfxText, { x: (x0 + x1) / 2, y: y - 4, s: label, size: 9, fill: color, anchor: "middle", halo: true }));
++}
++function gfxCallout(e, key, xa, ya, xb, yb, lines, color) {
++  return e("g", { key },
++    e("polyline", { points: xa + "," + ya + " " + xb + "," + yb + " " + (xb + 6) + "," + yb, fill: "none", stroke: color || GFX_MUTED, strokeWidth: 0.7 }),
++    e("circle", { cx: xa, cy: ya, r: 1.6, fill: color || GFX_MUTED }),
++    lines.map((ln, k) => e(GfxText, { key: k, x: xb + 9, y: yb + 3 + k * 11, s: ln, size: 9, fill: k ? GFX_MUTED : GFX_INK, halo: true })));
++}
++function gfxPropTable(rows, print) {
++  const e = React.createElement;
++  return e("table", { className: "pd-gfx-tbl", style: { borderCollapse: "collapse", width: "100%", fontSize: print ? "8px" : "10.5px", marginTop: "2px" } },
++    e("tbody", null, rows.filter(Boolean).map((rw, k) => e("tr", { key: k, style: { borderTop: k ? "1px solid #E4E7EB" : "none" } },
++      e("td", { style: { padding: "1.5px 4px", color: "#475569" } }, gfxSub(rw[0])),
++      e("td", { style: { padding: "1.5px 4px", textAlign: "right", fontFamily: "monospace", whiteSpace: "nowrap", color: GFX_INK } }, gfxSub(rw[1]))))));
++}
++function PileSectionsFig({ I, r, pyRes, ei, print }) {
++  const e = React.createElement;
++  const id = useGfxId("xs");
++  const panel = (title, svg, rows, note) => e("div", { className: "pd-xs-panel", style: print ? { breakInside: "avoid" } : undefined },
++    e("div", { className: "pd-xs-title", style: print ? { fontSize: "8.5px", fontWeight: 700, color: GFX_INK, marginBottom: "2px" } : undefined }, title),
++    svg, gfxPropTable(rows, print),
++    note ? e("div", { className: print ? "" : "pd-gfx-note", style: print ? { fontSize: "7.5px", color: "#475569", marginTop: "2px" } : undefined }, gfxSub(note)) : null);
++  const svgStyle = { display: "block", width: "100%", height: "auto", maxWidth: print ? "3.3in" : "340px", fontFamily: GFX_FONT };
++  if (I.pileType === "hpile") {
++    const hs = r.hpileStruct, hp = hs ? hs.hp : hpileSection({ d: I.hpD, bf: I.hpBf, tf: I.hpTf, tw: I.hpTw, Fy: I.hpFy, E: I.E || 29000 });
++    const strong = I.hpAxis !== "weak";
++    const W = 340, H = 300, cx = 132, cy = 152, k = 190 / Math.max(hp.d, hp.bf, 0.1);
++    const hd = hp.d * k / 2, hb = hp.bf * k / 2, tf = hp.tf * k, tw = hp.tw * k;
++    const steel = "url(#" + id + "-steel)";
++    const els = [e(GfxPatterns, { key: "p", id }),
++      e("rect", { key: "f1", x: cx - hb, y: cy - hd, width: 2 * hb, height: tf, fill: steel, stroke: GFX_INK, strokeWidth: 0.9 }),
++      e("rect", { key: "f2", x: cx - hb, y: cy + hd - tf, width: 2 * hb, height: tf, fill: steel, stroke: GFX_INK, strokeWidth: 0.9 }),
++      e("rect", { key: "w", x: cx - tw / 2, y: cy - hd + tf, width: tw, height: 2 * hd - 2 * tf, fill: steel, stroke: GFX_INK, strokeWidth: 0.9 }),
++      e("title", { key: "tt" }, "HP " + fmt(hp.d, 2) + " × " + fmt(hp.bf, 2) + ": t_f " + fmt(hp.tf, 3) + " in, t_w " + fmt(hp.tw, 3) + " in (nominal)"),
++      // axes: bending axis heavy dashed, the other light
++      e("line", { key: "ax", x1: cx - hb - 14, x2: cx + hb + 14, y1: cy, y2: cy, stroke: strong ? GFX_ACC : "#B8C2CC", strokeWidth: strong ? 1.3 : 0.7, strokeDasharray: "7 3 2 3" }),
++      e("line", { key: "ay", x1: cx, x2: cx, y1: cy - hd - 12, y2: cy + hd + 12, stroke: strong ? "#B8C2CC" : GFX_ACC, strokeWidth: strong ? 0.7 : 1.3, strokeDasharray: "7 3 2 3" }),
++      e(GfxText, { key: "axl", x: cx + hb + 16, y: cy + 3, s: "x", size: 9.5, weight: 600, fill: strong ? GFX_ACC : GFX_MUTED }),
++      e(GfxText, { key: "ayl", x: cx + 4, y: cy - hd - 14, s: "y", size: 9.5, weight: 600, fill: strong ? GFX_MUTED : GFX_ACC }),
++      gfxHDim(e, "dbf", cx - hb, cx + hb, cy - hd - 26, "b_f = " + fmt(hp.bf, 2) + " in", GFX_INK2, cy - hd - 2),
++      gfxVDim(e, "dd", cx - hb - 22, cy - hd, cy + hd, "d = " + fmt(hp.d, 2) + " in", GFX_INK2),
++      gfxCallout(e, "ctf", cx + hb * 0.6, cy - hd + tf / 2, cx + hb + 22, cy - hd + 18, ["t_f = " + fmt(hp.tf, 3) + " in"], GFX_INK),
++      gfxCallout(e, "ctw", cx + tw / 2, cy + hd * 0.45, cx + hb + 22, cy + hd * 0.45, ["t_w = " + fmt(hp.tw, 3) + " in", "h_w = " + fmt(hp.hw, 2) + " in"], GFX_INK),
++      e(GfxText, { key: "bax", x: 6, y: H - 8, s: "Bending axis used: " + (strong ? "strong (x–x)" : "weak (y–y)") + " — lateral load " + (strong ? "parallel to the web" : "parallel to the flanges"), size: 9, fill: GFX_ACC, weight: 600 })];
++    const svg = e("svg", { viewBox: "0 0 " + W + " " + H, width: "100%", role: "img", "aria-label": "H-pile cross-section", style: svgStyle }, els);
++    const rows = [["Section", "HP " + fmt(hp.d, 2) + " × " + fmt(hp.bf, 2) + " (" + (I.hpGrade || "") + ")"], ["Gross area A_g", fmt(hp.A, 2) + " in²"],
++      hs && Math.abs(hs.Aeff - hs.Ag) > 1e-9 ? ["Effective area A_eff (slender)", fmt(hs.Aeff, 2) + " in²"] : null,
++      ["I_x / I_y", fmt(hp.Ix, 1) + " / " + fmt(hp.Iy, 1) + " in⁴"], ["S_x / S_y", fmt(hp.Sx, 1) + " / " + fmt(hp.Sy, 1) + " in³"],
++      ["Z_x / Z_y (reference)", fmt(hp.Zx, 1) + " / " + fmt(hp.Zy, 1) + " in³"], ["r_x / r_y", fmt(hp.rx, 2) + " / " + fmt(hp.ry, 2) + " in"],
++      ["Governing axis: I, S", fmt(strong ? hp.Ix : hp.Iy, 1) + " in⁴, " + fmt(strong ? hp.Sx : hp.Sy, 1) + " in³"],
++      ["EI to the p-y solver", fmt((I.E || 29000) * (strong ? hp.Ix : hp.Iy) / 1000, 0) + "k kip·in²"],
++      ["p-y bearing width", fmt(strong ? hp.bf : hp.d, 2) + " in (" + (strong ? "b_f" : "d") + ")"]];
++    return e("div", { className: "pd-gfx-fig", "data-pd-gfx": "xs" },
++      e("div", { className: "pd-xs-grid" }, panel("H-pile section (to scale)", svg, rows,
++        "No corrosion loss is modelled for H-piles in this tool (no input): the outline and every property are nominal. Fillets neglected, as in the property calculation (Module G).")));
++  }
++  // ---- micropile: cased and uncased (bond zone) sections, one scale ----
++  const ax = r.axial, OD = I.OD, ODr = ax.OD_r, ID = ax.ID, dh = r.geo.dh, db = ax.barDia;
++  const W = 340, H = 268, cx = 112, cy = 132;
++  const k = 168 / Math.max(OD, dh, 0.1);
++  const R = OD * k / 2, Rr = ODr * k / 2, Ri = ID * k / 2, Rb = db * k / 2, Rh = dh * k / 2;
++  const corr = (I.corr || 0) > 0;
++  const casedEls = [e(GfxPatterns, { key: "p", id }),
++    corr ? e("circle", { key: "co", cx, cy, r: R, fill: "url(#" + id + "-corr)", stroke: GFX_ACC, strokeWidth: 0.8, strokeDasharray: "4 2" }, e("title", null, "Corrosion allowance " + fmt(I.corr, 4) + " in (outside face): nominal OD " + fmt(OD, 3) + " in")) : null,
++    e("circle", { key: "st", cx, cy, r: Rr, fill: "url(#" + id + "-steel)", stroke: GFX_INK, strokeWidth: 0.9 }, e("title", null, "Casing (corroded): OD_r " + fmt(ODr, 3) + " in, t_r " + fmt(ax.tc_r, 3) + " in")),
++    e("circle", { key: "gr", cx, cy, r: Ri, fill: "url(#" + id + "-grout)", stroke: GFX_INK, strokeWidth: 0.7 }, e("title", null, "Grout core: ID " + fmt(ID, 3) + " in, f′c " + fmt(I.fcGrout, 0) + " psi")),
++    e("circle", { key: "bar", cx, cy, r: Math.max(Rb, 1.5), fill: GFX_ACC, stroke: "#7a3a18", strokeWidth: 0.8 }, e("title", null, "Bar A_b " + fmt(ax.Ab, 2) + " in² (equivalent Ø " + fmt(db, 3) + " in)")),
++    gfxHDim(e, "dod", cx - R, cx + R, cy - R - 16, "OD = " + fmt(OD, 3) + " in", GFX_INK2, cy - 2),
++    gfxHDim(e, "did", cx - Ri, cx + Ri, cy + Ri * 0.55, "ID = " + fmt(ID, 3) + " in", GFX_INK2, null),
++    gfxCallout(e, "cst", cx + Rr * 0.72 - 1, cy - Rr * 0.72 + 1, cx + R + 16, cy - R * 0.78, ["t = " + fmt(I.tc, 3) + " in nominal", "t_r = " + fmt(ax.tc_r, 3) + " in corroded"], GFX_INK),
++    corr ? gfxCallout(e, "cco", cx + (R + Rr) / 2 * 0.94, cy - (R + Rr) / 2 * 0.34, cx + R + 16, cy - R * 0.2, ["corrosion " + fmt(I.corr, 4) + " in", "OD_r = " + fmt(ODr, 3) + " in"], GFX_ACC) : null,
++    gfxCallout(e, "cgr", cx + Ri * 0.45, cy + Ri * 0.05, cx + R + 16, cy + R * 0.42, ["grout, f′c " + fmt(I.fcGrout, 0) + " psi"], GFX_INK),
++    gfxCallout(e, "cbr", cx + Math.max(Rb, 1.5) * 0.7, cy - Math.max(Rb, 1.5) * 0.7, cx + R + 16, cy + R * 0.8, ["bar A_b = " + fmt(ax.Ab, 2) + " in²", "Ø_eq = " + fmt(db, 3) + " in"], GFX_ACC)];
++  const casedSvg = e("svg", { viewBox: "0 0 " + W + " " + H, width: "100%", role: "img", "aria-label": "Cased micropile section", style: svgStyle }, casedEls);
++  const unEls = [e(GfxPatterns, { key: "p", id: id + "u" }),
++    e("circle", { key: "h", cx, cy, r: Rh, fill: "url(#" + id + "u-grout)", stroke: GFX_INK, strokeWidth: 0.9 }, e("title", null, "Grouted hole d_h " + fmt(dh, 3) + " in (bond zone, no casing)")),
++    e("circle", { key: "bar", cx, cy, r: Math.max(Rb, 1.5), fill: GFX_ACC, stroke: "#7a3a18", strokeWidth: 0.8 }, e("title", null, "Bar A_b " + fmt(ax.Ab, 2) + " in²")),
++    gfxHDim(e, "ddh", cx - Rh, cx + Rh, cy - Math.max(R, Rh) - 16, "d_h = " + fmt(dh, 3) + " in", GFX_INK2, cy - 2),
++    gfxCallout(e, "cgr", cx + Rh * 0.5, cy + Rh * 0.3, cx + Math.max(R, Rh) + 16, cy + Rh * 0.42, ["grout, f′c " + fmt(I.fcGrout, 0) + " psi"], GFX_INK),
++    gfxCallout(e, "cbr", cx + Math.max(Rb, 1.5) * 0.7, cy - Math.max(Rb, 1.5) * 0.7, cx + Math.max(R, Rh) + 16, cy - Rh * 0.5, ["bar A_b = " + fmt(ax.Ab, 2) + " in²", "Ø_eq = " + fmt(db, 3) + " in"], GFX_ACC)];
++  const unSvg = e("svg", { viewBox: "0 0 " + W + " " + H, width: "100%", role: "img", "aria-label": "Uncased bond-zone section", style: svgStyle }, unEls);
++  const py = pyRes && pyRes.ok ? pyRes : null;
++  const casedRows = [["Casing OD / wall t (nominal)", fmt(OD, 3) + " / " + fmt(I.tc, 3) + " in"], ["Corrosion allowance (outside)", fmt(I.corr || 0, 4) + " in"],
++    ["OD_r / t_r (corroded)", fmt(ODr, 3) + " / " + fmt(ax.tc_r, 3) + " in"], ["ID (grout core)", fmt(ID, 3) + " in"],
++    ["A_cas (corroded casing)", fmt(ax.Acas, 2) + " in²"], ["A_g (grout, cased)", fmt(ax.Ag_cas, 2) + " in²"], ["A_b (bar)", fmt(ax.Ab, 2) + " in²"],
++    ["I_cas (corroded casing)", fmt(r.comb.Icas, 1) + " in⁴"], ["S_j / Z_j (threaded joint, Module 04)", fmt(r.flex.Sj, 2) + " / " + fmt(r.flex.Zj, 2) + " in³"],
++    ei && ei.EI != null ? ["EI casing only", fmt(ei.EI / 1000, 0) + "k kip·in²"] : null,
++    py && py.EIcased_used != null ? ["EI used by the p-y solver (cased)", fmt(py.EIcased_used / 1000, 0) + "k kip·in²"] : null];
++  const unRows = [["Drilled hole d_h", fmt(dh, 3) + " in" + (I.dhBondSeparate && I.dhBond > 0 ? " (entered)" : " (= casing OD)")],
++    ["A_g (grout, uncased)", fmt(ax.Ag_ucas, 2) + " in²"], ["A_b (bar)", fmt(ax.Ab, 2) + " in²"], ["Bar Ø_eq = 2√(A_b/π)", fmt(db, 3) + " in"],
++    ei && ei.EI_uncased_kipin2 != null ? ["EI uncased (grout + bar)", fmt(ei.EI_uncased_kipin2 / 1000, 0) + "k kip·in²"] : null];
++  return e("div", { className: "pd-gfx-fig", "data-pd-gfx": "xs" },
++    e("div", { className: "pd-xs-grid" },
++      panel("Cased section — head to casing tip (" + fmt(r.geo.casingTip, 1) + " ft below head)", casedSvg, casedRows, "Corrosion is taken off the outside face (OD_r = OD − 2·corrosion; ID unchanged), as in the property calculation. Centralisers and couplers are not modelled."),
++      panel("Uncased bond zone — below the casing tip", unSvg, unRows, "Same scale as the cased section. The tool uses an equivalent round bar of area A_b.")));
++}
++/* screen wrapper: a figure card on an output tab (not a check module) */
++function GfxCard({ order, otab, badge, title, sub, children }) {
++  const e = React.createElement;
++  return e("div", { "data-otab-fixed": otab, "data-pd-gfx": "card", style: { order }, className: "module-card pd-gfx-card bg-white border border-slate-200 rounded-md overflow-hidden fade-in" },
++    e("div", { className: "pd-gfx-head" },
++      e("span", { className: "module-badge font-mono-tech text-[11px] text-white px-1.5 py-0.5 rounded-sm", style: { background: "var(--blueprint)" } }, badge),
++      e("div", { className: "flex-1 min-w-0" }, e("div", { className: "pd-gfx-title" }, title), sub ? e("div", { className: "pd-gfx-sub" }, sub) : null)),
++    e("div", { className: "pd-gfx-body" }, children));
++}
++/* report wrapper: a figure block that is kept on one page */
++function GfxRptFig({ caption, children }) {
++  const e = React.createElement;
++  return e("div", { className: "rpt-avoid", "data-pd-gfx": "rpt", style: { margin: "6px 0 10px", breakInside: "avoid", pageBreakInside: "avoid" } },
++    e("div", { style: { border: "1px solid #e2e8f0", padding: "6px", background: "#fff" } }, children),
++    e("div", { style: { fontSize: "7.5px", color: "#475569", marginTop: "2px" } }, caption));
++}
+ function InteractionDiagram({
+   r
+ }) {
+@@ -6786,7 +7470,8 @@ function PrintReport({
+   caseRes,
+   pyRes,
+   pcr,
+-  sel
++  sel,
++  gfx = {}
+ }) {
+   // OK / NG of each on-screen module (read after every render; see rptStatusFor)
+   const [modStat, setModStat] = useState({});
+@@ -7247,7 +7932,9 @@ function PrintReport({
+               /*#__PURE__*/React.createElement("div", { style: { fontSize: "10px", marginTop: "4px", color: b.simplifiedApplies ? "#256436" : "#8a2a2a" } }, b.simplifiedApplies ? "\u2713 All boundary conditions satisfied \u2014 Simplified Method applies." : "\u2717 Boundary condition(s) not met \u2014 3D Space Frame Analysis Method required (\u00a73.10.11.5), outside this package.")),
+             /*#__PURE__*/React.createElement("div", { className: "rpt-section" }, /*#__PURE__*/React.createElement(RptHeading, { n: "01b", title: "Section & Soil", code: "Grade 50 \u00b7 Table 3.10.11-1" }),
+               line("Section " + s.label + ": Ag = " + fmt(s.Ag, 1) + " in\u00b2, Zx = " + fmt(s.Zx, 0) + " in\u00b3, Zy = " + fmt(s.Zy, 1) + " in\u00b3, ry = " + fmt(s.ry, 2) + " in (webs \u2225 abutment \u2192 weak-axis bending)"),
+-              line("Soil type " + b.si + " \u2014 " + b.soil.name + ": \u03b3 = " + b.soil.gamma + " pcf, " + (b.soil.phi != null ? "\u03c6 = " + b.soil.phi + "\u00b0" : "c = " + b.soil.c + " psf, \u03b5\u2085\u2080 = " + b.soil.e50) + ", k = " + b.soil.k + " pci")),
++              line("Soil type " + b.si + " \u2014 " + b.soil.name + ": \u03b3 = " + b.soil.gamma + " pcf, " + (b.soil.phi != null ? "\u03c6 = " + b.soil.phi + "\u00b0" : "c = " + b.soil.c + " psf, \u03b5\u2085\u2080 = " + b.soil.e50) + ", k = " + b.soil.k + " pci"),
++              React.createElement(GfxRptFig, { caption: "Figure G-1: soil profile and abutment pile (depth to scale; widths schematic)." },
++                React.createElement(SoilPileProfile, { I: I, r: r, pyRes: pyRes, print: true }))),
+             /*#__PURE__*/React.createElement("div", { className: "rpt-section" }, /*#__PURE__*/React.createElement(RptHeading, { n: "01c", title: "Gravity Capacity Check", code: "Tables 3.10.11-2/-3" }),
+               line("Table row (" + s.label + ", " + b.soil.name + "): Pu = " + b.interp.row.map((v, i) => v + "@" + (i * 10) + "\u00b0").join(", ") + " kip; Lf = " + fmt(b.Lf, 0) + " ft; Le = " + fmt(b.Le, 1) + " ft"),
+               line(b.interp.exact
+@@ -7286,7 +7973,9 @@ function PrintReport({
+           tr("g", ...kv("Gross area A", fmt(hp.A, 2) + " in²"), ...kv("Ix / Iy", fmt(hp.Ix, 1) + " / " + fmt(hp.Iy, 1) + " in⁴")),
+           tr("h", ...kv("Sx / Sy", fmt(hp.Sx, 1) + " / " + fmt(hp.Sy, 1) + " in³"), ...kv("rx / ry", fmt(hp.rx, 2) + " / " + fmt(hp.ry, 2) + " in")),
+           tr("i", ...kv("Axial demand STL", fmt(I.STL, 0) + " kip"), ...kv("Lateral / moment", fmt(I.Plat, 0) + " kip / " + fmt(r.hpileStruct ? r.hpileStruct.Mu : 0, 1) + " kip·ft"))));
+-    })()),
++    })(),
++    React.createElement(GfxRptFig, { caption: "Figure G-1: soil profile and pile elevation (depth to scale; widths schematic). Layers and properties as entered." },
++      React.createElement(SoilPileProfile, { I: I, r: r, pyRes: pyRes, print: true }))),
+   /*#__PURE__*/React.createElement("div", { className: "rpt-section rpt-pagebreak" }, /*#__PURE__*/React.createElement(RptHeading, { n: "01", title: "Geotechnical Axial Resistance — Tip + Skin", code: "AASHTO 10.7.3.8.6" }),
+     r.hpileGeo ? (() => {
+       const g = r.hpileGeo;
+@@ -7308,6 +7997,8 @@ function PrintReport({
+         g.enableTension && /*#__PURE__*/React.createElement(RptRow, { label: "Uplift (skin only): φup·Rs ≥ Tu", val: fmt(g.phiRn_up, 1) + " ≥ " + fmt(g.Tu, 0) + " kip", pass: g.up_pass }));
+     })() : null),
+   /*#__PURE__*/React.createElement("div", { className: "rpt-section" }, /*#__PURE__*/React.createElement(RptHeading, { n: "03\u201309", title: "Structural Checks", code: "AASHTO Section 6" }),
++    React.createElement(GfxRptFig, { caption: "Figure S-1: H-pile cross-section to scale, with the section properties used by the checks." },
++      React.createElement(PileSectionsFig, { I: I, r: r, pyRes: pyRes, print: true })),
+     r.hpileStruct ? (() => {
+       const hs = r.hpileStruct;
+       const line = (t) => /*#__PURE__*/React.createElement("div", { style: { fontFamily: "monospace", fontSize: "10px", margin: "2px 0" } }, t);
+@@ -7431,7 +8122,9 @@ function PrintReport({
+     style: cellK
+   }, "φ", /*#__PURE__*/React.createElement("sub", null, "geo")), /*#__PURE__*/React.createElement("td", {
+     style: cellV
+-  }, fmt(I.phiGeo, 2))))))), /*#__PURE__*/React.createElement("div", {
++  }, fmt(I.phiGeo, 2)))))),
++    React.createElement(GfxRptFig, { caption: "Figure G-1: soil profile and pile elevation (depth to scale; widths schematic). Layers and properties as entered." },
++      React.createElement(SoilPileProfile, { I: I, r: r, pyRes: pyRes, print: true }))), /*#__PURE__*/React.createElement("div", {
+     className: "rpt-section rpt-pagebreak"
+   }, /*#__PURE__*/React.createElement(RptHeading, {
+     n: "01",
+@@ -7507,7 +8200,8 @@ function PrintReport({
+     n: "03",
+     title: "Structural Axial Resistance",
+     code: "AASHTO 10.9.3.10.2"
+-  }), /*#__PURE__*/React.createElement(Narr, null, "The factored structural compressive resistance is evaluated for both the cased section (casing, grout, and bar acting together) and the uncased section (grout and bar only). The uncased section, which applies below the casing tip, typically governs."), /*#__PURE__*/React.createElement(Calc, {
++  }), React.createElement(GfxRptFig, { caption: "Figure S-1: pile cross-sections to scale, with the section properties used by the checks." },
++    React.createElement(PileSectionsFig, { I: I, r: r, pyRes: pyRes, ei: gfx.ei, print: true })), /*#__PURE__*/React.createElement(Narr, null, "The factored structural compressive resistance is evaluated for both the cased section (casing, grout, and bar acting together) and the uncased section (grout and bar only). The uncased section, which applies below the casing tip, typically governs."), /*#__PURE__*/React.createElement(Calc, {
+     label: "Corroded casing area",
+     eq: `A_{cas} = \\tfrac{\\pi}{4}(OD_r^2 - ID^2) = \\tfrac{\\pi}{4}(${fmt(r.axial.OD_r, 3)}^2 - ${fmt(r.axial.ID, 3)}^2)`,
+     result: `= ${fmt(r.axial.Acas, 2)}\\ \\text{in}^2`
+@@ -8072,6 +8766,10 @@ function PrintReport({
+             yaxis: { title: { text: "depth below grade (ft)", font: { size: 9 } }, autorange: "reversed", gridcolor: C.grid } }), height: 240 })),
+       /*#__PURE__*/React.createElement("div", { style: { fontSize: "7.5px", color: "#94a3b8", marginTop: "2px" } },
+         "Figure F-2: moment profiles, all LRFD load cases overlaid (per-case p-y solves)."))),
++  (I.pileType !== "iab") && React.createElement("div", { className: "rpt-grp", "data-pd-gfx": "rptgrp", style: { marginBottom: "12px" } },
++    React.createElement(RptHeading, { n: "02F", title: "Figure F-3 \u2014 p-y curves at selected depths", code: I.lateralSource === "py" ? "nonlinear p-y (built-in)" : I.lateralSource === "input" ? "p-y (LPILE)" : "linear estimate" }),
++    React.createElement(GfxRptFig, { caption: "Figure F-3: p-y curves at selected depths (active case). \u25cf = point mobilised under the active load case." },
++      React.createElement(PyCurvesFig, { I: I, pyRes: pyRes, solved: gfx.solved, activeLayers: gfx.activeLayers, depths: gfx.pyDepths || null, print: true }))),
+   r.capDist && r.capDist.enable && /*#__PURE__*/React.createElement("div", { className: "rpt-grp", style: { marginBottom: "12px" } },
+     /*#__PURE__*/React.createElement(RptHeading, { n: "11", title: "Pile Group \u2014 Rigid-Cap Load Distribution" }),
+     /*#__PURE__*/React.createElement("div", { style: { fontSize: "8.5px", color: "#334", marginBottom: "4px" } },
+@@ -11031,6 +11729,7 @@ function App() {
+   const setRptSel = v => { setRptSelState(v); saveRptSel(v); };
+   // UI: active tab of the left input rail (presentation state, not an input)
+   const [railTab, setRailTab] = useState("pile");
++  const [pyDepths, setPyDepths] = useState(readPyDepths); // Figure F-3 depths (per browser, micropile_lrfd_pyCurveDepths_v1)
+   const [lpileParse, setLpileParse] = useState(() => loadSavedLpile()); // {ok, summary, warnings, records, fileName, ...} — persisted
+   const [lpileBusy, setLpileBusy] = useState(false);
+   const [saveFlash, setSaveFlash] = useState(false);
+@@ -11754,6 +12453,10 @@ function App() {
+             return { d_ft: d2, model: s2.model, pts, op: { y: yop, p: pyPofY(s2.model, yop, z_in, s2.prm, gP, gY) } };
+           }).filter(Boolean);
+         })(),
++        // F14 graphics: the solver's own soil records / datum / multipliers and nodal
++        // reactions, so Figure F-3 plots exactly what the solve used (display only).
++        pNode: res2.p,
++        setup: { soilAt, stick_in, L_in, D, soilTop_in: S.soilTop_in, unsupBelowGrade_in: S.unsupBelowGrade_in, nNodes: res2.z.length - 1, gPM: I.pyPM || 1, gYM: I.pyYM || 1 },
+         mphi: I.pyEIvar && mphiC ? { phis: mphiC.phis, Ms: mphiC.Ms.map(m => m / 12), EI0: mphiC.EI0, EI0u: mphiU.EI0,
+           phisU: mphiU.phis, MsU: mphiU.Ms.map(m => m / 12) } : null
+       };
+@@ -12467,14 +13170,16 @@ function App() {
+     caseRes: caseRes,
+     pyRes: pyRes,
+     pcr: pcr,
+-    sel: rptSel
++    sel: rptSel,
++    gfx: { solved: solved, activeLayers: activeLayers, pyDepths: pyDepths, ei: { EI: EI, EI_uncased_kipin2: EI_uncased_kipin2 } }
+   }))), /*#__PURE__*/React.createElement(PrintReport, {
+     I: I,
+     r: r,
+     caseRes: caseRes,
+     pyRes: pyRes,
+     pcr: pcr,
+-    sel: rptSel
++    sel: rptSel,
++    gfx: { solved: solved, activeLayers: activeLayers, pyDepths: pyDepths, ei: { EI: EI, EI_uncased_kipin2: EI_uncased_kipin2 } }
+   }), /*#__PURE__*/React.createElement(PrintChooser, {
+     open: printDlg,
+     sel: rptSel,
+@@ -13342,10 +14047,10 @@ function App() {
+     ? /*#__PURE__*/React.createElement(React.Fragment, null,
+         /*#__PURE__*/React.createElement("p", { className: "text-[11px] text-slate-600 leading-snug mb-3" },
+           "Integral abutment pile geometry (MassDOT \u00a73.10). A single row of vertical H-piles supports the abutment, embedded 2 ft into the cap, with a 3-ft crushed-stone trench below the cap to reduce lateral restraint against thermal movement (\u00a73.10.10.4). Webs are oriented parallel to the abutment so thermal movement bends the pile about its weak axis."),
+-        /*#__PURE__*/React.createElement("div", { className: "grid xl:grid-cols-[310px_1fr] gap-4 items-start mb-3" },
++        /*#__PURE__*/React.createElement("div", { className: "grid pd-geom-grid gap-4 items-start mb-3" },
+           /*#__PURE__*/React.createElement("div", { className: "bg-slate-50 rounded-sm p-2 border border-slate-200 overflow-hidden" },
+-            /*#__PURE__*/React.createElement("div", { className: "text-[9px] font-mono-tech text-[var(--blueprint2)] uppercase tracking-wider mb-1" }, "Abutment / pile elevation"),
+-            /*#__PURE__*/React.createElement(PileElevation, { r: r, I: I })),
++            /*#__PURE__*/React.createElement("div", { className: "text-[9px] font-mono-tech text-[var(--blueprint2)] uppercase tracking-wider mb-1" }, "Soil profile & abutment pile (depth to scale)"),
++            /*#__PURE__*/React.createElement(SoilPileProfile, { r: r, I: I, pyRes: pyRes })),
+           /*#__PURE__*/React.createElement("div", null,
+             /*#__PURE__*/React.createElement("div", { className: "text-[9px] font-mono-tech text-[var(--blueprint2)] uppercase tracking-wider mb-1" }, "Section & geometry"),
+             r.iab ? /*#__PURE__*/React.createElement("table", { className: "w-full text-[9.5px] font-mono-tech", style: { borderCollapse: "collapse" } },
+@@ -13370,10 +14075,10 @@ function App() {
+     : I.pileType === "hpile"
+     ? /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("p", { className: "text-[11px] text-slate-600 leading-snug mb-3" },
+     "Geometry summary for the driven steel H-pile. The section is driven to the embedded length shown; axial resistance is developed by tip bearing and skin friction (Module 01), and structural capacity is checked in the HA\u2013HT modules. The elevation at left shows the section, soil layers, bearing stratum, cap embedment, and stickup to scale."),
+-  /*#__PURE__*/React.createElement("div", { className: "grid xl:grid-cols-[300px_1fr] gap-4 items-start mb-3" },
++  /*#__PURE__*/React.createElement("div", { className: "grid pd-geom-grid gap-4 items-start mb-3" },
+     /*#__PURE__*/React.createElement("div", { className: "bg-slate-50 rounded-sm p-2 border border-slate-200 overflow-hidden" },
+-      /*#__PURE__*/React.createElement("div", { className: "text-[9px] font-mono-tech text-[var(--blueprint2)] uppercase tracking-wider mb-1" }, "Pile elevation (to scale)"),
+-      /*#__PURE__*/React.createElement(PileElevation, { r: r, I: I })),
++      /*#__PURE__*/React.createElement("div", { className: "text-[9px] font-mono-tech text-[var(--blueprint2)] uppercase tracking-wider mb-1" }, "Soil profile & pile elevation (depth to scale)"),
++      /*#__PURE__*/React.createElement(SoilPileProfile, { r: r, I: I, pyRes: pyRes })),
+     /*#__PURE__*/React.createElement("div", null,
+       /*#__PURE__*/React.createElement("div", { className: "text-[9px] font-mono-tech text-[var(--blueprint2)] uppercase tracking-wider mb-1" }, "Geometry summary"),
+       /*#__PURE__*/React.createElement("table", { className: "w-full text-[9.5px] font-mono-tech", style: { borderCollapse: "collapse" } },
+@@ -13433,10 +14138,10 @@ function App() {
+     "Detailed geotechnical and structural checks are in the modules below (HG geotechnical; HA\u2013HT structural). This section consolidates the driven-pile geometry only."))
+     : /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("p", { className: "text-[11px] text-slate-600 leading-snug mb-3" },
+     "Consolidated geometry and code-limit checks. The headline check is uncased-section flexural adequacy: below the casing tip the section is bar-plus-grout only, with a small nominal capacity — the casing should extend deep enough that the moment there is within the uncased section’s φM", /*#__PURE__*/React.createElement("sub", null, "n"), ", leaving the uncased bond zone essentially axial."),
+-  /*#__PURE__*/React.createElement("div", { className: "grid xl:grid-cols-[300px_1fr] gap-4 items-start mb-3" },
++  /*#__PURE__*/React.createElement("div", { className: "grid pd-geom-grid gap-4 items-start mb-3" },
+     /*#__PURE__*/React.createElement("div", { className: "bg-slate-50 rounded-sm p-2 border border-slate-200 overflow-hidden" },
+-      /*#__PURE__*/React.createElement("div", { className: "text-[9px] font-mono-tech text-[var(--blueprint2)] uppercase tracking-wider mb-1" }, "Pile elevation (to scale)"),
+-      /*#__PURE__*/React.createElement(PileElevation, { r: r, I: I })),
++      /*#__PURE__*/React.createElement("div", { className: "text-[9px] font-mono-tech text-[var(--blueprint2)] uppercase tracking-wider mb-1" }, "Soil profile & pile elevation (depth to scale)"),
++      /*#__PURE__*/React.createElement(SoilPileProfile, { r: r, I: I, pyRes: pyRes })),
+     /*#__PURE__*/React.createElement("div", null,
+       /*#__PURE__*/React.createElement("div", { className: "text-[9px] font-mono-tech text-[var(--blueprint2)] uppercase tracking-wider mb-1" }, "Geometry summary"),
+       /*#__PURE__*/React.createElement("table", { className: "w-full text-[9.5px] font-mono-tech", style: { borderCollapse: "collapse" } },
+@@ -13742,6 +14447,9 @@ function App() {
+       /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-amber-700 bg-amber-50 border border-amber-300 rounded-sm px-2 py-1 leading-snug mt-1" },
+         "\u26a0 Static analysis for length/capacity estimate. Field-verify nominal resistance via dynamic testing / driving criteria (\u03c6dyn, Table 10.5.5.2.3-1). Box-perimeter and plugged-tip assumptions per C10.7.3.8.6f \u2014 confirm plugging suits the section and soil. Sanity-check aid; independent PE review required."));
+   })()),
++  I.pileType === "hpile" && r.hpileStruct && React.createElement(GfxCard, { order: 29, otab: "struct", badge: "S-1", title: "H-pile cross-section (to scale)",
++    sub: "dimensions, bending axis and the properties the checks use" },
++    React.createElement(PileSectionsFig, { I: I, r: r, pyRes: pyRes })),
+   I.pileType === "hpile" && r.hpileStruct && /*#__PURE__*/React.createElement(Module, {
+     idx: "03",
+     title: "Structural Axial \u2014 Compression + Buckling",
+@@ -14514,7 +15222,14 @@ function App() {
+         color: under ? "#b23b3b" : "#2f6f3e"
+       }
+     }, under ? `The linear built-in estimate is ${fmt((1 - ratio) * 100, 0)}% below LPILE here — as expected, the linear model under-predicts once soil yields. Use the LPILE moment for design.` : `The built-in estimate is at or above LPILE here (${fmt(ratio, 2)}×). Still verify against LPILE before sealing.`));
+-  })()))), /*#__PURE__*/(I.pileType === "micropile") && React.createElement(Module, {
++  })()))),
++  (I.pileType !== "iab") && React.createElement(GfxCard, { order: 21, otab: "lat", badge: "F-3", title: "Figure F-3: p-y curves at selected depths",
++    sub: "the curves the lateral solver uses, with the point mobilised under the active load case" },
++    React.createElement(PyCurvesFig, { I: I, pyRes: pyRes, solved: solved, activeLayers: activeLayers, depths: pyDepths, setDepths: setPyDepths })),
++  (I.pileType === "micropile") && React.createElement(GfxCard, { order: 29, otab: "struct", badge: "S-1", title: "Pile cross-sections (to scale)",
++    sub: "cased and uncased (bond-zone) sections with the properties the checks use" },
++    React.createElement(PileSectionsFig, { I: I, r: r, pyRes: pyRes, ei: { EI: EI, EI_uncased_kipin2: EI_uncased_kipin2 } })),
++  /*#__PURE__*/(I.pileType === "micropile") && React.createElement(Module, {
+     idx: "03",
+     title: "Structural Axial Resistance",
+     code: "AASHTO 10.9.3.10.2 · cased & uncased",
+```
+
 ## Open items (not changed)
 - O1. **Uncased/cased structural axial: outer 0.85 factor and `fy = min(fyb, fyc)`** (`Rn_cased/Rn_ucased`, ≈ line 1675).
   - Neither AASHTO 10.9.3.10.2 nor FHWA NHI-05-039 Eq. 5-13 has the outer 0.85, and the uncased section has no casing, so min(fyb, fyc) is arbitrary there.
@@ -2442,3 +3360,8 @@ index 7c4fca1..266eea6 100644
   - **Ask:** confirm the values and remove or relabel, or keep.
 - O22. **Report, Assumptions & Design Notes (micropile): the bond-value item prints a line break and the word "beta".** The `RTex` call has `tex: "\\\\beta"`, which reaches KaTeX as `\\beta` (a line break, then text "beta") instead of β. Found in the 2026-10-10 output/print work; text in an equation, so listed rather than changed.
 - O23. **The printed report has no section for the Module G code-limit checks** (uncased flexure below the casing tip, minimum bond length, plunge, cover). On screen Module G is NG at the micropile defaults (uncased flexure D/C 1.34), but the report only lists materials and geometry under G, and the Summary of Results table has no uncased-flexure row. **Ask:** add the G checks to the report (new report content).
+- O24. **Weak-rock p-y units.** `PY.weakrock` works in kip (qᵤ and Eₘ in ksi, so p_ur and the initial modulus come out in kip/in), but `solvePyPile` treats every p-y value as lb/in. Read from the code, the weak-rock springs in the built-in solver are 1000× too soft (unconservative for deflection, can be either way for moment). Found while building Figure F-3, which plots the values as the solver uses them. The model is already flagged "uncalibrated". Not changed (calculation). **Ask:** confirm and convert (×1000), or keep weak rock disabled for design.
+- O25. **H-pile p-y model length.** The input "Embedded length, below grade" (`I.solverLembed`) is used as the length below grade by Module G and the static axial capacity, but `buildPySetup` uses it as the length from the pile head (`L = solverLembed`, embedded = solverLembed − stickup). At the defaults (3 ft stickup) the p-y model's pile ends 3 ft above the drawn toe (27 vs 30 ft below grade). The soil-profile drawing marks the p-y model toe in red. Not changed (calculation). **Ask:** which length is intended for the lateral model?
+- O26. **`pyRes` memo dependencies.** `buildPySetup` reads `I.bucklingEnable` and `I.LuFree` (the unsupported zone with no soil springs), but the `pyRes` memo does not list them, so toggling buckling or changing L_u does not re-run the lateral solve until another listed input changes. Not changed (calculation behaviour). **Ask:** add them to the dependency list.
+- O27. **Module G H-pile "Cross-section (to scale, in)" plot is empty** (axes only, no section) on main as well, in headless Chromium at 1500 px. The new S-1 card on the Structural tab draws the section. **Ask:** fix or remove the empty plot.
+- O28. **H-pile corrosion.** The tool has no section-loss input for H-piles; every H-pile property is nominal. **Ask:** add a corrosion loss (per face) if the piles are permanent in aggressive ground.
