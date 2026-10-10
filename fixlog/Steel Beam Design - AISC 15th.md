@@ -1197,6 +1197,184 @@ Engineer's decision of 2026-10-09 on open item O11: compute the concrete compres
 - **Saved projects whose results change (intended):** composite with ribs parallel, s_r entered, and the block deeper than t (concrete crushing governs, or partial composite with a thin slab). Only possible since A1 added s_r.
 - **Other copies of this code:** none.
 
+## 2026-10-10 — PR: claude/steel-evalvm-fixed-end (PR link added after merge)
+Engineer's decision of 2026-10-10: fix the end-of-beam boundary bug in `evalVM` found during the Timber rebuild, and any other place where the same boundary problem appears. Both functions edited below are defined once (see O4).
+
+### E1. `evalVM` at x = L returns the value just left of the right end (fixed-end moment and end shear)   [calc change] [more conservative]
+- **Where:** `evalVM` (defined once; anchor `function evalVM(X,R,fac){`, ≈ line 1156). Three conditions changed: the node loop (anchor `S.geom.nodes.forEach((_,j)=>{if(nX[j]<=X+1e-9)`), the point load (anchor `if(gx<=X+1e-9){V-=P;M-=P*(X-gx);}`) and the concentrated couple (anchor `if(gx<=X+1e-9)M-=ld.mag*fk;`).
+- **Problem:**
+  - `evalVM` sums everything at or to the left of X. At X = L that included the right-end reaction force and reaction couple, so the free body was the whole beam: **M(L) = 0 and V(L) = 0** for any support at the right end.
+  - Fixed right end: the fixed-end moment was missing at the last station. The diagrams snapped back to 0 at x = L. The negative-moment peak, the governing M_u in the last region, M_max in the C_b calculation, and the envelopes only saw the last grid station, about L/240 short of the support. That is unconservative by about V·Δx.
+  - Any supported right end: the end shear was missing at the last station. V_u came from the last grid station, short by w·Δx, unless the left end governed.
+  - x = 0 was checked and is correct. The left reaction is part of the left free body, so V(0) = R_A and M(0) = −M_A for a fixed left end. A point load at x = 0 is also included, as the value just right of 0.
+- **Governing provision:** statics only (internal V and M from the free body to the left of the section). No code provision, factor or unit changes. Downstream checks use AISC 360-16 Ch. F (M_u, C_b Eq. F1-1) and Ch. G (V_u) unchanged.
+- **Before:**
+  ```js
+  function evalVM(X,R,fac){
+    const nX=nodeXs(),sp=S.geom.spans;
+    let V=0,M=0;
+    S.geom.nodes.forEach((_,j)=>{if(nX[j]<=X+1e-9){V+=R[j].v;M+=R[j].v*(X-nX[j])-R[j].m;}});
+    ...
+        if(gx<=X+1e-9){V-=P;M-=P*(X-gx);}
+    ...
+        if(gx<=X+1e-9)M-=ld.mag*fk;
+  ```
+- **After** (comment above the function extended with three lines saying so):
+  ```js
+  function evalVM(X,R,fac){
+    const nX=nodeXs(),sp=S.geom.spans;
+    const xEnd=nX[nX.length-1],atEnd=X>=xEnd-1e-9;
+    const inc=gx=>atEnd?gx<xEnd-1e-9:gx<=X+1e-9;
+    let V=0,M=0;
+    S.geom.nodes.forEach((_,j)=>{if(inc(nX[j])){V+=R[j].v;M+=R[j].v*(X-nX[j])-R[j].m;}});
+    ...
+        if(inc(gx)){V-=P;M-=P*(X-gx);}
+    ...
+        if(inc(gx))M-=ld.mag*fk;
+  ```
+  The distributed-load branches are unchanged (they are continuous at L).
+- **Check case 1 (the reported example), unfactored:** fixed – pin – fixed, spans 10 + 10 ft, w = 75 plf = 0.075 klf on both spans.
+  - By symmetry the interior support does not rotate, so each span is fixed-fixed: M_end = −wL²/12 = −0.075·10²/12 = **−0.625 kip-ft (−625 ft-lb)**; R = 0.375, 0.750, 0.375 kip.
+  - Statics at x = 20 ft, left free body: 0.375·20 − 0.625 + 0.750·10 − 0.075·20²/2 = 7.5 − 0.625 + 7.5 − 15.0 = −0.625 kip-ft.
+  - Tool: M(20) **0 → −0.625005 kip-ft**; V(20) **0 → −0.375 kip**. (The 0.0008 % excess is the existing 240-strip integration of the fixed-end forces.)
+  - Note: the original request quoted −2187.5 ft-lb for this example. That figure was a mistake in the request (confirmed 2026-10-10); the correct value is −wL²/12 = −625 ft-lb.
+- **Check case 2 (design), W12X26 A992, pin – fixed, L = 20 ft, C_b calculated, L_b,bot = 20 ft:** loads DL 1.0 + 0.15 + 0.026 (self weight) klf, LL 0.40 klf. Combination 1.2D + 1.6L: w_u = 1.2·1.176 + 1.6·0.40 = 2.0512 klf.
+  - M_u at the fixed end = w_uL²/8 = 2.0512·400/8 = **102.56 kip-ft**. Before: 100.43 kip-ft (at x = 19.917 ft, the last grid station). After: 102.56 kip-ft at x = 20.
+  - V_u = 5w_uL/8 = 25.64 kip. Before 25.47 kip (x = 19.917); after **25.64 kip** (x = 20).
+  - C_b (Eq. F1-1) for the bottom-flange region 15.04 – 20 ft: M_A = 21.395, M_B = 45.299, M_C = 72.354 kip-ft (unchanged).
+    - Before: 12.5·100.43/(2.5·100.43 + 3·21.395 + 4·45.299 + 3·72.354) = 1255.39/713.52 = 1.7594.
+    - After: 12.5·102.56/(256.40 + 64.19 + 181.19 + 217.06) = 1282.01/718.84 = **1.7834**.
+  - φM_n (LTB, L_b = 20 ft): 97.58 → 98.91 kip-ft (higher C_b).
+  - **Flexure DCR 1.0292 → 1.0369** (governing; already failing). Shear DCR 0.3026 → 0.3046. H1-1b 1.0292 → 1.0369.
+- **Validation tab (built-in benchmarks):** all 17 analysis, 30 design-example, 25 composite and 4 torsion checks still pass, and the tab text is identical. No benchmark evaluates M or V at x = L of a fixed end ("Two equal spans, M_support" uses x = 20 ft, the interior support of a 40 ft beam). Only one stored value moves, below display precision:
+  - Fixed-fixed UDL δ_mid = wL⁴/384EI: 0.041377414 → 0.041376954 ft (exact 0.041379310; error −0.0046 % → −0.0057 %, tolerance 1.5 %). This comes from the deflection integration, which now uses the true M at x = L in its last interval. The published comparison is unchanged.
+  - All other 16 benchmark values are bit-identical.
+- **Outputs that change:** only for beams with a support (or a point load or couple) at the right end:
+  - V and M diagrams (screen and print) end at the true values instead of 0.
+  - The "V max / V min / M min" peak table and the strength envelopes.
+  - Governing M_u, M_max in the C_b calculation and the unbraced-segment (worst-window) moments for the region touching the right end.
+  - V_u, the H3.3 open-section stresses, and the interaction ratios that use them.
+  - The "V = 0" list on the Analysis tab: the spurious entry at x = L that came from V(L) ≈ 0 is gone.
+  - Deflections of beams with a fixed right end (integration of M/EI in the last interval). Free-left / fixed-right cantilever, tip P = 10 kip, L = 10 ft, I = 100 in⁴: δ_tip 0.16510 → 0.16552 ft (exact PL³/3EI = 0.16552 ft; error −0.25 % → −0.0001 %). In the harness the free-left cantilever (xCantR) moved +0.26 % (deflection DCR 1.3904 → 1.3942); all other cases moved by less than 0.01 %.
+  - The station table's last row: V_r at x = L now shows the end shear (same as V_l), not 0. At x = 0 the V_l column already shows the start shear.
+  - Ties: on a symmetric beam the end shear at x = L now equals the one at x = 0 exactly. Where the last digit is larger, the reported location of V_u (or of a tied M_min) moves from x = 0 to x = L. The values are unchanged.
+- **How verified:** see E2.
+- **Other copies of this code:** none in this file. `Shear and Moment Diagrams.html` and the Timber tool have their own solvers. Not checked or changed here (one tool per PR).
+
+### E2. Station just left of each interior support   [calc change] [more conservative]
+- **Where:** `stationList` (defined once; anchor `nX.forEach(add);` followed by `const EPS=1e-6;`, ≈ line 1197).
+- **Problem:** the station at an interior node gives the value just right of the node. The left-side shear at an interior support (and the left-side moment at a fixed interior node, where M jumps by the reaction couple) was only seen at the previous grid station, Δx = L_total/240 or less away. This was unconservative by w·Δx (or V·Δx for the moment). Point loads and couples already had stations at x ± 10⁻⁶ ft; supports did not.
+- **Governing provision:** statics only, as E1.
+- **Before:**
+  ```js
+    nX.forEach(add);
+    const EPS=1e-6;
+  ```
+- **After:**
+  ```js
+    nX.forEach(add);
+    const EPS=1e-6;
+    /* just left of each interior node: ... */
+    nX.slice(1,-1).forEach(x=>add(x-EPS));
+  ```
+- **Check case:** W12X26, pin – fixed – pin, spans 10 + 10 ft, DL 1.0 + 0.15 + 0.026 klf, LL 0.40 klf, plus a 5 kip DL point load at 4 ft in span 1. Combination 1.2D + 1.6L:
+  - Left-side values at the interior fixed support (x = 10 ft): V = −16.228 kip, M = −35.720 kip-ft (M jumps at the node by the reaction couple).
+  - Before: V_u = 16.057 kip and M_u = 35.121 kip-ft (x = 9.917/9.963 ft). After: **V_u = 16.228 kip, M_u = 35.720 kip-ft** at x = 10 ft (shown as 10.00; the station is at 9.999999 ft).
+  - Flexure DCR 0.2518 → 0.2561; shear DCR 0.1907 → 0.1928.
+  - Two equal spans with pinned supports: M is continuous, so only the V diagram changes (now a vertical jump). On a symmetric beam V_u is unchanged.
+- **How verified (E1 + E2):**
+  - Reproduced on main (281c438) in headless Chromium by calling `solveFor` and `evalVM` directly: M(20) = 0 for the reported example, and the same for fixed-fixed, pin-fixed and free-fixed beams.
+  - Chromium harness, 27 scenarios, main against branch: the 12 regression scenarios from the earlier Steel Beam PRs, the 6 composite cases (A1/R1 a–f), and 9 new boundary cases. The new cases are fixed-pin-fixed (the reported example), fixed-fixed, pin-fixed, fixed-pin, free-fixed and fixed-free cantilevers, 2-span pinned, pin-fixed-pin with a point load, and a simple span with a point load over the right support.
+    - Member mode (3 scenarios) and batch mode (2 scenarios): `AN`, every tab's text and autosave are identical.
+    - Beam mode: the only differences are the ones listed in E1 and E2. For pinned right ends: V at the last station, the V_u location on ties, the spurious "V = 0 at x = L" entry, and V min on the Analysis tab (it now shows the exact end shear, e.g. −2.800 instead of −2.777 kip in the default project). φM_n, φV_n, and all flexure, deflection, J10 and composite results are identical when there is no fixed right end, no fixed interior node and no point load at the right end.
+    - Save/load round trip, autosave, the input panel and the member-reaction hand-off payload are identical. No console errors.
+  - Screenshots of the V and M diagrams, before and after, in `scratchpad/followups/steel-evalvm/`.
+  - `node --check` on all 5 inline scripts.
+- **Saved projects whose results change (intended):** beams with a fixed right end (M_u, C_b, V_u, envelopes, small deflection change), any supported right end where the right reaction governs V_u (V_u up by about w·L/240), and continuous beams where the left-side shear at an interior support governs, or with a fixed interior node.
+- **Other copies of this code:** none.
+
+### E3. Round HSS / pipe shear length L_v measured to the point of zero shear within the span   [calc change] [more conservative or equal]
+Engineer's decision 2026-10-10 on O13 (closes O13). The rule for point loads was corrected the same day to the usual reading of §G5: a point load whose jump crosses V = 0 is the point of zero shear.
+- **Where:**
+  - New function `lvFor(cb,A)`, inserted just above the anchor `/* ---------- master design pass ---------- */`.
+  - Its one caller is in `designAll` (defined once), in the shear branch for `p._kind==='P'`.
+  - `shearMajor` is unchanged (live copy ≈ line 5223, see O4).
+- **Problem:**
+  - L_v was the distance from the V_u station to the nearest entry of the "V = 0" list (`cb.zV`).
+  - That list contains every sign change between neighbouring stations, including the sign change across the shear jump at a support.
+  - When V_u was at an interior support, the nearest "zero" was the jump at that same support:
+    - on main, L_v came out as one grid step (≈ 0.08 ft for 2 × 20 ft), the least conservative value;
+    - after E2, L_v could be exactly 0. `shearMajor` reads 0 as "none" (`LvIn||1e9`), so the derivation printed L_v = 83 333 300 ft.
+- **Governing provision:** AISC 360-16 §G5, Eq. G5-2a: F_cr = 1.60E / (√(L_v/D)·(D/t)^5/4). L_v is the distance from the location of maximum shear to the location of zero shear. G5-2b and the 0.6F_y cap are unchanged.
+- **Rule now used (`lvFor`):**
+  1. Start at the max-|V| station. This is the same station as V_u (the first maximum, as `absPk` picks it).
+  2. Search along the span in the direction of decreasing |V|.
+  3. L_v is the distance to the first point of zero shear:
+     - a zero of the continuous shear diagram (linear interpolation between stations), or
+     - a point load whose jump crosses V = 0. The load point is then the zero, as for a midspan point load on a simple span.
+  4. A point-load jump that does not cross zero is stepped over.
+  5. A point-load jump within 10⁻⁴ ft of the start station is not counted.
+  6. Support jumps never count as a zero. The search stops at the supports bounding the span, or at a beam end.
+  7. **Fallback (conservative):** if no zero is found before the span end, L_v is the distance to that span end. A longer L_v gives a lower G5-2a.
+  8. If |V| is level both ways, both directions are searched and the longer result is used.
+  9. A non-positive result falls back to the span length. So L_v is never 0, and beam mode never passes the 10⁹ in default.
+- **Before:**
+  ```js
+      let Lv=A.L;cb.zV.forEach(z=>{Lv=Math.min(Lv,Math.abs(z-cb.Vabs.x));});
+      C.shearX=shearMajor(p,Lv*12,S.design.stiff);
+  ```
+- **After:**
+  ```js
+      const Lv=lvFor(cb,A);
+      C.shearX=shearMajor(p,Lv*12,S.design.stiff);
+  ```
+  plus the new `lvFor` (≈ 50 lines; its header comment states the rule above).
+- **When L_v changes F_cr.** F_cr = min(0.6F_y, max(G5-2a, G5-2b)), and only G5-2a depends on L_v. So L_v can change F_cr only when G5-2b < 0.6F_y.
+  - In the tool's catalog that is only **HSS26.000X0.313**: D/t = 89.35 with A500 Gr. C (F_y = 46), and D/t = 83.07 with A1085 (F_y = 50).
+  - Every other round HSS and pipe has G5-2b ≥ 0.6F_y, so F_cr = 0.6F_y whatever L_v is.
+  - For HSS26.000X0.313 A500C, G5-2a drops below 0.6F_y = 27.6 ksi only when L_v > 81.2 ft. It reaches the G5-2b floor (26.78 ksi) at L_v = 86.2 ft.
+- **Check case 1 (F_cr changes): HSS26.000X0.313 A500C, two spans 2 × 150 ft, pins, UDL (0.2 klf DL plus default project loads).**
+  - 1.2D + 1.6L gives V_u = 109.03 kip at the interior support.
+  - L_v: main **0.629 ft** (the support jump, interpolated within one grid step) → branch **93.75 ft**. Hand: the in-span zero is at 0.375·150 = 56.25 ft from the end support, so L_v = 0.625·150 = 93.75 ft.
+  - Section: D = 26 in, D/t = 89.35, (D/t)^1.25 = 274.6, (D/t)^1.5 = 844.6, A = 23.5 in².
+  - G5-2b = 0.78·29 000/844.6 = 26.78 ksi (both).
+  - Main: G5-2a = 313.5 ksi, so F_cr = 0.6F_y = 27.60 ksi.
+  - Branch: L_v = 1125 in, √(1125/26) = 6.578, so G5-2a = 46 400/(6.578·274.6) = 25.68 ksi, and F_cr = min(27.6, max(25.68, 26.78)) = **26.78 ksi**.
+  - φV_n = 0.9·F_cr·A/2: **291.87 → 283.24 kip** (−3.0 %). Shear DCR 0.3736 → 0.3849.
+- **Check case 2 (L_v changes, F_cr does not): Pipe8XS A53B, 2 × 20 ft, pins, UDL.**
+  - 1.2D + 1.6L gives V_u = 25.90 kip just right of the interior support.
+  - L_v: main **0.0839 ft** → branch **12.50 ft** (0.625·20).
+  - Section: D/t = 18.55, (D/t)^1.25 = 38.48, (D/t)^1.5 = 79.9.
+  - G5-2a: main 3528 ksi; branch √(150/8.625) = 4.170, so 46 400/(4.170·38.48) = **289.0 ksi**.
+  - G5-2b = 283.2 ksi.
+  - F_cr = min(0.6·35 = 21.0, …) = **21.0 ksi both**. φV_n = 112.46 kip both; DCR 0.2303 both.
+  - HSS26.000X0.313 on the same 2 × 20 ft: L_v 0.0839 → 12.5 ft, G5-2a 858 → 70.3 ksi, F_cr 27.6 ksi both.
+- **Check case 3 (point load, no change vs main): HSS26.000X0.313 A500C, simple span 100 ft, 20 kip DL at midspan.**
+  - V_u = 58.15 kip.
+  - L_v = **50 ft on main and on the branch**: the jump at the load crosses zero, so the load point is the zero.
+  - G5-2a = 46 400/(√(600/26)·274.6) = 46 400/(4.804·274.6) = 35.17 ksi, so F_cr = 27.60 ksi and φV_n = 291.87 kip (both).
+- **Other cases checked (Pipe8XS unless noted), L_v main → branch, F_cr unchanged in all:**
+  - simple span UDL: 10 → 10 ft;
+  - fixed-fixed: 10 → 10 ft;
+  - pin-fixed: 12.42 (0.083 for two combinations) → 12.5 ft;
+  - fixed-free cantilever with a tip load: 10 → 10 ft;
+  - simple span with a point load at midspan: 10 → 10 ft;
+  - simple span with a point load at L/4: 5 → 5 ft (1.4D), 6.98 → 6.98 ft (1.2D + 1.6L);
+  - 3 spans 15 + 20 + 15 ft with a point load: 0.12 → 8.77 ft;
+  - HSS26.000X0.313, 100 ft UDL: 50 → 50 ft.
+  - So L_v changes only where main picked up a support jump.
+- **Validation tab:** no benchmark uses §G5 (the design examples cover F2, F7, F8, G2, G4, H3 and E3). All 17 + 30 + 25 + 4 checks pass, and the tab text is identical to main.
+- **How verified:**
+  - The 27-scenario harness (as in E2) gives results identical to the E1 + E2 commit in every scenario, because none of them uses a round section. So main vs branch differs only as listed in E1 and E2.
+  - The 12 round-section cases above were run on main, on E1 + E2, and on the final branch. The V_x tab text was checked for the "83 333 300 ft" value: it appears with E1 + E2 alone (3 cases), never on main or on the branch.
+  - `node --check` on all inline scripts; no console errors.
+- **Not changed:**
+  - Member mode still uses the entered L_v, with its existing default of 10⁸ ft when blank (`S.member.Lv!=null?S.member.Lv:1e8`).
+  - Batch mode uses L_x.
+  - The "V = 0 (moment extrema / Lᵥ stations)" list on the Analysis tab still shows `zV`, which now feeds the C_b sampling only.
+- **Saved projects whose results change:** round HSS or pipe in beam mode with V_u at an interior support, or at a fixed end next to a support jump. F_cr changes only for HSS26.000X0.313 when the in-span L_v exceeds about 81 ft (A500C) or about 82 ft (A1085).
+- **Other copies of this code:** none.
+
 ## Open items (not changed)
 - O1. **H3.3(c) buckling limit state** is not implemented, only warned (F5). Decide on the method (e.g. f_bx + σ_w ≤ φF_cr with F_cr = M_n/S_x from Chapter F, or a DG 9 interaction) before coding it as a check.
 - O2. **Batch mode** has no H3.3 buckling warning and keeps its existing tension note. Decide whether to add a matching batch note.
@@ -1210,3 +1388,4 @@ Engineer's decision of 2026-10-09 on open item O11: compute the concrete compres
 - O10. **Resolved 2026-10-09 by A1** (s_r is now an input; drawings use it). **Rib spacing is not an input.** The D1 drawings use an illustrative spacing max(6 in, 2w_r), labelled as such. Add an input only if the drawings need to show the real deck profile.
 - O11. **Resolved 2026-10-09 by R1** (block computed through the rib concrete). **Compression block in the ribs with parallel deck.** When a > t (C reaches into the ribs), the tool keeps a uniform-width block of depth a = C/(0.85f′_c b_eff) and d₁ = Y_con − a/2, and warns "verify by hand". With parallel ribs the true block under the slab is only the rib width, so its centroid is lower. In A1 case (b), the true centroid is 3.19 in below the slab top, not 3.00 in, so d₁ = 4.31 in rather than 4.50 in and M_n is about 0.7 % high. Pre-existing; not changed. Decide whether to compute the block through the ribs.
 - O12. **Batch template has no rib width or rib spacing columns.** After A1, batch PERP rows count no rib concrete (§I3.2c) and PARA rows count none either, with a warning. Add `w_r` / `s_r` columns only if batch PARA rows need the rib concrete.
+- O13. **Resolved 2026-10-10 by E3** (L_v measured to the point of zero shear within the span; support jumps excluded). **Round HSS / pipe shear length L_v at an interior support** (found while checking E2). The G5 L_v is the distance from the V_u station to the nearest entry in the "V = 0" list. That list includes the sign change across the shear jump at a support, so when V_u is at an interior support, L_v is about 0. Before E2 the jump crossing was interpolated a grid step away, giving L_v ≈ 0.08 ft and F_cr = 0.6F_y. With E2 it lands on the support, L_v can be exactly 0, and `shearMajor` treats 0 as "no zero-shear point" (`LvIn||1e9`): the derivation then shows L_v ≈ 83 000 000 ft and F_cr = max(G5-2b, ~0) ≤ 0.6F_y. For standard pipes and most round HSS (D/t below about 90) G5-2b still exceeds 0.6F_y, so V_n does not change (checked: Pipe8XS and Pipe12STD on 2 × 20 ft spans, F_cr = 21 ksi before and after). For very slender rounds it is lower, which is conservative. Both the old and the new L_v are artefacts. The intended L_v is the distance to the zero-shear point within the span (12.5 ft from the interior support of a 2 × 20 ft UDL beam). Decide whether to exclude support-jump crossings from the L_v search.
