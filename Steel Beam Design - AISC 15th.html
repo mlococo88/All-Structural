@@ -1152,21 +1152,26 @@ function solveFor(fac,Iin4){
 }
 /* Exact V & M at any X by statics on the left segment.
    A reaction couple enters the internal sagging moment with NEGATIVE sign
-   (verified: FF midspan P → M_end = −PL/8, M_mid = +PL/8). */
+   (verified: FF midspan P → M_end = −PL/8, M_mid = +PL/8).
+   At the right end (X = L) the value just LEFT of L is returned: the end
+   reaction (force and couple) and any point load or couple placed at L are
+   excluded, so a fixed right end gives its fixed-end moment, not 0. */
 function evalVM(X,R,fac){
   const nX=nodeXs(),sp=S.geom.spans;
+  const xEnd=nX[nX.length-1],atEnd=X>=xEnd-1e-9;
+  const inc=gx=>atEnd?gx<xEnd-1e-9:gx<=X+1e-9;
   let V=0,M=0;
-  S.geom.nodes.forEach((_,j)=>{if(nX[j]<=X+1e-9){V+=R[j].v;M+=R[j].v*(X-nX[j])-R[j].m;}});
+  S.geom.nodes.forEach((_,j)=>{if(inc(nX[j])){V+=R[j].v;M+=R[j].v*(X-nX[j])-R[j].m;}});
   S.loads.forEach(ld=>{
     if(ld.off)return;const fk=fac[ld.lc]||0;if(!fk)return;
     if(ld.allSpans&&ld.type==='uniform'){const w=ld.mag*fk;V-=w*X;M-=w*X*X/2;return;}
     const si=Math.min(ld.si||0,sp.length-1),x0=nX[si],spL=sp[si].L;
     if(ld.type==='point'){
       const gx=x0+Math.max(0,Math.min(spL,ld.pos)),P=ld.mag*fk;
-      if(gx<=X+1e-9){V-=P;M-=P*(X-gx);}
+      if(inc(gx)){V-=P;M-=P*(X-gx);}
     }else if(ld.type==='moment'){
       const gx=x0+Math.max(0,Math.min(spL,ld.pos));
-      if(gx<=X+1e-9)M-=ld.mag*fk;
+      if(inc(gx))M-=ld.mag*fk;
     }else{
       const lx1=ld.type==='uniform'?0:(ld.sx||0),lx2=ld.type==='uniform'?spL:(ld.ex||spL);
       const gx1=x0+lx1,gx2=x0+lx2;
@@ -1191,6 +1196,10 @@ function stationList(){
   for(let i=0;i<=nGrid;i++)add(i/nGrid*L);
   nX.forEach(add);
   const EPS=1e-6;
+  /* just left of each interior node: the station AT the node carries the
+     value just right of it, so the left-side shear (and the left-side moment
+     at a fixed interior node) needs its own station */
+  nX.slice(1,-1).forEach(x=>add(x-EPS));
   S.loads.forEach(ld=>{
     if(ld.off)return;
     const si=Math.min(ld.si||0,sp.length-1),x0=nX[si],spL=sp[si].L;
