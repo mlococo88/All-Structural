@@ -252,3 +252,305 @@ How verified (follow-up):
 #### Open items
 
 - N-O4. Resize handles are offered for plates, bars and rectangular tubes only (not holes, round parts or rolled shapes, whose sizes come from a list or a single diameter).
+
+
+## 2026-10-10 — PR: claude/spc-dxf (PR link added after merge)
+
+### X1. Export DXF, to check the section properties with AutoCAD MASSPROP   [new output only — no change to any formula, computed property, storage key or saved format]
+
+- **Engineer's request (2026-10-10):** "Add a DXF output feature, this will allow me to check the section properties quickly using MASSPROP."
+- **What it does:** a new header button **Export DXF** (next to Save file) opens a dialog: units shown, coordinate basis (section centroid at 0,0 — default — or the tool's own origin), warnings where MASSPROP will differ, short MASSPROP help. **Download DXF** writes an ASCII DXF R12 (AC1009, CRLF) file named after the project (`section_properties.dxf` when the project name is blank).
+- **Geometry = exactly what the properties are computed from:** for every part (hole parts included) the primitives of `SPC.partGlobal(pt).prims` that `analyze` integrates: polygons as closed `POLYLINE`/`VERTEX` (flag 70 = 1), circles as `CIRCLE`. Rectangular tubes and rectangular HSS: the same 24 chords per corner that the tool integrates (`rrectPts(…, 24)`). Round bars, round tubes, round HSS and pipes: the tool integrates exact circles (`circM`), so true CIRCLEs are written. Consecutive coincident vertices (a zero-length straight between two corner arcs) are dropped; this does not change the area integrals. Coordinates are written at full precision (shortest round-trip decimal form, never rounded to the display precision, no exponent notation).
+- **Units:** the display units from Settings. in: coordinates in inches, `$INSUNITS = 1`. mm: coordinates × 25.4, `$INSUNITS = 4`. The dialog and the notes state the unit.
+- **Coordinate basis.** Stored per browser in the new key `spc_dxfOpts_v1` = `{"basis":"centroid"|"origin"}`. It is written only when the radio is changed, every read and write is in try/catch, and an invalid value falls back to centroid. It is not project data.
+  - *centroid* (default): the tool's centroid (x̄, ȳ, as displayed) is moved to 0,0, so MASSPROP "Moments of inertia" X, Y and "Product of inertia" XY are the centroidal I<sub>x</sub>, I<sub>y</sub>, I<sub>xy</sub> directly.
+  - *origin*: the tool's own origin, so MASSPROP "Centroid" = x̄, ȳ and its moments are about 0,0 (I + A·d²). The notes give both.
+- **Sign convention:** axes as in the tool (+x right, +y up). Product of inertia = ∫xy dA, the sign the tool uses (`polyM`, `circM`). AutoCAD's MASSPROP product of inertia is understood to be the same ∫xy dA (positive with the area mostly in quadrants 1 and 3). **This was not checked in AutoCAD.** A one-time check is given in the Method tab (1 × 1 square, corner at 0,0 → XY = +0.25).
+- **Layers:**
+  - `SPC-PARTS`: material (colour 7).
+  - `SPC-PARTS-N`: material of parts with n ≠ 1 (colour 3; only written when used).
+  - `SPC-HOLES`: hole parts and the voids inside tubes (colour 1).
+  - `SPC-CENTROID`: cross and small circle at the centroid, principal axes 1 and 2 with tags.
+  - `SPC-NOTES` (TEXT):
+    - project, date, units, basis, axes and sign, layers;
+    - the tool's A, x̄, ȳ, I<sub>x</sub>, I<sub>y</sub>, I<sub>xy</sub>, I<sub>1</sub>, I<sub>2</sub>, θ<sub>p</sub>;
+    - the **expected MASSPROP readout** of the exported geometry: Area, Centroid, Moments of inertia, Product of inertia, Radii of gyration, Principal moments with directions;
+    - the REGION → UNION → SUBTRACT → MASSPROP steps, what MASSPROP does not report, the warnings and the part list.
+  - `SPC-LABELS`: part labels. Written **off** (negative colour) so that REGION does not pick it up.
+- **Warnings (dialog and notes):**
+  - overlapping parts: UNION merges the overlap once, the tool counts it twice;
+  - n ≠ 1: MASSPROP is unweighted, so the expected readout is the unweighted geometry;
+  - AISC tabulated option: the DXF holds the plate model;
+  - holes not inside material: SUBTRACT removes only the part inside;
+  - self-intersecting polygons: REGION fails.
+- **Text is ASCII only:**
+  - No `^`, which is AutoCAD's caret escape: ezdxf showed "in^2" as "inp", so units are written in2 / in4.
+  - × → x, Ø → `%%c`, ² → 2, dashes → `-`. Any other non-ASCII character goes through the copied `enc` (`\U+XXXX`).
+  - Long note lines are wrapped at about 120 characters.
+- **Not in this change:** DXF import; any change to the calculation, to existing keys or to the saved JSON.
+
+#### Other copies (CLAUDE.md §3)
+
+The writer helpers (`g`, `layer`, `line`, `pline`, `circle`, `text`, `enc`) and the file assembly (HEADER / TABLES / BLOCKS / ENTITIES) are copied from `GPDXF.write` in `Gusset Plate Rating.html` (anchor `/* ---------- writer: ASCII DXF R12 (AC1009), CRLF ---------- */`). Gusset Plate Rating is not changed. Differences in this copy:
+- `fmt` writes full precision instead of 8 decimals;
+- `$INSUNITS` is 1 or 4;
+- `layer()` takes an `off` flag (negative colour);
+- `text()` takes `noGrow`, so labels do not move the notes;
+- the LTYPE table has CONTINUOUS only (no dashed layers here).
+
+#### Where (anchors): before / after
+
+1. Header button. Anchor `<button type="button" id="btnSaveHdr"`.
+   - Before:
+     ```html
+             <button type="button" id="btnSaveHdr" title="Save the project to a file (.json)">Save file</button>
+             <button type="button" id="btnPrint" class="primary" title="Build a printable calculation report">Print report</button>
+     ```
+   - After:
+     ```html
+             <button type="button" id="btnSaveHdr" title="Save the project to a file (.json)">Save file</button>
+             <button type="button" id="btnDxf" title="Export the section geometry to DXF, to check the properties with AutoCAD MASSPROP">Export DXF</button>
+             <button type="button" id="btnPrint" class="primary" title="Build a printable calculation report">Print report</button>
+     ```
+2. `wireFile()`, anchor `$('btnPrint').addEventListener('click', openPrintDialog);`. One line added before it:
+   ```js
+     $('btnDxf').addEventListener('click', openDxfDialog);
+   ```
+3. `buildManual()`: a new section before `  H('Saved data');`:
+   ```js
+  H('Checking with AutoCAD MASSPROP (Export DXF)');
+  UL(['<b>Export DXF</b> (header) writes an ASCII DXF R12 file with exactly the geometry the properties are computed from: each part\'s polygons as closed polylines (rectangular-tube and HSS corners as the same 24 chords per corner), round bars, tubes and pipes as true circles, at full numeric precision, in the display units (in: $INSUNITS = 1; mm: $INSUNITS = 4).',
+    '<b>Layers:</b> SPC-PARTS (material), SPC-PARTS-N (material of parts with n ≠ 1), SPC-HOLES (hole parts and the voids inside tubes), SPC-CENTROID (cross at the centroid, principal axes 1 and 2), SPC-NOTES (project, units, basis, the tool\'s A, x̄, ȳ, I<sub>x</sub>, I<sub>y</sub>, I<sub>xy</sub>, I<sub>1</sub>, I<sub>2</sub>, θ<sub>p</sub>, the expected MASSPROP readout and the steps), SPC-LABELS (part labels; off).',
+    '<b>Coordinate basis</b> (remembered in this browser): section centroid at 0,0 (default) — MASSPROP "Moments of inertia" X, Y and "Product of inertia" XY are then the centroidal I<sub>x</sub>, I<sub>y</sub>, I<sub>xy</sub>; or the tool\'s own origin — MASSPROP "Centroid" = x̄, ȳ and its moments are about 0,0. Axes: +x right, +y up; product of inertia = ∫xy dA, the sign the tool uses and, as understood, the sign MASSPROP uses (check once: a 1 × 1 square with a corner at 0,0 in the first quadrant gives XY = +0.25).',
+    '<b>Steps:</b> UCS World → REGION (select the objects on SPC-PARTS, SPC-PARTS-N, SPC-HOLES) → UNION the material regions (touching parts union cleanly; separate pieces become one composite region) → SUBTRACT the hole regions → MASSPROP. Compare Area, Centroid, Moments of inertia, Product of inertia and Principal moments.',
+    '<b>Differences to expect:</b> MASSPROP is unweighted (compare with every n = 1, or use the unweighted values in the notes); rolled shapes are exported as their plate model (the AISC tabulated option is not in the geometry); overlapping parts (possible only with "Prevent overlap" off or in an older file) are merged once by UNION but counted twice by the tool — the export dialog warns. MASSPROP does not report J, C<sub>w</sub>, Z, S, the shear centre or Q.']);
+   ```
+   and in the Saved data list (before, then after):
+   ```
+   selected input tab <code>${LS_INTAB}</code>. All keys
+   selected input tab <code>${LS_INTAB}</code>, DXF export options <code>${LS_DXF}</code>. All keys
+   ```
+4. New block, inserted immediately before the `PRINT REPORT` banner (`/* ====…` followed by `   PRINT REPORT`):
+   ```js
+/* =====================================================================
+   DXF EXPORT — for checking the section with AutoCAD REGION / MASSPROP.
+   Writes exactly the geometry the properties are computed from (each part's
+   polygons and circles after mirror, rotation and placement; rectangular-tube
+   corners as the same 24 chords per corner; circles as true CIRCLEs), at full
+   numeric precision, in the display units. No import.
+   ===================================================================== */
+const LS_DXF = 'spc_dxfOpts_v1';   // per-browser export options { basis: 'centroid' | 'origin' }; not project data
+function dxfOpts() { let o = null; try { o = JSON.parse(lsGet(LS_DXF) || 'null'); } catch (e) { o = null; } return { basis: (o && o.basis === 'origin') ? 'origin' : 'centroid' }; }
+function dxfOptsSave(o) { try { lsSet(LS_DXF, JSON.stringify({ basis: o.basis === 'origin' ? 'origin' : 'centroid' })); } catch (e) { } }
+const SPCDXF = (function () {
+  /* ASCII DXF R12 (AC1009), CRLF. Writer helpers and file assembly copied from GPDXF.write in
+     Gusset Plate Rating.html (CLAUDE.md §3: duplicated code stays duplicated). Changes from that copy:
+     fmt writes full precision (shortest round-trip form, no rounding); $INSUNITS is 1 (in) or 4 (mm);
+     a layer may be written "off" (negative colour). */
+  const fmt = x => { if (!isFinite(x) || x === 0) return '0'; let s = String(x); if (/e/i.test(s)) { s = x.toFixed(20); if (s.indexOf('.') >= 0) s = s.replace(/0+$/, '').replace(/\.$/, ''); } return /^-0(\.0*)?$/.test(s) ? '0' : s; };
+  function enc(s) { return String(s ?? '').replace(/[\r\n\t]+/g, ' ').replace(/[^\x20-\x7e]/g, c => { const cp = c.codePointAt(0); return '\\U+' + cp.toString(16).toUpperCase().padStart(4, '0'); }).slice(0, 250); }
+  // TEXT is plain ASCII: '^' is AutoCAD's caret escape (never written); x for the multiplication sign, %%c for the diameter sign
+  const asc = s => String(s ?? '').replace(/\^/g, '').replace(/\u00d7/g, 'x').replace(/[\u00d8\u2300]/g, '%%c').replace(/\u00b2/g, '2').replace(/\u2074/g, '4').replace(/[\u2013\u2014]/g, '-');
+  const g6 = (v, p) => isNum(v) ? (Math.abs(v) < 1e-12 ? '0' : String(+v.toPrecision(p || 8))) : 'n/a';
+  // geometry-only (unweighted, every part n = 1, plate model) properties of the exported primitives, in model units, about the given origin
+  function geomProps(R, o) {
+    const pr = []; R.parts.forEach(q => q.G.prims.forEach(p => pr.push(p.k === 'poly' ? { k: 'poly', s: p.s, pts: p.pts.map(v => [v[0] - o[0], v[1] - o[1]]) } : { k: 'circ', s: p.s, c: [p.c[0] - o[0], p.c[1] - o[1]], r: p.r })));
+    const m = SPC.primsMoments(pr), A = m.A, cx = m.Sy / A, cy = m.Sx / A;
+    const Ixc = m.Ixx - A * cy * cy, Iyc = m.Iyy - A * cx * cx, Ixyc = m.Ixy - A * cx * cy, P = SPC.principal(Ixc, Iyc, Ixyc);
+    return { A, cx, cy, Ixo: m.Ixx, Iyo: m.Iyy, Ixyo: m.Ixy, Ixc, Iyc, Ixyc, I1: P.I1, I2: P.I2, th: P.th };
+  }
+  // warnings for the export (things that make MASSPROP differ from the tool)
+  function issues(R) {
+    const W = [];
+    (R.overlaps || []).forEach(o => W.push(`${o.la} and ${o.lb} overlap: UNION merges the common area once, the tool counts it twice, so MASSPROP will differ. Move them apart (or switch "Prevent overlap" on).`));
+    if (R.anyN) W.push('Some parts have modulus ratio n other than 1 (layer SPC-PARTS-N). MASSPROP is unweighted: it matches the tool only with every n = 1; the notes give the unweighted values it should show.');
+    if (R.anyTab) W.push('Some rolled shapes use the AISC tabulated properties. The DXF holds their plate model (no fillets), so MASSPROP matches the plate model, not the tabulated values; the notes give the values it should show.');
+    (R.warnings || []).forEach(w => { if (/^Hole .* not entirely inside/.test(w)) W.push(w + ' SUBTRACT removes only the part inside the material.'); else if (/self-intersecting/.test(w)) W.push(w + ' REGION cannot make a region from it.'); });
+    return W;
+  }
+  function write(R, M, opt) {
+    opt = opt || {};
+    const mm = opt.units === 'mm', f = mm ? 25.4 : 1, uL = mm ? 'mm' : 'in';
+    const o = opt.basis === 'origin' ? [0, 0] : [R.cx, R.cy];
+    const tp = v => [(v[0] - o[0]) * f, (v[1] - o[1]) * f];
+    const L = [], ent = [], bb = [Infinity, Infinity, -Infinity, -Infinity];
+    const grow = (x, y) => { if (!isFinite(x) || !isFinite(y)) return; bb[0] = Math.min(bb[0], x); bb[1] = Math.min(bb[1], y); bb[2] = Math.max(bb[2], x); bb[3] = Math.max(bb[3], y); };
+    const g = (c, v) => ent.push(String(c).padStart(3), String(v));
+    const layer = (name, col, lt = 'CONTINUOUS', off = false) => { if (!L.some(l => l[0] === name)) L.push([name, off ? -col : col, lt]); return name; };
+    const line = (ly, a, b) => { g(0, 'LINE'); g(8, ly); g(10, fmt(a[0])); g(20, fmt(a[1])); g(30, 0); g(11, fmt(b[0])); g(21, fmt(b[1])); g(31, 0); grow(a[0], a[1]); grow(b[0], b[1]); };
+    const pline = (ly, pts, closed = true) => { g(0, 'POLYLINE'); g(8, ly); g(66, 1); g(10, 0); g(20, 0); g(30, 0); g(70, closed ? 1 : 0);
+      pts.forEach(q => { g(0, 'VERTEX'); g(8, ly); g(10, fmt(q[0])); g(20, fmt(q[1])); g(30, 0); grow(q[0], q[1]); }); g(0, 'SEQEND'); g(8, ly); };
+    const circle = (ly, c, r) => { g(0, 'CIRCLE'); g(8, ly); g(10, fmt(c[0])); g(20, fmt(c[1])); g(30, 0); g(40, fmt(r)); grow(c[0] - r, c[1] - r); grow(c[0] + r, c[1] + r); };
+    const text = (ly, at, h, s, noGrow) => { g(0, 'TEXT'); g(8, ly); g(10, fmt(at[0])); g(20, fmt(at[1])); g(30, 0); g(40, fmt(h)); g(1, enc(s)); if (!noGrow) { grow(at[0], at[1]); grow(at[0] + 0.62 * h * String(s).length, at[1] + h); } };
+    layer('0', 7);
+    const LP = layer('SPC-PARTS', 7), LH = layer('SPC-HOLES', 1);
+    // 1. the geometry, exactly as computed (holes and the voids inside tubes on SPC-HOLES)
+    let nPoly = 0, nCirc = 0;
+    R.parts.forEach(q => {
+      const LS = Math.abs(q.n - 1) > 1e-12 ? layer('SPC-PARTS-N', 3) : LP;
+      q.G.prims.forEach(pr => {
+        const ly = pr.s < 0 ? LH : LS;
+        if (pr.k === 'circ') { circle(ly, tp(pr.c), pr.r * f); nCirc++; return; }
+        const P = []; pr.pts.forEach(v => { const w = tp(v), z = P[P.length - 1]; if (!z || Math.hypot(w[0] - z[0], w[1] - z[1]) > 1e-12 * f) P.push(w); });
+        if (P.length > 2 && Math.hypot(P[0][0] - P[P.length - 1][0], P[0][1] - P[P.length - 1][1]) <= 1e-12 * f) P.pop();
+        pline(ly, P); nPoly++;
+      });
+    });
+    const gb = bb.slice(), ext = Math.max(gb[2] - gb[0], gb[3] - gb[1], 1e-9);
+    // 2. centroid cross and principal axes
+    const LC = layer('SPC-CENTROID', 6), c0 = tp([R.cx, R.cy]), cs = 0.06 * ext, ax = 0.45 * ext;
+    line(LC, [c0[0] - cs, c0[1]], [c0[0] + cs, c0[1]]); line(LC, [c0[0], c0[1] - cs], [c0[0], c0[1] + cs]); circle(LC, c0, cs / 3);
+    const u1 = R.u1, u2 = R.u2, hC = 0.025 * ext;
+    line(LC, [c0[0] - ax * u1[0], c0[1] - ax * u1[1]], [c0[0] + ax * u1[0], c0[1] + ax * u1[1]]);
+    line(LC, [c0[0] - ax * u2[0], c0[1] - ax * u2[1]], [c0[0] + ax * u2[0], c0[1] + ax * u2[1]]);
+    text(LC, [c0[0] + ax * u1[0], c0[1] + ax * u1[1]], hC, 'axis 1 (I1)'); text(LC, [c0[0] + ax * u2[0], c0[1] + ax * u2[1]], hC, 'axis 2 (I2)');
+    // 3. part labels (own layer, written "off" so it is never picked up by REGION)
+    const LL = layer('SPC-LABELS', 8, 'CONTINUOUS', true);
+    R.parts.forEach(q => text(LL, tp(q.geo.c), 0.03 * ext, asc((q.pt.lbl || q.pt.id) + (Math.abs(q.n - 1) > 1e-12 ? ' (n = ' + q.n + ')' : '')), true));
+    // 4. notes: tool results, expected MASSPROP readout, steps
+    const LN = layer('SPC-NOTES', 4), hN = Math.max(0.016 * ext, 1e-6), x0 = bb[2] + 0.08 * ext;   // right of the parts, the axes and their tags
+    const GP = geomProps(R, o), fA = f * f, fI = fA * fA, p = M.project || {}, d = new Date();
+    const today = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    const u2s = uL + '2', u4s = uL + '4', deg = r => (+(r * 180 / Math.PI).toFixed(4)) + ' deg';
+    const pa = SPC.principal(GP.Ixc, GP.Iyc, GP.Ixyc), d1 = [Math.cos(pa.th), Math.sin(pa.th)], d2 = [-Math.sin(pa.th), Math.cos(pa.th)];
+    // round-off zeros (e.g. Ixy = 1e-14 for a symmetric section) are written as 0
+    const sI = Math.max(Math.abs(GP.Ixo), Math.abs(GP.Iyo), Math.abs(R.Ix), Math.abs(R.Iy)) * fI, z = (v, sc) => Math.abs(v) < 1e-12 * sc ? 0 : v;
+    const N = [];
+    N.push(['SECTION PROPERTY CALCULATOR - DXF FOR CHECKING WITH AUTOCAD MASSPROP', 1.3]);
+    N.push(`Project: ${p.name || '-'}   Member: ${p.member || '-'}   Job: ${p.job || '-'}   Date: ${p.date || today}   Exported: ${today}`);
+    N.push(`Units: ${mm ? 'millimetres (drawing unit = 1 mm, $INSUNITS = 4)' : 'inches (drawing unit = 1 in, $INSUNITS = 1)'}. Coordinates at full precision.`);
+    N.push(opt.basis === 'origin' ? 'Coordinate basis: the tool\'s own origin at (0,0). MASSPROP Centroid = the tool\'s xbar, ybar; its Moments/Product of inertia are about (0,0), not the centroid.'
+      : `Coordinate basis: section centroid at (0,0) (the tool's xbar = ${g6(z(R.cx * f, ext), 10)}, ybar = ${g6(z(R.cy * f, ext), 10)} ${uL} moved to 0,0). MASSPROP Moments/Product of inertia are then centroidal.`);
+    N.push('Axes as in the tool: +x right, +y up. Product of inertia Ixy = integral of x*y dA (positive with the area mostly in quadrants 1 and 3; AutoCAD MASSPROP uses the same sign, as understood).');
+    N.push('Layers: SPC-PARTS = material (closed polylines, circles); SPC-PARTS-N = material of parts with n other than 1; SPC-HOLES = holes and the voids inside tubes; SPC-CENTROID; SPC-NOTES; SPC-LABELS (off).');
+    N.push(`Geometry exactly as the tool computes it: ${nPoly} closed polyline${nPoly === 1 ? '' : 's'}, ${nCirc} circle${nCirc === 1 ? '' : 's'}. Rectangular tube / HSS corners are 24 straight chords per corner (as in the tool); round parts are true circles.`);
+    N.push(['TOOL RESULTS (as displayed in the tool' + (R.anyN ? ', transformed with n' : '') + (R.anyTab ? ', AISC tabulated values where selected' : '') + '):', 1.1]);
+    N.push(`A = ${g6(R.A * fA)} ${u2s}   xbar = ${g6(z(R.cx * f, ext))} ${uL}   ybar = ${g6(z(R.cy * f, ext))} ${uL}  (tool axes)`);
+    N.push(`Ix = ${g6(R.Ix * fI)} ${u4s}   Iy = ${g6(R.Iy * fI)} ${u4s}   Ixy = ${g6(z(R.Ixy * fI, sI))} ${u4s}  (about the centroid)`);
+    N.push(`I1 = ${g6(R.I1 * fI)} ${u4s}   I2 = ${g6(R.I2 * fI)} ${u4s}   theta_p = ${deg(R.thp)} (from +x to axis 1, CCW)`);
+    N.push([`EXPECTED MASSPROP READOUT (this geometry, unweighted, UCS = World)${(R.anyN || R.anyTab) ? ' - differs from the tool results, see the warnings' : ''}:`, 1.1]);
+    N.push(`Area: ${g6(GP.A * fA)}`);
+    N.push(`Centroid: X: ${g6(z(GP.cx * f, ext))}  Y: ${g6(z(GP.cy * f, ext))}`);
+    N.push(`Moments of inertia: X: ${g6(GP.Ixo * fI)}  Y: ${g6(GP.Iyo * fI)}`);
+    N.push(`Product of inertia: XY: ${g6(z(GP.Ixyo * fI, sI))}`);
+    N.push(`Radii of gyration: X: ${g6(Math.sqrt(GP.Ixo / GP.A) * f)}  Y: ${g6(Math.sqrt(GP.Iyo / GP.A) * f)}`);
+    N.push(`Principal moments about centroid: ${g6(pa.I1 * fI)} along [${g6(d1[0], 6)} ${g6(d1[1], 6)}],  ${g6(pa.I2 * fI)} along [${g6(d2[0], 6)} ${g6(d2[1], 6)}]  (MASSPROP may list them in the other order)`);
+    if (opt.basis === 'origin') N.push(`(About the centroid: Ix = ${g6(GP.Ixc * fI)}, Iy = ${g6(GP.Iyc * fI)}, Ixy = ${g6(z(GP.Ixyc * fI, sI))}; MASSPROP moments = these + A*ybar*ybar, + A*xbar*xbar, + A*xbar*ybar.)`);
+    N.push(['STEPS IN AUTOCAD:', 1.1]);
+    N.push('1. UCS -> World. Thaw/turn on SPC-PARTS, SPC-PARTS-N and SPC-HOLES; leave SPC-LABELS off.');
+    N.push('2. REGION -> select every object on SPC-PARTS, SPC-PARTS-N and SPC-HOLES (e.g. QSELECT by layer).');
+    N.push('3. UNION -> select the regions of SPC-PARTS (and SPC-PARTS-N). Parts that only touch union cleanly; separate pieces become one composite region.');
+    N.push('4. SUBTRACT -> select the union, Enter, then the hole regions (SPC-HOLES), Enter.');
+    N.push('5. MASSPROP -> select the region. Compare Area, Centroid, Moments of inertia, Product of inertia and Principal moments with the values above.');
+    N.push('MASSPROP does not report J, Cw, Z (plastic), S (elastic moduli), the shear centre or Q: check those another way.');
+    const W = issues(R);
+    if (W.length) { N.push(['WARNINGS:', 1.1]); W.forEach(w => N.push('- ' + w)); }
+    N.push([mm ? 'PARTS (descriptions as in the tool, sizes in inches):' : 'PARTS:', 1.1]);
+    R.parts.forEach(q => N.push(`${q.pt.lbl || q.pt.id}: ${q.G.g.desc || q.pt.type}${q.pt.hole ? ' (hole)' : ''}${Math.abs(q.n - 1) > 1e-12 ? ', n = ' + q.n : ''}${q.use ? ', AISC tabulated' : ''}`));
+    let y = gb[3];
+    const wrap = s => { const o = []; let l = ''; String(s).split(' ').forEach(w => { if (l && (l + ' ' + w).length > 120) { o.push(l); l = '   ' + w; } else l = l ? l + ' ' + w : w; }); if (l) o.push(l); return o; };
+    N.forEach(s => { const big = Array.isArray(s), hh = hN * (big ? s[1] : 1); if (big) y -= 0.6 * hN; wrap(asc(big ? s[0] : s)).forEach(t => { text(LN, [x0, y - hh], hh, t); y -= 1.6 * hh; }); });
+    // assemble (as GPDXF.write)
+    const out = [], h = (c, v) => out.push(String(c).padStart(3), String(v));
+    h(0, 'SECTION'); h(2, 'HEADER');
+    h(9, '$ACADVER'); h(1, 'AC1009'); h(9, '$INSBASE'); h(10, 0); h(20, 0); h(30, 0);
+    h(9, '$EXTMIN'); h(10, fmt(bb[0])); h(20, fmt(bb[1])); h(30, 0); h(9, '$EXTMAX'); h(10, fmt(bb[2])); h(20, fmt(bb[3])); h(30, 0);
+    h(9, '$LTSCALE'); h(40, 1); h(9, '$INSUNITS'); h(70, mm ? 4 : 1); h(0, 'ENDSEC');
+    h(0, 'SECTION'); h(2, 'TABLES');
+    h(0, 'TABLE'); h(2, 'LTYPE'); h(70, 1);
+    h(0, 'LTYPE'); h(2, 'CONTINUOUS'); h(70, 0); h(3, 'Solid line'); h(72, 65); h(73, 0); h(40, 0);
+    h(0, 'ENDTAB');
+    h(0, 'TABLE'); h(2, 'LAYER'); h(70, L.length); L.forEach(([n, c, lt]) => { h(0, 'LAYER'); h(2, n); h(70, 0); h(62, c); h(6, lt); }); h(0, 'ENDTAB');
+    h(0, 'TABLE'); h(2, 'STYLE'); h(70, 1); h(0, 'STYLE'); h(2, 'STANDARD'); h(70, 0); h(40, 0); h(41, 1); h(50, 0); h(71, 0); h(42, 0.2); h(3, 'txt'); h(4, ''); h(0, 'ENDTAB');
+    h(0, 'ENDSEC');
+    h(0, 'SECTION'); h(2, 'BLOCKS'); h(0, 'ENDSEC');
+    h(0, 'SECTION'); h(2, 'ENTITIES'); out.push(...ent); h(0, 'ENDSEC'); h(0, 'EOF');
+    return { text: out.join('\r\n') + '\r\n', warnings: W, layers: L.map(l => l[0]), expected: GP, units: uL, f };
+  }
+  return { write, issues, geomProps, fmt };
+})();
+function dxfFileName() { return ((M.project.name || '').trim() ? M.project.name.trim().replace(/[^\w\-]+/g, '_') : 'section_properties') + '.dxf'; }
+function openDxfDialog() {
+  const old = $('dxfOverlay'); if (old) old.remove();
+  const O = dxfOpts(), mm = unitSys() === 'mm';
+  const ov = el('div'); ov.id = 'dxfOverlay'; ov.style.cssText = 'position:fixed;inset:0;background:rgba(15,25,40,.45);z-index:60;display:flex;align-items:center;justify-content:center';
+  const box = el('div'); box.style.cssText = 'background:#fff;border-radius:8px;padding:16px 20px;width:min(520px,92vw);max-height:86vh;overflow:auto;font-family:var(--font-ui);box-shadow:0 12px 40px rgba(0,0,0,.3)';
+  box.setAttribute('role', 'dialog'); box.setAttribute('aria-label', 'Export DXF');
+  box.appendChild(el('div', null, '<b style="font-size:11pt">Export DXF — check with AutoCAD MASSPROP</b>'));
+  box.appendChild(el('div', 'hint', 'The DXF holds exactly the geometry the properties are computed from: each part as a closed polyline (rectangular-tube corners as the same 24 chords per corner), round parts as true circles, holes and tube voids on their own layer. ASCII DXF R12.'));
+  box.appendChild(el('div', 'note', `<b>Units:</b> ${mm ? 'millimetres (1 drawing unit = 1 mm)' : 'inches (1 drawing unit = 1 in)'} — the display units from Settings.`));
+  if (!R || !R.ok) { box.appendChild(el('div', 'errBox', 'There are no results (input errors): nothing to export.')); }
+  const bas = el('div'); bas.style.cssText = 'margin:6px 0;font-size:9.5pt';
+  bas.appendChild(el('div', null, '<b>Coordinate basis</b>'));
+  const radio = (v, lbl) => { const r = el('label'); r.style.cssText = 'display:flex;gap:8px;align-items:flex-start;padding:2px 0;cursor:pointer'; const c = document.createElement('input'); c.type = 'radio'; c.name = 'dxfBasis'; c.value = v; c.checked = O.basis === v; c.addEventListener('change', () => { if (c.checked) { O.basis = v; dxfOptsSave(O); } }); r.appendChild(c); r.appendChild(el('span', null, lbl)); return r; };
+  bas.appendChild(radio('centroid', 'Section centroid at 0,0 — MASSPROP "Moments of inertia" X, Y and "Product of inertia" XY are then the centroidal I<sub>x</sub>, I<sub>y</sub>, I<sub>xy</sub> directly.'));
+  bas.appendChild(radio('origin', 'The tool\'s own origin at 0,0 — MASSPROP "Centroid" = x̄, ȳ; its moments are about 0,0 (= I + A·d²).'));
+  box.appendChild(bas);
+  if (R && R.ok) { const W = SPCDXF.issues(R); if (W.length) box.appendChild(el('div', 'warnBox', '<b>MASSPROP will differ from the tool:</b><ul style="margin:3px 0 0 16px;padding:0">' + W.map(w => '<li>' + esc(w) + '</li>').join('') + '</ul>')); }
+  box.appendChild(el('div', 'hint', '<b>Checking with MASSPROP:</b> UCS World. REGION (select the objects on SPC-PARTS, SPC-PARTS-N and SPC-HOLES) → UNION the material regions → SUBTRACT the hole regions → MASSPROP. Compare Area, Centroid, Moments and Product of inertia, Principal moments with the values in the drawing notes (layer SPC-NOTES). Sign of the product of inertia: ∫xy dA, as in the tool. MASSPROP is unweighted (n = 1) and does not give J, C<sub>w</sub>, Z, S, the shear centre or Q.'));
+  const row = el('div', 'btnRow'); row.style.marginTop = '10px';
+  const go = el('button', 'btn primary', 'Download DXF'); go.type = 'button'; go.id = 'dxfGo'; go.disabled = !(R && R.ok); if (go.disabled) { go.style.opacity = '.45'; go.style.cursor = 'default'; }
+  go.addEventListener('click', () => { ov.remove(); exportDxf(O); });
+  const ca = el('button', 'btn', 'Cancel'); ca.type = 'button'; ca.addEventListener('click', () => ov.remove());
+  row.appendChild(go); row.appendChild(ca); box.appendChild(row); ov.appendChild(box);
+  ov.addEventListener('click', e => { if (e.target === ov) ov.remove(); });
+  document.body.appendChild(ov); go.focus();
+}
+function exportDxf(O) {
+  if (!R || !R.ok) { toast('No results: nothing to export'); return; }
+  let w; try { w = SPCDXF.write(R, M, { units: unitSys(), basis: (O || dxfOpts()).basis }); } catch (e) { console.error(e); alert('Could not write the DXF: ' + e.message); return; }
+  const blob = new Blob([w.text], { type: 'application/dxf' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = dxfFileName();
+  document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+  toast('DXF exported' + (w.warnings.length ? ' — see the warnings in its notes' : ''));
+}
+   ```
+
+#### Check case (expected MASSPROP readout, can be checked by hand)
+
+PL 12 × 1 (b = 12, t = 1), centroid at (3, 2), units in, basis = tool origin:
+- Tool: A = 12 in², x̄ = 3, ȳ = 2, I<sub>x</sub> = 12·1³/12 = 1, I<sub>y</sub> = 1·12³/12 = 144, I<sub>xy</sub> = 0 (in⁴).
+- DXF: one closed polyline (−3, 1.5), (9, 1.5), (9, 2.5), (−3, 2.5).
+- Expected MASSPROP:
+  - Area 12; Centroid X 3, Y 2.
+  - Moments of inertia X = 1 + 12·2² = **49**, Y = 144 + 12·3² = **252**.
+  - Product of inertia XY = 0 + 12·3·2 = **72**.
+  - Radii of gyration X = √(49/12) = 2.0207259, Y = √(252/12) = 4.5825757.
+  - Principal moments about the centroid: 144 and 1.
+- The DXF notes and the ezdxf rebuild give the same values.
+- With basis = centroid the same model gives Centroid 0, 0 and Moments X = 1, Y = 144, XY = 0.
+
+#### How verified
+
+- `node --check` of every inline script.
+- Headless Chromium (Playwright): 12 models × 2 bases exported through the real button, the dialog radio and **Download DXF** (24 files). No console errors. Models:
+  - single plate;
+  - W14X90 (plate model);
+  - HSS10X6X1/2 (chords);
+  - round tube D 6 × 1/2 + Pipe6STD (circles);
+  - 2L4X4X1/2 back to back, 3/8 gap;
+  - built-up box (4 plates);
+  - plate girder with a rectangular and a round hole;
+  - rotated parts: plate at 30°, mirrored L6X4X1/2 at 17°, rect. tube at 41.3°;
+  - W14X90 + slab with n = 1/8;
+  - plate girder + rotated angle + hole, in **mm**;
+  - C15X33.9 with the AISC tabulated option, at 25°;
+  - two overlapping plates.
+- ezdxf 1.4.4:
+  - `recover.readfile` + `doc.audit()` → **0 errors** on all 24 files; `$INSUNITS` is 1 or 4 as expected.
+  - Independent rebuild: shoelace / Green's theorem on the polylines, exact circles, `SPC-HOLES` subtracted. A, centroid, I<sub>x</sub>, I<sub>y</sub>, I<sub>xy</sub> (about the centroid and about 0,0), I<sub>1</sub> and I<sub>2</sub> agree with the tool's plate-model values to **≤ 2.7e-15 relative** (worst over all files). These are the tool's own displayed values whenever every n = 1 and no tabulated option is used.
+  - The expected-readout numbers written in the notes agree with the rebuild to 8 significant figures.
+- Storage:
+  - the export leaves `spc_autosave_v1` unchanged;
+  - no new key is written until the basis radio is changed, and then only `spc_dxfOpts_v1`;
+  - a corrupt stored value falls back to centroid;
+  - with no results, the Download button is disabled.
+- main vs branch: default example and all 8 templates. The results text of every output tab, the warnings and the saved model are identical; Validation 60/60 on both.
+- 400 px wide: no horizontal scroll; the header buttons wrap.
+- Screenshots looked at: `dxf_dialog.png`, `dxf_dialog_warn.png`, `method_tab.png`, `narrow_dialog.png`, and ezdxf renders of three exported files.
+
+#### Open items
+
+- X-O1. Not checked in AutoCAD: the sign of the MASSPROP product of inertia, and the order in which MASSPROP lists the principal moments. Both are taken from its documentation as understood. Please confirm on first use (1 × 1 square check in the Method tab).
+- X-O2. MASSPROP is unweighted. With n ≠ 1, compare against the "expected MASSPROP readout" (unweighted) in the notes, or set every n = 1 before exporting.
+- X-O3. Rolled shapes are exported as their plate model. With the AISC tabulated option, the tool's tabulated A and I will differ from MASSPROP by the fillet area. This is expected.
