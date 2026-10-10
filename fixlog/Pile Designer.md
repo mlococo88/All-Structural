@@ -3449,6 +3449,720 @@ index 26e16f1..660bc9b 100644
        key: t.id, type: "button", role: "tab", "aria-selected": tab === t.id,
 ```
 
+## 2026-10-10 — PR: claude/pile-loads-tab (PR link added after merge)
+
+### F15. "Loads & group" input tab: single pile or pile group, load cases, group workspace and hand-off in one place   [UI / workflow only] [no calculation change]
+- **Date:** 2026-10-10. Engineer: "I think the pile group workspace and loading should be a new input tab. It should allow for a single pile and manual entry of loading as well as the pile group."
+- **What changed:**
+  - New input-rail tab **"Loads & group"** (`RAIL_TABS` id `loads`), after Soil profile and before Bond / p-y (lateral) — the order is now Project, Pile, Soil profile, **Loads & group**, Bond / p-y, Cap, Checks, φ: what the pile is, what it sits in and what it carries come first, then the analysis settings and checks. One rail block, `LoadsGroupPanel` (`data-rtab-fixed="loads"`, id `pd-loads`):
+    1. **"Single pile or pile group"**: two radio cards, *Single pile — enter loads manually* and *Pile group — cap loads distributed to the piles*. Under them, **"Foundation loads from another tool"**: the "Pull from Abutment / SubLoads" (● new data) and "Import hand-off (JSON)" buttons and the source line, moved here from the Project Info panel with the same ids (`pfxPull`, `pfxNew`, `pfxImp`, `pfxFile`, `pfxSrc`) and handlers. They serve both modes because the import dialog itself asks for the target (group workspace by default, or the single-pile case table); the dialog is unchanged.
+    2. **Pile group only — "Pile group workspace"**: the content of the Pile Group Workspace dialog, now `GroupWorkspaceBody` (shared by the tab, one column, and the dialog, two columns as before; every input, key and handler is the dialog's). In the tab it starts with **"Plan & per-pile forces"** (`GroupLayoutView`): a to-scale SVG plan (`GroupPlanSvg`: cap outline, stem, piles numbered P1…, axial under each pile, design pile ringed, load locations, group centroid, dimension chains in ft for the pile centre lines and the overall cap) and the per-pile table (x, y, axial, shear) for one group case — the active case when it is a Group ▦ row, otherwise the first non-zero group case; a selector shows any other case without changing the active case. Then 1 Pile layout, 2 Load locations, 2b Load cases × magnitudes, 2b Cap geometry & self-weight, the edge-distance check, 3 Design pile, the 3D view behind a "Show 3D view" button, max compression / uplift / shear, and "Make the Group ▦ case the ACTIVE load case" (was in the dialog footer).
+    3. **"LRFD load cases (per pile)"** (single pile) or **"Design load cases (per pile)"** (pile group: your rows + the computed Group ▦ rows): `LoadCasesCard` with the new `variant: "edit"` — svc defl limit, Run all cases → envelope, active-case selector, editable rows (add / delete / rename / type), the computed Group ▦ rows read-only as before. After "Run all" it shows "Envelope: n cases run · k not satisfied — results on the Summary tab →".
+  - **How the mode is determined (no migration, no new field):** the choice *is* the existing input `I.groupEnable` ("Apply pile group to the design" in the dialog, "Evaluate group effects" in Module 11): Single pile = `false`, Pile group = `true`. Every saved project therefore opens in the mode that reproduces its results. Choosing Single pile writes `groupEnable: false, loadFromGroup: false`, choosing Pile group writes `groupEnable: true` — exactly what the dialog's checkbox wrote. Nothing is deleted when switching: the group layout, load locations, group cases and cap inputs stay in the inputs (not applied in single-pile mode, as before); the manual load cases are applied in both modes (as before, group mode adds the Group ▦ rows to them).
+  - **Summary output tab:** `LoadCasesCard` `variant: "summary"` (id `pd-cases-sum`): read-only case table (◉ buttons still switch the active case), the active-case selector, svc defl limit (as text), Run all cases → envelope, **Edit loads →**, and the envelope results table and moment-profile plot (moved out of the input card).
+  - **Jumps to the new tab** (`gotoLoadsTab`): Summary "Edit loads →" and the Loads panel (Checks tab) "Edit loads →" (focus the first case field); the "▦ PILE GROUP → Loads & group tab" button on the Checks tab (was "▦ PILE GROUP WORKSPACE", opened the dialog) and the new link in Module 11's note (focus the workspace); Project Info "Loads & group tab →". The dialog (`GroupModal`) is no longer opened (kept in the file).
+  - **Text that pointed at the old places** now names the tab: Loads panel sub and note, Uplift panel sub, Group options note, Module 02 note ("left column card"), Module 06 cap note, Module 11 note, `CapResults` empty message, `GroupCasesTable` note, the workspace's "main Load Cases section". Project Info sub no longer mentions the hand-off; in integral-abutment mode its body says hand-offs are not used in that mode.
+  - **Integral abutment:** the tab is not shown (that mode takes its gravity load in the Abutment panel and has no LRFD case table or group workspace). The hand-off buttons are therefore not shown in that mode; before, they were shown and the import was refused there with a message ("Integral-abutment mode takes the unfactored gravity load per pile …").
+  - **Red dot:** works as for every rail tab (a ⚠ inside the tab marks it): e.g. pile group with no cap plan (cap L × W = 0) or a failed "Run all".
+  - **Printed report:** content unchanged except **Figure 11-1** (the same `GroupPlanSvg` for `r.capDist`, the distribution the section prints) added at the top of the Group (11) print group, after the resultant lines. Load-case and group tables print as before.
+  - CSS: rail hide rule for `loads`, the radio cards (`.pd-mode*`), no spin buttons in the tab's tables, a wider name and type column in the case table.
+- **Not changed:** `computeAll`, `computeCapDist`, the Group ▦ case emission, `runAllCases`, every check and status; every input key and the saved / exported / autosaved data (no new field); storage keys (`micropile_lrfd_inputs_v1`, `micropile_lrfd_lpile_v1`, `micropile_lrfd_outTab_v1`, `micropile_lrfd_printSel_v1`, IndexedDB `micropile_lrfd_db`); the `foundationLoads` receiver code and dialog, and the `projectMeta` share; library tags.
+- **Governing provision:** none (presentation / workflow only). No formula, factor, unit, default or code reference changed.
+- **Check case:** not applicable (no result changes). Parity: see How verified.
+- **How verified:**
+  - `node --check` on all four inline scripts (pre-compiled `React.createElement`; no JSX).
+  - Headless Chromium, pinned libraries served locally, origin/main vs branch, after "Run all cases" with every module expanded: (a) defaults in all three modes; (b) a single-pile project with 4 manual cases (strength / extreme / service / tension, active = Ext I, svc limit 0.75 in) in micropile and H-pile; (c) a group project (2 × 3 piles at 4 ft, cap 12 × 8 × 3 ft with self-weight, two load locations, eccentric cap loads, 2 group cases Str I / Ext I, plus one manual case) in micropile and H-pile. Identical: output-column text (the load-case card compared separately, plus the known text changes above), case names, active case, envelope table, report text (figures removed), summary strip, module statuses, autosave JSON, `Save .json` export, localStorage key list. No console errors.
+  - A project saved by main (the group project's exported .json, via "Load .json" and via autosave) opens on the branch in Pile group mode with the same summary strip.
+  - Hand-off: abutment calculator "Send foundation loads" → Pile Designer pull, main vs branch, target group (default) and target single: new-data marker, dialog text, resulting inputs (timestamps removed), source line and summary strip identical; the group import switches the tab to Pile group, the single import leaves Single pile.
+  - Mode switch on the group project: Single pile → `groupEnable` false, `loadFromGroup` false, group cases / load points / pile coordinates / manual cases unchanged, Group ▦ rows gone; back to Pile group → inputs and output text identical to before.
+  - Jumps: Summary "Edit loads", Loads panel "Edit loads", the Checks-tab group button, Module 11 link and Project Info link all select the Loads & group tab (and focus a case field / the workspace). Dot: none at the defaults; shown for a group with no cap plan. Integral abutment: tabs Project, Abutment, p-y / lateral. No horizontal page scroll at 400 px in either mode. Screenshots at 1500 and 400 px in both modes, and the printed Figure 11-1 (Letter PDF), looked at.
+- **Other copies:** none (all tool-specific).
+- **Re-applying by hand:** unified diff below (CRLF stripped). Hunks: rail CSS (anchor `aside.input-rail[data-rtab-active="soilprof"]`); `LoadCasesCard` (variant); `GroupModal` split into `GroupWorkspaceBody` + `GroupModal` (anchor `function GroupModal(`); text in `CapResults`, `GroupCasesTable`, workspace, `PyPanel`; the report's 11 block (anchor `r.capDist.capWt_incl &&`); new `gotoLoadsTab`, `GroupPlanSvg`, `GroupLayoutView`, `LoadsGroupPanel` before `function InteractionDiagram(`; `App`: Project Info panel, the Checks-tab group button, Loads panel, `LoadsGroupPanel` element after `SoilProfilePanel`, Group options / Uplift / cap-geometry / Module 11 text, the Summary `LoadCasesCard`; `RAIL_TABS`.
+
+```diff
+diff --git a/Pile Designer.html b/Pile Designer.html
+index 660bc9b..c478a46 100644
+--- a/Pile Designer.html	
++++ b/Pile Designer.html	
+@@ -186,7 +186,20 @@
+   aside.input-rail[data-rtab-active="cap"] > [data-rtab]:not([data-rtab="cap"]),
+   aside.input-rail[data-rtab-active="checks"] > [data-rtab]:not([data-rtab="checks"]),
+   aside.input-rail[data-rtab-active="phi"] > [data-rtab]:not([data-rtab="phi"]),
+-  aside.input-rail[data-rtab-active="soilprof"] > [data-rtab]:not([data-rtab="soilprof"]) { display: none; }
++  aside.input-rail[data-rtab-active="soilprof"] > [data-rtab]:not([data-rtab="soilprof"]),
++  aside.input-rail[data-rtab-active="loads"] > [data-rtab]:not([data-rtab="loads"]) { display: none; }
++  /* Loads & group tab (2026-10-10, UI only): single pile / pile group choice, tables in the rail width */
++  .pd-mode { display: grid; gap: 6px; }
++  .pd-mode-opt { display: flex; gap: 8px; align-items: flex-start; border: 1px solid #CBD5E1; border-radius: 5px; padding: 7px 9px; cursor: pointer; background: #fff; font-size: 12px; line-height: 1.35; color: #1b232b; }
++  .pd-mode-opt:hover { background: #F5F8FC; }
++  .pd-mode-opt.is-on { border-color: #1F3A5F; background: #EFF4FA; box-shadow: inset 3px 0 0 #1F3A5F; }
++  .pd-mode-opt input { margin-top: 3px; flex: none; }
++  .pd-mode-desc { display: block; font-size: 10.5px; color: #5A6B80; margin-top: 2px; }
++  #pd-loads table input[type=number] { -moz-appearance: textfield; appearance: textfield; }
++  #pd-loads table input[type=number]::-webkit-inner-spin-button, #pd-loads table input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
++  #pd-cases-edit table input, #pd-cases-edit table select { font-size: 11px; }
++  #pd-cases-edit table td:nth-child(2) { width: 30% !important; }
++  #pd-cases-edit table select { min-width: 74px; }
+   /* Soil profile tab: the layer table in the rail width (spinners hidden so values are not cut off) */
+   #pd-soilprof table input[type=number], #pd-soilprof table select { font-size: 11px; padding: 2px 3px; }
+   #pd-soilprof table input[type=number] { -moz-appearance: textfield; appearance: textfield; }
+@@ -5612,6 +5625,218 @@ function gotoSoilProfileTab(setRailTab) {
+     const f = el.querySelector("table input:not([disabled]), table select"); if (f) f.focus({ preventScroll: true });
+   }, 60);
+ }
++/* ============================================================
++   LOADS & GROUP INPUT TAB (UI only, 2026-10-10)
++   ------------------------------------------------------------
++   One rail tab for the design loads. The choice at the top is the existing
++   input I.groupEnable ("Apply pile group to the design"): Single pile = off,
++   Pile group = on. Nothing new is stored; both sets of data are kept when the
++   choice changes (the group data are just not applied in single-pile mode).
++   Single pile: the LRFD load-case table (LoadCasesCard, variant "edit").
++   Pile group: the Pile Group Workspace content (GroupWorkspaceBody, rail
++   layout) with a dimensioned plan and the per-pile table, then the design
++   case table with its computed Group rows, as before. The foundation-load
++   hand-off buttons sit under the choice (the import dialog itself asks which
++   target). Display-only helpers below call the existing computeCapDist with
++   the same arguments the case table uses; nothing feeds back into a check.
++============================================================ */
++function gotoLoadsTab(setRailTab, part) {
++  setRailTab("loads");
++  setTimeout(() => {
++    const el = document.getElementById(part === "group" ? "pd-grpws" : part === "cases" ? "pd-cases-edit" : "pd-loads") || document.getElementById("pd-loads");
++    if (!el) return;
++    el.scrollIntoView({ block: "start", behavior: "auto" });
++    const f = el.querySelector(part === "cases" ? "table input:not([disabled]), table select" : "input:not([disabled]), select"); if (f) f.focus({ preventScroll: true });
++  }, 60);
++}
++/* Plan of the pile group, to scale (SVG): cap outline, stem, piles numbered as in
++   the tables, axial per pile for the case given (cd = computeCapDist result),
++   design pile ringed, load locations, group centroid, dimension chains (ft). */
++function GroupPlanSvg({ I, cd, print, showAxial = true }) {
++  const e = React.createElement;
++  if (!cd || !cd.piles || !cd.piles.length) return null;
++  const piles = cd.piles, n = piles.length;
++  const D = Math.max((pileWidth(I) || 0) / 12, 0.05);
++  const capOn = I.capL > 0 && I.capW > 0;
++  const ccx = I.capCx || 0, ccy = I.capCy || 0;
++  const stemOn = !!(I.stemEnable && I.stemWx > 0 && I.stemWy > 0);
++  const lpts = (cd.loads || []).filter(L => !L._capWeight && !L._stemWeight);
++  const xs = [], ys = [];
++  piles.forEach(p => { xs.push(p.xg - D / 2, p.xg + D / 2); ys.push(p.yg - D / 2, p.yg + D / 2); });
++  if (capOn) { xs.push(ccx - I.capL / 2, ccx + I.capL / 2); ys.push(ccy - I.capW / 2, ccy + I.capW / 2); }
++  if (stemOn) { xs.push((I.stemX || 0) - I.stemWx / 2, (I.stemX || 0) + I.stemWx / 2); ys.push((I.stemY || 0) - I.stemWy / 2, (I.stemY || 0) + I.stemWy / 2); }
++  lpts.forEach(L => { if (isFinite(L.x) && isFinite(L.y)) { xs.push(L.x); ys.push(L.y); } });
++  xs.push(cd.cx); ys.push(cd.cy);
++  let x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
++  const span = Math.max(x1 - x0, y1 - y0, 2);
++  if (x1 - x0 < span * 0.3) { const m = (x0 + x1) / 2; x0 = m - span * 0.15; x1 = m + span * 0.15; }
++  if (y1 - y0 < span * 0.3) { const m = (y0 + y1) / 2; y0 = m - span * 0.15; y1 = m + span * 0.15; }
++  const mw = 0.05 * span; x0 -= mw; x1 += mw; y0 -= mw; y1 += mw;
++  const VW = 440, padL = 60, padR = 16, padT = 30, padB = 60, HMAX = 380;
++  let sc = (VW - padL - padR) / (x1 - x0);
++  if (padT + padB + (y1 - y0) * sc > HMAX) sc = (HMAX - padT - padB) / (y1 - y0);
++  const VH = Math.round(padT + padB + (y1 - y0) * sc);
++  const offX = padL + ((VW - padL - padR) - (x1 - x0) * sc) / 2;
++  const X = x => offX + (x - x0) * sc, Y = y => padT + (y1 - y) * sc;
++  const NAVY = "#16304F", RED = "#B91C1C", ORG = "#c9622e", GREY = "#64748b", FONT = "Arial, Helvetica, sans-serif";
++  const els = [];
++  let k = 0;
++  const T = (x, y, s, o) => els.push(e("text", Object.assign({ key: "t" + (k++), x, y, fontSize: 10, fontFamily: FONT, fill: "#334155" }, o || {}), s));
++  const Ln = (xa, ya, xb, yb, o) => els.push(e("line", Object.assign({ key: "l" + (k++), x1: xa, y1: ya, x2: xb, y2: yb, stroke: GREY, strokeWidth: 0.8 }, o || {})));
++  // cap and stem
++  if (capOn) els.push(e("rect", { key: "cap", x: X(ccx - I.capL / 2), y: Y(ccy + I.capW / 2), width: I.capL * sc, height: I.capW * sc, fill: "rgba(148,163,184,0.12)", stroke: GREY, strokeWidth: 1.2 }));
++  if (stemOn) els.push(e("rect", { key: "stem", x: X((I.stemX || 0) - I.stemWx / 2), y: Y((I.stemY || 0) + I.stemWy / 2), width: I.stemWx * sc, height: I.stemWy * sc, fill: "none", stroke: GREY, strokeWidth: 1, strokeDasharray: "5 3" }));
++  // dimension chains (ft): pile centre lines, then the overall cap (or outer piles)
++  const uniq = arr => { const s = [...arr].sort((a, b) => a - b), out = []; s.forEach(v => { if (!out.length || Math.abs(v - out[out.length - 1]) > 0.005) out.push(v); }); return out; };
++  const ux = uniq(piles.map(p => p.xg)), uy = uniq(piles.map(p => p.yg));
++  const pBot = Y(Math.min(...piles.map(p => p.yg))) + D / 2 * sc, pLeft = X(Math.min(...piles.map(p => p.xg))) - D / 2 * sc;
++  const geoBot = capOn ? Math.max(pBot, Y(ccy - I.capW / 2)) : pBot, geoLeft = capOn ? Math.min(pLeft, X(ccx - I.capL / 2)) : pLeft;
++  const tick = (x, y) => Ln(x - 3, y + 3, x + 3, y - 3, { stroke: "#334155", strokeWidth: 1 });
++  const dimH = (vals, yp, ext) => {
++    if (vals.length < 2) return;
++    Ln(X(vals[0]), yp, X(vals[vals.length - 1]), yp, { stroke: "#334155" });
++    vals.forEach(v => { tick(X(v), yp); if (ext != null) Ln(X(v), ext + 2, X(v), yp + 3, { strokeDasharray: "2 2", stroke: "#94a3b8" }); });
++    for (let i = 1; i < vals.length; i++) { const a = X(vals[i - 1]), b = X(vals[i]); if (b - a >= 24) T((a + b) / 2, yp - 3, fmt(vals[i] - vals[i - 1], 2), { textAnchor: "middle" }); }
++  };
++  const dimV = (vals, xp, ext) => {
++    if (vals.length < 2) return;
++    Ln(xp, Y(vals[0]), xp, Y(vals[vals.length - 1]), { stroke: "#334155" });
++    vals.forEach(v => { tick(xp, Y(v)); if (ext != null) Ln(ext - 2, Y(v), xp - 3, Y(v), { strokeDasharray: "2 2", stroke: "#94a3b8" }); });
++    for (let i = 1; i < vals.length; i++) { const a = Y(vals[i]), b = Y(vals[i - 1]); if (b - a >= 24) { const cx0 = xp - 4, cy0 = (a + b) / 2; T(cx0, cy0, fmt(vals[i] - vals[i - 1], 2), { textAnchor: "middle", transform: "rotate(-90 " + cx0 + " " + cy0 + ")" }); } }
++  };
++  const yd1 = geoBot + 18, yd2 = geoBot + 38, xd1 = geoLeft - 18, xd2 = geoLeft - 38;
++  dimH(ux, yd1, pBot); dimV(uy, xd1, pLeft);
++  if (capOn) { dimH([ccx - I.capL / 2, ccx + I.capL / 2], yd2, Y(ccy - I.capW / 2)); dimV([ccy - I.capW / 2, ccy + I.capW / 2], xd2, X(ccx - I.capL / 2)); }
++  else { if (ux.length > 2) dimH([ux[0], ux[ux.length - 1]], yd2, null); if (uy.length > 2) dimV([uy[0], uy[uy.length - 1]], xd2, null); }
++  // centroid
++  const gx = X(cd.cx), gy = Y(cd.cy);
++  Ln(gx - 7, gy, gx + 7, gy, { stroke: "#0f766e", strokeWidth: 1.4 }); Ln(gx, gy - 7, gx, gy + 7, { stroke: "#0f766e", strokeWidth: 1.4 });
++  T(gx + 5, gy + 12, "CG", { fill: "#0f766e", fontSize: 9 });
++  // piles
++  const rr = Math.max(D / 2 * sc, 4.5);
++  piles.forEach(p => {
++    const px = X(p.xg), py = Y(p.yg), up = showAxial && p.axial < -1e-6, des = showAxial && p.id === cd.selId;
++    if (des) els.push(e("circle", { key: "d" + p.id, cx: px, cy: py, r: rr + 3.5, fill: "none", stroke: ORG, strokeWidth: 2.2 }));
++    els.push(e("circle", { key: "p" + p.id, cx: px, cy: py, r: rr, fill: up ? RED : NAVY, stroke: "#fff", strokeWidth: 0.8 }));
++    T(px + rr + 2, py - rr - 1, "P" + p.id, { fontSize: 9.5, fontWeight: 700, fill: NAVY });
++    if (n <= 36 && showAxial && cd.enable) T(px, py + rr + 11, fmt(p.axial, 1), { fontSize: 8.5, textAnchor: "middle", fill: up ? RED : "#475569" });
++  });
++  // load locations
++  lpts.forEach((L, i) => {
++    if (!isFinite(L.x) || !isFinite(L.y)) return;
++    const lx = X(L.x), ly = Y(L.y);
++    els.push(e("path", { key: "L" + i, d: "M" + lx + " " + (ly - 6) + " L" + (lx + 6) + " " + ly + " L" + lx + " " + (ly + 6) + " L" + (lx - 6) + " " + ly + " Z", fill: ORG, stroke: "#fff", strokeWidth: 0.8 }));
++    T(lx + 8, ly - 7, L.name || ("Load " + (i + 1)), { fontSize: 9, fill: "#8a4a1a" });
++  });
++  // axes
++  const ax = 12, ay = 18;
++  els.push(e("path", { key: "axx", d: "M" + ax + " " + ay + " L" + (ax + 24) + " " + ay + " M" + (ax + 20) + " " + (ay - 3) + " L" + (ax + 24) + " " + ay + " L" + (ax + 20) + " " + (ay + 3), stroke: "#334155", fill: "none", strokeWidth: 1.2 }));
++  els.push(e("path", { key: "axy", d: "M" + ax + " " + ay + " L" + ax + " " + (ay - 14) + " M" + (ax - 3) + " " + (ay - 10) + " L" + ax + " " + (ay - 14) + " L" + (ax + 3) + " " + (ay - 10), stroke: "#334155", fill: "none", strokeWidth: 1.2 }));
++  T(ax + 27, ay + 3, "+x", { fontSize: 9 }); T(ax + 4, ay - 10, "+y", { fontSize: 9 });
++  return e("svg", { viewBox: "0 0 " + VW + " " + VH, width: "100%", role: "img", "aria-label": "Pile group plan, " + n + " piles, dimensions in ft",
++    style: { display: "block", maxWidth: print ? "4.8in" : VW + "px", height: "auto", margin: "0 auto", background: "#fff" } }, els);
++}
++/* Plan + per-pile table for one group load case. Follows the active case when it
++   is a Group row (else the first non-zero group case); the selector here does not
++   change the active case. */
++function GroupLayoutView({ I, cases, activeIdx }) {
++  const e = React.createElement;
++  const [sel, setSel] = React.useState(null);
++  const pts = deriveLoadPoints(I);
++  const gcs = deriveGroupCases(I).filter(gc => !caseIsZero(gc));
++  const act = cases && cases[activeIdx];
++  const actGc = act && act._fromGroup && act._groupCaseId != null ? gcs.findIndex(gc => gc.id === act._groupCaseId) : -1;
++  const si = (sel != null && sel < gcs.length) ? sel : (actGc >= 0 ? actGc : 0);
++  const gc = gcs[si] || null;
++  const geom = { nRows: I.groupNrows, nCols: I.groupNcols, s_in: (I.groupSpacingIn && I.groupSpacingIn > 0 ? I.groupSpacingIn : (I.groupSpacingDia || 3) * pileWidth(I)) };
++  const cd = computeCapDist(I, geom, caseLoadList(pts, gc || { mags: {} }, stemTopZ(I)));
++  const capOn = I.capL > 0 && I.capW > 0;
++  return e("div", { className: "pd-grplay mb-3" },
++    e("div", { className: "text-[11px] font-mono-tech text-[var(--blueprint)] uppercase tracking-wider mb-1.5" }, "Plan & per-pile forces"),
++    e("div", { className: "flex items-center gap-2 mb-1.5 flex-wrap text-[10px]" },
++      e("span", { className: "text-slate-500" }, "Case shown:"),
++      gcs.length ? e("select", { className: "border border-slate-300 rounded-sm px-1.5 py-0.5 text-[10px] font-mono-tech bg-white", "aria-label": "Group load case shown in the plan and the per-pile table", value: si, onChange: ev => setSel(parseInt(ev.target.value)) },
++        gcs.map((c, i) => e("option", { key: c.id, value: i }, c.name + " (" + (c.type || "strength") + ")")))
++        : e("span", { className: "text-slate-400" }, "no non-zero cap load case yet (enter them in 2b below)"),
++      gcs.length && sel != null ? e("button", { type: "button", onClick: () => setSel(null), className: "underline text-slate-500" }, "follow the active case") : null,
++      gcs.length && sel == null ? e("span", { className: "text-slate-400" }, actGc >= 0 ? "(the active case)" : "(the active case is not a Group row)") : null),
++    e("div", { className: "pd-grpplan border border-slate-200 rounded-sm p-1.5 bg-white" }, e(GroupPlanSvg, { I, cd, showAxial: !!gc })),
++    e("p", { className: "text-[8.5px] text-slate-500 mt-1 leading-snug" },
++      "To scale; dimensions in ft (pile centre lines, then the overall cap). Pile numbers as in the tables. ",
++      gc ? "Number under each pile = axial for the case shown (kip, + compression, red = uplift). " : "",
++      "Orange ring = design pile (its axial and shear form the case’s Group ▦ row); ◆ = load location; CG = pile-group centroid.",
++      capOn ? "" : " Cap plan not defined (cap L × W = 0): no cap outline drawn."),
++    gc && cd && cd.piles && cd.piles.length ? e("div", { className: "mt-2" },
++      e("div", { className: "text-[9.5px] text-slate-500 mb-1 font-mono-tech" }, "ΣP = ", fmt(cd.Pv, 1), " kip · design pile P", cd.selId, " @ ", fmt(cd.sel ? cd.sel.axial : null, 1), " kip", cd.anyUplift ? " · uplift present" : ""),
++      e("div", { className: "border border-slate-200 rounded-sm overflow-auto", style: { maxHeight: "220px" } },
++        e("table", { className: "w-full text-[9.5px] font-mono-tech" },
++          e("thead", { className: "sticky top-0 bg-slate-100 text-slate-500" }, e("tr", null,
++            ["pile", "x (ft)", "y (ft)", "axial (kip)", "shear (kip)"].map((th, i) => e("td", { key: i, className: "px-2 py-1" + (i >= 3 ? " text-right" : "") }, th)))),
++          e("tbody", null, cd.piles.map(p => {
++            const isD = p.id === cd.selId, up = p.axial < -1e-6;
++            return e("tr", { key: p.id, style: { borderTop: "1px solid #eef2f6", background: isD ? "rgba(201,98,46,0.10)" : "transparent" } },
++              e("td", { className: "px-2 py-0.5" }, "P", p.id, isD ? " ◉" : ""),
++              e("td", { className: "px-2 py-0.5" }, fmt(p.xg, 2)),
++              e("td", { className: "px-2 py-0.5" }, fmt(p.yg, 2)),
++              e("td", { className: "px-2 py-0.5 text-right", style: { color: up ? "#b23b3b" : (isD ? "#8a5a1f" : "#14304a"), fontWeight: isD ? 600 : 400 } }, fmt(p.axial, 1)),
++              e("td", { className: "px-2 py-0.5 text-right" }, fmt(p.Vres, 1)));
++          })))),
++      e("div", { className: "text-[8px] text-slate-400 mt-1 leading-snug" }, "◉ = design pile for this case. Axial = P/n + biaxial bending share; shear = equal share of ΣV (rigid cap, pinned heads). The same values feed the Group ▦ row of this case in the design case table.")) : null);
++}
++function LoadsGroupPanel({ I, set, setI, r, cases, activeIdx, casesCard }) {
++  const e = React.createElement;
++  const grp = !!I.groupEnable;
++  // same writes as the dialog's "Apply pile group to the design" box (groupEnable; loadFromGroup cleared when off)
++  const pick = on => { if (on) set('groupEnable', true); else { set('groupEnable', false); set('loadFromGroup', false); } };
++  const opt = (on, title, rest, desc) => e("label", { className: "pd-mode-opt" + (grp === on ? " is-on" : "") },
++    e("input", { type: "radio", name: "pdLoadMode", value: on ? "group" : "single", checked: grp === on, onChange: () => pick(on) }),
++    e("span", null, e("b", null, title), " — ", rest, e("span", { className: "pd-mode-desc" }, desc)));
++  return e("div", { "data-rtab-fixed": "loads", id: "pd-loads", className: "space-y-4" },
++    e(Panel, { title: "Single pile or pile group", sub: "how the design loads are entered" },
++      e("div", { role: "radiogroup", "aria-label": "Load input", className: "pd-mode" },
++        opt(false, "Single pile", "enter loads manually", "Each row of the LRFD load-case table is the factored load on one pile: axial (or uplift), lateral and head moment."),
++        opt(true, "Pile group", "cap loads distributed to the piles", "Enter the pile layout and the cap (resultant) loads per case. The rigid-cap distribution gives each pile’s load and adds one “Group ▦” row per case (design pile) to the load-case table; group effects (Module 11) are evaluated.")),
++      e("p", { className: "text-[9.5px] text-slate-500 leading-snug mt-2" }, grp
++        ? "Your own rows in the load-case table stay in use alongside the Group ▦ rows. Switching to single pile keeps the group layout and cap loads (not applied)."
++        : "Any pile-group layout and cap loads already entered are kept, but not applied, while single pile is selected."),
++      e("div", { className: "mt-3 pt-2 border-t border-slate-200" },
++        e("div", { className: "text-[11.5px] font-medium text-[var(--blueprint)] mb-1" }, "Foundation loads from another tool"),
++        e("div", { className: "flex flex-wrap gap-2 no-print" },
++          e("button", {
++            type: "button",
++            id: "pfxPull",
++            onClick: () => PileFoundationXfer.pull(I, setI),
++            title: "Pull foundation load cases sent by the abutment calculator or Bridge Substructure Loading (channel foundationLoads; asks first, nothing changes until you import)",
++            className: "font-mono-tech text-[9px] px-1.5 py-1 rounded-sm border border-slate-300 text-slate-500 hover:bg-white"
++          }, "Pull from Abutment / SubLoads", e("span", {
++            id: "pfxNew",
++            hidden: true,
++            style: { color: "#b45309", fontWeight: 700 }
++          }, " ● new data")),
++          e("button", {
++            type: "button",
++            id: "pfxImp",
++            onClick: () => { const f = document.getElementById("pfxFile"); if (f) f.click(); },
++            title: "Import a foundationLoads hand-off JSON file (asks first)",
++            className: "font-mono-tech text-[9px] px-1.5 py-1 rounded-sm border border-slate-300 text-slate-500 hover:bg-white"
++          }, "Import hand-off (JSON)"),
++          e("input", {
++            type: "file",
++            id: "pfxFile",
++            accept: ".json,application/json",
++            style: { display: "none" },
++            onChange: ev => PileFoundationXfer.importFile(ev, I, setI)
++          })),
++        e("p", { className: "text-[9px] text-slate-400 leading-snug mt-1" }, "From the abutment calculator or Bridge Substructure Loading (hand-off channel foundationLoads). The dialog lists the cases and asks where they go: the pile group workspace (a footing / pile-cap resultant; the default) or the single-pile load-case table. Nothing changes until you import."),
++        I.foundationSrc && e("div", {
++          id: "pfxSrc",
++          className: "text-[9px] text-slate-500 italic leading-snug mt-1"
++        }, PileFoundationXfer.sourceLine(I)))),
++    grp && e(Panel, { title: "Pile group workspace", sub: "layout, cap loads and rigid-cap distribution" },
++      e("div", { id: "pd-grpws" }, e(GroupWorkspaceBody, { I, set, cap: r.capDist, g: r.group, rail: true, cases, activeIdx }))),
++    e(Panel, { title: grp ? "Design load cases (per pile)" : "LRFD load cases (per pile)", sub: grp ? "your rows + one computed Group ▦ row per group case · the active case drives every module" : "the active case drives every module" },
++      e("div", { id: "pd-cases-edit" }, casesCard)));
++}
+ function InteractionDiagram({
+   r
+ }) {
+@@ -8807,6 +9032,8 @@ function PrintReport({
+       "Group: ", r.capDist.n, " piles \u00b7 centroid (", fmt(r.capDist.cx, 2), ", ", fmt(r.capDist.cy, 2), ") ft \u00b7 S", /*#__PURE__*/React.createElement("sub", null, "xx"), " = ", fmt(r.capDist.Sxx, 1), ", S", /*#__PURE__*/React.createElement("sub", null, "yy"), " = ", fmt(r.capDist.Syy, 1), ", S", /*#__PURE__*/React.createElement("sub", null, "xy"), " = ", fmt(r.capDist.Sxy, 1), " ft\u00b2"),
+     /*#__PURE__*/React.createElement("div", { style: { fontSize: "8.5px", color: "#16304F", marginBottom: "4px" } },
+       "Resultant at centroid: \u03a3P = ", fmt(r.capDist.Pv, 1), " kip, \u03a3V = (", fmt(r.capDist.Vx, 1), ", ", fmt(r.capDist.Vy, 1), ") kip, \u03a3M", /*#__PURE__*/React.createElement("sub", null, "eff"), " = (", fmt(r.capDist.Mx_eff, 1), ", ", fmt(r.capDist.My_eff, 1), ") kip\u00b7ft (incl. shear\u00d7height and vertical\u00d7offset)."),
++    React.createElement(GfxRptFig, { caption: "Figure 11-1: pile group plan, to scale (dimensions in ft). Number under each pile = axial (kip) from the table below; orange ring = design pile; \u25c6 = load location; CG = pile-group centroid." },
++      React.createElement(GroupPlanSvg, { I: I, cd: r.capDist, print: true })),
+     r.capDist.capWt_incl && /*#__PURE__*/React.createElement("div", { style: { fontSize: "8px", color: "#64748b", marginBottom: "3px" } },
+       "Includes cap self-weight + soil surcharge \u03b3DC\u00d7W = ", fmt(r.capDist.dlFactor, 2), "\u00d7", fmt(r.capDist.capWeight_nom, 1), " = ", fmt(r.capDist.capWeight, 1), " kip (FHWA Eq. 8-79), applied at the cap centroid.",
+       r.capDist.stemWt_incl ? " Stem wall self-weight \u03b3DC\u00d7W = " + fmt(r.capDist.dlFactor, 2) + "\u00d7" + fmt(r.capDist.stemWeight_nom, 1) + " = " + fmt(r.capDist.stemWeight, 1) + " kip, applied at the stem plan centroid." : ""),
+@@ -9352,23 +9579,30 @@ function BarSelect({ I, set, areaKey, setGrade, label }) {
+       "\u26a0 fyb \u2265 150 ksi: for an ASTM A722 Gr150 threadbar, 150 ksi is the ULTIMATE strength (fpu). Yield fpy = 0.80\u00b7fpu = 120 ksi \u2014 re-select the bar or set fyb = 120."));
+ }
+ 
+-function LoadCasesCard({ cases, updCases, applyCase, runAllCases, caseRes, I, updCasesLimit, activeIdx, setActive, onRowEdit }) {
++// variant "edit": the editable table in the Loads & group input tab (results stay on the Summary
++// output tab); variant "summary" (default): a read-only copy on the Summary output tab with the
++// active-case selector, "Run all", the envelope results and an "Edit loads" link (UI only, 2026-10-10).
++function LoadCasesCard({ cases, updCases, applyCase, runAllCases, caseRes, I, updCasesLimit, activeIdx, setActive, onRowEdit, variant = "summary", onEdit, onShowResults }) {
++  const ro = variant !== "edit";
+   const cell = "w-full font-mono-tech text-[10px] px-1 py-0.5 rounded-sm border border-slate-300";
+   const upd = (i, k, v) => onRowEdit ? onRowEdit(i, k, v) : updCases(cases.map((c, j) => j === i ? { ...c, [k]: v } : c));
+   const rr = caseRes && caseRes.rows;
+   const worst = key => { if (!rr) return -1; let w = -1, m = -1; rr.forEach((r0, i) => { if (r0[key] != null && r0[key] > m) { m = r0[key]; w = i; } }); return w; };
+   const wG = worst('geoR'), wF = worst('flexR'), wC = worst('combR'), wB = worst('buckR');
+   const fmtR = v => v == null ? "—" : fmt(v, 2);
+-  return /*#__PURE__*/React.createElement("div", { className: "rounded-sm border border-slate-300 bg-white p-3 mb-4", "data-otab-fixed": "summary" },
+-    /*#__PURE__*/React.createElement("div", { className: "flex items-center justify-between mb-1" },
+-      /*#__PURE__*/React.createElement("span", { className: "text-[11px] font-mono-tech text-[var(--blueprint)] uppercase tracking-wider" }, "LRFD load cases"),
+-      /*#__PURE__*/React.createElement("span", { className: "flex items-center gap-2" },
+-        /*#__PURE__*/React.createElement("span", { className: "flex items-center gap-1 text-[9px] font-mono-tech text-slate-500" },
++  const nFail = rr ? rr.filter(r0 => !r0.pass).length : 0;
++  return /*#__PURE__*/React.createElement("div", ro ? { className: "rounded-sm border border-slate-300 bg-white p-3 mb-4", "data-otab-fixed": "summary", id: "pd-cases-sum" } : { className: "pd-cases-edit" },
++    /*#__PURE__*/React.createElement("div", { className: "flex items-center justify-between flex-wrap gap-1 mb-1" },
++      ro ? /*#__PURE__*/React.createElement("span", { className: "text-[11px] font-mono-tech text-[var(--blueprint)] uppercase tracking-wider" }, "LRFD load cases") : /*#__PURE__*/React.createElement("span", null),
++      /*#__PURE__*/React.createElement("span", { className: "flex items-center gap-2 flex-wrap" },
++        ro ? /*#__PURE__*/React.createElement("span", { className: "text-[9px] font-mono-tech text-slate-500" }, "svc defl limit ", fmt(I.deflLimit, 2), " in")
++        : /*#__PURE__*/React.createElement("span", { className: "flex items-center gap-1 text-[9px] font-mono-tech text-slate-500" },
+           "svc defl limit", /*#__PURE__*/React.createElement("input", { type: "number", step: 0.05, "aria-label": "Service deflection limit, in", value: I.deflLimit,
+             onChange: e => updCasesLimit(parseFloat(e.target.value) || 0),
+             className: "w-14 font-mono-tech text-[9px] px-1 py-0.5 rounded-sm border border-slate-300" }), "in"),
+         /*#__PURE__*/React.createElement("button", { onClick: runAllCases, className: "font-mono-tech text-[9.5px] px-2 py-1 rounded-sm text-white", style: { background: "var(--blueprint2)" } },
+-          caseRes && caseRes.busy ? "running…" : "Run all cases → envelope"))),
++          caseRes && caseRes.busy ? "running…" : "Run all cases → envelope"),
++        ro && onEdit && /*#__PURE__*/React.createElement("button", { type: "button", onClick: onEdit, className: "pd-edit-link font-mono-tech text-[9.5px] px-2 py-1 rounded-sm border border-[var(--blueprint2)] text-[var(--blueprint2)] hover:bg-slate-50", title: "Edit the load cases in the Loads & group input tab" }, "Edit loads \u2192"))),
+     /*#__PURE__*/React.createElement("div", { className: "flex items-center gap-2 mb-1.5 text-[10px] font-mono-tech" },
+       /*#__PURE__*/React.createElement("span", { className: "text-slate-500" }, "Active case (drives ALL modules live):"),
+       /*#__PURE__*/React.createElement("select", { className: "border border-slate-300 rounded-sm px-1.5 py-0.5 text-[10px] font-mono-tech bg-white", "aria-label": "Active load case", value: activeIdx,
+@@ -9377,35 +9611,39 @@ function LoadCasesCard({ cases, updCases, applyCase, runAllCases, caseRes, I, up
+     /*#__PURE__*/React.createElement("table", { className: "w-full text-[9.5px]", style: { borderCollapse: "collapse" } },
+       /*#__PURE__*/React.createElement("thead", null, /*#__PURE__*/React.createElement("tr", { className: "text-slate-400 font-mono-tech" },
+         ["", "name", "type", "axial/T (kip)", "lateral (kip)", "M head (k·ft)", ""].map((h2, i) => /*#__PURE__*/React.createElement("td", { key: i, className: "pr-1" }, h2)))),
+-      /*#__PURE__*/React.createElement("tbody", null, cases.map((c, i) => /*#__PURE__*/React.createElement("tr", { key: i, style: { borderTop: "1px solid #eef2f6", background: c._fromGroup ? "rgba(20,48,74,0.04)" : "transparent" } },
++      /*#__PURE__*/React.createElement("tbody", null, cases.map((c, i) => { const rd = ro || c._fromGroup; return /*#__PURE__*/React.createElement("tr", { key: i, style: { borderTop: "1px solid #eef2f6", background: c._fromGroup ? "rgba(20,48,74,0.04)" : "transparent" } },
+         /*#__PURE__*/React.createElement("td", { className: "py-0.5 pr-1" },
+           /*#__PURE__*/React.createElement("button", { title: "make active", onClick: () => setActive(i),
+             className: "text-[8.5px] px-1 py-0.5 rounded-sm border " + (i === activeIdx ? "border-[var(--accent)] text-[var(--accent)] font-bold" : "border-slate-300 text-slate-400") }, i === activeIdx ? "◉" : "○")),
+         /*#__PURE__*/React.createElement("td", { className: "py-0.5 pr-1", style: { width: "24%" } },
+-          c._fromGroup ? /*#__PURE__*/React.createElement("span", { className: "font-mono-tech text-[9.5px]", style: { color: "#14304a" } }, c.name,
+-            /*#__PURE__*/React.createElement("span", { className: "ml-1 text-[7.5px] px-1 py-0.5 rounded-sm text-white align-middle", style: { background: "var(--blueprint2)" } }, "GROUP"))
++          rd ? /*#__PURE__*/React.createElement("span", { className: "font-mono-tech text-[9.5px]", style: { color: "#14304a" } }, c.name,
++            c._fromGroup ? /*#__PURE__*/React.createElement("span", { className: "ml-1 text-[7.5px] px-1 py-0.5 rounded-sm text-white align-middle", style: { background: "var(--blueprint2)" } }, "GROUP") : null)
+           : /*#__PURE__*/React.createElement("input", { className: cell, "aria-label": "Case " + (i + 1) + " name", value: c.name, onChange: e => upd(i, 'name', e.target.value) })),
+         /*#__PURE__*/React.createElement("td", { className: "py-0.5 pr-1" },
+-          c._fromGroup ? /*#__PURE__*/React.createElement("span", { className: "font-mono-tech text-[9.5px] text-slate-500" }, c.type)
++          rd ? /*#__PURE__*/React.createElement("span", { className: "font-mono-tech text-[9.5px] text-slate-500" }, c.type)
+           : /*#__PURE__*/React.createElement("select", { className: cell, "aria-label": "Case " + (i + 1) + " type", value: c.type, onChange: e => upd(i, 'type', e.target.value) },
+             ["strength", "extreme", "service", "tension"].map(t => /*#__PURE__*/React.createElement("option", { key: t, value: t }, t)))),
+         /*#__PURE__*/React.createElement("td", { className: "py-0.5 pr-1" },
+-          c._fromGroup ? /*#__PURE__*/React.createElement("span", { className: "font-mono-tech text-[9.5px]", style: { color: "#14304a" } }, fmt(c.STL, 1))
++          rd ? /*#__PURE__*/React.createElement("span", { className: "font-mono-tech text-[9.5px]", style: { color: "#14304a" } }, fmt(c.STL, 1))
+           : /*#__PURE__*/React.createElement("input", { type: "number", className: cell, "aria-label": "Case " + (i + 1) + " axial load, kip", value: c.STL, onChange: e => upd(i, 'STL', parseFloat(e.target.value) || 0) })),
+         /*#__PURE__*/React.createElement("td", { className: "py-0.5 pr-1" },
+-          c._fromGroup ? /*#__PURE__*/React.createElement("span", { className: "font-mono-tech text-[9.5px]", style: { color: "#14304a" } }, fmt(c.Plat, 2))
++          rd ? /*#__PURE__*/React.createElement("span", { className: "font-mono-tech text-[9.5px]", style: { color: "#14304a" } }, fmt(c.Plat, 2))
+           : /*#__PURE__*/React.createElement("input", { type: "number", className: cell, "aria-label": "Case " + (i + 1) + " lateral load, kip", value: c.Plat, onChange: e => upd(i, 'Plat', parseFloat(e.target.value) || 0) })),
+         /*#__PURE__*/React.createElement("td", { className: "py-0.5 pr-1" },
+-          c._fromGroup ? /*#__PURE__*/React.createElement("span", { className: "font-mono-tech text-[9.5px] text-slate-500" }, fmt(c.Mhead || 0, 1))
++          rd ? /*#__PURE__*/React.createElement("span", { className: "font-mono-tech text-[9.5px] text-slate-500" }, fmt(c.Mhead || 0, 1))
+           : /*#__PURE__*/React.createElement("input", { type: "number", className: cell, "aria-label": "Case " + (i + 1) + " head moment, kip-ft", value: c.Mhead || 0, onChange: e => upd(i, 'Mhead', parseFloat(e.target.value) || 0) })),
+         /*#__PURE__*/React.createElement("td", { className: "py-0.5 text-right" },
+-          !c._fromGroup && cases.length > 1 && /*#__PURE__*/React.createElement("button", { onClick: () => updCases(cases.filter((_, j) => j !== i)), className: "text-slate-400 hover:text-red-600 px-1" }, "×")))))),
+-    /*#__PURE__*/React.createElement("button", { onClick: () => updCases([...cases, { name: "Case " + (cases.length + 1), type: "strength", STL: I.STL, Plat: I.Plat, Mhead: 0 }]),
++          !rd && cases.length > 1 && /*#__PURE__*/React.createElement("button", { onClick: () => updCases(cases.filter((_, j) => j !== i)), className: "text-slate-400 hover:text-red-600 px-1" }, "×"))); }))),
++    !ro && /*#__PURE__*/React.createElement("button", { onClick: () => updCases([...cases, { name: "Case " + (cases.length + 1), type: "strength", STL: I.STL, Plat: I.Plat, Mhead: 0 }]),
+       className: "mt-1 font-mono-tech text-[9px] px-2 py-0.5 rounded-sm border border-slate-300 text-slate-500 hover:bg-slate-50" }, "+ add case"),
+     /*#__PURE__*/React.createElement("p", { className: "text-[8.5px] text-slate-400 mt-1 leading-snug" },
+-      "Loads live ONLY here — the STL/Plat/M fields elsewhere mirror the active case and write back to it. ◉ = active. \u201cRun all\u201d solves each case with its own p-y analysis and \u03c6 set: Extreme Event \u03c6 = 1.0 (uplift 0.8) per AASHTO 10.5.5.3; service rows check head deflection against the project criterion above (project-specific — set per your structure's tolerance); tension rows feed the uplift checks. Results envelope below — worst ratio per check highlighted."),
++      ro ? "Loads are entered in the Loads & group input tab (Edit loads \u2192). \u25c9 = active case: click a row or use the selector to switch; every module follows it. \u201cRun all\u201d solves each case with its own p-y analysis and \u03c6 set: Extreme Event \u03c6 = 1.0 (uplift 0.8) per AASHTO 10.5.5.3; service rows check head deflection against the limit above; tension rows feed the uplift checks. Results envelope below \u2014 worst ratio per check highlighted."
++      : "Loads live ONLY here — the STL/Plat/M fields elsewhere mirror the active case and write back to it. ◉ = active. \u201cRun all\u201d solves each case with its own p-y analysis and \u03c6 set: Extreme Event \u03c6 = 1.0 (uplift 0.8) per AASHTO 10.5.5.3; service rows check head deflection against the project criterion above (project-specific — set per your structure's tolerance); tension rows feed the uplift checks. The results envelope (worst ratio per check highlighted) is on the Summary output tab."),
+     caseRes && caseRes.fail && /*#__PURE__*/React.createElement("p", { className: "text-[9.5px] mt-1", style: { color: "#b23b3b" } }, "⚠ ", caseRes.msg),
+-    rr && /*#__PURE__*/React.createElement("table", { className: "w-full text-[9.5px] font-mono-tech mt-2", style: { borderCollapse: "collapse" } },
++    !ro && rr && /*#__PURE__*/React.createElement("p", { className: "text-[9.5px] mt-1.5 font-mono-tech", style: { color: nFail ? "#b23b3b" : "#2f6f3e" } },
++      "Envelope: ", rr.length, " case", rr.length === 1 ? "" : "s", " run \u00b7 ", nFail ? nFail + " not satisfied" : "all satisfied", " \u2014 ",
++      /*#__PURE__*/React.createElement("button", { type: "button", onClick: onShowResults, className: "underline text-[var(--blueprint2)]" }, "results on the Summary tab \u2192")),
++    ro && rr && /*#__PURE__*/React.createElement("table", { className: "w-full text-[9.5px] font-mono-tech mt-2", style: { borderCollapse: "collapse" } },
+       /*#__PURE__*/React.createElement("thead", null, /*#__PURE__*/React.createElement("tr", { className: "text-slate-400" },
+         ["case", "Mmax k·ft", "y₀ in", "geo", "flex", "comb", "buckl", "pass"].map((h2, i) => /*#__PURE__*/React.createElement("td", { key: i, className: "pr-2" }, h2)))),
+       /*#__PURE__*/React.createElement("tbody", null, rr.map((r0, i) => /*#__PURE__*/React.createElement("tr", { key: i, style: { borderTop: "1px solid #eef2f6" } },
+@@ -9414,7 +9652,7 @@ function LoadCasesCard({ cases, updCases, applyCase, runAllCases, caseRes, I, up
+         /*#__PURE__*/React.createElement("td", { className: "py-0.5 pr-2" }, r0.y0 != null ? fmt(r0.y0, 3) : "—"),
+         [["geoR", wG], ["flexR", wF], ["combR", wC], ["buckR", wB]].map(([k, w], j) => /*#__PURE__*/React.createElement("td", { key: j, className: "py-0.5 pr-2", style: { color: i === w && rr[i][k] != null ? "#b23b3b" : "#334155", fontWeight: i === w && rr[i][k] != null ? 700 : 400 } }, fmtR(r0[k]))),
+         /*#__PURE__*/React.createElement("td", { className: "py-0.5", style: { color: r0.pass ? "#2f6f3e" : "#b23b3b" } }, r0.pass ? "✓" : "✗"))))),
+-    rr && rr.some(r0 => r0.prof) && /*#__PURE__*/React.createElement("div", { className: "mt-2" },
++    ro && rr && rr.some(r0 => r0.prof) && /*#__PURE__*/React.createElement("div", { className: "mt-2" },
+       /*#__PURE__*/React.createElement("div", { className: "text-[9.5px] font-mono-tech text-[var(--blueprint)] uppercase tracking-wider mb-1" }, "Moment profiles · all cases overlaid"),
+       /*#__PURE__*/React.createElement(Plot, {
+         data: rr.filter(r0 => r0.prof).map((r0, i) => {
+@@ -9798,7 +10036,7 @@ function computeCapDist(I, grp, loadListOverride) {
+ function CapResults({ cap, g, I, set }) {
+   const [sel, setSel] = React.useState(null);
+   if (!cap || !cap.enable) return /*#__PURE__*/React.createElement("div", { className: "text-[10px] text-slate-400 p-3 border border-slate-200 rounded-sm bg-white" },
+-    "Open the ", /*#__PURE__*/React.createElement("b", null, "Pile Group Workspace"), " (left panel) and enter cap loads to distribute them to the piles.");
++    "Enter the pile layout and cap loads in the ", /*#__PURE__*/React.createElement("b", null, "Pile Group Workspace"), " (Loads & group input tab) to distribute them to the piles.");
+   const piles = cap.piles;
+   const selId = sel != null ? sel : cap.selId;
+   const sp = piles.find(p => p.id === selId) || piles[0];
+@@ -9928,7 +10166,7 @@ function GroupCasesTable({ I }) {
+             /*#__PURE__*/React.createElement("td", { className: "px-2 py-0.5 text-right", style: { color: up ? "#b23b3b" : (isGov ? "#8a5a1f" : "#14304a"), fontWeight: isGov ? 600 : 400 } }, fmt(p.axial, 1)),
+             /*#__PURE__*/React.createElement("td", { className: "px-2 py-0.5 text-right" }, fmt(p.Vres, 1)));
+         })))),
+-    /*#__PURE__*/React.createElement("div", { className: "text-[8px] text-slate-400 mt-1 leading-snug" }, "\u25c9 = governing pile (max compression) for the selected case. Uplift (negative axial) shown red. Axial = P/n + biaxial bending share; shear = equal share of \u03a3V. Selecting a case here does not change the app's active case \u2014 set that in the Load Cases section."));
++    /*#__PURE__*/React.createElement("div", { className: "text-[8px] text-slate-400 mt-1 leading-snug" }, "\u25c9 = governing pile (max compression) for the selected case. Uplift (negative axial) shown red. Axial = P/n + biaxial bending share; shear = equal share of \u03a3V. Selecting a case here does not change the app's active case \u2014 set that in the load-case table (Loads & group input tab, or the Summary output tab)."));
+ }
+ 
+ function Group3D({ cap, g, I }) {
+@@ -10111,13 +10349,11 @@ function SoilModal({ open, onClose, I, set }) {
+         /*#__PURE__*/React.createElement("button", { onClick: onClose, className: "text-[11px] px-4 py-1.5 rounded-sm text-white", style: { background: "var(--blueprint)" } }, "Done"))));
+ }
+ 
+-function GroupModal({ open, onClose, I, set, cap, g }) {
+-  React.useEffect(() => {
+-    function onKey(e) { if (e.key === "Escape") onClose(); }
+-    if (open) document.addEventListener("keydown", onKey);
+-    return () => document.removeEventListener("keydown", onKey);
+-  }, [open, onClose]);
+-  if (!open) return null;
++/* Pile group workspace body: shared by the Loads & group input tab (rail: one column, plan view
++   and per-pile table first, 3D view on request) and the original dialog (GroupModal, two columns).
++   Inputs, keys and handlers are the dialog's, unchanged (UI move only, 2026-10-10). */
++function GroupWorkspaceBody({ I, set, cap, g, rail, cases, activeIdx }) {
++  const [show3d, setShow3d] = React.useState(false);
+   const piles = (Array.isArray(I.groupPiles) && I.groupPiles.length) ? I.groupPiles
+     : (cap ? cap.piles.map(p => ({ x: +p.xg.toFixed(2), y: +p.yg.toFixed(2) })) : []);
+   const setPiles = arr => set('groupPiles', arr);
+@@ -10166,25 +10402,7 @@ function GroupModal({ open, onClose, I, set, cap, g }) {
+   const capF = (lbl, key, unit) => /*#__PURE__*/React.createElement("div", null,
+     /*#__PURE__*/React.createElement("div", { className: "text-[10px] text-slate-500 mb-0.5" }, lbl, /*#__PURE__*/React.createElement("span", { className: "text-slate-400" }, " (" + unit + ")")),
+     /*#__PURE__*/React.createElement("input", { type: "number", className: "w-full font-mono-tech text-[11px] px-1.5 py-1 rounded-sm border border-slate-300", value: I[key] || 0, onChange: e => set(key, parseFloat(e.target.value) || 0) }));
+-  return /*#__PURE__*/React.createElement("div", { className: "fixed inset-0 z-50 flex items-stretch md:items-center justify-center p-0 md:p-6", style: { background: "rgba(8,18,28,0.55)" }, onClick: onClose },
+-    /*#__PURE__*/React.createElement("div", { className: "bg-[var(--paper)] w-full md:max-w-5xl md:max-h-[90vh] md:rounded-lg shadow-2xl flex flex-col overflow-hidden", onClick: e => e.stopPropagation() },
+-      /*#__PURE__*/React.createElement("div", { className: "blueprint-grid text-white px-6 py-3 flex items-center justify-between shrink-0" },
+-        /*#__PURE__*/React.createElement("div", null,
+-          /*#__PURE__*/React.createElement("div", { className: "font-mono-tech text-[10px] tracking-[0.2em] text-[#9fc0d8] uppercase" }, "Pile Group Workspace"),
+-          /*#__PURE__*/React.createElement("h2", { className: "text-[16px] font-semibold" }, "Layout, cap loads & distribution")),
+-        /*#__PURE__*/React.createElement("button", { onClick: onClose, className: "text-white/70 hover:text-white text-[20px] leading-none" }, "\u00d7")),
+-      /*#__PURE__*/React.createElement("div", { className: "flex-1 overflow-auto p-5" },
+-      /*#__PURE__*/React.createElement("div", { className: "rounded-sm border p-2.5 mb-4 flex items-start gap-2",
+-        style: !!I.groupEnable ? { borderColor: "var(--blueprint2)", background: "rgba(61,106,148,0.06)" } : { borderColor: "#cbd5e1", background: "rgba(148,163,184,0.06)" } },
+-        /*#__PURE__*/React.createElement("input", { type: "checkbox", className: "mt-0.5",
+-          checked: !!I.groupEnable,
+-          onChange: e => { set('groupEnable', e.target.checked); if (!e.target.checked) set('loadFromGroup', false); } }),
+-        /*#__PURE__*/React.createElement("div", null,
+-          /*#__PURE__*/React.createElement("div", { className: "text-[11px] font-medium", style: { color: "#14304a" } }, "Apply pile group to the design"),
+-          /*#__PURE__*/React.createElement("div", { className: "text-[9.5px] text-slate-500 leading-snug" }, "When ON, the group distribution adds a computed \u201cGroup \u25a6\u201d load case to the LRFD case table (visible alongside your cases, not replacing them). When OFF, the design runs as a ", /*#__PURE__*/React.createElement("b", null, "single pile"), " on your entered load cases only \u2014 group-derived loading is unavailable."))),
+-      /*#__PURE__*/React.createElement("div", { className: "grid md:grid-cols-2 gap-5" },
+-        // LEFT: inputs
+-        /*#__PURE__*/React.createElement("div", null,
++  const leftA = [
+           /*#__PURE__*/React.createElement("div", { className: "text-[11px] font-mono-tech text-[var(--blueprint)] uppercase tracking-wider mb-2" }, "1 \u00b7 Pile layout"),
+           /*#__PURE__*/React.createElement("div", { className: "flex items-end gap-2 mb-2" },
+             /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-500" }, "rows"), /*#__PURE__*/React.createElement("input", { type: "number", className: "w-14 text-[11px] px-1 py-0.5 border border-slate-300 rounded-sm", value: I.groupNrows, onChange: e => set('groupNrows', Math.max(1, Math.round(+e.target.value))) })),
+@@ -10266,7 +10484,7 @@ function GroupModal({ open, onClose, I, set, cap, g }) {
+           /*#__PURE__*/React.createElement("div", { className: "flex items-center gap-3 mt-1" },
+             /*#__PURE__*/React.createElement("button", { onClick: addCase, className: "text-[10px] text-[var(--blueprint2)]" }, "+ add case"),
+             cap && /*#__PURE__*/React.createElement("span", { className: "text-[9px] text-slate-500" }, "Active-case resultant: \u03a3P = ", fmt(cap.Pv, 1), " kip, \u03a3V = (", fmt(cap.Vx, 1), ", ", fmt(cap.Vy, 1), "), \u03a3M", /*#__PURE__*/React.createElement("sub", null, "eff"), " = (", fmt(cap.Mx_eff, 0), ", ", fmt(cap.My_eff, 0), ") kip\u00b7ft")),
+-          /*#__PURE__*/React.createElement("div", { className: "text-[8px] text-slate-400 mt-0.5" }, "Each non-zero case is added to the main Load Cases section as a Group \u25a6 row and swept by \u201cRun all cases \u2192 envelope.\u201d The distribution shown here reflects the currently active case."),
++          /*#__PURE__*/React.createElement("div", { className: "text-[8px] text-slate-400 mt-0.5" }, "Each non-zero case is added to the LRFD load-case table as a Group \u25a6 row and swept by \u201cRun all cases \u2192 envelope.\u201d The distribution shown here reflects the currently active case."),
+           /*#__PURE__*/React.createElement("div", { className: "text-[11px] font-mono-tech text-[var(--blueprint)] uppercase tracking-wider mt-4 mb-2" }, "2b \u00b7 Cap geometry & self-weight"),
+           /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-500 mb-1" }, "Cap plan geometry drives the to-scale 3D view and the edge-distance check (and self-weight if enabled below):"),
+           /*#__PURE__*/React.createElement("div", { className: "grid grid-cols-3 gap-2 mb-1.5" },
+@@ -10294,23 +10512,24 @@ function GroupModal({ open, onClose, I, set, cap, g }) {
+           (I.capIncludeWeight || I.stemEnable) && /*#__PURE__*/React.createElement("div", { className: "grid grid-cols-3 gap-2 mb-1.5" },
+             capF("Dead-load factor \u03b3DC", "dlFactor", "\u2013"),
+             /*#__PURE__*/React.createElement("div", { className: "col-span-2 flex items-end text-[8.5px] text-slate-400 leading-snug pb-0.5" }, "Applied to cap + stem self-weight in the distribution. AASHTO LRFD Strength I max \u03b3DC = 1.25 (Table 3.4.1-2); override per project spec.")),
++  ];
++  const leftB = [
+           /*#__PURE__*/React.createElement("div", { className: "text-[11px] font-mono-tech text-[var(--blueprint)] uppercase tracking-wider mt-4 mb-2" }, "3 \u00b7 Design pile"),
+           /*#__PURE__*/React.createElement("div", { className: "flex items-center gap-2 text-[11px]" },
+             /*#__PURE__*/React.createElement("span", { className: "text-slate-500" }, "Selected pile (checks run against this):"),
+             /*#__PURE__*/React.createElement("select", { className: "border border-slate-300 rounded-sm px-1.5 py-0.5 text-[11px] font-mono-tech bg-white", value: I.groupSelPile || (cap ? cap.selId : 0), onChange: e => set('groupSelPile', parseInt(e.target.value)) },
+               /*#__PURE__*/React.createElement("option", { value: 0 }, "auto (governing)"),
+               (cap ? cap.piles : []).map(p => /*#__PURE__*/React.createElement("option", { key: p.id, value: p.id }, "Pile " + p.id + " (" + fmt(p.axial, 0) + " kip)")))),
+-          cap && cap.sel && /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-500 mt-1" }, "Design pile: #", cap.selId, " \u00b7 axial ", fmt(cap.sel.axial, 1), " kip, shear ", fmt(cap.sel.Vres, 1), " kip")),
+-        // RIGHT: 3D
+-        /*#__PURE__*/React.createElement("div", null,
+-          /*#__PURE__*/React.createElement("div", { className: "text-[11px] font-mono-tech text-[var(--blueprint)] uppercase tracking-wider mb-2" }, "To-scale 3D schematic"),
+-          cap && cap.piles.length ? /*#__PURE__*/React.createElement(Group3D, { cap: cap, g: g, I: I }) : /*#__PURE__*/React.createElement("div", { className: "text-[10px] text-slate-400 p-4 border border-slate-200 rounded-sm" }, "Define piles and cap loads to see the 3D view."),
+-          cap && cap.piles.length ? (() => {
++          cap && cap.sel && /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-500 mt-1" }, "Design pile: #", cap.selId, " \u00b7 axial ", fmt(cap.sel.axial, 1), " kip, shear ", fmt(cap.sel.Vres, 1), " kip")
++  ];
++  const hdr3d = /*#__PURE__*/React.createElement("div", { className: "text-[11px] font-mono-tech text-[var(--blueprint)] uppercase tracking-wider mb-2" }, "To-scale 3D schematic");
++  const view3d = cap && cap.piles.length ? /*#__PURE__*/React.createElement(Group3D, { cap: cap, g: g, I: I }) : /*#__PURE__*/React.createElement("div", { className: "text-[10px] text-slate-400 p-4 border border-slate-200 rounded-sm" }, "Define piles and cap loads to see the 3D view.");
++  const edgeBlock = cap && cap.piles.length ? (() => {
+             // Edge-distance check: pile CENTER to nearest cap edge, using the
+             // defined cap plan (L × W centered at Cx,Cy). Only meaningful when
+             // the cap geometry is actually entered.
+             if (!(I.capL > 0 && I.capW > 0)) return /*#__PURE__*/React.createElement("p", { className: "text-[9px] mt-1.5 leading-snug", style: { color: "#8a5a1f" } },
+-              "⚠ Cap plan geometry not defined (enter Cap L × W below) — the 3D cap shown is a schematic bounding box, and the edge-distance check is unavailable.");
++              "⚠ Cap plan geometry not defined (enter Cap L × W under Cap geometry & self-weight) — the 3D cap shown is a schematic bounding box, and the edge-distance check is unavailable.");
+             const cx0 = I.capCx || 0, cy0 = I.capCy || 0;
+             const edges = cap.piles.map(p => ({ id: p.id,
+               e: Math.min(I.capL / 2 - Math.abs(p.xg - cx0), I.capW / 2 - Math.abs(p.yg - cy0)) * 12 }));
+@@ -10329,12 +10548,56 @@ function GroupModal({ open, onClose, I, set, cap, g }) {
+               outside ? /*#__PURE__*/React.createElement("div", null, "✗ Pile P", worst2.id, " lies OUTSIDE the defined cap plan — fix the layout or cap dimensions.")
+                 : short2 ? /*#__PURE__*/React.createElement("div", null, "⚠ Edge distance below the project minimum (", fmt(minReq, 1), " in) — enlarge the cap or move the pile.")
+                 : /*#__PURE__*/React.createElement("div", { className: "text-slate-500" }, minReq > 0 ? "✓ All piles meet the entered minimum." : "Enter a project minimum to check (set per structural detailing criteria — e.g. cover + embedment; a common rule of thumb is ≥ ~1.5×OD, verify per project)."));
+-          })() : null,
+-          /*#__PURE__*/React.createElement("div", { className: "text-[8px] text-slate-400 mt-1" }, "Drag to rotate. To scale: cap slab, pile stubs, load vectors at the application point. Red arrow = axial P, green = shears Vx/Vy, blue curved arrows = effective moments Mx/My (about the horizontal axes). Pile color: blue = compression, red = uplift; orange ring = selected design pile; orange dot = load point."),
+-          cap && cap.enable && /*#__PURE__*/React.createElement("div", { className: "mt-3 text-[10px] font-mono-tech" },
++          })() : null;
++  const legend3d = /*#__PURE__*/React.createElement("div", { className: "text-[8px] text-slate-400 mt-1" }, "Drag to rotate. To scale: cap slab, pile stubs, load vectors at the application point. Red arrow = axial P, green = shears Vx/Vy, blue curved arrows = effective moments Mx/My (about the horizontal axes). Pile color: blue = compression, red = uplift; orange ring = selected design pile; orange dot = load point.");
++  const sumBlock = cap && cap.enable && /*#__PURE__*/React.createElement("div", { className: "mt-3 text-[10px] font-mono-tech" },
+             /*#__PURE__*/React.createElement("div", { className: "flex justify-between py-0.5" }, /*#__PURE__*/React.createElement("span", { className: "text-slate-500" }, "Max compression"), /*#__PURE__*/React.createElement("b", null, fmt(cap.maxComp, 1), " kip")),
+             /*#__PURE__*/React.createElement("div", { className: "flex justify-between py-0.5" }, /*#__PURE__*/React.createElement("span", { className: "text-slate-500" }, "Max uplift"), /*#__PURE__*/React.createElement("b", { style: { color: cap.anyUplift ? "#b23b3b" : "#2f6f3e" } }, fmt(cap.maxUplift, 1), " kip")),
+-            /*#__PURE__*/React.createElement("div", { className: "flex justify-between py-0.5" }, /*#__PURE__*/React.createElement("span", { className: "text-slate-500" }, "Shear / pile"), /*#__PURE__*/React.createElement("b", null, fmt(cap.Vres_each, 1), " kip")))))),
++            /*#__PURE__*/React.createElement("div", { className: "flex justify-between py-0.5" }, /*#__PURE__*/React.createElement("span", { className: "text-slate-500" }, "Shear / pile"), /*#__PURE__*/React.createElement("b", null, fmt(cap.Vres_each, 1), " kip")));
++  if (rail) return /*#__PURE__*/React.createElement("div", { className: "pd-grpws-body" },
++    /*#__PURE__*/React.createElement(GroupLayoutView, { I: I, cases: cases, activeIdx: activeIdx }),
++    ...leftA, edgeBlock, ...leftB,
++    /*#__PURE__*/React.createElement("div", { className: "flex items-center gap-2 mt-4 mb-2" },
++      /*#__PURE__*/React.createElement("span", { className: "text-[11px] font-mono-tech text-[var(--blueprint)] uppercase tracking-wider" }, "To-scale 3D schematic"),
++      /*#__PURE__*/React.createElement("button", { type: "button", onClick: () => setShow3d(v => !v), "aria-expanded": show3d,
++        className: "text-[10px] px-2 py-0.5 rounded-sm border border-slate-300 text-slate-600 hover:bg-slate-50" }, show3d ? "Hide 3D view" : "Show 3D view")),
++    show3d && view3d, show3d && legend3d, sumBlock,
++    /*#__PURE__*/React.createElement("label", { className: "flex items-start gap-2 mt-3 text-[10.5px] cursor-pointer " + (!!I.groupEnable ? "text-slate-600" : "text-slate-300") },
++      /*#__PURE__*/React.createElement("input", { type: "checkbox", className: "mt-0.5", checked: !!I.loadFromGroup,
++        disabled: !!!I.groupEnable,
++        onChange: e => { set('loadFromGroup', e.target.checked); if (e.target.checked) set('groupEnable', true); } }),
++      /*#__PURE__*/React.createElement("span", null, "Make the ", /*#__PURE__*/React.createElement("b", null, "Group \u25a6"), " case the ACTIVE load case (your other cases stay in the table, editable as usual)")));
++  return /*#__PURE__*/React.createElement("div", { className: "grid md:grid-cols-2 gap-5" },
++    // LEFT: inputs
++    /*#__PURE__*/React.createElement("div", null, ...leftA, ...leftB),
++    // RIGHT: 3D
++    /*#__PURE__*/React.createElement("div", null, hdr3d, view3d, edgeBlock, legend3d, sumBlock));
++}
++
++function GroupModal({ open, onClose, I, set, cap, g }) {
++  React.useEffect(() => {
++    function onKey(e) { if (e.key === "Escape") onClose(); }
++    if (open) document.addEventListener("keydown", onKey);
++    return () => document.removeEventListener("keydown", onKey);
++  }, [open, onClose]);
++  if (!open) return null;
++  return /*#__PURE__*/React.createElement("div", { className: "fixed inset-0 z-50 flex items-stretch md:items-center justify-center p-0 md:p-6", style: { background: "rgba(8,18,28,0.55)" }, onClick: onClose },
++    /*#__PURE__*/React.createElement("div", { className: "bg-[var(--paper)] w-full md:max-w-5xl md:max-h-[90vh] md:rounded-lg shadow-2xl flex flex-col overflow-hidden", onClick: e => e.stopPropagation() },
++      /*#__PURE__*/React.createElement("div", { className: "blueprint-grid text-white px-6 py-3 flex items-center justify-between shrink-0" },
++        /*#__PURE__*/React.createElement("div", null,
++          /*#__PURE__*/React.createElement("div", { className: "font-mono-tech text-[10px] tracking-[0.2em] text-[#9fc0d8] uppercase" }, "Pile Group Workspace"),
++          /*#__PURE__*/React.createElement("h2", { className: "text-[16px] font-semibold" }, "Layout, cap loads & distribution")),
++        /*#__PURE__*/React.createElement("button", { onClick: onClose, className: "text-white/70 hover:text-white text-[20px] leading-none" }, "\u00d7")),
++      /*#__PURE__*/React.createElement("div", { className: "flex-1 overflow-auto p-5" },
++      /*#__PURE__*/React.createElement("div", { className: "rounded-sm border p-2.5 mb-4 flex items-start gap-2",
++        style: !!I.groupEnable ? { borderColor: "var(--blueprint2)", background: "rgba(61,106,148,0.06)" } : { borderColor: "#cbd5e1", background: "rgba(148,163,184,0.06)" } },
++        /*#__PURE__*/React.createElement("input", { type: "checkbox", className: "mt-0.5",
++          checked: !!I.groupEnable,
++          onChange: e => { set('groupEnable', e.target.checked); if (!e.target.checked) set('loadFromGroup', false); } }),
++        /*#__PURE__*/React.createElement("div", null,
++          /*#__PURE__*/React.createElement("div", { className: "text-[11px] font-medium", style: { color: "#14304a" } }, "Apply pile group to the design"),
++          /*#__PURE__*/React.createElement("div", { className: "text-[9.5px] text-slate-500 leading-snug" }, "When ON, the group distribution adds a computed \u201cGroup \u25a6\u201d load case to the LRFD case table (visible alongside your cases, not replacing them). When OFF, the design runs as a ", /*#__PURE__*/React.createElement("b", null, "single pile"), " on your entered load cases only \u2014 group-derived loading is unavailable."))),
++      /*#__PURE__*/React.createElement(GroupWorkspaceBody, { I: I, set: set, cap: cap, g: g })),
+       /*#__PURE__*/React.createElement("div", { className: "border-t border-slate-200 px-5 py-3 flex items-center justify-between shrink-0" },
+         /*#__PURE__*/React.createElement("label", { className: "flex items-center gap-2 text-[11px] cursor-pointer " + (!!I.groupEnable ? "text-slate-600" : "text-slate-300") },
+           /*#__PURE__*/React.createElement("input", { type: "checkbox", checked: !!I.loadFromGroup,
+@@ -11211,7 +11474,7 @@ function PyPanel({ I, set, pyRes, r, EI, EI_composite_kipin2, EI_aashto_kipin2,
+     }, "Step 2 · Model setup — loads & solver configuration"),
+     /*#__PURE__*/React.createElement("p", {
+       className: "text-[9.5px] text-slate-600 leading-snug mb-2"
+-    }, "Loads come from the active LRFD load case (left column card); the fields below set the head condition and solver options. Optionally import an LPILE file to auto-populate the soil profile, loads, and settings — nothing is applied until confirmed. Use the ", /*#__PURE__*/React.createElement("b", null, ".lp13o"), " output report for LPILE 2013+ (the modern .lp13d input deck is binary and unreadable); the report also carries LPILE’s computed results, which are compared against this app’s solve after import. Legacy text ", /*#__PURE__*/React.createElement("b", null, ".lp12d"), " input decks are still accepted."),
++    }, "Loads come from the active LRFD load case (Loads & group input tab); the fields below set the head condition and solver options. Optionally import an LPILE file to auto-populate the soil profile, loads, and settings — nothing is applied until confirmed. Use the ", /*#__PURE__*/React.createElement("b", null, ".lp13o"), " output report for LPILE 2013+ (the modern .lp13d input deck is binary and unreadable); the report also carries LPILE’s computed results, which are compared against this app’s solve after import. Legacy text ", /*#__PURE__*/React.createElement("b", null, ".lp12d"), " input decks are still accepted."),
+     /*#__PURE__*/React.createElement("div", { className: "rounded-sm border border-slate-200 p-2 mb-3 bg-slate-50" },
+       /*#__PURE__*/React.createElement("div", { className: "text-[9px] font-mono-tech text-[var(--blueprint2)] uppercase tracking-wider mb-1" }, "Head fixity & solver options \u00b7 inputs"),
+       // These are INPUTS and now live on the left Pile Geometry panel only. Showing an
+@@ -13423,37 +13686,12 @@ function App() {
+     className: "text-[9px] text-slate-400 leading-snug"
+   }, "Save many named projects in this browser. Recall, overwrite, or delete any. For cross-device or archival storage, use the .json export above."))), /*#__PURE__*/React.createElement(Panel, {
+     title: "Project Info",
+-    sub: "Project, job no., subject, by / chk: in the header title block \u00b7 foundation-load hand-off"
++    sub: "Project, job no., subject, by / chk: in the header title block"
+   }, /*#__PURE__*/React.createElement("div", {
+-    className: "grid grid-cols-1 gap-2"
+-  }, /*#__PURE__*/React.createElement("div", {
+-    className: "flex flex-wrap gap-2 no-print"
+-  }, /*#__PURE__*/React.createElement("button", {
+-    type: "button",
+-    id: "pfxPull",
+-    onClick: () => PileFoundationXfer.pull(I, setI),
+-    title: "Pull foundation load cases sent by the abutment calculator or Bridge Substructure Loading (channel foundationLoads; asks first, nothing changes until you import)",
+-    className: "font-mono-tech text-[9px] px-1.5 py-1 rounded-sm border border-slate-300 text-slate-500 hover:bg-white"
+-  }, "Pull from Abutment / SubLoads", /*#__PURE__*/React.createElement("span", {
+-    id: "pfxNew",
+-    hidden: true,
+-    style: { color: "#b45309", fontWeight: 700 }
+-  }, " ● new data")), /*#__PURE__*/React.createElement("button", {
+-    type: "button",
+-    id: "pfxImp",
+-    onClick: () => { const f = document.getElementById("pfxFile"); if (f) f.click(); },
+-    title: "Import a foundationLoads hand-off JSON file (asks first)",
+-    className: "font-mono-tech text-[9px] px-1.5 py-1 rounded-sm border border-slate-300 text-slate-500 hover:bg-white"
+-  }, "Import hand-off (JSON)"), /*#__PURE__*/React.createElement("input", {
+-    type: "file",
+-    id: "pfxFile",
+-    accept: ".json,application/json",
+-    style: { display: "none" },
+-    onChange: e => PileFoundationXfer.importFile(e, I, setI)
+-  })), I.foundationSrc && /*#__PURE__*/React.createElement("div", {
+-    id: "pfxSrc",
+-    className: "text-[9px] text-slate-500 italic leading-snug"
+-  }, PileFoundationXfer.sourceLine(I)))), /*#__PURE__*/(I.pileType === "iab") && /*#__PURE__*/React.createElement(Panel, {
++    className: "text-[10px] text-slate-500 leading-snug"
++  }, I.pileType === "iab"
++    ? "Integral-abutment mode takes the gravity load per pile in the Abutment tab; foundation-load hand-offs are not used in this mode."
++    : ["Foundation loads from the abutment calculator or Bridge Substructure Loading are pulled in the ", /*#__PURE__*/React.createElement("button", { key: "b", type: "button", onClick: () => gotoLoadsTab(setRailTab), className: "underline text-[var(--blueprint2)]" }, "Loads & group tab \u2192")])), /*#__PURE__*/(I.pileType === "iab") && /*#__PURE__*/React.createElement(Panel, {
+     title: "Integral Abutment Pile \u2014 Simplified Method"
+   }, /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-500 mb-2 leading-snug" }, "MassDOT Bridge Manual Part I \u00a73.10.11. Pick the section, MassDOT soil type, and skew; enter the factored gravity load per pile (DL+LL). Capacity is read from Tables 3.10.11-2/-3 (thermal & skew effects pre-computed)."),
+     /*#__PURE__*/React.createElement("div", { className: "grid grid-cols-2 gap-3 mb-2" },
+@@ -13672,11 +13910,12 @@ function App() {
+   }, /*#__PURE__*/React.createElement("div", null,
+     I.solverFree < 0 ? "head " + fmt(Math.abs(I.solverFree), 1) + " ft below grade · " : (I.solverFree > 0 ? "stickup " + fmt(I.solverFree, 1) + " ft above grade · " : ""),
+     "toe: ", fmt(r.geo.bondBottom, 1), " ft below head · total length ", fmt(r.geo.bondBottom, 1), " ft · casing tip ", fmt(r.geo.casingTip, 1), " ft"), !r.geo.geomValid && /*#__PURE__*/React.createElement("div", { className: "text-[var(--no)]" }, "⚠ geometry inconsistent: plunge ≤ bond and cased ≥ plunge required."))), /*#__PURE__*/(I.pileType !== "iab") && /*#__PURE__*/React.createElement("button", {
+-    onClick: () => setGroupModalOpen(true),
++    "data-rtab-fixed": "checks",
++    onClick: () => gotoLoadsTab(setRailTab, "group"),
+     className: "w-full mt-2 font-mono-tech text-[11px] tracking-wider py-2 rounded-sm border border-[var(--blueprint2)] text-[var(--blueprint2)] hover:bg-slate-50 transition flex items-center justify-center gap-1.5"
+-  }, "▦ PILE GROUP WORKSPACE", (cases[activeIdx] && cases[activeIdx]._fromGroup) ? /*#__PURE__*/React.createElement("span", { className: "text-[8px] px-1.5 py-0.5 rounded-sm text-white", style: { background: "var(--accent)" } }, "GROUP CASE ACTIVE") : (groupEnabled && groupCase) ? /*#__PURE__*/React.createElement("span", { className: "text-[8px] px-1.5 py-0.5 rounded-sm text-white", style: { background: "var(--blueprint2)" } }, "APPLIED") : null), /*#__PURE__*/React.createElement("div", { className: "mt-3 pt-2 border-t border-slate-200" }, /*#__PURE__*/React.createElement("div", { className: "text-[12px] text-[var(--blueprint)] font-medium mb-1" }, "Head condition"), /*#__PURE__*/React.createElement("div", { className: "flex gap-2 text-[11px] font-mono-tech" }, [["free", "free / pinned"], ["fixed", "fixed / capped"]].map(([v, l]) => /*#__PURE__*/React.createElement("button", { key: v, onClick: () => set('solverHead', v), className: "flex-1 px-2 py-1 rounded-sm border " + (I.solverHead === v ? "bg-[var(--blueprint2)] text-white border-[var(--blueprint2)]" : "bg-white border-slate-300 text-slate-600 hover:bg-slate-50") }, l))), I.solverHead !== "fixed" && /*#__PURE__*/React.createElement("div", { className: "flex items-center gap-1.5 mt-1.5" }, /*#__PURE__*/React.createElement("span", { className: "text-[10px] text-slate-500 font-mono-tech" }, "K\u03b8"), /*#__PURE__*/React.createElement("input", { type: "number", "aria-label": "Head rotational stiffness K-theta, kip-in per radian", value: I.pyKrot || 0, onChange: e => set('pyKrot', parseFloat(e.target.value) || 0), className: "w-24 font-mono-tech text-[11px] px-1.5 py-1 rounded-sm border border-slate-300" }), /*#__PURE__*/React.createElement("span", { className: "text-[9px] text-slate-400 font-mono-tech" }, "kip\u00b7in/rad \u00b7 0 = pinned")), /*#__PURE__*/React.createElement("p", { className: "text-[8.5px] text-slate-400 mt-1 leading-snug" }, /*#__PURE__*/React.createElement("b", null, "Free"), ": head rotates (flagpole/pinned), or is partially restrained by K\u03b8. ", /*#__PURE__*/React.createElement("b", null, "Fixed"), ": rotation fully restrained by a rigid cap connection. Drives the p-y boundary condition, the deflection-matched buckling basis, and the cap-embedment check."), /*#__PURE__*/React.createElement("div", { className: "text-[12px] text-[var(--blueprint)] font-medium mt-2.5 mb-1" }, "p-y loading criterion"), /*#__PURE__*/React.createElement("label", { className: "flex items-center gap-1.5 text-[10px] text-slate-600 font-mono-tech" }, /*#__PURE__*/React.createElement("input", { type: "checkbox", checked: !!I.pyCyclic, onChange: e => { const on = e.target.checked; set('pyCyclic', on); if (on) setCycInfoOpen(true); } }), "cyclic p-y curves"), /*#__PURE__*/React.createElement("p", { className: "text-[8.5px] text-slate-400 mt-1 leading-snug" }, !!I.pyCyclic ? [/*#__PURE__*/React.createElement("b", { key: "b", style: { color: "#8a5a1f" } }, "\u26a0 Cyclic active. "), "Models soil-resistance degradation under repeated large-amplitude reversal (offshore wave, seismic). Static is the usual basis for bridge substructure. ", /*#__PURE__*/React.createElement("button", { key: "d", onClick: () => setCycInfoOpen(true), className: "underline font-mono-tech" }, "details")] : "Unchecked = static (the usual basis for bridge substructure lateral analysis). Cyclic models soil degradation under repeated reversal \u2014 an offshore/seismic criterion."), /*#__PURE__*/React.createElement(CyclicInfoModal, { open: cycInfoOpen, onClose: () => setCycInfoOpen(false), onRevert: () => { set('pyCyclic', false); setCycInfoOpen(false); } })), /*#__PURE__*/React.createElement("button", { onClick: () => gotoSoilProfileTab(setRailTab), className: "w-full mt-2 font-mono-tech text-[11px] tracking-wider py-2 rounded-sm border border-[var(--blueprint2)] text-[var(--blueprint2)] hover:bg-slate-50 transition flex items-center justify-center gap-1.5" }, "\u2261 SOIL PROFILE", (Array.isArray(I.soilLayers) && I.soilLayers.length) ? /*#__PURE__*/React.createElement("span", { className: "text-[8px] px-1.5 py-0.5 rounded-sm text-white", style: { background: "var(--blueprint2)" } }, I.soilLayers.length, " LAYER", I.soilLayers.length > 1 ? "S" : "") : /*#__PURE__*/React.createElement("span", { className: "text-[8px] px-1.5 py-0.5 rounded-sm", style: { background: "#e2e8f0", color: "#64748b" } }, "UNIFORM")), /*#__PURE__*/React.createElement("div", { className: "mt-1 text-[8.5px] text-slate-400 font-mono-tech leading-snug" }, (Array.isArray(I.soilLayers) && I.soilLayers.length) ? ["Drives the p-y lateral analysis and the Davisson fixity depth (Module 10). Top layer: ", (() => { const t = [...I.soilLayers].sort((a, b) => (a.topDepth || 0) - (b.topDepth || 0))[0]; return t.type === "sand" ? "sand n\u2095=" + fmt(t.nh, 0) : (t.type === "stiffclay" ? "stiff clay" : t.type === "weakrock" ? "weak rock" : "clay") + " k\u2095=" + fmt(t.kh, 0); })(), "."] : "No layered profile \u2014 the analysis uses the uniform soil set in Module 02."), /*#__PURE__*/(I.pileType !== "iab") && /*#__PURE__*/React.createElement(Panel, {
++  }, "▦ PILE GROUP \u2192 Loads & group tab", (cases[activeIdx] && cases[activeIdx]._fromGroup) ? /*#__PURE__*/React.createElement("span", { className: "text-[8px] px-1.5 py-0.5 rounded-sm text-white", style: { background: "var(--accent)" } }, "GROUP CASE ACTIVE") : (groupEnabled && groupCase) ? /*#__PURE__*/React.createElement("span", { className: "text-[8px] px-1.5 py-0.5 rounded-sm text-white", style: { background: "var(--blueprint2)" } }, "APPLIED") : null), /*#__PURE__*/React.createElement("div", { className: "mt-3 pt-2 border-t border-slate-200" }, /*#__PURE__*/React.createElement("div", { className: "text-[12px] text-[var(--blueprint)] font-medium mb-1" }, "Head condition"), /*#__PURE__*/React.createElement("div", { className: "flex gap-2 text-[11px] font-mono-tech" }, [["free", "free / pinned"], ["fixed", "fixed / capped"]].map(([v, l]) => /*#__PURE__*/React.createElement("button", { key: v, onClick: () => set('solverHead', v), className: "flex-1 px-2 py-1 rounded-sm border " + (I.solverHead === v ? "bg-[var(--blueprint2)] text-white border-[var(--blueprint2)]" : "bg-white border-slate-300 text-slate-600 hover:bg-slate-50") }, l))), I.solverHead !== "fixed" && /*#__PURE__*/React.createElement("div", { className: "flex items-center gap-1.5 mt-1.5" }, /*#__PURE__*/React.createElement("span", { className: "text-[10px] text-slate-500 font-mono-tech" }, "K\u03b8"), /*#__PURE__*/React.createElement("input", { type: "number", "aria-label": "Head rotational stiffness K-theta, kip-in per radian", value: I.pyKrot || 0, onChange: e => set('pyKrot', parseFloat(e.target.value) || 0), className: "w-24 font-mono-tech text-[11px] px-1.5 py-1 rounded-sm border border-slate-300" }), /*#__PURE__*/React.createElement("span", { className: "text-[9px] text-slate-400 font-mono-tech" }, "kip\u00b7in/rad \u00b7 0 = pinned")), /*#__PURE__*/React.createElement("p", { className: "text-[8.5px] text-slate-400 mt-1 leading-snug" }, /*#__PURE__*/React.createElement("b", null, "Free"), ": head rotates (flagpole/pinned), or is partially restrained by K\u03b8. ", /*#__PURE__*/React.createElement("b", null, "Fixed"), ": rotation fully restrained by a rigid cap connection. Drives the p-y boundary condition, the deflection-matched buckling basis, and the cap-embedment check."), /*#__PURE__*/React.createElement("div", { className: "text-[12px] text-[var(--blueprint)] font-medium mt-2.5 mb-1" }, "p-y loading criterion"), /*#__PURE__*/React.createElement("label", { className: "flex items-center gap-1.5 text-[10px] text-slate-600 font-mono-tech" }, /*#__PURE__*/React.createElement("input", { type: "checkbox", checked: !!I.pyCyclic, onChange: e => { const on = e.target.checked; set('pyCyclic', on); if (on) setCycInfoOpen(true); } }), "cyclic p-y curves"), /*#__PURE__*/React.createElement("p", { className: "text-[8.5px] text-slate-400 mt-1 leading-snug" }, !!I.pyCyclic ? [/*#__PURE__*/React.createElement("b", { key: "b", style: { color: "#8a5a1f" } }, "\u26a0 Cyclic active. "), "Models soil-resistance degradation under repeated large-amplitude reversal (offshore wave, seismic). Static is the usual basis for bridge substructure. ", /*#__PURE__*/React.createElement("button", { key: "d", onClick: () => setCycInfoOpen(true), className: "underline font-mono-tech" }, "details")] : "Unchecked = static (the usual basis for bridge substructure lateral analysis). Cyclic models soil degradation under repeated reversal \u2014 an offshore/seismic criterion."), /*#__PURE__*/React.createElement(CyclicInfoModal, { open: cycInfoOpen, onClose: () => setCycInfoOpen(false), onRevert: () => { set('pyCyclic', false); setCycInfoOpen(false); } })), /*#__PURE__*/React.createElement("button", { onClick: () => gotoSoilProfileTab(setRailTab), className: "w-full mt-2 font-mono-tech text-[11px] tracking-wider py-2 rounded-sm border border-[var(--blueprint2)] text-[var(--blueprint2)] hover:bg-slate-50 transition flex items-center justify-center gap-1.5" }, "\u2261 SOIL PROFILE", (Array.isArray(I.soilLayers) && I.soilLayers.length) ? /*#__PURE__*/React.createElement("span", { className: "text-[8px] px-1.5 py-0.5 rounded-sm text-white", style: { background: "var(--blueprint2)" } }, I.soilLayers.length, " LAYER", I.soilLayers.length > 1 ? "S" : "") : /*#__PURE__*/React.createElement("span", { className: "text-[8px] px-1.5 py-0.5 rounded-sm", style: { background: "#e2e8f0", color: "#64748b" } }, "UNIFORM")), /*#__PURE__*/React.createElement("div", { className: "mt-1 text-[8.5px] text-slate-400 font-mono-tech leading-snug" }, (Array.isArray(I.soilLayers) && I.soilLayers.length) ? ["Drives the p-y lateral analysis and the Davisson fixity depth (Module 10). Top layer: ", (() => { const t = [...I.soilLayers].sort((a, b) => (a.topDepth || 0) - (b.topDepth || 0))[0]; return t.type === "sand" ? "sand n\u2095=" + fmt(t.nh, 0) : (t.type === "stiffclay" ? "stiff clay" : t.type === "weakrock" ? "weak rock" : "clay") + " k\u2095=" + fmt(t.kh, 0); })(), "."] : "No layered profile \u2014 the analysis uses the uniform soil set in Module 02."), /*#__PURE__*/(I.pileType !== "iab") && /*#__PURE__*/React.createElement(Panel, {
+     title: "Loads",
+-    sub: "active case · edit in LRFD Load Cases"
++    sub: "active case · edit in the Loads & group tab"
+   }, (() => {
+     const ac = cases[activeIdx] || {};
+     const row = (lbl, val, unit) => /*#__PURE__*/React.createElement("div", { className: "flex justify-between items-baseline py-0.5" },
+@@ -13688,8 +13927,9 @@ function App() {
+       row("Lateral", ac.Plat, "kip"),
+       row("Head moment", ac.Mhead, "kip·ft"),
+       /*#__PURE__*/React.createElement("p", { className: "text-[10px] text-slate-400 mt-1.5 leading-snug" },
+-        "Loads are set per case in the LRFD Load Cases table (top of the results column). Switch the active case there; every module follows.",
+-        cases[activeIdx] && cases[activeIdx]._fromGroup ? /*#__PURE__*/React.createElement("span", { style: { color: "#3d6a94", fontWeight: 600 } }, " Active case is Group ▦ — values are computed by the Pile Group Workspace and are read-only here; edit the cap loads/layout there.") : null));
++        "Loads are set per case in the LRFD load-case table (Loads & group tab). Switch the active case there or on the Summary output tab; every module follows.",
++        cases[activeIdx] && cases[activeIdx]._fromGroup ? /*#__PURE__*/React.createElement("span", { style: { color: "#3d6a94", fontWeight: 600 } }, " Active case is Group ▦ — values are computed by the Pile Group Workspace and are read-only here; edit the cap loads/layout there.") : null),
++      /*#__PURE__*/React.createElement("button", { type: "button", onClick: () => gotoLoadsTab(setRailTab, "cases"), className: "mt-1.5 text-[10px] underline text-[var(--blueprint2)]" }, "Edit loads \u2192"));
+   })()), /*#__PURE__*/(I.pileType !== "iab") && /*#__PURE__*/React.createElement(Panel, {
+     title: "Materials"
+   }, I.pileType === "hpile" ? /*#__PURE__*/React.createElement("div", {
+@@ -13830,7 +14070,19 @@ function App() {
+     className: "mt-3"
+   }, /*#__PURE__*/React.createElement(PileSection, {
+     r: r
+-  }))), (I.pileType !== "iab" || (I.iabTier2 && I.iabNlSoilSource === "layered")) && React.createElement(SoilProfilePanel, { I: I, set: set, r: r, pyRes: pyRes }), /*#__PURE__*/(I.pileType === "micropile") && /*#__PURE__*/React.createElement(Panel, {
++  }))), (I.pileType !== "iab" || (I.iabTier2 && I.iabNlSoilSource === "layered")) && React.createElement(SoilProfilePanel, { I: I, set: set, r: r, pyRes: pyRes }), (I.pileType !== "iab") && React.createElement(LoadsGroupPanel, { I: I, set: set, setI: setI, r: r, cases: cases, activeIdx: activeIdx,
++    casesCard: /*#__PURE__*/React.createElement(LoadCasesCard, { variant: "edit", cases: cases, updCases: updCases, applyCase: applyCase, runAllCases: runAllCases, caseRes: caseRes, I: I, updCasesLimit: v => { set('deflLimit', v); setCaseRes(null); }, activeIdx: activeIdx, setActive: i => set('activeCase', i),
++      onShowResults: () => { if (window.__pdSetOutTab) window.__pdSetOutTab("summary"); setTimeout(() => { const el = document.getElementById("pd-cases-sum"); if (el) el.scrollIntoView({ block: "start", behavior: "auto" }); }, 60); },
++      onRowEdit: (i, k, v) => {
++    const next = cases.map((c, j) => j === i ? { ...c, [k]: v } : c);
++    set('loadCases', next); setCaseRes(null);
++    if (i === activeIdx) {
++      const c = next[i];
++      set('STL', c.type === "tension" ? 0 : c.STL); set('Plat', c.Plat); set('pyMhead', c.Mhead || 0);
++      if (c.type === "tension") set('Tu', c.STL);
++      if (c.type === "service") set('SVL', c.STL);
++    }
++  } }) }), /*#__PURE__*/(I.pileType === "micropile") && /*#__PURE__*/React.createElement(Panel, {
+     title: "Geotechnical"
+   }, /*#__PURE__*/React.createElement("div", {
+     className: "grid grid-cols-2 gap-3"
+@@ -13915,7 +14167,7 @@ function App() {
+     "manually override \u03b7"),
+     I.groupEtaOverride && /*#__PURE__*/React.createElement("div", { className: "mt-2 max-w-[180px]" },
+       /*#__PURE__*/React.createElement(Field, { label: "\u03b7 override", value: I.groupEta, onChange: v => set('groupEta', v) })),
+-    /*#__PURE__*/React.createElement("p", { className: "text-[10px] text-slate-500 leading-snug mt-2" }, "Computed \u03b7 = ", fmt(r.group.eta, 3), r.group.spacingOKforEta ? " (spacing \u2265 3\u00d7 bond dia \u2192 individual elements)" : " (Converse-Labarre)", ". Group layout and cap loads are set in the Pile group workspace.")), /*#__PURE__*/(I.pileType !== "iab") && /*#__PURE__*/React.createElement(Panel, {
++    /*#__PURE__*/React.createElement("p", { className: "text-[10px] text-slate-500 leading-snug mt-2" }, "Computed \u03b7 = ", fmt(r.group.eta, 3), r.group.spacingOKforEta ? " (spacing \u2265 3\u00d7 bond dia \u2192 individual elements)" : " (Converse-Labarre)", ". Group layout and cap loads are set in the Pile group workspace (Loads & group tab).")), /*#__PURE__*/(I.pileType !== "iab") && /*#__PURE__*/React.createElement(Panel, {
+     title: "Buckling",
+     sub: "unsupported span and column parameters (10)"
+   }, /*#__PURE__*/React.createElement(Toggle, {
+@@ -13939,7 +14191,7 @@ function App() {
+     sub: "tension / uplift demand (09)"
+   }, /*#__PURE__*/React.createElement(Field, {
+     label: "Factored uplift demand, Tu",
+-    sub: r.tension.tensionDemandSource === "case" ? "from load cases (max tension) — edit cases in the LRFD table" : "standalone input; a tension load case overrides this if larger",
++    sub: r.tension.tensionDemandSource === "case" ? "from load cases (max tension) — edit cases in the Loads & group tab" : "standalone input; a tension load case overrides this if larger",
+     unit: "kip",
+     value: I.Tu,
+     onChange: v => set('Tu', v)
+@@ -14054,16 +14306,7 @@ function App() {
+       className: "text-[10px] text-slate-500 mt-1.5 leading-snug"
+     }, "Integral abutment pile mode — MassDOT Bridge Manual Part I \u00a73.10 Simplified Method. Single row of vertical H-piles (HP10\u00d757 or HP12\u00d784, Grade 50), webs parallel to the abutment, bending about the weak axis under thermal movement. Capacity is read from MassDOT's pre-computed tables (thermal + skew effects already embedded) \u2014 no p-y analysis required for the non-scour case. Sanity-check aid only \u2014 independent PE review required.")),
+   /*#__PURE__*/React.createElement(OutTabs, { pileType: I.pileType }),
+-  /*#__PURE__*/(I.pileType !== "iab") && /*#__PURE__*/React.createElement(LoadCasesCard, { cases: cases, updCases: updCases, applyCase: applyCase, runAllCases: runAllCases, caseRes: caseRes, I: I, updCasesLimit: v => { set('deflLimit', v); setCaseRes(null); }, activeIdx: activeIdx, setActive: i => set('activeCase', i), onRowEdit: (i, k, v) => {
+-    const next = cases.map((c, j) => j === i ? { ...c, [k]: v } : c);
+-    set('loadCases', next); setCaseRes(null);
+-    if (i === activeIdx) {
+-      const c = next[i];
+-      set('STL', c.type === "tension" ? 0 : c.STL); set('Plat', c.Plat); set('pyMhead', c.Mhead || 0);
+-      if (c.type === "tension") set('Tu', c.STL);
+-      if (c.type === "service") set('SVL', c.STL);
+-    }
+-  } }),
++  /*#__PURE__*/(I.pileType !== "iab") && /*#__PURE__*/React.createElement(LoadCasesCard, { variant: "summary", cases: cases, updCases: updCases, applyCase: applyCase, runAllCases: runAllCases, caseRes: caseRes, I: I, activeIdx: activeIdx, setActive: i => set('activeCase', i), onEdit: () => gotoLoadsTab(setRailTab, "cases") }),
+   /*#__PURE__*/React.createElement(UtilizationDashboard, { r: r, I: I }),
+   /*#__PURE__*/React.createElement(Module, {
+     idx: "G",
+@@ -15574,7 +15817,7 @@ function App() {
+             /*#__PURE__*/React.createElement("td", { className: "py-0.5 pr-2 align-top text-slate-500" }, row[1]),
+             /*#__PURE__*/React.createElement("td", { className: "py-0.5 align-top text-right", style: { color: "#14304a", whiteSpace: "nowrap" } }, row[2])))))),
+   (I.capThk > 0 || I.capEdgeMin > 0) && /*#__PURE__*/React.createElement("div", { className: "mb-2 rounded-sm border p-1.5 text-[9px] leading-snug", style: { borderColor: "#3d6a94", background: "rgba(61,106,148,0.06)", color: "#334" } },
+-    /*#__PURE__*/React.createElement("b", null, "Pile Group Workspace defines cap geometry. "),
++    /*#__PURE__*/React.createElement("b", null, "Pile Group Workspace (Loads & group tab) defines cap geometry. "),
+     "You can pull those values into the two-direction fields below: ",
+     I.capThk > 0 ? /*#__PURE__*/React.createElement("button", { onClick: () => { set('t1', I.capThk); set('t2', I.capThk); }, className: "underline text-[var(--blueprint2)] hover:opacity-80 mx-0.5" }, "use cap thickness " + fmt(I.capThk, 2) + " ft") : null,
+     (I.capThk > 0 && I.capEdgeMin > 0) ? " · " : "",
+@@ -15909,7 +16152,7 @@ function App() {
+   I.groupEnable && /*#__PURE__*/React.createElement("div", null,
+     /*#__PURE__*/React.createElement("div", {
+       className: "text-[10px] text-slate-500 mb-3 p-2 rounded-sm bg-slate-50 border border-slate-200"
+-    }, "Layout, spacing, and cap loads are defined in the ", /*#__PURE__*/React.createElement("b", null, "Pile Group Workspace"), " (left panel button). The efficiency, p-multiplier, and block-failure checks below use that layout."),
++    }, "Layout, spacing, and cap loads are defined in the ", /*#__PURE__*/React.createElement("b", null, "Pile Group Workspace"), " (", /*#__PURE__*/React.createElement("button", { type: "button", onClick: () => gotoLoadsTab(setRailTab, "group"), className: "underline text-[var(--blueprint2)]" }, "Loads & group input tab \u2192"), "). The efficiency, p-multiplier, and block-failure checks below use that layout."),
+     /*#__PURE__*/React.createElement("div", {
+       className: "text-[10px] font-mono-tech text-slate-500 mb-4"
+     }, r.group.nPiles + " piles (" + r.group.nRows + "×" + r.group.nCols + "), spacing = " + fmt(r.group.s_dia, 1) + "× bond dia (" + fmt(r.group.s_in, 1) + " in), bond dia = " + fmt(r.group.dh_in, 2) + " in"),
+@@ -16079,6 +16322,7 @@ const RAIL_TABS = [
+   { id: "project", label: "Project" },
+   { id: "pile", label: "Pile" },
+   { id: "soilprof", label: "Soil profile" },
++  { id: "loads", label: "Loads & group" },
+   { id: "soil", label: "Bond / p-y" },
+   { id: "cap", label: "Cap" },
+   { id: "checks", label: "Checks" },
+```
+
 ## Open items (not changed)
 - O1. **Uncased/cased structural axial: outer 0.85 factor and `fy = min(fyb, fyc)`** (`Rn_cased/Rn_ucased`, ≈ line 1675).
   - Neither AASHTO 10.9.3.10.2 nor FHWA NHI-05-039 Eq. 5-13 has the outer 0.85, and the uncased section has no casing, so min(fyb, fyc) is arbitrary there.
@@ -3511,3 +4225,5 @@ index 26e16f1..660bc9b 100644
 - O26. **`pyRes` memo dependencies.** `buildPySetup` reads `I.bucklingEnable` and `I.LuFree` (the unsupported zone with no soil springs), but the `pyRes` memo does not list them, so toggling buckling or changing L_u does not re-run the lateral solve until another listed input changes. Not changed (calculation behaviour). **Ask:** add them to the dependency list.
 - O27. **Module G H-pile "Cross-section (to scale, in)" plot is empty** (axes only, no section) on main as well, in headless Chromium at 1500 px. The new S-1 card on the Structural tab draws the section. **Ask:** fix or remove the empty plot.
 - O28. **H-pile corrosion.** The tool has no section-loss input for H-piles; every H-pile property is nominal. **Ask:** add a corrosion loss (per face) if the piles are permanent in aggressive ground.
+- O29. **Module 11 / report 11 distribution uses `I.activeCase` as a group-case index.** `R.capDist` (`computeAll`, comment "RIGID-CAP LOAD DISTRIBUTION") takes `gcs[min(activeCase, nGroupCases - 1)]`, but `activeCase` indexes the combined case list (manual rows first, then the Group ▦ rows). With one manual row and two group cases, the active row "Group ▦ Str I" (index 1) shows the Ext I distribution in `CapResults` and in the printed 11 table / Figure 11-1. Found while building the Loads & group tab (its plan follows the active Group row by `_groupCaseId`). The Group ▦ rows, the checks and the envelope are not affected. Not changed (it changes printed values). **Ask:** map the active Group row to its group case (`_groupCaseId`), and use the first group case when a manual row is active?
+- O30. **HANDOFF.md §4.6 (Pile Designer receiver)** still says the pull buttons are in the "Project panel". Since F15 they are in the Loads & group tab and are not shown in integral-abutment mode. HANDOFF.md was outside this PR. **Update** it in a docs PR.
