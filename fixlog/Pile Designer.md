@@ -3303,6 +3303,152 @@ index 266eea6..26e16f1 100644
      code: "AASHTO 10.9.3.10.2 · cased & uncased",
 ```
 
+### F14, part b. Soil profile input tab   [UI only] [no calculation change]
+- **Date:** 2026-10-10. Engineer: "Can we make the soil profile its own input tab rather than buried inside of a tab."
+- **What changed:**
+  - New input-rail tab **"Soil profile"** after Pile (`RAIL_TABS` id `soilprof`). It holds one panel, `SoilProfilePanel` (marked `data-rtab-fixed="soilprof"`, id `pd-soilprof`): the soil profile drawing (`SoilPileProfile`, updates live as layers are edited, hover for values) above the layer inputs, which are the **same component** the Soil Profile Workspace dialog showed (`PyLayerTable`: layer table, add layer, import boring-log JSON, copy AI prompt, H-pile static axial table) and the same "use layered profile" box (`solverLayered`). Every input keeps its key and handler; saved data are unchanged.
+  - The tab is shown for micropile and H-pile, and for integral abutment only when Tier 2 is on with the layered soil source (`I.iabTier2 && I.iabNlSoilSource === "layered"`), the only case where that mode reads the layers. Otherwise the tab is not shown in that mode.
+  - The old "Soil / p-y" tab keeps the head condition, p-y settings, uniform-soil settings and (micropile) the Geotechnical bond panel; it is renamed **"Bond / p-y"** for micropile and **"p-y / lateral"** for H-pile and integral abutment (`labelFor`).
+  - Every button that opened the Soil Profile Workspace dialog now selects the Soil profile tab, scrolls to it and focuses the first editable layer field (`gotoSoilProfileTab`): the "≡ SOIL PROFILE" button and the Geotechnical-panel button in the rail, the Tier 2 button (integral abutment) and the Module 02 button. The three "◈ SOIL PROFILE WORKSPACE" labels now read "◈ SOIL PROFILE → Soil profile tab"; the "≡ SOIL PROFILE" label is unchanged. The dialog itself (`SoilModal`) is no longer opened (kept in the file).
+  - The red warning dot works on the new tab (an import with warnings marks it, as before for its old tab). Layer-table inputs in the rail use 11 px text and no spin buttons so values are not cut off.
+  - **Tab memory:** the input-rail tab is not stored (it starts on Pile at each load: `useState("pile")`); there is no stored value to migrate. The output-tab key `micropile_lrfd_outTab_v1` is unaffected.
+- **Not changed:** any calculation, input key, storage key, saved / exported data or hand-off.
+- **Governing provision:** none (presentation only).
+- **How verified:** `node --check` on all inline scripts; headless Chromium: parity main vs branch as in part a (defaults and layered profile, all three modes) identical; each of the jump buttons selects the Soil profile tab, shows it and focuses a layer field; an import with warnings puts the red dot on the Soil profile tab; integral abutment without Tier 2 shows no Soil profile tab; localStorage keys after use: only `micropile_lrfd_outTab_v1` and `micropile_lrfd_inputs_v1` (no rail-tab key); screenshots at 1500 and 400 px (no horizontal page scroll); no console errors.
+- **Other copies:** none.
+- **Re-applying by hand:** unified diff below (CRLF stripped). Hunks: rail CSS (anchor `aside.input-rail[data-rtab-active="phi"]`); `SoilProfilePanel` and `gotoSoilProfileTab` after `GfxRptFig`; the four workspace buttons (anchors `setSoilModalOpen(true)`, `SOIL PROFILE WORKSPACE`); the `SoilProfilePanel` element before the micropile `title: "Geotechnical"` panel; `RAIL_TABS` and `labelFor`.
+
+```diff
+diff --git a/Pile Designer.html b/Pile Designer.html
+index 26e16f1..660bc9b 100644
+--- a/Pile Designer.html	
++++ b/Pile Designer.html	
+@@ -185,7 +185,12 @@
+   aside.input-rail[data-rtab-active="soil"] > [data-rtab]:not([data-rtab="soil"]),
+   aside.input-rail[data-rtab-active="cap"] > [data-rtab]:not([data-rtab="cap"]),
+   aside.input-rail[data-rtab-active="checks"] > [data-rtab]:not([data-rtab="checks"]),
+-  aside.input-rail[data-rtab-active="phi"] > [data-rtab]:not([data-rtab="phi"]) { display: none; }
++  aside.input-rail[data-rtab-active="phi"] > [data-rtab]:not([data-rtab="phi"]),
++  aside.input-rail[data-rtab-active="soilprof"] > [data-rtab]:not([data-rtab="soilprof"]) { display: none; }
++  /* Soil profile tab: the layer table in the rail width (spinners hidden so values are not cut off) */
++  #pd-soilprof table input[type=number], #pd-soilprof table select { font-size: 11px; padding: 2px 3px; }
++  #pd-soilprof table input[type=number] { -moz-appearance: textfield; appearance: textfield; }
++  #pd-soilprof table input[type=number]::-webkit-inner-spin-button, #pd-soilprof table input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+   @media print { .rail-tabs { display: none; } }
+   /* modules laid out by unified check number (MODULE_ORDER) */
+   .main-col { display: flex; flex-direction: column; }
+@@ -5583,6 +5588,30 @@ function GfxRptFig({ caption, children }) {
+     e("div", { style: { border: "1px solid #e2e8f0", padding: "6px", background: "#fff" } }, children),
+     e("div", { style: { fontSize: "7.5px", color: "#475569", marginTop: "2px" } }, caption));
+ }
++/* Soil profile input tab (rail): the layer inputs (PyLayerTable, the same
++   component and keys the Soil Profile Workspace used) with the profile drawn
++   above them, live. */
++function SoilProfilePanel({ I, set, r, pyRes }) {
++  const e = React.createElement;
++  return e("div", { "data-rtab-fixed": "soilprof", id: "pd-soilprof" },
++    e(Panel, { title: "Soil profile", sub: I.pileType === "iab" ? "layers for the Tier 2 nonlinear p-y check" : "layers used by the p-y analysis" + (I.pileType === "hpile" ? " and the static axial capacity" : "") },
++      e("div", { className: "pd-soilprof-fig" }, e(SoilPileProfile, { I, r, pyRes })),
++      e("p", { className: "text-[10px] text-slate-500 leading-snug mt-3 mb-2" }, "Define the soil profile top-down: each row starts at its top depth (ft below grade) and continues to the next row; the last layer continues to the end of the model. The drawing above updates as you edit; hover a layer for its values."),
++      e(PyLayerTable, { I, set }),
++      e("div", { className: "mt-3 flex items-center gap-2 text-[10px] font-mono-tech" },
++        e("label", { className: "flex items-center gap-1.5 text-slate-600 cursor-pointer" },
++          e("input", { type: "checkbox", checked: !!I.solverLayered, onChange: ev => set('solverLayered', ev.target.checked) }),
++          "use layered profile (uncheck for a single uniform layer)"))));
++}
++/* every "Soil profile workspace" button now opens the Soil profile input tab */
++function gotoSoilProfileTab(setRailTab) {
++  setRailTab("soilprof");
++  setTimeout(() => {
++    const el = document.getElementById("pd-soilprof"); if (!el) return;
++    el.scrollIntoView({ block: "start", behavior: "auto" });
++    const f = el.querySelector("table input:not([disabled]), table select"); if (f) f.focus({ preventScroll: true });
++  }, 60);
++}
+ function InteractionDiagram({
+   r
+ }) {
+@@ -11409,7 +11438,7 @@ function PyPanel({ I, set, pyRes, r, EI, EI_composite_kipin2, EI_aashto_kipin2,
+         /*#__PURE__*/React.createElement("div", { className: "text-[10px] font-mono-tech text-[var(--blueprint)] uppercase tracking-wider mb-1" }, "Soil profile (below grade)"),
+         /*#__PURE__*/React.createElement("button", { onClick: openSoilModal,
+           className: "w-full flex items-center justify-between gap-2 px-2.5 py-2 rounded-sm border border-[var(--blueprint2)] text-[var(--blueprint2)] hover:bg-slate-50 transition mb-1" },
+-          /*#__PURE__*/React.createElement("span", { className: "font-mono-tech text-[10px] tracking-wider" }, "◈ SOIL PROFILE WORKSPACE"),
++          /*#__PURE__*/React.createElement("span", { className: "font-mono-tech text-[10px] tracking-wider" }, "◈ SOIL PROFILE \u2192 Soil profile tab"),
+           /*#__PURE__*/React.createElement("span", { className: "font-mono-tech text-[9px] text-slate-500" }, (Array.isArray(I.soilLayers) ? I.soilLayers.length : 0), " layer", (Array.isArray(I.soilLayers) && I.soilLayers.length === 1) ? "" : "s", " · edit")),
+         /*#__PURE__*/React.createElement("div", { className: "text-[8.5px] font-mono-tech text-slate-400 leading-snug mb-1" },
+           (Array.isArray(I.soilLayers) ? I.soilLayers : []).slice().sort((a, b) => (a.topDepth || 0) - (b.topDepth || 0)).map((ly, i) => {
+@@ -13556,9 +13585,9 @@ function App() {
+         /*#__PURE__*/React.createElement("option", { value: "layered" }, "Project soil profile (layered workspace)"),
+         /*#__PURE__*/React.createElement("option", { value: "massdot" }, "MassDOT idealized soil (single type)")),
+       I.iabNlSoilSource === "layered" && /*#__PURE__*/React.createElement("div", { className: "mb-1" },
+-        /*#__PURE__*/React.createElement("button", { onClick: () => setSoilModalOpen(true),
++        /*#__PURE__*/React.createElement("button", { onClick: () => gotoSoilProfileTab(setRailTab),
+           className: "w-full flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-sm border border-[var(--blueprint2)] text-[var(--blueprint2)] hover:bg-slate-50 transition" },
+-          /*#__PURE__*/React.createElement("span", { className: "font-mono-tech text-[10px] tracking-wider" }, "\u25c8 SOIL PROFILE WORKSPACE"),
++          /*#__PURE__*/React.createElement("span", { className: "font-mono-tech text-[10px] tracking-wider" }, "\u25c8 SOIL PROFILE \u2192 Soil profile tab"),
+           /*#__PURE__*/React.createElement("span", { className: "font-mono-tech text-[9px] text-slate-500" }, (Array.isArray(I.soilLayers) ? I.soilLayers.length : 0), " layer", (Array.isArray(I.soilLayers) && I.soilLayers.length === 1) ? "" : "s")),
+         (!Array.isArray(I.soilLayers) || I.soilLayers.length === 0) && /*#__PURE__*/React.createElement("div", { className: "text-[8.5px] text-amber-700 bg-amber-50 border border-amber-200 rounded-sm px-1.5 py-1 mt-1 leading-snug" }, "No project soil layers defined \u2014 the nonlinear check falls back to the MassDOT idealized soil until you add layers.")),
+       I.iabNlSoilSource === "layered" && /*#__PURE__*/React.createElement("div", { className: "text-[8px] text-slate-400 mb-1 leading-snug" }, "The nonlinear Tier-2 analysis runs on this layered profile (same engine and p-y models as the Module 02 lateral analysis). The Tier-1 table check and the linear MassDOT-basis line always use the idealized soil above."),
+@@ -13645,7 +13674,7 @@ function App() {
+     "toe: ", fmt(r.geo.bondBottom, 1), " ft below head · total length ", fmt(r.geo.bondBottom, 1), " ft · casing tip ", fmt(r.geo.casingTip, 1), " ft"), !r.geo.geomValid && /*#__PURE__*/React.createElement("div", { className: "text-[var(--no)]" }, "⚠ geometry inconsistent: plunge ≤ bond and cased ≥ plunge required."))), /*#__PURE__*/(I.pileType !== "iab") && /*#__PURE__*/React.createElement("button", {
+     onClick: () => setGroupModalOpen(true),
+     className: "w-full mt-2 font-mono-tech text-[11px] tracking-wider py-2 rounded-sm border border-[var(--blueprint2)] text-[var(--blueprint2)] hover:bg-slate-50 transition flex items-center justify-center gap-1.5"
+-  }, "▦ PILE GROUP WORKSPACE", (cases[activeIdx] && cases[activeIdx]._fromGroup) ? /*#__PURE__*/React.createElement("span", { className: "text-[8px] px-1.5 py-0.5 rounded-sm text-white", style: { background: "var(--accent)" } }, "GROUP CASE ACTIVE") : (groupEnabled && groupCase) ? /*#__PURE__*/React.createElement("span", { className: "text-[8px] px-1.5 py-0.5 rounded-sm text-white", style: { background: "var(--blueprint2)" } }, "APPLIED") : null), /*#__PURE__*/React.createElement("div", { className: "mt-3 pt-2 border-t border-slate-200" }, /*#__PURE__*/React.createElement("div", { className: "text-[12px] text-[var(--blueprint)] font-medium mb-1" }, "Head condition"), /*#__PURE__*/React.createElement("div", { className: "flex gap-2 text-[11px] font-mono-tech" }, [["free", "free / pinned"], ["fixed", "fixed / capped"]].map(([v, l]) => /*#__PURE__*/React.createElement("button", { key: v, onClick: () => set('solverHead', v), className: "flex-1 px-2 py-1 rounded-sm border " + (I.solverHead === v ? "bg-[var(--blueprint2)] text-white border-[var(--blueprint2)]" : "bg-white border-slate-300 text-slate-600 hover:bg-slate-50") }, l))), I.solverHead !== "fixed" && /*#__PURE__*/React.createElement("div", { className: "flex items-center gap-1.5 mt-1.5" }, /*#__PURE__*/React.createElement("span", { className: "text-[10px] text-slate-500 font-mono-tech" }, "K\u03b8"), /*#__PURE__*/React.createElement("input", { type: "number", "aria-label": "Head rotational stiffness K-theta, kip-in per radian", value: I.pyKrot || 0, onChange: e => set('pyKrot', parseFloat(e.target.value) || 0), className: "w-24 font-mono-tech text-[11px] px-1.5 py-1 rounded-sm border border-slate-300" }), /*#__PURE__*/React.createElement("span", { className: "text-[9px] text-slate-400 font-mono-tech" }, "kip\u00b7in/rad \u00b7 0 = pinned")), /*#__PURE__*/React.createElement("p", { className: "text-[8.5px] text-slate-400 mt-1 leading-snug" }, /*#__PURE__*/React.createElement("b", null, "Free"), ": head rotates (flagpole/pinned), or is partially restrained by K\u03b8. ", /*#__PURE__*/React.createElement("b", null, "Fixed"), ": rotation fully restrained by a rigid cap connection. Drives the p-y boundary condition, the deflection-matched buckling basis, and the cap-embedment check."), /*#__PURE__*/React.createElement("div", { className: "text-[12px] text-[var(--blueprint)] font-medium mt-2.5 mb-1" }, "p-y loading criterion"), /*#__PURE__*/React.createElement("label", { className: "flex items-center gap-1.5 text-[10px] text-slate-600 font-mono-tech" }, /*#__PURE__*/React.createElement("input", { type: "checkbox", checked: !!I.pyCyclic, onChange: e => { const on = e.target.checked; set('pyCyclic', on); if (on) setCycInfoOpen(true); } }), "cyclic p-y curves"), /*#__PURE__*/React.createElement("p", { className: "text-[8.5px] text-slate-400 mt-1 leading-snug" }, !!I.pyCyclic ? [/*#__PURE__*/React.createElement("b", { key: "b", style: { color: "#8a5a1f" } }, "\u26a0 Cyclic active. "), "Models soil-resistance degradation under repeated large-amplitude reversal (offshore wave, seismic). Static is the usual basis for bridge substructure. ", /*#__PURE__*/React.createElement("button", { key: "d", onClick: () => setCycInfoOpen(true), className: "underline font-mono-tech" }, "details")] : "Unchecked = static (the usual basis for bridge substructure lateral analysis). Cyclic models soil degradation under repeated reversal \u2014 an offshore/seismic criterion."), /*#__PURE__*/React.createElement(CyclicInfoModal, { open: cycInfoOpen, onClose: () => setCycInfoOpen(false), onRevert: () => { set('pyCyclic', false); setCycInfoOpen(false); } })), /*#__PURE__*/React.createElement("button", { onClick: () => setSoilModalOpen(true), className: "w-full mt-2 font-mono-tech text-[11px] tracking-wider py-2 rounded-sm border border-[var(--blueprint2)] text-[var(--blueprint2)] hover:bg-slate-50 transition flex items-center justify-center gap-1.5" }, "\u2261 SOIL PROFILE", (Array.isArray(I.soilLayers) && I.soilLayers.length) ? /*#__PURE__*/React.createElement("span", { className: "text-[8px] px-1.5 py-0.5 rounded-sm text-white", style: { background: "var(--blueprint2)" } }, I.soilLayers.length, " LAYER", I.soilLayers.length > 1 ? "S" : "") : /*#__PURE__*/React.createElement("span", { className: "text-[8px] px-1.5 py-0.5 rounded-sm", style: { background: "#e2e8f0", color: "#64748b" } }, "UNIFORM")), /*#__PURE__*/React.createElement("div", { className: "mt-1 text-[8.5px] text-slate-400 font-mono-tech leading-snug" }, (Array.isArray(I.soilLayers) && I.soilLayers.length) ? ["Drives the p-y lateral analysis and the Davisson fixity depth (Module 10). Top layer: ", (() => { const t = [...I.soilLayers].sort((a, b) => (a.topDepth || 0) - (b.topDepth || 0))[0]; return t.type === "sand" ? "sand n\u2095=" + fmt(t.nh, 0) : (t.type === "stiffclay" ? "stiff clay" : t.type === "weakrock" ? "weak rock" : "clay") + " k\u2095=" + fmt(t.kh, 0); })(), "."] : "No layered profile \u2014 the analysis uses the uniform soil set in Module 02."), /*#__PURE__*/(I.pileType !== "iab") && /*#__PURE__*/React.createElement(Panel, {
++  }, "▦ PILE GROUP WORKSPACE", (cases[activeIdx] && cases[activeIdx]._fromGroup) ? /*#__PURE__*/React.createElement("span", { className: "text-[8px] px-1.5 py-0.5 rounded-sm text-white", style: { background: "var(--accent)" } }, "GROUP CASE ACTIVE") : (groupEnabled && groupCase) ? /*#__PURE__*/React.createElement("span", { className: "text-[8px] px-1.5 py-0.5 rounded-sm text-white", style: { background: "var(--blueprint2)" } }, "APPLIED") : null), /*#__PURE__*/React.createElement("div", { className: "mt-3 pt-2 border-t border-slate-200" }, /*#__PURE__*/React.createElement("div", { className: "text-[12px] text-[var(--blueprint)] font-medium mb-1" }, "Head condition"), /*#__PURE__*/React.createElement("div", { className: "flex gap-2 text-[11px] font-mono-tech" }, [["free", "free / pinned"], ["fixed", "fixed / capped"]].map(([v, l]) => /*#__PURE__*/React.createElement("button", { key: v, onClick: () => set('solverHead', v), className: "flex-1 px-2 py-1 rounded-sm border " + (I.solverHead === v ? "bg-[var(--blueprint2)] text-white border-[var(--blueprint2)]" : "bg-white border-slate-300 text-slate-600 hover:bg-slate-50") }, l))), I.solverHead !== "fixed" && /*#__PURE__*/React.createElement("div", { className: "flex items-center gap-1.5 mt-1.5" }, /*#__PURE__*/React.createElement("span", { className: "text-[10px] text-slate-500 font-mono-tech" }, "K\u03b8"), /*#__PURE__*/React.createElement("input", { type: "number", "aria-label": "Head rotational stiffness K-theta, kip-in per radian", value: I.pyKrot || 0, onChange: e => set('pyKrot', parseFloat(e.target.value) || 0), className: "w-24 font-mono-tech text-[11px] px-1.5 py-1 rounded-sm border border-slate-300" }), /*#__PURE__*/React.createElement("span", { className: "text-[9px] text-slate-400 font-mono-tech" }, "kip\u00b7in/rad \u00b7 0 = pinned")), /*#__PURE__*/React.createElement("p", { className: "text-[8.5px] text-slate-400 mt-1 leading-snug" }, /*#__PURE__*/React.createElement("b", null, "Free"), ": head rotates (flagpole/pinned), or is partially restrained by K\u03b8. ", /*#__PURE__*/React.createElement("b", null, "Fixed"), ": rotation fully restrained by a rigid cap connection. Drives the p-y boundary condition, the deflection-matched buckling basis, and the cap-embedment check."), /*#__PURE__*/React.createElement("div", { className: "text-[12px] text-[var(--blueprint)] font-medium mt-2.5 mb-1" }, "p-y loading criterion"), /*#__PURE__*/React.createElement("label", { className: "flex items-center gap-1.5 text-[10px] text-slate-600 font-mono-tech" }, /*#__PURE__*/React.createElement("input", { type: "checkbox", checked: !!I.pyCyclic, onChange: e => { const on = e.target.checked; set('pyCyclic', on); if (on) setCycInfoOpen(true); } }), "cyclic p-y curves"), /*#__PURE__*/React.createElement("p", { className: "text-[8.5px] text-slate-400 mt-1 leading-snug" }, !!I.pyCyclic ? [/*#__PURE__*/React.createElement("b", { key: "b", style: { color: "#8a5a1f" } }, "\u26a0 Cyclic active. "), "Models soil-resistance degradation under repeated large-amplitude reversal (offshore wave, seismic). Static is the usual basis for bridge substructure. ", /*#__PURE__*/React.createElement("button", { key: "d", onClick: () => setCycInfoOpen(true), className: "underline font-mono-tech" }, "details")] : "Unchecked = static (the usual basis for bridge substructure lateral analysis). Cyclic models soil degradation under repeated reversal \u2014 an offshore/seismic criterion."), /*#__PURE__*/React.createElement(CyclicInfoModal, { open: cycInfoOpen, onClose: () => setCycInfoOpen(false), onRevert: () => { set('pyCyclic', false); setCycInfoOpen(false); } })), /*#__PURE__*/React.createElement("button", { onClick: () => gotoSoilProfileTab(setRailTab), className: "w-full mt-2 font-mono-tech text-[11px] tracking-wider py-2 rounded-sm border border-[var(--blueprint2)] text-[var(--blueprint2)] hover:bg-slate-50 transition flex items-center justify-center gap-1.5" }, "\u2261 SOIL PROFILE", (Array.isArray(I.soilLayers) && I.soilLayers.length) ? /*#__PURE__*/React.createElement("span", { className: "text-[8px] px-1.5 py-0.5 rounded-sm text-white", style: { background: "var(--blueprint2)" } }, I.soilLayers.length, " LAYER", I.soilLayers.length > 1 ? "S" : "") : /*#__PURE__*/React.createElement("span", { className: "text-[8px] px-1.5 py-0.5 rounded-sm", style: { background: "#e2e8f0", color: "#64748b" } }, "UNIFORM")), /*#__PURE__*/React.createElement("div", { className: "mt-1 text-[8.5px] text-slate-400 font-mono-tech leading-snug" }, (Array.isArray(I.soilLayers) && I.soilLayers.length) ? ["Drives the p-y lateral analysis and the Davisson fixity depth (Module 10). Top layer: ", (() => { const t = [...I.soilLayers].sort((a, b) => (a.topDepth || 0) - (b.topDepth || 0))[0]; return t.type === "sand" ? "sand n\u2095=" + fmt(t.nh, 0) : (t.type === "stiffclay" ? "stiff clay" : t.type === "weakrock" ? "weak rock" : "clay") + " k\u2095=" + fmt(t.kh, 0); })(), "."] : "No layered profile \u2014 the analysis uses the uniform soil set in Module 02."), /*#__PURE__*/(I.pileType !== "iab") && /*#__PURE__*/React.createElement(Panel, {
+     title: "Loads",
+     sub: "active case · edit in LRFD Load Cases"
+   }, (() => {
+@@ -13801,7 +13830,7 @@ function App() {
+     className: "mt-3"
+   }, /*#__PURE__*/React.createElement(PileSection, {
+     r: r
+-  }))), /*#__PURE__*/(I.pileType === "micropile") && /*#__PURE__*/React.createElement(Panel, {
++  }))), (I.pileType !== "iab" || (I.iabTier2 && I.iabNlSoilSource === "layered")) && React.createElement(SoilProfilePanel, { I: I, set: set, r: r, pyRes: pyRes }), /*#__PURE__*/(I.pileType === "micropile") && /*#__PURE__*/React.createElement(Panel, {
+     title: "Geotechnical"
+   }, /*#__PURE__*/React.createElement("div", {
+     className: "grid grid-cols-2 gap-3"
+@@ -13835,9 +13864,9 @@ function App() {
+     className: "text-[9px] font-mono-tech text-slate-400 mt-0.5 leading-tight"
+   }, "= ", fmt(I.beta, 2), " ksf · ", fmt(I.beta * 1000 / 144, 1), " psi · ", fmt(I.beta / 144, 4), " ksi")), /*#__PURE__*/React.createElement(GeoMirror, { label: "Bond length", val: I.LbProvided, unit: "ft" })),
+   /*#__PURE__*/React.createElement("div", { className: "mt-3" },
+-    /*#__PURE__*/React.createElement("button", { onClick: () => setSoilModalOpen(true),
++    /*#__PURE__*/React.createElement("button", { onClick: () => gotoSoilProfileTab(setRailTab),
+       className: "w-full flex items-center justify-between gap-2 px-2.5 py-2 rounded-sm border border-[var(--blueprint2)] text-[var(--blueprint2)] hover:bg-slate-50 transition" },
+-      /*#__PURE__*/React.createElement("span", { className: "font-mono-tech text-[10px] tracking-wider" }, "◈ SOIL PROFILE WORKSPACE"),
++      /*#__PURE__*/React.createElement("span", { className: "font-mono-tech text-[10px] tracking-wider" }, "◈ SOIL PROFILE \u2192 Soil profile tab"),
+       /*#__PURE__*/React.createElement("span", { className: "font-mono-tech text-[9px] text-slate-500" }, (Array.isArray(I.soilLayers) ? I.soilLayers.length : 0), " layer", (Array.isArray(I.soilLayers) && I.soilLayers.length === 1) ? "" : "s", " · edit")),
+     /*#__PURE__*/React.createElement("p", { className: "text-[8.5px] text-slate-400 mt-1 leading-snug" }, "Layered p-y soil model used by the lateral analysis (Module 02) and the buckling fixity estimate. Same workspace as the button in Module 02."))), /*#__PURE__*/(I.pileType === "micropile") && /*#__PURE__*/React.createElement(Panel, {
+     title: "Resistance Factors"
+@@ -14721,7 +14750,7 @@ function App() {
+     EI: EI, EI_composite_kipin2: EI_composite_kipin2, EI_aashto_kipin2: EI_aashto_kipin2,
+     EI_aashto_Cp: EI_aashto_Cp, EI_uncased_kipin2: EI_uncased_kipin2,
+     casingTipBelowMudline: casingTipBelowMudline
+-    , pcr: pcr, computePcr: computePcr, pmCurve: pmCurve, caseRes: caseRes, setLoad: setCaseLoad, openSoilModal: () => setSoilModalOpen(true)
++    , pcr: pcr, computePcr: computePcr, pmCurve: pmCurve, caseRes: caseRes, setLoad: setCaseLoad, openSoilModal: () => gotoSoilProfileTab(setRailTab)
+   }) : I.lateralSource === "input" ? /*#__PURE__*/React.createElement("div", null,
+   /*#__PURE__*/React.createElement("div", {
+     className: "text-[10px] font-mono-tech text-[var(--blueprint)] uppercase tracking-wider mb-2"
+@@ -16049,7 +16078,8 @@ function InputsUsed({ items, tab, setTab, panelTitle }) {
+ const RAIL_TABS = [
+   { id: "project", label: "Project" },
+   { id: "pile", label: "Pile" },
+-  { id: "soil", label: "Soil / p-y" },
++  { id: "soilprof", label: "Soil profile" },
++  { id: "soil", label: "Bond / p-y" },
+   { id: "cap", label: "Cap" },
+   { id: "checks", label: "Checks" },
+   { id: "phi", label: "\u03c6" }
+@@ -16093,7 +16123,7 @@ function RailTabs({ tab, setTab, pileType }) {
+       const first = RAIL_TABS.find(t => present[t.id]); if (first) setTab(first.id);
+     }
+   }, [JSON.stringify(present), tab]);
+-  const labelFor = (t) => (pileType === "iab" && t.id === "pile") ? "Abutment" : t.label;
++  const labelFor = (t) => (pileType === "iab" && t.id === "pile") ? "Abutment" : (t.id === "soil" && pileType !== "micropile") ? "p-y / lateral" : t.label;
+   return /*#__PURE__*/React.createElement("div", { className: "rail-tabs", role: "tablist", "aria-label": "Input categories" },
+     RAIL_TABS.filter(t => present[t.id]).map(t => /*#__PURE__*/React.createElement("button", {
+       key: t.id, type: "button", role: "tab", "aria-selected": tab === t.id,
+```
+
 ## Open items (not changed)
 - O1. **Uncased/cased structural axial: outer 0.85 factor and `fy = min(fyb, fyc)`** (`Rn_cased/Rn_ucased`, ≈ line 1675).
   - Neither AASHTO 10.9.3.10.2 nor FHWA NHI-05-039 Eq. 5-13 has the outer 0.85, and the uncased section has no casing, so min(fyb, fyc) is arbitrary there.
