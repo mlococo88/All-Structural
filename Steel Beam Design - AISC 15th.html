@@ -1877,13 +1877,14 @@ function regionCheck(cb,reg,A,p){
   return out;
 }
 /* ---------- §G5 shear length L_v (round HSS / pipe), ft ----------
-   L_v = distance from the max-|V| station to the first zero of the
-   CONTINUOUS shear diagram, searched along the span in the direction of
-   decreasing |V|. Shear jumps at point loads are stepped over and never
-   count as a zero; the search stops at the supports bounding the span (or
-   the beam end). No zero found -> distance to that span end (a longer L_v
-   gives a lower G5-2a F_cr, i.e. conservative). Equal |V| both ways -> the
-   longer of the two results. */
+   L_v = distance from the max-|V| station to the first point of zero
+   shear, searched along the span in the direction of decreasing |V|: a
+   zero of the continuous shear diagram, or a point load whose jump crosses
+   V = 0 (the load point is then the zero). A point-load jump that does not
+   cross zero is stepped over. Support jumps never count; the search stops
+   at the supports bounding the span (or the beam end). No zero found ->
+   distance to that span end (a longer L_v gives a lower G5-2a F_cr, i.e.
+   conservative). Equal |V| both ways -> the longer of the two results. */
 function lvFor(cb,A){
   const xs=A.stations,V=cb.V,n=xs.length,L=A.L,tol=1e-9,sp=S.geom.spans;
   if(!n)return L;
@@ -1907,6 +1908,10 @@ function lvFor(cb,A){
       if(!jumpIn(pts,i,j)){
         if(V[j]===0)return{lv:Math.abs(xs[j]-x0),found:true};
         if(V[i]*V[j]<0)return{lv:Math.abs(xs[i]-V[i]*(xs[j]-xs[i])/(V[j]-V[i])-x0),found:true};
+      }else if(V[i]*V[j]<0||V[j]===0){
+        /* point-load jump through V = 0: the load point is the zero */
+        const b=pts.find(q=>jumpIn([q],i,j));
+        if(Math.abs(b-x0)>1e-4)return{lv:Math.abs(b-x0),found:true};
       }
       i=j;
     }
