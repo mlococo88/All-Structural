@@ -1589,3 +1589,494 @@ Other edits (unified diff, 1 line of context):
 - P2a-O6. Weight of rolled shapes uses the plate model (no fillets) unless "AISC tabulated" is ticked (then within about 0.2 % of the nominal weight). Should the nominal tabulated weight be used instead for rolled shapes?
 - P2a-O7. r_ts is shown only for doubly symmetric sections (F2); h_o only for a single rolled I or a three-plate I. AISC F2 also covers channels (r_ts with c ≠ 1) — not included.
 - P2a-O8. Opening a P2a file in the older main version and re-saving there drops `rho` and `stress` (no error). Acceptable?
+
+## 2026-10-10 — PR: claude/spc-open-items (PR link added after merge)
+
+Engineer's instruction (2026-10-10): "fix all pending items with your recommended fix". This entry covers the false closed cells at face-contact junctions (a **calculation change**, O1 below), R2-O1, X-O3, P2a-O6 and the decisions on every other open item.
+
+### O1. Torsion: no false closed cells at face-contact junctions; order-independent face-contact merge   [CALCULATION CHANGE — torsion model (J, C<sub>w</sub>, shear centre and everything that uses them); no other result, key or file format changed]
+
+**Problem (engineer's report, model `built-up I`: web PL 18 × 1/2 turned 90°, 4 × L6X6X1/2 with the heels against the web and the flange plates, 2 × PL 12-1/2 × 1/2).**
+- The Torsion tab showed 3 "closed cells" of A<sub>m</sub> = 0.0625 in² (0.25 × 0.25) at the heel / web / flange-plate junctions; cell 3 had only 2 walls with thickness (the other 2 were rigid links). The section is open: these loops lie entirely inside solid material (heel + web + plate) and enclose no void.
+- Because cells were "found", C<sub>w</sub>, the shear centre, x<sub>o</sub>, y<sub>o</sub>, r̄<sub>o</sub>, H, r<sub>ts</sub> and β<sub>x</sub> were all "n/a"; J had a spurious Bredt term of 0.0784 in⁴.
+- Cause 1: face contacts were merged **pairwise, one after the other**. Each merge put the overlap on the combined mid-plane and left the rest of each plate on its own line, joined by rigid links. The order of the parts decided the result: the symmetric section gave an unsymmetric centre-line model (L1+PL2 b = 6.0 vs L2+PL2 b = 6.25; a 0.25 in "Web PL+L1" element on one side only; "L4+L3+Web PL" vs "L2+Web PL+L1").
+- Cause 2: the two legs of an angle end up on two different combined lines (vertical leg in the web stack, horizontal leg in the flange stack). Their junction plus the plate-only piece between the heels and the web extension form small closed loops.
+- Effect on results: J slightly high (+0.078 in⁴ here); C<sub>w</sub>, shear centre and the AISC E4/F2 parameters not available for an open section. Not conservative or unconservative in itself; the missing C<sub>w</sub> forced a hand calculation.
+
+**Governing basis:** thin-walled open-section theory (St. Venant J = Σbt³/3; Vlasov sectorial coordinates for C<sub>w</sub> and the shear centre), AISC Design Guide 9, *Torsional Analysis of Structural Steel Members* (Seaburg & Carter, 1997), §3 and App. C; closed cells (Bredt–Batho) only where the centre line encloses a void. No AISC 360-16 provision, load or resistance factor is involved. The thin-wall results keep their "thin-wall — verify" flag.
+
+**Fix (as recommended):**
+1. **Stacks and thickness zones (order-independent).** All face-contact pairs are found first among the original elements (same test as before: parallel within 0.0087 rad, offset ≤ (t<sub>1</sub> + t<sub>2</sub>)/2 + tol, overlap > tol, rectangles touching). Connected pairs form a *stack*. Along each stack the element ends are breakpoints (merged within the contact tolerance). In each zone between breakpoints, the plates present are grouped into runs that touch each other; each run becomes one element with t = Σt on the combined mid-plane Σt·w/Σt. A plate that continues into the next zone on a different line is joined by a rigid link (as before). Ends of other elements lying on a stacked plate's centre line are re-attached as before (extended along their own direction, or linked if parallel).
+2. **Re-joining a split part.** Two elements in different stacks that share a part (e.g. the two legs of one angle) may now connect at the intersection of their centre lines, by the existing junction rule (before, elements of the same part were never joined there).
+3. **Junction loops are not cells.** After the graph is built (only for a piece that has face contacts): elements running along each other are split at the shared nodes (thicker kept); then every face of the centre-line graph that does **not** contain a void of the material is a junction loop. A void = an inner boundary loop of the union of the piece's parts (holes ignored, as in torsion), found by the existing coating-perimeter routine; a point just inside each void is tested against the face polygon. The nodes of a junction loop are merged into one node at the (least-squares) intersection of the centre lines of the elements that leave the junction; the elements inside the loop are dropped (they lie inside the junction material; their bt³/3 was not counted before either, as cell walls). Guard: a loop larger than 2 × the thickest element meeting there (+2·tol) is left as it is.
+4. Real cells (4-plate box, HSS, boxed channels, built-up boxes, a box with angles in its corners) enclose a void and are detected exactly as before.
+5. **Pieces without face contact: the code path is unchanged** (steps 1 and 3 do nothing; the step-2 test is unchanged because `stk` is undefined), so their results are bit-identical.
+
+**Displayed text:** Torsion tab note on face contacts ("…combined, over each length where the same plates overlap, into one element of thickness Σt…") and a new note listing the junctions; Method → Torsion "Connections" and "J, closed cells" bullets.
+
+#### Before / after — engineer's model (file `engineer_model.json`, in)
+
+A = 44.5 in², I<sub>x</sub> = 2,623.21 in⁴, I<sub>y</sub> = 328.677 in⁴, S<sub>x</sub> = 276.127 in³ (unchanged).
+
+| Output | Before (main) | After |
+|---|---|---|
+| Closed cells | 3 × A<sub>m</sub> 0.0625 in² | none (2 junctions at (0, ±9)) |
+| J | 22.0784 in⁴ (Bredt 0.0784 + open 22.0000) | **22.0833 in⁴** (open only) |
+| C<sub>w</sub> | n/a | **26,367.19 in⁶** |
+| Shear centre (x<sub>o</sub>, y<sub>o</sub>) from the centroid | n/a | **(0, 0)** |
+| r̄<sub>o</sub> (E4-9) | n/a | 8.1446 in (r̄<sub>o</sub>² = 66.3345 in²) |
+| H (E4-8) | n/a | 1.000 |
+| r<sub>ts</sub> (F2-7) | n/a | 3.2652 in |
+| β<sub>x</sub> | n/a | 0 (3.6e-16) |
+| h<sub>o</sub> | n/a (not a single rolled I / 3-plate I) | n/a (unchanged rule) |
+
+**Centre-line model after the fix** (symmetric): web on x = 0 from y = −9 to +9: t = 1.5 (web + 2 angle legs) over 6.0 in at each end (5.75 + 0.25 extension to the junction), t = 0.5 over the middle 6.0 in; flanges on y = ±9 (mid-plane of plate t = 0.5 at ±9.25 and angle leg t = 0.5 at ±8.75), t = 1.0, from the junction at x = 0 to x = ±6.25. Junction nodes (0, ±9).
+
+**Hand check (thin-wall theory, DG9):**
+- J = Σbt³/3 = [2 × 6 × 1.5³ + 6 × 0.5³ + 4 × 6.25 × 1.0³]/3 = [40.5 + 0.75 + 25.0]/3 = 66.25/3 = **22.0833 in⁴**.
+- C<sub>w</sub>: pole at the centroid (on the web line), so ω = 0 along the web; on a flange ω = (h<sub>o</sub>/2)·x with h<sub>o</sub> = 18 (between flange centre lines y = ±9); ∫ω t ds = 0 by symmetry. C<sub>w</sub> = 4 ∫₀^6.25 (9x)² (1.0) dx = 4 × 81 × 6.25³/3 = 108 × 244.1406 = **26,367.19 in⁶** = (h<sub>o</sub>²/2)·I<sub>f</sub> with I<sub>f</sub> = 2 × 1.0 × 6.25³/3 = 162.76 in⁴. (The coordinator's estimate I<sub>y</sub>h<sub>o</sub>²/4 = 328.68 × 324/4 = 26,623 includes the web and the plates' own t³ terms; if the plate-only 0.5 in strip under the web, |x| < 0.25, were kept at t = 0.5 instead of 1.0, C<sub>w</sub> = 26,367 − 4 × 81 × 0.5 × 0.25³/3 = 26,366.5: negligible.)
+- Shear centre: doubly symmetric → at the centroid, x<sub>o</sub> = y<sub>o</sub> = 0.
+- r̄<sub>o</sub>² = 0 + (2,623.208 + 328.677)/44.5 = 66.3345 in², r̄<sub>o</sub> = 8.1446 in; H = 1 − 0/66.33 = 1.
+- r<sub>ts</sub> = √(√(I<sub>y</sub>C<sub>w</sub>)/S<sub>x</sub>) = √(√(328.677 × 26,367.19)/276.127) = √(2,943.86/276.127) = √10.6612 = **3.2652 in**.
+- The tool gives exactly these values (J 22.083333, C<sub>w</sub> 26,367.1875). Same result for the model rotated 30°/45°/90°/180°, mirrored, translated or with the part order reversed (J, C<sub>w</sub> to 1e-15, shear centre at the centroid to 1e-14).
+
+**Other check cases (new Validation group 17, all pass):**
+- Engineer's model: no closed cell; x<sub>o</sub> = y<sub>o</sub> = 0; C<sub>w</sub> = (h<sub>o</sub>²/2)·2·t·b³/3 = 26,367.19; J = 22.0833.
+- 4-plate box of case 4 + a 10 × 1/2 cover plate on the top flange (face contact): still one closed cell.
+- 4-plate box (12 × 3/4 flanges, 16 × 1/2 webs, 10 out-to-out) with L3X3X3/8 in all four inside corners: exactly one closed cell (the void); the four corner loops are junctions (main found 5 cells: J 1,269.48 → 1,299.16 in⁴).
+- W14X90 from three plates (case 2, no face contact): C<sub>w</sub> = 15,929 in⁶, bit-identical to main. Same three plates + 14.5 × 1 cover plates (face contact): J 48.7411 in⁴, C<sub>w</sub> 44,356.1 in⁶ = hand values (case 9 formula), as before; with 10 × 1 cover plates (narrower than the flange): J 34.8142, C<sub>w</sub> 28,014.39, unchanged from main (round-off only).
+
+#### Every template / validation case whose torsion results change
+
+- Engine-level comparison main vs branch, 5,247 models: every single rolled shape (1,660), every template with every applicable shape and arrangement (2L gaps 0/3/8/3/4 both orientations, star, double channel gaps 0/0.5 back-to-back/toe-to-toe, boxed channels toes in/out, laced 2C/4L, cover-plated W/M/S/HP with equal, wider and narrower plates, 4-plate boxes, plate girders), the engineer's model and 400 random plate assemblies (+ rotated copies).
+  - **Every model without face contact is bit-identical** (J, C<sub>w</sub>, shear centre, r̄<sub>o</sub>², cells, every other number): 3,621 of the 5,247 models are bit-identical, and none of the 1,626 that differ is free of face contact.
+  - **Templates with face contact** (2L gap 0, star gap 0, double channels gap 0, boxed channels, laced 4L, cover-plated shapes; 1,161 models): round-off only — largest relative change in J 6.5e-16, C<sub>w</sub> 6.7e-15, shear-centre shift 1.1e-14 in (element order changed). No change in cell count.
+  - **Validation tab**: the 96 existing checks give the same results (case 4 box, case 9 cover plates: identical to 1e-15); 7 new checks (group 17); 103/103 pass.
+  - **Changed beyond round-off**: the engineer's model (above) and 9 random assemblies (5 shapes, some rotated), each of which had 1 false cell on main (no enclosed void): the cell disappears, J rises by 1.6–5.9 % (the 4A<sub>m</sub>²/∮ds/t term of a tiny loop replaced by the open terms) and C<sub>w</sub> / shear centre become available. 66 more random assemblies with **overlapping** parts (invalid input, flagged in "Check the model") change too; 55 of them lose a false cell (no void), the rest change J by up to 43 % because overlapping plates were merged differently. On main, 3 of the 9 valid ones gave different J for the same section rotated (rotation dependence); now identical.
+- Robustness run (branch only): 435 random built-ups (web + 4 angles with flange plates of any width and optional cover plate, boxes with angles in some corners, rolled shapes with cover plates of any width), each also rotated 90°/33°/−120°, mirrored and with the part order reversed: number of cells = number of enclosed voids in every case, J and C<sub>w</sub> invariant to 1e-9, shear centre transforms with the section, C<sub>w</sub> available for every open one (673 junctions merged). On main the same run gives 261 failures (112 open sections with C<sub>w</sub> n/a).
+
+#### Known limitation (unchanged, noted)
+
+- HSS10X6X1/2 with a plate on top (face contact on a closed tube with rounded corners): J n/a "elements … cross without a connection" on main and on the branch — the plate's line meets the tube's corner chords. Not changed here (pre-existing; see open item O1-O1).
+
+#### Where (anchors) — exact code
+
+1. `thinWall`, anchor `    // 1) parallel face contacts`. **Before** (whole block up to `    // 2) other contacts`):
+```js
+    // 1) parallel face contacts → one combined element (t1 + t2) over the overlap
+    let merged = true, guard = 0; C.merges = [];
+    while (merged && guard++ < 500) {
+      merged = false;
+      outer: for (let i = 0; i < E.length; i++) for (let j = i + 1; j < E.length; j++) {
+        const a = E[i], b = E[j]; if (a.link || b.link || !allowed(a, b)) continue;
+        const da = sub(a.q, a.p), La = len(da), db = sub(b.q, b.p), Lb = len(db); if (La === 0 || Lb === 0) continue;
+        const u = [da[0] / La, da[1] / La], v = [db[0] / Lb, db[1] / Lb];
+        if (Math.abs(crs(u, v)) > 0.0087) continue;
+        const nrm = [-u[1], u[0]], off2 = dot(sub(b.p, a.p), nrm);
+        if (Math.abs(off2) > (a.t + b.t) / 2 + ltol) continue;
+        const s1 = dot(sub(b.p, a.p), u), s2 = dot(sub(b.q, a.p), u), s0 = Math.max(0, Math.min(s1, s2)), se = Math.min(La, Math.max(s1, s2));
+        if (se - s0 <= ltol) continue;
+        const ra = rectOf(a), rb = rectOf(b); if (polyDist(ra, rb) > ltol) continue;
+        // combined element
+        const offc = (b.t * off2) / (a.t + b.t), t = a.t + b.t;
+        const P0 = add(add(a.p, mul(u, s0)), mul(nrm, offc)), P1 = add(add(a.p, mul(u, se)), mul(nrm, offc));
+        const comb = { p: P0, q: P1, t, parts: [...new Set([...a.parts, ...b.parts])], link: false, src: a.src + '+' + b.src, merged: true };
+        C.merges.push({ a: a.src, b: b.src, L: se - s0, t1: a.t, t2: b.t });
+        const pieces = [];
+        const pieceOf = (e, uu, base) => { // parts of e outside [s0, se] (measured along u from a.p)
+          const sp = dot(sub(e.p, a.p), u), sq = dot(sub(e.q, a.p), u), lo = Math.min(sp, sq), hi = Math.max(sp, sq), lp = sp <= sq ? e.p : e.q, hp = sp <= sq ? e.q : e.p;
+          const ptAt = s => add(lp, mul(sub(hp, lp), (s - lo) / (hi - lo)));
+          if (s0 - lo > ltol) pieces.push({ p: lp, q: ptAt(s0), t: e.t, parts: e.parts, link: false, src: e.src });
+          if (hi - se > ltol) pieces.push({ p: ptAt(se), q: hp, t: e.t, parts: e.parts, link: false, src: e.src });
+        };
+        pieceOf(a); pieceOf(b);
+        const rest = E.filter((_, k) => k !== i && k !== j).concat(pieces);
+        // re-attach every element end that lies on line a or line b inside the overlap to the combined line:
+        // a non-parallel element (e.g. a web) is extended or shortened along its own direction (centre-line model);
+        // a collinear piece gets a rigid link (t = 0) across to the combined line
+        const links = [], endsSeen = [], rest2 = [];
+        const onOld = w => Math.abs(w) < ltol || Math.abs(w - off2) < ltol;
+        rest.forEach(e0 => {
+          const e = Object.assign({}, e0);
+          ['p', 'q'].forEach(k => {
+            const P = e[k], s = dot(sub(P, a.p), u), w = dot(sub(P, a.p), nrm);
+            if (s < s0 - ltol || s > se + ltol || !onOld(w) || Math.abs(w - offc) < 1e-12) return;
+            const Q = add(add(a.p, mul(u, Math.max(s0, Math.min(se, s)))), mul(nrm, offc));
+            const other = e[k === 'p' ? 'q' : 'p'], de = sub(other, P), Le = len(de);
+            const par = Le === 0 || Math.abs(dot(de, nrm)) < 0.0087 * Le;
+            if (par) { if (!endsSeen.some(x => len(sub(x, P)) < 1e-9)) { endsSeen.push(P); links.push({ p: P, q: Q, t: 0, parts: e.parts, link: true, src: 'link' }); } }
+            else { const lam = (offc - w) / dot(de, nrm); e[k] = add(P, mul(de, lam)); }
+          });
+          if (len(sub(e.q, e.p)) > 1e-12) rest2.push(e);
+        });
+        E = rest2.concat([comb], links); merged = true; break outer;
+      }
+    }
+```
+   **After:**
+```js
+    // 1) parallel face contacts → stacks of plates in face contact. Each stack becomes one combined element per thickness
+    //    zone (t = Σt of the plates present in that zone, on their combined mid-plane Σt·w/Σt); zones at different offsets are
+    //    joined by rigid links. All stacks are built at once from the original elements, so the model does not depend on
+    //    the order of the parts (a symmetric section gives a symmetric model). Engineer's decision 2026-10-10.
+    C.merges = [];
+    {
+      const N0 = E.length, fu = E.map((_, i) => i), ff = i => fu[i] === i ? i : (fu[i] = ff(fu[i]));
+      let anyFC = false;
+      for (let i = 0; i < N0; i++) for (let j = i + 1; j < N0; j++) {
+        const a = E[i], b = E[j]; if (!allowed(a, b)) continue;
+        const da = sub(a.q, a.p), La = len(da), db = sub(b.q, b.p), Lb = len(db); if (La === 0 || Lb === 0) continue;
+        const u = [da[0] / La, da[1] / La], v = [db[0] / Lb, db[1] / Lb];
+        if (Math.abs(crs(u, v)) > 0.0087) continue;
+        const nrm = [-u[1], u[0]], off2 = dot(sub(b.p, a.p), nrm);
+        if (Math.abs(off2) > (a.t + b.t) / 2 + ltol) continue;
+        const s1 = dot(sub(b.p, a.p), u), s2 = dot(sub(b.q, a.p), u), s0 = Math.max(0, Math.min(s1, s2)), se = Math.min(La, Math.max(s1, s2));
+        if (se - s0 <= ltol) continue;
+        if (polyDist(rectOf(a), rectOf(b)) > ltol) continue;
+        fu[ff(i)] = ff(j); anyFC = true;
+      }
+      if (anyFC) {
+        const grp = new Map(); E.forEach((e, i) => { const r = ff(i); if (!grp.has(r)) grp.set(r, []); grp.get(r).push(i); });
+        const stacks = [...grp.values()].filter(g => g.length > 1), inStack = new Array(N0).fill(false);
+        stacks.forEach(g => g.forEach(i => { inStack[i] = true; }));
+        const pOrd = {}; gp.forEach((q, i) => { pOrd[q.pt.id] = i; });
+        const lbls = ids => [...new Set(ids)].sort((x, y) => pOrd[x] - pOrd[y]).map(id => gp[pOrd[id]].pt.lbl);
+        const ST = stacks.map(g => {
+          let r = g[0]; g.forEach(i => { if (len(sub(E[i].q, E[i].p)) > len(sub(E[r].q, E[r].p)) + 1e-12) r = i; });
+          const d = sub(E[r].q, E[r].p), L = len(d); let u = [d[0] / L, d[1] / L]; if (u[0] < -1e-12 || (Math.abs(u[0]) <= 1e-12 && u[1] < 0)) u = [-u[0], -u[1]];
+          const o = E[r].p, nrm = [-u[1], u[0]], S = P => dot(sub(P, o), u), Wn = P => dot(sub(P, o), nrm), at = (s, w) => add(add(o, mul(u, s)), mul(nrm, w));
+          const mem = g.map(i => { const e = E[i], a = S(e.p), b = S(e.q); return { i, e, lo: Math.min(a, b), hi: Math.max(a, b), w: (Wn(e.p) + Wn(e.q)) / 2, t: e.t }; });
+          // zone breakpoints = element ends along the stack, merged within the contact tolerance
+          const raw = []; mem.forEach(m => raw.push(m.lo, m.hi)); raw.sort((x, y) => x - y);
+          const bp = []; let cl = [];
+          raw.forEach(v => { if (cl.length && v - cl[0] > ltol) { bp.push(cl.reduce((s, x) => s + x, 0) / cl.length); cl = []; } cl.push(v); });
+          bp.push(cl.reduce((s, x) => s + x, 0) / cl.length);
+          const nearK = v => { let k = 0; bp.forEach((x, j) => { if (Math.abs(x - v) < Math.abs(bp[k] - v)) k = j; }); return k; };
+          mem.forEach(m => { m.k0 = nearK(m.lo); m.k1 = nearK(m.hi); });
+          // zone k: the plates present between breakpoints k and k + 1, grouped into runs that are in face contact
+          // (plates present in a zone but not touching each other there stay separate elements)
+          const zones = [];
+          for (let k = 0; k + 1 < bp.length; k++) {
+            const cov = mem.filter(m => m.k0 <= k && m.k1 >= k + 1).sort((x, y) => x.w - y.w), gs = [];
+            cov.forEach(m => { const g = gs[gs.length - 1], l = g && g[g.length - 1]; if (l && m.w - l.w <= (m.t + l.t) / 2 + ltol) g.push(m); else gs.push([m]); });
+            zones.push(gs.map(g => {
+              const t = g.reduce((s, m) => s + m.t, 0), w = g.reduce((s, m) => s + m.t * m.w, 0) / t, parts = [...new Set(g.reduce((s, m) => s.concat(m.e.parts), []))];
+              return { s0: bp[k], s1: bp[k + 1], t, w, cov: g, parts, src: lbls(parts).join('+') };
+            }));
+          }
+          return { u, o, nrm, S, Wn, at, mem, zones };
+        });
+        const newE = [];
+        ST.forEach((st, si) => st.zones.forEach((zk, k) => zk.forEach(z => {
+          newE.push({ p: st.at(z.s0, z.w), q: st.at(z.s1, z.w), t: z.t, parts: z.parts, link: false, src: z.src, merged: z.cov.length > 1, stk: si });
+          if (z.cov.length > 1) { const nm = lbls(z.parts); C.merges.push({ a: nm[0], b: nm.slice(1).join(' + '), L: z.s1 - z.s0, t: z.t }); }
+          // continuity into the next zone: a rigid link where a plate continues on a different combined line
+          (st.zones[k + 1] || []).forEach(nx => { if (nx.cov.some(m => z.cov.includes(m)) && Math.abs(nx.w - z.w) > 1e-12) newE.push({ p: st.at(z.s1, z.w), q: st.at(z.s1, nx.w), t: 0, parts: [...new Set(z.parts.concat(nx.parts))], link: true, src: 'link', stk: si }); });
+        })));
+        // re-attach every end of an element outside the stacks that lies on the centre line of a stacked plate: a
+        // non-parallel element (e.g. a web) is extended or shortened along its own direction to the zone's combined line;
+        // a parallel one gets a rigid link (t = 0) across to it
+        const links = [], endsSeen = [], rest = [];
+        E.forEach((e0, i) => {
+          if (inStack[i]) return;
+          const e = Object.assign({}, e0);
+          ['p', 'q'].forEach(k => {
+            const P = e[k];
+            for (const st of ST) {
+              const s = st.S(P), w = st.Wn(P), m = st.mem.find(m => Math.abs(w - m.w) < ltol && s >= m.lo - ltol && s <= m.hi + ltol); if (!m) continue;
+              const zs = [].concat(...st.zones).filter(z => z.cov.includes(m)); if (!zs.length) break;
+              const dz = z => Math.max(0, z.s0 - s, s - z.s1); let z = zs[0]; zs.forEach(y => { if (dz(y) < dz(z)) z = y; });
+              if (Math.abs(w - z.w) < 1e-12) break;
+              const Q = st.at(Math.max(z.s0, Math.min(z.s1, s)), z.w), other = e[k === 'p' ? 'q' : 'p'], de = sub(other, P), Le = len(de);
+              const par = Le === 0 || Math.abs(dot(de, st.nrm)) < 0.0087 * Le;
+              if (par) { if (!endsSeen.some(x => len(sub(x, P)) < 1e-9)) { endsSeen.push(P); links.push({ p: P, q: Q, t: 0, parts: e.parts, link: true, src: 'link' }); } }
+              else { const lam = (z.w - w) / dot(de, st.nrm); e[k] = add(P, mul(de, lam)); }
+              break;
+            }
+          });
+          if (len(sub(e.q, e.p)) > 1e-12) rest.push(e);
+        });
+        E = rest.concat(newE, links);
+      }
+    }
+```
+2. `thinWall`, anchor `    // 2) other contacts`. Before:
+```js
+    // 2) other contacts: junction at the intersection of the centre lines (extend or split), else a rigid link
+    const splits = E.map(() => []), extra = [];
+    for (let i = 0; i < E.length; i++) for (let j = i + 1; j < E.length; j++) {
+      const a = E[i], b = E[j]; if (a.link || b.link || !allowed(a, b)) continue;
+```
+   After:
+```js
+    // 2) other contacts: junction at the intersection of the centre lines (extend or split), else a rigid link.
+    //    A part whose elements went into different stacks (e.g. the two legs of an angle, one against a web, one against a
+    //    flange plate) is re-joined here: elements of different stacks that share a part may connect.
+    const joinable = (a, b) => (a.stk !== undefined || b.stk !== undefined) && a.stk !== b.stk && a.parts.some(x => b.parts.includes(x));
+    const splits = E.map(() => []), extra = [];
+    for (let i = 0; i < E.length; i++) for (let j = i + 1; j < E.length; j++) {
+      const a = E[i], b = E[j]; if (a.link || b.link || !(allowed(a, b) || joinable(a, b))) continue;
+```
+3. `thinWall`, new block inserted immediately before `    // components` (after the crossing check):
+```js
+    // 3b) face-contact junctions: a centre-line loop that encloses no void lies inside the combined material of a junction
+    //     (e.g. angle heels against a web and a flange plate) and is not a closed cell. Its nodes are merged into one junction
+    //     node at the least-squares intersection of the centre lines of the elements that leave the junction; the elements
+    //     inside the junction are dropped. A real cell (box, tube, boxed channels) encloses a void and is kept. Only for
+    //     pieces with plates in face contact (the model of every other piece is unchanged). Engineer's decision 2026-10-10.
+    C.junctions = [];
+    if (C.merges.length) {
+      // an extension that runs along another element (collinear overlap): split every element at the nodes lying on it,
+      // then keep one element per pair of nodes (the thicker), as above
+      for (let pass = 0; pass < 20; pass++) {
+        let any = false;
+        for (let k = 0; k < edges.length && !any; k++) {
+          const e = edges[k], P = nodes[e.a], Q = nodes[e.b];
+          for (let v = 0; v < nodes.length; v++) {
+            if (v === e.a || v === e.b || ptSegDist(nodes[v], P, Q) > ntol || len(sub(nodes[v], P)) <= ntol || len(sub(nodes[v], Q)) <= ntol) continue;
+            edges[k] = Object.assign({}, e, { b: v, L: len(sub(nodes[v], P)) }); edges.push(Object.assign({}, e, { a: v, L: len(sub(Q, nodes[v])) })); any = true; break;
+          }
+        }
+        if (!any) break;
+      }
+      { const keep = [], at = new Map(); edges.forEach(e => { const key = Math.min(e.a, e.b) + '-' + Math.max(e.a, e.b); if (!at.has(key)) { at.set(key, keep.length); keep.push(e); } else { const o = keep[at.get(key)]; if (o.link && !e.link) keep[at.get(key)] = e; else if (!o.link && !e.link && e.t > o.t) keep[at.get(key)] = e; } }); edges.length = 0; keep.forEach(e => edges.push(e)); }
+      // voids enclosed by the material of this piece (inner boundary loops of the union of its parts; holes ignored)
+      const CO = coating({ parts: gp }, ltol), VP = CO.voidPts || [];
+      const faceList = () => {
+        const ho = nodes.map(() => []);
+        edges.forEach((e, k) => { ho[e.a].push({ k, to: e.b }); ho[e.b].push({ k, to: e.a }); });
+        ho.forEach((L, v) => { L.forEach(h => { h.ang = Math.atan2(nodes[h.to][1] - nodes[v][1], nodes[h.to][0] - nodes[v][0]); }); L.sort((x, y) => x.ang - y.ang); });
+        const seen = new Set(), F = [];
+        nodes.forEach((_, v0) => ho[v0].forEach(h0 => {
+          if (seen.has(v0 + ':' + h0.k + ':' + h0.to)) return;
+          const f = { vs: [], ks: [], A: 0 }; let v = v0, h = h0, g = 0;
+          while (!seen.has(v + ':' + h.k + ':' + h.to) && g++ < 100000) {
+            seen.add(v + ':' + h.k + ':' + h.to); f.vs.push(v); f.ks.push(h.k);
+            f.A += (nodes[v][0] * nodes[h.to][1] - nodes[h.to][0] * nodes[v][1]) / 2;
+            const L = ho[h.to], idx = L.findIndex(x => x.k === h.k && x.to === v); const nx = L[(idx - 1 + L.length) % L.length]; v = h.to; h = nx;
+          }
+          F.push(f);
+        }));
+        return F;
+      };
+      // the face boundary walked once (spikes along dangling elements removed)
+      const loopOf = f => {
+        let P = f.vs.slice(), ch = true;
+        while (ch && P.length > 3) { ch = false; for (let i = 0; i < P.length; i++) { const a = P[(i - 1 + P.length) % P.length], c = P[(i + 1) % P.length]; if (a === c) { P.splice(i, 1); P.splice(i < P.length ? i : 0, 1); ch = true; break; } } }
+        return P.length >= 3 ? P : null;
+      };
+      for (let it = 0; it < 20; it++) {
+        let b = [Infinity, Infinity, -Infinity, -Infinity]; nodes.forEach(p => { b = [Math.min(b[0], p[0]), Math.min(b[1], p[1]), Math.max(b[2], p[0]), Math.max(b[3], p[1])]; });
+        const bA = Math.max((b[2] - b[0]) * (b[3] - b[1]), 1e-12);
+        const solid = [];
+        if (CO.ok) faceList().forEach(f => { if (!(f.A > 1e-7 * bA)) return; const L = loopOf(f); if (!L) return; const P = L.map(v => nodes[v]); if (!VP.some(p => ptInPoly(p, P))) solid.push({ vs: L }); });
+        if (!solid.length) break;
+        // clusters of nodes of solid faces (faces sharing a node form one junction)
+        const ju = nodes.map((_, i) => i), jf = i => ju[i] === i ? i : (ju[i] = jf(ju[i]));
+        solid.forEach(f => f.vs.forEach(v => { ju[jf(v)] = jf(f.vs[0]); }));
+        const inJ = new Set(); solid.forEach(f => f.vs.forEach(v => inJ.add(v)));
+        const cl = new Map(); [...inJ].forEach(v => { const r = jf(v); if (!cl.has(r)) cl.set(r, []); cl.get(r).push(v); });
+        const map = nodes.map((_, i) => i);
+        let done = 0;
+        cl.forEach(vs => {
+          const set = new Set(vs), outE = edges.filter(e => set.has(e.a) !== set.has(e.b));
+          if (!outE.length) return;
+          const c = [vs.reduce((s, v) => s + nodes[v][0], 0) / vs.length, vs.reduce((s, v) => s + nodes[v][1], 0) / vs.length];
+          let a11 = 0, a12 = 0, a22 = 0, b1 = 0, b2 = 0, n0 = null, o0 = 0, nl = 0;
+          outE.forEach(e => { if (e.link) return; const P = nodes[e.a], Q = nodes[e.b], d = sub(Q, P), L = len(d); if (!(L > 0)) return; const n = [-d[1] / L, d[0] / L], na = dot(n, P); a11 += n[0] * n[0]; a12 += n[0] * n[1]; a22 += n[1] * n[1]; b1 += n[0] * na; b2 += n[1] * na; if (!n0) n0 = n; o0 += Math.sign(dot(n, n0)) * na; nl++; });
+          const det = a11 * a22 - a12 * a12;
+          // intersection of the lines (least squares); all lines parallel: the centroid of the loop nodes moved onto their mean line
+          let p = det > 1e-6 * (a11 + a22) * (a11 + a22) ? [(b1 * a22 - b2 * a12) / det, (a11 * b2 - a12 * b1) / det] : (n0 ? sub(c, mul(n0, dot(n0, c) - o0 / nl)) : c);
+          let diam = 0; vs.forEach(v => vs.forEach(w => { diam = Math.max(diam, len(sub(nodes[v], nodes[w]))); }));
+          // a junction is no larger than the plates meeting there: a larger solid loop is left as it is
+          const tMax = edges.filter(e => !e.link && (set.has(e.a) || set.has(e.b))).reduce((s, e) => Math.max(s, e.t), 0);
+          if (!(diam <= 2 * tMax + 2 * ltol)) return;
+          if (!nl || !(len(sub(p, c)) <= diam + 1e-9)) p = c;
+          const r = vs[0]; nodes[r] = p; vs.forEach(v => { map[v] = r; });
+          C.junctions.push({ at: p.slice(), size: diam, loops: solid.filter(f => set.has(f.vs[0])).length, srcs: [...new Set(edges.filter(e => set.has(e.a) || set.has(e.b)).filter(e => !e.link).map(e => e.src))] });
+          done++;
+        });
+        if (!done) break;
+        edges.forEach(e => { e.a = map[e.a]; e.b = map[e.b]; });
+        for (let k = edges.length - 1; k >= 0; k--) if (edges[k].a === edges[k].b) edges.splice(k, 1);
+        edges.forEach(e => { e.L = len(sub(nodes[e.b], nodes[e.a])); });
+        // as above: duplicate edges, link chains that lead nowhere, unused nodes
+        { const keep = [], at = new Map(); edges.forEach(e => { const key = Math.min(e.a, e.b) + '-' + Math.max(e.a, e.b); if (!at.has(key)) { at.set(key, keep.length); keep.push(e); } else { const o = keep[at.get(key)]; if (o.link && !e.link) keep[at.get(key)] = e; else if (!o.link && !e.link && e.t > o.t) keep[at.get(key)] = e; } }); edges.length = 0; keep.forEach(e => edges.push(e)); }
+        for (let pass = 0; pass < 50; pass++) {
+          const deg = nodes.map(() => 0); edges.forEach(e => { deg[e.a]++; deg[e.b]++; });
+          const before = edges.length;
+          for (let k = edges.length - 1; k >= 0; k--) { const e = edges[k]; if (e.link && (deg[e.a] === 1 || deg[e.b] === 1)) edges.splice(k, 1); }
+          if (edges.length === before) break;
+        }
+        { const usedN = new Set(); edges.forEach(e => { usedN.add(e.a); usedN.add(e.b); }); const mp = {}, nn = []; nodes.forEach((p, i) => { if (usedN.has(i)) { mp[i] = nn.length; nn.push(p); } }); edges.forEach(e => { e.a = mp[e.a]; e.b = mp[e.b]; }); nodes.length = 0; nn.forEach(p => nodes.push(p)); }
+      }
+    }
+```
+4. `coating` (P2a), two lines changed so that it also returns a point inside each void (`voidPts`; no existing output changes):
+```js
+// before
+    let outside = 0, inner = 0, nOut = 0, nIn = 0, ok = true;
+    full.forEach(pc => { if (pc.ccw) { outside += pc.L; nOut++; } else { inner += pc.L; nIn++; } });
+…
+      if (A2 > 0) { outside += Ls; nOut++; } else { inner += Ls; nIn++; }
+    }
+    return { exposed, outside: ok ? outside : null, inner: ok ? inner : null, nOut, nIn, ok, pieces: pieces.length, eps };
+// after
+    let outside = 0, inner = 0, nOut = 0, nIn = 0, ok = true;
+    // a point just inside the void next to a piece (material is on its left), one per inner loop: used by the torsion model
+    // to tell a real closed cell (it encloses a void) from a centre-line loop inside solid material
+    const voidPts = [], voidPt = pc => { if (pc.k === 'L') { const nl = [-(pc.b[1] - pc.a[1]) / pc.L, (pc.b[0] - pc.a[0]) / pc.L]; return sub(mul(add(pc.a, pc.b), 0.5), mul(nl, eps)); } const am = (pc.a0 + pc.a1) / 2; return add(pc.c, mul([Math.cos(am), Math.sin(am)], pc.ccw ? pc.r + eps : Math.max(pc.r - eps, pc.r / 2))); };
+…
+      if (A2 > 0) { outside += Ls; nOut++; } else { inner += Ls; nIn++; voidPts.push(voidPt(rest[i0])); }
+    }
+    return { exposed, outside: ok ? outside : null, inner: ok ? inner : null, nOut, nIn, ok, pieces: pieces.length, eps, voidPts };
+```
+5. `buildTors`, anchor `if (C.merges && C.merges.length)`. Before:
+```js
+        if (C.merges && C.merges.length) body.appendChild(el('div', 'note', 'Plates in face contact are combined over their overlap into one element of thickness t₁ + t₂ (continuous connection along both edges assumed): ' + esc([...new Set(C.merges.map(m => m.a + ' + ' + m.b))].join('; ')) + '.'));
+```
+   After:
+```js
+        if (C.merges && C.merges.length) body.appendChild(el('div', 'note', 'Plates in face contact are combined, over each length where the same plates overlap, into one element of thickness Σt on their combined mid-plane (continuous connection along both edges assumed): ' + esc([...new Set(C.merges.map(m => m.a + ' + ' + m.b))].join('; ')) + '.'));
+        if (C.junctions && C.junctions.length) body.appendChild(el('div', 'note', 'Face-contact junction' + (C.junctions.length > 1 ? 's' : '') + ' at ' + esc(C.junctions.map(j => '(' + nf(j.at[0], 'L') + ', ' + nf(j.at[1], 'L') + ')').join(', ')) + ' ' + esc(un('L')) + ': the centre lines of the combined plates form small loop(s) that enclose no void, only the solid material of the junction. These are not closed cells: the loop is merged into one junction node at the intersection of the centre lines of the elements that meet there.'));
+```
+6. `buildManual` → Torsion: "Connections" — "…are combined over the overlap into one element of thickness t<sub>1</sub> + t<sub>2</sub> on their combined mid-plane — this assumes a continuous connection along both edges. Other contacts get a rigid link." → "…(e.g. a cover plate on a flange, angle legs against a web or a flange plate) are combined, over each length where the same plates overlap, into one element of thickness Σt on their combined mid-plane (t<sub>1</sub> + t<sub>2</sub> for two plates) — this assumes a continuous connection along both edges; where the combination changes, the lines are joined by a rigid link. Other contacts get a rigid link." "J, closed cells": "…found automatically as the faces of the planar centre-line graph." → "…as the faces of the planar centre-line graph that enclose a void (a hole in the material). At a junction of plates in face contact the centre lines can form a small loop lying inside solid material (e.g. angle heels against a web and a flange plate): it is not a cell, and its nodes are merged into one junction node at the intersection of the centre lines of the elements that meet there."
+7. `runValidation`, new group inserted after group 16 (anchor `addAbs(g, 'and its product of inertia is 0`):
+```js
+    // 17 face-contact junctions (engineer's decision 2026-10-10): loops inside solid material are not closed cells
+    { const g = '17. Face-contact junctions: built-up I (web PL 18 × 1/2, 4 L6X6X1/2 heels against the web and the flange plates, 2 PL 12-1/2 × 1/2)';
+      const angAt = (h, rot, mir) => { const pt = { type: 'shape', p: { fam: 'L', name: 'L6X6X1/2' }, x: 0, y: 0, rot, mir }, hl = SPC.partGlobal(pt).refPts.heel; pt.x = h[0] - hl[0]; pt.y = h[1] - hl[1]; return pt; };
+      const Re = SPC.analyze(vModel([{ type: 'plate', p: { b: 18, t: 0.5 }, x: 0, y: 0, rot: 90 }, angAt([0.25, -9], 0, false), angAt([-0.25, -9], 0, true), angAt([0.25, 9], 180, true), angAt([-0.25, 9], 180, false), { type: 'plate', p: { b: 12.5, t: 0.5 }, x: 0, y: 9.25 }, { type: 'plate', p: { b: 12.5, t: 0.5 }, x: 0, y: -9.25 }])), Te = Re.tors;
+      add(g, 'no closed cell (the section is open; the junction loops enclose no void)', Te.comps[0].cells.length, 0, 0, 'topology', '');
+      addAbs(g, 'shear centre x_o = 0 (doubly symmetric: at the centroid)', Te.xo, 1e-9, 'symmetry', 'in'); addAbs(g, 'shear centre y_o = 0', Te.yo, 1e-9, 'symmetry', 'in');
+      const tc = 0.5 + 0.5, b = 6.25, h0 = 18, Iwf = 2 * tc * b ** 3 / 3;
+      add(g, 'Cw vs hand (h_o²/2)·I_f, I_f = 2·t·b³/3: flange = plate + angle leg, t = 1.0 on y = ±9, b = 6.25 each side of the web; h_o = 18', Te.Cw, h0 * h0 / 2 * Iwf, tight, 'hand calc (thin-wall)', 'in⁶');
+      add(g, 'J vs hand Σbt³/3: web 2 × 6 × 1.5³ + 6 × 0.5³, flanges 4 × 6.25 × 1.0³ (all /3)', Te.J, (2 * 6 * 1.5 ** 3 + 6 * 0.5 ** 3 + 4 * 6.25 * tc ** 3) / 3, tight, 'hand calc (thin-wall)', 'in⁴');
+      const B4 = SPC.TEMPLATES.box.f({ bf: 10, tf: 0.5, h: 5, tw: 0.375, bw: 10 }), Rb = SPC.analyze(vModel(B4.concat([{ type: 'plate', p: { b: 10, t: 0.5 }, x: 0, y: 3.25 }])));
+      add(g, 'box of 4 plates (case 4) + cover plate 10 × 1/2 on the top flange: still one closed cell', Rb.tors.comps[0].cells.length, 1, 0, 'topology', '');
+      const ang2 = (hx, hy, rot, mir) => { const pt = { type: 'shape', p: { fam: 'L', name: 'L3X3X3/8' }, x: 0, y: 0, rot, mir }, hl = SPC.partGlobal(pt).refPts.heel; pt.x = hx - hl[0]; pt.y = hy - hl[1]; return pt; };
+      const Rc = SPC.analyze(vModel(SPC.TEMPLATES.box.f({ bf: 12, tf: 0.75, h: 16, tw: 0.5, bw: 10 }).concat([ang2(4.5, 8, 180, false), ang2(-4.5, 8, 180, true), ang2(4.5, -8, 0, true), ang2(-4.5, -8, 0, false)])));
+      add(g, 'box of 4 plates with L3X3X3/8 in the 4 inside corners: one closed cell (the void); the 4 corner loops are junctions', Rc.tors.comps[0].cells.length, 1, 0, 'topology', ''); }
+```
+
+#### How verified
+
+- `node --check` of every inline script (4 scripts, 0 errors).
+- Engine comparison and robustness runs above (Node, the engine block of main and branch loaded side by side).
+- Node suites re-run on the branch: Phase 1 independent cross-check 410/0, P2a cross-check 858/0, no-overlap geometry 18/0 (2,303 template variants).
+- Browser (headless Chromium, KaTeX served locally): Validation 103/103; engineer's model loaded from the file: J 22.0833, C<sub>w</sub> 26,367.19, shear centre (0, 0), 2 junctions, no "Closed cell" on the Torsion tab, Properties §8 r̄<sub>o</sub> 8.1446, H 1, r<sub>ts</sub> 3.2652; screenshots `eng_tors_branch.png` / `eng_tors_main.png`, `eng_section_branch.png` (SC marker at the centroid) looked at.
+
+#### Open item
+
+- O1-O1. A plate in face contact with a rectangular HSS / rectangular tube (rounded corners as chords) gives "J n/a — elements cross without a connection" (main and branch). Not part of this fix; say if it should be handled (e.g. treat the flat of the tube wall as a plate for the contact).
+
+### R2. Part properties Centroid x / y and edge fields carry the holes inside the part (R2-O1 closed)   [drawing behaviour — no change to any formula, computed property, storage key or saved format]
+
+- **Decision (2026-10-10):** the **Centroid x**, **Centroid y** and the four **edge** fields (Left / Right / Bottom / Top) move the holes inside the part with it, exactly as drag, arrow-key nudge, "Move by" and align do: same rule for which holes are carried (`novCarried`: holes wholly inside the part and in no other solid part), only with **Prevent overlap** on (off: the part moves alone, as before and as drag / nudge do).
+- The part itself is set exactly as before (x = the typed value; for an edge, x + d). Each carried hole moves by the same (dx, dy).
+- With Prevent overlap on, a typed position that would overlap is refused as before; the carried holes are included in the check and in the restore, and **Place touching** moves the part and its holes together. The message names the part ("Not applied: PL1 would overlap PL2"), not "the parts".
+- Undo: one step restores the part and its holes.
+
+#### Where (anchors) — exact before / after
+
+1. `buildPartPane`, section `'ppPos'`:
+```js
+// before
+    fRow(body, 'Centroid x', numIn(() => pt.x, v => { pt.x = v; }, 'pp_x', { k: 'L', geo: true, guard: GD }), L);
+    fRow(body, 'Centroid y', numIn(() => pt.y, v => { pt.y = v; }, 'pp_y', { k: 'L', geo: true, guard: GD }), L);
+    const edge = (lab, i, key) => fRow(body, lab, numIn(() => SPC.partGlobal(pt).bbox[i], v => { const d = v - SPC.partGlobal(pt).bbox[i]; if (i === 0 || i === 2) pt.x += d; else pt.y += d; }, key, { k: 'L', geo: true, structural: true, guard: GD }), L);
+// after
+    const GM = Object.assign([pt.id], { carry: true });   // position fields: the holes inside the part move with it (R2-O1)
+    fRow(body, 'Centroid x', numIn(() => pt.x, v => { movePart(pt, v, pt.y); }, 'pp_x', { k: 'L', geo: true, guard: GM }), L);
+    fRow(body, 'Centroid y', numIn(() => pt.y, v => { movePart(pt, pt.x, v); }, 'pp_y', { k: 'L', geo: true, guard: GM }), L);
+    const edge = (lab, i, key) => fRow(body, lab, numIn(() => SPC.partGlobal(pt).bbox[i], v => { const d = v - SPC.partGlobal(pt).bbox[i]; if (i === 0 || i === 2) movePart(pt, pt.x + d, pt.y); else movePart(pt, pt.x, pt.y + d); }, key, { k: 'L', geo: true, structural: true, guard: GM }), L);
+```
+2. `guardEdit`: before `  if (ids.rotWarn) {` two lines added, and the `why` line changed:
+```js
+// added
+  const carried = ids.carry ? novCarried(new Set(ids)) : [];
+  if (carried.length) ids = ids.concat(carried);   // position fields: the carried holes are part of the move
+// before
+  const why = novWhy(ids), after = ids.map(id => JSON.stringify(partById(id)));
+// after
+  const why = novWhy(ids.filter(id => !carried.includes(id))), after = ids.map(id => JSON.stringify(partById(id)));
+```
+3. New function before `function novCarriedFix(id) {`:
+```js
+// Centroid x / y and edge fields of the Part properties: the holes inside the part move with it, exactly as with drag, nudge
+// and "Move by" (same rule for which holes are carried: novCarried, i.e. only with Prevent overlap on). Engineer's decision
+// R2-O1, 2026-10-10. The part itself is set exactly as before (x = typed value, or x + d for an edge).
+function movePart(pt, x, y) {
+  const d = [x - pt.x, y - pt.y], hs = novCarried(new Set([pt.id])).map(partById);
+  hs.forEach(h => { h.x += d[0]; h.y += d[1]; });
+  pt.x = x; pt.y = y;
+}
+```
+4. Method → Drawing, "Move" bullet: appended after "Exact positions: Part properties tab (centroid or an edge)." — " With "Prevent overlap" on, holes that lie inside the part move with it (drag, arrow keys, "Move by", align, and the centroid and edge fields)."
+
+#### Check case
+
+PL1 8 × 4 at (0, 0); H1 rectangular hole 2 × 1 at (2, 1) (inside PL1); PL2 4 × 1 at (30, 0). Prevent overlap on. Select PL1, type **Centroid x = 10**.
+- Own properties: PL1 A 32, I<sub>x</sub> 42.667, I<sub>y</sub> 170.667; H1 A −2, I<sub>x</sub> −0.16667, I<sub>y</sub> −0.66667; PL2 A 4, I<sub>x</sub> 0.33333, I<sub>y</sub> 5.33333. A = 34 in² in both cases.
+- **Before (main):** H1 stays at (2, 1), outside PL1 (x 6…14). Warning "Hole H1 is not entirely inside one material part". x̄ = (320 − 4 + 120)/34 = **12.823529**, ȳ = −2/34 = −0.058824; I<sub>y</sub> = 170.667 − 0.667 + 5.333 + 3,200 − 8 + 3,600 − 34 × 12.823529² = **1,376.2745**; I<sub>xy</sub> = −2·2·1 − 34(12.823529)(−0.058824) = **21.647059** in⁴.
+- **After:** H1 moves to (12, 1), inside PL1; no warning. x̄ = (320 − 24 + 120)/34 = **12.235294**, ȳ = −0.058824; I<sub>y</sub> = 170.667 − 0.667 + 5.333 + 3,200 − 288 + 3,600 − 34 × 12.235294² = **1,597.4510**; I<sub>xy</sub> = −2·12·1 − 34(12.235294)(−0.058824) = **0.470588** in⁴. I<sub>x</sub> = 40.715686 in⁴ both.
+- Same result as nudging PL1 by +10 (bit-identical).
+
+#### How verified
+
+Browser tests (`open_ui.mjs`, headless Chromium): main gives the "before" values and warning; branch the "after" values (hand values to 1e-8). Centroid y and the four edge fields carry the hole (e.g. Left edge = 0 → PL1 (4, 0), H1 (6, 1)). x = 28 (overlaps PL2) is refused with "Not applied: PL1 would overlap PL2", PL1 and H1 unchanged; Place touching moves both, offset kept. Undo restores both in one step. Prevent overlap off: the hole stays (as nudge). A hole inside another part is not moved. No console errors.
+
+### X3. DXF export: the warning names the parts that use the AISC tabulated option (X-O3 closed)   [output text only]
+
+- **Decision (2026-10-10):** keep the warning; name the affected parts in the export dialog and in the DXF notes.
+- `SPCDXF.issues`, before:
+```js
+    if (R.anyTab) W.push('Some rolled shapes use the AISC tabulated properties. The DXF holds their plate model (no fillets), so MASSPROP matches the plate model, not the tabulated values; the notes give the values it should show.');
+```
+  after:
+```js
+    if (R.anyTab) { const tl = R.parts.filter(q => q.use).map(q => q.pt.lbl + ' (' + q.G.g.desc + ')'); W.push(`AISC tabulated properties are used for ${tl.join(', ')}. The DXF holds ${tl.length > 1 ? 'their' : 'its'} plate model (no fillets), so MASSPROP matches the plate model, not the tabulated values; the notes give the values it should show.`); }
+```
+- Example: "AISC tabulated properties are used for W1 (W14X90), C1 (C15X33.9). The DXF holds their plate model (no fillets), …" (dialog and the WARNINGS block of layer SPC-NOTES; one part: "… used for W1 (W14X90). The DXF holds its plate model …"). The PARTS list in the notes already marked them ", AISC tabulated". Geometry, expected readout and every other line of the DXF unchanged.
+- Verified in the browser: dialog text and the downloaded DXF notes (2 tabulated parts and 1); no console errors.
+
+### P2a-O6. Single rolled shape: nominal weight shown for reference   [display only — the computed weight is unchanged]
+
+- **Decision (2026-10-10):** keep the plate-model weight (tabulated A when "AISC tabulated" is ticked); for a single rolled shape, also show the nominal weight from the AISC table next to it, for reference.
+- `buildPropsP2a` → section `'pWt'`, after the hint that ends `'Densities are typical values unless entered (Part properties → Material).'));`, added:
+```js
+      // a single rolled shape: its nominal weight from the AISC table, beside the computed one, for reference only (P2a-O6)
+      const one = R.parts.length === 1 && R.parts[0].pt.type === 'shape' ? R.parts[0] : null, rec = one && SPC.shapeRec(one.pt.p.fam, one.pt.p.name);
+      if (rec && isNum(rec.Wt)) body.appendChild(el('div', 'note', `For reference: nominal weight of ${esc(rec.lbl)} = <b>${esc(nu(rec.Wt, 'wt'))}</b> (AISC Shapes Database v16.0, steel; fillets included). Not used: the weight above is from ${one.use ? 'the tabulated A' : 'the plate-model A (fillets neglected)'} and ρ = ${esc(nu(Wt.rows[0].rho, 'rho', 4))}.`));
+```
+- Check: W14X90 alone → "For reference: nominal weight of W14X90 = 90 lb/ft (AISC Shapes Database v16.0, steel; fillets included). Not used: the weight above is from the plate-model A (fillets neglected) and ρ = 490 lb/ft³." The computed weight stays 26.125 × 490/144 = 88.898 lb/ft. mm units: 133.93 kg/m. With the tabulated option the note says "the tabulated A". Two or more parts: no note. Verified in the browser.
+
+### Decisions recorded on the remaining open items (no code change)
+
+| Item | Decision (engineer, 2026-10-10) | Status |
+|---|---|---|
+| O1 (C1) | Accept the steelpy 1.1.1 transcription of AISC v16.0 for L, WT, MT, ST and 2L, with the documented cross-checks (identical to Steel Beam Design on 395 W/M/S/HP/C/MC rows; L/WT/MT/ST identical to efficalc v15.0 except shapes new in v16.0). | Closed |
+| O2 (C1) | HSS corner radii: 2t<sub>des</sub> outside, t<sub>des</sub> inside (AISC Manual basis for HSS section properties). The "verify" note in the Method tab stays. | Closed |
+| O3 (C1) | Face-contact parts are connected continuously by default; the user can switch a contact off on the Torsion tab. | Closed |
+| O4 (C1) | Cell walls' own bt³/3 not added to the Bredt term (conventional); stocky elements (b/t < 10) flagged. | Closed |
+| O5 (C1) | Holes ignored in torsion (gross section), with the note on the Torsion tab. | Closed |
+| O6 (C1) | Group flip / rotate about the centre of the selection's bounding box. | Closed |
+| R2-O1 | Position fields carry holes (R2 above). | Closed |
+| X-O1 | AutoCAD MASSPROP product-of-inertia sign and principal-moment order: the engineer will check on first use (1 × 1 square, Method tab). | **Open — engineer's action** |
+| X-O2 | MASSPROP unweighted: compare with the unweighted "expected readout" in the notes (as implemented). | Closed |
+| X-O3 | Tabulated option: warning kept, parts named (X3 above). | Closed |
+| P2a-O1 | AISC 360-16 equation numbers E4-8, E4-9, F2-7 keep "verify"; the engineer checks them against the printed Specification. | **Open — engineer's action** |
+| P2a-O2 | β<sub>x</sub> sign kept: positive with the larger flange in compression (Trahair & Bradford). Informational; no specific design method. | Closed |
+| P2a-O3 | Stress sign kept: M<sub>x</sub> > 0 compresses +y (positive bending compresses the top), M<sub>y</sub> > 0 compresses +x, P > 0 tension. | Closed |
+| P2a-O4 | Paint: perimeter in in and area in ft²/ft, kept. | Closed |
+| P2a-O5 | Holes at the density of the host part; 0.001 in faying tolerance: accepted. | Closed |
+| P2a-O6 | Plate-model weight kept; nominal weight shown for a single rolled shape (above). | Closed |
+| P2a-O7 | r<sub>ts</sub> for doubly symmetric sections only; h<sub>o</sub> for a single rolled I / three-plate I: accepted. | Closed |
+| P2a-O8 | Re-saving a P2a file in the older version drops `rho` / `stress`: accepted (the hosted site always serves the current version). | Closed |
+
+#### How verified (whole entry)
+
+- `node --check`: 4 scripts, 0 errors. No library, storage key or file format changed; the saved JSON of the default example and the 8 templates is identical to main.
+- Main vs branch in the browser (default example and the 8 templates, in and mm units): saved model identical; every number identical except round-off in C<sub>w</sub> / x<sub>o</sub> of the default example and the cover-plated W (≤ 5e-15 relative, not visible at display precision); text of the Section, Properties, Calc detail, Plastic, Q and Stresses tabs identical; Validation main 96/96, branch 103/103 with the first 96 identical; no console errors. Torsion tab: the face-contact note wording (default example, cover-plated W, boxed channels) and, for boxed channels, the two overhangs of each cover plate beyond the channels are now one row "PL 2.282" (n = 2) instead of two rows of 1.141 (same Σ; J 499.742 unchanged). Method tab: the three edited bullets.
+- Existing browser suites re-run on the branch: Phase 1 browser tests 49/0; no-overlap 70/0; dimension editing 35/0; live fields 47/0; hole carry (R2) 26/0 for the branch checks (its 2 "main" checks describe main before R2 and no longer apply); rotate/flip parity 45 states identical; DXF export 24 files + 13 UI checks, ezdxf audit 0 errors, worst relative error 2.6e-15; 400 px no horizontal scroll; new tests `open_ui.mjs` 26/0.
+- No console errors.

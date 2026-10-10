@@ -2683,12 +2683,16 @@ const SPC = (function () {
     const allowed = (a, b) => { for (const x of a.parts) for (const y of b.parts) { if (x === y) return false; } for (const x of a.parts) for (const y of b.parts) { if (!off.has(pairKey(x, y))) return true; } return false; };
     const rectOf = e => { const d = sub(e.q, e.p), L = len(d); if (L === 0) return null; const n = [-d[1] / L * e.t / 2, d[0] / L * e.t / 2]; return [add(e.p, n), add(e.q, n), sub(e.q, n), sub(e.p, n)]; };
     const ltol = Math.max(tol, 1e-9);
-    // 1) parallel face contacts → one combined element (t1 + t2) over the overlap
-    let merged = true, guard = 0; C.merges = [];
-    while (merged && guard++ < 500) {
-      merged = false;
-      outer: for (let i = 0; i < E.length; i++) for (let j = i + 1; j < E.length; j++) {
-        const a = E[i], b = E[j]; if (a.link || b.link || !allowed(a, b)) continue;
+    // 1) parallel face contacts → stacks of plates in face contact. Each stack becomes one combined element per thickness
+    //    zone (t = Σt of the plates present in that zone, on their combined mid-plane Σt·w/Σt); zones at different offsets are
+    //    joined by rigid links. All stacks are built at once from the original elements, so the model does not depend on
+    //    the order of the parts (a symmetric section gives a symmetric model). Engineer's decision 2026-10-10.
+    C.merges = [];
+    {
+      const N0 = E.length, fu = E.map((_, i) => i), ff = i => fu[i] === i ? i : (fu[i] = ff(fu[i]));
+      let anyFC = false;
+      for (let i = 0; i < N0; i++) for (let j = i + 1; j < N0; j++) {
+        const a = E[i], b = E[j]; if (!allowed(a, b)) continue;
         const da = sub(a.q, a.p), La = len(da), db = sub(b.q, b.p), Lb = len(db); if (La === 0 || Lb === 0) continue;
         const u = [da[0] / La, da[1] / La], v = [db[0] / Lb, db[1] / Lb];
         if (Math.abs(crs(u, v)) > 0.0087) continue;
@@ -2696,46 +2700,80 @@ const SPC = (function () {
         if (Math.abs(off2) > (a.t + b.t) / 2 + ltol) continue;
         const s1 = dot(sub(b.p, a.p), u), s2 = dot(sub(b.q, a.p), u), s0 = Math.max(0, Math.min(s1, s2)), se = Math.min(La, Math.max(s1, s2));
         if (se - s0 <= ltol) continue;
-        const ra = rectOf(a), rb = rectOf(b); if (polyDist(ra, rb) > ltol) continue;
-        // combined element
-        const offc = (b.t * off2) / (a.t + b.t), t = a.t + b.t;
-        const P0 = add(add(a.p, mul(u, s0)), mul(nrm, offc)), P1 = add(add(a.p, mul(u, se)), mul(nrm, offc));
-        const comb = { p: P0, q: P1, t, parts: [...new Set([...a.parts, ...b.parts])], link: false, src: a.src + '+' + b.src, merged: true };
-        C.merges.push({ a: a.src, b: b.src, L: se - s0, t1: a.t, t2: b.t });
-        const pieces = [];
-        const pieceOf = (e, uu, base) => { // parts of e outside [s0, se] (measured along u from a.p)
-          const sp = dot(sub(e.p, a.p), u), sq = dot(sub(e.q, a.p), u), lo = Math.min(sp, sq), hi = Math.max(sp, sq), lp = sp <= sq ? e.p : e.q, hp = sp <= sq ? e.q : e.p;
-          const ptAt = s => add(lp, mul(sub(hp, lp), (s - lo) / (hi - lo)));
-          if (s0 - lo > ltol) pieces.push({ p: lp, q: ptAt(s0), t: e.t, parts: e.parts, link: false, src: e.src });
-          if (hi - se > ltol) pieces.push({ p: ptAt(se), q: hp, t: e.t, parts: e.parts, link: false, src: e.src });
-        };
-        pieceOf(a); pieceOf(b);
-        const rest = E.filter((_, k) => k !== i && k !== j).concat(pieces);
-        // re-attach every element end that lies on line a or line b inside the overlap to the combined line:
-        // a non-parallel element (e.g. a web) is extended or shortened along its own direction (centre-line model);
-        // a collinear piece gets a rigid link (t = 0) across to the combined line
-        const links = [], endsSeen = [], rest2 = [];
-        const onOld = w => Math.abs(w) < ltol || Math.abs(w - off2) < ltol;
-        rest.forEach(e0 => {
+        if (polyDist(rectOf(a), rectOf(b)) > ltol) continue;
+        fu[ff(i)] = ff(j); anyFC = true;
+      }
+      if (anyFC) {
+        const grp = new Map(); E.forEach((e, i) => { const r = ff(i); if (!grp.has(r)) grp.set(r, []); grp.get(r).push(i); });
+        const stacks = [...grp.values()].filter(g => g.length > 1), inStack = new Array(N0).fill(false);
+        stacks.forEach(g => g.forEach(i => { inStack[i] = true; }));
+        const pOrd = {}; gp.forEach((q, i) => { pOrd[q.pt.id] = i; });
+        const lbls = ids => [...new Set(ids)].sort((x, y) => pOrd[x] - pOrd[y]).map(id => gp[pOrd[id]].pt.lbl);
+        const ST = stacks.map(g => {
+          let r = g[0]; g.forEach(i => { if (len(sub(E[i].q, E[i].p)) > len(sub(E[r].q, E[r].p)) + 1e-12) r = i; });
+          const d = sub(E[r].q, E[r].p), L = len(d); let u = [d[0] / L, d[1] / L]; if (u[0] < -1e-12 || (Math.abs(u[0]) <= 1e-12 && u[1] < 0)) u = [-u[0], -u[1]];
+          const o = E[r].p, nrm = [-u[1], u[0]], S = P => dot(sub(P, o), u), Wn = P => dot(sub(P, o), nrm), at = (s, w) => add(add(o, mul(u, s)), mul(nrm, w));
+          const mem = g.map(i => { const e = E[i], a = S(e.p), b = S(e.q); return { i, e, lo: Math.min(a, b), hi: Math.max(a, b), w: (Wn(e.p) + Wn(e.q)) / 2, t: e.t }; });
+          // zone breakpoints = element ends along the stack, merged within the contact tolerance
+          const raw = []; mem.forEach(m => raw.push(m.lo, m.hi)); raw.sort((x, y) => x - y);
+          const bp = []; let cl = [];
+          raw.forEach(v => { if (cl.length && v - cl[0] > ltol) { bp.push(cl.reduce((s, x) => s + x, 0) / cl.length); cl = []; } cl.push(v); });
+          bp.push(cl.reduce((s, x) => s + x, 0) / cl.length);
+          const nearK = v => { let k = 0; bp.forEach((x, j) => { if (Math.abs(x - v) < Math.abs(bp[k] - v)) k = j; }); return k; };
+          mem.forEach(m => { m.k0 = nearK(m.lo); m.k1 = nearK(m.hi); });
+          // zone k: the plates present between breakpoints k and k + 1, grouped into runs that are in face contact
+          // (plates present in a zone but not touching each other there stay separate elements)
+          const zones = [];
+          for (let k = 0; k + 1 < bp.length; k++) {
+            const cov = mem.filter(m => m.k0 <= k && m.k1 >= k + 1).sort((x, y) => x.w - y.w), gs = [];
+            cov.forEach(m => { const g = gs[gs.length - 1], l = g && g[g.length - 1]; if (l && m.w - l.w <= (m.t + l.t) / 2 + ltol) g.push(m); else gs.push([m]); });
+            zones.push(gs.map(g => {
+              const t = g.reduce((s, m) => s + m.t, 0), w = g.reduce((s, m) => s + m.t * m.w, 0) / t, parts = [...new Set(g.reduce((s, m) => s.concat(m.e.parts), []))];
+              return { s0: bp[k], s1: bp[k + 1], t, w, cov: g, parts, src: lbls(parts).join('+') };
+            }));
+          }
+          return { u, o, nrm, S, Wn, at, mem, zones };
+        });
+        const newE = [];
+        ST.forEach((st, si) => st.zones.forEach((zk, k) => zk.forEach(z => {
+          newE.push({ p: st.at(z.s0, z.w), q: st.at(z.s1, z.w), t: z.t, parts: z.parts, link: false, src: z.src, merged: z.cov.length > 1, stk: si });
+          if (z.cov.length > 1) { const nm = lbls(z.parts); C.merges.push({ a: nm[0], b: nm.slice(1).join(' + '), L: z.s1 - z.s0, t: z.t }); }
+          // continuity into the next zone: a rigid link where a plate continues on a different combined line
+          (st.zones[k + 1] || []).forEach(nx => { if (nx.cov.some(m => z.cov.includes(m)) && Math.abs(nx.w - z.w) > 1e-12) newE.push({ p: st.at(z.s1, z.w), q: st.at(z.s1, nx.w), t: 0, parts: [...new Set(z.parts.concat(nx.parts))], link: true, src: 'link', stk: si }); });
+        })));
+        // re-attach every end of an element outside the stacks that lies on the centre line of a stacked plate: a
+        // non-parallel element (e.g. a web) is extended or shortened along its own direction to the zone's combined line;
+        // a parallel one gets a rigid link (t = 0) across to it
+        const links = [], endsSeen = [], rest = [];
+        E.forEach((e0, i) => {
+          if (inStack[i]) return;
           const e = Object.assign({}, e0);
           ['p', 'q'].forEach(k => {
-            const P = e[k], s = dot(sub(P, a.p), u), w = dot(sub(P, a.p), nrm);
-            if (s < s0 - ltol || s > se + ltol || !onOld(w) || Math.abs(w - offc) < 1e-12) return;
-            const Q = add(add(a.p, mul(u, Math.max(s0, Math.min(se, s)))), mul(nrm, offc));
-            const other = e[k === 'p' ? 'q' : 'p'], de = sub(other, P), Le = len(de);
-            const par = Le === 0 || Math.abs(dot(de, nrm)) < 0.0087 * Le;
-            if (par) { if (!endsSeen.some(x => len(sub(x, P)) < 1e-9)) { endsSeen.push(P); links.push({ p: P, q: Q, t: 0, parts: e.parts, link: true, src: 'link' }); } }
-            else { const lam = (offc - w) / dot(de, nrm); e[k] = add(P, mul(de, lam)); }
+            const P = e[k];
+            for (const st of ST) {
+              const s = st.S(P), w = st.Wn(P), m = st.mem.find(m => Math.abs(w - m.w) < ltol && s >= m.lo - ltol && s <= m.hi + ltol); if (!m) continue;
+              const zs = [].concat(...st.zones).filter(z => z.cov.includes(m)); if (!zs.length) break;
+              const dz = z => Math.max(0, z.s0 - s, s - z.s1); let z = zs[0]; zs.forEach(y => { if (dz(y) < dz(z)) z = y; });
+              if (Math.abs(w - z.w) < 1e-12) break;
+              const Q = st.at(Math.max(z.s0, Math.min(z.s1, s)), z.w), other = e[k === 'p' ? 'q' : 'p'], de = sub(other, P), Le = len(de);
+              const par = Le === 0 || Math.abs(dot(de, st.nrm)) < 0.0087 * Le;
+              if (par) { if (!endsSeen.some(x => len(sub(x, P)) < 1e-9)) { endsSeen.push(P); links.push({ p: P, q: Q, t: 0, parts: e.parts, link: true, src: 'link' }); } }
+              else { const lam = (z.w - w) / dot(de, st.nrm); e[k] = add(P, mul(de, lam)); }
+              break;
+            }
           });
-          if (len(sub(e.q, e.p)) > 1e-12) rest2.push(e);
+          if (len(sub(e.q, e.p)) > 1e-12) rest.push(e);
         });
-        E = rest2.concat([comb], links); merged = true; break outer;
+        E = rest.concat(newE, links);
       }
     }
-    // 2) other contacts: junction at the intersection of the centre lines (extend or split), else a rigid link
+    // 2) other contacts: junction at the intersection of the centre lines (extend or split), else a rigid link.
+    //    A part whose elements went into different stacks (e.g. the two legs of an angle, one against a web, one against a
+    //    flange plate) is re-joined here: elements of different stacks that share a part may connect.
+    const joinable = (a, b) => (a.stk !== undefined || b.stk !== undefined) && a.stk !== b.stk && a.parts.some(x => b.parts.includes(x));
     const splits = E.map(() => []), extra = [];
     for (let i = 0; i < E.length; i++) for (let j = i + 1; j < E.length; j++) {
-      const a = E[i], b = E[j]; if (a.link || b.link || !allowed(a, b)) continue;
+      const a = E[i], b = E[j]; if (a.link || b.link || !(allowed(a, b) || joinable(a, b))) continue;
       const ra = rectOf(a), rb = rectOf(b); if (!ra || !rb || polyDist(ra, rb) > ltol) continue;
       const da = sub(a.q, a.p), db = sub(b.q, b.p), den = crs(da, db);
       let done = false;
@@ -2783,6 +2821,98 @@ const SPC = (function () {
     for (let i = 0; i < edges.length; i++) for (let j = i + 1; j < edges.length; j++) {
       const a = edges[i], b = edges[j]; if (a.a === b.a || a.a === b.b || a.b === b.a || a.b === b.b) continue;
       if (segX(nodes[a.a], nodes[a.b], nodes[b.a], nodes[b.b])) { C.why = `elements of ${a.src} and ${b.src} cross without a connection (contact switched off?)`; return; }
+    }
+    // 3b) face-contact junctions: a centre-line loop that encloses no void lies inside the combined material of a junction
+    //     (e.g. angle heels against a web and a flange plate) and is not a closed cell. Its nodes are merged into one junction
+    //     node at the least-squares intersection of the centre lines of the elements that leave the junction; the elements
+    //     inside the junction are dropped. A real cell (box, tube, boxed channels) encloses a void and is kept. Only for
+    //     pieces with plates in face contact (the model of every other piece is unchanged). Engineer's decision 2026-10-10.
+    C.junctions = [];
+    if (C.merges.length) {
+      // an extension that runs along another element (collinear overlap): split every element at the nodes lying on it,
+      // then keep one element per pair of nodes (the thicker), as above
+      for (let pass = 0; pass < 20; pass++) {
+        let any = false;
+        for (let k = 0; k < edges.length && !any; k++) {
+          const e = edges[k], P = nodes[e.a], Q = nodes[e.b];
+          for (let v = 0; v < nodes.length; v++) {
+            if (v === e.a || v === e.b || ptSegDist(nodes[v], P, Q) > ntol || len(sub(nodes[v], P)) <= ntol || len(sub(nodes[v], Q)) <= ntol) continue;
+            edges[k] = Object.assign({}, e, { b: v, L: len(sub(nodes[v], P)) }); edges.push(Object.assign({}, e, { a: v, L: len(sub(Q, nodes[v])) })); any = true; break;
+          }
+        }
+        if (!any) break;
+      }
+      { const keep = [], at = new Map(); edges.forEach(e => { const key = Math.min(e.a, e.b) + '-' + Math.max(e.a, e.b); if (!at.has(key)) { at.set(key, keep.length); keep.push(e); } else { const o = keep[at.get(key)]; if (o.link && !e.link) keep[at.get(key)] = e; else if (!o.link && !e.link && e.t > o.t) keep[at.get(key)] = e; } }); edges.length = 0; keep.forEach(e => edges.push(e)); }
+      // voids enclosed by the material of this piece (inner boundary loops of the union of its parts; holes ignored)
+      const CO = coating({ parts: gp }, ltol), VP = CO.voidPts || [];
+      const faceList = () => {
+        const ho = nodes.map(() => []);
+        edges.forEach((e, k) => { ho[e.a].push({ k, to: e.b }); ho[e.b].push({ k, to: e.a }); });
+        ho.forEach((L, v) => { L.forEach(h => { h.ang = Math.atan2(nodes[h.to][1] - nodes[v][1], nodes[h.to][0] - nodes[v][0]); }); L.sort((x, y) => x.ang - y.ang); });
+        const seen = new Set(), F = [];
+        nodes.forEach((_, v0) => ho[v0].forEach(h0 => {
+          if (seen.has(v0 + ':' + h0.k + ':' + h0.to)) return;
+          const f = { vs: [], ks: [], A: 0 }; let v = v0, h = h0, g = 0;
+          while (!seen.has(v + ':' + h.k + ':' + h.to) && g++ < 100000) {
+            seen.add(v + ':' + h.k + ':' + h.to); f.vs.push(v); f.ks.push(h.k);
+            f.A += (nodes[v][0] * nodes[h.to][1] - nodes[h.to][0] * nodes[v][1]) / 2;
+            const L = ho[h.to], idx = L.findIndex(x => x.k === h.k && x.to === v); const nx = L[(idx - 1 + L.length) % L.length]; v = h.to; h = nx;
+          }
+          F.push(f);
+        }));
+        return F;
+      };
+      // the face boundary walked once (spikes along dangling elements removed)
+      const loopOf = f => {
+        let P = f.vs.slice(), ch = true;
+        while (ch && P.length > 3) { ch = false; for (let i = 0; i < P.length; i++) { const a = P[(i - 1 + P.length) % P.length], c = P[(i + 1) % P.length]; if (a === c) { P.splice(i, 1); P.splice(i < P.length ? i : 0, 1); ch = true; break; } } }
+        return P.length >= 3 ? P : null;
+      };
+      for (let it = 0; it < 20; it++) {
+        let b = [Infinity, Infinity, -Infinity, -Infinity]; nodes.forEach(p => { b = [Math.min(b[0], p[0]), Math.min(b[1], p[1]), Math.max(b[2], p[0]), Math.max(b[3], p[1])]; });
+        const bA = Math.max((b[2] - b[0]) * (b[3] - b[1]), 1e-12);
+        const solid = [];
+        if (CO.ok) faceList().forEach(f => { if (!(f.A > 1e-7 * bA)) return; const L = loopOf(f); if (!L) return; const P = L.map(v => nodes[v]); if (!VP.some(p => ptInPoly(p, P))) solid.push({ vs: L }); });
+        if (!solid.length) break;
+        // clusters of nodes of solid faces (faces sharing a node form one junction)
+        const ju = nodes.map((_, i) => i), jf = i => ju[i] === i ? i : (ju[i] = jf(ju[i]));
+        solid.forEach(f => f.vs.forEach(v => { ju[jf(v)] = jf(f.vs[0]); }));
+        const inJ = new Set(); solid.forEach(f => f.vs.forEach(v => inJ.add(v)));
+        const cl = new Map(); [...inJ].forEach(v => { const r = jf(v); if (!cl.has(r)) cl.set(r, []); cl.get(r).push(v); });
+        const map = nodes.map((_, i) => i);
+        let done = 0;
+        cl.forEach(vs => {
+          const set = new Set(vs), outE = edges.filter(e => set.has(e.a) !== set.has(e.b));
+          if (!outE.length) return;
+          const c = [vs.reduce((s, v) => s + nodes[v][0], 0) / vs.length, vs.reduce((s, v) => s + nodes[v][1], 0) / vs.length];
+          let a11 = 0, a12 = 0, a22 = 0, b1 = 0, b2 = 0, n0 = null, o0 = 0, nl = 0;
+          outE.forEach(e => { if (e.link) return; const P = nodes[e.a], Q = nodes[e.b], d = sub(Q, P), L = len(d); if (!(L > 0)) return; const n = [-d[1] / L, d[0] / L], na = dot(n, P); a11 += n[0] * n[0]; a12 += n[0] * n[1]; a22 += n[1] * n[1]; b1 += n[0] * na; b2 += n[1] * na; if (!n0) n0 = n; o0 += Math.sign(dot(n, n0)) * na; nl++; });
+          const det = a11 * a22 - a12 * a12;
+          // intersection of the lines (least squares); all lines parallel: the centroid of the loop nodes moved onto their mean line
+          let p = det > 1e-6 * (a11 + a22) * (a11 + a22) ? [(b1 * a22 - b2 * a12) / det, (a11 * b2 - a12 * b1) / det] : (n0 ? sub(c, mul(n0, dot(n0, c) - o0 / nl)) : c);
+          let diam = 0; vs.forEach(v => vs.forEach(w => { diam = Math.max(diam, len(sub(nodes[v], nodes[w]))); }));
+          // a junction is no larger than the plates meeting there: a larger solid loop is left as it is
+          const tMax = edges.filter(e => !e.link && (set.has(e.a) || set.has(e.b))).reduce((s, e) => Math.max(s, e.t), 0);
+          if (!(diam <= 2 * tMax + 2 * ltol)) return;
+          if (!nl || !(len(sub(p, c)) <= diam + 1e-9)) p = c;
+          const r = vs[0]; nodes[r] = p; vs.forEach(v => { map[v] = r; });
+          C.junctions.push({ at: p.slice(), size: diam, loops: solid.filter(f => set.has(f.vs[0])).length, srcs: [...new Set(edges.filter(e => set.has(e.a) || set.has(e.b)).filter(e => !e.link).map(e => e.src))] });
+          done++;
+        });
+        if (!done) break;
+        edges.forEach(e => { e.a = map[e.a]; e.b = map[e.b]; });
+        for (let k = edges.length - 1; k >= 0; k--) if (edges[k].a === edges[k].b) edges.splice(k, 1);
+        edges.forEach(e => { e.L = len(sub(nodes[e.b], nodes[e.a])); });
+        // as above: duplicate edges, link chains that lead nowhere, unused nodes
+        { const keep = [], at = new Map(); edges.forEach(e => { const key = Math.min(e.a, e.b) + '-' + Math.max(e.a, e.b); if (!at.has(key)) { at.set(key, keep.length); keep.push(e); } else { const o = keep[at.get(key)]; if (o.link && !e.link) keep[at.get(key)] = e; else if (!o.link && !e.link && e.t > o.t) keep[at.get(key)] = e; } }); edges.length = 0; keep.forEach(e => edges.push(e)); }
+        for (let pass = 0; pass < 50; pass++) {
+          const deg = nodes.map(() => 0); edges.forEach(e => { deg[e.a]++; deg[e.b]++; });
+          const before = edges.length;
+          for (let k = edges.length - 1; k >= 0; k--) { const e = edges[k]; if (e.link && (deg[e.a] === 1 || deg[e.b] === 1)) edges.splice(k, 1); }
+          if (edges.length === before) break;
+        }
+        { const usedN = new Set(); edges.forEach(e => { usedN.add(e.a); usedN.add(e.b); }); const mp = {}, nn = []; nodes.forEach((p, i) => { if (usedN.has(i)) { mp[i] = nn.length; nn.push(p); } }); edges.forEach(e => { e.a = mp[e.a]; e.b = mp[e.b]; }); nodes.length = 0; nn.forEach(p => nodes.push(p)); }
+      }
     }
     // components
     const uf = nodes.map((_, i) => i), fd = i => uf[i] === i ? i : (uf[i] = fd(uf[i]));
@@ -2996,7 +3126,10 @@ const SPC = (function () {
     const exposed = pieces.reduce((s, pc) => s + pc.L, 0);
     const full = pieces.filter(pc => pc.k === 'A' && pc.a1 - pc.a0 >= 2 * PI - 1e-12), rest = pieces.filter(pc => !(pc.k === 'A' && pc.a1 - pc.a0 >= 2 * PI - 1e-12));
     let outside = 0, inner = 0, nOut = 0, nIn = 0, ok = true;
-    full.forEach(pc => { if (pc.ccw) { outside += pc.L; nOut++; } else { inner += pc.L; nIn++; } });
+    // a point just inside the void next to a piece (material is on its left), one per inner loop: used by the torsion model
+    // to tell a real closed cell (it encloses a void) from a centre-line loop inside solid material
+    const voidPts = [], voidPt = pc => { if (pc.k === 'L') { const nl = [-(pc.b[1] - pc.a[1]) / pc.L, (pc.b[0] - pc.a[0]) / pc.L]; return sub(mul(add(pc.a, pc.b), 0.5), mul(nl, eps)); } const am = (pc.a0 + pc.a1) / 2; return add(pc.c, mul([Math.cos(am), Math.sin(am)], pc.ccw ? pc.r + eps : Math.max(pc.r - eps, pc.r / 2))); };
+    full.forEach(pc => { if (pc.ccw) { outside += pc.L; nOut++; } else { inner += pc.L; nIn++; voidPts.push(voidPt(pc)); } });
     // nodes: endpoints merged within eps (grid hashing)
     const E = rest.map(pc => ends(pc)), keys = new Map(), node = [], g = 4 * eps;
     const nodeOf = p => {
@@ -3018,9 +3151,9 @@ const SPC = (function () {
         cand.forEach(j => { const dj = dirAt(rest[j], false), v = Math.atan2(crs(din, dj), dot(din, dj)); if (v > bv) { bv = v; best = j; } });   // leftmost turn
         i = best;
       }
-      if (A2 > 0) { outside += Ls; nOut++; } else { inner += Ls; nIn++; }
+      if (A2 > 0) { outside += Ls; nOut++; } else { inner += Ls; nIn++; voidPts.push(voidPt(rest[i0])); }
     }
-    return { exposed, outside: ok ? outside : null, inner: ok ? inner : null, nOut, nIn, ok, pieces: pieces.length, eps };
+    return { exposed, outside: ok ? outside : null, inner: ok ? inner : null, nOut, nIn, ok, pieces: pieces.length, eps, voidPts };
   }
 
   /* doubly symmetric: the weighted primitives map onto themselves under reflection about each centroidal principal axis */
@@ -3786,9 +3919,10 @@ function buildPartPane(P) {
   });
   mkSec(P, 'ppPos', 'Position and orientation', body => {
     const L = un('L');
-    fRow(body, 'Centroid x', numIn(() => pt.x, v => { pt.x = v; }, 'pp_x', { k: 'L', geo: true, guard: GD }), L);
-    fRow(body, 'Centroid y', numIn(() => pt.y, v => { pt.y = v; }, 'pp_y', { k: 'L', geo: true, guard: GD }), L);
-    const edge = (lab, i, key) => fRow(body, lab, numIn(() => SPC.partGlobal(pt).bbox[i], v => { const d = v - SPC.partGlobal(pt).bbox[i]; if (i === 0 || i === 2) pt.x += d; else pt.y += d; }, key, { k: 'L', geo: true, structural: true, guard: GD }), L);
+    const GM = Object.assign([pt.id], { carry: true });   // position fields: the holes inside the part move with it (R2-O1)
+    fRow(body, 'Centroid x', numIn(() => pt.x, v => { movePart(pt, v, pt.y); }, 'pp_x', { k: 'L', geo: true, guard: GM }), L);
+    fRow(body, 'Centroid y', numIn(() => pt.y, v => { movePart(pt, pt.x, v); }, 'pp_y', { k: 'L', geo: true, guard: GM }), L);
+    const edge = (lab, i, key) => fRow(body, lab, numIn(() => SPC.partGlobal(pt).bbox[i], v => { const d = v - SPC.partGlobal(pt).bbox[i]; if (i === 0 || i === 2) movePart(pt, pt.x + d, pt.y); else movePart(pt, pt.x, pt.y + d); }, key, { k: 'L', geo: true, structural: true, guard: GM }), L);
     body.appendChild(el('div', 'subh', 'or set an edge (moves the part)'));
     edge('Left edge', 0, 'pp_bl'); edge('Right edge', 2, 'pp_br'); edge('Bottom edge', 1, 'pp_bb'); edge('Top edge', 3, 'pp_bt');
     fRow(body, 'Rotation (CCW)', numIn(() => pt.rot, v => { setOrient(pt, v, pt.mir); }, 'pp_rot', { k: 'deg', geo: true, guard: GR }), '°', 'About the part centroid. Mirrored = reflected left-right in the part\'s own frame before the rotation.');
@@ -4521,12 +4655,14 @@ function dragTarget(D, raw, alt) {
 let OVEDIT = null;
 function guardEdit(ids, fn, inp) {
   if (!NOOV) { fn(); if (OVEDIT) { OVEDIT = null; renderOvEdit(); } return true; }
+  const carried = ids.carry ? novCarried(new Set(ids)) : [];
+  if (carried.length) ids = ids.concat(carried);   // position fields: the carried holes are part of the move
   if (ids.rotWarn) { ids = ids.filter(id => partById(id)); fn(); if (OVEDIT) { OVEDIT = null; renderOvEdit(); } const w = novRotWarn(ids); if (w) toast('Applied to ' + ids.map(id => partById(id).lbl).join(', ') + w, true); return true; }
   ids = ids.filter(id => partById(id));
   const was = novOK(ids), before = ids.map(id => JSON.stringify(partById(id)));
   fn();
   if (!was || novOK(ids)) { if (OVEDIT) { OVEDIT = null; renderOvEdit(); } return true; }
-  const why = novWhy(ids), after = ids.map(id => JSON.stringify(partById(id)));
+  const why = novWhy(ids.filter(id => !carried.includes(id))), after = ids.map(id => JSON.stringify(partById(id)));
   before.forEach(s => { const o = JSON.parse(s), p = partById(o.id); Object.keys(p).forEach(k => delete p[k]); Object.assign(p, o); });
   OVEDIT = { ids, after, why }; renderOvEdit(); if (inp) inp.classList.add('bad');
   return false;
@@ -4571,6 +4707,14 @@ function setOrient(pt, rot, mir) {
     hs.forEach(h => { h.rot = norm((h.rot || 0) + a); const dx = h.x - c[0], dy = h.y - c[1]; h.x = c[0] + cs * dx - sn * dy; h.y = c[1] + sn * dx + cs * dy; });
   }
   pt.rot = rot; pt.mir = mir;
+}
+// Centroid x / y and edge fields of the Part properties: the holes inside the part move with it, exactly as with drag, nudge
+// and "Move by" (same rule for which holes are carried: novCarried, i.e. only with Prevent overlap on). Engineer's decision
+// R2-O1, 2026-10-10. The part itself is set exactly as before (x = typed value, or x + d for an edge).
+function movePart(pt, x, y) {
+  const d = [x - pt.x, y - pt.y], hs = novCarried(new Set([pt.id])).map(partById);
+  hs.forEach(h => { h.x += d[0]; h.y += d[1]; });
+  pt.x = x; pt.y = y;
 }
 function novCarriedFix(id) { const was = NOOV; NOOV = true; try { return novCarried(new Set([id])); } finally { NOOV = was; } }
 
@@ -5014,7 +5158,8 @@ function buildTors(pg) {
           calc(body, { title: 'Open elements', ref: 'AISC Design Guide 9 (thin-walled open sections)', lines: [TX`J_{open}=\Sigma\frac{b\,t^3}{3}=${nt(C.Jo, 'I')}\ \text{${I}}`], result: '' });
           if (C.stocky && C.stocky.length) body.appendChild(el('div', 'warnBox', 'Element(s) with b/t &lt; 10 (' + esc([...new Set(C.stocky)].join(', ')) + '): bt³/3 overestimates J of stocky plates (a square bar: bt³/3 = 0.333b⁴ vs 0.141b⁴ exact).'));
         }
-        if (C.merges && C.merges.length) body.appendChild(el('div', 'note', 'Plates in face contact are combined over their overlap into one element of thickness t₁ + t₂ (continuous connection along both edges assumed): ' + esc([...new Set(C.merges.map(m => m.a + ' + ' + m.b))].join('; ')) + '.'));
+        if (C.merges && C.merges.length) body.appendChild(el('div', 'note', 'Plates in face contact are combined, over each length where the same plates overlap, into one element of thickness Σt on their combined mid-plane (continuous connection along both edges assumed): ' + esc([...new Set(C.merges.map(m => m.a + ' + ' + m.b))].join('; ')) + '.'));
+        if (C.junctions && C.junctions.length) body.appendChild(el('div', 'note', 'Face-contact junction' + (C.junctions.length > 1 ? 's' : '') + ' at ' + esc(C.junctions.map(j => '(' + nf(j.at[0], 'L') + ', ' + nf(j.at[1], 'L') + ')').join(', ')) + ' ' + esc(un('L')) + ': the centre lines of the combined plates form small loop(s) that enclose no void, only the solid material of the junction. These are not closed cells: the loop is merged into one junction node at the intersection of the centre lines of the elements that meet there.'));
         C.cells.forEach((c, k) => {
           const wr = c.walls.filter(w => !w.link).map(w => [w.src + (w.ext ? ' (ext.)' : ''), nf(w.L, 'L'), nf(w.t, 'L'), nf(w.w, 'n')]);
           wr.push({ cls: 'gov', cells: [{ h: '<b>∮ds/t</b>' }, '', '', { h: '<b>' + nf(c.dsT, 'n') + '</b>' }] });
@@ -5172,6 +5317,9 @@ function buildPropsP2a(pg) {
       rows.push({ cls: 'gov', cells: [{ h: '<b>Total</b>' }, '', '', { h: '<b>' + nf(Wt.w, 'wt') + '</b>' }] });
       body.appendChild(tblEl(['Part', 'A', 'ρ (' + un('rho') + ')', 'Weight (' + un('wt') + ')'], rows, { left: [0] }));
       body.appendChild(el('div', 'hint', 'Weight = Σ A<sub>i</sub>·ρ<sub>i</sub> (net of holes; tube voids excluded). The modulus ratio n does <b>not</b> change the weight. ' + (R.anyTab ? 'Parts set to "AISC tabulated" use the tabulated A (fillets included). ' : 'Rolled shapes: plate-model A (fillets neglected; tick "Use AISC tabulated" for the tabulated A). ') + 'Densities are typical values unless entered (Part properties → Material).'));
+      // a single rolled shape: its nominal weight from the AISC table, beside the computed one, for reference only (P2a-O6)
+      const one = R.parts.length === 1 && R.parts[0].pt.type === 'shape' ? R.parts[0] : null, rec = one && SPC.shapeRec(one.pt.p.fam, one.pt.p.name);
+      if (rec && isNum(rec.Wt)) body.appendChild(el('div', 'note', `For reference: nominal weight of ${esc(rec.lbl)} = <b>${esc(nu(rec.Wt, 'wt'))}</b> (AISC Shapes Database v16.0, steel; fillets included). Not used: the weight above is from ${one.use ? 'the tabulated A' : 'the plate-model A (fillets neglected)'} and ρ = ${esc(nu(Wt.rows[0].rho, 'rho', 4))}.`));
     }
     if (C) {
       const pr = v => isNum(v) ? nf(v, 'L') : 'n/a', pa = v => isNum(v) ? nf(v, 'pa') : 'n/a';
@@ -5472,6 +5620,20 @@ function runValidation() {
       add(g, 'L6X4X1/2 at 20°: I1 + I2 = Ix + Iy', Ra.I1 + Ra.I2, Ra.Ix + Ra.Iy, tight, 'invariant', 'in⁴'); add(g, 'I1·I2 = Ix·Iy − Ixy²', Ra.I1 * Ra.I2, Ra.Ix * Ra.Iy - Ra.Ixy * Ra.Ixy, tight, 'invariant', 'in⁸');
       add(g, 'point X turned by 2θp on the circle reaches I1: c + R cos(2α + 2θp)', c + Rm * Math.cos(a2 + 2 * Ra.thp), Ra.I1, tight, 'Mohr\'s circle', 'in⁴');
       addAbs(g, 'and its product of inertia is 0: sin(2α + 2θp)', Math.sin(a2 + 2 * Ra.thp), 1e-12, 'Mohr\'s circle', ''); }
+    // 17 face-contact junctions (engineer's decision 2026-10-10): loops inside solid material are not closed cells
+    { const g = '17. Face-contact junctions: built-up I (web PL 18 × 1/2, 4 L6X6X1/2 heels against the web and the flange plates, 2 PL 12-1/2 × 1/2)';
+      const angAt = (h, rot, mir) => { const pt = { type: 'shape', p: { fam: 'L', name: 'L6X6X1/2' }, x: 0, y: 0, rot, mir }, hl = SPC.partGlobal(pt).refPts.heel; pt.x = h[0] - hl[0]; pt.y = h[1] - hl[1]; return pt; };
+      const Re = SPC.analyze(vModel([{ type: 'plate', p: { b: 18, t: 0.5 }, x: 0, y: 0, rot: 90 }, angAt([0.25, -9], 0, false), angAt([-0.25, -9], 0, true), angAt([0.25, 9], 180, true), angAt([-0.25, 9], 180, false), { type: 'plate', p: { b: 12.5, t: 0.5 }, x: 0, y: 9.25 }, { type: 'plate', p: { b: 12.5, t: 0.5 }, x: 0, y: -9.25 }])), Te = Re.tors;
+      add(g, 'no closed cell (the section is open; the junction loops enclose no void)', Te.comps[0].cells.length, 0, 0, 'topology', '');
+      addAbs(g, 'shear centre x_o = 0 (doubly symmetric: at the centroid)', Te.xo, 1e-9, 'symmetry', 'in'); addAbs(g, 'shear centre y_o = 0', Te.yo, 1e-9, 'symmetry', 'in');
+      const tc = 0.5 + 0.5, b = 6.25, h0 = 18, Iwf = 2 * tc * b ** 3 / 3;
+      add(g, 'Cw vs hand (h_o²/2)·I_f, I_f = 2·t·b³/3: flange = plate + angle leg, t = 1.0 on y = ±9, b = 6.25 each side of the web; h_o = 18', Te.Cw, h0 * h0 / 2 * Iwf, tight, 'hand calc (thin-wall)', 'in⁶');
+      add(g, 'J vs hand Σbt³/3: web 2 × 6 × 1.5³ + 6 × 0.5³, flanges 4 × 6.25 × 1.0³ (all /3)', Te.J, (2 * 6 * 1.5 ** 3 + 6 * 0.5 ** 3 + 4 * 6.25 * tc ** 3) / 3, tight, 'hand calc (thin-wall)', 'in⁴');
+      const B4 = SPC.TEMPLATES.box.f({ bf: 10, tf: 0.5, h: 5, tw: 0.375, bw: 10 }), Rb = SPC.analyze(vModel(B4.concat([{ type: 'plate', p: { b: 10, t: 0.5 }, x: 0, y: 3.25 }])));
+      add(g, 'box of 4 plates (case 4) + cover plate 10 × 1/2 on the top flange: still one closed cell', Rb.tors.comps[0].cells.length, 1, 0, 'topology', '');
+      const ang2 = (hx, hy, rot, mir) => { const pt = { type: 'shape', p: { fam: 'L', name: 'L3X3X3/8' }, x: 0, y: 0, rot, mir }, hl = SPC.partGlobal(pt).refPts.heel; pt.x = hx - hl[0]; pt.y = hy - hl[1]; return pt; };
+      const Rc = SPC.analyze(vModel(SPC.TEMPLATES.box.f({ bf: 12, tf: 0.75, h: 16, tw: 0.5, bw: 10 }).concat([ang2(4.5, 8, 180, false), ang2(-4.5, 8, 180, true), ang2(4.5, -8, 0, true), ang2(-4.5, -8, 0, false)])));
+      add(g, 'box of 4 plates with L3X3X3/8 in the 4 inside corners: one closed cell (the void); the 4 corner loops are junctions', Rc.tors.comps[0].cells.length, 1, 0, 'topology', ''); }
   } catch (e) { out.push({ grp: 'error', what: 'Validation failed to run: ' + e.message, tool: NaN, ref: NaN, tol: 0, d: NaN, ok: false, src: '' }); }
   return out;
 }
@@ -5495,7 +5657,7 @@ function buildManual(pg) {
   P('Section properties of built-up sections made of plates, bars, tubes, polygons, holes and AISC rolled shapes, drawn to scale. Phase 1: elastic and plastic properties, thin-wall torsion, and Q / shear flow at a cut. No design checks and no hand-offs to other tools yet.');
   H('Drawing');
   UL(['<b>Select:</b> click a part; Shift/Ctrl+click adds or removes; drag on the background with Shift (or with "Box select" on) for a box. Esc clears the selection.',
-    '<b>Move:</b> drag a selected part. It snaps (within the snap radius) to the corners, edge midpoints and centroids of the other parts, to the origin and to the grid; hold Alt to suspend snapping. Arrow keys move by the step (Shift: ×10). Exact positions: Part properties tab (centroid or an edge).',
+    '<b>Move:</b> drag a selected part. It snaps (within the snap radius) to the corners, edge midpoints and centroids of the other parts, to the origin and to the grid; hold Alt to suspend snapping. Arrow keys move by the step (Shift: ×10). Exact positions: Part properties tab (centroid or an edge). With "Prevent overlap" on, holes that lie inside the part move with it (drag, arrow keys, "Move by", align, and the centroid and edge fields).',
     '<b>View:</b> wheel to zoom about the cursor, drag the background (or the middle button) to pan, "Fit" (F).',
     '<b>Right-click a part:</b> flip, rotate (90° or any angle), mirror copy about a vertical or horizontal axis through the part (selection) centroid, an edge, the section centroid or the origin; align and "place touching" relative to a second selected part (Shift+click it first: the part clicked last before the right-click is the reference); duplicate, copy, order, delete. Right-click the background to add a part there, paste, fit or place the Q cut.',
     '<b>Keys:</b> Ctrl+Z / Ctrl+Y undo/redo, Ctrl+C / Ctrl+V copy/paste, Ctrl+D duplicate, Del delete, H / V flip, R / Shift+R rotate 90° CCW / CW, L labels, F fit, Ctrl+A select all.',
@@ -5514,9 +5676,9 @@ function buildManual(pg) {
   UL(['The plastic neutral axis divides the (n-weighted) area in half. It is found by bisection, using the exact area of each polygon (clipped by the line) and circle (circular segment) on one side; Z = Σ|first moment| about the PNA. Computed for x, y and the principal axes. Where the PNA falls in a gap without material, Z is the same anywhere in the gap.']);
   H('Torsion (thin-wall approximation)');
   UL(['<b>Model:</b> every plate becomes a centre-line element (length along its long side, thickness = short side). Rolled shapes use their standard centre-line model (W web length h<sub>o</sub> = d − t<sub>f</sub>, flanges b<sub>f</sub>; C flanges b<sub>f</sub> − t<sub>w</sub>/2). Tubes: the mid-thickness line (rectangular tubes with the corner radius r − t/2, as 6 chords per corner; round tubes as 48 chords when connected to other parts).',
-    '<b>Connections:</b> parts that touch (within the contact tolerance) are connected unless the contact is switched off. Elements meeting at an angle are joined at the intersection of their centre lines (an element is extended to it where needed). Plates in face contact (e.g. a cover plate on a flange) are combined over the overlap into one element of thickness t<sub>1</sub> + t<sub>2</sub> on their combined mid-plane — this assumes a continuous connection along both edges. Other contacts get a rigid link.',
+    '<b>Connections:</b> parts that touch (within the contact tolerance) are connected unless the contact is switched off. Elements meeting at an angle are joined at the intersection of their centre lines (an element is extended to it where needed). Plates in face contact (e.g. a cover plate on a flange, angle legs against a web or a flange plate) are combined, over each length where the same plates overlap, into one element of thickness Σt on their combined mid-plane (t<sub>1</sub> + t<sub>2</sub> for two plates) — this assumes a continuous connection along both edges; where the combination changes, the lines are joined by a rigid link. Other contacts get a rigid link.',
     '<b>J, open parts:</b> Σ b·t³/3 (AISC Design Guide 9). A single rectangle on its own uses Roark\'s formula J = b t³[1/3 − 0.21(t/b)(1 − t⁴/12b⁴)]; a solid round bar πd⁴/32 and a round tube π(D⁴ − d⁴)/32 (exact).',
-    '<b>J, closed cells:</b> closed cells are found automatically as the faces of the planar centre-line graph. One cell: Bredt J = 4A<sub>m</sub>²/∮ds/t; several cells: the shear flows q<sub>i</sub> from ∮<sub>i</sub>q ds/t = 2A<sub>m,i</sub>, J = 2ΣA<sub>m,i</sub>q<sub>i</sub>. Open branches add Σ b·t³/3; the b·t³/3 of the cell walls is not added.',
+    '<b>J, closed cells:</b> closed cells are found automatically as the faces of the planar centre-line graph that enclose a void (a hole in the material). At a junction of plates in face contact the centre lines can form a small loop lying inside solid material (e.g. angle heels against a web and a flange plate): it is not a cell, and its nodes are merged into one junction node at the intersection of the centre lines of the elements that meet there. One cell: Bredt J = 4A<sub>m</sub>²/∮ds/t; several cells: the shear flows q<sub>i</sub> from ∮<sub>i</sub>q ds/t = 2A<sub>m,i</sub>, J = 2ΣA<sub>m,i</sub>q<sub>i</sub>. Open branches add Σ b·t³/3; the b·t³/3 of the cell walls is not added.',
     '<b>Pieces not connected</b> twist independently: J = Σ J of the pieces (e.g. double angles with a gap, laced columns).',
     '<b>Shear centre and C<sub>w</sub></b> (open sections only, one connected piece): sectorial coordinates ω over the centre-line model (Vlasov; Design Guide 9 App. C), x<sub>o</sub> = (I<sub>y</sub>I<sub>ωx</sub> − I<sub>xy</sub>I<sub>ωy</sub>)/(I<sub>x</sub>I<sub>y</sub> − I<sub>xy</sub>²), y<sub>o</sub> = (I<sub>xy</sub>I<sub>ωx</sub> − I<sub>x</sub>I<sub>ωy</sub>)/(…), C<sub>w</sub> = ∫ω<sub>n</sub>²t ds. Closed sections, separate pieces, custom polygons and round bars connected to other parts: "n/a — not computed".',
     'Not modelled in torsion: holes (gross section used; a note says so), custom polygons, the modulus ratio n.']);
@@ -5576,7 +5738,7 @@ const SPCDXF = (function () {
     const W = [];
     (R.overlaps || []).forEach(o => W.push(`${o.la} and ${o.lb} overlap: UNION merges the common area once, the tool counts it twice, so MASSPROP will differ. Move them apart (or switch "Prevent overlap" on).`));
     if (R.anyN) W.push('Some parts have modulus ratio n other than 1 (layer SPC-PARTS-N). MASSPROP is unweighted: it matches the tool only with every n = 1; the notes give the unweighted values it should show.');
-    if (R.anyTab) W.push('Some rolled shapes use the AISC tabulated properties. The DXF holds their plate model (no fillets), so MASSPROP matches the plate model, not the tabulated values; the notes give the values it should show.');
+    if (R.anyTab) { const tl = R.parts.filter(q => q.use).map(q => q.pt.lbl + ' (' + q.G.g.desc + ')'); W.push(`AISC tabulated properties are used for ${tl.join(', ')}. The DXF holds ${tl.length > 1 ? 'their' : 'its'} plate model (no fillets), so MASSPROP matches the plate model, not the tabulated values; the notes give the values it should show.`); }
     (R.warnings || []).forEach(w => { if (/^Hole .* not entirely inside/.test(w)) W.push(w + ' SUBTRACT removes only the part inside the material.'); else if (/self-intersecting/.test(w)) W.push(w + ' REGION cannot make a region from it.'); });
     return W;
   }
