@@ -160,6 +160,7 @@ svg text{font-family:var(--font-ui)}
 textarea{min-height:64px;resize:vertical;font-family:var(--font-doc);font-size:10pt}
 #toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--navy-900);color:#fff;font-family:var(--font-ui);font-size:9pt;padding:7px 16px;border-radius:6px;opacity:0;pointer-events:none;transition:opacity .25s;z-index:99}
 #toast.show{opacity:.94}
+#toast.warn{background:var(--warn)}
 ::-webkit-scrollbar{width:10px;height:10px}
 ::-webkit-scrollbar-thumb{background:#C4CDD8;border-radius:5px}
 #printReport{display:none}
@@ -2944,7 +2945,7 @@ const $ = id => document.getElementById(id);
 function el(tag, cls, html) { const e = document.createElement(tag); if (cls) e.className = cls; if (html !== undefined) e.innerHTML = html; return e; }
 function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
 const isNum = v => typeof v === 'number' && isFinite(v);
-function toast(t) { const e = $('toast'); e.textContent = t; e.classList.add('show'); clearTimeout(toast._t); toast._t = setTimeout(() => e.classList.remove('show'), 2200); }
+function toast(t, warn) { const e = $('toast'); e.textContent = t; e.classList.toggle('warn', !!warn); e.classList.add('show'); clearTimeout(toast._t); toast._t = setTimeout(() => e.classList.remove('show'), warn ? 7000 : 2200); }
 const VFY = '<span class="badge vfy" title="Thin-wall approximation: verify independently before relying on it">thin-wall — verify</span>';
 const TX = String.raw;
 
@@ -3494,7 +3495,7 @@ function buildPartPane(P) {
   const sp = selParts();
   if (!sp.length) { P.appendChild(el('div', 'note', 'Select a part on the drawing (click) or in the Parts list. Shift/Ctrl+click or drag a box with Shift to select several.')); return; }
   if (sp.length > 1) { buildMultiPane(P, sp); return; }
-  const pt = sp[0], g = SPC.partGeom(pt), GD = [pt.id];
+  const pt = sp[0], g = SPC.partGeom(pt), GD = [pt.id], GR = Object.assign([pt.id], { rotWarn: true });
   if (OVEDIT && !(OVEDIT.ids.length === 1 && OVEDIT.ids[0] === pt.id)) OVEDIT = null;
   ovEditBox(P);
   mkSec(P, 'ppId', 'Part ' + esc(pt.lbl), body => {
@@ -3526,8 +3527,8 @@ function buildPartPane(P) {
     const edge = (lab, i, key) => fRow(body, lab, numIn(() => SPC.partGlobal(pt).bbox[i], v => { const d = v - SPC.partGlobal(pt).bbox[i]; if (i === 0 || i === 2) pt.x += d; else pt.y += d; }, key, { k: 'L', geo: true, structural: true, guard: GD }), L);
     body.appendChild(el('div', 'subh', 'or set an edge (moves the part)'));
     edge('Left edge', 0, 'pp_bl'); edge('Right edge', 2, 'pp_br'); edge('Bottom edge', 1, 'pp_bb'); edge('Top edge', 3, 'pp_bt');
-    fRow(body, 'Rotation (CCW)', numIn(() => pt.rot, v => { pt.rot = v; }, 'pp_rot', { k: 'deg', geo: true, guard: GD }), '°', 'About the part centroid. Mirrored = reflected left-right in the part\'s own frame before the rotation.');
-    chkRow(body, 'Mirrored', chkIn(() => pt.mir, v => { pt.mir = v; }, 'pp_mir', true, true, GD));
+    fRow(body, 'Rotation (CCW)', numIn(() => pt.rot, v => { pt.rot = v; }, 'pp_rot', { k: 'deg', geo: true, guard: GR }), '°', 'About the part centroid. Mirrored = reflected left-right in the part\'s own frame before the rotation.');
+    chkRow(body, 'Mirrored', chkIn(() => pt.mir, v => { pt.mir = v; }, 'pp_mir', true, true, GR));
     const r = el('div', 'btnRow');
     [['Flip ↔', () => actFlip('h')], ['Flip ↕', () => actFlip('v')], ['⟲ 90°', () => actRotate(90)], ['⟳ 90°', () => actRotate(-90)]].forEach(([l, f]) => r.appendChild(btn(l, 'sm', f)));
     body.appendChild(r);
@@ -3670,7 +3671,7 @@ function buildSetPane(P) {
     fRow(body, 'Snap radius', numIn(() => S.snapPx, v => { S.snapPx = v; }, 'set_spx', { k: 'n', min: 0 }), 'px', 'Within this distance on screen a dragged part snaps flush to another part (parallel edges become coincident; ends and centres line up along the contact), then to corners and midpoints, then to the grid.');
     const nov = document.createElement('input'); nov.type = 'checkbox'; nov.checked = NOOV; tagField(nov, 'set_noov');
     nov.addEventListener('change', () => { setNoOverlap(nov.checked); toast(NOOV ? 'Prevent overlap is on' : 'Prevent overlap is off: parts may overlap (overlap is counted twice)'); });
-    chkRow(body, 'Prevent overlap', nov, 'Solid parts may touch but not overlap: a dragged part stops at contact and slides along it; new, pasted, copied, rotated and flipped parts go to the nearest free position; typed positions and sizes that would overlap are not applied. Holes must stay inside a solid part (they move with the part they are in). Turn off for special cases. This setting is kept in this browser only, not in the project.');
+    chkRow(body, 'Prevent overlap', nov, 'Solid parts may touch but not overlap: a dragged part stops at contact and slides along it; new, pasted and copied parts go to the nearest free position; typed positions and sizes that would overlap are not applied. A rotate or flip is always applied in place; if the part then overlaps another, a warning names it (Check the model → Fix: move apart). Holes must stay inside a solid part (they move with the part they are in). Turn off for special cases. This setting is kept in this browser only, not in the project.');
     fRow(body, 'Arrow-key step', numIn(() => S.nudge, v => { S.nudge = v; }, 'set_nud', { k: 'L', min: 0 }), un('L'), 'Shift+arrow moves 10 steps.');
   });
   mkSec(P, 'setCalc', 'Calculation', body => {
@@ -4214,6 +4215,12 @@ function novResolve(ids) {
   shiftParts(ids, r.d); return { ok: true, d: r.d, moved: true };
 }
 const movedTxt = res => res && res.moved ? ` — placed at the nearest free position (moved ${nf(res.d[0], 'L', 4)}, ${nf(res.d[1], 'L', 4)} ${un('L')})` : '';
+// rotate / flip of existing parts: applied in place even if the result overlaps (engineer's decision N-O2, 2026-10-10); the warning names the parts now overlapped
+function novRotWarn(ids) {
+  if (!NOOV) return '';
+  const ov = SPC.NOV.overlapping(novWorld(ids), [0, 0]).map(id => (partById(id) || {}).lbl || id);
+  return ov.length ? ' — now overlaps ' + ov.join(', ') + ' (common area counted twice). Check the model → Fix: move apart.' : '';
+}
 function novRefuse(what, why) { if (UNDO.length) restoreSnap(UNDO.pop()); afterGeo(true); toast(what + ': ' + why + ' (Prevent overlap is on — Settings).'); }
 // position of the dragged parts: collide and slide, then magnetic snap to other parts (edges flush, ends / centres aligned), then points, then grid
 function dragTarget(D, raw, alt) {
@@ -4238,6 +4245,7 @@ function dragTarget(D, raw, alt) {
 let OVEDIT = null;
 function guardEdit(ids, fn, inp) {
   if (!NOOV) { fn(); if (OVEDIT) { OVEDIT = null; renderOvEdit(); } return true; }
+  if (ids.rotWarn) { ids = ids.filter(id => partById(id)); fn(); if (OVEDIT) { OVEDIT = null; renderOvEdit(); } const w = novRotWarn(ids); if (w) toast('Applied to ' + ids.map(id => partById(id).lbl).join(', ') + w, true); return true; }
   ids = ids.filter(id => partById(id));
   const was = novOK(ids), before = ids.map(id => JSON.stringify(partById(id)));
   fn();
@@ -4279,23 +4287,23 @@ function novCarriedFix(id) { const was = NOOV; NOOV = true; try { return novCarr
 function groupBox(parts) { const b = bboxOf(parts); return [(b[0] + b[2]) / 2, (b[1] + b[3]) / 2]; }
 function actFlip(ax, ids) {
   const sp0 = ids ? M.parts.filter(p => ids.includes(p.id)) : selParts(); if (!sp0.length) return;
-  const all = sp0.map(p => p.id).concat(novCarried(new Set(sp0.map(p => p.id)))), sp = all.map(partById), was = NOOV && novOK(all);
+  const all = sp0.map(p => p.id).concat(novCarried(new Set(sp0.map(p => p.id)))), sp = all.map(partById);
   pushUndo(); const c0 = sp0.length > 1 ? groupBox(sp0) : null, c = c0 || (sp.length > 1 ? [sp0[0].x, sp0[0].y] : null);
   sp.forEach(p => {
     if (ax === 'h') { p.rot = norm(-(p.rot || 0)); p.mir = !p.mir; if (c) p.x = 2 * c[0] - p.x; }
     else { p.rot = norm(180 - (p.rot || 0)); p.mir = !p.mir; if (c) p.y = 2 * c[1] - p.y; }
   });
-  const res = was ? novResolve(all) : null; if (res && !res.ok) { novRefuse('Not flipped', res.why); return; }
-  afterGeo(true); toast((ax === 'h' ? 'Flipped horizontally' : 'Flipped vertically') + (c0 ? ' (as a group)' : '') + movedTxt(res));
+  const w = novRotWarn(all);
+  afterGeo(true); toast((ax === 'h' ? 'Flipped horizontally' : 'Flipped vertically') + (c0 ? ' (as a group)' : '') + w, !!w);
 }
 const norm = a => { let r = ((a % 360) + 360) % 360; if (Math.abs(r - 360) < 1e-9) r = 0; return +r.toFixed(10); };
 function actRotate(a, about) {
   const sp0 = selParts(); if (!sp0.length || !isNum(a)) return;
-  const all = sp0.map(p => p.id).concat(novCarried(new Set(sp0.map(p => p.id)))), sp = all.map(partById), was = NOOV && novOK(all);
+  const all = sp0.map(p => p.id).concat(novCarried(new Set(sp0.map(p => p.id)))), sp = all.map(partById);
   pushUndo(); const c0 = about || (sp0.length > 1 ? groupBox(sp0) : null), c = c0 || (sp.length > 1 ? [sp0[0].x, sp0[0].y] : null), r = a * Math.PI / 180, cs = Math.cos(r), sn = Math.sin(r);
   sp.forEach(p => { p.rot = norm((p.rot || 0) + a); if (c) { const dx = p.x - c[0], dy = p.y - c[1]; p.x = c[0] + cs * dx - sn * dy; p.y = c[1] + sn * dx + cs * dy; } });
-  const res = was ? novResolve(all) : null; if (res && !res.ok) { novRefuse('Not rotated', res.why); return; }
-  afterGeo(true); toast('Rotated ' + a + '°' + (c0 ? (about ? '' : ' (as a group)') : '') + movedTxt(res));
+  const w = novRotWarn(all);
+  afterGeo(true); toast('Rotated ' + a + '°' + (c0 ? (about ? '' : ' (as a group)') : '') + w, !!w);
 }
 function actRotatePrompt() {
   if (!SEL.size) return;
@@ -4506,7 +4514,7 @@ function warnPanel(parent) {
     if (o) { const b = btn('Fix: move apart', 'sm ovFix', () => fixOverlap(o), 'Moves the smaller part of the pair to the nearest position where it touches but does not overlap any part'); b.style.marginLeft = '6px'; li.appendChild(b); }
     ul.appendChild(li);
   });
-  if (ovs.length) box.appendChild(el('div', 'hint', 'Overlapping parts (e.g. in a project saved before overlap prevention) are kept where they are, and the overlap is counted twice in all properties until it is fixed.'));
+  if (ovs.length) box.appendChild(el('div', 'hint', 'Overlapping parts (e.g. in a project saved before overlap prevention, or after a rotate or flip) are kept where they are, and the overlap is counted twice in all properties until it is fixed.'));
   parent.appendChild(box);
 }
 function buildGovStrip() {
@@ -4874,7 +4882,7 @@ function buildManual(pg) {
     '<b>View:</b> wheel to zoom about the cursor, drag the background (or the middle button) to pan, "Fit" (F).',
     '<b>Right-click a part:</b> flip, rotate (90° or any angle), mirror copy about a vertical or horizontal axis through the part (selection) centroid, an edge, the section centroid or the origin; align and "place touching" relative to a second selected part (Shift+click it first: the part clicked last before the right-click is the reference); duplicate, copy, order, delete. Right-click the background to add a part there, paste, fit or place the Q cut.',
     '<b>Keys:</b> Ctrl+Z / Ctrl+Y undo/redo, Ctrl+C / Ctrl+V copy/paste, Ctrl+D duplicate, Del delete, H / V flip, R / Shift+R rotate 90° CCW / CW, L labels, F fit, Ctrl+A select all.',
-    '<b>Flip and rotate</b> act about the part centroid for one part, and about the centre of the bounding box of the selection for several parts. Flip horizontal = mirror about the vertical axis through that point.']);
+    '<b>Flip and rotate</b> act about the part centroid for one part, and about the centre of the bounding box of the selection for several parts. Flip horizontal = mirror about the vertical axis through that point. With "Prevent overlap" on, a rotate or flip (toolbar, right-click, keys, Rotate 90° button, Rotation field, Mirrored box) is still applied in place, about the same point; if the part then overlaps another, the message names it and Check the model lists the pair with "Fix: move apart". Until fixed, the overlap is counted twice, as for any overlap.']);
   H('Parts and geometry');
   UL(['Each part is a set of exact polygons and circles (holes: negative). Its position is its centroid; orientation = rotation (CCW) after an optional left-right mirror in the part\'s own frame.',
     '<b>Rolled shapes</b> (AISC Shapes Database v16.0) are modelled as their plates: W/M/S/HP as three rectangles (d, b<sub>f</sub>, t<sub>f</sub>, t<sub>w</sub>), C/MC as a web and two flanges with the average flange thickness, L as two legs, WT/MT/ST as flange and stem, rectangular HSS as a rounded rectangular tube (design thickness t<sub>des</sub>, outside corner radius 2t<sub>des</sub> and inside radius t<sub>des</sub>, the basis of the AISC tables as understood — verify; arcs drawn as 24 chords), round HSS/pipe as an annulus (OD, t<sub>des</sub>). Root fillets, toe radii and flange slopes are neglected, so A and I differ slightly from the tables (the Properties tab compares them for a single shape).',
@@ -4902,7 +4910,7 @@ function buildManual(pg) {
     '<b>Layers:</b> SPC-PARTS (material), SPC-PARTS-N (material of parts with n ≠ 1), SPC-HOLES (hole parts and the voids inside tubes), SPC-CENTROID (cross at the centroid, principal axes 1 and 2), SPC-NOTES (project, units, basis, the tool\'s A, x̄, ȳ, I<sub>x</sub>, I<sub>y</sub>, I<sub>xy</sub>, I<sub>1</sub>, I<sub>2</sub>, θ<sub>p</sub>, the expected MASSPROP readout and the steps), SPC-LABELS (part labels; off).',
     '<b>Coordinate basis</b> (remembered in this browser): section centroid at 0,0 (default) — MASSPROP "Moments of inertia" X, Y and "Product of inertia" XY are then the centroidal I<sub>x</sub>, I<sub>y</sub>, I<sub>xy</sub>; or the tool\'s own origin — MASSPROP "Centroid" = x̄, ȳ and its moments are about 0,0. Axes: +x right, +y up; product of inertia = ∫xy dA, the sign the tool uses and, as understood, the sign MASSPROP uses (check once: a 1 × 1 square with a corner at 0,0 in the first quadrant gives XY = +0.25).',
     '<b>Steps:</b> UCS World → REGION (select the objects on SPC-PARTS, SPC-PARTS-N, SPC-HOLES) → UNION the material regions (touching parts union cleanly; separate pieces become one composite region) → SUBTRACT the hole regions → MASSPROP. Compare Area, Centroid, Moments of inertia, Product of inertia and Principal moments.',
-    '<b>Differences to expect:</b> MASSPROP is unweighted (compare with every n = 1, or use the unweighted values in the notes); rolled shapes are exported as their plate model (the AISC tabulated option is not in the geometry); overlapping parts (possible only with "Prevent overlap" off or in an older file) are merged once by UNION but counted twice by the tool — the export dialog warns. MASSPROP does not report J, C<sub>w</sub>, Z, S, the shear centre or Q.']);
+    '<b>Differences to expect:</b> MASSPROP is unweighted (compare with every n = 1, or use the unweighted values in the notes); rolled shapes are exported as their plate model (the AISC tabulated option is not in the geometry); overlapping parts (possible with "Prevent overlap" off, after a rotate or flip, or in an older file) are merged once by UNION but counted twice by the tool — the export dialog warns. MASSPROP does not report J, C<sub>w</sub>, Z, S, the shear centre or Q.']);
   H('Saved data');
   UL([`<b>Files:</b> Save file writes JSON with <code>_schema: "${SCHEMA}"</code>, <code>version: ${SCHEMA_VER}</code>; dimensions are always stored in inches. Open file refuses another schema or a newer version.`,
     `<b>This browser:</b> autosave <code>${LS_AUTO}</code>, named projects <code>${LS_PROJ}</code>, selected input tab <code>${LS_INTAB}</code>, DXF export options <code>${LS_DXF}</code>. All keys start with <code>spc_</code>.`,
