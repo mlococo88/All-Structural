@@ -2371,16 +2371,13 @@ const SPC = (function () {
   }
   function overlapChecks(R) {
     const P = R.parts;
+    // material overlap of solid parts: exact area common to the two materials (each part's own void excluded; circles exact)
+    R.overlaps = [];
+    const S = P.map(q => q.pt.hole ? null : novShape(q.pt));
     for (let i = 0; i < P.length; i++) for (let j = i + 1; j < P.length; j++) {
-      const a = P[i], b = P[j]; if (a.pt.hole || b.pt.hole) continue;
-      const ba = a.G.bbox, bb = b.G.bbox; if (ba[0] >= bb[2] || bb[0] >= ba[2] || ba[1] >= bb[3] || bb[1] >= ba[3]) continue;
-      let ov = 0;
-      a.G.prims.forEach(pa => { if (pa.s < 0) return; b.G.prims.forEach(pb => { if (pb.s < 0) return; ov += overlapArea(primPoly(pa), primPoly(pb)); }); });
-      // material removed by a part's own void (tube interior) does not count
-      if (ov > 1e-6 * Math.min(Math.abs(a.geo.A), Math.abs(b.geo.A))) {
-        let inVoid = 0; [a, b].forEach(x => x.G.prims.forEach(pv => { if (pv.s > 0) return; const other = x === a ? b : a; other.G.prims.forEach(po => { if (po.s > 0) inVoid += overlapArea(primPoly(pv), primPoly(po)); }); }));
-        if (ov - inVoid > 1e-6 * Math.min(Math.abs(a.geo.A), Math.abs(b.geo.A))) R.warnings.push(`${a.pt.lbl} and ${b.pt.lbl} overlap (about ${(+(ov - inVoid).toPrecision(3))} in² counted twice). Move them apart or use a hole.`);
-      }
+      const a = S[i], b = S[j]; if (!a || !b || !bbHit(a.bbox, b.bbox)) continue;
+      const ov = novInter(a, b);
+      if (ov > novTol(a, b)) { R.overlaps.push({ a: a.id, b: b.id, la: P[i].pt.lbl, lb: P[j].pt.lbl, area: ov }); R.warnings.push(`${P[i].pt.lbl} and ${P[j].pt.lbl} overlap (about ${(+ov.toPrecision(3))} in² counted twice). Move them apart or use a hole.`); }
     }
     P.forEach(h => {
       if (!h.pt.hole) return;
@@ -2390,6 +2387,206 @@ const SPC = (function () {
     });
   }
   function ptSegDistPoly(p, P) { let m = Infinity; for (let i = 0; i < P.length; i++) m = Math.min(m, ptSegDist(p, P[i], P[(i + 1) % P.length])); return m; }
+
+  /* ---------------- no-overlap geometry (drawing: collision, magnetic snap, overlap checks) ----------------
+     A part's material = its outer boundary minus its own void (tube interior). Polygons exact; circles exact
+     (circle ∩ polygon by circular segments, circle ∩ circle by the lens formula). A hole is a region that must stay
+     inside one solid part. Used only to place parts and for the overlap warning; the section properties do not use it. */
+  function novShape(pt) {
+    const G = partGlobal(pt), hs = pt.hole ? -1 : 1;
+    const prims = G.prims.map(pr => { const s = pr.s * hs; return pr.k === 'poly' ? { k: 'poly', s, pts: pr.pts, pieces: convexPieces(pr.pts), bb: ptsBB(pr.pts) } : { k: 'circ', s, c: pr.c, r: pr.r, bb: [pr.c[0] - pr.r, pr.c[1] - pr.r, pr.c[0] + pr.r, pr.c[1] + pr.r] }; });
+    let A = 0; prims.forEach(p => { A += p.s * (p.k === 'poly' ? Math.abs(polyM(p.pts).A) : PI * p.r * p.r); });
+    let bb = [Infinity, Infinity, -Infinity, -Infinity]; prims.forEach(p => { if (p.s > 0) bb = [Math.min(bb[0], p.bb[0]), Math.min(bb[1], p.bb[1]), Math.max(bb[2], p.bb[2]), Math.max(bb[3], p.bb[3])]; });
+    return { id: pt.id, lbl: pt.lbl, hole: !!pt.hole, prims, bbox: bb, A };
+  }
+  function ptsBB(P) { let b = [Infinity, Infinity, -Infinity, -Infinity]; P.forEach(q => { b = [Math.min(b[0], q[0]), Math.min(b[1], q[1]), Math.max(b[2], q[0]), Math.max(b[3], q[1])]; }); return b; }
+  function novShift(S, d) {
+    if (!d || (d[0] === 0 && d[1] === 0)) return S;
+    const t = q => [q[0] + d[0], q[1] + d[1]], tb = b => [b[0] + d[0], b[1] + d[1], b[2] + d[0], b[3] + d[1]];
+    return { id: S.id, lbl: S.lbl, hole: S.hole, A: S.A, bbox: tb(S.bbox), prims: S.prims.map(p => p.k === 'poly' ? { k: 'poly', s: p.s, pts: p.pts.map(t), pieces: p.pieces.map(c => c.map(t)), bb: tb(p.bb) } : { k: 'circ', s: p.s, c: t(p.c), r: p.r, bb: tb(p.bb) }) };
+  }
+  const bbHit = (a, b, m) => { m = m || 0; return !(a[0] > b[2] + m || b[0] > a[2] + m || a[1] > b[3] + m || b[1] > a[3] + m); };
+  // signed area of circle(0, r) ∩ triangle(0, a, b)
+  function circTri(a, b, r) {
+    const d = sub(b, a), A2 = dot(d, d), B = dot(a, d), C = dot(a, a) - r * r, disc = B * B - A2 * C, P = [a];
+    if (disc > 0 && A2 > 0) { const s = Math.sqrt(disc), t1 = (-B - s) / A2, t2 = (-B + s) / A2; if (t1 > 0 && t1 < 1) P.push(add(a, mul(d, t1))); if (t2 > 0 && t2 < 1) P.push(add(a, mul(d, t2))); }
+    P.push(b); let ar = 0;
+    for (let i = 0; i + 1 < P.length; i++) { const p = P[i], q = P[i + 1], m = mul(add(p, q), 0.5); ar += dot(m, m) <= r * r ? crs(p, q) / 2 : r * r * Math.atan2(crs(p, q), dot(p, q)) / 2; }
+    return ar;
+  }
+  function circPolyArea(c, r, P) { let a = 0; for (let i = 0; i < P.length; i++) a += circTri(sub(P[i], c), sub(P[(i + 1) % P.length], c), r); return Math.abs(a); }
+  function lensArea(c1, r1, c2, r2) {
+    const d = len(sub(c2, c1)); if (d >= r1 + r2) return 0; if (d <= Math.abs(r1 - r2)) return PI * Math.min(r1, r2) ** 2;
+    const cl = v => Math.max(-1, Math.min(1, v));
+    return r1 * r1 * Math.acos(cl((d * d + r1 * r1 - r2 * r2) / (2 * d * r1))) + r2 * r2 * Math.acos(cl((d * d + r2 * r2 - r1 * r1) / (2 * d * r2))) - 0.5 * Math.sqrt(Math.max(0, (-d + r1 + r2) * (d + r1 - r2) * (d - r1 + r2) * (d + r1 + r2)));
+  }
+  function primInter(p, q) {
+    if (!bbHit(p.bb, q.bb)) return 0;
+    if (p.k === 'poly' && q.k === 'poly') { let a = 0; p.pieces.forEach(x => q.pieces.forEach(y => { a += convexOverlapArea(x, y); })); return a; }
+    if (p.k === 'circ' && q.k === 'circ') return lensArea(p.c, p.r, q.c, q.r);
+    return p.k === 'circ' ? circPolyArea(p.c, p.r, q.pts) : circPolyArea(q.c, q.r, p.pts);
+  }
+  // area common to the regions of two parts (material of a solid; the cut-out region of a hole); void ⊂ outer for each part
+  function novInter(a, b) { if (!bbHit(a.bbox, b.bbox)) return 0; let s = 0; a.prims.forEach(p => b.prims.forEach(q => { s += p.s * q.s * primInter(p, q); })); return s; }
+  const novTol = (a, b) => 1e-9 * Math.max(0.01, Math.min(Math.abs(a.A), b ? Math.abs(b.A) : Infinity));
+  function holeOK(h, solids) { return solids.some(s => bbHit(h.bbox, s.bbox) && novInter(h, s) >= Math.abs(h.A) - novTol(h)); }
+  // W = { mov: [shapes], st: [shapes] }: the moving shapes (at their current position) translated by d
+  function novFeasible(W, d) {
+    const mv = W.mov.map(s => novShift(s, d)), sm = mv.filter(s => !s.hole), ss = W.st.filter(s => !s.hole);
+    for (const m of sm) for (const s of ss) if (bbHit(m.bbox, s.bbox) && novInter(m, s) > novTol(m, s)) return false;
+    for (const h of mv) if (h.hole && !holeOK(h, ss.concat(sm))) return false;
+    return true;
+  }
+  function novOverlapping(W, d) { // static parts that a moving solid overlaps at offset d
+    const mv = W.mov.map(s => novShift(s, d)), out = new Set();
+    mv.forEach(m => { if (m.hole) return; W.st.forEach(s => { if (!s.hole && bbHit(m.bbox, s.bbox) && novInter(m, s) > novTol(m, s)) out.add(s.id); }); });
+    return [...out];
+  }
+  // contact events: times t ∈ [0, 1] at which a boundary of a moving part (moving by v) touches a boundary of a static part.
+  // Overlap can only start or end at such a time, so the feasibility of each interval between events is tested once.
+  function evVertEdge(P, Q, v, out) {
+    const vl = len(v);
+    for (let j = 0; j < Q.length; j++) {
+      const a = Q[j], b = Q[(j + 1) % Q.length], e = sub(b, a), L2 = dot(e, e); if (L2 < 1e-24) continue;
+      const den = crs(e, v); if (Math.abs(den) <= 1e-13 * Math.sqrt(L2) * vl) continue;
+      const tan = mul(e, 1 / Math.sqrt(L2));
+      for (let i = 0; i < P.length; i++) {
+        const p = P[i], t = crs(e, sub(a, p)) / den; if (t < -1e-9 || t > 1 + 1e-9) continue;
+        const u = dot(sub(add(p, mul(v, t)), a), e) / L2; if (u < -1e-9 || u > 1 + 1e-9) continue;
+        out.push({ t, tan });
+      }
+    }
+  }
+  function quadT(w, v, r, out) { // |w + t v| = r
+    const a = dot(v, v), b = 2 * dot(w, v), c = dot(w, w) - r * r, D = b * b - 4 * a * c; if (!(a > 0) || D < 0) return;
+    const s = Math.sqrt(D);
+    [(-b - s) / (2 * a), (-b + s) / (2 * a)].forEach(t => { if (t < -1e-9 || t > 1 + 1e-9) return; const q = add(w, mul(v, t)), L = len(q); out.push({ t, tan: L > 0 ? [-q[1] / L, q[0] / L] : [1, 0] }); });
+  }
+  function evCircPoly(c, r, Q, v, out) { // circle (c, r) moving by v against polygon Q
+    for (let j = 0; j < Q.length; j++) {
+      const a = Q[j], b = Q[(j + 1) % Q.length], e = sub(b, a), L = len(e); if (L < 1e-12) continue;
+      const u = mul(e, 1 / L), n = [u[1], -u[0]], nv = dot(n, v);
+      if (Math.abs(nv) > 1e-15) [-r, r].forEach(sg => { const t = (sg - dot(n, sub(c, a))) / nv; if (t < -1e-9 || t > 1 + 1e-9) return; const f = dot(sub(add(c, mul(v, t)), a), u) / L; if (f >= -1e-9 && f <= 1 + 1e-9) out.push({ t, tan: u }); });
+      quadT(sub(c, a), v, r, out);
+    }
+  }
+  function primEvents(pm, ps, v, out) {
+    const nv = [-v[0], -v[1]];
+    if (pm.k === 'poly' && ps.k === 'poly') { evVertEdge(pm.pts, ps.pts, v, out); evVertEdge(ps.pts, pm.pts, nv, out); }
+    else if (pm.k === 'circ' && ps.k === 'poly') evCircPoly(pm.c, pm.r, ps.pts, v, out);
+    else if (pm.k === 'poly' && ps.k === 'circ') evCircPoly(ps.c, ps.r, pm.pts, nv, out);
+    else { const w = sub(pm.c, ps.c); quadT(w, v, pm.r + ps.r, out); if (Math.abs(pm.r - ps.r) > 0) quadT(w, v, Math.abs(pm.r - ps.r), out); }
+  }
+  function novEvents(W, d0, v) {
+    const out = [];
+    W.mov.forEach(m0 => {
+      const m = novShift(m0, d0), b1 = m.bbox, sw = [Math.min(b1[0], b1[0] + v[0]), Math.min(b1[1], b1[1] + v[1]), Math.max(b1[2], b1[2] + v[0]), Math.max(b1[3], b1[3] + v[1])];
+      W.st.forEach(s => { if (s.hole || !bbHit(sw, s.bbox, 1e-9)) return; m.prims.forEach(pm => s.prims.forEach(ps => primEvents(pm, ps, v, out))); });
+    });
+    out.forEach(e => { e.t = Math.max(0, Math.min(1, e.t)); });
+    return out.sort((a, b) => a.t - b.t);
+  }
+  function novTimes(E) { const ts = [0]; E.forEach(e => { if (e.t - ts[ts.length - 1] > 1e-12) ts.push(e.t); }); if (1 - ts[ts.length - 1] > 1e-12) ts.push(1); else ts[ts.length - 1] = 1; return ts; }
+  // move from d0 (feasible) by v; stops at the first contact that would make the parts overlap
+  function novCollide(W, d0, v) {
+    if (len(v) === 0) return { t: 1, tans: [] };
+    const E = novEvents(W, d0, v), ts = novTimes(E);
+    for (let i = 0; i + 1 < ts.length; i++) {
+      const a = ts[i], b = ts[i + 1];
+      if (!novFeasible(W, add(d0, mul(v, (a + b) / 2)))) return { t: a, tans: E.filter(e => Math.abs(e.t - a) < 1e-9).map(e => e.tan) };
+    }
+    return { t: 1, tans: [] };
+  }
+  // collide and slide: the moving set stops at contact and slides along the contact edge toward the target
+  function novSlide(W, d0, d1) {
+    if (!novFeasible(W, d0)) return { d: d1.slice(), hit: false, free: true };
+    let cur = d0.slice(), tgt = d1.slice(), hit = false;
+    for (let k = 0; k < 4; k++) {
+      const v = sub(tgt, cur); if (len(v) < 1e-12) break;
+      const r = novCollide(W, cur, v); cur = add(cur, mul(v, r.t)); if (r.t >= 1) break;
+      hit = true; const rem = mul(v, 1 - r.t); let best = null; const seen = [];
+      r.tans.forEach(u => {
+        if (seen.some(w => Math.abs(crs(w, u)) < 1e-9)) return; seen.push(u);
+        const s = dot(rem, u); if (Math.abs(s) < 1e-12) return;
+        const tv = mul(u, s), r2 = novCollide(W, cur, tv), prog = r2.t * Math.abs(s);
+        if (!best || prog > best.prog) best = { prog, tv };
+      });
+      if (!best || best.prog < 1e-12) break;
+      tgt = add(cur, best.tv);
+    }
+    return { d: cur, hit };
+  }
+  // nearest offset (from d0) at which the moving set is free: exact escape distance along each trial direction
+  // (24 directions every 15° plus the normals of the edges in conflict); the result touches the part it escaped from
+  function novNearestFree(W, d0) {
+    if (novFeasible(W, d0)) return { d: d0.slice(), dist: 0 };
+    let bb = [Infinity, Infinity, -Infinity, -Infinity]; W.mov.concat(W.st).forEach(s => { const b = s.bbox; bb = [Math.min(bb[0], b[0]), Math.min(bb[1], b[1]), Math.max(bb[2], b[2]), Math.max(bb[3], b[3])]; });
+    const Smax = 1.2 * Math.hypot(bb[2] - bb[0], bb[3] - bb[1]) + len(d0) + 1;
+    const dirs = []; const addDir = u => { const L = len(u); if (!(L > 0)) return; u = mul(u, 1 / L); if (!dirs.some(w => Math.abs(w[0] - u[0]) < 1e-9 && Math.abs(w[1] - u[1]) < 1e-9)) dirs.push(u); };
+    for (let i = 0; i < 24; i++) addDir([Math.cos(i * PI / 12), Math.sin(i * PI / 12)]);
+    const conf = novOverlapping(W, d0); let ne = 0;
+    W.st.filter(s => conf.includes(s.id)).concat(W.mov).forEach(s => s.prims.forEach(p => { if (p.k !== 'poly' || p.pts.length > 40) return; p.pts.forEach((a, i) => { const b = p.pts[(i + 1) % p.pts.length], e = sub(b, a); if (ne++ < 120) { addDir([e[1], -e[0]]); addDir([-e[1], e[0]]); } }); }));
+    let best = null;
+    dirs.forEach(u => {
+      const v = mul(u, Smax), E = novEvents(W, d0, v), ts = novTimes(E);
+      for (let i = 0; i + 1 < ts.length; i++) {
+        const a = ts[i], b = ts[i + 1]; if (best && a * Smax >= best.dist - 1e-12) return;
+        if (novFeasible(W, add(d0, mul(v, (a + b) / 2)))) { let t = a; if (!novFeasible(W, add(d0, mul(v, t)))) t = (a + b) / 2; best = { d: add(d0, mul(v, t)), dist: t * Smax }; return; }
+      }
+    });
+    return best;
+  }
+  // magnetic snap: parallel edges within rad become coincident (contact), then ends / centres line up along the contact edge
+  function novEdges(S) { const E = []; S.prims.forEach(p => { if (p.k !== 'poly') return; const P = p.pts; for (let i = 0; i < P.length; i++) { const a = P[i], b = P[(i + 1) % P.length], e = sub(b, a), L = len(e); if (L < 1e-12) continue; const u = mul(e, 1 / L); E.push({ a, b, u, n: mul([u[1], -u[0]], p.s), L }); } }); return E; }
+  function extAlong(shapes, u) { let lo = Infinity, hi = -Infinity; shapes.forEach(S => S.prims.forEach(p => { if (p.s < 0) return; if (p.k === 'poly') p.pts.forEach(q => { const v = dot(q, u); lo = Math.min(lo, v); hi = Math.max(hi, v); }); else { const v = dot(p.c, u); lo = Math.min(lo, v - p.r); hi = Math.max(hi, v + p.r); } })); return [lo, hi]; }
+  function novSnap(mov, st, rad) {
+    let best = null;
+    const consider = c => { if (!best || Math.abs(c.g) < Math.abs(best.g) - 1e-12) best = c; };
+    mov.forEach(ms => {
+      const ME = novEdges(ms);
+      st.forEach(s => {
+        if (s.hole || !bbHit(ms.bbox, s.bbox, rad)) return;
+        const same = ms.hole, SE = novEdges(s);
+        ME.forEach(em => SE.forEach(eo => {
+          const dn = dot(em.n, eo.n); if (same ? dn < 1 - 1e-9 : dn > -1 + 1e-9) return;
+          const g = dot(eo.n, sub(em.a, eo.a)); if (Math.abs(g) > rad) return;
+          const p1 = dot(em.a, eo.u), p2 = dot(em.b, eo.u), q1 = dot(eo.a, eo.u), q2 = dot(eo.b, eo.u);
+          if (Math.min(Math.max(p1, p2), Math.max(q1, q2)) - Math.max(Math.min(p1, p2), Math.min(q1, q2)) <= 1e-9) return;
+          consider({ g, shift: mul(eo.n, -g), kind: 'edge', em, eo, s });
+        }));
+        if (same) return;
+        // round parts: tangent to an edge or to another round part
+        ms.prims.forEach(pm => {
+          if (pm.k !== 'circ' || pm.s < 0) return;
+          SE.forEach(eo => { const g = dot(eo.n, sub(pm.c, eo.a)) - pm.r; if (Math.abs(g) > rad) return; const f = dot(sub(pm.c, eo.a), eo.u); if (f < 0 || f > eo.L) return; consider({ g, shift: mul(eo.n, -g), kind: 'pt', p: sub(pm.c, mul(eo.n, pm.r + g)) }); });
+          s.prims.forEach(ps => { if (ps.k !== 'circ' || ps.s < 0) return; const w = sub(ps.c, pm.c), d = len(w); if (!(d > 0)) return; const g = d - pm.r - ps.r; if (Math.abs(g) > rad) return; const u = mul(w, 1 / d); consider({ g, shift: mul(u, g), kind: 'pt', p: sub(ps.c, mul(u, ps.r)) }); });
+        });
+        s.prims.forEach(ps => { if (ps.k !== 'circ' || ps.s < 0) return; ME.forEach(em => { const g = dot(em.n, sub(ps.c, em.a)) - ps.r; if (Math.abs(g) > rad) return; const f = dot(sub(ps.c, em.a), em.u); if (f < 0 || f > em.L) return; consider({ g, shift: mul(em.n, g), kind: 'pt', p: sub(ps.c, mul(em.n, ps.r)) }); }); });
+      });
+    });
+    if (!best) return null;
+    if (best.kind === 'pt') return { shift: best.shift, normalShift: best.shift, kind: 'pt', p: add(best.p, [0, 0]) };
+    // alignment along the contact edge: ends with ends, centre with centre (of the edges, or of the parts' overall extents)
+    const u = best.eo.u, em = best.em, eo = best.eo;
+    const mv = [[dot(em.a, u), dot(em.b, u)].sort((a, b) => a - b), extAlong(mov, u)], ob = [[dot(eo.a, u), dot(eo.b, u)].sort((a, b) => a - b), extAlong([best.s], u)];
+    let al = null;
+    mv.forEach(a => ob.forEach(b => { [[a[0], b[0]], [a[1], b[1]], [(a[0] + a[1]) / 2, (b[0] + b[1]) / 2]].forEach(([x, y]) => { const dd = y - x; if (Math.abs(dd) <= rad && (!al || Math.abs(dd) < Math.abs(al.dd) - 1e-12)) al = { dd, at: y }; }); }));
+    const shift = add(best.shift, al ? mul(u, al.dd) : [0, 0]);
+    const X = val => add(eo.a, mul(u, val - dot(eo.a, u)));
+    const sh = al ? al.dd : 0, p1 = dot(em.a, u) + sh, p2 = dot(em.b, u) + sh, q1 = dot(eo.a, u), q2 = dot(eo.b, u);
+    const lo = Math.max(Math.min(p1, p2), Math.min(q1, q2)), hi = Math.min(Math.max(p1, p2), Math.max(q1, q2));
+    return { shift, normalShift: best.shift, kind: 'edge', seg: [X(lo), X(hi)], guide: al ? { p: X(al.at), n: eo.n } : null, u, n: eo.n };
+  }
+  // overlapping solid pairs of a model (warning and "fix" action)
+  function novPairs(parts) {
+    const S = parts.map(pt => { try { return novShape(pt); } catch (e) { return null; } }), out = [];
+    for (let i = 0; i < S.length; i++) for (let j = i + 1; j < S.length; j++) {
+      const a = S[i], b = S[j]; if (!a || !b || a.hole || b.hole || !bbHit(a.bbox, b.bbox)) continue;
+      const ov = novInter(a, b); if (ov > novTol(a, b)) out.push({ a: a.id, b: b.id, la: a.lbl, lb: b.lbl, area: ov });
+    }
+    return out;
+  }
+  const NOV = { shape: novShape, shift: novShift, inter: novInter, feasible: novFeasible, overlapping: novOverlapping, events: novEvents, collide: novCollide, slide: novSlide, nearestFree: novNearestFree, snap: novSnap, pairs: novPairs, holeOK, tol: novTol, circPolyArea, lensArea };
 
   /* ---------------- Q at a cut line ---------------- */
   function qcut(R, dir, posv, V) {
@@ -2723,7 +2920,7 @@ const SPC = (function () {
   };
   function P(type, p, x, y, o) { o = o || {}; return { type, p, x, y, rot: o.rot || 0, mir: !!o.mir, n: 1, hole: false, useTab: false }; }
 
-  return { FAMS, FAM_ORDER, TYPES, shapeRec, shapeNames, dblAngle, partGeom, partGlobal, xfMat, apply, polyM, circM, primM, primsMoments, analyze, qcut, principal, Jrect, labelPrefix, fmtDim, TEMPLATES, rotTensor, plastic, sideSum, chordLen, pairKey, sectorial, partProps, triangulate, overlapArea, polyDist, primPoly, selfIntersects, ptInPoly };
+  return { FAMS, FAM_ORDER, TYPES, shapeRec, shapeNames, dblAngle, partGeom, partGlobal, xfMat, apply, polyM, circM, primM, primsMoments, analyze, qcut, principal, Jrect, labelPrefix, fmtDim, TEMPLATES, rotTensor, plastic, sideSum, chordLen, pairKey, sectorial, partProps, triangulate, overlapArea, polyDist, primPoly, selfIntersects, ptInPoly, NOV };
 })();
 /* SPC-ENGINE-END */
 </script>
@@ -2909,7 +3106,9 @@ function numIn(get, set, key, opts) {
     i.classList.toggle('bad', !ok);
     if (!ok) return;
     if (opts.geo && !undone) { pushUndo(); undone = true; }
-    set(x === null ? null : fromD(x, k)); schedule(!!opts.structural);
+    const doSet = () => set(x === null ? null : fromD(x, k));
+    if (opts.guard) { if (!guardEdit(opts.guard, doSet, i)) return; } else doSet();
+    schedule(!!opts.structural);
   });
   i.addEventListener('blur', () => { undone = false; });
   return i;
@@ -2918,15 +3117,15 @@ function txtIn(get, set, key, ph) {
   const i = document.createElement('input'); i.type = 'text'; i.value = get() || ''; if (ph) i.placeholder = ph; tagField(i, key);
   i.addEventListener('input', () => { set(i.value); schedule(false); }); return i;
 }
-function chkIn(get, set, key, structural, geo) {
+function chkIn(get, set, key, structural, geo, guard) {
   const i = document.createElement('input'); i.type = 'checkbox'; i.checked = !!get(); tagField(i, key);
-  i.addEventListener('change', () => { if (geo) pushUndo(); set(i.checked); schedule(!!structural); }); return i;
+  i.addEventListener('change', () => { if (geo) pushUndo(); if (guard) { if (!guardEdit(guard, () => set(i.checked))) { i.checked = !!get(); return; } } else set(i.checked); schedule(!!structural); }); return i;
 }
-function selIn(opts, get, set, key, structural, geo) {
+function selIn(opts, get, set, key, structural, geo, guard) {
   const s = document.createElement('select'); tagField(s, key);
   opts.forEach(o => { const op = document.createElement('option'); op.value = o[0]; op.textContent = o[1]; s.appendChild(op); });
   s.value = get();
-  s.addEventListener('change', () => { if (geo) pushUndo(); set(s.value); schedule(structural !== false); }); return s;
+  s.addEventListener('change', () => { if (geo) pushUndo(); if (guard) { if (!guardEdit(guard, () => set(s.value))) { s.value = get(); return; } } else set(s.value); schedule(structural !== false); }); return s;
 }
 function fRow(parent, label, input, unit, hint) {
   const r = el('div', 'fRow'); const l = el('label', null, label); r.appendChild(l); r.appendChild(input); r.appendChild(el('span', 'unit', unit || ''));
@@ -2983,6 +3182,10 @@ function lsSet(k, v) { try { localStorage.setItem(k, v); return true; } catch (e
 function autosave() { lsSet(LS_AUTO, JSON.stringify(M)); }
 function getProjects() { try { const p = JSON.parse(lsGet(LS_PROJ) || '{}'); return (p && typeof p === 'object' && !Array.isArray(p)) ? p : {}; } catch (e) { return {}; } }
 function setProjects(p) { return lsSet(LS_PROJ, JSON.stringify(p)); }
+// "Prevent overlap" is a per-browser setting, not project data (key spc_preventOverlap_v1: '1' / '0'; default on)
+const LS_NOOV = 'spc_preventOverlap_v1';
+let NOOV = lsGet(LS_NOOV) !== '0';
+function setNoOverlap(v) { NOOV = !!v; lsSet(LS_NOOV, NOOV ? '1' : '0'); OVEDIT = null; updateToolState(); updateStatus(); }
 function compute() {
   try { R = SPC.analyze(M); }
   catch (e) { console.error(e); R = { ok: false, errors: ['Internal error in the calculation: ' + e.message], warnings: [] }; }
@@ -3002,7 +3205,9 @@ function fullRebuild() { clearTimeout(schedT); schedT = null; pendStruct = false
 function pruneSel() { const ids = new Set(M.parts.map(p => p.id)); SEL = new Set([...SEL].filter(i => ids.has(i))); SELORD = SELORD.filter(i => SEL.has(i)); }
 function loadModel(d, how) {
   let m; try { m = migrate(d); } catch (e) { alert('Could not open project file: ' + e.message); return false; }
-  M = m; SEL = new Set(); SELORD = []; UNDO = []; REDO = []; VIEW.init = false; fullRebuild(); fitView(); toast(how || 'Project loaded'); return true;
+  M = m; SEL = new Set(); SELORD = []; UNDO = []; REDO = []; VIEW.init = false; fullRebuild(); fitView();
+  const nov = R && R.overlaps ? R.overlaps.length : 0;
+  toast((how || 'Project loaded') + (nov ? ` — ${nov} overlapping pair${nov > 1 ? 's' : ''} (not moved): see the warning` : '')); return true;
 }
 function openFileText(text) {
   let d; try { d = JSON.parse(text); } catch (e) { alert('Could not open project file: the file is not valid JSON.'); return; }
@@ -3076,8 +3281,9 @@ function newPart(type, p, x, y, extra) {
 }
 function addParts(list, select) {
   pushUndo(); list.forEach(p => M.parts.push(p));
+  const res = novResolve(list.map(p => p.id)); if (!res.ok) { novRefuse('Not added', 'no free position found'); return null; }
   if (select !== false) { SEL = new Set(list.map(p => p.id)); SELORD = list.map(p => p.id); }
-  afterGeo(true);
+  afterGeo(true); return res;
 }
 function viewCentre() { const w = CV.svg ? CV.svg.clientWidth : 600, h = CV.svg ? CV.svg.clientHeight : 400; const c = s2w([w / 2, h / 2]); const g = M.settings.grid > 0 ? M.settings.grid : 0.5; return [Math.round(c[0] / g) * g, Math.round(c[1] / g) * g]; }
 function addSimple(kind, at) {
@@ -3090,12 +3296,13 @@ function addSimple(kind, at) {
   else if (kind === 'rtube') pt = newPart('rtube', { B: 6, H: 8, t: 0.375 }, c[0], c[1]);
   else if (kind === 'hrect') pt = newPart('plate', { b: 1, t: 1 }, c[0], c[1], { hole: true });
   else if (kind === 'hcirc') pt = newPart('round', { d: 0.9375 }, c[0], c[1], { hole: true });
-  if (pt) { if (pt.hole) pt.lbl = nextLabel(pt); addParts([pt]); toast('Added ' + pt.lbl); }
+  if (pt) { if (pt.hole) pt.lbl = nextLabel(pt); const res = addParts([pt]); if (res) toast('Added ' + pt.lbl + movedTxt(res)); }
 }
 function addShape(fam, name, at) {
   if (!SPC.shapeRec(fam, name)) { alert('Unknown shape ' + fam + ' ' + name); return; }
   const c = at || viewCentre();
-  addParts([newPart('shape', { fam, name }, c[0], c[1], { useTab: !!M.settings.tabDefault })]);
+  const pt = newPart('shape', { fam, name }, c[0], c[1], { useTab: !!M.settings.tabDefault }), res = addParts([pt]);
+  if (res) toast('Added ' + pt.lbl + movedTxt(res));
 }
 
 /* =====================================================================
@@ -3227,22 +3434,24 @@ function buildPartPane(P) {
   const sp = selParts();
   if (!sp.length) { P.appendChild(el('div', 'note', 'Select a part on the drawing (click) or in the Parts list. Shift/Ctrl+click or drag a box with Shift to select several.')); return; }
   if (sp.length > 1) { buildMultiPane(P, sp); return; }
-  const pt = sp[0], g = SPC.partGeom(pt);
+  const pt = sp[0], g = SPC.partGeom(pt), GD = [pt.id];
+  if (OVEDIT && !(OVEDIT.ids.length === 1 && OVEDIT.ids[0] === pt.id)) OVEDIT = null;
+  ovEditBox(P);
   mkSec(P, 'ppId', 'Part ' + esc(pt.lbl), body => {
     fRow(body, 'Label', txtIn(() => pt.lbl, v => { pt.lbl = v; }, 'pp_lbl'), '');
     body.appendChild(el('div', 'hint', esc(SPC.TYPES[pt.type].name) + (pt.type === 'shape' ? ' — ' + esc(SPC.FAMS[pt.p.fam] ? SPC.FAMS[pt.p.fam].name : '') : '')));
     if (g.err) body.appendChild(el('div', 'errBox', esc(g.err)));
   }, { noNum: true });
   mkSec(P, 'ppDim', 'Dimensions', body => {
-    const L = un('L'), dim = (lab, key, hint) => fRow(body, lab, numIn(() => pt.p[key], v => { pt.p[key] = v; }, 'pp_' + key, { k: 'L', min: 0, geo: true }), L, hint);
+    const L = un('L'), dim = (lab, key, hint) => fRow(body, lab, numIn(() => pt.p[key], v => { pt.p[key] = v; }, 'pp_' + key, { k: 'L', min: 0, geo: true, guard: GD }), L, hint);
     if (pt.type === 'plate' || pt.type === 'bar') { dim('Width b (along x)', 'b'); dim('Thickness t (along y)', 't'); }
     else if (pt.type === 'round') dim('Diameter d', 'd');
     else if (pt.type === 'tube') { dim('Outside diameter D', 'D'); dim('Wall thickness t', 't'); }
-    else if (pt.type === 'rtube') { dim('Width B (along x)', 'B'); dim('Height H (along y)', 'H'); dim('Wall thickness t', 't'); fRow(body, 'Outside corner radius r', numIn(() => pt.p.r || 0, v => { pt.p.r = v; }, 'pp_r', { k: 'L', min: 0, minIncl: true, geo: true }), L, '0 = square corners. Inside radius = max(r − t, 0). AISC HSS use r = 2t.'); }
+    else if (pt.type === 'rtube') { dim('Width B (along x)', 'B'); dim('Height H (along y)', 'H'); dim('Wall thickness t', 't'); fRow(body, 'Outside corner radius r', numIn(() => pt.p.r || 0, v => { pt.p.r = v; }, 'pp_r', { k: 'L', min: 0, minIncl: true, geo: true, guard: GD }), L, '0 = square corners. Inside radius = max(r − t, 0). AISC HSS use r = 2t.'); }
     else if (pt.type === 'shape') {
-      const fam = selIn(SPC.FAM_ORDER.map(f => [f, SPC.FAMS[f].name]), () => pt.p.fam, v => { pt.p.fam = v; pt.p.name = SPC.shapeNames(v)[0]; }, 'pp_fam', true, true);
+      const fam = selIn(SPC.FAM_ORDER.map(f => [f, SPC.FAMS[f].name]), () => pt.p.fam, v => { pt.p.fam = v; pt.p.name = SPC.shapeNames(v)[0]; }, 'pp_fam', true, true, GD);
       fRow(body, 'Family', fam, '');
-      const nm = selIn(SPC.shapeNames(pt.p.fam).map(n => [n, n]), () => pt.p.name, v => { pt.p.name = v; }, 'pp_name', true, true);
+      const nm = selIn(SPC.shapeNames(pt.p.fam).map(n => [n, n]), () => pt.p.name, v => { pt.p.name = v; }, 'pp_name', true, true, GD);
       nm.classList.add('shapeSel'); fRow(body, 'Shape', nm, '');
       const d = g.dims, rows = Object.keys(d).map(k => `${k} = ${nf(d[k], 'L', 4)} ${un('L')}`).join(', ');
       body.appendChild(el('div', 'hint', 'Plate model: ' + esc(rows) + '. Fillets / corner radii neglected.'));
@@ -3251,21 +3460,21 @@ function buildPartPane(P) {
   });
   mkSec(P, 'ppPos', 'Position and orientation', body => {
     const L = un('L');
-    fRow(body, 'Centroid x', numIn(() => pt.x, v => { pt.x = v; }, 'pp_x', { k: 'L', geo: true }), L);
-    fRow(body, 'Centroid y', numIn(() => pt.y, v => { pt.y = v; }, 'pp_y', { k: 'L', geo: true }), L);
+    fRow(body, 'Centroid x', numIn(() => pt.x, v => { pt.x = v; }, 'pp_x', { k: 'L', geo: true, guard: GD }), L);
+    fRow(body, 'Centroid y', numIn(() => pt.y, v => { pt.y = v; }, 'pp_y', { k: 'L', geo: true, guard: GD }), L);
     const bb = SPC.partGlobal(pt).bbox;
-    const edge = (lab, i, key) => fRow(body, lab, numIn(() => bb[i], v => { const d = v - SPC.partGlobal(pt).bbox[i]; if (i === 0 || i === 2) pt.x += d; else pt.y += d; }, key, { k: 'L', geo: true, structural: true }), L);
+    const edge = (lab, i, key) => fRow(body, lab, numIn(() => bb[i], v => { const d = v - SPC.partGlobal(pt).bbox[i]; if (i === 0 || i === 2) pt.x += d; else pt.y += d; }, key, { k: 'L', geo: true, structural: true, guard: GD }), L);
     body.appendChild(el('div', 'subh', 'or set an edge (moves the part)'));
     edge('Left edge', 0, 'pp_bl'); edge('Right edge', 2, 'pp_br'); edge('Bottom edge', 1, 'pp_bb'); edge('Top edge', 3, 'pp_bt');
-    fRow(body, 'Rotation (CCW)', numIn(() => pt.rot, v => { pt.rot = v; }, 'pp_rot', { k: 'deg', geo: true }), '°', 'About the part centroid. Mirrored = reflected left-right in the part\'s own frame before the rotation.');
-    chkRow(body, 'Mirrored', chkIn(() => pt.mir, v => { pt.mir = v; }, 'pp_mir', true, true));
+    fRow(body, 'Rotation (CCW)', numIn(() => pt.rot, v => { pt.rot = v; }, 'pp_rot', { k: 'deg', geo: true, guard: GD }), '°', 'About the part centroid. Mirrored = reflected left-right in the part\'s own frame before the rotation.');
+    chkRow(body, 'Mirrored', chkIn(() => pt.mir, v => { pt.mir = v; }, 'pp_mir', true, true, GD));
     const r = el('div', 'btnRow');
     [['Flip ↔', () => actFlip('h')], ['Flip ↕', () => actFlip('v')], ['⟲ 90°', () => actRotate(90)], ['⟳ 90°', () => actRotate(-90)]].forEach(([l, f]) => r.appendChild(btn(l, 'sm', f)));
     body.appendChild(r);
   });
   mkSec(P, 'ppMat', 'Material and role', body => {
     fRow(body, 'Modulus ratio n', numIn(() => pt.n, v => { pt.n = v; }, 'pp_n', { k: 'n', min: 0, geo: true }), '', 'n = E_part / E_ref (transformed section). Use 1 for one material; e.g. a different steel grade does not change n, a concrete slab on steel does.');
-    if (SPC.TYPES[pt.type].hole) chkRow(body, 'Hole / cut-out (negative area)', chkIn(() => pt.hole, v => { pt.hole = v; }, 'pp_hole', true, true), 'A hole removes area from whatever it covers. Give it the same n as the part it is in.');
+    if (SPC.TYPES[pt.type].hole) chkRow(body, 'Hole / cut-out (negative area)', chkIn(() => pt.hole, v => { pt.hole = v; }, 'pp_hole', true, true, GD), 'A hole removes area from whatever it covers. Give it the same n as the part it is in.');
   });
   mkSec(P, 'ppProps', 'This part\'s own properties', body => {
     const s = el('div'); s.setAttribute('data-live', 'part'); body.appendChild(s);
@@ -3285,7 +3494,7 @@ function polyTable(body, pt) {
   const G = SPC.partGlobal(pt), pts = G.g.prims.length ? G.g.prims[0].pts.map(q => SPC.apply(G.T, q)).map(q => [q[0] + pt.x, q[1] + pt.y]) : [];
   body.appendChild(el('div', 'hint', 'Vertices in section coordinates (' + un('L') + '). Editing a vertex keeps the shape where it is and resets rotation/mirror to 0.'));
   const t = el('table', 'vtx'); t.appendChild(el('tr', null, '<th>#</th><th>x</th><th>y</th><th></th>'));
-  const commit = (arr) => { pushUndo(); setPolyGlobal(pt, arr); afterGeo(true); };
+  const commit = (arr) => { pushUndo(); if (!guardEdit([pt.id], () => setPolyGlobal(pt, arr))) { UNDO.pop(); updateToolState(); return; } afterGeo(true); };
   pts.forEach((q, i) => {
     const tr = el('tr'); tr.appendChild(el('td', null, String(i + 1)));
     ['x', 'y'].forEach((ax, j) => {
@@ -3315,7 +3524,16 @@ function buildMultiPane(P, sp) {
     const mv = { dx: 0, dy: 0 };
     fRow(body, 'Move by Δx', numIn(() => mv.dx, v => { mv.dx = v; }, 'mv_dx', { k: 'L' }), un('L'));
     fRow(body, 'Move by Δy', numIn(() => mv.dy, v => { mv.dy = v; }, 'mv_dy', { k: 'L' }), un('L'));
-    const r = el('div', 'btnRow'); r.appendChild(btn('Move', 'primary sm', () => { if (!isNum(mv.dx) || !isNum(mv.dy)) return; pushUndo(); sp.forEach(p => { p.x += mv.dx; p.y += mv.dy; }); afterGeo(true); }));
+    const r = el('div', 'btnRow'); r.appendChild(btn('Move', 'primary sm', () => {
+      if (!isNum(mv.dx) || !isNum(mv.dy)) return;
+      const ids = sp.map(p => p.id).concat(novCarried(new Set(sp.map(p => p.id)))), was = NOOV && novOK(ids);
+      pushUndo(); shiftParts(ids, [mv.dx, mv.dy]);
+      if (was && !novOK(ids)) {
+        const why = novWhy(ids);
+        if (!confirm('Moving by this amount: ' + why + '.\n\nOK = place them touching instead (nearest free position); Cancel = do not move.')) { novRefuse('Not moved', why); return; }
+        const res = novResolve(ids); if (!res.ok) { novRefuse('Not moved', res.why); return; }
+      }
+      afterGeo(true); }));
     body.appendChild(r);
     const r2 = el('div', 'btnRow');
     [['Flip ↔', () => actFlip('h')], ['Flip ↕', () => actFlip('v')], ['⟲ 90°', () => actRotate(90)], ['⟳ 90°', () => actRotate(-90)], ['Duplicate', actDuplicate], ['Delete', actDelete]].forEach(([l, f]) => r2.appendChild(btn(l, 'sm', f)));
@@ -3348,8 +3566,9 @@ function buildTplPane(P) {
       if (parts.some(p => !isNum(p.x) || !isNum(p.y))) { alert('Template: enter all dimensions.'); return; }
       pushUndo(); if (replace) { M.parts = []; M.contacts.off = []; }
       const made = parts.map(p => { const q = newPart(p.type, p.p, p.x, p.y, { rot: p.rot, mir: p.mir }); M.parts.push(q); return q; });
+      const res = replace ? null : novResolve(made.map(p => p.id)); if (res && !res.ok) { novRefuse('Template not added', 'no free position found'); return; }
       SEL = new Set(made.map(p => p.id)); SELORD = made.map(p => p.id);
-      afterGeo(true); fitView(); toast(SPC.TEMPLATES[id].name + ': ' + made.length + ' parts');
+      afterGeo(true); fitView(); toast(SPC.TEMPLATES[id].name + ': ' + made.length + ' parts' + movedTxt(res));
     };
     r.appendChild(btn('Replace drawing', 'primary sm', () => run(true))); r.appendChild(btn('Add to drawing', 'sm', () => run(false)));
     body.appendChild(r);
@@ -3388,7 +3607,10 @@ function buildSetPane(P) {
     chkRow(body, 'Snap (hold Alt while dragging to suspend)', chkIn(() => S.snap, v => { S.snap = v; }, 'set_snap', false));
     chkRow(body, 'Snap to other parts (corners, edge midpoints, centroids)', chkIn(() => S.snapParts, v => { S.snapParts = v; }, 'set_snp', false));
     chkRow(body, 'Snap to the grid', chkIn(() => S.snapGrid, v => { S.snapGrid = v; }, 'set_sng', false));
-    fRow(body, 'Snap radius', numIn(() => S.snapPx, v => { S.snapPx = v; }, 'set_spx', { k: 'n', min: 0 }), 'px');
+    fRow(body, 'Snap radius', numIn(() => S.snapPx, v => { S.snapPx = v; }, 'set_spx', { k: 'n', min: 0 }), 'px', 'Within this distance on screen a dragged part snaps flush to another part (parallel edges become coincident; ends and centres line up along the contact), then to corners and midpoints, then to the grid.');
+    const nov = document.createElement('input'); nov.type = 'checkbox'; nov.checked = NOOV; tagField(nov, 'set_noov');
+    nov.addEventListener('change', () => { setNoOverlap(nov.checked); toast(NOOV ? 'Prevent overlap is on' : 'Prevent overlap is off: parts may overlap (overlap is counted twice)'); });
+    chkRow(body, 'Prevent overlap', nov, 'Solid parts may touch but not overlap: a dragged part stops at contact and slides along it; new, pasted, copied, rotated and flipped parts go to the nearest free position; typed positions and sizes that would overlap are not applied. Holes must stay inside a solid part (they move with the part they are in). Turn off for special cases. This setting is kept in this browser only, not in the project.');
     fRow(body, 'Arrow-key step', numIn(() => S.nudge, v => { S.nudge = v; }, 'set_nud', { k: 'L', min: 0 }), un('L'), 'Shift+arrow moves 10 steps.');
   });
   mkSec(P, 'setCalc', 'Calculation', body => {
@@ -3462,6 +3684,7 @@ const TOOLS = [
   ['front', 'Front', 'Bring to front', () => actOrder(1)], ['back', 'Back', 'Send to back', () => actOrder(-1)], ['|'],
   ['zin', '+', 'Zoom in (wheel)', () => zoomBy(1.25)], ['zout', '−', 'Zoom out', () => zoomBy(0.8)], ['fit', 'Fit', 'Fit the section in the view (F)', () => fitView()], ['|'],
   ['snap', 'Snap', 'Snap to parts and grid while dragging', () => { M.settings.snap = !M.settings.snap; updateToolState(); autosave(); }],
+  ['noov', 'No overlap', 'Prevent overlap: parts may touch but not overlap (setting kept in this browser)', () => { setNoOverlap(!NOOV); toast(NOOV ? 'Prevent overlap is on' : 'Prevent overlap is off: parts may overlap (overlap is counted twice)'); }],
   ['grid', 'Grid', 'Show the grid', () => { M.settings.showGrid = !M.settings.showGrid; updateToolState(); drawCanvas(); autosave(); }],
   ['labels', 'Labels', 'Part labels (L)', () => { M.settings.labels = !M.settings.labels; updateToolState(); drawCanvas(); autosave(); }],
   ['box', 'Box select', 'Drag on the background selects with a box (otherwise: Shift+drag)', () => { M.settings.boxMode = !M.settings.boxMode; updateToolState(); autosave(); }],
@@ -3481,7 +3704,7 @@ function updateToolState() {
   const q = k => CV.tools.querySelector('[data-tool="' + k + '"]'), has = SEL.size > 0;
   ['flipH', 'flipV', 'rotL', 'rotR', 'rotA', 'mirC', 'dup', 'del', 'front', 'back'].forEach(k => { const b = q(k); if (b) b.disabled = !has; });
   const set = (k, on) => { const b = q(k); if (b) b.classList.toggle('on', !!on); };
-  set('snap', M.settings.snap); set('grid', M.settings.showGrid); set('labels', M.settings.labels); set('box', M.settings.boxMode); set('qcut', M.q.on);
+  set('snap', M.settings.snap); set('noov', NOOV); set('grid', M.settings.showGrid); set('labels', M.settings.labels); set('box', M.settings.boxMode); set('qcut', M.q.on);
   const u = q('undo'), r = q('redo'); if (u) u.disabled = !UNDO.length; if (r) r.disabled = !REDO.length;
 }
 function fitView(svgEl, box) {
@@ -3576,7 +3799,11 @@ function svgMarkup(W, H, V, opts) {
       o.push(`<text x="${fx(xr + 5)}" y="${fx((a[1] + c[1]) / 2 + 3)}" stroke="#fff" stroke-width="3" paint-order="stroke">${esc(nf(b[3] - b[1], 'L', 4))}</text></g>`);
     }
   }
-  if (!opts.print && SNAPMARK) { const p = tr(SNAPMARK.p); o.push(`<circle cx="${fx(p[0])}" cy="${fx(p[1])}" r="5" fill="none" stroke="#DB2777" stroke-width="2" pointer-events="none"/>`); }
+  if (!opts.print && SNAPMARK) {
+    if (SNAPMARK.p) { const p = tr(SNAPMARK.p); o.push(`<circle cx="${fx(p[0])}" cy="${fx(p[1])}" r="5" fill="none" stroke="#DB2777" stroke-width="2" pointer-events="none"/>`); }
+    if (SNAPMARK.seg) { const a = tr(SNAPMARK.seg[0]), b = tr(SNAPMARK.seg[1]); o.push(`<path d="M${fx(a[0])} ${fx(a[1])}L${fx(b[0])} ${fx(b[1])}" stroke="#DB2777" stroke-width="4" stroke-linecap="round" opacity=".85" pointer-events="none"/><circle cx="${fx(a[0])}" cy="${fx(a[1])}" r="3" fill="#DB2777" pointer-events="none"/><circle cx="${fx(b[0])}" cy="${fx(b[1])}" r="3" fill="#DB2777" pointer-events="none"/>`); }
+    if (SNAPMARK.guide) { const g = SNAPMARK.guide, L = 70 / V.s, a = tr([g.p[0] - g.n[0] * L, g.p[1] - g.n[1] * L]), b = tr([g.p[0] + g.n[0] * L, g.p[1] + g.n[1] * L]); o.push(`<path d="M${fx(a[0])} ${fx(a[1])}L${fx(b[0])} ${fx(b[1])}" stroke="#DB2777" stroke-width="1.3" stroke-dasharray="5 3" pointer-events="none"/>`); }
+  }
   if (!opts.print && BOX) { const x = Math.min(BOX.a[0], BOX.b[0]), y = Math.min(BOX.a[1], BOX.b[1]); o.push(`<rect x="${fx(x)}" y="${fx(y)}" width="${fx(Math.abs(BOX.b[0] - BOX.a[0]))}" height="${fx(Math.abs(BOX.b[1] - BOX.a[1]))}" fill="rgba(37,99,235,.08)" stroke="#2563EB" stroke-dasharray="4 3" pointer-events="none"/>`); }
   if (!opts.print && POLY && POLY.pts.length) {
     const pp = POLY.pts.map(tr); let d = 'M' + pp.map(q => fx(q[0]) + ' ' + fx(q[1])).join('L');
@@ -3609,7 +3836,7 @@ function updateStatus() {
   s.push(`scale ${nf(VIEW.s / uf('L'), 'n', 3)} px/${un('L')}`);
   s.push(SEL.size ? SEL.size + ' selected' : 'nothing selected');
   if (R && R.ok) s.push(`centroid (${nf(R.cx, 'L', 4)}, ${nf(R.cy, 'L', 4)})`);
-  s.push(M.settings.snap ? 'snap on' : 'snap off');
+  s.push(M.settings.snap ? 'snap on' : 'snap off'); s.push(NOOV ? 'no overlap' : '<b>overlap allowed</b>');
   s.push('<span class="hint">drag background: ' + (M.settings.boxMode ? 'box select' : 'pan (Shift: box)') + ' · wheel: zoom · right-click: menu</span>');
   CV.status.innerHTML = s.join(' · ');
 }
@@ -3662,7 +3889,8 @@ function wireCanvas() {
       const moving = selParts();
       const G = moving.map(p => SPC.partGlobal(p)), movePts = [].concat(...G.map(g => g.snaps));
       let anchor = movePts[0], bd = Infinity; movePts.forEach(m => { const d = Math.hypot(m[0] - wp[0], m[1] - wp[1]); if (d < bd) { bd = d; anchor = m; } });
-      DRAG = { mode: 'move', w0: wp, ids: moving.map(p => p.id), base: moving.map(p => [p.x, p.y]), movePts, anchor, targets: snapTargets(new Set(moving.map(p => p.id))), moved: false, pushed: false, click: pid };
+      const sel = moving.map(p => p.id), ids = sel.concat(novCarried(new Set(sel)));
+      DRAG = { mode: 'move', w0: wp, ids, base: ids.map(id => { const q = partById(id); return [q.x, q.y]; }), movePts, anchor, targets: snapTargets(new Set(ids)), W: novWorld(ids), cur: [0, 0], nsel: sel.length, moved: false, pushed: false, click: pid };
       drawCanvas(); return;
     }
     // background
@@ -3686,7 +3914,7 @@ function wireCanvas() {
       if (!DRAG.moved && Math.hypot(d[0], d[1]) * VIEW.s < 3) return;
       if (!DRAG.pushed) { pushUndo(); DRAG.pushed = true; }
       DRAG.moved = true; showTip(null);
-      d = snapDelta(DRAG.movePts, d, DRAG.targets, DRAG.anchor, e.altKey);
+      d = dragTarget(DRAG, d, e.altKey); DRAG.cur = d;
       DRAG.ids.forEach((id, i) => { const p = partById(id); if (p) { p.x = DRAG.base[i][0] + d[0]; p.y = DRAG.base[i][1] + d[1]; } });
       DRAG.d = d; compute(); requestDraw(); throttleOut();
     }
@@ -3704,7 +3932,7 @@ function wireCanvas() {
     if (D.mode === 'pan' && D.click) { if (SEL.size) { SEL = new Set(); SELORD = []; rebuildInputs(); updateToolState(); } drawCanvas(); return; }
     if (D.mode === 'move') {
       SNAPMARK = null;
-      if (D.moved) { afterGeo(true); toast(`Moved ${D.ids.length > 1 ? D.ids.length + ' parts' : partById(D.ids[0]).lbl} by (${nf(D.d[0], 'L', 4)}, ${nf(D.d[1], 'L', 4)}) ${un('L')}`); }
+      if (D.moved) { afterGeo(true); toast(`Moved ${D.nsel > 1 ? D.nsel + ' parts' : partById(D.ids[0]).lbl} by (${nf(D.d[0], 'L', 4)}, ${nf(D.d[1], 'L', 4)}) ${un('L')}`); }
       else if (SEL.size > 1) { SEL = new Set([D.click]); SELORD = [D.click]; rebuildInputs(); drawCanvas(); updateToolState(); }
       return;
     }
@@ -3756,29 +3984,122 @@ function finishPoly() {
   const P = POLY; POLY = null; CV.svg.classList.remove('adding'); polyHint(); SNAPMARK = null;
   if (!P || P.pts.length < 3) { toast('Polygon cancelled (needs 3 vertices)'); drawCanvas(); return; }
   const m = SPC.polyM(P.pts); if (Math.abs(m.A) < 1e-12) { toast('Polygon has no area'); drawCanvas(); return; }
-  if (P.replace) { const pt = partById(P.replace); if (pt) { pushUndo(); setPolyGlobal(pt, P.pts); afterGeo(true); return; } }
+  if (P.replace) { const pt = partById(P.replace); if (pt) { pushUndo(); if (!guardEdit([pt.id], () => setPolyGlobal(pt, P.pts))) { showInTab('part'); rebuildInputs(); drawCanvas(); return; } afterGeo(true); return; } }
   const pt = newPart('poly', { pts: [] }, 0, 0, { hole: P.hole }); setPolyGlobal(pt, P.pts); pt.lbl = nextLabel(pt);
-  addParts([pt]); toast('Added ' + pt.lbl);
+  const res = addParts([pt]); if (res) toast('Added ' + pt.lbl + movedTxt(res));
 }
 function cancelPoly() { POLY = null; if (CV.svg) CV.svg.classList.remove('adding'); polyHint(); drawCanvas(); }
+
+/* ---------- no overlap ---------- */
+// Solid parts may touch but not overlap; a hole must stay inside one solid part (SPC.NOV: exact polygon / circle geometry).
+const novShapes = parts => parts.map(p => { try { const s = SPC.NOV.shape(p); return s.prims.length ? s : null; } catch (e) { return null; } }).filter(Boolean);
+// holes that sit in a moving solid part (and in no other solid part) move with it
+function novCarried(ids) {
+  if (!NOOV) return [];
+  const mv = novShapes(M.parts.filter(p => ids.has(p.id) && !p.hole)); if (!mv.length) return [];
+  const st = novShapes(M.parts.filter(p => !ids.has(p.id) && !p.hole));
+  return M.parts.filter(p => p.hole && !ids.has(p.id)).filter(hp => { const s = novShapes([hp])[0]; return s && SPC.NOV.holeOK(s, mv) && !SPC.NOV.holeOK(s, st); }).map(p => p.id);
+}
+function novWorld(ids) { const set = new Set(ids); return { mov: novShapes(M.parts.filter(p => set.has(p.id))), st: novShapes(M.parts.filter(p => !set.has(p.id))) }; }
+function novOK(ids) { return SPC.NOV.feasible(novWorld(ids), [0, 0]); }
+function novWhy(ids, d) {
+  const W = novWorld(ids), N = SPC.NOV, ov = N.overlapping(W, d || [0, 0]).map(id => (partById(id) || {}).lbl || id), bad = [];
+  if (ov.length) bad.push((ids.length > 1 ? 'the parts' : ((partById(ids[0]) || {}).lbl || 'the part')) + ' would overlap ' + ov.join(', '));
+  const mv = W.mov.map(s => N.shift(s, d || [0, 0]));
+  if (mv.some(s => s.hole && !N.holeOK(s, W.st.filter(q => !q.hole).concat(mv.filter(q => !q.hole))))) bad.push('a hole would not be inside one solid part');
+  return bad.join('; ') || 'overlap';
+}
+function shiftParts(ids, d) { ids.forEach(id => { const p = partById(id); if (p) { p.x += d[0]; p.y += d[1]; } }); }
+// moves parts that were just placed to the nearest position where nothing overlaps (touching the part they would overlap)
+function novResolve(ids) {
+  if (!NOOV) return { ok: true, d: [0, 0] };
+  const W = novWorld(ids); if (SPC.NOV.feasible(W, [0, 0])) return { ok: true, d: [0, 0] };
+  const r = SPC.NOV.nearestFree(W, [0, 0]); if (!r) return { ok: false, why: novWhy(ids) };
+  shiftParts(ids, r.d); return { ok: true, d: r.d, moved: true };
+}
+const movedTxt = res => res && res.moved ? ` — placed at the nearest free position (moved ${nf(res.d[0], 'L', 4)}, ${nf(res.d[1], 'L', 4)} ${un('L')})` : '';
+function novRefuse(what, why) { if (UNDO.length) restoreSnap(UNDO.pop()); afterGeo(true); toast(what + ': ' + why + ' (Prevent overlap is on — Settings).'); }
+// position of the dragged parts: collide and slide, then magnetic snap to other parts (edges flush, ends / centres aligned), then points, then grid
+function dragTarget(D, raw, alt) {
+  const N = SPC.NOV, S = M.settings; SNAPMARK = null;
+  const d = NOOV ? N.slide(D.W, D.cur, raw).d : raw;
+  if (!S.snap || alt) return d;
+  const free0 = NOOV && N.feasible(D.W, d);
+  const reach = c => !free0 || N.collide(D.W, d, [c[0] - d[0], c[1] - d[1]]).t >= 1;
+  const rad = (S.snapPx || 10) / VIEW.s;
+  if (S.snapParts) {
+    const sn = N.snap(D.W.mov.map(s => N.shift(s, d)), D.W.st, rad);
+    if (sn) for (const sh of [sn.shift, sn.normalShift]) {
+      const c = [d[0] + sh[0], d[1] + sh[1]];
+      if (reach(c)) { SNAPMARK = sn.kind === 'edge' ? { seg: sn.seg, guide: sh === sn.shift ? sn.guide : null } : { p: sn.p }; return c; }
+    }
+  }
+  const c = snapDelta(D.movePts, d, D.targets, D.anchor, alt);
+  if (c !== d && !reach(c)) { SNAPMARK = null; return d; }
+  return c;
+}
+// edits typed in the part panel: not applied when they would make parts overlap (message with "Place touching")
+let OVEDIT = null;
+function guardEdit(ids, fn, inp) {
+  if (!NOOV) { fn(); if (OVEDIT) { OVEDIT = null; renderOvEdit(); } return true; }
+  ids = ids.filter(id => partById(id));
+  const was = novOK(ids), before = ids.map(id => JSON.stringify(partById(id)));
+  fn();
+  if (!was || novOK(ids)) { if (OVEDIT) { OVEDIT = null; renderOvEdit(); } return true; }
+  const why = novWhy(ids), after = ids.map(id => JSON.stringify(partById(id)));
+  before.forEach(s => { const o = JSON.parse(s), p = partById(o.id); Object.keys(p).forEach(k => delete p[k]); Object.assign(p, o); });
+  OVEDIT = { ids, after, why }; renderOvEdit(); if (inp) inp.classList.add('bad');
+  return false;
+}
+function ovEditPlace() {
+  const E = OVEDIT; if (!E) return; OVEDIT = null;
+  pushUndo(); E.after.forEach(s => { const o = JSON.parse(s), p = partById(o.id); if (p) { Object.keys(p).forEach(k => delete p[k]); Object.assign(p, o); } });
+  const res = novResolve(E.ids); if (!res.ok) { novRefuse('Not applied', res.why); return; }
+  afterGeo(true); toast('Applied' + movedTxt(res));
+}
+function renderOvEdit() {
+  document.querySelectorAll('.ovEditMsg').forEach(box => {
+    box.innerHTML = ''; if (!OVEDIT) { box.hidden = true; return; }
+    box.hidden = false; box.appendChild(el('div', null, '<b>Not applied:</b> ' + esc(OVEDIT.why) + '. Solid parts may touch but not overlap (Prevent overlap is on).'));
+    const r = el('div', 'btnRow'); r.appendChild(btn('Place touching', 'sm primary', ovEditPlace, 'Apply the value and move the part to the nearest position where it touches but does not overlap'));
+    r.appendChild(btn('Turn off Prevent overlap', 'sm', () => { const E = OVEDIT; setNoOverlap(false); if (E) { pushUndo(); E.after.forEach(s => { const o = JSON.parse(s), p = partById(o.id); if (p) { Object.keys(p).forEach(k => delete p[k]); Object.assign(p, o); } }); } afterGeo(true); toast('Prevent overlap is off (this browser)'); }));
+    box.appendChild(r);
+  });
+}
+function ovEditBox(P) { const b = el('div', 'errBox ovEditMsg'); b.hidden = true; P.appendChild(b); return b; }
+function fixOverlap(o) {
+  // move the smaller part of the pair clear of every other solid part, touching
+  const a = partById(o.a), b = partById(o.b); if (!a || !b) return;
+  const A = q => Math.abs(SPC.partProps(q).geo.A), mv = A(b) <= A(a) ? b : a;
+  pushUndo(); const ids = [mv.id].concat(novCarriedFix(mv.id));
+  const W = novWorld(ids), r = SPC.NOV.nearestFree(W, [0, 0]);
+  if (!r) { UNDO.pop(); toast('No free position found for ' + mv.lbl); return; }
+  shiftParts(ids, r.d); afterGeo(true);
+  toast(`Moved ${mv.lbl} by (${nf(r.d[0], 'L', 4)}, ${nf(r.d[1], 'L', 4)}) ${un('L')}: no longer overlapping`);
+}
+function novCarriedFix(id) { const was = NOOV; NOOV = true; try { return novCarried(new Set([id])); } finally { NOOV = was; } }
 
 /* ---------- actions ---------- */
 function groupBox(parts) { const b = bboxOf(parts); return [(b[0] + b[2]) / 2, (b[1] + b[3]) / 2]; }
 function actFlip(ax, ids) {
-  const sp = ids ? M.parts.filter(p => ids.includes(p.id)) : selParts(); if (!sp.length) return;
-  pushUndo(); const c = sp.length > 1 ? groupBox(sp) : null;
+  const sp0 = ids ? M.parts.filter(p => ids.includes(p.id)) : selParts(); if (!sp0.length) return;
+  const all = sp0.map(p => p.id).concat(novCarried(new Set(sp0.map(p => p.id)))), sp = all.map(partById), was = NOOV && novOK(all);
+  pushUndo(); const c0 = sp0.length > 1 ? groupBox(sp0) : null, c = c0 || (sp.length > 1 ? [sp0[0].x, sp0[0].y] : null);
   sp.forEach(p => {
     if (ax === 'h') { p.rot = norm(-(p.rot || 0)); p.mir = !p.mir; if (c) p.x = 2 * c[0] - p.x; }
     else { p.rot = norm(180 - (p.rot || 0)); p.mir = !p.mir; if (c) p.y = 2 * c[1] - p.y; }
   });
-  afterGeo(true); toast((ax === 'h' ? 'Flipped horizontally' : 'Flipped vertically') + (c ? ' (as a group)' : ''));
+  const res = was ? novResolve(all) : null; if (res && !res.ok) { novRefuse('Not flipped', res.why); return; }
+  afterGeo(true); toast((ax === 'h' ? 'Flipped horizontally' : 'Flipped vertically') + (c0 ? ' (as a group)' : '') + movedTxt(res));
 }
 const norm = a => { let r = ((a % 360) + 360) % 360; if (Math.abs(r - 360) < 1e-9) r = 0; return +r.toFixed(10); };
 function actRotate(a, about) {
-  const sp = selParts(); if (!sp.length || !isNum(a)) return;
-  pushUndo(); const c = about || (sp.length > 1 ? groupBox(sp) : null), r = a * Math.PI / 180, cs = Math.cos(r), sn = Math.sin(r);
+  const sp0 = selParts(); if (!sp0.length || !isNum(a)) return;
+  const all = sp0.map(p => p.id).concat(novCarried(new Set(sp0.map(p => p.id)))), sp = all.map(partById), was = NOOV && novOK(all);
+  pushUndo(); const c0 = about || (sp0.length > 1 ? groupBox(sp0) : null), c = c0 || (sp.length > 1 ? [sp0[0].x, sp0[0].y] : null), r = a * Math.PI / 180, cs = Math.cos(r), sn = Math.sin(r);
   sp.forEach(p => { p.rot = norm((p.rot || 0) + a); if (c) { const dx = p.x - c[0], dy = p.y - c[1]; p.x = c[0] + cs * dx - sn * dy; p.y = c[1] + sn * dx + cs * dy; } });
-  afterGeo(true); toast('Rotated ' + a + '°' + (c ? (about ? '' : ' (as a group)') : ''));
+  const res = was ? novResolve(all) : null; if (res && !res.ok) { novRefuse('Not rotated', res.why); return; }
+  afterGeo(true); toast('Rotated ' + a + '°' + (c0 ? (about ? '' : ' (as a group)') : '') + movedTxt(res));
 }
 function actRotatePrompt() {
   if (!SEL.size) return;
@@ -3790,7 +4111,8 @@ function actDuplicate() {
   const sp = selParts(); if (!sp.length) return;
   const g = M.settings.grid > 0 ? M.settings.grid : 0.5; pushUndo();
   const made = sp.map(p => { const q = clonePart(p); q.x += g * 2; q.y -= g * 2; M.parts.push(q); q.lbl = nextLabel(q); return q; });
-  SEL = new Set(made.map(p => p.id)); SELORD = made.map(p => p.id); afterGeo(true); toast('Duplicated ' + made.length);
+  const res = novResolve(made.map(p => p.id)); if (!res.ok) { novRefuse('Not duplicated', 'no free position found'); return; }
+  SEL = new Set(made.map(p => p.id)); SELORD = made.map(p => p.id); afterGeo(true); toast('Duplicated ' + made.length + movedTxt(res));
 }
 function actDelete() {
   const sp = selParts(); if (!sp.length) return;
@@ -3814,8 +4136,9 @@ function actMirrorCopy(ax, about) {
     else { q.y = 2 * y0 - q.y; q.rot = norm(180 - (q.rot || 0)); q.mir = !q.mir; }
     M.parts.push(q); q.lbl = nextLabel(q); return q;
   });
+  const res = novResolve(made.map(p => p.id)); if (!res.ok) { novRefuse('No mirror copy', 'no free position found'); return; }
   SEL = new Set(made.map(p => p.id)); SELORD = made.map(p => p.id); afterGeo(true);
-  toast(`Mirror copy about the ${ax === 'v' ? 'vertical axis x = ' + nf(x0, 'L', 4) : 'horizontal axis y = ' + nf(y0, 'L', 4)} ${un('L')}`);
+  toast(`Mirror copy about the ${ax === 'v' ? 'vertical axis x = ' + nf(x0, 'L', 4) : 'horizontal axis y = ' + nf(y0, 'L', 4)} ${un('L')}` + movedTxt(res));
 }
 function anchorFor(clicked) { const others = SELORD.filter(id => id !== clicked && SEL.has(id)); return others.length ? partById(others[others.length - 1]) : null; }
 function actAlign(anchor, how) {
@@ -3824,7 +4147,10 @@ function actAlign(anchor, how) {
   if (how === 'left') dx = a[0] - m[0]; if (how === 'right') dx = a[2] - m[2]; if (how === 'bottom') dy = a[1] - m[1]; if (how === 'top') dy = a[3] - m[3];
   if (how === 'cx') dx = (a[0] + a[2]) / 2 - (m[0] + m[2]) / 2; if (how === 'cy') dy = (a[1] + a[3]) / 2 - (m[1] + m[3]) / 2;
   if (how === 'onTop') dy = a[3] - m[1]; if (how === 'below') dy = a[1] - m[3]; if (how === 'leftOf') dx = a[0] - m[2]; if (how === 'rightOf') dx = a[2] - m[0];
-  pushUndo(); moving.forEach(p => { p.x += dx; p.y += dy; }); afterGeo(true);
+  const ids = moving.map(p => p.id).concat(novCarried(new Set(moving.map(p => p.id)))), was = NOOV && novOK(ids);
+  pushUndo(); shiftParts(ids, [dx, dy]);
+  if (was && !novOK(ids)) { novRefuse('Not moved', novWhy(ids)); return; }
+  afterGeo(true);
   toast(`Moved ${moving.map(p => p.lbl).join(', ')} by (${nf(dx, 'L', 4)}, ${nf(dy, 'L', 4)}) ${un('L')}`);
 }
 function copySel() { const sp = selParts(); if (!sp.length) return; CLIP = JSON.parse(JSON.stringify(sp)); CLIPN = 0; toast('Copied ' + sp.length); }
@@ -3835,9 +4161,21 @@ function paste(at) {
   if (at) { const b = (() => { let bb = [Infinity, Infinity, -Infinity, -Infinity]; CLIP.forEach(p => { const q = SPC.partGlobal(p).bbox; bb = [Math.min(bb[0], q[0]), Math.min(bb[1], q[1]), Math.max(bb[2], q[2]), Math.max(bb[3], q[3])]; }); return bb; })(); dx = at[0] - (b[0] + b[2]) / 2; dy = at[1] - (b[1] + b[3]) / 2; }
   pushUndo();
   const made = CLIP.map(p => { const q = clonePart(p); q.x += dx; q.y += dy; M.parts.push(q); q.lbl = nextLabel(q); return q; });
-  SEL = new Set(made.map(p => p.id)); SELORD = made.map(p => p.id); afterGeo(true); toast('Pasted ' + made.length);
+  const res = novResolve(made.map(p => p.id)); if (!res.ok) { novRefuse('Not pasted', 'no free position found'); return; }
+  SEL = new Set(made.map(p => p.id)); SELORD = made.map(p => p.id); afterGeo(true); toast('Pasted ' + made.length + movedTxt(res));
 }
-function nudge(dx, dy) { const sp = selParts(); if (!sp.length) return; pushUndo(); sp.forEach(p => { p.x += dx; p.y += dy; }); afterGeo(false); }
+function nudge(dx, dy) {
+  const sp = selParts(); if (!sp.length) return;
+  const sel = sp.map(p => p.id), ids = sel.concat(novCarried(new Set(sel))); let d = [dx, dy], msg = '';
+  if (NOOV) {
+    const W = novWorld(ids);
+    if (SPC.NOV.feasible(W, [0, 0])) {
+      const r = SPC.NOV.collide(W, [0, 0], d);
+      if (r.t < 1) { msg = novWhy(ids, d); if (r.t <= 1e-12) { toast('Not moved: ' + msg + ' (Prevent overlap is on).'); return; } d = [dx * r.t, dy * r.t]; msg = 'Stopped at contact: ' + msg; }
+    }
+  }
+  pushUndo(); shiftParts(ids, d); afterGeo(false); if (msg) toast(msg);
+}
 
 /* ---------- context menu ---------- */
 function closeMenu() { const m = $('ctxMenu'); if (m && !m.hidden) { m.hidden = true; m.innerHTML = ''; } }
@@ -3964,7 +4302,16 @@ function errPanel() { return el('div', 'errBox', '<b>No results: input required<
 function warnPanel(parent) {
   if (!R || !R.ok) return;
   const w = R.warnings.slice();
-  if (w.length) parent.appendChild(el('div', 'warnBox', '<b>Check the model</b><ul>' + w.map(m => '<li>' + esc(m) + '</li>').join('') + '</ul>'));
+  if (!w.length) return;
+  const box = el('div', 'warnBox', '<b>Check the model</b>'), ul = el('ul'); box.appendChild(ul);
+  const ovs = R.overlaps || [];
+  w.forEach(m => {
+    const li = el('li', null, esc(m)), o = ovs.find(q => m.startsWith(`${q.la} and ${q.lb} overlap`));
+    if (o) { const b = btn('Fix: move apart', 'sm ovFix', () => fixOverlap(o), 'Moves the smaller part of the pair to the nearest position where it touches but does not overlap any part'); b.style.marginLeft = '6px'; li.appendChild(b); }
+    ul.appendChild(li);
+  });
+  if (ovs.length) box.appendChild(el('div', 'hint', 'Overlapping parts (e.g. in a project saved before overlap prevention) are kept where they are, and the overlap is counted twice in all properties until it is fixed.'));
+  parent.appendChild(box);
 }
 function buildGovStrip() {
   const g = $('govStrip'); g.className = 'govStrip';
@@ -4371,6 +4718,7 @@ const PRINT_CSS = `
   html,body{background:#fff!important;overflow:visible!important;height:auto!important}
   body>#app{display:none!important}
   #ctxMenu{display:none!important}
+  .ovFix{display:none!important}
   #printReport{display:block!important;font-family:var(--font-doc);color:#111;font-size:10pt}
   @page{margin:0.6in 0.55in}
   .prTitle{border:1.6px solid #16304F;padding:8px 12px;margin-bottom:12px}
@@ -4482,7 +4830,7 @@ function spcInit() {
   if (!window.katex) window.addEventListener('load', () => { if (window.katex) renderTab(); });
 }
 // test / automation hook (read-only use; not part of the saved data)
-window.SPCUI = { get model() { return M; }, get res() { return R; }, get sel() { return [...SEL]; }, set sel(a) { SEL = new Set(a); SELORD = a.slice(); rebuildInputs(); drawCanvas(); updateToolState(); }, flush, fullRebuild, load: d => loadModel(d), buildPrintReport, runValidation, actFlip, actRotate, actMirrorCopy, actDuplicate, actDelete, actAlign, undo, redo, paste, copySel, partById, fitView, get view() { return VIEW; }, w2s, s2w, get undoN() { return UNDO.length; } };
+window.SPCUI = { get model() { return M; }, get res() { return R; }, get sel() { return [...SEL]; }, set sel(a) { SEL = new Set(a); SELORD = a.slice(); rebuildInputs(); drawCanvas(); updateToolState(); }, flush, fullRebuild, load: d => loadModel(d), buildPrintReport, runValidation, actFlip, actRotate, actMirrorCopy, actDuplicate, actDelete, actAlign, undo, redo, paste, copySel, partById, fitView, nudge, addSimple, addShape, setNoOverlap, get noOverlap() { return NOOV; }, fixOverlap, get snapMark() { return SNAPMARK; }, get view() { return VIEW; }, w2s, s2w, get undoN() { return UNDO.length; } };
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', spcInit); else spcInit();
 </script>
 </body>

@@ -69,3 +69,95 @@ A / Ix / J: W 2.7 % / 4.1 % / 18.7 % (W40X149); M 9.0 % / 9.4 % / 50 % (M3X2.9);
 - O4. J of cell walls' own b t³/3 is not added to the Bredt term (conventional); stocky open elements (b/t < 10) use b t³/3 without end correction (flagged).
 - O5. Holes are ignored in torsion (gross section), with a note.
 - O6. Flip/rotate of several selected parts acts about the selection's bounding-box centre (one part: about its centroid).
+
+## 2026-10-10 — PR: claude/spc-no-overlap (PR link added after merge)
+
+### N1. Parts may not overlap; magnetic snap to each other   [drawing behaviour — no change to any formula or computed property]
+
+- **Engineer's request (2026-10-10):** "Don't allow overlap of elements; instead, if they get too close they should snap to each other."
+- **Problem:** solid parts could be dragged, pasted, rotated or typed on top of each other. The overlap was only a warning, and the common area was counted twice in every property.
+- **Change (drawing only):** with **Prevent overlap** on (default), solid parts may touch but their materials may not intersect. A hole must stay inside one solid part.
+  - **Drag:** the part stops at contact and slides along the contact edge ("collide and slide"). It cannot pass through thin parts, even on a fast drag.
+  - **Arrow-key nudge:** stops at contact. Pushing again into the contact shows "Not moved: … would overlap …".
+  - **Paste, duplicate, mirror copy, add part / rolled shape / polygon, template "Add to drawing":** the new parts go to the nearest free position, touching the part they would have overlapped. The toast gives the shift.
+  - **Rotate / flip:** if the result overlaps, it is moved to the nearest free position, touching (chosen over refusing, because it keeps the requested orientation; the toast gives the shift). If no free position exists, the action is undone with a message.
+  - **Align / "place touching" (context menu) and the multi-selection "Move by":** not applied if the result would overlap. For "Move by", OK = place touching instead.
+  - **Part panel (position, edges, rotation, mirror, dimensions, family/shape, hole flag, polygon vertices):** a value that would overlap is not applied. The field turns red and a box shows "Not applied: PL2 would overlap PL1" with **Place touching** (apply the value, then move to the nearest free position) and **Turn off Prevent overlap**.
+  - **Holes:** a dragged hole stops at the edge of its part. Holes lying inside a moved, rotated or flipped part move with it.
+  - **Magnetic snap (drag):** within the snap radius (Settings → Snap radius, default 10 px on screen), parallel edges with opposite outward normals become coincident (to round-off). Then the ends or centres of the two edges, or of the two parts' overall extents, line up along the contact if they are within the same radius (e.g. flange tip flush with the plate edge, or centred on the plate). Round bars snap tangent to edges and to other round bars. While snapping, the contact edge is drawn in magenta and the alignment as a dashed magenta guide. Corner/midpoint snapping (Phase 1) and then the grid remain as lower priorities. Alt suspends snapping.
+- **Setting:** Settings → "Prevent overlap", and a "No overlap" toolbar toggle. Per browser, **not project data**: new localStorage key `spc_preventOverlap_v1` = `'1'` / `'0'` (absent = on). No existing key or file format changed. The status line shows "no overlap" or "overlap allowed".
+- **Geometry (new block `NOV`, engine anchor `/* ---------------- no-overlap geometry`, after `function ptSegDistPoly`):** each part is its outer boundary minus its own void (tube interior), in the same global geometry the properties use (`partGlobal`). Overlap area is exact: polygons by convex pieces (Sutherland–Hodgman); circle ∩ polygon by circular segments; circle ∩ circle by the lens formula; inclusion–exclusion for voids. "Overlap" = common area > 1e-9 × max(0.01, smaller part area) in², so touching parts and round-off are not flagged. Collision uses exact contact times (vertex–edge, circle–edge, circle–vertex, circle–circle) and tests the overlap between consecutive contact times. The nearest free position is the exact escape distance along 24 directions plus the edge normals of the conflicting parts, taking the shortest.
+- **Projects that already have overlapping parts** (saved before this change, or with the setting off): they load **unchanged** (CLAUDE.md §5). The toast says "N overlapping pair(s) (not moved)". The "Check the model" warning lists each pair with a **Fix: move apart** button, which moves the smaller part of the pair to the nearest position where it touches but overlaps nothing. Until fixed, the properties are computed as before, with the overlap counted twice.
+
+#### Engine change: overlap warning (`overlapChecks`, anchor `function overlapChecks(R) {`)
+
+Before:
+```js
+    const P = R.parts;
+    for (let i = 0; i < P.length; i++) for (let j = i + 1; j < P.length; j++) {
+      const a = P[i], b = P[j]; if (a.pt.hole || b.pt.hole) continue;
+      const ba = a.G.bbox, bb = b.G.bbox; if (ba[0] >= bb[2] || bb[0] >= ba[2] || ba[1] >= bb[3] || bb[1] >= ba[3]) continue;
+      let ov = 0;
+      a.G.prims.forEach(pa => { if (pa.s < 0) return; b.G.prims.forEach(pb => { if (pb.s < 0) return; ov += overlapArea(primPoly(pa), primPoly(pb)); }); });
+      // material removed by a part's own void (tube interior) does not count
+      if (ov > 1e-6 * Math.min(Math.abs(a.geo.A), Math.abs(b.geo.A))) {
+        let inVoid = 0; [a, b].forEach(x => x.G.prims.forEach(pv => { if (pv.s > 0) return; const other = x === a ? b : a; other.G.prims.forEach(po => { if (po.s > 0) inVoid += overlapArea(primPoly(pv), primPoly(po)); }); }));
+        if (ov - inVoid > 1e-6 * Math.min(Math.abs(a.geo.A), Math.abs(b.geo.A))) R.warnings.push(`${a.pt.lbl} and ${b.pt.lbl} overlap (about ${(+(ov - inVoid).toPrecision(3))} in² counted twice). Move them apart or use a hole.`);
+      }
+    }
+```
+After:
+```js
+    const P = R.parts;
+    // material overlap of solid parts: exact area common to the two materials (each part's own void excluded; circles exact)
+    R.overlaps = [];
+    const S = P.map(q => q.pt.hole ? null : novShape(q.pt));
+    for (let i = 0; i < P.length; i++) for (let j = i + 1; j < P.length; j++) {
+      const a = S[i], b = S[j]; if (!a || !b || !bbHit(a.bbox, b.bbox)) continue;
+      const ov = novInter(a, b);
+      if (ov > novTol(a, b)) { R.overlaps.push({ a: a.id, b: b.id, la: P[i].pt.lbl, lb: P[j].pt.lbl, area: ov }); R.warnings.push(`${P[i].pt.lbl} and ${P[j].pt.lbl} overlap (about ${(+ov.toPrecision(3))} in² counted twice). Move them apart or use a hole.`); }
+    }
+```
+Only the warning's area figure is affected: it was computed with circles as inscribed 64-gons and an approximate void correction, and is now exact. No property uses it. The hole-inside check below it is unchanged. `SPC` also exports `NOV`.
+
+Check case (warning area): round bar Ø4 at (0, 0) and plate 6 × 1 centred at (1, 1.5). The common area is the circular segment above y = 1: r² acos(d/r) − d√(r² − d²) = 4 acos(0.5) − 1·√3 = 4.18879 − 1.73205 = **2.45674 in²**. Before: 2.44997 (64-gon), shown as "about 2.45 in²". After: 2.456739, shown as "about 2.46 in²". A = 12.566 + 6 = 18.566 in² (overlap counted twice) both before and after.
+
+#### UI changes (anchors)
+
+| Where (anchor) | Change |
+|---|---|
+| after `function setProjects(p)` | `LS_NOOV = 'spc_preventOverlap_v1'`, `NOOV`, `setNoOverlap()` |
+| before `/* ---------- actions ---------- */` | new block `/* ---------- no overlap ---------- */`: `novShapes`, `novCarried` (holes that move with their part), `novWorld`, `novOK`, `novWhy`, `shiftParts`, `novResolve` (nearest free position), `movedTxt`, `novRefuse`, `dragTarget` (collide-and-slide, then magnetic snap, then point/grid snap), `guardEdit` / `ovEditPlace` / `renderOvEdit` / `ovEditBox` (part-panel guard), `fixOverlap` |
+| `wireCanvas` pointerdown `DRAG = { mode: 'move'` | moving set = selection + carried holes; `W: novWorld(ids), cur: [0, 0]` |
+| `wireCanvas` pointermove | `d = snapDelta(DRAG.movePts, d, …)` → `d = dragTarget(DRAG, d, e.altKey); DRAG.cur = d;` |
+| `svgMarkup` `if (!opts.print && SNAPMARK)` | also draws `SNAPMARK.seg` (contact edge) and `SNAPMARK.guide` (alignment) |
+| `nudge`, `actFlip`, `actRotate`, `actDuplicate`, `actMirrorCopy`, `paste`, `actAlign`, `addParts` / `addSimple` / `addShape`, `finishPoly`, template `run`, multi-selection "Move" | rules above |
+| `numIn` / `chkIn` / `selIn` | optional `guard` (part ids) → `guardEdit`; used by the part panel |
+| `buildSetPane` → Snapping and moving | "Prevent overlap" checkbox (per browser); snap-radius hint |
+| `TOOLS`, `updateToolState`, `updateStatus` | "No overlap" toggle; status text |
+| `warnPanel` | "Fix: move apart" button per overlapping pair (hidden in print via `.ovFix`) |
+| `loadModel` | toast names the overlapping pairs; nothing is moved |
+
+#### How verified
+
+- `node --check` of every inline script.
+- **Main vs branch** (headless Chromium, KaTeX served locally): default example and all 8 templates. Identical numeric results and identical text of the Properties, Calc detail, Plastic, Torsion, Q and Section tabs. The only differences are the new "No overlap" toolbar button and status text. Autosaved model identical, no warnings, Validation tab 60/60 on both, no console errors.
+- **Phase 1 checks:** node cross-check 410 checks, 0 failures; Phase 1 browser interaction tests 49/49 (unchanged, including the corner-to-corner drag snap).
+- **Node, new geometry** (18 checks). Overlap areas vs a 0.004 in grid for round bar/plate, two round bars, tube/plate, W/rotated L, HSS/round bar, pipe/round HSS: all within the grid error. Touching plates, and round bars tangent at 30° or 37°, give no overlap. Collide stops at contact exactly. Slide reaches (3, 1) for a target of (3, −10). Slide into an inner corner stops at both walls. A Ø2 bar drops onto a W14X90 flange to y = d/2 + r. A fast move does not tunnel through a 1/4 in plate. A hole stops at the plate edge. Nearest free position of a plate 0.2 in into another: up 0.8. Snap gives coincident edges and aligned ends. **2,303 template variants** produce no overlapping parts: every C/MC/L/W/M/S/HP shape in every template and arrangement, gaps 0, 3/8 and 3/4 in.
+- **Browser interaction tests** (47 checks, 0 failures, no console errors):
+  - **Drag:** drag into a plate stops at contact (y = 1 exactly). A diagonal drag slides along the contact. Undo restores the position.
+  - **Snap:** within 0.5 × the snap radius the edges become coincident (0 error) and the right ends align (0 error), with the cue shown (screenshot `snap_cue.png`). A centred snap also works; beyond the radius there is no snap. A round bar snaps tangent.
+  - **Nudge:** stops at contact; blocked with a message; free along the contact.
+  - **Paste, duplicate, mirror copy:** paste over a part and duplicate end free and touching. Mirror copy about the part centroid is moved clear, touching.
+  - **Rotate / flip:** rotate 90° on a plate moves the part up to touching. Flip V of an angle standing on a plate puts it back on the plate.
+  - **Add:** a plate or angle added on the W ends free. A hole added in empty space is moved inside a solid part. Template "Add to drawing" ends free.
+  - **Part panel:** typed y that would overlap is not applied (red field + message, screenshot `edit_refused.png`); "Place touching" works. Thickness 1 → 2 is refused, then placed touching.
+  - **Holes:** a dragged hole stays inside; dragging the plate carries its hole; a typed hole position outside the plate is refused.
+  - **Toggle off:** overlap allowed, warning shown, A counted twice. Stored only under `spc_preventOverlap_v1` (not in the autosave), and survives a reload.
+  - **Legacy file** (W14X90 with a cover plate 0.3 in into the flange): loads with geometry unchanged and the warning plus Fix button (screenshot `legacy_warning.png`). A = 46.1252 in², overlap counted twice as before. Fix moves PL1 to y = 7.5, touching.
+
+#### Open items
+
+- N-O1. Holes inside a moved, rotated or flipped part move with it (otherwise the part could not move without leaving its hole behind). This happens only when Prevent overlap is on. Confirm.
+- N-O2. Rotate/flip that would overlap moves the part to the nearest free position, touching, rather than refusing. Confirm.
+- N-O3. A hole must lie inside **one** solid part (same rule as the existing warning). A hole straddling two touching plates is refused. Say if that case is needed.
