@@ -1876,6 +1876,50 @@ function regionCheck(cb,reg,A,p){
   if(worst.cap.blocked)out.blocked=worst.cap.blocked;
   return out;
 }
+/* ---------- §G5 shear length L_v (round HSS / pipe), ft ----------
+   L_v = distance from the max-|V| station to the first zero of the
+   CONTINUOUS shear diagram, searched along the span in the direction of
+   decreasing |V|. Shear jumps at point loads are stepped over and never
+   count as a zero; the search stops at the supports bounding the span (or
+   the beam end). No zero found -> distance to that span end (a longer L_v
+   gives a lower G5-2a F_cr, i.e. conservative). Equal |V| both ways -> the
+   longer of the two results. */
+function lvFor(cb,A){
+  const xs=A.stations,V=cb.V,n=xs.length,L=A.L,tol=1e-9,sp=S.geom.spans;
+  if(!n)return L;
+  let i0=0;for(let i=1;i<n;i++)if(Math.abs(V[i])>Math.abs(V[i0]))i0=i;
+  const sup=A.nX.filter((x,j)=>S.geom.nodes[j].t!=='free'),pts=[];
+  S.loads.forEach(ld=>{
+    if(ld.off||ld.type!=='point'||!(cb.f[ld.lc]||0)||!ld.mag)return;
+    const si=Math.min(ld.si||0,sp.length-1);
+    pts.push(A.nX[si]+Math.max(0,Math.min(sp[si].L,ld.pos||0)));
+  });
+  /* a jump at b lies between stations i and j when b is in (lo, hi]; nothing
+     at x = L jumps, because evalVM returns the value just left of L there */
+  const jumpIn=(arr,i,j)=>{const lo=Math.min(xs[i],xs[j]),hi=Math.max(xs[i],xs[j]);
+    return arr.some(b=>b>lo+tol&&b<=hi+tol&&b<L-tol);};
+  const x0=xs[i0],a0=Math.abs(V[i0]);
+  const run=d=>{
+    let i=i0;
+    while(i+d>=0&&i+d<n){
+      const j=i+d;
+      if(jumpIn(sup,i,j))break;
+      if(!jumpIn(pts,i,j)){
+        if(V[j]===0)return{lv:Math.abs(xs[j]-x0),found:true};
+        if(V[i]*V[j]<0)return{lv:Math.abs(xs[i]-V[i]*(xs[j]-xs[i])/(V[j]-V[i])-x0),found:true};
+      }
+      i=j;
+    }
+    return{lv:Math.abs(xs[i]-x0),found:false};
+  };
+  const step=d=>{const j=i0+d;return j>=0&&j<n&&!jumpIn(sup,i0,j);};
+  let dirs=[1,-1].filter(d=>step(d)&&!jumpIn(pts,i0,i0+d)&&Math.abs(V[i0+d])<=a0);
+  if(!dirs.length)dirs=[1,-1].filter(step);
+  const rs=dirs.map(run),fd=rs.filter(r=>r.found);
+  let lv=Math.max(0,...(fd.length?fd:rs).map(r=>r.lv));
+  if(!(lv>1e-6)){let si=0;for(let i=0;i<sp.length;i++)if(x0>=A.nX[i]-tol)si=i;lv=sp[si].L;}
+  return lv;
+}
 /* ---------- master design pass ---------- */
 let DZ=null;
 function designAll(A){
@@ -1931,7 +1975,7 @@ function designAll(A){
     C.flexGov=C.regions.reduce((m,r)=>r.dcr>(m?m.dcr:-1)?r:m,null);
     /* shear */
     if(p._kind==='P'){
-      let Lv=A.L;cb.zV.forEach(z=>{Lv=Math.min(Lv,Math.abs(z-cb.Vabs.x));});
+      const Lv=lvFor(cb,A);
       C.shearX=shearMajor(p,Lv*12,S.design.stiff);
     }else C.shearX=D.shearX;
     C.Vu=Math.abs(cb.Vabs.v);C.VuX=cb.Vabs.x;
