@@ -862,6 +862,436 @@ All check-case numbers below came from running the real `computeAll()` (and the 
 - **Other copies:** `check()`, `mapAxes()` and `candidates()` are duplicated in Spread Footing.html (CLAUDE.md §3). BridgeXfer v1 unchanged.
 - **Open items:** the reference point defaults to the pile-group centroid (assumes the footing centre coincides with it); single-pile mode enters |M| with the sense of the lateral load.
 
+## 2026-10-10 — PR: claude/pile-restyle (PR link added after merge)
+
+### F12. Screen restyle to match the recent tools ("GirderDetail look"); title block moved to the header   [UI only] [no calculation change]
+- **Date:** 2026-10-10. **Type:** UI only (presentation). The engineer asked for a review and a formatting cleanup "to make it look more like the more recent apps". The review is summarised in the PR; new open items O16–O21 are below.
+- **What changed (screen only; the printed report is unchanged):**
+  - **Header:** the tall "blueprint grid" hero is replaced by a compact navy band. It holds the title ("Drilled Micropile — LRFD" etc.), the existing description as a subtitle, a basis line ("← All tools · AASHTO LRFD BDS 10th Ed. · FHWA … · by Mario Lococo"), a "Methodology & code path" button, the same key stats, the Overall pill, and a **title block** (Project, Subject, Job no., Prepared by, Checked by) with **Use / Share project info**.
+  - **Project Info panel** (rail, Project tab): the five text fields and the Use/Share buttons moved to the header. They are bound to the same keys (`projName`, `projSubject`, `projNum`, `projBy`, `projChk`) through the same `setStr` and the same `ProjMetaUI` calls. The panel keeps the foundation-load hand-off buttons (`#pfxPull`, `#pfxImp`, `#pfxFile`, `#pfxSrc`) and its title "Project Info", which `railTabFor` matches.
+  - **Summary strip** (`CheckIndex`): tinted green/red by the overall result (CSS `:has()`), with chip and button styles as in the recent tools. Below 820 px it is no longer sticky.
+  - **Input tabs:** navy active tab, red dot (it still marks a "⚠" in the tab).
+  - **Rail panels:** numbered "1. …" per tab (CSS counter, so `.panel-title` text is unchanged), with a gradient title bar. **Every panel can now collapse** (`Panel` default `collapsible = true`) and opens by default as before.
+  - **Modules:** light cards with a gradient title row, a red border when NG, and light OK/NG badges (`StatusPill` gets `pd-pill is-ok|is-ng`). Derivation lines (`DerivLine`) show the equation on a light strip with a blue left rule. Result rows (`CheckRow`) have a coloured left rule.
+  - **Labels and controls:** tracked all-caps micro labels are shown in their source sentence case (CSS). Four rail button labels are changed to sentence case in the source. Number inputs are right-aligned. Input borders and table header rows use the recent tools' colours.
+  - **Colour tokens:** `--blueprint` #1E3A5F, `--accent` #1E3A5F, `--ok` #059669, `--no` #DC2626, `--warn` #B45309, `--paper` #F8FAFC. Plot colours (JS constant `C`) are unchanged.
+- **Not changed:** every input id/key, handler, storage key (`micropile_lrfd_inputs_v1`, `micropile_lrfd_lpile_v1`, IndexedDB `micropile_lrfd_db`), the saved/exported JSON, the hand-offs (`bridgeSuite.v1.projectMeta`, `foundationLoads`), `computeAll` and every module's content, and the `PrintReport` component. Library tags and versions are unchanged.
+- **Governing provision:** none (presentation only). No formula, factor, unit, default or code reference changed.
+- **Check case:** not applicable. Parity: see How verified.
+- **How verified:**
+  - `node --check` on all four inline scripts (the app is pre-compiled `React.createElement`, so there is no JSX to transpile).
+  - Headless Chromium with the pinned libraries served locally (React 18.3.1 UMD, three 0.128.0, KaTeX 0.16.9, Plotly 2.32.0; Tailwind 3.4.5 compiled from each file's classes in place of the Play CDN), origin/main vs branch:
+    - every module expanded in micropile, H-pile and integral-abutment mode: `.main-col` text and the print report text are identical (2300 / 1105 / 458 numbers, all equal);
+    - module statuses are identical;
+    - an edited project (five title-block fields typed through each version's own UI, bond length 31 ft) gives identical autosave JSON, `Save .json` export, IndexedDB library record and `bridgeSuite.v1.projectMeta` share payload;
+    - "Use shared project info" from the header fills the fields, and "Pull from Abutment / SubLoads" still opens its flow;
+    - print PDFs have the same page counts (13 / 8 / 5) and identical text;
+    - no console errors, and no horizontal scroll at 400 px in any mode.
+  - Before/after screenshots of every input tab and the output column at 1500 and 400 px were reviewed.
+- **Other copies:** none. The CSS and `HdrField` are specific to this tool. BridgeXfer / ProjMetaUI are unchanged.
+- **Re-applying by hand:** the exact before/after is the unified diff below (CRLF stripped; the file itself uses CRLF). Hunks in order:
+  1. CSS block appended at the end of the head `<style>`, after the `prefers-reduced-motion` rule. Anchor: `@media (prefers-reduced-motion: reduce) {`.
+  2. `StatusPill` className. Anchor: `"font-mono-tech text-[11px] font-bold px-2 py-0.5 rounded-sm tracking-wider "`.
+  3. New `HdrField` before `function Toggle({`.
+  4. `CheckRow` classNames. Anchors: `"flex items-center justify-between gap-4 py-2.5 px-3 rounded-sm fade-in"` and `"min-w-0 overflow-x-auto seg text-[15px]"`.
+  5. `DerivLine` classNames.
+  6. `App` header. Anchor: `React.createElement("header", {` + `className: "blueprint-grid text-white"`, up to `React.createElement(CheckIndex, {`.
+  7. `App` Project Info panel. Anchor: `title: "Project Info",`.
+  8. Rail button labels. Anchors: `"↧ PRINT / SAVE PDF REPORT"`, `"↓ DOWNLOAD USER MANUAL (theory + methodology)"`, `"↓ SAVE SCENARIO"`, `"↑ LOAD SCENARIO"`.
+  9. `Panel` default `collapsible = true` and the caret class.
+
+```diff
+diff --git a/Pile Designer.html b/Pile Designer.html
+index 445a319..7c4fca1 100644
+--- a/Pile Designer.html	
++++ b/Pile Designer.html	
+@@ -212,4 +212,131 @@
+     html { scroll-behavior: auto; }
+   }
++  /* ==========================================================
++     GIRDERDETAIL LOOK (2026-10-10, presentation only)
++     ----------------------------------------------------------
++     Brings the screen look in line with the recent tools (Section Property
++     Calculator, Timber Beam Check, Gusset Plate Rating, Steel Beam Design):
++     navy header band with the title block, a tinted summary strip, navy tab
++     strips, light section cards with a gradient title bar and "1." numbers,
++     calc lines with a blue left rule, light OK / NG badges, blue-grey table
++     headers. Overrides only; no calculation, input key or report value is
++     touched. The printed report keeps its own inline styles.
++  ========================================================== */
++  :root {
++    --navy-900: #16304F; --navy-800: #1E3A5F; --blue-600: #2563EB;
++    --pd-line: #E4E7EB;
++    --blueprint: #1E3A5F;
++    --blueprint2: #16304F;
++    --accent: #1E3A5F;
++    --ok: #059669;
++    --no: #DC2626;
++    --warn: #B45309;
++    --paper: #F8FAFC;
++    --f-ui: -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
++  }
++  /* header band + title block */
++  .pd-hdr { background: var(--navy-800); color: #fff; border-bottom: 3px solid var(--navy-900); font-family: var(--f-ui); }
++  .pd-hdr-in { padding: 8px 24px 8px; }
++  .pd-titleRow { display: flex; justify-content: space-between; align-items: flex-start; gap: 6px 16px; flex-wrap: wrap; }
++  .pd-titleCol { min-width: 0; flex: 1 1 460px; }
++  .pd-h1 { font-family: var(--f-ui); font-size: 19px; font-weight: 600; margin: 0; letter-spacing: .3px; color: #fff; line-height: 1.25; }
++  .app-shell .pd-byline { font-size: 12.5px; color: #C7D4E4; margin-top: 2px; line-height: 1.35; max-width: 980px; }
++  .pd-basis { font-size: 12px; color: #B9C8DB; margin-top: 3px; display: flex; gap: 2px 7px; flex-wrap: wrap; align-items: baseline; }
++  .pd-alltools { color: #C7D4E4; text-decoration: none; margin-right: 8px; }
++  .pd-alltools:hover { color: #fff; text-decoration: underline; }
++  .pd-sep { opacity: .6; }
++  .pd-hdrRight { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
++  .pd-hdrBtns { display: flex; gap: 6px; flex-wrap: wrap; }
++  .pd-hdrBtns button { font-family: var(--f-ui); font-size: 12px; padding: 4px 11px; border: 1px solid #ffffff55; border-radius: 4px; background: #ffffff1c; color: #fff; }
++  .pd-hdrBtns button:hover { background: #ffffff33; }
++  .pd-stats { display: flex; flex-wrap: wrap; gap: 3px 14px; align-items: center; justify-content: flex-end; font-size: 12px; }
++  .app-shell .pd-stats .text-\[\#9fc0d8\] { color: #B9C8DB; font-size: 12px; }
++  .pd-overall { display: flex; align-items: center; gap: 6px; }
++  .pd-overall-lbl { font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: #B9C8DB; }
++  .pd-projGrid { display: grid; grid-template-columns: minmax(120px, 1.3fr) minmax(160px, 2fr) repeat(3, minmax(96px, 1fr)); gap: 4px 8px; margin-top: 7px; }
++  .pd-fld { display: block; min-width: 0; }
++  .pd-fld > span { display: block; font-size: 10.5px; text-transform: uppercase; letter-spacing: .5px; color: #B9C8DB; margin-bottom: 1px; }
++  .app-shell .pd-fld input[type=text] { width: 100%; font-family: var(--f-ui); font-size: 12.5px; padding: 3px 6px; border: 1px solid #ffffff33; border-radius: 3px; background: #ffffff14; color: #fff; text-align: left; }
++  .app-shell .pd-fld input[type=text]::placeholder { color: #8FA3BC; }
++  .app-shell .pd-fld input[type=text]:focus { outline: 2px solid #BFD3F2; outline-offset: 0; background: #ffffff24; }
++  .pd-projShare { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
++  .pd-projShare button { font-family: var(--f-ui); font-size: 11.5px; padding: 2px 8px; border: 1px solid #ffffff44; border-radius: 3px; background: #ffffff14; color: #fff; }
++  .pd-projShare button:hover { background: #ffffff2a; }
++
++  /* OK / NG badges (light, as the recent tools) */
++  .app-shell .pd-pill { background: #E8F7F0 !important; color: #065F46 !important; border: 1px solid #7FD1B0; border-radius: 4px; letter-spacing: .4px; font-family: var(--f-ui); }
++  .app-shell .pd-pill.is-ng { background: #FDECEC !important; color: #B91C1C !important; border-color: #F1A8A8; }
++
++  /* summary strip (the sticky check index) */
++  .check-index { background: #F1F3F5; border-bottom: 1px solid #D5DBE2; box-shadow: none; font-family: var(--f-ui);
++    -webkit-backdrop-filter: none; backdrop-filter: none; }
++  .check-index:has(.ci-status.is-ok) { background: #EAF6EE; border-bottom-color: #9ED3B0; }
++  .check-index:has(.ci-status.is-ng) { background: #FBEAEA; border-bottom-color: #E2A2A2; }
++  .check-index-inner { min-height: 44px; gap: 6px 12px; padding-top: 6px; padding-bottom: 6px; }
++  .ci-pile { font-family: var(--f-ui); font-size: 14px; font-weight: 600; color: var(--navy-900); }
++  .ci-status { font-weight: 700; letter-spacing: .3px; background: rgba(0,0,0,.06); border-radius: 4px; }
++  .ci-status.is-ok { color: var(--ok); background: rgba(0,0,0,.05); }
++  .ci-status.is-ng { color: var(--no); background: rgba(0,0,0,.05); }
++  .ci-case { color: #5A6B80; }
++  .ci-chip { border: 1.5px solid #CBD5E1; border-radius: 5px; font-family: var(--f-ui); padding: 2px 7px; }
++  .ci-chip.st-ok { border-color: #9CD6BC; }
++  .ci-chip.st-ng { border-color: #F1A8A8; background: #FDF3F3; }
++  .ci-chip.st-na { color: #64748B; }
++  .ci-chip[aria-current="true"] { background: var(--navy-800); border-color: var(--navy-800); color: #fff; }
++  .ci-btn { font-family: var(--f-ui); font-size: 12px; padding: 4px 10px; border-radius: 4px; border-color: var(--navy-800); color: var(--navy-800); }
++  .ci-btn:hover { background: #EFF4FA; }
++  .ci-btn-primary { background: var(--navy-800); color: #fff; }
++  .ci-btn-primary:hover { background: var(--navy-900); }
++  .ci-btn-quiet { border-color: #C6CFDA; color: #41546E; }
++
++  /* input rail: tab strip + numbered section cards */
++  .rail-tabs { background: var(--paper); border-bottom: 2px solid var(--navy-800); padding: 6px 0 0; gap: 2px; flex-wrap: wrap; overflow: visible; margin-bottom: 8px; }
++  .rail-tab { font-family: var(--f-ui); font-size: 12px; padding: 5px 11px; border: 1px solid var(--pd-line); border-bottom: none; background: #F1F3F5; color: #41546E; border-radius: 5px 5px 0 0; }
++  .rail-tab:hover { background: #EFF4FA; color: #41546E; }
++  .rail-tab.is-active { background: var(--navy-800); color: #fff; border-color: var(--navy-800); font-weight: 600; }
++  .rail-tab-dot { background: var(--no); box-shadow: 0 0 0 1.5px #fff; }
++  aside.input-rail { counter-reset: pdsec; }
++  .app-shell .panel { border: 1px solid var(--pd-line); border-radius: 6px; box-shadow: none; }
++  .app-shell .panel > .panel-head { background: linear-gradient(#F6F8FA, #EDF1F5) !important; border-bottom: 1px solid var(--pd-line); padding: 6px 10px; }
++  .app-shell .panel .panel-title { font-family: var(--f-ui); font-size: 13px; font-weight: 600; color: var(--navy-800); }
++  aside.input-rail .panel-title::before { counter-increment: pdsec; content: counter(pdsec) ". "; }
++  .app-shell .panel .panel-sub { font-family: var(--f-ui); font-size: 11px; color: #6B7A8F; }
++  .app-shell .panel .panel-caret { color: var(--navy-800); }
++
++  /* output modules: calc-sheet cards */
++  .app-shell .module-card { border: 1px solid var(--pd-line); border-radius: 6px; box-shadow: none; }
++  .app-shell .module-card[data-status="ng"] { border-color: #E9A9A4; }
++  .app-shell .module-toggle { background-image: linear-gradient(#F6F8FA, #EDF1F5); border-bottom: 1px solid var(--pd-line); padding-top: 8px; padding-bottom: 8px; }
++  .app-shell .module-title { font-family: var(--f-ui); font-size: 14.5px; font-weight: 600; color: var(--navy-800); }
++  .app-shell .module-badge { font-family: var(--f-ui); font-weight: 600; border-radius: 4px; }
++  .app-shell .deriv-line { border-bottom: none !important; padding: 3px 0; }
++  .app-shell .deriv-lbl { text-transform: none; letter-spacing: 0; font-family: var(--f-ui); font-size: 11.5px; font-weight: 600; color: #6B7A8F; }
++  .app-shell .deriv-eq { background: #F7F8FA; border-left: 3px solid var(--blue-600); padding: 3px 12px; }
++  .app-shell .check-row { border: 1px solid var(--pd-line); border-left-width: 3px; border-radius: 6px; }
++  .app-shell .check-row.is-ok { background: #F6FBF8 !important; border-left-color: var(--ok) !important; }
++  .app-shell .check-row.is-ng { background: #FDF7F6 !important; border-color: #E9A9A4; border-left-color: var(--no) !important; }
++  .app-shell .check-row.is-adv { background: #FEF6E7 !important; border-color: #F0C36D; border-left-color: var(--warn) !important; }
++  /* tracked all-caps micro labels -> sentence-case section labels (source text is already sentence case) */
++  .app-shell .uppercase.tracking-wider, .app-shell .uppercase.tracking-wide, .app-shell .uppercase[class*="tracking-[0."] { text-transform: none; letter-spacing: 0; font-family: var(--f-ui); font-weight: 600; }
++  .app-shell .tracking-wider, .app-shell .tracking-wide { letter-spacing: .02em; }
++  .app-shell button.rounded-sm, .app-shell label.rounded-sm { border-radius: 4px; }
++  /* tables: header row as the recent tools */
++  .app-shell .main-col table th, .app-shell aside.input-rail table th { background: #DCE6F1; color: var(--navy-900); font-family: var(--f-ui); font-weight: 700; border: 1px solid #B9C8DB; padding: 3px 6px; }
++  .app-shell .main-col table td { border-color: var(--pd-line); }
++  /* form controls */
++  .app-shell input[type=number]:not(:focus), .app-shell input[type=text]:not(:focus), .app-shell select:not(:focus) { border-color: #C6CFDA; }
++  .app-shell input[type=number] { text-align: right; }
++  .app-shell input[type=number], .app-shell input[type=text], .app-shell select { border-radius: 3px; }
++  .app-shell input:focus, .app-shell select:focus { border-color: var(--blue-600); }
++
++  /* narrow screens */
++  @media (max-width: 820px) {
++    .pd-hdr-in { padding: 8px 12px; }
++    .pd-hdrRight { align-items: flex-start; }
++    .pd-stats { justify-content: flex-start; }
++    .pd-projGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
++    .pd-fld-wide { grid-column: 1 / -1; }
++    .check-index { position: static; }
++  }
+ </style>
+ </head>
+@@ -3811,5 +3938,5 @@ function StatusPill({
+ }) {
+   return /*#__PURE__*/React.createElement("span", {
+-    className: "font-mono-tech text-[11px] font-bold px-2 py-0.5 rounded-sm tracking-wider " + (pass ? "text-white" : "text-white"),
++    className: "pd-pill " + (pass ? "is-ok " : "is-ng ") + "font-mono-tech text-[11px] font-bold px-2 py-0.5 rounded-sm tracking-wider " + (pass ? "text-white" : "text-white"),
+     style: {
+       background: pass ? "var(--ok)" : "var(--no)"
+@@ -3861,4 +3988,21 @@ function TextField({
+   }));
+ }
++/* UI: one title-block field in the header band (GirderDetail look). Same
++   onChange contract as TextField; the value is the same input key. */
++function HdrField({
++  label,
++  value,
++  onChange,
++  wide
++}) {
++  return /*#__PURE__*/React.createElement("label", {
++    className: "pd-fld" + (wide ? " pd-fld-wide" : "")
++  }, /*#__PURE__*/React.createElement("span", null, label), /*#__PURE__*/React.createElement("input", {
++    type: "text",
++    value: value,
++    placeholder: label,
++    onChange: e => onChange(e.target.value)
++  }));
++}
+ function Toggle({
+   label,
+@@ -4024,5 +4168,5 @@ function CheckRow({
+   const adv = advisory && !pass;
+   return /*#__PURE__*/React.createElement("div", {
+-    className: "flex items-center justify-between gap-4 py-2.5 px-3 rounded-sm fade-in",
++    className: "check-row " + (adv ? "is-adv " : pass ? "is-ok " : "is-ng ") + "flex items-center justify-between gap-4 py-2.5 px-3 rounded-sm fade-in",
+     style: {
+       background: adv ? "rgba(183,121,31,0.09)" : pass ? "rgba(47,125,79,0.07)" : "rgba(178,59,59,0.07)",
+@@ -4030,5 +4174,5 @@ function CheckRow({
+     }
+   }, /*#__PURE__*/React.createElement("div", {
+-    className: "min-w-0 overflow-x-auto seg text-[15px]"
++    className: "check-row-eq min-w-0 overflow-x-auto seg text-[15px]"
+   }, /*#__PURE__*/React.createElement(Tex, {
+     tex: tex
+@@ -4130,9 +4274,9 @@ function DerivLine({
+ }) {
+   return /*#__PURE__*/React.createElement("div", {
+-    className: "py-1.5 border-b border-dashed border-slate-100 last:border-0"
++    className: "deriv-line py-1.5 border-b border-dashed border-slate-100 last:border-0"
+   }, /*#__PURE__*/React.createElement("div", {
+-    className: "text-[10px] uppercase tracking-wider text-slate-400 mb-0.5 leading-snug"
++    className: "deriv-lbl text-[10px] uppercase tracking-wider text-slate-400 mb-0.5 leading-snug"
+   }, label), /*#__PURE__*/React.createElement("div", {
+-    className: "overflow-x-auto seg"
++    className: "deriv-eq overflow-x-auto seg"
+   }, /*#__PURE__*/React.createElement(Tex, {
+     tex: tex
+@@ -12138,33 +12282,36 @@ function App() {
+     } : undefined
+   }, /*#__PURE__*/React.createElement("header", {
+-    className: "blueprint-grid text-white"
++    className: "pd-hdr"
++  }, /*#__PURE__*/React.createElement("div", {
++    className: "pd-hdr-in max-w-[1920px] mx-auto"
+   }, /*#__PURE__*/React.createElement("div", {
+-    className: "max-w-[1920px] mx-auto px-6 pt-8 pb-7"
++    className: "pd-titleRow"
+   }, /*#__PURE__*/React.createElement("div", {
+-    className: "flex items-center gap-2 text-[11px] font-mono-tech tracking-[0.2em] text-[#9fc0d8] uppercase mb-3"
++    className: "pd-titleCol"
++  }, /*#__PURE__*/React.createElement("h1", {
++    className: "pd-h1"
++  }, I.pileType === "iab" ? "Integral Abutment Pile" : I.pileType === "hpile" ? "Driven Steel H-Pile" : "Drilled Micropile", " \u2014 LRFD"), /*#__PURE__*/React.createElement("div", {
++    className: "pd-byline"
++  }, I.pileType === "iab" ? "MassDOT Simplified Method check for integral abutment H-piles \u2014 eligibility, tabulated gravity capacity with skew, section and geometry limits, with optional p-y verification. Every equation is shown for an engineer to verify and seal." : I.pileType === "hpile" ? "A full design check for driven steel H-piles \u2014 static geotechnical capacity, structural axial and buckling, flexure, combined loading, shear, head fixity, lateral p-y, and group effects. Every equation is shown for an engineer to verify and seal." : "A full design check for cased drilled micropiles — geotechnical bond, structural axial, casing flexure, combined loading, head bearing, punching shear, and load-test bars. Every equation is shown for an engineer to verify and seal."), /*#__PURE__*/React.createElement("div", {
++    className: "pd-basis"
+   }, /*#__PURE__*/React.createElement("a", {
+     href: "tools.html",
+     target: "_top",
+     title: "Open the list of all tools",
+-    className: "no-print hover:text-white"
+-  }, "\u2190 All tools"), /*#__PURE__*/React.createElement("span", {
+-    className: "opacity-40 no-print"
+-  }, "/"), /*#__PURE__*/React.createElement("span", null, "AASHTO LRFD BDS 10th Ed."), /*#__PURE__*/React.createElement("span", {
+-    className: "opacity-40"
+-  }, "/"), /*#__PURE__*/React.createElement("span", null, I.pileType === "iab" ? "MassDOT Bridge Manual Part I \u00a73.10" : I.pileType === "hpile" ? "FHWA-NHI-16-009 driven piles" : "FHWA NHI-05-039")), /*#__PURE__*/React.createElement("h1", {
+-    className: "font-disp text-3xl md:text-[40px] font-bold leading-[1.05] tracking-tight"
+-  }, I.pileType === "iab" ? "Integral Abutment Pile" : I.pileType === "hpile" ? "Driven Steel H-Pile" : "Drilled Micropile", /*#__PURE__*/React.createElement("span", {
+-    className: "text-[var(--accent)]"
+-  }, " / LRFD")), /*#__PURE__*/React.createElement("div", {
+-    className: "hero-byline"
+-  }, "by Mario Lococo"), /*#__PURE__*/React.createElement("p", {
+-    className: "text-[#bcd2e2] text-[13px] mt-3 max-w-2xl leading-relaxed"
+-  }, I.pileType === "iab" ? "MassDOT Simplified Method check for integral abutment H-piles \u2014 eligibility, tabulated gravity capacity with skew, section and geometry limits, with optional p-y verification. Every equation is shown for an engineer to verify and seal." : I.pileType === "hpile" ? "A full design check for driven steel H-piles \u2014 static geotechnical capacity, structural axial and buckling, flexure, combined loading, shear, head fixity, lateral p-y, and group effects. Every equation is shown for an engineer to verify and seal." : "A full design check for cased drilled micropiles — geotechnical bond, structural axial, casing flexure, combined loading, head bearing, punching shear, and load-test bars. Every equation is shown for an engineer to verify and seal."), /*#__PURE__*/React.createElement("button", {
++    className: "pd-alltools no-print"
++  }, "\u2190 All tools"), /*#__PURE__*/React.createElement("span", null, "AASHTO LRFD BDS 10th Ed."), /*#__PURE__*/React.createElement("span", {
++    className: "pd-sep"
++  }, "\u00b7"), /*#__PURE__*/React.createElement("span", null, I.pileType === "iab" ? "MassDOT Bridge Manual Part I \u00a73.10" : I.pileType === "hpile" ? "FHWA-NHI-16-009 driven piles" : "FHWA NHI-05-039"), /*#__PURE__*/React.createElement("span", {
++    className: "pd-sep"
++  }, "\u00b7"), /*#__PURE__*/React.createElement("span", null, "by Mario Lococo"))), /*#__PURE__*/React.createElement("div", {
++    className: "pd-hdrRight"
++  }, /*#__PURE__*/React.createElement("div", {
++    className: "pd-hdrBtns no-print"
++  }, /*#__PURE__*/React.createElement("button", {
++    type: "button",
+     onClick: () => setDocsOpen(true),
+-    className: "mt-4 inline-flex items-center gap-2 font-mono-tech text-[12px] px-3.5 py-2 rounded-sm bg-white/10 hover:bg-white/20 border border-white/20 transition"
+-  }, /*#__PURE__*/React.createElement("span", {
+-    className: "text-[var(--accent)]"
+-  }, "❓"), " Methodology & code path"), /*#__PURE__*/React.createElement("div", {
+-    className: "flex flex-wrap gap-x-6 gap-y-1 mt-5 font-mono-tech text-[12px]"
++    title: "How this tool checks the pile: methodology and code path"
++  }, "Methodology & code path")), /*#__PURE__*/React.createElement("div", {
++    className: "pd-stats"
+   }, ...(I.pileType === "iab" ? [
+     /*#__PURE__*/React.createElement(Stat, { key: "s1", label: "Section", v: I.iabSection === "HP12X84" ? "HP12\u00d784" : "HP10\u00d757" }),
+@@ -12182,11 +12329,50 @@ function App() {
+     /*#__PURE__*/React.createElement(Stat, { key: "s4", label: "Lb", v: `${fmt(I.LbProvided, 0)} ft` })
+   ]), /*#__PURE__*/React.createElement("div", {
+-    className: "ml-auto flex items-center gap-2"
++    className: "pd-overall"
+   }, /*#__PURE__*/React.createElement("span", {
+-    className: "text-[#9fc0d8] uppercase text-[10px] tracking-wider"
++    className: "pd-overall-lbl"
+   }, "Overall"), /*#__PURE__*/React.createElement(StatusPill, {
+     pass: r.allPass,
+     label: r.allPass ? "ALL CHECKS OK" : "CHECK REQUIRED"
+-  }))))), /*#__PURE__*/React.createElement(CheckIndex, {
++  }))))), /*#__PURE__*/React.createElement("div", {
++    className: "pd-projGrid"
++  }, /*#__PURE__*/React.createElement(HdrField, {
++    label: "Project",
++    value: I.projName,
++    onChange: v => setStr('projName', v)
++  }), /*#__PURE__*/React.createElement(HdrField, {
++    label: "Subject",
++    value: I.projSubject,
++    onChange: v => setStr('projSubject', v),
++    wide: true
++  }), /*#__PURE__*/React.createElement(HdrField, {
++    label: "Job no.",
++    value: I.projNum,
++    onChange: v => setStr('projNum', v)
++  }), /*#__PURE__*/React.createElement(HdrField, {
++    label: "Prepared by",
++    value: I.projBy,
++    onChange: v => setStr('projBy', v)
++  }), /*#__PURE__*/React.createElement(HdrField, {
++    label: "Checked by",
++    value: I.projChk,
++    onChange: v => setStr('projChk', v)
++  })), /*#__PURE__*/React.createElement("div", {
++    className: "pd-projShare no-print"
++  }, /*#__PURE__*/React.createElement("button", {
++    type: "button",
++    onClick: () => {
++      const patch = ProjMetaUI.use(PILE_PROJ_MAP, I, "pileDesigner");
++      if (patch) setI(s => ({
++        ...s,
++        ...patch
++      }));
++    },
++    title: "Fill the project info from project info shared by another tool"
++  }, "Use shared project info"), /*#__PURE__*/React.createElement("button", {
++    type: "button",
++    onClick: () => ProjMetaUI.share(PILE_PROJ_MAP, pileProjShareValues(I), "Pile Designer", "Pile Designer.html"),
++    title: "Make this project info available to the other tools"
++  }, "Share project info")))), /*#__PURE__*/React.createElement(CheckIndex, {
+     pileLabel: I.pileType === "iab" ? "Integral abutment pile" : I.pileType === "hpile" ? "Driven H-pile" : "Drilled micropile",
+     allPass: r.allPass,
+@@ -12297,51 +12483,9 @@ function App() {
+   }, "Save many named projects in this browser. Recall, overwrite, or delete any. For cross-device or archival storage, use the .json export above."))), /*#__PURE__*/React.createElement(Panel, {
+     title: "Project Info",
+-    sub: "Appears on printed report"
++    sub: "Project, job no., subject, by / chk: in the header title block \u00b7 foundation-load hand-off"
+   }, /*#__PURE__*/React.createElement("div", {
+     className: "grid grid-cols-1 gap-2"
+-  }, /*#__PURE__*/React.createElement(TextField, {
+-    label: "Project name",
+-    value: I.projName,
+-    onChange: v => setStr('projName', v)
+-  }), /*#__PURE__*/React.createElement("div", {
+-    className: "grid grid-cols-2 gap-2"
+-  }, /*#__PURE__*/React.createElement(TextField, {
+-    label: "Job no.",
+-    value: I.projNum,
+-    onChange: v => setStr('projNum', v)
+-  }), /*#__PURE__*/React.createElement("div", {
+-    className: "grid grid-cols-2 gap-2"
+-  }, /*#__PURE__*/React.createElement(TextField, {
+-    label: "By",
+-    value: I.projBy,
+-    onChange: v => setStr('projBy', v)
+-  }), /*#__PURE__*/React.createElement(TextField, {
+-    label: "Chk",
+-    value: I.projChk,
+-    onChange: v => setStr('projChk', v)
+-  }))), /*#__PURE__*/React.createElement(TextField, {
+-    label: "Subject",
+-    value: I.projSubject,
+-    onChange: v => setStr('projSubject', v)
+-  }), /*#__PURE__*/React.createElement("div", {
+-    className: "flex gap-2 no-print"
+-  }, /*#__PURE__*/React.createElement("button", {
+-    type: "button",
+-    onClick: () => {
+-      const patch = ProjMetaUI.use(PILE_PROJ_MAP, I, "pileDesigner");
+-      if (patch) setI(s => ({
+-        ...s,
+-        ...patch
+-      }));
+-    },
+-    title: "Fill the project info from project info shared by another tool",
+-    className: "font-mono-tech text-[9px] px-1.5 py-1 rounded-sm border border-slate-300 text-slate-500 hover:bg-white"
+-  }, "Use shared project info"), /*#__PURE__*/React.createElement("button", {
+-    type: "button",
+-    onClick: () => ProjMetaUI.share(PILE_PROJ_MAP, pileProjShareValues(I), "Pile Designer", "Pile Designer.html"),
+-    title: "Make this project info available to the other tools",
+-    className: "font-mono-tech text-[9px] px-1.5 py-1 rounded-sm border border-slate-300 text-slate-500 hover:bg-white"
+-  }, "Share project info")), /*#__PURE__*/React.createElement("div", {
+-    className: "flex gap-2 no-print"
++  }, /*#__PURE__*/React.createElement("div", {
++    className: "flex flex-wrap gap-2 no-print"
+   }, /*#__PURE__*/React.createElement("button", {
+     type: "button",
+@@ -12938,10 +13082,10 @@ function App() {
+       background: "var(--blueprint)"
+     }
+-  }, "↧ PRINT / SAVE PDF REPORT"), /*#__PURE__*/React.createElement("button", {
++  }, "↧ Print / save PDF report"), /*#__PURE__*/React.createElement("button", {
+     onClick: downloadManual,
+     className: "w-full font-mono-tech text-[11px] tracking-wider py-2 rounded-sm border border-[var(--blueprint2)] text-[var(--blueprint2)] hover:bg-slate-50 transition"
+-  }, "↓ DOWNLOAD USER MANUAL (theory + methodology)"), /*#__PURE__*/React.createElement("div", { className: "flex gap-2" },
+-    /*#__PURE__*/React.createElement("button", { onClick: saveScenario, className: "flex-1 font-mono-tech text-[10px] tracking-wider py-2 rounded-sm border border-slate-300 text-slate-600 hover:bg-slate-50 transition" }, "↓ SAVE SCENARIO"),
+-    /*#__PURE__*/React.createElement("button", { onClick: () => fileInputRef.current && fileInputRef.current.click(), className: "flex-1 font-mono-tech text-[10px] tracking-wider py-2 rounded-sm border border-slate-300 text-slate-600 hover:bg-slate-50 transition" }, "↑ LOAD SCENARIO"),
++  }, "↓ Download user manual (theory + methodology)"), /*#__PURE__*/React.createElement("div", { className: "flex gap-2" },
++    /*#__PURE__*/React.createElement("button", { onClick: saveScenario, className: "flex-1 font-mono-tech text-[10px] tracking-wider py-2 rounded-sm border border-slate-300 text-slate-600 hover:bg-slate-50 transition" }, "↓ Save scenario"),
++    /*#__PURE__*/React.createElement("button", { onClick: () => fileInputRef.current && fileInputRef.current.click(), className: "flex-1 font-mono-tech text-[10px] tracking-wider py-2 rounded-sm border border-slate-300 text-slate-600 hover:bg-slate-50 transition" }, "↑ Load scenario"),
+     /*#__PURE__*/React.createElement("input", { ref: fileInputRef, type: "file", accept: ".json,application/json", onChange: loadScenarioFile, style: { display: "none" } })))), /*#__PURE__*/React.createElement("main", {
+     className: "main-col space-y-4"
+@@ -14922,5 +15066,5 @@ function Panel({
+   sub,
+   children,
+-  collapsible = false,
++  collapsible = true,
+   defaultOpen = true
+ }) {
+@@ -14941,5 +15085,5 @@ function Panel({
+         style: { background: "rgba(20,48,74,0.03)", borderBottom: open ? "1px solid #f1f5f9" : "none" }
+       }, /*#__PURE__*/React.createElement("div", { className: "flex-1 min-w-0" }, headInner),
+-        /*#__PURE__*/React.createElement("span", { className: "text-slate-400 text-[12px]", "aria-hidden": true }, open ? "\u25b4" : "\u25be"))
++        /*#__PURE__*/React.createElement("span", { className: "panel-caret text-slate-400 text-[12px]", "aria-hidden": true }, open ? "\u25b4" : "\u25be"))
+     : /*#__PURE__*/React.createElement("div", {
+         className: "panel-head px-3 py-2 border-b border-slate-100",
+```
+
 ## Open items (not changed)
 - O1. **Uncased/cased structural axial: outer 0.85 factor and `fy = min(fyb, fyc)`** (`Rn_cased/Rn_ucased`, ≈ line 1675).
   - Neither AASHTO 10.9.3.10.2 nor FHWA NHI-05-039 Eq. 5-13 has the outer 0.85, and the uncased section has no casing, so min(fyb, fyc) is arbitrary there.
@@ -901,3 +1331,19 @@ All check-case numbers below came from running the real `computeAll()` (and the 
   - **Confirm** relabelling it to 5.12.8.6.3.
 - O15. **Punching `bo2` leg length.** It uses d_edge as the pile-centre-to-edge distance, consistent with the bearing A2 calculation. If "Edge dist" is measured from the pile face instead, the legs are short by OD/2.
   - **Confirm** how the edge distance is measured.
+- O16. **H-pile geotechnical capacity is 0 at the defaults.** Found in the 2026-10-10 review.
+  - The soil layer carried over from the micropile mode has no SPT N, so the sand SPT method gives qs = qp = 0 and φRn = 0 kip against STL = 86 kip.
+  - The summary row "Geotech axial (tip+skin)" shows "0.00 ✗": an empty bar for a failing check.
+  - **Ask:** require N (or warn) in H-pile mode, and show "capacity 0 — NG" instead of a 0.00 ratio.
+- O17. **Integral abutment: eligibility shown as a ratio.** The summary shows "Simplified-Method eligibility 2.00 ✗" for a pass/fail eligibility.
+  - Blank/0 bridge length and abutment height show ✗ with no "enter a value" hint: `(I.iabBridgeLength || 0) > 0 && …`, ≈ line 3528.
+  - **Ask:** show eligible / not eligible, plus a hint for missing inputs.
+- O18. **Integral abutment, Module 01 §4: equation does not render.** The "Required pile length" line shows raw KaTeX source in red: `\text{(governs: fixity (L_f + 5 ft))}`; the `_` inside `\text` fails. The value is correct. Equation-text fix pending sign-off.
+- O19. **H-pile mode, Module 02 elevation plot shows micropile geometry.** It draws "casing tip" and "bond 27 ft", and the text line reports "M at casing tip …".
+  - **Ask:** hide these for H-piles.
+- O20. **φc default 0.80** (`DEFAULT_INPUTS.phiC`). It is used in the casing-only combined interaction (Module 05) and in buckling.
+  - AASHTO LRFD 10th Ed. 6.5.4.2 gives 0.95 (steel-only) and 0.90 (composite). The tool's own φ info says "resolve which applies before sealing".
+  - The default is conservative.
+  - **Engineer to confirm** the basis.
+- O21. **"UNVERIFIED" φ labels.** The H-pile banner "⚠ UNVERIFIED φ — driven-pile module, confirm vs AASHTO 10th Ed before use" and the PHI_INFO notes "VALUE UNVERIFIED" (micropile φcc, φcu and uplift) are still shown, although F3 set the H-pile defaults to AASHTO values.
+  - **Ask:** confirm the values and remove or relabel, or keep.
