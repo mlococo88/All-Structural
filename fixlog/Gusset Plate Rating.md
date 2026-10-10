@@ -1734,3 +1734,131 @@ Exact before/after: unified diff against main 5add80b, zero context lines. The a
 -const putStore = s => { try { localStorage.setItem(KEY_PR, JSON.stringify(s)); return true; } catch (e) { flash('Could not save (browser storage full or blocked). Use Export JSON.', 'fail'); return false; } };
 +const putStore = s => { try { Object.values(s).forEach(d => ((d && d.members) || []).forEach(GPR.blankGrid)); localStorage.setItem(KEY_PR, JSON.stringify(s)); /* C11: as autosave */ return true; } catch (e) { flash('Could not save (browser storage full or blocked). Use Export JSON.', 'fail'); return false; } };
 ```
+
+## 2026-10-10 — PR: claude/gusset-open-items (PR link added after merge)
+
+### C12. Review of every open item (engineer's instruction 2026-10-10: "fix all pending items with your recommended fix"); decisions recorded; heel-joint wording finished (O15)   [no calculation change]
+
+Every open item in this log was reviewed. For each one the recommended resolution is one of these:
+- **keep the current behaviour:** the decision is recorded here and the item is closed. Before an item was closed this way, the current behaviour was checked to be conservative for typical cases;
+- **engineer's action:** the item stays open, reworded;
+- **small code fix that changes no computed result:** made here (O15 only);
+- **not closed:** keeping the current behaviour could be unconservative, or the fix would change a calculation (CLAUDE.md §4). These items stay open for the engineer's decision. No code was changed for them.
+
+#### C12.1 Item list and decisions
+
+| Item | Status before | Decision (2026-10-10) |
+|---|---|---|
+| O1 Chord splice check; combined shear + axial + moment on a plane (NCHRP W-197) | open | **Not closed (engineer to decide).** This check is missing. A spliced chord is checked only through the gusset plates. Leaving it out can be unconservative wherever the splice or the combined check would govern. Adding it would be a calculation change. |
+| O2 Whitmore section not clipped at adjacent members (warning only) | open | **Not closed (engineer to decide).** An unclipped section is never narrower than a clipped one, so the current rule can be unconservative where the section crosses another member. The tool warns in that case. Clipping would be a calculation change. |
+| O3 Free-edge slenderness / edge buckling; section loss uniform per plate | open | **Not closed (engineer to decide).** No free-edge check is made (it can be unconservative). Uniform loss is conservative only when the engineer enters the worst measured thickness or loss for each plate. That is an input practice; the tool does not enforce it. |
+| O4 Eccentric fastener groups; unequal force sharing between plates of different thickness | open | **Not closed (engineer to decide).** Both effects are ignored, which can be unconservative. Including either would be a calculation change. |
+| O5 3D view | closed (C2) | — |
+| O6 Live-load concurrency | closed (C4.2) | — |
+| O7 MIDAS: long table only, no .mct / result-file import | open | **Closed: keep.** This is an input convenience and does not affect results. MIDAS tables export to the supported long format (Elem, Load, Part, Axial). |
+| O8 All items under "Needs verification" (C1) | open | **Stays open: engineer's action.** Check each "verify" / "least certain" default against the printed MBE 3rd Ed., LRFD 10th Ed., Std. Spec. 17th Ed. and FHWA-IF-09-014. Then record the confirmations, which moves them to "Confirmed". No value was changed. |
+| O9 3D member stubs use nominal element thickness / flange width | open | **Closed: keep.** This is display only and no check uses it. True section dimensions would need new project fields (a saved-data format change, §5); that is not worth it for the drawing. |
+| O10 Fit-up not checked; narrow members drawn with the gap | open | **Closed: keep.** Fit-up is not a rating limit state, and the 3D note already states the gap. |
+| O11 Irregular DXF patterns forced to a best-fit grid | open (guarded by C4.3) | **Closed: resolved by C10.** Custom hole patterns import exactly as drawn (hole table). The best fit is used only for "Convert to grid". |
+| O12 Non-ASCII DXF text written as `\U+XXXX` | open | **Closed: keep.** AutoCAD reads this escape as the character. How MicroStation shows it is checked as part of O13. |
+| O13 Exported R12 DXF not opened in AutoCAD / MicroStation | open | **Stays open: engineer's action.** Open an exported model (for example the 5-member default) and the heel template in AutoCAD and in MicroStation. Confirm that the layers, line types, text (including any `\U+XXXX` characters) and units are as listed in C3. Then re-import the file saved by each program. |
+| O14 L_mid at clipped Whitmore ends | closed (C6.1 / C7) | — |
+| O15 Heel joint: the texts speak of a splice | partly done (C6.3) | **Closed: fixed here (C12.2).** With one chord member, the 3D note now says "chord ends at the joint", and the DXF writer no longer draws the GP-SPLICE line. Nothing is computed differently. |
+| O16 Heel joint SP1: shear plane without the normal force | open (note, C6.3) | **Not closed (engineer to decide).** The combined check is part of O1 and is missing. Leaving it out can be unconservative at a heel. Adding it would be a calculation change. |
+| O17 Heel joint: equilibrium residual; chord drawn from the WP | open (note, C6.3) | **Closed: keep.** The residual is the bearing reaction, and the note explains it. The chord body is drawing-only: it is used in the 3D/2D views and in the "crosses another member" warning, not in any capacity. |
+| O18 L_mid along a plate edge | closed (C7, C8) | — |
+| C11 open item 1: stagger search band s_b = 2√(L d_n) | open | **Not closed (engineer to decide).** Keeping the band can be unconservative compared with a search without a band. See C12.3. |
+| C11 open item 2: partly staggered next row not grouped | open | **Closed: keep (conservative).** See C12.4. |
+
+#### C12.2 O15: heel-joint wording (code change; no computed result changes)
+
+**Problem.** A heel joint uses the "spliced at the joint" chord mode with a single chord member (template `t2h`). The checks use the correct load path. But the 3D note said "chord spliced at the joint … (splice plates are not drawn)", and the DXF export drew a dashed GP-SPLICE line at x = 0 even though there is no splice. The warning was already reworded in C6.3.
+
+**Fix.** With exactly one chord member:
+- the 3D note says "chord ends at the joint (single chord member)";
+- the DXF writer leaves out the GP-SPLICE line, and with it the GP-SPLICE layer entry.
+
+With two or more chord members in "spliced" mode, the note and the line are unchanged. The importer still reads a GP-SPLICE line in older heel DXFs. GP-SPLICE is information only: it gives a warning with a continuous chord and is otherwise ignored.
+
+**Governing provision:** none (text and drawing only). **§4 statement:** no formula, factor, unit or reference changed. Results are identical (see How verified).
+
+Where:
+- `GP3D` build (3D view), member loop. Anchor: `if (spliced) notes.push(`.
+- `GPDXF` `write()`, after the member loop. Anchor: `line(layer('GP-SPLICE', COLORS.SPLICE, 'DASHED'), [0, -hw], [0, hw]);`.
+
+```diff
+@@ -2132 +2132,2 @@ const GP3D = (function () {
+-      if (spliced) notes.push(`${esc(m.id)}: chord spliced at the joint; drawn with a small gap at the work point (splice plates are not drawn).`);
++      if (spliced) notes.push(Pm.members.filter(q => q.role === 'chord').length === 1 ? `${esc(m.id)}: chord ends at the joint (single chord member); drawn with a small gap at the work point.`   // O15: heel joint, no splice
++        : `${esc(m.id)}: chord spliced at the joint; drawn with a small gap at the work point (splice plates are not drawn).`);
+@@ -2383 +2384 @@ const GPDXF = (function () {
+-    if (P.chord === 'spliced') { const ch = P.members.filter(m => m.role === 'chord'), hw = Math.max(6, ...ch.map(m => (num(m.sec.w) || 0) / 2 + 2)); line(layer('GP-SPLICE', COLORS.SPLICE, 'DASHED'), [0, -hw], [0, hw]); }
++    if (P.chord === 'spliced' && P.members.filter(m => m.role === 'chord').length >= 2) { const ch = P.members.filter(m => m.role === 'chord'), hw = Math.max(6, ...ch.map(m => (num(m.sec.w) || 0) / 2 + 2)); line(layer('GP-SPLICE', COLORS.SPLICE, 'DASHED'), [0, -hw], [0, hw]); }
+```
+
+**Check case.** Heel template (`t2h`, members L0-L1 chord and L0-U1):
+- 3D note, before: "L0-L1: chord spliced at the joint; drawn with a small gap at the work point (splice plates are not drawn)."
+- 3D note, after: "L0-L1: chord ends at the joint (single chord member); drawn with a small gap at the work point."
+- Template DXF, before: 1835 lines, with the GP-SPLICE layer and a LINE (0, −11) to (0, 11).
+- Template DXF, after: 1809 lines. The layer and the line are gone; the layer count in the table header is 10 instead of 11; the drawing extents and the note position move 2 units because the line no longer sets the bottom of the extents.
+- Default model with chord = spliced (two chord members): note and DXF unchanged.
+
+#### C12.3 C11 item 1, stagger band s_b = 2√(L d_n): evaluation (not closed)
+
+The band limits which holes the s²/4g search (C10) may use. The justification in C10 is that a single step of more than s_b from the line costs at least one hole's deduction. That argument does not cover paths that **run along a farther row** (no stagger terms). Such a path is allowed by the engineer's confirmation of 2026-10-06 ("a path through a nearby complete row may govern"). It also does not cover a staircase of small steps.
+
+Evaluation: the band was removed (every hole of the member searched), and every custom model of the C10/C11 suite plus 8 representative patterns was computed with and without the band. Script: `gopen/band.js`, with a patched copy in which every `band` / `bt` is set to 1e9.
+
+- **No difference** in 9 of the 17 models: case 1, case 2, the t5 3-2-3-2 patterns, the vertical with filler, the varying-pitch import, the tapered-end patterns A and B (C12.4), a 4-3-4 stagger, an outer/inner line stagger, and patterns with a narrow first row.
+- **Differences** (W_n is smaller without the band):
+
+| Model | s_b (in) | W_n with band | W_n without band | Governing path without the band | WF capacity |
+|---|---|---|---|---|---|
+| symc_c3 (spliced; every member custom, one hole in five removed) L1-L2 | 9.497 | 19.600 | 18.652 | 4 holes zig-zag at s = 17.5 / 18.25 (16 in beyond the line) | 889.25 → 865.47 kip (−2.7 %) |
+| symc_c3 L2-L3 | 10.305 | 23.277 | 22.652 | 4 holes at s = 13.5 / 14.25 | not governing |
+| rtc_allcustom L1-L2 | 9.497 | 19.599 | 18.651 | as c3 | 889.25 → 865.43 kip |
+| gp3 06_irregular L2-U2 | 9.201 | 19.778 | 19.166 | farther row | not governing |
+| Pattern D: validation D; rows of 2 holes at s = 20, 23, 26, 29; a 4-hole row at s = 27.5 (t = ±1.5, ±2.75) | 7.319 | 11.392 | 9.392 | the 4-hole row at 7.5 in from the line | 528.19 → 435.80 kip (−17.5 %) |
+
+No governing RF changed in these models.
+
+The band therefore **can be unconservative compared with an unlimited search**. This happens when a row with more holes than the first row lies just beyond s_b. A fixed band of one pitch (the alternative named in C10 question 3) would be narrower than s_b in every case above (pitch 3 to 4 in, s_b 7.3 to 10.3 in), so it would be less conservative still.
+
+Whether a row far from the Whitmore line should count toward the Whitmore net width at all is an engineering decision. Not counting it is the usual Whitmore practice, which deducts only holes on the line, and every result above is at least as conservative as that. **No code changed; the item stays open for the engineer.**
+
+#### C12.4 C11 item 2, partly staggered next row: evaluation (closed, keep)
+
+The current rule groups the far row with the next row only when no hole of the next row lies on a gage line of the far row. The alternative is to group the next row whenever any of its holes is off those gage lines. This was computed with the C11 per-hole spread origins: script `gopen/partly.js`, with a patched copy of the `offLine` test.
+
+| Pattern | W_g current / grouped (in) | W_n current / grouped (in) | L_mid current / grouped (in) | WY / WF / WB LRFR (kip), current → grouped | Governing RF that changes |
+|---|---|---|---|---|---|
+| A: validation D; inner lines ±1.5 at s = 20 … 29; outer lines ±4.5 at s = 20 … 26 (tapered end) | 13.392 / 15.928 | 9.392 / 11.928 | 20.000 / 20.000 | 458.0 → 544.7 / 435.8 → 553.5 / 337.0 → 400.8 | LFR Inv 3.465 (D-WF) → 4.104 (D-FS) |
+| B: default L2-U1; 4 lines (±1.75, ±5.25) at s = 26 … 38; far row s = 41 with the inner 2 holes only | 20.821 / 23.838 | 16.821 / 19.838 | 12.435 / 11.455 | 712.1 → 815.3 / 780.5 → 920.5 / 611.8 → 710.9 | LFR Inv 0.789 → 1.183 (L2-U1-WB) |
+| C: as B, plus a full row at s = 39.5 (far row 1.5 in beyond it) | 20.821 / 24.704 | 16.821 / 20.704 | 12.435 / 11.232 | 712.1 → 844.9 / 780.5 → 960.7 / 611.8 → 739.1 | LFR Inv 0.789 → 1.292 |
+| D (atypical, as in C12.3) | 13.392 / 14.160 | 11.392 / 10.160 | 20.000 / 20.000 | 458.0 → 484.3 / 528.2 → 471.4 / 337.0 → 356.4 | none |
+
+**Hand check, pattern A.**
+- Current: g_s = 3 (far row ±1.5 at s = 29), L = 9. W_g = 3 + 2(9)(0.57735) = 13.392 in. W_n = 13.392 − 4(1.000) = 9.392 in (4 holes on the line at s = 20).
+- Grouped: the outer holes are ±4.5 at s = 26 (L = 6). W_g = 9 + 2(6)(0.57735) = 15.928 in. W_n = 15.928 − 4 = 11.928 in.
+- The current W_g is smaller. It is also smaller than the envelope of all holes (15.928 in), and the tool warns that 2 holes lie outside the spread lines.
+
+**Result.** For the representative patterns A, B and C, the current rule (not grouped) gives the smaller W_g and W_n, a longer or equal L_mid, and the lower capacities and RFs. It is the conservative choice. The current W_g is never larger than the width that envelopes every hole with 30° lines.
+
+In the atypical pattern D, grouping gives a smaller W_n (10.160 in against 11.392 in). That comes from the band (C12.3): the wider W_g widens s_b from 7.319 to 7.526 in, which takes in the 4-hole row 7.5 in away. It does not come from the grouping rule; with grouping, W_g is still larger. This case is left with the band question.
+
+**Decision:** keep (partly staggered next row not grouped). Closed. The warning "holes lie outside the 30° Whitmore spread lines" continues to flag these patterns.
+
+#### C12.5 How verified
+
+- `node --check` on all 7 inline scripts: pass.
+- Engine and DXF in node, main (ab3e7be) against the branch (`gopen/par.js`, `gopen/rt2.js`). Models: the default, the validation model, all 7 DXF templates with forces, and the default with chord = spliced.
+  - Every check's capacities, RFs, governing RFs, warnings and errors: identical.
+  - DXF exports: identical except the heel template (C12.2).
+  - The main and branch DXF of every model, imported by main and by the branch onto the same model: identical results, equal to the source; import messages identical.
+- Chromium (Playwright, three.js r128 served locally), main against the branch:
+  - The 3D note is as in the check case for the heel template and unchanged for the spliced default.
+  - No page errors.
+  - Screenshot of the heel 3D view reviewed.
+- C12.3 and C12.4 are evaluations only. The patched copies are scratch files and are not part of this PR.
+- **Other copies:** none.
+- **Open items after C12:** O1, O2, O3, O4, O16 and C11 item 1 (stagger band) are for the engineer to decide. O8 (check the "verify" values against the printed specifications) and O13 (open the DXF in AutoCAD / MicroStation) need the engineer's own action.
