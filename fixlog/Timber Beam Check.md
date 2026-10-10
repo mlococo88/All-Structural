@@ -1004,6 +1004,138 @@ Material tab: material type (sawn / glulam / SCL); glulam combination, species g
 - O3 (Table 4D, flat use of timbers): **added** for DF-L, HF, SP (verify); SPF not built in (P2-3).
 - O11 (Stud 8 in. and wider), O12 (SP 4" thick 8"+ C<sub>F</sub> 1.1), O14 (C<sub>i</sub> on timbers): unchanged.
 
+## 2026-10-10 — PR: claude/timber-p2-followups (PR link added after merge)
+
+### R4. Engineer's decisions on P2-1, P2-2 and P2-7 (2026-10-10): round-off moments ignored; 6x8 / 8x8 to Table 1B; C<sub>r</sub> = 1.04 for SCL   [calc change] [P2-1: removes a false NG; P2-2: less conservative for 6x8 / 8x8; P2-7: less conservative for SCL in repetitive use]
+
+- **Date / type:** 2026-10-10. Engineer's decisions of 2026-10-10 on open items P2-1, P2-2 and P2-7. Calculation changes; CLAUDE.md §4 callouts below. Only `Timber Beam Check.html` and this log change. CRLF kept. No storage key or saved-data format changed (files store the size by name, so files with 6x8 / 8x8 open with the new section; see P2-2).
+
+#### P2-1. Region moments from floating-point round-off are zero
+
+- **Where:** `tbcRun`, inside `const combos = (lrfd ? COMBOS_LRFD : COMBOS).map(c => {`, directly after the station loop that fills `reg` (anchor `else putM(x, mv, 0);`); constants after `const SCL_KINDS = {`.
+- **Before:**
+  ```js
+            else putM(x, mv, 0);
+        });
+        // Design shear: max |V| between d from each support (NDS 3.4.3.1(a)); no x/d reduction of point loads
+  ```
+- **After:**
+  ```js
+            else putM(x, mv, 0);
+        });
+        // Engineer's decision P2-1 (2026-10-10, fix log R4): a region moment that is floating-point round-off
+        // (|M| <= the larger of 1e-6 ft-lb and 1e-9 x the largest |M| of the combination) is zero: no top- or bottom-edge check.
+        const Mtol = Math.max(M_TOL_ABS, M_TOL_REL * Mmax);
+        reg.forEach(r => { if (r.Mp <= Mtol) { r.Mp = 0; r.xp = null; } if (r.Mn <= Mtol) { r.Mn = 0; r.xn = null; } });
+        // Design shear: max |V| between d from each support (NDS 3.4.3.1(a)); no x/d reduction of point loads
+  ```
+  and after `const SCL_KINDS = { … };`:
+  ```js
+  // Round-off tolerance for region moments (fix log R4, P2-1): |M| <= max(M_TOL_ABS ft-lb, M_TOL_REL x largest |M| of the combination) is zero
+  const M_TOL_ABS = 1e-6, M_TOL_REL = 1e-9;
+  ```
+- **Tolerance chosen:** |M| ≤ max(1e-6 ft-lb, 1e-9 × M<sub>max</sub>), M<sub>max</sub> = largest |M| anywhere on the member in that combination. The absolute 1e-6 ft-lb (f<sub>b</sub> ≈ 1e-5/S psi) covers combinations whose moments are all round-off; the relative term covers very large members. Round-off seen in the parity runs is about 1e-15 × M<sub>max</sub> (here 1.8e-12 ft-lb with M<sub>max</sub> ≈ 13,000 ft-lb), many orders below the tolerance; any real moment is many orders above it.
+- **Effect:** a positive (top edge in compression) or negative (bottom edge in compression) moment region whose moment is round-off is treated as having no moment: M = 0, no location, ratio 0, no glulam C<sub>V</sub> for it, and no bottom-edge "R<sub>B</sub> > 50" failure (the anchor `if (s.bot.RB > 50 && combos.some(c => c.bend[i].Mn > 0))` is unchanged and now sees 0). The "Peak values" table shows "0 / —" instead of "0" at the support location. Formulas unchanged.
+- **Governing provision:** NDS 2018 3.3.3.7 (R<sub>B</sub> ≤ 50) and 3.3.3 (C<sub>L</sub> of the compression edge). No code value changes.
+- **Not changed (new open item P2-10):** the top-edge "R<sub>B</sub> > 50" failure (anchor `if (stabilityApplies && s.top.RB > 50) fails.push(`) does not depend on the moment at all (pre-R1 behaviour), so a span with no positive moment (e.g. a fixed-free cantilever under gravity load) is still flagged when its top-edge R<sub>B</sub> > 50. That is not a round-off case and was left alone.
+- **Check case (parity case "rand 108", reproduced on the Validation tab):** DF-L SS 2x10 (1.5 × 9.25 in.), simple span 29.7 ft, spacing 12 in., D 11 / L 40 psf, self-weight, point loads 250 lb W at 10.22 ft, 1200 lb Lr at 8.52 ft, 3000 lb D at 25.57 ft, −400 lb L at 16.64 ft, 500 lb D at 23.17 ft; wet, 100–125 °F; bearing 1.5 in. with C<sub>b</sub>; top edge braced, bottom edge at supports only.
+  - Bottom edge: l<sub>u</sub> = 356.4 in., l<sub>u</sub>/d = 38.5 > 14.3 with point loads → l<sub>e</sub> = 1.84 × 356.4 = 655.8 in.; R<sub>B</sub> = √(655.8 × 9.25/1.5²) = 51.92 > 50.
+  - Statics: a simple span has M(L) = 0 exactly at the right support; the computed "−M" of every combination was 1.8e-12 to 1.5e-11 ft-lb, all at x = 29.7 ft (round-off of M(L) = R<sub>L</sub>L − wL²/2 − ΣP(L − a)). No other negative moment occurs.
+  - Before: fails = ["Bottom edge (negative moment): slenderness RB = 51.9 exceeds 50 (NDS 3.3.3.7). Not permitted."] (NG), −M max = 1.5e-11 ft-lb.
+  - After: no failure; −M = 0 in every combination. Headline unchanged (1144.5 %, deflection; this random case is grossly overstressed anyway). Every other result identical.
+
+#### P2-2. 6x8 and 8x8 dressed sizes per NDS Supplement Table 1B
+
+- **Where:** `const SIZES_DB = [`.
+- **Before:**
+  ```js
+      { label: '6x8', b: 5.5, d: 7.25 }, { label: '8x8', b: 7.25, d: 7.25 },
+  ```
+- **After:**
+  ```js
+      // Engineer's decision P2-2 (2026-10-10, fix log R4): 6x8 and 8x8 dressed to NDS Supplement Table 1B (were 5.5 x 7.25 and 7.25 x 7.25)
+      { label: '6x8', b: 5.5, d: 7.5 }, { label: '8x8', b: 7.5, d: 7.5 },
+  ```
+- **Whole list checked against the Table 1B convention** (dressed dry: 2"–4" nominal −½ in. (1.5, 3.5); widths 2"–6" −½ in.; widths 8" and over −¾ in. for dimension lumber (2x8 7.25, 2x10 9.25, 2x12 11.25); timbers 5" and larger −½ in. both ways): 2x4, 2x6, 2x8, 2x10, 2x12, 4x4, 4x6, 6x6 and all the R3 timbers (6x10 … 12x16) are consistent. Only 6x8 and 8x8 had the dimension-lumber −¾ in. rule applied to a timber. No other change.
+- **Size class unchanged:** 6x8 d − b = 2.0 in. (was 1.75) → Posts and Timbers; 8x8 d − b = 0 → Posts and Timbers. Timber C<sub>F</sub> = 1.0 (d ≤ 12 in.). Both still ≥ 4.5 in. thick (Table 4D).
+- **Governing provision:** NDS Supplement 2018 Table 1B (standard dressed sizes). Section properties A = bd, S = bd²/6, I = bd³/12 unchanged.
+- **Saved data:** files store `material.size` = "6x8" / "8x8" by name, so every saved project with these sizes opens with the larger section and different results (no migration: the engineer's decision corrects the size; the old section can still be entered as Custom 5.5 × 7.25 or 7.25 × 7.25). **Less conservative** for bending, shear and deflection (larger section); **slightly more conservative for bearing** (the self-weight grows with A while the bearing width b of the 6x8 is unchanged; 8x8: b and self-weight both grow). In the parity runs the headline went down in 3,979 and up in 54 cases (all bearing-governed).
+- **Check case 6x8** (Validation tab): DF-L No.1 6x8, simple span 12 ft, spacing 48 in. (trib. 4 ft), D 15 / L 40 psf, self-weight 34 pcf, top braced; Table 4D P&T No.1: F<sub>b</sub> 1200, F<sub>v</sub> 170, F<sub>c⊥</sub> 625, E 1.6M.
+
+  | | Before (5.5 × 7.25) | After (5.5 × 7.5) |
+  |---|---|---|
+  | A (in²) | 39.875 | 41.25 |
+  | S (in³) | 48.182 | 51.5625 |
+  | I (in⁴) | 174.66 | 193.36 |
+  | w (D + L) = 220 + 34A/144 (plf) | 229.41 | 229.74 |
+  | M = wL²/8 (ft-lb) | 4129.5 | 4135.3 |
+  | f<sub>b</sub> = 12M/S (psi) | 1028.5 | 962.4 |
+  | bending f<sub>b</sub>/F′<sub>b</sub> (F′<sub>b</sub> = 1200) | **0.857** | **0.802** |
+  | shear f<sub>v</sub>/F′<sub>v</sub> | 46.57/170 = 0.274 | 44.90/170 = 0.264 |
+  | bearing | 0.114 | 0.115 |
+  | LL defl. ratio (L/360) | 0.668 | 0.603 |
+  | TL defl. ratio (L/240) | 0.735 | 0.665 |
+  | Headline | 85.7 % bending | 80.2 % bending |
+
+- **Check case 8x8** (Validation tab): DF-L No.1 8x8, 14 ft, same loads and spacing.
+
+  | | Before (7.25 × 7.25) | After (7.5 × 7.5) |
+  |---|---|---|
+  | A (in²) | 52.5625 | 56.25 |
+  | S (in³) | 63.513 | 70.3125 |
+  | I (in⁴) | 230.23 | 263.67 |
+  | w (plf) | 232.41 | 233.28 |
+  | M (ft-lb) | 5694.1 | 5715.4 |
+  | f<sub>b</sub> (psi) | 1075.8 | 975.4 |
+  | bending ratio | **0.897** | **0.813** |
+  | shear | 0.250 | 0.233 |
+  | bearing | 0.103 | 0.100 |
+  | LL defl. ratio | 0.805 | 0.703 |
+  | TL defl. ratio | 0.900 | 0.790 |
+  | Headline | 90.0 % deflection | 81.3 % bending |
+
+#### P2-7. Repetitive member factor C<sub>r</sub> = 1.04 for SCL
+
+- **Where:** `tbcRun`, anchor `const Cr = (dz.repetitive && cat === 'dim' && spacing <= 24) ? 1.15 : 1.0;`; constant after `const SCL_KINDS = {`.
+- **Before:**
+  ```js
+      const Cr = (dz.repetitive && cat === 'dim' && spacing <= 24) ? 1.15 : 1.0;
+      if (dz.repetitive && cat !== 'dim') notes.push('Cr applies to dimension lumber only (NDS 4.3.9); Cr = 1.0 used.');
+      if (dz.repetitive && cat === 'dim' && spacing > 24) notes.push('Cr requires spacing ≤ 24 in. (NDS 4.3.9); Cr = 1.0 used.');
+  ```
+- **After:**
+  ```js
+      // Repetitive member factor: dimension lumber 1.15 (NDS 4.3.9); SCL 1.04 (NDS 8.3.7; engineer's decision P2-7, 2026-10-10, fix log R4)
+      const Cr = (dz.repetitive && cat === 'dim' && spacing <= 24) ? 1.15 : (dz.repetitive && cat === 'scl' && spacing <= 24) ? SCL_CR : 1.0;
+      if (dz.repetitive && cat !== 'dim' && cat !== 'scl') notes.push('Cr applies to dimension lumber only (NDS 4.3.9); Cr = 1.0 used.');
+      if (dz.repetitive && cat === 'dim' && spacing > 24) notes.push('Cr requires spacing ≤ 24 in. (NDS 4.3.9); Cr = 1.0 used.');
+      if (dz.repetitive && cat === 'scl' && spacing > 24) notes.push('Cr requires spacing ≤ 24 in. (NDS 8.3.7); Cr = 1.0 used.');
+  ```
+  and `const SCL_CR = 1.04;` (comment: NDS 2018 8.3.7, Table 8.3.1, as recalled: verify).
+- **Conditions** (same input and logic as dimension lumber): the existing "Repetitive member" tick box (three or more members, spacing ≤ 24 in., load-distributing element) and spacing s ≤ 24 in. Applies to F<sub>b</sub> only (enters F<sub>b</sub>*, ASD and LRFD). **Not** glulam or timbers (note text unchanged for them). The SCL calc sheets already listed C<sub>r</sub>; their reference now reads "NDS 8.3.7 verify" (was "not applied to SCL, open item").
+- **Governing provision:** NDS 2018 8.3.7 and Table 8.3.1 (SCL adjustment factors), as recalled; **verify** against the printed standard (Reference Values tab row "C<sub>r</sub>, SCL" carries the verify badge).
+- **Less conservative** for SCL beams with Repetitive member ticked and s ≤ 24 in. (Repetitive member is ticked in a new project by default, so an SCL project with s ≤ 24 in. gets C<sub>r</sub> = 1.04 unless the box is cleared).
+- **Check case** (Validation tab): the R3 LVL (1-3/4 × 14 in., user-entered example values F<sub>b</sub> 2600, n = 0.111, d<sub>ref</sub> 12, 42 pcf, 14 ft span) placed in a repetitive configuration with the same line load as R3: spacing 24 in. (trib. 2 ft), D 60 / L 160 psf → w = 2 × 220 + 42 × 24.5/144 = 447.15 plf (R3: 8 × 55 + 7.15). M = 447.15 × 14²/8 = 10,955 ft-lb; S = 1.75 × 14²/6 = 57.167 in³; f<sub>b</sub> = 10,955 × 12/57.167 = 2299.6 psi; C<sub>V</sub> = (12/14)<sup>0.111</sup> = 0.98303; C<sub>L</sub> = 1.0.
+  - Before: F′<sub>b</sub> = 2600 × 1.0 × min(1.0, 0.98303) × C<sub>r</sub> 1.0 = 2555.9 psi; ratio **0.900** (= R3).
+  - After: F′<sub>b</sub> = 2600 × 1.0 × 0.98303 × C<sub>r</sub> 1.04 = 2658.1 psi; ratio 2299.6/2658.1 = **0.865**. Shear 0.560, bearing 0.681, deflection unchanged. Headline 90.0 % → 86.5 % (bending).
+  - Same beam, LRFD (1.2D + 1.6L, λ 0.8): F′<sub>b</sub> = 2600 × 0.8 × 0.98303 × 2.54 × 0.85 × C<sub>r</sub>: 4414.5 → 4591.1 psi; ratio 0.774 → 0.744 (headline stays 82.9 %, deflection).
+  - R3 check as published (spacing 96 in.): unchanged, 0.900; with Repetitive member ticked the note now reads "Cr requires spacing ≤ 24 in. (NDS 8.3.7); Cr = 1.0 used." (was "Cr applies to dimension lumber only (NDS 4.3.9) …").
+
+#### Text / UI changes (no calculation)
+
+Factors tab hint of the Repetitive member box ("Dimension lumber C<sub>r</sub> = 1.15 (NDS 4.3.9); SCL C<sub>r</sub> = 1.04 (NDS 8.3.7). Not timbers or glulam."); SCL hint on the Factors tab; Design Values C<sub>r</sub> row (status "repetitive, s ≤ 24 in." when C<sub>r</sub> > 1; reference NDS 8.3.7 for SCL); bending "where" row for SCL; Reference Values: SCL note, new row "C<sub>r</sub>, SCL — 1.04 on F<sub>b</sub> … NDS 2018 8.3.7, Table 8.3.1" (verify), dressed-sizes row text; Method & Manual: SCL item and the Files item (6x8 / 8x8 files change results); Validation: 17 new benchmarks (the four checks above), hint mentions R4.
+
+#### How verified
+
+- `node --check` on all four inline scripts.
+- **Engine parity (Node, scratchpad `followups/timber-p2-followups/parity4.js`):** origin/main engine vs this engine, deep comparison of every result field, plus this engine with each change undone by text substitution (N0 = all three undone; N1/N2/N7 = only P2-1 / P2-2 / P2-7 active). Model migration (`tbcMigrate`) identical in every case.
+  - **20,417 Phase 1 / Phase 2 cases** (old file formats, every species × grade × size, 20,000 random files): N0 vs main **0 differences**. P2-1 alone changes **7,080** cases, **all of the round-off kind**: in every one main had a region moment 0 < |M| ≤ tolerance (mostly M(L) at the right end support of a simple span), and only the region fields (`bend[].Mp/xp/Mn/xn/fbp/fbn/rp/rn/zt/zb/CVt/CVb`) and the fail list differ; **no bending, shear or bearing ratio, F′<sub>b</sub>, headline or governing check changes**; **1** case loses a bottom-edge "R<sub>B</sub> > 50" NG (`rand 108`, the case that raised P2-1). P2-2 alone changes **2,427** cases, all with size 6x8 or 8x8. P2-7 alone changes **0** (no SCL in this set). All three together: 8,512 changed, **0 unexplained**.
+  - **20,000 random Phase 2 models** (all distinct; sawn incl. 6x8 / 8x8 / timbers, glulam, SCL (LVL / PSL / LSL, C<sub>V</sub> limit 1.0 / 1.15), ASD / LRFD, 1–3 spans, fixed / free ends, 0–5 point loads, uplift, all lateral-support settings, spacing 12–96 in., Repetitive member random): N0 vs main **0 differences**. P2-1 alone: **4,459** changed, all of the round-off kind, ratios and headline unchanged in all; **14** lose a bottom-edge "R<sub>B</sub> > 50" NG that came only from a round-off moment. P2-2 alone: **3,262**, all 6x8 / 8x8. P2-7 alone: **2,539**, all SCL with Repetitive member and s ≤ 24 in.; only C<sub>r</sub>, F<sub>b</sub>*, F′<sub>b</sub>, C<sub>L</sub> (through F<sub>b</sub>*), bending ratios, governing bending and headline fields differ; **no ratio increases**. All three: 8,915 changed, **0 unexplained**.
+  - Headline (P2-2, cases with results): lower in 3,979, higher in 54 (bearing governs; self-weight).
+- **Hand checks:** all 87 Validation benchmarks match (70 earlier + 17 new) in Chromium.
+- **Browser (headless Chromium, `file://`, KaTeX / plotly served locally), main vs branch, every output tab's text, the governing strip and the saved model:** default, glulam (simple, 2-span wet notched, SP LRFD with overhang and uplift), 6x12, SP No.1, LRFD joist: **identical**. R3 LVL (s = 96 in.): identical results and saved data; only the bending "where" row text (C<sub>r</sub> reference). Changed as intended: LVL repetitive ASD (90.0 → 86.5 %) and LRFD (ratio 0.774 → 0.744), 6x8 (85.7 → 80.2 %), 8x8 (90.0 % defl. → 81.3 % bending), rand 108 (bottom-edge NG removed). No console errors, no NaN / undefined, no KaTeX errors. Screenshots reviewed (scratchpad `followups/timber-p2-followups/shots/`).
+- **Other copies of this code:** none (tool-specific).
+
 ## Open items (not changed)
 - O1. **Libraries.** Versions pinned 2026-10-09 (L1): `@babel/standalone@7.29.10`, `lucide@1.54.0` (unused), Tailwind Play CDN 3.4.17. Still open: *(R1: resolved; the rebuild uses only KaTeX 0.16.11 and plotly-basic 2.35.2.)*
   - Tailwind Play CDN (`cdn.tailwindcss.com`) is meant for development only.
@@ -1026,15 +1158,16 @@ Material tab: material type (sawn / glulam / SCL); glulam combination, species g
 - O13. **ASCE 7 edition:** 7-16 assumed. ASCE 7-22 Sec. 2.4.1 is believed to have the same forms for these load types. Confirm the governing edition.
 - O14. **Ci is applied to timbers if ticked.** NDS 4.3.8 is written for dimension lumber. Minor; confirm.
 - O15. **Not in scope:** no print button (C4 in the audit); `projectInfo.notes` has no input; the app title differs from the file name. *(R1: resolved: Print report, a Notes input, title "Timber Beam Check".)*
-- P2-1. **Round-off negative moment (observation, not changed).** The bottom-edge slenderness failure ("Bottom edge (negative moment): slenderness RB = … exceeds 50") is raised when any combination has `c.bend[i].Mn > 0`. A moment of about 1e-12 ft-lb from floating-point round-off at an end support counts, so a member with no real negative moment can be flagged NG when its bottom-edge R<sub>B</sub> exceeds 50 (1 of 20,417 parity cases: 29.7 ft span, five point loads). The advisory beside it already uses a 1e-9 tolerance. Proposed fix: `c.bend[i].Mn > 1e-9` in the anchor `if (s.bot.RB > 50 && combos.some(c => c.bend[i].Mn > 0))`. Decision?
-- P2-2. **6x8 and 8x8 dressed sizes.** The size list (unchanged since the original tool) has 6x8 = 5.5 × 7.25 in. and 8x8 = 7.25 × 7.25 in.; NDS Supplement Table 1B gives 5.5 × 7.5 and 7.5 × 7.5 in. for timbers. The smaller section is conservative. Not changed (it changes results of existing files). Decision: correct them?
+- P2-1. **Round-off negative moment (observation, not changed).** The bottom-edge slenderness failure ("Bottom edge (negative moment): slenderness RB = … exceeds 50") is raised when any combination has `c.bend[i].Mn > 0`. A moment of about 1e-12 ft-lb from floating-point round-off at an end support counts, so a member with no real negative moment can be flagged NG when its bottom-edge R<sub>B</sub> exceeds 50 (1 of 20,417 parity cases: 29.7 ft span, five point loads). The advisory beside it already uses a 1e-9 tolerance. Proposed fix: `c.bend[i].Mn > 1e-9` in the anchor `if (s.bot.RB > 50 && combos.some(c => c.bend[i].Mn > 0))`. Decision? *(R4: closed. Engineer's decision 2026-10-10: region moments with |M| ≤ max(1e-6 ft-lb, 1e-9 × M<sub>max</sub>) are zero; the false NG is gone.)*
+- P2-2. **6x8 and 8x8 dressed sizes.** The size list (unchanged since the original tool) has 6x8 = 5.5 × 7.25 in. and 8x8 = 7.25 × 7.25 in.; NDS Supplement Table 1B gives 5.5 × 7.5 and 7.5 × 7.5 in. for timbers. The smaller section is conservative. Not changed (it changes results of existing files). Decision: correct them? *(R4: closed. Corrected to 5.5 × 7.5 and 7.5 × 7.5 in.; results of files with these sizes change.)*
 - P2-3. **Not built in:** Southern Pine Stud (Table 4B), Spruce-Pine-Fir timbers (Table 4D), Dense / Non-Dense grades, glulam combinations other than the seven listed. These still ask for Manual / custom values. Supply the values if wanted.
 - P2-4. **Southern Pine Table 4D and wet service.** The SP timber F<sub>c⊥</sub> = 375 psi (≈ 0.67 × 565) suggests the SP timber values may already be for wet service; the tool still applies C<sub>M</sub> = 0.67 to F<sub>c⊥</sub> when Wet is ticked (conservative if so). Confirm the Table 4D footnote.
 - P2-5. **Table 4D flat use.** Beams and Stringers loaded on the wide face: F<sub>b</sub> × 0.86 (SS), 0.74 (No.1), 1.00 (No.2) as recalled; Posts and Timbers 1.00; Southern Pine timbers take the B&S factors (conservative). Confirm.
 - P2-6. **Glulam:** (a) F<sub>vx</sub> of the stress classes when made of Southern Pine (a Table 5A footnote may allow 300 psi; the tool uses the tabulated 210 / 265, conservative); (b) no balanced-layup option for the stress classes (F<sub>bx</sub><sup>−</sup> = F<sub>bx</sub><sup>+</sup>; use Custom values); (c) flat use (y–y) not supported; (d) notch rules (NDS 5.4.4.1 lesser of d/10 and 3 in.; C<sub>vr</sub> = 0.72, NDS 5.3.10) as recalled; (e) C<sub>V</sub> length L taken between the points of zero moment of each combination around the governing moment (for a cantilever: from the tip to the inflection point in the back span, or the support); (f) density 35 / 36 pcf (tool values). Confirm.
-- P2-7. **SCL repetitive member factor.** NDS 2018 may permit C<sub>r</sub> = 1.04 for SCL in repetitive use (8.3.7, as recalled); not applied (1.0, conservative). Decision?
+- P2-7. **SCL repetitive member factor.** NDS 2018 may permit C<sub>r</sub> = 1.04 for SCL in repetitive use (8.3.7, as recalled); not applied (1.0, conservative). Decision? *(R4: closed. C<sub>r</sub> = 1.04 applied to SCL F<sub>b</sub> with Repetitive member ticked and s ≤ 24 in. (NDS 8.3.7, verify).)*
 - P2-8. **LRFD time effect factor.** The brief listed λ 0.7 / 0.8 / 1.0 for L from storage / occupancy / impact; NDS Table N3 (as recalled) gives 1.25 for impact. The tool offers occupancy (0.8, default) and storage (0.7) only; impact is not offered (ASD has no impact C<sub>D</sub> either). Confirm. The ASCE 7-16 Sec. 2.3.1 exception (0.5L in combinations 3 and 4) is not used (conservative).
 - P2-9. **Glulam bearing face.** Bearing uses the tension-face F<sub>c⊥x</sub> at every support (the bottom face sits on the supports). The seven built-in combinations have equal values for both faces; matters only for custom data. Confirm.
+- P2-10. **Top-edge R<sub>B</sub> > 50 regardless of moment (observation, not changed).** The top-edge failure "Slenderness RB = … exceeds 50" (anchor `if (stabilityApplies && s.top.RB > 50) fails.push(`) is raised for every span when the top edge is braced at supports only, even when the span has no positive moment (e.g. a fixed-free cantilever under gravity load: the top edge is in tension). The bottom-edge check is raised only where negative moment occurs. This is the pre-R1 behaviour (conservative) and not a round-off case, so it was not changed in R4. Decision: raise the top-edge failure only where positive moment occurs (`combos.some(c => c.bend[i].Mp > 0)`)?
 
 ## How verified (all fixes)
 - **Before values:** the original engine (lines 67-88 and 361-482 of the original file) was extracted verbatim into node and run on 8 cases.

@@ -447,6 +447,10 @@ const GLULAM_GRP = {
 const GLULAM_CM = { Fb: 0.8, Fv: 0.875, Fcp: 0.53, E: 0.833 };
 const GLULAM_CVR = 0.72;
 const SCL_KINDS = { LVL: 'LVL (laminated veneer lumber)', PSL: 'PSL (parallel strand lumber)', LSL: 'LSL (laminated strand lumber)' };
+// SCL repetitive member factor on Fb (NDS 2018 8.3.7, Table 8.3.1, as recalled: verify); fix log R4
+const SCL_CR = 1.04;
+// Round-off tolerance for region moments (fix log R4, P2-1): |M| <= max(M_TOL_ABS ft-lb, M_TOL_REL x largest |M| of the combination) is zero
+const M_TOL_ABS = 1e-6, M_TOL_REL = 1e-9;
 // LRFD, NDS 2018 Appendix N: format conversion factor KF (Table N1), resistance factor phi (Table N2),
 // time effect factor lambda (Table N3) by load combination (ASCE 7-16 Sec. 2.3.1 strength combinations).
 const LRFD_KF = { Fb: 2.54, Fv: 2.88, Fcp: 1.67, Emin: 1.76 };
@@ -496,7 +500,8 @@ const SIZES_DB = [
     { label: '2x8', b: 1.5, d: 7.25 }, { label: '2x10', b: 1.5, d: 9.25 },
     { label: '2x12', b: 1.5, d: 11.25 }, { label: '4x4', b: 3.5, d: 3.5 },
     { label: '4x6', b: 3.5, d: 5.5 }, { label: '6x6', b: 5.5, d: 5.5 },
-    { label: '6x8', b: 5.5, d: 7.25 }, { label: '8x8', b: 7.25, d: 7.25 },
+    // Engineer's decision P2-2 (2026-10-10, fix log R4): 6x8 and 8x8 dressed to NDS Supplement Table 1B (were 5.5 x 7.25 and 7.25 x 7.25)
+    { label: '6x8', b: 5.5, d: 7.5 }, { label: '8x8', b: 7.5, d: 7.5 },
     // added in Phase 2 (fix log R3): timbers, dressed 1/2 in. under nominal (NDS Supplement Table 1B)
     { label: '6x10', b: 5.5, d: 9.5 }, { label: '6x12', b: 5.5, d: 11.5 }, { label: '6x14', b: 5.5, d: 13.5 }, { label: '6x16', b: 5.5, d: 15.5 },
     { label: '8x10', b: 7.5, d: 9.5 }, { label: '8x12', b: 7.5, d: 11.5 }, { label: '8x14', b: 7.5, d: 13.5 }, { label: '8x16', b: 7.5, d: 15.5 },
@@ -812,9 +817,11 @@ function tbcRun(m) {
     const ciOn = !!dz.incising && !isGL && !isSCL;
     if (dz.incising && (isGL || isSCL)) notes.push('Ci applies to sawn lumber only (NDS 4.3.8); Ci = 1.0 used.');
     const Ci = { Fb: ciOn ? 0.80 : 1.0, Fv: ciOn ? 0.80 : 1.0, Fcp: 1.0, E: ciOn ? 0.95 : 1.0 };
-    const Cr = (dz.repetitive && cat === 'dim' && spacing <= 24) ? 1.15 : 1.0;
-    if (dz.repetitive && cat !== 'dim') notes.push('Cr applies to dimension lumber only (NDS 4.3.9); Cr = 1.0 used.');
+    // Repetitive member factor: dimension lumber 1.15 (NDS 4.3.9); SCL 1.04 (NDS 8.3.7; engineer's decision P2-7, 2026-10-10, fix log R4)
+    const Cr = (dz.repetitive && cat === 'dim' && spacing <= 24) ? 1.15 : (dz.repetitive && cat === 'scl' && spacing <= 24) ? SCL_CR : 1.0;
+    if (dz.repetitive && cat !== 'dim' && cat !== 'scl') notes.push('Cr applies to dimension lumber only (NDS 4.3.9); Cr = 1.0 used.');
     if (dz.repetitive && cat === 'dim' && spacing > 24) notes.push('Cr requires spacing ≤ 24 in. (NDS 4.3.9); Cr = 1.0 used.');
+    if (dz.repetitive && cat === 'scl' && spacing > 24) notes.push('Cr requires spacing ≤ 24 in. (NDS 8.3.7); Cr = 1.0 used.');
     const Cfu = (flat && cat === 'dim') ? T4A_CFU[wg][thick4 ? 1 : 0] : (flat && cat === 'timber' && !userVals && cls4D !== 'PT') ? T4D_FLAT_FB[mt.grade] : 1.0;
     // LRFD (NDS 2018 Appendix N): KF and phi multiply the reference values (exactly 1 in ASD)
     const KF = lrfd ? LRFD_KF : { Fb: 1, Fv: 1, Fcp: 1, Emin: 1 };
@@ -950,6 +957,10 @@ function tbcRun(m) {
             if (!simple && nodeSet.has(x)) { putM(x, mv, -1); const mr = bm.M(x, true); putM(x, mr, 1); if (Math.abs(mr) > Mmax) { Mmax = Math.abs(mr); xM = x; } }
             else putM(x, mv, 0);
         });
+        // Engineer's decision P2-1 (2026-10-10, fix log R4): a region moment that is floating-point round-off
+        // (|M| <= the larger of 1e-6 ft-lb and 1e-9 x the largest |M| of the combination) is zero: no top- or bottom-edge check.
+        const Mtol = Math.max(M_TOL_ABS, M_TOL_REL * Mmax);
+        reg.forEach(r => { if (r.Mp <= Mtol) { r.Mp = 0; r.xp = null; } if (r.Mn <= Mtol) { r.Mn = 0; r.xn = null; } });
         // Design shear: max |V| between d from each support (NDS 3.4.3.1(a)); no x/d reduction of point loads
         let Vd = 0, xV = 0;
         shearRegion.forEach(x => { const v = Math.max(Math.abs(bm.V(x, false)), Math.abs(bm.V(x, true))); if (v > Vd) { Vd = v; xV = x; } });
@@ -1850,9 +1861,9 @@ function buildFactorsPane(P) {
     chkRow(body, 'Wet service (C<sub>M</sub>)', chkIn(() => dz.moisture === 'Wet', v => { dz.moisture = v ? 'Wet' : 'Dry'; }, 'wet'));
     fRow(body, 'Temperature (C<sub>t</sub>)', selIn([['Normal', 'T ≤ 100 °F'], ['100-125', '100 °F < T ≤ 125 °F'], ['125-150', '125 °F < T ≤ 150 °F']], () => dz.temp, v => { dz.temp = v; }, 'temp', false), '');
     chkRow(body, 'Incised (C<sub>i</sub>)', chkIn(() => dz.incising, v => { dz.incising = v; }, 'incised'));
-    chkRow(body, 'Repetitive member (C<sub>r</sub>)', chkIn(() => dz.repetitive, v => { dz.repetitive = v; }, 'repetitive'), 'Three or more members at ≤ 24 in., joined by a load-distributing element (NDS 4.3.9). Dimension lumber only.');
+    chkRow(body, 'Repetitive member (C<sub>r</sub>)', chkIn(() => dz.repetitive, v => { dz.repetitive = v; }, 'repetitive'), 'Three or more members at ≤ 24 in., joined by a load-distributing element. Dimension lumber C<sub>r</sub> = 1.15 (NDS 4.3.9); SCL C<sub>r</sub> = 1.04 (NDS 8.3.7). Not timbers or glulam.');
     chkRow(body, 'Flat use (C<sub>fu</sub>, load on the wide face)', chkIn(() => dz.flatUse, v => { dz.flatUse = v; }, 'flat'));
-    if (M.material.type !== 'sawn') body.appendChild(el('div', 'hint', M.material.type === 'glulam' ? 'Glulam: C<sub>M</sub> per the Table 5A footnote (F<sub>b</sub> 0.8, F<sub>v</sub> 0.875, F<sub>c⊥</sub> 0.53, E 0.833); C<sub>i</sub>, C<sub>r</sub>, C<sub>F</sub> and flat use do not apply.' : 'SCL: wet service and flat use need the manufacturer’s values (not built in); C<sub>i</sub> and C<sub>r</sub> are not applied.'));
+    if (M.material.type !== 'sawn') body.appendChild(el('div', 'hint', M.material.type === 'glulam' ? 'Glulam: C<sub>M</sub> per the Table 5A footnote (F<sub>b</sub> 0.8, F<sub>v</sub> 0.875, F<sub>c⊥</sub> 0.53, E 0.833); C<sub>i</sub>, C<sub>r</sub>, C<sub>F</sub> and flat use do not apply.' : 'SCL: wet service and flat use need the manufacturer’s values (not built in); C<sub>i</sub> is not applied; C<sub>r</sub> = 1.04 when Repetitive member is ticked and s ≤ 24 in. (NDS 8.3.7).'));
   }, { noNum: true });
   mkSec(P, 'inStab', 'Lateral support (beam stability, NDS 3.3.3)', body => {
     fRow(body, 'Top edge (compression where M > 0)', selIn([['Continuous', 'Continuous (e.g. sheathing)'], ['Supports', 'At supports only']], () => dz.latTop, v => { dz.latTop = v; }, 'latTop'), '');
@@ -1984,7 +1995,7 @@ function whereFb(c, CL, CV, sign) {
     tfWhere(c), ['C_M', 'wet service', g4(R.CM.Fb), '', 'Supplement footnotes ' + VFY], ['C_t', 'temperature', g4(R.Ct.Fb), '', 'NDS Table 2.3.3 ' + VFY], ['C_L', 'beam stability', f3(CL), '', 'above']];
   if (sawnOnly()) rows.push(['C_F', esc(R.CFnote), f3(R.CF), '', R.cat === 'dim' && !R.userVals ? 'NDS Supplement Table 4A/4B ' + VFY : 'NDS 4.3.6'], ['C_i', 'incising', g4(R.Ci.Fb), '', 'NDS Table 4.3.8 ' + VFY], ['C_{fu}', 'flat use', g4(R.Cfu), '', (R.cat === 'timber' ? 'Supplement Table 4D footnote ' : 'Supplement Table 4A/4B ') + VFY], ['C_r', 'repetitive member', g4(R.Cr), '', 'NDS 4.3.9 ' + VFY]);
   else rows.push(['C_V', R.isGL ? 'volume factor (C_L and C_V not cumulative: the lesser applies)' : 'size factor of the manufacturer (' + (CV > 1 ? 'C_V > 1.0: applied with C_L' : 'the lesser of C_L and C_V applies') + ')', f3(CV), '', R.isGL ? 'NDS 5.3.6, Eq. 5.3-1 ' + VFY : 'manufacturer; NDS 8.3.6 ' + VFY]);
-  if (R.isSCL) rows.push(['C_r', 'repetitive member (not applied to SCL, open item)', g4(R.Cr), '', '']);
+  if (R.isSCL) rows.push(['C_r', 'repetitive member (SCL)', g4(R.Cr), '', 'NDS 8.3.7 ' + VFY]);
   return rows.concat(lrfdWhere('Fb'));
 }
 
@@ -2228,7 +2239,7 @@ function factorRows() {
     ['C<sub>F</sub> size', g4(R.CF), '—', '—', '—', esc(R.CFnote), (R.cat === 'dim' ? (R.cfIncluded ? (builtIn ? 'NDS Supplement Table 4B ' + VFY : 'included in the entered F<sub>b</sub>') : 'NDS Supplement Table 4A ' + VFY) : 'NDS 4.3.6.2, Eq. (12/d)^(1/9)')],
     ['C<sub>fu</sub> flat use', g4(R.Cfu), '—', '—', '—', R.flat ? 'flat use' + (R.cat === 'timber' ? (R.cls4D === 'PT' ? ' (Posts and Timbers: 1.00)' : ' (Table 4D Beams and Stringers factor, by grade)') : '') : 'edgewise', R.flat ? (R.cat === 'timber' ? 'NDS Supplement Table 4D footnote ' : 'NDS Supplement Table 4A/4B ') + VFY : 'NDS 4.3.7'],
     ['C<sub>i</sub> incising', g4(R.Ci.Fb), g4(R.Ci.Fv), g4(R.Ci.Fcp), g4(R.Ci.E), M.design.incising ? 'incised' : 'not incised', 'NDS 4.3.8, Table 4.3.8 ' + VFY],
-    ['C<sub>r</sub> repetitive member', g4(R.Cr), '—', '—', '—', M.design.repetitive ? (R.Cr === 1.15 ? 'repetitive, s ≤ 24 in.' : 'not applicable (see notes)') : 'not repetitive', 'NDS 4.3.9 ' + VFY]);
+    ['C<sub>r</sub> repetitive member', g4(R.Cr), '—', '—', '—', M.design.repetitive ? (R.Cr > 1 ? 'repetitive, s ≤ 24 in.' : 'not applicable (see notes)') : 'not repetitive', (R.isSCL ? 'NDS 8.3.7 ' : 'NDS 4.3.9 ') + VFY]);
   else rows.push(R.isGL
     ? ['C<sub>V</sub> volume factor', 'per bending region', '—', '—', '—', `(21/L)<sup>1/x</sup>(12/d)<sup>1/x</sup>(5.125/b)<sup>1/x</sup> ≤ 1.0, x = ${R.glX}, L = distance between the points of zero moment; the lesser of C<sub>L</sub> and C<sub>V</sub> applies (see the Bending tab)`, 'NDS 5.3.6, Eq. 5.3-1 ' + VFY]
     : ['C<sub>V</sub> size factor', f3(R.CVscl), '—', '—', '—', `(d<sub>ref</sub>/d)<sup>n</sup> = (${g4(R.sclRef)}/${g4(R.d)})<sup>${g4(R.sclN)}</sup>, not more than ${g4(R.sclMax)}`, 'manufacturer; NDS 8.3.6']);
@@ -2523,7 +2534,7 @@ function buildRefv(pg) {
     body.appendChild(el('div', 'hint', 'All values ' + VFY + '. LRFD adjusted value = reference value × the applicable factors of NDS Table 4.3.1 / 5.3.1 / 8.3.1 × K<sub>F</sub> × φ × λ; C<sub>D</sub> is not used; F<sub>c⊥</sub> has no λ; E (deflection) has no K<sub>F</sub>, φ or λ. F<sub>b</sub>* for C<sub>L</sub> includes K<sub>F</sub>, φ and λ, and F<sub>bE</sub> uses E′<sub>min</sub> with K<sub>F</sub> φ<sub>s</sub>. W is the strength-level wind load (the ASD combinations use 0.6W). The 0.5L option of ASCE 7-16 2.3.1 (exception 1) is not used (L factor 1.0, conservative). λ = 1.25 (impact) is not offered. Added in Phase 2 (fix log R3).'));
   });
   mkSec(pg, 'rvSCL', 'Structural composite lumber (LVL, PSL, LSL) — NDS Chapter 8', body => {
-    body.appendChild(el('div', 'note', 'No SCL values are built in: the reference design values (F<sub>b</sub>, F<sub>v</sub>, F<sub>c⊥</sub>, E, E<sub>min</sub>) and the size factor C<sub>V</sub> = (d<sub>ref</sub>/d)<sup>n</sup> are entered from the manufacturer’s literature, which governs (NDS 8.2, 8.3.6). The tool applies C<sub>D</sub> (ASD) or K<sub>F</sub> φ λ (LRFD), C<sub>t</sub> (Table 2.3.3), C<sub>L</sub>, C<sub>V</sub> (the lesser of C<sub>L</sub> and C<sub>V</sub> when C<sub>V</sub> ≤ 1.0; both when C<sub>V</sub> > 1.0) and C<sub>b</sub>. Wet service, flat use and notches are not covered (manufacturer). C<sub>r</sub> is not applied.'));
+    body.appendChild(el('div', 'note', 'No SCL values are built in: the reference design values (F<sub>b</sub>, F<sub>v</sub>, F<sub>c⊥</sub>, E, E<sub>min</sub>) and the size factor C<sub>V</sub> = (d<sub>ref</sub>/d)<sup>n</sup> are entered from the manufacturer’s literature, which governs (NDS 8.2, 8.3.6). The tool applies C<sub>D</sub> (ASD) or K<sub>F</sub> φ λ (LRFD), C<sub>t</sub> (Table 2.3.3), C<sub>L</sub>, C<sub>V</sub> (the lesser of C<sub>L</sub> and C<sub>V</sub> when C<sub>V</sub> ≤ 1.0; both when C<sub>V</sub> > 1.0) and C<sub>b</sub>. Wet service, flat use and notches are not covered (manufacturer). C<sub>r</sub> = ' + SCL_CR + ' in repetitive use (NDS 8.3.7) ' + VFY + '.'));
   });
   mkSec(pg, 'rvCF', 'Size factor C_F and flat use factor C_fu (Table 4A / 4B footnotes)', body => {
     const ws = [3, 4, 5, 6, 8, 10, 12, 14];
@@ -2545,6 +2556,7 @@ function buildRefv(pg) {
       ['C<sub>t</sub>', 'T ≤ 100 °F: 1.0. 100–125 °F: E 0.9; others 0.8 dry / 0.7 wet. 125–150 °F: E 0.9; others 0.7 dry / 0.5 wet', 'NDS 2018 Table 2.3.3'],
       ['C<sub>i</sub>', 'incised: F<sub>b</sub>, F<sub>v</sub> 0.80; E, E<sub>min</sub> 0.95; F<sub>c⊥</sub> 1.00', 'NDS 2018 Table 4.3.8'],
       ['C<sub>r</sub>', '1.15 (dimension lumber, spacing ≤ 24 in.)', 'NDS 2018 4.3.9'],
+      ['C<sub>r</sub>, SCL', SCL_CR + ' on F<sub>b</sub> (repetitive member, spacing ≤ 24 in.; fix log R4)', 'NDS 2018 8.3.7, Table 8.3.1'],
       ['C<sub>D</sub>', 'D 0.9; L 1.0; S 1.15; Lr 1.25; W 1.6', 'NDS 2018 Table 2.3.2'],
       ['C<sub>b</sub>', '(l<sub>b</sub> + 0.375)/l<sub>b</sub>, l<sub>b</sub> < 6 in., bearing ≥ 3 in. from the member end', 'NDS 2018 3.10.4, Eq. 3.10-2'],
       ['Beam stability', 'l<sub>e</sub> per Table 3.3.3 (single span, uniform load: 2.06 l<sub>u</sub> for l<sub>u</sub>/d < 7, 1.63 l<sub>u</sub> + 3d for l<sub>u</sub>/d ≥ 7; other loading, continuous and cantilever: footnote 1, 2.06 l<sub>u</sub> / 1.63 l<sub>u</sub> + 3d / 1.84 l<sub>u</sub> for l<sub>u</sub>/d > 14.3); R<sub>B</sub> ≤ 50; F<sub>bE</sub> = 1.20 E′<sub>min</sub>/R<sub>B</sub><sup>2</sup>', 'NDS 2018 3.3.3, Table 3.3.3, Eq. 3.3-5, 3.3-6'],
@@ -2553,7 +2565,7 @@ function buildRefv(pg) {
       ['ASD combinations', 'D; D+L; D+Lr; D+S; D+0.75L+0.75S; D+0.6W; D+0.75L+0.75Lr; D+0.75L+0.75(0.6W)+0.75Lr; D+0.75L+0.75(0.6W)+0.75S; 0.6D+0.6W', 'ASCE 7-16 Sec. 2.4.1 (O13: edition)'],
       ['Specific gravity G', Object.keys(DEFAULT_SPECIES).map(k => k + ' ' + DEFAULT_SPECIES[k].G).join(', '), 'NDS 2018 Table 12.3.3A (shown only)'],
       ['Density for self-weight', Object.keys(DEFAULT_SPECIES).map(k => k + ' ' + DEFAULT_SPECIES[k].dens + ' pcf').join(', '), 'tool values (pre-R1), not from an NDS table'],
-      ['Dressed sizes', SIZES_DB.filter(s => s.label !== 'Custom').map(s => `${s.label} ${s.b}×${s.d}`).join(', ') + ' in. (6x8 and 8x8 as in the earlier tool; Table 1B gives 5.5×7.5 and 7.5×7.5, open item P2-2)', 'NDS Supplement Table 1B'],
+      ['Dressed sizes', SIZES_DB.filter(s => s.label !== 'Custom').map(s => `${s.label} ${s.b}×${s.d}`).join(', ') + ' in. (6x8 and 8x8 corrected to Table 1B in fix log R4; were 5.5×7.25 and 7.25×7.25)', 'NDS Supplement Table 1B'],
     ];
     body.appendChild(tblEl(['Item', 'Values built in', 'Reference', ''], rows.map(r => [{ h: r[0] }, { h: r[1] }, r[2], { h: VFY }]), { left: [0, 1, 2] }));
   });
@@ -2639,6 +2651,27 @@ function runBenchmarks() {
       add(g, 'w_u = 1.2 × 16.61 + 1.6 × 53.33 (plf)', 105.26, k.w, 'plf', 1e-4); add(g, 'λ (Table N3)', 0.8, k.TF, '', 1e-12);
       add(g, "F'b = 900 × 0.8 × 1.1 × 1.15 × 2.54 × 0.85 (psi)", 1966.4, k.Fb_p, 'psi', 1e-4); add(g, 'fb/F′b = 1446.8/1966.4 (ASD: 0.844)', 0.7358, k.r_b, '', 1e-3);
       add(g, "E'min = 580,000 × 1.76 × 0.85 (psi)", 867680, q.Emin_p, 'psi', 1e-9); add(g, "F'v = 180 × 0.8 × 2.88 × 0.75 (psi)", 311.04, k.Fv_p, 'psi', 1e-9); add(g, "F'c⊥ = 625 × 1.67 × 0.90 (psi)", 939.375, k.Fcp_p, 'psi', 1e-9); }
+    // 4. Engineer's decisions of 2026-10-10 (fix log R4): SCL C_r, Table 1B sizes of 6x8 / 8x8, round-off moments
+    { const q = p2(m => { m.material.type = 'scl'; Object.assign(m.material.scl, { kind: 'LVL', name: 'example inputs', b: 1.75, d: 14, Fb: 2600, Fv: 285, Fcp: 750, E: 1900000, Emin: 966000, n: 0.111, dref: 12, cvMax: 1.0, dens: 42 });
+        m.geom.spans = [{ L: 14 }]; m.geom.spacing = 24; m.loads.D = 60; m.loads.L = 160; m.design.repetitive = true; }), k = comb(q, 'D+L');
+      const g = 'LVL of the R3 check in repetitive use (fix log R4): spacing 24 in., D 60 / L 160 psf (same 447.15 plf), Repetitive member ticked';
+      add(g, 'C_r, SCL (NDS 8.3.7)', 1.04, q.Cr, '', 1e-12); add(g, "F'b = 2600 × C_r 1.04 × C_V 0.98303 (psi)", 2658.1, k.Fb_p, 'psi', 1e-4);
+      add(g, 'fb = 10,955 × 12/57.167 (psi)', 2299.6, k.fb, 'psi', 1e-4); add(g, 'fb/F′b = 2299.6/2658.1 (C_r = 1.0: 0.900)', 0.8651, k.r_b, '', 1e-3); }
+    { const q = p2(m => { m.material.size = '6x8'; m.material.grade = 'No.1'; m.geom.spacing = 48; m.geom.spans = [{ L: 12 }]; }), k = comb(q, 'D+L');
+      const g = '6x8 DF-L No.1, 5.5 × 7.5 in. (Table 1B, fix log R4; Posts and Timbers), 12 ft, trib. 4 ft, D 15 / L 40 psf';
+      add(g, 'A = 5.5 × 7.5 (in²)', 41.25, q.A, 'in²', 1e-12); add(g, 'S = 5.5 × 7.5²/6 (in³)', 51.5625, q.S, 'in³', 1e-12); add(g, 'I = 5.5 × 7.5³/12 (in⁴)', 193.359, q.I, 'in⁴', 1e-5);
+      add(g, 'M = (220 + 34 × 41.25/144) × 12²/8 (ft-lb)', 4135.3, k.Mgov, 'ft-lb', 1e-4); add(g, 'fb/F′b = 962.4/1200', 0.8020, k.r_b, '', 1e-3); }
+    { const q = p2(m => { m.material.size = '8x8'; m.material.grade = 'No.1'; m.geom.spacing = 48; m.geom.spans = [{ L: 14 }]; }), k = comb(q, 'D+L');
+      const g = '8x8 DF-L No.1, 7.5 × 7.5 in. (Table 1B, fix log R4; Posts and Timbers), 14 ft, trib. 4 ft, D 15 / L 40 psf';
+      add(g, 'A = 7.5 × 7.5 (in²)', 56.25, q.A, 'in²', 1e-12); add(g, 'S = 7.5³/6 (in³)', 70.3125, q.S, 'in³', 1e-12); add(g, 'I = 7.5⁴/12 (in⁴)', 263.672, q.I, 'in⁴', 1e-5);
+      add(g, 'M = (220 + 34 × 56.25/144) × 14²/8 (ft-lb)', 5715.4, k.Mgov, 'ft-lb', 1e-4); add(g, 'fb/F′b = 975.4/1200', 0.8129, k.r_b, '', 1e-3); }
+    { const q = p2(m => { m.material.grade = 'SS'; m.geom.spans = [{ L: 29.7 }]; m.geom.spacing = 12; m.geom.supports = [{ t: 'pin', lb: 1.5, cb: true }, { t: 'pin', lb: 1.5, cb: true }];
+        m.loads.D = 11; m.loads.L = 40; m.loads.points = [{ mag: 250, loc: 10.22, type: 'W' }, { mag: 1200, loc: 8.52, type: 'Lr' }, { mag: 3000, loc: 25.57, type: 'D' }, { mag: -400, loc: 16.64, type: 'L' }, { mag: 500, loc: 23.17, type: 'D' }];
+        m.design.moisture = 'Wet'; m.design.temp = '100-125'; m.design.repetitive = false; m.design.latTop = 'Continuous'; m.design.latBot = 'Supports'; m.design.deflTL = 180; });
+      const g = 'Round-off moment (fix log R4, P2-1): DF-L SS 2x10, simple span 29.7 ft, five point loads, bottom edge braced at supports only (parity case "rand 108")';
+      add(g, 'bottom-edge R_B = √(1.84 × 356.4 × 9.25/1.5²) (> 50)', 51.923, q.stab[0].bot.RB, '', 1e-4);
+      add(g, 'largest negative moment, all combinations (ft-lb; was 1.5e-11 round-off)', 0, Math.max(...q.combos.map(c => c.bend[0].Mn)), 'ft-lb', 1e-12);
+      add(g, 'bottom-edge "R_B > 50" failures (no negative moment: none)', 0, q.fails.filter(f => /edge \(negative moment\)/.test(f)).length, '', 1e-12); }
   } catch (e) { out.push({ grp: 'error', what: 'Benchmark failed to run: ' + e.message, hand: NaN, tool: NaN, unit: '', diff: NaN, ok: false }); }
   return out;
 }
@@ -2650,7 +2683,7 @@ function buildValid(pg) {
     B.forEach(b => { if (b.grp !== grp) { grp = b.grp; rows.push({ cls: 'gov', cells: [{ h: '<b>' + esc(grp) + '</b>' }, '', '', '', '', ''] }); }
       rows.push([b.what, b.unit === '' ? f3(b.hand) : g4(b.hand), b.unit === 'in.' || b.unit === '' ? (b.tool).toFixed(4) : f2(b.tool), b.unit, (b.diff * 100).toFixed(4) + ' %', { cls: b.ok ? 'ok' : 'ng', h: b.ok ? 'match' : 'differs' }]); });
     body.appendChild(tblEl(['Quantity (hand calculation / closed form)', 'Hand', 'Tool', 'Unit', 'Diff.', 'Status'], rows, { left: [0] }));
-    body.appendChild(el('div', 'hint', 'Closed forms: AISC Steel Construction Manual Table 3-23 beam diagrams (any linear-elastic beam). The closed-form benchmarks use the 2x10 DF-L No.2 section with E′ = 1,600,000 psi and dead load only (spacing 12 in., no self-weight). The fix-log case reproduces the engineer’s accepted 84.4 % result. Hand values of the fix-log case and of the Phase 2 hand checks (fix log R3) are rounded as printed there (tolerance 0.01–0.2 %).'));
+    body.appendChild(el('div', 'hint', 'Closed forms: AISC Steel Construction Manual Table 3-23 beam diagrams (any linear-elastic beam). The closed-form benchmarks use the 2x10 DF-L No.2 section with E′ = 1,600,000 psi and dead load only (spacing 12 in., no self-weight). The fix-log case reproduces the engineer’s accepted 84.4 % result. Hand values of the fix-log case and of the Phase 2 hand checks (fix log R3, R4) are rounded as printed there (tolerance 0.01–0.2 %).'));
   });
   if (R.ok) mkSec(pg, 'vEq', 'Equilibrium of the current model', body => {
     body.appendChild(tblEl(['Combination', 'Σ applied loads (lb)', 'Σ reactions (lb)', 'Difference (lb)', 'Status'], R.combos.map(c => { const d = c.sumR - c.sumF; const ok = Math.abs(d) <= 1e-6 * Math.max(1, Math.abs(c.sumF)); return [c.name, f2(c.sumF), f2(c.sumR), d.toExponential(2), { cls: ok ? 'ok' : 'ng', h: ok ? 'OK' : 'check' }]; }), { left: [0] }));
@@ -2684,10 +2717,10 @@ function buildManual(pg) {
     '<b>Bearing (NDS 3.10):</b> at every support, f<sub>c⊥</sub> = R/(b l<sub>b</sub>) with the downward reaction; C<sub>b</sub> only when the bearing is ≥ 3 in. from the member end. Net uplift is reported (provide a connection).',
     '<b>Deflection (NDS 3.5):</b> per span, Δ<sub>LL</sub> = max of L, Lr, S, 0.75L + 0.75Lr, 0.75L + 0.75S; Δ<sub>T</sub> = K<sub>cr</sub>Δ<sub>D</sub> + Δ<sub>LL</sub>. Limits L/n with L = span, or twice the cantilever length (IBC Table 1604.3 footnote h). Wind is excluded. Always at service loads (also with LRFD).',
     '<b>Glulam (NDS Ch. 5):</b> F<sub>bx</sub><sup>+</sup> for positive and F<sub>bx</sub><sup>−</sup> for negative moment; volume factor C<sub>V</sub> = (21/L)<sup>1/x</sup>(12/d)<sup>1/x</sup>(5.125/b)<sup>1/x</sup> ≤ 1.0 per bending region, with L = the distance between the points of zero moment around the governing moment (found on the moment diagram of the combination); the lesser of C<sub>L</sub> and C<sub>V</sub> applies (NDS 5.3.6). Wet service per Table 5A. End notch ≤ the lesser of d/10 and 3 in., with C<sub>vr</sub> = 0.72 in the notch shear check. Bearing with the tension-face F<sub>c⊥x</sub>.',
-    '<b>SCL (NDS Ch. 8):</b> manufacturer’s values; C<sub>V</sub> = (d<sub>ref</sub>/d)<sup>n</sup> up to the limit entered; the lesser of C<sub>L</sub> and C<sub>V</sub> applies when C<sub>V</sub> ≤ 1.0, both when C<sub>V</sub> > 1.0 (NDS 8.3.6). Wet service, flat use and notches: not covered.',
+    '<b>SCL (NDS Ch. 8):</b> manufacturer’s values; C<sub>V</sub> = (d<sub>ref</sub>/d)<sup>n</sup> up to the limit entered; the lesser of C<sub>L</sub> and C<sub>V</sub> applies when C<sub>V</sub> ≤ 1.0, both when C<sub>V</sub> > 1.0 (NDS 8.3.6); repetitive member factor C<sub>r</sub> = 1.04 on F<sub>b</sub> (NDS 8.3.7). Wet service, flat use and notches: not covered.',
     '<b>Timbers (Table 4D):</b> C<sub>F</sub> = (12/d)<sup>1/9</sup> for d > 12 in.; no C<sub>r</sub>; flat use with the Table 4D factors (Beams and Stringers).']);
   H('Saved data');
-  UL(['<b>Files:</b> Save file writes the project as JSON with <code>_schema: "timber-beam-check"</code> and <code>version: 2</code>, or <code>version: 3</code> when the project uses glulam, SCL or LRFD (so that the earlier version of the tool refuses it instead of reading it as sawn lumber / ASD). Open file reads versions 2 and 3 and every format of the earlier version (the original 11-field file, the full flat file of fix log F18, <code>temp: "High"</code>, custom species in the old <code>F_b</code> shape); those convert with identical results, except that the bottom (negative-moment) edge opens as braced at supports only (engineer\'s decision R1-a, fix log R2; that version took it as braced like the top edge, which can still be chosen as "Same as top edge").',
+  UL(['<b>Files:</b> Save file writes the project as JSON with <code>_schema: "timber-beam-check"</code> and <code>version: 2</code>, or <code>version: 3</code> when the project uses glulam, SCL or LRFD (so that the earlier version of the tool refuses it instead of reading it as sawn lumber / ASD). Open file reads versions 2 and 3 and every format of the earlier version (the original 11-field file, the full flat file of fix log F18, <code>temp: "High"</code>, custom species in the old <code>F_b</code> shape); those convert with identical results, except that the bottom (negative-moment) edge opens as braced at supports only (engineer\'s decision R1-a, fix log R2; that version took it as braced like the top edge, which can still be chosen as "Same as top edge"). Files of any version that use the 6x8 or 8x8 size open with the Table 1B dressed sizes (5.5 × 7.5 and 7.5 × 7.5 in.; fix log R4), so their results change.',
     `<b>This browser:</b> the last session is autosaved (<code>${LS_AUTO}</code>) and named projects are kept (<code>${LS_PROJ}</code>); the selected input tab is remembered (<code>${TBC_IN_KEY}</code>). All keys start with <code>tbc_</code>.`,
     '<b>Shared project info</b> (bridgeSuite.v1.projectMeta): Client, Job # and Designer are shared and received, as before.']);
   H('Limitations and open items');
