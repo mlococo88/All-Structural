@@ -3108,6 +3108,7 @@ function numIn(get, set, key, opts) {
   if (opts.ph) i.placeholder = opts.ph;
   if (opts.min !== undefined) i.setAttribute('data-min', opts.min);
   tagField(i, key);
+  i._get = get; i._k = k;   // refreshInputs() re-reads the value (live update when the model changes elsewhere)
   let undone = false;
   i.addEventListener('input', () => {
     const x = i.value === '' ? null : parseFloat(i.value);
@@ -3373,6 +3374,13 @@ function rebuildInputs() {
 function refreshInputs() {
   // live read-outs in the part pane
   document.querySelectorAll('#inputPanel [data-live]').forEach(s => { const f = LIVE[s.getAttribute('data-live')]; if (f) s.innerHTML = f(); });
+  // number fields follow the model (sizes, centroid, edges, inline list fields), except the one being typed in
+  document.querySelectorAll('#inputPanel input[type="number"]').forEach(i => {
+    if (!i._get || i === document.activeElement) return;
+    let v; try { v = i._get(); } catch (e) { return; }
+    const s = (v === null || v === undefined || !isNum(v)) ? '' : String(+toD(v, i._k).toPrecision(12));
+    if (i.value !== s) { i.value = s; i.classList.remove('bad'); }
+  });
   inputTabMarks();
 }
 const LIVE = {};
@@ -3513,8 +3521,7 @@ function buildPartPane(P) {
     const L = un('L');
     fRow(body, 'Centroid x', numIn(() => pt.x, v => { pt.x = v; }, 'pp_x', { k: 'L', geo: true, guard: GD }), L);
     fRow(body, 'Centroid y', numIn(() => pt.y, v => { pt.y = v; }, 'pp_y', { k: 'L', geo: true, guard: GD }), L);
-    const bb = SPC.partGlobal(pt).bbox;
-    const edge = (lab, i, key) => fRow(body, lab, numIn(() => bb[i], v => { const d = v - SPC.partGlobal(pt).bbox[i]; if (i === 0 || i === 2) pt.x += d; else pt.y += d; }, key, { k: 'L', geo: true, structural: true, guard: GD }), L);
+    const edge = (lab, i, key) => fRow(body, lab, numIn(() => SPC.partGlobal(pt).bbox[i], v => { const d = v - SPC.partGlobal(pt).bbox[i]; if (i === 0 || i === 2) pt.x += d; else pt.y += d; }, key, { k: 'L', geo: true, structural: true, guard: GD }), L);
     body.appendChild(el('div', 'subh', 'or set an edge (moves the part)'));
     edge('Left edge', 0, 'pp_bl'); edge('Right edge', 2, 'pp_br'); edge('Bottom edge', 1, 'pp_bb'); edge('Top edge', 3, 'pp_bt');
     fRow(body, 'Rotation (CCW)', numIn(() => pt.rot, v => { pt.rot = v; }, 'pp_rot', { k: 'deg', geo: true, guard: GD }), '°', 'About the part centroid. Mirrored = reflected left-right in the part\'s own frame before the rotation.');
@@ -3879,35 +3886,61 @@ function dimInfo(pt) {
   const T = SPC.xfMat(pt), W = l => { const v = SPC.apply(T, [l[0] - (g.shift ? 0 : 0), l[1]]); return [pt.x + v[0], pt.y + v[1]]; }, U = l => SPC.apply(T, l);
   const p = pt.p || {}, D = { dims: [], tags: [], handles: [] };
   const box = (wk, hk, w, hh) => {
-    D.dims.push({ key: wk, v: w, a: W([-w / 2, -hh / 2]), b: W([w / 2, -hh / 2]), u: U([0, -1]) }, { key: hk, v: hh, a: W([w / 2, -hh / 2]), b: W([w / 2, hh / 2]), u: U([1, 0]) });
+    // each dimension: preferred side (below / right) and the opposite side, used when the label would not fit
+    D.dims.push({ key: wk, v: w, sides: [{ a: W([-w / 2, -hh / 2]), b: W([w / 2, -hh / 2]), u: U([0, -1]) }, { a: W([-w / 2, hh / 2]), b: W([w / 2, hh / 2]), u: U([0, 1]) }] },
+      { key: hk, v: hh, sides: [{ a: W([w / 2, -hh / 2]), b: W([w / 2, hh / 2]), u: U([1, 0]) }, { a: W([-w / 2, -hh / 2]), b: W([-w / 2, hh / 2]), u: U([-1, 0]) }] });
     if (pt.hole) return;
     D.handles.push({ key: wk, sg: 1, at: W([w / 2, 0]), n: U([1, 0]) }, { key: wk, sg: -1, at: W([-w / 2, 0]), n: U([-1, 0]) }, { key: hk, sg: 1, at: W([0, hh / 2]), n: U([0, 1]) }, { key: hk, sg: -1, at: W([0, -hh / 2]), n: U([0, -1]) });
   };
   if (pt.type === 'plate' || pt.type === 'bar') box('b', 't', p.b, p.t);
-  else if (pt.type === 'rtube') { box('B', 'H', p.B, p.H); D.tags.push({ key: 't', v: p.t, at: W([0, p.H / 2 - p.t / 2]), lab: 't' }); }
+  else if (pt.type === 'rtube') { box('B', 'H', p.B, p.H); D.tags.push({ key: 't', v: p.t, at: W([0, p.H / 2 - p.t / 2]), along: U([1, 0]), lab: 't' }); }
   else if (pt.type === 'round') D.tags.push({ key: 'd', v: p.d, at: W([0, -p.d / 2]), off: U([0, -1]), lab: 'Ø' });
-  else if (pt.type === 'tube') { D.tags.push({ key: 'D', v: p.D, at: W([0, -p.D / 2]), off: U([0, -1]), lab: 'Ø' }, { key: 't', v: p.t, at: W([0, p.D / 2 - p.t / 2]), lab: 't' }); }
+  else if (pt.type === 'tube') { D.tags.push({ key: 'D', v: p.D, at: W([0, -p.D / 2]), off: U([0, -1]), lab: 'Ø' }, { key: 't', v: p.t, at: W([0, p.D / 2 - p.t / 2]), along: U([1, 0]), lab: 't' }); }
   else if (pt.type === 'shape') { const bb = SPC.partGlobal(pt).bbox; D.tags.push({ key: 'name', v: p.name, at: [(bb[0] + bb[2]) / 2, bb[1]], off: [0, -1], lab: '' }); }
   return D;
 }
-function dimLabel(pid, key, txt, c, title, VW, VH) {
+function dimLabel(pid, key, txt, c, title) {
   const w = Math.max(28, txt.length * 6.3 + 12);
-  if (VW) c = [Math.max(w / 2 + 2, Math.min(VW - w / 2 - 2, c[0])), Math.max(11, Math.min(VH - 11, c[1]))];   // keep the label inside the view
   return `<g data-dim="${pid}|${key}" style="cursor:pointer"><title>${esc(title)}</title><rect x="${fx(c[0] - w / 2)}" y="${fx(c[1] - 9)}" width="${fx(w)}" height="17" rx="4" fill="#fff" stroke="#2563EB" stroke-width="1.1"/><text x="${fx(c[0])}" y="${fx(c[1] + 4)}" text-anchor="middle" font-size="11" font-weight="600" fill="#1D4ED8" text-decoration="underline">${esc(txt)}</text></g>`;
 }
 function dimMarkup(pt, tr, V, VW, VH) {
   const D = dimInfo(pt); if (!D) return '';
   const o = ['<g class="selDims">'], val = (k, v) => k === 'name' ? String(v) : (k === 'd' || k === 'D' ? 'Ø' : k + ' = ') + nf(v, 'L', 4) + ' ' + un('L');
   const names = { b: 'Width b', t: 'Thickness t', B: 'Width B', H: 'Height H', d: 'Diameter d', D: 'Outside diameter D', name: 'Shape size' };
+  const lw = txt => Math.max(28, txt.length * 6.3 + 12);
+  // labels are placed clear of the edge handles (with a 4 px gap), of each other, and inside the view
+  const busy = D.handles.map(hd => { const P = tr(hd.at); return [P[0] - 9, P[1] - 9, P[0] + 9, P[1] + 9]; });
+  const rectOf = (c, w) => [c[0] - w / 2, c[1] - 9, c[0] + w / 2, c[1] + 8];
+  const inView = r => !VW || (r[0] >= 2 && r[2] <= VW - 2 && r[1] >= 2 && r[3] <= VH - 2);
+  const free = r => !busy.some(q => !(r[2] < q[0] || q[2] < r[0] || r[3] < q[1] || q[3] < r[1]));
+  const clampC = (c, w) => VW ? [Math.max(w / 2 + 2, Math.min(VW - w / 2 - 2, c[0])), Math.max(11, Math.min(VH - 10, c[1]))] : c;
+  const choose = (opts, w) => { // opts: [{c, ...}] in order of preference
+    for (const q of opts) { const r = rectOf(q.c, w); if (inView(r) && free(r)) return q; }
+    for (const q of opts) { const c = clampC(q.c, w), r = rectOf(c, w); if (free(r)) return Object.assign({}, q, { c }); }
+    return Object.assign({}, opts[0], { c: clampC(opts[0].c, w) });
+  };
   D.dims.forEach(dm => {
-    const A = tr(dm.a), B = tr(dm.b), us = [dm.u[0], -dm.u[1]], off = 16, A2 = [A[0] + us[0] * off, A[1] + us[1] * off], B2 = [B[0] + us[0] * off, B[1] + us[1] * off];
-    const L = Math.hypot(B2[0] - A2[0], B2[1] - A2[1]) || 1, ex = [(B2[0] - A2[0]) / L, (B2[1] - A2[1]) / L], tk = (P) => `M${fx(P[0] - 4 * (ex[0] + us[0]))} ${fx(P[1] - 4 * (ex[1] + us[1]))}l${fx(8 * (ex[0] + us[0]) / 1)} ${fx(8 * (ex[1] + us[1]) / 1)}`;
+    const txt = val(dm.key, dm.v), w = lw(txt), opts = [];
+    dm.sides.forEach(sd => {
+      const A = tr(sd.a), B = tr(sd.b), us = [sd.u[0], -sd.u[1]], off = 16, A2 = [A[0] + us[0] * off, A[1] + us[1] * off], B2 = [B[0] + us[0] * off, B[1] + us[1] * off];
+      const L = Math.hypot(B2[0] - A2[0], B2[1] - A2[1]) || 1, ex = [(B2[0] - A2[0]) / L, (B2[1] - A2[1]) / L];
+      const ext = Math.abs(us[0]) * w / 2 + Math.abs(us[1]) * 8.5 + 4, sh = Math.abs(ex[0]) * w / 2 + Math.abs(ex[1]) * 8.5 + 14;
+      const m = [(A2[0] + B2[0]) / 2 + us[0] * ext, (A2[1] + B2[1]) / 2 + us[1] * ext];
+      [0, 1, -1].forEach(k => opts.push({ c: [m[0] + ex[0] * sh * k, m[1] + ex[1] * sh * k], A, B, A2, B2, us, ex }));
+    });
+    const q = choose(opts, w), { A, B, A2, B2, us, ex } = q;
+    const tk = (P) => `M${fx(P[0] - 4 * (ex[0] + us[0]))} ${fx(P[1] - 4 * (ex[1] + us[1]))}l${fx(8 * (ex[0] + us[0]))} ${fx(8 * (ex[1] + us[1]))}`;
     o.push(`<path d="M${fx(A[0] + us[0] * 3)} ${fx(A[1] + us[1] * 3)}L${fx(A2[0] + us[0] * 4)} ${fx(A2[1] + us[1] * 4)}M${fx(B[0] + us[0] * 3)} ${fx(B[1] + us[1] * 3)}L${fx(B2[0] + us[0] * 4)} ${fx(B2[1] + us[1] * 4)}M${fx(A2[0])} ${fx(A2[1])}L${fx(B2[0])} ${fx(B2[1])}${tk(A2)}${tk(B2)}" stroke="#2563EB" stroke-width="1" fill="none" pointer-events="none"/>`);
-    const txt = val(dm.key, dm.v), hw = Math.max(28, txt.length * 6.3 + 12) / 2, ext = Math.abs(us[0]) * hw + Math.abs(us[1]) * 8.5 + 4;   // clear of the line and the edge handle
-    const c = [(A2[0] + B2[0]) / 2 + us[0] * ext, (A2[1] + B2[1]) / 2 + us[1] * ext];
-    o.push(dimLabel(pt.id, dm.key, txt, c, names[dm.key] + ' — click to type a new value', VW, VH));
+    busy.push(rectOf(q.c, w));
+    o.push(dimLabel(pt.id, dm.key, txt, q.c, names[dm.key] + ' — click to type a new value'));
   });
-  D.tags.forEach(tg => { const P = tr(tg.at), us = tg.off ? [tg.off[0], -tg.off[1]] : [0, 0], c = [P[0] + us[0] * 16, P[1] + us[1] * 16]; o.push(dimLabel(pt.id, tg.key, tg.key === 'name' ? String(tg.v) + ' ▾' : (tg.lab === 'Ø' ? 'Ø' : tg.lab + ' = ') + nf(tg.v, 'L', 4) + ' ' + un('L'), c, (tg.key === 'name' ? 'Shape size' : names[tg.key] || ('Wall thickness ' + tg.key)) + ' — click to change', VW, VH)); });
+  D.tags.forEach(tg => {
+    const txt = tg.key === 'name' ? String(tg.v) + ' ▾' : (tg.lab === 'Ø' ? 'Ø' : tg.lab + ' = ') + nf(tg.v, 'L', 4) + ' ' + un('L'), w = lw(txt);
+    const P = tr(tg.at), us = tg.off ? [tg.off[0], -tg.off[1]] : [0, 0], c0 = [P[0] + us[0] * 16, P[1] + us[1] * 16], opts = [{ c: c0 }];
+    if (tg.along) { const ex = [tg.along[0], -tg.along[1]], sh = Math.abs(ex[0]) * w / 2 + Math.abs(ex[1]) * 8.5 + 14; opts.push({ c: [c0[0] + ex[0] * sh, c0[1] + ex[1] * sh] }, { c: [c0[0] - ex[0] * sh, c0[1] - ex[1] * sh] }); }
+    const q = choose(opts, w); busy.push(rectOf(q.c, w));
+    o.push(dimLabel(pt.id, tg.key, txt, q.c, (tg.key === 'name' ? 'Shape size' : names[tg.key] || ('Wall thickness ' + tg.key)) + ' — click to change'));
+  });
   D.handles.forEach(hd => { const P = tr(hd.at), horiz = Math.abs(hd.n[0]) >= Math.abs(hd.n[1]); o.push(`<rect data-h="rs|${pt.id}|${hd.key}|${hd.sg}" x="${fx(P[0] - 5)}" y="${fx(P[1] - 5)}" width="10" height="10" rx="2" fill="#fff" stroke="#2563EB" stroke-width="1.6" style="cursor:${horiz ? 'ew-resize' : 'ns-resize'}"><title>Drag to change ${esc(names[hd.key] || hd.key)}</title></rect>`); });
   o.push('</g>');
   return o.join('');
@@ -4063,7 +4096,7 @@ function wireCanvas() {
     if (DRAG.mode === 'box') { BOX.b = sp; requestDraw(); return; }
     if (DRAG.mode === 'resize') {
       if (!DRAG.pushed) { pushUndo(); DRAG.pushed = true; } DRAG.moved = true;
-      resizeTo(DRAG, wp, e.altKey); SNAPMARK = DRAG.snapPt ? { p: DRAG.snapPt } : null; compute(); requestDraw(); throttleOut(); return;
+      resizeTo(DRAG, wp, e.altKey); SNAPMARK = DRAG.snapPt ? { p: DRAG.snapPt } : null; compute(); requestDraw(); throttleOut(); refreshInputs(); return;
     }
     if (DRAG.mode === 'qcut') { let v = M.q.dir === 'v' ? wp[0] : wp[1]; const g = M.settings.grid; if (M.settings.snap && !e.altKey && g > 0 && Math.abs(Math.round(v / g) * g - v) * VIEW.s < 6) v = Math.round(v / g) * g; if (R && R.ok && M.settings.snap && !e.altKey) { const c = M.q.dir === 'v' ? R.cx : R.cy; if (Math.abs(c - v) * VIEW.s < 8) v = c; } M.q.pos = v; compute(); requestDraw(); throttleOut(); return; }
     if (DRAG.mode === 'move') {
@@ -4073,7 +4106,7 @@ function wireCanvas() {
       DRAG.moved = true; showTip(null);
       d = dragTarget(DRAG, d, e.altKey); DRAG.cur = d;
       DRAG.ids.forEach((id, i) => { const p = partById(id); if (p) { p.x = DRAG.base[i][0] + d[0]; p.y = DRAG.base[i][1] + d[1]; } });
-      DRAG.d = d; compute(); requestDraw(); throttleOut();
+      DRAG.d = d; compute(); requestDraw(); throttleOut(); refreshInputs();
     }
   });
   const up = e => {

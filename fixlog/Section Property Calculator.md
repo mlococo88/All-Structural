@@ -214,7 +214,41 @@ Check case (warning area): round bar Ø4 at (0, 0) and plate 6 × 1 centred at (
   - **Discoverability:** right-click → "Edit dimensions…" focuses b. A double-click on the part focuses b. The hint text is present. After a 90° turn, b is labelled "vertical".
 - Screenshots (looked at): `dim_added_panel.png` (panel after adding, labels and handles on the drawing), `dim_parts_list.png` (inline fields), `dim_drawing_selected.png`, `dim_inplace_editor.png`.
 
+#### Follow-up (coordinator review, commit 3)
+
+1. **Fields update live.**
+   - Before (Phase 1 behaviour): the Left / Right / Bottom / Top edge fields, and the centroid fields, kept their old values until the panel was rebuilt. Example: b = 12 still showed edges −4 / 4.
+   - Now every number field in the side panel follows the model whenever it changes from any source: panel field, inline list field, on-drawing label editor, resize handle (also during the drag), Rotate 90°, nudge, or drag of a part. The field being typed in is never overwritten.
+   - The inline list fields and the panel fields follow each other.
+   - Code:
+     - `numIn`: `i._get = get; i._k = k;` after `tagField(i, key);`.
+     - `refreshInputs`: re-reads every `#inputPanel input[type="number"]` that has `_get`, except `document.activeElement`.
+     - Edge getter: `numIn(() => bb[i], …)` with `const bb = SPC.partGlobal(pt).bbox;` computed once → `numIn(() => SPC.partGlobal(pt).bbox[i], …)`.
+     - Pointer-move of `move` and `resize` drags calls `refreshInputs()`.
+2. **Dimension labels clear of the edge handles.**
+   - Before: a label pulled back into the view could sit on the midpoint handle (`dim_drawing_selected.png`: "t = 1 in" on the right handle).
+   - Now each label is placed at the first position that is inside the view and keeps a 4 px gap from every handle and from the other labels. The order tried is: beyond its dimension line; shifted along the line past the handle, either way; then the same on the opposite side of the part, with the dimension line drawn on that side. Only if none fit is it clamped into the view.
+   - The rect. tube / tube wall-thickness tag is also shifted clear of the top handle.
+   - Code: `dimInfo` gives each dimension two `sides`; `dimMarkup` places the labels (`choose`); `dimLabel` no longer clamps.
+
+How verified (follow-up):
+- New browser test (47 checks, 0 failures).
+  - Typing b = 12 updates the edges to −6 / 6 live while b keeps focus; the inline list field shows 12.
+  - t = 0.75 → edges ±0.375.
+  - Inline t = 2 → panel t and edges ±1.
+  - Typed left edge = 0 → centroid x 6, right edge 12.
+  - Label editor t = 1.5 → panel, edges and inline field.
+  - Resize handle → fields live during the drag and after (bottom stays at −0.75).
+  - Rotate 90° → edges swap and b is labelled vertical.
+  - Nudge → centroid and edges.
+  - Labels vs handles at zoom ×0.25, 0.6, 1, 2.5 and 6 for: plate 10 × 1 at 0°, 30° and 90°; bar 4 × 1/4; rect. tube 6 × 8 × 3/8 at 0° and 45°. No label touches a handle (3 px gap) or another label, and labels stay inside the view when zoomed out.
+- Re-run:
+  - main-vs-branch parity: identical, Validation 60/60;
+  - N1 no-overlap tests 47/0, N2 dimension tests 35/0;
+  - Phase 1 browser tests 49/0, node cross-check 410/0, geometry 18/0;
+  - 400 px: no horizontal scroll.
+- Screenshots: `live_panel.png`, `dim_drawing_selected.png` (t label now above the handle), `labels_0..2.png` (plate, rotated plate, rotated rect. tube).
+
 #### Open items
 
-- N-O4. Already in Phase 1: the "Left / Right / Bottom / Top edge" fields on the Part properties tab are not refreshed while a dimension is typed (they update when the panel is next rebuilt, e.g. on reselect). Not changed here — say if they should update live.
-- N-O5. Resize handles are offered for plates, bars and rectangular tubes only (not holes, round parts or rolled shapes, whose sizes come from a list or a single diameter).
+- N-O4. Resize handles are offered for plates, bars and rectangular tubes only (not holes, round parts or rolled shapes, whose sizes come from a list or a single diameter).
