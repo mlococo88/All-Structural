@@ -2080,3 +2080,210 @@ Browser tests (`open_ui.mjs`, headless Chromium): main gives the "before" values
 - Main vs branch in the browser (default example and the 8 templates, in and mm units): saved model identical; every number identical except round-off in C<sub>w</sub> / x<sub>o</sub> of the default example and the cover-plated W (≤ 5e-15 relative, not visible at display precision); text of the Section, Properties, Calc detail, Plastic, Q and Stresses tabs identical; Validation main 96/96, branch 103/103 with the first 96 identical; no console errors. Torsion tab: the face-contact note wording (default example, cover-plated W, boxed channels) and, for boxed channels, the two overhangs of each cover plate beyond the channels are now one row "PL 2.282" (n = 2) instead of two rows of 1.141 (same Σ; J 499.742 unchanged). Method tab: the three edited bullets.
 - Existing browser suites re-run on the branch: Phase 1 browser tests 49/0; no-overlap 70/0; dimension editing 35/0; live fields 47/0; hole carry (R2) 26/0 for the branch checks (its 2 "main" checks describe main before R2 and no longer apply); rotate/flip parity 45 states identical; DXF export 24 files + 13 UI checks, ezdxf audit 0 errors, worst relative error 2.6e-15; 400 px no horizontal scroll; new tests `open_ui.mjs` 26/0.
 - No console errors.
+
+## 2026-10-10 — PR: claude/spc-print (PR link added after merge)
+
+Engineer's report review (2026-10-10): the PDF printed from Chrome (Letter) of the built-up I (web PL 18 × 1/2 turned 90°, 4 × L6X6X1/2, 2 × PL 12-1/2 × 1/2) showed nine layout problems. All fixes are **display / print layout only**: no formula, computed value, unit, storage key or saved format changed. The report now also contains the P2a sections (Mohr's circle, buckling parameters, Wagner β, kern, weight and paint, Stresses tab) and the open-items torsion fix; all of them are covered.
+
+### PR1. Print report layout: sections flow, headings kept with their content, tables fit the page, Parts once, static text for inputs, no exponent / negative-zero junk, labels clear of the markers   [display only — no change to any formula, computed property, storage key or saved format]
+
+| # | Engineer's problem | Fix |
+|---|---|---|
+| 1 | Key-property cards split: last card + "thin-wall — verify" note alone on an otherwise blank page 2 | Card grid `.kp` is `break-inside: avoid` + `break-after: avoid`; print drawing reduced to 4.1 in high (was 4.57 in at 7 in wide), so title, drawing, all cards and the note fit on page 1 (Letter and A4) |
+| 2 | Heading + table header at the foot of a page, rows on the next | Headings (`.prSec>h1`, `.secHead`, `.subh`, `.manH`) `break-after: avoid`; every report table gets a `<thead>` (repeated on each page) and its first 3 rows, last 2 rows and every group row (Validation) + 2 rows in `tbody.prKeep` (`break-inside: avoid`) |
+| 3 | Tables cut at the right edge (parallel-axis table lost columns at "n·"; Parts table touching the edge) | `.sec` had `overflow: hidden` (clipped) → `visible` in the report; print table font 8.5 pt, headers wrap; the 16-column parallel-axis table is printed as two tables (a) areas/centroids/distances and (b) inertias/transfer terms, **all columns kept**, Part column repeated; `fitPrintWidths` measures the report off-screen at 7.1 in (fits Letter 7.4 in and A4 7.17 in) and shrinks any table still too wide (7.5 → 6 pt) and any too-wide equation |
+| 4 | Parts table printed twice | When the "Parts table" section is printed, Properties §6 "Parts" keeps its number and says "Listed in the Parts section of this report." (with "Parts table" unticked, Properties §6 prints the table as before) |
+| 5 | Every short section on a new page → blank areas | Sections flow (no page break per section). Only the appendices **Validation** and **Method and assumptions** start a new page (with the running header), so they can be separated from the calculation; the running header is printed on the first section and the appendices |
+| 6 | Q page printed form controls (checkbox, truncated select "shear V para…", input) | `printStatic`: every input/select in the report becomes text: numbers via `nf` in display units (same format as the tables), select → its full option text, checkbox → "yes"/"no" (in a check row: "label: yes"); buttons removed; a block of input rows is kept on one page. Applies to every tab: Q cut line, Stresses loads, Torsion contacts table |
+| 7 | "Cut at y" printed as 6.3869009956e-16 | Fixed by 6: the value is printed with `nf`, which shows |x| < 1e-10 (display units) as 0 → "0 in" |
+| 8 | θ<sub>p</sub> printed as "−0.0000°" (Calc detail) | `fix0` drops the sign of a value that rounds to zero: "0.0000°" (screen and print) |
+| 9 | Drawing: "Web PL" split around the centroid marker ("W ⊕ PL") | Part labels that would overlap the centroid ⊕, the shear-centre × with its "SC" text (and on screen the "origin" text) are moved along the part's longer side until clear (screen and print) |
+
+#### Where / before / after
+
+1. Helpers, after `const ang = r => …` (anchor `const pctd = (a, b)`) — added:
+```js
+const fix0 = s => /^-0(\.0*)?$/.test(s) ? s.slice(1) : s;   // display only: no "−0.0000" (negative zero after rounding)
+```
+2. `buildCalc` → section `'cP'`, before:
+```js
+      TX`\theta_p=\tfrac{1}{2}\,\mathrm{atan2}\!\left(-2I_{xy},\ I_x-I_y\right)=${(R.thp * 180 / Math.PI).toFixed(4)}^{\circ}`,
+```
+after:
+```js
+      TX`\theta_p=\tfrac{1}{2}\,\mathrm{atan2}\!\left(-2I_{xy},\ I_x-I_y\right)=${fix0((R.thp * 180 / Math.PI).toFixed(4))}^{\circ}`,
+```
+3. `buildCalc` → section `'cTab'`, before:
+```js
+    body.appendChild(tblEl(['Part', 'n', 'A<sub>i</sub>', 'n·A<sub>i</sub>', 'x̄<sub>i</sub>', 'ȳ<sub>i</sub>', 'n·A·x̄', 'n·A·ȳ', 'n·I<sub>xo</sub>', 'n·I<sub>yo</sub>', 'n·I<sub>xyo</sub>', 'd<sub>x</sub>', 'd<sub>y</sub>', 'n·A·d<sub>y</sub>²', 'n·A·d<sub>x</sub>²', 'n·A·d<sub>x</sub>d<sub>y</sub>'], rows, { left: [0] }));
+```
+after:
+```js
+    const heads = ['Part', 'n', 'A<sub>i</sub>', 'n·A<sub>i</sub>', 'x̄<sub>i</sub>', 'ȳ<sub>i</sub>', 'n·A·x̄', 'n·A·ȳ', 'n·I<sub>xo</sub>', 'n·I<sub>yo</sub>', 'n·I<sub>xyo</sub>', 'd<sub>x</sub>', 'd<sub>y</sub>', 'n·A·d<sub>y</sub>²', 'n·A·d<sub>x</sub>²', 'n·A·d<sub>x</sub>d<sub>y</sub>'];
+    if (!PRMODE) body.appendChild(tblEl(heads, rows, { left: [0] }));
+    else { // print: the 16 columns do not fit the page width — the same table in two parts (all columns kept, Part repeated)
+      const cut = (cols) => rows.map(r => r.cells ? { cls: r.cls, cells: cols.map(i => r.cells[i]) } : cols.map(i => r[i]));
+      const c1 = [0, 1, 2, 3, 4, 5, 6, 7, 11, 12], c2 = [0, 8, 9, 10, 13, 14, 15];
+      body.appendChild(el('div', 'subh prKeepNext', '(a) Areas, centroids and distances to the section centroid'));
+      body.appendChild(tblEl(c1.map(i => heads[i]), cut(c1), { left: [0] }));
+      body.appendChild(el('div', 'subh prKeepNext', '(b) Moments of inertia: own axes and transfer terms'));
+      body.appendChild(tblEl(c2.map(i => heads[i]), cut(c2), { left: [0] }));
+    }
+```
+4. `buildProps`, before:
+```js
+  mkSec(pg, 'pParts', 'Parts', body => body.appendChild(partsTable()));
+```
+after:
+```js
+  mkSec(pg, 'pParts', 'Parts', body => body.appendChild(PRMODE && PRMODE.parts ? el('div', 'hint', 'Listed in the Parts section of this report.') : partsTable()));   // print: the table once
+```
+5. `svgMarkup`, anchor `// labels`, before:
+```js
+  if (S.labels) M.parts.forEach(pt => { let G; try { G = SPC.partGlobal(pt); } catch (e) { return; } if (!G.prims.length) return; const p = tr([pt.x, pt.y]); o.push(`<text x="${fx(p[0])}" y="${fx(p[1] + 4)}" text-anchor="middle" font-size="11" font-weight="600" fill="#0F172A" stroke="#fff" stroke-width="3" paint-order="stroke">${esc(pt.lbl)}</text>`); });
+```
+after:
+```js
+  if (S.labels) {
+    // keep-out boxes [x0, y0, x1, y1] (screen px) of the centroid ⊕ and the shear-centre × with its "SC" text: a label that
+    // would cover one is moved along the part's longer side until it is clear (display only)
+    const keep = opts.print ? [] : [[O[0] + 2, O[1] + 3, O[0] + 38, O[1] + 16]];   // screen: the "origin" text
+    if (R && R.ok) { const C = tr([R.cx, R.cy]); keep.push([C[0] - 10, C[1] - 10, C[0] + 10, C[1] + 10]); if (S.showSC && R.tors && R.tors.sc) { const P = tr(R.tors.sc); keep.push([P[0] - 9, P[1] - 18, P[0] + 26, P[1] + 9]); } }
+    M.parts.forEach(pt => {
+      let G; try { G = SPC.partGlobal(pt); } catch (e) { return; } if (!G.prims.length) return;
+      const p = tr([pt.x, pt.y]), hw = 3.4 * String(pt.lbl).length + 3, hit = (x, y) => keep.some(k => x + hw > k[0] && x - hw < k[2] && y + 4 > k[1] && y - 9 < k[3]);
+      let x = p[0], y = p[1] + 4;
+      if (hit(x, y)) {
+        const bb = G.bbox, vert = (bb[3] - bb[1]) >= (bb[2] - bb[0]), dirs = vert ? [[0, 1], [0, -1], [1, 0], [-1, 0]] : [[1, 0], [-1, 0], [0, 1], [0, -1]];
+        let found = null;
+        for (let d = 4; d <= 200 && !found; d += 2) for (const u of dirs) { const xx = p[0] + u[0] * d, yy = p[1] + 4 + u[1] * d; if (!hit(xx, yy)) { found = [xx, yy]; break; } }
+        if (found) { x = found[0]; y = found[1]; }
+      }
+      o.push(`<text x="${fx(x)}" y="${fx(y)}" text-anchor="middle" font-size="11" font-weight="600" fill="#0F172A" stroke="#fff" stroke-width="3" paint-order="stroke">${esc(pt.lbl)}</text>`);
+    });
+  }
+```
+6. `PRINT_CSS` (anchor `const PRINT_CSS = \``): the whole string replaced. Before:
+```css
+@media screen{#printReport{display:none!important}}
+@media print{
+  html,body{background:#fff!important;overflow:visible!important;height:auto!important}
+  body>#app{display:none!important}
+  #ctxMenu{display:none!important}
+  .ovFix{display:none!important}
+  #printReport{display:block!important;font-family:var(--font-doc);color:#111;font-size:10pt}
+  @page{margin:0.6in 0.55in}
+  .prTitle{border:1.6px solid #16304F;padding:8px 12px;margin-bottom:12px}
+  .prTitle h1{font-size:15pt;margin:0 0 4px;color:#16304F}
+  .prTitle table{width:100%;border-collapse:collapse;font-size:9pt}
+  .prTitle td{padding:1.5px 8px 1.5px 0;vertical-align:top}
+  .prSec{page-break-before:always}
+  .prSec.first{page-break-before:auto}
+  .prSec>h1{font-size:13pt;color:#16304F;border-bottom:1.4px solid #16304F;padding-bottom:2px;margin:0 0 8px}
+  .prRunHdr{font-size:7.5pt;color:#5A6B80;border-bottom:.5px solid #B8C2CE;padding-bottom:2px;margin:0 0 6px;display:flex;justify-content:space-between}
+  .sec{border:none;margin:6px 0 10px}
+  .secHead{background:none!important;border-bottom:1px solid #999;padding:2px 0!important}
+  .secHead .caret{display:none}
+  .secBody{display:block!important;padding:4px 0!important}
+  .tbl th{background:#EFEFEF!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .tbl tr.gov td{background:#F3EEE3!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .eqb,.tbl tr,.okBox,.errBox,.warnBox,.note,.kp .t{page-break-inside:avoid}
+  .badge,.okBox,.errBox,.warnBox{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .prDraw{width:100%;max-width:7in;display:block;margin:4px auto 8px;border:1px solid #999;page-break-inside:avoid}
+  .prDraw path{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .prFoot{margin-top:10px;padding-top:4px;border-top:1px solid #999;font-size:8pt;color:#444;display:flex;justify-content:space-between}
+  .tscroll{overflow:visible}
+  .kp{grid-template-columns:repeat(4,1fr)}
+}
+```
+After (report rules scoped to `#printReport` outside the print media query, so the off-screen measurement uses the same layout; only visibility, `@page` and colour-adjust stay in `@media print`):
+```css
+@media screen{#printReport:not(.prMeasure){display:none!important}
+  #printReport.prMeasure{display:block!important;position:absolute!important;left:-30000px;top:0;width:7.1in;visibility:hidden}}
+@media print{
+  html,body{background:#fff!important;overflow:visible!important;height:auto!important}
+  body>#app{display:none!important}
+  #ctxMenu{display:none!important}
+  .ovFix{display:none!important}
+  #printReport{display:block!important}
+  @page{margin:0.6in 0.55in}
+  #printReport .tbl th,#printReport .tbl tr.gov td,#printReport .badge,#printReport .okBox,#printReport .errBox,#printReport .warnBox,#printReport .prDraw path,#printReport .kp .t{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+}
+/* report layout (scoped to the report; also applied while it is measured off-screen, see fitPrintWidths) */
+#printReport{font-family:var(--font-doc);color:#111;font-size:10pt;background:#fff}
+#printReport .prTitle{border:1.6px solid #16304F;padding:8px 12px;margin-bottom:12px;break-inside:avoid}
+#printReport .prTitle h1{font-size:15pt;margin:0 0 4px;color:#16304F}
+#printReport .prTitle table{width:100%;border-collapse:collapse;font-size:9pt}
+#printReport .prTitle td{padding:1.5px 8px 1.5px 0;vertical-align:top}
+#printReport .prSec{margin:0 0 16px}
+#printReport .prSec.brk{break-before:page}
+#printReport .prSec>h1{font-size:13pt;color:#16304F;border-bottom:1.4px solid #16304F;padding-bottom:2px;margin:0 0 8px;break-after:avoid}
+#printReport .prRunHdr{font-size:7.5pt;color:#5A6B80;border-bottom:.5px solid #B8C2CE;padding-bottom:2px;margin:0 0 6px;display:flex;justify-content:space-between;break-after:avoid}
+#printReport .sec{border:none;border-radius:0;background:none;margin:6px 0 10px;overflow:visible}
+#printReport .secHead{background:none;border-bottom:1px solid #999;padding:2px 0;cursor:default;break-after:avoid}
+#printReport .secHead .caret{display:none}
+#printReport .secBody{display:block;padding:4px 0}
+#printReport .subh,#printReport .manH,#printReport .manH3,#printReport .prKeepNext{break-after:avoid}
+#printReport .tscroll{overflow:visible}
+#printReport table.tbl{font-size:8.5pt}
+#printReport table.tbl th{background:#EFEFEF;font-size:8pt;padding:2px 4px;white-space:normal}
+#printReport table.tbl td{padding:2px 4px}
+#printReport table.tbl tr.gov td{background:#F3EEE3}
+#printReport table.tbl thead{display:table-header-group}
+#printReport table.tbl tr,#printReport table.tbl tbody.prKeep{break-inside:avoid}
+#printReport .eqb,#printReport .okBox,#printReport .errBox,#printReport .warnBox,#printReport .note,#printReport .fRow,#printReport .chkRow,#printReport svg,#printReport .kp,#printReport .kp .t,#printReport li{break-inside:avoid}
+#printReport .eqbM{overflow:visible}
+#printReport .kp{grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;break-after:avoid}
+#printReport .kp .t{padding:3px 7px}
+#printReport .prDraw{width:auto;height:4.1in;max-width:100%;display:block;margin:4px auto 6px;border:1px solid #999}
+#printReport .prVal{font-family:var(--mono);font-size:9.5pt}
+#printReport .prVal.txt{font-family:var(--font-doc);font-size:10pt}
+#printReport .fRow{display:flex;gap:10px;align-items:baseline;margin:1px 0}
+#printReport .fRow>label{flex:0 0 2.6in}
+#printReport .fRow>.unit{flex:0 0 auto;text-align:left}
+#printReport .prKeepBlk{break-inside:avoid}
+#printReport .prFoot{margin-top:10px;padding-top:4px;border-top:1px solid #999;font-size:8pt;color:#444;display:flex;justify-content:space-between}
+```
+7. New functions before `async function buildPrintReport(opts) {` — `let PRMODE = false;`, `printStatic(pr)`, `printTables(pr)`, `fitPrintWidths(pr)` (full code in the tool, anchor `// form controls → static report text`).
+8. `buildPrintReport`: the `section` helper takes a 4th argument `brk` (class `brk` = new page; running header only on the first section and on `brk` sections); `PRMODE = { parts: !!sel.parts }` before the sections and `PRMODE = false` after; Validation and Method called with `brk = true`. Before:
+```js
+  pr.querySelectorAll('input,select,button').forEach(i => { if (i.type === 'checkbox') i.disabled = true; else if (i.tagName === 'BUTTON') i.remove(); else i.disabled = true; });
+```
+after:
+```js
+  printStatic(pr); printTables(pr);
+```
+and after `try { await document.fonts.ready; } catch (e) { }` added `fitPrintWidths(pr);`.
+
+#### Governing provision
+
+None (report layout and display formatting). No engineering value is computed differently.
+
+#### Check case (engineer's model, all report sections ticked, Chrome / Chromium print to PDF)
+
+| | main | branch |
+|---|---|---|
+| Pages, Letter / A4 | 24 / 22 | 18 / 17 |
+| Page 1 | title, drawing, cards to "Shear centre x<sub>o</sub>"; page 2 = last card + note only | title, drawing, all 21 cards, "thin-wall — verify" note; Parts starts on page 2 (Letter) / at the foot of page 1 (A4) |
+| "4. Plastic moduli and shape factors" | heading + header row at the foot of a page | heading, header and its 4 rows together |
+| Parallel-axis table | 16 columns, cut after "n·" | (a) 10 columns + (b) 7 columns, all values present |
+| Q tab "Cut at y" | input box "6.3869009956e-16" | "Cut at y  0  in" (text) |
+| Q tab "Direction" | select "horizontal cut (Q about the x axis; shear V para…" | "horizontal cut (Q about the x axis; shear V parallel to y)" |
+| θ<sub>p</sub> in Calc detail §4 | = −0.0000° | = 0.0000° |
+| Drawing | "W ⊕ PL" | "Web PL" just below the ⊕ |
+
+Every number in the report is the same as on main: compared token by token over every text node of the report and the source of every KaTeX equation (default example, engineer's model, engineer's model with stresses/kern/ellipse/Q in in and mm, the 8 templates, one template with stresses). The only differences are the intended ones: θ<sub>p</sub> "−0.0000" → "0.0000"; input values now at display precision (e.g. ȳ cut 3.55363737868 → 3.5536; 6.3869009956e-16 → 0; P −222.411080763 kN → −222.41); the Parts table not repeated in Properties; the date on the running headers of the flowed sections (no longer printed).
+
+#### How verified
+
+- `node --check` on the 4 inline scripts: 0 errors.
+- Headless Chromium (Playwright) `page.pdf`, Letter and A4, all 10 report sections ticked: default example, engineer's model, engineer's model with stresses + kern + ellipse + Q cut (in and mm), the 8 templates and one with stresses — 26 PDFs, rendered to PNG and looked at page by page; automated checks on every page: no content within 0.5 in of the right page edge (nothing cut), no page that ends with a heading (main: 1–4 per report, branch: 0), every page under 60 % full is the page before Validation or Method (the deliberate breaks) except one (template with stresses, Letter: the 4.3 in stress plot moves whole to the next page). Off-screen measurement at 7.1 in: no element wider than the printable width (one weight equation scaled to 83 %).
+- Report section options: subsets print only the ticked sections; with "Parts table" unticked, Properties §6 prints the parts table; the print dialog still has its 10 options.
+- Screen: text of every output tab identical to main for the default example, the engineer's model (also with stresses/Q) and the 8 templates, except θ<sub>p</sub> "0.0000°" in Calc detail; saved model identical; the screen Calc detail still has the single 16-column table and Properties §6 the Parts table. Screenshot: "Web PL" clear of ⊕ and of the "origin" text.
+- Existing browser suites re-run on the branch: Phase 1 browser tests 49/0; no-overlap 70/0; dimension editing 35/0; live fields 47/0; hole carry 26/2 and open-items UI 24/2 — the 4 failures are the suites' "main:" checks, which describe main before the hole-carry changes (already merged) and no longer apply, same as in the previous PR; rotate/flip parity 45 states identical; DXF export 24 files; 400 px no horizontal scroll; extra 13/13.
+- No console errors.
+
+#### Open items
+
+- PR1-O1. Validation tab: tool values and |Δ| of the checks whose reference is 0 are printed in exponent form (e.g. W14X90 β<sub>x</sub> = −2.201853e-15, |Δ| = 2.2e-15) and the relative differences as e.g. "9.52e-14 %". Left unchanged: they are the evidence that the tool reproduces the closed form to machine precision. Engineer to decide whether to show them as 0 / "< 1e-12".
+- PR1-O2. On screen, the Q tab "Cut at y" input still shows the raw value (e.g. 6.3869009956e-16) when the cut is at the centroid; only the report shows 0. Changing the input formatting affects every number field; not done without a decision.

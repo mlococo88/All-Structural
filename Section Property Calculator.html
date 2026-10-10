@@ -3422,6 +3422,7 @@ function nf(v, k, sig) { // number in display units, significant figures from th
 }
 const nu = (v, k, sig) => nf(v, k, sig) + (un(k) ? ' ' + un(k) : '');
 const ang = r => isNum(r) ? (+(r * 180 / Math.PI).toFixed(3)).toString() + '°' : '—';
+const fix0 = s => /^-0(\.0*)?$/.test(s) ? s.slice(1) : s;   // display only: no "−0.0000" (negative zero after rounding)
 const pctd = (a, b) => (isNum(a) && isNum(b) && b !== 0) ? ((a - b) / Math.abs(b) * 100) : NaN;
 const pctS = v => isNum(v) ? (v >= 0 ? '+' : '') + v.toFixed(2) + ' %' : '—';
 
@@ -4236,7 +4237,24 @@ function svgMarkup(W, H, V, opts) {
   // selection boxes
   if (!opts.print) M.parts.forEach(pt => { if (!SEL.has(pt.id)) return; const b = SPC.partGlobal(pt).bbox, a = tr([b[0], b[3]]), c = tr([b[2], b[1]]); o.push(`<rect x="${fx(a[0] - 3)}" y="${fx(a[1] - 3)}" width="${fx(c[0] - a[0] + 6)}" height="${fx(c[1] - a[1] + 6)}" fill="none" stroke="#2563EB" stroke-width="1" stroke-dasharray="3 3" pointer-events="none"/>`); });
   // labels
-  if (S.labels) M.parts.forEach(pt => { let G; try { G = SPC.partGlobal(pt); } catch (e) { return; } if (!G.prims.length) return; const p = tr([pt.x, pt.y]); o.push(`<text x="${fx(p[0])}" y="${fx(p[1] + 4)}" text-anchor="middle" font-size="11" font-weight="600" fill="#0F172A" stroke="#fff" stroke-width="3" paint-order="stroke">${esc(pt.lbl)}</text>`); });
+  if (S.labels) {
+    // keep-out boxes [x0, y0, x1, y1] (screen px) of the centroid ⊕ and the shear-centre × with its "SC" text: a label that
+    // would cover one is moved along the part's longer side until it is clear (display only)
+    const keep = opts.print ? [] : [[O[0] + 2, O[1] + 3, O[0] + 38, O[1] + 16]];   // screen: the "origin" text
+    if (R && R.ok) { const C = tr([R.cx, R.cy]); keep.push([C[0] - 10, C[1] - 10, C[0] + 10, C[1] + 10]); if (S.showSC && R.tors && R.tors.sc) { const P = tr(R.tors.sc); keep.push([P[0] - 9, P[1] - 18, P[0] + 26, P[1] + 9]); } }
+    M.parts.forEach(pt => {
+      let G; try { G = SPC.partGlobal(pt); } catch (e) { return; } if (!G.prims.length) return;
+      const p = tr([pt.x, pt.y]), hw = 3.4 * String(pt.lbl).length + 3, hit = (x, y) => keep.some(k => x + hw > k[0] && x - hw < k[2] && y + 4 > k[1] && y - 9 < k[3]);
+      let x = p[0], y = p[1] + 4;
+      if (hit(x, y)) {
+        const bb = G.bbox, vert = (bb[3] - bb[1]) >= (bb[2] - bb[0]), dirs = vert ? [[0, 1], [0, -1], [1, 0], [-1, 0]] : [[1, 0], [-1, 0], [0, 1], [0, -1]];
+        let found = null;
+        for (let d = 4; d <= 200 && !found; d += 2) for (const u of dirs) { const xx = p[0] + u[0] * d, yy = p[1] + 4 + u[1] * d; if (!hit(xx, yy)) { found = [xx, yy]; break; } }
+        if (found) { x = found[0]; y = found[1]; }
+      }
+      o.push(`<text x="${fx(x)}" y="${fx(y)}" text-anchor="middle" font-size="11" font-weight="600" fill="#0F172A" stroke="#fff" stroke-width="3" paint-order="stroke">${esc(pt.lbl)}</text>`);
+    });
+  }
   // centroid, principal axes, shear centre
   if (R && R.ok) {
     const C = tr([R.cx, R.cy]), L = Math.max(30, 0.6 * V.s * Math.max(R.bbox[2] - R.bbox[0], R.bbox[3] - R.bbox[1]));
@@ -5060,7 +5078,7 @@ function buildProps(pg) {
     ].map(r => r.map((c, i) => i === 0 ? { h: c } : c)), { left: [0, 3] }));
   });
   if (R.single) pg.appendChild(aisCompare(R.single));
-  mkSec(pg, 'pParts', 'Parts', body => body.appendChild(partsTable()));
+  mkSec(pg, 'pParts', 'Parts', body => body.appendChild(PRMODE && PRMODE.parts ? el('div', 'hint', 'Listed in the Parts section of this report.') : partsTable()));   // print: the table once
   buildPropsP2a(pg);
 }
 function partsTable() {
@@ -5078,7 +5096,16 @@ function buildCalc(pg) {
     const rows = R.rows.map(r => [r.lbl, String(+r.n.toPrecision(4)), nf(r.A, 'A'), nf(r.nA, 'A'), nf(r.x, 'L'), nf(r.y, 'L'), nf(r.Ax, 'S'), nf(r.Ay, 'S'), nf(r.Ixo, 'I'), nf(r.Iyo, 'I'), nf(r.Ixyo, 'I'), nf(r.dx, 'L'), nf(r.dy, 'L'), nf(r.Ady2, 'I'), nf(r.Adx2, 'I'), nf(r.Adxdy, 'I')]);
     const sm = k => R.rows.reduce((s, r) => s + r[k], 0);
     rows.push({ cls: 'gov', cells: [{ h: '<b>Σ</b>' }, '', '', { h: '<b>' + nf(sm('nA'), 'A') + '</b>' }, '', '', { h: '<b>' + nf(sm('Ax'), 'S') + '</b>' }, { h: '<b>' + nf(sm('Ay'), 'S') + '</b>' }, { h: '<b>' + nf(sm('Ixo'), 'I') + '</b>' }, { h: '<b>' + nf(sm('Iyo'), 'I') + '</b>' }, { h: '<b>' + nf(sm('Ixyo'), 'I') + '</b>' }, '', '', { h: '<b>' + nf(sm('Ady2'), 'I') + '</b>' }, { h: '<b>' + nf(sm('Adx2'), 'I') + '</b>' }, { h: '<b>' + nf(sm('Adxdy'), 'I') + '</b>' }] });
-    body.appendChild(tblEl(['Part', 'n', 'A<sub>i</sub>', 'n·A<sub>i</sub>', 'x̄<sub>i</sub>', 'ȳ<sub>i</sub>', 'n·A·x̄', 'n·A·ȳ', 'n·I<sub>xo</sub>', 'n·I<sub>yo</sub>', 'n·I<sub>xyo</sub>', 'd<sub>x</sub>', 'd<sub>y</sub>', 'n·A·d<sub>y</sub>²', 'n·A·d<sub>x</sub>²', 'n·A·d<sub>x</sub>d<sub>y</sub>'], rows, { left: [0] }));
+    const heads = ['Part', 'n', 'A<sub>i</sub>', 'n·A<sub>i</sub>', 'x̄<sub>i</sub>', 'ȳ<sub>i</sub>', 'n·A·x̄', 'n·A·ȳ', 'n·I<sub>xo</sub>', 'n·I<sub>yo</sub>', 'n·I<sub>xyo</sub>', 'd<sub>x</sub>', 'd<sub>y</sub>', 'n·A·d<sub>y</sub>²', 'n·A·d<sub>x</sub>²', 'n·A·d<sub>x</sub>d<sub>y</sub>'];
+    if (!PRMODE) body.appendChild(tblEl(heads, rows, { left: [0] }));
+    else { // print: the 16 columns do not fit the page width — the same table in two parts (all columns kept, Part repeated)
+      const cut = (cols) => rows.map(r => r.cells ? { cls: r.cls, cells: cols.map(i => r.cells[i]) } : cols.map(i => r[i]));
+      const c1 = [0, 1, 2, 3, 4, 5, 6, 7, 11, 12], c2 = [0, 8, 9, 10, 13, 14, 15];
+      body.appendChild(el('div', 'subh prKeepNext', '(a) Areas, centroids and distances to the section centroid'));
+      body.appendChild(tblEl(c1.map(i => heads[i]), cut(c1), { left: [0] }));
+      body.appendChild(el('div', 'subh prKeepNext', '(b) Moments of inertia: own axes and transfer terms'));
+      body.appendChild(tblEl(c2.map(i => heads[i]), cut(c2), { left: [0] }));
+    }
     body.appendChild(el('div', 'hint', 'I<sub>xo</sub>, I<sub>yo</sub>, I<sub>xyo</sub>: each part about its own centroid, in the section x–y directions (a rotated part\'s own inertia tensor is rotated: I′ = T·I·Tᵀ). Rolled shapes: plate model, unless "AISC tab." is ticked for that part.'));
   });
   const sA = R.A, sAx = R.rows.reduce((s, r) => s + r.Ax, 0), sAy = R.rows.reduce((s, r) => s + r.Ay, 0);
@@ -5100,7 +5127,7 @@ function buildCalc(pg) {
     calc(body, { title: 'Principal moments of inertia', ref: 'Mohr\'s circle', lines: [
       TX`I_{1,2}=\frac{I_x+I_y}{2}\pm\sqrt{\left(\frac{I_x-I_y}{2}\right)^2+I_{xy}^2}=${nt((R.Ix + R.Iy) / 2, 'I')}\pm${nt(Math.hypot((R.Ix - R.Iy) / 2, R.Ixy), 'I')}`,
       TX`I_1=${nt(R.I1, 'I')},\quad I_2=${nt(R.I2, 'I')}\ \text{${I}}`,
-      TX`\theta_p=\tfrac{1}{2}\,\mathrm{atan2}\!\left(-2I_{xy},\ I_x-I_y\right)=${(R.thp * 180 / Math.PI).toFixed(4)}^{\circ}`,
+      TX`\theta_p=\tfrac{1}{2}\,\mathrm{atan2}\!\left(-2I_{xy},\ I_x-I_y\right)=${fix0((R.thp * 180 / Math.PI).toFixed(4))}^{\circ}`,
       TX`r_{min}=\sqrt{I_2/A}=${nt(R.r2, 'L')}\ \text{${L}}`], result: 'θp: angle from +x to the major axis 1, counter-clockwise. Rotated-axis check: I(θp) = (Ix+Iy)/2 + (Ix−Iy)/2·cos2θp − Ixy·sin2θp = ' + nf((R.Ix + R.Iy) / 2 + (R.Ix - R.Iy) / 2 * Math.cos(2 * R.thp) - R.Ixy * Math.sin(2 * R.thp), 'I') + ' ' + I });
   });
   mkSec(pg, 'cG', 'Part geometry (plate model)', body => {
@@ -5883,36 +5910,52 @@ function exportDxf(O) {
    PRINT REPORT
    ===================================================================== */
 const PRINT_CSS = `
-@media screen{#printReport{display:none!important}}
+@media screen{#printReport:not(.prMeasure){display:none!important}
+  #printReport.prMeasure{display:block!important;position:absolute!important;left:-30000px;top:0;width:7.1in;visibility:hidden}}
 @media print{
   html,body{background:#fff!important;overflow:visible!important;height:auto!important}
   body>#app{display:none!important}
   #ctxMenu{display:none!important}
   .ovFix{display:none!important}
-  #printReport{display:block!important;font-family:var(--font-doc);color:#111;font-size:10pt}
+  #printReport{display:block!important}
   @page{margin:0.6in 0.55in}
-  .prTitle{border:1.6px solid #16304F;padding:8px 12px;margin-bottom:12px}
-  .prTitle h1{font-size:15pt;margin:0 0 4px;color:#16304F}
-  .prTitle table{width:100%;border-collapse:collapse;font-size:9pt}
-  .prTitle td{padding:1.5px 8px 1.5px 0;vertical-align:top}
-  .prSec{page-break-before:always}
-  .prSec.first{page-break-before:auto}
-  .prSec>h1{font-size:13pt;color:#16304F;border-bottom:1.4px solid #16304F;padding-bottom:2px;margin:0 0 8px}
-  .prRunHdr{font-size:7.5pt;color:#5A6B80;border-bottom:.5px solid #B8C2CE;padding-bottom:2px;margin:0 0 6px;display:flex;justify-content:space-between}
-  .sec{border:none;margin:6px 0 10px}
-  .secHead{background:none!important;border-bottom:1px solid #999;padding:2px 0!important}
-  .secHead .caret{display:none}
-  .secBody{display:block!important;padding:4px 0!important}
-  .tbl th{background:#EFEFEF!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-  .tbl tr.gov td{background:#F3EEE3!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-  .eqb,.tbl tr,.okBox,.errBox,.warnBox,.note,.kp .t{page-break-inside:avoid}
-  .badge,.okBox,.errBox,.warnBox{-webkit-print-color-adjust:exact;print-color-adjust:exact}
-  .prDraw{width:100%;max-width:7in;display:block;margin:4px auto 8px;border:1px solid #999;page-break-inside:avoid}
-  .prDraw path{-webkit-print-color-adjust:exact;print-color-adjust:exact}
-  .prFoot{margin-top:10px;padding-top:4px;border-top:1px solid #999;font-size:8pt;color:#444;display:flex;justify-content:space-between}
-  .tscroll{overflow:visible}
-  .kp{grid-template-columns:repeat(4,1fr)}
-}`;
+  #printReport .tbl th,#printReport .tbl tr.gov td,#printReport .badge,#printReport .okBox,#printReport .errBox,#printReport .warnBox,#printReport .prDraw path,#printReport .kp .t{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+}
+/* report layout (scoped to the report; also applied while it is measured off-screen, see fitPrintWidths) */
+#printReport{font-family:var(--font-doc);color:#111;font-size:10pt;background:#fff}
+#printReport .prTitle{border:1.6px solid #16304F;padding:8px 12px;margin-bottom:12px;break-inside:avoid}
+#printReport .prTitle h1{font-size:15pt;margin:0 0 4px;color:#16304F}
+#printReport .prTitle table{width:100%;border-collapse:collapse;font-size:9pt}
+#printReport .prTitle td{padding:1.5px 8px 1.5px 0;vertical-align:top}
+#printReport .prSec{margin:0 0 16px}
+#printReport .prSec.brk{break-before:page}
+#printReport .prSec>h1{font-size:13pt;color:#16304F;border-bottom:1.4px solid #16304F;padding-bottom:2px;margin:0 0 8px;break-after:avoid}
+#printReport .prRunHdr{font-size:7.5pt;color:#5A6B80;border-bottom:.5px solid #B8C2CE;padding-bottom:2px;margin:0 0 6px;display:flex;justify-content:space-between;break-after:avoid}
+#printReport .sec{border:none;border-radius:0;background:none;margin:6px 0 10px;overflow:visible}
+#printReport .secHead{background:none;border-bottom:1px solid #999;padding:2px 0;cursor:default;break-after:avoid}
+#printReport .secHead .caret{display:none}
+#printReport .secBody{display:block;padding:4px 0}
+#printReport .subh,#printReport .manH,#printReport .manH3,#printReport .prKeepNext{break-after:avoid}
+#printReport .tscroll{overflow:visible}
+#printReport table.tbl{font-size:8.5pt}
+#printReport table.tbl th{background:#EFEFEF;font-size:8pt;padding:2px 4px;white-space:normal}
+#printReport table.tbl td{padding:2px 4px}
+#printReport table.tbl tr.gov td{background:#F3EEE3}
+#printReport table.tbl thead{display:table-header-group}
+#printReport table.tbl tr,#printReport table.tbl tbody.prKeep{break-inside:avoid}
+#printReport .eqb,#printReport .okBox,#printReport .errBox,#printReport .warnBox,#printReport .note,#printReport .fRow,#printReport .chkRow,#printReport svg,#printReport .kp,#printReport .kp .t,#printReport li{break-inside:avoid}
+#printReport .eqbM{overflow:visible}
+#printReport .kp{grid-template-columns:repeat(4,minmax(0,1fr));gap:4px;break-after:avoid}
+#printReport .kp .t{padding:3px 7px}
+#printReport .prDraw{width:auto;height:4.1in;max-width:100%;display:block;margin:4px auto 6px;border:1px solid #999}
+#printReport .prVal{font-family:var(--mono);font-size:9.5pt}
+#printReport .prVal.txt{font-family:var(--font-doc);font-size:10pt}
+#printReport .fRow{display:flex;gap:10px;align-items:baseline;margin:1px 0}
+#printReport .fRow>label{flex:0 0 2.6in}
+#printReport .fRow>.unit{flex:0 0 auto;text-align:left}
+#printReport .prKeepBlk{break-inside:avoid}
+#printReport .prFoot{margin-top:10px;padding-top:4px;border-top:1px solid #999;font-size:8pt;color:#444;display:flex;justify-content:space-between}
+`;
 const PR_LABELS = { sum: 'Drawing and key properties', parts: 'Parts table', props: 'Properties', calc: 'Calc detail (parallel-axis table)', plas: 'Plastic', tors: 'Torsion', q: 'Q & shear flow', stress: 'Stresses', val: 'Validation', man: 'Method and assumptions' };
 const PR_DEFAULT = { sum: true, parts: true, props: true, calc: true, plas: true, tors: true, q: false, stress: false, val: false, man: true };
 function openPrintDialog() {
@@ -5942,6 +5985,65 @@ function printSVG(w, h) {
   const s = `<svg xmlns="http://www.w3.org/2000/svg" class="prDraw" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}">${svgMarkup(w, h, V, { print: true })}</svg>`;
   HOVER = keepH; SNAPMARK = keepSnap; VIEW_T = VIEW; return s;
 }
+let PRMODE = false;   // set while the print report is built: print-only variants (Parts table once, parallel-axis table in two parts)
+// form controls → static report text (the value as the tables show it; no input boxes, no truncated selects)
+function printStatic(pr) {
+  pr.querySelectorAll('button').forEach(b => b.remove());
+  pr.querySelectorAll('input,select,textarea').forEach(i => {
+    let t;
+    if (i.tagName === 'SELECT') t = i.selectedIndex >= 0 ? i.options[i.selectedIndex].textContent : '—';
+    else if (i.type === 'checkbox' || i.type === 'radio') t = i.checked ? 'yes' : 'no';
+    else if (i.type === 'number' && i._get) { const v = i._get(); t = isNum(v) ? nf(v, i._k) : (i.placeholder || '—'); }
+    else t = i.value || i.placeholder || '—';
+    const v = el('span', 'prVal' + (i.tagName === 'SELECT' || i.type === 'text' ? ' txt' : ''), esc(t)), row = i.closest('.chkRow');
+    if (row && i.type === 'checkbox') { i.remove(); const lab = row.lastElementChild; if (lab) lab.insertAdjacentHTML('beforeend', ':'); row.appendChild(v); }
+    else i.replaceWith(v);
+  });
+  // a block of input rows (e.g. the Q cut line, the stress loads) is printed in one piece
+  pr.querySelectorAll('.fRow,.chkRow').forEach(r => { const b = r.parentElement; if (b && !b.querySelector('table,.eqb,svg')) b.classList.add('prKeepBlk'); });
+}
+// tables: header row(s) in a <thead> (repeated on every page), the first rows and the last two rows kept together,
+// so a heading or table header never ends a page alone and a total row never starts one alone
+function printTables(pr) {
+  pr.querySelectorAll('table.tbl').forEach(t => {
+    if (t.tHead) return;
+    const rows = [...t.rows]; let nh = 0;
+    while (nh < rows.length && rows[nh].cells.length && [...rows[nh].cells].every(c => c.tagName === 'TH')) nh++;
+    if (!nh) return;
+    const hd = t.createTHead(); rows.slice(0, nh).forEach(r => hd.appendChild(r));
+    t.querySelectorAll('tbody').forEach(b => { if (!b.rows.length) b.remove(); });
+    const body = rows.slice(nh), n = body.length, head = Math.min(3, n), tail = n >= 6 ? 2 : 0;
+    // rows that must stay together: the first rows, the last two, and a group-heading row (one cell across the table,
+    // e.g. the Validation groups) with the two rows after it
+    const keep = body.map((r, i) => i < head || i >= n - tail);
+    const grpRow = r => r.cells.length === 1 && r.cells[0].colSpan > 1;
+    const seg = body.map(() => 0); let id = 1;
+    body.forEach((r, i) => { if (grpRow(r) && i >= head) { const e = Math.min(n, i + 3); for (let j = i; j < e; j++) seg[j] = id; id++; } });
+    let cur = null, curKey = null;
+    body.forEach((r, i) => {
+      const key = keep[i] ? (i < head ? 'h' : 't') : seg[i] ? 'g' + seg[i] : 'm';
+      if (key !== curKey) { cur = document.createElement('tbody'); if (key !== 'm') cur.className = 'prKeep'; t.appendChild(cur); curKey = key; }
+      cur.appendChild(r);
+    });
+  });
+}
+// wide content: measured off-screen at the printable width (7.1 in, fits Letter and A4); tables that are still too wide
+// get a smaller font, equations that are too wide are scaled down (nothing is cut off at the right edge)
+function fitPrintWidths(pr) {
+  pr.classList.add('prMeasure');
+  try {
+    pr.querySelectorAll('table.tbl').forEach(t => {
+      const W = t.parentElement.clientWidth;
+      for (const f of [7.5, 7, 6.5, 6]) { if (t.getBoundingClientRect().width <= W + 0.5) break; t.style.fontSize = f + 'pt'; t.querySelectorAll('th').forEach(h => { h.style.fontSize = f + 'pt'; }); }
+    });
+    pr.querySelectorAll('.eqbM .katex-display>.katex').forEach(k => {
+      const box = k.closest('.eqbM'), W = box.clientWidth - 30, x0 = k.getBoundingClientRect().left;
+      const w = Math.max(0, ...[...k.querySelectorAll('.katex-html>.base')].map(e => e.getBoundingClientRect().right - x0));   // width of the formula itself
+      if (W > 0 && w > W) k.style.fontSize = (parseFloat(getComputedStyle(k).fontSize) * Math.max(0.55, W / w)).toFixed(2) + 'px';
+    });
+  } catch (e) { console.error(e); }
+  pr.classList.remove('prMeasure');
+}
 async function buildPrintReport(opts) {
   opts = opts || {};
   const sel = Object.assign({}, PR_DEFAULT, M.ui.print || {});
@@ -5955,15 +6057,20 @@ async function buildPrintReport(opts) {
   if (!R || !R.ok) pr.appendChild(errPanel());
   if ((p.notes || '').trim()) pr.appendChild(el('div', 'note', '<b>Notes and assumptions:</b><br>' + esc(p.notes).replace(/\n/g, '<br>')));
   let first = true;
-  const section = (id, title, fill) => {
+  // Sections flow one after the other (no page break per section, so short sections leave no blank pages); headings stay
+  // with their first content and boxes / table rows are not split (PRINT_CSS). Only the appendices (Validation, Method)
+  // start a new page, with the running header.
+  const section = (id, title, fill, brk) => {
     if (!sel[id]) return;
-    const sec = el('div', 'prSec' + (first ? ' first' : '')); first = false;
-    sec.appendChild(el('div', 'prRunHdr', `<span>${esc(p.name || '')}${p.member ? ' — ' + esc(p.member) : ''}</span><span>${esc(title)}</span><span>${esc(p.designer || '')} · ${esc(p.date || today)}</span>`));
+    const sec = el('div', 'prSec' + (first ? ' first' : brk ? ' brk' : ''));
+    if (first || brk) sec.appendChild(el('div', 'prRunHdr', `<span>${esc(p.name || '')}${p.member ? ' — ' + esc(p.member) : ''}</span><span>${esc(title)}</span><span>${esc(p.designer || '')} · ${esc(p.date || today)}</span>`));
+    first = false;
     sec.appendChild(el('h1', null, esc(title)));
     const holder = el('div'); sec.appendChild(holder); __secNum = 0;
     try { fill(holder); } catch (e) { holder.appendChild(el('div', 'errBox', 'Section failed to build: ' + esc(e.message))); }
     pr.appendChild(sec);
   };
+  PRMODE = { parts: !!sel.parts };
   section('sum', 'Section drawing and key properties', h => { h.insertAdjacentHTML('beforeend', printSVG(720, 470)); h.appendChild(el('div', 'hint', 'Drawn to scale. ⊕ centroid; dashed: principal axes 1 and 2; × SC: shear centre; red x / green y: origin and axes.')); if (R && R.ok) buildSecSummary(h); });
   if (R && R.ok) {
     section('parts', 'Parts', h => h.appendChild(partsTable()));
@@ -5974,13 +6081,15 @@ async function buildPrintReport(opts) {
     section('q', 'Q and shear flow', h => buildQ(h));
     section('stress', 'Stresses', h => buildStress(h));
   }
-  section('val', 'Validation', h => buildValid(h));
-  section('man', 'Method and assumptions', h => buildManual(h));
+  section('val', 'Validation', h => buildValid(h), true);
+  section('man', 'Method and assumptions', h => buildManual(h), true);
+  PRMODE = false;
   pr.querySelectorAll('.secBody').forEach(b => { b.style.display = 'block'; });
-  pr.querySelectorAll('input,select,button').forEach(i => { if (i.type === 'checkbox') i.disabled = true; else if (i.tagName === 'BUTTON') i.remove(); else i.disabled = true; });
+  printStatic(pr); printTables(pr);
   pr.appendChild(el('div', 'prFoot', `<span>${esc(p.name || '')}${p.member ? ' — ' + esc(p.member) : ''}</span><span>Section Property Calculator.html · printed ${today}</span>`));
   const cleanup = () => { const n = $('printReport'); if (n) n.remove(); renderTab(); window.removeEventListener('afterprint', cleanup); };
   try { await document.fonts.ready; } catch (e) { }
+  fitPrintWidths(pr);
   if (opts.noPrint) return pr;
   window.addEventListener('afterprint', cleanup);
   setTimeout(() => { window.print(); setTimeout(() => { if ($('printReport')) cleanup(); }, 1500); }, 60);
