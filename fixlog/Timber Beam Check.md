@@ -863,15 +863,47 @@ Every error, code-limit failure and note of the pre-R1 engine is produced with t
 
 #### New open items (R1)
 
-- R1-a. **Default bottom-edge bracing.** Files from the earlier version open with "same as top edge" (results unchanged); new projects default to "at supports only". Decision: should opening an old file switch it to "at supports only" (changes uplift results for files with a continuously braced top edge, e.g. 0.287 → 0.951 in the check case above)?
+- R1-a. **Default bottom-edge bracing.** Files from the earlier version open with "same as top edge" (results unchanged); new projects default to "at supports only". Decision: should opening an old file switch it to "at supports only" (changes uplift results for files with a continuously braced top edge, e.g. 0.287 → 0.951 in the check case above)? *(Engineer 2026-10-10: yes. Done in R2.)*
 - R1-b. **l<sub>e</sub> for continuous beams and cantilevers:** the footnote 1 general rule is used (conservative). Confirm, or use the Table 3.3.3 cantilever rows for cantilevers.
-- R1-c. **Cantilever deflection limit:** L = twice the cantilever length (IBC 2018 Table 1604.3 footnote h, as recalled). Confirm the footnote and the intent.
-- R1-d. **Pattern (skip) live loading** is not generated for continuous beams (Steel Beam does not either); an advisory is shown. Decision: add automatic patterns?
+- R1-c. **Cantilever deflection limit:** L = twice the cantilever length (IBC 2018 Table 1604.3 footnote h, as recalled). Confirm the footnote and the intent. *(Engineer 2026-10-10: confirmed. No change; R2.)*
+- R1-d. **Pattern (skip) live loading** is not generated for continuous beams (Steel Beam does not either); an advisory is shown. Decision: add automatic patterns? *(Engineer 2026-10-10: declined; the advisory stays. R2.)*
 - R1-e. **Cb at interior supports:** ticked by default for an interior support (member continues past it). Confirm.
 - R1-f. **NDS equation numbers** in the calc sheets (3.3-2, 3.3-5, 3.3-6, 3.4-2, 3.4-3, 3.5-1, 3.10-2) are as recalled; verify against the printed NDS 2018.
 - R1-g. **Shared project info:** `TBC_PROJ_MAP` is unchanged (Client, Job #, Designer). The new fields Project, Checked by and Date could be mapped to `projectName`, `checkedBy`, `date`. Decision?
 - R1-h. **Observation (Steel Beam, not changed here):** in `Steel Beam Design - AISC 15th.html`, `evalVM(X, …)` includes the reaction couple of a node at `X` itself, so at x = L with a fixed right end it returns M = 0 instead of the end moment (fixed-pin-fixed 10 + 10 ft, w = 75 plf: 0 vs −2187.5 ft-lb at x = 20 ft). The station just before it is close, so the effect is small but unconservative. For a separate Steel Beam PR if wanted.
 - R1-i. **Fixed supports** are offered (as in Steel Beam) but rare in timber; the bearing check uses the vertical reaction only.
+
+## 2026-10-10 — PR: claude/timber-rebuild-p2 (PR link added after merge)
+
+### R2. Engineer's decisions on the R1 open items (2026-10-10): old files open with the bottom edge braced at supports only   [calc change] [more conservative; only old files with negative moment]
+
+- **Date / type:** 2026-10-10. Engineer's decisions on the R1 open items: **R1-a** old files open with the bottom edge "at supports only"; **R1-c** confirmed; **R1-d** declined; R1-b, R1-e, R1-f, R1-g unanswered (still open).
+- **R1-a (changed).** `tbcFromLegacy` (anchor `latBot: 'same', luBot: 0,   // pre-R1 behaviour`) now maps every file of the earlier (React, pre-R1) version to `design.latBot = 'Supports'`. The bottom-edge unbraced length is the old file's `unbracedLen` when its `latSupport` was `'Supports'` (the earlier tool used that one length for both edges), otherwise 0 (= the span length).
+  - Before:
+    ```js
+            latBot: 'same', luBot: 0,   // pre-R1 behaviour: one lateral-support setting for both edges (open item O9)
+    ```
+  - After:
+    ```js
+            // Engineer's decision R1-a (2026-10-10, fix log R2): the bottom edge opens "at supports only". When the old file
+            // had the top edge at supports only with an entered unbraced length, that length is carried to the bottom edge too
+            // (the earlier tool used it for both edges); otherwise l_u,bottom = 0 (= the span length).
+            latBot: 'Supports', luBot: (st(d.latSupport, 'Continuous', ['Continuous', 'Supports']) === 'Supports') ? n(d.unbracedLen, 0) : 0,
+    ```
+  - "Same as top edge" stays in the bottom-edge selector for users who want it. Version-2 files (saved by R1) store `latBot` explicitly and are **not** changed. New projects already defaulted to "at supports only".
+  - Text changed to match: the toast after opening an old file ("… converted; bottom edge braced at supports only, fix log R2"), the hint under the lateral-support inputs, the Method & Manual "Saved data" item and the Validation "Parity" note.
+  - **Governing provision:** NDS 2018 3.3.3 (beam stability, C<sub>L</sub>; l<sub>u</sub> = distance between points of lateral support of the compression edge), Table 3.3.3, Eq. 3.3-6. The formulas are unchanged; only the bracing assumed for the bottom (compression under negative moment) edge of an old file changes.
+  - **What changes (CLAUDE.md §4):** only files saved by the earlier version, only when some combination has negative moment (net uplift, e.g. 0.6D + 0.6W or D + 0.6W with W negative; or upward point loads) and the member is edgewise (d > b), and only when the old file had the top edge **continuously** braced: the bending check of the negative-moment region then uses C<sub>L</sub> with l<sub>u</sub> = span instead of C<sub>L</sub> = 1.0. Also: the advisory "Negative moment occurs, and the bottom-edge bracing is set to 'same as top edge' …" is no longer shown for those files; the bending location reads "−M (bottom edge in compression)" instead of "|M| max"; and an R<sub>B</sub> > 50 of the bottom edge is reported as "Bottom edge (negative moment): slenderness RB = … exceeds 50 (NDS 3.3.3.7). Not permitted." (NG). Files whose top edge was "at supports only" give the same C<sub>L</sub> as before (same l<sub>u</sub> for both edges). **Never less conservative** (parity run below).
+  - **Check case** (fix-log joist: DF-L No.2 2x10 @ 16 in., 14 ft, D 10 / L 40 / W −60 psf, old file with `latSupport: 'Continuous'`): 0.6D + 0.6W: w = 0.6 × 16.61 + 0.6 × (−80.0) = −38.03 plf; M = −38.03 × 14²/8 = −931.8 ft-lb; f<sub>b</sub> = 931.8 × 12/21.39 = 522.8 psi; F<sub>b</sub>* = 900 × 1.6 × 1.0 × 1.0 × 1.1 × 1.0 × 1.15 = 1821.6 psi.
+    - Before (bottom edge same as top = continuous): C<sub>L</sub> = 1.0, F′<sub>b</sub> = 1821.6 psi, ratio **0.287**; headline 84.4 % (D + L bending).
+    - After (bottom edge at supports only): l<sub>u</sub> = 168 in., l<sub>u</sub>/d = 18.2 (uniform load only) → l<sub>e</sub> = 1.63 × 168 + 3 × 9.25 = 301.6 in.; R<sub>B</sub> = √(301.6 × 9.25/1.5²) = 35.21; F<sub>bE</sub> = 1.20 × 580,000/35.21² = 561.3 psi; F<sub>bE</sub>/F<sub>b</sub>* = 0.3082; C<sub>L</sub> = (1.3082/1.9) − √[(1.3082/1.9)² − 0.3082/0.95] = 0.302; F′<sub>b</sub> = 1821.6 × 0.302 = 549.5 psi; ratio 522.8/549.5 = **0.951**; headline 95.1 % (0.6D + 0.6W bending).
+    - Same joist with `latSupport: 'Supports'`, `unbracedLen: 7`: before and after C<sub>L</sub> = 0.534, ratio 0.538 (unchanged: l<sub>u</sub> = 7 ft carried to the bottom edge).
+- **R1-c (confirmed by the engineer 2026-10-10):** cantilever deflection limit with L = 2 × the cantilever length (IBC Table 1604.3 footnote h). No code change.
+- **R1-d (declined by the engineer 2026-10-10):** no automatic pattern (skip) live loading. The advisory for continuous beams stays. No code change.
+- **R1-b, R1-e, R1-f, R1-g:** not answered; still open (list below).
+- **How verified:**
+  - Node, the Phase 1 parity cases (20,417 project objects in the old file formats, incl. 20,000 random files): pre-R1 React engine (extracted verbatim from the pre-R1 file) vs this file's engine with the R1-a mapping undone (`latBot = 'same'`, `luBot = 0`): **0 differences** (exact equality, same fields as R1). Raw-state path: 0 differences. R1 (origin/main) engine vs this engine on the same version-2 model: 0 differences in a deep comparison of every R1 result field (20,417 cases + 3,000 random multi-span / cantilever models).
+  - R1-a effect (this file as opened vs R1-a undone): **1,811 of 20,417 cases change**; in **1,810** a combination has negative moment; **none is less conservative** (headline and every bending ratio ≥ before). The one remaining case (`rand 108`, a 29.7 ft span with five point loads) changes only by a bottom-edge "R<sub>B</sub> > 50" NG message caused by a round-off moment of 1.8e-12 ft-lb at the end support (see new open item P2-1 below). Not changed here (CLAUDE.md §4: raise and ask).
 
 ## Open items (not changed)
 - O1. **Libraries.** Versions pinned 2026-10-09 (L1): `@babel/standalone@7.29.10`, `lucide@1.54.0` (unused), Tailwind Play CDN 3.4.17. Still open: *(R1: resolved; the rebuild uses only KaTeX 0.16.11 and plotly-basic 2.35.2.)*
@@ -888,13 +920,14 @@ Every error, code-limit failure and note of the pre-R1 engine is produced with t
   - Wind is excluded from deflection.
   - The transient case set {L, Lr, S, 0.75L + 0.75(Lr or S)} is my interpretation of "include S/Lr in the live portion appropriately". Please confirm.
 - O8. **Notch model.** One end-notch depth applies at both ends, on the tension face at the supports. Interior notches (≤ d/6 in the outer thirds; none in the middle third, NDS 4.4.3) and compression-side notches (NDS 3.4.3.2(c)) are not modelled.
-- O9. **Uplift (0.6D + 0.6W with W negative).** The tool flags the net uplift and reminds the user about bottom-edge bracing. CL is still based on the single lateral-support setting, and bearing ignores negative reactions. Decision: add a separate bottom-edge unbraced length? *(R1: bottom-edge lateral support input added; files from the earlier version open with "same as top edge"; see R1-a.)*
+- O9. **Uplift (0.6D + 0.6W with W negative).** The tool flags the net uplift and reminds the user about bottom-edge bracing. CL is still based on the single lateral-support setting, and bearing ignores negative reactions. Decision: add a separate bottom-edge unbraced length? *(R1: bottom-edge lateral support input added; files from the earlier version open with "same as top edge"; see R1-a.)* *(R2: old files now open with the bottom edge "at supports only".)*
 - O10. **Span slider** is limited to 4–40 ft (unchanged UI). *(R1: resolved, spans are typed.)*
 - O11. **Stud grade 8 in. and wider** (Table 4A directs No.3 values) is not built in; the tool asks for Manual values.
 - O12. **SP 4-in.-thick, 8 in. and wider:** Table 4B permits CF = 1.1 on Fb. It is not applied (conservative).
 - O13. **ASCE 7 edition:** 7-16 assumed. ASCE 7-22 Sec. 2.4.1 is believed to have the same forms for these load types. Confirm the governing edition.
 - O14. **Ci is applied to timbers if ticked.** NDS 4.3.8 is written for dimension lumber. Minor; confirm.
 - O15. **Not in scope:** no print button (C4 in the audit); `projectInfo.notes` has no input; the app title differs from the file name. *(R1: resolved: Print report, a Notes input, title "Timber Beam Check".)*
+- P2-1. **Round-off negative moment (observation, not changed).** The bottom-edge slenderness failure ("Bottom edge (negative moment): slenderness RB = … exceeds 50") is raised when any combination has `c.bend[i].Mn > 0`. A moment of about 1e-12 ft-lb from floating-point round-off at an end support counts, so a member with no real negative moment can be flagged NG when its bottom-edge R<sub>B</sub> exceeds 50 (1 of 20,417 parity cases: 29.7 ft span, five point loads). The advisory beside it already uses a 1e-9 tolerance. Proposed fix: `c.bend[i].Mn > 1e-9` in the anchor `if (s.bot.RB > 50 && combos.some(c => c.bend[i].Mn > 0))`. Decision?
 
 ## How verified (all fixes)
 - **Before values:** the original engine (lines 67-88 and 361-482 of the original file) was extracted verbatim into node and run on 8 cases.

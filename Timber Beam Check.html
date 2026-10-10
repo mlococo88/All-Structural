@@ -981,7 +981,10 @@ function tbcFromLegacy(d) {
         temp: d.temp === 'High' ? '125-150' : st(d.temp, 'Normal', ['Normal', '100-125', '125-150']),
         incising: bo(d.incising, false), repetitive: bo(d.repetitive, true), flatUse: bo(d.flatUse, false),
         latTop: st(d.latSupport, 'Continuous', ['Continuous', 'Supports']), luTop: n(d.unbracedLen, 0),
-        latBot: 'same', luBot: 0,   // pre-R1 behaviour: one lateral-support setting for both edges (open item O9)
+        // Engineer's decision R1-a (2026-10-10, fix log R2): the bottom edge opens "at supports only". When the old file
+        // had the top edge at supports only with an entered unbraced length, that length is carried to the bottom edge too
+        // (the earlier tool used it for both edges); otherwise l_u,bottom = 0 (= the span length).
+        latBot: 'Supports', luBot: (st(d.latSupport, 'Continuous', ['Continuous', 'Supports']) === 'Supports') ? n(d.unbracedLen, 0) : 0,
         creep: n(d.creepFactor, 1.5), deflLL: n(d.deflLimitLL, 360), deflTL: n(d.deflLimitTL, 240),
     };
     m.ui = { diagCombo: st(d.loadCombo, 'GOV', ['GOV', ...COMBOS.map(c => c.key)]) };
@@ -1252,7 +1255,7 @@ function loadModel(d, how) {
   let r;
   try { r = tbcMigrate(d); } catch (e) { alert('Could not open project file: ' + e.message); return false; }
   M = r.model; fullRebuild();
-  toast(r.kind === 'legacy' ? 'Project loaded (file from the earlier version of this tool, converted; results unchanged)' : (how || 'Project loaded'));
+  toast(r.kind === 'legacy' ? 'Project loaded (file from the earlier version of this tool, converted; bottom edge braced at supports only, fix log R2)' : (how || 'Project loaded'));
   return true;
 }
 function openFileText(text) {
@@ -1603,7 +1606,7 @@ function buildFactorsPane(P) {
     if (dz.latTop === 'Supports') fRow(body, 'Unbraced length l<sub>u</sub>, top', numIn(() => dz.luTop, v => { dz.luTop = v; }, 'luTop', { ph: 'span' }), 'ft', '0 or blank = the length of each span.');
     fRow(body, 'Bottom edge (compression where M < 0)', selIn([['Supports', 'At supports only'], ['Continuous', 'Continuous (e.g. ceiling)'], ['same', 'Same as top edge (earlier tool versions)']], () => dz.latBot, v => { dz.latBot = v; }, 'latBot'), '');
     if (dz.latBot === 'Supports') fRow(body, 'Unbraced length l<sub>u</sub>, bottom', numIn(() => dz.luBot, v => { dz.luBot = v; }, 'luBot', { ph: 'span' }), 'ft', '0 or blank = the length of each span (support to support, or the cantilever length).');
-    body.appendChild(el('div', 'hint', 'Negative moment occurs over interior supports, on cantilevers and under net uplift; its compression edge is the bottom edge. An inflection point is not a brace point. Files from earlier versions of this tool open with "Same as top edge", which is how those versions worked (fix log O9).'));
+    body.appendChild(el('div', 'hint', 'Negative moment occurs over interior supports, on cantilevers and under net uplift; its compression edge is the bottom edge. An inflection point is not a brace point. Files from the earlier (pre-2026-10-10) version of this tool open with the bottom edge "At supports only" (engineer\'s decision, fix log R2); "Same as top edge" is how that version worked and can still be chosen.'));
   }, { noNum: true });
   mkSec(P, 'inDefl', 'Deflection', body => {
     fRow(body, 'Creep factor K<sub>cr</sub>', numIn(() => dz.creep, v => { dz.creep = v; }, 'creep'), '', 'Applied to the dead-load deflection (NDS 3.5.2: 1.5 for seasoned lumber in dry service). 0 or blank = 1.5.');
@@ -2254,7 +2257,7 @@ function buildValid(pg) {
     body.appendChild(tblEl(['Combination', 'Σ applied loads (lb)', 'Σ reactions (lb)', 'Difference (lb)', 'Status'], R.combos.map(c => { const d = c.sumR - c.sumF; const ok = Math.abs(d) <= 1e-6 * Math.max(1, Math.abs(c.sumF)); return [c.name, f2(c.sumF), f2(c.sumR), d.toExponential(2), { cls: ok ? 'ok' : 'ng', h: ok ? 'OK' : 'check' }]; }), { left: [0] }));
   });
   mkSec(pg, 'vParity', 'Parity with the earlier version of the tool', body => {
-    body.appendChild(el('div', 'note', 'A single span on two pin supports runs exactly the calculation of the earlier (React) version of this tool (fix log F1–F22): the same formulas in the same order. Every file format the earlier version saved opens with identical results. The rebuild was checked by running the earlier engine and this one side by side on thousands of cases (fix log R1).'));
+    body.appendChild(el('div', 'note', 'A single span on two pin supports runs exactly the calculation of the earlier (React) version of this tool (fix log F1–F22): the same formulas in the same order. Every file format the earlier version saved opens with identical results, except where negative moment occurs: those files now open with the bottom edge braced at supports only (fix log R2). The rebuild was checked by running the earlier engine and this one side by side on thousands of cases (fix log R1).'));
   });
 }
 
@@ -2282,7 +2285,7 @@ function buildManual(pg) {
     '<b>Bearing (NDS 3.10):</b> at every support, f<sub>c⊥</sub> = R/(b l<sub>b</sub>) with the downward reaction; C<sub>b</sub> only when the bearing is ≥ 3 in. from the member end. Net uplift is reported (provide a connection).',
     '<b>Deflection (NDS 3.5):</b> per span, Δ<sub>LL</sub> = max of L, Lr, S, 0.75L + 0.75Lr, 0.75L + 0.75S; Δ<sub>T</sub> = K<sub>cr</sub>Δ<sub>D</sub> + Δ<sub>LL</sub>. Limits L/n with L = span, or twice the cantilever length (IBC Table 1604.3 footnote h). Wind is excluded.']);
   H('Saved data');
-  UL(['<b>Files:</b> Save file writes the project as JSON with <code>_schema: "timber-beam-check"</code>, <code>version: 2</code>. Open file reads version 2 and every format of the earlier version (the original 11-field file, the full flat file of fix log F18, <code>temp: "High"</code>, custom species in the old <code>F_b</code> shape); those convert with identical results. A file from the earlier version opens with the bottom-edge bracing "same as top edge", which is how that version worked.',
+  UL(['<b>Files:</b> Save file writes the project as JSON with <code>_schema: "timber-beam-check"</code>, <code>version: 2</code>. Open file reads version 2 and every format of the earlier version (the original 11-field file, the full flat file of fix log F18, <code>temp: "High"</code>, custom species in the old <code>F_b</code> shape); those convert with identical results, except that the bottom (negative-moment) edge opens as braced at supports only (engineer\'s decision R1-a, fix log R2; that version took it as braced like the top edge, which can still be chosen as "Same as top edge").',
     `<b>This browser:</b> the last session is autosaved (<code>${LS_AUTO}</code>) and named projects are kept (<code>${LS_PROJ}</code>); the selected input tab is remembered (<code>${TBC_IN_KEY}</code>). All keys start with <code>tbc_</code>.`,
     '<b>Shared project info</b> (bridgeSuite.v1.projectMeta): Client, Job # and Designer are shared and received, as before.']);
   H('Limitations and open items');
