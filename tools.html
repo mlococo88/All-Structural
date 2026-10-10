@@ -22,6 +22,10 @@ a.card:hover{border-color:var(--accent)}
 .tag{display:inline-block;background:var(--tag);color:var(--muted);border-radius:5px;padding:1px 7px;font-size:12px;margin:0 4px 4px 0}
 .note{margin-top:30px;color:var(--muted);font-size:13px}
 .hidden{display:none}
+details.checks{background:var(--card);border:1px solid #d9a441;border-left:5px solid #d9a441;border-radius:10px;padding:10px 16px;margin:0 0 8px}
+details.checks summary{cursor:pointer;font-weight:600}
+details.checks h3{font-size:13px;margin:12px 0 4px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+details.checks ul{margin:0;padding-left:20px}details.checks li{margin:3px 0}details.checks b{color:var(--accent)}
 </style>
 </head>
 <body>
@@ -29,6 +33,28 @@ a.card:hover{border-color:var(--accent)}
 <h1>Structural &amp; Bridge Engineering Tools</h1>
 <p class="sub">All tools in one place, grouped by discipline. Each opens in a new tab.</p>
 <input id="q" type="search" placeholder="Filter tools (e.g. pile, AASHTO, anchor)" aria-label="Filter tools">
+<details class="checks" open>
+<summary>Open engineer checks and decisions — check these before relying on the affected results</summary>
+<h3>Checks (your own action)</h3><ul>
+<li><b>Base Plate &amp; Anchor:</b> type 5.5 into f'c in Edge/Chrome; it should stay 5.5 (decimal fix tested headless only).</li>
+<li><b>Concrete Beam ASD, Concrete Anchor:</b> check the styling looks right after the Tailwind 3.4.17 pin.</li>
+<li><b>Section Properties:</b> AutoCAD MASSPROP sign check: 1 × 1 square at 0,0 should give XY = +0.25; note the principal-moment order.</li>
+<li><b>Section Properties:</b> AISC 360-16 Eq. E4-8, E4-9, F2-7 numbers; weld strength factors (J2.4, Table J2.5); HSS corner radii basis.</li>
+<li><b>Timber:</b> NDS 2018 equation numbers and the 3.3.3 / 3.3.3.7 wording; all "verify" reference values.</li>
+<li><b>Timber:</b> supply values not built in if wanted (SP Stud, SPF timbers, Dense/Non-Dense, other glulam).</li>
+<li><b>Gusset:</b> check all "verify" values against the printed MBE / FHWA guide / AASHTO.</li>
+<li><b>Gusset:</b> open an exported DXF in AutoCAD and MicroStation and re-import it.</li>
+</ul><h3>Decisions</h3><ul>
+<li><b>Gusset:</b> stagger search band 2√(L·d<sub>n</sub>): remove it (recommended, more conservative)?</li>
+<li><b>Gusset:</b> which missing checks to add: chord splice / combined forces (O1), Whitmore clipping (O2), free-edge buckling (O3), eccentric groups (O4), heel shear plane normal force (O16).</li>
+<li><b>Section Properties:</b> plate against an HSS gives "J n/a" — handle it (recommended)?</li>
+<li><b>Section Properties:</b> shear flow with parallel load paths: switch bearing contacts off (recommended) or a stiffness split?</li>
+<li><b>Section Properties:</b> confirm V<sub>x</sub>, V<sub>y</sub> sign (force components along +x, +y).</li>
+<li><b>Section Properties:</b> keep the sections library on the Templates tab?</li>
+<li><b>Section Properties:</b> show machine-precision Validation differences as 0?</li>
+</ul>
+<p class="sub" style="margin:10px 0 2px;font-size:13px">Full list with details: ENGINEER_CHECKS.md in the repository. Remove an item here and there when it is done.</p>
+</details>
 
 <section><h2>Bridge suite (linked apps)</h2><div class="grid">
 <a class="card" href="index.html" target="_blank"><div class="name">MCT Generator &amp; Rating</div><div class="desc">MIDAS Civil model generator, results post-processing, AASHTO MBE and AREMA load rating. Hub of the bridge suite.</div><span class="tag">AASHTO MBE</span><span class="tag">AREMA</span></a>
