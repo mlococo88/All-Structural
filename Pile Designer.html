@@ -338,6 +338,80 @@
     .pd-fld-wide { grid-column: 1 / -1; }
     .check-index { position: static; }
   }
+  /* ==========================================================
+     OUTPUT TABS + REPORT LOOK (2026-10-10, presentation only)
+     ----------------------------------------------------------
+     Output column split into tabs (Summary / Geometry & limits / Geotechnical /
+     Lateral / Structural / Cap & connection / Load test / Group; IAB: Simplified
+     Method / Tier 2). Every module stays rendered; the non-active tabs' blocks
+     are hidden with CSS only, as the input rail does. The printed report takes
+     the recent tools' look (Times text, UI-sans labels, navy #16304F headings,
+     calc lines on a light strip with a blue left rule, light OK / NG badges)
+     and a section chooser. No calculation, input key or report value changes.
+  ========================================================== */
+  .out-tabs { position: sticky; top: var(--ci-h); z-index: 30; display: flex; flex-wrap: wrap; gap: 2px;
+    background: var(--paper); border-bottom: 2px solid var(--navy-800); padding: 6px 0 0; font-family: var(--f-ui); }
+  .out-tab { position: relative; display: inline-flex; align-items: center; font-family: var(--f-ui); font-size: 12.5px; padding: 5px 11px;
+    border: 1px solid var(--pd-line); border-bottom: none; background: #F1F3F5; color: #41546E; border-radius: 5px 5px 0 0; white-space: nowrap; cursor: pointer; }
+  .out-tab:hover { background: #EFF4FA; }
+  .out-tab[aria-selected="true"] { background: var(--navy-800); color: #fff; border-color: var(--navy-800); font-weight: 600; }
+  .out-tab:focus-visible { outline: 2px solid #BFD3F2; outline-offset: 1px; }
+  .out-tab-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--no); margin-left: 6px; box-shadow: 0 0 0 1.5px #fff; }
+  .main-col > .out-tabs { margin-bottom: 0; }
+  section[data-module] { scroll-margin-top: calc(var(--ci-h) + var(--ot-h, 40px) + 12px); }
+  .main-col[data-otab-active="summary"] > [data-otab]:not([data-otab="summary"]),
+  .main-col[data-otab-active="geom"] > [data-otab]:not([data-otab="geom"]),
+  .main-col[data-otab-active="geo"] > [data-otab]:not([data-otab="geo"]),
+  .main-col[data-otab-active="simp"] > [data-otab]:not([data-otab="simp"]),
+  .main-col[data-otab-active="tier2"] > [data-otab]:not([data-otab="tier2"]),
+  .main-col[data-otab-active="lat"] > [data-otab]:not([data-otab="lat"]),
+  .main-col[data-otab-active="struct"] > [data-otab]:not([data-otab="struct"]),
+  .main-col[data-otab-active="cap"] > [data-otab]:not([data-otab="cap"]),
+  .main-col[data-otab-active="test"] > [data-otab]:not([data-otab="test"]),
+  .main-col[data-otab-active="group"] > [data-otab]:not([data-otab="group"]) { display: none; }
+  @media (max-width: 820px) {
+    .out-tabs { top: 0; }
+    .out-tab { font-size: 12px; padding: 5px 9px; }
+  }
+  @media print { .out-tabs, .pd-prdlg-ov { display: none !important; } }
+
+  /* print-section chooser */
+  .pd-prdlg-ov { position: fixed; inset: 0; background: rgba(15,25,40,.45); z-index: 80; display: flex; align-items: center; justify-content: center; font-family: var(--f-ui); }
+  .pd-prdlg { background: #fff; border-radius: 8px; padding: 16px 20px; width: min(460px, 92vw); max-height: 86vh; overflow: auto; box-shadow: 0 12px 40px rgba(0,0,0,.3); color: #1b232b; font-family: var(--f-ui); }
+  .pd-prdlg h2 { font-size: 15px; font-weight: 700; color: var(--navy-800); margin: 0 0 4px; }
+  .pd-prdlg .pd-prdlg-hint { font-size: 12px; color: #5A6B80; margin: 0 0 8px; line-height: 1.4; }
+  .pd-prdlg label { display: flex; gap: 8px; align-items: baseline; padding: 3px 0; font-size: 13px; cursor: pointer; }
+  .pd-prdlg label input { position: relative; top: 2px; }
+  .pd-prdlg .pd-prdlg-ns { color: #6B7A8F; font-size: 12px; }
+  .pd-prdlg .pd-prdlg-fixed { font-size: 12px; color: #41546E; padding: 3px 0 5px; border-bottom: 1px solid var(--pd-line); margin-bottom: 4px; }
+  .pd-prdlg .pd-prdlg-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+  .pd-prdlg button { font-family: var(--f-ui); font-size: 12.5px; padding: 5px 12px; border-radius: 4px; border: 1px solid var(--navy-800); color: var(--navy-800); background: #fff; cursor: pointer; }
+  .pd-prdlg button:hover { background: #EFF4FA; }
+  .pd-prdlg button.is-primary { background: var(--navy-800); color: #fff; }
+  .pd-prdlg button.is-primary:hover { background: var(--navy-900); }
+  .pd-prdlg button.is-quiet { border-color: #C6CFDA; color: #41546E; padding: 2px 8px; font-size: 11.5px; }
+
+  /* printed report: page flow (headings stay with their content, short
+     sections and calc lines are not split, long sections flow so no page is
+     left nearly empty; no forced page breaks) */
+  @media print {
+    .print-only .rpt-section { break-inside: auto; page-break-inside: auto; }
+    .print-only .rpt-section[data-short] { break-inside: avoid; page-break-inside: avoid; }
+    .print-only .rpt-pagebreak { break-before: auto; page-break-before: auto; }
+    .print-only .rpt-h { break-after: avoid; page-break-after: avoid; }
+    .print-only tr, .print-only li, .print-only .rpt-calc, .print-only .rpt-check, .print-only .rpt-row { break-inside: avoid; page-break-inside: avoid; }
+    .print-only thead { display: table-header-group; }
+    .print-only, .print-only * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  }
+  /* the report is measured off screen at the printable width (7.1 in) before
+     printing; tables still too wide get a smaller font (nothing is clipped) */
+  .print-only[data-measure] { display: block !important; position: absolute !important; left: -30000px; top: 0; width: 7.1in; visibility: hidden; }
+  .print-only[data-measure] [style*="font-size: 7.5px"], .print-only[data-measure] [style*="font-size: 8px"],
+  .print-only[data-measure] [style*="font-size: 8.5px"], .print-only[data-measure] [style*="font-size: 9px"] { font-size: 8pt !important; }
+  .print-only[data-measure] [style*="font-size: 9.5px"], .print-only[data-measure] [style*="font-size: 10px"] { font-size: 8.5pt !important; }
+  .print-only table[data-fit="8"], .print-only table[data-fit="8"] td, .print-only table[data-fit="8"] th { font-size: 7.5pt !important; }
+  .print-only table[data-fit="7"], .print-only table[data-fit="7"] td, .print-only table[data-fit="7"] th { font-size: 7pt !important; }
+  .print-only table[data-fit="6"], .print-only table[data-fit="6"] td, .print-only table[data-fit="6"] th { font-size: 6.3pt !important; }
 </style>
 </head>
 <body>
@@ -6409,6 +6483,82 @@ function loadSavedInputs() {
    PROFESSIONAL CALCULATION REPORT
    Formatted as a sealed structural calc package.
 ============================================================ */
+/* Report look (2026-10-10): UI sans for labels, Times for text, navy #16304F. */
+const RPT_UI = "-apple-system, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, sans-serif";
+const RPT_SERIF = "\"Times New Roman\", Times, \"Liberation Serif\", serif";
+/* Report section groups (print-section chooser). Each RptHeading carries its
+   group so the chooser can hide the section that holds it (CSS only). */
+const RPT_GRP_ORDER = ["inputs", "basis", "geom", "geo", "simp", "tier2", "lat", "struct", "cap", "test", "group", "summary"];
+const RPT_GRP_LABEL = { inputs: "Input summary", basis: "Scope, references & assumptions", geom: "Geometry & limits", geo: "Geotechnical", simp: "Simplified Method", tier2: "Tier 2", lat: "Lateral (p-y)", struct: "Structural", cap: "Cap & connection", test: "Load test", group: "Group", summary: "Summary of results & conclusion" };
+function rptGrpFor(n) {
+  const s = String(n);
+  if (s === "A") return "inputs";
+  if (s === "B" || s === "C" || s === "D") return "basis";
+  if (s === "S") return "summary";
+  if (s === "G") return "geom";
+  if (/^01[a-d]$/.test(s)) return "simp";
+  if (s === "12") return "tier2";
+  if (s === "01" || s === "09") return "geo";
+  if (/^02/.test(s)) return "lat";
+  if (s === "06" || s === "07") return "cap";
+  if (s === "08") return "test";
+  if (s === "11") return "group";
+  return "struct";
+}
+/* OK / NG badge on a report module heading: the status of the same on-screen
+   module (read from its data-status), so screen and report always agree.
+   "03-09" (H-pile structural block) combines its modules. G is not badged:
+   its report section lists materials and geometry, not the limit checks. */
+const RptStatCtx = React.createContext({});
+function rptStatusFor(n, stat) {
+  const s = String(n);
+  if (s === "G") return null;
+  const ids = s === "03\u201309" ? ["03", "04", "05", "07", "09"] : [s];
+  const v = ids.map(i => stat[i]).filter(x => x === "ok" || x === "ng");
+  if (!v.length) return null;
+  return v.indexOf("ng") >= 0 ? "ng" : "ok";
+}
+const RPT_SEL_KEY = "micropile_lrfd_printSel_v1";
+function loadRptSel() {
+  try { const v = JSON.parse(window.localStorage.getItem(RPT_SEL_KEY) || "null"); return v && typeof v === "object" && !Array.isArray(v) ? v : {}; } catch (e) { return {}; }
+}
+function saveRptSel(v) { try { window.localStorage.setItem(RPT_SEL_KEY, JSON.stringify(v)); } catch (e) {} }
+/* Fit the report to the printable width before printing / previewing. The
+   standalone report is display:none on screen, so it is laid out off screen at
+   7.1 in. Tables that are still too wide get a smaller font, equations that
+   run past the right edge are scaled down, and short sections are marked so
+   print keeps them on one page. Attributes / KaTeX nodes only. */
+function fitPrintReport(root) {
+  const R = root || [...document.querySelectorAll(".print-only")].find(e => !e.closest(".report-preview-show"));
+  if (!R) return;
+  const hidden = R.getClientRects().length === 0;
+  if (hidden) R.setAttribute("data-measure", "1");
+  try {
+    R.querySelectorAll("table[data-fit]").forEach(t => t.removeAttribute("data-fit"));
+    R.querySelectorAll(".katex[data-fitk]").forEach(k => { k.style.fontSize = ""; k.removeAttribute("data-fitk"); });
+    R.querySelectorAll("table").forEach(t => {
+      const pw = t.parentElement ? t.parentElement.clientWidth : 0;
+      if (!pw) return;
+      for (const f of ["8", "7", "6"]) { if (t.scrollWidth <= pw + 0.5) break; t.setAttribute("data-fit", f); }
+    });
+    const right = R.getBoundingClientRect().right;
+    R.querySelectorAll(".katex").forEach(k => {
+      if (k.parentElement && k.parentElement.closest(".katex")) return;
+      const box = k.closest("td, .rpt-calc-eq, .rpt-check") || R;
+      const lim = Math.min(right, box.getBoundingClientRect().right) - 2;
+      const kr = k.getBoundingClientRect();
+      if (kr.width > 0 && kr.right > lim) {
+        const room = lim - kr.left, fs = parseFloat(getComputedStyle(k).fontSize) || 12;
+        if (room > 20) { k.style.fontSize = (fs * Math.max(0.6, room / kr.width)).toFixed(2) + "px"; k.setAttribute("data-fitk", "1"); }
+      }
+    });
+    R.querySelectorAll(".rpt-section").forEach(sec => {
+      const h = sec.getBoundingClientRect().height;
+      if (h > 0 && h < 260) sec.setAttribute("data-short", "1"); else sec.removeAttribute("data-short");
+    });
+  } catch (e) { console.error(e); }
+  if (hidden) R.removeAttribute("data-measure");
+}
 function RTex({
   tex
 }) {
@@ -6429,8 +6579,9 @@ function Calc({
   note
 }) {
   return /*#__PURE__*/React.createElement("div", {
+    className: "rpt-calc",
     style: {
-      marginBottom: "7px",
+      marginBottom: "6px",
       breakInside: "avoid"
     }
   }, /*#__PURE__*/React.createElement("div", {
@@ -6441,14 +6592,21 @@ function Calc({
       gap: "12px"
     }
   }, /*#__PURE__*/React.createElement("div", {
+    className: "rpt-calc-eq",
     style: {
       fontSize: "11.5px",
-      color: "#1a2733",
-      flex: 1
+      color: "#11161c",
+      flex: 1,
+      minWidth: 0,
+      background: "#F7F8FA",
+      borderLeft: "3px solid #2563EB",
+      padding: "2px 10px"
     }
   }, label && /*#__PURE__*/React.createElement("span", {
     style: {
-      color: "#475569"
+      color: "#475569",
+      fontFamily: RPT_UI,
+      fontSize: "10.5px"
     }
   }, label, ": "), /*#__PURE__*/React.createElement("span", {
     style: {
@@ -6466,8 +6624,8 @@ function Calc({
   }))), cite && /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: "9px",
-      color: "#94a3b8",
-      fontFamily: "monospace",
+      color: "#5A6B80",
+      fontFamily: RPT_UI,
       whiteSpace: "nowrap",
       textAlign: "right",
       minWidth: "110px"
@@ -6477,7 +6635,8 @@ function Calc({
       fontSize: "10px",
       color: "#64748b",
       fontStyle: "italic",
-      marginTop: "1px"
+      marginTop: "1px",
+      paddingLeft: "13px"
     }
   }, note));
 }
@@ -6488,28 +6647,38 @@ function RptCheck({
   pass
 }) {
   return /*#__PURE__*/React.createElement("div", {
+    className: "rpt-check",
     style: {
       display: "flex",
       alignItems: "center",
       gap: "10px",
       margin: "6px 0",
-      padding: "5px 9px",
-      background: pass ? "rgba(47,125,79,0.06)" : "rgba(178,59,59,0.06)",
-      borderLeft: `3px solid ${pass ? "#2f7d4f" : "#b23b3b"}`
+      padding: "4px 9px",
+      background: pass ? "#F6FBF8" : "#FDF7F6",
+      border: "1px solid " + (pass ? "#CDEBDC" : "#F1C9C5"),
+      borderLeft: `3px solid ${pass ? "#059669" : "#DC2626"}`,
+      borderRadius: "4px",
+      breakInside: "avoid"
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
       flex: 1,
+      minWidth: 0,
       fontSize: "12.5px"
     }
   }, /*#__PURE__*/React.createElement(RTex, {
     tex: eq
   })), /*#__PURE__*/React.createElement("div", {
     style: {
-      fontSize: "11px",
+      fontSize: "10px",
       fontWeight: 700,
-      fontFamily: "monospace",
-      color: pass ? "#2f7d4f" : "#b23b3b"
+      fontFamily: RPT_UI,
+      whiteSpace: "nowrap",
+      padding: "0 6px",
+      borderRadius: "3px",
+      background: pass ? "#E8F7F0" : "#FDECEC",
+      color: pass ? "#065F46" : "#B91C1C",
+      border: "1px solid " + (pass ? "#7FD1B0" : "#F1A8A8")
     }
   }, pass ? "✓ OK" : "✗ NG"));
 }
@@ -6521,9 +6690,10 @@ function RptInputs({ title, rows }) {
   if (!live.length) return null;
   return /*#__PURE__*/React.createElement("div", { className: "rpt-avoid", style: { marginBottom: "10px" } },
     /*#__PURE__*/React.createElement("div", {
-      style: { fontFamily: "monospace", fontSize: "9.5px", fontWeight: 700, color: "#14304a",
-               textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "3px",
-               borderBottom: "1px solid #cbd5e1", paddingBottom: "2px" }
+      className: "rpt-sub",
+      style: { fontFamily: RPT_UI, fontSize: "10px", fontWeight: 700, color: "#16304F",
+               marginBottom: "3px", breakAfter: "avoid",
+               borderBottom: "1px solid #B9C8DB", paddingBottom: "2px" }
     }, title),
     /*#__PURE__*/React.createElement("table", { style: { width: "100%", borderCollapse: "collapse", fontSize: "10px" } },
       /*#__PURE__*/React.createElement("tbody", null, live.map((r, i) => {
@@ -6542,38 +6712,57 @@ function RptHeading({
   title,
   code
 }) {
+  const st = rptStatusFor(n, React.useContext(RptStatCtx));
   return /*#__PURE__*/React.createElement("div", {
-    className: "rpt-avoid",
+    className: "rpt-avoid rpt-h",
+    "data-rgrp": rptGrpFor(n),
+    "data-n": n,
     style: {
       marginTop: "16px",
       marginBottom: "8px",
-      borderBottom: "1.5px solid #14304a",
+      borderBottom: "1.5px solid #16304F",
       paddingBottom: "3px",
       display: "flex",
       alignItems: "baseline",
-      gap: "8px"
+      flexWrap: "wrap",
+      gap: "2px 8px",
+      breakAfter: "avoid",
+      pageBreakAfter: "avoid"
     }
   }, /*#__PURE__*/React.createElement("span", {
     style: {
-      fontFamily: "monospace",
-      fontSize: "11px",
+      fontFamily: RPT_UI,
+      fontSize: "10.5px",
       fontWeight: 700,
       color: "#fff",
-      background: "#14304a",
-      padding: "1px 6px"
+      background: "#16304F",
+      padding: "1px 6px",
+      borderRadius: "3px"
     }
   }, n), /*#__PURE__*/React.createElement("span", {
     style: {
       fontSize: "14px",
       fontWeight: 700,
-      color: "#14304a",
-      fontFamily: "Georgia, serif"
+      color: "#16304F",
+      fontFamily: RPT_SERIF
     }
-  }, title), code && /*#__PURE__*/React.createElement("span", {
+  }, title), st && /*#__PURE__*/React.createElement("span", {
+    className: "rpt-badge",
+    style: {
+      fontFamily: RPT_UI,
+      fontSize: "9px",
+      fontWeight: 700,
+      padding: "0 5px",
+      borderRadius: "3px",
+      background: st === "ok" ? "#E8F7F0" : "#FDECEC",
+      color: st === "ok" ? "#065F46" : "#B91C1C",
+      border: "1px solid " + (st === "ok" ? "#7FD1B0" : "#F1A8A8")
+    }
+  }, st === "ok" ? "OK" : "NG"), code && /*#__PURE__*/React.createElement("span", {
     style: {
       fontSize: "9.5px",
-      color: "#94a3b8",
-      fontFamily: "monospace",
+      color: "#5A6B80",
+      fontFamily: RPT_UI,
       marginLeft: "auto"
     }
   }, code));
@@ -6587,7 +6776,7 @@ function Narr({
       color: "#334155",
       lineHeight: 1.5,
       margin: "4px 0 8px",
-      fontFamily: "Georgia, serif"
+      fontFamily: RPT_SERIF
     }
   }, children);
 }
@@ -6596,32 +6785,41 @@ function PrintReport({
   r,
   caseRes,
   pyRes,
-  pcr
+  pcr,
+  sel
 }) {
+  // OK / NG of each on-screen module (read after every render; see rptStatusFor)
+  const [modStat, setModStat] = useState({});
+  useEffect(() => {
+    const m = {};
+    document.querySelectorAll(".app-shell section[data-module]").forEach(s => { m[s.getAttribute("data-module")] = s.getAttribute("data-status"); });
+    const k = JSON.stringify(m);
+    setModStat(p => JSON.stringify(p) === k ? p : m);
+  });
   const today = new Date().toLocaleDateString(undefined, {
     year: "numeric",
     month: "long",
     day: "numeric"
   });
   const cell = {
-    border: "1px solid #cbd5e1",
+    border: "1px solid #C6CFDA",
     padding: "3px 7px",
     fontSize: "10px",
     fontFamily: "monospace"
   };
   const cellK = {
     ...cell,
-    background: "#f1f5f9",
-    color: "#475569"
+    background: "#EEF2F7",
+    color: "#41546E"
   };
   const cellV = {
     ...cell,
     fontWeight: 700
   };
-  const serif = "Georgia, 'Times New Roman', serif";
-  const RptRow = ({ label, val, pass }) => /*#__PURE__*/React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", borderTop: "1px solid #e2e8f0", padding: "3px 0", fontFamily: "monospace", fontSize: "10px" } },
+  const serif = RPT_SERIF;
+  const RptRow = ({ label, val, pass }) => /*#__PURE__*/React.createElement("div", { className: "rpt-row", style: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px", borderTop: "1px solid #E4E7EB", padding: "3px 0", fontFamily: "monospace", fontSize: "10px" } },
     /*#__PURE__*/React.createElement("span", null, label),
-    /*#__PURE__*/React.createElement("span", null, /*#__PURE__*/React.createElement("b", null, val), "  ", /*#__PURE__*/React.createElement("span", { style: { color: pass ? "#2f7d4f" : "#b23b3b", fontWeight: 700 } }, pass ? "OK" : "NG")));
+    /*#__PURE__*/React.createElement("span", { style: { whiteSpace: "nowrap" } }, /*#__PURE__*/React.createElement("b", null, val), "  ", /*#__PURE__*/React.createElement("span", { style: { fontFamily: RPT_UI, fontSize: "9px", padding: "0 5px", borderRadius: "3px", background: pass ? "#E8F7F0" : "#FDECEC", color: pass ? "#065F46" : "#B91C1C", border: "1px solid " + (pass ? "#7FD1B0" : "#F1A8A8"), fontWeight: 700 } }, pass ? "OK" : "NG")));
 
   // results rows (mirror on-screen summary)
   const resultRows = I.pileType === "iab" ? (() => {
@@ -6656,8 +6854,12 @@ function PrintReport({
   // ignored harmlessly by browsers without support).
   const cssStr = v => String(v == null ? "" : v).replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/[\r\n]+/g, " ");
   const footLeft = [I.projName, I.projNum, I.pileType === "iab" ? "Integral abutment pile" : I.pileType === "hpile" ? "Driven H-pile" : "Drilled micropile"].filter(Boolean).join("  \u00b7  ");
-  const pageCss = "@media print { @page { @bottom-left { content: \"" + cssStr(footLeft) + "\"; font: 8pt Georgia, 'Times New Roman', serif; color: #475569; } @bottom-right { content: \"Sheet \" counter(page) \" of \" counter(pages); font: 8pt Georgia, 'Times New Roman', serif; color: #475569; } } }";
-  return /*#__PURE__*/React.createElement("div", {
+  const headLeft = [I.projName, I.projSubject].filter(Boolean).join(" \u2014 ");
+  const headRight = ["Pile Designer", I.projBy, today].filter(Boolean).join("  \u00b7  ");
+  const pageCss = "@media print { @page { @top-left { content: \"" + cssStr(headLeft) + "\"; font: 7.5pt 'Times New Roman', Times, serif; color: #5A6B80; } @top-right { content: \"" + cssStr(headRight) + "\"; font: 7.5pt 'Times New Roman', Times, serif; color: #5A6B80; } @bottom-left { content: \"" + cssStr(footLeft) + "\"; font: 8pt 'Times New Roman', Times, serif; color: #475569; } @bottom-right { content: \"Sheet \" counter(page) \" of \" counter(pages); font: 8pt 'Times New Roman', Times, serif; color: #475569; } } }";
+  // print-section chooser: hide the section (or group block) that holds a heading of an unticked group
+  const hideCss = RPT_GRP_ORDER.filter(g => sel && sel[g] === false).map(g => ".print-only :is(.rpt-section, .rpt-grp):has(> .rpt-h[data-rgrp=\"" + g + "\"]) { display: none !important; }").join("\n");
+  return /*#__PURE__*/React.createElement(RptStatCtx.Provider, { value: modStat }, /*#__PURE__*/React.createElement("div", {
     className: "print-only",
     style: {
       fontFamily: serif,
@@ -6665,97 +6867,71 @@ function PrintReport({
       maxWidth: "7.1in",
       margin: "0 auto"
     }
-  }, /*#__PURE__*/React.createElement("style", null, pageCss), /*#__PURE__*/React.createElement("div", {
-    className: "rpt-avoid",
+  }, /*#__PURE__*/React.createElement("style", null, pageCss + (hideCss ? "\n" + hideCss : "")),
+  /* Title block (recent tools' layout): package label, pile-type title and
+     overall status, then Project / Job no. / Subject / Units / Prepared by /
+     Checked by / Date and the design basis. */
+  /*#__PURE__*/React.createElement("div", {
+    className: "rpt-avoid rpt-title",
     style: {
-      border: "2px solid #11161c"
+      border: "1.6px solid #16304F",
+      padding: "8px 12px 6px",
+      breakInside: "avoid"
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       justifyContent: "space-between",
-      alignItems: "center",
-      padding: "10px 14px",
-      borderBottom: "1px solid #11161c",
-      background: "#14304a",
-      color: "#fff"
+      alignItems: "flex-start",
+      gap: "6px 12px",
+      flexWrap: "wrap"
     }
-  }, /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
     style: {
-      fontFamily: "monospace",
-      fontSize: "10px",
-      letterSpacing: "2px",
-      textTransform: "uppercase"
+      fontFamily: RPT_UI,
+      fontSize: "9px",
+      letterSpacing: "1px",
+      textTransform: "uppercase",
+      color: "#5A6B80"
     }
   }, "Structural Calculation Package"), /*#__PURE__*/React.createElement("div", {
     style: {
-      fontFamily: "monospace",
-      fontSize: "10px"
-    }
-  }, I.projNum)), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex"
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      flex: 2,
-      padding: "12px 14px",
-      borderRight: "1px solid #11161c"
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: "19px",
+      fontSize: "17px",
       fontWeight: 700,
-      color: "#14304a",
-      lineHeight: 1.15
-    }
-  }, I.projName), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: "13px",
-      marginTop: "3px",
-      color: "#334155"
-    }
-  }, I.projSubject), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: "12px",
-      marginTop: "8px",
-      fontWeight: 700
+      color: "#16304F",
+      lineHeight: 1.2,
+      marginTop: "2px"
     }
   }, I.pileType === "iab" ? "Integral Abutment H-Pile \u2014 MassDOT Simplified Method" : I.pileType === "hpile" ? "Driven Steel H-Pile — Structural & Geotechnical Design" : "Drilled Micropile — Structural & Geotechnical Design")), /*#__PURE__*/React.createElement("div", {
     style: {
-      flex: 1,
-      padding: "12px 14px",
-      fontFamily: "monospace",
-      fontSize: "10.5px",
-      lineHeight: 1.7
-    }
-  }, /*#__PURE__*/React.createElement("div", null, "Job No.\xA0\xA0", /*#__PURE__*/React.createElement("b", null, I.projNum)), /*#__PURE__*/React.createElement("div", null, "Computed\xA0\xA0", /*#__PURE__*/React.createElement("b", null, I.projBy)), /*#__PURE__*/React.createElement("div", null, "Checked\xA0\xA0\xA0", /*#__PURE__*/React.createElement("b", null, I.projChk)), /*#__PURE__*/React.createElement("div", null, "Date\xA0\xA0\xA0\xA0\xA0\xA0", /*#__PURE__*/React.createElement("b", null, today)))), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      borderTop: "1px solid #11161c"
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      flex: 1,
-      padding: "8px 14px",
-      fontSize: "11px"
-    }
-  }, /*#__PURE__*/React.createElement("span", {
-    style: {
-      color: "#475569"
-    }
-  }, "Design basis: "), "AASHTO LRFD Bridge Design Specifications; FHWA NHI-05-039"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      padding: "8px 14px",
-      borderLeft: "1px solid #11161c",
-      fontFamily: "monospace",
-      fontSize: "11px",
+      fontFamily: RPT_UI,
+      fontSize: "10px",
       fontWeight: 700,
-      color: r.allPass ? "#2f7d4f" : "#b23b3b",
-      minWidth: "150px",
-      textAlign: "center"
+      whiteSpace: "nowrap",
+      padding: "2px 8px",
+      borderRadius: "4px",
+      background: r.allPass ? "#E8F7F0" : "#FDECEC",
+      color: r.allPass ? "#065F46" : "#B91C1C",
+      border: "1px solid " + (r.allPass ? "#7FD1B0" : "#F1A8A8")
     }
-  }, r.allPass ? "ALL CHECKS SATISFIED" : "CHECKS REQUIRE REVIEW"))), ((r.inputErrors && r.inputErrors.length) || (r.inputNotes && r.inputNotes.length)) ? /*#__PURE__*/React.createElement("div", {
+  }, r.allPass ? "ALL CHECKS SATISFIED" : "CHECKS REQUIRE REVIEW")), (() => {
+    const tdS = { padding: "1.5px 10px 1.5px 0", verticalAlign: "top", width: "50%" };
+    const lab = t => /*#__PURE__*/React.createElement("b", { style: { fontFamily: RPT_UI, fontSize: "9.5px", color: "#41546E" } }, t, ": ");
+    const row = (k, l1, v1, l2, v2) => /*#__PURE__*/React.createElement("tr", { key: k },
+      /*#__PURE__*/React.createElement("td", { style: tdS }, lab(l1), v1),
+      /*#__PURE__*/React.createElement("td", { style: tdS }, lab(l2), v2));
+    return /*#__PURE__*/React.createElement("table", {
+      style: { width: "100%", borderCollapse: "collapse", fontSize: "11px", marginTop: "6px", borderTop: "1px solid #B9C8DB" }
+    }, /*#__PURE__*/React.createElement("tbody", null,
+      row("a", "Project", I.projName, "Job no.", I.projNum),
+      row("b", "Subject / member", I.projSubject, "Units", "US customary (kip, ft, in, ksi)"),
+      row("c", "Prepared by", I.projBy, "Checked by", I.projChk),
+      /*#__PURE__*/React.createElement("tr", { key: "d" },
+        /*#__PURE__*/React.createElement("td", { style: tdS }, lab("Date"), today),
+        /*#__PURE__*/React.createElement("td", { style: tdS }, /*#__PURE__*/React.createElement("span", {
+          style: { fontFamily: RPT_UI, fontSize: "9.5px", fontWeight: 700, color: "#41546E" }
+        }, "Design basis: "), "AASHTO LRFD Bridge Design Specifications; FHWA NHI-05-039"))));
+  })()), ((r.inputErrors && r.inputErrors.length) || (r.inputNotes && r.inputNotes.length)) ? /*#__PURE__*/React.createElement("div", {
     style: { marginTop: "6px", fontSize: "10px", color: "#8a2a2a" }
   }, (r.inputErrors || []).map((m, i) => /*#__PURE__*/React.createElement("div", { key: "e" + i }, "\u26a0 Input error: ", m)),
     (r.inputNotes || []).map((m, i) => /*#__PURE__*/React.createElement("div", { key: "n" + i, style: { color: "#7a4d15" } }, "\u26a0 Note: ", m))) : null, /*#__PURE__*/React.createElement("div", {
@@ -6783,16 +6959,16 @@ function PrintReport({
       left: "0",
       right: "0",
       textAlign: "center",
-      fontFamily: "monospace",
+      fontFamily: RPT_UI,
       fontSize: "8px",
       color: "#94a3b8",
-      letterSpacing: "1px"
+      letterSpacing: "0.5px"
     }
   }, "PROFESSIONAL ENGINEER SEAL"), /*#__PURE__*/React.createElement("div", {
     style: {
       borderTop: "1px solid #475569",
       width: "90%",
-      fontFamily: "monospace",
+      fontFamily: RPT_UI,
       fontSize: "8px",
       color: "#475569",
       textAlign: "center",
@@ -6918,7 +7094,7 @@ function PrintReport({
       ["Groundwater (uniform-soil n\u2095 preset)", (Array.isArray(I.soilLayers) && I.soilLayers.length) ? null : (I.solverGWT === "below" ? "below pile zone" : "above (submerged n\u2095)"), "", "uniform-soil model only; the layered profile carries groundwater in each layer\u2019s effective \u03b3"]
     ] }),
     (Array.isArray(I.soilLayers) && I.soilLayers.length > 0) && /*#__PURE__*/React.createElement("div", { className: "rpt-avoid", style: { marginBottom: "10px" } },
-      /*#__PURE__*/React.createElement("div", { style: { fontFamily: "monospace", fontSize: "9.5px", fontWeight: 700, color: "#14304a", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "3px", borderBottom: "1px solid #cbd5e1", paddingBottom: "2px" } }, "Soil profile \u00b7 layers"),
+      /*#__PURE__*/React.createElement("div", { className: "rpt-sub", style: { fontFamily: RPT_UI, fontSize: "10px", fontWeight: 700, color: "#16304F", marginBottom: "3px", breakAfter: "avoid", borderBottom: "1px solid #B9C8DB", paddingBottom: "2px" } }, "Soil profile \u00b7 layers"),
       /*#__PURE__*/React.createElement("table", { style: { width: "100%", borderCollapse: "collapse", fontSize: "9.5px" } },
         /*#__PURE__*/React.createElement("thead", null, /*#__PURE__*/React.createElement("tr", { style: { borderBottom: "1px solid #cbd5e1" } },
           ["Top (ft)", "Model", "\u03b3 (pcf)", "\u03c6 (\u00b0)", "k (pci)", "s\u1d64 (psf)", "\u03b5\u2085\u2080", "n\u2095", "k\u2095"].map((h, i) =>
@@ -6926,7 +7102,7 @@ function PrintReport({
         /*#__PURE__*/React.createElement("tbody", null, [...I.soilLayers].sort((a, b) => (a.topDepth || 0) - (b.topDepth || 0)).map((ly, i) =>
           /*#__PURE__*/React.createElement("tr", { key: i, style: { borderBottom: "1px solid #f1f5f9" } },
             /*#__PURE__*/React.createElement("td", { style: { padding: "2px 4px", textAlign: "right", fontFamily: "monospace" } }, fmt(ly.topDepth, 1)),
-            /*#__PURE__*/React.createElement("td", { style: { padding: "2px 4px", color: "#14304a" } },
+            /*#__PURE__*/React.createElement("td", { style: { padding: "2px 4px", color: "#16304F" } },
               ly.type === "sand" ? "Reese sand (1974)" : ly.type === "stiffclay" ? "Welch\u2013Reese stiff clay" : ly.type === "weakrock" ? "Reese weak rock (1997)" : "Matlock soft clay (1970)"),
             /*#__PURE__*/React.createElement("td", { style: { padding: "2px 4px", textAlign: "right", fontFamily: "monospace" } }, ly.gamma != null ? fmt(ly.gamma, 0) : "\u2014"),
             /*#__PURE__*/React.createElement("td", { style: { padding: "2px 4px", textAlign: "right", fontFamily: "monospace" } }, ly.type === "sand" ? fmt(ly.phi, 0) : "\u2014"),
@@ -7065,7 +7241,7 @@ function PrintReport({
             /*#__PURE__*/React.createElement("div", { className: "rpt-section" }, /*#__PURE__*/React.createElement(RptHeading, { n: "01a", title: "Simplified-Method Eligibility", code: "MassDOT \u00a73.10.11.1" }),
               /*#__PURE__*/React.createElement("table", { style: { borderCollapse: "collapse", width: "100%" } },
                 /*#__PURE__*/React.createElement("tbody", null, b.bc.map((c, i) => /*#__PURE__*/React.createElement("tr", { key: i },
-                  /*#__PURE__*/React.createElement("td", { style: { ...cell, color: c.ok ? "#256436" : "#b23b3b", width: "16px" } }, c.ok ? "\u2713" : "\u2717"),
+                  /*#__PURE__*/React.createElement("td", { style: { ...cell, color: c.ok ? "#256436" : "#B91C1C", width: "16px" } }, c.ok ? "\u2713" : "\u2717"),
                   /*#__PURE__*/React.createElement("td", { style: cell }, c.label),
                   /*#__PURE__*/React.createElement("td", { style: { ...cell, textAlign: "right", whiteSpace: "nowrap" } }, c.val))))),
               /*#__PURE__*/React.createElement("div", { style: { fontSize: "10px", marginTop: "4px", color: b.simplifiedApplies ? "#256436" : "#8a2a2a" } }, b.simplifiedApplies ? "\u2713 All boundary conditions satisfied \u2014 Simplified Method applies." : "\u2717 Boundary condition(s) not met \u2014 3D Space Frame Analysis Method required (\u00a73.10.11.5), outside this package.")),
@@ -7291,7 +7467,7 @@ function PrintReport({
     code: I.lateralSource === "py" ? "nonlinear p-y (built-in)" : I.lateralSource === "input" ? "p-y (LPILE)" : "linear estimate"
   }), /*#__PURE__*/React.createElement(Narr, null, I.lateralSource === "py" ? `The maximum bending moment used in the structural checks is computed by the built-in nonlinear p-y finite-difference analysis (Reese et al. 1974 sand; Matlock 1970 soft clay; Welch & Reese 1972 stiff clay; Georgiadis 1983 layering; axial thrust carried in the governing equation). Mmax = ${fmt(r.MmaxUsed != null ? r.MmaxUsed : I.Mmax, 1)} kip·ft.${I.solverFree < 0 ? ` The pile head is modeled ${fmt(Math.abs(I.solverFree),1)} ft below grade (buried pile cap); lateral soil resistance is credited from the head down at true overburden. The cap’s passive resistance is not included in this pile analysis and no near-surface p-y reduction is applied — near-surface soil should be down-rated separately if backfill is disturbed or non-structural.` : ``} The implementation is benchmarked against an LPILE 2022 project analysis (within 0.2% on Mmax); final design should be verified against a project-specific LPILE run prior to sealing.` : I.lateralSource === "input" ? `The maximum bending moment used in the structural checks is taken from an external p-y (LPILE) analysis as Mmax = ${fmt(I.Mmax, 1)} kip·ft.` : `The maximum bending moment is computed by a finite-difference beam-on-elastic-foundation analysis using a linear subgrade modulus, and reports the depth to fixity (second zero-crossing of the moment diagram) as a reference figure only \u2014 it is not used in the structural checks. This first-order result is to be verified against a project-specific LPILE analysis prior to sealing.`),
   I.lateralSource === "py" && /*#__PURE__*/React.createElement("div", { style: { margin: "6px 0 8px" } },
-    /*#__PURE__*/React.createElement("div", { style: { fontSize: "8.5px", fontWeight: 700, color: "#14304a", marginBottom: "2px" } }, "p-y ANALYSIS CONSTANTS (these govern the result — verify against the geotechnical report)"),
+    /*#__PURE__*/React.createElement("div", { style: { fontSize: "8.5px", fontWeight: 700, color: "#16304F", marginBottom: "2px" } }, "p-y ANALYSIS CONSTANTS (these govern the result — verify against the geotechnical report)"),
     /*#__PURE__*/React.createElement("table", { style: { width: "100%", borderCollapse: "collapse", fontSize: "8px" } },
       /*#__PURE__*/React.createElement("thead", null, /*#__PURE__*/React.createElement("tr", { style: { borderBottom: "1px solid #94a3b8", textAlign: "left", color: "#64748b" } },
         ["top (ft)", "model", "γ (pcf)", "φ° / su (psf)", "k (pci) / ε50"].map((h2, i) => /*#__PURE__*/React.createElement("td", { key: i, style: { padding: "1px 4px" } }, h2)))),
@@ -7567,7 +7743,7 @@ function PrintReport({
   }), /*#__PURE__*/React.createElement(Narr, null, "An unsupported length is present (stickup, scour, or soft/liquefiable soil that does not brace the shaft). The unbraced length runs from the top of the unsupported span down to the depth of rotational fixity in the competent soil below. Three bases for the fixity depth are available: the ", /*#__PURE__*/React.createElement("b", null, "Davisson & Robinson (1965) closed form"), " (preliminary; assumes uniform soil, linear springs, constant EI), the ", /*#__PURE__*/React.createElement("b", null, "deflection-matched equivalent cantilever"), " (site-specific; a STIFFNESS match to a lateral analysis \u2014 not the moment zero-crossing), and the ", /*#__PURE__*/React.createElement("b", null, "nonlinear P-crit ramp"), " (LPile Tech Manual \u00a74.4 hyperbolic-fit method on the p-y model; validated end-to-end against LPILE Example 23, Ensoft LPile 2026-13.001 \u2014 P\u1d04\u1d63 9,074 vs 9,074 kip). All three run the identical column check once the fixity depth is known. The method selected by the engineer governs \u2014 it is not chosen automatically."),
     // ---- three-method comparison, mirroring the on-screen tabs ----
     /*#__PURE__*/React.createElement("div", { className: "rpt-avoid", style: { margin: "6px 0 10px" } },
-      /*#__PURE__*/React.createElement("div", { style: { fontFamily: "monospace", fontSize: "9.5px", fontWeight: 700, color: "#14304a", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "3px", borderBottom: "1px solid #cbd5e1", paddingBottom: "2px" } },
+      /*#__PURE__*/React.createElement("div", { style: { fontFamily: "monospace", fontSize: "9.5px", fontWeight: 700, color: "#16304F", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "3px", borderBottom: "1px solid #cbd5e1", paddingBottom: "2px" } },
         "All three methods \u00b7 \u03c6c\u00b7Pn vs STL = " + fmt(r.buckling.STL, 0) + " kip"),
       /*#__PURE__*/React.createElement("table", { style: { width: "100%", borderCollapse: "collapse", fontSize: "10px" } },
         /*#__PURE__*/React.createElement("thead", null, /*#__PURE__*/React.createElement("tr", { style: { borderBottom: "1px solid #cbd5e1" } },
@@ -7577,14 +7753,14 @@ function PrintReport({
           [["davisson", "Davisson (closed form)"], ["deflmatch", "Deflection-matched"], ["pcrit", "Nonlinear P-crit"]].map(([k, nm]) => {
             const mm = r.buckling.methods[k], isSel = k === r.buckling.bklTab;
             return /*#__PURE__*/React.createElement("tr", { key: k, style: { borderBottom: "1px solid #f1f5f9", background: isSel ? "rgba(20,48,74,0.06)" : "transparent" } },
-              /*#__PURE__*/React.createElement("td", { style: { padding: "2px 4px", fontWeight: 700, color: "#14304a" } }, isSel ? "\u25b8" : ""),
-              /*#__PURE__*/React.createElement("td", { style: { padding: "2px 4px", fontWeight: isSel ? 700 : 400, color: "#14304a" } }, nm),
+              /*#__PURE__*/React.createElement("td", { style: { padding: "2px 4px", fontWeight: 700, color: "#16304F" } }, isSel ? "\u25b8" : ""),
+              /*#__PURE__*/React.createElement("td", { style: { padding: "2px 4px", fontWeight: isSel ? 700 : 400, color: "#16304F" } }, nm),
               ...(mm
                 ? [k === "pcrit" ? fmt(mm.KLeq_ft, 1) + "*" : fmt(mm.Lf, 1), fmt(mm.KL, 1), fmt(mm.slender, 0), fmt(mm.Pe, 0), fmt(mm.Pn, 0), fmt(mm.phiPn, 0)]
                     .map((v, i) => /*#__PURE__*/React.createElement("td", { key: i, style: { padding: "2px 4px", textAlign: "right", fontFamily: "monospace", fontWeight: isSel ? 700 : 400 } }, v))
                 : [/*#__PURE__*/React.createElement("td", { key: "na", colSpan: 6, style: { padding: "2px 4px", textAlign: "right", fontStyle: "italic", color: "#94a3b8" } },
                     k === "pcrit" ? "ramp not run" : (r.buckling.deflDegenerate ? "match degenerate \u2014 L_equiv \u2264 L\u1d64" : "no lateral deflection available"))]),
-              /*#__PURE__*/React.createElement("td", { style: { padding: "2px 4px", textAlign: "right", fontWeight: 700, color: mm ? (mm.pass ? "#2f6f3e" : "#b23b3b") : "#94a3b8" } },
+              /*#__PURE__*/React.createElement("td", { style: { padding: "2px 4px", textAlign: "right", fontWeight: 700, color: mm ? (mm.pass ? "#2f6f3e" : "#B91C1C") : "#94a3b8" } },
                 mm ? (mm.pass ? "OK" : "NG") : "\u2014"));
           }))),
       /*#__PURE__*/React.createElement("p", { style: { fontSize: "8.5px", color: "#64748b", marginTop: "3px", lineHeight: 1.5 } },
@@ -7667,7 +7843,7 @@ function PrintReport({
     pass: r.buckling.buck_pass,
     eq: `\\phi_c P_n = ${fmt(r.buckling.phiPn_buck, 1)}\\ \\text{kip} \\;${r.buckling.buck_pass ? '\\geq' : '<'}\\; STL = ${fmt(I.STL, 0)}\\ \\text{kip}`
   }), pcr && pcr.ok && /*#__PURE__*/React.createElement("div", { style: { marginTop: "8px", padding: "7px 9px", border: "1px solid #cbd5e1", borderRadius: "3px", background: "#f8fafc" } },
-    /*#__PURE__*/React.createElement("div", { style: { fontSize: "9px", fontWeight: 700, color: "#14304a", marginBottom: "3px" } }, "Soil-supported critical buckling (nonlinear p-y ramp \u2014 rigorous cross-check)"),
+    /*#__PURE__*/React.createElement("div", { style: { fontSize: "9px", fontWeight: 700, color: "#16304F", marginBottom: "3px" } }, "Soil-supported critical buckling (nonlinear p-y ramp \u2014 rigorous cross-check)"),
     /*#__PURE__*/React.createElement("div", { style: { fontSize: "8.5px", color: "#334", marginBottom: "2px" } },
       "Axial thrust ramped on the nonlinear p-y model to instability: P", /*#__PURE__*/React.createElement("sub", null, "cr"), " = ", /*#__PURE__*/React.createElement("b", null, fmt(pcr.Pcr, 0), " kip"),
       pcr.voidBelowGrade_ft > 0 ? [" \u00b7 soil springs REMOVED over the top ", /*#__PURE__*/React.createElement("b", { key: "v" }, fmt(pcr.voidBelowGrade_ft, 1), " ft"), " below the mudline (declared scour / void / soft layer), so L", /*#__PURE__*/React.createElement("sub", { key: "u" }, "u"), " = " + fmt(pcr.LuModelled_ft, 1) + " ft of the shaft carries no lateral resistance in the model"] : "",
@@ -7716,7 +7892,7 @@ function PrintReport({
             /*#__PURE__*/React.createElement(Plot, {
               data: [{ x: pcr.hist.filter(p => !p.diverged && isFinite(p.y0) && isFinite(p.Q)).map(p => Math.abs(p.y0)), y: pcr.hist.filter(p => !p.diverged && isFinite(p.y0) && isFinite(p.Q)).map(p => p.Q), mode: "lines+markers", line: { color: C.accent, width: 2 }, marker: { size: 4 },
                 hoverinfo: "text", text: pcr.hist.filter(p => !p.diverged && isFinite(p.y0) && isFinite(p.Q)).map(p => "Q=" + fmt(p.Q, 0) + " kip<br>y₀=" + fmt(Math.abs(p.y0), 3) + " in<br>Mmax=" + fmt(p.Mmax, 1) + " kip·ft") },
-                { x: [Math.abs(isFinite(pcr.y0_base) ? pcr.y0_base : 0)], y: [pcr.at.STL], mode: "markers", marker: { color: "#14304a", size: 8, symbol: "diamond" }, hoverinfo: "text", text: ["design STL"] }],
+                { x: [Math.abs(isFinite(pcr.y0_base) ? pcr.y0_base : 0)], y: [pcr.at.STL], mode: "markers", marker: { color: "#16304F", size: 8, symbol: "diamond" }, hoverinfo: "text", text: ["design STL"] }],
               layout: baseLayout({ height: 200, margin: { l: 50, r: 8, t: 8, b: 34 }, showlegend: false,
                 xaxis: { title: { text: "head deflection (in)", font: { size: 9 } }, gridcolor: C.grid },
                 yaxis: { title: { text: "axial thrust Q (kip)", font: { size: 9 } }, gridcolor: C.grid } }), height: 200 })),
@@ -7741,7 +7917,7 @@ function PrintReport({
           /*#__PURE__*/React.createElement("span", null, " Mode shape characterized by probing the equilibrium solution at the governing thrust (there is no separate max-anywhere detector \u2014 the hyperbolic fit uses head deflection per LPile Tech Manual \u00a74.4.3, and the full deflected shape at that thrust is inspected for interior bowing)."),
           /*#__PURE__*/React.createElement("br"), /*#__PURE__*/React.createElement("span", { className: "text-slate-500" }, "Note: the model never restrains head translation (only rotation, per the head-fixity setting), so this finds sway and sway-coupled interior modes. A pile head rigidly braced against sidesway by the cap/superstructure buckles at a higher load; for that truly-braced case this P", /*#__PURE__*/React.createElement("sub", null, "cr"), " is conservative."))),
     pcr.trace && pcr.trace.length > 1 && /*#__PURE__*/React.createElement("div", { className: "rpt-avoid", style: { marginTop: "6px" } },
-      /*#__PURE__*/React.createElement("div", { style: { fontFamily: "monospace", fontSize: "8.5px", fontWeight: 700, color: "#14304a", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "2px" } },
+      /*#__PURE__*/React.createElement("div", { style: { fontFamily: "monospace", fontSize: "8.5px", fontWeight: 700, color: "#16304F", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "2px" } },
         "Ramp trace \u00b7 every solve in the search (" + pcr.trace.length + " steps)"),
       /*#__PURE__*/React.createElement("table", { style: { width: "100%", borderCollapse: "collapse", fontSize: "8.5px" } },
         /*#__PURE__*/React.createElement("thead", null, /*#__PURE__*/React.createElement("tr", { style: { borderBottom: "1px solid #cbd5e1" } },
@@ -7758,11 +7934,11 @@ function PrintReport({
               /*#__PURE__*/React.createElement("td", { style: { padding: "1px 4px", textAlign: "right", fontFamily: "monospace" } }, fmt(t.Q, 0)),
               /*#__PURE__*/React.createElement("td", { style: { padding: "1px 4px", textAlign: "right", fontFamily: "monospace", color: "#64748b" } }, I.STL > 0 ? fmt(t.Q / I.STL, 2) : "\u2014"),
               t.diverged
-                ? /*#__PURE__*/React.createElement("td", { colSpan: 5, style: { padding: "1px 4px", textAlign: "right", fontStyle: "italic", color: "#b23b3b" } }, "solve diverged")
+                ? /*#__PURE__*/React.createElement("td", { colSpan: 5, style: { padding: "1px 4px", textAlign: "right", fontStyle: "italic", color: "#B91C1C" } }, "solve diverged")
                 : [t.y0, t.ymax, t.peakFt, t.Mmax, t.soft != null ? t.soft * 100 : null].map((v, k) =>
                     /*#__PURE__*/React.createElement("td", { key: k, style: { padding: "1px 4px", textAlign: "right", fontFamily: "monospace" } },
                       v == null ? "\u2014" : fmt(v, k === 0 || k === 1 ? 3 : (k === 4 ? 0 : 1)))),
-              /*#__PURE__*/React.createElement("td", { style: { padding: "1px 4px", textAlign: "right", fontFamily: "monospace", fontWeight: unstable ? 700 : 400, color: unstable ? "#b23b3b" : "#2f6f3e" } },
+              /*#__PURE__*/React.createElement("td", { style: { padding: "1px 4px", textAlign: "right", fontFamily: "monospace", fontWeight: unstable ? 700 : 400, color: unstable ? "#B91C1C" : "#2f6f3e" } },
                 unstable ? "UNSTABLE" : "stable"));
           });
         })())),
@@ -7789,10 +7965,10 @@ function PrintReport({
     // Geotechnical depth to fixity -- REFERENCE ONLY
     /*#__PURE__*/React.createElement("div", { className: "rpt-avoid", style: { border: "1px solid #cbd5e1", background: "#f8fafc", padding: "6px 8px", margin: "6px 0" } },
       /*#__PURE__*/React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "3px" } },
-        /*#__PURE__*/React.createElement("span", { style: { fontFamily: "monospace", fontSize: "9.5px", fontWeight: 700, color: "#14304a", textTransform: "uppercase", letterSpacing: "0.06em" } }, "Geotechnical depth to fixity"),
-        /*#__PURE__*/React.createElement("span", { style: { fontFamily: "monospace", fontSize: "8px", background: "rgba(20,48,74,0.10)", color: "#14304a", padding: "1px 5px" } }, "REFERENCE ONLY")),
+        /*#__PURE__*/React.createElement("span", { style: { fontFamily: "monospace", fontSize: "9.5px", fontWeight: 700, color: "#16304F", textTransform: "uppercase", letterSpacing: "0.06em" } }, "Geotechnical depth to fixity"),
+        /*#__PURE__*/React.createElement("span", { style: { fontFamily: "monospace", fontSize: "8px", background: "rgba(20,48,74,0.10)", color: "#16304F", padding: "1px 5px" } }, "REFERENCE ONLY")),
       pyRes.zFix2 != null
-        ? /*#__PURE__*/React.createElement("div", { style: { fontFamily: "monospace", fontSize: "12px", color: "#14304a", marginBottom: "3px" } },
+        ? /*#__PURE__*/React.createElement("div", { style: { fontFamily: "monospace", fontSize: "12px", color: "#16304F", marginBottom: "3px" } },
             /*#__PURE__*/React.createElement("b", null, "z_fix = " + fmt(pyRes.zFix2, 1) + " ft"),
             /*#__PURE__*/React.createElement("span", { style: { fontSize: "9.5px", color: "#64748b" } },
               " below mudline \u00b7 2nd zero-crossing of the moment diagram"))
@@ -7826,7 +8002,7 @@ function PrintReport({
     ] }),
     // ---- per-layer p-y model basis ----
     (Array.isArray(I.soilLayers) && I.soilLayers.length > 0) && /*#__PURE__*/React.createElement("div", { className: "rpt-avoid", style: { marginBottom: "10px" } },
-      /*#__PURE__*/React.createElement("div", { style: { fontFamily: "monospace", fontSize: "9.5px", fontWeight: 700, color: "#14304a", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "3px", borderBottom: "1px solid #cbd5e1", paddingBottom: "2px" } },
+      /*#__PURE__*/React.createElement("div", { style: { fontFamily: "monospace", fontSize: "9.5px", fontWeight: 700, color: "#16304F", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "3px", borderBottom: "1px solid #cbd5e1", paddingBottom: "2px" } },
         "p-y constitutive model \u00b7 by layer"),
       /*#__PURE__*/React.createElement("table", { style: { width: "100%", borderCollapse: "collapse", fontSize: "9.5px" } },
         /*#__PURE__*/React.createElement("thead", null, /*#__PURE__*/React.createElement("tr", { style: { borderBottom: "1px solid #cbd5e1" } },
@@ -7843,7 +8019,7 @@ function PrintReport({
           const bad = meta.cal.indexOf("UNCALIBRATED") === 0 || meta.cal.indexOf("Free-water") === 0;
           return /*#__PURE__*/React.createElement("tr", { key: i, style: { borderBottom: "1px solid #f1f5f9" } },
             /*#__PURE__*/React.createElement("td", { style: { padding: "2px 4px", fontFamily: "monospace" } }, fmt(ly.topDepth, 1)),
-            /*#__PURE__*/React.createElement("td", { style: { padding: "2px 4px", color: "#14304a", fontWeight: 600 } }, meta.crit),
+            /*#__PURE__*/React.createElement("td", { style: { padding: "2px 4px", color: "#16304F", fontWeight: 600 } }, meta.crit),
             /*#__PURE__*/React.createElement("td", { style: { padding: "2px 4px", color: "#475569" } }, meta.ref),
             /*#__PURE__*/React.createElement("td", { style: { padding: "2px 4px", fontSize: "8.5px", color: bad ? "#8a5a1f" : "#2f6f3e" } }, meta.cal));
         }))),
@@ -7851,7 +8027,7 @@ function PrintReport({
         "Calibration status refers to whether this app's implementation of the model has been benchmarked node-for-node against an LPILE run. Uncalibrated models are believed correct per the published formulation but have not been independently verified; treat their results as preliminary and confirm against a project-specific LPILE analysis.")),
     // ---- response profile table ----
     (pyRes.records && pyRes.records.length > 0) && /*#__PURE__*/React.createElement("div", { className: "rpt-avoid", style: { marginBottom: "6px" } },
-      /*#__PURE__*/React.createElement("div", { style: { fontFamily: "monospace", fontSize: "9.5px", fontWeight: 700, color: "#14304a", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "3px", borderBottom: "1px solid #cbd5e1", paddingBottom: "2px" } },
+      /*#__PURE__*/React.createElement("div", { style: { fontFamily: "monospace", fontSize: "9.5px", fontWeight: 700, color: "#16304F", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "3px", borderBottom: "1px solid #cbd5e1", paddingBottom: "2px" } },
         "Response profile \u00b7 tabulated"),
       (() => {
         const recs = pyRes.records;
@@ -7878,7 +8054,7 @@ function PrintReport({
     null),
   /*#__PURE__*/React.createElement("div", {
     className: "rpt-section rpt-pagebreak"
-  }, pyRes && pyRes.ok && pyRes.records && /*#__PURE__*/React.createElement("div", { style: { pageBreakInside: "avoid", marginBottom: "12px" } },
+  }, pyRes && pyRes.ok && pyRes.records && /*#__PURE__*/React.createElement("div", { className: "rpt-grp", style: { pageBreakInside: "avoid", marginBottom: "12px" } },
     /*#__PURE__*/React.createElement(RptHeading, { n: "02F", title: "Figures — Lateral Analysis (nonlinear p-y)" }),
     /*#__PURE__*/React.createElement("div", { style: { border: "1px solid #e2e8f0", padding: "6px", background: "#fff" } },
       /*#__PURE__*/React.createElement(LpileProfilePlot, { records: pyRes.records })),
@@ -7888,7 +8064,7 @@ function PrintReport({
       /*#__PURE__*/React.createElement("div", { style: { border: "1px solid #e2e8f0", padding: "6px", background: "#fff" } },
         /*#__PURE__*/React.createElement(Plot, {
           data: caseRes.rows.filter(r2 => r2.prof).map((r2, i) => {
-            const cols = ["#14304a", "#c9622e", "#2f6f3e", "#3d6a94", "#8a5a1f", "#7a4a7a"];
+            const cols = ["#16304F", "#c9622e", "#2f6f3e", "#3d6a94", "#8a5a1f", "#7a4a7a"];
             return { x: r2.prof.m, y: r2.prof.d, mode: "lines", line: { color: cols[i % 6], width: 1.6 }, name: r2.name, hoverinfo: "skip" };
           }),
           layout: baseLayout({ height: 240, margin: { l: 46, r: 8, t: 8, b: 34 }, showlegend: true, legend: { font: { size: 8, family: PLOT_FONT }, x: 1, xanchor: "right", y: 0.02 },
@@ -7896,13 +8072,13 @@ function PrintReport({
             yaxis: { title: { text: "depth below grade (ft)", font: { size: 9 } }, autorange: "reversed", gridcolor: C.grid } }), height: 240 })),
       /*#__PURE__*/React.createElement("div", { style: { fontSize: "7.5px", color: "#94a3b8", marginTop: "2px" } },
         "Figure F-2: moment profiles, all LRFD load cases overlaid (per-case p-y solves)."))),
-  r.capDist && r.capDist.enable && /*#__PURE__*/React.createElement("div", { style: { marginBottom: "12px" } },
+  r.capDist && r.capDist.enable && /*#__PURE__*/React.createElement("div", { className: "rpt-grp", style: { marginBottom: "12px" } },
     /*#__PURE__*/React.createElement(RptHeading, { n: "11", title: "Pile Group \u2014 Rigid-Cap Load Distribution" }),
     /*#__PURE__*/React.createElement("div", { style: { fontSize: "8.5px", color: "#334", marginBottom: "4px" } },
       "Generalized elastic bolt-group statics (biaxial bending incl. product term S", /*#__PURE__*/React.createElement("sub", null, "xy"), "). ", r.capDist.nLoads, " load(s) resolved to the group centroid; rigid cap, identical vertical piles, pinned heads (axial + overturning; equal shear share)."),
-    /*#__PURE__*/React.createElement("div", { style: { fontSize: "8.5px", color: "#14304a", marginBottom: "3px" } },
+    /*#__PURE__*/React.createElement("div", { style: { fontSize: "8.5px", color: "#16304F", marginBottom: "3px" } },
       "Group: ", r.capDist.n, " piles \u00b7 centroid (", fmt(r.capDist.cx, 2), ", ", fmt(r.capDist.cy, 2), ") ft \u00b7 S", /*#__PURE__*/React.createElement("sub", null, "xx"), " = ", fmt(r.capDist.Sxx, 1), ", S", /*#__PURE__*/React.createElement("sub", null, "yy"), " = ", fmt(r.capDist.Syy, 1), ", S", /*#__PURE__*/React.createElement("sub", null, "xy"), " = ", fmt(r.capDist.Sxy, 1), " ft\u00b2"),
-    /*#__PURE__*/React.createElement("div", { style: { fontSize: "8.5px", color: "#14304a", marginBottom: "4px" } },
+    /*#__PURE__*/React.createElement("div", { style: { fontSize: "8.5px", color: "#16304F", marginBottom: "4px" } },
       "Resultant at centroid: \u03a3P = ", fmt(r.capDist.Pv, 1), " kip, \u03a3V = (", fmt(r.capDist.Vx, 1), ", ", fmt(r.capDist.Vy, 1), ") kip, \u03a3M", /*#__PURE__*/React.createElement("sub", null, "eff"), " = (", fmt(r.capDist.Mx_eff, 1), ", ", fmt(r.capDist.My_eff, 1), ") kip\u00b7ft (incl. shear\u00d7height and vertical\u00d7offset)."),
     r.capDist.capWt_incl && /*#__PURE__*/React.createElement("div", { style: { fontSize: "8px", color: "#64748b", marginBottom: "3px" } },
       "Includes cap self-weight + soil surcharge \u03b3DC\u00d7W = ", fmt(r.capDist.dlFactor, 2), "\u00d7", fmt(r.capDist.capWeight_nom, 1), " = ", fmt(r.capDist.capWeight, 1), " kip (FHWA Eq. 8-79), applied at the cap centroid.",
@@ -7918,21 +8094,21 @@ function PrintReport({
         /*#__PURE__*/React.createElement("td", { style: { padding: "2px 5px" } }, fmt(p.yg, 2)),
         /*#__PURE__*/React.createElement("td", { style: { padding: "2px 5px", textAlign: "right", color: "#64748b" } }, fmt(p.base, 1)),
         /*#__PURE__*/React.createElement("td", { style: { padding: "2px 5px", textAlign: "right", color: "#64748b" } }, (p.bend >= 0 ? "+" : "") + fmt(p.bend, 1)),
-        /*#__PURE__*/React.createElement("td", { style: { padding: "2px 5px", textAlign: "right", fontWeight: 600, color: p.axial < 0 ? "#b23b3b" : "#14304a" } }, fmt(p.axial, 1)),
+        /*#__PURE__*/React.createElement("td", { style: { padding: "2px 5px", textAlign: "right", fontWeight: 600, color: p.axial < 0 ? "#B91C1C" : "#16304F" } }, fmt(p.axial, 1)),
         /*#__PURE__*/React.createElement("td", { style: { padding: "2px 5px", textAlign: "right", color: "#64748b" } }, fmt(p.Vres, 1))))),
       /*#__PURE__*/React.createElement("tfoot", null, /*#__PURE__*/React.createElement("tr", { style: { borderTop: "1px solid #94a3b8", fontWeight: 600 } },
         /*#__PURE__*/React.createElement("td", { colSpan: 5, style: { padding: "2px 5px" } }, "Max compression / max uplift"),
         /*#__PURE__*/React.createElement("td", { style: { padding: "2px 5px", textAlign: "right" } }, fmt(r.capDist.maxComp, 1)),
-        /*#__PURE__*/React.createElement("td", { style: { padding: "2px 5px", textAlign: "right", color: r.capDist.anyUplift ? "#b23b3b" : "#14304a" } }, fmt(r.capDist.maxUplift, 1))))),
+        /*#__PURE__*/React.createElement("td", { style: { padding: "2px 5px", textAlign: "right", color: r.capDist.anyUplift ? "#B91C1C" : "#16304F" } }, fmt(r.capDist.maxUplift, 1))))),
     /*#__PURE__*/React.createElement("div", { style: { fontSize: "7.5px", color: "#94a3b8", marginTop: "3px" } },
       "\u25c9 = design pile (checks run against this). ", r.capDist.anyUplift ? "Uplift present \u2014 verify tension/uplift. " : "", "Working-load elastic distribution; for flexible caps or battered piles use a full group model."),
     I.loadFromGroup && /*#__PURE__*/React.createElement("div", { style: { fontSize: "8px", color: "#8a5a1f", marginTop: "3px", fontWeight: 600 } },
       "Load cases in this report are driven by the group: design pile #", r.capDist.selId, " axial = ", fmt(r.capDist.sel.axial, 1), " kip, shear = ", fmt(r.capDist.sel.Vres, 1), " kip, M", /*#__PURE__*/React.createElement("sub", null, "head"), " = 0.")),
-  /*#__PURE__*/React.createElement(RptHeading, {
+  /*#__PURE__*/React.createElement("div", { className: "rpt-grp" }, /*#__PURE__*/React.createElement(RptHeading, {
     n: "S",
     title: "Summary of Results"
   }), caseRes && caseRes.rows && /*#__PURE__*/React.createElement("div", { style: { marginBottom: "10px" } },
-    /*#__PURE__*/React.createElement("div", { style: { fontSize: "9px", fontWeight: 700, color: "#14304a", marginBottom: "3px" } },
+    /*#__PURE__*/React.createElement("div", { style: { fontSize: "9px", fontWeight: 700, color: "#16304F", marginBottom: "3px" } },
       "LRFD LOAD-CASE ENVELOPE (each case: own p-y analysis and \u03c6 set; Extreme Event \u03c6=1.0, uplift 0.8, AASHTO 10.5.5.3)"),
     /*#__PURE__*/React.createElement("table", { style: { width: "100%", borderCollapse: "collapse", fontSize: "8.5px" } },
       /*#__PURE__*/React.createElement("thead", null, /*#__PURE__*/React.createElement("tr", { style: { borderBottom: "1px solid #94a3b8", textAlign: "left", color: "#64748b" } },
@@ -7944,7 +8120,7 @@ function PrintReport({
         /*#__PURE__*/React.createElement("td", { style: { padding: "2px 4px" } }, r0.Mmax != null ? fmt(r0.Mmax, 1) : "\u2014"),
         /*#__PURE__*/React.createElement("td", { style: { padding: "2px 4px" } }, r0.y0 != null ? fmt(r0.y0, 3) : "\u2014"),
         ["geoR", "flexR", "combR", "buckR"].map((k, j) => /*#__PURE__*/React.createElement("td", { key: j, style: { padding: "2px 4px" } }, r0[k] != null ? fmt(r0[k], 2) : "\u2014")),
-        /*#__PURE__*/React.createElement("td", { style: { padding: "2px 4px", fontWeight: 700, color: r0.pass ? "#2f6f3e" : "#b23b3b" } }, r0.pass ? "PASS" : "FAIL"))))),
+        /*#__PURE__*/React.createElement("td", { style: { padding: "2px 4px", fontWeight: 700, color: r0.pass ? "#2f6f3e" : "#B91C1C" } }, r0.pass ? "PASS" : "FAIL"))))),
     /*#__PURE__*/React.createElement("div", { style: { fontSize: "7.5px", color: "#94a3b8", marginTop: "2px" } },
       "Envelope computed " + caseRes.at + ". Service rows report deflection only. The detailed module calculations that follow reflect the ACTIVE case.")),
   /*#__PURE__*/React.createElement("table", {
@@ -7954,8 +8130,9 @@ function PrintReport({
     }
   }, /*#__PURE__*/React.createElement("thead", null, /*#__PURE__*/React.createElement("tr", {
     style: {
-      background: "#14304a",
-      color: "#fff"
+      background: "#DCE6F1",
+      color: "#16304F",
+      fontFamily: RPT_UI
     }
   }, /*#__PURE__*/React.createElement("th", {
     style: {
@@ -8025,17 +8202,17 @@ function PrintReport({
       ...cell,
       textAlign: "center",
       fontWeight: 700,
-      color: pass ? "#2f7d4f" : "#b23b3b"
+      color: pass ? "#047857" : "#B91C1C"
     }
   }, pass ? "OK" : "NG"))))), /*#__PURE__*/React.createElement("div", {
     style: {
       marginTop: "10px",
       padding: "8px 12px",
-      border: `1.5px solid ${r.allPass ? "#2f7d4f" : "#b23b3b"}`,
+      border: `1.5px solid ${r.allPass ? "#047857" : "#B91C1C"}`,
       fontSize: "12px",
       fontFamily: serif
     }
-  }, /*#__PURE__*/React.createElement("b", null, "Conclusion:\xA0"), r.allPass ? (I.pileType === "iab" ? "The integral abutment pile satisfies the MassDOT Simplified Method: all \u00a73.10.11.1 boundary conditions are met and the factored gravity load per pile is within the tabulated capacity. Pile tip elevation shall be set at the required length shown; thermal/skew effects are embedded in the tabulated Pu per \u00a73.10.11.3." : I.pileType === "hpile" ? "All evaluated strength and geotechnical checks are satisfied for the driven H-pile as designed. Nominal geotechnical resistance is to be field-verified by dynamic testing / driving criteria per the resistance factors used." : "All evaluated strength and load-test checks are satisfied for the micropile as designed. Geotechnical bond resistance is to be confirmed by the specified verification and proof load tests.") : (I.pileType === "iab" ? "The Simplified Method is not satisfied \u2014 either a boundary condition fails (requiring the 3D Space Frame Analysis Method, \u00a73.10.11.5) or the gravity demand exceeds the tabulated capacity (requiring a larger section or more piles). Revise before sealing." : "One or more checks require review (marked NG above). The design must be revised until all applicable checks are satisfied before this package is sealed."))), /*#__PURE__*/React.createElement("div", {
+  }, /*#__PURE__*/React.createElement("b", null, "Conclusion:\xA0"), r.allPass ? (I.pileType === "iab" ? "The integral abutment pile satisfies the MassDOT Simplified Method: all \u00a73.10.11.1 boundary conditions are met and the factored gravity load per pile is within the tabulated capacity. Pile tip elevation shall be set at the required length shown; thermal/skew effects are embedded in the tabulated Pu per \u00a73.10.11.3." : I.pileType === "hpile" ? "All evaluated strength and geotechnical checks are satisfied for the driven H-pile as designed. Nominal geotechnical resistance is to be field-verified by dynamic testing / driving criteria per the resistance factors used." : "All evaluated strength and load-test checks are satisfied for the micropile as designed. Geotechnical bond resistance is to be confirmed by the specified verification and proof load tests.") : (I.pileType === "iab" ? "The Simplified Method is not satisfied \u2014 either a boundary condition fails (requiring the 3D Space Frame Analysis Method, \u00a73.10.11.5) or the gravity demand exceeds the tabulated capacity (requiring a larger section or more piles). Revise before sealing." : "One or more checks require review (marked NG above). The design must be revised until all applicable checks are satisfied before this package is sealed.")))), /*#__PURE__*/React.createElement("div", {
     style: {
       marginTop: "14px",
       paddingTop: "8px",
@@ -8045,7 +8222,7 @@ function PrintReport({
       fontFamily: "monospace",
       lineHeight: 1.5
     }
-  }, "Computed checks follow AASHTO LRFD Bridge Design Specifications and FHWA NHI-05-039 methodology. This calculation package is a design aid; all results, assumptions, and input load effects must be independently verified and sealed by a licensed Professional Engineer prior to use for construction. " + (I.pileType === "hpile" ? "Nominal geotechnical resistances are from static analysis and must be field-verified by dynamic testing / driving criteria (AASHTO Table 10.5.5.2.3-1)." : "Bond values are preliminary (AASHTO Table C10.9.3.5.2-1) and must be confirmed by load testing.") + " — ", I.projNum, " · ", today));
+  }, "Computed checks follow AASHTO LRFD Bridge Design Specifications and FHWA NHI-05-039 methodology. This calculation package is a design aid; all results, assumptions, and input load effects must be independently verified and sealed by a licensed Professional Engineer prior to use for construction. " + (I.pileType === "hpile" ? "Nominal geotechnical resistances are from static analysis and must be field-verified by dynamic testing / driving criteria (AASHTO Table 10.5.5.2.3-1)." : "Bond values are preliminary (AASHTO Table C10.9.3.5.2-1) and must be confirmed by load testing.") + " — ", I.projNum, " · ", today)));
 }
 
 /* ---- Nonlinear p-y panel: layer table with real soil parameters ---- */
@@ -8455,7 +8632,7 @@ function LoadCasesCard({ cases, updCases, applyCase, runAllCases, caseRes, I, up
   const worst = key => { if (!rr) return -1; let w = -1, m = -1; rr.forEach((r0, i) => { if (r0[key] != null && r0[key] > m) { m = r0[key]; w = i; } }); return w; };
   const wG = worst('geoR'), wF = worst('flexR'), wC = worst('combR'), wB = worst('buckR');
   const fmtR = v => v == null ? "—" : fmt(v, 2);
-  return /*#__PURE__*/React.createElement("div", { className: "rounded-sm border border-slate-300 bg-white p-3 mb-4" },
+  return /*#__PURE__*/React.createElement("div", { className: "rounded-sm border border-slate-300 bg-white p-3 mb-4", "data-otab-fixed": "summary" },
     /*#__PURE__*/React.createElement("div", { className: "flex items-center justify-between mb-1" },
       /*#__PURE__*/React.createElement("span", { className: "text-[11px] font-mono-tech text-[var(--blueprint)] uppercase tracking-wider" }, "LRFD load cases"),
       /*#__PURE__*/React.createElement("span", { className: "flex items-center gap-2" },
@@ -8601,7 +8778,7 @@ function UtilizationDashboard({ r, I }) {
   rows.sort((a, b) => b.dcr - a.dcr);
   const gov = rows.length ? rows[0] : null;
   const barColor = d => d > 1.0 ? "#b23b3b" : d > 0.85 ? "#c9622e" : d > 0.6 ? "#8a6d1f" : "#2f6f3e";
-  return /*#__PURE__*/React.createElement("div", { className: "bg-white rounded-md border border-slate-200 card-sh p-3" },
+  return /*#__PURE__*/React.createElement("div", { className: "bg-white rounded-md border border-slate-200 card-sh p-3", "data-otab-fixed": "summary" },
     /*#__PURE__*/React.createElement("div", { className: "flex items-baseline justify-between mb-2" },
       /*#__PURE__*/React.createElement("div", { className: "text-[11px] font-mono-tech text-[var(--blueprint)] uppercase tracking-wider" }, "Summary of checks · demand / capacity"),
       gov && /*#__PURE__*/React.createElement("div", { className: "text-[10px] font-mono-tech", style: { color: barColor(gov.dcr) } },
@@ -8633,6 +8810,7 @@ function UtilizationDashboard({ r, I }) {
    index bar and the summary-of-checks rows. Presentation-only. */
 function jumpToModule(id) {
   const s = document.getElementById(id); if (!s) return false;
+  showOutTabOf(s); // output tabs: select the module's tab first
   const t = s.querySelector(".module-toggle");
   if (t && t.getAttribute("aria-expanded") === "false") t.click();
   const smooth = !(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
@@ -10847,6 +11025,10 @@ function App() {
   // and the modal must be reachable from there.
   const [cycInfoOpen, setCycInfoOpen] = useState(false);
   const [previewReport, setPreviewReport] = useState(false);
+  // UI: print-section chooser (per-browser selection, not project data)
+  const [printDlg, setPrintDlg] = useState(false);
+  const [rptSel, setRptSelState] = useState(() => loadRptSel());
+  const setRptSel = v => { setRptSelState(v); saveRptSel(v); };
   // UI: active tab of the left input rail (presentation state, not an input)
   const [railTab, setRailTab] = useState("pile");
   const [lpileParse, setLpileParse] = useState(() => loadSavedLpile()); // {ok, summary, warnings, records, fileName, ...} — persisted
@@ -10871,7 +11053,8 @@ function App() {
     setOpen(s => ({ ...s, [openKey]: true }));
     setTimeout(() => {
       const el = document.getElementById("module-" + (domIdx != null ? domIdx : openKey));
-      if (el && el.scrollIntoView) el.scrollIntoView({ behavior: "smooth", block: "start" });
+      if (el) showOutTabOf(el); // output tabs: select the module's tab first
+      if (el && el.scrollIntoView) setTimeout(() => el.scrollIntoView({ behavior: "smooth", block: "start" }), 30);
     }, 60);
   };
 
@@ -11047,10 +11230,25 @@ function App() {
   }
   const ALL_MODULES = [1, 2, 3, 4, 5, 55, 6, 7, 8, 9, 10, 11];
   function printReport() {
-    // The PrintReport component renders independently of the on-screen modules,
-    // so we can print directly.
-    window.print();
+    // UI: every print button opens the print-section chooser first.
+    setPrintDlg(true);
   }
+  function doPrint() {
+    // The PrintReport component renders independently of the on-screen modules,
+    // so we can print directly (after the chooser closes and the report is fitted).
+    setPrintDlg(false);
+    setTimeout(() => { fitPrintReport(); window.print(); }, 60);
+  }
+  useEffect(() => {
+    const f = () => fitPrintReport();
+    window.addEventListener("beforeprint", f);
+    return () => window.removeEventListener("beforeprint", f);
+  }, []);
+  useEffect(() => {
+    if (!previewReport) return;
+    const t = setTimeout(() => fitPrintReport(document.querySelector(".report-preview-show .print-only")), 400);
+    return () => clearTimeout(t);
+  }, [previewReport, rptSel]);
 
   // ---- LPILE file import ----
   async function handleLpileFile(file) {
@@ -12268,13 +12466,22 @@ function App() {
     r: r,
     caseRes: caseRes,
     pyRes: pyRes,
-    pcr: pcr
+    pcr: pcr,
+    sel: rptSel
   }))), /*#__PURE__*/React.createElement(PrintReport, {
     I: I,
     r: r,
     caseRes: caseRes,
     pyRes: pyRes,
-    pcr: pcr
+    pcr: pcr,
+    sel: rptSel
+  }), /*#__PURE__*/React.createElement(PrintChooser, {
+    open: printDlg,
+    sel: rptSel,
+    setSel: setRptSel,
+    onClose: () => setPrintDlg(false),
+    onPrint: doPrint,
+    onPreview: () => { setPrintDlg(false); setPreviewReport(true); window.scrollTo(0, 0); }
   }), /*#__PURE__*/React.createElement("div", {
     className: "app-shell",
     style: previewReport ? {
@@ -13112,6 +13319,7 @@ function App() {
     I.pileType === "iab" && /*#__PURE__*/React.createElement("div", {
       className: "text-[10px] text-slate-500 mt-1.5 leading-snug"
     }, "Integral abutment pile mode — MassDOT Bridge Manual Part I \u00a73.10 Simplified Method. Single row of vertical H-piles (HP10\u00d757 or HP12\u00d784, Grade 50), webs parallel to the abutment, bending about the weak axis under thermal movement. Capacity is read from MassDOT's pre-computed tables (thermal + skew effects already embedded) \u2014 no p-y analysis required for the non-scour case. Sanity-check aid only \u2014 independent PE review required.")),
+  /*#__PURE__*/React.createElement(OutTabs, { pileType: I.pileType }),
   /*#__PURE__*/(I.pileType !== "iab") && /*#__PURE__*/React.createElement(LoadCasesCard, { cases: cases, updCases: updCases, applyCase: applyCase, runAllCases: runAllCases, caseRes: caseRes, I: I, updCasesLimit: v => { set('deflLimit', v); setCaseRes(null); }, activeIdx: activeIdx, setActive: i => set('activeCase', i), onRowEdit: (i, k, v) => {
     const next = cases.map((c, j) => j === i ? { ...c, [k]: v } : c);
     set('loadCases', next); setCaseRes(null);
@@ -15180,6 +15388,146 @@ function RailTabs({ tab, setTab, pileType }) {
 }
 
 /* ============================================================
+   OUTPUT TABS (UI only, 2026-10-10)
+   ------------------------------------------------------------
+   The output column is split into tabs. Every module stays rendered (the
+   check index, the report badges and the scroll targets read them); the
+   blocks of the other tabs are hidden with CSS, as the input rail does.
+   Anything that jumps to a module (check-index chips, summary rows, "apply
+   to Module 02") selects its tab first (showOutTabOf). The active tab is
+   remembered per browser in micropile_lrfd_outTab_v1 (not project data).
+============================================================ */
+const OUT_TAB_KEY = "micropile_lrfd_outTab_v1";
+const OUT_TABS = [["summary", "Summary"], ["geom", "Geometry & limits"], ["geo", "Geotechnical"], ["simp", "Simplified Method"], ["tier2", "Tier 2"], ["lat", "Lateral (p-y)"], ["struct", "Structural"], ["cap", "Cap & connection"], ["test", "Load test"], ["group", "Group"]];
+function outTabFor(el, pileType) {
+  const fx = el.getAttribute("data-otab-fixed"); if (fx) return fx;
+  const idx = el.getAttribute("data-module"); if (!idx) return null; // pile-type card, footer: always shown
+  if (idx === "G") return "geom";
+  if (pileType === "iab") return idx === "12" ? "tier2" : "simp";
+  if (idx === "01") return "geo";
+  if (idx === "09") return pileType === "hpile" ? "struct" : "geo";
+  if (idx === "02") return "lat";
+  if (idx === "06") return "cap";
+  if (idx === "07") return pileType === "hpile" ? "struct" : "cap";
+  if (idx === "08") return "test";
+  if (idx === "11") return "group";
+  return "struct"; // 03, 04, 05, 05b, 10
+}
+function readOutTab() { try { return window.localStorage.getItem(OUT_TAB_KEY) || "summary"; } catch (e) { return "summary"; } }
+function showOutTabOf(sec) {
+  const t = sec && sec.getAttribute("data-otab"), main = sec && sec.closest(".main-col");
+  if (!t || !main) return;
+  if (main.getAttribute("data-otab-active") !== t) main.setAttribute("data-otab-active", t);
+  if (window.__pdSetOutTab) window.__pdSetOutTab(t);
+}
+function OutTabs({ pileType }) {
+  const [tab, setTab] = React.useState(readOutTab);
+  const [present, setPresent] = React.useState([]);
+  const [ng, setNg] = React.useState({});
+  const ref = React.useRef(null);
+  const choose = React.useCallback(t => { setTab(t); try { window.localStorage.setItem(OUT_TAB_KEY, t); } catch (e) {} }, []);
+  React.useEffect(() => { window.__pdSetOutTab = choose; return () => { if (window.__pdSetOutTab === choose) window.__pdSetOutTab = null; }; }, [choose]);
+  React.useLayoutEffect(() => {
+    const strip = ref.current, main = strip && strip.parentElement; if (!main) return;
+    const has = {}, bad = {};
+    [...main.children].forEach(c => {
+      if (c === strip) return;
+      const t = outTabFor(c, pileType);
+      if (t) { if (c.getAttribute("data-otab") !== t) c.setAttribute("data-otab", t); has[t] = true; if (c.getAttribute("data-status") === "ng") bad[t] = true; }
+      else if (c.hasAttribute("data-otab")) c.removeAttribute("data-otab");
+    });
+    const ids = OUT_TABS.map(x => x[0]).filter(id => has[id]);
+    const now = ids.indexOf(tab) >= 0 ? tab : (ids[0] || "summary");
+    if (main.getAttribute("data-otab-active") !== now) main.setAttribute("data-otab-active", now);
+    const k1 = ids.join("|"), k2 = JSON.stringify(bad);
+    setPresent(p => p.join("|") === k1 ? p : ids);
+    setNg(p => JSON.stringify(p) === k2 ? p : bad);
+  });
+  React.useEffect(() => {
+    const el = ref.current; if (!el) return;
+    const apply = () => document.documentElement.style.setProperty("--ot-h", Math.ceil(el.getBoundingClientRect().height) + "px");
+    apply();
+    if (!("ResizeObserver" in window)) return;
+    const ro = new ResizeObserver(apply); ro.observe(el); return () => ro.disconnect();
+  }, []);
+  const cur = present.indexOf(tab) >= 0 ? tab : (present[0] || "summary");
+  const pick = (id, focus) => {
+    choose(id);
+    const strip = ref.current;
+    // if the page is scrolled past the top of the tabs, bring the new tab's top into view
+    if (strip && strip.previousElementSibling) {
+      const top = parseFloat(getComputedStyle(strip).top) || 0;
+      const y = strip.previousElementSibling.getBoundingClientRect().bottom + window.scrollY - top;
+      if (window.scrollY > y) window.scrollTo({ top: y, behavior: "auto" });
+    }
+    if (focus) setTimeout(() => { const b = document.getElementById("otab-" + id); if (b) b.focus(); }, 0);
+  };
+  const onKey = (e, i) => {
+    let j = null;
+    if (e.key === "ArrowRight") j = (i + 1) % present.length;
+    else if (e.key === "ArrowLeft") j = (i - 1 + present.length) % present.length;
+    else if (e.key === "Home") j = 0;
+    else if (e.key === "End") j = present.length - 1;
+    if (j == null) return;
+    e.preventDefault(); pick(present[j], true);
+  };
+  const label = id => (OUT_TABS.find(x => x[0] === id) || [id, id])[1];
+  return /*#__PURE__*/React.createElement("div", { ref: ref, className: "out-tabs no-print", role: "tablist", "aria-label": "Output sections" },
+    present.map((id, i) => /*#__PURE__*/React.createElement("button", {
+      key: id, id: "otab-" + id, type: "button", role: "tab", className: "out-tab",
+      "aria-selected": cur === id ? "true" : "false", tabIndex: cur === id ? 0 : -1,
+      title: ng[id] ? "A check on this tab is not satisfied" : undefined,
+      onClick: () => pick(id), onKeyDown: e => onKey(e, i)
+    }, label(id), ng[id] ? /*#__PURE__*/React.createElement("span", { className: "out-tab-dot", "aria-label": "(not satisfied)" }) : null)));
+}
+
+/* ============================================================
+   PRINT-SECTION CHOOSER (UI only, 2026-10-10)
+   ------------------------------------------------------------
+   Lists the report groups present for this pile type (read from the rendered
+   report headings). The choice is remembered per browser in
+   micropile_lrfd_printSel_v1 ({group: false} for an unticked group; nothing
+   stored = everything, which is what printed before). The title block, seal
+   box and sheet footers always print. Preview uses the same selection.
+============================================================ */
+function PrintChooser({ open, sel, setSel, onClose, onPrint, onPreview }) {
+  const [groups, setGroups] = React.useState([]);
+  const goRef = React.useRef(null);
+  React.useEffect(() => {
+    if (!open) return;
+    const seen = {}, list = [];
+    document.querySelectorAll(".print-only .rpt-h[data-rgrp]").forEach(h => {
+      const g = h.getAttribute("data-rgrp"), n = h.getAttribute("data-n");
+      if (!seen[g]) { seen[g] = { g, ns: [] }; list.push(seen[g]); }
+      if (seen[g].ns.indexOf(n) < 0) seen[g].ns.push(n);
+    });
+    list.sort((a, b) => RPT_GRP_ORDER.indexOf(a.g) - RPT_GRP_ORDER.indexOf(b.g));
+    setGroups(list);
+    const onKey = e => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", onKey);
+    setTimeout(() => { if (goRef.current) goRef.current.focus(); }, 0);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [open]);
+  if (!open) return null;
+  const setAll = v => { const n = { ...sel }; groups.forEach(x => { if (v) delete n[x.g]; else n[x.g] = false; }); setSel(n); };
+  return /*#__PURE__*/React.createElement("div", { className: "pd-prdlg-ov no-print", onClick: e => { if (e.target === e.currentTarget) onClose(); } },
+    /*#__PURE__*/React.createElement("div", { className: "pd-prdlg", role: "dialog", "aria-modal": "true", "aria-labelledby": "pdPrdlgT" },
+      /*#__PURE__*/React.createElement("h2", { id: "pdPrdlgT" }, "Print report — select contents"),
+      /*#__PURE__*/React.createElement("p", { className: "pd-prdlg-hint" }, "Use the browser’s print dialog to print or save as PDF. Your choice is remembered in this browser; it is not saved with the project."),
+      /*#__PURE__*/React.createElement("div", { className: "pd-prdlg-fixed" }, "Always printed: title block, PE seal box, sheet header and footer."),
+      groups.map(x => /*#__PURE__*/React.createElement("label", { key: x.g },
+        /*#__PURE__*/React.createElement("input", { type: "checkbox", checked: sel[x.g] !== false, onChange: e => { const n = { ...sel }; if (e.target.checked) delete n[x.g]; else n[x.g] = false; setSel(n); } }),
+        /*#__PURE__*/React.createElement("span", null, RPT_GRP_LABEL[x.g] || x.g, " ", /*#__PURE__*/React.createElement("span", { className: "pd-prdlg-ns" }, "(" + x.ns.join(", ") + ")")))),
+      /*#__PURE__*/React.createElement("div", { className: "pd-prdlg-row" },
+        /*#__PURE__*/React.createElement("button", { type: "button", className: "is-quiet", onClick: () => setAll(true) }, "All (default)"),
+        /*#__PURE__*/React.createElement("button", { type: "button", className: "is-quiet", onClick: () => setAll(false) }, "None")),
+      /*#__PURE__*/React.createElement("div", { className: "pd-prdlg-row" },
+        /*#__PURE__*/React.createElement("button", { ref: goRef, type: "button", className: "is-primary", onClick: onPrint }, "Print"),
+        /*#__PURE__*/React.createElement("button", { type: "button", onClick: onPreview }, "Preview report"),
+        /*#__PURE__*/React.createElement("button", { type: "button", onClick: onClose }, "Cancel"))));
+}
+
+/* ============================================================
    CHECK INDEX -- sticky strip under the title block (UI only)
    ------------------------------------------------------------
    Lists every design module with its OK / NG status, highlights the one in
@@ -15190,9 +15538,16 @@ function RailTabs({ tab, setTab, pileType }) {
    whatever modules the active pile type renders; it never touches calc state.
 ============================================================ */
 function CheckIndex({ pileLabel, allPass, onSave, onPreview, previewing, onPrint, caseLabel }) {
+  // Expand / Collapse all act on the modules of the open output tab (on a tab
+  // with no modules, e.g. Summary, on every module).
   const setAll = (wantOpen) => {
-    document.querySelectorAll(".app-shell section[data-module] .module-toggle").forEach(t => {
-      if ((t.getAttribute("aria-expanded") === "true") !== wantOpen) t.click();
+    const main = document.querySelector(".app-shell .main-col");
+    const act = main && main.getAttribute("data-otab-active");
+    const secs = [...document.querySelectorAll(".app-shell section[data-module]")];
+    const onTab = secs.filter(s => s.getAttribute("data-otab") === act);
+    (onTab.length ? onTab : secs).forEach(s => {
+      const t = s.querySelector(".module-toggle");
+      if (t && (t.getAttribute("aria-expanded") === "true") !== wantOpen) t.click();
     });
   };
   const [items, setItems] = React.useState([]);
@@ -15283,8 +15638,8 @@ function CheckIndex({ pileLabel, allPass, onSave, onPreview, previewing, onPrint
             /*#__PURE__*/React.createElement("span", { className: "ci-mark", "aria-hidden": true }, it.status === "ok" ? "\u2713" : it.status === "ng" ? "\u2717" : "\u2022"),
             /*#__PURE__*/React.createElement("span", { className: "sr-only" }, it.title + (it.status === "ok" ? ", OK" : it.status === "ng" ? ", not satisfied" : "")))))),
       /*#__PURE__*/React.createElement("div", { className: "ci-actions" },
-        /*#__PURE__*/React.createElement("button", { type: "button", className: "ci-btn ci-btn-quiet", onClick: () => setAll(true) }, "Expand all"),
-        /*#__PURE__*/React.createElement("button", { type: "button", className: "ci-btn ci-btn-quiet", onClick: () => setAll(false) }, "Collapse all"),
+        /*#__PURE__*/React.createElement("button", { type: "button", className: "ci-btn ci-btn-quiet", onClick: () => setAll(true), title: "Open every module on the open output tab (on the Summary tab: every module)" }, "Expand all"),
+        /*#__PURE__*/React.createElement("button", { type: "button", className: "ci-btn ci-btn-quiet", onClick: () => setAll(false), title: "Close every module on the open output tab (on the Summary tab: every module)" }, "Collapse all"),
         /*#__PURE__*/React.createElement("button", { type: "button", className: "ci-btn", onClick: onSave }, "Save .json"),
         /*#__PURE__*/React.createElement("button", { type: "button", className: "ci-btn", onClick: onPreview, "aria-pressed": !!previewing }, previewing ? "Close preview" : "Preview report"),
         /*#__PURE__*/React.createElement("button", { type: "button", className: "ci-btn ci-btn-primary", onClick: onPrint }, "Print report"))));
