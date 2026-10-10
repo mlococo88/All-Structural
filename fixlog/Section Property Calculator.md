@@ -158,9 +158,9 @@ Check case (warning area): round bar Ø4 at (0, 0) and plate 6 × 1 centred at (
 
 #### Open items
 
-- N-O1. Holes inside a moved, rotated or flipped part move with it (otherwise the part could not move without leaving its hole behind). This happens only when Prevent overlap is on. Confirm.
-- N-O2. Rotate/flip that would overlap moves the part to the nearest free position, touching, rather than refusing. Confirm.
-- N-O3. A hole must lie inside **one** solid part (same rule as the existing warning). A hole straddling two touching plates is refused. Say if that case is needed.
+- N-O1. Holes inside a moved, rotated or flipped part move with it (otherwise the part could not move without leaving its hole behind). This happens only when Prevent overlap is on. Confirm. **Closed 2026-10-10: confirmed (see R1).**
+- N-O2. Rotate/flip that would overlap moves the part to the nearest free position, touching, rather than refusing. Confirm. **Closed 2026-10-10: changed. A rotate or flip is applied in place with a warning (see R1).**
+- N-O3. A hole must lie inside **one** solid part (same rule as the existing warning). A hole straddling two touching plates is refused. Say if that case is needed. **Closed 2026-10-10: confirmed (see R1).**
 
 ### N2. Make dimension editing obvious   [UI only — no change to any formula or computed property]
 
@@ -251,7 +251,7 @@ How verified (follow-up):
 
 #### Open items
 
-- N-O4. Resize handles are offered for plates, bars and rectangular tubes only (not holes, round parts or rolled shapes, whose sizes come from a list or a single diameter).
+- N-O4. Resize handles are offered for plates, bars and rectangular tubes only (not holes, round parts or rolled shapes, whose sizes come from a list or a single diameter). **Closed 2026-10-10: confirmed (see R1).**
 
 
 ## 2026-10-10 — PR: claude/spc-dxf (PR link added after merge)
@@ -554,3 +554,141 @@ PL 12 × 1 (b = 12, t = 1), centroid at (3, 2), units in, basis = tool origin:
 - X-O1. Not checked in AutoCAD: the sign of the MASSPROP product of inertia, and the order in which MASSPROP lists the principal moments. Both are taken from its documentation as understood. Please confirm on first use (1 × 1 square check in the Method tab).
 - X-O2. MASSPROP is unweighted. With n ≠ 1, compare against the "expected MASSPROP readout" (unweighted) in the notes, or set every n = 1 before exporting.
 - X-O3. Rolled shapes are exported as their plate model. With the AISC tabulated option, the tool's tabulated A and I will differ from MASSPROP by the fillet area. This is expected.
+
+
+## 2026-10-10 — PR: claude/spc-rotate-warn (PR link added after merge)
+
+### R1. Rotate / flip under Prevent overlap: applied in place with a warning; open items N-O1 to N-O4 closed   [drawing behaviour — no change to any formula, computed property, storage key or saved format]
+
+**Engineer's decisions (2026-10-10) on the open items of N1 / N2:**
+
+| Item | Decision | Result |
+|---|---|---|
+| N-O1 | Confirmed: holes move with their part. | No code change. |
+| N-O2 | **Changed.** A rotate or flip that would make the part overlap another is neither moved to the nearest free position nor refused. It is applied in place, about the same point as with Prevent overlap off, and a warning is shown: a toast naming the part(s) it now overlaps, plus the existing overlap warning in "Check the model" with its per-pair "Fix: move apart" button. Properties are computed as for any overlap (common area counted twice). Drag, nudge, paste and typed-position rules are unchanged. | Changed in this entry. |
+| N-O3 | Confirmed: a hole must lie within one part. | No code change. |
+| N-O4 | Confirmed: resize handles only on plates, bars and rectangular tubes. | No code change. |
+
+- **Rotate/flip actions covered:**
+  - toolbar: Flip H, Flip V, ⟲ 90°, ⟳ 90°, ∠… (angle);
+  - right-click menu: Flip horizontal / vertical, Rotate 90° CCW / CW, Rotate by angle…;
+  - keys H, V, R, Shift+R;
+  - Part properties: Flip ↔ / Flip ↕ / ⟲ 90° / ⟳ 90° buttons, the **⟲ Rotate 90°** button under the size fields, the **Rotation (CCW)** field and the **Mirrored** box.
+  - Single parts and groups.
+- **Same point as with Prevent overlap off:** unchanged. A single part turns about its centroid; several parts turn about the centre of their bounding box. Holes inside the part still turn with it (N-O1), about the part centroid, so each hole keeps its place relative to its part.
+- **Mirror copy (decided here):** it makes a **new** part and is not a rotate/flip of an existing part. It therefore keeps the N1 rule: the copy goes to the nearest free position, touching. The same applies to Duplicate and Paste.
+- **Warning:**
+  - The toast is amber (`--warn`) and stays 7 s instead of 2.2 s. Example: "Rotated 90° — now overlaps PL1 (common area counted twice). Check the model → Fix: move apart."
+  - For the Rotation field / Mirrored box the toast reads "Applied to PL2 — now overlaps PL1 (…)". These two fields no longer show the "Not applied" box or turn red.
+  - With Prevent overlap off, nothing changes (ordinary toast, no extra text). A rotate/flip that does not overlap gives the same toast as before.
+- **Undo** restores the previous orientation and position in one step (one undo snapshot per action, as before).
+
+#### Where (anchors) — exact before / after
+
+1. CSS, after `#toast.show{opacity:.94}` — added:
+```css
+#toast.warn{background:var(--warn)}
+```
+2. `function toast(t)`:
+```js
+// before
+function toast(t) { const e = $('toast'); e.textContent = t; e.classList.add('show'); clearTimeout(toast._t); toast._t = setTimeout(() => e.classList.remove('show'), 2200); }
+// after
+function toast(t, warn) { const e = $('toast'); e.textContent = t; e.classList.toggle('warn', !!warn); e.classList.add('show'); clearTimeout(toast._t); toast._t = setTimeout(() => e.classList.remove('show'), warn ? 7000 : 2200); }
+```
+3. New function, before `function novRefuse(what, why) {`:
+```js
+// rotate / flip of existing parts: applied in place even if the result overlaps (engineer's decision N-O2, 2026-10-10); the warning names the parts now overlapped
+function novRotWarn(ids) {
+  if (!NOOV) return '';
+  const ov = SPC.NOV.overlapping(novWorld(ids), [0, 0]).map(id => (partById(id) || {}).lbl || id);
+  return ov.length ? ' — now overlaps ' + ov.join(', ') + ' (common area counted twice). Check the model → Fix: move apart.' : '';
+}
+```
+4. `function guardEdit(ids, fn, inp) {` — new second line. Ids flagged `rotWarn` are applied first, then warned:
+```js
+  if (ids.rotWarn) { ids = ids.filter(id => partById(id)); fn(); if (OVEDIT) { OVEDIT = null; renderOvEdit(); } const w = novRotWarn(ids); if (w) toast('Applied to ' + ids.map(id => partById(id).lbl).join(', ') + w, true); return true; }
+```
+5. `function actFlip(ax, ids) {`:
+```js
+// before
+  const all = sp0.map(p => p.id).concat(novCarried(new Set(sp0.map(p => p.id)))), sp = all.map(partById), was = NOOV && novOK(all);
+  …
+  const res = was ? novResolve(all) : null; if (res && !res.ok) { novRefuse('Not flipped', res.why); return; }
+  afterGeo(true); toast((ax === 'h' ? 'Flipped horizontally' : 'Flipped vertically') + (c0 ? ' (as a group)' : '') + movedTxt(res));
+// after
+  const all = sp0.map(p => p.id).concat(novCarried(new Set(sp0.map(p => p.id)))), sp = all.map(partById);
+  …
+  const w = novRotWarn(all);
+  afterGeo(true); toast((ax === 'h' ? 'Flipped horizontally' : 'Flipped vertically') + (c0 ? ' (as a group)' : '') + w, !!w);
+```
+6. `function actRotate(a, about) {`: the same first-line change (`, was = NOOV && novOK(all)` removed), and
+```js
+// before
+  const res = was ? novResolve(all) : null; if (res && !res.ok) { novRefuse('Not rotated', res.why); return; }
+  afterGeo(true); toast('Rotated ' + a + '°' + (c0 ? (about ? '' : ' (as a group)') : '') + movedTxt(res));
+// after
+  const w = novRotWarn(all);
+  afterGeo(true); toast('Rotated ' + a + '°' + (c0 ? (about ? '' : ' (as a group)') : '') + w, !!w);
+```
+7. `buildPartPane`:
+   - `const pt = sp[0], g = SPC.partGeom(pt), GD = [pt.id];` → `const pt = sp[0], g = SPC.partGeom(pt), GD = [pt.id], GR = Object.assign([pt.id], { rotWarn: true });`
+   - Rotation (CCW) field: `'pp_rot', { k: 'deg', geo: true, guard: GD }` → `guard: GR`.
+   - Mirrored box: `chkIn(() => pt.mir, v => { pt.mir = v; }, 'pp_mir', true, true, GD)` → `…, GR)`.
+   - All other part-panel fields keep `GD`, so typed positions and sizes are still refused with "Place touching".
+8. Text:
+   - Settings → Prevent overlap hint:
+     - "new, pasted, copied, rotated and flipped parts go to the nearest free position;" → "new, pasted and copied parts go to the nearest free position;".
+     - Added after "…are not applied.": " A rotate or flip is always applied in place; if the part then overlaps another, a warning names it (Check the model → Fix: move apart)."
+   - `warnPanel` hint: "(e.g. in a project saved before overlap prevention)" → "(e.g. in a project saved before overlap prevention, or after a rotate or flip)".
+   - Method → Drawing, "Flip and rotate" bullet, appended: "With "Prevent overlap" on, a rotate or flip (toolbar, right-click, keys, Rotate 90° button, Rotation field, Mirrored box) is still applied in place, about the same point; if the part then overlaps another, the message names it and Check the model lists the pair with "Fix: move apart". Until fixed, the overlap is counted twice, as for any overlap."
+   - Method → Export DXF, "Differences to expect": "(possible only with "Prevent overlap" off or in an older file)" → "(possible with "Prevent overlap" off, after a rotate or flip, or in an older file)".
+- `movedTxt`, `novRefuse` and `novResolve` are unchanged. Paste, duplicate, mirror copy, add, "Move by" and "Place touching" still use them.
+
+#### Check case
+
+Setup: PL1 plate 10 × 1 at (0, 0); PL2 plate 4 × 1 at (0, 1.5), above PL1. The bottom of PL2 is at y = 1.0 and the top of PL1 at 0.5, so the gap is 0.5. Select PL2 and press R (rotate 90° CCW). PL2 becomes 1 wide × 4 tall about its centroid, spanning y = −0.5 … 3.5.
+
+- **Before (N1):** PL2 is moved up to touching, centroid (0, 2.5). No warning.
+  - A = 10 + 4 = 14 in².
+  - ȳ = 4 × 2.5 / 14 = 0.714286 in.
+  - I<sub>x</sub> = 10/12 + 10 × 0.714286² + 64/12 + 4 × 1.785714² = 0.8333 + 5.1020 + 5.3333 + 12.7551 = **24.0238 in⁴**.
+  - I<sub>y</sub> = 1000/12 + 4/12 = 83.667 in⁴.
+- **After (R1):** PL2 stays at (0, 1.5) with rotation 90°. It overlaps PL1 over 1 × 1 = 1 in² (y −0.5 … 0.5, x −0.5 … 0.5).
+  - A = 14 in² (overlap counted twice).
+  - ȳ = 4 × 1.5 / 14 = 0.428571 in.
+  - I<sub>x</sub> = 0.8333 + 10 × 0.428571² + 5.3333 + 4 × 1.071429² = 0.8333 + 1.8367 + 5.3333 + 4.5918 = **12.5952 in⁴**.
+  - I<sub>y</sub> = 83.667 in⁴.
+  - Toast: "Rotated 90° — now overlaps PL1 (common area counted twice). Check the model → Fix: move apart."
+  - Warning: "PL1 and PL2 overlap (about 1 in² counted twice)", with **Fix: move apart**. Fix moves PL2 (the smaller part) to (0, 2.5), which gives the "before" values.
+- Both sets of numbers were confirmed with the engine in Node (`SPC.analyze`): 24.023810 / 12.595238 in⁴.
+- The "after" values are identical to what the tool gives for the same rotation with Prevent overlap off, both before and after this change.
+
+#### How verified
+
+- `node --check` of every inline script (4 scripts, 0 errors). The engine block (`const DBVER=` … `/* SPC-ENGINE-END */`) is byte-identical to main.
+- **No-overlap browser tests** (section 6 rewritten; 70 checks, 0 failures, no console errors):
+  - **Rotate 90° of PL2 above PL1:**
+    - In place (0, 1.5, 90°). Geometry, A and I<sub>x</sub> are identical to the same action with Prevent overlap off.
+    - Amber toast names PL1. Check the model lists PL1/PL2 with one Fix button. A = 14.
+    - Undo → rotation 0 at (0, 1.5), warning gone. Redo works. Fix → PL2 to (0, 2.5). Undo of Fix works.
+  - **Other rotate controls:** key R, toolbar ⟲ 90°, right-click → Rotate 90° CCW, and the Part properties ⟲ Rotate 90° button each rotate in place, with the warning and the Fix button.
+  - **Rotation field = 90:** applied in place. No "Not applied" box, field not red. Toast "Applied to PL2 — now overlaps PL1 …". Undo → 0.
+  - **Mirrored box** on an angle next to a plate: applied in place (same as with Prevent overlap off); the warning names PL3.
+  - **Flip V (key V)** of an L4X4X1/2 standing on a plate: flipped in place about its centroid. Geometry, A, I<sub>x</sub> and I<sub>y</sub> are the same as with Prevent overlap off. The warning names PL1. Undo restores exactly. Right-click → Flip vertical gives the same result.
+  - **Rotate with no overlap:** ordinary toast "Rotated 90°", no warning.
+  - **Plate containing a hole, rotated:** the part stays in place; the hole is carried to its rotated position (still inside); the overlap is warned.
+  - **Group rotate of two parts:** same as with Prevent overlap off; the warning names PL1.
+  - **All other N1 checks** are unchanged and pass: drag, snap, nudge, paste, duplicate, mirror copy (placed free and touching), add, part-panel refusals and Place touching, holes, toggle, legacy file.
+- **Main vs branch, models without overlap:**
+  - Default example and all 8 templates: results of every output tab, warnings and saved model identical. Validation 60/60 on both. No console errors.
+  - Default example plus six free parts (plate with a hole, L6X4X1/2, rect. tube, round tube, C10X15.3). On each part: rotate 90°, −90° and 45°, flip H, flip V, key R, Rotation field 30°, Mirrored box. Then group rotate, group flip and undo. Across these 45 states, geometry, results, warnings, toasts and autosave are **identical**.
+- **Re-run:**
+  - N2 dimension tests 35/0; live-field tests 47/0; Phase 1 browser tests 49/0; node geometry 18/0.
+  - DXF export: 24 files and 13 UI checks; ezdxf audit 0 errors; worst relative error 2.6e-15.
+  - 400 px: no horizontal scroll.
+- Screenshots looked at: `rotate_warning.png` (amber toast + Check the model with Fix button), `flip_warning.png`, `rotfield_warning.png`.
+
+#### Open items
+
+- R-O1. The Part properties **Rotation** field and **Mirrored** box do **not** carry the holes inside the part; they change only the part's own orientation. The toolbar, menu and key actions do carry them. This was already so before this change, with Prevent overlap on or off. As a result, a hole can be left partly outside its part, and the existing "Hole … is not entirely inside one material part" warning appears. Making these two fields carry holes, as N-O1 implies, would be a further behaviour change. Say if it is wanted.
