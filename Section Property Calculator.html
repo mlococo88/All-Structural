@@ -3527,8 +3527,8 @@ function buildPartPane(P) {
     const edge = (lab, i, key) => fRow(body, lab, numIn(() => SPC.partGlobal(pt).bbox[i], v => { const d = v - SPC.partGlobal(pt).bbox[i]; if (i === 0 || i === 2) pt.x += d; else pt.y += d; }, key, { k: 'L', geo: true, structural: true, guard: GD }), L);
     body.appendChild(el('div', 'subh', 'or set an edge (moves the part)'));
     edge('Left edge', 0, 'pp_bl'); edge('Right edge', 2, 'pp_br'); edge('Bottom edge', 1, 'pp_bb'); edge('Top edge', 3, 'pp_bt');
-    fRow(body, 'Rotation (CCW)', numIn(() => pt.rot, v => { pt.rot = v; }, 'pp_rot', { k: 'deg', geo: true, guard: GR }), '°', 'About the part centroid. Mirrored = reflected left-right in the part\'s own frame before the rotation.');
-    chkRow(body, 'Mirrored', chkIn(() => pt.mir, v => { pt.mir = v; }, 'pp_mir', true, true, GR));
+    fRow(body, 'Rotation (CCW)', numIn(() => pt.rot, v => { setOrient(pt, v, pt.mir); }, 'pp_rot', { k: 'deg', geo: true, guard: GR }), '°', 'About the part centroid. Mirrored = reflected left-right in the part\'s own frame before the rotation.');
+    chkRow(body, 'Mirrored', chkIn(() => pt.mir, v => { setOrient(pt, pt.rot, v); }, 'pp_mir', true, true, GR));
     const r = el('div', 'btnRow');
     [['Flip ↔', () => actFlip('h')], ['Flip ↕', () => actFlip('v')], ['⟲ 90°', () => actRotate(90)], ['⟳ 90°', () => actRotate(-90)]].forEach(([l, f]) => r.appendChild(btn(l, 'sm', f)));
     body.appendChild(r);
@@ -4281,6 +4281,21 @@ function fixOverlap(o) {
   shiftParts(ids, r.d); afterGeo(true);
   toast(`Moved ${mv.lbl} by (${nf(r.d[0], 'L', 4)}, ${nf(r.d[1], 'L', 4)}) ${un('L')}: no longer overlapping`);
 }
+// Rotation field / Mirrored box of the Part properties: the holes inside the part turn / reflect with it about the part centroid,
+// exactly as with the toolbar rotate / flip (same rule for which holes are carried: novCarried, i.e. only with Prevent overlap on).
+// Engineer's decision R-O1, 2026-10-10. Mirrored toggles the part's own frame: a reflection about the line through the centroid at rot + 90°.
+function setOrient(pt, rot, mir) {
+  const r0 = pt.rot || 0, c = [pt.x, pt.y], hs = novCarried(new Set([pt.id])).map(partById);
+  if (!!mir !== !!pt.mir) {
+    const a = 2 * r0 * Math.PI / 180, cs = Math.cos(a), sn = Math.sin(a);
+    hs.forEach(h => { const dx = h.x - c[0], dy = h.y - c[1]; h.x = c[0] - cs * dx - sn * dy; h.y = c[1] - sn * dx + cs * dy; h.rot = norm(2 * r0 - (h.rot || 0)); h.mir = !h.mir; });
+  }
+  if ((rot || 0) !== r0) {
+    const a = (rot || 0) - r0, r = a * Math.PI / 180, cs = Math.cos(r), sn = Math.sin(r);
+    hs.forEach(h => { h.rot = norm((h.rot || 0) + a); const dx = h.x - c[0], dy = h.y - c[1]; h.x = c[0] + cs * dx - sn * dy; h.y = c[1] + sn * dx + cs * dy; });
+  }
+  pt.rot = rot; pt.mir = mir;
+}
 function novCarriedFix(id) { const was = NOOV; NOOV = true; try { return novCarried(new Set([id])); } finally { NOOV = was; } }
 
 /* ---------- actions ---------- */
@@ -4882,7 +4897,7 @@ function buildManual(pg) {
     '<b>View:</b> wheel to zoom about the cursor, drag the background (or the middle button) to pan, "Fit" (F).',
     '<b>Right-click a part:</b> flip, rotate (90° or any angle), mirror copy about a vertical or horizontal axis through the part (selection) centroid, an edge, the section centroid or the origin; align and "place touching" relative to a second selected part (Shift+click it first: the part clicked last before the right-click is the reference); duplicate, copy, order, delete. Right-click the background to add a part there, paste, fit or place the Q cut.',
     '<b>Keys:</b> Ctrl+Z / Ctrl+Y undo/redo, Ctrl+C / Ctrl+V copy/paste, Ctrl+D duplicate, Del delete, H / V flip, R / Shift+R rotate 90° CCW / CW, L labels, F fit, Ctrl+A select all.',
-    '<b>Flip and rotate</b> act about the part centroid for one part, and about the centre of the bounding box of the selection for several parts. Flip horizontal = mirror about the vertical axis through that point. With "Prevent overlap" on, a rotate or flip (toolbar, right-click, keys, Rotate 90° button, Rotation field, Mirrored box) is still applied in place, about the same point; if the part then overlaps another, the message names it and Check the model lists the pair with "Fix: move apart". Until fixed, the overlap is counted twice, as for any overlap.']);
+    '<b>Flip and rotate</b> act about the part centroid for one part, and about the centre of the bounding box of the selection for several parts. Flip horizontal = mirror about the vertical axis through that point. With "Prevent overlap" on, a rotate or flip (toolbar, right-click, keys, Rotate 90° button, Rotation field, Mirrored box) is still applied in place, about the same point; if the part then overlaps another, the message names it and Check the model lists the pair with "Fix: move apart". Until fixed, the overlap is counted twice, as for any overlap. With "Prevent overlap" on, holes that lie inside the part turn or flip with it, about the same point, with every one of these controls (Rotation field and Mirrored box included).']);
   H('Parts and geometry');
   UL(['Each part is a set of exact polygons and circles (holes: negative). Its position is its centroid; orientation = rotation (CCW) after an optional left-right mirror in the part\'s own frame.',
     '<b>Rolled shapes</b> (AISC Shapes Database v16.0) are modelled as their plates: W/M/S/HP as three rectangles (d, b<sub>f</sub>, t<sub>f</sub>, t<sub>w</sub>), C/MC as a web and two flanges with the average flange thickness, L as two legs, WT/MT/ST as flange and stem, rectangular HSS as a rounded rectangular tube (design thickness t<sub>des</sub>, outside corner radius 2t<sub>des</sub> and inside radius t<sub>des</sub>, the basis of the AISC tables as understood — verify; arcs drawn as 24 chords), round HSS/pipe as an annulus (OD, t<sub>des</sub>). Root fillets, toe radii and flange slopes are neglected, so A and I differ slightly from the tables (the Properties tab compares them for a single shape).',

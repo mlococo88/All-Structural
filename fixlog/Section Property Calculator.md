@@ -554,6 +554,7 @@ PL 12 × 1 (b = 12, t = 1), centroid at (3, 2), units in, basis = tool origin:
 - X-O1. Not checked in AutoCAD: the sign of the MASSPROP product of inertia, and the order in which MASSPROP lists the principal moments. Both are taken from its documentation as understood. Please confirm on first use (1 × 1 square check in the Method tab).
 - X-O2. MASSPROP is unweighted. With n ≠ 1, compare against the "expected MASSPROP readout" (unweighted) in the notes, or set every n = 1 before exporting.
 - X-O3. Rolled shapes are exported as their plate model. With the AISC tabulated option, the tool's tabulated A and I will differ from MASSPROP by the fillet area. This is expected.
+- X-O4. Units of the export (asked in the PR: display units, or always inches?). **Closed 2026-10-10: keep the display units, no change (see R2).** X-O1 (AutoCAD sign / order check) and X-O3 (AISC tabulated option) stay open.
 
 
 ## 2026-10-10 — PR: claude/spc-rotate-warn (PR link added after merge)
@@ -691,4 +692,118 @@ Setup: PL1 plate 10 × 1 at (0, 0); PL2 plate 4 × 1 at (0, 1.5), above PL1. The
 
 #### Open items
 
-- R-O1. The Part properties **Rotation** field and **Mirrored** box do **not** carry the holes inside the part; they change only the part's own orientation. The toolbar, menu and key actions do carry them. This was already so before this change, with Prevent overlap on or off. As a result, a hole can be left partly outside its part, and the existing "Hole … is not entirely inside one material part" warning appears. Making these two fields carry holes, as N-O1 implies, would be a further behaviour change. Say if it is wanted.
+- R-O1. The Part properties **Rotation** field and **Mirrored** box do **not** carry the holes inside the part; they change only the part's own orientation. The toolbar, menu and key actions do carry them. This was already so before this change, with Prevent overlap on or off. As a result, a hole can be left partly outside its part, and the existing "Hole … is not entirely inside one material part" warning appears. Making these two fields carry holes, as N-O1 implies, would be a further behaviour change. Say if it is wanted. **Closed 2026-10-10: yes, they carry the holes exactly as the toolbar does (see R2).**
+
+
+## 2026-10-10 — PR: claude/spc-hole-carry (PR link added after merge)
+
+### R2. Rotation field and Mirrored box carry the holes inside the part (R-O1 closed); DXF units decided (X-O4 closed)   [drawing behaviour — no change to any formula, computed property, storage key or saved format]
+
+**Engineer's decisions (2026-10-10):**
+
+| Item | Decision | Result |
+|---|---|---|
+| R-O1 | **Yes.** The Part properties **Rotation (CCW)** field and **Mirrored** box carry the holes inside the part exactly as the toolbar / menu / key rotate and flip do: same pivot, same rule for which holes are "inside the part", same behaviour with Prevent overlap on and off. | Changed in this entry. |
+| X1 units | Keep the display units for the DXF export (in → in, `$INSUNITS = 1`; mm → mm, `$INSUNITS = 4`). | No code change. Recorded as X-O4, closed. X-O1 and X-O3 stay open. |
+
+- **What the toolbar path does (the two fields now do the same):**
+  - **Which holes:** `novCarried(new Set([part id]))`, i.e. holes wholly inside the part and not wholly inside any other solid part.
+  - **Prevent overlap off:** `novCarried` returns nothing, so neither the toolbar nor the fields carry holes in that mode. This is unchanged and matches the toolbar, as decided.
+  - **Pivot:** the part centroid (part x, y), as for a single-part toolbar rotate or flip.
+  - **Rotation field, old value r₀ → new value r:** each carried hole turns by a = r − r₀ about the centroid. Its position is rotated by a and its rotation becomes norm(rot + a). This is the same arithmetic as `actRotate(a)`, so field 90 and ⟲ 90° give bit-identical geometry.
+  - **Mirrored box:** toggling the mirror in the part's own frame is a reflection about the line through the centroid at angle r₀ + 90°. Each carried hole is reflected about that line:
+    - position (dx, dy) → (−cos 2r₀·dx − sin 2r₀·dy, −sin 2r₀·dx + cos 2r₀·dy);
+    - hole rotation → norm(2r₀ − rot);
+    - hole mirror toggled.
+    - With r₀ = 0 this is exactly the toolbar Flip H (x → 2c − x, rot → norm(−rot), mirror toggled).
+  - **The part itself** is set exactly as before (`pt.rot = v` / `pt.mir = v`). The overlap warning (R1, `guard: GR`) is unchanged.
+- **Other paths that change a part's rotation / mirror (checked):**
+  - **Toolbar, menu and keys:** ⇋ Flip H, ⇵ Flip V, ⟲ 90°, ⟳ 90°, ∠…; right-click Flip / Rotate / Rotate by angle…; keys H / V / R / Shift+R. The Part properties Flip ↔ / Flip ↕ / ⟲ 90° / ⟳ 90° buttons and the ⟲ Rotate 90° button under the size fields also belong here. All of these call `actFlip` / `actRotate`, which already carry holes. Unchanged.
+  - **Multi-part (group) pane:** it has only Flip / ⟲ / ⟳ buttons, which call `actFlip` / `actRotate` (group about the bounding-box centre). Unchanged; they carry holes.
+  - **Parts list inline fields:** sizes only (b × t, angle size), with no rotation or mirror field. Nothing to change.
+  - **Undo / redo:** whole-model snapshots. One field edit (focus to blur) or one box click is one undo step, and it restores the part and its holes together.
+  - **Polygon vertex edit** (`setPolyGlobal`): resets rot / mir to 0 but keeps the world shape, so holes need not move. Unchanged.
+  - **Mirror copy, Duplicate, Paste, templates:** these make new parts, and holes are not copied with them. Unchanged.
+  - **Not rotation, noted only:** the Part properties **Centroid x / y** and **edge** fields move the part without its holes. Drag, nudge, "Move by" and align do carry them with Prevent overlap on. Not changed here (see R2-O1).
+- **Typing digit by digit** (e.g. "4" then "45") applies each value in turn, so the holes are carried step by step (0 → 4 → 45). The end position equals the toolbar's 45° to within float rounding (1e-15).
+
+#### Where (anchors) — exact before / after
+
+1. `buildPartPane`, anchors `'Rotation (CCW)'` and `'pp_mir'`:
+```js
+// before
+    fRow(body, 'Rotation (CCW)', numIn(() => pt.rot, v => { pt.rot = v; }, 'pp_rot', { k: 'deg', geo: true, guard: GR }), '°', 'About the part centroid. Mirrored = reflected left-right in the part\'s own frame before the rotation.');
+    chkRow(body, 'Mirrored', chkIn(() => pt.mir, v => { pt.mir = v; }, 'pp_mir', true, true, GR));
+// after
+    fRow(body, 'Rotation (CCW)', numIn(() => pt.rot, v => { setOrient(pt, v, pt.mir); }, 'pp_rot', { k: 'deg', geo: true, guard: GR }), '°', 'About the part centroid. Mirrored = reflected left-right in the part\'s own frame before the rotation.');
+    chkRow(body, 'Mirrored', chkIn(() => pt.mir, v => { setOrient(pt, pt.rot, v); }, 'pp_mir', true, true, GR));
+```
+2. New function, inserted before `function novCarriedFix(id) {`:
+```js
+// Rotation field / Mirrored box of the Part properties: the holes inside the part turn / reflect with it about the part centroid,
+// exactly as with the toolbar rotate / flip (same rule for which holes are carried: novCarried, i.e. only with Prevent overlap on).
+// Engineer's decision R-O1, 2026-10-10. Mirrored toggles the part's own frame: a reflection about the line through the centroid at rot + 90°.
+function setOrient(pt, rot, mir) {
+  const r0 = pt.rot || 0, c = [pt.x, pt.y], hs = novCarried(new Set([pt.id])).map(partById);
+  if (!!mir !== !!pt.mir) {
+    const a = 2 * r0 * Math.PI / 180, cs = Math.cos(a), sn = Math.sin(a);
+    hs.forEach(h => { const dx = h.x - c[0], dy = h.y - c[1]; h.x = c[0] - cs * dx - sn * dy; h.y = c[1] - sn * dx + cs * dy; h.rot = norm(2 * r0 - (h.rot || 0)); h.mir = !h.mir; });
+  }
+  if ((rot || 0) !== r0) {
+    const a = (rot || 0) - r0, r = a * Math.PI / 180, cs = Math.cos(r), sn = Math.sin(r);
+    hs.forEach(h => { h.rot = norm((h.rot || 0) + a); const dx = h.x - c[0], dy = h.y - c[1]; h.x = c[0] + cs * dx - sn * dy; h.y = c[1] + sn * dx + cs * dy; });
+  }
+  pt.rot = rot; pt.mir = mir;
+}
+```
+3. Method → Drawing, "Flip and rotate" bullet. Appended after "…as for any overlap.": " With "Prevent overlap" on, holes that lie inside the part turn or flip with it, about the same point, with every one of these controls (Rotation field and Mirrored box included)."
+
+#### Check case
+
+Setup: PL1 plate b = 8, t = 4 at (0, 0). H1 is a rectangular hole 2 wide × 1 high at (2, 1), i.e. x 1…3, y 0.5…1.5, inside PL1. Prevent overlap is on. Select PL1 and type 90 in **Rotation (CCW)**. PL1 becomes 4 wide × 8 tall (x −2…2, y −4…4).
+
+- Plate alone, rotated: A = 32 in²; about (0, 0), I<sub>x</sub> = 4·8³/12 = 170.667 in⁴ and I<sub>y</sub> = 8·4³/12 = 42.667 in⁴.
+- **Before (main):** H1 stays at (2, 1), 2 wide × 1 high, half outside PL1 (x 2…3). Warning: "Hole H1 is not entirely inside one material part: the area it removes may not exist."
+  - A = 32 − 2 = **30 in²**.
+  - x̄ = −2·2/30 = **−0.133333 in**; ȳ = −2·1/30 = **−0.066667 in**.
+  - I<sub>x</sub> = 170.667 − (2·1³/12 + 2·1²) − 30·0.066667² = 168.5 − 0.133333 = **168.366667 in⁴**.
+  - I<sub>y</sub> = 42.667 − (1·2³/12 + 2·2²) − 30·0.133333² = 34.0 − 0.533333 = **33.466667 in⁴**.
+  - I<sub>xy</sub> = −2·2·1 − 30·(−0.133333)(−0.066667) = **−4.266667 in⁴**.
+- **After (this change):** H1 turns with PL1 about (0, 0): (2, 1) → (−1, 2), rotation 90°. It is now 1 wide × 2 high (x −1.5…−0.5, y 1…3), inside PL1. No warning.
+  - A = **30 in²**.
+  - x̄ = −2·(−1)/30 = **+0.066667 in**; ȳ = −2·2/30 = **−0.133333 in**.
+  - I<sub>x</sub> = 170.667 − (1·2³/12 + 2·2²) − 30·0.133333² = 162.0 − 0.533333 = **161.466667 in⁴**.
+  - I<sub>y</sub> = 42.667 − (2·1³/12 + 2·1²) − 30·0.066667² = 40.5 − 0.133333 = **40.366667 in⁴**.
+  - I<sub>xy</sub> = −2·(−1)·2 − 30·(0.066667)(−0.133333) = **+4.266667 in⁴**.
+- **Cross-check:** the unrotated model has I<sub>x</sub> = 40.366667, I<sub>y</sub> = 161.466667 and I<sub>xy</sub> = −4.266667. A 90° turn swaps I<sub>x</sub> and I<sub>y</sub> and changes the sign of I<sub>xy</sub>, which gives the "after" values. Pressing R (toolbar ⟲ 90°) gives the same result, bit for bit.
+- Both sets of numbers were read from the tool in the browser (main and branch) and match the hand values to 1e-9.
+
+#### How verified
+
+- `node --check` of every inline script (4 scripts, 0 errors). The engine block (`const DBVER=` … `/* SPC-ENGINE-END */`) is byte-identical to main.
+- **New browser tests** (28 checks, 0 failures, no console errors):
+  - **Check case:** on main, the hole stays, the warning appears and the "before" values result. On the branch, the hole goes to (−1, 2) at rot 90, no warning, "after" values. Field 90 and toolbar ⟲ 90° are bit-identical.
+  - **Undo / redo:** undo after the field restores the part and hole exactly, in one step; redo gives the carried state. Typing "45" key by key equals toolbar 45° within 1e-12 and is one undo step.
+  - **Prevent overlap off:** field 90 = toolbar ⟲ 90°, and Mirrored box = toolbar Flip H, identical. In both cases the hole is not carried, as before.
+  - **Mirrored box:**
+    - Unrotated part: same as toolbar Flip H, identical (hole to (−2, 1), mirrored).
+    - Part at 30°: the part and the hole are both the reflection about the line through the centroid at 120° (every vertex, to 1e-9). No warning; undo exact.
+    - Mirrored part, field 30 → 75: same as toolbar +45° within 1e-12.
+  - **Which holes are carried:**
+    - Rectangular and round holes in PL1 are carried; a hole in another plate is untouched.
+    - A hole in PL1 next to a neighbouring plate: same as the toolbar.
+    - Angle L6X6X1/2 with a hole in its leg: field −120 and Mirrored box give the same hole as toolbar −120° / Flip H. (The field stores −120 for the part and the toolbar 240, as before.)
+  - **Field that makes the part overlap a neighbour (R1):** applied in place, the warning toast names PL1, and the hole is carried. Same geometry as toolbar ⟲ 90°.
+  - **Group:** ⟲ 90° from the multi-part pane carries holes, as before.
+- **Main vs branch, models without holes in a field-rotated part:**
+  - Model: default example + six free parts (plate, L6X4X1/2, rectangular tube, round tube, C10X15.3, and a plate with a hole that is not rotated).
+  - On each of five parts: rotate 90°, −90°, 45°, flip H, flip V, key R, Rotation field 30°, Mirrored box. Then group rotate / flip and undo.
+  - 45 states: geometry, results, warnings, toasts and autosave are **identical**.
+  - Same run with a hole in a toolbar-rotated plate (toolbar actions only): 35 states identical.
+- Default example and all 8 templates (every output tab, warnings, saved model): identical. Validation 60/60 on both. No console errors.
+- **Re-run:** no-overlap tests 70/0; N2 dimension tests 35/0; live-field tests 47/0; Phase 1 browser tests 49/0; node geometry 18/0; DXF UI checks 13/13; smoke (KaTeX, Validation 60); 400 px: no horizontal scroll.
+- Screenshots looked at: `field90_carried.png`, `field_overlap_hole.png`.
+
+#### Open items
+
+- R2-O1. The Part properties **Centroid x / y** and **edge** fields move a part without the holes inside it, while drag, nudge, "Move by" and align carry them (with Prevent overlap on). Not changed here, because it is not a rotate / flip path. Say if these fields should carry holes too.
