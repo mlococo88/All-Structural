@@ -959,5 +959,71 @@ h_ef 12″, 30×30×36 pedestal, f'c 4 ksi cracked, 1″ grout) unless stated.
   - Screenshots of every tab at 1400 px and 400 px were checked.
 - **Other copies of this code:** none.
 - **Open items (found, not changed):**
-  - O10. Typing a decimal into a number field can lose the decimal point. Typing `5.5` into f'c with Playwright's keyboard gives 55, both on main and on this branch. The panel is rebuilt on every keystroke, and the number input does not keep the intermediate `5.`. Please check this by hand in a browser. Not changed, because it is outside this brief.
+  - O10. Typing a decimal into a number field can lose the decimal point. Typing `5.5` into f'c with Playwright's keyboard gives 55, both on main and on this branch. The panel is rebuilt on every keystroke, and the number input does not keep the intermediate `5.`. Please check this by hand in a browser. Not changed, because it is outside this brief. **Resolved 2026-10-10 by D1** (claude/baseplate-decimal).
   - O11. At 400 px the page scrolls horizontally because of the six-column project header (`#projGrid`, at least 120 px per column). This was there before this change and was not changed.
+
+## 2026-10-10 — PR: claude/baseplate-decimal (PR link added after merge)
+### D1. Number fields keep a typed decimal point (closes O10)   [UI only — no calculation change]
+- **Date / type:** 2026-10-10, input handling only. No formula, factor, unit, code reference, storage key or saved-data change. Engineer's instruction (2026-10-10): fix O10 with the recommended fix.
+- **Problem (reproduced on main in headless Chromium with real key events):** typing `5.5` into an input-panel number field gave `55`; `0.75` gave `75`, `.5` gave `5`, `-1.25` gave `125`, `1e3` gave `3`, and `1.25` into plate t gave `125`. So f'c could silently become 55 ksi. Typing with 120–150 ms between keys gave the same. All 24 number fields in the input-panel tabs failed (168 of 168 typed cases).
+- **Root cause:** every keystroke runs `refreshAll()`, which rebuilds the whole input panel, so the field being typed in is replaced by a new `<input type="number">`. `numInput()` already tried to carry the typed text over (`window.__editingRaw`), but it reads it from `i.value`, and a number input hides unfinished text: `5.` reads as `"5"`, and `-`, `.` and `1e` read as `""`. The new field was filled with `5`, and the next `5` made it `55`.
+- **Fix:** keep the live field across the rebuild. In `refreshAll()`, if the focused element is a `numInput` field in `#inputPanel` that is being typed in (`st.key===window.__editingKey`), the panel is rebuilt as before, then the rebuilt twin (same `data-fkey` and same row label) is replaced by the original node. The original node takes the twin's attributes and setter, so it acts exactly like the rebuilt field. Its text, caret and focus are the browser's own and are left alone. If no twin with the same key and label exists (the field layout changed), the old behaviour applies. Results still update live on every keystroke. The combination editor fields (`mcombo*`, not rebuilt while typing) and the ASCE 7 generator fields (update on `change`) already kept decimals and are unchanged.
+- **Where:**
+  - `numInput()`, anchor text `const v=parseFloat(i.value); set(isNaN(v)?0:v); refreshAll();` (approx. line 1049).
+  - `refreshAll()`, anchor text `__fieldSeq=0;            /* deterministic keys: same field gets same key each rebuild */` (approx. line 9588).
+- **Before (`numInput`):**
+  ```js
+    i.value = (window.__editingKey===k && window.__editingRaw!=null)? window.__editingRaw : get();
+    i.addEventListener("input",()=>{
+      window.__editingKey=k; window.__editingRaw=i.value;
+      const v=parseFloat(i.value); set(isNaN(v)?0:v); refreshAll();
+    });
+  ```
+- **After (`numInput`):**
+  ```js
+    i.value = (window.__editingKey===k && window.__editingRaw!=null)? window.__editingRaw : get();
+    i.__bpadSet=set;   /* refreshAll() may keep this node and hand it the setter of its rebuilt twin */
+    i.addEventListener("input",()=>{
+      window.__editingKey=k; window.__editingRaw=i.value;
+      const v=parseFloat(i.value); i.__bpadSet(isNaN(v)?0:v); refreshAll();
+    });
+  ```
+- **Before (`refreshAll`):**
+  ```js
+    __fieldSeq=0;            /* deterministic keys: same field gets same key each rebuild */
+    buildInputPanel();
+    buildTabs();
+    restoreUI(st);
+  ```
+- **After (`refreshAll`):**
+  ```js
+    __fieldSeq=0;            /* deterministic keys: same field gets same key each rebuild */
+    /* A number input's .value hides unfinished text ("5." reads as "5", "-" as ""),
+       so a rebuilt copy cannot show what is being typed. Keep the live node instead. */
+    const ae=document.activeElement;
+    const keep=(ae && ae.__bpadSet && st.key && st.key===window.__editingKey &&
+                ae.closest && ae.closest("#inputPanel"))? ae : null;
+    const rowLab=n=>{ const r=n.closest(".fRow"); const l=r&&r.querySelector("label"); return l?l.textContent:null; };
+    const keepLab=keep? rowLab(keep) : null;
+    buildInputPanel();
+    if(keep){
+      const twin=document.querySelector('#inputPanel [data-fkey="'+st.key+'"]');
+      if(twin && twin!==keep && twin.__bpadSet && twin.type===keep.type && rowLab(twin)===keepLab){
+        keep.__bpadSet=twin.__bpadSet;
+        [...keep.attributes].forEach(a=>{ if(!twin.hasAttribute(a.name)) keep.removeAttribute(a.name); });
+        [...twin.attributes].forEach(a=>keep.setAttribute(a.name,a.value));
+        twin.replaceWith(keep);
+      }
+    }
+    buildTabs();
+    restoreUI(st);
+  ```
+- **Governing provision:** none (input handling only).
+- **Check case:** default project, Pedestal tab, f'c field. Select all and type `5.5`. Before: the field shows `55`, `S.conc.fc` = 55, and the Input Summary shows `f'c=55 ksi`. After: the field shows `5.5`, `S.conc.fc` = 5.5, and every result is identical to setting 5.5 directly. Plate thickness `1.25` typed slowly: before `125`, after `1.25`.
+- **How verified (headless Chromium, Playwright real keystrokes, main vs branch):**
+  - All 24 input-panel number fields × `5.5`, `5.5` with 120 ms delay, `0.75`, `.5`, `-1.25`, `1e3`, `1.0`: branch 168/168 correct, with focus kept; main 0/168.
+  - Parity: for each of the 24 fields in a fresh browser profile, main with the value set directly (`fill("5.5")`) vs the branch typed key by key. The `allChecks()` JSON, the full output-panel text and the saved `LS_AUTO` JSON are identical in all 24 cases and for the untouched default project (75 of 75 comparisons). Branch `fill` vs main `fill` is also identical. The default project is the tool's only example.
+  - Live update after each keystroke (`5`, `5.`, `5.5`). Backspace over the decimal (`5.5` → `5.` → `5`, then type `.25` → `5.25`). Caret in the middle (`12`, ←, `.` → `1.2`, then `7` → `1.72`). ArrowUp steps (`4` → `4.5`). `-` alone, then `0.5` → `-0.5`. A field that changes the layout (Bolts along x → 3). Combination editor P (`12.75`, `-0.5`) and all 32 ASCE 7 generator fields (`5.5`) correct on both main and branch.
+  - Every inline script parses (`vm.Script`). No console errors. Screenshot checked.
+- **Other copies of this code:** none (`numInput` and `refreshAll` are local to this tool).
+- **Open items:** none new.
