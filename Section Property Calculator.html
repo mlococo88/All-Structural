@@ -2876,6 +2876,263 @@ const SPC = (function () {
     return { ok: true, sc, Cw, A, cx, cy, Ix, Iy, Ixy, wn, check: { Iwx: ints(wA).Iwx, Iwy: ints(wA).Iwy } };
   }
 
+  /* ---------------- Phase 2a: weight, coating perimeter, buckling / LTB parameters, Wagner β, kern, stresses ----------------
+     Computed on demand from an analyze() result (they do not change any Phase 1 result). Units: in, in², kip, kip-in, ksi;
+     density lb/ft³, weight lb/ft. */
+  const RHO_STEEL = 490;                                   // lb/ft³, typical structural steel (default when a part has no density)
+  const partRho = pt => pos(pt.rho) ? pt.rho : RHO_STEEL;
+  // weight per foot = Σ A_i·ρ_i / 144 (A in in², ρ in lb/ft³). A_i is the area the properties use (AISC tabulated A when that
+  // option is ticked), NOT multiplied by n. A hole removes weight at the density of the solid part it lies in.
+  function weight(R) {
+    const sol = R.parts.filter(q => !q.pt.hole).map(q => ({ q, S: novShape(q.pt) }));
+    const rows = []; let w = 0;
+    R.parts.forEach(q => {
+      let rho = partRho(q.pt), host = null;
+      if (q.pt.hole) {
+        const h = novShape(q.pt); let best = 0;
+        sol.forEach(s => { const a = bbHit(h.bbox, s.S.bbox) ? novInter(h, s.S) : 0; if (a > best) { best = a; host = s.q; } });
+        if (host) rho = partRho(host.pt);
+      }
+      const wi = q.P.A * rho / 144; w += wi;
+      rows.push({ lbl: q.pt.lbl, id: q.pt.id, A: q.P.A, rho, w: wi, hole: !!q.pt.hole, host: host ? host.pt.lbl : null, own: pos(q.pt.rho), tab: q.use });
+    });
+    return { w, rows, mixed: new Set(rows.filter(r => !r.hole).map(r => r.rho)).size > 1 };
+  }
+
+  /* Boundary of the material = union of the solid parts (minus their own voids) minus the holes.
+     Every polygon edge and circle of every part is split where other boundaries cross or touch it; each piece is kept when
+     material lies on exactly one side of it (tested at its midpoint, offset ±tol to each side). Faces where two parts touch
+     (material on both sides, within the contact tolerance) drop out. Pieces are oriented with the material on the left and
+     chained into closed loops: loops enclosing material (positive area) are the outside boundary; negative loops are the
+     boundaries of closed cells and holes. Arcs exactly (r·Δθ); rectangular-tube corners as the tool models them (chords). */
+  function coating(R, tol) {
+    const eps = Math.max(pos(tol) ? tol : 0.001, 1e-9);
+    const parts = R.parts.map(q => ({ hole: !!q.pt.hole, lbl: q.pt.lbl, prims: q.G.prims, bb: q.G.bbox }));
+    const bbIn = (b, p, m) => p[0] >= b[0] - m && p[0] <= b[2] + m && p[1] >= b[1] - m && p[1] <= b[3] + m;
+    const inPrim = (pr, p) => pr.k === 'circ' ? len(sub(p, pr.c)) < pr.r : ptInPoly(p, pr.pts);
+    const solids = parts.filter(P => !P.hole), holes = parts.filter(P => P.hole);
+    const inMat = p => {
+      if (!solids.some(P => bbIn(P.bb, p, 0) && P.prims.reduce((s, pr) => s + (inPrim(pr, p) ? pr.s : 0), 0) > 0)) return false;
+      return !holes.some(P => P.prims.some(pr => inPrim(pr, p)));
+    };
+    // all boundary primitives with a bounding box
+    const B = [];
+    parts.forEach((P, ip) => P.prims.forEach(pr => {
+      if (pr.k === 'circ') B.push({ ip, pr, bb: [pr.c[0] - pr.r, pr.c[1] - pr.r, pr.c[0] + pr.r, pr.c[1] + pr.r] });
+      else { let b = [Infinity, Infinity, -Infinity, -Infinity]; pr.pts.forEach(q => { b = [Math.min(b[0], q[0]), Math.min(b[1], q[1]), Math.max(b[2], q[0]), Math.max(b[3], q[1])]; }); B.push({ ip, pr, bb: b }); }
+    }));
+    const hit = (a, b) => !(a[0] > b[2] + eps || b[0] > a[2] + eps || a[1] > b[3] + eps || b[1] > a[3] + eps);
+    const pieces = [];
+    const keepLine = (a, b, ip) => {
+      const d = sub(b, a), L = len(d); if (L < 1e-12) return;
+      const m = mul(add(a, b), 0.5), nl = [-d[1] / L, d[0] / L];
+      const lf = inMat(add(m, mul(nl, eps))), rt = inMat(sub(m, mul(nl, eps)));
+      if (lf === rt) return;
+      const pc = lf ? { k: 'L', a, b, L, ip } : { k: 'L', a: b, b: a, L, ip };
+      // the same piece from a coincident edge of another part (overlapping parts) is counted once
+      if (pieces.some(q => q.k === 'L' && q.ip !== ip && ptSegDist(m, q.a, q.b) < eps / 10 && Math.abs(crs(sub(q.b, q.a), d)) < 1e-9 * q.L * L)) return;
+      pieces.push(pc);
+    };
+    const keepArc = (c, r, a0, a1, ip) => {   // CCW from a0 to a1 (a1 > a0)
+      if (a1 - a0 < 1e-12) return;
+      const am = (a0 + a1) / 2, u = [Math.cos(am), Math.sin(am)];
+      const ins = inMat(add(c, mul(u, Math.max(r - eps, r / 2)))), out = inMat(add(c, mul(u, r + eps)));
+      if (ins === out) return;
+      if (pieces.some(q => q.k === 'A' && q.ip !== ip && len(sub(q.c, c)) < eps / 10 && Math.abs(q.r - r) < eps / 10 && angIn(am, q.a0, q.a1))) return;
+      pieces.push({ k: 'A', c, r, a0, a1, ccw: ins, L: r * (a1 - a0), ip });   // ccw: material inside → traverse CCW
+    };
+    const angIn = (a, lo, hi) => { let x = a; while (x < lo) x += 2 * PI; while (x > lo + 2 * PI) x -= 2 * PI; return x <= hi; };
+    const segCirc = (a, b, c, r) => { // parameters t ∈ (0,1) where segment ab meets the circle
+      const d = sub(b, a), f = sub(a, c), A2 = dot(d, d), Bq = 2 * dot(f, d), C = dot(f, f) - r * r, D = Bq * Bq - 4 * A2 * C, o = [];
+      if (A2 === 0 || D < 0) return o; const s = Math.sqrt(D); [(-Bq - s) / (2 * A2), (-Bq + s) / (2 * A2)].forEach(t => { if (t > 1e-12 && t < 1 - 1e-12) o.push(t); }); return o;
+    };
+    B.forEach((X, ix) => {
+      const near = B.filter((Y, iy) => iy !== ix && hit(X.bb, Y.bb));
+      if (X.pr.k === 'poly') {
+        const P = X.pr.pts, n = P.length;
+        for (let i = 0; i < n; i++) {
+          const a = P[i], b = P[(i + 1) % n], d = sub(b, a), L2 = dot(d, d); if (L2 < 1e-24) continue;
+          const ts = [0, 1], proj = q => dot(sub(q, a), d) / L2;
+          near.forEach(Y => {
+            if (Y.pr.k === 'poly') {
+              const Q = Y.pr.pts, m = Q.length;
+              for (let j = 0; j < m; j++) {
+                const c = Q[j], e = Q[(j + 1) % m];
+                if (ptSegDist(c, a, b) <= eps) ts.push(proj(c));
+                const den = crs(d, sub(e, c)); if (Math.abs(den) > 1e-14 * Math.sqrt(L2) * len(sub(e, c))) { const t = crs(sub(c, a), sub(e, c)) / den, u = crs(sub(c, a), d) / den; if (t > 0 && t < 1 && u >= 0 && u <= 1) ts.push(t); }
+              }
+            } else { segCirc(a, b, Y.pr.c, Y.pr.r).forEach(t => ts.push(t)); }
+          });
+          const T = [...new Set(ts.map(t => Math.min(1, Math.max(0, t))))].sort((x, y) => x - y);
+          for (let k = 0; k + 1 < T.length; k++) if (T[k + 1] - T[k] > 1e-12) keepLine(add(a, mul(d, T[k])), add(a, mul(d, T[k + 1])), X.ip);
+        }
+      } else {
+        const c = X.pr.c, r = X.pr.r, ang = [], at = q => Math.atan2(q[1] - c[1], q[0] - c[0]);
+        near.forEach(Y => {
+          if (Y.pr.k === 'poly') {
+            const Q = Y.pr.pts, m = Q.length;
+            for (let j = 0; j < m; j++) { const p = Q[j], q2 = Q[(j + 1) % m]; if (Math.abs(len(sub(p, c)) - r) <= eps) ang.push(at(p)); segCirc(p, q2, c, r).forEach(t => ang.push(at(add(p, mul(sub(q2, p), t))))); }
+          } else {
+            const c2 = Y.pr.c, r2 = Y.pr.r, dd = len(sub(c2, c));
+            if (dd > 1e-12 && dd <= r + r2 + eps && dd >= Math.abs(r - r2) - eps) {
+              const x = Math.max(-1, Math.min(1, (dd * dd + r * r - r2 * r2) / (2 * dd * r))), base = at(c2), h = Math.acos(x);
+              ang.push(base - h, base + h);
+            }
+          }
+        });
+        if (!ang.length) { keepArc(c, r, 0, 2 * PI, X.ip); return; }
+        const A = [...new Set(ang.map(a => { let x = a % (2 * PI); if (x < 0) x += 2 * PI; return x; }))].sort((x, y) => x - y);
+        for (let k = 0; k < A.length; k++) keepArc(c, r, A[k], k + 1 < A.length ? A[k + 1] : A[0] + 2 * PI, X.ip);
+      }
+    });
+    // chain the pieces (material on the left) into loops
+    const ends = pc => pc.k === 'L' ? [pc.a, pc.b] : (pc.ccw ? [[pc.c[0] + pc.r * Math.cos(pc.a0), pc.c[1] + pc.r * Math.sin(pc.a0)], [pc.c[0] + pc.r * Math.cos(pc.a1), pc.c[1] + pc.r * Math.sin(pc.a1)]] : [[pc.c[0] + pc.r * Math.cos(pc.a1), pc.c[1] + pc.r * Math.sin(pc.a1)], [pc.c[0] + pc.r * Math.cos(pc.a0), pc.c[1] + pc.r * Math.sin(pc.a0)]]);
+    const dirAt = (pc, atEnd) => { if (pc.k === 'L') return mul(sub(pc.b, pc.a), 1 / pc.L); const a = pc.ccw ? (atEnd ? pc.a1 : pc.a0) : (atEnd ? pc.a0 : pc.a1), s = pc.ccw ? 1 : -1; return [-s * Math.sin(a), s * Math.cos(a)]; };
+    const area2 = pc => { // ∫(x dy − y dx) along the piece in its direction
+      if (pc.k === 'L') return crs(pc.a, pc.b);
+      const { c, r, a0, a1 } = pc, v = r * c[0] * (Math.sin(a1) - Math.sin(a0)) - r * c[1] * (Math.cos(a1) - Math.cos(a0)) + r * r * (a1 - a0);
+      return pc.ccw ? v : -v;
+    };
+    const exposed = pieces.reduce((s, pc) => s + pc.L, 0);
+    const full = pieces.filter(pc => pc.k === 'A' && pc.a1 - pc.a0 >= 2 * PI - 1e-12), rest = pieces.filter(pc => !(pc.k === 'A' && pc.a1 - pc.a0 >= 2 * PI - 1e-12));
+    let outside = 0, inner = 0, nOut = 0, nIn = 0, ok = true;
+    full.forEach(pc => { if (pc.ccw) { outside += pc.L; nOut++; } else { inner += pc.L; nIn++; } });
+    // nodes: endpoints merged within eps (grid hashing)
+    const E = rest.map(pc => ends(pc)), keys = new Map(), node = [], g = 4 * eps;
+    const nodeOf = p => {
+      const gx = Math.floor(p[0] / g), gy = Math.floor(p[1] / g);
+      for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) { const L = keys.get((gx + i) + ',' + (gy + j)); if (L) for (const k of L) if (len(sub(node[k], p)) <= eps) return k; }
+      node.push(p); const k = node.length - 1, key = gx + ',' + gy; if (!keys.has(key)) keys.set(key, []); keys.get(key).push(k); return k;
+    };
+    const S = E.map(e => nodeOf(e[0])), F = E.map(e => nodeOf(e[1]));
+    const outOf = node.map(() => []); rest.forEach((pc, i) => outOf[S[i]].push(i));
+    const used = new Array(rest.length).fill(false);
+    for (let i0 = 0; i0 < rest.length; i0++) {
+      if (used[i0]) continue;
+      let i = i0, A2 = 0, Ls = 0, guard = 0; const start = S[i0];
+      while (guard++ <= rest.length) {
+        used[i] = true; A2 += area2(rest[i]); Ls += rest[i].L;
+        const nd = F[i]; if (nd === start) break;
+        const cand = outOf[nd].filter(j => !used[j]); if (!cand.length) { ok = false; break; }
+        const din = dirAt(rest[i], true); let best = -1, bv = -Infinity;
+        cand.forEach(j => { const dj = dirAt(rest[j], false), v = Math.atan2(crs(din, dj), dot(din, dj)); if (v > bv) { bv = v; best = j; } });   // leftmost turn
+        i = best;
+      }
+      if (A2 > 0) { outside += Ls; nOut++; } else { inner += Ls; nIn++; }
+    }
+    return { exposed, outside: ok ? outside : null, inner: ok ? inner : null, nOut, nIn, ok, pieces: pieces.length, eps };
+  }
+
+  /* doubly symmetric: the weighted primitives map onto themselves under reflection about each centroidal principal axis */
+  function symAbout(R, u) {   // reflection about the line through the centroid along u
+    const c = [R.cx, R.cy], ext = Math.max(R.bbox[2] - R.bbox[0], R.bbox[3] - R.bbox[1]), e = 1e-7 * Math.max(ext, 1e-9);
+    const rf = p => { const d = sub(p, c), a = dot(d, u); return add(c, sub(mul(u, 2 * a), d)); };
+    const items = R.W.filter(x => x.w !== 0), used = new Array(items.length).fill(false);
+    return items.every(x => {
+      const j = items.findIndex((y, k) => !used[k] && Math.abs(y.w - x.w) <= 1e-12 * Math.abs(x.w) && y.pr.k === x.pr.k && (x.pr.k === 'circ'
+        ? (Math.abs(y.pr.r - x.pr.r) <= e && len(sub(rf(x.pr.c), y.pr.c)) <= e)
+        : (y.pr.pts.length === x.pr.pts.length && x.pr.pts.every(p => { const q = rf(p); return y.pr.pts.some(v => len(sub(v, q)) <= e); }))));
+      if (j < 0) return false; used[j] = true; return true;
+    });
+  }
+  /* AISC 360-16 Ch. E4 / F2 parameters and the Wagner coefficient */
+  function buckling(R) {
+    const T = R.tors || {}, o = { sc: !!T.sc, why: T.sc ? '' : (T.cwWhy || 'shear centre not computed') };
+    if (T.sc) { o.xo = T.xo; o.yo = T.yo; o.ro2 = T.xo * T.xo + T.yo * T.yo + (R.Ix + R.Iy) / R.A; o.ro = Math.sqrt(o.ro2); o.H = 1 - (T.xo * T.xo + T.yo * T.yo) / o.ro2; }
+    o.dsym = symAbout(R, R.u1) && symAbout(R, R.u2);
+    if (o.dsym && fin(T.Cw)) { o.Imin = R.I2; o.Smaj = R.S1; o.rts = Math.sqrt(Math.sqrt(R.I2 * T.Cw) / R.S1); }
+    // h0: single rolled I-shape, or three plates/bars forming an I (two equal flanges, web between), doubly symmetric
+    if (o.dsym) {
+      const P = R.parts.filter(q => !q.pt.hole);
+      if (P.length === 1 && P[0].pt.type === 'shape' && P[0].G.g.kind === 'I') { const d = P[0].G.g.dims; o.h0 = d.d - d.tf; o.h0how = 'd − t_f of ' + P[0].G.g.desc; }
+      else if (P.length === 3 && R.parts.length === 3 && P.every(q => q.pt.type === 'plate' || q.pt.type === 'bar')) {
+        const s2 = q => dot(sub(q.geo.c, [R.cx, R.cy]), R.u2), wid = q => { const b = q.G.bbox, c = [[b[0], b[1]], [b[2], b[3]]]; let lo = Infinity, hi = -Infinity; q.G.prims[0].pts.forEach(p => { const v = dot(p, R.u1); lo = Math.min(lo, v); hi = Math.max(hi, v); }); return hi - lo; };
+        const S2 = P.map(q => ({ q, s: s2(q), w: wid(q) })).sort((a, b) => a.s - b.s), ext = Math.max(R.bbox[2] - R.bbox[0], R.bbox[3] - R.bbox[1]);
+        if (Math.abs(S2[1].s) < 1e-9 * ext && S2[0].w > S2[1].w && S2[2].w > S2[1].w) { o.h0 = S2[2].s - S2[0].s; o.h0how = 'distance between the centroids of ' + S2[2].q.pt.lbl + ' and ' + S2[0].q.pt.lbl; }
+      }
+    }
+    o.wag = wagner(R);
+    return o;
+  }
+  // ∫x³, ∫x²y, ∫xy², ∫y³ dA over a polygon (signed by orientation): Green's theorem, edges by 3-point Gauss–Legendre (exact for these degrees)
+  const GL3 = [[0.5 - Math.sqrt(0.15), 5 / 18], [0.5, 8 / 18], [0.5 + Math.sqrt(0.15), 5 / 18]];
+  function polyCubic(P) {
+    let a30 = 0, a21 = 0, a12 = 0, a03 = 0; const n = P.length;
+    for (let i = 0; i < n; i++) {
+      const p = P[i], q = P[(i + 1) % n], dx = q[0] - p[0], dy = q[1] - p[1];
+      GL3.forEach(([t, w]) => { const x = p[0] + t * dx, y = p[1] + t * dy; a30 += w * x ** 4 / 4 * dy; a21 += w * x ** 3 * y / 3 * dy; a12 += w * x * x * y * y / 2 * dy; a03 += w * x * y ** 3 * dy; });
+    }
+    return { a30, a21, a12, a03 };
+  }
+  function circCubic(c, r) { const A = PI * r * r, I0 = PI * r ** 4 / 4, x = c[0], y = c[1]; return { a30: A * x ** 3 + 3 * x * I0, a21: y * (A * x * x + I0), a12: x * (A * y * y + I0), a03: A * y ** 3 + 3 * y * I0 }; }
+  /* Wagner coefficient (monosymmetry constant), about the centroidal principal axes of the (n-weighted) plate-model geometry:
+       β_1 = (1/I_1)∫ v(u² + v²) dA − 2v_o   (u along axis 1, v along axis 2 = u1 turned 90° CCW; v_o = shear-centre ordinate)
+       β_2 = (1/I_2)∫ u(u² + v²) dA − 2u_o
+     Sign: as computed, for the +v side in TENSION (v measured toward the tension side, as Trahair & Bradford measure y);
+     the value for the +v side in compression is −β. */
+  function wagner(R) {
+    const T = R.tors || {}; if (!T.sc) return { ok: false, why: T.cwWhy || 'shear centre not computed' };
+    const m = { A: 0, Sx: 0, Sy: 0, Ixx: 0, Iyy: 0, Ixy: 0 };
+    R.W.forEach(({ pr, w }) => { const q = primM(pr); Object.keys(m).forEach(k => { m[k] += w * q[k]; }); });
+    const cx = m.Sy / m.A, cy = m.Sx / m.A, Ixc = m.Ixx - m.A * cy * cy, Iyc = m.Iyy - m.A * cx * cx, Ixyc = m.Ixy - m.A * cx * cy;
+    const pr0 = principal(Ixc, Iyc, Ixyc), u1 = [Math.cos(pr0.th), Math.sin(pr0.th)], u2 = [-Math.sin(pr0.th), Math.cos(pr0.th)];
+    const loc = p => { const d = [p[0] - cx, p[1] - cy]; return [dot(d, u1), dot(d, u2)]; };
+    let a30 = 0, a21 = 0, a12 = 0, a03 = 0;
+    R.W.forEach(({ pr, w }) => { const k = pr.k === 'poly' ? polyCubic(pr.pts.map(loc)) : circCubic(loc(pr.c), pr.r); a30 += w * k.a30; a21 += w * k.a21; a12 += w * k.a12; a03 += w * k.a03; });
+    const sc = loc(T.sc), b1 = (a21 + a03) / pr0.I1 - 2 * sc[1], b2 = pr0.I2 > 0 ? (a30 + a12) / pr0.I2 - 2 * sc[0] : null;
+    return { ok: true, A: m.A, c: [cx, cy], I1: pr0.I1, I2: pr0.I2, th: pr0.th, u1, u2, int1: a21 + a03, int2: a30 + a12, vo: sc[1], uo: sc[0], b1, b2 };
+  }
+
+  /* kern (core): load points (axial force) that cause no stress reversal. Each edge of the convex hull of the material
+     (outward unit normal n, distance d from the centroid) gives one kern vertex e = −J·n/(A·d), J = [[I_y, I_xy], [I_xy, I_x]].
+     Circles enter the hull as circumscribed 720-gons (every hull edge from a circle is a true tangent: kern vertices on the
+     exact kern curve; the hull is up to 0.001 % larger near a circle, i.e. conservative). Transformed A, I when n ≠ 1. */
+  function kern(R) {
+    const pts = [], N = 720, rc = 1 / Math.cos(PI / N);
+    R.parts.forEach(q => { if (q.pt.hole) return; q.G.prims.forEach(pr => { if (pr.s < 0) return; if (pr.k === 'poly') pr.pts.forEach(p => pts.push(p)); else for (let i = 0; i < N; i++) { const a = 2 * PI * (i + 0.5) / N; pts.push([pr.c[0] + pr.r * rc * Math.cos(a), pr.c[1] + pr.r * rc * Math.sin(a)]); } }); });
+    const H = hull(pts), c = [R.cx, R.cy], V = [];
+    for (let i = 0; i < H.length; i++) {
+      const a = H[i], b = H[(i + 1) % H.length], e = sub(b, a), L = len(e); if (L < 1e-12) continue;
+      const n = [e[1] / L, -e[0] / L], d = dot(n, sub(a, c)); if (!(d > 0)) return { ok: false, why: 'the centroid is not inside the convex hull' };
+      const k = [-(R.Iy * n[0] + R.Ixy * n[1]) / (R.A * d), -(R.Ixy * n[0] + R.Ix * n[1]) / (R.A * d)];
+      V.push({ e: k, p: add(c, k), n, d, a, b });
+    }
+    let bb = [Infinity, Infinity, -Infinity, -Infinity]; V.forEach(v => { bb = [Math.min(bb[0], v.e[0]), Math.min(bb[1], v.e[1]), Math.max(bb[2], v.e[0]), Math.max(bb[3], v.e[1])]; });
+    return { ok: true, V, hull: H, ext: bb, circ: R.parts.some(q => !q.pt.hole && q.G.prims.some(pr => pr.k === 'circ' && pr.s > 0)) };
+  }
+  function hull(P) {   // Andrew's monotone chain, CCW, collinear points dropped
+    const S = P.slice().sort((a, b) => a[0] - b[0] || a[1] - b[1]); if (S.length < 3) return S;
+    const sc = Math.max(1e-300, ...S.map(p => Math.abs(p[0]) + Math.abs(p[1]))), z = 1e-14 * sc * sc;
+    const cr = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+    const lo = [], up = [];
+    S.forEach(p => { while (lo.length >= 2 && cr(lo[lo.length - 2], lo[lo.length - 1], p) <= z) lo.pop(); lo.push(p); });
+    for (let i = S.length - 1; i >= 0; i--) { const p = S[i]; while (up.length >= 2 && cr(up[up.length - 2], up[up.length - 1], p) <= z) up.pop(); up.push(p); }
+    lo.pop(); up.pop(); return lo.concat(up);
+  }
+
+  /* normal stress, unsymmetric bending (x, y from the centroid; I_x, I_y, I_xy of the (transformed) section):
+       σ = P/A − [(M_x I_y − M_y I_xy)·y + (M_y I_x − M_x I_xy)·x] / (I_x I_y − I_xy²)
+     P > 0 tension; M_x > 0 compresses the +y side, M_y > 0 compresses the +x side (moments about the centroidal axes,
+     i.e. M_x = −∫σ y dA, M_y = −∫σ x dA). Part i (modulus ratio n_i): σ_i = n_i·σ. */
+  function stress(R, P, Mx, My) {
+    P = fin(P) ? P : 0; Mx = fin(Mx) ? Mx : 0; My = fin(My) ? My : 0;
+    const D = R.Ix * R.Iy - R.Ixy * R.Ixy, s0 = P / R.A, ky = -(Mx * R.Iy - My * R.Ixy) / D, kx = -(My * R.Ix - Mx * R.Ixy) / D;
+    const sig = p => s0 + kx * (p[0] - R.cx) + ky * (p[1] - R.cy), gn = Math.hypot(kx, ky);
+    const parts = []; let mx = null, mn = null;
+    R.parts.forEach(q => {
+      if (q.pt.hole) return;
+      const pts = [];
+      q.G.prims.forEach(pr => { if (pr.s < 0) return; if (pr.k === 'poly') pr.pts.forEach(p => pts.push(p)); else { const u = gn > 0 ? [kx / gn, ky / gn] : [1, 0]; pts.push(add(pr.c, mul(u, pr.r)), sub(pr.c, mul(u, pr.r))); } });
+      let hi = null, lo = null;
+      pts.forEach(p => { const s = q.n * sig(p); if (!hi || s > hi.s + 1e-12 * Math.abs(s)) hi = { s, p }; if (!lo || s < lo.s - 1e-12 * Math.abs(s)) lo = { s, p }; });
+      const row = { lbl: q.pt.lbl, id: q.pt.id, n: q.n, hi, lo }; parts.push(row);
+      if (hi && (!mx || hi.s > mx.s)) mx = Object.assign({ lbl: q.pt.lbl }, hi);
+      if (lo && (!mn || lo.s < mn.s)) mn = Object.assign({ lbl: q.pt.lbl }, lo);
+    });
+    const na = gn > 1e-300 ? { p: [R.cx - s0 * kx / (gn * gn), R.cy - s0 * ky / (gn * gn)], t: [-ky / gn, kx / gn], ang: Math.atan2(kx, -ky) } : null;
+    return { P, Mx, My, D, s0, kx, ky, sig, parts, max: mx, min: mn, na };
+  }
+
   /* ---------------- templates ----------------
      Each returns new parts (positions in inches; the section is centred near the origin).
      Local frames: C — back of web at refPts.back (left), toes toward +x; L — heel at refPts.heel, long leg (leg1) along +y,
@@ -2931,7 +3188,7 @@ const SPC = (function () {
   };
   function P(type, p, x, y, o) { o = o || {}; return { type, p, x, y, rot: o.rot || 0, mir: !!o.mir, n: 1, hole: false, useTab: false }; }
 
-  return { FAMS, FAM_ORDER, TYPES, shapeRec, shapeNames, dblAngle, partGeom, partGlobal, xfMat, apply, polyM, circM, primM, primsMoments, analyze, qcut, principal, Jrect, labelPrefix, fmtDim, TEMPLATES, rotTensor, plastic, sideSum, chordLen, pairKey, sectorial, partProps, triangulate, overlapArea, polyDist, primPoly, selfIntersects, ptInPoly, NOV };
+  return { FAMS, FAM_ORDER, TYPES, shapeRec, shapeNames, dblAngle, partGeom, partGlobal, xfMat, apply, polyM, circM, primM, primsMoments, analyze, qcut, principal, Jrect, labelPrefix, fmtDim, TEMPLATES, rotTensor, plastic, sideSum, chordLen, pairKey, sectorial, partProps, triangulate, overlapArea, polyDist, primPoly, selfIntersects, ptInPoly, NOV, RHO_STEEL, partRho, weight, coating, buckling, wagner, kern, hull, stress, symAbout, polyCubic };
 })();
 /* SPC-ENGINE-END */
 </script>
@@ -3008,7 +3265,11 @@ const UQ = {
   L: { in: [1, 'in'], mm: [25.4, 'mm'] }, A: { in: [1, 'in²'], mm: [645.16, 'mm²'] }, S: { in: [1, 'in³'], mm: [16387.064, 'mm³'] },
   I: { in: [1, 'in⁴'], mm: [416231.4256, 'mm⁴'] }, W: { in: [1, 'in⁶'], mm: [Math.pow(25.4, 6), 'mm⁶'] },
   F: { in: [1, 'kip'], mm: [4.4482216152605, 'kN'] }, q: { in: [1, 'kip/in'], mm: [4448.2216152605 / 25.4, 'N/mm'] }, tau: { in: [1, 'ksi'], mm: [6.894757293168, 'MPa'] },
-  deg: { in: [1, '°'], mm: [1, '°'] }, n: { in: [1, ''], mm: [1, ''] }
+  deg: { in: [1, '°'], mm: [1, '°'] }, n: { in: [1, ''], mm: [1, ''] },
+  // Phase 2a: moment (internal kip-in), normal stress, density, weight per length, coating area per length (internal: perimeter in in)
+  Mo: { in: [1 / 12, 'kip-ft'], mm: [0.11298482902761671, 'kN·m'] }, sig: { in: [1, 'ksi'], mm: [6.894757293168, 'MPa'] },
+  rho: { in: [1, 'lb/ft³'], mm: [16.018463373960138, 'kg/m³'] }, wt: { in: [1, 'lb/ft'], mm: [1.4881639435695537, 'kg/m'] },
+  pa: { in: [1 / 12, 'ft²/ft'], mm: [0.0254, 'm²/m'] }
 };
 const unitSys = () => (M && M.settings && M.settings.units === 'mm') ? 'mm' : 'in';
 const uf = k => UQ[k][unitSys()][0], un = k => UQ[k][unitSys()][1];
@@ -3180,7 +3441,10 @@ function migrate(d) {
   (Array.isArray(d.parts) ? d.parts : []).forEach(p => {
     if (!p || typeof p !== 'object' || !SPC.TYPES[p.type]) return;
     m.parts.push({ id: typeof p.id === 'string' && p.id ? p.id : newId(), lbl: String(p.lbl || ''), type: p.type, p: (p.p && typeof p.p === 'object') ? JSON.parse(JSON.stringify(p.p)) : {}, x: +p.x || 0, y: +p.y || 0, rot: +p.rot || 0, mir: !!p.mir, n: isNum(p.n) ? p.n : 1, hole: !!p.hole, useTab: !!p.useTab });
+    if (isNum(p.rho) && p.rho > 0) m.parts[m.parts.length - 1].rho = p.rho;   // optional density, lb/ft³ (Phase 2a; absent = steel 490)
   });
+  // optional stress loads (Phase 2a): P kip (tension +), Mx, My kip-in; absent = all 0
+  if (d.stress && typeof d.stress === 'object') m.stress = { P: isNum(d.stress.P) ? d.stress.P : 0, Mx: isNum(d.stress.Mx) ? d.stress.Mx : 0, My: isNum(d.stress.My) ? d.stress.My : 0 };
   // unique ids
   const ids = new Set(); m.parts.forEach(p => { if (ids.has(p.id)) p.id = newId(); ids.add(p.id); });
   if (m.view) delete m.view;
@@ -3535,6 +3799,10 @@ function buildPartPane(P) {
   });
   mkSec(P, 'ppMat', 'Material and role', body => {
     fRow(body, 'Modulus ratio n', numIn(() => pt.n, v => { pt.n = v; }, 'pp_n', { k: 'n', min: 0, geo: true }), '', 'n = E_part / E_ref (transformed section). Use 1 for one material; e.g. a different steel grade does not change n, a concrete slab on steel does.');
+    if (!pt.hole) {
+      fRow(body, 'Density ρ', numIn(() => SPC.partRho(pt), v => { pt.rho = v; }, 'pp_rho', { k: 'rho', min: 0, geo: true }), un('rho'), 'For the weight per length only (Properties → Weight). n does not change the weight.');
+      fRow(body, 'Density preset', selIn(RHO_PRESETS(), () => '', v => { if (v) { pushUndo(); pt.rho = +v; } }, 'pp_rhoP', false), '', 'Typical values — use the actual material density where it matters.');
+    } else body.appendChild(el('div', 'hint', 'A hole removes weight at the density of the solid part it lies in.'));
     if (SPC.TYPES[pt.type].hole) chkRow(body, 'Hole / cut-out (negative area)', chkIn(() => pt.hole, v => { pt.hole = v; }, 'pp_hole', true, true, GD), 'A hole removes area from whatever it covers. Give it the same n as the part it is in.');
   });
   mkSec(P, 'ppProps', 'This part\'s own properties', body => {
@@ -3551,6 +3819,8 @@ function buildPartPane(P) {
     return h + '</table>';
   };
 }
+// density presets (typical values, lb/ft³; shown in the display units)
+const RHO_PRESETS = () => [['', 'preset…'], ['490', 'Steel'], ['169', 'Aluminum'], ['150', 'Concrete, normal weight'], ['35', 'Timber (typical softwood)']].map(([v, l]) => [v, v ? l + ' — typical ' + nf(+v, 'rho', 4) + ' ' + un('rho') : l]);
 function polyTable(body, pt) {
   const G = SPC.partGlobal(pt), pts = G.g.prims.length ? G.g.prims[0].pts.map(q => SPC.apply(G.T, q)).map(q => [q[0] + pt.x, q[1] + pt.y]) : [];
   body.appendChild(el('div', 'hint', 'Vertices in section coordinates (' + un('L') + '). Editing a vertex keeps the shape where it is and resets rotation/mirror to 0.'));
@@ -3601,6 +3871,7 @@ function buildMultiPane(P, sp) {
     body.appendChild(r2);
     body.appendChild(el('div', 'hint', 'Flip and rotate act on the selection as a group (about the centre of its bounding box). Right-click a part for "align" and "place touching" relative to another selected part.'));
     fRow(body, 'Set n for all', numIn(() => null, v => { if (!(v > 0)) return; sp.forEach(p => { p.n = v; }); }, 'mv_n', { k: 'n', min: 0, blank: true, geo: true, ph: 'n' }), '');
+    fRow(body, 'Set density ρ for all', selIn(RHO_PRESETS(), () => '', v => { if (v) { pushUndo(); sp.forEach(p => { if (!p.hole) p.rho = +v; }); } }, 'mv_rhoP', false), '', 'Weight only (holes take the density of the part they lie in).');
   });
 }
 
@@ -3662,6 +3933,8 @@ function buildSetPane(P) {
     chkRow(body, 'Part labels', chkIn(() => S.labels, v => { S.labels = v; }, 'set_lab', false));
     chkRow(body, 'Principal axes', chkIn(() => S.showPrincipal, v => { S.showPrincipal = v; }, 'set_pa', false));
     chkRow(body, 'Shear centre', chkIn(() => S.showSC, v => { S.showSC = v; }, 'set_sc', false));
+    chkRow(body, 'Kern (core)', chkIn(() => S.showKern, v => { S.showKern = v; }, 'set_kern', false));
+    chkRow(body, 'Inertia ellipse (Culmann)', chkIn(() => S.showEllipse, v => { S.showEllipse = v; }, 'set_ell', false), 'Semi-axes r<sub>1</sub> = √(I<sub>1</sub>/A) measured along axis 2 and r<sub>2</sub> = √(I<sub>2</sub>/A) along axis 1.');
     chkRow(body, 'Dimensions on hover', chkIn(() => S.showDims, v => { S.showDims = v; }, 'set_dim', false));
   });
   mkSec(P, 'setSnap', 'Snapping and moving', body => {
@@ -3839,6 +4112,9 @@ function svgMarkup(W, H, V, opts) {
       o.push(ax(u1, '1', '#B45309')); o.push(ax(u2, '2', '#B45309'));
     }
     o.push(`<g pointer-events="none"><circle cx="${fx(C[0])}" cy="${fx(C[1])}" r="7" fill="#fff" stroke="#0F172A" stroke-width="1.3"/><path d="M${fx(C[0])} ${fx(C[1] - 7)}A7 7 0 0 1 ${fx(C[0] + 7)} ${fx(C[1])}L${fx(C[0])} ${fx(C[1])}Z M${fx(C[0])} ${fx(C[1] + 7)}A7 7 0 0 1 ${fx(C[0] - 7)} ${fx(C[1])}L${fx(C[0])} ${fx(C[1])}Z" fill="#0F172A"/></g>`);
+    // Phase 2a overlays (Settings → Drawing): central ellipse of inertia, kern
+    if (S.showEllipse && R.I2 > 0) { const a = R.r2 * V.s, b2 = R.r1 * V.s, dg = -R.thp * 180 / Math.PI; o.push(`<g pointer-events="none"><ellipse cx="${fx(C[0])}" cy="${fx(C[1])}" rx="${fx(a)}" ry="${fx(b2)}" transform="rotate(${fx(dg)} ${fx(C[0])} ${fx(C[1])})" fill="none" stroke="#0E7490" stroke-width="1.5"/><text x="${fx(C[0] + a * Math.cos(R.thp) + 4)}" y="${fx(C[1] - a * Math.sin(R.thp) - 4)}" font-size="10" fill="#0E7490" stroke="#fff" stroke-width="3" paint-order="stroke">ellipse of inertia</text></g>`); }
+    if (S.showKern) { const K = ext('kern'); if (K && K.ok && K.V.length > 2) { const d = 'M' + K.V.map(v => { const q = tr(v.p); return fx(q[0]) + ' ' + fx(q[1]); }).join('L') + 'Z'; const top = K.V.reduce((m, v) => v.p[1] > m.p[1] ? v : m, K.V[0]), tq = tr(top.p); o.push(`<g pointer-events="none"><path d="${d}" fill="#BE185D" fill-opacity=".14" stroke="#BE185D" stroke-width="1.5"/><text x="${fx(tq[0] + 6)}" y="${fx(tq[1] - 5)}" font-size="10" fill="#BE185D" stroke="#fff" stroke-width="3" paint-order="stroke">kern</text></g>`); } }
     if (S.showSC && R.tors && R.tors.sc) { const P = tr(R.tors.sc); o.push(`<g pointer-events="none"><path d="M${fx(P[0] - 6)} ${fx(P[1] - 6)}l12 12m0 -12l-12 12" stroke="#7C3AED" stroke-width="2"/><text x="${fx(P[0] + 8)}" y="${fx(P[1] - 6)}" font-size="10" fill="#7C3AED" stroke="#fff" stroke-width="3" paint-order="stroke">SC</text></g>`); }
     // Q cut
     if (M.q.on) {
@@ -4487,7 +4763,7 @@ function wireKeys() {
 /* =====================================================================
    OUTPUT (tabs)
    ===================================================================== */
-const OUT_TABS = [['sec', 'Section'], ['props', 'Properties'], ['calc', 'Calc detail'], ['plas', 'Plastic'], ['tors', 'Torsion'], ['q', 'Q & shear flow'], ['val', 'Validation'], ['man', 'Method']];
+const OUT_TABS = [['sec', 'Section'], ['props', 'Properties'], ['calc', 'Calc detail'], ['plas', 'Plastic'], ['tors', 'Torsion'], ['q', 'Q & shear flow'], ['stress', 'Stresses'], ['val', 'Validation'], ['man', 'Method']];
 function curTab() { const t = M.ui.outTab; return OUT_TABS.some(x => x[0] === t) ? t : 'sec'; }
 function setOutTab(id) { if (curTab() === id) return; M.ui.outTab = id; autosave(); buildTabBar(); renderTab(); }
 function renderOutput(light) { buildGovStrip(); if (!light) buildTabBar(); renderTab(light); inputTabMarks(); updateToolState(); }
@@ -4502,7 +4778,7 @@ function buildTabBar() {
     bar.appendChild(b);
   });
 }
-const BUILDERS = () => ({ sec: buildSec, props: buildProps, calc: buildCalc, plas: buildPlas, tors: buildTors, q: buildQ, val: buildValid, man: buildManual });
+const BUILDERS = () => ({ sec: buildSec, props: buildProps, calc: buildCalc, plas: buildPlas, tors: buildTors, q: buildQ, stress: buildStress, val: buildValid, man: buildManual });
 function renderTab(light) {
   const pages = $('tabPages'), id = curTab();
   if (light && id === 'sec' && $('secSummary')) { const s = $('secSummary'); s.innerHTML = ''; buildSecSummary(s); return; }
@@ -4641,6 +4917,7 @@ function buildProps(pg) {
   });
   if (R.single) pg.appendChild(aisCompare(R.single));
   mkSec(pg, 'pParts', 'Parts', body => body.appendChild(partsTable()));
+  buildPropsP2a(pg);
 }
 function partsTable() {
   return tblEl(['Label', 'Description', 'x (centroid)', 'y (centroid)', 'Rotation', 'Mirr.', 'n', 'A', 'Basis'], R.rows.map(r => {
@@ -4685,6 +4962,7 @@ function buildCalc(pg) {
   mkSec(pg, 'cG', 'Part geometry (plate model)', body => {
     body.appendChild(tblEl(['Part', 'Model', 'Dimensions'], M.parts.map(p => { const g = SPC.partGeom(p); return [p.lbl, (p.hole ? 'hole: ' : '') + (p.type === 'shape' ? g.desc + ' as plates' : SPC.TYPES[p.type].name), Object.keys(g.dims).map(k => k + ' = ' + nf(g.dims[k], 'L', 4)).join(', ') + (p.type === 'poly' ? (g.prims[0] ? g.prims[0].pts.length + ' vertices' : '') : '')]; }), { left: [0, 1, 2] }));
   });
+  buildCalcP2a(pg);
 }
 
 /* ---- Plastic tab ---- */
@@ -4798,6 +5076,270 @@ function buildQ(pg) {
   });
 }
 
+/* =====================================================================
+   PHASE 2a: weight and coating area, buckling / LTB parameters, Wagner β,
+   kern, Mohr's circle, inertia ellipse, stresses
+   ===================================================================== */
+const VFY2 = (t) => `<span class="badge vfy" title="${esc(t || 'Interpretation or reference to be verified by the engineer')}">verify</span>`;
+// results computed on demand from R (cached on R; recomputed whenever R is)
+function ext(k) {
+  if (!R || !R.ok) return null;
+  const X = R._x || (R._x = {});
+  if (!(k in X)) {
+    try { X[k] = k === 'w' ? SPC.weight(R) : k === 'coat' ? SPC.coating(R, M.settings.tol) : k === 'bk' ? SPC.buckling(R) : k === 'kern' ? SPC.kern(R) : null; }
+    catch (e) { console.error(e); X[k] = null; }
+  }
+  return X[k];
+}
+const stressIn = () => M.stress || { P: 0, Mx: 0, My: 0 };
+function setStress(k, v) { M.stress = Object.assign({ P: 0, Mx: 0, My: 0 }, M.stress || {}); M.stress[k] = isNum(v) ? v : 0; }
+const stressOn = () => { const s = stressIn(); return !!(s.P || s.Mx || s.My); };
+
+/* ---- Mohr's circle (SVG) ---- */
+function mohrSVG(Ix, Iy, Ixy) {
+  const W = 420, H = 300, avg = (Ix + Iy) / 2, Rr = Math.hypot((Ix - Iy) / 2, Ixy), I1 = avg + Rr, I2 = avg - Rr;
+  const span = Math.max(I1, 1e-300), rad = Math.max(Rr, 0.02 * span);
+  // equal scales on both axes; I axis from 0 (or I2 if negative) to I1
+  const lo = Math.min(0, I2), hi = I1, sc = Math.min((W - 70) / Math.max(hi - lo, 1e-300), (H - 70) / (2 * rad));
+  const X = v => 40 + (v - lo) * sc, Y = v => H / 2 - v * sc;
+  const o = [`<svg class="mohr" viewBox="0 0 ${W} ${H}" width="100%" style="max-width:${W}px;display:block" role="img" aria-label="Mohr's circle of inertia">`];
+  o.push(`<rect x="0" y="0" width="${W}" height="${H}" fill="#FCFDFE"/>`);
+  o.push(`<path d="M${fx(X(lo) - 10)} ${H / 2}H${W - 12}M${fx(X(0))} 12V${H - 12}" stroke="#94A3B8" stroke-width="1" fill="none"/>`);
+  o.push(`<path d="M${W - 18} ${H / 2 - 4}l6 4l-6 4M${fx(X(0)) - 4} 18l4 -6l4 6" stroke="#94A3B8" fill="none"/>`);
+  o.push(`<text x="${W - 14}" y="${H / 2 + 16}" font-size="11" text-anchor="end" fill="#334155">I</text><text x="${fx(X(0) + 6)}" y="20" font-size="11" fill="#334155">I<tspan font-size="8" dy="2">xy</tspan></text>`);
+  const cx = X(avg), cy = Y(0), r = Rr * sc;
+  if (Rr > 1e-12 * span) o.push(`<circle cx="${fx(cx)}" cy="${fx(cy)}" r="${fx(r)}" fill="none" stroke="#1E3A5F" stroke-width="2"/>`);
+  const px = [X(Ix), Y(Ixy)], py = [X(Iy), Y(-Ixy)];
+  o.push(`<path d="M${fx(px[0])} ${fx(px[1])}L${fx(py[0])} ${fx(py[1])}" stroke="#64748B" stroke-width="1" stroke-dasharray="4 3"/>`);
+  // 2θp arc from X to I1
+  const th = SPC.principal(Ix, Iy, Ixy).th, a0 = Math.atan2(Ixy, (Ix - Iy) / 2);
+  if (Rr > 1e-12 * span && Math.abs(th) > 1e-9) {
+    const ra = Math.min(r * 0.45, 40), N = 24, P = []; for (let i = 0; i <= N; i++) { const a = a0 + 2 * th * i / N; P.push(fx(cx + ra * Math.cos(a)) + ' ' + fx(cy - ra * Math.sin(a))); }
+    o.push(`<path d="M${P.join('L')}" stroke="#B45309" stroke-width="1.4" fill="none"/>`);
+    const am = a0 + th; o.push(`<text x="${fx(cx + (ra + 12) * Math.cos(am))}" y="${fx(cy - (ra + 12) * Math.sin(am) + 4)}" font-size="10" fill="#B45309" text-anchor="middle">2θp</text>`);
+  }
+  const dot = (p, col, lab, dx, dy, anc) => `<circle cx="${fx(p[0])}" cy="${fx(p[1])}" r="4.5" fill="${col}" stroke="#fff" stroke-width="1.5"/><text x="${fx(p[0] + dx)}" y="${fx(p[1] + dy)}" font-size="10" fill="#0F172A" text-anchor="${anc || 'start'}">${lab}</text>`;
+  o.push(dot(px, '#C0392B', 'X (I<tspan font-size="8" dy="2">x</tspan><tspan dy="-2">, I</tspan><tspan font-size="8" dy="2">xy</tspan><tspan dy="-2">)</tspan>', 7, Ixy >= 0 ? -8 : 16));
+  o.push(dot(py, '#1E8449', 'Y (I<tspan font-size="8" dy="2">y</tspan><tspan dy="-2">, −I</tspan><tspan font-size="8" dy="2">xy</tspan><tspan dy="-2">)</tspan>', 7, Ixy <= 0 ? -8 : 16));
+  o.push(dot([X(I1), cy], '#1E3A5F', 'I<tspan font-size="8" dy="2">1</tspan>', 0, 18, 'middle'));
+  o.push(dot([X(I2), cy], '#1E3A5F', 'I<tspan font-size="8" dy="2">2</tspan>', 0, 18, 'middle'));
+  o.push(`<circle cx="${fx(cx)}" cy="${fx(cy)}" r="2.5" fill="#1E3A5F"/>`);
+  o.push('</svg>');
+  return o.join('');
+}
+
+/* ---- Properties tab additions ---- */
+function buildPropsP2a(pg) {
+  const T = R.tors || {}, bk = ext('bk') || {}, wg = bk.wag || {};
+  mkSec(pg, 'pMohr', 'Mohr\'s circle of inertia (centroidal axes)', body => {
+    const d = el('div'); d.innerHTML = mohrSVG(R.Ix, R.Iy, R.Ixy); body.appendChild(d);
+    body.appendChild(tblEl(['Point', 'I', 'I<sub>xy</sub>', 'Unit'], [
+      ['X (axis x)', nf(R.Ix, 'I'), nf(R.Ixy, 'I'), un('I')], ['Y (axis y)', nf(R.Iy, 'I'), nf(-R.Ixy, 'I'), un('I')],
+      ['Centre (I<sub>x</sub> + I<sub>y</sub>)/2', nf((R.Ix + R.Iy) / 2, 'I'), '0', un('I')], ['Radius √(((I<sub>x</sub> − I<sub>y</sub>)/2)² + I<sub>xy</sub>²)', nf(Math.hypot((R.Ix - R.Iy) / 2, R.Ixy), 'I'), '', un('I')],
+      ['I<sub>1</sub> (major), I<sub>2</sub> (minor)', nf(R.I1, 'I') + ', ' + nf(R.I2, 'I'), '0', un('I')], ['2θ<sub>p</sub> (from X to I<sub>1</sub>, CCW on the circle)', ang(2 * R.thp), '', '']
+    ].map(r => r.map((c, i) => i === 0 ? { h: c } : c)), { left: [0] }));
+    body.appendChild(el('div', 'hint', 'Sign convention: I horizontal, I<sub>xy</sub> = ∫xy dA plotted <b>upward</b>. Point X = (I<sub>x</sub>, I<sub>xy</sub>), point Y = (I<sub>y</sub>, −I<sub>xy</sub>). Turning the axes counter-clockwise by θ moves X counter-clockwise by 2θ on the circle (I<sub>x′</sub> = c + R cos(2θ + 2α), I<sub>x′y′</sub> = R sin(2θ + 2α)); X reaches I<sub>1</sub> after 2θ<sub>p</sub>. Some texts plot −I<sub>xy</sub> upward, which mirrors the figure.'));
+  });
+  mkSec(pg, 'pBk', 'Flexural-torsional and lateral-torsional buckling parameters', body => {
+    const na = (v, k, w) => isNum(v) ? nf(v, k) : 'n/a';
+    const rows = [
+      ['r̄<sub>o</sub>² = x<sub>o</sub>² + y<sub>o</sub>² + (I<sub>x</sub> + I<sub>y</sub>)/A<sub>g</sub>', bk.sc ? nf(bk.ro2, 'A') : 'n/a', un('A'), { h: 'AISC 360-16 Eq. E4-9 ' + VFY2('Equation number as understood for AISC 360-16; check against the printed Specification') + (bk.sc ? '' : ' — ' + esc(bk.why)) }],
+      ['r̄<sub>o</sub>', bk.sc ? nf(bk.ro, 'L') : 'n/a', un('L'), ''],
+      ['H = 1 − (x<sub>o</sub>² + y<sub>o</sub>²)/r̄<sub>o</sub>²', bk.sc ? nf(bk.H, 'n', 4) : 'n/a', '', { h: 'AISC 360-16 Eq. E4-8 ' + VFY2('Equation number as understood for AISC 360-16; check against the printed Specification') }],
+      ['r<sub>ts</sub> = √(√(I<sub>y</sub>C<sub>w</sub>)/S<sub>x</sub>)', isNum(bk.rts) ? nf(bk.rts, 'L') : 'n/a', un('L'), { h: 'AISC 360-16 Eq. F2-7; doubly symmetric I-shapes only. ' + (bk.dsym ? (isNum(bk.rts) ? 'x = major principal axis. Uses the thin-wall C<sub>w</sub> ' + VFY : 'C<sub>w</sub> n/a') : 'Not shown: the section is not doubly symmetric about its principal axes (or not detected as such).') }],
+      ['h<sub>o</sub> (distance between flange centroids)', isNum(bk.h0) ? nf(bk.h0, 'L') : 'n/a', un('L'), { h: isNum(bk.h0) ? esc(bk.h0how) : 'Given only for a single rolled I-shape or three plates forming a doubly symmetric I (not identified for other sections).' }],
+      ['β<sub>x</sub>, top (+v side) in compression', wg.ok ? nf(-wg.b1, 'L') : 'n/a', un('L'), { h: (wg.ok ? 'Wagner monosymmetry constant about the major principal axis 1; positive when the larger flange is in compression. Bottom (−v side) in compression: β<sub>x</sub> = ' + esc(nf(wg.b1, 'L')) + '. ' : esc(wg.why || '') + '. ') + 'Not used by AISC 360 (F4 uses I<sub>yc</sub>/I<sub>y</sub>); for AS 4100 / EN 1993 / SSRC methods ' + VFY2('Sign convention and use in the design standard to be confirmed') }]
+    ];
+    body.appendChild(tblEl(['Parameter', 'Value', 'Unit', 'Note'], rows.map(r => r.map((c, i) => i === 0 ? { h: c } : c)), { left: [0, 3] }));
+    body.appendChild(el('div', 'hint', 'x<sub>o</sub>, y<sub>o</sub>: shear centre from the centroid (thin-wall model, Torsion tab). r̄<sub>o</sub> and H do not depend on the axis directions (AISC uses the principal axes). n/a when the shear centre is n/a (closed cells, separate pieces, custom polygons). v = axis 2 direction (for an unrotated section with x as the major axis, v = y, upward).'));
+  });
+  mkSec(pg, 'pKern', 'Kern (core) of the section', body => {
+    const K = ext('kern');
+    if (!K || !K.ok) { body.appendChild(el('div', 'note', 'Kern n/a' + (K && K.why ? ': ' + esc(K.why) : ''))); return; }
+    const e = K.ext;
+    body.appendChild(tblEl(['Kern extent from the centroid', 'Value', 'Unit'], [
+      ['x: left … right', nf(e[0], 'L') + ' … ' + nf(e[2], 'L'), un('L')], ['y: bottom … top', nf(e[1], 'L') + ' … ' + nf(e[3], 'L'), un('L')]
+    ], { left: [0] }));
+    const many = K.V.length > 48;
+    const rows = (many ? K.V.filter((v, i) => i % Math.ceil(K.V.length / 24) === 0) : K.V).map((v, i) => [String(i + 1), nf(v.e[0], 'L'), nf(v.e[1], 'L'), nf(v.p[0], 'L'), nf(v.p[1], 'L')]);
+    body.appendChild(tblEl(['Vertex', 'e<sub>x</sub> (from centroid)', 'e<sub>y</sub> (from centroid)', 'x (from origin)', 'y (from origin)'], rows));
+    body.appendChild(el('div', 'hint', (many ? `${K.V.length} vertices (curved boundary from round parts); every ${Math.ceil(K.V.length / 24)}th listed. ` : `${K.V.length} vertices, one per edge of the convex hull. `) + 'An axial force applied inside the kern causes no stress reversal over the section (compression only for a compressive force). Toggle "Kern" in Settings → Drawing to draw it.' + (R.anyN ? ' Transformed section (n): the kern of the transformed section.' : '')));
+  });
+  mkSec(pg, 'pWt', 'Weight and coating (paint) area per length', body => {
+    const Wt = ext('w'), C = ext('coat');
+    if (Wt) {
+      const rows = Wt.rows.map(r => [r.lbl + (r.hole ? ' (hole' + (r.host ? ' in ' + r.host : '') + ')' : ''), nf(r.A, 'A'), nf(r.rho, 'rho', 4) + (r.hole ? '' : (r.own ? '' : ' (default steel)')), nf(r.w, 'wt')]);
+      rows.push({ cls: 'gov', cells: [{ h: '<b>Total</b>' }, '', '', { h: '<b>' + nf(Wt.w, 'wt') + '</b>' }] });
+      body.appendChild(tblEl(['Part', 'A', 'ρ (' + un('rho') + ')', 'Weight (' + un('wt') + ')'], rows, { left: [0] }));
+      body.appendChild(el('div', 'hint', 'Weight = Σ A<sub>i</sub>·ρ<sub>i</sub> (net of holes; tube voids excluded). The modulus ratio n does <b>not</b> change the weight. ' + (R.anyTab ? 'Parts set to "AISC tabulated" use the tabulated A (fillets included). ' : 'Rolled shapes: plate-model A (fillets neglected; tick "Use AISC tabulated" for the tabulated A). ') + 'Densities are typical values unless entered (Part properties → Material).'));
+    }
+    if (C) {
+      const pr = v => isNum(v) ? nf(v, 'L') : 'n/a', pa = v => isNum(v) ? nf(v, 'pa') : 'n/a';
+      body.appendChild(tblEl(['Perimeter', 'Length (' + un('L') + ')', 'Area per length (' + un('pa') + ')', 'Note'], [
+        ['Exposed (all boundary of the material)', pr(C.exposed), pa(C.exposed), { h: 'includes closed cells and holes; faces where parts touch excluded' }],
+        ['Outside only', pr(C.outside), pa(C.outside), { h: C.ok ? 'outer boundary; closed cells and holes excluded' : 'n/a: the boundary could not be closed into loops' }],
+        ['Inside (closed cells and holes)', pr(C.inner), pa(C.inner), { h: C.ok ? C.nIn + ' loop' + (C.nIn === 1 ? '' : 's') : '' }]
+      ].map(r => r.map((c, i) => i === 0 ? { h: c } : c)), { left: [0, 3] }));
+      body.appendChild(el('div', 'hint', 'Paint area per length = perimeter × 1 ft (' + (unitSys() === 'mm' ? 'perimeter in m × 1 m' : 'perimeter in in ÷ 12') + '). Faces closer than the contact tolerance (' + esc(nu(C.eps, 'L')) + ') to another part are treated as faying (not painted). Round parts exact (2πr); rectangular-tube and HSS corners as the 24 chords per corner the tool uses (perimeter 0.04 % short of the true arc). Rolled shapes: plate model (no fillets).'));
+    }
+  });
+}
+
+/* ---- Calc detail additions ---- */
+function buildCalcP2a(pg) {
+  const L = un('L'), bk = ext('bk') || {}, wg = bk.wag || {}, T = R.tors || {};
+  mkSec(pg, 'cWt', 'Weight and coating area per length', body => {
+    const Wt = ext('w'), C = ext('coat');
+    if (Wt) calc(body, { title: 'Weight per length', ref: 'mass = area × density (typical densities: steel 490, aluminum 169, concrete 150, timber 35 lb/ft³)', lines: [
+      TX`w=\Sigma A_i\,\rho_i\quad(\text{in}^2\times\text{lb/ft}^3\div 144=\text{lb/ft})`,
+      TX`w=${Wt.rows.map(r => `${nt(r.A, 'A')}\\times ${nt(r.rho, 'rho', 4)}`).slice(0, 6).join('+')}${Wt.rows.length > 6 ? '+\\ldots' : ''}\ \text{(${un('A')}·${un('rho')})}=${nt(Wt.w, 'wt')}\ \text{${un('wt')}}`],
+      result: 'w = ' + nu(Wt.w, 'wt') + ' (n not applied; holes at the density of the part they lie in)' });
+    if (C) calc(body, { title: 'Coating (paint) perimeter', ref: 'geometry of the union of the parts', lines: [
+      TX`p_{exposed}=\Sigma\,\text{lengths of boundary pieces with material on one side only}=${nt(C.exposed, 'L')}\ \text{${L}}`,
+      C.ok ? TX`p_{outside}=\Sigma\,\text{pieces of loops enclosing material (positive area)}=${nt(C.outside, 'L')}\ \text{${L}}` : TX`p_{outside}=\text{n/a}`,
+      TX`a=p\times 1\ \text{ft}=${C.ok ? nt(C.outside, 'pa') : '\\text{n/a}'}\ (\text{outside}),\quad ${nt(C.exposed, 'pa')}\ (\text{exposed})\ \text{${un('pa')}}`],
+      result: `Exposed ${nu(C.exposed, 'L')}, outside ${isNum(C.outside) ? nu(C.outside, 'L') : 'n/a'}` });
+  });
+  mkSec(pg, 'cBk', 'Flexural-torsional buckling parameters r̄<sub>o</sub>, H and r<sub>ts</sub>', body => {
+    if (!bk.sc) { body.appendChild(el('div', 'note', 'r̄<sub>o</sub>, H: n/a — the shear centre is n/a (' + esc(bk.why) + ').')); }
+    else calc(body, { title: 'Polar radius of gyration about the shear centre, and flexural constant', ref: 'AISC 360-16 Eq. E4-9 and E4-8', badge: VFY2('Equation numbers as understood for AISC 360-16; shear centre from the thin-wall model'), lines: [
+      TX`\bar{r}_o^2=x_o^2+y_o^2+\frac{I_x+I_y}{A_g}=\left(${nt(bk.xo, 'L')}\right)^2+\left(${nt(bk.yo, 'L')}\right)^2+\frac{${nt(R.Ix, 'I')}+${nt(R.Iy, 'I')}}{${nt(R.A, 'A')}}=${nt(bk.ro2, 'A')}\ \text{${un('A')}}`,
+      TX`\bar{r}_o=${nt(bk.ro, 'L')}\ \text{${L}}`,
+      TX`H=1-\frac{x_o^2+y_o^2}{\bar{r}_o^2}=1-\frac{${nt(bk.xo * bk.xo + bk.yo * bk.yo, 'A')}}{${nt(bk.ro2, 'A')}}=${nf(bk.H, 'n', 5)}`],
+      result: `r̄o = ${nu(bk.ro, 'L')}, H = ${nf(bk.H, 'n', 4)} (x_o, y_o = shear centre from the centroid; invariant under rotation of the axes)` });
+    if (isNum(bk.rts)) calc(body, { title: 'Effective radius of gyration for LTB (doubly symmetric I-shapes)', ref: 'AISC 360-16 Eq. F2-7', badge: VFY, lines: [
+      TX`r_{ts}=\sqrt{\frac{\sqrt{I_yC_w}}{S_x}}=\sqrt{\frac{\sqrt{${nt(bk.Imin, 'I')}\times${nt(T.Cw, 'W')}}}{${nt(bk.Smaj, 'S')}}}=${nt(bk.rts, 'L')}\ \text{${L}}`],
+      result: `r_ts = ${nu(bk.rts, 'L')} (x = major principal axis, y = minor; C_w thin-wall)` + (isNum(bk.h0) ? `; h_o = ${nu(bk.h0, 'L')} (${bk.h0how})` : '') });
+    else body.appendChild(el('div', 'note', 'r<sub>ts</sub>: shown only for a doubly symmetric section with C<sub>w</sub> (AISC 360-16 F2 applies to doubly symmetric compact I-shapes and channels; the channel case is not covered here).'));
+  });
+  mkSec(pg, 'cWag', 'Wagner monosymmetry constant β<sub>x</sub>', body => {
+    if (!wg.ok) { body.appendChild(el('div', 'note', 'β<sub>x</sub>: n/a — ' + esc(wg.why || 'shear centre n/a'))); return; }
+    calc(body, { title: 'Monosymmetry constant about the major principal axis 1', ref: 'Trahair & Bradford; Kitipornchai & Trahair (1980); SSRC Guide', badge: VFY2('Sign convention and the standard\'s use of β to be confirmed by the engineer'), lines: [
+      TX`\beta_x=\frac{1}{I_1}\int_A v\,(u^2+v^2)\,dA-2v_o\quad(u\ \text{along axis 1},\ v\ \text{along axis 2},\ \text{from the centroid})`,
+      TX`\int_A v\,(u^2+v^2)\,dA=${nt(wg.int1 * uf('I') * uf('L'), 'n')}\ \text{${un('L')}}^5,\quad I_1=${nt(wg.I1, 'I')}\ \text{${un('I')}},\quad v_o=${nt(wg.vo, 'L')}\ \text{${L}}`,
+      TX`\beta_{x,(+v\ \text{in tension})}=\frac{${nt(wg.int1 * uf('I') * uf('L'), 'n')}}{${nt(wg.I1, 'I')}}-2\times${nt(wg.vo, 'L')}=${nt(wg.b1, 'L')}\ \text{${L}}`,
+      TX`\beta_{x,(+v\ \text{in compression})}=${nt(-wg.b1, 'L')}\ \text{${L}}`],
+      result: `β_x = ${nf(-wg.b1, 'L')} ${L} with the +v (top) side in compression; ${nf(wg.b1, 'L')} ${L} with the −v (bottom) side in compression` });
+    if (isNum(wg.b2)) calc(body, { title: 'About the minor principal axis 2 (for reference)', ref: 'same definition', lines: [TX`\beta_y=\frac{1}{I_2}\int_A u\,(u^2+v^2)\,dA-2u_o=\frac{${nt(wg.int2 * uf('I') * uf('L'), 'n')}}{${nt(wg.I2, 'I')}}-2\times${nt(wg.uo, 'L')}=${nt(wg.b2, 'L')}\ \text{${L}}\ (+u\ \text{in tension})`], result: '' });
+    body.appendChild(el('div', 'hint', 'Sign convention: v is measured positive toward the <b>tension</b> side (as y in Trahair &amp; Bradford, where y points down for a top flange in compression), so β<sub>x</sub> &gt; 0 when the larger flange is in compression and β<sub>x</sub> = 0 for doubly symmetric sections. The area integral is exact (polygons and circles, n-weighted, plate model, about the centroid and principal axes of that geometry); v<sub>o</sub> is the thin-wall shear centre. Approximation for monosymmetric I-sections: β<sub>x</sub> ≈ 0.9h(2ρ − 1)(1 − (I<sub>y</sub>/I<sub>x</sub>)²), ρ = I<sub>yc</sub>/I<sub>y</sub> (Kitipornchai &amp; Trahair). AISC 360 does not use β<sub>x</sub> (F4 uses I<sub>yc</sub>/I<sub>y</sub>). EN 1993 (z<sub>j</sub>) and AS 4100 use related quantities with their own sign conventions — verify before use.'));
+  });
+  mkSec(pg, 'cKern', 'Kern (core)', body => {
+    const K = ext('kern'); if (!K || !K.ok) { body.appendChild(el('div', 'note', 'n/a')); return; }
+    const v = K.V[0];
+    calc(body, { title: 'Kern vertex for each edge of the convex hull', ref: 'no-tension condition: σ = 0 along the hull edge', lines: [
+      TX`\sigma(\mathbf{p})=N\left(\frac{1}{A}+\mathbf{p}^{T}\mathbf{J}^{-1}\mathbf{e}\right),\quad \mathbf{J}=\begin{bmatrix}I_y&I_{xy}\\I_{xy}&I_x\end{bmatrix}`,
+      TX`\sigma=0\ \text{on}\ \mathbf{n}\cdot\mathbf{p}=d\ \Rightarrow\ \mathbf{e}=-\frac{\mathbf{J}\,\mathbf{n}}{A\,d}`,
+      TX`\text{vertex 1: }\mathbf{n}=(${nf(v.n[0], 'n', 4)},\ ${nf(v.n[1], 'n', 4)}),\ d=${nt(v.d, 'L')}\ \Rightarrow\ \mathbf{e}=(${nt(v.e[0], 'L')},\ ${nt(v.e[1], 'L')})\ \text{${L}}`],
+      result: `${K.V.length} kern vertices (Properties tab); p, e measured from the centroid; n = outward unit normal of the hull edge, d its distance from the centroid` });
+    body.appendChild(el('div', 'hint', 'Check: rectangle b × h → kern rhombus with half-diagonals b/6 and h/6; solid circle radius r → circle of radius r/4 (Validation tab). Round parts enter the hull as circumscribed 720-gons (kern vertices on the exact curve).'));
+  });
+  mkSec(pg, 'cEll', 'Central ellipse of inertia (Culmann)', body => {
+    calc(body, { title: 'Semi-axes', ref: 'central ellipse of inertia', lines: [
+      TX`r_1=\sqrt{I_1/A}=${nt(R.r1, 'L')}\ \text{${L}}\ (\text{measured along axis 2}),\qquad r_2=\sqrt{I_2/A}=${nt(R.r2, 'L')}\ \text{${L}}\ (\text{along axis 1})`],
+      result: 'The radius of gyration about any centroidal axis equals the distance from the centroid to the tangent of the ellipse parallel to that axis. Toggle "Inertia ellipse" in Settings → Drawing.' });
+  });
+}
+
+/* ---- Stresses tab ---- */
+const DIV = [[-1, [33, 102, 172]], [-0.5, [103, 169, 207]], [0, [242, 242, 242]], [0.5, [239, 138, 98]], [1, [178, 24, 43]]];
+function divCol(t) { t = Math.max(-1, Math.min(1, isNum(t) ? t : 0)); let i = 0; while (i < DIV.length - 2 && t > DIV[i + 1][0]) i++; const [a, ca] = DIV[i], [b, cb] = DIV[i + 1], f = (t - a) / (b - a); return 'rgb(' + ca.map((c, k) => Math.round(c + f * (cb[k] - c))).join(',') + ')'; }
+function signSketch() {
+  return `<svg viewBox="0 0 230 150" width="230" height="150" role="img" aria-label="Sign convention" style="flex:0 0 auto;background:#FCFDFE;border:1px solid var(--line);border-radius:4px">
+  <rect x="85" y="30" width="60" height="84" fill="#9FB3C8" fill-opacity=".55" stroke="#33475E"/>
+  <path d="M115 72h24m-6 -4l6 4l-6 4" stroke="#C0392B" stroke-width="1.6" fill="none"/><text x="129" y="86" font-size="11" fill="#C0392B">x</text>
+  <path d="M115 72v-30m-4 6l4 -6l4 6" stroke="#1E8449" stroke-width="1.6" fill="none"/><text x="119" y="47" font-size="11" fill="#1E8449">y</text>
+  <text x="115" y="23" font-size="9" text-anchor="middle" fill="#2166AC">C (M<tspan font-size="7" dy="2">x</tspan><tspan dy="-2">&gt;0)</tspan></text><text x="115" y="126" font-size="9" text-anchor="middle" fill="#B2182B">T (M<tspan font-size="7" dy="2">x</tspan><tspan dy="-2">&gt;0)</tspan></text>
+  <text x="150" y="75" font-size="9" fill="#2166AC">C (M<tspan font-size="7" dy="2">y</tspan><tspan dy="-2">&gt;0)</tspan></text><text x="80" y="75" font-size="9" text-anchor="end" fill="#B2182B">T (M<tspan font-size="7" dy="2">y</tspan><tspan dy="-2">&gt;0)</tspan></text>
+  <circle cx="115" cy="72" r="3" fill="#0F172A"/><text x="4" y="145" font-size="9" fill="#334155">P &gt; 0 tension · C = compression, T = tension</text></svg>`;
+}
+function stressSVG(S, W, H) {
+  const b = R.bbox, pad = 34, leg = 46, s = Math.min((W - 2 * pad) / Math.max(b[2] - b[0], 1e-9), (H - 2 * pad - leg) / Math.max(b[3] - b[1], 1e-9));
+  const V = { s, ox: W / 2 - s * (b[0] + b[2]) / 2, oy: (H - leg) / 2 + s * (b[1] + b[3]) / 2 }, tr = p => [V.ox + V.s * p[0], V.oy - V.s * p[1]];
+  VIEW_T = V;
+  const mA = Math.max(Math.abs(S.max ? S.max.s : 0), Math.abs(S.min ? S.min.s : 0), 1e-300);
+  const o = [`<svg class="stressSvg" viewBox="0 0 ${W} ${H}" width="100%" style="max-width:${W}px;display:block;background:#FCFDFE;border:1px solid var(--line);border-radius:4px" role="img" aria-label="Normal stress over the section">`, '<defs>'];
+  const gn = Math.hypot(S.kx, S.ky), u = gn > 0 ? [S.kx / gn, S.ky / gn] : [1, 0];
+  // projection range of the whole section along the stress gradient
+  const cs = [[b[0], b[1]], [b[2], b[1]], [b[2], b[3]], [b[0], b[3]]].map(p => p[0] * u[0] + p[1] * u[1]), t0 = Math.min(...cs), t1 = Math.max(...cs);
+  const pA = [u[0] * t0, u[1] * t0], pB = [u[0] * t1, u[1] * t1];
+  const fill = {};
+  R.parts.forEach((q, i) => {
+    if (q.pt.hole) return;
+    if (gn === 0) { fill[q.pt.id] = divCol(q.n * S.s0 / mA); return; }
+    const a = tr(pA), c = tr(pB), stops = [];
+    for (let k = 0; k <= 20; k++) { const f = k / 20, p = [pA[0] + f * (pB[0] - pA[0]), pA[1] + f * (pB[1] - pA[1])]; stops.push(`<stop offset="${f}" stop-color="${divCol(q.n * S.sig(p) / mA)}"/>`); }
+    o.push(`<linearGradient id="sg${i}" gradientUnits="userSpaceOnUse" x1="${fx(a[0])}" y1="${fx(a[1])}" x2="${fx(c[0])}" y2="${fx(c[1])}">${stops.join('')}</linearGradient>`);
+    fill[q.pt.id] = `url(#sg${i})`;
+  });
+  o.push('</defs>');
+  const order = R.parts.filter(q => !q.pt.hole).concat(R.parts.filter(q => q.pt.hole));
+  order.forEach(q => {
+    const d = q.G.prims.map(pr => primPath(pr, tr)).join('');
+    const sr = S.parts.find(r => r.id === q.pt.id);
+    const tip = sr ? `${q.pt.lbl}: max ${nf(sr.hi.s, 'sig')} ${un('sig')}, min ${nf(sr.lo.s, 'sig')} ${un('sig')}${q.n !== 1 ? ' (n = ' + (+q.n.toPrecision(4)) + ')' : ''}` : q.pt.lbl + ' (hole)';
+    if (q.pt.hole) o.push(`<path d="${d}" fill="#FFFFFF" fill-rule="evenodd" stroke="#C0392B" stroke-width="1.2" stroke-dasharray="5 3"><title>${esc(tip)}</title></path>`);
+    else o.push(`<path d="${d}" fill="${fill[q.pt.id]}" fill-rule="evenodd" stroke="#33475E" stroke-width="1"><title>${esc(tip)}</title></path>`);
+  });
+  // neutral axis, clipped to the drawing box
+  if (S.na) {
+    const big = 4 * Math.max(b[2] - b[0], b[3] - b[1], 1e-9), p = S.na.p, t = S.na.t;
+    const a = tr([p[0] - big * t[0], p[1] - big * t[1]]), c = tr([p[0] + big * t[0], p[1] + big * t[1]]);
+    o.push(`<clipPath id="naClip"><rect x="4" y="4" width="${W - 8}" height="${H - leg - 4}"/></clipPath>`);
+    o.push(`<path d="M${fx(a[0])} ${fx(a[1])}L${fx(c[0])} ${fx(c[1])}" stroke="#0F172A" stroke-width="1.4" stroke-dasharray="8 4" clip-path="url(#naClip)"/>`);
+    // label where the NA crosses the section box
+    const m = tr(p), lx = Math.max(30, Math.min(W - 60, m[0])), ly = Math.max(16, Math.min(H - leg - 10, m[1]));
+    o.push(`<text x="${fx(lx + 6)}" y="${fx(ly - 6)}" font-size="10" fill="#0F172A" stroke="#fff" stroke-width="3" paint-order="stroke">N.A.</text>`);
+  }
+  // centroid
+  const C = tr([R.cx, R.cy]); o.push(`<circle cx="${fx(C[0])}" cy="${fx(C[1])}" r="4" fill="#fff" stroke="#0F172A" stroke-width="1.3"/>`);
+  const mark = (e, lab, col) => { if (!e) return; const p = tr(e.p); o.push(`<circle cx="${fx(p[0])}" cy="${fx(p[1])}" r="6" fill="none" stroke="${col}" stroke-width="2.2"/><circle cx="${fx(p[0])}" cy="${fx(p[1])}" r="2" fill="${col}"/>`); const right = p[0] < W / 2; o.push(`<text x="${fx(p[0] + (right ? 10 : -10))}" y="${fx(Math.max(12, p[1] - 8))}" font-size="10.5" font-weight="600" text-anchor="${right ? 'start' : 'end'}" fill="#0F172A" stroke="#fff" stroke-width="3.5" paint-order="stroke">${lab} ${esc(nf(e.s, 'sig', 4))} ${esc(un('sig'))}</text>`); };
+  if (S.max && S.max.s > 0) mark(S.max, 'max tension', '#B2182B');
+  if (S.min && S.min.s < 0) mark(S.min, 'max compression', '#2166AC');
+  // legend
+  const lx0 = 40, lx1 = W - 40, ly = H - 30, st = [];
+  for (let k = 0; k <= 20; k++) st.push(`<stop offset="${k / 20}" stop-color="${divCol(-1 + 2 * k / 20)}"/>`);
+  o.push(`<defs><linearGradient id="sgLeg" x1="0" x2="1" y1="0" y2="0">${st.join('')}</linearGradient></defs><rect x="${lx0}" y="${ly}" width="${lx1 - lx0}" height="10" fill="url(#sgLeg)" stroke="#94A3B8" stroke-width=".6"/>`);
+  [[-1, lx0, 'start'], [0, (lx0 + lx1) / 2, 'middle'], [1, lx1, 'end']].forEach(([v, x, an]) => o.push(`<text x="${fx(x)}" y="${ly + 22}" font-size="10" text-anchor="${an}" fill="#334155">${esc((v > 0 ? '+' : '') + nf(v * mA, 'sig', 4))} ${esc(un('sig'))}</text>`));
+  o.push(`<text x="${lx0}" y="${ly - 4}" font-size="9.5" fill="#2166AC">compression</text><text x="${lx1}" y="${ly - 4}" font-size="9.5" text-anchor="end" fill="#B2182B">tension</text>`);
+  o.push('</svg>');
+  VIEW_T = VIEW;
+  return o.join('');
+}
+function buildStress(pg) {
+  const s = stressIn();
+  mkSec(pg, 'sIn', 'Loads (at the centroid; moments about the centroidal x and y axes)', body => {
+    const wrap = el('div'); wrap.style.cssText = 'display:flex;gap:14px;flex-wrap:wrap;align-items:flex-start';
+    const f = el('div'); f.style.cssText = 'flex:1 1 260px;min-width:0';
+    fRow(f, 'Axial force P (tension +)', numIn(() => stressIn().P, v => setStress('P', v), 'st_P', { k: 'F' }), un('F'));
+    fRow(f, 'Moment M<sub>x</sub> (+ compresses the +y side)', numIn(() => stressIn().Mx, v => setStress('Mx', v), 'st_Mx', { k: 'Mo' }), un('Mo'));
+    fRow(f, 'Moment M<sub>y</sub> (+ compresses the +x side)', numIn(() => stressIn().My, v => setStress('My', v), 'st_My', { k: 'Mo' }), un('Mo'));
+    f.appendChild(el('div', 'hint', 'Service or factored loads as you choose — no design check is made. Saved with the project.'));
+    wrap.appendChild(f); const sk = el('div'); sk.innerHTML = signSketch(); wrap.appendChild(sk); body.appendChild(wrap);
+  });
+  if (!stressOn()) { pg.appendChild(el('div', 'note', 'Enter P, M<sub>x</sub> or M<sub>y</sub> to plot the normal stress over the section.')); return; }
+  const S = SPC.stress(R, s.P, s.Mx, s.My);
+  mkSec(pg, 'sPlot', 'Normal stress σ over the section', body => {
+    const d = el('div'); const nar = window.innerWidth < 600 && !$('printReport'); d.innerHTML = stressSVG(S, nar ? 380 : 720, nar ? 400 : 440); body.appendChild(d);   // narrow screens: smaller drawing box, so the text stays legible
+    body.appendChild(el('div', 'hint', 'Colour: σ from blue (compression) through grey (0) to red (tension), symmetric scale. Dashed: neutral axis (σ = 0). Hover a part for its extreme stresses.' + (R.anyN ? ' Transformed section: part i shows n<sub>i</sub> × the transformed-section stress, so the colour can jump at a material boundary; the neutral axis is common.' : '')));
+  });
+  mkSec(pg, 'sCalc', 'Stress formula (unsymmetric bending)', body => {
+    const nax = S.na ? (S.na.ang * 180 / Math.PI) : null, na2 = isNum(nax) ? ((nax % 180) + 180) % 180 : null;
+    calc(body, { title: 'Normal stress at a point (x, y measured from the centroid)', ref: 'general flexure formula, unsymmetric bending (e.g. Boresi & Schmidt, Advanced Mechanics of Materials)', lines: [
+      TX`\sigma=\frac{P}{A}-\frac{\left(M_xI_y-M_yI_{xy}\right)y+\left(M_yI_x-M_xI_{xy}\right)x}{I_xI_y-I_{xy}^2}`,
+      TX`\frac{P}{A}=\frac{${nt(S.P, 'F')}}{${nt(R.A, 'A')}}=${nt(S.s0, 'sig')}\ \text{${un('sig')}},\qquad I_xI_y-I_{xy}^2=${nt(S.D * uf('I'), 'I')}\ \text{${unitSys() === 'mm' ? 'mm⁸' : 'in⁸'}}`,
+      TX`\sigma=${nt(S.s0, 'sig')}${S.kx >= 0 ? '+' : '-'}${nt(Math.abs(S.kx) * uf('sig') / uf('L'), 'n')}\,x${S.ky >= 0 ? '+' : '-'}${nt(Math.abs(S.ky) * uf('sig') / uf('L'), 'n')}\,y\quad(\sigma\ \text{in ${un('sig')}},\ x,y\ \text{in ${un('L')} from the centroid})`],
+      result: `Max tension ${S.max && S.max.s > 0 ? nu(S.max.s, 'sig') + ' (' + S.max.lbl + ')' : 'none'}; max compression ${S.min && S.min.s < 0 ? nu(S.min.s, 'sig') + ' (' + S.min.lbl + ')' : 'none'}` + (isNum(na2) ? `; neutral axis at ${na2.toFixed(3)}° from +x` : '') });
+    body.appendChild(el('div', 'hint', 'Sign convention: P &gt; 0 tension; M<sub>x</sub> &gt; 0 compresses the +y side and M<sub>y</sub> &gt; 0 compresses the +x side (M<sub>x</sub> = −∫σy dA, M<sub>y</sub> = −∫σx dA). σ &gt; 0 tension. With I<sub>xy</sub> ≠ 0 (e.g. an angle) the neutral axis is not parallel to the moment axis. ' + (R.anyN ? '<b>Transformed section:</b> σ in part i = n<sub>i</sub> × the transformed-section stress above. ' : '') + (R.anyTab ? 'A, I include the AISC tabulated values where selected; the extreme points are on the plate model. ' : '') + 'Elastic, plane sections; no local effects, shear lag or residual stresses.'));
+  });
+  mkSec(pg, 'sTab', 'Stress at each part\'s extreme points', body => {
+    const pt = e => e ? `(${nf(e.p[0], 'L', 4)}, ${nf(e.p[1], 'L', 4)})` : '';
+    const rows = S.parts.map(r => [r.lbl, String(+r.n.toPrecision(4)), nf(r.hi.s, 'sig'), pt(r.hi), nf(r.lo.s, 'sig'), pt(r.lo)]);
+    if (S.max) rows.push({ cls: 'gov', cells: [{ h: '<b>Section</b>' }, '', { h: '<b>' + nf(S.max.s, 'sig') + '</b>' }, S.max.lbl + ' ' + pt(S.max), { h: '<b>' + nf(S.min.s, 'sig') + '</b>' }, S.min.lbl + ' ' + pt(S.min)] });
+    body.appendChild(tblEl(['Part', 'n', 'σ max (' + un('sig') + ')', 'at (x, y) ' + un('L'), 'σ min (' + un('sig') + ')', 'at (x, y) ' + un('L')], rows, { left: [0, 3, 5] }));
+    body.appendChild(el('div', 'hint', 'Extreme points: polygon vertices; round parts: the two points where the stress gradient is normal to the circle. Coordinates from the origin.'));
+  });
+}
+
 /* ---- Validation ---- */
 let VAL = null;
 function valSummary() { try { if (!VAL) VAL = runValidation(); return VAL.every(v => v.ok); } catch (e) { return false; } }
@@ -4870,6 +5412,66 @@ function runValidation() {
       const tf2 = w.tf + 1, ho2 = w.d - w.tf + 1;
       add(g, 'J = [2·bf·(tf + tp)³ + h_o′·tw³]/3, h_o′ = d − tf + tp', R9.tors.J, (2 * 14.5 * tf2 ** 3 + ho2 * w.tw ** 3) / 3, tight, 'hand calc (thin-wall)', 'in⁴');
       add(g, 'Cw = (tf + tp)·bf³·h_o′²/24', R9.tors.Cw, tf2 * 14.5 ** 3 * ho2 ** 2 / 24, tight, 'hand calc (thin-wall)', 'in⁶'); }
+    // ---- Phase 2a ----
+    const addAbs = (grp, what, tool, tolAbs, src, unit) => out.push({ grp, what, tool, ref: 0, tol: tolAbs, d: Math.abs(tool), ok: isNum(tool) && Math.abs(tool) <= tolAbs, src, unit: unit || '', abs: true });
+    // 10 weight
+    { const g = '10. Weight per length (P2a)', Rr = SPC.analyze(vModel([{ type: 'plate', p: { b: 6, t: 10 }, x: 3, y: 5 }])), Ra = SPC.analyze(vModel([{ type: 'plate', p: { b: 6, t: 10 }, x: 3, y: 5, rho: 169 }]));
+      add(g, 'rectangle 6 × 10 in, steel 490 lb/ft³: w = 60 × 490/144 = 204.17 lb/ft', SPC.weight(Rr).w, 60 * 490 / 144, tight, 'hand calc', 'lb/ft');
+      add(g, 'same, aluminum 169 lb/ft³: w = 60 × 169/144', SPC.weight(Ra).w, 60 * 169 / 144, tight, 'hand calc', 'lb/ft');
+      const Rh = SPC.analyze(vModel([{ type: 'plate', p: { b: 10, t: 10 }, x: 0, y: 0, rho: 150, n: 0.125 }, { type: 'round', p: { d: 2 }, x: 2, y: 0, hole: true, n: 0.125 }]));
+      add(g, '10 × 10 concrete (150 lb/ft³, n = 1/8) with a 2 in hole: w = (100 − π)·150/144 (n not applied; hole at the host density)', SPC.weight(Rh).w, (100 - Math.PI) * 150 / 144, tight, 'hand calc', 'lb/ft');
+      const w = SPC.shapeRec('W', 'W14X90'), Rt = SPC.analyze(vModel([{ type: 'shape', p: { fam: 'W', name: 'W14X90' }, x: 0, y: 0, useTab: true }]));
+      add(g, 'W14X90 with the AISC tabulated A = 26.5 in²: 26.5 × 490/144 = 90.17 vs nominal 90 lb/ft', SPC.weight(Rt).w, w.Wt, 0.005, 'AISC v16.0 (nominal weight)', 'lb/ft'); }
+    // 11 coating perimeters
+    { const g = '11. Coating (paint) perimeter (P2a)', B = 10, H = 6, tf = 0.5, tw = 0.375, R4 = SPC.analyze(vModel(SPC.TEMPLATES.box.f({ bf: B, tf, h: H - 2 * tf, tw, bw: B }))), C4 = SPC.coating(R4, 0.001);
+      add(g, 'box from 4 plates 10 × 6 (tf 1/2, tw 3/8): outside = 2(10 + 6) = 32 in', C4.outside, 32, tight, 'hand calc', 'in');
+      add(g, 'same: exposed = 32 + inside 2[(10 − 0.75) + (6 − 1)] = 60.5 in (faying faces excluded)', C4.exposed, 60.5, tight, 'hand calc', 'in');
+      const w = SPC.shapeRec('W', 'W14X90'), Rw = SPC.analyze(vModel([{ type: 'shape', p: { fam: 'W', name: 'W14X90' }, x: 0, y: 0, rot: 30 }]));
+      add(g, 'W14X90 plate model (rotated 30°): 4bf + 2d − 2tw = 85.12 in', SPC.coating(Rw, 0.001).exposed, 4 * w.bf + 2 * w.d - 2 * w.tw, tight, 'hand calc', 'in');
+      const Rt = SPC.analyze(vModel([{ type: 'tube', p: { D: 10, t: 0.5 }, x: 0, y: 0 }])), Ct = SPC.coating(Rt, 0.001);
+      add(g, 'round tube 10 × 1/2: exposed = π(10 + 9) (arcs exact)', Ct.exposed, Math.PI * 19, tight, 'closed form', 'in'); add(g, 'round tube: outside = 10π', Ct.outside, 10 * Math.PI, tight, 'closed form', 'in');
+      const Rp = SPC.analyze(vModel([{ type: 'plate', p: { b: 10, t: 10 }, x: 0, y: 0 }, { type: 'round', p: { d: 2 }, x: 2, y: 0, hole: true }, { type: 'round', p: { d: 4 }, x: 0, y: 7 }]));
+      add(g, '10 × 10 plate with a 2 in hole and a Ø4 bar standing on it (tangent): exposed = 40 + 2π + 4π', SPC.coating(Rp, 0.001).exposed, 40 + 6 * Math.PI, tight, 'closed form', 'in'); }
+    // 12 r̄o, H, rts
+    { const g = '12. AISC 360-16 E4 / F2 parameters (P2a)', c = SPC.shapeRec('C', 'C15X50'), Rc = SPC.analyze(vModel([{ type: 'shape', p: { fam: 'C', name: 'C15X50' }, x: 0, y: 0 }])), bc = SPC.buckling(Rc);
+      add(g, 'C15X50 r̄o vs AISC 5.49 (plate model, thin-wall shear centre)', bc.ro, c.ro, 0.01, 'AISC v16.0', 'in'); add(g, 'C15X50 H vs AISC 0.937', bc.H, c.Hc, 0.01, 'AISC v16.0', '');
+      const xo = Rc.tors.xo, ro2 = xo * xo + (Rc.Ix + Rc.Iy) / Rc.A; add(g, 'C15X50 H = 1 − x_o²/r̄o² (y_o = 0), from the tool\'s x_o, I, A', bc.H, 1 - xo * xo / ro2, tight, 'Eq. E4-8 form', '');
+      const w = SPC.shapeRec('W', 'W14X90'), Rw = SPC.analyze(vModel([{ type: 'shape', p: { fam: 'W', name: 'W14X90' }, x: 0, y: 0 }])), bw = SPC.buckling(Rw);
+      add(g, 'W14X90: H = 1 (shear centre at the centroid)', bw.H, 1, tight, 'doubly symmetric', '');
+      add(g, 'W14X90 r_ts vs hand √(√(Iy·Cw)/Sx), plate model', bw.rts, Math.sqrt(Math.sqrt(Rw.Iy * Rw.tors.Cw) / (Rw.Ix / (w.d / 2))), tight, 'Eq. F2-7', 'in');
+      add(g, 'W14X90 r_ts vs AISC 4.10', bw.rts, w.rts, 0.02, 'AISC v16.0', 'in'); add(g, 'W14X90 h_o = d − tf vs AISC 13.3', bw.h0, w.ho, 0.002, 'AISC v16.0', 'in'); }
+    // 13 Wagner
+    { const g = '13. Wagner monosymmetry constant β_x (P2a)';
+      const Rw = SPC.analyze(vModel([{ type: 'shape', p: { fam: 'W', name: 'W14X90' }, x: 0, y: 0, rot: 30 }]));
+      addAbs(g, 'W14X90 (rotated 30°): β_x = 0 (doubly symmetric)', SPC.buckling(Rw).wag.b1, 1e-9, 'symmetry', 'in');
+      const bt = 12, tt = 1, bb = 6, tb = 1, hw = 20, tw = 0.5, rect = [[bt, tt, hw / 2 + tt / 2], [tw, hw, 0], [bb, tb, -hw / 2 - tb / 2]];
+      const Rm = SPC.analyze(vModel(rect.map(([b, h, y]) => ({ type: 'plate', p: { b, t: h }, x: 0, y }))));
+      let A = 0, Sy = 0; rect.forEach(([b, h, y]) => { A += b * h; Sy += b * h * y; }); const yc = Sy / A; let Ix = 0, Iy = 0, I3 = 0;
+      rect.forEach(([b, h, y]) => { const v = y - yc; Ix += b * h ** 3 / 12 + b * h * v * v; Iy += h * b ** 3 / 12; I3 += v * h * b ** 3 / 12 + b * h * (v ** 3 + v * h * h / 4); });
+      const I1f = tt * bt ** 3 / 12, I2f = tb * bb ** 3 / 12, hh = hw + tt / 2 + tb / 2, yo = (hw / 2 + tt / 2) - hh * I2f / (I1f + I2f) - yc, bx = -(I3 / Ix - 2 * yo);
+      add(g, 'I: top flange 12 × 1, web 20 × 1/2, bottom flange 6 × 1, top in compression: β_x = −[∫y(x² + y²)dA/Ix − 2y_o] (rectangles by hand, y_o from y_sc = h·I_2/(I_1 + I_2) below the top flange)', -SPC.buckling(Rm).wag.b1, bx, tight, 'hand calc', 'in');
+      const rho = I1f / (I1f + I2f); add(g, 'same vs Kitipornchai–Trahair approximation 0.9h(2ρ − 1)(1 − (Iy/Ix)²) (an approximation: 5 %)', -SPC.buckling(Rm).wag.b1, 0.9 * hh * (2 * rho - 1) * (1 - (Iy / Ix) ** 2), 0.05, 'Kitipornchai & Trahair (1980)', 'in');
+      const tr2 = [[8, 1, 8.5], [0.5, 8, 4]], Rt = SPC.analyze(vModel(tr2.map(([b, h, y]) => ({ type: 'plate', p: { b, t: h }, x: 0, y }))));
+      let A2 = 0, S2 = 0; tr2.forEach(([b, h, y]) => { A2 += b * h; S2 += b * h * y; }); const y2 = S2 / A2; let Ix2 = 0, J3 = 0; tr2.forEach(([b, h, y]) => { const v = y - y2; Ix2 += b * h ** 3 / 12 + b * h * v * v; J3 += v * h * b ** 3 / 12 + b * h * (v ** 3 + v * h * h / 4); });
+      add(g, 'T: flange 8 × 1 on stem 1/2 × 8, flange in compression (shear centre at the centre-line junction, y = 8.5)', -SPC.buckling(Rt).wag.b1, -(J3 / Ix2 - 2 * (8.5 - y2)), tight, 'hand calc', 'in'); }
+    // 14 stress
+    { const g = '14. Normal stress (P2a)', Rr = SPC.analyze(vModel([{ type: 'plate', p: { b: 6, t: 10 }, x: 3, y: 5 }])), S = SPC.stress(Rr, 30, 600, 240);
+      add(g, 'rectangle 6 × 10, P = 30 kip, Mx = 50 kip-ft, My = 20 kip-ft: corner (6, 10): 0.5 − 600·5/500 − 240·3/180 = −9.5 ksi', S.sig([6, 10]), -9.5, tight, 'hand calc', 'ksi');
+      add(g, 'same: max tension at (0, 0) = 0.5 + 6 + 4 = 10.5 ksi', S.max.s, 10.5, tight, 'hand calc', 'ksi'); add(g, 'same: max compression = −9.5 ksi', S.min.s, -9.5, tight, 'hand calc', 'ksi');
+      const Ra = SPC.analyze(vModel([{ type: 'shape', p: { fam: 'L', name: 'L6X4X1/2' }, x: 0, y: 0 }])), Sa = SPC.stress(Ra, 0, 120, 0);
+      add(g, 'L6X4X1/2, Mx only: neutral axis slope tan α = Ixy/Iy (rotated, not horizontal)', Math.tan(Sa.na.ang), Ra.Ixy / Ra.Iy, 1e-9, 'unsymmetric bending', '');
+      add(g, 'same: −∫σ·y dA = Mx (resultant check)', -(Sa.kx * Ra.Ixy + Sa.ky * Ra.Ix), 120, tight, 'equilibrium', 'kip-in');
+      addAbs(g, 'same: −∫σ·x dA = My = 0 (resultant check)', -(Sa.kx * Ra.Iy + Sa.ky * Ra.Ixy), 1e-9, 'equilibrium', 'kip-in'); }
+    // 15 kern
+    { const g = '15. Kern (P2a)', Rr = SPC.analyze(vModel([{ type: 'plate', p: { b: 6, t: 10 }, x: 3, y: 5 }])), K = SPC.kern(Rr);
+      add(g, 'rectangle 6 × 10: kern half-width b/6 = 1', K.ext[2], 1, tight, 'closed form', 'in'); add(g, 'rectangle: kern half-height h/6 = 1.667', K.ext[3], 10 / 6, tight, 'closed form', 'in'); add(g, 'rectangle: 4 kern vertices (rhombus)', K.V.length, 4, 0, 'closed form', '');
+      const Rc = SPC.analyze(vModel([{ type: 'round', p: { d: 8 }, x: 1, y: 2 }])), Kc = SPC.kern(Rc), dm = Kc.V.map(v => Math.hypot(v.e[0], v.e[1]));
+      add(g, 'solid circle r = 4: kern radius r/4 = 1 (largest vertex distance)', Math.max(...dm), 1, tight, 'closed form', 'in'); add(g, 'solid circle: kern radius r/4 = 1 (smallest vertex distance)', Math.min(...dm), 1, tight, 'closed form', 'in'); }
+    // 16 Mohr
+    { const g = '16. Mohr\'s circle (P2a)', Ra = SPC.analyze(vModel([{ type: 'shape', p: { fam: 'L', name: 'L6X4X1/2' }, x: 0, y: 0, rot: 20 }])), c = (Ra.Ix + Ra.Iy) / 2, Rm = Math.hypot((Ra.Ix - Ra.Iy) / 2, Ra.Ixy), a2 = Math.atan2(Ra.Ixy, (Ra.Ix - Ra.Iy) / 2);
+      add(g, 'L6X4X1/2 at 20°: I1 + I2 = Ix + Iy', Ra.I1 + Ra.I2, Ra.Ix + Ra.Iy, tight, 'invariant', 'in⁴'); add(g, 'I1·I2 = Ix·Iy − Ixy²', Ra.I1 * Ra.I2, Ra.Ix * Ra.Iy - Ra.Ixy * Ra.Ixy, tight, 'invariant', 'in⁸');
+      add(g, 'point X turned by 2θp on the circle reaches I1: c + R cos(2α + 2θp)', c + Rm * Math.cos(a2 + 2 * Ra.thp), Ra.I1, tight, 'Mohr\'s circle', 'in⁴');
+      addAbs(g, 'and its product of inertia is 0: sin(2α + 2θp)', Math.sin(a2 + 2 * Ra.thp), 1e-12, 'Mohr\'s circle', ''); }
   } catch (e) { out.push({ grp: 'error', what: 'Validation failed to run: ' + e.message, tool: NaN, ref: NaN, tol: 0, d: NaN, ok: false, src: '' }); }
   return out;
 }
@@ -4880,7 +5482,7 @@ function buildValid(pg) {
   let grp = null; const rows = [];
   VAL.forEach(v => {
     if (v.grp !== grp) { grp = v.grp; rows.push({ cls: 'gov', cells: [{ h: '<b>' + esc(grp) + '</b>', span: 7 }] }); }
-    rows.push([v.what, g6(v.tool), g6(v.ref), v.unit, isNum(v.d) ? (v.d * 100).toPrecision(3) + ' %' : '—', v.tol >= 1e-6 ? (v.tol * 100) + ' %' : (v.tol === 0 ? 'exact' : '1e-9'), { cls: v.ok ? 'ok' : 'ng', h: v.ok ? 'pass' : 'FAIL' }]);
+    rows.push([v.what, g6(v.tool), g6(v.ref), v.unit, v.abs ? '|Δ| = ' + g6(v.d) : isNum(v.d) ? (v.d * 100).toPrecision(3) + ' %' : '—', v.abs ? '|Δ| ≤ ' + v.tol : v.tol >= 1e-6 ? (v.tol * 100) + ' %' : (v.tol === 0 ? 'exact' : '1e-9'), { cls: v.ok ? 'ok' : 'ng', h: v.ok ? 'pass' : 'FAIL' }]);
   });
   pg.appendChild(tblEl(['Check', 'Tool', 'Reference', 'Unit', 'Diff.', 'Tolerance', 'Status'], rows, { left: [0] }));
 }
@@ -4920,6 +5522,14 @@ function buildManual(pg) {
     'Not modelled in torsion: holes (gross section used; a note says so), custom polygons, the modulus ratio n.']);
   H('Q and shear flow');
   UL(['Q = first moment, about the centroidal axis, of the area on one side of a straight cut right across the section (above a horizontal cut, right of a vertical cut). q = V·Q/I for symmetric sections; with I<sub>xy</sub> ≠ 0 the general formula q = V<sub>y</sub>(I<sub>y</sub>Q<sub>x</sub> − I<sub>xy</sub>Q<sub>y</sub>)/(I<sub>x</sub>I<sub>y</sub> − I<sub>xy</sub>²). τ<sub>avg</sub> = q/b with b = material length on the cut.']);
+  H('Weight, coating area, buckling parameters, kern (Phase 2a)');
+  UL(['<b>Weight</b> per length = Σ A<sub>i</sub>·ρ<sub>i</sub> (Properties tab). Density per part (Part properties → Material; default steel 490 lb/ft³; presets aluminum 169, concrete 150, timber 35 lb/ft³ — typical values, editable). The modulus ratio n does not change the weight. Holes remove weight at the density of the solid part they lie in. Parts with "AISC tabulated" use the tabulated A.',
+    '<b>Coating (paint) area</b>: exposed perimeter = all boundary of the union of the material (closed cells and holes included; faces where parts touch within the contact tolerance excluded); outside perimeter = the outer boundary only. Area per length = perimeter × length. Round parts exact; rectangular-tube and HSS corners as the 24 chords the tool uses; rolled shapes as the plate model (no fillets).',
+    '<b>r̄<sub>o</sub>, H</b> (AISC 360-16 Eq. E4-9, E4-8 — equation numbers to be verified against the printed Specification) from the thin-wall shear centre; n/a when the shear centre is n/a. <b>r<sub>ts</sub></b> = √(√(I<sub>y</sub>C<sub>w</sub>)/S<sub>x</sub>) (Eq. F2-7) only when the section is doubly symmetric about its principal axes (detected geometrically: every polygon and circle maps onto one of the same weight under reflection about each principal axis); h<sub>o</sub> for a single rolled I-shape or three plates forming an I.',
+    '<b>Wagner coefficient β<sub>x</sub></b> = (1/I<sub>1</sub>)∫v(u² + v²)dA − 2v<sub>o</sub> about the principal axes (exact polygon and circle integrals; thin-wall shear centre), reported as positive when the larger flange is in compression (v toward the tension side, as Trahair &amp; Bradford). Not used by AISC 360; for AS 4100 / EN 1993 / SSRC methods — verify the sign convention of the method used.',
+    '<b>Kern</b>: one vertex per convex-hull edge, e = −J·n/(A·d) (no stress reversal for an axial force inside it). <b>Mohr\'s circle</b> (Properties tab) with I<sub>xy</sub> plotted upward; <b>central ellipse of inertia</b> with semi-axes r<sub>1</sub> (along axis 2) and r<sub>2</sub> (along axis 1). Kern and ellipse are drawing overlays (Settings → Drawing).']);
+  H('Stresses (Phase 2a)');
+  UL(['Stresses tab: P (tension +) at the centroid, M<sub>x</sub> (+ compresses the +y side) and M<sub>y</sub> (+ compresses the +x side) about the centroidal axes. σ = P/A − [(M<sub>x</sub>I<sub>y</sub> − M<sub>y</sub>I<sub>xy</sub>)y + (M<sub>y</sub>I<sub>x</sub> − M<sub>x</sub>I<sub>xy</sub>)x]/(I<sub>x</sub>I<sub>y</sub> − I<sub>xy</sub>²), x, y from the centroid. Transformed sections: σ in part i = n<sub>i</sub> × the transformed-section stress. Colour plot, neutral axis, maximum tension and compression (polygon vertices; circles at the tangent points of the stress gradient) and a table per part. No design check.']);
   H('Checking with AutoCAD MASSPROP (Export DXF)');
   UL(['<b>Export DXF</b> (header) writes an ASCII DXF R12 file with exactly the geometry the properties are computed from: each part\'s polygons as closed polylines (rectangular-tube and HSS corners as the same 24 chords per corner), round bars, tubes and pipes as true circles, at full numeric precision, in the display units (in: $INSUNITS = 1; mm: $INSUNITS = 4).',
     '<b>Layers:</b> SPC-PARTS (material), SPC-PARTS-N (material of parts with n ≠ 1), SPC-HOLES (hole parts and the voids inside tubes), SPC-CENTROID (cross at the centroid, principal axes 1 and 2), SPC-NOTES (project, units, basis, the tool\'s A, x̄, ȳ, I<sub>x</sub>, I<sub>y</sub>, I<sub>xy</sub>, I<sub>1</sub>, I<sub>2</sub>, θ<sub>p</sub>, the expected MASSPROP readout and the steps), SPC-LABELS (part labels; off).',
@@ -4927,7 +5537,7 @@ function buildManual(pg) {
     '<b>Steps:</b> UCS World → REGION (select the objects on SPC-PARTS, SPC-PARTS-N, SPC-HOLES) → UNION the material regions (touching parts union cleanly; separate pieces become one composite region) → SUBTRACT the hole regions → MASSPROP. Compare Area, Centroid, Moments of inertia, Product of inertia and Principal moments.',
     '<b>Differences to expect:</b> MASSPROP is unweighted (compare with every n = 1, or use the unweighted values in the notes); rolled shapes are exported as their plate model (the AISC tabulated option is not in the geometry); overlapping parts (possible with "Prevent overlap" off, after a rotate or flip, or in an older file) are merged once by UNION but counted twice by the tool — the export dialog warns. MASSPROP does not report J, C<sub>w</sub>, Z, S, the shear centre or Q.']);
   H('Saved data');
-  UL([`<b>Files:</b> Save file writes JSON with <code>_schema: "${SCHEMA}"</code>, <code>version: ${SCHEMA_VER}</code>; dimensions are always stored in inches. Open file refuses another schema or a newer version.`,
+  UL([`<b>Files:</b> Save file writes JSON with <code>_schema: "${SCHEMA}"</code>, <code>version: ${SCHEMA_VER}</code>; dimensions are always stored in inches. Open file refuses another schema or a newer version. Optional fields (Phase 2a, written only once used): a part's density <code>rho</code> (lb/ft³; absent = steel 490), the stress loads <code>stress: {P, Mx, My}</code> (kip, kip-in; absent = 0), and the overlay switches <code>settings.showKern</code>, <code>settings.showEllipse</code>.`,
     `<b>This browser:</b> autosave <code>${LS_AUTO}</code>, named projects <code>${LS_PROJ}</code>, selected input tab <code>${LS_INTAB}</code>, DXF export options <code>${LS_DXF}</code>. All keys start with <code>spc_</code>.`,
     '<b>Shared project info</b> (bridgeSuite.v1.projectMeta): Project, Job #, Client, Prepared by, Checked by and Date are shared and received. No other hand-offs in Phase 1.']);
   H('Limitations');
@@ -5141,8 +5751,8 @@ const PRINT_CSS = `
   .tscroll{overflow:visible}
   .kp{grid-template-columns:repeat(4,1fr)}
 }`;
-const PR_LABELS = { sum: 'Drawing and key properties', parts: 'Parts table', props: 'Properties', calc: 'Calc detail (parallel-axis table)', plas: 'Plastic', tors: 'Torsion', q: 'Q & shear flow', val: 'Validation', man: 'Method and assumptions' };
-const PR_DEFAULT = { sum: true, parts: true, props: true, calc: true, plas: true, tors: true, q: false, val: false, man: true };
+const PR_LABELS = { sum: 'Drawing and key properties', parts: 'Parts table', props: 'Properties', calc: 'Calc detail (parallel-axis table)', plas: 'Plastic', tors: 'Torsion', q: 'Q & shear flow', stress: 'Stresses', val: 'Validation', man: 'Method and assumptions' };
+const PR_DEFAULT = { sum: true, parts: true, props: true, calc: true, plas: true, tors: true, q: false, stress: false, val: false, man: true };
 function openPrintDialog() {
   if (!M.ui.print || typeof M.ui.print !== 'object') M.ui.print = {};
   const sel = Object.assign({}, PR_DEFAULT, M.ui.print);
@@ -5200,6 +5810,7 @@ async function buildPrintReport(opts) {
     section('plas', 'Plastic properties', h => buildPlas(h));
     section('tors', 'Torsion (thin-wall approximation)', h => buildTors(h));
     section('q', 'Q and shear flow', h => buildQ(h));
+    section('stress', 'Stresses', h => buildStress(h));
   }
   section('val', 'Validation', h => buildValid(h));
   section('man', 'Method and assumptions', h => buildManual(h));
@@ -5228,7 +5839,7 @@ function spcInit() {
   if (!window.katex) window.addEventListener('load', () => { if (window.katex) renderTab(); });
 }
 // test / automation hook (read-only use; not part of the saved data)
-window.SPCUI = { get model() { return M; }, get res() { return R; }, get sel() { return [...SEL]; }, set sel(a) { SEL = new Set(a); SELORD = a.slice(); rebuildInputs(); drawCanvas(); updateToolState(); }, flush, fullRebuild, load: d => loadModel(d), buildPrintReport, runValidation, actFlip, actRotate, actMirrorCopy, actDuplicate, actDelete, actAlign, undo, redo, paste, copySel, partById, fitView, nudge, addSimple, addShape, setNoOverlap, get noOverlap() { return NOOV; }, fixOverlap, get snapMark() { return SNAPMARK; }, focusDims, openDimEditor, get view() { return VIEW; }, w2s, s2w, get undoN() { return UNDO.length; } };
+window.SPCUI = { get model() { return M; }, get res() { return R; }, get sel() { return [...SEL]; }, set sel(a) { SEL = new Set(a); SELORD = a.slice(); rebuildInputs(); drawCanvas(); updateToolState(); }, flush, fullRebuild, load: d => loadModel(d), buildPrintReport, runValidation, actFlip, actRotate, actMirrorCopy, actDuplicate, actDelete, actAlign, undo, redo, paste, copySel, partById, fitView, nudge, addSimple, addShape, setNoOverlap, get noOverlap() { return NOOV; }, fixOverlap, get snapMark() { return SNAPMARK; }, focusDims, openDimEditor, get view() { return VIEW; }, w2s, s2w, get undoN() { return UNDO.length; }, ext, stressRes: () => (R && R.ok ? SPC.stress(R, stressIn().P, stressIn().Mx, stressIn().My) : null) };
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', spcInit); else spcInit();
 </script>
 </body>
