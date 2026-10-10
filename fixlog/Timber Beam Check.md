@@ -764,8 +764,117 @@ Factor tables entered (Table 4A footnotes; Table 4B uses the same Cfu and wet-se
   - Full-page screenshots (light and dark) compared pixel by pixel: dark identical; light differs only by the timing-dependent "Project saved successfully" toast.
 - **Other copies:** none.
 
+## 2026-10-10 — PR: claude/timber-rebuild-p1 (PR link added after merge)
+
+### R1. Rebuild in vanilla JS (Steel Beam layout), Phase 1: same results + continuous beams and cantilevers   [rebuild] [no result change for any case the pre-R1 tool supports] [new calculations for multi-span / cantilever]
+
+- **Date / type:** 2026-10-10. Engineer's decisions of 2026-10-10: rebuild the tool like Steel Beam (single file, vanilla JS, header with project fields, input tabs, output tabs with full worked calc sheets, Validation, Method, Print report; KaTeX 0.16.11 and plotly-basic 2.35.2 only); Phase 1 = everything the tool did + multi-span and cantilevers; every built-in value shown with its Supplement table and a "verify" badge. Phase 2 (Glulam, SCL, Table 4D, missing SP grades, LRFD) is not implemented; the data model has the slots (`material.type`, `design.method`).
+- **File name unchanged** (`Timber Beam Check.html`; `tools.html` links to it). CRLF line endings kept. The page title is now "Timber Beam Check — NDS 2018 (ASD)" (was "Universal Timber Design Studio (NDS 2018)", O15).
+
+#### Structure of the new file (top to bottom)
+
+| Part | Anchor | Content |
+|---|---|---|
+| `<head>` | `<title>Timber Beam Check` | KaTeX **0.16.11** CSS + JS (`cdn.jsdelivr.net/npm/katex@0.16.11/...`, `defer`), plotly-basic **2.35.2** (`cdn.plot.ly/plotly-basic-2.35.2.min.js`): the exact tags of `Steel Beam Design - AISC 15th.html`. CSS after Steel Beam (navy header, input tabs, output tab bar, `.sec` sections) plus calc-sheet blocks (`.eqb`), badges and a narrow-screen layout (`@media (max-width:820px)`). |
+| body | `<div id="app">` | Header: title, "← All tools" (`tools.html`, `target="_top"`), Open file / Save file / Print report, project fields (`#projGrid`), "Use shared project info" / "Share project info". Governing strip (`#govStrip`). Input panel (`#inputPanel`), output panel (`#tabBar`, `#tabPages`). Hidden file input `#tbcFile`. |
+| script 1 | `/* BridgeXfer v1 — cross-tool hand-off helper.` | **Unchanged** (verbatim copy of the pre-R1 file, HANDOFF.md §5). |
+| script 2 | `/* Shared project info buttons (HANDOFF.md §4.1` | **Unchanged**: `ProjMetaUI` and `TBC_PROJ_MAP` (Client, Job #, Designer). |
+| script 3 | `/* TBC-ENGINE-BEGIN */` … `/* TBC-ENGINE-END */` | The calculation engine, pure functions, no DOM: reference/factor tables, `widthGroup`, `ctFactors`, `tbcDefaultModel`, the continuous-beam solver (`gauss`, `elemK`, `tbcSpanOf`, `tbcSolve`, `tbcStatics`), `tbcRun(model)`, and the saved-data functions `tbcFromLegacy`, `tbcSanitize`, `tbcMigrate`. |
+| script 4 | `Timber Beam Check — user interface (vanilla JS` | UI: helpers (KaTeX helpers copied from Steel Beam), state and storage, header, input tabs, output tabs, plots, print report, start-up (`tbcInit`). `window.TBC` is a read-only test hook (model, results, flush). |
+
+Removed with the React version: Tailwind Play CDN 3.4.17, `@babel/standalone@7.29.10`, `lucide@1.54.0`, esm.sh (`react@18.2.0`, `react-dom@18.2.0/client`, `lucide-react@0.292.0`), Google Fonts. No new library: KaTeX and plotly-basic at the versions Steel Beam already uses.
+
+#### Engine: what is unchanged and what is new
+
+The pre-R1 engine (`runTimberCheck`, fix log F1–F22) is the base of `tbcRun`. Every table and helper is copied unchanged: `DEFAULT_SPECIES`, `GRADES_DB`, `REF_4A`, `REF_4B_SP`, `T4A_CF_FB`, `T4A_CF_FB_STUD`, `T4A_CFU`, `LOAD_CD`, `COMBOS`, `DEFL_TRANSIENT`, `SIZES_DB`, `widthGroup`, `ctFactors`. `tbcRun` reads a model object instead of the React state; the field mapping is:
+
+| pre-R1 input (`runTimberCheck(inp)`) | R1 model |
+|---|---|
+| `span` | `geom.spans[0].L` (one entry per span) |
+| `spacing` | `geom.spacing` |
+| `bearingLen`, `bearingInterior` | `geom.supports[j].lb`, `geom.supports[j].cb` (one per support; `t` = `pin` / `fixed` / `free`) |
+| `wDead`, `wLive`, `wRoofLive`, `wSnow`, `wWind`, `selfWeight`, `pointLoads` | `loads.D`, `.L`, `.Lr`, `.S`, `.W`, `.selfWeight`, `.points` (x from the left end) |
+| `species`, `grade`, `sizeLabel`, `customB`, `customD`, `isManual`, `manualProps`, `customMaterials`, `notchDepth`, `costPerBF` | `material.species`, `.grade`, `.size`, `.customB`, `.customD`, `.manual`, `.manualProps`, `.customMaterials`, `.notch`, `.costPerBF` (+ `material.type`, Phase 2 slot) |
+| `moisture`, `temp`, `incising`, `repetitive`, `flatUse`, `latSupport`, `unbracedLen`, `creepFactor`, `deflLimitLL`, `deflLimitTL` | `design.moisture`, `.temp`, `.incising`, `.repetitive`, `.flatUse`, `.latTop`, `.luTop`, `.creep`, `.deflLL`, `.deflTL` (+ `design.latBot`, `design.luBot`, new; `design.method`, Phase 2 slot) |
+| `loadCombo` | `ui.diagCombo` |
+
+**A single span on two pin supports (`simple`) runs the pre-R1 code, line for line:** the closed-form `beam()` statics, the station list `L*i/100` plus point-load positions, the zero-shear candidates, the shear region `[d, L − d]`, `defl()` superposition, the factor, C<sub>L</sub>, notch, bearing and deflection expressions in the same order. Where the pre-R1 code had one value, the R1 code keeps that expression for the simple span and uses a general one otherwise:
+
+| pre-R1 anchor (earlier entries) | R1 anchor | Simple span |
+|---|---|---|
+| `const Cb = (inp.bearingInterior && lb < 6) ? (lb + 0.375) / lb : 1.0;` (F8) | `const Cbs = lbs.map((lb, j) => (cbOn[j] && lb < 6) ? (lb + 0.375) / lb : 1.0);` | same value at each support; `Cb` = value at support A |
+| `const Rbear = Math.max(bm.RL, bm.RR, 0); const fcp = Rbear / (bw * lb);` (F9) | `const Rbear = legacyBear ? Math.max(bm.RL, bm.RR, 0) : gc.Rb;` | pre-R1 expression whenever both supports have the same l<sub>b</sub> and Cb box (`legacyBear`); otherwise per-support ratios |
+| `const fb = Mmax * 12 / S;` and `r_b = fb / Fb_p` (F12, F17) | `const fb = legacyBend ? Mmax * 12 / S : Mgov * 12 / S;` | pre-R1 expression when the bottom edge is "same as top edge" (`legacyBend`) |
+| `if (luD < 7) { le = 2.06 * lu; ...` (F13) | `const leFor = (lu) => {` with `const fn1 = hasPL \|\| !simple;` | identical (`fn1` = `hasPL`) |
+| `const shearRegion = L > 2 * dft ? ...` (F9) | `if (simple) shearRegion = L > 2 * dft ? ...` | identical |
+| `const defl = (w, P, x) => {` (F10) | same, plus `const deflG = (w, P, sol, i, x) => {` for the general model | identical |
+| `const fvn = hasNotch ? 1.5 * Rmax / (bw * dn) : 0;` (F14) | same; `Rmax = simple ? Math.max(Math.abs(bm.RL), Math.abs(bm.RR)) : max over the end supports` | identical |
+| `fails.push(\`Slenderness RB = ...` (F13) | same text for one span; `Span i: slenderness RB = ...` for several spans | identical |
+
+Every error, code-limit failure and note of the pre-R1 engine is produced with the same text in the same order. New R1 advisories (bottom-edge bracing, pattern loading, notch at a cantilever end, uplift support names) are in a separate list (`adv`) and shown with the notes.
+
+#### Calculation callouts (CLAUDE.md §4)
+
+1. **No formula, factor, table value, unit or code reference changed** for any case the pre-R1 tool supports (a single span on two pins). Proof: the parity runs below (exact equality, `Object.is`, of every computed field).
+2. **New: continuous beams and cantilevers** (new capability; no earlier result exists):
+   - *Analysis:* direct stiffness, Euler–Bernoulli elements, one E′I for the member, exact fixed-end forces for the full-span uniform load (wL/2, wL²/12) and point loads (Pb²(L + 2a)/L³, Pab²/L², …); V and M by statics on the left segment. Copied from Steel Beam's `gauss`, `elemK`, `solveFor` (adapted: lb/ft, global point-load x, closed-form uniform-load FER instead of Steel's numerical N = 240 integration). Governing basis: statics / matrix structural analysis (no code provision).
+   - *Bending (NDS 2018 3.3):* per span, the largest +M is checked with the top-edge C<sub>L</sub> and the largest −M with the bottom-edge C<sub>L</sub>. l<sub>u</sub> = entered value, else the span length (cantilever: its length). l<sub>e</sub>: NDS 2018 Table 3.3.3 footnote 1 general rule (2.06 l<sub>u</sub> for l<sub>u</sub>/d < 7; 1.63 l<sub>u</sub> + 3d for 7 ≤ l<sub>u</sub>/d ≤ 14.3; 1.84 l<sub>u</sub> above), which is not less than the table's cantilever rows (1.33 l<sub>u</sub>, 0.90 l<sub>u</sub> + 3d, 1.87 l<sub>u</sub>, 1.44 l<sub>u</sub> + 3d). R<sub>B</sub> ≤ 50 per span (NDS 3.3.3.7).
+   - *Shear (NDS 3.4.3.1(a)):* V = max |V| between d from each support (to the tip on a cantilever); no x/d reduction (O4 kept).
+   - *Bearing (NDS 3.10):* every support, with its own l<sub>b</sub> and Cb box; Cb per NDS 3.10.4, Eq. 3.10-2 (F8 rule: only when ticked, l<sub>b</sub> < 6 in.). The UI ticks the box for an interior support (the member continues past it).
+   - *End notch (NDS 3.4.3.2(a), 4.4.3.2):* at the supports at the member ends; full reaction.
+   - *Deflection (NDS 3.5, IBC Table 1604.3):* per span; limit L/n with L = span, or **twice the cantilever length** (IBC 2018 Table 1604.3 footnote h). Span deflection = chord between nodal deflections + simple-beam deflection of the span's loads + end-moment term [M₁s(L − s)(2L − s) + M₂s(L − s)(L + s)]/(6LE′I) (exact).
+   - *Check case (hand-checkable), 2 spans 12 + 12 ft*, 2x10 DF-L No.2 @ 16 in., D 10 / L 40 psf, self-weight, top edge continuous, bottom edge at supports only, l<sub>b</sub> 3.5 / 5.5 (Cb) / 3.5 in.: w = 16.61 + 53.33 = 69.94 plf; R = 3/8·wL = 314.7 lb, 10/8·wL = 1049.1 lb, 314.7 lb; M<sub>B</sub> = −wL²/8 = −1259.0 ft-lb; +M = 9wL²/128 = 708.2 ft-lb at 4.5 ft. Bottom edge: l<sub>u</sub>/d = 144/9.25 = 15.57 > 14.3 → l<sub>e</sub> = 1.84 × 144 = 265.0 in.; R<sub>B</sub> = √(265.0 × 9.25/1.5²) = 33.00; F<sub>bE</sub> = 1.20 × 580,000/33.00² = 639 psi; F<sub>b</sub>* = 900 × 1.0 × 1.1 × 1.15 = 1138.5 psi; C<sub>L</sub> = 0.531; F′<sub>b</sub> = 604.7 psi; f<sub>b</sub> = 1259.0 × 12/21.39 = 706.3 psi; **ratio 1.168 (NG)**. With the bottom edge continuous: C<sub>L</sub> = 1.0, ratio 706.3/1138.5 = **0.620**. Bearing at B: C<sub>b</sub> = (5.5 + 0.375)/5.5 = 1.068, F′<sub>c⊥</sub> = 667.6 psi, f<sub>c⊥</sub> = 1049.1/(1.5 × 5.5) = 127.2 psi, 0.191. Live-load deflection 0.065 in. (L/2200).
+   - *Check case, 12 ft span + 3 ft overhang* (same joist and loads): R<sub>A</sub> = 393.4 lb, R<sub>B</sub> = 655.7 lb; M<sub>B</sub> = −wa²/2 = −314.7 ft-lb; overhang live-load deflection 0.088 in. against 2 × 36/360 = 0.200 in. (0.442).
+   - The Validation tab re-runs closed-form checks live through `tbcRun` (simple span, 2 and 3 equal spans, cantilever tip load and UDL, propped cantilever, fixed-fixed, span + overhang).
+3. **New input: bottom-edge lateral support** (O9). `design.latBot` = `Supports` (at supports only, l<sub>u</sub> = `design.luBot` or the span) / `Continuous` / `same` (same as top edge = pre-R1 behaviour). **Files from the earlier version open with `same`, so their results are unchanged.** New projects default to `Supports` (more conservative wherever negative moment occurs: continuous beams, cantilevers, net uplift). Check case (fix-log joist, 14 ft, D 10 / L 40 / W −60 psf, top edge continuous): 0.6D + 0.6W gives w = −38.03 plf, M = −931.8 ft-lb, f<sub>b</sub> = 522.8 psi, F<sub>b</sub>* = 1138.5 × 1.6 = 1821.6 psi. `same` (as before): C<sub>L</sub> = 1.0, ratio **0.287**, headline 84.4 % (D + L bending), plus an advisory that the bottom edge is being taken as braced. `Supports`: l<sub>u</sub> = 168 in., l<sub>e</sub> = 1.63 × 168 + 3 × 9.25 = 301.6 in. (uniform load, l<sub>u</sub>/d = 18.2), R<sub>B</sub> = 35.21, F<sub>bE</sub> = 561.4 psi, C<sub>L</sub> = 0.302, F′<sub>b</sub> = 549.5 psi, ratio **0.951**, headline 95.1 % (0.6D + 0.6W bending).
+
+#### Saved data (CLAUDE.md §5)
+
+- **Files.** Save file writes `{ _schema: "timber-beam-check", version: 2, project, geom, loads, material, design, ui }` (file `<project name>.json`, or `timber_design.json` when the name is blank). Open file (`tbcMigrate`) reads version 2 and every earlier format: the original 11-field file, the F18 full flat file, `temp: "High"`, custom species in the old `{F_b, F_v, F_c_perp}` shape, wrong types, missing fields. `tbcFromLegacy` applies the pre-R1 `loadProject` rules field for field (same defaults and validation) and maps them onto the model; `latBot` = `same`. A file with another `_schema` or a newer version is refused with a message; the current project is kept. Nothing in an old file is discarded: every field the old tool read is carried over (projectInfo → project client/job/designer/notes).
+- **Browser storage (new keys, tool-prefixed):** `tbc_autosave_v1` (the model, written on every change, restored at start-up), `tbc_projects_v1` (named projects `{name: {t, d: model}}`). `tbc_inputTab_v1` is kept; its values are now `project`, `geom`, `loads`, `material`, `factors` (the four pre-R1 values are still valid; an unknown value falls back to Project). Every access is in try/catch; the page works with storage blocked.
+- **Hand-off:** `projectMeta` unchanged (same `TBC_PROJ_MAP`, receiver id `timberBeamCheck`, producer "Timber Beam Check", file "Timber Beam Check.html"). The new title-block fields (Project, Member, Checked by, Date) are not mapped (open item R1-g). No other channel; HANDOFF.md unchanged.
+
+#### UI changes
+
+- Input tabs: Project (saved projects, project file, notes), Geometry (layout presets, spans, supports with bearing length and Cb, spacing), Loads (area loads, self-weight, point loads), Material (type, species, grade, size, manual / custom values, notch, cost), Factors (method, service conditions, top- and bottom-edge lateral support, deflection). Red dot on a tab whose input has an error.
+- Output tabs: Summary (utilization, check chips, governing results, all combinations), Schematic & Inputs, Analysis Results (V / M diagrams per combination or envelope, reactions, peaks), Design Values (section, loads, reference values, factor table, adjusted values), Bending, Shear, Bearing, Deflection (each a worked calc sheet: equation, substituted values, "where" table with sources and verify badges, result, ratio, NDS reference), Reference Values (every built-in value with its table and a verify badge), Validation, Method & Manual. Print report: selectable sections, title block, diagrams as images.
+- Removed: dark mode, the Trace on/off switch (the calc sheets always show the full trace), the span slider (O10: spans are now typed, no 4–40 ft limit), the "Visual Analysis / Detailed Report" switch, the hover read-out of the old SVG diagrams (Plotly hover instead). The project notes (`projectInfo.notes`, now `project.notes`) have an input and are printed in the report (O15).
+
+#### How verified
+
+- `node --check` on all four inline scripts.
+- **Engine parity (Node):** the pre-R1 engine and `loadProject` were extracted verbatim from `origin/main` and run against `tbcRun` + `tbcMigrate` on 20,417 project objects (the fix-log check case, every built-in species × grade × size edgewise and flat, every load type alone, point loads of each type at 10 positions including both supports, notches (2 in., > d/4, negative, ≥ d), unbraced / RB > 50, uplift with top edge continuous and at supports, wet / hot / incised, Lr, Cb, manual and custom species (both shapes), timbers blocked and Manual, Stud 2x8, SP SS, custom sections, every error case, wrong types, empty object, plus 20,000 random files). Two paths per case: through the file loaders, and the raw React state (incl. NaN/blank values) straight into both engines. Compared with exact equality: 49 top-level fields, 28 fields × 10 combinations, the governing combinations, 12 deflection fields, the diagram data. **Result: 0 differences (20,417 cases × 2 paths = 40,834 result comparisons; 13,197 cases with results, 7,220 blocked by input errors, where the error lists were compared).** A mutation test (Kcr default 1.5 → 1.5000001; zero-shear candidates removed) is detected.
+- **Browser parity:** the origin/main file (React, its libraries served locally at the pinned versions) and the new file, both opened from `file://` in headless Chromium; each case written to a JSON file and opened through each page's own Open input. Compared: the combinations table (CD, w, R<sub>L</sub>/R<sub>R</sub>, M, three ratios), headline %, controlling limit state and detail, errors, fails, notes, every number of the old Detailed Report (sections 1–6), the 14 factor tiles, the reference-value line, the ring captions and the diagram combination. **Result: 296 cases (207 with results, 89 with input errors), 8,402 comparisons, 0 differences; no console errors on either page.**
+- **Files saved by the old tool:** for each browser case the old page's Save button wrote a genuine `timber_design.json`; all 296 files opened in the new engine with identical results; each was then saved as version 2 and reopened: identical model and results.
+- **Multi-span:** closed-form checks (2 and 3 equal spans, cantilever tip load / UDL, propped cantilever, fixed-fixed, span + overhang) match to ≤ 2e-16 relative (deflection maxima at the 1 % stations within 0.02 %); against Steel Beam's engine (extracted verbatim, same EI) reactions and moments agree within 4e-6 and deflections within 1.1e-4 relative (Steel integrates distributed-load FER and deflection numerically).
+- **Interaction (Chromium):** editing, presets, add/remove span, point-load error and red dots, blank bearing length, SP SS → Manual, custom species, keyboard tab navigation, autosave restore after reload, named projects, Save file → Open file round trip (identical model and results), legacy and malformed files, another tool's file refused, Share / Use shared project info (same payload as before), print report (10 sections, 3 diagram images), storage blocked, pre-R1 stored tab value. No console errors.
+- Screenshots of every input and output tab at 1440 px and 400 px (single span and a 3-span model with overhang) were reviewed; no horizontal page scroll at 400 px.
+
+- **Other copies of this code:** `gauss` and `elemK` (verbatim) and the solve logic of `solveFor` are from `Steel Beam Design - AISC 15th.html`; the KaTeX helpers `TEX_CMD` … `tex()` are copied unchanged from the same file. BridgeXfer v1 and `ProjMetaUI` unchanged (same list as F23).
+
+#### Open items affected
+
+- O1 (libraries): **resolved** — no Tailwind Play CDN, Babel or esm.sh any more; KaTeX 0.16.11 and plotly-basic 2.35.2 pinned.
+- O9 (uplift / bottom edge): **addressed** by the bottom-edge input; files from the earlier version keep "same as top edge" (decision R1-a below).
+- O10 (span slider 4–40 ft): **resolved** (typed spans).
+- O15 (no print button; notes without an input; title ≠ file name): **resolved**.
+- T1 open item (400 px header causes a horizontal page scroll): **resolved** by the new layout.
+- O2–O8, O11–O14: unchanged for the simple span; O4, O7 and O8 apply to continuous beams in the same way.
+
+#### New open items (R1)
+
+- R1-a. **Default bottom-edge bracing.** Files from the earlier version open with "same as top edge" (results unchanged); new projects default to "at supports only". Decision: should opening an old file switch it to "at supports only" (changes uplift results for files with a continuously braced top edge, e.g. 0.287 → 0.951 in the check case above)?
+- R1-b. **l<sub>e</sub> for continuous beams and cantilevers:** the footnote 1 general rule is used (conservative). Confirm, or use the Table 3.3.3 cantilever rows for cantilevers.
+- R1-c. **Cantilever deflection limit:** L = twice the cantilever length (IBC 2018 Table 1604.3 footnote h, as recalled). Confirm the footnote and the intent.
+- R1-d. **Pattern (skip) live loading** is not generated for continuous beams (Steel Beam does not either); an advisory is shown. Decision: add automatic patterns?
+- R1-e. **Cb at interior supports:** ticked by default for an interior support (member continues past it). Confirm.
+- R1-f. **NDS equation numbers** in the calc sheets (3.3-2, 3.3-5, 3.3-6, 3.4-2, 3.4-3, 3.5-1, 3.10-2) are as recalled; verify against the printed NDS 2018.
+- R1-g. **Shared project info:** `TBC_PROJ_MAP` is unchanged (Client, Job #, Designer). The new fields Project, Checked by and Date could be mapped to `projectName`, `checkedBy`, `date`. Decision?
+- R1-h. **Observation (Steel Beam, not changed here):** in `Steel Beam Design - AISC 15th.html`, `evalVM(X, …)` includes the reaction couple of a node at `X` itself, so at x = L with a fixed right end it returns M = 0 instead of the end moment (fixed-pin-fixed 10 + 10 ft, w = 75 plf: 0 vs −2187.5 ft-lb at x = 20 ft). The station just before it is close, so the effect is small but unconservative. For a separate Steel Beam PR if wanted.
+- R1-i. **Fixed supports** are offered (as in Steel Beam) but rare in timber; the bearing check uses the vertical reaction only.
+
 ## Open items (not changed)
-- O1. **Libraries.** Versions pinned 2026-10-09 (L1): `@babel/standalone@7.29.10`, `lucide@1.54.0` (unused), Tailwind Play CDN 3.4.17. Still open:
+- O1. **Libraries.** Versions pinned 2026-10-09 (L1): `@babel/standalone@7.29.10`, `lucide@1.54.0` (unused), Tailwind Play CDN 3.4.17. Still open: *(R1: resolved; the rebuild uses only KaTeX 0.16.11 and plotly-basic 2.35.2.)*
   - Tailwind Play CDN (`cdn.tailwindcss.com`) is meant for development only.
   - esm.sh serves React 18.2.0 and lucide-react (exact versions) and is not on the CLAUDE.md host list.
 - O2. **Southern Pine SS, No.1 and Stud (Table 4B)**, and the SP Ft/Fc values, were not entered because I am not confident of them. The tool asks for Manual values. Decision: supply the values from the Supplement to add.
@@ -779,13 +888,13 @@ Factor tables entered (Table 4A footnotes; Table 4B uses the same Cfu and wet-se
   - Wind is excluded from deflection.
   - The transient case set {L, Lr, S, 0.75L + 0.75(Lr or S)} is my interpretation of "include S/Lr in the live portion appropriately". Please confirm.
 - O8. **Notch model.** One end-notch depth applies at both ends, on the tension face at the supports. Interior notches (≤ d/6 in the outer thirds; none in the middle third, NDS 4.4.3) and compression-side notches (NDS 3.4.3.2(c)) are not modelled.
-- O9. **Uplift (0.6D + 0.6W with W negative).** The tool flags the net uplift and reminds the user about bottom-edge bracing. CL is still based on the single lateral-support setting, and bearing ignores negative reactions. Decision: add a separate bottom-edge unbraced length?
-- O10. **Span slider** is limited to 4–40 ft (unchanged UI).
+- O9. **Uplift (0.6D + 0.6W with W negative).** The tool flags the net uplift and reminds the user about bottom-edge bracing. CL is still based on the single lateral-support setting, and bearing ignores negative reactions. Decision: add a separate bottom-edge unbraced length? *(R1: bottom-edge lateral support input added; files from the earlier version open with "same as top edge"; see R1-a.)*
+- O10. **Span slider** is limited to 4–40 ft (unchanged UI). *(R1: resolved, spans are typed.)*
 - O11. **Stud grade 8 in. and wider** (Table 4A directs No.3 values) is not built in; the tool asks for Manual values.
 - O12. **SP 4-in.-thick, 8 in. and wider:** Table 4B permits CF = 1.1 on Fb. It is not applied (conservative).
 - O13. **ASCE 7 edition:** 7-16 assumed. ASCE 7-22 Sec. 2.4.1 is believed to have the same forms for these load types. Confirm the governing edition.
 - O14. **Ci is applied to timbers if ticked.** NDS 4.3.8 is written for dimension lumber. Minor; confirm.
-- O15. **Not in scope:** no print button (C4 in the audit); `projectInfo.notes` has no input; the app title differs from the file name.
+- O15. **Not in scope:** no print button (C4 in the audit); `projectInfo.notes` has no input; the app title differs from the file name. *(R1: resolved: Print report, a Notes input, title "Timber Beam Check".)*
 
 ## How verified (all fixes)
 - **Before values:** the original engine (lines 67-88 and 361-482 of the original file) was extracted verbatim into node and run on 8 cases.
