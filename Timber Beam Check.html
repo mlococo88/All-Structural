@@ -337,9 +337,13 @@ textarea{min-height:64px;resize:vertical;font-family:var(--font-doc);font-size:1
   window.ProjMetaUI={ share:share, use:use };
 })();
 /* Timber Beam Check: shared project info field map ("Project & Geometry" section). */
-var TBC_PROJ_MAP=[{shared:'client',key:'client',label:'Client'},
+/* Engineer's decision R1-g (2026-10-10, fix log R5): Project, Checked by and Date added (HANDOFF.md §4.1 field names). */
+var TBC_PROJ_MAP=[{shared:'projectName',key:'name',label:'Project'},
+                  {shared:'client',key:'client',label:'Client'},
                   {shared:'jobNo',key:'job',label:'Job #'},
-                  {shared:'preparedBy',key:'designer',label:'Designer'}];
+                  {shared:'preparedBy',key:'designer',label:'Designer'},
+                  {shared:'checkedBy',key:'checker',label:'Checked by'},
+                  {shared:'date',key:'date',label:'Date'}];
 </script>
 <script>
 /* TBC-ENGINE-BEGIN */
@@ -859,8 +863,9 @@ function tbcRun(m) {
         const bot = latBot === 'same' ? top : leFor(((unbB > 0) ? unbB : Li) * 12);
         return { top, bot, cant: types[i] === 'free' || types[i + 1] === 'free' };
     });
+    const topRBFail = [];   // top-edge "RB > 50" failures; kept below only for spans where positive moment occurs (P2-10, fix log R5)
     stab.forEach((s, i) => {
-        if (stabilityApplies && s.top.RB > 50) fails.push(nS === 1 ? `Slenderness RB = ${s.top.RB.toFixed(1)} exceeds 50 (NDS 3.3.3.7). Not permitted.` : `Span ${i + 1}: slenderness RB = ${s.top.RB.toFixed(1)} exceeds 50 (NDS 3.3.3.7). Not permitted.`);
+        if (stabilityApplies && s.top.RB > 50) { const msg = nS === 1 ? `Slenderness RB = ${s.top.RB.toFixed(1)} exceeds 50 (NDS 3.3.3.7). Not permitted.` : `Span ${i + 1}: slenderness RB = ${s.top.RB.toFixed(1)} exceeds 50 (NDS 3.3.3.7). Not permitted.`; fails.push(msg); topRBFail.push({ i, msg }); }
     });
     const st0 = stab[0].top;
     const lu = st0.lu, luD = st0.luD, le = st0.le, leRule = st0.leRule, RB = st0.RB, FbE = st0.FbE;
@@ -1035,6 +1040,11 @@ function tbcRun(m) {
     if (latBot !== 'same' && stabBot) stab.forEach((s, i) => {
         if (s.bot.RB > 50 && combos.some(c => c.bend[i].Mn > 0)) fails.push(`${nS > 1 ? `Span ${i + 1}, bottom` : 'Bottom'} edge (negative moment): slenderness RB = ${s.bot.RB.toFixed(1)} exceeds 50 (NDS 3.3.3.7). Not permitted.`);
     });
+    // Engineer's decision P2-10 (2026-10-10, fix log R5): the top-edge "RB > 50" failure stands only for a span where positive
+    // moment (top edge in compression) occurs in some combination, as for the bottom edge above. Region moments are already
+    // round-off filtered (P2-1: |M| <= max(1e-6 ft-lb, 1e-9 x Mmax) is 0). "Same as top edge": the bottom edge has the same RB and
+    // no failure of its own, so the failure also stands where negative moment occurs.
+    topRBFail.forEach(t => { if (!combos.some(c => c.bend[t.i].Mp > 0 || (latBot === 'same' && c.bend[t.i].Mn > 0))) fails.splice(fails.indexOf(t.msg), 1); });
     if (latBot === 'same' && combos.some(c => c.bend.some(e => e.Mn > 1e-9)) && stabilityApplies !== (dep > bw)) adv.push('Negative moment occurs, and the bottom-edge bracing is set to "same as top edge" (continuous lateral support): the bottom (compression) edge is taken as braced. Confirm, or choose "at supports only" for the bottom edge.');
 
     // --- Deflection (service loads; superposition per load type) ---
@@ -2672,6 +2682,17 @@ function runBenchmarks() {
       add(g, 'bottom-edge R_B = √(1.84 × 356.4 × 9.25/1.5²) (> 50)', 51.923, q.stab[0].bot.RB, '', 1e-4);
       add(g, 'largest negative moment, all combinations (ft-lb; was 1.5e-11 round-off)', 0, Math.max(...q.combos.map(c => c.bend[0].Mn)), 'ft-lb', 1e-12);
       add(g, 'bottom-edge "R_B > 50" failures (no negative moment: none)', 0, q.fails.filter(f => /edge \(negative moment\)/.test(f)).length, '', 1e-12); }
+    // 5. Engineer's decision P2-10 of 2026-10-10 (fix log R5): top-edge R_B > 50 only where positive moment occurs
+    { const q = p2(m => { m.material.type = 'scl'; Object.assign(m.material.scl, { kind: 'LVL', name: 'example inputs', b: 1.75, d: 24, Fb: 2600, Fv: 285, Fcp: 750, E: 1900000, Emin: 966000, n: 0.111, dref: 12, cvMax: 1.0, dens: 42 });
+        m.geom.spans = [{ L: 16 }]; m.geom.spacing = 24; m.geom.supports = [{ t: 'fixed', lb: 5.5, cb: false }, { t: 'free', lb: 3.5, cb: false }];
+        m.loads.D = 10; m.loads.L = 40; m.design.repetitive = false; m.design.latTop = 'Supports'; m.design.luTop = 0; m.design.latBot = 'Supports'; m.design.luBot = 4; }), k = comb(q, 'D+L');
+      const g = 'Fixed-free cantilever, no positive moment (fix log R5, P2-10): LVL 1.75 × 24 in., 16 ft, trib. 2 ft, D 10 / L 40 psf, top edge at supports only, bottom edge braced at 4 ft';
+      add(g, 'top-edge R_B = √((1.63 × 192 + 3 × 24) × 24/1.75²) (> 50)', 54.926, q.stab[0].top.RB, '', 1e-4);
+      add(g, 'largest positive moment, all combinations (ft-lb)', 0, Math.max(...q.combos.map(c => c.bend[0].Mp)), 'ft-lb', 1e-12);
+      add(g, 'top-edge "R_B > 50" failures (top edge in tension: none; was 1)', 0, q.fails.length, '', 1e-12);
+      add(g, 'M fixed end = −112.25 × 16²/2 (ft-lb)', 14368, k.Mgov, 'ft-lb', 1e-9); add(g, 'bottom-edge R_B = √(2.06 × 48 × 24/1.75²)', 27.837, q.stab[0].bot.RB, '', 1e-4);
+      add(g, 'C_L bottom edge (F_bE 1495.9 / F_b* 2600)', 0.54308, k.CL, '', 1e-4); add(g, "F'b = 2600 × min(C_L, C_V 0.92595) (psi)", 1412.0, k.Fb_p, 'psi', 1e-4);
+      add(g, 'fb/F′b = 1026.3/1412.0', 0.7268, k.r_b, '', 1e-3); add(g, 'Headline (bending, D + L)', 0.7268, q.dcrMax, '', 1e-3); }
   } catch (e) { out.push({ grp: 'error', what: 'Benchmark failed to run: ' + e.message, hand: NaN, tool: NaN, unit: '', diff: NaN, ok: false }); }
   return out;
 }
@@ -2683,7 +2704,7 @@ function buildValid(pg) {
     B.forEach(b => { if (b.grp !== grp) { grp = b.grp; rows.push({ cls: 'gov', cells: [{ h: '<b>' + esc(grp) + '</b>' }, '', '', '', '', ''] }); }
       rows.push([b.what, b.unit === '' ? f3(b.hand) : g4(b.hand), b.unit === 'in.' || b.unit === '' ? (b.tool).toFixed(4) : f2(b.tool), b.unit, (b.diff * 100).toFixed(4) + ' %', { cls: b.ok ? 'ok' : 'ng', h: b.ok ? 'match' : 'differs' }]); });
     body.appendChild(tblEl(['Quantity (hand calculation / closed form)', 'Hand', 'Tool', 'Unit', 'Diff.', 'Status'], rows, { left: [0] }));
-    body.appendChild(el('div', 'hint', 'Closed forms: AISC Steel Construction Manual Table 3-23 beam diagrams (any linear-elastic beam). The closed-form benchmarks use the 2x10 DF-L No.2 section with E′ = 1,600,000 psi and dead load only (spacing 12 in., no self-weight). The fix-log case reproduces the engineer’s accepted 84.4 % result. Hand values of the fix-log case and of the Phase 2 hand checks (fix log R3, R4) are rounded as printed there (tolerance 0.01–0.2 %).'));
+    body.appendChild(el('div', 'hint', 'Closed forms: AISC Steel Construction Manual Table 3-23 beam diagrams (any linear-elastic beam). The closed-form benchmarks use the 2x10 DF-L No.2 section with E′ = 1,600,000 psi and dead load only (spacing 12 in., no self-weight). The fix-log case reproduces the engineer’s accepted 84.4 % result. Hand values of the fix-log case and of the Phase 2 hand checks (fix log R3, R4, R5) are rounded as printed there (tolerance 0.01–0.2 %).'));
   });
   if (R.ok) mkSec(pg, 'vEq', 'Equilibrium of the current model', body => {
     body.appendChild(tblEl(['Combination', 'Σ applied loads (lb)', 'Σ reactions (lb)', 'Difference (lb)', 'Status'], R.combos.map(c => { const d = c.sumR - c.sumF; const ok = Math.abs(d) <= 1e-6 * Math.max(1, Math.abs(c.sumF)); return [c.name, f2(c.sumF), f2(c.sumR), d.toExponential(2), { cls: ok ? 'ok' : 'ng', h: ok ? 'OK' : 'check' }]; }), { left: [0] }));
@@ -2712,7 +2733,7 @@ function buildManual(pg) {
     'ASD: all ten combinations of ASCE 7-16 Sec. 2.4.1 are evaluated; C<sub>D</sub> is that of the shortest-duration load present (NDS 2.3.2). LRFD: the ten strength combinations of ASCE 7-16 Sec. 2.3.1 for D, L, Lr, S and W, each with λ of NDS Table N3 (1.4D: 0.6; 1.2D + 1.6L + 0.5(Lr or S): 0.8 occupancy / 0.7 storage; 1.2D + 1.6(Lr or S) + (L or 0.5W): 0.8; with 1.0W: 1.0); adjusted values × K<sub>F</sub> × φ (Tables N1, N2), no C<sub>D</sub>. Wind acts on all spans with its sign (+ down, − uplift).',
     'Pattern (skip) live loading is <b>not</b> generated for continuous beams (as in Steel Beam Design); check it separately where it matters.']);
   H('Checks');
-  UL(['<b>Bending (NDS 3.3):</b> per span, the largest positive moment is checked with the top-edge C<sub>L</sub> and the largest negative moment with the bottom-edge C<sub>L</sub>. l<sub>u</sub> = the entered unbraced length, else the span length (cantilever: its length). l<sub>e</sub> per Table 3.3.3: a simple span with uniform load only uses the uniform-load row; other loading, continuous beams and cantilevers use the footnote 1 general rule, which is not less than the cantilever rows. R<sub>B</sub> ≤ 50 is enforced (NG otherwise).',
+  UL(['<b>Bending (NDS 3.3):</b> per span, the largest positive moment is checked with the top-edge C<sub>L</sub> and the largest negative moment with the bottom-edge C<sub>L</sub>. l<sub>u</sub> = the entered unbraced length, else the span length (cantilever: its length). l<sub>e</sub> per Table 3.3.3: a simple span with uniform load only uses the uniform-load row; other loading, continuous beams and cantilevers use the footnote 1 general rule, which is not less than the cantilever rows. R<sub>B</sub> ≤ 50 is enforced (NG otherwise) for each edge in a span where that edge is in compression in some combination (top edge: positive moment; bottom edge: negative moment; fix log R4, R5).',
     '<b>Shear (NDS 3.4):</b> V = largest |V| between d from each support face (or to a cantilever tip); f<sub>v</sub> = 3V/2A. Point loads within d are not reduced (O4). End notch (tension face, at end supports): f<sub>v,n</sub> = 3R/(2 b d<sub>n</sub>) with the full reaction, against F′<sub>v</sub>(d<sub>n</sub>/d)<sup>2</sup>; notch > d/4 is NG (NDS 4.4.3.2).',
     '<b>Bearing (NDS 3.10):</b> at every support, f<sub>c⊥</sub> = R/(b l<sub>b</sub>) with the downward reaction; C<sub>b</sub> only when the bearing is ≥ 3 in. from the member end. Net uplift is reported (provide a connection).',
     '<b>Deflection (NDS 3.5):</b> per span, Δ<sub>LL</sub> = max of L, Lr, S, 0.75L + 0.75Lr, 0.75L + 0.75S; Δ<sub>T</sub> = K<sub>cr</sub>Δ<sub>D</sub> + Δ<sub>LL</sub>. Limits L/n with L = span, or twice the cantilever length (IBC Table 1604.3 footnote h). Wind is excluded. Always at service loads (also with LRFD).',
@@ -2722,7 +2743,7 @@ function buildManual(pg) {
   H('Saved data');
   UL(['<b>Files:</b> Save file writes the project as JSON with <code>_schema: "timber-beam-check"</code> and <code>version: 2</code>, or <code>version: 3</code> when the project uses glulam, SCL or LRFD (so that the earlier version of the tool refuses it instead of reading it as sawn lumber / ASD). Open file reads versions 2 and 3 and every format of the earlier version (the original 11-field file, the full flat file of fix log F18, <code>temp: "High"</code>, custom species in the old <code>F_b</code> shape); those convert with identical results, except that the bottom (negative-moment) edge opens as braced at supports only (engineer\'s decision R1-a, fix log R2; that version took it as braced like the top edge, which can still be chosen as "Same as top edge"). Files of any version that use the 6x8 or 8x8 size open with the Table 1B dressed sizes (5.5 × 7.5 and 7.5 × 7.5 in.; fix log R4), so their results change.',
     `<b>This browser:</b> the last session is autosaved (<code>${LS_AUTO}</code>) and named projects are kept (<code>${LS_PROJ}</code>); the selected input tab is remembered (<code>${TBC_IN_KEY}</code>). All keys start with <code>tbc_</code>.`,
-    '<b>Shared project info</b> (bridgeSuite.v1.projectMeta): Client, Job # and Designer are shared and received, as before.']);
+    '<b>Shared project info</b> (bridgeSuite.v1.projectMeta): Project, Client, Job #, Designer, Checked by and Date are shared and received (shared fields <code>projectName</code>, <code>client</code>, <code>jobNo</code>, <code>preparedBy</code>, <code>checkedBy</code>, <code>date</code>; Project, Checked by and Date added in fix log R5). Member / mark and Notes stay in this tool.']);
   H('Limitations and open items');
   UL(['Built-in reference values and factors must be verified against the printed NDS Supplement (Reference Values tab).',
     'No axial load, no torsion, no lateral load on the weak axis; no interior or compression-face notches (O8); no x/d shear reduction (O4); no sustained live load in creep (O7).',
