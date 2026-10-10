@@ -1,0 +1,71 @@
+# Fix log — Section Property Calculator.html
+
+Governing basis: mechanics of materials (section properties by exact area integrals), AISC Shapes Database v16.0 (rolled-shape dimensions and tabulated properties), thin-walled beam theory for torsion: AISC Design Guide 9, *Torsional Analysis of Structural Steel Members* (Seaburg & Carter, 1997) and Vlasov sectorial coordinates; Roark's *Formulas for Stress and Strain* (Young & Budynas, 7th Ed.) Table 10.7 for the solid rectangle; AISC 360-16 Eq. E4-9 form for r̄o. No design code checks (no resistance or load factors) are made by this tool.
+
+**Thin-wall torsion results (J, Cw, shear centre) are approximations and carry a "thin-wall — verify" flag in the tool.**
+
+## 2026-10-10 — PR: claude/section-props-p1 (PR link added after merge)
+
+### C1. New tool: Section Property Calculator (Phase 1: properties only)   [new tool]
+
+- **Type:** new file `Section Property Calculator.html` (single file, opens from `file://`, no build step). CDN: KaTeX 0.16.11 (pinned, `cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js` and `.css`; already used by Steel Beam Design and Timber Beam Check). Drawing is plain inline SVG. No other libraries. Without KaTeX the equations fall back to plain text.
+- **Look and feel:** the CSS, header, input/result tab bars, calc-sheet blocks (`calc`, `mkSec`, `tblEl`), focus-preserving inputs and print-report pattern are copied from `Timber Beam Check.html` (which follows Steel Beam Design). The KaTeX helper block is copied unchanged from `Steel Beam Design - AISC 15th.html` (as in Timber Beam Check).
+- **Storage (new keys only, prefix `spc_`):** `spc_autosave_v1` (the model), `spc_projects_v1` (map name → `{t, d}`), `spc_inputTab_v1` (selected input tab). File: JSON with `_schema: "section-property-calculator"`, `version: 1`, `app`, `savedAt`, `project`, `parts[]`, `contacts.off[]`, `settings`, `q`, `ui`. All lengths are stored in inches whatever the display units. Open file refuses another `_schema` or a newer version.
+- **Hand-off:** "← All tools" link, the BridgeXfer v1 helper (verbatim, HANDOFF.md §5) and the project-info glue (`ProjMetaUI`, verbatim from Timber Beam Check) on channel `bridgeSuite.v1.projectMeta` only (receiver id `sectionProps`; field map in HANDOFF.md §4.1). No other channel in Phase 1.
+- **Other copies (CLAUDE.md §3):**
+  - AISC Shapes Database v16.0 block `DBVER`, `DBKEYS`, `DBKIND`, `DB` (W, M, S, HP, C, MC, HSS rectangular, HSS round, Pipe): copied unchanged from `Steel Beam Design - AISC 15th.html` (anchor `const DBVER="AISC Shapes Database v16.0";`).
+  - BridgeXfer v1 helper: same as every tool that uses it (HANDOFF.md §5).
+  - `ProjMetaUI` glue: same as BasePlateAnchorDesigner, Concrete Anchor, Pile Designer, Spread Footing, Timber Beam Check; only the field map `SPC_PROJ_MAP` is this tool's.
+  - KaTeX helpers (`TEX_CMD` … `tex()`): same as Steel Beam Design and Timber Beam Check.
+
+#### Data not copied from another tool — needs the engineer's acceptance
+
+L (137 shapes), WT (289), MT (14), ST (28) and double angles 2L (639 rows: A, y, Ix, Iy for gaps 0, 3/8, 3/4 in, LLBB/SLBB) are **not in any tool in the repo**, and aisc.org could not be reached from the build environment. They were taken from the AISC Shapes Database v16.0 as transcribed in the open-source Python package **steelpy 1.1.1** (PyPI, Apache-2.0). Cross-checks made before using it:
+
+- steelpy's W, M, S, HP, C and MC rows are **identical to Steel Beam Design's v16.0 data on every row (395 shapes) and every common field** (Wt, A, d, bf, tf, tw, kdes, Ix, Zx, Sx, rx, Iy, Zy, Sy, ry, J, Cw, rts, ho, Wno, Sw1, Qf, Qw; channels also x̄, eo).
+- Its L, WT, MT and ST rows are identical to the independent **v15.0** transcription in **efficalc 1.2.7** (MIT) for every shape present in both (A, d, b/bf, t/tw/tf, Ix, Iy, Iz, J, Cw, x, y, kdes), except shapes added in v16.0 and one rounding (ST2X4.75 Cw 0.00995 vs 0.01).
+- Leg dimensions and thickness are taken from the designation (e.g. L4X4X1/2 → 4, 4, 0.5); the tabulated decimal t is within 0.006 in of it.
+- Stored in the tool as `DBX` / `DBX_KEYS` (comment in the file states the source). **Verify** any tabulated value used for design against the printed Manual.
+
+#### Method as implemented (units in, in², in³, in⁴, in⁶; kip for V)
+
+- **Geometry.** Each part = exact polygons and circles in its own frame, centred on its gross centroid; holes are separate parts with negative area. Global = (x, y) + R(rot)·M·local, M = diag(−1, 1) when mirrored. Rolled shapes are their plates: I (W, M, S, HP) a 12-vertex outline from d, bf, tf, tw; C/MC an 8-vertex outline (average tf, flange slope neglected); L two legs (heel at the corner, leg1 vertical); WT/MT/ST flange + stem; HSS rectangular a rounded tube (tdes, outside radius 2tdes, inside tdes, arcs as 24 chords — the AISC table basis as understood, **verify**); HSS round / Pipe an annulus (OD, tdes). Root fillets and toe radii are neglected.
+- **Elastic.** Polygon integrals by Green's theorem: A = ½Σ(xᵢyᵢ₊₁ − xᵢ₊₁yᵢ), ∫x dA = ⅙Σ(xᵢ + xᵢ₊₁)cᵢ, ∫x² dA = ¹⁄₁₂Σ(xᵢ² + xᵢxᵢ₊₁ + xᵢ₊₁²)cᵢ, ∫xy dA = ¹⁄₂₄Σ(xᵢyᵢ₊₁ + 2xᵢyᵢ + 2xᵢ₊₁yᵢ₊₁ + xᵢ₊₁yᵢ)cᵢ, cᵢ = xᵢyᵢ₊₁ − xᵢ₊₁yᵢ; circles exact (πr⁴/4). Each part about its own centroid, then parallel axis with modulus ratio n: A = Σ nA, Ix = Σ n(Ixo + A dy²), Iy = Σ n(Iyo + A dx²), Ixy = Σ n(Ixyo + A dx dy) (Ixy = ∫xy dA). S = I/c to the extreme material fibre (top, bottom, left, right); r = √(I/A).
+- **Principal axes.** I₁,₂ = (Ix + Iy)/2 ± √(((Ix − Iy)/2)² + Ixy²); θp = ½·atan2(−2Ixy, Ix − Iy) from +x to axis 1, CCW. S₁, S₂, Z₁, Z₂ about the principal axes; r_min = √(I₂/A).
+- **AISC tabulated option (per rolled part).** Uses the tabulated A, Ix, Iy at the tabulated centroid (C: x̄ from the back of web; L: x, y from the heel; tee: y from the flange face), rotated with the part (I′ = T·I·Tᵀ); for angles |Ixy| = √(((Iw − Iz)/2)² − ((Ix − Iy)/2)²) with Iw = Ix + Iy − Iz, sign from the geometry. Plastic, Q and torsion keep the plate model. Default off (setting "New rolled shapes use AISC tabulated").
+- **Plastic.** PNA by bisection (to 1e-13 relative) on the exact n-weighted area on one side of the line (polygons clipped by the half-plane; circles by the circular-segment formulas A = r²acos(d/r) − d√(r² − d²), first moment ⅔(r² − d²)^{3/2}); Z = A₁d₁ + A₂d₂ about the PNA. For x, y and the principal axes. Shape factors Z/S_min.
+- **Q and shear flow.** Q = first moment, about the centroidal axis, of the area on one side of a full-width cut (above a horizontal / right of a vertical cut). q = V·Q/I when Ixy ≈ 0; otherwise q = Vy(Iy·Qx − Ixy·Qy)/(Ix·Iy − Ixy²) (and the x counterpart). τavg = q/b, b = material length on the cut.
+- **Torsion J (thin-wall).** Centre-line elements: plates along their long side (t = short side); rolled shapes' standard centre-line model (W web hₒ = d − tf; C flanges bf − tw/2); tubes on the mid-thickness line (rect. tube corner radius r − t/2 as 6 chords, round tube 48 chords when connected). Touching parts (within the contact tolerance, default 0.001 in) are connected unless the contact is switched off on the Torsion tab: elements at an angle join at the intersection of their centre lines (extended where needed); plates in face contact are combined over the overlap into one element of thickness t₁ + t₂ on their combined mid-plane (continuous connection along both edges assumed); other contacts get a rigid link. Closed cells = interior faces of the planar centre-line graph. One cell: J = 4A_m²/∮ds/t (Bredt); several: ∮ᵢ q ds/t = 2A_m,i (Gθ = 1), J = 2ΣA_m,i qᵢ. Open branches add Σ b t³/3 (DG9); b t³/3 of cell walls not added. Separate pieces: J = Σ. Single rectangle alone: J = b t³[⅓ − 0.21(t/b)(1 − t⁴/12b⁴)] (Roark Table 10.7 case 4); solid round πd⁴/32; round tube π(D⁴ − d⁴)/32 (exact). Custom polygons, round bars connected to other parts: n/a. Holes ignored in torsion (stated on the tab). Elements with b/t < 10 are flagged.
+- **Shear centre and Cw (open, one connected piece).** Sectorial coordinate ω_B over the centre-line tree, pole B = centroid of the centre-line model; xₒ = (Iy·Iωx − Ixy·Iωy)/(Ix·Iy − Ixy²), yₒ = (Ixy·Iωx − Ix·Iωy)/(Ix·Iy − Ixy²) (offsets from B; Iωx = ∫ω y t ds, Iωy = ∫ω x t ds); Cw = ∫ωₙ² t ds with ωₙ = ω_S − (1/A)∫ω_S t ds. Linear-segment integrals exact. Closed cells, separate pieces: "n/a — not computed". r̄ₒ = √(xₒ² + yₒ² + (Ix + Iy)/A).
+
+#### Worked check cases (all reproduced live on the Validation tab, 60 checks)
+
+1. **Rectangle 6 × 10 in:** A = 60, Ix = 6·10³/12 = 500, Iy = 180, Sx = 100, Zx = 6·10²/4 = 150, Zy = 90 in³; J (b = 10, t = 6) = 10·216·[⅓ − 0.21·0.6·(1 − 0.6⁴/12)] = 450.78 in⁴; Q at the centroid = 6·5·2.5 = 75 in³. Tool: identical (relative difference < 1e-15).
+2. **W14X90 from three plates** (bf 14.5, tf 0.71, tw 0.44, d 14.0, h = 12.58): A = 2(14.5)(0.71) + 12.58(0.44) = 26.125 in²; Ix = [14.5(14)³ − 14.06(12.58)³]/12 = 983.04 in⁴; Iy = 360.84; Zx = 14.5(0.71)(13.29) + 0.44(12.58)²/4 = 154.23 in³; J = [2(14.5)(0.71)³ + 13.29(0.44)³]/3 = 3.837 in⁴; Cw = 0.71(14.5)³(13.29)²/24 = 15,929 in⁶. Tool = hand exactly; the rolled W14X90 part gives the same. vs AISC 26.5 / 999 / 362 / 157 / 4.06 / 16,000: −1.4 %, −1.6 %, −0.3 %, −1.8 %, −5.5 % (fillets), −0.4 %.
+3. **2L4X4X1/2, long legs back-to-back, 3/8 gap:** single angle (plate model) A = 3.75, ȳ = x̄ = 1.1833; A = 7.50, Ix = 11.123, Iy = 2[Iy,L + 3.75(1.1833 + 0.1875)²] = 25.217 in⁴. AISC 2L table: 7.50, 11.0, 25.1 (+1.1 %, +0.5 %).
+4. **Box 10 × 6 out-to-out, flanges 1/2, webs 3/8:** a = 9.625, b = 5.5, J = 2(0.5)(0.375)(9.625)²(5.5)²/(9.625·0.375 + 5.5·0.5) = 165.25 in⁴ by automatic cell detection (exact). HSS10X6X1/2: Bredt with the 1.5t centre-line corner radius 176.14 vs closed form 176.18 (arcs as chords) vs AISC 176; A 13.46 vs 13.5, Ix 171.3 vs 171.
+5. **C15X50 shear centre:** b = 3.72 − 0.358 = 3.362, h = 14.35: e = 3b²tf/(6b·tf + h·tw) = 0.9425 from the web centre line, eₒ = 0.5845 in from the back of the web (AISC 0.583, +0.25 %); Cw = tf b³h²/12·(3b·tf + 2h·tw)/(6b·tf + h·tw) = 491.27 in⁶ (AISC 492).
+6. **Tee, flange 8 × 1 on stem 1/2 × 8:** A = 12, A/2 = 6 lies in the flange 0.75 in below the top → PNA y = 8.25 in; Zx = 6(0.375) + 2(0.125) + 4(4.25) = 19.5 in³; Zy = 1(8)²/4 + 8(0.5)²/4 = 16.5 in³. Tool exact.
+7. Rotation/mirror invariants (L8X4X1/2), 8. circles, tubes, a round hole in a plate (closed forms), 9. cover-plated W14X90 with 14.5 × 1 plates: J = [2(14.5)(1.71)³ + 14.29(0.44)³]/3 = 48.741 in⁴, Cw = 1.71(14.5)³(14.29)²/24 = 44,356 in⁶ (tool exact).
+
+**Default example (opens on first use):** W21X62 with a C15X33.9 cap channel (web on the top flange, flanges down). W1 A = 2(8.24)(0.615) + 19.77(0.4) = 18.043; C1 A = 9.90 at y = 10.5 + 0.4 − 0.8697 = 10.030; A = 27.943 in², ȳ = 9.90 × 10.030 / 27.943 = 3.5536 in, Ix = 1310.81 + 9.84 + 227.86 + 415.28 = 1963.8 in⁴, Iy = 370.86 in⁴, Zx = 187.70 in³ (PNA y = 8.647 in), J = 4.666 in⁴, Cw = 12,658 in⁶, yₒ = +6.115 in above the centroid; Q at the centroid 105.78 in³, with V = 50 kip q = 50 × 105.78 / 1963.8 = 2.693 kip/in.
+
+#### How verified
+
+- `node --check` of every inline script; headless Chromium (Playwright, KaTeX 0.16.11 served locally): no console errors; Validation tab 60/60 pass.
+- Independent Node script (no engine formulas reused): 60 random star-shaped polygons (1–3 parts, random rotation, mirror and n) vs a triangle-fan implementation — A, x̄, ȳ, Ix, Iy, Ixy within 1e-9; Zx and PNA vs numerical slicing (40,000 strips) within 2e-4; polygon + triangle hole + round hole exact; monosymmetric plate girder shear centre h·I₂/(I₁ + I₂) and Cw = h²I₁I₂/(I₁ + I₂) exact; Z-section Cw by direct integration exact (and the literature formula t b³h²(b + 2h)/(12(2b + h)) reproduced); symmetric two-cell box J = single outer cell; unsymmetric two-cell box vs a 2 × 2 hand solution exact; rotated + mirrored channel shear centre transforms with the part; star angle, 4-angle laced column, double channels; all 1,660 shapes run (tabulated option reproduces A, Ix, Iy exactly; plate-model differences listed below). 410 checks, 0 failures.
+- Browser interaction tests (49): flip H of an angle = reflection about its own centroid; flip V; rotate 90° keeps A and swaps Ix/Iy; rotate by angle keeps I₁, I₂; mirror copy about an edge doubles A; undo/redo restore exactly; drag snaps a corner exactly onto another part's corner; arrow nudge; align / place touching; contact switch-off; box select; copy/paste/delete; polygon by clicking; all eight templates; Q-cut drag; save → open file round trip with identical results; autosave after reload; wrong `_schema` refused; named projects; Share/Use shared project info; mm units; print report.
+- Screenshots at 1500 px and 400 px (no horizontal page scroll at 400 px).
+
+#### Plate model vs AISC tables (largest differences over all shapes; informational)
+
+A / Ix / J: W 2.7 % / 4.1 % / 18.7 % (W40X149); M 9.0 % / 9.4 % / 50 % (M3X2.9); S 1.9 / 1.1 / 27 %; HP 4.5 / 5.1 / 30 %; C 1.7 / 0.8 / 20 %; MC 1.7 / 1.6 / 16 %; L 1.6 / 2.2 / 14 %; WT 2.7 / 1.7 / 18 %; MT 4.7 / 0.9 / 29 %; ST 1.9 / 3.9 / 27 %; HSS rect 0.4 / 1.0 / 0.5 %; HSS round 0.7 / 1.9 / 1.7 %; Pipe 3.4 / 3.2 / 3.2 % (Pipe20XS). J differences come from the fillets, which add to J; the thin-wall J is lower (conservative for torsional stiffness, unconservative for warping/torsion stress estimates that use J in a denominator — verify).
+
+#### Open items (decisions for the engineer)
+
+- O1. Accept steelpy 1.1.1 as the source of the L, WT, MT, ST and 2L data (cross-checks above), or supply the AISC v16.0 spreadsheet.
+- O2. HSS corner radius basis 2tdes (outside) / tdes (inside) — confirm against the Manual.
+- O3. Face-contact plates are combined into one thicker element for J and Cw (continuous edge welds assumed). For stitch-bolted or intermittently welded plates the user must switch the contact off. Confirm this default.
+- O4. J of cell walls' own b t³/3 is not added to the Bredt term (conventional); stocky open elements (b/t < 10) use b t³/3 without end correction (flagged).
+- O5. Holes are ignored in torsion (gross section), with a note.
+- O6. Flip/rotate of several selected parts acts about the selection's bounding-box centre (one part: about its centroid).

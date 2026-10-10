@@ -76,6 +76,7 @@ This matches the existing BridgeLocks "project" channel (`index.html`).
 
 - Each tool maps these fields onto its own title-block fields. Fields a tool doesn't have are ignored.
 - Each tool offers **"Use shared project info"** (pull) and **"Share project info"** (publish).
+- Section Property Calculator (added 2026-10-10, receiver id `sectionProps`) maps `projectName` → Project, `jobNo` → Job #, `client` → Client, `preparedBy` → Prepared by, `checkedBy` → Checked by, `date` → Date; `bridgeId` and `location` are not used. It uses no other channel (Phase 1).
 - Gusset Plate Rating (added 2026-10-05) has all eight fields: `projectName`, `bridgeId`, `jobNo`, `client`, `location`, `preparedBy`, `checkedBy` map to its Calculation header fields of the same names, and `date` maps to its "Date" (prepared) field. It uses no other channel.
 
 ### 4.2 `lldfGeom` (existing; Bridge Geometry becomes a sender)
