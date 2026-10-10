@@ -229,6 +229,15 @@ table.plist tr.sel td{background:#E3EDFA}
 table.plist tr{cursor:pointer;user-select:none;-webkit-user-select:none}
 table.plist .sw{display:inline-block;width:10px;height:10px;border-radius:2px;border:1px solid rgba(0,0,0,.25);vertical-align:-1px;margin-right:4px}
 table.plist button{font-size:8pt;padding:0 5px;border:1px solid #C6CFDA;background:#fff;border-radius:3px;cursor:pointer;color:#2B3A4E}
+.inlDims{display:flex;flex-wrap:wrap;align-items:center;gap:2px 3px;margin-top:2px;font-size:8.5pt;color:#475569}
+.inlDims input,.inlDims select{user-select:text;-webkit-user-select:text;font-size:8.5pt;padding:1px 3px;height:auto}
+.inlDims input{width:58px}
+.inlDims select{max-width:150px}
+.inlDims .il{font-style:italic;color:#334155}
+#dimEd{position:absolute;z-index:6;display:none;background:#fff;border:1.5px solid #2563EB;border-radius:5px;padding:3px 5px;box-shadow:0 3px 10px rgba(15,23,42,.25);font-family:var(--font-ui);font-size:9pt;align-items:center;gap:4px}
+#dimEd input{width:84px;font-size:10pt;padding:2px 4px}
+#dimEd select{font-size:9.5pt;max-width:180px}
+#dimEd .bad{border-color:#C0392B;background:#FDECEC}
 .vtx{border-collapse:collapse;width:100%;font-size:9pt}
 .vtx td{padding:1px 2px}
 .vtx input{font-size:8.8pt;padding:2px 4px}
@@ -3296,13 +3305,13 @@ function addSimple(kind, at) {
   else if (kind === 'rtube') pt = newPart('rtube', { B: 6, H: 8, t: 0.375 }, c[0], c[1]);
   else if (kind === 'hrect') pt = newPart('plate', { b: 1, t: 1 }, c[0], c[1], { hole: true });
   else if (kind === 'hcirc') pt = newPart('round', { d: 0.9375 }, c[0], c[1], { hole: true });
-  if (pt) { if (pt.hole) pt.lbl = nextLabel(pt); const res = addParts([pt]); if (res) toast('Added ' + pt.lbl + movedTxt(res)); }
+  if (pt) { if (pt.hole) pt.lbl = nextLabel(pt); const res = addParts([pt]); if (res) { toast('Added ' + pt.lbl + movedTxt(res) + ' — type its size'); focusDims(pt.id); } }
 }
 function addShape(fam, name, at) {
   if (!SPC.shapeRec(fam, name)) { alert('Unknown shape ' + fam + ' ' + name); return; }
   const c = at || viewCentre();
   const pt = newPart('shape', { fam, name }, c[0], c[1], { useTab: !!M.settings.tabDefault }), res = addParts([pt]);
-  if (res) toast('Added ' + pt.lbl + movedTxt(res));
+  if (res) { toast('Added ' + pt.lbl + movedTxt(res) + ' — pick its size'); focusDims(pt.id); }
 }
 
 /* =====================================================================
@@ -3312,7 +3321,9 @@ const IN_TABS = [['parts', 'Parts'], ['part', 'Part properties'], ['tpl', 'Templ
 let inTabMem = null;
 const inTabGet = () => { if (inTabMem) return inTabMem; try { return localStorage.getItem(LS_INTAB) || ''; } catch (e) { return ''; } };
 const inTabSet = (t) => { inTabMem = t; try { localStorage.setItem(LS_INTAB, t); } catch (e) { } };
+let PANE_STALE = false;   // selection changed from an inline field in the parts list without rebuilding the panes
 function inTabSelect(k, remember) {
+  if (PANE_STALE && remember && k !== 'parts') { PANE_STALE = false; inTabSet(k); rebuildInputs(); return; }
   IN_TABS.forEach(([t]) => {
     const b = $('spcInTab_' + t), p = $('spcInPane_' + t); if (!b || !p) return;
     const on = t === k; b.setAttribute('aria-selected', on ? 'true' : 'false'); b.tabIndex = on ? 0 : -1; p.hidden = !on;
@@ -3337,6 +3348,7 @@ function inputTabMarks() {
   IN_TABS.forEach(([k]) => { const b = $('spcInTab_' + k); if (!b) return; b.classList.toggle('has-err', !!bad[k]); b.title = bad[k] ? 'An input on this tab needs attention' : ''; });
 }
 function rebuildInputs() {
+  PANE_STALE = false;
   const st = captureUI();
   const P = $('inputPanel'); const keep = P.scrollTop; P.innerHTML = '';
   const bar = el('div'); bar.id = 'spcInTabs'; bar.setAttribute('role', 'tablist'); bar.setAttribute('aria-label', 'Input groups');
@@ -3365,6 +3377,37 @@ function refreshInputs() {
 }
 const LIVE = {};
 
+/* ---- dimension editing: focus, inline fields, orientation wording ---- */
+const DIM_FIRST = { plate: 'b', bar: 'b', round: 'd', tube: 'D', rtube: 'B', shape: 'name', poly: null };
+// select a part and show its dimension fields (Part properties tab, first dimension field focused and selected)
+function focusDims(pid) {
+  const pt = partById(pid); if (!pt) return;
+  SEL = new Set([pid]); SELORD = [pid]; inTabSelect('part', true); rebuildInputs(); drawCanvas(); updateToolState();
+  const k = DIM_FIRST[pt.type], e = document.querySelector('#spcInPane_part [data-fkey="' + (k ? 'pp_' + k : 'vx0x') + '"]');
+  if (e) { e.focus(); try { if (e.select) e.select(); } catch (err) { } if (e.scrollIntoView) e.scrollIntoView({ block: 'nearest' }); }
+}
+// how the part's own b / t (B / H) axes lie on the drawing
+function orientWords(pt) {
+  const r = ((+(pt.rot || 0) % 180) + 180) % 180;
+  if (r < 1e-9 || 180 - r < 1e-9) return ['horizontal', 'vertical'];
+  if (Math.abs(r - 90) < 1e-9) return ['vertical — part turned 90°', 'horizontal — part turned 90°'];
+  return ['along the part, turned ' + (+(+pt.rot).toFixed(3)) + '°', 'across the part'];
+}
+function inlineDims(p) {
+  const d = el('div', 'inlDims'), G = [p.id];
+  d.addEventListener('dblclick', e => e.stopPropagation());
+  const f = (key, lab, title) => { const i = numIn(() => p.p[key], v => { p.p[key] = v; }, 'pl_' + p.id + '_' + key, { k: 'L', min: 0, geo: true, guard: G }); i.title = title; i.setAttribute('aria-label', p.lbl + ' ' + title); d.appendChild(el('span', 'il', lab)); d.appendChild(i); };
+  const x = () => d.appendChild(el('span', null, '×'));
+  if (p.type === 'plate' || p.type === 'bar') { const o = orientWords(p); f('b', 'b', 'Width b (' + o[0] + ')'); x(); f('t', 't', 'Thickness t (' + o[1] + ')'); }
+  else if (p.type === 'round') f('d', 'Ø', 'Diameter d');
+  else if (p.type === 'tube') { f('D', 'Ø', 'Outside diameter D'); x(); f('t', 't', 'Wall thickness t'); }
+  else if (p.type === 'rtube') { f('B', 'B', 'Width B'); x(); f('H', 'H', 'Height H'); x(); f('t', 't', 'Wall thickness t'); }
+  else if (p.type === 'shape') { const s = selIn(SPC.shapeNames(p.p.fam).map(n => [n, n]), () => p.p.name, v => { p.p.name = v; }, 'pl_' + p.id + '_name', true, true, G); s.title = 'Shape size'; s.setAttribute('aria-label', p.lbl + ' shape size'); d.appendChild(s); }
+  else return null;
+  if (p.type !== 'shape') d.appendChild(el('span', 'unit', un('L')));
+  return d;
+}
+
 /* ---- Parts tab ---- */
 const SHAPE_UI = { fam: 'W', filter: '', name: '' };
 function buildPartsPane(P) {
@@ -3377,6 +3420,7 @@ function buildPartsPane(P) {
     const r2 = el('div', 'btnRow');
     r2.appendChild(btn('Rect. hole', 'sm', () => addSimple('hrect'))); r2.appendChild(btn('Round hole', 'sm', () => addSimple('hcirc'))); r2.appendChild(btn('Polygon hole…', 'sm', () => startPoly(true)));
     body.appendChild(r2);
+    body.appendChild(el('div', 'hint', '<b>Click a part to change its size — or double-click it.</b> A selected part shows its dimensions on the drawing: click one to type a new value, or drag an edge handle (plates, bars, rectangular tubes). Sizes can also be typed in the list below.'));
     body.appendChild(el('div', 'hint', 'New parts go to the centre of the view. Drag them on the drawing (snapping to corners, edge midpoints, centroids and the grid), or type exact positions on the Part properties tab. Right-click a part for flip, mirror, rotate, align and "place touching".'));
   });
   mkSec(P, 'inShape', 'Add a rolled shape (AISC Shapes Database v16.0)', body => {
@@ -3399,21 +3443,27 @@ function buildPartsPane(P) {
     body.appendChild(el('div', 'hint', 'Shapes are drawn and computed as their plates (flanges, web, legs) with fillets and corner radii neglected; the AISC tabulated A, I, J, Cw are shown for comparison. L, WT, MT, ST and 2L data: see Method. Double-click a name to add it.'));
   });
   mkSec(P, 'inList', 'Parts in the section (' + M.parts.length + ')', body => {
+    ovEditBox(body);
     if (!M.parts.length) { body.appendChild(el('div', 'hint', 'No parts yet. Add a part, a rolled shape or a template.')); return; }
     const t = el('table', 'plist');
     t.appendChild(el('tr', null, '<th>Label</th><th>Description</th><th>n</th><th></th>'));
     M.parts.forEach((p, i) => {
       const tr = el('tr', SEL.has(p.id) ? 'sel' : null);
       tr.appendChild(el('td', null, `<span class="sw" style="background:${typeColor(p)};${p.hole ? 'border:1.5px dashed #C0392B' : ''}"></span><b>${esc(p.lbl)}</b>`));
-      tr.appendChild(el('td', null, esc(partDesc(p)) + (p.useTab ? ' <span class="badge use" title="Uses the AISC tabulated A, I about its own axes">tab.</span>' : '') + (p.rot ? ` <span class="hint">${+(+p.rot).toFixed(2)}°</span>` : '') + (p.mir ? ' <span class="hint">mirr.</span>' : '')));
+      const tdd = el('td', null, esc(partDesc(p)) + (p.useTab ? ' <span class="badge use" title="Uses the AISC tabulated A, I about its own axes">tab.</span>' : '') + (p.rot ? ` <span class="hint">${+(+p.rot).toFixed(2)}°</span>` : '') + (p.mir ? ' <span class="hint">mirr.</span>' : ''));
+      const idm = inlineDims(p); if (idm) tdd.appendChild(idm); tr.appendChild(tdd);
       tr.appendChild(el('td', null, isNum(p.n) && p.n !== 1 ? String(+p.n.toPrecision(4)) : '1'));
       const tdb = el('td'); tdb.style.whiteSpace = 'nowrap';
       const up = el('button', null, '▲'); up.title = 'Send backward (drawn earlier)'; up.disabled = i === 0; up.addEventListener('click', e => { e.stopPropagation(); pushUndo(); const a = M.parts; [a[i - 1], a[i]] = [a[i], a[i - 1]]; afterGeo(true); });
       const dn = el('button', null, '▼'); dn.title = 'Bring forward'; dn.disabled = i === M.parts.length - 1; dn.addEventListener('click', e => { e.stopPropagation(); pushUndo(); const a = M.parts; [a[i + 1], a[i]] = [a[i], a[i + 1]]; afterGeo(true); });
       const del = el('button', null, '✕'); del.title = 'Delete'; del.addEventListener('click', e => { e.stopPropagation(); SEL = new Set([p.id]); actDelete(); });
       tdb.appendChild(up); tdb.appendChild(dn); tdb.appendChild(del); tr.appendChild(tdb);
-      tr.addEventListener('click', e => { selectPart(p.id, e.shiftKey || e.ctrlKey || e.metaKey); });
-      tr.addEventListener('dblclick', () => { SEL = new Set([p.id]); SELORD = [p.id]; showInTab('part'); rebuildInputs(); drawCanvas(); });
+      tr.addEventListener('click', e => {
+        // a click in an inline size field selects the part without rebuilding the list (keeps the field's focus and text selection)
+        if (e.target.closest && e.target.closest('.inlDims')) { if (!(SEL.size === 1 && SEL.has(p.id))) { SEL = new Set([p.id]); SELORD = [p.id]; PANE_STALE = true; t.querySelectorAll('tr').forEach(r => r.classList.remove('sel')); tr.classList.add('sel'); drawCanvas(); updateToolState(); } return; }
+        selectPart(p.id, e.shiftKey || e.ctrlKey || e.metaKey);
+      });
+      tr.addEventListener('dblclick', () => focusDims(p.id));
       t.appendChild(tr);
     });
     body.appendChild(t);
@@ -3444,10 +3494,11 @@ function buildPartPane(P) {
   }, { noNum: true });
   mkSec(P, 'ppDim', 'Dimensions', body => {
     const L = un('L'), dim = (lab, key, hint) => fRow(body, lab, numIn(() => pt.p[key], v => { pt.p[key] = v; }, 'pp_' + key, { k: 'L', min: 0, geo: true, guard: GD }), L, hint);
-    if (pt.type === 'plate' || pt.type === 'bar') { dim('Width b (along x)', 'b'); dim('Thickness t (along y)', 't'); }
+    const rotRow = () => { const r = el('div', 'btnRow'); r.appendChild(btn('⟲ Rotate 90°', 'sm', () => actRotate(90), 'Turn the part 90° (b and t keep their values; horizontal and vertical swap)')); r.appendChild(el('span', 'hint', 'swaps horizontal and vertical')); body.appendChild(r); };
+    if (pt.type === 'plate' || pt.type === 'bar') { const o = orientWords(pt); dim('Width b (' + o[0] + ')', 'b'); dim('Thickness t (' + o[1] + ')', 't'); rotRow(); }
     else if (pt.type === 'round') dim('Diameter d', 'd');
     else if (pt.type === 'tube') { dim('Outside diameter D', 'D'); dim('Wall thickness t', 't'); }
-    else if (pt.type === 'rtube') { dim('Width B (along x)', 'B'); dim('Height H (along y)', 'H'); dim('Wall thickness t', 't'); fRow(body, 'Outside corner radius r', numIn(() => pt.p.r || 0, v => { pt.p.r = v; }, 'pp_r', { k: 'L', min: 0, minIncl: true, geo: true, guard: GD }), L, '0 = square corners. Inside radius = max(r − t, 0). AISC HSS use r = 2t.'); }
+    else if (pt.type === 'rtube') { const o = orientWords(pt); dim('Width B (' + o[0] + ')', 'B'); dim('Height H (' + o[1] + ')', 'H'); dim('Wall thickness t', 't'); rotRow(); fRow(body, 'Outside corner radius r', numIn(() => pt.p.r || 0, v => { pt.p.r = v; }, 'pp_r', { k: 'L', min: 0, minIncl: true, geo: true, guard: GD }), L, '0 = square corners. Inside radius = max(r − t, 0). AISC HSS use r = 2t.'); }
     else if (pt.type === 'shape') {
       const fam = selIn(SPC.FAM_ORDER.map(f => [f, SPC.FAMS[f].name]), () => pt.p.fam, v => { pt.p.fam = v; pt.p.name = SPC.shapeNames(v)[0]; }, 'pp_fam', true, true, GD);
       fRow(body, 'Family', fam, '');
@@ -3659,7 +3710,7 @@ const VIEW = { s: 30, ox: 300, oy: 250, init: false };       // screen = (ox + s
 const CV = { svg: null, wrap: null, block: null, tip: null, hint: null, status: null, tools: null };
 const w2s = p => [VIEW.ox + VIEW.s * p[0], VIEW.oy - VIEW.s * p[1]];
 const s2w = p => [(p[0] - VIEW.ox) / VIEW.s, (VIEW.oy - p[1]) / VIEW.s];
-let HOVER = null, DRAG = null, POLY = null, SNAPMARK = null, BOX = null, CURSOR = null;
+let HOVER = null, DRAG = null, POLY = null, SNAPMARK = null, BOX = null, CURSOR = null, LASTCLICK = null;
 const fx = v => (Math.round(v * 100) / 100).toString();
 
 function buildCanvasBlock() {
@@ -3786,8 +3837,11 @@ function svgMarkup(W, H, V, opts) {
       else { const y = fx(tr([0, pv])[1]); o.push(`<path d="M0 ${y}H${W}" stroke="#D97706" stroke-width="1.6" stroke-dasharray="9 5" pointer-events="none"/><path d="M0 ${y}H${W}" stroke="transparent" stroke-width="12" data-h="qcut" style="cursor:ns-resize"/><text x="6" y="${+y - 5}" font-size="10" fill="#D97706">Q cut y = ${esc(nf(pv, 'L', 4))}</text>`); }
     }
   }
+  // selected part: clickable dimensions and edge handles
+  const selDim = !opts.print && SEL.size === 1 && !POLY && !(DRAG && DRAG.mode === 'move') ? partById([...SEL][0]) : null;
+  if (selDim) o.push(dimMarkup(selDim, tr, V, W, H));
   // hover dimensions
-  if (!opts.print && S.showDims && HOVER && !DRAG) {
+  if (!opts.print && S.showDims && HOVER && !DRAG && !(selDim && selDim.id === HOVER)) {
     const pt = partById(HOVER);
     if (pt) {
       const b = SPC.partGlobal(pt).bbox, a = tr([b[0], b[1]]), c = tr([b[2], b[3]]);
@@ -3819,6 +3873,94 @@ function svgMarkup(W, H, V, opts) {
   }
   return o.join('');
 }
+// dimension labels (click to edit in place) and edge handles (drag to resize) for the selected part
+function dimInfo(pt) {
+  let g; try { g = SPC.partGeom(pt); } catch (e) { return null; } if (!g.prims.length) return null;
+  const T = SPC.xfMat(pt), W = l => { const v = SPC.apply(T, [l[0] - (g.shift ? 0 : 0), l[1]]); return [pt.x + v[0], pt.y + v[1]]; }, U = l => SPC.apply(T, l);
+  const p = pt.p || {}, D = { dims: [], tags: [], handles: [] };
+  const box = (wk, hk, w, hh) => {
+    D.dims.push({ key: wk, v: w, a: W([-w / 2, -hh / 2]), b: W([w / 2, -hh / 2]), u: U([0, -1]) }, { key: hk, v: hh, a: W([w / 2, -hh / 2]), b: W([w / 2, hh / 2]), u: U([1, 0]) });
+    if (pt.hole) return;
+    D.handles.push({ key: wk, sg: 1, at: W([w / 2, 0]), n: U([1, 0]) }, { key: wk, sg: -1, at: W([-w / 2, 0]), n: U([-1, 0]) }, { key: hk, sg: 1, at: W([0, hh / 2]), n: U([0, 1]) }, { key: hk, sg: -1, at: W([0, -hh / 2]), n: U([0, -1]) });
+  };
+  if (pt.type === 'plate' || pt.type === 'bar') box('b', 't', p.b, p.t);
+  else if (pt.type === 'rtube') { box('B', 'H', p.B, p.H); D.tags.push({ key: 't', v: p.t, at: W([0, p.H / 2 - p.t / 2]), lab: 't' }); }
+  else if (pt.type === 'round') D.tags.push({ key: 'd', v: p.d, at: W([0, -p.d / 2]), off: U([0, -1]), lab: 'Ø' });
+  else if (pt.type === 'tube') { D.tags.push({ key: 'D', v: p.D, at: W([0, -p.D / 2]), off: U([0, -1]), lab: 'Ø' }, { key: 't', v: p.t, at: W([0, p.D / 2 - p.t / 2]), lab: 't' }); }
+  else if (pt.type === 'shape') { const bb = SPC.partGlobal(pt).bbox; D.tags.push({ key: 'name', v: p.name, at: [(bb[0] + bb[2]) / 2, bb[1]], off: [0, -1], lab: '' }); }
+  return D;
+}
+function dimLabel(pid, key, txt, c, title, VW, VH) {
+  const w = Math.max(28, txt.length * 6.3 + 12);
+  if (VW) c = [Math.max(w / 2 + 2, Math.min(VW - w / 2 - 2, c[0])), Math.max(11, Math.min(VH - 11, c[1]))];   // keep the label inside the view
+  return `<g data-dim="${pid}|${key}" style="cursor:pointer"><title>${esc(title)}</title><rect x="${fx(c[0] - w / 2)}" y="${fx(c[1] - 9)}" width="${fx(w)}" height="17" rx="4" fill="#fff" stroke="#2563EB" stroke-width="1.1"/><text x="${fx(c[0])}" y="${fx(c[1] + 4)}" text-anchor="middle" font-size="11" font-weight="600" fill="#1D4ED8" text-decoration="underline">${esc(txt)}</text></g>`;
+}
+function dimMarkup(pt, tr, V, VW, VH) {
+  const D = dimInfo(pt); if (!D) return '';
+  const o = ['<g class="selDims">'], val = (k, v) => k === 'name' ? String(v) : (k === 'd' || k === 'D' ? 'Ø' : k + ' = ') + nf(v, 'L', 4) + ' ' + un('L');
+  const names = { b: 'Width b', t: 'Thickness t', B: 'Width B', H: 'Height H', d: 'Diameter d', D: 'Outside diameter D', name: 'Shape size' };
+  D.dims.forEach(dm => {
+    const A = tr(dm.a), B = tr(dm.b), us = [dm.u[0], -dm.u[1]], off = 16, A2 = [A[0] + us[0] * off, A[1] + us[1] * off], B2 = [B[0] + us[0] * off, B[1] + us[1] * off];
+    const L = Math.hypot(B2[0] - A2[0], B2[1] - A2[1]) || 1, ex = [(B2[0] - A2[0]) / L, (B2[1] - A2[1]) / L], tk = (P) => `M${fx(P[0] - 4 * (ex[0] + us[0]))} ${fx(P[1] - 4 * (ex[1] + us[1]))}l${fx(8 * (ex[0] + us[0]) / 1)} ${fx(8 * (ex[1] + us[1]) / 1)}`;
+    o.push(`<path d="M${fx(A[0] + us[0] * 3)} ${fx(A[1] + us[1] * 3)}L${fx(A2[0] + us[0] * 4)} ${fx(A2[1] + us[1] * 4)}M${fx(B[0] + us[0] * 3)} ${fx(B[1] + us[1] * 3)}L${fx(B2[0] + us[0] * 4)} ${fx(B2[1] + us[1] * 4)}M${fx(A2[0])} ${fx(A2[1])}L${fx(B2[0])} ${fx(B2[1])}${tk(A2)}${tk(B2)}" stroke="#2563EB" stroke-width="1" fill="none" pointer-events="none"/>`);
+    const txt = val(dm.key, dm.v), hw = Math.max(28, txt.length * 6.3 + 12) / 2, ext = Math.abs(us[0]) * hw + Math.abs(us[1]) * 8.5 + 4;   // clear of the line and the edge handle
+    const c = [(A2[0] + B2[0]) / 2 + us[0] * ext, (A2[1] + B2[1]) / 2 + us[1] * ext];
+    o.push(dimLabel(pt.id, dm.key, txt, c, names[dm.key] + ' — click to type a new value', VW, VH));
+  });
+  D.tags.forEach(tg => { const P = tr(tg.at), us = tg.off ? [tg.off[0], -tg.off[1]] : [0, 0], c = [P[0] + us[0] * 16, P[1] + us[1] * 16]; o.push(dimLabel(pt.id, tg.key, tg.key === 'name' ? String(tg.v) + ' ▾' : (tg.lab === 'Ø' ? 'Ø' : tg.lab + ' = ') + nf(tg.v, 'L', 4) + ' ' + un('L'), c, (tg.key === 'name' ? 'Shape size' : names[tg.key] || ('Wall thickness ' + tg.key)) + ' — click to change', VW, VH)); });
+  D.handles.forEach(hd => { const P = tr(hd.at), horiz = Math.abs(hd.n[0]) >= Math.abs(hd.n[1]); o.push(`<rect data-h="rs|${pt.id}|${hd.key}|${hd.sg}" x="${fx(P[0] - 5)}" y="${fx(P[1] - 5)}" width="10" height="10" rx="2" fill="#fff" stroke="#2563EB" stroke-width="1.6" style="cursor:${horiz ? 'ew-resize' : 'ns-resize'}"><title>Drag to change ${esc(names[hd.key] || hd.key)}</title></rect>`); });
+  o.push('</g>');
+  return o.join('');
+}
+// in-place editor for a dimension label
+function closeDimEditor() { const e = $('dimEd'); if (e) { e.style.display = 'none'; e.innerHTML = ''; } }
+function openDimEditor(pid, key, sp) {
+  const pt = partById(pid); if (!pt || !CV.wrap) return;
+  let ed = $('dimEd'); if (!ed) { ed = el('div'); ed.id = 'dimEd'; CV.wrap.appendChild(ed); }
+  ed.innerHTML = ''; ed.style.display = 'flex';
+  const done = () => closeDimEditor();
+  let inp;
+  if (key === 'name') {
+    inp = document.createElement('select'); SPC.shapeNames(pt.p.fam).forEach(n => { const op = document.createElement('option'); op.value = n; op.textContent = n; inp.appendChild(op); }); inp.value = pt.p.name;
+    inp.addEventListener('change', () => { applyDim(pid, key, inp.value, inp); });
+  } else {
+    inp = document.createElement('input'); inp.type = 'number'; inp.step = 'any'; inp.value = +toD(pt.p[key], 'L').toPrecision(10);
+    ed.appendChild(el('span', null, esc(key === 'd' || key === 'D' ? 'Ø' : key) + ' ='));
+  }
+  inp.setAttribute('data-fkey', 'dimEd'); ed.insertBefore(inp, null);
+  if (key !== 'name') ed.appendChild(el('span', 'unit', un('L')));
+  inp.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter') { e.preventDefault(); if (key !== 'name') { if (applyDim(pid, key, inp.value, inp)) done(); } else done(); } else if (e.key === 'Escape') { e.preventDefault(); done(); } });
+  inp.addEventListener('blur', () => setTimeout(() => { if ($('dimEd') && $('dimEd').contains(document.activeElement)) return; if (key !== 'name' && $('dimEd').style.display !== 'none') { if (String(+toD(pt.p[key], 'L').toPrecision(10)) !== inp.value) applyDim(pid, key, inp.value, inp); } done(); }, 0));
+  const W = CV.wrap.clientWidth; ed.style.left = Math.max(2, Math.min(W - 170, sp[0] - 60)) + 'px'; ed.style.top = Math.max(2, sp[1] - 16) + 'px';
+  setTimeout(() => { inp.focus(); try { if (inp.select) inp.select(); } catch (e) { } }, 0);
+}
+function applyDim(pid, key, raw, inp) {
+  const pt = partById(pid); if (!pt) return false;
+  let v;
+  if (key === 'name') v = raw; else { const x = parseFloat(raw); if (!isNum(x) || !(x > 0)) { inp.classList.add('bad'); toast('Enter a positive number'); return false; } v = fromD(x, 'L'); }
+  pushUndo();
+  if (!guardEdit([pid], () => { pt.p[key] = v; }, inp)) { UNDO.pop(); updateToolState(); toast('Not applied: ' + (OVEDIT ? OVEDIT.why : 'overlap') + ' (Prevent overlap is on)'); return false; }
+  afterGeo(true); toast(`${pt.lbl}: ${key === 'name' ? v : key + ' = ' + nf(v, 'L', 4) + ' ' + un('L')}`); return true;
+}
+// edge-handle resize: the opposite edge stays put; snaps to other parts' edges / corners, else to 1/16 in (1 mm); stops at contact
+function resizeTo(D, wp, alt) {
+  const pt = partById(D.id); if (!pt) return;
+  let s = (wp[0] - D.w0[0]) * D.n[0] + (wp[1] - D.w0[1]) * D.n[1], v = D.v0 + s;
+  const S = M.settings; D.snapPt = null;
+  if (S.snap && !alt) {
+    const rad = (S.snapPx || 10) / VIEW.s, e = D.e0 + s; let best = null;
+    if (S.snapParts) D.targets.forEach(q => { const dd = q[0] * D.n[0] + q[1] * D.n[1] - e; if (Math.abs(dd) <= rad && (!best || Math.abs(dd) < Math.abs(best.dd))) best = { dd, q }; });
+    if (best) { v += best.dd; D.snapPt = best.q; }
+    else { const inc = unitSys() === 'mm' ? 1 / 25.4 : 1 / 16; v = Math.round(v / inc) * inc; }
+  }
+  const minV = pt.type === 'rtube' ? 2 * (pt.p.t || 0) + 1e-6 : 1e-6; v = Math.max(minV, v);
+  const set = val => { pt.p[D.key] = val; pt.x = D.c0[0] + D.n[0] * (val - D.v0) / 2; pt.y = D.c0[1] + D.n[1] * (val - D.v0) / 2; };
+  const ok = val => { set(val); return SPC.NOV.feasible({ mov: novShapes([pt]), st: D.st }, [0, 0]); };
+  D.blocked = false;
+  if (NOOV && D.was && v > D.cur && !ok(v)) { let lo = D.cur, hi = v; for (let i = 0; i < 60; i++) { const m = (lo + hi) / 2; if (ok(m)) lo = m; else hi = m; } v = lo; D.blocked = true; }
+  set(v); D.cur = v;
+}
+
 let _drawQ = false;
 function drawCanvas() {
   if (!CV.svg || !CV.svg.isConnected) return;
@@ -3881,6 +4023,17 @@ function wireCanvas() {
     if (POLY) { const p = snapPoint(wp, e.altKey); if (POLY.pts.length >= 3 && Math.hypot(...[0, 1].map(i => (w2s(POLY.pts[0])[i] - sp[i]))) < 9) { finishPoly(); return; } POLY.pts.push(p); drawCanvas(); polyHint(); return; }
     const tg = e.target;
     if (tg.getAttribute && tg.getAttribute('data-h') === 'qcut') { DRAG = { mode: 'qcut' }; return; }
+    const dg = tg.closest && tg.closest('[data-dim]');
+    if (dg) { const [dpid, dkey] = dg.getAttribute('data-dim').split('|'); try { svg.releasePointerCapture(e.pointerId); } catch (err) { } openDimEditor(dpid, dkey, sp); return; }
+    const hh = tg.getAttribute && tg.getAttribute('data-h');
+    if (hh && hh.startsWith('rs|')) {
+      const [, rid, rkey, rsg] = hh.split('|'), rp = partById(rid); if (!rp) return;
+      const ax = SPC.apply(SPC.xfMat(rp), (rkey === 'b' || rkey === 'B') ? [1, 0] : [0, 1]), n = [ax[0] * +rsg, ax[1] * +rsg];
+      const others = M.parts.filter(q => q.id !== rid), tg2 = [];
+      others.forEach(q => { try { const G = SPC.partGlobal(q); G.prims.forEach(pr => { if (pr.k === 'poly') pr.pts.forEach(v => tg2.push(v)); else tg2.push([pr.c[0] + pr.r * n[0], pr.c[1] + pr.r * n[1]], [pr.c[0] - pr.r * n[0], pr.c[1] - pr.r * n[1]]); }); } catch (err) { } });
+      DRAG = { mode: 'resize', id: rid, key: rkey, n, w0: wp, v0: rp.p[rkey], cur: rp.p[rkey], c0: [rp.x, rp.y], e0: rp.x * n[0] + rp.y * n[1] + rp.p[rkey] / 2, targets: tg2, st: novShapes(others), was: NOOV && novOK([rid]), pushed: false, moved: false };
+      closeDimEditor(); return;
+    }
     const pid = tg.getAttribute && tg.getAttribute('data-pid');
     if (pid) {
       const tog = e.shiftKey || e.ctrlKey || e.metaKey;
@@ -3908,6 +4061,10 @@ function wireCanvas() {
     }
     if (DRAG.mode === 'pan') { VIEW.ox = DRAG.o0[0] + sp[0] - DRAG.s0[0]; VIEW.oy = DRAG.o0[1] + sp[1] - DRAG.s0[1]; if (Math.hypot(sp[0] - DRAG.s0[0], sp[1] - DRAG.s0[1]) > 3) DRAG.click = false; requestDraw(); return; }
     if (DRAG.mode === 'box') { BOX.b = sp; requestDraw(); return; }
+    if (DRAG.mode === 'resize') {
+      if (!DRAG.pushed) { pushUndo(); DRAG.pushed = true; } DRAG.moved = true;
+      resizeTo(DRAG, wp, e.altKey); SNAPMARK = DRAG.snapPt ? { p: DRAG.snapPt } : null; compute(); requestDraw(); throttleOut(); return;
+    }
     if (DRAG.mode === 'qcut') { let v = M.q.dir === 'v' ? wp[0] : wp[1]; const g = M.settings.grid; if (M.settings.snap && !e.altKey && g > 0 && Math.abs(Math.round(v / g) * g - v) * VIEW.s < 6) v = Math.round(v / g) * g; if (R && R.ok && M.settings.snap && !e.altKey) { const c = M.q.dir === 'v' ? R.cx : R.cy; if (Math.abs(c - v) * VIEW.s < 8) v = c; } M.q.pos = v; compute(); requestDraw(); throttleOut(); return; }
     if (DRAG.mode === 'move') {
       let d = [wp[0] - DRAG.w0[0], wp[1] - DRAG.w0[1]];
@@ -3929,11 +4086,15 @@ function wireCanvas() {
       hit.forEach(id => { if (!SEL.has(id)) { SEL.add(id); SELORD.push(id); } });
       BOX = null; rebuildInputs(); drawCanvas(); updateToolState(); return;
     }
+    if (D.mode === 'resize') { SNAPMARK = null; if (D.moved) { const rp = partById(D.id); afterGeo(true); toast(`${rp.lbl}: ${D.key} = ${nf(rp.p[D.key], 'L', 4)} ${un('L')}` + (D.blocked ? ' — stopped at contact (Prevent overlap)' : '')); } else drawCanvas(); return; }
     if (D.mode === 'pan' && D.click) { if (SEL.size) { SEL = new Set(); SELORD = []; rebuildInputs(); updateToolState(); } drawCanvas(); return; }
     if (D.mode === 'move') {
       SNAPMARK = null;
       if (D.moved) { afterGeo(true); toast(`Moved ${D.nsel > 1 ? D.nsel + ' parts' : partById(D.ids[0]).lbl} by (${nf(D.d[0], 'L', 4)}, ${nf(D.d[1], 'L', 4)}) ${un('L')}`); }
       else if (SEL.size > 1) { SEL = new Set([D.click]); SELORD = [D.click]; rebuildInputs(); drawCanvas(); updateToolState(); }
+      // double-click on a part = edit its dimensions (detected here: the drawing is redrawn between the two clicks, so the
+      // browser's dblclick event does not reach the part)
+      if (!D.moved) { const now = Date.now(); if (LASTCLICK && LASTCLICK.pid === D.click && now - LASTCLICK.t < 450) { LASTCLICK = null; focusDims(D.click); } else LASTCLICK = { pid: D.click, t: now }; }
       return;
     }
     if (D.mode === 'qcut') { renderOutput(); autosave(); }
@@ -3941,11 +4102,11 @@ function wireCanvas() {
   };
   svg.addEventListener('pointerup', up); svg.addEventListener('pointercancel', up);
   svg.addEventListener('pointerleave', () => { if (!DRAG) { HOVER = null; showTip(null); CURSOR = null; requestDraw(); } });
-  svg.addEventListener('wheel', e => { e.preventDefault(); zoomBy(Math.pow(1.0015, -e.deltaY), evPt(e)); }, { passive: false });
+  svg.addEventListener('wheel', e => { e.preventDefault(); closeDimEditor(); zoomBy(Math.pow(1.0015, -e.deltaY), evPt(e)); }, { passive: false });
   svg.addEventListener('dblclick', e => {
     if (POLY) { e.preventDefault(); finishPoly(); return; }
     const pid = e.target.getAttribute && e.target.getAttribute('data-pid');
-    if (pid) { SEL = new Set([pid]); SELORD = [pid]; showInTab('part'); rebuildInputs(); drawCanvas(); }
+    if (pid) focusDims(pid);
   });
   svg.addEventListener('contextmenu', e => {
     e.preventDefault(); if (POLY) { finishPoly(); return; }
@@ -3986,7 +4147,7 @@ function finishPoly() {
   const m = SPC.polyM(P.pts); if (Math.abs(m.A) < 1e-12) { toast('Polygon has no area'); drawCanvas(); return; }
   if (P.replace) { const pt = partById(P.replace); if (pt) { pushUndo(); if (!guardEdit([pt.id], () => setPolyGlobal(pt, P.pts))) { showInTab('part'); rebuildInputs(); drawCanvas(); return; } afterGeo(true); return; } }
   const pt = newPart('poly', { pts: [] }, 0, 0, { hole: P.hole }); setPolyGlobal(pt, P.pts); pt.lbl = nextLabel(pt);
-  const res = addParts([pt]); if (res) toast('Added ' + pt.lbl + movedTxt(res));
+  const res = addParts([pt]); if (res) { toast('Added ' + pt.lbl + movedTxt(res)); focusDims(pt.id); }
 }
 function cancelPoly() { POLY = null; if (CV.svg) CV.svg.classList.remove('adding'); polyHint(); drawCanvas(); }
 
@@ -4212,7 +4373,7 @@ function openPartMenu(e, pid) {
     [['onTop', 'Place on top of'], ['below', 'Place below'], ['leftOf', 'Place to the left of'], ['rightOf', 'Place to the right of']].forEach(([k, l]) => items.push({ t: l + ' ' + anc.lbl + ' (touching)', title: 'Moves ' + mv + ' so that the bounding boxes touch', f: () => actAlign(anc, k) }));
   } else items.push({ t: 'Shift+click a second part first', dis: true });
   items.push({ h: 'Part' });
-  items.push({ t: 'Edit…', k: 'dbl-click', f: () => { showInTab('part'); rebuildInputs(); } }, { t: 'Duplicate', k: 'Ctrl+D', f: actDuplicate }, { t: 'Copy', k: 'Ctrl+C', f: copySel }, { t: 'Bring to front', f: () => actOrder(1) }, { t: 'Send to back', f: () => actOrder(-1) }, { t: 'Delete', k: 'Del', f: actDelete });
+  items.push({ t: 'Edit dimensions…', k: 'dbl-click', f: () => focusDims(pid) }, { t: 'Duplicate', k: 'Ctrl+D', f: actDuplicate }, { t: 'Copy', k: 'Ctrl+C', f: copySel }, { t: 'Bring to front', f: () => actOrder(1) }, { t: 'Send to back', f: () => actOrder(-1) }, { t: 'Delete', k: 'Del', f: actDelete });
   showMenu(e, items);
 }
 function openBgMenu(e, wp) {
@@ -4830,7 +4991,7 @@ function spcInit() {
   if (!window.katex) window.addEventListener('load', () => { if (window.katex) renderTab(); });
 }
 // test / automation hook (read-only use; not part of the saved data)
-window.SPCUI = { get model() { return M; }, get res() { return R; }, get sel() { return [...SEL]; }, set sel(a) { SEL = new Set(a); SELORD = a.slice(); rebuildInputs(); drawCanvas(); updateToolState(); }, flush, fullRebuild, load: d => loadModel(d), buildPrintReport, runValidation, actFlip, actRotate, actMirrorCopy, actDuplicate, actDelete, actAlign, undo, redo, paste, copySel, partById, fitView, nudge, addSimple, addShape, setNoOverlap, get noOverlap() { return NOOV; }, fixOverlap, get snapMark() { return SNAPMARK; }, get view() { return VIEW; }, w2s, s2w, get undoN() { return UNDO.length; } };
+window.SPCUI = { get model() { return M; }, get res() { return R; }, get sel() { return [...SEL]; }, set sel(a) { SEL = new Set(a); SELORD = a.slice(); rebuildInputs(); drawCanvas(); updateToolState(); }, flush, fullRebuild, load: d => loadModel(d), buildPrintReport, runValidation, actFlip, actRotate, actMirrorCopy, actDuplicate, actDelete, actAlign, undo, redo, paste, copySel, partById, fitView, nudge, addSimple, addShape, setNoOverlap, get noOverlap() { return NOOV; }, fixOverlap, get snapMark() { return SNAPMARK; }, focusDims, openDimEditor, get view() { return VIEW; }, w2s, s2w, get undoN() { return UNDO.length; } };
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', spcInit); else spcInit();
 </script>
 </body>

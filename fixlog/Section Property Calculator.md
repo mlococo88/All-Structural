@@ -161,3 +161,60 @@ Check case (warning area): round bar Ø4 at (0, 0) and plate 6 × 1 centred at (
 - N-O1. Holes inside a moved, rotated or flipped part move with it (otherwise the part could not move without leaving its hole behind). This happens only when Prevent overlap is on. Confirm.
 - N-O2. Rotate/flip that would overlap moves the part to the nearest free position, touching, rather than refusing. Confirm.
 - N-O3. A hole must lie inside **one** solid part (same rule as the existing warning). A hole straddling two touching plates is refused. Say if that case is needed.
+
+### N2. Make dimension editing obvious   [UI only — no change to any formula or computed property]
+
+- **Engineer's feedback (2026-10-10):** "It's not clear how to update a plate dimension. Once I add a plate it drops in at the default size, and I don't see where to change the thickness or length."
+- **Changes:**
+  1. **After adding a part** (Plate, Flat bar, Round bar, tubes, holes, rolled shape, polygon), the part is selected and the side panel switches to **Part properties**, with the first size field focused and its value selected (plate: width b; rolled shape: the size dropdown), so typing replaces it. The toast says "— type its size". (Chosen over a popover next to the part: it shows every field of the part, and Tab moves on to the next dimension.)
+  2. **Parts in the section** list: each part's key sizes are editable in its row (plate/bar b × t, round Ø, tube Ø × t, rect. tube B × H × t, rolled shape: size dropdown of its family). Same no-overlap guard as the panel. Clicking into one of these fields selects the part without rebuilding the list, so the field keeps focus and selection; the other panes are rebuilt when next shown (`PANE_STALE`).
+  3. **On the drawing**, a single selected part shows its dimensions as clickable labels: plate/bar b and t with dimension lines; rect. tube B, H and t; round Ø; tube Ø and t; rolled shape its designation ▾.
+     - Clicking a label opens an in-place editor: Enter or leaving the field applies, Esc cancels; a size list for rolled shapes.
+     - Plates, bars and rectangular tubes get four **edge handles**. Dragging one changes that dimension while the opposite edge stays put. It snaps to other parts' edge and corner lines within the snap radius, otherwise to 1/16 in (1 mm in mm units); Alt suspends snapping. With Prevent overlap on, it stops exactly at contact (bisection; growth is monotonic).
+     - Labels are kept inside the view.
+  4. **Discoverability:**
+     - Double-click on a part now really opens its dimensions. The browser's `dblclick` never reached the part, because the drawing is redrawn between the two clicks; it is now detected in `pointerup` (two clicks on the same part within 450 ms).
+     - Right-click → **Edit dimensions…** (was "Edit…").
+     - Hint under the Add buttons: "Click a part to change its size — or double-click it. …"
+  5. **Plate wording:** "Width b (horizontal)" / "Thickness t (vertical)" (after a 90° turn: "vertical — part turned 90°" / "horizontal — part turned 90°"; other angles: "along / across the part"). Same for rect. tube B / H. A **⟲ Rotate 90°** button sits right under the size fields ("swaps horizontal and vertical").
+- **Saved data:** none changed (no new keys; the dimension fields write the same `p.b`, `p.t`, … as before).
+
+#### Where (anchors)
+
+| Anchor | Change |
+|---|---|
+| before `/* ---- Parts tab ---- */` | new `DIM_FIRST`, `focusDims(pid)`, `orientWords(pt)`, `inlineDims(p)` |
+| `buildPartsPane` → `mkSec(P, 'inAdd'` | new hint line (before "New parts go to the centre of the view.") |
+| `buildPartsPane` → `mkSec(P, 'inList'` | `ovEditBox(body)`; row description cell + `inlineDims(p)`; row click ignores clicks in `.inlDims` (selects without rebuild); row dblclick → `focusDims` |
+| `function inTabSelect(k, remember)` | rebuilds the panes first when `PANE_STALE` |
+| `function rebuildInputs()` | `PANE_STALE = false;` |
+| `buildPartPane` → `mkSec(P, 'ppDim'` | plate/bar labels `'Width b (' + o[0] + ')'`, `'Thickness t (' + o[1] + ')'` (before: `'Width b (along x)'`, `'Thickness t (along y)'`); rect. tube `'Width B (…)'`, `'Height H (…)'` (before: `(along x)`, `(along y)`); `rotRow()` button |
+| `addSimple`, `addShape`, `finishPoly` | `focusDims(pt.id)` after a successful add |
+| `openPartMenu` | `{ t: 'Edit…', … }` → `{ t: 'Edit dimensions…', k: 'dbl-click', f: () => focusDims(pid) }` |
+| `svg.addEventListener('dblclick'` | `if (pid) { SEL = …; showInTab('part'); rebuildInputs(); drawCanvas(); }` → `if (pid) focusDims(pid);` |
+| `wireCanvas` pointerup, `if (D.mode === 'move')` | double-click detection (`LASTCLICK`) → `focusDims` |
+| before `let _drawQ = false;` | new `dimInfo`, `dimLabel`, `dimMarkup`, `closeDimEditor`, `openDimEditor`, `applyDim`, `resizeTo` |
+| `svgMarkup` before `// hover dimensions` | `selDim` overlay; hover dimensions are skipped for the selected part |
+| `wireCanvas` pointerdown after the `qcut` check | `[data-dim]` label → `openDimEditor`; `data-h="rs|…"` handle → `DRAG = { mode: 'resize', … }` |
+| `wireCanvas` pointermove / pointerup | `resize` mode (`resizeTo`; toast `PL1: t = … in`, "stopped at contact") |
+| CSS after `table.plist button{…}` | `.inlDims …`, `#dimEd …` |
+
+#### How verified
+
+- `node --check` of every inline script.
+- **Main vs branch** comparison repeated after this change: still identical (default + 8 templates, all output tabs, saved model, Validation 60/60). Phase 1 node cross-check 410/0; Phase 1 browser tests 49/49; N1 tests 47/47.
+- **Browser interaction tests** (35 checks, 0 failures, no console errors):
+  - **Add:** adding a plate → Part properties, b focused; typing "12" → b = 12; Tab → t; typing 0.75 → A = 9 in². Labels read "horizontal / vertical" and the Rotate 90° button is there. Adding a rolled shape focuses the size dropdown; adding a round bar focuses Ø.
+  - **Parts list:** b × t fields and the angle size dropdown are shown. Inline t = 1.5 → A + 5 in², and focus stays in the field. Inline angle size → L6X6X1/2. Undo restores both. An inline edit that would overlap is refused with the message.
+  - **Drawing labels:** a selected plate shows "b = 10 in", "t = 1 in" and 4 handles. Clicking t opens the editor with "1" selected. Typing 0.75 + Enter → t = 0.75 and A = 11.5. Undo works. t = 8 into the plate above is refused.
+  - **Handles:**
+    - Top handle dragged up 0.6 in → t = 1.625 (1/16 steps) with the bottom edge fixed at y = −0.5; A updated; undo works.
+    - Top handle dragged 10 in into the plate above → stops with the top edge at y = 3.5 (to 1e-9), no overlap.
+    - Right handle dragged near another part's end → edge at x = 2 exactly.
+  - **Discoverability:** right-click → "Edit dimensions…" focuses b. A double-click on the part focuses b. The hint text is present. After a 90° turn, b is labelled "vertical".
+- Screenshots (looked at): `dim_added_panel.png` (panel after adding, labels and handles on the drawing), `dim_parts_list.png` (inline fields), `dim_drawing_selected.png`, `dim_inplace_editor.png`.
+
+#### Open items
+
+- N-O4. Already in Phase 1: the "Left / Right / Bottom / Top edge" fields on the Part properties tab are not refreshed while a dimension is typed (they update when the panel is next rebuilt, e.g. on reselect). Not changed here — say if they should update live.
+- N-O5. Resize handles are offered for plates, bars and rectangular tubes only (not holes, round parts or rolled shapes, whose sizes come from a list or a single diameter).
