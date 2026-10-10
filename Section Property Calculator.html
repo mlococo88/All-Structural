@@ -194,6 +194,19 @@ textarea{min-height:64px;resize:vertical;font-family:var(--font-doc);font-size:1
 .spcInDot{display:none;width:7px;height:7px;border-radius:50%;background:var(--fail);margin-left:6px;box-shadow:0 0 0 1.5px #fff}
 .spcInTab.has-err .spcInDot{display:inline-block}
 .spcInPane[hidden]{display:none!important}
+/* My sections library (end of the Templates tab) */
+.libHead{font-family:var(--font-ui);font-size:10pt;font-weight:700;color:var(--accent);border-top:2px solid var(--accent);margin:14px 0 2px;padding-top:6px}
+.libSearch{width:100%;box-sizing:border-box;margin:2px 0 4px}
+.libRow{display:flex;gap:7px;align-items:flex-start;border:1px solid var(--line);border-radius:5px;background:#fff;padding:5px 6px;margin:5px 0}
+.libRow[hidden]{display:none!important}
+.libRow>input[type="checkbox"]{flex:0 0 auto;margin:3px 0 0}
+.libThumb{flex:0 0 76px;height:58px;border:1px solid #E2E8F0;border-radius:3px;background:#FCFDFE;cursor:pointer;line-height:0}
+.libThumb:hover{border-color:var(--accent)}
+.libMeta{flex:1 1 auto;min-width:0}
+.libName{font-family:var(--font-ui);font-size:9.5pt;font-weight:600;color:#1F2D3D;overflow-wrap:anywhere}
+.libDesc{font-family:var(--font-ui);font-size:8.5pt;color:#41546E;overflow-wrap:anywhere}
+.libTag{display:inline-block;background:#EEF2F7;border:1px solid #D5DEE9;border-radius:9px;padding:0 6px;font-size:7.5pt;color:#41546E}
+.libMeta .btnRow{margin:3px 0 0;gap:4px}
 /* canvas */
 #cvBlock{margin:8px 0 4px}
 #cvTools{display:flex;flex-wrap:wrap;gap:3px;align-items:center;margin:0 0 5px}
@@ -4004,7 +4017,7 @@ function rebuildInputs() {
     panes[k] = pn; P.appendChild(pn);
   });
   __secNum = 0;
-  buildPartsPane(panes.parts); buildPartPane(panes.part); buildTplPane(panes.tpl); buildSetPane(panes.set); buildProjPane(panes.proj);
+  buildPartsPane(panes.parts); buildPartPane(panes.part); buildTplPane(panes.tpl); buildSetPane(panes.set); buildProjPane(panes.proj); buildLibPane(panes.tpl);
   let t = inTabGet(); if (!IN_TABS.some(([k]) => k === t)) t = 'parts';
   inTabSelect(t, false);
   P.scrollTop = keep;
@@ -4358,6 +4371,255 @@ function buildProjPane(P) {
     const ta = document.createElement('textarea'); ta.value = M.project.notes || ''; tagField(ta, 'projNotes');
     ta.addEventListener('input', () => { M.project.notes = ta.value; schedule(false); }); body.appendChild(ta);
   });
+}
+
+/* ---- My sections library (end of the Templates tab) ----
+   Kept in this browser only, under localStorage key spc_library_v1 (tool-prefixed; not part of the project file). The stored text is the
+   same JSON as an exported library file: { _schema: 'section-property-calculator-library', version: 1, app, entries: [entry, …] }.
+   entry = { id, name, desc, tags: [string], created, modified (ISO dates), units ('in' | 'mm': display units when saved — dimensions are always inches),
+             parts: [part exactly as a project file stores it: id, lbl, type, p, x, y, rot, mir, n, hole, useTab, rho (optional)],
+             off: [contact keys 'idA|idB' between these parts switched off on the Torsion tab ("not connected")],
+             conn: { 'idA|idB': shear-flow connector inputs between these parts } (optional) }
+   Coordinates are section coordinates as drawn when saved (section origin). Insert places the group's bounding-box centre at the view centre
+   or at the clicked point (as "Paste here"); with Prevent overlap on, the group then goes to the nearest free position. */
+const LIB_SCHEMA = 'section-property-calculator-library', LIB_VER = 1, LS_LIB = 'spc_library_v1';
+const LIBF = { name: '', desc: '', tags: '', which: 'all' };   // "Save to the library" form (screen only)
+let LIBQ = '', LIBCHK = new Set(), LIBPLACE = null, LIBC = { raw: undefined, r: null };
+const libId = () => 'lib' + Date.now().toString(36) + (++__idc).toString(36);
+const libNow = () => new Date().toISOString();
+const libKey = s => String(s || '').trim().toLowerCase();
+// one entry, checked and cleaned (its parts go through the project-file migrate); null if unusable
+function libClean(e) {
+  if (!e || typeof e !== 'object' || Array.isArray(e) || !Array.isArray(e.parts)) return null;
+  let m; try { m = migrate({ _schema: SCHEMA, version: SCHEMA_VER, parts: e.parts, contacts: { off: Array.isArray(e.off) ? e.off : [] }, sf: (e.conn && typeof e.conn === 'object' && !Array.isArray(e.conn)) ? { conn: e.conn } : undefined }); } catch (err) { return null; }
+  if (!m.parts.length) return null;
+  const ids = new Set(m.parts.map(p => p.id)), inside = k => { const s = String(k).split('|'); return s.length === 2 && ids.has(s[0]) && ids.has(s[1]); };
+  const out = { id: typeof e.id === 'string' && e.id ? e.id : libId(), name: String(e.name == null ? '' : e.name).trim() || 'Untitled', desc: String(e.desc == null ? '' : e.desc), tags: (Array.isArray(e.tags) ? e.tags : []).map(t => String(t).trim()).filter(Boolean), created: String(e.created || ''), modified: String(e.modified || e.created || ''), units: e.units === 'mm' ? 'mm' : 'in', parts: m.parts, off: m.contacts.off.filter(inside) };
+  const ck = m.sf ? Object.keys(m.sf.conn).filter(inside) : [];
+  if (ck.length) { out.conn = {}; ck.forEach(k => { out.conn[k] = m.sf.conn[k]; }); }
+  return out;
+}
+// read the library: { entries, bad, na } — "bad" (unreadable, other schema, newer version, unreadable entries) blocks every write, so nothing stored is lost
+function libRead() {
+  let raw; try { raw = localStorage.getItem(LS_LIB); } catch (e) { return { entries: [], na: true }; }
+  if (raw === LIBC.raw && LIBC.r) return LIBC.r;
+  let r;
+  if (raw == null) r = { entries: [] };
+  else {
+    try {
+      const d = JSON.parse(raw);
+      if (!d || d._schema !== LIB_SCHEMA || !Array.isArray(d.entries)) throw new Error('the stored text is not a library (_schema "' + ((d && d._schema) || 'none') + '")');
+      if (!(d.version <= LIB_VER)) throw new Error('it was written by a newer version (v' + d.version + ') of this tool');
+      const en = d.entries.map(libClean).filter(Boolean), nb = d.entries.length - en.length;
+      r = nb ? { entries: en, bad: nb + (nb > 1 ? ' entries are' : ' entry is') + ' not readable' } : { entries: en };
+    } catch (e) { r = { entries: [], bad: (e instanceof SyntaxError) ? 'the stored text is not valid JSON' : e.message }; }
+  }
+  LIBC = { raw, r }; return r;
+}
+function libWrite(entries) {
+  const cur = libRead();
+  if (cur.na) { alert('Could not save the library: browser storage is not available.'); return false; }
+  if (cur.bad) { alert('The library stored in this browser could not be read (' + cur.bad + '). It is left unchanged: use "Download the stored text" (Templates tab, My sections library) before changing anything.'); return false; }
+  const s = JSON.stringify({ _schema: LIB_SCHEMA, version: LIB_VER, app: 'Section Property Calculator', entries });
+  try { localStorage.setItem(LS_LIB, s); }
+  catch (e) {
+    const quota = e && (e.name === 'QuotaExceededError' || e.name === 'NS_ERROR_DOM_QUOTA_REACHED' || e.code === 22 || e.code === 1014 || /quota/i.test(String(e.message)));
+    alert('Could not save the library: ' + (quota ? 'the browser storage is full (quota exceeded). Export the library to a file (Export all), then delete entries you no longer need; or save the section with Save file instead.' : 'browser storage is not available.') + ' Nothing was changed.');
+    return false;
+  }
+  LIBC = { raw: undefined, r: null }; return true;
+}
+// parts (with the "not connected" flags and connector inputs between them) → new entry
+function libMake(parts, name, desc, tags) {
+  const ps = JSON.parse(JSON.stringify(parts)), ids = new Set(ps.map(p => p.id)), inside = k => { const s = String(k).split('|'); return s.length === 2 && ids.has(s[0]) && ids.has(s[1]); };
+  const e = { id: libId(), name, desc, tags, created: libNow(), modified: libNow(), units: M.settings.units === 'mm' ? 'mm' : 'in', parts: ps, off: M.contacts.off.filter(inside) };
+  const conn = (M.sf && M.sf.conn) || {}, ck = Object.keys(conn).filter(inside);
+  if (ck.length) { e.conn = {}; ck.forEach(k => { e.conn[k] = JSON.parse(JSON.stringify(conn[k])); }); }
+  return e;
+}
+function libUnique(name, entries, skipId) {
+  const used = new Set(entries.filter(x => x.id !== skipId).map(x => libKey(x.name)));
+  if (!used.has(libKey(name))) return name;
+  let i = 2; while (used.has(libKey(name + ' (' + i + ')'))) i++; return name + ' (' + i + ')';
+}
+function libSaveCurrent() {
+  const sp = LIBF.which === 'sel' ? selParts() : M.parts.slice();
+  if (!sp.length) { alert(LIBF.which === 'sel' ? 'Select the parts to save first (or choose "All parts").' : 'There are no parts to save.'); return; }
+  const name = LIBF.name.trim() || (M.project.name || '').trim() || 'Section ' + new Date().toLocaleDateString();
+  const tags = LIBF.tags.split(',').map(t => t.trim()).filter(Boolean);
+  const L = libRead(); if (L.bad || L.na) { libWrite([]); return; }
+  const entries = L.entries.slice(), e = libMake(sp, name, LIBF.desc.trim(), tags), i = entries.findIndex(x => libKey(x.name) === libKey(name));
+  if (i >= 0) { if (!confirm(`The library already has an entry named "${entries[i].name}". Replace it?`)) return; e.id = entries[i].id; e.created = entries[i].created || e.created; entries[i] = e; }
+  else entries.push(e);
+  if (!libWrite(entries)) return;
+  LIBF.name = ''; LIBF.desc = ''; LIBF.tags = '';
+  toast(`Saved "${name}" to the library (${sp.length} part${sp.length > 1 ? 's' : ''})`); rebuildInputs();
+}
+// insert an entry as a group: bounding-box centre at `at` (default: the view centre); saved labels kept unless already used in the drawing
+function libInsert(en, at) {
+  const d = libClean(en); if (!d) { alert('This library entry has no usable parts.'); return false; }
+  const bb = bboxOf(d.parts); if (!bb.every(isFinite)) { alert('This library entry has no drawable parts.'); return false; }
+  const c = at || viewCentre(), dx = c[0] - (bb[0] + bb[2]) / 2, dy = c[1] - (bb[1] + bb[3]) / 2;
+  pushUndo();
+  const map = {}, made = d.parts.map(p => {
+    const q = clonePart(p); map[p.id] = q.id; q.x += dx; q.y += dy;
+    const used = new Set(M.parts.map(r => r.lbl)); M.parts.push(q); q.lbl = (p.lbl && !used.has(p.lbl)) ? p.lbl : nextLabel(q); return q;
+  });
+  const res = novResolve(made.map(p => p.id)); if (!res.ok) { novRefuse('Not inserted', 'no free position found'); return false; }
+  const rk = k => { const s = k.split('|'); return SPC.pairKey(map[s[0]], map[s[1]]); };
+  if (d.off.length) M.contacts.off = [...new Set(M.contacts.off.concat(d.off.map(rk)))];
+  if (d.conn) { M.sf = Object.assign(SF_DEF(), M.sf || {}); M.sf.conn = Object.assign({}, M.sf.conn); Object.keys(d.conn).forEach(k => { M.sf.conn[rk(k)] = Object.assign({}, d.conn[k]); }); }
+  SEL = new Set(made.map(p => p.id)); SELORD = made.map(p => p.id);
+  afterGeo(true); toast(`Inserted "${d.name}": ${made.length} part${made.length > 1 ? 's' : ''}` + movedTxt(res));
+  return true;
+}
+// "Place…": the next click on the drawing inserts the entry there (Esc cancels)
+function libPlaceStart(id) { if (POLY) cancelPoly(); LIBPLACE = id; setOutTab('sec'); if (CV.svg) CV.svg.classList.add('adding'); libHint(); }
+function libPlaceEnd() { LIBPLACE = null; if (CV.svg && !POLY) CV.svg.classList.remove('adding'); if (CV.hint && !POLY) CV.hint.style.display = 'none'; }
+function libHint() {
+  if (!CV.hint || !LIBPLACE) return; const en = libRead().entries.find(x => x.id === LIBPLACE);
+  CV.hint.style.display = 'block'; CV.hint.innerHTML = `Library: click on the drawing to place <b>${esc(en ? en.name : '')}</b> (the centre of the group goes to the clicked point; snapping applies). Esc cancels.`;
+}
+function libDownload(text, fname) {
+  const blob = new Blob([text], { type: 'application/json' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = fname;
+  document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+}
+const libFileName = s => (String(s || '').trim().replace(/[^\w\-]+/g, '_') || 'section_library') + '.json';
+function libExport(entries, fname) {
+  if (!entries.length) { toast('Nothing to export'); return; }
+  libDownload(JSON.stringify({ _schema: LIB_SCHEMA, version: LIB_VER, app: 'Section Property Calculator', savedAt: libNow(), entries }, null, 2), fname);
+  toast('Exported ' + entries.length + ' library entr' + (entries.length > 1 ? 'ies' : 'y'));
+}
+// import: a library file (merged; asks on a name clash) or a project file (one new entry named after the project)
+function libImportText(text, fname) {
+  let d; try { d = JSON.parse(text); } catch (e) { alert('Could not import: the file is not valid JSON.'); return 0; }
+  let inc = [], skipped = 0;
+  if (d && d._schema === LIB_SCHEMA) {
+    if (!(d.version <= LIB_VER)) { alert('Could not import: the library file is from a newer version (v' + d.version + ') of this tool.'); return 0; }
+    const list = Array.isArray(d.entries) ? d.entries : []; inc = list.map(libClean).filter(Boolean); skipped = list.length - inc.length;
+  } else if (d && d._schema === SCHEMA) {
+    let m; try { m = migrate(d); } catch (e) { alert('Could not import the project file: ' + e.message); return 0; }
+    if (!m.parts.length) { alert('Could not import: the project file has no parts.'); return 0; }
+    const nm = (m.project.name || '').trim() || String(fname || '').replace(/\.json$/i, '').trim() || 'Imported project';
+    const e = libClean({ name: nm, desc: m.project.member || '', tags: [], created: libNow(), modified: libNow(), units: m.settings.units, parts: m.parts, off: m.contacts.off, conn: m.sf ? m.sf.conn : undefined });
+    if (e) inc = [e];
+  } else { alert('Could not import: this is not a Section Property Calculator library or project file (_schema "' + ((d && d._schema) || 'none') + '").'); return 0; }
+  if (!inc.length) { alert('Could not import: the file has no usable library entries.'); return 0; }
+  const L = libRead(); if (L.bad || L.na) { libWrite([]); return 0; }
+  const entries = L.entries.slice(); let added = 0, replaced = 0;
+  inc.forEach(e => {
+    const i = entries.findIndex(x => libKey(x.name) === libKey(e.name));
+    if (i >= 0) {
+      const alt = libUnique(e.name, entries.concat(inc.filter(x => x !== e)));
+      if (confirm(`The library already has an entry named "${entries[i].name}".\n\nOK = replace it with the imported one\nCancel = keep both (the imported one is added as "${alt}")`)) { e.id = entries[i].id; entries[i] = e; replaced++; return; }
+      e.name = alt;
+    }
+    if (entries.some(x => x.id === e.id)) e.id = libId();
+    entries.push(e); added++;
+  });
+  if (!libWrite(entries)) return 0;
+  toast(`Library import: ${added} added` + (replaced ? `, ${replaced} replaced` : '') + (skipped ? `, ${skipped} not readable (skipped)` : ''), !!skipped);
+  rebuildInputs(); return added + replaced;
+}
+function libPickFile() {
+  const fi = document.createElement('input'); fi.type = 'file'; fi.accept = '.json,application/json'; fi.style.display = 'none'; fi.id = 'spcLibFile';
+  fi.addEventListener('change', () => { const f = fi.files[0]; fi.remove(); if (!f) return; const rd = new FileReader(); rd.onload = () => libImportText(rd.result, f.name); rd.onerror = () => alert('Could not read the file.'); rd.readAsText(f); });
+  document.body.appendChild(fi); fi.click();
+}
+const LIBTH = new Map();
+function libThumb(en, w, h) {
+  const k = en.id + '|' + en.modified + '|' + JSON.stringify(en.parts).length; if (LIBTH.has(k)) return LIBTH.get(k);
+  const G = []; en.parts.forEach(p => { try { const g = SPC.partGlobal(p); if (g.prims.length) G.push([p, g]); } catch (e) { } });
+  const bb = bboxOf(en.parts); let s = `<svg viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" aria-hidden="true">`;
+  if (G.length && bb.every(isFinite)) {
+    const pad = 5, sc = Math.min((w - 2 * pad) / Math.max(bb[2] - bb[0], 1e-6), (h - 2 * pad) / Math.max(bb[3] - bb[1], 1e-6)), cx = (bb[0] + bb[2]) / 2, cy = (bb[1] + bb[3]) / 2;
+    const tr = q => [w / 2 + sc * (q[0] - cx), h / 2 - sc * (q[1] - cy)];
+    const path = pr => { if (pr.k === 'poly') return 'M' + pr.pts.map(q => { const t = tr(q); return fx(t[0]) + ' ' + fx(t[1]); }).join('L') + 'Z'; const c = tr(pr.c), r = pr.r * sc; return `M${fx(c[0] + r)} ${fx(c[1])}A${fx(r)} ${fx(r)} 0 1 0 ${fx(c[0] - r)} ${fx(c[1])}A${fx(r)} ${fx(r)} 0 1 0 ${fx(c[0] + r)} ${fx(c[1])}Z`; };
+    G.filter(x => !x[0].hole).concat(G.filter(x => x[0].hole)).forEach(([p, g]) => {
+      const d = g.prims.map(path).join('');
+      s += p.hole ? `<path d="${d}" fill="#FFFFFF" fill-rule="evenodd" stroke="#C0392B" stroke-width=".8" stroke-dasharray="2 1.5"/>` : `<path d="${d}" fill="${typeColor(p)}" fill-opacity=".75" fill-rule="evenodd" stroke="#33475E" stroke-width=".7" stroke-linejoin="round"/>`;
+    });
+  }
+  s += '</svg>'; LIBTH.set(k, s); return s;
+}
+function buildLibPane(T) {
+  const P = el('div'); P.id = 'spcLib'; T.appendChild(P);   // at the end of the Templates tab, after the templates (their numbering unchanged)
+  const L = libRead(), entries = L.entries.slice().sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
+  LIBCHK = new Set([...LIBCHK].filter(id => entries.some(e => e.id === id)));
+  P.appendChild(el('div', 'libHead', 'My sections library'));
+  P.appendChild(el('div', 'hint', 'Save the current section (or the selected parts) under a name and insert it into any project later. The library is kept in this browser; export it to a file to keep or move it.'));
+  if (L.na) P.appendChild(el('div', 'errBox', 'Browser storage is not available: the library cannot be used here. Projects can still be saved to a file.'));
+  if (L.bad) {
+    const b = el('div', 'errBox', `<b>The library stored in this browser could not be read</b> (${esc(L.bad)}). It is left unchanged, and nothing can be saved to it until this is resolved. Download the stored text to keep it.`);
+    const r = el('div', 'btnRow'); r.appendChild(btn('Download the stored text', 'sm', () => { let raw = ''; try { raw = localStorage.getItem(LS_LIB) || ''; } catch (e) { } libDownload(raw, 'section_library_stored.json'); }));
+    b.appendChild(r); P.appendChild(b);
+  }
+  mkSec(P, 'libSave', 'Save to the library', body => {
+    const ti = (key, ph, k, lab) => { const i = document.createElement('input'); i.type = 'text'; i.value = LIBF[k]; i.placeholder = ph; i.setAttribute('aria-label', lab); tagField(i, key); i.addEventListener('input', () => { LIBF[k] = i.value; }); return i; };
+    fRow(body, 'Name', ti('lib_name', (M.project.name || '').trim() || 'e.g. Crane runway W21 + C15', 'name', 'Library entry name'), '');
+    fRow(body, 'Description', ti('lib_desc', 'optional', 'desc', 'Description'), '');
+    fRow(body, 'Tags', ti('lib_tags', 'optional, comma-separated', 'tags', 'Tags'), '');
+    const ns = SEL.size, s = document.createElement('select'); tagField(s, 'lib_which'); s.setAttribute('aria-label', 'Parts to save');
+    [['all', 'All parts (' + M.parts.length + ')'], ['sel', 'Selected parts (' + ns + ')']].forEach(([v, t]) => { const o = document.createElement('option'); o.value = v; o.textContent = t; if (v === 'sel' && !ns) o.disabled = true; s.appendChild(o); });
+    if (LIBF.which === 'sel' && !ns) LIBF.which = 'all';
+    s.value = LIBF.which; s.addEventListener('change', () => { LIBF.which = s.value; });
+    fRow(body, 'Parts', s, '');
+    const r = el('div', 'btnRow'); r.appendChild(btn('Save to library', 'primary sm', libSaveCurrent, 'Save these parts as a named library entry (an entry with the same name is replaced after a confirmation)')); body.appendChild(r);
+    body.appendChild(el('div', 'hint', 'Stored for each part: everything a project file stores (type, size or rolled shape, position, rotation, mirrored, n, density ρ, hole, AISC tabulated option, label), plus the "not connected" contacts (Torsion tab) and the shear-flow connector inputs between the saved parts. Positions are kept as drawn; dimensions are stored in inches.'));
+  }, { noNum: true });
+  mkSec(P, 'libList', 'My sections (' + entries.length + ')', body => {
+    if (!entries.length) body.appendChild(el('div', 'note', L.bad ? 'No entries shown.' : 'The library is empty. Save the current section above, or import a library or project file below.'));
+    else {
+      const q = document.createElement('input'); q.type = 'search'; q.placeholder = 'Search name, description, tags'; q.value = LIBQ; tagField(q, 'lib_q'); q.setAttribute('aria-label', 'Search the library'); q.className = 'libSearch';
+      body.appendChild(q);
+      const list = el('div', 'libList'); body.appendChild(list);
+      const cnt = el('div', 'hint'); body.appendChild(cnt);
+      const filt = () => { const t = LIBQ.trim().toLowerCase(); let n = 0; list.querySelectorAll('.libRow').forEach(r => { const on = !t || r.getAttribute('data-text').includes(t); r.hidden = !on; if (on) n++; }); cnt.textContent = t ? n + ' of ' + entries.length + ' shown' : ''; };
+      q.addEventListener('input', () => { LIBQ = q.value; filt(); });
+      entries.forEach(en => {
+        const row = el('div', 'libRow'); row.setAttribute('data-text', [en.name, en.desc, en.tags.join(' ')].join(' ').toLowerCase()); row.setAttribute('data-libid', en.id);
+        const ck = document.createElement('input'); ck.type = 'checkbox'; ck.checked = LIBCHK.has(en.id); ck.title = 'Tick for "Export selected"'; ck.setAttribute('aria-label', 'Select ' + en.name);
+        ck.addEventListener('change', () => { if (ck.checked) LIBCHK.add(en.id); else LIBCHK.delete(en.id); const b = body.querySelector('[data-libexpsel]'); if (b) { b.textContent = 'Export selected (' + LIBCHK.size + ')'; b.disabled = !LIBCHK.size; } });
+        row.appendChild(ck);
+        const th = el('div', 'libThumb', libThumb(en, 76, 58)); th.title = 'Insert at the view centre'; th.addEventListener('click', () => libInsert(en)); row.appendChild(th);
+        const meta = el('div', 'libMeta');
+        meta.appendChild(el('div', 'libName', esc(en.name)));
+        if (en.desc) meta.appendChild(el('div', 'libDesc', esc(en.desc)));
+        const nh = en.parts.filter(p => p.hole).length, ns = en.parts.length - nh;
+        const info = ns + ' part' + (ns !== 1 ? 's' : '') + (nh ? ' + ' + nh + ' hole' + (nh > 1 ? 's' : '') : '') + (en.modified && isFinite(new Date(en.modified)) ? ' · ' + esc(new Date(en.modified).toLocaleDateString()) : '');
+        meta.appendChild(el('div', 'hint', info + (en.tags.length ? ' · ' + en.tags.map(t => '<span class="libTag">' + esc(t) + '</span>').join(' ') : '')));
+        const br = el('div', 'btnRow');
+        br.appendChild(btn('Insert', 'primary sm', () => libInsert(en), 'Add these parts as a group at the view centre (nearest free position with Prevent overlap on)'));
+        br.appendChild(btn('Place…', 'sm', () => libPlaceStart(en.id), 'Then click on the drawing to place the group there'));
+        br.appendChild(btn('Rename', 'sm', () => {
+          const nm = prompt('New name for "' + en.name + '":', en.name); if (nm == null) return; const n2 = nm.trim(); if (!n2) return;
+          const all = libRead().entries; if (all.some(x => x.id !== en.id && libKey(x.name) === libKey(n2))) { alert('The library already has an entry named "' + n2 + '".'); return; }
+          const d2 = prompt('Description (optional):', en.desc); const t2 = prompt('Tags (optional, comma-separated):', en.tags.join(', '));
+          const out = all.map(x => x.id === en.id ? Object.assign({}, x, { name: n2, desc: d2 == null ? x.desc : d2.trim(), tags: t2 == null ? x.tags : t2.split(',').map(t => t.trim()).filter(Boolean), modified: libNow() }) : x);
+          if (libWrite(out)) { toast('Saved "' + n2 + '"'); rebuildInputs(); }
+        }, 'Rename (and edit the description and tags)'));
+        br.appendChild(btn('Duplicate', 'sm', () => { const all = libRead().entries.slice(), c = JSON.parse(JSON.stringify(en)); c.id = libId(); c.name = libUnique(en.name + ' (copy)', all); c.created = c.modified = libNow(); all.push(c); if (libWrite(all)) { toast('Duplicated as "' + c.name + '"'); rebuildInputs(); } }));
+        br.appendChild(btn('Export', 'sm', () => libExport([en], libFileName(en.name)), 'Save this entry to a library file (.json)'));
+        br.appendChild(btn('Delete', 'sm danger', () => { if (!confirm('Delete "' + en.name + '" from the library? This cannot be undone (export it first to keep a copy).')) return; if (libWrite(libRead().entries.filter(x => x.id !== en.id))) { LIBCHK.delete(en.id); toast('Deleted "' + en.name + '"'); rebuildInputs(); } }));
+        meta.appendChild(br); row.appendChild(meta); list.appendChild(row);
+      });
+      filt();
+    }
+    const r = el('div', 'btnRow');
+    const ea = btn('Export all', 'sm', () => libExport(libRead().entries, 'section_library.json'), 'Save the whole library to a file (.json)'); ea.disabled = !entries.length; r.appendChild(ea);
+    const es = btn('Export selected (' + LIBCHK.size + ')', 'sm', () => libExport(libRead().entries.filter(e => LIBCHK.has(e.id)), 'section_library_selected.json'), 'Save the ticked entries to a file (.json)'); es.setAttribute('data-libexpsel', '1'); es.disabled = !LIBCHK.size; r.appendChild(es);
+    r.appendChild(btn('Import…', 'sm', libPickFile, 'Add the entries of a library file, or a project file as one new entry'));
+    body.appendChild(r);
+    body.appendChild(el('div', 'hint', `Import accepts a library file (<code>_schema: "${LIB_SCHEMA}"</code>: its entries are added; on a name clash you are asked whether to replace the entry or keep both) or a project file (<code>_schema: "${SCHEMA}"</code>: added as one entry named after the project). The library is stored in this browser under <code>${LS_LIB}</code>; it is not part of the project file.`));
+  }, { noNum: true });
+  mkSec(P, 'libProj', 'Project file (JSON)', body => {
+    const r = el('div', 'btnRow');
+    r.appendChild(btn('Save file', 'sm', saveFile, 'Save the whole project to a file (.json) — same as Save file in the header'));
+    r.appendChild(btn('Open file…', 'sm', () => $('spcFile').click(), 'Open a project file (.json) — same as Open file in the header'));
+    body.appendChild(r);
+    body.appendChild(el('div', 'hint', 'A project file holds the whole project (all parts, settings, loads and project data); a library file holds library entries only.'));
+  }, { noNum: true });
 }
 
 /* =====================================================================
@@ -4723,6 +4985,7 @@ function wireCanvas() {
     const sp = evPt(e), wp = s2w(sp);
     svg.setPointerCapture(e.pointerId);
     if (e.button === 1) { e.preventDefault(); DRAG = { mode: 'pan', s0: sp, o0: [VIEW.ox, VIEW.oy] }; svg.classList.add('panning'); return; }
+    if (LIBPLACE) { const id = LIBPLACE, at = snapPoint(wp, e.altKey); SNAPMARK = null; libPlaceEnd(); try { svg.releasePointerCapture(e.pointerId); } catch (err) { } const en = libRead().entries.find(x => x.id === id); if (en) libInsert(en, at); else drawCanvas(); return; }
     if (POLY) { const p = snapPoint(wp, e.altKey); if (POLY.pts.length >= 3 && Math.hypot(...[0, 1].map(i => (w2s(POLY.pts[0])[i] - sp[i]))) < 9) { finishPoly(); return; } POLY.pts.push(p); drawCanvas(); polyHint(); return; }
     const tg = e.target;
     if (tg.getAttribute && tg.getAttribute('data-h') === 'qcut') { DRAG = { mode: 'qcut' }; return; }
@@ -4840,7 +5103,7 @@ function startPoly(hole, replaceId) {
 }
 function polyHint() {
   if (!CV.hint) return;
-  if (!POLY) { CV.hint.style.display = 'none'; return; }
+  if (!POLY) { if (LIBPLACE) { libHint(); return; } CV.hint.style.display = 'none'; return; }
   CV.hint.style.display = 'block';
   CV.hint.innerHTML = `${POLY.hole ? 'Polygon hole' : 'Polygon'}: click to place vertices (${POLY.pts.length} so far; snapping applies). Click the first vertex, double-click, right-click or press Enter to finish; Esc cancels; Backspace removes the last vertex.`;
 }
@@ -5117,6 +5380,8 @@ function openBgMenu(e, wp) {
   [['plate', 'Plate'], ['bar', 'Flat bar'], ['round', 'Round bar'], ['tube', 'Round tube'], ['rtube', 'Rectangular tube'], ['hrect', 'Rectangular hole'], ['hcirc', 'Round hole']].forEach(([k, l]) => items.push({ t: l, f: () => addSimple(k, at) }));
   items.push({ t: 'Rolled shape (' + (SHAPE_UI.name || 'pick on the Parts tab') + ')', dis: !SHAPE_UI.name, f: () => addShape(SHAPE_UI.fam, SHAPE_UI.name, at) });
   items.push({ t: 'Polygon (click vertices)…', f: () => startPoly(false) });
+  const lib = libRead().entries.slice().sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
+  if (lib.length) { items.push({ h: 'Insert here from My sections' }); lib.slice(0, 12).forEach(en => items.push({ t: en.name, title: en.desc || '', f: () => libInsert(en, at) })); if (lib.length > 12) items.push({ t: 'More… (Templates tab)', f: () => showInTab('tpl') }); }
   items.push({ h: 'Edit and view' });
   items.push({ t: 'Paste here', k: 'Ctrl+V', dis: !CLIP, f: () => paste(at) }, { t: 'Select all', k: 'Ctrl+A', f: () => { SEL = new Set(M.parts.map(p => p.id)); SELORD = M.parts.map(p => p.id); rebuildInputs(); drawCanvas(); updateToolState(); } }, { t: 'Fit view', k: 'F', f: () => fitView() });
   items.push({ t: 'Q cut: horizontal line here', f: () => { M.q.on = true; M.q.dir = 'h'; M.q.pos = at[1]; compute(); renderOutput(); drawCanvas(); updateToolState(); autosave(); } });
@@ -5139,7 +5404,7 @@ function wireKeys() {
     if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (t && t.isContentEditable)) return;
     if ($('prOverlay')) return;
     const k = e.key, ctrl = e.ctrlKey || e.metaKey;
-    if (k === 'Escape') { closeMenu(); if (POLY) { cancelPoly(); return; } if (SEL.size) { SEL = new Set(); SELORD = []; rebuildInputs(); drawCanvas(); updateToolState(); } return; }
+    if (k === 'Escape') { closeMenu(); if (LIBPLACE) { libPlaceEnd(); drawCanvas(); toast('Placing cancelled'); return; } if (POLY) { cancelPoly(); return; } if (SEL.size) { SEL = new Set(); SELORD = []; rebuildInputs(); drawCanvas(); updateToolState(); } return; }
     if (POLY) { if (k === 'Enter') { e.preventDefault(); finishPoly(); } else if (k === 'Backspace') { e.preventDefault(); POLY.pts.pop(); polyHint(); drawCanvas(); } return; }
     if (ctrl && (k === 'z' || k === 'Z')) { e.preventDefault(); if (e.shiftKey) redo(); else undo(); return; }
     if (ctrl && (k === 'y' || k === 'Y')) { e.preventDefault(); redo(); return; }
@@ -6665,7 +6930,7 @@ function spcInit() {
   if (!window.katex) window.addEventListener('load', () => { if (window.katex) renderTab(); });
 }
 // test / automation hook (read-only use; not part of the saved data)
-window.SPCUI = { get model() { return M; }, get res() { return R; }, get sel() { return [...SEL]; }, set sel(a) { SEL = new Set(a); SELORD = a.slice(); rebuildInputs(); drawCanvas(); updateToolState(); }, flush, fullRebuild, load: d => loadModel(d), buildPrintReport, runValidation, actFlip, actRotate, actMirrorCopy, actDuplicate, actDelete, actAlign, undo, redo, paste, copySel, partById, fitView, nudge, addSimple, addShape, setNoOverlap, get noOverlap() { return NOOV; }, fixOverlap, get snapMark() { return SNAPMARK; }, focusDims, openDimEditor, get view() { return VIEW; }, w2s, s2w, get undoN() { return UNDO.length; }, ext, sfIn, setSF, setConn, connIn, get sfSel() { return SFSEL; }, set sfSel(k) { SFSEL = k; }, stressRes: () => (R && R.ok ? SPC.stress(R, stressIn().P, stressIn().Mx, stressIn().My) : null) };
+window.SPCUI = { get model() { return M; }, get res() { return R; }, get sel() { return [...SEL]; }, set sel(a) { SEL = new Set(a); SELORD = a.slice(); rebuildInputs(); drawCanvas(); updateToolState(); }, flush, fullRebuild, load: d => loadModel(d), buildPrintReport, runValidation, actFlip, actRotate, actMirrorCopy, actDuplicate, actDelete, actAlign, undo, redo, paste, copySel, partById, fitView, nudge, addSimple, addShape, setNoOverlap, get noOverlap() { return NOOV; }, fixOverlap, get snapMark() { return SNAPMARK; }, focusDims, openDimEditor, get view() { return VIEW; }, w2s, s2w, get undoN() { return UNDO.length; }, ext, sfIn, setSF, setConn, connIn, get sfSel() { return SFSEL; }, set sfSel(k) { SFSEL = k; }, lib: { read: libRead, insert: libInsert, importText: libImportText, saveCurrent: libSaveCurrent, form: LIBF, placeStart: libPlaceStart, get placing() { return LIBPLACE; } }, stressRes: () => (R && R.ok ? SPC.stress(R, stressIn().P, stressIn().Mx, stressIn().My) : null) };
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', spcInit); else spcInit();
 </script>
 </body>

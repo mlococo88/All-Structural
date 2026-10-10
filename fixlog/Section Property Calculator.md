@@ -2375,3 +2375,100 @@ Units: V kip (kN), q kip/in (N/mm), lengths in (mm), φR<sub>n</sub> kip (kN), F
 - P2b-O2. Closed loops that are not cells (e.g. angles bolted to a web and to a flange plate that also touches the web) are n/a unless symmetric with the extra contact switched off. Confirm switching off non-structural bearing contacts is the intended workflow, or say if a stiffness-based split is wanted.
 - P2b-O3. Thin-wall closed-cell values (centre-line model, extensions into junctions, load corrected per part) are approximate ("thin-wall — verify"); cells with n ≠ 1 and face-contact stacks in a cell are n/a.
 - P2b-O4. Weld check: φ = 0.75 / Ω = 2.00, 0.60F<sub>EXX</sub>, throat 0.707w, no directional increase — verify against AISC 360-16 J2.4; detailing limits not checked (listed on the tab).
+
+## 2026-10-10 — PR: claude/spc-library (PR link added after merge)
+
+### L1. My sections library (save, insert, place, rename, duplicate, delete, search; JSON import / export of the library, of single or selected entries, and of a project file as an entry)   [new feature — no change to any formula, computed property, project storage key or project file format]
+
+- **Engineer's request (2026-10-10):** "My sections library", plus JSON import / export of the whole library, of a single entry or the selected entries, and import of a project file as one entry; the project Save file / Open file easy to find next to these.
+- **Where in the tool:** at the end of the **Templates** input tab, under the heading "My sections library" (three sections: "Save to the library", "My sections (N)", "Project file (JSON)"). The tab bar is unchanged: a sixth "Library" tab made the input tab bar wrap to two rows at 1280–1920 px (5 px too wide at the 430 px panel), so the library sits with the templates (the brief allows either). The background right-click menu of the drawing gets "Insert here from My sections" (up to 12 entries by name; "More…" opens the Templates tab).
+- **No calculation change.** Nothing in the engine (`SPC`) changed. A library insert creates ordinary parts (as Paste does); results are those of the parts. Main vs branch: every output tab, results, warnings, drawing, saved model (autosave) and the Validation list identical for the default example and the 8 templates (in and mm); print report HTML identical (default and the engineer's model, default and all sections).
+
+#### Decisions
+
+| Item | Decision |
+|---|---|
+| Coordinates stored | Section coordinates as drawn (section origin) — lossless; on Insert the group's **bounding-box centre** goes to the view centre (Insert) or the clicked point (Place…, background menu), the same rule as "Paste here"; with Prevent overlap on, the group then goes to the nearest free position (`novResolve`, as Paste) |
+| Stored per part | The part object exactly as the project file stores it: `id, lbl, type, p, x, y, rot, mir, n, hole, useTab`, and `rho` when set (passed through the project `migrate`, so the same checks apply) |
+| Contacts | **Carried:** `off` = the "not connected" contact keys (Torsion tab, `contacts.off`) whose two parts are both in the entry, and `conn` = the shear-flow connector inputs (`sf.conn`) of contacts between the saved parts. On insert both are re-keyed to the new part ids (`SPC.pairKey`). The loads V<sub>x</sub>, V<sub>y</sub>, basis are project data, not carried |
+| Labels | Kept on insert unless the label is already used in the drawing (then the next free label, as Paste) |
+| Units | `units` = display units when saved (information only); dimensions always inches, as in the project file |
+| Name clash | Save: "Replace it?" (OK replaces in place, keeps the id and created date). Import: per clash "OK = replace / Cancel = keep both" (kept one renamed "Name (2)"). Rename to an existing name is refused. Names compared case-insensitively |
+| Unreadable stored library | (invalid JSON, other `_schema`, newer version, or an unreadable entry) shown in an error box with "Download the stored text"; **every write is refused** so nothing stored is lost |
+| Quota | `QuotaExceededError` (or not available) on write: alert "the browser storage is full (quota exceeded)… Nothing was changed."; the stored library is unchanged |
+| Undo | Insert is one undo step (parts and "not connected" flags; connector inputs, which are outside the undo snapshot as before, stay in `sf.conn` keyed to the removed contact — no effect on any result) |
+
+#### Storage and file format (CLAUDE.md §5)
+
+- **New key** `spc_library_v1` (tool-prefixed, localStorage, try/catch on every access). Nothing is written until the first save/import. No existing key, the project file, `spc_autosave_v1`, `spc_projects_v1` or any `bridgeSuite.v1.*` key is changed; the project model `M` gets no new field (`sf` is created only when an inserted entry carries connector inputs, in the existing P2b format).
+- Stored text = library file:
+```json
+{ "_schema": "section-property-calculator-library", "version": 1, "app": "Section Property Calculator", "savedAt": "<export only>",
+  "entries": [ { "id": "lib…", "name": "…", "desc": "…", "tags": ["…"], "created": "<ISO>", "modified": "<ISO>", "units": "in" | "mm",
+                 "parts": [ <project-file part objects> ], "off": [ "idA|idB" ], "conn": { "idA|idB": { <P2b connector inputs> } } } ] }
+```
+  `conn` only when present. Export all / Export selected / Export (one entry) write this format; Import accepts it (merged) or a project file (`_schema: "section-property-calculator"`, version ≤ 1, through `migrate`) as one entry named after the project (or the file name when the project has no name; description = Member / description).
+- Main (before this change) ignores `spc_library_v1` and opens a project file saved by this version (format unchanged) — tested.
+
+#### Where (anchors) — exact before / after of existing lines
+
+1. CSS, after `.spcInPane[hidden]{display:none!important}` — added the `.libHead`, `.libSearch`, `.libRow`, `.libThumb`, `.libMeta`, `.libName`, `.libDesc`, `.libTag` rules (anchor `/* My sections library (end of the Templates tab) */`).
+2. `rebuildInputs`, before:
+```js
+  buildPartsPane(panes.parts); buildPartPane(panes.part); buildTplPane(panes.tpl); buildSetPane(panes.set); buildProjPane(panes.proj);
+```
+after (built last; its sections are unnumbered, so the numbering of every other section is unchanged):
+```js
+  buildPartsPane(panes.parts); buildPartPane(panes.part); buildTplPane(panes.tpl); buildSetPane(panes.set); buildProjPane(panes.proj); buildLibPane(panes.tpl);
+```
+3. New block after `buildProjPane` and before the `CANVAS: to-scale SVG drawing` banner (anchor `/* ---- My sections library (end of the Templates tab) ----`): constants `LIB_SCHEMA`, `LIB_VER`, `LS_LIB = 'spc_library_v1'`, form state `LIBF`, and `libClean`, `libRead`, `libWrite`, `libMake`, `libUnique`, `libSaveCurrent`, `libInsert`, `libPlaceStart`, `libPlaceEnd`, `libHint`, `libDownload`, `libFileName`, `libExport`, `libImportText`, `libPickFile`, `libThumb`, `buildLibPane` (full code in the tool).
+4. `wireCanvas` → `pointerdown`, inserted before the line starting `    if (POLY) { const p = snapPoint(wp, e.altKey);`:
+```js
+    if (LIBPLACE) { const id = LIBPLACE, at = snapPoint(wp, e.altKey); SNAPMARK = null; libPlaceEnd(); try { svg.releasePointerCapture(e.pointerId); } catch (err) { } const en = libRead().entries.find(x => x.id === id); if (en) libInsert(en, at); else drawCanvas(); return; }
+```
+5. `polyHint`, before:
+```js
+  if (!POLY) { CV.hint.style.display = 'none'; return; }
+```
+after:
+```js
+  if (!POLY) { if (LIBPLACE) { libHint(); return; } CV.hint.style.display = 'none'; return; }
+```
+6. `wireKeys`, before:
+```js
+    if (k === 'Escape') { closeMenu(); if (POLY) { cancelPoly(); return; } if (SEL.size) { …
+```
+after:
+```js
+    if (k === 'Escape') { closeMenu(); if (LIBPLACE) { libPlaceEnd(); drawCanvas(); toast('Placing cancelled'); return; } if (POLY) { cancelPoly(); return; } if (SEL.size) { …
+```
+7. `openBgMenu`, inserted between `items.push({ t: 'Polygon (click vertices)…', f: () => startPoly(false) });` and `items.push({ h: 'Edit and view' });`:
+```js
+  const lib = libRead().entries.slice().sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
+  if (lib.length) { items.push({ h: 'Insert here from My sections' }); lib.slice(0, 12).forEach(en => items.push({ t: en.name, title: en.desc || '', f: () => libInsert(en, at) })); if (lib.length > 12) items.push({ t: 'More… (Templates tab)', f: () => showInTab('tpl') }); }
+```
+8. `window.SPCUI`: after `set sfSel(k) { SFSEL = k; },` added `lib: { read: libRead, insert: libInsert, importText: libImportText, saveCurrent: libSaveCurrent, form: LIBF, placeStart: libPlaceStart, get placing() { return LIBPLACE; } },` (test hook).
+
+#### Governing provision
+
+None (data management and UI). No engineering value, unit or reference changed.
+
+#### Check case (engineer's built-up I: web PL 18 × 1/2 turned 90°, 4 × L6X6X1/2, 2 × PL 12-1/2 × 1/2; with ρ = 450 lb/ft³ on L1, n = 2 on L2, AISC tabulated on L3, a Ø1/4 hole in PL1, the two web – flange-plate contacts switched off, V<sub>y</sub> = 100 kip, E70 1/4 in fillet welds on L3 – PL1)
+
+1. Save to the library (all parts): the entry's `parts` equal the project's parts exactly (JSON-identical, incl. `rho`, `n`, `useTab`, `hole`, labels, ids); `off` = the 2 switched-off keys; `conn` = the weld inputs of L3 – PL1; autosave of the project unchanged.
+2. New empty project → Insert: A, I<sub>x</sub>, I<sub>y</sub>, I<sub>xy</sub>, J, C<sub>w</sub> equal the original (translation only; ≤ 1e-9 relative); the 10 contacts have the same on/off state and the same shear-flow coefficient per unit V<sub>y</sub> (`ky`, ≤ 1e-9 relative; the loads are not carried, V<sub>y</sub> is 0 after the insert); new part ids; flags and connector re-keyed; Undo removes the 8 parts and the 2 flags.
+3. Insert a second time (Prevent overlap on): 16 parts, 0 overlaps, labels renumbered (L5…L8, PL3…, H2), 4 "not connected" flags.
+
+#### How verified
+
+- `node --check` of the 4 inline scripts: 0 errors.
+- Browser (headless Chromium, KaTeX local): library suite **78/78** — save all / selected parts (only the flags between them), name clash on save (cancel / replace in place), Insert (properties, contacts, q, ids, labels, flags, connector, undo/redo), second insert (nearest free position, no overlap), Place… by click (group centre at the clicked point within snap; hint; Esc cancels), background-menu insert, Export single / selected / all (downloaded files checked), Rename (+ description, tags; clash refused), Duplicate, Delete (cancel / confirm), search, Import library (keep both → "(2)", unique ids; replace), Import project file (named after the project; unnamed → file name), invalid JSON / other schema / newer library or project version refused with the library unchanged, corrupt stored library (message, save refused, stored text untouched), one unreadable entry (message), newer stored version (message), quota exceeded (message, unchanged), project autosave and Save file format unchanged, main opens the branch-saved project and runs with `spc_library_v1` present, print report HTML identical main vs branch, 400 px no horizontal scroll, no console errors.
+- Main vs branch (default example + 8 templates, in and mm): results, every output tab text (Section, Properties, Calc detail, Plastic, Torsion, Q & shear flow, Stresses, Method), saved model, drawing, full Validation list (117/117): **identical** in all 18 cases (strict text equality of every tab), no console errors.
+- Existing browser suites re-run on the branch: Phase 1 UI 49/0, no-overlap 70/0, dimension editing 35/0, live fields 47/0, DXF export 24 files, 400 px, extra 13/13, rotate/flip parity 45 states identical; hole carry 26/2 and open-items UI 24/2 (the suites' stale "main:" checks, as in the previous PRs).
+- Screenshots looked at: `lib_empty.png`, `lib_saved.png`, `lib_list.png`, `lib_insert_twice.png`, `lib_place_hint.png`, `lib_placed.png`, `lib_ctxmenu.png`, `lib_corrupt.png`, `lib_desktop.png`, `lib_400.png`.
+
+#### Open items
+
+- L-O1. Location: the library is at the end of the Templates tab (keeps the tab bar on one row). If the engineer prefers a separate "Library" tab, the input tab bar wraps to two rows at the 430 px panel unless the tab padding is reduced — decide.
+- L-O2. The library lives in this browser's localStorage (shared `file://` origin in Chrome/Edge, like the other keys); clearing site data deletes it. Export all regularly to keep a copy.
+- L-O3. Connector inputs left in `sf.conn` after undoing an insert (or deleting parts) stay in the project file keyed to contacts that no longer exist (pre-existing P2b behaviour for deleted parts; no effect on results).
