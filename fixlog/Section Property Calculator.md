@@ -2287,3 +2287,91 @@ Every number in the report is the same as on main: compared token by token over 
 
 - PR1-O1. Validation tab: tool values and |Δ| of the checks whose reference is 0 are printed in exponent form (e.g. W14X90 β<sub>x</sub> = −2.201853e-15, |Δ| = 2.2e-15) and the relative differences as e.g. "9.52e-14 %". Left unchanged: they are the evidence that the tool reproduces the closed form to machine precision. Engineer to decide whether to show them as 0 / "< 1e-12".
 - PR1-O2. On screen, the Q tab "Cut at y" input still shows the raw value (e.g. 6.3869009956e-16) when the cut is at the centroid; only the report shows 0. Changing the input formatting affects every number field; not done without a decision.
+
+## 2026-10-10 — PR: claude/spc-shearflow (PR link added after merge)
+
+### P2b. Shear flow at every connection, connector check; Q-tab "Cut at" display and τ<sub>avg</sub> with b = 0   [new outputs — no existing formula, result, storage key or file version changed]
+
+- **Engineer's request (2026-10-10):** "shear flow at each connection". Folded in (they touch the Q tab): the "Cut at y/x" field showed raw floats (PR1-O2), and a cut through a gap showed "τavg = q/b = 3.0579/0 = —".
+- **Existing results unchanged.** `SPC.analyze` and every existing formula are unchanged. The new values are computed on demand (`ext('sf')` → `SPC.shearFlow(R, tol)`). The thin-wall model (`thinWall`) only carries two extra fields on its elements/edges (`parts`, `tp` = thickness of each part in a combined element); engine comparison main vs branch on 5,247 models (every rolled shape, every template variant, engineer's model, 400 random assemblies + rotated copies): **every analyze() number bit-identical** (J, C<sub>w</sub>, shear centre, cells, A … Z).
+- **Where:** Q & shear flow tab, after the existing cut-line sections (the existing Q text is an exact prefix): "Shear flow at the connections: shear force" (V<sub>y</sub>, V<sub>x</sub>, load basis LRFD/ASD), "Shear flow q at each connection" (drawing + table), "Connection #k" (calculation and connector check; on screen the selected row, in the print report every connection), "Connector checks: what is and is not checked". Method tab: new section "Shear flow at the connections (Phase 2b)"; Saved data bullet. Validation: new group 18 (14 checks).
+
+#### Method and formulas
+
+| Item | As implemented | Reference | Flag |
+|---|---|---|---|
+| Connections | the contacts of the Torsion tab (`contactPairs`, contact tolerance); a contact switched off there = "not connected" (no q) | — | — |
+| Contact geometry | length = Σ boundary pieces where the parts touch (parallel edges within tol, overlap > tol; collinear pieces merged; several lines added); location = middle of the longest piece; no piece → point contact (closest points), length 0 | geometry | — |
+| Sign | V<sub>x</sub>, V<sub>y</sub> = force components along +x, +y; dM<sub>x</sub>/dz = V<sub>y</sub>, dM<sub>y</sub>/dz = −V<sub>x</sub> (moment vectors, z out of the page); group G: dF<sub>G</sub>/dz = −Φ(G), Φ = [(V<sub>y</sub>I<sub>y</sub> − V<sub>x</sub>I<sub>xy</sub>)Q<sub>x</sub> + (V<sub>x</sub>I<sub>x</sub> − V<sub>y</sub>I<sub>xy</sub>)Q<sub>y</sub>]/(I<sub>x</sub>I<sub>y</sub> − I<sub>xy</sub>²) | equilibrium of a beam slice; general flexure formula (Boresi & Schmidt) | **see open item P2b-O1** |
+| Q of a group | Q<sub>x</sub> = Σ n·A(ȳ<sub>i</sub> − ȳ), Q<sub>y</sub> = Σ n·A(x̄<sub>i</sub> − x̄) with the part properties the section uses (`q.P`: tabulated A, centroid where "AISC tabulated" is ticked); holes charged to the part they lie in (largest common area, as for the weight) | — | — |
+| Open contact (cut splits the connection graph) | q = \|Φ\| of the smaller group (by \|Σn·A\|); the other group gives the same \|q\| for one connected piece | VQ/I | exact |
+| Closed loop, symmetric | section (parts, n, tabulated option), on-contacts and the load component symmetric about the vertical (V<sub>y</sub>) / horizontal (V<sub>x</sub>) centroidal axis, the contact and its mirror image together cut off a group mapped onto itself → q = ½\|Φ(group)\| | equilibrium + symmetry | exact |
+| Closed cell, thin-wall | centre-line model of the Torsion tab; q(s) = q<sub>0</sub> − ∫t·∂σ/∂z ds, ∂σ/∂z = [(V<sub>y</sub>I<sub>xy</sub> − V<sub>x</sub>I<sub>x</sub>)x + (V<sub>x</sub>I<sub>xy</sub> − V<sub>y</sub>I<sub>y</sub>)y]/D (exact I, x, y from the exact centroid); each part's load + a constant per unit area so its total = the exact n·A term (open contacts then exact); unknowns q<sub>0</sub> per element: node balance at all nodes but one + ∮q/t ds = 0 on each fundamental cycle (zero twist, shear through the shear centre); rigid links carry flow, add 0 to ∮; result = flow entering the part at the junction(s) where only the two parts meet | thin-walled closed sections (e.g. Megson, Ch. 17) | **thin-wall — verify** |
+| n/a | anything else (e.g. face-contact stacks in a loop, three or more parts at a junction, n ≠ 1 in a cell, separate pieces): "n/a — closed loop, not computed", with the reason and, for reference, the total through all connections of the smaller part | — | never a number |
+| Fasteners | s<sub>req</sub> = n<sub>l</sub>·φR<sub>n</sub>/q (ASD: R<sub>n</sub>/Ω), φR<sub>n</sub> per fastener entered by the user; D/C = s/s<sub>req</sub> | AISC 360-16 J3 / AASHTO LRFD 6.13.2 (user's value) | verify |
+| Fillet welds | r = φ·0.60F<sub>EXX</sub>·0.707 (φ = 0.75) or 0.60F<sub>EXX</sub>·0.707/Ω (Ω = 2.00) per unit length per unit leg; w<sub>req</sub> = q/(n<sub>w</sub>·r) × p/L<sub>w</sub> (intermittent); D/C = w<sub>req</sub>/w; n<sub>w</sub> 1 or 2; F<sub>EXX</sub> default 70 ksi | AISC 360-16 J2.4, Table J2.5 | verify |
+| Not checked (listed on the tab) | min. weld size (Table J2.4), max. size along edges and min. intermittent length (J2.2b), base metal (J2.4, J4.2), fastener spacing / edge limits (J3.3–J3.5), built-up member connector spacing (E6, AASHTO 6.13.2.6), fatigue (App. 3, AASHTO 6.6.1) | — | decided: not checked (no simple, unambiguous rule without member data) |
+
+**Service vs factored (decided):** a "Load basis" select: LRFD (factored V, φ = 0.75 for welds, fastener field reads "φR<sub>n</sub>") or ASD (service V, Ω = 2.00, field reads "R<sub>n</sub>/Ω").
+
+Units: V kip (kN), q kip/in (N/mm), lengths in (mm), φR<sub>n</sub> kip (kN), F<sub>EXX</sub> ksi (MPa); stored in kip, in, ksi.
+
+#### Check cases (all on the Validation tab, group 18, 14/14 pass)
+
+1. **Cover-plated W14X90 (plate model) + PL 14.5 × 1 on the top flange, V<sub>y</sub> = 100 kip.** W: A = 2(14.5)(0.71) + 12.58(0.44) = 26.1252 in², I = [14.5(14)³ − 14.06(12.58)³]/12 = 983.036 in⁴. Section: A = 40.6252, ȳ = 14.5 × 7.5/40.6252 = 2.67691 in, I<sub>x</sub> = 983.036 + 26.1252(2.67691)² + 14.5/12 + 14.5(7.5 − 2.67691)² = 1,508.76 in⁴. Q<sub>plate</sub> = 14.5(4.82309) = 69.9348 in³. **q = 100 × 69.9348/1,508.76 = 4.6353 kip/in** (tool identical to 1e-15). Contact length 14.5 in, one line. With n = 2 for the plate: q = 5.8616 kip/in (n·A·d / I<sub>tr</sub>, hand = tool).
+2. **Plate girder 16 × 1 / web 40 × 1/2 / 16 × 1-1/4, V<sub>y</sub> = 150 kip, two E70 fillet welds (LRFD).** A = 56, ȳ = (16 × 20.5 − 20 × 20.625)/56 = −1.50893 in, I<sub>x</sub> = 17,774.9 in⁴, Q<sub>top</sub> = 16(20.5 + 1.50893) = 352.143 in³, **q = 150 × 352.143/17,774.9 = 2.9717 kip/in**; r<sub>n</sub> = 0.75 × 0.60 × 70 × 0.707 = 22.2705 ksi; **w<sub>req</sub> = 2.9717/(2 × 22.2705) = 0.0667 in** (1/16 in rounded up; minimum size not checked). ASD: 0.1001 in. With w = 1/4 in: D/C = 0.267. Bottom flange: Q = 382.321, q = 3.2264 kip/in; bolts n<sub>l</sub> = 2, φR<sub>n</sub> = 24.3 kip → s<sub>req</sub> = 15.06 in. With two Ø1 holes in the top flange (net): q = 2.8843 kip/in (hand = tool).
+3. **Unsymmetric angle pair, I<sub>xy</sub> ≠ 0: L6X4X1/2 (heel at 0,0, long leg up) + L4X4X1/2 mirrored, backs touching on x = 0 (contact 4 in at (0, 2)); V<sub>x</sub> = 20, V<sub>y</sub> = 50 kip.** Rectangles by hand: A = 8.5 in², x̄ = 0.029412, ȳ = 1.63235 in, I<sub>x</sub> = 24.3094, I<sub>y</sub> = 21.7010, I<sub>xy</sub> = 0.841912 in⁴, D = 526.83 in⁸. Group L4X4X1/2: A = 3.75, centroid (−1.18333, 1.18333), Q<sub>x</sub> = −1.68382, Q<sub>y</sub> = −4.54779 in³. (V<sub>y</sub>I<sub>y</sub> − V<sub>x</sub>I<sub>xy</sub>)Q<sub>x</sub> = −1,798.68, (V<sub>x</sub>I<sub>x</sub> − V<sub>y</sub>I<sub>xy</sub>)Q<sub>y</sub> = −2,019.64; Φ = −3,818.32/526.83 = −7.2477 → **q = 7.2477 kip/in**. Ignoring I<sub>xy</sub>: 7.6546. Sign check: the signed transfer into L4X4 equals ∫σ dA over it with the Stresses-tab σ for M<sub>x</sub> = V<sub>y</sub>·z, M<sub>y</sub> = V<sub>x</sub>·z (7.2477, to 1e-15).
+4. **4-plate box 10 × 6 (flanges 10 × 1/2, webs 3/8 × 5 between), V<sub>y</sub> = 100 kip.** I = 10(6)³/12 − 9.25(5)³/12 = 83.6458 in⁴, Q<sub>f</sub> = 10 × 0.5 × 2.75 = 13.75 in³. Symmetric pair: **q = ½ × 100 × 13.75/83.6458 = 8.2192 kip/in** per web–flange contact; the closed-cell thin-wall solution gives the same value (to 1e-16).
+5. **Box with unequal webs (left 3/8, right 3/4; flanges 10 × 1/2; 6 out-to-out), V<sub>y</sub> = 100 kip — thin-wall single cell, hand solution.** I<sub>x</sub> = 2(10 × 0.5³/12 + 5 × 2.75²) + 1.125 × 5³/12 = 87.5521 in⁴, k = V/I = 1.14218 in⁻⁴·kip. Centre lines: webs at x<sub>L</sub> = −4.8125, x<sub>R</sub> = 4.625 (a = 9.4375), flanges at y = ±2.75 (h = 5.5), overhangs a<sub>L</sub> = 0.1875, a<sub>R</sub> = 0.375; c = t<sub>f</sub>k(2.75) = 1.57049 kip/in². Cut at the top flange next to the right web, flows positive counter-clockwise: top q<sub>T0</sub> + cs; left web q<sub>T0</sub> + c(a + a<sub>L</sub>) + t<sub>1</sub>k(2.75s − s²/2); bottom q<sub>T0</sub> + c(a − s); right web q<sub>T0</sub> − c a<sub>R</sub> + t<sub>2</sub>k(s²/2 − 2.75s). ∮q/t ds = 0: q<sub>T0</sub>(2a/t<sub>f</sub> + h/t<sub>1</sub> + h/t<sub>2</sub>) = −[c a²/t<sub>f</sub> + c(a + a<sub>L</sub>)h/t<sub>1</sub> − c a<sub>R</sub>h/t<sub>2</sub>] → q<sub>T0</sub> = −497.139/59.75 = −8.32032. **Top flange → left web q = |q<sub>T0</sub> + c(a + a<sub>L</sub>)| = 6.7957 kip/in; → right web q = |q<sub>T0</sub> − c a<sub>R</sub>| = 8.9093 kip/in**; sum 15.7049 = 100 × 13.75/87.5521 (flange equilibrium). Tool = hand to 1e-15.
+6. **Default example** (W21X62 + C15X33.9 cap), V<sub>y</sub> = 50 kip: one open contact, length 8.24 in at (0, 10.5); group C1: A = 9.9, ȳ<sub>G</sub> = 10.03, Q<sub>x</sub> = 9.9(10.03 − 3.5536) = 64.119 in³; q = 50 × 64.119/1,963.8 = **1.6325 kip/in**.
+7. **Engineer's built-up I** (web PL 18 × 1/2, 4 × L6X6X1/2, 2 × PL 12-1/2 × 1/2), V<sub>y</sub> = 100 kip. All contacts on (as saved): all 10 n/a — the web plate also touches both flange plates, so each flange plate has three parallel paths (statically indeterminate); the tab says so and gives the total, e.g. into L1 through Web PL and PL2: 1.6035 kip/in. With the two web–flange-plate contacts switched off (web plate bearing, not connected): angle–flange plate **q = ½ × 100 × 6.25 × 9.25/2,623.21 = 1.1019 kip/in** each; angle–web q = ½ × 100 × 141.94/2,623.21 = **2.7054 kip/in** each (group = flange plate + two angles, Q = 141.94 in³).
+
+#### Small items (Q tab)
+
+- **"Cut at y/x" field** (PR1-O2): displayed at the display precision (significant figures of the settings), |x| < 1e-9 × section size → 0 (6.3869009956e-16 → 0; 3.55363737868 → 3.5536). `q.pos` keeps its value unless the user types; while the field has the focus (it is rebuilt after each keystroke) the full typed value is shown. Only this field: `numIn` got an optional `disp` formatter used only here.
+- **Vertical/horizontal cut through a gap (b = 0):** the τ line is dropped and the result reads "τ_avg not defined — the cut line crosses no material (b = 0)" (both the symmetric and the I<sub>xy</sub> ≠ 0 block). q itself unchanged.
+
+#### Where (anchors) — exact before / after of existing lines
+
+1. `thinWall`, stack zones, anchor `return { s0: bp[k], s1: bp[k + 1]`:
+```js
+// before
+              return { s0: bp[k], s1: bp[k + 1], t, w, cov: g, parts, src: lbls(parts).join('+') };
+// after
+              const tp = {}; g.forEach(m => m.e.parts.forEach(id => { tp[id] = (tp[id] || 0) + m.t; }));   // thickness of each part (shear flow, P2b)
+              return { s0: bp[k], s1: bp[k + 1], t, w, cov: g, parts, tp, src: lbls(parts).join('+') };
+```
+2. `thinWall`: `newE.push({ … parts: z.parts, link: false, …` → `parts: z.parts, tp: z.tp, link: false`; extension `extra.push({ p: end, q: X, t: e.t, parts: e.parts, link: false, …` → `parts: e.parts, tp: e.tp, link: false`; graph `edges.push({ a: na, b: nb, t: e.t, L: …, link: e.link, src: e.src, ext: !!e.ext });` → `…, ext: !!e.ext, parts: e.parts, tp: e.tp });`. No numeric effect (fields not read by the torsion code).
+3. Engine: new block after `function stress(` (anchor `/* ---------------- Phase 2b: shear flow at the connections`): `contactGeom`, `mirrorMap`, `shearFlow`, `twSolve`; export list `… buckling, shearFlow, contactGeom, mirrorMap, wag…`.
+4. `numIn`:
+```js
+// before
+  const v = get(); i.value = (v === null || v === undefined || !isNum(v)) ? '' : +toD(v, k).toPrecision(12);
+// after
+  const v = get(); i.value = (v === null || v === undefined || !isNum(v)) ? '' : (opts.disp ? opts.disp(toD(v, k)) : +toD(v, k).toPrecision(12));
+```
+5. `renderTab`: `let NUMIN_FOCUS = null;` before it; `NUMIN_FOCUS = stUI ? stUI.key : null;` after `stUI = captureUI();`; `NUMIN_FOCUS = null;` after the `BUILDERS()[id](pg)` try/catch. New `qPosDisp(x)` before `function buildQ(pg) {`.
+6. `buildQ`: `'q_pos', { k: 'L' }` → `'q_pos', { k: 'L', disp: qPosDisp }`; `… to compute Q.')); return; }` → `… to compute Q.')); buildSF(pg); return; }`; `if (!Qr) return;` → `if (!Qr) { buildSF(pg); return; }`; `buildSF(pg);` added as the last line; the two τ calc blocks: τ line only when `Qr.b > 1e-12`, else the "not defined" text (code in the tool, anchor `const noB = !(Qr.b > 1e-12)`).
+7. `ext(k)`: `… : k === 'kern' ? SPC.kern(R) : null;` → `… : k === 'kern' ? SPC.kern(R) : k === 'sf' ? SPC.shearFlow(R, M.settings.tol) : null;`.
+8. `migrate`: block before `// unique ids` copying `sf` (numbers checked; basis LRFD/ASD; per-contact connector fields sanitised).
+9. New UI block before `/* ---- Validation ---- */` (anchor `PHASE 2b: shear flow at every connection`): `sfIn`, `setSF`, `connIn`, `setConn`, `sfVal`, `connCheck`, `connSummary`, `sfSVG`, `buildSF`, `sfDetail`. CSS `tr.sfSel`, `.sfConn`. Validation group 18 before the `catch` of `runValidation`. Method section and Saved-data text. `SPCUI` gains `sfIn, setSF, setConn, connIn, sfSel`.
+
+#### Saved data (CLAUDE.md §5)
+
+- No key, schema or version changed (`_schema`, `version: 1`). New **optional** top-level field written only once used: `sf: { Vx, Vy, basis: 'LRFD'|'ASD', conn: { <contact key a|b>: { type: 'none'|'bolt'|'weld', nl, Rn, s, nw, Fexx, w, int, Lw, p } } }` (kip, in, ksi; contact keys as in `contacts.off`). Absent = no loads, no connectors. With it unused the saved JSON is identical to main's (default example and the 8 templates, in and mm). The selected contact is not saved.
+- **Main opens a file saved by this version** without alert or console error (tested; `sf` is ignored by main and dropped if re-saved there).
+
+#### How verified
+
+- `node --check` of the 4 inline scripts: 0 errors.
+- Engine parity main vs branch, 5,247 models: all analyze()/torsion numbers bit-identical.
+- Shear-flow robustness (branch, same 5,247 models): no exception; 3,384 open contacts, 1,252 symmetric-pair and 186 thin-wall component results, 2,332 n/a (random face-contact loops, engineer's model, laced 4L junctions); for every part whose contacts all have values, Σ transfers into the part = −Φ(part) (12,100 checks, worst 2.3e-15 relative); open contacts: both sides give the same \|q\| (5.4e-15); thin-wall solution at 691 open contacts = exact (5.3e-15).
+- Browser (headless Chromium, KaTeX local): Validation 117/117 (first 103 identical to main); P2b UI tests 29/29 (no sf in the autosave until used; cut-field display and stored value; typed value kept while focused; b = 0 text; weld LRFD/ASD/intermittent and bolt s<sub>req</sub>/D/C values; sf saved and round-tripped; mm units N/mm; print report has every connection, no form controls, no KaTeX error; main opens the branch file); main vs branch for the default and 8 templates in in and mm: results, saved model, drawing, every tab identical except the Q tab (main text an exact prefix) and the Method tab (new section); existing suites re-run (see PR). No console errors. 400 px: no horizontal page scroll. Print (Letter): tables and equations within 7.1 in.
+- Screenshots looked at: `sf_default.png`, `sf_eng.png`, `sf_eng_off.png`, `sf_girder_weld.png`, `sf_mm.png`, `sf_400_table.png`, `sf_400_detail.png`, print pages `eng_pages.png`, `gir_pages.png`.
+
+#### Open items
+
+- P2b-O1. **Sign of the V<sub>x</sub> term.** The brief wrote q = [(V<sub>y</sub>I<sub>y</sub> − V<sub>x</sub>I<sub>xy</sub>)Q<sub>x</sub> **−** (V<sub>x</sub>I<sub>x</sub> − V<sub>y</sub>I<sub>xy</sub>)Q<sub>y</sub>]/D. With V<sub>x</sub>, V<sub>y</sub> as force components along +x, +y (one right-handed frame), equilibrium gives **+** (derivation above; same expression as the existing Q tab; checked against the Stresses-tab σ). The minus form corresponds to V<sub>x</sub> taken with the opposite sign. Results with one load component are unaffected; with both, case 3 gives 7.2477 (implemented) vs 0.4194 kip/in (minus form). Confirm the convention (V<sub>x</sub> positive along +x).
+- P2b-O2. Closed loops that are not cells (e.g. angles bolted to a web and to a flange plate that also touches the web) are n/a unless symmetric with the extra contact switched off. Confirm switching off non-structural bearing contacts is the intended workflow, or say if a stiffness-based split is wanted.
+- P2b-O3. Thin-wall closed-cell values (centre-line model, extensions into junctions, load corrected per part) are approximate ("thin-wall — verify"); cells with n ≠ 1 and face-contact stacks in a cell are n/a.
+- P2b-O4. Weld check: φ = 0.75 / Ω = 2.00, 0.60F<sub>EXX</sub>, throat 0.707w, no directional increase — verify against AISC 360-16 J2.4; detailing limits not checked (listed on the tab).

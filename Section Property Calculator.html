@@ -84,6 +84,8 @@ table.tbl th{background:#DCE6F1;color:var(--navy-900);font-family:var(--font-ui)
 table.tbl td{padding:2.5px 6px;border:1px solid var(--line);text-align:center}
 table.tbl td.lft,table.tbl th.lft{text-align:left}
 table.tbl tr.gov td{background:#FEF6E7}
+table.tbl tr.sfSel td{background:#FDE7C3}
+.sfConn{margin:6px 0 2px;padding:6px 8px;border:1px dashed var(--line);border-radius:6px}
 table.tbl td.b{font-weight:700}
 table.tbl td.ng{color:var(--fail);font-weight:700}
 table.tbl td.ok{color:var(--pass);font-weight:700}
@@ -2729,14 +2731,15 @@ const SPC = (function () {
             cov.forEach(m => { const g = gs[gs.length - 1], l = g && g[g.length - 1]; if (l && m.w - l.w <= (m.t + l.t) / 2 + ltol) g.push(m); else gs.push([m]); });
             zones.push(gs.map(g => {
               const t = g.reduce((s, m) => s + m.t, 0), w = g.reduce((s, m) => s + m.t * m.w, 0) / t, parts = [...new Set(g.reduce((s, m) => s.concat(m.e.parts), []))];
-              return { s0: bp[k], s1: bp[k + 1], t, w, cov: g, parts, src: lbls(parts).join('+') };
+              const tp = {}; g.forEach(m => m.e.parts.forEach(id => { tp[id] = (tp[id] || 0) + m.t; }));   // thickness of each part (shear flow, P2b)
+              return { s0: bp[k], s1: bp[k + 1], t, w, cov: g, parts, tp, src: lbls(parts).join('+') };
             }));
           }
           return { u, o, nrm, S, Wn, at, mem, zones };
         });
         const newE = [];
         ST.forEach((st, si) => st.zones.forEach((zk, k) => zk.forEach(z => {
-          newE.push({ p: st.at(z.s0, z.w), q: st.at(z.s1, z.w), t: z.t, parts: z.parts, link: false, src: z.src, merged: z.cov.length > 1, stk: si });
+          newE.push({ p: st.at(z.s0, z.w), q: st.at(z.s1, z.w), t: z.t, parts: z.parts, tp: z.tp, link: false, src: z.src, merged: z.cov.length > 1, stk: si });
           if (z.cov.length > 1) { const nm = lbls(z.parts); C.merges.push({ a: nm[0], b: nm.slice(1).join(' + '), L: z.s1 - z.s0, t: z.t }); }
           // continuity into the next zone: a rigid link where a plate continues on a different combined line
           (st.zones[k + 1] || []).forEach(nx => { if (nx.cov.some(m => z.cov.includes(m)) && Math.abs(nx.w - z.w) > 1e-12) newE.push({ p: st.at(z.s1, z.w), q: st.at(z.s1, nx.w), t: 0, parts: [...new Set(z.parts.concat(nx.parts))], link: true, src: 'link', stk: si }); });
@@ -2783,7 +2786,7 @@ const SPC = (function () {
         if (dA <= b.t / 2 + ltol && dB <= a.t / 2 + ltol) {
           [[a, i, dA], [b, j, dB]].forEach(([e, k, dd]) => {
             if (dd < 1e-9) splits[k].push(X);
-            else { const end = len(sub(X, e.p)) < len(sub(X, e.q)) ? e.p : e.q; extra.push({ p: end, q: X, t: e.t, parts: e.parts, link: false, src: e.src, ext: true }); }
+            else { const end = len(sub(X, e.p)) < len(sub(X, e.q)) ? e.p : e.q; extra.push({ p: end, q: X, t: e.t, parts: e.parts, tp: e.tp, link: false, src: e.src, ext: true }); }
           });
           done = true;
         }
@@ -2805,7 +2808,7 @@ const SPC = (function () {
       const ts = sp.map(P => ({ P, s: dot(sub(P, e.p), d) / L2 })).sort((x, y) => x.s - y.s);
       for (let m = 0; m + 1 < ts.length; m++) {
         const na = nodeOf(ts[m].P), nb = nodeOf(ts[m + 1].P); if (na === nb) continue;
-        edges.push({ a: na, b: nb, t: e.t, L: len(sub(nodes[nb], nodes[na])), link: e.link, src: e.src, ext: !!e.ext });
+        edges.push({ a: na, b: nb, t: e.t, L: len(sub(nodes[nb], nodes[na])), link: e.link, src: e.src, ext: !!e.ext, parts: e.parts, tp: e.tp });
       }
     });
     // duplicate edges (same two nodes): keep one; then prune link chains that lead nowhere
@@ -3266,6 +3269,236 @@ const SPC = (function () {
     return { P, Mx, My, D, s0, kx, ky, sig, parts, max: mx, min: mn, na };
   }
 
+  /* ---------------- Phase 2b: shear flow at the connections (contacts between parts) ----------------
+     Computed on demand from an analyze() result (no Phase 1 / 2a result changes). Units: in, in², in³, in⁴, kip, kip/in.
+     Sign: V_x, V_y = shear force components in +x and +y (z out of the page, right-handed). With the bending stresses of the
+     section (σ linear in x, y from the centroid) and dM_x/dz = V_y, dM_y/dz = −V_x (moment vectors), a group of parts G
+     cut free along its contacts carries the longitudinal force F_G = ∫_G σ dA, and
+       dF_G/dz = −Φ(G),  Φ(G) = [(V_y I_y − V_x I_xy) Q_x + (V_x I_x − V_y I_xy) Q_y] / (I_x I_y − I_xy²)
+     (Q_x = Σ n·A·(ȳ_i − ȳ), Q_y = Σ n·A·(x̄_i − x̄) of the group; this is the expression of the Q tab, q = V_y(I_yQ_x − I_xyQ_y)/D
+     for a horizontal cut). Equilibrium of G: the flows through its contacts sum to dF_G/dz. The transfer t_c of a contact
+     (a, b) is the longitudinal force per unit length passed from part a to part b (into b); |t_c| = q is reported. */
+  // geometry of a contact: the pieces of boundary where the two parts touch (parallel edges within tol, overlapping by
+  // more than tol); without such a piece, the point of closest approach (corner / tangent contact, length 0)
+  function contactGeom(qa, qb, tol) {
+    const edgesOf = q => { const E = []; q.G.prims.forEach(pr => { if (pr.k !== 'poly') return; const P = pr.pts; for (let i = 0; i < P.length; i++) { const a = P[i], b = P[(i + 1) % P.length]; if (len(sub(b, a)) > 1e-12) E.push([a, b]); } }); return E; };
+    const EA = edgesOf(qa), EB = edgesOf(qb), raw = [];
+    EA.forEach(([a, b]) => {
+      const d = sub(b, a), L = len(d), u = mul(d, 1 / L), n = [-u[1], u[0]];
+      EB.forEach(([c, e]) => {
+        const d2 = sub(e, c), L2 = len(d2);
+        if (Math.abs(crs(u, d2)) > 1e-6 * L2) return;                                      // not parallel
+        const w1 = dot(sub(c, a), n), w2 = dot(sub(e, a), n); if (Math.abs(w1) > tol || Math.abs(w2) > tol) return;
+        const s1 = dot(sub(c, a), u), s2 = dot(sub(e, a), u), lo = Math.max(0, Math.min(s1, s2)), hi = Math.min(L, Math.max(s1, s2));
+        if (hi - lo > tol) raw.push({ u, n, o: a, w: (w1 + w2) / 4, lo, hi });              // on the mid-line between the two faces
+      });
+    });
+    // merge collinear overlapping pieces
+    const segs = [];
+    raw.forEach(r => {
+      const P0 = add(add(r.o, mul(r.u, r.lo)), mul(r.n, r.w)), P1 = add(add(r.o, mul(r.u, r.hi)), mul(r.n, r.w));
+      const m = segs.find(s => Math.abs(crs(s.u, r.u)) < 1e-6 && Math.abs(dot(sub(P0, s.o), s.n)) <= tol && (() => { const a0 = dot(sub(P0, s.o), s.u), a1 = dot(sub(P1, s.o), s.u); return Math.min(a0, a1) <= s.hi + tol && Math.max(a0, a1) >= s.lo - tol; })());
+      if (m) { const a0 = dot(sub(P0, m.o), m.u), a1 = dot(sub(P1, m.o), m.u); m.lo = Math.min(m.lo, a0, a1); m.hi = Math.max(m.hi, a0, a1); }
+      else segs.push({ u: r.u, n: r.n, o: P0, lo: 0, hi: r.hi - r.lo });
+    });
+    const S = segs.map(s => [add(s.o, mul(s.u, s.lo)), add(s.o, mul(s.u, s.hi))]);
+    const L = S.reduce((t, s) => t + len(sub(s[1], s[0])), 0);
+    let loc = null, pt = null;
+    if (S.length) { let best = S[0]; S.forEach(s => { if (len(sub(s[1], s[0])) > len(sub(best[1], best[0]))) best = s; }); loc = mul(add(best[0], best[1]), 0.5); }
+    else {   // point contact: closest points of the two boundaries
+      let bd = Infinity;
+      const ptSeg = (p, a, b) => { const ab = sub(b, a), L2 = dot(ab, ab); const t = L2 > 0 ? Math.max(0, Math.min(1, dot(sub(p, a), ab) / L2)) : 0; return add(a, mul(ab, t)); };
+      const tryPair = (p, q) => { const d = len(sub(p, q)); if (d < bd) { bd = d; pt = mul(add(p, q), 0.5); } };
+      const circs = q => q.G.prims.filter(pr => pr.k === 'circ' && pr.s > 0);
+      EA.forEach(([a, b]) => EB.forEach(([c, e]) => { tryPair(a, ptSeg(a, c, e)); tryPair(b, ptSeg(b, c, e)); tryPair(c, ptSeg(c, a, b)); tryPair(e, ptSeg(e, a, b)); }));
+      const cp = (cr, E) => E.forEach(([a, b]) => { const f = ptSeg(cr.c, a, b), d = sub(f, cr.c), l = len(d); if (l > 0) tryPair(add(cr.c, mul(d, cr.r / l)), f); });
+      circs(qa).forEach(cr => cp(cr, EB)); circs(qb).forEach(cr => cp(cr, EA));
+      circs(qa).forEach(c1 => circs(qb).forEach(c2 => { const d = sub(c2.c, c1.c), l = len(d); if (l > 0) tryPair(add(c1.c, mul(d, c1.r / l)), sub(c2.c, mul(d, c2.r / l))); }));
+      loc = pt;
+    }
+    return { segs: S, L, loc };
+  }
+  // map of the parts onto themselves under the reflection about the line through the centroid with unit normal nv
+  // (nv = [1, 0]: about the vertical axis x = x̄; [0, 1]: about the horizontal axis y = ȳ). null if the section is not symmetric.
+  function mirrorMap(R, nv) {
+    const c = [R.cx, R.cy], ext = Math.max(R.bbox[2] - R.bbox[0], R.bbox[3] - R.bbox[1]), e = 1e-7 * Math.max(ext, 1e-9);
+    const rf = p => sub(p, mul(nv, 2 * dot(sub(p, c), nv)));
+    const primsMatch = (A, B) => {
+      if (A.length !== B.length) return false; const used = new Array(B.length).fill(false);
+      return A.every(x => { const j = B.findIndex((y, k) => !used[k] && y.k === x.k && y.s === x.s && (x.k === 'circ' ? Math.abs(y.r - x.r) <= e && len(sub(rf(x.c), y.c)) <= e : y.pts.length === x.pts.length && x.pts.every(p => { const q = rf(p); return y.pts.some(v => len(sub(v, q)) <= e); }))); if (j < 0) return false; used[j] = true; return true; });
+    };
+    const map = {}, used = new Set();
+    for (const q of R.parts) {
+      const r = R.parts.find(r => !used.has(r.pt.id) && !!r.pt.hole === !!q.pt.hole && Math.abs(r.n - q.n) <= 1e-12 * Math.abs(q.n) && r.use === q.use && (!q.use || (r.pt.p.fam === q.pt.p.fam && r.pt.p.name === q.pt.p.name)) && primsMatch(q.G.prims, r.G.prims));
+      if (!r) return null; used.add(r.pt.id); map[q.pt.id] = r.pt.id;
+    }
+    return map;
+  }
+  function shearFlow(R, tol) {
+    tol = pos(tol) ? tol : 0.001;
+    const T = R.tors || {}, CS = T.contacts || [], sol = R.parts.filter(q => !q.pt.hole), idx = {};
+    sol.forEach((q, i) => { idx[q.pt.id] = i; });
+    const D = R.Ix * R.Iy - R.Ixy * R.Ixy;
+    const out = { ok: D > 0, why: D > 0 ? '' : 'I_x I_y − I_xy² ≤ 0', D, contacts: [], ncomp: 0, holeLost: [] };
+    // holes are charged to the solid part they lie in (largest common area), as for the weight
+    const host = {};
+    R.parts.forEach(q => { if (!q.pt.hole) return; const h = novShape(q.pt); let best = 0, hb = null; sol.forEach(s => { const S = novShape(s.pt), a = bbHit(h.bbox, S.bbox) ? novInter(h, S) : 0; if (a > best) { best = a; hb = s; } }); if (hb) host[q.pt.id] = hb.pt.id; else out.holeLost.push(q.pt.lbl); });
+    // per solid part: transformed area n·A and first moments about the centroidal axes (its holes included)
+    const pa = sol.map(q => ({ id: q.pt.id, lbl: q.pt.lbl, A: q.n * q.P.A, Qx: q.n * q.P.A * (q.P.c[1] - R.cy), Qy: q.n * q.P.A * (q.P.c[0] - R.cx), holes: [] }));
+    R.parts.forEach(q => { if (!q.pt.hole || host[q.pt.id] === undefined) return; const o = pa[idx[host[q.pt.id]]]; o.A += q.n * q.P.A; o.Qx += q.n * q.P.A * (q.P.c[1] - R.cy); o.Qy += q.n * q.P.A * (q.P.c[0] - R.cx); o.holes.push(q.pt.lbl); });
+    // Φ(G) per unit V_x and per unit V_y
+    const grp = set => {
+      const ids = [...set].sort((x, y) => x - y), g = { ids, pid: ids.map(i => sol[i].pt.id), lbls: ids.map(i => sol[i].pt.lbl), A: 0, Qx: 0, Qy: 0, holes: [] };
+      ids.forEach(i => { const o = pa[i]; g.A += o.A; g.Qx += o.Qx; g.Qy += o.Qy; g.holes = g.holes.concat(o.holes); });
+      g.cx = g.A ? R.cx + g.Qy / g.A : null; g.cy = g.A ? R.cy + g.Qx / g.A : null;
+      g.phx = (R.Ix * g.Qy - R.Ixy * g.Qx) / D; g.phy = (R.Iy * g.Qx - R.Ixy * g.Qy) / D;
+      return g;
+    };
+    // connection graph: solid parts, connected contacts
+    const on = CS.filter(c => c.on && idx[c.a] !== undefined && idx[c.b] !== undefined), kOf = {}, adj = sol.map(() => []);
+    on.forEach((c, k) => { kOf[c.key] = k; adj[idx[c.a]].push({ k, to: idx[c.b] }); adj[idx[c.b]].push({ k, to: idx[c.a] }); });
+    const reach = (s, skip) => { const seen = new Set([s]), st = [s]; while (st.length) { const u = st.pop(); adj[u].forEach(h => { if (skip.has(h.k) || seen.has(h.to)) return; seen.add(h.to); st.push(h.to); }); } return seen; };
+    { const seen = new Set(); sol.forEach((_, i) => { if (seen.has(i)) return; out.ncomp++; reach(i, new Set()).forEach(j => seen.add(j)); }); }
+    const absA = s => Math.abs([...s].reduce((t, i) => t + pa[i].A, 0));
+    // symmetry: reflection about the vertical axis (V_y symmetric) and about the horizontal axis (V_x symmetric)
+    const mir = {};
+    [['y', [1, 0]], ['x', [0, 1]]].forEach(([k, nv]) => {
+      const pm = mirrorMap(R, nv); if (!pm) { mir[k] = null; return; }
+      const cm = {}; let ok = true;
+      on.forEach(c => { const k2 = pairKey(pm[c.a], pm[c.b]); if (kOf[k2] === undefined) ok = false; else cm[c.key] = k2; });
+      mir[k] = ok ? { pm, cm } : null;
+    });
+    out.sym = { y: !!mir.y, x: !!mir.x };
+    const symPair = (c, comp) => {   // comp 'y' (V_y, mirror about the vertical axis) or 'x'
+      const m = mir[comp]; if (!m) return { why: comp === 'y' ? 'the section is not symmetric about the vertical centroidal axis' : 'the section is not symmetric about the horizontal centroidal axis' };
+      const k2 = m.cm[c.key]; if (k2 === c.key) return { why: 'the contact lies on the ' + (comp === 'y' ? 'vertical' : 'horizontal') + ' axis of symmetry (no mirror partner)' };
+      const skip = new Set([kOf[c.key], kOf[k2]]), ia = idx[c.a], ib = idx[c.b], sa = reach(ia, skip);
+      if (sa.has(ib)) return { why: 'cutting this contact and its mirror image (' + on[kOf[k2]].la + ' — ' + on[kOf[k2]].lb + ') does not separate the parts' };
+      const sb = reach(ib, skip), cand = [sa, sb].sort((x, y) => absA(x) - absA(y));
+      for (const G of cand) { if ([...G].every(i => G.has(idx[m.pm[sol[i].pt.id]]))) return { G, inA: G.has(ia), pair: on[kOf[k2]] }; }
+      return { why: 'the separated groups are not symmetric' };
+    };
+    // thin-wall model (closed cells), solved once on demand
+    let TW = null; const tw = () => TW || (TW = twSolve(R, sol, pa, idx, D, out.ncomp, on));
+    CS.forEach(c => {
+      const o = { key: c.key, a: c.a, b: c.b, la: c.la, lb: c.lb, on: c.on, geo: contactGeom(sol[idx[c.a]], sol[idx[c.b]], tol), kx: null, ky: null, how: { x: null, y: null }, why: { x: '', y: '' }, G: null, Gx: null, Gy: null };
+      out.contacts.push(o);
+      if (!c.on || !out.ok) { o.method = c.on ? 'na' : 'off'; return; }
+      const k = kOf[c.key], ia = idx[c.a], ib = idx[c.b], sa = reach(ia, new Set([k]));
+      if (!sa.has(ib)) {   // open: cutting the contact separates the parts into two groups
+        const sb = reach(ib, new Set([k])), inA = absA(sa) <= absA(sb), g = grp(inA ? sa : sb), s = inA ? 1 : -1;
+        o.method = 'open'; o.G = g; o.inA = inA; o.other = grp(inA ? sb : sa);
+        o.kx = s * g.phx; o.ky = s * g.phy; o.how = { x: 'open', y: 'open' }; return;
+      }
+      o.method = 'closed';
+      ['x', 'y'].forEach(comp => {
+        const r = symPair(c, comp);
+        if (r.G) { const g = grp(r.G), v = (r.inA ? 1 : -1) * (comp === 'x' ? g.phx : g.phy) / 2; o['k' + comp] = v; o.how[comp] = 'sym'; o['G' + comp] = g; o['inA' + comp] = r.inA; o['pair' + comp] = r.pair; return; }
+        o.why[comp] = 'symmetry: ' + r.why;
+        const W = tw();
+        if (!W.ok) { o.why[comp] += '; thin-wall model: ' + W.why; return; }
+        const f = W.contact(c.a, c.b);
+        if (f.why) { o.why[comp] += '; thin-wall model: ' + f.why; return; }
+        o['k' + comp] = f[comp]; o.how[comp] = 'tw';
+      });
+      // for the n/a explanation: the total transfer into the smaller of the two parts through all its contacts
+      const single = [ia, ib].map(i => ({ i, n: adj[i].length })).sort((x, y) => x.n - y.n || absA(new Set([x.i])) - absA(new Set([y.i])))[0];
+      o.tot = { g: grp(new Set([single.i])), via: adj[single.i].map(h => sol[h.to].pt.lbl) };
+    });
+    out.tw = () => tw();
+    return out;
+  }
+  /* Thin-wall shear flow on the centre-line model of the torsion tab (one connected piece; closed cells allowed).
+     Each element carries q(s) = q_0 − ∫_0^s g ds (q positive from node a to node b), with the longitudinal load per unit
+     length g = t·∂σ/∂z = t·(a′x + b′y) (x, y from the section centroid; a′ = (−V_x I_x + V_y I_xy)/D, b′ = (−V_y I_y + V_x I_xy)/D,
+     exact section properties). The load of each part is then corrected by a constant per unit area so that its total equals
+     the exact a′Q_y + b′Q_x of the part (the centre-line model adds the extensions into the junctions and drops the parts'
+     own t³ terms; with the correction every open contact gives exactly the V·Q/I value). Unknowns q_0 of every element:
+     flow balance at every node but one, and zero twist ∮ q/t ds = 0 (load through the shear centre) around each independent
+     cycle (fundamental cycles of a spanning tree). Rigid links (t = 0) carry flow and add nothing to ∮ q/t ds. */
+  function twSolve(R, sol, pa, idx, D, ncomp, on) {
+    const fail = why => ({ ok: false, why });
+    const T = R.tors || {};
+    if (ncomp !== 1 || !T.comps || T.comps.length !== 1) return fail('the section is not one connected piece');
+    const Cm = T.comps[0], G = Cm.graph;
+    if (Cm.J === null || !G) return fail(Cm.why || 'no centre-line model (round bars, custom polygons or single parts are not modelled)');
+    if (G.ncomp !== 1) return fail('the centre-line model is not one connected piece');
+    if (R.anyN) return fail('modulus ratios n ≠ 1 are not handled in the closed-cell model');
+    const { nodes, edges } = G, N = nodes.length, E = edges.length;
+    const tps = edges.map(e => (e.link || !(e.t > 0)) ? null : (e.tp || (e.parts && e.parts.length === 1 ? { [e.parts[0]]: e.t } : null)));
+    if (tps.some((tp, k) => !edges[k].link && edges[k].t > 0 && !tp)) return fail('element thickness shares not available');
+    // spanning tree and fundamental cycles
+    const inc = nodes.map(() => []); edges.forEach((e, k) => { inc[e.a].push(k); inc[e.b].push(k); });
+    const par = new Array(N).fill(null), dep = new Array(N).fill(-1), tree = new Set(); dep[0] = 0; const st = [0];
+    while (st.length) { const u = st.pop(); inc[u].forEach(k => { const e = edges[k], v = e.a === u ? e.b : e.a; if (dep[v] >= 0) return; dep[v] = dep[u] + 1; par[v] = { u, k }; tree.add(k); st.push(v); }); }
+    if (dep.some(d => d < 0)) return fail('the centre-line model is not connected');
+    const sgn = (k, from) => edges[k].a === from ? 1 : -1;
+    const cycles = [];
+    edges.forEach((e, k) => {
+      if (tree.has(k)) return;
+      // e from a to b, then the tree path from b back to a
+      const cyc = [[k, 1]]; let x = e.b, y = e.a; const up = [], dn = [];
+      while (dep[x] > dep[y]) { up.push([par[x].k, sgn(par[x].k, x)]); x = par[x].u; }
+      while (dep[y] > dep[x]) { dn.push([par[y].k, -sgn(par[y].k, y)]); y = par[y].u; }
+      while (x !== y) { up.push([par[x].k, sgn(par[x].k, x)]); x = par[x].u; dn.push([par[y].k, -sgn(par[y].k, y)]); y = par[y].u; }
+      cycles.push(cyc.concat(up, dn.reverse()));
+    });
+    if (N - 1 + cycles.length !== E) return fail('inconsistent centre-line graph');
+    // part areas in the model (for the load correction)
+    const area = {}; edges.forEach((e, k) => { const tp = tps[k]; if (!tp) return; Object.keys(tp).forEach(id => { area[id] = (area[id] || 0) + tp[id] * e.L; }); });
+    const solveFor = (Vx, Vy) => {
+      const ap = (-Vx * R.Ix + Vy * R.Ixy) / D, bp = (-Vy * R.Iy + Vx * R.Ixy) / D;
+      const f = p => ap * (p[0] - R.cx) + bp * (p[1] - R.cy);
+      const twT = {}; edges.forEach((e, k) => { const tp = tps[k]; if (!tp) return; const m = e.L * (f(nodes[e.a]) + f(nodes[e.b])) / 2; Object.keys(tp).forEach(id => { twT[id] = (twT[id] || 0) + tp[id] * m; }); });
+      const corr = {};
+      for (const o of pa) {
+        const ex = ap * o.Qy + bp * o.Qx;
+        if (!(area[o.id] > 0)) { if (Math.abs(ex) > 1e-12 * (Math.abs(ap) + Math.abs(bp)) * Math.max(1, Math.abs(R.Ix) + Math.abs(R.Iy))) return null; corr[o.id] = 0; continue; }
+        corr[o.id] = (ex - (twT[o.id] || 0)) / area[o.id];
+      }
+      const ce = edges.map((e, k) => { const tp = tps[k]; if (!tp) return 0; return Object.keys(tp).reduce((s, id) => s + tp[id] * (corr[id] || 0), 0); });
+      const Tk = edges.map((e, k) => tps[k] ? e.L * (e.t * (f(nodes[e.a]) + f(nodes[e.b])) / 2 + ce[k]) : 0);
+      const A = [], b = [];
+      for (let v = 1; v < N; v++) { const row = new Array(E).fill(0); let rhs = 0; inc[v].forEach(k => { if (edges[k].b === v) { row[k] += 1; rhs += Tk[k]; } if (edges[k].a === v) row[k] -= 1; }); A.push(row); b.push(rhs); }
+      cycles.forEach(cyc => {
+        const row = new Array(E).fill(0); let rhs = 0;
+        cyc.forEach(([k, s]) => { const e = edges[k]; if (!tps[k]) return; const fa = f(nodes[e.a]), fb = f(nodes[e.b]); row[k] += s * e.L / e.t; rhs += s * (e.L * e.L * (2 * fa + fb) / 6 + ce[k] * e.L * e.L / (2 * e.t)); });
+        A.push(row); b.push(rhs);
+      });
+      const q = solveLin(A.map(r => r.slice()), b.slice()); if (!q || q.some(v => !fin(v))) return null;
+      // residual check
+      let res = 0, sc = 0; A.forEach((r, i) => { let s = 0; r.forEach((a, j) => { s += a * q[j]; }); res = Math.max(res, Math.abs(s - b[i])); sc = Math.max(sc, Math.abs(b[i])); });
+      q.forEach(v => { sc = Math.max(sc, Math.abs(v)); });
+      if (!(res <= 1e-8 * Math.max(sc, 1e-300))) return null;
+      return { q0: q, q1: q.map((v, k) => v - Tk[k]) };
+    };
+    const S = { x: solveFor(1, 0), y: solveFor(0, 1) };
+    if (!S.x || !S.y) return fail('the shear-flow system is singular (e.g. a cell made only of rigid links)');
+    const onKey = new Set(on.map(c => c.key));
+    // transfer from part a into part b: at each node where elements of a and elements of b (and nothing else) meet, the flow
+    // entering the elements of the pure side (elements of that part alone)
+    const contact = (a, b) => {
+      if (edges.some((e, k) => tps[k] && e.parts.includes(a) && e.parts.includes(b))) return { why: 'the two parts are combined into one element (face contact)' };
+      let fx = 0, fy = 0, n = 0;
+      for (let v = 0; v < N; v++) {
+        const EA = [], EB = []; let other = 0;
+        inc[v].forEach(k => { const e = edges[k]; if (!tps[k]) { other++; return; } const hA = e.parts.includes(a), hB = e.parts.includes(b); if (hA) EA.push(k); else if (hB) EB.push(k); else other++; });
+        if (!EA.length || !EB.length) continue;
+        if (other) return { why: 'more than the two parts (or a rigid link) meet at the junction' };
+        const pure = L => L.every(k => edges[k].parts.length === 1);
+        const touches = (L, p) => L.some(k => edges[k].parts.some(id => id !== a && id !== b && onKey.has(pairKey(id, p))));
+        const into = (L, s) => L.reduce((t, k) => t + (edges[k].a === v ? s.q0[k] : -s.q1[k]), 0);
+        if (pure(EB) && !touches(EA, b)) { fx += into(EB, S.x); fy += into(EB, S.y); }
+        else if (pure(EA) && !touches(EB, a)) { fx -= into(EA, S.x); fy -= into(EA, S.y); }
+        else return { why: 'combined elements on both sides of the junction' };
+        n++;
+      }
+      if (!n) return { why: 'the contact is not a junction of the centre-line model' };
+      return { x: fx, y: fy, nodes: n };
+    };
+    return { ok: true, contact, S, nC: cycles.length, nodes, edges };
+  }
+
   /* ---------------- templates ----------------
      Each returns new parts (positions in inches; the section is centred near the origin).
      Local frames: C — back of web at refPts.back (left), toes toward +x; L — heel at refPts.heel, long leg (leg1) along +y,
@@ -3321,7 +3554,7 @@ const SPC = (function () {
   };
   function P(type, p, x, y, o) { o = o || {}; return { type, p, x, y, rot: o.rot || 0, mir: !!o.mir, n: 1, hole: false, useTab: false }; }
 
-  return { FAMS, FAM_ORDER, TYPES, shapeRec, shapeNames, dblAngle, partGeom, partGlobal, xfMat, apply, polyM, circM, primM, primsMoments, analyze, qcut, principal, Jrect, labelPrefix, fmtDim, TEMPLATES, rotTensor, plastic, sideSum, chordLen, pairKey, sectorial, partProps, triangulate, overlapArea, polyDist, primPoly, selfIntersects, ptInPoly, NOV, RHO_STEEL, partRho, weight, coating, buckling, wagner, kern, hull, stress, symAbout, polyCubic };
+  return { FAMS, FAM_ORDER, TYPES, shapeRec, shapeNames, dblAngle, partGeom, partGlobal, xfMat, apply, polyM, circM, primM, primsMoments, analyze, qcut, principal, Jrect, labelPrefix, fmtDim, TEMPLATES, rotTensor, plastic, sideSum, chordLen, pairKey, sectorial, partProps, triangulate, overlapArea, polyDist, primPoly, selfIntersects, ptInPoly, NOV, RHO_STEEL, partRho, weight, coating, buckling, shearFlow, contactGeom, mirrorMap, wagner, kern, hull, stress, symAbout, polyCubic };
 })();
 /* SPC-ENGINE-END */
 </script>
@@ -3501,7 +3734,7 @@ function numIn(get, set, key, opts) {
   opts = opts || {};
   const k = opts.k || 'n';
   const i = document.createElement('input'); i.type = 'number'; i.step = opts.step || 'any';
-  const v = get(); i.value = (v === null || v === undefined || !isNum(v)) ? '' : +toD(v, k).toPrecision(12);
+  const v = get(); i.value = (v === null || v === undefined || !isNum(v)) ? '' : (opts.disp ? opts.disp(toD(v, k)) : +toD(v, k).toPrecision(12));
   if (opts.ph) i.placeholder = opts.ph;
   if (opts.min !== undefined) i.setAttribute('data-min', opts.min);
   tagField(i, key);
@@ -3579,6 +3812,12 @@ function migrate(d) {
   });
   // optional stress loads (Phase 2a): P kip (tension +), Mx, My kip-in; absent = all 0
   if (d.stress && typeof d.stress === 'object') m.stress = { P: isNum(d.stress.P) ? d.stress.P : 0, Mx: isNum(d.stress.Mx) ? d.stress.Mx : 0, My: isNum(d.stress.My) ? d.stress.My : 0 };
+  // optional shear flow at the connections (Phase 2b): V_x, V_y kip; basis; connector inputs per contact key (in, kip, ksi)
+  if (d.sf && typeof d.sf === 'object' && !Array.isArray(d.sf)) {
+    const n0 = v => isNum(v) ? v : null, sf = { Vx: isNum(d.sf.Vx) ? d.sf.Vx : 0, Vy: isNum(d.sf.Vy) ? d.sf.Vy : 0, basis: d.sf.basis === 'ASD' ? 'ASD' : 'LRFD', conn: {} };
+    if (d.sf.conn && typeof d.sf.conn === 'object') Object.keys(d.sf.conn).forEach(k => { const c = d.sf.conn[k]; if (!c || typeof c !== 'object') return; sf.conn[k] = { type: ['bolt', 'weld'].includes(c.type) ? c.type : 'none', nl: isNum(c.nl) ? c.nl : 2, Rn: n0(c.Rn), s: n0(c.s), nw: c.nw === 1 ? 1 : 2, Fexx: isNum(c.Fexx) && c.Fexx > 0 ? c.Fexx : 70, w: n0(c.w), int: !!c.int, Lw: n0(c.Lw), p: n0(c.p) }; });
+    m.sf = sf;
+  }
   // unique ids
   const ids = new Set(); m.parts.forEach(p => { if (ids.has(p.id)) p.id = newId(); ids.add(p.id); });
   if (m.view) delete m.view;
@@ -4941,16 +5180,19 @@ function buildTabBar() {
   });
 }
 const BUILDERS = () => ({ sec: buildSec, props: buildProps, calc: buildCalc, plas: buildPlas, tors: buildTors, q: buildQ, stress: buildStress, val: buildValid, man: buildManual });
+let NUMIN_FOCUS = null;   // key of the field that had the focus when the output tab is rebuilt (qPosDisp)
 function renderTab(light) {
   const pages = $('tabPages'), id = curTab();
   if (light && id === 'sec' && $('secSummary')) { const s = $('secSummary'); s.innerHTML = ''; buildSecSummary(s); return; }
   if (light && id !== 'sec' && id !== 'q') return;
   const keepScroll = $('outputPanel').scrollTop, stUI = captureUI();
+  NUMIN_FOCUS = stUI ? stUI.key : null;
   pages.innerHTML = '';
   const pg = el('div', 'tabPage'); pg.id = 'page_' + id; pages.appendChild(pg);
   __secNum = 0;
   if ((!R || !R.ok) && !['val', 'man', 'sec'].includes(id)) { pg.appendChild(errPanel()); return; }
   try { BUILDERS()[id](pg); } catch (e) { pg.appendChild(el('div', 'errBox', 'This page could not be built: ' + esc(e.message))); console.error(e); }
+  NUMIN_FOCUS = null;
   if (light) $('outputPanel').scrollTop = keepScroll;
   restoreUI(stUI);
   if (id === 'sec') drawCanvas();
@@ -5216,25 +5458,36 @@ function buildTors(pg) {
 }
 
 /* ---- Q tab ---- */
+// "Cut at" field: shown at the display precision (significant figures of the settings); |x| < 1e-9 × the section size → 0
+// (e.g. 6.4e-16 at the centroid). Display only: q.pos keeps its value unless the user types; while the field has the focus
+// (it is rebuilt after every keystroke) the full value is shown.
+function qPosDisp(x) {
+  if (NUMIN_FOCUS === 'q_pos') return +x.toPrecision(12);
+  const b = R && R.ok ? R.bbox : null, sc = b ? Math.max(b[2] - b[0], b[3] - b[1], Math.abs(b[0]), Math.abs(b[1]), Math.abs(b[2]), Math.abs(b[3])) * uf('L') : 1;
+  if (Math.abs(x) < 1e-9 * Math.max(sc, 1e-300)) return 0;
+  return +x.toPrecision((M && M.settings && M.settings.prec) || 5);
+}
 function buildQ(pg) {
   const q = M.q;
   mkSec(pg, 'qIn', 'Cut line', body => {
     chkRow(body, 'Show the cut line on the drawing (drag it there)', chkIn(() => q.on, v => { q.on = v; if (v && !isNum(q.pos)) q.pos = q.dir === 'v' ? R.cx : R.cy; }, 'q_on', false));
     fRow(body, 'Direction', selIn([['h', 'horizontal cut (Q about the x axis; shear V parallel to y)'], ['v', 'vertical cut (Q about the y axis; shear V parallel to x)']], () => q.dir, v => { q.dir = v; q.pos = v === 'v' ? R.cx : R.cy; }, 'q_dir', false), '');
-    fRow(body, q.dir === 'v' ? 'Cut at x' : 'Cut at y', numIn(() => qPos(), v => { q.pos = v; }, 'q_pos', { k: 'L' }), un('L'));
+    fRow(body, q.dir === 'v' ? 'Cut at x' : 'Cut at y', numIn(() => qPos(), v => { q.pos = v; }, 'q_pos', { k: 'L', disp: qPosDisp }), un('L'));
     const r = el('div', 'btnRow'); r.appendChild(btn('At the centroid', 'sm', () => { q.pos = q.dir === 'v' ? R.cx : R.cy; compute(); renderOutput(); drawCanvas(); autosave(); })); body.appendChild(r);
     fRow(body, 'Shear force V (optional)', numIn(() => q.V, v => { q.V = v; }, 'q_V', { k: 'F', blank: true, ph: 'none' }), un('F'), 'Phase 1: Q is the property; enter V to see q = V·Q/I and the average shear stress on the cut.');
   });
-  if (!q.on) { pg.appendChild(el('div', 'note', 'Tick "Show the cut line" (or use the Q cut button on the drawing toolbar) to compute Q.')); return; }
-  const Qr = SPC.qcut(R, q.dir, qPos(), q.V); if (!Qr) return;
+  if (!q.on) { pg.appendChild(el('div', 'note', 'Tick "Show the cut line" (or use the Q cut button on the drawing toolbar) to compute Q.')); buildSF(pg); return; }
+  const Qr = SPC.qcut(R, q.dir, qPos(), q.V); if (!Qr) { buildSF(pg); return; }
   const hv = q.dir === 'v', ax = hv ? 'y' : 'x';
   mkSec(pg, 'qRes', 'First moment of area Q and shear flow', body => {
     calc(body, { title: `Q of the part ${hv ? 'to the right of' : 'above'} the cut, about the centroidal ${ax} axis`, ref: 'Q = A′·ȳ′', lines: [
       hv ? TX`Q_y=A'\left(\bar{x}'-\bar{x}\right)=${nt(Qr.Aup, 'A')}\times${nt(Qr.Aup ? Qr.Qy / Qr.Aup : 0, 'L')}=${nt(Qr.Qy, 'S')}\ \text{${un('S')}}` : TX`Q_x=A'\left(\bar{y}'-\bar{y}\right)=${nt(Qr.Aup, 'A')}\times${nt(Qr.Aup ? Qr.Qx / Qr.Aup : 0, 'L')}=${nt(Qr.Qx, 'S')}\ \text{${un('S')}}`],
       result: `Q = ${nu(Qr.Q, 'S')}; material width on the cut b = ${nu(Qr.b, 'L')}` + (R.anyN ? ' (n-weighted area)' : '') });
     if (isNum(Qr.q)) {
-      if (!Qr.gen) calc(body, { title: 'Shear flow and average shear stress on the cut', ref: 'q = V·Q/I (elastic)', lines: [TX`q=\frac{V Q}{I_${ax}}=\frac{${nt(q.V, 'F')}\times${nt(Qr.Q, 'S')}}{${nt(Qr.I, 'I')}}=${nt(Qr.q, 'q')}\ \text{${un('q')}}`, TX`\tau_{avg}=\frac{q}{b}=\frac{${nt(Qr.q, 'q')}}{${nt(Qr.b, 'L')}}=${nt(Qr.tau, 'tau')}\ \text{${un('tau')}}`], result: '' });
-      else calc(body, { title: 'Shear flow (unsymmetric section, I_xy ≠ 0)', ref: 'general flexural shear flow (e.g. Megson, Aircraft Structures, Eq. 17.14)', lines: [hv ? TX`q=V_x\frac{I_xQ_y-I_{xy}Q_x}{I_xI_y-I_{xy}^2}=${nt(Qr.q, 'q')}\ \text{${un('q')}}` : TX`q=V_y\frac{I_yQ_x-I_{xy}Q_y}{I_xI_y-I_{xy}^2}=${nt(Qr.q, 'q')}\ \text{${un('q')}}`, TX`\tau_{avg}=q/b=${nt(Qr.tau, 'tau')}\ \text{${un('tau')}}`], result: `Q_x = ${nf(Qr.Qx, 'S')}, Q_y = ${nf(Qr.Qy, 'S')} ${un('S')}` });
+      // a cut through a gap (no material on the line, b = 0): τavg is not defined (no division by 0 shown)
+      const noB = !(Qr.b > 1e-12), noBtxt = 'τ_avg not defined — the cut line crosses no material (b = 0)';
+      if (!Qr.gen) calc(body, { title: 'Shear flow and average shear stress on the cut', ref: 'q = V·Q/I (elastic)', lines: [TX`q=\frac{V Q}{I_${ax}}=\frac{${nt(q.V, 'F')}\times${nt(Qr.Q, 'S')}}{${nt(Qr.I, 'I')}}=${nt(Qr.q, 'q')}\ \text{${un('q')}}`].concat(noB ? [] : [TX`\tau_{avg}=\frac{q}{b}=\frac{${nt(Qr.q, 'q')}}{${nt(Qr.b, 'L')}}=${nt(Qr.tau, 'tau')}\ \text{${un('tau')}}`]), result: noB ? noBtxt : '' });
+      else calc(body, { title: 'Shear flow (unsymmetric section, I_xy ≠ 0)', ref: 'general flexural shear flow (e.g. Megson, Aircraft Structures, Eq. 17.14)', lines: [hv ? TX`q=V_x\frac{I_xQ_y-I_{xy}Q_x}{I_xI_y-I_{xy}^2}=${nt(Qr.q, 'q')}\ \text{${un('q')}}` : TX`q=V_y\frac{I_yQ_x-I_{xy}Q_y}{I_xI_y-I_{xy}^2}=${nt(Qr.q, 'q')}\ \text{${un('q')}}`].concat(noB ? [] : [TX`\tau_{avg}=q/b=${nt(Qr.tau, 'tau')}\ \text{${un('tau')}}`]), result: `Q_x = ${nf(Qr.Qx, 'S')}, Q_y = ${nf(Qr.Qy, 'S')} ${un('S')}` + (noB ? '; ' + noBtxt : '') });
     }
     body.appendChild(el('div', 'hint', 'The cut runs right across the section: Q is that of everything on one side of the line. For the shear flow in one plate or at one weld (e.g. a cover plate to flange weld), place the cut at the interface: Q is then that of the plate. Multiply q by the spacing for the force per bolt. Holes are subtracted.'));
   });
@@ -5246,6 +5499,7 @@ function buildQ(pg) {
     rows.push({ cls: 'gov', cells: ['centroid ' + nf(hv ? R.cx : R.cy, 'L'), nf(zc.Q, 'S'), nf(zc.b, 'L'), isNum(zc.q) ? nf(zc.q, 'q') : '—', isNum(zc.tau) ? nf(zc.tau, 'tau') : '—'] });
     body.appendChild(tblEl([(hv ? 'x' : 'y') + ' (' + un('L') + ')', 'Q (' + un('S') + ')', 'b (' + un('L') + ')', 'q (' + un('q') + ')', 'τ avg (' + un('tau') + ')'], rows));
   });
+  buildSF(pg);   // Phase 2b: shear flow at every connection
 }
 
 /* =====================================================================
@@ -5258,7 +5512,7 @@ function ext(k) {
   if (!R || !R.ok) return null;
   const X = R._x || (R._x = {});
   if (!(k in X)) {
-    try { X[k] = k === 'w' ? SPC.weight(R) : k === 'coat' ? SPC.coating(R, M.settings.tol) : k === 'bk' ? SPC.buckling(R) : k === 'kern' ? SPC.kern(R) : null; }
+    try { X[k] = k === 'w' ? SPC.weight(R) : k === 'coat' ? SPC.coating(R, M.settings.tol) : k === 'bk' ? SPC.buckling(R) : k === 'kern' ? SPC.kern(R) : k === 'sf' ? SPC.shearFlow(R, M.settings.tol) : null; }
     catch (e) { console.error(e); X[k] = null; }
   }
   return X[k];
@@ -5515,6 +5769,250 @@ function buildStress(pg) {
   });
 }
 
+/* =====================================================================
+   PHASE 2b: shear flow at every connection (contact) and connector check
+   ===================================================================== */
+// optional model data (written only once used): M.sf = { Vx, Vy (kip), basis 'LRFD' | 'ASD', conn: { <contact key>: {...} } }
+const SF_DEF = () => ({ Vx: 0, Vy: 0, basis: 'LRFD', conn: {} });
+const sfIn = () => Object.assign(SF_DEF(), M.sf || {});
+function setSF(k, v) { M.sf = Object.assign(SF_DEF(), M.sf || {}); M.sf[k] = k === 'basis' ? (v === 'ASD' ? 'ASD' : 'LRFD') : (isNum(v) ? v : 0); }
+const CONN_DEF = () => ({ type: 'none', nl: 2, Rn: null, s: null, nw: 2, Fexx: 70, w: null, int: false, Lw: null, p: null });
+const connIn = key => Object.assign(CONN_DEF(), ((M.sf && M.sf.conn) || {})[key] || {});
+function setConn(key, k, v) { M.sf = Object.assign(SF_DEF(), M.sf || {}); M.sf.conn = Object.assign({}, M.sf.conn); M.sf.conn[key] = Object.assign(connIn(key), { [k]: v }); }
+let SFSEL = null;   // selected contact (screen only, not saved)
+const WELD_PHI = 0.75, WELD_OMEGA = 2.00;   // AISC 360-16 J2.4 (fillet welds, shear on the effective throat) — verify
+// value of one contact for the current loads
+function sfVal(c) {
+  const L = sfIn(), need = { x: isNum(L.Vx) && L.Vx !== 0, y: isNum(L.Vy) && L.Vy !== 0 };
+  if (!c.on) return { off: true };
+  if (!need.x && !need.y) return { none: true };
+  const miss = ['x', 'y'].filter(k => need[k] && !isNum(c['k' + k]));
+  if (miss.length) return { na: true, miss };
+  const t = (need.x ? L.Vx * c.kx : 0) + (need.y ? L.Vy * c.ky : 0);
+  const how = ['x', 'y'].filter(k => need[k]).map(k => c.how[k]);
+  return { t, q: Math.abs(t), tw: how.includes('tw'), sym: how.includes('sym'), need };
+}
+const SF_HOW = { open: 'open — V·Q/I of the group', sym: 'closed loop — symmetric pair, ½·V·Q/I', tw: 'closed cell — thin-wall shear flow' };
+const ntp = (v, k, sg) => (isNum(v) && v < 0 ? '\\left(' + nt(v, k, sg) + '\\right)' : nt(v, k, sg));   // a negative number in brackets in a substitution
+function sfMethodTxt(c, v) {
+  if (!c.on) return 'not connected (switched off on the Torsion tab)';
+  if (c.method === 'open') return SF_HOW.open;
+  const need = (v && v.need) || { x: true, y: true }, ks = ['x', 'y'].filter(k => need[k]);
+  const hs = [...new Set(ks.map(k => c.how[k] || 'na'))];
+  if (hs.includes('na')) return 'n/a — closed loop, not computed';
+  return hs.map(h => SF_HOW[h]).join('; ');
+}
+// connector check of one contact (q in kip/in, internal units)
+function connCheck(key, q) {
+  const C = connIn(key), L = sfIn(), asd = L.basis === 'ASD', o = { C, asd };
+  if (C.type === 'bolt') {
+    o.ok = isNum(C.Rn) && C.Rn > 0 && isNum(C.nl) && C.nl > 0;
+    if (o.ok && isNum(q) && q > 0) { o.sreq = C.nl * C.Rn / q; if (isNum(C.s) && C.s > 0) o.dc = C.s / o.sreq; }
+  } else if (C.type === 'weld') {
+    const F = isNum(C.Fexx) && C.Fexx > 0 ? C.Fexx : 70, nw = C.nw === 1 ? 1 : 2;
+    o.F = F; o.nw = nw; o.unit = (asd ? 1 / WELD_OMEGA : WELD_PHI) * 0.60 * F * 0.707;   // strength per inch of weld per inch of leg size
+    o.frac = C.int && isNum(C.Lw) && C.Lw > 0 && isNum(C.p) && C.p > 0 ? Math.min(1, C.Lw / C.p) : 1;
+    if (isNum(q)) { o.wreq = q / (nw * o.unit * o.frac); if (isNum(C.w) && C.w > 0) o.dc = o.wreq / C.w; }
+  }
+  return o;
+}
+function connSummary(c, v) {
+  const C = connIn(c.key);
+  if (C.type === 'none' || !v || !isNum(v.q)) return { txt: C.type === 'none' ? '—' : (C.type === 'bolt' ? 'fasteners' : 'fillet welds'), dc: null };
+  const k = connCheck(c.key, v.q);
+  if (C.type === 'bolt') return { txt: isNum(k.sreq) ? 's_req = ' + nu(k.sreq, 'L', 4) : 'enter ' + (k.asd ? 'R_n/Ω' : 'φR_n'), dc: k.dc };
+  return { txt: 'w_req = ' + nu(k.wreq, 'L', 4), dc: k.dc };
+}
+
+/* ---- drawing: contacts with their shear flow, selected contact's separated group highlighted ---- */
+function sfSVG(S, W, H, sel) {
+  const b = R.bbox, px = Math.min(110, W * 0.16), py = 34, leg = 22, s = Math.min((W - 2 * px) / Math.max(b[2] - b[0], 1e-9), (H - 2 * py - leg) / Math.max(b[3] - b[1], 1e-9));   // margins for the tags
+  const V = { s, ox: W / 2 - s * (b[0] + b[2]) / 2, oy: (H - leg) / 2 + s * (b[1] + b[3]) / 2 }, tr = p => [V.ox + V.s * p[0], V.oy - V.s * p[1]];
+  VIEW_T = V;
+  const cs = S.contacts, csel = cs.find(c => c.key === sel), hl = new Set();
+  if (csel) { const G = csel.G || csel.Gy || csel.Gx; if (G) G.pid.forEach(id => hl.add(id)); else { hl.add(csel.a); hl.add(csel.b); } }
+  const o = [`<svg class="sfSvg" viewBox="0 0 ${W} ${H}" width="100%" style="max-width:${W}px;display:block;background:#FCFDFE;border:1px solid var(--line);border-radius:4px" role="img" aria-label="Contacts and shear flow">`];
+  const order = R.parts.filter(q => !q.pt.hole).concat(R.parts.filter(q => q.pt.hole));
+  order.forEach(q => {
+    const d = q.G.prims.map(pr => primPath(pr, tr)).join('');
+    if (q.pt.hole) o.push(`<path d="${d}" fill="#FFFFFF" fill-rule="evenodd" stroke="#C0392B" stroke-width="1.1" stroke-dasharray="5 3"/>`);
+    else o.push(`<path d="${d}" fill="${hl.has(q.pt.id) ? '#F59E0B' : '#CBD5E1'}" fill-opacity="${hl.has(q.pt.id) ? 0.55 : 0.5}" fill-rule="evenodd" stroke="#33475E" stroke-width="1"><title>${esc(q.pt.lbl)}</title></path>`);
+  });
+  // labels of the parts (small, grey)
+  R.parts.forEach(q => { if (q.pt.hole) return; const p = tr(q.geo.c); o.push(`<text x="${fx(p[0])}" y="${fx(p[1] + 3)}" font-size="9" text-anchor="middle" fill="#475569" stroke="#fff" stroke-width="2.5" paint-order="stroke">${esc(q.pt.lbl)}</text>`); });
+  const C = tr([R.cx, R.cy]); o.push(`<circle cx="${fx(C[0])}" cy="${fx(C[1])}" r="4" fill="#fff" stroke="#0F172A" stroke-width="1.3"/>`);
+  // contacts: thick line on the contact (point: dot); colour by status; numbered tag with q, leader arrow to the contact
+  const boxes = [], tags = [], pbox = R.parts.filter(q => !q.pt.hole).map(q => { const a = tr([q.G.bbox[0], q.G.bbox[3]]), e = tr([q.G.bbox[2], q.G.bbox[1]]); return [a[0] - 2, a[1] - 2, e[0] + 2, e[1] + 2]; });
+  cs.forEach((c, i) => {
+    const v = sfVal(c), col = !c.on ? '#94A3B8' : v.na ? '#B91C1C' : v.tw ? '#7C3AED' : '#15803D', isSel = c.key === sel;
+    c.geo.segs.forEach(sg => { const a = tr(sg[0]), e = tr(sg[1]); o.push(`<path d="M${fx(a[0])} ${fx(a[1])}L${fx(e[0])} ${fx(e[1])}" stroke="${col}" stroke-width="${isSel ? 6 : 4}" stroke-linecap="round" opacity="${c.on ? 0.9 : 0.6}"${c.on ? '' : ' stroke-dasharray="4 4"'}/>`); });
+    if (!c.geo.segs.length && c.geo.loc) { const p = tr(c.geo.loc); o.push(`<circle cx="${fx(p[0])}" cy="${fx(p[1])}" r="${isSel ? 5 : 4}" fill="${col}"/>`); }
+    if (!c.geo.loc) return;
+    const txt = '#' + (i + 1) + (v.off ? ' off' : v.na ? ' n/a' : isNum(v.q) ? ' q = ' + nf(v.q, 'q', 4) : '');
+    tags.push({ c, i, v, col, isSel, txt, p: tr(c.geo.loc) });
+  });
+  // place tags: away from the centroid, then the first free spot around the contact
+  tags.forEach(tg => {
+    const w = 6.2 * tg.txt.length + 8, h = 15, d0 = [tg.p[0] - C[0], tg.p[1] - C[1]], L0 = Math.hypot(d0[0], d0[1]) || 1, u0 = [d0[0] / L0, d0[1] / L0];
+    const cand = []; for (const r of [24, 36, 50, 66, 84, 104, 126, 150, 176, 204]) for (let k = 0; k < 16; k++) { const a = Math.atan2(u0[1], u0[0]) + (k % 2 ? 1 : -1) * Math.ceil(k / 2) * Math.PI / 8; cand.push([tg.p[0] + r * Math.cos(a), tg.p[1] + r * Math.sin(a)]); }
+    let best = null; const hit = (bx, z) => bx[0] < z[2] && bx[2] > z[0] && bx[1] < z[3] && bx[3] > z[1];
+    // first clear of the parts (tag outside the section, with a leader), else anywhere clear of the other tags
+    for (const clear of [true, false]) { for (const q of cand) { const bx = [q[0] - w / 2, q[1] - h / 2, q[0] + w / 2, q[1] + h / 2]; if (bx[0] < 2 || bx[2] > W - 2 || bx[1] < 2 || bx[3] > H - leg - 2) continue; if (boxes.some(z => hit(bx, z)) || (clear && pbox.some(z => hit(bx, z)))) continue; best = { q, bx }; break; } if (best) break; }
+    if (!best) { const q = [Math.max(w / 2 + 2, Math.min(W - w / 2 - 2, tg.p[0] + 26 * u0[0])), Math.max(h / 2 + 2, Math.min(H - h / 2 - 2, tg.p[1] + 26 * u0[1]))]; best = { q, bx: [q[0] - w / 2, q[1] - h / 2, q[0] + w / 2, q[1] + h / 2] }; }
+    boxes.push(best.bx);
+    const q = best.q, dv = [tg.p[0] - q[0], tg.p[1] - q[1]], dl = Math.hypot(dv[0], dv[1]) || 1;
+    // leader from the tag edge to the contact, with an arrow head
+    const t0 = (() => { const sx = dv[0] ? (w / 2) / Math.abs(dv[0]) : Infinity, sy = dv[1] ? (h / 2) / Math.abs(dv[1]) : Infinity, sc = Math.min(sx, sy); return [q[0] + dv[0] * sc, q[1] + dv[1] * sc]; })();
+    const tip = [tg.p[0] - dv[0] / dl * 3, tg.p[1] - dv[1] / dl * 3], hd = [-dv[0] / dl, -dv[1] / dl], nn = [-hd[1], hd[0]];
+    o.push(`<g data-sf="${esc(tg.c.key)}" style="cursor:pointer"><path d="M${fx(t0[0])} ${fx(t0[1])}L${fx(tip[0])} ${fx(tip[1])}" stroke="${tg.col}" stroke-width="1.2"/><path d="M${fx(tip[0])} ${fx(tip[1])}l${fx(hd[0] * 6 + nn[0] * 3)} ${fx(hd[1] * 6 + nn[1] * 3)}M${fx(tip[0])} ${fx(tip[1])}l${fx(hd[0] * 6 - nn[0] * 3)} ${fx(hd[1] * 6 - nn[1] * 3)}" stroke="${tg.col}" stroke-width="1.2" fill="none"/>`);
+    o.push(`<rect x="${fx(best.bx[0])}" y="${fx(best.bx[1])}" width="${fx(w)}" height="${h}" rx="3" fill="${tg.isSel ? tg.col : '#fff'}" stroke="${tg.col}" stroke-width="1.2"/><text x="${fx(q[0])}" y="${fx(q[1] + 4)}" font-size="10.5" text-anchor="middle" fill="${tg.isSel ? '#fff' : '#0F172A'}">${esc(tg.txt)}</text><title>${esc(tg.c.la + ' — ' + tg.c.lb)}</title></g>`);
+  });
+  // legend
+  o.push(`<g font-size="9.5" fill="#334155"><rect x="8" y="${H - 18}" width="14" height="5" fill="#15803D"/><text x="26" y="${H - 13}">exact</text><rect x="62" y="${H - 18}" width="14" height="5" fill="#7C3AED"/><text x="80" y="${H - 13}">thin-wall (verify)</text><rect x="168" y="${H - 18}" width="14" height="5" fill="#B91C1C"/><text x="186" y="${H - 13}">n/a</text><rect x="210" y="${H - 18}" width="14" height="5" fill="#94A3B8"/><text x="228" y="${H - 13}">not connected</text>${csel ? `<rect x="306" y="${H - 21}" width="12" height="10" fill="#F59E0B" fill-opacity=".55" stroke="#33475E" stroke-width=".6"/><text x="322" y="${H - 13}">${(csel.G || csel.Gy || csel.Gx) ? 'separated group' : 'the two parts'} of #${cs.indexOf(csel) + 1}</text>` : ''}</g>`);
+  o.push('</svg>');
+  VIEW_T = VIEW;
+  return o.join('');
+}
+
+/* ---- Q tab additions ---- */
+function buildSF(pg) {
+  const S = ext('sf'); if (!S) return;
+  const L = sfIn(), asd = L.basis === 'ASD';
+  mkSec(pg, 'sfIn', 'Shear flow at the connections: shear force', body => {
+    fRow(body, 'Shear V<sub>y</sub> (force along +y)', numIn(() => sfIn().Vy, v => setSF('Vy', v), 'sf_Vy', { k: 'F' }), un('F'));
+    fRow(body, 'Shear V<sub>x</sub> (force along +x)', numIn(() => sfIn().Vx, v => setSF('Vx', v), 'sf_Vx', { k: 'F' }), un('F'));
+    fRow(body, 'Load basis', selIn([['LRFD', 'LRFD — factored V; design strength φR_n'], ['ASD', 'ASD — service V; allowable strength R_n/Ω']], () => sfIn().basis, v => setSF('basis', v), 'sf_basis', false), '');
+    body.appendChild(el('div', 'hint', 'V<sub>x</sub>, V<sub>y</sub> act through the shear centre (no torsion). State whether they are factored (LRFD) or service (ASD) loads with the load basis; it sets φ or Ω of the weld check and the label of the fastener strength. Saved with the project.'));
+  });
+  if (!S.contacts.length) { pg.appendChild(el('div', 'note', 'No parts touch each other: there are no connections to check.')); return; }
+  if (!S.ok) { pg.appendChild(el('div', 'errBox', 'Shear flow not computed: ' + esc(S.why))); return; }
+  const vals = S.contacts.map(c => sfVal(c));
+  if (!S.contacts.some(c => c.key === SFSEL)) { const i = vals.findIndex(v => isNum(v.q)); SFSEL = S.contacts[i >= 0 ? i : 0].key; }
+  mkSec(pg, 'sfTab', 'Shear flow q at each connection (contact between parts)', body => {
+    const d = el('div', 'sfDraw'); const nar = window.innerWidth < 600 && !PRMODE; d.innerHTML = sfSVG(S, nar ? 380 : 720, nar ? 360 : 420, PRMODE ? null : SFSEL); body.appendChild(d);
+    d.addEventListener('click', e => { const g = e.target.closest('[data-sf]'); if (g) { SFSEL = g.getAttribute('data-sf'); renderTab(true); } });
+    const rows = S.contacts.map((c, i) => {
+      const v = vals[i], g = c.geo, cs = connSummary(c, v);
+      const grpTxt = c.method === 'open' ? c.G.lbls.join(' + ') : ['x', 'y'].filter(k => (v.need || { x: false, y: true })[k] && c['G' + k]).map(k => c['G' + k].lbls.join(' + ') + ' (½)').join('; ') || (c.on ? '—' : '');
+      const qTxt = v.off ? 'not connected' : v.none ? '— (enter V)' : v.na ? 'n/a' : nf(v.q, 'q');
+      const r = { cls: c.key === SFSEL && !PRMODE ? 'sfSel' : '', cells: ['#' + (i + 1), c.la + ' — ' + c.lb, g.L > 0 ? nf(g.L, 'L') + (g.segs.length > 1 ? ' (' + g.segs.length + ' lines)' : '') : 'point', g.loc ? '(' + nf(g.loc[0], 'L', 4) + ', ' + nf(g.loc[1], 'L', 4) + ')' : '—', { h: esc(sfMethodTxt(c, v)) + (v.tw ? ' ' + VFY : '') }, grpTxt, { h: '<b>' + esc(qTxt) + '</b>' }, cs.txt, isNum(cs.dc) ? { cls: cs.dc <= 1 ? 'ok' : 'ng', h: nf(cs.dc, 'n', 3) } : '—'] };
+      return r;
+    });
+    const t = tblEl(['#', 'Parts', 'Contact length (' + un('L') + ')', 'Location (x, y) ' + un('L'), 'Method', 'Separated group', '|q| (' + un('q') + ')', 'Connector', 'D/C'], rows, { left: [1, 4, 5, 7] });
+    t.querySelectorAll('tr').forEach((tr, i) => { if (!i) return; const c = S.contacts[i - 1]; tr.style.cursor = 'pointer'; tr.title = 'Show the calculation of ' + c.la + ' — ' + c.lb; tr.addEventListener('click', () => { SFSEL = c.key; renderTab(true); }); });
+    body.appendChild(t);
+    body.appendChild(el('div', 'hint', 'q = longitudinal shear force per unit length transferred across the contact (all its lines together), elastic, plane sections. Click a row or a tag for its calculation; the separated group is highlighted. Contacts are the touching parts of the Torsion tab (tolerance ' + esc(nu(M.settings.tol, 'L')) + '); a contact switched off there is "not connected" here. ' + (S.ncomp > 1 ? '<b>The connected parts form ' + S.ncomp + ' separate pieces</b>: the section properties assume they act together (e.g. through lacing or battens not modelled); each q here is the equilibrium of the separated group alone. ' : '') + (S.holeLost.length ? 'Hole(s) ' + esc(S.holeLost.join(', ')) + ' lie in no part and are not in any group. ' : '')));
+  });
+  const list = PRMODE ? S.contacts : S.contacts.filter(c => c.key === SFSEL);
+  list.forEach(c => { const i = S.contacts.indexOf(c); mkSec(pg, 'sfDet' + (PRMODE ? i : ''), 'Connection #' + (i + 1) + ': ' + esc(c.la + ' — ' + c.lb), body => sfDetail(body, S, c, vals[i])); });
+  mkSec(pg, 'sfNot', 'Connector checks: what is and is not checked', body => {
+    body.appendChild(el('ul', 'manList', [
+      'Fasteners: the strength per fastener (' + (asd ? 'R<sub>n</sub>/Ω' : 'φR<sub>n</sub>') + ', shear, bearing / tear-out, slip-critical as applicable) is entered by you per AISC 360-16 J3 or AASHTO LRFD 6.13.2 ' + VFY2() + '. Required spacing s<sub>req</sub> = n<sub>l</sub>·' + (asd ? 'R<sub>n</sub>/Ω' : 'φR<sub>n</sub>') + '/q along the member; D/C = s/s<sub>req</sub>.',
+      'Fillet welds: ' + (asd ? 'R<sub>n</sub>/Ω' : 'φR<sub>n</sub>') + ' per unit length = ' + (asd ? '0.60F<sub>EXX</sub>·0.707w/Ω, Ω = 2.00' : 'φ·0.60F<sub>EXX</sub>·0.707w, φ = 0.75') + ' (AISC 360-16 J2.4 and Table J2.5, load parallel to the weld axis, no directional increase) ' + VFY2() + '. Intermittent welds: length L<sub>w</sub> at pitch p (L<sub>w</sub>/p of the length is welded).',
+      '<b>Not checked</b> (verify separately): minimum fillet weld size (AISC 360-16 Table J2.4) and maximum size along edges (J2.2b); minimum length of intermittent welds (J2.2b); base metal shear at the fusion face (J2.4, J4.2); minimum and maximum fastener spacing and edge distance (J3.3, J3.4, J3.5); connector spacing of built-up compression members (E6) and AASHTO LRFD 6.13.2.6 (maximum pitch of stitch and sealing fasteners); fatigue (AISC Appendix 3, AASHTO 6.6.1); combined shear and tension, prying, and local effects of concentrated loads.',
+      'q is per contact: a contact with several lines (e.g. both flange tips of a channel on a plate) carries q over all its lines together; n<sub>l</sub> and n<sub>w</sub> count the fastener lines and welds that cross this contact.'
+    ].map(x => '<li>' + x + '</li>').join('')));
+  });
+}
+function sfDetail(body, S, c, v) {
+  const g = c.geo, Lsf = sfIn(), asd = Lsf.basis === 'ASD';
+  body.appendChild(el('div', 'hint', 'Contact: ' + esc(c.la + ' — ' + c.lb) + '; ' + (g.L > 0 ? 'length ' + esc(nu(g.L, 'L')) + (g.segs.length > 1 ? ' over ' + g.segs.length + ' lines' : '') : 'point contact (length 0)') + (g.loc ? '; at (' + esc(nf(g.loc[0], 'L')) + ', ' + esc(nf(g.loc[1], 'L')) + ') ' + esc(un('L')) : '') + '.'));
+  if (!c.on) { body.appendChild(el('div', 'note', 'Not connected: this contact is switched off on the Torsion tab, so no shear is transferred here.')); return; }
+  const Dd = S.D, D8 = unitSys() === 'mm' ? 'mm⁸' : 'in⁸', gen = Math.abs(R.Ixy) > 1e-9 * Math.max(Math.abs(R.Ix), Math.abs(R.Iy));
+  const groupCalc = (G, half, comp, inA) => {
+    const holes = G.holes.length ? ' (holes ' + G.holes.join(', ') + ' subtracted)' : '';
+    if (G.ids.length > 1 || G.holes.length) {
+      const rows = G.pid.map(id => { const q = R.parts.find(p => p.pt.id === id); return [q.pt.lbl, String(+q.n.toPrecision(4)), nf(q.n * q.P.A, 'A'), nf(q.P.c[0], 'L'), nf(q.P.c[1], 'L'), nf(q.n * q.P.A * (q.P.c[1] - R.cy), 'S'), nf(q.n * q.P.A * (q.P.c[0] - R.cx), 'S')]; });
+      R.parts.filter(q => q.pt.hole && G.holes.includes(q.pt.lbl)).forEach(q => rows.push([q.pt.lbl + ' (hole)', String(+q.n.toPrecision(4)), nf(q.n * q.P.A, 'A'), nf(q.P.c[0], 'L'), nf(q.P.c[1], 'L'), nf(q.n * q.P.A * (q.P.c[1] - R.cy), 'S'), nf(q.n * q.P.A * (q.P.c[0] - R.cx), 'S')]));
+      rows.push({ cls: 'gov', cells: [{ h: '<b>Σ group</b>' }, '', { h: '<b>' + nf(G.A, 'A') + '</b>' }, nf(G.cx, 'L'), nf(G.cy, 'L'), { h: '<b>' + nf(G.Qx, 'S') + '</b>' }, { h: '<b>' + nf(G.Qy, 'S') + '</b>' }] });
+      body.appendChild(tblEl(['Part', 'n', 'n·A (' + un('A') + ')', 'x̄ᵢ', 'ȳᵢ', 'Q<sub>x</sub> = n·A(ȳᵢ − ȳ)', 'Q<sub>y</sub> = n·A(x̄ᵢ − x̄)'], rows, { left: [0] }));
+    }
+    const lines = [
+      TX`A_G=${nt(G.A, 'A')}\ \text{${un('A')}},\quad \bar{x}_G=${nt(G.cx, 'L')},\ \ \bar{y}_G=${nt(G.cy, 'L')}\ \text{${un('L')}}\quad(\bar{x}=${nt(R.cx, 'L')},\ \bar{y}=${nt(R.cy, 'L')})`,
+      TX`Q_x=A_G(\bar{y}_G-\bar{y})=${nt(G.Qx, 'S')}\ \text{${un('S')}},\qquad Q_y=A_G(\bar{x}_G-\bar{x})=${nt(G.Qy, 'S')}\ \text{${un('S')}}`];
+    const Vx = comp === 'x' || !comp ? Lsf.Vx : 0, Vy = comp === 'y' || !comp ? Lsf.Vy : 0, phi = (comp === 'x' ? 0 : Vy * G.phy) + (comp === 'y' ? 0 : Vx * G.phx);
+    const mmNote = unitSys() === 'mm' ? '\\ \\ (1\\ \\text{kN/mm}=1000\\ \\text{N/mm})' : '';
+    if (!gen && (!Vx || !Vy)) {
+      if (Vy || !Vx) lines.push(TX`q=${half ? '\\tfrac12' : ''}\left|\frac{V_yQ_x}{I_x}\right|=${half ? '\\tfrac12' : ''}\left|\frac{${ntp(Vy, 'F')}\times${ntp(G.Qx, 'S')}}{${nt(R.Ix, 'I')}}\right|=${nt(Math.abs(phi) / (half ? 2 : 1), 'q')}\ \text{${un('q')}}${mmNote}`);
+      else lines.push(TX`q=${half ? '\\tfrac12' : ''}\left|\frac{V_xQ_y}{I_y}\right|=${half ? '\\tfrac12' : ''}\left|\frac{${ntp(Vx, 'F')}\times${ntp(G.Qy, 'S')}}{${nt(R.Iy, 'I')}}\right|=${nt(Math.abs(phi) / (half ? 2 : 1), 'q')}\ \text{${un('q')}}${mmNote}`);
+    } else {
+      lines.push(TX`\Phi=\frac{\left(V_yI_y-V_xI_{xy}\right)Q_x+\left(V_xI_x-V_yI_{xy}\right)Q_y}{I_xI_y-I_{xy}^2}`);
+      lines.push(TX`=\frac{\left(${ntp(Vy, 'F')}\times${nt(R.Iy, 'I')}-${ntp(Vx, 'F')}\times${ntp(R.Ixy, 'I')}\right)\times${ntp(G.Qx, 'S')}+\left(${ntp(Vx, 'F')}\times${nt(R.Ix, 'I')}-${ntp(Vy, 'F')}\times${ntp(R.Ixy, 'I')}\right)\times${ntp(G.Qy, 'S')}}{${nt(Dd * uf('I'), 'I')}\ \text{${D8}}}=${nt(phi, 'q')}\ \text{${un('q')}}${mmNote}`);
+      lines.push(TX`${half ? 'q=\\tfrac12\\left|\\Phi\\right|' : 'q=\\left|\\Phi\\right|'}=${nt(Math.abs(phi) / (half ? 2 : 1), 'q')}\ \text{${un('q')}}`);
+    }
+    return { lines, holes, phi };
+  };
+  if (c.method === 'open') {
+    const G = c.G, r = groupCalc(G, false, null);
+    calc(body, { title: 'Separated group: ' + esc(G.lbls.join(' + ') + r.holes), ref: 'equilibrium of the group: q = dF/dz = V·Q/I (elastic); general (I_xy ≠ 0): e.g. Boresi and Schmidt', lines: r.lines, result: isNum(v.q) ? 'q = ' + nu(v.q, 'q') : v.none ? 'enter V_x or V_y' : '' });
+    body.appendChild(el('div', 'hint', 'Cutting this contact separates the parts into two groups; the smaller one (by transformed area) is used: ' + esc(G.lbls.join(' + ')) + ' (the other group, ' + esc(c.other.lbls.join(' + ')) + ', gives the same |q|' + (S.ncomp > 1 ? ' only if the whole piece carries no net longitudinal force' : '') + '). Q = first moment of the group\'s transformed area about the centroidal axes' + (R.anyN ? ' (n·A)' : '') + '.'));
+  } else {
+    const need = v.need || { x: !!Lsf.Vx, y: !!Lsf.Vy };
+    ['y', 'x'].forEach(k => {
+      if (!need[k]) return;
+      const h = c.how[k], V = k === 'y' ? 'V<sub>y</sub>' : 'V<sub>x</sub>';
+      if (h === 'sym') {
+        const G = c['G' + k], r = groupCalc(G, true, k), pr = c['pair' + k];
+        calc(body, { title: 'Closed loop, ' + V + ': symmetric pair with ' + esc(pr.la + ' — ' + pr.lb + '; group ' + G.lbls.join(' + ') + r.holes), ref: 'equilibrium + symmetry (each of the two contacts carries half)', lines: r.lines, result: 'q (from V_' + k + ') = ' + nu(Math.abs(r.phi) / 2, 'q') });
+        body.appendChild(el('div', 'hint', 'This contact and its mirror image (' + esc(pr.la + ' — ' + pr.lb) + ') about the ' + (k === 'y' ? 'vertical' : 'horizontal') + ' centroidal axis together separate ' + esc(G.lbls.join(' + ')) + '. The section, its connections and the load ' + V + ' are symmetric about that axis, so each of the two carries half of the group\'s V·Q/I.'));
+      } else if (h === 'tw') {
+        const W = S.tw(), val = k === 'y' ? Lsf.Vy * c.ky : Lsf.Vx * c.kx;
+        calc(body, { title: 'Closed cell, ' + V + ': thin-wall shear flow on the centre-line model', ref: 'thin-walled closed sections (e.g. Megson, Aircraft Structures, Ch. 17): q = q_open + q_0, ∮q/t ds = 0', lines: [
+          TX`q(s)=q_0-\int_0^s t\,\frac{\partial\sigma}{\partial z}\,ds,\qquad \frac{\partial\sigma}{\partial z}=\frac{\left(V_yI_{xy}-V_xI_x\right)x+\left(V_xI_{xy}-V_yI_y\right)y}{I_xI_y-I_{xy}^2}`,
+          TX`\text{node balance at every junction};\qquad \oint\frac{q}{t}\,ds=0\ \text{around each of the ${W.nC} independent cell(s) (shear through the shear centre)}`,
+          TX`q\ \text{(flow from ${texEsc(c.la)} into ${texEsc(c.lb)} at the junction)}=${nt(Math.abs(val), 'q')}\ \text{${un('q')}}`], result: 'q (from V_' + k + ') = ' + nu(Math.abs(val), 'q'), badge: VFY });
+        body.appendChild(el('div', 'hint', 'Statically indeterminate: ' + esc(c.la) + ' and ' + esc(c.lb) + ' are also connected through the other walls of the cell. ' + esc(c.why[k].replace(/^symmetry: /, 'Not by symmetry: ')) + '. Centre-line model of the Torsion tab (plates on their mid-lines, extended to the junctions); each part\'s load is scaled so that its total equals the exact n·A·(V·Q/I) term of the part, which makes every open contact exact; the circulatory flow comes from zero twist. Approximate — verify.'));
+      } else {
+        const tot = c.tot, Vv = k === 'y' ? Lsf.Vy : Lsf.Vx, tq = Math.abs(Vv * (k === 'y' ? tot.g.phy : tot.g.phx));
+        body.appendChild(el('div', 'errBox', '<b>' + V + ': n/a — closed loop, not computed.</b> ' + esc(c.la) + ' and ' + esc(c.lb) + ' are also connected through other parts (statically indeterminate). ' + esc(c.why[k].replace(/^symmetry: /, 'By symmetry: ')) + '.'));
+        body.appendChild(el('div', 'note', 'For reference: the total transfer into ' + esc(tot.g.lbls.join(' + ')) + ' through all its connections (' + esc(tot.via.join(', ')) + ') is ' + esc(nu(tq, 'q')) + ' (' + V + '·Q/I of ' + esc(tot.g.lbls.join(' + ')) + '); how it divides between them is not computed. If a contact is not a connection (e.g. a web plate bearing on a flange plate without a weld), switch it off on the Torsion tab; with symmetric connections the tool can then split the flow.'));
+      }
+    });
+    if (need.x && need.y && isNum(v.q)) body.appendChild(el('div', 'okBox', 'Both components: q = |' + esc(nf(Lsf.Vy * c.ky, 'q')) + (Lsf.Vx * c.kx < 0 ? ' − ' : ' + ') + esc(nf(Math.abs(Lsf.Vx * c.kx), 'q')) + '| = <b>' + esc(nu(v.q, 'q')) + '</b> (signs: transfer into ' + esc(c.lb) + ')'));
+  }
+  if (v.none) return;
+  // connector check
+  const C = connIn(c.key), key = c.key, sk = 'sfc_' + key.replace(/[^\w]/g, '_') + '_';
+  const box = el('div', 'sfConn');
+  fRow(box, 'Connector', selIn([['none', 'none (q only)'], ['bolt', 'fasteners (bolts / rivets)'], ['weld', 'fillet welds']], () => connIn(key).type, x => setConn(key, 'type', x), sk + 'type', false), '');
+  if (C.type === 'bolt') {
+    fRow(box, 'Fastener lines crossing the contact n<sub>l</sub>', numIn(() => connIn(key).nl, x => setConn(key, 'nl', x), sk + 'nl', { k: 'n', min: 0 }), '');
+    fRow(box, (asd ? 'Allowable strength per fastener R<sub>n</sub>/Ω' : 'Design strength per fastener φR<sub>n</sub>') + ' (you supply it, AISC J3 / AASHTO 6.13.2)', numIn(() => connIn(key).Rn, x => setConn(key, 'Rn', x), sk + 'Rn', { k: 'F', blank: true, ph: 'required' }), un('F'));
+    fRow(box, 'Provided spacing s (optional)', numIn(() => connIn(key).s, x => setConn(key, 's', x), sk + 's', { k: 'L', blank: true, ph: 'none' }), un('L'));
+  } else if (C.type === 'weld') {
+    fRow(box, 'Number of welds n<sub>w</sub>', selIn([['1', '1'], ['2', '2']], () => String(connIn(key).nw === 1 ? 1 : 2), x => setConn(key, 'nw', +x), sk + 'nw', false), '');
+    fRow(box, 'Electrode F<sub>EXX</sub>', numIn(() => connIn(key).Fexx, x => setConn(key, 'Fexx', x), sk + 'Fexx', { k: 'tau', min: 0 }), un('tau'));
+    fRow(box, 'Provided leg size w (optional)', numIn(() => connIn(key).w, x => setConn(key, 'w', x), sk + 'w', { k: 'L', blank: true, ph: 'none' }), un('L'));
+    chkRow(box, 'Intermittent welds', chkIn(() => connIn(key).int, x => setConn(key, 'int', x), sk + 'int', false));
+    if (C.int) {
+      fRow(box, 'Weld segment length L<sub>w</sub>', numIn(() => connIn(key).Lw, x => setConn(key, 'Lw', x), sk + 'Lw', { k: 'L', blank: true, ph: 'required' }), un('L'));
+      fRow(box, 'Pitch p (centre to centre)', numIn(() => connIn(key).p, x => setConn(key, 'p', x), sk + 'p', { k: 'L', blank: true, ph: 'required' }), un('L'));
+    }
+  }
+  body.appendChild(box);
+  if (C.type === 'none') return;
+  if (!isNum(v.q)) { body.appendChild(el('div', 'note', 'Connector check: q is not available for this contact.')); return; }
+  const k = connCheck(key, v.q);
+  if (C.type === 'bolt') {
+    if (!k.ok) { body.appendChild(el('div', 'note', 'Enter ' + (asd ? 'R<sub>n</sub>/Ω' : 'φR<sub>n</sub>') + ' per fastener and n<sub>l</sub> &gt; 0.')); return; }
+    const Rs = asd ? 'R_n/\\Omega' : '\\phi R_n', lines = [TX`s_{req}=\frac{n_l\,${Rs}}{q}=\frac{${nt(C.nl, 'n')}\times${nt(C.Rn, 'F')}}{${nt(v.q, 'q')}}=${nt(k.sreq, 'L')}\ \text{${un('L')}}${unitSys() === 'mm' ? '\\ \\ (\\text{kN}\\to\\text{N}:\\times1000)' : ''}`];
+    if (isNum(k.dc)) lines.push(TX`D/C=\frac{s}{s_{req}}=\frac{${nt(C.s, 'L')}}{${nt(k.sreq, 'L')}}=${nt(k.dc, 'n', 3)}`);
+    calc(body, { title: 'Fasteners: required spacing along the member', ref: 'strength per fastener supplied by the user (AISC 360-16 J3 / AASHTO LRFD 6.13.2) — verify', lines, result: isNum(k.dc) ? 'D/C = ' + nf(k.dc, 'n', 3) + (k.dc <= 1 ? ' — OK' : ' — NG') : 's_req = ' + nu(k.sreq, 'L'), status: isNum(k.dc) && k.dc > 1 ? 'ng' : '', badge: VFY2('Strength per fastener is your input; spacing limits not checked') });
+  } else {
+    const F = asd ? `\\frac{0.60F_{EXX}\\times0.707}{\\Omega}=\\frac{0.60\\times${nt(k.F, 'tau')}\\times0.707}{2.00}` : `\\phi\\,0.60F_{EXX}\\times0.707=0.75\\times0.60\\times${nt(k.F, 'tau')}\\times0.707`;
+    const lines = [TX`${asd ? 'r_a' : 'r_n'}=${F}=${nt(k.unit, 'tau')}\ \text{${un('tau')}}\quad(\text{per unit length per unit leg size})`];
+    const iOK = C.int && isNum(C.Lw) && isNum(C.p) && C.Lw > 0 && C.p > 0;   // intermittent with both inputs (else taken as continuous)
+    if (iOK) lines.push(TX`\text{intermittent: } L_w/p=${nt(C.Lw, 'L')}/${nt(C.p, 'L')}=${nt(k.frac, 'n', 4)}`);
+    lines.push(TX`w_{req}=\frac{q}{n_w\,${asd ? 'r_a' : 'r_n'}${iOK ? '\\,(L_w/p)' : ''}}=\frac{${nt(v.q, 'q')}}{${k.nw}\times${nt(k.unit, 'tau')}${iOK ? '\\times' + nt(k.frac, 'n', 4) : ''}}=${nt(k.wreq, 'L')}\ \text{${un('L')}}${unitSys() === 'mm' ? '\\ \\ (\\text{N/mm}\\div\\text{MPa}=\\text{mm})' : ''}`);
+    if (isNum(k.dc)) lines.push(TX`D/C=\frac{w_{req}}{w}=\frac{${nt(k.wreq, 'L')}}{${nt(C.w, 'L')}}=${nt(k.dc, 'n', 3)}`);
+    const n16 = Math.max(1, Math.ceil(k.wreq * 16 - 1e-9)), g16 = [16, 8, 4, 2, 1].find(d => n16 % d === 0), sx = unitSys() === 'mm' ? '' : ' (' + (n16 / g16) + '/' + (16 / g16) + ' in rounded up to 1/16)';
+    calc(body, { title: 'Fillet welds' + (C.int ? ' (intermittent)' : ' (continuous)') + ': required leg size', ref: 'AISC 360-16 J2.4, Table J2.5: ' + (asd ? 'Ω = 2.00' : 'φ = 0.75') + ', R_n = 0.60F_EXX·A_we, throat 0.707w — verify', lines, result: (isNum(k.dc) ? 'D/C = ' + nf(k.dc, 'n', 3) + (k.dc <= 1 ? ' — OK' : ' — NG') + '; ' : '') + 'w_req = ' + nu(k.wreq, 'L') + sx, status: isNum(k.dc) && k.dc > 1 ? 'ng' : '', badge: VFY2('Weld strength as understood for AISC 360-16 J2.4; minimum size (Table J2.4) and base metal not checked') });
+    if (C.int && (!isNum(C.Lw) || !isNum(C.p) || !(C.Lw > 0) || !(C.p > 0))) body.appendChild(el('div', 'note', 'Intermittent: enter L<sub>w</sub> and p (until then the weld is taken as continuous).'));
+    else if (C.int && C.Lw > C.p) body.appendChild(el('div', 'note', 'L<sub>w</sub> &gt; p: taken as continuous (L<sub>w</sub>/p = 1).'));
+  }
+}
+const texEsc = s => String(s).replace(/[\\{}$&#^_%~]/g, ' ');   // a part label inside \text{…}
+
 /* ---- Validation ---- */
 let VAL = null;
 function valSummary() { try { if (!VAL) VAL = runValidation(); return VAL.every(v => v.ok); } catch (e) { return false; } }
@@ -5661,6 +6159,57 @@ function runValidation() {
       const ang2 = (hx, hy, rot, mir) => { const pt = { type: 'shape', p: { fam: 'L', name: 'L3X3X3/8' }, x: 0, y: 0, rot, mir }, hl = SPC.partGlobal(pt).refPts.heel; pt.x = hx - hl[0]; pt.y = hy - hl[1]; return pt; };
       const Rc = SPC.analyze(vModel(SPC.TEMPLATES.box.f({ bf: 12, tf: 0.75, h: 16, tw: 0.5, bw: 10 }).concat([ang2(4.5, 8, 180, false), ang2(-4.5, 8, 180, true), ang2(4.5, -8, 0, true), ang2(-4.5, -8, 0, false)])));
       add(g, 'box of 4 plates with L3X3X3/8 in the 4 inside corners: one closed cell (the void); the 4 corner loops are junctions', Rc.tors.comps[0].cells.length, 1, 0, 'topology', ''); }
+    // 18 shear flow at the connections (P2b): hand calculations, independent of the shear-flow code
+    { const g = '18. Shear flow at the connections (P2b)', sfc = (Rr, la, lb) => SPC.shearFlow(Rr, 0.001).contacts.find(c => (c.la === la && c.lb === lb) || (c.la === lb && c.lb === la));
+      const qOf = (c, Vx, Vy) => Math.abs((Vx ? Vx * c.kx : 0) + (Vy ? Vy * c.ky : 0));
+      // (a) cover-plated W14X90 (plate model) + PL 14.5 × 1 on the top flange, V_y = 100 kip: q = V·Q/I of the plate
+      const w = SPC.shapeRec('W', 'W14X90'), d = w.d, bf = w.bf, tf = w.tf, tw = w.tw, hw = d - 2 * tf;
+      const Aw = 2 * bf * tf + hw * tw, Iw = (bf * d ** 3 - (bf - tw) * hw ** 3) / 12, Ap = 14.5, yp = d / 2 + 0.5;
+      const A1 = Aw + Ap, y1 = Ap * yp / A1, I1 = Iw + Aw * y1 * y1 + 14.5 / 12 + Ap * (yp - y1) ** 2, Q1 = Ap * (yp - y1);
+      const Ra = SPC.analyze(vModel([{ lbl: 'W1', type: 'shape', p: { fam: 'W', name: 'W14X90' }, x: 0, y: 0 }, { lbl: 'PL1', type: 'plate', p: { b: 14.5, t: 1 }, x: 0, y: yp }])), ca = sfc(Ra, 'W1', 'PL1');
+      add(g, 'cover-plated W14X90 (plate model) + PL 14.5 × 1, V_y = 100 kip: q = V·Q/I, Q = 14.5 × (7.5 − ȳ), ȳ = 14.5 × 7.5/A', qOf(ca, 0, 100), 100 * Q1 / I1, tight, 'hand calc', 'kip/in');
+      add(g, 'same: contact length = plate on the flange = 14.5 in (one line)', ca.geo.L, 14.5, tight, 'geometry', 'in');
+      // (b) plate girder: top flange 16 × 1, web 40 × 1/2, bottom flange 16 × 1-1/4; V_y = 150 kip; two E70 fillet welds
+      const Ag = 16 + 20 + 20, yg = (16 * 20.5 - 20 * 20.625) / Ag, Ig = 16 / 12 + 16 * (20.5 - yg) ** 2 + 0.5 * 40 ** 3 / 12 + 20 * yg ** 2 + 16 * 1.25 ** 3 / 12 + 20 * (20.625 + yg) ** 2, Qt = 16 * (20.5 - yg);
+      const Rg = SPC.analyze(vModel(SPC.TEMPLATES.girder.f({ btf: 16, ttf: 1, D: 40, tw: 0.5, bbf: 16, tbf: 1.25 }))), cg = SPC.shearFlow(Rg, 0.001).contacts.find(c => c.geo.loc[1] > 0), qg = 150 * Qt / Ig;
+      add(g, 'plate girder 16 × 1 / 40 × 1/2 / 16 × 1-1/4, V_y = 150 kip: top flange–web q = V·Q/I, Q = 16 × (20.5 − ȳ)', qOf(cg, 0, 150), qg, tight, 'hand calc', 'kip/in');
+      add(g, 'same, 2 fillet welds E70 (LRFD): w_req = q/(2 × 0.75 × 0.60 × 70 × 0.707) = q/44.541', qg / (2 * 0.75 * 0.60 * 70 * 0.707), qOf(cg, 0, 150) / 44.541, 1e-12, 'AISC 360-16 J2.4 (hand calc)', 'in');
+      // (c) unsymmetric angle pair, I_xy ≠ 0: L6X4X1/2 (long leg up, heel at 0,0) and L4X4X1/2 mirrored, backs touching on x = 0
+      const rect = (x0, y0, x1, y1) => ({ A: (x1 - x0) * (y1 - y0), x: (x0 + x1) / 2, y: (y0 + y1) / 2, Ix: (x1 - x0) * (y1 - y0) ** 3 / 12, Iy: (y1 - y0) * (x1 - x0) ** 3 / 12 });
+      const L6 = [rect(0, 0, 0.5, 6), rect(0.5, 0, 4, 0.5)], L4 = [rect(-0.5, 0, 0, 4), rect(-4, 0, -0.5, 0.5)], all = L6.concat(L4);
+      const Ac = all.reduce((s, r) => s + r.A, 0), xc = all.reduce((s, r) => s + r.A * r.x, 0) / Ac, yc = all.reduce((s, r) => s + r.A * r.y, 0) / Ac;
+      const Ixc = all.reduce((s, r) => s + r.Ix + r.A * (r.y - yc) ** 2, 0), Iyc = all.reduce((s, r) => s + r.Iy + r.A * (r.x - xc) ** 2, 0), Ixyc = all.reduce((s, r) => s + r.A * (r.x - xc) * (r.y - yc), 0);
+      const Qx4 = L4.reduce((s, r) => s + r.A * (r.y - yc), 0), Qy4 = L4.reduce((s, r) => s + r.A * (r.x - xc), 0), Dc = Ixc * Iyc - Ixyc * Ixyc, Vx = 20, Vy = 50;
+      const angAt3 = (name, h, mir) => { const pt = { type: 'shape', p: { fam: 'L', name }, x: 0, y: 0, rot: 0, mir }, hl = SPC.partGlobal(pt).refPts.heel; pt.x = h[0] - hl[0]; pt.y = h[1] - hl[1]; return pt; };
+      const Rc = SPC.analyze(vModel([Object.assign(angAt3('L6X4X1/2', [0, 0], false), { lbl: 'L6' }), Object.assign(angAt3('L4X4X1/2', [0, 0], true), { lbl: 'L4' })])), cc = sfc(Rc, 'L6', 'L4');
+      add(g, 'L6X4X1/2 + L4X4X1/2 back to back: I_xy (rectangles by hand) ≠ 0', Rc.Ixy, Ixyc, tight, 'hand calc', 'in⁴');
+      add(g, 'same, V_x = 20, V_y = 50 kip: q = |(V_yI_y − V_xI_xy)Q_x + (V_xI_x − V_yI_xy)Q_y|/(I_xI_y − I_xy²), Q of L4X4X1/2', qOf(cc, Vx, Vy), Math.abs(((Vy * Iyc - Vx * Ixyc) * Qx4 + (Vx * Ixc - Vy * Ixyc) * Qy4) / Dc), tight, 'hand calc (rectangles)', 'kip/in');
+      // sign check against the Stresses tab: transfer into L4X4 = dF/dz = ∫σ dA over L4X4 for M_x = V_y·(1 in), M_y = V_x·(1 in) (σ linear: exact over each rectangle)
+      const St = SPC.stress(Rc, 0, Vy, Vx), dF = L4.reduce((s, r) => s + r.A * St.sig([r.x, r.y]), 0), into = (cc.lb === 'L4' ? 1 : -1) * (Vx * cc.kx + Vy * cc.ky);
+      add(g, 'same: signed transfer into L4X4X1/2 = dF/dz = ∫σ dA over it with the Stresses-tab σ for M_x = V_y·z, M_y = V_x·z (combined V_x, V_y sign check)', into, dF, tight, 'equilibrium (Stresses tab)', 'kip/in');
+      // (d) box of 4 plates (case 4), V_y = 100 kip: each web–flange contact carries half of the flange's V·Q/I (symmetry)
+      const Rb = SPC.analyze(vModel(SPC.TEMPLATES.box.f({ bf: 10, tf: 0.5, h: 5, tw: 0.375, bw: 10 }))), Ib = 10 * 6 ** 3 / 12 - 9.25 * 5 ** 3 / 12, Qf = 10 * 0.5 * 2.75;
+      const Sb = SPC.shearFlow(Rb, 0.001), cb = Sb.contacts[0];
+      add(g, 'box 10 × 6 of 4 plates (flanges 1/2, webs 3/8), V_y = 100 kip: web–flange q = ½·V·Q_f/I, Q_f = 10 × 0.5 × 2.75 = 13.75, I = 83.646', qOf(cb, 0, 100), 0.5 * 100 * Qf / Ib, tight, 'symmetry + hand calc', 'kip/in');
+      const twb = Sb.tw().contact(cb.a, cb.b);
+      add(g, 'same contact by the closed-cell thin-wall solution (zero twist) = the symmetric value', Math.abs(100 * twb.y), 0.5 * 100 * Qf / Ib, tight, 'symmetry', 'kip/in');
+      // (e) box with unequal webs (left 3/8, right 3/4; flanges 10 × 1/2, 6 out-to-out): single cell, hand solution with the cell cut on the top flange
+      const B5 = SPC.TEMPLATES.box.f({ bf: 10, tf: 0.5, h: 5, tw: 0.375, bw: 10 }); B5[3].p = { b: 0.75, t: 5 }; B5[3].x = 5 - 0.375;
+      const Ru = SPC.analyze(vModel(B5)), Iu = 2 * (10 * 0.125 / 12 + 5 * 2.75 ** 2) + (0.375 + 0.75) * 125 / 12, k = 100 / Iu;
+      const xL = -5 + 0.1875, xR = 5 - 0.375, a = xR - xL, aL = 0.1875, aR = 0.375, h = 5.5, t1 = 0.375, t2 = 0.75, tfl = 0.5, cc5 = tfl * k * 2.75;
+      const qT0 = -(cc5 * a * a / tfl + cc5 * (a + aL) * h / t1 - cc5 * aR * h / t2) / (2 * a / tfl + h / t1 + h / t2);
+      const qLw = Math.abs(qT0 + cc5 * (a + aL)), qRw = Math.abs(qT0 - cc5 * aR);
+      const Su = SPC.shearFlow(Ru, 0.001), top = Su.contacts.filter(c => c.geo.loc[1] > 0).sort((p, q) => p.geo.loc[0] - q.geo.loc[0]);
+      add(g, 'box with webs 3/8 (left) and 3/4 (right), V_y = 100 kip, thin-wall single cell: top flange → left web q (hand: cut + ∮q/t ds = 0)', qOf(top[0], 0, 100), qLw, 1e-9, 'hand calc (thin-wall)', 'kip/in');
+      add(g, 'same: top flange → right web q', qOf(top[1], 0, 100), qRw, 1e-9, 'hand calc (thin-wall)', 'kip/in');
+      add(g, 'same: the two add up to the flange\'s V·Q/I = 100 × 13.75/I (equilibrium)', qOf(top[0], 0, 100) + qOf(top[1], 0, 100), 100 * 13.75 / Iu, tight, 'equilibrium', 'kip/in');
+      // (f) transformed section and hole: cover plate with n = 2; girder top flange with a Ø1 hole
+      const Rn = SPC.analyze(vModel([{ lbl: 'W1', type: 'shape', p: { fam: 'W', name: 'W14X90' }, x: 0, y: 0 }, { lbl: 'PL1', type: 'plate', p: { b: 14.5, t: 1 }, x: 0, y: yp, n: 2 }])), cn = sfc(Rn, 'W1', 'PL1');
+      const A2 = Aw + 2 * Ap, y2 = 2 * Ap * yp / A2, I2 = Iw + Aw * y2 * y2 + 2 * 14.5 / 12 + 2 * Ap * (yp - y2) ** 2;
+      add(g, 'cover plate with n = 2 (transformed): q = V·(n·A·d)/I_tr, V_y = 100 kip', qOf(cn, 0, 100), 100 * 2 * Ap * (yp - y2) / I2, tight, 'hand calc', 'kip/in');
+      const Rh = SPC.analyze(vModel(SPC.TEMPLATES.girder.f({ btf: 16, ttf: 1, D: 40, tw: 0.5, bbf: 16, tbf: 1.25 }).concat([{ type: 'round', p: { d: 1 }, x: 4, y: 20.5, hole: true }, { type: 'round', p: { d: 1 }, x: -4, y: 20.5, hole: true }]))), ch = SPC.shearFlow(Rh, 0.001).contacts.find(c => c.geo.loc[1] > 0);
+      const Ah = 2 * Math.PI / 4, Agh = Ag - Ah, ygh = (16 * 20.5 - Ah * 20.5 - 20 * 20.625) / Agh, Igh = Ig + Ag * yg * yg - Ah * (1 / 16 + 20.5 ** 2) - Agh * ygh * ygh;
+      add(g, 'plate girder with two Ø1 holes in the top flange (net section), V_y = 150 kip: q = V·Q_net/I_net, Q_net = (16 − 2π/4)(20.5 − ȳ)', qOf(ch, 0, 150), 150 * (16 - Ah) * (20.5 - ygh) / Igh, tight, 'hand calc', 'kip/in'); }
   } catch (e) { out.push({ grp: 'error', what: 'Validation failed to run: ' + e.message, tool: NaN, ref: NaN, tol: 0, d: NaN, ok: false, src: '' }); }
   return out;
 }
@@ -5711,6 +6260,12 @@ function buildManual(pg) {
     'Not modelled in torsion: holes (gross section used; a note says so), custom polygons, the modulus ratio n.']);
   H('Q and shear flow');
   UL(['Q = first moment, about the centroidal axis, of the area on one side of a straight cut right across the section (above a horizontal cut, right of a vertical cut). q = V·Q/I for symmetric sections; with I<sub>xy</sub> ≠ 0 the general formula q = V<sub>y</sub>(I<sub>y</sub>Q<sub>x</sub> − I<sub>xy</sub>Q<sub>y</sub>)/(I<sub>x</sub>I<sub>y</sub> − I<sub>xy</sub>²). τ<sub>avg</sub> = q/b with b = material length on the cut.']);
+  H('Shear flow at the connections (Phase 2b)');
+  UL(['<b>Connections</b> = the contacts of the Torsion tab (parts touching within the contact tolerance); a contact switched off there is not connected. For each: the parts, the contact length (the boundary pieces where the two parts touch; several lines are added up), and its location (middle of the longest piece). Shear V<sub>x</sub>, V<sub>y</sub> (force components along +x, +y, through the shear centre) on the Q tab; LRFD (factored) or ASD (service).',
+    '<b>Sign and formula.</b> Plane sections, elastic. A group of parts G cut free along its contacts carries F<sub>G</sub> = ∫σ dA; with dM<sub>x</sub>/dz = V<sub>y</sub> and dM<sub>y</sub>/dz = −V<sub>x</sub> (moment vectors, z out of the page), dF<sub>G</sub>/dz = −Φ(G), Φ = [(V<sub>y</sub>I<sub>y</sub> − V<sub>x</sub>I<sub>xy</sub>)Q<sub>x</sub> + (V<sub>x</sub>I<sub>x</sub> − V<sub>y</sub>I<sub>xy</sub>)Q<sub>y</sub>]/(I<sub>x</sub>I<sub>y</sub> − I<sub>xy</sub>²), Q<sub>x</sub> = Σn·A(ȳ<sub>i</sub> − ȳ), Q<sub>y</sub> = Σn·A(x̄<sub>i</sub> − x̄) of the group (transformed areas; holes in the part they lie in). This is the same expression as the Q cut (q = V<sub>y</sub>(I<sub>y</sub>Q<sub>x</sub> − I<sub>xy</sub>Q<sub>y</sub>)/D) and reduces to q = VQ/I for a symmetric section. The flows through the contacts of G add up to dF<sub>G</sub>/dz; q = |transfer| is reported.',
+    '<b>Open</b> (cutting the contact splits the connected parts into two groups): q = |Φ| of the smaller group (both give the same value for one connected piece). Exact.',
+    '<b>Closed loop</b> (the parts stay connected through other parts; statically indeterminate): (1) <b>symmetry</b> — if the section, its connections and the load component are symmetric about the vertical (V<sub>y</sub>) or horizontal (V<sub>x</sub>) centroidal axis, and the contact and its mirror image together separate a group that maps onto itself, each carries ½|Φ| of that group (exact; e.g. the web–flange contacts of a symmetric 4-plate box); (2) <b>thin-wall closed-section shear flow</b> on the centre-line model of the Torsion tab: q(s) = q<sub>0</sub> − ∫t·∂σ/∂z ds on every element, flow balance at every node and zero twist ∮q/t ds = 0 around every independent cell (shear through the shear centre); each part\'s load is corrected by a constant per unit area so that its total equals the exact n·A term (then every open contact is exact); the flow entering the part at the junction where only the two parts meet is the result — approximate, "thin-wall — verify"; (3) otherwise <b>n/a — closed loop, not computed</b>, with the total through all connections of the smaller part for reference (e.g. angles bolted to a web and to a flange plate that also touches the web: switch off a contact that is not a connection).',
+    '<b>Connector check</b> (optional, per contact): fasteners — n<sub>l</sub> lines and the strength per fastener (φR<sub>n</sub> or R<sub>n</sub>/Ω) supplied by the user (AISC 360-16 J3 / AASHTO LRFD 6.13.2), s<sub>req</sub> = n<sub>l</sub>·φR<sub>n</sub>/q, D/C = s/s<sub>req</sub>; fillet welds — n<sub>w</sub> = 1 or 2, F<sub>EXX</sub> (default 70 ksi), φ = 0.75 (LRFD) or Ω = 2.00 (ASD), strength per unit length 0.60F<sub>EXX</sub>·0.707w (AISC 360-16 J2.4, Table J2.5 — verify), w<sub>req</sub> = q/(n<sub>w</sub>·φ·0.60F<sub>EXX</sub>·0.707), intermittent ×p/L<sub>w</sub>, D/C = w<sub>req</sub>/w. Not checked: minimum and maximum weld size, intermittent weld length, base metal, fastener spacing and edge limits (J3.3–J3.5), built-up member connector spacing (E6, AASHTO 6.13.2.6), fatigue.']);
   H('Weight, coating area, buckling parameters, kern (Phase 2a)');
   UL(['<b>Weight</b> per length = Σ A<sub>i</sub>·ρ<sub>i</sub> (Properties tab). Density per part (Part properties → Material; default steel 490 lb/ft³; presets aluminum 169, concrete 150, timber 35 lb/ft³ — typical values, editable). The modulus ratio n does not change the weight. Holes remove weight at the density of the solid part they lie in. Parts with "AISC tabulated" use the tabulated A.',
     '<b>Coating (paint) area</b>: exposed perimeter = all boundary of the union of the material (closed cells and holes included; faces where parts touch within the contact tolerance excluded); outside perimeter = the outer boundary only. Area per length = perimeter × length. Round parts exact; rectangular-tube and HSS corners as the 24 chords the tool uses; rolled shapes as the plate model (no fillets).',
@@ -5726,7 +6281,7 @@ function buildManual(pg) {
     '<b>Steps:</b> UCS World → REGION (select the objects on SPC-PARTS, SPC-PARTS-N, SPC-HOLES) → UNION the material regions (touching parts union cleanly; separate pieces become one composite region) → SUBTRACT the hole regions → MASSPROP. Compare Area, Centroid, Moments of inertia, Product of inertia and Principal moments.',
     '<b>Differences to expect:</b> MASSPROP is unweighted (compare with every n = 1, or use the unweighted values in the notes); rolled shapes are exported as their plate model (the AISC tabulated option is not in the geometry); overlapping parts (possible with "Prevent overlap" off, after a rotate or flip, or in an older file) are merged once by UNION but counted twice by the tool — the export dialog warns. MASSPROP does not report J, C<sub>w</sub>, Z, S, the shear centre or Q.']);
   H('Saved data');
-  UL([`<b>Files:</b> Save file writes JSON with <code>_schema: "${SCHEMA}"</code>, <code>version: ${SCHEMA_VER}</code>; dimensions are always stored in inches. Open file refuses another schema or a newer version. Optional fields (Phase 2a, written only once used): a part's density <code>rho</code> (lb/ft³; absent = steel 490), the stress loads <code>stress: {P, Mx, My}</code> (kip, kip-in; absent = 0), and the overlay switches <code>settings.showKern</code>, <code>settings.showEllipse</code>.`,
+  UL([`<b>Files:</b> Save file writes JSON with <code>_schema: "${SCHEMA}"</code>, <code>version: ${SCHEMA_VER}</code>; dimensions are always stored in inches. Open file refuses another schema or a newer version. Optional fields (Phase 2a, written only once used): a part's density <code>rho</code> (lb/ft³; absent = steel 490), the stress loads <code>stress: {P, Mx, My}</code> (kip, kip-in; absent = 0), and the overlay switches <code>settings.showKern</code>, <code>settings.showEllipse</code>. Phase 2b: the shear flow inputs <code>sf: {Vx, Vy, basis, conn}</code> (kip; <code>conn</code> = connector inputs per contact, keyed like <code>contacts.off</code>; absent = no loads, no connectors).`,
     `<b>This browser:</b> autosave <code>${LS_AUTO}</code>, named projects <code>${LS_PROJ}</code>, selected input tab <code>${LS_INTAB}</code>, DXF export options <code>${LS_DXF}</code>. All keys start with <code>spc_</code>.`,
     '<b>Shared project info</b> (bridgeSuite.v1.projectMeta): Project, Job #, Client, Prepared by, Checked by and Date are shared and received. No other hand-offs in Phase 1.']);
   H('Limitations');
@@ -6110,7 +6665,7 @@ function spcInit() {
   if (!window.katex) window.addEventListener('load', () => { if (window.katex) renderTab(); });
 }
 // test / automation hook (read-only use; not part of the saved data)
-window.SPCUI = { get model() { return M; }, get res() { return R; }, get sel() { return [...SEL]; }, set sel(a) { SEL = new Set(a); SELORD = a.slice(); rebuildInputs(); drawCanvas(); updateToolState(); }, flush, fullRebuild, load: d => loadModel(d), buildPrintReport, runValidation, actFlip, actRotate, actMirrorCopy, actDuplicate, actDelete, actAlign, undo, redo, paste, copySel, partById, fitView, nudge, addSimple, addShape, setNoOverlap, get noOverlap() { return NOOV; }, fixOverlap, get snapMark() { return SNAPMARK; }, focusDims, openDimEditor, get view() { return VIEW; }, w2s, s2w, get undoN() { return UNDO.length; }, ext, stressRes: () => (R && R.ok ? SPC.stress(R, stressIn().P, stressIn().Mx, stressIn().My) : null) };
+window.SPCUI = { get model() { return M; }, get res() { return R; }, get sel() { return [...SEL]; }, set sel(a) { SEL = new Set(a); SELORD = a.slice(); rebuildInputs(); drawCanvas(); updateToolState(); }, flush, fullRebuild, load: d => loadModel(d), buildPrintReport, runValidation, actFlip, actRotate, actMirrorCopy, actDuplicate, actDelete, actAlign, undo, redo, paste, copySel, partById, fitView, nudge, addSimple, addShape, setNoOverlap, get noOverlap() { return NOOV; }, fixOverlap, get snapMark() { return SNAPMARK; }, focusDims, openDimEditor, get view() { return VIEW; }, w2s, s2w, get undoN() { return UNDO.length; }, ext, sfIn, setSF, setConn, connIn, get sfSel() { return SFSEL; }, set sfSel(k) { SFSEL = k; }, stressRes: () => (R && R.ok ? SPC.stress(R, stressIn().P, stressIn().Mx, stressIn().My) : null) };
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', spcInit); else spcInit();
 </script>
 </body>
