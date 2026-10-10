@@ -4163,6 +4163,143 @@ index 660bc9b..c478a46 100644
    { id: "checks", label: "Checks" },
 ```
 
+## 2026-10-10 — PR: claude/pile-o24-o26 (PR link added after merge)
+
+Engineer's decision 2026-10-10 on O24–O26: "Yes go ahead with the others and merge". Basis as stated in `fixlog/README.md`, plus Reese (1997) for weak rock.
+
+### F16. Lateral solve re-runs when the buckling settings change (O26)   [calc behaviour] [no result change for a freshly loaded project]
+- **Where:** `App`, the dependency arrays of the `pyRes` memo, the `setCaseRes(null)` effect and the `setPcr(null)` effect (≈ lines 12496, 12572, 12578). Anchor texts: `const pyRes = useMemo(() => {` (array at its closing `}, [I.lateralSource, …`), `React.useEffect(() => { setCaseRes(null); }`, `React.useEffect(() => { setPcr(null); }`.
+- **Problem:** `buildPySetup` reads `I.bucklingEnable` and `I.LuFree`: with buckling enabled, the soil springs are removed over the unsupported length below grade. The `pyRes` memo did not list either, so toggling buckling or changing "Added unsupported length" did not re-run the lateral solve. The screen kept the old Mmax, deflection and fixity until some listed input changed, while a reload of the same project gave different numbers. The two explicit-run results that also use `buildPySetup` had the same kind of gap: the case envelope ("Run all cases") was not cleared when the H-pile section, `E`, `solverLembed` or the lateral source changed, and the Pcr ramp was not cleared when buckling, the casing/bond lengths, the bar/grout inputs or φc changed. Either could leave a result for the previous model on screen.
+- **Audit:** every input read by `buildPySetup`, by the `pyRes` body and by `solvePyPile`'s arguments was checked against each list. `solvePyPile` only reads its arguments. `pyRes` was missing only `I.bucklingEnable` and `I.LuFree`; the derived EI values it uses (`EI`, `EI_composite_kipin2`, `EI_aashto_kipin2`, `EI_uncased_kipin2`) were already listed. The case envelope deliberately keeps the M-φ curves at the active case's axial load, so `I.STL` stays out of its list (switching the active case must not clear it).
+- **Governing provision:** none; no formula, factor or unit changed. This is when the existing calculation runs.
+- **Before / After (appended to the end of each array):**
+  ```js
+  // pyRes memo: before
+  … I.pileType, I.hpD, I.hpBf, I.hpTf, I.hpTw, I.hpFy, I.hpAxis, I.solverLembed]);
+  // pyRes memo: after
+  … I.pileType, I.hpD, I.hpBf, I.hpTf, I.hpTw, I.hpFy, I.hpAxis, I.solverLembed, I.bucklingEnable, I.LuFree]);
+
+  // setCaseRes(null) effect: before
+  … I.solverHead, I.solverFree, I.bucklingEnable, I.LuFree, I.Kb, I.pileType]);
+  // after
+  … I.solverHead, I.solverFree, I.bucklingEnable, I.LuFree, I.Kb, I.pileType, I.lateralSource, I.E, I.solverLembed, I.hpD, I.hpBf, I.hpTf, I.hpTw, I.hpFy, I.hpAxis]);
+
+  // setPcr(null) effect: before
+  … I.bklCapMult, I.pyEIvar, I.pyEIBasis, I.pyPM, I.pyYM, JSON.stringify(I.loadCases)]);
+  // after
+  … I.bklCapMult, I.pyEIvar, I.pyEIBasis, I.pyPM, I.pyYM, JSON.stringify(I.loadCases), I.bucklingEnable, I.Lcased, I.Lplunge, I.LbProvided, I.Ab, I.fyb, I.fcGrout, I.fc, I.phiC, I.hpPhiC]);
+  ```
+- **Check case:** micropile defaults with the layered profile sand 0 ft (φ 34°, k 110) / soft clay 8 ft (su 600 psf) / stiff clay 16 ft (su 2,500 psf) / sand 25 ft (φ 38°, k 125). Stickup 3 ft, buckling off, then in the UI turn buckling on and set "Added unsupported length" = 8 ft (L_u = 3 + 8 = 11 ft, so 8 ft × 12 = 96 in of springs removed below grade).
+  | state | Mmax (kip·ft) | at (ft) | head y (in) | z_fix (ft) | springs removed (in) |
+  |---|---|---|---|---|---|
+  | fresh load, buckling off (both) | 51.149 | 3.83 | 2.9767 | 12.92 | 0 |
+  | before: after the UI edits | 51.149 | 3.83 | 2.9767 | 12.92 | 0 (stale) |
+  | before: reload of the same project | 19.289 | 8.38 | −13.956 | 13.87 | 96 |
+  | after: after the UI edits | 19.289 | 8.38 | −13.956 | 13.87 | 96 |
+  | after: reload of the same project | 19.289 | 8.38 | −13.956 | 13.87 | 96 |
+
+  Second case, saved with buckling off and L_u = 11 ft, then only the toggle switched on: before, the screen stayed at 51.149 kip·ft while a reload gave 19.289; after, the toggle gives 19.289, equal to the reload.
+- **How verified:** headless Chromium, main and branch, the UI sequence above (`o26.mjs`), reading the `pyRes` object from the React state. Fresh loads give identical results on main and branch: page text of every mode identical for the defaults, the four-layer profile, and the four-layer profile with buckling on and 8 ft of added unsupported length (except the H-pile lateral changes from F18).
+- **Other copies of this code:** none.
+
+### F17. Weak-rock p-y curves in the solver's units (lb, in) (O24)   [calc change] [LESS conservative than before for deflection and, in the example, for moment; the old springs were 1000× too soft]
+- **Where:** `PY.weakrock.pu`, `PY.weakrock.p`, and the weak-rock line of `pySecantEs` (≈ lines 1664, 1673, 1710). Anchor texts: `weakrock: { // Reese (1997) interim weak-rock criterion`, `if (model === 'weakrock') { const b = prm.D;`.
+- **Problem:** the lateral solver works in lb and in (`Pt = Plat·1000`, sand γ in lb/in³, clay su in psi), and every p-y curve must return p in lb/in. The weak-rock inputs are labelled and stored in ksi (q_u "ksi", E_m "ksi"; the LPILE importer converts psi → ksi; the AI soil prompt asks for ksi), and `PY.weakrock` used them directly, so p_ur came out in kip/in and K_ir in kip/in², read by the solver as lb/in. Every weak-rock spring was 1000× too soft. That also distorted the Georgiadis layering: a rock layer under soil got an equivalent depth of about 300 ft. Labels, defaults (q_u 1.0 ksi, E_m 300 ksi) and the importer all agree on ksi, so the intent is not ambiguous. The fix converts ksi → psi inside the model, so saved projects keep their ksi values and no stored data changes.
+- **Input fields checked (unit label vs use):** q_u: labelled ksi in the layer table, soil-profile drawing, report and AI prompt; LPILE import psi/1000 → ksi; now ×1000 to psi in the model. E_m (Reese's E_ir, initial rock modulus): the same, ksi → psi. RQD (%) → α_r = max(1 − (2/3)·RQD/100, 0.33), unchanged. k_rm: dimensionless (default 0.0005), unchanged. b: in, unchanged. γ is not used by the weak-rock curve.
+- **Governing provision:** Reese, L.C. (1997), "Analysis of laterally loaded piles in weak rock", J. Geotech. Geoenviron. Eng. 123(11), 1010–1017 (interim criterion, as also implemented in LPILE):
+  - p_ur = α_r·q_ur·b·(1 + 1.4·x_r/b) for 0 ≤ x_r ≤ 3b; p_ur = 5.2·α_r·q_ur·b for x_r ≥ 3b
+  - K_ir = k_ir·E_ir, with k_ir = 100 + 400·x_r/(3b) for x_r ≤ 3b and 500 below
+  - y_rm = k_rm·b; y_A = [p_ur / (2·y_rm^0.25·K_ir)]^(4/3)
+  - p = K_ir·y for y ≤ y_A; p = (p_ur/2)·(y/y_rm)^0.25 for y_A < y < 16·y_rm; p = p_ur beyond.
+  The formulas are unchanged; only the units of q_ur and E_ir change.
+- **Before:**
+  ```js
+      const b = prm.D, qu = prm.qu, ar = prm.alpha;   // qu ksi, b in -> pur kip/in
+  …
+      const Kir = kir * prm.Em;                        // kip/in per in
+  …
+    if (model === 'weakrock') { const b = prm.D; const kir = ze < 3 * b ? (100 + 400 * ze / (3 * b)) : 500; return gPM * kir * prm.Em / gYM; }
+  ```
+- **After:**
+  ```js
+      const b = prm.D, qu = prm.qu * 1000, ar = prm.alpha;   // qu input in ksi -> psi; b in -> pur lb/in (solver units)
+  …
+      const Kir = kir * prm.Em * 1000;                 // Em input in ksi -> psi; Kir lb/in per in (solver units)
+  …
+    if (model === 'weakrock') { const b = prm.D; const kir = ze < 3 * b ? (100 + 400 * ze / (3 * b)) : 500; return gPM * kir * prm.Em * 1000 / gYM; } // Em ksi -> psi
+  ```
+- **Check case 1 (the curve):** q_ur = 1.0 ksi = 1,000 psi, E_ir = 300 ksi = 300,000 psi, RQD = 50 %, k_rm = 0.0005, b = 7 in, x_r = 5 ft = 60 in (rock from grade, no Georgiadis offset).
+  - α_r = 1 − (2/3)(0.50) = 0.6667. x_r = 60 > 3b = 21 in, so p_ur = 5.2 × 0.6667 × 1,000 × 7 = **24,266.7 lb/in**.
+  - k_ir = 500; K_ir = 500 × 300,000 = **1.50 × 10⁸ lb/in²**.
+  - y_rm = 0.0005 × 7 = 0.0035 in; y_rm^0.25 = 0.24324; y_A = [24,266.7 / (2 × 0.24324 × 1.5 × 10⁸)]^(4/3) = (3.3255 × 10⁻⁴)^(4/3) = **2.304 × 10⁻⁵ in**, p(y_A) = 3,456.1 lb/in. p reaches p_ur at 16·y_rm = 0.056 in.
+  | y (in) | independent (lb/in) | tool before (as used, lb/in) | tool after (lb/in) |
+  |---|---|---|---|
+  | 1 × 10⁻⁵ | 1,500.0 | 1.500 | 1,500.0 |
+  | 2.304 × 10⁻⁵ (y_A) | 3,456.1 | 3.456 | 3,456.1 |
+  | 0.001 | 8,870.8 | 8.871 | 8,870.8 |
+  | 0.01 | 15,774.8 | 15.775 | 15,774.8 |
+  | 0.02 | 18,759.5 | 18.759 | 18,759.5 |
+  | ≥ 0.056 | 24,266.7 | 24.267 | 24,266.7 |
+  Initial secant E_s (y → 0): before 150,000 lb/in², after 1.5 × 10⁸ lb/in² = K_ir.
+- **Check case 2 (a pile in weak rock):** micropile defaults (7 in casing, stickup 3 ft, 6 kip lateral, 86 kip axial, free head), soil: sand 0–10 ft (φ 32°, k 90 pci), weak rock from 10 ft (q_u 1.0 ksi, E_m 300 ksi, RQD 50 %).
+  | result | before | after |
+  |---|---|---|
+  | Georgiadis z_e at 10.65 ft (top of rock + 0.65 ft) | 303.0 ft | 1.45 ft |
+  | Mmax | 54.10 kip·ft at 4.15 ft | 52.74 kip·ft at 4.15 ft |
+  | head deflection | 3.280 in | 3.046 in |
+  | depth to fixity (2nd zero crossing) | 13.98 ft | 9.33 ft |
+  | M at casing tip | 1.647 kip·ft | 0.0017 kip·ft |
+  | Module 04 flexure D/C | 1.003 (NG) | 0.978 (OK) |
+  | Module 05 combined D/C (governing) | 1.172 (NG) | 1.147 (NG) |
+  | Module G uncased flexure at the casing tip, D/C | 1.742 | 0.002 |
+  Every result moves in the less conservative direction, because the rock is now about 1000× stiffer and correct.
+- **Integral abutment:** the Tier-2 nonlinear check on the layered profile (`iabLayeredSoilAt`) uses the same `PY.weakrock`. With a sand / clay / weak-rock (16 ft) profile, main dropped the "Full nonlinear p-y check" section entirely (the solve did not succeed with the near-zero rock springs). The branch converges and shows it.
+- **Figure F-3:** now plots the corrected curves. In the check case, the independent evaluation matches the plotted points exactly (max relative difference 0), and the mobilised points lie on the curves.
+- **Saved projects affected:** every project with a layer of type `weakrock` that uses the built-in p-y analysis (`lateralSource` "py", micropile or H-pile), or the IAB Tier-2 nonlinear check with the layered soil source. LPILE imports with a weak-rock layer are included. Their lateral results change. The linear (Winkler) solver, Davisson fixity, axial capacity and projects without weak rock are unchanged.
+- **How verified:** an independent Python evaluation of the formulas above (lb, in); the tool's own `PY.weakrock`/`pyPofY`/`pySecantEs` evaluated in headless Chromium on main and branch; Figure F-3 data compared with an independent JS evaluation (`wrcheck.mjs`); main-vs-branch page text for all modes with a weak-rock profile (all modes differ only in the lateral results, as intended) and without (identical).
+- **Other copies of this code:** none.
+- **Still open:** the weak-rock model is still flagged "UNCALIBRATED vs LPILE" (no LPILE weak-rock benchmark run). The flag and the UI notes are unchanged.
+
+### F18. H-pile p-y model: the toe at the embedded length below grade (O25)   [calc change] [at the defaults: no practical change (Mmax −0.005 %); for short embedment: Mmax up (more conservative), head deflection down (LESS conservative)]
+- **Where:** `App` → `buildPySetup`, the `bondBottom` H-pile branch (≈ line 12210). Anchor text: `const bondBottom = isHP`.
+- **Problem:** the H-pile input is "Embedded length, below grade" (`I.solverLembed`), and stickup is "+ above grade / NEGATIVE = head below grade". Module G's elevation plot and the soil-profile drawing put the toe at `solverLembed` below grade. `buildPySetup` used `solverLembed` as the pile length from the head, so with a 3 ft stickup the p-y pile ended 3 ft short: 27 ft instead of 30 ft below grade. The drawing marked this with a red dashed "p-y model toe" line. The micropile path is correct: it measures its lengths from the head, as its labels say ("Cased length, head → tip"), with soil from grade (`zg = stick_in`), and it is unchanged. Labels are unambiguous: toe = `solverLembed` below grade.
+- **Governing provision:** none (model geometry). Basis: the input labels and Module G's geometry.
+- **Before:**
+  ```js
+      // H-pile length: embedment is user cap-embed + solver embed length (no casing/bond concept).
+      const bondBottom = isHP
+        ? Math.max((I.solverLembed || 30), 5)  // ft from head; reuse solver embed length control
+  ```
+- **After:**
+  ```js
+      // H-pile length: "Embedded length, below grade" (I.solverLembed) is measured from GRADE,
+      // as Module G and the soil-profile drawing use it: the toe is solverLembed below grade, so
+      // the pile length from the head is stickup + solverLembed (stickup signed: + above grade,
+      // - head below grade). Before F18 (O25) solverLembed was used as the length from the head.
+      const bondBottom = isHP
+        ? Math.max(Math.max((I.solverLembed || 30), 5) + (I.solverFree || 0), 5)  // ft from head = stickup + embedded length below grade (>= 5 ft)
+  ```
+- **Check case 1 (H-pile defaults: HP 13.83×14.70 strong axis, stickup 3 ft, L_embed 30 ft, uniform sand, 6 kip, free head):**
+  - Before: L = max(30, 5) = 30 ft = 360 in from the head; embedded = 360 − 36 = 324 in = **27.0 ft** below grade.
+  - After: L = max(30, 5) + 3 = 33 ft = 396 in; embedded = 396 − 36 = 360 in = **30.0 ft** below grade, the same as the drawn toe.
+  | result | before | after |
+  |---|---|---|
+  | modelled toe below grade | 27.0 ft | 30.0 ft |
+  | Mmax | 34.884 kip·ft at 4.25 ft | 34.882 kip·ft at 4.43 ft |
+  | head deflection | 0.17670 in | 0.17668 in |
+  | depth to fixity | 15.76 ft | 15.76 ft |
+  | Module 04 flexure D/C | 0.06487 | 0.06486 |
+  | Module 05 combined D/C (governing structural) | 0.11243 | 0.11243 |
+  | shear / axial D/C | 0.0267 / 0.1110 | 0.0267 / 0.1110 |
+  The pile is long and flexible, so the extra 3 ft has no practical effect. The Mmax depth moves by one node because the node spacing is L/120.
+- **Check case 2 (the same pile with L_embed = 12 ft):** toe 9.0 → 12.0 ft below grade; Mmax 33.38 → 34.09 kip·ft (+2.1 %, more conservative); head deflection 0.659 → 0.225 in (less conservative); depth to fixity 9.00 → 12.00 ft (the toe in both); flexure D/C 0.0621 → 0.0634.
+- **Drawing:** the red dashed "p-y model toe" mark no longer appears, because the p-y toe and the drawn toe now agree. The guard that draws it is kept: it only appears if the 5 ft minimum length overrides the input (embedded length under 5 ft, or a buried head deeper than the embedded length).
+- **Also affected:** the case envelope and the Pcr ramp use the same `buildPySetup` length for H-piles.
+- **Saved projects affected:** H-pile projects using the built-in p-y analysis with a non-zero stickup. With a stickup of 0 the length is unchanged. With a negative stickup (buried cap) the pile is now shorter: the toe is at `solverLembed` below grade, not `solverLembed` below the head.
+- **How verified:** headless Chromium, main vs branch, H-pile defaults and L_embed = 12 ft (`res.mjs`); page text of the micropile and IAB modes identical; the drawing now shows only "toe 30.0 ft".
+- **Other copies of this code:** none.
+- **Not changed (see O31):** the H-pile static axial capacity and Module G's "Pile toe depth" line use a third datum.
+
 ## Open items (not changed)
 - O1. **Uncased/cased structural axial: outer 0.85 factor and `fy = min(fyb, fyc)`** (`Rn_cased/Rn_ucased`, ≈ line 1675).
   - Neither AASHTO 10.9.3.10.2 nor FHWA NHI-05-039 Eq. 5-13 has the outer 0.85, and the uncased section has no casing, so min(fyb, fyc) is arbitrary there.
@@ -4220,10 +4357,13 @@ index 660bc9b..c478a46 100644
   - **Ask:** confirm the values and remove or relabel, or keep.
 - O22. **Report, Assumptions & Design Notes (micropile): the bond-value item prints a line break and the word "beta".** The `RTex` call has `tex: "\\\\beta"`, which reaches KaTeX as `\\beta` (a line break, then text "beta") instead of β. Found in the 2026-10-10 output/print work; text in an equation, so listed rather than changed.
 - O23. **The printed report has no section for the Module G code-limit checks** (uncased flexure below the casing tip, minimum bond length, plunge, cover). On screen Module G is NG at the micropile defaults (uncased flexure D/C 1.34), but the report only lists materials and geometry under G, and the Summary of Results table has no uncased-flexure row. **Ask:** add the G checks to the report (new report content).
-- O24. **Weak-rock p-y units.** `PY.weakrock` works in kip (qᵤ and Eₘ in ksi, so p_ur and the initial modulus come out in kip/in), but `solvePyPile` treats every p-y value as lb/in. Read from the code, the weak-rock springs in the built-in solver are 1000× too soft (unconservative for deflection, can be either way for moment). Found while building Figure F-3, which plots the values as the solver uses them. The model is already flagged "uncalibrated". Not changed (calculation). **Ask:** confirm and convert (×1000), or keep weak rock disabled for design.
-- O25. **H-pile p-y model length.** The input "Embedded length, below grade" (`I.solverLembed`) is used as the length below grade by Module G and the static axial capacity, but `buildPySetup` uses it as the length from the pile head (`L = solverLembed`, embedded = solverLembed − stickup). At the defaults (3 ft stickup) the p-y model's pile ends 3 ft above the drawn toe (27 vs 30 ft below grade). The soil-profile drawing marks the p-y model toe in red. Not changed (calculation). **Ask:** which length is intended for the lateral model?
-- O26. **`pyRes` memo dependencies.** `buildPySetup` reads `I.bucklingEnable` and `I.LuFree` (the unsupported zone with no soil springs), but the `pyRes` memo does not list them, so toggling buckling or changing L_u does not re-run the lateral solve until another listed input changes. Not changed (calculation behaviour). **Ask:** add them to the dependency list.
+- O24. **Weak-rock p-y units.** Fixed in F17 (2026-10-10): q_u and E_m are converted ksi → psi inside `PY.weakrock`, so the springs are in lb/in as the solver expects. The model is still flagged uncalibrated (no LPILE weak-rock benchmark).
+- O25. **H-pile p-y model length.** Fixed in F18 (2026-10-10): the p-y model's toe is now `solverLembed` below grade (pile length from the head = stickup + `solverLembed`). See O31 for the axial datum.
+- O26. **`pyRes` memo dependencies.** Fixed in F16 (2026-10-10): `I.bucklingEnable` and `I.LuFree` added; the case-envelope and Pcr reset lists completed as well.
 - O27. **Module G H-pile "Cross-section (to scale, in)" plot is empty** (axes only, no section) on main as well, in headless Chromium at 1500 px. The new S-1 card on the Structural tab draws the section. **Ask:** fix or remove the empty plot.
 - O28. **H-pile corrosion.** The tool has no section-loss input for H-piles; every H-pile property is nominal. **Ask:** add a corrosion loss (per face) if the piles are permanent in aggressive ground.
 - O29. **Module 11 / report 11 distribution uses `I.activeCase` as a group-case index.** `R.capDist` (`computeAll`, comment "RIGID-CAP LOAD DISTRIBUTION") takes `gcs[min(activeCase, nGroupCases - 1)]`, but `activeCase` indexes the combined case list (manual rows first, then the Group ▦ rows). With one manual row and two group cases, the active row "Group ▦ Str I" (index 1) shows the Ext I distribution in `CapResults` and in the printed 11 table / Figure 11-1. Found while building the Loads & group tab (its plan follows the active Group row by `_groupCaseId`). The Group ▦ rows, the checks and the envelope are not affected. Not changed (it changes printed values). **Ask:** map the active Group row to its group case (`_groupCaseId`), and use the first group case when a manual row is active?
 - O30. **HANDOFF.md §4.6 (Pile Designer receiver)** still says the pull buttons are in the "Project panel". Since F15 they are in the Loads & group tab and are not shown in integral-abutment mode. HANDOFF.md was outside this PR. **Update** it in a docs PR.
+- O31. **H-pile static axial capacity uses a third length datum.** `computeAll` passes `embedTop = I.solverFree` (the stickup, + above grade) to `hpileGeoCapacity`, which treats it as the depth from grade to the pile head: side resistance runs from `solverFree` to `solverFree + solverLembed` below grade. At the defaults (3 ft stickup, 30 ft embedded) skin friction is counted from 3 to 33 ft and the tip is taken at 33 ft, while the input label, Module G's elevation plot, the soil-profile drawing and now the p-y model (F18) put the toe at 30 ft with soil from grade. Module G's geometry summary line "Pile toe depth" also prints stickup + embedded length (33.0 ft) "below grade". With a buried head (negative stickup) the axial model ends at `solverLembed` below the head instead. Found during F18. Not changed (calculation). **Ask:** take the axial interval as 0 → `solverLembed` below grade (or from the head when it is below grade), and print the toe at `solverLembed`?
+- O32. **Case envelope ("Run all cases") in H-pile mode uses the micropile flexure and combined checks.** `runAllCases` reports `flexR = MmaxUsed / R2.flex.phiMn` and `combR = R2.comb.interaction`, which are the micropile casing checks. At the H-pile defaults the envelope shows flexure D/C 0.647, while Module 04 (`R.hpileStruct`, Mu/φMn) gives 0.065. Found during F16 verification. Not changed (calculation/display). **Ask:** use `R2.hpileStruct` (Mu/φMn and `comb_ratio`) for H-piles?
+- O33. **Lateral profile table shear after a retry.** In `pyRes`, the depth records take `shear: res.V[i]` from the first solve attempt, while deflection and moment come from `res2` (the adaptive retry when the first attempt fails). After a retry the shear column belongs to the failed attempt. Found during F16. Not changed (calculation). **Ask:** use `res2.V`?

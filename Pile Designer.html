@@ -1674,7 +1674,7 @@ const PY = {
   },
   weakrock: { // Reese (1997) interim weak-rock criterion. UNCALIBRATED vs LPILE.
     pu(ze, prm) {
-      const b = prm.D, qu = prm.qu, ar = prm.alpha;   // qu ksi, b in -> pur kip/in
+      const b = prm.D, qu = prm.qu * 1000, ar = prm.alpha;   // qu input in ksi -> psi; b in -> pur lb/in (solver units)
       if (qu <= 0) return 0;
       return ze <= 3 * b ? ar * qu * b * (1 + 1.4 * ze / b) : 5.2 * ar * qu * b;
     },
@@ -1683,7 +1683,7 @@ const PY = {
       if (pur <= 0 || y <= 0) return 0;
       const b = prm.D;
       const kir = ze < 3 * b ? (100 + 400 * ze / (3 * b)) : 500;
-      const Kir = kir * prm.Em;                        // kip/in per in
+      const Kir = kir * prm.Em * 1000;                 // Em input in ksi -> psi; Kir lb/in per in (solver units)
       const yrm = prm.krm * b;
       const yA = Math.pow(pur / (2 * Math.pow(yrm, 0.25) * Kir), 4 / 3);
       if (y <= yA) return Kir * y;
@@ -1720,7 +1720,7 @@ function pySecantEs(model, y, z, prm, gPM, gYM) {
   if (ya < fl) ya = fl;
   if (ya < 1e-8) {
     if (model === 'sand' || model === 'sandapi') return gPM * prm.k * ze / gYM;
-    if (model === 'weakrock') { const b = prm.D; const kir = ze < 3 * b ? (100 + 400 * ze / (3 * b)) : 500; return gPM * kir * prm.Em / gYM; }
+    if (model === 'weakrock') { const b = prm.D; const kir = ze < 3 * b ? (100 + 400 * ze / (3 * b)) : 500; return gPM * kir * prm.Em * 1000 / gYM; } // Em ksi -> psi
     if (model === 'user') return prm.ys[0] > 0 ? gPM * (prm.ps[0] / prm.ys[0]) / gYM : 0;
     return 0;
   }
@@ -12465,9 +12465,12 @@ function App() {
       }
       const D = isHP ? hpDepthDim : I.OD;
       const stick_in = (I.solverFree || 0) * 12; // signed: negative = pile head below grade (buried cap)
-      // H-pile length: embedment is user cap-embed + solver embed length (no casing/bond concept).
+      // H-pile length: "Embedded length, below grade" (I.solverLembed) is measured from GRADE,
+      // as Module G and the soil-profile drawing use it: the toe is solverLembed below grade, so
+      // the pile length from the head is stickup + solverLembed (stickup signed: + above grade,
+      // - head below grade). Before F18 (O25) solverLembed was used as the length from the head.
       const bondBottom = isHP
-        ? Math.max((I.solverLembed || 30), 5)  // ft from head; reuse solver embed length control
+        ? Math.max(Math.max((I.solverLembed || 30), 5) + (I.solverFree || 0), 5)  // ft from head = stickup + embedded length below grade (>= 5 ft)
         : Math.max((I.Lcased - I.Lplunge) + I.LbProvided, I.Lcased + 1); // ft from head
       const L_in = bondBottom * 12;
       const embed_in = L_in - stick_in;
@@ -12753,7 +12756,7 @@ function App() {
           phisU: mphiU.phis, MsU: mphiU.Ms.map(m => m / 12) } : null
       };
     } catch (e) { return { ok: false, msg: e.message }; }
-  }, [I.lateralSource, I.OD, I.dhBond, I.dhBondSeparate, I.tc, I.corr, I.E, I.fyc, I.fyb, I.Ab, I.fcGrout, I.solverFree, I.Lcased, I.Lplunge, I.LbProvided, JSON.stringify(I.soilLayers), I.pyCyclic, I.pyEIBasis, I.pyEIvar, I.pyPM, I.pyYM, I.pyNodes, I.pyMhead, I.pyKrot, I.pyCurveDepth, I.Plat, I.STL, I.solverHead, EI, EI_composite_kipin2, EI_aashto_kipin2, EI_uncased_kipin2, I.pileType, I.hpD, I.hpBf, I.hpTf, I.hpTw, I.hpFy, I.hpAxis, I.solverLembed]);
+  }, [I.lateralSource, I.OD, I.dhBond, I.dhBondSeparate, I.tc, I.corr, I.E, I.fyc, I.fyb, I.Ab, I.fcGrout, I.solverFree, I.Lcased, I.Lplunge, I.LbProvided, JSON.stringify(I.soilLayers), I.pyCyclic, I.pyEIBasis, I.pyEIvar, I.pyPM, I.pyYM, I.pyNodes, I.pyMhead, I.pyKrot, I.pyCurveDepth, I.Plat, I.STL, I.solverHead, EI, EI_composite_kipin2, EI_aashto_kipin2, EI_uncased_kipin2, I.pileType, I.hpD, I.hpBf, I.hpTf, I.hpTw, I.hpFy, I.hpAxis, I.solverLembed, I.bucklingEnable, I.LuFree]);
 
   // ---- LRFD load cases (series) ----
   // Strip any persisted _fromGroup flag but KEEP the case. The synthetic group
@@ -12829,13 +12832,13 @@ function App() {
       set('loadCases', cleaned.length ? cleaned : [{ name: "Case 1 — Strength", type: "strength", STL: I.STL, Plat: I.Plat, Mhead: I.pyMhead || 0 }]);
     }
   }, []);
-  React.useEffect(() => { setCaseRes(null); }, [JSON.stringify(I.soilLayers), I.OD, I.dhBond, I.dhBondSeparate, I.tc, I.corr, I.fyc, I.Ab, I.fyb, I.fcGrout, I.fc, I.Lcased, I.Lplunge, I.LbProvided, I.beta, I.pyEIvar, I.pyEIBasis, I.pyPM, I.pyYM, I.pyCyclic, I.pyKrot, I.pyNodes, I.solverHead, I.solverFree, I.bucklingEnable, I.LuFree, I.Kb, I.pileType]);
+  React.useEffect(() => { setCaseRes(null); }, [JSON.stringify(I.soilLayers), I.OD, I.dhBond, I.dhBondSeparate, I.tc, I.corr, I.fyc, I.Ab, I.fyb, I.fcGrout, I.fc, I.Lcased, I.Lplunge, I.LbProvided, I.beta, I.pyEIvar, I.pyEIBasis, I.pyPM, I.pyYM, I.pyCyclic, I.pyKrot, I.pyNodes, I.solverHead, I.solverFree, I.bucklingEnable, I.LuFree, I.Kb, I.pileType, I.lateralSource, I.E, I.solverLembed, I.hpD, I.hpBf, I.hpTf, I.hpTw, I.hpFy, I.hpAxis]);
   // Invalidate the Pcr ramp whenever the MODEL it was run on changes. Without this,
   // switching pile type (or editing soil, section, loads, head condition...) left the
   // PREVIOUS model's Pcr on screen -- e.g. the H-pile's critical load displayed as the
   // micropile's -- and because pcr.ok was true, Tab 3 believed it had valid data and
   // never offered the Compute button again. A stale wrong answer, silently presented.
-  React.useEffect(() => { setPcr(null); }, [I.pileType, JSON.stringify(I.soilLayers), I.solverSoil, I.solverNh, I.solverKh, I.OD, I.dhBond, I.dhBondSeparate, I.tc, I.corr, I.fyc, I.hpD, I.hpBf, I.hpTf, I.hpTw, I.hpFy, I.hpAxis, I.E, I.STL, I.Plat, I.pyMhead, I.solverHead, I.pyKrot, I.pyCyclic, I.solverFree, I.solverLembed, I.LuFree, I.Kb, I.bklCapMult, I.pyEIvar, I.pyEIBasis, I.pyPM, I.pyYM, JSON.stringify(I.loadCases)]);
+  React.useEffect(() => { setPcr(null); }, [I.pileType, JSON.stringify(I.soilLayers), I.solverSoil, I.solverNh, I.solverKh, I.OD, I.dhBond, I.dhBondSeparate, I.tc, I.corr, I.fyc, I.hpD, I.hpBf, I.hpTf, I.hpTw, I.hpFy, I.hpAxis, I.E, I.STL, I.Plat, I.pyMhead, I.solverHead, I.pyKrot, I.pyCyclic, I.solverFree, I.solverLembed, I.LuFree, I.Kb, I.bklCapMult, I.pyEIvar, I.pyEIBasis, I.pyPM, I.pyYM, JSON.stringify(I.loadCases), I.bucklingEnable, I.Lcased, I.Lplunge, I.LbProvided, I.Ab, I.fyb, I.fcGrout, I.fc, I.phiC, I.hpPhiC]);
   function applyCase(idx) {
     const c = cases[idx]; if (!c) return;
     set('STL', c.type === "tension" ? 0 : c.STL); set('Plat', c.Plat); set('pyMhead', c.Mhead || 0);
