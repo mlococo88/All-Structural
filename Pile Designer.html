@@ -2264,8 +2264,14 @@ function solvePyPile(input) {
   const Mhead = input.headFixed ? res.M[0] : Mt;
   const fRes = Pt - intP;
   const mRes = Mhead + Qt * (res.y[0] - res.y[n]) + intPz;
+  // F27: the force residual is measured against the applied lateral load, but never against
+  // less than 1 % of the total soil-reaction magnitude (integral of |p| dz). Before F27 the
+  // floor was 1e-6 lb, so a moment-only head load (Pt = 0) gave residuals of 1e6 % and more.
+  // Unchanged wherever |Pt| >= 1 % of that integral (every solve with a lateral load found).
+  let intAbsP = 0;
+  for (let i = 0; i < n; i++) intAbsP += 0.5 * (Math.abs(res.p[i]) + Math.abs(res.p[i + 1])) * h;
   res.eq = {
-    fPct: 100 * Math.abs(fRes) / Math.max(Math.abs(Pt), 1e-6),
+    fPct: 100 * Math.abs(fRes) / Math.max(Math.abs(Pt), 0.01 * intAbsP, 1e-6),
     mPct: 100 * Math.abs(mRes) / Math.max(intAbsPz, Math.abs(Mhead), 1e-6)
   };
   return res;
@@ -2273,21 +2279,24 @@ function solvePyPile(input) {
 
 /* F22 (O33) / F23 (O34): the lateral p-y solve used by Module 02 (pyRes) AND by the
    case envelope ("Run all cases"), so both take exactly the same path.
-   1. First attempt: 8 load steps, maxIter 200. A solve that converges here is used as
-      it is (unchanged from before F22).
-   2. Only if that fails, an adaptive retry: 16 load steps, maxIter 400, under-relaxation
-      omega 0.55.
+   1. First attempt: 8 load steps, maxIter 200. A solve that converges here AND is on the
+      stable loading branch (pyRetryCheck with branchOnly = true: tests (a) and (c), not the
+      closure test (b)) is used as it is (F27 (O36); before F27 any converged first attempt
+      was used).
+   2. Only if the first attempt does not converge, or converges but fails the branch test:
+      an adaptive retry, 16 load steps, maxIter 400, under-relaxation omega 0.55.
    3. A retried solution is used only if it passes pyRetryCheck (every step converged,
       equilibrium closure, stable loading branch; F25 (O37) removed the former |y0| <= 1.0 D
       bound, see pyDeflWarnInfo for the warning that replaced it). Otherwise, and when the retry itself does not
       converge, the result is "did not converge" (noConv) and the lateral-dependent checks
-      are NG. A retried solve is never used just because the iterations stopped: past the
+      are NG. A solve is never used just because the iterations stopped: past the
       instability load the solver can settle on a POST-CRITICAL equilibrium (head deflection
       reversed, |y0| of 20-200 in) whose equilibrium closure is still excellent.
    input: the solvePyPile input without nSteps / maxIter / omega; D: pile width (in) in the
    bending plane, the same D the p-y curves use.
-   returns { res, retried, noConv, why[] }: res is the solvePyPile result to use (null when
-   noConv); why lists the reasons a retried solve was rejected. */
+   returns { res, retried, noConv, why[], firstWhy }: res is the solvePyPile result to use
+   (null when noConv); why lists the reasons the solve was rejected; firstWhy (F27) lists
+   why a CONVERGED first attempt was rejected when the retry was then accepted (else null). */
 const PY_NC_MSG = "Did not converge — the pile is likely unstable (buckling / P-Δ) at this load";
 // shown (KaTeX) in place of a check comparison that needs the lateral solution
 const PY_NC_TEX = "\\text{NG: the lateral p-y solve did not converge (no valid moment demand)}";
@@ -2296,10 +2305,13 @@ const PY_LAT_ROW = /^(Flexure|Combined axial \+ flexure|Combined \(interaction\)
 const PY_RETRY_CLOSURE_PCT = 1.0;   // max equilibrium residual (% of applied) for a retried solve
 // F25 (O37): no deflection bound in the acceptance (was PY_RETRY_DEFL_D = 1.0, |y0| <= 1.0 D);
 // a large head deflection is now a warning only (pyDeflWarnInfo).
-function pyRetryCheck(rr, D) {
+// F27 (O36): branchOnly = true for a FIRST attempt: the stable-branch test (c) only, no
+// closure test (b) (the engineer's decision 2026-10-11: "the same stable-branch test";
+// convergence (a) is the solver's own ok flag). A retried solve gets (b) and (c).
+function pyRetryCheck(rr, D, branchOnly) {
   const why = [];
   const eq = rr.eq || {};
-  if (!(eq.fPct <= PY_RETRY_CLOSURE_PCT && eq.mPct <= PY_RETRY_CLOSURE_PCT))
+  if (!branchOnly && !(eq.fPct <= PY_RETRY_CLOSURE_PCT && eq.mPct <= PY_RETRY_CLOSURE_PCT))
     why.push("equilibrium closure ΣF " + fmt(eq.fPct, 2) + " % / ΣM " + fmt(eq.mPct, 2) + " % exceeds " + fmt(PY_RETRY_CLOSURE_PCT, 1) + " %");
   // Stable loading branch: the head deflection keeps the direction of the first load step
   // and |y0| never drops while the load rises (same fold-back rule as the pushover plot).
@@ -2320,8 +2332,8 @@ function pyRetryCheck(rr, D) {
    Engineer's decision 2026-10-11: no deflection bound in the acceptance of a retried p-y
    solve; instead a warning when |y0| > pyDeflWarnD x D (input "Large head-deflection
    warning", Bond / p-y tab). Applies to every lateral p-y result: the first attempt and an
-   accepted retry, Module 02 and every envelope case, so it also flags the post-critical
-   first attempts of O36 (large, often reversed, head deflection).
+   accepted retry, Module 02 and every envelope case. (Since F27 (O36) a first attempt must
+   also pass the stable-branch test, so the post-critical first attempts of O36 are no longer used.)
    pyDeflWarnD is a saved project input; absent (older projects) or blank -> 0.25;
    0 or negative -> warning off. D = the p-y pile width in the bending plane. */
 const PY_DEFL_WARN_D_DEFAULT = 0.25;
@@ -2361,16 +2373,25 @@ function PyNoConvNote({ why, print }) {
 }
 function solvePyWithRetry(input, D) {
   const res = solvePyPile({ ...input, nSteps: 8, maxIter: 200 });
-  if (res.ok) return { res, retried: false, noConv: false, why: [] };
+  // F27 (O36): a converged first attempt must also be on the stable loading branch (test
+  // (c); the closure test (b) stays for retried solves only); if not, the retry is tried.
+  const why1 = res.ok ? pyRetryCheck(res, D, true) : null;
+  if (res.ok && !why1.length) return { res, retried: false, noConv: false, why: [], firstWhy: null };
+  const first = res.ok
+    ? "the first solve (8 load steps) converged but was rejected: " + why1.join("; ")
+    : "the first solve (8 load steps) did not converge";
   const res2 = solvePyPile({ ...input, nSteps: 16, maxIter: 400, omega: 0.55 });
   if (!res2.ok) {
     const last = res2.history.length ? res2.history[res2.history.length - 1] : null;
+    const stop = last ? "; the retry stopped at load step " + last.step + "/16 (lateral " + fmt(last.P / 1000, 2) + " kip, axial " + fmt(last.Q / 1000, 1) + " kip)" : "";
     return { res: null, retried: true, noConv: true,
-      why: ["the first solve (8 load steps) and the adaptive retry (16 load steps, under-relaxed) both failed to converge" + (last ? "; the retry stopped at load step " + last.step + "/16 (lateral " + fmt(last.P / 1000, 2) + " kip, axial " + fmt(last.Q / 1000, 1) + " kip)" : "")] };
+      why: [res.ok
+        ? first + "; the adaptive retry (16 load steps, under-relaxed) did not converge" + stop
+        : "the first solve (8 load steps) and the adaptive retry (16 load steps, under-relaxed) both failed to converge" + stop] };
   }
   const why = pyRetryCheck(res2, D);
-  if (why.length) return { res: null, retried: true, noConv: true, why: ["the first solve (8 load steps) did not converge; the adaptive retry (16 load steps) was rejected: " + why.join("; ")] };
-  return { res: res2, retried: true, noConv: false, why: [] };
+  if (why.length) return { res: null, retried: true, noConv: true, why: [first + "; the adaptive retry (16 load steps) was rejected: " + why.join("; ")] };
+  return { res: res2, retried: true, noConv: false, why: [], firstWhy: res.ok ? why1 : null };
 }
 
 // Tier-2 nonlinear path: drive the app's real nonlinear p-y engine (solvePyPile) with the
@@ -4435,7 +4456,7 @@ function DocsModal({
   }, /*#__PURE__*/React.createElement("p", null, "The grout-to-ground bond is the geotechnical capacity. Nominal resistance is the bond stress β times the drill-hole circumference times the bond length: ", /*#__PURE__*/React.createElement("i", null, "Pn = dₕ·π·β·Lb"), ". The required bond length is back-solved from the factored demand and the geotechnical resistance factor φ (0.70 when a load test is specified, per Table 10.5.5.2.5-1). The bond value β comes from the soil/rock row of Table C10.9.3.5.2-1 and ", /*#__PURE__*/React.createElement("b", null, "must be confirmed by load testing"), " — the tool labels it grout-to-ground because the value is keyed to the bearing stratum, not necessarily rock.")), /*#__PURE__*/React.createElement(DocSection, {
     title: "02 · Lateral analysis",
     code: "p-y finite-difference solver"
-  }, /*#__PURE__*/React.createElement("p", null, "Two paths. You can enter a maximum moment directly from an external LPILE run, or use the built-in solver. The solver is a real ", /*#__PURE__*/React.createElement("b", null, "finite-difference beam on an elastic foundation"), ": the embedded pile is discretized on Winkler springs with a linear subgrade modulus (Es = nh·z for sand, constant kh for clay), and EI·y⁗ + k(z)·y = 0 is solved with mudline boundary conditions (shear V₀ = P, moment M₀ = P·e from the free length) and an unrestrained toe (no applied tip shear or moment restraint — the toe is still bedded on soil springs)."), /*#__PURE__*/React.createElement("p", null, "From the resulting moment profile, the tool reports the true maximum moment and locates the ", /*#__PURE__*/React.createElement("b", null, "depth to fixity as the first zero crossing of the moment below the maximum moment (on a free-head pile with no head moment, the 2nd zero of the moment diagram, counting M = 0 at the head)"), " — the depth that reproduces the correct above-grade moment in an equivalent fixed-base model. A noise guard ignores crossings whose preceding moment lobe is under 2% of Mmax so numerical tail-ringing isn't mistaken for a real reversal. This is a REFERENCE figure only \u2014 it is a moment-diagram measure and is NOT used in the buckling check, which requires a stiffness equivalence (Davisson / deflection-matched / nonlinear P-crit) and yields a much shorter fixity depth. The model is linear, so the fixity depth is load-independent — appropriate for a stiffness/fixity basis, but it should be checked against a nonlinear p-y run before sealing."), /*#__PURE__*/React.createElement("p", null, /*#__PURE__*/React.createElement("b", null, "Nonlinear p-y convergence."), " The built-in nonlinear p-y solve applies the loads in 8 equal steps (secant iteration, up to 200 iterations per step). If a step does not converge it retries once with 16 steps, up to 400 iterations and under-relaxation 0.55. A retried solution is used only if (a) every step converged, (b) the equilibrium closure is within " + PY_RETRY_CLOSURE_PCT + " % for both ΣF and ΣM, and (c) it is on the stable loading branch (the head deflection keeps the direction of the first step and never decreases while the load rises). Otherwise the result is “did not converge — the pile is likely unstable (buckling / P-Δ) at this load”: there is no valid lateral demand, so flexure, combined loading, casing extension, uncased flexure and combined-loading stability are NG. Past the instability load the solver can settle on a post-critical equilibrium (head deflection reversed, tens of inches) whose closure is still excellent, which is why the branch test is needed. “Run all cases” solves each case with exactly the same solve (node count, load steps, retry and acceptance test), so for the active case the envelope equals Module 02. Large head deflection: when |y\u2080| exceeds the factor × D set in the Bond / p-y input tab (p-y / lateral for an H-pile; default 0.25 D; 0 = off), Module 02, the Lateral graphs, the Summary of checks, the case envelope and the report show an amber warning. It is a warning only (no check becomes NG); it applies to every p-y result, first attempt or retry, and also flags first attempts that settled on a post-critical state.")), /*#__PURE__*/React.createElement(DocSection, {
+  }, /*#__PURE__*/React.createElement("p", null, "Two paths. You can enter a maximum moment directly from an external LPILE run, or use the built-in solver. The solver is a real ", /*#__PURE__*/React.createElement("b", null, "finite-difference beam on an elastic foundation"), ": the embedded pile is discretized on Winkler springs with a linear subgrade modulus (Es = nh·z for sand, constant kh for clay), and EI·y⁗ + k(z)·y = 0 is solved with mudline boundary conditions (shear V₀ = P, moment M₀ = P·e from the free length) and an unrestrained toe (no applied tip shear or moment restraint — the toe is still bedded on soil springs)."), /*#__PURE__*/React.createElement("p", null, "From the resulting moment profile, the tool reports the true maximum moment and locates the ", /*#__PURE__*/React.createElement("b", null, "depth to fixity as the first zero crossing of the moment below the maximum moment (on a free-head pile with no head moment, the 2nd zero of the moment diagram, counting M = 0 at the head)"), " — the depth that reproduces the correct above-grade moment in an equivalent fixed-base model. A noise guard ignores crossings whose preceding moment lobe is under 2% of Mmax so numerical tail-ringing isn't mistaken for a real reversal. This is a REFERENCE figure only \u2014 it is a moment-diagram measure and is NOT used in the buckling check, which requires a stiffness equivalence (Davisson / deflection-matched / nonlinear P-crit) and yields a much shorter fixity depth. The model is linear, so the fixity depth is load-independent — appropriate for a stiffness/fixity basis, but it should be checked against a nonlinear p-y run before sealing."), /*#__PURE__*/React.createElement("p", null, /*#__PURE__*/React.createElement("b", null, "Nonlinear p-y convergence."), " The built-in nonlinear p-y solve applies the loads in 8 equal steps (secant iteration, up to 200 iterations per step). The first attempt is used only if (a) every step converged and (c) it is on the stable loading branch (the head deflection keeps the direction of the first step and never decreases while the load rises). If it fails either, the solve retries once with 16 steps, up to 400 iterations and under-relaxation 0.55; the retried solution is used only if (a) every step converged, (b) the equilibrium closure is within " + PY_RETRY_CLOSURE_PCT + " % for both ΣF and ΣM (ΣF relative to the applied lateral load, but not less than 1 % of the total soil reaction ∫|p|dz, so a moment-only head load is measured sensibly), and (c) it is on the stable loading branch. If the retry also fails, the result is “did not converge — the pile is likely unstable (buckling / P-Δ) at this load”: there is no valid lateral demand, so flexure, combined loading, casing extension, uncased flexure and combined-loading stability are NG. Past the instability load the solver can settle on a post-critical equilibrium (head deflection reversed, tens of inches) whose closure is still excellent, which is why the branch test is needed. “Run all cases” solves each case with exactly the same solve (node count, load steps, retry and acceptance test), so for the active case the envelope equals Module 02. Large head deflection: when |y\u2080| exceeds the factor × D set in the Bond / p-y input tab (p-y / lateral for an H-pile; default 0.25 D; 0 = off), Module 02, the Lateral graphs, the Summary of checks, the case envelope and the report show an amber warning. It is a warning only (no check becomes NG); it applies to every p-y result, first attempt or retry.")), /*#__PURE__*/React.createElement(DocSection, {
     title: "03 · Structural axial",
     code: "AASHTO 10.9.3.10.2"
   }, /*#__PURE__*/React.createElement("p", null, "Non-composite axial capacity, computed for both the cased length (casing + grout + bar, Eq. 10.9.3.10.2a-2) and the uncased length (grout + bar only, Eq. 10.9.3.10.2b-2). The uncased section typically governs because it has no casing contribution. The casing wall is reduced by a sacrificial corrosion allowance.")), /*#__PURE__*/React.createElement(DocSection, {
@@ -12253,7 +12274,7 @@ function PyPanel({ I, set, pyRes, r, EI, EI_composite_kipin2, EI_aashto_kipin2, 
             ? [fmt(Math.abs(pyRes.zMmax), 1), " ft ABOVE grade (in the stickup)"]
             : [fmt(pyRes.zMmax, 1), " ft below grade"]),
         " flows to the structural checks automatically.",
-        pyRes.retried ? " (Converged on the adaptive retry: 16 load steps, under-relaxed; convergence, closure and stable-branch checks passed.)" : null)
+        pyRes.retried ? ((pyRes.firstWhy && pyRes.firstWhy.length ? " (The first solve (8 load steps) converged but was rejected: " + pyRes.firstWhy.join("; ") + ".)" : "") + " (Converged on the adaptive retry: 16 load steps, under-relaxed; convergence, closure and stable-branch checks passed.)") : null)
         : (pyRes && pyRes.noConv) ? /*#__PURE__*/React.createElement(PyNoConvNote, { why: pyRes.why })
         : ("\u26a0 " + (pyRes ? pyRes.msg : "not run"))),
     // F25 (O37): large head-deflection warning (amber, warning only)
@@ -13153,7 +13174,7 @@ function App() {
       return {
         ok: true, records, Mmax_kft, zMmax, headDefl_in: res2.y[0], zMomentDecay: zDecay,
         fixity, zFix2, mzCrossings: _mzcPy.crossings, MmaxAboveGrade,
-        Mtip_kft, eq: res2.eq, iters: res2.history.reduce((s, h) => s + h.iter, 0), retried: sol.retried,
+        Mtip_kft, eq: res2.eq, iters: res2.history.reduce((s, h) => s + h.iter, 0), retried: sol.retried, firstWhy: sol.firstWhy,
         EIcased_used: EIcasedSel, embed_ft: embed_in / 12, L_ft: L_in / 12,
         eiVar: !!I.pyEIvar, Mcr_kft, Mcr_kft_u, EIatMmax, cracked,
         sweepTruncated: (() => {
