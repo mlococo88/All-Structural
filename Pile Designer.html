@@ -3776,6 +3776,30 @@ function computeAll(I, opts = {}) {
       pass: comp_pass && up_pass
     };
 
+    // ---- F32 (O43, 2026-10-11): H-pile group axial checks on the H-pile capacity ----
+    // Before F32 the group efficiency check reduced the MICROPILE grout-to-ground bond
+    // capacity R.geo.Pn_geo (beta, d_h, L_b inputs) and the block check used that bond on
+    // the block perimeter, in H-pile mode too. Now:
+    // - eta check: eta x the H-pile static phi R_n (Module 01: skin + tip, phi per layer,
+    //   incl. the small-group factor) vs STL. eta itself (FHWA / Converse-Labarre, s/B per
+    //   F30/F31) is unchanged.
+    // - block failure: NOT computed for H-piles (the tool's block is a grout-bond mechanism;
+    //   AASHTO 10.7.3.9 block failure in cohesive soil needs S_u on the block perimeter,
+    //   N_c S_u at the base and its own phi, which are not H-pile inputs). Module 11 says
+    //   "not computed - verify by hand"; it no longer enters allPass / the Module 11 status.
+    if (R.group) {
+      const g = R.group;
+      g.capBasis = "hpile";
+      g.Pn_geo_single = geo.Rn_comp;                 // nominal R_n (skin + tip), kip
+      g.phiRn_single = geo.phiRn_comp;               // phi R_n, kip
+      g.Pn_geo_group = geo.Rn_comp * g.eta;
+      g.phiPn_geo_group = geo.phiRn_comp * g.eta;
+      g.geoGroup_pass = !grpOn || g.phiPn_geo_group >= STL;
+      g.blockComputed = false;
+      g.Pn_block = null; g.blockGoverns = null; g.groupBondCap = null; g.phiGroupBond = null; g.block_pass = null;
+      g.sumIndiv = geo.Rn_comp * nPiles;
+    }
+
     // ---- H-PILE STRUCTURAL (AASHTO 10th Ed Section 6) ----
     const hp = hpileSection({ d: I.hpD, bf: I.hpBf, tf: I.hpTf, tw: I.hpTw, Fy: I.hpFy, E: I.E || 29000 });
     const Es = I.E || 29000;
@@ -4147,7 +4171,8 @@ function computeAll(I, opts = {}) {
       (hs.KLr_ok !== false)
     ) : false;
     const fixPass = R.hpileHeadFix ? R.hpileHeadFix.pass : true;
-    R.allPass = (R.hpileGeo ? R.hpileGeo.pass : false) && structPass && fixPass && R.stability.pass && (!grpOn || (geoGroup_pass && block_pass));
+    // F32 (O43): the H-pile group efficiency check on the H-pile capacity; block not computed for H-piles
+    R.allPass = (R.hpileGeo ? R.hpileGeo.pass : false) && structPass && fixPass && R.stability.pass && (!grpOn || R.group.geoGroup_pass);
   } else {
     R.allPass = R.geoChecks.pass && R.geo.pass && R.axial.cased_pass && R.axial.ucased_pass && R.flex.pass && R.comb.pass && R.bearing.pass && R.punch.pass && R.tests.verf_pass && R.tests.proof_pass && (!enableTension || geoUp_pass && strUp_pass) && (!enableBuckling || buck_pass) && (!I.cfstEnable || R.cfst.pass) && R.casingExt.pass && (!grpOn || (geoGroup_pass && block_pass)) && R.stability.pass;
   }
@@ -10252,7 +10277,7 @@ function moduleForCheck(label, pileType) {
 function grpRows(r) {
   if (!r.group || !r.group.enable) return [];
   const out = [];
-  if (r.group.block_pass !== undefined) out.push(["Group block", r.group.phiGroupBond, r.group.groupDemand, r.group.block_pass, "FHWA"]);
+  if (r.group.block_pass !== undefined && r.group.blockComputed !== false) out.push(["Group block", r.group.phiGroupBond, r.group.groupDemand, r.group.block_pass, "FHWA"]);
   return out;
 }
 
@@ -16894,7 +16919,7 @@ function App() {
     idx: "11",
     title: "Group Effects",
     code: r.group.pmSource === "rollins" ? "FHWA NHI-05-039 · Rollins/Reese p-multipliers · Converse-Labarre" : "FHWA NHI-05-039 · AASHTO Table 10.7.2.4-1 p-multipliers · Converse-Labarre",
-    status: !r.group.enable || (r.group.geoGroup_pass && r.group.block_pass),
+    status: !r.group.enable || (r.group.geoGroup_pass && (r.group.blockComputed === false || r.group.block_pass)),
     open: open[11],
     onToggle: () => toggle(11)
   }, /*#__PURE__*/React.createElement("div", {
@@ -16925,19 +16950,24 @@ function App() {
 
     // === 1. AXIAL EFFICIENCY ===
     /*#__PURE__*/React.createElement("div", { className: "rounded-sm border border-slate-200 p-3 mb-3" },
-      /*#__PURE__*/React.createElement("div", { className: "text-[11px] font-mono-tech text-[var(--blueprint)] uppercase tracking-wider mb-1" }, "1 · Axial group efficiency (η) — reduces bond capacity"),
-      /*#__PURE__*/React.createElement("p", { className: "text-[9.5px] text-slate-600 leading-snug mb-2" }, "FHWA NHI-05-039: micropiles may be treated as individual elements (η = 1.0) when center-to-center spacing ≥ 3× the bond diameter. Below that, a reduction applies (Converse-Labarre efficiency shown)."),
+      /*#__PURE__*/React.createElement("div", { className: "text-[11px] font-mono-tech text-[var(--blueprint)] uppercase tracking-wider mb-1" }, r.group.capBasis === "hpile" ? "1 · Axial group efficiency (η) — reduces the H-pile static resistance" : "1 · Axial group efficiency (η) — reduces bond capacity"),
+      r.group.capBasis === "hpile"
+        // F32 (O43): H-pile -- eta reduces the H-pile static resistance of Module 01, not the micropile bond
+        ? /*#__PURE__*/React.createElement("p", { className: "text-[9.5px] text-slate-600 leading-snug mb-2" }, "η (spacing ≥ 3B → 1.0; below that Converse-Labarre, as for micropiles) reduces the H-pile static resistance φR", /*#__PURE__*/React.createElement("sub", null, "n"), " of Module 01 (skin + tip, φ per layer). The AASHTO 10.7.3.9 group factors for driven piles are not applied here; confirm the group efficiency with the geotechnical engineer.")
+        : /*#__PURE__*/React.createElement("p", { className: "text-[9.5px] text-slate-600 leading-snug mb-2" }, "FHWA NHI-05-039: micropiles may be treated as individual elements (η = 1.0) when center-to-center spacing ≥ 3× the bond diameter. Below that, a reduction applies (Converse-Labarre efficiency shown)."),
       /*#__PURE__*/React.createElement("div", { className: "text-[10px] font-mono-tech rounded-sm p-1.5 mb-2", style: { background: r.group.spacingOKforEta ? "rgba(47,111,62,0.06)" : "rgba(178,59,59,0.06)", color: "#14304a" } },
         r.group.spacingOKforEta
           ? /*#__PURE__*/React.createElement(React.Fragment, null, "✓ Spacing ", fmt(r.group.s_dia, 1), "× ≥ 3× " + r.group.Blbl + " → η = 1.0 permitted (individual elements)")
           : /*#__PURE__*/React.createElement(React.Fragment, null, "⚠ Spacing ", fmt(r.group.s_dia, 1), "× < 3× " + r.group.Blbl + " → Converse-Labarre η = ", fmt(r.group.clEff, 3), I.pileType === "hpile" ? " (θ=atan(B/s)=" : " (θ=atan(d/s)=", fmt(r.group.thetaDeg, 1), "°)")),
-      /*#__PURE__*/React.createElement("div", { className: "text-[10px] font-mono-tech mb-2" }, "η used = ", /*#__PURE__*/React.createElement("b", null, fmt(r.group.eta, 3)), " → per-pile bond φP", /*#__PURE__*/React.createElement("sub", null, "n"), " = ", fmt(r.group.Pn_geo_single, 0), " → ", /*#__PURE__*/React.createElement("b", null, fmt(r.group.phiPn_geo_group, 0), " kip")),
+      r.group.capBasis === "hpile"
+        ? /*#__PURE__*/React.createElement("div", { className: "text-[10px] font-mono-tech mb-2" }, "η used = ", /*#__PURE__*/React.createElement("b", null, fmt(r.group.eta, 3)), " → per-pile H-pile φR", /*#__PURE__*/React.createElement("sub", null, "n"), " = ", fmt(r.group.phiRn_single, 1), " kip (R", /*#__PURE__*/React.createElement("sub", null, "n"), " = ", fmt(r.group.Pn_geo_single, 1), " kip) → ηφR", /*#__PURE__*/React.createElement("sub", null, "n"), " = ", /*#__PURE__*/React.createElement("b", null, fmt(r.group.phiPn_geo_group, 1), " kip"))
+        : /*#__PURE__*/React.createElement("div", { className: "text-[10px] font-mono-tech mb-2" }, "η used = ", /*#__PURE__*/React.createElement("b", null, fmt(r.group.eta, 3)), " → per-pile bond φP", /*#__PURE__*/React.createElement("sub", null, "n"), " = ", fmt(r.group.Pn_geo_single, 0), " → ", /*#__PURE__*/React.createElement("b", null, fmt(r.group.phiPn_geo_group, 0), " kip")),
       /*#__PURE__*/React.createElement(InputsUsed, { tab: "checks", setTab: setRailTab, panelTitle: "Group options",
         items: [["\u03b7 override", I.groupEtaOverride ? "on, \u03b7 = " + fmt(I.groupEta, 3) : "off", ""]] }),
       /*#__PURE__*/React.createElement("div", { className: "mt-2" }, /*#__PURE__*/React.createElement(CheckRow, {
         pass: r.group.geoGroup_pass,
-        tex: `\\phi\\eta P_{n,bond}=${fmt(r.group.phiPn_geo_group, 1)}\\text{ kip}${r.group.geoGroup_pass ? ' \\geq ' : ' < '}STL=${fmt(I.STL, 0)}`,
-        note: "Per-pile bond reduced by axial group efficiency."
+        tex: r.group.capBasis === "hpile" ? `\\eta\\,\\phi R_{n}=${fmt(r.group.phiPn_geo_group, 1)}\\text{ kip}${r.group.geoGroup_pass ? ' \\geq ' : ' < '}STL=${fmt(I.STL, 0)}` : `\\phi\\eta P_{n,bond}=${fmt(r.group.phiPn_geo_group, 1)}\\text{ kip}${r.group.geoGroup_pass ? ' \\geq ' : ' < '}STL=${fmt(I.STL, 0)}`,
+        note: r.group.capBasis === "hpile" ? "Per-pile H-pile static resistance (Module 01) reduced by axial group efficiency." : "Per-pile bond reduced by axial group efficiency."
       }))),
 
     // === 2. LATERAL P-MULTIPLIERS ===
@@ -16987,6 +17017,14 @@ function App() {
     // === 3. BLOCK FAILURE ===
     /*#__PURE__*/React.createElement("div", { className: "rounded-sm border border-slate-200 p-3 mb-2" },
       /*#__PURE__*/React.createElement("div", { className: "text-[11px] font-mono-tech text-[var(--blueprint)] uppercase tracking-wider mb-1" }, "3 · Block failure / equivalent pier"),
+      // F32 (O43): H-pile -- the block check is not computed (it was the micropile grout bond on the block perimeter)
+      r.group.blockComputed === false ? /*#__PURE__*/React.createElement("div", null,
+        /*#__PURE__*/React.createElement("div", { className: "p-2 rounded-sm text-[9.5px] leading-snug", style: { background: "rgba(183,121,31,0.10)", border: "1px solid rgba(183,121,31,0.35)", color: "#7a4d15" } },
+          /*#__PURE__*/React.createElement("b", null, "Not computed for H-piles — verify by hand. "),
+          "This tool's block check is the micropile grout-to-ground bond on the block perimeter, which does not apply to driven H-piles. For a group in cohesive soil check block failure per AASHTO LRFD 10th Ed. Art. 10.7.3.9 (S", /*#__PURE__*/React.createElement("sub", null, "u"), " on the block perimeter plus N", /*#__PURE__*/React.createElement("sub", null, "c"), "S", /*#__PURE__*/React.createElement("sub", null, "u"), " at the base, with its own resistance factor); in cohesionless soil confirm with the geotechnical engineer. Not included in the Module 11 status or the overall result."),
+        /*#__PURE__*/React.createElement("div", { className: "text-[10px] font-mono-tech leading-relaxed mt-2", style: { color: "#334155" } },
+          "block footprint ≈ ", fmt(r.group.Bx_ft, 1), " × ", fmt(r.group.By_ft, 1), " ft (c/c + B), perimeter ", fmt(r.group.blockPerim_ft, 1), " ft; Σ individual H-pile R", /*#__PURE__*/React.createElement("sub", null, "n"), " = ", fmt(r.group.sumIndiv, 0), " kip; total factored group demand ", fmt(r.group.groupDemand, 0), " kip"))
+      : /*#__PURE__*/React.createElement(React.Fragment, null,
       /*#__PURE__*/React.createElement("p", { className: "text-[9.5px] text-slate-600 leading-snug mb-2" }, "At tight spacing the group can fail as one monolithic block rather than as individual piles. The block's perimeter bond capacity is compared to the sum of individual capacities; the lesser governs the group. Group settlement is typically a geotechnical-report item and is not computed here."),
       /*#__PURE__*/React.createElement("div", { className: "text-[10px] font-mono-tech leading-relaxed", style: { color: "#334155" } },
         "block footprint ≈ ", fmt(r.group.Bx_ft, 1), " × ", fmt(r.group.By_ft, 1), " ft, perimeter ", fmt(r.group.blockPerim_ft, 1), " ft, depth ", fmt(r.group.Lb_block, 0), " ft",
@@ -16997,7 +17035,7 @@ function App() {
         pass: r.group.block_pass,
         tex: `\\phi P_{n,group}=${fmt(r.group.phiGroupBond, 0)}\\text{ kip}${r.group.block_pass ? ' \\geq ' : ' < '}\\Sigma STL=${fmt(r.group.groupDemand, 0)}\\text{ kip}`,
         note: "Group capacity = min(block, Σ individual × η) vs total factored group demand."
-      }))),
+      })))),
     /*#__PURE__*/React.createElement(CapResults, { cap: r.capDist, g: r.group, I: I, set: set })
   )),
   /*#__PURE__*/React.createElement("footer", {

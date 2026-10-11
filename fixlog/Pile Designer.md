@@ -9531,6 +9531,208 @@ function groupWsSpacing(I) {
    const groupCase = groupCasesEmitted.length ? groupCasesEmitted[0] : null;
 ```
 
+### F32. H-pile groups: the group efficiency check uses the H-pile static resistance; the block check is "not computed — verify by hand" (O43)   [calc change] [H-pile groups only; micropile, integral abutment and single piles bit-identical (proven). The η check is now against the H-pile φR_n (Module 01) instead of the micropile bond: MORE or LESS conservative depending on which is larger (defaults: H-pile φR_n = 0 with no N60 entered → NG either way; sand N60 = 20: 84.88 vs 76.97 kip → LESS conservative, NG → OK). The block check no longer enters the H-pile overall result or the Module 11 status: LESS conservative (a check that failed on the wrong basis is removed; the engineer must verify block failure by hand)]
+
+- **Where:**
+  - `computeAll`, after `R.hpileGeo = { … }` (anchor `// ---- F32 (O43, 2026-10-11): H-pile group axial checks on the H-pile capacity ----`): overwrites the `R.group` capacity fields in H-pile mode.
+  - `computeAll` H-pile `R.allPass` (anchor `(!grpOn || R.group.geoGroup_pass)`).
+  - `grpRows` (check strip "Group block" row: skipped when `blockComputed === false`).
+  - Module 11 status (anchor `(r.group.blockComputed === false || r.group.block_pass)`), section 1 heading / text / η line / check row, section 3 (amber "Not computed for H-piles — verify by hand" box).
+- **Problem:** in H-pile mode the group efficiency check reduced the **micropile** grout-to-ground bond capacity `R.geo.Pn_geo` (β, d_h, L_b, φ_geo micropile inputs; 109.96 kip at the defaults) and the block check used that bond on the block perimeter over the micropile bond length; both entered the H-pile `allPass` and the Module 11 status. Neither is the H-pile's capacity (F30 open item O43).
+- **Before (H-pile and micropile alike):**
+
+```js
+  const Pn_geo_group = R.geo.Pn_geo * eta;                  // per-pile bond reduced by eta
+  const phiPn_geo_group = phi_geo * Pn_geo_group;
+  const geoGroup_pass = !grpOn || phiPn_geo_group >= STL;
+  ...
+  const Pn_block_side = blockPerim_in * beta_ksi*12 * Lb_block; // kip
+  const sumIndiv = R.geo.Pn_geo * nPiles;
+  const Pn_block = Pn_block_side;          // (base bearing conservatively neglected)
+  const groupBondCap = Math.min(Pn_block, sumIndiv*eta);
+  const phiGroupBond = phi_geo*groupBondCap;
+  const block_pass = !grpOn || phiGroupBond >= groupDemand;
+  ...
+    R.allPass = (R.hpileGeo ? R.hpileGeo.pass : false) && structPass && fixPass && R.stability.pass && (!grpOn || (geoGroup_pass && block_pass));
+```
+
+- **After (micropile unchanged; H-pile, after `R.hpileGeo`):**
+
+```js
+    if (R.group) {
+      const g = R.group;
+      g.capBasis = "hpile";
+      g.Pn_geo_single = geo.Rn_comp;                 // nominal R_n (skin + tip), kip
+      g.phiRn_single = geo.phiRn_comp;               // phi R_n, kip
+      g.Pn_geo_group = geo.Rn_comp * g.eta;
+      g.phiPn_geo_group = geo.phiRn_comp * g.eta;
+      g.geoGroup_pass = !grpOn || g.phiPn_geo_group >= STL;
+      g.blockComputed = false;
+      g.Pn_block = null; g.blockGoverns = null; g.groupBondCap = null; g.phiGroupBond = null; g.block_pass = null;
+      g.sumIndiv = geo.Rn_comp * nPiles;
+    }
+  ...
+    R.allPass = (R.hpileGeo ? R.hpileGeo.pass : false) && structPass && fixPass && R.stability.pass && (!grpOn || R.group.geoGroup_pass);
+// Module 11 status
+    status: !r.group.enable || (r.group.geoGroup_pass && (r.group.blockComputed === false || r.group.block_pass)),
+// grpRows
+  if (r.group.block_pass !== undefined && r.group.blockComputed !== false) out.push(["Group block", …]);
+```
+
+- **Efficiency check (H-pile):** η × φR_n ≥ STL, φR_n = the Module 01 static resistance (Σ φ_stat · R_s per layer + φ_stat · R_p, including the small-group 0.80 factor when that option is on). η itself is unchanged (FHWA spacing ≥ 3B → 1.0, else Converse-Labarre on s/B per F30 / F31). The AASHTO 10.7.3.9 group factors for driven piles (cohesionless: η = 1.0; cohesive: 0.65–1.0 by spacing and cap contact) are **not** applied — new open item O45.
+- **Block check (H-pile): not computed.** The tool's block mechanism is grout-to-ground bond on the block perimeter over the bond length (base neglected), a micropile model. The driven-pile equivalent (AASHTO LRFD 10th Ed. Art. 10.7.3.9: block of soil bounded by the piles in cohesive soil, S̄_u over the block perimeter × embedded length plus N_c·S_u over the base, with its own resistance factor φ_g; FHWA GEC-12 the same) needs a block resistance factor that is not an H-pile input, and for cohesionless layers the tool has no block basis. So Module 11 shows an amber box "Not computed for H-piles — verify by hand" (with the footprint, Σ individual R_n and the factored group demand for reference), and the block is excluded from the H-pile overall result, the Module 11 status and the check strip, rather than showing a wrong number. Micropile block unchanged.
+- **Governing provision:** AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024): Art. 10.7.3.8.6 (static H-pile resistance, Module 01, unchanged), Art. 10.7.3.9 (pile group resistance and block failure — referenced, not implemented), Table 10.5.5.2.3-1 (φ_stat, unchanged). FHWA NHI-05-039 / Converse-Labarre for η, as before.
+- **§4 callouts (worked checks).** 2 columns × 3 rows, HP 14×89 strong axis, "3 × dia" = 3B (after F31: s = 44.10 in, η = 1.000), toggle on, case Manual Str (STL 80 kip, V 3 kip per pile), micropile bond inputs at the defaults (R.geo.Pn_geo = 109.96 kip, φ_geo 0.70, β 2.50 ksf, L_b 24 ft), embedded length 30 ft below grade, stickup 3 ft.
+  - **(a) Default soil (sand, no N60 entered → H-pile R_s = R_p = 0; Module 01 already NG).**
+
+    | | Before (F31) | After (F32) |
+    |---|---|---|
+    | per-pile capacity used | micropile bond P_n = 109.96, φ = 0.70 | H-pile R_n = 0, φR_n = 0 |
+    | η check | 0.70 × 1.000 × 109.96 = 76.97 < 80 **NG** | 1.000 × 0 = 0 < 80 **NG** |
+    | block | 0.70 × min(1617.0, 659.8) = 461.8 < 480 **NG** | not computed — verify by hand |
+    | Module 11 / overall | NG / NG | NG / NG (Module 01 and η) |
+
+  - **(b) Sand with N60 = 20 (same γ, φ, k).** Hand check of Module 01 (unchanged): box perimeter 2(13.83 + 14.70)/12 = 4.755 ft, box area 13.83 × 14.70/144 = 1.4118 ft²; q_s = N60/50 = 0.40 ksf → R_s = 0.40 × 4.755 × 30 = 57.06 kip; q_p = min(0.8 × 20 × 30/1.225, 8 × 20) = min(391.8, 160) = 160 ksf → R_p = 160 × 1.4118 = 225.89 kip; R_n = 282.95 kip; φR_n = 0.30 × 282.95 = **84.89 kip** (φ_stat sand 0.30).
+
+    | | Before (F31) | After (F32) |
+    |---|---|---|
+    | η check | 0.70 × 1.000 × 109.96 = 76.97 < 80 **NG** | 1.000 × 84.89 = **84.89 ≥ 80 OK** |
+    | block | 461.8 < 480 **NG** | not computed — verify by hand (Σ individual R_n = 6 × 282.95 = 1697.7 kip shown for reference; factored demand 480 kip) |
+    | Module 11 status | NG | **OK** |
+    | Overall (active case Manual Str) / envelope Manual Str | NG / ✗ | **OK / ✓** |
+    | Group ▦ Str I / Ext I (STL 184.8 / 138.6 kip > φR_n 84.9) | ✗ | ✗ (Module 01 governs) |
+
+    **LESS conservative** here (the micropile bond was lower than the H-pile resistance, and the block no longer fails the group); in a profile where φR_n < 0.70 × P_n,bond it is MORE conservative.
+  - **(c) Weak axis, N60 = 20, and toggle off:** the same η-check numbers (R_n uses max(d, b_f) for the tip width, unchanged); lateral results unchanged by F32.
+- **Pure refactor parts:** none in the micropile path; micropile `R.group` and every micropile result unchanged (verified bit-identical).
+- **How verified:**
+  - `node --check` on the four inline scripts.
+  - Headless Chromium (pinned libraries served locally), F31 commit vs this commit, same procedure as F31 (load, "Run all cases", every case active in turn, envelope re-run):
+    - **Bit-identical (0 numeric, 0 text differences):** micropile group, default soil and sand N60 = 20.
+    - **H-pile groups** (strong axis at the defaults and with N60 = 20, weak axis with N60 = 20, toggle off with N60 = 20): differences only in `R.group` (`Pn_geo_single`, `phiRn_single`, `Pn_geo_group`, `phiPn_geo_group`, `geoGroup_pass`, `capBasis`, `blockComputed`, block fields null, `sumIndiv`) and what follows from them: Module 11 status, check strip "1 check not satisfied" → "All checks OK", envelope Manual Str ✗ → ✓ (N60 = 20, numbers in (b)); lateral results identical.
+  - Single-pile H-pile: displayed values identical (the H-pile `R.group` internals are unused when the group is off). Integral abutment: identical.
+  - Screenshot looked at: Module 11, H-pile group, N60 = 20 (η line "per-pile H-pile φR_n = 84.9 kip (R_n = 283.0 kip) → ηφR_n = 84.9 kip", check row, amber block box). No console errors.
+- **Other copies:** none.
+- **Re-applying by hand:** unified diff below (CRLF stripped).
+
+```diff
+--- a/Pile Designer.html
++++ b/Pile Designer.html
+@@ -3776,6 +3776,30 @@
+       pass: comp_pass && up_pass
+     };
+ 
++    // ---- F32 (O43, 2026-10-11): H-pile group axial checks on the H-pile capacity ----
++    // Before F32 the group efficiency check reduced the MICROPILE grout-to-ground bond
++    // capacity R.geo.Pn_geo (beta, d_h, L_b inputs) and the block check used that bond on
++    // the block perimeter, in H-pile mode too. Now:
++    // - eta check: eta x the H-pile static phi R_n (Module 01: skin + tip, phi per layer,
++    //   incl. the small-group factor) vs STL. eta itself (FHWA / Converse-Labarre, s/B per
++    //   F30/F31) is unchanged.
++    // - block failure: NOT computed for H-piles (the tool's block is a grout-bond mechanism;
++    //   AASHTO 10.7.3.9 block failure in cohesive soil needs S_u on the block perimeter,
++    //   N_c S_u at the base and its own phi, which are not H-pile inputs). Module 11 says
++    //   "not computed - verify by hand"; it no longer enters allPass / the Module 11 status.
++    if (R.group) {
++      const g = R.group;
++      g.capBasis = "hpile";
++      g.Pn_geo_single = geo.Rn_comp;                 // nominal R_n (skin + tip), kip
++      g.phiRn_single = geo.phiRn_comp;               // phi R_n, kip
++      g.Pn_geo_group = geo.Rn_comp * g.eta;
++      g.phiPn_geo_group = geo.phiRn_comp * g.eta;
++      g.geoGroup_pass = !grpOn || g.phiPn_geo_group >= STL;
++      g.blockComputed = false;
++      g.Pn_block = null; g.blockGoverns = null; g.groupBondCap = null; g.phiGroupBond = null; g.block_pass = null;
++      g.sumIndiv = geo.Rn_comp * nPiles;
++    }
++
+     // ---- H-PILE STRUCTURAL (AASHTO 10th Ed Section 6) ----
+     const hp = hpileSection({ d: I.hpD, bf: I.hpBf, tf: I.hpTf, tw: I.hpTw, Fy: I.hpFy, E: I.E || 29000 });
+     const Es = I.E || 29000;
+@@ -4147,7 +4171,8 @@
+       (hs.KLr_ok !== false)
+     ) : false;
+     const fixPass = R.hpileHeadFix ? R.hpileHeadFix.pass : true;
+-    R.allPass = (R.hpileGeo ? R.hpileGeo.pass : false) && structPass && fixPass && R.stability.pass && (!grpOn || (geoGroup_pass && block_pass));
++    // F32 (O43): the H-pile group efficiency check on the H-pile capacity; block not computed for H-piles
++    R.allPass = (R.hpileGeo ? R.hpileGeo.pass : false) && structPass && fixPass && R.stability.pass && (!grpOn || R.group.geoGroup_pass);
+   } else {
+     R.allPass = R.geoChecks.pass && R.geo.pass && R.axial.cased_pass && R.axial.ucased_pass && R.flex.pass && R.comb.pass && R.bearing.pass && R.punch.pass && R.tests.verf_pass && R.tests.proof_pass && (!enableTension || geoUp_pass && strUp_pass) && (!enableBuckling || buck_pass) && (!I.cfstEnable || R.cfst.pass) && R.casingExt.pass && (!grpOn || (geoGroup_pass && block_pass)) && R.stability.pass;
+   }
+@@ -10252,7 +10277,7 @@
+ function grpRows(r) {
+   if (!r.group || !r.group.enable) return [];
+   const out = [];
+-  if (r.group.block_pass !== undefined) out.push(["Group block", r.group.phiGroupBond, r.group.groupDemand, r.group.block_pass, "FHWA"]);
++  if (r.group.block_pass !== undefined && r.group.blockComputed !== false) out.push(["Group block", r.group.phiGroupBond, r.group.groupDemand, r.group.block_pass, "FHWA"]);
+   return out;
+ }
+ 
+@@ -16894,7 +16919,7 @@
+     idx: "11",
+     title: "Group Effects",
+     code: r.group.pmSource === "rollins" ? "FHWA NHI-05-039 · Rollins/Reese p-multipliers · Converse-Labarre" : "FHWA NHI-05-039 · AASHTO Table 10.7.2.4-1 p-multipliers · Converse-Labarre",
+-    status: !r.group.enable || (r.group.geoGroup_pass && r.group.block_pass),
++    status: !r.group.enable || (r.group.geoGroup_pass && (r.group.blockComputed === false || r.group.block_pass)),
+     open: open[11],
+     onToggle: () => toggle(11)
+   }, /*#__PURE__*/React.createElement("div", {
+@@ -16925,19 +16950,24 @@
+ 
+     // === 1. AXIAL EFFICIENCY ===
+     /*#__PURE__*/React.createElement("div", { className: "rounded-sm border border-slate-200 p-3 mb-3" },
+-      /*#__PURE__*/React.createElement("div", { className: "text-[11px] font-mono-tech text-[var(--blueprint)] uppercase tracking-wider mb-1" }, "1 · Axial group efficiency (η) — reduces bond capacity"),
+-      /*#__PURE__*/React.createElement("p", { className: "text-[9.5px] text-slate-600 leading-snug mb-2" }, "FHWA NHI-05-039: micropiles may be treated as individual elements (η = 1.0) when center-to-center spacing ≥ 3× the bond diameter. Below that, a reduction applies (Converse-Labarre efficiency shown)."),
++      /*#__PURE__*/React.createElement("div", { className: "text-[11px] font-mono-tech text-[var(--blueprint)] uppercase tracking-wider mb-1" }, r.group.capBasis === "hpile" ? "1 · Axial group efficiency (η) — reduces the H-pile static resistance" : "1 · Axial group efficiency (η) — reduces bond capacity"),
++      r.group.capBasis === "hpile"
++        // F32 (O43): H-pile -- eta reduces the H-pile static resistance of Module 01, not the micropile bond
++        ? /*#__PURE__*/React.createElement("p", { className: "text-[9.5px] text-slate-600 leading-snug mb-2" }, "η (spacing ≥ 3B → 1.0; below that Converse-Labarre, as for micropiles) reduces the H-pile static resistance φR", /*#__PURE__*/React.createElement("sub", null, "n"), " of Module 01 (skin + tip, φ per layer). The AASHTO 10.7.3.9 group factors for driven piles are not applied here; confirm the group efficiency with the geotechnical engineer.")
++        : /*#__PURE__*/React.createElement("p", { className: "text-[9.5px] text-slate-600 leading-snug mb-2" }, "FHWA NHI-05-039: micropiles may be treated as individual elements (η = 1.0) when center-to-center spacing ≥ 3× the bond diameter. Below that, a reduction applies (Converse-Labarre efficiency shown)."),
+       /*#__PURE__*/React.createElement("div", { className: "text-[10px] font-mono-tech rounded-sm p-1.5 mb-2", style: { background: r.group.spacingOKforEta ? "rgba(47,111,62,0.06)" : "rgba(178,59,59,0.06)", color: "#14304a" } },
+         r.group.spacingOKforEta
+           ? /*#__PURE__*/React.createElement(React.Fragment, null, "✓ Spacing ", fmt(r.group.s_dia, 1), "× ≥ 3× " + r.group.Blbl + " → η = 1.0 permitted (individual elements)")
+           : /*#__PURE__*/React.createElement(React.Fragment, null, "⚠ Spacing ", fmt(r.group.s_dia, 1), "× < 3× " + r.group.Blbl + " → Converse-Labarre η = ", fmt(r.group.clEff, 3), I.pileType === "hpile" ? " (θ=atan(B/s)=" : " (θ=atan(d/s)=", fmt(r.group.thetaDeg, 1), "°)")),
+-      /*#__PURE__*/React.createElement("div", { className: "text-[10px] font-mono-tech mb-2" }, "η used = ", /*#__PURE__*/React.createElement("b", null, fmt(r.group.eta, 3)), " → per-pile bond φP", /*#__PURE__*/React.createElement("sub", null, "n"), " = ", fmt(r.group.Pn_geo_single, 0), " → ", /*#__PURE__*/React.createElement("b", null, fmt(r.group.phiPn_geo_group, 0), " kip")),
++      r.group.capBasis === "hpile"
++        ? /*#__PURE__*/React.createElement("div", { className: "text-[10px] font-mono-tech mb-2" }, "η used = ", /*#__PURE__*/React.createElement("b", null, fmt(r.group.eta, 3)), " → per-pile H-pile φR", /*#__PURE__*/React.createElement("sub", null, "n"), " = ", fmt(r.group.phiRn_single, 1), " kip (R", /*#__PURE__*/React.createElement("sub", null, "n"), " = ", fmt(r.group.Pn_geo_single, 1), " kip) → ηφR", /*#__PURE__*/React.createElement("sub", null, "n"), " = ", /*#__PURE__*/React.createElement("b", null, fmt(r.group.phiPn_geo_group, 1), " kip"))
++        : /*#__PURE__*/React.createElement("div", { className: "text-[10px] font-mono-tech mb-2" }, "η used = ", /*#__PURE__*/React.createElement("b", null, fmt(r.group.eta, 3)), " → per-pile bond φP", /*#__PURE__*/React.createElement("sub", null, "n"), " = ", fmt(r.group.Pn_geo_single, 0), " → ", /*#__PURE__*/React.createElement("b", null, fmt(r.group.phiPn_geo_group, 0), " kip")),
+       /*#__PURE__*/React.createElement(InputsUsed, { tab: "checks", setTab: setRailTab, panelTitle: "Group options",
+         items: [["\u03b7 override", I.groupEtaOverride ? "on, \u03b7 = " + fmt(I.groupEta, 3) : "off", ""]] }),
+       /*#__PURE__*/React.createElement("div", { className: "mt-2" }, /*#__PURE__*/React.createElement(CheckRow, {
+         pass: r.group.geoGroup_pass,
+-        tex: `\\phi\\eta P_{n,bond}=${fmt(r.group.phiPn_geo_group, 1)}\\text{ kip}${r.group.geoGroup_pass ? ' \\geq ' : ' < '}STL=${fmt(I.STL, 0)}`,
+-        note: "Per-pile bond reduced by axial group efficiency."
++        tex: r.group.capBasis === "hpile" ? `\\eta\\,\\phi R_{n}=${fmt(r.group.phiPn_geo_group, 1)}\\text{ kip}${r.group.geoGroup_pass ? ' \\geq ' : ' < '}STL=${fmt(I.STL, 0)}` : `\\phi\\eta P_{n,bond}=${fmt(r.group.phiPn_geo_group, 1)}\\text{ kip}${r.group.geoGroup_pass ? ' \\geq ' : ' < '}STL=${fmt(I.STL, 0)}`,
++        note: r.group.capBasis === "hpile" ? "Per-pile H-pile static resistance (Module 01) reduced by axial group efficiency." : "Per-pile bond reduced by axial group efficiency."
+       }))),
+ 
+     // === 2. LATERAL P-MULTIPLIERS ===
+@@ -16987,6 +17017,14 @@
+     // === 3. BLOCK FAILURE ===
+     /*#__PURE__*/React.createElement("div", { className: "rounded-sm border border-slate-200 p-3 mb-2" },
+       /*#__PURE__*/React.createElement("div", { className: "text-[11px] font-mono-tech text-[var(--blueprint)] uppercase tracking-wider mb-1" }, "3 · Block failure / equivalent pier"),
++      // F32 (O43): H-pile -- the block check is not computed (it was the micropile grout bond on the block perimeter)
++      r.group.blockComputed === false ? /*#__PURE__*/React.createElement("div", null,
++        /*#__PURE__*/React.createElement("div", { className: "p-2 rounded-sm text-[9.5px] leading-snug", style: { background: "rgba(183,121,31,0.10)", border: "1px solid rgba(183,121,31,0.35)", color: "#7a4d15" } },
++          /*#__PURE__*/React.createElement("b", null, "Not computed for H-piles — verify by hand. "),
++          "This tool's block check is the micropile grout-to-ground bond on the block perimeter, which does not apply to driven H-piles. For a group in cohesive soil check block failure per AASHTO LRFD 10th Ed. Art. 10.7.3.9 (S", /*#__PURE__*/React.createElement("sub", null, "u"), " on the block perimeter plus N", /*#__PURE__*/React.createElement("sub", null, "c"), "S", /*#__PURE__*/React.createElement("sub", null, "u"), " at the base, with its own resistance factor); in cohesionless soil confirm with the geotechnical engineer. Not included in the Module 11 status or the overall result."),
++        /*#__PURE__*/React.createElement("div", { className: "text-[10px] font-mono-tech leading-relaxed mt-2", style: { color: "#334155" } },
++          "block footprint ≈ ", fmt(r.group.Bx_ft, 1), " × ", fmt(r.group.By_ft, 1), " ft (c/c + B), perimeter ", fmt(r.group.blockPerim_ft, 1), " ft; Σ individual H-pile R", /*#__PURE__*/React.createElement("sub", null, "n"), " = ", fmt(r.group.sumIndiv, 0), " kip; total factored group demand ", fmt(r.group.groupDemand, 0), " kip"))
++      : /*#__PURE__*/React.createElement(React.Fragment, null,
+       /*#__PURE__*/React.createElement("p", { className: "text-[9.5px] text-slate-600 leading-snug mb-2" }, "At tight spacing the group can fail as one monolithic block rather than as individual piles. The block's perimeter bond capacity is compared to the sum of individual capacities; the lesser governs the group. Group settlement is typically a geotechnical-report item and is not computed here."),
+       /*#__PURE__*/React.createElement("div", { className: "text-[10px] font-mono-tech leading-relaxed", style: { color: "#334155" } },
+         "block footprint ≈ ", fmt(r.group.Bx_ft, 1), " × ", fmt(r.group.By_ft, 1), " ft, perimeter ", fmt(r.group.blockPerim_ft, 1), " ft, depth ", fmt(r.group.Lb_block, 0), " ft",
+@@ -16997,7 +17035,7 @@
+         pass: r.group.block_pass,
+         tex: `\\phi P_{n,group}=${fmt(r.group.phiGroupBond, 0)}\\text{ kip}${r.group.block_pass ? ' \\geq ' : ' < '}\\Sigma STL=${fmt(r.group.groupDemand, 0)}\\text{ kip}`,
+         note: "Group capacity = min(block, Σ individual × η) vs total factored group demand."
+-      }))),
++      })))),
+     /*#__PURE__*/React.createElement(CapResults, { cap: r.capDist, g: r.group, I: I, set: set })
+   )),
+   /*#__PURE__*/React.createElement("footer", {
+```
+
 ## Open items (not changed)
 - O1. **Uncased/cased structural axial: outer 0.85 factor and `fy = min(fyb, fyc)`** (`Rn_cased/Rn_ucased`, ≈ line 1675).
   - Neither AASHTO 10.9.3.10.2 nor FHWA NHI-05-039 Eq. 5-13 has the outer 0.85, and the uncased section has no casing, so min(fyb, fyc) is arbitrary there.
@@ -9606,5 +9808,7 @@ function groupWsSpacing(I) {
 - O40. **Integral-abutment Tier-2 graphs (`iabNonlinearSolve`) still plot the p-y curve value `res.p` at near-zero-deflection clay nodes** (the overstatement F28 removed from the Lateral graphs). Display only; switch them to the solver-applied reaction? (Split out of O39, 2026-10-11.)
 - O41. **Closed by F30 (2026-10-11).** Engineer's decision 2026-10-11: B = the pile width the p-y analysis uses (H-pile: b_f strong axis / d weak axis); micropile unchanged. Original text: **Group spacing ratio for the p-multipliers (and η) uses the bond-hole diameter for every pile type** (`computeAll` / `groupPmTable`: `s_dia = s / bondHoleDia(I)`; `bondHoleDia` = micropile casing OD unless d_h is entered). AASHTO Table 10.7.2.4-1 is in pile diameters / widths B. In H-pile mode the ratio is therefore taken against the micropile OD input, not the H-pile width; the group workspace grid and `computeCapDist` space piles with `pileWidth(I)` instead. Found in F29, not changed (it changes the row f_m and η of H-pile groups). **Ask:** use `pileWidth(I)` (H-pile: d or b_f per axis) as B for the p-multiplier spacing, and which width for a micropile with d_h ≠ OD.
 - O42. **Per-row lateral load share.** With "Apply group p-multipliers automatically (per row)" every row is solved with the same per-pile shear (the rigid-cap equal share). In a real group the stiffer leading row attracts more shear than the shadowed trailing rows, so equal shares overstate the trailing-row demand and understate the leading row's. Found in F29, not changed. **Ask:** keep equal shares (the governing row is usually the trailing row, so this is conservative there), or distribute the cap shear by row stiffness (iterating on a common head deflection)?
-- O43. **Group axial efficiency and block failure in H-pile mode reduce the micropile bond capacity.** `computeAll` group block: `Pn_geo_group = R.geo.Pn_geo * eta` and the block side resistance use the micropile grout-to-ground bond (β, d_h, L_b inputs) for every pile type, and both checks enter the H-pile `allPass` and the Module 11 status. In H-pile mode they should use the H-pile static capacity (`R.hpileGeo`) and an H-pile block (skin over the embedded length, plus base). Found in F30, not changed (calc change). **Ask:** H-pile group efficiency / block basis (AASHTO 10.7.3.9 / 10.7.3.11?), or hide these two checks in H-pile mode until then.
+- O43. **Closed by F32 (2026-10-11).** Engineer's decision 2026-10-11: the H-pile group η check uses the H-pile static resistance; the block is shown "not computed for H-piles — verify by hand" (see O45). Original text: **Group axial efficiency and block failure in H-pile mode reduce the micropile bond capacity.** `computeAll` group block: `Pn_geo_group = R.geo.Pn_geo * eta` and the block side resistance use the micropile grout-to-ground bond (β, d_h, L_b inputs) for every pile type, and both checks enter the H-pile `allPass` and the Module 11 status. In H-pile mode they should use the H-pile static capacity (`R.hpileGeo`) and an H-pile block (skin over the embedded length, plus base). Found in F30, not changed (calc change). **Ask:** H-pile group efficiency / block basis (AASHTO 10.7.3.9 / 10.7.3.11?), or hide these two checks in H-pile mode until then.
 - O44. **Micropile with d_h ≠ casing OD: two group layouts.** Module 11 (`computeAll`, `groupPmTable`, "Generate grid") spaces a grid given in diameters at `groupSpacingDia × d_h`, while the group workspace, the Group ▦ case loads and the plan use `groupSpacingDia × OD` (`pileWidth`). With d_h = 9 in, OD 7 in, 3 × dia: Module 11's rigid-cap table shows 27 in c/c, the cases use 21 in. Left unchanged by F30 (micropile results to stay identical). **Ask:** which width defines "spacing × dia" for a micropile (d_h or OD), so both use it.
+- O45. **H-pile group efficiency and block failure per AASHTO 10.7.3.9 (found in F32, not changed).** F32 makes the H-pile η check use the H-pile static resistance but keeps the tool's η (FHWA spacing ≥ 3B → 1.0, else Converse-Labarre), and shows the block check as "not computed — verify by hand". AASHTO LRFD 10th Ed. Art. 10.7.3.9 for driven piles gives: cohesionless soil η = 1.0 (no block check); cohesive soil η from 0.65 at 2.5B to 1.0 at 6B when the cap is not in firm contact (1.0 when it is), and a block check R = (2X + 2Y)·Z·S̄_u + X·Y·N_c·S_u with its own resistance factor (Table 10.5.5.2.3-1, block failure in clay). **Ask:** implement the AASHTO η and the cohesive-soil block for H-pile groups (needs a cap-contact input and the block φ, plus a rule for mixed profiles), or keep the current η and the "verify by hand" block?
+- O48. **Micropile Module 11 η line labels the nominal bond capacity as "φP_n" (found in F32, display only, not changed).** "per-pile bond φP_n = 110 → 57 kip": the first number is the nominal R.geo.Pn_geo (109.96 kip), the second φηP_n. **Ask:** relabel the first value "P_n"?
