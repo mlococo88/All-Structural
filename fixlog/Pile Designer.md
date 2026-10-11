@@ -7987,6 +7987,383 @@ index d816926..81efdda 100644
          sweepTruncated: (() => {
 ```
 
+## 2026-10-11 — PR: claude/pile-o38 (PR link added after merge)
+
+### F28. Equilibrium closure from the soil reaction the solver applied (O38); Soil reaction graph and Figure F-3 points show that reaction   [diagnostic + display] [no result change: y, M, V, M_max, y₀ and every D/C are bit-identical; the displayed closure changes, and so does the closure the retry acceptance test (b) reads — no accept / reject outcome changed in 326 solves]
+- **Date:** 2026-10-11. **Type:** diagnostic (closure measure) + display (graphs). No formula, load or resistance factor, unit or code reference changes.
+- **Engineer's decision 2026-10-11 on O38:** "yes do both, switch the soil reaction graph too" — (1) the closure integrates the reaction the solver applied; (2) apply the closure test (b) to first attempts too; (3) plot the solver-applied reaction on the Soil reaction graph. **Item (2) is NOT in this entry:** the required re-run found ordinary converged solves that (b) would reject (four-layer H-pile, moment-only head load M 40 kip·ft, see "Item (2) withheld" below and O39). Per the instruction ("if any ordinary solve is rejected by (b), STOP and report") it was stopped and is left for a decision. First attempts keep (a) + (c) only, as F27.
+- **Cause of O38 (found by the investigation, confirmed here):** the soft-clay (Matlock) and stiff-clay (Welch & Reese) p-y models have a secant floor `yFloor = 0.001·y₅₀` (× f_y) in `pySecantEs`: below |y| = 0.001·y₅₀ the solver uses the secant stiffness through the floor point, i.e. it linearises the curve (needed because the y^(1/3) / y^(1/4) curves have infinite initial slope). The FD stiffness rows use that E_s. The closure, however, integrated `res.p = pyPofY(y)`, the curve itself, which at those near-zero-deflection nodes is far above E_s·y (p ∝ y^(1/4) vs p ∝ y; up to ~50× at 23 ft in the example). On a four-layer profile with 9 ft of stiff clay under the active zone, 32 of 121 nodes are below the floor and the curve values add 2.6 kip of "reaction" that the solver never applied. The solution itself is sound: recomputed with the applied reaction the closure is 0.006 % / 0.004 %.
+- **Where:**
+  - `solvePyPile` (anchor `res.pEq.push(pySecantEs(soil[i].model, y[IX(i)], z[i], soil[i].prm, gPM, gYM) * y[IX(i)]);`): new result array `res.pEq` = E_s(y)·y at each node, with the same `pySecantEs` call (same yFloor, f_m, f_y) the FD rows use; `res.p` is unchanged and kept. The closure loop (`intP`, `intPz`, `intAbsPz`) and the F27 force-normalisation integral `intAbsP` now integrate `res.pEq` (anchor `const pE = res.pEq;`).
+  - `App` → `pyRes`: `pNode: res2.pEq` (was `res2.p`; anchor `pNode: res2.pEq,`) and `mobil` (anchor `Math.abs(res2.pEq[i2]) / pu2`).
+  - `PyCurvesFig` note (anchor `p = the reaction the solver applied (E_s·y, the secant stiffness times y)`), with a sentence naming any depth whose ● lies off its curve; `LatGraphsCard` → `soil` panel notes (anchors `Solver-applied reaction: the nodal soil reaction p = E_s·y` and `p = the solver-applied reaction beside it`); Methodology paragraph "Nonlinear p-y convergence" (closure basis E_s·y stated); graphics header comment.
+- **Governing provision:** none (a numerical-solution diagnostic and a display choice). The p-y models, the yFloor linearisation, the solve and all results are unchanged.
+- **Before / after (`solvePyPile`):**
+  ```js
+  // before
+      res.p.push(pyPofY(soil[i].model, y[IX(i)], z[i], soil[i].prm, gPM, gYM));
+    }
+    let intP = 0, intPz = 0, intAbsPz = 0;
+    for (let i = 0; i < n; i++) {
+      intP += 0.5 * (res.p[i] + res.p[i + 1]) * h;
+      intPz += 0.5 * (res.p[i] * z[i] + res.p[i + 1] * z[i + 1]) * h;
+      intAbsPz += 0.5 * (Math.abs(res.p[i]) * z[i] + Math.abs(res.p[i + 1]) * z[i + 1]) * h;
+    }
+    …
+    for (let i = 0; i < n; i++) intAbsP += 0.5 * (Math.abs(res.p[i]) + Math.abs(res.p[i + 1])) * h;
+  // after
+      res.p.push(pyPofY(soil[i].model, y[IX(i)], z[i], soil[i].prm, gPM, gYM));
+      res.pEq.push(pySecantEs(soil[i].model, y[IX(i)], z[i], soil[i].prm, gPM, gYM) * y[IX(i)]);
+    }
+    const pE = res.pEq;
+    let intP = 0, intPz = 0, intAbsPz = 0;
+    for (let i = 0; i < n; i++) {
+      intP += 0.5 * (pE[i] + pE[i + 1]) * h;
+      intPz += 0.5 * (pE[i] * z[i] + pE[i + 1] * z[i + 1]) * h;
+      intAbsPz += 0.5 * (Math.abs(pE[i]) * z[i] + Math.abs(pE[i + 1]) * z[i + 1]) * h;
+    }
+    …
+    for (let i = 0; i < n; i++) intAbsP += 0.5 * (Math.abs(pE[i]) + Math.abs(pE[i + 1])) * h;
+  ```
+  (and `p: [], pEq: [],` in the result object; full diff at the end of this entry). The closure formulas themselves (ΣF = P_t − ∫p dz over max(|P_t|, 0.01∫|p|dz); ΣM = M_head + Q_t(y₀ − y_toe) + ∫p·z dz over max(∫|p|·z dz, |M_head|)) are unchanged; only p changes from the curve value to the applied value.
+- **Hand check of one node (four-layer H-pile defaults, z = 23.13 ft, Welch & Reese stiff clay, b = 14.70 in, ε₅₀ = 0.006, f_m·p_u = 2,296.9 lb/in, y = 1.1896e-6 in; Figure F-3 with that depth):**
+  - y₅₀ = 2.5·ε₅₀·b = 2.5 × 0.006 × 14.70 = 0.2205 in; floor = 0.001 × 0.2205 = 2.205e-4 in > |y| → linearised.
+  - Curve (before, `res.p`): p = 0.5·p_u·(y/y₅₀)^0.25 = 1,148.45 × (5.395e-6)^0.25 = 1,148.45 × 0.04819 = **55.35 lb/in**.
+  - Applied (after, `res.pEq`): E_s = 0.5·p_u·(0.001)^0.25 / floor = 1,148.45 × 0.17783 / 2.205e-4 = 926,200 lb/in²; p = E_s·y = 926,200 × 1.1896e-6 = **1.10 lb/in**. (Above the floor the two are equal: the 3.88 ft sand and 12.13 ft clay rows show |p − p(y)| = 0.)
+- **Closure before → after (Module 02 / report; ΣF / ΣM):**
+  | case | before | after |
+  |---|---|---|
+  | four-layer H-pile defaults (STL 86 / P 6; y₀ 0.157 in, M_max 34.0 kip·ft unchanged) | 43.80 % / 15.06 % | 0.0064 % / 0.0036 % |
+  | four-layer + buckling (L_u 8 ft) H-pile (M_max 56.2 unchanged) | 57.20 % / 16.20 % | 0.0162 % / 0.0049 % |
+  | four-layer micropile defaults (M_max 51.1 unchanged) | 3.17 % / 1.10 % | 3.43e-5 % / 6.23e-5 % |
+  | four-layer edited micropile (bond 31 ft) | 1.97 % / 0.55 % | 2.04e-4 % / 1.55e-4 % |
+  | four-layer + buckling edited micropile: retry (still rejected by (c), reversal) | retry 5.51 % / 0.81 % (fails (b) and (c)) | passes (b), fails (c): reason now lists only the reversal; still "did not converge" |
+  | uniform default soil, micropile / H-pile / IAB (sand only, no floor) | unchanged | unchanged (bit-identical text) |
+  | moment-only, default soil (micropile M 5 / M 40; H-pile M 5 / M 40) | 0.040 % / 0.0071 %; 8.3e-7 % / 0.0039 % | unchanged |
+  | moment-only, four-layer H-pile M 5 (STL 20/86/150) | 115–132 % / 6.1–6.2 % | 6.0e-7–6.6e-7 % / 0.00024 % |
+  | moment-only, four-layer H-pile M 40 | 1,049–1,057 % / 13 % | **1.30–1.31 %** / 0.017 % (see O39) |
+  | moment-only, four-layer micropile M 5 | 107–253 % / 2.0–3.8 % | 0.0019–0.013 % / 0.0001–0.0005 % |
+  | sweep four-layer, lateral load (H-pile 27 / micropile 17 accepted first attempts) | 14.9–166 % / 8.0–15.2 %; 0.13–14.9 % / 0.05–4.9 % | ≤ 0.096 % / ≤ 0.021 %; ≤ 0.0021 % / ≤ 0.0008 % |
+  - Worked closure, four-layer H-pile defaults: P_t = 6.000 kip; ∫res.p dz = 8.628 kip → ΣF = |6.000 − 8.628| / 6.000 = 43.80 %; ∫res.pEq dz = 6.0004 kip → 0.0064 %. y₀ 0.15682 in and M_max 33.987 kip·ft identical before and after.
+- **Retry acceptance (b) now reads the corrected closure.** Retries on the four-layer profile that failed (b) on main (closure 1.2–7.8 %) now pass (b); every one of them also fails (c) (reversed deflection), so none is accepted and no outcome changes. On uniform soil the retry closures are bit-identical.
+- **Graphs (item 3):**
+  - Lateral graphs → Soil reaction: plots `pyRes.pNode` = the solver-applied reaction; note "Solver-applied reaction: … below |y| = 0.001·y₅₀ in clay the p-y curve is linearised." Four-layer H-pile: the deep stiff-clay lobe (≈ +130 / −70 lb/in at 20–24 ft on main) becomes ≈ +50 lb/in decaying to 0 by 22 ft; max |p| (193.1 lb/in @ 16.3 ft) and the shallow profile unchanged. Screenshot looked at.
+  - Soil mobilisation p/p_u (beside it): switched to the same applied reaction (so the two charts and the F-3 p/p_u column agree); its peak (59 % @ 0.0 ft in the example) is in the sand and unchanged; only deep near-zero values drop.
+  - Figure F-3 (screen and report): curves unchanged (true p-y curves); the ● p is now the applied reaction. Above the floor it is on the curve (|p − p(y)| = 0.0e+0, as before); at a depth below the floor (only reachable with user depths, e.g. 20.1 and 23.1 ft in the four-layer H-pile) the ● lies below its curve and the note names those depths. Automatic depths (active zone) are unchanged.
+  - Not switched (they keep `res.p`, the curve value): the "p-y curves at 1, 2.5, 5, 10 and 20 pile widths" operating points (Lateral graphs → p-y curves; they are defined as the curve at the reached deflection); the integral-abutment Tier-2 solve (`iabNonlinearSolve`: p profile, p_max, mobilisation, tabulated p) — a separate module that does not use the closure; changing it is left for a decision (O39 note). Every consumer of `res.p` / `pyRes.pNode` / `pyRes.mobil` was listed: `solvePyPile` closure (switched), `pyRes.pNode` → `pyCurveSet` (F-3) and the Soil reaction panel (switched), `pyRes.mobil` (switched), `pyRes.curves` (kept), `iabNonlinearSolve` `best.p` (kept).
+- **Item (2) withheld — closure test (b) on first attempts.** Implemented and run on the three sweeps (diagnostic build): 323 of 326 outcomes unchanged, but **3 ordinary solves rejected**: four-layer H-pile, free head, moment-only head load M 40 kip·ft at STL 20 / 86 / 150 (first attempt ΣF 1.30 / 1.30 / 1.31 %, ΣM 0.017 %; y₀ 0.135–0.140 in, M_max 40.1–41.0 kip·ft, used on main) → retry ΣF 2.6–2.7 % → "did not converge". Cause: with P_t = 0 the force residual is normalised by 0.01·∫|p|dz (F27); the absolute residual is 1.68 lb against ∫|p|dz = 12,797 lb, i.e. the solver's convergence tolerance (tol 1e-6): with tol 1e-9 the same solve gives 0.0016 % (M_max 40.54425 → 40.54426 kip·ft). Max closure of the first attempts that would be accepted: uniform 0.0011 % / 0.00022 %; mixed set 0.040 % / 0.00056 %; four-layer 0.096 % / 0.021 % (lateral load). Logged as O39.
+- **Sweep (this build vs main, diagnostic copies recording every `solvePyWithRetry` call through "Run all cases"):** uniform default soil 208 solves, mixed set 52, four-layer 66: **0 outcome changes** (accept / retry / did-not-converge, M_max and y₀ bit-identical for every solve); the closure recomputed from E_s·y in the main build equals this build's closure exactly (relative difference 0) for every converged first attempt.
+- **Saved data:** none changed (`pEq` is run-time only; no storage key or export format touched).
+- **How verified:** node --check of every script block; headless Chromium with the pinned libraries served locally: `parity.mjs` main vs branch (micropile, H-pile, integral abutment, edited micropile × default soil, four-layer, four-layer + buckling: page text, printed report, module statuses, check strip, autosave, Save .json export, IndexedDB record, share payload) — identical except the closure numbers listed above and the retry reason of the four-layer + buckling edited micropile; `latg.mjs` (Lateral graphs: soil-reaction trace, F-3 table and notes, with automatic and user depths); `sweeps.sh` / `swcmp.py` (above); `m40.mjs` (tolerance check of the moment-only case). Screenshots looked at: Soil reaction (four-layer H-pile, main and branch), F-3 with user depths 4 / 12 / 20 / 23 ft. No console errors.
+- **Other copies of this code:** none.
+- **Re-applying by hand:** unified diff below, against f73d20a (CRLF stripped).
+
+```diff
+diff --git a/Pile Designer.html b/Pile Designer.html
+index 81efdda..6165412 100644
+--- a/Pile Designer.html	
++++ b/Pile Designer.html	
+@@ -2207,7 +2207,7 @@ function solvePyPile(input) {
+     history.push({ step: s, iter, converged, P: fP, M: fM, Q: fQ, y0: y[IX(0)], Mmax: mmS });
+     if (!converged) return { ok: false, history, msg: 'Load step ' + s + '/' + nSteps + ' did not converge. The solver already auto-retried with finer load stepping, so this is not a settings issue. With large axial thrust it usually means the finite-difference solve is losing conditioning near the top of the load ramp — check the Buckling module (10): if that closed-form check passes with margin, this is a numerical limit of the p-y solve on a well-braced pile rather than real instability; if buckling is tight, the two are consistent and the section needs revision.' };
+   }
+-  const res = { ok: true, history, z: [], y: [], M: [], V: [], p: [], EIfinal: null };
++  const res = { ok: true, history, z: [], y: [], M: [], V: [], p: [], pEq: [], EIfinal: null };
+   if (input.EIsecFn) {
+     // Report the secant EI from the FINAL converged curvature at each node, in one
+     // clean pass. The iterating EI[] above is deliberately ratcheted/under-relaxed
+@@ -2254,12 +2254,20 @@ function solvePyPile(input) {
+     res.M.push(Mn[i + 1]);
+     res.V.push((Mn[i + 2] - Mn[i]) / (2 * h) + Qt * (y[IX(i + 1)] - y[IX(i - 1)]) / (2 * h));
+     res.p.push(pyPofY(soil[i].model, y[IX(i)], z[i], soil[i].prm, gPM, gYM));
++    // F28 (O38): the reaction the solver APPLIED at the node, E_s(y)*y with the same secant
++    // stiffness the FD rows use (pySecantEs, incl. the soft / stiff clay floor yFloor =
++    // 0.001*y50*f_y). Equal to res.p (to round-off) wherever |y| >= that floor; below it the
++    // solver linearises the curve and res.p (the curve itself) overstates the reaction.
++    res.pEq.push(pySecantEs(soil[i].model, y[IX(i)], z[i], soil[i].prm, gPM, gYM) * y[IX(i)]);
+   }
++  // F28 (O38): the closure integrates res.pEq (before F28: res.p, which on layered clay
++  // profiles showed residuals of up to ~50 % ΣF on sound solutions).
++  const pE = res.pEq;
+   let intP = 0, intPz = 0, intAbsPz = 0;
+   for (let i = 0; i < n; i++) {
+-    intP += 0.5 * (res.p[i] + res.p[i + 1]) * h;
+-    intPz += 0.5 * (res.p[i] * z[i] + res.p[i + 1] * z[i + 1]) * h;
+-    intAbsPz += 0.5 * (Math.abs(res.p[i]) * z[i] + Math.abs(res.p[i + 1]) * z[i + 1]) * h;
++    intP += 0.5 * (pE[i] + pE[i + 1]) * h;
++    intPz += 0.5 * (pE[i] * z[i] + pE[i + 1] * z[i + 1]) * h;
++    intAbsPz += 0.5 * (Math.abs(pE[i]) * z[i] + Math.abs(pE[i + 1]) * z[i + 1]) * h;
+   }
+   const Mhead = input.headFixed ? res.M[0] : Mt;
+   const fRes = Pt - intP;
+@@ -2269,7 +2277,7 @@ function solvePyPile(input) {
+   // floor was 1e-6 lb, so a moment-only head load (Pt = 0) gave residuals of 1e6 % and more.
+   // Unchanged wherever |Pt| >= 1 % of that integral (every solve with a lateral load found).
+   let intAbsP = 0;
+-  for (let i = 0; i < n; i++) intAbsP += 0.5 * (Math.abs(res.p[i]) + Math.abs(res.p[i + 1])) * h;
++  for (let i = 0; i < n; i++) intAbsP += 0.5 * (Math.abs(pE[i]) + Math.abs(pE[i + 1])) * h;
+   res.eq = {
+     fPct: 100 * Math.abs(fRes) / Math.max(Math.abs(Pt), 0.01 * intAbsP, 1e-6),
+     mPct: 100 * Math.abs(mRes) / Math.max(intAbsPz, Math.abs(Mhead), 1e-6)
+@@ -4456,7 +4464,7 @@ function DocsModal({
+   }, /*#__PURE__*/React.createElement("p", null, "The grout-to-ground bond is the geotechnical capacity. Nominal resistance is the bond stress β times the drill-hole circumference times the bond length: ", /*#__PURE__*/React.createElement("i", null, "Pn = dₕ·π·β·Lb"), ". The required bond length is back-solved from the factored demand and the geotechnical resistance factor φ (0.70 when a load test is specified, per Table 10.5.5.2.5-1). The bond value β comes from the soil/rock row of Table C10.9.3.5.2-1 and ", /*#__PURE__*/React.createElement("b", null, "must be confirmed by load testing"), " — the tool labels it grout-to-ground because the value is keyed to the bearing stratum, not necessarily rock.")), /*#__PURE__*/React.createElement(DocSection, {
+     title: "02 · Lateral analysis",
+     code: "p-y finite-difference solver"
+-  }, /*#__PURE__*/React.createElement("p", null, "Two paths. You can enter a maximum moment directly from an external LPILE run, or use the built-in solver. The solver is a real ", /*#__PURE__*/React.createElement("b", null, "finite-difference beam on an elastic foundation"), ": the embedded pile is discretized on Winkler springs with a linear subgrade modulus (Es = nh·z for sand, constant kh for clay), and EI·y⁗ + k(z)·y = 0 is solved with mudline boundary conditions (shear V₀ = P, moment M₀ = P·e from the free length) and an unrestrained toe (no applied tip shear or moment restraint — the toe is still bedded on soil springs)."), /*#__PURE__*/React.createElement("p", null, "From the resulting moment profile, the tool reports the true maximum moment and locates the ", /*#__PURE__*/React.createElement("b", null, "depth to fixity as the first zero crossing of the moment below the maximum moment (on a free-head pile with no head moment, the 2nd zero of the moment diagram, counting M = 0 at the head)"), " — the depth that reproduces the correct above-grade moment in an equivalent fixed-base model. A noise guard ignores crossings whose preceding moment lobe is under 2% of Mmax so numerical tail-ringing isn't mistaken for a real reversal. This is a REFERENCE figure only \u2014 it is a moment-diagram measure and is NOT used in the buckling check, which requires a stiffness equivalence (Davisson / deflection-matched / nonlinear P-crit) and yields a much shorter fixity depth. The model is linear, so the fixity depth is load-independent — appropriate for a stiffness/fixity basis, but it should be checked against a nonlinear p-y run before sealing."), /*#__PURE__*/React.createElement("p", null, /*#__PURE__*/React.createElement("b", null, "Nonlinear p-y convergence."), " The built-in nonlinear p-y solve applies the loads in 8 equal steps (secant iteration, up to 200 iterations per step). The first attempt is used only if (a) every step converged and (c) it is on the stable loading branch (the head deflection keeps the direction of the first step and never decreases while the load rises). If it fails either, the solve retries once with 16 steps, up to 400 iterations and under-relaxation 0.55; the retried solution is used only if (a) every step converged, (b) the equilibrium closure is within " + PY_RETRY_CLOSURE_PCT + " % for both ΣF and ΣM (ΣF relative to the applied lateral load, but not less than 1 % of the total soil reaction ∫|p|dz, so a moment-only head load is measured sensibly), and (c) it is on the stable loading branch. If the retry also fails, the result is “did not converge — the pile is likely unstable (buckling / P-Δ) at this load”: there is no valid lateral demand, so flexure, combined loading, casing extension, uncased flexure and combined-loading stability are NG. Past the instability load the solver can settle on a post-critical equilibrium (head deflection reversed, tens of inches) whose closure is still excellent, which is why the branch test is needed. “Run all cases” solves each case with exactly the same solve (node count, load steps, retry and acceptance test), so for the active case the envelope equals Module 02. Large head deflection: when |y\u2080| exceeds the factor × D set in the Bond / p-y input tab (p-y / lateral for an H-pile; default 0.25 D; 0 = off), Module 02, the Lateral graphs, the Summary of checks, the case envelope and the report show an amber warning. It is a warning only (no check becomes NG); it applies to every p-y result, first attempt or retry.")), /*#__PURE__*/React.createElement(DocSection, {
++  }, /*#__PURE__*/React.createElement("p", null, "Two paths. You can enter a maximum moment directly from an external LPILE run, or use the built-in solver. The solver is a real ", /*#__PURE__*/React.createElement("b", null, "finite-difference beam on an elastic foundation"), ": the embedded pile is discretized on Winkler springs with a linear subgrade modulus (Es = nh·z for sand, constant kh for clay), and EI·y⁗ + k(z)·y = 0 is solved with mudline boundary conditions (shear V₀ = P, moment M₀ = P·e from the free length) and an unrestrained toe (no applied tip shear or moment restraint — the toe is still bedded on soil springs)."), /*#__PURE__*/React.createElement("p", null, "From the resulting moment profile, the tool reports the true maximum moment and locates the ", /*#__PURE__*/React.createElement("b", null, "depth to fixity as the first zero crossing of the moment below the maximum moment (on a free-head pile with no head moment, the 2nd zero of the moment diagram, counting M = 0 at the head)"), " — the depth that reproduces the correct above-grade moment in an equivalent fixed-base model. A noise guard ignores crossings whose preceding moment lobe is under 2% of Mmax so numerical tail-ringing isn't mistaken for a real reversal. This is a REFERENCE figure only \u2014 it is a moment-diagram measure and is NOT used in the buckling check, which requires a stiffness equivalence (Davisson / deflection-matched / nonlinear P-crit) and yields a much shorter fixity depth. The model is linear, so the fixity depth is load-independent — appropriate for a stiffness/fixity basis, but it should be checked against a nonlinear p-y run before sealing."), /*#__PURE__*/React.createElement("p", null, /*#__PURE__*/React.createElement("b", null, "Nonlinear p-y convergence."), " The built-in nonlinear p-y solve applies the loads in 8 equal steps (secant iteration, up to 200 iterations per step). The first attempt is used only if (a) every step converged and (c) it is on the stable loading branch (the head deflection keeps the direction of the first step and never decreases while the load rises). If it fails either, the solve retries once with 16 steps, up to 400 iterations and under-relaxation 0.55; the retried solution is used only if (a) every step converged, (b) the equilibrium closure is within " + PY_RETRY_CLOSURE_PCT + " % for both ΣF and ΣM (the soil reaction the solver applied, Eₛ·y, integrated along the pile against the head loads; ΣF relative to the applied lateral load, but not less than 1 % of the total soil reaction ∫|p|dz, so a moment-only head load is measured sensibly), and (c) it is on the stable loading branch. If the retry also fails, the result is “did not converge — the pile is likely unstable (buckling / P-Δ) at this load”: there is no valid lateral demand, so flexure, combined loading, casing extension, uncased flexure and combined-loading stability are NG. Past the instability load the solver can settle on a post-critical equilibrium (head deflection reversed, tens of inches) whose closure is still excellent, which is why the branch test is needed. “Run all cases” solves each case with exactly the same solve (node count, load steps, retry and acceptance test), so for the active case the envelope equals Module 02. Large head deflection: when |y\u2080| exceeds the factor × D set in the Bond / p-y input tab (p-y / lateral for an H-pile; default 0.25 D; 0 = off), Module 02, the Lateral graphs, the Summary of checks, the case envelope and the report show an amber warning. It is a warning only (no check becomes NG); it applies to every p-y result, first attempt or retry.")), /*#__PURE__*/React.createElement(DocSection, {
+     title: "03 · Structural axial",
+     code: "AASHTO 10.9.3.10.2"
+   }, /*#__PURE__*/React.createElement("p", null, "Non-composite axial capacity, computed for both the cased length (casing + grout + bar, Eq. 10.9.3.10.2a-2) and the uncased length (grout + bar only, Eq. 10.9.3.10.2b-2). The uncased section typically governs because it has no casing contribution. The casing wall is reduced by a sacrificial corrosion allowance.")), /*#__PURE__*/React.createElement(DocSection, {
+@@ -5172,7 +5180,8 @@ function PileElevation({
+                      selected depths, with the point mobilised under the
+                      active load case. It reads the solver's own setup
+                      (pyRes.setup: soilAt, datum, multipliers) and nodal
+-                     solution (pyRes.records, pyRes.pNode) and evaluates
++                     solution (pyRes.records, pyRes.pNode = the reaction the
++                     solver applied, E_s*y, F28) and evaluates
+                      pyPofY, the function the solver calls. The linear
+                      (Winkler) basis shows its linear springs (subgradeAt).
+    PileSectionsFig : micropile cased / uncased sections and the H-pile
+@@ -5676,7 +5685,7 @@ function PyCurvesFig({ I, pyRes, solved, activeLayers, depths, setDepths, print
+     ? ["Linear (Winkler) basis: the springs are straight lines p = E_s·y with E_s = n_h·z (sand) or k_h (clay) per layer, read with the solver's own subgradeAt(); node spacing " + fmt(set.dz, 3) + " ft. ● = deflection of the linear solution at that depth (active case).",
+        "There are no nonlinear p-y curves on this basis; select “Nonlinear p-y (built-in)” to see them."]
+     : ["Curves are the solver's own springs: pyPofY() with the same soil records, Georgiadis equivalent depth z_e, pile width b" + (I.pileType === "hpile" ? " (H-pile: b_f for strong-axis, d for weak-axis bending)" : " (d_h below the casing tip where entered)") + " and multipliers, p = f_m·p(y/f_y) with f_m = " + fmt(set.gPM, 2) + ", f_y = " + fmt(set.gYM, 2) + ". Group row factors (Module 11) reach the solver only through f_m (“Apply avg fm”); they are not applied per row.",
+-       "● = point mobilised under the active load case: y from the solution at the solver node nearest each depth (node spacing " + fmt(set.h, 2) + " in) and p = the solver's nodal reaction; |p − p(y)| shows it lies on its curve. " + (I.pyCyclic ? "Cyclic loading selected: cyclic forms apply to sand and soft clay; stiff clay and weak rock have no cyclic form in the tool." : "Static loading.") + "" + (set.curves.some(c => c.model === "weakrock") ? " Weak rock values are plotted as the solver uses them (uncalibrated model)." : ""),
++       "● = point mobilised under the active load case: y from the solution at the solver node nearest each depth (node spacing " + fmt(set.h, 2) + " in) and p = the reaction the solver applied (E_s·y, the secant stiffness times y); |p − p(y)| shows it lies on its curve (round-off only). " + (set.curves.some(c => Math.abs(c.pSolver - c.pOnCurve) > 1e-6 * Math.max(1, c.pOnCurve)) ? "At " + set.curves.filter(c => Math.abs(c.pSolver - c.pOnCurve) > 1e-6 * Math.max(1, c.pOnCurve)).map(c => fmt(c.d, 1) + " ft").join(", ") + " the deflection is below 0.001·y_50 (clay), where the solver linearises the p-y curve, so the ● lies below the curve. " : "") + (I.pyCyclic ? "Cyclic loading selected: cyclic forms apply to sand and soft clay; stiff clay and weak rock have no cyclic form in the tool." : "Static loading.") + "" + (set.curves.some(c => c.model === "weakrock") ? " Weak rock values are plotted as the solver uses them (uncalibrated model)." : ""),
+        set.user ? "Depths: your list (saved in this browser)." : "Automatic depths: mid-depth of each layer between the top of the springs (" + fmt(set.dTop, 1) + " ft) and the depth where M decays to 5 % of M_max (" + fmt(set.dBot, 1) + " ft), the head region (one pile width below the top of the springs) and the depth of M_max."];
+   if (set.more) notes.push("Only the first 8 depths are drawn.");
+   return e("div", { className: "pd-gfx-fig", "data-pd-gfx": "py" },
+@@ -13223,7 +13232,7 @@ function App() {
+           const s2 = soilAt(zi);
+           if (s2.model === "none") return null;
+           const pu2 = PY[s2.model].pu(pyEffDepth(zi, s2.prm), s2.prm) * (I.pyPM || 1);
+-          return pu2 > 1e-9 ? { d: Math.max(zi - stick_in, 0) / 12, r: Math.min(Math.abs(res2.p[i2]) / pu2, 1) } : null;
++          return pu2 > 1e-9 ? { d: Math.max(zi - stick_in, 0) / 12, r: Math.min(Math.abs(res2.pEq[i2]) / pu2, 1) } : null;
+         }).filter(Boolean),
+         curves: (() => {
+           // p-y curves at representative depths below grade, with the SAME
+@@ -13249,7 +13258,9 @@ function App() {
+         })(),
+         // F14 graphics: the solver's own soil records / datum / multipliers and nodal
+         // reactions, so Figure F-3 plots exactly what the solve used (display only).
+-        pNode: res2.p,
++        // F28 (O38): the reaction the solver applied (E_s*y, res2.pEq), not the curve value
++        // res2.p (they differ only where the clay secant floor linearises the curve).
++        pNode: res2.pEq,
+         setup: { soilAt, stick_in, L_in, D, soilTop_in: S.soilTop_in, unsupBelowGrade_in: S.unsupBelowGrade_in, nNodes: res2.z.length - 1, gPM: I.pyPM || 1, gYM: I.pyYM || 1 },
+         mphi: I.pyEIvar && mphiC ? { phis: mphiC.phis, Ms: mphiC.Ms.map(m => m / 12), EI0: mphiC.EI0, EI0u: mphiU.EI0,
+           phisU: mphiU.phis, MsU: mphiU.Ms.map(m => m / 12) } : null
+@@ -17140,7 +17151,7 @@ function LatGraphsCard({ I, set, pyRes, solved, activeLayers, pyDepths, setPyDep
+     const G0 = latGradeLine();
+     return e(React.Fragment, null, e("div", { className: "pd-lg-grid" },
+       n > 2 && e(LatPanel, { title: "Soil reaction p vs depth (active case)",
+-        note: "The solver’s nodal soil reaction p (lb/in of pile length), plotted with the sign of the deflection at that depth (the soil resists in the opposite direction). These are the same values as the ● points of Figure F-3. Depth below grade; negative = stickup (no soil)." },
++        note: "Solver-applied reaction: the nodal soil reaction p = E_s·y the solver applied (lb/in of pile length); below |y| = 0.001·y₅₀ in clay the p-y curve is linearised. Plotted with the sign of the deflection at that depth (the soil resists in the opposite direction). These are the same values as the ● points of Figure F-3. Depth below grade; negative = stickup (no soil)." },
+         e(Plot, {
+           data: [{ x: pv, y: dBG, mode: "lines", fill: "tozerox", fillcolor: "rgba(47,111,62,0.12)", line: { color: "#2f6f3e", width: 2.2 }, name: "p", showlegend: false,
+             hovertemplate: "depth %{y:.2f} ft below grade<br>p = %{x:.1f} lb/in<extra></extra>" },
+@@ -17150,7 +17161,7 @@ function LatGraphsCard({ I, set, pyRes, solved, activeLayers, pyDepths, setPyDep
+           layout: latLayout({ height: H, shapes: G0.shapes.concat(bndSh), annotations: G0.annotations, showlegend: !!(K && K.fix.length), legend: { orientation: "h", x: 0, y: -0.14, yanchor: "top", entrywidth: 1, entrywidthmode: "fraction", font: { size: 10, family: PLOT_FONT } },
+             xaxis: latAx("p — soil reaction (lb/in)", { range: pR }), yaxis: latAx("depth below grade (ft)", { autorange: "reversed", zeroline: true }) }), height: H })),
+       pyRes.mobil && pyRes.mobil.length > 3 && e(LatPanel, { title: "Soil mobilization p/pᵤ vs depth",
+-        note: "How hard the soil is working at each depth in the converged state — high mobilization near grade is normal; high values at depth flag a soft zone doing structural work." },
++        note: "How hard the soil is working at each depth in the converged state (p = the solver-applied reaction beside it, divided by the ultimate resistance pᵤ) — high mobilization near grade is normal; high values at depth flag a soft zone doing structural work." },
+         /*#__PURE__*/React.createElement("p", { className: "pd-lg-note", style: { marginTop: 0 } }, "How much of each depth's ultimate soil resistance is being used under the design load (0 = untouched, 1 = fully mobilized/yielded). Values approaching 1 near the surface indicate the soil is at its limit there and load is shedding deeper."),
+         /*#__PURE__*/React.createElement(Plot, {
+           data: [{ x: pyRes.mobil.map(m2 => m2.r * 100), y: pyRes.mobil.map(m2 => m2.d), mode: "lines", fill: "tozerox", fillcolor: "rgba(201,98,46,0.15)", line: { color: C.accent, width: 2 },
+```
+
+### F26, part d. Davisson & Robinson depth to fixity on the lateral graphs, always, as the primary labelled fixity line, with an AASHTO reference   [UI only] [no calculation change]
+- **Date:** 2026-10-11. **Type:** display only. No new calculation: the value is Module 10's `Lf_davisson`.
+- **Engineer's request 2026-10-11:** "yes add it, make sure it [is] labeled with a AASHTO reference as well." Show the Davisson & Robinson (1965) depth to fixity on the lateral graphs always (not only with buckling enabled), as the primary labelled line on F-1, the elevation and the soil-reaction plot; z_fix and the 5 % decay depth as secondary lines; the Module 10 buckling line only when buckling is on and its method is not Davisson; also in the printed figures and key strips.
+- **Value and datum:** `r.buckling.Lf_davisson = davissonMult × davissonChar` (1.8·T, T = (EI/n_h)^(1/5) for a sand top layer; 1.4·R, R = (EI/k_h)^(1/4) otherwise; top-layer n_h / k_h; EI of the casing (micropile) or of the H-pile section about the chosen axis), computed by `computeAll` whether or not Module 10 is enabled. Module 10 measures L_f below the bottom of the unsupported length: L_e = L_u + L_f with L_u = max(L_u input, stickup) measured from the pile head (`colChk`). The graphs plot depth below grade, so the line is at **z = L_u + L_f − s** (s = head height above grade, ft) — the same conversion the Module 10 buckling line already used (`Le_buck − s`). With no unsupported length below grade (L_u = stickup) this is z = L_f, "measured from grade"; otherwise the label and hover say "L_f measured below the bottom of the unsupported length L_u = … ft from the head (Module 10), so … ft below grade".
+- **Reference label:** "AASHTO LRFD 10th Ed. Art. 10.7.3.13.4 — verify article" (the depth-to-fixity expressions for buckling of piles with an unsupported length, from Davisson & Robinson (1965), are given in the AASHTO pile "Buckling and Lateral Stability" article; the article number is recalled, not checked against the 10th Ed. text, hence "verify", as the tool marks other recalled references). Note: Module 10's own Calc note still says "Not an AASHTO equation"; it is not changed here (UI scope) — see open question in the PR. AASHTO writes the clay form with the soil modulus E_s (= 0.465 s_u, ksi); the tool's 1.4·(EI/k_h)^(1/4) is the same form with its k_h input.
+- **Where:**
+  - New `LAT_DAV_REF` and `latDavisson(r, s)` before `latKV` (anchor `function latDavisson(r, s) {`): returns the line {k: "dav", z, name, short, lbl, keyVal} from `r.buckling` (null if Module 10 has no value).
+  - `latKV` (anchor `const dav = latDavisson(r, s);`): Davisson first in `K.fix` (so it is the primary line); z_fix and 5 % decay follow; the buckling line is added only when `b.enable` and not (`bklTab === "davisson"` without an L_f override) and not at the same depth as the Davisson line.
+  - `latOverlay` (F-1): secondary lines 1.0 px (was 1.3), primary 1.8; the primary's on-panel label uses the short form "Davisson z_f x.x ft" (anchor `t: h.short || h.name`).
+  - `ElevationPlot` (screen and report F-4): primary (Davisson) labelled below its line at the right; secondary lines 1.0 px at 75 % opacity, their labels stacked at the left of the moment panel with `latStack` (no overlap); without a Davisson value the F26 c placement is unchanged (anchor `if (f.k === "dav") { if (!narrow) anns.push(`). Note text names the teal line.
+  - Soil reaction panel (`fixTr`): secondary lines 1.0 px, 75 % opacity.
+  - `latKeysFix`: key-strip row "Davisson & Robinson fixity z_f (primary)" with the formula, T or R, datum, "Module 10 value" and the reference (screen strips and printed F-1 / F-4 key tables).
+  - `LatFail` + `LatGraphsCard` (anchor `dav: latDavisson(r, I.solverFree || 0)`): when the p-y solve did not converge no graph is drawn (unchanged), and the note now ends with "Davisson & Robinson fixity (independent of the p-y solve): …", since that value does not depend on the solve. The solve-derived lines (z_fix, 5 % decay) are not shown then, as before.
+- **Legend / label text:** "Davisson & Robinson z_f = 1.8T = 4.8 ft[<br>7.8 ft below grade]<br>AASHTO LRFD 10th 10.7.3.13.4, verify"; hover: "Davisson & Robinson (1965) depth to fixity z_f = 1.8T = 1.8 × 2.69 = 4.8 ft, T = (EI/n_h)^(1/5); n_h = … (top layer …), EI = … ×10⁶ kip·in² (casing | H-pile section, Module 10); <datum>. AASHTO LRFD 10th Ed. Art. 10.7.3.13.4 — verify article. Independent of the p-y solve."
+- **Check cases (plotted depth = Module 10 value, asserted in the test on every Davisson trace and shape: F-1 three panels, elevation, soil reaction, printed F-1 and F-4 — 9 values per case, all exactly equal to L_u + Lf_davisson − s):**
+  | case | Module 10 L_f | L_u | s | plotted z |
+  |---|---|---|---|---|
+  | micropile defaults (sand, T = 2.690 ft) | 1.8 × 2.690 = 4.842 ft | 3.0 | 3.0 | 4.842 ft |
+  | H-pile defaults (T = 4.958 ft, strong-axis section) | 1.8 × 4.958 = 8.924 ft | 3.0 | 3.0 | 8.924 ft |
+  | H-pile four-layer (top layer sand) | 8.924 ft | 3.0 | 3.0 | 8.924 ft |
+  | H-pile four-layer, buckling on, L_u 8 ft, Davisson method | 8.924 ft | 8.0 | 3.0 | 13.924 ft (no separate buckling line: same method) |
+  | same with P-crit tab (no P-crit data → falls back to the Davisson depth) | 8.924 ft | 8.0 | 3.0 | 13.924 ft (buckling line at the same depth → not drawn twice) |
+  | micropile, buckling on, L_u 6 ft, deflection-matched (LPILE Δ 0.4 in, V 6 kip) | 4.842 ft | 6.0 | 3.0 | 7.842 ft; buckling line at 12.634 ft drawn as secondary (L_f = 9.6 ft deflection-matched) |
+  | micropile, stiff clay top layer (k_h 500, R = 2.028 ft) | 1.4 × 2.028 = 2.839 ft | 3.0 | 3.0 | 2.839 ft |
+  | micropile, soft clay (k_h 150), did not converge | 1.4 × 2.740 = 3.836 ft | — | — | no graphs; note "z_f = 1.4R = 1.4 × 2.74 = 3.8 ft …" |
+  | micropile STL 20 / P 15, did not converge | 4.842 ft | — | — | no graphs; note "z_f = 1.8T = 1.8 × 2.69 = 4.8 ft …" |
+  - Hand check (micropile defaults): T = (EI/n_h)^(1/5) = 2.690 ft (Module 10 shows the same), L_f = 1.8 × 2.690 = 4.842 ft; L_u = stickup = 3.0 ft, s = 3.0 ft → z = 3.0 + 4.842 − 3.0 = 4.842 ft below grade.
+- **Saved data:** none changed.
+- **How verified:** node --check of every script block; headless Chromium (pinned libraries local): `latg.mjs` on the cases above + `davassert.py` (assertion above, 0 failures); `parity.mjs` F28 commit vs this commit (micropile, H-pile, IAB, edited micropile × default / four-layer / four-layer + buckling): page text, module statuses, check strip, autosave, export, IndexedDB, share payload identical; the printed report differs only in the F-1 / F-4 figure labels and key tables (Davisson rows added, secondary labels shortened). Screenshots looked at: F-1 + elevation (micropile with L_u 6 ft deflection-matched: 4 lines; H-pile four-layer), soil reaction (H-pile four-layer + buckling), printed F-4 (both). No console errors.
+- **Other copies of this code:** none.
+- **Re-applying by hand:** unified diff below, against the F28 commit (CRLF stripped).
+
+```diff
+diff --git a/Pile Designer.html b/Pile Designer.html
+index 6165412..a18a6e1 100644
+--- a/Pile Designer.html	
++++ b/Pile Designer.html	
+@@ -10144,6 +10144,31 @@ function latZeros(z, v) {
+   }
+   return out;
+ }
++/* F26 d (engineer 2026-10-11: "yes add it, make sure it [is] labeled with a AASHTO reference
++   as well"): the Davisson & Robinson (1965) depth to fixity on the lateral graphs, ALWAYS
++   (not only with Module 10 enabled). No new calculation: the value Module 10 computes
++   (r.buckling.Lf_davisson = davissonMult x davissonChar, 1.8 T sand / 1.4 R clay, top-layer
++   n_h / k_h, section-aware EI). Module 10 measures L_f below the bottom of the unsupported
++   length L_u (L_u from the pile head, floored at the stickup: L_e = L_u + L_f), so the depth
++   below grade is L_u + L_f - s (s = head height above grade, ft). It does not depend on the
++   p-y solve. Returns null when Module 10 has no value. */
++const LAT_DAV_REF = "AASHTO LRFD 10th Ed. Art. 10.7.3.13.4 \u2014 verify article";
++function latDavisson(r, s) {
++  const b = r && r.buckling;
++  if (!b || !(b.Lf_davisson > 0) || !isFinite(b.Lf_davisson)) return null;
++  const sym = b.bklSoilIsSand ? "T" : "R", m = b.davissonMult, Lf = b.Lf_davisson;
++  const Lu = b.Lu_free || 0, st = s || 0, z = Lu + Lf - st;
++  const form = b.bklSoilIsSand ? "T = (EI/n_h)^(1/5)" : "R = (EI/k_h)^(1/4)";
++  const basis = (b.bklSoilIsSand ? "n_h = " : "k_h = ") + latFmt(b.bklStiff, 0) + (b.bklSoilIsSand ? " pci/in" : " pci") + " (" + (b.bklSoilSrc || "") + "), EI = " + latFmt(b.EI_bkl / 1e6, 2) + "\u00d710\u2076 kip\u00b7in\u00b2 (" + (b.isHPile ? "H-pile section" : "casing") + ", Module 10)";
++  const datum = Math.abs(z - Lf) < 1e-9 ? "measured from grade (no unsupported length below grade)"
++    : "L_f measured below the bottom of the unsupported length L_u = " + latFmt(Lu, 1) + " ft from the head (Module 10), so " + latFmt(z, 1) + " ft below grade";
++  const eqs = "z_f = " + latFmt(m, 1) + sym + " = " + latFmt(m, 1) + " \u00d7 " + latFmt(b.davissonChar, 2) + " = " + latFmt(Lf, 1) + " ft";
++  return { k: "dav", z, col: "#0f766e", dash: "solid",
++    name: "Davisson & Robinson z_f = " + latFmt(m, 1) + sym + " = " + latFmt(Lf, 1) + " ft" + (Math.abs(z - Lf) < 1e-9 ? "" : "<br>" + latFmt(z, 1) + " ft below grade") + "<br>AASHTO LRFD 10th 10.7.3.13.4, verify",
++    short: "Davisson z_f " + latFmt(z, 1) + " ft",
++    lbl: "Davisson & Robinson (1965) depth to fixity " + eqs + ", " + form + "; " + basis + "; " + datum + ". " + LAT_DAV_REF + ". Independent of the p-y solve.",
++    keyVal: eqs + ", " + form + "; " + datum + " (Module 10 value; " + LAT_DAV_REF + ")" };
++}
+ function latKV(I, r, pyRes, actType) {
+   if (!pyRes || !pyRes.ok || !pyRes.records || pyRes.records.length < 3) return null;
+   const s = pyRes.setup ? pyRes.setup.stick_in / 12 : (I.solverFree || 0);
+@@ -10175,7 +10200,11 @@ function latKV(I, r, pyRes, actType) {
+     if (r.geoChecks && K.tip < K.zBot) K.cap.push({ v: r.geoChecks.phiMn_uncased, z0: K.tip, z1: K.zBot, lbl: "φM_n uncased (Module G)", short: "φMn uncased", dp: 2 });
+   }
+   // depth to fixity: the depths the tool already computes, each with its definition and source
++  // F26 d: Davisson & Robinson first (the PRIMARY line); z_fix, 5 % decay and the Module 10
++  // buckling line (only when Module 10 is on and its method is not Davisson) are secondary
+   K.fix = [];
++  const dav = latDavisson(r, s);
++  if (dav) K.fix.push(dav);
+   const zw = pyZfixWords(pyRes, I);   // F26 c: wording only (the depth is unchanged)
+   if (zw) K.fix.push({ k: "zfix", z: pyRes.zFix2, col: "#7a4a7a", dash: "solid",
+     name: "z_fix " + latFmt(pyRes.zFix2, 1) + " ft (" + zw.short + ")",
+@@ -10184,7 +10213,8 @@ function latKV(I, r, pyRes, actType) {
+     name: "5% M decay " + latFmt(pyRes.zMomentDecay, 1) + " ft",
+     lbl: "5% moment-decay depth = " + latFmt(pyRes.zMomentDecay, 1) + " ft — first depth below M_max where |M| ≤ 5% of M_max (Module 02" + (isHP ? ")" : "; casing-extension check)") });
+   const b = r && r.buckling;
+-  if (b && b.enable && b.Lf_buck != null && isFinite(b.Lf_buck) && isFinite(b.Le_buck)) K.fix.push({ k: "bkl", z: b.Le_buck - s, col: "#8a5a1f", dash: "dot",
++  if (b && b.enable && b.Lf_buck != null && isFinite(b.Lf_buck) && isFinite(b.Le_buck)
++    && !(b.bklTab === "davisson" && !b.lfOverrideActive) && !(dav && Math.abs(b.Le_buck - s - dav.z) < 1e-9)) K.fix.push({ k: "bkl", z: b.Le_buck - s, col: "#8a5a1f", dash: "dot",
+     name: "buckling fixity " + latFmt(b.Le_buck - s, 1) + " ft (Module 10)",
+     lbl: "buckling equivalent fixed base = head + L_u + L_f = " + latFmt(b.Lu_free, 1) + " + " + latFmt(b.Lf_buck, 1) + " = " + latFmt(b.Le_buck, 1) + " ft below the head, " + latFmt(b.Le_buck - s, 1) + " ft below grade (Module 10, " + (b.lfGoverning && b.lfGoverning.src ? b.lfGoverning.src : (b.bklTab || "")) + ")" });
+   K.fix.forEach((f, i) => { f.primary = i === 0; });
+@@ -10250,12 +10280,12 @@ function latOverlay(K, q, xa, ya, R, o) {
+   // horizontal lines across the panel: casing tip, then depth to fixity
+   const hl = [];
+   if (K.tip != null && K.tip > K.zTop && K.tip < K.zBot) hl.push({ z: K.tip, name: "casing tip " + latFmt(K.tip, 1) + " ft", lbl: "casing tip " + latFmt(K.tip, 1) + " ft below grade" + (K.Mtip != null ? "; M at tip " + latFmt(K.Mtip, 1) + " kip·ft (Module 02)" : ""), col: "#14304a", dash: "longdash", grp: "tip", w: 1 });
+-  K.fix.forEach(f => hl.push({ z: f.z, name: f.name, lbl: f.lbl, col: f.col, dash: f.dash, grp: f.k, w: f.primary ? 1.8 : 1.3, primary: f.primary }));
++  K.fix.forEach(f => hl.push({ z: f.z, name: f.name, short: f.short, lbl: f.lbl, col: f.col, dash: f.dash, grp: f.k, w: f.primary ? 1.8 : 1, primary: f.primary }));
+   hl.forEach(h => {
+     T.push({ x: [lo, hi], y: [h.z, h.z], xaxis: xa, yaxis: ya, mode: "lines", line: { color: h.col, width: h.w, dash: h.dash }, name: h.name, legendgroup: h.grp,
+       showlegend: !!o.legend && !seen[h.grp], hovertemplate: h.lbl.replace(/%/g, "%%") + "<extra></extra>" });
+     seen[h.grp] = 1;
+-    if (h.primary && o.fixLabel) pts.push({ x: hi, y: h.z, t: h.name, s: h.name.replace(/ \(.*\)$/, ""), primary: true, col: h.col, noMarker: true });
++    if (h.primary && o.fixLabel) pts.push({ x: hi, y: h.z, t: h.short || h.name, s: h.short || h.name.replace(/ \(.*\)$/, ""), primary: true, col: h.col, noMarker: true });
+   });
+   // point markers (every point keeps a hover, also when its label is hidden)
+   const mk = pts.filter(p => !p.noMarker);
+@@ -10319,7 +10349,7 @@ function latKeysF1(K) {
+ }
+ function latKeysFix(K) {
+   if (!K) return [];
+-  const out = K.fix.map(f => [f.k === "zfix" ? "Depth to fixity z_fix" : f.k === "decay" ? "5% moment-decay depth" : "Buckling fixity", f.lbl.replace(/^[^—=]*= ?/, "")]);
++  const out = K.fix.map(f => [f.k === "dav" ? "Davisson & Robinson fixity z_f (primary)" : f.k === "zfix" ? "Depth to fixity z_fix" : f.k === "decay" ? "5% moment-decay depth" : "Buckling fixity", f.keyVal || f.lbl.replace(/^[^—=]*= ?/, "")]);
+   if (!K.fix.some(f => f.k === "zfix")) out.unshift(["Depth to fixity z_fix", "none — the moment does not reverse below M_max (Module 02)"]);
+   return out;
+ }
+@@ -10494,15 +10524,23 @@ function ElevationPlot({ I, pyRes, height = 340, print, narrow, kv }) {
+     showarrow: false, align: "left", text: ld.join("<br>"), font: { size: fz, family: PLOT_FONT } });
+   // ---- moment panel ----
+   if (kv) kv.fix.forEach(f => {   // F26 b: depth to fixity lines across both panels
+-    shapes.push({ type: "line", xref: "paper", x0: 0, x1: 1, yref: "y", y0: f.z, y1: f.z, line: { color: f.col, width: f.primary ? 1.8 : 1.2, dash: f.dash } });
++    shapes.push({ type: "line", xref: "paper", x0: 0, x1: 1, yref: "y", y0: f.z, y1: f.z, line: { color: f.col, width: f.primary ? 1.8 : 1, dash: f.dash }, opacity: f.primary ? 1 : 0.75 });
+     // F26 c: every line labelled (was the primary only), so close lines do not share a label
+     // spot: the shallowest line's label above it, the deepest's below it (both at the right),
+     // a middle one above it at the left of the moment panel; a label below its line is kept
+     // clear of the soil-layer name at the right edge (xshift -100)
++    // F26 d: the primary line (Davisson & Robinson, when present) is labelled below the line at
++    // the right; without a Davisson value the F26 c placement is kept
++    if (f.k === "dav") { if (!narrow) anns.push({ xref: "paper", x: 1, xanchor: "right", xshift: -16, yref: "y", y: f.z, yanchor: "top", align: "right", showarrow: false, text: f.name, font: { size: fz, color: f.col, family: PLOT_FONT }, bgcolor: "rgba(255,255,255,0.75)" }); return; }
++    if (kv.fix.some(g => g.k === "dav")) return;   // secondary lines: stacked below
+     const zs = kv.fix.map(g => g.z).sort((a, b) => a - b), nF = zs.length;
+     const pos = nF < 2 || f.z === zs[0] ? "up" : f.z === zs[nF - 1] ? "down" : "left";
+     if (!narrow) anns.push({ xref: "paper", x: pos === "left" ? DOM_M[0] : 1, xanchor: pos === "left" ? "left" : "right", xshift: pos === "left" ? 4 : pos === "down" ? -100 : -16, yref: "y", y: f.z, yanchor: pos === "down" ? "top" : "bottom", showarrow: false, text: f.name, font: { size: fz, color: f.col, family: PLOT_FONT }, bgcolor: "rgba(255,255,255,0.7)" });
+   });
++  // F26 d: secondary depth-to-fixity labels (z_fix, 5 % decay, buckling) at the left of the
++  // moment panel, stacked so close lines do not overlap (lighter: 75 % opacity)
++  if (kv && !narrow && kv.fix.some(g => g.k === "dav")) latStack(kv.fix.filter(g => !g.primary).map(g => ({ y: g.z, g })), 13 / pxFt, yTop + 8 / pxFt, yBot - 8 / pxFt)
++    .forEach(L => anns.push({ xref: "paper", x: DOM_M[0], xanchor: "left", xshift: 4, yref: "y", y: L.ly, yanchor: "middle", showarrow: false, text: L.g.name.replace(/ \(.*\)$/, ""), opacity: 0.85, font: { size: fz - 0.5, color: L.g.col, family: PLOT_FONT }, bgcolor: "rgba(255,255,255,0.7)" }));
+   else if (pyRes.zMomentDecay != null) shapes.push({ type: "line", xref: "paper", x0: DOM_M[0], x1: 1, yref: "y", y0: pyRes.zMomentDecay, y1: pyRes.zMomentDecay, line: { color: "#2f6f3e", width: 1, dash: "dash" } });
+   const mom = pyRes.records.map(r2 => ({ d: r2.depth - s, m: r2.mom }));
+   const iM = mom.reduce((a, r2, i) => Math.abs(r2.m) > Math.abs(mom[a].m) ? i : a, 0);
+@@ -10528,7 +10566,7 @@ function ElevationPlot({ I, pyRes, height = 340, print, narrow, kv }) {
+   const plot = React.createElement(Plot, { data, layout, height: H, config: print ? { staticPlot: true, responsive: false } : undefined });
+   const note = "Left: the pile to scale — depths true, every width in true proportion, drawn " + Nt + "× wider than the depth scale (one factor for the whole pile); the cap is schematic. " +
+     (isHP ? "H-pile seen in the plane of bending (" + (G.hp.weak ? "weak axis: flange width b_f, web edge-on" : "strong axis: depth d, flanges edge-on") + "). " : "Dark = casing, gray = grout (inside the casing and in the bond hole d_h), orange = central bar, orange dashed = plunge. ") +
+-    "Right: moment diagram (active case); bands = soil layers; " + (kv && kv.fix.length ? "horizontal lines = depth to fixity: " + kv.fix.map(f => (f.k === "zfix" ? "purple solid = z_fix (first moment reversal below M_max, Module 02 reference)" : f.k === "decay" ? "green dash = 5% moment-decay depth" : "brown dot = buckling equivalent fixed base (Module 10)")).join(", ") + " (hover for the definition)." : "green dash = 5% moment-decay depth.") + " Stickup plots above grade (negative depth).";
++    "Right: moment diagram (active case); bands = soil layers; " + (kv && kv.fix.length ? "horizontal lines = depth to fixity: " + kv.fix.map(f => (f.k === "dav" ? "teal solid (heavier) = Davisson & Robinson z_f, the primary line (Module 10 value; " + LAT_DAV_REF + ")" : f.k === "zfix" ? "purple solid = z_fix (first moment reversal below M_max, Module 02 reference)" : f.k === "decay" ? "green dash = 5% moment-decay depth" : "brown dot = buckling equivalent fixed base (Module 10)")).join(", ") + " (hover for the definition)." : "green dash = 5% moment-decay depth.") + " Stickup plots above grade (negative depth).";
+   const keys = kv ? [
+     ["Horizontal scale", "\u00d7" + Nt + " (widths drawn " + Nt + "\u00d7 the depth scale)"],
+     Math.abs(s) > 0.01 ? [s > 0 ? "Stickup" : "Head below grade", latFmt(Math.abs(s), 1) + " ft"] : null,
+@@ -16944,16 +16982,18 @@ function latGradeLine() {
+     annotations: [{ xref: "paper", x: 0.01, xanchor: "left", yref: "y", y: 0, yanchor: "bottom", showarrow: false, text: "grade", font: { size: 10, color: "#5a5a4a", family: PLOT_FONT } }]
+   };
+ }
+-function LatFail({ pyRes }) {
++function LatFail({ pyRes, dav }) {
+   const e = React.createElement;
++  // F26 d: the Davisson & Robinson depth does not depend on the solve; shown here too
++  const dv = dav ? e("div", { style: { marginTop: "4px" }, "data-lg-dav": "1" }, e("b", null, "Davisson & Robinson fixity (independent of the p-y solve): "), dav.keyVal) : null;
+   // F22 (O33) "did not converge" outcome: the same note Module 02 shows
+   if (pyRes && pyRes.noConv) return e("div", { className: "pd-lg-fail", role: "alert" },
+     e("div", { style: { fontWeight: 700, marginBottom: "4px" } }, "No graphs are shown: the lateral p-y analysis did not converge."),
+-    e(PyNoConvNote, { why: pyRes.why }));
++    e(PyNoConvNote, { why: pyRes.why }), dv);
+   return e("div", { className: "pd-lg-fail", role: "alert" },
+     e("b", null, "The nonlinear p-y analysis did not converge — no response graphs are shown."),
+     " ", pyRes && pyRes.msg ? "Solver message: " + pyRes.msg + " " : "",
+-    "The graphs return when the solve converges (Module 02 on the Lateral (p-y) tab holds the inputs).");
++    "The graphs return when the solve converges (Module 02 on the Lateral (p-y) tab holds the inputs).", dv);
+ }
+ function LatGraphsCard({ I, set, pyRes, solved, activeLayers, pyDepths, setPyDepths, caseRes, runAllCases, pmCurve, lpileParse, r, actType }) {
+   const e = React.createElement;
+@@ -16999,7 +17039,7 @@ function LatGraphsCard({ I, set, pyRes, solved, activeLayers, pyDepths, setPyDep
+   };
+   const src = I.lateralSource, isPy = src === "py";
+   const ok = isPy && pyRes && pyRes.ok;
+-  const fail = isPy && !ok ? e(LatFail, { pyRes }) : null;
++  const fail = isPy && !ok ? e(LatFail, { pyRes, dav: latDavisson(r, I.solverFree || 0) }) : null;
+   const stickFt = ok && pyRes.setup ? pyRes.setup.stick_in / 12 : null;
+   const H = 520;
+   // F25 (O37): large head-deflection warning (limit lines on the deflection plots; note)
+@@ -17140,7 +17180,7 @@ function LatGraphsCard({ I, set, pyRes, solved, activeLayers, pyDepths, setPyDep
+     const bnd = (Array.isArray(I.soilLayers) ? I.soilLayers : []).map(l => l.topDepth).filter(d => d > 0 && (n <= 2 || d < Math.max(...dBG))).sort((a, b) => a - b);
+     const pLo = Math.min(0, ...pv), pHi = Math.max(0, ...pv), pSp = Math.max(pHi - pLo, 1e-6);
+     const pR = [pLo - 0.08 * pSp, pHi + 0.08 * pSp];
+-    const fixTr = xr => K ? K.fix.map(f => ({ x: xr, y: [f.z, f.z], mode: "lines", line: { color: f.col, width: f.primary ? 1.8 : 1.3, dash: f.dash }, name: f.name, hovertemplate: f.lbl.replace(/%/g, "%%") + "<extra></extra>" })) : [];
++    const fixTr = xr => K ? K.fix.map(f => ({ x: xr, y: [f.z, f.z], mode: "lines", line: { color: f.col, width: f.primary ? 1.8 : 1, dash: f.dash }, opacity: f.primary ? 1 : 0.75, name: f.name, hovertemplate: f.lbl.replace(/%/g, "%%") + "<extra></extra>" })) : [];
+     const bndTr = bnd.length ? [{ x: bnd.map(() => 0), y: bnd, mode: "markers", marker: { size: 7, color: "rgba(0,0,0,0)" }, showlegend: false, hovertemplate: "layer boundary %{y:.1f} ft below grade<extra></extra>" }] : [];
+     const bndSh = bnd.map(d => ({ type: "line", xref: "paper", x0: 0, x1: 1, yref: "y", y0: d, y1: d, line: { color: "#7a7355", width: 1, dash: "dot" } }));
+     const soilKeys = [
+```
+
 ## Open items (not changed)
 - O1. **Uncased/cased structural axial: outer 0.85 factor and `fy = min(fyb, fyc)`** (`Rn_cased/Rn_ucased`, ≈ line 1675).
   - Neither AASHTO 10.9.3.10.2 nor FHWA NHI-05-039 Eq. 5-13 has the outer 0.85, and the uncased section has no casing, so min(fyb, fyc) is arbitrary there.
@@ -8057,4 +8434,5 @@ index d816926..81efdda 100644
 - O35. **Extreme Event φ in the H-pile envelope.** The envelope heading says "Extreme Event φ = 1.0, uplift 0.8, AASHTO 10.5.5.3", and `runAllCases` applies that by overriding the micropile φ keys (`phiGeo`, `phiCC`, …). The H-pile φ keys (`hpPhiGeo`, `hpPhiGeoClay`, `hpPhiUp`, `hpPhiC`, `hpPhiCcomb`, `hpPhiF`, `hpPhiV`, `hpPhiTy`, `hpPhiTu`) are not overridden, so since F20 the H-pile Extreme rows use the strength φ (the same as the modules show with that case active; before F20 the φ = 1.0 reached only the micropile ratios, which were the wrong checks). In the F20 four-case run, H-pile Ext I geo D/C is 0.707 with φ_stat 0.30, which would be 0.212 with φ = 1.0. The micropile modules also do not apply the Extreme φ when an Extreme case is active (the envelope does). Not changed (resistance factors). **Ask:** apply φ = 1.0 (uplift 0.8) to the H-pile keys in the envelope (and should the modules apply it when an Extreme case is active, for both pile types)?
 - O36. **A FIRST p-y attempt can converge to a post-critical state, and it is used.** **Closed by F27 (2026-10-11).** Engineer's decision 2026-10-11: "yes apply it to first attempts too." A converged first attempt must now pass the stable-branch test (c) (and (a) convergence); the closure test (b) stays for retried solves only (coordinator's ruling after (b) on first attempts rejected moment-only and layered-profile solves; see F27 and O38). A rejected first attempt goes to the retry; in every case found the retry also reversed or did not converge, so these cases are now "did not converge" / NG (STL 20 / P 15: was Mmax 130.41 kip·ft at y₀ −164.69 in with stability OK; Ext I 60 / 12 / M 5: was 112.77 kip·ft at −47.04 in). Original text: **A FIRST p-y attempt can converge to a post-critical state, and it is used.** F22 tests only retried solves (as approved: solves that never needed the retry stay bit-identical). The 8-step first attempt can also settle on the unstable branch. Example: micropile defaults, free head, one strength case STL 20 kip / P 15 kip: Module 02 reports Mmax 130.41 kip·ft at a head deflection of **−164.69 in** (opposite to the load), closure 0.006 %, and combined-loading stability **passes**; flexure (D/C 2.42) and combined (2.46) are NG on that moment, so `allPass` is false, but the moment is not a valid design value. Since F23 the envelope shows the same value (before, its 6-step solve failed and it showed the 17.5 kip·ft fallback). Another: micropile defaults (default soil), an Extreme case 60 kip / 12 kip / M 5 kip·ft made active: the first attempt converges to y0 = −47.04 in, Mmax 112.77 kip·ft, and stability passes (the same loads on the uniform sand N60 20 profile of F23 check case 2 need the retry and are now "did not converge"). The retry search also found first attempts with reversed deflections at moderate loads (micropile defaults, P 6 kip with 200 kip axial, M-φ curves at 86 kip: y0 −9.6 in). Not changed (it changes results for solves that do not need the retry). **Mitigated by F25 (2026-10-11):** the large head-deflection warning (default |y₀| > 0.25 D) applies to every p-y result, so these first attempts are now flagged in amber in Module 02, the dashboard, the Lateral graphs tab, the envelope and the report (e.g. the STL 20 / P 15 case: "|y₀| = 164.69 in = 23.53 D"); their values and check results are unchanged. Still open. **Ask:** apply the stable-branch test (c) to every p-y solve, so a first attempt that reverses or folds back is also "did not converge"? (The deflection bound (d) no longer exists; see O37.)
 - O37. **F22 acceptance thresholds.** **Closed by F25 (2026-10-11).** Engineer's decision: "The deflection limit will be much smaller than 1D, I don't know what it is, but probably a couple inches. I suggest just leaving it off or maybe an input for the warning with default at .25D." The |y0| ≤ 1.0 × D acceptance test was removed (acceptance keeps (a) every step converged, (b) closure ≤ 1 %, (c) stable branch); a new input "Large head-deflection warning, y₀ > [0.25] × D" gives an amber warning only. Check case 2 below is now accepted (Mmax 107.84 kip·ft, flexure 2.00 NG, combined 2.04 NG, stability OK) with the warning. Closure 1 % kept as is. Original text: A retried solve is accepted only with closure ≤ 1 % (ΣF and ΣM) and |y0| ≤ 1.0 × D. Both are judgement values (no code provision). With the 1·D bound no retried solve was found that is accepted: F22 check case 2 (micropile, free head, STL 20 / P 14) converges on the stable branch with closure 0.0003 % but y0 = 9.40 in = 1.34 D, so it is reported as "did not converge" (its flexure D/C would be 2.0, NG either way). With 2·D it would be accepted. **Confirm** the thresholds (or give the deflection bound you want, e.g. 2·D, or a multiple of the service deflection limit).
-- O38. **Large equilibrium-closure residual on layered (four-layer) profiles.** Found in F27 (2026-10-11), not changed. On main, converged first attempts on the four-layer profile used by the parity runs (sand / soft clay / stiff clay / sand, tops 0 / 8 / 16 / 25 ft) report closures far above the uniform-soil values (≤ 0.05 % ΣF): H-pile defaults ΣF **43.80 %** / ΣM **15.06 %** (y₀ 0.157 in, Mmax 34.0 kip·ft, a plainly sound solve); with buckling (L_u 8 ft) 57.20 % / 16.20 %; micropile 3.17 % / 1.10 %, edited micropile 1.97 % / 0.55 %, micropile + buckling 5.12 % / 0.83 %. Sweep (four-layer, free head, STL 20–150, P 1–20): H-pile 15–52 % ΣF / 8–15 % ΣM; micropile 0.1–10 % ΣF / 0.05–4.9 % ΣM; moment-only head loads (after F27's normalisation) 115–1,057 % ΣF, 1.5–13 % ΣM. The residual is computed from the reported soil reactions `res.p` (`pyPofY` at each node) integrated against the applied loads; on a uniform profile it closes to round-off, so the large layered values point at the reported p (layer-boundary nodes / Georgiadis equivalent depth) or the integration across layer boundaries rather than at the solution itself, but this was not investigated. Effects today: Module 02 and the report show these closures; a RETRIED solve on such a profile is rejected by the 1 % closure test (b) even when sound (F27 four-layer + buckling edited micropile: retry closure 5.51 %). First attempts are not tested for closure (F27). **To investigate** (coordinator): whether the residual or the reported p is wrong on layered profiles, and whether the moment / deflection results are affected.
+- O38. **Large equilibrium-closure residual on layered (four-layer) profiles.** **Closed by F28 (2026-10-11).** Cause: the closure integrated the p-y curve value `res.p`, but below |y| = 0.001·y₅₀ (soft and stiff clay) the solver applies the linearised secant reaction E_s·y; the solution was sound. The closure now integrates the applied reaction (`res.pEq`): four-layer H-pile 43.80 % / 15.06 % → 0.0064 % / 0.0036 %; results unchanged. Engineer's item (2) (closure test (b) on first attempts) was stopped by its own condition and is O39. Original text: Found in F27 (2026-10-11), not changed. On main, converged first attempts on the four-layer profile used by the parity runs (sand / soft clay / stiff clay / sand, tops 0 / 8 / 16 / 25 ft) report closures far above the uniform-soil values (≤ 0.05 % ΣF): H-pile defaults ΣF **43.80 %** / ΣM **15.06 %** (y₀ 0.157 in, Mmax 34.0 kip·ft, a plainly sound solve); with buckling (L_u 8 ft) 57.20 % / 16.20 %; micropile 3.17 % / 1.10 %, edited micropile 1.97 % / 0.55 %, micropile + buckling 5.12 % / 0.83 %. Sweep (four-layer, free head, STL 20–150, P 1–20): H-pile 15–52 % ΣF / 8–15 % ΣM; micropile 0.1–10 % ΣF / 0.05–4.9 % ΣM; moment-only head loads (after F27's normalisation) 115–1,057 % ΣF, 1.5–13 % ΣM. The residual is computed from the reported soil reactions `res.p` (`pyPofY` at each node) integrated against the applied loads; on a uniform profile it closes to round-off, so the large layered values point at the reported p (layer-boundary nodes / Georgiadis equivalent depth) or the integration across layer boundaries rather than at the solution itself, but this was not investigated. Effects today: Module 02 and the report show these closures; a RETRIED solve on such a profile is rejected by the 1 % closure test (b) even when sound (F27 four-layer + buckling edited micropile: retry closure 5.51 %). First attempts are not tested for closure (F27). **To investigate** (coordinator): whether the residual or the reported p is wrong on layered profiles, and whether the moment / deflection results are affected.
+- O39. **Closure test (b) on first p-y attempts (engineer's decision 2026-10-11, item 2 of O38) — stopped, not applied.** With F28's closure, applying (b) (ΣF and ΣM ≤ 1 %) to first attempts changes no outcome in the uniform (208) and mixed (52) sweeps, but in the four-layer sweep (66) it rejects 3 ordinary solves: H-pile, free head, moment-only head load M 40 kip·ft at STL 20 / 86 / 150 (first attempt ΣF 1.30–1.31 %, ΣM 0.017 %, y₀ 0.135–0.140 in, M_max 40.1–41.0 kip·ft; the retry gives ΣF 2.6–2.7 %, so the result would become "did not converge" / NG). The residual is the solver tolerance, not an equilibrium error: 1.68 lb absolute against ∫|p|dz = 12,797 lb, measured (F27) against 1 % of ∫|p|dz because P_t = 0; with tol 1e-9 it is 0.0016 % and M_max moves by 1e-7 relative. (A fourth case, micropile M 40 at STL 150, also fails (b) but reverses and is "did not converge" on main already.) First attempts keep (a) + (c) (F27). **Ask:** apply (b) to first attempts with a different moment-only ΣF measure (e.g. 10 % of ∫|p|dz, or ΣF judged against |M_head| / (pile length) — or test only ΣM when P_t = 0), or with a tighter solver tolerance, or leave first attempts on (a) + (c)? Also: the integral-abutment Tier-2 graphs (`iabNonlinearSolve`) still show the curve value `res.p` at near-zero-deflection clay nodes (the same overstatement F28 removed from the Lateral graphs); switch them to the applied reaction too?
