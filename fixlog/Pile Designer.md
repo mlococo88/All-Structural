@@ -8173,6 +8173,197 @@ index 81efdda..6165412 100644
            data: [{ x: pyRes.mobil.map(m2 => m2.r * 100), y: pyRes.mobil.map(m2 => m2.d), mode: "lines", fill: "tozerox", fillcolor: "rgba(201,98,46,0.15)", line: { color: C.accent, width: 2 },
 ```
 
+### F26, part d. Davisson & Robinson depth to fixity on the lateral graphs, always, as the primary labelled fixity line, with an AASHTO reference   [UI only] [no calculation change]
+- **Date:** 2026-10-11. **Type:** display only. No new calculation: the value is Module 10's `Lf_davisson`.
+- **Engineer's request 2026-10-11:** "yes add it, make sure it [is] labeled with a AASHTO reference as well." Show the Davisson & Robinson (1965) depth to fixity on the lateral graphs always (not only with buckling enabled), as the primary labelled line on F-1, the elevation and the soil-reaction plot; z_fix and the 5 % decay depth as secondary lines; the Module 10 buckling line only when buckling is on and its method is not Davisson; also in the printed figures and key strips.
+- **Value and datum:** `r.buckling.Lf_davisson = davissonMult × davissonChar` (1.8·T, T = (EI/n_h)^(1/5) for a sand top layer; 1.4·R, R = (EI/k_h)^(1/4) otherwise; top-layer n_h / k_h; EI of the casing (micropile) or of the H-pile section about the chosen axis), computed by `computeAll` whether or not Module 10 is enabled. Module 10 measures L_f below the bottom of the unsupported length: L_e = L_u + L_f with L_u = max(L_u input, stickup) measured from the pile head (`colChk`). The graphs plot depth below grade, so the line is at **z = L_u + L_f − s** (s = head height above grade, ft) — the same conversion the Module 10 buckling line already used (`Le_buck − s`). With no unsupported length below grade (L_u = stickup) this is z = L_f, "measured from grade"; otherwise the label and hover say "L_f measured below the bottom of the unsupported length L_u = … ft from the head (Module 10), so … ft below grade".
+- **Reference label:** "AASHTO LRFD 10th Ed. Art. 10.7.3.13.4 — verify article" (the depth-to-fixity expressions for buckling of piles with an unsupported length, from Davisson & Robinson (1965), are given in the AASHTO pile "Buckling and Lateral Stability" article; the article number is recalled, not checked against the 10th Ed. text, hence "verify", as the tool marks other recalled references). Note: Module 10's own Calc note still says "Not an AASHTO equation"; it is not changed here (UI scope) — see open question in the PR. AASHTO writes the clay form with the soil modulus E_s (= 0.465 s_u, ksi); the tool's 1.4·(EI/k_h)^(1/4) is the same form with its k_h input.
+- **Where:**
+  - New `LAT_DAV_REF` and `latDavisson(r, s)` before `latKV` (anchor `function latDavisson(r, s) {`): returns the line {k: "dav", z, name, short, lbl, keyVal} from `r.buckling` (null if Module 10 has no value).
+  - `latKV` (anchor `const dav = latDavisson(r, s);`): Davisson first in `K.fix` (so it is the primary line); z_fix and 5 % decay follow; the buckling line is added only when `b.enable` and not (`bklTab === "davisson"` without an L_f override) and not at the same depth as the Davisson line.
+  - `latOverlay` (F-1): secondary lines 1.0 px (was 1.3), primary 1.8; the primary's on-panel label uses the short form "Davisson z_f x.x ft" (anchor `t: h.short || h.name`).
+  - `ElevationPlot` (screen and report F-4): primary (Davisson) labelled below its line at the right; secondary lines 1.0 px at 75 % opacity, their labels stacked at the left of the moment panel with `latStack` (no overlap); without a Davisson value the F26 c placement is unchanged (anchor `if (f.k === "dav") { if (!narrow) anns.push(`). Note text names the teal line.
+  - Soil reaction panel (`fixTr`): secondary lines 1.0 px, 75 % opacity.
+  - `latKeysFix`: key-strip row "Davisson & Robinson fixity z_f (primary)" with the formula, T or R, datum, "Module 10 value" and the reference (screen strips and printed F-1 / F-4 key tables).
+  - `LatFail` + `LatGraphsCard` (anchor `dav: latDavisson(r, I.solverFree || 0)`): when the p-y solve did not converge no graph is drawn (unchanged), and the note now ends with "Davisson & Robinson fixity (independent of the p-y solve): …", since that value does not depend on the solve. The solve-derived lines (z_fix, 5 % decay) are not shown then, as before.
+- **Legend / label text:** "Davisson & Robinson z_f = 1.8T = 4.8 ft[<br>7.8 ft below grade]<br>AASHTO LRFD 10th 10.7.3.13.4, verify"; hover: "Davisson & Robinson (1965) depth to fixity z_f = 1.8T = 1.8 × 2.69 = 4.8 ft, T = (EI/n_h)^(1/5); n_h = … (top layer …), EI = … ×10⁶ kip·in² (casing | H-pile section, Module 10); <datum>. AASHTO LRFD 10th Ed. Art. 10.7.3.13.4 — verify article. Independent of the p-y solve."
+- **Check cases (plotted depth = Module 10 value, asserted in the test on every Davisson trace and shape: F-1 three panels, elevation, soil reaction, printed F-1 and F-4 — 9 values per case, all exactly equal to L_u + Lf_davisson − s):**
+  | case | Module 10 L_f | L_u | s | plotted z |
+  |---|---|---|---|---|
+  | micropile defaults (sand, T = 2.690 ft) | 1.8 × 2.690 = 4.842 ft | 3.0 | 3.0 | 4.842 ft |
+  | H-pile defaults (T = 4.958 ft, strong-axis section) | 1.8 × 4.958 = 8.924 ft | 3.0 | 3.0 | 8.924 ft |
+  | H-pile four-layer (top layer sand) | 8.924 ft | 3.0 | 3.0 | 8.924 ft |
+  | H-pile four-layer, buckling on, L_u 8 ft, Davisson method | 8.924 ft | 8.0 | 3.0 | 13.924 ft (no separate buckling line: same method) |
+  | same with P-crit tab (no P-crit data → falls back to the Davisson depth) | 8.924 ft | 8.0 | 3.0 | 13.924 ft (buckling line at the same depth → not drawn twice) |
+  | micropile, buckling on, L_u 6 ft, deflection-matched (LPILE Δ 0.4 in, V 6 kip) | 4.842 ft | 6.0 | 3.0 | 7.842 ft; buckling line at 12.634 ft drawn as secondary (L_f = 9.6 ft deflection-matched) |
+  | micropile, stiff clay top layer (k_h 500, R = 2.028 ft) | 1.4 × 2.028 = 2.839 ft | 3.0 | 3.0 | 2.839 ft |
+  | micropile, soft clay (k_h 150), did not converge | 1.4 × 2.740 = 3.836 ft | — | — | no graphs; note "z_f = 1.4R = 1.4 × 2.74 = 3.8 ft …" |
+  | micropile STL 20 / P 15, did not converge | 4.842 ft | — | — | no graphs; note "z_f = 1.8T = 1.8 × 2.69 = 4.8 ft …" |
+  - Hand check (micropile defaults): T = (EI/n_h)^(1/5) = 2.690 ft (Module 10 shows the same), L_f = 1.8 × 2.690 = 4.842 ft; L_u = stickup = 3.0 ft, s = 3.0 ft → z = 3.0 + 4.842 − 3.0 = 4.842 ft below grade.
+- **Saved data:** none changed.
+- **How verified:** node --check of every script block; headless Chromium (pinned libraries local): `latg.mjs` on the cases above + `davassert.py` (assertion above, 0 failures); `parity.mjs` F28 commit vs this commit (micropile, H-pile, IAB, edited micropile × default / four-layer / four-layer + buckling): page text, module statuses, check strip, autosave, export, IndexedDB, share payload identical; the printed report differs only in the F-1 / F-4 figure labels and key tables (Davisson rows added, secondary labels shortened). Screenshots looked at: F-1 + elevation (micropile with L_u 6 ft deflection-matched: 4 lines; H-pile four-layer), soil reaction (H-pile four-layer + buckling), printed F-4 (both). No console errors.
+- **Other copies of this code:** none.
+- **Re-applying by hand:** unified diff below, against the F28 commit (CRLF stripped).
+
+```diff
+diff --git a/Pile Designer.html b/Pile Designer.html
+index 6165412..a18a6e1 100644
+--- a/Pile Designer.html	
++++ b/Pile Designer.html	
+@@ -10144,6 +10144,31 @@ function latZeros(z, v) {
+   }
+   return out;
+ }
++/* F26 d (engineer 2026-10-11: "yes add it, make sure it [is] labeled with a AASHTO reference
++   as well"): the Davisson & Robinson (1965) depth to fixity on the lateral graphs, ALWAYS
++   (not only with Module 10 enabled). No new calculation: the value Module 10 computes
++   (r.buckling.Lf_davisson = davissonMult x davissonChar, 1.8 T sand / 1.4 R clay, top-layer
++   n_h / k_h, section-aware EI). Module 10 measures L_f below the bottom of the unsupported
++   length L_u (L_u from the pile head, floored at the stickup: L_e = L_u + L_f), so the depth
++   below grade is L_u + L_f - s (s = head height above grade, ft). It does not depend on the
++   p-y solve. Returns null when Module 10 has no value. */
++const LAT_DAV_REF = "AASHTO LRFD 10th Ed. Art. 10.7.3.13.4 \u2014 verify article";
++function latDavisson(r, s) {
++  const b = r && r.buckling;
++  if (!b || !(b.Lf_davisson > 0) || !isFinite(b.Lf_davisson)) return null;
++  const sym = b.bklSoilIsSand ? "T" : "R", m = b.davissonMult, Lf = b.Lf_davisson;
++  const Lu = b.Lu_free || 0, st = s || 0, z = Lu + Lf - st;
++  const form = b.bklSoilIsSand ? "T = (EI/n_h)^(1/5)" : "R = (EI/k_h)^(1/4)";
++  const basis = (b.bklSoilIsSand ? "n_h = " : "k_h = ") + latFmt(b.bklStiff, 0) + (b.bklSoilIsSand ? " pci/in" : " pci") + " (" + (b.bklSoilSrc || "") + "), EI = " + latFmt(b.EI_bkl / 1e6, 2) + "\u00d710\u2076 kip\u00b7in\u00b2 (" + (b.isHPile ? "H-pile section" : "casing") + ", Module 10)";
++  const datum = Math.abs(z - Lf) < 1e-9 ? "measured from grade (no unsupported length below grade)"
++    : "L_f measured below the bottom of the unsupported length L_u = " + latFmt(Lu, 1) + " ft from the head (Module 10), so " + latFmt(z, 1) + " ft below grade";
++  const eqs = "z_f = " + latFmt(m, 1) + sym + " = " + latFmt(m, 1) + " \u00d7 " + latFmt(b.davissonChar, 2) + " = " + latFmt(Lf, 1) + " ft";
++  return { k: "dav", z, col: "#0f766e", dash: "solid",
++    name: "Davisson & Robinson z_f = " + latFmt(m, 1) + sym + " = " + latFmt(Lf, 1) + " ft" + (Math.abs(z - Lf) < 1e-9 ? "" : "<br>" + latFmt(z, 1) + " ft below grade") + "<br>AASHTO LRFD 10th 10.7.3.13.4, verify",
++    short: "Davisson z_f " + latFmt(z, 1) + " ft",
++    lbl: "Davisson & Robinson (1965) depth to fixity " + eqs + ", " + form + "; " + basis + "; " + datum + ". " + LAT_DAV_REF + ". Independent of the p-y solve.",
++    keyVal: eqs + ", " + form + "; " + datum + " (Module 10 value; " + LAT_DAV_REF + ")" };
++}
+ function latKV(I, r, pyRes, actType) {
+   if (!pyRes || !pyRes.ok || !pyRes.records || pyRes.records.length < 3) return null;
+   const s = pyRes.setup ? pyRes.setup.stick_in / 12 : (I.solverFree || 0);
+@@ -10175,7 +10200,11 @@ function latKV(I, r, pyRes, actType) {
+     if (r.geoChecks && K.tip < K.zBot) K.cap.push({ v: r.geoChecks.phiMn_uncased, z0: K.tip, z1: K.zBot, lbl: "φM_n uncased (Module G)", short: "φMn uncased", dp: 2 });
+   }
+   // depth to fixity: the depths the tool already computes, each with its definition and source
++  // F26 d: Davisson & Robinson first (the PRIMARY line); z_fix, 5 % decay and the Module 10
++  // buckling line (only when Module 10 is on and its method is not Davisson) are secondary
+   K.fix = [];
++  const dav = latDavisson(r, s);
++  if (dav) K.fix.push(dav);
+   const zw = pyZfixWords(pyRes, I);   // F26 c: wording only (the depth is unchanged)
+   if (zw) K.fix.push({ k: "zfix", z: pyRes.zFix2, col: "#7a4a7a", dash: "solid",
+     name: "z_fix " + latFmt(pyRes.zFix2, 1) + " ft (" + zw.short + ")",
+@@ -10184,7 +10213,8 @@ function latKV(I, r, pyRes, actType) {
+     name: "5% M decay " + latFmt(pyRes.zMomentDecay, 1) + " ft",
+     lbl: "5% moment-decay depth = " + latFmt(pyRes.zMomentDecay, 1) + " ft — first depth below M_max where |M| ≤ 5% of M_max (Module 02" + (isHP ? ")" : "; casing-extension check)") });
+   const b = r && r.buckling;
+-  if (b && b.enable && b.Lf_buck != null && isFinite(b.Lf_buck) && isFinite(b.Le_buck)) K.fix.push({ k: "bkl", z: b.Le_buck - s, col: "#8a5a1f", dash: "dot",
++  if (b && b.enable && b.Lf_buck != null && isFinite(b.Lf_buck) && isFinite(b.Le_buck)
++    && !(b.bklTab === "davisson" && !b.lfOverrideActive) && !(dav && Math.abs(b.Le_buck - s - dav.z) < 1e-9)) K.fix.push({ k: "bkl", z: b.Le_buck - s, col: "#8a5a1f", dash: "dot",
+     name: "buckling fixity " + latFmt(b.Le_buck - s, 1) + " ft (Module 10)",
+     lbl: "buckling equivalent fixed base = head + L_u + L_f = " + latFmt(b.Lu_free, 1) + " + " + latFmt(b.Lf_buck, 1) + " = " + latFmt(b.Le_buck, 1) + " ft below the head, " + latFmt(b.Le_buck - s, 1) + " ft below grade (Module 10, " + (b.lfGoverning && b.lfGoverning.src ? b.lfGoverning.src : (b.bklTab || "")) + ")" });
+   K.fix.forEach((f, i) => { f.primary = i === 0; });
+@@ -10250,12 +10280,12 @@ function latOverlay(K, q, xa, ya, R, o) {
+   // horizontal lines across the panel: casing tip, then depth to fixity
+   const hl = [];
+   if (K.tip != null && K.tip > K.zTop && K.tip < K.zBot) hl.push({ z: K.tip, name: "casing tip " + latFmt(K.tip, 1) + " ft", lbl: "casing tip " + latFmt(K.tip, 1) + " ft below grade" + (K.Mtip != null ? "; M at tip " + latFmt(K.Mtip, 1) + " kip·ft (Module 02)" : ""), col: "#14304a", dash: "longdash", grp: "tip", w: 1 });
+-  K.fix.forEach(f => hl.push({ z: f.z, name: f.name, lbl: f.lbl, col: f.col, dash: f.dash, grp: f.k, w: f.primary ? 1.8 : 1.3, primary: f.primary }));
++  K.fix.forEach(f => hl.push({ z: f.z, name: f.name, short: f.short, lbl: f.lbl, col: f.col, dash: f.dash, grp: f.k, w: f.primary ? 1.8 : 1, primary: f.primary }));
+   hl.forEach(h => {
+     T.push({ x: [lo, hi], y: [h.z, h.z], xaxis: xa, yaxis: ya, mode: "lines", line: { color: h.col, width: h.w, dash: h.dash }, name: h.name, legendgroup: h.grp,
+       showlegend: !!o.legend && !seen[h.grp], hovertemplate: h.lbl.replace(/%/g, "%%") + "<extra></extra>" });
+     seen[h.grp] = 1;
+-    if (h.primary && o.fixLabel) pts.push({ x: hi, y: h.z, t: h.name, s: h.name.replace(/ \(.*\)$/, ""), primary: true, col: h.col, noMarker: true });
++    if (h.primary && o.fixLabel) pts.push({ x: hi, y: h.z, t: h.short || h.name, s: h.short || h.name.replace(/ \(.*\)$/, ""), primary: true, col: h.col, noMarker: true });
+   });
+   // point markers (every point keeps a hover, also when its label is hidden)
+   const mk = pts.filter(p => !p.noMarker);
+@@ -10319,7 +10349,7 @@ function latKeysF1(K) {
+ }
+ function latKeysFix(K) {
+   if (!K) return [];
+-  const out = K.fix.map(f => [f.k === "zfix" ? "Depth to fixity z_fix" : f.k === "decay" ? "5% moment-decay depth" : "Buckling fixity", f.lbl.replace(/^[^—=]*= ?/, "")]);
++  const out = K.fix.map(f => [f.k === "dav" ? "Davisson & Robinson fixity z_f (primary)" : f.k === "zfix" ? "Depth to fixity z_fix" : f.k === "decay" ? "5% moment-decay depth" : "Buckling fixity", f.keyVal || f.lbl.replace(/^[^—=]*= ?/, "")]);
+   if (!K.fix.some(f => f.k === "zfix")) out.unshift(["Depth to fixity z_fix", "none — the moment does not reverse below M_max (Module 02)"]);
+   return out;
+ }
+@@ -10494,15 +10524,23 @@ function ElevationPlot({ I, pyRes, height = 340, print, narrow, kv }) {
+     showarrow: false, align: "left", text: ld.join("<br>"), font: { size: fz, family: PLOT_FONT } });
+   // ---- moment panel ----
+   if (kv) kv.fix.forEach(f => {   // F26 b: depth to fixity lines across both panels
+-    shapes.push({ type: "line", xref: "paper", x0: 0, x1: 1, yref: "y", y0: f.z, y1: f.z, line: { color: f.col, width: f.primary ? 1.8 : 1.2, dash: f.dash } });
++    shapes.push({ type: "line", xref: "paper", x0: 0, x1: 1, yref: "y", y0: f.z, y1: f.z, line: { color: f.col, width: f.primary ? 1.8 : 1, dash: f.dash }, opacity: f.primary ? 1 : 0.75 });
+     // F26 c: every line labelled (was the primary only), so close lines do not share a label
+     // spot: the shallowest line's label above it, the deepest's below it (both at the right),
+     // a middle one above it at the left of the moment panel; a label below its line is kept
+     // clear of the soil-layer name at the right edge (xshift -100)
++    // F26 d: the primary line (Davisson & Robinson, when present) is labelled below the line at
++    // the right; without a Davisson value the F26 c placement is kept
++    if (f.k === "dav") { if (!narrow) anns.push({ xref: "paper", x: 1, xanchor: "right", xshift: -16, yref: "y", y: f.z, yanchor: "top", align: "right", showarrow: false, text: f.name, font: { size: fz, color: f.col, family: PLOT_FONT }, bgcolor: "rgba(255,255,255,0.75)" }); return; }
++    if (kv.fix.some(g => g.k === "dav")) return;   // secondary lines: stacked below
+     const zs = kv.fix.map(g => g.z).sort((a, b) => a - b), nF = zs.length;
+     const pos = nF < 2 || f.z === zs[0] ? "up" : f.z === zs[nF - 1] ? "down" : "left";
+     if (!narrow) anns.push({ xref: "paper", x: pos === "left" ? DOM_M[0] : 1, xanchor: pos === "left" ? "left" : "right", xshift: pos === "left" ? 4 : pos === "down" ? -100 : -16, yref: "y", y: f.z, yanchor: pos === "down" ? "top" : "bottom", showarrow: false, text: f.name, font: { size: fz, color: f.col, family: PLOT_FONT }, bgcolor: "rgba(255,255,255,0.7)" });
+   });
++  // F26 d: secondary depth-to-fixity labels (z_fix, 5 % decay, buckling) at the left of the
++  // moment panel, stacked so close lines do not overlap (lighter: 75 % opacity)
++  if (kv && !narrow && kv.fix.some(g => g.k === "dav")) latStack(kv.fix.filter(g => !g.primary).map(g => ({ y: g.z, g })), 13 / pxFt, yTop + 8 / pxFt, yBot - 8 / pxFt)
++    .forEach(L => anns.push({ xref: "paper", x: DOM_M[0], xanchor: "left", xshift: 4, yref: "y", y: L.ly, yanchor: "middle", showarrow: false, text: L.g.name.replace(/ \(.*\)$/, ""), opacity: 0.85, font: { size: fz - 0.5, color: L.g.col, family: PLOT_FONT }, bgcolor: "rgba(255,255,255,0.7)" }));
+   else if (pyRes.zMomentDecay != null) shapes.push({ type: "line", xref: "paper", x0: DOM_M[0], x1: 1, yref: "y", y0: pyRes.zMomentDecay, y1: pyRes.zMomentDecay, line: { color: "#2f6f3e", width: 1, dash: "dash" } });
+   const mom = pyRes.records.map(r2 => ({ d: r2.depth - s, m: r2.mom }));
+   const iM = mom.reduce((a, r2, i) => Math.abs(r2.m) > Math.abs(mom[a].m) ? i : a, 0);
+@@ -10528,7 +10566,7 @@ function ElevationPlot({ I, pyRes, height = 340, print, narrow, kv }) {
+   const plot = React.createElement(Plot, { data, layout, height: H, config: print ? { staticPlot: true, responsive: false } : undefined });
+   const note = "Left: the pile to scale — depths true, every width in true proportion, drawn " + Nt + "× wider than the depth scale (one factor for the whole pile); the cap is schematic. " +
+     (isHP ? "H-pile seen in the plane of bending (" + (G.hp.weak ? "weak axis: flange width b_f, web edge-on" : "strong axis: depth d, flanges edge-on") + "). " : "Dark = casing, gray = grout (inside the casing and in the bond hole d_h), orange = central bar, orange dashed = plunge. ") +
+-    "Right: moment diagram (active case); bands = soil layers; " + (kv && kv.fix.length ? "horizontal lines = depth to fixity: " + kv.fix.map(f => (f.k === "zfix" ? "purple solid = z_fix (first moment reversal below M_max, Module 02 reference)" : f.k === "decay" ? "green dash = 5% moment-decay depth" : "brown dot = buckling equivalent fixed base (Module 10)")).join(", ") + " (hover for the definition)." : "green dash = 5% moment-decay depth.") + " Stickup plots above grade (negative depth).";
++    "Right: moment diagram (active case); bands = soil layers; " + (kv && kv.fix.length ? "horizontal lines = depth to fixity: " + kv.fix.map(f => (f.k === "dav" ? "teal solid (heavier) = Davisson & Robinson z_f, the primary line (Module 10 value; " + LAT_DAV_REF + ")" : f.k === "zfix" ? "purple solid = z_fix (first moment reversal below M_max, Module 02 reference)" : f.k === "decay" ? "green dash = 5% moment-decay depth" : "brown dot = buckling equivalent fixed base (Module 10)")).join(", ") + " (hover for the definition)." : "green dash = 5% moment-decay depth.") + " Stickup plots above grade (negative depth).";
+   const keys = kv ? [
+     ["Horizontal scale", "\u00d7" + Nt + " (widths drawn " + Nt + "\u00d7 the depth scale)"],
+     Math.abs(s) > 0.01 ? [s > 0 ? "Stickup" : "Head below grade", latFmt(Math.abs(s), 1) + " ft"] : null,
+@@ -16944,16 +16982,18 @@ function latGradeLine() {
+     annotations: [{ xref: "paper", x: 0.01, xanchor: "left", yref: "y", y: 0, yanchor: "bottom", showarrow: false, text: "grade", font: { size: 10, color: "#5a5a4a", family: PLOT_FONT } }]
+   };
+ }
+-function LatFail({ pyRes }) {
++function LatFail({ pyRes, dav }) {
+   const e = React.createElement;
++  // F26 d: the Davisson & Robinson depth does not depend on the solve; shown here too
++  const dv = dav ? e("div", { style: { marginTop: "4px" }, "data-lg-dav": "1" }, e("b", null, "Davisson & Robinson fixity (independent of the p-y solve): "), dav.keyVal) : null;
+   // F22 (O33) "did not converge" outcome: the same note Module 02 shows
+   if (pyRes && pyRes.noConv) return e("div", { className: "pd-lg-fail", role: "alert" },
+     e("div", { style: { fontWeight: 700, marginBottom: "4px" } }, "No graphs are shown: the lateral p-y analysis did not converge."),
+-    e(PyNoConvNote, { why: pyRes.why }));
++    e(PyNoConvNote, { why: pyRes.why }), dv);
+   return e("div", { className: "pd-lg-fail", role: "alert" },
+     e("b", null, "The nonlinear p-y analysis did not converge — no response graphs are shown."),
+     " ", pyRes && pyRes.msg ? "Solver message: " + pyRes.msg + " " : "",
+-    "The graphs return when the solve converges (Module 02 on the Lateral (p-y) tab holds the inputs).");
++    "The graphs return when the solve converges (Module 02 on the Lateral (p-y) tab holds the inputs).", dv);
+ }
+ function LatGraphsCard({ I, set, pyRes, solved, activeLayers, pyDepths, setPyDepths, caseRes, runAllCases, pmCurve, lpileParse, r, actType }) {
+   const e = React.createElement;
+@@ -16999,7 +17039,7 @@ function LatGraphsCard({ I, set, pyRes, solved, activeLayers, pyDepths, setPyDep
+   };
+   const src = I.lateralSource, isPy = src === "py";
+   const ok = isPy && pyRes && pyRes.ok;
+-  const fail = isPy && !ok ? e(LatFail, { pyRes }) : null;
++  const fail = isPy && !ok ? e(LatFail, { pyRes, dav: latDavisson(r, I.solverFree || 0) }) : null;
+   const stickFt = ok && pyRes.setup ? pyRes.setup.stick_in / 12 : null;
+   const H = 520;
+   // F25 (O37): large head-deflection warning (limit lines on the deflection plots; note)
+@@ -17140,7 +17180,7 @@ function LatGraphsCard({ I, set, pyRes, solved, activeLayers, pyDepths, setPyDep
+     const bnd = (Array.isArray(I.soilLayers) ? I.soilLayers : []).map(l => l.topDepth).filter(d => d > 0 && (n <= 2 || d < Math.max(...dBG))).sort((a, b) => a - b);
+     const pLo = Math.min(0, ...pv), pHi = Math.max(0, ...pv), pSp = Math.max(pHi - pLo, 1e-6);
+     const pR = [pLo - 0.08 * pSp, pHi + 0.08 * pSp];
+-    const fixTr = xr => K ? K.fix.map(f => ({ x: xr, y: [f.z, f.z], mode: "lines", line: { color: f.col, width: f.primary ? 1.8 : 1.3, dash: f.dash }, name: f.name, hovertemplate: f.lbl.replace(/%/g, "%%") + "<extra></extra>" })) : [];
++    const fixTr = xr => K ? K.fix.map(f => ({ x: xr, y: [f.z, f.z], mode: "lines", line: { color: f.col, width: f.primary ? 1.8 : 1, dash: f.dash }, opacity: f.primary ? 1 : 0.75, name: f.name, hovertemplate: f.lbl.replace(/%/g, "%%") + "<extra></extra>" })) : [];
+     const bndTr = bnd.length ? [{ x: bnd.map(() => 0), y: bnd, mode: "markers", marker: { size: 7, color: "rgba(0,0,0,0)" }, showlegend: false, hovertemplate: "layer boundary %{y:.1f} ft below grade<extra></extra>" }] : [];
+     const bndSh = bnd.map(d => ({ type: "line", xref: "paper", x0: 0, x1: 1, yref: "y", y0: d, y1: d, line: { color: "#7a7355", width: 1, dash: "dot" } }));
+     const soilKeys = [
+```
+
 ## Open items (not changed)
 - O1. **Uncased/cased structural axial: outer 0.85 factor and `fy = min(fyb, fyc)`** (`Rn_cased/Rn_ucased`, ≈ line 1675).
   - Neither AASHTO 10.9.3.10.2 nor FHWA NHI-05-039 Eq. 5-13 has the outer 0.85, and the uncased section has no casing, so min(fyb, fyc) is arbitrary there.
