@@ -6236,6 +6236,1311 @@ Engineer's decision 2026-10-11 on O37: "The deflection limit will be much smalle
 - **Other copies of this code:** none.
 - **Not changed:** the first-attempt acceptance (O36 stays open; now flagged by the warning), the service deflection limit, the Pcr ramp, closure and branch tests.
 
+## 2026-10-11 — PR: claude/pile-elev-scale (PR link added after merge)
+
+### F26. Elevation: the pile drawn to scale beside the moment diagram (screen and report); H-pile shows no micropile labels (O19)   [UI only] [no calculation change]
+- **Date:** 2026-10-11. **Type:** UI only (presentation). Engineer's request 2026-10-11: "The elevation graphic that shows the pile should show the pile more to scale." Also closes O19.
+- **Problem:** the "Elevation · moment diagram depth-aligned with stratigraphy" chart (`ElevationPlot`, Lateral graphs tab, sub-tab Deflection · Moment · Shear) drew the pile as rectangles in paper fractions of the moment axis (`x0: 0.05, x1: 0.115` cased, `0.062–0.103` uncased, `0.03–0.135` bond zone). The widths had no relation to the pile: at the micropile defaults the cased part was drawn wider than the bond zone although casing OD = d_h = 7.0 in, and the drawn widths changed with the plot width. In H-pile mode it drew the micropile parts and labels "casing tip" and "bond 27 ft" (O19).
+- **What changed (screen):**
+  - `ElevationPlot` rewritten. Two panels on **one depth axis** (`yaxis`, ft below grade, stickup negative, the F24 datum `pyRes.setup.stick_in / 12`): left (`xaxis`, domain 0–0.36; 0–0.42 on a narrow card) the pile, right (`xaxis2`, domain 0.42–1; 0.50–1 narrow) the moment diagram as before (same trace, Mmax marker, 5 % moment-decay line).
+  - **Pile panel to scale:** horizontal axis in inches with `scaleanchor: "y"`, `scaleratio: N/12`, so one inch of width is drawn N times as long as one inch of depth. **N is one factor for the whole pile**, chosen so the widest part is about 7 % of the plot height and rounded down to 1, 2, 2.5, 3, 4, 5, 6, 8, 10, … (`elevScaleN`); the axis title says "width (in) · horizontal scale ×N". Depths are true; every width is in true proportion to every other.
+  - **Micropile parts** (inputs only): casing OD `I.OD` from the top of the cap embedment to the casing tip, with the casing ID `OD − 2·tc` (grout) inside and the corroded OD `OD − 2·corr` dotted; bond-zone hole `bondHoleDia(I)` (d_h; `dhBond` when "separate bond-zone diameter" is on, else OD) from the top of bond to the toe; central bar as the equivalent round bar `2·√(A_b/π)` (as `computeAll` `barDia`) from the top of the embedment to the toe; plunge (top of bond to casing tip) dashed; cap embedment `I.capEmbed` drawn up into the cap. Casing tip `Lcased − stickup`, top of bond `Lcased − Lplunge − stickup`, toe `pyRes.embed_ft` (the p-y model's toe), as before.
+  - **H-pile parts:** the section in the plane of bending: strong axis → depth `hpD` with the flanges (`hpTf`) edge-on; weak axis → flange width `hpBf` with the web (`hpTw`) edge-on; from the top of the embedment `hpCapEmbed` to the toe at the embedded length (`pyRes.embed_ft`). **No casing tip, bond or plunge** (O19).
+  - Cap: schematic, 1.5 ft thick (more if the embedment needs it), 2.2 × the widest pile part wide, labelled "cap"; the note says it is schematic.
+  - Labels right of the pile with leader lines, at least 12 px apart and inside the plot: stickup (or "head below grade"), embed, casing OD (corroded), top of bond, plunge, casing tip, bond hole d_h, bar Ø, toe (H-pile: section and width used, toe "(embedded length)"). On a narrow card (< 700 px) only the key depths are labelled; every label is also in the hover (transparent markers at the label points).
+  - Loads at the head in the pile panel: P arrow onto the cap, V arrow at the head, one label "P = … kip / V = … kip / ↻ M = … kip·ft" above the cap (as before, values `I.STL`, `I.Plat`, `I.pyMhead`).
+  - Soil bands and the grade line run across both panels; layer names at the right; "grade" label. Moment axis range padded on the Mmax side so its label is not clipped. Height 480 → 520 px on the Lateral graphs tab. Note under the chart says what is to scale and what is schematic.
+  - **Module 02** text line under the convergence message: "· M at casing tip … kip·ft" is shown for the micropile only (O19; H-pile: "head deflection … · moment decays to 5% at … · pile modeled full length …").
+  - **Figure F-3 note** (screen and report): "pile width b (d_h below the casing tip where entered)" → H-pile: "pile width b (H-pile: b_f for strong-axis, d for weak-axis bending)" (the width `buildPySetup` uses: `hpDepthDim`); micropile unchanged.
+- **What changed (printed report):** new block **"02F Figure F-4 — elevation: pile to scale and moment diagram"** after F-1/F-2 (micropile and H-pile, when the p-y solve converged): the same `ElevationPlot` with `print`, 660 px wide (inside the 7.1 in printable width), 470 px tall, static, with the note and the caption "Figure F-4: elevation (active case) — pile drawn to scale with one horizontal exaggeration, moment diagram on the same depth axis." It is in the Lateral print group with F-1/F-2.
+- **O19 other places checked** (H-pile defaults, every module expanded, all screen text, every Plotly annotation and the report text searched for "casing tip", "plunge", "bond"): after this change only the general disclaimer ("…FHWA NHI-05-039…") matches. Module G (H-pile) already showed the toe/embedded length (since F14/F19), no "casing tip" or "bond".
+- **Not changed:** every computed value, check and report number; the moment trace and the Mmax/decay values; storage keys and saved data.
+- **Governing provision:** none (presentation only). No formula, factor, unit, default or code reference changed.
+- **Check case (drawing dimensions, measured from the rendered Plotly chart, `_fullLayout` px):**
+
+  | Case | N | px/in (x) | px/ft (y) | px/in ÷ (px/ft ÷ 12) | casing px | hole px | ratio (= OD/d_h) | tip / top of bond / toe (ft) |
+  |---|---|---|---|---|---|---|---|---|
+  | Micropile defaults (OD 7.0, d_h = OD) | 5 | 3.9847 | 9.5632 | 5.000 | 27.89 | 27.89 | 1.000 (7/7) | 12.0 / 9.0 / 36.0 |
+  | Separate bond hole d_h = 10 in | 4 | 3.1877 | 9.5632 | 4.000 | 22.31 | 31.88 | 0.700 (7/10) | 12.0 / 9.0 / 36.0 |
+  | H-pile defaults HP 13.83×14.70, strong axis | 2.5 | 2.3111 | 11.0933 | 2.500 | width d 31.96 px = 13.83 in × 2.311 | — | flange 0.615 in = 1.42 px | toe 30.0 (embedded length) |
+
+  Hand check (micropile defaults): Lcased 15, Lplunge 3, stickup 3 → tip 15 − 3 = 12.0 ft, top of bond 15 − 3 − 3 = 9.0 ft; toe from head max(15 − 3 + 27, 16) = 39 → 36.0 ft below grade; bar 2·√(0.79/π) = 1.003 in (drawn 1.0029 in); corroded OD 7 − 2(0.0625) = 6.875 in.
+- **How verified:**
+  - `node --check` on all four inline scripts (pre-compiled `React.createElement`; no JSX).
+  - Headless Chromium, pinned libraries served locally (React 18.3.1, three r128, KaTeX 0.16.9, Plotly 2.32.0, Tailwind 3.4.5 compiled from the file's classes), origin/main vs branch, all three modes with every module expanded plus an edited project: `.main-col` text, Module 02 text, check strip, module statuses, report badges, autosave JSON, LPILE key, `Save .json` export (apart from `savedAt`), IndexedDB record and `bridgeSuite.v1.projectMeta` payload identical; report text identical apart from the new F-4 block and (H-pile) the F-3 note; Module 02 text identical apart from the H-pile "M at casing tip" removal. No console errors.
+  - Screenshots at 1500 and 400 px (micropile defaults, d_h 10 in, H-pile defaults) and the printed F-4 (Letter PDF) looked at.
+- **Other copies:** none.
+- **Re-applying by hand:** the unified diff below (against origin/main at #112; CRLF stripped; the file uses CRLF). Anchors: `function ElevationPlot({` (replaced, with the new helpers `elevScaleN`, `elevPileGeom`, `elevStack` before it), the report anchor `"Figure F-2: moment profiles, all LRFD load cases overlaid (per-case p-y solves)."))),`, Module 02 anchor `" · M at casing tip "`, F-3 note anchor `pile width b (d_h below the casing tip where entered)`, `LatGraphsCard` (`narrow` state, `setNarrow` in `onSize`, `e(ElevationPlot, {`).
+
+```diff
+diff --git a/Pile Designer.html b/Pile Designer.html
+index 2e32ece..a8206ec 100644
+--- a/Pile Designer.html	
++++ b/Pile Designer.html	
+@@ -5586,5 +5586,5 @@ function PyCurvesFig({ I, pyRes, solved, activeLayers, depths, setDepths, print
+     ? ["Linear (Winkler) basis: the springs are straight lines p = E_s·y with E_s = n_h·z (sand) or k_h (clay) per layer, read with the solver's own subgradeAt(); node spacing " + fmt(set.dz, 3) + " ft. ● = deflection of the linear solution at that depth (active case).",
+        "There are no nonlinear p-y curves on this basis; select “Nonlinear p-y (built-in)” to see them."]
+-    : ["Curves are the solver's own springs: pyPofY() with the same soil records, Georgiadis equivalent depth z_e, pile width b (d_h below the casing tip where entered) and multipliers, p = f_m·p(y/f_y) with f_m = " + fmt(set.gPM, 2) + ", f_y = " + fmt(set.gYM, 2) + ". Group row factors (Module 11) reach the solver only through f_m (“Apply avg fm”); they are not applied per row.",
++    : ["Curves are the solver's own springs: pyPofY() with the same soil records, Georgiadis equivalent depth z_e, pile width b" + (I.pileType === "hpile" ? " (H-pile: b_f for strong-axis, d for weak-axis bending)" : " (d_h below the casing tip where entered)") + " and multipliers, p = f_m·p(y/f_y) with f_m = " + fmt(set.gPM, 2) + ", f_y = " + fmt(set.gYM, 2) + ". Group row factors (Module 11) reach the solver only through f_m (“Apply avg fm”); they are not applied per row.",
+        "● = point mobilised under the active load case: y from the solution at the solver node nearest each depth (node spacing " + fmt(set.h, 2) + " in) and p = the solver's nodal reaction; |p − p(y)| shows it lies on its curve. " + (I.pyCyclic ? "Cyclic loading selected: cyclic forms apply to sand and soft clay; stiff clay and weak rock have no cyclic form in the tool." : "Static loading.") + "" + (set.curves.some(c => c.model === "weakrock") ? " Weak rock values are plotted as the solver uses them (uncalibrated model)." : ""),
+        set.user ? "Depths: your list (saved in this browser)." : "Automatic depths: mid-depth of each layer between the top of the springs (" + fmt(set.dTop, 1) + " ft) and the depth where M decays to 5 % of M_max (" + fmt(set.dBot, 1) + " ft), the head region (one pile width below the top of the springs) and the depth of M_max."];
+@@ -9161,4 +9161,11 @@ function PrintReport({
+       /*#__PURE__*/React.createElement("div", { style: { fontSize: "7.5px", color: "#94a3b8", marginTop: "2px" } },
+         "Figure F-2: moment profiles, all LRFD load cases overlaid (per-case p-y solves)."))),
++  // F26: elevation, pile to scale beside the moment diagram (same figure as the Lateral graphs tab)
++  pyRes && pyRes.ok && pyRes.records && pyRes.records.length > 2 && (I.pileType !== "iab") && /*#__PURE__*/React.createElement("div", { className: "rpt-grp", style: { pageBreakInside: "avoid", marginBottom: "12px" } },
++    /*#__PURE__*/React.createElement(RptHeading, { n: "02F", title: "Figure F-4 \u2014 elevation: pile to scale and moment diagram" }),
++    /*#__PURE__*/React.createElement("div", { style: { border: "1px solid #e2e8f0", padding: "6px", background: "#fff" } },
++      /*#__PURE__*/React.createElement(ElevationPlot, { I: I, pyRes: pyRes, height: 470, print: true })),
++    /*#__PURE__*/React.createElement("div", { style: { fontSize: "7.5px", color: "#94a3b8", marginTop: "2px" } },
++      "Figure F-4: elevation (active case) \u2014 pile drawn to scale with one horizontal exaggeration, moment diagram on the same depth axis.")),
+   (I.pileType !== "iab") && React.createElement("div", { className: "rpt-grp", "data-pd-gfx": "rptgrp", style: { marginBottom: "12px" } },
+     React.createElement(RptHeading, { n: "02F", title: "Figure F-3 \u2014 p-y curves at selected depths", code: I.lateralSource === "py" ? "nonlinear p-y (built-in)" : I.lateralSource === "input" ? "p-y (LPILE)" : "linear estimate" }),
+@@ -9963,72 +9970,169 @@ function grpRows(r) {
+ }
+ 
+-function ElevationPlot({ I, pyRes, height = 340 }) {
+-  const stick = I.solverFree || 0;
+-  const tipBG = Math.max((I.Lcased || 0) - stick, 0);           // casing tip below grade
+-  const bondTopBG = Math.max((I.Lcased - I.Lplunge) - stick, 0); // top of bond below grade
+-  const toeBG = pyRes.embed_ft;                                  // toe below grade
++/* Elevation (F26, engineer 2026-10-11: "the elevation graphic that shows the
++   pile should show the pile more to scale"). Two panels on one depth axis
++   (ft below grade, stickup negative): left, the pile drawn to scale with ONE
++   uniform horizontal exaggeration N (Plotly scaleanchor: the drawn width is N
++   times the true width at the depth scale, so every width is in true
++   proportion to every other and the depths are true); right, the moment
++   diagram. Display only: every width and depth is an input or the pile's own
++   geometry. Micropile: cap embedment, casing OD (corroded OD dotted), casing
++   ID, bond hole d_h (bondHoleDia), equivalent bar 2·sqrt(A_b/π) (as computeAll
++   barDia), plunge, top of bond, casing tip, toe. H-pile: the section seen in
++   the plane of bending (strong axis: depth d, flanges edge-on; weak axis:
++   flange width b_f), toe at the embedded length. */
++function elevScaleN(yspan, wMax) {
++  // N so the widest part draws at about 7 % of the plot height, rounded DOWN to a nice value
++  const raw = 0.07 * yspan * 12 / Math.max(wMax, 0.1);
++  let n = 1;
++  [1, 2, 2.5, 3, 4, 5, 6, 8, 10, 12, 15, 20, 25, 30, 40, 50, 60, 80, 100].forEach(v => { if (v <= raw) n = v; });
++  return n;
++}
++function elevPileGeom(I, pyRes) {
++  const isHP = I.pileType === "hpile";
++  const s = pyRes.setup ? pyRes.setup.stick_in / 12 : (I.solverFree || 0);
++  const G = { isHP, s, headY: -s, toe: pyRes.embed_ft };   // head (cap underside) and toe, ft below grade
++  if (isHP) {
++    const weak = I.hpAxis === "weak";
++    G.hp = { w: weak ? I.hpBf : I.hpD, weak, d: I.hpD, bf: I.hpBf, tf: I.hpTf || 0, tw: I.hpTw || 0 };
++    G.wMax = G.wHead = G.hp.w;
++    G.embedIn = I.hpCapEmbed || 0;
++    return G;
++  }
++  const OD = I.OD || 0, tc = I.tc || 0, corr = I.corr || 0;
++  G.OD = OD; G.ID = OD - 2 * tc; G.ODr = OD - 2 * corr; G.corr = corr;
++  G.dh = bondHoleDia(I);
++  G.bar = 2 * Math.sqrt(Math.max(I.Ab || 0, 0) / PI);
++  G.tip = Math.max((I.Lcased || 0) - s, 0);                          // casing tip below grade
++  G.tob = Math.max(((I.Lcased || 0) - (I.Lplunge || 0)) - s, 0);     // top of bond below grade
++  G.wMax = Math.max(OD, G.dh); G.wHead = OD;
++  G.embedIn = I.capEmbed || 0;
++  return G;
++}
++/* stack labels (depth y in ft, wanted) at least `gap` ft apart, inside [lo, hi] */
++function elevStack(list, gap, lo, hi) {
++  list.sort((a, b) => a.y - b.y);
++  let cur = -Infinity;
++  list.forEach(L => { L.ly = Math.max(L.y, cur + gap, lo); cur = L.ly; });
++  let lim = hi;
++  for (let k = list.length - 1; k >= 0; k--) { if (list[k].ly > lim) list[k].ly = lim; lim = list[k].ly - gap; }
++  return list;
++}
++function ElevationPlot({ I, pyRes, height = 340, print, narrow }) {
++  const G = elevPileGeom(I, pyRes);
++  const { isHP, s, headY, toe } = G;
++  const embedFt = Math.max(G.embedIn, 0) / 12;
++  const capTop = headY - Math.max(1.5, embedFt + 0.5);  // schematic cap thickness 1.5 ft (more if the embedment needs it)
++  const H = height, mT = 8, mB = 40, plotH = H - mT - mB;
++  // depth range: about 56 px above the cap for the load arrows and label, toe + 3 ft below
++  const base = Math.max(toe + 3 - capTop, 5);
++  const yTop = capTop - 56 * base / Math.max(plotH - 56, 50), yBot = toe + 3;
++  const pxFt = plotH / (yBot - yTop);                  // px per ft of depth
++  const N = elevScaleN(yBot - yTop, G.wMax);
++  const pxIn = pxFt * N / 12;                          // px per inch of width (scaleanchor y, scaleratio N/12)
++  const hw = G.wMax / 2, capHalf = 1.1 * G.wMax;
++  const Nt = fmt(N, N % 1 ? 1 : 0);
++  const fz = 9;
+   const layers = (Array.isArray(I.soilLayers) ? I.soilLayers : []).slice().sort((a, b) => a.topDepth - b.topDepth);
+-  const soilCol = t => t === "clay" ? "rgba(150,165,145,0.35)" : t === "stiffclay" ? "rgba(120,140,115,0.40)" : "rgba(217,197,142,0.40)";
+-  const shapes = [];
+-  const anns = [];
+-  // soil layer bands
++  const soilCol = t => t === "clay" ? "rgba(150,165,145,0.35)" : t === "stiffclay" ? "rgba(120,140,115,0.40)" : t === "weakrock" ? "rgba(160,150,140,0.40)" : "rgba(217,197,142,0.40)";
++  const shapes = [], anns = [];
++  const DOM_P = narrow ? [0, 0.42] : [0, 0.36], DOM_M = narrow ? [0.5, 1] : [0.42, 1];
++  // soil layer bands across both panels
+   layers.forEach((ly, i) => {
+-    const bot = i + 1 < layers.length ? layers[i + 1].topDepth : toeBG + 4;
+-    shapes.push({ type: "rect", xref: "paper", x0: 0, x1: 1, yref: "y", y0: ly.topDepth, y1: bot, fillcolor: soilCol(ly.type), line: { width: 0 }, layer: "below" });
+-    anns.push({ xref: "paper", x: 0.99, xanchor: "right", y: (ly.topDepth + Math.min(bot, toeBG + 4)) / 2, yref: "y", showarrow: false,
+-      text: (ly.type === "sand" ? "sand \u03c6=" + fmt(ly.phi == null ? 32 : ly.phi, 0) + "\u00b0" : (ly.type === "stiffclay" ? "stiff clay" : "soft clay") + " su=" + fmt(ly.su == null ? 1000 : ly.su, 0)),
+-      font: { size: 8, color: "#7a7355", family: PLOT_FONT } });
++    const t0 = Math.max(ly.topDepth, 0), bot = i + 1 < layers.length ? layers[i + 1].topDepth : yBot;
++    shapes.push({ type: "rect", xref: "paper", x0: 0, x1: 1, yref: "y", y0: t0, y1: bot, fillcolor: soilCol(ly.type), line: { width: 0 }, layer: "below" });
++    anns.push({ xref: "paper", x: 0.995, xanchor: "right", y: (t0 + Math.min(bot, yBot)) / 2, yref: "y", showarrow: false,
++      text: (ly.type === "sand" ? "sand φ=" + fmt(ly.phi == null ? 32 : ly.phi, 0) + "°" : ly.type === "weakrock" ? "weak rock" : (ly.type === "stiffclay" ? "stiff clay" : "soft clay") + " su=" + fmt(ly.su == null ? 1000 : ly.su, 0)),
++      font: { size: fz, color: "#7a7355", family: PLOT_FONT } });
+   });
+-  // grade line
++  // grade line (both panels)
+   shapes.push({ type: "line", xref: "paper", x0: 0, x1: 1, yref: "y", y0: 0, y1: 0, line: { color: "#5a5a4a", width: 1.5 } });
+-  // pile: casing (paper x 0.05-0.115), uncased shaft (0.06-0.105), bond zone highlight
+-  shapes.push({ type: "rect", xref: "paper", x0: 0.05, x1: 0.115, yref: "y", y0: -stick, y1: tipBG, fillcolor: "rgba(20,48,74,0.85)", line: { color: "#14304a", width: 1 } });
+-  shapes.push({ type: "rect", xref: "paper", x0: 0.062, x1: 0.103, yref: "y", y0: tipBG, y1: toeBG, fillcolor: "rgba(150,150,150,0.65)", line: { color: "#666", width: 1 } });
+-  shapes.push({ type: "rect", xref: "paper", x0: 0.03, x1: 0.135, yref: "y", y0: bondTopBG, y1: toeBG, fillcolor: "rgba(201,98,46,0.12)", line: { color: "var(--accent)", width: 1, dash: "dot" } });
+-  anns.push({ xref: "paper", x: 0.145, xanchor: "left", y: (bondTopBG + toeBG) / 2, yref: "y", showarrow: false, text: "bond " + fmt(I.LbProvided, 0) + " ft", font: { size: 8, color: "#c9622e", family: PLOT_FONT } });
+-  anns.push({ xref: "paper", x: 0.125, xanchor: "left", y: tipBG, yref: "y", showarrow: false, text: "casing tip", font: { size: 8, color: "#14304a", family: PLOT_FONT } });
+-  // ---- Applied loads at the pile head (active case) ----
+-  const headY = -stick;                 // pile head depth (negative = above grade)
+-  const axial = I.STL || 0, lat = I.Plat || 0, mhd = I.pyMhead || 0;
+-  const headPileMid = 0.0825;           // paper-x center of the casing
+-  // axial: vertical arrow pushing DOWN onto the head
+-  if (Math.abs(axial) > 0.01) {
+-    anns.push({ xref: "paper", x: headPileMid, yref: "y", y: headY, ax: 0, ay: -30, axref: "pixel", ayref: "pixel",
+-      showarrow: true, arrowhead: 3, arrowsize: 1.3, arrowwidth: 2.2, arrowcolor: "#b23b3b",
+-      text: "", standoff: 0 });
+-  }
+-  // lateral: horizontal arrow pushing the head sideways (drawn from left toward the pile)
+-  if (Math.abs(lat) > 0.01) {
+-    anns.push({ xref: "paper", x: headPileMid, yref: "y", y: headY, ax: -34, ay: 0, axref: "pixel", ayref: "pixel",
+-      showarrow: true, arrowhead: 3, arrowsize: 1.3, arrowwidth: 2.2, arrowcolor: "#2f6f3e", text: "" });
++  anns.push({ xref: "paper", x: DOM_M[0], xanchor: "left", yref: "y", y: 0, yanchor: "top", showarrow: false, text: "grade", font: { size: fz, color: "#5a5a4a", family: PLOT_FONT } });
++  const R = (x0, x1, y0, y1, fill, line) => shapes.push({ type: "rect", xref: "x", yref: "y", x0, x1, y0, y1, fillcolor: fill, line: line || { width: 0 } });
++  const steel = "rgba(20,48,74,0.88)", grout = "rgba(155,176,192,0.80)", ink = { color: "#14304a", width: 1 };
++  // cap (schematic) and the pile's embedment into it
++  R(-capHalf, capHalf, capTop, headY, "rgba(120,130,140,0.22)", { color: "#5a6570", width: 1 });
++  anns.push({ xref: "x", x: -capHalf, xanchor: "right", xshift: -2, yref: "y", y: (capTop + headY) / 2, showarrow: false, text: "cap", font: { size: fz, color: "#3a4550", family: PLOT_FONT } });
++  const topPile = headY - embedFt;
++  const lab = [];   // labels right of the pile: point (x in, depth ft), text; hover markers at the same points
++  if (isHP) {
++    const hp = G.hp, w2 = hp.w / 2;
++    if (hp.weak) {
++      R(-w2, w2, topPile, toe, "rgba(28,79,115,0.55)", ink);                              // flange face, b_f wide
++      if (hp.tw > 0) R(-hp.tw / 2, hp.tw / 2, topPile, toe, steel);                       // web edge-on
++    } else {
++      R(-w2, w2, topPile, toe, "rgba(28,79,115,0.30)", ink);                              // web face between the flanges
++      if (hp.tf > 0) { R(-w2, -w2 + hp.tf, topPile, toe, steel); R(w2 - hp.tf, w2, topPile, toe, steel); } // flanges edge-on
++    }
++    if (embedFt > 0) R(-w2, w2, topPile, headY, "rgba(201,98,46,0.30)", { color: C.accent, width: 1.2 });
++    lab.push({ x: w2, y: (Math.max(headY, 0) + toe) / 2, t: "HP " + fmt(hp.d, 2) + "×" + fmt(hp.bf, 2) + " (" + (hp.weak ? "weak" : "strong") + " axis): width " + (hp.weak ? "b_f" : "d") + " = " + fmt(hp.w, 2) + " in", c: "#14304a" });
++    lab.push({ x: w2, y: toe, t: "toe " + fmt(toe, 1) + " ft" + (narrow ? "" : " (embedded length)"), c: "#14304a", key: true });
++  } else {
++    const od2 = G.OD / 2, dh2 = G.dh / 2, id2 = Math.max(G.ID, 0) / 2, b2 = G.bar / 2;
++    if (toe > G.tob) R(-dh2, dh2, G.tob, toe, grout, { color: "#5a6570", width: 0.8 });     // bond-zone hole d_h
++    R(-od2, od2, topPile, G.tip, steel, ink);                                                // casing OD
++    if (id2 > 0) R(-id2, id2, topPile, G.tip, grout);                                         // grout inside the casing
++    if (G.corr > 0 && G.ODr > 0) [-1, 1].forEach(sg => shapes.push({ type: "line", xref: "x", yref: "y", x0: sg * G.ODr / 2, x1: sg * G.ODr / 2, y0: topPile, y1: G.tip, line: { color: "#e2e8f0", width: 1, dash: "dot" } }));
++    if (G.tip > G.tob + 0.01) R(-hw - 0.15 * G.wMax, hw + 0.15 * G.wMax, G.tob, G.tip, "rgba(201,98,46,0.10)", { color: C.accent, width: 1.2, dash: "dash" }); // plunge
++    if (b2 > 0) R(-b2, b2, topPile, toe, "rgba(201,98,46,0.95)");                             // central bar
++    if (embedFt > 0) R(-od2, od2, topPile, headY, "rgba(0,0,0,0)", { color: C.accent, width: 1.2 });
++    lab.push({ x: od2, y: (Math.max(headY, 0) + Math.min(G.tob, G.tip)) / 2, t: "casing OD " + fmt(G.OD, 3) + " in" + (G.corr > 0 ? " (corroded " + fmt(G.ODr, 3) + ", dotted)" : ""), c: "#14304a" });
++    lab.push({ x: Math.max(od2, dh2), y: G.tob, t: "top of bond " + fmt(G.tob, 1) + " ft", c: "#c9622e", key: true });
++    if (G.tip > G.tob + 0.01) lab.push({ x: hw + 0.15 * G.wMax, y: (G.tob + G.tip) / 2, t: "plunge " + fmt(G.tip - G.tob, 1) + " ft", c: "#c9622e" });
++    lab.push({ x: od2, y: G.tip, t: "casing tip " + fmt(G.tip, 1) + " ft", c: "#14304a", key: true });
++    lab.push({ x: dh2, y: (G.tip + toe) / 2, t: "bond hole d_h " + fmt(G.dh, 3) + " in", c: "#5a6570" });
++    if (b2 > 0) lab.push({ x: b2, y: G.tip + 0.8 * (toe - G.tip), t: "bar Ø " + fmt(G.bar, 2) + " in (equiv. of A_b " + fmt(I.Ab, 2) + " in²)", c: "#c9622e" });
++    lab.push({ x: dh2, y: toe, t: "toe " + fmt(toe, 1) + " ft", c: "#14304a", key: true });
+   }
+-  // one load label above the head, right of the axial arrow: clear of the arrows,
+-  // the cap and the moment curve (which starts at the head)
++  if (embedFt > 0) lab.push({ x: G.wHead / 2, y: (topPile + headY) / 2, t: "embed " + fmt(G.embedIn, 1) + " in", c: "#c9622e" });
++  if (Math.abs(s) > 0.01) lab.push({ x: G.wHead / 2, y: headY / 2, t: (s > 0 ? "stickup " : "head below grade ") + fmt(Math.abs(s), 1) + " ft", c: "#8a5a1f" });
++  // labels: stacked at least 12 px apart inside the plot, with leaders; on a narrow
++  // screen only the key depths are labelled (every label stays in the hover)
++  const shown = elevStack(lab.filter(L => !narrow || L.key), 12 / pxFt, yTop + 6 / pxFt, yBot - 6 / pxFt);
++  shown.forEach(L => anns.push({ xref: "x", yref: "y", x: L.x, y: L.y, axref: "pixel", ayref: "pixel",
++    ax: (capHalf - L.x) * pxIn + 8, ay: (L.ly - L.y) * pxFt, xanchor: "left", showarrow: true, arrowhead: 0, arrowwidth: 0.8, arrowcolor: "#94a3b8",
++    text: L.t, font: { size: fz, color: L.c, family: PLOT_FONT }, standoff: 0, startstandoff: 0 }));
++  // ---- applied loads at the pile head (active case) ----
++  const axial = I.STL || 0, lat = I.Plat || 0, mhd = I.pyMhead || 0;
++  if (Math.abs(axial) > 0.01) anns.push({ xref: "x", x: 0, yref: "y", y: capTop, ax: 0, ay: -30, axref: "pixel", ayref: "pixel",
++    showarrow: true, arrowhead: 3, arrowsize: 1.3, arrowwidth: 2.2, arrowcolor: "#b23b3b", text: "", standoff: 0 });
++  if (Math.abs(lat) > 0.01) anns.push({ xref: "x", x: -G.wHead / 2, yref: "y", y: headY, ax: -30, ay: 0, axref: "pixel", ayref: "pixel",
++    showarrow: true, arrowhead: 3, arrowsize: 1.3, arrowwidth: 2.2, arrowcolor: "#2f6f3e", text: "" });
+   const ld = [];
+   if (Math.abs(axial) > 0.01) ld.push("<span style='color:#b23b3b'>P = " + fmt(axial, 0) + " kip</span>");
+   if (Math.abs(lat) > 0.01) ld.push("<span style='color:#2f6f3e'>V = " + fmt(lat, 1) + " kip</span>");
+-  if (Math.abs(mhd) > 0.01) ld.push("<span style='color:#3d6a94'>\u21bb M = " + fmt(mhd, 1) + " kip\u00b7ft</span>");
+-  if (ld.length) anns.push({ xref: "paper", x: headPileMid, xshift: 10, xanchor: "left", yref: "y", y: headY, yanchor: "bottom", yshift: 10,
+-    showarrow: false, align: "left", text: ld.join(" \u00b7 "), font: { size: 9, family: PLOT_FONT } });
+-  // depth range: pile head (less room for the load arrows and label) to toe + 3 ft
+-  const ySpan = Math.max(toeBG + 3 - headY, 5);
+-  const yRange = [toeBG + 3, headY - Math.max(0.16 * ySpan, 2)];
+-  if (pyRes.zMomentDecay != null) shapes.push({ type: "line", xref: "paper", x0: 0, x1: 1, yref: "y", y0: pyRes.zMomentDecay, y1: pyRes.zMomentDecay, line: { color: "#2f6f3e", width: 1, dash: "dash" } });
+-  // moment trace (depth below grade; stickup negative)
+-  const mom = pyRes.records.map(r2 => ({ d: r2.depth - stick, m: r2.mom }));
++  if (Math.abs(mhd) > 0.01) ld.push("<span style='color:#3d6a94'>↻ M = " + fmt(mhd, 1) + " kip·ft</span>");
++  if (ld.length) anns.push({ xref: "x", x: capHalf, xshift: 6, xanchor: "left", yref: "y", y: capTop, yanchor: "bottom", yshift: 2,
++    showarrow: false, align: "left", text: ld.join("<br>"), font: { size: fz, family: PLOT_FONT } });
++  // ---- moment panel ----
++  if (pyRes.zMomentDecay != null) shapes.push({ type: "line", xref: "paper", x0: DOM_M[0], x1: 1, yref: "y", y0: pyRes.zMomentDecay, y1: pyRes.zMomentDecay, line: { color: "#2f6f3e", width: 1, dash: "dash" } });
++  const mom = pyRes.records.map(r2 => ({ d: r2.depth - s, m: r2.mom }));
+   const iM = mom.reduce((a, r2, i) => Math.abs(r2.m) > Math.abs(mom[a].m) ? i : a, 0);
+-  return /*#__PURE__*/React.createElement("div", { className: "bg-white rounded-sm p-3 border border-slate-200" },
+-    /*#__PURE__*/React.createElement("div", { className: "text-[10px] font-mono-tech text-[var(--blueprint)] uppercase tracking-wider mb-1" }, "Elevation \u00b7 moment diagram depth-aligned with stratigraphy"),
+-    /*#__PURE__*/React.createElement(Plot, {
+-      data: [
+-        { x: mom.map(r2 => r2.m), y: mom.map(r2 => r2.d), mode: "lines", line: { color: C.blueprint2, width: 2 }, name: "M(z)",
+-          hoverinfo: "text", text: mom.map(r2 => fmt(r2.d, 1) + " ft: M = " + fmt(r2.m, 1) + " kip\u00b7ft") },
+-        { x: [mom[iM].m], y: [mom[iM].d], cliponaxis: false, mode: "markers+text", marker: { color: "#b23b3b", size: 8 }, text: ["Mmax " + fmt(Math.abs(mom[iM].m), 1)], textposition: "middle right", textfont: { size: 8, family: PLOT_FONT, color: "#b23b3b" }, hoverinfo: "skip", showlegend: false }
+-      ],
+-      layout: baseLayout({ height: height, margin: { l: 46, r: 64, t: 8, b: 34 }, shapes, annotations: anns, showlegend: false,
+-        xaxis: { title: { text: "M (kip\u00b7ft)", font: { size: 9 } }, gridcolor: C.grid, zeroline: true, zerolinecolor: "#cbd5e1" },
+-        yaxis: { title: { text: "depth below grade (ft)", font: { size: 9 } }, range: yRange, autorange: false, gridcolor: C.grid } }), height: height }),
+-    /*#__PURE__*/React.createElement("p", { className: "text-[8.5px] text-slate-400 mt-1 leading-snug" },
+-      "Dark = cased, gray = uncased shaft, orange dotted = bond zone; bands = soil layers; green dash = 5% moment-decay depth. Stickup plots above grade (negative depth)."));
++  // moment axis: room on the Mmax side for its label
++  const mLo = Math.min(0, ...mom.map(r2 => r2.m)), mHi = Math.max(0, ...mom.map(r2 => r2.m)), mSp = Math.max(mHi - mLo, 1e-6);
++  const mPad = narrow ? 0.15 : 0.4;
++  const mRange = mom[iM].m < 0 ? [mLo - mPad * mSp, mHi + 0.05 * mSp] : [mLo - 0.05 * mSp, mHi + mPad * mSp];
++  const data = [
++    { x: mom.map(r2 => r2.m), y: mom.map(r2 => r2.d), xaxis: "x2", yaxis: "y", mode: "lines", line: { color: C.blueprint2, width: 2 }, name: "M(z)",
++      hoverinfo: "text", text: mom.map(r2 => fmt(r2.d, 1) + " ft: M = " + fmt(r2.m, 1) + " kip·ft") },
++    { x: [mom[iM].m], y: [mom[iM].d], xaxis: "x2", yaxis: "y", cliponaxis: false, mode: "markers+text", marker: { color: "#b23b3b", size: 8 }, text: ["Mmax " + fmt(Math.abs(mom[iM].m), 1)], textposition: narrow ? (mom[iM].m < 0 ? "top right" : "top left") : mom[iM].m < 0 ? "middle left" : "middle right", textfont: { size: fz, family: PLOT_FONT, color: "#b23b3b" }, hoverinfo: "skip", showlegend: false },
++    // hover points on the pile drawing (every label, also those hidden on a narrow screen)
++    { x: lab.map(L => L.x), y: lab.map(L => L.y), xaxis: "x", yaxis: "y", mode: "markers", marker: { size: 7, color: "rgba(0,0,0,0)" }, hoverinfo: "text", text: lab.map(L => L.t), showlegend: false }
++  ];
++  const layout = baseLayout({ height: H, width: print ? 660 : undefined, autosize: !print, margin: { l: 46, r: 10, t: mT, b: mB }, shapes, annotations: anns, showlegend: false, hovermode: "closest",
++    xaxis: { domain: DOM_P, range: [-1.5 * G.wMax, hw + 0.4 * G.wMax], scaleanchor: "y", scaleratio: N / 12, constrain: "range", constraintoward: "left",
++      title: { text: narrow ? "width (in) ×" + Nt : "width (in) · horizontal scale ×" + Nt, font: { size: 9 } }, nticks: narrow ? 3 : undefined, showgrid: false, zeroline: false, ticks: "outside", fixedrange: true },
++    xaxis2: { domain: DOM_M, anchor: "y", range: mRange, title: { text: "M (kip·ft)", font: { size: 9 } }, gridcolor: C.grid, zeroline: true, zerolinecolor: "#cbd5e1", ticks: "outside" },
++    yaxis: { title: { text: "depth below grade (ft)", font: { size: 9 } }, range: [yBot, yTop], autorange: false, gridcolor: C.grid, fixedrange: true } });
++  const plot = React.createElement(Plot, { data, layout, height: H, config: print ? { staticPlot: true, responsive: false } : undefined });
++  const note = "Left: the pile to scale — depths true, every width in true proportion, drawn " + Nt + "× wider than the depth scale (one factor for the whole pile); the cap is schematic. " +
++    (isHP ? "H-pile seen in the plane of bending (" + (G.hp.weak ? "weak axis: flange width b_f, web edge-on" : "strong axis: depth d, flanges edge-on") + "). " : "Dark = casing, gray = grout (inside the casing and in the bond hole d_h), orange = central bar, orange dashed = plunge. ") +
++    "Right: moment diagram (active case); bands = soil layers; green dash = 5% moment-decay depth. Stickup plots above grade (negative depth).";
++  if (print) return React.createElement("div", { "data-pd-elev": "1" }, plot,
++    React.createElement("div", { style: { fontSize: "7.5px", color: "#475569", marginTop: "2px", lineHeight: 1.4 } }, note));
++  return /*#__PURE__*/React.createElement("div", { className: "bg-white rounded-sm p-3 border border-slate-200", "data-pd-elev": "1" },
++    /*#__PURE__*/React.createElement("div", { className: "text-[10px] font-mono-tech text-[var(--blueprint)] uppercase tracking-wider mb-1" }, "Elevation · pile to scale and moment diagram, depth-aligned with stratigraphy"),
++    plot,
++    /*#__PURE__*/React.createElement("p", { className: "text-[8.5px] text-slate-400 mt-1 leading-snug" }, note));
+ }
+ 
+@@ -11775,5 +11879,5 @@ function PyPanel({ I, set, pyRes, r, EI, EI_composite_kipin2, EI_aashto_kipin2,
+       "head deflection ", fmt(pyRes.headDefl_in, 3), " in \u00b7 moment decays to 5% at ",
+       pyRes.zMomentDecay != null ? fmt(pyRes.zMomentDecay, 1) + " ft" : "\u2014",
+-      " \u00b7 M at casing tip ", fmt(pyRes.Mtip_kft, 1), " kip\u00b7ft \u00b7 pile modeled full length ", fmt(pyRes.L_ft, 0), " ft (unrestrained toe)"),
++      I.pileType === "hpile" ? null : [" \u00b7 M at casing tip ", fmt(pyRes.Mtip_kft, 1), " kip\u00b7ft"], " \u00b7 pile modeled full length ", fmt(pyRes.L_ft, 0), " ft (unrestrained toe)"),
+     // ---- Geotechnical depth to fixity (REFERENCE ONLY) ----
+     ok && /*#__PURE__*/React.createElement("div", { className: "rounded-sm border p-2 mb-3", style: { borderColor: "#cbd5e1", background: "#f8fafc" } },
+@@ -16415,4 +16519,5 @@ function LatGraphsCard({ I, set, pyRes, solved, activeLayers, pyDepths, setPyDep
+   const [tab, setTab] = React.useState(readLatGraphTab);
+   const [view, setView] = React.useState("all"); // F-1: all three, or one quantity large
++  const [narrow, setNarrow] = React.useState(false); // F26: fewer labels on a narrow card
+   const choose = React.useCallback(t => { setTab(t); try { window.localStorage.setItem(LATG_KEY, t); } catch (err) {} }, []);
+   React.useEffect(() => { window.__pdSetLatGraphTab = setTab; return () => { if (window.__pdSetLatGraphTab === setTab) window.__pdSetLatGraphTab = null; }; }, []);
+@@ -16433,5 +16538,5 @@ function LatGraphsCard({ I, set, pyRes, solved, activeLayers, pyDepths, setPyDep
+       const w = Math.round(el.getBoundingClientRect().width);
+       if (w === lastW) return;
+-      lastW = w; cancelAnimationFrame(raf); raf = requestAnimationFrame(fitPlots);
++      lastW = w; setNarrow(w > 0 && w < 700); cancelAnimationFrame(raf); raf = requestAnimationFrame(fitPlots);
+     };
+     if (!("ResizeObserver" in window)) { window.addEventListener("resize", onSize); return () => window.removeEventListener("resize", onSize); }
+@@ -16469,5 +16574,5 @@ function LatGraphsCard({ I, set, pyRes, solved, activeLayers, pyDepths, setPyDep
+           view === "all" ? e(LpileProfilePlot, { records: pyRes.records, height: H, zOffset: stickFt || 0 })
+             : e(LatProfileOne, { records: pyRes.records, which: view, stickFt, height: 560 })),
+-        e("div", { style: { marginTop: "12px" } }, e(ElevationPlot, { I: I, pyRes: pyRes, height: 480 })));
++        e("div", { style: { marginTop: "12px" } }, e(ElevationPlot, { I: I, pyRes: pyRes, height: 520, narrow: narrow })));
+     }
+     if (src === "solver") {
+```
+
+### F26, part b. Lateral graphs show their key values: max / min with depths, capacity and service-limit lines, depth to fixity, key-values strips (screen and report)   [UI only] [no calculation change]
+- **Date:** 2026-10-11. **Type:** UI only. Engineer's additions the same day: "Also the graphs should show more info, maybe max/mins, maybe some other detail too?" and "Maybe we add a depth to fixity indicator on the graphs as well."
+- **Rule:** every number shown is a value the tool already computes (`pyRes`, `r`, the inputs) or a simple extraction from the solver's own arrays (largest / smallest value and its depth; sign changes located by linear interpolation between solver nodes, as `momentZeroCrossings` does). No new engineering quantity. New helpers (before the elevation block): `latZeros`, `latKV(I, r, pyRes, actType)` (collects the values), `latStack` (label stacking), `latOverlay(K, q, xa, ya, R, o)` (markers, labels, lines for one response panel), `LatKeys` (key-values strip: chips on screen, a two-pair-per-row table in print), `latKeysF1`, `latKeysFix`, `latCaseKeys`.
+- **Depth to fixity — the depths the tool already has (no new definition):**
+  | Line | Value | Definition / source | Style |
+  |---|---|---|---|
+  | z_fix (primary, labelled) | `pyRes.zFix2` | 2nd zero crossing of the moment below grade (Module 02 "Geotechnical depth to fixity", reference only) | purple solid |
+  | 5 % moment decay | `pyRes.zMomentDecay` | first depth below M_max where \|M\| ≤ 5 % of M_max (Module 02; micropile casing-extension check) | green dash |
+  | buckling fixity (only when Module 10 is enabled and its method gives L_f) | `r.buckling.Le_buck − stickup` | equivalent fixed base at head + L_u + L_f (Module 10, method named: Davisson / deflection-matched) | brown dot |
+  When there is no 2nd zero crossing the strip says "none — the moment does not reverse below M_max (Module 02)" and the 5 % decay line is the labelled one. Hidden when the solve did not converge (the graphs are not drawn then). H-pile: the same `pyRes` values (the H-pile p-y path computes zFix2 / decay; Module 10 is section-aware).
+  Shown on all F-1 panels (screen, single views, report), the elevation (both panels), the soil-reaction chart; in the legend and hover with the full definition; the primary one labelled on the plot; listed in every key strip.
+- **Figure F-1** (`LpileProfilePlot` new optional `kv`, `narrow`; `LatProfileOne` new optional `kv`, `narrow`; used only for the built-in p-y solve, not for LPILE imports):
+  - Deflection: y₀ (`pyRes.headDefl_in`) labelled; max / min with depth; first zero crossing; toe deflection. Head rotation: the solver does not return it, so it is not shown. **Service deflection limit** `I.deflLimit` (`|| 1`, as the case envelope) as dash-dot lines, **each of ±limit only where it lies inside the deflection range [min(0, y), max(0, y)] (never widens the axis; the same rule as the F25 warning lines, `pyDeflWarnLines`)**, otherwise a note "…not reached (outside the plotted range)"; when the active case is a service case, a tag "service case: |y₀| … ≤/> limit — OK/NG" (same test as `runAllCases`: `|y0| ≤ deflLimit`).
+  - Moment: +M max and −M min with depths (labelled), zero-moment depths (`pyRes.mzCrossings`, markers with hover), capacity lines ±φM_n: micropile `r.flex.phiMn` (cased, head to casing tip, Module 04) and `r.geoChecks.phiMn_uncased` (casing tip to toe, Module G); H-pile `r.hpileStruct.phiMn` (Module 04). A capacity line widens the axis only up to 4 × the response; beyond that it is noted "off scale" and listed in the strip. Casing tip line (micropile).
+  - Shear: +V max / −V min with depths; H-pile ±φV_n (`r.hpileStruct.phiVn`, Module 07). Micropile: no shear capacity line (the tool has no pile shear capacity; punching is a cap check).
+  - Labels stacked ≥ 12 px apart inside the plot; on a narrow card (< 700 px) only the primary labels, shortened; every point keeps a hover. Legend below the plot. Height 520 → 600 px (single views 560 → 640).
+- **Elevation (F26 part a):** dimension lines left of the pile — micropile L_cased, L_bond, total length; H-pile embedded length, total length (not on a narrow card; in the hover and strip); fixity lines across both panels; strip "Dimensions and depth to fixity" (scale ×N, stickup, the dimensions with their depth ranges, plunge, OD / d_h / bar or H-pile width, cap embedment, fixity).
+- **Figure F-2:** legend "case · Mmax … @ … ft" (`row.Mmax`, depth of the profile node with the largest |M|), governing case (largest Mmax) drawn thicker and "(governs)", envelope max marker; strip with each case and the cases with no profile (did not converge).
+- **Figure F-3:** legend adds "p_u … lb/in · p/p_u …" per curve (`pyCurveSet` `pu`, `ratio`, the values of the table under it).
+- **Soil reaction:** max |p| with depth (marker + label), layer boundaries (dotted, hover), fixity lines and legend; mobilisation chart: peak p/p_u with depth; strip.
+- **Pushover & stiffness:** pushover design point (P = `I.Plat`, y₀ = `pyRes.headDefl_in`); M-φ charts: φM_n cased / uncased lines; EI profile: casing tip line; strip (design point, |M|max, M_cr, φM_n, casing tip; "First yield M_y: not computed by the tool").
+- **Printed report:** F-1 drawn with the same markers / lines / legend (440 px tall) followed by "Figure F-1 key values (active case)"; F-2 followed by "Figure F-2 key values (Mmax per case)" when cases were run; F-4 (elevation) followed by "Dimensions and depth to fixity". Not in integral abutment mode (its F-1 prints as before).
+- **App:** `LatGraphsCard` gets `r` and `actType` (type of the active case, `cases[activeIdx].type`); both `PrintReport` `gfx` objects get `actType`. CSS `.pd-lg-keys*` added.
+- **Not changed:** every computed value, check, report number and saved data. Report text: only additions (the strips and the F-3 legend are new text).
+- **Governing provision:** none (presentation only).
+- **Check (every annotated number equals the tool's value; automated, headless Chromium):** micropile defaults, micropile d_h 10 in, H-pile defaults, H-pile P = 45 kip, micropile and H-pile with a 4-layer profile and Module 10 enabled, micropile with a service case active:
+  - |M|max strip = Module 02 "M_max = … @ … ft" (e.g. 53.4 kip·ft @ 4.1 ft; H-pile 34.9 @ 4.4; layered 25.5 @ 3.2);
+  - y₀ strip = Module 02 "head deflection …" (3.162 in; H-pile 0.177 in);
+  - z_fix line (F-1, elevation) and strip = Module 02 z_fix (10.7 / 15.8 / 11.3 / 14.4 ft); 5 % decay line and strip = Module 02 (10.0 / 14.6 / 10.3 / 13.8 ft);
+  - φM_n cased line = Module 04 φ_f M_n (53.9 kip·ft); φM_n uncased line = Module G φM_n,uncased (0.95 kip·ft); H-pile φM_n = Module 04 (537.8, off scale at the defaults, drawn at P = 45 kip where |M| = 365.8); H-pile φV_n = Module 07 (224.7 kip);
+  - casing tip line = 12.0 ft (Lcased 15 − stickup 3); no casing tip line in H-pile mode;
+  - service limit = the input (1.00 in); service case active (Svc I, P = 4 kip): |y₀| 1.354 > 1.00 → "NG", the same test as the case envelope;
+  - buckling fixity uses Module 10's L_u + L_f (e.g. 3.0 + 4.8 = 7.8 ft from the head → 4.8 ft below grade, Davisson).
+- **How verified:** `node --check` on all inline scripts; the parity run of part a repeated (screen text outside the Lateral graphs card, Module 02, statuses, autosave, export apart from `savedAt`, IndexedDB, hand-off identical; report text identical apart from additions); a non-converging solve (STL 1,200 / P 80 kip) shows the "did not converge" box with no markers or strips; screenshots of every sub-tab at 1500 and 400 px and the printed pages (Letter PDF) looked at; no console errors; no horizontal page scroll at 400 px.
+- **Merge with F25 (#113, O37 large head-deflection warning), same branch (merge commit):** both kept. `LpileProfilePlot({ …, kv, narrow, deflWarn })` draws F25's dotted ±f·D lines and label (computed before the F26 overlay; the deflection axis is not widened by F26, so they stay inside) together with the F26 markers / lines; `LatProfileOne({ …, deflWarn, kv, narrow })` adds the F25 lines to `shapes`/`anns` first, then the F26 branch uses them; `LatGraphsCard` computes both `dw` (F25) and `K` (F26); the F-1 calls pass `kv`, `narrow` and `deflWarn: dw`; the F25 warning / "not reached" note stays under Figure F-1, after the F26 key strip; the elevation call keeps `kv`. The service-limit line was changed in the merge to F25's rule (each of ±limit only inside [min(0, y), max(0, y)]); the code after the merge (in `latOverlay`, replacing the `ext(L)` lines of the diff below):
+
+  ```js
+      // the service limit never widens the axis (same rule as the F25 warning lines, pyDeflWarnLines):
+      // each of ±limit is drawn only inside the deflection range [min(0, y), max(0, y)], else noted
+      const yLo = Math.min(0, ...K.y), yHi = Math.max(0, ...K.y), svx = [L, -L].filter(xv => xv >= yLo && xv <= yHi);
+      svx.forEach(xv => vlines.push({ x: xv, z0: K.zTop, z1: K.zBot, name: "service limit ±" + fmt(L, 2) + " in" + tag, col: K.svc.active && !K.svc.ok ? "#b23b3b" : "#3d6a94", dash: "dashdot", grp: "svc" }));
+      if (!svx.length) off.push("service limit ±" + fmt(L, 2) + " in" + tag + ": not reached (outside the plotted range)");
+  ```
+- **Re-applying by hand:** the unified diff below (against the part a commit; CRLF stripped). Anchors: the helper block before `/* Elevation (F26`; `function ElevationPlot({` (`kv`, `dims`, `xLeft`, `kv.fix.forEach`, `keys`); `function LpileProfilePlot({` (`kv`, `EX`); `function LatProfileOne({`; `function LatGraphsCard({` (`r, actType`, `const K = ok ? latKV`, F-1 calls, `latCaseKeys`, soil / stiff blocks); `function PyCurvesChart({` (legend name, `entrywidth`); App `React.createElement(LatGraphsCard, {` and the two `gfx: {` objects; `PrintReport` 02F blocks; CSS after `.pd-lg-link:hover`.
+
+```diff
+diff --git a/Pile Designer.html b/Pile Designer.html
+index a8206ec..199c741 100644
+--- a/Pile Designer.html	
++++ b/Pile Designer.html	
+@@ -486,4 +486,10 @@
+   .pd-lg-link { font-family: var(--f-ui); font-size: 11.5px; padding: 3px 10px; border: 1px solid var(--navy-800); color: var(--navy-800); background: #fff; border-radius: 4px; cursor: pointer; }
+   .pd-lg-link:hover { background: #EFF4FA; }
++  .pd-lg-keys { margin-top: 8px; border-top: 1px solid #E2E8F0; padding-top: 6px; font-family: var(--f-ui); }
++  .pd-lg-keys-h { font-size: 11px; font-weight: 600; color: var(--navy-800); margin-bottom: 3px; }
++  .pd-lg-keys dl { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr)); gap: 0 16px; margin: 0; }
++  .pd-lg-keys dl > div { display: flex; gap: 8px; font-size: 11px; line-height: 1.35; padding: 2px 0; border-bottom: 1px dotted #E2E8F0; min-width: 0; }
++  .pd-lg-keys dt { color: #5A6B80; flex: 0 0 40%; }
++  .pd-lg-keys dd { margin: 0; color: #1F2D3D; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 10.5px; overflow-wrap: anywhere; }
+ </style>
+ </head>
+@@ -5536,5 +5542,5 @@ function PyCurvesChart({ set, print, height }) {
+   curves.forEach((c, k) => {
+     const col = GFX_COLS[k % GFX_COLS.length];
+-    data.push({ x: c.pts.map(p => p[0]), y: c.pts.map(p => p[1]), mode: "lines", line: { color: col, width: 2 }, name: lbl(c),
++    data.push({ x: c.pts.map(p => p[0]), y: c.pts.map(p => p[1]), mode: "lines", line: { color: col, width: 2 }, name: lbl(c) + " · p_u " + fmt(c.pu, 1) + " lb/in · p/p_u " + (c.ratio == null ? "—" : fmt(c.ratio, 3)),
+       hovertemplate: "z = " + fmt(c.d, 2) + " ft<br>y = %{x:.4f} in<br>p = %{y:.2f} lb/in<extra></extra>" });
+     data.push({ x: [Math.min(c.yMob, set.ymax)], y: [c.pSolver], mode: "markers", marker: { color: col, size: 9, line: { color: "#fff", width: 1.5 } }, name: "mobilised, z = " + fmt(c.d, 1) + " ft", showlegend: false,
+@@ -5546,5 +5552,5 @@ function PyCurvesChart({ set, print, height }) {
+     margin: print ? { l: 58, r: 8, t: 8, b: 40 } : { l: 58, r: 14, t: 10, b: 46 },
+     showlegend: true,
+-    legend: { orientation: "h", x: 0, y: print ? -0.2 : -0.16, yanchor: "top", entrywidth: print ? 160 : 150, font: { size: print ? 9 : 10, family: PLOT_FONT } },
++    legend: { orientation: "h", x: 0, y: print ? -0.2 : -0.16, yanchor: "top", entrywidth: print ? 0.5 : 1, entrywidthmode: "fraction", font: { size: print ? 9 : 10, family: PLOT_FONT } },
+     xaxis: ax("y — pile deflection (in)", [0, set.ymax]), yaxis: ax("p — soil resistance (lb/in)", [0, pmax]) });
+   return React.createElement(Plot, { data, layout, height: H, config: print ? { staticPlot: true, responsive: false } : undefined });
+@@ -6680,5 +6686,7 @@ function LpileProfilePlot({
+   records,
+   height = 360,
+-  zOffset = null
++  zOffset = null,
++  kv = null,
++  narrow = false
+ }) {
+   if (!records || records.length < 2) return null;
+@@ -6700,7 +6708,20 @@ function LpileProfilePlot({
+     return [lo < 0 ? -m : Math.min(lo, 0), hi > 0 ? m : 0.01];
+   };
+-  const yR = rangeOf(y),
++  let yR = rangeOf(y),
+     mR = rangeOf(M),
+     vR = rangeOf(V);
++  // F26 b: key values, capacity / limit lines and depth to fixity (kv = latKV(...); F-1 of the p-y solve only)
++  let EX = null;
++  if (kv) {
++    const span = Math.max(zBase - z[0], 1e-6);
++    const zLo = z[0] - 0.04 * span, zHi = zBase + 0.03 * span;
++    const mb = 42 + (narrow ? 110 : 60);
++    const o = { narrow, pxFt: (height - 30 - mb) / (zHi - zLo), zLo, zHi, legend: true, seen: {} };
++    const oy = latOverlay(kv, "y", "x", "y", yR, o);
++    const om = latOverlay(kv, "M", "x2", "y2", mR, o);
++    const ov = latOverlay(kv, "V", "x3", "y3", vR, { ...o, fixLabel: true });
++    yR = oy.range; mR = om.range; vR = ov.range;
++    EX = { traces: [...oy.traces, ...om.traces, ...ov.traces], anns: [...oy.anns, ...om.anns, ...ov.anns], zLo, zHi, mb, plotH: height - 30 - mb };
++  }
+   // maxima for annotation
+   let iM = 0;
+@@ -6786,4 +6807,5 @@ function LpileProfilePlot({
+     name: "shear"
+   }];
++  if (EX) { data.forEach(t => { t.showlegend = false; }); data.push(...EX.traces); }
+   const layout = baseLayout({
+     height: height,
+@@ -6798,6 +6820,9 @@ function LpileProfilePlot({
+       r: 12,
+       t: 30,
+-      b: 42
++      b: EX ? EX.mb : 42
+     },
++    showlegend: !!EX,
++    legend: EX ? { orientation: "h", x: 0, xanchor: "left", y: -44 / EX.plotH, yanchor: "top", entrywidth: narrow ? 1 : 0.33, entrywidthmode: "fraction", font: { size: 9, family: PLOT_FONT } } : undefined,
++    hovermode: EX ? "closest" : undefined,
+     shapes: [...band("x", "y", yR), ...band("x2", "y2", mR), ...band("x3", "y3", vR)],
+     annotations: [{
+@@ -6837,5 +6862,5 @@ function LpileProfilePlot({
+         family: PLOT_FONT
+       }
+-    }, {
++    }, ...(EX ? EX.anns : []), ...(EX ? [] : [{
+       x: M[iM],
+       y: z[iM],
+@@ -6863,5 +6888,5 @@ function LpileProfilePlot({
+       },
+       xanchor: V[iV] < 0 ? "right" : "left"
+-    }],
++    }])],
+     xaxis: {
+       range: yR,
+@@ -6876,5 +6901,6 @@ function LpileProfilePlot({
+     },
+     yaxis: {
+-      autorange: "reversed",
++      autorange: EX ? false : "reversed",
++      range: EX ? [EX.zHi, EX.zLo] : undefined,
+       title: {
+         text: zOffset != null ? "depth below grade (ft)" : "depth (ft)",
+@@ -9146,7 +9172,8 @@ function PrintReport({
+     /*#__PURE__*/React.createElement(RptHeading, { n: "02F", title: "Figures — Lateral Analysis (nonlinear p-y)" }),
+     /*#__PURE__*/React.createElement("div", { style: { border: "1px solid #e2e8f0", padding: "6px", background: "#fff" } },
+-      /*#__PURE__*/React.createElement(LpileProfilePlot, { records: pyRes.records, zOffset: pyRes.setup ? pyRes.setup.stick_in / 12 : (I.solverFree || 0) })),
++      /*#__PURE__*/React.createElement(LpileProfilePlot, { records: pyRes.records, zOffset: pyRes.setup ? pyRes.setup.stick_in / 12 : (I.solverFree || 0), kv: I.pileType !== "iab" ? latKV(I, r, pyRes, gfx.actType) : null, height: I.pileType !== "iab" ? 440 : 360 })),
+     /*#__PURE__*/React.createElement("div", { style: { fontSize: "7.5px", color: "#94a3b8", marginTop: "2px" } },
+       "Figure F-1: deflection, moment, and shear vs depth (active case; nonlinear p-y, M-φ EI " + (pyRes.eiVar ? "on" : "off") + "). Mmax = " + fmt(pyRes.Mmax_kft, 1) + " kip·ft @ " + fmt(pyRes.zMmax, 1) + " ft; head deflection " + fmt(pyRes.headDefl_in, 3) + " in."),
++    I.pileType !== "iab" && /*#__PURE__*/React.createElement(LatKeys, { items: latKeysF1(latKV(I, r, pyRes, gfx.actType)), print: true, title: "Figure F-1 key values (active case)" }),
+     caseRes && caseRes.rows && caseRes.rows.some(r2 => r2.prof) && /*#__PURE__*/React.createElement("div", { style: { marginTop: "8px" } },
+       /*#__PURE__*/React.createElement("div", { style: { border: "1px solid #e2e8f0", padding: "6px", background: "#fff" } },
+@@ -9160,10 +9187,11 @@ function PrintReport({
+             yaxis: { title: { text: "depth below grade (ft)", font: { size: 9 } }, autorange: "reversed", gridcolor: C.grid } }), height: 240 })),
+       /*#__PURE__*/React.createElement("div", { style: { fontSize: "7.5px", color: "#94a3b8", marginTop: "2px" } },
+-        "Figure F-2: moment profiles, all LRFD load cases overlaid (per-case p-y solves)."))),
++        "Figure F-2: moment profiles, all LRFD load cases overlaid (per-case p-y solves)."),
++      /*#__PURE__*/React.createElement(LatKeys, { items: latCaseKeys(caseRes).items, print: true, title: "Figure F-2 key values (Mmax per case)" }))),
+   // F26: elevation, pile to scale beside the moment diagram (same figure as the Lateral graphs tab)
+   pyRes && pyRes.ok && pyRes.records && pyRes.records.length > 2 && (I.pileType !== "iab") && /*#__PURE__*/React.createElement("div", { className: "rpt-grp", style: { pageBreakInside: "avoid", marginBottom: "12px" } },
+     /*#__PURE__*/React.createElement(RptHeading, { n: "02F", title: "Figure F-4 \u2014 elevation: pile to scale and moment diagram" }),
+     /*#__PURE__*/React.createElement("div", { style: { border: "1px solid #e2e8f0", padding: "6px", background: "#fff" } },
+-      /*#__PURE__*/React.createElement(ElevationPlot, { I: I, pyRes: pyRes, height: 470, print: true })),
++      /*#__PURE__*/React.createElement(ElevationPlot, { I: I, pyRes: pyRes, height: 470, print: true, kv: latKV(I, r, pyRes, gfx.actType) })),
+     /*#__PURE__*/React.createElement("div", { style: { fontSize: "7.5px", color: "#94a3b8", marginTop: "2px" } },
+       "Figure F-4: elevation (active case) \u2014 pile drawn to scale with one horizontal exaggeration, moment diagram on the same depth axis.")),
+@@ -9970,4 +9998,204 @@ function grpRows(r) {
+ }
+ 
++/* ---- F26 part b: key values on the lateral graphs (display only) ----
++   Engineer 2026-10-11: "the graphs should show more info, maybe max/mins" and
++   "maybe we add a depth to fixity indicator on the graphs as well". Every
++   number is read from pyRes / r / the inputs, or is a simple extraction from
++   the solver's own arrays (max / min and their depth; sign changes found by
++   linear interpolation between solver nodes). No new engineering quantity. */
++function latZeros(z, v) {
++  const out = [];
++  for (let i = 1; i < v.length; i++) {
++    const a = v[i - 1], b = v[i];
++    if ((a < 0 && b > 0) || (a > 0 && b < 0)) out.push(z[i - 1] + (z[i] - z[i - 1]) * a / (a - b));
++  }
++  return out;
++}
++function latKV(I, r, pyRes, actType) {
++  if (!pyRes || !pyRes.ok || !pyRes.records || pyRes.records.length < 3) return null;
++  const s = pyRes.setup ? pyRes.setup.stick_in / 12 : (I.solverFree || 0);
++  const rec = pyRes.records, n = rec.length;
++  const z = rec.map(q => q.depth - s), y = rec.map(q => q.defl), M = rec.map(q => q.mom), V = rec.map(q => q.shear);
++  const at = (a, i) => ({ v: a[i], z: z[i], i });
++  const iMax = a => a.reduce((k, v, i) => v > a[k] ? i : k, 0), iMin = a => a.reduce((k, v, i) => v < a[k] ? i : k, 0);
++  const isHP = I.pileType === "hpile";
++  const K = { s, z, y, M, V, isHP, zTop: z[0], zBot: z[n - 1] };
++  K.y0 = pyRes.headDefl_in; K.yToe = y[n - 1];
++  K.yMax = at(y, iMax(y)); K.yMin = at(y, iMin(y));
++  const yz = latZeros(z, y); K.yZero = yz.length ? yz[0] : null;
++  const lim = I.deflLimit || 1;   // as the case envelope's service check (runAllCases)
++  K.svc = { lim, active: actType === "service", ok: Math.abs(K.y0) <= lim };
++  K.Mpos = at(M, iMax(M)); K.Mneg = at(M, iMin(M));
++  K.Mmax = pyRes.Mmax_kft; K.zMmax = pyRes.zMmax;
++  K.Mzeros = Array.isArray(pyRes.mzCrossings) ? pyRes.mzCrossings.slice() : [];
++  K.Vpos = at(V, iMax(V)); K.Vneg = at(V, iMin(V));
++  K.cap = []; K.Vcap = null; K.tip = null;
++  if (isHP) {
++    if (r && r.hpileStruct) {
++      K.cap.push({ v: r.hpileStruct.phiMn, z0: K.zTop, z1: K.zBot, lbl: "φM_n (Module 04)", short: "φMn" });
++      K.Vcap = { v: r.hpileStruct.phiVn, lbl: "φV_n (Module 07)" };
++    }
++  } else if (r && r.flex && r.geo) {
++    K.tip = r.geo.casingTip - s;
++    K.Mtip = pyRes.Mtip_kft;
++    K.cap.push({ v: r.flex.phiMn, z0: K.zTop, z1: Math.min(K.tip, K.zBot), lbl: "φM_n cased (Module 04)", short: "φMn cased" });
++    if (r.geoChecks && K.tip < K.zBot) K.cap.push({ v: r.geoChecks.phiMn_uncased, z0: K.tip, z1: K.zBot, lbl: "φM_n uncased (Module G)", short: "φMn uncased", dp: 2 });
++  }
++  // depth to fixity: the depths the tool already computes, each with its definition and source
++  K.fix = [];
++  if (pyRes.zFix2 != null && isFinite(pyRes.zFix2)) K.fix.push({ k: "zfix", z: pyRes.zFix2, col: "#7a4a7a", dash: "solid",
++    name: "z_fix " + fmt(pyRes.zFix2, 1) + " ft (2nd M zero)",
++    lbl: "z_fix = " + fmt(pyRes.zFix2, 1) + " ft — 2nd zero crossing of moment (Module 02, reference)" });
++  if (pyRes.zMomentDecay != null && isFinite(pyRes.zMomentDecay)) K.fix.push({ k: "decay", z: pyRes.zMomentDecay, col: "#2f6f3e", dash: "dash",
++    name: "5% M decay " + fmt(pyRes.zMomentDecay, 1) + " ft",
++    lbl: "5% moment-decay depth = " + fmt(pyRes.zMomentDecay, 1) + " ft — first depth below M_max where |M| ≤ 5% of M_max (Module 02" + (isHP ? ")" : "; casing-extension check)") });
++  const b = r && r.buckling;
++  if (b && b.enable && b.Lf_buck != null && isFinite(b.Lf_buck) && isFinite(b.Le_buck)) K.fix.push({ k: "bkl", z: b.Le_buck - s, col: "#8a5a1f", dash: "dot",
++    name: "buckling fixity " + fmt(b.Le_buck - s, 1) + " ft (Module 10)",
++    lbl: "buckling equivalent fixed base = head + L_u + L_f = " + fmt(b.Lu_free, 1) + " + " + fmt(b.Lf_buck, 1) + " = " + fmt(b.Le_buck, 1) + " ft below the head, " + fmt(b.Le_buck - s, 1) + " ft below grade (Module 10, " + (b.lfGoverning && b.lfGoverning.src ? b.lfGoverning.src : (b.bklTab || "")) + ")" });
++  K.fix.forEach((f, i) => { f.primary = i === 0; });
++  return K;
++}
++/* stack labels on one side of a panel: depth y (ft) wanted, at least `gap` ft apart, inside [lo, hi] */
++function latStack(list, gap, lo, hi) {
++  list.sort((a, b) => a.y - b.y);
++  let cur = -Infinity;
++  list.forEach(L => { L.ly = Math.max(L.y, cur + gap, lo); cur = L.ly; });
++  let lim = hi;
++  for (let k = list.length - 1; k >= 0; k--) { if (list[k].ly > lim) list[k].ly = lim; lim = list[k].ly - gap; }
++  return list;
++}
++/* markers, labels, capacity / limit lines and fixity lines for one response
++   panel (q = "y" | "M" | "V") on axes xa / ya; R = the panel's x range.
++   o: { narrow, legend (show legend entries), pxFt, zLo, zHi, fixLabel } */
++function latOverlay(K, q, xa, ya, R, o) {
++  const T = [], A = [], fz = 9;
++  let lo = R[0], hi = R[1];
++  const ext = v => { const m = Math.max(Math.abs(lo), Math.abs(hi)); if (Math.abs(v) <= 4 * m) { const nn = Math.abs(v) * 1.1; lo = Math.min(lo, -nn); hi = Math.max(hi, nn); return true; } return false; };
++  const pts = [];   // {x, y, t, primary, col}
++  const vlines = []; // {x, z0, z1, name, col, dash, grp}
++  const off = [];   // off-scale notes
++  const dist = (a, b) => a.i !== b.i;
++  if (q === "y") {
++    pts.push({ x: K.y0, y: K.zTop, t: "y₀ " + fmt(K.y0, 3) + " in", s: "y₀ " + fmt(K.y0, 3), primary: true, col: C.blueprint2 });
++    if (dist(K.yMax, { i: 0 }) && Math.abs(K.yMax.v) > 1e-9) pts.push({ x: K.yMax.v, y: K.yMax.z, t: "max " + fmt(K.yMax.v, 3) + " in @ " + fmt(K.yMax.z, 1) + " ft", col: C.blueprint2 });
++    if (dist(K.yMin, { i: 0 }) && Math.abs(K.yMin.v) > 1e-9) pts.push({ x: K.yMin.v, y: K.yMin.z, t: "min " + fmt(K.yMin.v, 3) + " in @ " + fmt(K.yMin.z, 1) + " ft", col: C.blueprint2 });
++    if (K.yZero != null) pts.push({ x: 0, y: K.yZero, t: "y = 0 @ " + fmt(K.yZero, 1) + " ft", col: "#5a6570" });
++    pts.push({ x: K.yToe, y: K.zBot, t: "toe " + fmt(K.yToe, 4) + " in", col: "#5a6570" });
++    const L = K.svc.lim, tag = K.svc.active ? (K.svc.ok ? " — OK" : " — NG") : "";
++    // the service limit never widens the axis: drawn only inside the natural range, else noted
++    if (L <= Math.max(Math.abs(lo), Math.abs(hi))) [-1, 1].forEach(sg => vlines.push({ x: sg * L, z0: K.zTop, z1: K.zBot, name: "service limit ±" + fmt(L, 2) + " in" + tag, col: K.svc.active && !K.svc.ok ? "#b23b3b" : "#3d6a94", dash: "dashdot", grp: "svc" }));
++    else off.push("service limit ±" + fmt(L, 2) + " in" + tag + ": not reached (outside the plotted range)");
++    if (K.svc.active) A.push({ xref: xa + " domain", x: 0.02, xanchor: "left", yref: ya + " domain", y: 0.005, yanchor: "bottom", showarrow: false, text: "service case: |y₀| " + fmt(Math.abs(K.y0), 3) + (K.svc.ok ? " ≤ " : " > ") + fmt(L, 2) + " in" + tag, font: { size: fz, color: K.svc.ok ? "#2f6f3e" : "#b23b3b", family: PLOT_FONT }, bgcolor: "rgba(255,255,255,0.85)" });
++  } else if (q === "M") {
++    const absPos = Math.abs(K.Mpos.v) >= Math.abs(K.Mneg.v);
++    if (Math.abs(K.Mpos.v) > 1e-9) pts.push({ x: K.Mpos.v, y: K.Mpos.z, t: "+M " + fmt(K.Mpos.v, 1) + " kip·ft @ " + fmt(K.Mpos.z, 1) + " ft", s: "+M " + fmt(K.Mpos.v, 1), primary: absPos, col: C.accent });
++    if (Math.abs(K.Mneg.v) > 1e-9) pts.push({ x: K.Mneg.v, y: K.Mneg.z, t: "−M " + fmt(K.Mneg.v, 1) + " kip·ft @ " + fmt(K.Mneg.z, 1) + " ft", s: "−M " + fmt(K.Mneg.v, 1), primary: !absPos, col: C.accent });
++    K.Mzeros.forEach(zz => pts.push({ x: 0, y: zz, t: "M = 0 @ " + fmt(zz, 1) + " ft", col: "#5a6570", hoverOnly: true }));
++    K.cap.forEach((c, k) => {
++      if (!(c.v > 0) || !(c.z1 > c.z0)) return;
++      if (ext(c.v)) [-1, 1].forEach(sg => vlines.push({ x: sg * c.v, z0: c.z0, z1: c.z1, name: c.short + " " + fmt(c.v, c.dp || 1) + " kip·ft", hov: c.lbl + " = " + fmt(c.v, c.dp || 1) + " kip·ft", col: "#b23b3b", dash: k ? "dot" : "dash", grp: "cap" + k }));
++      else off.push(c.lbl + " = " + fmt(c.v, c.dp || 1) + " kip·ft (off scale)");
++    });
++  } else {
++    if (Math.abs(K.Vpos.v) > 1e-9) pts.push({ x: K.Vpos.v, y: K.Vpos.z, t: "+V " + fmt(K.Vpos.v, 2) + " kip @ " + fmt(K.Vpos.z, 1) + " ft", s: "+V " + fmt(K.Vpos.v, 1), primary: Math.abs(K.Vpos.v) >= Math.abs(K.Vneg.v), col: C.blueprint });
++    if (Math.abs(K.Vneg.v) > 1e-9) pts.push({ x: K.Vneg.v, y: K.Vneg.z, t: "−V " + fmt(K.Vneg.v, 2) + " kip @ " + fmt(K.Vneg.z, 1) + " ft", s: "−V " + fmt(K.Vneg.v, 1), primary: Math.abs(K.Vneg.v) > Math.abs(K.Vpos.v), col: C.blueprint });
++    if (K.Vcap && K.Vcap.v > 0) {
++      if (ext(K.Vcap.v)) [-1, 1].forEach(sg => vlines.push({ x: sg * K.Vcap.v, z0: K.zTop, z1: K.zBot, name: "φVn " + fmt(K.Vcap.v, 1) + " kip", hov: K.Vcap.lbl + " = " + fmt(K.Vcap.v, 1) + " kip", col: "#b23b3b", dash: "dash", grp: "vcap" }));
++      else off.push(K.Vcap.lbl + " = " + fmt(K.Vcap.v, 1) + " kip (off scale)");
++    }
++  }
++  const seen = o.seen || {};
++  vlines.forEach(L => {
++    T.push({ x: [L.x, L.x], y: [L.z0, L.z1], xaxis: xa, yaxis: ya, mode: "lines", line: { color: L.col, width: 1.3, dash: L.dash }, name: L.name, legendgroup: L.grp,
++      showlegend: !!o.legend && !seen[L.grp], hovertemplate: (L.hov || L.name) + "<extra></extra>" });
++    seen[L.grp] = 1;
++  });
++  // horizontal lines across the panel: casing tip, then depth to fixity
++  const hl = [];
++  if (K.tip != null && K.tip > K.zTop && K.tip < K.zBot) hl.push({ z: K.tip, name: "casing tip " + fmt(K.tip, 1) + " ft", lbl: "casing tip " + fmt(K.tip, 1) + " ft below grade" + (K.Mtip != null ? "; M at tip " + fmt(K.Mtip, 1) + " kip·ft (Module 02)" : ""), col: "#14304a", dash: "longdash", grp: "tip", w: 1 });
++  K.fix.forEach(f => hl.push({ z: f.z, name: f.name, lbl: f.lbl, col: f.col, dash: f.dash, grp: f.k, w: f.primary ? 1.8 : 1.3, primary: f.primary }));
++  hl.forEach(h => {
++    T.push({ x: [lo, hi], y: [h.z, h.z], xaxis: xa, yaxis: ya, mode: "lines", line: { color: h.col, width: h.w, dash: h.dash }, name: h.name, legendgroup: h.grp,
++      showlegend: !!o.legend && !seen[h.grp], hovertemplate: h.lbl.replace(/%/g, "%%") + "<extra></extra>" });
++    seen[h.grp] = 1;
++    if (h.primary && o.fixLabel) pts.push({ x: hi, y: h.z, t: h.name, s: h.name.replace(/ \(.*\)$/, ""), primary: true, col: h.col, noMarker: true });
++  });
++  // point markers (every point keeps a hover, also when its label is hidden)
++  const mk = pts.filter(p => !p.noMarker);
++  if (mk.length) T.push({ x: mk.map(p => p.x), y: mk.map(p => p.y), xaxis: xa, yaxis: ya, mode: "markers", cliponaxis: false, showlegend: false,
++    marker: { size: mk.map(p => p.primary ? 8 : 6), color: mk.map(p => p.col), line: { color: "#fff", width: 1 } }, hovertemplate: "%{text}<extra></extra>", text: mk.map(p => p.t) });
++  // labels: primary ones always, the others unless narrow; right of the point if x >= 0
++  const lab = pts.filter(p => !p.hoverOnly && (p.primary || !o.narrow));
++  const span = Math.max(hi - lo, 1e-9);
++  [1, -1].forEach(side => {
++    const L = lab.filter(p => (side > 0) === (p.x >= lo + 0.5 * span));
++    latStack(L, 12 / o.pxFt, o.zLo + 7 / o.pxFt, o.zHi - 7 / o.pxFt).forEach(p => A.push(p.noMarker ? { xref: xa, yref: ya, x: p.x, y: p.ly, xanchor: "right", xshift: -16, showarrow: false,
++      text: p.s || p.t, font: { size: fz, color: p.col, family: PLOT_FONT }, bgcolor: "rgba(255,255,255,0.75)" } : { xref: xa, yref: ya, x: p.x, y: p.y, axref: "pixel", ayref: "pixel",
++      ax: p.noMarker ? -2 : side > 0 ? -10 : 10, ay: (p.ly - p.y) * o.pxFt, xanchor: side > 0 ? "right" : "left", showarrow: true, arrowhead: 0, arrowwidth: p.noMarker ? 0.1 : 0.8, arrowcolor: p.noMarker ? "rgba(0,0,0,0)" : "#94a3b8",
++      text: o.narrow && p.s ? p.s : p.t, font: { size: fz, color: p.col, family: PLOT_FONT }, bgcolor: "rgba(255,255,255,0.75)", standoff: 3 }));
++  });
++  if (off.length && !o.narrow) A.push({ xref: xa + " domain", x: 0.02, xanchor: "left", yref: ya + " domain", y: 0.995, yanchor: "top", showarrow: false, align: "left", text: off.join("<br>"), font: { size: fz, color: "#b23b3b", family: PLOT_FONT }, bgcolor: "rgba(255,255,255,0.8)" });
++  return { traces: T, anns: A, range: [lo, hi], off };
++}
++/* compact key-values strip under each graph (screen: chips; print: table) */
++function LatKeys({ items, print, title }) {
++  const e = React.createElement;
++  const list = (items || []).filter(Boolean);
++  if (!list.length) return null;
++  if (print) {
++    const rows = [];
++    for (let i = 0; i < list.length; i += 2) rows.push(list.slice(i, i + 2));
++    const td = { padding: "1px 4px", borderBottom: "1px solid #eef2f6", verticalAlign: "top" };
++    return e("div", { "data-lg-keys": "1", style: { marginTop: "4px" } },
++      title ? e("div", { style: { fontSize: "8px", fontWeight: 700, color: "#16304F", marginBottom: "1px" } }, title) : null,
++      e("table", { style: { width: "100%", borderCollapse: "collapse", fontSize: "7.5px", color: "#334155" } },
++        e("tbody", null, rows.map((rw, i) => e("tr", { key: i }, rw.map((it, j) => [
++          e("td", { key: "k" + j, style: { ...td, color: "#5A6B80", width: "17%" } }, it[0]),
++          e("td", { key: "v" + j, style: { ...td, fontFamily: "monospace", width: "33%" } }, it[1])]))))));
++  }
++  return e("div", { className: "pd-lg-keys", "data-lg-keys": "1" },
++    title ? e("div", { className: "pd-lg-keys-h" }, title) : null,
++    e("dl", null, list.map((it, i) => e("div", { key: i }, e("dt", null, it[0]), e("dd", null, it[1])))));
++}
++function latKeysF1(K) {
++  if (!K) return [];
++  const f1 = v => fmt(v, 1), lst = a => a.length ? a.map(f1).join(", ") + " ft" : "none";
++  const L = K.svc.lim;
++  return [
++    ["Head deflection y₀", fmt(K.y0, 3) + " in"],
++    ["Max / min deflection", fmt(K.yMax.v, 3) + " in @ " + f1(K.yMax.z) + " ft / " + fmt(K.yMin.v, 3) + " in @ " + f1(K.yMin.z) + " ft"],
++    ["First zero deflection", K.yZero != null ? f1(K.yZero) + " ft" : "none"],
++    ["Toe deflection", fmt(K.yToe, 4) + " in"],
++    ["Service deflection limit", "±" + fmt(L, 2) + " in" + (K.svc.active ? (K.svc.ok ? " — OK (active case is a service case)" : " — NG (active case is a service case)") : " (active case is not a service case)")],
++    ["+M max", fmt(K.Mpos.v, 1) + " kip·ft @ " + f1(K.Mpos.z) + " ft"],
++    ["−M min", fmt(K.Mneg.v, 1) + " kip·ft @ " + f1(K.Mneg.z) + " ft"],
++    ["|M|max (Module 02)", fmt(K.Mmax, 1) + " kip·ft @ " + f1(K.zMmax) + " ft"],
++    ["Zero moment (embedded)", lst(K.Mzeros)],
++    ...K.cap.map(c => [c.lbl, fmt(c.v, c.dp || 1) + " kip·ft (" + f1(c.z0) + " to " + f1(c.z1) + " ft)"]),
++    K.tip != null ? ["Casing tip", f1(K.tip) + " ft; M at tip " + fmt(K.Mtip, 1) + " kip·ft"] : null,
++    ["+V max / −V min", fmt(K.Vpos.v, 2) + " kip @ " + f1(K.Vpos.z) + " ft / " + fmt(K.Vneg.v, 2) + " kip @ " + f1(K.Vneg.z) + " ft"],
++    K.Vcap ? [K.Vcap.lbl, fmt(K.Vcap.v, 1) + " kip"] : null,
++    ...latKeysFix(K)
++  ];
++}
++function latKeysFix(K) {
++  if (!K) return [];
++  const out = K.fix.map(f => [f.k === "zfix" ? "Depth to fixity z_fix" : f.k === "decay" ? "5% moment-decay depth" : "Buckling fixity", f.lbl.replace(/^[^—=]*= ?/, "")]);
++  if (!K.fix.some(f => f.k === "zfix")) out.unshift(["Depth to fixity z_fix", "none — the moment does not reverse below M_max (Module 02)"]);
++  return out;
++}
++/* Figure F-2: per-case peak (the profile node with the largest |M|), governing case = largest Mmax */
++function latCaseKeys(caseRes) {
++  const rr = caseRes && caseRes.rows ? caseRes.rows : [];
++  const withP = rr.filter(r0 => r0.prof);
++  const peak = withP.map(r0 => { let k = 0; r0.prof.m.forEach((v, i) => { if (Math.abs(v) > Math.abs(r0.prof.m[k])) k = i; }); return { m: r0.prof.m[k], d: r0.prof.d[k] }; });
++  let gov = -1;
++  withP.forEach((r0, i) => { if (r0.Mmax != null && (gov < 0 || r0.Mmax > withP[gov].Mmax)) gov = i; });
++  const items = withP.map((r0, i) => [r0.name + (i === gov ? " (governs)" : ""), r0.Mmax != null ? fmt(r0.Mmax, 1) + " kip·ft @ " + fmt(peak[i].d, 1) + " ft" : "—"]);
++  const noP = rr.filter(r0 => !r0.prof);
++  if (noP.length) items.push(["No profile (did not converge)", noP.map(r0 => r0.name).join(", ")]);
++  return { peak, gov, items };
++}
+ /* Elevation (F26, engineer 2026-10-11: "the elevation graphic that shows the
+    pile should show the pile more to scale"). Two panels on one depth axis
+@@ -10019,5 +10247,5 @@ function elevStack(list, gap, lo, hi) {
+   return list;
+ }
+-function ElevationPlot({ I, pyRes, height = 340, print, narrow }) {
++function ElevationPlot({ I, pyRes, height = 340, print, narrow, kv }) {
+   const G = elevPileGeom(I, pyRes);
+   const { isHP, s, headY, toe } = G;
+@@ -10087,4 +10315,16 @@ function ElevationPlot({ I, pyRes, height = 340, print, narrow }) {
+   if (embedFt > 0) lab.push({ x: G.wHead / 2, y: (topPile + headY) / 2, t: "embed " + fmt(G.embedIn, 1) + " in", c: "#c9622e" });
+   if (Math.abs(s) > 0.01) lab.push({ x: G.wHead / 2, y: headY / 2, t: (s > 0 ? "stickup " : "head below grade ") + fmt(Math.abs(s), 1) + " ft", c: "#8a5a1f" });
++  // F26 b: dimension lines left of the pile (not on a narrow card; all in the hover and the key strip)
++  const dims = isHP
++    ? [{ a: 0, b: toe, t: "embedded length " + fmt(toe, 1) + " ft" }, { a: headY, b: toe, t: "total length " + fmt(toe - headY, 1) + " ft" }]
++    : [{ a: headY, b: G.tip, t: "L_cased " + fmt(G.tip - headY, 1) + " ft" }, { a: G.tob, b: toe, t: "L_bond " + fmt(toe - G.tob, 1) + " ft" }, { a: headY, b: toe, t: "total length " + fmt(toe - headY, 1) + " ft" }];
++  let xLeft = -1.5 * G.wMax;
++  if (!narrow) dims.forEach((d, k) => {
++    const xd = -(1.75 + 0.75 * k) * G.wMax, tk = 0.15 * G.wMax;
++    xLeft = Math.min(xLeft, xd - 0.6 * G.wMax);
++    shapes.push({ type: "line", xref: "x", yref: "y", x0: xd, x1: xd, y0: d.a, y1: d.b, line: { color: "#475569", width: 1 } });
++    [d.a, d.b].forEach(yy => shapes.push({ type: "line", xref: "x", yref: "y", x0: xd - tk, x1: xd + tk, y0: yy, y1: yy, line: { color: "#475569", width: 1 } }));
++    if ((d.b - d.a) * pxFt > d.t.length * 5.4 + 8) anns.push({ xref: "x", yref: "y", x: xd, xshift: -7, y: (d.a + d.b) / 2, textangle: -90, showarrow: false, text: d.t, font: { size: fz, color: "#334155", family: PLOT_FONT } });
++  });
+   // labels: stacked at least 12 px apart inside the plot, with leaders; on a narrow
+   // screen only the key depths are labelled (every label stays in the hover)
+@@ -10106,5 +10346,9 @@ function ElevationPlot({ I, pyRes, height = 340, print, narrow }) {
+     showarrow: false, align: "left", text: ld.join("<br>"), font: { size: fz, family: PLOT_FONT } });
+   // ---- moment panel ----
+-  if (pyRes.zMomentDecay != null) shapes.push({ type: "line", xref: "paper", x0: DOM_M[0], x1: 1, yref: "y", y0: pyRes.zMomentDecay, y1: pyRes.zMomentDecay, line: { color: "#2f6f3e", width: 1, dash: "dash" } });
++  if (kv) kv.fix.forEach(f => {   // F26 b: depth to fixity lines across both panels; the primary one labelled
++    shapes.push({ type: "line", xref: "paper", x0: 0, x1: 1, yref: "y", y0: f.z, y1: f.z, line: { color: f.col, width: f.primary ? 1.8 : 1.2, dash: f.dash } });
++    if (f.primary && !narrow) anns.push({ xref: "paper", x: 1, xanchor: "right", xshift: -16, yref: "y", y: f.z, yanchor: "bottom", showarrow: false, text: f.name, font: { size: fz, color: f.col, family: PLOT_FONT }, bgcolor: "rgba(255,255,255,0.7)" });
++  });
++  else if (pyRes.zMomentDecay != null) shapes.push({ type: "line", xref: "paper", x0: DOM_M[0], x1: 1, yref: "y", y0: pyRes.zMomentDecay, y1: pyRes.zMomentDecay, line: { color: "#2f6f3e", width: 1, dash: "dash" } });
+   const mom = pyRes.records.map(r2 => ({ d: r2.depth - s, m: r2.mom }));
+   const iM = mom.reduce((a, r2, i) => Math.abs(r2.m) > Math.abs(mom[a].m) ? i : a, 0);
+@@ -10118,8 +10362,11 @@ function ElevationPlot({ I, pyRes, height = 340, print, narrow }) {
+     { x: [mom[iM].m], y: [mom[iM].d], xaxis: "x2", yaxis: "y", cliponaxis: false, mode: "markers+text", marker: { color: "#b23b3b", size: 8 }, text: ["Mmax " + fmt(Math.abs(mom[iM].m), 1)], textposition: narrow ? (mom[iM].m < 0 ? "top right" : "top left") : mom[iM].m < 0 ? "middle left" : "middle right", textfont: { size: fz, family: PLOT_FONT, color: "#b23b3b" }, hoverinfo: "skip", showlegend: false },
+     // hover points on the pile drawing (every label, also those hidden on a narrow screen)
+-    { x: lab.map(L => L.x), y: lab.map(L => L.y), xaxis: "x", yaxis: "y", mode: "markers", marker: { size: 7, color: "rgba(0,0,0,0)" }, hoverinfo: "text", text: lab.map(L => L.t), showlegend: false }
++    { x: lab.map(L => L.x), y: lab.map(L => L.y), xaxis: "x", yaxis: "y", mode: "markers", marker: { size: 7, color: "rgba(0,0,0,0)" }, hoverinfo: "text", text: lab.map(L => L.t), showlegend: false },
++    // dimension and fixity hovers
++    { x: dims.map((d, k) => -(1.75 + 0.75 * k) * G.wMax), y: dims.map(d => (d.a + d.b) / 2), xaxis: "x", yaxis: "y", mode: "markers", marker: { size: 7, color: "rgba(0,0,0,0)" }, hoverinfo: "text", text: dims.map(d => d.t), showlegend: false, visible: !narrow },
++    ...(kv && kv.fix.length ? [{ x: kv.fix.map(() => mRange[1] - 0.02 * (mRange[1] - mRange[0])), y: kv.fix.map(f => f.z), xaxis: "x2", yaxis: "y", mode: "markers", marker: { size: 8, color: "rgba(0,0,0,0)" }, hoverinfo: "text", text: kv.fix.map(f => f.lbl), showlegend: false }] : [])
+   ];
+   const layout = baseLayout({ height: H, width: print ? 660 : undefined, autosize: !print, margin: { l: 46, r: 10, t: mT, b: mB }, shapes, annotations: anns, showlegend: false, hovermode: "closest",
+-    xaxis: { domain: DOM_P, range: [-1.5 * G.wMax, hw + 0.4 * G.wMax], scaleanchor: "y", scaleratio: N / 12, constrain: "range", constraintoward: "left",
++    xaxis: { domain: DOM_P, range: [xLeft, hw + 0.4 * G.wMax], scaleanchor: "y", scaleratio: N / 12, constrain: "range", constraintoward: "left",
+       title: { text: narrow ? "width (in) ×" + Nt : "width (in) · horizontal scale ×" + Nt, font: { size: 9 } }, nticks: narrow ? 3 : undefined, showgrid: false, zeroline: false, ticks: "outside", fixedrange: true },
+     xaxis2: { domain: DOM_M, anchor: "y", range: mRange, title: { text: "M (kip·ft)", font: { size: 9 } }, gridcolor: C.grid, zeroline: true, zerolinecolor: "#cbd5e1", ticks: "outside" },
+@@ -10128,11 +10375,21 @@ function ElevationPlot({ I, pyRes, height = 340, print, narrow }) {
+   const note = "Left: the pile to scale — depths true, every width in true proportion, drawn " + Nt + "× wider than the depth scale (one factor for the whole pile); the cap is schematic. " +
+     (isHP ? "H-pile seen in the plane of bending (" + (G.hp.weak ? "weak axis: flange width b_f, web edge-on" : "strong axis: depth d, flanges edge-on") + "). " : "Dark = casing, gray = grout (inside the casing and in the bond hole d_h), orange = central bar, orange dashed = plunge. ") +
+-    "Right: moment diagram (active case); bands = soil layers; green dash = 5% moment-decay depth. Stickup plots above grade (negative depth).";
++    "Right: moment diagram (active case); bands = soil layers; " + (kv && kv.fix.length ? "horizontal lines = depth to fixity: " + kv.fix.map(f => (f.k === "zfix" ? "purple solid = z_fix (2nd moment zero, Module 02 reference)" : f.k === "decay" ? "green dash = 5% moment-decay depth" : "brown dot = buckling equivalent fixed base (Module 10)")).join(", ") + " (hover for the definition)." : "green dash = 5% moment-decay depth.") + " Stickup plots above grade (negative depth).";
++  const keys = kv ? [
++    ["Horizontal scale", "\u00d7" + Nt + " (widths drawn " + Nt + "\u00d7 the depth scale)"],
++    Math.abs(s) > 0.01 ? [s > 0 ? "Stickup" : "Head below grade", fmt(Math.abs(s), 1) + " ft"] : null,
++    ...dims.map(d => [d.t.replace(/ [\d.\-]+ ft$/, ""), fmt(d.b - d.a, 1) + " ft (" + fmt(d.a, 1) + " to " + fmt(d.b, 1) + " ft)"]),
++    isHP ? ["Section width drawn", (G.hp.weak ? "b_f " : "d ") + fmt(G.hp.w, 2) + " in (" + (G.hp.weak ? "weak" : "strong") + " axis)"] : ["Plunge", fmt(G.tip - G.tob, 1) + " ft (" + fmt(G.tob, 1) + " to " + fmt(G.tip, 1) + " ft)"],
++    isHP ? null : ["Casing OD / hole d_h / bar", fmt(G.OD, 3) + " / " + fmt(G.dh, 3) + " / " + fmt(G.bar, 2) + " in"],
++    G.embedIn > 0 ? ["Cap embedment", fmt(G.embedIn, 1) + " in"] : null,
++    ...latKeysFix(kv)] : null;
+   if (print) return React.createElement("div", { "data-pd-elev": "1" }, plot,
+-    React.createElement("div", { style: { fontSize: "7.5px", color: "#475569", marginTop: "2px", lineHeight: 1.4 } }, note));
++    React.createElement("div", { style: { fontSize: "7.5px", color: "#475569", marginTop: "2px", lineHeight: 1.4 } }, note),
++    keys ? React.createElement(LatKeys, { items: keys, print: true, title: "Dimensions and depth to fixity" }) : null);
+   return /*#__PURE__*/React.createElement("div", { className: "bg-white rounded-sm p-3 border border-slate-200", "data-pd-elev": "1" },
+     /*#__PURE__*/React.createElement("div", { className: "text-[10px] font-mono-tech text-[var(--blueprint)] uppercase tracking-wider mb-1" }, "Elevation · pile to scale and moment diagram, depth-aligned with stratigraphy"),
+     plot,
+-    /*#__PURE__*/React.createElement("p", { className: "text-[8.5px] text-slate-400 mt-1 leading-snug" }, note));
++    /*#__PURE__*/React.createElement("p", { className: "text-[8.5px] text-slate-400 mt-1 leading-snug" }, note),
++    keys ? React.createElement(LatKeys, { items: keys, title: "Dimensions and depth to fixity" }) : null);
+ }
+ 
+@@ -13580,5 +13837,5 @@ function App() {
+     pcr: pcr,
+     sel: rptSel,
+-    gfx: { solved: solved, activeLayers: activeLayers, pyDepths: pyDepths, ei: { EI: EI, EI_uncased_kipin2: EI_uncased_kipin2 } }
++    gfx: { solved: solved, activeLayers: activeLayers, pyDepths: pyDepths, ei: { EI: EI, EI_uncased_kipin2: EI_uncased_kipin2 }, actType: (cases[activeIdx] || {}).type }
+   }))), /*#__PURE__*/React.createElement(PrintReport, {
+     I: I,
+@@ -13588,5 +13845,5 @@ function App() {
+     pcr: pcr,
+     sel: rptSel,
+-    gfx: { solved: solved, activeLayers: activeLayers, pyDepths: pyDepths, ei: { EI: EI, EI_uncased_kipin2: EI_uncased_kipin2 } }
++    gfx: { solved: solved, activeLayers: activeLayers, pyDepths: pyDepths, ei: { EI: EI, EI_uncased_kipin2: EI_uncased_kipin2 }, actType: (cases[activeIdx] || {}).type }
+   }), /*#__PURE__*/React.createElement(PrintChooser, {
+     open: printDlg,
+@@ -15537,5 +15794,5 @@ function App() {
+   }, /*#__PURE__*/React.createElement("p", { className: "text-[10px] text-slate-500 leading-snug mb-2" }, "The deflection and moment diagrams of this linear solution", lpileParse && lpileParse.ok && lpileParse.records && lpileParse.records.length > 2 ? " (with the imported LPILE profiles overlaid and compared)" : "", " are on the ", /*#__PURE__*/React.createElement("b", null, "Lateral graphs"), " output tab."),
+   /*#__PURE__*/React.createElement(LatGraphsLinks, { ids: ["dmv", "py"].concat(lpileParse && lpileParse.ok && lpileParse.records && lpileParse.records.length > 2 ? ["lpile"] : []) })))),
+-  (I.pileType !== "iab") && React.createElement(LatGraphsCard, { I: I, set: set, pyRes: pyRes, solved: solved, activeLayers: activeLayers, pyDepths: pyDepths, setPyDepths: setPyDepths,
++  (I.pileType !== "iab") && React.createElement(LatGraphsCard, { I: I, set: set, pyRes: pyRes, solved: solved, activeLayers: activeLayers, pyDepths: pyDepths, setPyDepths: setPyDepths, r: r, actType: (cases[activeIdx] || {}).type,
+     caseRes: caseRes, runAllCases: runAllCases, pmCurve: pmCurve, lpileParse: lpileParse }),
+   (I.pileType === "micropile") && React.createElement(GfxCard, { order: 29, otab: "struct", badge: "S-1", title: "Pile cross-sections (to scale)",
+@@ -16473,5 +16730,5 @@ function LatPanel({ title, children, note }) {
+ }
+ /* one response quantity vs depth (Figure F-1, single view) */
+-function LatProfileOne({ records, which, stickFt, height }) {
++function LatProfileOne({ records, which, stickFt, height, kv, narrow }) {
+   const k = which === "y" ? "defl" : which === "M" ? "mom" : "shear";
+   const z = records.map(r => r.depth - (stickFt || 0)), v = records.map(r => r[k]); // depth below grade
+@@ -16483,4 +16740,18 @@ function LatProfileOne({ records, which, stickFt, height }) {
+   const dp = which === "y" ? 4 : which === "M" ? 1 : 2;
+   const G = latGradeLine(), shapes = G.shapes, anns = G.annotations;
++  if (kv) {   // F26 b: key values, capacity / limit lines and depth to fixity
++    const lo = Math.min(0, ...v), hi = Math.max(0, ...v), m = Math.max(Math.abs(lo), Math.abs(hi)) * 1.15 || 1;
++    const span = Math.max(z[z.length - 1] - z[0], 1e-6), zLo = z[0] - 0.04 * span, zHi = z[z.length - 1] + 0.03 * span;
++    const mb = 46 + (narrow ? 110 : 60), plotH = height - 10 - mb;
++    const O = latOverlay(kv, which, "x", "y", [lo < 0 ? -m : 0, hi > 0 ? m : 0.01], { narrow, legend: true, fixLabel: true, pxFt: plotH / (zHi - zLo), zLo, zHi, seen: {} });
++    return React.createElement(Plot, {
++      data: [{ x: v, y: z, mode: "lines", fill: "tozerox", fillcolor: fill, line: { color: col, width: 2.5 }, name: nm, showlegend: false,
++        hovertemplate: "depth %{y:.2f} ft below grade<br>" + nm + " = %{x:." + dp + "f} " + unit + "<extra></extra>" }, ...O.traces],
++      layout: latLayout({ height, margin: { l: 58, r: 14, t: 10, b: mb }, showlegend: true, legend: { orientation: "h", x: 0, y: -48 / plotH, yanchor: "top", entrywidth: narrow ? 1 : 0.33, entrywidthmode: "fraction", font: { size: 9, family: PLOT_FONT } },
++        shapes, annotations: anns.concat(O.anns),
++        xaxis: latAx(nm + " (" + unit + ")", { range: O.range }),
++        yaxis: latAx("depth below grade (ft)", { range: [zHi, zLo], autorange: false, zeroline: false }) }),
++      height });
++  }
+   return React.createElement(Plot, {
+     data: [
+@@ -16513,5 +16784,5 @@ function LatFail({ pyRes }) {
+     "The graphs return when the solve converges (Module 02 on the Lateral (p-y) tab holds the inputs).");
+ }
+-function LatGraphsCard({ I, set, pyRes, solved, activeLayers, pyDepths, setPyDepths, caseRes, runAllCases, pmCurve, lpileParse }) {
++function LatGraphsCard({ I, set, pyRes, solved, activeLayers, pyDepths, setPyDepths, caseRes, runAllCases, pmCurve, lpileParse, r, actType }) {
+   const e = React.createElement;
+   const lp = lpileParse && lpileParse.ok && lpileParse.records && lpileParse.records.length > 2 ? lpileParse : null;
+@@ -16560,4 +16831,5 @@ function LatGraphsCard({ I, set, pyRes, solved, activeLayers, pyDepths, setPyDep
+   const stickFt = ok && pyRes.setup ? pyRes.setup.stick_in / 12 : null;
+   const H = 520;
++  const K = ok ? latKV(I, r, pyRes, actType) : null;   // F26 b: key values (display only)
+ 
+   /* ---- Deflection · Moment · Shear (Figure F-1) ---- */
+@@ -16572,7 +16844,8 @@ function LatGraphsCard({ I, set, pyRes, solved, activeLayers, pyDepths, setPyDep
+         e(LatPanel, { title: "Figure F-1: deflection, moment and shear vs depth (active case)",
+           note: "Nonlinear p-y, M-φ EI " + (pyRes.eiVar ? "on" : "off") + ". M_max = " + fmt(pyRes.Mmax_kft, 1) + " kip·ft at " + fmt(pyRes.zMmax, 1) + " ft below grade; head deflection " + fmt(pyRes.headDefl_in, 3) + " in. Depth below grade (stickup negative). Same solution as the printed Figure F-1." },
+-          view === "all" ? e(LpileProfilePlot, { records: pyRes.records, height: H, zOffset: stickFt || 0 })
+-            : e(LatProfileOne, { records: pyRes.records, which: view, stickFt, height: 560 })),
+-        e("div", { style: { marginTop: "12px" } }, e(ElevationPlot, { I: I, pyRes: pyRes, height: 520, narrow: narrow })));
++          view === "all" ? e(LpileProfilePlot, { records: pyRes.records, height: H + 80, zOffset: stickFt || 0, kv: K, narrow })
++            : e(LatProfileOne, { records: pyRes.records, which: view, stickFt, height: 640, kv: K, narrow }),
++          e(LatKeys, { items: latKeysF1(K), title: "Key values (active case)" })),
++        e("div", { style: { marginTop: "12px" } }, e(ElevationPlot, { I: I, pyRes: pyRes, height: 520, narrow: narrow, kv: K })));
+     }
+     if (src === "solver") {
+@@ -16627,4 +16900,5 @@ function LatGraphsCard({ I, set, pyRes, solved, activeLayers, pyDepths, setPyDep
+     if (!rr) return e("div", { className: "pd-lg-note" }, "Figure F-2 needs the per-case p-y solves. Run all LRFD cases (the same run as “Run all cases” in the Load cases card) to plot every case’s moment profile. ", runBtn);
+     const withP = rr.filter(r0 => r0.prof), noP = rr.filter(r0 => !r0.prof);
++    const ck = latCaseKeys(caseRes);   // F26 b: per-case Mmax and depth, governing case
+     return e(LatPanel, { title: "Figure F-2: moment profiles, all LRFD load cases overlaid (per-case p-y solves)",
+       note: e(React.Fragment, null, "Each case solved with its own loads (the case envelope run" + (caseRes.at ? ", " + caseRes.at : "") + "). Depth below grade; negative = stickup. ",
+@@ -16633,10 +16907,16 @@ function LatGraphsCard({ I, set, pyRes, solved, activeLayers, pyDepths, setPyDep
+         data: withP.map((r0, i) => {
+           const cols = ["#14304a", "#c9622e", "#2f6f3e", "#3d6a94", "#8a5a1f", "#7a4a7a"];
+-          return { x: r0.prof.m, y: r0.prof.d, mode: "lines", line: { color: cols[i % 6], width: 2 }, name: r0.name,
+-            hovertemplate: r0.name.replace(/%/g, "%%") + "<br>depth %{y:.2f} ft below grade<br>M = %{x:.1f} kip·ft<extra></extra>" };
+-        }),
+-        layout: latLayout({ height: H, ...latGradeLine(), showlegend: true, legend: { orientation: "h", x: 0, y: -0.14, yanchor: "top", entrywidth: 190, font: { size: 10, family: PLOT_FONT } },
+-          xaxis: latAx("M (kip·ft)"), yaxis: latAx("depth below grade (ft)", { autorange: "reversed", zeroline: false }) }), height: H })
+-        : e("div", { className: "pd-lg-note" }, "No case converged; nothing to plot."));
++          const pk = ck.peak[i], gov = i === ck.gov;
++          return { x: r0.prof.m, y: r0.prof.d, mode: "lines", line: { color: cols[i % 6], width: gov ? 3.4 : 1.6 }, opacity: gov || ck.gov < 0 ? 1 : 0.8,
++            name: r0.name + (r0.Mmax != null ? " \u00b7 Mmax " + fmt(r0.Mmax, 1) + " @ " + fmt(pk.d, 1) + " ft" : "") + (gov ? " (governs)" : ""),
++            hovertemplate: r0.name.replace(/%/g, "%%") + (r0.Mmax != null ? " (Mmax " + fmt(r0.Mmax, 1) + " kip·ft @ " + fmt(pk.d, 1) + " ft)" : "") + "<br>depth %{y:.2f} ft below grade<br>M = %{x:.1f} kip·ft<extra></extra>" };
++        }).concat(ck.gov >= 0 ? [{ x: [ck.peak[ck.gov].m], y: [ck.peak[ck.gov].d], mode: "markers+text", cliponaxis: false, marker: { color: "#b23b3b", size: 10, symbol: "diamond" },
++          text: ["envelope max " + fmt(withP[ck.gov].Mmax, 1) + " kip·ft"], textposition: ck.peak[ck.gov].m < 0 ? "top right" : "top left", textfont: { size: 10, family: PLOT_FONT, color: "#b23b3b" },
++          name: "envelope max", showlegend: false, hovertemplate: "envelope max |M| = " + fmt(withP[ck.gov].Mmax, 1) + " kip·ft<br>" + withP[ck.gov].name.replace(/%/g, "%%") + " @ " + fmt(ck.peak[ck.gov].d, 1) + " ft<extra></extra>" }] : []),
++        layout: latLayout({ height: H, ...latGradeLine(), showlegend: true, legend: { orientation: "h", x: 0, y: -0.14, yanchor: "top", entrywidth: narrow ? 1 : 0.5, entrywidthmode: "fraction", font: { size: 10, family: PLOT_FONT } },
++          xaxis: latAx("M (kip·ft)", (() => { const all = withP.flatMap(r0 => r0.prof.m); const lo = Math.min(0, ...all), hi = Math.max(0, ...all), sp = Math.max(hi - lo, 1e-6); return { range: [lo - 0.05 * sp, hi + 0.1 * sp] }; })()),
++          yaxis: latAx("depth below grade (ft)", { autorange: "reversed", zeroline: false }) }), height: H })
++        : e("div", { className: "pd-lg-note" }, "No case converged; nothing to plot."),
++      e(LatKeys, { items: ck.items, title: "Key values (all cases)" }));
+   };
+ 
+@@ -16675,12 +16955,31 @@ function LatGraphsCard({ I, set, pyRes, solved, activeLayers, pyDepths, setPyDep
+     const dBG = [], pv = [];
+     for (let i = 0; i < n; i++) { dBG.push(recs[i].depth - (stickFt || 0)); pv.push(pN[i]); }
+-    return e("div", { className: "pd-lg-grid" },
++    // F26 b: max |p| and its depth, layer boundaries, depth to fixity; peak mobilisation
++    let ip = 0; pv.forEach((v, i) => { if (Math.abs(v) > Math.abs(pv[ip])) ip = i; });
++    const mob = pyRes.mobil || [];
++    let im = 0; mob.forEach((m2, i) => { if (m2.r > mob[im].r) im = i; });
++    const bnd = (Array.isArray(I.soilLayers) ? I.soilLayers : []).map(l => l.topDepth).filter(d => d > 0 && (n <= 2 || d < Math.max(...dBG))).sort((a, b) => a - b);
++    const pLo = Math.min(0, ...pv), pHi = Math.max(0, ...pv), pSp = Math.max(pHi - pLo, 1e-6);
++    const pR = [pLo - 0.08 * pSp, pHi + 0.08 * pSp];
++    const fixTr = xr => K ? K.fix.map(f => ({ x: xr, y: [f.z, f.z], mode: "lines", line: { color: f.col, width: f.primary ? 1.8 : 1.3, dash: f.dash }, name: f.name, hovertemplate: f.lbl.replace(/%/g, "%%") + "<extra></extra>" })) : [];
++    const bndTr = bnd.length ? [{ x: bnd.map(() => 0), y: bnd, mode: "markers", marker: { size: 7, color: "rgba(0,0,0,0)" }, showlegend: false, hovertemplate: "layer boundary %{y:.1f} ft below grade<extra></extra>" }] : [];
++    const bndSh = bnd.map(d => ({ type: "line", xref: "paper", x0: 0, x1: 1, yref: "y", y0: d, y1: d, line: { color: "#7a7355", width: 1, dash: "dot" } }));
++    const soilKeys = [
++      n > 2 ? ["max |p|", fmt(pv[ip], 1) + " lb/in @ " + fmt(dBG[ip], 1) + " ft"] : null,
++      mob.length ? ["Peak mobilisation p/p\u1d64", fmt(mob[im].r * 100, 0) + "% @ " + fmt(mob[im].d, 1) + " ft"] : null,
++      ["Layer boundaries", bnd.length ? bnd.map(d => fmt(d, 1)).join(", ") + " ft" : "none (one layer)"],
++      ...latKeysFix(K)];
++    const G0 = latGradeLine();
++    return e(React.Fragment, null, e("div", { className: "pd-lg-grid" },
+       n > 2 && e(LatPanel, { title: "Soil reaction p vs depth (active case)",
+         note: "The solver’s nodal soil reaction p (lb/in of pile length), plotted with the sign of the deflection at that depth (the soil resists in the opposite direction). These are the same values as the ● points of Figure F-3. Depth below grade; negative = stickup (no soil)." },
+         e(Plot, {
+-          data: [{ x: pv, y: dBG, mode: "lines", fill: "tozerox", fillcolor: "rgba(47,111,62,0.12)", line: { color: "#2f6f3e", width: 2.2 }, name: "p",
+-            hovertemplate: "depth %{y:.2f} ft below grade<br>p = %{x:.1f} lb/in<extra></extra>" }],
+-          layout: latLayout({ height: H, ...latGradeLine(), showlegend: false,
+-            xaxis: latAx("p — soil reaction (lb/in)"), yaxis: latAx("depth below grade (ft)", { autorange: "reversed", zeroline: true }) }), height: H })),
++          data: [{ x: pv, y: dBG, mode: "lines", fill: "tozerox", fillcolor: "rgba(47,111,62,0.12)", line: { color: "#2f6f3e", width: 2.2 }, name: "p", showlegend: false,
++            hovertemplate: "depth %{y:.2f} ft below grade<br>p = %{x:.1f} lb/in<extra></extra>" },
++            { x: [pv[ip]], y: [dBG[ip]], mode: "markers+text", cliponaxis: false, marker: { color: "#b23b3b", size: 8 }, text: ["max |p| " + fmt(Math.abs(pv[ip]), 1) + " lb/in @ " + fmt(dBG[ip], 1) + " ft"], textposition: pv[ip] < 0 ? "top right" : "top left",
++              textfont: { size: 10, family: PLOT_FONT, color: "#b23b3b" }, showlegend: false, hovertemplate: "max |p| = " + fmt(Math.abs(pv[ip]), 1) + " lb/in @ " + fmt(dBG[ip], 1) + " ft<extra></extra>" },
++            ...fixTr(pR), ...bndTr],
++          layout: latLayout({ height: H, shapes: G0.shapes.concat(bndSh), annotations: G0.annotations, showlegend: !!(K && K.fix.length), legend: { orientation: "h", x: 0, y: -0.14, yanchor: "top", entrywidth: 1, entrywidthmode: "fraction", font: { size: 10, family: PLOT_FONT } },
++            xaxis: latAx("p — soil reaction (lb/in)", { range: pR }), yaxis: latAx("depth below grade (ft)", { autorange: "reversed", zeroline: true }) }), height: H })),
+       pyRes.mobil && pyRes.mobil.length > 3 && e(LatPanel, { title: "Soil mobilization p/pᵤ vs depth",
+         note: "How hard the soil is working at each depth in the converged state — high mobilization near grade is normal; high values at depth flag a soft zone doing structural work." },
+@@ -16688,9 +16987,12 @@ function LatGraphsCard({ I, set, pyRes, solved, activeLayers, pyDepths, setPyDep
+         /*#__PURE__*/React.createElement(Plot, {
+           data: [{ x: pyRes.mobil.map(m2 => m2.r * 100), y: pyRes.mobil.map(m2 => m2.d), mode: "lines", fill: "tozerox", fillcolor: "rgba(201,98,46,0.15)", line: { color: C.accent, width: 2 },
+-            hoverinfo: "text", text: pyRes.mobil.map(m2 => fmt(m2.d, 1) + " ft below grade: " + fmt(m2.r * 100, 0) + "% of ultimate") }],
++            hoverinfo: "text", text: pyRes.mobil.map(m2 => fmt(m2.d, 1) + " ft below grade: " + fmt(m2.r * 100, 0) + "% of ultimate") },
++            { x: [mob[im].r * 100], y: [mob[im].d], mode: "markers+text", cliponaxis: false, marker: { color: "#b23b3b", size: 8 }, text: ["peak " + fmt(mob[im].r * 100, 0) + "% @ " + fmt(mob[im].d, 1) + " ft"], textposition: mob[im].r > 0.6 ? "bottom left" : "bottom right",
++              textfont: { size: 10, family: PLOT_FONT, color: "#b23b3b" }, hoverinfo: "skip" }],
+           layout: latLayout({ height: H - 40, ...latGradeLine(), showlegend: false,
+             xaxis: latAx("% of ultimate resistance", { range: [0, 100] }),
+             // same depth range as the soil-reaction chart beside it (pile head to toe)
+-            yaxis: latAx("depth below grade (ft)", n > 2 ? { range: [Math.max(...dBG), Math.min(...dBG)], zeroline: false } : { autorange: "reversed", zeroline: false }) }), height: H - 40 })));
++            yaxis: latAx("depth below grade (ft)", n > 2 ? { range: [Math.max(...dBG), Math.min(...dBG)], zeroline: false } : { autorange: "reversed", zeroline: false }) }), height: H - 40 }))),
++      e(LatKeys, { items: soilKeys, title: "Key values (active case)" }));
+   };
+ 
+@@ -16703,10 +17005,13 @@ function LatGraphsCard({ I, set, pyRes, solved, activeLayers, pyDepths, setPyDep
+     // eiProf nodes are the solver nodes of pyRes.records (eiProf.d is clamped at grade)
+     const eiD = (p2, i2) => (pyRes.records && pyRes.records[i2] && stickFt != null) ? pyRes.records[i2].depth - stickFt : p2.d;
+-    return e("div", { className: "pd-lg-grid" },
++    return e(React.Fragment, null, e("div", { className: "pd-lg-grid" },
+       pyRes.sweep && pyRes.sweep.length > 2 && e(LatPanel, { title: "Head load–deflection (pushover)" },
+         /*#__PURE__*/React.createElement("p", { className: "pd-lg-note", style: { marginTop: 0 } }, "Pile-head deflection as the lateral load is ramped from zero to the design value. A straight line means near-elastic response; curvature (softening) shows soil yielding and/or section cracking. The operating point is your design load."),
+         /*#__PURE__*/React.createElement(Plot, {
+           data: [{ x: [0, ...pyRes.sweep.map(s => s.y0)], y: [0, ...pyRes.sweep.map(s => s.P)], mode: "lines+markers", line: { color: C.blueprint2, width: 2 }, marker: { size: 5 },
+-            hoverinfo: "text", text: ["origin", ...pyRes.sweep.map(s => "P=" + fmt(s.P, 1) + " kip<br>y₀=" + fmt(s.y0, 3) + " in<br>Mmax=" + fmt(s.M, 1) + " kip·ft")] }],
++            hoverinfo: "text", text: ["origin", ...pyRes.sweep.map(s => "P=" + fmt(s.P, 1) + " kip<br>y₀=" + fmt(s.y0, 3) + " in<br>Mmax=" + fmt(s.M, 1) + " kip·ft")] },
++            // F26 b: the design point of the active case (Module 02 head deflection, lateral load)
++            { x: [pyRes.headDefl_in], y: [I.Plat], mode: "markers+text", cliponaxis: false, marker: { color: "#b23b3b", size: 10, symbol: "diamond" }, text: ["design point  "], textposition: "middle left",
++              textfont: { size: 10, family: PLOT_FONT, color: "#b23b3b" }, hovertemplate: "design point (active case)<br>P = " + fmt(I.Plat, 1) + " kip<br>y₀ = " + fmt(pyRes.headDefl_in, 3) + " in<extra></extra>" }],
+           layout: latLayout({ height: SH, showlegend: false,
+             xaxis: latAx("head deflection (in)"),
+@@ -16723,4 +17028,5 @@ function LatGraphsCard({ I, set, pyRes, solved, activeLayers, pyDepths, setPyDep
+               hoverinfo: "text", text: pyRes.mphi.phis.map((p2, i2) => "φ=" + p2.toExponential(2) + "<br>M=" + fmt(pyRes.mphi.Ms[i2], 1) + " kip·ft") },
+             ...(pyRes.Mcr_kft != null ? [{ x: [pyRes.mphi.phis[0], pyRes.mphi.phis[pyRes.mphi.phis.length - 1]], y: [pyRes.Mcr_kft, pyRes.Mcr_kft], mode: "lines", line: { color: "#8a5a1f", width: 1, dash: "dot" }, name: "Mcr", hoverinfo: "skip" }] : []),
++            ...(r && r.flex && I.pileType !== "hpile" ? [{ x: [pyRes.mphi.phis[0], pyRes.mphi.phis[pyRes.mphi.phis.length - 1]], y: [r.flex.phiMn, r.flex.phiMn], mode: "lines", line: { color: "#b23b3b", width: 1.3, dash: "dash" }, name: "φMn cased " + fmt(r.flex.phiMn, 1), hovertemplate: "φM_n cased (Module 04) = " + fmt(r.flex.phiMn, 1) + " kip·ft<extra></extra>" }] : []),
+             (() => {
+               // Operating point: place ● ON the curve at the curvature where M
+@@ -16757,4 +17063,5 @@ function LatGraphsCard({ I, set, pyRes, solved, activeLayers, pyDepths, setPyDep
+               hoverinfo: "text", text: pyRes.mphi.phisU.map((p2, i2) => "φ=" + p2.toExponential(2) + "<br>M=" + fmt(pyRes.mphi.MsU[i2], 1) + " kip·ft") },
+             ...(pyRes.Mcr_kft_u != null ? [{ x: [pyRes.mphi.phisU[0], pyRes.mphi.phisU[pyRes.mphi.phisU.length - 1]], y: [pyRes.Mcr_kft_u, pyRes.Mcr_kft_u], mode: "lines", line: { color: "#8a5a1f", width: 1, dash: "dot" }, name: "Mcr", hoverinfo: "skip" }] : []),
++            ...(r && r.geoChecks && I.pileType !== "hpile" ? [{ x: [pyRes.mphi.phisU[0], pyRes.mphi.phisU[pyRes.mphi.phisU.length - 1]], y: [r.geoChecks.phiMn_uncased, r.geoChecks.phiMn_uncased], mode: "lines", line: { color: "#b23b3b", width: 1.3, dash: "dash" }, name: "φMn uncased " + fmt(r.geoChecks.phiMn_uncased, 2), hovertemplate: "φM_n uncased (Module G) = " + fmt(r.geoChecks.phiMn_uncased, 2) + " kip·ft<extra></extra>" }] : []),
+             ...(pyRes.Mtip_kft != null ? [(() => {
+               // mark the moment carried at the casing tip — the demand the uncased
+@@ -16800,9 +17107,17 @@ function LatGraphsCard({ I, set, pyRes, solved, activeLayers, pyDepths, setPyDep
+           data: [{ x: pyRes.eiProf.map(p2 => p2.EI / 1e6), y: pyRes.eiProf.map((p2, i2) => eiD(p2, i2)), mode: "lines", line: { color: C.blueprint, width: 2 },
+             hoverinfo: "text", text: pyRes.eiProf.map((p2, i2) => fmt(eiD(p2, i2), 1) + " ft below grade: EI = " + fmt(p2.EI / 1e6, 2) + "×10⁶ kip·in²") }],
+-          layout: latLayout({ height: SH, ...latGradeLine(), showlegend: false,
++          layout: latLayout({ height: SH, ...(() => { const g = latGradeLine(); if (K && K.tip != null) { g.shapes = g.shapes.concat([{ type: "line", xref: "paper", x0: 0, x1: 1, yref: "y", y0: K.tip, y1: K.tip, line: { color: "#14304a", width: 1, dash: "longdash" } }]); g.annotations = g.annotations.concat([{ xref: "paper", x: 0.99, xanchor: "right", yref: "y", y: K.tip, yanchor: "bottom", showarrow: false, text: "casing tip " + fmt(K.tip, 1) + " ft", font: { size: 10, color: "#14304a", family: PLOT_FONT } }]); } return g; })(), showlegend: false,
+             xaxis: latAx("EI (×10⁶ kip·in²)", { rangemode: "tozero" }),
+             yaxis: latAx("depth below grade (ft)", { autorange: "reversed", zeroline: false }) }), height: SH }),
+         /*#__PURE__*/React.createElement("p", { className: "pd-lg-note" },
+-          "Converged secant EI from the moment-curvature model — dips mark cracked reaches; the step is the casing tip. EI ratchets downward only (cracking irreversible under the monotonic ramp).")));
++          "Converged secant EI from the moment-curvature model — dips mark cracked reaches; the step is the casing tip. EI ratchets downward only (cracking irreversible under the monotonic ramp)."))),
++      e(LatKeys, { title: "Key values (active case)", items: [
++        ["Design point (active case)", "P = " + fmt(I.Plat, 1) + " kip, y\u2080 = " + fmt(pyRes.headDefl_in, 3) + " in"],
++        ["|M|max (Module 02)", fmt(pyRes.Mmax_kft, 1) + " kip·ft @ " + fmt(pyRes.zMmax, 1) + " ft"],
++        pyRes.Mcr_kft != null ? ["M_cr cased (M-φ knee)", fmt(pyRes.Mcr_kft, 1) + " kip·ft"] : null,
++        pyRes.Mcr_kft_u != null ? ["M_cr uncased (M-φ knee)", fmt(pyRes.Mcr_kft_u, 1) + " kip·ft"] : null,
++        ...(K ? K.cap.map(c => [c.lbl, fmt(c.v, c.dp || 1) + " kip·ft"]) : []),
++        K && K.tip != null ? ["Casing tip", fmt(K.tip, 1) + " ft; M at tip " + fmt(K.Mtip, 1) + " kip·ft"] : null,
++        ["First yield M_y", "not computed by the tool"]] }));
+   };
+ 
+```
+
+### F26, part b — review polish (2026-10-11): display precision, label spacing, off-scale arrows   [UI only] [no calculation change]
+- **Display precision, no exponents:** new `latFmt(x, d)` (rounds to d decimals with `toFixed`, never exponent notation, a value that rounds to zero shows as 0, no "−0"). Used for every number the F26 code writes (labels, legends, hovers, strips, report strips) and for the F-1 hover texts of `LpileProfilePlot` (`y=`, `M=`, `V=`; before `fmt`, which switches to exponent notation below 1e-3). Toe deflection: 3 decimals like y₀. Before → after, micropile defaults: toe "−3.2227e-11 in" → "0.000 in"; H-pile defaults: "2.3615e-5 in" → "0.000 in"; hover "y=-8.0366e-4 in" → "y=-0.0008 in". Values of normal size are unchanged (e.g. 53.4 kip·ft, 3.162 in). Exception: the moment–curvature hovers keep scientific notation for the curvature φ (1/in, e.g. 2.50e-6), which is its natural unit form (pre-existing, not a label).
+- **Labels spaced:** elevation labels at least 20 px apart (was 12) with the text 18 px right of the cap edge (was 8) on a white backing, so "top of bond", "plunge", "casing tip", "embed" and the cap no longer touch; casing label shortened to "(corr. …, dotted)". F-1 panel labels at least 15 px apart (was 12) and kept above the off-scale arrows. When the F26 overlay is drawn, the F25 large-deflection warning line keeps its dotted line but its label moves to the legend ("±0.25 × D = ±1.75 in (large-deflection warning)"; "(warning)" on a narrow card) instead of the vertical text on the plot, which crowded the service-limit line (`LpileProfilePlot`: `annotations: [...(EX ? [] : dwAnns), …` plus a legend-only trace; `LatProfileOne`: the warning annotation filtered out of `anns` in the F26 branch, legend-only trace added). Without the overlay (LPILE import profiles) F25's label is unchanged.
+- **Off-scale capacity lines drawn as arrows:** a capacity line more than 4 × the response is still listed in the strip and now also shows as a red arrow at the right edge of its panel, bottom up: "φMn = 537.8 kip·ft → off scale", "φVn = 224.7 kip → off scale" (narrow card: "φMn→", "φVn→"); a service limit outside the deflection range shows "service limit ±1.00 in: not reached" the same way (hidden on a narrow card; in the strip).
+- **Checked:** the value assertions of part b repeated for the six cases, 0 fails; no label, legend, hover (apart from the curvature φ) or strip text in exponent notation (scanned in the rendered charts, micropile and H-pile, 1500 and 400 px); parity with origin/main unchanged (report text only additions); screenshots at 1500 / 400 px and the printed pages looked at; no console errors.
+- **Re-applying by hand:** unified diff below, against the merge commit `a9fcfdd` (CRLF stripped).
+
+```diff
+diff --git a/Pile Designer.html b/Pile Designer.html
+index 80fa334..1701bae 100644
+--- a/Pile Designer.html	
++++ b/Pile Designer.html	
+@@ -5575,3 +5575,3 @@ function PyCurvesChart({ set, print, height }) {
+     const col = GFX_COLS[k % GFX_COLS.length];
+-    data.push({ x: c.pts.map(p => p[0]), y: c.pts.map(p => p[1]), mode: "lines", line: { color: col, width: 2 }, name: lbl(c) + " · p_u " + fmt(c.pu, 1) + " lb/in · p/p_u " + (c.ratio == null ? "—" : fmt(c.ratio, 3)),
++    data.push({ x: c.pts.map(p => p[0]), y: c.pts.map(p => p[1]), mode: "lines", line: { color: col, width: 2 }, name: lbl(c) + " · p_u " + latFmt(c.pu, 1) + " lb/in · p/p_u " + (c.ratio == null ? "—" : latFmt(c.ratio, 3)),
+       hovertemplate: "z = " + fmt(c.d, 2) + " ft<br>y = %{x:.4f} in<br>p = %{y:.2f} lb/in<extra></extra>" });
+@@ -6813,3 +6813,3 @@ function LpileProfilePlot({
+     hoverinfo: "text",
+-    text: z.map((d, i) => `${zLbl(d)}<br>y=${fmt(y[i], 4)} in`),
++    text: z.map((d, i) => `${zLbl(d)}<br>y=${latFmt(y[i], 4)} in`),
+     name: "deflection"
+@@ -6828,3 +6828,3 @@ function LpileProfilePlot({
+     hoverinfo: "text",
+-    text: z.map((d, i) => `${zLbl(d)}<br>M=${fmt(M[i], 1)} kip·ft`),
++    text: z.map((d, i) => `${zLbl(d)}<br>M=${latFmt(M[i], 1)} kip·ft`),
+     name: "moment"
+@@ -6843,3 +6843,3 @@ function LpileProfilePlot({
+     hoverinfo: "text",
+-    text: z.map((d, i) => `${zLbl(d)}<br>V=${fmt(V[i], 2)} kip`),
++    text: z.map((d, i) => `${zLbl(d)}<br>V=${latFmt(V[i], 2)} kip`),
+     name: "shear"
+@@ -6847,2 +6847,4 @@ function LpileProfilePlot({
+   if (EX) { data.forEach(t => { t.showlegend = false; }); data.push(...EX.traces); }
++  if (EX && dwX.length) data.push({ x: [null], y: [null], xaxis: "x", yaxis: "y", mode: "lines", line: { color: "#b7791f", width: 1.5, dash: "dot" }, hoverinfo: "skip",
++    name: "±" + latFmt(deflWarn.f, 2) + " × D = ±" + latFmt(deflWarn.lim, 2) + " in" + (narrow ? " (warning)" : " (large-deflection warning)") });   // F26: label in the legend, not on the plot
+   const layout = baseLayout({
+@@ -6865,3 +6867,3 @@ function LpileProfilePlot({
+     shapes: [...band("x", "y", yR), ...band("x2", "y2", mR), ...band("x3", "y3", vR), ...dwShapes],
+-    annotations: [...dwAnns, {
++    annotations: [...(EX ? [] : dwAnns), {
+       xref: "paper",
+@@ -10065,2 +10067,11 @@ function grpRows(r) {
+    linear interpolation between solver nodes). No new engineering quantity. */
++/* display precision for the lateral-graph labels and strips: rounded to d decimals,
++   never exponent notation; a value that rounds to zero (e.g. a toe deflection of
++   1e-11 in) shows as 0 (no "-0"). Display only. */
++function latFmt(x, d = 2) {
++  if (x === null || x === undefined || isNaN(x)) return "—";
++  if (!isFinite(x)) return "∞";
++  const r = Number(x.toFixed(d));
++  return (r === 0 ? 0 : r).toLocaleString(undefined, { minimumFractionDigits: d, maximumFractionDigits: d });
++}
+ function latZeros(z, v) {
+@@ -10106,11 +10117,11 @@ function latKV(I, r, pyRes, actType) {
+   if (pyRes.zFix2 != null && isFinite(pyRes.zFix2)) K.fix.push({ k: "zfix", z: pyRes.zFix2, col: "#7a4a7a", dash: "solid",
+-    name: "z_fix " + fmt(pyRes.zFix2, 1) + " ft (2nd M zero)",
+-    lbl: "z_fix = " + fmt(pyRes.zFix2, 1) + " ft — 2nd zero crossing of moment (Module 02, reference)" });
++    name: "z_fix " + latFmt(pyRes.zFix2, 1) + " ft (2nd M zero)",
++    lbl: "z_fix = " + latFmt(pyRes.zFix2, 1) + " ft — 2nd zero crossing of moment (Module 02, reference)" });
+   if (pyRes.zMomentDecay != null && isFinite(pyRes.zMomentDecay)) K.fix.push({ k: "decay", z: pyRes.zMomentDecay, col: "#2f6f3e", dash: "dash",
+-    name: "5% M decay " + fmt(pyRes.zMomentDecay, 1) + " ft",
+-    lbl: "5% moment-decay depth = " + fmt(pyRes.zMomentDecay, 1) + " ft — first depth below M_max where |M| ≤ 5% of M_max (Module 02" + (isHP ? ")" : "; casing-extension check)") });
++    name: "5% M decay " + latFmt(pyRes.zMomentDecay, 1) + " ft",
++    lbl: "5% moment-decay depth = " + latFmt(pyRes.zMomentDecay, 1) + " ft — first depth below M_max where |M| ≤ 5% of M_max (Module 02" + (isHP ? ")" : "; casing-extension check)") });
+   const b = r && r.buckling;
+   if (b && b.enable && b.Lf_buck != null && isFinite(b.Lf_buck) && isFinite(b.Le_buck)) K.fix.push({ k: "bkl", z: b.Le_buck - s, col: "#8a5a1f", dash: "dot",
+-    name: "buckling fixity " + fmt(b.Le_buck - s, 1) + " ft (Module 10)",
+-    lbl: "buckling equivalent fixed base = head + L_u + L_f = " + fmt(b.Lu_free, 1) + " + " + fmt(b.Lf_buck, 1) + " = " + fmt(b.Le_buck, 1) + " ft below the head, " + fmt(b.Le_buck - s, 1) + " ft below grade (Module 10, " + (b.lfGoverning && b.lfGoverning.src ? b.lfGoverning.src : (b.bklTab || "")) + ")" });
++    name: "buckling fixity " + latFmt(b.Le_buck - s, 1) + " ft (Module 10)",
++    lbl: "buckling equivalent fixed base = head + L_u + L_f = " + latFmt(b.Lu_free, 1) + " + " + latFmt(b.Lf_buck, 1) + " = " + latFmt(b.Le_buck, 1) + " ft below the head, " + latFmt(b.Le_buck - s, 1) + " ft below grade (Module 10, " + (b.lfGoverning && b.lfGoverning.src ? b.lfGoverning.src : (b.bklTab || "")) + ")" });
+   K.fix.forEach((f, i) => { f.primary = i === 0; });
+@@ -10139,7 +10150,7 @@ function latOverlay(K, q, xa, ya, R, o) {
+   if (q === "y") {
+-    pts.push({ x: K.y0, y: K.zTop, t: "y₀ " + fmt(K.y0, 3) + " in", s: "y₀ " + fmt(K.y0, 3), primary: true, col: C.blueprint2 });
+-    if (dist(K.yMax, { i: 0 }) && Math.abs(K.yMax.v) > 1e-9) pts.push({ x: K.yMax.v, y: K.yMax.z, t: "max " + fmt(K.yMax.v, 3) + " in @ " + fmt(K.yMax.z, 1) + " ft", col: C.blueprint2 });
+-    if (dist(K.yMin, { i: 0 }) && Math.abs(K.yMin.v) > 1e-9) pts.push({ x: K.yMin.v, y: K.yMin.z, t: "min " + fmt(K.yMin.v, 3) + " in @ " + fmt(K.yMin.z, 1) + " ft", col: C.blueprint2 });
+-    if (K.yZero != null) pts.push({ x: 0, y: K.yZero, t: "y = 0 @ " + fmt(K.yZero, 1) + " ft", col: "#5a6570" });
+-    pts.push({ x: K.yToe, y: K.zBot, t: "toe " + fmt(K.yToe, 4) + " in", col: "#5a6570" });
++    pts.push({ x: K.y0, y: K.zTop, t: "y₀ " + latFmt(K.y0, 3) + " in", s: "y₀ " + latFmt(K.y0, 3), primary: true, col: C.blueprint2 });
++    if (dist(K.yMax, { i: 0 }) && Math.abs(K.yMax.v) > 1e-9) pts.push({ x: K.yMax.v, y: K.yMax.z, t: "max " + latFmt(K.yMax.v, 3) + " in @ " + latFmt(K.yMax.z, 1) + " ft", col: C.blueprint2 });
++    if (dist(K.yMin, { i: 0 }) && Math.abs(K.yMin.v) > 1e-9) pts.push({ x: K.yMin.v, y: K.yMin.z, t: "min " + latFmt(K.yMin.v, 3) + " in @ " + latFmt(K.yMin.z, 1) + " ft", col: C.blueprint2 });
++    if (K.yZero != null) pts.push({ x: 0, y: K.yZero, t: "y = 0 @ " + latFmt(K.yZero, 1) + " ft", col: "#5a6570" });
++    pts.push({ x: K.yToe, y: K.zBot, t: "toe " + latFmt(K.yToe, 3) + " in", col: "#5a6570" });
+     const L = K.svc.lim, tag = K.svc.active ? (K.svc.ok ? " — OK" : " — NG") : "";
+@@ -10148,21 +10159,21 @@ function latOverlay(K, q, xa, ya, R, o) {
+     const yLo = Math.min(0, ...K.y), yHi = Math.max(0, ...K.y), svx = [L, -L].filter(xv => xv >= yLo && xv <= yHi);
+-    svx.forEach(xv => vlines.push({ x: xv, z0: K.zTop, z1: K.zBot, name: "service limit ±" + fmt(L, 2) + " in" + tag, col: K.svc.active && !K.svc.ok ? "#b23b3b" : "#3d6a94", dash: "dashdot", grp: "svc" }));
+-    if (!svx.length) off.push("service limit ±" + fmt(L, 2) + " in" + tag + ": not reached (outside the plotted range)");
+-    if (K.svc.active) A.push({ xref: xa + " domain", x: 0.02, xanchor: "left", yref: ya + " domain", y: 0.005, yanchor: "bottom", showarrow: false, text: "service case: |y₀| " + fmt(Math.abs(K.y0), 3) + (K.svc.ok ? " ≤ " : " > ") + fmt(L, 2) + " in" + tag, font: { size: fz, color: K.svc.ok ? "#2f6f3e" : "#b23b3b", family: PLOT_FONT }, bgcolor: "rgba(255,255,255,0.85)" });
++    svx.forEach(xv => vlines.push({ x: xv, z0: K.zTop, z1: K.zBot, name: "service limit ±" + latFmt(L, 2) + " in" + tag, col: K.svc.active && !K.svc.ok ? "#b23b3b" : "#3d6a94", dash: "dashdot", grp: "svc" }));
++    if (!svx.length) off.push({ t: "service limit ±" + latFmt(L, 2) + " in" + tag + ": not reached", s: null });
++    if (K.svc.active) A.push({ xref: xa + " domain", x: 0.02, xanchor: "left", yref: ya + " domain", y: 0.005, yanchor: "bottom", showarrow: false, text: "service case: |y₀| " + latFmt(Math.abs(K.y0), 3) + (K.svc.ok ? " ≤ " : " > ") + latFmt(L, 2) + " in" + tag, font: { size: fz, color: K.svc.ok ? "#2f6f3e" : "#b23b3b", family: PLOT_FONT }, bgcolor: "rgba(255,255,255,0.85)" });
+   } else if (q === "M") {
+     const absPos = Math.abs(K.Mpos.v) >= Math.abs(K.Mneg.v);
+-    if (Math.abs(K.Mpos.v) > 1e-9) pts.push({ x: K.Mpos.v, y: K.Mpos.z, t: "+M " + fmt(K.Mpos.v, 1) + " kip·ft @ " + fmt(K.Mpos.z, 1) + " ft", s: "+M " + fmt(K.Mpos.v, 1), primary: absPos, col: C.accent });
+-    if (Math.abs(K.Mneg.v) > 1e-9) pts.push({ x: K.Mneg.v, y: K.Mneg.z, t: "−M " + fmt(K.Mneg.v, 1) + " kip·ft @ " + fmt(K.Mneg.z, 1) + " ft", s: "−M " + fmt(K.Mneg.v, 1), primary: !absPos, col: C.accent });
+-    K.Mzeros.forEach(zz => pts.push({ x: 0, y: zz, t: "M = 0 @ " + fmt(zz, 1) + " ft", col: "#5a6570", hoverOnly: true }));
++    if (Math.abs(K.Mpos.v) > 1e-9) pts.push({ x: K.Mpos.v, y: K.Mpos.z, t: "+M " + latFmt(K.Mpos.v, 1) + " kip·ft @ " + latFmt(K.Mpos.z, 1) + " ft", s: "+M " + latFmt(K.Mpos.v, 1), primary: absPos, col: C.accent });
++    if (Math.abs(K.Mneg.v) > 1e-9) pts.push({ x: K.Mneg.v, y: K.Mneg.z, t: "−M " + latFmt(K.Mneg.v, 1) + " kip·ft @ " + latFmt(K.Mneg.z, 1) + " ft", s: "−M " + latFmt(K.Mneg.v, 1), primary: !absPos, col: C.accent });
++    K.Mzeros.forEach(zz => pts.push({ x: 0, y: zz, t: "M = 0 @ " + latFmt(zz, 1) + " ft", col: "#5a6570", hoverOnly: true }));
+     K.cap.forEach((c, k) => {
+       if (!(c.v > 0) || !(c.z1 > c.z0)) return;
+-      if (ext(c.v)) [-1, 1].forEach(sg => vlines.push({ x: sg * c.v, z0: c.z0, z1: c.z1, name: c.short + " " + fmt(c.v, c.dp || 1) + " kip·ft", hov: c.lbl + " = " + fmt(c.v, c.dp || 1) + " kip·ft", col: "#b23b3b", dash: k ? "dot" : "dash", grp: "cap" + k }));
+-      else off.push(c.lbl + " = " + fmt(c.v, c.dp || 1) + " kip·ft (off scale)");
++      if (ext(c.v)) [-1, 1].forEach(sg => vlines.push({ x: sg * c.v, z0: c.z0, z1: c.z1, name: c.short + " " + latFmt(c.v, c.dp || 1) + " kip·ft", hov: c.lbl + " = " + latFmt(c.v, c.dp || 1) + " kip·ft", col: "#b23b3b", dash: k ? "dot" : "dash", grp: "cap" + k }));
++      else off.push({ t: c.short + " = " + latFmt(c.v, c.dp || 1) + " kip·ft → off scale", s: c.short.replace(/ .*/, "") + "→" });
+     });
+   } else {
+-    if (Math.abs(K.Vpos.v) > 1e-9) pts.push({ x: K.Vpos.v, y: K.Vpos.z, t: "+V " + fmt(K.Vpos.v, 2) + " kip @ " + fmt(K.Vpos.z, 1) + " ft", s: "+V " + fmt(K.Vpos.v, 1), primary: Math.abs(K.Vpos.v) >= Math.abs(K.Vneg.v), col: C.blueprint });
+-    if (Math.abs(K.Vneg.v) > 1e-9) pts.push({ x: K.Vneg.v, y: K.Vneg.z, t: "−V " + fmt(K.Vneg.v, 2) + " kip @ " + fmt(K.Vneg.z, 1) + " ft", s: "−V " + fmt(K.Vneg.v, 1), primary: Math.abs(K.Vneg.v) > Math.abs(K.Vpos.v), col: C.blueprint });
++    if (Math.abs(K.Vpos.v) > 1e-9) pts.push({ x: K.Vpos.v, y: K.Vpos.z, t: "+V " + latFmt(K.Vpos.v, 2) + " kip @ " + latFmt(K.Vpos.z, 1) + " ft", s: "+V " + latFmt(K.Vpos.v, 1), primary: Math.abs(K.Vpos.v) >= Math.abs(K.Vneg.v), col: C.blueprint });
++    if (Math.abs(K.Vneg.v) > 1e-9) pts.push({ x: K.Vneg.v, y: K.Vneg.z, t: "−V " + latFmt(K.Vneg.v, 2) + " kip @ " + latFmt(K.Vneg.z, 1) + " ft", s: "−V " + latFmt(K.Vneg.v, 1), primary: Math.abs(K.Vneg.v) > Math.abs(K.Vpos.v), col: C.blueprint });
+     if (K.Vcap && K.Vcap.v > 0) {
+-      if (ext(K.Vcap.v)) [-1, 1].forEach(sg => vlines.push({ x: sg * K.Vcap.v, z0: K.zTop, z1: K.zBot, name: "φVn " + fmt(K.Vcap.v, 1) + " kip", hov: K.Vcap.lbl + " = " + fmt(K.Vcap.v, 1) + " kip", col: "#b23b3b", dash: "dash", grp: "vcap" }));
+-      else off.push(K.Vcap.lbl + " = " + fmt(K.Vcap.v, 1) + " kip (off scale)");
++      if (ext(K.Vcap.v)) [-1, 1].forEach(sg => vlines.push({ x: sg * K.Vcap.v, z0: K.zTop, z1: K.zBot, name: "φVn " + latFmt(K.Vcap.v, 1) + " kip", hov: K.Vcap.lbl + " = " + latFmt(K.Vcap.v, 1) + " kip", col: "#b23b3b", dash: "dash", grp: "vcap" }));
++      else off.push({ t: "φVn = " + latFmt(K.Vcap.v, 1) + " kip → off scale", s: "φVn→" });
+     }
+@@ -10177,3 +10188,3 @@ function latOverlay(K, q, xa, ya, R, o) {
+   const hl = [];
+-  if (K.tip != null && K.tip > K.zTop && K.tip < K.zBot) hl.push({ z: K.tip, name: "casing tip " + fmt(K.tip, 1) + " ft", lbl: "casing tip " + fmt(K.tip, 1) + " ft below grade" + (K.Mtip != null ? "; M at tip " + fmt(K.Mtip, 1) + " kip·ft (Module 02)" : ""), col: "#14304a", dash: "longdash", grp: "tip", w: 1 });
++  if (K.tip != null && K.tip > K.zTop && K.tip < K.zBot) hl.push({ z: K.tip, name: "casing tip " + latFmt(K.tip, 1) + " ft", lbl: "casing tip " + latFmt(K.tip, 1) + " ft below grade" + (K.Mtip != null ? "; M at tip " + latFmt(K.Mtip, 1) + " kip·ft (Module 02)" : ""), col: "#14304a", dash: "longdash", grp: "tip", w: 1 });
+   K.fix.forEach(f => hl.push({ z: f.z, name: f.name, lbl: f.lbl, col: f.col, dash: f.dash, grp: f.k, w: f.primary ? 1.8 : 1.3, primary: f.primary }));
+@@ -10194,3 +10205,3 @@ function latOverlay(K, q, xa, ya, R, o) {
+     const L = lab.filter(p => (side > 0) === (p.x >= lo + 0.5 * span));
+-    latStack(L, 12 / o.pxFt, o.zLo + 7 / o.pxFt, o.zHi - 7 / o.pxFt).forEach(p => A.push(p.noMarker ? { xref: xa, yref: ya, x: p.x, y: p.ly, xanchor: "right", xshift: -16, showarrow: false,
++    latStack(L, 15 / o.pxFt, o.zLo + 8 / o.pxFt, o.zHi - (8 + 16 * off.length) / o.pxFt).forEach(p => A.push(p.noMarker ? { xref: xa, yref: ya, x: p.x, y: p.ly, xanchor: "right", xshift: -16, showarrow: false,
+       text: p.s || p.t, font: { size: fz, color: p.col, family: PLOT_FONT }, bgcolor: "rgba(255,255,255,0.75)" } : { xref: xa, yref: ya, x: p.x, y: p.y, axref: "pixel", ayref: "pixel",
+@@ -10199,3 +10210,5 @@ function latOverlay(K, q, xa, ya, R, o) {
+   });
+-  if (off.length && !o.narrow) A.push({ xref: xa + " domain", x: 0.02, xanchor: "left", yref: ya + " domain", y: 0.995, yanchor: "top", showarrow: false, align: "left", text: off.join("<br>"), font: { size: fz, color: "#b23b3b", family: PLOT_FONT }, bgcolor: "rgba(255,255,255,0.8)" });
++  // off-scale capacities / limits: arrows at the right edge of the panel, bottom up (also on a narrow card)
++  off.filter(n => !o.narrow || n.s).forEach((n, k) => A.push({ xref: xa + " domain", x: 1, yref: ya + " domain", y: 0.02 + k * 0.06, ax: -14, ay: 0, axref: "pixel", ayref: "pixel", showarrow: true, arrowhead: 2, arrowsize: 1, arrowwidth: 1.2, arrowcolor: "#b23b3b",
++    xanchor: "right", text: o.narrow ? n.s : n.t, font: { size: fz, color: "#b23b3b", family: PLOT_FONT }, bgcolor: "rgba(255,255,255,0.85)" }));
+   return { traces: T, anns: A, range: [lo, hi], off };
+@@ -10224,18 +10237,18 @@ function latKeysF1(K) {
+   if (!K) return [];
+-  const f1 = v => fmt(v, 1), lst = a => a.length ? a.map(f1).join(", ") + " ft" : "none";
++  const f1 = v => latFmt(v, 1), lst = a => a.length ? a.map(f1).join(", ") + " ft" : "none";
+   const L = K.svc.lim;
+   return [
+-    ["Head deflection y₀", fmt(K.y0, 3) + " in"],
+-    ["Max / min deflection", fmt(K.yMax.v, 3) + " in @ " + f1(K.yMax.z) + " ft / " + fmt(K.yMin.v, 3) + " in @ " + f1(K.yMin.z) + " ft"],
++    ["Head deflection y₀", latFmt(K.y0, 3) + " in"],
++    ["Max / min deflection", latFmt(K.yMax.v, 3) + " in @ " + f1(K.yMax.z) + " ft / " + latFmt(K.yMin.v, 3) + " in @ " + f1(K.yMin.z) + " ft"],
+     ["First zero deflection", K.yZero != null ? f1(K.yZero) + " ft" : "none"],
+-    ["Toe deflection", fmt(K.yToe, 4) + " in"],
+-    ["Service deflection limit", "±" + fmt(L, 2) + " in" + (K.svc.active ? (K.svc.ok ? " — OK (active case is a service case)" : " — NG (active case is a service case)") : " (active case is not a service case)")],
+-    ["+M max", fmt(K.Mpos.v, 1) + " kip·ft @ " + f1(K.Mpos.z) + " ft"],
+-    ["−M min", fmt(K.Mneg.v, 1) + " kip·ft @ " + f1(K.Mneg.z) + " ft"],
+-    ["|M|max (Module 02)", fmt(K.Mmax, 1) + " kip·ft @ " + f1(K.zMmax) + " ft"],
++    ["Toe deflection", latFmt(K.yToe, 3) + " in"],
++    ["Service deflection limit", "±" + latFmt(L, 2) + " in" + (K.svc.active ? (K.svc.ok ? " — OK (active case is a service case)" : " — NG (active case is a service case)") : " (active case is not a service case)")],
++    ["+M max", latFmt(K.Mpos.v, 1) + " kip·ft @ " + f1(K.Mpos.z) + " ft"],
++    ["−M min", latFmt(K.Mneg.v, 1) + " kip·ft @ " + f1(K.Mneg.z) + " ft"],
++    ["|M|max (Module 02)", latFmt(K.Mmax, 1) + " kip·ft @ " + f1(K.zMmax) + " ft"],
+     ["Zero moment (embedded)", lst(K.Mzeros)],
+-    ...K.cap.map(c => [c.lbl, fmt(c.v, c.dp || 1) + " kip·ft (" + f1(c.z0) + " to " + f1(c.z1) + " ft)"]),
+-    K.tip != null ? ["Casing tip", f1(K.tip) + " ft; M at tip " + fmt(K.Mtip, 1) + " kip·ft"] : null,
+-    ["+V max / −V min", fmt(K.Vpos.v, 2) + " kip @ " + f1(K.Vpos.z) + " ft / " + fmt(K.Vneg.v, 2) + " kip @ " + f1(K.Vneg.z) + " ft"],
+-    K.Vcap ? [K.Vcap.lbl, fmt(K.Vcap.v, 1) + " kip"] : null,
++    ...K.cap.map(c => [c.lbl, latFmt(c.v, c.dp || 1) + " kip·ft (" + f1(c.z0) + " to " + f1(c.z1) + " ft)"]),
++    K.tip != null ? ["Casing tip", f1(K.tip) + " ft; M at tip " + latFmt(K.Mtip, 1) + " kip·ft"] : null,
++    ["+V max / −V min", latFmt(K.Vpos.v, 2) + " kip @ " + f1(K.Vpos.z) + " ft / " + latFmt(K.Vneg.v, 2) + " kip @ " + f1(K.Vneg.z) + " ft"],
++    K.Vcap ? [K.Vcap.lbl, latFmt(K.Vcap.v, 1) + " kip"] : null,
+     ...latKeysFix(K)
+@@ -10256,3 +10269,3 @@ function latCaseKeys(caseRes) {
+   withP.forEach((r0, i) => { if (r0.Mmax != null && (gov < 0 || r0.Mmax > withP[gov].Mmax)) gov = i; });
+-  const items = withP.map((r0, i) => [r0.name + (i === gov ? " (governs)" : ""), r0.Mmax != null ? fmt(r0.Mmax, 1) + " kip·ft @ " + fmt(peak[i].d, 1) + " ft" : "—"]);
++  const items = withP.map((r0, i) => [r0.name + (i === gov ? " (governs)" : ""), r0.Mmax != null ? latFmt(r0.Mmax, 1) + " kip·ft @ " + latFmt(peak[i].d, 1) + " ft" : "—"]);
+   const noP = rr.filter(r0 => !r0.prof);
+@@ -10323,3 +10336,3 @@ function ElevationPlot({ I, pyRes, height = 340, print, narrow, kv }) {
+   const hw = G.wMax / 2, capHalf = 1.1 * G.wMax;
+-  const Nt = fmt(N, N % 1 ? 1 : 0);
++  const Nt = latFmt(N, N % 1 ? 1 : 0);
+   const fz = 9;
+@@ -10334,3 +10347,3 @@ function ElevationPlot({ I, pyRes, height = 340, print, narrow, kv }) {
+     anns.push({ xref: "paper", x: 0.995, xanchor: "right", y: (t0 + Math.min(bot, yBot)) / 2, yref: "y", showarrow: false,
+-      text: (ly.type === "sand" ? "sand φ=" + fmt(ly.phi == null ? 32 : ly.phi, 0) + "°" : ly.type === "weakrock" ? "weak rock" : (ly.type === "stiffclay" ? "stiff clay" : "soft clay") + " su=" + fmt(ly.su == null ? 1000 : ly.su, 0)),
++      text: (ly.type === "sand" ? "sand φ=" + latFmt(ly.phi == null ? 32 : ly.phi, 0) + "°" : ly.type === "weakrock" ? "weak rock" : (ly.type === "stiffclay" ? "stiff clay" : "soft clay") + " su=" + latFmt(ly.su == null ? 1000 : ly.su, 0)),
+       font: { size: fz, color: "#7a7355", family: PLOT_FONT } });
+@@ -10357,4 +10370,4 @@ function ElevationPlot({ I, pyRes, height = 340, print, narrow, kv }) {
+     if (embedFt > 0) R(-w2, w2, topPile, headY, "rgba(201,98,46,0.30)", { color: C.accent, width: 1.2 });
+-    lab.push({ x: w2, y: (Math.max(headY, 0) + toe) / 2, t: "HP " + fmt(hp.d, 2) + "×" + fmt(hp.bf, 2) + " (" + (hp.weak ? "weak" : "strong") + " axis): width " + (hp.weak ? "b_f" : "d") + " = " + fmt(hp.w, 2) + " in", c: "#14304a" });
+-    lab.push({ x: w2, y: toe, t: "toe " + fmt(toe, 1) + " ft" + (narrow ? "" : " (embedded length)"), c: "#14304a", key: true });
++    lab.push({ x: w2, y: (Math.max(headY, 0) + toe) / 2, t: "HP " + latFmt(hp.d, 2) + "×" + latFmt(hp.bf, 2) + " (" + (hp.weak ? "weak" : "strong") + " axis): width " + (hp.weak ? "b_f" : "d") + " = " + latFmt(hp.w, 2) + " in", c: "#14304a" });
++    lab.push({ x: w2, y: toe, t: "toe " + latFmt(toe, 1) + " ft" + (narrow ? "" : " (embedded length)"), c: "#14304a", key: true });
+   } else {
+@@ -10368,16 +10381,16 @@ function ElevationPlot({ I, pyRes, height = 340, print, narrow, kv }) {
+     if (embedFt > 0) R(-od2, od2, topPile, headY, "rgba(0,0,0,0)", { color: C.accent, width: 1.2 });
+-    lab.push({ x: od2, y: (Math.max(headY, 0) + Math.min(G.tob, G.tip)) / 2, t: "casing OD " + fmt(G.OD, 3) + " in" + (G.corr > 0 ? " (corroded " + fmt(G.ODr, 3) + ", dotted)" : ""), c: "#14304a" });
+-    lab.push({ x: Math.max(od2, dh2), y: G.tob, t: "top of bond " + fmt(G.tob, 1) + " ft", c: "#c9622e", key: true });
+-    if (G.tip > G.tob + 0.01) lab.push({ x: hw + 0.15 * G.wMax, y: (G.tob + G.tip) / 2, t: "plunge " + fmt(G.tip - G.tob, 1) + " ft", c: "#c9622e" });
+-    lab.push({ x: od2, y: G.tip, t: "casing tip " + fmt(G.tip, 1) + " ft", c: "#14304a", key: true });
+-    lab.push({ x: dh2, y: (G.tip + toe) / 2, t: "bond hole d_h " + fmt(G.dh, 3) + " in", c: "#5a6570" });
+-    if (b2 > 0) lab.push({ x: b2, y: G.tip + 0.8 * (toe - G.tip), t: "bar Ø " + fmt(G.bar, 2) + " in (equiv. of A_b " + fmt(I.Ab, 2) + " in²)", c: "#c9622e" });
+-    lab.push({ x: dh2, y: toe, t: "toe " + fmt(toe, 1) + " ft", c: "#14304a", key: true });
++    lab.push({ x: od2, y: (Math.max(headY, 0) + Math.min(G.tob, G.tip)) / 2, t: "casing OD " + latFmt(G.OD, 3) + " in" + (G.corr > 0 ? " (corr. " + latFmt(G.ODr, 3) + ", dotted)" : ""), c: "#14304a" });
++    lab.push({ x: Math.max(od2, dh2), y: G.tob, t: "top of bond " + latFmt(G.tob, 1) + " ft", c: "#c9622e", key: true });
++    if (G.tip > G.tob + 0.01) lab.push({ x: hw + 0.15 * G.wMax, y: (G.tob + G.tip) / 2, t: "plunge " + latFmt(G.tip - G.tob, 1) + " ft", c: "#c9622e" });
++    lab.push({ x: od2, y: G.tip, t: "casing tip " + latFmt(G.tip, 1) + " ft", c: "#14304a", key: true });
++    lab.push({ x: dh2, y: (G.tip + toe) / 2, t: "bond hole d_h " + latFmt(G.dh, 3) + " in", c: "#5a6570" });
++    if (b2 > 0) lab.push({ x: b2, y: G.tip + 0.8 * (toe - G.tip), t: "bar Ø " + latFmt(G.bar, 2) + " in (equiv. of A_b " + latFmt(I.Ab, 2) + " in²)", c: "#c9622e" });
++    lab.push({ x: dh2, y: toe, t: "toe " + latFmt(toe, 1) + " ft", c: "#14304a", key: true });
+   }
+-  if (embedFt > 0) lab.push({ x: G.wHead / 2, y: (topPile + headY) / 2, t: "embed " + fmt(G.embedIn, 1) + " in", c: "#c9622e" });
+-  if (Math.abs(s) > 0.01) lab.push({ x: G.wHead / 2, y: headY / 2, t: (s > 0 ? "stickup " : "head below grade ") + fmt(Math.abs(s), 1) + " ft", c: "#8a5a1f" });
++  if (embedFt > 0) lab.push({ x: G.wHead / 2, y: (topPile + headY) / 2, t: "embed " + latFmt(G.embedIn, 1) + " in", c: "#c9622e" });
++  if (Math.abs(s) > 0.01) lab.push({ x: G.wHead / 2, y: headY / 2, t: (s > 0 ? "stickup " : "head below grade ") + latFmt(Math.abs(s), 1) + " ft", c: "#8a5a1f" });
+   // F26 b: dimension lines left of the pile (not on a narrow card; all in the hover and the key strip)
+   const dims = isHP
+-    ? [{ a: 0, b: toe, t: "embedded length " + fmt(toe, 1) + " ft" }, { a: headY, b: toe, t: "total length " + fmt(toe - headY, 1) + " ft" }]
+-    : [{ a: headY, b: G.tip, t: "L_cased " + fmt(G.tip - headY, 1) + " ft" }, { a: G.tob, b: toe, t: "L_bond " + fmt(toe - G.tob, 1) + " ft" }, { a: headY, b: toe, t: "total length " + fmt(toe - headY, 1) + " ft" }];
++    ? [{ a: 0, b: toe, t: "embedded length " + latFmt(toe, 1) + " ft" }, { a: headY, b: toe, t: "total length " + latFmt(toe - headY, 1) + " ft" }]
++    : [{ a: headY, b: G.tip, t: "L_cased " + latFmt(G.tip - headY, 1) + " ft" }, { a: G.tob, b: toe, t: "L_bond " + latFmt(toe - G.tob, 1) + " ft" }, { a: headY, b: toe, t: "total length " + latFmt(toe - headY, 1) + " ft" }];
+   let xLeft = -1.5 * G.wMax;
+@@ -10392,5 +10405,5 @@ function ElevationPlot({ I, pyRes, height = 340, print, narrow, kv }) {
+   // screen only the key depths are labelled (every label stays in the hover)
+-  const shown = elevStack(lab.filter(L => !narrow || L.key), 12 / pxFt, yTop + 6 / pxFt, yBot - 6 / pxFt);
++  const shown = elevStack(lab.filter(L => !narrow || L.key), 20 / pxFt, yTop + 10 / pxFt, yBot - 10 / pxFt);
+   shown.forEach(L => anns.push({ xref: "x", yref: "y", x: L.x, y: L.y, axref: "pixel", ayref: "pixel",
+-    ax: (capHalf - L.x) * pxIn + 8, ay: (L.ly - L.y) * pxFt, xanchor: "left", showarrow: true, arrowhead: 0, arrowwidth: 0.8, arrowcolor: "#94a3b8",
++    ax: (capHalf - L.x) * pxIn + 18, ay: (L.ly - L.y) * pxFt, xanchor: "left", showarrow: true, arrowhead: 0, arrowwidth: 0.8, arrowcolor: "#94a3b8", bgcolor: "rgba(255,255,255,0.7)",
+     text: L.t, font: { size: fz, color: L.c, family: PLOT_FONT }, standoff: 0, startstandoff: 0 }));
+@@ -10405,3 +10418,3 @@ function ElevationPlot({ I, pyRes, height = 340, print, narrow, kv }) {
+   if (Math.abs(lat) > 0.01) ld.push("<span style='color:#2f6f3e'>V = " + fmt(lat, 1) + " kip</span>");
+-  if (Math.abs(mhd) > 0.01) ld.push("<span style='color:#3d6a94'>↻ M = " + fmt(mhd, 1) + " kip·ft</span>");
++  if (Math.abs(mhd) > 0.01) ld.push("<span style='color:#3d6a94'>↻ M = " + latFmt(mhd, 1) + " kip·ft</span>");
+   if (ld.length) anns.push({ xref: "x", x: capHalf, xshift: 6, xanchor: "left", yref: "y", y: capTop, yanchor: "bottom", yshift: 2,
+@@ -10422,4 +10435,4 @@ function ElevationPlot({ I, pyRes, height = 340, print, narrow, kv }) {
+     { x: mom.map(r2 => r2.m), y: mom.map(r2 => r2.d), xaxis: "x2", yaxis: "y", mode: "lines", line: { color: C.blueprint2, width: 2 }, name: "M(z)",
+-      hoverinfo: "text", text: mom.map(r2 => fmt(r2.d, 1) + " ft: M = " + fmt(r2.m, 1) + " kip·ft") },
+-    { x: [mom[iM].m], y: [mom[iM].d], xaxis: "x2", yaxis: "y", cliponaxis: false, mode: "markers+text", marker: { color: "#b23b3b", size: 8 }, text: ["Mmax " + fmt(Math.abs(mom[iM].m), 1)], textposition: narrow ? (mom[iM].m < 0 ? "top right" : "top left") : mom[iM].m < 0 ? "middle left" : "middle right", textfont: { size: fz, family: PLOT_FONT, color: "#b23b3b" }, hoverinfo: "skip", showlegend: false },
++      hoverinfo: "text", text: mom.map(r2 => latFmt(r2.d, 1) + " ft: M = " + latFmt(r2.m, 1) + " kip·ft") },
++    { x: [mom[iM].m], y: [mom[iM].d], xaxis: "x2", yaxis: "y", cliponaxis: false, mode: "markers+text", marker: { color: "#b23b3b", size: 8 }, text: ["Mmax " + latFmt(Math.abs(mom[iM].m), 1)], textposition: narrow ? (mom[iM].m < 0 ? "top right" : "top left") : mom[iM].m < 0 ? "middle left" : "middle right", textfont: { size: fz, family: PLOT_FONT, color: "#b23b3b" }, hoverinfo: "skip", showlegend: false },
+     // hover points on the pile drawing (every label, also those hidden on a narrow screen)
+@@ -10441,7 +10454,7 @@ function ElevationPlot({ I, pyRes, height = 340, print, narrow, kv }) {
+     ["Horizontal scale", "\u00d7" + Nt + " (widths drawn " + Nt + "\u00d7 the depth scale)"],
+-    Math.abs(s) > 0.01 ? [s > 0 ? "Stickup" : "Head below grade", fmt(Math.abs(s), 1) + " ft"] : null,
+-    ...dims.map(d => [d.t.replace(/ [\d.\-]+ ft$/, ""), fmt(d.b - d.a, 1) + " ft (" + fmt(d.a, 1) + " to " + fmt(d.b, 1) + " ft)"]),
+-    isHP ? ["Section width drawn", (G.hp.weak ? "b_f " : "d ") + fmt(G.hp.w, 2) + " in (" + (G.hp.weak ? "weak" : "strong") + " axis)"] : ["Plunge", fmt(G.tip - G.tob, 1) + " ft (" + fmt(G.tob, 1) + " to " + fmt(G.tip, 1) + " ft)"],
+-    isHP ? null : ["Casing OD / hole d_h / bar", fmt(G.OD, 3) + " / " + fmt(G.dh, 3) + " / " + fmt(G.bar, 2) + " in"],
+-    G.embedIn > 0 ? ["Cap embedment", fmt(G.embedIn, 1) + " in"] : null,
++    Math.abs(s) > 0.01 ? [s > 0 ? "Stickup" : "Head below grade", latFmt(Math.abs(s), 1) + " ft"] : null,
++    ...dims.map(d => [d.t.replace(/ [\d.\-]+ ft$/, ""), latFmt(d.b - d.a, 1) + " ft (" + latFmt(d.a, 1) + " to " + latFmt(d.b, 1) + " ft)"]),
++    isHP ? ["Section width drawn", (G.hp.weak ? "b_f " : "d ") + latFmt(G.hp.w, 2) + " in (" + (G.hp.weak ? "weak" : "strong") + " axis)"] : ["Plunge", latFmt(G.tip - G.tob, 1) + " ft (" + latFmt(G.tob, 1) + " to " + latFmt(G.tip, 1) + " ft)"],
++    isHP ? null : ["Casing OD / hole d_h / bar", latFmt(G.OD, 3) + " / " + latFmt(G.dh, 3) + " / " + latFmt(G.bar, 2) + " in"],
++    G.embedIn > 0 ? ["Cap embedment", latFmt(G.embedIn, 1) + " in"] : null,
+     ...latKeysFix(kv)] : null;
+@@ -16824,5 +16837,7 @@ function LatProfileOne({ records, which, stickFt, height, deflWarn, kv, narrow }
+       data: [{ x: v, y: z, mode: "lines", fill: "tozerox", fillcolor: fill, line: { color: col, width: 2.5 }, name: nm, showlegend: false,
+-        hovertemplate: "depth %{y:.2f} ft below grade<br>" + nm + " = %{x:." + dp + "f} " + unit + "<extra></extra>" }, ...O.traces],
++        hovertemplate: "depth %{y:.2f} ft below grade<br>" + nm + " = %{x:." + dp + "f} " + unit + "<extra></extra>" }, ...O.traces,
++        ...(dwX.length ? [{ x: [null], y: [null], mode: "lines", line: { color: "#b7791f", width: 1.5, dash: "dot" }, hoverinfo: "skip",
++          name: "±" + latFmt(deflWarn.f, 2) + " × D = ±" + latFmt(deflWarn.lim, 2) + " in" + (narrow ? " (warning)" : " (large-deflection warning)") }] : [])],
+       layout: latLayout({ height, margin: { l: 58, r: 14, t: 10, b: mb }, showlegend: true, legend: { orientation: "h", x: 0, y: -48 / plotH, yanchor: "top", entrywidth: narrow ? 1 : 0.33, entrywidthmode: "fraction", font: { size: 9, family: PLOT_FONT } },
+-        shapes, annotations: anns.concat(O.anns),
++        shapes, annotations: anns.filter(a => a.textangle !== -90).concat(O.anns),   // F26: the warning label is in the legend
+         xaxis: latAx(nm + " (" + unit + ")", { range: O.range }),
+@@ -16993,7 +17008,7 @@ function LatGraphsCard({ I, set, pyRes, solved, activeLayers, pyDepths, setPyDep
+           return { x: r0.prof.m, y: r0.prof.d, mode: "lines", line: { color: cols[i % 6], width: gov ? 3.4 : 1.6 }, opacity: gov || ck.gov < 0 ? 1 : 0.8,
+-            name: r0.name + (r0.Mmax != null ? " \u00b7 Mmax " + fmt(r0.Mmax, 1) + " @ " + fmt(pk.d, 1) + " ft" : "") + (gov ? " (governs)" : ""),
+-            hovertemplate: r0.name.replace(/%/g, "%%") + (r0.Mmax != null ? " (Mmax " + fmt(r0.Mmax, 1) + " kip·ft @ " + fmt(pk.d, 1) + " ft)" : "") + "<br>depth %{y:.2f} ft below grade<br>M = %{x:.1f} kip·ft<extra></extra>" };
++            name: r0.name + (r0.Mmax != null ? " \u00b7 Mmax " + latFmt(r0.Mmax, 1) + " @ " + latFmt(pk.d, 1) + " ft" : "") + (gov ? " (governs)" : ""),
++            hovertemplate: r0.name.replace(/%/g, "%%") + (r0.Mmax != null ? " (Mmax " + latFmt(r0.Mmax, 1) + " kip·ft @ " + latFmt(pk.d, 1) + " ft)" : "") + "<br>depth %{y:.2f} ft below grade<br>M = %{x:.1f} kip·ft<extra></extra>" };
+         }).concat(ck.gov >= 0 ? [{ x: [ck.peak[ck.gov].m], y: [ck.peak[ck.gov].d], mode: "markers+text", cliponaxis: false, marker: { color: "#b23b3b", size: 10, symbol: "diamond" },
+-          text: ["envelope max " + fmt(withP[ck.gov].Mmax, 1) + " kip·ft"], textposition: ck.peak[ck.gov].m < 0 ? "top right" : "top left", textfont: { size: 10, family: PLOT_FONT, color: "#b23b3b" },
+-          name: "envelope max", showlegend: false, hovertemplate: "envelope max |M| = " + fmt(withP[ck.gov].Mmax, 1) + " kip·ft<br>" + withP[ck.gov].name.replace(/%/g, "%%") + " @ " + fmt(ck.peak[ck.gov].d, 1) + " ft<extra></extra>" }] : []),
++          text: ["envelope max " + latFmt(withP[ck.gov].Mmax, 1) + " kip·ft"], textposition: ck.peak[ck.gov].m < 0 ? "top right" : "top left", textfont: { size: 10, family: PLOT_FONT, color: "#b23b3b" },
++          name: "envelope max", showlegend: false, hovertemplate: "envelope max |M| = " + latFmt(withP[ck.gov].Mmax, 1) + " kip·ft<br>" + withP[ck.gov].name.replace(/%/g, "%%") + " @ " + latFmt(ck.peak[ck.gov].d, 1) + " ft<extra></extra>" }] : []),
+         layout: latLayout({ height: H, ...latGradeLine(), showlegend: true, legend: { orientation: "h", x: 0, y: -0.14, yanchor: "top", entrywidth: narrow ? 1 : 0.5, entrywidthmode: "fraction", font: { size: 10, family: PLOT_FONT } },
+@@ -17050,5 +17065,5 @@ function LatGraphsCard({ I, set, pyRes, solved, activeLayers, pyDepths, setPyDep
+     const soilKeys = [
+-      n > 2 ? ["max |p|", fmt(pv[ip], 1) + " lb/in @ " + fmt(dBG[ip], 1) + " ft"] : null,
+-      mob.length ? ["Peak mobilisation p/p\u1d64", fmt(mob[im].r * 100, 0) + "% @ " + fmt(mob[im].d, 1) + " ft"] : null,
+-      ["Layer boundaries", bnd.length ? bnd.map(d => fmt(d, 1)).join(", ") + " ft" : "none (one layer)"],
++      n > 2 ? ["max |p|", latFmt(pv[ip], 1) + " lb/in @ " + latFmt(dBG[ip], 1) + " ft"] : null,
++      mob.length ? ["Peak mobilisation p/p\u1d64", latFmt(mob[im].r * 100, 0) + "% @ " + latFmt(mob[im].d, 1) + " ft"] : null,
++      ["Layer boundaries", bnd.length ? bnd.map(d => latFmt(d, 1)).join(", ") + " ft" : "none (one layer)"],
+       ...latKeysFix(K)];
+@@ -17061,4 +17076,4 @@ function LatGraphsCard({ I, set, pyRes, solved, activeLayers, pyDepths, setPyDep
+             hovertemplate: "depth %{y:.2f} ft below grade<br>p = %{x:.1f} lb/in<extra></extra>" },
+-            { x: [pv[ip]], y: [dBG[ip]], mode: "markers+text", cliponaxis: false, marker: { color: "#b23b3b", size: 8 }, text: ["max |p| " + fmt(Math.abs(pv[ip]), 1) + " lb/in @ " + fmt(dBG[ip], 1) + " ft"], textposition: pv[ip] < 0 ? "top right" : "top left",
+-              textfont: { size: 10, family: PLOT_FONT, color: "#b23b3b" }, showlegend: false, hovertemplate: "max |p| = " + fmt(Math.abs(pv[ip]), 1) + " lb/in @ " + fmt(dBG[ip], 1) + " ft<extra></extra>" },
++            { x: [pv[ip]], y: [dBG[ip]], mode: "markers+text", cliponaxis: false, marker: { color: "#b23b3b", size: 8 }, text: ["max |p| " + latFmt(Math.abs(pv[ip]), 1) + " lb/in @ " + latFmt(dBG[ip], 1) + " ft"], textposition: pv[ip] < 0 ? "top right" : "top left",
++              textfont: { size: 10, family: PLOT_FONT, color: "#b23b3b" }, showlegend: false, hovertemplate: "max |p| = " + latFmt(Math.abs(pv[ip]), 1) + " lb/in @ " + latFmt(dBG[ip], 1) + " ft<extra></extra>" },
+             ...fixTr(pR), ...bndTr],
+@@ -17071,4 +17086,4 @@ function LatGraphsCard({ I, set, pyRes, solved, activeLayers, pyDepths, setPyDep
+           data: [{ x: pyRes.mobil.map(m2 => m2.r * 100), y: pyRes.mobil.map(m2 => m2.d), mode: "lines", fill: "tozerox", fillcolor: "rgba(201,98,46,0.15)", line: { color: C.accent, width: 2 },
+-            hoverinfo: "text", text: pyRes.mobil.map(m2 => fmt(m2.d, 1) + " ft below grade: " + fmt(m2.r * 100, 0) + "% of ultimate") },
+-            { x: [mob[im].r * 100], y: [mob[im].d], mode: "markers+text", cliponaxis: false, marker: { color: "#b23b3b", size: 8 }, text: ["peak " + fmt(mob[im].r * 100, 0) + "% @ " + fmt(mob[im].d, 1) + " ft"], textposition: mob[im].r > 0.6 ? "bottom left" : "bottom right",
++            hoverinfo: "text", text: pyRes.mobil.map(m2 => latFmt(m2.d, 1) + " ft below grade: " + latFmt(m2.r * 100, 0) + "% of ultimate") },
++            { x: [mob[im].r * 100], y: [mob[im].d], mode: "markers+text", cliponaxis: false, marker: { color: "#b23b3b", size: 8 }, text: ["peak " + latFmt(mob[im].r * 100, 0) + "% @ " + latFmt(mob[im].d, 1) + " ft"], textposition: mob[im].r > 0.6 ? "bottom left" : "bottom right",
+               textfont: { size: 10, family: PLOT_FONT, color: "#b23b3b" }, hoverinfo: "skip" }],
+@@ -17094,6 +17109,6 @@ function LatGraphsCard({ I, set, pyRes, solved, activeLayers, pyDepths, setPyDep
+           data: [{ x: [0, ...pyRes.sweep.map(s => s.y0)], y: [0, ...pyRes.sweep.map(s => s.P)], mode: "lines+markers", line: { color: C.blueprint2, width: 2 }, marker: { size: 5 },
+-            hoverinfo: "text", text: ["origin", ...pyRes.sweep.map(s => "P=" + fmt(s.P, 1) + " kip<br>y₀=" + fmt(s.y0, 3) + " in<br>Mmax=" + fmt(s.M, 1) + " kip·ft")] },
++            hoverinfo: "text", text: ["origin", ...pyRes.sweep.map(s => "P=" + latFmt(s.P, 1) + " kip<br>y₀=" + latFmt(s.y0, 3) + " in<br>Mmax=" + latFmt(s.M, 1) + " kip·ft")] },
+             // F26 b: the design point of the active case (Module 02 head deflection, lateral load)
+             { x: [pyRes.headDefl_in], y: [I.Plat], mode: "markers+text", cliponaxis: false, marker: { color: "#b23b3b", size: 10, symbol: "diamond" }, text: ["design point  "], textposition: "middle left",
+-              textfont: { size: 10, family: PLOT_FONT, color: "#b23b3b" }, hovertemplate: "design point (active case)<br>P = " + fmt(I.Plat, 1) + " kip<br>y₀ = " + fmt(pyRes.headDefl_in, 3) + " in<extra></extra>" }],
++              textfont: { size: 10, family: PLOT_FONT, color: "#b23b3b" }, hovertemplate: "design point (active case)<br>P = " + latFmt(I.Plat, 1) + " kip<br>y₀ = " + latFmt(pyRes.headDefl_in, 3) + " in<extra></extra>" }],
+           layout: latLayout({ height: SH, showlegend: false,
+@@ -17112,3 +17127,3 @@ function LatGraphsCard({ I, set, pyRes, solved, activeLayers, pyDepths, setPyDep
+             ...(pyRes.Mcr_kft != null ? [{ x: [pyRes.mphi.phis[0], pyRes.mphi.phis[pyRes.mphi.phis.length - 1]], y: [pyRes.Mcr_kft, pyRes.Mcr_kft], mode: "lines", line: { color: "#8a5a1f", width: 1, dash: "dot" }, name: "Mcr", hoverinfo: "skip" }] : []),
+-            ...(r && r.flex && I.pileType !== "hpile" ? [{ x: [pyRes.mphi.phis[0], pyRes.mphi.phis[pyRes.mphi.phis.length - 1]], y: [r.flex.phiMn, r.flex.phiMn], mode: "lines", line: { color: "#b23b3b", width: 1.3, dash: "dash" }, name: "φMn cased " + fmt(r.flex.phiMn, 1), hovertemplate: "φM_n cased (Module 04) = " + fmt(r.flex.phiMn, 1) + " kip·ft<extra></extra>" }] : []),
++            ...(r && r.flex && I.pileType !== "hpile" ? [{ x: [pyRes.mphi.phis[0], pyRes.mphi.phis[pyRes.mphi.phis.length - 1]], y: [r.flex.phiMn, r.flex.phiMn], mode: "lines", line: { color: "#b23b3b", width: 1.3, dash: "dash" }, name: "φMn cased " + latFmt(r.flex.phiMn, 1), hovertemplate: "φM_n cased (Module 04) = " + latFmt(r.flex.phiMn, 1) + " kip·ft<extra></extra>" }] : []),
+             (() => {
+@@ -17147,3 +17162,3 @@ function LatGraphsCard({ I, set, pyRes, solved, activeLayers, pyDepths, setPyDep
+             ...(pyRes.Mcr_kft_u != null ? [{ x: [pyRes.mphi.phisU[0], pyRes.mphi.phisU[pyRes.mphi.phisU.length - 1]], y: [pyRes.Mcr_kft_u, pyRes.Mcr_kft_u], mode: "lines", line: { color: "#8a5a1f", width: 1, dash: "dot" }, name: "Mcr", hoverinfo: "skip" }] : []),
+-            ...(r && r.geoChecks && I.pileType !== "hpile" ? [{ x: [pyRes.mphi.phisU[0], pyRes.mphi.phisU[pyRes.mphi.phisU.length - 1]], y: [r.geoChecks.phiMn_uncased, r.geoChecks.phiMn_uncased], mode: "lines", line: { color: "#b23b3b", width: 1.3, dash: "dash" }, name: "φMn uncased " + fmt(r.geoChecks.phiMn_uncased, 2), hovertemplate: "φM_n uncased (Module G) = " + fmt(r.geoChecks.phiMn_uncased, 2) + " kip·ft<extra></extra>" }] : []),
++            ...(r && r.geoChecks && I.pileType !== "hpile" ? [{ x: [pyRes.mphi.phisU[0], pyRes.mphi.phisU[pyRes.mphi.phisU.length - 1]], y: [r.geoChecks.phiMn_uncased, r.geoChecks.phiMn_uncased], mode: "lines", line: { color: "#b23b3b", width: 1.3, dash: "dash" }, name: "φMn uncased " + latFmt(r.geoChecks.phiMn_uncased, 2), hovertemplate: "φM_n uncased (Module G) = " + latFmt(r.geoChecks.phiMn_uncased, 2) + " kip·ft<extra></extra>" }] : []),
+             ...(pyRes.Mtip_kft != null ? [(() => {
+@@ -17191,3 +17206,3 @@ function LatGraphsCard({ I, set, pyRes, solved, activeLayers, pyDepths, setPyDep
+             hoverinfo: "text", text: pyRes.eiProf.map((p2, i2) => fmt(eiD(p2, i2), 1) + " ft below grade: EI = " + fmt(p2.EI / 1e6, 2) + "×10⁶ kip·in²") }],
+-          layout: latLayout({ height: SH, ...(() => { const g = latGradeLine(); if (K && K.tip != null) { g.shapes = g.shapes.concat([{ type: "line", xref: "paper", x0: 0, x1: 1, yref: "y", y0: K.tip, y1: K.tip, line: { color: "#14304a", width: 1, dash: "longdash" } }]); g.annotations = g.annotations.concat([{ xref: "paper", x: 0.99, xanchor: "right", yref: "y", y: K.tip, yanchor: "bottom", showarrow: false, text: "casing tip " + fmt(K.tip, 1) + " ft", font: { size: 10, color: "#14304a", family: PLOT_FONT } }]); } return g; })(), showlegend: false,
++          layout: latLayout({ height: SH, ...(() => { const g = latGradeLine(); if (K && K.tip != null) { g.shapes = g.shapes.concat([{ type: "line", xref: "paper", x0: 0, x1: 1, yref: "y", y0: K.tip, y1: K.tip, line: { color: "#14304a", width: 1, dash: "longdash" } }]); g.annotations = g.annotations.concat([{ xref: "paper", x: 0.99, xanchor: "right", yref: "y", y: K.tip, yanchor: "bottom", showarrow: false, text: "casing tip " + latFmt(K.tip, 1) + " ft", font: { size: 10, color: "#14304a", family: PLOT_FONT } }]); } return g; })(), showlegend: false,
+             xaxis: latAx("EI (×10⁶ kip·in²)", { rangemode: "tozero" }),
+@@ -17197,8 +17212,8 @@ function LatGraphsCard({ I, set, pyRes, solved, activeLayers, pyDepths, setPyDep
+       e(LatKeys, { title: "Key values (active case)", items: [
+-        ["Design point (active case)", "P = " + fmt(I.Plat, 1) + " kip, y\u2080 = " + fmt(pyRes.headDefl_in, 3) + " in"],
+-        ["|M|max (Module 02)", fmt(pyRes.Mmax_kft, 1) + " kip·ft @ " + fmt(pyRes.zMmax, 1) + " ft"],
+-        pyRes.Mcr_kft != null ? ["M_cr cased (M-φ knee)", fmt(pyRes.Mcr_kft, 1) + " kip·ft"] : null,
+-        pyRes.Mcr_kft_u != null ? ["M_cr uncased (M-φ knee)", fmt(pyRes.Mcr_kft_u, 1) + " kip·ft"] : null,
+-        ...(K ? K.cap.map(c => [c.lbl, fmt(c.v, c.dp || 1) + " kip·ft"]) : []),
+-        K && K.tip != null ? ["Casing tip", fmt(K.tip, 1) + " ft; M at tip " + fmt(K.Mtip, 1) + " kip·ft"] : null,
++        ["Design point (active case)", "P = " + latFmt(I.Plat, 1) + " kip, y\u2080 = " + latFmt(pyRes.headDefl_in, 3) + " in"],
++        ["|M|max (Module 02)", latFmt(pyRes.Mmax_kft, 1) + " kip·ft @ " + latFmt(pyRes.zMmax, 1) + " ft"],
++        pyRes.Mcr_kft != null ? ["M_cr cased (M-φ knee)", latFmt(pyRes.Mcr_kft, 1) + " kip·ft"] : null,
++        pyRes.Mcr_kft_u != null ? ["M_cr uncased (M-φ knee)", latFmt(pyRes.Mcr_kft_u, 1) + " kip·ft"] : null,
++        ...(K ? K.cap.map(c => [c.lbl, latFmt(c.v, c.dp || 1) + " kip·ft"]) : []),
++        K && K.tip != null ? ["Casing tip", latFmt(K.tip, 1) + " ft; M at tip " + latFmt(K.Mtip, 1) + " kip·ft"] : null,
+         ["First yield M_y", "not computed by the tool"]] }));
+```
+
 ## Open items (not changed)
 - O1. **Uncased/cased structural axial: outer 0.85 factor and `fy = min(fyb, fyc)`** (`Rn_cased/Rn_ucased`, ≈ line 1675).
   - Neither AASHTO 10.9.3.10.2 nor FHWA NHI-05-039 Eq. 5-13 has the outer 0.85, and the uncased section has no casing, so min(fyb, fyc) is arbitrary there.
@@ -6283,8 +7588,7 @@ Engineer's decision 2026-10-11 on O37: "The deflection limit will be much smalle
   - Blank/0 bridge length and abutment height show ✗ with no "enter a value" hint: `(I.iabBridgeLength || 0) > 0 && …`, ≈ line 3528.
   - **Ask:** show eligible / not eligible, plus a hint for missing inputs.
 - O18. **Integral abutment, Module 01 §4: equation does not render.** The "Required pile length" line shows raw KaTeX source in red: `\text{(governs: fixity (L_f + 5 ft))}`; the `_` inside `\text` fails. The value is correct. Equation-text fix pending sign-off.
-- O19. **H-pile mode, Module 02 elevation plot shows micropile geometry.** It draws "casing tip" and "bond 27 ft", and the text line reports "M at casing tip …".
-  - **Ask:** hide these for H-piles.
+- O19. **H-pile mode, Module 02 elevation plot shows micropile geometry.** Fixed in F26 (2026-10-11): the elevation draws the H-pile section and toe (no casing tip / bond / plunge), the Module 02 line "M at casing tip" is micropile-only, and the F-3 note gives the H-pile p-y width.
 - O20. **φc default 0.80** (`DEFAULT_INPUTS.phiC`). It is used in the casing-only combined interaction (Module 05) and in buckling.
   - AASHTO LRFD 10th Ed. 6.5.4.2 gives 0.95 (steel-only) and 0.90 (composite). The tool's own φ info says "resolve which applies before sealing".
   - The default is conservative.
