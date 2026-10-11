@@ -10537,6 +10537,134 @@ index 41bfc0d..7fac0ba 100644
        /*#__PURE__*/React.createElement("div", { className: "text-[10px] font-mono-tech leading-relaxed", style: { color: "#334155" } },
 ```
 
+### F35. Per-row group analysis: when a row fails, the displayed governing row is the failing row (O46)   [display / governing-row selection] [only with "Apply group p-multipliers automatically (per row)" on in Pile group mode; toggle off, single pile, integral abutment bit-identical (proven). No check result, overall result or envelope pass / fail changes (F33 already made any failing row NG). What changes is which row the modules, graphs, report and envelope show: the failing row instead of the larger-D/C passing row — so the displayed M_max / flexure / combined D/C can be LOWER than another (passing) row's (LESS conservative as a displayed number; that row is still listed in the per-row table)]
+
+- **Where:**
+  - `pmRowSummary`: returns `fail` (= lateral status NG: flexure, combined, stability, micropile casing extension, H-pile shear, or did not converge).
+  - `pmPickGov` (anchor `// F35 (O46, 2026-10-11): when any row fails`): when any `ev[k].fail`, only the failing rows are candidates; otherwise the F29 rule unchanged (the loop is the old one with `g` starting at the first candidate).
+  - `runAllCases` → `runOne`: returns `latFail` (the same `pmRowSummary(R2, …, I2).fail` as Module 02) when the per-row toggle is on; the per-row `pmPickGov` call passes `fail: e.latFail`; `latFail` is removed from the output row.
+  - Text: `PmRowTable` "other row NG" line and governing-row note; envelope notes (screen and report) "… when a row's lateral checks are NG, the failing row with the largest D/C governs".
+- **Problem (O46):** after F33 the governing (displayed) row was the largest flexure / combined D/C even when another row failed a lateral check (micropile: the trailing row's casing extension). The overall result was NG but the modules and check strip showed the passing row's checks.
+- **Rule (engineer's decision 2026-10-11):** if any row fails, the governing row = the failing row with the highest D/C (ties: larger M_max, then smaller p-multiplier, as before); otherwise the max D/C row as before. Modules 02 / 04 / 05 / G, the Lateral graphs, the report and the envelope row follow it (the envelope uses the same flags, so envelope = Module 02 per case). The "other row NG" line now lists only further failing rows.
+- **Governing provision:** none changed (selection of the displayed row). AASHTO LRFD 10th Ed. Art. 10.7.2.4 row p-multipliers and the F33 distribution unchanged.
+- **§4 callout (worked check): micropile 2 × 3 at 3B, toggle on, F33 check case (a), Manual Str (STL 80, V 3 kip per pile, free head, defaults).** Row results (unchanged by F35): row 1 V 3.886 kip, M_max 30.61 kip·ft, flexure 0.567, combined 0.725, OK; row 2 V 2.751, 25.54, 0.473, 0.631, OK; row 3 V 2.363, 23.66, 0.439, 0.596, **NG (casing extension)**.
+
+  | Case | Before (F34): governing row / V / M_max / flexure / combined / overall | After (F35) |
+  |---|---|---|
+  | Manual Str | row 1 / 3.886 / 30.61 / 0.567 / 0.725 / NG ("✗ Row 3: casing extension NG — not the governing row") | **row 3** / 2.363 / **23.66** / 0.439 / 0.596 / NG (row 3 shown, casing extension NG in Module 02 / G) |
+  | Manual EE (STL 70, V 4) | row 1 / 5.190 / 42.76 / 0.793 / 0.903 / NG | **row 3** / 3.145 / **32.91** / 0.610 / 0.720 / NG |
+  | Group ▦ Str I · P1 | row 1 / 3.886 / 30.61 / NG | **row 3** / 2.363 / 23.66 / NG |
+  | Group ▦ Ext I · P1 | row 1 / 5.136 / 39.47 / NG | **row 3** / 3.183 / 30.33 / NG |
+  | Svc I (no row fails) | row 1 / 2.531 / 16.11 / OK | row 1 (unchanged) |
+
+  Overall result and envelope pass / fail: unchanged (NG / ✗). Displayed governing M_max 30.61 → 23.66 kip·ft (−22.7 %): LESS conservative as a displayed number (row 1's 30.61 is still in the per-row table, OK). The H-pile F33 case (b) has no failing row: unchanged.
+- **Pure refactor parts:** `pmPickGov` with no failing row returns the same index as before (same comparisons in the same order); verified by the bit-identical runs below.
+- **How verified:**
+  - `node --check` on the four inline scripts.
+  - Headless Chromium, F34 commit vs this commit: micropile 2 × 3 toggle on (F33 case), rotational spring, head moment 15 kip·ft, V = 6 kip: only the cases with a failing non-governing row change (governing row 1 → 3 and the values above); H-pile F33 case (no failing row): numbers identical, only the note text; toggle off, single pile, integral abutment: bit-identical.
+  - Envelope row = Module 02 for every case made active (governing row, M_max, pass): 5 / 5 in each project.
+  - Screenshot looked at: Module 11 / 02 per-row table, micropile 2 × 3 (row 3 ◀ governs, NG casing extension). No console errors.
+- **Saved data:** none changed.
+- **Other copies:** none.
+- **Re-applying by hand:** unified diff below (CRLF stripped).
+
+```diff
+diff --git a/Pile Designer.html b/Pile Designer.html
+index 7fac0ba..2bf493f 100644
+--- a/Pile Designer.html	
++++ b/Pile Designer.html	
+@@ -2559,13 +2559,21 @@ function pmRowSummary(R, pr, I) {
+     ...(!isHP && !R.casingExt.pass ? ["casing extension"] : []),
+     ...(R.stability && R.stability.pass ? [] : ["stability"]),
+     ...(isHP && hs.shear_pass === false ? ["shear"] : [])];
+-  return { noConv: nc, flexR, combR, latPass, dc, Mmax: nc ? null : pr.Mmax_kft, y0: nc ? null : pr.headDefl_in, ngParts, shearOK: !(isHP && hs.shear_pass === false) };
++  const shearOK = !(isHP && hs.shear_pass === false);
++  // F35 (O46): fail = this row's lateral-dependent checks (or H-pile shear) are NG; read by pmPickGov
++  return { noConv: nc, flexR, combR, latPass, dc, Mmax: nc ? null : pr.Mmax_kft, y0: nc ? null : pr.headDefl_in, ngParts, shearOK, fail: !latPass || !shearOK };
+ }
+ // Governing row: the largest dc (a row that did not converge has dc = Infinity and governs);
+ // ties (within 1e-9) -> the larger Mmax, then the smaller p-multiplier (less soil support).
++// F35 (O46, 2026-10-11): when any row fails (ev[k].fail: a lateral-dependent check or H-pile
++// shear NG), only the failing rows are candidates, so the displayed governing row is the
++// failing row with the largest dc; with no failing row the rule is the one above (unchanged).
+ function pmPickGov(ev) {
+-  let g = 0;
+-  for (let k = 1; k < ev.length; k++) {
++  const anyFail = ev.some(e => e && e.fail);
++  let g = -1;
++  for (let k = 0; k < ev.length; k++) {
++    if (anyFail && !ev[k].fail) continue;
++    if (g < 0) { g = k; continue; }
+     const a = ev[k], b = ev[g];
+     const tie = (x, y) => (x === y) || (isFinite(x) && isFinite(y) && Math.abs(x - y) <= 1e-9 * Math.max(1, Math.abs(x), Math.abs(y)));
+     if (a.dc > b.dc && !tie(a.dc, b.dc)) { g = k; continue; }
+@@ -9745,7 +9753,7 @@ function PrintReport({
+       "\u26a0 Large head deflection (|y\u2080| > " + fmt(pyDeflWarnFactor(I), 2) + " \u00d7 D, warning only): " + caseRes.rows.filter(r0 => { const w = pyDeflWarnInfo(r0.y0, r0.D, I); return w && w.warn; }).map(r0 => r0.name + " (" + fmt(Math.abs(r0.y0) / r0.D, 2) + " D)").join(", ") + ". The checks use these solutions as computed; a deflection this large, especially one opposite to the load, can mean the pile is near or past instability."),
+     /*#__PURE__*/React.createElement("div", { style: { fontSize: "7.5px", color: "#94a3b8", marginTop: "2px" } },
+       "Envelope computed " + caseRes.at + ". Service rows report deflection only. The detailed module calculations that follow reflect the ACTIVE case." +
+-      (caseRes.rows.some(r0 => r0.pmRow != null) ? " Group p-multipliers applied per row: each case solved for every row (p-multiplier = row f\u2098 \u00d7 modifier), the case's lateral load shared between the rows for equal head deflection (rigid cap; V = the governing row's shear per pile); values shown are the governing row's (largest flexure / combined D/C; service: largest |y\u2080| (equal on every row once the distribution converges, then the largest M\u2098\u2090\u2093); a row that did not converge governs)." : ""))),
++      (caseRes.rows.some(r0 => r0.pmRow != null) ? " Group p-multipliers applied per row: each case solved for every row (p-multiplier = row f\u2098 \u00d7 modifier), the case's lateral load shared between the rows for equal head deflection (rigid cap; V = the governing row's shear per pile); values shown are the governing row's (largest flexure / combined D/C; service: largest |y\u2080| (equal on every row once the distribution converges, then the largest M\u2098\u2090\u2093); a row that did not converge governs; when a row's lateral checks are NG, the failing row with the largest D/C governs)." : ""))),
+   /*#__PURE__*/React.createElement("table", {
+     style: {
+       width: "100%",
+@@ -10326,7 +10334,7 @@ function LoadCasesCard({ cases, updCases, applyCase, runAllCases, caseRes, I, up
+           : /*#__PURE__*/React.createElement("td", { key: j, className: "py-0.5 pr-2", style: { color: i === w && rr[i][k] != null ? "#b23b3b" : "#334155", fontWeight: i === w && rr[i][k] != null ? 700 : 400 } }, fmtR(r0[k]))),
+         /*#__PURE__*/React.createElement("td", { className: "py-0.5", style: { color: r0.pass ? "#2f6f3e" : "#b23b3b" } }, r0.pass ? "✓" : "✗"))))),
+     ro && rr && rr.some(r0 => r0.pmRow != null) && /*#__PURE__*/React.createElement("p", { className: "text-[9px] mt-1 leading-snug", style: { color: "#1F3A5F" } },
+-      "Group p-multipliers applied per row: each case was solved for every row (p-multiplier = row f\u2098 \u00d7 modifier), with the case's lateral load shared between the rows for equal head deflection (rigid cap; V = the governing row's shear per pile, kip); the values shown are the governing row's (largest flexure / combined D/C; service: largest |y\u2080| (equal on every row once the distribution converges, then the largest M\u2098\u2090\u2093); a row that did not converge governs)."),
++      "Group p-multipliers applied per row: each case was solved for every row (p-multiplier = row f\u2098 \u00d7 modifier), with the case's lateral load shared between the rows for equal head deflection (rigid cap; V = the governing row's shear per pile, kip); the values shown are the governing row's (largest flexure / combined D/C; service: largest |y\u2080| (equal on every row once the distribution converges, then the largest M\u2098\u2090\u2093); a row that did not converge governs; when a row's lateral checks are NG, the failing row with the largest D/C governs)."),
+     ro && rr && rr.some(r0 => r0.noConv) && /*#__PURE__*/React.createElement("p", { className: "text-[9px] mt-1 leading-snug", style: { color: "#b23b3b" } },
+       "n/c = the p-y solve did not converge for ", rr.filter(r0 => r0.noConv).map(r0 => r0.name).join(", "), ": ", PY_NC_MSG.replace(/^Did not converge — /, ""), ". No valid lateral demand, so flexure and combined loading are NG (a service row fails its deflection check). Reduce the load, check P", /*#__PURE__*/React.createElement("sub", null, "cr"), " in Module 10, shorten the unsupported length or add stiffness; make the case active to see the reason in Module 02."),
+     ro && rr && rr.some(r0 => { const w = pyDeflWarnInfo(r0.y0, r0.D, I); return w && w.warn; }) && /*#__PURE__*/React.createElement("p", { className: "text-[9px] mt-1 leading-snug", style: { color: "#7a4d15" } },
+@@ -11749,7 +11757,7 @@ function PmRowTable({ info, print }) {
+       }))),
+     info.otherNG && info.otherNG.length ? e("div", print ? { style: { fontSize: "8px", color: "#B91C1C", fontWeight: 700, marginTop: "2px" } } : { className: "text-[9px] mt-1 leading-snug font-semibold", style: { color: "#b23b3b" } },
+       "✗ " + info.otherNG.map(o => "Row " + o.row + ": " + (o.parts && o.parts.length ? o.parts.join(", ") : "lateral check") + " NG").join("; ") +
+-      " — not the governing row (largest flexure / combined D/C), whose checks are shown, but the overall result is NG.") : null,
++      " — also NG; the governing row shown is the failing row with the largest flexure / combined D/C, and the overall result is NG.") : null,
+     e("div", print ? { style: { fontSize: "7.5px", color: "#64748b", marginTop: "2px" } } : { className: "text-[8.5px] text-slate-500 mt-0.5 leading-snug" },
+       (eq
+         ? "Rigid cap, equal head deflection: the case's lateral load " + fmt(eq.Vpile, 2) + " kip × " + eq.N + " piles = " + fmt(eq.Vtot, 2) + " kip is shared so every row has the same head deflection" +
+@@ -11757,7 +11765,7 @@ function PmRowTable({ info, print }) {
+             : " — NOT achieved: " + eq.why + "; the lateral checks are NG. ") +
+           "Each row: the case's axial load, head moment and head condition, its own shear V, p-multiplier = row fₘ × modifier (" + fmt(info.mod || 1, 2) + "); fₘ from " + info.srcLabel + " at s = " + fmt(info.s_dia, 2) + " × " + (info.Blbl || "bond dia") + ". "
+         : "Each row solved with the active case's per-pile loads and p-multiplier = row fₘ × modifier (" + fmt(info.mod || 1, 2) + "); fₘ from " + info.srcLabel + " at s = " + fmt(info.s_dia, 2) + " × " + (info.Blbl || "bond dia") + ". ") +
+-      "Governing row = largest D/C of flexure / combined (a row that did not converge governs, NG; ties → larger Mₘₐₓ). " +
++      "Governing row = largest D/C of flexure / combined (a row that did not converge governs, NG; ties → larger Mₘₐₓ); when any row's lateral status is NG, the failing row with the largest D/C governs. " +
+       "Lateral status = flexure, combined" + " and stability (micropile: also casing extension)" + (eq ? "; each row's checks use its own V (H-pile: also shear)" : "") + ". The lateral results, graphs and checks shown are the governing row's."));
+ }
+ function GroupPlan({ I, g }) {
+@@ -13954,7 +13962,9 @@ function App() {
+             svcR: c.type === "service" && y0 != null ? Math.abs(y0) / Math.max(I.deflLimit || 1, 0.01) : null,
+             pass: noConv ? false : (c.type === "service" ? (y0 == null || Math.abs(y0) <= (I.deflLimit || 1)) : R2.allPass),
+             noConv, ncWhy,
+-            D: S ? S.D : null   // F25 (O37): p-y pile width, for the large-deflection warning (display only)
++            D: S ? S.D : null,   // F25 (O37): p-y pile width, for the large-deflection warning (display only)
++            // F35 (O46): this row's lateral-dependent checks NG (Module 02's pmRowSummary rule), for pmPickGov
++            latFail: pmSpec ? pmRowSummary(R2, { ok: usePy && !noConv && Mx != null, Mmax_kft: Mx, headDefl_in: y0 }, I2).fail : undefined
+           };
+         };
+           if (!pmSpec) return runOne(I.pyPM || 1);
+@@ -13973,7 +13983,7 @@ function App() {
+             const Vk = eq.V[k] != null ? eq.V[k] : (c.Plat || 0);
+             return Object.assign(runOne(sp.pm, Vk, sol), { _sp: sp, _V: Vk });
+           });
+-          const g = pmPickGov(ev.map(e => ({ pm: e._sp.pm, Mmax: e.Mmax,
++          const g = pmPickGov(ev.map(e => ({ pm: e._sp.pm, Mmax: e.Mmax, fail: e.latFail,
+             // F33: with the equal-deflection distribution every row has the same y0 (to the iteration
+             // tolerance), so a service case ranks its rows by M_max (the tie-break), as Module 02 does.
+             dc: e.noConv ? Infinity : (c.type === "service" ? (eq.ok ? 0 : (e.y0 != null ? Math.abs(e.y0) : 0)) : Math.max(e.flexR != null && isFinite(e.flexR) ? e.flexR : 0, e.combR != null && isFinite(e.combR) ? e.combR : 0)) })));
+@@ -13981,7 +13991,7 @@ function App() {
+           const out = Object.assign({}, ev[g], { pass: c.type === "service" ? ev[g].pass : ev.every(e => e.pass), pmRow: ev[g]._sp.row, pmFm: ev[g]._sp.fm, pmPm: ev[g]._sp.pm, pmNRows: ev.length, pmV: ev[g]._V,
+             pmEq: { ok: eq.ok, it: eq.it, nSolves: eq.nSolves, yCap: eq.yCap, Vtot: eq.Vtot, sumNV: eq.sumNV, spread: eq.spread, failRow: eq.failRow, why: eq.why },
+             pmRows: ev.map(e => ({ row: e._sp.row, fm: e._sp.fm, pm: e._sp.pm, V: e._V, Mmax: e.Mmax, y0: e.y0, flexR: e.flexR, combR: e.combR, noConv: e.noConv, pass: e.pass })) });
+-          delete out._sp; delete out._V;
++          delete out._sp; delete out._V; delete out.latFail;
+           return out;
+         });
+         setCaseRes({ rows, at: new Date().toLocaleTimeString() });
+```
+
 ## Open items (not changed)
 - O1. **Uncased/cased structural axial: outer 0.85 factor and `fy = min(fyb, fyc)`** (`Rn_cased/Rn_ucased`, ≈ line 1675).
   - Neither AASHTO 10.9.3.10.2 nor FHWA NHI-05-039 Eq. 5-13 has the outer 0.85, and the uncased section has no casing, so min(fyb, fyc) is arbitrary there.
@@ -10615,7 +10743,7 @@ index 41bfc0d..7fac0ba 100644
 - O43. **Closed by F32 (2026-10-11).** Engineer's decision 2026-10-11: the H-pile group η check uses the H-pile static resistance; the block is shown "not computed for H-piles — verify by hand" (see O45). Original text: **Group axial efficiency and block failure in H-pile mode reduce the micropile bond capacity.** `computeAll` group block: `Pn_geo_group = R.geo.Pn_geo * eta` and the block side resistance use the micropile grout-to-ground bond (β, d_h, L_b inputs) for every pile type, and both checks enter the H-pile `allPass` and the Module 11 status. In H-pile mode they should use the H-pile static capacity (`R.hpileGeo`) and an H-pile block (skin over the embedded length, plus base). Found in F30, not changed (calc change). **Ask:** H-pile group efficiency / block basis (AASHTO 10.7.3.9 / 10.7.3.11?), or hide these two checks in H-pile mode until then.
 - O44. **Micropile with d_h ≠ casing OD: two group layouts.** Module 11 (`computeAll`, `groupPmTable`, "Generate grid") spaces a grid given in diameters at `groupSpacingDia × d_h`, while the group workspace, the Group ▦ case loads and the plan use `groupSpacingDia × OD` (`pileWidth`). With d_h = 9 in, OD 7 in, 3 × dia: Module 11's rigid-cap table shows 27 in c/c, the cases use 21 in. Left unchanged by F30 (micropile results to stay identical). **Ask:** which width defines "spacing × dia" for a micropile (d_h or OD), so both use it.
 - O45. **Closed by F34 (2026-10-11).** Engineer's decision 2026-10-11 ("Fix all"): AASHTO 10.7.3.9 η for H-pile groups (cohesionless 1.0; cohesive 0.65–1.0 by spacing when the cap is not in firm contact or the surface clay is soft; new input "pile cap in firm contact with the ground", default yes) and the cohesive block check with φ_g = 0.60; mixed profiles by the predominant type. Original text: **H-pile group efficiency and block failure per AASHTO 10.7.3.9 (found in F32, not changed).** F32 makes the H-pile η check use the H-pile static resistance but keeps the tool's η (FHWA spacing ≥ 3B → 1.0, else Converse-Labarre), and shows the block check as "not computed — verify by hand". AASHTO LRFD 10th Ed. Art. 10.7.3.9 for driven piles gives: cohesionless soil η = 1.0 (no block check); cohesive soil η from 0.65 at 2.5B to 1.0 at 6B when the cap is not in firm contact (1.0 when it is), and a block check R = (2X + 2Y)·Z·S̄_u + X·Y·N_c·S_u with its own resistance factor (Table 10.5.5.2.3-1, block failure in clay). **Ask:** implement the AASHTO η and the cohesive-soil block for H-pile groups (needs a cap-contact input and the block φ, plus a rule for mixed profiles), or keep the current η and the "verify by hand" block?
-- O46. **Governing row vs a failing non-governing row (found in F33).** The governing row is still the largest flexure / combined D/C (F29 rule). With the equal-deflection distribution the leading row usually has that, while the trailing row can fail a different lateral check (micropile casing extension: its moment decays deepest). F33 makes the overall result (allPass, envelope "pass") NG when any row fails and names the row in the per-row table, but the modules and check strip show the governing row's checks (all OK in that example). **Ask:** keep this, or make a row with any lateral check NG the governing (displayed) row?
+- O46. **Closed by F35 (2026-10-11).** Engineer's decision 2026-10-11: when any row fails, the displayed governing row is the failing row with the highest D/C. Original text: **Governing row vs a failing non-governing row (found in F33).** The governing row is still the largest flexure / combined D/C (F29 rule). With the equal-deflection distribution the leading row usually has that, while the trailing row can fail a different lateral check (micropile casing extension: its moment decays deepest). F33 makes the overall result (allPass, envelope "pass") NG when any row fails and names the row in the per-row table, but the modules and check strip show the governing row's checks (all OK in that example). **Ask:** keep this, or make a row with any lateral check NG the governing (displayed) row?
 - O47. **Lateral load direction for the row distribution (found in F33, not changed).** The rows are the grid rows (`groupNrows`, leading row = row 1) and the load is taken as acting along the row direction; V_total = n × the case's per-pile lateral resultant (manual cases: the per-pile value; Group ▦ rows: the design pile's `Vres` = √((V_x/n)² + (V_y/n)²), so n × Vres is the cap's resultant shear; the rigid-cap distribution gives every pile the same shear, no torsion share). A biaxial cap shear is therefore one resultant along the row direction, as the tool's per-pile resultant already was. **Ask:** is a separate distribution per direction (rows in x and in y) needed?
 - O48. **Micropile Module 11 η line labels the nominal bond capacity as "φP_n" (found in F32, display only, not changed).** "per-pile bond φP_n = 110 → 57 kip": the first number is the nominal R.geo.Pn_geo (109.96 kip), the second φηP_n. **Ask:** relabel the first value "P_n"?
 - O51. **AASHTO 10.7.3.9 details not implemented by F34 (ask).** (1) As recalled, AASHTO waives the cohesive η reduction when the cap is not in contact but the surface soil is stiff; F34 follows the engineer's rule (not in contact → 0.65–1.0 whatever the surface stiffness; more conservative). Apply the stiff-surface waiver? (2) "Soft" surface = cohesive with S_u < 0.50 ksf (Terzaghi & Peck; verify) — confirm the threshold. (3) The group in a strong layer over a weaker compressible layer, and group settlement, are not checked. (4) For mixed profiles the block counts cohesionless layers as S_u = 0 along the side and no base when the toe is cohesionless (conservative) — acceptable, or check both mechanisms separately?
