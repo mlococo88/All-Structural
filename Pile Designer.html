@@ -16387,6 +16387,10 @@ function LatProfileOne({ records, which, stickFt, height }) {
 }
 function LatFail({ pyRes }) {
   const e = React.createElement;
+  // F22 (O33) "did not converge" outcome: the same note Module 02 shows
+  if (pyRes && pyRes.noConv) return e("div", { className: "pd-lg-fail", role: "alert" },
+    e("div", { style: { fontWeight: 700, marginBottom: "4px" } }, "No graphs are shown: the lateral p-y analysis did not converge."),
+    e(PyNoConvNote, { why: pyRes.why }));
   return e("div", { className: "pd-lg-fail", role: "alert" },
     e("b", null, "The nonlinear p-y analysis did not converge — no response graphs are shown."),
     " ", pyRes && pyRes.msg ? "Solver message: " + pyRes.msg + " " : "",
@@ -16520,7 +16524,7 @@ function LatGraphsCard({ I, set, pyRes, solved, activeLayers, pyDepths, setPyDep
   };
 
   /* ---- p-y curves (Figure F-3, plus the standard-depth curves) ---- */
-  const pyTab = () => e(React.Fragment, null,
+  const pyTab = () => isPy && !ok ? fail : e(React.Fragment, null,
     e(LatPanel, { title: "Figure F-3: p-y curves at selected depths (active case)" },
       e(PyCurvesFig, { I: I, pyRes: pyRes, solved: solved, activeLayers: activeLayers, depths: pyDepths, setDepths: setPyDepths })),
     ok && pyRes.curves && pyRes.curves.length > 0 && e("div", { style: { marginTop: "12px" } }, e(LatPanel, { title: "p-y curves at 1, 2.5, 5, 10 and 20 pile widths below grade · ● = operating point" },

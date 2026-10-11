@@ -4731,6 +4731,1013 @@ Engineer's decision 2026-10-11: "Go ahead with O33 and O34". For O33 the approve
 - **How verified:** headless Chromium, main vs branch: `env.mjs` / `envcmp.py` (Run all, then each case made active), `env2.mjs` / `env2cmp.py` (Run all re-run with each case active), `timing.mjs`; screenshot of the envelope with a did-not-converge row, a service row and a converged row looked at (screen and print). No console errors.
 - **Other copies of this code:** none.
 
+## 2026-10-11 — PR: claude/pile-lateral-graphs (PR link added after merge)
+
+### F24. "Lateral graphs" output tab: every lateral-analysis graph on its own tab, larger, in Plotly; Figure F-3 redrawn in Plotly   [UI only] [no calculation change]
+- **Date:** 2026-10-11. **Type:** UI only (presentation). Engineer's requests 2026-10-11: "I want to add output tabs just for the graphs due to lateral analysis" and, the same day, "those new graphs should be using plotly".
+- **What changed (screen):**
+  - **New output tab "Lateral graphs"** (`OUT_TABS` id `latgfx`), right after "Lateral (p-y)", in micropile and H-pile modes (wherever Module 02 runs; not in integral abutment mode, whose Tier 2 plots stay in Module 12). It holds one card, `LatGraphsCard` (id `pd-latgfx`, `data-otab-fixed="latgfx"`), with a sub-tab strip (ARIA tablist; Arrow Left/Right, Home, End):
+
+    | Sub-tab | Shown when | Content |
+    |---|---|---|
+    | Deflection · Moment · Shear | always | nonlinear p-y: Figure F-1 (`LpileProfilePlot` of `pyRes.records`, 520 px tall) with a view switch All three / Deflection / Moment / Shear (one quantity at 560 px, `LatProfileOne`), then the elevation moment diagram (`ElevationPlot`, 480 px). Linear estimate: `LateralDiagram` (520 px) with the LPILE overlay and the "Built-in vs LPILE" box, moved from Module 02. Input Mmax: a note (no built-in profiles). |
+    | Moment — all cases | nonlinear p-y | Figure F-2 (per-case moment profiles from "Run all cases", 520 px), with a Run / Re-run all cases button (the existing `runAllCases`) and the names of cases with no profile (did not converge). |
+    | p-y curves | always | Figure F-3 (`PyCurvesFig`, now Plotly, with its depth chips) moved from the Lateral (p-y) tab; below it the "p-y curves at 1, 2.5, 5, 10, 20 pile widths" chart with its probe-depth input (`I.pyCurveDepth`, as before) moved from Module 02. |
+    | Soil reaction | nonlinear p-y | **new chart** "Soil reaction p vs depth": the solver's nodal reactions `pyRes.pNode` (lb/in, sign of the deflection) vs depth below grade (`records[i].depth − setup.stick_in/12`); beside it "Soil mobilization p/pᵤ vs depth" moved from Module 02. |
+    | Pushover & stiffness | nonlinear p-y | pushover, moment–curvature (cased, uncased), P–M interaction, EI along the pile, moved from Module 02 (340 px each, two columns from about 960 px). |
+    | LPILE comparison | an LPILE output with a profile is imported | the LPILE response profiles (`LpileProfilePlot` of the import, 520 px); with the Input Mmax basis also the "Built-in solver vs LPILE" diagram and box moved from Module 02 (its text "sync the load below" now reads "sync the load in Module 02"). |
+
+  - **Nonlinear p-y did not converge** (F22 `pyRes.noConv`, or any other `pyRes.ok === false`): the Deflection · Moment · Shear, p-y curves, Soil reaction and Pushover & stiffness sub-tabs show a red box "No graphs are shown: the lateral p-y analysis did not converge." with the same `PyNoConvNote` (reason and what to do) that Module 02 shows, instead of plots. F-2 lists the cases that did not converge.
+  - **Plotly throughout, one style** (`latLayout`, `latAx`): UI sans `PLOT_FONT`, axis titles with units, depth axes increasing downward, hover with values, no mode bar (`PLOT_CONFIG`), responsive; legends below the plot with a fixed entry width (`entrywidth`) so the entries never overlap or clip. Every chart in the card is resized (`Plotly.Plots.resize`) when the card's width changes (tab shown, window resized; `ResizeObserver`) and after a sub-tab or view switch, so a chart drawn while its tab was hidden gets its correct size.
+  - **Figure F-3 is Plotly** (`PyCurvesChart` rewritten; it was static SVG from F14): the same `pyCurveSet` data, one line per depth (legend "z = … ft · soil type", colours `GFX_COLS` as before) and a marker per depth at the mobilised point (y clamped to the plotted range as before), axes 0–y_max and 0–p_max as before; hover gives z, y, p. The table and notes under it are unchanged. The old SVG legend lines "y … in · p … lb/in" are now in the hover and in the table (they were already there).
+  - **Module 02 keeps the calculation**: Step 4 now reads "The response graphs of this solve … are on the Lateral graphs output tab" with buttons to each sub-tab (`LatGraphsLinks` → `showLatGraphs(sub)`: selects the output tab and sub-tab, scrolls to the card). The governing-equation / models / layering / benchmark lines, which were behind the "Show response profiles & diagnostics" toggle, are now always shown (the toggle and its `diagOpen` state are removed). Input Mmax basis: the LPILE profile plot and the built-in vs LPILE block are replaced by a link; the sentence "The full moment / shear / deflection profile from LPILE is plotted above" now says "is plotted on the Lateral graphs tab (LPILE comparison)". Linear basis: the right-hand diagram column is replaced by a short note and links. No Plotly chart remains in Module 02.
+  - The **Lateral (p-y) tab** now holds Module 02 only (the F-3 card moved to the new tab).
+  - Sub-tab remembered per browser in the **new key `micropile_lrfd_latGraphTab_v1`** (string sub-tab id; try/catch; not in project data). If the remembered sub-tab does not exist for the basis, the first one is shown and the remembered one is kept.
+  - Larger figures: `LpileProfilePlot`, `LateralDiagram` and `ElevationPlot` take an optional `height` (defaults 360 / 340 / 340, the old fixed values, so every other use is unchanged). `LpileProfilePlot` keeps its panel titles 23 px above the plot area when drawn taller (`annY`; at the default 360 px the value is the old 1.08).
+- **What changed (printed report):** only Figure F-3: drawn by the same Plotly `PyCurvesChart`, 660 px wide (6.9 in, inside the 7.1 in printable width), 330 px tall, static (`staticPlot`), legend below; same "02F" block, same print-chooser group (Lateral), same table and notes. F-1 and F-2 in the report are unchanged (they were already Plotly). Each figure prints once (the screen card is in `.app-shell`, which does not print).
+- **Not changed:** `computeAll`, `solvePyPile`, `solvePyWithRetry`, `pyCurveSet`, the `pyRes` memo, `runAllCases`, every check and every displayed result; the Summary tab's case-envelope card (it keeps its own small "Moment profiles · all cases overlaid" chart); the Tier 2 plots (Module 12); the drawings that are not graphs (soil-profile column G-1, cross-sections S-1, group plan) stay SVG; storage keys `micropile_lrfd_inputs_v1`, `micropile_lrfd_lpile_v1`, `micropile_lrfd_outTab_v1`, `micropile_lrfd_printSel_v1`, `micropile_lrfd_pyCurveDepths_v1`, IndexedDB `micropile_lrfd_db`; saved / exported JSON; `bridgeSuite.v1.projectMeta` and `foundationLoads`; library tags and versions (Plotly 2.32.0 already loaded; no new library).
+- **New storage key (per browser, UI only, never in project data):** `micropile_lrfd_latGraphTab_v1`.
+- **Governing provision:** none (presentation only). No formula, factor, unit, default or code reference changed.
+- **Check case (F-3 in Plotly, independent evaluation, as in F14):** micropile defaults with layers sand (0–5 ft, γ 120, φ 34°, k 110) / soft clay (5–9 ft, γ 110, sᵤ 600 psf, ε₅₀ 0.02) / stiff clay (9–25 ft, γ 120, sᵤ 2500 psf, ε₅₀ 0.006) / sand (25 ft+, γ 62, φ 38°, k 125), depths 1, 3, 6, 8, 12, 20 ft. The curve points (91 per curve) and the mobilised points were read from the **rendered Plotly chart's data** (`gd.data`) and compared with a separate implementation of Reese, Cox & Koop (1974) sand, Matlock (1970) soft clay (static and cyclic) and the tool's Welch & Reese stiff-clay form, at the solver's Georgiadis equivalent depth: P_lat = 12 kip, static, f_m = f_y = 1: max relative difference 2.3·10⁻¹⁶; P_lat = 5 kip, cyclic, f_m = 0.70, f_y = 1.20: 3.3·10⁻¹⁶ (same as F14). Mobilised points on their curves: |p_marker − p(y_marker)| ≤ 5.7·10⁻¹⁴ lb/in (e.g. z = 6.10 ft soft clay, z_e = 7.82 ft: y = 0.9103 in, p = 180.497 lb/in, as in F14).
+- **How verified:**
+  - `node --check` on all four inline scripts (pre-compiled `React.createElement`; no JSX to transpile).
+  - Headless Chromium, pinned libraries served locally (React 18.3.1, three r128, KaTeX 0.16.9, Plotly 2.32.0, Tailwind 3.4.5 compiled from the file's classes), origin/main (with F22/F23 merged) vs branch, all three modes with every module expanded, plus an edited project: `.main-col` text outside Module 02 identical (new card and charts removed); report text identical (charts removed); module statuses, check-index strip, report badges identical; autosave JSON, LPILE key, `Save .json` export (apart from `savedAt`), IndexedDB record and `bridgeSuite.v1.projectMeta` share payload identical. Module 02 text: every number of main is still there except the "5" of the removed elevation-plot caption ("green dash = 5% moment-decay depth"); the added text is the Step 4 note, the link labels and the governing-equation lines that are now always shown.
+  - Each sub-tab at 1500 and 400 px in micropile and H-pile modes, with the nonlinear p-y, linear and Input Mmax bases, with and without an imported LPILE profile, and with a solve that does not converge (STL 1,200 kip / P 80 kip): charts fill their containers (host width = Plotly width, e.g. 892/892 and 425/425 at 1500 px, 292/292 at 400 px) after the card was first rendered on a hidden tab; no horizontal page scroll at 400 px; no console errors. Screenshots of every sub-tab looked at.
+  - Behaviour: "Run all cases" from the F-2 sub-tab plots every case (a non-converging case is listed, not plotted); changing the active load case redraws F-1 (micropile defaults: Mmax 53.45 → 81.76 kip·ft); Arrow keys move between sub-tabs; the sub-tab is restored after reload; every Module 02 link selects the Lateral graphs tab and the right sub-tab; integral abutment has no Lateral graphs tab.
+  - Print: Letter PDF looked at: F-1 (sheet 11) and F-3 (sheet 12) each once, F-3 Plotly chart 660 px wide inside the margins, legend and table not clipped.
+- **Other copies:** none.
+- **Re-applying by hand:** the exact before/after is the unified diff below (against origin/main after F22/F23; CRLF stripped; the file uses CRLF). Hunks in order:
+  1. CSS appended at the end of the head `<style>`. Anchor: `.pd-soilprof-fig {`.
+  2. `PyCurvesChart` replaced (Plotly). Anchor: `function PyCurvesChart({`; and its call in `PyCurvesFig` (anchor `e(PyCurvesChart, { set })`).
+  3. `LateralDiagram`, `LpileProfilePlot`, `ElevationPlot`: optional `height` parameter (and `annY` in `LpileProfilePlot`).
+  4. `PyPanel`: `diagOpen` state removed; Step 4 plots replaced by the note and `LatGraphsLinks`; one closing parenthesis fewer at the end (anchor `before sealing.")))))`).
+  5. `App`, Module 02 Input Mmax branch: LPILE profile plot and built-in vs LPILE block → link (anchor `"LPILE response profiles"`); "plotted above" sentence; linear branch right column → note and links (anchor `React.createElement(LateralDiagram, {` in the linear branch); F-3 `GfxCard` → `LatGraphsCard`.
+  6. New block `LATERAL GRAPHS OUTPUT TAB` (`LATG_KEY`, `LATG_TABS`, `readLatGraphTab`, `latGraphTabsFor`, `showLatGraphs`, `LatGraphsLinks`, `latAx`, `latLayout`, `LatPanel`, `LatProfileOne`, `LatFail`, `LatGraphsCard`) before the `OUTPUT TABS` comment; `OUT_TABS` gets `["latgfx", "Lateral graphs"]`.
+
+```diff
+diff --git a/Pile Designer.html b/Pile Designer.html
+index d594f08..9235f4e 100644
+--- a/Pile Designer.html	
++++ b/Pile Designer.html	
+@@ -459,6 +459,32 @@
+   .pd-pyd-btn:hover { background: #EFF4FA; }
+   @media (min-width: 1280px) { .pd-geom-grid { grid-template-columns: minmax(0, 560px) minmax(260px, 1fr); } }
+   .pd-soilprof-fig { border: 1px solid var(--pd-line); border-radius: 4px; background: #fff; padding: 4px; }
++  /* ==========================================================
++     LATERAL GRAPHS OUTPUT TAB (2026-10-11, presentation only)
++     ----------------------------------------------------------
++     All lateral-analysis graphs on their own output tab, larger, with a
++     sub-tab strip; Plotly charts. No calculation is touched.
++  ========================================================== */
++  .main-col[data-otab-active="latgfx"] > [data-otab]:not([data-otab="latgfx"]) { display: none; }
++  #pd-latgfx { scroll-margin-top: calc(var(--ci-h) + var(--ot-h, 40px) + 12px); }
++  .pd-lg-sub { display: flex; flex-wrap: wrap; gap: 4px; margin: 0 0 12px; padding-bottom: 8px; border-bottom: 1px solid var(--pd-line); font-family: var(--f-ui); }
++  .pd-lg-sub button { font-family: var(--f-ui); font-size: 12px; padding: 4px 11px; border: 1px solid #C6CFDA; background: #fff; color: #41546E; border-radius: 14px; cursor: pointer; white-space: nowrap; }
++  .pd-lg-sub button:hover { background: #EFF4FA; }
++  .pd-lg-sub button[aria-selected="true"] { background: var(--navy-800); border-color: var(--navy-800); color: #fff; font-weight: 600; }
++  .pd-lg-sub button:focus-visible, .pd-lg-seg button:focus-visible, .pd-lg-link:focus-visible { outline: 2px solid #BFD3F2; outline-offset: 1px; }
++  .pd-lg-seg { display: inline-flex; flex-wrap: wrap; margin-bottom: 8px; border: 1px solid #C6CFDA; border-radius: 4px; overflow: hidden; font-family: var(--f-ui); }
++  .pd-lg-seg button { font-family: var(--f-ui); font-size: 11.5px; padding: 3px 10px; background: #fff; color: #41546E; border: none; border-right: 1px solid #C6CFDA; cursor: pointer; }
++  .pd-lg-seg button:last-child { border-right: none; }
++  .pd-lg-seg button[aria-pressed="true"] { background: #DCE6F1; color: var(--navy-900); font-weight: 600; }
++  .pd-lg-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(440px, 100%), 1fr)); gap: 12px 16px; align-items: start; }
++  .pd-lg-panel { border: 1px solid #E2E8F0; border-radius: 4px; padding: 10px 12px; background: #fff; min-width: 0; }
++  .pd-lg-h { font-family: var(--f-ui); font-size: 12.5px; font-weight: 600; color: var(--navy-800); margin-bottom: 4px; }
++  .pd-lg-note { font-family: var(--f-ui); font-size: 10.5px; color: #5A6B80; line-height: 1.45; margin-top: 6px; }
++  .pd-lg-fail { font-family: var(--f-ui); font-size: 12px; line-height: 1.45; color: #7F1D1D; background: #FEF2F2; border: 1px solid #B91C1C; border-left-width: 4px; border-radius: 4px; padding: 10px 12px; }
++  .pd-lg-links { display: flex; flex-wrap: wrap; align-items: center; gap: 5px 6px; font-family: var(--f-ui); }
++  .pd-lg-links-lead { font-size: 11px; color: #41546E; }
++  .pd-lg-link { font-family: var(--f-ui); font-size: 11.5px; padding: 3px 10px; border: 1px solid var(--navy-800); color: var(--navy-800); background: #fff; border-radius: 4px; cursor: pointer; }
++  .pd-lg-link:hover { background: #EFF4FA; }
+ </style>
+ </head>
+ <body>
+@@ -5498,41 +5524,30 @@ function pyCurveSet(I, pyRes, solved, activeLayers, userDepths) {
+   use.forEach(c => { c.pts = [[0, 0], [ymax, c.Es * ymax]]; });
+   return { kind: "linear", curves: use, ymax, auto, user: !!userDepths, dz, more: curves.length > use.length };
+ }
+-function PyCurvesChart({ set }) {
+-  const e = React.createElement;
+-  const W = 660, H = 300, x0 = 62, x1 = 446, y0 = 14, y1 = 252;
++/* Figure F-3 chart, Plotly (engineer 2026-10-11: "those new graphs should be
++   using plotly"; was a static SVG). Same data as before: the curves and
++   mobilised points of pyCurveSet(). On screen it is responsive; in the report
++   (print) it is drawn 660 px wide (fits the 7.1 in printable width) and static. */
++function PyCurvesChart({ set, print, height }) {
+   const curves = set.curves;
+   const pmax = gfxNiceUp(1.04 * Math.max(1e-6, ...curves.map(c => Math.max(c.pSolver, ...c.pts.map(p => p[1])))));
+-  const X = v => x0 + (v / set.ymax) * (x1 - x0), Yp = v => y1 - (v / pmax) * (y1 - y0);
+-  const els = [];
+-  const sx = gfxNiceStep(set.ymax, 6), sy = gfxNiceStep(pmax, 6);
+-  for (let v = 0; v <= set.ymax + 1e-9; v += sx) {
+-    els.push(e("line", { key: "gx" + v, x1: X(v), x2: X(v), y1: y0, y2: y1, stroke: "#E2E8F0", strokeWidth: 0.8 }));
+-    els.push(e(GfxText, { key: "tx" + v, x: X(v), y: y1 + 13, s: fmt(v, sx < 0.01 ? 3 : sx < 0.1 ? 2 : sx < 1 ? 2 : 1), size: 9, fill: GFX_MUTED, anchor: "middle" }));
+-  }
+-  for (let v = 0; v <= pmax + 1e-9; v += sy) {
+-    els.push(e("line", { key: "gy" + v, x1: x0, x2: x1, y1: Yp(v), y2: Yp(v), stroke: "#E2E8F0", strokeWidth: 0.8 }));
+-    els.push(e(GfxText, { key: "ty" + v, x: x0 - 5, y: Yp(v) + 3, s: fmt(v, sy < 1 ? 2 : 0), size: 9, fill: GFX_MUTED, anchor: "end" }));
+-  }
+-  els.push(e("rect", { key: "fr", x: x0, y: y0, width: x1 - x0, height: y1 - y0, fill: "none", stroke: GFX_INK, strokeWidth: 0.9 }));
+-  els.push(e(GfxText, { key: "xt", x: (x0 + x1) / 2, y: H - 14, s: "y — pile deflection (in)", size: 9.5, fill: GFX_INK, anchor: "middle" }));
+-  els.push(e(GfxText, { key: "yt", x: 14, y: (y0 + y1) / 2, s: "p — soil resistance (lb/in)", size: 9.5, fill: GFX_INK, anchor: "middle", rot: -90 }));
++  const lbl = c => "z = " + fmt(c.d, 1) + " ft · " + (c.model === "linear" ? "linear" : GFX_SOIL[c.model] ? GFX_SOIL[c.model].label.toLowerCase() : c.model);
++  const data = [];
+   curves.forEach((c, k) => {
+     const col = GFX_COLS[k % GFX_COLS.length];
+-    const pts = c.pts.filter(p => p[1] <= pmax * 1.0001).map(p => X(p[0]).toFixed(2) + "," + Yp(p[1]).toFixed(2)).join(" ");
+-    els.push(e("polyline", { key: "c" + k, points: pts, fill: "none", stroke: col, strokeWidth: 1.8 }, e("title", null, "z = " + fmt(c.d, 2) + " ft below grade — " + (c.model === "linear" ? "linear spring" : GFX_PY_MODEL[c.model] || c.model))));
+-    els.push(e("circle", { key: "m" + k, cx: X(Math.min(c.yMob, set.ymax)), cy: Yp(c.pSolver), r: 4.2, fill: col, stroke: "#fff", strokeWidth: 1.4 },
+-      e("title", null, "Mobilised at z = " + fmt(c.d, 2) + " ft: y = " + fmt(c.yMob, 4) + " in, p = " + fmt(c.pSolver, 2) + " lb/in")));
++    data.push({ x: c.pts.map(p => p[0]), y: c.pts.map(p => p[1]), mode: "lines", line: { color: col, width: 2 }, name: lbl(c),
++      hovertemplate: "z = " + fmt(c.d, 2) + " ft<br>y = %{x:.4f} in<br>p = %{y:.2f} lb/in<extra></extra>" });
++    data.push({ x: [Math.min(c.yMob, set.ymax)], y: [c.pSolver], mode: "markers", marker: { color: col, size: 9, line: { color: "#fff", width: 1.5 } }, name: "mobilised, z = " + fmt(c.d, 1) + " ft", showlegend: false,
++      hovertemplate: "Mobilised at z = " + fmt(c.d, 2) + " ft<br>y = " + fmt(c.yMob, 4) + " in<br>p = " + fmt(c.pSolver, 2) + " lb/in<extra></extra>" });
+   });
+-  // legend
+-  curves.forEach((c, k) => {
+-    const col = GFX_COLS[k % GFX_COLS.length], ly = y0 + 6 + k * 28;
+-    els.push(e("line", { key: "lg" + k, x1: x1 + 14, x2: x1 + 34, y1: ly, y2: ly, stroke: col, strokeWidth: 2 }));
+-    els.push(e("circle", { key: "lc" + k, cx: x1 + 24, cy: ly, r: 3.2, fill: col, stroke: "#fff", strokeWidth: 1 }));
+-    els.push(e(GfxText, { key: "lt" + k, x: x1 + 40, y: ly + 3, s: "z = " + fmt(c.d, 1) + " ft · " + (c.model === "linear" ? "linear" : GFX_SOIL[c.model] ? GFX_SOIL[c.model].label.toLowerCase() : c.model), size: 9, weight: 600, fill: GFX_INK }));
+-    els.push(e(GfxText, { key: "lu" + k, x: x1 + 40, y: ly + 14, s: "y " + fmt(c.yMob, 3) + " in · p " + fmt(c.pSolver, 1) + " lb/in", size: 8.5, fill: GFX_MUTED }));
+-  });
+-  return e("svg", { viewBox: "0 0 " + W + " " + H, width: "100%", role: "img", "aria-label": "p-y curves at selected depths", style: { display: "block", width: "100%", height: "auto", maxWidth: W + "px", fontFamily: GFX_FONT } }, els);
++  const H = height || (print ? 330 : 440);
++  const ax = (t, r) => ({ title: { text: t, font: { size: print ? 10 : 11 } }, range: r, gridcolor: C.grid, zeroline: false, linecolor: C.blueprint, ticks: "outside", tickcolor: C.blueprint, mirror: true, automargin: true });
++  const layout = baseLayout({ height: H, width: print ? 660 : undefined, autosize: !print, hovermode: "closest", hoverlabel: { font: { family: PLOT_FONT, size: 11 } },
++    margin: print ? { l: 58, r: 8, t: 8, b: 40 } : { l: 58, r: 14, t: 10, b: 46 },
++    showlegend: true,
++    legend: { orientation: "h", x: 0, y: print ? -0.2 : -0.16, yanchor: "top", entrywidth: print ? 160 : 150, font: { size: print ? 9 : 10, family: PLOT_FONT } },
++    xaxis: ax("y — pile deflection (in)", [0, set.ymax]), yaxis: ax("p — soil resistance (lb/in)", [0, pmax]) });
++  return React.createElement(Plot, { data, layout, height: H, config: print ? { staticPlot: true, responsive: false } : undefined });
+ }
+ function PyCurvesFig({ I, pyRes, solved, activeLayers, depths, setDepths, print }) {
+   const e = React.createElement;
+@@ -5576,7 +5591,7 @@ function PyCurvesFig({ I, pyRes, solved, activeLayers, depths, setDepths, print
+   if (set.more) notes.push("Only the first 8 depths are drawn.");
+   return e("div", { className: "pd-gfx-fig", "data-pd-gfx": "py" },
+     editor,
+-    e("div", { className: print ? "" : "pd-gfx-scroll" }, e("div", { style: { minWidth: print ? 0 : "520px" } }, e(PyCurvesChart, { set }))),
++    e("div", { "data-pd-gfx": "pychart" }, e(PyCurvesChart, { set, print })),
+     e("div", { className: print ? "" : "pd-gfx-scroll" }, table),
+     e("div", { className: print ? "" : "pd-gfx-note", style: print ? cap : undefined }, notes.map((n, k) => e("div", { key: k }, gfxSub(n)))));
+ }
+@@ -6239,7 +6254,8 @@ function CapPlan({
+ function LateralDiagram({
+   solved,
+   I,
+-  lpileOverlay
++  lpileOverlay,
++  height = 340
+ }) {
+   // Plots the ACTUAL finite-difference solver output: deflection y(z) in inches
+   // and moment M(z) in kip-ft, vs depth. z<0 = above grade (free length).
+@@ -6445,7 +6461,7 @@ function LateralDiagram({
+   }] : [])];
+   const ovMmax = ov ? ovM.reduce((a, b) => Math.abs(b) > Math.abs(a) ? b : a, 0) : null;
+   const layout = baseLayout({
+-    height: 340,
++    height: height,
+     grid: {
+       rows: 1,
+       columns: 2,
+@@ -6578,7 +6594,7 @@ function LateralDiagram({
+   return /*#__PURE__*/React.createElement(Plot, {
+     data: data,
+     layout: layout,
+-    height: 340
++    height: height
+   });
+ }
+ 
+@@ -6656,9 +6672,13 @@ function IabProfilePlot({ nl, scourD, layers, pileLen, sectLabel }) {
+ }
+ // Plots the imported LPILE profile: deflection, moment, and shear vs depth.
+ function LpileProfilePlot({
+-  records
++  records,
++  height = 360
+ }) {
+   if (!records || records.length < 2) return null;
++  // panel titles sit ~23 px above the plot area at the default 360 px; keep that
++  // offset when drawn taller (Lateral graphs tab) so the titles are not clipped
++  const annY = height === 360 ? 1.08 : 1 + 23 / Math.max(height - 72, 100);
+   const z = records.map(r => r.depth);
+   const y = records.map(r => r.defl);
+   const M = records.map(r => r.mom);
+@@ -6757,7 +6777,7 @@ function LpileProfilePlot({
+     name: "shear"
+   }];
+   const layout = baseLayout({
+-    height: 360,
++    height: height,
+     grid: {
+       rows: 1,
+       columns: 3,
+@@ -6775,7 +6795,7 @@ function LpileProfilePlot({
+       xref: "paper",
+       x: 0.09,
+       yref: "paper",
+-      y: 1.08,
++      y: annY,
+       text: "deflection (in)",
+       showarrow: false,
+       font: {
+@@ -6787,7 +6807,7 @@ function LpileProfilePlot({
+       xref: "paper",
+       x: 0.5,
+       yref: "paper",
+-      y: 1.08,
++      y: annY,
+       text: "moment (kip·ft)",
+       showarrow: false,
+       font: {
+@@ -6799,7 +6819,7 @@ function LpileProfilePlot({
+       xref: "paper",
+       x: 0.9,
+       yref: "paper",
+-      y: 1.08,
++      y: annY,
+       text: "shear (kip)",
+       showarrow: false,
+       font: {
+@@ -6894,7 +6914,7 @@ function LpileProfilePlot({
+   return /*#__PURE__*/React.createElement(Plot, {
+     data: data,
+     layout: layout,
+-    height: 360
++    height: height
+   });
+ }
+ const STORAGE_KEY = "micropile_lrfd_inputs_v1";
+@@ -9938,7 +9958,7 @@ function grpRows(r) {
+   return out;
+ }
+ 
+-function ElevationPlot({ I, pyRes }) {
++function ElevationPlot({ I, pyRes, height = 340 }) {
+   const stick = I.solverFree || 0;
+   const tipBG = Math.max((I.Lcased || 0) - stick, 0);           // casing tip below grade
+   const bondTopBG = Math.max((I.Lcased - I.Lplunge) - stick, 0); // top of bond below grade
+@@ -9999,9 +10019,9 @@ function ElevationPlot({ I, pyRes }) {
+           hoverinfo: "text", text: mom.map(r2 => fmt(r2.d, 1) + " ft: M = " + fmt(r2.m, 1) + " kip\u00b7ft") },
+         { x: [mom[iM].m], y: [mom[iM].d], mode: "markers+text", marker: { color: "#b23b3b", size: 8 }, text: ["Mmax " + fmt(Math.abs(mom[iM].m), 1)], textposition: "middle right", textfont: { size: 8, family: PLOT_FONT, color: "#b23b3b" }, hoverinfo: "skip", showlegend: false }
+       ],
+-      layout: baseLayout({ height: 340, margin: { l: 46, r: 8, t: 8, b: 34 }, shapes, annotations: anns, showlegend: false,
++      layout: baseLayout({ height: height, margin: { l: 46, r: 8, t: 8, b: 34 }, shapes, annotations: anns, showlegend: false,
+         xaxis: { title: { text: "M (kip\u00b7ft)", font: { size: 9 } }, gridcolor: C.grid, zeroline: true, zerolinecolor: "#cbd5e1" },
+-        yaxis: { title: { text: "depth below grade (ft)", font: { size: 9 } }, autorange: "reversed", gridcolor: C.grid } }), height: 340 }),
++        yaxis: { title: { text: "depth below grade (ft)", font: { size: 9 } }, autorange: "reversed", gridcolor: C.grid } }), height: height }),
+     /*#__PURE__*/React.createElement("p", { className: "text-[8.5px] text-slate-400 mt-1 leading-snug" },
+       "Dark = cased, gray = uncased shaft, orange dotted = bond zone; bands = soil layers; green dash = 5% moment-decay depth. Stickup plots above grade (negative depth)."));
+ }
+@@ -11510,10 +11530,6 @@ function PyPanel({ I, set, pyRes, r, EI, EI_composite_kipin2, EI_aashto_kipin2,
+   const ok = pyRes && pyRes.ok;
+   const [lpd, setLpd] = React.useState(null);        // parsed .lp12d {data, warn} | {err}
+   const [lpdCase, setLpdCase] = React.useState(0);
+-  // UI: Step 4 secondary diagnostics (profiles, pushover, section/soil
+-  // diagnostics) collapse behind one control; the elevation moment diagram
+-  // stays visible. Plots mount only when opened so Plotly sizes correctly.
+-  const [diagOpen, setDiagOpen] = React.useState(false);
+   function onLpdFile(e) {
+     const f = e.target.files && e.target.files[0];
+     if (!f) return;
+@@ -11837,164 +11853,14 @@ function PyPanel({ I, set, pyRes, r, EI, EI_composite_kipin2, EI_aashto_kipin2,
+         /*#__PURE__*/React.createElement("div", {
+           className: "text-[10px] font-mono-tech text-[var(--blueprint)] uppercase tracking-wider mb-1.5 pb-1 border-b border-slate-200"
+         }, "Step 4 · Response profiles & diagnostics"),
+-        /*#__PURE__*/React.createElement("p", { className: "text-[9px] text-slate-500 leading-snug mb-2" }, "How the pile responds to the design lateral load with depth, plus the section/soil diagnostics behind the solve. The elevation drawing below aligns deflection, moment, and shear with the stratigraphy; Mmax (the design moment for the structural checks) is the peak of the moment profile."),
+-        ok && pyRes.records && pyRes.records.length > 2 && /*#__PURE__*/React.createElement(ElevationPlot, { I: I, pyRes: pyRes }),
+-        ok && /*#__PURE__*/React.createElement("button", {
+-          type: "button", onClick: () => setDiagOpen(o => !o), "aria-expanded": diagOpen,
+-          className: "mt-3 w-full text-left text-[11px] px-3 py-2 rounded-sm border border-slate-300 hover:bg-slate-50",
+-          style: { color: "var(--blueprint)" }
+-        }, diagOpen ? "\u25b4 Hide response profiles & diagnostics" : "\u25be Show response profiles & diagnostics \u2014 deflection / moment / shear profiles, pushover curve, section and soil diagnostics"),
+-        (!ok || diagOpen) && /*#__PURE__*/React.createElement(React.Fragment, null,
+-        ok && pyRes.records && pyRes.records.length > 2 && /*#__PURE__*/React.createElement("div", { className: "bg-white rounded-sm p-3 border border-slate-200 mt-3" },
+-          /*#__PURE__*/React.createElement(LpileProfilePlot, { records: pyRes.records })),
+-        ok && pyRes.sweep && pyRes.sweep.length > 2 && /*#__PURE__*/React.createElement("div", { className: "bg-white rounded-sm p-3 border border-slate-200 mt-3" },
+-          /*#__PURE__*/React.createElement("div", { className: "text-[10px] font-mono-tech text-[var(--blueprint)] uppercase tracking-wider mb-1" }, "Head load–deflection (pushover)"),
+-          /*#__PURE__*/React.createElement("p", { className: "text-[8.5px] text-slate-400 leading-snug mb-1" }, "Pile-head deflection as the lateral load is ramped from zero to the design value. A straight line means near-elastic response; curvature (softening) shows soil yielding and/or section cracking. The operating point is your design load."),
+-          /*#__PURE__*/React.createElement(Plot, {
+-            data: [{ x: [0, ...pyRes.sweep.map(s => s.y0)], y: [0, ...pyRes.sweep.map(s => s.P)], mode: "lines+markers", line: { color: C.blueprint2, width: 2 }, marker: { size: 4 },
+-              hoverinfo: "text", text: ["origin", ...pyRes.sweep.map(s => "P=" + fmt(s.P, 1) + " kip<br>y₀=" + fmt(s.y0, 3) + " in<br>Mmax=" + fmt(s.M, 1) + " kip·ft")] }],
+-            layout: baseLayout({ height: 200, margin: { l: 46, r: 12, t: 8, b: 36 },
+-              xaxis: { title: { text: "head deflection (in)", font: { size: 9 } }, gridcolor: C.grid },
+-              yaxis: { title: { text: "P (kip)", font: { size: 9 } }, gridcolor: C.grid } }),
+-            height: 200 }),
+-          /*#__PURE__*/React.createElement("p", { className: "text-[8.5px] text-slate-400 mt-1 leading-snug" }, "Incremental load-step states from the same solve — secant head stiffness and softening onset visible directly."),
+-          pyRes.sweepTruncated && /*#__PURE__*/React.createElement("p", { className: "text-[8.5px] mt-1 p-1.5 rounded-sm leading-snug", style: { background: "rgba(201,98,46,0.10)", color: "#8a5a1f" } },
+-            "⚠ The pushover was truncated where the deflection curve began to fold back. Under the combined lateral + axial (STL = ", fmt(I.STL, 0), " kip) ramp, the beam-column approaches its instability load before reaching the full design load — past that point the static solver returns non-physical post-critical solutions (decreasing deflection), so only the stable rising branch is plotted. This is a sign the section is near its buckling capacity under these loads; check Module 10 (Buckling) and consider a stiffer section, shorter unsupported length, or reduced axial.")),
+-        ok && pyRes.curves && pyRes.curves.length > 0 && /*#__PURE__*/React.createElement("div", { className: "bg-white rounded-sm p-3 border border-slate-200 mt-3" },
+-          /*#__PURE__*/React.createElement("div", { className: "text-[10px] font-mono-tech text-[var(--blueprint)] uppercase tracking-wider mb-1" }, "p-y curves at depth · ● = operating point"),
+-          /*#__PURE__*/React.createElement("p", { className: "text-[8.5px] text-slate-400 leading-snug mb-1" }, "The nonlinear soil springs: horizontal resistance p (per unit length) vs pile deflection y, at several depths. Stiffer/stronger with depth. The ● marks where each spring is actually operating under the design load — near the flat top means the soil is near its ultimate resistance there."),
+-          /*#__PURE__*/React.createElement("div", { className: "flex items-center gap-1 text-[8.5px] font-mono-tech text-slate-500 mb-1" }, "probe depth",
+-            /*#__PURE__*/React.createElement("input", { type: "number", "aria-label": "p-y curve probe depth, ft below grade", value: I.pyCurveDepth || 0, onChange: e => set('pyCurveDepth', parseFloat(e.target.value) || 0),
+-              className: "w-14 text-[9px] px-1 py-0.5 rounded-sm border border-slate-300" }), "ft below grade (0 = off)"),
+-          /*#__PURE__*/React.createElement(Plot, {
+-            data: [
+-              ...pyRes.curves.map((c2, i2) => {
+-                const cols = ["#14304a", "#3d6a94", "#c9622e", "#2f6f3e", "#8a5a1f"];
+-                return { x: c2.pts.map(p2 => p2.y), y: c2.pts.map(p2 => p2.p), mode: "lines",
+-                  line: { color: cols[i2 % 5], width: 2 }, name: fmt(c2.d_ft, 1) + " ft (" + c2.model + ")",
+-                  hoverinfo: "text", text: c2.pts.map(p2 => fmt(c2.d_ft, 1) + " ft<br>y=" + fmt(p2.y, 3) + " in<br>p=" + fmt(p2.p, 1) + " lb/in") };
+-              }),
+-              { x: pyRes.curves.map(c2 => c2.op.y), y: pyRes.curves.map(c2 => c2.op.p), mode: "markers",
+-                marker: { color: "#b23b3b", size: 7, symbol: "circle" }, name: "operating",
+-                hoverinfo: "text", text: pyRes.curves.map(c2 => "operating @ " + fmt(c2.d_ft, 1) + " ft<br>y=" + fmt(c2.op.y, 3) + " in<br>p=" + fmt(c2.op.p, 1) + " lb/in") }
+-            ],
+-            layout: baseLayout({ height: 240, margin: { l: 50, r: 10, t: 8, b: 36 },
+-              showlegend: true, legend: { font: { size: 8, family: PLOT_FONT }, x: 1, xanchor: "right", y: 0.05 },
+-              xaxis: { title: { text: "y (in)", font: { size: 9 } }, gridcolor: C.grid },
+-              yaxis: { title: { text: "p (lb/in)", font: { size: 9 } }, gridcolor: C.grid } }),
+-            height: 240 }),
+-          /*#__PURE__*/React.createElement("p", { className: "text-[8.5px] text-slate-400 mt-1 leading-snug" },
+-            "Curves include the Georgiadis equivalent-depth offsets and the p/y multipliers exactly as the solve applies them. Red dots show the deflection each depth actually reached — how much of each curve is mobilized. Depths at 1–2.5–5–10–20 pile diameters below grade.")),
+-        ok && pyRes.mphi && /*#__PURE__*/React.createElement("div", { className: "bg-white rounded-sm p-3 border border-slate-200 mt-3" },
+-          /*#__PURE__*/React.createElement("div", { className: "text-[10px] font-mono-tech text-[var(--blueprint)] uppercase tracking-wider mb-1" }, "Moment–curvature (cased section)"),
+-          /*#__PURE__*/React.createElement("p", { className: "text-[8.5px] text-slate-400 leading-snug mb-1" }, "The section's bending stiffness: moment M vs curvature κ for the cased section at the design axial load. The initial slope is the uncracked EI₀; the knee is the cracking moment Mcr; beyond it the section softens. The p-y solver uses the secant EI along this curve when variable-EI is on."),
+-          /*#__PURE__*/React.createElement(Plot, {
+-            data: [
+-              { x: pyRes.mphi.phis, y: pyRes.mphi.Ms, mode: "lines", line: { color: C.blueprint, width: 2 }, name: "M-φ",
+-                hoverinfo: "text", text: pyRes.mphi.phis.map((p2, i2) => "φ=" + p2.toExponential(2) + "<br>M=" + fmt(pyRes.mphi.Ms[i2], 1) + " kip·ft") },
+-              ...(pyRes.Mcr_kft != null ? [{ x: [pyRes.mphi.phis[0], pyRes.mphi.phis[pyRes.mphi.phis.length - 1]], y: [pyRes.Mcr_kft, pyRes.Mcr_kft], mode: "lines", line: { color: "#8a5a1f", width: 1, dash: "dot" }, name: "Mcr", hoverinfo: "skip" }] : []),
+-              (() => {
+-                // Operating point: place ● ON the curve at the curvature where M
+-                // reaches the design demand Mmax. If the demand exceeds every M on
+-                // the plotted curve, the section only reaches that moment beyond the
+-                // shown curvature range — clamp the marker to the curve's endpoint
+-                // (so it sits on the line, not floating) and flag it below.
+-                const Ms = pyRes.mphi.Ms, phis = pyRes.mphi.phis, dem = pyRes.Mmax_kft;
+-                const last = Ms.length - 1;
+-                if (dem >= Ms[last]) {
+-                  return { x: [phis[last]], y: [Ms[last]], mode: "markers", marker: { color: "#b23b3b", size: 8, symbol: "circle-open", line: { width: 2, color: "#b23b3b" } }, name: "Mmax op.",
+-                    hoverinfo: "text", text: ["demand Mmax = " + fmt(dem, 1) + " kip·ft exceeds plotted curve (max " + fmt(Ms[last], 1) + ")"] };
+-                }
+-                let i2 = 0; while (i2 < last && Ms[i2] < dem) i2++;
+-                // linear-interpolate the curvature at exactly M = dem
+-                const y0 = Ms[i2 - 1] != null ? Ms[i2 - 1] : 0, y1 = Ms[i2];
+-                const x0 = phis[i2 - 1] != null ? phis[i2 - 1] : 0, x1 = phis[i2];
+-                const px = (y1 > y0) ? x0 + (dem - y0) * (x1 - x0) / (y1 - y0) : x1;
+-                return { x: [px], y: [dem], mode: "markers", marker: { color: "#b23b3b", size: 8 }, name: "Mmax op.",
+-                  hoverinfo: "text", text: ["operating Mmax = " + fmt(dem, 1) + " kip·ft"] };
+-              })()
+-            ],
+-            layout: baseLayout({ height: 190, margin: { l: 48, r: 10, t: 8, b: 34 }, showlegend: true, legend: { font: { size: 8, family: PLOT_FONT }, x: 1, xanchor: "right", y: 0.05 },
+-              xaxis: { title: { text: "φ (1/in)", font: { size: 9 } }, gridcolor: C.grid, exponentformat: "e" },
+-              yaxis: { title: { text: "M (kip·ft)", font: { size: 9 } }, gridcolor: C.grid } }), height: 190 }),
+-          (pyRes.mphi.Ms.length > 0 && pyRes.Mmax_kft >= pyRes.mphi.Ms[pyRes.mphi.Ms.length - 1]) && /*#__PURE__*/React.createElement("p", { className: "text-[8.5px] mt-1 p-1.5 rounded-sm leading-snug", style: { background: "rgba(201,98,46,0.10)", color: "#8a5a1f" } },
+-            "⚠ The design moment demand (Mmax = ", fmt(pyRes.Mmax_kft, 1), " kip·ft) is at or beyond the top of the plotted M-φ curve (max ", fmt(pyRes.mphi.Ms[pyRes.mphi.Ms.length - 1], 1), " kip·ft over the shown curvature range). The ● is clamped to the curve endpoint. This does not by itself mean the section is overstressed — the plotted range is capped at φ = ", (pyRes.mphi.phis[pyRes.mphi.phis.length - 1]).toExponential(1), " 1/in — but it means the section is operating at high curvature; confirm the flexural check in the combined-loading module (05) and the P-M interaction below, which carry the actual capacity comparison."),
+-          /*#__PURE__*/React.createElement("p", { className: "text-[8px] text-slate-400 mt-1 leading-snug" }, "Two knees: a subtle one at M", /*#__PURE__*/React.createElement("sub", null, "cr"), " (grout cracking — small effect because the elastic casing dominates bending) and the pronounced flattening at high curvature where the casing itself yields, approaching the section capacity M", /*#__PURE__*/React.createElement("sub", null, "n"), ". The solver operates on the secant of this curve.")),
+-        ok && pyRes.mphi && pyRes.mphi.phisU && pyRes.mphi.phisU.length > 1 && /*#__PURE__*/React.createElement("div", { className: "bg-white rounded-sm p-3 border border-slate-200 mt-3" },
+-          /*#__PURE__*/React.createElement("div", { className: "text-[10px] font-mono-tech text-[var(--blueprint)] uppercase tracking-wider mb-1" }, "Moment–curvature (uncased section)"),
+-          /*#__PURE__*/React.createElement("p", { className: "text-[8.5px] text-slate-400 leading-snug mb-1" }, "The same section below the casing tip — grout core + central bar only, no casing. This is much weaker and softer (note the smaller M and lower EI₀), and it governs the pile's stiffness over the bond zone. The p-y solver switches to this curve below the casing tip. With the bar and grout carrying the full axial load, it cracks at a low moment."),
+-          /*#__PURE__*/React.createElement(Plot, {
+-            data: [
+-              { x: pyRes.mphi.phisU, y: pyRes.mphi.MsU, mode: "lines", line: { color: "#5a6b7a", width: 2 }, name: "M-φ (uncased)",
+-                hoverinfo: "text", text: pyRes.mphi.phisU.map((p2, i2) => "φ=" + p2.toExponential(2) + "<br>M=" + fmt(pyRes.mphi.MsU[i2], 1) + " kip·ft") },
+-              ...(pyRes.Mcr_kft_u != null ? [{ x: [pyRes.mphi.phisU[0], pyRes.mphi.phisU[pyRes.mphi.phisU.length - 1]], y: [pyRes.Mcr_kft_u, pyRes.Mcr_kft_u], mode: "lines", line: { color: "#8a5a1f", width: 1, dash: "dot" }, name: "Mcr", hoverinfo: "skip" }] : []),
+-              ...(pyRes.Mtip_kft != null ? [(() => {
+-                // mark the moment carried at the casing tip — the demand the uncased
+-                // section actually sees where it takes over from the casing.
+-                const Ms = pyRes.mphi.MsU, phis = pyRes.mphi.phisU, dem = Math.abs(pyRes.Mtip_kft);
+-                const last = Ms.length - 1;
+-                if (dem <= 0) return { x: [], y: [], mode: "markers", name: "Mtip" };
+-                if (dem >= Ms[last]) return { x: [phis[last]], y: [Ms[last]], mode: "markers", marker: { color: "#b23b3b", size: 8, symbol: "circle-open", line: { width: 2, color: "#b23b3b" } }, name: "M @ casing tip",
+-                  hoverinfo: "text", text: ["moment at casing tip = " + fmt(dem, 1) + " kip·ft ≥ uncased curve max (" + fmt(Ms[last], 1) + ")"] };
+-                let i2 = 0; while (i2 < last && Ms[i2] < dem) i2++;
+-                const y0 = Ms[i2 - 1] != null ? Ms[i2 - 1] : 0, y1 = Ms[i2];
+-                const x0 = phis[i2 - 1] != null ? phis[i2 - 1] : 0, x1 = phis[i2];
+-                const px = (y1 > y0) ? x0 + (dem - y0) * (x1 - x0) / (y1 - y0) : x1;
+-                return { x: [px], y: [dem], mode: "markers", marker: { color: "#b23b3b", size: 8 }, name: "M @ casing tip",
+-                  hoverinfo: "text", text: ["moment at casing tip = " + fmt(dem, 1) + " kip·ft"] };
+-              })()] : [])
+-            ],
+-            layout: baseLayout({ height: 190, margin: { l: 48, r: 10, t: 8, b: 34 }, showlegend: true, legend: { font: { size: 8, family: PLOT_FONT }, x: 1, xanchor: "right", y: 0.05 },
+-              xaxis: { title: { text: "φ (1/in)", font: { size: 9 } }, gridcolor: C.grid, exponentformat: "e" },
+-              yaxis: { title: { text: "M (kip·ft)", font: { size: 9 } }, gridcolor: C.grid } }), height: 190 }),
+-          /*#__PURE__*/React.createElement("p", { className: "text-[8px] text-slate-400 mt-1 leading-snug" }, "EI₀ uncased ≈ ", fmt(pyRes.mphi.EI0u / 1e6, 2), "×10⁶ kip·in² vs cased ", fmt(pyRes.mphi.EI0 / 1e6, 2), "×10⁶ — the step you see in the EI-along-pile profile at the casing tip. The ● marks the moment carried where the casing ends (", fmt(Math.abs(pyRes.Mtip_kft || 0), 1), " kip·ft); if it sits past the knee, the uncased reach just below the tip is cracked, which is why its EI drops there.")),
+-        ok && pmCurve && /*#__PURE__*/React.createElement("div", { className: "bg-white rounded-sm p-3 border border-slate-200 mt-3" },
+-          /*#__PURE__*/React.createElement("div", { className: "text-[10px] font-mono-tech text-[var(--blueprint)] uppercase tracking-wider mb-1" }, "P–M interaction (nominal, fiber) · ● load cases"),
+-          /*#__PURE__*/React.createElement("p", { className: "text-[8.5px] text-slate-400 leading-snug mb-1" }, "The section's nominal axial–moment capacity envelope (fiber analysis). Any load-case point ● inside the curve is within nominal capacity; a point on or outside it is at/over capacity. This is the nominal (unfactored) interaction — the factored combined-loading check is in Module 05."),
+-          /*#__PURE__*/React.createElement(Plot, {
+-            data: [
+-              { x: pmCurve.pts.map(p2 => p2.Mn), y: pmCurve.pts.map(p2 => p2.P), mode: "lines", line: { color: C.blueprint, width: 2 }, name: "Mn(P)",
+-                hoverinfo: "text", text: pmCurve.pts.map(p2 => "P=" + fmt(p2.P, 0) + " kip<br>Mn=" + fmt(p2.Mn, 0) + " kip·ft") },
+-              { x: [pyRes.Mmax_kft], y: [I.STL], mode: "markers", marker: { color: "var(--accent)", size: 9, symbol: "diamond" }, name: "active",
+-                hoverinfo: "text", text: ["active: M=" + fmt(pyRes.Mmax_kft, 1) + ", P=" + fmt(I.STL, 0)] },
+-              ...(caseRes && caseRes.rows ? [{ x: caseRes.rows.filter(r2 => r2.Mmax != null && r2.type !== "service").map(r2 => r2.Mmax),
+-                y: caseRes.rows.filter(r2 => r2.Mmax != null && r2.type !== "service").map(r2 => ((Array.isArray(I.loadCases) ? I.loadCases : []).find(c2 => c2.name === r2.name) || {}).STL || 0),
+-                mode: "markers", marker: { color: "#b23b3b", size: 6 }, name: "cases",
+-                hoverinfo: "text", text: caseRes.rows.filter(r2 => r2.Mmax != null && r2.type !== "service").map(r2 => r2.name) }] : [])
+-            ],
+-            layout: baseLayout({ height: 210, margin: { l: 48, r: 10, t: 8, b: 34 }, showlegend: true, legend: { font: { size: 8, family: PLOT_FONT }, x: 1, xanchor: "right", y: 0.95 },
+-              xaxis: { title: { text: "M (kip·ft)", font: { size: 9 } }, gridcolor: C.grid, rangemode: "tozero" },
+-              yaxis: { title: { text: "P (kip)", font: { size: 9 } }, gridcolor: C.grid, rangemode: "tozero" } }), height: 210 }),
+-          /*#__PURE__*/React.createElement("p", { className: "text-[8.5px] text-slate-400 mt-1 leading-snug" },
+-            "Nominal fiber-section envelope (φ factors NOT applied) — a visualization aid; the code combined check in Module 05 governs. Compression side only.")),
+-        ok && pyRes.mobil && pyRes.mobil.length > 3 && /*#__PURE__*/React.createElement("div", { className: "bg-white rounded-sm p-3 border border-slate-200 mt-3" },
+-          /*#__PURE__*/React.createElement("div", { className: "text-[10px] font-mono-tech text-[var(--blueprint)] uppercase tracking-wider mb-1" }, "Soil mobilization p/pᵤ vs depth"),
+-          /*#__PURE__*/React.createElement("p", { className: "text-[8.5px] text-slate-400 leading-snug mb-1" }, "How much of each depth's ultimate soil resistance is being used under the design load (0 = untouched, 1 = fully mobilized/yielded). Values approaching 1 near the surface indicate the soil is at its limit there and load is shedding deeper."),
+-          /*#__PURE__*/React.createElement(Plot, {
+-            data: [{ x: pyRes.mobil.map(m2 => m2.r * 100), y: pyRes.mobil.map(m2 => m2.d), mode: "lines", fill: "tozerox", fillcolor: "rgba(201,98,46,0.15)", line: { color: C.accent, width: 2 },
+-              hoverinfo: "text", text: pyRes.mobil.map(m2 => fmt(m2.d, 1) + " ft: " + fmt(m2.r * 100, 0) + "% of ultimate") }],
+-            layout: baseLayout({ height: 210, margin: { l: 48, r: 10, t: 8, b: 34 },
+-              xaxis: { title: { text: "% of ultimate resistance", font: { size: 9 } }, range: [0, 100], gridcolor: C.grid },
+-              yaxis: { title: { text: "depth (ft)", font: { size: 9 } }, autorange: "reversed", gridcolor: C.grid } }), height: 210 }),
+-          /*#__PURE__*/React.createElement("p", { className: "text-[8.5px] text-slate-400 mt-1 leading-snug" },
+-            "How hard the soil is working at each depth in the converged state — high mobilization near grade is normal; high values at depth flag a soft zone doing structural work.")),
+-        ok && pyRes.eiProf && /*#__PURE__*/React.createElement("div", { className: "bg-white rounded-sm p-3 border border-slate-200 mt-3" },
+-          /*#__PURE__*/React.createElement("div", { className: "text-[10px] font-mono-tech text-[var(--blueprint)] uppercase tracking-wider mb-1" }, "Section EI along pile (post-cracking state)"),
+-          /*#__PURE__*/React.createElement("p", { className: "text-[8.5px] text-slate-400 leading-snug mb-1" }, "Bending stiffness EI at each depth after the solve, when variable-EI is on. Drops show where the moment exceeded cracking and the section softened; the step at the casing tip is the cased→uncased transition. Flat = section stayed uncracked (elastic EI throughout)."),
+-          /*#__PURE__*/React.createElement(Plot, {
+-            data: [{ x: pyRes.eiProf.map(p2 => p2.EI / 1e6), y: pyRes.eiProf.map(p2 => p2.d), mode: "lines", line: { color: C.blueprint, width: 2 },
+-              hoverinfo: "text", text: pyRes.eiProf.map(p2 => fmt(p2.d, 1) + " ft: EI = " + fmt(p2.EI / 1e6, 2) + "\u00d710\u2076 kip\u00b7in\u00b2") }],
+-            layout: baseLayout({ height: 210, margin: { l: 48, r: 10, t: 8, b: 34 },
+-              xaxis: { title: { text: "EI (\u00d710\u2076 kip\u00b7in\u00b2)", font: { size: 9 } }, gridcolor: C.grid, rangemode: "tozero" },
+-              yaxis: { title: { text: "depth (ft)", font: { size: 9 } }, autorange: "reversed", gridcolor: C.grid } }), height: 210 }),
+-          /*#__PURE__*/React.createElement("p", { className: "text-[8.5px] text-slate-400 mt-1 leading-snug" },
+-            "Converged secant EI from the moment-curvature model \u2014 dips mark cracked reaches; the step is the casing tip. EI ratchets downward only (cracking irreversible under the monotonic ramp).")),
++        /*#__PURE__*/React.createElement("p", { className: "text-[9px] text-slate-500 leading-snug mb-2" }, "The response graphs of this solve \u2014 deflection, moment and shear vs depth (Figure F-1), the moment profiles of all cases (F-2), the p-y curves (F-3), soil reaction and mobilization, pushover, moment\u2013curvature, P\u2013M interaction and EI along the pile \u2014 are on the ", /*#__PURE__*/React.createElement("b", null, "Lateral graphs"), " output tab. M", /*#__PURE__*/React.createElement("sub", null, "max"), " (the design moment for the structural checks) is the peak of the moment profile."),
++        /*#__PURE__*/React.createElement(LatGraphsLinks, { ids: ["dmv", "mcases", "py", "soil", "stiff"] }),
+         /*#__PURE__*/React.createElement("div", { className: "mt-3" },
+           /*#__PURE__*/React.createElement(DerivLine, { label: "Governing equation", tex: "(EI(z)\\,y'')'' + Q\\,y'' + E_s(y,z)\\,y = 0" }),
+           /*#__PURE__*/React.createElement(DerivLine, { label: "Models", tex: "\\text{Reese et al. (1974) sand; Matlock (1970); Welch \\& Reese (1972)}" }),
+           /*#__PURE__*/React.createElement(DerivLine, { label: "Layering", tex: "\\text{Georgiadis (1983) equivalent depth}" }),
+           /*#__PURE__*/React.createElement("p", { className: "text-[9px] text-slate-400 mt-2 leading-snug" },
+-            "Nonlinear p-y finite-difference solve: secant-stiffness iteration, incremental load steps, axial thrust in the stiffness (second-order). Benchmarked against an LPILE 2022 project run (Reese sand over Matlock clay, 85 kip thrust): head deflection 100.1%, M", /*#__PURE__*/React.createElement("sub", null, "max"), " 100.2% of LPILE. Verify final design against a project-specific LPILE analysis before sealing.")))))
++            "Nonlinear p-y finite-difference solve: secant-stiffness iteration, incremental load steps, axial thrust in the stiffness (second-order). Benchmarked against an LPILE 2022 project run (Reese sand over Matlock clay, 85 kip thrust): head deflection 100.1%, M", /*#__PURE__*/React.createElement("sub", null, "max"), " 100.2% of LPILE. Verify final design against a project-specific LPILE analysis before sealing."))))
+   );
+ }
+ 
+@@ -15241,46 +15107,8 @@ function App() {
+       style: {
+         color: "#2f7d4f"
+       }
+-    }, "✓ Applied — Mmax is now ", fmt(s.Mmax, 1), " kip·ft, driving the flexure & combined checks."), lpileParse.records && lpileParse.records.length > 2 && /*#__PURE__*/React.createElement("div", {
+-      className: "mt-3 rounded-sm border border-slate-200 p-2 bg-white"
+-    }, /*#__PURE__*/React.createElement("div", {
+-      className: "text-[10px] font-mono-tech text-[var(--blueprint)] uppercase tracking-wider mb-1"
+-    }, "LPILE response profiles"), /*#__PURE__*/React.createElement(LpileProfilePlot, {
+-      records: lpileParse.records
+-    })), lpileParse.records && lpileParse.records.length > 2 && (() => {
+-      const lpM = lpileParse.summary.Mmax,
+-        biM = solved.Mmax_kft;
+-      const lpV = lpileParse.inputs ? lpileParse.inputs.shear_kip : null;
+-      const loadMatch = lpV != null ? Math.abs(lpV - I.Plat) <= 0.1 : null;
+-      const ratio = lpM > 0 ? biM / lpM : null;
+-      const under = biM < lpM;
+-      return /*#__PURE__*/React.createElement("div", {
+-        className: "mt-3 rounded-sm border border-slate-200 p-2 bg-white"
+-      }, /*#__PURE__*/React.createElement("div", {
+-        className: "text-[10px] font-mono-tech text-[var(--blueprint)] uppercase tracking-wider mb-1"
+-      }, "Built-in solver vs LPILE ", /*#__PURE__*/React.createElement("span", {
+-        className: "text-slate-400 normal-case"
+-      }, "(dashed green = LPILE)")), /*#__PURE__*/React.createElement(LateralDiagram, {
+-        solved: solved,
+-        I: I,
+-        lpileOverlay: lpileParse.records
+-      }), /*#__PURE__*/React.createElement("div", {
+-        className: "text-[10px] leading-snug mt-1 font-mono-tech",
+-        style: {
+-          color: "#334155"
+-        }
+-      }, "Built-in M", /*#__PURE__*/React.createElement("sub", null, "max"), " ", fmt(biM, 1), " · LPILE M", /*#__PURE__*/React.createElement("sub", null, "max"), " ", fmt(lpM, 1), " kip·ft · ratio ", ratio != null ? fmt(ratio, 2) : "—"), loadMatch === false ? /*#__PURE__*/React.createElement("div", {
+-        className: "text-[10px] mt-1 leading-snug",
+-        style: {
+-          color: "#b23b3b"
+-        }
+-      }, "⚠ Loads differ (LPILE lateral ", fmt(lpV, 1), " kip vs app ", fmt(I.Plat, 1), " kip) — not a like-for-like comparison until you sync the load below.") : /*#__PURE__*/React.createElement("div", {
+-        className: "text-[10px] mt-1 leading-snug",
+-        style: {
+-          color: under ? "#b23b3b" : "#2f6f3e"
+-        }
+-      }, under ? `The linear built-in estimate sits ${fmt((1 - ratio) * 100, 0)}% below LPILE — expected once the soil yields. LPILE governs; use its moment.` : `Built-in is at/above LPILE (${fmt(ratio, 2)}×); still verify against LPILE before sealing.`));
+-    })(), (lpileParse.warnings || []).length > 0 && /*#__PURE__*/React.createElement("ul", {
++    }, "✓ Applied — Mmax is now ", fmt(s.Mmax, 1), " kip·ft, driving the flexure & combined checks."), lpileParse.records && lpileParse.records.length > 2 && /*#__PURE__*/React.createElement("div", { className: "mt-3" },
++      /*#__PURE__*/React.createElement(LatGraphsLinks, { ids: ["lpile"], lead: "LPILE response profiles and the built-in solver vs LPILE comparison:" })), (lpileParse.warnings || []).length > 0 && /*#__PURE__*/React.createElement("ul", {
+       className: "list-disc ml-4 mt-2 text-[9.5px]",
+       style: {
+         color: "#8a6d3b"
+@@ -15366,7 +15194,7 @@ function App() {
+       }, "The moment was computed for the LPILE pile above. If it doesn't match this design, the moment won't be valid — sync the inputs or re-run LPILE on the correct pile before using it."));
+     })(), /*#__PURE__*/React.createElement("p", {
+       className: "text-[9px] text-slate-400 mt-2 leading-snug"
+-    }, "The full moment / shear / deflection profile from LPILE is plotted above. Deflection, shear, and fixity are parsed too — tell me if you want any of those pushed into other fields."));
++    }, "The full moment / shear / deflection profile from LPILE is plotted on the Lateral graphs tab (LPILE comparison). Deflection, shear, and fixity are parsed too — tell me if you want any of those pushed into other fields."));
+   })()))) : /*#__PURE__*/React.createElement("div", {
+     className: "space-y-4"
+   }, /*#__PURE__*/React.createElement("div", {
+@@ -15596,48 +15424,10 @@ function App() {
+     className: "text-[9.5px] text-slate-400 mt-2 leading-snug"
+   }, "Finite-difference beam on linear elastic foundation. Fixity = 2nd zero-crossing of the moment diagram. The fixed-head model restrains rotation at grade; validate against a full nonlinear p-y (LPILE) run before sealing."))), /*#__PURE__*/React.createElement("div", {
+     className: "bg-white rounded-sm p-3 border border-slate-200"
+-  }, /*#__PURE__*/React.createElement(LateralDiagram, {
+-    solved: solved,
+-    I: I,
+-    lpileOverlay: lpileParse && lpileParse.ok && lpileParse.records && lpileParse.records.length > 2 ? lpileParse.records : null
+-  }), lpileParse && lpileParse.ok && lpileParse.records && lpileParse.records.length > 2 && (() => {
+-    const lpM = lpileParse.summary.Mmax; // kip-ft
+-    const biM = solved.Mmax_kft; // kip-ft
+-    const lpV = lpileParse.inputs ? lpileParse.inputs.shear_kip : null;
+-    const loadMatch = lpV != null ? Math.abs(lpV - I.Plat) <= 0.1 : null;
+-    const ratio = lpM > 0 ? biM / lpM : null;
+-    const under = biM < lpM;
+-    return /*#__PURE__*/React.createElement("div", {
+-      className: "mt-2 rounded-sm border p-2 text-[10px] leading-snug",
+-      style: {
+-        borderColor: "#2f6f3e",
+-        background: "rgba(47,111,62,0.05)"
+-      }
+-    }, /*#__PURE__*/React.createElement("div", {
+-      className: "font-mono-tech mb-1",
+-      style: {
+-        color: "#14304a"
+-      }
+-    }, /*#__PURE__*/React.createElement("b", null, "Built-in vs LPILE"), " (dashed green = LPILE)"), /*#__PURE__*/React.createElement("div", {
+-      className: "font-mono-tech",
+-      style: {
+-        color: "#334155"
+-      }
+-    }, "Built-in M", /*#__PURE__*/React.createElement("sub", null, "max"), " = ", fmt(biM, 1), " kip·ft · LPILE M", /*#__PURE__*/React.createElement("sub", null, "max"), " = ", fmt(lpM, 1), " kip·ft · ratio = ", ratio != null ? fmt(ratio, 2) : "—"), loadMatch === false && /*#__PURE__*/React.createElement("div", {
+-      className: "mt-1",
+-      style: {
+-        color: "#b23b3b"
+-      }
+-    }, "⚠ Loads differ — LPILE lateral ", fmt(lpV, 1), " kip vs built-in ", fmt(I.Plat, 1), " kip. The curves aren't a like-for-like comparison until the loads match (sync via the import panel)."), loadMatch !== false && /*#__PURE__*/React.createElement("div", {
+-      className: "mt-1",
+-      style: {
+-        color: under ? "#b23b3b" : "#2f6f3e"
+-      }
+-    }, under ? `The linear built-in estimate is ${fmt((1 - ratio) * 100, 0)}% below LPILE here — as expected, the linear model under-predicts once soil yields. Use the LPILE moment for design.` : `The built-in estimate is at or above LPILE here (${fmt(ratio, 2)}×). Still verify against LPILE before sealing.`));
+-  })()))),
+-  (I.pileType !== "iab") && React.createElement(GfxCard, { order: 21, otab: "lat", badge: "F-3", title: "Figure F-3: p-y curves at selected depths",
+-    sub: "the curves the lateral solver uses, with the point mobilised under the active load case" },
+-    React.createElement(PyCurvesFig, { I: I, pyRes: pyRes, solved: solved, activeLayers: activeLayers, depths: pyDepths, setDepths: setPyDepths })),
++  }, /*#__PURE__*/React.createElement("p", { className: "text-[10px] text-slate-500 leading-snug mb-2" }, "The deflection and moment diagrams of this linear solution", lpileParse && lpileParse.ok && lpileParse.records && lpileParse.records.length > 2 ? " (with the imported LPILE profiles overlaid and compared)" : "", " are on the ", /*#__PURE__*/React.createElement("b", null, "Lateral graphs"), " output tab."),
++  /*#__PURE__*/React.createElement(LatGraphsLinks, { ids: ["dmv", "py"].concat(lpileParse && lpileParse.ok && lpileParse.records && lpileParse.records.length > 2 ? ["lpile"] : []) })))),
++  (I.pileType !== "iab") && React.createElement(LatGraphsCard, { I: I, set: set, pyRes: pyRes, solved: solved, activeLayers: activeLayers, pyDepths: pyDepths, setPyDepths: setPyDepths,
++    caseRes: caseRes, runAllCases: runAllCases, pmCurve: pmCurve, lpileParse: lpileParse }),
+   (I.pileType === "micropile") && React.createElement(GfxCard, { order: 29, otab: "struct", badge: "S-1", title: "Pile cross-sections (to scale)",
+     sub: "cased and uncased (bond-zone) sections with the properties the checks use" },
+     React.createElement(PileSectionsFig, { I: I, r: r, pyRes: pyRes, ei: { EI: EI, EI_uncased_kipin2: EI_uncased_kipin2 } })),
+@@ -16516,6 +16306,445 @@ function RailTabs({ tab, setTab, pileType }) {
+     }, labelFor(t), warn[t.id] ? /*#__PURE__*/React.createElement("span", { className: "rail-tab-dot", title: "An input on this tab has a warning", "aria-label": "warning" }) : null)));
+ }
+ 
++/* ============================================================
++   LATERAL GRAPHS OUTPUT TAB (UI only, 2026-10-11)
++   ------------------------------------------------------------
++   Every lateral-analysis graph on one output tab ("Lateral graphs", next to
++   "Lateral (p-y)"), drawn larger, with a sub-tab strip: Deflection · Moment ·
++   Shear (Figure F-1), Moment — all cases (F-2), p-y curves (F-3), Soil
++   reaction, Pushover & stiffness, LPILE comparison. All charts are Plotly
++   (engineer 2026-10-11: "those new graphs should be using plotly"). Module 02
++   keeps the calculation and links here. The sub-tab is remembered per browser
++   in micropile_lrfd_latGraphTab_v1 (not project data). Charts drawn while the
++   tab is hidden are resized when it is shown (Plotly.Plots.resize). Nothing is
++   computed here: every value is read from pyRes / solved / caseRes / pmCurve /
++   the LPILE import, as the plots in Module 02 did before.
++============================================================ */
++const LATG_KEY = "micropile_lrfd_latGraphTab_v1";
++const LATG_TABS = [["dmv", "Deflection · Moment · Shear"], ["mcases", "Moment — all cases"], ["py", "p-y curves"], ["soil", "Soil reaction"], ["stiff", "Pushover & stiffness"], ["lpile", "LPILE comparison"]];
++function readLatGraphTab() { try { return window.localStorage.getItem(LATG_KEY) || "dmv"; } catch (e) { return "dmv"; } }
++function latGraphTabsFor(I, hasLpile) {
++  const py = I.lateralSource === "py";
++  return LATG_TABS.map(t => t[0]).filter(id => id === "dmv" || id === "py" || (py && (id === "mcases" || id === "soil" || id === "stiff")) || (id === "lpile" && hasLpile));
++}
++/* select the Lateral graphs output tab (and a sub-tab) and scroll to it */
++function showLatGraphs(sub) {
++  if (sub) {
++    try { window.localStorage.setItem(LATG_KEY, sub); } catch (e) {}
++    if (window.__pdSetLatGraphTab) window.__pdSetLatGraphTab(sub);
++  }
++  const card = document.getElementById("pd-latgfx");
++  if (!card) return false;
++  showOutTabOf(card);
++  const smooth = !(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
++  setTimeout(() => card.scrollIntoView({ behavior: smooth ? "smooth" : "auto", block: "start" }), 30);
++  return true;
++}
++function LatGraphsLinks({ ids, lead }) {
++  const e = React.createElement;
++  return e("div", { className: "pd-lg-links" },
++    lead ? e("span", { className: "pd-lg-links-lead" }, lead) : null,
++    ids.map(id => e("button", { key: id, type: "button", className: "pd-lg-link", onClick: () => showLatGraphs(id) },
++      (LATG_TABS.find(t => t[0] === id) || [id, id])[1], " →")));
++}
++/* shared Plotly styling for the tab */
++function latAx(title, extra) {
++  return Object.assign({ title: { text: title, font: { size: 11 } }, gridcolor: C.grid, zeroline: true, zerolinecolor: "#cbd5e1", linecolor: C.blueprint, ticks: "outside", tickcolor: C.blueprint, automargin: true }, extra || {});
++}
++function latLayout(over) {
++  return baseLayout(Object.assign({ margin: { l: 58, r: 14, t: 10, b: 46 }, hovermode: "closest", hoverlabel: { font: { family: PLOT_FONT, size: 11 } } }, over));
++}
++function LatPanel({ title, children, note }) {
++  const e = React.createElement;
++  return e("div", { className: "pd-lg-panel" },
++    title ? e("div", { className: "pd-lg-h" }, title) : null,
++    children,
++    note ? e("div", { className: "pd-lg-note" }, note) : null);
++}
++/* one response quantity vs depth (Figure F-1, single view) */
++function LatProfileOne({ records, which, stickFt, height }) {
++  const k = which === "y" ? "defl" : which === "M" ? "mom" : "shear";
++  const z = records.map(r => r.depth), v = records.map(r => r[k]);
++  let iM = 0; v.forEach((x, i) => { if (Math.abs(x) > Math.abs(v[iM])) iM = i; });
++  const col = which === "y" ? C.blueprint2 : which === "M" ? C.accent : C.blueprint;
++  const fill = which === "y" ? "rgba(61,106,148,0.10)" : which === "M" ? "rgba(201,98,46,0.12)" : "rgba(20,48,74,0.10)";
++  const unit = which === "y" ? "in" : which === "M" ? "kip·ft" : "kip";
++  const nm = which === "y" ? "deflection y" : which === "M" ? "moment M" : "shear V";
++  const dp = which === "y" ? 4 : which === "M" ? 1 : 2;
++  const shapes = stickFt != null && stickFt > 0 ? [{ type: "line", xref: "paper", x0: 0, x1: 1, yref: "y", y0: stickFt, y1: stickFt, line: { color: "#5a5a4a", width: 1.2, dash: "dash" } }] : [];
++  const anns = shapes.length ? [{ xref: "paper", x: 0.01, xanchor: "left", yref: "y", y: stickFt, yanchor: "bottom", showarrow: false, text: "grade", font: { size: 10, color: "#5a5a4a", family: PLOT_FONT } }] : [];
++  return React.createElement(Plot, {
++    data: [
++      { x: v, y: z, mode: "lines", fill: "tozerox", fillcolor: fill, line: { color: col, width: 2.5 }, name: nm,
++        hovertemplate: "depth %{y:.2f} ft<br>" + nm + " = %{x:." + dp + "f} " + unit + "<extra></extra>" },
++      { x: [v[iM]], y: [z[iM]], mode: "markers+text", marker: { color: "#b23b3b", size: 8 }, text: [" max " + fmt(v[iM], dp) + " "], textposition: v[iM] < 0 ? "middle left" : "middle right",
++        textfont: { size: 10, family: PLOT_FONT, color: "#b23b3b" }, hoverinfo: "skip", showlegend: false }
++    ],
++    layout: latLayout({ height, showlegend: false, shapes, annotations: anns,
++      xaxis: latAx(nm + " (" + unit + ")"),
++      yaxis: latAx("depth from pile head (ft)", { autorange: "reversed", zeroline: false }) }),
++    height });
++}
++function LatFail({ pyRes }) {
++  const e = React.createElement;
++  // F22 (O33) "did not converge" outcome: the same note Module 02 shows
++  if (pyRes && pyRes.noConv) return e("div", { className: "pd-lg-fail", role: "alert" },
++    e("div", { style: { fontWeight: 700, marginBottom: "4px" } }, "No graphs are shown: the lateral p-y analysis did not converge."),
++    e(PyNoConvNote, { why: pyRes.why }));
++  return e("div", { className: "pd-lg-fail", role: "alert" },
++    e("b", null, "The nonlinear p-y analysis did not converge — no response graphs are shown."),
++    " ", pyRes && pyRes.msg ? "Solver message: " + pyRes.msg + " " : "",
++    "The graphs return when the solve converges (Module 02 on the Lateral (p-y) tab holds the inputs).");
++}
++function LatGraphsCard({ I, set, pyRes, solved, activeLayers, pyDepths, setPyDepths, caseRes, runAllCases, pmCurve, lpileParse }) {
++  const e = React.createElement;
++  const lp = lpileParse && lpileParse.ok && lpileParse.records && lpileParse.records.length > 2 ? lpileParse : null;
++  const ids = latGraphTabsFor(I, !!lp);
++  const [tab, setTab] = React.useState(readLatGraphTab);
++  const [view, setView] = React.useState("all"); // F-1: all three, or one quantity large
++  const choose = React.useCallback(t => { setTab(t); try { window.localStorage.setItem(LATG_KEY, t); } catch (err) {} }, []);
++  React.useEffect(() => { window.__pdSetLatGraphTab = setTab; return () => { if (window.__pdSetLatGraphTab === setTab) window.__pdSetLatGraphTab = null; }; }, []);
++  const cur = ids.indexOf(tab) >= 0 ? tab : ids[0];
++  const ref = React.useRef(null);
++  // Plotly gotcha: a chart drawn while its tab is hidden keeps the default
++  // size; resize every chart in the card when the card's width changes
++  // (hidden -> shown, window resize) and after a sub-tab or view switch.
++  const fitPlots = React.useCallback(() => {
++    const el = ref.current;
++    if (!el || !window.Plotly || el.getClientRects().length === 0) return;
++    el.querySelectorAll(".js-plotly-plot").forEach(p => { try { window.Plotly.Plots.resize(p); } catch (err) {} });
++  }, []);
++  React.useEffect(() => {
++    const el = ref.current; if (!el) return;
++    let raf = 0, lastW = -1;
++    const onSize = () => {
++      const w = Math.round(el.getBoundingClientRect().width);
++      if (w === lastW) return;
++      lastW = w; cancelAnimationFrame(raf); raf = requestAnimationFrame(fitPlots);
++    };
++    if (!("ResizeObserver" in window)) { window.addEventListener("resize", onSize); return () => window.removeEventListener("resize", onSize); }
++    const ro = new ResizeObserver(onSize); ro.observe(el);
++    return () => { ro.disconnect(); cancelAnimationFrame(raf); };
++  }, [fitPlots]);
++  React.useEffect(() => { const t = setTimeout(fitPlots, 80); return () => clearTimeout(t); }, [cur, view, fitPlots]);
++  const onKey = (ev, i) => {
++    let j = null;
++    if (ev.key === "ArrowRight") j = (i + 1) % ids.length;
++    else if (ev.key === "ArrowLeft") j = (i - 1 + ids.length) % ids.length;
++    else if (ev.key === "Home") j = 0;
++    else if (ev.key === "End") j = ids.length - 1;
++    if (j == null) return;
++    ev.preventDefault(); choose(ids[j]);
++    setTimeout(() => { const b = document.getElementById("lgtab-" + ids[j]); if (b) b.focus(); }, 0);
++  };
++  const src = I.lateralSource, isPy = src === "py";
++  const ok = isPy && pyRes && pyRes.ok;
++  const fail = isPy && !ok ? e(LatFail, { pyRes }) : null;
++  const stickFt = ok && pyRes.setup ? pyRes.setup.stick_in / 12 : null;
++  const H = 520;
++
++  /* ---- Deflection · Moment · Shear (Figure F-1) ---- */
++  const dmv = () => {
++    if (isPy) {
++      if (!ok) return fail;
++      if (!pyRes.records || pyRes.records.length <= 2) return e("div", { className: "pd-lg-note" }, "No response profile.");
++      const views = [["all", "All three"], ["y", "Deflection"], ["M", "Moment"], ["V", "Shear"]];
++      return e(React.Fragment, null,
++        e("div", { className: "pd-lg-seg", role: "group", "aria-label": "Figure F-1 view" }, views.map(([v, l]) =>
++          e("button", { key: v, type: "button", "aria-pressed": view === v ? "true" : "false", onClick: () => setView(v) }, l))),
++        e(LatPanel, { title: "Figure F-1: deflection, moment and shear vs depth (active case)",
++          note: "Nonlinear p-y, M-φ EI " + (pyRes.eiVar ? "on" : "off") + ". M_max = " + fmt(pyRes.Mmax_kft, 1) + " kip·ft at " + fmt(pyRes.zMmax, 1) + " ft below grade; head deflection " + fmt(pyRes.headDefl_in, 3) + " in. Depth is measured from the pile head" + (stickFt > 0 ? " (grade " + fmt(stickFt, 1) + " ft below the head)." : ".") + " Same solution as the printed Figure F-1." },
++          view === "all" ? e(LpileProfilePlot, { records: pyRes.records, height: H })
++            : e(LatProfileOne, { records: pyRes.records, which: view, stickFt, height: 560 })),
++        e("div", { style: { marginTop: "12px" } }, e(ElevationPlot, { I: I, pyRes: pyRes, height: 480 })));
++    }
++    if (src === "solver") {
++      return e(LatPanel, { title: "Linear estimate: deflection and moment vs depth (active case)" },
++        e(LateralDiagram, { solved: solved, I: I, height: H, lpileOverlay: lp ? lp.records : null }),
++        lp && (() => {
++          const lpM = lp.summary.Mmax; // kip-ft
++          const biM = solved.Mmax_kft; // kip-ft
++          const lpV = lp.inputs ? lp.inputs.shear_kip : null;
++          const loadMatch = lpV != null ? Math.abs(lpV - I.Plat) <= 0.1 : null;
++          const ratio = lpM > 0 ? biM / lpM : null;
++          const under = biM < lpM;
++          return /*#__PURE__*/React.createElement("div", {
++            className: "mt-2 rounded-sm border p-2 text-[10px] leading-snug",
++            style: {
++              borderColor: "#2f6f3e",
++              background: "rgba(47,111,62,0.05)"
++            }
++          }, /*#__PURE__*/React.createElement("div", {
++            className: "font-mono-tech mb-1",
++            style: {
++              color: "#14304a"
++            }
++          }, /*#__PURE__*/React.createElement("b", null, "Built-in vs LPILE"), " (dashed green = LPILE)"), /*#__PURE__*/React.createElement("div", {
++            className: "font-mono-tech",
++            style: {
++              color: "#334155"
++            }
++          }, "Built-in M", /*#__PURE__*/React.createElement("sub", null, "max"), " = ", fmt(biM, 1), " kip·ft · LPILE M", /*#__PURE__*/React.createElement("sub", null, "max"), " = ", fmt(lpM, 1), " kip·ft · ratio = ", ratio != null ? fmt(ratio, 2) : "—"), loadMatch === false && /*#__PURE__*/React.createElement("div", {
++            className: "mt-1",
++            style: {
++              color: "#b23b3b"
++            }
++          }, "⚠ Loads differ — LPILE lateral ", fmt(lpV, 1), " kip vs built-in ", fmt(I.Plat, 1), " kip. The curves aren't a like-for-like comparison until the loads match (sync via the import panel)."), loadMatch !== false && /*#__PURE__*/React.createElement("div", {
++            className: "mt-1",
++            style: {
++              color: under ? "#b23b3b" : "#2f6f3e"
++            }
++          }, under ? `The linear built-in estimate is ${fmt((1 - ratio) * 100, 0)}% below LPILE here — as expected, the linear model under-predicts once soil yields. Use the LPILE moment for design.` : `The built-in estimate is at or above LPILE here (${fmt(ratio, 2)}×). Still verify against LPILE before sealing.`));
++        })());
++    }
++    return e("div", { className: "pd-lg-note" }, "The lateral basis is “Input Mmax (from LPILE)”: the tool does not compute response profiles. ",
++      lp ? "The imported LPILE profiles are on the LPILE comparison sub-tab." : "Import an LPILE output in Module 02 to plot its profiles here.");
++  };
++
++  /* ---- Moment — all cases (Figure F-2) ---- */
++  const mcases = () => {
++    const rr = caseRes && caseRes.rows;
++    const runBtn = e("button", { type: "button", className: "pd-lg-link", onClick: runAllCases }, rr ? "Re-run all cases" : "Run all cases");
++    if (caseRes && caseRes.busy) return e("div", { className: "pd-lg-note" }, "Running all cases…");
++    if (caseRes && caseRes.fail) return e("div", { className: "pd-lg-note" }, "The case run failed: " + caseRes.msg + " ", runBtn);
++    if (!rr) return e("div", { className: "pd-lg-note" }, "Figure F-2 needs the per-case p-y solves. Run all LRFD cases (the same run as “Run all cases” in the Load cases card) to plot every case’s moment profile. ", runBtn);
++    const withP = rr.filter(r0 => r0.prof), noP = rr.filter(r0 => !r0.prof);
++    return e(LatPanel, { title: "Figure F-2: moment profiles, all LRFD load cases overlaid (per-case p-y solves)",
++      note: e(React.Fragment, null, "Each case solved with its own loads (the case envelope run" + (caseRes.at ? ", " + caseRes.at : "") + "). Depth below grade; negative = stickup. ",
++        noP.length ? "No profile (p-y solve did not converge): " + noP.map(r0 => r0.name).join(", ") + ". " : "", runBtn) },
++      withP.length ? e(Plot, {
++        data: withP.map((r0, i) => {
++          const cols = ["#14304a", "#c9622e", "#2f6f3e", "#3d6a94", "#8a5a1f", "#7a4a7a"];
++          return { x: r0.prof.m, y: r0.prof.d, mode: "lines", line: { color: cols[i % 6], width: 2 }, name: r0.name,
++            hovertemplate: r0.name.replace(/%/g, "%%") + "<br>depth %{y:.2f} ft<br>M = %{x:.1f} kip·ft<extra></extra>" };
++        }),
++        layout: latLayout({ height: H, showlegend: true, legend: { orientation: "h", x: 0, y: -0.14, yanchor: "top", entrywidth: 190, font: { size: 10, family: PLOT_FONT } },
++          xaxis: latAx("M (kip·ft)"), yaxis: latAx("depth below grade (ft)", { autorange: "reversed", zeroline: false }) }), height: H })
++        : e("div", { className: "pd-lg-note" }, "No case converged; nothing to plot."));
++  };
++
++  /* ---- p-y curves (Figure F-3, plus the standard-depth curves) ---- */
++  const pyTab = () => isPy && !ok ? fail : e(React.Fragment, null,
++    e(LatPanel, { title: "Figure F-3: p-y curves at selected depths (active case)" },
++      e(PyCurvesFig, { I: I, pyRes: pyRes, solved: solved, activeLayers: activeLayers, depths: pyDepths, setDepths: setPyDepths })),
++    ok && pyRes.curves && pyRes.curves.length > 0 && e("div", { style: { marginTop: "12px" } }, e(LatPanel, { title: "p-y curves at 1, 2.5, 5, 10 and 20 pile widths below grade · ● = operating point" },
++      /*#__PURE__*/React.createElement("p", { className: "pd-lg-note", style: { marginTop: 0 } }, "The nonlinear soil springs: horizontal resistance p (per unit length) vs pile deflection y, at several depths. Stiffer/stronger with depth. The ● marks where each spring is actually operating under the design load — near the flat top means the soil is near its ultimate resistance there."),
++      /*#__PURE__*/React.createElement("div", { className: "flex items-center gap-1 text-[11px] font-mono-tech text-slate-500 mb-1" }, "probe depth",
++        /*#__PURE__*/React.createElement("input", { type: "number", "aria-label": "p-y curve probe depth, ft below grade", value: I.pyCurveDepth || 0, onChange: ev => set('pyCurveDepth', parseFloat(ev.target.value) || 0),
++          className: "w-16 text-[11px] px-1 py-0.5 rounded-sm border border-slate-300" }), "ft below grade (0 = off)"),
++      /*#__PURE__*/React.createElement(Plot, {
++        data: [
++          ...pyRes.curves.map((c2, i2) => {
++            const cols = ["#14304a", "#3d6a94", "#c9622e", "#2f6f3e", "#8a5a1f"];
++            return { x: c2.pts.map(p2 => p2.y), y: c2.pts.map(p2 => p2.p), mode: "lines",
++              line: { color: cols[i2 % 5], width: 2 }, name: fmt(c2.d_ft, 1) + " ft (" + c2.model + ")",
++              hoverinfo: "text", text: c2.pts.map(p2 => fmt(c2.d_ft, 1) + " ft<br>y=" + fmt(p2.y, 3) + " in<br>p=" + fmt(p2.p, 1) + " lb/in") };
++          }),
++          { x: pyRes.curves.map(c2 => c2.op.y), y: pyRes.curves.map(c2 => c2.op.p), mode: "markers",
++            marker: { color: "#b23b3b", size: 8, symbol: "circle" }, name: "operating",
++            hoverinfo: "text", text: pyRes.curves.map(c2 => "operating @ " + fmt(c2.d_ft, 1) + " ft<br>y=" + fmt(c2.op.y, 3) + " in<br>p=" + fmt(c2.op.p, 1) + " lb/in") }
++        ],
++        layout: latLayout({ height: 420, showlegend: true, legend: { orientation: "h", x: 0, y: -0.16, yanchor: "top", entrywidth: 140, font: { size: 10, family: PLOT_FONT } },
++          xaxis: latAx("y — pile deflection (in)"), yaxis: latAx("p — soil resistance (lb/in)") }),
++        height: 420 }),
++      /*#__PURE__*/React.createElement("p", { className: "pd-lg-note" },
++        "Curves include the Georgiadis equivalent-depth offsets and the p/y multipliers exactly as the solve applies them. Red dots show the deflection each depth actually reached — how much of each curve is mobilized. Depths at 1–2.5–5–10–20 pile diameters below grade."))));
++
++  /* ---- Soil reaction ---- */
++  const soil = () => {
++    if (!ok) return fail;
++    const recs = pyRes.records || [], pN = pyRes.pNode || [];
++    const n = Math.min(recs.length, pN.length);
++    const dBG = [], pv = [];
++    for (let i = 0; i < n; i++) { dBG.push(recs[i].depth - (stickFt || 0)); pv.push(pN[i]); }
++    return e("div", { className: "pd-lg-grid" },
++      n > 2 && e(LatPanel, { title: "Soil reaction p vs depth (active case)",
++        note: "The solver’s nodal soil reaction p (lb/in of pile length), plotted with the sign of the deflection at that depth (the soil resists in the opposite direction). These are the same values as the ● points of Figure F-3. Depth below grade; negative = stickup (no soil)." },
++        e(Plot, {
++          data: [{ x: pv, y: dBG, mode: "lines", fill: "tozerox", fillcolor: "rgba(47,111,62,0.12)", line: { color: "#2f6f3e", width: 2.2 }, name: "p",
++            hovertemplate: "depth %{y:.2f} ft<br>p = %{x:.1f} lb/in<extra></extra>" }],
++          layout: latLayout({ height: H, showlegend: false,
++            xaxis: latAx("p — soil reaction (lb/in)"), yaxis: latAx("depth below grade (ft)", { autorange: "reversed", zeroline: true }) }), height: H })),
++      pyRes.mobil && pyRes.mobil.length > 3 && e(LatPanel, { title: "Soil mobilization p/pᵤ vs depth",
++        note: "How hard the soil is working at each depth in the converged state — high mobilization near grade is normal; high values at depth flag a soft zone doing structural work." },
++        /*#__PURE__*/React.createElement("p", { className: "pd-lg-note", style: { marginTop: 0 } }, "How much of each depth's ultimate soil resistance is being used under the design load (0 = untouched, 1 = fully mobilized/yielded). Values approaching 1 near the surface indicate the soil is at its limit there and load is shedding deeper."),
++        /*#__PURE__*/React.createElement(Plot, {
++          data: [{ x: pyRes.mobil.map(m2 => m2.r * 100), y: pyRes.mobil.map(m2 => m2.d), mode: "lines", fill: "tozerox", fillcolor: "rgba(201,98,46,0.15)", line: { color: C.accent, width: 2 },
++            hoverinfo: "text", text: pyRes.mobil.map(m2 => fmt(m2.d, 1) + " ft: " + fmt(m2.r * 100, 0) + "% of ultimate") }],
++          layout: latLayout({ height: H - 40, showlegend: false,
++            xaxis: latAx("% of ultimate resistance", { range: [0, 100] }),
++            yaxis: latAx("depth (ft)", { autorange: "reversed", zeroline: false }) }), height: H - 40 })));
++  };
++
++  /* ---- Pushover & stiffness ---- */
++  const stiff = () => {
++    if (!ok) return fail;
++    const any = (pyRes.sweep && pyRes.sweep.length > 2) || pyRes.mphi || pmCurve || pyRes.eiProf;
++    if (!any) return e("div", { className: "pd-lg-note" }, "No pushover or stiffness diagnostics for this solve.");
++    const SH = 340;
++    return e("div", { className: "pd-lg-grid" },
++      pyRes.sweep && pyRes.sweep.length > 2 && e(LatPanel, { title: "Head load–deflection (pushover)" },
++        /*#__PURE__*/React.createElement("p", { className: "pd-lg-note", style: { marginTop: 0 } }, "Pile-head deflection as the lateral load is ramped from zero to the design value. A straight line means near-elastic response; curvature (softening) shows soil yielding and/or section cracking. The operating point is your design load."),
++        /*#__PURE__*/React.createElement(Plot, {
++          data: [{ x: [0, ...pyRes.sweep.map(s => s.y0)], y: [0, ...pyRes.sweep.map(s => s.P)], mode: "lines+markers", line: { color: C.blueprint2, width: 2 }, marker: { size: 5 },
++            hoverinfo: "text", text: ["origin", ...pyRes.sweep.map(s => "P=" + fmt(s.P, 1) + " kip<br>y₀=" + fmt(s.y0, 3) + " in<br>Mmax=" + fmt(s.M, 1) + " kip·ft")] }],
++          layout: latLayout({ height: SH, showlegend: false,
++            xaxis: latAx("head deflection (in)"),
++            yaxis: latAx("P (kip)") }),
++          height: SH }),
++        /*#__PURE__*/React.createElement("p", { className: "pd-lg-note" }, "Incremental load-step states from the same solve — secant head stiffness and softening onset visible directly."),
++        pyRes.sweepTruncated && /*#__PURE__*/React.createElement("p", { className: "text-[10px] mt-1 p-1.5 rounded-sm leading-snug", style: { background: "rgba(201,98,46,0.10)", color: "#8a5a1f" } },
++          "⚠ The pushover was truncated where the deflection curve began to fold back. Under the combined lateral + axial (STL = ", fmt(I.STL, 0), " kip) ramp, the beam-column approaches its instability load before reaching the full design load — past that point the static solver returns non-physical post-critical solutions (decreasing deflection), so only the stable rising branch is plotted. This is a sign the section is near its buckling capacity under these loads; check Module 10 (Buckling) and consider a stiffer section, shorter unsupported length, or reduced axial.")),
++      pyRes.mphi && e(LatPanel, { title: "Moment–curvature (cased section)" },
++        /*#__PURE__*/React.createElement("p", { className: "pd-lg-note", style: { marginTop: 0 } }, "The section's bending stiffness: moment M vs curvature κ for the cased section at the design axial load. The initial slope is the uncracked EI₀; the knee is the cracking moment Mcr; beyond it the section softens. The p-y solver uses the secant EI along this curve when variable-EI is on."),
++        /*#__PURE__*/React.createElement(Plot, {
++          data: [
++            { x: pyRes.mphi.phis, y: pyRes.mphi.Ms, mode: "lines", line: { color: C.blueprint, width: 2 }, name: "M-φ",
++              hoverinfo: "text", text: pyRes.mphi.phis.map((p2, i2) => "φ=" + p2.toExponential(2) + "<br>M=" + fmt(pyRes.mphi.Ms[i2], 1) + " kip·ft") },
++            ...(pyRes.Mcr_kft != null ? [{ x: [pyRes.mphi.phis[0], pyRes.mphi.phis[pyRes.mphi.phis.length - 1]], y: [pyRes.Mcr_kft, pyRes.Mcr_kft], mode: "lines", line: { color: "#8a5a1f", width: 1, dash: "dot" }, name: "Mcr", hoverinfo: "skip" }] : []),
++            (() => {
++              // Operating point: place ● ON the curve at the curvature where M
++              // reaches the design demand Mmax. If the demand exceeds every M on
++              // the plotted curve, the section only reaches that moment beyond the
++              // shown curvature range — clamp the marker to the curve's endpoint
++              // (so it sits on the line, not floating) and flag it below.
++              const Ms = pyRes.mphi.Ms, phis = pyRes.mphi.phis, dem = pyRes.Mmax_kft;
++              const last = Ms.length - 1;
++              if (dem >= Ms[last]) {
++                return { x: [phis[last]], y: [Ms[last]], mode: "markers", marker: { color: "#b23b3b", size: 8, symbol: "circle-open", line: { width: 2, color: "#b23b3b" } }, name: "Mmax op.",
++                  hoverinfo: "text", text: ["demand Mmax = " + fmt(dem, 1) + " kip·ft exceeds plotted curve (max " + fmt(Ms[last], 1) + ")"] };
++              }
++              let i2 = 0; while (i2 < last && Ms[i2] < dem) i2++;
++              // linear-interpolate the curvature at exactly M = dem
++              const y0 = Ms[i2 - 1] != null ? Ms[i2 - 1] : 0, y1 = Ms[i2];
++              const x0 = phis[i2 - 1] != null ? phis[i2 - 1] : 0, x1 = phis[i2];
++              const px = (y1 > y0) ? x0 + (dem - y0) * (x1 - x0) / (y1 - y0) : x1;
++              return { x: [px], y: [dem], mode: "markers", marker: { color: "#b23b3b", size: 8 }, name: "Mmax op.",
++                hoverinfo: "text", text: ["operating Mmax = " + fmt(dem, 1) + " kip·ft"] };
++            })()
++          ],
++          layout: latLayout({ height: SH, showlegend: true, legend: { orientation: "h", x: 0, y: -0.2, yanchor: "top", entrywidth: 140, font: { size: 10, family: PLOT_FONT } },
++            xaxis: latAx("φ (1/in)", { exponentformat: "e" }),
++            yaxis: latAx("M (kip·ft)") }), height: SH }),
++        (pyRes.mphi.Ms.length > 0 && pyRes.Mmax_kft >= pyRes.mphi.Ms[pyRes.mphi.Ms.length - 1]) && /*#__PURE__*/React.createElement("p", { className: "text-[10px] mt-1 p-1.5 rounded-sm leading-snug", style: { background: "rgba(201,98,46,0.10)", color: "#8a5a1f" } },
++          "⚠ The design moment demand (Mmax = ", fmt(pyRes.Mmax_kft, 1), " kip·ft) is at or beyond the top of the plotted M-φ curve (max ", fmt(pyRes.mphi.Ms[pyRes.mphi.Ms.length - 1], 1), " kip·ft over the shown curvature range). The ● is clamped to the curve endpoint. This does not by itself mean the section is overstressed — the plotted range is capped at φ = ", (pyRes.mphi.phis[pyRes.mphi.phis.length - 1]).toExponential(1), " 1/in — but it means the section is operating at high curvature; confirm the flexural check in the combined-loading module (05) and the P-M interaction below, which carry the actual capacity comparison."),
++        /*#__PURE__*/React.createElement("p", { className: "pd-lg-note" }, "Two knees: a subtle one at M", /*#__PURE__*/React.createElement("sub", null, "cr"), " (grout cracking — small effect because the elastic casing dominates bending) and the pronounced flattening at high curvature where the casing itself yields, approaching the section capacity M", /*#__PURE__*/React.createElement("sub", null, "n"), ". The solver operates on the secant of this curve.")),
++      pyRes.mphi && pyRes.mphi.phisU && pyRes.mphi.phisU.length > 1 && e(LatPanel, { title: "Moment–curvature (uncased section)" },
++        /*#__PURE__*/React.createElement("p", { className: "pd-lg-note", style: { marginTop: 0 } }, "The same section below the casing tip — grout core + central bar only, no casing. This is much weaker and softer (note the smaller M and lower EI₀), and it governs the pile's stiffness over the bond zone. The p-y solver switches to this curve below the casing tip. With the bar and grout carrying the full axial load, it cracks at a low moment."),
++        /*#__PURE__*/React.createElement(Plot, {
++          data: [
++            { x: pyRes.mphi.phisU, y: pyRes.mphi.MsU, mode: "lines", line: { color: "#5a6b7a", width: 2 }, name: "M-φ (uncased)",
++              hoverinfo: "text", text: pyRes.mphi.phisU.map((p2, i2) => "φ=" + p2.toExponential(2) + "<br>M=" + fmt(pyRes.mphi.MsU[i2], 1) + " kip·ft") },
++            ...(pyRes.Mcr_kft_u != null ? [{ x: [pyRes.mphi.phisU[0], pyRes.mphi.phisU[pyRes.mphi.phisU.length - 1]], y: [pyRes.Mcr_kft_u, pyRes.Mcr_kft_u], mode: "lines", line: { color: "#8a5a1f", width: 1, dash: "dot" }, name: "Mcr", hoverinfo: "skip" }] : []),
++            ...(pyRes.Mtip_kft != null ? [(() => {
++              // mark the moment carried at the casing tip — the demand the uncased
++              // section actually sees where it takes over from the casing.
++              const Ms = pyRes.mphi.MsU, phis = pyRes.mphi.phisU, dem = Math.abs(pyRes.Mtip_kft);
++              const last = Ms.length - 1;
++              if (dem <= 0) return { x: [], y: [], mode: "markers", name: "Mtip" };
++              if (dem >= Ms[last]) return { x: [phis[last]], y: [Ms[last]], mode: "markers", marker: { color: "#b23b3b", size: 8, symbol: "circle-open", line: { width: 2, color: "#b23b3b" } }, name: "M @ casing tip",
++                hoverinfo: "text", text: ["moment at casing tip = " + fmt(dem, 1) + " kip·ft ≥ uncased curve max (" + fmt(Ms[last], 1) + ")"] };
++              let i2 = 0; while (i2 < last && Ms[i2] < dem) i2++;
++              const y0 = Ms[i2 - 1] != null ? Ms[i2 - 1] : 0, y1 = Ms[i2];
++              const x0 = phis[i2 - 1] != null ? phis[i2 - 1] : 0, x1 = phis[i2];
++              const px = (y1 > y0) ? x0 + (dem - y0) * (x1 - x0) / (y1 - y0) : x1;
++              return { x: [px], y: [dem], mode: "markers", marker: { color: "#b23b3b", size: 8 }, name: "M @ casing tip",
++                hoverinfo: "text", text: ["moment at casing tip = " + fmt(dem, 1) + " kip·ft"] };
++            })()] : [])
++          ],
++          layout: latLayout({ height: SH, showlegend: true, legend: { orientation: "h", x: 0, y: -0.2, yanchor: "top", entrywidth: 140, font: { size: 10, family: PLOT_FONT } },
++            xaxis: latAx("φ (1/in)", { exponentformat: "e" }),
++            yaxis: latAx("M (kip·ft)") }), height: SH }),
++        /*#__PURE__*/React.createElement("p", { className: "pd-lg-note" }, "EI₀ uncased ≈ ", fmt(pyRes.mphi.EI0u / 1e6, 2), "×10⁶ kip·in² vs cased ", fmt(pyRes.mphi.EI0 / 1e6, 2), "×10⁶ — the step you see in the EI-along-pile profile at the casing tip. The ● marks the moment carried where the casing ends (", fmt(Math.abs(pyRes.Mtip_kft || 0), 1), " kip·ft); if it sits past the knee, the uncased reach just below the tip is cracked, which is why its EI drops there.")),
++      pmCurve && e(LatPanel, { title: "P–M interaction (nominal, fiber) · ● load cases" },
++        /*#__PURE__*/React.createElement("p", { className: "pd-lg-note", style: { marginTop: 0 } }, "The section's nominal axial–moment capacity envelope (fiber analysis). Any load-case point ● inside the curve is within nominal capacity; a point on or outside it is at/over capacity. This is the nominal (unfactored) interaction — the factored combined-loading check is in Module 05."),
++        /*#__PURE__*/React.createElement(Plot, {
++          data: [
++            { x: pmCurve.pts.map(p2 => p2.Mn), y: pmCurve.pts.map(p2 => p2.P), mode: "lines", line: { color: C.blueprint, width: 2 }, name: "Mn(P)",
++              hoverinfo: "text", text: pmCurve.pts.map(p2 => "P=" + fmt(p2.P, 0) + " kip<br>Mn=" + fmt(p2.Mn, 0) + " kip·ft") },
++            { x: [pyRes.Mmax_kft], y: [I.STL], mode: "markers", marker: { color: C.accent, size: 10, symbol: "diamond" }, name: "active",
++              hoverinfo: "text", text: ["active: M=" + fmt(pyRes.Mmax_kft, 1) + ", P=" + fmt(I.STL, 0)] },
++            ...(caseRes && caseRes.rows ? [{ x: caseRes.rows.filter(r2 => r2.Mmax != null && r2.type !== "service").map(r2 => r2.Mmax),
++              y: caseRes.rows.filter(r2 => r2.Mmax != null && r2.type !== "service").map(r2 => ((Array.isArray(I.loadCases) ? I.loadCases : []).find(c2 => c2.name === r2.name) || {}).STL || 0),
++              mode: "markers", marker: { color: "#b23b3b", size: 7 }, name: "cases",
++              hoverinfo: "text", text: caseRes.rows.filter(r2 => r2.Mmax != null && r2.type !== "service").map(r2 => r2.name) }] : [])
++          ],
++          layout: latLayout({ height: SH, showlegend: true, legend: { orientation: "h", x: 0, y: -0.2, yanchor: "top", entrywidth: 140, font: { size: 10, family: PLOT_FONT } },
++            xaxis: latAx("M (kip·ft)", { rangemode: "tozero" }),
++            yaxis: latAx("P (kip)", { rangemode: "tozero" }) }), height: SH }),
++        /*#__PURE__*/React.createElement("p", { className: "pd-lg-note" },
++          "Nominal fiber-section envelope (φ factors NOT applied) — a visualization aid; the code combined check in Module 05 governs. Compression side only.")),
++      pyRes.eiProf && e(LatPanel, { title: "Section EI along pile (post-cracking state)" },
++        /*#__PURE__*/React.createElement("p", { className: "pd-lg-note", style: { marginTop: 0 } }, "Bending stiffness EI at each depth after the solve, when variable-EI is on. Drops show where the moment exceeded cracking and the section softened; the step at the casing tip is the cased→uncased transition. Flat = section stayed uncracked (elastic EI throughout)."),
++        /*#__PURE__*/React.createElement(Plot, {
++          data: [{ x: pyRes.eiProf.map(p2 => p2.EI / 1e6), y: pyRes.eiProf.map(p2 => p2.d), mode: "lines", line: { color: C.blueprint, width: 2 },
++            hoverinfo: "text", text: pyRes.eiProf.map(p2 => fmt(p2.d, 1) + " ft: EI = " + fmt(p2.EI / 1e6, 2) + "×10⁶ kip·in²") }],
++          layout: latLayout({ height: SH, showlegend: false,
++            xaxis: latAx("EI (×10⁶ kip·in²)", { rangemode: "tozero" }),
++            yaxis: latAx("depth (ft)", { autorange: "reversed", zeroline: false }) }), height: SH }),
++        /*#__PURE__*/React.createElement("p", { className: "pd-lg-note" },
++          "Converged secant EI from the moment-curvature model — dips mark cracked reaches; the step is the casing tip. EI ratchets downward only (cracking irreversible under the monotonic ramp).")));
++  };
++
++  /* ---- LPILE comparison ---- */
++  const lpile = () => {
++    if (!lp) return null;
++    return e(React.Fragment, null,
++      e(LatPanel, { title: "LPILE response profiles (imported: " + (lp.fileName || "LPILE output") + ")",
++        note: "Deflection, moment and shear from the imported LPILE output, depth as LPILE reports it." },
++        e(LpileProfilePlot, { records: lp.records, height: H })),
++      src === "input" && (() => {
++        const lpM = lp.summary.Mmax,
++          biM = solved.Mmax_kft;
++        const lpV = lp.inputs ? lp.inputs.shear_kip : null;
++        const loadMatch = lpV != null ? Math.abs(lpV - I.Plat) <= 0.1 : null;
++        const ratio = lpM > 0 ? biM / lpM : null;
++        const under = biM < lpM;
++        return e("div", { style: { marginTop: "12px" } }, /*#__PURE__*/React.createElement("div", {
++          className: "pd-lg-panel"
++        }, /*#__PURE__*/React.createElement("div", {
++          className: "pd-lg-h"
++        }, "Built-in solver vs LPILE ", /*#__PURE__*/React.createElement("span", {
++          className: "text-slate-400 font-normal"
++        }, "(dashed green = LPILE)")), /*#__PURE__*/React.createElement(LateralDiagram, {
++          solved: solved,
++          I: I,
++          height: H,
++          lpileOverlay: lp.records
++        }), /*#__PURE__*/React.createElement("div", {
++          className: "text-[10px] leading-snug mt-1 font-mono-tech",
++          style: {
++            color: "#334155"
++          }
++        }, "Built-in M", /*#__PURE__*/React.createElement("sub", null, "max"), " ", fmt(biM, 1), " · LPILE M", /*#__PURE__*/React.createElement("sub", null, "max"), " ", fmt(lpM, 1), " kip·ft · ratio ", ratio != null ? fmt(ratio, 2) : "—"), loadMatch === false ? /*#__PURE__*/React.createElement("div", {
++          className: "text-[10px] mt-1 leading-snug",
++          style: {
++            color: "#b23b3b"
++          }
++        }, "⚠ Loads differ (LPILE lateral ", fmt(lpV, 1), " kip vs app ", fmt(I.Plat, 1), " kip) — not a like-for-like comparison until you sync the load in Module 02.") : /*#__PURE__*/React.createElement("div", {
++          className: "text-[10px] mt-1 leading-snug",
++          style: {
++            color: under ? "#b23b3b" : "#2f6f3e"
++          }
++        }, under ? `The linear built-in estimate sits ${fmt((1 - ratio) * 100, 0)}% below LPILE — expected once the soil yields. LPILE governs; use its moment.` : `Built-in is at/above LPILE (${fmt(ratio, 2)}×); still verify against LPILE before sealing.`)));
++      })());
++  };
++
++  const body = cur === "dmv" ? dmv() : cur === "mcases" ? mcases() : cur === "py" ? pyTab() : cur === "soil" ? soil() : cur === "stiff" ? stiff() : lpile();
++  const basis = isPy ? "nonlinear p-y (built-in)" : src === "input" ? "Input Mmax (from LPILE)" : "linear estimate";
++  return e("div", { id: "pd-latgfx", ref: ref, "data-otab-fixed": "latgfx", "data-pd-gfx": "latgfx", style: { order: 21 }, className: "module-card pd-gfx-card bg-white border border-slate-200 rounded-md overflow-hidden fade-in" },
++    e("div", { className: "pd-gfx-head" },
++      e("span", { className: "module-badge font-mono-tech text-[11px] text-white px-1.5 py-0.5 rounded-sm", style: { background: "var(--blueprint)" } }, "F"),
++      e("div", { className: "flex-1 min-w-0" },
++        e("div", { className: "pd-gfx-title" }, "Lateral analysis graphs"),
++        e("div", { className: "pd-gfx-sub" }, "Module 02 · basis: " + basis + " · active load case"))),
++    e("div", { className: "pd-gfx-body" },
++      e("div", { className: "pd-lg-sub", role: "tablist", "aria-label": "Lateral graphs" }, ids.map((id, i) =>
++        e("button", { key: id, id: "lgtab-" + id, type: "button", role: "tab", "aria-selected": cur === id ? "true" : "false", "aria-controls": "lgpanel",
++          tabIndex: cur === id ? 0 : -1, onClick: () => choose(id), onKeyDown: ev => onKey(ev, i) }, (LATG_TABS.find(t => t[0] === id) || [id, id])[1]))),
++      e("div", { id: "lgpanel", role: "tabpanel", "aria-labelledby": "lgtab-" + cur, "data-lg": cur }, body)));
++}
++
+ /* ============================================================
+    OUTPUT TABS (UI only, 2026-10-10)
+    ------------------------------------------------------------
+@@ -16527,7 +16756,7 @@ function RailTabs({ tab, setTab, pileType }) {
+    remembered per browser in micropile_lrfd_outTab_v1 (not project data).
+ ============================================================ */
+ const OUT_TAB_KEY = "micropile_lrfd_outTab_v1";
+-const OUT_TABS = [["summary", "Summary"], ["geom", "Geometry & limits"], ["geo", "Geotechnical"], ["simp", "Simplified Method"], ["tier2", "Tier 2"], ["lat", "Lateral (p-y)"], ["struct", "Structural"], ["cap", "Cap & connection"], ["test", "Load test"], ["group", "Group"]];
++const OUT_TABS = [["summary", "Summary"], ["geom", "Geometry & limits"], ["geo", "Geotechnical"], ["simp", "Simplified Method"], ["tier2", "Tier 2"], ["lat", "Lateral (p-y)"], ["latgfx", "Lateral graphs"], ["struct", "Structural"], ["cap", "Cap & connection"], ["test", "Load test"], ["group", "Group"]];
+ function outTabFor(el, pileType) {
+   const fx = el.getAttribute("data-otab-fixed"); if (fx) return fx;
+   const idx = el.getAttribute("data-module"); if (!idx) return null; // pile-type card, footer: always shown
+```
+
 ## Open items (not changed)
 - O1. **Uncased/cased structural axial: outer 0.85 factor and `fy = min(fyb, fyc)`** (`Rn_cased/Rn_ucased`, ≈ line 1675).
   - Neither AASHTO 10.9.3.10.2 nor FHWA NHI-05-039 Eq. 5-13 has the outer 0.85, and the uncased section has no casing, so min(fyb, fyc) is arbitrary there.
