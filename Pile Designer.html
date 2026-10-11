@@ -2207,7 +2207,7 @@ function solvePyPile(input) {
     history.push({ step: s, iter, converged, P: fP, M: fM, Q: fQ, y0: y[IX(0)], Mmax: mmS });
     if (!converged) return { ok: false, history, msg: 'Load step ' + s + '/' + nSteps + ' did not converge. The solver already auto-retried with finer load stepping, so this is not a settings issue. With large axial thrust it usually means the finite-difference solve is losing conditioning near the top of the load ramp — check the Buckling module (10): if that closed-form check passes with margin, this is a numerical limit of the p-y solve on a well-braced pile rather than real instability; if buckling is tight, the two are consistent and the section needs revision.' };
   }
-  const res = { ok: true, history, z: [], y: [], M: [], V: [], p: [], EIfinal: null };
+  const res = { ok: true, history, z: [], y: [], M: [], V: [], p: [], pEq: [], EIfinal: null };
   if (input.EIsecFn) {
     // Report the secant EI from the FINAL converged curvature at each node, in one
     // clean pass. The iterating EI[] above is deliberately ratcheted/under-relaxed
@@ -2254,12 +2254,20 @@ function solvePyPile(input) {
     res.M.push(Mn[i + 1]);
     res.V.push((Mn[i + 2] - Mn[i]) / (2 * h) + Qt * (y[IX(i + 1)] - y[IX(i - 1)]) / (2 * h));
     res.p.push(pyPofY(soil[i].model, y[IX(i)], z[i], soil[i].prm, gPM, gYM));
+    // F28 (O38): the reaction the solver APPLIED at the node, E_s(y)*y with the same secant
+    // stiffness the FD rows use (pySecantEs, incl. the soft / stiff clay floor yFloor =
+    // 0.001*y50*f_y). Equal to res.p (to round-off) wherever |y| >= that floor; below it the
+    // solver linearises the curve and res.p (the curve itself) overstates the reaction.
+    res.pEq.push(pySecantEs(soil[i].model, y[IX(i)], z[i], soil[i].prm, gPM, gYM) * y[IX(i)]);
   }
+  // F28 (O38): the closure integrates res.pEq (before F28: res.p, which on layered clay
+  // profiles showed residuals of up to ~50 % ΣF on sound solutions).
+  const pE = res.pEq;
   let intP = 0, intPz = 0, intAbsPz = 0;
   for (let i = 0; i < n; i++) {
-    intP += 0.5 * (res.p[i] + res.p[i + 1]) * h;
-    intPz += 0.5 * (res.p[i] * z[i] + res.p[i + 1] * z[i + 1]) * h;
-    intAbsPz += 0.5 * (Math.abs(res.p[i]) * z[i] + Math.abs(res.p[i + 1]) * z[i + 1]) * h;
+    intP += 0.5 * (pE[i] + pE[i + 1]) * h;
+    intPz += 0.5 * (pE[i] * z[i] + pE[i + 1] * z[i + 1]) * h;
+    intAbsPz += 0.5 * (Math.abs(pE[i]) * z[i] + Math.abs(pE[i + 1]) * z[i + 1]) * h;
   }
   const Mhead = input.headFixed ? res.M[0] : Mt;
   const fRes = Pt - intP;
@@ -2269,7 +2277,7 @@ function solvePyPile(input) {
   // floor was 1e-6 lb, so a moment-only head load (Pt = 0) gave residuals of 1e6 % and more.
   // Unchanged wherever |Pt| >= 1 % of that integral (every solve with a lateral load found).
   let intAbsP = 0;
-  for (let i = 0; i < n; i++) intAbsP += 0.5 * (Math.abs(res.p[i]) + Math.abs(res.p[i + 1])) * h;
+  for (let i = 0; i < n; i++) intAbsP += 0.5 * (Math.abs(pE[i]) + Math.abs(pE[i + 1])) * h;
   res.eq = {
     fPct: 100 * Math.abs(fRes) / Math.max(Math.abs(Pt), 0.01 * intAbsP, 1e-6),
     mPct: 100 * Math.abs(mRes) / Math.max(intAbsPz, Math.abs(Mhead), 1e-6)
@@ -4456,7 +4464,7 @@ function DocsModal({
   }, /*#__PURE__*/React.createElement("p", null, "The grout-to-ground bond is the geotechnical capacity. Nominal resistance is the bond stress β times the drill-hole circumference times the bond length: ", /*#__PURE__*/React.createElement("i", null, "Pn = dₕ·π·β·Lb"), ". The required bond length is back-solved from the factored demand and the geotechnical resistance factor φ (0.70 when a load test is specified, per Table 10.5.5.2.5-1). The bond value β comes from the soil/rock row of Table C10.9.3.5.2-1 and ", /*#__PURE__*/React.createElement("b", null, "must be confirmed by load testing"), " — the tool labels it grout-to-ground because the value is keyed to the bearing stratum, not necessarily rock.")), /*#__PURE__*/React.createElement(DocSection, {
     title: "02 · Lateral analysis",
     code: "p-y finite-difference solver"
-  }, /*#__PURE__*/React.createElement("p", null, "Two paths. You can enter a maximum moment directly from an external LPILE run, or use the built-in solver. The solver is a real ", /*#__PURE__*/React.createElement("b", null, "finite-difference beam on an elastic foundation"), ": the embedded pile is discretized on Winkler springs with a linear subgrade modulus (Es = nh·z for sand, constant kh for clay), and EI·y⁗ + k(z)·y = 0 is solved with mudline boundary conditions (shear V₀ = P, moment M₀ = P·e from the free length) and an unrestrained toe (no applied tip shear or moment restraint — the toe is still bedded on soil springs)."), /*#__PURE__*/React.createElement("p", null, "From the resulting moment profile, the tool reports the true maximum moment and locates the ", /*#__PURE__*/React.createElement("b", null, "depth to fixity as the first zero crossing of the moment below the maximum moment (on a free-head pile with no head moment, the 2nd zero of the moment diagram, counting M = 0 at the head)"), " — the depth that reproduces the correct above-grade moment in an equivalent fixed-base model. A noise guard ignores crossings whose preceding moment lobe is under 2% of Mmax so numerical tail-ringing isn't mistaken for a real reversal. This is a REFERENCE figure only \u2014 it is a moment-diagram measure and is NOT used in the buckling check, which requires a stiffness equivalence (Davisson / deflection-matched / nonlinear P-crit) and yields a much shorter fixity depth. The model is linear, so the fixity depth is load-independent — appropriate for a stiffness/fixity basis, but it should be checked against a nonlinear p-y run before sealing."), /*#__PURE__*/React.createElement("p", null, /*#__PURE__*/React.createElement("b", null, "Nonlinear p-y convergence."), " The built-in nonlinear p-y solve applies the loads in 8 equal steps (secant iteration, up to 200 iterations per step). The first attempt is used only if (a) every step converged and (c) it is on the stable loading branch (the head deflection keeps the direction of the first step and never decreases while the load rises). If it fails either, the solve retries once with 16 steps, up to 400 iterations and under-relaxation 0.55; the retried solution is used only if (a) every step converged, (b) the equilibrium closure is within " + PY_RETRY_CLOSURE_PCT + " % for both ΣF and ΣM (ΣF relative to the applied lateral load, but not less than 1 % of the total soil reaction ∫|p|dz, so a moment-only head load is measured sensibly), and (c) it is on the stable loading branch. If the retry also fails, the result is “did not converge — the pile is likely unstable (buckling / P-Δ) at this load”: there is no valid lateral demand, so flexure, combined loading, casing extension, uncased flexure and combined-loading stability are NG. Past the instability load the solver can settle on a post-critical equilibrium (head deflection reversed, tens of inches) whose closure is still excellent, which is why the branch test is needed. “Run all cases” solves each case with exactly the same solve (node count, load steps, retry and acceptance test), so for the active case the envelope equals Module 02. Large head deflection: when |y\u2080| exceeds the factor × D set in the Bond / p-y input tab (p-y / lateral for an H-pile; default 0.25 D; 0 = off), Module 02, the Lateral graphs, the Summary of checks, the case envelope and the report show an amber warning. It is a warning only (no check becomes NG); it applies to every p-y result, first attempt or retry.")), /*#__PURE__*/React.createElement(DocSection, {
+  }, /*#__PURE__*/React.createElement("p", null, "Two paths. You can enter a maximum moment directly from an external LPILE run, or use the built-in solver. The solver is a real ", /*#__PURE__*/React.createElement("b", null, "finite-difference beam on an elastic foundation"), ": the embedded pile is discretized on Winkler springs with a linear subgrade modulus (Es = nh·z for sand, constant kh for clay), and EI·y⁗ + k(z)·y = 0 is solved with mudline boundary conditions (shear V₀ = P, moment M₀ = P·e from the free length) and an unrestrained toe (no applied tip shear or moment restraint — the toe is still bedded on soil springs)."), /*#__PURE__*/React.createElement("p", null, "From the resulting moment profile, the tool reports the true maximum moment and locates the ", /*#__PURE__*/React.createElement("b", null, "depth to fixity as the first zero crossing of the moment below the maximum moment (on a free-head pile with no head moment, the 2nd zero of the moment diagram, counting M = 0 at the head)"), " — the depth that reproduces the correct above-grade moment in an equivalent fixed-base model. A noise guard ignores crossings whose preceding moment lobe is under 2% of Mmax so numerical tail-ringing isn't mistaken for a real reversal. This is a REFERENCE figure only \u2014 it is a moment-diagram measure and is NOT used in the buckling check, which requires a stiffness equivalence (Davisson / deflection-matched / nonlinear P-crit) and yields a much shorter fixity depth. The model is linear, so the fixity depth is load-independent — appropriate for a stiffness/fixity basis, but it should be checked against a nonlinear p-y run before sealing."), /*#__PURE__*/React.createElement("p", null, /*#__PURE__*/React.createElement("b", null, "Nonlinear p-y convergence."), " The built-in nonlinear p-y solve applies the loads in 8 equal steps (secant iteration, up to 200 iterations per step). The first attempt is used only if (a) every step converged and (c) it is on the stable loading branch (the head deflection keeps the direction of the first step and never decreases while the load rises). If it fails either, the solve retries once with 16 steps, up to 400 iterations and under-relaxation 0.55; the retried solution is used only if (a) every step converged, (b) the equilibrium closure is within " + PY_RETRY_CLOSURE_PCT + " % for both ΣF and ΣM (the soil reaction the solver applied, Eₛ·y, integrated along the pile against the head loads; ΣF relative to the applied lateral load, but not less than 1 % of the total soil reaction ∫|p|dz, so a moment-only head load is measured sensibly), and (c) it is on the stable loading branch. If the retry also fails, the result is “did not converge — the pile is likely unstable (buckling / P-Δ) at this load”: there is no valid lateral demand, so flexure, combined loading, casing extension, uncased flexure and combined-loading stability are NG. Past the instability load the solver can settle on a post-critical equilibrium (head deflection reversed, tens of inches) whose closure is still excellent, which is why the branch test is needed. “Run all cases” solves each case with exactly the same solve (node count, load steps, retry and acceptance test), so for the active case the envelope equals Module 02. Large head deflection: when |y\u2080| exceeds the factor × D set in the Bond / p-y input tab (p-y / lateral for an H-pile; default 0.25 D; 0 = off), Module 02, the Lateral graphs, the Summary of checks, the case envelope and the report show an amber warning. It is a warning only (no check becomes NG); it applies to every p-y result, first attempt or retry.")), /*#__PURE__*/React.createElement(DocSection, {
     title: "03 · Structural axial",
     code: "AASHTO 10.9.3.10.2"
   }, /*#__PURE__*/React.createElement("p", null, "Non-composite axial capacity, computed for both the cased length (casing + grout + bar, Eq. 10.9.3.10.2a-2) and the uncased length (grout + bar only, Eq. 10.9.3.10.2b-2). The uncased section typically governs because it has no casing contribution. The casing wall is reduced by a sacrificial corrosion allowance.")), /*#__PURE__*/React.createElement(DocSection, {
@@ -5172,7 +5180,8 @@ function PileElevation({
                      selected depths, with the point mobilised under the
                      active load case. It reads the solver's own setup
                      (pyRes.setup: soilAt, datum, multipliers) and nodal
-                     solution (pyRes.records, pyRes.pNode) and evaluates
+                     solution (pyRes.records, pyRes.pNode = the reaction the
+                     solver applied, E_s*y, F28) and evaluates
                      pyPofY, the function the solver calls. The linear
                      (Winkler) basis shows its linear springs (subgradeAt).
    PileSectionsFig : micropile cased / uncased sections and the H-pile
@@ -5676,7 +5685,7 @@ function PyCurvesFig({ I, pyRes, solved, activeLayers, depths, setDepths, print 
     ? ["Linear (Winkler) basis: the springs are straight lines p = E_s·y with E_s = n_h·z (sand) or k_h (clay) per layer, read with the solver's own subgradeAt(); node spacing " + fmt(set.dz, 3) + " ft. ● = deflection of the linear solution at that depth (active case).",
        "There are no nonlinear p-y curves on this basis; select “Nonlinear p-y (built-in)” to see them."]
     : ["Curves are the solver's own springs: pyPofY() with the same soil records, Georgiadis equivalent depth z_e, pile width b" + (I.pileType === "hpile" ? " (H-pile: b_f for strong-axis, d for weak-axis bending)" : " (d_h below the casing tip where entered)") + " and multipliers, p = f_m·p(y/f_y) with f_m = " + fmt(set.gPM, 2) + ", f_y = " + fmt(set.gYM, 2) + ". Group row factors (Module 11) reach the solver only through f_m (“Apply avg fm”); they are not applied per row.",
-       "● = point mobilised under the active load case: y from the solution at the solver node nearest each depth (node spacing " + fmt(set.h, 2) + " in) and p = the solver's nodal reaction; |p − p(y)| shows it lies on its curve. " + (I.pyCyclic ? "Cyclic loading selected: cyclic forms apply to sand and soft clay; stiff clay and weak rock have no cyclic form in the tool." : "Static loading.") + "" + (set.curves.some(c => c.model === "weakrock") ? " Weak rock values are plotted as the solver uses them (uncalibrated model)." : ""),
+       "● = point mobilised under the active load case: y from the solution at the solver node nearest each depth (node spacing " + fmt(set.h, 2) + " in) and p = the reaction the solver applied (E_s·y, the secant stiffness times y); |p − p(y)| shows it lies on its curve (round-off only). " + (set.curves.some(c => Math.abs(c.pSolver - c.pOnCurve) > 1e-6 * Math.max(1, c.pOnCurve)) ? "At " + set.curves.filter(c => Math.abs(c.pSolver - c.pOnCurve) > 1e-6 * Math.max(1, c.pOnCurve)).map(c => fmt(c.d, 1) + " ft").join(", ") + " the deflection is below 0.001·y_50 (clay), where the solver linearises the p-y curve, so the ● lies below the curve. " : "") + (I.pyCyclic ? "Cyclic loading selected: cyclic forms apply to sand and soft clay; stiff clay and weak rock have no cyclic form in the tool." : "Static loading.") + "" + (set.curves.some(c => c.model === "weakrock") ? " Weak rock values are plotted as the solver uses them (uncalibrated model)." : ""),
        set.user ? "Depths: your list (saved in this browser)." : "Automatic depths: mid-depth of each layer between the top of the springs (" + fmt(set.dTop, 1) + " ft) and the depth where M decays to 5 % of M_max (" + fmt(set.dBot, 1) + " ft), the head region (one pile width below the top of the springs) and the depth of M_max."];
   if (set.more) notes.push("Only the first 8 depths are drawn.");
   return e("div", { className: "pd-gfx-fig", "data-pd-gfx": "py" },
@@ -13223,7 +13232,7 @@ function App() {
           const s2 = soilAt(zi);
           if (s2.model === "none") return null;
           const pu2 = PY[s2.model].pu(pyEffDepth(zi, s2.prm), s2.prm) * (I.pyPM || 1);
-          return pu2 > 1e-9 ? { d: Math.max(zi - stick_in, 0) / 12, r: Math.min(Math.abs(res2.p[i2]) / pu2, 1) } : null;
+          return pu2 > 1e-9 ? { d: Math.max(zi - stick_in, 0) / 12, r: Math.min(Math.abs(res2.pEq[i2]) / pu2, 1) } : null;
         }).filter(Boolean),
         curves: (() => {
           // p-y curves at representative depths below grade, with the SAME
@@ -13249,7 +13258,9 @@ function App() {
         })(),
         // F14 graphics: the solver's own soil records / datum / multipliers and nodal
         // reactions, so Figure F-3 plots exactly what the solve used (display only).
-        pNode: res2.p,
+        // F28 (O38): the reaction the solver applied (E_s*y, res2.pEq), not the curve value
+        // res2.p (they differ only where the clay secant floor linearises the curve).
+        pNode: res2.pEq,
         setup: { soilAt, stick_in, L_in, D, soilTop_in: S.soilTop_in, unsupBelowGrade_in: S.unsupBelowGrade_in, nNodes: res2.z.length - 1, gPM: I.pyPM || 1, gYM: I.pyYM || 1 },
         mphi: I.pyEIvar && mphiC ? { phis: mphiC.phis, Ms: mphiC.Ms.map(m => m / 12), EI0: mphiC.EI0, EI0u: mphiU.EI0,
           phisU: mphiU.phis, MsU: mphiU.Ms.map(m => m / 12) } : null
@@ -17140,7 +17151,7 @@ function LatGraphsCard({ I, set, pyRes, solved, activeLayers, pyDepths, setPyDep
     const G0 = latGradeLine();
     return e(React.Fragment, null, e("div", { className: "pd-lg-grid" },
       n > 2 && e(LatPanel, { title: "Soil reaction p vs depth (active case)",
-        note: "The solver’s nodal soil reaction p (lb/in of pile length), plotted with the sign of the deflection at that depth (the soil resists in the opposite direction). These are the same values as the ● points of Figure F-3. Depth below grade; negative = stickup (no soil)." },
+        note: "Solver-applied reaction: the nodal soil reaction p = E_s·y the solver applied (lb/in of pile length); below |y| = 0.001·y₅₀ in clay the p-y curve is linearised. Plotted with the sign of the deflection at that depth (the soil resists in the opposite direction). These are the same values as the ● points of Figure F-3. Depth below grade; negative = stickup (no soil)." },
         e(Plot, {
           data: [{ x: pv, y: dBG, mode: "lines", fill: "tozerox", fillcolor: "rgba(47,111,62,0.12)", line: { color: "#2f6f3e", width: 2.2 }, name: "p", showlegend: false,
             hovertemplate: "depth %{y:.2f} ft below grade<br>p = %{x:.1f} lb/in<extra></extra>" },
@@ -17150,7 +17161,7 @@ function LatGraphsCard({ I, set, pyRes, solved, activeLayers, pyDepths, setPyDep
           layout: latLayout({ height: H, shapes: G0.shapes.concat(bndSh), annotations: G0.annotations, showlegend: !!(K && K.fix.length), legend: { orientation: "h", x: 0, y: -0.14, yanchor: "top", entrywidth: 1, entrywidthmode: "fraction", font: { size: 10, family: PLOT_FONT } },
             xaxis: latAx("p — soil reaction (lb/in)", { range: pR }), yaxis: latAx("depth below grade (ft)", { autorange: "reversed", zeroline: true }) }), height: H })),
       pyRes.mobil && pyRes.mobil.length > 3 && e(LatPanel, { title: "Soil mobilization p/pᵤ vs depth",
-        note: "How hard the soil is working at each depth in the converged state — high mobilization near grade is normal; high values at depth flag a soft zone doing structural work." },
+        note: "How hard the soil is working at each depth in the converged state (p = the solver-applied reaction beside it, divided by the ultimate resistance pᵤ) — high mobilization near grade is normal; high values at depth flag a soft zone doing structural work." },
         /*#__PURE__*/React.createElement("p", { className: "pd-lg-note", style: { marginTop: 0 } }, "How much of each depth's ultimate soil resistance is being used under the design load (0 = untouched, 1 = fully mobilized/yielded). Values approaching 1 near the surface indicate the soil is at its limit there and load is shedding deeper."),
         /*#__PURE__*/React.createElement(Plot, {
           data: [{ x: pyRes.mobil.map(m2 => m2.r * 100), y: pyRes.mobil.map(m2 => m2.d), mode: "lines", fill: "tozerox", fillcolor: "rgba(201,98,46,0.15)", line: { color: C.accent, width: 2 },
