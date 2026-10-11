@@ -9062,6 +9062,260 @@ index a18a6e1..5d79b4e 100644
 \ No newline at end of file
 ```
 
+## 2026-10-11 — PR: claude/pile-o41 (PR link added after merge)
+
+Engineer's decision 2026-10-11 (O41): the group spacing ratio s/B for the p-multipliers (AASHTO and legacy) and for the axial group efficiency η uses B = the pile width the p-y analysis uses for that pile type. Micropile unchanged.
+
+### F30. H-pile groups: s/B, η, Converse-Labarre θ and the block footprint use the H-pile p-y width B, and the c/c spacing the group workspace uses (O41)   [calc change] [H-pile groups only; micropile and integral-abutment results bit-identical (proven). MORE conservative for strong-axis H-piles at the default spacing (η 1.00 → 0.747) and wherever the spacing is entered in inches (s/B smaller → lower row f_m, lower η); LESS conservative for the block-failure perimeter (larger footprint) and for weak-axis H-piles at a spacing in diameters (s/B 3.00 → 3.19, row f_m up). See the check cases]
+
+- **Where:**
+  - New top-level helpers after `function bondHoleDia(I) {`: `groupB(I)`, `groupCcSpacing(I)`, `groupBLabel(I)`.
+  - `groupPmTable` (anchor `const dh_in = groupB(I);`): B and s from the helpers; returns `Blbl`.
+  - `computeAll`, group block (anchor `// F30 (O41): B = the p-y width`): `dh_in = groupB(I)`, `s_in = groupCcSpacing(I)`; `R.group` gains `Blbl`.
+  - `GroupWorkspaceBody` `genGrid` (anchor `const s = g.s_in / 12;`).
+  - Text: Module 11 header line (`spacing = " + fmt(r.group.s_dia, 1) + "× " + r.group.Blbl`), section 1 spacing notes (✓/⚠, θ = atan(B/s) for H-piles), Group options panel η note, `GroupPlan` caption (`s = x.xB` for H-piles), report 11 p-multiplier line, `PmRowTable` note (`info.Blbl`, added in the `pyRowsEval` memo).
+- **Problem:** `computeAll` and `groupPmTable` took B = `bondHoleDia(I)` (micropile casing OD unless d_h is entered) for every pile type, and the spacing given in diameters as `groupSpacingDia × bondHoleDia(I)`. In H-pile mode both used the micropile OD input (7 in by default), not the H-pile. The group workspace, the Group ▦ case loads (`groupGeom`, `groupGeomLocal`, the bootstrap centroid) space the piles at `groupSpacingDia × pileWidth(I)`, so in H-pile mode Module 11 also showed a different layout (and per-pile forces) from the one the cases used. Example, defaults: Module 11 / report 11 said 21 in c/c and 80.0 kip on pile 1; the Group ▦ case used 41.49 in c/c and 178.8 kip.
+- **Before:**
+
+```js
+// groupPmTable
+  const dh_in = bondHoleDia(I);
+  const s_in = (I.groupSpacingIn && I.groupSpacingIn>0) ? I.groupSpacingIn : (I.groupSpacingDia||3)*dh_in;
+  const s_dia = s_in/Math.max(dh_in,1e-6);
+// computeAll
+  const dh_in = dh;                                          // bond/drilled-hole dia (in)
+  const s_in = (I.groupSpacingIn && I.groupSpacingIn>0) ? I.groupSpacingIn : (I.groupSpacingDia||3)*dh_in;
+// genGrid
+    const s = (I.groupSpacingIn && I.groupSpacingIn > 0 ? I.groupSpacingIn : (I.groupSpacingDia || 3) * (g.dh_in)) / 12;
+```
+
+- **After:**
+
+```js
+function groupB(I) {
+  if (I.pileType === "hpile") return I.hpAxis === "weak" ? I.hpD : I.hpBf;
+  return bondHoleDia(I);
+}
+function groupCcSpacing(I) {
+  if (I.groupSpacingIn && I.groupSpacingIn > 0) return I.groupSpacingIn;
+  return (I.groupSpacingDia || 3) * (I.pileType === "hpile" ? pileWidth(I) : bondHoleDia(I));
+}
+function groupBLabel(I) { return I.pileType === "hpile" ? "B" : "bond dia"; }
+// groupPmTable / computeAll
+  const dh_in = groupB(I);
+  const s_in = groupCcSpacing(I);
+  const s_dia = s_in/Math.max(dh_in,1e-6);
+// genGrid
+    const s = g.s_in / 12;
+```
+
+- **What changed (H-pile mode only):**
+  1. **B** = the width `buildPySetup` gives the p-y springs: b_f for strong-axis bending, d for weak-axis bending (`I.hpBf` / `I.hpD`, the projected width normal to the load). Note: this is **not** `pileWidth(I)`, which is the section dimension in the bending plane (d strong / b_f weak, used for the head-fixity screen and the drawings). B drives s/B (row f_m, AASHTO and legacy; the below-3B / above-5B notes), the η threshold s/B ≥ 3, Converse-Labarre θ = atan(B/s) and the block footprint (n−1)·s + B in both directions.
+  2. **s** (spacing given in diameters) = `groupSpacingDia × pileWidth(I)`, the spacing the group workspace, the Group ▦ case loads and the plan already used. Module 11's rigid-cap distribution table, plan and derivation, report 11 and the 3D view now show that layout (display only: the checks already ran on the case loads from that layout). An explicit spacing in inches is used as entered (unchanged).
+  3. **"Generate grid"** in the workspace writes the grid at `R.group.s_in` (H-pile: the workspace spacing above, was × OD; micropile: the same expression as before).
+  4. **Labels:** H-pile text says "× B" and "B = 14.70 in (H-pile b_f, strong-axis bending: the p-y width normal to the load)"; micropile text unchanged ("× bond dia").
+  - Not changed: the micropile (B = bond-hole diameter, s = × bond-hole diameter) and the integral-abutment path; the axial efficiency and block checks still reduce the micropile bond capacity `R.geo.Pn_geo` in H-pile mode too (new open item O43); the plan symbol size in `GroupPlanSvg` (`pileWidth`).
+- **Governing provision:** AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024), Art. 10.7.2.4 and Table 10.7.2.4-1 (P_m by row as a function of c/c spacing in pile diameters / widths B — verify the table number and values, as F29). η: FHWA NHI-05-039 (spacing ≥ 3 × diameter → η = 1.0) and the Converse-Labarre formula, as before. No formula, factor or table value changed; only the B and s fed to them in H-pile mode.
+- **§4 callouts (worked checks).** 2 columns × 3 rows, HP 14×89 defaults (d 13.83 in, b_f 14.70 in, strong axis → B = 14.70 in, pileWidth = 13.83 in), source AASHTO, "Apply group p-multipliers automatically" on, case Manual Str (STL 80 kip, V 3 kip per pile, M 0), default soil (sand γ 120 pcf, φ 32°, k 90 pci), micropile bond inputs at the defaults (R.geo.Pn_geo = 109.96 kip, β 2.50 ksf, L_b 24 ft, φ_geo 0.70).
+  - **(a) Default spacing, 3.0 × dia.**
+
+    | | Before | After |
+    |---|---|---|
+    | s (in) | 3 × 7.00 (OD) = 21.00 | 3 × 13.83 (d) = 41.49 |
+    | B (in) | 7.00 (OD) | 14.70 (b_f) |
+    | s/B | 3.000 | 41.49 / 14.70 = **2.822** (< 3B: amber note, 3B values) |
+    | f_m rows 1 / 2 / 3 | 0.80 / 0.40 / 0.30 | 0.80 / 0.40 / 0.30 (no change) |
+    | Per-row M_max (kip·ft) / y₀ (in) | 17.40 / 0.0912; 19.12 / 0.1315; **20.61 / 0.1629** (row 3 governs) | identical |
+    | η | s/B ≥ 3 → **1.000** | θ = atan(14.70/41.49) = 19.509°; η = 1 − (19.509/90)·[(2−1)·3 + (3−1)·2]/6 = 1 − 0.21677 × 1.1667 = **0.747** |
+    | φηP_n,bond (kip) vs STL 80 | 0.70 × 1.000 × 109.96 = 76.97 (NG) | 0.70 × 0.747 × 109.96 = **57.50** (NG) |
+    | Block footprint (ft) | (21 + 7) × (42 + 7) in = 2.333 × 4.083; perimeter 154 in = 12.83 ft | (41.49 + 14.70) × (82.98 + 14.70) in = 4.683 × 8.140; perimeter 307.74 in = **25.65 ft** |
+    | Block P_n (kip) = perim · β/144 · 12 · L_b | 154 × 0.020833 × 12 × 24 = 770.0 | 307.74 × 0.020833 × 12 × 24 = **1538.7** |
+    | φP_n,group = 0.70·min(P_block, 6 × 109.96 × η) vs ΣSTL 480 | 0.70 × min(770.0, 659.7) = 461.8 (NG) | 0.70 × min(1538.7, 492.9) = **345.0** (NG) |
+    | Module 11 rigid-cap table (Str I, P 480 kip, V_x 18 kip at (0.875, 1.75) ft) | piles at 1.75 ft grid: pile 1 = 80.0 kip | piles at 3.4575 ft grid: pile 1 = **178.8 kip**, pile 6 = −18.8 kip (= what the Group ▦ case already used, on main and branch) |
+
+    Module statuses, check strip, allPass, envelope: identical (Module 11 NG and Module 01 NG before and after).
+  - **(b) Spacing that crosses 5B and 3B: s = 36 in entered.**
+
+    | | Before | After |
+    |---|---|---|
+    | s/B | 36/7.00 = **5.143** (5B values) | 36/14.70 = **2.449** (< 3B, 3B values, amber note) |
+    | f_m rows 1 / 2 / 3, AASHTO | 1.00 / 0.85 / 0.70 | **0.80 / 0.40 / 0.30** |
+    | f_m, legacy curve (toggle off) | 1.000 / 0.871 / 0.743 | 0.80 / 0.40 / 0.30 |
+    | Row 1 M_max / y₀ / flex / comb | 16.94 / 0.0824 / 0.0315 / 0.0758 | 17.40 / 0.0912 / 0.0323 / 0.0766 |
+    | Row 2 | 17.27 / 0.0887 / 0.0321 / 0.0764 | 19.12 / 0.1315 / 0.0356 / 0.0798 |
+    | **Row 3 (governs)** | **17.67 / 0.0970 / 0.0329 / 0.0771** | **20.61 / 0.1629 / 0.0383 / 0.0826** (M_max +16.6 %, y₀ +68 %) |
+    | Envelope Group ▦ Str I (row 3): M_max / comb | 18.13 / 0.124 | 21.48 / 0.130 |
+    | Envelope Manual EE (row 3): M_max / y₀ | 23.60 / 0.1313 | 28.85 / 0.2401 |
+    | η | 1.000 | θ = atan(14.70/36) = 22.212°; 1 − 0.24680 × 1.1667 = **0.712** |
+    | φηP_n,bond | 76.97 | 54.81 |
+    | Block perimeter / P_n / φP_n,group | 20.33 ft / 1220.0 / 461.8 | (50.7 + 86.7) × 2 in = 22.90 ft / 1374.0 / **328.8** |
+
+    With the toggle off (legacy source, s = 36 in) the lateral analysis uses the entered p-multiplier: no lateral result changes; only the row values, η and the block change as above.
+  - **(c) Weak axis, default spacing** (B = d = 13.83 in, s = 3 × b_f = 44.10 in): s/B 3.000 → **3.189**; f_m 0.80 / 0.40 / 0.30 → 0.819 / 0.443 / 0.338; governing row 3 M_max 20.53 → **19.89** kip·ft (−3.1 %), y₀ 0.3465 → 0.3183 in, flexure D/C 0.111 → 0.108 — **less conservative**; η 1.000 → 1.000 (θ 17.41°, s/B ≥ 3).
+  - **Conservatism summary:** strong-axis H-piles (b_f > d) at a spacing in diameters: s/B drops below the entered multiple → η reduced, f_m the same or lower (more conservative). Spacing in inches: B grows from the 7 in OD to 14.70 in → s/B roughly halves → lower f_m and η (more conservative). Weak axis at a spacing in diameters: s/B rises (less conservative, as (c)). Block footprint grows with s and B (less conservative for the block mechanism alone; in every case run the η-reduced individual sum governed).
+- **Pure refactor parts (no result change claimed):** micropile and integral abutment: `groupB(I)` = `bondHoleDia(I)` = the old `dh`; `groupCcSpacing(I)` is the old expression; `genGrid`'s `g.s_in` equals its old expression for a micropile. Checked by the main-vs-branch runs below.
+- **How verified:**
+  - `node --check` on the four inline scripts.
+  - Headless Chromium (pinned React 18.3.1 / Plotly 2.32.0 / KaTeX 0.16.9 / three r128 served locally), origin/main (#118) vs branch, each run: load the project, "Run all cases", then every case made active with the envelope re-run; compared the full `R.group`, R.capDist piles, M_max / φM_n / interaction / H-pile Mu, the F29 per-row info, envelope rows, module statuses, check strip, Module 02 / 11 / summary / report text and autosave.
+    - **Bit-identical except for the new `Blbl` field ("bond dia")**: micropile defaults, legacy group project, group toggle on (3B), toggle on at s = 36 in, micropile with d_h = 9 in (≠ OD), single pile, integral abutment. Text identical apart from the envelope time stamp.
+    - **H-pile, single pile (group off) and defaults:** displayed text, statuses, checks identical; only the unused `R.group` / `R.capDist` internals differ.
+    - **H-pile groups** (toggle on at 3 × dia, toggle on at 36 in, legacy toggle off at 36 in, legacy at 3 × dia, AASHTO toggle off, weak axis toggle on): differences exactly as (a)–(c): s/B, f_m, η, block, Module 11 / report 11 rigid-cap layout and labels; with the toggle on the per-row and governing-row lateral results; module statuses and allPass unchanged in all six. Envelope rows equal Module 02 with each case active.
+  - Print: Letter PDF and report text (report 11 "at s = 2.45 × B", below-3B note, per-row table note). Screenshot looked at: Module 11, H-pile at 36 in (header line, ⚠ η note with θ = atan(B/s), amber below-3B note, plan "s = 2.4B", per-row table, block, rigid-cap table). No console errors in any run.
+- **Other copies:** none.
+- **Open items:** O41 closed; O43, O44 new (below).
+- **Re-applying by hand:** unified diff below (CRLF stripped).
+
+```diff
+diff --git a/Pile Designer.html b/Pile Designer.html
+index 5d79b4e..8471707 100644
+--- a/Pile Designer.html	
++++ b/Pile Designer.html	
+@@ -2458,12 +2458,12 @@ function groupPmRows(nRows, s_dia, src) {
+ }
+ function groupPmTable(I) {
+   const nRows = Math.max(1, Math.round(I.groupNrows||1));
+-  const dh_in = bondHoleDia(I);
+-  const s_in = (I.groupSpacingIn && I.groupSpacingIn>0) ? I.groupSpacingIn : (I.groupSpacingDia||3)*dh_in;
++  const dh_in = groupB(I);                   // F30 (O41): B = the p-y width (micropile: bond-hole dia, unchanged)
++  const s_in = groupCcSpacing(I);            // F30 (O41): c/c spacing as the group workspace lays the piles out
+   const s_dia = s_in/Math.max(dh_in,1e-6);
+   const src = groupPmSourceOf(I);
+   const rows = groupPmRows(nRows, s_dia, src);
+-  return { src, srcLabel: GROUP_PM_SRC_LABEL[src], nRows, s_in, s_dia, rows,
++  return { src, srcLabel: GROUP_PM_SRC_LABEL[src], nRows, s_in, s_dia, rows, Blbl: groupBLabel(I),
+     avg: rows.reduce((a,b)=>a+b.fm,0)/nRows, belowTable: s_dia < 3 - 1e-9, aboveTable: s_dia > 5 + 1e-9 };
+ }
+ function groupPmModOf(I) { const v = +(I && I.groupPmMod); return (isFinite(v) && v > 0) ? v : 1.0; }
+@@ -2499,6 +2499,28 @@ function pmPickGov(ev) {
+ function bondHoleDia(I) {
+   return (I.dhBondSeparate && isFinite(I.dhBond) && I.dhBond > 0) ? I.dhBond : I.OD;
+ }
++/* F30 (O41, 2026-10-11): group pile width B and c/c spacing s for Module 11 (s/B for the
++   row p-multipliers and the axial efficiency eta, Converse-Labarre theta = atan(B/s), block
++   footprint) and the per-row p-y analysis (groupPmTable).
++   - B = the pile width the p-y analysis uses (buildPySetup): micropile -> bond-hole diameter
++     bondHoleDia(I) (unchanged); H-pile -> the projected width normal to the load, b_f for
++     strong-axis bending, d for weak-axis bending (I.hpBf / I.hpD, as buildPySetup reads them).
++     Before F30 B was bondHoleDia(I) for every pile type, i.e. the micropile casing OD input
++     in H-pile mode.
++   - s = I.groupSpacingIn when entered; otherwise I.groupSpacingDia x the width the group
++     workspace and the case loads (computeCapDist via groupGeom) space the piles with:
++     micropile bondHoleDia(I) (unchanged), H-pile pileWidth(I) (d strong / b_f weak). Before
++     F30 Module 11 used groupSpacingDia x bondHoleDia(I) in H-pile mode too. */
++function groupB(I) {
++  if (I.pileType === "hpile") return I.hpAxis === "weak" ? I.hpD : I.hpBf;
++  return bondHoleDia(I);
++}
++function groupCcSpacing(I) {
++  if (I.groupSpacingIn && I.groupSpacingIn > 0) return I.groupSpacingIn;
++  return (I.groupSpacingDia || 3) * (I.pileType === "hpile" ? pileWidth(I) : bondHoleDia(I));
++}
++// Label of B in the Module 11 / report text: micropile "bond dia" (as before F30), H-pile "B".
++function groupBLabel(I) { return I.pileType === "hpile" ? "B" : "bond dia"; }
+ function computeAll(I, opts = {}) {
+   const R = {}; // results
+   const warn = [];
+@@ -3575,10 +3597,12 @@ function computeAll(I, opts = {}) {
+   const nRows = Math.max(1, Math.round(I.groupNrows||1));   // rows in load direction
+   const nCols = Math.max(1, Math.round(I.groupNcols||1));
+   const nPiles = nRows*nCols;
+-  const dh_in = dh;                                          // bond/drilled-hole dia (in)
++  // F30 (O41): B = the p-y width (micropile: bond/drilled-hole dia dh, unchanged; H-pile: b_f
++  // strong axis / d weak axis); s = the c/c spacing the group workspace uses (see groupB).
++  const dh_in = groupB(I);                                   // group pile width B (in)
+   // spacing: absolute (in) overrides diameters
+-  const s_in = (I.groupSpacingIn && I.groupSpacingIn>0) ? I.groupSpacingIn : (I.groupSpacingDia||3)*dh_in;
+-  const s_dia = s_in/Math.max(dh_in,1e-6);                  // spacing in diameters
++  const s_in = groupCcSpacing(I);
++  const s_dia = s_in/Math.max(dh_in,1e-6);                  // spacing in diameters (s/B)
+ 
+   // --- 1) Axial efficiency (eta) ---
+   // FHWA NHI-05-039: micropiles may be treated as individual elements (eta=1.0) when
+@@ -3623,7 +3647,7 @@ function computeAll(I, opts = {}) {
+   const block_pass = !grpOn || phiGroupBond >= groupDemand;
+ 
+   R.group = {
+-    enable: grpOn, nRows, nCols, nPiles, dh_in, s_in, s_dia,
++    enable: grpOn, nRows, nCols, nPiles, dh_in, s_in, s_dia, Blbl: groupBLabel(I),
+     // axial efficiency
+     eta, eta_auto, etaOverride: I.groupEtaOverride, spacingOKforEta, spacingThreshDia, thetaDeg, clEff,
+     Pn_geo_single: R.geo.Pn_geo, Pn_geo_group, phiPn_geo_group, geoGroup_pass,
+@@ -9408,7 +9432,7 @@ function PrintReport({
+       React.createElement(GroupPlanSvg, { I: I, cd: r.capDist, print: true })),
+     // F29: row p-multipliers (source, warnings) and, with the per-row toggle on, the per-row results
+     r.group && r.group.pMultipliers && /*#__PURE__*/React.createElement("div", { style: { fontSize: "8.5px", color: "#16304F", margin: "4px 0" } },
+-      "Lateral p-multipliers by row (", r.group.pmSourceLabel, ") at s = ", fmt(r.group.s_dia, 2), " \u00d7 bond dia: ",
++      "Lateral p-multipliers by row (", r.group.pmSourceLabel, ") at s = ", fmt(r.group.s_dia, 2), " \u00d7 " + (r.group.Blbl || "bond dia") + ": ",
+       r.group.pMultipliers.map(p => "row " + p.row + " " + fmt(p.fm, 2)).join(", "), ". ",
+       r.group.pmBelowTable && r.group.pmSource === "aashto" ? "\u26a0 Spacing below 3B \u2014 outside the table; the 3B values are used. " : "",
+       r.group.pmAboveTable && r.group.pmSource === "aashto" ? "Spacing above 5B: the 5B values are used. " : "",
+@@ -11159,7 +11183,7 @@ function GroupWorkspaceBody({ I, set, cap, g, rail, cases, activeIdx }) {
+   const setPiles = arr => set('groupPiles', arr);
+   const genGrid = () => {
+     const nR = Math.max(1, Math.round(I.groupNrows || 1)), nC = Math.max(1, Math.round(I.groupNcols || 1));
+-    const s = (I.groupSpacingIn && I.groupSpacingIn > 0 ? I.groupSpacingIn : (I.groupSpacingDia || 3) * (g.dh_in)) / 12;
++    const s = g.s_in / 12;   // F30 (O41): the c/c spacing Module 11 and the case loads use (groupCcSpacing)
+     const out = []; for (let ri = 0; ri < nR; ri++) for (let ci = 0; ci < nC; ci++) out.push({ x: +(ci * s).toFixed(2), y: +(ri * s).toFixed(2) });
+     setPiles(out);
+   };
+@@ -11464,7 +11488,7 @@ function PmRowTable({ info, print }) {
+           e("td", { style: Object.assign({}, td, { color: rw.latPass ? "#2f6f3e" : "#b23b3b" }) }, rw.latPass ? "OK" : "NG"));
+       }))),
+     e("div", print ? { style: { fontSize: "7.5px", color: "#64748b", marginTop: "2px" } } : { className: "text-[8.5px] text-slate-500 mt-0.5 leading-snug" },
+-      "Each row solved with the active case's per-pile loads and p-multiplier = row fₘ × modifier (" + fmt(info.mod || 1, 2) + "); fₘ from " + info.srcLabel + " at s = " + fmt(info.s_dia, 2) + " × bond dia. " +
++      "Each row solved with the active case's per-pile loads and p-multiplier = row fₘ × modifier (" + fmt(info.mod || 1, 2) + "); fₘ from " + info.srcLabel + " at s = " + fmt(info.s_dia, 2) + " × " + (info.Blbl || "bond dia") + ". " +
+       "Governing row = largest D/C of flexure / combined (a row that did not converge governs, NG; ties → larger Mₘₐₓ). " +
+       "Lateral status = flexure, combined" + " and stability (micropile: also casing extension). The lateral results, graphs and checks shown are the governing row's."));
+ }
+@@ -11482,7 +11506,7 @@ function GroupPlan({ I, g }) {
+     arrowhead: 2, arrowcolor: "#2f6f3e", arrowwidth: 2, text: "load", font: { size: 9, family: PLOT_FONT, color: "#2f6f3e" } });
+   const pad = s * 1.4;
+   return /*#__PURE__*/React.createElement("div", { className: "bg-white rounded-sm p-2 border border-slate-200 mt-3" },
+-    /*#__PURE__*/React.createElement("div", { className: "text-[10px] font-mono-tech text-[var(--blueprint)] uppercase tracking-wider mb-1" }, "Group plan (to scale) \u00b7 s = " + fmt(g.s_dia, 1) + "D"),
++    /*#__PURE__*/React.createElement("div", { className: "text-[10px] font-mono-tech text-[var(--blueprint)] uppercase tracking-wider mb-1" }, "Group plan (to scale) \u00b7 s = " + fmt(g.s_dia, 1) + (g.Blbl === "B" ? "B" : "D")),
+     /*#__PURE__*/React.createElement(Plot, {
+       data: [{ x: [0], y: [0], mode: "markers", marker: { size: 0.1, color: "rgba(0,0,0,0)" }, hoverinfo: "skip" }],
+       layout: baseLayout({ height: Math.min(140 + nR * 34, 300), margin: { l: 8, r: 8, t: 6, b: 6 }, shapes, annotations: anns, showlegend: false,
+@@ -14183,7 +14207,7 @@ function App() {
+     const g = pmPickGov(ev);
+     const info = { rows: ev.map(e => ({ row: e.row, fm: e.fm, pm: e.pm, Mmax: e.Mmax, y0: e.y0, flexR: e.flexR, combR: e.combR, noConv: e.noConv, latPass: e.latPass })),
+       gov: g, govRow: ev[g].row, govFm: ev[g].fm, govPm: ev[g].pm, mod: pyRowsRaw.mod, src: pyRowsRaw.tbl.src, srcLabel: pyRowsRaw.tbl.srcLabel,
+-      nRows: pyRowsRaw.tbl.nRows, s_dia: pyRowsRaw.tbl.s_dia, belowTable: pyRowsRaw.tbl.belowTable, aboveTable: pyRowsRaw.tbl.aboveTable };
++      nRows: pyRowsRaw.tbl.nRows, s_dia: pyRowsRaw.tbl.s_dia, Blbl: pyRowsRaw.tbl.Blbl, belowTable: pyRowsRaw.tbl.belowTable, aboveTable: pyRowsRaw.tbl.aboveTable };
+     return { pyRes: Object.assign({}, ev[g].res, { pmAuto: info }), R: ev[g].R, info };
+   }, [I, activeLayers, solved, pyRowsRaw, pcr]);
+   const pyRes = pyRowsEval ? pyRowsEval.pyRes : pyResSingle;
+@@ -14962,7 +14986,7 @@ function App() {
+     "manually override \u03b7"),
+     I.groupEtaOverride && /*#__PURE__*/React.createElement("div", { className: "mt-2 max-w-[180px]" },
+       /*#__PURE__*/React.createElement(Field, { label: "\u03b7 override", value: I.groupEta, onChange: v => set('groupEta', v) })),
+-    /*#__PURE__*/React.createElement("p", { className: "text-[10px] text-slate-500 leading-snug mt-2" }, "Computed \u03b7 = ", fmt(r.group.eta, 3), r.group.spacingOKforEta ? " (spacing \u2265 3\u00d7 bond dia \u2192 individual elements)" : " (Converse-Labarre)", ". Group layout and cap loads are set in the Pile group workspace (Loads & group tab).")), /*#__PURE__*/(I.pileType !== "iab") && /*#__PURE__*/React.createElement(Panel, {
++    /*#__PURE__*/React.createElement("p", { className: "text-[10px] text-slate-500 leading-snug mt-2" }, "Computed \u03b7 = ", fmt(r.group.eta, 3), r.group.spacingOKforEta ? " (spacing \u2265 3\u00d7 " + (r.group.Blbl || "bond dia") + " \u2192 individual elements)" : " (Converse-Labarre)", ". Group layout and cap loads are set in the Pile group workspace (Loads & group tab).")), /*#__PURE__*/(I.pileType !== "iab") && /*#__PURE__*/React.createElement(Panel, {
+     title: "Buckling",
+     sub: "unsupported span and column parameters (10)"
+   }, /*#__PURE__*/React.createElement(Toggle, {
+@@ -16878,7 +16902,7 @@ function App() {
+     }, "Layout, spacing, and cap loads are defined in the ", /*#__PURE__*/React.createElement("b", null, "Pile Group Workspace"), " (", /*#__PURE__*/React.createElement("button", { type: "button", onClick: () => gotoLoadsTab(setRailTab, "group"), className: "underline text-[var(--blueprint2)]" }, "Loads & group input tab \u2192"), "). The efficiency, p-multiplier, and block-failure checks below use that layout."),
+     /*#__PURE__*/React.createElement("div", {
+       className: "text-[10px] font-mono-tech text-slate-500 mb-4"
+-    }, r.group.nPiles + " piles (" + r.group.nRows + "×" + r.group.nCols + "), spacing = " + fmt(r.group.s_dia, 1) + "× bond dia (" + fmt(r.group.s_in, 1) + " in), bond dia = " + fmt(r.group.dh_in, 2) + " in"),
++    }, r.group.nPiles + " piles (" + r.group.nRows + "×" + r.group.nCols + "), spacing = " + fmt(r.group.s_dia, 1) + "× " + r.group.Blbl + " (" + fmt(r.group.s_in, 1) + " in), " + r.group.Blbl + " = " + fmt(r.group.dh_in, 2) + " in" + (I.pileType === "hpile" ? " (H-pile " + (I.hpAxis === "weak" ? "d, weak-axis" : "b_f, strong-axis") + " bending: the p-y width normal to the load)" : "")),
+ 
+     // === PER-PILE DISTRIBUTION BY LOAD CASE ===
+     /*#__PURE__*/React.createElement("div", { className: "rounded-sm border border-slate-200 p-3 mb-3" },
+@@ -16892,8 +16916,8 @@ function App() {
+       /*#__PURE__*/React.createElement("p", { className: "text-[9.5px] text-slate-600 leading-snug mb-2" }, "FHWA NHI-05-039: micropiles may be treated as individual elements (η = 1.0) when center-to-center spacing ≥ 3× the bond diameter. Below that, a reduction applies (Converse-Labarre efficiency shown)."),
+       /*#__PURE__*/React.createElement("div", { className: "text-[10px] font-mono-tech rounded-sm p-1.5 mb-2", style: { background: r.group.spacingOKforEta ? "rgba(47,111,62,0.06)" : "rgba(178,59,59,0.06)", color: "#14304a" } },
+         r.group.spacingOKforEta
+-          ? /*#__PURE__*/React.createElement(React.Fragment, null, "✓ Spacing ", fmt(r.group.s_dia, 1), "× ≥ 3× bond dia → η = 1.0 permitted (individual elements)")
+-          : /*#__PURE__*/React.createElement(React.Fragment, null, "⚠ Spacing ", fmt(r.group.s_dia, 1), "× < 3× bond dia → Converse-Labarre η = ", fmt(r.group.clEff, 3), " (θ=atan(d/s)=", fmt(r.group.thetaDeg, 1), "°)")),
++          ? /*#__PURE__*/React.createElement(React.Fragment, null, "✓ Spacing ", fmt(r.group.s_dia, 1), "× ≥ 3× " + r.group.Blbl + " → η = 1.0 permitted (individual elements)")
++          : /*#__PURE__*/React.createElement(React.Fragment, null, "⚠ Spacing ", fmt(r.group.s_dia, 1), "× < 3× " + r.group.Blbl + " → Converse-Labarre η = ", fmt(r.group.clEff, 3), I.pileType === "hpile" ? " (θ=atan(B/s)=" : " (θ=atan(d/s)=", fmt(r.group.thetaDeg, 1), "°)")),
+       /*#__PURE__*/React.createElement("div", { className: "text-[10px] font-mono-tech mb-2" }, "η used = ", /*#__PURE__*/React.createElement("b", null, fmt(r.group.eta, 3)), " → per-pile bond φP", /*#__PURE__*/React.createElement("sub", null, "n"), " = ", fmt(r.group.Pn_geo_single, 0), " → ", /*#__PURE__*/React.createElement("b", null, fmt(r.group.phiPn_geo_group, 0), " kip")),
+       /*#__PURE__*/React.createElement(InputsUsed, { tab: "checks", setTab: setRailTab, panelTitle: "Group options",
+         items: [["\u03b7 override", I.groupEtaOverride ? "on, \u03b7 = " + fmt(I.groupEta, 3) : "off", ""]] }),
+```
+
 ## Open items (not changed)
 - O1. **Uncased/cased structural axial: outer 0.85 factor and `fy = min(fyb, fyc)`** (`Rn_cased/Rn_ucased`, ≈ line 1675).
   - Neither AASHTO 10.9.3.10.2 nor FHWA NHI-05-039 Eq. 5-13 has the outer 0.85, and the uncased section has no casing, so min(fyb, fyc) is arbitrary there.
@@ -9135,5 +9389,7 @@ index a18a6e1..5d79b4e 100644
 - O38. **Large equilibrium-closure residual on layered (four-layer) profiles.** **Closed by F28 (2026-10-11).** Cause: the closure integrated the p-y curve value `res.p`, but below |y| = 0.001·y₅₀ (soft and stiff clay) the solver applies the linearised secant reaction E_s·y; the solution was sound. The closure now integrates the applied reaction (`res.pEq`): four-layer H-pile 43.80 % / 15.06 % → 0.0064 % / 0.0036 %; results unchanged. Engineer's item (2) (closure test (b) on first attempts) was stopped by its own condition and is O39. Original text: Found in F27 (2026-10-11), not changed. On main, converged first attempts on the four-layer profile used by the parity runs (sand / soft clay / stiff clay / sand, tops 0 / 8 / 16 / 25 ft) report closures far above the uniform-soil values (≤ 0.05 % ΣF): H-pile defaults ΣF **43.80 %** / ΣM **15.06 %** (y₀ 0.157 in, Mmax 34.0 kip·ft, a plainly sound solve); with buckling (L_u 8 ft) 57.20 % / 16.20 %; micropile 3.17 % / 1.10 %, edited micropile 1.97 % / 0.55 %, micropile + buckling 5.12 % / 0.83 %. Sweep (four-layer, free head, STL 20–150, P 1–20): H-pile 15–52 % ΣF / 8–15 % ΣM; micropile 0.1–10 % ΣF / 0.05–4.9 % ΣM; moment-only head loads (after F27's normalisation) 115–1,057 % ΣF, 1.5–13 % ΣM. The residual is computed from the reported soil reactions `res.p` (`pyPofY` at each node) integrated against the applied loads; on a uniform profile it closes to round-off, so the large layered values point at the reported p (layer-boundary nodes / Georgiadis equivalent depth) or the integration across layer boundaries rather than at the solution itself, but this was not investigated. Effects today: Module 02 and the report show these closures; a RETRIED solve on such a profile is rejected by the 1 % closure test (b) even when sound (F27 four-layer + buckling edited micropile: retry closure 5.51 %). First attempts are not tested for closure (F27). **To investigate** (coordinator): whether the residual or the reported p is wrong on layered profiles, and whether the moment / deflection results are affected.
 - O39. **Closure test (b) on first p-y attempts (engineer's decision 2026-10-11, item 2 of O38) — stopped, not applied.** **Closed 2026-10-11, engineer's decision: "leave it as is, go with your recommendation" — first attempts keep tests (a) + (c) only (F27); (b) stays on retried solves. No code change.** The IAB Tier-2 question at the end of this item moves to O40. Original text: With F28's closure, applying (b) (ΣF and ΣM ≤ 1 %) to first attempts changes no outcome in the uniform (208) and mixed (52) sweeps, but in the four-layer sweep (66) it rejects 3 ordinary solves: H-pile, free head, moment-only head load M 40 kip·ft at STL 20 / 86 / 150 (first attempt ΣF 1.30–1.31 %, ΣM 0.017 %, y₀ 0.135–0.140 in, M_max 40.1–41.0 kip·ft; the retry gives ΣF 2.6–2.7 %, so the result would become "did not converge" / NG). The residual is the solver tolerance, not an equilibrium error: 1.68 lb absolute against ∫|p|dz = 12,797 lb, measured (F27) against 1 % of ∫|p|dz because P_t = 0; with tol 1e-9 it is 0.0016 % and M_max moves by 1e-7 relative. (A fourth case, micropile M 40 at STL 150, also fails (b) but reverses and is "did not converge" on main already.) First attempts keep (a) + (c) (F27). **Ask:** apply (b) to first attempts with a different moment-only ΣF measure (e.g. 10 % of ∫|p|dz, or ΣF judged against |M_head| / (pile length) — or test only ΣM when P_t = 0), or with a tighter solver tolerance, or leave first attempts on (a) + (c)? Also: the integral-abutment Tier-2 graphs (`iabNonlinearSolve`) still show the curve value `res.p` at near-zero-deflection clay nodes (the same overstatement F28 removed from the Lateral graphs); switch them to the applied reaction too?
 - O40. **Integral-abutment Tier-2 graphs (`iabNonlinearSolve`) still plot the p-y curve value `res.p` at near-zero-deflection clay nodes** (the overstatement F28 removed from the Lateral graphs). Display only; switch them to the solver-applied reaction? (Split out of O39, 2026-10-11.)
-- O41. **Group spacing ratio for the p-multipliers (and η) uses the bond-hole diameter for every pile type** (`computeAll` / `groupPmTable`: `s_dia = s / bondHoleDia(I)`; `bondHoleDia` = micropile casing OD unless d_h is entered). AASHTO Table 10.7.2.4-1 is in pile diameters / widths B. In H-pile mode the ratio is therefore taken against the micropile OD input, not the H-pile width; the group workspace grid and `computeCapDist` space piles with `pileWidth(I)` instead. Found in F29, not changed (it changes the row f_m and η of H-pile groups). **Ask:** use `pileWidth(I)` (H-pile: d or b_f per axis) as B for the p-multiplier spacing, and which width for a micropile with d_h ≠ OD.
+- O41. **Closed by F30 (2026-10-11).** Engineer's decision 2026-10-11: B = the pile width the p-y analysis uses (H-pile: b_f strong axis / d weak axis); micropile unchanged. Original text: **Group spacing ratio for the p-multipliers (and η) uses the bond-hole diameter for every pile type** (`computeAll` / `groupPmTable`: `s_dia = s / bondHoleDia(I)`; `bondHoleDia` = micropile casing OD unless d_h is entered). AASHTO Table 10.7.2.4-1 is in pile diameters / widths B. In H-pile mode the ratio is therefore taken against the micropile OD input, not the H-pile width; the group workspace grid and `computeCapDist` space piles with `pileWidth(I)` instead. Found in F29, not changed (it changes the row f_m and η of H-pile groups). **Ask:** use `pileWidth(I)` (H-pile: d or b_f per axis) as B for the p-multiplier spacing, and which width for a micropile with d_h ≠ OD.
 - O42. **Per-row lateral load share.** With "Apply group p-multipliers automatically (per row)" every row is solved with the same per-pile shear (the rigid-cap equal share). In a real group the stiffer leading row attracts more shear than the shadowed trailing rows, so equal shares overstate the trailing-row demand and understate the leading row's. Found in F29, not changed. **Ask:** keep equal shares (the governing row is usually the trailing row, so this is conservative there), or distribute the cap shear by row stiffness (iterating on a common head deflection)?
+- O43. **Group axial efficiency and block failure in H-pile mode reduce the micropile bond capacity.** `computeAll` group block: `Pn_geo_group = R.geo.Pn_geo * eta` and the block side resistance use the micropile grout-to-ground bond (β, d_h, L_b inputs) for every pile type, and both checks enter the H-pile `allPass` and the Module 11 status. In H-pile mode they should use the H-pile static capacity (`R.hpileGeo`) and an H-pile block (skin over the embedded length, plus base). Found in F30, not changed (calc change). **Ask:** H-pile group efficiency / block basis (AASHTO 10.7.3.9 / 10.7.3.11?), or hide these two checks in H-pile mode until then.
+- O44. **Micropile with d_h ≠ casing OD: two group layouts.** Module 11 (`computeAll`, `groupPmTable`, "Generate grid") spaces a grid given in diameters at `groupSpacingDia × d_h`, while the group workspace, the Group ▦ case loads and the plan use `groupSpacingDia × OD` (`pileWidth`). With d_h = 9 in, OD 7 in, 3 × dia: Module 11's rigid-cap table shows 27 in c/c, the cases use 21 in. Left unchanged by F30 (micropile results to stay identical). **Ask:** which width defines "spacing × dia" for a micropile (d_h or OD), so both use it.
