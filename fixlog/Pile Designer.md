@@ -4300,6 +4300,167 @@ Engineer's decision 2026-10-10 on O24–O26: "Yes go ahead with the others and m
 - **Other copies of this code:** none.
 - **Not changed (see O31):** the H-pile static axial capacity and Module G's "Pile toe depth" line use a third datum.
 
+## 2026-10-11 — PR: claude/pile-o29-o32 (PR link added after merge)
+
+Engineer's decision 2026-10-10 on O29, O31, O32 (and O33 if trivial): "Go ahead". Basis as stated in `fixlog/README.md` (AASHTO LRFD 10th Ed. (2024)). O33 was looked at and left open: see O33 below.
+
+### F19. H-pile static axial capacity: skin from grade (or the buried head) to the toe at the embedded length below grade (O31)   [calc change] [depends on the profile: no change in a uniform profile; MORE conservative or LESS conservative in a layered one — see the check cases]
+- **Where:** `computeAll`, the H-pile geotechnical block (≈ line 3449), and `App` → Module G "Geometry summary" table (≈ line 14393). Anchor texts: `// ---- H-PILE geotechnical axial capacity` and `["Pile toe depth",`. `hpileGeoCapacity` itself is unchanged.
+- **Problem:** `hpileGeoCapacity` documents `embedTop` as "depth from grade to pile head (0 if at grade)" and `embedLen` as "embedded length below grade", with the toe at `embedTop + embedLen` below grade. `computeAll` passed `embedTop = I.solverFree`, the stickup, which is + ABOVE grade. At the defaults (3 ft stickup, 30 ft embedded) skin friction was counted from 3 to 33 ft below grade and the tip taken at 33 ft, while the input ("Embedded length, below grade"), Module G's elevation, the soil-profile drawing and the p-y model (F18) put the toe at 30 ft with soil from grade. Module G's "Pile toe depth" line printed stickup + embedded length (33.0 ft). With a buried head (negative stickup) the axial interval ran from grade (soil above the head was counted) to `solverLembed` below the head.
+- **Code checked for a deliberate reason:** there is no separate "top of skin friction", scour, downdrag or neglected-zone input in the H-pile axial path. `LuFree` (added unsupported length) is used only by buckling and the p-y bracing, not by the axial capacity; the cap embedment (`hpCapEmbed`, inches into the cap) is used only by the head-fixity check. Nothing indicates the 3 ft shift was intended.
+- **Governing provision:** AASHTO LRFD 10th Ed. (2024) Art. 10.7.3.8.6 (static analysis): R_n = R_p + R_s, Eq. 10.7.3.8.6a-2/-3/-4; side resistance over the embedded length in contact with soil. Unit values unchanged: sand q_s = N̄60/50 ksf (Eq. 10.7.3.8.6g-3, nondisplacement H-pile), q_p = 0.8·N60·D_b/D ≤ q_L = 8·N60 (sand) / 6·N60 (silt) (Eq. 10.7.3.8.6g-1); clay q_s = α·S_u (Eq. 10.7.3.8.6b-1), q_p = 9·S_u (Eq. 10.7.3.8.6e-1). φ from Table 10.5.5.2.3-1 (inputs `hpPhiGeo`, `hpPhiGeoClay`, `hpPhiUp`), unchanged. Box perimeter and box tip area per C10.7.3.8.6f, unchanged. Only the depth interval changes.
+- **Before:**
+  ```js
+      const embedTop_ft = (I.solverFree || 0);        // depth grade→head (0 at grade)
+      const embedLen_ft = Math.max((I.solverLembed || 30), 1);
+  …
+             ["Pile toe depth", fmt(Math.max(I.solverFree || 0, 0) + Math.max(I.solverLembed || 30, 1), 1) + " ft below grade"],
+  ```
+- **After:**
+  ```js
+      // Datum (F19/O31): "Embedded length, below grade" (I.solverLembed) puts the toe at
+      // solverLembed below GRADE, as Module G, the soil-profile drawing and the p-y model
+      // (F18) do. Stickup I.solverFree is signed (+ above grade, - head below grade), so the
+      // soil contact starts at grade, or at the head when the head is buried. Before O31 the
+      // stickup was passed as the depth grade->head, so skin ran from stickup to
+      // stickup + solverLembed below grade (3-33 ft at the defaults).
+      const toe_ft = Math.max((I.solverLembed || 30), 1);                       // grade -> toe (ft)
+      const embedTop_ft = Math.min(Math.max(-(I.solverFree || 0), 0), toe_ft);  // depth grade->head when buried, else 0
+      const embedLen_ft = toe_ft - embedTop_ft;                                 // soil contact length, head/grade -> toe (ft)
+  …
+             ["Pile toe depth", fmt(Math.max(I.solverLembed || 30, 1), 1) + " ft below grade"],
+  ```
+  Interval, before → after: stickup s ≥ 0: [s, s + L] → [0, L]; buried head at depth h (s = −h): [0, L − h] (soil above the head counted, toe short by h) → [h, L]. Toe always at L = `solverLembed` below grade, as in F18 (the p-y model) and the drawing. The 1 ft minimum on L is kept. If a buried head is entered deeper than L, the side length is 0 (it was negative-clipped before as well).
+- **Common data (all cases):** HP 13.83 × 14.70 (defaults), box perimeter = 2(13.83 + 14.70)/12 = 4.755 ft/ft, box tip area A_p = 13.83 × 14.70/144 = 1.4118 ft², D (larger plan dimension) = 14.70/12 = 1.225 ft, φ sand 0.30 / clay 0.35 / uplift 0.25, no small-group factor, STL = 86 kip, stickup 3 ft, L = 30 ft.
+- **Check case 1 (H-pile defaults, as shipped):** the carried-over soil layer has no N60 (O16), so q_s = q_p = 0 before and after.
+  | item | before | after |
+  |---|---|---|
+  | skin zone (below grade) | 3.0–33.0 ft | 0.0–30.0 ft |
+  | unit skin q_s | 0 ksf | 0 ksf |
+  | tip depth / D_b | 33.0 ft / 30.0 ft | 30.0 ft / 30.0 ft |
+  | q_p, R_s, R_p, φR_n | 0 | 0 |
+  | D/C (Module 01 shows φR_n = 0 ✗) | — | — |
+  | Module G "Pile toe depth" | 33.0 ft below grade | 30.0 ft below grade |
+  No required length is computed for H-piles (only the integral-abutment mode has one), so there is none to report.
+- **Check case 2 (defaults + one uniform sand layer, N60 = 20):** no change in the numbers, only in the interval: q_s = 20/50 = 0.40 ksf over 30 ft both ways, A_s = 4.755 × 30 = 142.65 ft², R_s = 57.06 kip; tip D_b = 30 ft both ways, q_p = 0.8 × 20 × 30/1.225 = 391.8 → q_L = 8 × 20 = 160 ksf, R_p = 160 × 1.4118 = 225.89 kip; R_n = 282.95 kip, φR_n = 0.30 × 282.95 = 84.885 kip, D/C = 86/84.885 = 1.013 (NG) before and after.
+- **Check case 3 (the tip moves into a different layer; MORE conservative):** clay 0–31 ft (S_u = 1.0 ksf, α = 0.5), sand from 31 ft (N60 = 40).
+  | item | before (3–33 ft) | after (0–30 ft) |
+  |---|---|---|
+  | clay skin | 3–31 ft, h = 28, q_s = 0.5 ksf, A_s = 133.14 ft², R_s = 66.57 kip | 0–30 ft, h = 30, q_s = 0.5, A_s = 142.65, R_s = 71.325 kip |
+  | sand skin | 31–33 ft, h = 2, q_s = 40/50 = 0.8 ksf, A_s = 9.51, R_s = 7.608 kip | — |
+  | tip layer, depth | sand, 33 ft, D_b = 33 − 31 = 2 ft | clay, 30 ft |
+  | unit tip | q_p = 0.8 × 40 × 2/1.225 = 52.245 ksf (≤ q_L 320) | q_p = 9 × 1.0 = 9.0 ksf |
+  | R_s / R_p | 74.178 / 73.760 kip | 71.325 / 12.706 kip |
+  | φR_n | 0.35·66.57 + 0.30·7.608 + 0.30·73.760 = 47.710 kip | 0.35 × (71.325 + 12.706) = 29.411 kip |
+  | D/C = 86/φR_n | 1.803 (NG) | 2.924 (NG) |
+- **Check case 4 (LESS conservative; the tip moves out of a soft layer):** sand 0–31 ft (N60 = 40), clay from 31 ft (S_u = 1.0 ksf, α = 0.5).
+  | item | before (3–33 ft) | after (0–30 ft) |
+  |---|---|---|
+  | skin | sand 3–31 (28 ft, 0.8 ksf, 106.512 kip) + clay 31–33 (2 ft, 0.5 ksf, 4.755 kip) = 111.267 kip | sand 0–30 (30 ft, 0.8 ksf) = 114.12 kip |
+  | tip | clay at 33 ft, q_p = 9.0 ksf, R_p = 12.706 kip | sand at 30 ft, D_b = 30, q_p = 0.8 × 40 × 30/1.225 = 783.7 → q_L = 320 ksf, R_p = 451.78 kip |
+  | φR_n | 0.30·106.512 + 0.35·4.755 + 0.35·12.706 = 38.065 kip | 0.30 × 565.90 = 169.77 kip |
+  | D/C | 2.259 (NG) | 0.507 (OK) |
+  The old datum put the toe 3 ft deeper, into the clay below the sand; the toe the engineer entered (30 ft) is in the sand.
+- **Check case 5 (four-layer profile used for F16, MORE conservative):** sand 0–8 ft (N60 18), soft clay 8–16 (S_u 0.6, α 0.8), stiff clay 16–25 (S_u 2.5, α 0.5), sand from 25 ft (N60 40).
+  | item | before | after |
+  |---|---|---|
+  | skin rows (ft: q_s ksf → R_s kip) | sand 3–8: 0.36 → 8.559; clay 8–16: 0.48 → 18.259; clay 16–25: 1.25 → 53.494; sand 25–33: 0.80 → 30.432 | sand 0–8: 0.36 → 13.694; clay 8–16: 0.48 → 18.259; clay 16–25: 1.25 → 53.494; sand 25–30: 0.80 → 19.020 |
+  | R_s | 110.744 kip | 104.467 kip |
+  | tip (sand, 33 / 30 ft) | D_b = 8 ft, q_p = 0.8 × 40 × 8/1.225 = 208.98 ksf, R_p = 295.04 kip | D_b = 5 ft, q_p = 130.61 ksf, R_p = 184.40 kip |
+  | φR_n | 125.32 kip | 90.25 kip |
+  | D/C | 0.686 | 0.953 |
+  | φR_up (uplift, skin only) | 27.69 kip | 26.12 kip |
+- **Check case 6 (buried head, stickup −2 ft, uniform sand N60 20):** before: skin 0–28 ft (soil above the head counted), toe 28 ft, D_b 28 ft; after: skin 2–30 ft, toe 30 ft, D_b = 30 − 2 = 28 ft. R_s = 0.40 × 4.755 × 28 = 53.256 kip and R_p = 225.89 kip (q_L governs) both ways, φR_n = 83.744 kip, D/C 1.027; only the interval and the toe depth change in a uniform profile.
+- **Saved projects affected:** every H-pile project with a non-zero stickup and a layered soil profile (results change as above); with a uniform profile only the printed depth ranges and the Module G toe line change. Stickup 0: no change. Micropile and integral-abutment modes: no change (page text identical).
+- **How verified:** headless Chromium, main vs branch, reading `R.hpileGeo` and the Module G table (`geo.mjs`) for cases 1–6; the hand checks above reproduce the tool's numbers. Main-vs-branch page text and printed report for all three modes (defaults and the four-layer profile): micropile and IAB identical; H-pile differs only in Module 01 / report 01 (depth ranges, R_s, R_p, φR_n, D/C, the summary row "Geotech axial (tip+skin)") and the Module G toe line. Saved data (autosave, .json export, IndexedDB library) identical.
+- **Other copies of this code:** none.
+
+### F20. Case envelope ("Run all cases") in H-pile mode: the H-pile checks, not the micropile casing checks (O32)   [display / check selection] [no formula change; the H-pile envelope columns now equal the module values, much lower than the casing ratios shown before]
+- **Where:** `App` → `runAllCases`, the per-case row object (≈ line 12911). Anchor text: `const rat = (d, cap) => cap > 0 ? d / cap : null;`.
+- **Problem:** `computeAll` evaluates both the micropile checks and, for an H-pile, `R.hpileGeo` / `R.hpileStruct`. The envelope rows always used the micropile ones: geo = STL/`R2.geo.phiPn_geo` (grout-to-ground bond), flex = Mmax/`R2.flex.phiMn` (casing), comb = `R2.comb.interaction` (casing-only), tension from the micropile tension block. In H-pile mode those are not checks the tool reports anywhere else. At the defaults the envelope showed flexure 0.65 while Module 04 shows 0.065.
+- **Governing provision:** none changed. The columns now report the H-pile checks the modules show: Module 01 geotechnical compression (AASHTO 10th Ed. 10.7.3.8.6, STL/φ_stat·R_n), Module 04 flexure (6.12, M_u/φ_f·M_n with M_n = F_y·S), Module 05 combined axial + flexure (6.9.2.2.1, `comb_ratio`), and for tension rows min(H-pile uplift φ_up·R_s, H-pile structural tension 6.8). The buckling column is unchanged: `R2.buckling.phiPn_buck` is already section-aware and is what Module 10 shows for both pile types. The "pass" column was already `R2.allPass`, which is H-pile specific. Micropile rows: unchanged code path.
+- **Before:**
+  ```js
+            geoR: c.type === "service" ? null : rat(I2.STL, R2.geo.phiPn_geo),
+            flexR: c.type === "service" ? null : rat(R2.MmaxUsed, R2.flex.phiMn),
+            combR: c.type === "service" ? null : R2.comb.interaction, // P-M interaction value (was R2.comb.ratio = Po/Pe)
+            buckR: (c.type === "service" || !R2.buckling.enable) ? null : rat(I2.STL, R2.buckling.phiPn_buck),
+            tenR: c.type === "tension" ? rat(I2.Tu, Math.min(R2.tension && R2.tension.phiPn_up || 1e9, R2.tension && R2.tension.phiPn_tension_total || 1e9)) : null,
+  ```
+- **After:**
+  ```js
+          // H-pile (F20/O32): report the H-pile checks the modules show (Module 01 geotech
+          // tip + skin, Module 04 Mu/phiMn, Module 05 6.9.2.2.1 interaction, H-pile uplift and
+          // tension), not the micropile casing checks that computeAll also evaluates.
+          const hg = R2.hpileGeo, hs = R2.hpileStruct, isHPc = I2.pileType === "hpile" && hg && hs;
+  …
+            geoR: c.type === "service" ? null : (isHPc ? rat(I2.STL, hg.phiRn_comp) : rat(I2.STL, R2.geo.phiPn_geo)),
+            flexR: c.type === "service" ? null : (isHPc ? rat(hs.Mu, hs.phiMn) : rat(R2.MmaxUsed, R2.flex.phiMn)),
+            combR: c.type === "service" ? null : (isHPc ? hs.comb_ratio : R2.comb.interaction), // P-M interaction value (was R2.comb.ratio = Po/Pe)
+            buckR: (c.type === "service" || !R2.buckling.enable) ? null : rat(I2.STL, R2.buckling.phiPn_buck),
+            tenR: c.type === "tension" ? (isHPc ? rat(I2.Tu, Math.min(hg.phiRn_up || 1e9, hs.phiPn_tension || 1e9)) : rat(I2.Tu, Math.min(R2.tension && R2.tension.phiPn_up || 1e9, R2.tension && R2.tension.phiPn_tension_total || 1e9))) : null,
+  ```
+- **Check case 1 (H-pile defaults, one strength case STL 86 kip, P 6 kip, free head):** envelope row before → after; module values with the case active (Module 04/05).
+  | column | before | after | module (active) |
+  |---|---|---|---|
+  | Mmax (kip·ft) | 34.887 | 34.887 | 34.882 (see O34) |
+  | y₀ (in) | 0.1768 | 0.1768 | 0.1767 |
+  | geo | 1.12 (micropile bond, 1.1173) | — (H-pile φR_n = 0, O16) | φR_n = 0 (Module 01 ✗) |
+  | flex | 0.65 (0.64668, casing φM_n = 53.95 kip·ft) | 0.06 (0.064872) | 0.064864 |
+  | comb | 0.82 (0.81613, casing-only) | 0.11 (0.112436) | 0.112428 |
+  | buckl | — | — | — |
+  | pass | ✗ | ✗ | ✗ |
+  Hand check (after): S_x = 129.07 in³ (Module G), φ_f·M_n = 1.00 × 50 × 129.07/12 = 537.8 kip·ft; flex = 34.887/537.8 = 0.0649. P_o = F_y·A_g = 50 × 25.83 = 1,291.5 kip (nonslender), P_r = 0.70 × 1,291.5 = 904.0 kip, P_u/P_r = 86/904.0 = 0.0951 < 0.2, so comb = 0.0951/2 + 0.0649 = 0.1124 (Eq. 6.9.2.2.1-1).
+- **Check case 2 (envelope = module, exactly):** to remove the envelope's own p-y solve from the comparison (O34), the lateral source was set to "LPILE / typed Mmax" (Mmax = 40 kip·ft) with four cases (strength 86/6, extreme 60/12/5, service 60/4, tension 20/3), buckling on with 4 ft added unsupported length, uniform sand N60 20. Each case was made active in turn and the module values read from `R`. H-pile after: every column equal to the module value to machine precision for every case: Str I geo 1.013135, flex 0.074381, comb 0.133914, buckl 0.138911; Ext I 0.706839 / 0.074381 / 0.115916 / 0.096915; Uplift geo 0 / flex 0.074381 / comb 0.074381 / buckl 0 / tension 1.402033. (Before: Str I 1.117333 / 0.741461 / 0.910917 / 0.138911; tension 0.363783.) The service row's "pass" is the deflection check, not `allPass`, by design.
+- **With the built-in p-y lateral analysis** the check columns are the same functions of Mmax, but the envelope's Mmax comes from its own per-case solve (110 nodes, 6 load steps, no casing cut) and differs from Module 02's (120 nodes, 8 steps) by 0.01–0.5 % in the cases run, in all pile types; see O34.
+- **Micropile and IAB:** the micropile envelope is identical on main and branch (defaults, a four-case p-y run and the typed-Mmax run, every column of every case). IAB mode has no case envelope.
+- **Extreme Event φ:** the envelope applies Extreme Event φ = 1.0 (uplift 0.8) by overriding the micropile φ keys. The H-pile φ inputs are not overridden, so the H-pile Extreme rows now use the strength φ, the same as the modules do when the Extreme case is active. Not changed: see O35.
+- **How verified:** headless Chromium, main vs branch (`env.mjs`, `envcmp.py`): "Run all cases", then each case made active and the module values read from the React state; H-pile defaults, a four-case p-y run, and the typed-Mmax run, in H-pile and micropile modes; no console errors. Screenshot of the H-pile envelope (four-layer profile with three manual and two Group rows) looked at.
+- **Other copies of this code:** none.
+
+### F21. Module 11 / report 11 distribution follows the active Group row (O29)   [display only] [no check or envelope value changes]
+- **Where:** `computeAll`, `R.capDist` (≈ line 3379; anchor `// ---- RIGID-CAP LOAD DISTRIBUTION`); `App`, the live `computeAll(I, {…})` call in the `r` memo (≈ line 13421; anchor `pyStabMsg: (pyRes && !pyRes.ok) ? pyRes.msg : null`); `CapResults` (≈ line 10073; anchor `Click a pile for its full derivation. Design pile shown highlighted.`); `PrintReport` section 11 (≈ line 9043; anchor `RptHeading, { n: "11", title: "Pile Group`).
+- **Problem:** `R.capDist` took `gcs[min(activeCase, nGroupCases − 1)]`, but `I.activeCase` indexes the combined case list (manual rows first, then the Group ▦ rows; there is always at least one manual row). With one manual row and two group cases, the active row "Group ▦ Str I" (index 1) showed the Ext I distribution in Module 11 and in printed section 11 / Figure 11-1, and the manual row (index 0) showed Str I without saying why.
+- **Decision on the default:** when the active row is a manual case (or no Group row exists), Module 11 / report 11 show the **first non-zero group case**, the same default the Loads & group plan (`GroupLayoutView`) uses, and both now say so: "Group load case shown: <name> (the active case is not a Group row; the first non-zero group case is shown)". When a Group row is active: "Group load case shown: <name> (the active case)". The governing group case was not chosen as the default because "governing" depends on which check is meant (axial, uplift, shear); this can be changed if preferred.
+- **Governing provision:** none (display). The distribution itself (`computeCapDist`) is unchanged.
+- **Before:**
+  ```js
+        const gcs = deriveGroupCases(I);
+        const ai = Math.min(Math.max(I.activeCase || 0, 0), gcs.length - 1);
+        const active = gcs[ai] || gcs[0];
+        return computeCapDist(I, R.group, caseLoadList(pts, active, stemTopZ(I)));
+  ```
+- **After:**
+  ```js
+        const gcs = deriveGroupCases(I);
+        // F21 (O29): I.activeCase indexes the COMBINED case list (manual rows first, then
+        // the Group rows), not the group cases. The App passes the active Group row's group
+        // case id (opts.capCaseId). When the active row is not a Group row, show the first
+        // non-zero group case (as the Loads & group plan does), and say so.
+        const ai = opts.capCaseId != null ? gcs.findIndex(gc => gc.id === opts.capCaseId) : -1;
+        const nz = gcs.findIndex(gc => !caseIsZero(gc));
+        const active = ai >= 0 ? gcs[ai] : (gcs[nz >= 0 ? nz : 0]);
+        const cd = computeCapDist(I, R.group, caseLoadList(pts, active, stemTopZ(I)));
+        return cd ? { ...cd, caseName: (active && active.name) || "case", caseIsActive: ai >= 0 } : cd;
+  ```
+  In the live `computeAll` call, added after `pyStabMsg`:
+  ```js
+        // F21 (O29): the group case of the active Group row, for the Module 11 / report 11
+        // distribution (null when the active row is a manual case). Display only.
+        capCaseId: (cases[activeIdx] && cases[activeIdx]._fromGroup && cases[activeIdx]._groupCaseId != null) ? cases[activeIdx]._groupCaseId : null
+  ```
+  `CapResults`, after the description paragraph, and report section 11, after its heading: a line "Group load case shown: **name** (the active case)" / "(the active case is not a Group row; the first non-zero group case is shown)". Shown only for the two-table group-case model (`caseName` set); the legacy single-load path is unchanged.
+- **Check case:** micropile defaults; group on, 2 × 3 piles at 3D, one load point at (0, 0, 0); group cases Str I (P 900, V_x 30, M_y 600) and Ext I (P 600, V_x 60, M_y 1,500); one manual row "Manual" (86 / 6). Combined list: [0] Manual, [1] Group ▦ Str I · P1, [2] Group ▦ Ext I · P3. Centroid (1.75, 0.88) ft, S_xx = 12.3, S_yy = 4.6 ft².
+  | active row | before: case shown | before: design pile, axial | after: case shown | after: design pile, axial |
+  |---|---|---|---|---|
+  | [0] Manual | Str I (unlabelled) | P1, 439.3 kip | Str I, labelled "not a Group row; first non-zero group case" | P1, 439.3 kip |
+  | [1] Group ▦ Str I | **Ext I** (wrong) | P3, 264.3 kip | Str I (the active case) | P1, 439.3 kip |
+  | [2] Group ▦ Ext I | Ext I | P3, 264.3 kip | Ext I (the active case) | P3, 264.3 kip |
+  Hand check, Str I: load offset from the centroid e_x = −1.75, e_y = −0.875 ft; pile P1 at (0, 0) is at x = −1.75, y = −0.875 ft from the centroid; M_x,eff = 0 + 0 + 900(−0.875) = −787.5, M_y,eff = 600 + 30·0 + 900(−1.75) = −975 kip·ft; P1 = 900/6 + [(−787.5)(12.25)(−0.875) + (−975)(4.594)(−1.75)]/(12.25 × 4.594) = 150 + 289.3 = 439.3 kip (matches the row "Group ▦ Str I · P1", STL 439.3). With the active row's case, the Module 11 design pile and axial now equal that Group row's STL.
+- **Checks and envelope unaffected:** `R.capDist` is read only by Module 11 (`CapResults`), the group modal, report section 11 / Figure 11-1 and the p-multiplier row highlight; no check reads it, and the Group ▦ rows are built separately (`groupCasesEmitted`). STL, P_lat and `allPass` for each active row are identical on main and branch, and the envelope does not use `capCaseId`.
+- **How verified:** headless Chromium, main vs branch (`grp.mjs`), each row made active in turn, reading `R.capDist` and the printed section 11 text; screenshots of Module 11 for a manual row and both Group rows looked at. Saved data unchanged (`capCaseId` is passed at run time, not stored).
+- **Other copies of this code:** none.
+
 ## Open items (not changed)
 - O1. **Uncased/cased structural axial: outer 0.85 factor and `fy = min(fyb, fyc)`** (`Rn_cased/Rn_ucased`, ≈ line 1675).
   - Neither AASHTO 10.9.3.10.2 nor FHWA NHI-05-039 Eq. 5-13 has the outer 0.85, and the uncased section has no casing, so min(fyb, fyc) is arbitrary there.
@@ -4362,8 +4523,10 @@ Engineer's decision 2026-10-10 on O24–O26: "Yes go ahead with the others and m
 - O26. **`pyRes` memo dependencies.** Fixed in F16 (2026-10-10): `I.bucklingEnable` and `I.LuFree` added; the case-envelope and Pcr reset lists completed as well.
 - O27. **Module G H-pile "Cross-section (to scale, in)" plot is empty** (axes only, no section) on main as well, in headless Chromium at 1500 px. The new S-1 card on the Structural tab draws the section. **Ask:** fix or remove the empty plot.
 - O28. **H-pile corrosion.** The tool has no section-loss input for H-piles; every H-pile property is nominal. **Ask:** add a corrosion loss (per face) if the piles are permanent in aggressive ground.
-- O29. **Module 11 / report 11 distribution uses `I.activeCase` as a group-case index.** `R.capDist` (`computeAll`, comment "RIGID-CAP LOAD DISTRIBUTION") takes `gcs[min(activeCase, nGroupCases - 1)]`, but `activeCase` indexes the combined case list (manual rows first, then the Group ▦ rows). With one manual row and two group cases, the active row "Group ▦ Str I" (index 1) shows the Ext I distribution in `CapResults` and in the printed 11 table / Figure 11-1. Found while building the Loads & group tab (its plan follows the active Group row by `_groupCaseId`). The Group ▦ rows, the checks and the envelope are not affected. Not changed (it changes printed values). **Ask:** map the active Group row to its group case (`_groupCaseId`), and use the first group case when a manual row is active?
+- O29. **Module 11 / report 11 distribution case.** Fixed in F21 (2026-10-11): the distribution follows the active Group row (by `_groupCaseId`); with a manual row active it shows the first non-zero group case and says so.
 - O30. **HANDOFF.md §4.6 (Pile Designer receiver)** still says the pull buttons are in the "Project panel". Since F15 they are in the Loads & group tab and are not shown in integral-abutment mode. HANDOFF.md was outside this PR. **Update** it in a docs PR.
-- O31. **H-pile static axial capacity uses a third length datum.** `computeAll` passes `embedTop = I.solverFree` (the stickup, + above grade) to `hpileGeoCapacity`, which treats it as the depth from grade to the pile head: side resistance runs from `solverFree` to `solverFree + solverLembed` below grade. At the defaults (3 ft stickup, 30 ft embedded) skin friction is counted from 3 to 33 ft and the tip is taken at 33 ft, while the input label, Module G's elevation plot, the soil-profile drawing and now the p-y model (F18) put the toe at 30 ft with soil from grade. Module G's geometry summary line "Pile toe depth" also prints stickup + embedded length (33.0 ft) "below grade". With a buried head (negative stickup) the axial model ends at `solverLembed` below the head instead. Found during F18. Not changed (calculation). **Ask:** take the axial interval as 0 → `solverLembed` below grade (or from the head when it is below grade), and print the toe at `solverLembed`?
-- O32. **Case envelope ("Run all cases") in H-pile mode uses the micropile flexure and combined checks.** `runAllCases` reports `flexR = MmaxUsed / R2.flex.phiMn` and `combR = R2.comb.interaction`, which are the micropile casing checks. At the H-pile defaults the envelope shows flexure D/C 0.647, while Module 04 (`R.hpileStruct`, Mu/φMn) gives 0.065. Found during F16 verification. Not changed (calculation/display). **Ask:** use `R2.hpileStruct` (Mu/φMn and `comb_ratio`) for H-piles?
-- O33. **Lateral profile table shear after a retry.** In `pyRes`, the depth records take `shear: res.V[i]` from the first solve attempt, while deflection and moment come from `res2` (the adaptive retry when the first attempt fails). After a retry the shear column belongs to the failed attempt. Found during F16. Not changed (calculation). **Ask:** use `res2.V`?
+- O31. **H-pile static axial capacity datum.** Fixed in F19 (2026-10-11): skin from grade (or the buried head) to the toe at `solverLembed` below grade, tip at the toe; Module G prints the toe at `solverLembed`.
+- O32. **Case envelope in H-pile mode.** Fixed in F20 (2026-10-11): the H-pile rows report the H-pile checks (Module 01 geotech, Module 04 flexure, Module 05 interaction, H-pile uplift/tension). See O34 and O35.
+- O33. **Lateral profile table shear after a retry — the retry path itself never works.** In `pyRes`, the depth records take `shear: res.V[i]` from the first solve attempt, while deflection and moment come from `res2` (the adaptive retry). Looked at on 2026-10-11 (not changed): a failed `solvePyPile` attempt returns `{ ok: false, history, msg }` with no `V`, so whenever the retry is used, `res.V[i]` throws and `pyRes` becomes `{ ok: false, msg: "Cannot read properties of undefined (reading '0')" }`. Example, H-pile defaults with one case STL 800 kip / P 120 kip (or STL 1,200 / P 80): main shows the p-y analysis as failed with that message; with `res2.V` the retry converges and returns Mmax 6,289 kip·ft, head deflection −170 in (a post-critical state far beyond capacity). So the one-word fix would switch the adaptive retry on for the first time and change Mmax, the structural checks and the stability flags for every case that needs it, not just a table column. **Ask:** make the fix (use `res2.V`) and accept that retried solves now report results (with the stability flags deciding whether they are credible), or keep a failed first attempt as a failure and remove the retry? Either way, the error message should not be a JavaScript exception text.
+- O34. **Case envelope Mmax vs Module 02 Mmax.** `runAllCases` solves each case with its own p-y call (110 nodes, 6 load steps, maxIter 200, no `zCut`, no adaptive retry), while Module 02 / `pyRes` uses `I.pyNodes` (120 default), 8 steps, `zCut` at the casing tip, plus the retry. With a case active, the envelope Mmax and y₀ differ from Module 02 by 0.01–0.5 % in the cases run (e.g. micropile defaults 53.473 vs 53.450 kip·ft; H-pile defaults 34.887 vs 34.882), and so do the flexure/combined ratios. In one micropile Extreme case (P 12 kip, M 5 kip·ft) Module 02 did not converge while the envelope returned y₀ = −46.6 in. Found during F20 (all pile types, pre-existing). Not changed (it changes the micropile envelope). **Ask:** have the envelope use the same solve settings as Module 02 (and the same non-convergence handling)?
+- O35. **Extreme Event φ in the H-pile envelope.** The envelope heading says "Extreme Event φ = 1.0, uplift 0.8, AASHTO 10.5.5.3", and `runAllCases` applies that by overriding the micropile φ keys (`phiGeo`, `phiCC`, …). The H-pile φ keys (`hpPhiGeo`, `hpPhiGeoClay`, `hpPhiUp`, `hpPhiC`, `hpPhiCcomb`, `hpPhiF`, `hpPhiV`, `hpPhiTy`, `hpPhiTu`) are not overridden, so since F20 the H-pile Extreme rows use the strength φ (the same as the modules show with that case active; before F20 the φ = 1.0 reached only the micropile ratios, which were the wrong checks). In the F20 four-case run, H-pile Ext I geo D/C is 0.707 with φ_stat 0.30, which would be 0.212 with φ = 1.0. The micropile modules also do not apply the Extreme φ when an Extreme case is active (the envelope does). Not changed (resistance factors). **Ask:** apply φ = 1.0 (uplift 0.8) to the H-pile keys in the envelope (and should the modules apply it when an Extreme case is active, for both pile types)?

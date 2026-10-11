@@ -3376,9 +3376,15 @@ function computeAll(I, opts = {}) {
     if (Array.isArray(I.groupCases) && I.groupCases.length) {
       const pts = deriveLoadPoints(I);
       const gcs = deriveGroupCases(I);
-      const ai = Math.min(Math.max(I.activeCase || 0, 0), gcs.length - 1);
-      const active = gcs[ai] || gcs[0];
-      return computeCapDist(I, R.group, caseLoadList(pts, active, stemTopZ(I)));
+      // F21 (O29): I.activeCase indexes the COMBINED case list (manual rows first, then
+      // the Group rows), not the group cases. The App passes the active Group row's group
+      // case id (opts.capCaseId). When the active row is not a Group row, show the first
+      // non-zero group case (as the Loads & group plan does), and say so.
+      const ai = opts.capCaseId != null ? gcs.findIndex(gc => gc.id === opts.capCaseId) : -1;
+      const nz = gcs.findIndex(gc => !caseIsZero(gc));
+      const active = ai >= 0 ? gcs[ai] : (gcs[nz >= 0 ? nz : 0]);
+      const cd = computeCapDist(I, R.group, caseLoadList(pts, active, stemTopZ(I)));
+      return cd ? { ...cd, caseName: (active && active.name) || "case", caseIsActive: ai >= 0 } : cd;
     }
     return computeCapDist(I, R.group);
   })();
@@ -3440,8 +3446,15 @@ function computeAll(I, opts = {}) {
   // ---- H-PILE geotechnical axial capacity (only meaningful when pileType==="hpile") ----
   const isHPile = I.pileType === "hpile";
   if (isHPile) {
-    const embedTop_ft = (I.solverFree || 0);        // depth grade→head (0 at grade)
-    const embedLen_ft = Math.max((I.solverLembed || 30), 1);
+    // Datum (F19/O31): "Embedded length, below grade" (I.solverLembed) puts the toe at
+    // solverLembed below GRADE, as Module G, the soil-profile drawing and the p-y model
+    // (F18) do. Stickup I.solverFree is signed (+ above grade, - head below grade), so the
+    // soil contact starts at grade, or at the head when the head is buried. Before O31 the
+    // stickup was passed as the depth grade->head, so skin ran from stickup to
+    // stickup + solverLembed below grade (3-33 ft at the defaults).
+    const toe_ft = Math.max((I.solverLembed || 30), 1);                       // grade -> toe (ft)
+    const embedTop_ft = Math.min(Math.max(-(I.solverFree || 0), 0), toe_ft);  // depth grade->head when buried, else 0
+    const embedLen_ft = toe_ft - embedTop_ft;                                 // soil contact length, head/grade -> toe (ft)
     const geo = hpileGeoCapacity({
       layers: (Array.isArray(I.soilLayers) ? I.soilLayers : []),
       d: I.hpD, bf: I.hpBf,
@@ -9026,6 +9039,8 @@ function PrintReport({
       React.createElement(PyCurvesFig, { I: I, pyRes: pyRes, solved: gfx.solved, activeLayers: gfx.activeLayers, depths: gfx.pyDepths || null, print: true }))),
   r.capDist && r.capDist.enable && /*#__PURE__*/React.createElement("div", { className: "rpt-grp", style: { marginBottom: "12px" } },
     /*#__PURE__*/React.createElement(RptHeading, { n: "11", title: "Pile Group \u2014 Rigid-Cap Load Distribution" }),
+    r.capDist.caseName != null && /*#__PURE__*/React.createElement("div", { style: { fontSize: "8.5px", color: "#334", marginBottom: "4px" } },
+      "Group load case shown: ", /*#__PURE__*/React.createElement("b", null, r.capDist.caseName), r.capDist.caseIsActive ? " (the active case)." : " (the active case is not a Group row; the first non-zero group case is shown)."),
     /*#__PURE__*/React.createElement("div", { style: { fontSize: "8.5px", color: "#334", marginBottom: "4px" } },
       "Generalized elastic bolt-group statics (biaxial bending incl. product term S", /*#__PURE__*/React.createElement("sub", null, "xy"), "). ", r.capDist.nLoads, " load(s) resolved to the group centroid; rigid cap, identical vertical piles, pinned heads (axial + overturning; equal shear share)."),
     /*#__PURE__*/React.createElement("div", { style: { fontSize: "8.5px", color: "#16304F", marginBottom: "3px" } },
@@ -10055,6 +10070,8 @@ function CapResults({ cap, g, I, set }) {
       /*#__PURE__*/React.createElement("div", { className: "text-[11px] font-mono-tech text-[var(--blueprint)] uppercase tracking-wider" }, "Rigid-cap distribution \u00b7 per-pile results"),
       I.loadFromGroup && /*#__PURE__*/React.createElement("span", { className: "text-[8px] px-1.5 py-0.5 rounded-sm text-white", style: { background: "var(--accent)" } }, "DRIVING LOAD CASES")),
     /*#__PURE__*/React.createElement("p", { className: "text-[9px] text-slate-500 mb-2" }, "Generalized bolt-group statics (biaxial bending incl. product term S", /*#__PURE__*/React.createElement("sub", null, "xy"), "). Click a pile for its full derivation. Design pile shown highlighted."),
+    cap.caseName != null && /*#__PURE__*/React.createElement("p", { className: "text-[9px] text-slate-600 mb-2 font-mono-tech" }, "Group load case shown: ", /*#__PURE__*/React.createElement("b", null, cap.caseName),
+      cap.caseIsActive ? " (the active case)" : " (the active case is not a Group row; the first non-zero group case is shown)"),
     /*#__PURE__*/React.createElement("div", { className: "overflow-auto", style: { maxHeight: "220px" } },
       /*#__PURE__*/React.createElement("table", { className: "w-full text-[10px] font-mono-tech" },
         /*#__PURE__*/React.createElement("thead", { className: "sticky top-0 bg-slate-100" }, /*#__PURE__*/React.createElement("tr", { className: "text-slate-500" },
@@ -12891,13 +12908,17 @@ function App() {
           if (c.type === "extreme") Object.assign(I2, { phiGeo: 1.0, phiCC: 1.0, phiCU: 1.0, phiF: 1.0, phiC: 1.0, phiB: 1.0, phiV: 1.0, phiVpunch: 1.0, phiT: 1.0, phiUp: 0.8 });
           const R2 = computeAll(I2, { layered: !!activeLayers, pyMmax: Mx, Mmax_kft: Mx != null ? Mx : undefined, zMomentDecay: decay != null ? decay : undefined });
           const rat = (d, cap) => cap > 0 ? d / cap : null;
+          // H-pile (F20/O32): report the H-pile checks the modules show (Module 01 geotech
+          // tip + skin, Module 04 Mu/phiMn, Module 05 6.9.2.2.1 interaction, H-pile uplift and
+          // tension), not the micropile casing checks that computeAll also evaluates.
+          const hg = R2.hpileGeo, hs = R2.hpileStruct, isHPc = I2.pileType === "hpile" && hg && hs;
           return {
             name: c.name, type: c.type, Mmax: Mx != null ? Mx : R2.MmaxUsed, y0, prof: (typeof prof !== "undefined") ? prof : null,
-            geoR: c.type === "service" ? null : rat(I2.STL, R2.geo.phiPn_geo),
-            flexR: c.type === "service" ? null : rat(R2.MmaxUsed, R2.flex.phiMn),
-            combR: c.type === "service" ? null : R2.comb.interaction, // P-M interaction value (was R2.comb.ratio = Po/Pe)
+            geoR: c.type === "service" ? null : (isHPc ? rat(I2.STL, hg.phiRn_comp) : rat(I2.STL, R2.geo.phiPn_geo)),
+            flexR: c.type === "service" ? null : (isHPc ? rat(hs.Mu, hs.phiMn) : rat(R2.MmaxUsed, R2.flex.phiMn)),
+            combR: c.type === "service" ? null : (isHPc ? hs.comb_ratio : R2.comb.interaction), // P-M interaction value (was R2.comb.ratio = Po/Pe)
             buckR: (c.type === "service" || !R2.buckling.enable) ? null : rat(I2.STL, R2.buckling.phiPn_buck),
-            tenR: c.type === "tension" ? rat(I2.Tu, Math.min(R2.tension && R2.tension.phiPn_up || 1e9, R2.tension && R2.tension.phiPn_tension_total || 1e9)) : null,
+            tenR: c.type === "tension" ? (isHPc ? rat(I2.Tu, Math.min(hg.phiRn_up || 1e9, hs.phiPn_tension || 1e9)) : rat(I2.Tu, Math.min(R2.tension && R2.tension.phiPn_up || 1e9, R2.tension && R2.tension.phiPn_tension_total || 1e9))) : null,
             svcR: c.type === "service" && y0 != null ? Math.abs(y0) / Math.max(I.deflLimit || 1, 0.01) : null,
             pass: c.type === "service" ? (y0 == null || Math.abs(y0) <= (I.deflLimit || 1)) : R2.allPass
           };
@@ -13396,7 +13417,10 @@ function App() {
       // Combined-loading stability signals (always-on, from the normal p-y run):
       pyActive: I.lateralSource === "py",
       pyConverged: pyOK,
-      pyStabMsg: (pyRes && !pyRes.ok) ? pyRes.msg : null
+      pyStabMsg: (pyRes && !pyRes.ok) ? pyRes.msg : null,
+      // F21 (O29): the group case of the active Group row, for the Module 11 / report 11
+      // distribution (null when the active row is a manual case). Display only.
+      capCaseId: (cases[activeIdx] && cases[activeIdx]._fromGroup && cases[activeIdx]._groupCaseId != null) ? cases[activeIdx]._groupCaseId : null
     });
   }, [I, activeLayers, solved, pyRes, pcr]);
   return /*#__PURE__*/React.createElement("div", {
@@ -14366,7 +14390,7 @@ function App() {
            ["Bending axis", I.hpAxis === "weak" ? "weak (y-y)" : "strong (x-x)"],
            ["Embedded length", fmt(Math.max(I.solverLembed || 30, 1), 1) + " ft below grade"],
            ["Stickup / free length", fmt(I.solverFree, 1) + " ft " + (I.solverFree < 0 ? "(head below grade)" : (I.solverFree > 0 ? "above grade" : "(at grade)"))],
-           ["Pile toe depth", fmt(Math.max(I.solverFree || 0, 0) + Math.max(I.solverLembed || 30, 1), 1) + " ft below grade"],
+           ["Pile toe depth", fmt(Math.max(I.solverLembed || 30, 1), 1) + " ft below grade"],
            ["Cap embedment", fmt(I.hpCapEmbed || 0, 1) + " in"],
            ["Head condition", I.solverHead === "fixed" ? "fixed" : "free / pinned"]].map((row, i) =>
             /*#__PURE__*/React.createElement("tr", { key: i, style: { borderTop: i ? "1px solid #eef2f6" : "none" } },
