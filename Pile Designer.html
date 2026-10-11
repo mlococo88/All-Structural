@@ -1396,6 +1396,37 @@ function momentZeroCrossings(z, M) {
     zMmax: z[iM]
   };
 }
+/* F26 c (display only): wording for the depth to fixity z_fix (pyRes.zFix2). The rule is
+   momentZeroCrossings' `second`: the FIRST zero crossing of the moment below the depth of
+   the largest below-grade |M| (embedded length only; lobes < 2 % of that moment ignored).
+   Which zero of the whole moment diagram that is depends on the head:
+     - free head with no head moment (M = 0 at the head, no rotational restraint): the head
+       counts as the 1st zero, so z_fix is the (k+1)-th zero, k = its rank among the
+       below-grade crossings (normally the 2nd zero);
+     - head moment != 0 (fixed head, rotational restraint or an applied head moment): the
+       head is not a zero; z_fix is the k-th zero crossing below grade (1st when the
+       largest below-grade moment is the head-restraint lobe at grade, 2nd when the next
+       lobe down is larger).
+   Returns null when there is no z_fix. */
+function pyZfixWords(pyRes, I) {
+  if (!pyRes || pyRes.zFix2 == null || !isFinite(pyRes.zFix2)) return null;
+  const cr = Array.isArray(pyRes.mzCrossings) ? pyRes.mzCrossings : [];
+  const k = cr.findIndex(z => Math.abs(z - pyRes.zFix2) < 1e-9) + 1;
+  const fixedHead = !!I && I.solverHead === "fixed";
+  const krot = !fixedHead && !!I && (I.pyKrot || 0) > 0;
+  const mHead = !fixedHead && !!I && Math.abs(I.pyMhead || 0) > 0;
+  const headZero = !fixedHead && !krot && !mHead;
+  const ord = n => n + ((n % 100 >= 11 && n % 100 <= 13) ? "th" : ({ 1: "st", 2: "nd", 3: "rd" }[n % 10] || "th"));
+  const ref = pyRes.MmaxAboveGrade ? "the largest below-grade moment" : "M_max";
+  const nth = k <= 0 ? null : headZero
+    ? "the " + ord(k + 1) + " zero of the moment diagram, counting M = 0 at the free head as the 1st"
+    : "the " + ord(k) + " zero crossing below grade (" + (fixedHead ? "fixed head" : krot ? "rotational head restraint" : "applied head moment") + ": the head moment is not zero, so the head does not count)";
+  return {
+    short: "1st M reversal below " + (pyRes.MmaxAboveGrade ? "peak below-grade M" : "Mmax"),
+    long: "first moment reversal (zero crossing) below " + ref + (pyRes.MmaxAboveGrade ? " (M_max is in the stickup; the search runs over the embedded length)" : ""),
+    nth
+  };
+}
 
 /* ============================================================
    NONLINEAR p-y LATERAL SOLVER CORE  (units internal: lb, in)
@@ -4404,7 +4435,7 @@ function DocsModal({
   }, /*#__PURE__*/React.createElement("p", null, "The grout-to-ground bond is the geotechnical capacity. Nominal resistance is the bond stress β times the drill-hole circumference times the bond length: ", /*#__PURE__*/React.createElement("i", null, "Pn = dₕ·π·β·Lb"), ". The required bond length is back-solved from the factored demand and the geotechnical resistance factor φ (0.70 when a load test is specified, per Table 10.5.5.2.5-1). The bond value β comes from the soil/rock row of Table C10.9.3.5.2-1 and ", /*#__PURE__*/React.createElement("b", null, "must be confirmed by load testing"), " — the tool labels it grout-to-ground because the value is keyed to the bearing stratum, not necessarily rock.")), /*#__PURE__*/React.createElement(DocSection, {
     title: "02 · Lateral analysis",
     code: "p-y finite-difference solver"
-  }, /*#__PURE__*/React.createElement("p", null, "Two paths. You can enter a maximum moment directly from an external LPILE run, or use the built-in solver. The solver is a real ", /*#__PURE__*/React.createElement("b", null, "finite-difference beam on an elastic foundation"), ": the embedded pile is discretized on Winkler springs with a linear subgrade modulus (Es = nh·z for sand, constant kh for clay), and EI·y⁗ + k(z)·y = 0 is solved with mudline boundary conditions (shear V₀ = P, moment M₀ = P·e from the free length) and an unrestrained toe (no applied tip shear or moment restraint — the toe is still bedded on soil springs)."), /*#__PURE__*/React.createElement("p", null, "From the resulting moment profile, the tool reports the true maximum moment and locates the ", /*#__PURE__*/React.createElement("b", null, "depth to fixity as the second zero-crossing of the moment diagram"), " — the depth that reproduces the correct above-grade moment in an equivalent fixed-base model. A noise guard ignores crossings whose preceding moment lobe is under 2% of Mmax so numerical tail-ringing isn't mistaken for a real reversal. This is a REFERENCE figure only \u2014 it is a moment-diagram measure and is NOT used in the buckling check, which requires a stiffness equivalence (Davisson / deflection-matched / nonlinear P-crit) and yields a much shorter fixity depth. The model is linear, so the fixity depth is load-independent — appropriate for a stiffness/fixity basis, but it should be checked against a nonlinear p-y run before sealing."), /*#__PURE__*/React.createElement("p", null, /*#__PURE__*/React.createElement("b", null, "Nonlinear p-y convergence."), " The built-in nonlinear p-y solve applies the loads in 8 equal steps (secant iteration, up to 200 iterations per step). If a step does not converge it retries once with 16 steps, up to 400 iterations and under-relaxation 0.55. A retried solution is used only if (a) every step converged, (b) the equilibrium closure is within " + PY_RETRY_CLOSURE_PCT + " % for both ΣF and ΣM, and (c) it is on the stable loading branch (the head deflection keeps the direction of the first step and never decreases while the load rises). Otherwise the result is “did not converge — the pile is likely unstable (buckling / P-Δ) at this load”: there is no valid lateral demand, so flexure, combined loading, casing extension, uncased flexure and combined-loading stability are NG. Past the instability load the solver can settle on a post-critical equilibrium (head deflection reversed, tens of inches) whose closure is still excellent, which is why the branch test is needed. “Run all cases” solves each case with exactly the same solve (node count, load steps, retry and acceptance test), so for the active case the envelope equals Module 02. Large head deflection: when |y\u2080| exceeds the factor × D set in the Bond / p-y input tab (p-y / lateral for an H-pile; default 0.25 D; 0 = off), Module 02, the Lateral graphs, the Summary of checks, the case envelope and the report show an amber warning. It is a warning only (no check becomes NG); it applies to every p-y result, first attempt or retry, and also flags first attempts that settled on a post-critical state.")), /*#__PURE__*/React.createElement(DocSection, {
+  }, /*#__PURE__*/React.createElement("p", null, "Two paths. You can enter a maximum moment directly from an external LPILE run, or use the built-in solver. The solver is a real ", /*#__PURE__*/React.createElement("b", null, "finite-difference beam on an elastic foundation"), ": the embedded pile is discretized on Winkler springs with a linear subgrade modulus (Es = nh·z for sand, constant kh for clay), and EI·y⁗ + k(z)·y = 0 is solved with mudline boundary conditions (shear V₀ = P, moment M₀ = P·e from the free length) and an unrestrained toe (no applied tip shear or moment restraint — the toe is still bedded on soil springs)."), /*#__PURE__*/React.createElement("p", null, "From the resulting moment profile, the tool reports the true maximum moment and locates the ", /*#__PURE__*/React.createElement("b", null, "depth to fixity as the first zero crossing of the moment below the maximum moment (on a free-head pile with no head moment, the 2nd zero of the moment diagram, counting M = 0 at the head)"), " — the depth that reproduces the correct above-grade moment in an equivalent fixed-base model. A noise guard ignores crossings whose preceding moment lobe is under 2% of Mmax so numerical tail-ringing isn't mistaken for a real reversal. This is a REFERENCE figure only \u2014 it is a moment-diagram measure and is NOT used in the buckling check, which requires a stiffness equivalence (Davisson / deflection-matched / nonlinear P-crit) and yields a much shorter fixity depth. The model is linear, so the fixity depth is load-independent — appropriate for a stiffness/fixity basis, but it should be checked against a nonlinear p-y run before sealing."), /*#__PURE__*/React.createElement("p", null, /*#__PURE__*/React.createElement("b", null, "Nonlinear p-y convergence."), " The built-in nonlinear p-y solve applies the loads in 8 equal steps (secant iteration, up to 200 iterations per step). If a step does not converge it retries once with 16 steps, up to 400 iterations and under-relaxation 0.55. A retried solution is used only if (a) every step converged, (b) the equilibrium closure is within " + PY_RETRY_CLOSURE_PCT + " % for both ΣF and ΣM, and (c) it is on the stable loading branch (the head deflection keeps the direction of the first step and never decreases while the load rises). Otherwise the result is “did not converge — the pile is likely unstable (buckling / P-Δ) at this load”: there is no valid lateral demand, so flexure, combined loading, casing extension, uncased flexure and combined-loading stability are NG. Past the instability load the solver can settle on a post-critical equilibrium (head deflection reversed, tens of inches) whose closure is still excellent, which is why the branch test is needed. “Run all cases” solves each case with exactly the same solve (node count, load steps, retry and acceptance test), so for the active case the envelope equals Module 02. Large head deflection: when |y\u2080| exceeds the factor × D set in the Bond / p-y input tab (p-y / lateral for an H-pile; default 0.25 D; 0 = off), Module 02, the Lateral graphs, the Summary of checks, the case envelope and the report show an amber warning. It is a warning only (no check becomes NG); it applies to every p-y result, first attempt or retry, and also flags first attempts that settled on a post-critical state.")), /*#__PURE__*/React.createElement(DocSection, {
     title: "03 · Structural axial",
     code: "AASHTO 10.9.3.10.2"
   }, /*#__PURE__*/React.createElement("p", null, "Non-composite axial capacity, computed for both the cased length (casing + grout + bar, Eq. 10.9.3.10.2a-2) and the uncased length (grout + bar only, Eq. 10.9.3.10.2b-2). The uncased section typically governs because it has no casing contribution. The casing wall is reduced by a sacrificial corrosion allowance.")), /*#__PURE__*/React.createElement(DocSection, {
@@ -6467,7 +6498,7 @@ function LateralDiagram({
       }
     },
     hoverinfo: "text",
-    text: [`fixity (2nd moment zero)<br>z=${fmt(Lf, 2)} ft`],
+    text: [`fixity (1st moment zero below Mmax)<br>z=${fmt(Lf, 2)} ft`],
     name: "fixity"
   },
   // ----- LPILE overlay (dashed) -----
@@ -8616,7 +8647,7 @@ function PrintReport({
     n: "02",
     title: "Lateral Analysis",
     code: I.lateralSource === "py" ? "nonlinear p-y (built-in)" : I.lateralSource === "input" ? "p-y (LPILE)" : "linear estimate"
-  }), /*#__PURE__*/React.createElement(Narr, null, I.lateralSource === "py" ? `The maximum bending moment used in the structural checks is computed by the built-in nonlinear p-y finite-difference analysis (Reese et al. 1974 sand; Matlock 1970 soft clay; Welch & Reese 1972 stiff clay; Georgiadis 1983 layering; axial thrust carried in the governing equation). Mmax = ${fmt(r.MmaxUsed != null ? r.MmaxUsed : I.Mmax, 1)} kip·ft.${I.solverFree < 0 ? ` The pile head is modeled ${fmt(Math.abs(I.solverFree),1)} ft below grade (buried pile cap); lateral soil resistance is credited from the head down at true overburden. The cap’s passive resistance is not included in this pile analysis and no near-surface p-y reduction is applied — near-surface soil should be down-rated separately if backfill is disturbed or non-structural.` : ``} The implementation is benchmarked against an LPILE 2022 project analysis (within 0.2% on Mmax); final design should be verified against a project-specific LPILE run prior to sealing.` : I.lateralSource === "input" ? `The maximum bending moment used in the structural checks is taken from an external p-y (LPILE) analysis as Mmax = ${fmt(I.Mmax, 1)} kip·ft.` : `The maximum bending moment is computed by a finite-difference beam-on-elastic-foundation analysis using a linear subgrade modulus, and reports the depth to fixity (second zero-crossing of the moment diagram) as a reference figure only \u2014 it is not used in the structural checks. This first-order result is to be verified against a project-specific LPILE analysis prior to sealing.`),
+  }), /*#__PURE__*/React.createElement(Narr, null, I.lateralSource === "py" ? `The maximum bending moment used in the structural checks is computed by the built-in nonlinear p-y finite-difference analysis (Reese et al. 1974 sand; Matlock 1970 soft clay; Welch & Reese 1972 stiff clay; Georgiadis 1983 layering; axial thrust carried in the governing equation). Mmax = ${fmt(r.MmaxUsed != null ? r.MmaxUsed : I.Mmax, 1)} kip·ft.${I.solverFree < 0 ? ` The pile head is modeled ${fmt(Math.abs(I.solverFree),1)} ft below grade (buried pile cap); lateral soil resistance is credited from the head down at true overburden. The cap’s passive resistance is not included in this pile analysis and no near-surface p-y reduction is applied — near-surface soil should be down-rated separately if backfill is disturbed or non-structural.` : ``} The implementation is benchmarked against an LPILE 2022 project analysis (within 0.2% on Mmax); final design should be verified against a project-specific LPILE run prior to sealing.` : I.lateralSource === "input" ? `The maximum bending moment used in the structural checks is taken from an external p-y (LPILE) analysis as Mmax = ${fmt(I.Mmax, 1)} kip·ft.` : `The maximum bending moment is computed by a finite-difference beam-on-elastic-foundation analysis using a linear subgrade modulus, and reports the depth to fixity (the first zero crossing of the moment below the maximum moment) as a reference figure only \u2014 it is not used in the structural checks. This first-order result is to be verified against a project-specific LPILE analysis prior to sealing.`),
   I.lateralSource === "py" && /*#__PURE__*/React.createElement("div", { style: { margin: "6px 0 8px" } },
     /*#__PURE__*/React.createElement("div", { style: { fontSize: "8.5px", fontWeight: 700, color: "#16304F", marginBottom: "2px" } }, "p-y ANALYSIS CONSTANTS (these govern the result — verify against the geotechnical report)"),
     /*#__PURE__*/React.createElement("table", { style: { width: "100%", borderCollapse: "collapse", fontSize: "8px" } },
@@ -9132,9 +9163,10 @@ function PrintReport({
         ? /*#__PURE__*/React.createElement("div", { style: { fontFamily: "monospace", fontSize: "12px", color: "#16304F", marginBottom: "3px" } },
             /*#__PURE__*/React.createElement("b", null, "z_fix = " + fmt(pyRes.zFix2, 1) + " ft"),
             /*#__PURE__*/React.createElement("span", { style: { fontSize: "9.5px", color: "#64748b" } },
-              " below mudline \u00b7 2nd zero-crossing of the moment diagram"))
+              " below mudline \u00b7 first moment reversal (zero crossing) below " + (pyRes.MmaxAboveGrade ? "the largest below-grade moment" : "M\u2098\u2090\u2093 @ " + fmt(pyRes.zMmax, 1) + " ft"),
+              (() => { const zw = pyZfixWords(pyRes, I); return zw && zw.nth ? " \u00b7 here " + zw.nth : ""; })()))
         : /*#__PURE__*/React.createElement("div", { style: { fontFamily: "monospace", fontSize: "10px", color: "#64748b", marginBottom: "3px" } },
-            "\u2014 the moment does not reverse below M\u2098\u2090\u2093; there is no second zero-crossing."),
+            "\u2014 the moment does not reverse below M\u2098\u2090\u2093; there is no z_fix."),
       /*#__PURE__*/React.createElement("p", { style: { fontSize: "9px", color: "#475569", lineHeight: 1.5, margin: 0 } },
         "The depth that reproduces the correct above-grade moment in an equivalent fixed-base model \u2014 the conventional geotechnical \u201cdepth to fixity.\u201d It is a ",
         /*#__PURE__*/React.createElement("b", null, "moment-diagram"), " measure. ",
@@ -10114,9 +10146,10 @@ function latKV(I, r, pyRes, actType) {
   }
   // depth to fixity: the depths the tool already computes, each with its definition and source
   K.fix = [];
-  if (pyRes.zFix2 != null && isFinite(pyRes.zFix2)) K.fix.push({ k: "zfix", z: pyRes.zFix2, col: "#7a4a7a", dash: "solid",
-    name: "z_fix " + latFmt(pyRes.zFix2, 1) + " ft (2nd M zero)",
-    lbl: "z_fix = " + latFmt(pyRes.zFix2, 1) + " ft — 2nd zero crossing of moment (Module 02, reference)" });
+  const zw = pyZfixWords(pyRes, I);   // F26 c: wording only (the depth is unchanged)
+  if (zw) K.fix.push({ k: "zfix", z: pyRes.zFix2, col: "#7a4a7a", dash: "solid",
+    name: "z_fix " + latFmt(pyRes.zFix2, 1) + " ft (" + zw.short + ")",
+    lbl: "z_fix = " + latFmt(pyRes.zFix2, 1) + " ft — " + zw.long + (zw.nth ? "; here " + zw.nth : "") + " (Module 02, reference)" });
   if (pyRes.zMomentDecay != null && isFinite(pyRes.zMomentDecay)) K.fix.push({ k: "decay", z: pyRes.zMomentDecay, col: "#2f6f3e", dash: "dash",
     name: "5% M decay " + latFmt(pyRes.zMomentDecay, 1) + " ft",
     lbl: "5% moment-decay depth = " + latFmt(pyRes.zMomentDecay, 1) + " ft — first depth below M_max where |M| ≤ 5% of M_max (Module 02" + (isHP ? ")" : "; casing-extension check)") });
@@ -10368,7 +10401,17 @@ function ElevationPlot({ I, pyRes, height = 340, print, narrow, kv }) {
       if (hp.tf > 0) { R(-w2, -w2 + hp.tf, topPile, toe, steel); R(w2 - hp.tf, w2, topPile, toe, steel); } // flanges edge-on
     }
     if (embedFt > 0) R(-w2, w2, topPile, headY, "rgba(201,98,46,0.30)", { color: C.accent, width: 1.2 });
-    lab.push({ x: w2, y: (Math.max(headY, 0) + toe) / 2, t: "HP " + latFmt(hp.d, 2) + "×" + latFmt(hp.bf, 2) + " (" + (hp.weak ? "weak" : "strong") + " axis): width " + (hp.weak ? "b_f" : "d") + " = " + latFmt(hp.w, 2) + " in", c: "#14304a" });
+    // F26 c: the section label at mid-depth, unless a depth-to-fixity line runs there (it
+    // would sit on the line): then the depth between grade and the toe farthest from every line
+    const yMidHP = (() => {
+      const a = Math.max(headY, 0), m = (a + toe) / 2, fz2 = kv ? kv.fix.map(f => f.z) : [];
+      const dist = y => fz2.reduce((d, z) => Math.min(d, Math.abs(z - y)), Infinity);
+      if (dist(m) * pxFt >= 16) return m;
+      let best = m;
+      for (let t = 0.2; t <= 0.801; t += 0.05) { const y = a + t * (toe - a); if (dist(y) > dist(best)) best = y; }
+      return best;
+    })();
+    lab.push({ x: w2, y: yMidHP, t: "HP " + latFmt(hp.d, 2) + "×" + latFmt(hp.bf, 2) + " (" + (hp.weak ? "weak" : "strong") + " axis): width " + (hp.weak ? "b_f" : "d") + " = " + latFmt(hp.w, 2) + " in", c: "#14304a" });
     lab.push({ x: w2, y: toe, t: "toe " + latFmt(toe, 1) + " ft" + (narrow ? "" : " (embedded length)"), c: "#14304a", key: true });
   } else {
     const od2 = G.OD / 2, dh2 = G.dh / 2, id2 = Math.max(G.ID, 0) / 2, b2 = G.bar / 2;
@@ -10420,9 +10463,15 @@ function ElevationPlot({ I, pyRes, height = 340, print, narrow, kv }) {
   if (ld.length) anns.push({ xref: "x", x: capHalf, xshift: 6, xanchor: "left", yref: "y", y: capTop, yanchor: "bottom", yshift: 2,
     showarrow: false, align: "left", text: ld.join("<br>"), font: { size: fz, family: PLOT_FONT } });
   // ---- moment panel ----
-  if (kv) kv.fix.forEach(f => {   // F26 b: depth to fixity lines across both panels; the primary one labelled
+  if (kv) kv.fix.forEach(f => {   // F26 b: depth to fixity lines across both panels
     shapes.push({ type: "line", xref: "paper", x0: 0, x1: 1, yref: "y", y0: f.z, y1: f.z, line: { color: f.col, width: f.primary ? 1.8 : 1.2, dash: f.dash } });
-    if (f.primary && !narrow) anns.push({ xref: "paper", x: 1, xanchor: "right", xshift: -16, yref: "y", y: f.z, yanchor: "bottom", showarrow: false, text: f.name, font: { size: fz, color: f.col, family: PLOT_FONT }, bgcolor: "rgba(255,255,255,0.7)" });
+    // F26 c: every line labelled (was the primary only), so close lines do not share a label
+    // spot: the shallowest line's label above it, the deepest's below it (both at the right),
+    // a middle one above it at the left of the moment panel; a label below its line is kept
+    // clear of the soil-layer name at the right edge (xshift -100)
+    const zs = kv.fix.map(g => g.z).sort((a, b) => a - b), nF = zs.length;
+    const pos = nF < 2 || f.z === zs[0] ? "up" : f.z === zs[nF - 1] ? "down" : "left";
+    if (!narrow) anns.push({ xref: "paper", x: pos === "left" ? DOM_M[0] : 1, xanchor: pos === "left" ? "left" : "right", xshift: pos === "left" ? 4 : pos === "down" ? -100 : -16, yref: "y", y: f.z, yanchor: pos === "down" ? "top" : "bottom", showarrow: false, text: f.name, font: { size: fz, color: f.col, family: PLOT_FONT }, bgcolor: "rgba(255,255,255,0.7)" });
   });
   else if (pyRes.zMomentDecay != null) shapes.push({ type: "line", xref: "paper", x0: DOM_M[0], x1: 1, yref: "y", y0: pyRes.zMomentDecay, y1: pyRes.zMomentDecay, line: { color: "#2f6f3e", width: 1, dash: "dash" } });
   const mom = pyRes.records.map(r2 => ({ d: r2.depth - s, m: r2.mom }));
@@ -10449,7 +10498,7 @@ function ElevationPlot({ I, pyRes, height = 340, print, narrow, kv }) {
   const plot = React.createElement(Plot, { data, layout, height: H, config: print ? { staticPlot: true, responsive: false } : undefined });
   const note = "Left: the pile to scale — depths true, every width in true proportion, drawn " + Nt + "× wider than the depth scale (one factor for the whole pile); the cap is schematic. " +
     (isHP ? "H-pile seen in the plane of bending (" + (G.hp.weak ? "weak axis: flange width b_f, web edge-on" : "strong axis: depth d, flanges edge-on") + "). " : "Dark = casing, gray = grout (inside the casing and in the bond hole d_h), orange = central bar, orange dashed = plunge. ") +
-    "Right: moment diagram (active case); bands = soil layers; " + (kv && kv.fix.length ? "horizontal lines = depth to fixity: " + kv.fix.map(f => (f.k === "zfix" ? "purple solid = z_fix (2nd moment zero, Module 02 reference)" : f.k === "decay" ? "green dash = 5% moment-decay depth" : "brown dot = buckling equivalent fixed base (Module 10)")).join(", ") + " (hover for the definition)." : "green dash = 5% moment-decay depth.") + " Stickup plots above grade (negative depth).";
+    "Right: moment diagram (active case); bands = soil layers; " + (kv && kv.fix.length ? "horizontal lines = depth to fixity: " + kv.fix.map(f => (f.k === "zfix" ? "purple solid = z_fix (first moment reversal below M_max, Module 02 reference)" : f.k === "decay" ? "green dash = 5% moment-decay depth" : "brown dot = buckling equivalent fixed base (Module 10)")).join(", ") + " (hover for the definition)." : "green dash = 5% moment-decay depth.") + " Stickup plots above grade (negative depth).";
   const keys = kv ? [
     ["Horizontal scale", "\u00d7" + Nt + " (widths drawn " + Nt + "\u00d7 the depth scale)"],
     Math.abs(s) > 0.01 ? [s > 0 ? "Stickup" : "Head below grade", latFmt(Math.abs(s), 1) + " ft"] : null,
@@ -11828,7 +11877,7 @@ function BucklingTabs({ b, I, set, pcr, computePcr }) {
         /*#__PURE__*/React.createElement("i", null, "your"), " lateral analysis \u2014 so unlike the closed form it captures layering, soil nonlinearity, and degradation."),
       /*#__PURE__*/React.createElement("p", { className: "text-[9px] leading-snug mb-1 p-1.5 rounded-sm", style: { background: "rgba(20,48,74,0.06)", color: "#14304a" } },
         /*#__PURE__*/React.createElement("b", null, "This is a STIFFNESS match, not the moment zero-crossing. "),
-        "Do not confuse it with the \u201cgeotechnical depth to fixity\u201d reported in the lateral analysis module, which is the second zero-crossing of the moment diagram. That figure reproduces the MOMENT DIAGRAM and is typically ~2\u00d7 deeper; using it here would understate the critical load by roughly 4\u00d7. Buckling needs stiffness equivalence."),
+        "Do not confuse it with the \u201cgeotechnical depth to fixity\u201d reported in the lateral analysis module, which is the first moment reversal (zero crossing) below the maximum moment. That figure reproduces the MOMENT DIAGRAM and is typically ~2\u00d7 deeper; using it here would understate the critical load by roughly 4\u00d7. Buckling needs stiffness equivalence."),
       !b.methods.deflmatch
         ? (b.deflDegenerate
             ? /*#__PURE__*/React.createElement("div", { className: "p-2 rounded-sm", style: { background: "rgba(178,59,59,0.08)", border: "1px solid rgba(178,59,59,0.35)" } },
@@ -12228,13 +12277,13 @@ function PyPanel({ I, set, pyRes, r, EI, EI_composite_kipin2, EI_aashto_kipin2, 
         ? /*#__PURE__*/React.createElement("div", { className: "font-mono-tech text-[13px] mb-1", style: { color: "#14304a" } },
             /*#__PURE__*/React.createElement("b", null, "z", /*#__PURE__*/React.createElement("sub", null, "fix"), " = ", fmt(pyRes.zFix2, 1), " ft"),
             /*#__PURE__*/React.createElement("span", { className: "text-[9.5px] text-slate-500" },
-              " below mudline \u00b7 2nd zero-crossing of the moment diagram",
               pyRes.MmaxAboveGrade
-                ? " (M\u2098\u2090\u2093 falls in the stickup, so the search runs over the embedded length only)"
-                : [" (first reversal below M", /*#__PURE__*/React.createElement("sub", { key: "s" }, "max"), " @ ", fmt(pyRes.zMmax, 1), " ft)"]))
+                ? " below mudline \u00b7 first moment reversal (zero crossing) below the largest below-grade moment (M\u2098\u2090\u2093 falls in the stickup, so the search runs over the embedded length only)"
+                : [" below mudline \u00b7 first moment reversal (zero crossing) below M", /*#__PURE__*/React.createElement("sub", { key: "s" }, "max"), " @ ", fmt(pyRes.zMmax, 1), " ft"],
+              (() => { const zw = pyZfixWords(pyRes, I); return zw && zw.nth ? " \u00b7 here " + zw.nth : null; })()))
         : /*#__PURE__*/React.createElement("div", { className: "font-mono-tech text-[10px] text-slate-500 mb-1" },
             "\u2014 the moment does not reverse below M", /*#__PURE__*/React.createElement("sub", null, "max"),
-            ", so there is no second zero-crossing. (Short or very stiff pile, or a moment diagram that decays without changing sign.)"),
+            ", so there is no z_fix. (Short or very stiff pile, or a moment diagram that decays without changing sign.)"),
       /*#__PURE__*/React.createElement("p", { className: "text-[8.5px] text-slate-500 leading-snug" },
         "This is the depth that reproduces the correct above-grade moment in an equivalent fixed-base model \u2014 the conventional geotechnical \u201cdepth to fixity.\u201d It is a ",
         /*#__PURE__*/React.createElement("b", null, "moment-diagram"), " measure. ",
@@ -15815,7 +15864,7 @@ function App() {
     tex: `M_{max}=${fmt(solved.Mmax_signed, 1)}\\text{ kip}\\!\\cdot\\!\\text{ft}\\;@\\;z=${fmt(solved.zMmax, 1)}\\text{ ft }${solved.zMmax < 0.05 ? "(\\text{at head})" : "(\\text{below grade})"}`
   }), /*#__PURE__*/React.createElement(DerivLine, {
     label: "Depth to fixity",
-    tex: `L_f=${fmt(solved.depthFixity, 1)}\\text{ ft}\\;(\\text{2nd moment zero})`
+    tex: `L_f=${fmt(solved.depthFixity, 1)}\\text{ ft}\\;(\\text{1st moment zero below }M_{max})`
   }), /*#__PURE__*/React.createElement(DerivLine, {
     label: "Moment-decay depth",
     tex: `z_{M\\to0}=${fmt(solved.zMomentDecay, 1)}\\text{ ft}\\;(|M|\\leq ${fmt(solved.decayFrac * 100, 0)}\\%\\,M_{max})`
@@ -15871,7 +15920,7 @@ function App() {
     }
   }, "Note: the governing moment is a below-grade reversal (negative), induced by the shear as the soil resists. With a small stickup the applied head moment P·e partially offsets it, so |Mmax| can decrease as stickup grows before increasing again — this is expected, not an error."), /*#__PURE__*/React.createElement("p", {
     className: "text-[9.5px] text-slate-400 mt-2 leading-snug"
-  }, "Finite-difference beam on linear elastic foundation. Fixity = 2nd zero-crossing of the moment diagram. The fixed-head model restrains rotation at grade; validate against a full nonlinear p-y (LPILE) run before sealing."))), /*#__PURE__*/React.createElement("div", {
+  }, "Finite-difference beam on linear elastic foundation. Fixity = first zero crossing of the moment below the maximum moment. The fixed-head model restrains rotation at grade; validate against a full nonlinear p-y (LPILE) run before sealing."))), /*#__PURE__*/React.createElement("div", {
     className: "bg-white rounded-sm p-3 border border-slate-200"
   }, /*#__PURE__*/React.createElement("p", { className: "text-[10px] text-slate-500 leading-snug mb-2" }, "The deflection and moment diagrams of this linear solution", lpileParse && lpileParse.ok && lpileParse.records && lpileParse.records.length > 2 ? " (with the imported LPILE profiles overlaid and compared)" : "", " are on the ", /*#__PURE__*/React.createElement("b", null, "Lateral graphs"), " output tab."),
   /*#__PURE__*/React.createElement(LatGraphsLinks, { ids: ["dmv", "py"].concat(lpileParse && lpileParse.ok && lpileParse.records && lpileParse.records.length > 2 ? ["lpile"] : []) })))),
