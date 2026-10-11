@@ -4461,6 +4461,276 @@ Engineer's decision 2026-10-10 on O29, O31, O32 (and O33 if trivial): "Go ahead"
 - **How verified:** headless Chromium, main vs branch (`grp.mjs`), each row made active in turn, reading `R.capDist` and the printed section 11 text; screenshots of Module 11 for a manual row and both Group rows looked at. Saved data unchanged (`capCaseId` is passed at run time, not stored).
 - **Other copies of this code:** none.
 
+## 2026-10-11 — PR: claude/pile-o33-o34 (PR link added after merge)
+
+Engineer's decision 2026-10-11: "Go ahead with O33 and O34". For O33 the approved behaviour is to keep treating a solve that needs the retry as failed unless the retried solution is a sound, converged equilibrium, and to replace the JavaScript error with a deliberate "did not converge" outcome that makes the lateral-dependent checks NG. Basis as stated in `fixlog/README.md` (AASHTO LRFD 10th Ed. (2024)). No AASHTO formula, load or resistance factor, unit or code reference changes in F22 or F23.
+
+### F22. p-y solves that need the adaptive retry: a deliberate "did not converge" outcome instead of a JavaScript error; lateral-dependent checks NG (O33)   [calc behaviour / check status] [MORE conservative for every case found: checks that showed OK on the linear-Winkler fallback moment are now NG. LESS conservative only if a retried solve passes all four acceptance tests (then its moment is used and the stability check passes); no such case was found with the shipped bound]
+- **Where:**
+  - New top-level code after `solvePyPile` (≈ lines 2211–2276): `PY_NC_MSG`, `PY_NC_TEX`, `PY_LAT_ROW`, `PY_RETRY_CLOSURE_PCT`, `PY_RETRY_DEFL_D`, `pyRetryCheck`, `PyNoConvNote`, `solvePyWithRetry`. Anchor text: `/* F22 (O33) / F23 (O34): the lateral p-y solve used by Module 02`.
+  - `App` → `pyRes` memo (≈ line 12709). Anchor text: `const pyRes = useMemo(() => {`.
+  - `computeAll`, just before `// ---- overall ----` (≈ line 3880). Anchor text: `// ---- F22 (O33): the lateral p-y solve did not converge ----`.
+  - `App` → the live `computeAll(I, {…})` call in the `r` memo (≈ line 13532). Anchor text: `pyStabMsg: (pyRes && !pyRes.ok) ? pyRes.msg : null,`.
+  - `App` → `runAllCases` (≈ line 12979), see also F23. Anchor text: `function runAllCases() {`.
+  - Displays (listed under "Display changes" below).
+- **Problem (from O33):** in `pyRes`, a failed first attempt (8 load steps) triggered an adaptive retry (16 steps, ω 0.55), but the depth records then read `shear: res.V[i]` from the failed first attempt, which has no `V`. Every solve that needed the retry threw, and `pyRes` became `{ ok: false, msg: "Cannot read properties of undefined (reading '0')" }`. The screen and report showed that JavaScript text. The stability check was NG (any p-y failure is), but Module 04 / 05 / 05b, the casing-extension and uncased-flexure checks were evaluated on the **linear-Winkler fallback moment** and could show OK. Fixing only the array name would have switched the retry on for the first time: in every case found, the retry "converges" to a **post-critical** equilibrium (head deflection reversed, 17–170 in) whose equilibrium closure is still excellent (≤ 0.1 % in most), so closure alone cannot tell a sound solution from a post-critical one.
+- **Decision implemented:**
+  1. The first attempt is unchanged (8 steps, maxIter 200). A solve that converges there is used as before, bit for bit.
+  2. Only if it fails: the retry (16 steps, maxIter 400, ω 0.55), unchanged settings.
+  3. A retried solution is used only if all four tests pass (`pyRetryCheck`):
+     - (a) every load step converged (the solver's own test, `dMax < max(tol, tol·|y0|)`, tol = 1e-6);
+     - (b) equilibrium closure ΣF ≤ 1 % and ΣM ≤ 1 % (`res.eq`, the residuals the tool already reports);
+     - (c) stable loading branch: the head deflection keeps the sign of the first load step and |y0| never drops by more than 0.1 % from its running peak (the same fold-back rule the pushover plot already uses);
+     - (d) sanity bound: |y0| ≤ 1.0 × D, D = the p-y pile width in the bending plane (casing OD for a micropile; the H-pile width the p-y curves use).
+  4. Otherwise (retry fails, or any test fails): `pyRes = { ok: false, noConv: true, msg: PY_NC_MSG, why: [...] }`, shown as **"Did not converge — the pile is likely unstable (buckling / P-Δ) at this load"** with the reason and what to do. `computeAll` gets `pyNoConv` and sets `R.lateralNoConv`; flexure, combined loading, CFST P-M, casing extension, uncased flexure (micropile) and H-pile flexure / combined become NG; combined-loading stability was already NG and stays NG. The P-y-independent checks (geotechnical, axial, shear, bearing, punching, tension, buckling by the selected method) are unchanged.
+  5. The criteria are written into the Methodology text (DocsModal "02 · Lateral analysis", new paragraph "Nonlinear p-y convergence").
+- **Governing provision:** none changed. The acceptance tests are numerical-solution criteria chosen by the tool, not code provisions: closure 1 % and the one-pile-width bound are judgement values (see O37). The stability row keeps its existing reference "AASHTO 6.9.4 / p-y".
+- **Before (`pyRes`):**
+  ```js
+      const res = solvePyPile({
+        EIsecFn,
+        L: L_in, nNodes: Math.max(80, Math.min(Math.round(I.pyNodes || 120), 200)), D,
+        EIfn, soilAt, zg: stick_in,
+        Pt: (I.Plat || 0) * 1000, Mt: I.solverHead === "fixed" ? 0 : (I.pyMhead || 0) * 12000, Qt: (I.STL || 0) * 1000,
+        headFixed: I.solverHead === "fixed", headKrot: I.solverHead === "fixed" ? 0 : (I.pyKrot || 0) * 1000,
+        gPM: I.pyPM || 1, gYM: I.pyYM || 1,
+        nSteps: 8, tol: 1e-6, maxIter: 200, zCut: cut_in
+      });
+      let resv = res;
+      if (!resv.ok) {
+        // adaptive retry: finer load stepping + heavier under-relaxation.
+        // Converges genuine-but-tender cases; a second failure means the
+        // load state is truly near instability and the message stands.
+        resv = solvePyPile({
+          EIsecFn, L: L_in, nNodes: Math.max(80, Math.min(Math.round(I.pyNodes || 120), 200)), D,
+          EIfn, soilAt, zg: stick_in,
+          Pt: (I.Plat || 0) * 1000, Mt: I.solverHead === "fixed" ? 0 : (I.pyMhead || 0) * 12000, Qt: (I.STL || 0) * 1000,
+          headFixed: I.solverHead === "fixed", headKrot: I.solverHead === "fixed" ? 0 : (I.pyKrot || 0) * 1000,
+          gPM: I.pyPM || 1, gYM: I.pyYM || 1,
+          nSteps: 16, tol: 1e-6, maxIter: 400, omega: 0.55, zCut: cut_in
+        });
+      }
+      if (!resv.ok) return { ok: false, msg: resv.msg };
+      const res2 = resv;
+      const records = res2.z.map((zi, i) => ({
+        depth: zi / 12, defl: res2.y[i], mom: res2.M[i] / 12000, shear: res.V[i] / 1000
+      }));
+  …
+        Mtip_kft, eq: res2.eq, iters: res2.history.reduce((s, h) => s + h.iter, 0),
+  ```
+- **After (`pyRes`):**
+  ```js
+      // F22 (O33): first solve (8 steps), then the adaptive retry (16 steps, under-relaxed)
+      // with its acceptance test, in solvePyWithRetry -- the same call "Run all cases" makes.
+      // A retry that does not converge, or converges to a post-critical / unsound state,
+      // is reported as "did not converge" (noConv) and the lateral-dependent checks are NG.
+      const sol = solvePyWithRetry({
+        EIsecFn,
+        L: L_in, nNodes: Math.max(80, Math.min(Math.round(I.pyNodes || 120), 200)), D,
+        EIfn, soilAt, zg: stick_in,
+        Pt: (I.Plat || 0) * 1000, Mt: I.solverHead === "fixed" ? 0 : (I.pyMhead || 0) * 12000, Qt: (I.STL || 0) * 1000,
+        headFixed: I.solverHead === "fixed", headKrot: I.solverHead === "fixed" ? 0 : (I.pyKrot || 0) * 1000,
+        gPM: I.pyPM || 1, gYM: I.pyYM || 1,
+        tol: 1e-6, zCut: cut_in
+      }, D);
+      if (sol.noConv) return { ok: false, noConv: true, msg: PY_NC_MSG, why: sol.why };
+      const res2 = sol.res;
+      const records = res2.z.map((zi, i) => ({
+        depth: zi / 12, defl: res2.y[i], mom: res2.M[i] / 12000, shear: res2.V[i] / 1000
+      }));
+  …
+        Mtip_kft, eq: res2.eq, iters: res2.history.reduce((s, h) => s + h.iter, 0), retried: sol.retried,
+  ```
+- **New code after `solvePyPile` (after only; nothing before):**
+  ```js
+  const PY_NC_MSG = "Did not converge — the pile is likely unstable (buckling / P-Δ) at this load";
+  // shown (KaTeX) in place of a check comparison that needs the lateral solution
+  const PY_NC_TEX = "\\text{NG: the lateral p-y solve did not converge (no valid moment demand)}";
+  // summary-table / dashboard rows whose demand comes from the lateral solution
+  const PY_LAT_ROW = /^(Flexure|Combined axial \+ flexure|Combined \(interaction\)|Casing flexure|Combined loading \(casing-only|Combined \(casing\)|Combined loading \(CFST P-M\)|Combined \(CFST P-M\)|Casing past active moment zone|Uncased flexure)/;
+  const PY_RETRY_CLOSURE_PCT = 1.0;   // max equilibrium residual (% of applied) for a retried solve
+  const PY_RETRY_DEFL_D = 1.0;        // max |head deflection| for a retried solve, in pile widths D
+  function pyRetryCheck(rr, D) {
+    const why = [];
+    const eq = rr.eq || {};
+    if (!(eq.fPct <= PY_RETRY_CLOSURE_PCT && eq.mPct <= PY_RETRY_CLOSURE_PCT))
+      why.push("equilibrium closure ΣF " + fmt(eq.fPct, 2) + " % / ΣM " + fmt(eq.mPct, 2) + " % exceeds " + fmt(PY_RETRY_CLOSURE_PCT, 1) + " %");
+    // Stable loading branch: the head deflection keeps the direction of the first load step
+    // and |y0| never drops while the load rises (same fold-back rule as the pushover plot).
+    const h = rr.history || [];
+    const y1 = h.length ? h[0].y0 : 0;
+    let peak = 0, flip = false, fold = false;
+    for (const s of h) {
+      if (Math.abs(y1) > 1e-9 && s.y0 * y1 < 0) flip = true;
+      const mag = Math.abs(s.y0);
+      if (mag < peak * (1 - 1e-3)) fold = true;
+      peak = Math.max(peak, mag);
+    }
+    if (flip) why.push("the head deflection reversed direction during the load ramp (post-critical equilibrium)");
+    else if (fold) why.push("the head deflection decreased while the load increased (fold-back, post-critical equilibrium)");
+    const y0 = rr.y && rr.y.length ? rr.y[0] : NaN;
+    if (!(Math.abs(y0) <= PY_RETRY_DEFL_D * D))
+      why.push("head deflection " + fmt(Math.abs(y0), 2) + " in exceeds the sanity bound of " + (PY_RETRY_DEFL_D === 1 ? "one pile width" : fmt(PY_RETRY_DEFL_D, 1) + " pile widths") + " (" + fmt(PY_RETRY_DEFL_D * D, 2) + " in)");
+    return why;
+  }
+  function PyNoConvNote({ why, print }) { … }   // the message, "Reason: …" and "What to do: …" (screen and print)
+  function solvePyWithRetry(input, D) {
+    const res = solvePyPile({ ...input, nSteps: 8, maxIter: 200 });
+    if (res.ok) return { res, retried: false, noConv: false, why: [] };
+    const res2 = solvePyPile({ ...input, nSteps: 16, maxIter: 400, omega: 0.55 });
+    if (!res2.ok) {
+      const last = res2.history.length ? res2.history[res2.history.length - 1] : null;
+      return { res: null, retried: true, noConv: true,
+        why: ["the first solve (8 load steps) and the adaptive retry (16 load steps, under-relaxed) both failed to converge" + (last ? "; the retry stopped at load step " + last.step + "/16 (lateral " + fmt(last.P / 1000, 2) + " kip, axial " + fmt(last.Q / 1000, 1) + " kip)" : "")] };
+    }
+    const why = pyRetryCheck(res2, D);
+    if (why.length) return { res: null, retried: true, noConv: true, why: ["the first solve (8 load steps) did not converge; the adaptive retry (16 load steps) was rejected: " + why.join("; ")] };
+    return { res: res2, retried: true, noConv: false, why: [] };
+  }
+  ```
+  (`PyNoConvNote` text: "✗ NG — <PY_NC_MSG>. The built-in p-y solve found no converged, stable equilibrium at the design loads, so there is no valid lateral demand: the checks that use the lateral moment (flexure, combined loading and, for a micropile, casing extension and uncased flexure) are NG, and so is combined-loading stability." + "Reason: …" + "What to do: reduce the axial and/or lateral load; check buckling and P_cr in Module 10 (the nonlinear P-crit ramp shows the thrust at which the pile becomes unstable); shorten the unsupported length (stickup, scour, added unsupported length); or add stiffness (larger section, longer casing).")
+- **After (`computeAll`, inserted before `// ---- overall ----`; nothing before):**
+  ```js
+    R.lateralNoConv = (opts.pyActive && opts.pyNoConv) ? { msg: opts.pyStabMsg || PY_NC_MSG, why: opts.pyNoConvWhy || [] } : null;
+    if (R.lateralNoConv && I.pileType !== "iab") {
+      if (R.flex) R.flex.pass = false;
+      if (R.comb) R.comb.pass = false;
+      if (R.cfst) { R.cfst.cfst_pm_pass = false; R.cfst.pass = false; }
+      if (R.casingExt) R.casingExt.pass = false;
+      if (R.geoChecks) { R.geoChecks.uncasedFlex_pass = false; R.geoChecks.casingPastActive = false; R.geoChecks.pass = false; }
+      if (R.hpileStruct) { R.hpileStruct.flex_pass = false; R.hpileStruct.comb_pass2 = false; }
+    }
+  ```
+  The live call adds, after `pyStabMsg`:
+  ```js
+        pyNoConv: !!(pyRes && pyRes.noConv),
+        pyNoConvWhy: (pyRes && pyRes.noConv) ? pyRes.why : null,
+  ```
+- **Display changes** (each shows the "did not converge" text in place of the comparison only when `r.lateralNoConv` is set; otherwise unchanged):
+  - Module 02 (`PyPanel`, anchor `" flows to the structural checks automatically."`): the status banner shows `PyNoConvNote` for `pyRes.noConv`; a converged retried solve adds "(Converged on the adaptive retry: …)". Module 02 status chip: `status: r.lateralNoConv ? false : undefined` (was `undefined`).
+  - Check lines, `eq:`/`tex:` → `r.lateralNoConv ? PY_NC_TEX : <unchanged>`: Module 04 micropile (anchor `M_{max}=${fmt(r.flex.Mmax, 1)}\``), Module 05 (anchor `` tex: `D/C=${fmt(r.comb.interaction, 3)} ``), Module 05b CFST (two places, anchors `M_u=${fmt(r.cfst.Mmax, 1)}\`` and `label: "Check", tex:`), Module G uncased flexure (anchor `\\phi M_{n,uncased}=`), H-pile Module 04 (anchor `RptCheck, { pass: hs.flex_pass, eq:`), H-pile Module 05 (anchor `` eq: `\\text{D/C}=${fmt(ratio,3)} ``; also `pass: r.lateralNoConv ? false : pass` and the module status returns `false` first when `r.lateralNoConv`); report: casing extension (anchor `` eq: `L_{tip} = ``), flexure (anchor `` eq: `\\phi_f M_n = ``), combined (anchor `` eq: `D/C = ``), CFST (anchor `` eq: `M_r = ``), H-pile 03–09 rows (anchor `const nc = !!r.lateralNoConv;`: value "p-y did not converge", `cPass = false`).
+  - Module 05 and 05b explanatory sentences: "The lateral p-y solve did not converge, so there is no valid moment demand: the point uses the linear-Winkler fallback moment and the check is NG." in place of "Here D/C = … inside/outside".
+  - Report summary table (anchor `fmt(dem, name.includes("D/C") ? 3 : 2)`): Demand "p-y did not converge" for rows matching `PY_LAT_ROW`.
+  - Summary-of-checks dashboard (`UtilizationDashboard`): rows matching `PY_LAT_ROW` show "NG" with a full red bar (D/C plotted as 2.0, like the stability row); "governs: … · p-y did not converge".
+  - Report: a new section "02R Lateral Analysis — Did Not Converge (NG)" with `PyNoConvNote` (anchor `// ---- F22 (O33): p-y lateral analysis did not converge`), shown instead of the results section, which needs `pyRes.ok`.
+  - Envelope, screen and report: see F23.
+- **Check case 1 (H-pile defaults, one strength case STL 800 kip, P 120 kip, free head):** HP 13.83 × 14.70 strong axis, stickup 3 ft, embedded 30 ft, uniform default sand; D = 14.70 in.
+  - First attempt (8 steps of 15 kip lateral / 100 kip axial): steps 1–6 converge; step 7 (105 / 700 kip) needs more than 200 iterations → failed.
+  - Retry (16 steps of 7.5 / 50 kip): every step converges. Head deflection by step: 0.240, 0.641, 1.12, 1.71, 2.45, 3.38, 4.57, 6.11, 8.12, 10.86, 14.80, 21.12, 34.95 (step 13, 97.5 / 650 kip), **−183.5** (step 14, 105 / 700 kip), −176.3, −170.24 in. Mmax 6,289 kip·ft.
+  - Tests: (a) pass; (b) closure ΣF 0.040 %, ΣM 0.0027 % ≤ 1 % → pass; (c) sign reversal at step 14 → **fail**; (d) |y0| = 170.24 in > 1.0 × 14.70 in → **fail**. Outcome: did not converge.
+  - The Module 10 nonlinear P-crit ramp (unchanged, see below) gives KL_eq 54.1 ft, φ_c·P_n = 317 kip < 800 kip, consistent with instability at this thrust.
+  | result | before (main) | after (branch) |
+  |---|---|---|
+  | Module 02 | "⚠ Cannot read properties of undefined (reading '0')", status — | "✗ NG — Did not converge — the pile is likely unstable (buckling / P-Δ) at this load." + reason (tests c and d) + what to do; status NG |
+  | Module 04 flexure | OK (M_u = 17.5 kip·ft fallback, D/C 0.033) | NG ("did not converge") |
+  | Module 05 combined | OK (0.914 on the fallback moment) | NG |
+  | Combined-loading stability | NG | NG |
+  | Dashboard | Flexure 0.03 ✓, Combined 0.91 ✓ | Flexure NG ✗, Combined NG ✗ |
+  | Report summary demand | 17.50 kip·ft OK / 0.914 OK | "p-y did not converge" NG / NG |
+  | `allPass` | false | false |
+  | Envelope row ("Run all") | Mmax 6,289.6, y₀ −170.234, flex 11.70, comb 11.28, FAIL (the old 6-step solve converged to the post-critical state) | Mmax "n/c", y₀ —, flex NG, comb NG, FAIL, with the reason |
+- **Check case 2 (a retried solve that converges on the stable branch, rejected only by the deflection bound):** micropile defaults (7 in casing, stickup 3 ft, M-φ EI on), free head, one strength case STL 20 kip, P 14 kip; D = 7.00 in. First attempt fails at step 8 (> 200 iterations). Retry: every step converges, head deflection rises monotonically to y0 = +9.397 in; closure ΣF 0.00028 %, ΣM 0.00004 %; Mmax 107.84 kip·ft. Tests (a)–(c) pass; (d) 9.397 in > 7.00 in fails → **did not converge** (before: the JavaScript error, Module 04/05 OK on the fallback moment 17.5 kip·ft, D/C 0.32 / 0.36). With a test copy using a 2·D bound (not shipped), the retry is accepted: Module 02 "Converged on the adaptive retry", Mmax 107.84 kip·ft, flexure D/C 1.999 (NG), combined 2.038 (NG), stability passes, equilibrium closes as above; the code path works (no errors). No retried solve was found that passes all four tests with the shipped 1·D bound (search: H-pile defaults, P 6–150 kip × Q 0–1,500 kip; micropile defaults, layered profile and free head, P 4–60 kip × Q 0–400 kip, M 0/5 kip·ft): every other converged retry reversed direction (|y0| 17–200 in), or had closure 2–7 %.
+- **Other O33 cases checked (main → branch):** micropile defaults STL 86 / P 14 free head: error → NC (sign reversal, |y0| 30.8 in); micropile defaults STL 40 / P 15: error → NC (sign reversal, 72.7 in); micropile four-case project of F23 check case 2 (uniform sand N60 20), Ext I (60 / 12 / M 5) made active: error → NC.
+- **Cases that never need the retry: bit-identical.** Module values (`pyRes`, `R`) equal to the last digit on main and branch for every converged case run, and the full page text, printed report text, module statuses, autosave, export JSON, IndexedDB record and share payload are identical in all three modes for the defaults, the four-layer profile, and the four-layer profile with buckling on (`parity.mjs`).
+- **Pcr ramp:** `computePcr` calls `solvePyPile` directly (6 steps, maxIter 975, no retry). Non-convergence there is the ramp's designed end point (the hyperbolic fit uses the converged points), so it does not use `solvePyWithRetry` and is unchanged. Run on check case 1 (buckling on, P-crit tab): Module 10 text identical on main and branch, no errors.
+- **Saved data:** none changed. `retried`, `noConv`, `why` live in run-time objects only.
+- **How verified:** node --check of every script block; headless Chromium with the pinned libraries served locally, main vs branch: `nc.mjs` (Module 02 state and text, `R` flags, module statuses, dashboard, envelope, printed report) for the cases above; `search.mjs` (the tool's own `solvePyPile` / `buildPySetup` through an instrumented copy) for the retry search; `parity.mjs` for bit-identity; `pcr.mjs` for the ramp. Screenshots looked at: Module 02 banner, Modules 04 / 05 (H-pile and micropile), dashboard, envelope, report sections 02R, 03–09, summary table and envelope. No console errors.
+- **Other copies of this code:** none.
+- **Not changed (see O36):** a FIRST attempt can also converge to a post-critical state, and it is used as before.
+
+### F23. Case envelope ("Run all cases") uses the same p-y solve as Module 02 (O34)   [calc behaviour] [envelope Mmax / y₀ / flexure / combined now equal Module 02; in the cases run they drop by 0.01–0.5 % (LESS conservative by that amount); cases that need the retry are now "did not converge" / NG]
+- **Where:** `App` → `runAllCases`, the per-case solve and row (≈ line 12979). Anchor text: `// per-case p-y solve (M-phi curves held at the ACTIVE case axial)`. Display: `LoadCasesCard` envelope table (anchor `["case", "Mmax k·ft", "y₀ in"`) and the report envelope (anchor `LRFD LOAD-CASE ENVELOPE`).
+- **Problem (from O34):** the envelope solved each case with its own settings: 110 nodes, 6 load steps, maxIter 200, no casing cut (`zCut`), no retry. Module 02 uses `I.pyNodes` (120 default) nodes, 8 steps, `zCut`, and the retry. With a case active, the envelope Mmax and y₀ differed from Module 02 by 0.01–0.5 %, and a case that Module 02 could not solve could show numbers in the envelope (micropile Ext I: Mmax 112.6 kip·ft, y₀ −46.6 in, a post-critical state). The moment-decay search also started at the Mmax node even when that is in the stickup (fixed head), and clamped above-grade depths to 0, while Module 02 starts at the mudline node.
+- **Governing provision:** none changed (numerical settings).
+- **Before:**
+  ```js
+          let Mx = null, y0 = null, decay = null;
+          if (usePy) {
+            const rs = solvePyPile({ L: S.L_in, nNodes: 110, D: S.D, EIfn: S.EIfn, EIsecFn: S.EIsecFn, soilAt: S.soilAt, zg: S.stick_in,
+              Pt: (c.Plat || 0) * 1000, Mt: (c.type !== "service" && I.solverHead === "fixed" ? 0 : (c.Mhead || 0) * 12000),
+              Qt: (c.type === "tension" ? 0 : (c.STL || 0)) * 1000,
+              headFixed: I.solverHead === "fixed", headKrot: I.solverHead === "fixed" ? 0 : (I.pyKrot || 0) * 1000, gPM: I.pyPM || 1, gYM: I.pyYM || 1, nSteps: 6, tol: 1e-6, maxIter: 200 });
+            var prof = null;
+            if (rs.ok) {
+              …
+              const th = 0.05 * Math.abs(rs.M[iM]);
+              for (let i2 = iM; i2 < rs.M.length; i2++) if (Math.abs(rs.M[i2]) <= th) { decay = Math.max(rs.z[i2] - S.stick_in, 0) / 12; break; }
+            }
+          }
+  …
+          const R2 = computeAll(I2, { layered: !!activeLayers, pyMmax: Mx, Mmax_kft: Mx != null ? Mx : undefined, zMomentDecay: decay != null ? decay : undefined });
+  …
+            name: c.name, type: c.type, Mmax: Mx != null ? Mx : R2.MmaxUsed, y0, prof: (typeof prof !== "undefined") ? prof : null,
+  …
+            flexR: c.type === "service" ? null : (isHPc ? rat(hs.Mu, hs.phiMn) : rat(R2.MmaxUsed, R2.flex.phiMn)),
+            combR: c.type === "service" ? null : (isHPc ? hs.comb_ratio : R2.comb.interaction), // P-M interaction value (was R2.comb.ratio = Po/Pe)
+  …
+            pass: c.type === "service" ? (y0 == null || Math.abs(y0) <= (I.deflLimit || 1)) : R2.allPass
+  ```
+- **After:**
+  ```js
+          let Mx = null, y0 = null, decay = null, noConv = false, ncWhy = null;
+          if (usePy) {
+            // F23 (O34): the same solve as Module 02 (pyRes): I.pyNodes nodes, 8 load steps,
+            // maxIter 200, casing cut, and the F22 (O33) adaptive retry with its acceptance
+            // test (solvePyWithRetry). Before F23: 110 nodes, 6 steps, no retry, no zCut.
+            const sol = solvePyWithRetry({ L: S.L_in, nNodes: Math.max(80, Math.min(Math.round(I.pyNodes || 120), 200)), D: S.D, EIfn: S.EIfn, EIsecFn: S.EIsecFn, soilAt: S.soilAt, zg: S.stick_in,
+              Pt: (c.Plat || 0) * 1000, Mt: (c.type !== "service" && I.solverHead === "fixed" ? 0 : (c.Mhead || 0) * 12000),
+              Qt: (c.type === "tension" ? 0 : (c.STL || 0)) * 1000,
+              headFixed: I.solverHead === "fixed", headKrot: I.solverHead === "fixed" ? 0 : (I.pyKrot || 0) * 1000, gPM: I.pyPM || 1, gYM: I.pyYM || 1, tol: 1e-6, zCut: S.cut_in }, S.D);
+            const rs = sol.res;
+            noConv = sol.noConv; ncWhy = sol.why;
+            var prof = null;
+            if (rs) {
+              …
+              // moment-decay depth: the same search as pyRes (from max(Mmax node, mudline node) down)
+              const iG = (() => { for (let k = 0; k < rs.z.length; k++) if (rs.z[k] >= S.stick_in - 1e-9) return k; return 0; })();
+              const th = 0.05 * Math.abs(rs.M[iM]);
+              for (let i2 = Math.max(iM, iG); i2 < rs.M.length; i2++) if (Math.abs(rs.M[i2]) <= th) { decay = (rs.z[i2] - S.stick_in) / 12; break; }
+            }
+          }
+  …
+          const R2 = computeAll(I2, { layered: !!activeLayers, pyMmax: Mx, Mmax_kft: Mx != null ? Mx : undefined, zMomentDecay: decay != null ? decay : undefined,
+            // F22 (O33): a case whose p-y solve did not converge is NG (stability + lateral checks)
+            ...(noConv ? { pyActive: true, pyConverged: false, pyStabMsg: PY_NC_MSG, pyNoConv: true, pyNoConvWhy: ncWhy } : {}) });
+  …
+            name: c.name, type: c.type, Mmax: noConv ? null : (Mx != null ? Mx : R2.MmaxUsed), y0, prof: (typeof prof !== "undefined") ? prof : null,
+  …
+            flexR: (c.type === "service" || noConv) ? null : (isHPc ? rat(hs.Mu, hs.phiMn) : rat(R2.MmaxUsed, R2.flex.phiMn)),
+            combR: (c.type === "service" || noConv) ? null : (isHPc ? hs.comb_ratio : R2.comb.interaction), // P-M interaction value (was R2.comb.ratio = Po/Pe)
+  …
+            pass: noConv ? false : (c.type === "service" ? (y0 == null || Math.abs(y0) <= (I.deflLimit || 1)) : R2.allPass),
+            noConv, ncWhy
+  ```
+  Envelope tables (screen and report): a `noConv` row shows Mmax "n/c" (screen) / "did not converge" (report), flexure and combined "NG", result ✗ / FAIL, and a note naming the case(s) with the reason (report) or the message and what to do (screen). Before, a service row with no solution passed (y₀ "—"); it now fails.
+- **Check case 1 (defaults, one strength case STL 86, P 6, free head):** envelope before → after; Module 02 value (unchanged).
+  | pile | column | before | after | Module 02 |
+  |---|---|---|---|---|
+  | H-pile | Mmax (kip·ft) | 34.886608 | 34.882268 | 34.882268 |
+  | H-pile | y₀ (in) | 0.176766 | 0.176679 | 0.176679 |
+  | H-pile | flex / comb | 0.064872 / 0.112436 | 0.064864 / 0.112428 | 0.064864 / 0.112428 |
+  | micropile | Mmax (kip·ft) | 53.473149 | 53.449741 | 53.449741 |
+  | micropile | y₀ (in) | 3.163262 | 3.161882 | 3.161882 |
+  | micropile | flex / comb | 0.991206 / 1.160663 | 0.990772 / 1.160229 | 0.990772 / 1.160229 |
+  Hand check (H-pile, after): flex = 34.882268 / 537.8 = 0.06486; P_u/P_r = 86/904.0 = 0.0951 < 0.2 → comb = 0.0951/2 + 0.06486 = 0.1124 (Eq. 6.9.2.2.1-1), as F20.
+- **Check case 2 (four cases: Str I 86/6, Ext I 60/12/M 5, Svc I 60/4, Uplift 20/3; uniform sand N60 20, buckling on, 4 ft added unsupported length).** "Run all" with Str I active; envelope Mmax before → after (all other columns follow Mmax; geo, buckl and tension unchanged):
+  | pile | case | Mmax before | Mmax after | change | y₀ before → after (in) |
+  |---|---|---|---|---|---|
+  | H-pile | Str I | 36.419770 | 36.241115 | −0.49 % | 0.188532 → 0.187147 |
+  | H-pile | Ext I | 84.460136 | 84.163590 | −0.35 % | 0.515126 → 0.512665 |
+  | H-pile | Svc I | 23.551053 | 23.439989 | −0.47 % | 0.115940 → 0.115219 |
+  | H-pile | Uplift | 17.377612 | 17.297552 | −0.46 % | 0.085637 → 0.085129 |
+  | micropile | Str I | 56.338405 | 56.256489 | −0.15 % | 3.395053 → 3.385795 |
+  | micropile | Ext I | 112.591198 (y₀ −46.557, post-critical) | n/c, flex / comb NG | — | — |
+  | micropile | Svc I | 27.981765 | 27.955348 | −0.09 % | 1.440716 → 1.435944 |
+  | micropile | Uplift | 16.035575 | 15.992843 | −0.27 % | 0.765692 → 0.763847 |
+  Flexure / combined after (H-pile Str I 0.067391 / 0.126924, was 0.067723 / 0.127257; micropile Str I 1.042800 / 1.212256, was 1.044318 / 1.213775). The pass column did not change in any row.
+- **Envelope = Module 02 for the active case:** each case made active in turn and "Run all" re-run (`env2.mjs`): branch, every column of the active row equals the module value to machine precision, in both pile types, for all four cases (micropile Ext I: both "did not converge"). On main every active row differed (as above). For a micropile, the other (non-active) rows still use the M-φ curves at the ACTIVE case axial (by design, see F16), so they equal Module 02 only when that case is made active; the micropile Extreme row also applies φ = 1.0 (O35).
+- **Run-all time** (headless Chromium, 3 runs each, ms; cases cycle strength / extreme / service / tension / strength): micropile 5 cases main 313–497, branch 390–503; 20 cases main 755–1,138, branch 1,333–1,570. H-pile 5 cases main 183–223, branch 208–225; 20 cases main 410–460, branch 483–550. Run all stays responsive (it already runs after a 30 ms timeout behind a "running…" label).
+- **Also note (O36):** a case whose old 6-step solve failed but whose 8-step first attempt converges now shows the Module 02 value. Example: micropile free head STL 20 / P 15: envelope before Mmax 17.5 kip·ft (the fallback, flex 0.32) → after 130.41 kip·ft, y₀ −164.69 in (flex 2.42), equal to Module 02, which accepts that post-critical first attempt (O36).
+- **How verified:** headless Chromium, main vs branch: `env.mjs` / `envcmp.py` (Run all, then each case made active), `env2.mjs` / `env2cmp.py` (Run all re-run with each case active), `timing.mjs`; screenshot of the envelope with a did-not-converge row, a service row and a converged row looked at (screen and print). No console errors.
+- **Other copies of this code:** none.
+
 ## Open items (not changed)
 - O1. **Uncased/cased structural axial: outer 0.85 factor and `fy = min(fyb, fyc)`** (`Rn_cased/Rn_ucased`, ≈ line 1675).
   - Neither AASHTO 10.9.3.10.2 nor FHWA NHI-05-039 Eq. 5-13 has the outer 0.85, and the uncased section has no casing, so min(fyb, fyc) is arbitrary there.
@@ -4527,6 +4797,8 @@ Engineer's decision 2026-10-10 on O29, O31, O32 (and O33 if trivial): "Go ahead"
 - O30. **HANDOFF.md §4.6 (Pile Designer receiver)** still says the pull buttons are in the "Project panel". Since F15 they are in the Loads & group tab and are not shown in integral-abutment mode. HANDOFF.md was outside this PR. **Update** it in a docs PR.
 - O31. **H-pile static axial capacity datum.** Fixed in F19 (2026-10-11): skin from grade (or the buried head) to the toe at `solverLembed` below grade, tip at the toe; Module G prints the toe at `solverLembed`.
 - O32. **Case envelope in H-pile mode.** Fixed in F20 (2026-10-11): the H-pile rows report the H-pile checks (Module 01 geotech, Module 04 flexure, Module 05 interaction, H-pile uplift/tension). See O34 and O35.
-- O33. **Lateral profile table shear after a retry — the retry path itself never works.** In `pyRes`, the depth records take `shear: res.V[i]` from the first solve attempt, while deflection and moment come from `res2` (the adaptive retry). Looked at on 2026-10-11 (not changed): a failed `solvePyPile` attempt returns `{ ok: false, history, msg }` with no `V`, so whenever the retry is used, `res.V[i]` throws and `pyRes` becomes `{ ok: false, msg: "Cannot read properties of undefined (reading '0')" }`. Example, H-pile defaults with one case STL 800 kip / P 120 kip (or STL 1,200 / P 80): main shows the p-y analysis as failed with that message; with `res2.V` the retry converges and returns Mmax 6,289 kip·ft, head deflection −170 in (a post-critical state far beyond capacity). So the one-word fix would switch the adaptive retry on for the first time and change Mmax, the structural checks and the stability flags for every case that needs it, not just a table column. **Ask:** make the fix (use `res2.V`) and accept that retried solves now report results (with the stability flags deciding whether they are credible), or keep a failed first attempt as a failure and remove the retry? Either way, the error message should not be a JavaScript exception text.
-- O34. **Case envelope Mmax vs Module 02 Mmax.** `runAllCases` solves each case with its own p-y call (110 nodes, 6 load steps, maxIter 200, no `zCut`, no adaptive retry), while Module 02 / `pyRes` uses `I.pyNodes` (120 default), 8 steps, `zCut` at the casing tip, plus the retry. With a case active, the envelope Mmax and y₀ differ from Module 02 by 0.01–0.5 % in the cases run (e.g. micropile defaults 53.473 vs 53.450 kip·ft; H-pile defaults 34.887 vs 34.882), and so do the flexure/combined ratios. In one micropile Extreme case (P 12 kip, M 5 kip·ft) Module 02 did not converge while the envelope returned y₀ = −46.6 in. Found during F20 (all pile types, pre-existing). Not changed (it changes the micropile envelope). **Ask:** have the envelope use the same solve settings as Module 02 (and the same non-convergence handling)?
+- O33. **p-y solves that need the adaptive retry.** Fixed in F22 (2026-10-11): no JavaScript error; a retried solve is used only if it converges with closure ≤ 1 %, on the stable loading branch and with |y0| ≤ one pile width; otherwise "Did not converge — the pile is likely unstable (buckling / P-Δ) at this load" and the lateral-dependent checks are NG. See O36 and O37.
+- O34. **Case envelope Mmax vs Module 02 Mmax.** Fixed in F23 (2026-10-11): the envelope uses the same solve as Module 02 (`solvePyWithRetry`: `I.pyNodes` nodes, 8 steps, `zCut`, retry with the F22 tests) and the same moment-decay search; with a case active its row equals Module 02.
 - O35. **Extreme Event φ in the H-pile envelope.** The envelope heading says "Extreme Event φ = 1.0, uplift 0.8, AASHTO 10.5.5.3", and `runAllCases` applies that by overriding the micropile φ keys (`phiGeo`, `phiCC`, …). The H-pile φ keys (`hpPhiGeo`, `hpPhiGeoClay`, `hpPhiUp`, `hpPhiC`, `hpPhiCcomb`, `hpPhiF`, `hpPhiV`, `hpPhiTy`, `hpPhiTu`) are not overridden, so since F20 the H-pile Extreme rows use the strength φ (the same as the modules show with that case active; before F20 the φ = 1.0 reached only the micropile ratios, which were the wrong checks). In the F20 four-case run, H-pile Ext I geo D/C is 0.707 with φ_stat 0.30, which would be 0.212 with φ = 1.0. The micropile modules also do not apply the Extreme φ when an Extreme case is active (the envelope does). Not changed (resistance factors). **Ask:** apply φ = 1.0 (uplift 0.8) to the H-pile keys in the envelope (and should the modules apply it when an Extreme case is active, for both pile types)?
+- O36. **A FIRST p-y attempt can converge to a post-critical state, and it is used.** F22 tests only retried solves (as approved: solves that never needed the retry stay bit-identical). The 8-step first attempt can also settle on the unstable branch. Example: micropile defaults, free head, one strength case STL 20 kip / P 15 kip: Module 02 reports Mmax 130.41 kip·ft at a head deflection of **−164.69 in** (opposite to the load), closure 0.006 %, and combined-loading stability **passes**; flexure (D/C 2.42) and combined (2.46) are NG on that moment, so `allPass` is false, but the moment is not a valid design value. Since F23 the envelope shows the same value (before, its 6-step solve failed and it showed the 17.5 kip·ft fallback). Another: micropile defaults (default soil), an Extreme case 60 kip / 12 kip / M 5 kip·ft made active: the first attempt converges to y0 = −47.04 in, Mmax 112.77 kip·ft, and stability passes (the same loads on the uniform sand N60 20 profile of F23 check case 2 need the retry and are now "did not converge"). The retry search also found first attempts with reversed deflections at moderate loads (micropile defaults, P 6 kip with 200 kip axial, M-φ curves at 86 kip: y0 −9.6 in). Not changed (it changes results for solves that do not need the retry). **Ask:** apply the stable-branch test (c) and the deflection bound (d) to every p-y solve, so a first attempt that reverses or folds back is also "did not converge"?
+- O37. **F22 acceptance thresholds.** A retried solve is accepted only with closure ≤ 1 % (ΣF and ΣM) and |y0| ≤ 1.0 × D. Both are judgement values (no code provision). With the 1·D bound no retried solve was found that is accepted: F22 check case 2 (micropile, free head, STL 20 / P 14) converges on the stable branch with closure 0.0003 % but y0 = 9.40 in = 1.34 D, so it is reported as "did not converge" (its flexure D/C would be 2.0, NG either way). With 2·D it would be accepted. **Confirm** the thresholds (or give the deflection bound you want, e.g. 2·D, or a multiple of the service deflection limit).
