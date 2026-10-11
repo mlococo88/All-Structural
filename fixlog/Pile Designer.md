@@ -10229,6 +10229,794 @@ function groupWsSpacing(I) {
          pyRes.Mcr_kft_u != null ? ["M_cr uncased (M-φ knee)", latFmt(pyRes.Mcr_kft_u, 1) + " kip·ft"] : null,
 ```
 
+## 2026-10-11 — PR: claude/pile-o45 (PR link added after merge)
+
+Engineer's decision 2026-10-11 on O45–O48: "Fix all" — apply the recommended resolutions. All four changes act only in Pile group mode; single pile, integral abutment and the per-row toggle off are unchanged (F34 acts on H-pile groups with the toggle on or off; F35 / F36 only with the per-row toggle on).
+
+### F34. H-pile groups: AASHTO 10.7.3.9 group efficiency η and, in cohesive soil, the block-failure check (O45)   [calc change] [H-pile groups only; micropile, integral abutment and single piles bit-identical (proven). Cohesionless profiles: η = 1.0 at any spacing (before: Converse-Labarre below 3B) — LESS conservative below 3B, no change at ≥ 3B. Cohesive profiles: cap in firm contact (default, and every old project) and a non-soft surface → η = 1.0 as before at ≥ 3B (LESS conservative below 3B); cap not in contact or soft surface clay → η = 0.65–1.0 (MORE conservative); the block check is now computed and enters the overall result (MORE conservative: before it was "not computed — verify by hand")]
+
+- **Where:**
+  - New top-level `HP_BLOCK_PHI`, `HP_SOFT_SU_KSF`, `hpStaticIsClay`, `hpGroupAashto`, `hpBlockNc`, after `hpileGeoCapacity` (anchor `F34 (O45, 2026-10-11): AASHTO LRFD 10th Ed. Art. 10.7.3.9 GROUP RESISTANCE, DRIVEN H-PILES`).
+  - `computeAll`, H-pile branch, the F32 block (anchor `// ---- F34 (O45, 2026-10-11): AASHTO 10.7.3.9 group efficiency and block failure ----`): `R.group.eta`, `eta_auto`, `aashto`, `etaBasis`, `sumPhiIndiv`, and the block fields (`blockComputed`, `blk`, `Pn_block`, `phiBlock`, `phiEtaSum`, `blockGoverns`, `phiGroupBond`, `block_pass`) for H-piles.
+  - `computeAll` H-pile `R.allPass` (anchor `// F34 (O45): plus the AASHTO 10.7.3.9 block check in cohesive soil (blockComputed)`).
+  - `DEFAULT_INPUTS`: new optional field `hpCapContact: true`.
+  - `grpRows`: the "Group block" row cites "AASHTO 10.7.3.9" for H-piles.
+  - Display: Module 11 code line, section 1 (H-pile text, classification / cap-contact / η box, "Inputs used" adds the cap contact), section 3 (H-pile: the computed block check in cohesive soil, "Not required — cohesionless soil" otherwise; replaces the amber "Not computed for H-piles — verify by hand" box); rail "Group options" panel (H-pile: checkbox "pile cap in firm contact with the ground", computed η with its AASHTO case); report "Pile group" inputs table row "Pile cap in firm contact with the ground".
+- **Problem (O45):** after F32 the H-pile group η was the FHWA micropile rule (s ≥ 3B → 1.0, else Converse-Labarre) and the block check was not computed. AASHTO LRFD Art. 10.7.3.9 gives the driven-pile rules.
+- **Method (engineer's decision 2026-10-11; values recalled, marked verify in the tool):**
+  - **Soil classification** along the embedded length (grade, or the buried head, to the toe at `solverLembed`), with the tool's static layer types (as Module 01: `staticType` "clay", or a clay / stiff clay p-y layer with no `staticType`, is cohesive; sand and silt are cohesionless). **Mixed profiles: the predominant type by thickness; a tie counts as cohesive** (the more conservative rules). Module 11 shows the two thicknesses and flags a mixed profile "verify with the geotechnical engineer".
+  - **η:** cohesionless → 1.0. Cohesive: cap in firm contact with the ground and the surface soil not soft → 1.0; otherwise η = 0.65 at s = 2.5B, linear to 1.0 at 6B (0.65 below 2.5B with a "below the AASHTO minimum spacing" note; 1.0 above 6B). **Soft surface:** the layer at the top of the embedded length is cohesive with S_u < 0.50 ksf (soft / very soft, Terzaghi & Peck consistency; verify) — then treated as not in contact even with the box ticked. The η override (Group options) still wins, as before.
+  - **Cap contact input:** "pile cap in firm contact with the ground" (rail, Group options, H-pile only), saved as the optional field `hpCapContact`. **Default yes.** The tool had no cap-contact assumption; its η (1.0 at ≥ 3B) corresponds to "in contact", so the default (and a project saved without the field) reproduces the old η at ≥ 3B in cohesive soil with a firm surface. Ticking it off is the more conservative choice.
+  - **Block (cohesive only):** R_g = (2X + 2Y)·Z·S̄_u + X·Y·N_c·S_u,base; X = the smaller plan dimension of the block (c/c + B, as the F30 footprint), Y = the larger, Z = embedded length; S̄_u = Σ S_u·h / Z over the embedded length with cohesionless layers counted as 0 (conservative for mixed profiles); S_u,base = S_u of the toe layer (0 when the toe is cohesionless); N_c = 5(1 + Z/5X)(1 + X/5Y) for Z/X ≤ 2.5, 7.5(1 + X/5Y) for Z/X > 2.5 (≤ 9 both ways; the engineer's "5(…)(…) ≤ 9" equals this for Z/X ≤ 2.5 — the Z/X > 2.5 form is the AASHTO equation as recalled, verify); φ_g = 0.60 (Table 10.5.5.2.3-1, block failure in clay; verify; a constant, not an input). Group resistance = min(η·Σφ_stat R_n, φ_g R_g) vs the total factored group demand STL × n (the existing demand definition). It enters the H-pile overall result, the Module 11 status and the check strip / dashboard ("Group block", AASHTO 10.7.3.9). Cohesionless: no block check ("Not required — cohesionless soil").
+- **Before (F32, H-pile):** `g.eta` from the shared FHWA / Converse-Labarre code; `g.blockComputed = false` and the block fields null; `R.allPass = … && (!grpOn || R.group.geoGroup_pass)`.
+- **After:** see the diff below.
+- **Governing provision:** AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024), Art. 10.7.3.9 (pile group resistance: cohesionless η = 1.0; cohesive η 0.65 at 2.5B to 1.0 at 6B when the cap is not in firm contact; block failure Eq. 10.7.3.9-2 to -4 with N_c), Table 10.5.5.2.3-1 (φ_g = 0.60 block failure, clay), Art. 10.7.1.2 (2.5B minimum spacing) — **verify** the article, equation and table numbers and the values against the edition in use. Module 01 static resistance (Art. 10.7.3.8.6) unchanged.
+- **§4 callouts (worked checks).** 2 columns × 3 rows, HP 14×89 strong axis, B = b_f = 14.70 in, "3 × dia" = 3B, s = 44.10 in, embedded length 30 ft below grade, stickup 3 ft, toggle on, case Manual Str (STL 80 kip per pile), n = 6, demand 6 × 80 = 480 kip. Footprint X = (2 − 1) × 44.10 + 14.70 = 58.80 in = 4.900 ft, Y = (3 − 1) × 44.10 + 14.70 = 102.90 in = 8.575 ft.
+  - **(a) Uniform stiff clay, S_u = 2.0 ksf, α = 0.75, cap NOT in contact.** Module 01 (unchanged): q_s = 0.75 × 2.0 = 1.50 ksf, R_s = 1.50 × 4.755 × 30 = 213.98 kip; q_p = 9 × 2.0 = 18 ksf, R_p = 18 × 1.4118 = 25.41 kip; R_n = 239.39 kip; φR_n = 0.35 × 239.39 = **83.79 kip**.
+    η = 0.65 + 0.35 × (3.00 − 2.5)/3.5 = **0.700**. Block: Z/X = 30/4.900 = 6.12 > 2.5 → N_c = 7.5 × (1 + 4.900/(5 × 8.575)) = 7.5 × 1.11429 = **8.357**; R_side = 2 × (4.900 + 8.575) × 30 × 2.0 = 1617.0 kip; R_base = 4.900 × 8.575 × 8.357 × 2.0 = 702.3 kip; R_g = **2319.3 kip**; φ_g R_g = 0.60 × 2319.3 = 1391.6 kip; η Σ φR_n = 0.700 × 6 × 83.79 = 351.9 kip → group resistance min = **351.9 kip < 480 NG** (individual piles govern).
+
+    | | Before (F33) | After (F34) |
+    |---|---|---|
+    | η | 1.000 (s ≥ 3B, FHWA) | **0.700** (AASHTO, cohesive, cap not in contact) |
+    | η check ηφR_n vs STL 80 | 83.79 **OK** | 0.700 × 83.79 = **58.65 NG** |
+    | block | not computed — verify by hand | min(351.9, 1391.6) = **351.9 < 480 NG** |
+    | Module 11 / overall (Manual Str) / envelope Manual Str, Manual EE | OK / OK / ✓, ✓ | **NG / NG / ✗, ✗** |
+
+    **MORE conservative.**
+  - **(b) Same clay, cap in contact (the default; the project saved without the field):** η = **1.000** (unchanged); η check 83.79 ≥ 80 OK (unchanged); block now computed: min(1.000 × 6 × 83.79 = 502.7, 1391.6) = **502.7 ≥ 480 OK**. Overall OK as before. No result changes; the block check is added (MORE conservative in principle, passes here).
+  - **(c) Soft clay, S_u = 0.40 ksf (Matlock soft clay p-y), cap in contact:** surface S_u 0.40 < 0.50 → soft, treated as not in contact → η = **0.700** (before 1.000); φR_n = 16.76 kip (Module 01, already NG); η check 11.73 (before 16.76) NG; block: R_g = 2 × 13.475 × 30 × 0.40 + 4.900 × 8.575 × 8.357 × 0.40 = 323.4 + 140.5 = 463.9 kip, φ_g R_g = 278.3; min(0.700 × 6 × 16.76 = 70.4, 278.3) = **70.4 < 480 NG**. Overall NG before and after (Module 01). MORE conservative.
+  - **(d) Sand N60 = 20 (the F32 case):** cohesionless → η = **1.000**, as before at 3B; η check 84.89 ≥ 80 OK (unchanged); block "Not required — cohesionless soil" (before "not computed — verify by hand"). **No result change** (only the Module 11 code line / text).
+  - **(e) Mixed: soft clay 0–10 ft (S_u 0.40) over sand N60 30 (10–30 ft):** cohesive 10 ft < cohesionless 20 ft → cohesionless (flagged "mixed profile") → η = 1.000, no block. No result change at 3B.
+  - **(f) Hand check, sand below 3B (2.5B, 2 × 3):** before, Converse-Labarre θ = atan(1/2.5) = 21.80°, η = 1 − (21.80/90) × (1 × 3 + 2 × 2)/6 = 0.717; after η = 1.000 (cohesionless) — LESS conservative (AASHTO allows no reduction in cohesionless soil).
+- **Pure refactor parts:** none; the micropile path is untouched (its `R.group` is computed by the same code as before and verified bit-identical).
+- **Saved data:** one new optional field `hpCapContact` (boolean), written only when the box is changed; it is **not** in `DEFAULT_INPUTS`, so autosaves of existing projects are unchanged (verified: autosave identical main vs branch for every project below). A project without the field loads as "in contact" (the tool's previous behaviour at ≥ 3B). A branch file with `hpCapContact: false` loads in main (the field is ignored there; checked). No key renamed.
+- **How verified:**
+  - `node --check` on the four inline scripts.
+  - Headless Chromium (pinned libraries served locally), origin/main (#120) vs this commit, each project loaded, "Run all cases", every case made active, envelope re-run:
+    - **Bit-identical** (numbers, module statuses, check strip, Module 02 / summary / report text, autosave; only the envelope time stamp differs): micropile single pile (project and defaults), micropile groups (toggle off, legacy source, d_h = 9 in, toggle on), integral abutment.
+    - **H-pile, single pile and defaults:** displayed values identical; only the unused `R.group` internals gain the `aashto` / `etaBasis` / `sumPhiIndiv` fields (Module 11's code line keeps the old text when the group is off).
+    - **H-pile groups:** differences only in `R.group` and what follows from it: (a) clay, cap not in contact — η 1.000 → 0.700, block NG, Module 11 / overall / envelope Manual Str and Manual EE OK → NG; (b) clay, no field — η 1.000, block computed OK, no status change; (c) soft clay — η 1.000 → 0.700, block NG, overall NG before and after; (d) sand N60 = 20, (e) mixed, default sand, toggle off with sand — numbers identical, Module 11 code line / block text only.
+  - Screenshot looked at: Module 11, H-pile 2 × 3 in clay, cap not in contact (classification box, η line, η check NG, block section with X, Y, Z, N_c, R_g, the min check NG). Report PDF printed. No console errors.
+- **Other copies:** none.
+- **Re-applying by hand:** unified diff below (CRLF stripped).
+
+```diff
+diff --git a/Pile Designer.html b/Pile Designer.html
+index 41bfc0d..7fac0ba 100644
+--- a/Pile Designer.html	
++++ b/Pile Designer.html	
+@@ -2020,6 +2020,78 @@ function hpileGeoCapacity({ layers, d, bf, embedTop, embedLen, smallGroup, phiSa
+   };
+ }
+ 
++/* ============================================================
++   F34 (O45, 2026-10-11): AASHTO LRFD 10th Ed. Art. 10.7.3.9 GROUP RESISTANCE, DRIVEN H-PILES
++   ------------------------------------------------------------
++   Used only for H-pile groups (pile group mode). Verify the article / equation / table
++   numbers and values against the edition in use.
++   Soil classification for the group (the tool's static layer types, as hpileGeoCapacity:
++   staticType "clay", or a clay / stiff clay p-y layer with no staticType, is cohesive;
++   sand and silt are cohesionless). Rule for mixed profiles: the PREDOMINANT type by
++   thickness along the embedded length (grade or buried head -> toe); a tie counts as
++   cohesive (the cohesive rules are the more conservative). Mixed profiles are flagged.
++   Group efficiency eta:
++     cohesionless: eta = 1.0.
++     cohesive: cap in firm contact with the ground and the soil at the surface not soft
++       -> eta = 1.0; otherwise (cap not in firm contact, or soft surface soil, which is
++       treated as not in contact) eta = 0.65 at s = 2.5B rising linearly to 1.0 at 6B
++       (0.65 below 2.5B, 1.0 above 6B).
++     "soft" surface soil: the layer at the top of the embedded length is cohesive with
++       S_u < 0.50 ksf (soft / very soft consistency, Terzaghi & Peck; verify).
++   Block failure (cohesive groups only), Eq. 10.7.3.9-2 / -3 / -4 (verify numbering):
++     R_g = (2X + 2Y) Z S_u,avg + X Y N_c S_u,base
++     X = group width (smaller plan dimension), Y = group length, Z = embedded length (ft),
++     S_u,avg = average S_u along Z (cohesionless layers counted as S_u = 0: conservative),
++     S_u,base = S_u of the layer at the toe (0 when the toe is in a cohesionless layer).
++     N_c = 5 (1 + Z/(5X)) (1 + X/(5Y))  for Z/X <= 2.5
++     N_c = 7.5 (1 + X/(5Y))             for Z/X >  2.5   (both <= 9)
++     phi_g = 0.60 (Table 10.5.5.2.3-1, block failure in clay; verify).
++   in: layers (as hpileGeoCapacity), zTop / zToe (ft below grade), s_dia (s/B), capContact
++============================================================ */
++const HP_BLOCK_PHI = 0.60;        // Table 10.5.5.2.3-1, group block failure, clay (verify)
++const HP_SOFT_SU_KSF = 0.50;      // surface soil "soft" below this S_u (verify)
++function hpStaticIsClay(ly) { return (ly.staticType || ((ly.type === "clay" || ly.type === "stiffclay") ? "clay" : "sand")) === "clay"; }
++function hpGroupAashto({ layers, zTop, zToe, s_dia, capContact }) {
++  const sorted = (layers || []).slice().sort((a, b) => a.topDepth - b.topDepth);
++  const Z = Math.max(zToe - zTop, 0);
++  let hClay = 0, hCoh = 0, SuH = 0;
++  for (let i = 0; i < sorted.length; i++) {
++    const top = sorted[i].topDepth, bot = (i + 1 < sorted.length) ? sorted[i + 1].topDepth : zToe;
++    const h = Math.min(bot, zToe) - Math.max(top, zTop);
++    if (h <= 0) continue;
++    if (hpStaticIsClay(sorted[i])) { hClay += h; SuH += (sorted[i].Su != null ? sorted[i].Su : 0) * h; }
++    else hCoh += h;
++  }
++  // layer containing a depth (same rule as the toe layer in hpileGeoCapacity)
++  const layerAt = (z, last) => {
++    let L = sorted[sorted.length - 1] || null;
++    for (let i = 0; i < sorted.length; i++) {
++      const top = sorted[i].topDepth, bot = (i + 1 < sorted.length) ? sorted[i + 1].topDepth : last;
++      if (z >= top && z < bot) { L = sorted[i]; break; }
++    }
++    return L;
++  };
++  const cohesive = hClay > 0 && hClay >= hCoh;
++  const mixed = hClay > 0 && hCoh > 0;
++  const surf = layerAt(zTop, Infinity);
++  const surfClay = !!(surf && hpStaticIsClay(surf));
++  const surfSu = surfClay ? (surf.Su != null ? surf.Su : 0) : null;
++  const surfaceSoft = surfClay && surfSu < HP_SOFT_SU_KSF;
++  const contactEff = !!capContact && !surfaceSoft;
++  let eta, etaCase;
++  if (!cohesive) { eta = 1.0; etaCase = "cohesionless"; }
++  else if (contactEff) { eta = 1.0; etaCase = "cohesive, cap in contact"; }
++  else {
++    eta = s_dia <= 2.5 ? 0.65 : (s_dia >= 6 ? 1.0 : 0.65 + 0.35 * (s_dia - 2.5) / 3.5);
++    etaCase = capContact ? "cohesive, soft surface soil (treated as not in contact)" : "cohesive, cap not in contact";
++  }
++  const toeL = layerAt(zToe, zToe + 1);
++  const toeClay = !!(toeL && hpStaticIsClay(toeL));
++  return { cohesive, mixed, hClay, hCoh, Z, SuAvg: Z > 0 ? SuH / Z : 0, SuBase: toeClay ? (toeL.Su != null ? toeL.Su : 0) : 0, toeClay,
++    surfClay, surfSu, surfaceSoft, capContact: !!capContact, contactEff, eta, etaCase, below25: s_dia < 2.5 - 1e-9 };
++}
++function hpBlockNc(Z, X, Y) { return (Z / X <= 2.5) ? 5 * (1 + Z / (5 * X)) * (1 + X / (5 * Y)) : 7.5 * (1 + X / (5 * Y)); }
++
+ function mphiSection(sec) {
+   // sec: { Dg (gross dia for concrete), Dcore (concrete dia; = ID for cased, = Dg for uncased),
+   //        casOD, casID (casing annulus, or null), Es, fyc, Ab, fyb, fc_psi, c2, epsCrFac, P }
+@@ -3905,14 +3977,43 @@ function computeAll(I, opts = {}) {
+     if (R.group) {
+       const g = R.group;
+       g.capBasis = "hpile";
++      // ---- F34 (O45, 2026-10-11): AASHTO 10.7.3.9 group efficiency and block failure ----
++      // Before F34: eta = FHWA micropile rule (s >= 3B -> 1.0, else Converse-Labarre) and the
++      // block "not computed - verify by hand". Now eta per AASHTO 10.7.3.9 (cohesionless 1.0;
++      // cohesive 0.65 at 2.5B -> 1.0 at 6B unless the cap is in firm contact with non-soft
++      // ground) and, in cohesive soil, the block check. See hpGroupAashto.
++      const ga = hpGroupAashto({ layers: (Array.isArray(I.soilLayers) ? I.soilLayers : []), zTop: embedTop_ft, zToe: toe_ft,
++        s_dia: g.s_dia, capContact: I.hpCapContact !== false });   // optional saved field hpCapContact; missing = true (in contact)
++      g.aashto = ga;
++      g.etaBasis = "aashto";
++      g.eta_auto = ga.eta;
++      g.eta = I.groupEtaOverride ? Math.max(Math.min(I.groupEta,1.0),0.1) : ga.eta;
+       g.Pn_geo_single = geo.Rn_comp;                 // nominal R_n (skin + tip), kip
+       g.phiRn_single = geo.phiRn_comp;               // phi R_n, kip
+       g.Pn_geo_group = geo.Rn_comp * g.eta;
+       g.phiPn_geo_group = geo.phiRn_comp * g.eta;
+       g.geoGroup_pass = !grpOn || g.phiPn_geo_group >= STL;
+-      g.blockComputed = false;
+-      g.Pn_block = null; g.blockGoverns = null; g.groupBondCap = null; g.phiGroupBond = null; g.block_pass = null;
+       g.sumIndiv = geo.Rn_comp * nPiles;
++      g.sumPhiIndiv = geo.phiRn_comp * nPiles;
++      if (ga.cohesive) {
++        const Xft = Math.min(g.Bx_ft, g.By_ft), Yft = Math.max(g.Bx_ft, g.By_ft), Z = ga.Z;
++        const Nc = (Xft > 0 && Yft > 0) ? hpBlockNc(Z, Xft, Yft) : 0;
++        const Rside = 2 * (Xft + Yft) * Z * ga.SuAvg;          // kip (ft x ft x ksf)
++        const Rbase = Xft * Yft * Nc * ga.SuBase;              // kip
++        g.blockComputed = true;
++        g.blk = { X: Xft, Y: Yft, Z, Nc, ZX: Xft > 0 ? Z / Xft : null, Rside, Rbase, phi: HP_BLOCK_PHI };
++        g.Pn_block = Rside + Rbase;                            // nominal block resistance R_g
++        g.phiBlock = HP_BLOCK_PHI * g.Pn_block;
++        g.phiEtaSum = g.eta * g.sumPhiIndiv;
++        g.blockGoverns = g.phiBlock < g.phiEtaSum;
++        g.phiGroupBond = Math.min(g.phiEtaSum, g.phiBlock);    // factored group resistance
++        g.groupBondCap = null;
++        g.block_pass = !grpOn || g.phiGroupBond >= g.groupDemand;
++      } else {
++        // cohesionless: AASHTO 10.7.3.9 has no block check (eta = 1.0)
++        g.blockComputed = false;
++        g.Pn_block = null; g.blockGoverns = null; g.groupBondCap = null; g.phiGroupBond = null; g.block_pass = null;
++      }
+     }
+ 
+     // ---- H-PILE STRUCTURAL (AASHTO 10th Ed Section 6) ----
+@@ -4286,8 +4387,9 @@ function computeAll(I, opts = {}) {
+       (hs.KLr_ok !== false)
+     ) : false;
+     const fixPass = R.hpileHeadFix ? R.hpileHeadFix.pass : true;
+-    // F32 (O43): the H-pile group efficiency check on the H-pile capacity; block not computed for H-piles
+-    R.allPass = (R.hpileGeo ? R.hpileGeo.pass : false) && structPass && fixPass && R.stability.pass && (!grpOn || R.group.geoGroup_pass);
++    // F32 (O43): the H-pile group efficiency check on the H-pile capacity
++    // F34 (O45): plus the AASHTO 10.7.3.9 block check in cohesive soil (blockComputed)
++    R.allPass = (R.hpileGeo ? R.hpileGeo.pass : false) && structPass && fixPass && R.stability.pass && (!grpOn || (R.group.geoGroup_pass && (R.group.blockComputed === false || R.group.block_pass)));
+   } else {
+     R.allPass = R.geoChecks.pass && R.geo.pass && R.axial.cased_pass && R.axial.ucased_pass && R.flex.pass && R.comb.pass && R.bearing.pass && R.punch.pass && R.tests.verf_pass && R.tests.proof_pass && (!enableTension || geoUp_pass && strUp_pass) && (!enableBuckling || buck_pass) && (!I.cfstEnable || R.cfst.pass) && R.casingExt.pass && (!grpOn || (geoGroup_pass && block_pass)) && R.stability.pass;
+   }
+@@ -8639,6 +8741,7 @@ function PrintReport({
+       ["Spacing", I.groupSpacingIn > 0 ? I.groupSpacingIn : null, "in", "explicit"],
+       ["Spacing (diameters)", I.groupSpacingIn > 0 ? null : I.groupSpacingDia, I.pileType === "hpile" ? "\u00d7B" : "\u00d7D", I.pileType === "hpile" ? "B = " + fmt(groupB(I), 2) + " in (H-pile p-y width)" : ""],
+       ["Efficiency \u03b7 override", I.groupEtaOverride || null, "", ""],
++      ["Pile cap in firm contact with the ground", I.pileType === "hpile" ? (I.hpCapContact !== false ? "yes" : "no") : null, "", "AASHTO 10.7.3.9 \u03b7 (cohesive soil)"],
+       ["p-multiplier source", GROUP_PM_SRC_LABEL[groupPmSourceOf(I)], "", ""],
+       ["Group p-multipliers per row", I.lateralSource === "py" ? (I.groupPmAuto ? "applied automatically, modifier " + fmt(groupPmModOf(I), 2) : "off \u2014 p-multiplier entered directly") : null, "", ""]
+     ] })),
+@@ -10392,7 +10495,7 @@ function moduleForCheck(label, pileType) {
+ function grpRows(r) {
+   if (!r.group || !r.group.enable) return [];
+   const out = [];
+-  if (r.group.block_pass !== undefined && r.group.blockComputed !== false) out.push(["Group block", r.group.phiGroupBond, r.group.groupDemand, r.group.block_pass, "FHWA"]);
++  if (r.group.block_pass !== undefined && r.group.blockComputed !== false) out.push(["Group block", r.group.phiGroupBond, r.group.groupDemand, r.group.block_pass, r.group.capBasis === "hpile" ? "AASHTO 10.7.3.9" : "FHWA"]);
+   return out;
+ }
+ 
+@@ -15192,7 +15295,12 @@ function App() {
+     "manually override \u03b7"),
+     I.groupEtaOverride && /*#__PURE__*/React.createElement("div", { className: "mt-2 max-w-[180px]" },
+       /*#__PURE__*/React.createElement(Field, { label: "\u03b7 override", value: I.groupEta, onChange: v => set('groupEta', v) })),
+-    /*#__PURE__*/React.createElement("p", { className: "text-[10px] text-slate-500 leading-snug mt-2" }, "Computed \u03b7 = ", fmt(r.group.eta, 3), r.group.spacingOKforEta ? " (spacing \u2265 3\u00d7 " + (r.group.Blbl || "bond dia") + " \u2192 individual elements)" : " (Converse-Labarre)", ". Group layout and cap loads are set in the Pile group workspace (Loads & group tab).")), /*#__PURE__*/(I.pileType !== "iab") && /*#__PURE__*/React.createElement(Panel, {
++    // F34 (O45): H-pile groups -- pile cap contact for the AASHTO 10.7.3.9 eta (cohesive soil)
++    r.group.capBasis === "hpile" && /*#__PURE__*/React.createElement("label", { className: "flex items-center gap-1.5 text-[12px] text-slate-600 cursor-pointer mt-2" },
++      /*#__PURE__*/React.createElement("input", { type: "checkbox", "aria-label": "Pile cap in firm contact with the ground", checked: I.hpCapContact !== false, onChange: e => set('hpCapContact', e.target.checked) }),
++      "pile cap in firm contact with the ground"),
++    r.group.capBasis === "hpile" && r.group.aashto ? /*#__PURE__*/React.createElement("p", { className: "text-[10px] text-slate-500 leading-snug mt-2" }, "Computed \u03b7 = ", fmt(r.group.eta_auto, 3), " (AASHTO 10.7.3.9: ", r.group.aashto.etaCase, "; cap contact matters only in cohesive soil, and soft surface clay is treated as not in contact). Group layout and cap loads are set in the Pile group workspace (Loads & group tab).") :
++    /*#__PURE__*/React.createElement("p", { className: "text-[10px] text-slate-500 leading-snug mt-2" }, "Computed \u03b7 = ", fmt(r.group.eta, 3), r.group.spacingOKforEta ?" (spacing \u2265 3\u00d7 " + (r.group.Blbl || "bond dia") + " \u2192 individual elements)" : " (Converse-Labarre)", ". Group layout and cap loads are set in the Pile group workspace (Loads & group tab).")), /*#__PURE__*/(I.pileType !== "iab") && /*#__PURE__*/React.createElement(Panel, {
+     title: "Buckling",
+     sub: "unsupported span and column parameters (10)"
+   }, /*#__PURE__*/React.createElement(Toggle, {
+@@ -17086,7 +17194,10 @@ function App() {
+       pcr && pcr.ok ? "Recompute P" : "Compute P", /*#__PURE__*/React.createElement("sub", null, "cr"), " (ramp Q to instability)")))), /*#__PURE__*/(I.pileType !== "iab") && /*#__PURE__*/React.createElement(Module, {
+     idx: "11",
+     title: "Group Effects",
+-    code: r.group.pmSource === "rollins" ? "FHWA NHI-05-039 · Rollins/Reese p-multipliers · Converse-Labarre" : "FHWA NHI-05-039 · AASHTO Table 10.7.2.4-1 p-multipliers · Converse-Labarre",
++    code: r.group.capBasis === "hpile" && r.group.enable
++      // F34 (O45): H-pile groups -- AASHTO 10.7.3.9 efficiency / block
++      ? (r.group.pmSource === "rollins" ? "AASHTO 10.7.3.9 group resistance · Rollins/Reese p-multipliers" : "AASHTO 10.7.3.9 group resistance · AASHTO Table 10.7.2.4-1 p-multipliers")
++      : r.group.pmSource === "rollins" ? "FHWA NHI-05-039 · Rollins/Reese p-multipliers · Converse-Labarre" : "FHWA NHI-05-039 · AASHTO Table 10.7.2.4-1 p-multipliers · Converse-Labarre",
+     status: !r.group.enable || (r.group.geoGroup_pass && (r.group.blockComputed === false || r.group.block_pass)),
+     open: open[11],
+     onToggle: () => toggle(11)
+@@ -17121,9 +17232,21 @@ function App() {
+       /*#__PURE__*/React.createElement("div", { className: "text-[11px] font-mono-tech text-[var(--blueprint)] uppercase tracking-wider mb-1" }, r.group.capBasis === "hpile" ? "1 · Axial group efficiency (η) — reduces the H-pile static resistance" : "1 · Axial group efficiency (η) — reduces bond capacity"),
+       r.group.capBasis === "hpile"
+         // F32 (O43): H-pile -- eta reduces the H-pile static resistance of Module 01, not the micropile bond
+-        ? /*#__PURE__*/React.createElement("p", { className: "text-[9.5px] text-slate-600 leading-snug mb-2" }, "η (spacing ≥ 3B → 1.0; below that Converse-Labarre, as for micropiles) reduces the H-pile static resistance φR", /*#__PURE__*/React.createElement("sub", null, "n"), " of Module 01 (skin + tip, φ per layer). The AASHTO 10.7.3.9 group factors for driven piles are not applied here; confirm the group efficiency with the geotechnical engineer.")
++        // F34 (O45): eta per AASHTO 10.7.3.9 (driven piles)
++        ? /*#__PURE__*/React.createElement("p", { className: "text-[9.5px] text-slate-600 leading-snug mb-2" }, "AASHTO LRFD 10th Ed. Art. 10.7.3.9 (driven piles; verify): cohesionless soil η = 1.0. Cohesive soil: η = 1.0 when the pile cap is in firm contact with the ground; when it is not (or the soil at the surface is soft, S", /*#__PURE__*/React.createElement("sub", null, "u"), " < " + fmt(HP_SOFT_SU_KSF, 2) + " ksf, treated as not in contact) η = 0.65 at s = 2.5B rising linearly to 1.0 at 6B. η reduces the H-pile static resistance φR", /*#__PURE__*/React.createElement("sub", null, "n"), " of Module 01 (skin + tip, φ per layer).")
+         : /*#__PURE__*/React.createElement("p", { className: "text-[9.5px] text-slate-600 leading-snug mb-2" }, "FHWA NHI-05-039: micropiles may be treated as individual elements (η = 1.0) when center-to-center spacing ≥ 3× the bond diameter. Below that, a reduction applies (Converse-Labarre efficiency shown)."),
+-      /*#__PURE__*/React.createElement("div", { className: "text-[10px] font-mono-tech rounded-sm p-1.5 mb-2", style: { background: r.group.spacingOKforEta ? "rgba(47,111,62,0.06)" : "rgba(178,59,59,0.06)", color: "#14304a" } },
++      r.group.capBasis === "hpile" && r.group.aashto
++        // F34 (O45): soil classification, cap contact and the AASHTO eta
++        ? /*#__PURE__*/React.createElement("div", { className: "text-[10px] font-mono-tech rounded-sm p-1.5 mb-2 leading-relaxed", style: { background: r.group.aashto.eta < 1 ? "rgba(178,59,59,0.06)" : "rgba(47,111,62,0.06)", color: "#14304a" } },
++            "Soil along the embedded length (", fmt(r.group.aashto.Z, 1), " ft): cohesive ", fmt(r.group.aashto.hClay, 1), " ft, cohesionless ", fmt(r.group.aashto.hCoh, 1), " ft → ", /*#__PURE__*/React.createElement("b", null, r.group.aashto.cohesive ? "cohesive" : "cohesionless"),
++            r.group.aashto.mixed ? " (mixed profile: classified by the predominant type; a tie counts as cohesive — verify with the geotechnical engineer)" : "", /*#__PURE__*/React.createElement("br", null),
++            r.group.aashto.cohesive
++              ? /*#__PURE__*/React.createElement(React.Fragment, null, "Pile cap in firm contact with the ground: ", /*#__PURE__*/React.createElement("b", null, r.group.aashto.capContact ? "yes" : "no"),
++                  r.group.aashto.surfClay ? "; surface soil S" : "; surface soil cohesionless", r.group.aashto.surfClay ? /*#__PURE__*/React.createElement("sub", null, "u") : null, r.group.aashto.surfClay ? " = " + fmt(r.group.aashto.surfSu, 2) + " ksf" + (r.group.aashto.surfaceSoft ? " (soft)" : "") : "",
++                  " → ", r.group.aashto.etaCase, /*#__PURE__*/React.createElement("br", null),
++                  r.group.aashto.contactEff ? "η = 1.0" : "η = 0.65 + 0.35 × (s/B − 2.5)/3.5 at s/B = " + fmt(r.group.s_dia, 2) + " → η = " + fmt(r.group.aashto.eta, 3) + (r.group.aashto.below25 ? " (s < 2.5B: below the AASHTO minimum spacing; 0.65 used)" : ""))
++              : "η = 1.0 (cohesionless; no block check)")
++        : /*#__PURE__*/React.createElement("div", { className: "text-[10px] font-mono-tech rounded-sm p-1.5 mb-2", style: { background: r.group.spacingOKforEta ? "rgba(47,111,62,0.06)" : "rgba(178,59,59,0.06)", color: "#14304a" } },
+         r.group.spacingOKforEta
+           ? /*#__PURE__*/React.createElement(React.Fragment, null, "✓ Spacing ", fmt(r.group.s_dia, 1), "× ≥ 3× " + r.group.Blbl + " → η = 1.0 permitted (individual elements)")
+           : /*#__PURE__*/React.createElement(React.Fragment, null, "⚠ Spacing ", fmt(r.group.s_dia, 1), "× < 3× " + r.group.Blbl + " → Converse-Labarre η = ", fmt(r.group.clEff, 3), I.pileType === "hpile" ? " (θ=atan(B/s)=" : " (θ=atan(d/s)=", fmt(r.group.thetaDeg, 1), "°)")),
+@@ -17131,7 +17254,7 @@ function App() {
+         ? /*#__PURE__*/React.createElement("div", { className: "text-[10px] font-mono-tech mb-2" }, "η used = ", /*#__PURE__*/React.createElement("b", null, fmt(r.group.eta, 3)), " → per-pile H-pile φR", /*#__PURE__*/React.createElement("sub", null, "n"), " = ", fmt(r.group.phiRn_single, 1), " kip (R", /*#__PURE__*/React.createElement("sub", null, "n"), " = ", fmt(r.group.Pn_geo_single, 1), " kip) → ηφR", /*#__PURE__*/React.createElement("sub", null, "n"), " = ", /*#__PURE__*/React.createElement("b", null, fmt(r.group.phiPn_geo_group, 1), " kip"))
+         : /*#__PURE__*/React.createElement("div", { className: "text-[10px] font-mono-tech mb-2" }, "η used = ", /*#__PURE__*/React.createElement("b", null, fmt(r.group.eta, 3)), " → per-pile bond φP", /*#__PURE__*/React.createElement("sub", null, "n"), " = ", fmt(r.group.Pn_geo_single, 0), " → ", /*#__PURE__*/React.createElement("b", null, fmt(r.group.phiPn_geo_group, 0), " kip")),
+       /*#__PURE__*/React.createElement(InputsUsed, { tab: "checks", setTab: setRailTab, panelTitle: "Group options",
+-        items: [["\u03b7 override", I.groupEtaOverride ? "on, \u03b7 = " + fmt(I.groupEta, 3) : "off", ""]] }),
++        items: [["\u03b7 override", I.groupEtaOverride ? "on, \u03b7 = " + fmt(I.groupEta, 3) : "off", ""], ...(r.group.capBasis === "hpile" ? [["Pile cap in firm contact with the ground", I.hpCapContact !== false ? "yes" : "no", ""]] : [])] }),
+       /*#__PURE__*/React.createElement("div", { className: "mt-2" }, /*#__PURE__*/React.createElement(CheckRow, {
+         pass: r.group.geoGroup_pass,
+         tex: r.group.capBasis === "hpile" ? `\\eta\\,\\phi R_{n}=${fmt(r.group.phiPn_geo_group, 1)}\\text{ kip}${r.group.geoGroup_pass ? ' \\geq ' : ' < '}STL=${fmt(I.STL, 0)}` : `\\phi\\eta P_{n,bond}=${fmt(r.group.phiPn_geo_group, 1)}\\text{ kip}${r.group.geoGroup_pass ? ' \\geq ' : ' < '}STL=${fmt(I.STL, 0)}`,
+@@ -17185,13 +17308,30 @@ function App() {
+     // === 3. BLOCK FAILURE ===
+     /*#__PURE__*/React.createElement("div", { className: "rounded-sm border border-slate-200 p-3 mb-2" },
+       /*#__PURE__*/React.createElement("div", { className: "text-[11px] font-mono-tech text-[var(--blueprint)] uppercase tracking-wider mb-1" }, "3 · Block failure / equivalent pier"),
+-      // F32 (O43): H-pile -- the block check is not computed (it was the micropile grout bond on the block perimeter)
+-      r.group.blockComputed === false ? /*#__PURE__*/React.createElement("div", null,
+-        /*#__PURE__*/React.createElement("div", { className: "p-2 rounded-sm text-[9.5px] leading-snug", style: { background: "rgba(183,121,31,0.10)", border: "1px solid rgba(183,121,31,0.35)", color: "#7a4d15" } },
+-          /*#__PURE__*/React.createElement("b", null, "Not computed for H-piles — verify by hand. "),
+-          "This tool's block check is the micropile grout-to-ground bond on the block perimeter, which does not apply to driven H-piles. For a group in cohesive soil check block failure per AASHTO LRFD 10th Ed. Art. 10.7.3.9 (S", /*#__PURE__*/React.createElement("sub", null, "u"), " on the block perimeter plus N", /*#__PURE__*/React.createElement("sub", null, "c"), "S", /*#__PURE__*/React.createElement("sub", null, "u"), " at the base, with its own resistance factor); in cohesionless soil confirm with the geotechnical engineer. Not included in the Module 11 status or the overall result."),
++      // F32 (O43) / F34 (O45): H-pile -- AASHTO 10.7.3.9 block failure in cohesive soil (computed);
++      // cohesionless: no block check (eta = 1.0). The micropile grout-bond block is not used for H-piles.
++      r.group.capBasis === "hpile" ? (r.group.blockComputed ? /*#__PURE__*/React.createElement("div", null,
++        /*#__PURE__*/React.createElement("p", { className: "text-[9.5px] text-slate-600 leading-snug mb-2" }, "AASHTO LRFD 10th Ed. Art. 10.7.3.9, pile group in cohesive soil (verify equation numbers and φ", /*#__PURE__*/React.createElement("sub", null, "g"), "): block resistance R", /*#__PURE__*/React.createElement("sub", null, "g"), " = (2X + 2Y)·Z·S̄", /*#__PURE__*/React.createElement("sub", null, "u"), " + X·Y·N", /*#__PURE__*/React.createElement("sub", null, "c"), "·S", /*#__PURE__*/React.createElement("sub", null, "u,base"), "; N", /*#__PURE__*/React.createElement("sub", null, "c"), " = 5(1 + Z/5X)(1 + X/5Y) for Z/X ≤ 2.5, 7.5(1 + X/5Y) above (≤ 9). Group resistance = min(η·Σφ", /*#__PURE__*/React.createElement("sub", null, "stat"), "R", /*#__PURE__*/React.createElement("sub", null, "n"), ", φ", /*#__PURE__*/React.createElement("sub", null, "g"), "·R", /*#__PURE__*/React.createElement("sub", null, "g"), ") vs the total factored group demand. S̄", /*#__PURE__*/React.createElement("sub", null, "u"), " is averaged over the embedded length with cohesionless layers counted as S", /*#__PURE__*/React.createElement("sub", null, "u"), " = 0, and the base term is used only when the toe is in a cohesive layer (conservative for mixed profiles)."),
++        /*#__PURE__*/React.createElement("div", { className: "text-[10px] font-mono-tech leading-relaxed", style: { color: "#334155" } },
++          "X × Y = ", fmt(r.group.blk.X, 2), " × ", fmt(r.group.blk.Y, 2), " ft (c/c + B), Z = ", fmt(r.group.blk.Z, 1), " ft, Z/X = ", fmt(r.group.blk.ZX, 2), ", N", /*#__PURE__*/React.createElement("sub", null, "c"), " = ", fmt(r.group.blk.Nc, 3),
++          /*#__PURE__*/React.createElement("br", null),
++          "S̄", /*#__PURE__*/React.createElement("sub", null, "u"), " = ", fmt(r.group.aashto.SuAvg, 3), " ksf, S", /*#__PURE__*/React.createElement("sub", null, "u,base"), " = ", fmt(r.group.aashto.SuBase, 3), " ksf", r.group.aashto.toeClay ? "" : " (toe in a cohesionless layer: base not credited)",
++          /*#__PURE__*/React.createElement("br", null),
++          "R", /*#__PURE__*/React.createElement("sub", null, "g"), " = ", fmt(r.group.blk.Rside, 1), " + ", fmt(r.group.blk.Rbase, 1), " = ", /*#__PURE__*/React.createElement("b", null, fmt(r.group.Pn_block, 1), " kip"), "; φ", /*#__PURE__*/React.createElement("sub", null, "g"), "R", /*#__PURE__*/React.createElement("sub", null, "g"), " = ", fmt(r.group.blk.phi, 2), " × ", fmt(r.group.Pn_block, 1), " = ", fmt(r.group.phiBlock, 1), " kip",
++          /*#__PURE__*/React.createElement("br", null),
++          "η·Σφ", /*#__PURE__*/React.createElement("sub", null, "stat"), "R", /*#__PURE__*/React.createElement("sub", null, "n"), " = ", fmt(r.group.eta, 3), " × ", r.group.nPiles, " × ", fmt(r.group.phiRn_single, 1), " = ", fmt(r.group.phiEtaSum, 1), " kip → ",
++          /*#__PURE__*/React.createElement("b", { style: { color: r.group.blockGoverns ? "#b23b3b" : "#2f6f3e" } }, r.group.blockGoverns ? "BLOCK governs" : "individual piles govern")),
++        /*#__PURE__*/React.createElement("div", { className: "mt-2" }, /*#__PURE__*/React.createElement(CheckRow, {
++          pass: r.group.block_pass,
++          tex: `\\min(\\eta\\,\\Sigma\\phi R_n,\\ \\phi_g R_g)=${fmt(r.group.phiGroupBond, 0)}\\text{ kip}${r.group.block_pass ? ' \\geq ' : ' < '}\\Sigma STL=${fmt(r.group.groupDemand, 0)}\\text{ kip}`,
++          note: "Group resistance (AASHTO 10.7.3.9, cohesive soil) vs total factored group demand (STL × n). Verify the equations, N_c and φ_g = " + fmt(r.group.blk.phi, 2) + " against the edition in use."
++        })))
++      : /*#__PURE__*/React.createElement("div", null,
++        /*#__PURE__*/React.createElement("div", { className: "p-2 rounded-sm text-[9.5px] leading-snug", style: { background: "rgba(47,111,62,0.06)", border: "1px solid rgba(47,111,62,0.25)", color: "#1f4d2b" } },
++          /*#__PURE__*/React.createElement("b", null, "Not required — cohesionless soil. "),
++          "AASHTO LRFD 10th Ed. Art. 10.7.3.9 (verify): for driven pile groups in cohesionless soil η = 1.0 and the group resistance is the sum of the individual resistances; there is no block check. A group in a strong layer over a weaker compressible layer, and group settlement, are not checked here — confirm with the geotechnical engineer."),
+         /*#__PURE__*/React.createElement("div", { className: "text-[10px] font-mono-tech leading-relaxed mt-2", style: { color: "#334155" } },
+-          "block footprint ≈ ", fmt(r.group.Bx_ft, 1), " × ", fmt(r.group.By_ft, 1), " ft (c/c + B), perimeter ", fmt(r.group.blockPerim_ft, 1), " ft; Σ individual H-pile R", /*#__PURE__*/React.createElement("sub", null, "n"), " = ", fmt(r.group.sumIndiv, 0), " kip; total factored group demand ", fmt(r.group.groupDemand, 0), " kip"))
++          "block footprint ≈ ", fmt(r.group.Bx_ft, 1), " × ", fmt(r.group.By_ft, 1), " ft (c/c + B); Σ individual H-pile φR", /*#__PURE__*/React.createElement("sub", null, "n"), " = ", fmt(r.group.sumPhiIndiv, 0), " kip; total factored group demand ", fmt(r.group.groupDemand, 0), " kip")))
+       : /*#__PURE__*/React.createElement(React.Fragment, null,
+       /*#__PURE__*/React.createElement("p", { className: "text-[9.5px] text-slate-600 leading-snug mb-2" }, "At tight spacing the group can fail as one monolithic block rather than as individual piles. The block's perimeter bond capacity is compared to the sum of individual capacities; the lesser governs the group. Group settlement is typically a geotechnical-report item and is not computed here."),
+       /*#__PURE__*/React.createElement("div", { className: "text-[10px] font-mono-tech leading-relaxed", style: { color: "#334155" } },
+```
+
+### F35. Per-row group analysis: when a row fails, the displayed governing row is the failing row (O46)   [display / governing-row selection] [only with "Apply group p-multipliers automatically (per row)" on in Pile group mode; toggle off, single pile, integral abutment bit-identical (proven). No check result, overall result or envelope pass / fail changes (F33 already made any failing row NG). What changes is which row the modules, graphs, report and envelope show: the failing row instead of the larger-D/C passing row — so the displayed M_max / flexure / combined D/C can be LOWER than another (passing) row's (LESS conservative as a displayed number; that row is still listed in the per-row table)]
+
+- **Where:**
+  - `pmRowSummary`: returns `fail` (= lateral status NG: flexure, combined, stability, micropile casing extension, H-pile shear, or did not converge).
+  - `pmPickGov` (anchor `// F35 (O46, 2026-10-11): when any row fails`): when any `ev[k].fail`, only the failing rows are candidates; otherwise the F29 rule unchanged (the loop is the old one with `g` starting at the first candidate).
+  - `runAllCases` → `runOne`: returns `latFail` (the same `pmRowSummary(R2, …, I2).fail` as Module 02) when the per-row toggle is on; the per-row `pmPickGov` call passes `fail: e.latFail`; `latFail` is removed from the output row.
+  - Text: `PmRowTable` "other row NG" line and governing-row note; envelope notes (screen and report) "… when a row's lateral checks are NG, the failing row with the largest D/C governs".
+- **Problem (O46):** after F33 the governing (displayed) row was the largest flexure / combined D/C even when another row failed a lateral check (micropile: the trailing row's casing extension). The overall result was NG but the modules and check strip showed the passing row's checks.
+- **Rule (engineer's decision 2026-10-11):** if any row fails, the governing row = the failing row with the highest D/C (ties: larger M_max, then smaller p-multiplier, as before); otherwise the max D/C row as before. Modules 02 / 04 / 05 / G, the Lateral graphs, the report and the envelope row follow it (the envelope uses the same flags, so envelope = Module 02 per case). The "other row NG" line now lists only further failing rows.
+- **Governing provision:** none changed (selection of the displayed row). AASHTO LRFD 10th Ed. Art. 10.7.2.4 row p-multipliers and the F33 distribution unchanged.
+- **§4 callout (worked check): micropile 2 × 3 at 3B, toggle on, F33 check case (a), Manual Str (STL 80, V 3 kip per pile, free head, defaults).** Row results (unchanged by F35): row 1 V 3.886 kip, M_max 30.61 kip·ft, flexure 0.567, combined 0.725, OK; row 2 V 2.751, 25.54, 0.473, 0.631, OK; row 3 V 2.363, 23.66, 0.439, 0.596, **NG (casing extension)**.
+
+  | Case | Before (F34): governing row / V / M_max / flexure / combined / overall | After (F35) |
+  |---|---|---|
+  | Manual Str | row 1 / 3.886 / 30.61 / 0.567 / 0.725 / NG ("✗ Row 3: casing extension NG — not the governing row") | **row 3** / 2.363 / **23.66** / 0.439 / 0.596 / NG (row 3 shown, casing extension NG in Module 02 / G) |
+  | Manual EE (STL 70, V 4) | row 1 / 5.190 / 42.76 / 0.793 / 0.903 / NG | **row 3** / 3.145 / **32.91** / 0.610 / 0.720 / NG |
+  | Group ▦ Str I · P1 | row 1 / 3.886 / 30.61 / NG | **row 3** / 2.363 / 23.66 / NG |
+  | Group ▦ Ext I · P1 | row 1 / 5.136 / 39.47 / NG | **row 3** / 3.183 / 30.33 / NG |
+  | Svc I (no row fails) | row 1 / 2.531 / 16.11 / OK | row 1 (unchanged) |
+
+  Overall result and envelope pass / fail: unchanged (NG / ✗). Displayed governing M_max 30.61 → 23.66 kip·ft (−22.7 %): LESS conservative as a displayed number (row 1's 30.61 is still in the per-row table, OK). The H-pile F33 case (b) has no failing row: unchanged.
+- **Pure refactor parts:** `pmPickGov` with no failing row returns the same index as before (same comparisons in the same order); verified by the bit-identical runs below.
+- **How verified:**
+  - `node --check` on the four inline scripts.
+  - Headless Chromium, F34 commit vs this commit: micropile 2 × 3 toggle on (F33 case), rotational spring, head moment 15 kip·ft, V = 6 kip: only the cases with a failing non-governing row change (governing row 1 → 3 and the values above); H-pile F33 case (no failing row): numbers identical, only the note text; toggle off, single pile, integral abutment: bit-identical.
+  - Envelope row = Module 02 for every case made active (governing row, M_max, pass): 5 / 5 in each project.
+  - Screenshot looked at: Module 11 / 02 per-row table, micropile 2 × 3 (row 3 ◀ governs, NG casing extension). No console errors.
+- **Saved data:** none changed.
+- **Other copies:** none.
+- **Re-applying by hand:** unified diff below (CRLF stripped).
+
+```diff
+diff --git a/Pile Designer.html b/Pile Designer.html
+index 7fac0ba..2bf493f 100644
+--- a/Pile Designer.html	
++++ b/Pile Designer.html	
+@@ -2559,13 +2559,21 @@ function pmRowSummary(R, pr, I) {
+     ...(!isHP && !R.casingExt.pass ? ["casing extension"] : []),
+     ...(R.stability && R.stability.pass ? [] : ["stability"]),
+     ...(isHP && hs.shear_pass === false ? ["shear"] : [])];
+-  return { noConv: nc, flexR, combR, latPass, dc, Mmax: nc ? null : pr.Mmax_kft, y0: nc ? null : pr.headDefl_in, ngParts, shearOK: !(isHP && hs.shear_pass === false) };
++  const shearOK = !(isHP && hs.shear_pass === false);
++  // F35 (O46): fail = this row's lateral-dependent checks (or H-pile shear) are NG; read by pmPickGov
++  return { noConv: nc, flexR, combR, latPass, dc, Mmax: nc ? null : pr.Mmax_kft, y0: nc ? null : pr.headDefl_in, ngParts, shearOK, fail: !latPass || !shearOK };
+ }
+ // Governing row: the largest dc (a row that did not converge has dc = Infinity and governs);
+ // ties (within 1e-9) -> the larger Mmax, then the smaller p-multiplier (less soil support).
++// F35 (O46, 2026-10-11): when any row fails (ev[k].fail: a lateral-dependent check or H-pile
++// shear NG), only the failing rows are candidates, so the displayed governing row is the
++// failing row with the largest dc; with no failing row the rule is the one above (unchanged).
+ function pmPickGov(ev) {
+-  let g = 0;
+-  for (let k = 1; k < ev.length; k++) {
++  const anyFail = ev.some(e => e && e.fail);
++  let g = -1;
++  for (let k = 0; k < ev.length; k++) {
++    if (anyFail && !ev[k].fail) continue;
++    if (g < 0) { g = k; continue; }
+     const a = ev[k], b = ev[g];
+     const tie = (x, y) => (x === y) || (isFinite(x) && isFinite(y) && Math.abs(x - y) <= 1e-9 * Math.max(1, Math.abs(x), Math.abs(y)));
+     if (a.dc > b.dc && !tie(a.dc, b.dc)) { g = k; continue; }
+@@ -9745,7 +9753,7 @@ function PrintReport({
+       "\u26a0 Large head deflection (|y\u2080| > " + fmt(pyDeflWarnFactor(I), 2) + " \u00d7 D, warning only): " + caseRes.rows.filter(r0 => { const w = pyDeflWarnInfo(r0.y0, r0.D, I); return w && w.warn; }).map(r0 => r0.name + " (" + fmt(Math.abs(r0.y0) / r0.D, 2) + " D)").join(", ") + ". The checks use these solutions as computed; a deflection this large, especially one opposite to the load, can mean the pile is near or past instability."),
+     /*#__PURE__*/React.createElement("div", { style: { fontSize: "7.5px", color: "#94a3b8", marginTop: "2px" } },
+       "Envelope computed " + caseRes.at + ". Service rows report deflection only. The detailed module calculations that follow reflect the ACTIVE case." +
+-      (caseRes.rows.some(r0 => r0.pmRow != null) ? " Group p-multipliers applied per row: each case solved for every row (p-multiplier = row f\u2098 \u00d7 modifier), the case's lateral load shared between the rows for equal head deflection (rigid cap; V = the governing row's shear per pile); values shown are the governing row's (largest flexure / combined D/C; service: largest |y\u2080| (equal on every row once the distribution converges, then the largest M\u2098\u2090\u2093); a row that did not converge governs)." : ""))),
++      (caseRes.rows.some(r0 => r0.pmRow != null) ? " Group p-multipliers applied per row: each case solved for every row (p-multiplier = row f\u2098 \u00d7 modifier), the case's lateral load shared between the rows for equal head deflection (rigid cap; V = the governing row's shear per pile); values shown are the governing row's (largest flexure / combined D/C; service: largest |y\u2080| (equal on every row once the distribution converges, then the largest M\u2098\u2090\u2093); a row that did not converge governs; when a row's lateral checks are NG, the failing row with the largest D/C governs)." : ""))),
+   /*#__PURE__*/React.createElement("table", {
+     style: {
+       width: "100%",
+@@ -10326,7 +10334,7 @@ function LoadCasesCard({ cases, updCases, applyCase, runAllCases, caseRes, I, up
+           : /*#__PURE__*/React.createElement("td", { key: j, className: "py-0.5 pr-2", style: { color: i === w && rr[i][k] != null ? "#b23b3b" : "#334155", fontWeight: i === w && rr[i][k] != null ? 700 : 400 } }, fmtR(r0[k]))),
+         /*#__PURE__*/React.createElement("td", { className: "py-0.5", style: { color: r0.pass ? "#2f6f3e" : "#b23b3b" } }, r0.pass ? "✓" : "✗"))))),
+     ro && rr && rr.some(r0 => r0.pmRow != null) && /*#__PURE__*/React.createElement("p", { className: "text-[9px] mt-1 leading-snug", style: { color: "#1F3A5F" } },
+-      "Group p-multipliers applied per row: each case was solved for every row (p-multiplier = row f\u2098 \u00d7 modifier), with the case's lateral load shared between the rows for equal head deflection (rigid cap; V = the governing row's shear per pile, kip); the values shown are the governing row's (largest flexure / combined D/C; service: largest |y\u2080| (equal on every row once the distribution converges, then the largest M\u2098\u2090\u2093); a row that did not converge governs)."),
++      "Group p-multipliers applied per row: each case was solved for every row (p-multiplier = row f\u2098 \u00d7 modifier), with the case's lateral load shared between the rows for equal head deflection (rigid cap; V = the governing row's shear per pile, kip); the values shown are the governing row's (largest flexure / combined D/C; service: largest |y\u2080| (equal on every row once the distribution converges, then the largest M\u2098\u2090\u2093); a row that did not converge governs; when a row's lateral checks are NG, the failing row with the largest D/C governs)."),
+     ro && rr && rr.some(r0 => r0.noConv) && /*#__PURE__*/React.createElement("p", { className: "text-[9px] mt-1 leading-snug", style: { color: "#b23b3b" } },
+       "n/c = the p-y solve did not converge for ", rr.filter(r0 => r0.noConv).map(r0 => r0.name).join(", "), ": ", PY_NC_MSG.replace(/^Did not converge — /, ""), ". No valid lateral demand, so flexure and combined loading are NG (a service row fails its deflection check). Reduce the load, check P", /*#__PURE__*/React.createElement("sub", null, "cr"), " in Module 10, shorten the unsupported length or add stiffness; make the case active to see the reason in Module 02."),
+     ro && rr && rr.some(r0 => { const w = pyDeflWarnInfo(r0.y0, r0.D, I); return w && w.warn; }) && /*#__PURE__*/React.createElement("p", { className: "text-[9px] mt-1 leading-snug", style: { color: "#7a4d15" } },
+@@ -11749,7 +11757,7 @@ function PmRowTable({ info, print }) {
+       }))),
+     info.otherNG && info.otherNG.length ? e("div", print ? { style: { fontSize: "8px", color: "#B91C1C", fontWeight: 700, marginTop: "2px" } } : { className: "text-[9px] mt-1 leading-snug font-semibold", style: { color: "#b23b3b" } },
+       "✗ " + info.otherNG.map(o => "Row " + o.row + ": " + (o.parts && o.parts.length ? o.parts.join(", ") : "lateral check") + " NG").join("; ") +
+-      " — not the governing row (largest flexure / combined D/C), whose checks are shown, but the overall result is NG.") : null,
++      " — also NG; the governing row shown is the failing row with the largest flexure / combined D/C, and the overall result is NG.") : null,
+     e("div", print ? { style: { fontSize: "7.5px", color: "#64748b", marginTop: "2px" } } : { className: "text-[8.5px] text-slate-500 mt-0.5 leading-snug" },
+       (eq
+         ? "Rigid cap, equal head deflection: the case's lateral load " + fmt(eq.Vpile, 2) + " kip × " + eq.N + " piles = " + fmt(eq.Vtot, 2) + " kip is shared so every row has the same head deflection" +
+@@ -11757,7 +11765,7 @@ function PmRowTable({ info, print }) {
+             : " — NOT achieved: " + eq.why + "; the lateral checks are NG. ") +
+           "Each row: the case's axial load, head moment and head condition, its own shear V, p-multiplier = row fₘ × modifier (" + fmt(info.mod || 1, 2) + "); fₘ from " + info.srcLabel + " at s = " + fmt(info.s_dia, 2) + " × " + (info.Blbl || "bond dia") + ". "
+         : "Each row solved with the active case's per-pile loads and p-multiplier = row fₘ × modifier (" + fmt(info.mod || 1, 2) + "); fₘ from " + info.srcLabel + " at s = " + fmt(info.s_dia, 2) + " × " + (info.Blbl || "bond dia") + ". ") +
+-      "Governing row = largest D/C of flexure / combined (a row that did not converge governs, NG; ties → larger Mₘₐₓ). " +
++      "Governing row = largest D/C of flexure / combined (a row that did not converge governs, NG; ties → larger Mₘₐₓ); when any row's lateral status is NG, the failing row with the largest D/C governs. " +
+       "Lateral status = flexure, combined" + " and stability (micropile: also casing extension)" + (eq ? "; each row's checks use its own V (H-pile: also shear)" : "") + ". The lateral results, graphs and checks shown are the governing row's."));
+ }
+ function GroupPlan({ I, g }) {
+@@ -13954,7 +13962,9 @@ function App() {
+             svcR: c.type === "service" && y0 != null ? Math.abs(y0) / Math.max(I.deflLimit || 1, 0.01) : null,
+             pass: noConv ? false : (c.type === "service" ? (y0 == null || Math.abs(y0) <= (I.deflLimit || 1)) : R2.allPass),
+             noConv, ncWhy,
+-            D: S ? S.D : null   // F25 (O37): p-y pile width, for the large-deflection warning (display only)
++            D: S ? S.D : null,   // F25 (O37): p-y pile width, for the large-deflection warning (display only)
++            // F35 (O46): this row's lateral-dependent checks NG (Module 02's pmRowSummary rule), for pmPickGov
++            latFail: pmSpec ? pmRowSummary(R2, { ok: usePy && !noConv && Mx != null, Mmax_kft: Mx, headDefl_in: y0 }, I2).fail : undefined
+           };
+         };
+           if (!pmSpec) return runOne(I.pyPM || 1);
+@@ -13973,7 +13983,7 @@ function App() {
+             const Vk = eq.V[k] != null ? eq.V[k] : (c.Plat || 0);
+             return Object.assign(runOne(sp.pm, Vk, sol), { _sp: sp, _V: Vk });
+           });
+-          const g = pmPickGov(ev.map(e => ({ pm: e._sp.pm, Mmax: e.Mmax,
++          const g = pmPickGov(ev.map(e => ({ pm: e._sp.pm, Mmax: e.Mmax, fail: e.latFail,
+             // F33: with the equal-deflection distribution every row has the same y0 (to the iteration
+             // tolerance), so a service case ranks its rows by M_max (the tie-break), as Module 02 does.
+             dc: e.noConv ? Infinity : (c.type === "service" ? (eq.ok ? 0 : (e.y0 != null ? Math.abs(e.y0) : 0)) : Math.max(e.flexR != null && isFinite(e.flexR) ? e.flexR : 0, e.combR != null && isFinite(e.combR) ? e.combR : 0)) })));
+@@ -13981,7 +13991,7 @@ function App() {
+           const out = Object.assign({}, ev[g], { pass: c.type === "service" ? ev[g].pass : ev.every(e => e.pass), pmRow: ev[g]._sp.row, pmFm: ev[g]._sp.fm, pmPm: ev[g]._sp.pm, pmNRows: ev.length, pmV: ev[g]._V,
+             pmEq: { ok: eq.ok, it: eq.it, nSolves: eq.nSolves, yCap: eq.yCap, Vtot: eq.Vtot, sumNV: eq.sumNV, spread: eq.spread, failRow: eq.failRow, why: eq.why },
+             pmRows: ev.map(e => ({ row: e._sp.row, fm: e._sp.fm, pm: e._sp.pm, V: e._V, Mmax: e.Mmax, y0: e.y0, flexR: e.flexR, combR: e.combR, noConv: e.noConv, pass: e.pass })) });
+-          delete out._sp; delete out._V;
++          delete out._sp; delete out._V; delete out.latFail;
+           return out;
+         });
+         setCaseRes({ rows, at: new Date().toLocaleTimeString() });
+```
+
+### F36. Per-row group analysis, biaxial cap shear: each direction distributed over its own rows, each pile checked at its resultant shear (O47)   [calc change] [only with "Apply group p-multipliers automatically (per row)" on, and only for a Group ▦ row whose per-pile shear has both an x and a y component. Manual cases and single-direction Group rows (V_x only or V_y only): bit-identical to F35 (proven). Biaxial rows: MORE or LESS conservative depending on the group and load (check case: H-pile governing M_max 34.86 → 33.53 kip·ft, LESS conservative by 3.8 %; micropile 51.40 → 66.09 kip·ft, MORE conservative by 28.6 %)]
+
+- **Where:**
+  - New top-level `BIAX_MIN_V`, `isBiaxShear`, `biaxDistribute` after `pyHeadV` (anchor `F36 (O47, 2026-10-11): BIAXIAL CAP SHEAR`).
+  - `App`: the emitted Group ▦ rows carry `_Vx`, `_Vy` (the per-pile shear components `sel.Vx`, `sel.Vy` of `computeCapDist`; synthetic rows, never saved). `actCase` / `actBiax` after `activeIdx`; `pyRowsRaw` moved below the case list (unchanged except `|| actBiax` in its first line and `!!actBiax` in its dependencies); new `pyBiaxRaw`; `pyRowsEval` biaxial branch (anchor `// F36 (O47): biaxial Group row -- every pile at its resultant V`).
+  - `runAllCases`: biaxial branch after `if (!pmSpec) return runOne(I.pyPM || 1);` (anchor `// F36 (O47): biaxial Group row -- the same per-direction distribution as Module 02`).
+  - Display: new `PmBiaxTable` (called from `PmRowTable` when `info.biax`; Module 02, Module 11 and the printed 02 / 11 tables); report 02 "Lateral load applied" description for a biaxial row.
+- **Problem (O47):** F33 reduced a biaxial cap shear to the per-pile resultant √((V_x/n)² + (V_y/n)²) and distributed it over the `groupNrows` rows as one load along the row direction. The rows that shadow each other differ for V_x and V_y.
+- **Method (engineer's decision 2026-10-11):**
+  - **When:** the Group ▦ row's per-pile |V_x| and |V_y| both exceed 1e-6 kip. Otherwise (manual cases, which carry only a per-pile V; single-direction Group rows) the F33 distribution is used unchanged — so a V_x-only row still uses the `groupNrows` rows, as today (see O49).
+  - **Rows per direction** on the generated grid (`computeCapDist`: pile P(ri·nC + ci + 1) at x = ci·s, y = ri·s; the Module 11 plan draws the load along y): V_y → the grid rows (constant y), nR rows of nC piles; V_x → the grid columns (constant x), nC rows of nR piles. Row 1 = the leading row in the direction of that component (largest y for +V_y, largest x for +V_x). Row f_m from `groupPmRows` (same source and s/B) for nR and nC rows.
+  - **Distribution:** each direction separately with `eqDeflDistribute` (F33: rigid cap, equal head deflection, the same p-y solve, axial, head moment and head condition), V_total,x = n·|V_x|, V_total,y = n·|V_y|.
+  - **Per pile:** V = √(V_x(x-row)² + V_y(y-row)²), solved and checked (as F33 rows: `computeAll` with Plat = V) with **p-multiplier = min(f_m,x, f_m,y) × modifier** — chosen over a p-y run "in the resultant direction" because the tool's p-y model has one pile width / bending axis and no directional p-multiplier; the smaller f_m is the conservative choice (verify). The axial load is the case's (the design pile's) on every pile, as F33.
+  - **Governing pile:** `pmPickGov` over the piles (F29 / F35 rule: failing pile with the largest D/C if any fails, else the largest D/C); any other failing pile makes the result NG ("other pile NG" line). Module 02 / 04 / 05 / G, graphs, report and the envelope show the governing pile (label "x<i>/y<j>, pile P<k>").
+  - **Non-convergence:** if either direction's distribution does not converge, every pile is "did not converge" (NG) with the reason (conservative; F33 marks one row).
+  - **Envelope:** the same `biaxDistribute` with the case's loads, so envelope = Module 02 per case (checked).
+- **Before (F35, biaxial row):** one distribution of V_res = √((V_x/n)² + (V_y/n)²) over the groupNrows rows (`pyRowsRaw` / the `pmSpec` branch of `runAllCases`).
+- **After:** see the diff.
+- **Governing provision:** AASHTO LRFD 10th Ed. (2024) Art. 10.7.2.4 and Table 10.7.2.4-1 (row p-multipliers, unchanged; rows defined normal to the load direction); rigid-cap group analysis as F33 (FHWA GEC-12 / GROUP procedure) — verify. No p-y curve, p-multiplier value, resistance factor or check formula changed.
+- **§4 callouts (worked checks).** 2 columns × 3 rows at 3B (x-rows: 2 rows of 3 piles, f_m 0.80 / 0.40; y-rows: 3 rows of 2 piles, f_m 0.80 / 0.40 / 0.30), toggle on, Group ▦ Str I: cap P = 480 kip, V_x = V_y = 18 kip (3.00 kip per pile each; resultant 4.243 kip per pile), free head, default sand (γ 120, φ 32°, k 90).
+  - **(a) H-pile HP 14×89 strong axis, s = 44.10 in (design pile axial 184.8 kip).**
+    - Before (F35): V_res 4.243 over 3 rows → row V 5.583 / 3.850 / 3.296 kip (Σ 2 × 12.729 = 25.46 = 6 × 4.243), y_cap 0.1954 in; governing row 1: M_max **34.86** kip·ft, y₀ 0.1954 in, flexure 0.0648, combined 0.2620.
+    - After: V_x over the x-rows 3.504 / 2.496 kip (3 × (3.504 + 2.496) = 18.00 ✓, shares 58.4 / 41.6 %, y_cap,x 0.1097 in, 3 iterations); V_y over the y-rows 3.891 / 2.751 / 2.358 kip (2 × 9.000 = 18.00 ✓, y_cap,y 0.1225 in, 4 iterations). Per pile:
+
+      | Pile | x-row / y-row | f_m,x / f_m,y → used | V_x / V_y / V (kip) | M_max (kip·ft) | y₀ (in) | flex / comb |
+      |---|---|---|---|---|---|---|
+      | P1 | 2 / 3 | 0.40 / 0.30 → 0.30 | 2.496 / 2.358 / 3.434 | 25.54 | 0.2068 | 0.0475 / 0.2466 |
+      | P2 | 1 / 3 | 0.80 / 0.30 → 0.30 | 3.504 / 2.358 / 4.223 | 32.72 | 0.2747 | 0.0608 / 0.2585 |
+      | P3 | 2 / 2 | 0.40 / 0.40 → 0.40 | 2.496 / 2.751 / 3.715 | 25.82 | 0.1859 | 0.0480 / 0.2470 |
+      | P4 | 1 / 2 | 0.80 / 0.40 → 0.40 | 3.504 / 2.751 / 4.454 | 32.07 | 0.2395 | 0.0596 / 0.2574 |
+      | **P5** | 2 / 1 | 0.40 / 0.80 → 0.40 | 2.496 / 3.891 / 4.623 | **33.53** | 0.2521 | **0.0624 / 0.2598** ◀ governs |
+      | P6 | 1 / 1 | 0.80 / 0.80 → 0.80 | 3.504 / 3.891 / 5.236 | 32.34 | 0.1783 | 0.0601 / 0.2578 |
+
+      Governing M_max 34.86 → **33.53 kip·ft (−3.8 %, LESS conservative)**; governing V 5.583 → 4.623 kip (H-pile shear check). Overall NG before and after (default sand has no N60: Module 01 φR_n = 0).
+      Hand check of P5: V = √(2.496² + 3.891²) = √(6.230 + 15.140) = √21.370 = 4.623 kip ✓; f_m = min(0.40, 0.80) = 0.40 ✓.
+  - **(b) Micropile (defaults, 7.0 in casing; design pile axial 80 kip).**
+    - Before (F35): rows 5.604 / 3.859 / 3.266 kip, y_cap 3.260 in; governing row 1 (failing: combined) M_max **51.40**, flexure 0.953, combined 1.110; row 3 casing extension NG.
+    - After: x-rows 3.505 / 2.495, y-rows 3.886 / 2.751 / 2.363 kip; piles P1 3.437 kip (f_m 0.30) M 43.29 NG casing ext.; **P2 4.227 kip (f_m 0.30) M 66.09, y₀ 6.525 in, flexure 1.225, combined 1.383, NG** ◀ governs; P3 3.714 (0.40) 40.19 OK; P4 4.455 (0.40) 54.53 NG; P5 4.618 (0.40) 58.21 NG; P6 5.233 (0.80) 46.52 NG combined. Governing M_max 51.40 → **66.09 kip·ft (+28.6 %, MORE conservative)**: the corner pile trailing in y (f_m 0.30) but leading in x carries 4.23 kip on the weakest soil support. Overall NG before and after.
+  - **(c) Single direction (V_y only, Group ▦ Ext I with V_y = 24 kip in the same projects) and every manual case:** bit-identical to F35.
+- **Pure refactor parts:** moving `pyRowsRaw` below the case list (and the `actBiax` guard, false for every non-biaxial case) does not change any result: verified bit-identical for every non-biaxial case.
+- **How verified:**
+  - `node --check` on the four inline scripts.
+  - Headless Chromium, F35 commit vs this commit: the two biaxial projects (H-pile and micropile, Group ▦ Str I with V_x = V_y = 18 kip, Group ▦ Ext I with V_y = 24 kip only): only case Str I changes (numbers above); Ext I (single direction) and the three manual cases bit-identical. F33 projects (micropile, H-pile, toggle on, V_x-only Group rows), toggle off (micropile, H-pile), single piles, integral abutment: bit-identical.
+  - Envelope row = Module 02 for every case made active, including the biaxial Str I (governing pile label, M_max, pass): 5 / 5 per project.
+  - Hand checks: Σ n·V per direction = 18.00 kip in both directions; P5 resultant above; f_m = min of the two row values for all six piles.
+  - Timing ("Run all cases", 5 cases, one biaxial): micropile 3.2 s (main 3.1 s); H-pile 1.8 s (F35 1.6 s). Module 02 with the biaxial case active: 27 p-y solves.
+  - Print: report 02 "Lateral load applied (governing row x1/y3, pile P2) 4.23 kip — biaxial: √(Vₓ² + V_y²) of the per-direction equal-deflection shares", per-pile table in the printed 02 and 11. Screenshots looked at: Module 11 (micropile, biaxial per-pile table, "other pile NG" line), Module 02. No console errors.
+- **Saved data:** none changed (`_Vx` / `_Vy` live only on the synthetic Group ▦ rows, which are never saved).
+- **Other copies:** none.
+- **Re-applying by hand:** unified diff below (CRLF stripped).
+
+```diff
+diff --git a/Pile Designer.html b/Pile Designer.html
+index 2bf493f..9e691f9 100644
+--- a/Pile Designer.html	
++++ b/Pile Designer.html	
+@@ -2691,6 +2691,53 @@ function pyHeadV(I, pyRes) {
+   const a = pyRes && pyRes.pmAuto;
+   return (a && a.eq && a.govV != null && isFinite(a.govV)) ? a.govV : I.Plat;
+ }
++/* ============================================================
++   F36 (O47, 2026-10-11): BIAXIAL CAP SHEAR -- EQUAL-DEFLECTION DISTRIBUTION PER DIRECTION
++   ------------------------------------------------------------
++   Used only with the per-row toggle on (groupPmAutoOn) for a Group row whose per-pile shear
++   has both components (|V_x| and |V_y| > BIAX_MIN_V kip per pile; isBiaxShear). Every other
++   case (manual cases, single-direction Group rows) keeps the F33 distribution of the
++   per-pile resultant over the groupNrows rows, exactly as before.
++   Rows are perpendicular to each load direction, on the generated grid (computeCapDist:
++   pile id = ri x nC + ci + 1 at x = ci s, y = ri s):
++     V_y: the grid rows (constant y): nR rows of nC piles; leading row = the row the load
++          moves toward (largest y for +V_y), so the y-row index kY = nR-1-ri (V_y > 0) or ri.
++     V_x: the grid columns (constant x): nC rows of nR piles; kX = nC-1-ci (V_x > 0) or ci.
++   Row f_m from groupPmRows (the same source / spacing s/B) for nR and nC rows.
++   Each direction is distributed on its own with eqDeflDistribute (rigid cap, equal head
++   deflection in that direction; the same p-y solve, axial, head moment and head condition
++   as F33), giving V_x per x-row and V_y per y-row. Each pile then gets
++       V = sqrt(V_x(kX)^2 + V_y(kY)^2)
++   and is solved and checked at V with p-multiplier = min(f_m,x(kX), f_m,y(kY)) x modifier
++   (the smaller of its two row values: conservative; the p-y model is the pile's single
++   p-y width / bending axis, as for every lateral solve in this tool -- verify).
++   If either direction's distribution does not converge, every pile is "did not converge"
++   (NG) with the reason. solve(pm, V) returns { ok, headDefl_in, ... }; solves are cached.
++============================================================ */
++const BIAX_MIN_V = 1e-6;   // kip per pile
++function isBiaxShear(Vx, Vy) { return isFinite(Vx) && isFinite(Vy) && Math.abs(Vx) > BIAX_MIN_V && Math.abs(Vy) > BIAX_MIN_V; }
++function biaxDistribute({ nR, nC, VxP, VyP, s_dia, src, mod, solve }) {
++  const cache = new Map();
++  let nSolves = 0;
++  const S = (pm, V) => { const key = pm + "|" + V; if (cache.has(key)) return cache.get(key); nSolves++; const r = solve(pm, V); cache.set(key, r); return r; };
++  const fmY = groupPmRows(nR, s_dia, src).map(p => p.fm);   // y-rows (grid rows), nC piles each
++  const fmX = groupPmRows(nC, s_dia, src).map(p => p.fm);   // x-rows (grid columns), nR piles each
++  const ax = Math.abs(VxP), ay = Math.abs(VyP);
++  const dist = (fm, nPer, Vp) => eqDeflDistribute({ nPer: fm.map(() => nPer), Vpile: Vp, init: fm.map(f => S(f * mod, Vp)), solve: (k, V) => S(fm[k] * mod, V) });
++  const eqX = dist(fmX, nR, ax), eqY = dist(fmY, nC, ay);
++  const ok = !!(eqX.ok && eqY.ok);
++  const why = ok ? null : [eqX.ok ? null : "V_x direction: " + eqX.why, eqY.ok ? null : "V_y direction: " + eqY.why].filter(Boolean).join("; ");
++  const piles = [];
++  for (let ri = 0; ri < nR; ri++) for (let ci = 0; ci < nC; ci++) {
++    const kY = VyP > 0 ? nR - 1 - ri : ri, kX = VxP > 0 ? nC - 1 - ci : ci;
++    const Vx = ok ? eqX.V[kX] : ax, Vy = ok ? eqY.V[kY] : ay;
++    const V = Math.sqrt(Vx * Vx + Vy * Vy), fm = Math.min(fmX[kX], fmY[kY]), pm = fm * mod;
++    piles.push({ id: ri * nC + ci + 1, ri, ci, kX, kY, fmX: fmX[kX], fmY: fmY[kY], fm, pm, Vx, Vy, V,
++      label: "x" + (kX + 1) + "/y" + (kY + 1) + ", pile P" + (ri * nC + ci + 1), res: ok ? S(pm, V) : null });
++  }
++  const sum = eq => ({ ok: eq.ok, it: eq.it, nSolves: eq.nSolves, yCap: eq.yCap, Vtot: eq.Vtot, sumNV: eq.sumNV, spread: eq.spread, tolRel: eq.tolRel, tolAbs: eq.tolAbs, failRow: eq.failRow, why: eq.why, V: eq.V, N: eq.N });
++  return { ok, why, eqX: sum(eqX), eqY: sum(eqY), fmX, fmY, VxP, VyP, nR, nC, mod, piles, nSolves };
++}
+ function bondHoleDia(I) {
+   return (I.dhBondSeparate && isFinite(I.dhBond) && I.dhBond > 0) ? I.dhBond : I.OD;
+ }
+@@ -9584,7 +9631,7 @@ function PrintReport({
+       ["Head boundary condition", I.solverHead === "fixed" ? "FIXED \u2014 rotation fully restrained" : ((I.pyKrot || 0) > 0 ? "FREE with rotational spring K\u03b8" : "FREE \u2014 rotation unrestrained (pinned)"), "", ""],
+       ["Rotational spring K\u03b8", (I.solverHead !== "fixed" && (I.pyKrot || 0) > 0) ? I.pyKrot : null, "kip\u00b7in/rad", ""],
+       ["Axial thrust carried in solve", I.STL, "kip", "P-\u0394 is second-order native"],
+-      pyRes && pyRes.pmAuto && pyRes.pmAuto.eq ? ["Lateral load applied (governing row " + pyRes.pmAuto.govRow + ")", pyHeadV(I, pyRes), "kip", "equal-deflection share of the case's " + fmt(I.Plat, 2) + " kip per pile"] : ["Lateral load applied", I.Plat, "kip", ""],
++      pyRes && pyRes.pmAuto && pyRes.pmAuto.eq ? ["Lateral load applied (governing row " + pyRes.pmAuto.govRow + ")", pyHeadV(I, pyRes), "kip", (pyRes.pmAuto.biax ? "biaxial: √(Vₓ² + V_y²) of the per-direction equal-deflection shares (case per pile Vₓ = " + fmt(pyRes.pmAuto.biax.VxP, 2) + ", V_y = " + fmt(pyRes.pmAuto.biax.VyP, 2) + " kip)" : "equal-deflection share of the case's " + fmt(I.Plat, 2) + " kip per pile")] : ["Lateral load applied", I.Plat, "kip", ""],
+       ["Head moment applied", I.solverHead === "fixed" ? null : I.pyMhead, "kip\u00b7ft", "free head only"],
+       ["p-y loading criterion", I.pyCyclic ? "CYCLIC \u2014 degraded resistance" : "STATIC", "", I.pyCyclic ? "offshore/seismic basis" : "usual bridge basis"],
+       pyRes && pyRes.pmAuto ? ["p-multiplier (governing row " + pyRes.pmAuto.govRow + ")", fmt(pyRes.pmAuto.govFm, 2) + " \u00d7 " + fmt(pyRes.pmAuto.mod, 2) + " = " + fmt(pyRes.pmAuto.govPm, 3), "", "row f\u2098 \u00d7 modifier, applied to all p-y curves of this solve"] : ["p-multiplier (group / curve)", I.pyPM, "", "applied to all p-y curves"],
+@@ -11728,6 +11775,7 @@ function PmAutoToggle({ I, set, where }) {
+ function PmRowTable({ info, print }) {
+   const e = React.createElement;
+   if (!info || !info.rows) return null;
++  if (info.biax) return PmBiaxTable({ info, print });
+   const fR = v => v == null || !isFinite(v) ? "—" : fmt(v, 2);
+   const showMod = Math.abs((info.mod || 1) - 1) > 1e-9;
+   const th = print ? { padding: "2px 4px", textAlign: "left", fontFamily: "monospace", color: "#475569", fontWeight: 600 } : undefined;
+@@ -11768,6 +11816,54 @@ function PmRowTable({ info, print }) {
+       "Governing row = largest D/C of flexure / combined (a row that did not converge governs, NG; ties → larger Mₘₐₓ); when any row's lateral status is NG, the failing row with the largest D/C governs. " +
+       "Lateral status = flexure, combined" + " and stability (micropile: also casing extension)" + (eq ? "; each row's checks use its own V (H-pile: also shear)" : "") + ". The lateral results, graphs and checks shown are the governing row's."));
+ }
++// F36 (O47): per-pile table of a biaxial Group row (per-direction equal-deflection distribution)
++function PmBiaxTable({ info, print }) {
++  const e = React.createElement;
++  const b = info.biax;
++  const fR = v => v == null || !isFinite(v) ? "—" : fmt(v, 2);
++  const showMod = Math.abs((info.mod || 1) - 1) > 1e-9;
++  const th = print ? { padding: "2px 4px", textAlign: "left", fontFamily: "monospace", color: "#475569", fontWeight: 600 } : undefined;
++  const td = print ? { padding: "2px 4px" } : undefined;
++  const cls = print ? undefined : "pr-2";
++  const hdr = ["Pile", "x-row", "y-row", "fₘ,x", "fₘ,y", "fₘ used", ...(showMod ? ["p-mult used"] : []), "Vₓ (kip)", "V_y (kip)", "V (kip)", "Mₘₐₓ (kip·ft)", "y₀ (in)", "flexure D/C", "combined D/C", "lateral status"];
++  const rowsTxt = (eq, fm, nPer, Vp, dir, nRw) => (eq.ok
++    ? dir + ": " + fmt(Vp, 2) + " kip × " + eq.N + " piles = " + fmt(eq.Vtot, 2) + " kip over " + nRw + " rows of " + nPer + " (" + eq.V.map((v, k) => "row " + (k + 1) + " fₘ " + fmt(fm[k], 2) + ": " + fmt(v, 3) + " kip, " + fmt(nPer * v / eq.Vtot * 100, 1) + " %").join("; ") + "), y_cap = " + fmt(eq.yCap, 4) + " in, " + eq.it + " iteration" + (eq.it === 1 ? "" : "s") + ". "
++    : dir + ": NOT achieved — " + eq.why + ". ");
++  return e("div", { className: print ? "rpt-avoid" : "pd-pmrows mb-2", style: print ? { marginBottom: "8px" } : undefined },
++    e("div", print ? { style: { fontSize: "9px", fontWeight: 700, color: "#16304F", marginBottom: "2px" } } : { className: "text-[10px] font-mono-tech text-[var(--blueprint)] uppercase tracking-wider mb-1" },
++      "Group p-multipliers, biaxial shear — equal head deflection per direction — governing pile " + info.govRow + " (fₘ = " + fmt(info.govFm, 2) + (showMod ? ", p-mult = " + fmt(info.govPm, 3) : "") + ", V = " + fmt(info.govV, 2) + " kip)"),
++    e("table", print ? { style: { width: "100%", borderCollapse: "collapse", fontSize: "8.5px" } } : { className: "w-full text-[9.5px] font-mono-tech", style: { borderCollapse: "collapse" } },
++      e("thead", null, e("tr", print ? { style: { borderBottom: "1px solid #cbd5e1" } } : { className: "text-slate-400" },
++        hdr.map((h, i) => e(print ? "th" : "td", { key: i, className: cls, style: th }, h)))),
++      e("tbody", null, b.piles.map((p, i) => {
++        const gov = i === info.gov, ok = p.latPass && p.shearOK !== false;
++        return e("tr", { key: i, style: { borderTop: "1px solid #eef2f6", background: gov ? "rgba(201,98,46,0.10)" : "transparent", fontWeight: gov ? 700 : 400 } },
++          e("td", { className: cls, style: td }, "P" + p.id + (gov ? " ◀ governs" : "")),
++          e("td", { className: cls, style: td }, String(p.kX + 1)),
++          e("td", { className: cls, style: td }, String(p.kY + 1)),
++          e("td", { className: cls, style: td }, fmt(p.fmX, 2)),
++          e("td", { className: cls, style: td }, fmt(p.fmY, 2)),
++          e("td", { className: cls, style: td }, fmt(p.fm, 2)),
++          showMod ? e("td", { className: cls, style: td }, fmt(p.pm, 3)) : null,
++          e("td", { className: cls, style: td }, fmt(p.Vx, 3)),
++          e("td", { className: cls, style: td }, fmt(p.Vy, 3)),
++          e("td", { className: cls, style: td }, fmt(p.V, 3)),
++          e("td", { className: cls, style: Object.assign({}, td, p.noConv ? { color: "#b23b3b" } : {}) }, p.noConv ? "did not converge" : fR(p.Mmax)),
++          e("td", { className: cls, style: td }, p.y0 == null ? "—" : fmt(p.y0, 3)),
++          e("td", { className: cls, style: td }, p.noConv ? "NG" : fR(p.flexR)),
++          e("td", { className: cls, style: td }, p.noConv ? "NG" : fR(p.combR)),
++          e("td", { style: Object.assign({}, td, { color: ok ? "#2f6f3e" : "#b23b3b" }) }, ok ? "OK" : "NG" + (p.ngParts && p.ngParts.length && !p.noConv ? " (" + p.ngParts.join(", ") + ")" : "")));
++      }))),
++    info.otherNG && info.otherNG.length ? e("div", print ? { style: { fontSize: "8px", color: "#B91C1C", fontWeight: 700, marginTop: "2px" } } : { className: "text-[9px] mt-1 leading-snug font-semibold", style: { color: "#b23b3b" } },
++      "✗ " + info.otherNG.map(o => o.row + ": " + (o.parts && o.parts.length ? o.parts.join(", ") : "lateral check") + " NG").join("; ") +
++      " — also NG; the governing pile shown is the failing pile with the largest flexure / combined D/C, and the overall result is NG.") : null,
++    e("div", print ? { style: { fontSize: "7.5px", color: "#64748b", marginTop: "2px" } } : { className: "text-[8.5px] text-slate-500 mt-0.5 leading-snug" },
++      "Biaxial cap shear (per pile Vₓ = " + fmt(b.VxP, 2) + ", V_y = " + fmt(b.VyP, 2) + " kip): each direction is shared between the rows perpendicular to it for equal head deflection (rigid cap) — " +
++      rowsTxt(b.eqX, b.fmX, b.nR, Math.abs(b.VxP), "Vₓ over the x-rows (grid columns)", b.nC) +
++      rowsTxt(b.eqY, b.fmY, b.nC, Math.abs(b.VyP), "V_y over the y-rows (grid rows)", b.nR) +
++      "Row 1 = the leading row in the direction of that load component. Each pile: V = √(Vₓ² + V_y²) of its two rows, solved and checked with p-multiplier = the smaller of its two row fₘ × modifier (" + fmt(info.mod || 1, 2) + ") (conservative; the pile's single p-y width / bending axis — verify); the case's axial load, head moment and head condition. fₘ from " + info.srcLabel + " at s = " + fmt(info.s_dia, 2) + " × " + (info.Blbl || "bond dia") + ". " +
++      "Governing pile = largest D/C of flexure / combined (a pile that did not converge governs, NG; ties → larger Mₘₐₓ); when any pile's lateral status is NG, the failing pile with the largest D/C governs. The lateral results, graphs and checks shown are the governing pile's. " + b.nSolves + " p-y solves."));
++}
+ function GroupPlan({ I, g }) {
+   const s = g.s_in, D = g.dh_in, nR = g.nRows, nC = g.nCols;
+   const shapes = [];
+@@ -13782,21 +13878,6 @@ function App() {
+     if (pmAutoOn) return null;
+     return solvePyResFor(I.pyPM || 1);
+   }, [I.lateralSource, I.OD, I.dhBond, I.dhBondSeparate, I.tc, I.corr, I.E, I.fyc, I.fyb, I.Ab, I.fcGrout, I.solverFree, I.Lcased, I.Lplunge, I.LbProvided, JSON.stringify(I.soilLayers), I.pyCyclic, I.pyEIBasis, I.pyEIvar, I.pyPM, I.pyYM, I.pyNodes, I.pyMhead, I.pyKrot, I.pyCurveDepth, I.Plat, I.STL, I.solverHead, EI, EI_composite_kipin2, EI_aashto_kipin2, EI_uncased_kipin2, I.pileType, I.hpD, I.hpBf, I.hpTf, I.hpTw, I.hpFy, I.hpAxis, I.solverLembed, I.bucklingEnable, I.LuFree, pmAutoOn]);
+-  const pyRowsRaw = useMemo(() => {
+-    if (I.lateralSource !== "py" || !pmAutoOn) return null;
+-    const mod = groupPmModOf(I);
+-    const rows0 = pmTblApp.rows.map(p => ({ row: p.row, fm: p.fm, pm: p.fm * mod, res: solvePyResFor(p.fm * mod) }));
+-    // F33 (O42): rigid-cap equal-deflection distribution of the case's lateral load over the rows
+-    // (n_k = groupNcols piles per row); every row's solve at its own shear V_k. See eqDeflDistribute.
+-    const nC = Math.max(1, Math.round(I.groupNcols || 1));
+-    const eq = eqDeflDistribute({ nPer: rows0.map(() => nC), Vpile: I.Plat || 0, init: rows0.map(rw => rw.res), solve: (k, V) => solvePyResFor(rows0[k].pm, V) });
+-    const rows = rows0.map((rw, k) => {
+-      const ncRes = { ok: false, noConv: true, msg: PY_NC_MSG, why: ["equal-deflection distribution: " + eq.why] };
+-      const res = eq.ok ? eq.res[k] : ((eq.failRow == null || eq.failRow === k || !eq.res[k]) ? ncRes : eq.res[k]);
+-      return Object.assign({}, rw, { V: eq.V[k] != null ? eq.V[k] : (I.Plat || 0), n: nC, res });
+-    });
+-    return { tbl: pmTblApp, mod, rows, eq };
+-  }, [I.lateralSource, I.OD, I.dhBond, I.dhBondSeparate, I.tc, I.corr, I.E, I.fyc, I.fyb, I.Ab, I.fcGrout, I.solverFree, I.Lcased, I.Lplunge, I.LbProvided, JSON.stringify(I.soilLayers), I.pyCyclic, I.pyEIBasis, I.pyEIvar, I.pyPM, I.pyYM, I.pyNodes, I.pyMhead, I.pyKrot, I.pyCurveDepth, I.Plat, I.STL, I.solverHead, EI, EI_composite_kipin2, EI_aashto_kipin2, EI_uncased_kipin2, I.pileType, I.hpD, I.hpBf, I.hpTf, I.hpTw, I.hpFy, I.hpAxis, I.solverLembed, I.bucklingEnable, I.LuFree, pmAutoOn, pmRowKey, I.groupNcols]);
+ 
+   // ---- LRFD load cases (series) ----
+   // Strip any persisted _fromGroup flag but KEEP the case. The synthetic group
+@@ -13839,7 +13920,8 @@ function App() {
+           name: "Group \u25a6 " + (gc.name || "case") + " \u00b7 P" + sel.id + (uplift ? " (uplift)" : ""),
+           type,
+           STL: Math.abs(sel.axial), Plat: sel.Vres || 0, Mhead: 0,
+-          _fromGroup: true, _groupCaseId: gc.id, _pileId: sel.id
++          _fromGroup: true, _groupCaseId: gc.id, _pileId: sel.id,
++          _Vx: sel.Vx, _Vy: sel.Vy   // F36 (O47): per-pile shear components (not saved; synthetic rows)
+         });
+       });
+       return out;
+@@ -13849,8 +13931,8 @@ function App() {
+     if (!cd || !cd.sel || !cd.enable || !isFinite(cd.sel.axial)) return [];
+     const sel = cd.sel, uplift = sel.axial < -1e-6;
+     return [uplift
+-      ? { name: "Group \u25a6 pile P" + sel.id + " (uplift)", type: "tension", STL: Math.abs(sel.axial), Plat: sel.Vres || 0, Mhead: 0, _fromGroup: true }
+-      : { name: "Group \u25a6 pile P" + sel.id, type: "strength", STL: sel.axial, Plat: sel.Vres || 0, Mhead: 0, _fromGroup: true }];
++      ? { name: "Group \u25a6 pile P" + sel.id + " (uplift)", type: "tension", STL: Math.abs(sel.axial), Plat: sel.Vres || 0, Mhead: 0, _fromGroup: true, _Vx: sel.Vx, _Vy: sel.Vy }
++      : { name: "Group \u25a6 pile P" + sel.id, type: "strength", STL: sel.axial, Plat: sel.Vres || 0, Mhead: 0, _fromGroup: true, _Vx: sel.Vx, _Vy: sel.Vy }];
+   }, [groupEnabled, JSON.stringify(I.groupCases), JSON.stringify(I.loadPoints), JSON.stringify(I.capLoads), I.capPz, I.capVx, I.capVy, I.capMx, I.capMy, I.capH, I.capLx, I.capLy, I.capIncludeWeight, I.capL, I.capW, I.capThk, I.capGamma, I.capSoilSurcharge, I.capCx, I.capCy, JSON.stringify(I.groupPiles), I.groupSelPile, I.groupNrows, I.groupNcols, I.groupSpacingDia, I.groupSpacingIn, I.OD, I.pileType, I.hpAxis, I.hpBf, I.hpD]);
+   const cases = groupCasesEmitted.length ? [...baseCasesSafe, ...groupCasesEmitted] : baseCasesSafe;
+   const groupCaseIdx = groupCasesEmitted.length ? baseCasesSafe.length : -1; // first group case index
+@@ -13887,6 +13969,32 @@ function App() {
+   }
+   // Single source of truth: the ACTIVE load case drives the live pipeline.
+   const activeIdx = Math.min(Math.max(I.activeCase || 0, 0), cases.length - 1);
++  // F36 (O47): the active case is a Group row with a biaxial per-pile shear -> per-direction
++  // distribution (biaxDistribute) instead of the F33 resultant over the rows (pyRowsRaw).
++  const actCase = cases[activeIdx];
++  const actBiax = (pmAutoOn && I.lateralSource === "py" && actCase && actCase._fromGroup && isBiaxShear(actCase._Vx, actCase._Vy)) ? { Vx: actCase._Vx, Vy: actCase._Vy } : null;
++  // F29 / F33 (moved below the case list by F36 so it can skip a biaxial active case)
++  const pyRowsRaw = useMemo(() => {
++    if (I.lateralSource !== "py" || !pmAutoOn || actBiax) return null;   // F36: a biaxial Group row -> pyBiaxRaw
++    const mod = groupPmModOf(I);
++    const rows0 = pmTblApp.rows.map(p => ({ row: p.row, fm: p.fm, pm: p.fm * mod, res: solvePyResFor(p.fm * mod) }));
++    // F33 (O42): rigid-cap equal-deflection distribution of the case's lateral load over the rows
++    // (n_k = groupNcols piles per row); every row's solve at its own shear V_k. See eqDeflDistribute.
++    const nC = Math.max(1, Math.round(I.groupNcols || 1));
++    const eq = eqDeflDistribute({ nPer: rows0.map(() => nC), Vpile: I.Plat || 0, init: rows0.map(rw => rw.res), solve: (k, V) => solvePyResFor(rows0[k].pm, V) });
++    const rows = rows0.map((rw, k) => {
++      const ncRes = { ok: false, noConv: true, msg: PY_NC_MSG, why: ["equal-deflection distribution: " + eq.why] };
++      const res = eq.ok ? eq.res[k] : ((eq.failRow == null || eq.failRow === k || !eq.res[k]) ? ncRes : eq.res[k]);
++      return Object.assign({}, rw, { V: eq.V[k] != null ? eq.V[k] : (I.Plat || 0), n: nC, res });
++    });
++    return { tbl: pmTblApp, mod, rows, eq };
++  }, [I.lateralSource, I.OD, I.dhBond, I.dhBondSeparate, I.tc, I.corr, I.E, I.fyc, I.fyb, I.Ab, I.fcGrout, I.solverFree, I.Lcased, I.Lplunge, I.LbProvided, JSON.stringify(I.soilLayers), I.pyCyclic, I.pyEIBasis, I.pyEIvar, I.pyPM, I.pyYM, I.pyNodes, I.pyMhead, I.pyKrot, I.pyCurveDepth, I.Plat, I.STL, I.solverHead, EI, EI_composite_kipin2, EI_aashto_kipin2, EI_uncased_kipin2, I.pileType, I.hpD, I.hpBf, I.hpTf, I.hpTw, I.hpFy, I.hpAxis, I.solverLembed, I.bucklingEnable, I.LuFree, pmAutoOn, pmRowKey, I.groupNcols, !!actBiax]);
++  const pyBiaxRaw = useMemo(() => {
++    if (I.lateralSource !== "py" || !pmAutoOn || !actBiax) return null;
++    const t = groupPmTable(I), mod = groupPmModOf(I);
++    const nC = Math.max(1, Math.round(I.groupNcols || 1));
++    return { tbl: t, mod, B: biaxDistribute({ nR: t.nRows, nC, VxP: actBiax.Vx, VyP: actBiax.Vy, s_dia: t.s_dia, src: t.src, mod, solve: (pm, V) => solvePyResFor(pm, V) }) };
++  }, [I.lateralSource, I.OD, I.dhBond, I.dhBondSeparate, I.tc, I.corr, I.E, I.fyc, I.fyb, I.Ab, I.fcGrout, I.solverFree, I.Lcased, I.Lplunge, I.LbProvided, JSON.stringify(I.soilLayers), I.pyCyclic, I.pyEIBasis, I.pyEIvar, I.pyPM, I.pyYM, I.pyNodes, I.pyMhead, I.pyKrot, I.pyCurveDepth, I.Plat, I.STL, I.solverHead, EI, EI_composite_kipin2, EI_aashto_kipin2, EI_uncased_kipin2, I.pileType, I.hpD, I.hpBf, I.hpTf, I.hpTw, I.hpFy, I.hpAxis, I.solverLembed, I.bucklingEnable, I.LuFree, pmAutoOn, pmRowKey, I.groupNcols, I.groupNrows, I.groupSpacingDia, I.groupSpacingIn, actBiax && actBiax.Vx, actBiax && actBiax.Vy]);
+   React.useEffect(() => { applyCase(activeIdx); }, [activeIdx, JSON.stringify(I.loadCases)]);
+   // Write-through: editing a load field anywhere edits the active case row.
+   function setCaseLoad(key, v) {
+@@ -13968,6 +14076,23 @@ function App() {
+           };
+         };
+           if (!pmSpec) return runOne(I.pyPM || 1);
++          if (c._fromGroup && isBiaxShear(c._Vx, c._Vy)) {
++            // F36 (O47): biaxial Group row -- the same per-direction distribution as Module 02
++            // (biaxDistribute), each pile at its resultant V with min(f_m,x, f_m,y) x modifier.
++            const tB = groupPmTable(I), modB = groupPmModOf(I);
++            const toResB = sol => ({ ok: !!(sol && sol.res && !sol.noConv), headDefl_in: sol && sol.res ? sol.res.y[0] : NaN, sol });
++            const B = biaxDistribute({ nR: tB.nRows, nC: Math.max(1, Math.round(I.groupNcols || 1)), VxP: c._Vx, VyP: c._Vy, s_dia: tB.s_dia, src: tB.src, mod: modB,
++              solve: (pm, V) => toResB(caseSolve(pm, V)) });
++            const ncSolB = { noConv: true, res: null, why: ["biaxial equal-deflection distribution: " + B.why] };
++            const evB = B.piles.map(p => Object.assign(runOne(p.pm, p.V, p.res ? p.res.sol : ncSolB), { _p: p }));
++            const gB = pmPickGov(evB.map(e => ({ pm: e._p.pm, Mmax: e.Mmax, fail: e.latFail,
++              dc: e.noConv ? Infinity : (c.type === "service" ? 0 : Math.max(e.flexR != null && isFinite(e.flexR) ? e.flexR : 0, e.combR != null && isFinite(e.combR) ? e.combR : 0)) })));
++            const outB = Object.assign({}, evB[gB], { pass: c.type === "service" ? evB[gB].pass : evB.every(e => e.pass), pmRow: evB[gB]._p.label, pmFm: evB[gB]._p.fm, pmPm: evB[gB]._p.pm, pmNRows: evB.length, pmV: evB[gB]._p.V,
++              pmEq: { ok: B.ok, biax: true, why: B.why, nSolves: B.nSolves, eqX: B.eqX, eqY: B.eqY },
++              pmRows: evB.map(e => ({ row: e._p.label, fm: e._p.fm, pm: e._p.pm, V: e._p.V, Vx: e._p.Vx, Vy: e._p.Vy, Mmax: e.Mmax, y0: e.y0, flexR: e.flexR, combR: e.combR, noConv: e.noConv, pass: e.pass })) });
++            delete outB._p; delete outB.latFail;
++            return outB;
++          }
+           // F29: per-row group p-multipliers: solve every row, report the governing row
+           // (same rule as Module 02: max D/C of flexure / combined; service rows: max |y0|;
+           // a row that did not converge governs; ties -> larger Mmax, then smaller p-multiplier).
+@@ -14506,6 +14631,29 @@ function App() {
+   // Its p-y result becomes pyRes, so Modules 02 / 04 / 05, the graphs and the report show
+   // the governing row's solution; pyRes.pmAuto carries the per-row table.
+   const pyRowsEval = useMemo(() => {
++    if (pyBiaxRaw) {
++      // F36 (O47): biaxial Group row -- every pile at its resultant V = sqrt(Vx^2 + Vy^2) of the
++      // two per-direction distributions, p-multiplier = min(row f_m,x, f_m,y) x modifier; the
++      // governing pile by the same rule as the rows (pmPickGov, with F35).
++      const B = pyBiaxRaw.B, t = pyBiaxRaw.tbl;
++      const ncRes = { ok: false, noConv: true, msg: PY_NC_MSG, why: ["biaxial equal-deflection distribution: " + B.why] };
++      const ev = B.piles.map(p => {
++        const res = p.res || ncRes;
++        const Irow = Object.assign({}, I, { Plat: p.V });
++        const R = computeAll(Irow, rOptsFor(res, Irow));
++        return Object.assign({}, p, { res, R, row: p.label }, pmRowSummary(R, res, Irow));
++      });
++      const g = pmPickGov(ev);
++      const otherNG = ev.filter((e, k) => k !== g && (!e.latPass || !e.shearOK)).map(e => ({ row: e.label, parts: e.ngParts }));
++      const info = { rows: [], otherNG,
++        biax: { ok: B.ok, why: B.why, VxP: B.VxP, VyP: B.VyP, nR: B.nR, nC: B.nC, fmX: B.fmX, fmY: B.fmY, eqX: B.eqX, eqY: B.eqY, nSolves: B.nSolves,
++          piles: ev.map(e => ({ id: e.id, label: e.label, kX: e.kX, kY: e.kY, fmX: e.fmX, fmY: e.fmY, fm: e.fm, pm: e.pm, Vx: e.Vx, Vy: e.Vy, V: e.V,
++            Mmax: e.Mmax, y0: e.y0, flexR: e.flexR, combR: e.combR, noConv: e.noConv, latPass: e.latPass, shearOK: e.shearOK, ngParts: e.ngParts })) },
++        eq: { ok: B.ok, biax: true }, govV: ev[g].V,
++        gov: g, govRow: ev[g].label, govFm: ev[g].fm, govPm: ev[g].pm, mod: pyBiaxRaw.mod, src: t.src, srcLabel: t.srcLabel,
++        nRows: ev.length, s_dia: t.s_dia, Blbl: t.Blbl, belowTable: t.belowTable, aboveTable: t.aboveTable };
++      return { pyRes: Object.assign({}, ev[g].res, { pmAuto: info }), R: otherNG.length ? Object.assign({}, ev[g].R, { allPass: false, pmOtherRowNG: otherNG }) : ev[g].R, info };
++    }
+     if (!pyRowsRaw) return null;
+     // F33: each row is checked with its own shear V_k (Plat) from the equal-deflection distribution
+     const ev = pyRowsRaw.rows.map(rw => {
+@@ -14528,7 +14676,7 @@ function App() {
+       gov: g, govRow: ev[g].row, govFm: ev[g].fm, govPm: ev[g].pm, mod: pyRowsRaw.mod, src: pyRowsRaw.tbl.src, srcLabel: pyRowsRaw.tbl.srcLabel,
+       nRows: pyRowsRaw.tbl.nRows, s_dia: pyRowsRaw.tbl.s_dia, Blbl: pyRowsRaw.tbl.Blbl, belowTable: pyRowsRaw.tbl.belowTable, aboveTable: pyRowsRaw.tbl.aboveTable };
+     return { pyRes: Object.assign({}, ev[g].res, { pmAuto: info }), R: otherNG.length ? Object.assign({}, ev[g].R, { allPass: false, pmOtherRowNG: otherNG }) : ev[g].R, info };
+-  }, [I, activeLayers, solved, pyRowsRaw, pcr]);
++  }, [I, activeLayers, solved, pyRowsRaw, pyBiaxRaw, pcr]);
+   const pyRes = pyRowsEval ? pyRowsEval.pyRes : pyResSingle;
+   const r = useMemo(() => {
+     if (pyRowsEval) return pyRowsEval.R;
+```
+
+### F37. Micropile Module 11 η line: the nominal bond capacity labelled "P_n", not "φP_n" (O48)   [display only] [no calculation change]
+
+- **Where:** Module 11, section 1, micropile branch of the η line (anchor `" → per-pile bond P"`).
+- **Problem (O48):** "per-pile bond φP_n = 110 → 77 kip": the first number is the nominal `R.group.Pn_geo_single` (= R.geo.Pn_geo, 109.96 kip at the defaults), not a factored value; the second is φ_geo·η·P_n.
+- **Before:** `" → per-pile bond φP", sub("n"), " = ", fmt(r.group.Pn_geo_single, 0), " → "`
+- **After:** `" → per-pile bond P", sub("n"), " = ", fmt(r.group.Pn_geo_single, 0), " → "`
+- **Governing provision:** none (label only).
+- **Check case:** micropile 2 × 3 at 3 × d_h (η = 1.000): "η used = 1.000 → per-pile bond P_n = 110 → 77 kip" (77 = φ_geo 0.70 × 1.000 × 109.96 = 76.97; the numbers are unchanged, only the "φ" is removed).
+- **How verified:** Module 11 text main vs branch (micropile groups): this label is the only Module 11 text difference other than F35's per-row table text; numbers identical. Screenshot looked at (Module 11, micropile 2 × 3).
+- **Other copies:** none.
+- **Final check (all four changes, origin/main vs the branch):** micropile single pile and defaults, integral abutment, micropile groups with the toggle off (AASHTO, legacy, d_h = 9 in): bit-identical. H-pile single pile / defaults: displayed values identical. Toggle-on micropile groups: only the F35 governing-row change and this label. No console errors.
+- **Re-applying by hand:** unified diff below (CRLF stripped).
+
+```diff
+diff --git a/Pile Designer.html b/Pile Designer.html
+index 9e691f9..638e8e4 100644
+--- a/Pile Designer.html	
++++ b/Pile Designer.html	
+@@ -17410,7 +17410,7 @@ function App() {
+           : /*#__PURE__*/React.createElement(React.Fragment, null, "⚠ Spacing ", fmt(r.group.s_dia, 1), "× < 3× " + r.group.Blbl + " → Converse-Labarre η = ", fmt(r.group.clEff, 3), I.pileType === "hpile" ? " (θ=atan(B/s)=" : " (θ=atan(d/s)=", fmt(r.group.thetaDeg, 1), "°)")),
+       r.group.capBasis === "hpile"
+         ? /*#__PURE__*/React.createElement("div", { className: "text-[10px] font-mono-tech mb-2" }, "η used = ", /*#__PURE__*/React.createElement("b", null, fmt(r.group.eta, 3)), " → per-pile H-pile φR", /*#__PURE__*/React.createElement("sub", null, "n"), " = ", fmt(r.group.phiRn_single, 1), " kip (R", /*#__PURE__*/React.createElement("sub", null, "n"), " = ", fmt(r.group.Pn_geo_single, 1), " kip) → ηφR", /*#__PURE__*/React.createElement("sub", null, "n"), " = ", /*#__PURE__*/React.createElement("b", null, fmt(r.group.phiPn_geo_group, 1), " kip"))
+-        : /*#__PURE__*/React.createElement("div", { className: "text-[10px] font-mono-tech mb-2" }, "η used = ", /*#__PURE__*/React.createElement("b", null, fmt(r.group.eta, 3)), " → per-pile bond φP", /*#__PURE__*/React.createElement("sub", null, "n"), " = ", fmt(r.group.Pn_geo_single, 0), " → ", /*#__PURE__*/React.createElement("b", null, fmt(r.group.phiPn_geo_group, 0), " kip")),
++        : /*#__PURE__*/React.createElement("div", { className: "text-[10px] font-mono-tech mb-2" }, "η used = ", /*#__PURE__*/React.createElement("b", null, fmt(r.group.eta, 3)), " → per-pile bond P", /*#__PURE__*/React.createElement("sub", null, "n"), " = ", fmt(r.group.Pn_geo_single, 0), " → ", /*#__PURE__*/React.createElement("b", null, fmt(r.group.phiPn_geo_group, 0), " kip")),
+       /*#__PURE__*/React.createElement(InputsUsed, { tab: "checks", setTab: setRailTab, panelTitle: "Group options",
+         items: [["\u03b7 override", I.groupEtaOverride ? "on, \u03b7 = " + fmt(I.groupEta, 3) : "off", ""], ...(r.group.capBasis === "hpile" ? [["Pile cap in firm contact with the ground", I.hpCapContact !== false ? "yes" : "no", ""]] : [])] }),
+       /*#__PURE__*/React.createElement("div", { className: "mt-2" }, /*#__PURE__*/React.createElement(CheckRow, {
+```
+
 ## Open items (not changed)
 - O1. **Uncased/cased structural axial: outer 0.85 factor and `fy = min(fyb, fyc)`** (`Rn_cased/Rn_ucased`, ≈ line 1675).
   - Neither AASHTO 10.9.3.10.2 nor FHWA NHI-05-039 Eq. 5-13 has the outer 0.85, and the uncased section has no casing, so min(fyb, fyc) is arbitrary there.
@@ -10306,7 +11094,11 @@ function groupWsSpacing(I) {
 - O42. **Closed by F33 (2026-10-11).** Engineer's decision 2026-10-11: rigid-cap equal-deflection distribution of the cap shear over the rows (toggle on, group mode). Original text: **Per-row lateral load share.** With "Apply group p-multipliers automatically (per row)" every row is solved with the same per-pile shear (the rigid-cap equal share). In a real group the stiffer leading row attracts more shear than the shadowed trailing rows, so equal shares overstate the trailing-row demand and understate the leading row's. Found in F29, not changed. **Ask:** keep equal shares (the governing row is usually the trailing row, so this is conservative there), or distribute the cap shear by row stiffness (iterating on a common head deflection)?
 - O43. **Closed by F32 (2026-10-11).** Engineer's decision 2026-10-11: the H-pile group η check uses the H-pile static resistance; the block is shown "not computed for H-piles — verify by hand" (see O45). Original text: **Group axial efficiency and block failure in H-pile mode reduce the micropile bond capacity.** `computeAll` group block: `Pn_geo_group = R.geo.Pn_geo * eta` and the block side resistance use the micropile grout-to-ground bond (β, d_h, L_b inputs) for every pile type, and both checks enter the H-pile `allPass` and the Module 11 status. In H-pile mode they should use the H-pile static capacity (`R.hpileGeo`) and an H-pile block (skin over the embedded length, plus base). Found in F30, not changed (calc change). **Ask:** H-pile group efficiency / block basis (AASHTO 10.7.3.9 / 10.7.3.11?), or hide these two checks in H-pile mode until then.
 - O44. **Micropile with d_h ≠ casing OD: two group layouts.** Module 11 (`computeAll`, `groupPmTable`, "Generate grid") spaces a grid given in diameters at `groupSpacingDia × d_h`, while the group workspace, the Group ▦ case loads and the plan use `groupSpacingDia × OD` (`pileWidth`). With d_h = 9 in, OD 7 in, 3 × dia: Module 11's rigid-cap table shows 27 in c/c, the cases use 21 in. Left unchanged by F30 (micropile results to stay identical). **Ask:** which width defines "spacing × dia" for a micropile (d_h or OD), so both use it.
-- O45. **H-pile group efficiency and block failure per AASHTO 10.7.3.9 (found in F32, not changed).** F32 makes the H-pile η check use the H-pile static resistance but keeps the tool's η (FHWA spacing ≥ 3B → 1.0, else Converse-Labarre), and shows the block check as "not computed — verify by hand". AASHTO LRFD 10th Ed. Art. 10.7.3.9 for driven piles gives: cohesionless soil η = 1.0 (no block check); cohesive soil η from 0.65 at 2.5B to 1.0 at 6B when the cap is not in firm contact (1.0 when it is), and a block check R = (2X + 2Y)·Z·S̄_u + X·Y·N_c·S_u with its own resistance factor (Table 10.5.5.2.3-1, block failure in clay). **Ask:** implement the AASHTO η and the cohesive-soil block for H-pile groups (needs a cap-contact input and the block φ, plus a rule for mixed profiles), or keep the current η and the "verify by hand" block?
-- O46. **Governing row vs a failing non-governing row (found in F33).** The governing row is still the largest flexure / combined D/C (F29 rule). With the equal-deflection distribution the leading row usually has that, while the trailing row can fail a different lateral check (micropile casing extension: its moment decays deepest). F33 makes the overall result (allPass, envelope "pass") NG when any row fails and names the row in the per-row table, but the modules and check strip show the governing row's checks (all OK in that example). **Ask:** keep this, or make a row with any lateral check NG the governing (displayed) row?
-- O47. **Lateral load direction for the row distribution (found in F33, not changed).** The rows are the grid rows (`groupNrows`, leading row = row 1) and the load is taken as acting along the row direction; V_total = n × the case's per-pile lateral resultant (manual cases: the per-pile value; Group ▦ rows: the design pile's `Vres` = √((V_x/n)² + (V_y/n)²), so n × Vres is the cap's resultant shear; the rigid-cap distribution gives every pile the same shear, no torsion share). A biaxial cap shear is therefore one resultant along the row direction, as the tool's per-pile resultant already was. **Ask:** is a separate distribution per direction (rows in x and in y) needed?
-- O48. **Micropile Module 11 η line labels the nominal bond capacity as "φP_n" (found in F32, display only, not changed).** "per-pile bond φP_n = 110 → 57 kip": the first number is the nominal R.geo.Pn_geo (109.96 kip), the second φηP_n. **Ask:** relabel the first value "P_n"?
+- O45. **Closed by F34 (2026-10-11).** Engineer's decision 2026-10-11 ("Fix all"): AASHTO 10.7.3.9 η for H-pile groups (cohesionless 1.0; cohesive 0.65–1.0 by spacing when the cap is not in firm contact or the surface clay is soft; new input "pile cap in firm contact with the ground", default yes) and the cohesive block check with φ_g = 0.60; mixed profiles by the predominant type. Original text: **H-pile group efficiency and block failure per AASHTO 10.7.3.9 (found in F32, not changed).** F32 makes the H-pile η check use the H-pile static resistance but keeps the tool's η (FHWA spacing ≥ 3B → 1.0, else Converse-Labarre), and shows the block check as "not computed — verify by hand". AASHTO LRFD 10th Ed. Art. 10.7.3.9 for driven piles gives: cohesionless soil η = 1.0 (no block check); cohesive soil η from 0.65 at 2.5B to 1.0 at 6B when the cap is not in firm contact (1.0 when it is), and a block check R = (2X + 2Y)·Z·S̄_u + X·Y·N_c·S_u with its own resistance factor (Table 10.5.5.2.3-1, block failure in clay). **Ask:** implement the AASHTO η and the cohesive-soil block for H-pile groups (needs a cap-contact input and the block φ, plus a rule for mixed profiles), or keep the current η and the "verify by hand" block?
+- O46. **Closed by F35 (2026-10-11).** Engineer's decision 2026-10-11: when any row fails, the displayed governing row is the failing row with the highest D/C. Original text: **Governing row vs a failing non-governing row (found in F33).** The governing row is still the largest flexure / combined D/C (F29 rule). With the equal-deflection distribution the leading row usually has that, while the trailing row can fail a different lateral check (micropile casing extension: its moment decays deepest). F33 makes the overall result (allPass, envelope "pass") NG when any row fails and names the row in the per-row table, but the modules and check strip show the governing row's checks (all OK in that example). **Ask:** keep this, or make a row with any lateral check NG the governing (displayed) row?
+- O47. **Closed by F36 (2026-10-11).** Engineer's decision 2026-10-11: biaxial Group rows are distributed per direction (x-rows / y-rows), each pile checked at V = √(V_x² + V_y²) with the smaller of its two row f_m. See O49 and O50. Original text: **Lateral load direction for the row distribution (found in F33, not changed).** The rows are the grid rows (`groupNrows`, leading row = row 1) and the load is taken as acting along the row direction; V_total = n × the case's per-pile lateral resultant (manual cases: the per-pile value; Group ▦ rows: the design pile's `Vres` = √((V_x/n)² + (V_y/n)²), so n × Vres is the cap's resultant shear; the rigid-cap distribution gives every pile the same shear, no torsion share). A biaxial cap shear is therefore one resultant along the row direction, as the tool's per-pile resultant already was. **Ask:** is a separate distribution per direction (rows in x and in y) needed?
+- O48. **Closed by F37 (2026-10-11).** Relabelled "P_n". Original text: **Micropile Module 11 η line labels the nominal bond capacity as "φP_n" (found in F32, display only, not changed).** "per-pile bond φP_n = 110 → 57 kip": the first number is the nominal R.geo.Pn_geo (109.96 kip), the second φηP_n. **Ask:** relabel the first value "P_n"?
+- O49. **Single-direction V_x Group rows keep the F33 row convention (found in F36).** A V_x-only (or V_y-only) Group row and every manual case are distributed over the `groupNrows` rows, as before (engineer's requirement: single-direction loads unchanged). In a biaxial row V_x uses the grid columns (`groupNcols` rows of `groupNrows` piles), which is what the plan geometry gives for a load along x. On a non-square grid a V_x-only row and a biaxial row with a tiny V_y therefore use different row sets (e.g. 2 columns × 3 rows: 3 rows of 2 vs 2 rows of 3). **Ask:** should a V_x-only Group row also use the grid columns?
+- O50. **Biaxial H-pile groups: one p-y width / bending axis (found in F36).** Each pile is solved at its resultant V with the selected H-pile axis (b_f strong / d weak) and EI, as every lateral solve in the tool; the V_x and V_y components really bend different axes. The F36 f_m is the smaller of the two row values. The same applies to F33 rows and to the group spacing B. **Ask:** check biaxial H-pile groups per axis (two p-y solves per pile and a biaxial interaction), or keep the resultant on the selected axis? Also: the per-row distributions use the generated nR × nC grid even when explicit pile coordinates (`groupPiles`) are entered (as F33).
+- O51. **AASHTO 10.7.3.9 details not implemented by F34 (ask).** (1) As recalled, AASHTO waives the cohesive η reduction when the cap is not in contact but the surface soil is stiff; F34 follows the engineer's rule (not in contact → 0.65–1.0 whatever the surface stiffness; more conservative). Apply the stiff-surface waiver? (2) "Soft" surface = cohesive with S_u < 0.50 ksf (Terzaghi & Peck; verify) — confirm the threshold. (3) The group in a strong layer over a weaker compressible layer, and group settlement, are not checked. (4) For mixed profiles the block counts cohesionless layers as S_u = 0 along the side and no base when the toe is cohesionless (conservative) — acceptable, or check both mechanisms separately?
+- O52. **The printed report has no group efficiency / block section** (Module 11 sections 1 and 3 are on screen only; the report shows the inputs and the rigid-cap distribution; the summary table has the "Group block" row). Pre-existing for micropiles too. **Ask:** add them to report 11?
