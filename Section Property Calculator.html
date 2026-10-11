@@ -2773,8 +2773,14 @@ const SPC = (function () {
               if (Math.abs(w - z.w) < 1e-12) break;
               const Q = st.at(Math.max(z.s0, Math.min(z.s1, s)), z.w), other = e[k === 'p' ? 'q' : 'p'], de = sub(other, P), Le = len(de);
               const par = Le === 0 || Math.abs(dot(de, st.nrm)) < 0.0087 * Le;
-              if (par) { if (!endsSeen.some(x => len(sub(x, P)) < 1e-9)) { endsSeen.push(P); links.push({ p: P, q: Q, t: 0, parts: e.parts, link: true, src: 'link' }); } }
-              else { const lam = (z.w - w) / dot(de, st.nrm); e[k] = add(P, mul(de, lam)); }
+              // the same part continuing from the end of its stacked element at a shallow angle (the corner chords of a
+              // rectangular tube / HSS whose flat is in face contact): extending it along its own direction would run it back
+              // along the combined element; it gets a rigid link across to the combined line at the zone end instead, as a
+              // plate that continues on a different line does. Engineer's decision 2026-10-11 (O1-O1).
+              const lam = par ? 0 : (z.w - w) / dot(de, st.nrm);
+              const own = !par && e.parts.some(x => m.e.parts.includes(x)) && Math.min(Math.abs(s - m.lo), Math.abs(s - m.hi)) <= ltol && Math.abs(lam * dot(de, st.u)) > e.t / 2 + ltol;
+              if (par || own) { if (!endsSeen.some(x => len(sub(x, P)) < 1e-9)) { endsSeen.push(P); links.push({ p: P, q: Q, t: 0, parts: e.parts, link: true, src: 'link' }); } }
+              else { e[k] = add(P, mul(de, lam)); }
               break;
             }
           });
@@ -6475,6 +6481,23 @@ function runValidation() {
       const Rh = SPC.analyze(vModel(SPC.TEMPLATES.girder.f({ btf: 16, ttf: 1, D: 40, tw: 0.5, bbf: 16, tbf: 1.25 }).concat([{ type: 'round', p: { d: 1 }, x: 4, y: 20.5, hole: true }, { type: 'round', p: { d: 1 }, x: -4, y: 20.5, hole: true }]))), ch = SPC.shearFlow(Rh, 0.001).contacts.find(c => c.geo.loc[1] > 0);
       const Ah = 2 * Math.PI / 4, Agh = Ag - Ah, ygh = (16 * 20.5 - Ah * 20.5 - 20 * 20.625) / Agh, Igh = Ig + Ag * yg * yg - Ah * (1 / 16 + 20.5 ** 2) - Agh * ygh * ygh;
       add(g, 'plate girder with two Ø1 holes in the top flange (net section), V_y = 150 kip: q = V·Q_net/I_net, Q_net = (16 − 2π/4)(20.5 − ȳ)', qOf(ch, 0, 150), 150 * (16 - Ah) * (20.5 - ygh) / Igh, tight, 'hand calc', 'kip/in'); }
+    // 19 plate in face contact with the flat of an HSS (engineer's decision 2026-10-11): combined over the flat, one closed cell
+    { const g = '19. Plate in face contact with an HSS: HSS10X6X1/2 + PL 10 × 1/2 (J by hand: Bredt over the 6-chord corners + open overhangs Σbt³/3)';
+      const hs = SPC.shapeRec('HSSR', 'HSS10X6X1/2'), t = hs.tdes, tp = 0.5, aa = hs.B - t, bb = hs.Ht - t, rm = 1.5 * t, c = 2 * rm * Math.sin(Math.PI / 24), fa = aa - 2 * rm, fb = bb - 2 * rm;
+      const A0 = aa * bb - 4 * rm * rm + 24 * rm * rm / 2 * Math.sin(Math.PI / 12), HS = { type: 'shape', p: { fam: 'HSSR', name: 'HSS10X6X1/2' }, x: 0, y: 0 };
+      // plate on top (wider than the tube): the flat fa becomes t + tp on the combined mid-plane (tp/2 higher); overhangs 5 − fa/2 each side
+      const Rt = SPC.analyze(vModel([HS, { type: 'plate', p: { b: 10, t: tp }, x: 0, y: hs.Ht / 2 + tp / 2 }])), Ct = Rt.tors.comps[0];
+      const At = A0 + fa * tp / 2, st = fa / (t + tp) + (fa + 2 * fb + 24 * c) / t, Jt = 4 * At * At / st + 2 * (5 - fa / 2) * tp ** 3 / 3;
+      add(g, 'plate on top: one closed cell', Ct.cells ? Ct.cells.length : NaN, 1, 0, 'topology', '');
+      add(g, 'plate on top: J = 4A_m²/∮ds/t + 2 × (5 − f_B/2) × t_p³/3, A_m = A_tube + f_B·t_p/2, flat f_B = B − t − 3t', Rt.tors.J, Jt, tight, 'hand calc (Bredt + thin-wall)', 'in⁴');
+      // plate 10 long on a long side: combined over the side flat fb, overhangs 5 − fb/2 each end
+      const Rs = SPC.analyze(vModel([HS, { type: 'plate', p: { b: 10, t: tp }, x: hs.B / 2 + tp / 2, y: 0, rot: 90 }]));
+      const As = A0 + fb * tp / 2, ss = fb / (t + tp) + (2 * fa + fb + 24 * c) / t, Js = 4 * As * As / ss + 2 * (5 - fb / 2) * tp ** 3 / 3;
+      add(g, 'plate on a long side: J = 4A_m²/∮ds/t + 2 × (5 − f_H/2) × t_p³/3, A_m = A_tube + f_H·t_p/2, flat f_H = H − t − 3t', Rs.tors.J, Js, tight, 'hand calc (Bredt + thin-wall)', 'in⁴');
+      // contact switched off: two separate pieces, J = tube + plate (Roark)
+      const Mo = vModel([HS, { type: 'plate', p: { b: 10, t: tp }, x: 0, y: hs.Ht / 2 + tp / 2 }]); Mo.contacts.off = ['v1|v2'];
+      const Ro = SPC.analyze(Mo), Rh = SPC.analyze(vModel([HS]));
+      add(g, 'contact switched off: J = J(HSS alone) + J(PL 10 × 1/2, Roark)', Ro.tors.J, Rh.tors.J + 10 * tp ** 3 * (1 / 3 - 0.21 * (tp / 10) * (1 - (tp / 10) ** 4 / 12)), tight, 'sum of the pieces', 'in⁴'); }
   } catch (e) { out.push({ grp: 'error', what: 'Validation failed to run: ' + e.message, tool: NaN, ref: NaN, tol: 0, d: NaN, ok: false, src: '' }); }
   return out;
 }
@@ -6517,7 +6540,7 @@ function buildManual(pg) {
   UL(['The plastic neutral axis divides the (n-weighted) area in half. It is found by bisection, using the exact area of each polygon (clipped by the line) and circle (circular segment) on one side; Z = Σ|first moment| about the PNA. Computed for x, y and the principal axes. Where the PNA falls in a gap without material, Z is the same anywhere in the gap.']);
   H('Torsion (thin-wall approximation)');
   UL(['<b>Model:</b> every plate becomes a centre-line element (length along its long side, thickness = short side). Rolled shapes use their standard centre-line model (W web length h<sub>o</sub> = d − t<sub>f</sub>, flanges b<sub>f</sub>; C flanges b<sub>f</sub> − t<sub>w</sub>/2). Tubes: the mid-thickness line (rectangular tubes with the corner radius r − t/2, as 6 chords per corner; round tubes as 48 chords when connected to other parts).',
-    '<b>Connections:</b> parts that touch (within the contact tolerance) are connected unless the contact is switched off. Elements meeting at an angle are joined at the intersection of their centre lines (an element is extended to it where needed). Plates in face contact (e.g. a cover plate on a flange, angle legs against a web or a flange plate) are combined, over each length where the same plates overlap, into one element of thickness Σt on their combined mid-plane (t<sub>1</sub> + t<sub>2</sub> for two plates) — this assumes a continuous connection along both edges; where the combination changes, the lines are joined by a rigid link. Other contacts get a rigid link.',
+    '<b>Connections:</b> parts that touch (within the contact tolerance) are connected unless the contact is switched off. Elements meeting at an angle are joined at the intersection of their centre lines (an element is extended to it where needed). Plates in face contact (e.g. a cover plate on a flange, angle legs against a web or a flange plate) are combined, over each length where the same plates overlap, into one element of thickness Σt on their combined mid-plane (t<sub>1</sub> + t<sub>2</sub> for two plates) — this assumes a continuous connection along both edges; where the combination changes, the lines are joined by a rigid link. A plate on the flat of a rectangular tube / HSS wall is combined with the flat the same way (the cell stays one cell); at the end of the flat the tube\'s rounded corner is joined to the combined line by a rigid link. Other contacts get a rigid link.',
     '<b>J, open parts:</b> Σ b·t³/3 (AISC Design Guide 9). A single rectangle on its own uses Roark\'s formula J = b t³[1/3 − 0.21(t/b)(1 − t⁴/12b⁴)]; a solid round bar πd⁴/32 and a round tube π(D⁴ − d⁴)/32 (exact).',
     '<b>J, closed cells:</b> closed cells are found automatically as the faces of the planar centre-line graph that enclose a void (a hole in the material). At a junction of plates in face contact the centre lines can form a small loop lying inside solid material (e.g. angle heels against a web and a flange plate): it is not a cell, and its nodes are merged into one junction node at the intersection of the centre lines of the elements that meet there. One cell: Bredt J = 4A<sub>m</sub>²/∮ds/t; several cells: the shear flows q<sub>i</sub> from ∮<sub>i</sub>q ds/t = 2A<sub>m,i</sub>, J = 2ΣA<sub>m,i</sub>q<sub>i</sub>. Open branches add Σ b·t³/3; the b·t³/3 of the cell walls is not added.',
     '<b>Pieces not connected</b> twist independently: J = Σ J of the pieces (e.g. double angles with a gap, laced columns).',
