@@ -2299,6 +2299,14 @@ function pyDeflWarnInfo(y0, D, I) {
   const lim = f * D;
   return { f, D, lim, y0, yD: Math.abs(y0) / D, warn: Math.abs(y0) > lim };
 }
+// the +/- limit lines that fall inside the natural extent of the deflection data
+// [min(y, 0), max(y, 0)]; the plots are never widened to show a line (when the warning
+// is triggered, |y0| > lim, so the line on the side of y0 is always inside)
+function pyDeflWarnLines(w, ys) {
+  if (!w || !(w.lim > 0) || !ys || !ys.length) return [];
+  const lo = Math.min(0, ...ys), hi = Math.max(0, ...ys);
+  return [w.lim, -w.lim].filter(xv => xv >= lo && xv <= hi);
+}
 function pyDeflWarnText(w) {
   return "Large head deflection: |y\u2080| = " + fmt(Math.abs(w.y0), 2) + " in = " + fmt(w.yD, 2) + " D > " + fmt(w.f, 2) + " \u00d7 D = " + fmt(w.lim, 2) + " in (D = " + fmt(w.D, 2) + " in)";
 }
@@ -6724,14 +6732,14 @@ function LpileProfilePlot({
     const m = Math.max(Math.abs(lo), Math.abs(hi)) * pad || 1;
     return [lo < 0 ? -m : Math.min(lo, 0), hi > 0 ? m : 0.01];
   };
-  const dwL = deflWarn && deflWarn.lim > 0 ? deflWarn.lim : null;
-  const yR = rangeOf(dwL ? [...y, dwL, -dwL] : y),
+  const dwX = pyDeflWarnLines(deflWarn, y);   // F25 (O37): only lines inside the natural range
+  const yR = rangeOf(y),
     mR = rangeOf(M),
     vR = rangeOf(V);
   // F25 (O37): the large head-deflection warning limit, +/- f x D, on the deflection panel
-  const dwShapes = dwL ? [dwL, -dwL].map(xv => ({ type: "line", xref: "x", yref: "y domain", x0: xv, x1: xv, y0: 0, y1: 1, line: { color: "#b7791f", width: 1.5, dash: "dot" } })) : [];
-  const dwAnns = dwL ? [{ xref: "x", yref: "y domain", x: dwL, y: 0.02, xanchor: "right", yanchor: "bottom", textangle: -90, showarrow: false,
-    text: "\u00b1" + fmt(deflWarn.f, 2) + "D = \u00b1" + fmt(dwL, 2) + " in (warning)", bgcolor: "rgba(255,255,255,0.8)", font: { size: 9, color: "#8a5a1f", family: PLOT_FONT } }] : [];
+  const dwShapes = dwX.map(xv => ({ type: "line", xref: "x", yref: "y domain", x0: xv, x1: xv, y0: 0, y1: 1, line: { color: "#b7791f", width: 1.5, dash: "dot" } }));
+  const dwAnns = dwX.length ? [{ xref: "x", yref: "y domain", x: dwX[0], y: 0.02, xanchor: "right", yanchor: "bottom", textangle: -90, showarrow: false,
+    text: "\u00b1" + fmt(deflWarn.f, 2) + "D = \u00b1" + fmt(deflWarn.lim, 2) + " in (warning)", bgcolor: "rgba(255,255,255,0.8)", font: { size: 9, color: "#8a5a1f", family: PLOT_FONT } }] : [];
   // maxima for annotation
   let iM = 0;
   M.forEach((v, i) => {
@@ -16438,9 +16446,10 @@ function LatProfileOne({ records, which, stickFt, height, deflWarn }) {
   const dp = which === "y" ? 4 : which === "M" ? 1 : 2;
   const G = latGradeLine(), shapes = G.shapes, anns = G.annotations;
   // F25 (O37): large head-deflection warning limit, +/- f x D (deflection view only)
-  if (which === "y" && deflWarn && deflWarn.lim > 0) {
-    [deflWarn.lim, -deflWarn.lim].forEach(xv => shapes.push({ type: "line", xref: "x", yref: "paper", x0: xv, x1: xv, y0: 0, y1: 1, line: { color: "#b7791f", width: 1.5, dash: "dot" } }));
-    anns.push({ xref: "x", yref: "paper", x: deflWarn.lim, y: 0.02, xanchor: "right", yanchor: "bottom", textangle: -90, showarrow: false,
+  const dwX = which === "y" ? pyDeflWarnLines(deflWarn, v) : [];   // no axis widening
+  if (dwX.length) {
+    dwX.forEach(xv => shapes.push({ type: "line", xref: "x", yref: "paper", x0: xv, x1: xv, y0: 0, y1: 1, line: { color: "#b7791f", width: 1.5, dash: "dot" } }));
+    anns.push({ xref: "x", yref: "paper", x: dwX[0], y: 0.02, xanchor: "right", yanchor: "bottom", textangle: -90, showarrow: false,
       text: "\u00b1" + fmt(deflWarn.f, 2) + " \u00d7 D = \u00b1" + fmt(deflWarn.lim, 2) + " in (large-deflection warning)", bgcolor: "rgba(255,255,255,0.8)", font: { size: 10, color: "#8a5a1f", family: PLOT_FONT } });
   }
   return React.createElement(Plot, {
@@ -16537,6 +16546,8 @@ function LatGraphsCard({ I, set, pyRes, solved, activeLayers, pyDepths, setPyDep
             : e(LatProfileOne, { records: pyRes.records, which: view, stickFt, height: 560, deflWarn: dw })),
         dw && e("div", { className: dw.warn ? "pd-lg-warn" : "pd-lg-note", role: dw.warn ? "note" : undefined, style: dw.warn ? { border: "1px solid #b7791f", background: "rgba(183,121,31,0.10)", color: "#7a4d15", padding: "6px 9px", borderRadius: "2px", marginTop: "8px", fontSize: "12px", lineHeight: 1.45 } : undefined },
           dw.warn ? e(React.Fragment, null, e("b", null, "\u26a0 Warning \u2014 " + pyDeflWarnText(dw) + "."), " " + PY_DEFL_WARN_NOTE)
+            : !pyDeflWarnLines(dw, pyRes.records.map(r0 => r0.defl)).length
+              ? "Large head-deflection warning limit = " + fmt(dw.lim, 2) + " in (" + fmt(dw.f, 2) + " D, D = " + fmt(dw.D, 2) + " in; set in the " + (I.pileType === "hpile" ? "p-y / lateral" : "Bond / p-y") + " input tab) \u2014 not reached: head deflection " + fmt(pyRes.headDefl_in, 3) + " in = " + fmt(dw.yD, 2) + " D. (Outside the plotted range, so no line is drawn.)"
             : "Dotted amber lines on the deflection plot: the large head-deflection warning limit \u00b1" + fmt(dw.f, 2) + " \u00d7 D = \u00b1" + fmt(dw.lim, 2) + " in (D = " + fmt(dw.D, 2) + " in; set in the " + (I.pileType === "hpile" ? "p-y / lateral" : "Bond / p-y") + " input tab). Head deflection " + fmt(pyRes.headDefl_in, 3) + " in = " + fmt(dw.yD, 2) + " D: no warning."),
         e("div", { style: { marginTop: "12px" } }, e(ElevationPlot, { I: I, pyRes: pyRes, height: 480 })));
     }
