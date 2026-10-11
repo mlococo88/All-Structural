@@ -8364,6 +8364,704 @@ index 6165412..a18a6e1 100644
      const soilKeys = [
 ```
 
+## 2026-10-11 — PR: claude/pile-pmult (PR link added after merge)
+
+Engineer's decisions 2026-10-11 (group p-multipliers): (1) AASHTO LRFD 10th Ed. Table 10.7.2.4-1 becomes the default p-multiplier source, the old curve stays selectable as "Rollins / FHWA (legacy curve)" with its exact behaviour; (2) "Apply group p-multipliers automatically (per row)" is a toggle; on, the lateral analysis runs once per row and the governing row drives the checks; (3) "Run all cases" runs every row of every case when the toggle is on.
+
+### F29. Group lateral p-multipliers: AASHTO Table 10.7.2.4-1 by default; optional automatic per-row p-y analysis with the governing row driving the lateral checks   [calc change] [no result change for any saved project or with the toggle off (proven, see How verified). Toggle on: MORE conservative than the old single "avg f_m" for the governing (trailing) row; see (d). New projects above 5B: MORE conservative row values than the legacy curve; see (b)]
+
+- **Where:**
+  - New top-level helpers before `function bondHoleDia(I) {`: `GROUP_PM_SRC_LABEL`, `groupPmSourceOf`, `groupPmRows`, `groupPmTable`, `groupPmModOf`, `groupPmAutoOn`, `pmRowSummary`, `pmPickGov`.
+  - `computeAll`, anchor `// --- 2) Lateral p-multipliers by row`: the inline `pmAt` replaced by `groupPmRows(nRows, s_dia, pmSrc)`; `R.group` gains `pmSource` (normalised), `pmSourceLabel`, `pmBelowTable`, `pmAboveTable`, `pmAuto`, `pmMod`.
+  - `DEFAULT_INPUTS`: `groupPmSource: "aashto"` (was `"rollins"`), new `groupPmAuto: false`, `groupPmMod: 1.0`.
+  - `mergeSavedInputs`: a project with no `groupPmSource` loads as `"rollins"`.
+  - `App`: the `pyRes` memo body became `solvePyResFor(gPM)`; `pyResSingle` (toggle off, `gPM = I.pyPM || 1`, unchanged) and `pyRowsRaw` (toggle on, one solve per row); `rOptsFor(pyRes)` (the old body of the `r` memo, unchanged) and `pyRowsEval` (computeAll per row, governing row); `pyRes` / `r` now come from them. `runAllCases` (anchor `const runOne = (gPMc)`), the `caseRes` / `pcr` reset lists, `computePcr` (`gPM: pcrGPM`).
+  - UI: `PmAutoToggle`, `PmRowTable` (before `function GroupPlan(`); Module 02 (after Step 1); `PyPanel` p-multiplier field; Module 11 section "2 · Lateral p-multipliers (f_m) by row" (id `pd-grp-pm`) and its code label; `GroupPlan` caption; `LoadCasesCard` envelope; Lateral graphs card subtitle; Figure F-3 note; report: solver settings, Group inputs, 02 (p-y constants line, per-row table, model setup row), 11 (row values, per-row table), envelope.
+- **What changed:**
+  1. **Source.** `groupPmRows(nRows, s_dia, src)`; `s_dia` = c/c spacing / bond-hole diameter, as Module 11 always computed it. Row index: leading, 2nd, 3rd and later.
+     - `"aashto"` (default for new projects, label "AASHTO LRFD 10th Ed. Table 10.7.2.4-1 — verify table number/values"): 3B 0.80 / 0.40 / 0.30, 5B 1.00 / 0.85 / 0.70; linear between 3B and 5B; **the 5B values above 5B**; below 3B the 3B values with an amber warning ("outside the table … may be unconservative").
+     - `"rollins"` ("Rollins / FHWA (legacy curve)"): the pre-F29 `pmAt` code, character for character (3B values at or below 3B, linear 3B–5B, ramp from the 5B values to 1.0 at 6B, 1.0 at or above 6B, clamp [0.2, 1.0]); no warning, as before.
+     - Module 11 has a source selector (there was none: the saved `groupPmSource` was never read). With the legacy curve a note says it was kept from the saved data and offers "Use AASHTO →".
+  2. **Old projects (§5).** Every project saved by main carries `groupPmSource: "rollins"` (main saved its full input set) and keeps it, so it reproduces exactly; a project with no source saved is migrated to `"rollins"` on load (`mergeSavedInputs`). New projects (no saved data, or "reset") start with `"aashto"`. No storage key or format changed; two optional fields were added (`groupPmAuto`, `groupPmMod`); a missing field takes its default (off, 1.0).
+  3. **Toggle "Apply group p-multipliers automatically (per row)"** (`I.groupPmAuto`, shown in Module 02 and Module 11). Active only when `groupPmAutoOn(I)`: toggle on **and** Pile group mode (`groupEnable`) **and** built-in p-y **and** not integral abutment. Single-pile mode: shown disabled with "Single pile — enter the p-multiplier directly."; external LPILE / linear basis: disabled with a note.
+     - **Definition:** final p-multiplier of row k = row f_m(k) × modifier, modifier = `I.groupPmMod` (default 1.00, shown when the toggle is on). The Module 02 "p-multiplier" field (`pyPM`) is not used while the toggle is on (field disabled, labelled so); it is kept unchanged in the data, so switching the toggle off restores the previous analysis.
+     - **Loads:** each row is solved with the active case's per-pile loads (manual cases are per pile; Group ▦ rows carry the design pile's axial and its equal shear share from the rigid-cap distribution, `computeCapDist` `sel.Vres`, unchanged).
+     - **Governing row** (`pmPickGov`): largest D/C of the lateral-dependent checks, D/C = max(flexure, combined) exactly as the envelope defines them (micropile M_max/φM_n and the P-M interaction; H-pile M_u/φM_n and the 6.9.2.2 interaction); a row whose solve did not converge (F22/F27 rules, `solvePyWithRetry` unchanged) has D/C = ∞ and governs (lateral checks NG); ties → larger M_max, then the smaller p-multiplier. Each row is evaluated with `computeAll(I, rOptsFor(rowSolve))`, the same options the module result uses, so the governing row's values ARE the module values.
+     - The governing row's p-y result becomes `pyRes` → Modules 02 / 04 / 05 / 10 / G, the Lateral graphs (subtitle "governing row k of n (f_m = x.xx)"; Figure F-3 note says the curves are the governing row's) and the report. Per-row table (row, f_m, [p-mult used when modifier ≠ 1], M_max, y₀, flexure D/C, combined D/C, lateral status = flexure, combined, stability, micropile casing extension) in Module 02, Module 11 and the printed 02 and 11 sections.
+     - **Compute P_cr** (Module 10 ramp) with the toggle on uses the smallest row p-multiplier (trailing row: least soil support, lowest P_cr). Chosen to keep P_cr independent of the governing-row choice (which itself reads P_cr through the buckling check); off: `pyPM` as before.
+  4. **Run all cases:** with the toggle on every case runs every row (same `solvePyWithRetry` call and `computeAll` options as before, `gPM` = row value); the row reported is the governing one by the same rule (service rows: largest |y₀|). Envelope rows say "· row k (f_m x.xx)" (screen) / "· governing row k (f_m = x.xx)" (report), plus a note.
+  5. **"Apply avg f_m" button:** kept as a helper when the toggle is off, with two more ("use leading row", "use trailing row"); hidden when the toggle is on (the per-row results show instead). Kept because it is the only route for an engineer who wants one p-multiplier for a single pile check, and old projects used it.
+  6. **Toggle default: OFF for new projects too.** The toggle does nothing in single-pile mode (the default mode), and the engineer often checks one pile on its own; turning it on is a deliberate, visible choice saved with the project, so a project never changes its basis because the mode was switched. When Pile group mode is chosen the toggle is right next to the row table (Module 11) and the p-multiplier field (Module 02).
+- **Governing provision:** AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024), Art. 10.7.2.4 and Table 10.7.2.4-1 (pile p-multipliers P_m for multiple-row shading; values above as given by the engineer — **verify the table number and values against the 10th Ed.**). Legacy curve: Rollins et al. / Reese & Van Impe / FHWA GEC-10 style (as before).
+- **§4 callouts:**
+  - **(a) Source change at the defaults and for old projects.** Before: every project used the Rollins curve (`groupPmSource` was saved but never read). After: new projects use AASHTO; saved projects keep their saved source ("rollins" from every main save; a file with none → "rollins"). Between 3B and 5B and below 3B both sources give the same numbers. Worked check, defaults (3 × 3 group at 3.0 × bond dia, s = 21 in, d_h = 7 in): before 0.80 / 0.40 / 0.30 (avg 0.50); after 0.80 / 0.40 / 0.30 (avg 0.50) — identical. Effect on results with the toggle off: none (the row values only display and feed the helper buttons).
+  - **(b) Spacing above 5B.** 2 columns × 3 rows at s = 5.5 × bond dia (micropile, s = 38.5 in, d_h = 7 in). Before (legacy): f = f5 + (1 − f5)(5.5 − 5)/1 → row 1: 1.0 + 0 = **1.000**; row 2: 0.85 + 0.15 × 0.5 = **0.925**; row 3: 0.70 + 0.30 × 0.5 = **0.850** (avg 0.925). After (AASHTO): the 5B values **1.00 / 0.85 / 0.70** (avg 0.85). Rows 2 and 3+ lower → **more conservative** (less soil resistance). Verified in the app: legacy project at 5.5B shows 1 / 0.925 / 0.85 on main and on the branch; AASHTO project shows 1 / 0.85 / 0.70. With the toggle on (case Manual Str, STL 80 kip, V 3 kip, micropile defaults): rows M_max 20.28 / 21.33 / **22.79** kip·ft, governing row 3 (f_m 0.70), flexure D/C 0.422, combined 0.580; H-pile 16.94 / 17.27 / **17.67** kip·ft, governing row 3, D/C 0.033 / 0.077.
+  - **(c) Spacing below 3B.** AASHTO: 3B values used (same numbers as the legacy curve, which also used the 3B values) plus an amber warning in Module 11 and a line in report 11: "Spacing 2.50× is below 3B — outside the table. The 3B values are used; closer spacing has more shadowing, so they may be unconservative." Check: s = 2.5 × d_h → 0.80 / 0.40 / 0.30 before and after; no result change.
+  - **(d) Automatic per row vs the old "avg f_m".** 2 × 3 group, 3 rows at 3B (f_m 0.80 / 0.40 / 0.30, avg 0.50), default soil (sand γ 120 pcf, φ 32°, k 90 pci), free head, stickup 3 ft, case "Manual Str" STL = 80 kip, V = 3 kip per pile, M_head = 0. Old method: p-multiplier field = avg 0.50 applied to the one pile. New: three solves.
+
+    | Pile | Row (f_m) | M_max (kip·ft) | y₀ (in) | flexure D/C | combined D/C | lateral |
+    |---|---|---|---|---|---|---|
+    | Micropile (7.0 in casing) | 1 (0.80) | 21.77 | 1.131 | 0.404 | 0.561 | OK |
+    | | 2 (0.40) | 28.99 | 1.987 | 0.537 | 0.695 | OK |
+    | | **3 (0.30) governs** | **34.30** | **2.707** | **0.636** | **0.793** | **NG** (casing extension: tip 12.0 ft < M→5 % depth 12.6 ft) |
+    | | old avg 0.50 | 26.08 | 1.624 | 0.483 | 0.641 | — |
+    | H-pile (defaults) | 1 (0.80) | 17.40 | 0.0912 | 0.0323 | 0.0766 | OK |
+    | | 2 (0.40) | 19.12 | 0.1315 | 0.0356 | 0.0798 | OK |
+    | | **3 (0.30) governs** | **20.61** | **0.1629** | **0.0383** | **0.0826** | OK |
+    | | old avg 0.50 | 18.42 | 0.1148 | 0.0343 | 0.0785 | — |
+
+    The governing (trailing) row is **more conservative** than the avg-f_m result: micropile M_max +31.5 % (34.30 vs 26.08), y₀ +67 %; H-pile M_max +11.9 %, y₀ +42 %. The leading row alone (f_m 0.80) is **less conservative** than the average (micropile 21.77 vs 26.08). With modifier 0.90 the micropile governing row uses 0.27: M_max 37.02 kip·ft, y₀ 3.106 in. At V = 6 kip (micropile) rows 2 and 3 did not converge → governing row 3, "did not converge", lateral checks NG (row 1 alone: M_max 56.98, flexure D/C 1.056).
+- **Pure refactor parts (no result change claimed):** `groupPmRows(…, "rollins")` is the old `pmAt` body; `rOptsFor` is the old `r` memo body; `solvePyResFor(I.pyPM || 1)` is the old `pyRes` memo body (its four `I.pyPM || 1` became `gPM`). Checked by the main-vs-branch runs below (bit-identical numbers).
+- **How verified:**
+  - `node --check` on the four inline scripts.
+  - Headless Chromium (pinned React 18.3.1 / Plotly 2.32.0 / KaTeX 0.16.9 / three r128 served locally), origin/main (#117) vs branch, each with "Run all cases" and then every case made active with the envelope re-run, comparing `computeAll` R (M_max, φM_n, interaction, H-pile Mu/φMn/interaction, no-convergence flag, allPass, group row values / avg / s_dia, cap distribution), the envelope rows, per-case module values, module statuses, check strip and autosave: **identical** for the defaults (micropile, H-pile; and integral abutment / edited / export / IndexedDB / share via the F13 parity script), an old group project saved with "rollins" (micropile and H-pile, 5 cases), a group project with no source saved, a project with the toggle off and source AASHTO (micropile, H-pile), single-pile projects (micropile, H-pile) and a legacy project at 5.5B. Only differences: the new default `groupPmSource` "aashto" in a fresh autosave, the two new fields, and text (Module 02 toggle/note, Module 11 section 2 and code label when AASHTO, report input rows, Figure F-3 note).
+  - Toggle on (branch): micropile and H-pile at 3B, 2.5B, 5.5B, modifier 0.9, heavy load (no convergence): for each of the 5 cases the envelope's M_max and governing row equal Module 02's with that case active (0 mismatches in 25 checks). Lateral graphs subtitle names the governing row; Figure F-3 curves use its p-multiplier.
+  - Timing, "Run all cases", 3 rows × 5 cases (15 solves, click to envelope incl. render): micropile 0.75–1.3 s, H-pile 0.46–0.79 s; toggle off, 5 cases: 0.58–0.69 s.
+  - Saved data: a main project (autosave and the old-format files above) opens on the branch with its source "rollins" and identical results; a branch project with the toggle on opens in main without error (main keeps the two extra fields and ignores them, analysing with the plain p-multiplier, as main always did).
+  - Print: Letter PDF and report text checked (02 per-row table and settings rows, 11 row values and per-row table, envelope labels). No console errors in any run. Screenshots looked at: Module 02 (toggle + per-row table), Module 11 (AASHTO with toggle on; 2.5B warning; legacy with note and helper buttons), envelope, Lateral graphs header, report page 5.
+- **Other copies:** none.
+- **Open items:** O41, O42 (below).
+- **Re-applying by hand:** unified diff below (CRLF stripped).
+
+```diff
+diff --git a/Pile Designer.html b/Pile Designer.html
+index a18a6e1..5d79b4e 100644
+--- a/Pile Designer.html	
++++ b/Pile Designer.html	
+@@ -2412,6 +2412,90 @@ function solvePyWithRetry(input, D) {
+    pile width below the casing tip (see buildPySetup). It does NOT change the
+    casing (structural section, head bearing, cap embedment), which stays on
+    the casing OD. */
++/* ============================================================
++   GROUP LATERAL p-MULTIPLIERS BY ROW (F29, 2026-10-11)
++   ------------------------------------------------------------
++   Row f_m for the leading row, the 2nd row and the 3rd and later rows, from the
++   c/c spacing in diameters s_dia (s / bond-hole diameter, as Module 11 computes it).
++   Sources (I.groupPmSource):
++   - "aashto" (default for new projects): AASHTO LRFD 10th Ed. Table 10.7.2.4-1
++     (verify table number / values): 3B 0.80 / 0.40 / 0.30, 5B 1.00 / 0.85 / 0.70,
++     linear between 3B and 5B; above 5B the 5B values; below 3B the 3B values
++     (outside the table: Module 11 shows an amber warning).
++   - "rollins": the legacy curve this tool used before F29, unchanged: the same 3B / 5B
++     anchors, 3B values at or below 3B, a ramp from the 5B values to 1.0 at 6B, 1.0 at
++     or above 6B, clamped to [0.2, 1.0]. Projects saved with "rollins" (or with no
++     source saved) keep it, so their results reproduce.
++   groupPmAutoOn(I): the "Apply group p-multipliers automatically (per row)" toggle is on
++   and meaningful (pile group mode, built-in p-y, not integral abutment). The App then
++   runs the p-y solve once per row with p-multiplier = row f_m x I.groupPmMod.
++============================================================ */
++const GROUP_PM_SRC_LABEL = { aashto: "AASHTO LRFD 10th Ed. Table 10.7.2.4-1 — verify table number/values", rollins: "Rollins / FHWA (legacy curve)" };
++function groupPmSourceOf(I) { return (I && I.groupPmSource === "rollins") ? "rollins" : "aashto"; }
++function groupPmRows(nRows, s_dia, src) {
++  const pmAt = (rowIdx) => {
++    // anchor tables: [leading, second, third+]
++    const at3 = [0.8, 0.4, 0.3];
++    const at5 = [1.0, 0.85, 0.7];
++    const pick = (arr)=> arr[Math.min(rowIdx,2)];
++    const f3 = pick(at3), f5 = pick(at5);
++    let fm;
++    if (src === "rollins") {
++      // legacy curve (Rollins, Reese & Van Impe; FHWA GEC-10 style), exactly as before F29
++      if (s_dia <= 3) fm = f3;
++      else if (s_dia >= 6) fm = 1.0;         // essentially isolated at >=6D
++      else if (s_dia >= 5) fm = f5 + (1.0 - f5)*((s_dia-5)/1);
++      else fm = f3 + (f5 - f3)*((s_dia-3)/2); // interpolate 3D->5D
++      return Math.max(Math.min(fm,1.0),0.2);
++    }
++    // AASHTO LRFD 10th Ed. Table 10.7.2.4-1
++    if (s_dia <= 3) fm = f3;                 // below 3B: outside the table, 3B values (warned)
++    else if (s_dia >= 5) fm = f5;            // at and above 5B: the 5B values
++    else fm = f3 + (f5 - f3)*((s_dia-3)/2);  // linear 3B -> 5B
++    return fm;
++  };
++  return Array.from({length:nRows}, (_,i)=>({ row:i+1, fm: pmAt(i) }));
++}
++function groupPmTable(I) {
++  const nRows = Math.max(1, Math.round(I.groupNrows||1));
++  const dh_in = bondHoleDia(I);
++  const s_in = (I.groupSpacingIn && I.groupSpacingIn>0) ? I.groupSpacingIn : (I.groupSpacingDia||3)*dh_in;
++  const s_dia = s_in/Math.max(dh_in,1e-6);
++  const src = groupPmSourceOf(I);
++  const rows = groupPmRows(nRows, s_dia, src);
++  return { src, srcLabel: GROUP_PM_SRC_LABEL[src], nRows, s_in, s_dia, rows,
++    avg: rows.reduce((a,b)=>a+b.fm,0)/nRows, belowTable: s_dia < 3 - 1e-9, aboveTable: s_dia > 5 + 1e-9 };
++}
++function groupPmModOf(I) { const v = +(I && I.groupPmMod); return (isFinite(v) && v > 0) ? v : 1.0; }
++function groupPmAutoOn(I) { return !!(I && I.groupPmAuto && I.groupEnable && I.lateralSource === "py" && I.pileType !== "iab"); }
++// One row's lateral-dependent results (from computeAll R and the row's p-y result pr):
++// D/C as the case envelope reports them (micropile: M_max / phi M_n and the P-M interaction;
++// H-pile: Mu / phi Mn and the 6.9.2.2 interaction), and the lateral checks' status (flexure,
++// combined, casing extension (micropile), stability). A row with no valid solve is NG.
++function pmRowSummary(R, pr, I) {
++  const nc = !(pr && pr.ok);
++  const hs = R.hpileStruct, isHP = I.pileType === "hpile" && R.hpileGeo && hs;
++  const flexR = nc ? null : (isHP ? (hs.phiMn > 0 ? hs.Mu / hs.phiMn : null) : (R.flex.phiMn > 0 ? R.MmaxUsed / R.flex.phiMn : null));
++  const combR = nc ? null : (isHP ? hs.comb_ratio : R.comb.interaction);
++  const latPass = !nc && (isHP ? (hs.flex_pass && hs.comb_pass2 !== false) : (R.flex.pass && R.comb.pass && R.casingExt.pass)) && !!(R.stability && R.stability.pass);
++  const dc = nc ? Infinity : Math.max(isFinite(flexR) ? flexR : 0, isFinite(combR) ? combR : 0);
++  return { noConv: nc, flexR, combR, latPass, dc, Mmax: nc ? null : pr.Mmax_kft, y0: nc ? null : pr.headDefl_in };
++}
++// Governing row: the largest dc (a row that did not converge has dc = Infinity and governs);
++// ties (within 1e-9) -> the larger Mmax, then the smaller p-multiplier (less soil support).
++function pmPickGov(ev) {
++  let g = 0;
++  for (let k = 1; k < ev.length; k++) {
++    const a = ev[k], b = ev[g];
++    const tie = (x, y) => (x === y) || (isFinite(x) && isFinite(y) && Math.abs(x - y) <= 1e-9 * Math.max(1, Math.abs(x), Math.abs(y)));
++    if (a.dc > b.dc && !tie(a.dc, b.dc)) { g = k; continue; }
++    if (!tie(a.dc, b.dc)) continue;
++    const am = a.Mmax == null ? -1 : a.Mmax, bm = b.Mmax == null ? -1 : b.Mmax;
++    if (am > bm && !tie(am, bm)) { g = k; continue; }
++    if (tie(am, bm) && a.pm < b.pm) g = k;
++  }
++  return g;
++}
+ function bondHoleDia(I) {
+   return (I.dhBondSeparate && isFinite(I.dhBond) && I.dhBond > 0) ? I.dhBond : I.OD;
+ }
+@@ -3511,23 +3595,12 @@ function computeAll(I, opts = {}) {
+   const phiPn_geo_group = phi_geo * Pn_geo_group;
+   const geoGroup_pass = !grpOn || phiPn_geo_group >= STL;
+ 
+-  // --- 2) Lateral p-multipliers by row (FHWA / Rollins et al.) ---
+-  // Representative fm by leading/2nd/3rd+ row at 3D and 5D; interpolate on spacing.
+-  // (Rollins, Reese & Van Impe; FHWA GEC-10 style.) fm capped at 1.0.
+-  const pmAt = (rowIdx) => {
+-    // anchor tables: [leading, second, third+]
+-    const at3 = [0.8, 0.4, 0.3];
+-    const at5 = [1.0, 0.85, 0.7];
+-    const pick = (arr)=> arr[Math.min(rowIdx,2)];
+-    const f3 = pick(at3), f5 = pick(at5);
+-    let fm;
+-    if (s_dia <= 3) fm = f3;
+-    else if (s_dia >= 6) fm = 1.0;         // essentially isolated at >=6D
+-    else if (s_dia >= 5) fm = f5 + (1.0 - f5)*((s_dia-5)/1);
+-    else fm = f3 + (f5 - f3)*((s_dia-3)/2); // interpolate 3D->5D
+-    return Math.max(Math.min(fm,1.0),0.2);
+-  };
+-  const pMultipliers = Array.from({length:nRows}, (_,i)=>({ row:i+1, fm: pmAt(i) }));
++  // --- 2) Lateral p-multipliers by row ---
++  // F29 (2026-10-11): the row values come from groupPmRows() (source I.groupPmSource:
++  // AASHTO LRFD 10th Ed. Table 10.7.2.4-1, the default, or the legacy Rollins / FHWA
++  // curve). The App's per-row p-y analysis reads the same function (groupPmTable).
++  const pmSrc = groupPmSourceOf(I);
++  const pMultipliers = groupPmRows(nRows, s_dia, pmSrc);
+   const pmAvg = pMultipliers.reduce((a,b)=>a+b.fm,0)/nRows;
+ 
+   // --- 3) Block failure / equivalent pier ---
+@@ -3555,7 +3628,9 @@ function computeAll(I, opts = {}) {
+     eta, eta_auto, etaOverride: I.groupEtaOverride, spacingOKforEta, spacingThreshDia, thetaDeg, clEff,
+     Pn_geo_single: R.geo.Pn_geo, Pn_geo_group, phiPn_geo_group, geoGroup_pass,
+     // lateral p-multipliers
+-    pMultipliers, pmAvg, pmSource: I.groupPmSource,
++    pMultipliers, pmAvg, pmSource: pmSrc, pmSourceLabel: GROUP_PM_SRC_LABEL[pmSrc],
++    pmBelowTable: s_dia < 3 - 1e-9, pmAboveTable: s_dia > 5 + 1e-9,
++    pmAuto: groupPmAutoOn(I), pmMod: groupPmModOf(I),
+     // block
+     Bx_ft: Bx/12, By_ft: By/12, blockPerim_ft, Lb_block, Pn_block, sumIndiv, blockGoverns,
+     groupBondCap, phiGroupBond, groupDemand, block_pass,
+@@ -5684,7 +5759,7 @@ function PyCurvesFig({ I, pyRes, solved, activeLayers, depths, setDepths, print
+   const notes = lin
+     ? ["Linear (Winkler) basis: the springs are straight lines p = E_s·y with E_s = n_h·z (sand) or k_h (clay) per layer, read with the solver's own subgradeAt(); node spacing " + fmt(set.dz, 3) + " ft. ● = deflection of the linear solution at that depth (active case).",
+        "There are no nonlinear p-y curves on this basis; select “Nonlinear p-y (built-in)” to see them."]
+-    : ["Curves are the solver's own springs: pyPofY() with the same soil records, Georgiadis equivalent depth z_e, pile width b" + (I.pileType === "hpile" ? " (H-pile: b_f for strong-axis, d for weak-axis bending)" : " (d_h below the casing tip where entered)") + " and multipliers, p = f_m·p(y/f_y) with f_m = " + fmt(set.gPM, 2) + ", f_y = " + fmt(set.gYM, 2) + ". Group row factors (Module 11) reach the solver only through f_m (“Apply avg fm”); they are not applied per row.",
++    : ["Curves are the solver's own springs: pyPofY() with the same soil records, Georgiadis equivalent depth z_e, pile width b" + (I.pileType === "hpile" ? " (H-pile: b_f for strong-axis, d for weak-axis bending)" : " (d_h below the casing tip where entered)") + " and multipliers, p = f_m·p(y/f_y) with f_m = " + fmt(set.gPM, 2) + ", f_y = " + fmt(set.gYM, 2) + ". " + (pyRes && pyRes.pmAuto ? "Group p-multipliers applied per row (Module 11): these are the curves of the governing row " + pyRes.pmAuto.govRow + " (f_m = row f_m " + fmt(pyRes.pmAuto.govFm, 2) + " × modifier " + fmt(pyRes.pmAuto.mod, 2) + ")." : "Group row factors (Module 11) reach the solver only through f_m (the p-multiplier input) unless “Apply group p-multipliers automatically (per row)” is on."),
+        "● = point mobilised under the active load case: y from the solution at the solver node nearest each depth (node spacing " + fmt(set.h, 2) + " in) and p = the reaction the solver applied (E_s·y, the secant stiffness times y); |p − p(y)| shows it lies on its curve (round-off only). " + (set.curves.some(c => Math.abs(c.pSolver - c.pOnCurve) > 1e-6 * Math.max(1, c.pOnCurve)) ? "At " + set.curves.filter(c => Math.abs(c.pSolver - c.pOnCurve) > 1e-6 * Math.max(1, c.pOnCurve)).map(c => fmt(c.d, 1) + " ft").join(", ") + " the deflection is below 0.001·y_50 (clay), where the solver linearises the p-y curve, so the ● lies below the curve. " : "") + (I.pyCyclic ? "Cyclic loading selected: cyclic forms apply to sand and soft clay; stiff clay and weak rock have no cyclic form in the tool." : "Static loading.") + "" + (set.curves.some(c => c.model === "weakrock") ? " Weak rock values are plotted as the solver uses them (uncalibrated model)." : ""),
+        set.user ? "Depths: your list (saved in this browser)." : "Automatic depths: mid-depth of each layer between the top of the springs (" + fmt(set.dTop, 1) + " ft) and the depth where M decays to 5 % of M_max (" + fmt(set.dBot, 1) + " ft), the head region (one pile width below the top of the springs) and the depth of M_max."];
+   if (set.more) notes.push("Only the first 8 depths are drawn.");
+@@ -7384,7 +7459,11 @@ const DEFAULT_INPUTS = {
+   groupPiles: null, groupSelPile: 0, loadFromGroup: false, capEdgeMin: 0,
+   groupSpacingIn: 0,
+   groupEtaOverride: false, groupEta: 1.0,
+-  groupPmSource: "rollins",
++  // F29: AASHTO LRFD 10th Ed. Table 10.7.2.4-1 for new projects ("rollins" = legacy curve;
++  // a saved project keeps its saved source, one with none saved loads as "rollins").
++  groupPmSource: "aashto",
++  groupPmAuto: false,   // F29: "Apply group p-multipliers automatically (per row)"
++  groupPmMod: 1.0,      // F29: user modifier on the row f_m when the toggle is on
+   // project metadata
+   projName: "Project Name",
+   projNum: "Job No.",
+@@ -7664,6 +7743,10 @@ function mergeSavedInputs(parsed) {
+     out.hpPhiRev = 2;
+     if (changed.length && out.pileType === "hpile") notes.push("H-pile resistance factors updated from the old unused placeholders (" + changed.join(", ") + ") to the values the calculation already used. Results are unchanged; the report now shows the factors actually applied.");
+   }
++  // F29: the p-multiplier source default changed to AASHTO ("aashto"). A project saved
++  // without a source predates the choice and used the legacy curve: keep "rollins" so its
++  // results reproduce. A saved source (either value) is kept as saved.
++  if (parsed && typeof parsed === "object" && parsed.groupPmSource == null) out.groupPmSource = "rollins";
+   LAST_LOAD_NOTES = notes;
+   return out;
+ }
+@@ -8322,7 +8405,7 @@ function PrintReport({
+       ["Head condition", I.solverHead === "fixed" ? "Fixed / capped" : "Free / pinned", "", ""],
+       ["Rotational spring K\u03b8", (I.solverHead !== "fixed" && (I.pyKrot || 0) > 0) ? I.pyKrot : null, "kip\u00b7in/rad", "partial head restraint"],
+       ["p-y loading criterion", I.pyCyclic ? "CYCLIC (degraded)" : "Static", "", I.pyCyclic ? "offshore/seismic criterion" : "usual bridge basis"],
+-      ["p-multiplier", I.pyPM, "", "group / curve factor"],
++      groupPmAutoOn(I) ? ["p-multiplier", "per row: row f\u2098 \u00d7 " + fmt(groupPmModOf(I), 2), "", "group p-multipliers applied automatically (Module 11)"] : ["p-multiplier", I.pyPM, "", "group / curve factor"],
+       ["y-multiplier", I.pyYM, "", ""],
+       ["p-y pile width", I.pileType === "micropile" ? (I.dhBondSeparate && I.dhBond > 0 && Math.abs(I.dhBond - I.OD) > 1e-9 ? "casing OD " + fmt(I.OD, 3) + " in to casing tip; d\u2095 " + fmt(I.dhBond, 3) + " in below" : "casing OD " + fmt(I.OD, 3) + " in, full length") : null, "", "two-section width per LPILE practice when d\u2095 \u2260 OD"],
+       ["Solver nodes", I.pyNodes != null ? String(Math.round(I.pyNodes)) : null, "", "finite-difference discretization"],
+@@ -8379,7 +8462,8 @@ function PrintReport({
+       ["Spacing", I.groupSpacingIn > 0 ? I.groupSpacingIn : null, "in", "explicit"],
+       ["Spacing (diameters)", I.groupSpacingIn > 0 ? null : I.groupSpacingDia, "\u00d7D", ""],
+       ["Efficiency \u03b7 override", I.groupEtaOverride || null, "", ""],
+-      ["p-multiplier source", I.groupPmSource, "", ""]
++      ["p-multiplier source", GROUP_PM_SRC_LABEL[groupPmSourceOf(I)], "", ""],
++      ["Group p-multipliers per row", I.lateralSource === "py" ? (I.groupPmAuto ? "applied automatically, modifier " + fmt(groupPmModOf(I), 2) : "off \u2014 p-multiplier entered directly") : null, "", ""]
+     ] })),
+   /*#__PURE__*/React.createElement("div", {
+     className: "rpt-section"
+@@ -8694,9 +8778,11 @@ function PrintReport({
+       }))),
+     /*#__PURE__*/React.createElement("div", { style: { fontSize: "7.5px", color: "#94a3b8", marginTop: "2px" } },
+       "Georgiadis (1983) layering · head: " + (I.solverHead === "fixed" ? "fixed" : (I.pyKrot > 0 ? "restrained Kθ=" + fmt(I.pyKrot, 0) + " kip·in/rad" : "free")) +
+-      " · p/y mult " + fmt(I.pyPM, 2) + "/" + fmt(I.pyYM, 2) +
++      (pyRes && pyRes.pmAuto ? " · p-mult per row (governing row " + pyRes.pmAuto.govRow + ": " + fmt(pyRes.pmAuto.govPm, 2) + ") / y mult " + fmt(I.pyYM, 2) : " · p/y mult " + fmt(I.pyPM, 2) + "/" + fmt(I.pyYM, 2)) +
+       (pyRes && pyRes.ok && pyRes.eiVar && pyRes.mphi ? " · M-φ EI: EI₀ " + fmt(pyRes.mphi.EI0 / 1e6, 2) + "/" + fmt(pyRes.mphi.EI0u / 1e6, 2) + "×10⁶ kip·in², Mcr≈" + fmt(pyRes.Mcr_kft, 1) + " kip·ft" : " · EI basis: " + I.pyEIBasis) +
+       (pyRes && pyRes.ok ? " · closure ΣF " + fmt(pyRes.eq.fPct, 2) + "% / ΣM " + fmt(pyRes.eq.mPct, 2) + "%" : ""))),
++  // F29: group p-multipliers per row -- the per-row results; the module values are the governing row's
++  I.lateralSource === "py" && pyRes && pyRes.pmAuto && /*#__PURE__*/React.createElement(PmRowTable, { info: pyRes.pmAuto, print: true }),
+   /*#__PURE__*/React.createElement(Calc, {
+     label: "Maximum moment",
+     eq: `M_{max} = ${fmt(r.MmaxUsed != null ? r.MmaxUsed : I.Mmax, 1)}\\ \\text{kip}\\cdot\\text{ft}`
+@@ -9213,7 +9299,7 @@ function PrintReport({
+       ["Lateral load applied", I.Plat, "kip", ""],
+       ["Head moment applied", I.solverHead === "fixed" ? null : I.pyMhead, "kip\u00b7ft", "free head only"],
+       ["p-y loading criterion", I.pyCyclic ? "CYCLIC \u2014 degraded resistance" : "STATIC", "", I.pyCyclic ? "offshore/seismic basis" : "usual bridge basis"],
+-      ["p-multiplier (group / curve)", I.pyPM, "", "applied to all p-y curves"],
++      pyRes && pyRes.pmAuto ? ["p-multiplier (governing row " + pyRes.pmAuto.govRow + ")", fmt(pyRes.pmAuto.govFm, 2) + " \u00d7 " + fmt(pyRes.pmAuto.mod, 2) + " = " + fmt(pyRes.pmAuto.govPm, 3), "", "row f\u2098 \u00d7 modifier, applied to all p-y curves of this solve"] : ["p-multiplier (group / curve)", I.pyPM, "", "applied to all p-y curves"],
+       ["y-multiplier", I.pyYM, "", ""],
+       ["Finite-difference nodes", I.pyNodes, "", "solver discretization"],
+       ["Layering correction", (Array.isArray(I.soilLayers) && I.soilLayers.length > 1) ? "Georgiadis (1983) equivalent depth" : null, "", "multi-layer profiles"],
+@@ -9320,6 +9406,14 @@ function PrintReport({
+       "Resultant at centroid: \u03a3P = ", fmt(r.capDist.Pv, 1), " kip, \u03a3V = (", fmt(r.capDist.Vx, 1), ", ", fmt(r.capDist.Vy, 1), ") kip, \u03a3M", /*#__PURE__*/React.createElement("sub", null, "eff"), " = (", fmt(r.capDist.Mx_eff, 1), ", ", fmt(r.capDist.My_eff, 1), ") kip\u00b7ft (incl. shear\u00d7height and vertical\u00d7offset)."),
+     React.createElement(GfxRptFig, { caption: "Figure 11-1: pile group plan, to scale (dimensions in ft). Number under each pile = axial (kip) from the table below; orange ring = design pile; \u25c6 = load location; CG = pile-group centroid." },
+       React.createElement(GroupPlanSvg, { I: I, cd: r.capDist, print: true })),
++    // F29: row p-multipliers (source, warnings) and, with the per-row toggle on, the per-row results
++    r.group && r.group.pMultipliers && /*#__PURE__*/React.createElement("div", { style: { fontSize: "8.5px", color: "#16304F", margin: "4px 0" } },
++      "Lateral p-multipliers by row (", r.group.pmSourceLabel, ") at s = ", fmt(r.group.s_dia, 2), " \u00d7 bond dia: ",
++      r.group.pMultipliers.map(p => "row " + p.row + " " + fmt(p.fm, 2)).join(", "), ". ",
++      r.group.pmBelowTable && r.group.pmSource === "aashto" ? "\u26a0 Spacing below 3B \u2014 outside the table; the 3B values are used. " : "",
++      r.group.pmAboveTable && r.group.pmSource === "aashto" ? "Spacing above 5B: the 5B values are used. " : "",
++      I.lateralSource === "py" ? (r.group.pmAuto ? "Applied automatically per row (p-multiplier = row f\u2098 \u00d7 " + fmt(r.group.pmMod, 2) + "); the lateral results are the governing row's." : "Not applied automatically; the p-y analysis used the entered p-multiplier " + fmt(I.pyPM || 1, 2) + ".") : ""),
++    r.group && r.group.pmAuto && pyRes && pyRes.pmAuto && /*#__PURE__*/React.createElement(PmRowTable, { info: pyRes.pmAuto, print: true }),
+     r.capDist.capWt_incl && /*#__PURE__*/React.createElement("div", { style: { fontSize: "8px", color: "#64748b", marginBottom: "3px" } },
+       "Includes cap self-weight + soil surcharge \u03b3DC\u00d7W = ", fmt(r.capDist.dlFactor, 2), "\u00d7", fmt(r.capDist.capWeight_nom, 1), " = ", fmt(r.capDist.capWeight, 1), " kip (FHWA Eq. 8-79), applied at the cap centroid.",
+       r.capDist.stemWt_incl ? " Stem wall self-weight \u03b3DC\u00d7W = " + fmt(r.capDist.dlFactor, 2) + "\u00d7" + fmt(r.capDist.stemWeight_nom, 1) + " = " + fmt(r.capDist.stemWeight, 1) + " kip, applied at the stem plan centroid." : ""),
+@@ -9355,7 +9449,7 @@ function PrintReport({
+         ["Case", "Type", "Mmax (kip\u00b7ft)", "y\u2080 (in)", "D/C geo", "D/C flex", "D/C comb", "D/C buckl", "Result"].map((h2, i) =>
+           /*#__PURE__*/React.createElement("td", { key: i, style: { padding: "2px 4px" } }, h2)))),
+       /*#__PURE__*/React.createElement("tbody", null, caseRes.rows.map((r0, i) => /*#__PURE__*/React.createElement("tr", { key: i, style: { borderBottom: "1px solid #e2e8f0" } },
+-        /*#__PURE__*/React.createElement("td", { style: { padding: "2px 4px" } }, r0.name),
++        /*#__PURE__*/React.createElement("td", { style: { padding: "2px 4px" } }, r0.name, r0.pmRow != null ? " \u00b7 governing row " + r0.pmRow + " (f\u2098 = " + fmt(r0.pmFm, 2) + ")" : ""),
+         /*#__PURE__*/React.createElement("td", { style: { padding: "2px 4px" } }, r0.type),
+         /*#__PURE__*/React.createElement("td", { style: r0.noConv ? { padding: "2px 4px", fontWeight: 700, color: "#B91C1C" } : { padding: "2px 4px" } }, r0.noConv ? "did not converge" : r0.Mmax != null ? fmt(r0.Mmax, 1) : "\u2014"),
+         /*#__PURE__*/React.createElement("td", { style: { padding: "2px 4px" } }, r0.y0 != null ? fmt(r0.y0, 3) : "\u2014",
+@@ -9370,7 +9464,8 @@ function PrintReport({
+     caseRes.rows.some(r0 => { const w = pyDeflWarnInfo(r0.y0, r0.D, I); return w && w.warn; }) && /*#__PURE__*/React.createElement("div", { style: { fontSize: "8px", color: "#7a4d15", marginTop: "2px" } },
+       "\u26a0 Large head deflection (|y\u2080| > " + fmt(pyDeflWarnFactor(I), 2) + " \u00d7 D, warning only): " + caseRes.rows.filter(r0 => { const w = pyDeflWarnInfo(r0.y0, r0.D, I); return w && w.warn; }).map(r0 => r0.name + " (" + fmt(Math.abs(r0.y0) / r0.D, 2) + " D)").join(", ") + ". The checks use these solutions as computed; a deflection this large, especially one opposite to the load, can mean the pile is near or past instability."),
+     /*#__PURE__*/React.createElement("div", { style: { fontSize: "7.5px", color: "#94a3b8", marginTop: "2px" } },
+-      "Envelope computed " + caseRes.at + ". Service rows report deflection only. The detailed module calculations that follow reflect the ACTIVE case.")),
++      "Envelope computed " + caseRes.at + ". Service rows report deflection only. The detailed module calculations that follow reflect the ACTIVE case." +
++      (caseRes.rows.some(r0 => r0.pmRow != null) ? " Group p-multipliers applied per row: each case solved for every row (p-multiplier = row f\u2098 \u00d7 modifier); values shown are the governing row's (largest flexure / combined D/C; service: largest |y\u2080|; a row that did not converge governs)." : ""))),
+   /*#__PURE__*/React.createElement("table", {
+     style: {
+       width: "100%",
+@@ -9941,7 +10036,8 @@ function LoadCasesCard({ cases, updCases, applyCase, runAllCases, caseRes, I, up
+       /*#__PURE__*/React.createElement("thead", null, /*#__PURE__*/React.createElement("tr", { className: "text-slate-400" },
+         ["case", "Mmax k·ft", "y₀ in", "geo", "flex", "comb", "buckl", "pass"].map((h2, i) => /*#__PURE__*/React.createElement("td", { key: i, className: "pr-2" }, h2)))),
+       /*#__PURE__*/React.createElement("tbody", null, rr.map((r0, i) => /*#__PURE__*/React.createElement("tr", { key: i, style: { borderTop: "1px solid #eef2f6" } },
+-        /*#__PURE__*/React.createElement("td", { className: "py-0.5 pr-2 text-slate-500" }, r0.name, r0.type === "service" ? " (svc)" : r0.type === "extreme" ? " (EE)" : r0.type === "tension" ? " (T)" : ""),
++        /*#__PURE__*/React.createElement("td", { className: "py-0.5 pr-2 text-slate-500" }, r0.name, r0.type === "service" ? " (svc)" : r0.type === "extreme" ? " (EE)" : r0.type === "tension" ? " (T)" : "",
++          r0.pmRow != null && /*#__PURE__*/React.createElement("span", { className: "ml-1 text-[8.5px]", style: { color: "#1F3A5F" }, title: "Governing row of " + r0.pmNRows + " (group p-multipliers per row)" }, "\u00b7 row " + r0.pmRow + " (f\u2098 " + fmt(r0.pmFm, 2) + ")")),
+         /*#__PURE__*/React.createElement("td", { className: "py-0.5 pr-2", style: r0.noConv ? { color: "#b23b3b", fontWeight: 700 } : undefined }, r0.noConv ? "n/c" : r0.Mmax != null ? fmt(r0.Mmax, 1) : "—"),
+         /*#__PURE__*/React.createElement("td", { className: "py-0.5 pr-2" }, r0.y0 != null ? fmt(r0.y0, 3) : "—",
+           (() => { const w = pyDeflWarnInfo(r0.y0, r0.D, I); return w && w.warn; })() && /*#__PURE__*/React.createElement("span", { title: "Large head deflection: |y0| > " + fmt(pyDeflWarnFactor(I), 2) + " × D (warning only)", style: { color: "#b7791f", fontWeight: 700 } }, " ⚠ large defl.")),
+@@ -9949,6 +10045,8 @@ function LoadCasesCard({ cases, updCases, applyCase, runAllCases, caseRes, I, up
+           ? /*#__PURE__*/React.createElement("td", { key: j, className: "py-0.5 pr-2", style: { color: "#b23b3b", fontWeight: 700 } }, "NG")
+           : /*#__PURE__*/React.createElement("td", { key: j, className: "py-0.5 pr-2", style: { color: i === w && rr[i][k] != null ? "#b23b3b" : "#334155", fontWeight: i === w && rr[i][k] != null ? 700 : 400 } }, fmtR(r0[k]))),
+         /*#__PURE__*/React.createElement("td", { className: "py-0.5", style: { color: r0.pass ? "#2f6f3e" : "#b23b3b" } }, r0.pass ? "✓" : "✗"))))),
++    ro && rr && rr.some(r0 => r0.pmRow != null) && /*#__PURE__*/React.createElement("p", { className: "text-[9px] mt-1 leading-snug", style: { color: "#1F3A5F" } },
++      "Group p-multipliers applied per row: each case was solved for every row (p-multiplier = row f\u2098 \u00d7 modifier); the values shown are the governing row's (largest flexure / combined D/C; service: largest |y\u2080|; a row that did not converge governs)."),
+     ro && rr && rr.some(r0 => r0.noConv) && /*#__PURE__*/React.createElement("p", { className: "text-[9px] mt-1 leading-snug", style: { color: "#b23b3b" } },
+       "n/c = the p-y solve did not converge for ", rr.filter(r0 => r0.noConv).map(r0 => r0.name).join(", "), ": ", PY_NC_MSG.replace(/^Did not converge — /, ""), ". No valid lateral demand, so flexure and combined loading are NG (a service row fails its deflection check). Reduce the load, check P", /*#__PURE__*/React.createElement("sub", null, "cr"), " in Module 10, shorten the unsupported length or add stiffness; make the case active to see the reason in Module 02."),
+     ro && rr && rr.some(r0 => { const w = pyDeflWarnInfo(r0.y0, r0.D, I); return w && w.warn; }) && /*#__PURE__*/React.createElement("p", { className: "text-[9px] mt-1 leading-snug", style: { color: "#7a4d15" } },
+@@ -11309,6 +11407,67 @@ function GroupModal({ open, onClose, I, set, cap, g }) {
+         /*#__PURE__*/React.createElement("button", { onClick: onClose, className: "text-[11px] px-4 py-1.5 rounded-sm text-white", style: { background: "var(--blueprint)" } }, "Done"))));
+ }
+ 
++/* ============================================================
++   F29 (2026-10-11): group p-multipliers by row -- the toggle and the per-row table
++   ------------------------------------------------------------
++   PmAutoToggle: "Apply group p-multipliers automatically (per row)" (I.groupPmAuto) and,
++   when on, the modifier on the row f_m (I.groupPmMod; final p-multiplier = row f_m x
++   modifier). Only meaningful in Pile group mode with the built-in p-y analysis; in
++   single-pile mode it is shown disabled with a note.
++   PmRowTable: the per-row results of the governing case (pyRes.pmAuto): row, f_m,
++   p-multiplier used, M_max, y0, flexure D/C, combined D/C, lateral status; the governing
++   row is marked. Display only: every value is read from the per-row solves.
++============================================================ */
++function PmAutoToggle({ I, set, where }) {
++  const e = React.createElement;
++  const grp = !!I.groupEnable, py = I.lateralSource === "py";
++  const on = groupPmAutoOn(I);
++  return e("div", { className: "pd-pmauto rounded-sm border p-2 mb-2", style: { borderColor: on ? "#1F3A5F" : "#CBD5E1", background: on ? "#EFF4FA" : "#fff" } },
++    e("label", { className: "flex items-start gap-1.5 text-[10px] " + (grp && py ? "cursor-pointer" : "opacity-50") },
++      e("input", { type: "checkbox", disabled: !(grp && py), checked: !!I.groupPmAuto && grp && py, "aria-label": "Apply group p-multipliers automatically (per row)",
++        onChange: ev => set('groupPmAuto', ev.target.checked) }),
++      e("span", null, e("b", null, "Apply group p-multipliers automatically (per row)"),
++        " — the p-y analysis runs once per row with p-multiplier = row f", e("sub", null, "m"), " × modifier; the governing row drives the lateral checks.")),
++    !grp ? e("div", { className: "text-[9px] text-slate-500 mt-1" }, "Single pile — enter the p-multiplier directly.")
++      : !py ? e("div", { className: "text-[9px] text-slate-500 mt-1" }, "Needs the built-in nonlinear p-y analysis (Module 02 lateral basis). With an external LPILE moment, enter the row f", e("sub", null, "m"), " in LPILE.")
++      : on ? e("div", { className: "flex items-center gap-2 mt-1.5 text-[9.5px] font-mono-tech" },
++          e("span", { className: "text-slate-600" }, "modifier on row f", e("sub", null, "m")),
++          e("input", { type: "number", step: 0.05, min: 0, "aria-label": "Modifier on the row p-multiplier", value: I.groupPmMod != null ? I.groupPmMod : 1,
++            onChange: ev => set('groupPmMod', parseFloat(ev.target.value)), className: "w-16 font-mono-tech text-[10px] px-1 py-0.5 rounded-sm border border-slate-300" }),
++          e("span", { className: "text-slate-400" }, "default 1.00; the p-multiplier field (" + fmt(I.pyPM || 1, 2) + ") is not used while this is on"))
++      : null);
++}
++function PmRowTable({ info, print }) {
++  const e = React.createElement;
++  if (!info || !info.rows) return null;
++  const fR = v => v == null || !isFinite(v) ? "—" : fmt(v, 2);
++  const showMod = Math.abs((info.mod || 1) - 1) > 1e-9;
++  const th = print ? { padding: "2px 4px", textAlign: "left", fontFamily: "monospace", color: "#475569", fontWeight: 600 } : undefined;
++  const td = print ? { padding: "2px 4px" } : undefined;
++  const hdr = ["Row", "fₘ", ...(showMod ? ["p-mult used"] : []), "Mₘₐₓ (kip·ft)", "y₀ (in)", "flexure D/C", "combined D/C", "lateral status"];
++  return e("div", { className: print ? "rpt-avoid" : "pd-pmrows mb-2", style: print ? { marginBottom: "8px" } : undefined },
++    e("div", print ? { style: { fontSize: "9px", fontWeight: 700, color: "#16304F", marginBottom: "2px" } } : { className: "text-[10px] font-mono-tech text-[var(--blueprint)] uppercase tracking-wider mb-1" },
++      "Group p-multipliers by row — governing row " + info.govRow + " (fₘ = " + fmt(info.govFm, 2) + (showMod ? ", p-mult = " + fmt(info.govPm, 3) : "") + ")"),
++    e("table", print ? { style: { width: "100%", borderCollapse: "collapse", fontSize: "8.5px" } } : { className: "w-full text-[9.5px] font-mono-tech", style: { borderCollapse: "collapse" } },
++      e("thead", null, e("tr", print ? { style: { borderBottom: "1px solid #cbd5e1" } } : { className: "text-slate-400" },
++        hdr.map((h, i) => e(print ? "th" : "td", { key: i, className: print ? undefined : "pr-2", style: th }, h)))),
++      e("tbody", null, info.rows.map((rw, i) => {
++        const gov = i === info.gov;
++        return e("tr", { key: i, style: { borderTop: "1px solid #eef2f6", background: gov ? "rgba(201,98,46,0.10)" : "transparent", fontWeight: gov ? 700 : 400 } },
++          e("td", { className: print ? undefined : "py-0.5 pr-2", style: td }, "Row " + rw.row + (rw.row === 1 ? " (leading)" : "") + (gov ? " ◀ governs" : "")),
++          e("td", { className: print ? undefined : "pr-2", style: td }, fmt(rw.fm, 2)),
++          showMod ? e("td", { className: print ? undefined : "pr-2", style: td }, fmt(rw.pm, 3)) : null,
++          e("td", { className: print ? undefined : "pr-2", style: Object.assign({}, td, rw.noConv ? { color: "#b23b3b" } : {}) }, rw.noConv ? "did not converge" : fR(rw.Mmax)),
++          e("td", { className: print ? undefined : "pr-2", style: td }, rw.y0 == null ? "—" : fmt(rw.y0, 3)),
++          e("td", { className: print ? undefined : "pr-2", style: td }, rw.noConv ? "NG" : fR(rw.flexR)),
++          e("td", { className: print ? undefined : "pr-2", style: td }, rw.noConv ? "NG" : fR(rw.combR)),
++          e("td", { style: Object.assign({}, td, { color: rw.latPass ? "#2f6f3e" : "#b23b3b" }) }, rw.latPass ? "OK" : "NG"));
++      }))),
++    e("div", print ? { style: { fontSize: "7.5px", color: "#64748b", marginTop: "2px" } } : { className: "text-[8.5px] text-slate-500 mt-0.5 leading-snug" },
++      "Each row solved with the active case's per-pile loads and p-multiplier = row fₘ × modifier (" + fmt(info.mod || 1, 2) + "); fₘ from " + info.srcLabel + " at s = " + fmt(info.s_dia, 2) + " × bond dia. " +
++      "Governing row = largest D/C of flexure / combined (a row that did not converge governs, NG; ties → larger Mₘₐₓ). " +
++      "Lateral status = flexure, combined" + " and stability (micropile: also casing extension). The lateral results, graphs and checks shown are the governing row's."));
++}
+ function GroupPlan({ I, g }) {
+   const s = g.s_in, D = g.dh_in, nR = g.nRows, nC = g.nCols;
+   const shapes = [];
+@@ -11331,7 +11490,7 @@ function GroupPlan({ I, g }) {
+         yaxis: { range: [(nR - 1) * s + pad, -pad], visible: false, scaleanchor: "x", scaleratio: 1 } }),
+       height: Math.min(140 + nR * 34, 300) }),
+     /*#__PURE__*/React.createElement("p", { className: "text-[8.5px] text-slate-400 mt-0.5 leading-snug" },
+-      "Rows numbered from the leading row (load direction shown); f\u2098 = Rollins-style row p-multiplier for LPILE entry. \u03b7 = " + fmt(g.eta, 2) + " axial efficiency."));
++      "Rows numbered from the leading row (load direction shown); f\u2098 = row p-multiplier (" + (g.pmSource === "rollins" ? "Rollins / FHWA legacy curve" : "AASHTO Table 10.7.2.4-1") + "). \u03b7 = " + fmt(g.eta, 2) + " axial efficiency."));
+ }
+ 
+ /* AASHTO LRFD Table C10.9.3.5.2-1 (modified after Sabatini et al. 2005):
+@@ -12398,7 +12557,9 @@ function PyPanel({ I, set, pyRes, r, EI, EI_composite_kipin2, EI_aashto_kipin2,
+           /*#__PURE__*/React.createElement(Field, { label: "Lateral load", unit: "kip", sub: "⇐ active load case", value: I.Plat, onChange: v => setLoad('Plat', v) }),
+           /*#__PURE__*/React.createElement(GeoMirror, { label: "Stickup", val: I.solverFree, unit: "ft" }),
+           /*#__PURE__*/React.createElement(Field, { label: "Head moment", unit: "kip\u00b7ft", sub: I.solverHead === "fixed" ? "ignored (fixed head)" : "⇐ active load case", value: I.pyMhead, onChange: v => setLoad('Mhead', v) }),
+-          /*#__PURE__*/React.createElement(Field, { label: "p-multiplier", sub: "group fm \u00d7 curve", value: I.pyPM, onChange: v => set('pyPM', v) }),
++          groupPmAutoOn(I)
++            ? /*#__PURE__*/React.createElement(Field, { label: "p-multiplier", sub: "not used \u2014 per row: row f\u2098 \u00d7 modifier (Module 11)", value: I.pyPM, disabled: true, onChange: () => {} })
++            : /*#__PURE__*/React.createElement(Field, { label: "p-multiplier", sub: "group fm \u00d7 curve", value: I.pyPM, onChange: v => set('pyPM', v) }),
+           /*#__PURE__*/React.createElement(Field, { label: "y-multiplier", value: I.pyYM, onChange: v => set('pyYM', v) })),
+         /*#__PURE__*/React.createElement("p", { className: "text-[8.5px] text-slate-400 leading-snug mb-2" },
+           "Axial thrust Q = STL = ", fmt(I.STL, 0), " kip is carried in the governing equation (P-\u0394 native). Cyclic Reese A/B factors are uncalibrated placeholders \u2014 the static path is the benchmarked one.",
+@@ -13132,8 +13293,9 @@ function App() {
+       const EIsecFnOut = isHP ? null : EIsecFn;
+       return { D, stick_in, L_in, embed_in, soilAt, EIfn, soilTop_in, unsupBelowGrade_in, Lu_ft, EIsecFn: EIsecFnOut, cut_in: isHP ? 1e9 : cut_in, mphiC: isHP ? null : mphiC, mphiU: isHP ? null : mphiU, EIcasedSel: isHP ? hpEIconst : EIcasedSel };
+   }
+-  const pyRes = useMemo(() => {
+-    if (I.lateralSource !== "py") return null;
++  // F29: one p-y solve with p-multiplier gPM (the pre-F29 pyRes body; gPM = gPM when the
++  // automatic per-row group p-multipliers are off, so that path is unchanged).
++  const solvePyResFor = (gPM) => {
+     try {
+       const S = buildPySetup();
+       const { D, stick_in, L_in, embed_in, soilAt, EIfn, EIsecFn, cut_in, mphiC, mphiU, EIcasedSel } = S;
+@@ -13148,7 +13310,7 @@ function App() {
+         EIfn, soilAt, zg: stick_in,
+         Pt: (I.Plat || 0) * 1000, Mt: I.solverHead === "fixed" ? 0 : (I.pyMhead || 0) * 12000, Qt: (I.STL || 0) * 1000,
+         headFixed: I.solverHead === "fixed", headKrot: I.solverHead === "fixed" ? 0 : (I.pyKrot || 0) * 1000,
+-        gPM: I.pyPM || 1, gYM: I.pyYM || 1,
++        gPM: gPM, gYM: I.pyYM || 1,
+         tol: 1e-6, zCut: cut_in
+       }, D);
+       if (sol.noConv) return { ok: false, noConv: true, msg: PY_NC_MSG, why: sol.why };
+@@ -13269,13 +13431,13 @@ function App() {
+         mobil: res2.z.map((zi, i2) => {
+           const s2 = soilAt(zi);
+           if (s2.model === "none") return null;
+-          const pu2 = PY[s2.model].pu(pyEffDepth(zi, s2.prm), s2.prm) * (I.pyPM || 1);
++          const pu2 = PY[s2.model].pu(pyEffDepth(zi, s2.prm), s2.prm) * (gPM);
+           return pu2 > 1e-9 ? { d: Math.max(zi - stick_in, 0) / 12, r: Math.min(Math.abs(res2.pEq[i2]) / pu2, 1) } : null;
+         }).filter(Boolean),
+         curves: (() => {
+           // p-y curves at representative depths below grade, with the SAME
+           // Georgiadis offsets and PM/YM the solve used; p in lb/in (LPILE units).
+-          const Dft = D / 12, gP = I.pyPM || 1, gY = I.pyYM || 1;
++          const Dft = D / 12, gP = gPM, gY = I.pyYM || 1;
+           const dep = [1, 2.5, 5, 10, 20].map(m2 => m2 * Dft).filter(d2 => d2 < embed_in / 12 - 1);
+           if (I.pyCurveDepth > 0 && I.pyCurveDepth < embed_in / 12 - 0.5) dep.push(I.pyCurveDepth);
+           const ymax = Math.max(0.75, Math.abs(res2.y[0]) * 1.5);
+@@ -13299,12 +13461,31 @@ function App() {
+         // F28 (O38): the reaction the solver applied (E_s*y, res2.pEq), not the curve value
+         // res2.p (they differ only where the clay secant floor linearises the curve).
+         pNode: res2.pEq,
+-        setup: { soilAt, stick_in, L_in, D, soilTop_in: S.soilTop_in, unsupBelowGrade_in: S.unsupBelowGrade_in, nNodes: res2.z.length - 1, gPM: I.pyPM || 1, gYM: I.pyYM || 1 },
++        setup: { soilAt, stick_in, L_in, D, soilTop_in: S.soilTop_in, unsupBelowGrade_in: S.unsupBelowGrade_in, nNodes: res2.z.length - 1, gPM: gPM, gYM: I.pyYM || 1 },
+         mphi: I.pyEIvar && mphiC ? { phis: mphiC.phis, Ms: mphiC.Ms.map(m => m / 12), EI0: mphiC.EI0, EI0u: mphiU.EI0,
+           phisU: mphiU.phis, MsU: mphiU.Ms.map(m => m / 12) } : null
+       };
+     } catch (e) { return { ok: false, msg: e.message }; }
+-  }, [I.lateralSource, I.OD, I.dhBond, I.dhBondSeparate, I.tc, I.corr, I.E, I.fyc, I.fyb, I.Ab, I.fcGrout, I.solverFree, I.Lcased, I.Lplunge, I.LbProvided, JSON.stringify(I.soilLayers), I.pyCyclic, I.pyEIBasis, I.pyEIvar, I.pyPM, I.pyYM, I.pyNodes, I.pyMhead, I.pyKrot, I.pyCurveDepth, I.Plat, I.STL, I.solverHead, EI, EI_composite_kipin2, EI_aashto_kipin2, EI_uncased_kipin2, I.pileType, I.hpD, I.hpBf, I.hpTf, I.hpTw, I.hpFy, I.hpAxis, I.solverLembed, I.bucklingEnable, I.LuFree]);
++  };
++  // F29: "Apply group p-multipliers automatically (per row)" -- on (and meaningful: pile group,
++  // built-in p-y), the solve runs once per row with p-multiplier = row f_m x modifier; the
++  // governing row is chosen below (pyRowsEval). Off: the single solve with I.pyPM, as before.
++  const pmAutoOn = groupPmAutoOn(I);
++  const pmTblApp = pmAutoOn ? groupPmTable(I) : null;
++  const pmRowKey = pmTblApp ? pmTblApp.rows.map(p => p.fm).join(",") + "|" + groupPmModOf(I) + "|" + pmTblApp.src : "";
++  // F29: Compute P_cr ramp p-multiplier: with the toggle on, the smallest row value x modifier
++  // (the trailing row: least soil support, lowest P_cr); off, I.pyPM as before.
++  const pcrGPM = pmTblApp ? Math.min(...pmTblApp.rows.map(p => p.fm)) * groupPmModOf(I) : (I.pyPM || 1);
++  const pyResSingle = useMemo(() => {
++    if (I.lateralSource !== "py") return null;
++    if (pmAutoOn) return null;
++    return solvePyResFor(I.pyPM || 1);
++  }, [I.lateralSource, I.OD, I.dhBond, I.dhBondSeparate, I.tc, I.corr, I.E, I.fyc, I.fyb, I.Ab, I.fcGrout, I.solverFree, I.Lcased, I.Lplunge, I.LbProvided, JSON.stringify(I.soilLayers), I.pyCyclic, I.pyEIBasis, I.pyEIvar, I.pyPM, I.pyYM, I.pyNodes, I.pyMhead, I.pyKrot, I.pyCurveDepth, I.Plat, I.STL, I.solverHead, EI, EI_composite_kipin2, EI_aashto_kipin2, EI_uncased_kipin2, I.pileType, I.hpD, I.hpBf, I.hpTf, I.hpTw, I.hpFy, I.hpAxis, I.solverLembed, I.bucklingEnable, I.LuFree, pmAutoOn]);
++  const pyRowsRaw = useMemo(() => {
++    if (I.lateralSource !== "py" || !pmAutoOn) return null;
++    const mod = groupPmModOf(I);
++    return { tbl: pmTblApp, mod, rows: pmTblApp.rows.map(p => ({ row: p.row, fm: p.fm, pm: p.fm * mod, res: solvePyResFor(p.fm * mod) })) };
++  }, [I.lateralSource, I.OD, I.dhBond, I.dhBondSeparate, I.tc, I.corr, I.E, I.fyc, I.fyb, I.Ab, I.fcGrout, I.solverFree, I.Lcased, I.Lplunge, I.LbProvided, JSON.stringify(I.soilLayers), I.pyCyclic, I.pyEIBasis, I.pyEIvar, I.pyPM, I.pyYM, I.pyNodes, I.pyMhead, I.pyKrot, I.pyCurveDepth, I.Plat, I.STL, I.solverHead, EI, EI_composite_kipin2, EI_aashto_kipin2, EI_uncased_kipin2, I.pileType, I.hpD, I.hpBf, I.hpTf, I.hpTw, I.hpFy, I.hpAxis, I.solverLembed, I.bucklingEnable, I.LuFree, pmAutoOn, pmRowKey]);
+ 
+   // ---- LRFD load cases (series) ----
+   // Strip any persisted _fromGroup flag but KEEP the case. The synthetic group
+@@ -13380,13 +13561,13 @@ function App() {
+       set('loadCases', cleaned.length ? cleaned : [{ name: "Case 1 — Strength", type: "strength", STL: I.STL, Plat: I.Plat, Mhead: I.pyMhead || 0 }]);
+     }
+   }, []);
+-  React.useEffect(() => { setCaseRes(null); }, [JSON.stringify(I.soilLayers), I.OD, I.dhBond, I.dhBondSeparate, I.tc, I.corr, I.fyc, I.Ab, I.fyb, I.fcGrout, I.fc, I.Lcased, I.Lplunge, I.LbProvided, I.beta, I.pyEIvar, I.pyEIBasis, I.pyPM, I.pyYM, I.pyCyclic, I.pyKrot, I.pyNodes, I.solverHead, I.solverFree, I.bucklingEnable, I.LuFree, I.Kb, I.pileType, I.lateralSource, I.E, I.solverLembed, I.hpD, I.hpBf, I.hpTf, I.hpTw, I.hpFy, I.hpAxis]);
++  React.useEffect(() => { setCaseRes(null); }, [JSON.stringify(I.soilLayers), I.OD, I.dhBond, I.dhBondSeparate, I.tc, I.corr, I.fyc, I.Ab, I.fyb, I.fcGrout, I.fc, I.Lcased, I.Lplunge, I.LbProvided, I.beta, I.pyEIvar, I.pyEIBasis, I.pyPM, I.pyYM, I.pyCyclic, I.pyKrot, I.pyNodes, I.solverHead, I.solverFree, I.bucklingEnable, I.LuFree, I.Kb, I.pileType, I.lateralSource, I.E, I.solverLembed, I.hpD, I.hpBf, I.hpTf, I.hpTw, I.hpFy, I.hpAxis, pmAutoOn, pmRowKey]);
+   // Invalidate the Pcr ramp whenever the MODEL it was run on changes. Without this,
+   // switching pile type (or editing soil, section, loads, head condition...) left the
+   // PREVIOUS model's Pcr on screen -- e.g. the H-pile's critical load displayed as the
+   // micropile's -- and because pcr.ok was true, Tab 3 believed it had valid data and
+   // never offered the Compute button again. A stale wrong answer, silently presented.
+-  React.useEffect(() => { setPcr(null); }, [I.pileType, JSON.stringify(I.soilLayers), I.solverSoil, I.solverNh, I.solverKh, I.OD, I.dhBond, I.dhBondSeparate, I.tc, I.corr, I.fyc, I.hpD, I.hpBf, I.hpTf, I.hpTw, I.hpFy, I.hpAxis, I.E, I.STL, I.Plat, I.pyMhead, I.solverHead, I.pyKrot, I.pyCyclic, I.solverFree, I.solverLembed, I.LuFree, I.Kb, I.bklCapMult, I.pyEIvar, I.pyEIBasis, I.pyPM, I.pyYM, JSON.stringify(I.loadCases), I.bucklingEnable, I.Lcased, I.Lplunge, I.LbProvided, I.Ab, I.fyb, I.fcGrout, I.fc, I.phiC, I.hpPhiC]);
++  React.useEffect(() => { setPcr(null); }, [I.pileType, JSON.stringify(I.soilLayers), I.solverSoil, I.solverNh, I.solverKh, I.OD, I.dhBond, I.dhBondSeparate, I.tc, I.corr, I.fyc, I.hpD, I.hpBf, I.hpTf, I.hpTw, I.hpFy, I.hpAxis, I.E, I.STL, I.Plat, I.pyMhead, I.solverHead, I.pyKrot, I.pyCyclic, I.solverFree, I.solverLembed, I.LuFree, I.Kb, I.bklCapMult, I.pyEIvar, I.pyEIBasis, I.pyPM, I.pyYM, JSON.stringify(I.loadCases), I.bucklingEnable, I.Lcased, I.Lplunge, I.LbProvided, I.Ab, I.fyb, I.fcGrout, I.fc, I.phiC, I.hpPhiC, pcrGPM]);
+   function applyCase(idx) {
+     const c = cases[idx]; if (!c) return;
+     set('STL', c.type === "tension" ? 0 : c.STL); set('Plat', c.Plat); set('pyMhead', c.Mhead || 0);
+@@ -13415,7 +13596,11 @@ function App() {
+       try {
+         const usePy = I.lateralSource === "py";
+         const S = usePy ? buildPySetup() : null;
++        // F29: with "Apply group p-multipliers automatically (per row)" on, every case runs
++        // once per row (p-multiplier = row f_m x modifier); off, once with I.pyPM as before.
++        const pmSpec = (usePy && groupPmAutoOn(I)) ? (() => { const t = groupPmTable(I), mod = groupPmModOf(I); return t.rows.map(p => ({ row: p.row, fm: p.fm, pm: p.fm * mod })); })() : null;
+         const rows = cases.map(c => {
++         const runOne = (gPMc) => {
+           // per-case p-y solve (M-phi curves held at the ACTIVE case axial)
+           let Mx = null, y0 = null, decay = null, noConv = false, ncWhy = null;
+           if (usePy) {
+@@ -13425,7 +13610,7 @@ function App() {
+             const sol = solvePyWithRetry({ L: S.L_in, nNodes: Math.max(80, Math.min(Math.round(I.pyNodes || 120), 200)), D: S.D, EIfn: S.EIfn, EIsecFn: S.EIsecFn, soilAt: S.soilAt, zg: S.stick_in,
+               Pt: (c.Plat || 0) * 1000, Mt: (c.type !== "service" && I.solverHead === "fixed" ? 0 : (c.Mhead || 0) * 12000),
+               Qt: (c.type === "tension" ? 0 : (c.STL || 0)) * 1000,
+-              headFixed: I.solverHead === "fixed", headKrot: I.solverHead === "fixed" ? 0 : (I.pyKrot || 0) * 1000, gPM: I.pyPM || 1, gYM: I.pyYM || 1, tol: 1e-6, zCut: S.cut_in }, S.D);
++              headFixed: I.solverHead === "fixed", headKrot: I.solverHead === "fixed" ? 0 : (I.pyKrot || 0) * 1000, gPM: gPMc, gYM: I.pyYM || 1, tol: 1e-6, zCut: S.cut_in }, S.D);
+             const rs = sol.res;
+             noConv = sol.noConv; ncWhy = sol.why;
+             var prof = null;
+@@ -13466,6 +13651,18 @@ function App() {
+             noConv, ncWhy,
+             D: S ? S.D : null   // F25 (O37): p-y pile width, for the large-deflection warning (display only)
+           };
++        };
++          if (!pmSpec) return runOne(I.pyPM || 1);
++          // F29: per-row group p-multipliers: solve every row, report the governing row
++          // (same rule as Module 02: max D/C of flexure / combined; service rows: max |y0|;
++          // a row that did not converge governs; ties -> larger Mmax, then smaller p-multiplier).
++          const ev = pmSpec.map(sp => Object.assign(runOne(sp.pm), { _sp: sp }));
++          const g = pmPickGov(ev.map(e => ({ pm: e._sp.pm, Mmax: e.Mmax,
++            dc: e.noConv ? Infinity : (c.type === "service" ? (e.y0 != null ? Math.abs(e.y0) : 0) : Math.max(e.flexR != null && isFinite(e.flexR) ? e.flexR : 0, e.combR != null && isFinite(e.combR) ? e.combR : 0)) })));
++          const out = Object.assign({}, ev[g], { pmRow: ev[g]._sp.row, pmFm: ev[g]._sp.fm, pmPm: ev[g]._sp.pm, pmNRows: ev.length,
++            pmRows: ev.map(e => ({ row: e._sp.row, fm: e._sp.fm, pm: e._sp.pm, Mmax: e.Mmax, y0: e.y0, flexR: e.flexR, combR: e.combR, noConv: e.noConv, pass: e.pass })) });
++          delete out._sp;
++          return out;
+         });
+         setCaseRes({ rows, at: new Date().toLocaleTimeString() });
+       } catch (e) { setCaseRes({ fail: true, msg: e.message }); }
+@@ -13511,7 +13708,7 @@ function App() {
+             // zero deflection. FIX (C2): the floor was Math.max(V, 500), which turned a
+             // NEGATIVE lateral load into +500 lb. Floor the magnitude, keep the sign.
+             Pt: Math.sign(clPlat || 1) * Math.max(Math.abs(clPlat) * 1000, 500), Mt: I.solverHead === "fixed" ? 0 : clMhead * 12000, Qt: Q,
+-            headFixed: I.solverHead === "fixed", headKrot: I.solverHead === "fixed" ? 0 : (I.pyKrot || 0) * 1000, gPM: I.pyPM || 1, gYM: I.pyYM || 1,
++            headFixed: I.solverHead === "fixed", headKrot: I.solverHead === "fixed" ? 0 : (I.pyKrot || 0) * 1000, gPM: pcrGPM, gYM: I.pyYM || 1,
+             nSteps: 6, tol: 1e-6, maxIter: 975   // sec 4.4.1 step 1: "avoid early termination"
+           });
+           // ============================================================
+@@ -13908,7 +14105,9 @@ function App() {
+       } catch (e) { setPcr({ fail: true, msg: e.message }); }
+     }, 30);
+   }
+-  const r = useMemo(() => {
++  // F29: the computeAll options for one p-y result (the pre-F29 body of the r memo, unchanged);
++  // used for the active-case result r and, with the per-row toggle on, for every row.
++  const rOptsFor = (pyRes) => {
+     // moment at the casing tip depth (for the casing-extension check)
+     const tipBelow = Math.max((I.Lcased || 0) - (I.solverFree || 0), 0);
+     const idx = Math.min(Math.max(Math.round(tipBelow / solved.dz), 0), solved.M.length - 1);
+@@ -13943,7 +14142,7 @@ function App() {
+       const _LfRaw = Lin / 12 - (I.solverFree || 0);
+       pyMatchedLf = (isFinite(_LfRaw) && _LfRaw >= 0.5) ? _LfRaw : null;
+     }
+-    return computeAll(I, {
++    return {
+       layered: !!activeLayers,
+       solvedFixity: pyOK && pyRes.fixity != null ? pyRes.fixity : solved.depthFixity,
+       // Reference-only: 2nd moment zero-crossing (null when the moment never
+@@ -13968,8 +14167,30 @@ function App() {
+       // F21 (O29): the group case of the active Group row, for the Module 11 / report 11
+       // distribution (null when the active row is a manual case). Display only.
+       capCaseId: (cases[activeIdx] && cases[activeIdx]._fromGroup && cases[activeIdx]._groupCaseId != null) ? cases[activeIdx]._groupCaseId : null
++    };
++  };
++  // F29: per-row group p-multipliers -- evaluate each row's solve with the same options as r,
++  // pick the governing row (max D/C on the lateral-dependent checks: flexure, combined;
++  // a row that did not converge governs (NG); ties -> larger Mmax, then smaller p-multiplier).
++  // Its p-y result becomes pyRes, so Modules 02 / 04 / 05, the graphs and the report show
++  // the governing row's solution; pyRes.pmAuto carries the per-row table.
++  const pyRowsEval = useMemo(() => {
++    if (!pyRowsRaw) return null;
++    const ev = pyRowsRaw.rows.map(rw => {
++      const R = computeAll(I, rOptsFor(rw.res));
++      return Object.assign({}, rw, { R }, pmRowSummary(R, rw.res, I));
+     });
+-  }, [I, activeLayers, solved, pyRes, pcr]);
++    const g = pmPickGov(ev);
++    const info = { rows: ev.map(e => ({ row: e.row, fm: e.fm, pm: e.pm, Mmax: e.Mmax, y0: e.y0, flexR: e.flexR, combR: e.combR, noConv: e.noConv, latPass: e.latPass })),
++      gov: g, govRow: ev[g].row, govFm: ev[g].fm, govPm: ev[g].pm, mod: pyRowsRaw.mod, src: pyRowsRaw.tbl.src, srcLabel: pyRowsRaw.tbl.srcLabel,
++      nRows: pyRowsRaw.tbl.nRows, s_dia: pyRowsRaw.tbl.s_dia, belowTable: pyRowsRaw.tbl.belowTable, aboveTable: pyRowsRaw.tbl.aboveTable };
++    return { pyRes: Object.assign({}, ev[g].res, { pmAuto: info }), R: ev[g].R, info };
++  }, [I, activeLayers, solved, pyRowsRaw, pcr]);
++  const pyRes = pyRowsEval ? pyRowsEval.pyRes : pyResSingle;
++  const r = useMemo(() => {
++    if (pyRowsEval) return pyRowsEval.R;
++    return computeAll(I, rOptsFor(pyRes));
++  }, [I, activeLayers, solved, pyRes, pcr, pyRowsEval]);
+   return /*#__PURE__*/React.createElement("div", {
+     className: "min-h-screen text-[var(--ink)]"
+   }, previewReport && /*#__PURE__*/React.createElement("div", {
+@@ -15562,7 +15783,11 @@ function App() {
+     key: m,
+     onClick: () => set('lateralSource', m),
+     className: "px-3 py-1.5 rounded-sm border transition " + (I.lateralSource === m ? "bg-[var(--blueprint)] text-white border-[var(--blueprint)]" : "bg-white border-slate-300 text-slate-600")
+-  }, m === "py" ? "Nonlinear p-y (built-in)" : m === "input" ? "Input Mmax (from LPILE)" : "Linear estimate")))), I.lateralSource === "py" ? /*#__PURE__*/React.createElement(PyPanel, {
++  }, m === "py" ? "Nonlinear p-y (built-in)" : m === "input" ? "Input Mmax (from LPILE)" : "Linear estimate")))),
++  // F29: group p-multipliers by row (pile group mode): the toggle, and the per-row table
++  I.lateralSource === "py" && /*#__PURE__*/React.createElement(PmAutoToggle, { I: I, set: set, where: "02" }),
++  pyRes && pyRes.pmAuto && /*#__PURE__*/React.createElement(PmRowTable, { info: pyRes.pmAuto }),
++  I.lateralSource === "py" ? /*#__PURE__*/React.createElement(PyPanel, {
+     I: I, set: set, pyRes: pyRes, r: r,
+     EI: EI, EI_composite_kipin2: EI_composite_kipin2, EI_aashto_kipin2: EI_aashto_kipin2,
+     EI_aashto_Cp: EI_aashto_Cp, EI_uncased_kipin2: EI_uncased_kipin2,
+@@ -16631,7 +16856,7 @@ function App() {
+       pcr && pcr.ok ? "Recompute P" : "Compute P", /*#__PURE__*/React.createElement("sub", null, "cr"), " (ramp Q to instability)")))), /*#__PURE__*/(I.pileType !== "iab") && /*#__PURE__*/React.createElement(Module, {
+     idx: "11",
+     title: "Group Effects",
+-    code: "FHWA NHI-05-039 · Rollins/Reese p-multipliers · Converse-Labarre",
++    code: r.group.pmSource === "rollins" ? "FHWA NHI-05-039 · Rollins/Reese p-multipliers · Converse-Labarre" : "FHWA NHI-05-039 · AASHTO Table 10.7.2.4-1 p-multipliers · Converse-Labarre",
+     status: !r.group.enable || (r.group.geoGroup_pass && r.group.block_pass),
+     open: open[11],
+     onToggle: () => toggle(11)
+@@ -16679,14 +16904,23 @@ function App() {
+       }))),
+ 
+     // === 2. LATERAL P-MULTIPLIERS ===
+-    /*#__PURE__*/React.createElement("div", { className: "rounded-sm border border-slate-200 p-3 mb-3" },
+-      /*#__PURE__*/React.createElement("div", { className: "text-[11px] font-mono-tech text-[var(--blueprint)] uppercase tracking-wider mb-1" }, "2 · Lateral p-multipliers (f", /*#__PURE__*/React.createElement("sub", null, "m"), ") — enter these in LPILE"),
+-      /*#__PURE__*/React.createElement("p", { className: "text-[9.5px] text-slate-600 leading-snug mb-2" }, "Trailing rows shadow the soil disturbed by leading rows, mobilizing less p-y resistance. These multipliers (Rollins et al.; Reese & Van Impe; FHWA GEC-10) are applied ", /*#__PURE__*/React.createElement("b", null, "inside LPILE"), " by assigning each row its f", /*#__PURE__*/React.createElement("sub", null, "m"), " — not in this tool's linear solver. The imported LPILE moment already reflects them if you set them there."),
+-      /*#__PURE__*/React.createElement("div", { className: "mb-2 p-2 rounded-sm text-[9px] leading-snug", style: { background: r.group.s_dia >= 6 ? "rgba(47,111,62,0.06)" : "rgba(61,106,148,0.06)", border: "1px solid " + (r.group.s_dia >= 6 ? "rgba(47,111,62,0.2)" : "rgba(61,106,148,0.2)"), color: "#334" } },
+-        /*#__PURE__*/React.createElement("b", null, r.group.s_dia >= 6 ? "Informational at this spacing. " : "Reference values — not auto-applied. "),
+-        r.group.s_dia >= 6
+-          ? /*#__PURE__*/React.createElement("span", null, "At ", fmt(r.group.s_dia, 1), "× spacing the rows behave as essentially isolated piles (f", /*#__PURE__*/React.createElement("sub", null, "m"), " ≈ 1.0), so no group reduction to lateral resistance is warranted. The values are shown for completeness/LPILE entry only.")
+-          : /*#__PURE__*/React.createElement("span", null, "The built-in lateral solver (Module 02) uses a single p-multiplier field, not per-row values. It is ", /*#__PURE__*/React.createElement("b", null, "not"), " automatically set from this table. To carry the group shadowing into the built-in analysis, apply the average f", /*#__PURE__*/React.createElement("sub", null, "m"), " below — or enter per-row f", /*#__PURE__*/React.createElement("sub", null, "m"), " directly in LPILE and import that moment.")),
++    // F29 (2026-10-11): source choice (AASHTO default / legacy curve), table warnings,
++    // the per-row toggle and, when on, the per-row results; off, the helper buttons.
++    /*#__PURE__*/React.createElement("div", { className: "rounded-sm border border-slate-200 p-3 mb-3", id: "pd-grp-pm" },
++      /*#__PURE__*/React.createElement("div", { className: "text-[11px] font-mono-tech text-[var(--blueprint)] uppercase tracking-wider mb-1" }, "2 · Lateral p-multipliers (f", /*#__PURE__*/React.createElement("sub", null, "m"), ") by row"),
++      /*#__PURE__*/React.createElement("p", { className: "text-[9.5px] text-slate-600 leading-snug mb-2" }, "Trailing rows shadow the soil disturbed by leading rows, mobilizing less p-y resistance. With ", /*#__PURE__*/React.createElement("b", null, "Apply group p-multipliers automatically"), " on, the built-in p-y analysis (Module 02) is run once per row with that row's f", /*#__PURE__*/React.createElement("sub", null, "m"), " and the governing row drives the lateral checks. Off, the p-multiplier is a plain input (Module 02) and this table is a reference (or for entry in LPILE)."),
++      /*#__PURE__*/React.createElement("div", { className: "flex items-center gap-2 flex-wrap mb-2 text-[10px] font-mono-tech" },
++        /*#__PURE__*/React.createElement("span", { className: "text-slate-500" }, "f", /*#__PURE__*/React.createElement("sub", null, "m"), " source"),
++        /*#__PURE__*/React.createElement("select", { className: "border border-slate-300 rounded-sm px-1.5 py-0.5 text-[10px] font-mono-tech bg-white", "aria-label": "p-multiplier source", value: r.group.pmSource, onChange: e => set('groupPmSource', e.target.value) },
++          /*#__PURE__*/React.createElement("option", { value: "aashto" }, GROUP_PM_SRC_LABEL.aashto),
++          /*#__PURE__*/React.createElement("option", { value: "rollins" }, GROUP_PM_SRC_LABEL.rollins))),
++      r.group.pmSource === "rollins" && /*#__PURE__*/React.createElement("div", { className: "mb-2 p-2 rounded-sm text-[9px] leading-snug", style: { background: "rgba(61,106,148,0.06)", border: "1px solid rgba(61,106,148,0.2)", color: "#334" } },
++        /*#__PURE__*/React.createElement("b", null, "Legacy curve (kept from this project's saved data). "),
++        "Same 3B / 5B anchors as AASHTO, but above 5B it ramps to f", /*#__PURE__*/React.createElement("sub", null, "m"), " = 1.0 at 6B (AASHTO keeps the 5B values). Consider AASHTO LRFD 10th Ed. Table 10.7.2.4-1. ",
++        /*#__PURE__*/React.createElement("button", { type: "button", onClick: () => set('groupPmSource', "aashto"), className: "underline text-[var(--blueprint2)]" }, "Use AASHTO →")),
++      r.group.pmBelowTable && r.group.pmSource === "aashto" && /*#__PURE__*/React.createElement("div", { className: "mb-2 p-2 rounded-sm text-[9px] leading-snug", style: { background: "rgba(183,121,31,0.10)", border: "1px solid rgba(183,121,31,0.35)", color: "#7a4d15" } },
++        "⚠ Spacing ", fmt(r.group.s_dia, 2), "× is below 3B — outside the table. The 3B values are used; closer spacing has more shadowing, so they may be unconservative. Verify with the geotechnical engineer."),
++      r.group.pmAboveTable && r.group.pmSource === "aashto" && /*#__PURE__*/React.createElement("div", { className: "mb-2 text-[9px] text-slate-500" }, "Spacing ", fmt(r.group.s_dia, 2), "× is above 5B: the 5B values are used (the table stops at 5B)."),
+       /*#__PURE__*/React.createElement(GroupPlan, { I: I, g: r.group }), /*#__PURE__*/React.createElement("table", { className: "w-full text-[10px] font-mono-tech mb-1" },
+         /*#__PURE__*/React.createElement("thead", null, /*#__PURE__*/React.createElement("tr", { className: "text-slate-400" },
+           /*#__PURE__*/React.createElement("td", { className: "pr-3" }, "Row (from lead)"), /*#__PURE__*/React.createElement("td", null, "p-multiplier f", /*#__PURE__*/React.createElement("sub", null, "m")))),
+@@ -16697,13 +16931,21 @@ function App() {
+           /*#__PURE__*/React.createElement("td", { className: "py-0.5 pr-3 text-slate-500" }, "Row " + p.row + (p.row === 1 ? " (leading)" : ""), isSelRow ? /*#__PURE__*/React.createElement("span", { className: "ml-1 text-[7.5px] px-1 py-0.5 rounded-sm text-white align-middle", style: { background: "var(--accent)" } }, "DESIGN PILE") : null),
+           /*#__PURE__*/React.createElement("td", { className: "py-0.5 font-bold", style: { color: "#14304a" } }, fmt(p.fm, 2)));
+         }))),
+-      /*#__PURE__*/React.createElement("p", { className: "text-[9px] text-slate-400 mt-1 leading-snug" }, "At " + fmt(r.group.s_dia, 1) + "× spacing (avg f", "" , /*#__PURE__*/React.createElement("sub", null, "m"), " = " + fmt(r.group.pmAvg, 2) + "). At ≥6× the rows behave essentially as isolated piles (f", /*#__PURE__*/React.createElement("sub", null, "m"), " → 1.0). Values interpolated between published 3× and 5× anchor sets."),
++      /*#__PURE__*/React.createElement("p", { className: "text-[9px] text-slate-400 mt-1 leading-snug" }, "At " + fmt(r.group.s_dia, 1) + "× spacing (avg f", "" , /*#__PURE__*/React.createElement("sub", null, "m"), " = " + fmt(r.group.pmAvg, 2) + "). ",
++        r.group.pmSource === "rollins" ? "Legacy curve: values interpolated between the 3× and 5× anchor sets; from 5× to 6× ramped to 1.0 (isolated piles)." : "AASHTO LRFD 10th Ed. Table 10.7.2.4-1 (verify table number/values): 3B 0.80 / 0.40 / 0.30, 5B 1.00 / 0.85 / 0.70 for row 1 / 2 / 3+; linear between 3B and 5B; 5B values above 5B."),
++      /*#__PURE__*/React.createElement(PmAutoToggle, { I: I, set: set, where: "11" }),
++      r.group.pmAuto && pyRes && pyRes.pmAuto ? /*#__PURE__*/React.createElement(PmRowTable, { info: pyRes.pmAuto })
++      : /*#__PURE__*/React.createElement(React.Fragment, null,
+       /*#__PURE__*/React.createElement("div", { className: "mt-2 flex items-center gap-2 flex-wrap" },
+         /*#__PURE__*/React.createElement("button", { onClick: () => { set('pyPM', +r.group.pmAvg.toFixed(2)); gotoModule(2, "02"); },
+           className: "font-mono-tech text-[9.5px] px-2.5 py-1 rounded-sm text-white hover:opacity-90", style: { background: "var(--blueprint2)" } },
+           "→ Apply avg f", /*#__PURE__*/React.createElement("sub", null, "m"), " = ", fmt(r.group.pmAvg, 2), " to lateral analysis (Module 02)"),
++        r.group.nRows > 1 && /*#__PURE__*/React.createElement("button", { onClick: () => { set('pyPM', +r.group.pMultipliers[0].fm.toFixed(2)); gotoModule(2, "02"); },
++          className: "font-mono-tech text-[9.5px] px-2 py-1 rounded-sm border border-[var(--blueprint2)] text-[var(--blueprint2)] hover:bg-slate-50" }, "use leading row ", fmt(r.group.pMultipliers[0].fm, 2)),
++        r.group.nRows > 1 && /*#__PURE__*/React.createElement("button", { onClick: () => { set('pyPM', +r.group.pMultipliers[r.group.nRows - 1].fm.toFixed(2)); gotoModule(2, "02"); },
++          className: "font-mono-tech text-[9.5px] px-2 py-1 rounded-sm border border-[var(--blueprint2)] text-[var(--blueprint2)] hover:bg-slate-50" }, "use trailing row ", fmt(r.group.pMultipliers[r.group.nRows - 1].fm, 2)),
+         Math.abs((I.pyPM || 1) - r.group.pmAvg) < 0.005 ? /*#__PURE__*/React.createElement("span", { className: "text-[9px] font-mono-tech", style: { color: "#256436" } }, "✓ currently applied") : /*#__PURE__*/React.createElement("span", { className: "text-[9px] font-mono-tech text-slate-400" }, "Module 02 p-mult currently ", fmt(I.pyPM || 1, 2))),
+-      /*#__PURE__*/React.createElement("p", { className: "text-[8px] text-slate-400 mt-1 leading-snug" }, "Applying the average is an approximation — it reduces every depth's p-y uniformly rather than per row. For a design of record, enter per-row f", /*#__PURE__*/React.createElement("sub", null, "m"), " in LPILE and import that moment.")),
++      /*#__PURE__*/React.createElement("p", { className: "text-[8px] text-slate-400 mt-1 leading-snug" }, "Helpers (toggle off): copy one value into the Module 02 p-multiplier field. A single value reduces every depth's p-y uniformly for one pile; the automatic per-row option above runs every row instead."))),
+ 
+     // === 3. BLOCK FAILURE ===
+     /*#__PURE__*/React.createElement("div", { className: "rounded-sm border border-slate-200 p-3 mb-2" },
+@@ -17391,7 +17633,9 @@ function LatGraphsCard({ I, set, pyRes, solved, activeLayers, pyDepths, setPyDep
+       e("span", { className: "module-badge font-mono-tech text-[11px] text-white px-1.5 py-0.5 rounded-sm", style: { background: "var(--blueprint)" } }, "F"),
+       e("div", { className: "flex-1 min-w-0" },
+         e("div", { className: "pd-gfx-title" }, "Lateral analysis graphs"),
+-        e("div", { className: "pd-gfx-sub" }, "Module 02 · basis: " + basis + " · active load case"))),
++        e("div", { className: "pd-gfx-sub" }, "Module 02 · basis: " + basis + " · active load case" +
++          // F29: with the group p-multipliers applied per row, the graphs are the governing row's solution
++          (isPy && pyRes && pyRes.pmAuto ? " · governing row " + pyRes.pmAuto.govRow + " of " + pyRes.pmAuto.nRows + " (f\u2098 = " + fmt(pyRes.pmAuto.govFm, 2) + (Math.abs(pyRes.pmAuto.mod - 1) > 1e-9 ? ", p-multiplier " + fmt(pyRes.pmAuto.govPm, 3) : "") + ")" : "")))),
+     e("div", { className: "pd-gfx-body" },
+       e("div", { className: "pd-lg-sub", role: "tablist", "aria-label": "Lateral graphs" }, ids.map((id, i) =>
+         e("button", { key: id, id: "lgtab-" + id, type: "button", role: "tab", "aria-selected": cur === id ? "true" : "false", "aria-controls": "lgpanel",
+@@ -17659,4 +17903,4 @@ function CheckIndex({ pileLabel, allPass, onSave, onPreview, previewing, onPrint
+ ReactDOM.createRoot(document.getElementById("root")).render(/*#__PURE__*/React.createElement(App, null));
+ </script>
+ </body>
+-</html>
+\ No newline at end of file
++</html>
+\ No newline at end of file
+```
+
 ## Open items (not changed)
 - O1. **Uncased/cased structural axial: outer 0.85 factor and `fy = min(fyb, fyc)`** (`Rn_cased/Rn_ucased`, ≈ line 1675).
   - Neither AASHTO 10.9.3.10.2 nor FHWA NHI-05-039 Eq. 5-13 has the outer 0.85, and the uncased section has no casing, so min(fyb, fyc) is arbitrary there.
@@ -8437,3 +9135,5 @@ index 6165412..a18a6e1 100644
 - O38. **Large equilibrium-closure residual on layered (four-layer) profiles.** **Closed by F28 (2026-10-11).** Cause: the closure integrated the p-y curve value `res.p`, but below |y| = 0.001·y₅₀ (soft and stiff clay) the solver applies the linearised secant reaction E_s·y; the solution was sound. The closure now integrates the applied reaction (`res.pEq`): four-layer H-pile 43.80 % / 15.06 % → 0.0064 % / 0.0036 %; results unchanged. Engineer's item (2) (closure test (b) on first attempts) was stopped by its own condition and is O39. Original text: Found in F27 (2026-10-11), not changed. On main, converged first attempts on the four-layer profile used by the parity runs (sand / soft clay / stiff clay / sand, tops 0 / 8 / 16 / 25 ft) report closures far above the uniform-soil values (≤ 0.05 % ΣF): H-pile defaults ΣF **43.80 %** / ΣM **15.06 %** (y₀ 0.157 in, Mmax 34.0 kip·ft, a plainly sound solve); with buckling (L_u 8 ft) 57.20 % / 16.20 %; micropile 3.17 % / 1.10 %, edited micropile 1.97 % / 0.55 %, micropile + buckling 5.12 % / 0.83 %. Sweep (four-layer, free head, STL 20–150, P 1–20): H-pile 15–52 % ΣF / 8–15 % ΣM; micropile 0.1–10 % ΣF / 0.05–4.9 % ΣM; moment-only head loads (after F27's normalisation) 115–1,057 % ΣF, 1.5–13 % ΣM. The residual is computed from the reported soil reactions `res.p` (`pyPofY` at each node) integrated against the applied loads; on a uniform profile it closes to round-off, so the large layered values point at the reported p (layer-boundary nodes / Georgiadis equivalent depth) or the integration across layer boundaries rather than at the solution itself, but this was not investigated. Effects today: Module 02 and the report show these closures; a RETRIED solve on such a profile is rejected by the 1 % closure test (b) even when sound (F27 four-layer + buckling edited micropile: retry closure 5.51 %). First attempts are not tested for closure (F27). **To investigate** (coordinator): whether the residual or the reported p is wrong on layered profiles, and whether the moment / deflection results are affected.
 - O39. **Closure test (b) on first p-y attempts (engineer's decision 2026-10-11, item 2 of O38) — stopped, not applied.** **Closed 2026-10-11, engineer's decision: "leave it as is, go with your recommendation" — first attempts keep tests (a) + (c) only (F27); (b) stays on retried solves. No code change.** The IAB Tier-2 question at the end of this item moves to O40. Original text: With F28's closure, applying (b) (ΣF and ΣM ≤ 1 %) to first attempts changes no outcome in the uniform (208) and mixed (52) sweeps, but in the four-layer sweep (66) it rejects 3 ordinary solves: H-pile, free head, moment-only head load M 40 kip·ft at STL 20 / 86 / 150 (first attempt ΣF 1.30–1.31 %, ΣM 0.017 %, y₀ 0.135–0.140 in, M_max 40.1–41.0 kip·ft; the retry gives ΣF 2.6–2.7 %, so the result would become "did not converge" / NG). The residual is the solver tolerance, not an equilibrium error: 1.68 lb absolute against ∫|p|dz = 12,797 lb, measured (F27) against 1 % of ∫|p|dz because P_t = 0; with tol 1e-9 it is 0.0016 % and M_max moves by 1e-7 relative. (A fourth case, micropile M 40 at STL 150, also fails (b) but reverses and is "did not converge" on main already.) First attempts keep (a) + (c) (F27). **Ask:** apply (b) to first attempts with a different moment-only ΣF measure (e.g. 10 % of ∫|p|dz, or ΣF judged against |M_head| / (pile length) — or test only ΣM when P_t = 0), or with a tighter solver tolerance, or leave first attempts on (a) + (c)? Also: the integral-abutment Tier-2 graphs (`iabNonlinearSolve`) still show the curve value `res.p` at near-zero-deflection clay nodes (the same overstatement F28 removed from the Lateral graphs); switch them to the applied reaction too?
 - O40. **Integral-abutment Tier-2 graphs (`iabNonlinearSolve`) still plot the p-y curve value `res.p` at near-zero-deflection clay nodes** (the overstatement F28 removed from the Lateral graphs). Display only; switch them to the solver-applied reaction? (Split out of O39, 2026-10-11.)
+- O41. **Group spacing ratio for the p-multipliers (and η) uses the bond-hole diameter for every pile type** (`computeAll` / `groupPmTable`: `s_dia = s / bondHoleDia(I)`; `bondHoleDia` = micropile casing OD unless d_h is entered). AASHTO Table 10.7.2.4-1 is in pile diameters / widths B. In H-pile mode the ratio is therefore taken against the micropile OD input, not the H-pile width; the group workspace grid and `computeCapDist` space piles with `pileWidth(I)` instead. Found in F29, not changed (it changes the row f_m and η of H-pile groups). **Ask:** use `pileWidth(I)` (H-pile: d or b_f per axis) as B for the p-multiplier spacing, and which width for a micropile with d_h ≠ OD.
+- O42. **Per-row lateral load share.** With "Apply group p-multipliers automatically (per row)" every row is solved with the same per-pile shear (the rigid-cap equal share). In a real group the stiffer leading row attracts more shear than the shadowed trailing rows, so equal shares overstate the trailing-row demand and understate the leading row's. Found in F29, not changed. **Ask:** keep equal shares (the governing row is usually the trailing row, so this is conservative there), or distribute the cap shear by row stiffness (iterating on a common head deflection)?
