@@ -2246,8 +2246,9 @@ function solvePyPile(input) {
       it is (unchanged from before F22).
    2. Only if that fails, an adaptive retry: 16 load steps, maxIter 400, under-relaxation
       omega 0.55.
-   3. A retried solution is used only if it passes pyRetryCheck (equilibrium closure, stable
-      loading branch, deflection sanity bound). Otherwise, and when the retry itself does not
+   3. A retried solution is used only if it passes pyRetryCheck (every step converged,
+      equilibrium closure, stable loading branch; F25 (O37) removed the former |y0| <= 1.0 D
+      bound, see pyDeflWarnInfo for the warning that replaced it). Otherwise, and when the retry itself does not
       converge, the result is "did not converge" (noConv) and the lateral-dependent checks
       are NG. A retried solve is never used just because the iterations stopped: past the
       instability load the solver can settle on a POST-CRITICAL equilibrium (head deflection
@@ -2262,7 +2263,8 @@ const PY_NC_TEX = "\\text{NG: the lateral p-y solve did not converge (no valid m
 // summary-table / dashboard rows whose demand comes from the lateral solution
 const PY_LAT_ROW = /^(Flexure|Combined axial \+ flexure|Combined \(interaction\)|Casing flexure|Combined loading \(casing-only|Combined \(casing\)|Combined loading \(CFST P-M\)|Combined \(CFST P-M\)|Casing past active moment zone|Uncased flexure)/;
 const PY_RETRY_CLOSURE_PCT = 1.0;   // max equilibrium residual (% of applied) for a retried solve
-const PY_RETRY_DEFL_D = 1.0;        // max |head deflection| for a retried solve, in pile widths D
+// F25 (O37): no deflection bound in the acceptance (was PY_RETRY_DEFL_D = 1.0, |y0| <= 1.0 D);
+// a large head deflection is now a warning only (pyDeflWarnInfo).
 function pyRetryCheck(rr, D) {
   const why = [];
   const eq = rr.eq || {};
@@ -2281,11 +2283,41 @@ function pyRetryCheck(rr, D) {
   }
   if (flip) why.push("the head deflection reversed direction during the load ramp (post-critical equilibrium)");
   else if (fold) why.push("the head deflection decreased while the load increased (fold-back, post-critical equilibrium)");
-  const y0 = rr.y && rr.y.length ? rr.y[0] : NaN;
-  if (!(Math.abs(y0) <= PY_RETRY_DEFL_D * D))
-    why.push("head deflection " + fmt(Math.abs(y0), 2) + " in exceeds the sanity bound of " + (PY_RETRY_DEFL_D === 1 ? "one pile width" : fmt(PY_RETRY_DEFL_D, 1) + " pile widths") + " (" + fmt(PY_RETRY_DEFL_D * D, 2) + " in)");
   return why;
 }
+/* F25 (O37): large head-deflection WARNING (amber; not a check, nothing becomes NG).
+   Engineer's decision 2026-10-11: no deflection bound in the acceptance of a retried p-y
+   solve; instead a warning when |y0| > pyDeflWarnD x D (input "Large head-deflection
+   warning", Bond / p-y tab). Applies to every lateral p-y result: the first attempt and an
+   accepted retry, Module 02 and every envelope case, so it also flags the post-critical
+   first attempts of O36 (large, often reversed, head deflection).
+   pyDeflWarnD is a saved project input; absent (older projects) or blank -> 0.25;
+   0 or negative -> warning off. D = the p-y pile width in the bending plane. */
+const PY_DEFL_WARN_D_DEFAULT = 0.25;
+function pyDeflWarnFactor(I) {
+  const v = I ? I.pyDeflWarnD : undefined;
+  return (typeof v === "number" && isFinite(v)) ? v : PY_DEFL_WARN_D_DEFAULT;
+}
+// returns null when off / no result, else { f, D, lim, y0, yD, warn }
+function pyDeflWarnInfo(y0, D, I) {
+  const f = pyDeflWarnFactor(I);
+  if (!(f > 0) || !(D > 0) || y0 == null || !isFinite(y0)) return null;
+  const lim = f * D;
+  return { f, D, lim, y0, yD: Math.abs(y0) / D, warn: Math.abs(y0) > lim };
+}
+// the +/- limit lines that fall inside the natural extent of the deflection data
+// [min(y, 0), max(y, 0)]; the plots are never widened to show a line (when the warning
+// is triggered, |y0| > lim, so the line on the side of y0 is always inside)
+function pyDeflWarnLines(w, ys) {
+  if (!w || !(w.lim > 0) || !ys || !ys.length) return [];
+  const lo = Math.min(0, ...ys), hi = Math.max(0, ...ys);
+  return [w.lim, -w.lim].filter(xv => xv >= lo && xv <= hi);
+}
+function pyDeflWarnText(w) {
+  return "Large head deflection: |y\u2080| = " + fmt(Math.abs(w.y0), 2) + " in = " + fmt(w.yD, 2) + " D > " + fmt(w.f, 2) + " \u00d7 D = " + fmt(w.lim, 2) + " in (D = " + fmt(w.D, 2) + " in)";
+}
+// Module 02 / dashboard / report wording (warning only)
+const PY_DEFL_WARN_NOTE = "Warning only, not a code check: the lateral checks use this solution as computed. Check the deflection against the structure's tolerance (the service limit is checked separately), and treat a deflection this large, especially one opposite to the applied load, as a sign the pile may be near or past instability (see Module 10).";
 /* F22 (O33): the "did not converge" outcome, with the reason and what to do. Used by
    Module 02 on screen and in the printed report. */
 function PyNoConvNote({ why, print }) {
@@ -4372,7 +4404,7 @@ function DocsModal({
   }, /*#__PURE__*/React.createElement("p", null, "The grout-to-ground bond is the geotechnical capacity. Nominal resistance is the bond stress β times the drill-hole circumference times the bond length: ", /*#__PURE__*/React.createElement("i", null, "Pn = dₕ·π·β·Lb"), ". The required bond length is back-solved from the factored demand and the geotechnical resistance factor φ (0.70 when a load test is specified, per Table 10.5.5.2.5-1). The bond value β comes from the soil/rock row of Table C10.9.3.5.2-1 and ", /*#__PURE__*/React.createElement("b", null, "must be confirmed by load testing"), " — the tool labels it grout-to-ground because the value is keyed to the bearing stratum, not necessarily rock.")), /*#__PURE__*/React.createElement(DocSection, {
     title: "02 · Lateral analysis",
     code: "p-y finite-difference solver"
-  }, /*#__PURE__*/React.createElement("p", null, "Two paths. You can enter a maximum moment directly from an external LPILE run, or use the built-in solver. The solver is a real ", /*#__PURE__*/React.createElement("b", null, "finite-difference beam on an elastic foundation"), ": the embedded pile is discretized on Winkler springs with a linear subgrade modulus (Es = nh·z for sand, constant kh for clay), and EI·y⁗ + k(z)·y = 0 is solved with mudline boundary conditions (shear V₀ = P, moment M₀ = P·e from the free length) and an unrestrained toe (no applied tip shear or moment restraint — the toe is still bedded on soil springs)."), /*#__PURE__*/React.createElement("p", null, "From the resulting moment profile, the tool reports the true maximum moment and locates the ", /*#__PURE__*/React.createElement("b", null, "depth to fixity as the second zero-crossing of the moment diagram"), " — the depth that reproduces the correct above-grade moment in an equivalent fixed-base model. A noise guard ignores crossings whose preceding moment lobe is under 2% of Mmax so numerical tail-ringing isn't mistaken for a real reversal. This is a REFERENCE figure only \u2014 it is a moment-diagram measure and is NOT used in the buckling check, which requires a stiffness equivalence (Davisson / deflection-matched / nonlinear P-crit) and yields a much shorter fixity depth. The model is linear, so the fixity depth is load-independent — appropriate for a stiffness/fixity basis, but it should be checked against a nonlinear p-y run before sealing."), /*#__PURE__*/React.createElement("p", null, /*#__PURE__*/React.createElement("b", null, "Nonlinear p-y convergence."), " The built-in nonlinear p-y solve applies the loads in 8 equal steps (secant iteration, up to 200 iterations per step). If a step does not converge it retries once with 16 steps, up to 400 iterations and under-relaxation 0.55. A retried solution is used only if (a) every step converged, (b) the equilibrium closure is within " + PY_RETRY_CLOSURE_PCT + " % for both ΣF and ΣM, (c) it is on the stable loading branch (the head deflection keeps the direction of the first step and never decreases while the load rises) and (d) the head deflection is no more than one pile width D. Otherwise the result is “did not converge — the pile is likely unstable (buckling / P-Δ) at this load”: there is no valid lateral demand, so flexure, combined loading, casing extension, uncased flexure and combined-loading stability are NG. Past the instability load the solver can settle on a post-critical equilibrium (head deflection reversed, tens of inches) whose closure is still excellent, which is why the branch and deflection tests are needed. “Run all cases” solves each case with exactly the same solve (node count, load steps, retry and acceptance test), so for the active case the envelope equals Module 02.")), /*#__PURE__*/React.createElement(DocSection, {
+  }, /*#__PURE__*/React.createElement("p", null, "Two paths. You can enter a maximum moment directly from an external LPILE run, or use the built-in solver. The solver is a real ", /*#__PURE__*/React.createElement("b", null, "finite-difference beam on an elastic foundation"), ": the embedded pile is discretized on Winkler springs with a linear subgrade modulus (Es = nh·z for sand, constant kh for clay), and EI·y⁗ + k(z)·y = 0 is solved with mudline boundary conditions (shear V₀ = P, moment M₀ = P·e from the free length) and an unrestrained toe (no applied tip shear or moment restraint — the toe is still bedded on soil springs)."), /*#__PURE__*/React.createElement("p", null, "From the resulting moment profile, the tool reports the true maximum moment and locates the ", /*#__PURE__*/React.createElement("b", null, "depth to fixity as the second zero-crossing of the moment diagram"), " — the depth that reproduces the correct above-grade moment in an equivalent fixed-base model. A noise guard ignores crossings whose preceding moment lobe is under 2% of Mmax so numerical tail-ringing isn't mistaken for a real reversal. This is a REFERENCE figure only \u2014 it is a moment-diagram measure and is NOT used in the buckling check, which requires a stiffness equivalence (Davisson / deflection-matched / nonlinear P-crit) and yields a much shorter fixity depth. The model is linear, so the fixity depth is load-independent — appropriate for a stiffness/fixity basis, but it should be checked against a nonlinear p-y run before sealing."), /*#__PURE__*/React.createElement("p", null, /*#__PURE__*/React.createElement("b", null, "Nonlinear p-y convergence."), " The built-in nonlinear p-y solve applies the loads in 8 equal steps (secant iteration, up to 200 iterations per step). If a step does not converge it retries once with 16 steps, up to 400 iterations and under-relaxation 0.55. A retried solution is used only if (a) every step converged, (b) the equilibrium closure is within " + PY_RETRY_CLOSURE_PCT + " % for both ΣF and ΣM, and (c) it is on the stable loading branch (the head deflection keeps the direction of the first step and never decreases while the load rises). Otherwise the result is “did not converge — the pile is likely unstable (buckling / P-Δ) at this load”: there is no valid lateral demand, so flexure, combined loading, casing extension, uncased flexure and combined-loading stability are NG. Past the instability load the solver can settle on a post-critical equilibrium (head deflection reversed, tens of inches) whose closure is still excellent, which is why the branch test is needed. “Run all cases” solves each case with exactly the same solve (node count, load steps, retry and acceptance test), so for the active case the envelope equals Module 02. Large head deflection: when |y\u2080| exceeds the factor × D set in the Bond / p-y input tab (p-y / lateral for an H-pile; default 0.25 D; 0 = off), Module 02, the Lateral graphs, the Summary of checks, the case envelope and the report show an amber warning. It is a warning only (no check becomes NG); it applies to every p-y result, first attempt or retry, and also flags first attempts that settled on a post-critical state.")), /*#__PURE__*/React.createElement(DocSection, {
     title: "03 · Structural axial",
     code: "AASHTO 10.9.3.10.2"
   }, /*#__PURE__*/React.createElement("p", null, "Non-composite axial capacity, computed for both the cased length (casing + grout + bar, Eq. 10.9.3.10.2a-2) and the uncased length (grout + bar only, Eq. 10.9.3.10.2b-2). The uncased section typically governs because it has no casing contribution. The casing wall is reduced by a sacrificial corrosion allowance.")), /*#__PURE__*/React.createElement(DocSection, {
@@ -6687,7 +6719,8 @@ function LpileProfilePlot({
   height = 360,
   zOffset = null,
   kv = null,
-  narrow = false
+  narrow = false,
+  deflWarn = null   // F25 (O37): pyDeflWarnInfo result -> dotted lines at +/- the warning limit
 }) {
   if (!records || records.length < 2) return null;
   // panel titles sit ~23 px above the plot area at the default 360 px; keep that
@@ -6707,6 +6740,7 @@ function LpileProfilePlot({
     const m = Math.max(Math.abs(lo), Math.abs(hi)) * pad || 1;
     return [lo < 0 ? -m : Math.min(lo, 0), hi > 0 ? m : 0.01];
   };
+  const dwX = pyDeflWarnLines(deflWarn, y);   // F25 (O37): only lines inside the natural range
   let yR = rangeOf(y),
     mR = rangeOf(M),
     vR = rangeOf(V);
@@ -6723,6 +6757,10 @@ function LpileProfilePlot({
     yR = oy.range; mR = om.range; vR = ov.range;
     EX = { traces: [...oy.traces, ...om.traces, ...ov.traces], anns: [...oy.anns, ...om.anns, ...ov.anns], zLo, zHi, mb, plotH: height - 30 - mb };
   }
+  // F25 (O37): the large head-deflection warning limit, +/- f x D, on the deflection panel
+  const dwShapes = dwX.map(xv => ({ type: "line", xref: "x", yref: "y domain", x0: xv, x1: xv, y0: 0, y1: 1, line: { color: "#b7791f", width: 1.5, dash: "dot" } }));
+  const dwAnns = dwX.length ? [{ xref: "x", yref: "y domain", x: dwX[0], y: 0.02, xanchor: "right", yanchor: "bottom", textangle: -90, showarrow: false,
+    text: "\u00b1" + fmt(deflWarn.f, 2) + "D = \u00b1" + fmt(deflWarn.lim, 2) + " in (warning)", bgcolor: "rgba(255,255,255,0.8)", font: { size: 9, color: "#8a5a1f", family: PLOT_FONT } }] : [];
   // maxima for annotation
   let iM = 0;
   M.forEach((v, i) => {
@@ -6824,8 +6862,8 @@ function LpileProfilePlot({
     showlegend: !!EX,
     legend: EX ? { orientation: "h", x: 0, xanchor: "left", y: -44 / EX.plotH, yanchor: "top", entrywidth: narrow ? 1 : 0.33, entrywidthmode: "fraction", font: { size: 9, family: PLOT_FONT } } : undefined,
     hovermode: EX ? "closest" : undefined,
-    shapes: [...band("x", "y", yR), ...band("x2", "y2", mR), ...band("x3", "y3", vR)],
-    annotations: [{
+    shapes: [...band("x", "y", yR), ...band("x2", "y2", mR), ...band("x3", "y3", vR), ...dwShapes],
+    annotations: [...dwAnns, {
       xref: "paper",
       x: 0.09,
       yref: "paper",
@@ -7193,6 +7231,8 @@ const DEFAULT_INPUTS = {
   pyPM: 1.0,
   pyYM: 1.0,
   pyNodes: 120,
+  // F25 (O37): large head-deflection WARNING when |y0| > pyDeflWarnD x D (0 = off; absent -> 0.25)
+  pyDeflWarnD: 0.25,
   // flexure
   phiF: 1.00,
   // combined
@@ -8223,6 +8263,7 @@ function PrintReport({
       ["y-multiplier", I.pyYM, "", ""],
       ["p-y pile width", I.pileType === "micropile" ? (I.dhBondSeparate && I.dhBond > 0 && Math.abs(I.dhBond - I.OD) > 1e-9 ? "casing OD " + fmt(I.OD, 3) + " in to casing tip; d\u2095 " + fmt(I.dhBond, 3) + " in below" : "casing OD " + fmt(I.OD, 3) + " in, full length") : null, "", "two-section width per LPILE practice when d\u2095 \u2260 OD"],
       ["Solver nodes", I.pyNodes != null ? String(Math.round(I.pyNodes)) : null, "", "finite-difference discretization"],
+      ["Large head-deflection warning", I.lateralSource === "py" ? (pyDeflWarnFactor(I) > 0 ? "|y\u2080| > " + fmt(pyDeflWarnFactor(I), 2) + " \u00d7 D" : "off") : null, "", "warning only (amber), not a check"],
       ["EI basis", I.pyEIvar ? "Nonlinear M\u2013\u03c6 (fiber section)" : (I.pyEIBasis === "composite" ? "Composite uncracked" : I.pyEIBasis === "aashto" ? "AASHTO 6.9.6.3.2 EIeff" : "Casing only"), "", ""],
       ["Analysis depth", I.pyCurveDepth, "ft", "auto \u2248 10\u00d7 char. length"]
     ] }),
@@ -9067,6 +9108,7 @@ function PrintReport({
       ["Maximum bending moment M\u2098\u2090\u2093", pyRes.Mmax_kft, "kip\u00b7ft", "flows to all structural checks"],
       ["Depth to M\u2098\u2090\u2093", pyRes.MmaxAboveGrade ? Math.abs(pyRes.zMmax) : pyRes.zMmax, "ft", pyRes.MmaxAboveGrade ? "ABOVE grade \u2014 in the stickup" : "below mudline"],
       ["Pile-head deflection", pyRes.headDefl_in, "in", ""],
+      ["Large-deflection warning limit", (() => { const w = pyDeflWarnInfo(pyRes.headDefl_in, pyRes.setup && pyRes.setup.D, I); return w ? w.lim : null; })(), "in", (() => { const w = pyDeflWarnInfo(pyRes.headDefl_in, pyRes.setup && pyRes.setup.D, I); return w ? fmt(w.f, 2) + " \u00d7 D (D = " + fmt(w.D, 2) + " in) \u00b7 " + (w.warn ? "EXCEEDED \u2014 warning" : "not exceeded") : ""; })()],
       ["Moment at casing tip", (I.pileType === "micropile") ? pyRes.Mtip_kft : null, "kip\u00b7ft", "cased/uncased transition"],
       ["Moment decays to 5% at", pyRes.zMomentDecay, "ft", "below mudline"],
       ["Pile length modelled", pyRes.L_ft, "ft", "unrestrained toe"],
@@ -9076,6 +9118,9 @@ function PrintReport({
       ["Cracking moment M\u1d04\u0280 (cased)", pyRes.eiVar ? pyRes.Mcr_kft : null, "kip\u00b7ft", "M\u2013\u03c6 basis"],
       ["Section cracked at M\u2098\u2090\u2093", pyRes.eiVar ? (pyRes.cracked ? "YES \u2014 EI softened" : "no") : null, "", ""]
     ] }),
+    // F25 (O37): large head-deflection warning (amber, warning only)
+    (() => { const w = pyDeflWarnInfo(pyRes.headDefl_in, pyRes.setup && pyRes.setup.D, I); return w && w.warn; })() && /*#__PURE__*/React.createElement("div", { className: "rpt-avoid", style: { border: "1.2px solid #b7791f", background: "#FFFBEB", color: "#7a4d15", padding: "5px 8px", margin: "4px 0 8px", fontSize: "9.5px", lineHeight: 1.4 } },
+      /*#__PURE__*/React.createElement("b", null, "\u26a0 WARNING \u2014 " + pyDeflWarnText(pyDeflWarnInfo(pyRes.headDefl_in, pyRes.setup.D, I)) + "."), " " + PY_DEFL_WARN_NOTE),
     // Geotechnical depth to fixity -- REFERENCE ONLY
     /*#__PURE__*/React.createElement("div", { className: "rpt-avoid", style: { border: "1px solid #cbd5e1", background: "#f8fafc", padding: "6px 8px", margin: "6px 0" } },
       /*#__PURE__*/React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: "3px" } },
@@ -9249,7 +9294,8 @@ function PrintReport({
         /*#__PURE__*/React.createElement("td", { style: { padding: "2px 4px" } }, r0.name),
         /*#__PURE__*/React.createElement("td", { style: { padding: "2px 4px" } }, r0.type),
         /*#__PURE__*/React.createElement("td", { style: r0.noConv ? { padding: "2px 4px", fontWeight: 700, color: "#B91C1C" } : { padding: "2px 4px" } }, r0.noConv ? "did not converge" : r0.Mmax != null ? fmt(r0.Mmax, 1) : "\u2014"),
-        /*#__PURE__*/React.createElement("td", { style: { padding: "2px 4px" } }, r0.y0 != null ? fmt(r0.y0, 3) : "\u2014"),
+        /*#__PURE__*/React.createElement("td", { style: { padding: "2px 4px" } }, r0.y0 != null ? fmt(r0.y0, 3) : "\u2014",
+          (() => { const w = pyDeflWarnInfo(r0.y0, r0.D, I); return w && w.warn; })() && /*#__PURE__*/React.createElement("span", { style: { color: "#b7791f", fontWeight: 700 } }, " \u26a0 large deflection")),
         ["geoR", "flexR", "combR", "buckR"].map((k, j) => (r0.noConv && r0.type !== "service" && (k === "flexR" || k === "combR"))
           ? /*#__PURE__*/React.createElement("td", { key: j, style: { padding: "2px 4px", fontWeight: 700, color: "#B91C1C" } }, "NG")
           : /*#__PURE__*/React.createElement("td", { key: j, style: { padding: "2px 4px" } }, r0[k] != null ? fmt(r0[k], 2) : "\u2014")),
@@ -9257,6 +9303,8 @@ function PrintReport({
     caseRes.rows.some(r0 => r0.noConv) && /*#__PURE__*/React.createElement("div", { style: { fontSize: "8px", color: "#B91C1C", marginTop: "2px" } },
       caseRes.rows.filter(r0 => r0.noConv).map(r0 => r0.name + ": " + (r0.ncWhy || []).join("; ")).join(" \u00b7 "),
       ". " + PY_NC_MSG + ": no valid lateral demand, so flexure and combined loading are NG (a service row fails its deflection check)."),
+    caseRes.rows.some(r0 => { const w = pyDeflWarnInfo(r0.y0, r0.D, I); return w && w.warn; }) && /*#__PURE__*/React.createElement("div", { style: { fontSize: "8px", color: "#7a4d15", marginTop: "2px" } },
+      "\u26a0 Large head deflection (|y\u2080| > " + fmt(pyDeflWarnFactor(I), 2) + " \u00d7 D, warning only): " + caseRes.rows.filter(r0 => { const w = pyDeflWarnInfo(r0.y0, r0.D, I); return w && w.warn; }).map(r0 => r0.name + " (" + fmt(Math.abs(r0.y0) / r0.D, 2) + " D)").join(", ") + ". The checks use these solutions as computed; a deflection this large, especially one opposite to the load, can mean the pile is near or past instability."),
     /*#__PURE__*/React.createElement("div", { style: { fontSize: "7.5px", color: "#94a3b8", marginTop: "2px" } },
       "Envelope computed " + caseRes.at + ". Service rows report deflection only. The detailed module calculations that follow reflect the ACTIVE case.")),
   /*#__PURE__*/React.createElement("table", {
@@ -9831,18 +9879,23 @@ function LoadCasesCard({ cases, updCases, applyCase, runAllCases, caseRes, I, up
       /*#__PURE__*/React.createElement("tbody", null, rr.map((r0, i) => /*#__PURE__*/React.createElement("tr", { key: i, style: { borderTop: "1px solid #eef2f6" } },
         /*#__PURE__*/React.createElement("td", { className: "py-0.5 pr-2 text-slate-500" }, r0.name, r0.type === "service" ? " (svc)" : r0.type === "extreme" ? " (EE)" : r0.type === "tension" ? " (T)" : ""),
         /*#__PURE__*/React.createElement("td", { className: "py-0.5 pr-2", style: r0.noConv ? { color: "#b23b3b", fontWeight: 700 } : undefined }, r0.noConv ? "n/c" : r0.Mmax != null ? fmt(r0.Mmax, 1) : "—"),
-        /*#__PURE__*/React.createElement("td", { className: "py-0.5 pr-2" }, r0.y0 != null ? fmt(r0.y0, 3) : "—"),
+        /*#__PURE__*/React.createElement("td", { className: "py-0.5 pr-2" }, r0.y0 != null ? fmt(r0.y0, 3) : "—",
+          (() => { const w = pyDeflWarnInfo(r0.y0, r0.D, I); return w && w.warn; })() && /*#__PURE__*/React.createElement("span", { title: "Large head deflection: |y0| > " + fmt(pyDeflWarnFactor(I), 2) + " × D (warning only)", style: { color: "#b7791f", fontWeight: 700 } }, " ⚠ large defl.")),
         [["geoR", wG], ["flexR", wF], ["combR", wC], ["buckR", wB]].map(([k, w], j) => (r0.noConv && r0.type !== "service" && (k === "flexR" || k === "combR"))
           ? /*#__PURE__*/React.createElement("td", { key: j, className: "py-0.5 pr-2", style: { color: "#b23b3b", fontWeight: 700 } }, "NG")
           : /*#__PURE__*/React.createElement("td", { key: j, className: "py-0.5 pr-2", style: { color: i === w && rr[i][k] != null ? "#b23b3b" : "#334155", fontWeight: i === w && rr[i][k] != null ? 700 : 400 } }, fmtR(r0[k]))),
         /*#__PURE__*/React.createElement("td", { className: "py-0.5", style: { color: r0.pass ? "#2f6f3e" : "#b23b3b" } }, r0.pass ? "✓" : "✗"))))),
     ro && rr && rr.some(r0 => r0.noConv) && /*#__PURE__*/React.createElement("p", { className: "text-[9px] mt-1 leading-snug", style: { color: "#b23b3b" } },
       "n/c = the p-y solve did not converge for ", rr.filter(r0 => r0.noConv).map(r0 => r0.name).join(", "), ": ", PY_NC_MSG.replace(/^Did not converge — /, ""), ". No valid lateral demand, so flexure and combined loading are NG (a service row fails its deflection check). Reduce the load, check P", /*#__PURE__*/React.createElement("sub", null, "cr"), " in Module 10, shorten the unsupported length or add stiffness; make the case active to see the reason in Module 02."),
+    ro && rr && rr.some(r0 => { const w = pyDeflWarnInfo(r0.y0, r0.D, I); return w && w.warn; }) && /*#__PURE__*/React.createElement("p", { className: "text-[9px] mt-1 leading-snug", style: { color: "#7a4d15" } },
+      "⚠ large defl. = head deflection |y₀| > ", fmt(pyDeflWarnFactor(I), 2), " × D (" + (I.pileType === "hpile" ? "p-y / lateral" : "Bond / p-y") + " input tab; warning only, not NG): ",
+      rr.filter(r0 => { const w = pyDeflWarnInfo(r0.y0, r0.D, I); return w && w.warn; }).map(r0 => r0.name + " " + fmt(Math.abs(r0.y0) / r0.D, 2) + " D").join(", "),
+      ". The checks use these solutions as computed; a deflection this large, especially one opposite to the load, can mean the pile is near or past instability."),
     ro && rr && rr.some(r0 => r0.prof) && /*#__PURE__*/React.createElement("div", { className: "mt-2" },
       /*#__PURE__*/React.createElement(LatGraphsLinks, { ids: ["mcases"], lead: "Moment profiles of all cases (Figure F-2) are on the Lateral graphs tab:" })));
 }
 
-function UtilizationDashboard({ r, I }) {
+function UtilizationDashboard({ r, I, pyRes }) {
   // Build demand/capacity ratios from the same data the report uses.
   // rows: [label, capacity, unit, demand, pass, code]. For most, DCR = demand/capacity.
   // Two are already-normalized ratios (interaction), handled explicitly.
@@ -9928,6 +9981,13 @@ function UtilizationDashboard({ r, I }) {
       /*#__PURE__*/React.createElement("div", { className: "text-[11px] font-mono-tech text-[var(--blueprint)] uppercase tracking-wider" }, "Summary of checks · demand / capacity"),
       gov && /*#__PURE__*/React.createElement("div", { className: "text-[10px] font-mono-tech", style: { color: barColor(gov.dcr) } },
         "governs: ", /*#__PURE__*/React.createElement("b", null, gov.label), gov.isStab ? (gov.pass ? " \u00b7 stable" : " \u00b7 UNSTABLE") : gov.nc ? " \u00b7 p-y did not converge" : " @ " + fmt(gov.dcr, 2))),
+    // F25 (O37): large head-deflection warning (amber, warning only; not a row, no D/C)
+    (() => {
+      const w = (!isIAB && I.lateralSource === "py" && pyRes && pyRes.ok) ? pyDeflWarnInfo(pyRes.headDefl_in, pyRes.setup && pyRes.setup.D, I) : null;
+      return (w && w.warn) ? /*#__PURE__*/React.createElement("button", { type: "button", onClick: () => jumpToModule("module-02"), title: "Show Module 02",
+        className: "pd-defl-warn w-full text-left rounded-sm border px-2 py-1 mb-2 text-[9.5px] font-mono-tech leading-snug", style: { borderColor: "#b7791f", background: "rgba(183,121,31,0.10)", color: "#7a4d15" } },
+        "\u26a0 Warning \u2014 ", pyDeflWarnText(w), ". Warning only, not a check (no D/C row). Module 02 \u2192") : null;
+    })(),
     /*#__PURE__*/React.createElement("div", { className: "space-y-1" }, rows.map((x, i) => {
       const pct = Math.min(x.dcr, 1.35) / 1.35 * 100;
       // UI: each row is a button that jumps to the module holding the full
@@ -10083,9 +10143,11 @@ function latOverlay(K, q, xa, ya, R, o) {
     if (K.yZero != null) pts.push({ x: 0, y: K.yZero, t: "y = 0 @ " + fmt(K.yZero, 1) + " ft", col: "#5a6570" });
     pts.push({ x: K.yToe, y: K.zBot, t: "toe " + fmt(K.yToe, 4) + " in", col: "#5a6570" });
     const L = K.svc.lim, tag = K.svc.active ? (K.svc.ok ? " — OK" : " — NG") : "";
-    // the service limit never widens the axis: drawn only inside the natural range, else noted
-    if (L <= Math.max(Math.abs(lo), Math.abs(hi))) [-1, 1].forEach(sg => vlines.push({ x: sg * L, z0: K.zTop, z1: K.zBot, name: "service limit ±" + fmt(L, 2) + " in" + tag, col: K.svc.active && !K.svc.ok ? "#b23b3b" : "#3d6a94", dash: "dashdot", grp: "svc" }));
-    else off.push("service limit ±" + fmt(L, 2) + " in" + tag + ": not reached (outside the plotted range)");
+    // the service limit never widens the axis (same rule as the F25 warning lines, pyDeflWarnLines):
+    // each of ±limit is drawn only inside the deflection range [min(0, y), max(0, y)], else noted
+    const yLo = Math.min(0, ...K.y), yHi = Math.max(0, ...K.y), svx = [L, -L].filter(xv => xv >= yLo && xv <= yHi);
+    svx.forEach(xv => vlines.push({ x: xv, z0: K.zTop, z1: K.zBot, name: "service limit ±" + fmt(L, 2) + " in" + tag, col: K.svc.active && !K.svc.ok ? "#b23b3b" : "#3d6a94", dash: "dashdot", grp: "svc" }));
+    if (!svx.length) off.push("service limit ±" + fmt(L, 2) + " in" + tag + ": not reached (outside the plotted range)");
     if (K.svc.active) A.push({ xref: xa + " domain", x: 0.02, xanchor: "left", yref: ya + " domain", y: 0.005, yanchor: "bottom", showarrow: false, text: "service case: |y₀| " + fmt(Math.abs(K.y0), 3) + (K.svc.ok ? " ≤ " : " > ") + fmt(L, 2) + " in" + tag, font: { size: fz, color: K.svc.ok ? "#2f6f3e" : "#b23b3b", family: PLOT_FONT }, bgcolor: "rgba(255,255,255,0.85)" });
   } else if (q === "M") {
     const absPos = Math.abs(K.Mpos.v) >= Math.abs(K.Mneg.v);
@@ -12129,9 +12191,15 @@ function PyPanel({ I, set, pyRes, r, EI, EI_composite_kipin2, EI_aashto_kipin2, 
             ? [fmt(Math.abs(pyRes.zMmax), 1), " ft ABOVE grade (in the stickup)"]
             : [fmt(pyRes.zMmax, 1), " ft below grade"]),
         " flows to the structural checks automatically.",
-        pyRes.retried ? " (Converged on the adaptive retry: 16 load steps, under-relaxed; closure, stable-branch and deflection checks passed.)" : null)
+        pyRes.retried ? " (Converged on the adaptive retry: 16 load steps, under-relaxed; convergence, closure and stable-branch checks passed.)" : null)
         : (pyRes && pyRes.noConv) ? /*#__PURE__*/React.createElement(PyNoConvNote, { why: pyRes.why })
         : ("\u26a0 " + (pyRes ? pyRes.msg : "not run"))),
+    // F25 (O37): large head-deflection warning (amber, warning only)
+    ok && (() => {
+      const w = pyDeflWarnInfo(pyRes.headDefl_in, pyRes.setup && pyRes.setup.D, I);
+      return (w && w.warn) ? /*#__PURE__*/React.createElement("div", { role: "note", className: "rounded-sm border p-2 mb-3 text-[10px] font-mono-tech", style: { borderColor: "#b7791f", background: "rgba(183,121,31,0.10)", color: "#7a4d15" } },
+        /*#__PURE__*/React.createElement("b", null, "\u26a0 WARNING \u2014 ", pyDeflWarnText(w), "."),  " ", PY_DEFL_WARN_NOTE, " The warning limit is set in the " + (I.pileType === "hpile" ? "p-y / lateral" : "Bond / p-y") + " input tab.") : null;
+    })(),
     ok && /*#__PURE__*/React.createElement("div", { className: "font-mono-tech text-[10px] text-slate-600 mb-3" },
       "head deflection ", fmt(pyRes.headDefl_in, 3), " in \u00b7 moment decays to 5% at ",
       pyRes.zMomentDecay != null ? fmt(pyRes.zMomentDecay, 1) + " ft" : "\u2014",
@@ -13263,7 +13331,8 @@ function App() {
             tenR: c.type === "tension" ? (isHPc ? rat(I2.Tu, Math.min(hg.phiRn_up || 1e9, hs.phiPn_tension || 1e9)) : rat(I2.Tu, Math.min(R2.tension && R2.tension.phiPn_up || 1e9, R2.tension && R2.tension.phiPn_tension_total || 1e9))) : null,
             svcR: c.type === "service" && y0 != null ? Math.abs(y0) / Math.max(I.deflLimit || 1, 0.01) : null,
             pass: noConv ? false : (c.type === "service" ? (y0 == null || Math.abs(y0) <= (I.deflLimit || 1)) : R2.allPass),
-            noConv, ncWhy
+            noConv, ncWhy,
+            D: S ? S.D : null   // F25 (O37): p-y pile width, for the large-deflection warning (display only)
           };
         });
         setCaseRes({ rows, at: new Date().toLocaleTimeString() });
@@ -14286,7 +14355,7 @@ function App() {
     "data-rtab-fixed": "checks",
     onClick: () => gotoLoadsTab(setRailTab, "group"),
     className: "w-full mt-2 font-mono-tech text-[11px] tracking-wider py-2 rounded-sm border border-[var(--blueprint2)] text-[var(--blueprint2)] hover:bg-slate-50 transition flex items-center justify-center gap-1.5"
-  }, "▦ PILE GROUP \u2192 Loads & group tab", (cases[activeIdx] && cases[activeIdx]._fromGroup) ? /*#__PURE__*/React.createElement("span", { className: "text-[8px] px-1.5 py-0.5 rounded-sm text-white", style: { background: "var(--accent)" } }, "GROUP CASE ACTIVE") : (groupEnabled && groupCase) ? /*#__PURE__*/React.createElement("span", { className: "text-[8px] px-1.5 py-0.5 rounded-sm text-white", style: { background: "var(--blueprint2)" } }, "APPLIED") : null), /*#__PURE__*/React.createElement("div", { className: "mt-3 pt-2 border-t border-slate-200" }, /*#__PURE__*/React.createElement("div", { className: "text-[12px] text-[var(--blueprint)] font-medium mb-1" }, "Head condition"), /*#__PURE__*/React.createElement("div", { className: "flex gap-2 text-[11px] font-mono-tech" }, [["free", "free / pinned"], ["fixed", "fixed / capped"]].map(([v, l]) => /*#__PURE__*/React.createElement("button", { key: v, onClick: () => set('solverHead', v), className: "flex-1 px-2 py-1 rounded-sm border " + (I.solverHead === v ? "bg-[var(--blueprint2)] text-white border-[var(--blueprint2)]" : "bg-white border-slate-300 text-slate-600 hover:bg-slate-50") }, l))), I.solverHead !== "fixed" && /*#__PURE__*/React.createElement("div", { className: "flex items-center gap-1.5 mt-1.5" }, /*#__PURE__*/React.createElement("span", { className: "text-[10px] text-slate-500 font-mono-tech" }, "K\u03b8"), /*#__PURE__*/React.createElement("input", { type: "number", "aria-label": "Head rotational stiffness K-theta, kip-in per radian", value: I.pyKrot || 0, onChange: e => set('pyKrot', parseFloat(e.target.value) || 0), className: "w-24 font-mono-tech text-[11px] px-1.5 py-1 rounded-sm border border-slate-300" }), /*#__PURE__*/React.createElement("span", { className: "text-[9px] text-slate-400 font-mono-tech" }, "kip\u00b7in/rad \u00b7 0 = pinned")), /*#__PURE__*/React.createElement("p", { className: "text-[8.5px] text-slate-400 mt-1 leading-snug" }, /*#__PURE__*/React.createElement("b", null, "Free"), ": head rotates (flagpole/pinned), or is partially restrained by K\u03b8. ", /*#__PURE__*/React.createElement("b", null, "Fixed"), ": rotation fully restrained by a rigid cap connection. Drives the p-y boundary condition, the deflection-matched buckling basis, and the cap-embedment check."), /*#__PURE__*/React.createElement("div", { className: "text-[12px] text-[var(--blueprint)] font-medium mt-2.5 mb-1" }, "p-y loading criterion"), /*#__PURE__*/React.createElement("label", { className: "flex items-center gap-1.5 text-[10px] text-slate-600 font-mono-tech" }, /*#__PURE__*/React.createElement("input", { type: "checkbox", checked: !!I.pyCyclic, onChange: e => { const on = e.target.checked; set('pyCyclic', on); if (on) setCycInfoOpen(true); } }), "cyclic p-y curves"), /*#__PURE__*/React.createElement("p", { className: "text-[8.5px] text-slate-400 mt-1 leading-snug" }, !!I.pyCyclic ? [/*#__PURE__*/React.createElement("b", { key: "b", style: { color: "#8a5a1f" } }, "\u26a0 Cyclic active. "), "Models soil-resistance degradation under repeated large-amplitude reversal (offshore wave, seismic). Static is the usual basis for bridge substructure. ", /*#__PURE__*/React.createElement("button", { key: "d", onClick: () => setCycInfoOpen(true), className: "underline font-mono-tech" }, "details")] : "Unchecked = static (the usual basis for bridge substructure lateral analysis). Cyclic models soil degradation under repeated reversal \u2014 an offshore/seismic criterion."), /*#__PURE__*/React.createElement(CyclicInfoModal, { open: cycInfoOpen, onClose: () => setCycInfoOpen(false), onRevert: () => { set('pyCyclic', false); setCycInfoOpen(false); } })), /*#__PURE__*/React.createElement("button", { onClick: () => gotoSoilProfileTab(setRailTab), className: "w-full mt-2 font-mono-tech text-[11px] tracking-wider py-2 rounded-sm border border-[var(--blueprint2)] text-[var(--blueprint2)] hover:bg-slate-50 transition flex items-center justify-center gap-1.5" }, "\u2261 SOIL PROFILE", (Array.isArray(I.soilLayers) && I.soilLayers.length) ? /*#__PURE__*/React.createElement("span", { className: "text-[8px] px-1.5 py-0.5 rounded-sm text-white", style: { background: "var(--blueprint2)" } }, I.soilLayers.length, " LAYER", I.soilLayers.length > 1 ? "S" : "") : /*#__PURE__*/React.createElement("span", { className: "text-[8px] px-1.5 py-0.5 rounded-sm", style: { background: "#e2e8f0", color: "#64748b" } }, "UNIFORM")), /*#__PURE__*/React.createElement("div", { className: "mt-1 text-[8.5px] text-slate-400 font-mono-tech leading-snug" }, (Array.isArray(I.soilLayers) && I.soilLayers.length) ? ["Drives the p-y lateral analysis and the Davisson fixity depth (Module 10). Top layer: ", (() => { const t = [...I.soilLayers].sort((a, b) => (a.topDepth || 0) - (b.topDepth || 0))[0]; return t.type === "sand" ? "sand n\u2095=" + fmt(t.nh, 0) : (t.type === "stiffclay" ? "stiff clay" : t.type === "weakrock" ? "weak rock" : "clay") + " k\u2095=" + fmt(t.kh, 0); })(), "."] : "No layered profile \u2014 the analysis uses the uniform soil set in Module 02."), /*#__PURE__*/(I.pileType !== "iab") && /*#__PURE__*/React.createElement(Panel, {
+  }, "▦ PILE GROUP \u2192 Loads & group tab", (cases[activeIdx] && cases[activeIdx]._fromGroup) ? /*#__PURE__*/React.createElement("span", { className: "text-[8px] px-1.5 py-0.5 rounded-sm text-white", style: { background: "var(--accent)" } }, "GROUP CASE ACTIVE") : (groupEnabled && groupCase) ? /*#__PURE__*/React.createElement("span", { className: "text-[8px] px-1.5 py-0.5 rounded-sm text-white", style: { background: "var(--blueprint2)" } }, "APPLIED") : null), /*#__PURE__*/React.createElement("div", { className: "mt-3 pt-2 border-t border-slate-200" }, /*#__PURE__*/React.createElement("div", { className: "text-[12px] text-[var(--blueprint)] font-medium mb-1" }, "Head condition"), /*#__PURE__*/React.createElement("div", { className: "flex gap-2 text-[11px] font-mono-tech" }, [["free", "free / pinned"], ["fixed", "fixed / capped"]].map(([v, l]) => /*#__PURE__*/React.createElement("button", { key: v, onClick: () => set('solverHead', v), className: "flex-1 px-2 py-1 rounded-sm border " + (I.solverHead === v ? "bg-[var(--blueprint2)] text-white border-[var(--blueprint2)]" : "bg-white border-slate-300 text-slate-600 hover:bg-slate-50") }, l))), I.solverHead !== "fixed" && /*#__PURE__*/React.createElement("div", { className: "flex items-center gap-1.5 mt-1.5" }, /*#__PURE__*/React.createElement("span", { className: "text-[10px] text-slate-500 font-mono-tech" }, "K\u03b8"), /*#__PURE__*/React.createElement("input", { type: "number", "aria-label": "Head rotational stiffness K-theta, kip-in per radian", value: I.pyKrot || 0, onChange: e => set('pyKrot', parseFloat(e.target.value) || 0), className: "w-24 font-mono-tech text-[11px] px-1.5 py-1 rounded-sm border border-slate-300" }), /*#__PURE__*/React.createElement("span", { className: "text-[9px] text-slate-400 font-mono-tech" }, "kip\u00b7in/rad \u00b7 0 = pinned")), /*#__PURE__*/React.createElement("p", { className: "text-[8.5px] text-slate-400 mt-1 leading-snug" }, /*#__PURE__*/React.createElement("b", null, "Free"), ": head rotates (flagpole/pinned), or is partially restrained by K\u03b8. ", /*#__PURE__*/React.createElement("b", null, "Fixed"), ": rotation fully restrained by a rigid cap connection. Drives the p-y boundary condition, the deflection-matched buckling basis, and the cap-embedment check."), /*#__PURE__*/React.createElement("div", { className: "text-[12px] text-[var(--blueprint)] font-medium mt-2.5 mb-1" }, "p-y loading criterion"), /*#__PURE__*/React.createElement("label", { className: "flex items-center gap-1.5 text-[10px] text-slate-600 font-mono-tech" }, /*#__PURE__*/React.createElement("input", { type: "checkbox", checked: !!I.pyCyclic, onChange: e => { const on = e.target.checked; set('pyCyclic', on); if (on) setCycInfoOpen(true); } }), "cyclic p-y curves"), /*#__PURE__*/React.createElement("p", { className: "text-[8.5px] text-slate-400 mt-1 leading-snug" }, !!I.pyCyclic ? [/*#__PURE__*/React.createElement("b", { key: "b", style: { color: "#8a5a1f" } }, "\u26a0 Cyclic active. "), "Models soil-resistance degradation under repeated large-amplitude reversal (offshore wave, seismic). Static is the usual basis for bridge substructure. ", /*#__PURE__*/React.createElement("button", { key: "d", onClick: () => setCycInfoOpen(true), className: "underline font-mono-tech" }, "details")] : "Unchecked = static (the usual basis for bridge substructure lateral analysis). Cyclic models soil degradation under repeated reversal \u2014 an offshore/seismic criterion."), /*#__PURE__*/React.createElement(CyclicInfoModal, { open: cycInfoOpen, onClose: () => setCycInfoOpen(false), onRevert: () => { set('pyCyclic', false); setCycInfoOpen(false); } }), /*#__PURE__*/(I.pileType !== "iab") && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", { className: "text-[12px] text-[var(--blueprint)] font-medium mt-2.5 mb-1" }, "Large head-deflection warning"), /*#__PURE__*/React.createElement("div", { className: "flex items-center gap-1.5" }, /*#__PURE__*/React.createElement("span", { className: "text-[10px] text-slate-500 font-mono-tech" }, "y\u2080 >"), /*#__PURE__*/React.createElement("input", { type: "number", step: 0.05, min: 0, "aria-label": "Large head-deflection warning, multiple of the pile width D", value: (typeof I.pyDeflWarnD === "number" && isFinite(I.pyDeflWarnD)) ? I.pyDeflWarnD : "", onChange: e => set('pyDeflWarnD', e.target.value === "" ? NaN : parseFloat(e.target.value)), className: "w-16 font-mono-tech text-[11px] px-1.5 py-1 rounded-sm border border-slate-300" }), /*#__PURE__*/React.createElement("span", { className: "text-[9px] text-slate-400 font-mono-tech" }, "\u00d7 D \u00b7 0 = off \u00b7 blank = 0.25")), /*#__PURE__*/React.createElement("p", { className: "text-[8.5px] text-slate-400 mt-1 leading-snug" }, "Amber warning, not a check: shown when the p-y head deflection |y\u2080| exceeds this multiple of the pile width D (default 0.25 D), for the active case and for each case of the envelope. Nothing becomes NG because of it. The service deflection limit (Loads & group tab) is separate."))), /*#__PURE__*/React.createElement("button", { onClick: () => gotoSoilProfileTab(setRailTab), className: "w-full mt-2 font-mono-tech text-[11px] tracking-wider py-2 rounded-sm border border-[var(--blueprint2)] text-[var(--blueprint2)] hover:bg-slate-50 transition flex items-center justify-center gap-1.5" }, "\u2261 SOIL PROFILE", (Array.isArray(I.soilLayers) && I.soilLayers.length) ? /*#__PURE__*/React.createElement("span", { className: "text-[8px] px-1.5 py-0.5 rounded-sm text-white", style: { background: "var(--blueprint2)" } }, I.soilLayers.length, " LAYER", I.soilLayers.length > 1 ? "S" : "") : /*#__PURE__*/React.createElement("span", { className: "text-[8px] px-1.5 py-0.5 rounded-sm", style: { background: "#e2e8f0", color: "#64748b" } }, "UNIFORM")), /*#__PURE__*/React.createElement("div", { className: "mt-1 text-[8.5px] text-slate-400 font-mono-tech leading-snug" }, (Array.isArray(I.soilLayers) && I.soilLayers.length) ? ["Drives the p-y lateral analysis and the Davisson fixity depth (Module 10). Top layer: ", (() => { const t = [...I.soilLayers].sort((a, b) => (a.topDepth || 0) - (b.topDepth || 0))[0]; return t.type === "sand" ? "sand n\u2095=" + fmt(t.nh, 0) : (t.type === "stiffclay" ? "stiff clay" : t.type === "weakrock" ? "weak rock" : "clay") + " k\u2095=" + fmt(t.kh, 0); })(), "."] : "No layered profile \u2014 the analysis uses the uniform soil set in Module 02."), /*#__PURE__*/(I.pileType !== "iab") && /*#__PURE__*/React.createElement(Panel, {
     title: "Loads",
     sub: "active case · edit in the Loads & group tab"
   }, (() => {
@@ -14680,7 +14749,7 @@ function App() {
     }, "Integral abutment pile mode — MassDOT Bridge Manual Part I \u00a73.10 Simplified Method. Single row of vertical H-piles (HP10\u00d757 or HP12\u00d784, Grade 50), webs parallel to the abutment, bending about the weak axis under thermal movement. Capacity is read from MassDOT's pre-computed tables (thermal + skew effects already embedded) \u2014 no p-y analysis required for the non-scour case. Sanity-check aid only \u2014 independent PE review required.")),
   /*#__PURE__*/React.createElement(OutTabs, { pileType: I.pileType }),
   /*#__PURE__*/(I.pileType !== "iab") && /*#__PURE__*/React.createElement(LoadCasesCard, { variant: "summary", cases: cases, updCases: updCases, applyCase: applyCase, runAllCases: runAllCases, caseRes: caseRes, I: I, activeIdx: activeIdx, setActive: i => set('activeCase', i), onEdit: () => gotoLoadsTab(setRailTab, "cases") }),
-  /*#__PURE__*/React.createElement(UtilizationDashboard, { r: r, I: I }),
+  /*#__PURE__*/React.createElement(UtilizationDashboard, { r: r, I: I, pyRes: pyRes }),
   /*#__PURE__*/React.createElement(Module, {
     idx: "G",
     title: "Geometry & Code-Limit Checks",
@@ -16729,7 +16798,7 @@ function LatPanel({ title, children, note }) {
     note ? e("div", { className: "pd-lg-note" }, note) : null);
 }
 /* one response quantity vs depth (Figure F-1, single view) */
-function LatProfileOne({ records, which, stickFt, height, kv, narrow }) {
+function LatProfileOne({ records, which, stickFt, height, deflWarn, kv, narrow }) {
   const k = which === "y" ? "defl" : which === "M" ? "mom" : "shear";
   const z = records.map(r => r.depth - (stickFt || 0)), v = records.map(r => r[k]); // depth below grade
   let iM = 0; v.forEach((x, i) => { if (Math.abs(x) > Math.abs(v[iM])) iM = i; });
@@ -16739,6 +16808,13 @@ function LatProfileOne({ records, which, stickFt, height, kv, narrow }) {
   const nm = which === "y" ? "deflection y" : which === "M" ? "moment M" : "shear V";
   const dp = which === "y" ? 4 : which === "M" ? 1 : 2;
   const G = latGradeLine(), shapes = G.shapes, anns = G.annotations;
+  // F25 (O37): large head-deflection warning limit, +/- f x D (deflection view only)
+  const dwX = which === "y" ? pyDeflWarnLines(deflWarn, v) : [];   // no axis widening
+  if (dwX.length) {
+    dwX.forEach(xv => shapes.push({ type: "line", xref: "x", yref: "paper", x0: xv, x1: xv, y0: 0, y1: 1, line: { color: "#b7791f", width: 1.5, dash: "dot" } }));
+    anns.push({ xref: "x", yref: "paper", x: dwX[0], y: 0.02, xanchor: "right", yanchor: "bottom", textangle: -90, showarrow: false,
+      text: "\u00b1" + fmt(deflWarn.f, 2) + " \u00d7 D = \u00b1" + fmt(deflWarn.lim, 2) + " in (large-deflection warning)", bgcolor: "rgba(255,255,255,0.8)", font: { size: 10, color: "#8a5a1f", family: PLOT_FONT } });
+  }
   if (kv) {   // F26 b: key values, capacity / limit lines and depth to fixity
     const lo = Math.min(0, ...v), hi = Math.max(0, ...v), m = Math.max(Math.abs(lo), Math.abs(hi)) * 1.15 || 1;
     const span = Math.max(z[z.length - 1] - z[0], 1e-6), zLo = z[0] - 0.04 * span, zHi = z[z.length - 1] + 0.03 * span;
@@ -16830,6 +16906,8 @@ function LatGraphsCard({ I, set, pyRes, solved, activeLayers, pyDepths, setPyDep
   const fail = isPy && !ok ? e(LatFail, { pyRes }) : null;
   const stickFt = ok && pyRes.setup ? pyRes.setup.stick_in / 12 : null;
   const H = 520;
+  // F25 (O37): large head-deflection warning (limit lines on the deflection plots; note)
+  const dw = ok ? pyDeflWarnInfo(pyRes.headDefl_in, pyRes.setup && pyRes.setup.D, I) : null;
   const K = ok ? latKV(I, r, pyRes, actType) : null;   // F26 b: key values (display only)
 
   /* ---- Deflection · Moment · Shear (Figure F-1) ---- */
@@ -16843,9 +16921,14 @@ function LatGraphsCard({ I, set, pyRes, solved, activeLayers, pyDepths, setPyDep
           e("button", { key: v, type: "button", "aria-pressed": view === v ? "true" : "false", onClick: () => setView(v) }, l))),
         e(LatPanel, { title: "Figure F-1: deflection, moment and shear vs depth (active case)",
           note: "Nonlinear p-y, M-φ EI " + (pyRes.eiVar ? "on" : "off") + ". M_max = " + fmt(pyRes.Mmax_kft, 1) + " kip·ft at " + fmt(pyRes.zMmax, 1) + " ft below grade; head deflection " + fmt(pyRes.headDefl_in, 3) + " in. Depth below grade (stickup negative). Same solution as the printed Figure F-1." },
-          view === "all" ? e(LpileProfilePlot, { records: pyRes.records, height: H + 80, zOffset: stickFt || 0, kv: K, narrow })
-            : e(LatProfileOne, { records: pyRes.records, which: view, stickFt, height: 640, kv: K, narrow }),
+          view === "all" ? e(LpileProfilePlot, { records: pyRes.records, height: H + 80, zOffset: stickFt || 0, kv: K, narrow, deflWarn: dw })
+            : e(LatProfileOne, { records: pyRes.records, which: view, stickFt, height: 640, kv: K, narrow, deflWarn: dw }),
           e(LatKeys, { items: latKeysF1(K), title: "Key values (active case)" })),
+        dw && e("div", { className: dw.warn ? "pd-lg-warn" : "pd-lg-note", role: dw.warn ? "note" : undefined, style: dw.warn ? { border: "1px solid #b7791f", background: "rgba(183,121,31,0.10)", color: "#7a4d15", padding: "6px 9px", borderRadius: "2px", marginTop: "8px", fontSize: "12px", lineHeight: 1.45 } : undefined },
+          dw.warn ? e(React.Fragment, null, e("b", null, "\u26a0 Warning \u2014 " + pyDeflWarnText(dw) + "."), " " + PY_DEFL_WARN_NOTE)
+            : !pyDeflWarnLines(dw, pyRes.records.map(r0 => r0.defl)).length
+              ? "Large head-deflection warning limit = " + fmt(dw.lim, 2) + " in (" + fmt(dw.f, 2) + " D, D = " + fmt(dw.D, 2) + " in; set in the " + (I.pileType === "hpile" ? "p-y / lateral" : "Bond / p-y") + " input tab) \u2014 not reached: head deflection " + fmt(pyRes.headDefl_in, 3) + " in = " + fmt(dw.yD, 2) + " D. (Outside the plotted range, so no line is drawn.)"
+            : "Dotted amber lines on the deflection plot: the large head-deflection warning limit \u00b1" + fmt(dw.f, 2) + " \u00d7 D = \u00b1" + fmt(dw.lim, 2) + " in (D = " + fmt(dw.D, 2) + " in; set in the " + (I.pileType === "hpile" ? "p-y / lateral" : "Bond / p-y") + " input tab). Head deflection " + fmt(pyRes.headDefl_in, 3) + " in = " + fmt(dw.yD, 2) + " D: no warning."),
         e("div", { style: { marginTop: "12px" } }, e(ElevationPlot, { I: I, pyRes: pyRes, height: 520, narrow: narrow, kv: K })));
     }
     if (src === "solver") {
