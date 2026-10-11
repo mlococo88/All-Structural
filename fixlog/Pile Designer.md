@@ -4755,7 +4755,7 @@ Engineer's decision 2026-10-11: "Go ahead with O33 and O34". For O33 the approve
   - Sub-tab remembered per browser in the **new key `micropile_lrfd_latGraphTab_v1`** (string sub-tab id; try/catch; not in project data). If the remembered sub-tab does not exist for the basis, the first one is shown and the remembered one is kept.
   - Larger figures: `LpileProfilePlot`, `LateralDiagram` and `ElevationPlot` take an optional `height` (defaults 360 / 340 / 340, the old fixed values, so every other use is unchanged). `LpileProfilePlot` keeps its panel titles 23 px above the plot area when drawn taller (`annY`; at the default 360 px the value is the old 1.08).
 - **What changed (printed report):** only Figure F-3: drawn by the same Plotly `PyCurvesChart`, 660 px wide (6.9 in, inside the 7.1 in printable width), 330 px tall, static (`staticPlot`), legend below; same "02F" block, same print-chooser group (Lateral), same table and notes. F-1 and F-2 in the report are unchanged (they were already Plotly). Each figure prints once (the screen card is in `.app-shell`, which does not print).
-- **Not changed:** `computeAll`, `solvePyPile`, `solvePyWithRetry`, `pyCurveSet`, the `pyRes` memo, `runAllCases`, every check and every displayed result; the Summary tab's case-envelope card (it keeps its own small "Moment profiles · all cases overlaid" chart); the Tier 2 plots (Module 12); the drawings that are not graphs (soil-profile column G-1, cross-sections S-1, group plan) stay SVG; storage keys `micropile_lrfd_inputs_v1`, `micropile_lrfd_lpile_v1`, `micropile_lrfd_outTab_v1`, `micropile_lrfd_printSel_v1`, `micropile_lrfd_pyCurveDepths_v1`, IndexedDB `micropile_lrfd_db`; saved / exported JSON; `bridgeSuite.v1.projectMeta` and `foundationLoads`; library tags and versions (Plotly 2.32.0 already loaded; no new library).
+- **Not changed:** `computeAll`, `solvePyPile`, `solvePyWithRetry`, `pyCurveSet`, the `pyRes` memo, `runAllCases`, every check and every displayed result; the Summary tab's case-envelope card (it kept its own small "Moment profiles · all cases overlaid" chart; replaced by a link in part b); the Tier 2 plots (Module 12); the drawings that are not graphs (soil-profile column G-1, cross-sections S-1, group plan) stay SVG; storage keys `micropile_lrfd_inputs_v1`, `micropile_lrfd_lpile_v1`, `micropile_lrfd_outTab_v1`, `micropile_lrfd_printSel_v1`, `micropile_lrfd_pyCurveDepths_v1`, IndexedDB `micropile_lrfd_db`; saved / exported JSON; `bridgeSuite.v1.projectMeta` and `foundationLoads`; library tags and versions (Plotly 2.32.0 already loaded; no new library).
 - **New storage key (per browser, UI only, never in project data):** `micropile_lrfd_latGraphTab_v1`.
 - **Governing provision:** none (presentation only). No formula, factor, unit, default or code reference changed.
 - **Check case (F-3 in Plotly, independent evaluation, as in F14):** micropile defaults with layers sand (0–5 ft, γ 120, φ 34°, k 110) / soft clay (5–9 ft, γ 110, sᵤ 600 psf, ε₅₀ 0.02) / stiff clay (9–25 ft, γ 120, sᵤ 2500 psf, ε₅₀ 0.006) / sand (25 ft+, γ 62, φ 38°, k 125), depths 1, 3, 6, 8, 12, 20 ft. The curve points (91 per curve) and the mobilised points were read from the **rendered Plotly chart's data** (`gd.data`) and compared with a separate implementation of Reese, Cox & Koop (1974) sand, Matlock (1970) soft clay (static and cyclic) and the tool's Welch & Reese stiff-clay form, at the solver's Georgiadis equivalent depth: P_lat = 12 kip, static, f_m = f_y = 1: max relative difference 2.3·10⁻¹⁶; P_lat = 5 kip, cyclic, f_m = 0.70, f_y = 1.20: 3.3·10⁻¹⁶ (same as F14). Mobilised points on their curves: |p_marker − p(y_marker)| ≤ 5.7·10⁻¹⁴ lb/in (e.g. z = 6.10 ft soft clay, z_e = 7.82 ft: y = 0.9103 in, p = 180.497 lb/in, as in F14).
@@ -5736,6 +5736,405 @@ index d594f08..9235f4e 100644
  function outTabFor(el, pileType) {
    const fx = el.getAttribute("data-otab-fixed"); if (fx) return fx;
    const idx = el.getAttribute("data-module"); if (!idx) return null; // pile-type card, footer: always shown
+```
+
+### F24, part b. Review fixes: one depth datum for every lateral graph, elevation diagram range and labels, Summary chart → link   [UI only] [no calculation change]
+- **Date:** 2026-10-11. **Type:** UI only. Review of the F24 screenshots, the same day (display only, no calc change).
+- **What changed:**
+  - **One datum: depth below grade** (stickup negative), axis title "depth below grade (ft)", a dashed grade line at 0 (`latGradeLine`), hover "depth … ft below grade", on every lateral graph:
+    - Figure F-1 (`LpileProfilePlot`) on screen **and in the printed report**: new optional `zOffset` (ft). With it the records' depth from the pile head is drawn less the stickup: `pyRes.setup.stick_in / 12` (the solver's datum, the one Figure F-3, F-2 and the report table use). The three panels now share one depth axis (`matches: "y"`), so grade lines up across them (before, each panel autoranged on its own). Without `zOffset` the plot is as before (no other caller).
+    - F-1 single views (`LatProfileOne`), Soil reaction, Soil mobilization (now also drawn over the soil-reaction chart's depth range, pile head to toe), EI along the pile (depths from the solver nodes, so the stickup is no longer folded onto grade; `eiProf.d` itself is unchanged), F-2 on screen; F-2 in the report gets the grade line (it was already below grade).
+    - `LateralDiagram` (linear basis and the built-in vs LPILE comparison): title "depth z (ft)" → "depth below grade (ft)"; the two panels share one depth axis; **the LPILE overlay is shifted by the project stickup** (LPILE reports depth from its pile head; before, it was drawn as if that were depth below grade, i.e. the LPILE head at grade). The unnamed helper traces no longer appear in the legend ("trace 1", "trace 2"); the legend has a fixed entry width; the "P=…k" label is no longer clipped.
+    - LPILE comparison profiles: drawn below grade with this project's stickup; the note says so and that this holds when the LPILE model has the same stickup.
+    - Figure F-3 has no depth axis; its depth chips and table were already in ft below grade (unchanged).
+  - **Elevation moment diagram** (`ElevationPlot`): fixed depth range from the pile head (less 16 % of the span, at least 2 ft, for the load arrows and label) to the toe + 3 ft (before: autorange about −45 to +40 ft, because the axial-load label was placed with an invalid `yref: "pixel"` and read as data y = −46). Loads: the P and V arrows are kept; one label "P = … kip · V = … kip (· ↻ M = …)" sits above the head, right of the axial arrow (before, "V = …" overlapped the head arrow and the cap). The "Mmax …" label is drawn outside the plot area if needed (`cliponaxis: false`, right margin 64 px) instead of being clipped.
+  - **Summary tab**: the small "Moment profiles · all cases overlaid" chart in the case-envelope card is replaced by a link "Moment profiles of all cases (Figure F-2) are on the Lateral graphs tab: Moment — all cases →". It was screen only (the printed report has its own F-2), so nothing is kept for print.
+- **Not changed:** every computed value and every number in the report text; the plotted x values; F-3 data.
+- **Check (datum):** report F-1, origin/main vs branch, micropile defaults: every x value identical, every y value lower by exactly 3.000000000 ft = the stickup; y title "depth (ft)" → "depth below grade (ft)".
+- **How verified:** `node --check`; the parity run of F24 repeated (report text, output text outside Module 02, statuses, saved data, export, IndexedDB, hand-off identical); F-3 cross-check on the Plotly data repeated (2.3·10⁻¹⁶ static, 3.3·10⁻¹⁶ cyclic); screenshots of every sub-tab at 1500 and 400 px with the p-y, linear and Input Mmax bases, with an LPILE import and with a solve that does not converge, looked at; Summary link selects Lateral graphs → Moment — all cases; Letter PDF page with F-1 looked at; no console errors; no horizontal scroll at 400 px.
+- **Re-applying by hand:** the unified diff below is against the F24 state of the file (CRLF stripped). Anchors: `function LateralDiagram({` (`ovZ`, the four hover texts, `"depth z (ft)"`, the legend, `yaxis2`, the helper traces after `dash: "dot"`), `function LpileProfilePlot({` (`zOffset`, `zLbl`, the three hover texts, the y title, `yaxis2`/`yaxis3`), the report F-1 call `React.createElement(LpileProfilePlot, { records: pyRes.records`, the report F-2 `layout: baseLayout({ height: 240,`, `function ElevationPlot(` (`// ---- Applied loads at the pile head`), `LoadCasesCard` (anchor `"Moment profiles · all cases overlaid"`), and in the Lateral graphs block `latGradeLine`, `LatProfileOne`, the F-1 note, F-2, Soil reaction, Soil mobilization, EI along the pile and the LPILE note.
+
+```diff
+diff --git a/Pile Designer.html b/Pile Designer.html
+index 9235f4e..2e32ece 100644
+--- a/Pile Designer.html	
++++ b/Pile Designer.html	
+@@ -6344,7 +6344,7 @@ function LateralDiagram({
+ 
+   // Optional LPILE overlay (dashed). Records carry depth(ft), defl(in), mom(kip-ft).
+   const ov = lpileOverlay && lpileOverlay.length > 1 ? lpileOverlay : null;
+-  const ovZ = ov ? ov.map(r => r.depth) : [];
++  const ovZ = ov ? ov.map(r => r.depth - (I.solverFree || 0)) : []; // LPILE depth is from its pile head: shift by the stickup to depth below grade
+   const ovY = ov ? ov.map(r => r.defl) : [];
+   const ovM = ov ? ov.map(r => r.mom) : [];
+   // expand ranges to include LPILE so both curves fit
+@@ -6361,7 +6361,7 @@ function LateralDiagram({
+       width: 2.5
+     },
+     hoverinfo: "text",
+-    text: zAll.map((z, i) => `z=${fmt(z, 1)} ft<br>y=${fmt(yAll[i], 3)} in`),
++    text: zAll.map((z, i) => `depth ${fmt(z, 1)} ft below grade<br>y=${fmt(yAll[i], 3)} in`),
+     name: "deflection (built-in)"
+   }, {
+     x: [0, 0],
+@@ -6374,9 +6374,12 @@ function LateralDiagram({
+       width: 1,
+       dash: "dot"
+     },
+-    hoverinfo: "skip"
++    hoverinfo: "skip",
++    showlegend: false
+   }, {
+     x: [yAll[0]],
++    showlegend: false,
++    cliponaxis: false,
+     y: [zTop],
+     xaxis: "x",
+     yaxis: "y",
+@@ -6407,7 +6410,7 @@ function LateralDiagram({
+       width: 2
+     },
+     hoverinfo: "text",
+-    text: zAll.map((z, i) => `z=${fmt(z, 1)} ft<br>M=${fmt(mAll[i], 1)} kip·ft`),
++    text: zAll.map((z, i) => `depth ${fmt(z, 1)} ft below grade<br>M=${fmt(mAll[i], 1)} kip·ft`),
+     name: "moment (built-in)"
+   },
+   // mark the 2nd zero (fixity) on the moment plot
+@@ -6442,7 +6445,7 @@ function LateralDiagram({
+       dash: "dash"
+     },
+     hoverinfo: "text",
+-    text: ovZ.map((z, i) => `LPILE<br>z=${fmt(z, 1)} ft<br>y=${fmt(ovY[i], 3)} in`),
++    text: ovZ.map((z, i) => `LPILE<br>depth ${fmt(z, 1)} ft below grade<br>y=${fmt(ovY[i], 3)} in`),
+     name: "deflection (LPILE)"
+   }, {
+     x: ovM,
+@@ -6456,7 +6459,7 @@ function LateralDiagram({
+       dash: "dash"
+     },
+     hoverinfo: "text",
+-    text: ovZ.map((z, i) => `LPILE<br>z=${fmt(z, 1)} ft<br>M=${fmt(ovM[i], 1)} kip·ft`),
++    text: ovZ.map((z, i) => `LPILE<br>depth ${fmt(z, 1)} ft below grade<br>M=${fmt(ovM[i], 1)} kip·ft`),
+     name: "moment (LPILE)"
+   }] : [])];
+   const ovMmax = ov ? ovM.reduce((a, b) => Math.abs(b) > Math.abs(a) ? b : a, 0) : null;
+@@ -6480,6 +6483,7 @@ function LateralDiagram({
+       x: 0.5,
+       xanchor: "center",
+       y: -0.18,
++      entrywidth: 150,
+       font: {
+         size: 8,
+         family: PLOT_FONT
+@@ -6565,7 +6569,7 @@ function LateralDiagram({
+     yaxis: {
+       autorange: "reversed",
+       title: {
+-        text: "depth z (ft)",
++        text: "depth below grade (ft)",
+         font: {
+           size: 10
+         }
+@@ -6588,7 +6592,8 @@ function LateralDiagram({
+       autorange: "reversed",
+       gridcolor: C.grid,
+       zeroline: false,
+-      showticklabels: false
++      showticklabels: false,
++      matches: "y" // one depth axis for both panels, so grade lines up
+     }
+   });
+   return /*#__PURE__*/React.createElement(Plot, {
+@@ -6673,13 +6678,17 @@ function IabProfilePlot({ nl, scourD, layers, pileLen, sectLabel }) {
+ // Plots the imported LPILE profile: deflection, moment, and shear vs depth.
+ function LpileProfilePlot({
+   records,
+-  height = 360
++  height = 360,
++  zOffset = null
+ }) {
+   if (!records || records.length < 2) return null;
+   // panel titles sit ~23 px above the plot area at the default 360 px; keep that
+   // offset when drawn taller (Lateral graphs tab) so the titles are not clipped
+   const annY = height === 360 ? 1.08 : 1 + 23 / Math.max(height - 72, 100);
+-  const z = records.map(r => r.depth);
++  // zOffset (ft): records are depths from the pile head; with zOffset = the stickup the
++  // plot is drawn against depth below grade (stickup negative; the line at 0 is grade)
++  const z = records.map(r => r.depth - (zOffset || 0));
++  const zLbl = d => zOffset != null ? `depth ${fmt(d, 1)} ft below grade` : `z=${fmt(d, 1)} ft`;
+   const y = records.map(r => r.defl);
+   const M = records.map(r => r.mom);
+   const V = records.map(r => r.shear);
+@@ -6743,7 +6752,7 @@ function LpileProfilePlot({
+       width: 2.5
+     },
+     hoverinfo: "text",
+-    text: z.map((d, i) => `z=${fmt(d, 1)} ft<br>y=${fmt(y[i], 4)} in`),
++    text: z.map((d, i) => `${zLbl(d)}<br>y=${fmt(y[i], 4)} in`),
+     name: "deflection"
+   }, {
+     x: M,
+@@ -6758,7 +6767,7 @@ function LpileProfilePlot({
+       width: 2
+     },
+     hoverinfo: "text",
+-    text: z.map((d, i) => `z=${fmt(d, 1)} ft<br>M=${fmt(M[i], 1)} kip·ft`),
++    text: z.map((d, i) => `${zLbl(d)}<br>M=${fmt(M[i], 1)} kip·ft`),
+     name: "moment"
+   }, {
+     x: V,
+@@ -6773,7 +6782,7 @@ function LpileProfilePlot({
+       width: 2
+     },
+     hoverinfo: "text",
+-    text: z.map((d, i) => `z=${fmt(d, 1)} ft<br>V=${fmt(V[i], 2)} kip`),
++    text: z.map((d, i) => `${zLbl(d)}<br>V=${fmt(V[i], 2)} kip`),
+     name: "shear"
+   }];
+   const layout = baseLayout({
+@@ -6868,7 +6877,7 @@ function LpileProfilePlot({
+     yaxis: {
+       autorange: "reversed",
+       title: {
+-        text: "depth (ft)",
++        text: zOffset != null ? "depth below grade (ft)" : "depth (ft)",
+         font: {
+           size: 10
+         }
+@@ -6891,7 +6900,9 @@ function LpileProfilePlot({
+       autorange: "reversed",
+       gridcolor: C.grid,
+       zeroline: false,
+-      showticklabels: false
++      showticklabels: false,
++      // below-grade datum: the three panels share one depth axis, so grade lines up
++      matches: zOffset != null ? "y" : undefined
+     },
+     xaxis3: {
+       range: vR,
+@@ -6908,7 +6919,9 @@ function LpileProfilePlot({
+       autorange: "reversed",
+       gridcolor: C.grid,
+       zeroline: false,
+-      showticklabels: false
++      showticklabels: false,
++      // below-grade datum: the three panels share one depth axis, so grade lines up
++      matches: zOffset != null ? "y" : undefined
+     }
+   });
+   return /*#__PURE__*/React.createElement(Plot, {
+@@ -9132,7 +9145,7 @@ function PrintReport({
+   }, pyRes && pyRes.ok && pyRes.records && /*#__PURE__*/React.createElement("div", { className: "rpt-grp", style: { pageBreakInside: "avoid", marginBottom: "12px" } },
+     /*#__PURE__*/React.createElement(RptHeading, { n: "02F", title: "Figures — Lateral Analysis (nonlinear p-y)" }),
+     /*#__PURE__*/React.createElement("div", { style: { border: "1px solid #e2e8f0", padding: "6px", background: "#fff" } },
+-      /*#__PURE__*/React.createElement(LpileProfilePlot, { records: pyRes.records })),
++      /*#__PURE__*/React.createElement(LpileProfilePlot, { records: pyRes.records, zOffset: pyRes.setup ? pyRes.setup.stick_in / 12 : (I.solverFree || 0) })),
+     /*#__PURE__*/React.createElement("div", { style: { fontSize: "7.5px", color: "#94a3b8", marginTop: "2px" } },
+       "Figure F-1: deflection, moment, and shear vs depth (active case; nonlinear p-y, M-φ EI " + (pyRes.eiVar ? "on" : "off") + "). Mmax = " + fmt(pyRes.Mmax_kft, 1) + " kip·ft @ " + fmt(pyRes.zMmax, 1) + " ft; head deflection " + fmt(pyRes.headDefl_in, 3) + " in."),
+     caseRes && caseRes.rows && caseRes.rows.some(r2 => r2.prof) && /*#__PURE__*/React.createElement("div", { style: { marginTop: "8px" } },
+@@ -9142,7 +9155,7 @@ function PrintReport({
+             const cols = ["#16304F", "#c9622e", "#2f6f3e", "#3d6a94", "#8a5a1f", "#7a4a7a"];
+             return { x: r2.prof.m, y: r2.prof.d, mode: "lines", line: { color: cols[i % 6], width: 1.6 }, name: r2.name, hoverinfo: "skip" };
+           }),
+-          layout: baseLayout({ height: 240, margin: { l: 46, r: 8, t: 8, b: 34 }, showlegend: true, legend: { font: { size: 8, family: PLOT_FONT }, x: 1, xanchor: "right", y: 0.02 },
++          layout: baseLayout({ height: 240, margin: { l: 46, r: 8, t: 8, b: 34 }, shapes: [{ type: "line", xref: "paper", x0: 0, x1: 1, yref: "y", y0: 0, y1: 0, line: { color: "#5a5a4a", width: 1, dash: "dash" } }], showlegend: true, legend: { font: { size: 8, family: PLOT_FONT }, x: 1, xanchor: "right", y: 0.02 },
+             xaxis: { title: { text: "M (kip·ft)", font: { size: 9 } }, gridcolor: C.grid, zeroline: true },
+             yaxis: { title: { text: "depth below grade (ft)", font: { size: 9 } }, autorange: "reversed", gridcolor: C.grid } }), height: 240 })),
+       /*#__PURE__*/React.createElement("div", { style: { fontSize: "7.5px", color: "#94a3b8", marginTop: "2px" } },
+@@ -9791,16 +9804,7 @@ function LoadCasesCard({ cases, updCases, applyCase, runAllCases, caseRes, I, up
+     ro && rr && rr.some(r0 => r0.noConv) && /*#__PURE__*/React.createElement("p", { className: "text-[9px] mt-1 leading-snug", style: { color: "#b23b3b" } },
+       "n/c = the p-y solve did not converge for ", rr.filter(r0 => r0.noConv).map(r0 => r0.name).join(", "), ": ", PY_NC_MSG.replace(/^Did not converge — /, ""), ". No valid lateral demand, so flexure and combined loading are NG (a service row fails its deflection check). Reduce the load, check P", /*#__PURE__*/React.createElement("sub", null, "cr"), " in Module 10, shorten the unsupported length or add stiffness; make the case active to see the reason in Module 02."),
+     ro && rr && rr.some(r0 => r0.prof) && /*#__PURE__*/React.createElement("div", { className: "mt-2" },
+-      /*#__PURE__*/React.createElement("div", { className: "text-[9.5px] font-mono-tech text-[var(--blueprint)] uppercase tracking-wider mb-1" }, "Moment profiles · all cases overlaid"),
+-      /*#__PURE__*/React.createElement(Plot, {
+-        data: rr.filter(r0 => r0.prof).map((r0, i) => {
+-          const cols = ["#14304a", "#c9622e", "#2f6f3e", "#3d6a94", "#8a5a1f", "#7a4a7a"];
+-          return { x: r0.prof.m, y: r0.prof.d, mode: "lines", line: { color: cols[i % 6], width: 1.8 }, name: r0.name,
+-            hoverinfo: "text", text: r0.prof.d.map((d2, j) => r0.name + "<br>" + fmt(d2, 1) + " ft: " + fmt(r0.prof.m[j], 1) + " kip·ft") };
+-        }),
+-        layout: baseLayout({ height: 230, margin: { l: 46, r: 8, t: 8, b: 34 }, showlegend: true, legend: { font: { size: 8, family: PLOT_FONT }, x: 1, xanchor: "right", y: 0.02 },
+-          xaxis: { title: { text: "M (kip·ft)", font: { size: 9 } }, gridcolor: C.grid, zeroline: true, zerolinecolor: "#cbd5e1" },
+-          yaxis: { title: { text: "depth below grade (ft)", font: { size: 9 } }, autorange: "reversed", gridcolor: C.grid } }), height: 230 })));
++      /*#__PURE__*/React.createElement(LatGraphsLinks, { ids: ["mcases"], lead: "Moment profiles of all cases (Figure F-2) are on the Lateral graphs tab:" })));
+ }
+ 
+ function UtilizationDashboard({ r, I }) {
+@@ -9989,24 +9993,26 @@ function ElevationPlot({ I, pyRes, height = 340 }) {
+   const headPileMid = 0.0825;           // paper-x center of the casing
+   // axial: vertical arrow pushing DOWN onto the head
+   if (Math.abs(axial) > 0.01) {
+-    anns.push({ xref: "paper", x: headPileMid, yref: "y", y: headY, ax: 0, ay: -34, axref: "pixel", ayref: "pixel",
++    anns.push({ xref: "paper", x: headPileMid, yref: "y", y: headY, ax: 0, ay: -30, axref: "pixel", ayref: "pixel",
+       showarrow: true, arrowhead: 3, arrowsize: 1.3, arrowwidth: 2.2, arrowcolor: "#b23b3b",
+       text: "", standoff: 0 });
+-    anns.push({ xref: "paper", x: headPileMid, xanchor: "center", yref: "pixel", y: -46, ayref: "pixel",
+-      showarrow: false, text: "P = " + fmt(axial, 0) + " kip", font: { size: 8.5, color: "#b23b3b", family: PLOT_FONT } });
+   }
+   // lateral: horizontal arrow pushing the head sideways (drawn from left toward the pile)
+   if (Math.abs(lat) > 0.01) {
+-    anns.push({ xref: "paper", x: headPileMid, yref: "y", y: headY, ax: -42, ay: 0, axref: "pixel", ayref: "pixel",
++    anns.push({ xref: "paper", x: headPileMid, yref: "y", y: headY, ax: -34, ay: 0, axref: "pixel", ayref: "pixel",
+       showarrow: true, arrowhead: 3, arrowsize: 1.3, arrowwidth: 2.2, arrowcolor: "#2f6f3e", text: "" });
+-    anns.push({ xref: "paper", x: headPileMid, xanchor: "right", yref: "y", y: headY,
+-      showarrow: false, text: "V = " + fmt(lat, 1) + " kip  ", font: { size: 8.5, color: "#2f6f3e", family: PLOT_FONT } });
+-  }
+-  // head moment: curved-arrow proxy (annotation label with a rotation glyph)
+-  if (Math.abs(mhd) > 0.01) {
+-    anns.push({ xref: "paper", x: headPileMid + 0.10, xanchor: "left", yref: "y", y: headY,
+-      showarrow: false, text: "\u21bb M = " + fmt(mhd, 1) + " kip\u00b7ft", font: { size: 8.5, color: "#3d6a94", family: PLOT_FONT } });
+   }
++  // one load label above the head, right of the axial arrow: clear of the arrows,
++  // the cap and the moment curve (which starts at the head)
++  const ld = [];
++  if (Math.abs(axial) > 0.01) ld.push("<span style='color:#b23b3b'>P = " + fmt(axial, 0) + " kip</span>");
++  if (Math.abs(lat) > 0.01) ld.push("<span style='color:#2f6f3e'>V = " + fmt(lat, 1) + " kip</span>");
++  if (Math.abs(mhd) > 0.01) ld.push("<span style='color:#3d6a94'>\u21bb M = " + fmt(mhd, 1) + " kip\u00b7ft</span>");
++  if (ld.length) anns.push({ xref: "paper", x: headPileMid, xshift: 10, xanchor: "left", yref: "y", y: headY, yanchor: "bottom", yshift: 10,
++    showarrow: false, align: "left", text: ld.join(" \u00b7 "), font: { size: 9, family: PLOT_FONT } });
++  // depth range: pile head (less room for the load arrows and label) to toe + 3 ft
++  const ySpan = Math.max(toeBG + 3 - headY, 5);
++  const yRange = [toeBG + 3, headY - Math.max(0.16 * ySpan, 2)];
+   if (pyRes.zMomentDecay != null) shapes.push({ type: "line", xref: "paper", x0: 0, x1: 1, yref: "y", y0: pyRes.zMomentDecay, y1: pyRes.zMomentDecay, line: { color: "#2f6f3e", width: 1, dash: "dash" } });
+   // moment trace (depth below grade; stickup negative)
+   const mom = pyRes.records.map(r2 => ({ d: r2.depth - stick, m: r2.mom }));
+@@ -10017,11 +10023,11 @@ function ElevationPlot({ I, pyRes, height = 340 }) {
+       data: [
+         { x: mom.map(r2 => r2.m), y: mom.map(r2 => r2.d), mode: "lines", line: { color: C.blueprint2, width: 2 }, name: "M(z)",
+           hoverinfo: "text", text: mom.map(r2 => fmt(r2.d, 1) + " ft: M = " + fmt(r2.m, 1) + " kip\u00b7ft") },
+-        { x: [mom[iM].m], y: [mom[iM].d], mode: "markers+text", marker: { color: "#b23b3b", size: 8 }, text: ["Mmax " + fmt(Math.abs(mom[iM].m), 1)], textposition: "middle right", textfont: { size: 8, family: PLOT_FONT, color: "#b23b3b" }, hoverinfo: "skip", showlegend: false }
++        { x: [mom[iM].m], y: [mom[iM].d], cliponaxis: false, mode: "markers+text", marker: { color: "#b23b3b", size: 8 }, text: ["Mmax " + fmt(Math.abs(mom[iM].m), 1)], textposition: "middle right", textfont: { size: 8, family: PLOT_FONT, color: "#b23b3b" }, hoverinfo: "skip", showlegend: false }
+       ],
+-      layout: baseLayout({ height: height, margin: { l: 46, r: 8, t: 8, b: 34 }, shapes, annotations: anns, showlegend: false,
++      layout: baseLayout({ height: height, margin: { l: 46, r: 64, t: 8, b: 34 }, shapes, annotations: anns, showlegend: false,
+         xaxis: { title: { text: "M (kip\u00b7ft)", font: { size: 9 } }, gridcolor: C.grid, zeroline: true, zerolinecolor: "#cbd5e1" },
+-        yaxis: { title: { text: "depth below grade (ft)", font: { size: 9 } }, autorange: "reversed", gridcolor: C.grid } }), height: height }),
++        yaxis: { title: { text: "depth below grade (ft)", font: { size: 9 } }, range: yRange, autorange: false, gridcolor: C.grid } }), height: height }),
+     /*#__PURE__*/React.createElement("p", { className: "text-[8.5px] text-slate-400 mt-1 leading-snug" },
+       "Dark = cased, gray = uncased shaft, orange dotted = bond zone; bands = soil layers; green dash = 5% moment-decay depth. Stickup plots above grade (negative depth)."));
+ }
+@@ -16364,27 +16370,33 @@ function LatPanel({ title, children, note }) {
+ /* one response quantity vs depth (Figure F-1, single view) */
+ function LatProfileOne({ records, which, stickFt, height }) {
+   const k = which === "y" ? "defl" : which === "M" ? "mom" : "shear";
+-  const z = records.map(r => r.depth), v = records.map(r => r[k]);
++  const z = records.map(r => r.depth - (stickFt || 0)), v = records.map(r => r[k]); // depth below grade
+   let iM = 0; v.forEach((x, i) => { if (Math.abs(x) > Math.abs(v[iM])) iM = i; });
+   const col = which === "y" ? C.blueprint2 : which === "M" ? C.accent : C.blueprint;
+   const fill = which === "y" ? "rgba(61,106,148,0.10)" : which === "M" ? "rgba(201,98,46,0.12)" : "rgba(20,48,74,0.10)";
+   const unit = which === "y" ? "in" : which === "M" ? "kip·ft" : "kip";
+   const nm = which === "y" ? "deflection y" : which === "M" ? "moment M" : "shear V";
+   const dp = which === "y" ? 4 : which === "M" ? 1 : 2;
+-  const shapes = stickFt != null && stickFt > 0 ? [{ type: "line", xref: "paper", x0: 0, x1: 1, yref: "y", y0: stickFt, y1: stickFt, line: { color: "#5a5a4a", width: 1.2, dash: "dash" } }] : [];
+-  const anns = shapes.length ? [{ xref: "paper", x: 0.01, xanchor: "left", yref: "y", y: stickFt, yanchor: "bottom", showarrow: false, text: "grade", font: { size: 10, color: "#5a5a4a", family: PLOT_FONT } }] : [];
++  const G = latGradeLine(), shapes = G.shapes, anns = G.annotations;
+   return React.createElement(Plot, {
+     data: [
+       { x: v, y: z, mode: "lines", fill: "tozerox", fillcolor: fill, line: { color: col, width: 2.5 }, name: nm,
+-        hovertemplate: "depth %{y:.2f} ft<br>" + nm + " = %{x:." + dp + "f} " + unit + "<extra></extra>" },
++        hovertemplate: "depth %{y:.2f} ft below grade<br>" + nm + " = %{x:." + dp + "f} " + unit + "<extra></extra>" },
+       { x: [v[iM]], y: [z[iM]], mode: "markers+text", marker: { color: "#b23b3b", size: 8 }, text: [" max " + fmt(v[iM], dp) + " "], textposition: v[iM] < 0 ? "middle left" : "middle right",
+         textfont: { size: 10, family: PLOT_FONT, color: "#b23b3b" }, hoverinfo: "skip", showlegend: false }
+     ],
+     layout: latLayout({ height, showlegend: false, shapes, annotations: anns,
+       xaxis: latAx(nm + " (" + unit + ")"),
+-      yaxis: latAx("depth from pile head (ft)", { autorange: "reversed", zeroline: false }) }),
++      yaxis: latAx("depth below grade (ft)", { autorange: "reversed", zeroline: false }) }),
+     height });
+ }
++/* grade line (depth 0) for the depth plots: every lateral graph uses depth below grade */
++function latGradeLine() {
++  return {
++    shapes: [{ type: "line", xref: "paper", x0: 0, x1: 1, yref: "y", y0: 0, y1: 0, line: { color: "#5a5a4a", width: 1.2, dash: "dash" } }],
++    annotations: [{ xref: "paper", x: 0.01, xanchor: "left", yref: "y", y: 0, yanchor: "bottom", showarrow: false, text: "grade", font: { size: 10, color: "#5a5a4a", family: PLOT_FONT } }]
++  };
++}
+ function LatFail({ pyRes }) {
+   const e = React.createElement;
+   // F22 (O33) "did not converge" outcome: the same note Module 02 shows
+@@ -16453,8 +16465,8 @@ function LatGraphsCard({ I, set, pyRes, solved, activeLayers, pyDepths, setPyDep
+         e("div", { className: "pd-lg-seg", role: "group", "aria-label": "Figure F-1 view" }, views.map(([v, l]) =>
+           e("button", { key: v, type: "button", "aria-pressed": view === v ? "true" : "false", onClick: () => setView(v) }, l))),
+         e(LatPanel, { title: "Figure F-1: deflection, moment and shear vs depth (active case)",
+-          note: "Nonlinear p-y, M-φ EI " + (pyRes.eiVar ? "on" : "off") + ". M_max = " + fmt(pyRes.Mmax_kft, 1) + " kip·ft at " + fmt(pyRes.zMmax, 1) + " ft below grade; head deflection " + fmt(pyRes.headDefl_in, 3) + " in. Depth is measured from the pile head" + (stickFt > 0 ? " (grade " + fmt(stickFt, 1) + " ft below the head)." : ".") + " Same solution as the printed Figure F-1." },
+-          view === "all" ? e(LpileProfilePlot, { records: pyRes.records, height: H })
++          note: "Nonlinear p-y, M-φ EI " + (pyRes.eiVar ? "on" : "off") + ". M_max = " + fmt(pyRes.Mmax_kft, 1) + " kip·ft at " + fmt(pyRes.zMmax, 1) + " ft below grade; head deflection " + fmt(pyRes.headDefl_in, 3) + " in. Depth below grade (stickup negative). Same solution as the printed Figure F-1." },
++          view === "all" ? e(LpileProfilePlot, { records: pyRes.records, height: H, zOffset: stickFt || 0 })
+             : e(LatProfileOne, { records: pyRes.records, which: view, stickFt, height: 560 })),
+         e("div", { style: { marginTop: "12px" } }, e(ElevationPlot, { I: I, pyRes: pyRes, height: 480 })));
+     }
+@@ -16516,9 +16528,9 @@ function LatGraphsCard({ I, set, pyRes, solved, activeLayers, pyDepths, setPyDep
+         data: withP.map((r0, i) => {
+           const cols = ["#14304a", "#c9622e", "#2f6f3e", "#3d6a94", "#8a5a1f", "#7a4a7a"];
+           return { x: r0.prof.m, y: r0.prof.d, mode: "lines", line: { color: cols[i % 6], width: 2 }, name: r0.name,
+-            hovertemplate: r0.name.replace(/%/g, "%%") + "<br>depth %{y:.2f} ft<br>M = %{x:.1f} kip·ft<extra></extra>" };
++            hovertemplate: r0.name.replace(/%/g, "%%") + "<br>depth %{y:.2f} ft below grade<br>M = %{x:.1f} kip·ft<extra></extra>" };
+         }),
+-        layout: latLayout({ height: H, showlegend: true, legend: { orientation: "h", x: 0, y: -0.14, yanchor: "top", entrywidth: 190, font: { size: 10, family: PLOT_FONT } },
++        layout: latLayout({ height: H, ...latGradeLine(), showlegend: true, legend: { orientation: "h", x: 0, y: -0.14, yanchor: "top", entrywidth: 190, font: { size: 10, family: PLOT_FONT } },
+           xaxis: latAx("M (kip·ft)"), yaxis: latAx("depth below grade (ft)", { autorange: "reversed", zeroline: false }) }), height: H })
+         : e("div", { className: "pd-lg-note" }, "No case converged; nothing to plot."));
+   };
+@@ -16562,18 +16574,19 @@ function LatGraphsCard({ I, set, pyRes, solved, activeLayers, pyDepths, setPyDep
+         note: "The solver’s nodal soil reaction p (lb/in of pile length), plotted with the sign of the deflection at that depth (the soil resists in the opposite direction). These are the same values as the ● points of Figure F-3. Depth below grade; negative = stickup (no soil)." },
+         e(Plot, {
+           data: [{ x: pv, y: dBG, mode: "lines", fill: "tozerox", fillcolor: "rgba(47,111,62,0.12)", line: { color: "#2f6f3e", width: 2.2 }, name: "p",
+-            hovertemplate: "depth %{y:.2f} ft<br>p = %{x:.1f} lb/in<extra></extra>" }],
+-          layout: latLayout({ height: H, showlegend: false,
++            hovertemplate: "depth %{y:.2f} ft below grade<br>p = %{x:.1f} lb/in<extra></extra>" }],
++          layout: latLayout({ height: H, ...latGradeLine(), showlegend: false,
+             xaxis: latAx("p — soil reaction (lb/in)"), yaxis: latAx("depth below grade (ft)", { autorange: "reversed", zeroline: true }) }), height: H })),
+       pyRes.mobil && pyRes.mobil.length > 3 && e(LatPanel, { title: "Soil mobilization p/pᵤ vs depth",
+         note: "How hard the soil is working at each depth in the converged state — high mobilization near grade is normal; high values at depth flag a soft zone doing structural work." },
+         /*#__PURE__*/React.createElement("p", { className: "pd-lg-note", style: { marginTop: 0 } }, "How much of each depth's ultimate soil resistance is being used under the design load (0 = untouched, 1 = fully mobilized/yielded). Values approaching 1 near the surface indicate the soil is at its limit there and load is shedding deeper."),
+         /*#__PURE__*/React.createElement(Plot, {
+           data: [{ x: pyRes.mobil.map(m2 => m2.r * 100), y: pyRes.mobil.map(m2 => m2.d), mode: "lines", fill: "tozerox", fillcolor: "rgba(201,98,46,0.15)", line: { color: C.accent, width: 2 },
+-            hoverinfo: "text", text: pyRes.mobil.map(m2 => fmt(m2.d, 1) + " ft: " + fmt(m2.r * 100, 0) + "% of ultimate") }],
+-          layout: latLayout({ height: H - 40, showlegend: false,
++            hoverinfo: "text", text: pyRes.mobil.map(m2 => fmt(m2.d, 1) + " ft below grade: " + fmt(m2.r * 100, 0) + "% of ultimate") }],
++          layout: latLayout({ height: H - 40, ...latGradeLine(), showlegend: false,
+             xaxis: latAx("% of ultimate resistance", { range: [0, 100] }),
+-            yaxis: latAx("depth (ft)", { autorange: "reversed", zeroline: false }) }), height: H - 40 })));
++            // same depth range as the soil-reaction chart beside it (pile head to toe)
++            yaxis: latAx("depth below grade (ft)", n > 2 ? { range: [Math.max(...dBG), Math.min(...dBG)], zeroline: false } : { autorange: "reversed", zeroline: false }) }), height: H - 40 })));
+   };
+ 
+   /* ---- Pushover & stiffness ---- */
+@@ -16582,6 +16595,8 @@ function LatGraphsCard({ I, set, pyRes, solved, activeLayers, pyDepths, setPyDep
+     const any = (pyRes.sweep && pyRes.sweep.length > 2) || pyRes.mphi || pmCurve || pyRes.eiProf;
+     if (!any) return e("div", { className: "pd-lg-note" }, "No pushover or stiffness diagnostics for this solve.");
+     const SH = 340;
++    // eiProf nodes are the solver nodes of pyRes.records (eiProf.d is clamped at grade)
++    const eiD = (p2, i2) => (pyRes.records && pyRes.records[i2] && stickFt != null) ? pyRes.records[i2].depth - stickFt : p2.d;
+     return e("div", { className: "pd-lg-grid" },
+       pyRes.sweep && pyRes.sweep.length > 2 && e(LatPanel, { title: "Head load–deflection (pushover)" },
+         /*#__PURE__*/React.createElement("p", { className: "pd-lg-note", style: { marginTop: 0 } }, "Pile-head deflection as the lateral load is ramped from zero to the design value. A straight line means near-elastic response; curvature (softening) shows soil yielding and/or section cracking. The operating point is your design load."),
+@@ -16677,11 +16692,11 @@ function LatGraphsCard({ I, set, pyRes, solved, activeLayers, pyDepths, setPyDep
+       pyRes.eiProf && e(LatPanel, { title: "Section EI along pile (post-cracking state)" },
+         /*#__PURE__*/React.createElement("p", { className: "pd-lg-note", style: { marginTop: 0 } }, "Bending stiffness EI at each depth after the solve, when variable-EI is on. Drops show where the moment exceeded cracking and the section softened; the step at the casing tip is the cased→uncased transition. Flat = section stayed uncracked (elastic EI throughout)."),
+         /*#__PURE__*/React.createElement(Plot, {
+-          data: [{ x: pyRes.eiProf.map(p2 => p2.EI / 1e6), y: pyRes.eiProf.map(p2 => p2.d), mode: "lines", line: { color: C.blueprint, width: 2 },
+-            hoverinfo: "text", text: pyRes.eiProf.map(p2 => fmt(p2.d, 1) + " ft: EI = " + fmt(p2.EI / 1e6, 2) + "×10⁶ kip·in²") }],
+-          layout: latLayout({ height: SH, showlegend: false,
++          data: [{ x: pyRes.eiProf.map(p2 => p2.EI / 1e6), y: pyRes.eiProf.map((p2, i2) => eiD(p2, i2)), mode: "lines", line: { color: C.blueprint, width: 2 },
++            hoverinfo: "text", text: pyRes.eiProf.map((p2, i2) => fmt(eiD(p2, i2), 1) + " ft below grade: EI = " + fmt(p2.EI / 1e6, 2) + "×10⁶ kip·in²") }],
++          layout: latLayout({ height: SH, ...latGradeLine(), showlegend: false,
+             xaxis: latAx("EI (×10⁶ kip·in²)", { rangemode: "tozero" }),
+-            yaxis: latAx("depth (ft)", { autorange: "reversed", zeroline: false }) }), height: SH }),
++            yaxis: latAx("depth below grade (ft)", { autorange: "reversed", zeroline: false }) }), height: SH }),
+         /*#__PURE__*/React.createElement("p", { className: "pd-lg-note" },
+           "Converged secant EI from the moment-curvature model — dips mark cracked reaches; the step is the casing tip. EI ratchets downward only (cracking irreversible under the monotonic ramp).")));
+   };
+@@ -16691,8 +16706,8 @@ function LatGraphsCard({ I, set, pyRes, solved, activeLayers, pyDepths, setPyDep
+     if (!lp) return null;
+     return e(React.Fragment, null,
+       e(LatPanel, { title: "LPILE response profiles (imported: " + (lp.fileName || "LPILE output") + ")",
+-        note: "Deflection, moment and shear from the imported LPILE output, depth as LPILE reports it." },
+-        e(LpileProfilePlot, { records: lp.records, height: H })),
++        note: "Deflection, moment and shear from the imported LPILE output. Depth below grade = LPILE depth (from its pile head) less this project\u2019s stickup of " + fmt(I.solverFree || 0, 1) + " ft; this holds when the LPILE model has the same stickup (see the LPILE reconciliation in Module 02)." },
++        e(LpileProfilePlot, { records: lp.records, height: H, zOffset: I.solverFree || 0 })),
+       src === "input" && (() => {
+         const lpM = lp.summary.Mmax,
+           biM = solved.Mmax_kft;
 ```
 
 ## Open items (not changed)
