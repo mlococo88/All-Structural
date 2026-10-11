@@ -1862,3 +1862,204 @@ In the atypical pattern D, grouping gives a smaller W_n (10.160 in against 11.39
 - C12.3 and C12.4 are evaluations only. The patched copies are scratch files and are not part of this PR.
 - **Other copies:** none.
 - **Open items after C12:** O1, O2, O3, O4, O16 and C11 item 1 (stagger band) are for the engineer to decide. O8 (check the "verify" values against the printed specifications) and O13 (open the DXF in AutoCAD / MicroStation) need the engineer's own action.
+
+## 2026-10-11 — PR: claude/gusset-no-band (PR link added after merge)
+
+### C13. Stagger search band s_b = 2√(L d_n) removed: the s²/4g search uses every hole of the custom pattern (engineer's decision 2026-10-11; closes C11 open item 1, see C12.3)   [calculation change for custom patterns only, more conservative; every grid member computes exactly as before]
+
+**Decision.** Engineer, 2026-10-11: "Fix whatever you recommend and merge." The recommendation (C12.3) was to remove the band.
+
+**Problem.** The staggered-chain search (`chainDed`, C10) only used holes within the band s_b = 2√(L d_n) of the section line. The C10 reasoning covered one long step only: a step longer than s_b costs at least one hole's deduction. It did not cover a path that runs along a farther row with no stagger terms, or a staircase of small steps. In the 17-model study (C12.3), 5 members got a smaller net width without the band. The worst was Pattern D: W_n 11.392 → 9.392 in, WF 528.19 → 435.80 kip (−17.5 %). The band was therefore unconservative compared with a full search.
+
+**Fix.** The band is removed from all three searches. They now consider every hole of the custom fastener group:
+- **Whitmore net width (custom member):** the member's own holes between the Whitmore ends (any distance from the line), plus every hole on the line.
+- **Block shear (custom member):** the two shear planes and the tension plane each search every hole of the member (before: only holes within s_b of the plane).
+- **Partial shear planes (joint with any custom member):** the holes on the line, plus every hole of the custom members between the ends of each part of the line inside the plate.
+
+Everything else in the search is unchanged:
+- the Whitmore ends;
+- monotone paths, with holes ordered along the section and consecutive holes more than 1/16 in apart;
+- the fixed end points at the block-shear corners;
+- the rule that a path is used only when it deducts more than the straight line.
+
+**More or less conservative:** more conservative (or equal). The set of candidate holes can only grow, and the search keeps the path with the largest deduction, so the deduction can only grow and the net length can only shrink.
+
+**Governing provision:** AASHTO LRFD 10th Ed. (2024) Art. 6.8.3: net width = gross width − Σ(d_h + Δ) + Σ s²/4g over each chain of holes; the chain that gives the least net width governs. Rule C10 (custom patterns) applies it to the Whitmore section (MBE 3rd Ed. 6A.6.12.6.7), the block-shear planes (6A.6.12.6.5) and the partial shear planes (6A.6.12.6.6).
+
+**Grid members:** unchanged. A grid member never runs the search: the Whitmore search runs only when `g.custom`, block shear uses `bsCustom` only for custom members, and a partial plane runs the search only when the joint has a custom member, with only holes on the line from grid members. Checked bit-identical (see How verified).
+
+#### C13.1 §4 callout: before / after
+
+| Section | Before | After |
+|---|---|---|
+| Whitmore W_n (custom member) | candidates: holes on the line, plus the member's holes with along-position within the Whitmore ends **and** \|offset\| ≤ s_b = 2√(W_g d_n) | candidates: holes on the line, plus the member's holes with along-position within the Whitmore ends |
+| Block shear, shear planes t = t_min, t_max | the member's holes with \|t − t_k\| ≤ s_b = 2√(L_k d_n), L_k = gross length of the plane | every hole of the member (except the corner hole, which is the fixed start point) |
+| Block shear, tension plane s = s_in | the member's holes with s − s_in ≤ s_b = 2√(L_tg d_n) | every hole of the member (except the two corner holes, which are the fixed end points) |
+| Partial shear plane, each part [t_0, t_1] of the line in the plate | holes on the line, plus custom holes with t_0 ≤ a ≤ t_1 **and** \|offset\| ≤ s_b = 2√((t_1 − t_0) max d_n) | holes on the line, plus custom holes with t_0 ≤ a ≤ t_1 |
+| Calc sheet text, no path used | "no staggered path (s²/4g) through holes within X in of the line deducts more" | "no staggered path (s²/4g) through the custom holes (searched at any distance from the line) deducts more" |
+| Calc sheet text, row path | "the path through the n holes of a nearby row (within X in, no stagger) governs" | "the path through the n holes of another row (no stagger) governs" |
+
+The formula itself (net = gross − Σ w + Σ s²/4g; d_n = d_h + 1/16 in) is not changed. Also unchanged: units, factors, φ_u, U, and the 0.85 A_g cap.
+
+#### C13.2 Check case 1: Pattern D (changes)
+
+**Model:** the validation model (Validation tab; two 1/2 in A36 plates, F_u = 58 ksi; 7/8 in fasteners, d_h = 15/16 in, d_n = d_h + 1/16 = 1.000 in). Member D is given a custom pattern:
+- rows of 2 holes at t = ±1.5 in, at s = 20, 23, 26 and 29 in;
+- a 4-hole row at s = 27.5 in (t = −2.75, −1.5, +1.5, +2.75).
+
+Whitmore section:
+- The far row is s = 29 (2 holes, ±1.5). The row at 27.5 has holes on the far row's gage lines, so it is not grouped (C11). g_s = 3.000, L = 29 − 20 = 9.000.
+- **W_g = 3.000 + 2(9.000) tan 30° = 13.392 in.** Section at s = 20; ends at t = ±6.696. Straight line: 2 holes, deduction 2.000 in.
+
+**Before (band):**
+- s_b = 2√(13.392 × 1.000) = **7.319 in**.
+- The 4-hole row is at offset 27.5 − 20 = **7.500 in > s_b**, so it is not searched.
+- The rows within the band (offsets 3 and 6) have 2 holes each, so the best deduction is 2.000 = straight. No path is used.
+- **W_n = 13.392 − 2.000 = 11.392 in.**
+- A_n = min(11.392 × 1.0, 0.85 × 13.392 × 1.0) = min(11.392, 11.383) = 11.383 in² (Σt = 2 × 0.5; the 0.85 A_g cap governs).
+- φ_u P_nu = 0.80 × 58.0 × 11.383 × 1.00 = **528.19 kip.**
+
+**After (no band):**
+- The 4-hole row at offset 7.500 is searched: all 4 holes are between the Whitmore ends (|t| ≤ 2.75 < 6.696).
+- Chain (s, t) = (27.5, −2.75) → (27.5, −1.5) → (27.5, +1.5) → (27.5, +2.75). There are no stagger terms (the holes are on one row), so deduction = 4 × 1.000 = **4.000 in > 2.000 in**, and the path is used.
+- **W_n = 13.392 − 4.000 = 9.392 in.**
+- A_n = min(9.392, 11.383) = 9.392 in².
+- φ_u P_nu = 0.80 × 58.0 × 9.392 × 1.00 = **435.80 kip** (−17.5 %).
+
+The calc sheet W_n row now reads: "custom holes: the path through the 4 holes of another row (no stagger) governs: Σ(d_h + Δ) = 4.000 in, more than 2.000 in on the straight line (rule C10, engineer-confirmed 2026-10-06 for the Whitmore net width)".
+
+D-WF RF, LRFR Inv / Op / LFR Inv / Op:
+- before: 4.469 / 5.793 / 4.317 / 7.206;
+- after: **3.589 / 4.652 / 3.465 / 5.785**.
+
+The governing RFs are unchanged, because D-FS governs: 2.627 / 3.405 / 3.439 / 5.741; reversal 5.353 / 6.939.
+
+Block shear of D is unchanged (L_vn = 13.261, L_tn = 3.500 in): no path through the added holes deducts more than the paths already found.
+
+#### C13.3 Check case 2 (C10 case 2, unchanged)
+
+**Model:** the validation model. Member D has a custom 2-line stagger:
+- line t = −1.5: holes at s = 20, 23, 26, 29;
+- line t = +1.5: holes at s = 21.5, 24.5, 27.5, 30.5.
+
+Before and after:
+- W_g = 14.258 in (C11 staggered far row).
+- Straight line: 1 hole, 1.000 in.
+- Governing chain: (20, −1.5) → (21.5, +1.5): 2.000 − 1.500²/(4 × 3.000) = 2.000 − 0.188 = 1.813 in.
+- **W_n = 12.446 in.**
+- A_n = min(12.446, 0.85 × 14.258 = 12.120) = 12.120 in².
+- WF = 0.80 × 58.0 × 12.120 = **562.35 kip.**
+- Block shear: L_vn = 13.500, L_tn = 2.500 in.
+- Governing RFs: 1.564 / 2.027 / 2.109 / 3.521 (D-FS). Reversal: 3.759 / 4.872.
+
+All identical before and after. Every farther hole is on one of the two lines, so no path through it deducts more than 1.813 in.
+
+#### C13.4 Every custom model whose computed result changes (17-model suite of C12.3)
+
+Script: `nb/suite.js`, `nb/num.js` and `nb/rf.js` (scratch; engine of main 2c36d6d against the branch). Every number of the compute result was compared: W, block shear, planes, checks, RFs, governing and warnings.
+
+| Model | Member | W_n before → after (in) | Capacity that changes | Governing RF before → after (LRFR Inv / Op; LFR Inv / Op) |
+|---|---|---|---|---|
+| Pattern D (validation model, D custom, as C13.2) | D | 11.392 → 9.392 | D-WF 528.19 → 435.80 kip | 2.627 / 3.405; 3.439 / 5.741 (D-FS) → **unchanged** |
+| symc_c3 (default, spliced chord, every member custom, one hole in five removed, every second hole +0.75 in along) | L1-L2 | 19.600 → 18.652 | L1-L2-WF 889.25 → 865.47 kip (RF −0.154 → −0.178 LRFR Inv) | −0.632 / −0.820; −0.403 / −0.673 (L1-L2-FS) → **unchanged** |
+| | L2-L3 | 23.277 → 22.652 | none: the A_n = 0.85 A_g cap (22.565 in²) still governs (L2-L3-WF 1047.01 kip) | |
+| symc_c4 (as c3, continuous chord) | L1-L2, L2-L3 | 19.600 → 18.652; 23.277 → 22.652 | none (no Whitmore checks on a continuous chord) | 0.750 / 0.973 (L2-U1-FS); 1.398 / 2.334 (L2-U1-WB) → **unchanged** |
+| rtc_allcustom (as c3, with +0.125 in across offsets) | L1-L2 | 19.599 → 18.651 | L1-L2-WF 889.25 → 865.43 kip | −0.632 / −0.820; −0.403 / −0.673 (L1-L2-FS) → **unchanged** |
+| | L2-L3 | 23.258 → 22.654 | none: the 0.85 A_g cap still governs | |
+| gp3 06_irregular (DXF import test) | L2-U2 | 19.778 → 19.166 | none: A_n = 0.85 A_g cap still governs (L2-U2-WF 834.78 kip) | 0.766 / 0.994 (L2-U2-FS); 1.403 / 2.342 (L2-U1-WB) → **unchanged** |
+
+**No governing RF changes in any model.** No block-shear length or partial-shear-plane length changes in any model of the suite. With the band, the block-shear and partial-plane searches already reached every row that could govern in these patterns.
+
+The other 12 custom models give identical numbers. The only change is the calc-sheet text that described the band: case 1, case 2, symc_c5, c5_uniform_32323, rtc_vert_fill, gp3 13_varying_pitch, patterns A, B, E, F, G and H.
+
+In pattern G (narrow first rows) the deduction is the same, 4.000 in, but the reported path is now a 4-hole row 12 in from the line instead of the one 6 in away. Both rows give the same deduction; `chainDed` keeps the first chain found on a tie, and that rule is unchanged. **No grid model changes** (default, validation, default with spliced chord, and all 7 DXF templates with forces).
+
+#### C13.5 Search time
+
+`chainDed` is a dynamic program over the candidate holes, O(n²) per section. Times are for one full `GPR.compute` in node (mean of 5 runs, main → branch):
+- largest suite model, symc_c3 (84 custom holes, at most 19 per member): 9.3 → 7.1 ms;
+- stress model, all 5 members custom, 12 staggered rows × 5 lines (300 holes, 60 per member): 15.7 → 17.2 ms;
+- stress model, 20 rows × 8 lines (800 holes, 160 per member): 44.3 → 38.9 ms.
+
+The difference is within run-to-run noise. No limit on the pattern size is needed.
+
+#### Where (anchors) and exact code
+
+- `GPR.compute`, block shear of a custom pattern, `bsCustom`. Anchors: `const shear = (tk, ck, Lk) =>` and `const cht = chainDed(`.
+- `GPR.compute`, Whitmore loop. Anchor: `// C10, custom pattern: staggered chains`.
+- `GPR.compute`, text helper. Anchor: `const stagTxt = (st, wh) =>`.
+- `GPR.compute`, partial shear planes. Anchor: `if (G.some(g => g.custom)) { const ded0 = LgAuto - LnAuto`.
+- `methodHtml()`, Method tab. Anchors: `<li><b>Staggered holes (s²/4g` and `<li><b>Block shear:</b>`.
+
+The objects `W.stag`, `B.cust.s1/s2/t` and `plane.stag` no longer have a `band` field. Nothing else read it except `stagTxt`. These objects are computed results and are not saved: no saved-data change (§5).
+
+```diff
+@@ -1617 +1617 @@ const GPR = (function () {
+-       staggered chain (s²/4g) through the member's holes within s_b = 2√(L d_n) of the plane that deducts more; each plane on its own (conservative).
++       staggered chain (s²/4g) through any of the member's holes that deducts more (no search band, engineer 2026-10-11); each plane on its own (conservative).
+@@ -1621,5 +1621,5 @@ const GPR = (function () {
+-      const shear = (tk, ck, Lk) => { const on = hs.filter(h => Math.abs(h.t - tk) < h.dh / 2 - 1e-9 && h.s >= g.sIn - TOLH), K = on.length - (ck ? 0.5 : 0), band = 2 * Math.sqrt(Lk * dn);
+-        const ch = chainDed(hs.filter(h => h !== ck && Math.abs(h.t - tk) <= band + 1e-9).map(h => ({ a: h.s - g.sIn, c: h.t - tk, w: dn, h })), { a: ck ? ck.s - g.sIn : 0, c: ck ? ck.t - tk : 0, w: ck ? dn / 2 : 0 }, null);
+-        return { n: on.length, K, straight: K * dn, band, ...ch, used: ch.v > K * dn + 1e-9 }; };
+-      const Ltg = g.tmax - g.tmin, on = hs.filter(h => Math.abs(h.s - g.sIn) < h.dh / 2 - 1e-9 && h.t >= g.tmin - TOLH && h.t <= g.tmax + TOLH), Kt = on.reduce((s, h) => s + (h === c1 || h === c2 ? 0.5 : 1), 0), bt = 2 * Math.sqrt(Ltg * dn);
+-      const cht = chainDed(hs.filter(h => h !== c1 && h !== c2 && h.s - g.sIn <= bt + 1e-9).map(h => ({ a: h.t, c: h.s - g.sIn, w: dn, h })),
++      const shear = (tk, ck, Lk) => { const on = hs.filter(h => Math.abs(h.t - tk) < h.dh / 2 - 1e-9 && h.s >= g.sIn - TOLH), K = on.length - (ck ? 0.5 : 0);
++        const ch = chainDed(hs.filter(h => h !== ck).map(h => ({ a: h.s - g.sIn, c: h.t - tk, w: dn, h })), { a: ck ? ck.s - g.sIn : 0, c: ck ? ck.t - tk : 0, w: ck ? dn / 2 : 0 }, null);
++        return { n: on.length, K, straight: K * dn, ...ch, used: ch.v > K * dn + 1e-9 }; };
++      const Ltg = g.tmax - g.tmin, on = hs.filter(h => Math.abs(h.s - g.sIn) < h.dh / 2 - 1e-9 && h.t >= g.tmin - TOLH && h.t <= g.tmax + TOLH), Kt = on.reduce((s, h) => s + (h === c1 || h === c2 ? 0.5 : 1), 0);
++      const cht = chainDed(hs.filter(h => h !== c1 && h !== c2).map(h => ({ a: h.t, c: h.s - g.sIn, w: dn, h })),
+@@ -1627 +1627 @@ const GPR = (function () {
+-      const s1 = shear(g.tmin, c1, L1), s2 = shear(g.tmax, c2, L2), t = { n: on.length, K: Kt, straight: Kt * dn, band: bt, ...cht, used: cht.v > Kt * dn + 1e-9 };
++      const s1 = shear(g.tmin, c1, L1), s2 = shear(g.tmax, c2, L2), t = { n: on.length, K: Kt, straight: Kt * dn, ...cht, used: cht.v > Kt * dn + 1e-9 };
+@@ -1643,5 +1643,5 @@ const GPR = (function () {
+-        // C10, custom pattern: staggered chains (s²/4g) through the member's own holes within the band s_b = 2√(W_g d_n) beyond the Whitmore line and
+-        // within its ends, and the holes on the line; the larger deduction governs (a grid's own holes cannot give a larger one: no change for grids)
+-        if (g.custom) { const ded0 = W.WgAuto - W.WnAuto, band = 2 * Math.sqrt(Math.max(0, W.WgAuto) * g.dn), loc = h => ({ a: dot(sub([h.x, h.y], c), g.v), c: dot(sub([h.x, h.y], c), g.u), w: h.dn, h });
+-          const cand = [...new Set([...W.cross, ...g.holes.filter(h => { const q = loc(h); return q.a >= tA - 1e-9 && q.a <= tB + 1e-9 && Math.abs(q.c) <= band + 1e-9; })])];
+-          const ch = chainDed(cand.map(loc), null, null); W.stag = { band, straight: ded0, ...ch, used: ch.v > ded0 + 1e-9 }; if (W.stag.used) W.WnAuto = W.WgAuto - ch.v; }
++        // C10, custom pattern: staggered chains (s²/4g) through the member's own holes within the Whitmore ends (any distance from the line, no search
++        // band: engineer 2026-10-11), and the holes on the line; the larger deduction governs (a grid's own holes cannot give a larger one: no change for grids)
++        if (g.custom) { const ded0 = W.WgAuto - W.WnAuto, loc = h => ({ a: dot(sub([h.x, h.y], c), g.v), c: dot(sub([h.x, h.y], c), g.u), w: h.dn, h });
++          const cand = [...new Set([...W.cross, ...g.holes.filter(h => { const q = loc(h); return q.a >= tA - 1e-9 && q.a <= tB + 1e-9; })])];
++          const ch = chainDed(cand.map(loc), null, null); W.stag = { straight: ded0, ...ch, used: ch.v > ded0 + 1e-9 }; if (W.stag.used) W.WnAuto = W.WgAuto - ch.v; }
+@@ -1697,2 +1697,2 @@ const GPR = (function () {
+-    /* C10: text for a staggered (s²/4g) net-section deduction of a custom pattern; st = { v, straight, chain, terms, band, used } */
+-    const stagTxt = (st, wh) => { if (!st) return ''; if (!st.used) return `; custom holes: no staggered path (s²/4g) through holes within ${f3(st.band)} in of the line deducts more (rule C10, verify)`;
++    /* C10: text for a staggered (s²/4g) net-section deduction of a custom pattern; st = { v, straight, chain, terms, used } */
++    const stagTxt = (st, wh) => { if (!st) return ''; if (!st.used) return `; custom holes: no staggered path (s²/4g) through the custom holes (searched at any distance from the line) deducts more (rule C10, verify)`;
+@@ -1701 +1701 @@ const GPR = (function () {
+-        : `; custom holes: the path through the ${nh} holes of a nearby row (within ${f3(st.band)} in, no stagger) governs: Σ(d<sub>h</sub> + Δ) = ${f3(st.v)} in, more than ${f3(st.straight)} in on the straight line (rule C10${wh ? ', engineer-confirmed 2026-10-06 for the Whitmore net width' : ', verify'})`; };
++        : `; custom holes: the path through the ${nh} holes of another row (no stagger) governs: Σ(d<sub>h</sub> + Δ) = ${f3(st.v)} in, more than ${f3(st.straight)} in on the straight line (rule C10${wh ? ', engineer-confirmed 2026-10-06 for the Whitmore net width' : ', verify'})`; };
+@@ -1784,4 +1784,4 @@ const GPR = (function () {
+-      // holes of custom patterns within s_b = 2√(L d_n) of it; the larger deduction governs (no change when every member is a grid)
+-      if (G.some(g => g.custom)) { const ded0 = LgAuto - LnAuto, dnx = Math.max(...holes.map(h => h.dn)), loc = h => ({ a: dot(sub([h.x, h.y], a), e), c: crs(e, sub([h.x, h.y], a)), w: h.dn, h }); let v = 0, bmax = 0; const terms = [], chain = [];
+-        segs.forEach(([A, B], k) => { const band = 2 * Math.sqrt((iv[k][1] - iv[k][0]) * dnx); bmax = Math.max(bmax, band);
+-          const ch = chainDed(holes.filter(h => { const q = loc(h); return distSeg([h.x, h.y], A, B) < h.dh / 2 - 1e-9 || (G[h.m].custom && q.a >= iv[k][0] - 1e-9 && q.a <= iv[k][1] + 1e-9 && Math.abs(q.c) <= band + 1e-9); }).map(loc), null, null);
++      // holes of custom patterns at any distance from it (no search band, engineer 2026-10-11); the larger deduction governs (no change when every member is a grid)
++      if (G.some(g => g.custom)) { const ded0 = LgAuto - LnAuto, loc = h => ({ a: dot(sub([h.x, h.y], a), e), c: crs(e, sub([h.x, h.y], a)), w: h.dn, h }); let v = 0; const terms = [], chain = [];
++        segs.forEach(([A, B], k) => {
++          const ch = chainDed(holes.filter(h => { const q = loc(h); return distSeg([h.x, h.y], A, B) < h.dh / 2 - 1e-9 || (G[h.m].custom && q.a >= iv[k][0] - 1e-9 && q.a <= iv[k][1] + 1e-9); }).map(loc), null, null);
+@@ -1789 +1789 @@ const GPR = (function () {
+-        stag = { band: bmax, straight: ded0, v, terms, chain, used: v > ded0 + 1e-9 }; if (stag.used) LnAuto = LgAuto - v; }
++        stag = { straight: ded0, v, terms, chain, used: v > ded0 + 1e-9 }; if (stag.used) LnAuto = LgAuto - v; }
+@@ -3265,2 +3265,2 @@ function methodHtml() { return `<div class="man-part active">
+-  <li><b>Staggered holes (s²/4g, LRFD 10th Ed. 6.8.3):</b> on every net section of a custom pattern, the net length is the gross length minus Σ(d<sub>h</sub> + Δ) plus Σ s²/4g over consecutive holes of a path (s = offset of two consecutive holes perpendicular to the section line, g = their spacing along it). The tool searches the straight line and every zig-zag path, through holes ordered along the section, within the band s<sub>b</sub> = 2√(L d<sub>n</sub>) of the line (L = gross length of the section, d<sub>n</sub> = d<sub>h</sub> + Δ; a step of more than s<sub>b</sub> costs at least d<sub>n</sub>), and uses the path that deducts the most. A path may run through the holes of a nearby row without touching the line itself, so the net width is not taken larger than at a row within the band (for the Whitmore net width: engineer-confirmed 2026-10-06). The band s<sub>b</sub> itself is still to be confirmed (verify). Whitmore: the member's own holes within the Whitmore ends, plus every hole on the line. Partial shear planes: the holes on the line plus the holes of custom members within the band. Each net length is minimized on its own (conservative).</li>
+-  <li><b>Block shear:</b> tension plane across the row nearest the WP between the outer holes of the whole pattern (across); shear planes along those two outer lines from that row to the plate edge. Net lengths deduct the member's holes on each plane (centre within d<sub>h</sub>/2; a hole at a corner, where the planes meet, counts half), or a staggered path within the band if it deducts more. If there is no hole at a corner, the rectangle is still used and a warning is given; stepped block shapes are not searched (engineer's decision 2026-10-06).</li>
++  <li><b>Staggered holes (s²/4g, LRFD 10th Ed. 6.8.3):</b> on every net section of a custom pattern, the net length is the gross length minus Σ(d<sub>h</sub> + Δ) plus Σ s²/4g over consecutive holes of a path (s = offset of two consecutive holes perpendicular to the section line, g = their spacing along it). The tool searches the straight line and every zig-zag path, through holes ordered along the section, at any distance from the line (no search band; engineer's decision 2026-10-11), and uses the path that deducts the most. A path may run through the holes of another row without touching the line itself, so the net width is never taken larger than at any row of the pattern (for the Whitmore net width: engineer-confirmed 2026-10-06). Whitmore: the member's own holes within the Whitmore ends, plus every hole on the line. Partial shear planes: the holes on the line plus every hole of the custom members within the ends of the plane. Each net length is minimized on its own (conservative).</li>
++  <li><b>Block shear:</b> tension plane across the row nearest the WP between the outer holes of the whole pattern (across); shear planes along those two outer lines from that row to the plate edge. Net lengths deduct the member's holes on each plane (centre within d<sub>h</sub>/2; a hole at a corner, where the planes meet, counts half), or a staggered path through any of the member's holes if it deducts more. If there is no hole at a corner, the rectangle is still used and a warning is given; stepped block shapes are not searched (engineer's decision 2026-10-06).</li>
+```
+
+#### How verified (C13)
+
+- `node --check` on all 7 inline scripts: pass.
+- **Engine in node, main (2c36d6d) against the branch.** Models: the 17 custom models of C12.3, and the grid models (default, validation, default with spliced chord, all 7 DXF templates with forces).
+  - Grid models: the full compute result is identical (every number and string, including checks, RFs, governing RFs, warnings and errors).
+  - Custom models: the numbers change only as listed in C13.4. Text changes only in the band wording.
+- Search time: C13.5.
+- **Chromium (Playwright, three.js r128 served locally), main against the branch.** Every model above was loaded into the page. The text of the Summary, Checks, Rating, Report, Method and Validation tabs, and the autosave, were compared.
+  - Grid models: identical except the Method tab (the new wording).
+  - Custom models: the Checks and Report text and the Rating rows changed only as in C13.4.
+  - Saved project data: identical. The only autosave difference was `ui.otab`, the last report/method tab clicked, which depends on when the debounced autosave ran.
+  - No page or console errors.
+- **Other copies:** none.
+- **Open items:** C11 item 1 (stagger band) is closed by this entry. Text only: when two rows tie, the calc sheet may name the farther row (pattern G). The deduction is the same.
