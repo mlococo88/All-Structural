@@ -2208,6 +2208,76 @@ function solvePyPile(input) {
   return res;
 }
 
+/* F22 (O33) / F23 (O34): the lateral p-y solve used by Module 02 (pyRes) AND by the
+   case envelope ("Run all cases"), so both take exactly the same path.
+   1. First attempt: 8 load steps, maxIter 200. A solve that converges here is used as
+      it is (unchanged from before F22).
+   2. Only if that fails, an adaptive retry: 16 load steps, maxIter 400, under-relaxation
+      omega 0.55.
+   3. A retried solution is used only if it passes pyRetryCheck (equilibrium closure, stable
+      loading branch, deflection sanity bound). Otherwise, and when the retry itself does not
+      converge, the result is "did not converge" (noConv) and the lateral-dependent checks
+      are NG. A retried solve is never used just because the iterations stopped: past the
+      instability load the solver can settle on a POST-CRITICAL equilibrium (head deflection
+      reversed, |y0| of 20-200 in) whose equilibrium closure is still excellent.
+   input: the solvePyPile input without nSteps / maxIter / omega; D: pile width (in) in the
+   bending plane, the same D the p-y curves use.
+   returns { res, retried, noConv, why[] }: res is the solvePyPile result to use (null when
+   noConv); why lists the reasons a retried solve was rejected. */
+const PY_NC_MSG = "Did not converge — the pile is likely unstable (buckling / P-Δ) at this load";
+// shown (KaTeX) in place of a check comparison that needs the lateral solution
+const PY_NC_TEX = "\\text{NG: the lateral p-y solve did not converge (no valid moment demand)}";
+// summary-table / dashboard rows whose demand comes from the lateral solution
+const PY_LAT_ROW = /^(Flexure|Combined axial \+ flexure|Combined \(interaction\)|Casing flexure|Combined loading \(casing-only|Combined \(casing\)|Combined loading \(CFST P-M\)|Combined \(CFST P-M\)|Casing past active moment zone|Uncased flexure)/;
+const PY_RETRY_CLOSURE_PCT = 1.0;   // max equilibrium residual (% of applied) for a retried solve
+const PY_RETRY_DEFL_D = 1.0;        // max |head deflection| for a retried solve, in pile widths D
+function pyRetryCheck(rr, D) {
+  const why = [];
+  const eq = rr.eq || {};
+  if (!(eq.fPct <= PY_RETRY_CLOSURE_PCT && eq.mPct <= PY_RETRY_CLOSURE_PCT))
+    why.push("equilibrium closure ΣF " + fmt(eq.fPct, 2) + " % / ΣM " + fmt(eq.mPct, 2) + " % exceeds " + fmt(PY_RETRY_CLOSURE_PCT, 1) + " %");
+  // Stable loading branch: the head deflection keeps the direction of the first load step
+  // and |y0| never drops while the load rises (same fold-back rule as the pushover plot).
+  const h = rr.history || [];
+  const y1 = h.length ? h[0].y0 : 0;
+  let peak = 0, flip = false, fold = false;
+  for (const s of h) {
+    if (Math.abs(y1) > 1e-9 && s.y0 * y1 < 0) flip = true;
+    const mag = Math.abs(s.y0);
+    if (mag < peak * (1 - 1e-3)) fold = true;
+    peak = Math.max(peak, mag);
+  }
+  if (flip) why.push("the head deflection reversed direction during the load ramp (post-critical equilibrium)");
+  else if (fold) why.push("the head deflection decreased while the load increased (fold-back, post-critical equilibrium)");
+  const y0 = rr.y && rr.y.length ? rr.y[0] : NaN;
+  if (!(Math.abs(y0) <= PY_RETRY_DEFL_D * D))
+    why.push("head deflection " + fmt(Math.abs(y0), 2) + " in exceeds the sanity bound of " + (PY_RETRY_DEFL_D === 1 ? "one pile width" : fmt(PY_RETRY_DEFL_D, 1) + " pile widths") + " (" + fmt(PY_RETRY_DEFL_D * D, 2) + " in)");
+  return why;
+}
+/* F22 (O33): the "did not converge" outcome, with the reason and what to do. Used by
+   Module 02 on screen and in the printed report. */
+function PyNoConvNote({ why, print }) {
+  const e = React.createElement;
+  return e("div", { style: print ? { fontSize: "10px", lineHeight: 1.4 } : null },
+    e("b", null, "✗ NG — " + PY_NC_MSG + "."),
+    " The built-in p-y solve found no converged, stable equilibrium at the design loads, so there is no valid lateral demand: the checks that use the lateral moment (flexure, combined loading and, for a micropile, casing extension and uncased flexure) are NG, and so is combined-loading stability.",
+    (why && why.length) ? e("div", { style: { marginTop: "3px" } }, "Reason: " + why.join("; ") + ".") : null,
+    e("div", { style: { marginTop: "3px" } }, "What to do: reduce the axial and/or lateral load; check buckling and P", e("sub", null, "cr"), " in Module 10 (the nonlinear P-crit ramp shows the thrust at which the pile becomes unstable); shorten the unsupported length (stickup, scour, added unsupported length); or add stiffness (larger section, longer casing)."));
+}
+function solvePyWithRetry(input, D) {
+  const res = solvePyPile({ ...input, nSteps: 8, maxIter: 200 });
+  if (res.ok) return { res, retried: false, noConv: false, why: [] };
+  const res2 = solvePyPile({ ...input, nSteps: 16, maxIter: 400, omega: 0.55 });
+  if (!res2.ok) {
+    const last = res2.history.length ? res2.history[res2.history.length - 1] : null;
+    return { res: null, retried: true, noConv: true,
+      why: ["the first solve (8 load steps) and the adaptive retry (16 load steps, under-relaxed) both failed to converge" + (last ? "; the retry stopped at load step " + last.step + "/16 (lateral " + fmt(last.P / 1000, 2) + " kip, axial " + fmt(last.Q / 1000, 1) + " kip)" : "")] };
+  }
+  const why = pyRetryCheck(res2, D);
+  if (why.length) return { res: null, retried: true, noConv: true, why: ["the first solve (8 load steps) did not converge; the adaptive retry (16 load steps) was rejected: " + why.join("; ")] };
+  return { res: res2, retried: true, noConv: false, why: [] };
+}
+
 // Tier-2 nonlinear path: drive the app's real nonlinear p-y engine (solvePyPile) with the
 /* Bond-zone drilled-hole diameter d_h (in). Defaults to the casing OD (the
    long-standing assumption: bond zone drilled at casing diameter). When the
@@ -3807,6 +3877,23 @@ function computeAll(I, opts = {}) {
     }
   }
 
+  // ---- F22 (O33): the lateral p-y solve did not converge ----
+  // With the built-in p-y analysis as the lateral source, opts.pyNoConv means the solve
+  // (first attempt and adaptive retry, solvePyWithRetry) reached no converged, stable
+  // equilibrium at the design load. There is then no valid lateral demand: the moment,
+  // moment-decay depth and casing-tip moment used above are the linear-Winkler fallback.
+  // Every check that depends on the lateral solution is NG (not n/a, not OK on the
+  // fallback values); the displays show "did not converge" in place of the comparison.
+  R.lateralNoConv = (opts.pyActive && opts.pyNoConv) ? { msg: opts.pyStabMsg || PY_NC_MSG, why: opts.pyNoConvWhy || [] } : null;
+  if (R.lateralNoConv && I.pileType !== "iab") {
+    if (R.flex) R.flex.pass = false;
+    if (R.comb) R.comb.pass = false;
+    if (R.cfst) { R.cfst.cfst_pm_pass = false; R.cfst.pass = false; }
+    if (R.casingExt) R.casingExt.pass = false;
+    if (R.geoChecks) { R.geoChecks.uncasedFlex_pass = false; R.geoChecks.casingPastActive = false; R.geoChecks.pass = false; }
+    if (R.hpileStruct) { R.hpileStruct.flex_pass = false; R.hpileStruct.comb_pass2 = false; }
+  }
+
   // ---- overall ----
   if (I.pileType === "iab") {
     R.allPass = R.iab ? R.iab.pass : false;
@@ -4253,7 +4340,7 @@ function DocsModal({
   }, /*#__PURE__*/React.createElement("p", null, "The grout-to-ground bond is the geotechnical capacity. Nominal resistance is the bond stress β times the drill-hole circumference times the bond length: ", /*#__PURE__*/React.createElement("i", null, "Pn = dₕ·π·β·Lb"), ". The required bond length is back-solved from the factored demand and the geotechnical resistance factor φ (0.70 when a load test is specified, per Table 10.5.5.2.5-1). The bond value β comes from the soil/rock row of Table C10.9.3.5.2-1 and ", /*#__PURE__*/React.createElement("b", null, "must be confirmed by load testing"), " — the tool labels it grout-to-ground because the value is keyed to the bearing stratum, not necessarily rock.")), /*#__PURE__*/React.createElement(DocSection, {
     title: "02 · Lateral analysis",
     code: "p-y finite-difference solver"
-  }, /*#__PURE__*/React.createElement("p", null, "Two paths. You can enter a maximum moment directly from an external LPILE run, or use the built-in solver. The solver is a real ", /*#__PURE__*/React.createElement("b", null, "finite-difference beam on an elastic foundation"), ": the embedded pile is discretized on Winkler springs with a linear subgrade modulus (Es = nh·z for sand, constant kh for clay), and EI·y⁗ + k(z)·y = 0 is solved with mudline boundary conditions (shear V₀ = P, moment M₀ = P·e from the free length) and an unrestrained toe (no applied tip shear or moment restraint — the toe is still bedded on soil springs)."), /*#__PURE__*/React.createElement("p", null, "From the resulting moment profile, the tool reports the true maximum moment and locates the ", /*#__PURE__*/React.createElement("b", null, "depth to fixity as the second zero-crossing of the moment diagram"), " — the depth that reproduces the correct above-grade moment in an equivalent fixed-base model. A noise guard ignores crossings whose preceding moment lobe is under 2% of Mmax so numerical tail-ringing isn't mistaken for a real reversal. This is a REFERENCE figure only \u2014 it is a moment-diagram measure and is NOT used in the buckling check, which requires a stiffness equivalence (Davisson / deflection-matched / nonlinear P-crit) and yields a much shorter fixity depth. The model is linear, so the fixity depth is load-independent — appropriate for a stiffness/fixity basis, but it should be checked against a nonlinear p-y run before sealing.")), /*#__PURE__*/React.createElement(DocSection, {
+  }, /*#__PURE__*/React.createElement("p", null, "Two paths. You can enter a maximum moment directly from an external LPILE run, or use the built-in solver. The solver is a real ", /*#__PURE__*/React.createElement("b", null, "finite-difference beam on an elastic foundation"), ": the embedded pile is discretized on Winkler springs with a linear subgrade modulus (Es = nh·z for sand, constant kh for clay), and EI·y⁗ + k(z)·y = 0 is solved with mudline boundary conditions (shear V₀ = P, moment M₀ = P·e from the free length) and an unrestrained toe (no applied tip shear or moment restraint — the toe is still bedded on soil springs)."), /*#__PURE__*/React.createElement("p", null, "From the resulting moment profile, the tool reports the true maximum moment and locates the ", /*#__PURE__*/React.createElement("b", null, "depth to fixity as the second zero-crossing of the moment diagram"), " — the depth that reproduces the correct above-grade moment in an equivalent fixed-base model. A noise guard ignores crossings whose preceding moment lobe is under 2% of Mmax so numerical tail-ringing isn't mistaken for a real reversal. This is a REFERENCE figure only \u2014 it is a moment-diagram measure and is NOT used in the buckling check, which requires a stiffness equivalence (Davisson / deflection-matched / nonlinear P-crit) and yields a much shorter fixity depth. The model is linear, so the fixity depth is load-independent — appropriate for a stiffness/fixity basis, but it should be checked against a nonlinear p-y run before sealing."), /*#__PURE__*/React.createElement("p", null, /*#__PURE__*/React.createElement("b", null, "Nonlinear p-y convergence."), " The built-in nonlinear p-y solve applies the loads in 8 equal steps (secant iteration, up to 200 iterations per step). If a step does not converge it retries once with 16 steps, up to 400 iterations and under-relaxation 0.55. A retried solution is used only if (a) every step converged, (b) the equilibrium closure is within " + PY_RETRY_CLOSURE_PCT + " % for both ΣF and ΣM, (c) it is on the stable loading branch (the head deflection keeps the direction of the first step and never decreases while the load rises) and (d) the head deflection is no more than one pile width D. Otherwise the result is “did not converge — the pile is likely unstable (buckling / P-Δ) at this load”: there is no valid lateral demand, so flexure, combined loading, casing extension, uncased flexure and combined-loading stability are NG. Past the instability load the solver can settle on a post-critical equilibrium (head deflection reversed, tens of inches) whose closure is still excellent, which is why the branch and deflection tests are needed. “Run all cases” solves each case with exactly the same solve (node count, load steps, retry and acceptance test), so for the active case the envelope equals Module 02.")), /*#__PURE__*/React.createElement(DocSection, {
     title: "03 · Structural axial",
     code: "AASHTO 10.9.3.10.2"
   }, /*#__PURE__*/React.createElement("p", null, "Non-composite axial capacity, computed for both the cased length (casing + grout + bar, Eq. 10.9.3.10.2a-2) and the uncased length (grout + bar only, Eq. 10.9.3.10.2b-2). The uncased section typically governs because it has no casing contribution. The casing wall is reduced by a sacrificial corrosion allowance.")), /*#__PURE__*/React.createElement(DocSection, {
@@ -8275,12 +8362,14 @@ function PrintReport({
         Pr = hs.phi_c_comb * Pn; const PuPr = hs.STL / Pr, MuMr = hs.Mr > 0 ? hs.Mu / hs.Mr : 0;
         if (PuPr < 0.2) { cBranch = "<0.2"; cRatio = PuPr / 2 + MuMr; } else { cBranch = "≥0.2"; cRatio = PuPr + 8 / 9 * MuMr; } cPass = cRatio <= 1.0;
       }
+      const nc = !!r.lateralNoConv; // F22 (O33): p-y did not converge -> flexure / combined NG
+      if (nc) cPass = false;
       return /*#__PURE__*/React.createElement("div", null,
         line("Axial: Po = Fy·A = " + fmt(hs.Po, 0) + " kip · " + (hs.hasStickup ? ({davisson:"Davisson",deflmatch:"deflection-matched",pcrit:"nonlinear P-crit"}[r.buckling.bklTab] || "Davisson") : "fully braced") + (Pn != null ? " · Pn = " + fmt(Pn, 0) + " kip" : " · (compute Pcr)")),
         phiPn != null && /*#__PURE__*/React.createElement(RptRow, { label: "Axial: φc·Pn ≥ STL (φc=" + fmt(hs.phi_c_axial, 2) + ")", val: fmt(phiPn, 0) + " ≥ " + fmt(hs.STL, 0) + " kip", pass: axPass }),
         line("Flexure: Mn = Fy·S = " + fmt(hs.Mn_elastic, 1) + " kip·ft (elastic; Mp = " + fmt(hs.Mp, 1) + " permitted)"),
-        /*#__PURE__*/React.createElement(RptRow, { label: "Flexure: φf·Mn ≥ Mu (φf=" + fmt(hs.phi_f, 2) + ")", val: fmt(hs.phiMn, 1) + " ≥ " + fmt(hs.Mu, 1) + " kip·ft", pass: hs.flex_pass }),
-        cRatio != null && /*#__PURE__*/React.createElement(RptRow, { label: "Combined " + (cBranch === "<0.2" ? "(6.9.2.2.1-1)" : "(6.9.2.2.1-2)") + " D/C", val: fmt(cRatio, 3) + " ≤ 1.0", pass: cPass }),
+        /*#__PURE__*/React.createElement(RptRow, { label: "Flexure: φf·Mn ≥ Mu (φf=" + fmt(hs.phi_f, 2) + ")", val: nc ? "p-y did not converge" : fmt(hs.phiMn, 1) + " ≥ " + fmt(hs.Mu, 1) + " kip·ft", pass: hs.flex_pass }),
+        cRatio != null && /*#__PURE__*/React.createElement(RptRow, { label: "Combined " + (cBranch === "<0.2" ? "(6.9.2.2.1-1)" : "(6.9.2.2.1-2)") + " D/C", val: nc ? "p-y did not converge" : fmt(cRatio, 3) + " ≤ 1.0", pass: cPass }),
         /*#__PURE__*/React.createElement(RptRow, { label: "Shear: φv·Vn ≥ Vu (φv=" + fmt(hs.phi_v, 2) + ")", val: fmt(hs.phiVn, 1) + " ≥ " + fmt(hs.Vu, 1) + " kip", pass: hs.shear_pass }),
         hs.enableTension && /*#__PURE__*/React.createElement(RptRow, { label: "Tension: φ·Pn ≥ Tu", val: fmt(hs.phiPn_tension, 0) + " ≥ " + fmt(hs.Tu, 0) + " kip", pass: hs.strTension_pass }));
     })() : null),
@@ -8460,7 +8549,7 @@ function PrintReport({
     note: "supporting information"
   }), /*#__PURE__*/React.createElement(RptCheck, {
     pass: r.casingExt.pass,
-    eq: `L_{tip} = ${fmt(r.casingExt.tipBelowGrade, 1)}\\ \\text{ft} \\;${r.casingExt.pass ? '\\geq' : '<'}\\; z_{M\\to0} = ${fmt(r.casingExt.zDecay || 0, 1)}\\ \\text{ft}`
+    eq: r.lateralNoConv ? PY_NC_TEX : `L_{tip} = ${fmt(r.casingExt.tipBelowGrade, 1)}\\ \\text{ft} \\;${r.casingExt.pass ? '\\geq' : '<'}\\; z_{M\\to0} = ${fmt(r.casingExt.zDecay || 0, 1)}\\ \\text{ft}`
   }))), /*#__PURE__*/React.createElement("div", {
     className: "rpt-section"
   }, /*#__PURE__*/React.createElement(RptHeading, {
@@ -8525,7 +8614,7 @@ function PrintReport({
     cite: "Art. 6.12.2.2.3"
   }), /*#__PURE__*/React.createElement(RptCheck, {
     pass: r.flex.pass,
-    eq: `\\phi_f M_n = ${fmt(r.flex.phiMn, 1)}\\ \\text{kip}\\cdot\\text{ft} \\;${r.flex.pass ? '\\geq' : '<'}\\; M_{max} = ${fmt(r.flex.Mmax, 1)}\\ \\text{kip}\\cdot\\text{ft}`
+    eq: r.lateralNoConv ? PY_NC_TEX : `\\phi_f M_n = ${fmt(r.flex.phiMn, 1)}\\ \\text{kip}\\cdot\\text{ft} \\;${r.flex.pass ? '\\geq' : '<'}\\; M_{max} = ${fmt(r.flex.Mmax, 1)}\\ \\text{kip}\\cdot\\text{ft}`
   })), /*#__PURE__*/React.createElement("div", {
     className: "rpt-section"
   }, /*#__PURE__*/React.createElement(RptHeading, {
@@ -8584,7 +8673,7 @@ function PrintReport({
     cite: `Eq. ${r.comb.eqUsed}`
   }), /*#__PURE__*/React.createElement(RptCheck, {
     pass: r.comb.pass,
-    eq: `D/C = ${fmt(r.comb.interaction, 3)} \\;${r.comb.pass ? '\\leq' : '>'}\\; 1.0`
+    eq: r.lateralNoConv ? PY_NC_TEX : `D/C = ${fmt(r.comb.interaction, 3)} \\;${r.comb.pass ? '\\leq' : '>'}\\; 1.0`
   })), r.cfst.enable && /*#__PURE__*/React.createElement("div", {
     className: "rpt-section"
   }, /*#__PURE__*/React.createElement(RptHeading, {
@@ -8617,7 +8706,7 @@ function PrintReport({
     cite: "Art. 6.9.6.3.4"
   }), /*#__PURE__*/React.createElement(RptCheck, {
     pass: r.cfst.cfst_pm_pass,
-    eq: `M_r = ${fmt(r.cfst.Mr_cfst, 1)} \\;${r.cfst.cfst_pm_pass ? '\\geq' : '<'}\\; M_u = ${fmt(r.cfst.Mmax, 1)}\\ \\text{kip}\\cdot\\text{ft}`
+    eq: r.lateralNoConv ? PY_NC_TEX : `M_r = ${fmt(r.cfst.Mr_cfst, 1)} \\;${r.cfst.cfst_pm_pass ? '\\geq' : '<'}\\; M_u = ${fmt(r.cfst.Mmax, 1)}\\ \\text{kip}\\cdot\\text{ft}`
   }))), /*#__PURE__*/React.createElement("div", {
     className: "rpt-section"
   }, /*#__PURE__*/React.createElement(RptHeading, {
@@ -8906,6 +8995,11 @@ function PrintReport({
       /*#__PURE__*/React.createElement("p", { style: { fontSize: "7.5px", color: "#94a3b8", marginTop: "2px", fontStyle: "italic" } },
         "Phases: base (stable baseline), bracket (doubling until instability), refine (bisection). A row is unstable if the solve diverged, deflection exceeded 10\u00d7 the baseline, or the deflection turned down >10% from a meaningfully-risen peak (the fold). P\u1d04\u0280 is the last stable thrust. This equilibrium path is the quantity benchmarked against LPILE 2026 step-for-step (0.00% across 14 load steps)."))
     )),
+  // ---- F22 (O33): p-y lateral analysis did not converge -> a clear NG section ----
+  (I.pileType !== "iab" && I.lateralSource === "py" && pyRes && pyRes.noConv) && /*#__PURE__*/React.createElement("div", { className: "rpt-section" },
+    /*#__PURE__*/React.createElement(RptHeading, { n: "02R", title: "Lateral Analysis — Did Not Converge (NG)", code: "nonlinear p-y · " + (I.solverHead === "fixed" ? "fixed head" : "free head") }),
+    /*#__PURE__*/React.createElement("div", { className: "rpt-avoid", style: { border: "1.2px solid #B91C1C", background: "#FEF2F2", color: "#7F1D1D", padding: "6px 9px", margin: "4px 0 8px" } },
+      /*#__PURE__*/React.createElement(PyNoConvNote, { why: pyRes.why, print: true }))),
   // ---- p-y lateral analysis results (previously ZERO report coverage) ----
   (I.pileType !== "iab" && I.lateralSource === "py" && pyRes && pyRes.ok) && /*#__PURE__*/React.createElement("div", { className: "rpt-section" },
     /*#__PURE__*/React.createElement(RptHeading, { n: "02R", title: "Lateral Analysis \u2014 Results & Diagnostics", code: "nonlinear p-y \u00b7 " + (I.solverHead === "fixed" ? "fixed head" : "free head") + (I.pyCyclic ? " \u00b7 CYCLIC" : " \u00b7 static") }),
@@ -9086,10 +9180,15 @@ function PrintReport({
       /*#__PURE__*/React.createElement("tbody", null, caseRes.rows.map((r0, i) => /*#__PURE__*/React.createElement("tr", { key: i, style: { borderBottom: "1px solid #e2e8f0" } },
         /*#__PURE__*/React.createElement("td", { style: { padding: "2px 4px" } }, r0.name),
         /*#__PURE__*/React.createElement("td", { style: { padding: "2px 4px" } }, r0.type),
-        /*#__PURE__*/React.createElement("td", { style: { padding: "2px 4px" } }, r0.Mmax != null ? fmt(r0.Mmax, 1) : "\u2014"),
+        /*#__PURE__*/React.createElement("td", { style: r0.noConv ? { padding: "2px 4px", fontWeight: 700, color: "#B91C1C" } : { padding: "2px 4px" } }, r0.noConv ? "did not converge" : r0.Mmax != null ? fmt(r0.Mmax, 1) : "\u2014"),
         /*#__PURE__*/React.createElement("td", { style: { padding: "2px 4px" } }, r0.y0 != null ? fmt(r0.y0, 3) : "\u2014"),
-        ["geoR", "flexR", "combR", "buckR"].map((k, j) => /*#__PURE__*/React.createElement("td", { key: j, style: { padding: "2px 4px" } }, r0[k] != null ? fmt(r0[k], 2) : "\u2014")),
+        ["geoR", "flexR", "combR", "buckR"].map((k, j) => (r0.noConv && r0.type !== "service" && (k === "flexR" || k === "combR"))
+          ? /*#__PURE__*/React.createElement("td", { key: j, style: { padding: "2px 4px", fontWeight: 700, color: "#B91C1C" } }, "NG")
+          : /*#__PURE__*/React.createElement("td", { key: j, style: { padding: "2px 4px" } }, r0[k] != null ? fmt(r0[k], 2) : "\u2014")),
         /*#__PURE__*/React.createElement("td", { style: { padding: "2px 4px", fontWeight: 700, color: r0.pass ? "#2f6f3e" : "#B91C1C" } }, r0.pass ? "PASS" : "FAIL"))))),
+    caseRes.rows.some(r0 => r0.noConv) && /*#__PURE__*/React.createElement("div", { style: { fontSize: "8px", color: "#B91C1C", marginTop: "2px" } },
+      caseRes.rows.filter(r0 => r0.noConv).map(r0 => r0.name + ": " + (r0.ncWhy || []).join("; ")).join(" \u00b7 "),
+      ". " + PY_NC_MSG + ": no valid lateral demand, so flexure and combined loading are NG (a service row fails its deflection check)."),
     /*#__PURE__*/React.createElement("div", { style: { fontSize: "7.5px", color: "#94a3b8", marginTop: "2px" } },
       "Envelope computed " + caseRes.at + ". Service rows report deflection only. The detailed module calculations that follow reflect the ACTIVE case.")),
   /*#__PURE__*/React.createElement("table", {
@@ -9166,7 +9265,7 @@ function PrintReport({
       ...cell,
       textAlign: "right"
     }
-  }, fmt(dem, name.includes("D/C") ? 3 : 2), " ", unit), /*#__PURE__*/React.createElement("td", {
+  }, (r.lateralNoConv && PY_LAT_ROW.test(name)) ? "p-y did not converge" : [fmt(dem, name.includes("D/C") ? 3 : 2), " ", unit]), /*#__PURE__*/React.createElement("td", {
     style: {
       ...cell,
       textAlign: "center",
@@ -9663,10 +9762,14 @@ function LoadCasesCard({ cases, updCases, applyCase, runAllCases, caseRes, I, up
         ["case", "Mmax k·ft", "y₀ in", "geo", "flex", "comb", "buckl", "pass"].map((h2, i) => /*#__PURE__*/React.createElement("td", { key: i, className: "pr-2" }, h2)))),
       /*#__PURE__*/React.createElement("tbody", null, rr.map((r0, i) => /*#__PURE__*/React.createElement("tr", { key: i, style: { borderTop: "1px solid #eef2f6" } },
         /*#__PURE__*/React.createElement("td", { className: "py-0.5 pr-2 text-slate-500" }, r0.name, r0.type === "service" ? " (svc)" : r0.type === "extreme" ? " (EE)" : r0.type === "tension" ? " (T)" : ""),
-        /*#__PURE__*/React.createElement("td", { className: "py-0.5 pr-2" }, r0.Mmax != null ? fmt(r0.Mmax, 1) : "—"),
+        /*#__PURE__*/React.createElement("td", { className: "py-0.5 pr-2", style: r0.noConv ? { color: "#b23b3b", fontWeight: 700 } : undefined }, r0.noConv ? "n/c" : r0.Mmax != null ? fmt(r0.Mmax, 1) : "—"),
         /*#__PURE__*/React.createElement("td", { className: "py-0.5 pr-2" }, r0.y0 != null ? fmt(r0.y0, 3) : "—"),
-        [["geoR", wG], ["flexR", wF], ["combR", wC], ["buckR", wB]].map(([k, w], j) => /*#__PURE__*/React.createElement("td", { key: j, className: "py-0.5 pr-2", style: { color: i === w && rr[i][k] != null ? "#b23b3b" : "#334155", fontWeight: i === w && rr[i][k] != null ? 700 : 400 } }, fmtR(r0[k]))),
+        [["geoR", wG], ["flexR", wF], ["combR", wC], ["buckR", wB]].map(([k, w], j) => (r0.noConv && r0.type !== "service" && (k === "flexR" || k === "combR"))
+          ? /*#__PURE__*/React.createElement("td", { key: j, className: "py-0.5 pr-2", style: { color: "#b23b3b", fontWeight: 700 } }, "NG")
+          : /*#__PURE__*/React.createElement("td", { key: j, className: "py-0.5 pr-2", style: { color: i === w && rr[i][k] != null ? "#b23b3b" : "#334155", fontWeight: i === w && rr[i][k] != null ? 700 : 400 } }, fmtR(r0[k]))),
         /*#__PURE__*/React.createElement("td", { className: "py-0.5", style: { color: r0.pass ? "#2f6f3e" : "#b23b3b" } }, r0.pass ? "✓" : "✗"))))),
+    ro && rr && rr.some(r0 => r0.noConv) && /*#__PURE__*/React.createElement("p", { className: "text-[9px] mt-1 leading-snug", style: { color: "#b23b3b" } },
+      "n/c = the p-y solve did not converge for ", rr.filter(r0 => r0.noConv).map(r0 => r0.name).join(", "), ": ", PY_NC_MSG.replace(/^Did not converge — /, ""), ". No valid lateral demand, so flexure and combined loading are NG (a service row fails its deflection check). Reduce the load, check P", /*#__PURE__*/React.createElement("sub", null, "cr"), " in Module 10, shorten the unsupported length or add stiffness; make the case active to see the reason in Module 02."),
     ro && rr && rr.some(r0 => r0.prof) && /*#__PURE__*/React.createElement("div", { className: "mt-2" },
       /*#__PURE__*/React.createElement("div", { className: "text-[9.5px] font-mono-tech text-[var(--blueprint)] uppercase tracking-wider mb-1" }, "Moment profiles · all cases overlaid"),
       /*#__PURE__*/React.createElement(Plot, {
@@ -9751,6 +9854,9 @@ function UtilizationDashboard({ r, I }) {
     ...(grpRows(r))
   ];
   const rows = raw.map(([label, cap, dem, pass, code]) => {
+    // F22 (O33): no converged p-y solution -> the lateral rows have no valid D/C; they
+    // show NG and sort as governing (like the stability row), not a ratio of the fallback moment
+    if (r.lateralNoConv && !isIAB && PY_LAT_ROW.test(label)) return { label, dcr: 2.0, pass: false, code, cap, dem, isStab: false, nc: true };
     const dcr = cap > 0 ? Math.abs(dem) / cap : 0;
     return { label, dcr, pass, code, cap, dem, isStab: label === "Combined-load stability" };
   }).filter(x => isFinite(x.dcr));
@@ -9762,7 +9868,7 @@ function UtilizationDashboard({ r, I }) {
     /*#__PURE__*/React.createElement("div", { className: "flex items-baseline justify-between mb-2" },
       /*#__PURE__*/React.createElement("div", { className: "text-[11px] font-mono-tech text-[var(--blueprint)] uppercase tracking-wider" }, "Summary of checks · demand / capacity"),
       gov && /*#__PURE__*/React.createElement("div", { className: "text-[10px] font-mono-tech", style: { color: barColor(gov.dcr) } },
-        "governs: ", /*#__PURE__*/React.createElement("b", null, gov.label), gov.isStab ? (gov.pass ? " \u00b7 stable" : " \u00b7 UNSTABLE") : " @ " + fmt(gov.dcr, 2))),
+        "governs: ", /*#__PURE__*/React.createElement("b", null, gov.label), gov.isStab ? (gov.pass ? " \u00b7 stable" : " \u00b7 UNSTABLE") : gov.nc ? " \u00b7 p-y did not converge" : " @ " + fmt(gov.dcr, 2))),
     /*#__PURE__*/React.createElement("div", { className: "space-y-1" }, rows.map((x, i) => {
       const pct = Math.min(x.dcr, 1.35) / 1.35 * 100;
       // UI: each row is a button that jumps to the module holding the full
@@ -9772,13 +9878,13 @@ function UtilizationDashboard({ r, I }) {
         key: i, type: target ? "button" : undefined,
         onClick: target ? () => jumpToModule(target) : undefined,
         title: target ? "Show the full calculation" : undefined,
-        "aria-label": target ? (x.label + ", D/C " + (x.isStab ? (x.pass ? "stable" : "unstable") : fmt(x.dcr, 2)) + ", " + (x.pass ? "OK" : "not satisfied") + ". Show calculation.") : undefined,
+        "aria-label": target ? (x.label + ", D/C " + (x.isStab ? (x.pass ? "stable" : "unstable") : x.nc ? "not available, p-y did not converge" : fmt(x.dcr, 2)) + ", " + (x.pass ? "OK" : "not satisfied") + ". Show calculation.") : undefined,
         className: "util-row w-full flex items-center gap-2 text-left rounded-sm " + (target ? "hover:bg-slate-50 cursor-pointer" : "") },
         /*#__PURE__*/React.createElement("div", { className: "text-[9.5px] text-slate-600 text-right", style: { width: "108px", flexShrink: 0 } }, x.label),
         /*#__PURE__*/React.createElement("div", { className: "relative flex-1 h-3.5 rounded-sm overflow-hidden", style: { background: "#eef2f6" } },
           /*#__PURE__*/React.createElement("div", { style: { position: "absolute", left: 0, top: 0, bottom: 0, width: pct + "%", background: barColor(x.dcr), opacity: 0.85 } }),
           /*#__PURE__*/React.createElement("div", { style: { position: "absolute", left: (1/1.35*100) + "%", top: 0, bottom: 0, width: "1px", background: "#334", opacity: 0.5 } })),
-        /*#__PURE__*/React.createElement("div", { className: "text-[9.5px] font-mono-tech text-right", style: { width: "34px", color: barColor(x.dcr) } }, x.isStab ? (x.pass ? "OK" : "NG") : fmt(x.dcr, 2)),
+        /*#__PURE__*/React.createElement("div", { className: "text-[9.5px] font-mono-tech text-right", style: { width: "34px", color: barColor(x.dcr) } }, (x.isStab || x.nc) ? (x.pass ? "OK" : "NG") : fmt(x.dcr, 2)),
         /*#__PURE__*/React.createElement("div", { style: { width: "12px", color: x.pass ? "#2f6f3e" : "#b23b3b", fontSize: "10px" } }, x.pass ? "✓" : "✗"),
         /*#__PURE__*/React.createElement("div", { className: "util-code text-[9px] text-slate-400 font-mono-tech", style: { width: "92px", flexShrink: 0 } }, x.code || ""));
     })),
@@ -11639,7 +11745,9 @@ function PyPanel({ I, set, pyRes, r, EI, EI_composite_kipin2, EI_aashto_kipin2, 
           pyRes.MmaxAboveGrade
             ? [fmt(Math.abs(pyRes.zMmax), 1), " ft ABOVE grade (in the stickup)"]
             : [fmt(pyRes.zMmax, 1), " ft below grade"]),
-        " flows to the structural checks automatically.")
+        " flows to the structural checks automatically.",
+        pyRes.retried ? " (Converged on the adaptive retry: 16 load steps, under-relaxed; closure, stable-branch and deflection checks passed.)" : null)
+        : (pyRes && pyRes.noConv) ? /*#__PURE__*/React.createElement(PyNoConvNote, { why: pyRes.why })
         : ("\u26a0 " + (pyRes ? pyRes.msg : "not run"))),
     ok && /*#__PURE__*/React.createElement("div", { className: "font-mono-tech text-[10px] text-slate-600 mb-3" },
       "head deflection ", fmt(pyRes.headDefl_in, 3), " in \u00b7 moment decays to 5% at ",
@@ -12599,33 +12707,23 @@ function App() {
       const S = buildPySetup();
       const { D, stick_in, L_in, embed_in, soilAt, EIfn, EIsecFn, cut_in, mphiC, mphiU, EIcasedSel } = S;
       if (embed_in <= 24) return { ok: false, msg: "Pile is not embedded — check geometry." };
-      const res = solvePyPile({
+      // F22 (O33): first solve (8 steps), then the adaptive retry (16 steps, under-relaxed)
+      // with its acceptance test, in solvePyWithRetry -- the same call "Run all cases" makes.
+      // A retry that does not converge, or converges to a post-critical / unsound state,
+      // is reported as "did not converge" (noConv) and the lateral-dependent checks are NG.
+      const sol = solvePyWithRetry({
         EIsecFn,
         L: L_in, nNodes: Math.max(80, Math.min(Math.round(I.pyNodes || 120), 200)), D,
         EIfn, soilAt, zg: stick_in,
         Pt: (I.Plat || 0) * 1000, Mt: I.solverHead === "fixed" ? 0 : (I.pyMhead || 0) * 12000, Qt: (I.STL || 0) * 1000,
         headFixed: I.solverHead === "fixed", headKrot: I.solverHead === "fixed" ? 0 : (I.pyKrot || 0) * 1000,
         gPM: I.pyPM || 1, gYM: I.pyYM || 1,
-        nSteps: 8, tol: 1e-6, maxIter: 200, zCut: cut_in
-      });
-      let resv = res;
-      if (!resv.ok) {
-        // adaptive retry: finer load stepping + heavier under-relaxation.
-        // Converges genuine-but-tender cases; a second failure means the
-        // load state is truly near instability and the message stands.
-        resv = solvePyPile({
-          EIsecFn, L: L_in, nNodes: Math.max(80, Math.min(Math.round(I.pyNodes || 120), 200)), D,
-          EIfn, soilAt, zg: stick_in,
-          Pt: (I.Plat || 0) * 1000, Mt: I.solverHead === "fixed" ? 0 : (I.pyMhead || 0) * 12000, Qt: (I.STL || 0) * 1000,
-          headFixed: I.solverHead === "fixed", headKrot: I.solverHead === "fixed" ? 0 : (I.pyKrot || 0) * 1000,
-          gPM: I.pyPM || 1, gYM: I.pyYM || 1,
-          nSteps: 16, tol: 1e-6, maxIter: 400, omega: 0.55, zCut: cut_in
-        });
-      }
-      if (!resv.ok) return { ok: false, msg: resv.msg };
-      const res2 = resv;
+        tol: 1e-6, zCut: cut_in
+      }, D);
+      if (sol.noConv) return { ok: false, noConv: true, msg: PY_NC_MSG, why: sol.why };
+      const res2 = sol.res;
       const records = res2.z.map((zi, i) => ({
-        depth: zi / 12, defl: res2.y[i], mom: res2.M[i] / 12000, shear: res.V[i] / 1000
+        depth: zi / 12, defl: res2.y[i], mom: res2.M[i] / 12000, shear: res2.V[i] / 1000
       }));
       // ---- Depth reporting: everything below is referenced to the MUDLINE ----
       // res2.z is measured from the PILE HEAD, so on a pile with a stickup the first
@@ -12692,7 +12790,7 @@ function App() {
       return {
         ok: true, records, Mmax_kft, zMmax, headDefl_in: res2.y[0], zMomentDecay: zDecay,
         fixity, zFix2, mzCrossings: _mzcPy.crossings, MmaxAboveGrade,
-        Mtip_kft, eq: res2.eq, iters: res2.history.reduce((s, h) => s + h.iter, 0),
+        Mtip_kft, eq: res2.eq, iters: res2.history.reduce((s, h) => s + h.iter, 0), retried: sol.retried,
         EIcased_used: EIcasedSel, embed_ft: embed_in / 12, L_ft: L_in / 12,
         eiVar: !!I.pyEIvar, Mcr_kft, Mcr_kft_u, EIatMmax, cracked,
         sweepTruncated: (() => {
@@ -12886,41 +12984,53 @@ function App() {
         const S = usePy ? buildPySetup() : null;
         const rows = cases.map(c => {
           // per-case p-y solve (M-phi curves held at the ACTIVE case axial)
-          let Mx = null, y0 = null, decay = null;
+          let Mx = null, y0 = null, decay = null, noConv = false, ncWhy = null;
           if (usePy) {
-            const rs = solvePyPile({ L: S.L_in, nNodes: 110, D: S.D, EIfn: S.EIfn, EIsecFn: S.EIsecFn, soilAt: S.soilAt, zg: S.stick_in,
+            // F23 (O34): the same solve as Module 02 (pyRes): I.pyNodes nodes, 8 load steps,
+            // maxIter 200, casing cut, and the F22 (O33) adaptive retry with its acceptance
+            // test (solvePyWithRetry). Before F23: 110 nodes, 6 steps, no retry, no zCut.
+            const sol = solvePyWithRetry({ L: S.L_in, nNodes: Math.max(80, Math.min(Math.round(I.pyNodes || 120), 200)), D: S.D, EIfn: S.EIfn, EIsecFn: S.EIsecFn, soilAt: S.soilAt, zg: S.stick_in,
               Pt: (c.Plat || 0) * 1000, Mt: (c.type !== "service" && I.solverHead === "fixed" ? 0 : (c.Mhead || 0) * 12000),
               Qt: (c.type === "tension" ? 0 : (c.STL || 0)) * 1000,
-              headFixed: I.solverHead === "fixed", headKrot: I.solverHead === "fixed" ? 0 : (I.pyKrot || 0) * 1000, gPM: I.pyPM || 1, gYM: I.pyYM || 1, nSteps: 6, tol: 1e-6, maxIter: 200 });
+              headFixed: I.solverHead === "fixed", headKrot: I.solverHead === "fixed" ? 0 : (I.pyKrot || 0) * 1000, gPM: I.pyPM || 1, gYM: I.pyYM || 1, tol: 1e-6, zCut: S.cut_in }, S.D);
+            const rs = sol.res;
+            noConv = sol.noConv; ncWhy = sol.why;
             var prof = null;
-            if (rs.ok) {
+            if (rs) {
               let iM = 0; rs.M.forEach((m, i2) => { if (Math.abs(m) > Math.abs(rs.M[iM])) iM = i2; });
               Mx = Math.abs(rs.M[iM]) / 12000; y0 = rs.y[0];
               prof = { d: [], m: [] };
               for (let i2 = 0; i2 < rs.z.length; i2 += 2) { prof.d.push((rs.z[i2] - S.stick_in) / 12); prof.m.push(rs.M[i2] / 12000); }
+              // moment-decay depth: the same search as pyRes (from max(Mmax node, mudline node) down)
+              const iG = (() => { for (let k = 0; k < rs.z.length; k++) if (rs.z[k] >= S.stick_in - 1e-9) return k; return 0; })();
               const th = 0.05 * Math.abs(rs.M[iM]);
-              for (let i2 = iM; i2 < rs.M.length; i2++) if (Math.abs(rs.M[i2]) <= th) { decay = Math.max(rs.z[i2] - S.stick_in, 0) / 12; break; }
+              for (let i2 = Math.max(iM, iG); i2 < rs.M.length; i2++) if (Math.abs(rs.M[i2]) <= th) { decay = (rs.z[i2] - S.stick_in) / 12; break; }
             }
           }
           // per-case inputs + Extreme Event phi = 1.0 (uplift 0.8) per AASHTO 10.5.5.3
           const I2 = { ...I, STL: c.type === "tension" ? 0 : c.STL, Plat: c.Plat, pyMhead: c.Mhead || 0,
             Tu: c.type === "tension" ? c.STL : 0 };
           if (c.type === "extreme") Object.assign(I2, { phiGeo: 1.0, phiCC: 1.0, phiCU: 1.0, phiF: 1.0, phiC: 1.0, phiB: 1.0, phiV: 1.0, phiVpunch: 1.0, phiT: 1.0, phiUp: 0.8 });
-          const R2 = computeAll(I2, { layered: !!activeLayers, pyMmax: Mx, Mmax_kft: Mx != null ? Mx : undefined, zMomentDecay: decay != null ? decay : undefined });
+          const R2 = computeAll(I2, { layered: !!activeLayers, pyMmax: Mx, Mmax_kft: Mx != null ? Mx : undefined, zMomentDecay: decay != null ? decay : undefined,
+            // F22 (O33): a case whose p-y solve did not converge is NG (stability + lateral checks)
+            ...(noConv ? { pyActive: true, pyConverged: false, pyStabMsg: PY_NC_MSG, pyNoConv: true, pyNoConvWhy: ncWhy } : {}) });
           const rat = (d, cap) => cap > 0 ? d / cap : null;
           // H-pile (F20/O32): report the H-pile checks the modules show (Module 01 geotech
           // tip + skin, Module 04 Mu/phiMn, Module 05 6.9.2.2.1 interaction, H-pile uplift and
           // tension), not the micropile casing checks that computeAll also evaluates.
           const hg = R2.hpileGeo, hs = R2.hpileStruct, isHPc = I2.pileType === "hpile" && hg && hs;
           return {
-            name: c.name, type: c.type, Mmax: Mx != null ? Mx : R2.MmaxUsed, y0, prof: (typeof prof !== "undefined") ? prof : null,
+            name: c.name, type: c.type, Mmax: noConv ? null : (Mx != null ? Mx : R2.MmaxUsed), y0, prof: (typeof prof !== "undefined") ? prof : null,
             geoR: c.type === "service" ? null : (isHPc ? rat(I2.STL, hg.phiRn_comp) : rat(I2.STL, R2.geo.phiPn_geo)),
-            flexR: c.type === "service" ? null : (isHPc ? rat(hs.Mu, hs.phiMn) : rat(R2.MmaxUsed, R2.flex.phiMn)),
-            combR: c.type === "service" ? null : (isHPc ? hs.comb_ratio : R2.comb.interaction), // P-M interaction value (was R2.comb.ratio = Po/Pe)
+            // F22 (O33): no lateral demand when the p-y solve did not converge -> the
+            // flexure / combined columns read NG (noConv), not a ratio of the fallback moment
+            flexR: (c.type === "service" || noConv) ? null : (isHPc ? rat(hs.Mu, hs.phiMn) : rat(R2.MmaxUsed, R2.flex.phiMn)),
+            combR: (c.type === "service" || noConv) ? null : (isHPc ? hs.comb_ratio : R2.comb.interaction), // P-M interaction value (was R2.comb.ratio = Po/Pe)
             buckR: (c.type === "service" || !R2.buckling.enable) ? null : rat(I2.STL, R2.buckling.phiPn_buck),
             tenR: c.type === "tension" ? (isHPc ? rat(I2.Tu, Math.min(hg.phiRn_up || 1e9, hs.phiPn_tension || 1e9)) : rat(I2.Tu, Math.min(R2.tension && R2.tension.phiPn_up || 1e9, R2.tension && R2.tension.phiPn_tension_total || 1e9))) : null,
             svcR: c.type === "service" && y0 != null ? Math.abs(y0) / Math.max(I.deflLimit || 1, 0.01) : null,
-            pass: c.type === "service" ? (y0 == null || Math.abs(y0) <= (I.deflLimit || 1)) : R2.allPass
+            pass: noConv ? false : (c.type === "service" ? (y0 == null || Math.abs(y0) <= (I.deflLimit || 1)) : R2.allPass),
+            noConv, ncWhy
           };
         });
         setCaseRes({ rows, at: new Date().toLocaleTimeString() });
@@ -13418,6 +13528,9 @@ function App() {
       pyActive: I.lateralSource === "py",
       pyConverged: pyOK,
       pyStabMsg: (pyRes && !pyRes.ok) ? pyRes.msg : null,
+      // F22 (O33): the p-y solve (with its adaptive retry) did not converge -> lateral checks NG
+      pyNoConv: !!(pyRes && pyRes.noConv),
+      pyNoConvWhy: (pyRes && pyRes.noConv) ? pyRes.why : null,
       // F21 (O29): the group case of the active Group row, for the Module 11 / report 11
       // distribution (null when the active row is a manual case). Display only.
       capCaseId: (cases[activeIdx] && cases[activeIdx]._fromGroup && cases[activeIdx]._groupCaseId != null) ? cases[activeIdx]._groupCaseId : null
@@ -14473,7 +14586,7 @@ function App() {
       /*#__PURE__*/React.createElement("p", { className: "text-[8px] text-slate-400 mt-1 leading-snug" }, "Bar-only capacity conservatively neglects grout compression (the fiber M–φ model, which includes grout, gives a higher uncased M", /*#__PURE__*/React.createElement("sub", null, "n"), " ≈ ", fmt(r.geoChecks.Mn_uncased_fiber != null ? r.geoChecks.Mn_uncased_fiber : 23, 0), " kip·ft — use that only if the grout’s tension/compression contribution is justified). M", /*#__PURE__*/React.createElement("sub", null, "tip"), " is the moment at the casing tip for the ", /*#__PURE__*/React.createElement("b", null, "active load case"), " and changes with the governing case; the uncased length below the tip sees this or less as the moment decays.")),
     /*#__PURE__*/React.createElement(CheckRow, {
       pass: r.geoChecks.uncasedFlex_pass,
-      tex: `\\phi M_{n,uncased}=${fmt(r.geoChecks.phiMn_uncased, 2)}\\text{ kip}\\cdot\\text{ft}${r.geoChecks.uncasedFlex_pass ? ' \\geq ' : ' < '}M_{tip}=${fmt(r.geoChecks.M_belowTip, 1)}\\text{ kip}\\cdot\\text{ft}`,
+      tex: r.lateralNoConv ? PY_NC_TEX : `\\phi M_{n,uncased}=${fmt(r.geoChecks.phiMn_uncased, 2)}\\text{ kip}\\cdot\\text{ft}${r.geoChecks.uncasedFlex_pass ? ' \\geq ' : ' < '}M_{tip}=${fmt(r.geoChecks.M_belowTip, 1)}\\text{ kip}\\cdot\\text{ft}`,
       note: "Uncased nominal from the central bar (grout tension neglected): φM_n = 0.90·f_yb·Z_bar. M_tip is the moment at the casing tip from the p-y solve; moment decays below the tip, so the tip governs the uncased length. Cased φM_n = " + fmt(r.geoChecks.casedMn, 1) + " kip·ft for comparison — the uncased section is far weaker, so keep demand off it (extend the casing past the active-moment zone)."
     }),
     /*#__PURE__*/React.createElement(CheckRow, {
@@ -14847,7 +14960,7 @@ function App() {
       /*#__PURE__*/React.createElement(RptHeading, { n: "2", title: "Nominal flexural resistance", code: "AASHTO 6.12 (elastic)" }),
       /*#__PURE__*/React.createElement(Calc, { label: "Elastic yield moment", eq: `M_n=F_yS=${fmt(hs.Fy,0)}\\times ${fmt(hs.S_sel,1)}=${fmt(hs.Mn_elastic*12,0)}\\ \\text{kip}\\cdot\\text{in}`, result: `=${fmt(hs.Mn_elastic,1)}\\ \\text{kip}\\cdot\\text{ft}` }),
       /*#__PURE__*/React.createElement(Calc, { label: "Factored resistance", eq: `M_r=\\phi_f M_n=${fmt(hs.phi_f,2)}\\times ${fmt(hs.Mn_elastic,1)}=${fmt(hs.phiMn,1)}\\ \\text{kip}\\cdot\\text{ft}`, cite: "\u03c6f=" + fmt(hs.phi_f, 2) + ", 6.5.4.2" }),
-      /*#__PURE__*/React.createElement(RptCheck, { pass: hs.flex_pass, eq: `\\phi_f M_n=${fmt(hs.phiMn,1)}\\ \\text{kip}\\cdot\\text{ft}\\ ${hs.flex_pass?"\\ge":"<"}\\ M_u=${fmt(hs.Mu,1)}\\ \\text{kip}\\cdot\\text{ft}` }),
+      /*#__PURE__*/React.createElement(RptCheck, { pass: hs.flex_pass, eq: r.lateralNoConv ? PY_NC_TEX : `\\phi_f M_n=${fmt(hs.phiMn,1)}\\ \\text{kip}\\cdot\\text{ft}\\ ${hs.flex_pass?"\\ge":"<"}\\ M_u=${fmt(hs.Mu,1)}\\ \\text{kip}\\cdot\\text{ft}` }),
       /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-600 bg-slate-50 border border-slate-200 rounded-sm px-2 py-1.5 mt-1 leading-snug" },
         /*#__PURE__*/React.createElement("b", null, "Plastic reserve available: "), "AASHTO 6.12.2.2.1 permits ", /*#__PURE__*/React.createElement(RTex, { tex: `M_p=F_yZ=${fmt(hs.Mp,1)}\\ \\text{kip}\\cdot\\text{ft}` }), " (capped 1.6F\u1d67S weak-axis; H-shape weak-axis M\u209a=1.5F\u1d67S), subject to the flange local-buckling check of 6.12.2.2.1c. The elastic basis used here is conservative by ~", fmt(100 * (hs.Mp / hs.Mn_elastic - 1), 0), "%. The plastic capacity may be claimed with PE review of the flange compactness (\u03bb\u209a\u2091=0.38\u221a(E/F\u1d67\u2091), \u03bb\u1d63\u2091=1.0\u221a(E/F\u1d67\u2091))."));
   })()),
@@ -14855,7 +14968,7 @@ function App() {
     idx: "05",
     title: "Combined Axial + Flexure \u2014 Interaction",
     code: "AASHTO 6.9.2.2.1 \u00b7 \u03c6c=" + fmt(r.hpileStruct.phi_c_comb, 2) + " \u03c6f=" + fmt(r.hpileStruct.phi_f, 2),
-    status: (() => { const hs = r.hpileStruct; if (!hs.hasStickup || hs.buckMethod !== "pcrit") return hs.comb_pass2; return (pcr && pcr.ok) ? true : null; })(),
+    status: (() => { const hs = r.hpileStruct; if (r.lateralNoConv) return false; if (!hs.hasStickup || hs.buckMethod !== "pcrit") return hs.comb_pass2; return (pcr && pcr.ok) ? true : null; })(),
     open: open.HC,
     onToggle: () => setOpen(o => ({ ...o, HC: !o.HC }))
   }, (() => {
@@ -14877,7 +14990,7 @@ function App() {
       /*#__PURE__*/React.createElement(Calc, { label: "Flexural ratio", eq: `\\dfrac{M_u}{M_r}=\\dfrac{${fmt(hs.Mu,1)}}{${fmt(hs.Mr,1)}}=${fmt(MuMr,3)}` }),
       /*#__PURE__*/React.createElement(RptHeading, { n: "3", title: "Interaction", code: branch === "<0.2" ? "Eq. 6.9.2.2.1-1" : "Eq. 6.9.2.2.1-2" }),
       /*#__PURE__*/React.createElement(Calc, { label: "Interaction value", eq: branch === "<0.2" ? `\\dfrac{P_u}{2P_r}+\\dfrac{M_u}{M_r}=${fmt(PuPr/2,3)}+${fmt(MuMr,3)}` : `\\dfrac{P_u}{P_r}+\\dfrac{8}{9}\\dfrac{M_u}{M_r}=${fmt(PuPr,3)}+${fmt(8/9*MuMr,3)}`, result: `=${fmt(ratio,3)}` }),
-      /*#__PURE__*/React.createElement(RptCheck, { pass: pass, eq: `\\text{D/C}=${fmt(ratio,3)}\\ ${pass?"\\le":">"}\\ 1.0` }));
+      /*#__PURE__*/React.createElement(RptCheck, { pass: r.lateralNoConv ? false : pass, eq: r.lateralNoConv ? PY_NC_TEX : `\\text{D/C}=${fmt(ratio,3)}\\ ${pass?"\\le":">"}\\ 1.0` }));
   })()),
   I.pileType === "hpile" && r.hpileStruct && /*#__PURE__*/React.createElement(Module, {
     idx: "07",
@@ -14999,7 +15112,7 @@ function App() {
     idx: "02",
     title: "Lateral Analysis — Maximum Moment",
     code: "p-y / LPILE · free-head",
-    status: undefined,
+    status: r.lateralNoConv ? false : undefined, // F22 (O33): p-y did not converge -> NG
     open: open[2],
     onToggle: () => toggle(2)
   }, /*#__PURE__*/React.createElement("div", { className: "mb-3" },
@@ -15648,7 +15761,7 @@ function App() {
     className: "mt-2"
   }, /*#__PURE__*/React.createElement(CheckRow, {
     pass: r.flex.pass,
-    tex: `\\phi_f M_n=${fmt(r.flex.phi_f, 2)}(${fmt(r.flex.Mn_j, 1)})=${fmt(r.flex.phiMn, 1)}\\text{ kip}\\!\\cdot\\!\\text{ft}${r.flex.pass ? ' \\geq ' : ' < '}M_{max}=${fmt(r.flex.Mmax, 1)}`
+    tex: r.lateralNoConv ? PY_NC_TEX : `\\phi_f M_n=${fmt(r.flex.phi_f, 2)}(${fmt(r.flex.Mn_j, 1)})=${fmt(r.flex.phiMn, 1)}\\text{ kip}\\!\\cdot\\!\\text{ft}${r.flex.pass ? ' \\geq ' : ' < '}M_{max}=${fmt(r.flex.Mmax, 1)}`
   }))), /*#__PURE__*/(I.pileType === "micropile") && React.createElement(Module, {
     idx: "05",
     title: "Combined Loading — Casing Only (non-composite)",
@@ -15706,7 +15819,7 @@ function App() {
     className: "mt-2"
   }, /*#__PURE__*/React.createElement(CheckRow, {
     pass: r.comb.pass,
-    tex: `D/C=${fmt(r.comb.interaction, 3)}\\;${r.comb.pass ? '\\leq' : '>'}\\;1.0`
+    tex: r.lateralNoConv ? PY_NC_TEX : `D/C=${fmt(r.comb.interaction, 3)}\\;${r.comb.pass ? '\\leq' : '>'}\\;1.0`
   }))), /*#__PURE__*/React.createElement("div", {
     className: "bg-slate-50 rounded-sm p-3 border border-slate-200"
   }, /*#__PURE__*/React.createElement("div", { className: "text-[11px] font-mono-tech text-[var(--blueprint2)] uppercase tracking-wider mb-1" }, "Interaction diagram — how to read it"),
@@ -15717,7 +15830,7 @@ function App() {
     /*#__PURE__*/React.createElement(DerivLine, { label: "Axial coordinate (y)", tex: `\\tfrac{P_u}{\\phi_c P_n}=\\tfrac{${fmt(r.comb.Pu, 1)}}{${fmt(r.comb.phi_c, 2)}\\times${fmt(r.comb.Pn_col, 1)}}=\\tfrac{${fmt(r.comb.Pu, 1)}}{${fmt(r.comb.Pr_col, 1)}}=${fmt(r.comb.PuPr, 3)}` }),
     /*#__PURE__*/React.createElement(DerivLine, { label: "Moment coordinate (x)", tex: `\\tfrac{M_u}{\\phi_f M_n}=\\tfrac{${fmt(r.comb.Mu, 1)}}{${fmt(I.phiF, 2)}\\times${fmt(r.comb.Mn_comb, 1)}}=\\tfrac{${fmt(r.comb.Mu, 1)}}{${fmt(r.comb.Mr_comb, 1)}}=${fmt(r.comb.MuMr, 3)}` }),
     /*#__PURE__*/React.createElement(DerivLine, { label: `Interaction value (Eq ${r.comb.eqUsed})`, tex: `${r.comb.eqUsed === "6.9.2.2.1-3" ? '\\tfrac{P_u}{P_r}+\\tfrac{M_u}{M_r}' : r.comb.eqUsed === "6.9.2.2.1-2" ? '\\tfrac{P_u}{P_r}+\\tfrac{8}{9}\\tfrac{M_u}{M_r}' : '\\tfrac{P_u}{2P_r}+\\tfrac{M_u}{M_r}'}=${r.comb.eqUsed === "6.9.2.2.1-1" ? `\\tfrac{${fmt(r.comb.PuPr,3)}}{2}+${fmt(r.comb.MuMr,3)}` : r.comb.eqUsed === "6.9.2.2.1-2" ? `${fmt(r.comb.PuPr,3)}+\\tfrac{8}{9}(${fmt(r.comb.MuMr,3)})` : `${fmt(r.comb.PuPr,3)}+${fmt(r.comb.MuMr,3)}`}=${fmt(r.comb.interaction, 3)}` }),
-    /*#__PURE__*/React.createElement("p", { className: "text-[8.5px] text-slate-400 mt-1 leading-snug" }, "The interaction value is the demand-to-capacity ratio: ≤ 1.0 means the ● lies within the envelope. Here D/C = ", fmt(r.comb.interaction, 3), ", so the point is ", r.comb.pass ? "inside (OK)." : "outside (over capacity)."))))), /*#__PURE__*/(I.pileType === "micropile") && React.createElement(Module, {
+    /*#__PURE__*/React.createElement("p", { className: "text-[8.5px] text-slate-400 mt-1 leading-snug" }, "The interaction value is the demand-to-capacity ratio: ≤ 1.0 means the ● lies within the envelope. ", r.lateralNoConv ? "The lateral p-y solve did not converge, so there is no valid moment demand: the point uses the linear-Winkler fallback moment and the check is NG." : ["Here D/C = ", fmt(r.comb.interaction, 3), ", so the point is ", r.comb.pass ? "inside (OK)." : "outside (over capacity)."]))))), /*#__PURE__*/(I.pileType === "micropile") && React.createElement(Module, {
     idx: "05b",
     title: "Combined Loading — CFST Composite (alt.)",
     code: "AASHTO 6.9.6 + C6.12.2.3.3",
@@ -15809,7 +15922,7 @@ function App() {
     className: "mt-2"
   }, /*#__PURE__*/React.createElement(CheckRow, {
     pass: r.cfst.cfst_pm_pass,
-    tex: `M_r=${fmt(r.cfst.Mr_cfst, 1)}\\text{ kip}\\!\\cdot\\!\\text{ft}${r.cfst.cfst_pm_pass ? ' \\geq ' : ' < '}M_u=${fmt(r.cfst.Mmax, 1)}`
+    tex: r.lateralNoConv ? PY_NC_TEX : `M_r=${fmt(r.cfst.Mr_cfst, 1)}\\text{ kip}\\!\\cdot\\!\\text{ft}${r.cfst.cfst_pm_pass ? ' \\geq ' : ' < '}M_u=${fmt(r.cfst.Mmax, 1)}`
   }))), /*#__PURE__*/React.createElement("div", {
     className: "bg-slate-50 rounded-sm p-3 border border-slate-200"
   }, /*#__PURE__*/React.createElement("div", { className: "text-[11px] font-mono-tech text-[var(--blueprint2)] uppercase tracking-wider mb-1" }, "CFST interaction diagram — how to read it"),
@@ -15820,8 +15933,8 @@ function App() {
     /*#__PURE__*/React.createElement(DerivLine, { label: "Demand", tex: `(M_u,\\,P_u)=(${fmt(r.cfst.Mmax, 1)}\\text{ kip}\\cdot\\text{ft},\\;${fmt(r.cfst.Pu_cfst, 0)}\\text{ kip})` }),
     /*#__PURE__*/React.createElement(DerivLine, { label: "Nominal moment capacity @ Pu (stability curve)", tex: `M_{SB}(P_u)=${fmt(r.cfst.Mr_cfst / r.cfst.phi_c_cfst, 1)}\\text{ kip}\\cdot\\text{ft}` }),
     /*#__PURE__*/React.createElement(DerivLine, { label: "Factored moment capacity", tex: `M_r=\\phi_c\\,M_{SB}(P_u)=${fmt(r.cfst.phi_c_cfst, 2)}(${fmt(r.cfst.Mr_cfst / r.cfst.phi_c_cfst, 1)})=${fmt(r.cfst.Mr_cfst, 1)}\\text{ kip}\\cdot\\text{ft}` }),
-    /*#__PURE__*/React.createElement(DerivLine, { label: "Check", tex: `M_r=${fmt(r.cfst.Mr_cfst, 1)}${r.cfst.cfst_pm_pass ? '\\geq' : '<'}M_u=${fmt(r.cfst.Mmax, 1)}\\text{ kip}\\cdot\\text{ft}` }),
-    /*#__PURE__*/React.createElement("p", { className: "text-[8.5px] text-slate-400 mt-1 leading-snug" }, "Unlike the casing-only interaction (a normalized D/C sum), the CFST check compares moment capacity to moment demand at the fixed demand axial level — the ● is ", r.cfst.cfst_pm_pass ? "inside" : "outside", " the stability curve. Points A'(", fmt(r.cfst.Ap ? r.cfst.Ap.M : 0, 0), ", ", fmt(r.cfst.Ap ? r.cfst.Ap.P : 0, 0), "), A''(", fmt(r.cfst.A2.M, 0), ", ", fmt(r.cfst.A2.P, 0), "), D(", fmt(r.cfst.Dp.M, 0), ", ", fmt(r.cfst.Dp.P, 0), "), B(", fmt(r.cfst.Bp ? r.cfst.Bp.M : 0, 0), ", ", fmt(r.cfst.Bp ? r.cfst.Bp.P : 0, 0), ") define the curve (M kip·ft, P kip).")))))), /*#__PURE__*/(I.pileType === "micropile") && React.createElement(Module, {
+    /*#__PURE__*/React.createElement(DerivLine, { label: "Check", tex: r.lateralNoConv ? PY_NC_TEX : `M_r=${fmt(r.cfst.Mr_cfst, 1)}${r.cfst.cfst_pm_pass ? '\\geq' : '<'}M_u=${fmt(r.cfst.Mmax, 1)}\\text{ kip}\\cdot\\text{ft}` }),
+    /*#__PURE__*/React.createElement("p", { className: "text-[8.5px] text-slate-400 mt-1 leading-snug" }, "Unlike the casing-only interaction (a normalized D/C sum), the CFST check compares moment capacity to moment demand at the fixed demand axial level — ", r.lateralNoConv ? "here the lateral p-y solve did not converge, so there is no valid moment demand (the ● uses the linear-Winkler fallback) and the check is NG." : ["the ● is ", r.cfst.cfst_pm_pass ? "inside" : "outside", " the stability curve."], " Points A'(", fmt(r.cfst.Ap ? r.cfst.Ap.M : 0, 0), ", ", fmt(r.cfst.Ap ? r.cfst.Ap.P : 0, 0), "), A''(", fmt(r.cfst.A2.M, 0), ", ", fmt(r.cfst.A2.P, 0), "), D(", fmt(r.cfst.Dp.M, 0), ", ", fmt(r.cfst.Dp.P, 0), "), B(", fmt(r.cfst.Bp ? r.cfst.Bp.M : 0, 0), ", ", fmt(r.cfst.Bp ? r.cfst.Bp.P : 0, 0), ") define the curve (M kip·ft, P kip).")))))), /*#__PURE__*/(I.pileType === "micropile") && React.createElement(Module, {
     idx: "06",
     title: "Pile Head Bearing on Concrete",
     code: "AASHTO 5.6.5",
