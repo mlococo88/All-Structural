@@ -5585,7 +5585,7 @@ function PyCurvesFig({ I, pyRes, solved, activeLayers, depths, setDepths, print 
   const notes = lin
     ? ["Linear (Winkler) basis: the springs are straight lines p = E_s·y with E_s = n_h·z (sand) or k_h (clay) per layer, read with the solver's own subgradeAt(); node spacing " + fmt(set.dz, 3) + " ft. ● = deflection of the linear solution at that depth (active case).",
        "There are no nonlinear p-y curves on this basis; select “Nonlinear p-y (built-in)” to see them."]
-    : ["Curves are the solver's own springs: pyPofY() with the same soil records, Georgiadis equivalent depth z_e, pile width b (d_h below the casing tip where entered) and multipliers, p = f_m·p(y/f_y) with f_m = " + fmt(set.gPM, 2) + ", f_y = " + fmt(set.gYM, 2) + ". Group row factors (Module 11) reach the solver only through f_m (“Apply avg fm”); they are not applied per row.",
+    : ["Curves are the solver's own springs: pyPofY() with the same soil records, Georgiadis equivalent depth z_e, pile width b" + (I.pileType === "hpile" ? " (H-pile: b_f for strong-axis, d for weak-axis bending)" : " (d_h below the casing tip where entered)") + " and multipliers, p = f_m·p(y/f_y) with f_m = " + fmt(set.gPM, 2) + ", f_y = " + fmt(set.gYM, 2) + ". Group row factors (Module 11) reach the solver only through f_m (“Apply avg fm”); they are not applied per row.",
        "● = point mobilised under the active load case: y from the solution at the solver node nearest each depth (node spacing " + fmt(set.h, 2) + " in) and p = the solver's nodal reaction; |p − p(y)| shows it lies on its curve. " + (I.pyCyclic ? "Cyclic loading selected: cyclic forms apply to sand and soft clay; stiff clay and weak rock have no cyclic form in the tool." : "Static loading.") + "" + (set.curves.some(c => c.model === "weakrock") ? " Weak rock values are plotted as the solver uses them (uncalibrated model)." : ""),
        set.user ? "Depths: your list (saved in this browser)." : "Automatic depths: mid-depth of each layer between the top of the springs (" + fmt(set.dTop, 1) + " ft) and the depth where M decays to 5 % of M_max (" + fmt(set.dBot, 1) + " ft), the head region (one pile width below the top of the springs) and the depth of M_max."];
   if (set.more) notes.push("Only the first 8 depths are drawn.");
@@ -9160,6 +9160,13 @@ function PrintReport({
             yaxis: { title: { text: "depth below grade (ft)", font: { size: 9 } }, autorange: "reversed", gridcolor: C.grid } }), height: 240 })),
       /*#__PURE__*/React.createElement("div", { style: { fontSize: "7.5px", color: "#94a3b8", marginTop: "2px" } },
         "Figure F-2: moment profiles, all LRFD load cases overlaid (per-case p-y solves)."))),
+  // F25: elevation, pile to scale beside the moment diagram (same figure as the Lateral graphs tab)
+  pyRes && pyRes.ok && pyRes.records && pyRes.records.length > 2 && (I.pileType !== "iab") && /*#__PURE__*/React.createElement("div", { className: "rpt-grp", style: { pageBreakInside: "avoid", marginBottom: "12px" } },
+    /*#__PURE__*/React.createElement(RptHeading, { n: "02F", title: "Figure F-4 \u2014 elevation: pile to scale and moment diagram" }),
+    /*#__PURE__*/React.createElement("div", { style: { border: "1px solid #e2e8f0", padding: "6px", background: "#fff" } },
+      /*#__PURE__*/React.createElement(ElevationPlot, { I: I, pyRes: pyRes, height: 470, print: true })),
+    /*#__PURE__*/React.createElement("div", { style: { fontSize: "7.5px", color: "#94a3b8", marginTop: "2px" } },
+      "Figure F-4: elevation (active case) \u2014 pile drawn to scale with one horizontal exaggeration, moment diagram on the same depth axis.")),
   (I.pileType !== "iab") && React.createElement("div", { className: "rpt-grp", "data-pd-gfx": "rptgrp", style: { marginBottom: "12px" } },
     React.createElement(RptHeading, { n: "02F", title: "Figure F-3 \u2014 p-y curves at selected depths", code: I.lateralSource === "py" ? "nonlinear p-y (built-in)" : I.lateralSource === "input" ? "p-y (LPILE)" : "linear estimate" }),
     React.createElement(GfxRptFig, { caption: "Figure F-3: p-y curves at selected depths (active case). \u25cf = point mobilised under the active load case." },
@@ -9962,74 +9969,171 @@ function grpRows(r) {
   return out;
 }
 
-function ElevationPlot({ I, pyRes, height = 340 }) {
-  const stick = I.solverFree || 0;
-  const tipBG = Math.max((I.Lcased || 0) - stick, 0);           // casing tip below grade
-  const bondTopBG = Math.max((I.Lcased - I.Lplunge) - stick, 0); // top of bond below grade
-  const toeBG = pyRes.embed_ft;                                  // toe below grade
+/* Elevation (F25, engineer 2026-10-11: "the elevation graphic that shows the
+   pile should show the pile more to scale"). Two panels on one depth axis
+   (ft below grade, stickup negative): left, the pile drawn to scale with ONE
+   uniform horizontal exaggeration N (Plotly scaleanchor: the drawn width is N
+   times the true width at the depth scale, so every width is in true
+   proportion to every other and the depths are true); right, the moment
+   diagram. Display only: every width and depth is an input or the pile's own
+   geometry. Micropile: cap embedment, casing OD (corroded OD dotted), casing
+   ID, bond hole d_h (bondHoleDia), equivalent bar 2·sqrt(A_b/π) (as computeAll
+   barDia), plunge, top of bond, casing tip, toe. H-pile: the section seen in
+   the plane of bending (strong axis: depth d, flanges edge-on; weak axis:
+   flange width b_f), toe at the embedded length. */
+function elevScaleN(yspan, wMax) {
+  // N so the widest part draws at about 7 % of the plot height, rounded DOWN to a nice value
+  const raw = 0.07 * yspan * 12 / Math.max(wMax, 0.1);
+  let n = 1;
+  [1, 2, 2.5, 3, 4, 5, 6, 8, 10, 12, 15, 20, 25, 30, 40, 50, 60, 80, 100].forEach(v => { if (v <= raw) n = v; });
+  return n;
+}
+function elevPileGeom(I, pyRes) {
+  const isHP = I.pileType === "hpile";
+  const s = pyRes.setup ? pyRes.setup.stick_in / 12 : (I.solverFree || 0);
+  const G = { isHP, s, headY: -s, toe: pyRes.embed_ft };   // head (cap underside) and toe, ft below grade
+  if (isHP) {
+    const weak = I.hpAxis === "weak";
+    G.hp = { w: weak ? I.hpBf : I.hpD, weak, d: I.hpD, bf: I.hpBf, tf: I.hpTf || 0, tw: I.hpTw || 0 };
+    G.wMax = G.wHead = G.hp.w;
+    G.embedIn = I.hpCapEmbed || 0;
+    return G;
+  }
+  const OD = I.OD || 0, tc = I.tc || 0, corr = I.corr || 0;
+  G.OD = OD; G.ID = OD - 2 * tc; G.ODr = OD - 2 * corr; G.corr = corr;
+  G.dh = bondHoleDia(I);
+  G.bar = 2 * Math.sqrt(Math.max(I.Ab || 0, 0) / PI);
+  G.tip = Math.max((I.Lcased || 0) - s, 0);                          // casing tip below grade
+  G.tob = Math.max(((I.Lcased || 0) - (I.Lplunge || 0)) - s, 0);     // top of bond below grade
+  G.wMax = Math.max(OD, G.dh); G.wHead = OD;
+  G.embedIn = I.capEmbed || 0;
+  return G;
+}
+/* stack labels (depth y in ft, wanted) at least `gap` ft apart, inside [lo, hi] */
+function elevStack(list, gap, lo, hi) {
+  list.sort((a, b) => a.y - b.y);
+  let cur = -Infinity;
+  list.forEach(L => { L.ly = Math.max(L.y, cur + gap, lo); cur = L.ly; });
+  let lim = hi;
+  for (let k = list.length - 1; k >= 0; k--) { if (list[k].ly > lim) list[k].ly = lim; lim = list[k].ly - gap; }
+  return list;
+}
+function ElevationPlot({ I, pyRes, height = 340, print, narrow }) {
+  const G = elevPileGeom(I, pyRes);
+  const { isHP, s, headY, toe } = G;
+  const embedFt = Math.max(G.embedIn, 0) / 12;
+  const capTop = headY - Math.max(1.5, embedFt + 0.5);  // schematic cap thickness 1.5 ft (more if the embedment needs it)
+  const H = height, mT = 8, mB = 40, plotH = H - mT - mB;
+  // depth range: about 56 px above the cap for the load arrows and label, toe + 3 ft below
+  const base = Math.max(toe + 3 - capTop, 5);
+  const yTop = capTop - 56 * base / Math.max(plotH - 56, 50), yBot = toe + 3;
+  const pxFt = plotH / (yBot - yTop);                  // px per ft of depth
+  const N = elevScaleN(yBot - yTop, G.wMax);
+  const pxIn = pxFt * N / 12;                          // px per inch of width (scaleanchor y, scaleratio N/12)
+  const hw = G.wMax / 2, capHalf = 1.1 * G.wMax;
+  const Nt = fmt(N, N % 1 ? 1 : 0);
+  const fz = 9;
   const layers = (Array.isArray(I.soilLayers) ? I.soilLayers : []).slice().sort((a, b) => a.topDepth - b.topDepth);
-  const soilCol = t => t === "clay" ? "rgba(150,165,145,0.35)" : t === "stiffclay" ? "rgba(120,140,115,0.40)" : "rgba(217,197,142,0.40)";
-  const shapes = [];
-  const anns = [];
-  // soil layer bands
+  const soilCol = t => t === "clay" ? "rgba(150,165,145,0.35)" : t === "stiffclay" ? "rgba(120,140,115,0.40)" : t === "weakrock" ? "rgba(160,150,140,0.40)" : "rgba(217,197,142,0.40)";
+  const shapes = [], anns = [];
+  const DOM_P = narrow ? [0, 0.42] : [0, 0.36], DOM_M = narrow ? [0.5, 1] : [0.42, 1];
+  // soil layer bands across both panels
   layers.forEach((ly, i) => {
-    const bot = i + 1 < layers.length ? layers[i + 1].topDepth : toeBG + 4;
-    shapes.push({ type: "rect", xref: "paper", x0: 0, x1: 1, yref: "y", y0: ly.topDepth, y1: bot, fillcolor: soilCol(ly.type), line: { width: 0 }, layer: "below" });
-    anns.push({ xref: "paper", x: 0.99, xanchor: "right", y: (ly.topDepth + Math.min(bot, toeBG + 4)) / 2, yref: "y", showarrow: false,
-      text: (ly.type === "sand" ? "sand \u03c6=" + fmt(ly.phi == null ? 32 : ly.phi, 0) + "\u00b0" : (ly.type === "stiffclay" ? "stiff clay" : "soft clay") + " su=" + fmt(ly.su == null ? 1000 : ly.su, 0)),
-      font: { size: 8, color: "#7a7355", family: PLOT_FONT } });
+    const t0 = Math.max(ly.topDepth, 0), bot = i + 1 < layers.length ? layers[i + 1].topDepth : yBot;
+    shapes.push({ type: "rect", xref: "paper", x0: 0, x1: 1, yref: "y", y0: t0, y1: bot, fillcolor: soilCol(ly.type), line: { width: 0 }, layer: "below" });
+    anns.push({ xref: "paper", x: 0.995, xanchor: "right", y: (t0 + Math.min(bot, yBot)) / 2, yref: "y", showarrow: false,
+      text: (ly.type === "sand" ? "sand φ=" + fmt(ly.phi == null ? 32 : ly.phi, 0) + "°" : ly.type === "weakrock" ? "weak rock" : (ly.type === "stiffclay" ? "stiff clay" : "soft clay") + " su=" + fmt(ly.su == null ? 1000 : ly.su, 0)),
+      font: { size: fz, color: "#7a7355", family: PLOT_FONT } });
   });
-  // grade line
+  // grade line (both panels)
   shapes.push({ type: "line", xref: "paper", x0: 0, x1: 1, yref: "y", y0: 0, y1: 0, line: { color: "#5a5a4a", width: 1.5 } });
-  // pile: casing (paper x 0.05-0.115), uncased shaft (0.06-0.105), bond zone highlight
-  shapes.push({ type: "rect", xref: "paper", x0: 0.05, x1: 0.115, yref: "y", y0: -stick, y1: tipBG, fillcolor: "rgba(20,48,74,0.85)", line: { color: "#14304a", width: 1 } });
-  shapes.push({ type: "rect", xref: "paper", x0: 0.062, x1: 0.103, yref: "y", y0: tipBG, y1: toeBG, fillcolor: "rgba(150,150,150,0.65)", line: { color: "#666", width: 1 } });
-  shapes.push({ type: "rect", xref: "paper", x0: 0.03, x1: 0.135, yref: "y", y0: bondTopBG, y1: toeBG, fillcolor: "rgba(201,98,46,0.12)", line: { color: "var(--accent)", width: 1, dash: "dot" } });
-  anns.push({ xref: "paper", x: 0.145, xanchor: "left", y: (bondTopBG + toeBG) / 2, yref: "y", showarrow: false, text: "bond " + fmt(I.LbProvided, 0) + " ft", font: { size: 8, color: "#c9622e", family: PLOT_FONT } });
-  anns.push({ xref: "paper", x: 0.125, xanchor: "left", y: tipBG, yref: "y", showarrow: false, text: "casing tip", font: { size: 8, color: "#14304a", family: PLOT_FONT } });
-  // ---- Applied loads at the pile head (active case) ----
-  const headY = -stick;                 // pile head depth (negative = above grade)
+  anns.push({ xref: "paper", x: DOM_M[0], xanchor: "left", yref: "y", y: 0, yanchor: "top", showarrow: false, text: "grade", font: { size: fz, color: "#5a5a4a", family: PLOT_FONT } });
+  const R = (x0, x1, y0, y1, fill, line) => shapes.push({ type: "rect", xref: "x", yref: "y", x0, x1, y0, y1, fillcolor: fill, line: line || { width: 0 } });
+  const steel = "rgba(20,48,74,0.88)", grout = "rgba(155,176,192,0.80)", ink = { color: "#14304a", width: 1 };
+  // cap (schematic) and the pile's embedment into it
+  R(-capHalf, capHalf, capTop, headY, "rgba(120,130,140,0.22)", { color: "#5a6570", width: 1 });
+  anns.push({ xref: "x", x: -capHalf, xanchor: "right", xshift: -2, yref: "y", y: (capTop + headY) / 2, showarrow: false, text: "cap", font: { size: fz, color: "#3a4550", family: PLOT_FONT } });
+  const topPile = headY - embedFt;
+  const lab = [];   // labels right of the pile: point (x in, depth ft), text; hover markers at the same points
+  if (isHP) {
+    const hp = G.hp, w2 = hp.w / 2;
+    if (hp.weak) {
+      R(-w2, w2, topPile, toe, "rgba(28,79,115,0.55)", ink);                              // flange face, b_f wide
+      if (hp.tw > 0) R(-hp.tw / 2, hp.tw / 2, topPile, toe, steel);                       // web edge-on
+    } else {
+      R(-w2, w2, topPile, toe, "rgba(28,79,115,0.30)", ink);                              // web face between the flanges
+      if (hp.tf > 0) { R(-w2, -w2 + hp.tf, topPile, toe, steel); R(w2 - hp.tf, w2, topPile, toe, steel); } // flanges edge-on
+    }
+    if (embedFt > 0) R(-w2, w2, topPile, headY, "rgba(201,98,46,0.30)", { color: C.accent, width: 1.2 });
+    lab.push({ x: w2, y: (Math.max(headY, 0) + toe) / 2, t: "HP " + fmt(hp.d, 2) + "×" + fmt(hp.bf, 2) + " (" + (hp.weak ? "weak" : "strong") + " axis): width " + (hp.weak ? "b_f" : "d") + " = " + fmt(hp.w, 2) + " in", c: "#14304a" });
+    lab.push({ x: w2, y: toe, t: "toe " + fmt(toe, 1) + " ft" + (narrow ? "" : " (embedded length)"), c: "#14304a", key: true });
+  } else {
+    const od2 = G.OD / 2, dh2 = G.dh / 2, id2 = Math.max(G.ID, 0) / 2, b2 = G.bar / 2;
+    if (toe > G.tob) R(-dh2, dh2, G.tob, toe, grout, { color: "#5a6570", width: 0.8 });     // bond-zone hole d_h
+    R(-od2, od2, topPile, G.tip, steel, ink);                                                // casing OD
+    if (id2 > 0) R(-id2, id2, topPile, G.tip, grout);                                         // grout inside the casing
+    if (G.corr > 0 && G.ODr > 0) [-1, 1].forEach(sg => shapes.push({ type: "line", xref: "x", yref: "y", x0: sg * G.ODr / 2, x1: sg * G.ODr / 2, y0: topPile, y1: G.tip, line: { color: "#e2e8f0", width: 1, dash: "dot" } }));
+    if (G.tip > G.tob + 0.01) R(-hw - 0.15 * G.wMax, hw + 0.15 * G.wMax, G.tob, G.tip, "rgba(201,98,46,0.10)", { color: C.accent, width: 1.2, dash: "dash" }); // plunge
+    if (b2 > 0) R(-b2, b2, topPile, toe, "rgba(201,98,46,0.95)");                             // central bar
+    if (embedFt > 0) R(-od2, od2, topPile, headY, "rgba(0,0,0,0)", { color: C.accent, width: 1.2 });
+    lab.push({ x: od2, y: (Math.max(headY, 0) + Math.min(G.tob, G.tip)) / 2, t: "casing OD " + fmt(G.OD, 3) + " in" + (G.corr > 0 ? " (corroded " + fmt(G.ODr, 3) + ", dotted)" : ""), c: "#14304a" });
+    lab.push({ x: Math.max(od2, dh2), y: G.tob, t: "top of bond " + fmt(G.tob, 1) + " ft", c: "#c9622e", key: true });
+    if (G.tip > G.tob + 0.01) lab.push({ x: hw + 0.15 * G.wMax, y: (G.tob + G.tip) / 2, t: "plunge " + fmt(G.tip - G.tob, 1) + " ft", c: "#c9622e" });
+    lab.push({ x: od2, y: G.tip, t: "casing tip " + fmt(G.tip, 1) + " ft", c: "#14304a", key: true });
+    lab.push({ x: dh2, y: (G.tip + toe) / 2, t: "bond hole d_h " + fmt(G.dh, 3) + " in", c: "#5a6570" });
+    if (b2 > 0) lab.push({ x: b2, y: G.tip + 0.8 * (toe - G.tip), t: "bar Ø " + fmt(G.bar, 2) + " in (equiv. of A_b " + fmt(I.Ab, 2) + " in²)", c: "#c9622e" });
+    lab.push({ x: dh2, y: toe, t: "toe " + fmt(toe, 1) + " ft", c: "#14304a", key: true });
+  }
+  if (embedFt > 0) lab.push({ x: G.wHead / 2, y: (topPile + headY) / 2, t: "embed " + fmt(G.embedIn, 1) + " in", c: "#c9622e" });
+  if (Math.abs(s) > 0.01) lab.push({ x: G.wHead / 2, y: headY / 2, t: (s > 0 ? "stickup " : "head below grade ") + fmt(Math.abs(s), 1) + " ft", c: "#8a5a1f" });
+  // labels: stacked at least 12 px apart inside the plot, with leaders; on a narrow
+  // screen only the key depths are labelled (every label stays in the hover)
+  const shown = elevStack(lab.filter(L => !narrow || L.key), 12 / pxFt, yTop + 6 / pxFt, yBot - 6 / pxFt);
+  shown.forEach(L => anns.push({ xref: "x", yref: "y", x: L.x, y: L.y, axref: "pixel", ayref: "pixel",
+    ax: (capHalf - L.x) * pxIn + 8, ay: (L.ly - L.y) * pxFt, xanchor: "left", showarrow: true, arrowhead: 0, arrowwidth: 0.8, arrowcolor: "#94a3b8",
+    text: L.t, font: { size: fz, color: L.c, family: PLOT_FONT }, standoff: 0, startstandoff: 0 }));
+  // ---- applied loads at the pile head (active case) ----
   const axial = I.STL || 0, lat = I.Plat || 0, mhd = I.pyMhead || 0;
-  const headPileMid = 0.0825;           // paper-x center of the casing
-  // axial: vertical arrow pushing DOWN onto the head
-  if (Math.abs(axial) > 0.01) {
-    anns.push({ xref: "paper", x: headPileMid, yref: "y", y: headY, ax: 0, ay: -30, axref: "pixel", ayref: "pixel",
-      showarrow: true, arrowhead: 3, arrowsize: 1.3, arrowwidth: 2.2, arrowcolor: "#b23b3b",
-      text: "", standoff: 0 });
-  }
-  // lateral: horizontal arrow pushing the head sideways (drawn from left toward the pile)
-  if (Math.abs(lat) > 0.01) {
-    anns.push({ xref: "paper", x: headPileMid, yref: "y", y: headY, ax: -34, ay: 0, axref: "pixel", ayref: "pixel",
-      showarrow: true, arrowhead: 3, arrowsize: 1.3, arrowwidth: 2.2, arrowcolor: "#2f6f3e", text: "" });
-  }
-  // one load label above the head, right of the axial arrow: clear of the arrows,
-  // the cap and the moment curve (which starts at the head)
+  if (Math.abs(axial) > 0.01) anns.push({ xref: "x", x: 0, yref: "y", y: capTop, ax: 0, ay: -30, axref: "pixel", ayref: "pixel",
+    showarrow: true, arrowhead: 3, arrowsize: 1.3, arrowwidth: 2.2, arrowcolor: "#b23b3b", text: "", standoff: 0 });
+  if (Math.abs(lat) > 0.01) anns.push({ xref: "x", x: -G.wHead / 2, yref: "y", y: headY, ax: -30, ay: 0, axref: "pixel", ayref: "pixel",
+    showarrow: true, arrowhead: 3, arrowsize: 1.3, arrowwidth: 2.2, arrowcolor: "#2f6f3e", text: "" });
   const ld = [];
   if (Math.abs(axial) > 0.01) ld.push("<span style='color:#b23b3b'>P = " + fmt(axial, 0) + " kip</span>");
   if (Math.abs(lat) > 0.01) ld.push("<span style='color:#2f6f3e'>V = " + fmt(lat, 1) + " kip</span>");
-  if (Math.abs(mhd) > 0.01) ld.push("<span style='color:#3d6a94'>\u21bb M = " + fmt(mhd, 1) + " kip\u00b7ft</span>");
-  if (ld.length) anns.push({ xref: "paper", x: headPileMid, xshift: 10, xanchor: "left", yref: "y", y: headY, yanchor: "bottom", yshift: 10,
-    showarrow: false, align: "left", text: ld.join(" \u00b7 "), font: { size: 9, family: PLOT_FONT } });
-  // depth range: pile head (less room for the load arrows and label) to toe + 3 ft
-  const ySpan = Math.max(toeBG + 3 - headY, 5);
-  const yRange = [toeBG + 3, headY - Math.max(0.16 * ySpan, 2)];
-  if (pyRes.zMomentDecay != null) shapes.push({ type: "line", xref: "paper", x0: 0, x1: 1, yref: "y", y0: pyRes.zMomentDecay, y1: pyRes.zMomentDecay, line: { color: "#2f6f3e", width: 1, dash: "dash" } });
-  // moment trace (depth below grade; stickup negative)
-  const mom = pyRes.records.map(r2 => ({ d: r2.depth - stick, m: r2.mom }));
+  if (Math.abs(mhd) > 0.01) ld.push("<span style='color:#3d6a94'>↻ M = " + fmt(mhd, 1) + " kip·ft</span>");
+  if (ld.length) anns.push({ xref: "x", x: capHalf, xshift: 6, xanchor: "left", yref: "y", y: capTop, yanchor: "bottom", yshift: 2,
+    showarrow: false, align: "left", text: ld.join("<br>"), font: { size: fz, family: PLOT_FONT } });
+  // ---- moment panel ----
+  if (pyRes.zMomentDecay != null) shapes.push({ type: "line", xref: "paper", x0: DOM_M[0], x1: 1, yref: "y", y0: pyRes.zMomentDecay, y1: pyRes.zMomentDecay, line: { color: "#2f6f3e", width: 1, dash: "dash" } });
+  const mom = pyRes.records.map(r2 => ({ d: r2.depth - s, m: r2.mom }));
   const iM = mom.reduce((a, r2, i) => Math.abs(r2.m) > Math.abs(mom[a].m) ? i : a, 0);
-  return /*#__PURE__*/React.createElement("div", { className: "bg-white rounded-sm p-3 border border-slate-200" },
-    /*#__PURE__*/React.createElement("div", { className: "text-[10px] font-mono-tech text-[var(--blueprint)] uppercase tracking-wider mb-1" }, "Elevation \u00b7 moment diagram depth-aligned with stratigraphy"),
-    /*#__PURE__*/React.createElement(Plot, {
-      data: [
-        { x: mom.map(r2 => r2.m), y: mom.map(r2 => r2.d), mode: "lines", line: { color: C.blueprint2, width: 2 }, name: "M(z)",
-          hoverinfo: "text", text: mom.map(r2 => fmt(r2.d, 1) + " ft: M = " + fmt(r2.m, 1) + " kip\u00b7ft") },
-        { x: [mom[iM].m], y: [mom[iM].d], cliponaxis: false, mode: "markers+text", marker: { color: "#b23b3b", size: 8 }, text: ["Mmax " + fmt(Math.abs(mom[iM].m), 1)], textposition: "middle right", textfont: { size: 8, family: PLOT_FONT, color: "#b23b3b" }, hoverinfo: "skip", showlegend: false }
-      ],
-      layout: baseLayout({ height: height, margin: { l: 46, r: 64, t: 8, b: 34 }, shapes, annotations: anns, showlegend: false,
-        xaxis: { title: { text: "M (kip\u00b7ft)", font: { size: 9 } }, gridcolor: C.grid, zeroline: true, zerolinecolor: "#cbd5e1" },
-        yaxis: { title: { text: "depth below grade (ft)", font: { size: 9 } }, range: yRange, autorange: false, gridcolor: C.grid } }), height: height }),
-    /*#__PURE__*/React.createElement("p", { className: "text-[8.5px] text-slate-400 mt-1 leading-snug" },
-      "Dark = cased, gray = uncased shaft, orange dotted = bond zone; bands = soil layers; green dash = 5% moment-decay depth. Stickup plots above grade (negative depth)."));
+  // moment axis: room on the Mmax side for its label
+  const mLo = Math.min(0, ...mom.map(r2 => r2.m)), mHi = Math.max(0, ...mom.map(r2 => r2.m)), mSp = Math.max(mHi - mLo, 1e-6);
+  const mPad = narrow ? 0.15 : 0.4;
+  const mRange = mom[iM].m < 0 ? [mLo - mPad * mSp, mHi + 0.05 * mSp] : [mLo - 0.05 * mSp, mHi + mPad * mSp];
+  const data = [
+    { x: mom.map(r2 => r2.m), y: mom.map(r2 => r2.d), xaxis: "x2", yaxis: "y", mode: "lines", line: { color: C.blueprint2, width: 2 }, name: "M(z)",
+      hoverinfo: "text", text: mom.map(r2 => fmt(r2.d, 1) + " ft: M = " + fmt(r2.m, 1) + " kip·ft") },
+    { x: [mom[iM].m], y: [mom[iM].d], xaxis: "x2", yaxis: "y", cliponaxis: false, mode: "markers+text", marker: { color: "#b23b3b", size: 8 }, text: ["Mmax " + fmt(Math.abs(mom[iM].m), 1)], textposition: narrow ? (mom[iM].m < 0 ? "top right" : "top left") : mom[iM].m < 0 ? "middle left" : "middle right", textfont: { size: fz, family: PLOT_FONT, color: "#b23b3b" }, hoverinfo: "skip", showlegend: false },
+    // hover points on the pile drawing (every label, also those hidden on a narrow screen)
+    { x: lab.map(L => L.x), y: lab.map(L => L.y), xaxis: "x", yaxis: "y", mode: "markers", marker: { size: 7, color: "rgba(0,0,0,0)" }, hoverinfo: "text", text: lab.map(L => L.t), showlegend: false }
+  ];
+  const layout = baseLayout({ height: H, width: print ? 660 : undefined, autosize: !print, margin: { l: 46, r: 10, t: mT, b: mB }, shapes, annotations: anns, showlegend: false, hovermode: "closest",
+    xaxis: { domain: DOM_P, range: [-1.5 * G.wMax, hw + 0.4 * G.wMax], scaleanchor: "y", scaleratio: N / 12, constrain: "range", constraintoward: "left",
+      title: { text: narrow ? "width (in) ×" + Nt : "width (in) · horizontal scale ×" + Nt, font: { size: 9 } }, nticks: narrow ? 3 : undefined, showgrid: false, zeroline: false, ticks: "outside", fixedrange: true },
+    xaxis2: { domain: DOM_M, anchor: "y", range: mRange, title: { text: "M (kip·ft)", font: { size: 9 } }, gridcolor: C.grid, zeroline: true, zerolinecolor: "#cbd5e1", ticks: "outside" },
+    yaxis: { title: { text: "depth below grade (ft)", font: { size: 9 } }, range: [yBot, yTop], autorange: false, gridcolor: C.grid, fixedrange: true } });
+  const plot = React.createElement(Plot, { data, layout, height: H, config: print ? { staticPlot: true, responsive: false } : undefined });
+  const note = "Left: the pile to scale — depths true, every width in true proportion, drawn " + Nt + "× wider than the depth scale (one factor for the whole pile); the cap is schematic. " +
+    (isHP ? "H-pile seen in the plane of bending (" + (G.hp.weak ? "weak axis: flange width b_f, web edge-on" : "strong axis: depth d, flanges edge-on") + "). " : "Dark = casing, gray = grout (inside the casing and in the bond hole d_h), orange = central bar, orange dashed = plunge. ") +
+    "Right: moment diagram (active case); bands = soil layers; green dash = 5% moment-decay depth. Stickup plots above grade (negative depth).";
+  if (print) return React.createElement("div", { "data-pd-elev": "1" }, plot,
+    React.createElement("div", { style: { fontSize: "7.5px", color: "#475569", marginTop: "2px", lineHeight: 1.4 } }, note));
+  return /*#__PURE__*/React.createElement("div", { className: "bg-white rounded-sm p-3 border border-slate-200", "data-pd-elev": "1" },
+    /*#__PURE__*/React.createElement("div", { className: "text-[10px] font-mono-tech text-[var(--blueprint)] uppercase tracking-wider mb-1" }, "Elevation · pile to scale and moment diagram, depth-aligned with stratigraphy"),
+    plot,
+    /*#__PURE__*/React.createElement("p", { className: "text-[8.5px] text-slate-400 mt-1 leading-snug" }, note));
 }
 
 // ---- Two-table group load model helpers ----
@@ -11774,7 +11878,7 @@ function PyPanel({ I, set, pyRes, r, EI, EI_composite_kipin2, EI_aashto_kipin2, 
     ok && /*#__PURE__*/React.createElement("div", { className: "font-mono-tech text-[10px] text-slate-600 mb-3" },
       "head deflection ", fmt(pyRes.headDefl_in, 3), " in \u00b7 moment decays to 5% at ",
       pyRes.zMomentDecay != null ? fmt(pyRes.zMomentDecay, 1) + " ft" : "\u2014",
-      " \u00b7 M at casing tip ", fmt(pyRes.Mtip_kft, 1), " kip\u00b7ft \u00b7 pile modeled full length ", fmt(pyRes.L_ft, 0), " ft (unrestrained toe)"),
+      I.pileType === "hpile" ? null : [" \u00b7 M at casing tip ", fmt(pyRes.Mtip_kft, 1), " kip\u00b7ft"], " \u00b7 pile modeled full length ", fmt(pyRes.L_ft, 0), " ft (unrestrained toe)"),
     // ---- Geotechnical depth to fixity (REFERENCE ONLY) ----
     ok && /*#__PURE__*/React.createElement("div", { className: "rounded-sm border p-2 mb-3", style: { borderColor: "#cbd5e1", background: "#f8fafc" } },
       /*#__PURE__*/React.createElement("div", { className: "flex items-baseline justify-between gap-2 mb-1" },
@@ -16414,6 +16518,7 @@ function LatGraphsCard({ I, set, pyRes, solved, activeLayers, pyDepths, setPyDep
   const ids = latGraphTabsFor(I, !!lp);
   const [tab, setTab] = React.useState(readLatGraphTab);
   const [view, setView] = React.useState("all"); // F-1: all three, or one quantity large
+  const [narrow, setNarrow] = React.useState(false); // F25: fewer labels on a narrow card
   const choose = React.useCallback(t => { setTab(t); try { window.localStorage.setItem(LATG_KEY, t); } catch (err) {} }, []);
   React.useEffect(() => { window.__pdSetLatGraphTab = setTab; return () => { if (window.__pdSetLatGraphTab === setTab) window.__pdSetLatGraphTab = null; }; }, []);
   const cur = ids.indexOf(tab) >= 0 ? tab : ids[0];
@@ -16432,7 +16537,7 @@ function LatGraphsCard({ I, set, pyRes, solved, activeLayers, pyDepths, setPyDep
     const onSize = () => {
       const w = Math.round(el.getBoundingClientRect().width);
       if (w === lastW) return;
-      lastW = w; cancelAnimationFrame(raf); raf = requestAnimationFrame(fitPlots);
+      lastW = w; setNarrow(w > 0 && w < 700); cancelAnimationFrame(raf); raf = requestAnimationFrame(fitPlots);
     };
     if (!("ResizeObserver" in window)) { window.addEventListener("resize", onSize); return () => window.removeEventListener("resize", onSize); }
     const ro = new ResizeObserver(onSize); ro.observe(el);
@@ -16468,7 +16573,7 @@ function LatGraphsCard({ I, set, pyRes, solved, activeLayers, pyDepths, setPyDep
           note: "Nonlinear p-y, M-φ EI " + (pyRes.eiVar ? "on" : "off") + ". M_max = " + fmt(pyRes.Mmax_kft, 1) + " kip·ft at " + fmt(pyRes.zMmax, 1) + " ft below grade; head deflection " + fmt(pyRes.headDefl_in, 3) + " in. Depth below grade (stickup negative). Same solution as the printed Figure F-1." },
           view === "all" ? e(LpileProfilePlot, { records: pyRes.records, height: H, zOffset: stickFt || 0 })
             : e(LatProfileOne, { records: pyRes.records, which: view, stickFt, height: 560 })),
-        e("div", { style: { marginTop: "12px" } }, e(ElevationPlot, { I: I, pyRes: pyRes, height: 480 })));
+        e("div", { style: { marginTop: "12px" } }, e(ElevationPlot, { I: I, pyRes: pyRes, height: 520, narrow: narrow })));
     }
     if (src === "solver") {
       return e(LatPanel, { title: "Linear estimate: deflection and moment vs depth (active case)" },
