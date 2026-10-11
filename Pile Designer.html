@@ -2458,12 +2458,12 @@ function groupPmRows(nRows, s_dia, src) {
 }
 function groupPmTable(I) {
   const nRows = Math.max(1, Math.round(I.groupNrows||1));
-  const dh_in = bondHoleDia(I);
-  const s_in = (I.groupSpacingIn && I.groupSpacingIn>0) ? I.groupSpacingIn : (I.groupSpacingDia||3)*dh_in;
+  const dh_in = groupB(I);                   // F30 (O41): B = the p-y width (micropile: bond-hole dia, unchanged)
+  const s_in = groupCcSpacing(I);            // F30 (O41): c/c spacing as the group workspace lays the piles out
   const s_dia = s_in/Math.max(dh_in,1e-6);
   const src = groupPmSourceOf(I);
   const rows = groupPmRows(nRows, s_dia, src);
-  return { src, srcLabel: GROUP_PM_SRC_LABEL[src], nRows, s_in, s_dia, rows,
+  return { src, srcLabel: GROUP_PM_SRC_LABEL[src], nRows, s_in, s_dia, rows, Blbl: groupBLabel(I),
     avg: rows.reduce((a,b)=>a+b.fm,0)/nRows, belowTable: s_dia < 3 - 1e-9, aboveTable: s_dia > 5 + 1e-9 };
 }
 function groupPmModOf(I) { const v = +(I && I.groupPmMod); return (isFinite(v) && v > 0) ? v : 1.0; }
@@ -2499,6 +2499,28 @@ function pmPickGov(ev) {
 function bondHoleDia(I) {
   return (I.dhBondSeparate && isFinite(I.dhBond) && I.dhBond > 0) ? I.dhBond : I.OD;
 }
+/* F30 (O41, 2026-10-11): group pile width B and c/c spacing s for Module 11 (s/B for the
+   row p-multipliers and the axial efficiency eta, Converse-Labarre theta = atan(B/s), block
+   footprint) and the per-row p-y analysis (groupPmTable).
+   - B = the pile width the p-y analysis uses (buildPySetup): micropile -> bond-hole diameter
+     bondHoleDia(I) (unchanged); H-pile -> the projected width normal to the load, b_f for
+     strong-axis bending, d for weak-axis bending (I.hpBf / I.hpD, as buildPySetup reads them).
+     Before F30 B was bondHoleDia(I) for every pile type, i.e. the micropile casing OD input
+     in H-pile mode.
+   - s = I.groupSpacingIn when entered; otherwise I.groupSpacingDia x the width the group
+     workspace and the case loads (computeCapDist via groupGeom) space the piles with:
+     micropile bondHoleDia(I) (unchanged), H-pile pileWidth(I) (d strong / b_f weak). Before
+     F30 Module 11 used groupSpacingDia x bondHoleDia(I) in H-pile mode too. */
+function groupB(I) {
+  if (I.pileType === "hpile") return I.hpAxis === "weak" ? I.hpD : I.hpBf;
+  return bondHoleDia(I);
+}
+function groupCcSpacing(I) {
+  if (I.groupSpacingIn && I.groupSpacingIn > 0) return I.groupSpacingIn;
+  return (I.groupSpacingDia || 3) * (I.pileType === "hpile" ? pileWidth(I) : bondHoleDia(I));
+}
+// Label of B in the Module 11 / report text: micropile "bond dia" (as before F30), H-pile "B".
+function groupBLabel(I) { return I.pileType === "hpile" ? "B" : "bond dia"; }
 function computeAll(I, opts = {}) {
   const R = {}; // results
   const warn = [];
@@ -3575,10 +3597,12 @@ function computeAll(I, opts = {}) {
   const nRows = Math.max(1, Math.round(I.groupNrows||1));   // rows in load direction
   const nCols = Math.max(1, Math.round(I.groupNcols||1));
   const nPiles = nRows*nCols;
-  const dh_in = dh;                                          // bond/drilled-hole dia (in)
+  // F30 (O41): B = the p-y width (micropile: bond/drilled-hole dia dh, unchanged; H-pile: b_f
+  // strong axis / d weak axis); s = the c/c spacing the group workspace uses (see groupB).
+  const dh_in = groupB(I);                                   // group pile width B (in)
   // spacing: absolute (in) overrides diameters
-  const s_in = (I.groupSpacingIn && I.groupSpacingIn>0) ? I.groupSpacingIn : (I.groupSpacingDia||3)*dh_in;
-  const s_dia = s_in/Math.max(dh_in,1e-6);                  // spacing in diameters
+  const s_in = groupCcSpacing(I);
+  const s_dia = s_in/Math.max(dh_in,1e-6);                  // spacing in diameters (s/B)
 
   // --- 1) Axial efficiency (eta) ---
   // FHWA NHI-05-039: micropiles may be treated as individual elements (eta=1.0) when
@@ -3623,7 +3647,7 @@ function computeAll(I, opts = {}) {
   const block_pass = !grpOn || phiGroupBond >= groupDemand;
 
   R.group = {
-    enable: grpOn, nRows, nCols, nPiles, dh_in, s_in, s_dia,
+    enable: grpOn, nRows, nCols, nPiles, dh_in, s_in, s_dia, Blbl: groupBLabel(I),
     // axial efficiency
     eta, eta_auto, etaOverride: I.groupEtaOverride, spacingOKforEta, spacingThreshDia, thetaDeg, clEff,
     Pn_geo_single: R.geo.Pn_geo, Pn_geo_group, phiPn_geo_group, geoGroup_pass,
@@ -9408,7 +9432,7 @@ function PrintReport({
       React.createElement(GroupPlanSvg, { I: I, cd: r.capDist, print: true })),
     // F29: row p-multipliers (source, warnings) and, with the per-row toggle on, the per-row results
     r.group && r.group.pMultipliers && /*#__PURE__*/React.createElement("div", { style: { fontSize: "8.5px", color: "#16304F", margin: "4px 0" } },
-      "Lateral p-multipliers by row (", r.group.pmSourceLabel, ") at s = ", fmt(r.group.s_dia, 2), " \u00d7 bond dia: ",
+      "Lateral p-multipliers by row (", r.group.pmSourceLabel, ") at s = ", fmt(r.group.s_dia, 2), " \u00d7 " + (r.group.Blbl || "bond dia") + ": ",
       r.group.pMultipliers.map(p => "row " + p.row + " " + fmt(p.fm, 2)).join(", "), ". ",
       r.group.pmBelowTable && r.group.pmSource === "aashto" ? "\u26a0 Spacing below 3B \u2014 outside the table; the 3B values are used. " : "",
       r.group.pmAboveTable && r.group.pmSource === "aashto" ? "Spacing above 5B: the 5B values are used. " : "",
@@ -11159,7 +11183,7 @@ function GroupWorkspaceBody({ I, set, cap, g, rail, cases, activeIdx }) {
   const setPiles = arr => set('groupPiles', arr);
   const genGrid = () => {
     const nR = Math.max(1, Math.round(I.groupNrows || 1)), nC = Math.max(1, Math.round(I.groupNcols || 1));
-    const s = (I.groupSpacingIn && I.groupSpacingIn > 0 ? I.groupSpacingIn : (I.groupSpacingDia || 3) * (g.dh_in)) / 12;
+    const s = g.s_in / 12;   // F30 (O41): the c/c spacing Module 11 and the case loads use (groupCcSpacing)
     const out = []; for (let ri = 0; ri < nR; ri++) for (let ci = 0; ci < nC; ci++) out.push({ x: +(ci * s).toFixed(2), y: +(ri * s).toFixed(2) });
     setPiles(out);
   };
@@ -11464,7 +11488,7 @@ function PmRowTable({ info, print }) {
           e("td", { style: Object.assign({}, td, { color: rw.latPass ? "#2f6f3e" : "#b23b3b" }) }, rw.latPass ? "OK" : "NG"));
       }))),
     e("div", print ? { style: { fontSize: "7.5px", color: "#64748b", marginTop: "2px" } } : { className: "text-[8.5px] text-slate-500 mt-0.5 leading-snug" },
-      "Each row solved with the active case's per-pile loads and p-multiplier = row fₘ × modifier (" + fmt(info.mod || 1, 2) + "); fₘ from " + info.srcLabel + " at s = " + fmt(info.s_dia, 2) + " × bond dia. " +
+      "Each row solved with the active case's per-pile loads and p-multiplier = row fₘ × modifier (" + fmt(info.mod || 1, 2) + "); fₘ from " + info.srcLabel + " at s = " + fmt(info.s_dia, 2) + " × " + (info.Blbl || "bond dia") + ". " +
       "Governing row = largest D/C of flexure / combined (a row that did not converge governs, NG; ties → larger Mₘₐₓ). " +
       "Lateral status = flexure, combined" + " and stability (micropile: also casing extension). The lateral results, graphs and checks shown are the governing row's."));
 }
@@ -11482,7 +11506,7 @@ function GroupPlan({ I, g }) {
     arrowhead: 2, arrowcolor: "#2f6f3e", arrowwidth: 2, text: "load", font: { size: 9, family: PLOT_FONT, color: "#2f6f3e" } });
   const pad = s * 1.4;
   return /*#__PURE__*/React.createElement("div", { className: "bg-white rounded-sm p-2 border border-slate-200 mt-3" },
-    /*#__PURE__*/React.createElement("div", { className: "text-[10px] font-mono-tech text-[var(--blueprint)] uppercase tracking-wider mb-1" }, "Group plan (to scale) \u00b7 s = " + fmt(g.s_dia, 1) + "D"),
+    /*#__PURE__*/React.createElement("div", { className: "text-[10px] font-mono-tech text-[var(--blueprint)] uppercase tracking-wider mb-1" }, "Group plan (to scale) \u00b7 s = " + fmt(g.s_dia, 1) + (g.Blbl === "B" ? "B" : "D")),
     /*#__PURE__*/React.createElement(Plot, {
       data: [{ x: [0], y: [0], mode: "markers", marker: { size: 0.1, color: "rgba(0,0,0,0)" }, hoverinfo: "skip" }],
       layout: baseLayout({ height: Math.min(140 + nR * 34, 300), margin: { l: 8, r: 8, t: 6, b: 6 }, shapes, annotations: anns, showlegend: false,
@@ -14183,7 +14207,7 @@ function App() {
     const g = pmPickGov(ev);
     const info = { rows: ev.map(e => ({ row: e.row, fm: e.fm, pm: e.pm, Mmax: e.Mmax, y0: e.y0, flexR: e.flexR, combR: e.combR, noConv: e.noConv, latPass: e.latPass })),
       gov: g, govRow: ev[g].row, govFm: ev[g].fm, govPm: ev[g].pm, mod: pyRowsRaw.mod, src: pyRowsRaw.tbl.src, srcLabel: pyRowsRaw.tbl.srcLabel,
-      nRows: pyRowsRaw.tbl.nRows, s_dia: pyRowsRaw.tbl.s_dia, belowTable: pyRowsRaw.tbl.belowTable, aboveTable: pyRowsRaw.tbl.aboveTable };
+      nRows: pyRowsRaw.tbl.nRows, s_dia: pyRowsRaw.tbl.s_dia, Blbl: pyRowsRaw.tbl.Blbl, belowTable: pyRowsRaw.tbl.belowTable, aboveTable: pyRowsRaw.tbl.aboveTable };
     return { pyRes: Object.assign({}, ev[g].res, { pmAuto: info }), R: ev[g].R, info };
   }, [I, activeLayers, solved, pyRowsRaw, pcr]);
   const pyRes = pyRowsEval ? pyRowsEval.pyRes : pyResSingle;
@@ -14962,7 +14986,7 @@ function App() {
     "manually override \u03b7"),
     I.groupEtaOverride && /*#__PURE__*/React.createElement("div", { className: "mt-2 max-w-[180px]" },
       /*#__PURE__*/React.createElement(Field, { label: "\u03b7 override", value: I.groupEta, onChange: v => set('groupEta', v) })),
-    /*#__PURE__*/React.createElement("p", { className: "text-[10px] text-slate-500 leading-snug mt-2" }, "Computed \u03b7 = ", fmt(r.group.eta, 3), r.group.spacingOKforEta ? " (spacing \u2265 3\u00d7 bond dia \u2192 individual elements)" : " (Converse-Labarre)", ". Group layout and cap loads are set in the Pile group workspace (Loads & group tab).")), /*#__PURE__*/(I.pileType !== "iab") && /*#__PURE__*/React.createElement(Panel, {
+    /*#__PURE__*/React.createElement("p", { className: "text-[10px] text-slate-500 leading-snug mt-2" }, "Computed \u03b7 = ", fmt(r.group.eta, 3), r.group.spacingOKforEta ? " (spacing \u2265 3\u00d7 " + (r.group.Blbl || "bond dia") + " \u2192 individual elements)" : " (Converse-Labarre)", ". Group layout and cap loads are set in the Pile group workspace (Loads & group tab).")), /*#__PURE__*/(I.pileType !== "iab") && /*#__PURE__*/React.createElement(Panel, {
     title: "Buckling",
     sub: "unsupported span and column parameters (10)"
   }, /*#__PURE__*/React.createElement(Toggle, {
@@ -16878,7 +16902,7 @@ function App() {
     }, "Layout, spacing, and cap loads are defined in the ", /*#__PURE__*/React.createElement("b", null, "Pile Group Workspace"), " (", /*#__PURE__*/React.createElement("button", { type: "button", onClick: () => gotoLoadsTab(setRailTab, "group"), className: "underline text-[var(--blueprint2)]" }, "Loads & group input tab \u2192"), "). The efficiency, p-multiplier, and block-failure checks below use that layout."),
     /*#__PURE__*/React.createElement("div", {
       className: "text-[10px] font-mono-tech text-slate-500 mb-4"
-    }, r.group.nPiles + " piles (" + r.group.nRows + "×" + r.group.nCols + "), spacing = " + fmt(r.group.s_dia, 1) + "× bond dia (" + fmt(r.group.s_in, 1) + " in), bond dia = " + fmt(r.group.dh_in, 2) + " in"),
+    }, r.group.nPiles + " piles (" + r.group.nRows + "×" + r.group.nCols + "), spacing = " + fmt(r.group.s_dia, 1) + "× " + r.group.Blbl + " (" + fmt(r.group.s_in, 1) + " in), " + r.group.Blbl + " = " + fmt(r.group.dh_in, 2) + " in" + (I.pileType === "hpile" ? " (H-pile " + (I.hpAxis === "weak" ? "d, weak-axis" : "b_f, strong-axis") + " bending: the p-y width normal to the load)" : "")),
 
     // === PER-PILE DISTRIBUTION BY LOAD CASE ===
     /*#__PURE__*/React.createElement("div", { className: "rounded-sm border border-slate-200 p-3 mb-3" },
@@ -16892,8 +16916,8 @@ function App() {
       /*#__PURE__*/React.createElement("p", { className: "text-[9.5px] text-slate-600 leading-snug mb-2" }, "FHWA NHI-05-039: micropiles may be treated as individual elements (η = 1.0) when center-to-center spacing ≥ 3× the bond diameter. Below that, a reduction applies (Converse-Labarre efficiency shown)."),
       /*#__PURE__*/React.createElement("div", { className: "text-[10px] font-mono-tech rounded-sm p-1.5 mb-2", style: { background: r.group.spacingOKforEta ? "rgba(47,111,62,0.06)" : "rgba(178,59,59,0.06)", color: "#14304a" } },
         r.group.spacingOKforEta
-          ? /*#__PURE__*/React.createElement(React.Fragment, null, "✓ Spacing ", fmt(r.group.s_dia, 1), "× ≥ 3× bond dia → η = 1.0 permitted (individual elements)")
-          : /*#__PURE__*/React.createElement(React.Fragment, null, "⚠ Spacing ", fmt(r.group.s_dia, 1), "× < 3× bond dia → Converse-Labarre η = ", fmt(r.group.clEff, 3), " (θ=atan(d/s)=", fmt(r.group.thetaDeg, 1), "°)")),
+          ? /*#__PURE__*/React.createElement(React.Fragment, null, "✓ Spacing ", fmt(r.group.s_dia, 1), "× ≥ 3× " + r.group.Blbl + " → η = 1.0 permitted (individual elements)")
+          : /*#__PURE__*/React.createElement(React.Fragment, null, "⚠ Spacing ", fmt(r.group.s_dia, 1), "× < 3× " + r.group.Blbl + " → Converse-Labarre η = ", fmt(r.group.clEff, 3), I.pileType === "hpile" ? " (θ=atan(B/s)=" : " (θ=atan(d/s)=", fmt(r.group.thetaDeg, 1), "°)")),
       /*#__PURE__*/React.createElement("div", { className: "text-[10px] font-mono-tech mb-2" }, "η used = ", /*#__PURE__*/React.createElement("b", null, fmt(r.group.eta, 3)), " → per-pile bond φP", /*#__PURE__*/React.createElement("sub", null, "n"), " = ", fmt(r.group.Pn_geo_single, 0), " → ", /*#__PURE__*/React.createElement("b", null, fmt(r.group.phiPn_geo_group, 0), " kip")),
       /*#__PURE__*/React.createElement(InputsUsed, { tab: "checks", setTab: setRailTab, panelTitle: "Group options",
         items: [["\u03b7 override", I.groupEtaOverride ? "on, \u03b7 = " + fmt(I.groupEta, 3) : "off", ""]] }),
