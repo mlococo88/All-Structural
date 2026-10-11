@@ -2738,6 +2738,43 @@ function biaxDistribute({ nR, nC, VxP, VyP, s_dia, src, mod, solve }) {
   const sum = eq => ({ ok: eq.ok, it: eq.it, nSolves: eq.nSolves, yCap: eq.yCap, Vtot: eq.Vtot, sumNV: eq.sumNV, spread: eq.spread, tolRel: eq.tolRel, tolAbs: eq.tolAbs, failRow: eq.failRow, why: eq.why, V: eq.V, N: eq.N });
   return { ok, why, eqX: sum(eqX), eqY: sum(eqY), fmX, fmY, VxP, VyP, nR, nC, mod, piles, nSolves };
 }
+/* ============================================================
+   F38 (O49, 2026-10-11): SINGLE-DIRECTION GROUP ROWS -- THE ROWS PERPENDICULAR TO THE LOAD
+   ------------------------------------------------------------
+   With the per-row toggle on, a Group row whose per-pile shear is V_x only (|V_x| >
+   BIAX_MIN_V, |V_y| <= BIAX_MIN_V; isVxOnlyShear) is distributed over the grid COLUMNS
+   (constant x): nC rows of nR piles, row f_m = groupPmRows(nC, s/B, source), x-row 1 = the
+   leading column (largest x for +V_x, smallest for -V_x) -- the same rows, f_m and leading /
+   trailing order as the x-direction of a biaxial row (F36). Before F38 it used the grid rows
+   (nR rows of nC piles) like every other case. The distribution itself (eqDeflDistribute,
+   the same p-y solve, axial, head moment and head condition) is unchanged.
+   A V_y-only Group row and every manual case keep the grid rows (F33), unchanged.
+   pmRowDir(c) -> { axis: "x" | "y", V } for a single-direction Group row (display: which
+   line of piles is row 1), else null (manual case, or biaxial -> F36).
+   pmRowsDirX(I, t) -> the groupPmTable t re-cut for the grid columns.
+============================================================ */
+function isVxOnlyShear(Vx, Vy) { return isFinite(Vx) && Math.abs(Vx) > BIAX_MIN_V && !(isFinite(Vy) && Math.abs(Vy) > BIAX_MIN_V); }
+function pmRowDir(c) {
+  if (!c || !c._fromGroup || isBiaxShear(c._Vx, c._Vy)) return null;
+  if (isVxOnlyShear(c._Vx, c._Vy)) return { axis: "x", V: c._Vx };
+  if (isFinite(c._Vy) && Math.abs(c._Vy) > BIAX_MIN_V) return { axis: "y", V: c._Vy };
+  return null;
+}
+function pmRowsDirX(I, t) {
+  const nR = Math.max(1, Math.round(I.groupNrows || 1)), nC = Math.max(1, Math.round(I.groupNcols || 1));
+  const rows = groupPmRows(nC, t.s_dia, t.src);
+  return Object.assign({}, t, { nRows: nC, rows, avg: rows.reduce((a, b) => a + b.fm, 0) / nC, nPer: nR });
+}
+// "x-row 1" / "y-row 1" for a single-direction Group row, "row 1" otherwise (F36 biaxial: its pile label)
+function pmGovTxt(a) { return a && a.govLbl ? a.govLbl : "row " + (a ? a.govRow : ""); }
+function pmRowLbl(row, dir) { return (dir ? dir + "-row " : "row ") + row; }
+// Which piles form row k (1 = leading) of a single-direction Group row on the generated grid
+function pmDirRowPiles(dir, k, nR, nC) {
+  const ids = [];
+  if (dir.axis === "x") { const ci = dir.V > 0 ? nC - k : k - 1; for (let ri = 0; ri < nR; ri++) ids.push(ri * nC + ci + 1); }
+  else { const ri = dir.V > 0 ? nR - k : k - 1; for (let ci = 0; ci < nC; ci++) ids.push(ri * nC + ci + 1); }
+  return ids;
+}
 function bondHoleDia(I) {
   return (I.dhBondSeparate && isFinite(I.dhBond) && I.dhBond > 0) ? I.dhBond : I.OD;
 }
@@ -9113,7 +9150,7 @@ function PrintReport({
       }))),
     /*#__PURE__*/React.createElement("div", { style: { fontSize: "7.5px", color: "#94a3b8", marginTop: "2px" } },
       "Georgiadis (1983) layering · head: " + (I.solverHead === "fixed" ? "fixed" : (I.pyKrot > 0 ? "restrained Kθ=" + fmt(I.pyKrot, 0) + " kip·in/rad" : "free")) +
-      (pyRes && pyRes.pmAuto ? " · p-mult per row (governing row " + pyRes.pmAuto.govRow + ": " + fmt(pyRes.pmAuto.govPm, 2) + ") / y mult " + fmt(I.pyYM, 2) : " · p/y mult " + fmt(I.pyPM, 2) + "/" + fmt(I.pyYM, 2)) +
+      (pyRes && pyRes.pmAuto ? " · p-mult per row (governing " + pmGovTxt(pyRes.pmAuto) + ": " + fmt(pyRes.pmAuto.govPm, 2) + ") / y mult " + fmt(I.pyYM, 2) : " · p/y mult " + fmt(I.pyPM, 2) + "/" + fmt(I.pyYM, 2)) +
       (pyRes && pyRes.ok && pyRes.eiVar && pyRes.mphi ? " · M-φ EI: EI₀ " + fmt(pyRes.mphi.EI0 / 1e6, 2) + "/" + fmt(pyRes.mphi.EI0u / 1e6, 2) + "×10⁶ kip·in², Mcr≈" + fmt(pyRes.Mcr_kft, 1) + " kip·ft" : " · EI basis: " + I.pyEIBasis) +
       (pyRes && pyRes.ok ? " · closure ΣF " + fmt(pyRes.eq.fPct, 2) + "% / ΣM " + fmt(pyRes.eq.mPct, 2) + "%" : ""))),
   // F29: group p-multipliers per row -- the per-row results; the module values are the governing row's
@@ -9631,10 +9668,10 @@ function PrintReport({
       ["Head boundary condition", I.solverHead === "fixed" ? "FIXED \u2014 rotation fully restrained" : ((I.pyKrot || 0) > 0 ? "FREE with rotational spring K\u03b8" : "FREE \u2014 rotation unrestrained (pinned)"), "", ""],
       ["Rotational spring K\u03b8", (I.solverHead !== "fixed" && (I.pyKrot || 0) > 0) ? I.pyKrot : null, "kip\u00b7in/rad", ""],
       ["Axial thrust carried in solve", I.STL, "kip", "P-\u0394 is second-order native"],
-      pyRes && pyRes.pmAuto && pyRes.pmAuto.eq ? ["Lateral load applied (governing row " + pyRes.pmAuto.govRow + ")", pyHeadV(I, pyRes), "kip", (pyRes.pmAuto.biax ? "biaxial: √(Vₓ² + V_y²) of the per-direction equal-deflection shares (case per pile Vₓ = " + fmt(pyRes.pmAuto.biax.VxP, 2) + ", V_y = " + fmt(pyRes.pmAuto.biax.VyP, 2) + " kip)" : "equal-deflection share of the case's " + fmt(I.Plat, 2) + " kip per pile")] : ["Lateral load applied", I.Plat, "kip", ""],
+      pyRes && pyRes.pmAuto && pyRes.pmAuto.eq ? ["Lateral load applied (governing " + pmGovTxt(pyRes.pmAuto) + ")", pyHeadV(I, pyRes), "kip", (pyRes.pmAuto.biax ? "biaxial: √(Vₓ² + V_y²) of the per-direction equal-deflection shares (case per pile Vₓ = " + fmt(pyRes.pmAuto.biax.VxP, 2) + ", V_y = " + fmt(pyRes.pmAuto.biax.VyP, 2) + " kip)" : "equal-deflection share of the case's " + fmt(I.Plat, 2) + " kip per pile" + (pyRes.pmAuto.dir ? " (" + (pyRes.pmAuto.dir.axis === "x" ? "Vₓ only: rows ⟂ x = the grid columns" : "V_y only: rows ⟂ y = the grid rows") + ", row 1 = the leading line of piles in the load direction)" : ""))] : ["Lateral load applied", I.Plat, "kip", ""],
       ["Head moment applied", I.solverHead === "fixed" ? null : I.pyMhead, "kip\u00b7ft", "free head only"],
       ["p-y loading criterion", I.pyCyclic ? "CYCLIC \u2014 degraded resistance" : "STATIC", "", I.pyCyclic ? "offshore/seismic basis" : "usual bridge basis"],
-      pyRes && pyRes.pmAuto ? ["p-multiplier (governing row " + pyRes.pmAuto.govRow + ")", fmt(pyRes.pmAuto.govFm, 2) + " \u00d7 " + fmt(pyRes.pmAuto.mod, 2) + " = " + fmt(pyRes.pmAuto.govPm, 3), "", "row f\u2098 \u00d7 modifier, applied to all p-y curves of this solve"] : ["p-multiplier (group / curve)", I.pyPM, "", "applied to all p-y curves"],
+      pyRes && pyRes.pmAuto ? ["p-multiplier (governing " + pmGovTxt(pyRes.pmAuto) + ")", fmt(pyRes.pmAuto.govFm, 2) + " \u00d7 " + fmt(pyRes.pmAuto.mod, 2) + " = " + fmt(pyRes.pmAuto.govPm, 3), "", "row f\u2098 \u00d7 modifier, applied to all p-y curves of this solve"] : ["p-multiplier (group / curve)", I.pyPM, "", "applied to all p-y curves"],
       ["y-multiplier", I.pyYM, "", ""],
       ["Finite-difference nodes", I.pyNodes, "", "solver discretization"],
       ["Layering correction", (Array.isArray(I.soilLayers) && I.soilLayers.length > 1) ? "Georgiadis (1983) equivalent depth" : null, "", "multi-layer profiles"],
@@ -9784,7 +9821,7 @@ function PrintReport({
         ["Case", "Type", "Mmax (kip\u00b7ft)", "y\u2080 (in)", "D/C geo", "D/C flex", "D/C comb", "D/C buckl", "Result"].map((h2, i) =>
           /*#__PURE__*/React.createElement("td", { key: i, style: { padding: "2px 4px" } }, h2)))),
       /*#__PURE__*/React.createElement("tbody", null, caseRes.rows.map((r0, i) => /*#__PURE__*/React.createElement("tr", { key: i, style: { borderBottom: "1px solid #e2e8f0" } },
-        /*#__PURE__*/React.createElement("td", { style: { padding: "2px 4px" } }, r0.name, r0.pmRow != null ? " \u00b7 governing row " + r0.pmRow + " (f\u2098 = " + fmt(r0.pmFm, 2) + (r0.pmV != null ? ", V = " + fmt(r0.pmV, 2) + " kip" : "") + ")" : ""),
+        /*#__PURE__*/React.createElement("td", { style: { padding: "2px 4px" } }, r0.name, r0.pmRow != null ? " \u00b7 governing " + pmRowLbl(r0.pmRow, r0.pmDir) + " (f\u2098 = " + fmt(r0.pmFm, 2) + (r0.pmV != null ? ", V = " + fmt(r0.pmV, 2) + " kip" : "") + ")" : ""),
         /*#__PURE__*/React.createElement("td", { style: { padding: "2px 4px" } }, r0.type),
         /*#__PURE__*/React.createElement("td", { style: r0.noConv ? { padding: "2px 4px", fontWeight: 700, color: "#B91C1C" } : { padding: "2px 4px" } }, r0.noConv ? "did not converge" : r0.Mmax != null ? fmt(r0.Mmax, 1) : "\u2014"),
         /*#__PURE__*/React.createElement("td", { style: { padding: "2px 4px" } }, r0.y0 != null ? fmt(r0.y0, 3) : "\u2014",
@@ -10372,7 +10409,7 @@ function LoadCasesCard({ cases, updCases, applyCase, runAllCases, caseRes, I, up
         ["case", "Mmax k·ft", "y₀ in", "geo", "flex", "comb", "buckl", "pass"].map((h2, i) => /*#__PURE__*/React.createElement("td", { key: i, className: "pr-2" }, h2)))),
       /*#__PURE__*/React.createElement("tbody", null, rr.map((r0, i) => /*#__PURE__*/React.createElement("tr", { key: i, style: { borderTop: "1px solid #eef2f6" } },
         /*#__PURE__*/React.createElement("td", { className: "py-0.5 pr-2 text-slate-500" }, r0.name, r0.type === "service" ? " (svc)" : r0.type === "extreme" ? " (EE)" : r0.type === "tension" ? " (T)" : "",
-          r0.pmRow != null && /*#__PURE__*/React.createElement("span", { className: "ml-1 text-[8.5px]", style: { color: "#1F3A5F" }, title: "Governing row of " + r0.pmNRows + " (group p-multipliers per row)" }, "\u00b7 row " + r0.pmRow + " (f\u2098 " + fmt(r0.pmFm, 2) + (r0.pmV != null ? ", V " + fmt(r0.pmV, 2) : "") + ")")),
+          r0.pmRow != null && /*#__PURE__*/React.createElement("span", { className: "ml-1 text-[8.5px]", style: { color: "#1F3A5F" }, title: "Governing row of " + r0.pmNRows + " (group p-multipliers per row)" }, "\u00b7 " + pmRowLbl(r0.pmRow, r0.pmDir) + " (f\u2098 " + fmt(r0.pmFm, 2) + (r0.pmV != null ? ", V " + fmt(r0.pmV, 2) : "") + ")")),
         /*#__PURE__*/React.createElement("td", { className: "py-0.5 pr-2", style: r0.noConv ? { color: "#b23b3b", fontWeight: 700 } : undefined }, r0.noConv ? "n/c" : r0.Mmax != null ? fmt(r0.Mmax, 1) : "—"),
         /*#__PURE__*/React.createElement("td", { className: "py-0.5 pr-2" }, r0.y0 != null ? fmt(r0.y0, 3) : "—",
           (() => { const w = pyDeflWarnInfo(r0.y0, r0.D, I); return w && w.warn; })() && /*#__PURE__*/React.createElement("span", { title: "Large head deflection: |y0| > " + fmt(pyDeflWarnFactor(I), 2) + " × D (warning only)", style: { color: "#b7791f", fontWeight: 700 } }, " ⚠ large defl.")),
@@ -11781,17 +11818,28 @@ function PmRowTable({ info, print }) {
   const th = print ? { padding: "2px 4px", textAlign: "left", fontFamily: "monospace", color: "#475569", fontWeight: 600 } : undefined;
   const td = print ? { padding: "2px 4px" } : undefined;
   const eq = info.eq;   // F33: equal-deflection distribution (always present with the per-row toggle on)
+  // F38 (O49): a single-direction Group row: which line of piles is row 1 for its load direction
+  const dir = info.dir || null, dAx = dir ? dir.axis : null;
+  const rowName = rw => dAx ? dAx + "-row " + rw : "Row " + rw;
+  const dirTxt = !dir ? null : (() => {
+    const n = info.rows.length, ids = k => dir.explicit ? "" : " (piles " + pmDirRowPiles(dir, k, dir.nR, dir.nC).map(i => "P" + i).join(", ") + ")";
+    const pos = dir.V > 0;
+    return (dAx === "x"
+      ? "Load direction: Vₓ only (" + fmt(dir.V, 2) + " kip per pile, " + (pos ? "+x" : "−x") + ") → the rows are perpendicular to x: the grid columns (constant x), " + dir.nC + " rows of " + dir.nR + " piles, fₘ for " + dir.nC + " rows. x-row 1 (leading) = the column at " + (pos ? "the largest x" : "the smallest x") + ids(1) + (n > 1 ? "; x-row " + n + " (trailing) = the column at " + (pos ? "the smallest x" : "the largest x") + ids(n) : "") + ". "
+      : "Load direction: V_y only (" + fmt(dir.V, 2) + " kip per pile, " + (pos ? "+y" : "−y") + ") → the rows are perpendicular to y: the grid rows (constant y), " + dir.nR + " rows of " + dir.nC + " piles. y-row 1 (leading) = the row at " + (pos ? "the largest y" : "the smallest y") + ids(1) + (n > 1 ? "; y-row " + n + " (trailing) = the row at " + (pos ? "the smallest y" : "the largest y") + ids(n) : "") + ". ") +
+      (dir.explicit ? "Rows on the generated " + dir.nR + " × " + dir.nC + " grid (the explicit pile coordinates are not used for the row distribution). " : "Pile numbers as in the group plan. ");
+  })();
   const hdr = ["Row", ...(eq ? ["n piles"] : []), "fₘ", ...(showMod ? ["p-mult used"] : []), ...(eq ? ["V per pile (kip)", "share"] : []), "Mₘₐₓ (kip·ft)", eq ? "y₀ = y_cap (in)" : "y₀ (in)", "flexure D/C", "combined D/C", "lateral status"];
   return e("div", { className: print ? "rpt-avoid" : "pd-pmrows mb-2", style: print ? { marginBottom: "8px" } : undefined },
     e("div", print ? { style: { fontSize: "9px", fontWeight: 700, color: "#16304F", marginBottom: "2px" } } : { className: "text-[10px] font-mono-tech text-[var(--blueprint)] uppercase tracking-wider mb-1" },
-      "Group p-multipliers by row" + (eq ? ", equal head deflection" : "") + " — governing row " + info.govRow + " (fₘ = " + fmt(info.govFm, 2) + (showMod ? ", p-mult = " + fmt(info.govPm, 3) : "") + (eq && info.govV != null ? ", V = " + fmt(info.govV, 2) + " kip" : "") + ")"),
+      "Group p-multipliers by row" + (eq ? ", equal head deflection" : "") + (dAx ? " — load along " + dAx : "") + " — governing " + pmGovTxt(info) + " (fₘ = " + fmt(info.govFm, 2) + (showMod ? ", p-mult = " + fmt(info.govPm, 3) : "") + (eq && info.govV != null ? ", V = " + fmt(info.govV, 2) + " kip" : "") + ")"),
     e("table", print ? { style: { width: "100%", borderCollapse: "collapse", fontSize: "8.5px" } } : { className: "w-full text-[9.5px] font-mono-tech", style: { borderCollapse: "collapse" } },
       e("thead", null, e("tr", print ? { style: { borderBottom: "1px solid #cbd5e1" } } : { className: "text-slate-400" },
         hdr.map((h, i) => e(print ? "th" : "td", { key: i, className: print ? undefined : "pr-2", style: th }, h)))),
       e("tbody", null, info.rows.map((rw, i) => {
         const gov = i === info.gov;
         return e("tr", { key: i, style: { borderTop: "1px solid #eef2f6", background: gov ? "rgba(201,98,46,0.10)" : "transparent", fontWeight: gov ? 700 : 400 } },
-          e("td", { className: print ? undefined : "py-0.5 pr-2", style: td }, "Row " + rw.row + (rw.row === 1 ? " (leading)" : "") + (gov ? " ◀ governs" : "")),
+          e("td", { className: print ? undefined : "py-0.5 pr-2", style: td }, rowName(rw.row) + (rw.row === 1 ? " (leading)" : "") + (gov ? " ◀ governs" : "")),
           eq ? e("td", { className: print ? undefined : "pr-2", style: td }, rw.n != null ? String(rw.n) : "—") : null,
           e("td", { className: print ? undefined : "pr-2", style: td }, fmt(rw.fm, 2)),
           showMod ? e("td", { className: print ? undefined : "pr-2", style: td }, fmt(rw.pm, 3)) : null,
@@ -11804,9 +11852,10 @@ function PmRowTable({ info, print }) {
           e("td", { style: Object.assign({}, td, { color: rw.latPass && rw.shearOK !== false ? "#2f6f3e" : "#b23b3b" }) }, rw.latPass && rw.shearOK !== false ? "OK" : "NG" + (rw.ngParts && rw.ngParts.length && !rw.noConv ? " (" + rw.ngParts.join(", ") + ")" : "")));
       }))),
     info.otherNG && info.otherNG.length ? e("div", print ? { style: { fontSize: "8px", color: "#B91C1C", fontWeight: 700, marginTop: "2px" } } : { className: "text-[9px] mt-1 leading-snug font-semibold", style: { color: "#b23b3b" } },
-      "✗ " + info.otherNG.map(o => "Row " + o.row + ": " + (o.parts && o.parts.length ? o.parts.join(", ") : "lateral check") + " NG").join("; ") +
+      "✗ " + info.otherNG.map(o => rowName(o.row) + ": " + (o.parts && o.parts.length ? o.parts.join(", ") : "lateral check") + " NG").join("; ") +
       " — also NG; the governing row shown is the failing row with the largest flexure / combined D/C, and the overall result is NG.") : null,
     e("div", print ? { style: { fontSize: "7.5px", color: "#64748b", marginTop: "2px" } } : { className: "text-[8.5px] text-slate-500 mt-0.5 leading-snug" },
+      dirTxt ? e("b", { className: print ? undefined : "text-[var(--blueprint)]", style: print ? { color: "#16304F" } : undefined }, dirTxt) : null,
       (eq
         ? "Rigid cap, equal head deflection: the case's lateral load " + fmt(eq.Vpile, 2) + " kip × " + eq.N + " piles = " + fmt(eq.Vtot, 2) + " kip is shared so every row has the same head deflection" +
           (eq.ok ? " y_cap = " + fmt(eq.yCap, 4) + " in; Σ n·V = " + fmt(eq.sumNV, 3) + " kip, largest row y₀ difference from y_cap " + (eq.spread != null && Math.abs(eq.yCap) > 1e-12 ? (eq.spread / Math.abs(eq.yCap) * 100).toFixed(4) + " %" : "0") + " (tolerance " + fmt(eq.tolRel * 100, 2) + " % of y_cap or " + Number(eq.tolAbs).toFixed(5) + " in); " + eq.it + " iteration" + (eq.it === 1 ? "" : "s") + ", " + eq.nSolves + " extra p-y solves. "
@@ -13973,22 +14022,29 @@ function App() {
   // distribution (biaxDistribute) instead of the F33 resultant over the rows (pyRowsRaw).
   const actCase = cases[activeIdx];
   const actBiax = (pmAutoOn && I.lateralSource === "py" && actCase && actCase._fromGroup && isBiaxShear(actCase._Vx, actCase._Vy)) ? { Vx: actCase._Vx, Vy: actCase._Vy } : null;
+  // F38 (O49): a single-direction Group row -> its load direction; V_x only -> the grid columns
+  const actDir = (pmAutoOn && I.lateralSource === "py" && !actBiax) ? pmRowDir(actCase) : null;
+  const actDirX = !!(actDir && actDir.axis === "x");
   // F29 / F33 (moved below the case list by F36 so it can skip a biaxial active case)
   const pyRowsRaw = useMemo(() => {
     if (I.lateralSource !== "py" || !pmAutoOn || actBiax) return null;   // F36: a biaxial Group row -> pyBiaxRaw
     const mod = groupPmModOf(I);
-    const rows0 = pmTblApp.rows.map(p => ({ row: p.row, fm: p.fm, pm: p.fm * mod, res: solvePyResFor(p.fm * mod) }));
+    // F38 (O49): a V_x-only Group row -> the grid columns (nC rows of nR piles, f_m for nC rows)
+    const tbl = actDirX ? pmRowsDirX(I, pmTblApp) : pmTblApp;
+    const rows0 = tbl.rows.map(p => ({ row: p.row, fm: p.fm, pm: p.fm * mod, res: solvePyResFor(p.fm * mod) }));
     // F33 (O42): rigid-cap equal-deflection distribution of the case's lateral load over the rows
-    // (n_k = groupNcols piles per row); every row's solve at its own shear V_k. See eqDeflDistribute.
+    // (n_k = groupNcols piles per row; F38: groupNrows for a V_x-only Group row); every row's
+    // solve at its own shear V_k. See eqDeflDistribute.
     const nC = Math.max(1, Math.round(I.groupNcols || 1));
-    const eq = eqDeflDistribute({ nPer: rows0.map(() => nC), Vpile: I.Plat || 0, init: rows0.map(rw => rw.res), solve: (k, V) => solvePyResFor(rows0[k].pm, V) });
+    const nPer = actDirX ? tbl.nPer : nC;
+    const eq = eqDeflDistribute({ nPer: rows0.map(() => nPer), Vpile: I.Plat || 0, init: rows0.map(rw => rw.res), solve: (k, V) => solvePyResFor(rows0[k].pm, V) });
     const rows = rows0.map((rw, k) => {
       const ncRes = { ok: false, noConv: true, msg: PY_NC_MSG, why: ["equal-deflection distribution: " + eq.why] };
       const res = eq.ok ? eq.res[k] : ((eq.failRow == null || eq.failRow === k || !eq.res[k]) ? ncRes : eq.res[k]);
-      return Object.assign({}, rw, { V: eq.V[k] != null ? eq.V[k] : (I.Plat || 0), n: nC, res });
+      return Object.assign({}, rw, { V: eq.V[k] != null ? eq.V[k] : (I.Plat || 0), n: nPer, res });
     });
-    return { tbl: pmTblApp, mod, rows, eq };
-  }, [I.lateralSource, I.OD, I.dhBond, I.dhBondSeparate, I.tc, I.corr, I.E, I.fyc, I.fyb, I.Ab, I.fcGrout, I.solverFree, I.Lcased, I.Lplunge, I.LbProvided, JSON.stringify(I.soilLayers), I.pyCyclic, I.pyEIBasis, I.pyEIvar, I.pyPM, I.pyYM, I.pyNodes, I.pyMhead, I.pyKrot, I.pyCurveDepth, I.Plat, I.STL, I.solverHead, EI, EI_composite_kipin2, EI_aashto_kipin2, EI_uncased_kipin2, I.pileType, I.hpD, I.hpBf, I.hpTf, I.hpTw, I.hpFy, I.hpAxis, I.solverLembed, I.bucklingEnable, I.LuFree, pmAutoOn, pmRowKey, I.groupNcols, !!actBiax]);
+    return { tbl, mod, rows, eq };
+  }, [I.lateralSource, I.OD, I.dhBond, I.dhBondSeparate, I.tc, I.corr, I.E, I.fyc, I.fyb, I.Ab, I.fcGrout, I.solverFree, I.Lcased, I.Lplunge, I.LbProvided, JSON.stringify(I.soilLayers), I.pyCyclic, I.pyEIBasis, I.pyEIvar, I.pyPM, I.pyYM, I.pyNodes, I.pyMhead, I.pyKrot, I.pyCurveDepth, I.Plat, I.STL, I.solverHead, EI, EI_composite_kipin2, EI_aashto_kipin2, EI_uncased_kipin2, I.pileType, I.hpD, I.hpBf, I.hpTf, I.hpTw, I.hpFy, I.hpAxis, I.solverLembed, I.bucklingEnable, I.LuFree, pmAutoOn, pmRowKey, I.groupNcols, !!actBiax, actDirX, I.groupNrows, I.groupSpacingDia, I.groupSpacingIn]);
   const pyBiaxRaw = useMemo(() => {
     if (I.lateralSource !== "py" || !pmAutoOn || !actBiax) return null;
     const t = groupPmTable(I), mod = groupPmModOf(I);
@@ -14098,12 +14154,16 @@ function App() {
           // a row that did not converge governs; ties -> larger Mmax, then smaller p-multiplier).
           // F33 (O42): rigid-cap equal-deflection distribution of the case's lateral load over the
           // rows (the same eqDeflDistribute call as Module 02), then each row at its own shear.
+          // F38 (O49): a V_x-only Group row -> the grid columns (nC rows of nR piles), as Module 02.
+          const cDir = pmRowDir(c);
           const nC = Math.max(1, Math.round(I.groupNcols || 1));
+          const pmSpecC = (cDir && cDir.axis === "x") ? (() => { const tX = pmRowsDirX(I, groupPmTable(I)), modX = groupPmModOf(I); return tX.rows.map(p => ({ row: p.row, fm: p.fm, pm: p.fm * modX })); })() : pmSpec;
+          const nPerC = (cDir && cDir.axis === "x") ? Math.max(1, Math.round(I.groupNrows || 1)) : nC;
           const toRes = sol => ({ ok: !!(sol && sol.res && !sol.noConv), headDefl_in: sol && sol.res ? sol.res.y[0] : NaN, sol });
-          const eq = eqDeflDistribute({ nPer: pmSpec.map(() => nC), Vpile: c.Plat || 0, init: pmSpec.map(sp => toRes(caseSolve(sp.pm, c.Plat))),
-            solve: (k, V) => toRes(caseSolve(pmSpec[k].pm, V)) });
+          const eq = eqDeflDistribute({ nPer: pmSpecC.map(() => nPerC), Vpile: c.Plat || 0, init: pmSpecC.map(sp => toRes(caseSolve(sp.pm, c.Plat))),
+            solve: (k, V) => toRes(caseSolve(pmSpecC[k].pm, V)) });
           const ncSol = { noConv: true, res: null, why: ["equal-deflection distribution: " + eq.why] };
-          const ev = pmSpec.map((sp, k) => {
+          const ev = pmSpecC.map((sp, k) => {
             const sol = eq.ok ? eq.res[k].sol : ((eq.failRow == null || eq.failRow === k || !eq.res[k]) ? ncSol : eq.res[k].sol);
             const Vk = eq.V[k] != null ? eq.V[k] : (c.Plat || 0);
             return Object.assign(runOne(sp.pm, Vk, sol), { _sp: sp, _V: Vk });
@@ -14114,6 +14174,7 @@ function App() {
             dc: e.noConv ? Infinity : (c.type === "service" ? (eq.ok ? 0 : (e.y0 != null ? Math.abs(e.y0) : 0)) : Math.max(e.flexR != null && isFinite(e.flexR) ? e.flexR : 0, e.combR != null && isFinite(e.combR) ? e.combR : 0)) })));
           // F33: a row other than the governing one that fails makes the case NG (service: equal y0)
           const out = Object.assign({}, ev[g], { pass: c.type === "service" ? ev[g].pass : ev.every(e => e.pass), pmRow: ev[g]._sp.row, pmFm: ev[g]._sp.fm, pmPm: ev[g]._sp.pm, pmNRows: ev.length, pmV: ev[g]._V,
+            ...(cDir ? { pmDir: cDir.axis } : {}),   // F38 (O49): load direction (display)
             pmEq: { ok: eq.ok, it: eq.it, nSolves: eq.nSolves, yCap: eq.yCap, Vtot: eq.Vtot, sumNV: eq.sumNV, spread: eq.spread, failRow: eq.failRow, why: eq.why },
             pmRows: ev.map(e => ({ row: e._sp.row, fm: e._sp.fm, pm: e._sp.pm, V: e._V, Mmax: e.Mmax, y0: e.y0, flexR: e.flexR, combR: e.combR, noConv: e.noConv, pass: e.pass })) });
           delete out._sp; delete out._V; delete out.latFail;
@@ -14674,9 +14735,12 @@ function App() {
       eq: eq ? { ok: eq.ok, it: eq.it, nSolves: eq.nSolves, yCap: eq.yCap, Vtot: eq.Vtot, sumNV: eq.sumNV, spread: eq.spread, tolRel: eq.tolRel, tolAbs: eq.tolAbs, failRow: eq.failRow, why: eq.why, Vpile: I.Plat || 0, N: eq.N } : null,
       govV: ev[g].V,
       gov: g, govRow: ev[g].row, govFm: ev[g].fm, govPm: ev[g].pm, mod: pyRowsRaw.mod, src: pyRowsRaw.tbl.src, srcLabel: pyRowsRaw.tbl.srcLabel,
+      // F38 (O49): load direction of a single-direction Group row (display: which line of piles is row 1)
+      dir: actDir ? { axis: actDir.axis, V: actDir.V, nR: Math.max(1, Math.round(I.groupNrows || 1)), nC: Math.max(1, Math.round(I.groupNcols || 1)), explicit: Array.isArray(I.groupPiles) && I.groupPiles.length > 0 } : null,
+      govLbl: actDir ? pmRowLbl(ev[g].row, actDir.axis) : null,
       nRows: pyRowsRaw.tbl.nRows, s_dia: pyRowsRaw.tbl.s_dia, Blbl: pyRowsRaw.tbl.Blbl, belowTable: pyRowsRaw.tbl.belowTable, aboveTable: pyRowsRaw.tbl.aboveTable };
     return { pyRes: Object.assign({}, ev[g].res, { pmAuto: info }), R: otherNG.length ? Object.assign({}, ev[g].R, { allPass: false, pmOtherRowNG: otherNG }) : ev[g].R, info };
-  }, [I, activeLayers, solved, pyRowsRaw, pyBiaxRaw, pcr]);
+  }, [I, activeLayers, solved, pyRowsRaw, pyBiaxRaw, pcr, actDir && actDir.axis, actDir && actDir.V]);
   const pyRes = pyRowsEval ? pyRowsEval.pyRes : pyResSingle;
   const r = useMemo(() => {
     if (pyRowsEval) return pyRowsEval.R;
@@ -18176,7 +18240,7 @@ function LatGraphsCard({ I, set, pyRes, solved, activeLayers, pyDepths, setPyDep
         e("div", { className: "pd-gfx-title" }, "Lateral analysis graphs"),
         e("div", { className: "pd-gfx-sub" }, "Module 02 · basis: " + basis + " · active load case" +
           // F29: with the group p-multipliers applied per row, the graphs are the governing row's solution
-          (isPy && pyRes && pyRes.pmAuto ? " · governing row " + pyRes.pmAuto.govRow + " of " + pyRes.pmAuto.nRows + " (f\u2098 = " + fmt(pyRes.pmAuto.govFm, 2) + (Math.abs(pyRes.pmAuto.mod - 1) > 1e-9 ? ", p-multiplier " + fmt(pyRes.pmAuto.govPm, 3) : "") + ")" : "")))),
+          (isPy && pyRes && pyRes.pmAuto ? " · governing " + pmGovTxt(pyRes.pmAuto) + " of " + pyRes.pmAuto.nRows + " (f\u2098 = " + fmt(pyRes.pmAuto.govFm, 2) + (Math.abs(pyRes.pmAuto.mod - 1) > 1e-9 ? ", p-multiplier " + fmt(pyRes.pmAuto.govPm, 3) : "") + ")" : "")))),
     e("div", { className: "pd-gfx-body" },
       e("div", { className: "pd-lg-sub", role: "tablist", "aria-label": "Lateral graphs" }, ids.map((id, i) =>
         e("button", { key: id, id: "lgtab-" + id, type: "button", role: "tab", "aria-selected": cur === id ? "true" : "false", "aria-controls": "lgpanel",
