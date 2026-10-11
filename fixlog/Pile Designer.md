@@ -9316,6 +9316,221 @@ index 5d79b4e..8471707 100644
          items: [["\u03b7 override", I.groupEtaOverride ? "on, \u03b7 = " + fmt(I.groupEta, 3) : "off", ""]] }),
 ```
 
+## 2026-10-11 — PR: claude/pile-group3 (PR link added after merge)
+
+Engineer's decisions 2026-10-11 (O42, O43 and the H-pile "spacing × dia"): "yes go ahead with all three, only when group is used." All three apply only in Pile group mode (`groupEnable` on); single-pile results are bit-identical (proven, see How verified). F33 applies only with "Apply group p-multipliers automatically (per row)" on.
+
+### F31. H-pile groups: "spacing × dia" means × B (the p-y width normal to the load), in the workspace, the Group ▦ case loads and Module 11; η threshold with a round-off tolerance   [calc change] [H-pile groups with the spacing given in diameters only; micropile, integral abutment, explicit spacing in inches and single piles bit-identical (proven). Strong axis: piles 6.3 % farther apart → per-pile axial from cap moments lower on the far piles / higher on the near ones (LESS or MORE conservative per pile: in the check case the governing pile's axial goes up, 178.8 → 184.8 kip, MORE conservative); η at exactly 3B 0.747 → 1.000 (LESS conservative); block footprint larger (LESS conservative). Weak axis: s/B 3.19 → 3.00 → row f_m and η lower (MORE conservative)]
+
+- **Where:**
+  - New top-level `groupWsSpacing(I)` after `groupCcSpacing` (anchor `function groupWsSpacing(I) {`).
+  - `groupCcSpacing` (anchor `return (I.groupSpacingDia || 3) * (I.pileType === "hpile" ? groupB(I) : bondHoleDia(I));`): H-pile width `pileWidth(I)` → `groupB(I)`.
+  - The four workspace / case-load layouts that spaced the grid at `groupSpacingDia × pileWidth(I)`: `GroupLayoutView` (`const geom = …`), `GroupCasesTable` (`const geom = …`), `GroupWorkspaceBody` (`const groupGeomLocal = …`), `App` (`const groupGeom = …`, used by the Group ▦ case rows); and the hand-off bootstrap `centroid(I)` (anchor `var g={nRows:I.groupNrows,nCols:I.groupNcols,s_in:`), all now `groupWsSpacing(I)`.
+  - `App` `groupCasesEmitted` memo dependency list: `I.pileType, I.hpAxis, I.hpBf, I.hpD` added.
+  - `computeAll` η threshold (anchor `const spacingOKforEta = s_dia >= spacingThreshDia - 1e-9;`).
+  - Text: workspace label "spacing ×B" (H-pile) with a tooltip giving B; report Group inputs row "Spacing (diameters) … ×B, B = 14.70 in (H-pile p-y width)".
+- **Problem:** (1) In H-pile mode the workspace, the plan and the Group ▦ case loads spaced a grid given in diameters at `groupSpacingDia × pileWidth(I)` = × d (strong axis) or × b_f (weak axis), the section dimension in the bending plane. F30 made Module 11's s/B use B = the p-y width normal to the load (b_f strong, d weak), so "3 × dia" was 41.49 / 14.70 = 2.82B strong axis (below the AASHTO table, amber note, η reduced) and 44.10 / 13.83 = 3.19B weak axis. Engineer: "spacing × dia" for an H-pile means × B. (2) The η threshold test `s/B ≥ 3` had no tolerance: 3 × 14.70 / 14.70 = 2.9999999999999996 in floating point, so a spacing entered as exactly 3B would still get the Converse-Labarre reduction. (3) Found while checking: the Group ▦ case-load memo did not list the pile type or the H-pile dimensions among its dependencies, so after switching Micropile → H-pile (or changing b_f / d / the axis) the Group ▦ rows kept the old layout's loads until another group input changed. A project opened in H-pile mode was not affected.
+- **Before:**
+
+```js
+function groupCcSpacing(I) {
+  if (I.groupSpacingIn && I.groupSpacingIn > 0) return I.groupSpacingIn;
+  return (I.groupSpacingDia || 3) * (I.pileType === "hpile" ? pileWidth(I) : bondHoleDia(I));
+}
+// GroupLayoutView / GroupCasesTable / GroupWorkspaceBody / App (groupGeom):
+  s_in: (I.groupSpacingIn && I.groupSpacingIn > 0 ? I.groupSpacingIn : (I.groupSpacingDia || 3) * pileWidth(I))
+// bootstrap centroid(I):
+  s_in:(I.groupSpacingIn&&I.groupSpacingIn>0?I.groupSpacingIn:(I.groupSpacingDia||3)*w)
+// computeAll
+  const spacingOKforEta = s_dia >= spacingThreshDia;
+// groupCasesEmitted deps: ..., I.groupNrows, I.groupNcols, I.groupSpacingDia, I.groupSpacingIn, I.OD]);
+```
+
+- **After:**
+
+```js
+function groupCcSpacing(I) {
+  if (I.groupSpacingIn && I.groupSpacingIn > 0) return I.groupSpacingIn;
+  return (I.groupSpacingDia || 3) * (I.pileType === "hpile" ? groupB(I) : bondHoleDia(I));
+}
+function groupWsSpacing(I) {
+  if (I.groupSpacingIn && I.groupSpacingIn > 0) return I.groupSpacingIn;
+  return (I.groupSpacingDia || 3) * (I.pileType === "hpile" ? groupB(I) : pileWidth(I));
+}
+// GroupLayoutView / GroupCasesTable / GroupWorkspaceBody / App (groupGeom):
+  s_in: groupWsSpacing(I)
+// bootstrap centroid(I):
+  s_in:(typeof groupWsSpacing==='function')?groupWsSpacing(I):(I.groupSpacingIn&&I.groupSpacingIn>0?I.groupSpacingIn:(I.groupSpacingDia||3)*w)
+// computeAll
+  const spacingOKforEta = s_dia >= spacingThreshDia - 1e-9;
+// groupCasesEmitted deps: ..., I.groupSpacingDia, I.groupSpacingIn, I.OD, I.pileType, I.hpAxis, I.hpBf, I.hpD]);
+```
+
+- **What changed (H-pile, spacing in diameters):** the c/c spacing is `groupSpacingDia × B` (B = `groupB(I)`: b_f strong axis, d weak axis) everywhere: Module 11 (s/B, f_m, η, θ, block footprint, rigid-cap table), "Generate grid" (writes `R.group.s_in`), the plan, the Group ▦ case loads (per-pile axial / shear from `computeCapDist`), the Loads & group per-pile table and the foundation-load import's default load location (group centroid). So "3 × dia" is exactly 3.00B. Micropile: `groupWsSpacing` = `groupSpacingDia × pileWidth(I)` = × casing OD and `groupCcSpacing` = × bond-hole diameter, exactly as before (O44 still open). Spacing entered in inches: used as entered (unchanged).
+- **Governing provision:** AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024), Art. 10.7.2.4 and Table 10.7.2.4-1 (P_m by row vs c/c spacing in pile widths B — verify table number and values, as F29); FHWA NHI-05-039 (η = 1.0 at spacing ≥ 3 × diameter) and the Converse-Labarre formula, as before. No formula, factor or table value changed: only the spacing the H-pile layout uses, and the round-off tolerance (1e-9, the same as the p-multiplier table's 3B / 5B tests) on the η threshold.
+- **§4 callouts (worked checks).** 2 columns × 3 rows, HP 14×89 defaults (d 13.83 in, b_f 14.70 in), spacing "3 × dia", source AASHTO, "Apply group p-multipliers automatically" on, cases Manual Str (STL 80 kip, V 3 kip per pile, M 0), Svc I, Manual EE, Group ▦ Str I (cap P 480 kip, V_x 18 kip at (0.875, 1.75) ft) and Group ▦ Ext I (P 360, V_x 24), default soil (sand γ 120 pcf, φ 32°, k 90 pci), micropile bond inputs at the defaults (the η / block checks still use them in F31; F32 changes that). Project saved in H-pile mode (so main's Group ▦ rows are not stale, see Problem 3).
+  - **(a) Strong axis (B = b_f = 14.70 in).**
+
+    | | Before | After |
+    |---|---|---|
+    | s (in) | 3 × d = 3 × 13.83 = 41.49 | 3 × B = 3 × 14.70 = **44.10** |
+    | s/B | 41.49 / 14.70 = 2.822 (< 3B: amber note, 3B values) | 44.10 / 14.70 = **3.000** (2.9999999999999996 in floating point; no below-3B note) |
+    | f_m rows 1 / 2 / 3 | 0.80 / 0.40 / 0.30 | 0.80 / 0.40 / 0.30 (no change) |
+    | η | θ = atan(14.70/41.49) = 19.509°; 1 − (19.509/90)·[(2−1)·3 + (3−1)·2]/6 = **0.747** | s/B ≥ 3 → **1.000** (without the tolerance the round-off would give Converse-Labarre θ = 18.435°, η = 0.761) |
+    | φηP_n,bond (kip) vs STL 80 | 0.70 × 0.747 × 109.96 = 57.50 (NG) | 0.70 × 1.000 × 109.96 = **76.97** (NG) |
+    | Block footprint (in) / perimeter | (41.49 + 14.70) × (82.98 + 14.70) → 25.65 ft | (44.10 + 14.70) × (88.20 + 14.70) = 58.80 × 102.90 → **26.95 ft** |
+    | Block P_n = perimeter × β × L_b (β 2.50 ksf, L_b 24 ft) | 307.74 in × 0.017361 ksi × 12 × 24 = 1538.7 kip | 323.40 × 0.017361 × 12 × 24 = **1617.0 kip** |
+    | φP_n,group = 0.70 · min(P_block, 6 × 109.96 × η) vs ΣSTL 480 | 0.70 × min(1538.7, 492.9) = 345.0 (NG) | 0.70 × min(1617.0, 659.8) = **461.8** (NG) |
+    | Grid / "Generate grid" (ft) | 3.4575 c/c | **3.675** c/c |
+    | Group ▦ Str I per-pile axial, pile 1 (0, 0) / pile 6 (3.675, 7.35) | 178.77 / −18.77 kip | **184.76 / −24.76** kip |
+    | Envelope Group ▦ Str I (governing row 3): STL / M_max / y₀ / flexure / combined | 178.77 / 21.65 / 0.171 / 0.0403 / 0.139 | 184.76 / 21.72 / 0.1716 / 0.0404 / **0.240** |
+    | Envelope Group ▦ Ext I (row 3): M_max / combined | 29.83 / 0.1296 | 29.90 / 0.1322 |
+    | Manual cases (per-pile loads entered), per-row M_max, Module 02 | 17.40 / 19.12 / 20.61 kip·ft (row 3 governs) | identical |
+
+    Hand check, pile 1, Group ▦ Str I after: centroid (1.8375, 3.675) ft; e_x = 0.875 − 1.8375 = −0.9625 ft, e_y = 1.75 − 3.675 = −1.925 ft; Σx² = 6 × 1.8375² = 20.258 ft², Σy² = 4 × 3.675² = 54.023 ft²; P₁ = 480/6 + 480 × (−0.9625)(−1.8375)/20.258 + 480 × (−1.925)(−3.675)/54.023 = 80 + 41.91 + 62.86 = **184.76 kip** ✓. The combined D/C step 0.139 → 0.240 is the AASHTO 6.9.2.2 interaction changing branch: P_u/P_r = 184.76/903 = 0.205 ≥ 0.2 → P_u/P_r + 8/9 · M_u/M_r = 0.205 + 0.889 × 0.0404 = 0.240 (before: 178.77/903 = 0.198 < 0.2 → P_u/(2P_r) + M_u/M_r = 0.099 + 0.040 = 0.139).
+  - **(b) Weak axis (B = d = 13.83 in).**
+
+    | | Before | After |
+    |---|---|---|
+    | s (in) | 3 × b_f = 44.10 | 3 × B = **41.49** |
+    | s/B | 3.189 | **3.000** |
+    | f_m rows 1 / 2 / 3 | 0.819 / 0.443 / 0.338 | **0.80 / 0.40 / 0.30** |
+    | Governing row 3, Manual Str: M_max / y₀ / flexure / combined | 19.89 / 0.3183 / 0.1077 / 0.1519 | **20.53 / 0.3465 / 0.1111 / 0.1554** (M_max +3.2 %) |
+    | Envelope Manual EE (row 3): M_max / y₀ | 27.61 / 0.4681 | 28.47 / 0.5077 |
+    | Group ▦ Str I pile 1 axial / envelope M_max / combined | 184.76 / 22.41 / 0.312 | 178.77 / 23.12 / 0.224 |
+    | η | 1.000 (s/B ≥ 3) | 1.000 |
+    | Block perimeter / P_n | 26.66 ft / 1599.6 kip | 25.36 ft / 1521.3 kip |
+
+    MORE conservative for the lateral rows (f_m lower); the group axial on pile 1 drops (piles closer together, so the cap moment gives a smaller axial on the far piles) — LESS conservative for that pile's axial, and the combined D/C drops back below the 0.2 branch.
+  - **(c) Spacing entered in inches (36 in), H-pile, and every micropile project:** no change (bit-identical, see How verified).
+  - **Conservatism summary:** strong axis at a spacing in diameters: piles 6.3 % farther apart; η at "3 × dia" 0.747 → 1.000 and the block footprint larger (LESS conservative for the group axial checks; F32 then changes their capacity basis); the governing Group ▦ pile's axial up 3.4 % (MORE conservative for that pile). Weak axis: 6.0 % closer, s/B 3.19 → 3.00, row f_m lower (MORE conservative laterally), corner-pile axial lower (LESS conservative). The η tolerance only matters when s/B is within 1e-9 of 3.
+- **Pure refactor parts (no result change claimed):** micropile: `groupWsSpacing(I)` = the old inline expression (`groupSpacingDia × pileWidth(I)` = × OD), `groupCcSpacing(I)` unchanged; the extra memo dependencies only make the Group ▦ rows recompute when those inputs change (no change for a project opened as saved). Checked by the main-vs-branch runs below.
+- **How verified:**
+  - `node --check` on the four inline scripts.
+  - Headless Chromium (pinned React 18.3.1 / Plotly 2.32.0 / KaTeX 0.16.9 / three r128 served locally), origin/main (#119) vs this commit, each run: load the project, "Run all cases", then every case made active with the envelope re-run; compared the full `R.group`, `R.capDist` piles, M_max / φM_n / interaction / H-pile M_u, the per-row info, envelope rows, module statuses, check strip, Module 02 / 11 / summary / report text and autosave.
+    - **Bit-identical (0 numeric, 0 text differences):** micropile group with the toggle on (3 × dia), H-pile group at an explicit 36 in, micropile single pile.
+    - **H-pile single pile:** displayed text, statuses, checks identical; only the unused `R.group` / `R.capDist` internals differ (spacing).
+    - **H-pile groups, strong and weak axis (projects saved in H-pile mode):** differences exactly as (a) and (b): s, s/B, f_m, η, block, rigid-cap layout, Group ▦ case loads and their envelope rows; Module 02 per-row results for the manual cases unchanged (strong axis).
+  - Saved data: no key, field or format changed.
+- **Other copies:** none.
+- **Re-applying by hand:** unified diff below (CRLF stripped).
+
+```diff
+--- a/Pile Designer.html
++++ b/Pile Designer.html
+@@ -686,7 +686,7 @@
+   /* pile-group centroid of the current layout (read-only use of the app's own computeCapDist) */
+   function centroid(I){
+     try{ var w=(typeof pileWidth==='function')?pileWidth(I):0;
+-      var g={nRows:I.groupNrows,nCols:I.groupNcols,s_in:(I.groupSpacingIn&&I.groupSpacingIn>0?I.groupSpacingIn:(I.groupSpacingDia||3)*w)};
++      var g={nRows:I.groupNrows,nCols:I.groupNcols,s_in:(typeof groupWsSpacing==='function')?groupWsSpacing(I):(I.groupSpacingIn&&I.groupSpacingIn>0?I.groupSpacingIn:(I.groupSpacingDia||3)*w)}; /* F31: H-pile x B */
+       var cd=computeCapDist(Object.assign({},I,{capIncludeWeight:false,stemEnable:false}),g,[]); return {x:r6(cd.cx),y:r6(cd.cy),n:cd.n}; }
+     catch(e){ return {x:0,y:0,n:0}; }
+   }
+@@ -2510,14 +2510,25 @@
+    - s = I.groupSpacingIn when entered; otherwise I.groupSpacingDia x the width the group
+      workspace and the case loads (computeCapDist via groupGeom) space the piles with:
+      micropile bondHoleDia(I) (unchanged), H-pile pileWidth(I) (d strong / b_f weak). Before
+-     F30 Module 11 used groupSpacingDia x bondHoleDia(I) in H-pile mode too. */
++     F30 Module 11 used groupSpacingDia x bondHoleDia(I) in H-pile mode too.
++     F31 (2026-10-11): H-pile "spacing x dia" = x B (groupB), here and in the workspace
++     (groupWsSpacing), so s/B = groupSpacingDia exactly. */
+ function groupB(I) {
+   if (I.pileType === "hpile") return I.hpAxis === "weak" ? I.hpD : I.hpBf;
+   return bondHoleDia(I);
+ }
+ function groupCcSpacing(I) {
+   if (I.groupSpacingIn && I.groupSpacingIn > 0) return I.groupSpacingIn;
+-  return (I.groupSpacingDia || 3) * (I.pileType === "hpile" ? pileWidth(I) : bondHoleDia(I));
++  return (I.groupSpacingDia || 3) * (I.pileType === "hpile" ? groupB(I) : bondHoleDia(I));
++}
++/* F31 (2026-10-11): the c/c spacing the group workspace, the Group rows' per-pile loads
++   (groupGeom), the plan and the hand-off centroid lay the piles out at. An explicit
++   spacing in inches is used as entered. "spacing x dia": H-pile -> x B (groupB: b_f strong
++   axis, d weak axis), so "3 x dia" is exactly 3.00B; micropile -> x casing OD (pileWidth,
++   unchanged; see O44). Before F31 the H-pile used pileWidth(I) (d strong / b_f weak). */
++function groupWsSpacing(I) {
++  if (I.groupSpacingIn && I.groupSpacingIn > 0) return I.groupSpacingIn;
++  return (I.groupSpacingDia || 3) * (I.pileType === "hpile" ? groupB(I) : pileWidth(I));
+ }
+ // Label of B in the Module 11 / report text: micropile "bond dia" (as before F30), H-pile "B".
+ function groupBLabel(I) { return I.pileType === "hpile" ? "B" : "bond dia"; }
+@@ -3609,7 +3620,9 @@
+   // c/c spacing >= ~3x bond diameter (also a ~40 in / bond-dia guidance). Below that,
+   // apply a reduction. Converse-Labarre efficiency formula used as the reduction basis.
+   const spacingThreshDia = 3.0;
+-  const spacingOKforEta = s_dia >= spacingThreshDia;
++  // F31: compared with a 1e-9 tolerance (as the p-multiplier table's 3B / 5B tests), so a spacing
++  // entered as exactly 3 x B is not put below 3B by round-off (e.g. 3 x 14.70 / 14.70 = 2.9999999999999996).
++  const spacingOKforEta = s_dia >= spacingThreshDia - 1e-9;
+   // Converse-Labarre: eta = 1 - (theta/90)*[ (n-1)m + (m-1)n ] / (m*n),  theta=atan(d/s)
+   const thetaDeg = Math.atan(dh_in/Math.max(s_in,1e-6))*180/PI;
+   const clEff = 1 - (thetaDeg/90)*(((nCols-1)*nRows + (nRows-1)*nCols)/(nRows*nCols));
+@@ -6061,7 +6074,7 @@
+   const actGc = act && act._fromGroup && act._groupCaseId != null ? gcs.findIndex(gc => gc.id === act._groupCaseId) : -1;
+   const si = (sel != null && sel < gcs.length) ? sel : (actGc >= 0 ? actGc : 0);
+   const gc = gcs[si] || null;
+-  const geom = { nRows: I.groupNrows, nCols: I.groupNcols, s_in: (I.groupSpacingIn && I.groupSpacingIn > 0 ? I.groupSpacingIn : (I.groupSpacingDia || 3) * pileWidth(I)) };
++  const geom = { nRows: I.groupNrows, nCols: I.groupNcols, s_in: groupWsSpacing(I) };
+   const cd = computeCapDist(I, geom, caseLoadList(pts, gc || { mags: {} }, stemTopZ(I)));
+   const capOn = I.capL > 0 && I.capW > 0;
+   return e("div", { className: "pd-grplay mb-3" },
+@@ -8484,7 +8497,7 @@
+       ["Number of piles", Array.isArray(I.groupPiles) ? I.groupPiles.length : I.groupPiles, "", "coordinates in the group table"],
+       ["Rows", I.groupNrows, "", ""],
+       ["Spacing", I.groupSpacingIn > 0 ? I.groupSpacingIn : null, "in", "explicit"],
+-      ["Spacing (diameters)", I.groupSpacingIn > 0 ? null : I.groupSpacingDia, "\u00d7D", ""],
++      ["Spacing (diameters)", I.groupSpacingIn > 0 ? null : I.groupSpacingDia, I.pileType === "hpile" ? "\u00d7B" : "\u00d7D", I.pileType === "hpile" ? "B = " + fmt(groupB(I), 2) + " in (H-pile p-y width)" : ""],
+       ["Efficiency \u03b7 override", I.groupEtaOverride || null, "", ""],
+       ["p-multiplier source", GROUP_PM_SRC_LABEL[groupPmSourceOf(I)], "", ""],
+       ["Group p-multipliers per row", I.lateralSource === "py" ? (I.groupPmAuto ? "applied automatically, modifier " + fmt(groupPmModOf(I), 2) : "off \u2014 p-multiplier entered directly") : null, "", ""]
+@@ -10964,7 +10977,7 @@
+   if (!gcs.length) return /*#__PURE__*/React.createElement("div", { className: "text-[10px] text-slate-400" }, "No non-zero load cases defined in the group workspace.");
+   const si = Math.min(Math.max(sel, 0), gcs.length - 1);
+   const gc = gcs[si];
+-  const geom = { nRows: I.groupNrows, nCols: I.groupNcols, s_in: (I.groupSpacingIn && I.groupSpacingIn > 0 ? I.groupSpacingIn : (I.groupSpacingDia || 3) * pileWidth(I)) };
++  const geom = { nRows: I.groupNrows, nCols: I.groupNcols, s_in: groupWsSpacing(I) };
+   const cd = computeCapDist(I, geom, caseLoadList(pts, gc, stemTopZ(I)));
+   if (!cd || !cd.piles || !cd.piles.length) return /*#__PURE__*/React.createElement("div", { className: "text-[10px] text-slate-400" }, "Define piles in the group workspace to see per-pile forces.");
+   // governing: max compression (largest positive axial); uplift = any negative
+@@ -11212,7 +11225,7 @@
+   }));
+   const addCase = () => setGroupCases([...groupCases, { id: nextCaseId(), name: "Case " + (groupCases.length + 1), type: "strength", mags: {} }]);
+   const delCase = i => setGroupCases(groupCases.length > 1 ? groupCases.filter((_, j) => j !== i) : groupCases);
+-  const groupGeomLocal = { nRows: I.groupNrows, nCols: I.groupNcols, s_in: (I.groupSpacingIn && I.groupSpacingIn > 0 ? I.groupSpacingIn : (I.groupSpacingDia || 3) * pileWidth(I)) };
++  const groupGeomLocal = { nRows: I.groupNrows, nCols: I.groupNcols, s_in: groupWsSpacing(I) };
+   // Per-case resultant forces at the group centroid (for the result column at the end
+   // of Table 2). Reuses the same bolt-group resolver each case is emitted through, so
+   // the displayed resultant matches what actually drives the distribution.
+@@ -11231,7 +11244,7 @@
+           /*#__PURE__*/React.createElement("div", { className: "flex items-end gap-2 mb-2" },
+             /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-500" }, "rows"), /*#__PURE__*/React.createElement("input", { type: "number", className: "w-14 text-[11px] px-1 py-0.5 border border-slate-300 rounded-sm", value: I.groupNrows, onChange: e => set('groupNrows', Math.max(1, Math.round(+e.target.value))) })),
+             /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-500" }, "cols"), /*#__PURE__*/React.createElement("input", { type: "number", className: "w-14 text-[11px] px-1 py-0.5 border border-slate-300 rounded-sm", value: I.groupNcols, onChange: e => set('groupNcols', Math.max(1, Math.round(+e.target.value))) })),
+-            /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-500" }, "spacing \u00d7dia"), /*#__PURE__*/React.createElement("input", { type: "number", className: "w-16 text-[11px] px-1 py-0.5 border border-slate-300 rounded-sm", value: I.groupSpacingDia, onChange: e => set('groupSpacingDia', +e.target.value) })),
++            /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-500" }, I.pileType === "hpile" ? "spacing \u00d7B" : "spacing \u00d7dia"), /*#__PURE__*/React.createElement("input", { type: "number", className: "w-16 text-[11px] px-1 py-0.5 border border-slate-300 rounded-sm", title: I.pileType === "hpile" ? "c/c spacing in multiples of B = " + fmt(groupB(I), 2) + " in (H-pile p-y width normal to the load)" : undefined, value: I.groupSpacingDia, onChange: e => set('groupSpacingDia', +e.target.value) })),
+             /*#__PURE__*/React.createElement("button", { onClick: genGrid, className: "text-[10px] px-2 py-1 rounded-sm text-white", style: { background: "var(--blueprint2)" } }, "\u21bb generate grid")),
+           /*#__PURE__*/React.createElement("div", { className: "text-[8.5px] text-slate-400 mb-1" }, "Generate fills the table; then edit x,y freely for irregular layouts. Coordinates in ft, any origin (centroid computed automatically)."),
+           /*#__PURE__*/React.createElement("div", { className: "border border-slate-200 rounded-sm overflow-auto", style: { maxHeight: "180px" } },
+@@ -13530,7 +13543,7 @@
+   // Resolve EACH non-zero group load case (two-table model) to its governing pile,
+   // producing one synthetic _fromGroup case per matrix case. Falls back to the legacy
+   // single-load resolution when the two-table model isn't in use.
+-  const groupGeom = { nRows: I.groupNrows, nCols: I.groupNcols, s_in: (I.groupSpacingIn && I.groupSpacingIn > 0 ? I.groupSpacingIn : (I.groupSpacingDia || 3) * pileWidth(I)) };
++  const groupGeom = { nRows: I.groupNrows, nCols: I.groupNcols, s_in: groupWsSpacing(I) };
+   const groupCasesEmitted = React.useMemo(() => {
+     if (!groupEnabled) return [];
+     const usingMatrix = Array.isArray(I.groupCases) && I.groupCases.length;
+@@ -13564,7 +13577,7 @@
+     return [uplift
+       ? { name: "Group \u25a6 pile P" + sel.id + " (uplift)", type: "tension", STL: Math.abs(sel.axial), Plat: sel.Vres || 0, Mhead: 0, _fromGroup: true }
+       : { name: "Group \u25a6 pile P" + sel.id, type: "strength", STL: sel.axial, Plat: sel.Vres || 0, Mhead: 0, _fromGroup: true }];
+-  }, [groupEnabled, JSON.stringify(I.groupCases), JSON.stringify(I.loadPoints), JSON.stringify(I.capLoads), I.capPz, I.capVx, I.capVy, I.capMx, I.capMy, I.capH, I.capLx, I.capLy, I.capIncludeWeight, I.capL, I.capW, I.capThk, I.capGamma, I.capSoilSurcharge, I.capCx, I.capCy, JSON.stringify(I.groupPiles), I.groupSelPile, I.groupNrows, I.groupNcols, I.groupSpacingDia, I.groupSpacingIn, I.OD]);
++  }, [groupEnabled, JSON.stringify(I.groupCases), JSON.stringify(I.loadPoints), JSON.stringify(I.capLoads), I.capPz, I.capVx, I.capVy, I.capMx, I.capMy, I.capH, I.capLx, I.capLy, I.capIncludeWeight, I.capL, I.capW, I.capThk, I.capGamma, I.capSoilSurcharge, I.capCx, I.capCy, JSON.stringify(I.groupPiles), I.groupSelPile, I.groupNrows, I.groupNcols, I.groupSpacingDia, I.groupSpacingIn, I.OD, I.pileType, I.hpAxis, I.hpBf, I.hpD]);
+   const cases = groupCasesEmitted.length ? [...baseCasesSafe, ...groupCasesEmitted] : baseCasesSafe;
+   const groupCaseIdx = groupCasesEmitted.length ? baseCasesSafe.length : -1; // first group case index
+   const groupCase = groupCasesEmitted.length ? groupCasesEmitted[0] : null;
+```
+
 ## Open items (not changed)
 - O1. **Uncased/cased structural axial: outer 0.85 factor and `fy = min(fyb, fyc)`** (`Rn_cased/Rn_ucased`, ≈ line 1675).
   - Neither AASHTO 10.9.3.10.2 nor FHWA NHI-05-039 Eq. 5-13 has the outer 0.85, and the uncased section has no casing, so min(fyb, fyc) is arbitrary there.

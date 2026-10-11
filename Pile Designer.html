@@ -686,7 +686,7 @@ function pileProjShareValues(I){ var v={}; PILE_PROJ_MAP.forEach(function(m){ va
   /* pile-group centroid of the current layout (read-only use of the app's own computeCapDist) */
   function centroid(I){
     try{ var w=(typeof pileWidth==='function')?pileWidth(I):0;
-      var g={nRows:I.groupNrows,nCols:I.groupNcols,s_in:(I.groupSpacingIn&&I.groupSpacingIn>0?I.groupSpacingIn:(I.groupSpacingDia||3)*w)};
+      var g={nRows:I.groupNrows,nCols:I.groupNcols,s_in:(typeof groupWsSpacing==='function')?groupWsSpacing(I):(I.groupSpacingIn&&I.groupSpacingIn>0?I.groupSpacingIn:(I.groupSpacingDia||3)*w)}; /* F31: H-pile x B */
       var cd=computeCapDist(Object.assign({},I,{capIncludeWeight:false,stemEnable:false}),g,[]); return {x:r6(cd.cx),y:r6(cd.cy),n:cd.n}; }
     catch(e){ return {x:0,y:0,n:0}; }
   }
@@ -2510,14 +2510,25 @@ function bondHoleDia(I) {
    - s = I.groupSpacingIn when entered; otherwise I.groupSpacingDia x the width the group
      workspace and the case loads (computeCapDist via groupGeom) space the piles with:
      micropile bondHoleDia(I) (unchanged), H-pile pileWidth(I) (d strong / b_f weak). Before
-     F30 Module 11 used groupSpacingDia x bondHoleDia(I) in H-pile mode too. */
+     F30 Module 11 used groupSpacingDia x bondHoleDia(I) in H-pile mode too.
+     F31 (2026-10-11): H-pile "spacing x dia" = x B (groupB), here and in the workspace
+     (groupWsSpacing), so s/B = groupSpacingDia exactly. */
 function groupB(I) {
   if (I.pileType === "hpile") return I.hpAxis === "weak" ? I.hpD : I.hpBf;
   return bondHoleDia(I);
 }
 function groupCcSpacing(I) {
   if (I.groupSpacingIn && I.groupSpacingIn > 0) return I.groupSpacingIn;
-  return (I.groupSpacingDia || 3) * (I.pileType === "hpile" ? pileWidth(I) : bondHoleDia(I));
+  return (I.groupSpacingDia || 3) * (I.pileType === "hpile" ? groupB(I) : bondHoleDia(I));
+}
+/* F31 (2026-10-11): the c/c spacing the group workspace, the Group rows' per-pile loads
+   (groupGeom), the plan and the hand-off centroid lay the piles out at. An explicit
+   spacing in inches is used as entered. "spacing x dia": H-pile -> x B (groupB: b_f strong
+   axis, d weak axis), so "3 x dia" is exactly 3.00B; micropile -> x casing OD (pileWidth,
+   unchanged; see O44). Before F31 the H-pile used pileWidth(I) (d strong / b_f weak). */
+function groupWsSpacing(I) {
+  if (I.groupSpacingIn && I.groupSpacingIn > 0) return I.groupSpacingIn;
+  return (I.groupSpacingDia || 3) * (I.pileType === "hpile" ? groupB(I) : pileWidth(I));
 }
 // Label of B in the Module 11 / report text: micropile "bond dia" (as before F30), H-pile "B".
 function groupBLabel(I) { return I.pileType === "hpile" ? "B" : "bond dia"; }
@@ -3609,7 +3620,9 @@ function computeAll(I, opts = {}) {
   // c/c spacing >= ~3x bond diameter (also a ~40 in / bond-dia guidance). Below that,
   // apply a reduction. Converse-Labarre efficiency formula used as the reduction basis.
   const spacingThreshDia = 3.0;
-  const spacingOKforEta = s_dia >= spacingThreshDia;
+  // F31: compared with a 1e-9 tolerance (as the p-multiplier table's 3B / 5B tests), so a spacing
+  // entered as exactly 3 x B is not put below 3B by round-off (e.g. 3 x 14.70 / 14.70 = 2.9999999999999996).
+  const spacingOKforEta = s_dia >= spacingThreshDia - 1e-9;
   // Converse-Labarre: eta = 1 - (theta/90)*[ (n-1)m + (m-1)n ] / (m*n),  theta=atan(d/s)
   const thetaDeg = Math.atan(dh_in/Math.max(s_in,1e-6))*180/PI;
   const clEff = 1 - (thetaDeg/90)*(((nCols-1)*nRows + (nRows-1)*nCols)/(nRows*nCols));
@@ -6061,7 +6074,7 @@ function GroupLayoutView({ I, cases, activeIdx }) {
   const actGc = act && act._fromGroup && act._groupCaseId != null ? gcs.findIndex(gc => gc.id === act._groupCaseId) : -1;
   const si = (sel != null && sel < gcs.length) ? sel : (actGc >= 0 ? actGc : 0);
   const gc = gcs[si] || null;
-  const geom = { nRows: I.groupNrows, nCols: I.groupNcols, s_in: (I.groupSpacingIn && I.groupSpacingIn > 0 ? I.groupSpacingIn : (I.groupSpacingDia || 3) * pileWidth(I)) };
+  const geom = { nRows: I.groupNrows, nCols: I.groupNcols, s_in: groupWsSpacing(I) };
   const cd = computeCapDist(I, geom, caseLoadList(pts, gc || { mags: {} }, stemTopZ(I)));
   const capOn = I.capL > 0 && I.capW > 0;
   return e("div", { className: "pd-grplay mb-3" },
@@ -8484,7 +8497,7 @@ function PrintReport({
       ["Number of piles", Array.isArray(I.groupPiles) ? I.groupPiles.length : I.groupPiles, "", "coordinates in the group table"],
       ["Rows", I.groupNrows, "", ""],
       ["Spacing", I.groupSpacingIn > 0 ? I.groupSpacingIn : null, "in", "explicit"],
-      ["Spacing (diameters)", I.groupSpacingIn > 0 ? null : I.groupSpacingDia, "\u00d7D", ""],
+      ["Spacing (diameters)", I.groupSpacingIn > 0 ? null : I.groupSpacingDia, I.pileType === "hpile" ? "\u00d7B" : "\u00d7D", I.pileType === "hpile" ? "B = " + fmt(groupB(I), 2) + " in (H-pile p-y width)" : ""],
       ["Efficiency \u03b7 override", I.groupEtaOverride || null, "", ""],
       ["p-multiplier source", GROUP_PM_SRC_LABEL[groupPmSourceOf(I)], "", ""],
       ["Group p-multipliers per row", I.lateralSource === "py" ? (I.groupPmAuto ? "applied automatically, modifier " + fmt(groupPmModOf(I), 2) : "off \u2014 p-multiplier entered directly") : null, "", ""]
@@ -10964,7 +10977,7 @@ function GroupCasesTable({ I }) {
   if (!gcs.length) return /*#__PURE__*/React.createElement("div", { className: "text-[10px] text-slate-400" }, "No non-zero load cases defined in the group workspace.");
   const si = Math.min(Math.max(sel, 0), gcs.length - 1);
   const gc = gcs[si];
-  const geom = { nRows: I.groupNrows, nCols: I.groupNcols, s_in: (I.groupSpacingIn && I.groupSpacingIn > 0 ? I.groupSpacingIn : (I.groupSpacingDia || 3) * pileWidth(I)) };
+  const geom = { nRows: I.groupNrows, nCols: I.groupNcols, s_in: groupWsSpacing(I) };
   const cd = computeCapDist(I, geom, caseLoadList(pts, gc, stemTopZ(I)));
   if (!cd || !cd.piles || !cd.piles.length) return /*#__PURE__*/React.createElement("div", { className: "text-[10px] text-slate-400" }, "Define piles in the group workspace to see per-pile forces.");
   // governing: max compression (largest positive axial); uplift = any negative
@@ -11212,7 +11225,7 @@ function GroupWorkspaceBody({ I, set, cap, g, rail, cases, activeIdx }) {
   }));
   const addCase = () => setGroupCases([...groupCases, { id: nextCaseId(), name: "Case " + (groupCases.length + 1), type: "strength", mags: {} }]);
   const delCase = i => setGroupCases(groupCases.length > 1 ? groupCases.filter((_, j) => j !== i) : groupCases);
-  const groupGeomLocal = { nRows: I.groupNrows, nCols: I.groupNcols, s_in: (I.groupSpacingIn && I.groupSpacingIn > 0 ? I.groupSpacingIn : (I.groupSpacingDia || 3) * pileWidth(I)) };
+  const groupGeomLocal = { nRows: I.groupNrows, nCols: I.groupNcols, s_in: groupWsSpacing(I) };
   // Per-case resultant forces at the group centroid (for the result column at the end
   // of Table 2). Reuses the same bolt-group resolver each case is emitted through, so
   // the displayed resultant matches what actually drives the distribution.
@@ -11231,7 +11244,7 @@ function GroupWorkspaceBody({ I, set, cap, g, rail, cases, activeIdx }) {
           /*#__PURE__*/React.createElement("div", { className: "flex items-end gap-2 mb-2" },
             /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-500" }, "rows"), /*#__PURE__*/React.createElement("input", { type: "number", className: "w-14 text-[11px] px-1 py-0.5 border border-slate-300 rounded-sm", value: I.groupNrows, onChange: e => set('groupNrows', Math.max(1, Math.round(+e.target.value))) })),
             /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-500" }, "cols"), /*#__PURE__*/React.createElement("input", { type: "number", className: "w-14 text-[11px] px-1 py-0.5 border border-slate-300 rounded-sm", value: I.groupNcols, onChange: e => set('groupNcols', Math.max(1, Math.round(+e.target.value))) })),
-            /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-500" }, "spacing \u00d7dia"), /*#__PURE__*/React.createElement("input", { type: "number", className: "w-16 text-[11px] px-1 py-0.5 border border-slate-300 rounded-sm", value: I.groupSpacingDia, onChange: e => set('groupSpacingDia', +e.target.value) })),
+            /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-500" }, I.pileType === "hpile" ? "spacing \u00d7B" : "spacing \u00d7dia"), /*#__PURE__*/React.createElement("input", { type: "number", className: "w-16 text-[11px] px-1 py-0.5 border border-slate-300 rounded-sm", title: I.pileType === "hpile" ? "c/c spacing in multiples of B = " + fmt(groupB(I), 2) + " in (H-pile p-y width normal to the load)" : undefined, value: I.groupSpacingDia, onChange: e => set('groupSpacingDia', +e.target.value) })),
             /*#__PURE__*/React.createElement("button", { onClick: genGrid, className: "text-[10px] px-2 py-1 rounded-sm text-white", style: { background: "var(--blueprint2)" } }, "\u21bb generate grid")),
           /*#__PURE__*/React.createElement("div", { className: "text-[8.5px] text-slate-400 mb-1" }, "Generate fills the table; then edit x,y freely for irregular layouts. Coordinates in ft, any origin (centroid computed automatically)."),
           /*#__PURE__*/React.createElement("div", { className: "border border-slate-200 rounded-sm overflow-auto", style: { maxHeight: "180px" } },
@@ -13530,7 +13543,7 @@ function App() {
   // Resolve EACH non-zero group load case (two-table model) to its governing pile,
   // producing one synthetic _fromGroup case per matrix case. Falls back to the legacy
   // single-load resolution when the two-table model isn't in use.
-  const groupGeom = { nRows: I.groupNrows, nCols: I.groupNcols, s_in: (I.groupSpacingIn && I.groupSpacingIn > 0 ? I.groupSpacingIn : (I.groupSpacingDia || 3) * pileWidth(I)) };
+  const groupGeom = { nRows: I.groupNrows, nCols: I.groupNcols, s_in: groupWsSpacing(I) };
   const groupCasesEmitted = React.useMemo(() => {
     if (!groupEnabled) return [];
     const usingMatrix = Array.isArray(I.groupCases) && I.groupCases.length;
@@ -13564,7 +13577,7 @@ function App() {
     return [uplift
       ? { name: "Group \u25a6 pile P" + sel.id + " (uplift)", type: "tension", STL: Math.abs(sel.axial), Plat: sel.Vres || 0, Mhead: 0, _fromGroup: true }
       : { name: "Group \u25a6 pile P" + sel.id, type: "strength", STL: sel.axial, Plat: sel.Vres || 0, Mhead: 0, _fromGroup: true }];
-  }, [groupEnabled, JSON.stringify(I.groupCases), JSON.stringify(I.loadPoints), JSON.stringify(I.capLoads), I.capPz, I.capVx, I.capVy, I.capMx, I.capMy, I.capH, I.capLx, I.capLy, I.capIncludeWeight, I.capL, I.capW, I.capThk, I.capGamma, I.capSoilSurcharge, I.capCx, I.capCy, JSON.stringify(I.groupPiles), I.groupSelPile, I.groupNrows, I.groupNcols, I.groupSpacingDia, I.groupSpacingIn, I.OD]);
+  }, [groupEnabled, JSON.stringify(I.groupCases), JSON.stringify(I.loadPoints), JSON.stringify(I.capLoads), I.capPz, I.capVx, I.capVy, I.capMx, I.capMy, I.capH, I.capLx, I.capLy, I.capIncludeWeight, I.capL, I.capW, I.capThk, I.capGamma, I.capSoilSurcharge, I.capCx, I.capCy, JSON.stringify(I.groupPiles), I.groupSelPile, I.groupNrows, I.groupNcols, I.groupSpacingDia, I.groupSpacingIn, I.OD, I.pileType, I.hpAxis, I.hpBf, I.hpD]);
   const cases = groupCasesEmitted.length ? [...baseCasesSafe, ...groupCasesEmitted] : baseCasesSafe;
   const groupCaseIdx = groupCasesEmitted.length ? baseCasesSafe.length : -1; // first group case index
   const groupCase = groupCasesEmitted.length ? groupCasesEmitted[0] : null;
