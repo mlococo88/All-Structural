@@ -7541,6 +7541,452 @@ index 80fa334..1701bae 100644
          ["First yield M_y", "not computed by the tool"]] }));
 ```
 
+## 2026-10-11 — PR: claude/pile-o36 (PR link added after merge)
+
+### F26, part c. Depth to fixity z_fix: wording says what the depth is (first moment reversal below M_max, and which zero of the moment diagram that is for the head condition); every depth-to-fixity line labelled on the elevation; H-pile section label moved off the lines   [UI only] [no calculation change]
+- **Date:** 2026-10-11. **Type:** display / wording only. Engineer's comment 2026-10-11 (via the coordinator): the label "z_fix 15.8 ft (2nd M zero)" is confusing, because on a free-head pile the line sits at the FIRST zero crossing below grade (the head's M = 0 is the "1st zero"); in the H-pile elevation the 5 % decay dashed line (≈ 14.6 ft) had no label and the "HP 13.83×14.70 (strong axis)…" label sat on it.
+- **The rule (unchanged, `momentZeroCrossings(z, M).second`, anchor `second: below.length ? below[0].z : null,   // first reversal BELOW Mmax`):** z_fix is the FIRST zero crossing of the moment below the depth of the largest below-grade |M|, searched over the embedded length only (the stickup is excluded), ignoring crossings whose preceding lobe is < 2 % of that moment, linearly interpolated between nodes. Which zero of the whole moment diagram that is depends on the head:
+  - free head, no applied head moment, no rotational restraint (M = 0 at the head): the head counts as the 1st zero, so z_fix is normally the **2nd zero** of the moment diagram (k + 1, k = its rank among the below-grade crossings);
+  - head moment ≠ 0 (fixed head, rotational restraint `pyKrot` > 0, or an applied head moment `pyMhead`): the head is not a zero; z_fix is the **k-th zero crossing below grade**: the **1st** when the largest below-grade moment is the lobe at grade (H-pile defaults, fixed head: z_fix 2.4 ft, crossings 2.42 / 17.57 / 30.0 ft), the **2nd** when the next lobe down is larger (micropile defaults, fixed head: z_fix 10.7 ft, crossings 1.23 / 10.74 / 15.45 ft); micropile defaults, free head with M_head 5 kip·ft: 1st below grade (10.9 ft).
+  - So the old wording "2nd zero-crossing of the moment diagram" was right only for the free head without head moment; the depth itself is unchanged in every case.
+- **New helper** after `momentZeroCrossings` (anchor `function pyZfixWords(pyRes, I) {`): returns `{ short, long, nth }` for a p-y result, `nth` = the head-specific sentence above (from the rank of `pyRes.zFix2` in `pyRes.mzCrossings`, `I.solverHead`, `I.pyKrot`, `I.pyMhead`); null when there is no z_fix.
+- **Text changes (before → after; value unchanged):**
+  | where (anchor) | before | after |
+  |---|---|---|
+  | `latKV` key values: line name (legend on the Lateral graphs, elevation label, report figure) (`const zw = pyZfixWords(pyRes, I);`) | `z_fix 15.8 ft (2nd M zero)` | `z_fix 15.8 ft (1st M reversal below Mmax)` (M_max in the stickup: `… below peak below-grade M`) |
+  | `latKV` line definition (hover, key-values strip on screen and in the report) | `z_fix = 15.8 ft — 2nd zero crossing of moment (Module 02, reference)` | `z_fix = 15.8 ft — first moment reversal (zero crossing) below M_max; here the 2nd zero of the moment diagram, counting M = 0 at the free head as the 1st (Module 02, reference)` (fixed head: `… below the largest below-grade moment (M_max is in the stickup; the search runs over the embedded length); here the 1st zero crossing below grade (fixed head: the head moment is not zero, so the head does not count) …`) |
+  | elevation caption (`purple solid = z_fix (`) | `(2nd moment zero, Module 02 reference)` | `(first moment reversal below M_max, Module 02 reference)` |
+  | Module 02 "Geotechnical depth to fixity" (`first moment reversal (zero crossing) below M", /*#__PURE__*/`) | `z_fix = 10.7 ft below mudline · 2nd zero-crossing of the moment diagram (first reversal below Mmax @ 4.1 ft)` | `z_fix = 10.7 ft below mudline · first moment reversal (zero crossing) below Mmax @ 4.1 ft · here the 2nd zero of the moment diagram, counting M = 0 at the free head as the 1st` |
+  | Module 02, no z_fix | `…, so there is no second zero-crossing. (Short …)` | `…, so there is no z_fix. (Short …)` |
+  | report 02R "Geotechnical depth to fixity" (`" below mudline · first moment reversal (zero crossing) below " + (pyRes.MmaxAboveGrade`) | `z_fix = 10.7 ft below mudline · 2nd zero-crossing of the moment diagram` | `z_fix = 10.7 ft below mudline · first moment reversal (zero crossing) below Mₘₐₓ @ 4.1 ft · here the 2nd zero …` |
+  | report, no z_fix | `…; there is no second zero-crossing.` | `…; there is no z_fix.` |
+  | Methodology "Two paths…" (linear solver) | `depth to fixity as the second zero-crossing of the moment diagram` | `depth to fixity as the first zero crossing of the moment below the maximum moment (on a free-head pile with no head moment, the 2nd zero of the moment diagram, counting M = 0 at the head)` |
+  | report narrative, linear source | `(second zero-crossing of the moment diagram)` | `(the first zero crossing of the moment below the maximum moment)` |
+  | buckling "stiffness match" note | `which is the second zero-crossing of the moment diagram.` | `which is the first moment reversal (zero crossing) below the maximum moment.` |
+  | linear-Winkler panel: hover, derivation line, note | `fixity (2nd moment zero)`, `L_f = … ft (2nd moment zero)`, `Fixity = 2nd zero-crossing of the moment diagram.` | `fixity (1st moment zero below Mmax)`, `L_f = … ft (1st moment zero below M_max)`, `Fixity = first zero crossing of the moment below the maximum moment.` (that legacy value keeps its fallback chain, first crossing then 0.3·e, when there is no reversal below M_max; unchanged) |
+- **Elevation (`ElevationPlot`):**
+  - every depth-to-fixity line is now labelled on a wide card (before: only the first, normally z_fix): the shallowest line's label above it at the right, the deepest's below it at the right (shifted 100 px left of the edge, clear of the soil-layer name), a middle one above it at the left of the moment panel (anchor `const zs = kv.fix.map(g => g.z).sort((a, b) => a - b), nF = zs.length;`). Narrow card: unchanged (no line labels; all in the hover and the key strip).
+  - H-pile section label ("HP 13.83×14.70 (strong axis): width d = 13.83 in"): at mid-depth as before unless a depth-to-fixity line is within 16 px; then at the depth between 20 % and 80 % of grade-to-toe farthest from every line (anchor `const yMidHP = (() => {`). H-pile defaults: from 15.0 ft (on the 14.6 ft decay line) to ≈ 6.0 ft.
+- **Governing provision:** none (display wording). No formula, factor, unit, code reference, saved key or format changes.
+- **Check (no value changes):** parity, main vs branch, micropile / H-pile / integral abutment / edited micropile, defaults, four-layer profile, four-layer + buckling (`parity.mjs`): check strip, module statuses, autosave, Save .json export, IndexedDB record and share payload identical; page text and printed report differ only in the wording above and the added elevation labels (`zn2.py`: every remaining difference is one of those; all depths, moments and deflections equal). z_fix values: micropile defaults 10.7 ft (free) / 10.7 ft (fixed), H-pile defaults 15.8 ft (free) / 2.4 ft (fixed), micropile M_head 5 kip·ft 10.9 ft: identical on main and branch.
+- **How verified:** node --check of every script block; headless Chromium with the pinned libraries served locally; screenshots looked at: H-pile elevation free head (decay 14.6 ft labelled above its line, z_fix 15.8 ft below its line, section label at ≈ 6 ft) and fixed head (2.2 / 2.4 ft lines, labels above / below), micropile defaults, four-layer + buckling micropile (three lines labelled), printed elevation, Module 02 fixity box (fixed head). No console errors.
+- **Other copies of this code:** none.
+- **Re-applying by hand:** unified diff below, against `origin/main` `372a810` (CRLF stripped).
+
+```diff
+diff --git a/Pile Designer.html b/Pile Designer.html
+index 1701bae..d816926 100644
+--- a/Pile Designer.html	
++++ b/Pile Designer.html	
+@@ -1396,6 +1396,37 @@ function momentZeroCrossings(z, M) {
+     zMmax: z[iM]
+   };
+ }
++/* F26 c (display only): wording for the depth to fixity z_fix (pyRes.zFix2). The rule is
++   momentZeroCrossings' `second`: the FIRST zero crossing of the moment below the depth of
++   the largest below-grade |M| (embedded length only; lobes < 2 % of that moment ignored).
++   Which zero of the whole moment diagram that is depends on the head:
++     - free head with no head moment (M = 0 at the head, no rotational restraint): the head
++       counts as the 1st zero, so z_fix is the (k+1)-th zero, k = its rank among the
++       below-grade crossings (normally the 2nd zero);
++     - head moment != 0 (fixed head, rotational restraint or an applied head moment): the
++       head is not a zero; z_fix is the k-th zero crossing below grade (1st when the
++       largest below-grade moment is the head-restraint lobe at grade, 2nd when the next
++       lobe down is larger).
++   Returns null when there is no z_fix. */
++function pyZfixWords(pyRes, I) {
++  if (!pyRes || pyRes.zFix2 == null || !isFinite(pyRes.zFix2)) return null;
++  const cr = Array.isArray(pyRes.mzCrossings) ? pyRes.mzCrossings : [];
++  const k = cr.findIndex(z => Math.abs(z - pyRes.zFix2) < 1e-9) + 1;
++  const fixedHead = !!I && I.solverHead === "fixed";
++  const krot = !fixedHead && !!I && (I.pyKrot || 0) > 0;
++  const mHead = !fixedHead && !!I && Math.abs(I.pyMhead || 0) > 0;
++  const headZero = !fixedHead && !krot && !mHead;
++  const ord = n => n + ((n % 100 >= 11 && n % 100 <= 13) ? "th" : ({ 1: "st", 2: "nd", 3: "rd" }[n % 10] || "th"));
++  const ref = pyRes.MmaxAboveGrade ? "the largest below-grade moment" : "M_max";
++  const nth = k <= 0 ? null : headZero
++    ? "the " + ord(k + 1) + " zero of the moment diagram, counting M = 0 at the free head as the 1st"
++    : "the " + ord(k) + " zero crossing below grade (" + (fixedHead ? "fixed head" : krot ? "rotational head restraint" : "applied head moment") + ": the head moment is not zero, so the head does not count)";
++  return {
++    short: "1st M reversal below " + (pyRes.MmaxAboveGrade ? "peak below-grade M" : "Mmax"),
++    long: "first moment reversal (zero crossing) below " + ref + (pyRes.MmaxAboveGrade ? " (M_max is in the stickup; the search runs over the embedded length)" : ""),
++    nth
++  };
++}
+ 
+ /* ============================================================
+    NONLINEAR p-y LATERAL SOLVER CORE  (units internal: lb, in)
+@@ -4404,7 +4435,7 @@ function DocsModal({
+   }, /*#__PURE__*/React.createElement("p", null, "The grout-to-ground bond is the geotechnical capacity. Nominal resistance is the bond stress β times the drill-hole circumference times the bond length: ", /*#__PURE__*/React.createElement("i", null, "Pn = dₕ·π·β·Lb"), ". The required bond length is back-solved from the factored demand and the geotechnical resistance factor φ (0.70 when a load test is specified, per Table 10.5.5.2.5-1). The bond value β comes from the soil/rock row of Table C10.9.3.5.2-1 and ", /*#__PURE__*/React.createElement("b", null, "must be confirmed by load testing"), " — the tool labels it grout-to-ground because the value is keyed to the bearing stratum, not necessarily rock.")), /*#__PURE__*/React.createElement(DocSection, {
+     title: "02 · Lateral analysis",
+     code: "p-y finite-difference solver"
+-  }, /*#__PURE__*/React.createElement("p", null, "Two paths. You can enter a maximum moment directly from an external LPILE run, or use the built-in solver. The solver is a real ", /*#__PURE__*/React.createElement("b", null, "finite-difference beam on an elastic foundation"), ": the embedded pile is discretized on Winkler springs with a linear subgrade modulus (Es = nh·z for sand, constant kh for clay), and EI·y⁗ + k(z)·y = 0 is solved with mudline boundary conditions (shear V₀ = P, moment M₀ = P·e from the free length) and an unrestrained toe (no applied tip shear or moment restraint — the toe is still bedded on soil springs)."), /*#__PURE__*/React.createElement("p", null, "From the resulting moment profile, the tool reports the true maximum moment and locates the ", /*#__PURE__*/React.createElement("b", null, "depth to fixity as the second zero-crossing of the moment diagram"), " — the depth that reproduces the correct above-grade moment in an equivalent fixed-base model. A noise guard ignores crossings whose preceding moment lobe is under 2% of Mmax so numerical tail-ringing isn't mistaken for a real reversal. This is a REFERENCE figure only \u2014 it is a moment-diagram measure and is NOT used in the buckling check, which requires a stiffness equivalence (Davisson / deflection-matched / nonlinear P-crit) and yields a much shorter fixity depth. The model is linear, so the fixity depth is load-independent — appropriate for a stiffness/fixity basis, but it should be checked against a nonlinear p-y run before sealing."), /*#__PURE__*/React.createElement("p", null, /*#__PURE__*/React.createElement("b", null, "Nonlinear p-y convergence."), " The built-in nonlinear p-y solve applies the loads in 8 equal steps (secant iteration, up to 200 iterations per step). If a step does not converge it retries once with 16 steps, up to 400 iterations and under-relaxation 0.55. A retried solution is used only if (a) every step converged, (b) the equilibrium closure is within " + PY_RETRY_CLOSURE_PCT + " % for both ΣF and ΣM, and (c) it is on the stable loading branch (the head deflection keeps the direction of the first step and never decreases while the load rises). Otherwise the result is “did not converge — the pile is likely unstable (buckling / P-Δ) at this load”: there is no valid lateral demand, so flexure, combined loading, casing extension, uncased flexure and combined-loading stability are NG. Past the instability load the solver can settle on a post-critical equilibrium (head deflection reversed, tens of inches) whose closure is still excellent, which is why the branch test is needed. “Run all cases” solves each case with exactly the same solve (node count, load steps, retry and acceptance test), so for the active case the envelope equals Module 02. Large head deflection: when |y\u2080| exceeds the factor × D set in the Bond / p-y input tab (p-y / lateral for an H-pile; default 0.25 D; 0 = off), Module 02, the Lateral graphs, the Summary of checks, the case envelope and the report show an amber warning. It is a warning only (no check becomes NG); it applies to every p-y result, first attempt or retry, and also flags first attempts that settled on a post-critical state.")), /*#__PURE__*/React.createElement(DocSection, {
++  }, /*#__PURE__*/React.createElement("p", null, "Two paths. You can enter a maximum moment directly from an external LPILE run, or use the built-in solver. The solver is a real ", /*#__PURE__*/React.createElement("b", null, "finite-difference beam on an elastic foundation"), ": the embedded pile is discretized on Winkler springs with a linear subgrade modulus (Es = nh·z for sand, constant kh for clay), and EI·y⁗ + k(z)·y = 0 is solved with mudline boundary conditions (shear V₀ = P, moment M₀ = P·e from the free length) and an unrestrained toe (no applied tip shear or moment restraint — the toe is still bedded on soil springs)."), /*#__PURE__*/React.createElement("p", null, "From the resulting moment profile, the tool reports the true maximum moment and locates the ", /*#__PURE__*/React.createElement("b", null, "depth to fixity as the first zero crossing of the moment below the maximum moment (on a free-head pile with no head moment, the 2nd zero of the moment diagram, counting M = 0 at the head)"), " — the depth that reproduces the correct above-grade moment in an equivalent fixed-base model. A noise guard ignores crossings whose preceding moment lobe is under 2% of Mmax so numerical tail-ringing isn't mistaken for a real reversal. This is a REFERENCE figure only \u2014 it is a moment-diagram measure and is NOT used in the buckling check, which requires a stiffness equivalence (Davisson / deflection-matched / nonlinear P-crit) and yields a much shorter fixity depth. The model is linear, so the fixity depth is load-independent — appropriate for a stiffness/fixity basis, but it should be checked against a nonlinear p-y run before sealing."), /*#__PURE__*/React.createElement("p", null, /*#__PURE__*/React.createElement("b", null, "Nonlinear p-y convergence."), " The built-in nonlinear p-y solve applies the loads in 8 equal steps (secant iteration, up to 200 iterations per step). If a step does not converge it retries once with 16 steps, up to 400 iterations and under-relaxation 0.55. A retried solution is used only if (a) every step converged, (b) the equilibrium closure is within " + PY_RETRY_CLOSURE_PCT + " % for both ΣF and ΣM, and (c) it is on the stable loading branch (the head deflection keeps the direction of the first step and never decreases while the load rises). Otherwise the result is “did not converge — the pile is likely unstable (buckling / P-Δ) at this load”: there is no valid lateral demand, so flexure, combined loading, casing extension, uncased flexure and combined-loading stability are NG. Past the instability load the solver can settle on a post-critical equilibrium (head deflection reversed, tens of inches) whose closure is still excellent, which is why the branch test is needed. “Run all cases” solves each case with exactly the same solve (node count, load steps, retry and acceptance test), so for the active case the envelope equals Module 02. Large head deflection: when |y\u2080| exceeds the factor × D set in the Bond / p-y input tab (p-y / lateral for an H-pile; default 0.25 D; 0 = off), Module 02, the Lateral graphs, the Summary of checks, the case envelope and the report show an amber warning. It is a warning only (no check becomes NG); it applies to every p-y result, first attempt or retry, and also flags first attempts that settled on a post-critical state.")), /*#__PURE__*/React.createElement(DocSection, {
+     title: "03 · Structural axial",
+     code: "AASHTO 10.9.3.10.2"
+   }, /*#__PURE__*/React.createElement("p", null, "Non-composite axial capacity, computed for both the cased length (casing + grout + bar, Eq. 10.9.3.10.2a-2) and the uncased length (grout + bar only, Eq. 10.9.3.10.2b-2). The uncased section typically governs because it has no casing contribution. The casing wall is reduced by a sacrificial corrosion allowance.")), /*#__PURE__*/React.createElement(DocSection, {
+@@ -6467,7 +6498,7 @@ function LateralDiagram({
+       }
+     },
+     hoverinfo: "text",
+-    text: [`fixity (2nd moment zero)<br>z=${fmt(Lf, 2)} ft`],
++    text: [`fixity (1st moment zero below Mmax)<br>z=${fmt(Lf, 2)} ft`],
+     name: "fixity"
+   },
+   // ----- LPILE overlay (dashed) -----
+@@ -8616,7 +8647,7 @@ function PrintReport({
+     n: "02",
+     title: "Lateral Analysis",
+     code: I.lateralSource === "py" ? "nonlinear p-y (built-in)" : I.lateralSource === "input" ? "p-y (LPILE)" : "linear estimate"
+-  }), /*#__PURE__*/React.createElement(Narr, null, I.lateralSource === "py" ? `The maximum bending moment used in the structural checks is computed by the built-in nonlinear p-y finite-difference analysis (Reese et al. 1974 sand; Matlock 1970 soft clay; Welch & Reese 1972 stiff clay; Georgiadis 1983 layering; axial thrust carried in the governing equation). Mmax = ${fmt(r.MmaxUsed != null ? r.MmaxUsed : I.Mmax, 1)} kip·ft.${I.solverFree < 0 ? ` The pile head is modeled ${fmt(Math.abs(I.solverFree),1)} ft below grade (buried pile cap); lateral soil resistance is credited from the head down at true overburden. The cap’s passive resistance is not included in this pile analysis and no near-surface p-y reduction is applied — near-surface soil should be down-rated separately if backfill is disturbed or non-structural.` : ``} The implementation is benchmarked against an LPILE 2022 project analysis (within 0.2% on Mmax); final design should be verified against a project-specific LPILE run prior to sealing.` : I.lateralSource === "input" ? `The maximum bending moment used in the structural checks is taken from an external p-y (LPILE) analysis as Mmax = ${fmt(I.Mmax, 1)} kip·ft.` : `The maximum bending moment is computed by a finite-difference beam-on-elastic-foundation analysis using a linear subgrade modulus, and reports the depth to fixity (second zero-crossing of the moment diagram) as a reference figure only \u2014 it is not used in the structural checks. This first-order result is to be verified against a project-specific LPILE analysis prior to sealing.`),
++  }), /*#__PURE__*/React.createElement(Narr, null, I.lateralSource === "py" ? `The maximum bending moment used in the structural checks is computed by the built-in nonlinear p-y finite-difference analysis (Reese et al. 1974 sand; Matlock 1970 soft clay; Welch & Reese 1972 stiff clay; Georgiadis 1983 layering; axial thrust carried in the governing equation). Mmax = ${fmt(r.MmaxUsed != null ? r.MmaxUsed : I.Mmax, 1)} kip·ft.${I.solverFree < 0 ? ` The pile head is modeled ${fmt(Math.abs(I.solverFree),1)} ft below grade (buried pile cap); lateral soil resistance is credited from the head down at true overburden. The cap’s passive resistance is not included in this pile analysis and no near-surface p-y reduction is applied — near-surface soil should be down-rated separately if backfill is disturbed or non-structural.` : ``} The implementation is benchmarked against an LPILE 2022 project analysis (within 0.2% on Mmax); final design should be verified against a project-specific LPILE run prior to sealing.` : I.lateralSource === "input" ? `The maximum bending moment used in the structural checks is taken from an external p-y (LPILE) analysis as Mmax = ${fmt(I.Mmax, 1)} kip·ft.` : `The maximum bending moment is computed by a finite-difference beam-on-elastic-foundation analysis using a linear subgrade modulus, and reports the depth to fixity (the first zero crossing of the moment below the maximum moment) as a reference figure only \u2014 it is not used in the structural checks. This first-order result is to be verified against a project-specific LPILE analysis prior to sealing.`),
+   I.lateralSource === "py" && /*#__PURE__*/React.createElement("div", { style: { margin: "6px 0 8px" } },
+     /*#__PURE__*/React.createElement("div", { style: { fontSize: "8.5px", fontWeight: 700, color: "#16304F", marginBottom: "2px" } }, "p-y ANALYSIS CONSTANTS (these govern the result — verify against the geotechnical report)"),
+     /*#__PURE__*/React.createElement("table", { style: { width: "100%", borderCollapse: "collapse", fontSize: "8px" } },
+@@ -9132,9 +9163,10 @@ function PrintReport({
+         ? /*#__PURE__*/React.createElement("div", { style: { fontFamily: "monospace", fontSize: "12px", color: "#16304F", marginBottom: "3px" } },
+             /*#__PURE__*/React.createElement("b", null, "z_fix = " + fmt(pyRes.zFix2, 1) + " ft"),
+             /*#__PURE__*/React.createElement("span", { style: { fontSize: "9.5px", color: "#64748b" } },
+-              " below mudline \u00b7 2nd zero-crossing of the moment diagram"))
++              " below mudline \u00b7 first moment reversal (zero crossing) below " + (pyRes.MmaxAboveGrade ? "the largest below-grade moment" : "M\u2098\u2090\u2093 @ " + fmt(pyRes.zMmax, 1) + " ft"),
++              (() => { const zw = pyZfixWords(pyRes, I); return zw && zw.nth ? " \u00b7 here " + zw.nth : ""; })()))
+         : /*#__PURE__*/React.createElement("div", { style: { fontFamily: "monospace", fontSize: "10px", color: "#64748b", marginBottom: "3px" } },
+-            "\u2014 the moment does not reverse below M\u2098\u2090\u2093; there is no second zero-crossing."),
++            "\u2014 the moment does not reverse below M\u2098\u2090\u2093; there is no z_fix."),
+       /*#__PURE__*/React.createElement("p", { style: { fontSize: "9px", color: "#475569", lineHeight: 1.5, margin: 0 } },
+         "The depth that reproduces the correct above-grade moment in an equivalent fixed-base model \u2014 the conventional geotechnical \u201cdepth to fixity.\u201d It is a ",
+         /*#__PURE__*/React.createElement("b", null, "moment-diagram"), " measure. ",
+@@ -10114,9 +10146,10 @@ function latKV(I, r, pyRes, actType) {
+   }
+   // depth to fixity: the depths the tool already computes, each with its definition and source
+   K.fix = [];
+-  if (pyRes.zFix2 != null && isFinite(pyRes.zFix2)) K.fix.push({ k: "zfix", z: pyRes.zFix2, col: "#7a4a7a", dash: "solid",
+-    name: "z_fix " + latFmt(pyRes.zFix2, 1) + " ft (2nd M zero)",
+-    lbl: "z_fix = " + latFmt(pyRes.zFix2, 1) + " ft — 2nd zero crossing of moment (Module 02, reference)" });
++  const zw = pyZfixWords(pyRes, I);   // F26 c: wording only (the depth is unchanged)
++  if (zw) K.fix.push({ k: "zfix", z: pyRes.zFix2, col: "#7a4a7a", dash: "solid",
++    name: "z_fix " + latFmt(pyRes.zFix2, 1) + " ft (" + zw.short + ")",
++    lbl: "z_fix = " + latFmt(pyRes.zFix2, 1) + " ft — " + zw.long + (zw.nth ? "; here " + zw.nth : "") + " (Module 02, reference)" });
+   if (pyRes.zMomentDecay != null && isFinite(pyRes.zMomentDecay)) K.fix.push({ k: "decay", z: pyRes.zMomentDecay, col: "#2f6f3e", dash: "dash",
+     name: "5% M decay " + latFmt(pyRes.zMomentDecay, 1) + " ft",
+     lbl: "5% moment-decay depth = " + latFmt(pyRes.zMomentDecay, 1) + " ft — first depth below M_max where |M| ≤ 5% of M_max (Module 02" + (isHP ? ")" : "; casing-extension check)") });
+@@ -10368,7 +10401,17 @@ function ElevationPlot({ I, pyRes, height = 340, print, narrow, kv }) {
+       if (hp.tf > 0) { R(-w2, -w2 + hp.tf, topPile, toe, steel); R(w2 - hp.tf, w2, topPile, toe, steel); } // flanges edge-on
+     }
+     if (embedFt > 0) R(-w2, w2, topPile, headY, "rgba(201,98,46,0.30)", { color: C.accent, width: 1.2 });
+-    lab.push({ x: w2, y: (Math.max(headY, 0) + toe) / 2, t: "HP " + latFmt(hp.d, 2) + "×" + latFmt(hp.bf, 2) + " (" + (hp.weak ? "weak" : "strong") + " axis): width " + (hp.weak ? "b_f" : "d") + " = " + latFmt(hp.w, 2) + " in", c: "#14304a" });
++    // F26 c: the section label at mid-depth, unless a depth-to-fixity line runs there (it
++    // would sit on the line): then the depth between grade and the toe farthest from every line
++    const yMidHP = (() => {
++      const a = Math.max(headY, 0), m = (a + toe) / 2, fz2 = kv ? kv.fix.map(f => f.z) : [];
++      const dist = y => fz2.reduce((d, z) => Math.min(d, Math.abs(z - y)), Infinity);
++      if (dist(m) * pxFt >= 16) return m;
++      let best = m;
++      for (let t = 0.2; t <= 0.801; t += 0.05) { const y = a + t * (toe - a); if (dist(y) > dist(best)) best = y; }
++      return best;
++    })();
++    lab.push({ x: w2, y: yMidHP, t: "HP " + latFmt(hp.d, 2) + "×" + latFmt(hp.bf, 2) + " (" + (hp.weak ? "weak" : "strong") + " axis): width " + (hp.weak ? "b_f" : "d") + " = " + latFmt(hp.w, 2) + " in", c: "#14304a" });
+     lab.push({ x: w2, y: toe, t: "toe " + latFmt(toe, 1) + " ft" + (narrow ? "" : " (embedded length)"), c: "#14304a", key: true });
+   } else {
+     const od2 = G.OD / 2, dh2 = G.dh / 2, id2 = Math.max(G.ID, 0) / 2, b2 = G.bar / 2;
+@@ -10420,9 +10463,15 @@ function ElevationPlot({ I, pyRes, height = 340, print, narrow, kv }) {
+   if (ld.length) anns.push({ xref: "x", x: capHalf, xshift: 6, xanchor: "left", yref: "y", y: capTop, yanchor: "bottom", yshift: 2,
+     showarrow: false, align: "left", text: ld.join("<br>"), font: { size: fz, family: PLOT_FONT } });
+   // ---- moment panel ----
+-  if (kv) kv.fix.forEach(f => {   // F26 b: depth to fixity lines across both panels; the primary one labelled
++  if (kv) kv.fix.forEach(f => {   // F26 b: depth to fixity lines across both panels
+     shapes.push({ type: "line", xref: "paper", x0: 0, x1: 1, yref: "y", y0: f.z, y1: f.z, line: { color: f.col, width: f.primary ? 1.8 : 1.2, dash: f.dash } });
+-    if (f.primary && !narrow) anns.push({ xref: "paper", x: 1, xanchor: "right", xshift: -16, yref: "y", y: f.z, yanchor: "bottom", showarrow: false, text: f.name, font: { size: fz, color: f.col, family: PLOT_FONT }, bgcolor: "rgba(255,255,255,0.7)" });
++    // F26 c: every line labelled (was the primary only), so close lines do not share a label
++    // spot: the shallowest line's label above it, the deepest's below it (both at the right),
++    // a middle one above it at the left of the moment panel; a label below its line is kept
++    // clear of the soil-layer name at the right edge (xshift -100)
++    const zs = kv.fix.map(g => g.z).sort((a, b) => a - b), nF = zs.length;
++    const pos = nF < 2 || f.z === zs[0] ? "up" : f.z === zs[nF - 1] ? "down" : "left";
++    if (!narrow) anns.push({ xref: "paper", x: pos === "left" ? DOM_M[0] : 1, xanchor: pos === "left" ? "left" : "right", xshift: pos === "left" ? 4 : pos === "down" ? -100 : -16, yref: "y", y: f.z, yanchor: pos === "down" ? "top" : "bottom", showarrow: false, text: f.name, font: { size: fz, color: f.col, family: PLOT_FONT }, bgcolor: "rgba(255,255,255,0.7)" });
+   });
+   else if (pyRes.zMomentDecay != null) shapes.push({ type: "line", xref: "paper", x0: DOM_M[0], x1: 1, yref: "y", y0: pyRes.zMomentDecay, y1: pyRes.zMomentDecay, line: { color: "#2f6f3e", width: 1, dash: "dash" } });
+   const mom = pyRes.records.map(r2 => ({ d: r2.depth - s, m: r2.mom }));
+@@ -10449,7 +10498,7 @@ function ElevationPlot({ I, pyRes, height = 340, print, narrow, kv }) {
+   const plot = React.createElement(Plot, { data, layout, height: H, config: print ? { staticPlot: true, responsive: false } : undefined });
+   const note = "Left: the pile to scale — depths true, every width in true proportion, drawn " + Nt + "× wider than the depth scale (one factor for the whole pile); the cap is schematic. " +
+     (isHP ? "H-pile seen in the plane of bending (" + (G.hp.weak ? "weak axis: flange width b_f, web edge-on" : "strong axis: depth d, flanges edge-on") + "). " : "Dark = casing, gray = grout (inside the casing and in the bond hole d_h), orange = central bar, orange dashed = plunge. ") +
+-    "Right: moment diagram (active case); bands = soil layers; " + (kv && kv.fix.length ? "horizontal lines = depth to fixity: " + kv.fix.map(f => (f.k === "zfix" ? "purple solid = z_fix (2nd moment zero, Module 02 reference)" : f.k === "decay" ? "green dash = 5% moment-decay depth" : "brown dot = buckling equivalent fixed base (Module 10)")).join(", ") + " (hover for the definition)." : "green dash = 5% moment-decay depth.") + " Stickup plots above grade (negative depth).";
++    "Right: moment diagram (active case); bands = soil layers; " + (kv && kv.fix.length ? "horizontal lines = depth to fixity: " + kv.fix.map(f => (f.k === "zfix" ? "purple solid = z_fix (first moment reversal below M_max, Module 02 reference)" : f.k === "decay" ? "green dash = 5% moment-decay depth" : "brown dot = buckling equivalent fixed base (Module 10)")).join(", ") + " (hover for the definition)." : "green dash = 5% moment-decay depth.") + " Stickup plots above grade (negative depth).";
+   const keys = kv ? [
+     ["Horizontal scale", "\u00d7" + Nt + " (widths drawn " + Nt + "\u00d7 the depth scale)"],
+     Math.abs(s) > 0.01 ? [s > 0 ? "Stickup" : "Head below grade", latFmt(Math.abs(s), 1) + " ft"] : null,
+@@ -11828,7 +11877,7 @@ function BucklingTabs({ b, I, set, pcr, computePcr }) {
+         /*#__PURE__*/React.createElement("i", null, "your"), " lateral analysis \u2014 so unlike the closed form it captures layering, soil nonlinearity, and degradation."),
+       /*#__PURE__*/React.createElement("p", { className: "text-[9px] leading-snug mb-1 p-1.5 rounded-sm", style: { background: "rgba(20,48,74,0.06)", color: "#14304a" } },
+         /*#__PURE__*/React.createElement("b", null, "This is a STIFFNESS match, not the moment zero-crossing. "),
+-        "Do not confuse it with the \u201cgeotechnical depth to fixity\u201d reported in the lateral analysis module, which is the second zero-crossing of the moment diagram. That figure reproduces the MOMENT DIAGRAM and is typically ~2\u00d7 deeper; using it here would understate the critical load by roughly 4\u00d7. Buckling needs stiffness equivalence."),
++        "Do not confuse it with the \u201cgeotechnical depth to fixity\u201d reported in the lateral analysis module, which is the first moment reversal (zero crossing) below the maximum moment. That figure reproduces the MOMENT DIAGRAM and is typically ~2\u00d7 deeper; using it here would understate the critical load by roughly 4\u00d7. Buckling needs stiffness equivalence."),
+       !b.methods.deflmatch
+         ? (b.deflDegenerate
+             ? /*#__PURE__*/React.createElement("div", { className: "p-2 rounded-sm", style: { background: "rgba(178,59,59,0.08)", border: "1px solid rgba(178,59,59,0.35)" } },
+@@ -12228,13 +12277,13 @@ function PyPanel({ I, set, pyRes, r, EI, EI_composite_kipin2, EI_aashto_kipin2,
+         ? /*#__PURE__*/React.createElement("div", { className: "font-mono-tech text-[13px] mb-1", style: { color: "#14304a" } },
+             /*#__PURE__*/React.createElement("b", null, "z", /*#__PURE__*/React.createElement("sub", null, "fix"), " = ", fmt(pyRes.zFix2, 1), " ft"),
+             /*#__PURE__*/React.createElement("span", { className: "text-[9.5px] text-slate-500" },
+-              " below mudline \u00b7 2nd zero-crossing of the moment diagram",
+               pyRes.MmaxAboveGrade
+-                ? " (M\u2098\u2090\u2093 falls in the stickup, so the search runs over the embedded length only)"
+-                : [" (first reversal below M", /*#__PURE__*/React.createElement("sub", { key: "s" }, "max"), " @ ", fmt(pyRes.zMmax, 1), " ft)"]))
++                ? " below mudline \u00b7 first moment reversal (zero crossing) below the largest below-grade moment (M\u2098\u2090\u2093 falls in the stickup, so the search runs over the embedded length only)"
++                : [" below mudline \u00b7 first moment reversal (zero crossing) below M", /*#__PURE__*/React.createElement("sub", { key: "s" }, "max"), " @ ", fmt(pyRes.zMmax, 1), " ft"],
++              (() => { const zw = pyZfixWords(pyRes, I); return zw && zw.nth ? " \u00b7 here " + zw.nth : null; })()))
+         : /*#__PURE__*/React.createElement("div", { className: "font-mono-tech text-[10px] text-slate-500 mb-1" },
+             "\u2014 the moment does not reverse below M", /*#__PURE__*/React.createElement("sub", null, "max"),
+-            ", so there is no second zero-crossing. (Short or very stiff pile, or a moment diagram that decays without changing sign.)"),
++            ", so there is no z_fix. (Short or very stiff pile, or a moment diagram that decays without changing sign.)"),
+       /*#__PURE__*/React.createElement("p", { className: "text-[8.5px] text-slate-500 leading-snug" },
+         "This is the depth that reproduces the correct above-grade moment in an equivalent fixed-base model \u2014 the conventional geotechnical \u201cdepth to fixity.\u201d It is a ",
+         /*#__PURE__*/React.createElement("b", null, "moment-diagram"), " measure. ",
+@@ -15815,7 +15864,7 @@ function App() {
+     tex: `M_{max}=${fmt(solved.Mmax_signed, 1)}\\text{ kip}\\!\\cdot\\!\\text{ft}\\;@\\;z=${fmt(solved.zMmax, 1)}\\text{ ft }${solved.zMmax < 0.05 ? "(\\text{at head})" : "(\\text{below grade})"}`
+   }), /*#__PURE__*/React.createElement(DerivLine, {
+     label: "Depth to fixity",
+-    tex: `L_f=${fmt(solved.depthFixity, 1)}\\text{ ft}\\;(\\text{2nd moment zero})`
++    tex: `L_f=${fmt(solved.depthFixity, 1)}\\text{ ft}\\;(\\text{1st moment zero below }M_{max})`
+   }), /*#__PURE__*/React.createElement(DerivLine, {
+     label: "Moment-decay depth",
+     tex: `z_{M\\to0}=${fmt(solved.zMomentDecay, 1)}\\text{ ft}\\;(|M|\\leq ${fmt(solved.decayFrac * 100, 0)}\\%\\,M_{max})`
+@@ -15871,7 +15920,7 @@ function App() {
+     }
+   }, "Note: the governing moment is a below-grade reversal (negative), induced by the shear as the soil resists. With a small stickup the applied head moment P·e partially offsets it, so |Mmax| can decrease as stickup grows before increasing again — this is expected, not an error."), /*#__PURE__*/React.createElement("p", {
+     className: "text-[9.5px] text-slate-400 mt-2 leading-snug"
+-  }, "Finite-difference beam on linear elastic foundation. Fixity = 2nd zero-crossing of the moment diagram. The fixed-head model restrains rotation at grade; validate against a full nonlinear p-y (LPILE) run before sealing."))), /*#__PURE__*/React.createElement("div", {
++  }, "Finite-difference beam on linear elastic foundation. Fixity = first zero crossing of the moment below the maximum moment. The fixed-head model restrains rotation at grade; validate against a full nonlinear p-y (LPILE) run before sealing."))), /*#__PURE__*/React.createElement("div", {
+     className: "bg-white rounded-sm p-3 border border-slate-200"
+   }, /*#__PURE__*/React.createElement("p", { className: "text-[10px] text-slate-500 leading-snug mb-2" }, "The deflection and moment diagrams of this linear solution", lpileParse && lpileParse.ok && lpileParse.records && lpileParse.records.length > 2 ? " (with the imported LPILE profiles overlaid and compared)" : "", " are on the ", /*#__PURE__*/React.createElement("b", null, "Lateral graphs"), " output tab."),
+   /*#__PURE__*/React.createElement(LatGraphsLinks, { ids: ["dmv", "py"].concat(lpileParse && lpileParse.ok && lpileParse.records && lpileParse.records.length > 2 ? ["lpile"] : []) })))),
+```
+
+### F27. p-y first attempts: the stable-branch test applies to them too (O36); force-closure residual normalised for a moment-only head load   [calc behaviour / check status] [MORE conservative: a first attempt that converged on a post-critical state (head deflection reversed or folding back) is no longer used; it goes to the retry and, in every case found, ends "did not converge" with the lateral-dependent checks NG. The closure change alters only the displayed ΣF % of moment-only head loads and the acceptance of retried solves with no lateral load (none found)]
+- **Date:** 2026-10-11. **Type:** calc behaviour (acceptance of a numerical solution) + diagnostic normalisation.
+- **Engineer's decision 2026-10-11 on O36:** "yes apply it to first attempts too." Coordinator's ruling after the first implementation was stopped (below): first attempts get (a) and (c) only ("the same stable-branch test"); (b) closure stays for retried solves; fix the ΣF normalisation for P_t = 0; the layered-profile residual is logged as O38 and not changed.
+- **Where:**
+  - `pyRetryCheck` (anchor `function pyRetryCheck(rr, D, branchOnly) {`): new third argument `branchOnly`; when true the closure test is skipped.
+  - `solvePyWithRetry` (anchor `const why1 = res.ok ? pyRetryCheck(res, D, true) : null;`): the converged first attempt is checked; if rejected, the retry runs; new result field `firstWhy`; "did not converge" reasons now say whether the first attempt did not converge or converged but was rejected (and why).
+  - `solvePyPile`, closure (anchor `fPct: 100 * Math.abs(fRes) / Math.max(Math.abs(Pt), 0.01 * intAbsP, 1e-6),`).
+  - `App` → `pyRes` (anchor `retried: sol.retried, firstWhy: sol.firstWhy,`); `PyPanel` Module 02 banner (anchor `pyRes.firstWhy && pyRes.firstWhy.length`); the block comment above `PY_NC_MSG`, the comment above `PY_DEFL_WARN_D_DEFAULT`; Methodology paragraph "Nonlinear p-y convergence".
+  - Everything that calls `solvePyWithRetry` takes the new rule: Module 02 (`pyRes`) and "Run all cases" (`runAllCases`), so the envelope still equals Module 02 for the active case. Not affected: the Module 10 nonlinear P-crit ramp (`computePcr` → `runOneCasePcr` calls `solvePyPile` directly; non-convergence and a deflection sign flip are its designed end points, LPile Tech Manual 4.4.2; it does not use this acceptance) and the integral-abutment Tier-2 solve (`iabNonlinearSolve` calls `solvePyPile` directly). Their results are unchanged (the `eq` field they get is not used by them).
+- **Governing provision:** none. The acceptance tests and the closure measure are numerical-solution criteria chosen by the tool (judgement values, as F22/F25), not code provisions. No AASHTO formula, load or resistance factor, unit or code reference changes.
+- **Acceptance rule, before → after:**
+  | test | first attempt, before (F22/F25) | first attempt, after (F27) | retried solve (unchanged) |
+  |---|---|---|---|
+  | (a) every load step converged | required | required | required |
+  | (b) closure ΣF ≤ 1 % and ΣM ≤ 1 % | not tested | **not tested** (see "Why not (b)" below) | required |
+  | (c) stable branch: head deflection keeps the sign of step 1 and never drops > 0.1 % below its running peak | not tested | **required** | required |
+  - Flow: first attempt converges and passes (c) → used (bit-identical to before); converges but fails (c) → retry; retry passes (a)–(c) → used, Module 02 adds "(The first solve (8 load steps) converged but was rejected: <reason>.)"; otherwise "Did not converge" (F22 NG behaviour) with the reason, e.g. "the first solve (8 load steps) converged but was rejected: the head deflection reversed direction during the load ramp (post-critical equilibrium); the adaptive retry (16 load steps) was rejected: …". The F25 large-deflection warning is unchanged.
+- **Before / after (`pyRetryCheck`, `solvePyWithRetry`):**
+  ```js
+  // before
+  function pyRetryCheck(rr, D) {
+    const why = [];
+    const eq = rr.eq || {};
+    if (!(eq.fPct <= PY_RETRY_CLOSURE_PCT && eq.mPct <= PY_RETRY_CLOSURE_PCT))
+  …
+  function solvePyWithRetry(input, D) {
+    const res = solvePyPile({ ...input, nSteps: 8, maxIter: 200 });
+    if (res.ok) return { res, retried: false, noConv: false, why: [] };
+    const res2 = …
+  // after
+  function pyRetryCheck(rr, D, branchOnly) {
+    const why = [];
+    const eq = rr.eq || {};
+    if (!branchOnly && !(eq.fPct <= PY_RETRY_CLOSURE_PCT && eq.mPct <= PY_RETRY_CLOSURE_PCT))
+  …
+  function solvePyWithRetry(input, D) {
+    const res = solvePyPile({ ...input, nSteps: 8, maxIter: 200 });
+    const why1 = res.ok ? pyRetryCheck(res, D, true) : null;
+    if (res.ok && !why1.length) return { res, retried: false, noConv: false, why: [], firstWhy: null };
+    const first = res.ok
+      ? "the first solve (8 load steps) converged but was rejected: " + why1.join("; ")
+      : "the first solve (8 load steps) did not converge";
+    const res2 = …   (retry unchanged; messages prefixed with `first`)
+    return { res: res2, retried: true, noConv: false, why: [], firstWhy: res.ok ? why1 : null };
+  ```
+  (full diff at the end of this entry).
+- **Closure normalisation, before → after (`solvePyPile`, `res.eq.fPct`; ΣM unchanged):**
+  - Before: `fPct = 100·|ΣF residual| / max(|P_t|, 1e-6 lb)`. With no lateral load (a moment-only head load) the divisor is 1e-6 lb, so any round-off residual shows as 10 % to 2e6 % (uniform soil) or 1e10 % (layered).
+  - After: `fPct = 100·|ΣF residual| / max(|P_t|, 0.01·∫|p| dz, 1e-6 lb)`, ∫|p| dz = the total soil-reaction magnitude along the pile (trapezoidal, same nodes as the residual). Chosen so that nothing changes when there is a lateral load: in every solve run with P_t ≠ 0 (338 converged first attempts and retries with P_t ≠ 0, uniform and four-layer, both pile types, free and fixed head), |P_t| ≥ 1/38 of ∫|p| dz, so |P_t| governs. Only when P_t is (near) zero does the soil reaction set the scale. ΣM already divides by max(∫|p|·z dz, |M_head|), which does not vanish under a moment-only load, so it is unchanged.
+  - Effect: displayed "equilibrium closure ΣF" in Module 02, the report 02R table and the solver note, and the retry acceptance test (b). A first attempt is never rejected by it (F27 does not test (b) on first attempts).
+  - **Worked check (moment-only), micropile defaults, free head, STL 86 / P 0 / M_head 5 kip·ft:** ΣF residual = 0.01136 lb (from 1.136e6 % × 1e-6 lb); ∫|p| dz = 2,838 lb; divisor before 1e-6 lb → 1,136,024 %; after max(0, 28.38 lb, 1e-6) = 28.38 lb → 0.01136 / 28.38 = **0.040 %**. ΣM 0.000235 % (unchanged). Mmax 6.02 kip·ft, y₀ 0.197 in, flexure 0.112 OK, combined 0.281 OK: unchanged, and the solve is used (before and after).
+  - Other moment-only cases (displayed ΣF before → after; nothing else changes): micropile M 40: 1.89e6 % → 0.0071 %; H-pile defaults M 5: 10.55 % → 8.3e-7 %; H-pile M 40: 4.0e5 % → 0.0039 %. Four-layer profile (layered residual, O38): micropile M 5 at STL 20/86/150: 8.8e9/6.9e9/1.07e10 % → 253/173/227 %; H-pile M 5: 8.5e9–9.9e9 % → 115–132 %; M 40: 2.1e11 % → 1,049–1,057 %. These layered values are still large; they are the O38 residual, not a moment-only artefact.
+- **Why not (b) on first attempts (the first implementation was stopped):** with (b) also applied to first attempts, ordinary converged solves became "did not converge": every moment-only head load (closure 1e6 %), and every four-layer profile case, because a first attempt on a layered profile shows a large force residual on main already (four-layer H-pile defaults ΣF 43.80 % / ΣM 15.06 %, micropile 3.17 % / 1.10 %; see O38). The coordinator ruled (a) + (c) for first attempts.
+- **Worked case (i) — micropile defaults, free head, one strength case STL 20 kip / P 15 kip** (O36 example; D = 7.00 in):
+  - First attempt (8 steps of 1.875 kip / 2.5 kip): converges; head deflection by step +0.398, +0.998, +1.774, +2.761, +3.978, +5.461, +7.331, **−164.69 in** (step 8, sign reversal). Closure ΣF 0.0059 %, ΣM 0.00089 %.
+  - Before: used. Module 02 Mmax **130.41 kip·ft** @ 3.8 ft, y₀ −164.69 in; flexure D/C 2.417 NG, combined 2.457 NG, casing extension OK, combined-loading stability **OK**; `allPass` false; envelope row 130.41 / −164.694 / 2.42 / 2.46.
+  - After: (c) fails (reversal at step 8) → retry (16 steps): +0.162 … +7.331 (step 14), +9.221 (step 15), step 16 does not converge within 400 iterations → **"Did not converge"**, reason "the first solve (8 load steps) converged but was rejected: the head deflection reversed direction during the load ramp (post-critical equilibrium); the adaptive retry (16 load steps, under-relaxed) did not converge; the retry stopped at load step 16/16 (lateral 15.00 kip, axial 20.0 kip)". Flexure, combined, casing extension, uncased flexure and stability NG; `allPass` false; envelope row n/c, NG (equals Module 02). Lateral graphs tab: "No graphs are shown: the lateral p-y analysis did not converge" with the reason (screenshot looked at).
+  - Hand check of (c): y₁ = +0.398 in > 0; y₈ = −164.69 in; y₈·y₁ < 0 → reversal → reject.
+- **Worked case (ii) — micropile defaults (default soil), cases Ext I 60 kip / 12 kip / M 5 kip·ft (active) and Str I 86 / 6:**
+  - Before: Ext I first attempt used: y₀ **−47.04 in**, Mmax 112.77 kip·ft, closure 0.0013 % / 0.00016 %, flexure 2.090 NG, combined 2.209 NG, stability OK; envelope Ext I 112.77 / −47.037 / 2.09 / 2.18.
+  - After: (c) fails (reversal) → retry converges but also reverses → rejected by (c) → **"Did not converge"**, NG; envelope Ext I n/c. Str I row unchanged (53.70 kip·ft, y₀ 3.201 in, flexure 0.995, combined 1.165).
+- **Worked case (iii) — no change where the first attempt is on the stable branch (bit-identical):** parity (`parity.mjs`, the F26 c commit vs this commit; micropile, H-pile, integral abutment, edited micropile: page text, printed report, module statuses, check strip, autosave, Save .json export, IndexedDB record, share payload):
+  - defaults: identical in every mode;
+  - four-layer profile: identical in every mode (micropile closure 3.17 % / 1.10 %, H-pile 43.80 % / 15.06 %: shown as before; these first attempts are on the stable branch);
+  - four-layer + buckling: identical for H-pile; **changed** for the two micropile cases whose first attempt is post-critical (listed below). The integral-abutment report changes only because it prints the micropile p-y figure, which is no longer drawn for the post-critical state.
+- **Worked case (iv) — H-pile defaults, free head, STL 800 / P 120:** first attempt does not converge (step 7), so F27 does not apply; unchanged: "Did not converge", reason "the first solve (8 load steps) did not converge; the adaptive retry (16 load steps) was rejected: the head deflection reversed direction during the load ramp (post-critical equilibrium)"; Module 04/05/stability NG; envelope n/c.
+- **Every case found that changes result** (all MORE conservative; all had a reversed head deflection on main, and the retry also reversed or did not converge — no retried solve was accepted anywhere):
+  | case | main | after |
+  |---|---|---|
+  | (i) micropile defaults, STL 20 / P 15 | y₀ −164.69 in, Mmax 130.41, stability OK | did not converge, NG |
+  | (ii) micropile defaults, Ext I 60 / 12 / M 5 active | y₀ −47.04 in, Mmax 112.77, stability OK | did not converge, NG |
+  | four-layer + buckling (L_u 8 ft), micropile defaults | y₀ −19.55 in, Mmax 78.1, closure 5.12 % / 0.83 %; Module 02 status "—" | did not converge (reversal; retry stopped at step 13/16), Module 02 NG; checks not satisfied 5 → 6 |
+  | four-layer + buckling, edited micropile (bond 31 ft) | y₀ −16.08 in, Mmax 50.1, **casing flexure (04) OK** | did not converge (reversal; retry closure 5.51 % and reversal), 02 and 04 NG; checks not satisfied 3 → 5 |
+  | sweep, uniform default soil (below) | 38 micropile first attempts with y₀ −4.7 to −178 in used | all 38 → did not converge |
+  | sweep, four-layer profile (below) | 8 micropile first attempts with y₀ −10.9 to −35.4 in used | all 8 → did not converge |
+- **Sweep (diagnostic copy of the branch recording every `solvePyWithRetry` call through "Run all cases", M-φ curves at the sweep's axial):**
+  - Uniform default soil, free head, P 1, 2, 3, 4, 5, 6, 8, 10, 12, 14, 16, 18, 20 kip × STL 20, 40, 60, 86, 100, 120, 150, 200 kip, micropile and H-pile (208 solves): 193 first attempts converged; 155 pass (c) → used as before (closure of these ≤ 0.0011 % ΣF / 0.00022 % ΣM); 38 (micropile only; STL 20–86 from P 10–16 up, STL 100–150 from P 5–8 up, STL 200 from P 3) reverse → retry → rejected by (c) (33) or not converged (5) → did not converge. All 104 H-pile solves unchanged. 15 first attempts did not converge (unchanged path).
+  - Mixed set, micropile and H-pile, free and fixed head (P 0–20, STL 0–200, head moments 0, ±5…±40, service / tension / extreme rows, negative P; 52 solves): 48 unchanged; 4 micropile reversed first attempts (fixed head STL 200 / P 20; free head 60 / 12 / M 5, 150 / 10, 200 / 20) → did not converge. Opposing head moment (P 6 / M −10, P 4 / M −20) and negative P: stable branch, unchanged.
+  - Four-layer profile, free head, STL 20, 86, 150 × P 1–20 and moment-only / P 1 + M 20 (66 solves): 55 first attempts unchanged (including all H-pile; closures with a lateral load up to 52 % ΣF / 15 % ΣM, see O38), 8 micropile reversed → did not converge, 3 not converged first (unchanged path).
+  - Closure: with (b) not applied to first attempts, no first attempt is rejected for closure. Across the uniform-soil sweep the first-attempt closure never exceeded 0.052 % ΣF / 0.010 % ΣM (including the reversed ones); the large values seen are all the layered-profile residual (O38) or (before F27) the moment-only divisor.
+- **Saved data:** none changed (`firstWhy` is run-time only).
+- **How verified:** node --check of every script block; headless Chromium with the pinned libraries served locally: `o37.mjs` per worked case (main vs branch: `pyRes`, `R`, Module 02 text, envelope, dashboard, report), `parity.mjs` (above), `sweep.mjs` with a diagnostic copy for the sweep, a test copy forcing a first-attempt rejection to exercise the "converged but was rejected … converged on the adaptive retry" display (micropile defaults: retry accepted, Mmax 53.45 kip·ft, same as the first attempt to 4 digits, text shown). Screenshots looked at: Module 02 "did not converge" banner for case (i), Lateral graphs tab did-not-converge state, envelope, dashboard. No console errors.
+- **Other copies of this code:** none.
+- **Re-applying by hand:** unified diff below, against the F26 c commit (CRLF stripped).
+
+```diff
+diff --git a/Pile Designer.html b/Pile Designer.html
+index d816926..81efdda 100644
+--- a/Pile Designer.html	
++++ b/Pile Designer.html	
+@@ -2264,8 +2264,14 @@ function solvePyPile(input) {
+   const Mhead = input.headFixed ? res.M[0] : Mt;
+   const fRes = Pt - intP;
+   const mRes = Mhead + Qt * (res.y[0] - res.y[n]) + intPz;
++  // F27: the force residual is measured against the applied lateral load, but never against
++  // less than 1 % of the total soil-reaction magnitude (integral of |p| dz). Before F27 the
++  // floor was 1e-6 lb, so a moment-only head load (Pt = 0) gave residuals of 1e6 % and more.
++  // Unchanged wherever |Pt| >= 1 % of that integral (every solve with a lateral load found).
++  let intAbsP = 0;
++  for (let i = 0; i < n; i++) intAbsP += 0.5 * (Math.abs(res.p[i]) + Math.abs(res.p[i + 1])) * h;
+   res.eq = {
+-    fPct: 100 * Math.abs(fRes) / Math.max(Math.abs(Pt), 1e-6),
++    fPct: 100 * Math.abs(fRes) / Math.max(Math.abs(Pt), 0.01 * intAbsP, 1e-6),
+     mPct: 100 * Math.abs(mRes) / Math.max(intAbsPz, Math.abs(Mhead), 1e-6)
+   };
+   return res;
+@@ -2273,21 +2279,24 @@ function solvePyPile(input) {
+ 
+ /* F22 (O33) / F23 (O34): the lateral p-y solve used by Module 02 (pyRes) AND by the
+    case envelope ("Run all cases"), so both take exactly the same path.
+-   1. First attempt: 8 load steps, maxIter 200. A solve that converges here is used as
+-      it is (unchanged from before F22).
+-   2. Only if that fails, an adaptive retry: 16 load steps, maxIter 400, under-relaxation
+-      omega 0.55.
++   1. First attempt: 8 load steps, maxIter 200. A solve that converges here AND is on the
++      stable loading branch (pyRetryCheck with branchOnly = true: tests (a) and (c), not the
++      closure test (b)) is used as it is (F27 (O36); before F27 any converged first attempt
++      was used).
++   2. Only if the first attempt does not converge, or converges but fails the branch test:
++      an adaptive retry, 16 load steps, maxIter 400, under-relaxation omega 0.55.
+    3. A retried solution is used only if it passes pyRetryCheck (every step converged,
+       equilibrium closure, stable loading branch; F25 (O37) removed the former |y0| <= 1.0 D
+       bound, see pyDeflWarnInfo for the warning that replaced it). Otherwise, and when the retry itself does not
+       converge, the result is "did not converge" (noConv) and the lateral-dependent checks
+-      are NG. A retried solve is never used just because the iterations stopped: past the
++      are NG. A solve is never used just because the iterations stopped: past the
+       instability load the solver can settle on a POST-CRITICAL equilibrium (head deflection
+       reversed, |y0| of 20-200 in) whose equilibrium closure is still excellent.
+    input: the solvePyPile input without nSteps / maxIter / omega; D: pile width (in) in the
+    bending plane, the same D the p-y curves use.
+-   returns { res, retried, noConv, why[] }: res is the solvePyPile result to use (null when
+-   noConv); why lists the reasons a retried solve was rejected. */
++   returns { res, retried, noConv, why[], firstWhy }: res is the solvePyPile result to use
++   (null when noConv); why lists the reasons the solve was rejected; firstWhy (F27) lists
++   why a CONVERGED first attempt was rejected when the retry was then accepted (else null). */
+ const PY_NC_MSG = "Did not converge — the pile is likely unstable (buckling / P-Δ) at this load";
+ // shown (KaTeX) in place of a check comparison that needs the lateral solution
+ const PY_NC_TEX = "\\text{NG: the lateral p-y solve did not converge (no valid moment demand)}";
+@@ -2296,10 +2305,13 @@ const PY_LAT_ROW = /^(Flexure|Combined axial \+ flexure|Combined \(interaction\)
+ const PY_RETRY_CLOSURE_PCT = 1.0;   // max equilibrium residual (% of applied) for a retried solve
+ // F25 (O37): no deflection bound in the acceptance (was PY_RETRY_DEFL_D = 1.0, |y0| <= 1.0 D);
+ // a large head deflection is now a warning only (pyDeflWarnInfo).
+-function pyRetryCheck(rr, D) {
++// F27 (O36): branchOnly = true for a FIRST attempt: the stable-branch test (c) only, no
++// closure test (b) (the engineer's decision 2026-10-11: "the same stable-branch test";
++// convergence (a) is the solver's own ok flag). A retried solve gets (b) and (c).
++function pyRetryCheck(rr, D, branchOnly) {
+   const why = [];
+   const eq = rr.eq || {};
+-  if (!(eq.fPct <= PY_RETRY_CLOSURE_PCT && eq.mPct <= PY_RETRY_CLOSURE_PCT))
++  if (!branchOnly && !(eq.fPct <= PY_RETRY_CLOSURE_PCT && eq.mPct <= PY_RETRY_CLOSURE_PCT))
+     why.push("equilibrium closure ΣF " + fmt(eq.fPct, 2) + " % / ΣM " + fmt(eq.mPct, 2) + " % exceeds " + fmt(PY_RETRY_CLOSURE_PCT, 1) + " %");
+   // Stable loading branch: the head deflection keeps the direction of the first load step
+   // and |y0| never drops while the load rises (same fold-back rule as the pushover plot).
+@@ -2320,8 +2332,8 @@ function pyRetryCheck(rr, D) {
+    Engineer's decision 2026-10-11: no deflection bound in the acceptance of a retried p-y
+    solve; instead a warning when |y0| > pyDeflWarnD x D (input "Large head-deflection
+    warning", Bond / p-y tab). Applies to every lateral p-y result: the first attempt and an
+-   accepted retry, Module 02 and every envelope case, so it also flags the post-critical
+-   first attempts of O36 (large, often reversed, head deflection).
++   accepted retry, Module 02 and every envelope case. (Since F27 (O36) a first attempt must
++   also pass the stable-branch test, so the post-critical first attempts of O36 are no longer used.)
+    pyDeflWarnD is a saved project input; absent (older projects) or blank -> 0.25;
+    0 or negative -> warning off. D = the p-y pile width in the bending plane. */
+ const PY_DEFL_WARN_D_DEFAULT = 0.25;
+@@ -2361,16 +2373,25 @@ function PyNoConvNote({ why, print }) {
+ }
+ function solvePyWithRetry(input, D) {
+   const res = solvePyPile({ ...input, nSteps: 8, maxIter: 200 });
+-  if (res.ok) return { res, retried: false, noConv: false, why: [] };
++  // F27 (O36): a converged first attempt must also be on the stable loading branch (test
++  // (c); the closure test (b) stays for retried solves only); if not, the retry is tried.
++  const why1 = res.ok ? pyRetryCheck(res, D, true) : null;
++  if (res.ok && !why1.length) return { res, retried: false, noConv: false, why: [], firstWhy: null };
++  const first = res.ok
++    ? "the first solve (8 load steps) converged but was rejected: " + why1.join("; ")
++    : "the first solve (8 load steps) did not converge";
+   const res2 = solvePyPile({ ...input, nSteps: 16, maxIter: 400, omega: 0.55 });
+   if (!res2.ok) {
+     const last = res2.history.length ? res2.history[res2.history.length - 1] : null;
++    const stop = last ? "; the retry stopped at load step " + last.step + "/16 (lateral " + fmt(last.P / 1000, 2) + " kip, axial " + fmt(last.Q / 1000, 1) + " kip)" : "";
+     return { res: null, retried: true, noConv: true,
+-      why: ["the first solve (8 load steps) and the adaptive retry (16 load steps, under-relaxed) both failed to converge" + (last ? "; the retry stopped at load step " + last.step + "/16 (lateral " + fmt(last.P / 1000, 2) + " kip, axial " + fmt(last.Q / 1000, 1) + " kip)" : "")] };
++      why: [res.ok
++        ? first + "; the adaptive retry (16 load steps, under-relaxed) did not converge" + stop
++        : "the first solve (8 load steps) and the adaptive retry (16 load steps, under-relaxed) both failed to converge" + stop] };
+   }
+   const why = pyRetryCheck(res2, D);
+-  if (why.length) return { res: null, retried: true, noConv: true, why: ["the first solve (8 load steps) did not converge; the adaptive retry (16 load steps) was rejected: " + why.join("; ")] };
+-  return { res: res2, retried: true, noConv: false, why: [] };
++  if (why.length) return { res: null, retried: true, noConv: true, why: [first + "; the adaptive retry (16 load steps) was rejected: " + why.join("; ")] };
++  return { res: res2, retried: true, noConv: false, why: [], firstWhy: res.ok ? why1 : null };
+ }
+ 
+ // Tier-2 nonlinear path: drive the app's real nonlinear p-y engine (solvePyPile) with the
+@@ -4435,7 +4456,7 @@ function DocsModal({
+   }, /*#__PURE__*/React.createElement("p", null, "The grout-to-ground bond is the geotechnical capacity. Nominal resistance is the bond stress β times the drill-hole circumference times the bond length: ", /*#__PURE__*/React.createElement("i", null, "Pn = dₕ·π·β·Lb"), ". The required bond length is back-solved from the factored demand and the geotechnical resistance factor φ (0.70 when a load test is specified, per Table 10.5.5.2.5-1). The bond value β comes from the soil/rock row of Table C10.9.3.5.2-1 and ", /*#__PURE__*/React.createElement("b", null, "must be confirmed by load testing"), " — the tool labels it grout-to-ground because the value is keyed to the bearing stratum, not necessarily rock.")), /*#__PURE__*/React.createElement(DocSection, {
+     title: "02 · Lateral analysis",
+     code: "p-y finite-difference solver"
+-  }, /*#__PURE__*/React.createElement("p", null, "Two paths. You can enter a maximum moment directly from an external LPILE run, or use the built-in solver. The solver is a real ", /*#__PURE__*/React.createElement("b", null, "finite-difference beam on an elastic foundation"), ": the embedded pile is discretized on Winkler springs with a linear subgrade modulus (Es = nh·z for sand, constant kh for clay), and EI·y⁗ + k(z)·y = 0 is solved with mudline boundary conditions (shear V₀ = P, moment M₀ = P·e from the free length) and an unrestrained toe (no applied tip shear or moment restraint — the toe is still bedded on soil springs)."), /*#__PURE__*/React.createElement("p", null, "From the resulting moment profile, the tool reports the true maximum moment and locates the ", /*#__PURE__*/React.createElement("b", null, "depth to fixity as the first zero crossing of the moment below the maximum moment (on a free-head pile with no head moment, the 2nd zero of the moment diagram, counting M = 0 at the head)"), " — the depth that reproduces the correct above-grade moment in an equivalent fixed-base model. A noise guard ignores crossings whose preceding moment lobe is under 2% of Mmax so numerical tail-ringing isn't mistaken for a real reversal. This is a REFERENCE figure only \u2014 it is a moment-diagram measure and is NOT used in the buckling check, which requires a stiffness equivalence (Davisson / deflection-matched / nonlinear P-crit) and yields a much shorter fixity depth. The model is linear, so the fixity depth is load-independent — appropriate for a stiffness/fixity basis, but it should be checked against a nonlinear p-y run before sealing."), /*#__PURE__*/React.createElement("p", null, /*#__PURE__*/React.createElement("b", null, "Nonlinear p-y convergence."), " The built-in nonlinear p-y solve applies the loads in 8 equal steps (secant iteration, up to 200 iterations per step). If a step does not converge it retries once with 16 steps, up to 400 iterations and under-relaxation 0.55. A retried solution is used only if (a) every step converged, (b) the equilibrium closure is within " + PY_RETRY_CLOSURE_PCT + " % for both ΣF and ΣM, and (c) it is on the stable loading branch (the head deflection keeps the direction of the first step and never decreases while the load rises). Otherwise the result is “did not converge — the pile is likely unstable (buckling / P-Δ) at this load”: there is no valid lateral demand, so flexure, combined loading, casing extension, uncased flexure and combined-loading stability are NG. Past the instability load the solver can settle on a post-critical equilibrium (head deflection reversed, tens of inches) whose closure is still excellent, which is why the branch test is needed. “Run all cases” solves each case with exactly the same solve (node count, load steps, retry and acceptance test), so for the active case the envelope equals Module 02. Large head deflection: when |y\u2080| exceeds the factor × D set in the Bond / p-y input tab (p-y / lateral for an H-pile; default 0.25 D; 0 = off), Module 02, the Lateral graphs, the Summary of checks, the case envelope and the report show an amber warning. It is a warning only (no check becomes NG); it applies to every p-y result, first attempt or retry, and also flags first attempts that settled on a post-critical state.")), /*#__PURE__*/React.createElement(DocSection, {
++  }, /*#__PURE__*/React.createElement("p", null, "Two paths. You can enter a maximum moment directly from an external LPILE run, or use the built-in solver. The solver is a real ", /*#__PURE__*/React.createElement("b", null, "finite-difference beam on an elastic foundation"), ": the embedded pile is discretized on Winkler springs with a linear subgrade modulus (Es = nh·z for sand, constant kh for clay), and EI·y⁗ + k(z)·y = 0 is solved with mudline boundary conditions (shear V₀ = P, moment M₀ = P·e from the free length) and an unrestrained toe (no applied tip shear or moment restraint — the toe is still bedded on soil springs)."), /*#__PURE__*/React.createElement("p", null, "From the resulting moment profile, the tool reports the true maximum moment and locates the ", /*#__PURE__*/React.createElement("b", null, "depth to fixity as the first zero crossing of the moment below the maximum moment (on a free-head pile with no head moment, the 2nd zero of the moment diagram, counting M = 0 at the head)"), " — the depth that reproduces the correct above-grade moment in an equivalent fixed-base model. A noise guard ignores crossings whose preceding moment lobe is under 2% of Mmax so numerical tail-ringing isn't mistaken for a real reversal. This is a REFERENCE figure only \u2014 it is a moment-diagram measure and is NOT used in the buckling check, which requires a stiffness equivalence (Davisson / deflection-matched / nonlinear P-crit) and yields a much shorter fixity depth. The model is linear, so the fixity depth is load-independent — appropriate for a stiffness/fixity basis, but it should be checked against a nonlinear p-y run before sealing."), /*#__PURE__*/React.createElement("p", null, /*#__PURE__*/React.createElement("b", null, "Nonlinear p-y convergence."), " The built-in nonlinear p-y solve applies the loads in 8 equal steps (secant iteration, up to 200 iterations per step). The first attempt is used only if (a) every step converged and (c) it is on the stable loading branch (the head deflection keeps the direction of the first step and never decreases while the load rises). If it fails either, the solve retries once with 16 steps, up to 400 iterations and under-relaxation 0.55; the retried solution is used only if (a) every step converged, (b) the equilibrium closure is within " + PY_RETRY_CLOSURE_PCT + " % for both ΣF and ΣM (ΣF relative to the applied lateral load, but not less than 1 % of the total soil reaction ∫|p|dz, so a moment-only head load is measured sensibly), and (c) it is on the stable loading branch. If the retry also fails, the result is “did not converge — the pile is likely unstable (buckling / P-Δ) at this load”: there is no valid lateral demand, so flexure, combined loading, casing extension, uncased flexure and combined-loading stability are NG. Past the instability load the solver can settle on a post-critical equilibrium (head deflection reversed, tens of inches) whose closure is still excellent, which is why the branch test is needed. “Run all cases” solves each case with exactly the same solve (node count, load steps, retry and acceptance test), so for the active case the envelope equals Module 02. Large head deflection: when |y\u2080| exceeds the factor × D set in the Bond / p-y input tab (p-y / lateral for an H-pile; default 0.25 D; 0 = off), Module 02, the Lateral graphs, the Summary of checks, the case envelope and the report show an amber warning. It is a warning only (no check becomes NG); it applies to every p-y result, first attempt or retry.")), /*#__PURE__*/React.createElement(DocSection, {
+     title: "03 · Structural axial",
+     code: "AASHTO 10.9.3.10.2"
+   }, /*#__PURE__*/React.createElement("p", null, "Non-composite axial capacity, computed for both the cased length (casing + grout + bar, Eq. 10.9.3.10.2a-2) and the uncased length (grout + bar only, Eq. 10.9.3.10.2b-2). The uncased section typically governs because it has no casing contribution. The casing wall is reduced by a sacrificial corrosion allowance.")), /*#__PURE__*/React.createElement(DocSection, {
+@@ -12253,7 +12274,7 @@ function PyPanel({ I, set, pyRes, r, EI, EI_composite_kipin2, EI_aashto_kipin2,
+             ? [fmt(Math.abs(pyRes.zMmax), 1), " ft ABOVE grade (in the stickup)"]
+             : [fmt(pyRes.zMmax, 1), " ft below grade"]),
+         " flows to the structural checks automatically.",
+-        pyRes.retried ? " (Converged on the adaptive retry: 16 load steps, under-relaxed; convergence, closure and stable-branch checks passed.)" : null)
++        pyRes.retried ? ((pyRes.firstWhy && pyRes.firstWhy.length ? " (The first solve (8 load steps) converged but was rejected: " + pyRes.firstWhy.join("; ") + ".)" : "") + " (Converged on the adaptive retry: 16 load steps, under-relaxed; convergence, closure and stable-branch checks passed.)") : null)
+         : (pyRes && pyRes.noConv) ? /*#__PURE__*/React.createElement(PyNoConvNote, { why: pyRes.why })
+         : ("\u26a0 " + (pyRes ? pyRes.msg : "not run"))),
+     // F25 (O37): large head-deflection warning (amber, warning only)
+@@ -13153,7 +13174,7 @@ function App() {
+       return {
+         ok: true, records, Mmax_kft, zMmax, headDefl_in: res2.y[0], zMomentDecay: zDecay,
+         fixity, zFix2, mzCrossings: _mzcPy.crossings, MmaxAboveGrade,
+-        Mtip_kft, eq: res2.eq, iters: res2.history.reduce((s, h) => s + h.iter, 0), retried: sol.retried,
++        Mtip_kft, eq: res2.eq, iters: res2.history.reduce((s, h) => s + h.iter, 0), retried: sol.retried, firstWhy: sol.firstWhy,
+         EIcased_used: EIcasedSel, embed_ft: embed_in / 12, L_ft: L_in / 12,
+         eiVar: !!I.pyEIvar, Mcr_kft, Mcr_kft_u, EIatMmax, cracked,
+         sweepTruncated: (() => {
+```
+
 ## Open items (not changed)
 - O1. **Uncased/cased structural axial: outer 0.85 factor and `fy = min(fyb, fyc)`** (`Rn_cased/Rn_ucased`, ≈ line 1675).
   - Neither AASHTO 10.9.3.10.2 nor FHWA NHI-05-039 Eq. 5-13 has the outer 0.85, and the uncased section has no casing, so min(fyb, fyc) is arbitrary there.
@@ -7609,5 +8055,6 @@ index 80fa334..1701bae 100644
 - O33. **p-y solves that need the adaptive retry.** Fixed in F22 (2026-10-11): no JavaScript error; a retried solve is used only if it converges with closure ≤ 1 %, on the stable loading branch and (until F25) with |y0| ≤ one pile width; otherwise "Did not converge — the pile is likely unstable (buckling / P-Δ) at this load" and the lateral-dependent checks are NG. See O36 and O37.
 - O34. **Case envelope Mmax vs Module 02 Mmax.** Fixed in F23 (2026-10-11): the envelope uses the same solve as Module 02 (`solvePyWithRetry`: `I.pyNodes` nodes, 8 steps, `zCut`, retry with the F22 tests) and the same moment-decay search; with a case active its row equals Module 02.
 - O35. **Extreme Event φ in the H-pile envelope.** The envelope heading says "Extreme Event φ = 1.0, uplift 0.8, AASHTO 10.5.5.3", and `runAllCases` applies that by overriding the micropile φ keys (`phiGeo`, `phiCC`, …). The H-pile φ keys (`hpPhiGeo`, `hpPhiGeoClay`, `hpPhiUp`, `hpPhiC`, `hpPhiCcomb`, `hpPhiF`, `hpPhiV`, `hpPhiTy`, `hpPhiTu`) are not overridden, so since F20 the H-pile Extreme rows use the strength φ (the same as the modules show with that case active; before F20 the φ = 1.0 reached only the micropile ratios, which were the wrong checks). In the F20 four-case run, H-pile Ext I geo D/C is 0.707 with φ_stat 0.30, which would be 0.212 with φ = 1.0. The micropile modules also do not apply the Extreme φ when an Extreme case is active (the envelope does). Not changed (resistance factors). **Ask:** apply φ = 1.0 (uplift 0.8) to the H-pile keys in the envelope (and should the modules apply it when an Extreme case is active, for both pile types)?
-- O36. **A FIRST p-y attempt can converge to a post-critical state, and it is used.** F22 tests only retried solves (as approved: solves that never needed the retry stay bit-identical). The 8-step first attempt can also settle on the unstable branch. Example: micropile defaults, free head, one strength case STL 20 kip / P 15 kip: Module 02 reports Mmax 130.41 kip·ft at a head deflection of **−164.69 in** (opposite to the load), closure 0.006 %, and combined-loading stability **passes**; flexure (D/C 2.42) and combined (2.46) are NG on that moment, so `allPass` is false, but the moment is not a valid design value. Since F23 the envelope shows the same value (before, its 6-step solve failed and it showed the 17.5 kip·ft fallback). Another: micropile defaults (default soil), an Extreme case 60 kip / 12 kip / M 5 kip·ft made active: the first attempt converges to y0 = −47.04 in, Mmax 112.77 kip·ft, and stability passes (the same loads on the uniform sand N60 20 profile of F23 check case 2 need the retry and are now "did not converge"). The retry search also found first attempts with reversed deflections at moderate loads (micropile defaults, P 6 kip with 200 kip axial, M-φ curves at 86 kip: y0 −9.6 in). Not changed (it changes results for solves that do not need the retry). **Mitigated by F25 (2026-10-11):** the large head-deflection warning (default |y₀| > 0.25 D) applies to every p-y result, so these first attempts are now flagged in amber in Module 02, the dashboard, the Lateral graphs tab, the envelope and the report (e.g. the STL 20 / P 15 case: "|y₀| = 164.69 in = 23.53 D"); their values and check results are unchanged. Still open. **Ask:** apply the stable-branch test (c) to every p-y solve, so a first attempt that reverses or folds back is also "did not converge"? (The deflection bound (d) no longer exists; see O37.)
+- O36. **A FIRST p-y attempt can converge to a post-critical state, and it is used.** **Closed by F27 (2026-10-11).** Engineer's decision 2026-10-11: "yes apply it to first attempts too." A converged first attempt must now pass the stable-branch test (c) (and (a) convergence); the closure test (b) stays for retried solves only (coordinator's ruling after (b) on first attempts rejected moment-only and layered-profile solves; see F27 and O38). A rejected first attempt goes to the retry; in every case found the retry also reversed or did not converge, so these cases are now "did not converge" / NG (STL 20 / P 15: was Mmax 130.41 kip·ft at y₀ −164.69 in with stability OK; Ext I 60 / 12 / M 5: was 112.77 kip·ft at −47.04 in). Original text: **A FIRST p-y attempt can converge to a post-critical state, and it is used.** F22 tests only retried solves (as approved: solves that never needed the retry stay bit-identical). The 8-step first attempt can also settle on the unstable branch. Example: micropile defaults, free head, one strength case STL 20 kip / P 15 kip: Module 02 reports Mmax 130.41 kip·ft at a head deflection of **−164.69 in** (opposite to the load), closure 0.006 %, and combined-loading stability **passes**; flexure (D/C 2.42) and combined (2.46) are NG on that moment, so `allPass` is false, but the moment is not a valid design value. Since F23 the envelope shows the same value (before, its 6-step solve failed and it showed the 17.5 kip·ft fallback). Another: micropile defaults (default soil), an Extreme case 60 kip / 12 kip / M 5 kip·ft made active: the first attempt converges to y0 = −47.04 in, Mmax 112.77 kip·ft, and stability passes (the same loads on the uniform sand N60 20 profile of F23 check case 2 need the retry and are now "did not converge"). The retry search also found first attempts with reversed deflections at moderate loads (micropile defaults, P 6 kip with 200 kip axial, M-φ curves at 86 kip: y0 −9.6 in). Not changed (it changes results for solves that do not need the retry). **Mitigated by F25 (2026-10-11):** the large head-deflection warning (default |y₀| > 0.25 D) applies to every p-y result, so these first attempts are now flagged in amber in Module 02, the dashboard, the Lateral graphs tab, the envelope and the report (e.g. the STL 20 / P 15 case: "|y₀| = 164.69 in = 23.53 D"); their values and check results are unchanged. Still open. **Ask:** apply the stable-branch test (c) to every p-y solve, so a first attempt that reverses or folds back is also "did not converge"? (The deflection bound (d) no longer exists; see O37.)
 - O37. **F22 acceptance thresholds.** **Closed by F25 (2026-10-11).** Engineer's decision: "The deflection limit will be much smaller than 1D, I don't know what it is, but probably a couple inches. I suggest just leaving it off or maybe an input for the warning with default at .25D." The |y0| ≤ 1.0 × D acceptance test was removed (acceptance keeps (a) every step converged, (b) closure ≤ 1 %, (c) stable branch); a new input "Large head-deflection warning, y₀ > [0.25] × D" gives an amber warning only. Check case 2 below is now accepted (Mmax 107.84 kip·ft, flexure 2.00 NG, combined 2.04 NG, stability OK) with the warning. Closure 1 % kept as is. Original text: A retried solve is accepted only with closure ≤ 1 % (ΣF and ΣM) and |y0| ≤ 1.0 × D. Both are judgement values (no code provision). With the 1·D bound no retried solve was found that is accepted: F22 check case 2 (micropile, free head, STL 20 / P 14) converges on the stable branch with closure 0.0003 % but y0 = 9.40 in = 1.34 D, so it is reported as "did not converge" (its flexure D/C would be 2.0, NG either way). With 2·D it would be accepted. **Confirm** the thresholds (or give the deflection bound you want, e.g. 2·D, or a multiple of the service deflection limit).
+- O38. **Large equilibrium-closure residual on layered (four-layer) profiles.** Found in F27 (2026-10-11), not changed. On main, converged first attempts on the four-layer profile used by the parity runs (sand / soft clay / stiff clay / sand, tops 0 / 8 / 16 / 25 ft) report closures far above the uniform-soil values (≤ 0.05 % ΣF): H-pile defaults ΣF **43.80 %** / ΣM **15.06 %** (y₀ 0.157 in, Mmax 34.0 kip·ft, a plainly sound solve); with buckling (L_u 8 ft) 57.20 % / 16.20 %; micropile 3.17 % / 1.10 %, edited micropile 1.97 % / 0.55 %, micropile + buckling 5.12 % / 0.83 %. Sweep (four-layer, free head, STL 20–150, P 1–20): H-pile 15–52 % ΣF / 8–15 % ΣM; micropile 0.1–10 % ΣF / 0.05–4.9 % ΣM; moment-only head loads (after F27's normalisation) 115–1,057 % ΣF, 1.5–13 % ΣM. The residual is computed from the reported soil reactions `res.p` (`pyPofY` at each node) integrated against the applied loads; on a uniform profile it closes to round-off, so the large layered values point at the reported p (layer-boundary nodes / Georgiadis equivalent depth) or the integration across layer boundaries rather than at the solution itself, but this was not investigated. Effects today: Module 02 and the report show these closures; a RETRIED solve on such a profile is rejected by the 1 % closure test (b) even when sound (F27 four-layer + buckling edited micropile: retry closure 5.51 %). First attempts are not tested for closure (F27). **To investigate** (coordinator): whether the residual or the reported p is wrong on layered profiles, and whether the moment / deflection results are affected.
