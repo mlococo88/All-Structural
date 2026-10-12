@@ -252,6 +252,7 @@ table.ldtbl input{width:58px;font-family:inherit;font-size:11px;border:1px solid
  <div class="row"><label>Bar coating (&psi;<sub>e</sub>)</label><select data-path="mat.coating"><option value="none">Uncoated / galvanized</option><option value="epoxy">Epoxy-coated</option></select><span class="hint">ACI Table 25.4.2.5</span></div>
  <div class="row"><label>Cover, bottom (cast on soil)</label><input type="number" step="0.25" data-path="mat.coverBot" data-num><span class="unit">in</span></div>
  <div class="row"><label>Cover, top (formed)</label><input type="number" step="0.25" data-path="mat.coverTop" data-num><span class="unit">in</span></div>
+ <div class="row"><label>Side/end cover, bottom bars</label><input type="text" data-path="mat.sfdCoverSide" placeholder="blank = bottom"><span class="unit">in</span><span class="hint">c<sub>b</sub> for &ell;<sub>d</sub></span></div>
  <div class="row"><label>Subgrade modulus k<sub>s</sub></label><input type="number" step="10" data-path="mat.ks" data-num><span class="unit">pci</span><span class="hint">(rigidity check)</span></div>
  <div class="row"><label>Footing self-weight</label><select data-path="mat.swMode" id="swMode"><option value="auto">Auto-compute</option><option value="user">User override</option></select></div>
  <div class="row swUser"><label>Self-weight override W<sub>f</sub></label><input type="number" step="1" data-path="mat.swUser" data-num><span class="unit">kips</span></div>
@@ -267,6 +268,7 @@ table.ldtbl input{width:58px;font-family:inherit;font-size:11px;border:1px solid
  <div class="row sm-vesic"><label>Cohesion c</label><input type="number" step="0.05" data-path="soil.c" data-num><span class="unit">ksf</span></div>
  <div class="row sm-vesic"><label>Friction angle &phi;</label><input type="number" step="0.5" data-path="soil.phi" data-num><span class="unit">deg</span></div>
  <div class="row sm-vesic"><label>Bearing capacity FS</label><input type="number" step="0.1" data-path="soil.FSb" data-num><span class="unit">&ndash;</span></div>
+ <div class="row sm-vesic"><label>Depth factors d<sub>q</sub>, d<sub>c</sub></label><select data-path="soil.sfdDepthF"><option value="off">Off (d = 1.0)</option><option value="on">On (Vesi&cacute;)</option></select><span class="hint">AASHTO 10.6.3.1.2a</span></div>
  <div class="row sm-vesic"><label>Override q<sub>allow</sub></label><select data-path="soil.qaOverride" id="qaOverSel"><option value="off">Off (use computed)</option><option value="on">On (user value)</option></select></div>
  <div class="row sm-vesic qa-over"><label>User q<sub>allow</sub></label><input type="number" step="0.25" data-path="soil.qaOverVal" data-num><span class="unit">ksf</span></div>
  <div class="row"><label>Soil unit weight &gamma;<sub>s</sub></label><input type="number" step="1" data-path="soil.gs" data-num><span class="unit">pcf</span></div>
@@ -567,7 +569,7 @@ function defaultState(){
  loadMode:'type',
  geom:{B:10,L:8,t:2.5,Df:4},
  mat:{gc:150,fc:4000,fy:60000,lambda:1,coverBot:3,coverTop:2,ks:150,swMode:'auto',swUser:0,vcMode:'c',coating:'none'},
- soil:{mode:'vesic',qa:4,qaBasis:'gross',c:0,phi:32,gs:120,FSb:3,dw:'',qaOverride:'off',qaOverVal:4},
+ soil:{mode:'vesic',qa:4,qaBasis:'gross',c:0,phi:32,gs:120,FSb:3,dw:'',qaOverride:'off',qaOverVal:4,sfdDepthF:'off'},
  ev:{cover:1.5,gev:120,qDsur:0,qLsur:0},
  freinf:{botX:{size:8,spc:9},botY:{size:8,spc:9},topX:{size:0,spc:12},topY:{size:0,spc:12}},
  stab:{muMode:'phi',mu:0.45,pf:0,FSot:2,FSsl:1.5,FSfl:1.25,shearCouple:'on',otGate:'off',eccMode:'kern',eccCustom:0.25},
@@ -589,6 +591,10 @@ function migrateState(){
  // Object.assign(defaultState(), imported) is shallow, so an imported stab/soil object
  // replaces the default wholesale and silently drops keys added since the export.
  const ds=defaultState();
+ // Saves made before the "use depth factors" option always applied d_q / d_c: keep them on
+ // for those saves so an old project reproduces its results (new projects default to off).
+ if(!state.soil||typeof state.soil!=='object')state.soil={};
+ if(state.soil.sfdDepthF===undefined)state.soil.sfdDepthF='on';
  ['stab','soil','ev'].forEach(sec=>{if(!state[sec])state[sec]={};
   Object.keys(ds[sec]).forEach(k=>{if(state[sec][k]===undefined)state[sec][k]=ds[sec][k];});});
  (state.peds||[]).forEach(p=>{
@@ -764,7 +770,7 @@ const SFD_IN_SEC={
 const SFD_IN_ERR=[
  [/^Footing dimensions B, L, t/,'geom'],
  [/^Vesi\u0107 mode: \u03c6 \u2248 0|^Direct mode: allowable bearing|^Friction angle \u03c6 cannot|^Cohesion c cannot|^Bearing capacity factor of safety|^Soil unit weight must/,'soil'],
- [/^Concrete strength f'c|^Steel yield f_y|^Cover cannot be negative|^Top and bottom cover together|^Concrete unit weight cannot/,'mat'],
+ [/^Concrete strength f'c|^Steel yield f_y|^Cover cannot be negative|^Side\/end cover must be|^Top and bottom cover together|^Concrete unit weight cannot/,'mat'],
  [/^Friction coefficient \u03bc cannot|^Passive fraction mobilized/,'stab'],
  [/^Pedestal ".*": (plan dimensions|height cannot|footprint extends)|^No pedestals defined/,'peds']];
 const SFD_IN_KEY='sfd_inputTab_v1';
@@ -955,10 +961,16 @@ function vesicCapacity(ctx,V,H,ex,ey,thetaH){
  const Ng=2*(Nq+1)*tphi;
  const sc=1+(Beff/Leff)*(Nq/Nc), sq=1+(Beff/Leff)*tphi, sg=1-0.4*(Beff/Leff);
  const kk=(Df/Beff<=1)?Df/Beff:Math.atan(Df/Beff);
- const dq=1+2*tphi*Math.pow(1-Math.sin(phi),2)*kk;
- const dc=phi>1e-6?(dq-(1-dq)/(Nc*tphi)):(1+0.4*kk);
+ /* depth factors only when the "use depth factors" option is on (soil.sfdDepthF):
+    AASHTO LRFD 10.6.3.1.2a - use them only where the soil above the base is as
+    competent as the bearing soil and will not be removed; otherwise d = 1.0. */
+ const useD=(ctx.useD===true);
+ const dq=useD?1+2*tphi*Math.pow(1-Math.sin(phi),2)*kk:1;
+ const dc=useD?(phi>1e-6?(dq-(1-dq)/(Nc*tphi)):(1+0.4*kk)):1;
  const dg=1;
- const mxm=(2+B/L)/(1+B/L), mym=(2+L/B)/(1+L/B);
+ /* inclination exponent on the effective footing B' x L' (AASHTO LRFD 10.6.3.1.2a);
+    was nominal B/L. Bp is the x-dimension, Lp the y-dimension. */
+ const mxm=(2+Bp/Lp)/(1+Bp/Lp), mym=(2+Lp/Bp)/(1+Lp/Bp);
  const ct=Math.cos(thetaH),st=Math.sin(thetaH);
  const m=mxm*ct*ct+mym*st*st;
  let iq=1,ig=1,ic=1,denom=null;
@@ -974,7 +986,7 @@ function vesicCapacity(ctx,V,H,ex,ey,thetaH){
  else{q_sur=gs*Df;g_eff=gs;gwCase=3;}
  const T1=c*Nc*sc*dc*ic, T2=q_sur*Nq*sq*dq*iq, T3=0.5*g_eff*Beff*Ng*sg*dg*ig;
  const qult=T1+T2+T3, qall=qult/FSb, qeff=V/Ae;
- return{fail:false,Bp,Lp,Beff,Leff,Ae,Nq,Nc,Ng,sc,sq,sg,kk,dq,dc,dg,m,mxm,mym,tphi,iq,ig,ic,denom,
+ return{fail:false,Bp,Lp,Beff,Leff,Ae,Nq,Nc,Ng,sc,sq,sg,kk,dq,dc,dg,useD,m,mxm,mym,tphi,iq,ig,ic,denom,
   q_sur,g_eff,gwCase,T1,T2,T3,qult,qall,qeff,DCR:qeff/qall,H,V};
 }
 /* ================= master compute ================= */
@@ -1003,7 +1015,8 @@ function computeAll(){
  else if(fyv<40000||fyv>100000)W.push({lvl:'warn',msg:'f_y = '+f2(fyv)+' psi is outside the usual 40,000\u2013100,000 psi range \u2014 check the units (this field is psi, not ksi).'});
  const lamv=num(state.mat.lambda);
  if(lamv<=0||lamv>1)W.push({lvl:'warn',msg:'Lightweight factor \u03bb = '+f2(lamv)+' is outside (0, 1.0]; ACI 19.2.4 caps \u03bb at 1.0 for normalweight concrete.'});
- if(num(state.mat.coverBot)<0||num(state.mat.coverTop)<0)W.push({lvl:'err',msg:'Cover cannot be negative.'});
+ if(num(state.mat.coverBot)<0||num(state.mat.coverTop)<0||sfdSideCoverIn()<0)W.push({lvl:'err',msg:'Cover cannot be negative.'});
+ if(isNaN(sfdSideCoverIn()))W.push({lvl:'err',msg:'Side/end cover must be a number in inches, or blank to use the bottom cover.'});
  if(num(state.mat.coverBot)+num(state.mat.coverTop)>=t*12)W.push({lvl:'err',msg:'Top and bottom cover together exceed the footing thickness \u2014 no effective depth remains.'});
  if(num(state.mat.coverBot)<3)W.push({lvl:'warn',msg:'Bottom cover < 3 in: ACI 318-19 20.5.1.3 requires 3 in for concrete cast against and permanently in contact with ground.'});
  if(num(state.mat.gc)<0)W.push({lvl:'err',msg:'Concrete unit weight cannot be negative.'});
@@ -1015,6 +1028,8 @@ function computeAll(){
  }
  if(num(state.stab.mu)<0)W.push({lvl:'err',msg:'Friction coefficient \u03bc cannot be negative.'});
  if(num(state.stab.pf)<0||num(state.stab.pf)>1)W.push({lvl:'err',msg:'Passive fraction mobilized must be between 0 and 1.'});
+ else if(num(state.stab.pf)>0)W.push({lvl:'warn',msg:'Passive resistance is credited over the full embedment Df and the full footing width (P_p = f_p·½K_pγD_f²·w), not only the footing face of depth t. Neglect soil that may be removed by excavation, scour or frost, and soil above the footing top, unless the geotechnical report allows it (AASHTO LRFD 10.6.3.4); set the passive fraction accordingly.'});
+ if(state.soil.mode==='vesic'&&state.soil.sfdDepthF==='on'&&Df>0)W.push({lvl:'warn',msg:'Depth factors d_q, d_c are applied in the Vesić bearing capacity. Use them only where the soil above the base is as competent as the bearing soil and will not be removed (AASHTO LRFD 10.6.3.1.2a); otherwise set "Depth factors" to Off.'});
  ['otGate','eccMode','eccCustom'].forEach(k=>{if(state.stab[k]===undefined)state.stab[k]=defaultState().stab[k];});
  ['FSot','FSsl','FSfl'].forEach(k=>{if(num(state.stab[k])<1)W.push({lvl:'warn',msg:'Target factor of safety '+k+' = '+f2(num(state.stab[k]))+' is less than 1.0.'});});
  if(num(state.mat.ks)<=0)W.push({lvl:'warn',msg:'Subgrade modulus k_s must be positive for the rigid-footing verification; the rigidity check will be skipped.'});
@@ -1115,7 +1130,7 @@ function computeAll(){
   if(U>0){P-=U;verts.push({w:-U,x:0,y:0,src:'Buoyancy U',f:1,mag:-U});}
   return{P,Hx,Hy,Mx,My,MaX,MaY,verts,ex:Math.abs(P)>1e-9?My/P:0,ey:Math.abs(P)>1e-9?Mx/P:0};
  }
- const ctx={B,L,Df,phi,c,gs,gw,dw:dwc===Infinity?Infinity:dwc,FSb};
+ const ctx={B,L,Df,phi,c,gs,gw,dw:dwc===Infinity?Infinity:dwc,FSb,useD:state.soil.sfdDepthF==='on'};
  const mu=(state.stab.muMode==='phi')?Math.tan((2/3)*phi):num(state.stab.mu);
  const Kp=Math.pow(Math.tan(Math.PI/4+phi/2),2);
  const pf=Math.min(Math.max(num(state.stab.pf),0),1);
@@ -1547,7 +1562,7 @@ function buildInputEcho(){
   ['Embedment Df',f2(R.Df),'ft',''],
   ['\u03b3 concrete / soil / EV',f2(R.gc*1000)+' / '+f2(R.gs*1000)+' / '+f2(R.gev*1000),'pcf',''],
   ['f\u2032c / ks',f2(R.fc)+' / '+f2(R.ks),'psi / pci','rigidity check'],
-  ['Bearing basis',state.soil.mode==='vesic'?'Vesi\u0107 computed (c='+f2(R.c)+' ksf, \u03c6='+f2(R.phiDeg)+'\u00b0, FS='+f2(R.FSb)+')':'Direct qa = '+f2(num(state.soil.qa))+' ksf ('+state.soil.qaBasis+')','',''],
+  ['Bearing basis',state.soil.mode==='vesic'?'Vesi\u0107 computed (c='+f2(R.c)+' ksf, \u03c6='+f2(R.phiDeg)+'\u00b0, FS='+f2(R.FSb)+', depth factors '+(state.soil.sfdDepthF==='on'?'on':'off')+')':'Direct qa = '+f2(num(state.soil.qa))+' ksf ('+state.soil.qaBasis+')','',''],
   ['Water table depth',R.dw===Infinity?'none':f2(R.dw),'ft below grade',''],
   ['Soil cover on footing',f2(num(state.ev.cover))+' (effective '+f2(R.covEff)+')','ft','EV region = footing \u2212 pedestals'],
   ['Friction \u03bc',f2(R.mu)+(state.stab.muMode==='phi'?' = tan(2/3\u00b7\u03c6)':' (user)'),'\u2013',''],
@@ -2063,13 +2078,16 @@ function renderBearing(){
    's_c = 1+\\frac{B_{eff}}{L_{eff}}\\frac{N_q}{N_c},\\quad s_q = 1+\\frac{B_{eff}}{L_{eff}}\\tan\\varphi,\\quad s_\\gamma = 1-0.4\\frac{B_{eff}}{L_{eff}}',
    's_c = 1+'+f2(v.Beff/v.Leff)+'\\cdot\\frac{'+f2(v.Nq)+'}{'+f2(v.Nc)+'},\\quad s_q = 1+'+f2(v.Beff/v.Leff)+'\\cdot\\tan '+f2(R.phiDeg)+'^\\circ,\\quad s_\\gamma = 1-0.4\\cdot'+f2(v.Beff/v.Leff),
    's_c = '+f2(v.sc)+',\\quad s_q = '+f2(v.sq)+',\\quad s_\\gamma = '+f2(v.sg)));
-  b2.appendChild(eqBlock('Depth factors','Vesi\u0107 (k = Df/B\u2032 \u2264 1, else arctan)',
+  if(!v.useD)b2.appendChild(eqBlock('Depth factors','Option off \u2014 AASHTO LRFD 10.6.3.1.2a (soil above the base not relied on)',
+   'd_q = d_c = d_\\gamma = 1',null,
+   'd_q = 1.00,\\quad d_c = 1.00,\\quad d_\\gamma = 1.00'));
+  else b2.appendChild(eqBlock('Depth factors','Vesi\u0107 (k = Df/B\u2032 \u2264 1, else arctan); option on \u2014 soil above the base taken as competent and permanent (AASHTO LRFD 10.6.3.1.2a)',
    'k = '+ (R.Df/v.Beff<=1?'D_f/B_{eff}':'\\arctan(D_f/B_{eff})')+',\\quad d_q = 1+2\\tan\\varphi(1-\\sin\\varphi)^2 k,\\quad d_c = d_q-\\frac{1-d_q}{N_c\\tan\\varphi},\\quad d_\\gamma = 1',
    'k = '+(R.Df/v.Beff<=1?f2(R.Df)+'/'+f2(v.Beff):'\\arctan('+f2(R.Df)+'/'+f2(v.Beff)+')')+' = '+f2(v.kk)+',\\quad d_q = 1+2\\tan '+f2(R.phiDeg)+'^\\circ(1-\\sin '+f2(R.phiDeg)+'^\\circ)^2\\cdot'+f2(v.kk)+',\\quad d_c = '+f2(v.dq)+'-\\frac{1-'+f2(v.dq)+'}{'+f2(v.Nc)+'\\cdot'+f2(v.tphi)+'}',
    'd_q = '+f2(v.dq)+',\\quad d_c = '+f2(v.dc)+',\\quad d_\\gamma = 1.00'));
-  b2.appendChild(eqBlock('Load inclination factors','Vesi\u0107 (m interpolated by load direction)',
-   'm_x=\\tfrac{2+B/L}{1+B/L},\\; m_y=\\tfrac{2+L/B}{1+L/B},\\; m = m_x\\cos^2\\theta + m_y\\sin^2\\theta,\\quad i_q = \\left(1-\\tfrac{H}{V+A_e c\\cot\\varphi}\\right)^m,\\; i_\\gamma = (\\;\\cdot\\;)^{m+1},\\; i_c = i_q-\\tfrac{1-i_q}{N_c\\tan\\varphi}',
-   'm_x='+f2(v.mxm)+',\\; m_y='+f2(v.mym)+'\\Rightarrow m='+f2(v.m)+';\\quad i_q = \\left(1-\\frac{'+f2(v.H)+'}{'+f2(v.V)+'+'+f2(v.Ae)+'\\cdot'+f2(R.c)+'\\cot '+f2(R.phiDeg)+'^\\circ}\\right)^{'+f2(v.m)+'}'+(v.denom!==null?'=\\left(1-\\frac{'+f2(v.H)+'}{'+f2(v.denom)+'}\\right)^{'+f2(v.m)+'}':''),
+  b2.appendChild(eqBlock('Load inclination factors','Vesi\u0107 (m interpolated by load direction, on B\u2032/L\u2032 \u2014 AASHTO LRFD 10.6.3.1.2a)',
+   "m_x=\\tfrac{2+B'/L'}{1+B'/L'},\\; m_y=\\tfrac{2+L'/B'}{1+L'/B'},"+'\\; m = m_x\\cos^2\\theta + m_y\\sin^2\\theta,\\quad i_q = \\left(1-\\tfrac{H}{V+A_e c\\cot\\varphi}\\right)^m,\\; i_\\gamma = (\\;\\cdot\\;)^{m+1},\\; i_c = i_q-\\tfrac{1-i_q}{N_c\\tan\\varphi}',
+   "B'/L'="+f2(v.Bp)+'/'+f2(v.Lp)+',\\; m_x='+f2(v.mxm)+',\\; m_y='+f2(v.mym)+'\\Rightarrow m='+f2(v.m)+';\\quad i_q = \\left(1-\\frac{'+f2(v.H)+'}{'+f2(v.V)+'+'+f2(v.Ae)+'\\cdot'+f2(R.c)+'\\cot '+f2(R.phiDeg)+'^\\circ}\\right)^{'+f2(v.m)+'}'+(v.denom!==null?'=\\left(1-\\frac{'+f2(v.H)+'}{'+f2(v.denom)+'}\\right)^{'+f2(v.m)+'}':''),
    'i_q = '+f2(v.iq)+',\\quad i_\\gamma = '+f2(v.ig)+',\\quad i_c = '+f2(v.ic)));
   const gwtxt=['','\\text{WT at/above base: } q = \\gamma d_w + \\gamma\'(D_f-d_w),\\; \\gamma_{eff} = \\gamma\'','\\text{WT within B below base: } q = \\gamma D_f,\\; \\gamma_{eff} = \\gamma\' + \\gamma_w\\frac{d_w-D_f}{B_{eff}}','\\text{WT deeper than } D_f+B_{eff}: \\text{ no correction}'][v.gwCase];
   const gwsub=[''
@@ -2666,6 +2684,20 @@ function reqAs(Mu,b,d,fc,fy){
    cb = min(cover to bar centre, s/2); Ktr = 0 (no transverse reinforcement in a footing mat);
    (cb+Ktr)/db <= 2.5; psi_t*psi_e <= 1.7; sqrt(f'c) <= 100 psi (25.4.1.4). Returns Ld (in);
    with o.detail = true returns the intermediate values as an object. */
+/* optional side/end cover of the bottom bars (mat.sfdCoverSide): null when blank (the earlier
+   assumption: side cover not less than the bottom cover), NaN when not a number. */
+function sfdSideCoverIn(){const v=state.mat.sfdCoverSide;
+ if(v===undefined||v===null||String(v).trim()==='')return null;
+ const x=Number(String(v).trim());return isFinite(x)?x:NaN;}
+/* clear cover used for cb of the bottom bars: the smaller of the bottom cover and the side/end
+   cover when one is entered (ACI 318-19 25.4.2.4: cb = the smaller of the distance from the bar
+   centre to the nearest concrete surface and half the c-c spacing). */
+function sfdCbCover(){const cb=num(state.mat.coverBot),sd=sfdSideCoverIn();
+ return (sd===null||isNaN(sd))?cb:Math.min(cb,Math.max(sd,0));}
+/* end cover deducted from the available development length: the side/end cover when entered,
+   else the bottom cover (earlier behaviour). */
+function sfdEndCover(){const sd=sfdSideCoverIn();
+ return (sd===null||isNaN(sd))?num(state.mat.coverBot):Math.max(sd,0);}
 function devLength(size,fc,fy,topBar,o){
  o=o||{};
  const db=BAR_DIA[size];if(!db)return o.detail?{Ld:0}:0;
@@ -3337,7 +3369,7 @@ function computePhase2(R){
   const AsDowMin=0.005*Ag;
   const AsDowProv=(state.peds[i].reinf.dowelN||0)*BAR_AREA[state.peds[i].reinf.dowelSize||0];
   const dSize=state.peds[i].reinf.dowelSize||8;
-  const Ldc=Math.max(0.02*BAR_DIA[dSize]*fy/(lam*sq),0.0003*BAR_DIA[dSize]*fy,8);
+  const Ldc=Math.max(0.02*BAR_DIA[dSize]*fy/(lam*Math.min(sq,100)),0.0003*BAR_DIA[dSize]*fy,8); // ACI 318-19 25.4.9.2, sqrt(f'c) <= 100 psi (25.4.1.4)
   /* Compression development of the dowel INTO the footing.  Depth available is the footing
      thickness less the bottom cover and the two bottom mat layers the dowel must clear.
      ACI 318-19 25.4.9.1 does not permit a hook to develop a bar in compression, so a
@@ -3644,7 +3676,7 @@ function renderFootingDesign(){
  [['x',state.freinf.botX.size,P2.desX],['y',state.freinf.botY.size,P2.desY]].forEach(([dir,size,des])=>{
   if(!size)return;
   const spcD=(dir==='x')?num(state.freinf.botX.spc):num(state.freinf.botY.spc);
-  const dv=devLength(size,P2.fc,P2.fy,false,{lam:P2.lam,cover:num(state.mat.coverBot),spc:spcD,coating:state.mat.coating,detail:true});
+  const dv=devLength(size,P2.fc,P2.fy,false,{lam:P2.lam,cover:sfdCbCover(),spc:spcD,coating:state.mat.coating,detail:true});
   const Ld=dv.Ld;
   /* Available length is measured from the GOVERNING FLEXURAL SECTION to the nearer footing
      edge, less the end cover. That is the length over which the bar must develop the stress
@@ -3663,17 +3695,17 @@ function renderFootingDesign(){
     [c-hw,c+hw].forEach(v=>{if(Math.abs(v)<hf-1e-9&&(best===null||Math.abs(v)>Math.abs(best)))best=v;});});
    sec=best;
   }
-  const avail=(sec===null||sec===undefined)?-1:((hf-Math.abs(sec))*12-num(state.mat.coverBot));
+  const avail=(sec===null||sec===undefined)?-1:((hf-Math.abs(sec))*12-sfdEndCover());
   if(!(avail>0)){
    bd.appendChild(el('div','note','<b>Development of the '+dir+'-bars is not applicable</b> \u2014 there is no cantilever in the '+dir+'-direction (every bearing element reaches the footing edge), so there is no length beyond a critical section over which these bars must develop. Detail for continuity across the footing instead.'));
    return;}
   bd.appendChild(eqBlock('Development length, '+dir+'-bars (#'+size+')','ACI 318-19 25.4.2.4, Table 25.4.2.5',
    '\\ell_d = \\frac{3}{40}\\frac{f_y}{\\lambda\\sqrt{f\'_c}}\\frac{\\psi_t\\psi_e\\psi_s\\psi_g}{(c_b+K_{tr})/d_b}\\,d_b \\ge 12\\;\\mathrm{in},\\quad c_b=\\min(c_c+d_b/2,\\;s/2),\\;K_{tr}=0',
    '\\lambda='+f2(dv.lam)+',\\;\\sqrt{f\'_c}='+f2(dv.sqfc)+(P2.fc>10000?'\\,(\\le100)':'')+',\\;\\psi_t\\psi_e='+f2(dv.psi_te)+',\\;\\psi_s='+f2(dv.psi_s)+',\\;\\psi_g='+f2(dv.psi_g)+',\\;c_b='+f2(dv.cb)+'\\;\\mathrm{in},\\;(c_b+K_{tr})/d_b='+f2(dv.conf)+(dv.conf>=2.5?'\\,(\\le2.5)':''),
-   '\\ell_d = '+f2(Ld)+'\\;\\mathrm{in},\\quad \\text{available} = ('+f2(hf)+'-|'+f2(sec)+'|)\\cdot12-'+f2(num(state.mat.coverBot))+' = '+f2(avail)+'\\;\\mathrm{in}',
+   '\\ell_d = '+f2(Ld)+'\\;\\mathrm{in},\\quad \\text{available} = ('+f2(hf)+'-|'+f2(sec)+'|)\\cdot12-'+f2(sfdEndCover())+' = '+f2(avail)+'\\;\\mathrm{in}',
    (Ld<=avail?'\\ell_d \\le \\text{available}\\;\\checkmark':'\\ell_d > \\text{available}\\;\\Rightarrow\\;\\textbf{hooks required}')));
  });
- bd.appendChild(el('div','note','Available length is measured from the <b>governing flexural section</b> to the nearer footing edge, less the end cover \u2014 the length over which the bar must develop the stress that section demands. c<sub>b</sub> uses the bottom clear cover (side cover assumed not less than it) and half the bar spacing; K<sub>tr</sub> = 0 (no transverse reinforcement); \u03bb is the input lightweight factor; \u03c8<sub>g</sub> follows f<sub>y</sub> (Grade 60 / 80 / 100); \u03c8<sub>e</sub> follows the bar-coating input. Bundled bars are not covered. Where \u2113<sub>d</sub> exceeds the available length, a standard hook <i>is</i> permitted in tension (25.4.3) \u2014 unlike the compression dowels in \u00a75.6.'));
+ bd.appendChild(el('div','note','Available length is measured from the <b>governing flexural section</b> to the nearer footing edge, less the end cover \u2014 the length over which the bar must develop the stress that section demands. c<sub>b</sub> uses '+(sfdSideCoverIn()===null?'the bottom clear cover (side/end cover not entered, so assumed not less than it)':'the smaller of the bottom cover and the entered side/end cover ('+f2(sfdCbCover())+' in)')+' and half the bar spacing; K<sub>tr</sub> = 0 (no transverse reinforcement); \u03bb is the input lightweight factor; \u03c8<sub>g</sub> follows f<sub>y</sub> (Grade 60 / 80 / 100); \u03c8<sub>e</sub> follows the bar-coating input. Bundled bars are not covered. Where \u2113<sub>d</sub> exceeds the available length, a standard hook <i>is</i> permitted in tension (25.4.3) \u2014 unlike the compression dowels in \u00a75.6.'));
  renderPunching(T);
  const bb=secPanel(T,'o-fd-bear','5.6  Concrete Bearing & Dowels at Pedestal Interface');
  const bt=document.createElement('table');bt.className='tbl';
@@ -3728,7 +3760,7 @@ function renderFootingDesign(){
  }
  bb.appendChild(eqBlock('Bearing on concrete & dowels','ACI 318-19 22.8.3.2 / 16.3.4.1',
   '\\phi P_{nb} = \\phi\\,0.85 f\'_c A_1\\sqrt{A_2/A_1}\\;(\\le 2\\times),\\;\\phi=0.65',
-  'A_{s,dowel,min} = 0.005 A_g,\\quad L_{dc} = (0.02 f_y/\\lambda\\sqrt{f\'_c})d_b \\ge 0.0003 f_y d_b',
+  'A_{s,dowel,min} = 0.005 A_g,\\quad L_{dc} = (0.02 f_y/\\lambda\\sqrt{f\'_c})d_b \\ge 0.0003 f_y d_b,\\;\\sqrt{f\'_c}\\le100\\;\\mathrm{psi}',
   null));
 }
 /* ---- original SVG: two-way (punching) critical perimeter, plan + elevation ---- */
@@ -4673,6 +4705,7 @@ manPart("p2","2. Input Reference",[
  ["Lightweight factor \u03bb","\u2013","ACI 19.2.4. 1.0 normalweight; enters every concrete shear/development expression."],
  ["Cover, bottom","in","Cast-against-soil cover to the outer bottom bar (ACI 20.5.1.3: 3 in). Sets d per layer \u2014 \u00a70.3.4."],
  ["Cover, top","in","Formed-surface cover to outer top bar."],
+ ["Side/end cover, bottom bars","in","Optional. Blank = same as the bottom cover. When entered, c<sub>b</sub> for the bottom-bar development length uses the smaller of this and the bottom cover, and this value is the end cover deducted from the available length (ACI 25.4.2.4)."],
  ["Subgrade modulus ks","pci","Rigidity screen only \u2014 \u00a70.3.1. Not in the pressure solution."],
  ["Self-weight mode","\u2013","Auto (B\u00b7L\u00b7t\u00b7\u03b3c) or user override."]
 ]}},
@@ -4681,6 +4714,7 @@ manPart("p2","2. Input Reference",[
  ["Bearing basis","\u2013","<b>Direct</b>: enter allowable qa (gross or net) and the pressure check is qmax \u2264 qa. <b>Vesi\u0107 computed</b>: qult from c, \u03c6, \u03b3, Df on the Meyerhof effective footing; qallow = qult/FS; check is on the effective-area uniform pressure (Part 4B)."],
  ["qa + gross/net","ksf","Direct allowable. Gross compares total pressure; net subtracts the overburden at founding level."],
  ["c, \u03c6, \u03b3 soil, FS","ksf, deg, pcf, \u2013","Vesi\u0107 parameters and factor of safety."],
+ ["Depth factors d<sub>q</sub>, d<sub>c</sub>","\u2013","Off (default for new projects): d<sub>q</sub> = d<sub>c</sub> = 1.0. On: Vesi\u0107 depth factors from D<sub>f</sub>/B\u2032. AASHTO LRFD 10.6.3.1.2a: use them only where the soil above the base is as competent as the bearing soil and will not be removed. Projects saved before this option existed open with it On, so their results are unchanged."],
  ["Water table depth","ft below grade","Buoyancy on base area when above base; effective \u03b3 in Vesi\u0107 (case 3 handling)."],
  ["Cover depth over footing","ft","Soil (EV) resting on the footing top outside pedestal footprints; capped at Df \u2212 t."],
  ["\u03b3 EV","pcf","Unit weight of that cover soil."]
@@ -4776,7 +4810,7 @@ manPart("p4b","4B. Bearing & Stability",[
 {h:"4B.2 The bearing check"},
 {p:"<b>Direct basis:</b> q<sub>max</sub> from the plane vs the entered allowable (gross or net). <b>Vesi&cacute; basis:</b> the geotechnical check follows the effective-area method \u2014 B&prime; = B\u22122|e<sub>x</sub>|, L&prime; = L\u22122|e<sub>y</sub>| (Meyerhof), uniform q<sub>eff</sub> = &Sigma;P/(B&prime;L&prime;) vs q<sub>allow</sub> = q<sub>ult</sub>/FS with"},
 {eq:"q_{ult}=cN_c s_c d_c i_c+qN_q s_q d_q i_q+\\tfrac12\\gamma_{ef}B_{ef}N_\\gamma s_\\gamma d_\\gamma i_\\gamma"},
-{p:"N-factors per Vesi&cacute;/Reissner/Prandtl; shape and depth factors per Vesi&cacute; (k = D<sub>f</sub>/B&prime; capped, arctan beyond); inclination factors with m interpolated by load direction; groundwater case 3 corrections on q and &gamma;<sub>ef</sub>. Every factor is substituted numerically in report &sect;3.3 with its reference. q<sub>max</sub> from the linear distribution is still reported \u2014 it feeds the structural design \u2014 but the geotechnical adequacy statement uses the effective-area value, per the method\u2019s derivation."},
+{p:"N-factors per Vesi&cacute;/Reissner/Prandtl; shape and depth factors per Vesi&cacute; (k = D<sub>f</sub>/B&prime; capped, arctan beyond; depth factors only when the Depth factors option is On, else 1.0); inclination factors with m on B&prime;/L&prime;, interpolated by load direction; groundwater case 3 corrections on q and &gamma;<sub>ef</sub>. Every factor is substituted numerically in report &sect;3.3 with its reference. q<sub>max</sub> from the linear distribution is still reported \u2014 it feeds the structural design \u2014 but the geotechnical adequacy statement uses the effective-area value, per the method\u2019s derivation."},
 {h:"4B.3 Overturning"},
 {p:"Evaluated about <b>all four edges</b> for <b>every</b> service combination. For each edge, each vertical action contributes W&middot;(arm to that edge) to M<sub>r</sub>; applied moments and V&middot;(t+h) couples contribute to M<sub>r</sub> or M<sub>o</sub> according to their sign about that edge; buoyancy is destabilising. FS = M<sub>r</sub>/M<sub>o</sub>; the dashboard reports the minimum over edges and combinations. The report prints the complete per-action table for each edge \u2014 the same table you would build by hand."},
 {key:"Bracketing matters more than the edge arithmetic: the governing overturning case is almost always a min-dead combination (0.6D+0.6W service). If your comparison software checks only nominal dead, expect it to report higher FS."},
