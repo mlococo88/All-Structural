@@ -830,15 +830,15 @@ h_ef 12″, 30×30×36 pedestal, f'c 4 ksi cracked, 1″ grout) unless stated.
 - **Open items:** the generator does not use slot S (existing O1); a beam-support moment is never transferred.
 
 ## Open items (not changed)
-- O1. ASCE 7-22 generator details (the 0.2S term in the 2.3.6 seismic combinations, a separate S slot, the 0.5L option). Not changed, per the brief (OPEN). Decide which combinations the generator should produce.
-- O2. Stand-off rod buckling uses gross d and A_g (`standoffCompressionCheck`). The threaded root arguably governs (r = d_root/4, A = A_se or A_root). Not changed (OPEN). Confirm the intended basis.
-- O3. The A2 1:2 frustum depth limit against pedestal height H is not checked (F13 covers similarity and concentricity only).
-- O4. **Pre-existing bug found:** shear hairpins can never be credited. `tensionDevLengths(S.vRebar)` reads `R.cover`, which `vRebar` does not have, so c_b = NaN, ℓ_d = NaN, and every leg fails the "behind the plane" development check (`reqBehind = NaN`). Hairpin substitution and (with F7) shear Condition A therefore never apply. This is conservative. Not fixed because it is outside the brief. Suggested fix: give `vRebar` a `cover` (2.0) or pass the cover used in `shearRebarIntercept`.
-- O5. ψ_ed,N in tension breakout still uses the minimum edge distance of ALL anchors, not the tension anchors (conservative). It is used consistently with the pryout cone. Should it follow the tension anchors like A_Nc?
-- O6. ψ_h,V outside the narrow-member case is computed from the `ca1` argument, which `comboCapacities` sets to the minimum edge distance of the whole group, not c_a1 of the governing edge. This is conservative and was left as is.
-- O7. Pryout keeps its old ratio cap `min(A_Nc,all/A_Nco, nT)` (nT = tension-anchor count) so its result is unchanged. Per §17.7.3 the cap would be the number of anchors in the group (less conservative when A_Nc,all/A_Nco > nT). Confirm.
-- O8. Condition A is decided by "the intercept check credits ≥ 1 bar/leg" (F7). If you want a stricter rule (all bars effective) or an explicit "Condition A" input, say so.
-- O9. F6 (§17.7.2.1.2) and F10 (uniform block) reduce DCRs in some cases. Both follow the code text / the reviewer's instruction, but please confirm.
+- O1. ASCE 7-22 generator details (the 0.2S term in the 2.3.6 seismic combinations, a separate S slot, the 0.5L option). Not changed, per the brief (OPEN). Decide which combinations the generator should produce. **Resolved 2026-10-12 by S1 (claude/sweep-baseplate).**
+- O2. Stand-off rod buckling uses gross d and A_g (`standoffCompressionCheck`). The threaded root arguably governs (r = d_root/4, A = A_se or A_root). Not changed (OPEN). Confirm the intended basis. **Resolved 2026-10-12 by S2 (claude/sweep-baseplate).**
+- O3. The A2 1:2 frustum depth limit against pedestal height H is not checked (F13 covers similarity and concentricity only). **Resolved 2026-10-12 by S3 (claude/sweep-baseplate).**
+- O4. **Pre-existing bug found:** shear hairpins can never be credited. `tensionDevLengths(S.vRebar)` reads `R.cover`, which `vRebar` does not have, so c_b = NaN, ℓ_d = NaN, and every leg fails the "behind the plane" development check (`reqBehind = NaN`). Hairpin substitution and (with F7) shear Condition A therefore never apply. This is conservative. Not fixed because it is outside the brief. Suggested fix: give `vRebar` a `cover` (2.0) or pass the cover used in `shearRebarIntercept`. **Resolved 2026-10-12 by S4 (claude/sweep-baseplate).**
+- O5. ψ_ed,N in tension breakout still uses the minimum edge distance of ALL anchors, not the tension anchors (conservative). It is used consistently with the pryout cone. Should it follow the tension anchors like A_Nc? **Resolved 2026-10-12 by S5 (claude/sweep-baseplate).**
+- O6. ψ_h,V outside the narrow-member case is computed from the `ca1` argument, which `comboCapacities` sets to the minimum edge distance of the whole group, not c_a1 of the governing edge. This is conservative and was left as is. **Resolved 2026-10-12 by S6 (claude/sweep-baseplate).**
+- O7. Pryout keeps its old ratio cap `min(A_Nc,all/A_Nco, nT)` (nT = tension-anchor count) so its result is unchanged. Per §17.7.3 the cap would be the number of anchors in the group (less conservative when A_Nc,all/A_Nco > nT). Confirm. **Resolved 2026-10-12 by S7 (claude/sweep-baseplate).**
+- O8. Condition A is decided by "the intercept check credits ≥ 1 bar/leg" (F7). If you want a stricter rule (all bars effective) or an explicit "Condition A" input, say so. **Still open: see "Needs engineer" in the 2026-10-12 entry.**
+- O9. F6 (§17.7.2.1.2) and F10 (uniform block) reduce DCRs in some cases. Both follow the code text / the reviewer's instruction, but please confirm. **Still open: see "Needs engineer" in the 2026-10-12 entry.**
 
 ## 2026-10-09 — PR: claude/tabs-baseplate (PR link added after merge)
 ### T1. Input panel split into tabs   [UI only — no calculation change]
@@ -960,7 +960,7 @@ h_ef 12″, 30×30×36 pedestal, f'c 4 ksi cracked, 1″ grout) unless stated.
 - **Other copies of this code:** none.
 - **Open items (found, not changed):**
   - O10. Typing a decimal into a number field can lose the decimal point. Typing `5.5` into f'c with Playwright's keyboard gives 55, both on main and on this branch. The panel is rebuilt on every keystroke, and the number input does not keep the intermediate `5.`. Please check this by hand in a browser. Not changed, because it is outside this brief. **Resolved 2026-10-10 by D1** (claude/baseplate-decimal).
-  - O11. At 400 px the page scrolls horizontally because of the six-column project header (`#projGrid`, at least 120 px per column). This was there before this change and was not changed.
+  - O11. At 400 px the page scrolls horizontally because of the six-column project header (`#projGrid`, at least 120 px per column). This was there before this change and was not changed. **Resolved 2026-10-12 by S8 (claude/sweep-baseplate).**
 
 ## 2026-10-10 — PR: claude/baseplate-decimal (PR link added after merge)
 ### D1. Number fields keep a typed decimal point (closes O10)   [UI only — no calculation change]
@@ -1027,3 +1027,274 @@ h_ef 12″, 30×30×36 pedestal, f'c 4 ksi cracked, 1″ grout) unless stated.
   - Every inline script parses (`vm.Script`). No console errors. Screenshot checked.
 - **Other copies of this code:** none (`numInput` and `refreshAll` are local to this tool).
 - **Open items:** none new.
+
+
+## 2026-10-12 — PR: claude/sweep-baseplate (PR link added after merge)
+
+Open-item sweep (engineer, 2026-10-12: "continue making updates and fixes until it's completed … use your best judgment"). Items from the open-item inventory, section 8 (BP-O1 to O9, BP-O11, BP-A1, BP-C5, BP-D6). Basis: ACI 318-19, AISC 360-16, ASCE 7-22 (as the tool states), AISC DG1 2nd Ed. Units: kip, in, ksi. "Default model" = the tool's default state (18×18×1.5 A36 plate, W12X65, 2×2 1″ F1554-36 heavy hex, h_ef 12″, 30×30×36 pedestal, f'c 4 ksi cracked, 1″ grout, three default combinations). All values below were read from the page itself in headless Chromium (main vs branch).
+
+Order of work: unconservative calc items (S1, S2, S3), then the conservative calc items and the bug (S4 to S7), then UI / import / dependency (S8 to S10).
+
+### S1. ASCE 7-22 generator: snow slot S, 0.2S with seismic, 0.5L option (closes O1)   [calc change: generator only] [MORE conservative where snow is entered]
+- **Where:** `const ASCE722 = {` (approx. line 702), new `const SNOW_FACTORS`, `generateCombos()` (anchor text `const roofs=hasS?`), `openComboGenerator()` (anchor text `0.5L in combinations 3, 4 and 6`), member-reaction receiver `plan()` (anchor text `if(add.E!==undefined && !(SL.useSeismic`).
+- **Problem:** the §2.3.1 roof term "(Lr or S or R)" used only slot Lr. A snow load typed into slot S had no effect (a warning in the member-reaction receiver said so). No 0.2S in the §2.3.6 seismic combinations and no 0.5L option. Unconservative wherever snow governs the roof.
+- **Before:**
+  ```js
+  const ASCE722 = {
+    /* [label, {D,L,Lr,S,W,E}] — Lr and S share the roof-live slot */
+    basic:[
+      ["1.4D",                 {D:1.4}],
+      ["1.2D+1.6L+0.5Lr",      {D:1.2,L:1.6,Lr:0.5}],
+      ["1.2D+1.6Lr+1.0L",      {D:1.2,Lr:1.6,L:1.0}],
+      ["1.2D+1.6Lr+0.5W",      {D:1.2,Lr:1.6,W:0.5}],
+      ["1.2D+1.0W+1.0L+0.5Lr", {D:1.2,W:1.0,L:1.0,Lr:0.5}],
+      ["0.9D+1.0W",            {D:0.9,W:1.0}],
+      ["0.9D-1.0W",            {D:0.9,W:-1.0}]
+    ],
+    seismic:(sds)=>{ const up=0.2*(sds||0); return [
+        ["("+fmt(1.2+up,2)+")D+1.0E+1.0L", {D:1.2+up, E:1.0, L:1.0}],
+        ["("+fmt(1.2+up,2)+")D-1.0E+1.0L", {D:1.2+up, E:-1.0, L:1.0}], … ]; },
+    omega:(sds,om)=>{ … ["…E+1.0L", {D:1.2+up, E:±o, L:1.0}] … }
+  };
+  …
+  const sets=[].concat(
+    SL.useBasic!==false ? ASCE722.basic : [],
+    SL.useSeismic ? ASCE722.seismic(SL.SDS) : [],
+    SL.useOmega   ? ASCE722.omega(SL.SDS, SL.omega) : []
+  );
+  ```
+  Receiver `plan()`: `if(add.S!==undefined) r.warn.push('The ASCE 7-22 generator in this tool does not use the S (snow) slot: …');`
+- **After:**
+  ```js
+  basic:(roofs, fL, sf)=>{
+    const L=(fL===undefined)?1.0:fL, F=sf||SNOW_FACTORS["1.6"];
+    const pf=r=>(r==="S"? F.p : 1.6), cf=r=>(r==="S"? F.c : 0.5);
+    const out=[["1.4D", {D:1.4}]];
+    const each=fn=>roofs.forEach(r=>out.push(fn(r)));
+    each(r=>["1.2D+1.6L+"+fmt(cf(r),1)+r,         {D:1.2, L:1.6, [r]:cf(r)}]);
+    each(r=>["1.2D+"+fmt(pf(r),1)+r+"+"+fmt(L,1)+"L", {D:1.2, [r]:pf(r), L:L}]);
+    each(r=>["1.2D+"+fmt(pf(r),1)+r+"+0.5W",      {D:1.2, [r]:pf(r), W:0.5}]);
+    each(r=>["1.2D+1.0W+"+fmt(L,1)+"L+"+fmt(cf(r),1)+r, {D:1.2, W:1.0, L:L, [r]:cf(r)}]);
+    out.push(["0.9D+1.0W", {D:0.9, W:1.0}], ["0.9D-1.0W", {D:0.9, W:-1.0}]);
+    return out;
+  },
+  seismic:(sds, fL, fS)=>{ … ["…D+1.0E+"+fmt(L,1)+"L"+sT, {D:1.2+up, E:1.0, L:L, S:s}] … }   /* sT = "+0.20S" when s>0 */
+  omega:(sds,om,fL,fS)=>{ … same L and S terms … }
+  const SNOW_FACTORS = {
+    "1.6":{p:1.6, c:0.5, e:0.2,  label:"1.6S / 0.5S / 0.2S — service-level snow (ASCE 7-16 form)"},
+    "1.0":{p:1.0, c:0.3, e:0.15, label:"1.0S / 0.3S / 0.15S — ASCE 7-22 strength-level snow (verify)"}
+  };
+  /* generateCombos */
+  const hasS=nz("S");
+  const roofs=hasS? (nz("Lr")? ["Lr","S"] : ["S"]) : ["Lr"];
+  const fL=SL.halfL? 0.5 : 1.0;
+  const sf=SNOW_FACTORS[SL.snowFactors]||SNOW_FACTORS["1.6"];
+  const fS=hasS? sf.e : 0;
+  ```
+  Generator dialog: new checkbox "0.5L in combinations 3, 4 and 6 (§2.3.1 Exception 1 …)" and a "Snow (S) factors" selector. The receiver's slot-S warning is removed, because slot S is now used.
+- **Defaults chosen:** 0.5L **off** (full L, conservative; the exception needs an occupancy judgement). Snow factors **1.6 / 0.5 / 0.2** (the service-level form the tool's 1.6Lr / 0.5Lr terms already use, and the larger gravity factors). The 7-22 set (1.0S / 0.3S / 0.15S, for strength-level snow from the 7-22 reliability-targeted ground snow load) is offered as an option and marked "verify": see Needs engineer N1.
+- **No change when S is empty:** with all S values zero the set, the labels and the order are exactly as before (checked: default service loads, with and without seismic and Ω₀, give identical lists on main and branch).
+- **Saved data:** two new optional fields in `S.serviceLoads`: `halfL` (boolean) and `snowFactors` ("1.6" or "1.0"). They are written only when the user touches the new controls. Old files load unchanged (absent = off / "1.6").
+- **Governing provision:** ASCE 7-22 §2.3.1 combinations 1 to 5 and Exception 1 (0.5L); §2.3.6 combination 6 (snow term). Combination numbering per ASCE 7-22 §2.3 (verify against the printed standard).
+- **Check case:** default service loads (D P −100, L −40, Lr −15, W P 20 / Vx 12 / My 200, E P 15 / Vx 10 / My 150) plus S = P −30, My 20 (kip, kip-in):
+  - Before: S is ignored. 7 combinations, the same as with S = 0 (for example 1.2D+1.6Lr+1.0L, P = −184).
+  - After (default factors): 11 combinations. Four new: 1.2D+1.6L+0.5S P = 1.2(−100)+1.6(−40)+0.5(−30) = **−199**, My = 10; 1.2D+1.6S+1.0L P = −120−48−40 = **−208**, My = 32; 1.2D+1.6S+0.5W P = −120−48+10 = **−158**, My = 0.5(200)+1.6(20) = 132; 1.2D+1.0W+1.0L+0.5S P = −120+20−40−15 = **−155**, My = 210.
+  - With seismic on (S_DS 1.0): (1.40)D+1.0E+1.0L+0.20S P = −140+15−40−6 = **−171** (before −165), My = 150+4 = 154.
+  - With "0.5L" ticked: 1.2D+1.6Lr+0.5L P = −120−24−20 = **−164** (before −184).
+  - With the 7-22 set: 1.2D+1.0S+1.0L P = −120−30−40 = −190; 1.2D+1.6L+0.3S P = −193; (1.40)D+1.0E+1.0L+0.15S P = −169.5.
+- **Conservatism:** more conservative wherever S is non-zero (S now enters). The 0.5L option and the 7-22 snow set are less conservative and are off by default.
+
+### S2. Stand-off rod compression on the threaded section (closes O2)   [calc change] [MORE conservative]
+- **Where:** `standoffCompressionCheck` (approx. line 3920). Anchor text `const dRoot=Math.max(d-1.2990/sp.n, 0.01);`
+- **Problem:** the open stand-off (no grout) rod buckling check used the gross area and r = d/4. The exposed length between the leveling nut and the concrete is threaded, so the threaded section governs.
+- **Before:**
+  ```js
+  const Ag=sp.Ag;                       /* gross area for compression */
+  const r=d/4;                          /* radius of gyration of solid round = d/4 */
+  ```
+  Report: `"\\phi P_n=\\phi F_{cr}A_g=…"`, vars `["r",…,"radius of gyration, d/4 (solid round)"]`, `["A_g",…,"gross rod area"]`.
+- **After:**
+  ```js
+  const dRoot=Math.max(d-1.2990/sp.n, 0.01);
+  const Ag=sp.Ase;                      /* threaded (stress) area for compression; name kept for the report fields */
+  const r=dRoot/4;                      /* radius of gyration of the root section = d_root/4 */
+  ```
+  Report: `A_{se}` in the φP_n line; vars `["r",…,"radius of gyration of the threaded root, d_root/4, d_root = d − 1.299/n = …"]`, `["A_se",…,"tensile stress area of the threaded rod …"]`. `dRoot` added to the returned object.
+- **Basis chosen:** A = A_se (the tool's own A_se table, the same area the tension check uses). r = d_root/4 with the basic minor diameter d_root = d − 1.2990/n, the root that the A_se formula 0.7854(d − 0.9743/n)² is built on. No new input: a leveling-nut stand-off is threaded at the nut by definition.
+- **Governing provision:** AISC 360-16 §E3 (flexural buckling), Eq. E3-2 / E3-3 / E3-4. The threaded-section properties follow ASME B1.1 thread geometry (A_se per ACI 318-19 R17.6.1.2 / AISC Table 7-17, verify).
+- **Check case:** 1″ F1554-36 (F_y 36), n = 8, open stand-off "no clamping" (K = 2.0), z = 2″, elastic force model (so the rods carry compression), default combinations. C_u = 40.0 kip (1.2D+1.6L).
+  - Before: r = 0.250, KL/r = 2(2)/0.25 = 16.0, F_e = π²(29000)/16² = 1118.0 ksi, F_cr = 0.658^(36/1118.0)(36) = 35.52 ksi, φP_n = 0.9(35.52)(0.7854) = **25.11 kip**, DCR = 40.0/25.11 = **1.593**.
+  - After: d_root = 1 − 1.299/8 = 0.8376, r = 0.2094, KL/r = 4/0.2094 = 19.10, F_e = 784.4 ksi, F_cr = 0.658^(36/784.4)(36) = 35.32 ksi, φP_n = 0.9(35.32)(0.606) = **19.26 kip**, DCR = 40.0/19.26 = **2.077**.
+- **Conservatism:** more conservative (φP_n about 23% lower for a 1″ rod).
+- **Found while checking (not changed, see N3):** with the default neutral-axis force model the anchors never carry compression, so for an open stand-off C_u = 0 and this check always reads 0.00. Only the elastic model loads the rods in compression.
+
+### S3. A2: 1V:2H frustum depth limited by the pedestal height H (closes O3)   [calc change] [MORE conservative or equal]
+- **Where:** `bearingCap` (approx. line 1320). Anchor text `const kDepth=Math.min(1+4*Hs/A1_w, 1+4*Hs/A1_l);`. Report label in `bearingCheck` (anchor text `1V:2H frustum within the pedestal height H`).
+- **Problem:** F13 made A2 geometrically similar and concentric, but the frustum depth was not checked against the pedestal height, so on a thin pedestal A2 (and √(A2/A1)) could be overstated.
+- **Before:**
+  ```js
+  const kSim=Math.max(1, Math.min((C.Bx/2-oX)/(A1_w/2), (C.By/2-oY)/(A1_l/2)));
+  ```
+- **After:**
+  ```js
+  const Hs=Math.max(+C.H||0, 0);
+  const kDepth=Math.min(1+4*Hs/A1_w, 1+4*Hs/A1_l);
+  const kSim=Math.max(1, Math.min((C.Bx/2-oX)/(A1_w/2), (C.By/2-oY)/(A1_l/2), kDepth));
+  ```
+  Returned object gains `kDepth` and `depthGoverns`. The A_2 row of the bearing step says "1V:2H frustum within the pedestal height H" and adds "LIMITED BY H" when the depth governs.
+- **Derivation:** each side of the lower base may lie at most 2H outside the loaded area, so k·A1_w ≤ A1_w + 4H, giving k ≤ 1 + 4H/A1_w (and likewise for A1_l). The pedestal height is used as the support depth (conservative: a footing below is ignored).
+- **Governing provision:** ACI 318-19 §22.8.3.2 and Fig. R22.8.3.2 (A2 is the lower base of the largest frustum, side slopes 1 vertical to 2 horizontal, contained wholly within the support); AISC 360-16 J8.
+- **Check case:** 18×18 plate, 1″ grout at 1:1 so A1 = 20×20 = 400 in². Pedestal 60×60, H = 4 in.:
+  - Before: k = 30/10 = 3.0, A2 = 3600, √(A2/A1) = 2.0 (cap).
+  - After: k_depth = 1 + 16/20 = 1.8, A2 = 400(1.8²) = 1296, √ = 1.8.
+  - With 5 ksi grout: φf_p = 0.65(0.85)(5) = **2.7625 ksi** in both (grout governs).
+  - With 10 ksi grout: before φf_p = 0.65(0.85)(4)(2.0) = **4.420 ksi** (bearing DCR 0.1676). After 0.65(0.85)(4)(1.8) = **3.978 ksi** (DCR 0.1862).
+  - Default model (H = 36): k_depth = 8.2, so there is no change.
+- **Conservatism:** more conservative or equal.
+
+### S4. Shear hairpins: ℓ_d no longer NaN, so effective legs can be credited (closes O4)   [bug fix → calc change] [LESS conservative]
+- **Where:** `shearRebarIntercept` (anchor text `const dev=tensionDevLengths(Object.assign({}, R, {cover}));`), `shearRebarCheck` (anchor text `const dev=ic? ic.dev : tensionDevLengths(Object.assign({}, R, {cover:`).
+- **Problem:** `tensionDevLengths(S.vRebar)` read `R.cover`, which `vRebar` does not have, so c_b = NaN and ℓ_d = NaN. Every leg failed the "developed behind the failure plane" test, no hairpin was ever credited, and shear Condition A (F7) and the shear substitution never applied. Main also logged NaN SVG attribute errors in the hairpin plan drawing.
+- **Before:**
+  ```js
+  const dev=tensionDevLengths(R);
+  const cover=Math.max(R.cover!==undefined?R.cover:2.0,0);
+  …
+  const dev=ic? ic.dev : tensionDevLengths(R);
+  ```
+- **After:**
+  ```js
+  const cover=Math.max(R.cover!==undefined?R.cover:2.0,0);
+  const dev=tensionDevLengths(Object.assign({}, R, {cover}));
+  …
+  const dev=ic? ic.dev : tensionDevLengths(Object.assign({}, R, {cover:Math.max(R.cover!==undefined?R.cover:2.0,0)}));
+  ```
+  This is the cover the intercept check already used for the leg set-out (2.0 in. unless a `cover` is present). No new input or saved field.
+- **Governing provision:** ACI 318-19 §17.5.2.1.2 (anchor reinforcement for shear, developed on both sides of the breakout surface); §25.4.2.4 Eq. 25.4.2.4a (ℓ_d); Table 17.5.3 (Condition A φ = 0.75 for concrete shear breakout when the reinforcement is effective).
+- **Check case:** default model, shear hairpins on with defaults (#4 Gr 60, 2 hairpins per leading anchor, spacing 4, ext. behind 12, acknowledgements not ticked):
+  - ℓ_d: c_b = min(2.0 + 0.25, 4/2) = 2.0, (c_b+K_tr)/d_b = 4.0 → 2.5 (cap), ψ_s = 0.8. ℓ_d = (3/40)(60000 · 0.8)/(√4000 · 2.5) · 0.5 = **11.38 in → 12 in (min)**. Before: NaN.
+  - Effective legs: before **0 of 8**; after **4 of 8** (available behind = 12 ≥ 12 required; the other 4 legs are outside 0.5c_a1).
+  - Hairpin shear φV_r = 0.75 × (4 × 0.20) × 60 = **36.0 kip**. V_ua = 16.16 kip (1.2D+1.0W). DCR before ∞ (FAIL); after **0.449**.
+  - Shear breakout φ (Condition A, F7): 0.70 → 0.75, so φV_cbg 14.346 → **15.371 kip**. Concrete breakout (V) DCR 1.126 → **1.051**; interaction 1.328 → **1.195**. Substitution stays off because the §17.5.2.1 acknowledgements are not ticked.
+- **Conservatism:** less conservative. This restores the intended F7 / §17.5.2.1.2 behaviour.
+
+### S5. ψ_ed,N from the anchors in tension (closes O5)   [calc change] [LESS conservative]
+- **Where:** `tensionBreakoutGroup` (anchor text `const caOf=p=>Math.min(g.ca_x_pos+(g.xmax-p.x)`), `pryout` (anchor text `tb.psi_edAll`).
+- **Problem:** ψ_ed,N used c_a,min of all anchors, while A_Nc (F3) and e′_N already use the anchors in tension.
+- **Before:**
+  ```js
+  /* psi_ed,N */
+  const ca=ca_min;
+  ```
+  pryout: `const Ncbg = tb.ANcRatioAll * tb.psi_ed * tb.psi_c * tb.psi_cp * tb.Nb;`, `psi_ed:tb.psi_ed`, `ca:tb.ca`, and the Step 3 text used `tb.ca` / `tb.psi_ed`.
+- **After:**
+  ```js
+  const caOf=p=>Math.min(g.ca_x_pos+(g.xmax-p.x), g.ca_x_neg+(p.x-g.xmin),
+                         g.ca_y_pos+(g.ymax-p.y), g.ca_y_neg+(p.y-g.ymin));
+  const caAll=ca_min;
+  const ca=Math.min(...tp.map(caOf));            /* ≥ caAll by construction */
+  const psi_edAll = (caAll>=1.5*hef)?1.0:(0.7+0.3*caAll/(1.5*hef));
+  ```
+  Each anchor's edge distance is the group edge distance (geometric, or the user override) plus the anchor's set-back from the outermost anchor line. Pryout keeps the all-anchor ψ_ed,N (`psi_edAll`, `caAll`) to match its all-anchor cone, so pryout is unchanged by S5. The c_a,min row now reads "smallest edge distance of the n anchors in tension (§17.6.2.4)".
+- **Governing provision:** ACI 318-19 §17.6.2.4.1, Eq. 17.6.2.4.1a/b (c_a,min of the anchor group in tension, read with §17.6.2.1 and Fig. R17.6.2.1(b)).
+- **Check case:** pedestal 60×60, plate offset x = −18, h_ef = 8 (only one edge within 1.5h_ef, so no §17.6.2.1.2 reduction). Anchors at pedestal x = −24 and −12. Combination P = −10, M_y = −400: the two anchors at x = −12 are in tension.
+  - Before: c_a,min = 6 (the compression anchors at the −x edge). ψ_ed,N = 0.7 + 0.3(6/12) = 0.85.
+  - After: c_a,min = 6 + 12 = 18 ≥ 12, so ψ_ed,N = 1.0.
+  - N_b = 24√4000(8^1.5)/1000 = 34.35 kip. A_Nc/A_Nco = 864/576 = 1.5. φN_cbg = 0.70(1.5)(ψ_ed)(34.35): before **30.65 kip**, after **36.06 kip**.
+  - The default model is unchanged (all c_a = 9 = 1.5h_ef,eff).
+- **Conservatism:** less conservative (only when the tension anchors are farther from the edge than the compression anchors).
+
+### S6. ψ_h,V from c_a1 of the edge being checked (closes O6)   [calc change] [LESS conservative]
+- **Where:** `shearBreakout` → `evalEdge` (anchor text `const psi_hV_e = (ha<1.5*c1)? Math.sqrt(1.5*c1/ha) : 1.0;`). The function-level `const psi_hV = (ha<1.5*ca1)? …` line is removed (no longer used).
+- **Problem:** outside the narrow-member case, ψ_h,V came from the `ca1` argument. In the main check that is the group's smallest edge distance to any edge, not the c_a1 of the edge whose breakout is computed. The c_a1 used in A_Vc, A_Vco and V_b was different from the one in ψ_h,V.
+- **Before:**
+  ```js
+  const psi_hV = (ha<1.5*ca1)? Math.sqrt(1.5*ca1/ha) : 1.0;
+  …
+  /* ψ_h,V with the §17.7.2.1.2-limited c_a1 (never larger than the value used before) */
+  const psi_hV_e = narrow ? Math.min(psi_hV, (ha<1.5*c1)? Math.sqrt(1.5*c1/ha) : 1.0) : psi_hV;
+  ```
+- **After:**
+  ```js
+  const psi_hV_e = (ha<1.5*c1)? Math.sqrt(1.5*c1/ha) : 1.0;
+  ```
+  Here `c1` is this edge's c_a1, limited per §17.7.2.1.2 where the narrow-member rule applies.
+- **Governing provision:** ACI 318-19 §17.7.2.6.1, Eq. 17.7.2.6.1 (ψ_h,V = √(1.5c_a1/h_a) ≥ 1.0). c_a1 is as used in §17.7.2.1 for that breakout surface, limited by §17.7.2.1.2.
+- **Check case:** default model with plate offset x = −6, pedestal B_y = 60, H = 14, one combination V_x = +10 (toward +x). c_a1(+x) = 15, c_a2 = 24, h_a = 14.
+  - V_b = min(38.98, 33.07) = 33.07 kip. A_Vc = 57 × 14 = 798, A_Vco = 4.5(15²) = 1012.5, ratio 0.788. ψ_ed,V = 1.0, ψ_c,V = 1.0.
+  - Before: ψ_h,V from c_a1 = 3 (the −x edge) = 1.0 → V_cbg = 26.06, φV_cbg = **18.24 kip**, DCR **0.548**.
+  - After: ψ_h,V = √(1.5 × 15/14) = 1.268 → V_cbg = 33.04, φV_cbg = **23.13 kip**, DCR **0.432**.
+  - The default model is unchanged (h_a = 36 ≥ 1.5c_a1).
+- **Conservatism:** less conservative. It removes a mismatch that A_Vc already accounts for, since A_Vc is clipped at h_a.
+
+### S7. Pryout A_Nc/A_Nco cap = number of anchors in the group (closes O7)   [calc change] [LESS conservative — changes the default model]
+- **Where:** `tensionBreakoutGroup` (anchor text `const nAll=g.pts.length;`), and the `pryout` Step 1 text (shows "≤ n" and an `n` row).
+- **Problem:** the pryout cone (all anchors) was capped at nT, the number of anchors in tension in that combination. The §17.6.2.1 cap is n·A_Nco, where n is the number of anchors in the group. For pryout the group is all the anchors resisting shear.
+- **Before:** `const ANcAll=extAll.ANc, ANcRatioAll=Math.min(ANcAll/ANco, nT);`
+- **After:**
+  ```js
+  const nAll=g.pts.length;
+  const ANcAll=extAll.ANc, ANcRatioAll=Math.min(ANcAll/ANco, nAll);
+  ```
+- **Governing provision:** ACI 318-19 §17.7.3.1, Eq. 17.7.3.1b (V_cpg = k_cp N_cpg, with N_cpg = N_cbg from §17.6.2 for the group); §17.6.2.1 (A_Nc ≤ n A_Nco).
+- **Check case (default model, 1.2D+1.0W, n_T = 1):** h_ef,eff = 6 (§17.6.2.1.2), A_Nco = 9(6²) = 324, A_Nc,all = 30 × 30 = 900, N_b = 22.31 kip, ψ_ed,N = 1.0, k_cp = 2, φ = 0.70.
+  - Before: ratio = min(900/324, 1) = 1.0. N_cbg = 22.31, V_cpg = 44.62, φV_cpg = **31.23 kip**. Pryout DCR = 16.16/31.23 = **0.517**.
+  - After: ratio = min(2.778, 4) = 2.778. N_cbg = 61.97, V_cpg = 123.94, φV_cpg = **86.75 kip**. DCR = **0.186**.
+  - In the default model pryout does not govern. The governing checks (breakout V 1.126, interaction 1.328) are unchanged.
+  - Second case: h_ef 4, plate 24×24, edges 2, pedestal 60×60, P = 0, V_x = 20, M_y = 300 (n_T = 2). Before: ratio capped at 2, φV_cpg = 34.00 kip. After: ratio 4, φV_cpg = **68.00 kip**, DCR 0.588 → **0.294**.
+- **Conservatism:** less conservative (when A_Nc,all/A_Nco > n_T).
+
+### S8. Project header wraps to two columns below 600 px (closes O11)   [UI only]
+- **Where:** CSS after `#projGrid{display:grid;…}` (approx. line 41).
+- **Before:** (no rule)
+- **After:** `@media (max-width:600px){ #projGrid{grid-template-columns:repeat(2,minmax(0,1fr));} }`
+- **Check:** at 400 px, document scrollWidth was 784 on main and is 400 on the branch (no horizontal scroll). At 1400 px the header screenshot is byte-identical to main.
+
+### S9. JSON import checks the file format (closes BP-C5)   [import robustness; export gains an optional tag]
+- **Where:** `wireHeader()`: `btnExport` (anchor text `Object.assign({_bpad:"project",_bpadVersion:1},S)`) and the `fileImport` change handler (anchor text `This is a whole-workspace backup`).
+- **Problem:** Import JSON accepted any JSON. A workspace backup or another tool's file was merged over defaults and silently replaced the current model. On main, importing a workspace backup reset the plate thickness to the default 1.5.
+- **Before:**
+  ```js
+  const blob=new Blob([JSON.stringify(S,null,2)],{type:"application/json"});
+  …
+  rd.onload=()=>{ try{ S=mergeState(JSON.parse(rd.result)); buildProjHeader(); refreshAll(); }catch(err){ alert("Invalid JSON."); } };
+  ```
+- **After:**
+  - Export writes `{_bpad:"project", _bpadVersion:1, …S}`: two new optional fields, stripped again on import.
+  - Import: a non-object is refused. A workspace backup (`_bpad:"workspace"`) is refused with a pointer to "Restore All".
+  - A file with another `_bpad` tag, or an untagged file without the `plate` / `anchor` / `conc` groups (another tool's file, named by its `_schema` if it has one), asks "Load anyway?" before anything changes.
+  - Old untagged exports that have those groups load silently, exactly as before.
+- **Saved data:** existing exports, autosave and project keys are unchanged. Older copies of the tool still read new exports (the two tag fields are copied into the state and ignored).
+- **Check:** branch export → import returns the identical state (JSON equal) with no tag fields left in `S`. An old untagged export loads (plate t 2.25). A workspace file is refused, with no change. A `bridge-member-reactions` file is refused on Cancel, with no change. `[1,2]` is refused.
+
+### S10. pdf.js: `isEvalSupported:false` (closes BP-D6)   [dependency mitigation, no version change]
+- **Where:** `extractPdfText` (anchor text `getDocument({data:buf, isEvalSupported:false})`).
+- **Before:** `const pdf=await pdfjsLib.getDocument({data:buf}).promise;`
+- **After:** `const pdf=await pdfjsLib.getDocument({data:buf, isEvalSupported:false}).promise;   /* CVE-2024-4367 mitigation (pdf.js 3.11.174) */`
+- **Check:** a real two-line PDF (made by Chromium) is extracted identically on main and branch through `extractPdfText`. pdf.js stays at 3.11.174.
+
+### Not changed
+- **BP-A1** (type `5.5` into f'c in Edge/Chrome by hand): the engineer's own check. D1's headless test still passes. Left for the engineer.
+- **BP-O8, BP-O9:** need the engineer (N4, N5).
+
+### Needs engineer
+- **N1 (S1 snow factors).** Which snow factors should the generator default to? I recall that ASCE 7-22 §2.3.1 / §2.3.6 use 1.0S (primary), 0.3S (companion) and 0.15S (with seismic) for strength-level snow, replacing 7-16's 1.6S / 0.5S / 0.2S, but I could not check the printed standard. Recommendation: keep the default at 1.6 / 0.5 / 0.2 (conservative for gravity with service-level S). Confirm the 7-22 values and wording of the option ("verify" on its label) against your copy, and say whether the default should follow 7-22.
+- **N2 (S1 scope).** Should the generator also produce 1.2D − 1.0W style wind-reversal combinations, and should rain (R) get a slot? Neither is generated today. Recommendation: add "−W" versions of combinations 3 and 4 only if your base-plate practice needs them; the uplift case 0.9D − 1.0W is already generated.
+- **N3 (new, found under S2).** With the default neutral-axis force model, an open (ungrouted) stand-off puts no compression in the rods, so the rod compression / buckling check always shows 0.00. Bearing is N/A for an open gap, so compression is not checked at all. This is unconservative. Recommendation: for an open stand-off, take rod compression from the elastic bolt group (P/n ± M·c/I, compression kept), or switch the force model to elastic automatically for that stand-off type. Not changed: it is a new calculation issue outside the inventory.
+- **N4 (BP-O8).** Condition A (Table 17.5.3) is granted when the intercept check credits at least one bar or leg. Do you want a stricter rule (all claimed bars effective) or an explicit "Condition A" input? Recommendation: require all claimed legs effective, or show a warning when fewer than all are, and keep the automatic decision.
+- **N5 (BP-O9).** Please confirm F6 (§17.7.2.1.2 narrow-member c_a1) and F10 (DG1 uniform bearing block for e > N/6). Both follow the code text and lower some DCRs. Recommendation: keep both.
+
+### Remaining open items
+- N1 to N5 above, and BP-A1.
+- Seen, not changed (display only, outside the inventory): the generator dialog note shows a literal `<b>…</b>` because `el()` sets `textContent`. Recommendation: build that note with `innerHTML`, or drop the tags.
+
+### How verified
+- `node --check` on every inline script: 4 blocks, 0 failures.
+- Headless Chromium (Playwright, `/opt/pw-browsers/chromium`, KaTeX / three / Plotly / pdf.js served locally), origin/main vs branch, 14 model scenarios: default, both rebar types, group hairpin, open and clamped stand-off, two thin pedestals, offset moment, pryout cap, narrow member, 3×3 plain rod, an O5 edge case, an O6 ψ_h,V case, and a large load with seismic. For each scenario, compared every output tab's text, `allChecks()`, the per-combination intermediates (tension breakout, pryout, shear breakout), `bearingCap()`, the stand-off check, the hairpin intercept and the autosaved JSON. Also compared 7 generator scenarios.
+  - Every difference is explained by S1 to S7. The default model's only result change is pryout (S7).
+  - Every `VALIDATION_CASES` (PROFIS) target is identical on main and branch.
+  - The autosaved JSON is identical in every scenario: no new default fields; `halfL` / `snowFactors` are written only when the generator controls are used.
+- UI: the generator was driven through its real controls (checkbox, selector, Replace) and the resulting combinations and saved `serviceLoads` checked. Export / import was run through the real buttons with five file types (see S9). The PDF import ran with a real PDF. Screenshots at 400 px (header) and of the generator dialog were looked at.
+- Console: main logged NaN SVG errors in both hairpin scenarios. The branch logs none.
+  - Both builds log a harness-only error, "Cannot read properties of undefined (reading 'show')". It comes from the 3-D tab's delayed `setTimeout` firing after the test script resets `S`, and does not occur in normal use.
+- **Other copies of this code:** none. The generator, anchor checks and import code are local to this tool. The member-reaction receiver's `check()` and unit tables are duplicated in Spread Footing.html, but the removed warning line is in this tool's own `plan()` and is not duplicated.
