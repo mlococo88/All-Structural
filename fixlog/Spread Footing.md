@@ -1119,13 +1119,144 @@ Line numbers are approximate, as of this fix. Search for the anchor text.
   - Screenshots of every tab at 1400 px and 400 px widths were checked.
 - **Other copies of this code:** none (the same pattern, with its own names, is in `Steel Beam Design - AISC 15th.html`).
 
+## 2026-10-12 — PR: claude/sweep-footing (PR link added after merge)
+Open-item sweep (engineer, 2026-10-12: "continue making updates and fixes until it's completed. Use your best judgment on the questions you have and just proceed"). Items from the open-item inventory, section 17: SF-O1, SF-O2, SF-O3, SF-O4, SF-O5, SF-C1, SF-C2. Basis: AASHTO LRFD 10th Ed. (2024) for the Vesić form and the eccentricity / sliding articles the tool already cites; ACI 318-19. Article numbers marked "(verify)" were not checked against the printed edition.
+
+Default check case for all entries below ("default inputs"): B 10 × L 8 × t 2.5 ft, Df 4 ft, cover 1.5 ft, c = 0, φ = 32°, γs = 120 pcf, FS = 3, no water table, f'c 4000 psi, f_y 60,000 psi, bottom mats #8 @ 9 in, Ped 1 D 120 / L 60 / Wx Vx 8, Ped 2 D 150 / L 80 / S 20 / Wx Vx 8. Governing bearing combination D + 0.75L + 0.45(+Wx) + 0.75S: ΣP = 434.94 k, H = Hx = 7.20 k (θ = 0), e_x = 0.4883 ft, e_y = 0, B′ = 9.0233 ft, L′ = 8.00 ft, B_eff = 8.00 ft, A_e = 72.19 ft², q_eff = 6.025 ksf, N_q = 23.177, N_γ = 30.215, s_q = 1.5540, s_γ = 0.6454, q = γD_f = 0.480 ksf, γ_eff = 0.120 kcf.
+
+### S1. SF-O1: Vesić inclination exponent m on B′/L′   [calc change] [neutral: either direction, small]
+- **Where:** `vesicCapacity()`, anchor `const mxm=` (about line 974). Report: `renderBearing()`, block titled `Load inclination factors` (about line 2087).
+- **Problem:** m_x = (2 + B/L)/(1 + B/L) and m_y used the nominal footing B/L. AASHTO LRFD 10th Ed. Art. 10.6.3.1.2a (Eq. 10.6.3.1.2a-6/-7, verify equation numbers) gives n on the effective dimensions B′/L′ and L′/B′, as the rest of the tool already does (shape factors, A_e). Neutral: m rises when B′/L′ < B/L (load in the long direction reduces B′) and falls in the other case; the effect on i_q is small.
+- **Before:**
+  ```js
+   const mxm=(2+B/L)/(1+B/L), mym=(2+L/B)/(1+L/B);
+  ```
+- **After:**
+  ```js
+   /* inclination exponent on the effective footing B' x L' (AASHTO LRFD 10.6.3.1.2a);
+      was nominal B/L. Bp is the x-dimension, Lp the y-dimension. */
+   const mxm=(2+Bp/Lp)/(1+Bp/Lp), mym=(2+Lp/Bp)/(1+Lp/Bp);
+  ```
+  Report block: title reference now "Vesić (m interpolated by load direction, on B′/L′ — AASHTO LRFD 10.6.3.1.2a)"; symbolic line `m_x=\tfrac{2+B'/L'}{1+B'/L'},\; m_y=\tfrac{2+L'/B'}{1+L'/B'}`; the substituted line starts with `B'/L'=9.02/8.00,`.
+- **Check case** (default inputs, depth factors On to isolate this item — i.e. an old save): before B/L = 1.25, m = 3.25/2.25 = 1.4444; after B′/L′ = 9.0233/8.00 = 1.1279, m = 3.1279/2.1279 = 1.4699. 1 − H/V = 1 − 7.20/434.94 = 0.98345. i_q = 0.98345^m: 0.97618 → 0.97576; i_γ = 0.98345^(m+1): 0.96002 → 0.95961. q_ult = 28.192 → 28.181 ksf, q_allow = 9.397 → 9.393 ksf, **DCR 0.6412 → 0.6414** (more conservative here). Combination 6 (D + 0.6(−Wx)): DCR 0.44 → 0.45 in the table. Cases with no horizontal load: no change (i = 1).
+
+### S2. SF-O2: "Depth factors d_q, d_c" option (default Off for new projects)   [calc change] [more conservative for new projects; old saves unchanged]
+- **Where:** new select in Soil & Bearing Capacity (`data-path="soil.sfdDepthF"`, shown in Vesić mode only, after "Bearing capacity FS"); `defaultState()` soil (`sfdDepthF:'off'`); `migrateState()` (old saves → `'on'`); `vesicCapacity()` anchor `const dq=`; `computeAll()` anchor `const ctx={B,L,Df,phi`; warning list; report `Depth factors` block; input echo `Bearing basis` row; Manual 2.4 and 4B.2.
+- **Problem:** d_q and d_c were always applied. AASHTO LRFD 10th Ed. Art. 10.6.3.1.2a (and its commentary) uses the depth factors only where the soil above the bearing level is as competent as the bearing soil and will not be removed (excavation, scour, frost); otherwise d = 1.0. Applying them unconditionally is unconservative.
+- **Default chosen:** Off (d_q = d_c = 1.0) for new projects, the conservative choice that does not rely on the overburden. Projects saved before this option existed (autosave, saved projects, exported JSON) open with **On**, so their results do not silently change; a new amber warning then says the depth factors are applied and when they are valid. (See "Needs engineer" Q-SF3 to confirm the old-save default.)
+- **Before:**
+  ```js
+   const dq=1+2*tphi*Math.pow(1-Math.sin(phi),2)*kk;
+   const dc=phi>1e-6?(dq-(1-dq)/(Nc*tphi)):(1+0.4*kk);
+  ```
+  ```js
+   const ctx={B,L,Df,phi,c,gs,gw,dw:dwc===Infinity?Infinity:dwc,FSb};
+  ```
+- **After:**
+  ```js
+   /* depth factors only when the "use depth factors" option is on (soil.sfdDepthF):
+      AASHTO LRFD 10.6.3.1.2a - use them only where the soil above the base is as
+      competent as the bearing soil and will not be removed; otherwise d = 1.0. */
+   const useD=(ctx.useD===true);
+   const dq=useD?1+2*tphi*Math.pow(1-Math.sin(phi),2)*kk:1;
+   const dc=useD?(phi>1e-6?(dq-(1-dq)/(Nc*tphi)):(1+0.4*kk)):1;
+  ```
+  `useD` added to the returned object (after `dg,`). `const ctx={B,L,Df,phi,c,gs,gw,dw:dwc===Infinity?Infinity:dwc,FSb,useD:state.soil.sfdDepthF==='on'};`
+  `defaultState()`: `soil:{...,qaOverride:'off',qaOverVal:4,sfdDepthF:'off'}`.
+  `migrateState()`, inserted right after `const ds=defaultState();`:
+  ```js
+   // Saves made before the "use depth factors" option always applied d_q / d_c: keep them on
+   // for those saves so an old project reproduces its results (new projects default to off).
+   if(!state.soil||typeof state.soil!=='object')state.soil={};
+   if(state.soil.sfdDepthF===undefined)state.soil.sfdDepthF='on';
+  ```
+  Input row (after the Bearing capacity FS row):
+  ```html
+   <div class="row sm-vesic"><label>Depth factors d<sub>q</sub>, d<sub>c</sub></label><select data-path="soil.sfdDepthF"><option value="off">Off (d = 1.0)</option><option value="on">On (Vesi&cacute;)</option></select><span class="hint">AASHTO 10.6.3.1.2a</span></div>
+  ```
+  Warning (in `computeAll()` after the passive-fraction check): `if(state.soil.mode==='vesic'&&state.soil.sfdDepthF==='on'&&Df>0)W.push({lvl:'warn',msg:'Depth factors d_q, d_c are applied ... (AASHTO LRFD 10.6.3.1.2a); otherwise set "Depth factors" to Off.'});`
+  Report: when off, the `Depth factors` block shows `d_q = d_c = d_γ = 1` with reference "Option off — AASHTO LRFD 10.6.3.1.2a (soil above the base not relied on)"; when on, the existing block with "option on — soil above the base taken as competent and permanent" added to its reference. Input echo: "…, FS=3.00, depth factors off)".
+- **Check case** (default inputs, governing combination): k = D_f/B_eff = 4/8 = 0.5; d_q (on) = 1 + 2·tan32°·(1 − sin32°)²·0.5 = 1 + 2·0.6249·0.2210·0.5 = 1.1381.
+  - Main (d on, m on B/L): T2 = 0.480·23.177·1.5540·1.1381·0.97618 = 19.206; T3 = 0.5·0.120·8·30.215·0.6454·0.96002 = 8.985; q_ult = 28.192, q_allow = 9.397 ksf, **DCR = 6.025/9.397 = 0.6412**.
+  - Branch, new project (d off, m on B′/L′): T2 = 0.480·23.177·1.5540·1.0·0.97576 = 16.869; T3 = 8.982; q_ult = 25.851, q_allow = 8.617 ksf, **DCR = 6.025/8.617 = 0.6992** (dashboard "Bearing (service)" 0.64 → 0.70). More conservative.
+  - Branch, old save (d on): DCR 0.6414 (S1 only).
+- **Saved data:** new optional field `soil.sfdDepthF` (`'off'`/`'on'`). Old files load unchanged and get `'on'`. No key renamed.
+
+### S3. SF-O4: compression dowel ℓ_dc with √f'c ≤ 100 psi   [calc change] [more conservative, rarely active]
+- **Where:** `computePhase2()`, anchor `const Ldc=Math.max(0.02*BAR_DIA[dSize]*fy/(lam*` (about line 3372); report block `Bearing on concrete & dowels`.
+- **Problem:** ACI 318-19 25.4.1.4 limits √f'c to 100 psi in all development-length calculations of Ch. 25; the compression ℓ_dc (25.4.9.2) did not apply it.
+- **Before:**
+  ```js
+    const Ldc=Math.max(0.02*BAR_DIA[dSize]*fy/(lam*sq),0.0003*BAR_DIA[dSize]*fy,8);
+  ```
+- **After:**
+  ```js
+    const Ldc=Math.max(0.02*BAR_DIA[dSize]*fy/(lam*Math.min(sq,100)),0.0003*BAR_DIA[dSize]*fy,8); // ACI 318-19 25.4.9.2, sqrt(f'c) <= 100 psi (25.4.1.4)
+  ```
+  Report symbolic line now ends `…\ge 0.0003 f_y d_b,\;\sqrt{f'_c}\le100\;\mathrm{psi}`.
+- **Effect:** with √f'c capped at 100, the first term is 0.02f_y d_b/(100λ) = 0.0002f_y d_b/λ, which exceeds the 0.0003f_y d_b floor only when λ < 0.667. So the change alters ℓ_dc only for f'c > 10,000 psi **and** λ < 0.667; otherwise the result is identical (checked: default, and f'c = 12,000 psi with λ = 1 give ℓ_dc = 18.97 and 18.00 in before and after).
+- **Check case:** #8 dowel (d_b = 1.0 in), f_y = 60,000 psi, f'c = 12,000 psi, λ = 0.5. Before: 0.02·60000·1.0/(0.5·109.54) = 21.91 in (> 0.0003·60000·1.0 = 18.0) → ℓ_dc = 21.91 in. After: 0.02·60000·1.0/(0.5·100) = 24.00 in → ℓ_dc = **24.00 in**. More conservative.
+
+### S4. SF-O5: optional side/end cover for the bottom-bar ℓ_d   [calc change only when the new input is used] [no change by default]
+- **Where:** new input in Materials after "Cover, top" (`data-path="mat.sfdCoverSide"`, text field, blank = bottom cover); new helpers `sfdSideCoverIn()`, `sfdCbCover()`, `sfdEndCover()` inserted just above `function devLength(`; `renderFootingDesign()` §5.4 anchors `const dv=devLength(size,P2.fc,P2.fy,false,{lam:P2.lam,cover:` and `const avail=(sec===null||sec===undefined)?-1:`; input validation; `SFD_IN_ERR` (Materials tab dot); Manual 2.3.
+- **Problem:** c_b used the bottom clear cover and assumed the side cover is not less (ACI 318-19 25.4.2.4 / definition of c_b: the smaller of the distance from the bar centre to the nearest concrete surface and half the c-c spacing). A footing with a smaller side/end cover was unconservative; the end cover deducted from the available length was also always the bottom cover.
+- **Before:**
+  ```js
+    const dv=devLength(size,P2.fc,P2.fy,false,{lam:P2.lam,cover:num(state.mat.coverBot),spc:spcD,coating:state.mat.coating,detail:true});
+  ...
+    const avail=(sec===null||sec===undefined)?-1:((hf-Math.abs(sec))*12-num(state.mat.coverBot));
+  ```
+- **After:**
+  ```js
+    const dv=devLength(size,P2.fc,P2.fy,false,{lam:P2.lam,cover:sfdCbCover(),spc:spcD,coating:state.mat.coating,detail:true});
+  ...
+    const avail=(sec===null||sec===undefined)?-1:((hf-Math.abs(sec))*12-sfdEndCover());
+  ```
+  with
+  ```js
+  function sfdSideCoverIn(){const v=state.mat.sfdCoverSide;
+   if(v===undefined||v===null||String(v).trim()==='')return null;
+   const x=Number(String(v).trim());return isFinite(x)?x:NaN;}
+  function sfdCbCover(){const cb=num(state.mat.coverBot),sd=sfdSideCoverIn();
+   return (sd===null||isNaN(sd))?cb:Math.min(cb,Math.max(sd,0));}
+  function sfdEndCover(){const sd=sfdSideCoverIn();
+   return (sd===null||isNaN(sd))?num(state.mat.coverBot):Math.max(sd,0);}
+  ```
+  The substituted "available" line prints `sfdEndCover()`; the §5.4 note states which cover c_b used. Validation: a negative entry gives the existing "Cover cannot be negative." error; a non-number gives "Side/end cover must be a number in inches, or blank to use the bottom cover." (both mark the Materials tab).
+- **Check case** (default inputs, x-bars #8 @ 9 in, governing section at 3.75 ft from centre): blank (default) → c_b = min(3 + 0.5, 4.5) = 3.50, (c_b)/d_b = 2.5 (cap), ℓ_d = (3/40)(60000/63.25)(1/2.5)(1.0) = **28.46 in**, available = (5.00 − 3.75)·12 − 3.00 = **12.00 in** (identical to before). Side/end cover 1.5 in → c_b = 2.00, (c_b)/d_b = 2.00, ℓ_d = **35.58 in** (more conservative); available = 15.00 − 1.50 = **13.50 in**. Side/end cover 4 in → c_b = 3.50 (bottom governs), ℓ_d = 28.46 in, available = 11.00 in.
+- **Saved data:** new optional field `mat.sfdCoverSide` (string, blank by default; absent in old files = blank, so old files give identical results).
+
+### S5. SF-O3: passive resistance over the full D_f — kept; warning added   [display only, no result change]
+- **Decision (my judgment, per the 2026-10-12 instruction):** the formula `PpX=pf*0.5*Kp*gs*Df*Df*L` is left unchanged. It is conservative by default (passive fraction f_p = 0) and f_p is the user's control. When f_p > 0 an amber warning now says that passive is credited over the full D_f and full width, and that soil that may be removed (excavation, scour, frost) and soil above the footing top should be neglected unless the geotechnical report allows it (AASHTO LRFD 10th Ed. Art. 10.6.3.4, verify).
+- **Where / After:** `computeAll()`, right after `if(num(state.stab.pf)<0||num(state.stab.pf)>1)W.push({lvl:'err',msg:'Passive fraction mobilized must be between 0 and 1.'});`:
+  ```js
+   else if(num(state.stab.pf)>0)W.push({lvl:'warn',msg:'Passive resistance is credited over the full embedment Df and the full footing width (P_p = f_p·½K_pγD_f²·w), not only the footing face of depth t. Neglect soil that may be removed by excavation, scour or frost, and soil above the footing top, unless the geotechnical report allows it (AASHTO LRFD 10.6.3.4); set the passive fraction accordingly.'});
+  ```
+- **Check case:** f_p = 0.5 → warning shown; all results identical to main.
+
+### How verified (S1–S5)
+- `node --check` on all 18 inline scripts: pass.
+- Headless Chromium (Playwright; KaTeX 0.16.11, Plotly 2.35.2, three.js 0.160.0 served from local copies of the pinned versions), origin/main vs branch, scenarios: default; old autosave written by main then opened in the branch; no horizontal load; depth factors On in both; f'c = 12,000; side cover 2 in and "abc"; f_p = 0.5; Direct load mode. Compared the dashboard, warnings, every output tab, `computeAll()` per-combination bearing values, `computePhase2()` ℓ_dc and the saved `state` JSON. Every difference traced to S1–S5: bearing DCR/q_allow and the bearing report blocks (S1, S2), input echo text (S2), §5.4/§5.6 text (S3, S4), new warnings (S2 when On, S4 bad entry, S5). Saved state: only the new `soil.sfdDepthF` field (`'off'` new, `'on'` for the old autosave); `sfdCoverSide` only when entered. No console errors in any scenario. Hand-off code untouched.
+- Screenshots of the Soil and Materials sections and the two bearing report blocks checked.
+- **Other copies:** none (the Vesić routine and the ℓ_d helper exist only in this tool).
+
+### Needs engineer (left as is)
+- **Q-SF1 (SF-C2): Direct (factored) load mode.** Self-weight, pedestal weight and EV are bracketed with ASCE 7 1.2 / 0.9 (not AASHTO γ_p), bearing is checked with factored loads against an allowable (service) bearing, and there is one case per pedestal. Question: is Direct mode meant for ASCE 7 building work only (then keep, the note already says "indicative only"), or should it follow AASHTO (γ_p max/min per Table 3.4.1-2 and a factored resistance φ_b·q_n)? Recommendation: keep as is and label Direct mode "ASCE 7 / indicative"; use by-load-type mode for bridge work.
+- **Q-SF2 (SF-C1): seismic load type (E).** There is no E load type, so E reactions in a hand-off are not imported. Question: is seismic needed in this tool? Recommendation: add E with the ASCE 7-16 2.3.6 / 2.4.5 combinations (with E_v and Ω₀ left to the user) only if you design seismic footings with it; otherwise keep, and the hand-off already says E is not imported.
+- **Q-SF3 (SF-O2 default for old saves).** Old projects open with depth factors On (results unchanged, warning shown); new projects default Off. Question: should old projects also open with Off (more conservative, but bearing results of old saved projects would change on reopening)? Recommendation: keep On for old saves.
+- **Q-SF4 (SF-O3 passive height).** Should passive be limited to the footing face, P_p = f_p·½K_pγ(D_f² − (D_f − t)²)·w, instead of the full D_f? Recommendation: keep f_p as the user's control with the new warning; the default f_p = 0 credits no passive.
+
 ## Open items (not changed)
-- **O1. Vesić inclination exponent m uses nominal B/L, not B'/L'.** Anchor: `const mxm=(2+B/L)/(1+B/L)`. Using B'/L' is the more common form (AASHTO 10.6.3.1.2a uses B'/L'). This changes bearing capacity and needs a decision. Question: should m use the effective B'/L'?
-- **O2. The depth factors dq/dc are always applied.** AASHTO 10.6.3.1.2a and common practice drop them when the soil above the base is not competent or may be removed. Recommendation: add a "use depth factors" option, default on to keep the current results. Needs a decision on the default.
-- **O3. Passive acts over the full Df across the full footing width** (`PpX=pf*0.5*Kp*gs*Df*Df*L`). The footing face only spans t. This is conservative by default (pf = 0) and is left as is. Question: should passive be limited to the footing thickness, or should pf stay as the user's control?
-- **O4. Compression dowel ℓdc does not cap √f'c at 100 psi** (`Ldc=Math.max(0.02*BAR_DIA[dSize]*fy/(lam*sq),...)`). ACI 318-19 25.4.1.4 applies to all development lengths. This was not in the task list, so it is raised here and not changed. Effect: only when f'c > 10 ksi.
-- **O5. ℓd cover assumption:** cb uses the bottom clear cover for both layers and assumes the side cover is no less than that. A separate side-cover input would sharpen this. Low priority.
+- **Q-SF1 (SF-C2). Direct load mode basis** (ASCE 7 1.2/0.9 self-weight bracket; factored loads vs allowable bearing; one case per pedestal). Needs engineer: see the 2026-10-12 entry, "Needs engineer".
+- **Q-SF2 (SF-C1). No seismic (E) load type**, so E reactions are not imported. Needs engineer: see the 2026-10-12 entry.
+- **Q-SF3. Depth-factor default for old saves** (On, results unchanged). Needs engineer to confirm: see the 2026-10-12 entry.
+- **Q-SF4 (O3). Passive height** (full D_f vs footing face only). Kept, with a warning when f_p > 0. Needs engineer to confirm: see the 2026-10-12 entry.
 
 ## Resolved items
+- **O1. Vesić inclination exponent m on nominal B/L.** RESOLVED 2026-10-12 (S1): m now uses B′/L′.
+- **O2. Depth factors always applied.** RESOLVED 2026-10-12 (S2): "Depth factors" option, Off for new projects, On for saves made before the option (confirmation asked in Q-SF3).
+- **O3. Passive over the full D_f.** DECIDED 2026-10-12 (S5): formula kept (conservative by default, f_p = 0); warning added when f_p > 0. Confirmation asked in Q-SF4.
+- **O4. ℓ_dc without the √f'c ≤ 100 psi cap.** RESOLVED 2026-10-12 (S3).
+- **O5. ℓ_d side cover assumption.** RESOLVED 2026-10-12 (S4): optional side/end cover input; blank keeps the earlier behaviour.
 - **F8 note (item 8): surcharge in the structural resultant is less conservative for sagging moment and one-way shear. Keep, revert, or apply only where unfavourable?**
   - **RESOLVED 2026-10-04 (F12):** engineer keeps the surcharge in the structural resultant. No code change.

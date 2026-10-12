@@ -1453,12 +1453,18 @@ function tensionBreakoutGroup(nT, ca_min, eccX, eccY, tensPts, condA){
   const extAll=breakoutExtents(g.pts, hef, C, pxo, pyo);
   const nAll=g.pts.length;
   const ANcAll=extAll.ANc, ANcRatioAll=Math.min(ANcAll/ANco, nAll);
-  /* Nb: kc=24 cast-in; alt 16 form for 11<=hef<=25 — use larger (§17.6.2.2.3) */
+  /* Nb: kc=24 cast-in (§17.6.2.2.1). §17.6.2.2.3: for cast-in HEADED studs and
+     headed bolts with 11 <= hef <= 25 in, Nb = 16·λa·√f'c·hef^(5/3) is used
+     whenever it applies (compliant whether the clause is read as mandatory or
+     as an alternative; same as Concrete Anchor.html). Previously max(24-form,
+     16-form), which was higher for 11 <= hef < 11.39 in, and also applied to a
+     plain rod (not headed), which now keeps the 24-form. */
   const kc=24, lam=1.0;
   const Nb1=kc*lam*Math.sqrt(fc*1000)/1000*Math.pow(hef,1.5);
   let NbAlt=0, useAlt=false;
-  if(hef>=11 && hef<=25){ NbAlt=16*lam*Math.sqrt(fc*1000)/1000*Math.pow(hef,5/3); if(NbAlt>Nb1)useAlt=true; }
-  const Nb=Math.max(Nb1,NbAlt);
+  const headed=(A.head!=="plainrod");
+  if(headed && hef>=11 && hef<=25){ NbAlt=16*lam*Math.sqrt(fc*1000)/1000*Math.pow(hef,5/3); useAlt=true; }
+  const Nb=useAlt? NbAlt : Nb1;
   /* psi_ed,N — §17.6.2.4: c_a,min of the anchors IN TENSION (the same anchors
      as A_Nc and e'_N). Each anchor's edge distance = the group's edge distance
      (geometric or overridden) plus its set-back from the outermost anchor line.
@@ -1495,7 +1501,7 @@ function tensionBreakoutGroup(nT, ca_min, eccX, eccY, tensPts, condA){
        lines:[
         "N_b = k_c\\,\\lambda_a\\sqrt{f'_c}\\,h_{ef}^{1.5}",
         "N_b = 24\\times1.0\\times\\sqrt{"+fmt(fc*1000,0)+"}\\times"+fmt(hef,2)+"^{1.5} = "+fmt(Nb1,2)+"\\ \\text{kip}"
-        ].concat(useAlt?["N_{b,alt}=16\\lambda_a\\sqrt{f'_c}\\,h_{ef}^{5/3} = "+fmt(NbAlt,2)+"\\ \\text{kip}\\;\\Rightarrow\\;\\text{governs}"]:[]),
+        ].concat(useAlt?["N_{b}=16\\lambda_a\\sqrt{f'_c}\\,h_{ef}^{5/3} = "+fmt(NbAlt,2)+"\\ \\text{kip}\\;\\Rightarrow\\;\\text{used (headed anchor, }11\\le h_{ef}\\le25\\text{ in, §17.6.2.2.3)}"]:[]),
        vars:[["k_c","24","cast-in anchors §17.6.2.2.1"],["\\lambda_a","1.0","normalweight concrete"],
              ["f'_c",fmt(fc,2)+" ksi","capped 10 ksi"],["h_{ef}",fmt(hef,2)+" in",he.applies?("REDUCED per §17.6.2.1.2 (from nominal "+fmt(hefNom,2)+" in)"):"effective embedment (user input)"]]}
         ].concat(he.applies?[{title:"Effective embedment reduction",ref:"ACI 318-19 §17.6.2.1.2",
@@ -1968,8 +1974,10 @@ function pryout(nV, tb){
              ["A_{Nc0}",fmt(tb.ANco,2)+" in^2","projected area of one anchor, no edge effects"],
              ["n",String(tb.nAll),"anchors in the group; A_Nc/A_Nc0 is capped at n (§17.6.2.1)"]]},
 
-      {title:"Step 2 — Basic single-anchor breakout strength",ref:"ACI 318-19 §17.6.2.2.1, Eq.(17.6.2.2.1)",
-       lines:[
+      {title:"Step 2 — Basic single-anchor breakout strength",ref:"ACI 318-19 §17.6.2.2.1, Eq.(17.6.2.2.1)"+(tb.useAlt?" & §17.6.2.2.3":""),
+       lines: tb.useAlt ? [
+        "N_b = 16\\,\\lambda_a\\,\\sqrt{f'_c}\\,h_{ef}^{5/3}\\quad(\\text{headed, }11\\le h_{ef}\\le25\\text{ in})",
+        "N_b = 16\\times1.000\\times\\sqrt{"+fmt(fcUse*1000,0)+"}\\times("+fmt(tb.hef,3)+")^{5/3} = "+fmt(tb.Nb*1000,0)+"\\ \\text{lb} = "+fmt(tb.Nb,3)+"\\ \\text{kip}"] : [
         "N_b = k_c\\,\\lambda_a\\,\\sqrt{f'_c}\\,h_{ef}^{1.5}",
         "N_b = 24\\times1.000\\times\\sqrt{"+fmt(fcUse*1000,0)+"}\\times("+fmt(tb.hef,3)+")^{1.5} = "+fmt(tb.Nb*1000,0)+"\\ \\text{lb} = "+fmt(tb.Nb,3)+"\\ \\text{kip}"],
        vars:[["k_c","24","cast-in anchors (§17.6.2.2.1)"],
@@ -3940,11 +3948,19 @@ function standoffCompressionCheck(cc){
   const Fcr=(KLr<=lim)? Math.pow(0.658, Fy/Fe)*Fy : 0.877*Fe;
   const phi=0.90;
   const phiPn=phi*Fcr*Ag;
-  /* governing per-anchor compression across combos: rigid plate, compression side */
+  /* governing per-anchor compression across combos. With an open gap there is
+     no bearing block, so the rods carry ALL the compression: take it from the
+     elastic bolt group, T_i = P/n + Mx·y_i/Σy² − My·x_i/Σx² (the same expression
+     and signs as the "elastic" force model in computeAll), WHATEVER force model
+     is selected. (Previously c.perAnchor was used; under the default
+     neutral-axis model it never has compression, so C_u was always 0.) */
+  const gp=anchorGeom().pts, nG=Math.max(gp.length,1);
+  const sx2=gp.reduce((a,p)=>a+p.x*p.x,0)||1e-9, sy2=gp.reduce((a,p)=>a+p.y*p.y,0)||1e-9;
   let Cmax=0, gov="—";
   cc.combos.forEach(c=>{
-    if(!c.perAnchor) return;
-    c.perAnchor.forEach(p=>{ const comp=-p.t; if(comp>Cmax){Cmax=comp;gov=c.name;} });
+    const cb=c.raw||c;
+    gp.forEach(p=>{ const t=(+cb.P||0)/nG + (+cb.Mx||0)*p.y/sy2 - (+cb.My||0)*p.x/sx2;
+      const comp=-t; if(comp>Cmax){Cmax=comp;gov=c.name;} });
   });
   const dcr=(phiPn>0)?Cmax/phiPn:0;
   return {K,L,r,KLr,Fe,Fcr,Fy,Ag,dRoot,phi,phiPn,Cmax,gov,dcr,lim,soLabel:so.label,
@@ -3960,8 +3976,8 @@ function standoffCompressionCheck(cc){
        vars:[["K",fmt(K,1),so.type==="clamp"?"1.0 — plate clamped by nuts both sides":"2.0 — unclamped, plate free to translate/rotate"],
              ["L",fmt(L,2)+" in","exposed stand-off length"],
              ["r",fmt(r,3)+" in","radius of gyration of the threaded root, d_root/4, d_root = d − 1.299/n = "+fmt(dRoot,3)+" in"],
-             ["A_se",fmt(Ag,3)+" in^2","tensile stress area of the threaded rod (the stand-off length is threaded)"],
-             ["C_u",fmt((Cmax)*forceFactor(),2)+" "+forceUnit(),"max per-anchor compression ("+gov+")"],
+             ["A_{se}",fmt(Ag,3)+" in^2","tensile stress area of the threaded rod (the stand-off length is threaded)"],
+             ["C_u",fmt((Cmax)*forceFactor(),2)+" "+forceUnit(),"max per-anchor compression ("+gov+"), elastic bolt group P/n ± M·c/Σc² — open gap, no bearing block, whatever force model is selected"],
              ["\\phi","0.90","compression §E1"]]}
     ]};
 }
@@ -5273,6 +5289,21 @@ function buildSummary(pg){
       pg.appendChild(b);
     }
   });
+  /* hairpins: fewer legs effective than claimed (BP-O8 / N4). The Condition A
+     rule is unchanged (≥ 1 effective leg); this only makes the shortfall visible. */
+  if(S.vRebar.present){
+    const ic=shearRebarIntercept(CC);
+    if(ic && ic.nLegsTotal>0 && ic.nEff<ic.nLegsTotal){
+      const b=el("div","warnBox");
+      b.innerHTML="<b>Shear hairpins: only "+ic.nEff+" of "+ic.nLegsTotal+" claimed legs are effective</b> "+
+        "(&sect;17.5.2.1.2 — position, depth, development or spacing; see the Shear Rebar tab). "+
+        "&phi;V<sub>r</sub> counts the effective legs only. "+
+        (ic.nEff>0
+          ? "Condition A (&phi; = 0.75, Table 17.5.3) is still applied to shear breakout because at least one leg is effective — confirm the detail is acceptable with the reduced number of legs."
+          : "No leg is effective, so shear breakout uses Condition B (&phi; = 0.70).");
+      pg.appendChild(b);
+    }
+  }
 
   /* per-check governing table */
   mkSection("sumTable","Governing Demand–Capacity Summary",body=>{
@@ -9326,11 +9357,13 @@ function openComboGenerator(){
   const SL=S.serviceLoads;
   const overlay=el("div","modal"), box=el("div","modalBox wide");
   box.appendChild(el("h3",null,"Generate load combinations — ASCE 7-22"));
-  box.appendChild(el("div","note",
+  { const nt=el("div","note");   /* innerHTML: el() sets textContent, which showed the <b> tags literally */
+    nt.innerHTML=
     "Enter SERVICE (unfactored) loads by case. The program applies the ASCE 7-22 §2.3.1 "+
     "strength combinations. Sign convention as elsewhere: <b>P positive = tension/uplift</b>, "+
     "negative = compression, so gravity dead load is a negative P. Roof live (Lr) and snow (S) "+
-    "each get their own combinations (the “Lr or S” term)."));
+    "each get their own combinations (the “Lr or S” term).";
+    box.appendChild(nt); }
 
   const Fu=forceUnit(), Mu=momentUnit(), uf=forceFactor();
   const cases=[["D","Dead"],["L","Live"],["Lr","Roof live"],["S","Snow"],["W","Wind"],["E","Seismic"]];
