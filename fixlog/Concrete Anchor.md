@@ -1571,3 +1571,446 @@ Replace everything from the line `    // --- CONSTANTS ---` up to (not including
 - **Open items:** O1, part 1 (pinning) is resolved by this entry. Still open:
   - the React development vs production build;
   - Tailwind Play CDN vs a static stylesheet (the Play CDN is meant for development).
+
+## 2026-10-12 — PR: claude/sweep-concanchor (open-item sweep; PR link added after merge)
+
+Engineer's instruction 2026-10-12: work through every open item of this tool, use best judgment, and note what needs the engineer. Items in priority order (open-item inventory §9). The complete diff of `Concrete Anchor.html` is in **Appendix C** below, so the whole change can be re-applied by hand. File uses CRLF; the inserted lines use CRLF too.
+
+Summary:
+
+| Item | Result | Results change? |
+|---|---|---|
+| O3 elastic bolt group | Scope note in the report + a warning when moment puts anchors in compression | No (text only) |
+| O8 grout pad | **Fixed:** new checkbox, 0.80 × V_sa (§17.7.1.2.1); default off | Only when ticked: **more conservative** |
+| O13 h_a default | **Fixed:** no default for a new project (required input); old files still get 24 in with the load note | No for any entered value |
+| O7 §17.6.2.2.3 | **Fixed:** the 16-form is used whenever it applies (headed, 11 ≤ h_ef ≤ 25) | Yes, 11 ≤ h_ef < 11.39 in only: **more conservative** (≤ 0.7 %) |
+| O4 A_brg / e_h | **Fixed:** optional inputs, 0 = the old values | Only when entered: **less conservative** (option) |
+| O1 React dev build | **Fixed:** React/ReactDOM 18.3.1 production UMD builds | No |
+| O12 tooltip / CSS | **Fixed:** unused "App D" tooltip removed; `rounded:` → `border-radius:`; unused `.toggle-*` CSS removed | No (input fields and tooltip now have the intended rounded corners) |
+| O5, O10 | Closed: kept as documented conservative simplifications | — |
+| O2, O6, O9, O11, O15, A2, Tailwind (X-D10) | **Needs engineer** (see the end of this entry) | — |
+
+### S1. O7 — §17.6.2.2.3: N_b by the 16-form for headed anchors with 11 ≤ h_ef ≤ 25 in   [calc change] [MORE conservative, ≤ 0.7 %, only for 11 ≤ h_ef < 11.39 in]
+- **Where:** `breakoutGroup` (≈ line 360). Anchor text: `const altOK = type === 'hex' && hefC >= 11 && hefC <= 25;`. Report text: `calculateBreakoutTension`, `Nb: { eq:`.
+- **Before:**
+  ```js
+          // §17.6.2.2.3: cast-in headed bolts/studs with 11 <= hef <= 25 in. (alternative Eq.)
+          const altOK = type === 'hex' && hefC >= 11 && hefC <= 25;
+          const Nb16 = altOK ? 16 * lambda * Math.sqrt(fcC) * Math.pow(hefC, 5/3) : 0;
+          const Nb = Math.max(Nb24, Nb16);
+  ```
+- **After:**
+  ```js
+          // §17.6.2.2.3: cast-in headed bolts/studs with 11 <= hef <= 25 in.: N_b by the 16-form.
+          // Used whenever it applies (2026-10-12, O7): compliant whether 318-19 makes it mandatory or
+          // an alternative; the old max(24-form, 16-form) was higher for 11 <= hef < 11.39 in.
+          const altOK = type === 'hex' && hefC >= 11 && hefC <= 25;
+          const Nb16 = altOK ? 16 * lambda * Math.sqrt(fcC) * Math.pow(hefC, 5/3) : 0;
+          const Nb = altOK ? Nb16 : Nb24;
+  ```
+  Report line: the condition `b.Nb16 > b.Nb24` (twice) became `b.Nb16 > 0`, and the label `(\\ge 24\\lambda_a\\sqrt{f'_c}h_{ef}^{1.5} = …)` became `(11 \\le h_{ef} \\le 25\\ \\text{in};\\ 24\\lambda_a\\sqrt{f'_c}h_{ef}^{1.5} = …)` (the 24-form is still shown for reference).
+- **Problem:** F11 used max(24-form, 16-form), reading §17.6.2.2.3 as an alternative. If ACI 318-19 makes the 16-form mandatory in that range, the max is unconservative for 11 ≤ h_ef < 11.39 in (where the 16-form is smaller). Using the 16-form throughout the range satisfies **both** readings: it is required under one and permitted under the other. For h_ef ≥ 11.39 in the 16-form was already governing, so nothing changes there.
+- **Governing provision:** ACI 318-19 §17.6.2.2.3 (Eq. 17.6.2.2.3), with §17.6.2.2.1 (Eq. 17.6.2.2.1).
+- **Check case:** 2×2 group, 1 in F1554-36 heavy hex, h_ef = 11.2 in, s = 6 in, all edges 40 in (no edge effects), f'c = 4000 psi, λ = 1.0, Cond. B, N_ua = 40,000 lb, no moment, no shear, h_a = 24 in.
+  - 24-form: 24 × √4000 × 11.2^1.5 = 24 × 63.246 × 37.482 = **56,894 lb**.
+  - 16-form: 16 × 63.246 × 11.2^(5/3) = 16 × 63.246 × 56.064 = **56,734 lb**.
+  - A_Nc / A_Nco = (6 + 2·16.8)² / (9·11.2²) = 39.6² / 1128.96 = 1568.16 / 1128.96 = 1.389.
+  - Before: N_b = max = 56,894 → N_cbg = 1.389 × 56,894 = 79,028; φ = 0.70 → 55,319 lb; ratio 40,000 / 55,319 = **0.723**.
+  - After: N_b = 56,734 → N_cbg = 78,806; φN_cbg = 55,164 lb; ratio **0.725**. Pryout φV_cpg 110,639 → 110,328 lb.
+  - h_ef = 12 in (above 11.39): N_b = 63,648 lb before and after (unchanged).
+- **Other copies:** BasePlateAnchorDesigner.html uses the same max(...) reading (its own log). Not changed here (one tool per PR; that tool is being swept separately).
+
+### S2. O8 — Built-up grout pad: 0.80 × V_sa   [calc change, new option] [MORE conservative when ticked; no change at default]
+- **Where:** `calculateSteel`. Anchor text: `const Vsa_single =`. New input `groutPad` (default `false`) in `DEFAULT_INPUTS`; checkbox in the System tab after "Cond. B".
+- **Before:**
+  ```js
+      const calculateSteel = (da, gradeKey) => {
+      ...
+          const Vsa_single = 0.6 * AseN * futa;
+  ```
+- **After:**
+  ```js
+      const calculateSteel = (da, gradeKey, groutPad) => {
+      ...
+          const fGrout = groutPad ? 0.80 : 1.0;   // §17.7.1.2.1: built-up grout pad
+          const Vsa_single = fGrout * 0.6 * AseN * futa;
+  ```
+  The `Vsa` / `phiVsa` report lines show `0.80 \\cdot` and "(grout pad, §17.7.1.2.1)" when ticked (exact text in Appendix C). Call site: `calculateSteel(da, grade, groutPad)`. Checkbox:
+  ```jsx
+  <label className="flex items-center gap-2 text-xs cursor-pointer"><input type="checkbox" checked={inputs.groutPad} onChange={e=>update('groutPad',e.target.checked)}/> Built-up grout pad (0.80 on steel shear V_sa, §17.7.1.2.1)</label>
+  ```
+- **Problem:** the 0.80 reduction for anchors used with built-up grout pads was not available, so a base or bearing plate on grout was over-rated in steel shear.
+- **Governing provision:** ACI 318-19 §17.7.1.2.1.
+- **Default chosen:** unticked (an embed plate cast flush has no grout pad; this is the tool's stated scope). Ticking it is the code requirement whenever there is a grout pad.
+- **Check case:** tool defaults (3/4 in F1554-36, A_se = 0.334 in², f_uta = 58,000 psi, V_ux = 2000 lb on 4 anchors = 500 lb each), h_a = 24 in.
+  - Before / unticked: φV_sa = 0.65 × 0.6 × 0.334 × 58,000 = **7555 lb**, ratio 500 / 7555 = **0.066**.
+  - Ticked: φV_sa = 0.65 × 0.80 × 0.6 × 0.334 × 58,000 = **6044 lb**, ratio **0.083**. Governing V ratio stays shear breakout 0.161; result OK.
+
+### S3. O13 — h_a has no default for a new project   [input handling] [no result change for any entered value]
+- **Where:** `App` initial state, anchor `const [inputs, setInputs] = useState(`; `validateInputs`, anchor `if (!isNum(inp[k])) errors.push(`.
+- **Before:**
+  ```js
+          const [inputs, setInputs] = useState({ ...DEFAULT_INPUTS });
+  ...
+              if (!isNum(inp[k])) errors.push(`${lbl}: blank or not a number.`);
+  ```
+- **After:**
+  ```js
+          const [inputs, setInputs] = useState({ ...DEFAULT_INPUTS, ha: '' });   // h_a has no default for a new project (O13)
+  ...
+              if (k === 'ha' && !isNum(inp[k])) { errors.push(`${lbl}: required (no default). Enter the actual member thickness; it sets psi_h,V and the depth of A_Vc (§17.7.2.6).`); return; }
+              if (!isNum(inp[k])) errors.push(`${lbl}: blank or not a number.`);
+  ```
+- **Problem:** the 24 in default is usually non-limiting, so a user who never enters the real member thickness silently gets ψ_h,V = 1.0 and an unclipped A_Vc. Now a new page shows "Input errors — no results calculated" with the message above and a red dot on the Geometry tab until h_a is entered.
+- **Old files:** unchanged. `DEFAULT_INPUTS.ha` is still 24, so `sanitizeLoaded` fills a missing `ha` with 24 and shows the existing load note (`"ha" not in file; default 24 used.`). Saved files always contain `ha`.
+- **Governing provision:** ACI 318-19 §17.7.2.6 (ψ_h,V; "verify" the sub-article number) and §17.7.2.1 (A_Vc).
+- **Check case:** open a new page: no results, the message above, a dot on Geometry. Enter h_a = 24: every result identical to main (all 11 browser scenarios below).
+
+### S4. O4 — Optional head bearing area A_brg and hook extension e_h   [calc change, new options] [LESS conservative only when a value is entered; no change at default]
+- **Where:** new helpers `abrgOf` / `ehOf` before `calculatePullout`; `calculatePullout(…, AbrgIn, ehIn)`; `calculateSideFaceBlowout(…, AbrgIn)`; `validateInputs`; `NUM_FIELDS`; `CA_IN_FIELD_TAB`; Member & Anchor tab after "Diameter". New inputs `Abrg` (in², default 0) and `eh` (in, default 0).
+- **Before:**
+  ```js
+          if (type === "hex") { const Abrg = 0.9 * da * da; Np = 8 * Abrg * fcC; eqStr = `…`; }
+          else { const eh = 3 * da; Np = 0.9 * fcC * eh * da; eqStr = `…`; }
+  ...
+          const Abrg = 0.9 * da * da;          // calculateSideFaceBlowout
+  ```
+- **After:**
+  ```js
+      const abrgOf = (AbrgIn, da) => AbrgIn > 0 ? AbrgIn : 0.9 * da * da;
+      const ehOf = (ehIn, da) => ehIn > 0 ? ehIn : 3 * da;
+  ...
+          if (type === "hex") { const Abrg = abrgOf(AbrgIn, da); Np = 8 * Abrg * fcC; eqStr = AbrgIn > 0 ? `… (\\text{input})` : `…0.9d_a^2…`; }
+          else { const eh = ehOf(ehIn, da); Np = 0.9 * fcC * eh * da; eqStr = ehIn > 0 ? `… (\\text{input})` : `…e_h=3d_a`; }
+  ...
+          const Abrg = abrgOf(AbrgIn, da);     // calculateSideFaceBlowout
+  ```
+  Validation: `Abrg < 0` is an error; for an L-bolt, `eh` must be 0 or 3d_a ≤ e_h ≤ 4.5d_a (error otherwise, red dot on Member & Anchor). The L-bolt warning now states the e_h used. The A_brg input is shown for HEX, the e_h input for L-BOLT (help text "0 = 0.9d_a² (conservative)" / "0 = 3d_a; 3d_a to 4.5d_a").
+- **Problem:** A_brg = 0.9d_a² is well below a heavy-hex head's net bearing area (conservative) and e_h was fixed at the §17.6.3.2.2(b) minimum. The engineer could not enter the real values.
+- **Default chosen:** 0 = the old hard-coded values, so every existing result is unchanged. An entered value is used as given; the user is responsible for the head/washer bearing area.
+- **Governing provision:** ACI 318-19 §17.6.3.2.2(a) N_p = 8A_brg f'c; §17.6.3.2.2(b) N_p = 0.9f'c e_h d_a, 3d_a ≤ e_h ≤ 4.5d_a; §17.6.4.1 (A_brg in N_sb).
+- **Check case:** tool defaults with h_a = 24 (N_max per anchor = 5000/4 + 1000/12 = 1333 lb).
+  - Before / A_brg = 0: A_brg = 0.9 × 0.75² = 0.506 in²; φN_pn = 0.70 × 8 × 0.506 × 4000 = **11,340 lb**, ratio **0.118**.
+  - A_brg = 0.911 in² (3/4 in heavy hex: 0.866 × 1.25² − 0.442): φN_pn = 0.70 × 8 × 0.911 × 4000 = **20,406 lb**, ratio **0.065**.
+  - L-bolt, e_h = 0 (3d_a = 2.25): φN_pn = 0.70 × 0.9 × 4000 × 2.25 × 0.75 = **4253 lb**, ratio 0.314. e_h = 3.0 in: **5670 lb**, ratio **0.235**. e_h = 5 in: error (> 4.5d_a = 3.375).
+  - Side-face blowout, EX2 (1 in, h_ef 18, c1 4, c2 6): A_brg 0 → φN_sbg 22,400 lb (ratio 0.446); A_brg 1.501 in² → 22,400 × √(1.501/0.9) = **28,928 lb** (ratio 0.346).
+
+### S5. O3 — Scope note for the elastic bolt group   [display only] [no result change]
+- **Where:** report header (after the `ACI 318-19 Ch. 17` block) and `computeAll` (before the `hefReduced` warning).
+- **After (inserted):**
+  ```jsx
+  <div className="mb-6 text-[11px] text-slate-400 leading-snug">Scope: cast-in headed bolts / L-bolts. Anchor forces from an elastic bolt group (anchors also take compression; no plate bearing). Intended for embed plates and small eccentricity; for base plates with large moment use BasePlateAnchorDesigner.html. Seismic §17.10.5.3 / §17.10.6 not checked.</div>
+  ```
+  ```js
+          if (numAnchors === 4 && (Mux !== 0 || Muy !== 0) && anchors.some(a => a.N < -1e-6)) warnings.push(`Moment with anchors in compression: anchor forces come from an elastic bolt group (anchors also take compression; no plate bearing / neutral-axis solution). Valid for embed plates and small eccentricity. For a base plate on concrete or grout with large moment, use BasePlateAnchorDesigner.html (bearing solution).`);
+  ```
+- **Why:** inventory default for CA-O3. A bearing (neutral-axis) solution is a larger change and the engineer's call (see Needs engineer).
+- **Check case:** EX1 (M_ux = 30,000, N = 6000: bottom anchors −1000 lb) and the "loads" scenario show the warning; the tool defaults (all four anchors in tension) do not.
+
+### S6. O1 — React production builds   [library build only] [no result change]
+- **Where:** `<head>`, anchor `<!-- React Framework -->`.
+- **Before:** `https://unpkg.com/react@18.3.1/umd/react.development.js`, `https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js`.
+- **After:** `https://unpkg.com/react@18.3.1/umd/react.production.min.js`, `https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js`. Same version (18.3.1), production build. @babel/standalone 7.29.10, Tailwind 3.4.17 and KaTeX 0.16.9 unchanged.
+
+### S7. O12 — Tooltip and CSS   [cosmetic] [no result change]
+- `TOOLTIPS`: the unused `"App D": "Plate Yield Line Analysis (AISC Design Guide 1)"` entry is removed (no line references it; the plate check is not DG1). The `"17.8"` line loses its trailing comma.
+- CSS: `rounded: 4px;` (not a CSS property) → `border-radius: 4px;` in `.ref-tooltip:hover::after` and `.input-field`. Input fields and the reference tooltip now get the rounded corners that were evidently intended.
+- CSS: the unused `/* Toggle Switch Style */` `.toggle-checkbox` / `.toggle-label` rules are removed (no element uses those classes).
+- More grades / diameters: not added (on request only).
+
+### Closed (not changed)
+- **O5** (shear breakout Case 3 only, inclined shear combined per edge, ψ_ec,V = 1): conservative; kept as documented simplifications (inventory default "leave").
+- **O10** (no cracked/uncracked control, always cracked): conservative; kept (inventory default "leave").
+- **O14** (no "not for design" banner): closed earlier by the engineer's "fix fully" decision.
+
+### Saved data
+- Three new optional input keys in the tool's own project file (`anchor.json`, `{project, inputs, version: 2}`): `groutPad` (false), `Abrg` (0), `eh` (0). Names follow the existing unprefixed keys of this file's `inputs` object (`ha`, `edgeReinf`, `plateFy`, `plateBeff`); the file is read only by this tool and is not a storage key, so no tool prefix is needed. No storage key added or changed.
+- An old file loads with these defaults and **without** a load note for them (`sanitizeLoaded` skips the "not in file" note for these three keys only), so results are identical. Verified: a file saved by main loads in the branch with no note and the same results; files without `ha` still get 24 and the existing note.
+- `bridgeSuite.v1.projectMeta` payload unchanged.
+
+### How verified
+- `node --check` on all three inline scripts after transpiling the text/babel block with @babel/standalone 7.29.
+- Engine (extracted from the file, Node): 14 cases (defaults, EX1–EX8 of the original fix, h_ef 11.2 and 12, L-bolt, single anchor, single at an edge), main vs branch, with h_a = 24: every result identical except h_ef = 11.2 (S1) and the new warning (S5). New options checked against the hand values in S2 and S4.
+- Headless Chromium (Playwright), libraries served locally from the npm tarballs of the pinned versions (main: React 18.3.1 development; branch: React 18.3.1 production; Babel 7.29.10; KaTeX 0.16.9; Tailwind emulated with CSS built by tailwindcss 3.4.19 from both files). Scenarios: open as is, default, CENTER, EDGE, CORNER, SINGLE, L-BOLT + Seismic + Cond. A, member edits, load edits, M_ux 40,000, h_ef 11.2, report; each with h_a = 24 entered. Centre panel identical in all of them; the report differs only by the scope line, the S5 warning where anchors are in compression, and the S1 values for h_ef 11.2. Branch-only: grout pad, A_brg 0.911, L-bolt e_h 3, L-bolt e_h 5 (error + dot on Member & Anchor). No console errors or warnings in any scenario.
+- Save → load: the branch file adds only `"groutPad":false,"Abrg":0,"eh":0`; a main-saved file loads in the branch with no note and identical results; "Share project info" payload identical.
+- Screenshots (session scratchpad `casweep/shot_*.png`) checked: new-page error state, System tab with the grout checkbox, Member & Anchor tab with A_brg, report scope note.
+
+### Needs engineer
+1. **O2 plate b_eff:** the plate check is a single-cantilever simplification with b_eff = 4 in by default. Which rule do you want: b_eff = 2l_x (45° spread, recommended), the anchor spacing, or replace the check with a DG1 yield-line check (as in BasePlateAnchorDesigner)?
+2. **O3 bearing solution:** should this tool get a plate-bearing / neutral-axis solution for base plates, or stay embed-plate scope with the note added here (recommended: stay embed-plate scope; BasePlateAnchorDesigner covers base plates)?
+3. **O9 seismic §17.10.5.3 / §17.10.6:** implement the ductile-steel / attachment-yield / Ω0 options here, or keep the warning and point to BasePlateAnchorDesigner (recommended: keep the warning)?
+4. **O6 §17.7.2.1.2 narrow-member c_a1 limit:** implementing it raises shear breakout capacity (less conservative). Implement? (Recommended: yes, as an on-by-default code provision, but only with your sign-off.)
+5. **O11 §17.6.2.1.2:** confirm that the edge distances and s for the h_ef reduction are taken from the anchors in tension (pryout: all anchors).
+6. **O7 wording (optional):** S1 is compliant under either reading; confirm the printed 318-19 §17.6.2.2.3 wording only if you want the max() reading back.
+7. **O15 narrow screen:** is a narrow-screen (stacked) layout wanted? At 400 px the input panel collapses to 1 px.
+8. **A2 / X-D10:** check the styling on the work laptop with the Tailwind 3.4.17 Play CDN, and decide whether to replace the Play CDN with an inlined static stylesheet (recommended: inline, for offline use).
+
+### Appendix C — diff of `Concrete Anchor.html` for this entry (against origin/main f8bd55f; CR characters removed)
+
+```diff
+diff --git a/Concrete Anchor.html b/Concrete Anchor.html
+index a47eb55..0a06024 100644
+--- a/Concrete Anchor.html	
++++ b/Concrete Anchor.html	
+@@ -6,8 +6,8 @@
+     <title>Structural Anchor Pro v4.9 - Visual Control</title>
+     
+     <!-- React Framework -->
+-    <script src="https://unpkg.com/react@18.3.1/umd/react.development.js"></script>
+-    <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js"></script>
++    <script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js"></script>
++    <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
+     <script src="https://unpkg.com/@babel/standalone@7.29.10/babel.min.js"></script>
+     
+     <!-- Tailwind CSS -->
+@@ -33,23 +33,14 @@
+             bottom: 100%; right: 0;
+             background: #1e293b; color: #94a3b8;
+             padding: 4px 8px; font-size: 10px;
+-            border: 1px solid #475569; rounded: 4px;
++            border: 1px solid #475569; border-radius: 4px;
+             white-space: nowrap; pointer-events: none; z-index: 50;
+         }
+         .unit-label { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); font-size: 10px; color: #64748b; pointer-events: none; }
+         .input-wrap { position: relative; }
+-        .input-field { width: 100%; background-color: #1e293b; border: 1px solid #475569; rounded: 4px; padding: 4px 28px 4px 8px; font-size: 14px; color: white; }
++        .input-field { width: 100%; background-color: #1e293b; border: 1px solid #475569; border-radius: 4px; padding: 4px 28px 4px 8px; font-size: 14px; color: white; }
+         .input-field:focus { outline: none; border-color: #3b82f6; }
+ 
+-        /* Toggle Switch Style */
+-        .toggle-checkbox:checked {
+-            right: 0;
+-            border-color: #68D391;
+-        }
+-        .toggle-checkbox:checked + .toggle-label {
+-            background-color: #68D391;
+-        }
+-
+         @media print {
+             body { background: white; color: black; height: auto; overflow: visible; }
+             .no-print { display: none !important; }
+@@ -216,7 +207,11 @@ var CA_PROJ_MAP=[{shared:'projectName',key:'name',label:'Project Name'},
+         Nua: 5000, Vux: 2000, Vuy: 0, Mux: 1000, Muy: 0,
+         plateT: 0.5, plateLx: 2.0,
+         // Added fields (optional in saved files; these defaults are applied when missing)
+-        ha: 24.0, edgeReinf: "none", plateFy: 36000, plateBeff: 4.0
++        ha: 24.0, edgeReinf: "none", plateFy: 36000, plateBeff: 4.0,
++        // Added 2026-10-12 (optional; old files load with these defaults = previous results):
++        // groutPad: built-up grout pad, 0.80 x V_sa (§17.7.1.2.1); Abrg: head bearing area, 0 = 0.9 d_a^2;
++        // eh: L-bolt hook extension, 0 = 3 d_a (§17.6.3.2.2(b): 3d_a <= e_h <= 4.5d_a).
++        groutPad: false, Abrg: 0, eh: 0
+     };
+ 
+     const TOOLTIPS = {
+@@ -232,8 +227,7 @@ var CA_PROJ_MAP=[{shared:'projectName',key:'name',label:'Project Name'},
+         "17.7.2.1": "Concrete Breakout Strength in Shear (group)",
+         "17.7.2.2": "Basic Concrete Breakout Strength in Shear",
+         "17.7.3.1": "Nominal Pryout Strength",
+-        "17.8": "Tension and Shear Interaction",
+-        "App D": "Plate Yield Line Analysis (AISC Design Guide 1)"
++        "17.8": "Tension and Shear Interaction"
+     };
+ 
+     const fmt = (n, d=2) => (typeof n === 'number' && isFinite(n)) ? n.toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d }) : (n === Infinity ? "∞" : "—");
+@@ -316,14 +310,15 @@ var CA_PROJ_MAP=[{shared:'projectName',key:'name',label:'Project Name'},
+         };
+     };
+ 
+-    const calculateSteel = (da, gradeKey) => {
++    const calculateSteel = (da, gradeKey, groutPad) => {
+         const grade = STEEL_GRADES[gradeKey];
+         const AseN = ASE_TABLE[da];
+         const futa = Math.min(grade.fut, 1.9 * grade.fy, 125000);   // §17.6.1.2
+         const Nsa_single = AseN * futa;
+         const phi_steel = 0.75; 
+         const phiNsa_single = phi_steel * Nsa_single;
+-        const Vsa_single = 0.6 * AseN * futa;
++        const fGrout = groutPad ? 0.80 : 1.0;   // §17.7.1.2.1: built-up grout pad
++        const Vsa_single = fGrout * 0.6 * AseN * futa;
+         const phi_shear_steel = 0.65;
+         const phiVsa_single = phi_shear_steel * Vsa_single;
+ 
+@@ -333,8 +328,8 @@ var CA_PROJ_MAP=[{shared:'projectName',key:'name',label:'Project Name'},
+                 futa: { eq: `f_{uta} = \\min(f_{ut}, 1.9 f_{ya}, 125000)`, sub: `\\min(${grade.fut}, ${fmt(1.9*grade.fy,0)}, 125000)`, res: fmt(futa,0), unit: "psi" },
+                 Nsa: { eq: `N_{sa} = A_{se,N} f_{uta}`, sub: `${fmt(AseN,3)} \\cdot ${fmt(futa,0)}`, res: fmt(Nsa_single,0), unit: "lb" },
+                 phiNsa: { eq: `\\phi N_{sa} = \\phi A_{se,N} f_{uta}`, sub: `${phi_steel} \\cdot ${fmt(AseN,3)} \\cdot ${fmt(futa,0)}`, res: fmt(phiNsa_single,0), unit: "lb" },
+-                Vsa: { eq: `V_{sa} = 0.6 A_{se,V} f_{uta}`, sub: `0.6 \\cdot ${fmt(AseN,3)} \\cdot ${fmt(futa,0)}`, res: fmt(Vsa_single,0), unit: "lb" },
+-                phiVsa: { eq: `\\phi V_{sa} = \\phi\\, 0.6 A_{se,V} f_{uta}`, sub: `${phi_shear_steel} \\cdot 0.6 \\cdot ${fmt(AseN,3)} \\cdot ${fmt(futa,0)}`, res: fmt(phiVsa_single,0), unit: "lb" }
++                Vsa: { eq: groutPad ? `V_{sa} = 0.80 \\cdot 0.6 A_{se,V} f_{uta}\\ (\\text{grout pad})` : `V_{sa} = 0.6 A_{se,V} f_{uta}`, sub: `${groutPad ? '0.80 \\cdot ' : ''}0.6 \\cdot ${fmt(AseN,3)} \\cdot ${fmt(futa,0)}`, res: fmt(Vsa_single,0), unit: "lb" },
++                phiVsa: { eq: groutPad ? `\\phi V_{sa} = \\phi\\, 0.80 \\cdot 0.6 A_{se,V} f_{uta}\\ (\\text{grout pad, \\S 17.7.1.2.1})` : `\\phi V_{sa} = \\phi\\, 0.6 A_{se,V} f_{uta}`, sub: `${phi_shear_steel} \\cdot ${groutPad ? '0.80 \\cdot ' : ''}0.6 \\cdot ${fmt(AseN,3)} \\cdot ${fmt(futa,0)}`, res: fmt(phiVsa_single,0), unit: "lb" }
+             }
+         };
+     };
+@@ -363,10 +358,12 @@ var CA_PROJ_MAP=[{shared:'projectName',key:'name',label:'Project Name'},
+         const AncGeom = w_x * w_y;
+         const Anc = Math.min(AncGeom, n * Anco);                       // A_Nc <= n A_Nco
+         const Nb24 = CONSTANTS.kc * lambda * Math.sqrt(fcC) * Math.pow(hefC, 1.5);
+-        // §17.6.2.2.3: cast-in headed bolts/studs with 11 <= hef <= 25 in. (alternative Eq.)
++        // §17.6.2.2.3: cast-in headed bolts/studs with 11 <= hef <= 25 in.: N_b by the 16-form.
++        // Used whenever it applies (2026-10-12, O7): compliant whether 318-19 makes it mandatory or
++        // an alternative; the old max(24-form, 16-form) was higher for 11 <= hef < 11.39 in.
+         const altOK = type === 'hex' && hefC >= 11 && hefC <= 25;
+         const Nb16 = altOK ? 16 * lambda * Math.sqrt(fcC) * Math.pow(hefC, 5/3) : 0;
+-        const Nb = Math.max(Nb24, Nb16);
++        const Nb = altOK ? Nb16 : Nb24;
+         // §17.6.2.3.1: e'_N = distance from the resultant tension of the tension anchors to their
+         // centroid, per axis; psi_ec,N = psi_ec,x * psi_ec,y
+         let eNx = 0, eNy = 0;
+@@ -407,8 +404,8 @@ var CA_PROJ_MAP=[{shared:'projectName',key:'name',label:'Project Name'},
+                 lambda: { eq: `\\lambda_a = \\lambda\\ (w_c=${p.wc}\\ \\text{pcf})`, sub: `\\min(1.0, \\max(0.75, 0.0075 w_c))`, res: fmt(lam, 3), unit: "" },
+                 hef: { eq: b.hefReduced ? `h'_{ef} = \\max(c_{a,max}/1.5,\\ s/3)` : `h_{ef}\\ (\\text{${b.nearCount} edge(s)} < 1.5h_{ef},\\ \\text{no reduction})`,
+                        sub: b.hefReduced ? `\\max(${fmt(b.caMax,2)}/1.5,\\ ${fmt(b.s,2)}/3)` : null, res: fmt(b.hefC, 2), unit: "in" },
+-                Nb: { eq: b.Nb16 > b.Nb24 ? `N_b = 16 \\lambda_a \\sqrt{f'_c} h_{ef}^{5/3}\\ (\\ge 24\\lambda_a\\sqrt{f'_c}h_{ef}^{1.5} = ${fmt(b.Nb24,0)})` : `N_b = k_c \\lambda_a \\sqrt{f'_c} h_{ef}^{1.5}`,
+-                      sub: b.Nb16 > b.Nb24 ? `16 \\cdot ${fmt(lam,3)} \\sqrt{${fmt(p.fcC,0)}} \\cdot ${fmt(b.hefC,2)}^{5/3}` : `24 \\cdot ${fmt(lam,3)} \\sqrt{${fmt(p.fcC,0)}} \\cdot ${fmt(b.hefC,2)}^{1.5}`, res: fmt(b.Nb,0), unit: "lb" },
++                Nb: { eq: b.Nb16 > 0 ? `N_b = 16 \\lambda_a \\sqrt{f'_c} h_{ef}^{5/3}\\ (11 \\le h_{ef} \\le 25\\ \\text{in};\\ 24\\lambda_a\\sqrt{f'_c}h_{ef}^{1.5} = ${fmt(b.Nb24,0)})` : `N_b = k_c \\lambda_a \\sqrt{f'_c} h_{ef}^{1.5}`,
++                      sub: b.Nb16 > 0 ? `16 \\cdot ${fmt(lam,3)} \\sqrt{${fmt(p.fcC,0)}} \\cdot ${fmt(b.hefC,2)}^{5/3}` : `24 \\cdot ${fmt(lam,3)} \\sqrt{${fmt(p.fcC,0)}} \\cdot ${fmt(b.hefC,2)}^{1.5}`, res: fmt(b.Nb,0), unit: "lb" },
+                 Anco: { eq: `A_{Nco} = 9 h_{ef}^2`, sub: `9 \\cdot ${fmt(b.hefC,2)}^2`, res: fmt(b.Anco,1), unit: "in²" },
+                 Anc: { eq: `A_{Nc} = \\min(w_x w_y,\\ n A_{Nco})\\ (n=${b.n}\\ \\text{tension anchors})`, sub: `\\min(${fmt(b.w_x,2)} \\times ${fmt(b.w_y,2)},\\ ${b.n} \\cdot ${fmt(b.Anco,1)})`, res: fmt(b.Anc,1), unit: "in²" },
+                 psi_ec: { eq: `\\psi_{ec,N} = \\frac{1}{1+\\frac{2e'_{N,x}}{3h_{ef}}} \\cdot \\frac{1}{1+\\frac{2e'_{N,y}}{3h_{ef}}}`, sub: `e'_{N,x}=${fmt(b.eNx,2)},\\ e'_{N,y}=${fmt(b.eNy,2)}`, res: fmt(b.psi_ecN,3), unit: "" },
+@@ -421,11 +418,14 @@ var CA_PROJ_MAP=[{shared:'projectName',key:'name',label:'Project Name'},
+         };
+     };
+ 
+-    const calculatePullout = (fcC, da, type, cracked, seismic) => {
++    // A_brg = head bearing area (0.9 d_a^2 when the input is 0); e_h = hook extension (3 d_a when the input is 0).
++    const abrgOf = (AbrgIn, da) => AbrgIn > 0 ? AbrgIn : 0.9 * da * da;
++    const ehOf = (ehIn, da) => ehIn > 0 ? ehIn : 3 * da;
++    const calculatePullout = (fcC, da, type, cracked, seismic, AbrgIn, ehIn) => {
+         const psi_c_p = cracked ? 1.0 : 1.4;
+         let Np = 0, eqStr = "";
+-        if (type === "hex") { const Abrg = 0.9 * da * da; Np = 8 * Abrg * fcC; eqStr = `8 A_{brg} f'_c,\\ A_{brg}=0.9d_a^2=${fmt(Abrg,3)}`; }
+-        else { const eh = 3 * da; Np = 0.9 * fcC * eh * da; eqStr = `0.9 f'_c e_h d_a,\\ e_h=3d_a`; }
++        if (type === "hex") { const Abrg = abrgOf(AbrgIn, da); Np = 8 * Abrg * fcC; eqStr = AbrgIn > 0 ? `8 A_{brg} f'_c,\\ A_{brg}=${fmt(Abrg,3)}\\ (\\text{input})` : `8 A_{brg} f'_c,\\ A_{brg}=0.9d_a^2=${fmt(Abrg,3)}`; }
++        else { const eh = ehOf(ehIn, da); Np = 0.9 * fcC * eh * da; eqStr = ehIn > 0 ? `0.9 f'_c e_h d_a,\\ e_h=${fmt(eh,3)}\\ (\\text{input})` : `0.9 f'_c e_h d_a,\\ e_h=3d_a`; }
+         const Npn = Np * psi_c_p;
+         const phi = 0.70;   // Table 17.5.3: pullout is always Condition B
+         const phiNpn = phi * Npn * (seismic ? 0.75 : 1.0);
+@@ -435,10 +435,10 @@ var CA_PROJ_MAP=[{shared:'projectName',key:'name',label:'Project Name'},
+     // ACI 318-19 §17.6.4: checked at each edge where hef > 2.5 c_a1 for the tension anchors in the
+     // row nearest that edge. Corner factor (1 + c_a2/c_a1)/4 per §17.6.4.1.1; group factor
+     // (1 + s/6c_a1) per §17.6.4.2 when s < 6c_a1, else anchors checked individually.
+-    const calculateSideFaceBlowout = (tens, g, hef, fcC, lambda, da, type, condB, seismic) => {
++    const calculateSideFaceBlowout = (tens, g, hef, fcC, lambda, da, type, condB, seismic, AbrgIn) => {
+         const na = { applicable: false, val: { phiNsb: Infinity, ratio: 0 } };
+         if (type !== "hex" || tens.length === 0) return na;
+-        const Abrg = 0.9 * da * da;
++        const Abrg = abrgOf(AbrgIn, da);
+         const phi = condB ? 0.70 : 0.75;
+         const fSeis = seismic ? 0.75 : 1.0;
+         const nsb = (ca1, ca2) => {
+@@ -565,12 +565,14 @@ var CA_PROJ_MAP=[{shared:'projectName',key:'name',label:'Project Name'},
+     // Input validation: errors block the calculation (no NaN/Infinity results); warnings are shown.
+     const NUM_FIELDS = { fc: "f'c", wc: "Density wc", hef: "Embedment hef", c1: "Left c1", c2: "Top c2", c3: "Right c3", c4: "Bottom c4",
+         sx: "Spacing X", sy: "Spacing Y", ha: "Member thickness ha", Nua: "Tension Nua", Vux: "Shear Vux", Vuy: "Shear Vuy",
+-        Mux: "Moment Mux", Muy: "Moment Muy", plateT: "Plate t", plateLx: "Plate cantilever lx", plateFy: "Plate Fy", plateBeff: "Plate b_eff" };
++        Mux: "Moment Mux", Muy: "Moment Muy", plateT: "Plate t", plateLx: "Plate cantilever lx", plateFy: "Plate Fy", plateBeff: "Plate b_eff",
++        Abrg: "Head bearing area A_brg", eh: "Hook extension e_h" };
+     const validateInputs = (inp) => {
+         const errors = [], warnings = [];
+         const isNum = v => typeof v === 'number' && isFinite(v);
+         Object.entries(NUM_FIELDS).forEach(([k, lbl]) => {
+             if ((k === 'sx' || k === 'sy') && inp.numAnchors !== 4) return;
++            if (k === 'ha' && !isNum(inp[k])) { errors.push(`${lbl}: required (no default). Enter the actual member thickness; it sets psi_h,V and the depth of A_Vc (§17.7.2.6).`); return; }
+             if (!isNum(inp[k])) errors.push(`${lbl}: blank or not a number.`);
+         });
+         if (!STEEL_GRADES[inp.grade]) errors.push(`Unknown anchor grade "${inp.grade}".`);
+@@ -583,6 +585,8 @@ var CA_PROJ_MAP=[{shared:'projectName',key:'name',label:'Project Name'},
+         ['fc', 'wc', 'hef', 'c1', 'c2', 'c3', 'c4', 'ha', 'plateT', 'plateFy', 'plateBeff'].forEach(pos);
+         if (inp.numAnchors === 4) { pos('sx'); pos('sy'); }
+         if (inp.plateLx < 0) errors.push(`Plate cantilever lx must not be negative.`);
++        if (inp.Abrg < 0) errors.push(`${NUM_FIELDS.Abrg} must not be negative (0 = 0.9d_a^2).`);
++        if (inp.type === 'hook' && inp.eh !== 0 && !(inp.eh >= 3 * inp.da - 1e-9 && inp.eh <= 4.5 * inp.da + 1e-9)) errors.push(`${NUM_FIELDS.eh} must be 0 (= 3d_a) or between 3d_a = ${fmt(3*inp.da,3)} and 4.5d_a = ${fmt(4.5*inp.da,3)} in (§17.6.3.2.2(b)).`);
+         if (errors.length) return { errors, warnings };
+         if (inp.fc > FC_MAX) warnings.push(`f'c = ${inp.fc} psi > 10,000 psi: f'c capped at 10,000 psi in all Ch. 17 calculations (§17.3.1).`);
+         const da = inp.da;
+@@ -596,7 +600,7 @@ var CA_PROJ_MAP=[{shared:'projectName',key:'name',label:'Project Name'},
+             warnings.push(`Seismic: 0.75 applied to concrete breakout, pullout and side-face blowout in tension only (§17.10.5.4). The ductility / Ω0 / attachment-yield requirements of §17.10.5.3 and §17.10.6 are NOT checked by this tool.`);
+             if (!inp.cracked) warnings.push(`Seismic: concrete shall be assumed cracked unless shown to remain uncracked (§17.10.5.4).`);
+         }
+-        if (inp.type === 'hook') warnings.push(`L-bolt: side-face blowout not applicable (headed anchors only); pullout uses e_h = 3d_a.`);
++        if (inp.type === 'hook') warnings.push(`L-bolt: side-face blowout not applicable (headed anchors only); pullout uses e_h = ${inp.eh > 0 ? fmt(inp.eh,3) + ' in (input)' : '3d_a'}.`);
+         return { errors, warnings };
+     };
+ 
+@@ -604,7 +608,7 @@ var CA_PROJ_MAP=[{shared:'projectName',key:'name',label:'Project Name'},
+         const v = validateInputs(inputs);
+         if (v.errors.length) return { errors: v.errors, warnings: v.warnings };
+         const warnings = v.warnings;
+-        const { da, grade, type, numAnchors, hef, fc, wc, c1, c2, c3, c4, sx, sy, cracked, condB, seismic, Nua, Vux, Vuy, Mux, Muy, plateT, plateLx, ha, edgeReinf, plateFy, plateBeff } = inputs;
++        const { da, grade, type, numAnchors, hef, fc, wc, c1, c2, c3, c4, sx, sy, cracked, condB, seismic, Nua, Vux, Vuy, Mux, Muy, plateT, plateLx, ha, edgeReinf, plateFy, plateBeff, groutPad, Abrg, eh } = inputs;
+         const fcC = Math.min(fc, FC_MAX);
+         const lambda = lambdaFromWc(wc);
+         const g = edgeLines(c1, c2, c3, c4, numAnchors, sx, sy);
+@@ -613,13 +617,14 @@ var CA_PROJ_MAP=[{shared:'projectName',key:'name',label:'Project Name'},
+ 
+         const loads = distributeLoads(Nua, Vux, Vuy, Mux, Muy, numAnchors, sx, sy);
+         const { anchors, tens, sumT, N_max_bolt, V_per_bolt, V_resultant } = loads.val;
+-        const steel = calculateSteel(da, grade);
++        const steel = calculateSteel(da, grade, groutPad);
+         const tBreak = calculateBreakoutTension(tens, p, condB, seismic, sumT);
+-        const pullout = calculatePullout(fcC, da, type, cracked, seismic);
+-        const blowout = calculateSideFaceBlowout(tens, g, hef, fcC, lambda, da, type, condB, seismic);
++        const pullout = calculatePullout(fcC, da, type, cracked, seismic, Abrg, eh);
++        const blowout = calculateSideFaceBlowout(tens, g, hef, fcC, lambda, da, type, condB, seismic, Abrg);
+         const sBreak = calculateBreakoutShear(anchors, g, p, Vux, Vuy, condB);
+         const pryout = calculatePryout(anchors, p, hef);
+         const plate = calculateBasePlate(N_max_bolt, plateLx, plateFy, plateT, plateBeff);
++        if (numAnchors === 4 && (Mux !== 0 || Muy !== 0) && anchors.some(a => a.N < -1e-6)) warnings.push(`Moment with anchors in compression: anchor forces come from an elastic bolt group (anchors also take compression; no plate bearing / neutral-axis solution). Valid for embed plates and small eccentricity. For a base plate on concrete or grout with large moment, use BasePlateAnchorDesigner.html (bearing solution).`);
+         if (tBreak.applicable && tBreak.val.hefReduced) warnings.push(`Tension breakout: anchors within 1.5h_ef of ${tBreak.val.nearCount} edges; h_ef reduced to ${fmt(tBreak.val.hefC,2)} in (§17.6.2.1.2).`);
+ 
+         const Nt = Math.max(0, N_max_bolt);
+@@ -653,7 +658,8 @@ var CA_PROJ_MAP=[{shared:'projectName',key:'name',label:'Project Name'},
+         const inputs = { ...DEFAULT_INPUTS }, notes = [];
+         Object.keys(DEFAULT_INPUTS).forEach(k => {
+             const def = DEFAULT_INPUTS[k];
+-            if (!(k in d.inputs)) { notes.push(`"${k}" not in file; default ${def} used.`); return; }
++            // Optional keys added 2026-10-12: their defaults give the previous results, so no note.
++            if (!(k in d.inputs)) { if (!['groutPad', 'Abrg', 'eh'].includes(k)) notes.push(`"${k}" not in file; default ${def} used.`); return; }
+             const v = d.inputs[k];
+             if (typeof def === 'number') {
+                 const n = typeof v === 'number' ? v : (typeof v === 'string' && v.trim() !== '' ? Number(v) : NaN);
+@@ -866,7 +872,7 @@ var CA_PROJ_MAP=[{shared:'projectName',key:'name',label:'Project Name'},
+     // (never in the project JSON). An in-memory copy keeps it when storage is blocked.
+     const CA_IN_TABS = [['system', 'System'], ['geom', 'Geometry'], ['member', 'Member & Anchor'], ['loads', 'Loads']];
+     const CA_IN_FIELD_TAB = { hef: 'geom', ha: 'geom', c1: 'geom', c2: 'geom', c3: 'geom', c4: 'geom', sx: 'geom', sy: 'geom',
+-        fc: 'member', wc: 'member', plateT: 'member', plateLx: 'member', plateFy: 'member', plateBeff: 'member',
++        fc: 'member', wc: 'member', plateT: 'member', plateLx: 'member', plateFy: 'member', plateBeff: 'member', Abrg: 'member', eh: 'member',
+         Nua: 'loads', Vux: 'loads', Vuy: 'loads', Mux: 'loads', Muy: 'loads' };
+     const CA_IN_KEY = 'concreteAnchor_inputTab_v1';
+     let caInTabMem = '';
+@@ -891,7 +897,7 @@ var CA_PROJ_MAP=[{shared:'projectName',key:'name',label:'Project Name'},
+ 
+     const App = () => {
+         const [project, setProject] = useState({ ...DEFAULT_PROJECT });
+-        const [inputs, setInputs] = useState({ ...DEFAULT_INPUTS });
++        const [inputs, setInputs] = useState({ ...DEFAULT_INPUTS, ha: '' });   // h_a has no default for a new project (O13)
+         const [reportMode, setReportMode] = useState(false);
+         const [loadMsg, setLoadMsg] = useState(null);   // { kind: 'error'|'info', lines: [] }
+         const [inTab, setInTabState] = useState(caInTabGet);   // input panel tab (UI only)
+@@ -1006,6 +1012,7 @@ var CA_PROJ_MAP=[{shared:'projectName',key:'name',label:'Project Name'},
+                             </div>
+                             <label className="flex items-center gap-2 text-xs cursor-pointer"><input type="checkbox" checked={inputs.seismic} onChange={e=>update('seismic',e.target.checked)}/> Seismic (0.75 on concrete tension, §17.10.5.4)</label>
+                             <label className="flex items-center gap-2 text-xs cursor-pointer"><input type="checkbox" checked={inputs.condB} onChange={e=>update('condB',e.target.checked)}/> Cond. B (No Reinf) — breakout/blowout φ 0.70; unchecked = Cond. A 0.75</label>
++                            <label className="flex items-center gap-2 text-xs cursor-pointer"><input type="checkbox" checked={inputs.groutPad} onChange={e=>update('groutPad',e.target.checked)}/> Built-up grout pad (0.80 on steel shear V_sa, §17.7.1.2.1)</label>
+                         </div>
+ 
+                         {/* 2. GEOMETRY */}
+@@ -1043,6 +1050,9 @@ var CA_PROJ_MAP=[{shared:'projectName',key:'name',label:'Project Name'},
+                                     <option value="1.0">1.0"</option>
+                                 </select>
+                             </div>
++                            {inputs.type === 'hex'
++                                ? <InputRow label="Head bearing area A_brg" value={inputs.Abrg} onChange={v=>update('Abrg',v)} unit="in²" help="0 = 0.9d_a² (conservative)" />
++                                : <InputRow label="Hook extension e_h" value={inputs.eh} onChange={v=>update('eh',v)} unit="in" help="0 = 3d_a; 3d_a to 4.5d_a" />}
+                             <div className="mb-2">
+                                 <label className="text-xs text-slate-400">Shear edge reinf. ψc,V (cracked; §17.7.2.5)</label>
+                                 <select value={inputs.edgeReinf} onChange={e=>update('edgeReinf',e.target.value)} className="input-field mt-1">
+@@ -1112,6 +1122,7 @@ var CA_PROJ_MAP=[{shared:'projectName',key:'name',label:'Project Name'},
+                                 <div>ACI 318-19 Ch. 17</div>
+                             </div>
+                         </div>
++                        <div className="mb-6 text-[11px] text-slate-400 leading-snug">Scope: cast-in headed bolts / L-bolts. Anchor forces from an elastic bolt group (anchors also take compression; no plate bearing). Intended for embed plates and small eccentricity; for base plates with large moment use BasePlateAnchorDesigner.html. Seismic §17.10.5.3 / §17.10.6 not checked.</div>
+ 
+                         {!ok && <div className="p-4 bg-red-900/40 border border-red-700 rounded text-sm text-red-200"><div className="font-bold mb-1">Input errors — no results calculated</div>{res.errors.map((m,i)=><div key={i}>• {m}</div>)}</div>}
+                         {res.warnings && res.warnings.length > 0 && <div className="mb-6 p-3 bg-amber-900/20 border border-amber-700 rounded text-xs text-amber-200 space-y-1">
+```
