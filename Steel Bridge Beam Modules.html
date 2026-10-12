@@ -5423,6 +5423,7 @@ async function girderReportRun(j) {
       grMsg(`Building: ${lbl}…`); await grTick();
       if (mod === 'df') DF_VIEW.j = g - 1;
       if (mod === 'splice' && !spIncl()) { add('Field splices', '<p class="cr-p">Field splices not included.</p>', []); continue; }
+      if (mod === 'splice' && !(j.splices || []).length && spNoPL()) { add('Field splices', `<p class="cr-p"><b>Warning:</b> Field splices are "Included" on the Splice tab, but Preliminary sizing has no field splice, so no splice was designed or checked for this girder.</p>`, []); continue; }
       if (mod === 'splice') { for (const s of (j.splices || [])) { importInto('splice', () => spliceApply(j, s), j.srcLabel); const c = await grChapter('splice', k + 1, o, `G${g}: bolted field splice ${s.label.replace(/, G\d+$/, '')}`); add(`Field splice ${s.label}`, c.html, c.toc); } continue; }
       const c = await grChapter(mod, k + 1, o, `G${g}: ${lbl}`); add(lbl, c.html, c.toc); }
     // assemble
@@ -5894,7 +5895,7 @@ function dxfSummary(D, C) { const h = D.h, tb = D.layer('TABL', 7), l = D.layer(
   let rows = []; try { const R = GM.gs.compute(P.gs), ck = GM.gs.checks(R) || []; rows = ck.filter(c => c.status !== 'na').map(c => { const g = c.items[c.gov] || c.items[0] || {}; return [c.id, dxfStr(c.title).toUpperCase().slice(0, 58), c.status.toUpperCase(), g.r != null ? f2(g.r) : '-', dxfStr(g.loc || '').toUpperCase().slice(0, 40)]; }); } catch (e) {}
   const T = dxfTable(D, tb, 0, 0, ['CHECK', 'DESCRIPTION', 'STATUS', 'RATIO', 'GOVERNING LOCATION'], rows, 'GIRDER SECTION CHECKS (DEMAND / RESISTANCE AT THE CRITICAL SECTIONS)');
   const st = (P.designAll && P.designAll.stat) || [];
-  if (st.length) dxfTable(D, tb, 0, T.y - 2 * h, ['MODULE', 'RESULT', 'NOTE'], st.map(s => [dxfStr(s.name || s.mm).toUpperCase(), s.fails && s.fails.length ? 'FAILS: ' + s.fails.join(', ') : s.warns && s.warns.length ? 'PASS, WARNINGS: ' + s.warns.join(', ') : 'ALL CHECKS PASS', dxfStr(s.note || '').toUpperCase()]), `DETAIL DESIGN (DESIGN ALL, ${dxfStr(P.designAll.src || '').toUpperCase()})`); }
+  if (st.length) dxfTable(D, tb, 0, T.y - 2 * h, ['MODULE', 'RESULT', 'NOTE'], st.map(s => [dxfStr(s.name || s.mm).toUpperCase(), s.mm === 'splice' && !s.off && spNoPL() ? 'WARNING: NO SPLICE IN SIZING; SPLICE DATA FROM SPLICE MODULE ONLY' : s.fails && s.fails.length ? 'FAILS: ' + s.fails.join(', ') : s.warns && s.warns.length ? 'PASS, WARNINGS: ' + s.warns.join(', ') : 'ALL CHECKS PASS', dxfStr(s.note || '').toUpperCase()]), `DETAIL DESIGN (DESIGN ALL, ${dxfStr(P.designAll.src || '').toUpperCase()})`); }
 /* ---------- standard details, filled in from the design ---------- */
 function dxfStd(D, C) { const h = D.h, m = C.m, ly = { p: D.layer('GRDR-PLAT', 4), g: D.layer('GRDR', 5), d: D.layer('DIMS', 7), t: D.layer('ANNO-TEXT', 7), tb: D.layer('TABL', 7), bo: D.layer('BOLT', 2), c: D.layer('CNTR', 8) }, hid = D.ltype('HIDDEN');
   const db = +(P.bolts && P.bolts.d) || 0.875, tw = m.web[0].t, sd = +(P.sc && P.sc.d) || 0.875, shh = +(P.sc && P.sc.h) || 6, B = C.PP.bridge, Wmax = 30 * D.k; let cx = 0, cy = 0, rowH = 0;

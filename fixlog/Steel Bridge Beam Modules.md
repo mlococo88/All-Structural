@@ -2487,3 +2487,41 @@ index 2ab3ba4..6e70ef9 100644
  function renderStatus() { crMarkStale();
    const c = counts(), v = c.fail ? { cls: 'fail', ico: '✕', t: `${c.fail} check${c.fail > 1 ? 's' : ''} fail` } : { cls: 'pass', ico: '✓', t: 'All checks pass' };
 ```
+
+## 2026-10-12 — PR: claude/girderdetail-q3 (engineer's approved follow-ups; PR link added after merge)
+
+Engineer's approval (2026-10-12) of three follow-ups: (1) the DXF title-block status table and the Girder report carry the G9 warning when field splices are "Included" but Preliminary sizing has none; (2) splice auto-design: when no web layout passes, the fallback fit starts from the largest web bolt group that fits; (3) TS5 (stiffener spacing) is not applicable on a web with connection plates only, and a panel wider than 3D is advisory. Basis: AASHTO LRFD 10th Ed. (2024). Main page only; the PlateLine string `PL_B64` is not touched. Items 1 and 3 change status and message text only (no formula, factor, unit or reference changed); item 2 changes the fallback layout that auto-design returns when nothing passes (no formula or check changed). Line numbers ≈ branch.
+
+### Q1. DXF title-block status table and Girder report: warning when splices are "Included" but Preliminary sizing has none   [message only] [no result change]
+- **Where (main page):**
+  - `dxfSummary()` (≈ 5898), the Design all status table (`MODULE / RESULT / NOTE`). Anchor `dxfTable(D, tb, 0, T.y - 2 * h, ['MODULE', 'RESULT', 'NOTE']`. The RESULT cell of the Field splices row reads `WARNING: NO SPLICE IN SIZING; SPLICE DATA FROM SPLICE MODULE ONLY` when `s.mm === 'splice' && !s.off && spNoPL()` (the same condition the Design all table on screen uses since G9); otherwise unchanged. The NOTE cell is unchanged (e.g. `0 CASES DESIGNED`).
+  - `girderReportRun()` (≈ 5426), module loop. Anchor `if (mod === 'splice' && !spIncl()) { add('Field splices', '<p class="cr-p">Field splices not included.</p>', []); continue; }`. New line after it: when the demands received have no splices and `spNoPL()`, a "Field splices" chapter with one line: "**Warning:** Field splices are "Included" on the Splice tab, but Preliminary sizing has no field splice, so no splice was designed or checked for this girder." Before, the report had no splice chapter in that state and said nothing.
+- **Before / after (exact):** see "Exact changes (Q1)" below.
+- **Problem:** after G9 the status bar, Summary, Project tab, report and Design all table warned, but the DXF status table still printed the stored Design all row (`ALL CHECKS PASS`) for the splice, and the Girder report silently left the splice out.
+- **§4:** no formula, factor, unit or reference changed; message only. `P.designAll` (saved) is unchanged; the DXF reads `spNoPL()` when it is written, as the Design all table on screen does.
+- **Check case (headless Chromium):** Preliminary sizing 90 ft simple span, N<sub>b</sub> = 10, S = 4 ft, overhangs 2.25 ft, depth rule off, Suggest applied (D = 37, top 13 × 3/4, bottom 14 × 1 1/8, no field splices); Splice tab "Included" (`P.spl` `inc: 'yes'`, `plN: 0`); Get demands; Design all (Preliminary sizing); DXF; Girder report for G2.
+  - DXF status table, Field splices row. Before: `ALL CHECKS PASS | 0 CASES DESIGNED`. After: `WARNING: NO SPLICE IN SIZING; SPLICE DATA FROM SPLICE MODULE ONLY | 0 CASES DESIGNED`. Every other row: same as before (the Transverse stiffeners row changes with Q3 only).
+  - Girder report chapters. Before: 10 chapters, no splice chapter. After: 11 chapters, "Chapter 6. Field splices" with the warning line.
+  - Default example (splices in the sizing layout): DXF text, Design all, and every check identical main vs branch.
+- **Saved data:** none changed.
+- **How verified:** `node --check` on the inline scripts; headless Chromium (Playwright) main vs branch; no console errors.
+- **Other copies:** none.
+- **Open items:** none.
+
+### Exact changes (Q1): main page (unified diff)
+
+```diff
+diff --git a/Steel Bridge Beam Modules.html b/Steel Bridge Beam Modules.html
+index 6e70ef9..643e627 100644
+--- a/Steel Bridge Beam Modules.html	
++++ b/Steel Bridge Beam Modules.html	
+@@ -5425,2 +5425,3 @@ async function girderReportRun(j) {
+       if (mod === 'splice' && !spIncl()) { add('Field splices', '<p class="cr-p">Field splices not included.</p>', []); continue; }
++      if (mod === 'splice' && !(j.splices || []).length && spNoPL()) { add('Field splices', `<p class="cr-p"><b>Warning:</b> Field splices are "Included" on the Splice tab, but Preliminary sizing has no field splice, so no splice was designed or checked for this girder.</p>`, []); continue; }
+       if (mod === 'splice') { for (const s of (j.splices || [])) { importInto('splice', () => spliceApply(j, s), j.srcLabel); const c = await grChapter('splice', k + 1, o, `G${g}: bolted field splice ${s.label.replace(/, G\d+$/, '')}`); add(`Field splice ${s.label}`, c.html, c.toc); } continue; }
+@@ -5896,3 +5897,3 @@ function dxfSummary(D, C) { const h = D.h, tb = D.layer('TABL', 7), l = D.layer(
+   const st = (P.designAll && P.designAll.stat) || [];
+-  if (st.length) dxfTable(D, tb, 0, T.y - 2 * h, ['MODULE', 'RESULT', 'NOTE'], st.map(s => [dxfStr(s.name || s.mm).toUpperCase(), s.fails && s.fails.length ? 'FAILS: ' + s.fails.join(', ') : s.warns && s.warns.length ? 'PASS, WARNINGS: ' + s.warns.join(', ') : 'ALL CHECKS PASS', dxfStr(s.note || '').toUpperCase()]), `DETAIL DESIGN (DESIGN ALL, ${dxfStr(P.designAll.src || '').toUpperCase()})`); }
++  if (st.length) dxfTable(D, tb, 0, T.y - 2 * h, ['MODULE', 'RESULT', 'NOTE'], st.map(s => [dxfStr(s.name || s.mm).toUpperCase(), s.mm === 'splice' && !s.off && spNoPL() ? 'WARNING: NO SPLICE IN SIZING; SPLICE DATA FROM SPLICE MODULE ONLY' : s.fails && s.fails.length ? 'FAILS: ' + s.fails.join(', ') : s.warns && s.warns.length ? 'PASS, WARNINGS: ' + s.warns.join(', ') : 'ALL CHECKS PASS', dxfStr(s.note || '').toUpperCase()]), `DETAIL DESIGN (DESIGN ALL, ${dxfStr(P.designAll.src || '').toUpperCase()})`); }
+ /* ---------- standard details, filled in from the design ---------- */
+```
