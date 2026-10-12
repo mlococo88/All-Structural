@@ -12120,15 +12120,15 @@ function GroupPlanDir({ I, g, sets }) {
   const C = "#c9622e", G = "#2f6f3e";
   sets.forEach(st => {
     st.rows.forEach(p => {
-      if (st.axis === "x") { const ci = st.V > 0 ? nC - p.row : p.row - 1; anns.push({ x: ci * s, y: (nR - 1) * s + s * 0.55, yanchor: "bottom", showarrow: false, text: "x" + p.row + ": fₘ=" + fmt(p.fm, 2), font: { size: 8.5, family: PLOT_FONT, color: C } }); }
+      if (st.axis === "x") { const ci = st.V > 0 ? nC - p.row : p.row - 1; anns.push({ x: ci * s, y: (nR - 1) * s + s * 0.55, yanchor: "bottom", showarrow: false, text: "x" + p.row + "<br>fₘ=" + fmt(p.fm, 2), font: { size: 8.5, family: PLOT_FONT, color: C } }); }
       else { const ri = st.V > 0 ? nR - p.row : p.row - 1; anns.push({ x: (nC - 1) * s + s * 0.75, y: ri * s, xanchor: "left", showarrow: false, text: "y" + p.row + ": fₘ=" + fmt(p.fm, 2), font: { size: 8.5, family: PLOT_FONT, color: C } }); }
     });
     if (st.axis === "x") { const y0 = -s * 0.8, xa = st.V > 0 ? -s * 0.4 : (nC - 1) * s + s * 0.4, xb = st.V > 0 ? (nC - 1) * s * 0.5 + s * 0.2 : (nC - 1) * s * 0.5 - s * 0.2;
       anns.push({ x: xb, y: y0, ax: xa, ay: y0, axref: "x", ayref: "y", showarrow: true, arrowhead: 2, arrowcolor: G, arrowwidth: 2, text: "", font: { size: 9 } });
-      anns.push({ x: xa, y: y0, xanchor: st.V > 0 ? "right" : "left", showarrow: false, text: "Vₓ", font: { size: 9, family: PLOT_FONT, color: G } }); }
+      anns.push({ x: xb, y: y0, xanchor: st.V > 0 ? "left" : "right", showarrow: false, text: " Vₓ ", font: { size: 9, family: PLOT_FONT, color: G } }); }
     else { const x0 = -s * 0.8, ya = st.V > 0 ? -s * 0.4 : (nR - 1) * s + s * 0.4, yb = st.V > 0 ? (nR - 1) * s * 0.5 + s * 0.2 : (nR - 1) * s * 0.5 - s * 0.2;
       anns.push({ x: x0, y: yb, ax: x0, ay: ya, axref: "x", ayref: "y", showarrow: true, arrowhead: 2, arrowcolor: G, arrowwidth: 2, text: "", font: { size: 9 } });
-      anns.push({ x: x0, y: ya, yanchor: st.V > 0 ? "top" : "bottom", showarrow: false, text: "V_y", font: { size: 9, family: PLOT_FONT, color: G } }); }
+      anns.push({ x: x0, y: yb, yanchor: st.V > 0 ? "bottom" : "top", showarrow: false, text: "V_y", font: { size: 9, family: PLOT_FONT, color: G } }); }
   });
   const pad = s * 1.4;
   const H = Math.min(160 + nR * 34, 320);
