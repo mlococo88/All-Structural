@@ -10080,7 +10080,7 @@ function PrintReport({
     /*#__PURE__*/React.createElement(Calc, {
     label: "Preliminary fixity (Davisson 1965)",
     eq: r.buckling.bklSoilIsSand ? `L_f = 1.8\\,T,\\; T = (EI/n_h)^{1/5} = ${fmt(r.buckling.T_char, 2)}\\ \\text{ft} \\Rightarrow ${fmt(r.buckling.Lf_davisson, 1)}\\ \\text{ft}` : `L_f = 1.4\\,R,\\; R = (EI/k_h)^{1/4} = ${fmt(r.buckling.R_char, 2)}\\ \\text{ft} \\Rightarrow ${fmt(r.buckling.Lf_davisson, 1)}\\ \\text{ft}`,
-    note: "Davisson & Robinson (1965); FHWA NHI-05-039 practice. Not an AASHTO equation \u2014 it is a closed-form fit to an eigenvalue solution for a pile on a Winkler foundation, and is valid only for the idealization it was fitted to: uniform soil, linear springs, constant EI. Soil basis: " + (r.buckling.bklSoilSrc || "\u2014") + "."
+    note: "Davisson & Robinson (1965); FHWA NHI-05-039 practice; AASHTO LRFD 10th Ed. Art. 10.7.3.13.4 \u2014 verify article. It is a closed-form fit to an eigenvalue solution for a pile on a Winkler foundation, and is valid only for the idealization it was fitted to: uniform soil, linear springs, constant EI. Soil basis: " + (r.buckling.bklSoilSrc || "\u2014") + "."
   }), r.buckling.lpileMatchOk && /*#__PURE__*/React.createElement(Calc, {
     label: "Deflection-matched fixity (" + (r.buckling.deflSrc || "lateral analysis") + ")",
     eq: r.buckling.deflHeadBasis === "fixed"
@@ -13345,8 +13345,8 @@ function BucklingTabs({ b, I, set, pcr, computePcr }) {
         " below are the result of that fit \u2014 so you are consuming somebody else's eigenvalue solution, hard-coded."),
       /*#__PURE__*/React.createElement("p", { className: "text-[9px] leading-snug mb-1 p-1.5 rounded-sm", style: { background: "rgba(201,98,46,0.08)", color: "#7a4d15" } },
         /*#__PURE__*/React.createElement("b", null, "Valid only for the idealization it was fitted to: "),
-        "uniform soil, linear springs, constant EI. It cannot see layering, soil nonlinearity, degradation, or P-\u0394. It is ",
-        /*#__PURE__*/React.createElement("b", null, "not an AASHTO equation"), " \u2014 see FHWA NHI-05-039 for its use in practice."),
+        "uniform soil, linear springs, constant EI. It cannot see layering, soil nonlinearity, degradation, or P-\u0394. Cited as ",
+        /*#__PURE__*/React.createElement("b", null, "AASHTO LRFD 10th Ed. Art. 10.7.3.13.4 \u2014 verify article"), "; see FHWA NHI-05-039 for its use in practice."),
       /*#__PURE__*/React.createElement(Lbl, null, "Fixity depth"),
       /*#__PURE__*/React.createElement("p", { className: "text-[9px] text-slate-500 mb-1" },
         "Soil stiffness from: ", /*#__PURE__*/React.createElement("b", null, b.bklSoilSrc),
@@ -14102,11 +14102,35 @@ function App() {
     document.body.removeChild(a);
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
+  // F63 (X-C5 / PILE-C5): format-tag check on import. Returns null for a file this
+  // loader recognises (a Pile project file with _version 1, an older scenario file,
+  // or an untagged file that carries at least one Pile Designer input name), or a
+  // warning text for a mismatched _version or another tool's / another kind of file.
+  // Old untagged Pile files therefore load silently, exactly as before.
+  function importFormatWarning(data) {
+    if (!data || typeof data !== "object" || Array.isArray(data)) return "This file is not a Pile Designer project file (no project object found).";
+    if (data._type != null) {
+      if (data._type !== "micropile_lrfd_project") return "This file is tagged \"" + String(data._type) + "\", not a Pile Designer project file (\"micropile_lrfd_project\").";
+      if (data._version !== 1) return "This Pile Designer project file has format version " + (data._version == null ? "(none)" : JSON.stringify(data._version)) + "; this copy of the tool reads version 1. Some inputs may be missing or misread.";
+      return null;
+    }
+    if (data._format != null) {
+      if (data._format === "micropile-designer-scenario") return null;
+      if (data._format === "micropile-designer-soil-layers") return "This is a soil-layer file (\"micropile-designer-soil-layers\"), not a project file. Load it with \"\u2191 import boring-log JSON\" in the soil profile instead.";
+      return "This file is tagged \"" + String(data._format) + "\", not a Pile Designer project file.";
+    }
+    if (data._schema != null) return "This file is a \"" + String(data._schema) + "\" file (another tool or a hand-off), not a Pile Designer project file.";
+    const inc = data.inputs && typeof data.inputs === "object" ? data.inputs : data;
+    if (!Object.keys(inc).some(k => Object.prototype.hasOwnProperty.call(DEFAULT_INPUTS, k))) return "This file has no Pile Designer inputs in it; it may belong to another tool.";
+    return null;
+  }
   function importProject(file) {
     const reader = new FileReader();
     reader.onload = e => {
       try {
         const data = JSON.parse(e.target.result);
+        const fmtWarn = importFormatWarning(data);
+        if (fmtWarn && !window.confirm(fmtWarn + "\n\nLoad it anyway? Your current inputs will be replaced. (Cancel leaves everything unchanged.)")) return;
         const inc = data && data.inputs ? data.inputs : data; // accept raw or wrapped
         if (inc && typeof inc === "object") {
           setI(mergeSavedInputs(inc));
@@ -14251,7 +14275,8 @@ function App() {
         }
         const buf = await file.arrayBuffer();
         const pdf = await window.pdfjsLib.getDocument({
-          data: buf
+          data: buf,
+          isEvalSupported: false   // F63: CVE-2024-4367 mitigation (pdf.js 3.11.174)
         }).promise;
         const parts = [];
         for (let p = 1; p <= pdf.numPages; p++) {
