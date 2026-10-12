@@ -397,6 +397,8 @@
         <p class="tbl-note" id="kdUsedNote" style="margin:-4px 0 8px 0"></p>
         <p class="tbl-note" id="kdMigNote" style="margin:0 0 8px 0;display:none;color:#b45309"></p>
         <div class="row"><label>G gust factor</label><div class="ctl"><input id="G" type="number" value="0.85" step="0.05"><span class="unit">—</span></div></div>
+        <div class="row"><label>Damping ratio, β<span class="note">for G<sub>f</sub> when n₁ &lt; 1 Hz (ASCE 7-22 §26.11.5)</span></label><div class="ctl"><input id="lppBeta" type="number" value="0.005" step="0.001" min="0.001"><span class="unit">—</span></div></div>
+        <p class="tbl-note" id="lppGfNote" style="margin:-4px 0 8px 0"></p>
       </div>
     </section>
 
@@ -1359,15 +1361,23 @@ function signWind(inp){
   // ---- exposed post drag (per post) ----
   // Only the CLEARANCE height (grade to bottom of panel) is exposed to wind; the strip
   // behind the panel is already captured by the panel force, so applying post drag over
-  // the full height would double-count. Drag acts at the exposed strip's mid-height clr/2.
+  // the full height would double-count. 2026-10-12: the drag is integrated over the exposed
+  // height in NPS strips (q_z at each strip centroid, ASCE 7-22 §29.4.1 per strip, as the mast in
+  // poleWindNominal); it was one force at q_z(clr/2) acting at clr/2.
   const postW_in=(inp.poleDiaBase+inp.poleDiaTop)/2;         // in, mean post width
   const postExpH=Math.max(0,clr);                            // ft, exposed height = clearance
-  const qzPost=0.00256*Kz(clr/2,inp.expo)*inp.Kzt*inp.Kd*inp.G*inp.V*inp.V;  // psf at exposed mid-height
+  const qzMidPost=0.00256*Kz(clr/2,inp.expo)*inp.Kzt*inp.Kd*inp.G*inp.V*inp.V;  // psf at exposed mid-height (reference)
   const Apost=(postW_in/12)*postExpH;                        // ft^2 exposed area
   const cfPost=inp.cfPole;                                   // post shape drag coeff
-  const Fpost=qzPost*cfPost*Apost;                           // lb, per post
-  const zPost=clr/2;                                         // ft, lever arm of post drag
-  const Mpost=Fpost*zPost;                                   // lb-ft, per post
+  const NPS=50, dzp=postExpH/NPS, postStrips=[];
+  let Fpost=0, Mpost=0;
+  for(let i=0;i<NPS && dzp>0;i++){
+    const z=(i+0.5)*dzp;
+    const F=0.00256*Kz(z,inp.expo)*inp.Kzt*inp.Kd*inp.G*inp.V*inp.V*cfPost*(postW_in/12)*dzp;   // lb
+    postStrips.push({z,F}); Fpost+=F; Mpost+=F*z;
+  }
+  const qzPost=Apost>0? Fpost/(cfPost*Apost) : qzMidPost;  // psf, area-average q_z over the exposed height
+  const zPost=Fpost>0? Mpost/Fpost : clr/2;                 // ft, height of the drag resultant
   // Case A resultant height: centroid, raised 0.05h if s/h==1 (approx: if sh>=0.99)
   const zA = sh>=0.99 ? zc+0.05*h : zc;
   // Case B: same force, resultant offset e=0.2B horizontally toward windward edge
@@ -1399,7 +1409,7 @@ function signWind(inp){
     caseC={bands, F:Ftot, e:eC, factor:cc.factor, xR};
   }
   return {B,s,clr,h,zc,zA,As,bs,sh,Kzh,qh,cfAB,cfAuto,cfManual,F_A,eB,caseC,
-          Fpost,Mpost,zPost,postExpH,Apost,qzPost,postW_in,cfPost};
+          Fpost,Mpost,zPost,postExpH,Apost,qzPost,qzMidPost,postStrips,postW_in,cfPost};
 }
 
 // ---- fixture load components (per fixture, unfactored, by source) ----
@@ -1662,6 +1672,43 @@ function poleNatFreq(inp, masses){
   const n1= b>0 ? Math.sqrt(386.1*a/b)/(2*Math.PI) : NaN;
   return {n1, Wtot:ms.reduce((s,m)=>s+m.W,0), yTop:df.top};
 }
+// ASCE 7-22 §26.11.5 gust-effect factor G_f for a FLEXIBLE structure (n1 < 1 Hz), Eqs. 26.11-10
+// to 26.11-15, Table 26.11-1 constants (verify). h = height (ft), B = width normal to the wind
+// (ft), L = depth along the wind (ft), n1 (Hz), beta = damping ratio, V = basic wind speed (mph).
+const GF_TBL={B:{ab:0.45,aa:1/4.0,c:0.30,l:320,eps:1/3.0,zmin:30},
+              C:{ab:0.65,aa:1/6.5,c:0.20,l:500,eps:1/5.0,zmin:15},
+              D:{ab:0.80,aa:1/9.0,c:0.15,l:650,eps:1/8.0,zmin:7}};
+function gustFlexible(expo, V, h, B, L, n1, beta){
+  const T=GF_TBL[expo]||GF_TBL.C;
+  const zb=Math.max(0.6*h, T.zmin);                        // z̄ (ft)
+  const Iz=T.c*Math.pow(33/zb,1/6);                        // Eq. 26.11-7
+  const Lz=T.l*Math.pow(zb/33,T.eps);                      // Eq. 26.11-9
+  const Q2=1/(1+0.63*Math.pow((B+h)/Lz,0.63));             // Eq. 26.11-8 (Q²)
+  const Vz=T.ab*Math.pow(zb/33,T.aa)*V*(88/60);            // Eq. 26.11-16, ft/s
+  const N1=n1*Lz/Vz;                                       // Eq. 26.11-14
+  const Rn=7.47*N1/Math.pow(1+10.3*N1,5/3);                // Eq. 26.11-13
+  const Rl=eta=>eta>0? 1/eta - (1-Math.exp(-2*eta))/(2*eta*eta) : 1;   // Eq. 26.11-15a/b
+  const Rh=Rl(4.6*n1*h/Vz), RB=Rl(4.6*n1*B/Vz), RL=Rl(15.4*n1*L/Vz);
+  const R2=(1/beta)*Rn*Rh*RB*(0.53+0.47*RL);               // Eq. 26.11-12 (R²)
+  const ln=Math.log(3600*n1), gR=Math.sqrt(2*ln)+0.577/Math.sqrt(2*ln);   // Eq. 26.11-11
+  const gQ=3.4, gv=3.4;
+  const Gf=0.925*(1+1.7*Iz*Math.sqrt(gQ*gQ*Q2+gR*gR*R2))/(1+1.7*gv*Iz);   // Eq. 26.11-10
+  return {Gf, zb, Iz, Lz, Q2, Vz, N1, Rn, Rh, RB, RL, R2, gR, beta, n1, h, B, L};
+}
+// Apply the flexible gust factor: when n1 < 1 Hz, G used = max(entered G, G_f). Mutates inp.G and
+// records inp.Ginput / inp.gf for display. Rigid (n1 ≥ 1 Hz): the entered G is used unchanged.
+function lppApplyGf(inp, nat, dims){
+  inp.Ginput=inp.G; inp.gf=null;
+  if(nat && nat.n1>0 && nat.n1<1.0){
+    const beta=(inp.beta>0)?inp.beta:0.005;
+    const gf=gustFlexible(inp.expo, inp.V, dims.h, dims.B, dims.L, nat.n1, beta);
+    inp.gf=gf; inp.G=Math.max(inp.Ginput, gf.Gf);
+  }
+  const nt=$('lppGfNote');
+  if(nt) nt.textContent = !(nat&&nat.n1>0) ? '' : (inp.gf
+    ? `n₁ ≈ ${fmt(nat.n1,2)} Hz < 1 Hz (flexible): G_f = ${fmt(inp.gf.Gf,3)} (ASCE 7-22 §26.11.5, β = ${fmt(inp.gf.beta,3)}); G used = max(${fmt(inp.Ginput,2)}, ${fmt(inp.gf.Gf,3)}) = ${fmt(inp.G,3)}.`
+    : `n₁ ≈ ${fmt(nat.n1,2)} Hz ≥ 1 Hz (rigid): G used = ${fmt(inp.G,2)} as entered; β not used.`);
+}
 // AISC 360-16 §H3.1 torsional strength and §G4/§G5 shear strength of the post (kip-in, kip).
 // Round: Fcr = max(1.23E/(√(L/D)(D/t)^1.25), 0.60E/(D/t)^1.5) ≤ 0.6Fy, C = π(D−t)²t/2 (H3-1..H3-2b);
 //        shear Fcr = max(1.60E/(√(Lv/D)(D/t)^1.25), 0.78E/(D/t)^1.5) ≤ 0.6Fy, Vn = Fcr·A/2 (G5).
@@ -1768,21 +1815,24 @@ function evalComboDir(key,inp,comps,fxs,pw,phi){
   // Wind on the cable drives an along-cable catenary pull, so its direction is set by the
   // cable, not the wind. The wind AZIMUTH therefore does not rotate the cable pull; only the
   // magnitude of the wind term matters. (Consistent with the along-cable pull model.)
-  let cx=0,cy=0,sV=0,hcNum=0,hcDen=0,sHw=0,MHw=0;
+  let cx=0,cy=0,sV=0,hcNum=0,hcDen=0,sHw=0,MHw=0,cMx=0,cMy=0;
   comps.forEach(cp=>{
     const wv=f.D*cp.D_v + f.Di*cp.Di_v;      // factored vertical distributed (dead+ice)
     const wh=f.W*cp.W_h + f.Wi*cp.Wi_h;      // factored wind distributed (bare/iced)
     const r=cp.react(wv,wh);
     perC.push({cp,wv,wh,...r});
     cx+=r.Hx; cy+=r.Hy; sV+=r.Vc;
+    cMx+=r.Hx*cp.c.hc; cMy+=r.Hy*cp.c.hc;    // exact moment vector of each pull at its own attach height
     hcNum+=r.Ht*cp.c.hc; hcDen+=r.Ht;
     sHw+=r.Hw; MHw+=r.Hw*cp.c.hc;            // transverse wind reaction wh·L/2 at the attach height
   });
   const cableRes=Math.hypot(cx,cy), cableAng=Math.atan2(cy,cx)/RAD;
   const hcEff=hcDen>0?hcNum/hcDen:(comps[0]?comps[0].c.hc:inp.H);
   Vx+=cx; Vy+=cy;
-  // cable pull acts at the effective attach height -> overturning moment along the pull direction
-  Mx+=cx*hcEff; My+=cy*hcEff;
+  // cable pulls: overturning moment = Σ H_i·h_ci (vector sum, each pull at its own attach height).
+  // 2026-10-12: was (ΣH)·h_c,eff with h_c,eff = Σ|H|·h_c/Σ|H| — inexact when pulls partly cancel.
+  // hcEff is kept for display (elevation drawing) only.
+  Mx+=cMx; My+=cMy;
   N+=sV;
   // transverse cable wind reaction (Σ wh·L/2) acts along the wind direction, at each cable's
   // attach height (conservatively taken as the full wind line load regardless of azimuth,
@@ -1821,7 +1871,7 @@ function evalComboDir(key,inp,comps,fxs,pw,phi){
           Vx,Vy,Mx,My,P,M,Mang,h,axial:N,
           cableRes,cableAng,hcEff,sV,poleWind,poleWindM,cableWindH:sHw,cableWindM:MHw,
           per:perC, perF,
-          M_cable:Math.hypot(cx,cy)*hcEff, M_pole:poleWindM};
+          M_cable:Math.hypot(cMx,cMy), M_pole:poleWindM};
 }
 
 // Evaluate a combination across all four wind azimuths; keep the one with the largest moment.
@@ -2025,7 +2075,8 @@ manPart("p2","2. Input Reference",[
  ["Exposure category","\u2014","K<sub>z</sub> profile through \u03b1 and z<sub>g</sub>","B suburban/wooded, C open terrain, D open water. Most light poles and highway signs are C. Choosing B when C applies under-predicts pressure by roughly 20\u201330% at low heights."],
  ["K<sub>zt</sub> topographic","\u2014","Multiplies velocity pressure","1.0 on level ground. Greater than 1.0 only on isolated hills, ridges, or escarpments per ASCE 7-22 §26.8. If you are not on a speed-up feature, leave it at 1.0."],
  ["K<sub>d</sub> directionality","\u2014","Multiplies velocity pressure","Set per component from ASCE 7-22 Table 26.6-1 (source = per component): round mast or post (multi-sided treated as round) 1.0; square or rectangular HSS mast or post 0.90 (chimneys, tanks and similar structures, square); solid freestanding sign panel 0.85. Cables and fixtures take the mast value, a conservative assumption. Select source = single value to apply the K<sub>d</sub> input to every component instead. K<sub>d</sub> accounts for the reduced probability that the worst wind direction coincides with the worst structural direction."],
- ["G gust factor","\u2014","Wind force (applied once)","0.85 for a rigid structure. Flexible structures with a natural frequency below 1 Hz require a computed G<sub>f</sub>; tall slender poles can fall into this range."]
+ ["G gust factor","\u2014","Wind force (applied once)","0.85 for a rigid structure. The tool estimates n<sub>1</sub> (Rayleigh); when n<sub>1</sub> &lt; 1 Hz it computes G<sub>f</sub> (ASCE 7-22 \u00a726.11.5) and uses max(entered G, G<sub>f</sub>) for every wind force. The value used is stated under the input."],
+ ["Damping ratio, \u03b2","\u2014","G<sub>f</sub> resonant term R\u00b2 = R<sub>n</sub>R<sub>h</sub>R<sub>B</sub>(0.53+0.47R<sub>L</sub>)/\u03b2","Used only when n<sub>1</sub> &lt; 1 Hz. Default 0.005 (bare steel pole, low damping). Lower \u03b2 gives a higher G<sub>f</sub>."]
 ]}},
 {warn:"<b>K<sub>d</sub> and the load combinations.</b> ASCE 7 permits the Table 26.6-1 K<sub>d</sub> values only when they are used with the standard load combinations. Do not apply K<sub>d</sub> and then use unfactored or non-standard combinations."},
 
@@ -2606,7 +2657,7 @@ function summaryHTML(ctx){
     warnL.push('Pole/post wall is a <b>slender compression element</b> (λ &gt; λ<sub>r</sub>, AISC 360-16 Table B4.1a); the §E7 effective-area reduction is <b>not applied</b>, so the axial capacity is unconservative — verify.');
   const natL=stacks.map(st=>st.nat).filter(Boolean);
   if(natL.some(x=>!(x.n1>=1.0)))
-    warnL.push(`Natural frequency n<sub>1</sub> ≈ ${natL.map(x=>fmt(x.n1,2)).join(' / ')} Hz &lt; 1 Hz (Rayleigh estimate): the structure is <b>flexible</b> (ASCE 7-22 §26.2). The gust factor must be G<sub>f</sub> from §26.11.5; the entered G = ${fmt(inp.G,2)} is used as is — verify.`);
+    warnL.push(`Natural frequency n<sub>1</sub> ≈ ${natL.map(x=>fmt(x.n1,2)).join(' / ')} Hz &lt; 1 Hz (Rayleigh estimate): the structure is <b>flexible</b> (ASCE 7-22 §26.2). G<sub>f</sub> = ${inp.gf?fmt(inp.gf.Gf,3):'—'} from §26.11.5 (β = ${fmt(inp.beta,3)}); G used = max(entered ${fmt(inp.Ginput!==undefined?inp.Ginput:inp.G,2)}, G<sub>f</sub>) = <b>${fmt(inp.G,3)}</b>. Dynamic effects beyond G<sub>f</sub> (vortex shedding, galloping) are not checked.`);
   if(stacks.some(st=>st.found&&st.found.Tu>0))
     warnL.push('Monopost torsion from the eccentric sign wind (Cases B/C): the <b>torsional resistance of the soil around the shaft is NOT CHECKED</b> — verify with the geotechnical engineer.');
   if(warnL.length) H+=`<div class="flag" style="background:#fbeeea;border-color:#e0a390;color:#8a2318;margin:8px 0">${warnL.join('<br>')}</div>`;
@@ -2684,14 +2735,14 @@ function signLoadPathHTML(inp,sw,pw,postGovList){
   H+=step(`1 · Panel geometry &amp; lever arms`);
   H+=g(`h = \\text{clr} + s = ${fmt(sw.clr,2)}\\ \\text{ft} + ${fmt(sw.s,2)}\\ \\text{ft} = ${fmt(sw.h,2)}\\ \\text{ft}\\qquad A_s = B\\,s = (${fmt(sw.B,2)}\\ \\text{ft})(${fmt(sw.s,2)}\\ \\text{ft}) = ${fmt(sw.As,2)}\\ \\text{ft}^2`);
   H+=g(`\\bar{z} = \\text{clr} + \\tfrac{s}{2} = ${fmt(sw.clr,2)} + \\tfrac{${fmt(sw.s,2)}}{2} = ${fmt(sw.zc,2)}\\ \\text{ft}` + (sw.zA!==sw.zc?`\\qquad z_A = \\bar z + 0.05h = ${fmt(sw.zA,2)}\\ \\text{ft}`:''));
-  H+=`<p class="eq-why">z̄ is the panel-area centroid where the Case A/B resultant acts${sw.zA!==sw.zc?' (raised 0.05h for a near-ground panel per Fig. 29.3-1 note)':''}. Case C, when applicable, uses its own band centroid z_C = ${fmt(sw.zc,2)} ft. The post's own drag resultant acts at h/2 = ${fmt(sw.h/2,2)} ft.</p>`;
+  H+=`<p class="eq-why">z̄ is the panel-area centroid where the Case A/B resultant acts${sw.zA!==sw.zc?' (raised 0.05h for a near-ground panel per Fig. 29.3-1 note)':''}. Case C, when applicable, uses its own band centroid z_C = ${fmt(sw.zc,2)} ft. The post's own drag resultant acts at z<sub>drag</sub> = ${fmt(sw.zPost,2)} ft (step 3).</p>`;
 
   // ---- 2 · dead load path (axial) ----
-  const Wp=inp.signWt, selfW=inp.__poleTotalW||0;
+  const Wp=inp.signWt, selfW=inp.__poleTotalW||0, DLp=inp.DL||0;
   H+=step(`2 · Dead load path — axial N per post`);
-  H+=`<p class="eq-why">The panel weight is assumed to hang concentrically on the post group, splitting evenly (no dead-load moment). Each post adds its own self-weight (section weight × exposed length, from the Post tab).</p>`;
-  H+=g(`N_{panel} = \\frac{W_{sign}}{n} = \\frac{${fmt(Wp,0)}\\ \\text{lb}}{${nP}} = ${fmt(Wp/nP,0)}\\ \\text{lb/post}\\qquad N_{post} = ${fmt(selfW,0)}\\ \\text{lb}`);
-  H+=g(`N = N_{panel}+N_{post} = ${fmt(Wp/nP,0)} + ${fmt(selfW,0)} = ${fmt(Wp/nP+selfW,0)}\\ \\text{lb (nominal, per post)}`);
+  H+=`<p class="eq-why">The panel weight is assumed to hang concentrically on the post group, splitting evenly (no dead-load moment). Each post adds its own self-weight (section weight × exposed length, from the Post tab) and the misc. dead load input (per post).</p>`;
+  H+=g(`N_{panel} = \\frac{W_{sign}}{n} = \\frac{${fmt(Wp,0)}\\ \\text{lb}}{${nP}} = ${fmt(Wp/nP,0)}\\ \\text{lb/post}\\qquad N_{post} = ${fmt(selfW,0)}\\ \\text{lb}\\qquad N_{DL} = ${fmt(DLp,0)}\\ \\text{lb}`);
+  H+=g(`N = N_{panel}+N_{post}+N_{DL} = ${fmt(Wp/nP,0)} + ${fmt(selfW,0)} + ${fmt(DLp,0)} = ${fmt(Wp/nP+selfW+DLp,0)}\\ \\text{lb (nominal, per post)}`);
 
   // ---- 3 · wind cases → force split ----
   H+=step(`3 · Wind cases → post shears ${ref('ASCE 7-22 Fig. 29.3-1 + statics')}`);
@@ -2701,9 +2752,9 @@ function signLoadPathHTML(inp,sw,pw,postGovList){
   cases.push({name:'B',F:sw.F_A,x:0.2*sw.B,z:sw.zA});
   if(sw.caseC) cases.push({name:'C',F:sw.caseC.F,x:sw.caseC.e,z:sw.zc});
   const Fdrag=sw.Fpost, Mdrag=sw.Mpost;
-  H+=`<p class="eq-why"><b>Post drag on the exposed column.</b> Each post is itself a member in the wind stream, but only the length <b>below the panel</b> is exposed \u2014 the strip behind the sign is already accounted for in the panel force above, so applying wind over the full post height would double-count it. The exposed height is the clearance, h<sub>exp</sub> = ${fmt(sw.clr,2)} ft (grade to bottom of panel), and its drag resultant acts at its mid-height, z<sub>drag</sub> = clr/2 = ${fmt(sw.zPost,2)} ft:</p>`;
-  H+=g(`q_{z}(clr/2) = 0.00256\\,K_z K_{zt} K_d\\,G\\,V^2 = ${fmt(sw.qzPost,1)}\\ \\text{psf}\\qquad A_{exp} = w_{post}\\,h_{exp} = \\tfrac{${fmt(sw.postW_in,2)}}{12}(${fmt(sw.postExpH,2)}) = ${fmt(sw.Apost,2)}\\ \\text{ft}^2`);
-  H+=g(`F_{drag,post} = q_z\\,C_f\\,A_{exp} = ${fmt(sw.qzPost,1)}(${fmt(sw.cfPost,2)})(${fmt(sw.Apost,2)}) = ${fmt(Fdrag,0)}\\ \\text{lb (per post, at } z_{drag}=${fmt(sw.zPost,2)}\\text{ ft)}`);
+  H+=`<p class="eq-why"><b>Post drag on the exposed column.</b> Each post is itself a member in the wind stream, but only the length <b>below the panel</b> is exposed \u2014 the strip behind the sign is already accounted for in the panel force above, so applying wind over the full post height would double-count it. The exposed height is the clearance, h<sub>exp</sub> = ${fmt(sw.clr,2)} ft (grade to bottom of panel). The drag is integrated over that height in ${sw.postStrips?sw.postStrips.length:1} strips (q_z at each strip centroid; K_z is constant below 15 ft), so q̄_z below is the area-average and z<sub>drag</sub> = ΣF_i z_i/ΣF_i = ${fmt(sw.zPost,2)} ft:</p>`;
+  H+=g(`\\bar q_{z} = \\frac{1}{h_{exp}}\\int_0^{h_{exp}} 0.00256\\,K_z(z) K_{zt} K_d\\,G\\,V^2\\,dz = ${fmt(sw.qzPost,1)}\\ \\text{psf}\\quad(q_z(clr/2) = ${fmt(sw.qzMidPost!==undefined?sw.qzMidPost:sw.qzPost,1)})\\qquad A_{exp} = w_{post}\\,h_{exp} = \\tfrac{${fmt(sw.postW_in,2)}}{12}(${fmt(sw.postExpH,2)}) = ${fmt(sw.Apost,2)}\\ \\text{ft}^2`);
+  H+=g(`F_{drag,post} = \\bar q_z\\,C_f\\,A_{exp} = ${fmt(sw.qzPost,1)}(${fmt(sw.cfPost,2)})(${fmt(sw.Apost,2)}) = ${fmt(Fdrag,0)}\\ \\text{lb (per post, at } z_{drag}=${fmt(sw.zPost,2)}\\text{ ft)}`);
   cases.forEach(cs=>{
     const sh=signPostSplit(cs.F,cs.x,Lp,nP);
     if(two){
@@ -2750,7 +2801,7 @@ function signLoadPathHTML(inp,sw,pw,postGovList){
     }
     H+=g(`V_u = ${fmt(fW,1)}\\,(${fmt(shv,0)} + ${fmt(Fdrag,0)}) = ${fmt(gl.P,0)}\\ \\text{lb}`);
     H+=g(`M_u = ${fmt(fW,1)}\\,\\big[(${fmt(shv,0)})(${fmt(cz,2)}) + (${fmt(Fdrag,0)})(${fmt(sw.zPost,2)})\\big] = ${fmt(gl.M,0)}\\ \\text{lb}{\\cdot}\\text{ft}\\qquad h=\\frac{M_u}{V_u}=${fmt(gl.h,2)}\\ \\text{ft}`);
-    H+=g(`N_u = ${fmt(fD,1)}\\,(${fmt(Wp/nP,0)}+${fmt(selfW,0)}) = ${fmt(gl.axial,0)}\\ \\text{lb}`);
+    H+=g(`N_u = ${fmt(fD,1)}\\,(${fmt(Wp/nP,0)}+${fmt(selfW,0)}+${fmt(DLp,0)}) = ${fmt(gl.axial,0)}\\ \\text{lb}`);
     if(!two && gl.Tmax>0) H+=g(`T_u = ${fmt(fW,1)}\\,F\\,|x| = ${fmt(gl.Tmax,0)}\\ \\text{lb}{\\cdot}\\text{ft}\\quad(\\text{max. torsion: Case ${gl.tCase?gl.tCase.case:'B'}})`);
     if(gl.B2) H+=`<p class="eq-why">P-Δ (AISC 360-16 App. 8): the anchors and the shaft use B₂·M_u = ${fmt(gl.B2,3)} × ${fmt(gl.M,0)} = ${fmt(gl.B2*gl.M,0)} lb·ft.</p>`;
   });
@@ -2815,7 +2866,7 @@ function evalSignComboDir(key,inp,pw,sw,phi){
       const zarm=cs.name==='C'? sw.zc : sw.zA;
       const Vwind=Fp + postWindEach;                   // + post's own drag
       const Mwind=Fp*zarm + postWindMEach;
-      const axial=f.D*(perPostDeadSign+postSelfW);
+      const axial=f.D*(perPostDeadSign+postSelfW+(inp.DL||0));   // + misc. dead load per post (2026-10-12)
       const M=Mwind, P=Vwind;
       const T=nPost===1? Math.abs(Fp*cs.x) : 0;        // lb-ft, monopost torsion
       const rec={case:cs.name, Fp, P, M, h:P>0?M/P:0, axial, zarm, T};
@@ -3437,6 +3488,10 @@ function calcSign(inp){
   inp.__poleTotalW=poleSeg.totalW;
   inp.DLtotal=inp.DL+poleSeg.totalW;               // per-post misc + self weight
   const pw=poleWindNominal(inp);
+  // natural frequency (Rayleigh) and flexible G_f BEFORE the wind forces: post segments + this
+  // post's share of the panel at the panel centroid
+  const nat=poleNatFreq(inp, poleSeg.segs.map(s=>({z:s.zMid,W:s.wSeg})).concat([{z:inp.signClr+inp.signS/2,W:(inp.signWt||0)/inp.signPosts}]));
+  lppApplyGf(inp, nat, {h:inp.signClr+inp.signS, B:inp.signB, L:(inp.poleDiaTop+inp.poleDiaBase)/24});
   const sw=signWind(inp);
 
   // evaluate all combos -> per-post governing demand
@@ -3478,7 +3533,6 @@ function calcSign(inp){
       lrfdCombos.map(x=>({name:x.name, M:x.M*(x.B2||1), M1:x.M, B2:x.B2||1, axial:x.axial, P:x.P, Mang:x.phi||0, T:x.Tmax||0})),
       asdCombos.map(x=>({name:x.name, axial:x.axial})));
     // natural frequency (Rayleigh): post segments + this post's share of the panel at the panel centroid
-    const nat=poleNatFreq(inp, poleSeg.segs.map(s=>({z:s.zMid,W:s.wSeg})).concat([{z:sw.zc,W:(inp.signWt||0)/nPost}]));
     const b2r=lrfdCombos.map(x=>x.B2||1);
     const b2=Object.assign({}, {name:gLRFD.name, B2:gLRFD.B2||1, B2min:Math.min(...b2r), B2max:Math.max(...b2r)});
     postDesigns.push({p:p+1,gASD,gLRFD,found,pstress,nat,b2});
@@ -3514,7 +3568,10 @@ function signPostStress(inp,poleSeg,pw,gLRFD,sw){
     if(zsign>=z){ V+=Fsign; M+=Fsign*(zsign-z); }
     // post drag acts only on the exposed strip below the panel (z up to clearance height);
     // above the panel bottom the post is shielded and the panel force already covers that wind.
-    if(z < clrH){
+    // 2026-10-12: the factored drag strips of signWind (q_z varies with height) replace the uniform w.
+    if(sw.postStrips){
+      sw.postStrips.forEach(st=>{ if(st.z>z){ V+=f.W*st.F; M+=f.W*st.F*(st.z-z); } });
+    } else if(z < clrH){
       const hAbove=clrH - z;            // exposed length above this section, up to the panel bottom
       const Hm=wMast*hAbove;            // shear from the exposed strip above this cut
       V+=Hm; M+=Hm*hAbove/2;            // its resultant acts at hAbove/2 above the cut
@@ -3876,6 +3933,7 @@ function lppInputErrors(inp){
   const e=[], sign=inp.mode==='sign';
   const pos=(v,lab)=>{ if(!(v>0)) e.push(lab+' must be greater than 0.'); };
   pos(inp.V,'Basic wind speed V');
+  if(!(inp.beta>0)) e.push('Damping ratio β must be greater than 0.');
   if(sign){
     pos(inp.signB,'Panel width B'); pos(inp.signS,'Panel height s');
     if(!(inp.signClr>=0)) e.push('Clearance to bottom of panel must be 0 or more.');
@@ -3916,7 +3974,7 @@ function kdStr(inp){
   return m+(inp.KdMode==='override'?' [override]':' (mast, cables, fixtures)');
 }
 function calc(){
-  const inp={V:num('V'),expo:$('expo').value,Kzt:num('Kzt'),Kd:kdComponents().mast,KdSign:kdComponents().sign,KdMode:kdComponents().mode,G:num('G'),
+  const inp={V:num('V'),expo:$('expo').value,Kzt:num('Kzt'),Kd:kdComponents().mast,KdSign:kdComponents().sign,KdMode:kdComponents().mode,G:num('G'),beta:($('lppBeta')?num('lppBeta'):0.005),
     H:num('H'),cfLum:num('cfLum'),poleShape:($('poleShape')?$('poleShape').value:'round'),
     poleDiaTop:num('poleDiaTop'),poleDiaBase:num('poleDiaBase'),
     poleDepthTop:num('poleDepthTop'),poleDepthBase:num('poleDepthBase'),cfPole:num('cfPole'),DL:num('DL'),
@@ -3969,6 +4027,16 @@ function calc(){
   // discretize the pole & get self-weight (added to axial dead load)
   const poleSeg=poleSegments(inp);
   inp.poleSelfW=poleSeg.totalW;
+  // natural frequency (Rayleigh) BEFORE any wind force, so the flexible-structure G_f can be used:
+  // pole segments, fixtures, misc. dead load at the top, half of each cable's dead weight at its
+  // attachment (cable tension stiffening ignored)
+  const nat=poleNatFreq(inp, poleSeg.segs.map(s=>({z:s.zMid,W:s.wSeg}))
+    .concat(fixtures.map(x=>({z:x.hf,W:x.W})))
+    .concat([{z:inp.H,W:inp.DL||0}])
+    .concat((cablesEnabled?cables:[]).map(c=>({z:c.hc,W:c.g*c.L/2}))));
+  { const Bw=(inp.poleDiaTop+inp.poleDiaBase)/24;
+    const Ld=inp.poleShape==='rect'? ((inp.poleDepthTop||0)+(inp.poleDepthBase||0))/24 : Bw;
+    lppApplyGf(inp, nat, {h:inp.H, B:Bw, L:Ld}); }
   // total service dead = misc + pole self-weight + sum of fixture weights
   const fixW=fixtures.reduce((s,x)=>s+x.W,0);
   inp.DLtotal=inp.DL+poleSeg.totalW+fixW;
@@ -4019,12 +4087,6 @@ function calc(){
   const phiVc=reo.tie.phiVc, shearOK=phiVc>=Vu;
   const dEff=reo.tie.dEff;
 
-  // natural frequency (Rayleigh): pole segments, fixtures, misc. dead load at the top, half of
-  // each cable's dead weight at its attachment (cable tension stiffening ignored)
-  const nat=poleNatFreq(inp, poleSeg.segs.map(s=>({z:s.zMid,W:s.wSeg}))
-    .concat(fxs.map(fc=>({z:fc.hf,W:fc.Wdead})))
-    .concat([{z:inp.H,W:inp.DL||0}])
-    .concat(comps.map(cp=>({z:cp.c.hc,W:cp.D_v*cp.c.L/2}))));
   // B2 reported for the max-moment LRFD combination; the range covers every LRFD combination
   const govB2=Object.assign({}, lrfdCands.find(c=>c.name===govLRFD.name)||lrfdCands[0],
     {B2min:Math.min(...lrfdCands.map(c=>c.B2)), B2max:Math.max(...lrfdCands.map(c=>c.B2))});
@@ -4055,7 +4117,7 @@ function calc(){
   else f+=`<div class="flag ok">d/b = ${fmt(ratio,1)} within rigid short-pier range.</div>`;
   f+=`<div class="flag ok">Embedment governed by ASD <b>${govASD.name}</b>; shaft P–M governed by LRFD <b>${shaftGov.name}</b> (all LRFD combinations checked); soil bearing by ASD <b>${govAxASD.name}</b> (max axial); anchors: tension <b>${bolts.byCheck.T.comboName}</b>, shear <b>${bolts.byCheck.V.comboName}</b>, interaction <b>${bolts.byCheck.I.comboName}</b>.</div>`;
   f+=`<div class="flag${govB2.B2max>1.10?' bad':''}">P-Δ (AISC 360-16 App. 8): B<sub>2</sub> = ${fmt(govB2.B2,3)} for ${govB2.name} (range ${fmt(govB2.B2min,3)}–${fmt(govB2.B2max,3)} over the LRFD combinations); each combination's B<sub>2</sub> multiplies its LRFD moments for the pole, anchors and shaft. Pole stress governed by <b>${pstress.comboName}</b>, wind toward ${fmt(pstress.phi,0)}° (all LRFD combinations and azimuths checked).</div>`;
-  if(!(nat.n1>=1.0)) f+=`<div class="flag bad">Natural frequency n<sub>1</sub> ≈ ${fmt(nat.n1,2)} Hz &lt; 1 Hz (Rayleigh estimate): the pole is <b>flexible</b> (ASCE 7-22 §26.2). G = ${fmt(inp.G,2)} is used as entered — it must be the flexible-structure G<sub>f</sub> of §26.11.5.</div>`;
+  if(!(nat.n1>=1.0)) f+=`<div class="flag bad">Natural frequency n<sub>1</sub> ≈ ${fmt(nat.n1,2)} Hz &lt; 1 Hz (Rayleigh estimate): the pole is <b>flexible</b> (ASCE 7-22 §26.2). G<sub>f</sub> = ${inp.gf?fmt(inp.gf.Gf,3):'—'} (§26.11.5, β = ${fmt(inp.beta,3)}); G used = max(${fmt(inp.Ginput,2)}, G<sub>f</sub>) = <b>${fmt(inp.G,3)}</b> for every wind force.</div>`;
   if(!cablesEnabled){
     f+=`<div class="flag">Catenary system disabled — foundation driven by pole wind, fixtures, and self-weight only.</div>`;
   } else if(cables.length>=2){
@@ -5826,7 +5888,7 @@ function populateDetailStack(sfx, ctx){
 }
 
 // ================= PROJECT MANAGEMENT + AUTOSAVE =================
-const INPUT_IDS=['V','expo','Kzt','Kd','KdMode','G','H','cfLum','poleShape','poleDiaTop','poleDiaBase','poleDepthTop','poleDepthBase','poleTwTop','poleTwBase','poleFy','poleDen','cfPole','DL','tIce','iceDen','Vice','cfCable','cableMethod','cableE','b','shaftShape','soilClass','bromsSoil','bromsC','bromsPhi','bromsGam','bromsPhiR','bromsOL','rebarMode','manBarSize','manBarN','manTieBar','manTieS','S1','qAllow','fc','fy','cover','minSteel','boltDia','boltGrade','boltQty','boltBC','boltTheta','boltHef','bpDia','signB','signS','signClr','signWt','signSpacing','signCfMode','signCfMan'];
+const INPUT_IDS=['V','expo','Kzt','Kd','KdMode','G','lppBeta','H','cfLum','poleShape','poleDiaTop','poleDiaBase','poleDepthTop','poleDepthBase','poleTwTop','poleTwBase','poleFy','poleDen','cfPole','DL','tIce','iceDen','Vice','cfCable','cableMethod','cableE','b','shaftShape','soilClass','bromsSoil','bromsC','bromsPhi','bromsGam','bromsPhiR','bromsOL','rebarMode','manBarSize','manBarN','manTieBar','manTieS','S1','qAllow','fc','fy','cover','minSteel','boltDia','boltGrade','boltQty','boltBC','boltTheta','boltHef','bpDia','signB','signS','signClr','signWt','signSpacing','signCfMode','signCfMan'];
 const LS_PROJECTS='lpp_projects_v1';   // {name: state}
 const LS_SESSION='lpp_session_v1';     // {state, activeName, dirty}
 let activeProject=null;   // name of loaded project, or null (unsaved/new)
@@ -5854,6 +5916,8 @@ function applyState(st){
   if(!st.inputs || st.inputs.poleDen===undefined) $('poleDen').value='490';
   if(!st.inputs || st.inputs.cableMethod===undefined) $('cableMethod').value='sag';
   if(!st.inputs || st.inputs.cableE===undefined) $('cableE').value='29000';
+  // damping ratio for G_f (added 2026-10-12): older saves have none → default 0.005
+  if($('lppBeta') && (!st.inputs || st.inputs.lppBeta===undefined)) $('lppBeta').value='0.005';
   // K_d source (added 2026-10). Saves made before it have no KdMode: a stored K_d of 0.85 was the
   // old single default and moves to the per-component ASCE 7-22 values; any other value is kept as an override.
   { const mn=$('kdMigNote'); if(mn){ mn.style.display='none'; mn.textContent=''; }
