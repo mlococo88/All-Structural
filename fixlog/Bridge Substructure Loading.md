@@ -823,3 +823,58 @@ Open-item sweep of inventory section 19 (SUB-PEND, SUB-O1 to O4, SUB-F6, SUB-F8,
 - **Zones 3/4 column shear from plastic hinging.** Section 5 refers column shear to 3.10.9.4 (verify the 10th Ed. article). It would need column flexural overstrength, which needs reinforcement input. Recommendation: add a "column shear, R = 1.0" line for Zones 3/4 as an interim upper bound if Zones 3/4 work is expected.
 - **Strength II** (owner permit vehicle), the vessel Method II, ice jams (3.9.4), vertical ground motion and multimode analysis, the Guide Specifications and the AASHTO-2023 hazard data: each needs an owner or engineer decision.
 - **Foundation hand-off "Footing i" groups and service concurrency (F8):** add on request.
+
+## 2026-10-12 — PR: claude/subloads-eeieh (PR link added after merge)
+
+### S4. Extreme Event I static EH: γp max/min by default; fixed value kept as "agency policy" (SUB-O3)   [calc change] [MORE conservative for new projects and for files without the field]
+- **Engineer's decision (2026-10-12):** use γp, and match `abutment_calculator` F25 (#147). This closes SUB-O3 and Needs-engineer item 2 of the claude/sweep-subloads entry.
+- **Where:**
+  - new `eqEHfixed()`, directly above `function gSHof(k)`;
+  - `comboComps`, anchor `perm(ev('EH'), c.eq`;
+  - new `migEHEQ(j)`, directly above `function openProject(j, file)`, and called in `openProject` and in the `start()` localStorage merge;
+  - the earth-loads `defP` patch, anchor `hEQr: 0.6, gEHEQ: 1.0`;
+  - the Bridge tab "Earth loads" section, anchor `fld('γ<sub>EH</sub> in Extreme Event I'`;
+  - the SELECT rebuild regex in the `change` handler (adds `br\.ehEQmode$`);
+  - the earth-tab note, anchor `plus wall and soil-block inertia (Extreme Event I,`;
+  - the `basisExtra` "Backfill" row.
+- **Problem:** EE I combined the static earth pressure EH with one fixed factor `br.gEHEQ` (default 1.0) for both max and min. Table 3.4.1-1 gives γp for EH in Extreme Event I, that is the Table 3.4.1-2 values: active 1.50 max / 0.90 min, at rest 1.35 / 0.90.
+- **Governing provision:** AASHTO LRFD 10th Ed., Table 3.4.1-1 (Extreme Event I row, γp) and Table 3.4.1-2 (EH active 1.50/0.90, at rest 1.35/0.90).
+- **Before:**
+  ```js
+  perm(ev('EH'), c.eq ? [nz(br.gEHEQ) || 1, nz(br.gEHEQ) || 1] : svc ? [1, 1] : EH, 'EH'); perm(ev('EV'), …
+  ```
+- **After:**
+  ```js
+  function eqEHfixed() { return P.br.ehEQmode === 'agency' ? (nz(P.br.gEHEQ) || 1) : null; }   // EE I γEH: null = γp max/min (Table 3.4.1-1 → 3.4.1-2); a number = the fixed "agency policy" value br.gEHEQ
+  …
+  perm(ev('EH'), c.eq && eqEHfixed() !== null ? [eqEHfixed(), eqEHfixed()] : svc ? [1, 1] : EH, 'EH'); perm(ev('EV'), …
+  ```
+  With γp, EE I uses the same `EH` pair as the Strength limit states (active or at rest by abutment; editable `br.ehMax/ehMin/ehAtMax/ehAtMin`). The permanent-load engine takes the max factor where EH increases the effect and the min factor where it reduces it.
+- **Input:** "γEH in Extreme Event I" is now a select with two options:
+  - "γp max/min (Table 3.4.1-1, -2)" (`br.ehEQmode = 'gp'`);
+  - "Fixed value (agency policy)" (`'agency'`). The number field `br.gEHEQ` is shown only with this option.
+- **Saved data (which rule applies to existing saves):**
+  - The new optional field is `br.ehEQmode`. No key is renamed and no hand-off payload changes.
+  - Every file saved since the earth-loads phase stores `br.gEHEQ`, because it has been in `defP` since then. That covers project files and the autosave. On Open or start-up, `migEHEQ` sets `ehEQmode = 'agency'` for these files, so they **keep their saved value (normally 1.00) and their results are unchanged**.
+  - A file that has no `br.gEHEQ`, which means one saved before earth loads existed, gets `'gp'`.
+  - New projects (`defP`) get `'gp'`.
+  - Files saved by this version store `ehEQmode` and keep it.
+  - This is the same rule as abutment_calculator F25.
+- **Check case:** default example project, Abut. 1 (Rankine, active), no ground motion (EQ = 0). Extreme Event I.
+  - Unfactored EH at the bottom of footing: V_l = 339.728 kip, M_l = 2264.854 kip-ft (both increase the effect at max).
+  - V_l, bottom of footing, EE I. Before (γEH = 1.00): max = min = 1.00·339.728 = **339.728 kip**. After (γp): max = 1.50·339.728 = **509.592 kip**, min = 0.90·339.728 = **305.755 kip**.
+  - M_l, bottom of footing, EE I = (other loads) + γEH·2264.854, with other loads = −1394.172 at max. Before: max = −1394.172 + 2264.854 = **870.682 kip-ft**. After: max = −1394.172 + 1.50·2264.854 = **2003.109 kip-ft**. The min goes from −182.001 to −182.001 − 0.10·2264.854 = **−408.486 kip-ft**.
+  - Top of footing: V_l 245.454 → 368.180 / 220.908 kip; M_l 2252.309 → 2947.760 (max).
+  - Abut. 2 mirrors this. Piers (no EH) and every non-EE limit state: unchanged.
+  - "Fixed value (agency policy)" with 1.00 reproduces the old numbers exactly.
+- **How verified:**
+  - `node --check` on the three inline scripts.
+  - Headless Chromium, origin/main (c378e4c) vs branch, 9 scenarios. Each compared every `combine()` envelope, the EQ vectors, the concurrent sets, the foundation hand-off cases, both abutment exports, the saved `P`, the checks and the basis rows.
+    - Fresh project and fresh Zone 2: only abutment EE I resultants change (4 per abutment), as in the check case.
+    - Fresh project with the agency option; an old save in localStorage (with and without Zone 2); and an old file opened with Open (Zone 2): every number is identical to main. The saved state differs only by the added `ehEQmode: 'agency'`.
+    - An old file without `gEHEQ`, by Open and by localStorage: gets `'gp'`, and results equal the fresh-project case.
+    - The abutment export is identical. The abutment hand-off differs only in its `exported` time stamp.
+    - No console or page errors.
+  - Screenshot of the Bridge tab with the select, and with the agency value field shown, checked.
+- **Not changed:** the superseded early `combine` wrapper in the earth section (`const eh = c.eq ? [nz(br.gEHEQ) || 1, …`) is not used by the final engine and was left as is (O4).
+- **Other copies:** `abutment_calculator.html` F25 has the same rule (separate code; no shared snippet).
