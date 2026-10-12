@@ -449,11 +449,597 @@ Verification method for every item: the page was loaded in jsdom from origin/mai
 - **How verified:** Every plain inline script syntax-checked (Node `vm.Script`, same parser as `node --check`); BridgeXfer block compared byte-for-byte with HANDOFF.md §5; page loaded in jsdom (CDN scripts not loaded) before and after the change with no new errors; Share → Use exercised between tools with jsdom localStorage (ASCE7-16 → ACI Rebar, Steel Beam → Shear and Moment, Concrete Beam Capacity shell against stub tab documents), including cancel, empty shared values (field kept), a non-ISO date on a date input (skipped), an empty channel and a wrong `_schema` (refused). `git diff` shows no removed lines other than the ones listed under Before. No calculation code was touched.
 - **Other copies of this code:** none. BridgeXfer v1 is also in: ACI Rebar Development Length.html, ASCE7-16 Load Generator.html, Concrete Beam Capacity.html (shell), Steel Beam Design - AISC 15th.html, Shear and Moment Diagrams.html.
 
+## 2026-10-12 — PR: claude/sweep-sm (open-item sweep; PR link added after merge)
+
+Engineer's instruction (2026-10-12): work through every open item using best judgment, and record anything that needs the engineer. Items handled: O1, O2, O4, O5, O6, O7 (fixed) and O3 (needs the engineer, unchanged). Edits are listed with exact before/after text (each Before occurs once in the file; CRLF line endings kept). Apply them in the order given.
+
+**Verification (all items):**
+- `node --check` on every inline script: 3 blocks, 0 failures.
+- Headless Chromium (Playwright, `/opt/pw-browsers/chromium`), origin/main against this branch. KaTeX 0.16.9 and plotly-basic 2.27.0 were served locally from the npm packages of the same versions, because the CDN is blocked in the sandbox.
+- Scenarios: the default page; each of the 5 templates (ss, 2s, 3s, cant, ff) with section off/on × single/envelope (20 cases); and the F14 check case.
+- Compared: stats cards, calculation panel text, table, CSV rows (`resultsRows`), saved project JSON (`gatherProject`) and report text (`buildReport`).
+- Result: after mapping the node label "roller" → "pin" (F11) and removing the report timestamp, the only differences are in the 5 envelope + section-on cases and the check case. They are the new deflection-envelope outputs (F14). V, M, R, σ, τ and every single-combination result are identical.
+- Separate scripted tests for F9, F10, F11 and F12 are described in each item.
+- No page errors. The only console errors are the KaTeX web-font requests that the sandbox blocks (same on main).
+- Screenshots of the envelope deflection plot (Plotly and the canvas fallback) and of the converted-units view were checked.
+
+### F9 (O1). Changing units now converts every entered value   [bug fix] [results now correct after a unit change; no change when units are not changed]
+- **Where:** new `FKIP` table and `convertUnits()` after `const LCONV=` (anchor `function convertUnits(fu0,lu0,fu1,lu1){`); the `iFU`/`iLU` change listener; the units hint under the selects (replaces the F8 notice).
+- **Problem:** changing Force or Length only changed the labels. A beam entered as 20 ft and 2 k/ft, then switched to kN and m, was solved as 20 m and 2 kN/m.
+- **Decision:** convert rather than lock the units.
+  - Converted: span lengths; point load P and its position; moment M (force × length) and its position; uniform w; trapezoid w1, w2, x1, x2; E, I, c, A, allowable σ; custom x stations; the stored W-shape d and t_w.
+  - Not converted (dimensionless): factors and the L/x limit.
+  - Each converted value is rounded to the shortest decimal within 1e-9 relative of the exact product, so the inputs stay readable. Converting there and back can leave a drift of about 1e-9 relative (2.0e-9 measured after kip-ft → kN-m → kip-ft).
+  - Undo (Ctrl+Z) restores the previous units and values exactly, because the history holds the whole project.
+- **Factors:** 1 kip = 4.4482216152605 kN = 1000 lb = 4448.2216152605 N. Length uses the existing `LCONV` (inches → unit: ft 1/12, m 0.0254, cm 2.54).
+- **Saved data:** format unchanged. Projects already store values together with `fu`/`lu`, so nothing in a file changes meaning.
+- **Governing provision:** n/a (unit conversion; exact definitions: 1 lbf = 4.4482216152605 N, 1 in = 25.4 mm).
+- **Before / After:**
+  1.
+     - Before:
+  ```html
+      <p class="hint" style="color:#b45309">⚠ Changing units only relabels the inputs — existing spans, loads, E, I, c, A and σ are NOT converted. Re-enter them in the new units.</p>
+  ```
+     - After:
+  ```html
+      <p class="hint">Changing units converts every entered value (spans, loads, E, I, c, A, σ, custom x) to the new units. Undo (Ctrl+Z) restores the previous units and values.</p>
+  ```
+  2.
+     - Before:
+  ```js
+const LCONV={ft:1/12,in:1,m:.0254,cm:2.54}; // inches → unit
+  ```
+     - After:
+  ```js
+const LCONV={ft:1/12,in:1,m:.0254,cm:2.54}; // inches → unit
+const FKIP={kip:1,lb:.001,kN:1/4.4482216152605,N:1/4448.2216152605}; // kip per force unit (1 kip = 4.4482216152605 kN)
+/* Convert every entered value from (fu0, lu0) to (fu1, lu1) when the unit selects change.
+   Was: labels only, values kept (fix log F8 / O1). Saved-data format unchanged (values are stored with fu/lu). */
+function convertUnits(fu0,lu0,fu1,lu1){
+  const rf=FKIP[fu0]/FKIP[fu1],rl=LCONV[lu1]/LCONV[lu0];
+  fu=fu1;lu=lu1;
+  if(!(rf>0&&rl>0)||(rf===1&&rl===1))return false;
+  const r=v=>{for(let p=1;p<=15;p++){const y=+v.toPrecision(p);if(Math.abs(y-v)<=1e-9*Math.abs(v))return y;}return v;}; // shortest value within 1e-9 relative
+  const sc=(o,k,f)=>{if(o&&typeof o[k]==='number'&&isFinite(o[k]))o[k]=r(o[k]*f);};
+  spans.forEach(sp=>sc(sp,'L',rl));
+  loads.forEach(ld=>{
+    if(ld.type==='point'){sc(ld,'mag',rf);sc(ld,'pos',rl);}
+    else if(ld.type==='moment'){sc(ld,'mag',rf*rl);sc(ld,'pos',rl);}
+    else if(ld.type==='uniform')sc(ld,'mag',rf/rl);
+    else{sc(ld,'sm',rf/rl);sc(ld,'em',rf/rl);sc(ld,'sx',rl);sc(ld,'ex',rl);}});
+  const fv=(id,f)=>{const v=parseFloat(g(id).value);if(isFinite(v)&&v!==0)g(id).value=r(v*f);};
+  fv('iE',rf/(rl*rl));fv('iI',rl*rl*rl*rl);fv('iC',rl);fv('iA',rl*rl);fv('iFb',rf/(rl*rl));
+  const ux=g('iUX').value;
+  if(ux.trim())g('iUX').value=ux.split(',').map(s=>{const v=parseFloat(s.trim());return isNaN(v)?s.trim():String(r(v*rl));}).join(', ');
+  if(shpW){shpW.d=r(shpW.d*rl);shpW.tw=r(shpW.tw*rl);}
+  return true;
+}
+  ```
+  3.
+     - Before:
+  ```js
+['iFU','iLU'].forEach(id=>g(id).addEventListener('change',()=>{renderCfg();refreshDG();schedule();toast('⚠ Units relabelled only — values were NOT converted');}));
+  ```
+     - After:
+  ```js
+['iFU','iLU'].forEach(id=>g(id).addEventListener('change',()=>{const fu0=fu,lu0=lu;
+  const cvd=convertUnits(fu0,lu0,g('iFU').value,g('iLU').value);
+  renderCfg();renderLoads(true);refreshDG();schedule();
+  if(cvd)toast(`Values converted: ${fu0}, ${lu0} → ${fu}, ${lu} (Ctrl+Z to undo)`);}));
+  ```
+- **Check case:** simple span 20 ft, uniform 2 kip/ft (DL), "Unfactored" combination; switch Force to kN and Length to m.
+  - Before: the inputs keep 20 and 2, so the beam is solved as 20 m and 2 kN/m: R = 20.000 kN, M = 100.000 kN·m (wrong).
+  - After: L = 6.096 m, w = 2 × 4.4482216 / 0.3048 = 29.1878059 kN/m.
+    - R = wL/2 = 88.964 kN (= 20 × 4.44822).
+    - M = wL²/8 = 29.1878059 × 6.096² / 8 = 135.582 kN·m (= 100 × 4.44822 × 0.3048).
+- **How verified:** scripted test on a 2-span beam with a cantilever, every load type, the W18×50 preset, σ_allow and custom x.
+  - After kip-ft → kN-m: R scales by 4.44822, M by 4.44822 × 0.3048, δ by 0.3048, and σ and τ by 4.44822/0.3048², all within 1e-6 relative.
+  - Back to kip-ft, every project value is within 2e-9 relative.
+  - Undo after a change to inches restores ft and the original spans.
+- **Other copies of this code:** none.
+
+### F10 (O7). W-shape preset fills E in any force unit   [bug fix] [results now correct with non-kip force units]
+- **Where:** `iShape` change handler (anchor `E = 29,000 ksi in the current units`); label of the shape select.
+- **Problem:** E was set only when the force unit was kip. With kN, lb or N the previous E stayed. For example, 4,176,000 entered for kip/ft was read as 4,176,000 kN/m², about 48× too low, so deflection came out 48× too large.
+- **Governing provision:** AISC 360-16, Symbols (E = 29,000 ksi, modulus of elasticity of steel).
+- **Before / After:**
+  1.
+     - Before:
+  ```html
+Standard Shape (auto-fills, kip units)
+  ```
+     - After:
+  ```html
+Standard Shape (auto-fills in the current units)
+  ```
+  2.
+     - Before:
+  ```js
+  if(fu==='kip')g('iE').value=Math.round(29000/(f*f));
+  ```
+     - After:
+  ```js
+  g('iE').value=Math.round(29000/FKIP[fu]/(f*f)); // E = 29,000 ksi in the current units (was: set only when fu = kip)
+  ```
+- **Check case:**
+  - Units kN, m; pick W18×50. Before: E unchanged. After: E = 29,000 × 4.4482216 / 0.0254² = 199,947,962 kN/m² (≈ 200 GPa).
+  - kip/ft is unchanged: 29,000 × 144 = 4,176,000 (same expression order as before).
+  - lb, in: 29,000,000.
+- **How verified:** scripted test (kN-m → 199,947,962; lb-in → 29,000,000); kip-ft results identical to main in the 20-case comparison.
+- **Other copies of this code:** none.
+
+### F11 (O2). "Roller" support option; rollers are no longer silently turned into pins   [UI] [no result change]
+- **Where:** first line of `solve()`; node select in `renderCfg()`; support click-cycle in the load-canvas drag handler (anchor `const cyc=isEnd?`).
+- **Problem:** the templates and "+ Add Span" create rollers, but `solve()` rewrote them to pins, and the dropdown had no Roller entry.
+- **Decision:** add Roller.
+  - It is solved exactly like Pin: only `free` and `fixed` change the constraints in `solveFor` and `deflOf`, so no result changes.
+  - The roller symbol and the label "(roller)" now show in the calculation panel and report.
+  - Saved projects may now contain `"t":"roller"`. That was already the template value, and Steel Beam Design's S&M import maps roller → pin.
+- **Governing provision:** n/a.
+- **Before / After:**
+  1.
+     - Before:
+  ```js
+  nodes.forEach(n2=>{if(n2.t==='roller')n2.t='pin';}); // pin ≡ roller in this model (no axial DOF)
+  ```
+     - After:
+  ```js
+  // 'roller' is kept as entered (was silently changed to 'pin'); it is solved exactly like 'pin' (no axial DOF).
+  ```
+  2.
+     - Before:
+  ```html
+      <option value="pin" ${nd2.t==='pin'||nd2.t==='roller'?'selected':''}>Pin</option>
+  ```
+     - After:
+  ```html
+      <option value="pin" ${nd2.t==='pin'?'selected':''}>Pin</option>
+      <option value="roller" ${nd2.t==='roller'?'selected':''}>Roller</option>
+  ```
+  3.
+     - Before:
+  ```js
+      const cyc=isEnd?['pin','fixed','free']:['pin','fixed'];
+  ```
+     - After:
+  ```js
+      const cyc=isEnd?['pin','roller','fixed','free']:['pin','roller','fixed'];
+  ```
+- **Check case:** 3-span template: reactions 3.5111 / 27.9889 / 27.9889 / 3.5111 kip before and after; node B now reads "Roller".
+- **How verified:** 20-case comparison (identical after mapping the label); dropdown test (node B = roller, options pin/roller/fixed).
+- **Other copies of this code:** none.
+
+### F12 (O6). Tool-prefixed storage keys, with migration   [saved data] [no result change]
+- **Where:** `const LSK=` (saved analyses section); new `smdMigrateKeys()` after `putSaves`; boot IIFE.
+- **Problem:** `beamProSaves` / `beamProAuto` are generic names in the shared `file://` origin (CLAUDE.md §5).
+- **Change:**
+  - New keys: `smd_saves_v1` (named saves) and `smd_auto_v1` (autosave).
+  - At start-up, each new key that is absent (`getItem` → null) is filled with a copy of its old key.
+  - The old keys are read only for this and are never written or removed. Value formats are unchanged.
+- **Governing provision:** CLAUDE.md §5.
+- **Before / After:**
+  1.
+     - Before:
+  ```js
+const LSK='beamProSaves',LSA='beamProAuto';
+  ```
+     - After:
+  ```js
+const LSK='smd_saves_v1',LSA='smd_auto_v1'; // tool-prefixed (CLAUDE.md §5); were the generic 'beamProSaves' / 'beamProAuto'
+const LSK_OLD='beamProSaves',LSA_OLD='beamProAuto'; // read once by smdMigrateKeys(), never written or removed
+  ```
+  2.
+     - Before:
+  ```js
+function putSaves(s){return lsSet(LSK,JSON.stringify(s));}
+  ```
+     - After:
+  ```js
+function putSaves(s){return lsSet(LSK,JSON.stringify(s));}
+/* One-time migration: copy each old generic key into its new key when the new key does not exist yet. */
+function smdMigrateKeys(){[[LSK_OLD,LSK],[LSA_OLD,LSA]].forEach(([o,n])=>{if(lsGet(n)===null){const v=lsGet(o);if(v!==null)lsSet(n,v);}});}
+  ```
+  3.
+     - Before:
+  ```js
+(function(){
+  refreshSaveList();
+  try{
+    const a=JSON.parse(lsGet(LSA));
+  ```
+     - After:
+  ```js
+(function(){
+  smdMigrateKeys();
+  refreshSaveList();
+  try{
+    const a=JSON.parse(lsGet(LSA));
+  ```
+- **Check case:** a browser holding only `beamProAuto` and `beamProSaves`, with project "Old" (18 ft, 3 k/ft).
+  - After loading: "Old" is restored and listed under Saved; `smd_auto_v1` and `smd_saves_v1` exist; the old keys are unchanged.
+  - Later changes to the old keys are not copied again.
+- **How verified:** scripted test as in the check case.
+- **Other copies of this code:** none (no other tool reads these keys).
+
+### F13 (O5). Combination presets: edition stated   [docs] [no result change]
+- **Where:** `psLRFD` / `psASD` button titles; hint under the combinations table.
+- **Change:**
+  - The presets are labelled ASCE 7-16 Sec. 2.3.1 (LRFD) and Sec. 2.4.1 (ASD), D/L/S/W only.
+  - The factors were checked against those sections:
+    - LRFD: 1.4D; 1.2D+1.6L+0.5S; 1.2D+1.6S+L; 1.2D+1.0W+L+0.5S; 0.9D+1.0W.
+    - ASD: D; D+L; D+S; D+0.75L+0.75S; D+0.6W; D+0.75L+0.75S+0.45W; 0.6D+0.6W.
+  - The hint also states that the default list's "Unfactored (1.0 All)" row is not a code combination, and that its wind row uses 0.5L (Sec. 2.3.1 Exception 1).
+  - The "U" row stays in the default list (the inventory's recommended default).
+- **Governing provision:** ASCE 7-16 Sec. 2.3.1 and 2.4.1 (verify the section numbering against the printed standard).
+- **Before / After:**
+  1.
+     - Before:
+  ```html
+title="Replace all combinations with ASCE 7 strength (LRFD) basics"
+  ```
+     - After:
+  ```html
+title="Replace all combinations with the ASCE 7-16 Sec. 2.3.1 strength (LRFD) basic combinations for D, L, S, W"
+  ```
+  2.
+     - Before:
+  ```html
+title="Replace all combinations with ASCE 7 allowable stress (ASD) basics"
+  ```
+     - After:
+  ```html
+title="Replace all combinations with the ASCE 7-16 Sec. 2.4.1 allowable stress (ASD) basic combinations for D, L, S, W"
+  ```
+  3.
+     - Before:
+  ```html
+  <p class="hint">Names are generated from the factors. The single-combination dropdown and the envelope both follow this table. Verify preset factors against your governing code edition.</p>
+  ```
+     - After:
+  ```html
+  <p class="hint">Names are generated from the factors. The single-combination dropdown and the envelope both follow this table. Presets: ASCE 7-16 Sec. 2.3.1 (LRFD) and Sec. 2.4.1 (ASD) basic combinations for D, L, S and W only (Lr, R, E and the alternate snow/wind arrangements are not included). The default list's "Unfactored (1.0 All)" row is not a code combination, and its wind row uses 0.5L (ASCE 7-16 Sec. 2.3.1 Exception 1: only where L<sub>o</sub> ≤ 100 psf, not garages or public assembly). Verify preset factors against your governing code edition.</p>
+  ```
+- **Check case:** n/a (text only).
+- **Other copies of this code:** none.
+
+### F14 (O4). Deflection envelope in envelope mode   [calc: new output] [more conservative: a deflection check now exists in envelope mode]
+- **Where:**
+  - New `deflOf(mo)` before `mkRow`: the single-mode deflection code moved out of `solve()` unchanged (`moD` → `mo`).
+  - `solve()` envelope branch (anchor `deflection envelope over the same enabled combinations`).
+  - `mkRow`; `deflSpans` (governing combination `c`); `readIn` (panel visibility); `drawAll`; `updStats` (|δ| env card, `pkD`); `renderTable`; `drawDefl`; `plotDefl`.
+  - `renderKaTeX` (per-combination |δ|max column and the deflection block); `resultsRows` (CSV); `buildReport` (checks, diagram, table).
+- **Problem:** envelope mode showed no deflection and no L/x check.
+- **Decision:**
+  - δ is computed for each enabled combination with the same double integration, then enveloped point-wise (max downward, and min).
+  - The check takes, at each station, the larger of |δmax| and |δmin|. It is made per span against that span's L/x (as in F1) and names the governing combination.
+  - The same enabled set as V/M is used, so factored combinations give factored deflections (conservative). The calculation panel says so, and tells the user to enable only service combinations, or use single-combination mode, for a service-level check.
+  - Single-combination results are unchanged (same code, verified identical in all 20 cases).
+- **Governing provision:** structural mechanics (Euler-Bernoulli, as F1/F2); limit per IBC 2021 Table 1604.3 with l = span length (F1).
+- **Before / After:**
+  1.
+     - Before:
+  ```js
+    // deflection (single mode + section on)
+    deD=[];
+    if(secOn&&Ev>0&&Iv>0){
+      const EI=Ev*Iv,n=moD.length,F1=new Array(n).fill(0),F2=new Array(n).fill(0);
+      for(let i=1;i<n;i++){const dx=moD[i].x-moD[i-1].x;F1[i]=F1[i-1]+.5*(moD[i-1].y+moD[i].y)*dx;}
+      for(let i=1;i<n;i++){const dx=moD[i].x-moD[i-1].x;F2[i]=F2[i-1]+.5*(F1[i-1]+F1[i])*dx;}
+      // constants from first & last support nodes: δ(xa)=δ(xb)=0
+      const supIdx=nodes.map((nd2,j)=>nd2.t!=='free'?j:-1).filter(j=>j>=0);
+      const xsD=moD.map(p=>p.x);
+      const at=(A,x)=>{let lo=0,hi=xsD.length-1;while(hi-lo>1){const md=(lo+hi)>>1;if(xsD[md]<=x)lo=md;else hi=md;}
+        const dx=xsD[hi]-xsD[lo];return dx>0?A[lo]+(A[hi]-A[lo])*(x-xsD[lo])/dx:A[lo];};
+      const F2at=x=>at(F2,x),F1at=x=>at(F1,x);
+      // EI·v'' = M (v up) → v=(F2+c1x+c2)/EI ; δ(down) = −v = (−F2+C1x+C2)/EI
+      let C1=null,C2=null;
+      if(supIdx.length>=2){
+        const xa=nodeX[supIdx[0]],xb=nodeX[supIdx[supIdx.length-1]];
+        C1=(F2at(xb)-F2at(xa))/(xb-xa||1);C2=F2at(xa)-C1*xa;
+      } else if(supIdx.length===1&&nodes[supIdx[0]].t==='fixed'){
+        // single fixed support (cantilever): δ = 0 and slope = 0 there
+        const xa=nodeX[supIdx[0]];C1=F1at(xa);C2=F2at(xa)-C1*xa;
+      }
+      if(C1!==null)deD=moD.map((p,i)=>({x:p.x,y:(-F2[i]+C1*p.x+C2)/EI}));
+    }
+  }
+  ```
+     - After:
+  ```js
+    // deflection (section on)
+    deD=deflOf(moD);
+  }
+  ```
+  2.
+     - Before:
+  ```js
+function mkRow(x,t){
+  if(envOn)return{x,t,Vmx:itp(env.V.mx,x),Vmn:itp(env.V.mn,x),Mmx:itp(env.M.mx,x),Mmn:itp(env.M.mn,x)};
+  ```
+     - After:
+  ```js
+/* Deflection curve (δ down positive) for one moment diagram mo[] (moved out of solve() unchanged, so the
+   envelope can use it per combination). [] when the section is off, E or I ≤ 0, or no anchoring support. */
+function deflOf(mo){
+  let de=[];
+  if(secOn&&Ev>0&&Iv>0){
+    const EI=Ev*Iv,n=mo.length,F1=new Array(n).fill(0),F2=new Array(n).fill(0);
+    for(let i=1;i<n;i++){const dx=mo[i].x-mo[i-1].x;F1[i]=F1[i-1]+.5*(mo[i-1].y+mo[i].y)*dx;}
+    for(let i=1;i<n;i++){const dx=mo[i].x-mo[i-1].x;F2[i]=F2[i-1]+.5*(F1[i-1]+F1[i])*dx;}
+    // constants from first & last support nodes: δ(xa)=δ(xb)=0
+    const supIdx=nodes.map((nd2,j)=>nd2.t!=='free'?j:-1).filter(j=>j>=0);
+    const xsD=mo.map(p=>p.x);
+    const at=(A,x)=>{let lo=0,hi=xsD.length-1;while(hi-lo>1){const md=(lo+hi)>>1;if(xsD[md]<=x)lo=md;else hi=md;}
+      const dx=xsD[hi]-xsD[lo];return dx>0?A[lo]+(A[hi]-A[lo])*(x-xsD[lo])/dx:A[lo];};
+    const F2at=x=>at(F2,x),F1at=x=>at(F1,x);
+    // EI·v'' = M (v up) → v=(F2+c1x+c2)/EI ; δ(down) = −v = (−F2+C1x+C2)/EI
+    let C1=null,C2=null;
+    if(supIdx.length>=2){
+      const xa=nodeX[supIdx[0]],xb=nodeX[supIdx[supIdx.length-1]];
+      C1=(F2at(xb)-F2at(xa))/(xb-xa||1);C2=F2at(xa)-C1*xa;
+    } else if(supIdx.length===1&&nodes[supIdx[0]].t==='fixed'){
+      // single fixed support (cantilever): δ = 0 and slope = 0 there
+      const xa=nodeX[supIdx[0]];C1=F1at(xa);C2=F2at(xa)-C1*xa;
+    }
+    if(C1!==null)de=mo.map((p,i)=>({x:p.x,y:(-F2[i]+C1*p.x+C2)/EI}));
+  }
+  return de;
+}
+function mkRow(x,t){
+  if(envOn)return{x,t,Vmx:itp(env.V.mx,x),Vmn:itp(env.V.mn,x),Mmx:itp(env.M.mx,x),Mmn:itp(env.M.mn,x),
+    Dmx:env.D?itp(env.D.mx,x):null,Dmn:env.D?itp(env.D.mn,x):null};
+  ```
+  3.
+     - Before:
+  ```js
+    shD=env.V.mx;moD=env.M.mx;deD=[];crits={zV:[],inf:[]};nodeR=nodes.map((_,j)=>({v:env.R[j].mx,m:0}));
+  ```
+     - After:
+  ```js
+    shD=env.V.mx;moD=env.M.mx;deD=[];crits={zV:[],inf:[]};nodeR=nodes.map((_,j)=>({v:env.R[j].mx,m:0}));
+    // deflection envelope over the same enabled combinations (was: none in envelope mode, fix log O4)
+    const dd=EK.map(k=>deflOf(res[k].mo));
+    if(dd.length&&dd.every(d=>d.length===stX.length)){
+      env.D={mx:[],mn:[],mxC:[],mnC:[]};
+      for(let i=0;i<stX.length;i++){let a=-1e18,b=1e18,ac='',bc='';
+        EK.forEach((k,q)=>{const v=dd[q][i].y;if(v>a){a=v;ac=k}if(v<b){b=v;bc=k}});
+        env.D.mx.push({x:stX[i],y:a});env.D.mn.push({x:stX[i],y:b});env.D.mxC.push(ac);env.D.mnC.push(bc);}
+      env.per.forEach((pc,q)=>{pc.dm=Math.max(...dd[q].map(p=>Math.abs(p.y)));});
+      // governing signed curve: at each station the larger of |δ max| and |δ min|
+      deD=env.D.mx.map((p,i)=>Math.abs(env.D.mn[i].y)>Math.abs(p.y)?env.D.mn[i]:p);
+    }
+  ```
+  4.
+     - Before:
+  ```js
+  return spans.map((sp,i)=>{const xa=nodeX[i],xb=nodeX[i+1];let dm=0,dx=xa;
+    deD.forEach(p=>{if(p.x>=xa-1e-9&&p.x<=xb+1e-9&&Math.abs(p.y)>dm){dm=Math.abs(p.y);dx=p.x;}});
+    const allow=defLim>0?sp.L/defLim:0;
+    return{i,L:sp.L,dm,x:dx,allow,ratio:allow>0?dm/allow:0,ok:allow>0?dm<=allow:true};});
+  ```
+     - After:
+  ```js
+  return spans.map((sp,i)=>{const xa=nodeX[i],xb=nodeX[i+1];let dm=0,dx=xa,dk=-1;
+    deD.forEach((p,k)=>{if(p.x>=xa-1e-9&&p.x<=xb+1e-9&&Math.abs(p.y)>dm){dm=Math.abs(p.y);dx=p.x;dk=k;}});
+    const allow=defLim>0?sp.L/defLim:0;
+    // envelope: combination that governs δ at that station
+    const c=envOn&&env&&env.D&&dk>=0?(Math.abs(env.D.mn[dk].y)>Math.abs(env.D.mx[dk].y)?env.D.mnC[dk]:env.D.mxC[dk]):null;
+    return{i,L:sp.L,dm,x:dx,allow,ratio:allow>0?dm/allow:0,ok:allow>0?dm<=allow:true,c};});
+  ```
+  5.
+     - Before:
+  ```js
+  g('dDefl').classList.toggle('hidden',!(secOn&&!envOn));
+  ```
+     - After:
+  ```js
+  g('dDefl').classList.toggle('hidden',!secOn);
+  ```
+  6.
+     - Before:
+  ```js
+  const showD=secOn&&!envOn&&deD.length;
+  ```
+     - After:
+  ```js
+  const showD=secOn&&deD.length;
+  ```
+  7.
+     - Before:
+  ```js
+      h+=`<div class="sc ${ok?'ctm':'crd'}"><div class="sc-l">σ env</div><div class="sc-v">${sg.toFixed(2)}</div><div class="sc-u">${fu}/${lu}²${Fbv>0?` / ${Fbv} ${ok?'✓':'✗'}`:''}</div></div>`;}
+  } else {
+  ```
+     - After:
+  ```js
+      h+=`<div class="sc ${ok?'ctm':'crd'}"><div class="sc-l">σ env</div><div class="sc-v">${sg.toFixed(2)}</div><div class="sc-u">${fu}/${lu}²${Fbv>0?` / ${Fbv} ${ok?'✓':'✗'}`:''}</div></div>`;}
+    if(deD.length){const dm=Math.max(...deD.map(p=>Math.abs(p.y)));
+      let lim='',ok=true;
+      if(defLim>0){const gv=deflGov();ok=deflSpans().every(s2=>s2.ok);lim=` / span ${gv.i+1}: L/${defLim}=${gv.allow.toFixed(4)} ${ok?'✓':'✗'}`;}
+      h+=`<div class="sc ${ok?'cam':'crd'}"><div class="sc-l">|δ| env</div><div class="sc-v">${dm.toFixed(4)}</div><div class="sc-u">${lu}${lim}</div></div>`;}
+  } else {
+  ```
+  8.
+     - Before:
+  ```js
+  if(envOn){g('pkV').textContent='envelope';g('pkM').textContent='envelope';}
+  ```
+     - After:
+  ```js
+  if(envOn){g('pkV').textContent='envelope';g('pkM').textContent='envelope';if(g('pkD'))g('pkD').textContent=deD.length?`|δ|max:${Math.max(...deD.map(p=>Math.abs(p.y))).toFixed(4)} ${lu} (envelope)`:'';}
+  ```
+  9.
+     - Before:
+  ```js
+    ?`<tr><th>x (${lu})</th><th>Vmax (${fu})</th><th>Vmin (${fu})</th><th>Mmax (${fu}·${lu})</th><th>Mmin (${fu}·${lu})</th><th></th></tr>`
+    :`<tr><th>x (${lu})</th><th>V (${fu})</th><th>M (${fu}·${lu})</th>${deD.length?`<th>δ (${lu})</th>`:''}<th></th></tr>`;
+  ```
+     - After:
+  ```js
+    ?`<tr><th>x (${lu})</th><th>Vmax (${fu})</th><th>Vmin (${fu})</th><th>Mmax (${fu}·${lu})</th><th>Mmin (${fu}·${lu})</th>${env&&env.D?`<th>δmax (${lu})</th><th>δmin (${lu})</th>`:''}<th></th></tr>`
+    :`<tr><th>x (${lu})</th><th>V (${fu})</th><th>M (${fu}·${lu})</th>${deD.length?`<th>δ (${lu})</th>`:''}<th></th></tr>`;
+  ```
+  10.
+     - Before:
+  ```js
+      ?`<td>${r.x.toFixed(3)}</td><td>${r.Vmx.toFixed(3)}</td><td>${r.Vmn.toFixed(3)}</td><td>${r.Mmx.toFixed(3)}</td><td>${r.Mmn.toFixed(3)}</td><td><span
+  ```
+     - After:
+  ```js
+      ?`<td>${r.x.toFixed(3)}</td><td>${r.Vmx.toFixed(3)}</td><td>${r.Vmn.toFixed(3)}</td><td>${r.Mmx.toFixed(3)}</td><td>${r.Mmn.toFixed(3)}</td>${r.Dmx!=null?`<td>${r.Dmx.toFixed(5)}</td><td>${r.Dmn.toFixed(5)}</td>`:''}<td><span
+  ```
+  11.
+     - Before:
+  ```js
+  const mn=Math.min(...deD.map(p=>p.y),0),mx=Math.max(...deD.map(p=>p.y),0),rng=mx-mn||1e-9;
+  ```
+     - After:
+  ```js
+  const DS=envOn&&env&&env.D?[env.D.mx,env.D.mn]:[deD]; // envelope: max and min curves
+  const mn=Math.min(...DS.map(d=>Math.min(...d.map(p=>p.y))),0),mx=Math.max(...DS.map(d=>Math.max(...d.map(p=>p.y))),0),rng=mx-mn||1e-9;
+  ```
+  12.
+     - Before:
+  ```js
+  ctx.beginPath();ctx.moveTo(tx(deD[0].x),z0);deD.forEach(p=>ctx.lineTo(tx(p.x),ty(p.y)));ctx.lineTo(tx(deD[deD.length-1].x),z0);ctx.closePath();ctx.fillStyle=gr;ctx.fill();
+  ctx.beginPath();ctx.strokeStyle='#0891b2';ctx.lineWidth=2.2;ctx.lineJoin='round';deD.forEach((p,i)=>i===0?ctx.moveTo(tx(p.x),ty(p.y)):ctx.lineTo(tx(p.x),ty(p.y)));ctx.stroke();
+  ```
+     - After:
+  ```js
+  if(DS.length>1)DS.forEach((d,q)=>{ctx.beginPath();ctx.strokeStyle=q?'#dc2626':'#2563eb';ctx.lineWidth=2;ctx.lineJoin='round';d.forEach((p,i)=>i===0?ctx.moveTo(tx(p.x),ty(p.y)):ctx.lineTo(tx(p.x),ty(p.y)));ctx.stroke();});
+  else{
+  ctx.beginPath();ctx.moveTo(tx(deD[0].x),z0);deD.forEach(p=>ctx.lineTo(tx(p.x),ty(p.y)));ctx.lineTo(tx(deD[deD.length-1].x),z0);ctx.closePath();ctx.fillStyle=gr;ctx.fill();
+  ctx.beginPath();ctx.strokeStyle='#0891b2';ctx.lineWidth=2.2;ctx.lineJoin='round';deD.forEach((p,i)=>i===0?ctx.moveTo(tx(p.x),ty(p.y)):ctx.lineTo(tx(p.x),ty(p.y)));ctx.stroke();}
+  ```
+  13.
+     - Before:
+  ```js
+  if(deD.length){
+    traces.push({x:XS(deD),y:YS(deD),name:'δ',type:'scatter',mode:'lines',
+      fill:'tozeroy',fillcolor:'rgba(8,145,178,.13)',
+      line:{color:'#0891b2',width:2.2},showlegend:false,
+      hovertemplate:`x %{x:.3f} ${lu}<br>δ %{y:.5f} ${lu}<extra></extra>`});
+  ```
+     - After:
+  ```js
+  const envD=envOn&&env&&env.D;
+  if(deD.length){
+    if(envD){
+      traces.push({x:XS(env.D.mx),y:YS(env.D.mx),name:'Envelope max (down)',type:'scatter',mode:'lines',
+        line:{color:'#2563eb',width:2},hovertemplate:`max %{y:.5f} ${lu}<extra></extra>`});
+      traces.push({x:XS(env.D.mn),y:YS(env.D.mn),name:'Envelope min',type:'scatter',mode:'lines',
+        fill:'tonexty',fillcolor:'rgba(37,99,235,.12)',
+        line:{color:'#dc2626',width:2},hovertemplate:`min %{y:.5f} ${lu}<extra></extra>`});
+    }else
+    traces.push({x:XS(deD),y:YS(deD),name:'δ',type:'scatter',mode:'lines',
+      fill:'tozeroy',fillcolor:'rgba(8,145,178,.13)',
+      line:{color:'#0891b2',width:2.2},showlegend:false,
+      hovertemplate:`x %{x:.3f} ${lu}<br>δ %{y:.5f} ${lu}<extra></extra>`});
+  ```
+  14.
+     - Before:
+  ```js
+    shapes,annotations:anns,showlegend:false
+  },PCFG('deflection'));
+  ```
+     - After:
+  ```js
+    shapes,annotations:anns,showlegend:!!envD,
+    legend:{orientation:'h',y:1.14,x:0,font:{size:10},bgcolor:'rgba(0,0,0,0)'}
+  },PCFG('deflection'));
+  ```
+  15.
+     - Before:
+  ```js
+    s3+=`<table class="ctb"><thead><tr><th>Combination</th><th>|V|max</th><th>|M|max</th></tr></thead><tbody>`;
+    env.per.forEach(pc=>s3+=`<tr><td>${pc.name}</td><td>${pc.vm.toFixed(3)} ${fu}</td><td>${pc.mm.toFixed(3)} ${fu}·${lu}</td></tr>`);
+  ```
+     - After:
+  ```js
+    s3+=`<table class="ctb"><thead><tr><th>Combination</th><th>|V|max</th><th>|M|max</th>${env.D?'<th>|δ|max</th>':''}</tr></thead><tbody>`;
+    env.per.forEach(pc=>s3+=`<tr><td>${pc.name}</td><td>${pc.vm.toFixed(3)} ${fu}</td><td>${pc.mm.toFixed(3)} ${fu}·${lu}</td>${env.D?`<td>${pc.dm.toFixed(5)} ${lu}</td>`:''}</tr>`);
+  ```
+  16.
+     - Before:
+  ```js
+    html+=sec(N++,'Envelope Results — All Combinations',s3);
+  ```
+     - After:
+  ```js
+    if(deD.length){const dm=Math.max(...deD.map(p2=>Math.abs(p2.y)));
+      s3+=`<div class="bxb">${p('<strong>Deflection envelope</strong> — δ by double integration of M/EI for each enabled combination, enveloped point-wise. A factored combination gives a factored deflection: for a service-level check, enable only service combinations or use single-combination mode.')}${kb(`|\\delta|_{\\text{env}}=\\boxed{${dm.toFixed(6)}\\,\\text{${lu}}}`)}`;
+      if(defLim>0)deflSpans().forEach(s2=>{s3+=kb(`\\text{Span ${s2.i+1}: }|\\delta|_{\\max}=${s2.dm.toFixed(5)}\\;${s2.ok?'\\le':'>'}\\;L_{${s2.i+1}}/${defLim}=${s2.L}/${defLim}=${s2.allow.toFixed(5)}\\,\\text{${lu}}\\;\\Rightarrow\\;${s2.ok?'\\text{OK}\\;\\checkmark':'\\text{NG}\\;\\times'}\\;\\text{(${s2.c&&COMBOS[s2.c]?COMBOS[s2.c].name:''})}`);});
+      s3+=`</div>`;}
+    html+=sec(N++,'Envelope Results — All Combinations',s3);
+  ```
+  17.
+     - Before:
+  ```js
+    rows.push(['x ('+lu+')','Vmax ('+fu+')','Vmin ('+fu+')','Mmax ('+fu+'·'+lu+')','Mmin ('+fu+'·'+lu+')','Type']);
+    tabR.forEach(r=>rows.push([r.x.toFixed(4),r.Vmx.toFixed(4),r.Vmn.toFixed(4),r.Mmx.toFixed(4),r.Mmn.toFixed(4),r.t]));
+  ```
+     - After:
+  ```js
+    const eD=!!(env&&env.D);
+    rows.push(['x ('+lu+')','Vmax ('+fu+')','Vmin ('+fu+')','Mmax ('+fu+'·'+lu+')','Mmin ('+fu+'·'+lu+')',...(eD?['delta max ('+lu+')','delta min ('+lu+')']:[]),'Type']);
+    tabR.forEach(r=>rows.push([r.x.toFixed(4),r.Vmx.toFixed(4),r.Vmn.toFixed(4),r.Mmx.toFixed(4),r.Mmn.toFixed(4),...(eD?[r.Dmx.toFixed(6),r.Dmn.toFixed(6)]:[]),r.t]));
+  ```
+  18.
+     - Before:
+  ```js
+  if(!envOn&&deD.length){const dm=Math.max(...deD.map(p=>Math.abs(p.y)));
+    if(defLim>0)deflSpans().forEach(s2=>{h+=`<tr><td>δ<sub>max</sub>, span ${s2.i+1}</td>
+  ```
+     - After:
+  ```js
+  if(deD.length){const dm=Math.max(...deD.map(p=>Math.abs(p.y)));
+    if(defLim>0)deflSpans().forEach(s2=>{h+=`<tr><td>δ<sub>max</sub>, span ${s2.i+1}${s2.c&&COMBOS[s2.c]?' ('+esc(COMBOS[s2.c].name)+')':''}</td>
+  ```
+  19.
+     - Before:
+  ```js
+    if(id==='cD'&&!(secOn&&!envOn&&deD.length))continue;
+  ```
+     - After:
+  ```js
+    if(id==='cD'&&!(secOn&&deD.length))continue;
+  ```
+  20.
+     - Before:
+  ```js
+  if(envOn){h+=`<tr><th>x (${lu})</th><th>Vmax (${fu})</th><th>Vmin (${fu})</th><th>Mmax (${fu}·${lu})</th><th>Mmin (${fu}·${lu})</th></tr>`;
+    tabR.forEach(r=>h+=`<tr><td>${r.x.toFixed(3)}</td><td>${r.Vmx.toFixed(3)}</td><td>${r.Vmn.toFixed(3)}</td><td>${r.Mmx.toFixed(3)}</td><td>${r.Mmn.toFixed(3)}</td></tr>`);}
+  ```
+     - After:
+  ```js
+  if(envOn){const eD=!!(env&&env.D);h+=`<tr><th>x (${lu})</th><th>Vmax (${fu})</th><th>Vmin (${fu})</th><th>Mmax (${fu}·${lu})</th><th>Mmin (${fu}·${lu})</th>${eD?`<th>δmax (${lu})</th><th>δmin (${lu})</th>`:''}</tr>`;
+    tabR.forEach(r=>h+=`<tr><td>${r.x.toFixed(3)}</td><td>${r.Vmx.toFixed(3)}</td><td>${r.Vmn.toFixed(3)}</td><td>${r.Mmx.toFixed(3)}</td><td>${r.Mmn.toFixed(3)}</td>${eD?`<td>${r.Dmx.toFixed(5)}</td><td>${r.Dmn.toFixed(5)}</td>`:''}</tr>`);}
+  ```
+- **Check case:** simple span 20 ft, uniform 2 kip/ft DL, E = 4,176,000 ksf, I = 0.02 ft⁴ (EI = 83,520 kip·ft²), L/360, default combinations, envelope mode.
+  - Before: no deflection output.
+  - After, |δ|max per combination: Unfactored 0.04989 ft; 1.4D 0.06984 ft; 1.2D(+…) 0.05987 ft; 0.9D+1.0W 0.04490 ft.
+  - Result: |δ|env = **0.069843 ft (1.4DL)** > L/360 = 20/360 = 0.05556 ft → **NG**.
+  - Hand check: 5wL⁴/(384EI) = 5 × 2.8 × 20⁴ / (384 × 83,520) = 2,240,000 / 32,071,680 = 0.069843 ft ✓.
+- **How verified:** check case in Chromium (cards, calculation panel, CSV, report); 20-case comparison; screenshots of the envelope plot (Plotly and the canvas fallback).
+- **Other copies of this code:** none.
+
+### Needs engineer (this sweep)
+- **O3 (unchanged).** The cantilever deflection limit uses l = overhang length. IBC 2021 Table 1604.3 footnote i takes l = 2 × cantilever length, which is less conservative (the Timber tool uses 2L, R1-c).
+  - Question: switch cantilever spans to 2L (with an option)?
+  - Recommendation: keep L as the default (conservative). Add a "cantilever l = 2L (IBC)" option only if you want it.
+- **New (raised, not changed): the default wind combination uses 0.5L.** `defCombos()` row `12W` is 1.2D + 0.5L + 0.5S + 1.0W.
+  - ASCE 7-16 Sec. 2.3.1 Exception 1 permits 0.5L only where L_o ≤ 100 psf, and not for garages or public assembly. Otherwise the factor is 1.0L (the LRFD preset already uses 1.0L).
+  - Question: change the default row to 1.0L?
+  - Recommendation: yes (the code default, and more conservative). It affects new projects only, because saved projects carry their own combinations. The hint now notes it.
+- **F14 follow-up:** should combinations carry a "service" flag, so the deflection envelope uses only service combinations?
+  - Recommendation: not needed now; every check names the governing combination.
+
 ## Open items (not changed)
-- O1. **Unit conversion.** Only a notice was added (F8). Real conversion would scale spans, loads (4 types), E, I, c, A, σ, user stations and the W-shape d/t_w, and would need a decision on saved projects. Recommend it as a separate PR if wanted.
-- O2. **Roller → pin silent conversion** (`solve()`: `nodes.forEach(n2=>{if(n2.t==='roller')n2.t='pin';})`). Log only, as instructed. Pin and roller are mechanically identical in this model (no axial DOF), so no result is affected. The node dropdown offers only Pin/Fixed/Free, and the templates and "+ span" create 'roller', which is converted on the first solve. The only visible effect is the drawn symbol and the saved value. A proper fix means adding a "Roller" option (a UI change); not done.
-- O3. **Cantilever spans and IBC footnote.** F1 uses the span length for every span, including a free-end overhang. IBC Table 1604.3 footnote says that for cantilevers l is taken as twice the cantilever length, which gives a larger (less conservative) allowable. Kept at L (conservative); the engineer should decide.
-- O4. **Envelope mode has no deflection** (deflection is computed in single-combination mode only). Not changed.
-- O5. **Default combination list includes the all-1.0 "U" combination** in the envelope, and the edition of the "ASCE 7" presets is not stated. Not changed (review item 6, low).
-- O6. **Generic storage keys** `beamProSaves` / `beamProAuto` (shared file:// origin). Not changed: renaming needs a migration and was not in scope.
-- O7. **W-shape presets with non-kip force units** keep the previous E (existing behaviour: E is set only when fu = kip). Part of O1.
+- O1. **Resolved 2026-10-12 (F9, claude/sweep-sm).** **Unit conversion.** Only a notice was added (F8). Real conversion would scale spans, loads (4 types), E, I, c, A, σ, user stations and the W-shape d/t_w, and would need a decision on saved projects. Recommend it as a separate PR if wanted.
+- O2. **Resolved 2026-10-12 (F11, claude/sweep-sm).** **Roller → pin silent conversion** (`solve()`: `nodes.forEach(n2=>{if(n2.t==='roller')n2.t='pin';})`). Log only, as instructed. Pin and roller are mechanically identical in this model (no axial DOF), so no result is affected. The node dropdown offers only Pin/Fixed/Free, and the templates and "+ span" create 'roller', which is converted on the first solve. The only visible effect is the drawn symbol and the saved value. A proper fix means adding a "Roller" option (a UI change); not done.
+- O3. **Still open: needs the engineer (see the 2026-10-12 "Needs engineer" list).** **Cantilever spans and IBC footnote.** F1 uses the span length for every span, including a free-end overhang. IBC Table 1604.3 footnote says that for cantilevers l is taken as twice the cantilever length, which gives a larger (less conservative) allowable. Kept at L (conservative); the engineer should decide.
+- O4. **Resolved 2026-10-12 (F14, claude/sweep-sm).** **Envelope mode has no deflection** (deflection is computed in single-combination mode only). Not changed.
+- O5. **Resolved 2026-10-12 (F13, claude/sweep-sm): edition stated; "U" kept.** **Default combination list includes the all-1.0 "U" combination** in the envelope, and the edition of the "ASCE 7" presets is not stated. Not changed (review item 6, low).
+- O6. **Resolved 2026-10-12 (F12, claude/sweep-sm).** **Generic storage keys** `beamProSaves` / `beamProAuto` (shared file:// origin). Not changed: renaming needs a migration and was not in scope.
+- O7. **Resolved 2026-10-12 (F10, claude/sweep-sm).** **W-shape presets with non-kip force units** keep the previous E (existing behaviour: E is set only when fu = kip). Part of O1.
+- O8. (2026-10-12) Default wind combination `12W` uses 0.5L (ASCE 7-16 Sec. 2.3.1 Exception 1). Raised, not changed; see the 2026-10-12 "Needs engineer" list.
