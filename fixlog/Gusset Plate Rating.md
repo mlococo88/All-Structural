@@ -2063,3 +2063,541 @@ The objects `W.stag`, `B.cust.s1/s2/t` and `plane.stag` no longer have a `band` 
   - No page or console errors.
 - **Other copies:** none.
 - **Open items:** C11 item 1 (stagger band) is closed by this entry. Text only: when two rows tie, the calc sheet may name the farther row (pattern G). The deduction is the same.
+
+## 2026-10-12 — PR: claude/gusset-missing-checks (PR link added after merge)
+
+Engineer's instruction 2026-10-12: "continue making updates and fixes ... use your best judgment ... note anything that absolutely needs my input". Items O1, O2, O3, O4 and O16 of C12.1 are done here, one entry per item (C14 to C18).
+
+**The reference documents were again not available.** The printed MBE 3rd Ed., LRFD 10th Ed., Std. Spec. 17th Ed., FHWA-IF-09-014 and NCHRP W-197 could not be opened from this session; the publishers' sites were blocked. Article and equation numbers marked "verify" are as recalled or as quoted in secondary sources (an AASHTOWare BrDR gusset tutorial, an FHWA tech brief and the NCHRP W-197 Appendix J summary). Every new coefficient is an editable code parameter with a "verify" and "least certain" flag.
+
+Two kinds of new checks:
+- **Rating checks** (they get an RF and can govern): the chord splice checks SPL-C, SPL-TY, SPL-TF (C14), LRFR only.
+- **Advisory checks** (amber, with a ratio, never in the governing RF): combined actions on a plane (C14.4 and C18), free-edge slenderness (C16) and eccentric fastener groups (C17). They are listed under "Advisory checks" on the Checks tab, in the Summary and in the report.
+
+**Every grid and custom model keeps identical results for every existing check**, and no model's governing RF changes (C14.6). The new SPL checks do not govern in any model of the suite.
+
+New code parameters (Code parameters tab):
+
+| Key | Method | Parameter | Default | Unit | Reference | Flag |
+|---|---|---|---|---|---|---|
+| `phiCS` | LRFR | Chord splice in compression (gusset and splice plates at the splice line) | 0.85 |  | MBE 3rd Ed. Table 6A.6.12.6.2-1, 6A.6.12.6.9 (verify); NCHRP W-197 | verify — **least certain** |
+| `Ksp` | LRFR | Effective length factor, chord splice in compression | 0.65 |  | MBE 3rd Ed. 6A.6.12.6.9 (verify); judgment (LRFD C4.6.2.5) | verify — **least certain** |
+| `spKLr` | LRFR | Chord splice: K l/r at or below which F_cr = F_y | 25 |  | MBE 3rd Ed. Eq. 6A.6.12.6.9-2 (verify) | verify — **least certain** |
+| `edgeC` | Both | Free-edge slenderness coefficient on √(E/F_y) (advisory) | 2.06 |  | AASHTO Std. Spec. 17th Ed. 10.16.11 (verify); FHWA-IF-09-014; former LRFD 6.14.2.8 | verify — **least certain** |
+| `eccTol` | Both | Eccentric fastener group tolerance (advisory) | 0.25 | in | Judgment | verify — **least certain** |
+| `eccPct` | Both | Eccentric fastener group tolerance, % of the across spread of the outer holes (advisory) | 5 | % | Judgment | verify — **least certain** |
+
+Saved data (CLAUDE.md §5): one new optional field, `splice` in the project data (`{ plates: [{ n, orient, w, t, Fy, Fu, y, nh }] }`). It sits inside the existing `gussetRating.autosave.v1` / `gussetRating.projects.v1` / exported project data, so no new storage key is used. It is written only when the user adds a splice plate and is deleted with the last one. A project without it computes as before (no splice plates: gusset plates only). Older copies of the tool ignore the field. No key, field or format changed; the project file version is unchanged.
+
+### C14. Chord splice at the joint (closes O1)   [calculation change: new LRFR rating checks SPL-C, SPL-TY, SPL-TF where the chord is "spliced at the joint" with two or more chord members; advisory combined check on the splice line; no existing check changes]
+
+#### C14.1 What the provision requires (as implemented; MBE 3rd Ed. 6A.6.12.6.9, verify)
+
+Secondary sources on MBE 6A.6.12.6.9 (the AASHTOWare BrDR truss gusset tutorial, the FHWA tech brief on FHWA-HRT-14-063 and the NCHRP W-197 Appendix J summary) agree on these points:
+- the splice is checked on a section of **every plate crossing the splice plane**: gusset plates and splice plates, gross area A_g and gross section modulus S_g;
+- the gusset and splice plates act as **one section under axial force plus the bending from the eccentric chord force**, and the modulus is taken at the edge with the larger combined stress;
+- the slenderness uses **l = centre-to-centre distance between the first lines of fasteners in the adjoining chords**, and **F_cr = F_y when the slenderness ratio is less than 25** (Eq. 6A.6.12.6.9-2);
+- the chord-splice resistance factor is reported as **0.85**;
+- the commentary says the Whitmore buckling check is not applied to the members of a compression chord splice.
+
+Not confirmed (marked verify, engineer to check against the printed MBE): the form of Eq. 6A.6.12.6.9-1, the K for the slenderness ratio, the column curve above 25, and the tension provisions.
+
+#### C14.2 Rule (as implemented)
+
+- **Where:** chord mode "spliced at the joint" with two or more chord members (a heel joint, one chord member, is not a splice and gets no SPL check). The splice line runs through the WP perpendicular to the right-hand chord (the chord member whose angle is nearest 0°). With more than two chord members, or chords not collinear, a warning says which members and line are used.
+- **Section** = strips along the splice line:
+  - gusset plates: each part of the line inside the plate outline, width Σt (after section loss);
+  - optional splice plates (new inputs, Plates tab, "Chord splice plates"): number n, width b, thickness t, F_y, F_u, offset y of the centroid from the chord work line (perpendicular to the chord), holes across one plate at the first fastener line n_h, and how it lies:
+    - flange plate (across the gusset plane): strip of length t centred at y, width n b;
+    - web plate (in the gusset plane): strip of length b centred at y, width n t.
+  - **Default: no splice plates, so only the gusset plates are counted. This is conservative wherever splice plates exist** (they only add area). The warning for a spliced chord says so.
+- **Demand:** free body of the members whose fastener centroid lies on the right-hand side of the splice line: N = Σ F_i (u_i · u_chord), tension +. Every member force acts along its work line through the WP, so N acts on the chord work line, at e = |ȳ| from the centroid ȳ of the section. A member whose holes straddle the line is assigned by its centroid (warning).
+- **SPL-C, compression (LRFR), rated when the live load N is compression:**
+  φ_cs P_n = φ_cs F_cr (1/A_g + e/S_g)⁻¹. That is, P/A_g + P e/S_g = F_cr at the extreme fibre on the side of the eccentricity, S_g = I/c to that fibre.
+  - K_sp l/r ≤ 25: F_cr = F_y, the lowest F_y of the plates.
+  - K_sp l/r > 25: F_cr from LRFD 10th Ed. 6.9.4.1.1 (0.658^(F_y/F_e) F_y, or 0.877 F_e when F_e/F_y < 0.44), F_e = π²E/(K_sp l/r)².
+  - l = s_in(left chord) + s_in(right chord); r = t_min/√12, with t_min the thinnest plate crossing the line (conservative). φ_cs = 0.85, K_sp = 0.65.
+- **SPL-TY, tension yielding (LRFR):** φ_y Σ F_y A_g over the plates crossing the splice line (φ_y = `phiY`).
+- **SPL-TF, tension fracture (LRFR):** φ_u U Σ F_u A_n on the line through the first fastener row of each chord, perpendicular to the chord; the lower of the two lines governs.
+  - Gusset: (L_g − Σ(d_h + Δ)) Σt, for the holes of any member on that line (straight line; for a custom chord pattern no s²/4g search here, flagged "custom holes: verify").
+  - Splice plate: n (b − n_h (d_h + Δ)) t, with the larger d_h + Δ of the two chords.
+  - Each element is limited to A_n ≤ 0.85 A_g when the `capAnOn` switch is on (LRFD 6.13.5.2 applies to splice plates and gussets).
+  - Eccentricity is not included in tension. The brief asked for gross and net sections only, and the advisory combined check C14.4 shows the bending.
+- **LFR:** no new check. FHWA-IF-09-014 rates a chord splice through the Whitmore checks of the chord members, which the tool already makes in spliced mode. The SPL checks are marked "not applicable" in LFR rating cases.
+- **Whitmore checks of the chord members are kept** in spliced mode, LRFR included. The MBE commentary (as quoted) says the Whitmore buckling check is not applied to a compression chord splice. Keeping it is conservative and changes no current result. **Needs engineer:** remove it for LRFR?
+
+#### C14.3 §4 callout: before / after
+
+- **Before:** with the chord spliced at the joint, each chord member was checked only like a web member through the gusset plates (FS, BR, WY, WF, WB, BS). Splice plates were ignored, and the warning said "The chord splice check is not in Phase 1."
+- **After:** the same checks, plus SPL-C, SPL-TY and SPL-TF (LRFR) with the equations above. Code parameters `phiCS`, `Ksp`, `spKLr` are new. Optional splice plates are new.
+- **Governing provision:** AASHTO MBE 3rd Ed. (with interims) 6A.6.12.6.9 and Eq. 6A.6.12.6.9-1, -2 (verify); MBE Table 6A.6.12.6.2-1 (φ_cs, verify); NCHRP Web-Only Document 197; AASHTO LRFD 10th Ed. 6.8.2.1, 6.8.3, 6.9.4.1.1, 6.13.5.2.
+- **Direction:** new limit states, so ratings can only go down or stay the same. No existing check changed.
+
+#### C14.4 Advisory: combined shear, normal force and moment on a plane (O1, second part)
+
+- **Planes:** every partial shear plane and the chord splice line.
+- **Forces:** N (normal, tension + = the loaded side pulled away), V (along the plane) and M about the centroid of the gross plane. They come from the same members as the plane's shear demand (the splice line: the free body above). Every force acts through the WP.
+- **Interaction:** M/M_r + (N/N_r)² + (V/V_r)⁴ ≤ 1. Source: the plate interaction of Astaneh-Asl (1998, Steel TIPS, "Seismic behavior and design of gusset plates"), the combined check discussed in NCHRP W-197. It is not an MBE rating limit, so it is advisory (verify).
+  - M_r = φ_y F_y Z, with Z the plastic modulus of the gross plane (neutral axis at equal yield force each side);
+  - N_r = φ_y F_y A_g (Σ over the plates);
+  - V_r = the plane's shear resistance: the lower of φ_vy 0.58 F_y A_g Ω and φ_vu 0.58 F_u A_vn (MBE 6A.6.12.6.6). On the splice line, V_r comes from the gusset and web plates and has no holes.
+- **Demand:** factored at RF = 1 for each rating case, as in the rating (dead load against the live load takes the minimum factors). LRFR resistances are multiplied by φ_c φ_s. The ratio shown is the largest over the active rating cases.
+
+#### C14.5 Check cases (hand)
+
+**Case 1, compression splice, gusset plates only.** Validation model with chord = spliced; forces CL (180°) and CR (0°): DC −200, DW −20, HL-93 −100 kip each; D: zero.
+- Splice line x = 0: the plate runs from y = −8 to y = 12 (the top edge from (−4, 8) to (15.567, 27.567) has slope 1). L = 20 in.
+- A_g = 20(2 × 0.5) = 20.000 in²; ȳ = 2.000 in; I = 1.0(20)³/12 = 666.667 in⁴.
+- e = 2.000 in; c = 2 − (−8) = 10.000 in; S_g = 66.667 in³.
+- 1/A_g + e/S_g = 0.05 + 0.03 = 0.0800 in⁻².
+- l = 1.5 + 1.5 = 3 in; r = 0.5/√12 = 0.14434 in; K_sp l/r = 0.65(3)/0.14434 = 13.51 ≤ 25, so F_cr = 36 ksi.
+- φ_cs P_n = 0.85(36)/0.0800 = **382.50 kip** (tool 382.50).
+- N (free body: CR) = −200 / −20 / −100.
+- RF LRFR Inventory = (382.50 − 1.25(200) − 1.50(20))/(1.75(100)) = 102.50/175 = **0.586** (tool 0.586). This RF does not govern: CL-FS 0.313 does. Before: no SPL check; governing 0.313 CL-FS, unchanged.
+
+**Case 2, as case 1 with splice plates: two web plates 8 × 3/8 in, F_y 36, at y = −2.5 in, 2 holes across.**
+- Strip [−6.5, 1.5], width 0.75; A_sp = 6.000 in²; A_g = 26.000 in².
+- ȳ = (20(2) + 6(−2.5))/26 = 0.96154 in.
+- I = 666.667 + 20(1.03846)² + 0.75(8)³/12 + 6(3.46154)² = 666.667 + 21.568 + 32.000 + 71.893 = 792.128 in⁴.
+- c = 0.96154 + 8 = 8.96154 in; S_g = 88.392 in³; e = 0.96154 in.
+- 1/A_g + e/S_g = 0.038462 + 0.010878 = 0.049340.
+- t_min = 0.375 in, r = 0.10825 in; K_sp l/r = 18.01 ≤ 25, so F_cr = 36 ksi.
+- φ_cs P_n = 0.85(36)/0.049340 = **620.19 kip** (tool 620.19).
+- RF = (620.19 − 250 − 30)/175 = **1.944** (tool 1.944).
+- SPL-TY: 0.95(36)(26.000) = **889.20 kip** (tool 889.20).
+- SPL-TF, line at x = +1.5 (first row of CR): plate from y = −8 to 13.5, L_g = 21.5; 2 CR holes; d_h + Δ = 1.0.
+  - Gusset: A_n0 = 19.5(1.0) = 19.500, capped at 0.85(21.5) = 18.275 in².
+  - Splice: A_n = 2(8 − 2 × 1.0)(0.375) = 4.500 ≤ 0.85(6) = 5.1.
+  - U Σ F_u A_n = 58(18.275 + 4.500) = 1320.95 kip.
+- SPL-TF, line at x = −1.5 (CL): L_g = 18.5 (top edge at y = 10.5); gusset A_n = min(16.5, 15.725) = 15.725 in².
+  - U Σ F_u A_n = 58(15.725 + 4.5) = **1173.05 kip, governs**; φ_u = 0.80 gives **938.44 kip** (tool 938.44).
+
+**Case 3, advisory combined check, default model SP1 (horizontal plane y = 6, x = −24 to 24, L_g = 48 in), LFR Inventory HS20.**
+- V_DC = 150 cos 50° × 2 = 192.836, V_DW = 30.854, V_HS20 = 147.841 kip.
+- N_DC = 40 (vertical; the two diagonals' normal components cancel), N_DW = 6, N_HS20 = 40 kip.
+- M = 6V about (0, 6): 1157.0 / 185.1 / 887.0 kip-in.
+- Factored: V = 1.3(223.690) + 2.17(147.841) = 611.61 kip; N = 1.3(46) + 2.17(40) = 146.60 kip; M = 3669.7 kip-in.
+- V_r = min(1.0(0.58)(36)(48)(1.0)(0.74) = 741.66, 0.8(0.58)(58)(36)(1.0) = 968.83) = 741.66 kip.
+- N_r = 0.95(36)(48) = 1641.6 kip.
+- M_r = 0.95(36)(48²/4) = 19699.2 kip-in.
+- O16: (611.61/741.66)² + (146.60/1641.6)² = 0.680 + 0.008 = **0.688** (tool 0.688).
+- O1: 3669.7/19699.2 + 0.0893² + 0.8247⁴ = 0.186 + 0.008 + 0.463 = **0.657** (tool 0.657).
+
+#### C14.6 Every model whose results change
+
+Suite: the 17-model custom suite of C12.3/C13; the grid models (default, validation, default with chord = spliced, all 7 DXF templates with forces); the t5, t4d, t4v, t3 templates and the validation model with chord = spliced. 37 models in all.
+- **Existing checks:** identical capacities and RFs in all 37 models.
+- **Governing RF:** no change in any model.
+- **New SPL checks** appear only in the spliced models:
+
+| Model | SPL-C C (kip) | SPL-TY C | SPL-TF C | Lowest SPL RF (LRFR) | Governing RF (unchanged) |
+|---|---|---|---|---|---|
+| default, chord = spliced (also symc_c3, rtc_allcustom) | 502.0 | 1594.6 | 1838.9 | SPL-TY 0.861 Inv. | −0.519 L1-L2-FS |
+| t5 / t4d / t4v templates, spliced | 502.0 | 1594.6 | 1838.9 | 5.916 | unchanged |
+| t3 template, spliced | 467.6 | 1402.2 | 1617.0 | 9.101 | unchanged |
+| validation, spliced | 382.5 | 684.0 | 729.6 | 4.154 (SPL-C reversal 6.457) | unchanged |
+
+The spliced default is not a realistic splice: the chord carries 700 kip through 24 rivets with no splice plates, so FS already governs at −0.519.
+
+#### C14.7 Needs the engineer
+
+1. Confirm MBE 3rd Ed. 6A.6.12.6.9: Eq. 6A.6.12.6.9-1 (the form φ_cs F_cr (1/A_g + e/S_g)⁻¹), the slenderness ratio and its K, the limit 25, the column curve above it, φ_cs = 0.85, and the tension requirements (eccentricity in tension or not).
+2. Whether to drop the Whitmore buckling check of the chord members for a compression chord splice (LRFR), as the MBE commentary is reported to say.
+3. Whether the splice demand should be the free-body force (as implemented) or the larger chord member force. With a web member delivering force across the line, the two differ.
+
+### C15. Whitmore section crossing an adjacent member (closes O2)   [no calculation change; warning text]
+
+**Guidance found.** The NCHRP 12-84 research behind MBE 3rd Ed. 6A.6.12.6 truncates the Whitmore section only at the plate's free edges and at planes of symmetry. Otherwise the full Whitmore section is used, "regardless of the intersections with adjacent fastener lines or adjacent members' Whitmore sections". Source: the SSRC 2013 paper "Analytical assessment of the strength of steel truss bridge gusset plates" (NCHRP 12-84); NCHRP W-197; MBE 6A.6.12.6.7 / 6A.6.12.6.8 and Fig. 6A.6.12.6.8-1, verify.
+
+The tool already does exactly this: it clips at the plate outline and uses the full section across adjacent members. It counts only the gusset plate, never the adjacent member's area.
+
+**Decision:** keep today's behaviour and close O2. The warning stays as an information note and now explains the rule.
+
+- **Before:** "Member X: the Whitmore section crosses the outline of Y. It is clipped at the plate edges only, not at adjacent members (verify; MBE 6A.6.12.6.8)."
+- **After:** "Member X: the Whitmore section crosses the outline of Y. It is clipped at the plate edges only. Where it crosses an adjacent member or that member's fastener lines, the full section is used, as in the NCHRP 12-84 research behind MBE 3rd Ed. 6A.6.12.6 (NCHRP W-197; MBE 6A.6.12.6.7 and 6A.6.12.6.8, verify; fix log C15). Only the gusset plate area is counted, never the adjacent member's own area. Information only."
+- **§4 statement:** no formula, factor or result changed. The Method tab and the "Not included" list are reworded.
+- **Check case:** default with chord = spliced, members L1-L2 and L2-L3: the warning text changes as above; W_g, W_n and every RF are identical.
+- **Needs the engineer:** confirm against the printed MBE text. If the MBE requires clipping at an adjacent member that is not connected to that part of the plate, this becomes a calculation change (more conservative).
+
+### C16. Free-edge slenderness, advisory (closes O3)   [advisory only; no rating change]
+
+- **Check:** L_g/t ≤ 2.06 √(E/F_y) for every free edge.
+  - t = the thinnest plate after section loss (conservative).
+  - Code parameter `edgeC` = 2.06.
+  - Source: AASHTO Std. Spec. 17th Ed. 10.16.11, written there as 11,000/√F_y (psi), the same value; FHWA-IF-09-014; former LRFD 6.14.2.8. Verify.
+- **Not a rating limit:** MBE 3rd Ed. 6A.6.12.6 and NCHRP W-197 (NCHRP 12-84) did not adopt it. Plate stability in rating is covered by the Whitmore buckling check with L_mid. It is therefore an ADVISORY line.
+- **Free edges from the plate outline:** the outline is split where it is beside a member.
+  - Beside a member = inside the member outline (width in the plate plane, from the member end outward; the drawing input) or inside the strip of its fastener field (outer holes across, from the row nearest the WP outward).
+  - Every other run of the outline is a free edge, with L_g measured along the outline, corners included (conservative).
+  - The table gives both ends and the neighbouring members. Free edges over the limit are drawn wide amber on the drawing.
+- **Check case (default model, free edge E1 from L2-L3 to L2-U3):**
+  - It starts at (24, 9) and runs along the edge to (33.25, 28.25), length √(9.25² + 19.25²) = 21.357 in.
+  - It then turns the corner along the end edge to the L2-U3 member outline (t = −7 in). The corner is at t = −7.312, so that part is 0.312 in long.
+  - L_g = 21.669 in.
+  - Limit: 2.06 √(29000/36)(0.5) = 2.06(28.382)(0.5) = 29.234 in.
+  - Ratio = 21.669/29.234 = **0.741** (tool 0.741).
+- **Models over the limit (ratio > 1):** validation (D to CL, 30.16 in, 1.032), t4d template (top edge, 44.72 in, 1.530), t4v/t4u (35.79 in, 1.224), t3 (two edges of 31.93 in, 1.092), heel t2h (64.37 in, 2.202), and the custom models based on the validation model (pA, pD; 1.032).
+
+### C17. Eccentric fastener groups, advisory; unequal plates (closes O4)   [advisory only; no rating change]
+
+**Part 1, eccentric groups (ADVISORY):**
+- e = offset of the centroid of a member's holes from its work line.
+- A note is given when |e| > max(`eccTol` 0.25 in, `eccPct` 5 % × the across spread of the outer holes). The larger of the two is used to avoid notes on tolerance-level offsets.
+- The note reports M = F e for each load and the largest factored M over the rating cases.
+- The checks keep equal sharing of the fasteners. LRFD 10th Ed. 6.13.1 calls for eccentricity to be considered in connection design (verify), but MBE 6A.6.12.6 rates fastener groups without it.
+- **Check case:** validation model, chord CL: holes at t = 0 and 5 in (offset 2.5, gage 5), so e = 2.500 in.
+  - Tolerance = max(0.25, 0.05 × 5) = 0.250 in.
+  - M_DC = 70(2.5) = 175 kip-in.
+  - LRFR Inventory: 1.25(70) + 1.50(10) + 1.75(80) = 242.5 kip, M = **606.25 kip-in** (tool 606.25).
+- **Flagged models:** validation and the custom models based on it (CL e = +2.5, CR e = −2.5); rtc_vert_fill (L2-U2, e = −0.463 in).
+
+**Part 2, plates of different thickness: closed, no change.** Every plate resistance (bearing, Whitmore yield, fracture and buckling, block shear, shear planes) is computed for each plate with its own thickness after loss and summed. Fastener shear counts planes per plate. A summed resistance is the same as sharing the force in proportion to each plate's resistance: each plate's demand/capacity ratio equals the total ratio. That is the rational and usual assumption, so nothing was changed. The Method tab now says this.
+- **Check case:** validation model with plate 2 reduced by 0.125 in: WY = 0.95(36)(15.392)(0.5 + 0.375) = 460.61 kip (tool 460.61) = 263.20 + 197.40 kip per plate. Under proportional sharing each plate carries 57.1 % and 42.9 % of the force, so the ratio is the same for both.
+
+### C18. Heel joint SP1 and any plane with a normal force: shear plus normal, advisory (closes O16)   [advisory only; no rating change]
+
+- **Check:** (V/V_r)² + (N/N_r)² ≤ 1 on every partial shear plane that carries a normal force, heel joints included. The splice line also gets it (C14.4).
+  - V_r = the plane's shear resistance (MBE 3rd Ed. 6A.6.12.6.6: the lower of shear yielding with Ω and shear fracture).
+  - N_r = φ_y F_y A_g of the plane.
+  - Source: the circular shear-plus-normal plate interaction used by Thornton and in AISC practice for gusset sections (verify). Not an MBE rating limit, so ADVISORY. It is shown beside the O1 interaction of C14.4.
+- **Check case (heel template t2h with the suite forces: L0-U1 at 50°, DC 57, DW 6, HL-93 83 kip; SP1 at y = 6, x = −6 to 24, L_g = 30 in, L_n = 24 in), LRFR Inventory:**
+  - N = 1.25(43.665) + 1.50(4.596) + 1.75(63.582) = 172.74 kip, with N_DC = 57 sin 50° = 43.665.
+  - V = 1.25(36.639) + 1.50(3.857) + 1.75(53.351) = 144.95 kip.
+  - V_r = min(1.0(0.58)(36)(30)(0.88) = 551.23, 0.8(0.58)(58)(24) = 645.89) = 551.23 kip.
+  - N_r = 0.95(36)(30) = 1026.0 kip.
+  - (144.95/551.23)² + (172.74/1026.0)² = 0.0691 + 0.0283 = **0.097** (tool 0.097).
+  - LFR Inventory: **0.143** (governs the advisory).
+  - The shear-only check SP1-Y is unchanged.
+- **Shown at:** every model's automatic plane(s) (the members above carry a normal component), largest ratio 0.688 (default model). None exceeds 1.
+
+#### Where (anchors) and exact code (C14 to C18)
+
+All changes are in `Gusset Plate Rating.html`. The anchors:
+- `GPR` `PARAMS`: anchors `['phiVU', 'lrfr'` and `['A1min', 'lfr'`.
+- `spliceList` before `function plateTs`.
+- `validate()`: anchor `// C14 (O1): optional chord splice plates`.
+- O2 warning: anchor `It is clipped at the plate edges only.`.
+- `compute()`:
+  - `secProps`, `zeroD`, `accD`, the splice section `spl`, and `capSPC` / `capSPY` / `capSPF`, before `/* ----- checks ----- */`;
+  - the `ref` entries `spc` / `spy` / `spf`;
+  - the spliced branch, anchor `checks SPL-C, SPL-TY, SPL-TF`;
+  - `c.cust`;
+  - the advisory block after `const incomplete =` (`facVal`, `plateInt`, `pint`, `edges`, `ecc`, `adv`), returned as `R.adv`.
+- UI:
+  - `panePlates()`: chord splice plates;
+  - `ACT.addSplice` / `ACT.delSplice`;
+  - `spliceList`;
+  - `LSNAME`, `dirLabel`, `demandHtml`, `SCOPE_OUT`;
+  - `ADV_NOTE`, `advItems`, `advLine` (before `gotoCheck`);
+  - `renderChecks` and `renderSummary` (advisory section and card), with a `data-goadv` click handler;
+  - `svgDrawing` (splice line and free edges);
+  - `crInputs` (splice plates table), `buildReport` (objectives text, advisory section), `methodHtml`.
+
+Exact diff against main 0c5a03e (`git diff -U0`):
+
+```diff
+diff --git a/Gusset Plate Rating.html b/Gusset Plate Rating.html
+index ed83d49..df13d08 100644
+--- a/Gusset Plate Rating.html	
++++ b/Gusset Plate Rating.html	
+@@ -1250,0 +1251,4 @@ const GPR = (function () {
++    // C14 (O1): chord splice at the joint, compression (LRFR rating check)
++    ['phiCS', 'lrfr', 'LRFR resistance factors', '\\phi_{cs}', 'Chord splice in compression (gusset and splice plates at the splice line)', 0.85, '', 'MBE 3rd Ed. Table 6A.6.12.6.2-1, 6A.6.12.6.9 (verify); NCHRP W-197', 1, 'Value as reported for the chord-splice resistance factor of NCHRP W-197 / MBE; the printed table was not available.'],
++    ['Ksp', 'lrfr', 'LRFR plate resistances', 'K_{sp}', 'Effective length factor, chord splice in compression (length = centre-to-centre distance between the first fastener lines of the two chords)', 0.65, '', 'MBE 3rd Ed. 6A.6.12.6.9 (verify)', 1, 'Judgment until confirmed: 0.65 (fixed-fixed, LRFD 10th Ed. C4.6.2.5). It only matters when K l/r exceeds the limit below.'],
++    ['spKLr', 'lrfr', 'LRFR plate resistances', '(Kl/r)_{lim}', 'Chord splice: slenderness K l/r at or below which F_cr = F_y', 25, '', 'MBE 3rd Ed. Eq. 6A.6.12.6.9-2 (verify)', 1, 'Above it, F_cr from the LRFD 10th Ed. 6.9.4.1.1 column curve.'],
+@@ -1297 +1301,5 @@ const GPR = (function () {
+-    ['A1min', 'lfr', 'LFR load factors', 'A_{1,min}', 'Dead load factor when dead load counteracts the live load effect', 1.0, '', 'Judgment (not given in MBE 6B)', 1, '']
++    ['A1min', 'lfr', 'LFR load factors', 'A_{1,min}', 'Dead load factor when dead load counteracts the live load effect', 1.0, '', 'Judgment (not given in MBE 6B)', 1, ''],
++    // C15-C18: advisory checks (shown with a ratio; never in the governing rating factor)
++    ['edgeC', 'both', 'Advisory checks (not rated)', '-', 'Free-edge slenderness: limit on L_g/t is this coefficient × √(E/F_y)', 2.06, '', 'AASHTO Std. Spec. 17th Ed. 10.16.11 (verify); FHWA-IF-09-014; former LRFD 6.14.2.8', 1, 'A design rule (edge to be stiffened when exceeded). MBE 3rd Ed. 6A.6.12.6 / NCHRP W-197 did not adopt it as a rating limit: advisory only.'],
++    ['eccTol', 'both', 'Advisory checks (not rated)', 'e_{tol}', 'Eccentric fastener group: offset of the fastener-group centroid from the work line above which a note is given', 0.25, 'in', 'Judgment', 1, 'The tolerance used is the larger of this value and the percentage below × the across spread of the outer holes.'],
++    ['eccPct', 'both', 'Advisory checks (not rated)', '-', 'Eccentric fastener group: tolerance as a percentage of the across spread of the outer holes', 5, '%', 'Judgment', 1, '']
+@@ -1488,0 +1497,2 @@ const GPR = (function () {
++  /* C14 (O1): optional chord splice plates, P.splice.plates = [{ n, w, t, Fy, Fu, nh, orient: 'flange' | 'web', y }] (absent in older files: none) */
++  const spliceList = P => (P && P.splice && Array.isArray(P.splice.plates)) ? P.splice.plates : [];
+@@ -1576,0 +1587,9 @@ const GPR = (function () {
++    // C14 (O1): optional chord splice plates (used only with a chord spliced at the joint and two or more chord members)
++    const spP = spliceList(P);
++    if (spP.length && !(P.chord === 'spliced' && chords.length >= 2)) W.push(`${spP.length} chord splice plate row${spP.length > 1 ? 's are' : ' is'} entered but not used: the chord splice check applies only with the chord spliced at the joint and two or more chord members.`);
++    else spP.forEach((s, i) => { const nm = `Chord splice plate ${i + 1}`;
++      if (!(Number.isInteger(num(s.n)) && num(s.n) >= 1)) E.push(`${nm}: the number of plates must be a whole number of at least 1.`);
++      ['w', 't', 'Fy', 'Fu'].forEach(k => { if (!(num(s[k]) > 0)) E.push(`${nm}: ${{ w: 'width', t: 'thickness', Fy: 'F_y', Fu: 'F_u' }[k]} must be a positive number.`); });
++      if (!(Number.isInteger(num(s.nh)) && num(s.nh) >= 0)) E.push(`${nm}: enter the number of holes across the plate at the first fastener line (a whole number, 0 or more).`);
++      if (!isFinite(num(s.y))) E.push(`${nm}: enter the offset of its centroid from the chord work line.`);
++      if (!['flange', 'web'].includes(s.orient)) E.push(`${nm}: choose how the plate lies (flange plate or web plate).`); });
+@@ -1650 +1669 @@ const GPR = (function () {
+-        if (W.adj.length && !isChordCont(i)) warn.push(`Member ${m.id}: the Whitmore section crosses the outline of ${W.adj.join(', ')}. It is clipped at the plate edges only, not at adjacent members (verify; MBE 6A.6.12.6.8).`);
++        if (W.adj.length && !isChordCont(i)) warn.push(`Member ${m.id}: the Whitmore section crosses the outline of ${W.adj.join(', ')}. It is clipped at the plate edges only. Where it crosses an adjacent member or that member's fastener lines, the full section is used, as in the NCHRP 12-84 research behind MBE 3rd Ed. 6A.6.12.6 (NCHRP W-197; MBE 6A.6.12.6.7 and 6A.6.12.6.8, verify; fix log C15). Only the gusset plate area is counted, never the adjacent member's own area. Information only.`);
+@@ -1706 +1725,2 @@ const GPR = (function () {
+-      pvy: { lrfr: 'MBE 6A.6.12.6.6; LRFD 6.14.2.8 (Ω); NCHRP W-197', lfr: 'FHWA-IF-09-014 (Ω = 0.74)' }, pvu: { lrfr: 'MBE 6A.6.12.6.6; LRFD 6.13.5.3', lfr: 'FHWA-IF-09-014' } };
++      pvy: { lrfr: 'MBE 6A.6.12.6.6; LRFD 6.14.2.8 (Ω); NCHRP W-197', lfr: 'FHWA-IF-09-014 (Ω = 0.74)' }, pvu: { lrfr: 'MBE 6A.6.12.6.6; LRFD 6.13.5.3', lfr: 'FHWA-IF-09-014' },
++      spc: { lrfr: 'MBE 3rd Ed. 6A.6.12.6.9, Eq. 6A.6.12.6.9-1, -2 (verify); NCHRP W-197', lfr: '' }, spy: { lrfr: 'MBE 3rd Ed. 6A.6.12.6.9 (verify); LRFD 6.8.2.1-1', lfr: '' }, spf: { lrfr: 'MBE 3rd Ed. 6A.6.12.6.9 (verify); LRFD 6.8.2.1-2, 6.13.5.2', lfr: '' } };
+@@ -1802,0 +1823,70 @@ const GPR = (function () {
++    /* ----- C14-C17 helpers. A section along a line (coordinate y along the line) is a set of strips { y0, y1, w (width across the line), Fy, Fu }:
++       area, centroid, moment of inertia, extreme fibres, yield force, plastic neutral axis (equal yield force each side) and plastic moment. ----- */
++    function secProps(els) { const A = els.reduce((s, q) => s + q.w * (q.y1 - q.y0), 0), yb = els.reduce((s, q) => s + q.w * (q.y1 - q.y0) * (q.y0 + q.y1) / 2, 0) / A;
++      const I = els.reduce((s, q) => { const h = q.y1 - q.y0, d = (q.y0 + q.y1) / 2 - yb; return s + q.w * h * h * h / 12 + q.w * h * d * d; }, 0), ymin = Math.min(...els.map(q => q.y0)), ymax = Math.max(...els.map(q => q.y1));
++      const Py = els.reduce((s, q) => s + q.Fy * q.w * (q.y1 - q.y0), 0), above = y => els.reduce((s, q) => s + q.Fy * q.w * Math.max(0, q.y1 - Math.max(q.y0, y)), 0);
++      let lo = ymin, hi = ymax; for (let k = 0; k < 100; k++) { const m = (lo + hi) / 2; if (above(m) > Py / 2) lo = m; else hi = m; } const yp = (lo + hi) / 2;
++      const absI = (a, b, q) => q <= a ? (b - a) * ((a + b) / 2 - q) : q >= b ? (b - a) * (q - (a + b) / 2) : ((q - a) * (q - a) + (b - q) * (b - q)) / 2;
++      return { A, yb, I, ymin, ymax, Py, yp, Mp: els.reduce((s, q) => s + q.Fy * q.w * absI(q.y0, q.y1, yp), 0) }; }
++    const zeroD = () => ({ DC: 0, DW: 0, LL: P.ll.map(() => 0) });
++    const accD = (D, m, c) => { D.DC += num(m.F.DC) * c; D.DW += num(m.F.DW) * c; m.F.LL.forEach((x, k) => D.LL[k] += num(x) * c); };
++
++    /* ----- C14 (O1): chord splice at the joint (chord "spliced" with two or more chord members). MBE 3rd Ed. 6A.6.12.6.9 (verify), NCHRP W-197.
++       Splice line: through the WP, perpendicular to the right-hand chord (i0). Section = every plate crossing the splice line: the gusset plates (the parts
++       of the line inside the plate outline, Σt) and the optional splice plates (flange plates: area n b t at their centroid offset; web plates: n plates
++       of width b in the gusset plane). Demand = free body of the members whose fastener centroid lies on the +axis side: N (tension +), V, M about the
++       centroid of the section (every member force acts along its work line through the WP). Compression (LRFR): φ_cs F_cr / (1/A_g + e/S_g), e = distance
++       from the chord work line to the centroid, S_g = I/c to the extreme fibre on the side of the eccentricity, F_cr = F_y for K l/r ≤ 25 (l = centre-to-
++       centre distance between the first fastener lines of the two chords, r = t_min/√12), otherwise LRFD 6.9.4.1.1. Tension (LRFR): φ_y Σ F_y A_g and
++       φ_u U Σ F_u A_n at the first fastener line of each chord (straight line; A_n ≤ 0.85 A_g per element when the switch is on). LFR: no new check
++       (FHWA-IF-09-014 checks the splice through the Whitmore checks of the chord members, as before). ----- */
++    let spl = null;
++    if (P.chord === 'spliced' && chordIdx.length >= 2) {
++      const srt = chordIdx.slice().sort((a, b) => Math.cos(num(P.members[b].ang) * PI / 180) - Math.cos(num(P.members[a].ang) * PI / 180)), i0 = srt[0], i1 = srt[srt.length - 1];
++      const axis = G[i0].u, nrm = [-axis[1], axis[0]], iv = lineIntervals([0, 0], nrm, poly), sp = spliceList(P);
++      spl = { i0, i1, axis, nrm, iv, nSp: sp.length, lbl: `Chord splice ${P.members[i1].id} / ${P.members[i0].id}` };
++      if (chordIdx.length > 2) warn.push(`${spl.lbl}: ${chordIdx.length} chord members; the splice is checked between ${P.members[i1].id} and ${P.members[i0].id} (the chord members nearest to the −x and +x directions).`);
++      if (Math.abs(dot(G[i0].u, G[i1].u) + 1) > 0.02) warn.push(`${spl.lbl}: the two chord members are not collinear; the splice line is taken through the work point perpendicular to ${P.members[i0].id}.`);
++      if (!iv.length) spl.err = 'The splice line (through the work point, perpendicular to the chord) does not cross the plate.';
++      else {
++        const els = iv.map(([a, b], k) => ({ nm: `Gusset plates${iv.length > 1 ? `, part ${k + 1}` : ''} (${Np} × ${f4(tminP)}${ts.some(t => Math.abs(t - ts[0]) > 1e-9) ? ' min.' : ''} in)`, kind: 'gusset', y0: a, y1: b, w: sumT, Fy, Fu, t: tminP }));
++        sp.forEach((s, k) => { const n = Math.round(num(s.n)), b = num(s.w), t = num(s.t), y = num(s.y), fl = s.orient === 'flange';
++          els.push({ nm: `Splice plate ${k + 1}: ${n} × ${f3(b)} × ${f4(t)} in, ${fl ? 'flange plate' : 'web plate (in the gusset plane)'} at ${f3(y)} in`, kind: fl ? 'flange' : 'web', y0: fl ? y - t / 2 : y - b / 2, y1: fl ? y + t / 2 : y + b / 2, w: fl ? n * b : n * t, Fy: num(s.Fy), Fu: num(s.Fu), n, b, t, nh: Math.round(num(s.nh)), yc: y }); });
++        const S = secProps(els), e = Math.abs(S.yb), ce = S.yb > 0 ? S.yb - S.ymin : S.ymax - S.yb, Se = ce > 1e-9 ? S.I / ce : Infinity;
++        const l = G[i0].sIn + G[i1].sIn, tmn = Math.min(...els.map(q => q.t)), r = tmn / Math.sqrt(12), KLr = p.Ksp * l / r, FyMin = Math.min(...els.map(q => q.Fy)), Fe = PI * PI * p.E / (KLr * KLr);
++        const eqF = KLr <= p.spKLr + 1e-9 ? 'le' : Fe / FyMin >= 0.44 ? '1' : '2', Fcr = eqF === 'le' ? FyMin : eqF === '1' ? Math.pow(0.658, FyMin / Fe) * FyMin : 0.877 * Fe;
++        const dnS = Math.max(G[i0].dn, G[i1].dn), capOn = p.capAnOn >= 0.5;
++        const net = [i0, i1].map(i => { const Q = G[i].P(G[i].sIn, 0), ivn = lineIntervals(Q, nrm, poly), segs = ivn.map(([a, b]) => [add(Q, mul(nrm, a)), add(Q, mul(nrm, b))]), Lg = ivn.reduce((s, [a, b]) => s + b - a, 0);
++          const cross = holes.filter(h => segs.some(([A, B]) => distSeg([h.x, h.y], A, B) < h.dh / 2 - 1e-9)), Ln = Lg - cross.reduce((s, h) => s + h.dn, 0);
++          const parts = [{ nm: 'Gusset plates', Ag: Lg * sumT, An0: Ln * sumT, Fu, txt: `(${f3(Lg)} − ${cross.length} × ${f4(G[i].dn)})(${f4(sumT)})` }, ...els.filter(q => q.kind !== 'gusset').map(q => ({ nm: q.nm.split(':')[0], Ag: q.n * q.b * q.t, An0: q.n * (q.b - q.nh * dnS) * q.t, Fu: q.Fu, txt: `${q.n}(${f3(q.b)} − ${q.nh} × ${f4(dnS)})(${f4(q.t)})` }))];
++          parts.forEach(z => { z.An = capOn ? Math.min(z.An0, p.capAn * z.Ag) : z.An0; });
++          return { i, Q, segs, Lg, Ln, cross, parts, Rn: parts.reduce((s, z) => s + z.Fu * z.An, 0) * p.U }; });
++        const N = zeroD(), V = zeroD(), M = zeroD(), Cpt = mul(nrm, S.yb), right = [], strad = [];
++        P.members.forEach((m, j) => { if (dot(G[j].centroid, axis) > 1e-6) { right.push(j); accD(N, m, dot(G[j].u, axis)); accD(V, m, dot(G[j].u, nrm)); accD(M, m, crs(mul(Cpt, -1), G[j].u)); }
++          const hs = G[j].holes.map(h => dot([h.x, h.y], axis)); if (hs.some(x => x > 1e-6) && hs.some(x => x < -1e-6)) strad.push(m.id); });
++        if (strad.length) warn.push(`${spl.lbl}: the fastener group of ${strad.join(', ')} straddles the splice line; each member is assigned to the side of its fastener centroid.`);
++        Object.assign(spl, { els, S, e, ce, Se, l, tmn, r, KLr, FyMin, Fe, Fcr, eqF, net, dnS, capOn, N, V, M, Cpt, right, A: add(mul(nrm, S.ymin), [0, 0]), B: mul(nrm, S.ymax), segs: iv.map(([a, b]) => [mul(nrm, a), mul(nrm, b)]) });
++      }
++    }
++    function capSPC() { const z = spl, phi = p.phiCS, den = 1 / z.S.A + (isFinite(z.Se) ? z.e / z.Se : 0), C = phi * z.Fcr / den;
++      const fcrTex = z.eqF === 'le' ? T`\frac{K_{sp}\,l}{r} = \frac{${f2(p.Ksp)}(${f3(z.l)})}{${f4(z.r)}} = ${f2(z.KLr)} \le ${f1(p.spKLr)} \Rightarrow F_{cr} = F_y = ${f1(z.Fcr)}\ \text{ksi}`
++        : T`\frac{K_{sp}\,l}{r} = ${f2(z.KLr)} > ${f1(p.spKLr)},\ F_e = \frac{\pi^2E}{(K_{sp}l/r)^2} = ${f1(z.Fe)} \Rightarrow F_{cr} = ${z.eqF === '1' ? T`0.658^{F_y/F_e}F_y` : T`0.877F_e`} = ${f2(z.Fcr)}\ \text{ksi}`;
++      return { C, phi, sym: T`\phi_{cs}P_n = \phi_{cs}F_{cr}\left(\frac{1}{A_g} + \frac{e}{S_g}\right)^{-1}`,
++        subst: fcrTex + T`, \quad \phi_{cs}P_n = ${f2(phi)}(${f2(z.Fcr)})\left(\frac{1}{${f3(z.S.A)}} + \frac{${f3(z.e)}}{${isFinite(z.Se) ? f2(z.Se) : T`\infty`}}\right)^{-1} = ${f1(C)}\ \text{kip}`,
++        where: [wr('A<sub>g</sub>', `Gross area of every plate crossing the splice line: ${z.els.map(q => `${escH(q.nm)} ${f3(q.w * (q.y1 - q.y0))}`).join('; ')}`, f3(z.S.A), 'in²', 'Geometry'),
++          wr('ȳ', `Centroid of A<sub>g</sub> from the chord work line (along the splice line, + toward ${dot(z.nrm, [0, 1]) >= 0 ? '+y' : '−y'})`, f3(z.S.yb), 'in', 'Geometry'), wr('e', 'Eccentricity of the chord force (on the work line) from the centroid, |ȳ|', f3(z.e), 'in', 'Geometry'),
++          wr('I, c', `Moment of inertia about the centroid; distance to the extreme fibre on the side of the eccentricity (plates from ${f3(z.S.ymin)} to ${f3(z.S.ymax)} in)`, `${f1(z.S.I)}, ${f3(z.ce)}`, 'in⁴, in', 'Geometry'),
++          wr('S<sub>g</sub>', 'Gross section modulus, I/c', isFinite(z.Se) ? f2(z.Se) : '∞', 'in³', 'Geometry'),
++          wr('l', `Centre-to-centre distance between the first fastener lines of the two chords (${escH(P.members[z.i1].id)} ${f3(G[z.i1].sIn)} + ${escH(P.members[z.i0].id)} ${f3(G[z.i0].sIn)} in from the WP)`, f3(z.l), 'in', 'MBE 6A.6.12.6.9 (verify)'),
++          wr('r', `t<sub>min</sub>/√12, t<sub>min</sub> = thinnest plate crossing the splice line`, `${f4(z.tmn)}/√12 = ${f4(z.r)}`, 'in', 'Geometry'), wr('K<sub>sp</sub>', 'Effective length factor (judgment, verify)', f2(p.Ksp), '', 'MBE 6A.6.12.6.9 (verify)'),
++          wr('F<sub>y</sub>', z.els.some(q => q.Fy !== z.FyMin) ? 'Lowest F<sub>y</sub> of the plates crossing the splice line (conservative)' : 'Yield strength', f1(z.FyMin), 'ksi', 'Input'),
++          wr('φ<sub>cs</sub>', 'Resistance factor, chord splice', f2(phi), '', 'MBE Table 6A.6.12.6.2-1 (verify)')], keys: ['phiCS', 'Ksp', 'spKLr', 'E'] }; }
++    function capSPY() { const z = spl, phi = p.phiY, Rn = z.S.Py, C = phi * Rn;
++      return { C, phi, sym: T`\phi_yP_{ny} = \phi_y\sum F_yA_g`, subst: T`\phi_yP_{ny} = ${f2(phi)}\left(${z.els.map(q => T`${f1(q.Fy)}(${f3(q.w * (q.y1 - q.y0))})`).join(' + ')}\right) = ${f2(phi)}(${f1(Rn)}) = ${f1(C)}\ \text{kip}`,
++        where: [wr('A<sub>g</sub>', `Gross area of each plate crossing the splice line: ${z.els.map(q => escH(q.nm)).join('; ')}`, z.els.map(q => f3(q.w * (q.y1 - q.y0))).join(', '), 'in²', 'Geometry'), wr('φ<sub>y</sub>', 'Resistance factor, yielding', f2(phi), '', 'LRFD 6.5.4.2')], keys: ['phiY'] }; }
++    function capSPF() { const z = spl, phi = p.phiU, gov = z.net.reduce((a, q) => q.Rn < a.Rn ? q : a), C = phi * gov.Rn;
++      return { C, phi, sym: z.capOn ? T`\phi_uP_{nu} = \phi_u\,U\sum F_uA_n, \quad A_n = \min(A_{n0},\ ${f2(p.capAn)}A_g)\ \text{per plate}` : T`\phi_uP_{nu} = \phi_u\,U\sum F_uA_n`,
++        subst: z.net.map((q, k) => T`\text{line ${k + 1}: } U\sum F_uA_n = ${f2(p.U)}\left(${q.parts.map(w => T`${f1(w.Fu)}(${f3(w.An)})`).join(' + ')}\right) = ${f1(q.Rn)}`).join(T`; \quad `) + T`; \quad \phi_uP_{nu} = ${f2(phi)}(${f1(gov.Rn)}) = ${f1(C)}\ \text{kip}`,
++        where: z.net.map((q, k) => wr(`A<sub>n</sub>, line ${k + 1}`, `Net section at the first fastener line of ${escH(P.members[q.i].id)} (perpendicular to the chord, ${f3(G[q.i].sIn)} in from the WP; ${q.cross.length} hole${q.cross.length === 1 ? '' : 's'} on the gusset line, straight line${G[q.i].custom ? '; custom holes: no s²/4g search here, verify' : ''}): ${q.parts.map(w => `${escH(w.nm)} A<sub>n0</sub> = ${w.txt} = ${f3(w.An0)}${w.An < w.An0 - 1e-9 ? `, ${f2(p.capAn)}A<sub>g</sub> = ${f3(w.An)} governs` : ''}`).join('; ')}`, q.parts.map(w => f3(w.An)).join(', '), 'in²', 'LRFD 6.8.3, 6.13.5.2'))
++          .concat([wr('U', 'Shear-lag factor', f2(p.U), '', 'LRFD 6.13.5.2'), wr('φ<sub>u</sub>', 'Resistance factor, fracture', f2(phi), '', 'LRFD 6.5.4.2')]), keys: ['dNet', 'U', 'capAnOn', ...(z.capOn ? ['capAn'] : []), 'phiU'] }; }
++
+@@ -1835 +1925,6 @@ const GPR = (function () {
+-    else if (P.chord === 'spliced' && chordIdx.length) warn.push('Chord spliced at the joint: each chord member is checked like a web member for its full force through the gusset plates only; any splice plates are ignored (conservative). The chord splice check is not in Phase 1.');
++    else if (P.chord === 'spliced' && chordIdx.length) { warn.push(`Chord spliced at the joint: each chord member is checked like a web member for its full force through the gusset plates; the splice section itself is checked at the splice line (checks SPL-C, SPL-TY, SPL-TF; LRFR, MBE 3rd Ed. 6A.6.12.6.9, verify; fix log C14)${spl && !spl.nSp ? '. No splice plates are entered, so only the gusset plates are counted at the splice line (conservative where splice plates exist)' : ''}.`);
++      const sdem = spl.N, base = { grp: 'Chord splice', mem: null, splice: true, who: spl.lbl, dem: sdem };
++      if (spl.err) [['SPL-C', 'spc', '-'], ['SPL-TY', 'spy', '+'], ['SPL-TF', 'spf', '+']].forEach(([id, ls, d]) => mk({ ...base, id, ls, dirs: d, title: `${spl.lbl}: ${{ spc: 'compression', spy: 'tension yielding', spf: 'tension fracture' }[ls]}`, err: spl.err, cap: {}, dem: zeroD() }));
++      else { mk({ ...base, id: 'SPL-C', ls: 'spc', dirs: '-', title: `${spl.lbl}: splice in compression (gusset${spl.nSp ? ' and splice' : ''} plates, eccentric)`, cap: { lrfr: { '-': capSPC() } } });
++        mk({ ...base, id: 'SPL-TY', ls: 'spy', dirs: '+', title: `${spl.lbl}: splice in tension, gross section yielding`, cap: { lrfr: { '+': capSPY() } } });
++        mk({ ...base, id: 'SPL-TF', ls: 'spf', dirs: '+', title: `${spl.lbl}: splice in tension, net section fracture`, cap: { lrfr: { '+': capSPF() } } }); } }
+@@ -1843 +1938 @@ const GPR = (function () {
+-      c.cust = c.mem != null ? G[c.mem].custom : c.chord ? G[c.chord.i0].custom || G[c.chord.i1].custom : c.plane != null ? !!planes[c.plane].stag : false; });   // C10: uses a custom hole pattern (generalized rules, verify)
++      c.cust = c.mem != null ? G[c.mem].custom : c.splice ? c.ls === 'spf' && (G[spl.i0].custom || G[spl.i1].custom) : c.chord ? G[c.chord.i0].custom || G[c.chord.i1].custom : c.plane != null ? !!planes[c.plane].stag : false; });   // C10: uses a custom hole pattern (generalized rules, verify)
+@@ -1853 +1948,55 @@ const GPR = (function () {
+-    return { errors: [], warnings: warn, P, p, poly, ts, Np, Fy, Fu, G, holes, planes, checks, cases: CASES, gov, incomplete, eqm, span, stops };
++
++    /* ===== advisory checks (C14.4, C16, C17, C18): shown with a ratio, never part of the governing rating factor ===== */
++    /* factored value of a demand D = { DC, DW, LL[] } for rating case cs at RF = 1: LRFR γ_DC DC + γ_DW DW + γ_LL LL (dead load against the live
++       load: minimum factors, as in the rating), LFR A_1 D + A_2 L; capacities are multiplied by φ_cφ_s (LRFR) as in the rating */
++    const phcs = Math.max(fac.phiC * fac.phiS, p.phiCSmin);
++    function facVal(D, cs) { const L = D.LL[cs.k] || 0, sg = x => (L === 0 || x * L >= 0);
++      return cs.meth === 'lrfr' ? (sg(D.DC) ? p.gDC : p.gDCmin) * D.DC + (sg(D.DW) ? p.gDW : p.gDWmin) * D.DW + cs.g * L : (sg(D.DC + D.DW) ? p.A1 : p.A1min) * (D.DC + D.DW) + cs.g * L; }
++    const capF = meth => meth === 'lrfr' ? phcs : 1;
++
++    /* C14.4 (O1, advisory) and C18 (O16, advisory): combined actions on a plane. For each partial shear plane and the chord splice line: N (normal,
++       tension + = loaded side pulled away), V (along the plane), M (about the centroid of the gross plane; member forces act through the WP).
++       O16: (V/V_r)² + (N/N_r)² ≤ 1 with V_r = the plane's shear resistance (MBE 6A.6.12.6.6: lower of shear yielding with Ω and shear fracture) and
++       N_r = φ_y F_y A_g of the plane (plate interaction, Thornton / AISC; verify). Shown where the plane carries a normal force.
++       O1: M/M_r + (N/N_r)² + (V/V_r)⁴ ≤ 1 with M_r = φ_y F_y Z (Z plastic modulus of the gross plane) (Astaneh-Asl 1998 plate interaction; the
++       combined shear + axial + moment check discussed in NCHRP W-197; not an MBE rating limit; verify). */
++    const pint = [];
++    function plateInt(key, nm, els, N, V, M, Vr, note) { const S = secProps(els), hasN = [N.DC, N.DW, ...N.LL].some(x => Math.abs(x) > 1e-6);
++      const res = { lrfr: { Vr: Vr.lrfr, Nr: p.phiY * S.Py, Mr: p.phiY * S.Mp, phi: p.phiY }, lfr: { Vr: Vr.lfr, Nr: p.phiYL * S.Py, Mr: p.phiYL * S.Mp, phi: p.phiYL } };
++      const rows = CASES.map((cs, j) => { const c = capF(cs.meth), R0 = res[cs.meth], n = facVal(N, cs), v = facVal(V, cs), m = facVal(M, cs), qn = Math.abs(n) / (c * R0.Nr), qv = Math.abs(v) / (c * R0.Vr), qm = Math.abs(m) / (c * R0.Mr);
++        return { j, n, v, m, qn, qv, qm, r16: qv * qv + qn * qn, r1: qm + qn * qn + qv * qv * qv * qv }; });
++      const mx = k => rows.reduce((a, r) => !a || r[k] > a[k] ? r : a, null);
++      pint.push({ key, nm, S, N, V, M, res, rows, hasN, g16: hasN ? mx('r16') : null, g1: mx('r1'), note }); }
++    planes.forEach((pl, k) => { if (!pl.mem.length) return; const nOut = mul([-pl.e[1], pl.e[0]], pl.sign), N = zeroD(), V = zeroD(), M = zeroD();
++      const els = pl.iv.map(([a, b]) => ({ y0: a, y1: b, w: sumT, Fy, Fu })), S0 = secProps(els), Cpt = add(pl.a, mul(pl.e, S0.yb));
++      pl.mem.forEach(i => { const m = P.members[i]; accD(N, m, dot(G[i].u, nOut)); accD(V, m, dot(G[i].u, pl.e)); accD(M, m, crs(mul(Cpt, -1), G[i].u)); });
++      const vr = meth => Math.min(capPV(pl, meth, 'pvy').C, capPV(pl, meth, 'pvu').C);
++      plateInt(`SP${k + 1}`, pl.nm, els, N, V, M, { lrfr: vr('lrfr'), lfr: vr('lfr') }, P.chord === 'spliced' && chordIdx.length === 1 && ['above', 'below'].includes(pl.kind) ? 'heel' : ''); });
++    if (spl && !spl.err) { const g = spl.els.filter(q => q.kind !== 'flange'), Ag = g.reduce((s, q) => s + q.w * (q.y1 - q.y0), 0), Vy = g.reduce((s, q) => s + 0.58 * q.Fy * q.w * (q.y1 - q.y0), 0), Vu = g.reduce((s, q) => s + 0.58 * q.Fu * q.w * (q.y1 - q.y0), 0);
++      plateInt('SPL', `${spl.lbl}: splice line`, spl.els, spl.N, spl.V, spl.M, { lrfr: Math.min(p.phiVY * Vy * p.Om, p.phiVU * Vu), lfr: Math.min(p.phiVYL * Vy * p.OmL, p.phiVUL * Vu) }, 'splice'); pint[pint.length - 1].Ag = Ag; }
++
++    /* C16 (O3, advisory): free-edge slenderness. The plate outline is split where it is beside a member: inside the member outline (width in the plate
++       plane, from the member end outward) or inside the strip of its fastener field (outer holes across, from the row nearest the WP outward). Each
++       remaining run of the outline between two such parts is a free edge; L_g = its length along the outline. Limit L_g/t ≤ 2.06 √(E/F_y), t = thinnest
++       plate after section loss (Std. Spec. 17th Ed. 10.16.11 / FHWA-IF-09-014, verify; MBE / NCHRP W-197 did not adopt it as a rating limit). */
++    const edges = (() => { const cov = []; G.forEach((g, i) => { cov.push({ i, poly: g.body(span * 2) }); if (g.tmax - g.tmin > 1e-6) cov.push({ i, poly: [g.P(g.sIn, g.tmin), g.P(span * 2, g.tmin), g.P(span * 2, g.tmax), g.P(g.sIn, g.tmax)] }); });
++      const covAt = q => cov.filter(c => inside(q, c.poly) || onBoundary(q, c.poly, 1e-5)).map(c => c.i);
++      const n = poly.length, pcs = [];
++      for (let k = 0; k < n; k++) { const A = poly[k], B = poly[(k + 1) % n], len = vlen(sub(B, A)); if (len < 1e-9) continue; const d = mul(sub(B, A), 1 / len), u = [0, len];
++        cov.forEach(c => lineHits(A, d, c.poly).forEach(t => { if (t > 1e-9 && t < len - 1e-9) u.push(t); })); u.sort((a, b) => a - b);
++        for (let j = 0; j + 1 < u.length; j++) { if (u[j + 1] - u[j] < 1e-9) continue; const mid = add(A, mul(d, (u[j] + u[j + 1]) / 2)), c = covAt(mid); pcs.push({ a: add(A, mul(d, u[j])), b: add(A, mul(d, u[j + 1])), L: u[j + 1] - u[j], free: !c.length, by: c }); } }
++      if (!pcs.length) return { runs: [] };
++      const s0 = pcs.findIndex(q => !q.free), runs = []; if (s0 < 0) runs.push({ pts: [pcs[0].a, ...pcs.map(q => q.b)], L: pcs.reduce((s, q) => s + q.L, 0), from: [], to: [], all: true });
++      else { let cur = null; for (let k = 1; k <= pcs.length; k++) { const q = pcs[(s0 + k) % pcs.length], prev = pcs[(s0 + k - 1) % pcs.length];
++        if (q.free) { if (!cur) cur = { pts: [q.a], L: 0, from: prev.by }; cur.pts.push(q.b); cur.L += q.L; } else if (cur) { cur.to = q.by; runs.push(cur); cur = null; } } }
++      const lim = p.edgeC * Math.sqrt(p.E / Fy) * tminP;
++      runs.forEach(r => { r.ratio = r.L / tminP / (p.edgeC * Math.sqrt(p.E / Fy)); r.Lt = r.L / tminP; r.a = r.pts[0]; r.b = r.pts[r.pts.length - 1]; r.fromN = [...new Set(r.from.map(i => P.members[i].id))]; r.toN = [...new Set((r.to || []).map(i => P.members[i].id))]; });
++      return { runs: runs.filter(r => r.L > 0.01), lim, limR: p.edgeC * Math.sqrt(p.E / Fy), t: tminP }; })();
++
++    /* C17 (O4, advisory): eccentric fastener groups. e = offset of the centroid of a member's holes from its work line (perpendicular). Flagged when
++       |e| > max(e_tol, pct × across spread of the outer holes). Eccentric moment M = F e (per load, and the largest factored value over the rating cases). */
++    const ecc = P.members.map((m, i) => { const g = G[i], e = dot(g.centroid, g.v), tol = Math.max(p.eccTol, p.eccPct / 100 * (g.tmax - g.tmin)); if (!(Math.abs(e) > tol + 1e-9)) return null;
++      const F = memDem(m), Mf = CASES.map((cs, j) => ({ j, M: Math.abs(facVal(F, cs)) * Math.abs(e) })).reduce((a, r) => !a || r.M > a.M ? r : a, null);
++      return { i, id: m.id, e, tol, spread: g.tmax - g.tmin, M: { DC: F.DC * e, DW: F.DW * e, LL: F.LL.map(x => x * e) }, Mf }; }).filter(Boolean);
++    const adv = { pint, edges, ecc, spl };
++    return { errors: [], warnings: warn, P, p, poly, ts, Np, Fy, Fu, G, holes, planes, checks, cases: CASES, gov, incomplete, eqm, span, stops, adv };
+@@ -2823 +2972,8 @@ function panePlates() {
+-    <p class="note">Continuous: the two chord members' fasteners together transfer the chord force difference ΔF to the gusset; Whitmore and block shear are not checked for the chord. Spliced: each chord member is checked like a web member through the gusset only (splice plates ignored; chord splice check is Phase 2).</p></div>
++    <p class="note">Continuous: the two chord members' fasteners together transfer the chord force difference ΔF to the gusset; Whitmore and block shear are not checked for the chord. Spliced: each chord member is checked like a web member through the gusset plates, and (with two chord members) the splice section at the splice line is checked: compression, tension yielding and fracture (LRFR, MBE 6A.6.12.6.9, verify).</p>
++    <div class="subhd">Chord splice plates (optional; used only with the chord spliced at the joint)</div>
++    <p class="note">Plates other than the gusset plates that cross the splice line. None entered: only the gusset plates are counted, which is conservative when splice plates exist. Flange plate: lies across the gusset plane (its area is taken at its centroid). Web plate: lies in the gusset plane (width along the splice line). Offset: from the chord work line to the plate centroid, perpendicular to the chord (+ toward +y for a horizontal chord). Holes: across one plate at the first fastener line (net section).</p>
++    ${spliceList().map((s, i) => `<div class="row-blk"><div class="row-hd"><span>Splice plate ${i + 1}</span><button type="button" class="x-btn" data-act="delSplice" data-i="${i}" title="Delete splice plate ${i + 1}">×</button></div>
++      <div class="sec-body" style="padding:0 0 6px">${fld('Number of plates', `splice.plates.${i}.n`, '')}${fld('Lies', `splice.plates.${i}.orient`, '', 'sel', { options: [['flange', 'Flange plate (across the gusset plane)'], ['web', 'Web plate (in the gusset plane)']] })}
++      ${fld('Width b', `splice.plates.${i}.w`, 'in', 'dim')}${fld('Thickness t', `splice.plates.${i}.t`, 'in', 'dim')}${fld('F<sub>y</sub>', `splice.plates.${i}.Fy`, 'ksi')}${fld('F<sub>u</sub>', `splice.plates.${i}.Fu`, 'ksi')}
++      ${fld('Offset of centroid from chord work line', `splice.plates.${i}.y`, 'in', 'dim')}${fld('Holes across one plate', `splice.plates.${i}.nh`, '', 'num', { note: 'first fastener line' })}</div></div>`).join('')}
++    <div class="arr-foot"><button type="button" class="proj-btn" data-act="addSplice">Add a splice plate</button></div></div>
+@@ -2977,0 +3134,2 @@ const ACT = {
++  addSplice() { if (!P.splice || !Array.isArray(P.splice.plates)) P.splice = { plates: [] }; P.splice.plates.push({ n: 1, orient: 'flange', w: '', t: '', Fy: num(P.plates.Fy), Fu: num(P.plates.Fu), y: '', nh: '' }); },   // C14: optional chord splice plates
++  delSplice(i) { P.splice.plates.splice(i, 1); if (!P.splice.plates.length) delete P.splice; },
+@@ -3008 +3166,2 @@ function updateAuto() { $$('[data-auto]').forEach(el => { const [a, i, k] = el.d
+-const oneChord = () => P.members.filter(m => m.role === 'chord').length === 1;   // chord ends at the joint (heel joint)
++const spliceList = () => (P.splice && Array.isArray(P.splice.plates)) ? P.splice.plates : [];   // C14: optional chord splice plates
++const oneChord = () =>P.members.filter(m => m.role === 'chord').length === 1;   // chord ends at the joint (heel joint)
+@@ -3061,0 +3221 @@ function renderSummary() {
++  const advC = card('sum-adv', 'Advisory checks (not in the rating factor)', '', `<p class="note-p">${esc(ADV_NOTE)}</p><ul class="dlist">${advItems().map(a => `<li><a href="#" data-goadv="${a.id}">${esc(a.title)}</a>: <span class="${(a.ratio > 1 + 1e-9 || a.flag) ? 'n-warn' : ''}">${advLine(a)}</span></li>`).join('')}</ul>`);   // C14.4, C16-C18
+@@ -3063 +3223 @@ function renderSummary() {
+-  $('#tab-summary').innerHTML = vfy + head + errC + tbl + warns + eqmC + scope;
++  $('#tab-summary').innerHTML = vfy + head + errC + tbl + warns + advC + eqmC + scope;
+@@ -3065 +3225 @@ function renderSummary() {
+-const SCOPE_OUT = ['Chord splice and combined shear, axial and moment on a plane (NCHRP W-197 combined check); a spliced chord is checked through the gusset plates only', 'Clipping of the Whitmore section at adjacent members (a warning is given when it crosses one)', 'Edge-buckling (free edge slenderness) and plate yielding near the work point under combined actions', 'Localized section loss (loss is applied uniformly to each plate)', 'Fastener groups loaded eccentrically; fasteners are assumed to share the member force equally', 'Fatigue and serviceability (slip) of bolted connections'];
++const SCOPE_OUT = ['LFR chord splice check (the LFR rating checks a spliced chord through the Whitmore checks of the chord members, FHWA-IF-09-014)', 'Combined shear, axial force and moment on a plane, shear with a normal force on a partial shear plane, free-edge slenderness and eccentric fastener groups: advisory only, with a ratio, never in the rating factor (see Advisory checks)', 'Fastener groups loaded eccentrically: the fasteners share the member force equally (the advisory note gives the eccentric moment)', 'Localized section loss (loss is applied uniformly to each plate)', 'Fatigue and serviceability (slip) of bolted connections'];
+@@ -3089,0 +3250,4 @@ function svgDrawing(opt = {}) {
++  // C14: chord splice line; C16: free edges longer than the advisory slenderness limit (amber)
++  if (V.planes && R.adv.spl && !R.adv.spl.err) { const z = R.adv.spl, c = colFor(['SPL-C', 'SPL-TY', 'SPL-TF']); z.segs.forEach(([A, B]) => { h += `<line x1="${X(A[0])}" y1="${Y(A[1])}" x2="${X(B[0])}" y2="${Y(B[1])}" stroke="${c}" stroke-width="${sw * 2.2}" stroke-dasharray="${sc * 0.5} ${sc * 0.7}"><title>Chord splice line: A_g = ${f2(z.S.A)} in², e = ${f2(z.e)} in</title></line>`; });
++    if (V.labels) { const B = z.segs[z.segs.length - 1][1]; h += `<text x="${X(B[0]) + sc}" y="${Y(B[1]) + sc * 2.4}" class="dw-t" font-size="${fs * 0.85}" fill="${c}">SPL</text>`; } }
++  if (V.planes) R.adv.edges.runs.forEach((r, k) => { if (r.ratio > 1 + 1e-9) h += `<polyline points="${r.pts.map(pt).join(' ')}" fill="none" stroke="#c98a1b" stroke-width="${sw * 4}" stroke-opacity="0.75" stroke-linejoin="round"><title>Free edge E${k + 1} (advisory): L_g = ${f2(r.L)} in, L_g/t = ${f1(r.Lt)}, ratio ${f2(r.ratio)}</title></polyline>`; });
+@@ -3114 +3278 @@ function renderDrawing() {
+-    <p class="cap">${V.dc ? `Colours: D/C for <b>${cs ? esc(cs.label) : '—'}</b> (choose the case on the Rating input tab): <span style="color:${DCOL.pass}">■</span> ≤ 0.85, <span style="color:${DCOL.warn}">■</span> 0.85 to 1.00, <span style="color:${DCOL.fail}">■</span> &gt; 1.00 or could not be computed, <span style="color:${DCOL.na}">■</span> not applicable for this case. ` : ''}Thick line: Whitmore section (clipped at the plate edge); thin dashed lines: 30° spread from the outer fasteners of the row farthest from the work point. Violet arrows: L<sub>1</sub>, L<sub>2</sub>, L<sub>3</sub> for L<sub>mid</sub>. Dotted: block-shear path. Dashed: partial shear planes. Scroll to zoom, drag to pan, hover for values.</p>`)
++    <p class="cap">${V.dc ? `Colours: D/C for <b>${cs ? esc(cs.label) : '—'}</b> (choose the case on the Rating input tab): <span style="color:${DCOL.pass}">■</span> ≤ 0.85, <span style="color:${DCOL.warn}">■</span> 0.85 to 1.00, <span style="color:${DCOL.fail}">■</span> &gt; 1.00 or could not be computed, <span style="color:${DCOL.na}">■</span> not applicable for this case. ` : ''}Thick line: Whitmore section (clipped at the plate edge); thin dashed lines: 30° spread from the outer fasteners of the row farthest from the work point. Violet arrows: L<sub>1</sub>, L<sub>2</sub>, L<sub>3</sub> for L<sub>mid</sub>. Dotted: block-shear path. Dashed: partial shear planes${R.adv.spl && !R.adv.spl.err ? ' and the chord splice line (SPL)' : ''}.${R.adv.edges.runs.some(r => r.ratio > 1 + 1e-9) ? ' Wide amber outline: free edge longer than the advisory slenderness limit (Checks tab, advisory checks).' : ''} Scroll to zoom, drag to pan, hover for values.</p>`)
+@@ -3140,2 +3304,2 @@ function drawPreview() { const host = $('#poly-prev'); if (!host) return; let po
+-const LSNAME = { fs: 'Fastener shear', brg: 'Bearing at fastener holes', wy: 'Whitmore tension yielding', wf: 'Whitmore tension fracture', bs: 'Block shear rupture', wb: 'Whitmore compression buckling', pvy: 'Partial shear plane, yielding', pvu: 'Partial shear plane, fracture' };
+-function dirLabel(c, dk) { if (c.mem != null) return dk === '+' ? 'member in tension' : 'member in compression'; if (c.chord) return dk === '+' ? `ΔF toward ${P.members[c.chord.i0].id}` : `ΔF toward ${P.members[c.chord.i1].id}`; return 'either direction'; }
++const LSNAME = { fs: 'Fastener shear', brg: 'Bearing at fastener holes', wy: 'Whitmore tension yielding', wf: 'Whitmore tension fracture', bs: 'Block shear rupture', wb: 'Whitmore compression buckling', pvy: 'Partial shear plane, yielding', pvu: 'Partial shear plane, fracture', spc: 'Chord splice, compression', spy: 'Chord splice, tension yielding', spf: 'Chord splice, tension fracture' };
++function dirLabel(c, dk) { if (c.splice) return dk === '+' ? 'splice in tension' : 'splice in compression'; if (c.mem != null) return dk === '+' ? 'member in tension' : 'member in compression'; if (c.chord) return dk === '+' ? `ΔF toward ${P.members[c.chord.i0].id}` : `ΔF toward ${P.members[c.chord.i1].id}`; return 'either direction'; }
+@@ -3143 +3307,2 @@ function demandHtml(c) {
+-  const what = c.mem != null ? `Member force F (tension +), as entered` : c.chord ? `Chord force difference ΔF = Σ F<sub>i</sub>(u<sub>i</sub> · u<sub>${esc(P.members[c.chord.i0].id)}</sub>) (+ toward ${esc(P.members[c.chord.i0].id)})` : `Shear along the plane, V = Σ F<sub>i</sub>(u<sub>i</sub> · e) over the loaded-side members (${R.planes[c.plane].mem.map(i => esc(P.members[i].id)).join(', ')})`;
++  const sp = c.splice && R.adv.spl && !R.adv.spl.err ? R.adv.spl : null;
++  const what = c.splice ? `Chord force across the splice line, N = Σ F<sub>i</sub>(u<sub>i</sub> · u<sub>${esc(P.members[R.adv.spl.i0].id)}</sub>) over the members whose fastener centroid lies on the ${esc(P.members[R.adv.spl.i0].id)} side of the splice line (${sp ? sp.right.map(i => esc(P.members[i].id)).join(', ') : '—'}; free body; tension +). LRFR only: the LFR rating (MBE 6B, FHWA-IF-09-014) checks the splice through the Whitmore checks of the chord members, as before` : c.mem != null ? `Member force F (tension +), as entered` : c.chord ? `Chord force difference ΔF = Σ F<sub>i</sub>(u<sub>i</sub> · u<sub>${esc(P.members[c.chord.i0].id)}</sub>) (+ toward ${esc(P.members[c.chord.i0].id)})` : `Shear along the plane, V = Σ F<sub>i</sub>(u<sub>i</sub> · e) over the loaded-side members (${R.planes[c.plane].mem.map(i => esc(P.members[i].id)).join(', ')})`;
+@@ -3173,0 +3339 @@ function renderChecks() {
++  h += `<h3 class="grp-hd">Advisory checks (not in the governing rating factor)</h3>` + advItems().map(a => card(a.id, `<span class="cid">ADV</span>${esc(a.title)}`, a.ref, a.body, advBadge(a.ratio))).join('');   // C14.4, C16-C18
+@@ -3176,0 +3343,28 @@ function renderChecks() {
++/* ---------- advisory checks (C14.4, C16, C17, C18): a ratio, amber, never in the governing rating factor ---------- */
++const ADV_NOTE = 'Advisory: shown with a ratio for the engineer\'s judgment; not a rating limit state, so it never enters the governing rating factor.';
++const advBadge = q => `<span class="badge warn" title="${esc(ADV_NOTE)}">advisory${q != null && isFinite(q) ? ` ${f2(q)}` : ''}</span>`;
++const advR = q => `<span class="${q > 1 + 1e-9 ? 'n-warn' : ''}">${f2(q)}</span>`;
++const ldT = (D, f = f1) => `${f(D.DC)} / ${f(D.DW)} / ${D.LL.map(x => f(x)).join(' / ')}`;
++function advItems() { const A = R.adv, out = [], lds = `DC / DW / ${P.ll.map(c => esc(c.name)).join(' / ')}`;
++  // C16 (O3): free-edge slenderness
++  { const E = A.edges, mx = E.runs.reduce((a, r) => Math.max(a, r.ratio), 0);
++    out.push({ id: 'adv-edge', title: 'Free-edge slenderness of the gusset plate (O3)', ref: 'Std. Spec. 17th Ed. 10.16.11 (verify); FHWA-IF-09-014; not in MBE 6A.6.12.6', ratio: E.runs.length ? mx : null,
++      body: `<p class="note-p">${ADV_NOTE} Limit L<sub>g</sub>/t ≤ ${f2(R.p.edgeC)}√(E/F<sub>y</sub>) = ${f2(R.p.edgeC)}√(${f0(R.p.E)}/${f1(R.Fy)}) = ${f2(E.limR || 0)}, t = ${f4(E.t || 0)} in (thinnest plate after section loss), so L<sub>g</sub> ≤ ${f2(E.lim || 0)} in. This is the former design rule for stiffening a free edge (AASHTO Std. Spec. 17th Ed. 10.16.11, former LRFD 6.14.2.8; FHWA-IF-09-014; verify). MBE 3rd Ed. 6A.6.12.6 and NCHRP W-197 (NCHRP 12-84) did not adopt it as a rating limit: the Whitmore buckling check with L<sub>mid</sub> covers plate stability in rating.</p>
++        <p class="note-p">Free edge: a run of the plate outline that is not beside a member, i.e. outside every member outline (width in the plate plane, from the member end outward) and outside the strip of every fastener field (outer holes across, from the row nearest the WP outward). L<sub>g</sub> is measured along the outline, corners included (conservative). The member widths are the drawing inputs.</p>
++        ${E.runs.length ? `<div class="tscroll"><table class="tbl narrow"><thead><tr><th>Free edge</th><th>From (x, y)</th><th>To (x, y)</th><th class="right">L<sub>g</sub> (in)</th><th class="right">L<sub>g</sub>/t</th><th class="right">Ratio</th></tr></thead><tbody>${E.runs.map((r, k) => `<tr><td class="lbl">E${k + 1}: ${esc(r.fromN.join(', ') || 'plate')} to ${esc(r.toN.join(', ') || 'plate')}</td><td>${f2(r.a[0])}, ${f2(r.a[1])}</td><td>${f2(r.b[0])}, ${f2(r.b[1])}</td><td class="val">${f2(r.L)}</td><td class="val">${f1(r.Lt)}</td><td class="val">${advR(r.ratio)}</td></tr>`).join('')}</tbody></table></div>` : '<p class="note-p">No free edge: the whole outline is beside members.</p>'}` }); }
++  // C17 (O4): eccentric fastener groups
++  { const ec = A.ecc;
++    out.push({ id: 'adv-ecc', title: 'Eccentric fastener groups (O4)', ref: 'Judgment; LRFD 10th Ed. 6.13.1 (verify)', ratio: null, flag: ec.length,
++      body: `<p class="note-p">${ADV_NOTE} e = offset of the centroid of a member's holes from its work line. A note is given when |e| exceeds the larger of ${f3(R.p.eccTol)} in and ${f1(R.p.eccPct)} % of the across spread of the outer holes. The checks assume the fasteners share the member force equally; the eccentric moment M = F e is not included in fastener shear or bearing. Where it matters, check the group for eccentric shear (for example by the elastic or instantaneous-centre method). Plates of different thickness: every plate resistance is computed with its own thickness and added, which shares the force in proportion to each plate's resistance (closed, fix log C17).</p>
++        ${ec.length ? `<div class="tscroll"><table class="tbl narrow"><thead><tr><th>Member</th><th class="right">e (in)</th><th class="right">Tolerance (in)</th><th class="right">M = F e, ${lds} (kip-in)</th><th class="right">Largest factored M (kip-in)</th></tr></thead><tbody>${ec.map(q => `<tr><td class="lbl">${esc(q.id)}</td><td class="val n-warn">${f3(q.e)}</td><td class="val">${f3(q.tol)}</td><td class="val">${ldT(q.M)}</td><td class="val">${q.Mf ? `${f1(q.Mf.M)} <small class="n-dim">${esc(R.cases[q.Mf.j].label)}</small>` : '—'}</td></tr>`).join('')}</tbody></table></div>` : '<p class="note-p">No fastener group is offset from its work line by more than the tolerance.</p>'}` }); }
++  // C14.4 (O1) and C18 (O16): combined actions on a plane
++  A.pint.forEach(q => { const mx = Math.max(q.g1 ? q.g1.r1 : 0, q.g16 ? q.g16.r16 : 0), meths = activeMeth();
++    const rows = q.rows.filter(r => meths.includes(R.cases[r.j].meth));
++    out.push({ id: 'adv-' + q.key, title: `${q.key === 'SPL' ? 'Chord splice line' : q.key}: combined shear, normal force and moment${q.hasN ? ' (O1, O16)' : ' (O1)'}`, ref: 'NCHRP W-197; Astaneh-Asl (1998); Thornton / AISC plate interaction (verify)', ratio: mx,
++      body: `<p class="note-p">${ADV_NOTE} ${esc(q.nm)}. Forces on the ${q.key === 'SPL' ? 'splice line from the members on one side' : 'plane from the loaded-side members'} (every member force acts along its work line through the WP): N normal to the plane (tension +), V along it, M about the centroid of the gross ${q.key === 'SPL' ? 'section (all plates crossing the line)' : 'plane'}.${q.note === 'heel' ? ' Heel joint: the end-post component normal to this plane is the force the shear-only check leaves out (O16).' : ''}</p>
++        <p class="note-p"><b>Shear with normal force (O16)</b>: (V/V<sub>r</sub>)² + (N/N<sub>r</sub>)² ≤ 1, V<sub>r</sub> = shear resistance of the plane (lower of shear yielding with Ω and shear fracture, MBE 3rd Ed. 6A.6.12.6.6), N<sub>r</sub> = φ<sub>y</sub>F<sub>y</sub>A<sub>g</sub> of the plane (plate interaction as used by Thornton and in AISC practice; verify). ${q.hasN ? '' : 'Not shown: no normal force on this plane.'}<br><b>Shear, normal force and moment (O1)</b>: M/M<sub>r</sub> + (N/N<sub>r</sub>)² + (V/V<sub>r</sub>)⁴ ≤ 1, M<sub>r</sub> = φ<sub>y</sub>F<sub>y</sub>Z (Z = plastic section modulus of the gross plane) (Astaneh-Asl 1998 plate interaction; the combined check discussed in NCHRP W-197, not adopted in MBE 6A.6.12.6; verify). Factored demand at RF = 1 for each rating case (dead load against the live load: minimum factors, as in the rating); LRFR resistances × φ<sub>c</sub>φ<sub>s</sub>.</p>
++        <div class="tscroll"><table class="tbl narrow"><thead><tr><th>Unfactored</th><th class="right">${lds}</th></tr></thead><tbody><tr><td class="lbl">N (kip)</td><td class="val">${ldT(q.N)}</td></tr><tr><td class="lbl">V (kip)</td><td class="val">${ldT(q.V)}</td></tr><tr><td class="lbl">M (kip-in)</td><td class="val">${ldT(q.M)}</td></tr></tbody></table></div>
++        <p class="note-p">Gross section: A<sub>g</sub> = ${f3(q.S.A)} in², centroid at ${f3(q.S.yb)} in along the line, ΣF<sub>y</sub>A<sub>g</sub> = ${f1(q.S.Py)} kip, F<sub>y</sub>Z = ${f1(q.S.Mp)} kip-in. ${meths.map(m => `${METH[m]}: V<sub>r</sub> = ${f1(q.res[m].Vr)} kip, N<sub>r</sub> = ${f2(q.res[m].phi)}(${f1(q.S.Py)}) = ${f1(q.res[m].Nr)} kip, M<sub>r</sub> = ${f2(q.res[m].phi)}(${f1(q.S.Mp)}) = ${f1(q.res[m].Mr)} kip-in`).join('; ')}.</p>
++        <div class="tscroll"><table class="tbl narrow"><thead><tr><th>Rating case</th><th class="right">N (kip)</th><th class="right">V (kip)</th><th class="right">M (kip-in)</th>${q.hasN ? '<th class="right">(V/V<sub>r</sub>)² + (N/N<sub>r</sub>)²</th>' : ''}<th class="right">M/M<sub>r</sub> + (N/N<sub>r</sub>)² + (V/V<sub>r</sub>)⁴</th></tr></thead><tbody>${rows.map(r => `<tr><td class="lbl">${esc(R.cases[r.j].label)}</td><td class="val">${f1(r.n)}</td><td class="val">${f1(r.v)}</td><td class="val">${f1(r.m)}</td>${q.hasN ? `<td class="val">${advR(r.r16)}</td>` : ''}<td class="val">${advR(r.r1)}</td></tr>`).join('')}</tbody></table></div>` }); });
++  return out; }
++const advLine = a => a.ratio != null ? `ratio ${f2(a.ratio)}${a.ratio > 1 + 1e-9 ? ' (exceeds 1.00)' : ''}` : a.flag ? `${a.flag} member${a.flag > 1 ? 's' : ''} flagged` : 'nothing flagged';
+@@ -3178,0 +3373 @@ document.addEventListener('click', e => { const g = e.target.closest('[data-goto
++document.addEventListener('click', e => { const g = e.target.closest('[data-goadv]'); if (g) { e.preventDefault(); const id = g.dataset.goadv; setOTab('checks'); delete P.ui.col[id]; applyCollapse(); setTimeout(() => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80); } });   // advisory checks
+@@ -3255 +3450 @@ function methodHtml() { return `<div class="man-part active">
+-  <li><b>Whitmore section:</b> lines at θ<sub>W</sub> (default 30°) spread from the outer fasteners of the row farthest from the WP to the row nearest it; W = g<sub>s</sub> + 2L tan θ<sub>W</sub>, clipped at the plate edges (not at adjacent members; a warning is given). Net width deducts d<sub>h</sub> + Δ for every hole on the section.</li>
++  <li><b>Whitmore section:</b> lines at θ<sub>W</sub> (default 30°) spread from the outer fasteners of the row farthest from the WP to the row nearest it; W = g<sub>s</sub> + 2L tan θ<sub>W</sub>, clipped at the plate edges. Where it crosses an adjacent member or that member's fastener lines it is not clipped: the full section is used, as in the NCHRP 12-84 research behind MBE 3rd Ed. 6A.6.12.6 (NCHRP W-197; MBE 6A.6.12.6.7, 6A.6.12.6.8, verify; fix log C15). Only the gusset plate area is counted. An information warning names the member crossed. Net width deducts d<sub>h</sub> + Δ for every hole on the section.</li>
+@@ -3270 +3465 @@ function methodHtml() { return `<div class="man-part active">
+-  <h3>Summing the two plates</h3><p>Member forces are entered for the whole joint (both gusset plates). Plate resistances (bearing, Whitmore, block shear, buckling, shear planes) are computed for each plate with its own thickness after section loss and added. Fastener shear counts one shear plane per plate for fasteners in single shear on each face (N = fasteners per plate × number of plates), or two shear planes per fastener when the fasteners pass through both plates (N = fasteners per plate × 2). This assumes the member force divides between the plates in proportion to their resistances (equal plates share equally).</p>
++  <h3>Summing the two plates</h3><p>Member forces are entered for the whole joint (both gusset plates). Plate resistances (bearing, Whitmore, block shear, buckling, shear planes) are computed for each plate with its own thickness after section loss and added. Fastener shear counts one shear plane per plate for fasteners in single shear on each face (N = fasteners per plate × number of plates), or two shear planes per fastener when the fasteners pass through both plates (N = fasteners per plate × 2). This assumes the member force divides between the plates in proportion to their resistances (equal plates share equally); for plates of different thickness this is the rational assumption, and it is what summing the per-plate resistances gives (fix log C17).</p>
+@@ -3271,0 +3467,9 @@ function methodHtml() { return `<div class="man-part active">
++  <h3>Chord spliced at the joint <span class="badge warn" title="Article and equation numbers as recalled; verify">verify</span></h3><p>Each chord member is checked like a web member for its full force through the gusset plates (as before). With two or more chord members the splice section is also checked (LRFR, MBE 3rd Ed. 6A.6.12.6.9, NCHRP W-197; fix log C14). The splice line runs through the WP perpendicular to the right-hand chord. Its section is every plate crossing it: the gusset plates (the parts of the line inside the outline, Σt) and the optional splice plates (flange plates across the gusset plane, area taken at their centroid; web plates in the gusset plane, width along the line). With no splice plates entered only the gusset plates are counted, which is conservative where splice plates exist.</p>
++  <ul><li><b>Demand:</b> free body of the members whose fastener centroid lies on the right-hand side of the line: N = Σ F<sub>i</sub>(u<sub>i</sub> · u<sub>chord</sub>) (tension +). Every member force acts along its work line through the WP, so the force on the splice section acts at the chord work line, at e = |ȳ| from the centroid of the section.</li>
++  <li><b>Compression (SPL-C):</b> φ<sub>cs</sub>P<sub>n</sub> = φ<sub>cs</sub>F<sub>cr</sub>(1/A<sub>g</sub> + e/S<sub>g</sub>)<sup>−1</sup>, i.e. the eccentric chord force produces F<sub>cr</sub> at the extreme fibre on the side of the eccentricity (S<sub>g</sub> = I/c to that fibre). F<sub>cr</sub> = F<sub>y</sub> (lowest of the plates) when K<sub>sp</sub>l/r ≤ 25, otherwise from LRFD 6.9.4.1.1; l = centre-to-centre distance between the first fastener lines of the two chords; r = t<sub>min</sub>/√12. φ<sub>cs</sub> = 0.85 and K<sub>sp</sub> = 0.65 are least-certain parameters. The Whitmore buckling check of the chord members is kept (MBE commentary may exclude it for a compression chord splice; keeping it is conservative).</li>
++  <li><b>Tension (SPL-TY, SPL-TF):</b> φ<sub>y</sub>ΣF<sub>y</sub>A<sub>g</sub> on the splice line, and φ<sub>u</sub>UΣF<sub>u</sub>A<sub>n</sub> on the line through the first fastener row of each chord (the lower governs): gusset plates with the holes on that line (straight line), splice plates with their holes across, each A<sub>n</sub> ≤ 0.85A<sub>g</sub> when that switch is on. Eccentricity is not included in tension (it is in the advisory combined check).</li>
++  <li><b>LFR:</b> no additional check: FHWA-IF-09-014 rates a chord splice through the Whitmore checks of the chord members, which the tool makes.</li></ul>
++  <h3>Advisory checks (not in the rating factor)</h3><p>Shown with a ratio for the engineer's judgment; they never enter the governing rating factor. Factored demand at RF = 1 for each rating case (as in the rating), resistances × φ<sub>c</sub>φ<sub>s</sub> for LRFR.</p>
++  <ul><li><b>Combined actions on a plane (O1, O16):</b> each partial shear plane and the chord splice line: N, V and M about the centroid of the gross plane. (V/V<sub>r</sub>)² + (N/N<sub>r</sub>)² ≤ 1 where the plane carries a normal force (heel joints in particular), and M/M<sub>r</sub> + (N/N<sub>r</sub>)² + (V/V<sub>r</sub>)⁴ ≤ 1 (Astaneh-Asl 1998, as discussed in NCHRP W-197); V<sub>r</sub> = the plane's shear resistance (MBE 6A.6.12.6.6), N<sub>r</sub> = φ<sub>y</sub>F<sub>y</sub>A<sub>g</sub>, M<sub>r</sub> = φ<sub>y</sub>F<sub>y</sub>Z. Verify.</li>
++  <li><b>Free-edge slenderness (O3):</b> L<sub>g</sub>/t ≤ 2.06√(E/F<sub>y</sub>) for each free edge (AASHTO Std. Spec. 17th Ed. 10.16.11, former LRFD 6.14.2.8; FHWA-IF-09-014; verify), t = thinnest plate after loss. Not an MBE rating limit. A free edge is a run of the outline outside every member outline and every fastener-field strip; L<sub>g</sub> is measured along the outline.</li>
++  <li><b>Eccentric fastener groups (O4):</b> offset e of the hole centroid from the work line larger than max(1/4 in, 5 % of the across spread of the outer holes): the eccentric moment F e is reported; the checks keep equal sharing.</li></ul>
+@@ -3405 +3609,2 @@ function crInputs() {
+-  return [{ t: 'Gusset plates and rating basis', h: plates }, { t: 'Plate outline', h: poly }, { t: 'Members and fasteners', h: mem }, ...(cus.length ? [{ t: 'Custom hole patterns', h: holes }] : []), { t: 'Member forces', h: frc }];
++  const spt = spliceList().length ? `<table class="cr-tbl cr-wide"><thead><tr><th>Splice plate</th><th>Number</th><th>Lies</th><th>b (in)</th><th>t (in)</th><th>F<sub>y</sub> / F<sub>u</sub> (ksi)</th><th>Offset (in)</th><th>Holes across</th></tr></thead><tbody>${spliceList().map((q, i) => `<tr><td>${i + 1}</td><td class="n">${esc(q.n)}</td><td>${q.orient === 'web' ? 'web (in the gusset plane)' : 'flange (across the gusset plane)'}</td><td class="n">${f3(num(q.w))}</td><td class="n">${f4(num(q.t))}</td><td class="n">${f1(num(q.Fy))} / ${f1(num(q.Fu))}</td><td class="n">${f3(num(q.y))}</td><td class="n">${esc(q.nh)}</td></tr>`).join('')}</tbody></table>${P.chord === 'spliced' ? '' : '<p class="cr-note">Not used: the chord is continuous.</p>'}` : '';   // C14
++  return [{ t: 'Gusset plates and rating basis', h: plates }, { t: 'Plate outline', h: poly }, ...(spt ? [{ t: 'Chord splice plates', h: spt }] : []), { t: 'Members and fasteners', h: mem }, ...(cus.length ? [{ t: 'Custom hole patterns', h: holes }] : []), { t: 'Member forces', h: frc }];
+@@ -3412 +3617 @@ function buildReport(o) {
+-  body += `<section class="cr-sec">${H1('Objectives')}<p class="cr-p">Rate the gusset-plate connection at ${esc(mt.joint || 'the panel point')} for ${activeMeth().map(m => m === 'lrfr' ? 'LRFR (AASHTO MBE 6A.6.12.6)' : 'LFR (AASHTO MBE 6B, FHWA-IF-09-014)').join(' and ')}: fastener shear, bearing, Whitmore tension yielding and fracture, block shear, Whitmore compression buckling with L<sub>mid</sub>, and partial shear planes.</p>
++  body += `<section class="cr-sec">${H1('Objectives')}<p class="cr-p">Rate the gusset-plate connection at ${esc(mt.joint || 'the panel point')} for ${activeMeth().map(m => m === 'lrfr' ? 'LRFR (AASHTO MBE 6A.6.12.6)' : 'LFR (AASHTO MBE 6B, FHWA-IF-09-014)').join(' and ')}: fastener shear, bearing, Whitmore tension yielding and fracture, block shear, Whitmore compression buckling with L<sub>mid</sub>, partial shear planes${R.checks.some(c => c.splice) ? ', and the chord splice (LRFR)' : ''}. Advisory checks (combined actions on planes, free-edge slenderness, eccentric fastener groups) are reported with a ratio and do not enter the rating factor.</p>
+@@ -3418,0 +3624 @@ function buildReport(o) {
++  if (o.checks) { body += `<section class="cr-sec">${H1('Advisory checks (not in the rating factor)')}<p class="cr-p">${esc(ADV_NOTE)}</p>`; advItems().forEach(a => { body += `<div class="cr-sub">${H2(a.title, a.ref, 'cr-' + a.id)}<div class="cr-body">${a.body}</div><div class="cr-line cr-res"><div class="cr-d">Advisory result:</div><div class="cr-m"><b>${advLine(a)}</b></div><div class="cr-r"><b>ADVISORY</b></div></div></div>`; }); body += `</section>`; }   // C14.4, C16-C18
+```
+
+#### How verified (C14 to C18)
+
+- `node --check` on all 7 inline scripts: pass.
+- **Engine in node, main (0c5a03e) against the branch** (`gb2/cmp.js`).
+  - Models (37): the 17-model custom suite of C12.3/C13; the default, the validation model and the default with chord = spliced; all 7 DXF templates with forces; the t5, t4d, t4v and t3 templates and the validation model with chord = spliced.
+  - Every existing check: identical capacities and RFs.
+  - Governing RF: no change in any model.
+  - New SPL checks only in the spliced models (C14.6). Warning text changes only for O2 and the spliced-chord note, plus the new splice warnings (straddling member).
+- **Hand checks:**
+  - C14.5 cases 1 to 3, C16, C17 and C18 were computed by hand (above) and match the engine (`gb2/case.js`, `gb2/hand.js`).
+  - C17 plate-loss case: WY 460.61 kip.
+- **Chromium (Playwright; MathJax 3.2.2 and three.js r128 served locally), main against the branch** (`gb2/ui.mjs`).
+  - 18 models: 15 representative suite models plus the t5 and t3 templates spliced and check case 1. Tabs compared: Summary, Checks, Rating, Report, Method, Validation and Code parameters, plus the autosave (`gb2/an.js`).
+    - Rating tab: identical except the three new SPL rows in the spliced models.
+    - Summary / Checks / Report: the new advisory section, the new SPL cards, renumbered card numbers and the reworded warnings; nothing removed otherwise.
+    - Autosave: identical project data; the only difference is `ui.otab` (timing of the debounced save).
+    - No MathJax errors. No page or console errors.
+  - Splice plate entered through the UI (2 web plates 8 × 3/8 at −2.5, 2 holes):
+    - SPL-C RF 1.944 / 2.520;
+    - saved as `splice: { plates: [{ n: 2, orient: "web", w: 8, t: 0.375, Fy: 36, Fu: 58, y: -2.5, nh: 2 }] }`;
+    - deleting the plate removes the `splice` field from the saved data.
+  - Screenshots reviewed: sidebar splice inputs, SPL-C card, advisory cards (splice line, free edge), summary advisory card, drawing (splice line, amber free edge), report advisory section, heel SP1 advisory and heel drawing.
+- **Other copies:** none.
+- **Open items after C18:**
+  - C14.7 items 1 to 3 (chord splice provision text, Whitmore buckling at a compression splice, splice demand definition).
+  - C15: confirm the MBE text on adjacent members.
+  - Confirm the advisory formulas and tolerances (C14.4, C16, C17, C18) and whether any should become rating checks.
+  - O8 and O13 (engineer's own action) stay open.
