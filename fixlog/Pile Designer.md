@@ -13947,6 +13947,77 @@ Engineer's instruction 2026-10-12: "continue ... use your best judgment"; the de
   - Block footprint (d_h) and its resistance: unchanged in every case.
 - **How verified:** origin/main (with F45) vs branch: the check cases above (toggle off and on); the full parity set (no project enters d_h separately): every numeric value bit-identical; the differences are the label `R.group.Blbl` ("bond dia" → "casing OD (p-y width)"), the new keys `dEta_in` / `sEta_dia` / `etaBlbl`, and the texts that print them.
 
+## 2026-10-12 — PR: claude/pile-xd6 (PR link added after merge)
+
+Engineer's delegation 2026-10-12: open inventory items X-D6 / PILE-D6, X-C5 / PILE-C5 and PILE-A2. No calculation, factor, unit or saved-data change.
+
+### F63. pdf.js: `isEvalSupported:false` (closes PILE-D6 / X-D6)   [dependency mitigation, no version change] [no result change]
+- **Where:** `App` → `handleLpileFile` (anchor text `window.pdfjsLib.getDocument({`). This is the only `getDocument` call in the file.
+- **Problem:** pdf.js 3.11.174 (cdnjs) was called without `isEvalSupported:false`. CVE-2024-4367 (arbitrary JavaScript through a crafted font in a PDF) is mitigated by that option in 3.x. Same fix as BasePlateAnchorDesigner S10.
+- **Before:**
+  ```js
+        const pdf = await window.pdfjsLib.getDocument({
+          data: buf
+        }).promise;
+  ```
+- **After:**
+  ```js
+        const pdf = await window.pdfjsLib.getDocument({
+          data: buf,
+          isEvalSupported: false   // F63: CVE-2024-4367 mitigation (pdf.js 3.11.174)
+        }).promise;
+  ```
+- pdf.js stays at 3.11.174 (script and worker URLs unchanged).
+- **Check:** a hand-written PDF of the LPILE test output (`lp1.lpo`, one text line per PDF line, Courier) imported through "Import LPILE output" on main and on the branch: both show "Parsed lp1.pdf · PDF — verify", M_max 210,376 in-lb → 17.5 kip-ft. The saved LPILE parse (`micropile_lrfd_lpile_v1`) and the page text are identical. A wrapper on `pdfjsLib.getDocument` recorded the options: main `data`, branch `data, isEvalSupported=false`.
+
+### F64. Project file import: format-tag check, confirm before loading a mismatched or foreign file (closes PILE-C5 / X-C5)   [import robustness] [no result change; export unchanged]
+- **Where:** `App`, new function `importFormatWarning(data)` just above `importProject`, and `importProject` (anchor text `const fmtWarn = importFormatWarning(data);`). Both load buttons ("↑ Load .json" in the Project panel and "↑ Load scenario") use `importProject`.
+- **Problem:** `exportProject` writes `_type: "micropile_lrfd_project", _version: 1`, but `importProject` never read either. Any JSON object was merged over the defaults and replaced the current inputs: a soil-layer file, a bridge-suite hand-off or another tool's file silently reset the whole project (projName came back blank on main).
+- **Before:**
+  ```js
+        const data = JSON.parse(e.target.result);
+        const inc = data && data.inputs ? data.inputs : data; // accept raw or wrapped
+  ```
+- **After:**
+  ```js
+        const data = JSON.parse(e.target.result);
+        const fmtWarn = importFormatWarning(data);
+        if (fmtWarn && !window.confirm(fmtWarn + "\n\nLoad it anyway? Your current inputs will be replaced. (Cancel leaves everything unchanged.)")) return;
+        const inc = data && data.inputs ? data.inputs : data; // accept raw or wrapped
+  ```
+  `importFormatWarning` returns `null` (load silently, exactly as before) for:
+  - `_type: "micropile_lrfd_project"` with `_version: 1` (every file this tool writes);
+  - `_format: "micropile-designer-scenario"` (old "Save scenario" files);
+  - an untagged file (raw inputs, or `{inputs: …}`) that has at least one key of `DEFAULT_INPUTS` (old untagged Pile files).
+
+  It returns a warning, and the user is asked "Load it anyway?", for:
+  - a Pile project file with `_version` missing or not 1 ("format version 2; this copy of the tool reads version 1");
+  - another `_type`, or another `_format` (the soil-layer file `micropile-designer-soil-layers` gets a pointer to "↑ import boring-log JSON");
+  - a `_schema` file (bridge-suite hand-off or another tool's file);
+  - an untagged object with no Pile Designer input names, or a non-object (array).
+
+  Cancel leaves the inputs and the LPILE import unchanged. OK loads it exactly as before.
+- **Saved data:** export format, autosave (`micropile_lrfd_inputs_v1`, `micropile_lrfd_lpile_v1`) and the IndexedDB library are unchanged. Same pattern as abutment_calculator F22 and BasePlateAnchorDesigner S9.
+- **Check (headless Chromium, main vs branch, confirm dismissed):** tagged v1 file, untagged raw inputs, untagged `{inputs}`, scenario file: load silently on both (projName "TAGGED OK" / "UNTAGGED OLD" / "WRAPPED OLD" / "SCEN"). `_version: 2`, soil-layer file, `_schema: "bridge-foundation-loads"`, `{plate, anchor}` and `[1,2]`: main loads each silently (projName reset to blank); the branch asks, and on Cancel nothing changes. `_version: 2` with OK: loaded on the branch, the same as main.
+
+### F65. Davisson & Robinson fixity: Module 10 and the report now cite AASHTO 10.7.3.13.4 "verify article", as the lateral graphs do (PILE-A2)   [text only] [no result change]
+- **Where:** report Module 10 `Calc` "Preliminary fixity (Davisson 1965)" `note` (anchor text `FHWA NHI-05-039 practice;`) and the Module 10 Davisson tab note (anchor text `Cited as ",`).
+- **Problem:** the lateral graphs (F26 d, `LAT_DAV_REF`) cite the Davisson & Robinson depth to fixity as "AASHTO LRFD 10th Ed. Art. 10.7.3.13.4 — verify article", while Module 10 and the report said "Not an AASHTO equation". The two texts disagreed. Recalled (not checked against the printed spec): AASHTO 10.7.3.13.4 gives the same 1.4 (E_pI_w/E_s)^0.25 clay and 1.8 (E_pI_w/n_h)^0.2 sand expressions for preliminary depth to fixity.
+- **Before → after (report note):** `"Davisson & Robinson (1965); FHWA NHI-05-039 practice. Not an AASHTO equation — it is a closed-form fit …"` → `"Davisson & Robinson (1965); FHWA NHI-05-039 practice; AASHTO LRFD 10th Ed. Art. 10.7.3.13.4 — verify article. It is a closed-form fit …"`.
+- **Before → after (Module 10 tab):** `… It is ", <b>"not an AASHTO equation"</b>, " — see FHWA NHI-05-039 for its use in practice."` → `… Cited as ", <b>"AASHTO LRFD 10th Ed. Art. 10.7.3.13.4 — verify article"</b>, "; see FHWA NHI-05-039 for its use in practice."`.
+- The validity warning (uniform soil, linear springs, constant EI) is kept in both places. `LAT_DAV_REF` is unchanged.
+- **Check:** Module 10 on (L_u 10 ft): rendered page text (scripts removed) main vs branch is identical once the two phrases are normalised; the branch has no "not an AASHTO equation" and the report note reads as above. L_f = 1.8 T = 4.8 ft on both.
+- **Engineer:** confirm the article against the printed 10th Ed., then drop "verify" in all three places (with PILE-A1).
+
+### Verification (all three)
+- `node --check` on each inline script: pass (main and branch).
+- Headless Chromium (local React, KaTeX, Plotly, compiled Tailwind; pdf.js 3.11.174 from the npm package): default page text and every localStorage key identical, main vs branch; no console errors.
+
+### Not changed
+- PILE-F11 (footing centre vs group centroid warning): classed as a calc item; left for the engineer.
+- PILE-A1 (10th Ed. relabel), PILE-L1 (weak-rock benchmark): need the engineer. PILE-UI1 / UI2: done by F59 / F60. PILE-TW: see X-D10.
+- The soil-layer import ("↑ import boring-log JSON") does not check `_format`; it validates the `layers` array. Not in scope.
+
 ## Open items (not changed)
 - O1. **Labelled by F50 (2026-10-12), value kept (coordinator's decision under the engineer's 2026-10-12 delegation):** shown on screen and in the report as a conservative deviation from AASHTO 10.9.3.10.2 / FHWA Eq. 5-13 (verify). Original text: **Uncased/cased structural axial: outer 0.85 factor and `fy = min(fyb, fyc)`** (`Rn_cased/Rn_ucased`, ≈ line 1675).
   - Neither AASHTO 10.9.3.10.2 nor FHWA NHI-05-039 Eq. 5-13 has the outer 0.85, and the uncased section has no casing, so min(fyb, fyc) is arbitrary there.
