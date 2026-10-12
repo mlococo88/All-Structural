@@ -220,16 +220,18 @@ All "before/after" numbers below were produced by running `computeEDM` from the 
 ## Open items (not changed)
 - O1. **10th Ed. text not available in this environment.** F5 (1.25GS ≤ 1.25 ksi; no increase for "fixed against shear") and F6 (0.75 for circular) were made from my knowledge of the post-2009 AASHTO text, supported by DOT manual excerpts found by search. — Engineer to confirm both against the 10th Ed., Art. 14.7.6.3.2 and 14.7.6.3.5. The `fixedShear` toggle now affects only Method B stability.
 - O3. **Plain-pad rotation check (14.7.6.3.5).** Not added; I am not confident of the 10th Ed. form for plain pads.
-- O4. **Construction tolerance on transverse rotation.** The MassDOT tolerance (0.03) is applied once (to the longitudinal rotation / resultant), per the existing §3.5.7.6 note. It is not applied to the rectangular transverse check (F3, F6). AASHTO 14.4.2.1's 0.005 rad may apply about each axis. — Engineer to decide.
-- O5. **Method A uplift G.** The uplift check still uses `GmethodA` = 0.150. The least favourable G for a minimum-stress check is the upper bound (0.200 for 60 durometer). Not changed (brief scope: stress limit only). Recommend an upper-bound G input.
-- O6. **Method B G range.** `VALID` warns outside 0.130–0.200 ksi; the Method B material range is 0.080–0.175 ksi (14.7.5.2). Not changed.
 - O7. **MassDOT values kept (needs MassDOT confirmation):** construction rotation tolerance 0.03 rad (AASHTO 14.4.2.1: 0.005) and combined-strain limit 4.75 (AASHTO 5.0).
-- O8. **Anchorage / slip check (14.7.5.4 / 14.7.6.4).** Not added; this needs a minimum vertical load input.
-- O9. **Rotation sign handling.** The static rotation adds absolute values (camber usually opposes DL). Conservative; not changed.
-- O10. **postMessage origin.** The EDM `message` handler still checks only `d.app`; acceptable for `file://` (not in this brief).
-- O11. **Self-test.** The shape-factor case is still a literal expression, not engine code. Not changed.
+- O12. **Anchorage check basis (S2).** (a) Δu is taken as the input Δs (MassDOT ×1.2 movement), treated as the factored strength-limit shear deformation (γTU = 1.20) — verify; creep/shrinkage in Δs at their own strength factors would change it slightly. (b) Method B uses the specified G (no +15% tolerance); Method A / plain pads use the upper-bound durometer G (`coef.GmaxA`). (c) P_min defaults to the unfactored service P_DL; enter a lower P_min (e.g. 0.9·P_DL, or DC only without DW) if the owner requires it. — Engineer to confirm (a)–(c).
 
 ## Resolved items
+- O4. Construction tolerance on the rectangular transverse rotation → **fixed in A2** (2026-10-12, `claude/edm-anchored`): AASHTO 0.005 now also added about W; MassDOT 0.03 stays applied once (coordinator decision).
+- O13. Anchored / doweled pad toggle → **added in A1** (`tog.anchored`, default off).
+- O5. Method A uplift G → **fixed in S1** (2026-10-12, `claude/sweep-edm`).
+- O6. Method B G warning range → **fixed in S3**.
+- O8. Anchorage / slip check → **fixed in S2**.
+- O9. Rotation sign handling (absolute values added) → **closed, no change (S6)**: conservative by design.
+- O10. postMessage source check → **fixed in S4**.
+- O11. Self-test shape factor from the engine → **fixed in S5**.
 - O2. **Plain-pad G·S coefficient (F7).** Default 1.00 (FGP). For plain elastomeric pads (PEP), the 10th Ed. coefficient may be lower (older specifications used GS/1.8 ≈ 0.55GS for plain pads). — Engineer to confirm the coefficient for MassDOT 1 × 5 plain pads and set `coef.GSplainA`.
   - **RESOLVED 2026-10-04 (F11):** engineer keeps the coefficient at 1.00. No code change; default already 1.00.
 
@@ -409,3 +411,255 @@ All "before/after" numbers below were produced by running `computeEDM` from the 
   - Screenshots of every tab at 1400 px and 400 px inspected.
 - **Other copies of this code:** none.
 - **Open items:** none.
+
+## 2026-10-12 — PR: claude/sweep-edm (open-item sweep; PR link added after merge)
+
+Inventory items worked: EDM-O5, EDM-O8, EDM-O6, EDM-O10, EDM-O11 (fixed); EDM-O9 (closed, no change); EDM-O1, EDM-O3, EDM-O4, EDM-O7 (need the engineer; see "Needs engineer" at the end of this entry). Check-case inputs are the default state of the 2026-10-04 entry unless stated (circular D = 16, hri = 0.5, n = 6, cover 0.25, G = 0.160, P_DL = 80, P_LL = 55, θLL = 0.004, seat slope 0.010, Δs = 0.35, tolerance 0.03). Derived: A = 201.06 in², S = 8.00, hrt = 3.50 in, σTL = 0.6714 ksi, θs = 0.014 + 0.03 = 0.044 rad.
+
+### S1. Method A uplift check uses the upper-bound G (EDM-O5)   [calc change] [MORE conservative]
+- **Where:** `computeEDM`, Method A block. Anchor: `const GmA=+cf.GmaxA, GminA=+cf.GminA;`. Also `defaultState()` (`coef`), `migrate()`, `buildInputs()` panel I-6, `renderDesign()` Method A uplift note.
+- **Problem:** the uplift (minimum-stress) check σs ≥ c·G·S(B/hri)²θs/n used G = 0.150 ksi (`coef.GmethodA`, mid-range). The demand grows with G, so the least favourable G is the upper bound of the durometer range (0.200 ksi at 60 durometer).
+- **Governing provision:** AASHTO LRFD 10th Ed. (2024), Art. 14.7.6.2 (when the elastomer is specified by hardness, G is taken as the least favourable value of the range; Table 14.7.6.2-1: 60 durometer 0.130–0.200 ksi); check per Art. 14.7.6.3.5.
+- **Before:**
+  ```js
+  const GmA=+cf.GmethodA, GminA=+cf.GminA;   // GminA: least favourable (lowest) G of the durometer range, used for the G·S stress limit [14.7.6.2]
+  ```
+  ```js
+  coef:{ Da:1.4, DrRect:0.5, DrCirc:0.375, sigCapReinA:1.25, sigCapPlainA:0.80, GmethodA:0.150, DaCirc:1.0, GminA:0.130, GSplainA:1.00, upliftCircA:0.75 },
+  ```
+  ```js
+      ${inpRow("Method-A shear modulus","coef.GmethodA","ksi",{title:"Used in the Method A rotation (uplift) check"})}
+  ```
+- **After:**
+  ```js
+  const GmA=+cf.GmaxA, GminA=+cf.GminA;   // least favourable G of the durometer range [14.7.6.2]: GminA (lowest) for the G·S stress limit, GmA = GmaxA (highest) for the uplift check
+  ```
+  ```js
+  coef:{ Da:1.4, DrRect:0.5, DrCirc:0.375, sigCapReinA:1.25, sigCapPlainA:0.80, GmethodA:0.150, DaCirc:1.0, GminA:0.130, GSplainA:1.00, upliftCircA:0.75, GmaxA:0.200 },
+  ```
+  ```js
+      ${inpRow("Method-A G for uplift &amp; anchorage (least favourable)","coef.GmaxA","ksi",{title:"Highest G of the specified durometer range (60 duro: 0.200 ksi) [14.7.6.2]; used in the Method A rotation (uplift) check and the Method A / plain-pad anchorage check"})}
+  ```
+  Migration, first lines of `migrate()` (anchor `// GmaxA (Method A uplift G, upper bound) is new`):
+  ```js
+  if(S.coef&&S.coef.GmaxA===undefined&&S.coef.GmethodA!==undefined&&+S.coef.GmethodA!==0.150) S.coef.GmaxA=+S.coef.GmethodA;
+  ```
+  The Method A uplift note in `renderDesign` now ends `G = ${fmt(ma.GmA,3)} ksi, the highest value of the durometer range (least favourable for this check) [14.7.6.2].`
+- **Saved data:** new optional field `coef.GmaxA`. `coef.GmethodA` keeps its key and stored value but no longer feeds any check (its input row is replaced by the GmaxA row in the same place). Old files: if `GmethodA` is the old default 0.150, `GmaxA` gets the new default 0.200; if the engineer had edited `GmethodA` (e.g. 0.130 for a 50-durometer pad), that value is carried into `GmaxA`, so a deliberate entry is kept.
+- **Default choice:** 0.200 ksi = upper bound of 60 durometer (the hardness the existing GminA = 0.130 already assumes). Code-required; editable in I-6.
+- **Check cases** (σTL = 0.6714 ksi):
+  - Default circular, Method A, tolerance 0.03: before σmin = 0.75·0.150·8·(16/0.5)²·0.044/6 = 0.9·1024·0.007333 = 6.758 ksi, D/C 10.07. After 0.75·0.200·8·1024·0.007333 = 9.011 ksi, D/C 13.42. FAIL both.
+  - Same, tolerance 0.005 (θs = 0.019): before 2.918 ksi, D/C 4.35; after 3.891 ksi, D/C 5.80.
+  - Rectangular 18 × 24 Method A, θt = 0.005 (S = 10.286, σTL = 0.3125): θs = √(0.014² + 0.005²) + 0.03 = 0.04487; long. before 0.5·0.150·10.286·36²·0.04487/6 = 7.476 ksi (D/C 23.92), after 9.968 ksi (D/C 31.90); transverse before 0.5·0.150·10.286·48²·0.005/6 = 1.481 ksi (D/C 4.74), after 1.975 ksi (D/C 6.32).
+  - Every uplift result scales by 0.200/0.150 = 1.333.
+- **How verified:** headless Chromium, main vs branch (see "Verification" below).
+- **Other copies:** none.
+
+### S2. Anchorage check H ≤ P_min/5 with a P_min input (EDM-O8)   [calc change: new check] [MORE conservative]
+- **Where:** `computeEDM` (anchor `// anchorage [14.7.5.4 Method B / 14.7.6.4 Method A]`, dashboard items `anc` / `ancA` / `ancP`, warning anchor `if(isFinite(ancDC)&&ancDC>1.0001)`), new helper `ancEq(R)` right after `hbuEq`, called in all three `renderDesign` panels; new input in I-4; `VALID` entry `loads.Pmin`; `inputEcho()` row.
+- **Problem:** no anchorage (slip) check. AASHTO requires the pad to be secured against horizontal movement when the shear force exceeds one-fifth of the minimum vertical force due to permanent loads.
+- **Governing provision:** AASHTO LRFD 10th Ed. (2024), Art. 14.7.5.4 (Method B) and Art. 14.7.6.4 (Method A, incl. plain pads); shear force per Art. 14.6.3.1 (H = G·A·Δu/hrt); G per Art. 14.7.5.2 (Method B, specified G) / 14.7.6.2 (Method A, least favourable = upper bound for a force). Article numbers from memory: verify.
+- **Before:** (no check)
+- **After:**
+  ```js
+  // anchorage [14.7.5.4 Method B / 14.7.6.4 Method A]: secure the pad if the shear force H > P_min/5 (P_min = minimum vertical force due to permanent loads)
+  // H = G·A·Δs/h_rt with Method B: specified G [14.7.5.2]; Method A and plain pads: upper-bound G of the durometer range (GmaxA) [14.7.6.2]
+  const GAnc=(S.method==="B"&&!isPlain())?G:GmA;
+  const PminIn=+L.Pmin, PminUsed=(PminIn>0)?PminIn:Pdl;
+  const Hanc=GAnc*A*(+L.deltaS)/hrt;
+  const ancDC=(PminUsed>0)?Hanc/(PminUsed/5):Infinity;
+  R.anc={G:GAnc,H:Hanc,Pmin:PminUsed,PminFromDL:!(PminIn>0),dc:ancDC,ref:(S.method==="B"&&!isPlain())?"14.7.5.4":"14.7.6.4"};
+  ```
+  - Dashboard: `add("anc","Anchorage H ≤ P_min/5 [14.7.5.4]",ancDC,"H ≤ P_min/5");` (Method B, after `cover`); `add("ancA","Anchorage H ≤ P_min/5 [14.7.6.4]",ancDC,"H ≤ P_min/5");` (Method A, after `coverA`); `add("ancP", …same…)` (plain, after `stabP`).
+  - Warning when D/C > 1: `if(isFinite(ancDC)&&ancDC>1.0001) warn("Anchorage: H = "+fmt(Hanc)+" kip > P_min/5 = "+fmt(PminUsed/5)+" kip — the pad must be secured against horizontal movement [AASHTO "+R.anc.ref+"].");`
+  - Input (I-4, after P_LL): `${inpRow("Min. permanent load P<sub>min</sub> (0 = P<sub>DL</sub>)","loads.Pmin","kip",{title:"…"})}`; default `Pmin:0` in `defaultState().loads`; `"loads.Pmin":{hard:[0,2000],typ:[0,2000],msg:""}` in `VALID` (negative → input error).
+  - `inputEcho()`: `["P_min (anchorage)",(+L.Pmin>0)?L.Pmin:"= P_DL","kip"]` after P_LL.
+  - `ancEq(R)` shows H = G·A·Δs/hrt with values, H ≤ P_min/5, the G basis and the check line (copy the function from the file; anchor `function ancEq(R)`).
+- **Saved data:** new optional field `loads.Pmin` (0 = use P_DL). Old files load with 0, i.e. P_min = P_DL. In the Girder Run, P_min = 0 uses each girder's own P_DL.
+- **Default choice:** P_min = P_DL (unfactored permanent load, the plain reading of the article); the engineer can enter a lower value. See O12.
+- **Hand-off:** the PAD payload format is unchanged; its `pass` / `govDC` now include this check.
+- **Check cases:**
+  - Default (circular, Method B): H = 0.160·201.06·0.35/3.50 = 3.217 kip; P_min/5 = 80/5 = 16.00 kip; D/C = 0.201 PASS. Dashboard before "All 6 checks PASS · governing D/C = 0.80", after "All 7 checks PASS · governing D/C = 0.80".
+  - Default with P_min = 12 kip: 12/5 = 2.40 kip; D/C = 3.217/2.40 = 1.34 FAIL (warning shown).
+  - Default, Method A: G = GmaxA = 0.200 → H = 4.021 kip, D/C = 0.251.
+  - Plain MassDOT pad 5 × 20 × 1 in, P_DL = P_LL = 15 kip, Δs = 0.25 in (hrt = 1.0): H = 0.200·100·0.25/1.0 = 5.00 kip; P_min/5 = 3.00 kip; D/C = 1.67 FAIL (new; see O13).
+  - Abutment hand-off test (P_DL 120, Δs 0.6, rect 20 × 26, G 0.15): D/C 0.557.
+- **How verified:** headless Chromium (below); girder run: a girder with P_DL = 40 gives P_min = 40, D/C 0.402.
+- **Other copies:** none.
+
+### S3. Method B shear-modulus warning range 0.080–0.175 ksi (EDM-O6)   [bug fix: advisory text only] [no result change]
+- **Where:** after the `VALID` table (new constant `VALID_G_METHOD_B`), and the `VALID` loop in `computeEDM`.
+- **Before:**
+  ```js
+    const V=VALID[p], v=Number(getPath(S,p));
+  ```
+- **After:**
+  ```js
+  // Method B (steel-reinforced) shear modulus range [14.7.5.2]; replaces the mat.G typical range above when Method B is used
+  const VALID_G_METHOD_B={hard:[0.05,0.30],typ:[0.080,0.175],msg:"Shear modulus outside the Method B range 0.080–0.175 ksi [14.7.5.2]."};
+  ```
+  ```js
+    const V=(p==="mat.G"&&S.method==="B"&&!isPlain())?VALID_G_METHOD_B:VALID[p], v=Number(getPath(S,p));
+  ```
+- **Governing provision:** AASHTO LRFD 10th Ed., Art. 14.7.5.2 (Method B: G between 0.080 and 0.175 ksi). Method A / plain keep the 0.130–0.200 advisory (60 durometer, Art. 14.7.6.2).
+- **Check case:** Method B, G = 0.09: before advisory "outside 0.130–0.200", after none. Method B, G = 0.18: before none, after "outside the Method B range 0.080–0.175 ksi". Method A, G = 0.09: advisory unchanged. Hard range (input error) unchanged.
+
+### S4. postMessage: accept INIT only from the opener / framing page (EDM-O10, X-S10)   [bug fix] [no result change]
+- **Where:** "postMessage linkage" block. Anchor: `function fromAbutment(src)`.
+- **Before:**
+  ```js
+  window.addEventListener("message",ev=>{ const d=ev.data; if(!d||d.app!=="abutment-edm")return;
+    if(d.type==="INIT"){ …
+  ```
+- **After:**
+  ```js
+  function fromAbutment(src){   // accept messages only from the window that opened this page (the Abutment app), or from the page framing it
+    if(!src) return false;
+    try{ if(window.opener&&src===window.opener) return true; if(window.parent!==window&&src===window.parent) return true; }catch(e){}
+    return false; }
+  window.addEventListener("message",ev=>{ const d=ev.data; if(!d||d.app!=="abutment-edm")return;
+    if(!fromAbutment(ev.source))return;
+    if(d.type==="INIT"){ …
+  ```
+- **Protocol:** unchanged (same `app`, `type`, payload; EDM_READY / INIT / PAD). `abutment_calculator.html` is not touched; it opens this file with `window.open`, so it is `window.opener` here. Same approach as the abutment's F10 `fromEDM`.
+- **Check case:** standalone page, `window.postMessage({app:"abutment-edm",type:"INIT",payload:{loads:{Pdl:999}}},"*")`: before P_DL 80 → 999; after it stays 80. Opener hand-off (test opener page answering EDM_READY with INIT incl. 3 girders): linked, inputs applied, PAD returned, as before.
+
+### S5. Self-test shape factor computed by the engine (EDM-O11)   [test fix] [no result change]
+- **Where:** `runSelfTest()`. Anchor: `// shape factor from the engine`.
+- **Before:**
+  ```js
+    // shape factor sanity: rectangular 18×24, hri 0.406 → S = 18·24/(2·0.406·42)
+    chk("Shape factor (18×24, hri .406)", 18*24/(2*0.406*42), 12.67, 0.05);
+  ```
+- **After:**
+  ```js
+    // shape factor from the engine: rectangular 18×24, hri 0.406 → S = 18·24/(2·0.406·42) = 12.67
+    { const S0=S, W0=WARN; let Sf=NaN;
+      try{ S=defaultState(); S.padType="rectRein"; S.geom.L=18; S.geom.W=24; S.geom.hri=0.406; Sf=computeEDM().S; }
+      finally{ S=S0; WARN=W0; }
+      chk("Shape factor (18×24, hri .406) [computeEDM]", Sf, 12.67, 0.05); }
+  ```
+- **Check case:** 432/(2·0.406·42) = 12.667 vs 12.67 → PASS (same as before). The user's state (`S`, `WARN`) is restored: pad type, method and hri unchanged after pressing Self-Test.
+
+### S6. EDM-O9 closed: static rotation adds absolute values   [no change]
+- `thLongStatic=Math.abs(θpg)+Math.abs(θDL)+Math.abs(θc)+Math.abs(seat)` is conservative (camber usually opposes DL). The inventory default is "leave". The engineer can enter a net value in one field and 0 in the other if relief is wanted. No code change.
+
+### Verification (whole PR)
+- `node --check` on all six inline scripts of the old and new file: all pass.
+- Headless Chromium (Playwright, KaTeX 0.16.11 / Plotly 2.35.2 served locally at the pinned versions), main vs branch, 15 scenarios plus the Abutment opener hand-off: default; rect; plain; Method A (tolerance 0.03 and 0.005); rect Method A with θt; rect Method A tolerance 0.005; all toggles; P_min = 10 and 40; plain 5 × 20; Method B and A with G = 0.09; P_min = −5; zero load.
+  - Every result difference comes from S1 (methodA.GmA, upliftA, upliftAW and their D/Cs ×1.333) or S2 (new `anc` result, the new dashboard item and check counts, the anchorage warning, the PAD `pass` / `govDC` where the new check governs). S3 changes only the advisory text listed.
+  - Everything else is identical: the rest of `LAST`, the Geometry, Rotation and Girder Run tabs, and the state apart from the two new fields.
+  - Old-format saved state: GmethodA 0.150 → GmaxA 0.200; GmethodA 0.18 → GmaxA 0.18. P_min = −5 → input error and a red dot on the Loads tab.
+  - No console errors. Self-test PASS. No horizontal scroll at 400 px.
+- Screenshots (Loads and Code input tabs, anchorage and uplift blocks, 400 px) inspected.
+
+### Needs engineer (left unchanged)
+- EDM-O1: confirm against the printed 10th Ed. Art. 14.7.6.3.2 (1.25GS ≤ 1.25 ksi, no "fixed" increase) and 14.7.6.3.5 (0.75 circular). Recommendation: keep as built.
+- EDM-O3: plain-pad rotation check. What is the 10th Ed. 14.7.6.3.5 form for plain pads? Recommendation: if it is σs ≥ 0.5GS(L/hri)²θs/n with n = 1, add it as a dashboard check.
+- EDM-O4: should the construction tolerance also be added to the rectangular transverse rotation (θt about W)? Recommendation: yes for the AASHTO 0.005 per axis; MassDOT §3.5.7.6 to confirm for 0.03.
+- EDM-O7: MassDOT 0.03 rad tolerance and 4.75 combined-strain limit. Confirm with MassDOT. Recommendation: keep (conservative).
+- O12 and O13 in "Open items" above (anchorage basis; anchored-pad toggle).
+
+## 2026-10-12 — PR: claude/edm-anchored (follow-up to #139; PR link added after merge)
+
+Coordinator request after #139: (1) O13, an anchored / doweled toggle; (2) O4, the AASHTO 0.005 tolerance on the rectangular transverse rotation (MassDOT 0.03 unchanged).
+Check-case pad unless stated: rectangular 18 × 24, hri = 0.5, n = 6, cover 0.25, G = 0.160, P_DL = 80, P_LL = 55, θLL = 0.004, seat slope 0.010, Δs = 0.35. Derived: A = 432 in², S = 10.286, hrt = 3.50, σDL = 0.1852, σLL = 0.1273, σTL = 0.3125 ksi; γa,st = 1.4·0.1852/(0.16·10.286) = 0.158, γa,cy = 0.108, γs = 0.100.
+
+### A1. Anchored / doweled toggle for the anchorage check (O13)   [behaviour option; default unchanged] [LESS conservative only when switched on]
+- **Where:** `defaultState().tog` (anchor `anchored:false`), panel I-5 in `buildInputs()` (new checkbox after "Exterior-beam check"), `computeEDM` (`R.anc.anchored`, new `addAnc` helper replacing the three anchorage `add(...)` calls, the anchorage warning), `ancEq(R)`, `renderDashboard` / `buildReport` check counts and the report verdict column, `inputEcho()`.
+- **Problem:** an anchored or doweled pad that exceeds P_min/5 still showed FAIL and "must be secured", and failed the PAD hand-off.
+- **Governing provision:** AASHTO LRFD 10th Ed. (2024), Art. 14.7.5.4 / 14.7.6.4 (when H > P_min/5 the pad shall be secured against horizontal movement). Once secured, the anchorage must be designed for H (Art. 14.6.3.1); this tool does not design it.
+- **Before:**
+  ```js
+      exteriorCheck:false    // exterior-beam check → uses 5.0 limit regardless
+  ```
+  ```js
+    R.anc={G:GAnc,H:Hanc,Pmin:PminUsed,PminFromDL:!(PminIn>0),dc:ancDC,ref:(S.method==="B"&&!isPlain())?"14.7.5.4":"14.7.6.4"};
+  ```
+  ```js
+    add("ancP","Anchorage H ≤ P_min/5 [14.7.6.4]",ancDC,"H ≤ P_min/5");
+    add("anc","Anchorage H ≤ P_min/5 [14.7.5.4]",ancDC,"H ≤ P_min/5");
+    add("ancA","Anchorage H ≤ P_min/5 [14.7.6.4]",ancDC,"H ≤ P_min/5");
+  ```
+  ```js
+    if(isFinite(ancDC)&&ancDC>1.0001) warn(
+  ```
+  `renderDashboard` / `buildReport`: `R.dash.length` (3 places); report verdict `${d.pass?"PASS":"FAIL"}`; `ancEq` ends `+checkLine("Anchorage H ≤ P_min/5",a.dc,"["+a.ref+"]"); }`.
+- **After:**
+  ```js
+      exteriorCheck:false,   // exterior-beam check → uses 5.0 limit regardless
+      anchored:false         // pad anchored / doweled against horizontal movement → anchorage check is informational (design the anchorage for H)
+  ```
+  ```js
+    R.anc={G:GAnc,H:Hanc,Pmin:PminUsed,PminFromDL:!(PminIn>0),dc:ancDC,ref:(S.method==="B"&&!isPlain())?"14.7.5.4":"14.7.6.4",anchored:!!tg.anchored};
+  ```
+  ```js
+    // anchorage item: a D/C check, or (pad anchored / doweled) an informational item with no D/C and no pass/fail, so nFail / governing D/C exclude it
+    const addAnc=id=>{ if(R.anc.anchored) dash.push({id,name:"Anchorage ["+R.anc.ref+"] — anchored/doweled: design the anchorage for H = "+fmt(Hanc)+" kip",dc:null,pass:null,ref:"info"});
+      else add(id,"Anchorage H ≤ P_min/5 ["+R.anc.ref+"]",ancDC,"H ≤ P_min/5"); };
+  ```
+  The three calls become `addAnc("ancP");`, `addAnc("anc");`, `addAnc("ancA");` (same positions, same names as before when the toggle is off). Warning: `if(!R.anc.anchored&&isFinite(ancDC)&&ancDC>1.0001) warn(`.
+  - Check counts: `R.dash.filter(d=>d.pass!==null).length` in place of `R.dash.length`. This is identical while there is no info item.
+  - Report verdict: `${d.pass===null?"INFO":d.pass?"PASS":"FAIL"}`.
+  - `ancEq`: when anchored, a grey "INFO" line "Pad anchored / doweled (panel I-5) — design the anchorage for H = … kip per bearing; H/(P_min/5) = … for reference (not a pass/fail check)" replaces the check line.
+  - `inputEcho()`: new row `["Pad anchored / doweled", anchored ? "yes — anchorage force H = …" : "no", anchored ? "kip" : ""]`.
+  - Checkbox (I-5): `<input type="checkbox" data-path="tog.anchored">` "Pad anchored / doweled against horizontal movement (anchorage check becomes "design the anchorage for H")".
+- **Saved data:** new optional field `tog.anchored` (default false). Old files load with false and give the #139 results.
+- **Effect when on:** the anchorage item has no D/C and no pass/fail. It is left out of `nFail`, the governing D/C, the check count, the D/C chart and the PAD `pass` / `govDC`. H is shown in the dashboard, the Design Checks tab, the report summary table and the input echo.
+- **Check cases:**
+  - Default circular pad, toggle on: H = 0.160·201.06·0.35/3.5 = 3.22 kip. Dashboard: before (off) "Anchorage H ≤ P_min/5 [14.7.5.4] (0.20) · All 7 checks PASS · governing D/C = 0.80"; on: "Anchorage [14.7.5.4] — anchored/doweled: design the anchorage for H = 3.22 kip · All 6 checks PASS · governing D/C = 0.80".
+  - Default circular pad with P_min = 10 kip: off → D/C 1.61, "1 of 7 checks FAIL", PAD pass false / govDC 1.61; on → "All 6 checks PASS", PAD pass true / govDC 0.80, no "must be secured" warning; report row "… H = 3.22 kip — INFO".
+  - Plain pad (default plain state), on: the 3.78 anchorage FAIL becomes info (H = 60.48 kip). Shear deformation (1.40) still fails: "1 of 3 checks FAIL · governing D/C = 1.40".
+- **Other copies:** none.
+
+### A2. AASHTO 0.005 construction tolerance added about W for the rectangular transverse checks (O4)   [calc change] [MORE conservative]
+- **Where:** `computeEDM` (anchor `const tolW=`; `grW_st`; `upliftAW`), new helper `thTWtex(R)` before `hbuEq`, transverse lines and note in `renderDesign` (Method B rotational-strain block and Method A uplift block).
+- **Problem:** with the AASHTO 0.005 rad tolerance selected, the tolerance was added only to the longitudinal rotation (about L). The rectangular transverse checks about W used θt alone.
+- **Governing provision:** AASHTO LRFD 10th Ed. (2024), Art. 14.4.2.1 (the design rotation includes an allowance of 0.005 rad for uncertainties, taken about each axis — verify the "each axis" reading against the printed text); used in Art. 14.7.5.3.3 (γr, Method B) and Art. 14.7.6.3.5 (Method A uplift). The MassDOT 0.03 rad option is unchanged and still applied once, to the resultant/longitudinal rotation (MassDOT §3.5.7.6), as the coordinator asked.
+- **Before:**
+  ```js
+    R.rot={thLongStatic,thLongCyclic,thTrans,thTotal,tol:+tg.rotTol};
+  ```
+  ```js
+    // rectangular: transverse rotation θt about W (tolerance applied once, to the longitudinal rotation, per MassDOT §3.5.7.6)
+    const grW_st=(!isCirc()&&!isPlain())?Dr*Math.pow(planW/hri,2)*(thTrans/n):0;
+  ```
+  ```js
+    const upliftAW=(!isCirc()&&!isPlain())?DrA*GmA*Sf*Math.pow(planW/hri,2)*(thTrans/n):0;   // rectangular: transverse rotation about W
+  ```
+- **After:**
+  ```js
+    // rectangular transverse checks (θt about W): the AASHTO 0.005-rad tolerance is added about this axis too [14.4.2.1]; the MassDOT 0.03 is applied once, to the resultant [§3.5.7.6]
+    const tolW=(Math.abs(+tg.rotTol-0.005)<1e-9)?0.005:0;
+    const thTransW=thTrans+tolW;
+    R.rot={thLongStatic,thLongCyclic,thTrans,thTotal,tol:+tg.rotTol,tolW,thTransW};
+  ```
+  ```js
+    // rectangular: transverse rotation θt about W (+0.005 with the AASHTO tolerance; MassDOT 0.03 applied once, to the longitudinal rotation, per §3.5.7.6)
+    const grW_st=(!isCirc()&&!isPlain())?Dr*Math.pow(planW/hri,2)*(thTransW/n):0;
+  ```
+  ```js
+    const upliftAW=(!isCirc()&&!isPlain())?DrA*GmA*Sf*Math.pow(planW/hri,2)*(thTransW/n):0;   // rectangular: transverse rotation about W (+0.005 with the AASHTO tolerance)
+  ```
+  ```js
+  function thTWtex(R){ const r=R.rot; return r.tolW>0?`\\theta_t = ${fmtT(r.thTrans,4)}+${fmtT(r.tolW,3)} = ${fmtT(r.thTransW,4)}`:`\\theta_t = ${fmtT(r.thTransW,4)}`; }   // transverse rotation used about W (incl. the AASHTO tolerance)
+  ```
+  - The Method B transverse γr line and the Method A transverse uplift line end with `, \\quad ${thTWtex(R)}`.
+  - The rectangular note in the Method B block adds: "With the AASHTO 0.005-rad tolerance it is also added to θt [14.4.2.1]; the MassDOT 0.03 rad is applied once, to the longitudinal rotation [§3.5.7.6]."
+- **Not affected:** circular pads (θst is already the resultant plus the tolerance once), the displayed design rotation θs, the Method B/A longitudinal checks, plain pads, and every case with the MassDOT 0.03 option.
+- **Check cases** (rectangular pad above, AASHTO tolerance 0.005):
+  - Method B, θt = 0.005: γr,st,W = 0.5·(24/0.5)²·θ/6 = 192·θ. Before θ = 0.005 → 0.960, combinedW = 0.158 + 0.960 + 0.100 + 1.75·0.108 = 1.407. After θ = 0.010 → 1.920, combinedW = 2.367. Longitudinal combined = 0.158 + 0.5·36²·0.015/6 (= 1.620) + 0.100 + 1.75(0.108 + 0.432) = 2.823 still governs → combined-strain D/C 0.59, unchanged.
+  - Method B, θt = 0.020: before 192·0.020 = 3.840, combinedW = 4.287, D/C 4.287/4.75 = 0.90 PASS. After 192·0.025 = 4.800, combinedW = 5.247, D/C 1.10 FAIL (governs; PAD pass true → false).
+  - Method B, θt = 0: before combinedW = 0.447; after γr,st,W = 0.960, combinedW = 1.407 (longitudinal still governs).
+  - Method A, θt = 0.005: σs,min,W = 0.5·0.200·10.286·48²·θ/6 = 394.97·θ. Before 1.975 ksi (D/C 1.975/0.3125 = 6.32); after 3.950 ksi (D/C 12.64).
+  - MassDOT 0.03, θt = 0.005: unchanged (Method A transverse 1.975 ksi, D/C 6.32).
+- **Other copies:** none.
+
+### Verification
+- `node --check` on all six inline scripts of the old and new file: all pass.
+- Headless Chromium, main (a794071) vs branch, KaTeX 0.16.11 / Plotly 2.35.2 served locally, 16 scenarios plus the Abutment opener hand-off. Scenarios: default; rect; plain; Method A; circular with tolerance 0.005; rect with θt = 0.005 at 0.03 and 0.005; rect with θt = 0 at 0.005; rect Method A with θt = 0.005 at 0.005 and 0.03; rect with θt = 0.02 at 0.005; anchored (default, with P_min = 10, plain, Method A); unanchored with P_min = 10.
+  - Results change only in the A2 cases above (combinedW, upliftAW and their D/Cs, only with the 0.005 option on rectangular pads) and the A1 cases (anchorage item info, counts, PAD pass/govDC).
+  - Every other `LAST` value is identical. The only additions are the new fields `rot.tolW`, `rot.thTransW` and `anc.anchored`. The state differs only by the new `tog.anchored`.
+  - Text changes elsewhere are the new input-echo row and the new θt line in the rectangular design blocks. Circular, plain and MassDOT-0.03 results are unchanged.
+  - No console errors.
+- Screenshots (I-5 with the toggle, the anchored anchorage block, the Method B and Method A transverse lines) inspected: `scratchpad/followups/edm-anchored/`.

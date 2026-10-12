@@ -278,7 +278,7 @@ tbody tr.ud:hover td{background:#dbeafe}
         <div class="fg"><label class="lbl">Force</label><select id="iFU"><option value="kN">kN</option><option value="lb">lb</option><option value="kip" selected>kip</option><option value="N">N</option></select></div>
         <div class="fg"><label class="lbl">Length</label><select id="iLU"><option value="m">m</option><option value="ft" selected>ft</option><option value="in">in</option><option value="cm">cm</option></select></div>
       </div>
-      <p class="hint" style="color:#b45309">⚠ Changing units only relabels the inputs — existing spans, loads, E, I, c, A and σ are NOT converted. Re-enter them in the new units.</p>
+      <p class="hint">Changing units converts every entered value (spans, loads, E, I, c, A, σ, custom x) to the new units. Undo (Ctrl+Z) restores the previous units and values.</p>
       <div class="fg"><label class="lbl">Load Combination</label>
         <select id="iLC"></select>
       </div>
@@ -290,7 +290,7 @@ tbody tr.ud:hover td{background:#dbeafe}
   <div>
     <div class="slbl">Section Properties <label class="tog"><input type="checkbox" id="secT"><span class="pil"></span>Enable</label></div>
     <div id="secB" class="card hidden" style="display:flex;flex-direction:column;gap:6px">
-      <div class="fg"><label class="lbl">Standard Shape (auto-fills, kip units)</label>
+      <div class="fg"><label class="lbl">Standard Shape (auto-fills in the current units)</label>
         <select id="iShape"><option value="">— Custom —</option>
         <option value="30.8,7.89,2.96,0.170">W8×10</option><option value="118,10.2,6.49,0.240">W10×22</option>
         <option value="204,12.2,7.65,0.230">W12×26</option><option value="291,13.8,8.85,0.270">W14×30</option>
@@ -397,10 +397,10 @@ tbody tr.ud:hover td{background:#dbeafe}
   <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap;align-items:center">
     <button class="btn btn-s" id="cmbAdd">+ Add Combination</button>
     <span style="flex:1"></span>
-    <button class="btn btn-s" id="psLRFD" title="Replace all combinations with ASCE 7 strength (LRFD) basics">Preset: LRFD</button>
-    <button class="btn btn-s" id="psASD" title="Replace all combinations with ASCE 7 allowable stress (ASD) basics">Preset: ASD</button>
+    <button class="btn btn-s" id="psLRFD" title="Replace all combinations with the ASCE 7-16 Sec. 2.3.1 strength (LRFD) basic combinations for D, L, S, W">Preset: LRFD</button>
+    <button class="btn btn-s" id="psASD" title="Replace all combinations with the ASCE 7-16 Sec. 2.4.1 allowable stress (ASD) basic combinations for D, L, S, W">Preset: ASD</button>
   </div>
-  <p class="hint">Names are generated from the factors. The single-combination dropdown and the envelope both follow this table. Verify preset factors against your governing code edition.</p>
+  <p class="hint">Names are generated from the factors. The single-combination dropdown and the envelope both follow this table. Presets: ASCE 7-16 Sec. 2.3.1 (LRFD) and Sec. 2.4.1 (ASD) basic combinations for D, L, S and W only (Lr, R, E and the alternate snow/wind arrangements are not included). The default list's "Unfactored (1.0 All)" row is not a code combination. Its wind row is combination 4 with 1.0L; where ASCE 7-16 Sec. 2.3.1 Exception 1 applies (L<sub>o</sub> ≤ 100 psf, not garages or public assembly) you may edit the L factor to 0.5. Verify preset factors against your governing code edition.</p>
  </div>
 </div>
 
@@ -419,7 +419,7 @@ const defCombos=()=>[
  {id:'14',f:{DL:1.4},on:true},
  {id:'12_16',f:{DL:1.2,LL:1.6},on:true},
  {id:'12_16S',f:{DL:1.2,LL:1.6,SL:.5},on:true},
- {id:'12W',f:{DL:1.2,LL:.5,SL:.5,WL:1},on:true},
+ {id:'12W',f:{DL:1.2,LL:1,SL:.5,WL:1},on:true}, // ASCE 7-16 2.3.1 comb. 4 (was 0.5L: Exception 1 only)
  {id:'09W',f:{DL:.9,WL:1},on:true}];
 let CASES=defCases(),combosArr=defCombos();
 let caseView=null; // non-null => diagrams show a single load case at factor 1.0
@@ -450,6 +450,28 @@ function caseStyle(id){
   const p=XPAL[xi%XPAL.length];return`background:${p[0]};color:${p[1]}`;
 }
 const LCONV={ft:1/12,in:1,m:.0254,cm:2.54}; // inches → unit
+const FKIP={kip:1,lb:.001,kN:1/4.4482216152605,N:1/4448.2216152605}; // kip per force unit (1 kip = 4.4482216152605 kN)
+/* Convert every entered value from (fu0, lu0) to (fu1, lu1) when the unit selects change.
+   Was: labels only, values kept (fix log F8 / O1). Saved-data format unchanged (values are stored with fu/lu). */
+function convertUnits(fu0,lu0,fu1,lu1){
+  const rf=FKIP[fu0]/FKIP[fu1],rl=LCONV[lu1]/LCONV[lu0];
+  fu=fu1;lu=lu1;
+  if(!(rf>0&&rl>0)||(rf===1&&rl===1))return false;
+  const r=v=>{for(let p=1;p<=15;p++){const y=+v.toPrecision(p);if(Math.abs(y-v)<=1e-9*Math.abs(v))return y;}return v;}; // shortest value within 1e-9 relative
+  const sc=(o,k,f)=>{if(o&&typeof o[k]==='number'&&isFinite(o[k]))o[k]=r(o[k]*f);};
+  spans.forEach(sp=>sc(sp,'L',rl));
+  loads.forEach(ld=>{
+    if(ld.type==='point'){sc(ld,'mag',rf);sc(ld,'pos',rl);}
+    else if(ld.type==='moment'){sc(ld,'mag',rf*rl);sc(ld,'pos',rl);}
+    else if(ld.type==='uniform')sc(ld,'mag',rf/rl);
+    else{sc(ld,'sm',rf/rl);sc(ld,'em',rf/rl);sc(ld,'sx',rl);sc(ld,'ex',rl);}});
+  const fv=(id,f)=>{const v=parseFloat(g(id).value);if(isFinite(v)&&v!==0)g(id).value=r(v*f);};
+  fv('iE',rf/(rl*rl));fv('iI',rl*rl*rl*rl);fv('iC',rl);fv('iA',rl*rl);fv('iFb',rf/(rl*rl));
+  const ux=g('iUX').value;
+  if(ux.trim())g('iUX').value=ux.split(',').map(s=>{const v=parseFloat(s.trim());return isNaN(v)?s.trim():String(r(v*rl));}).join(', ');
+  if(shpW){shpW.d=r(shpW.d*rl);shpW.tw=r(shpW.tw*rl);}
+  return true;
+}
 
 let spans=[{L:12},{L:12}],nodes=[{t:'pin'},{t:'roller'},{t:'pin'}];
 let loads=[],editId=null,userX=[];
@@ -549,7 +571,7 @@ function evalVM(X,R,fac){
 }
 
 function solve(){
-  nodes.forEach(n2=>{if(n2.t==='roller')n2.t='pin';}); // pin ≡ roller in this model (no axial DOF)
+  // 'roller' is kept as entered (was silently changed to 'pin'); it is solved exactly like 'pin' (no axial DOF).
   nodeX=[0];spans.forEach(sp=>nodeX.push(nodeX[nodeX.length-1]+sp.L));
   totL=nodeX[nodeX.length-1];
   stX=stationList();
@@ -579,6 +601,17 @@ function solve(){
       env.M.mx.push({x,y:mmx});env.M.mn.push({x,y:mmn});env.M.mxC.push(mxc);env.M.mnC.push(mnc);}
     env.R=nodes.map((_,j)=>{let mx=-1e18,mc='',mn=1e18,mnc='';EK.forEach(k=>{const v=res[k].R[j].v;if(v>mx){mx=v;mc=k}if(v<mn){mn=v;mnc=k}});return{mx,mc,mn,mnc};});
     shD=env.V.mx;moD=env.M.mx;deD=[];crits={zV:[],inf:[]};nodeR=nodes.map((_,j)=>({v:env.R[j].mx,m:0}));
+    // deflection envelope over the same enabled combinations (was: none in envelope mode, fix log O4)
+    const dd=EK.map(k=>deflOf(res[k].mo));
+    if(dd.length&&dd.every(d=>d.length===stX.length)){
+      env.D={mx:[],mn:[],mxC:[],mnC:[]};
+      for(let i=0;i<stX.length;i++){let a=-1e18,b=1e18,ac='',bc='';
+        EK.forEach((k,q)=>{const v=dd[q][i].y;if(v>a){a=v;ac=k}if(v<b){b=v;bc=k}});
+        env.D.mx.push({x:stX[i],y:a});env.D.mn.push({x:stX[i],y:b});env.D.mxC.push(ac);env.D.mnC.push(bc);}
+      env.per.forEach((pc,q)=>{pc.dm=Math.max(...dd[q].map(p=>Math.abs(p.y)));});
+      // governing signed curve: at each station the larger of |δ max| and |δ min|
+      deD=env.D.mx.map((p,i)=>Math.abs(env.D.mn[i].y)>Math.abs(p.y)?env.D.mn[i]:p);
+    }
   } else {
     env=null;
     const r=solveFor(curFac());
@@ -590,29 +623,8 @@ function solve(){
       else if(shD[i].y*shD[i+1].y<0){const dx=shD[i+1].x-shD[i].x;zV.push(shD[i].x-shD[i].y*dx/(shD[i+1].y-shD[i].y));}}
     for(let i=0;i<moD.length-1;i++)if(moD[i].y*moD[i+1].y<0){const dx=moD[i+1].x-moD[i].x;const xi=moD[i].x-moD[i].y*dx/(moD[i+1].y-moD[i].y);if(xi>totL*.005&&xi<totL*.995)inf.push(xi);}
     crits={zV:[...new Set(zV.map(x=>Math.round(x*1e4)/1e4))].filter(x=>x>totL*.005&&x<totL*.995),inf:[...new Set(inf.map(x=>Math.round(x*1e4)/1e4))]};
-    // deflection (single mode + section on)
-    deD=[];
-    if(secOn&&Ev>0&&Iv>0){
-      const EI=Ev*Iv,n=moD.length,F1=new Array(n).fill(0),F2=new Array(n).fill(0);
-      for(let i=1;i<n;i++){const dx=moD[i].x-moD[i-1].x;F1[i]=F1[i-1]+.5*(moD[i-1].y+moD[i].y)*dx;}
-      for(let i=1;i<n;i++){const dx=moD[i].x-moD[i-1].x;F2[i]=F2[i-1]+.5*(F1[i-1]+F1[i])*dx;}
-      // constants from first & last support nodes: δ(xa)=δ(xb)=0
-      const supIdx=nodes.map((nd2,j)=>nd2.t!=='free'?j:-1).filter(j=>j>=0);
-      const xsD=moD.map(p=>p.x);
-      const at=(A,x)=>{let lo=0,hi=xsD.length-1;while(hi-lo>1){const md=(lo+hi)>>1;if(xsD[md]<=x)lo=md;else hi=md;}
-        const dx=xsD[hi]-xsD[lo];return dx>0?A[lo]+(A[hi]-A[lo])*(x-xsD[lo])/dx:A[lo];};
-      const F2at=x=>at(F2,x),F1at=x=>at(F1,x);
-      // EI·v'' = M (v up) → v=(F2+c1x+c2)/EI ; δ(down) = −v = (−F2+C1x+C2)/EI
-      let C1=null,C2=null;
-      if(supIdx.length>=2){
-        const xa=nodeX[supIdx[0]],xb=nodeX[supIdx[supIdx.length-1]];
-        C1=(F2at(xb)-F2at(xa))/(xb-xa||1);C2=F2at(xa)-C1*xa;
-      } else if(supIdx.length===1&&nodes[supIdx[0]].t==='fixed'){
-        // single fixed support (cantilever): δ = 0 and slope = 0 there
-        const xa=nodeX[supIdx[0]];C1=F1at(xa);C2=F2at(xa)-C1*xa;
-      }
-      if(C1!==null)deD=moD.map((p,i)=>({x:p.x,y:(-F2[i]+C1*p.x+C2)/EI}));
-    }
+    // deflection (section on)
+    deD=deflOf(moD);
   }
   // tabular
   tabR=[];
@@ -620,8 +632,36 @@ function solve(){
   userX.forEach(ux=>{if(!isNaN(ux)&&ux>=0&&ux<=totL)tabR.push(mkRow(ux,'User'));});
   tabR.sort((a,b)=>a.x-b.x);
 }
+/* Deflection curve (δ down positive) for one moment diagram mo[] (moved out of solve() unchanged, so the
+   envelope can use it per combination). [] when the section is off, E or I ≤ 0, or no anchoring support. */
+function deflOf(mo){
+  let de=[];
+  if(secOn&&Ev>0&&Iv>0){
+    const EI=Ev*Iv,n=mo.length,F1=new Array(n).fill(0),F2=new Array(n).fill(0);
+    for(let i=1;i<n;i++){const dx=mo[i].x-mo[i-1].x;F1[i]=F1[i-1]+.5*(mo[i-1].y+mo[i].y)*dx;}
+    for(let i=1;i<n;i++){const dx=mo[i].x-mo[i-1].x;F2[i]=F2[i-1]+.5*(F1[i-1]+F1[i])*dx;}
+    // constants from first & last support nodes: δ(xa)=δ(xb)=0
+    const supIdx=nodes.map((nd2,j)=>nd2.t!=='free'?j:-1).filter(j=>j>=0);
+    const xsD=mo.map(p=>p.x);
+    const at=(A,x)=>{let lo=0,hi=xsD.length-1;while(hi-lo>1){const md=(lo+hi)>>1;if(xsD[md]<=x)lo=md;else hi=md;}
+      const dx=xsD[hi]-xsD[lo];return dx>0?A[lo]+(A[hi]-A[lo])*(x-xsD[lo])/dx:A[lo];};
+    const F2at=x=>at(F2,x),F1at=x=>at(F1,x);
+    // EI·v'' = M (v up) → v=(F2+c1x+c2)/EI ; δ(down) = −v = (−F2+C1x+C2)/EI
+    let C1=null,C2=null;
+    if(supIdx.length>=2){
+      const xa=nodeX[supIdx[0]],xb=nodeX[supIdx[supIdx.length-1]];
+      C1=(F2at(xb)-F2at(xa))/(xb-xa||1);C2=F2at(xa)-C1*xa;
+    } else if(supIdx.length===1&&nodes[supIdx[0]].t==='fixed'){
+      // single fixed support (cantilever): δ = 0 and slope = 0 there
+      const xa=nodeX[supIdx[0]];C1=F1at(xa);C2=F2at(xa)-C1*xa;
+    }
+    if(C1!==null)de=mo.map((p,i)=>({x:p.x,y:(-F2[i]+C1*p.x+C2)/EI}));
+  }
+  return de;
+}
 function mkRow(x,t){
-  if(envOn)return{x,t,Vmx:itp(env.V.mx,x),Vmn:itp(env.V.mn,x),Mmx:itp(env.M.mx,x),Mmn:itp(env.M.mn,x)};
+  if(envOn)return{x,t,Vmx:itp(env.V.mx,x),Vmn:itp(env.V.mn,x),Mmx:itp(env.M.mx,x),Mmn:itp(env.M.mn,x),
+    Dmx:env.D?itp(env.D.mx,x):null,Dmn:env.D?itp(env.D.mn,x):null};
   const e=evalVM(x,nodeR,curFac());
   return{x,t,V:e.V,M:e.M,D:deD.length?itp(deD,x):null};
 }
@@ -648,7 +688,7 @@ function readIn(){
   document.querySelectorAll('.uA').forEach(e=>e.textContent=`${lu}²`);
   document.querySelectorAll('.uS').forEach(e=>e.textContent=`${fu}/${lu}²`);
   g('iLC').disabled=envOn;
-  g('dDefl').classList.toggle('hidden',!(secOn&&!envOn));
+  g('dDefl').classList.toggle('hidden',!secOn);
   g('prTitle').textContent=(g('projNm').value||'Beam Analysis')+' — Report';
   g('prMeta').textContent=`${spans.length} span(s) · ${curName()} · ${new Date().toLocaleDateString()}`;
 }
@@ -657,10 +697,12 @@ function readIn(){
    (was: total beam length / x). */
 function deflSpans(){
   if(!deD.length)return[];
-  return spans.map((sp,i)=>{const xa=nodeX[i],xb=nodeX[i+1];let dm=0,dx=xa;
-    deD.forEach(p=>{if(p.x>=xa-1e-9&&p.x<=xb+1e-9&&Math.abs(p.y)>dm){dm=Math.abs(p.y);dx=p.x;}});
+  return spans.map((sp,i)=>{const xa=nodeX[i],xb=nodeX[i+1];let dm=0,dx=xa,dk=-1;
+    deD.forEach((p,k)=>{if(p.x>=xa-1e-9&&p.x<=xb+1e-9&&Math.abs(p.y)>dm){dm=Math.abs(p.y);dx=p.x;dk=k;}});
     const allow=defLim>0?sp.L/defLim:0;
-    return{i,L:sp.L,dm,x:dx,allow,ratio:allow>0?dm/allow:0,ok:allow>0?dm<=allow:true};});
+    // envelope: combination that governs δ at that station
+    const c=envOn&&env&&env.D&&dk>=0?(Math.abs(env.D.mn[dk].y)>Math.abs(env.D.mx[dk].y)?env.D.mnC[dk]:env.D.mxC[dk]):null;
+    return{i,L:sp.L,dm,x:dx,allow,ratio:allow>0?dm/allow:0,ok:allow>0?dm<=allow:true,c};});
 }
 function deflGov(){const a=deflSpans();return a.length?a.reduce((b,s2)=>s2.ratio>b.ratio?s2:b,a[0]):null;}
 /* Max shear stress: W-shape preset → average web shear V/(d·tw) (AISC Spec. G2.1, Aw = d·tw);
@@ -693,6 +735,10 @@ function updStats(){
     h+=`<div class="sc cgn"><div class="sc-l">|M| env</div><div class="sc-v">${mm.toFixed(3)}</div><div class="sc-u">${fu}·${lu}</div></div>`;
     if(secOn&&Iv>0&&cv>0){const sg=mm*cv/Iv,ok=Fbv<=0||sg<=Fbv;
       h+=`<div class="sc ${ok?'ctm':'crd'}"><div class="sc-l">σ env</div><div class="sc-v">${sg.toFixed(2)}</div><div class="sc-u">${fu}/${lu}²${Fbv>0?` / ${Fbv} ${ok?'✓':'✗'}`:''}</div></div>`;}
+    if(deD.length){const dm=Math.max(...deD.map(p=>Math.abs(p.y)));
+      let lim='',ok=true;
+      if(defLim>0){const gv=deflGov();ok=deflSpans().every(s2=>s2.ok);lim=` / span ${gv.i+1}: L/${defLim}=${gv.allow.toFixed(4)} ${ok?'✓':'✗'}`;}
+      h+=`<div class="sc ${ok?'cam':'crd'}"><div class="sc-l">|δ| env</div><div class="sc-v">${dm.toFixed(4)}</div><div class="sc-u">${lu}${lim}</div></div>`;}
   } else {
     const mv=shD.length?Math.max(...shD.map(p=>Math.abs(p.y))):0;
     const mm=moD.length?Math.max(...moD.map(p=>Math.abs(p.y))):0;
@@ -706,7 +752,7 @@ function updStats(){
       h+=`<div class="sc ${ok?'cam':'crd'}"><div class="sc-l">δ max</div><div class="sc-v">${dm.toFixed(4)}</div><div class="sc-u">${lu}${lim}</div></div>`;}
   }
   g('statsRow').innerHTML=h;
-  if(envOn){g('pkV').textContent='envelope';g('pkM').textContent='envelope';}
+  if(envOn){g('pkV').textContent='envelope';g('pkM').textContent='envelope';if(g('pkD'))g('pkD').textContent=deD.length?`|δ|max:${Math.max(...deD.map(p=>Math.abs(p.y))).toFixed(4)} ${lu} (envelope)`:'';}
   else{
     if(shD.length){const mx=Math.max(...shD.map(p=>p.y)),mn=Math.min(...shD.map(p=>p.y));g('pkV').textContent=`Max:${mx.toFixed(2)} Min:${mn.toFixed(2)} ${fu}`;}
     if(moD.length){const mx=Math.max(...moD.map(p=>p.y)),mn=Math.min(...moD.map(p=>p.y));g('pkM').textContent=`Max:${mx.toFixed(2)} Min:${mn.toFixed(2)} ${fu}·${lu}`;}
@@ -732,7 +778,8 @@ function renderCfg(){
     const isEnd=j===0||j===nodes.length-1;
     const tr=document.createElement('tr');
     tr.innerHTML=`<td style="font-weight:700;width:36px">${NN[j]}</td><td><select data-ni="${j}">
-      <option value="pin" ${nd2.t==='pin'||nd2.t==='roller'?'selected':''}>Pin</option>
+      <option value="pin" ${nd2.t==='pin'?'selected':''}>Pin</option>
+      <option value="roller" ${nd2.t==='roller'?'selected':''}>Roller</option>
       <option value="fixed" ${nd2.t==='fixed'?'selected':''}>Fixed</option>
       ${isEnd?`<option value="free" ${nd2.t==='free'?'selected':''}>Free (cantilever)</option>`:''}
     </select></td>`;
@@ -931,14 +978,14 @@ let dragRow=null;
 function renderTable(){
   const th=g('tHd'),tb=g('tBod');
   th.innerHTML=envOn
-    ?`<tr><th>x (${lu})</th><th>Vmax (${fu})</th><th>Vmin (${fu})</th><th>Mmax (${fu}·${lu})</th><th>Mmin (${fu}·${lu})</th><th></th></tr>`
+    ?`<tr><th>x (${lu})</th><th>Vmax (${fu})</th><th>Vmin (${fu})</th><th>Mmax (${fu}·${lu})</th><th>Mmin (${fu}·${lu})</th>${env&&env.D?`<th>δmax (${lu})</th><th>δmin (${lu})</th>`:''}<th></th></tr>`
     :`<tr><th>x (${lu})</th><th>V (${fu})</th><th>M (${fu}·${lu})</th>${deD.length?`<th>δ (${lu})</th>`:''}<th></th></tr>`;
   tb.innerHTML='';
   if(!tabR.length){tb.innerHTML='<tr><td colspan="6" class="empty">Add loads</td></tr>';return;}
   tabR.forEach(r=>{
     const tr=document.createElement('tr');if(r.t==='User')tr.className='ud';
     tr.innerHTML=envOn
-      ?`<td>${r.x.toFixed(3)}</td><td>${r.Vmx.toFixed(3)}</td><td>${r.Vmn.toFixed(3)}</td><td>${r.Mmx.toFixed(3)}</td><td>${r.Mmn.toFixed(3)}</td><td><span class="tb ${r.t==='User'?'tb-u':'tb-t'}">${r.t}</span></td>`
+      ?`<td>${r.x.toFixed(3)}</td><td>${r.Vmx.toFixed(3)}</td><td>${r.Vmn.toFixed(3)}</td><td>${r.Mmx.toFixed(3)}</td><td>${r.Mmn.toFixed(3)}</td>${r.Dmx!=null?`<td>${r.Dmx.toFixed(5)}</td><td>${r.Dmn.toFixed(5)}</td>`:''}<td><span class="tb ${r.t==='User'?'tb-u':'tb-t'}">${r.t}</span></td>`
       :`<td>${r.x.toFixed(3)}</td><td>${r.V.toFixed(3)}</td><td>${r.M.toFixed(3)}</td>${deD.length?`<td>${(r.D||0).toFixed(5)}</td>`:''}<td><span class="tb ${r.t==='User'?'tb-u':'tb-t'}">${r.t}</span></td>`;
     tb.appendChild(tr);});
 }
@@ -960,7 +1007,7 @@ function drawAll(){
   [['cS','pS'],['cM','pM'],['cD','pD']].forEach(([c,pd])=>{
     if(g(c))g(c).classList.toggle('hidden',P);
     if(g(pd))g(pd).classList.toggle('hidden',!P);});
-  const showD=secOn&&!envOn&&deD.length;
+  const showD=secOn&&deD.length;
   if(P){
     plotDia('s');plotDia('m');
     if(showD)plotDefl();
@@ -1164,7 +1211,8 @@ function drawDefl(){
   ctx.clearRect(0,0,W,H);ctx.fillStyle='#fafafa';ctx.fillRect(0,0,W,H);
   if(!deD.length)return;
   const PL=72,PR=24,PT=22,PB=42,gW=W-PL-PR,gH=H-PT-PB;
-  const mn=Math.min(...deD.map(p=>p.y),0),mx=Math.max(...deD.map(p=>p.y),0),rng=mx-mn||1e-9;
+  const DS=envOn&&env&&env.D?[env.D.mx,env.D.mn]:[deD]; // envelope: max and min curves
+  const mn=Math.min(...DS.map(d=>Math.min(...d.map(p=>p.y))),0),mx=Math.max(...DS.map(d=>Math.max(...d.map(p=>p.y))),0),rng=mx-mn||1e-9;
   const tx=x=>PL+x/totL*gW,ty=y=>PT+(y-mn)/rng*gH,z0=ty(0); // downward positive = down on screen
   for(let i=0;i<=4;i++){const v=mn+rng*i/4,y=ty(v);ctx.strokeStyle=Math.abs(v)<1e-12?'#cbd5e1':'#f1f5f9';ctx.lineWidth=Math.abs(v)<1e-12?1.5:1;ctx.beginPath();ctx.moveTo(PL,y);ctx.lineTo(W-PR,y);ctx.stroke();}
   nodeX.slice(1,-1).forEach(nx=>{const xp=tx(nx);ctx.strokeStyle='rgba(100,116,139,.2)';ctx.setLineDash([3,3]);ctx.beginPath();ctx.moveTo(xp,PT);ctx.lineTo(xp,H-PB);ctx.stroke();ctx.setLineDash([]);});
@@ -1172,8 +1220,10 @@ function drawDefl(){
   if(defLim>0)deflSpans().forEach(s2=>{const lim=s2.allow;if(lim<=mx){const y=ty(lim),x1=tx(nodeX[s2.i]),x2=tx(nodeX[s2.i+1]);ctx.strokeStyle='#dc2626';ctx.setLineDash([6,3]);ctx.lineWidth=1.3;ctx.beginPath();ctx.moveTo(x1,y);ctx.lineTo(x2,y);ctx.stroke();ctx.setLineDash([]);
     ctx.fillStyle='#dc2626';ctx.font='bold 9px system-ui';ctx.textAlign='left';ctx.fillText(`L/${defLim}=${lim.toFixed(4)}`,x1+4,y-4);}});
   const gr=ctx.createLinearGradient(0,PT,0,PT+gH);gr.addColorStop(0,'rgba(8,145,178,.03)');gr.addColorStop(1,'rgba(8,145,178,.15)');
+  if(DS.length>1)DS.forEach((d,q)=>{ctx.beginPath();ctx.strokeStyle=q?'#dc2626':'#2563eb';ctx.lineWidth=2;ctx.lineJoin='round';d.forEach((p,i)=>i===0?ctx.moveTo(tx(p.x),ty(p.y)):ctx.lineTo(tx(p.x),ty(p.y)));ctx.stroke();});
+  else{
   ctx.beginPath();ctx.moveTo(tx(deD[0].x),z0);deD.forEach(p=>ctx.lineTo(tx(p.x),ty(p.y)));ctx.lineTo(tx(deD[deD.length-1].x),z0);ctx.closePath();ctx.fillStyle=gr;ctx.fill();
-  ctx.beginPath();ctx.strokeStyle='#0891b2';ctx.lineWidth=2.2;ctx.lineJoin='round';deD.forEach((p,i)=>i===0?ctx.moveTo(tx(p.x),ty(p.y)):ctx.lineTo(tx(p.x),ty(p.y)));ctx.stroke();
+  ctx.beginPath();ctx.strokeStyle='#0891b2';ctx.lineWidth=2.2;ctx.lineJoin='round';deD.forEach((p,i)=>i===0?ctx.moveTo(tx(p.x),ty(p.y)):ctx.lineTo(tx(p.x),ty(p.y)));ctx.stroke();}
   ctx.strokeStyle='#cbd5e1';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(PL,PT);ctx.lineTo(PL,H-PB);ctx.stroke();
   ctx.font='10px system-ui';ctx.fillStyle='#64748b';ctx.textAlign='right';
   for(let i=0;i<=4;i++){const v=mn+rng*i/4;ctx.fillText(v.toFixed(4),PL-4,ty(v)+3.5);}
@@ -1287,7 +1337,15 @@ function plotDia(kind){
 function plotDefl(){
   const div=g('pD');
   const traces=[],anns=[],shapes=[...supportShapes(),...userShapes()];
+  const envD=envOn&&env&&env.D;
   if(deD.length){
+    if(envD){
+      traces.push({x:XS(env.D.mx),y:YS(env.D.mx),name:'Envelope max (down)',type:'scatter',mode:'lines',
+        line:{color:'#2563eb',width:2},hovertemplate:`max %{y:.5f} ${lu}<extra></extra>`});
+      traces.push({x:XS(env.D.mn),y:YS(env.D.mn),name:'Envelope min',type:'scatter',mode:'lines',
+        fill:'tonexty',fillcolor:'rgba(37,99,235,.12)',
+        line:{color:'#dc2626',width:2},hovertemplate:`min %{y:.5f} ${lu}<extra></extra>`});
+    }else
     traces.push({x:XS(deD),y:YS(deD),name:'δ',type:'scatter',mode:'lines',
       fill:'tozeroy',fillcolor:'rgba(8,145,178,.13)',
       line:{color:'#0891b2',width:2.2},showlegend:false,
@@ -1310,7 +1368,8 @@ function plotDefl(){
     // deflection is plotted downward-positive, so invert the axis to draw sag downward
     yaxis:{title:{text:`Deflection δ (${lu})`,font:{size:11}},gridcolor:'#f1f5f9',
       zeroline:true,zerolinecolor:'#cbd5e1',zerolinewidth:1.5,linecolor:'#cbd5e1',autorange:'reversed'},
-    shapes,annotations:anns,showlegend:false
+    shapes,annotations:anns,showlegend:!!envD,
+    legend:{orientation:'h',y:1.14,x:0,font:{size:10},bgcolor:'rgba(0,0,0,0)'}
   },PCFG('deflection'));
 }
 /* HOVER + CLICK */
@@ -1367,13 +1426,17 @@ function renderKaTeX(){
   if(envOn){
     // Envelope results
     let s3=p('Each IBC combination solved independently via the Direct Stiffness Method; envelope taken point-wise.');
-    s3+=`<table class="ctb"><thead><tr><th>Combination</th><th>|V|max</th><th>|M|max</th></tr></thead><tbody>`;
-    env.per.forEach(pc=>s3+=`<tr><td>${pc.name}</td><td>${pc.vm.toFixed(3)} ${fu}</td><td>${pc.mm.toFixed(3)} ${fu}·${lu}</td></tr>`);
+    s3+=`<table class="ctb"><thead><tr><th>Combination</th><th>|V|max</th><th>|M|max</th>${env.D?'<th>|δ|max</th>':''}</tr></thead><tbody>`;
+    env.per.forEach(pc=>s3+=`<tr><td>${pc.name}</td><td>${pc.vm.toFixed(3)} ${fu}</td><td>${pc.mm.toFixed(3)} ${fu}·${lu}</td>${env.D?`<td>${pc.dm.toFixed(5)} ${lu}</td>`:''}</tr>`);
     s3+=`</tbody></table>`;
     const vm=Math.max(...env.per.map(p2=>p2.vm)),mm=Math.max(...env.per.map(p2=>p2.mm));
     const vg=env.per.find(p2=>p2.vm===vm),mg=env.per.find(p2=>p2.mm===mm);
     s3+=`<div class="bxg">${kb(`|V|_{\\text{env}}=${vm.toFixed(4)}\\,\\text{${fu}}\\;\\text{governed by ${vg.name}}`)}${kb(`|M|_{\\text{env}}=${mm.toFixed(4)}\\,\\text{${fu}\\!\\cdot\\!${lu}}\\;\\text{governed by ${mg.name}}`)}</div>`;
     if(secOn&&Iv>0&&cv>0)s3+=`<div class="bxr">${kb(`\\sigma_{\\text{env}}=\\frac{|M|_{\\text{env}}\\cdot c}{I}=\\boxed{${(mm*cv/Iv).toFixed(4)}\\,\\text{${fu}/${lu}^2}}`)}</div>`;
+    if(deD.length){const dm=Math.max(...deD.map(p2=>Math.abs(p2.y)));
+      s3+=`<div class="bxb">${p('<strong>Deflection envelope</strong> — δ by double integration of M/EI for each enabled combination, enveloped point-wise. A factored combination gives a factored deflection: for a service-level check, enable only service combinations or use single-combination mode.')}${kb(`|\\delta|_{\\text{env}}=\\boxed{${dm.toFixed(6)}\\,\\text{${lu}}}`)}`;
+      if(defLim>0)deflSpans().forEach(s2=>{s3+=kb(`\\text{Span ${s2.i+1}: }|\\delta|_{\\max}=${s2.dm.toFixed(5)}\\;${s2.ok?'\\le':'>'}\\;L_{${s2.i+1}}/${defLim}=${s2.L}/${defLim}=${s2.allow.toFixed(5)}\\,\\text{${lu}}\\;\\Rightarrow\\;${s2.ok?'\\text{OK}\\;\\checkmark':'\\text{NG}\\;\\times'}\\;\\text{(${s2.c&&COMBOS[s2.c]?COMBOS[s2.c].name:''})}`);});
+      s3+=`</div>`;}
     html+=sec(N++,'Envelope Results — All Combinations',s3);
     // reactions
     let s4='';
@@ -1475,7 +1538,10 @@ g('fIm').addEventListener('change',e=>{
 g('bPr').onclick=()=>{readIn();window.print();};
 
 /* EVENTS */
-['iFU','iLU'].forEach(id=>g(id).addEventListener('change',()=>{renderCfg();refreshDG();schedule();toast('⚠ Units relabelled only — values were NOT converted');}));
+['iFU','iLU'].forEach(id=>g(id).addEventListener('change',()=>{const fu0=fu,lu0=lu;
+  const cvd=convertUnits(fu0,lu0,g('iFU').value,g('iLU').value);
+  renderCfg();renderLoads(true);refreshDG();schedule();
+  if(cvd)toast(`Values converted: ${fu0}, ${lu0} → ${fu}, ${lu} (Ctrl+Z to undo)`);}));
 g('iLC').addEventListener('change',()=>{caseView=null;cid=g('iLC').value;renderCfg();refreshDG();schedule();});
 ['iE','iI','iC','iA','iDL','iFb'].forEach(id=>g(id).addEventListener('input',schedule));
 ['iI','iC','iA'].forEach(id=>g(id).addEventListener('input',()=>{if(shpW){shpW=null;g('iShape').value='';}})); // edited by hand → custom section
@@ -1491,7 +1557,7 @@ g('iShape').addEventListener('change',e=>{
   g('iI').value=(Iin*f*f*f*f).toPrecision(5);
   g('iC').value=(din/2*f).toPrecision(4);
   g('iA').value=(Ain*f*f).toPrecision(4);
-  if(fu==='kip')g('iE').value=Math.round(29000/(f*f));
+  g('iE').value=Math.round(29000/FKIP[fu]/(f*f)); // E = 29,000 ksi in the current units (was: set only when fu = kip)
   schedule();});
 g('bAS').onclick=()=>{spans.push({L:10});nodes.splice(nodes.length-1,0,{t:'roller'});renderCfg();schedule();};
 function addLoad(o){o.id=Date.now()+Math.floor(Math.random()*1000);o.nm=autoName(o.type);loads.push(o);editId=o.id;renderLoads(true);schedule();}
@@ -1666,7 +1732,7 @@ let didDrag=false;
     const{h,moved}=drag;drag=null;
     if(!moved&&h.k==='sup'){
       const j=h.j,isEnd=j===0||j===nodes.length-1;
-      const cyc=isEnd?['pin','fixed','free']:['pin','fixed'];
+      const cyc=isEnd?['pin','roller','fixed','free']:['pin','roller','fixed'];
       nodes[j].t=cyc[(cyc.indexOf(nodes[j].t)+1)%cyc.length];
       renderCfg();schedule();toast('Support '+NN[j]+': '+nodes[j].t);return;}
     if(moved){renderCfg();renderLoads(true);schedule();setTimeout(()=>didDrag=false,60);}}
@@ -1705,7 +1771,8 @@ function setupProbe(cid2){
 setupProbe('cS');setupProbe('cM');
 
 /* ── SAVED ANALYSES (persisted in this browser via localStorage) ── */
-const LSK='beamProSaves',LSA='beamProAuto';
+const LSK='smd_saves_v1',LSA='smd_auto_v1'; // tool-prefixed (CLAUDE.md §5); were the generic 'beamProSaves' / 'beamProAuto'
+const LSK_OLD='beamProSaves',LSA_OLD='beamProAuto'; // read once by smdMigrateKeys(), never written or removed
 let lsWarned=false;
 function lsGet(k){try{return localStorage.getItem(k);}catch(e){return null;}}
 function lsSet(k,v){try{localStorage.setItem(k,v);return true;}catch(e){
@@ -1713,6 +1780,8 @@ function lsSet(k,v){try{localStorage.setItem(k,v);return true;}catch(e){
   return false;}}
 function getSaves(){try{return JSON.parse(lsGet(LSK))||{};}catch(e){return{};}}
 function putSaves(s){return lsSet(LSK,JSON.stringify(s));}
+/* One-time migration: copy each old generic key into its new key when the new key does not exist yet. */
+function smdMigrateKeys(){[[LSK_OLD,LSK],[LSA_OLD,LSA]].forEach(([o,n])=>{if(lsGet(n)===null){const v=lsGet(o);if(v!==null)lsSet(n,v);}});}
 function refreshSaveList(){
   const sel=g('saveSel'),saves=getSaves();
   const names=Object.keys(saves).sort((a,b)=>saves[b].t-saves[a].t);
@@ -1757,6 +1826,7 @@ function updateDirty(){
 }
 function autoSave(){lsSet(LSA,JSON.stringify({t:Date.now(),d:gatherProject()}));}
 (function(){
+  smdMigrateKeys();
   refreshSaveList();
   try{
     const a=JSON.parse(lsGet(LSA));
@@ -1868,8 +1938,9 @@ g('bUndo').onclick=undo;g('bRedo').onclick=redo;
 function resultsRows(sep){
   const rows=[];
   if(envOn){
-    rows.push(['x ('+lu+')','Vmax ('+fu+')','Vmin ('+fu+')','Mmax ('+fu+'·'+lu+')','Mmin ('+fu+'·'+lu+')','Type']);
-    tabR.forEach(r=>rows.push([r.x.toFixed(4),r.Vmx.toFixed(4),r.Vmn.toFixed(4),r.Mmx.toFixed(4),r.Mmn.toFixed(4),r.t]));
+    const eD=!!(env&&env.D);
+    rows.push(['x ('+lu+')','Vmax ('+fu+')','Vmin ('+fu+')','Mmax ('+fu+'·'+lu+')','Mmin ('+fu+'·'+lu+')',...(eD?['delta max ('+lu+')','delta min ('+lu+')']:[]),'Type']);
+    tabR.forEach(r=>rows.push([r.x.toFixed(4),r.Vmx.toFixed(4),r.Vmn.toFixed(4),r.Mmx.toFixed(4),r.Mmn.toFixed(4),...(eD?[r.Dmx.toFixed(6),r.Dmn.toFixed(6)]:[]),r.t]));
   }else{
     const hd=['x ('+lu+')','V ('+fu+')','M ('+fu+'·'+lu+')'];if(deD.length)hd.push('delta ('+lu+')');hd.push('Type');
     rows.push(hd);
@@ -1954,19 +2025,19 @@ async function buildReport(){
   if(secOn&&Iv>0&&cv>0){const sg=mm*cv/Iv;
     h+=`<tr><td>σ<sub>max</sub> = |M|c/I</td><td>${sg.toFixed(4)} ${fu}/${lu}²</td><td>${Fbv>0?Fbv+' '+fu+'/'+lu+'²':'—'}</td><td>${Fbv>0?(sg<=Fbv?'<b style="color:#15803d">OK ✓</b> ('+(sg/Fbv*100).toFixed(1)+'%)':'<b style="color:#b91c1c">NG ✗</b> ('+(sg/Fbv*100).toFixed(1)+'%)'):'—'}</td></tr>`;}
   {const tq=secOn?tauOf(vm):null;if(tq)h+=`<tr><td>τ<sub>max</sub> = ${tq.lbl}${shpW?' ('+esc(shpW.nm)+')':''}</td><td>${tq.val.toFixed(4)} ${fu}/${lu}²</td><td>—</td><td>—</td></tr>`;}
-  if(!envOn&&deD.length){const dm=Math.max(...deD.map(p=>Math.abs(p.y)));
-    if(defLim>0)deflSpans().forEach(s2=>{h+=`<tr><td>δ<sub>max</sub>, span ${s2.i+1}</td><td>${s2.dm.toFixed(6)} ${lu}</td><td>L/${defLim} = ${s2.L}/${defLim} = ${s2.allow.toFixed(5)} ${lu}</td><td>${s2.ok?'<b style="color:#15803d">OK ✓</b>':'<b style="color:#b91c1c">NG ✗</b>'}</td></tr>`;});
+  if(deD.length){const dm=Math.max(...deD.map(p=>Math.abs(p.y)));
+    if(defLim>0)deflSpans().forEach(s2=>{h+=`<tr><td>δ<sub>max</sub>, span ${s2.i+1}${s2.c&&COMBOS[s2.c]?' ('+esc(COMBOS[s2.c].name)+')':''}</td><td>${s2.dm.toFixed(6)} ${lu}</td><td>L/${defLim} = ${s2.L}/${defLim} = ${s2.allow.toFixed(5)} ${lu}</td><td>${s2.ok?'<b style="color:#15803d">OK ✓</b>':'<b style="color:#b91c1c">NG ✗</b>'}</td></tr>`;});
     else h+=`<tr><td>δ<sub>max</sub></td><td>${dm.toFixed(6)} ${lu}</td><td>—</td><td>—</td></tr>`;}
   h+=`</table>`;
   // 5 — diagrams
   h+=`<h2>5. Diagrams</h2>`;
   for(const [id,t] of [['cL','Loading Diagram'],['cS','Shear Force Diagram'],['cM','Bending Moment Diagram'],['cD','Deflection Curve']]){
-    if(id==='cD'&&!(secOn&&!envOn&&deD.length))continue;
+    if(id==='cD'&&!(secOn&&deD.length))continue;
     h+=`<h3>${t}</h3><img src="${await diagImg(id)}">`;}
   // 6 — tabular results
   h+=`<h2>6. Tabular Results</h2><table>`;
-  if(envOn){h+=`<tr><th>x (${lu})</th><th>Vmax (${fu})</th><th>Vmin (${fu})</th><th>Mmax (${fu}·${lu})</th><th>Mmin (${fu}·${lu})</th></tr>`;
-    tabR.forEach(r=>h+=`<tr><td>${r.x.toFixed(3)}</td><td>${r.Vmx.toFixed(3)}</td><td>${r.Vmn.toFixed(3)}</td><td>${r.Mmx.toFixed(3)}</td><td>${r.Mmn.toFixed(3)}</td></tr>`);}
+  if(envOn){const eD=!!(env&&env.D);h+=`<tr><th>x (${lu})</th><th>Vmax (${fu})</th><th>Vmin (${fu})</th><th>Mmax (${fu}·${lu})</th><th>Mmin (${fu}·${lu})</th>${eD?`<th>δmax (${lu})</th><th>δmin (${lu})</th>`:''}</tr>`;
+    tabR.forEach(r=>h+=`<tr><td>${r.x.toFixed(3)}</td><td>${r.Vmx.toFixed(3)}</td><td>${r.Vmn.toFixed(3)}</td><td>${r.Mmx.toFixed(3)}</td><td>${r.Mmn.toFixed(3)}</td>${eD?`<td>${r.Dmx.toFixed(5)}</td><td>${r.Dmn.toFixed(5)}</td>`:''}</tr>`);}
   else{h+=`<tr><th>x (${lu})</th><th>V (${fu})</th><th>M (${fu}·${lu})</th>${deD.length?`<th>δ (${lu})</th>`:''}</tr>`;
     tabR.forEach(r=>h+=`<tr><td>${r.x.toFixed(3)}</td><td>${r.V.toFixed(3)}</td><td>${r.M.toFixed(3)}</td>${deD.length?`<td>${(r.D||0).toFixed(5)}</td>`:''}</tr>`);}
   h+=`</table>`;

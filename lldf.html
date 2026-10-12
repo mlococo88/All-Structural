@@ -357,7 +357,7 @@ var st=document.createElement('style'); st.textContent=css;
     <div class="titleblock">
       <div class="tb-id">
         <h1>Live Load &amp; Dead Load Distribution</h1>
-        <div class="sub">AASHTO LRFD Bridge Design Specifications · MassDOT Bridge Manual Part I</div>
+        <div class="sub">AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024) · MassDOT Bridge Manual Part I</div>
         <div class="code">LL: Approximate Method, Art. 4.6.2.2 &nbsp;·&nbsp; DL: MassDOT §3.5.3</div>
       </div>
       <div class="tb-meta">
@@ -430,7 +430,8 @@ var st=document.createElement('style'); st.textContent=css;
               <option value="deck-voided">Deck beam — voided</option>
               <option value="next">NEXT beam (double-tee)</option>
             </select></div></div>
-            <div class="frow"><label>Skew angle <span class="sym">&theta;</span></label><div class="fval"><input type="number" id="skew" value="0" step="5"/><span class="u">deg</span></div></div>
+            <div class="frow"><label>Skew angle <span class="sym">&theta;</span></label><div class="fval"><input type="number" id="skew" value="0" step="5" title="Used for the moment reduction (Table 4.6.2.2.2e-1), and for the shear correction too unless a separate shear skew is entered below. The sign is ignored (|&theta;| is used)."/><span class="u">deg</span></div></div>
+            <div class="frow"><label>Skew for shear <span class="sym">&theta;<sub>V</sub></span> <span style="font-size:10.5px;color:var(--muted)">blank = &theta;</span></label><div class="fval"><input type="number" id="skewV" value="" step="5" placeholder="= &theta;" title="Optional. Skew used for the obtuse-corner shear correction (Table 4.6.2.2.3c-1) only. Leave blank to use &theta;. Where the support skews differ, AASHTO Art. 4.6.2.2.2e / 4.6.2.2.3c: moment &theta; = the smallest |skew| (0 if adjacent supports differ by more than 10&deg;), shear &theta;V = the largest |skew|. Bridge Geometry fills both."/><span class="u">deg</span></div></div>
           </div>
         </div>
         <div>
@@ -486,7 +487,8 @@ var st=document.createElement('style'); st.textContent=css;
             </div>
             <div>
               <div class="frow"><label>Eccentricity <span class="sym">e<sub>g</sub></span></label><div class="fval"><input type="number" id="eg" value="35.5" step="0.1"/><span class="u">in</span></div></div>
-              <div class="frow"><label>Modular ratio <span class="sym">n</span></label><div class="fval"><input type="number" id="n" value="1" step="0.1"/><span class="u"></span></div></div>
+              <div class="frow"><label>Modular ratio <span class="sym">n</span></label><div class="fval"><input type="number" id="n" value="1.31" step="0.1" title="n = E_B / E_D (Eq. 4.6.2.2.1-2). For a concrete girder it is computed from the girder and deck f&prime;c below (Eq. 5.4.2.4-1); you can still type a value."/><span class="u"></span></div></div>
+              <div class="frow"><label>Girder / deck <span class="sym">f&prime;<sub>c</sub></span> <span style="font-size:10.5px;color:var(--muted)">concrete girder: sets n</span></label><div class="fval"><input type="number" id="fcGirder" value="8.0" step="0.5" style="width:72px" title="Girder concrete f&prime;c. For a concrete girder, n = E_c,girder / E_c,deck is computed from the two f&prime;c values (AASHTO LRFD Eq. 5.4.2.4-1, K1 = 1, w_c per Table 3.5.1-1)."/><span class="u">ksi</span><input type="number" id="fcDeck" value="4.0" step="0.5" style="width:72px" title="Deck concrete f&prime;c."/><span class="u">ksi</span></div></div>
             </div>
           </div>
         </div>
@@ -600,7 +602,8 @@ var st=document.createElement('style'); st.textContent=css;
   function now(){ try{return new Date().toISOString();}catch(e){return '';} }
   function newId(){ return 'bp_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,6); }
   function readReg(){ try{return JSON.parse(localStorage.getItem(K_PROJ)||'{}')||{};}catch(e){return {};} }
-  function writeReg(r){ try{localStorage.setItem(K_PROJ,JSON.stringify(r));return true;}catch(e){return false;} }
+  function writeReg(r){ try{localStorage.setItem(K_PROJ,JSON.stringify(r));return true;}
+    catch(e){ try{ if(window.BridgeApps&&window.BridgeApps.storageWarn) window.BridgeApps.storageWarn('the shared project',e); }catch(x){} return false;} }
   function raw(){ return readReg(); }
   function list(){ var r=readReg(); return Object.keys(r).map(function(id){var e=r[id];
     return {id:id,name:e.name,savedAt:e.savedAt,apps:Object.keys(e.slices||{}),hasDemands:!!e.demands};})
@@ -681,8 +684,37 @@ var st=document.createElement('style'); st.textContent=css;
   var ME='';                                   // which app this file is, set by boot()
   var MAXDIRS=24;                              // folders remembered per app
   function read(){ try{ return JSON.parse(localStorage.getItem(KEY))||{}; }catch(e){ return {}; } }
-  function write(o){ try{ localStorage.setItem(KEY,JSON.stringify(o)); return true; }catch(e){ return false; } }
+  function write(o){ try{ localStorage.setItem(KEY,JSON.stringify(o)); return true; }catch(e){ storageWarn('the app-path record',e); return false; } }
   function now(){ return new Date().toISOString(); }
+  /* A write to the shared browser storage that fails because the storage is
+     FULL is shown, not swallowed (X-S8). Every tool opened from file:// in
+     Chrome/Edge shares one ~5 MB area, so once it fills, every autosave and
+     hand-off stops at once. One banner per page, one line per item; the other
+     shared blocks reach it through window.BridgeApps.storageWarn. */
+  var warned={};
+  function isQuota(e){ return !!e&&(e.name==='QuotaExceededError'||e.name==='NS_ERROR_DOM_QUOTA_REACHED'||
+    e.code===22||e.code===1014||/quota/i.test(String(e.message||''))); }
+  function storageWarn(what,e){
+    if(!isQuota(e)||warned[what]) return false;
+    warned[what]=true;
+    var show=function(){ try{
+      var b=document.getElementById('bridgeStorageWarn');
+      if(!b){
+        b=document.createElement('div'); b.id='bridgeStorageWarn'; b.setAttribute('role','alert');
+        b.style.cssText='position:fixed;left:8px;right:8px;bottom:8px;z-index:2147483647;background:#fdecea;color:#7a1a12;'
+          +'border:1px solid #b3261e;border-radius:6px;padding:8px 34px 8px 12px;font:13px/1.4 system-ui,sans-serif;box-shadow:0 2px 8px rgba(0,0,0,.25)';
+        var x=document.createElement('button'); x.type='button'; x.textContent='\u00d7'; x.title='Dismiss'; x.setAttribute('aria-label','Dismiss');
+        x.style.cssText='position:absolute;top:4px;right:6px;border:0;background:none;font-size:18px;line-height:1;cursor:pointer;color:#7a1a12';
+        x.onclick=function(){ if(b.parentNode) b.parentNode.removeChild(b); };
+        b.appendChild(x); document.body.appendChild(b);
+      }
+      var line=document.createElement('div');
+      line.textContent='\u26a0 Browser storage is full: '+what+' was not saved. Export your work as JSON now, then delete old projects to free space.';
+      b.appendChild(line);
+    }catch(x){} };
+    if(document.body) show(); else { try{ document.addEventListener('DOMContentLoaded',show); }catch(x){} }
+    return true;
+  }
   /* This app's own file name as the browser sees it. Decoded, because a name
      with a space arrives percent-encoded and the value is shown to a human. */
   function selfFile(){
@@ -783,8 +815,19 @@ var st=document.createElement('style'); st.textContent=css;
     // fact loaded and was working. This standing listener lets the parent re-ask at
     // any time with a {whois:true} ping, so the handshake self-heals instead of
     // requiring a full reload of the suite.
+    // Only the page framing this one, the window that opened it, or a frame
+    // this window holds may ask (X-S10; same rule as the abutment / EDM links).
+    var asker=function(src){
+      if(!src) return false;
+      try{
+        if(window.parent!==window&&src===window.parent) return true;
+        if(window.opener&&src===window.opener) return true;
+        for(var i=0;i<window.frames.length;i++) if(window.frames[i]===src) return true;
+      }catch(x){}
+      return false;
+    };
     try{ window.addEventListener('message',function(e){
-      var d=e&&e.data; if(d&&d.source==='bridge-suite'&&d.whois) send();
+      var d=e&&e.data; if(d&&d.source==='bridge-suite'&&d.whois&&asker(e.source)) send();
     }); }catch(e){}
   }
   function boot(app){ if(NAMES[app]) ME=app; register(app); announce(app); }
@@ -792,7 +835,7 @@ var st=document.createElement('style'); st.textContent=css;
   function href(app){ return path(app); }
   window.BridgeApps={ KEY:KEY, DEFAULTS:DEF, NAMES:NAMES, selfFile:selfFile, selfDir:selfDir,
     register:register, announce:announce, boot:boot, set:set, path:path, href:href,
-    info:info, all:all };
+    info:info, all:all, storageWarn:storageWarn };
 })();
 
 try{ window.BridgeApps.boot('lldf'); }catch(e){}
@@ -1691,27 +1734,32 @@ function memberSpacing(p,j){
 function girderU(p,geo){ return geo.pos.map(x=>p.OL+x); }  // girder CL positions from left deck edge
 
 function skewFactors(p,geo,Kg){
-  const th=p.skew;
-  if(th<=0) return {active:false,scfM:1,scfV:1,c1:0,thU:0,th:0,kind:"none"};
+  /* th = skew for the moment reduction (Table 4.6.2.2.2e-1); thV = skew for the shear correction
+     (Table 4.6.2.2.3c-1). thV = th unless a separate shear skew is entered (p.skewV): where the
+     support skews differ, Art. 4.6.2.2.2e limits the moment reduction (smallest |θ|, none if adjacent
+     supports differ by > 10°) while the obtuse-corner shear takes the largest |θ|. Signs are ignored. */
+  const th=Math.abs(+p.skew||0), thV=(p.skewV!=null&&isFinite(p.skewV))?Math.abs(+p.skewV):th;
+  if(th<=0&&thV<=0) return {active:false,scfM:1,scfV:1,c1:0,thU:0,th:0,thV:0,thVU:0,tanV:0,kind:"none"};
   const thU=Math.min(th,60), rad=thU*Math.PI/180, tan=Math.tan(rad);
+  const thVU=Math.min(thV,60), tanV=Math.tan(thVU*Math.PI/180);
   if(BOX.has(p.type)){
     // Table 4.6.2.2.2e-1 (box): 1.05 − 0.25 tanθ ≤ 1.0 ; Table 4.6.2.2.3c-1 (box): 1 + (12L/90d)√tanθ
     const scfM=Math.min(1.0,1.05-0.25*tan);
-    const scfV=1.0+(12.0*p.L/(90.0*p.depth))*Math.sqrt(Math.max(0,tan));
-    return {active:true,scfM,scfV,thU,th,tan,kind:"box"};
+    const scfV=1.0+(12.0*p.L/(90.0*p.depth))*Math.sqrt(Math.max(0,tanV));
+    return {active:true,scfM,scfV,thU,th,tan,thV,thVU,tanV,kind:"box"};
   }
   if(BEAM_SLAB.has(p.type)&&Kg){
     let scfM=1,c1=0;
     if(thU>=30){ c1=0.25*Math.pow(Kg/(12*p.L*Math.pow(p.ts,3)),0.25)*Math.pow(geo.Savg/p.L,0.5); scfM=1-c1*Math.pow(tan,1.5); }
-    const scfV=1+0.20*Math.pow(12*p.L*Math.pow(p.ts,3)/Kg,0.3)*tan;
-    return {active:true,scfM,scfV,c1,thU,th,tan,kind:"beamslab"};
+    const scfV=1+0.20*Math.pow(12*p.L*Math.pow(p.ts,3)/Kg,0.3)*tanV;
+    return {active:true,scfM,scfV,c1,thU,th,tan,thV,thVU,tanV,kind:"beamslab"};
   }
   if(p.type==="bc"||p.type==="d"){
     // moment reduction shared with box row of Table 4.6.2.2.2e-1; shear factors computed per member/type
     const scfM=Math.min(1.0,1.05-0.25*tan);
-    return {active:true,scfM,scfV:1,thU,th,tan,kind:p.type==="bc"?"spread":"multicell"};
+    return {active:true,scfM,scfV:1,thU,th,tan,thV,thVU,tanV,kind:p.type==="bc"?"spread":"multicell"};
   }
-  return {active:false,scfM:1,scfV:1,c1:0,thU:0,th:0,tan:0,kind:"none"};
+  return {active:false,scfM:1,scfV:1,c1:0,thU:0,th:0,tan:0,thV:0,thVU:0,tanV:0,kind:"none"};
 }
 function boxDF(p,geo){
   const b=p.boxB, I=p.boxI, J=p.boxJ, L=p.L, Nb=p.Nb;
@@ -1824,7 +1872,8 @@ function memberDF(p,geo,Kg,skew,j){
         lvUsed={lv1,lv2,eq:{mom1,mom2,shr1,shr2}};
         mom1=shr1=(lv1?lv1.df:0); mom2=shr2=(lv2?lv2.df:0);
       } else if(n3){ // Nb=3: moment = lesser of eqn or lever rule; shear = lever rule
-        const lv1=leverConfig(p,geo,j,1), lv2=leverConfig(p,geo,j,2);
+        // lv2 = governing of N = 2..N_L trucks (leverMulti), as for S > 16 ft (was 2 trucks only)
+        const lv1=leverConfig(p,geo,j,1), lv2=leverMulti(p,geo,j);
         n3info={lv1,lv2,eq:{mom1,mom2}};
         mom1=Math.min(mom1,lv1?lv1.df:mom1); mom2=Math.min(mom2,lv2?lv2.df:mom2);
         shr1=lv1?lv1.df:shr1; shr2=lv2?lv2.df:shr2;
@@ -1841,7 +1890,7 @@ function memberDF(p,geo,Kg,skew,j){
     if(tooWide){ // S > 16 ft: the e-factor rides on an out-of-range interior equation, so use the lever rule
       const lv2=leverMulti(p,geo,j); lvUsed={lv2,eq:{mE,vE}};   // governing of N = 2..N_L trucks
       mE=lv2?lv2.df:0; vE=lv2?lv2.df:0;
-    } else if(n3){ const lv2=leverConfig(p,geo,j,2); n3info={lv2,eqM:mE};
+    } else if(n3){ const lv2=leverMulti(p,geo,j); n3info={lv2,eqM:mE};   // governing of N = 2..N_L trucks
       mE=Math.min(mE,lv2?lv2.df:mE); vE=lv2?lv2.df:vE; }   // Nb=3: moment lesser of eqn/lever; shear lever
     // The rigid cross-section method is a statics check, not an empirical equation, so it
     // still applies (and may govern) when the spacing is out of range.
@@ -1868,7 +1917,9 @@ function memberDF(p,geo,Kg,skew,j){
       return {j,label,type,S,bx,r:{mom1,mom2,shr1,shr2},gM:Math.max(mom1,mom2),gV:Math.max(shr1,shr2),
         fatM:fat(mom1),fatV:fat(shr1),method:"box eqn (f/g)"};
     }
-    const side=(j===0)?"L":"R", de0=(side==="L")?geo.deL:geo.deR, de=Math.min(de0,2.0);
+    // d_e above the 2.0 ft range limit is NOT clamped (the clamp lowered e: unconservative); the
+    // e-equations are extrapolated and bridgeWarnings says so.
+    const side=(j===0)?"L":"R", de0=(side==="L")?geo.deL:geo.deR, de=de0;
     const eM1=Math.max(1.0,1.125+de/30), eM2=Math.max(1.0,1.04+de/25);
     const mExt1=eM1*bx.mom1*skew.scfM, mExt2=eM2*bx.mom2*skew.scfM;
     const eV1=Math.max(1.0,1.25+de/20);
@@ -1883,7 +1934,7 @@ function memberDF(p,geo,Kg,skew,j){
 
   if(p.type==="bc"){  // spread box beams
     const sp=spreadDF(p,S), tooWide=(S>18.0);
-    const fV=skew.active?1.0+(Math.sqrt(p.L*p.depth/12.0)/(6.0*S))*skew.tan:1.0;  // Table 4.6.2.2.3c-1 (b,c)
+    const fV=skew.active?1.0+(Math.sqrt(p.L*p.depth/12.0)/(6.0*S))*skew.tanV:1.0;  // Table 4.6.2.2.3c-1 (b,c)
     if(type==="int"){
       let mom1,mom2,shr1,shr2,lvUsed=null;
       if(tooWide){ const lv1=leverConfig(p,geo,j,1),lv2=leverMulti(p,geo,j); lvUsed={lv1,lv2};
@@ -1893,7 +1944,8 @@ function memberDF(p,geo,Kg,skew,j){
       return {j,label,type,S,sp,fV,tooWide,lvUsed,r:{mom1,mom2,shr1,shr2},gM:Math.max(mom1,mom2),gV:Math.max(shr1,shr2),
         fatM:fat(mom1),fatV:fat(shr1),method:tooWide?"lever (S>18)":"spread box eqn"};
     }
-    const side=(j===0)?"L":"R", de0=(side==="L")?geo.deL:geo.deR, de=Math.max(Math.min(de0,4.5),0);
+    // lower limit 0 kept (raises e); no upper clamp at 4.5 ft (extrapolated; the clamp lowered e)
+    const side=(j===0)?"L":"R", de0=(side==="L")?geo.deL:geo.deR, de=Math.max(de0,0);
     const lever1=leverConfig(p,geo,j,1), l1=lever1?lever1.df:0;
     const eM=0.97+de/28.5, eV=0.80+de/10;
     let mE,vE,lv2=null;
@@ -1907,14 +1959,15 @@ function memberDF(p,geo,Kg,skew,j){
 
   if(p.type==="d"){  // CIP multicell box — members are webs; Nc = Nb − 1
     const mc=multicellDF(p,S);
-    const fVext=skew.active?1.0+(0.25+12.0*p.L/(70.0*p.depth))*skew.tan:1.0;   // exterior web
-    const fVint=skew.active?1.0+(0.042+12.0*p.L/(420.0*p.depth))*skew.tan:1.0; // first interior web
+    const fVext=skew.active?1.0+(0.25+12.0*p.L/(70.0*p.depth))*skew.tanV:1.0;   // exterior web
+    const fVint=skew.active?1.0+(0.042+12.0*p.L/(420.0*p.depth))*skew.tanV:1.0; // first interior web
     if(type==="int"){
       const mom1=mc.mom1*skew.scfM, mom2=mc.mom2*skew.scfM, shr1=mc.shr1*fVint, shr2=mc.shr2*fVint;
       return {j,label,type,S,mc,fV:fVint,r:{mom1,mom2,shr1,shr2},gM:Math.max(mom1,mom2),gV:Math.max(shr1,shr2),
         fatM:fat(mom1),fatV:fat(shr1),method:"multicell eqn"};
     }
-    const side=(j===0)?"L":"R", de0=(side==="L")?geo.deL:geo.deR, de=Math.max(Math.min(de0,5.0),-2.0);
+    // lower limit −2.0 kept (raises e); no upper clamp at 5.0 ft (extrapolated; the clamp lowered e)
+    const side=(j===0)?"L":"R", de0=(side==="L")?geo.deL:geo.deR, de=Math.max(de0,-2.0);
     const O=(side==="L")?p.OL:p.OR, Sadj=(side==="L")?p.spacings[0]:p.spacings[p.spacings.length-1];
     const We=Math.min(O+Sadj/2.0,Sadj);
     const gWe=We/14.0;
@@ -1974,18 +2027,29 @@ function bridgeWarnings(p,geo,Kg){
        girder types; say so whenever d_e is outside the range, and say which way the clamp acts. */
     let lo=null,hi=null,clampLo=false,clampHi=false;
     if(BEAM_SLAB.has(p.type)){ lo=-1.0; hi=5.5; clampLo=true; }
-    else if(BOX.has(p.type)){ hi=2.0; clampHi=true; }
-    else if(p.type==="bc"){ lo=0.0; hi=4.5; clampLo=clampHi=true; }
-    else if(p.type==="d"){ lo=-2.0; hi=5.0; clampLo=clampHi=true; }
+    else if(BOX.has(p.type)){ hi=2.0; }
+    else if(p.type==="bc"){ lo=0.0; hi=4.5; clampLo=true; }
+    else if(p.type==="d"){ lo=-2.0; hi=5.0; clampLo=true; }
     if(hi!=null) [["left",geo.deL],["right",geo.deR]].forEach(([nm,de])=>{
       const rng=lo==null?`d_e ≤ ${f1(hi)} ft`:`${f1(lo)} ≤ d_e ≤ ${f1(hi)} ft`;
       const head=`d_e = ${f2(de)} ft at the ${nm} exterior girder is outside the range ${rng} (Tables 4.6.2.2.2d-1 / 4.6.2.2.3b-1). `;
       if(lo!=null&&de<lo-1e-9) warn(head+(clampLo?`d_e = ${f1(lo)} ft is used in the e-factors (clamped up; this raises e).`:`The e-factor equations are extrapolated.`));
-      else if(de>hi+1e-9) warn(head+(clampHi?`d_e = ${f1(hi)} ft is used in the e-factors (clamped DOWN; this LOWERS e and the exterior-girder DF, which is unconservative). Check the exterior girder by another method (e.g. lever rule / refined analysis).`:`The e-factor equations are extrapolated beyond their range; check the exterior girder by another method.`));
+      else if(de>hi+1e-9) warn(head+(clampHi?`d_e = ${f1(hi)} ft is used in the e-factors (clamped DOWN; this LOWERS e and the exterior-girder DF, which is unconservative). Check the exterior girder by another method (e.g. lever rule / refined analysis).`:`The e-factor equations are extrapolated with the actual d_e (not limited to ${f1(hi)} ft, which would lower e); check the exterior girder by another method.`));
     });
   }
-  if(p.skew>60 && p.type!=="slab")
-    warn(`Skew θ = ${f0(p.skew)}° exceeds the 60° limit of Tables 4.6.2.2.2e-1 / 4.6.2.2.3c-1. θ = 60° is used for BOTH the moment reduction and the shear correction (capped). The table directs θ = 60° for the moment reduction; the shear correction is only defined up to 60°, so the obtuse-corner shear may be understated. Consider a refined analysis (4.6.3).`);
+  if(p.skewV!=null&&p.type!=="slab"&&Math.abs(p.skewV-p.skew)>1e-9)
+    warn(`Separate skews: θ = ${f1(p.skew)}° for the moment reduction (Table 4.6.2.2.2e-1) and θ_V = ${f1(p.skewV)}° for the shear correction (Table 4.6.2.2.3c-1). Where the support skews differ, use the smallest |θ| for moment (0 if adjacent supports differ by more than 10°, Art. 4.6.2.2.2e) and the largest |θ| for shear.`,"info");
+  if(BEAM_SLAB.has(p.type)&&p.beamShape!=="steel-i"){
+    // n = E_B/E_D (Eq. 4.6.2.2.1-2). For a concrete girder, compare with E_c from the two f'c (Eq. 5.4.2.4-1).
+    const nc=nFromFc(p.fcGirder,p.fcDeck);
+    const locked=!!(window.BridgeLocks&&BridgeLocks.ok&&BridgeLocks.ok()&&(BridgeLocks.isLocked('geometry')||BridgeLocks.isLocked('psSection')));
+    if(nc!=null&&!locked&&Math.abs(p.n-nc)>0.006)
+      warn(`Modular ratio n = ${f2(p.n)} differs from E_c,girder / E_c,deck = ${f2(nc)} computed from f′c = ${f1(p.fcGirder)} / ${f1(p.fcDeck)} ksi (Eq. 5.4.2.4-1, w_c per Table 3.5.1-1). K_g = n(I + A·e_g²) uses the n entered; check it.`);
+    else if(nc==null&&p.n<=1+1e-9)
+      warn(`Modular ratio n = ${f2(p.n)} for a concrete girder. When the girder f′c exceeds the deck f′c, n = E_B/E_D > 1 (Eq. 4.6.2.2.1-2), which raises K_g and the DFs. Enter the girder and deck f′c to compute n.`,"info");
+  }
+  if(Math.max(p.skew,p.skewV||0)>60 && p.type!=="slab")
+    warn(`Skew θ = ${f0(Math.max(p.skew,p.skewV||0))}° exceeds the 60° limit of Tables 4.6.2.2.2e-1 / 4.6.2.2.3c-1. θ = 60° is used for BOTH the moment reduction and the shear correction (capped). The table directs θ = 60° for the moment reduction; the shear correction is only defined up to 60°, so the obtuse-corner shear may be understated. Consider a refined analysis (4.6.3).`);
   return w;
 }
 
@@ -1999,7 +2063,7 @@ function inputErrors(p){
     if(bad(p.ts)) e.push("Slab thickness t_s is blank, zero or negative — enter t_s > 0 in.");
     if(bad(p.n*(p.I+p.A*p.eg*p.eg))) e.push("K_g = n(I + A·e_g²) is zero or negative — check n, I, A and e_g.");
   }
-  if((p.type==="bc"||p.type==="d"||(BOX.has(p.type)&&p.skew>0))&&bad(p.depth)) e.push("Beam depth d is blank, zero or negative — enter d > 0 in.");
+  if((p.type==="bc"||p.type==="d"||(BOX.has(p.type)&&(p.skew>0||p.skewV>0)))&&bad(p.depth)) e.push("Beam depth d is blank, zero or negative — enter d > 0 in.");
   if(BOX.has(p.type)){
     if(bad(p.boxB)) e.push("Box beam width b is blank, zero or negative.");
     if(bad(p.boxI)) e.push("Box beam I is blank, zero or negative.");
@@ -2036,8 +2100,8 @@ function memberSteps(p,geo,Kg,skew,md){
         `f_{\\theta,M}=1.05-0.25\\tan\\theta=1.05-0.25\\tan ${f0(skew.thU)}^\\circ=\\boxed{${f3(skew.scfM)}}\\ (\\le 1.0)`,
         "Table 4.6.2.2.2e-1","Multiplies all moment factors above.",[V("\\theta","skew angle",f0(skew.th),"deg")]);
       add("Skew correction — shear",
-        `f_{\\theta,V}=1+\\frac{12L}{90d}\\sqrt{\\tan\\theta}=1+\\frac{12\\times ${f0(p.L)}}{90\\times ${f0(p.depth)}}\\sqrt{\\tan ${f0(skew.thU)}^\\circ}=\\boxed{${f3(skew.scfV)}}`,
-        "Table 4.6.2.2.3c-1","Obtuse-corner shear; multiplies all shear factors above.",[V("\\theta","skew angle",f0(skew.th),"deg"),V("d","beam depth",f0(p.depth),"in"),V("L","span",f0(p.L),"ft")]);
+        `f_{\\theta,V}=1+\\frac{12L}{90d}\\sqrt{\\tan\\theta}=1+\\frac{12\\times ${f0(p.L)}}{90\\times ${f0(p.depth)}}\\sqrt{\\tan ${f0(skew.thVU)}^\\circ}=\\boxed{${f3(skew.scfV)}}`,
+        "Table 4.6.2.2.3c-1","Obtuse-corner shear; multiplies all shear factors above.",[V("\\theta","skew angle for shear",f0(skew.thV),"deg"),V("d","beam depth",f0(p.depth),"in"),V("L","span",f0(p.L),"ft")]);
     } else {
       add("Skew correction — moment",
         skew.thU>=30
@@ -2047,7 +2111,7 @@ function memberSteps(p,geo,Kg,skew,md){
         [V("\\theta","skew angle",f0(skew.th),"deg"),V("c_1","skew coefficient (=0 if θ<30°)",skew.thU>=30?f3(skew.c1):"0","")]);
       add("Skew correction — shear",
         `f_{\\theta,V}=1+0.20\\left(\\frac{12Lt_s^3}{K_g}\\right)^{0.3}\\tan\\theta=\\boxed{${f3(skew.scfV)}}`,
-        "Table 4.6.2.2.3c-1","Multiplies all shear factors above.",[V("\\theta","skew angle",f0(skew.th),"deg")]);
+        "Table 4.6.2.2.3c-1","Multiplies all shear factors above.",[V("\\theta","skew angle for shear",f0(skew.thV),"deg")]);
     }
   };
 
@@ -2078,14 +2142,14 @@ function memberSteps(p,geo,Kg,skew,md){
       const {lv1,lv2,eq}=md.n3info;
       add("N_b = 3 — lesser of equation and lever rule",
         `\\begin{aligned} g^{M}_{1}&=\\min(${f3(eq.mom1)},\\ ${lv1?f3(lv1.df):"—"})=\\boxed{${f3(Math.min(eq.mom1,lv1?lv1.df:eq.mom1))}}\\\\
-          g^{M}_{2+}&=\\min(${f3(eq.mom2)},\\ ${lv2?f3(lv2.df):"—"})=\\boxed{${f3(Math.min(eq.mom2,lv2?lv2.df:eq.mom2))}}\\\\
+          g^{M}_{2+}&=\\min(${f3(eq.mom2)},\\ ${lv2?f3(lv2.df)+"\\ ("+lv2.N+"\\text{ trucks})":"—"})=\\boxed{${f3(Math.min(eq.mom2,lv2?lv2.df:eq.mom2))}}\\\\
           g^{V}_{1}&=${lv1?f3(lv1.df):"—"}\\ \\text{(lever rule)}\\\\
           g^{V}_{2+}&=${lv2?f3(lv2.df):"—"}\\ \\text{(lever rule)}\\end{aligned}`,
-        "Tables 4.6.2.2.2b/3a-1","With three beams, moment is the lesser of the equation and the lever rule; shear uses the lever rule.",[]);
+        "Tables 4.6.2.2.2b/3a-1","With three beams, moment is the lesser of the equation and the lever rule; shear uses the lever rule. The 2+ lane lever rule is the governing of every truck count that fits (2 … N_L, each with its multiple-presence factor).",[]);
     } else {
       const {lv2,eqM}=md.n3info;
       add("N_b = 3 — exterior lesser of equation and lever rule",
-        `g^{M}_{ext,2+}=\\min(${f3(eqM)},\\ ${lv2?f3(lv2.df):"—"})=\\boxed{${f3(Math.min(eqM,lv2?lv2.df:eqM))}}`,
+        `g^{M}_{ext,2+}=\\min(${f3(eqM)},\\ ${lv2?f3(lv2.df)+"\\ ("+lv2.N+"\\text{ trucks})":"—"})=\\boxed{${f3(Math.min(eqM,lv2?lv2.df:eqM))}}`,
         "Table 4.6.2.2.2d-1","Exterior shear (2+ lanes) uses the lever rule for N_b = 3.",[]);
     }
   };
@@ -2109,9 +2173,9 @@ function memberSteps(p,geo,Kg,skew,md){
         [V("O","overhang (web → deck edge)",f2(md.side==="L"?p.OL:p.OR),"ft"),V("f","deck edge → interior railing face",f2(md.side==="L"?p.rL:p.rR),"ft")]);
     }
     add("Longitudinal stiffness parameter, K<sub>g</sub>",
-      `K_g=n(I+A\\,e_g^2)=${f1(p.n)}(${tnum(p.I)}+${tnum(p.A)}\\times ${f2(p.eg)}^2)=\\boxed{${tnum(Kg)}\\ \\text{in}^4}`,
+      `K_g=n(I+A\\,e_g^2)=${f2(p.n)}(${tnum(p.I)}+${tnum(p.A)}\\times ${f2(p.eg)}^2)=\\boxed{${tnum(Kg)}\\ \\text{in}^4}`,
       "Eq. 4.6.2.2.1-1","",
-      [V("n","modular ratio",f1(p.n),""),V("I","moment of inertia",commas(p.I),"in⁴"),V("A","beam area",commas(p.A),"in²"),V("e_g","c.g. beam → deck",f2(p.eg),"in")]);
+      [V("n","modular ratio",f2(p.n),""),V("I","moment of inertia",commas(p.I),"in⁴"),V("A","beam area",commas(p.A),"in²"),V("e_g","c.g. beam → deck",f2(p.eg),"in")]);
     add("Deck stiffness term",
       `\\left(\\frac{K_g}{12Lt_s^3}\\right)^{0.1}=\\left(\\frac{${tnum(Kg)}}{12\\times${f0(p.L)}\\times${f0(p.ts)}^3}\\right)^{0.1}=\\boxed{${f3(emp.kterm)}}`,
       "Table 4.6.2.2.2b-1","",
@@ -2172,8 +2236,8 @@ function memberSteps(p,geo,Kg,skew,md){
     add("Distribution factor coefficient, k",
       `k=2.5(N_b)^{-0.2}\\ge 1.5=2.5(${p.Nb})^{-0.2}=\\boxed{${f3(bx.k)}}`,"Table 4.6.2.2.2b-1","",[V("N_b","number of beams",p.Nb,"")]);
     if(isExt) add("Distance to interior face of railing, d_e",
-      `d_e=\\min\\!\\left(O-f,\\ 2.0\\right)=\\min(${f2((md.side==="L"?p.OL:p.OR)-(md.side==="L"?p.rL:p.rR))},2.0)=\\boxed{${f2(md.de)}\\ \\text{ft}}`,
-      "Table 4.6.2.2.2d-1","Measured to the interior face of the railing; d_e limited to 2.0 ft for box beams.",[V("O","overhang",f2(md.side==="L"?p.OL:p.OR),"ft"),V("f","deck edge → interior railing face",f2(md.side==="L"?p.rL:p.rR),"ft")]);
+      `d_e=O-f=${f2(md.side==="L"?p.OL:p.OR)}-${f2(md.side==="L"?p.rL:p.rR)}=\\boxed{${f2(md.de)}\\ \\text{ft}}`,
+      "Table 4.6.2.2.2d-1","Measured to the interior face of the railing. Range of applicability d_e ≤ 2.0 ft; a larger d_e is used as is (the e-equations are extrapolated, which gives a larger e than limiting d_e to 2.0 ft).",[V("O","overhang",f2(md.side==="L"?p.OL:p.OR),"ft"),V("f","deck edge → interior railing face",f2(md.side==="L"?p.rL:p.rR),"ft")]);
     const vB=[V("b","beam width",f2(b),"in"),V("L","span length",f0(p.L),"ft"),V("I","moment of inertia",commas(p.boxI),"in⁴"),V("J","St. Venant torsional constant",commas(p.boxJ),"in⁴"),V("k","DF coefficient",f3(bx.k),"")];
     if(!isExt){
       add("Interior moment — one lane loaded",
@@ -2250,8 +2314,8 @@ function memberSteps(p,geo,Kg,skew,md){
       add("Skew correction — moment",
         `f_{\\theta,M}=1.05-0.25\\tan\\theta=\\boxed{${f3(skew.scfM)}}\\ (\\le 1.0)`,"Table 4.6.2.2.2e-1","",[V("\\theta","skew angle",f0(skew.th),"deg")]);
       add("Skew correction — shear",
-        `f_{\\theta,V}=1+\\frac{\\sqrt{L\\,d/12}}{6S}\\tan\\theta=1+\\frac{\\sqrt{${f0(L)}\\times ${f0(d)}/12}}{6\\times ${f2(S0)}}\\tan ${f0(skew.thU)}^\\circ=\\boxed{${f3(md.fV)}}`,
-        "Table 4.6.2.2.3c-1","",[V("\\theta","skew angle",f0(skew.th),"deg")]);
+        `f_{\\theta,V}=1+\\frac{\\sqrt{L\\,d/12}}{6S}\\tan\\theta=1+\\frac{\\sqrt{${f0(L)}\\times ${f0(d)}/12}}{6\\times ${f2(S0)}}\\tan ${f0(skew.thVU)}^\\circ=\\boxed{${f3(md.fV)}}`,
+        "Table 4.6.2.2.3c-1","",[V("\\theta","skew angle for shear",f0(skew.thV),"deg")]);
     }
     fatStep(); govStep(); return S;
   }
@@ -2296,7 +2360,7 @@ function memberSteps(p,geo,Kg,skew,md){
         isE?`f_{\\theta,V}=1+\\left(0.25+\\frac{12.0L}{70d}\\right)\\tan\\theta=\\boxed{${f3(md.fV)}}`
            :`f_{\\theta,V}=1+\\left(0.042+\\frac{12.0L}{420d}\\right)\\tan\\theta=\\boxed{${f3(md.fV)}}`,
         "Table 4.6.2.2.3c-1","Type (d) uses separate factors for the exterior and first-interior webs.",
-        [V("\\theta","skew angle",f0(skew.th),"deg"),V("d","box depth",f0(d),"in")]);
+        [V("\\theta","skew angle for shear",f0(skew.thV),"deg"),V("d","box depth",f0(d),"in")]);
     }
     fatStep(); govStep(); return S;
   }
@@ -2368,11 +2432,13 @@ function applySection(key){
   $("depth").value=s.d;
   if(s.shape&&$("beamShape")) $("beamShape").value=s.shape;
   if(s.fam==="steel"){ $("I").value=s.I; $("A").value=s.A; $("eg").value=(s.d/2+ts/2).toFixed(2); $("n").value=8; }
-  else { $("I").value=s.I; $("A").value=s.A; if(s.yb!=null) $("eg").value=((s.d-s.yb)+ts/2).toFixed(2); $("n").value=1; }
+  else { $("I").value=s.I; $("A").value=s.A; if(s.yb!=null) $("eg").value=((s.d-s.yb)+ts/2).toFixed(2);
+    // n = E_girder/E_deck from the two f'c (was hard-set to 1, which understates K_g); 1 if f'c is blank.
+    const nc=nFromFc(fcInput("fcGirder"),fcInput("fcDeck")); $("n").value=(nc!=null?nc:1); }
   if(s.fam==="boxb"){ $("boxB").value=s.b; $("boxI").value=s.I; $("boxJ").value=boxJest(s.b,s.d); }
   if(s.fam==="deck"){ $("boxB").value=s.b; $("boxI").value=s.I; $("boxJ").value=rectJ(s.b,s.d); }
 }
-const simpleIds=["bridgeType","beamShape","ts","depth","skew","OL","OR","I","A","eg","n","boxB","boxI","boxJ"];
+const simpleIds=["bridgeType","beamShape","ts","depth","skew","skewV","OL","OR","I","A","eg","n","boxB","boxI","boxJ"];
 const metaIds=["mProject","mStruct","mBy","mChk","mDate","mSheet"];
 
 /* ---------- persistence: guarded localStorage (degrades gracefully) ---------- */
@@ -2416,12 +2482,25 @@ function faceOffset(side,e){
   const swInner= (swOn&&swW>0)?swW:0;
   return Math.max(barrier, swInner, 0);
 }
+// Optional separate shear skew θ_V (blank = θ). Returns |θ_V| or null.
+function skewVInput(){ const e=$("skewV"); if(!e||e.value==="") return null; const v=+e.value; return isFinite(v)?Math.abs(v):null; }
+// Optional girder / deck f'c (ksi); blank or ≤ 0 -> null.
+function fcInput(id){ const e=$(id); if(!e||e.value==="") return null; const v=+e.value; return (isFinite(v)&&v>0)?v:null; }
+/* n = E_c,girder / E_c,deck for a concrete girder: AASHTO LRFD 10th Ed. Eq. 5.4.2.4-1,
+   E_c = 120,000 K1 w_c^2.0 f'c^0.33 (K1 = 1, cancels), normal-weight w_c per Table 3.5.1-1:
+   0.145 kcf for f'c ≤ 5.0 ksi, 0.140 + 0.001 f'c for 5.0 < f'c ≤ 15.0 ksi (verify). Rounded to 0.01. */
+function nFromFc(fcB,fcD){
+  if(!(fcB>0&&fcD>0)) return null;
+  const wc=f=>f<=5.0?0.145:0.140+0.001*f, Ec=f=>120000*Math.pow(wc(f),2)*Math.pow(f,0.33);
+  return Math.round(Ec(fcB)/Ec(fcD)*100)/100;
+}
 function readInputs(){
   const des=designL(state.spans,state.region);
   const e=edgeInputs();
   return {type:$("bridgeType").value,beamShape:$("beamShape").value,
     L:des.L,Ltex:des.tex,Ldesc:des.desc,spans:state.spans.slice(),region:state.region,
-    ts:+$("ts").value,depth:+$("depth").value,skew:+$("skew").value,
+    ts:+$("ts").value,depth:+$("depth").value,skew:Math.abs(+$("skew").value),   // sign ignored (|θ|)
+    skewV:skewVInput(),fcGirder:fcInput("fcGirder"),fcDeck:fcInput("fcDeck"),
     OL:+$("OL").value,OR:+$("OR").value,rL:faceOffset("L",e),rR:faceOffset("R",e),
     Nb:state.spacings.length+1,spacings:state.spacings.slice(),
     I:+$("I").value,A:+$("A").value,eg:+$("eg").value,n:+$("n").value,
@@ -2946,9 +3025,13 @@ function drawLever(p,geo,md,la){
 /* -------------------- serialize / restore -------------------- */
 function serialize(includeResults){
   const p=readInputs();
-  const inputs={type:p.type,stdSection:($("stdSection")?$("stdSection").value:""),beamShape:p.beamShape,spans:p.spans,region:p.region,ts:p.ts,depth:p.depth,skew:p.skew,OL:p.OL,OR:p.OR,rL:p.rL,rR:p.rR,
+  const inputs={type:p.type,stdSection:($("stdSection")?$("stdSection").value:""),beamShape:p.beamShape,spans:p.spans,region:p.region,ts:p.ts,depth:p.depth,skew:+$("skew").value,OL:p.OL,OR:p.OR,rL:p.rL,rR:p.rR,
     I:p.I,A:p.A,eg:p.eg,n:p.n,boxB:p.boxB,boxI:p.boxI,boxJ:p.boxJ,spacings:p.spacings,
     truckGaps:state.truckGaps.slice(),selectedMember};
+  // New optional fields (absent in older saves): separate shear skew, girder / deck f'c.
+  if($("skewV")&&$("skewV").value!=="") inputs.skewV=+$("skewV").value;
+  if($("fcGirder")&&$("fcGirder").value!=="") inputs.fcGirder=+$("fcGirder").value;
+  if($("fcDeck")&&$("fcDeck").value!=="") inputs.fcDeck=+$("fcDeck").value;
   const meta={}; metaIds.forEach(id=>meta[id]=$(id)?$(id).value:"");
   let savedAt=""; try{savedAt=new Date().toISOString();}catch(e){}
   const out={app:"AASHTO-LLDF",version:1,savedAt,meta,inputs};
@@ -2994,6 +3077,8 @@ function applyState(obj){
     if(inp.beamShape&&$("beamShape")) $("beamShape").value=inp.beamShape;
     if(inp.stdSection!=null&&$("stdSection")) $("stdSection").value=inp.stdSection;   // remember the pick; properties are restored below, so do not re-apply the library
     ["ts","depth","skew","OL","OR","I","A","eg","n","boxB","boxI","boxJ"].forEach(k=>{ if(inp[k]!=null&&$(k)) $(k).value=inp[k]; });
+    // Optional fields: absent (older saves) -> blank, so θ_V = θ and n is left exactly as saved.
+    ["skewV","fcGirder","fcDeck"].forEach(k=>{ if($(k)) $(k).value=(inp[k]!=null&&inp[k]!==""&&isFinite(+inp[k]))?inp[k]:""; });
     if(obj&&obj.meta) metaIds.forEach(id=>{ if(obj.meta[id]!=null&&$(id)) $(id).value=obj.meta[id]; });
     if(inp.selectedMember!=null) selectedMember=+inp.selectedMember;
     toggleSectional(); run();
@@ -3090,6 +3175,12 @@ $("memberSelect").addEventListener("change",()=>{ selectedMember=+$("memberSelec
 $("nSpans").addEventListener("change",()=>setNSpans(+$("nSpans").value));
 $("regionSel").addEventListener("change",()=>{ state.region=$("regionSel").value; run(); scheduleAutosave(); });
 $("stdSection").addEventListener("change",()=>{ applySection($("stdSection").value); run(); scheduleAutosave(); });
+// Girder / deck f'c: for a concrete girder, recompute n = E_B/E_D (not while a design app drives the section).
+["fcGirder","fcDeck"].forEach(id=>$(id).addEventListener("input",()=>{
+  const locked=!!(window.BridgeLocks&&BridgeLocks.ok&&BridgeLocks.ok()&&(BridgeLocks.isLocked('geometry')||BridgeLocks.isLocked('psSection')));
+  const nc=nFromFc(fcInput("fcGirder"),fcInput("fcDeck"));
+  if(!locked&&nc!=null&&$("beamShape").value!=="steel-i") $("n").value=nc;
+  if($("liveUpdate").checked) run(); scheduleAutosave(); }));
 function updatePrintHead(){
   $("printHead").innerHTML=`<span>${escHtml($("mProject").value||"—")} · Str. ${escHtml($("mStruct").value||"—")}</span>
     <span>LLDF — AASHTO LRFD 4.6.2.2</span>
@@ -3246,6 +3337,11 @@ function buildDFPayload(silent){
     designBeam:(window.BridgeBeam&&window.BridgeBeam.get())||null,   // the suite-wide selected beam
     beamRoster:(window.BridgeBeam&&window.BridgeBeam.roster())||null,// layout, classification, per-beam DL
     note:'governing = positive-region DFs (span L); governingNeg = negative-region DFs at interior supports (L = ½ of adjacent spans). gM/gV include multiple presence + skew; fatM/fatV are single-lane fatigue DFs. governing.byBeam / governingNeg.byBeam give the same envelope per individual girder, keyed by the 1-based beam number, so an app with a design beam selected can use that beam directly. governingBySpan[i] is the positive-region envelope for span i+1 alone.'};
+  // New optional fields (absent otherwise, so other payloads are unchanged):
+  //  skewShear    = the separate shear skew θ_V when one is entered (skew above is then the moment θ);
+  //  perFootStrip = true for the CIP slab type: gM/gV/fatM/fatV are per 1-ft strip, not per girder (LLDF-O4).
+  if(p.skewV!=null) payload.skewShear=+p.skewV;
+  if(p.type==='slab') payload.perFootStrip=true;
   return payload;
 }
 function writeDF(payload,silent){
@@ -3349,11 +3445,27 @@ function validateGeom(g){
     else i.spacings.forEach(function(v,k){ if(!fin(v)||v<=0) e.push('spacing '+(k+1)+' = '+v+' (must be a number > 0 ft)'); }); }
   if(g.Nb!=null&&(!fin(g.Nb)||g.Nb<2||Math.round(g.Nb)!==g.Nb)) e.push('Nb = '+g.Nb+' (must be a whole number ≥ 2)');
   if(g.Nb!=null&&Array.isArray(i.spacings)&&i.spacings.length&&g.Nb!==i.spacings.length+1) e.push('Nb = '+g.Nb+' does not match '+i.spacings.length+' spacings');
-  if(i.skew!=null&&(!fin(i.skew)||i.skew<0||i.skew>=90)) e.push('skew = '+i.skew+' (must be 0 ≤ θ < 90 deg)');
+  // A negative (signed) skew is accepted and used as |θ|: the sign does not affect the DFs (LLDF-OH2).
+  if(i.skew!=null&&(!fin(i.skew)||Math.abs(i.skew)>=90)) e.push('skew = '+i.skew+' (must be |θ| < 90 deg)');
   ['OL','OR'].forEach(function(k){ if(i[k]!=null&&(!fin(i[k])||i[k]<0)) e.push(k+' = '+i[k]+' (must be a number ≥ 0 ft)'); });
   ['ts','depth'].forEach(function(k){ if(i[k]!=null&&(!fin(i[k])||i[k]<=0)) e.push(k+' = '+i[k]+' (must be a number > 0)'); });
   if(g.de!=null&&!fin(g.de)) e.push('d_e = '+g.de+' (must be a number)');
   return e;
+}
+/* The skews a prefill will set: {skew, skewV} (skewV '' = blank, i.e. θ_V = θ), or null when the payload
+   sends no skew. Bridge Geometry's optional top-level `skewDetail` carries both values (moment: smallest
+   |θ|, 0 if adjacent supports differ by > 10°, Art. 4.6.2.2.2e; shear: largest |θ|, Art. 4.6.2.2.3c), so
+   both are used whichever single value was sent in inputs.skew. Without it, θ = |inputs.skew| and θ_V is
+   cleared. An invalid skewDetail is ignored. */
+function geomSkews(g){
+  var i=(g&&g.inputs)||{}, sd=g&&g.skewDetail;
+  var ok=function(v){ return typeof v==='number'&&isFinite(v)&&Math.abs(v)<90; };
+  if(sd&&typeof sd==='object'&&ok(sd.moment)&&ok(sd.shear)){
+    var m=+Math.abs(sd.moment).toFixed(3), v=+Math.abs(sd.shear).toFixed(3);
+    return {skew:m, skewV:(Math.abs(v-m)>1e-9)?v:'', fromDetail:true};
+  }
+  if(i.skew!=null) return {skew:Math.abs(+i.skew), skewV:'', fromDetail:false};
+  return null;
 }
 /* Exactly what a prefill will overwrite, current value -> incoming value, one line per field. */
 function geomOverwriteList(g){
@@ -3363,7 +3475,13 @@ function geomOverwriteList(g){
     out.push('Number of beams N_b: '+((state.spacings||[]).length+1)+' → '+(i.spacings.length+1));
     out.push('Girder spacings: '+f((state.spacings||[]).join(' / '))+' → '+i.spacings.join(' / ')+' ft');
   }
-  [['skew','Skew θ','deg'],['OL','Left overhang O_L','ft'],['OR','Right overhang O_R','ft'],['ts','Slab thickness t_s','in'],['depth','Beam depth d','in']].forEach(function(r){
+  var gsk=geomSkews(g);
+  if(gsk&&$('skew')){
+    out.push('Skew θ'+(gsk.fromDetail?' (moment)':'')+': '+f($('skew').value)+' → '+gsk.skew+' deg');
+    if($('skewV')&&(gsk.skewV!==''||$('skewV').value!==''))
+      out.push('Skew for shear θ_V: '+f($('skewV').value)+' → '+(gsk.skewV===''?'blank (= θ)':gsk.skewV+' deg'));
+  }
+  [['OL','Left overhang O_L','ft'],['OR','Right overhang O_R','ft'],['ts','Slab thickness t_s','in'],['depth','Beam depth d','in']].forEach(function(r){
     if(i[r[0]]!=null&&$(r[0])) out.push(r[1]+': '+f($(r[0]).value)+' → '+i[r[0]]+' '+r[2]); });
   if(i.OL==null&&g.de!=null&&$('OL')) out.push('Left overhang O_L: '+f($('OL').value)+' → d_e '+g.de+' ft + rail face offset');
   return out;
@@ -3377,7 +3495,7 @@ function renderGeomSource(){
     el.style.cssText='margin:6px 0 0;padding:4px 8px;border:1px solid #c7d1db;border-left:4px solid #1c4fc4;font:12px/1.5 system-ui,sans-serif;color:#16212e';
     tb.parentNode.insertBefore(el,tb.nextSibling); }
   el.style.display='';
-  var LBL={spans:'spans',spacings:'girder spacing',skew:'skew',OL:'left overhang',OR:'right overhang',ts:'slab thickness',depth:'beam depth'};
+  var LBL={spans:'spans',spacings:'girder spacing',skew:'skew',skewV:'shear skew',OL:'left overhang',OR:'right overhang',ts:'slab thickness',depth:'beam depth'};
   var fl=(Array.isArray(gs.fields)&&gs.fields.length)?gs.fields.map(function(k){ return LBL[k]||k; }).join(', '):'layout';
   el.innerHTML='<b>Layout geometry source:</b> '+escH(fl)
     +' prefilled from <b>'+escH(gs.producer)+'</b>, '+escH(fmtWhen(gs.producedAt))
@@ -3399,9 +3517,12 @@ function geomDelta(g){
     var nb=i.spacings.length+1, curNb=(state.spacings||[]).length+1;
     if(curNb!==nb) out.push('beams '+curNb+' \u2192 '+nb);
   }
-  if(i.skew!=null&&$('skew')){ var sk=+i.skew, curSk=+$('skew').value;
+  var gsk=geomSkews(g);
+  if(gsk&&$('skew')){ var sk=gsk.skew, curSk=+$('skew').value;
     if(isFinite(curSk)&&Math.abs(curSk-sk)>1e-6)
-      out.push('skew '+curSk+'\u00b0 \u2192 '+sk+'\u00b0'); }
+      out.push('skew '+curSk+'\u00b0 \u2192 '+sk+'\u00b0');
+    if($('skewV')&&String($('skewV').value)!==String(gsk.skewV))
+      out.push('shear skew '+($('skewV').value===''?'=\u03b8':$('skewV').value+'\u00b0')+' \u2192 '+(gsk.skewV===''?'=\u03b8':gsk.skewV+'\u00b0')); }
   var moved=function(id,key,lbl){ if(i[key]==null||!$(id)) return; var nv=+i[key], cv=+$(id).value;
     if(isFinite(cv)&&Math.abs(cv-nv)>Math.max(0.5,Math.abs(nv)*1e-4)) out.push(lbl+' '+commas(cv)+' \u2192 '+commas(nv)); };
   return out.length?out.join(', '):'layout refreshed';
@@ -3475,6 +3596,10 @@ function applyGeom(g,token,silent){
     // current railing/curb/sidewalk inputs), so d_e(LLDF) = OL - rL reproduces the sent d_e.
     // (Previously read a non-existent #rL element, so rL was always 0 and OL = d_e.)
     if(inp.OL==null&&g.de!=null){ var rL=+faceOffset("L")||0; inp.OL=+((+g.de)+rL).toFixed(2); }
+    // Skew: |θ| (a signed skew is accepted, LLDF-OH2); Bridge Geometry's skewDetail fills the moment θ and
+    // the shear θ_V separately. A payload with a skew but no skewDetail clears θ_V (θ_V = θ).
+    delete inp.skewV;
+    var gsk=geomSkews(g); if(gsk){ inp.skew=gsk.skew; inp.skewV=gsk.skewV; }
     // Overwrite ONLY the layout fields the payload carries (every producer). Start from the full
     // current state so section, appurtenance, beam-class, load-override, user-load and figure
     // inputs are left exactly as they are -- applyState({inputs:inp}) alone used to reset those.
@@ -3486,7 +3611,7 @@ function applyGeom(g,token,silent){
     // Record the source in the saved state (new optional field) and mark it adopted.
     state.geomSource={producer:String(g.producer||''),producerFile:String(g.producerFile||''),
       producedAt:String(g.producedAt||''),project:pn,
-      fields:['spans','spacings','skew','OL','OR','ts','depth'].filter(function(k){ return inp[k]!=null; })};
+      fields:['spans','spacings','skew','skewV','OL','OR','ts','depth'].filter(function(k){ return inp[k]!=null&&inp[k]!==''; })};
     if(window.BridgeXfer) BridgeXfer.markAdopted('lldfGeom','lldf',g.producedAt||'');
     renderGeomSource(); paintGeomPull();
     if(typeof scheduleAutosave==='function') scheduleAutosave();
@@ -3516,7 +3641,7 @@ function applyGeom(g,token,silent){
    the strip offers a one-click lock. The box I is stated to be the COMPOSITE I_x,
    because that is what PS-Beam sends and it differs from the bare-girder value the
    AASHTO table assumes -- the engineer should see which one is in play. */
-var GEOM_DRIVEN_IDS=['ts','depth','skew'];   // the LAYOUT geometry channel drives only these
+var GEOM_DRIVEN_IDS=['ts','depth','skew','skewV'];   // the LAYOUT geometry channel drives only these
 var SECT_IDS_BEAM=['I','A','eg','n'], SECT_IDS_BOX=['boxB','boxI','boxJ'];
 function _geomAvail(){ try{ var r=localStorage.getItem(K_GEOM); if(!r) return null;
   var g=JSON.parse(r); return (g&&g._schema==='bridge-lldf-geometry')?g:null; }catch(e){ return null; } }

@@ -628,7 +628,95 @@ All edits were applied by scripted exact-string replacement (each Before block o
   - Screenshots of every tab at 1400 px and 400 px.
 - **Other copies:** a near-verbatim copy of this app is embedded (HTML-escaped `srcdoc`) as the "Development & Splice" sub-app in `Concrete Beam Capacity.html` (`#suite-frame-dev`). It is **not** changed in this PR (one tool per PR, CLAUDE.md §3 and §7). It will be synced in a follow-up PR with the same four insertions (escape `&` → `&amp;`). The embedded copy has the same panels, anchors and validation messages; a dry run of the four insertions on a scratch copy of that file showed the same six tabs and no page errors. Both copies will use the same key `rebar_aci_inputTab_v1`.
 
+## 2026-10-12 — PR: claude/sweep-cbc-rebar (PR link added after merge)
+
+Open-item sweep of inventory section 11 (engineer 2026-10-12: "continue making updates and fixes until it's completed … use your best judgment"). Basis: ACI 318-19 and AASHTO LRFD 10th Ed. (2024). Article numbers marked "verify" were not checked against a printed copy.
+
+**Other copies (CLAUDE.md §3):** every edit below was applied identically to the Dev tab of `Concrete Beam Capacity.html` (`#suite-frame-dev` srcdoc, HTML-escaped `&` → `&amp;`, `"` → `&quot;`) in the same PR. Checked: the line diff main → branch of this file and of the un-escaped Dev srcdoc are the same (same hunks, same text). The edits were applied by one script (exact-string replacements, each anchor found exactly once) to both copies.
+
+**How verified (all entries):** `node --check` of every inline script of both files (10 blocks, 0 failures). Headless Chromium 1194 (Playwright), KaTeX 0.16.9 / Plotly 2.27.0 served locally. Standalone: main vs branch on the default, #14 hook (confined ticked), AASHTO #18, lightweight λ = 0.85, and a project named `A "q" <b>`; no console errors. Dev tab: 12 scenarios main vs branch (see the Concrete Beam Capacity log, same date), every difference traced to an item below; no console errors.
+
+**Saved data (§5):** no key or format changed. One new optional field `inp.lwLambda` (number). Older files without it load with λ = 0.75 (the former fixed value), so their results are unchanged. Default panel open/closed values change for new sessions only (R6).
+
+### R1. ψr / ψo (ACI) and the AASHTO hook confinement factor apply to No. 11 and smaller only (REB-O5)   [calc change] [MORE conservative for #14 / #18 hooks]
+- **Where:** `computeFactors` (anchor `const bigHook = barNum > 11;`), `calcHook` AASHTO branch (anchor `const conf = (inp.hookConfined && !f.bigHook)`), `validate` (three new notices), `tabHook` table labels.
+- **Problem:** ACI 318-19 Table 25.4.3.2 allows ψr = 1.0 and ψo = 1.0 only for No. 11 and smaller hooked bars. The tool used them for #14 / #18 when selected — and ψo = 1.0 is the default, so the Bar Schedule hook column for #14 / #18 was unconservative at the default inputs. The ψr part and the AASHTO 0.8 hook confinement factor (5.10.8.2.4b, "No. 11 and smaller") were found during this sweep and fixed the same way.
+- **Before:**
+  ```js
+  const psiR = inp.hookConfined ? 1.0 : 1.6;
+  const psiO = parseFloat(inp.hookLoc);
+  ...
+      const conf = inp.hookConfined?0.8:1.0;
+  ```
+- **After:**
+  ```js
+  const bigHook = barNum > 11;
+  const psiR = (inp.hookConfined && !bigHook) ? 1.0 : 1.6;
+  const psiO_sel = parseFloat(inp.hookLoc);
+  const psiO = bigHook ? Math.max(psiO_sel, 1.25) : psiO_sel;
+  const psiRForced = bigHook && inp.hookConfined;
+  const psiOForced = bigHook && psiO_sel < 1.25;
+  ...
+      const conf = (inp.hookConfined && !f.bigHook)?0.8:1.0;   // 5.10.8.2.4b: 0.8 for No. 11 and smaller bars only
+  ```
+- **Governing provision:** ACI 318-19 Table 25.4.3.2 (ψr, ψo); AASHTO LRFD 10th Ed. 5.10.8.2.4b (verify).
+- **Check case (ACI):** #14 (db = 1.693 in., db^1.5 = 2.2029), fy = 60,000, f′c = 4,000, uncoated, confined ticked, ψo = 1.0 selected. ψc = 4000/15000 + 0.6 = 0.8667. Before: l_dh = 60,000·1.0·1.0·1.0·0.8667/(55·1.0·63.25)·2.2029 = **32.93 in.** After: ψr = 1.6, ψo = 1.25: 32.93 × 1.6 × 1.25 = **65.86 in.** Default inputs (not confined, ψo = 1.0): Bar Schedule hook #14 52.7 → **65.9 in.**, #18 81.1 → **101.4 in.** (× 1.25); #11 and smaller unchanged.
+- **Check case (AASHTO):** #18, fy = 60, f′c = 4 ksi, confined ticked: l_hb = 38·2.257·60/(60·2) = 42.88 in. Before ×0.8 = **34.31 in.**; after ×1.0 = **42.88 in.**
+
+### R2. AASHTO: lap splices of #14 / #18 flagged as not permitted (REB-O2)   [check / display] [MORE conservative (N/P flag); no length changes]
+- **Where:** `lapProhibited` (anchor `function lapProhibited(inp,f){`), new `lapRef(f)`, `validate`, `tabTSplice`, `tabCSplice`, `tabBatch` footnote, `buildDashboard` label.
+- **Before:** `function lapProhibited(inp,f){ return !f.AASHTO && parseInt(inp.barSize)>=14; }`
+- **After:** `function lapProhibited(inp,f){ return parseInt(inp.barSize)>=14; }` plus AASHTO-specific texts ("AASHTO 5.10.8.4.2a: lap splices shall not be used for bars larger than No. 11 …"; no 25.5.5.3 compression exception is quoted for AASHTO).
+- **Governing provision:** AASHTO LRFD 10th Ed. 5.10.8.4.2a (verify article number; the rule "lap splices shall not be used for bars larger than No. 11" is the long-standing AASHTO text).
+- **Check case:** AASHTO, #18: Bar Schedule splice columns 158.5 / 50.8 in. → **N/P\***; dashboard "Lap splice permitted (5.10.8.4.2a) CHK #18 N/P"; tension and compression splice tabs show the red "not permitted" box. #11 and smaller unchanged.
+
+### R3. λ for lightweight concrete is an input (REB-O3)   [calc change (new option)] [no change at the default 0.75; less conservative only if the user enters λ > 0.75]
+- **Where:** `readInputs` (`lwLambda`), `computeFactors` (anchor `const lamIn = parseFloat(inp.lwLambda);`), panel B (new field `#lwLambda` under the Lightweight checkbox; checkbox label "Lightweight concrete (λ below)"), `validate` (notice when out of range, mapped to the Code & Material tab dot), `applyState`, print echo.
+- **Before:** `const lambda = inp.lightweight ? 0.75 : 1.0;`
+- **After:**
+  ```js
+  const lamIn = parseFloat(inp.lwLambda);
+  const lambda = inp.lightweight ? (isFinite(lamIn) ? Math.min(1.0, Math.max(0.75, lamIn)) : 0.75) : 1.0;
+  const lambdaAdj = inp.lightweight && !(isFinite(lamIn) && lamIn>=0.75 && lamIn<=1.0);
+  ```
+  Default value 0.75 (former fixed value). Blank → 0.75; outside 0.75–1.0 → limited, with a notice.
+- **Governing provision:** ACI 318-19 Table 19.2.4.2 (all-lightweight 0.75, sand-lightweight 0.85) and 19.2.4.1; AASHTO LRFD 10th Ed. 5.4.2.8 (0.75 ≤ λ ≤ 1.0).
+- **Check case:** ACI #8, fy = 60,000, f′c = 4,000, cb = 1.5 in., Ktr = 0: l_d = 3·60,000/(40·λ·63.25·1.5)·1.0 = 47.43/λ. λ = 0.75: **63.25 in.** (before and after, default). λ = 0.85: **55.80 in.**; hook 31.89 → 28.14 in.; compression 25.30 → 22.32 in.
+
+### R4. Loading an older project resets ψr (compression) and the bar spacing instead of keeping the current page values (REB-N1, found during this sweep)   [bug fix] [MORE conservative in that scenario]
+- **Where:** `applyState`. Anchor: `set('barSpc',`.
+- **Problem:** `set()` skips absent fields, so a project saved before ψr (F16) or barSpc (F14) existed kept whatever the page showed. With ψr = 0.75 on screen, loading an old project silently computed with 0.75. The new λ field would have had the same problem.
+- **Before:** `set('barSpc',inp.barSpc);set('psiRc',inp.psiRc);`
+- **After:** `set('barSpc',inp.barSpc!=null?inp.barSpc:'');set('psiRc',inp.psiRc!=null?inp.psiRc:'1.0');` and `set('lwLambda',(inp.lwLambda!=null&&inp.lwLambda!=='')?inp.lwLambda:0.75);`
+- **Check case:** default #8 (fy = 60,000, f′c = 4,000), ψr = 0.75 on screen, then load a project saved without `psiRc` (saved with ψr = 1.0 implied): before the loaded project showed ψr = 0.75 and l_dc = **14.23 in.**; after ψr = 1.0 and l_dc = 0.02·60,000/63.25·1.0 = **18.97 in.** (checked in Chromium). Projects that contain the fields load exactly as before.
+
+### R5. Code caps on the dashboard shown as information, not "CHK" (REB-O6)   [display only]
+- **Where:** `buildDashboard`. The rows "(c_b+K_tr)/d_b (limited to 2.5)", "ψ_t·ψ_e (limited to 1.7)", "λ_rc (limited to 0.4–1.0)", "λ_rl·λ_cf (limited to 1.7)" are `info:true` and show "(limit applied)" when the cap acts. Before they were pass/fail rows that showed a red CHK although the cap is applied in the calculation.
+- **Check case:** confinement Atr = 0.4, s = 6, n = 3, cb = 2.5: before "(c_b+K_tr)/d_b within 2.5 CHK 2.50"; after "(c_b+K_tr)/d_b (limited to 2.5) 2.50 (limit applied)". Lengths unchanged.
+
+### R6. Panels D2, E, E2, F, G open by default (REB-O11)   [UI only]
+- **Where:** `buildInputPanel`, the `open` argument of `panel("D2"…)`, `panel("E"…)`, `panel("E2"…)`, `panel("F"…)`, `panel("G"…)`: `false` → `true`.
+- **Why:** inside the input tabs a tab otherwise opened on a collapsed header. Saved states (autosave, projects, JSON) still restore their own open/closed values; only a new session differs. The saved `panels` values of a new session are therefore `true` for these panels.
+
+### R7. Project names escaped (REB-O10)   [bug fix] [no result change]
+- **Where:** new `escHTML` after `fmt`; `refreshProjectList` (anchor `Object.keys(p).map(k=>`); print title block (project, number, by, dates).
+- **Check case:** save a project named `A "q" <b>`: before the dropdown showed `A ` (broken option); after it shows `A "q" <b>` and loads.
+
+### Items closed / not changed
+- **REB-O8** (compression lap splice for fy > 80 ksi): closed, not an issue. ACI 318-19 Table 25.5.5.1 has three rows: fy ≤ 60,000 psi: 0.0005fy·db; 60,000 < fy ≤ 80,000 psi: (0.0009fy − 24)db; fy > 80,000 psi: (0.0009fy − 24)db; each ≥ 12 in. (verify against the printed table). The code matches.
+- **REB-O9** (shared storage keys): already resolved by Concrete Beam Capacity F21.
+
+### Needs engineer
+1. **REB-O7 / X-C1** — Edition labels still read "AASHTO LRFD 9th Ed. §5.10.8" (code selector, print header). Recommendation: relabel to 10th Ed. after you confirm 5.10.8.2.1, 5.10.8.2.4, 5.10.8.2.5 and 5.10.8.4 against the printed 10th Ed.
+2. **REB-O1** — Headed deformed bars (ACI 25.4.4; AASHTO 5.10.8.2.4c): do you want a "Headed Bar" tab? Recommendation: yes, ACI first (l_dt = fy·ψe·ψp·ψo·ψc/(75λ√f′c)·db^1.5 ≥ max(8db, 6 in.), with the 25.4.4.1 limits as checks).
+3. **REB-O4** — AASHTO compression modifiers (0.75 for spiral confinement in compression development; m = 0.83 ties / 0.75 spirals for compression laps) are not offered (conservative). I did not add them because I could not confirm the 10th Ed. wording and article numbers. Recommendation: add them as options defaulting to 1.0 once you confirm the text.
+4. **R1 / R2 articles** — confirm AASHTO 5.10.8.2.4b ("No. 11 and smaller" for the 0.8 hook factor) and 5.10.8.4.2a (no laps for bars larger than No. 11).
+
+### Remaining open items
+None from section 11 beyond the "Needs engineer" list.
+
 ## Open items (not changed)
+- **Status 2026-10-12 (claude/sweep-cbc-rebar):** O2 → R2; O3 → R3; O5 → R1; O6 → R5; O8 closed (not an issue); O9 resolved earlier (CBC F21); O10 → R7; O11 → R6. O1, O4, O7 remain under "Needs engineer" in that entry.
 - O1. **Headed deformed bars (ACI 318-19 §25.4.4; AASHTO 10th Ed. 5.10.8.2.4c) not implemented.** — Not done here: a clean implementation needs a new tab, a schedule column, a print section and new inputs (ψp needs Att/Ahs and bar spacing; plus the 25.4.4.1 applicability limits: bar ≤ #11, Abrg ≥ 4Ab, clear cover ≥ 2db, c-c spacing ≥ 3db, normalweight concrete), and the same change must be mirrored by hand into the escaped copy in `Concrete Beam Capacity.html`. That is a sizeable UI addition. — Decision needed: do you want a "Headed Bar" tab (ACI l_dt = fy·ψe·ψp·ψo·ψc/(75λ√f'c)·db^1.5 ≥ max(8db, 6 in.)), and should the AASHTO branch be included?
 - O2. **AASHTO: lap splices of #14/#18.** The new N/P flag is applied in ACI mode only. I believe AASHTO 5.10.8.4 also restricts lap splices to #11 and smaller, but I did not confirm the 10th Ed. wording/article. — Confirm the AASHTO article; if confirmed, `lapProhibited()` can drop its `!f.AASHTO` condition.
 - O3. **λ is a fixed 0.75 checkbox.** AASHTO 10th Ed. 5.4.2.8 computes λ from fct or wc (0.75 ≤ λ ≤ 1.0), and ACI 318-19 Table 19.2.4.2 allows 0.85 for sand-lightweight. The hook fix (F1) now uses this same λ. — Decision needed: add a λ input (value or wc)?

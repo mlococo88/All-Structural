@@ -60,6 +60,7 @@ tr.pier td{background:#f8fafc;font-weight:600}
 .deck{display:flex;flex-wrap:wrap;gap:10px;padding:10px 14px;border-bottom:1px solid #f1f5f9;align-items:flex-end}
 .deck .f{width:110px}
 @media(max-width:900px){.body{grid-template-columns:1fr}aside{position:static;max-height:none}.mets{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:900px){.hdr{height:auto;min-height:54px;flex-wrap:wrap;gap:6px;padding:6px 12px;position:static}.hdr>div:last-child{display:flex;flex-wrap:wrap;align-items:center;gap:6px 0}}
 @media print{.bx-alltools{display:none!important}}
 </style>
 </head>
@@ -100,6 +101,13 @@ tr.pier td{background:#f8fafc;font-weight:600}
       <div class="f" id="gapF"><label>Gap after last axle (ft)</label><input id="udlGap" type="number" step="0.1"></div>
     </div>
     <label class="chk" id="truncF"><input type="checkbox" id="udlTrunc">Allow trailing load to be truncated where it relieves</label>
+    <label class="chk"><input type="checkbox" id="stdLane">AASHTO Std. Spec. lane loading, checked as a separate case</label>
+    <div id="stdLaneF" class="g3">
+      <div class="f"><label>w (k/ft)</label><input id="slW" type="number" step="0.01" value="0.64"></div>
+      <div class="f"><label>P moment (kips)</label><input id="slPM" type="number" step="0.5" value="18"></div>
+      <div class="f"><label>P shear (kips)</label><input id="slPV" type="number" step="0.5" value="26"></div>
+    </div>
+    <p class="hint" id="stdLaneH">AASHTO Std. Spec. 17th Ed. Art. 3.7.1.1, Fig. 3.7.6B (H20 / HS20: 0.64 k/ft + 18 k for moment, 26 k for shear and reactions) and Art. 3.11.3 (negative moment in continuous spans: a second, equal P moment in one other span). The uniform load is patterned on the influence line. Enveloped with the truck (truck OR lane, not both); impact is applied to the lane case. DFs here are per lane: a Std. Spec. wheel-line DF (e.g. S/5.5) must be divided by 2.</p>
     <div class="lbl" style="margin-top:4px">Variable axle spacing</div>
     <div class="g3">
       <div class="f"><label>Axle # (0 = off)</label><input id="vK" type="number" min="0" step="1"></div>
@@ -120,7 +128,7 @@ tr.pier td{background:#f8fafc;font-weight:600}
 
   <details open><summary>Impact</summary><div class="pb">
     <div class="f"><label>Method</label>
-      <select id="impM"><option value="const">Constant multiplier</option><option value="arema">AREMA steel (span-dependent)</option></select></div>
+      <select id="impM"><option value="const">Constant multiplier</option><option value="arema">AREMA steel (span-dependent)</option><option value="std">AASHTO Std. Spec. 50/(L + 125) ≤ 0.30</option></select></div>
     <div class="f" id="impCF"><label>Impact multiplier (e.g. 1.33)</label><input id="impV" type="number" step="0.01"></div>
     <div id="impAF" class="pb" style="padding:0">
       <div class="g2">
@@ -129,6 +137,7 @@ tr.pier td{background:#f8fafc;font-weight:600}
       </div>
       <p class="hint">I% = 100/S + [40 − 3L²/1600 for L &lt; 80 ft, else 16 + 600/(L − 30)]. L = length of the span containing the section; interior supports and pier sections use the mean of the adjacent spans. Verify against current AREMA Ch. 15 for continuous spans.</p>
     </div>
+    <p class="hint" id="impSF">AASHTO Std. Spec. 17th Ed. Art. 3.8.2.1: I = 50/(L + 125) ≤ 0.30. L per Art. 3.8.2.2: positive moment = span length; negative moment = mean of the two spans adjacent to the nearest interior support; shear = loaded length from the section to the far reaction of its span (+V: to the right support, −V: to the left support); reactions = mean of the adjacent spans. Verify the shear and reaction L for continuous spans.</p>
     <label class="chk"><input type="checkbox" id="impUdl">Apply impact to uniform load</label>
   </div></details>
 
@@ -142,10 +151,14 @@ tr.pier td{background:#f8fafc;font-weight:600}
     <div id="dfT" class="pb" style="padding:0;gap:5px"></div>
     <div class="f"><label>Negative moment DF (blank = span DF)</label><input id="dfNeg" type="number" step="0.01" placeholder="Same as span"></div>
     <p class="hint">LRFD DFs already include multiple presence (except lever rule). Pier sections use the larger adjacent-span DF; reactions use the larger adjacent shear DF.</p>
+    <div class="lbl" style="margin-top:4px">LRFD fatigue truck DFs (blank = use the highway DFs above)</div>
+    <div class="g3"><div class="f"><label>DF moment</label><input id="fDFm" type="number" step="0.01" placeholder="Same"></div><div class="f"><label>DF shear</label><input id="fDFv" type="number" step="0.01" placeholder="Same"></div><div class="f"><label>Neg. M DF</label><input id="fDFn" type="number" step="0.01" placeholder="Fatigue M"></div></div>
+    <p class="hint">Used only for the LRFD Fatigue Truck preset (here and in the report): one-lane DF ÷ 1.2, LRFD 3.6.1.4.3b and C3.6.1.1.2. They replace the span DFs for every span.</p>
     <div class="g2">
       <div class="f"><label>Position step (ft)</label><input id="step" type="number" value="1" step="0.25"></div>
       <div class="f"><label>Spacing / headway step (ft)</label><input id="hStep" type="number" value="2" step="0.5"></div>
     </div>
+    <p class="hint" id="mlgBasis">Basis: AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024): HL-93 and fatigue truck (Art. 3.6.1.2–3.6.1.4), load factors (Table 3.4.1-1), IM (Art. 3.6.2). HS20 / H20: AASHTO Standard Specifications for Highway Bridges, 17th Ed. (2002), Art. 3.7, 3.8, 3.11. Rail: AREMA Manual Ch. 8 / 15 (edition per owner).</p>
   </div></details>
 </aside>
 
@@ -262,13 +275,14 @@ const sp=(load,arr)=>arr.map(s=>[load,s]);
 // ═══════════ PRESETS (defaults only — every rule is editable in the UI) ═══════════
 const E80=[[40,0],[80,8],[80,5],[80,5],[80,5],[52,9],[52,5],[52,6],[52,5],[40,8],[80,8],[80,5],[80,5],[80,5],[52,9],[52,5],[52,6],[52,5]];
 const NOV={k:0,min:0,max:0}, NOUDL={mode:'none',w:0,gap:0,trunc:false};
-const HW=(label,axles,o={})=>Object.assign({label,axles,udl:{mode:'lane',w:0.64,gap:0,trunc:false},vary:NOV,neglect:true,secondary:'',multi:{on:false,scale:0.9,hmin:50,fixed:14},imp:{method:'const',val:1.33,onUdl:false}},o);
+const NOSL={on:false,w:0.64,PM:18,PV:26}, SL20={on:true,w:0.64,PM:18,PV:26};   // AASHTO Std. Spec. 17th Ed. Fig. 3.7.6B (H20-44 / HS20-44 lane loading)
+const HW=(label,axles,o={})=>Object.assign({label,axles,udl:{mode:'lane',w:0.64,gap:0,trunc:false},vary:NOV,neglect:true,secondary:'',multi:{on:false,scale:0.9,hmin:50,fixed:14},imp:{method:'const',val:1.33,onUdl:false},stdLane:NOSL},o);
 const RL=(label,axles,w,gap,o={})=>Object.assign({label,axles,udl:{mode:w>0?'trail':'none',w,gap,trunc:false},vary:NOV,neglect:false,secondary:'',multi:{on:false,scale:1,hmin:50,fixed:0},imp:{method:'arema',val:1,onUdl:true}},o);
 const P={
   'HL93-Truck':HW('HL-93 Design Truck',[[8,0],[32,14],[32,14]],{vary:{k:3,min:14,max:30},secondary:'HL93-Tandem',multi:{on:true,scale:0.9,hmin:50,fixed:14}}),
   'HL93-Tandem':HW('HL-93 Design Tandem',[[25,0],[25,4]]),
-  'HS20':HW('HS20 Truck — truck only (no Std. Spec. lane load)',[[8,0],[32,14],[32,14]],{udl:NOUDL,vary:{k:3,min:14,max:30},neglect:false,imp:{method:'const',val:1.30,onUdl:false}}),
-  'H20':HW('H20 Truck — truck only (no Std. Spec. lane load)',[[8,0],[32,14]],{udl:NOUDL,neglect:false,imp:{method:'const',val:1.30,onUdl:false}}),
+  'HS20':HW('HS20 Truck + Std. Spec. lane loading',[[8,0],[32,14],[32,14]],{udl:NOUDL,vary:{k:3,min:14,max:30},neglect:false,imp:{method:'const',val:1.30,onUdl:false},stdLane:SL20}),
+  'H20':HW('H20 Truck + Std. Spec. lane loading',[[8,0],[32,14]],{udl:NOUDL,neglect:false,imp:{method:'const',val:1.30,onUdl:false},stdLane:SL20}),
   'E80':RL('AREMA Cooper E80',E80,8,5,{secondary:'E80-Alt'}),
   'E80-Alt':RL('Cooper E80 Alternate (4 × 100k)',sp(100,[0,5,6,5]),0,0),
   'F40PH':RL('F40PH Locomotive (280K)',sp(70,[0,9,24,9,14.17,9,24,9]),2,7),
@@ -313,15 +327,18 @@ function applyPreset(k){
   $('neglect').checked=p.neglect; $('secondary').value=p.secondary;
   $('multi').checked=p.multi.on; $('mScale').value=p.multi.scale; $('mHmin').value=p.multi.hmin; $('mFixed').value=p.multi.fixed;
   $('impM').value=p.imp.method; $('impV').value=p.imp.val; $('impUdl').checked=p.imp.onUdl;
+  const sl=p.stdLane||NOSL; $('stdLane').checked=sl.on; $('slW').value=sl.w; $('slPM').value=sl.PM; $('slPV').value=sl.PV;
 }
 function syncVis(){
-  const um=$('udlMode').value, ar=$('impM').value==='arema';
+  const um=$('udlMode').value, ar=$('impM').value==='arema', sd=$('impM').value==='std';
   $('wF').classList.toggle('hidden',um==='none');
   $('gapF').classList.toggle('hidden',um!=='trail');
   $('truncF').classList.toggle('hidden',um!=='trail');
   $('multiF').classList.toggle('hidden',!$('multi').checked);
-  $('impCF').classList.toggle('hidden',ar);
+  $('impCF').classList.toggle('hidden',ar||sd);
   $('impAF').classList.toggle('hidden',!ar);
+  $('impSF').classList.toggle('hidden',!sd);
+  $('stdLaneF').classList.toggle('hidden',!$('stdLane').checked);
 }
 
 // ═══════════ SECTION PROPERTIES (uncracked, short-term n) ═══════════
@@ -370,11 +387,12 @@ function updateProps(){
 // ═══════════ MODEL ═══════════
 function readModel(){
   const ns=+$('nSpans').value, spans=[];
-  for(let i=0;i<ns;i++) spans.push(Math.max(1,num('L'+i,100)));
+  for(let i=0;i<ns;i++) spans.push(Math.max(1,num('L'+i,NaN)));   // blank -> NaN -> input error in analyze (no silent 100 ft)
   const dk=deckRead();
   const sg=segs.map(s=>{const p=props(s,dk);let I=s.Io>0?s.Io:p.I;const bad=!(I>0);return {...s,I:bad?1:I,bad};});
   const pk=$('preset').value;
-  return {spans,E:num('Es',29000),segs:sg,axles:axles.map(a=>[...a]),short:pk,
+  return {spans,E:num('Es',NaN),segs:sg,axles:axles.map(a=>[...a]),short:pk,
+    stdLane:$('stdLane').checked?{w:num('slW',NaN),PM:num('slPM',NaN),PV:num('slPV',NaN)}:null,
     udl:{mode:$('udlMode').value,w:num('udlW',0),gap:num('udlGap',0),trunc:$('udlTrunc').checked},
     vK:Math.round(num('vK',0)),vMin:num('vMin',0),vMax:num('vMax',0),
     neglect:$('neglect').checked,dirs:$('bothDir').checked?[1,-1]:[1],
@@ -398,8 +416,11 @@ function luSolve(A,n,b){
 
 // ═══════════ ANALYSIS ENGINE ═══════════
 function analyze(m){
+  if(isNaN(m.E)) throw new Error('E steel is blank or not a number. Enter E in ksi.');
   if(!(m.E>0)) throw new Error(`E steel = ${m.E} ksi. E must be greater than 0 (the stiffness matrix is singular otherwise).`);
+  if(m.spans.some(l=>isNaN(l))) throw new Error(`Every span length must be a number greater than 0; span ${m.spans.findIndex(l=>isNaN(l))+1} is blank or not a number.`);
   if(!m.spans.length||m.spans.some(l=>!(l>0))) throw new Error('Every span length must be greater than 0.');
+  if(m.stdLane&&![m.stdLane.w,m.stdLane.PM,m.stdLane.PV].every(v=>isFinite(v)&&v>=0)) throw new Error('Std. Spec. lane loading: w, P moment and P shear must be numbers ≥ 0.');
   const ns=m.spans.length, sup=[0]; m.spans.forEach(l=>sup.push(sup[sup.length-1]+l)); const Lt=sup[ns];
   // Segment bounds
   const sb=[]; let c=0;
@@ -488,25 +509,32 @@ function analyze(m){
   effs.forEach((ef,ei)=>{ef.neg=ef.t==='M'&&DER[ei].end<-1e-9*Lt*Lt;});
 
   // Impact per effect
-  const imOf=ef=>{if(m.imp.method==='const')return m.imp.val;
+  // AASHTO Std. Spec. 17th Ed. 3.8.2.1: I = 50/(L+125) <= 0.30; L per 3.8.2.2 (isMax: + effect, else − effect)
+  const stdL=(ef,isMax)=>{const S=m.spans,k=ef.spans[0];
+    if(ef.t==='V'){const a=sup[k],b=sup[k+1];return isMax?b-ef.x:ef.x-a;}
+    if(ef.t==='M'&&!isMax&&ns>1){if(ef.spans.length>1)return (S[ef.spans[0]]+S[ef.spans[1]])/2;
+      const q=k===0?1:k===ns-1?ns-1:(ef.x-sup[k]<=sup[k+1]-ef.x?k:k+1);return (S[q-1]+S[q])/2;}
+    return ef.spans.reduce((a,s)=>a+S[s],0)/ef.spans.length;};
+  const imOf=(ef,isMax=true)=>{if(m.imp.method==='std')return 1+Math.min(0.30,50/(Math.max(0,stdL(ef,isMax))+125));
+    if(m.imp.method==='const')return m.imp.val;
     const Lb=$('aLb')?$('aLb').value:'span';
     const L=Lb==='user'?Math.max(1,num('aL',100)):Lb==='max'?Math.max(...m.spans):Lb==='total'?m.spans.reduce((a,b)=>a+b,0):ef.spans.reduce((a,s)=>a+m.spans[s],0)/ef.spans.length;
     const I=100/m.imp.S+(L<80?40-3*L*L/1600:16+600/(L-30));
     return 1+(m.imp.bal?0.9:1)*I/100;};
-  const imArr=effs.map(imOf);
+  const imArr=effs.map(ef=>imOf(ef,true)), imMinArr=effs.map((ef,i)=>m.imp.method==='std'?imOf(ef,false):imArr[i]);
   const dfOf=(ef,v)=>ef.t==='M'?(v<0&&m.dfNeg>0?m.dfNeg:Math.max(...ef.spans.map(s=>m.dfM[s]))):ef.t==='V'?m.dfV[ef.spans[0]]:Math.max(...ef.spans.map(s=>m.dfV[s]));
 
   // Independent uniform load (lane patterned, or full length) — constant per effect
   const uw=(m.udl.mode==='lane'||m.udl.mode==='full')?m.udl.w:0;
   const laneMax=effs.map((ef,ei)=>{const uf=m.imp.onUdl?imArr[ei]:1;return m.udl.mode==='lane'?uf*uw*DER[ei].lp:uf*uw*DER[ei].end;});
-  const laneMin=effs.map((ef,ei)=>{const uf=m.imp.onUdl?imArr[ei]:1;return m.udl.mode==='lane'?uf*uw*DER[ei].ln:uf*uw*DER[ei].end;});
+  const laneMin=effs.map((ef,ei)=>{const uf=m.imp.onUdl?imMinArr[ei]:1;return m.udl.mode==='lane'?uf*uw*DER[ei].ln:uf*uw*DER[ei].end;});
 
   const res=effs.map(()=>({max:0,maxG:null,min:0,minG:null}));
 
   const cfgs=[];function sweep(cfg){cfgs.push(cfg);
     const nA=cfg.offs.length, Lv=cfg.offs[nA-1], tr=cfg.trail, ext=Lv+(tr?tr.gap:0)+m.step;
     const J=new Int32Array(nA),T=new Float64Array(nA),on=new Uint8Array(nA);
-    const act=[]; effs.forEach((ef,ei)=>{const s=cfg.sel(ef);if(s[0]||s[1])act.push([ei,s[0],s[1],imArr[ei],ef.t==='V'?ef.el:-1,ef.cutL]);});
+    const act=[]; effs.forEach((ef,ei)=>{const s=cfg.sel(ef);if(s[0]||s[1])act.push([ei,s[0],s[1],imArr[ei],ef.t==='V'?ef.el:-1,ef.cutL,imMinArr[ei]]);});
     const loc=v=>{let lo=0,hi=nn-1;while(hi-lo>1){const md=(lo+hi)>>1;if(x[md]<=v)lo=md;else hi=md;}return lo;};
     for(const dir of m.dirs){
       for(let p=-ext;p<=Lt+ext+1e-9;p+=m.step){
@@ -518,7 +546,7 @@ function analyze(m){
         if(tr){const s0=p-dir*(Lv+tr.gap);if(dir>0){if(s0>0)sc=Math.min(s0,Lt);}else{if(s0<Lt)sc=Math.max(s0,0);}}
         if(!any&&sc===null)continue;
         let jc=0,tc=0; if(sc!==null){jc=loc(sc);tc=(sc-x[jc])/(x[jc+1]-x[jc]);}
-        for(const [ei,dMax,dMin,im,cutEl,cutL] of act){
+        for(const [ei,dMax,dMin,im,cutEl,cutL,imn] of act){
           const f=IL[ei]; let tot=0,ps=0,ng=0;
           for(let a=0;a<nA;a++){if(!on[a])continue;const j=J[a];let fa=f[j],fb=f[j+1];
             if(j===cutEl){if(cutL)fa+=1;else fb-=1;}
@@ -529,8 +557,8 @@ function analyze(m){
             if(dir>0){if(tr.trunc){uMax=CIs-Math.min(D.pmin[jc],CIs);uMin=CIs-Math.max(D.pmax[jc],CIs);}else uMax=uMin=CIs;}
             else{if(tr.trunc){uMax=Math.max(D.smax[jc+1],CIs)-CIs;uMin=Math.min(D.smin[jc+1],CIs)-CIs;}else uMax=uMin=D.end-CIs;}
             uMax*=tr.w;uMin*=tr.w;}
-          const uf=m.imp.onUdl?im:1;
-          const vMax=cfg.scale*(im*axMax+uf*uMax+laneMax[ei]), vMin=cfg.scale*(im*axMin+uf*uMin+laneMin[ei]);
+          const uf=m.imp.onUdl?im:1, ufn=m.imp.onUdl?imn:1;
+          const vMax=cfg.scale*(im*axMax+uf*uMax+laneMax[ei]), vMin=cfg.scale*(imn*axMin+ufn*uMin+laneMin[ei]);
           const r=res[ei];
           if(dMax&&vMax>r.max+1e-9){r.max=vMax;r.maxG=gov(cfg,p,dir,on);}
           if(dMin&&vMin<r.min-1e-9){r.min=vMin;r.minG=gov(cfg,p,dir,on);}
@@ -573,7 +601,7 @@ function analyze(m){
     if(!J.length&&sc===null)return;
     let jc=0,tc=0;if(sc!==null){let lo=0,hi=nn-1;while(hi-lo>1){const md=(lo+hi)>>1;if(x[md]<=sc)lo=md;else hi=md;}jc=lo;tc=(sc-x[jc])/(x[jc+1]-x[jc]);}
     list.forEach(([ei,dMax,dMin])=>{
-      const ef=effs[ei],f=IL[ei],im=imArr[ei],cutEl=ef.t==='V'?ef.el:-1;let tot=0,ps=0,ng=0;
+      const ef=effs[ei],f=IL[ei],im=imArr[ei],imn=imMinArr[ei],cutEl=ef.t==='V'?ef.el:-1;let tot=0,ps=0,ng=0;
       for(let a=0;a<J.length;a++){const j=J[a];let fa=f[j],fb=f[j+1];if(j===cutEl){if(ef.cutL)fa+=1;else fb-=1;}
         const v=Pa[a]*(fa+(fb-fa)*T[a]);tot+=v;if(v>0)ps+=v;else ng+=v;}
       const axMax=m.neglect?ps:tot,axMin=m.neglect?ng:tot;let uMax=0,uMin=0;
@@ -581,7 +609,7 @@ function analyze(m){
         if(dir>0){if(tr.trunc){uMax=CIs-Math.min(D.pmin[jc],CIs);uMin=CIs-Math.max(D.pmax[jc],CIs);}else uMax=uMin=CIs;}
         else{if(tr.trunc){uMax=Math.max(D.smax[jc+1],CIs)-CIs;uMin=Math.min(D.smin[jc+1],CIs)-CIs;}else uMax=uMin=D.end-CIs;}
         uMax*=tr.w;uMin*=tr.w;}
-      const uf=m.imp.onUdl?im:1,vMax=cfg.scale*(im*axMax+uf*uMax+laneMax[ei]),vMin=cfg.scale*(im*axMin+uf*uMin+laneMin[ei]),r=res[ei];
+      const uf=m.imp.onUdl?im:1,ufn=m.imp.onUdl?imn:1,vMax=cfg.scale*(im*axMax+uf*uMax+laneMax[ei]),vMin=cfg.scale*(imn*axMin+ufn*uMin+laneMin[ei]),r=res[ei];
       if(dMax&&vMax>r.max+1e-9){r.max=vMax;r.maxG={lab:cfg.lab,p,dir,pos:[...pos]};}
       if(dMin&&vMin<r.min-1e-9){r.min=vMin;r.minG={lab:cfg.lab,p,dir,pos:[...pos]};}
     });
@@ -606,6 +634,23 @@ function analyze(m){
       for(let q=-m.step;q<=m.step+1e-9;q+=0.1)refineAt(c,+(p0+q).toFixed(3),dr,list);}));
   }
 
+  // ── AASHTO Std. Spec. lane loading, separate case enveloped with the truck (17th Ed. 3.7.1.1, Fig. 3.7.6B, 3.11.3; impact 3.8.1) ──
+  // max = I+(w*positive IL area + P*max ordinate); min = I-(w*negative IL area + P*min ordinate [+ P*min ordinate in one other span, negative moment, 2+ spans])
+  if(m.stdLane){const SL=m.stdLane;
+    effs.forEach((ef,ei)=>{
+      const P1=ef.t==='M'?SL.PM:SL.PV, D=DER[ei], spMin=m.spans.map(()=>[0,0]);
+      let hi=0,xh=0,lo=0,xl=0,kl=-1,k=0;
+      for(let j=0;j<nn-1;j++){const [a,bb]=ends(ei,j),xm=(x[j]+x[j+1])/2;while(k<ns-1&&xm>sup[k+1])k++;
+        [[a,x[j]],[bb,x[j+1]]].forEach(([v,xv])=>{if(v>hi){hi=v;xh=xv;}if(v<lo){lo=v;xl=xv;kl=k;}if(v<spMin[k][0])spMin[k]=[v,xv];});}
+      let lo2=0,x2=null;
+      if(ef.t==='M'&&ns>1&&kl>=0)spMin.forEach(([v,xv],s)=>{if(s!==kl&&v<lo2){lo2=v;x2=xv;}});
+      const vMax=imArr[ei]*(SL.w*D.lp+P1*hi), vMin=imMinArr[ei]*(SL.w*D.ln+P1*(lo+lo2)), r=res[ei];
+      const lab=`Std. lane ${P1}k`;
+      if(vMax>r.max+1e-9){r.max=vMax;r.maxG={lab,p:xh,dir:1,pos:[xh],lane:true};}
+      if(vMin<r.min-1e-9){r.min=vMin;r.minG={lab:x2!=null?`Std. lane 2×${P1}k`:lab,p:xl,dir:1,pos:x2!=null?[xl,x2]:[xl],lane:true};}
+    });
+  }
+
   const warn=[]; let segSum=0; m.segs.slice(0,-1).forEach(s=>segSum+=s.len);
   if(m.segs.length>1&&segSum>=Lt) warn.push('Segment lengths reach or exceed the girder length, so the last segment has zero length.');
   if(m.segs.some(s=>s.bad)) warn.push('A segment has invalid geometry (zero area or I); a placeholder stiffness was used.');
@@ -616,8 +661,11 @@ function analyze(m){
   if([...m.dfM,...m.dfV].some(v=>!(v>0))) warn.push('One or more distribution factors are zero or blank.');
   if(m.imp.method==='const'&&m.imp.val<1) warn.push('The impact multiplier is below 1.0.');
   if(m.axles.some(a=>!(a[0]>0))) warn.push('One or more axles have zero or negative load.');
-  if(m.short==='Fatigue'){const ll=m.llf,fl=Math.abs(ll-1.75)<1e-9||Math.abs(ll-0.80)<1e-9;
-    warn.push(`LRFD fatigue truck: the distribution factors and live load factor entered (LLF = ${ll}) are applied exactly as given. For fatigue use the ONE-LANE distribution factor divided by 1.2 to remove the multiple presence factor (LRFD 3.6.1.4.3b, C3.6.1.1.2), not the strength (multi-lane) DF, and γ = 1.75 (Fatigue I) or 0.80 (Fatigue II), Table 3.4.1-1.${fl?'':' The current LLF is not a fatigue load factor.'}`);}
+  if(m.short==='Fatigue'){const ll=m.llf,fl=Math.abs(ll-1.75)<1e-9||Math.abs(ll-0.80)<1e-9,fd=m.fatDF;
+    if(fd&&!m.rail)warn.push(`LRFD fatigue truck: the fatigue DFs entered under Factors & Analysis are used for this vehicle (moment ${fd.M!=null?fd.M:'= highway span DFs'}, shear ${fd.V!=null?fd.V:'= highway span DFs'}, negative moment ${fd.N!=null?fd.N:fd.M!=null?fd.M:'= highway DF'}); they should be the ONE-LANE DF divided by 1.2 (LRFD 3.6.1.4.3b, C3.6.1.1.2). LLF = ${ll}: use γ = 1.75 (Fatigue I) or 0.80 (Fatigue II), Table 3.4.1-1.${fl?'':' The current LLF is not a fatigue load factor.'}`);
+    else warn.push(`LRFD fatigue truck: the distribution factors and live load factor entered (LLF = ${ll}) are applied exactly as given. For fatigue use the ONE-LANE distribution factor divided by 1.2 to remove the multiple presence factor (LRFD 3.6.1.4.3b, C3.6.1.1.2), not the strength (multi-lane) DF, and γ = 1.75 (Fatigue I) or 0.80 (Fatigue II), Table 3.4.1-1.${fl?'':' The current LLF is not a fatigue load factor.'}${m.rail?'':' Enter the fatigue DFs under Factors & Analysis to apply them to this vehicle.'}`);}
+  if(m.stdLane)warn.push(`Std. Spec. lane loading (${m.stdLane.w} k/ft + ${m.stdLane.PM} k moment / ${m.stdLane.PV} k shear and reactions; a second ${m.stdLane.PM} k in one other span for negative moment) is checked as a separate case and enveloped with the vehicle, with impact. Where it governs, the case reads "Std. lane" and "@" is the concentrated-load position.`);
+  else if(m.short==='HS20'||m.short==='H20')warn.push(`${m.short}: the AASHTO Std. Spec. lane loading is not checked (Load Model Rules). It can govern longer spans (Std. Spec. 17th Ed. Art. 3.7.1.1, Fig. 3.7.6B).`);
 
   // Engine check: unit uniform load on all spans
   const th={1:[0.125,0.5],2:[-0.125,0.375],3:[-0.1,0.4],4:[-0.1071,0.3929]}[ns], L1=m.spans[0];
@@ -714,7 +762,7 @@ function render(){
   if(!RES) return;
   const R=RES,{m,effs,res,rows,x,sup,Lt,IL}=R, view=$('viewMode').value, ns=m.spans.length;
   const F=(ei,v)=>view==='f'?m.llf*R.dfOf(effs[ei],v)*v:v, FF=(ei,v)=>m.llf*R.dfOf(effs[ei],v)*v;
-  const G=g=>g?`${g.lab} ${g.dir>0?'→':'←'} @${g.p.toFixed(1)}'`:'—';
+  const G=g=>g?(g.lane?`${g.lab} @${g.p.toFixed(1)}'`:`${g.lab} ${g.dir>0?'→':'←'} @${g.p.toFixed(1)}'`):'—';
   // Metrics (always factored)
   let mp=0,mn=0,vp=0,vn=0,rx=0,rxs='';
   effs.forEach((ef,ei)=>{const a=FF(ei,res[ei].max),b=FF(ei,res[ei].min);
@@ -867,7 +915,7 @@ function drawVehicle(){
   c.fillText(`R = ${+Rt.toFixed(2)}k @ ${CR.toFixed(2)}' from axle 1`,cx,gy-98);
   // Summary line
   const udlTxt=m.udl.mode==='none'||!(m.udl.w>0)?'No uniform load':m.udl.mode==='lane'?`Lane ${m.udl.w} k/ft, patterned on influence lines`:m.udl.mode==='full'?`Uniform ${m.udl.w} k/ft, full length`:`Trailing ${m.udl.w} k/ft, ${m.udl.gap}' behind last axle${m.udl.trunc?' (truncatable)':''}`;
-  $('vehInfo').innerHTML=`<b>${m.short==='Custom'?'Custom vehicle':(P[m.short]?P[m.short].label:m.short)}</b> · ${ax.length} axles · ΣP = ${+Rt.toFixed(2)} kips · ${udlTxt} · Impact: ${m.imp.method==='const'?m.imp.val:'AREMA formula'}${m.imp.onUdl?' (incl. uniform load)':''}`+
+  $('vehInfo').innerHTML=`<b>${m.short==='Custom'?'Custom vehicle':(P[m.short]?P[m.short].label:m.short)}</b> · ${ax.length} axles · ΣP = ${+Rt.toFixed(2)} kips · ${udlTxt} · Impact: ${m.imp.method==='const'?m.imp.val:m.imp.method==='std'?'Std. Spec. 50/(L+125) ≤ 0.30':'AREMA formula'}${m.imp.onUdl?' (incl. uniform load)':''}${m.stdLane?` · Std. Spec. lane ${m.stdLane.w} k/ft + ${m.stdLane.PM} k / ${m.stdLane.PV} k (separate case, with impact)`:''}`+
     `${varOK?` · Axle ${m.vK} spacing varies ${m.vMin}–${m.vMax}'`:''}${m.secondary?` · Also enveloped with ${m.secondary}`:''}${m.multi&&m.spans.length>1?` · ${m.mScale}×2-vehicle case, headway ≥ ${m.mHmin}'`:''}`;
 }
 const _render2=render; render=function(){_render2();drawVehicle();};
@@ -969,6 +1017,10 @@ $('envB').addEventListener('click',e=>{const td=e.target.closest('td'),tr=e.targ
 $('rB').addEventListener('click',e=>{const td=e.target.closest('td'),tr=e.target.closest('tr');if(!td||!tr||!RES)return;
   const ef=RES.effR[[...tr.parentNode.children].indexOf(tr)];if(!ef)return;const ei=RES.effs.indexOf(ef);
   const t={2:1,4:1,3:0,5:0}[td.cellIndex];if(t!==undefined)jumpTo(ei,!!t);});
+// Std. Spec. lane case: no vehicle position to load into step mode
+{const _jt=jumpTo;jumpTo=function(ei,isMax){const r=RES&&RES.res[ei],g=r&&(isMax?r.maxG:r.minG);
+  if(g&&g.lane){$('stepNote').textContent=`The governing ${isMax?'max':'min'} at x = ${RES.effs[ei].x.toFixed(2)}' is the AASHTO Std. Spec. lane loading case (${g.lab} at ${g.pos.map(v=>v.toFixed(1)+"'").join(' and ')} + patterned uniform load), not a vehicle position, so it cannot be shown in step mode.`;$('stepCard').scrollIntoView({behavior:'smooth',block:'start'});return;}
+  return _jt(ei,isMax);};}
 
 // Wrap run/render so deflection and notes stay in sync
 const _run0=run; run=function(){_run0();if(RES){try{DEF=deflAnalyze();}catch(e){console.error(e);DEF=null;}drawDefl();}};
@@ -991,7 +1043,7 @@ document.head.insertAdjacentHTML('beforeend','<style>.segb{border:1px solid #e2e
   const dk=$('deckF');dk.className='g2';dk.style.cssText='';$('deckHold').appendChild(dk);
   $('segBtns').appendChild($('segAdd'));$('segBtns').appendChild($('segDel'));
   $('secCard').style.display='none';
-  const h=first.querySelector('.hint');if(h)h.textContent='Pinned supports. Deck, girder segments, and flange transitions are defined in the Girder Section panel below.';
+  const h=first.querySelector('.hint');if(h)h.textContent='Pinned supports. Deck, girder segments, and flange transitions are defined on the Girder tab.';
 }
 renderSegs=function(){
   $('segList').innerHTML=segs.map((s,i)=>{
@@ -1062,7 +1114,7 @@ function modelFor(k){
   const p=P[k];
   return {...m,axles:p.axles.map(a=>[...a]),short:k,udl:{...p.udl},vK:p.vary.k,vMin:p.vary.min,vMax:p.vary.max,neglect:p.neglect,
     secondary:p.secondary,multi:p.multi.on,mScale:p.multi.scale,mHmin:p.multi.hmin,mFixed:p.multi.fixed,
-    imp:{...m.imp,method:p.imp.method,val:p.imp.val,onUdl:p.imp.onUdl}};
+    imp:{...m.imp,method:p.imp.method,val:p.imp.val,onUdl:p.imp.onUdl},stdLane:p.stdLane&&p.stdLane.on?{w:p.stdLane.w,PM:p.stdLane.PM,PV:p.stdLane.PV}:null};
 }
 function offPlot(series,o,w=1100,h=300){
   const cv=document.createElement('canvas');cv.style.cssText=`position:fixed;left:-99999px;top:0;width:${w}px;height:${h}px`;
@@ -1104,7 +1156,7 @@ async function genReport(keys,o,win){
 }
 function reportHTML(out,o,base,dk){
   const N=Math.max(1,num('dLim',800)), unit=o.fac?`factored per girder (LLF ${base.llf} × DF)`:'unfactored per lane, including impact';
-  const f1=v=>(+v).toFixed(1), G=g=>g?`${g.lab} ${g.dir>0?'→':'←'} lead axle @ ${g.p.toFixed(1)}'`:'—';
+  const f1=v=>(+v).toFixed(1), G=g=>g?(g.lane?`${g.lab} @ ${g.p.toFixed(1)}'`:`${g.lab} ${g.dir>0?'→':'←'} lead axle @ ${g.p.toFixed(1)}'`):'—';
   const Lt=base.spans.reduce((a,b)=>a+b,0);
   const loc=(R,x)=>{const s=R.sup;let k=0;while(k<s.length-2&&x>s[k+1]+1e-6)k++;return `Span ${k+1}, ${((x-s[k])/(s[k+1]-s[k])).toFixed(2)}L`;};
   const dRatio=r=>{if(!r.D)return null;let mx=0;r.R.m.spans.forEach((L,k)=>r.D.secs.forEach((s,j)=>{if(s.x>=r.R.sup[k]-1e-9&&s.x<=r.R.sup[k+1]+1e-9)mx=Math.max(mx,Math.abs(r.D.res[j].dn)/(L*12/N));}));return mx;};
@@ -1123,7 +1175,8 @@ function reportHTML(out,o,base,dk){
     ['Distribution factors',base.spans.map((_,k)=>`Span ${k+1}: moment ${base.dfM[k]}, shear ${base.dfV[k]}`).join(' · ')+(base.dfNeg>0?` · negative moment ${base.dfNeg}`:'')],
     ['AREMA impact inputs (rail presets)',`S = ${base.imp.S} ft${base.imp.bal?', ballasted deck (90%)':''}, L basis: ${$('aLb')?$('aLb').selectedOptions[0].text:'span'}`],
     ['Analysis',`Position step ${base.step} ft, spacing/headway step ${base.hStep} ft, ${base.dirs.length>1?'both travel directions':'one travel direction'}`],
-    ['Results basis',unit]];
+    ['Results basis',unit],['Code basis',esc($('mlgBasis').textContent.replace(/^Basis: /,''))]];
+  {const fm=num('fDFm',0),fv=num('fDFv',0),fn=num('fDFn',0);if(fm>0||fv>0||fn>0)inp.splice(5,0,['LRFD fatigue truck DFs (fatigue truck only)',`moment ${fm>0?fm:'= highway span DFs'}, shear ${fv>0?fv:'= highway span DFs'}, negative moment ${fn>0?fn:fm>0?fm:'= highway DF'}`]);}
   if(o.defl)inp.push(['Deflection',`${$('dCase').selectedOptions[0].text}; DF ${num('dDF',1)}; ${$('dIM').checked?'with':'without'} impact; limit L/${N}`]);
   // Per-vehicle sections
   const veh=out.map((r,i)=>{
@@ -1259,7 +1312,12 @@ function isRail(key){return key==='Custom'||key==='__current'?$('custRail').chec
 function applyFam(m,key){
   const n=m.spans.length; m.rail=isRail(key);
   if(m.rail){m.dfM=Array(n).fill(num('rDFm',0.5));m.dfV=Array(n).fill(num('rDFv',0.5));m.dfNeg=num('rDFn',0);}
-  else{m.dfM=m.spans.map((_,i)=>num('dfm'+i,1));m.dfV=m.spans.map((_,i)=>num('dfv'+i,1));m.dfNeg=num('dfNeg',0);}
+  else{m.dfM=m.spans.map((_,i)=>num('dfm'+i,1));m.dfV=m.spans.map((_,i)=>num('dfv'+i,1));m.dfNeg=num('dfNeg',0);
+    // LRFD fatigue truck: its own DF set (one-lane DF / 1.2, LRFD 3.6.1.4.3b, C3.6.1.1.2); blank = highway DFs (as before)
+    if(key==='Fatigue'){const fm=num('fDFm',0),fv=num('fDFv',0),fn=num('fDFn',0);
+      if(fm>0){m.dfM=Array(n).fill(fm);m.dfNeg=fn>0?fn:0;}else if(fn>0)m.dfNeg=fn;
+      if(fv>0)m.dfV=Array(n).fill(fv);
+      if(fm>0||fv>0||fn>0)m.fatDF={M:fm>0?fm:null,V:fv>0?fv:null,N:fn>0?fn:null};}}
   return m;
 }
 const _readModel=readModel; readModel=function(){return applyFam(_readModel(),$('preset').value);};
@@ -1310,13 +1368,13 @@ $('trB').addEventListener('click',e=>{const td=e.target.closest('td'),tr=e.targe
 // --- CSV with |V|, transitions, family ---
 exportCsv=function(){
   if(!RES)return;const R=RES,{m,effs,res,rows}=R,view=$('viewMode').value;
-  const F=(ei,v)=>view==='f'?m.llf*R.dfOf(effs[ei],v)*v:v,G=g=>g?`${g.lab} ${g.dir>0?'->':'<-'} @${g.p.toFixed(1)}`:'';
+  const F=(ei,v)=>view==='f'?m.llf*R.dfOf(effs[ei],v)*v:v,G=g=>g?(g.lane?`${g.lab} @${g.p.toFixed(1)}`:`${g.lab} ${g.dir>0?'->':'<-'} @${g.p.toFixed(1)}`):'';
   const av=ei=>Math.max(Math.abs(F(ei,res[ei].max)),Math.abs(F(ei,res[ei].min)));
   const HDR=['Span','x (ft)','x/L','+M (kip-ft)','-M (kip-ft)','+V (kips)','-V (kips)','Max |V| (kips)','Gov +M','Gov -M','Gov +V','Gov -V'];
   const line=(r,lab)=>{const a=res[r.mi],b=res[r.vi];return [r.k+1,r.x.toFixed(2),lab,F(r.mi,a.max).toFixed(2),F(r.mi,a.min).toFixed(2),F(r.vi,b.max).toFixed(2),F(r.vi,b.min).toFixed(2),av(r.vi).toFixed(2),G(a.maxG),G(a.minG),G(b.maxG),G(b.minG)];};
   const L=[['BridgeLoad Pro - Continuous Span Moving Load'],['Generated',new Date().toLocaleString()],['Spans (ft)',m.spans.join(' / ')],['Vehicle',m.short],['Vehicle family',m.rail?'Rail':'Highway'],
     ['Distribution factors',m.spans.map((_,k)=>`Span ${k+1}: M ${m.dfM[k]} V ${m.dfV[k]}`).join('; ')+(m.dfNeg>0?`; neg M ${m.dfNeg}`:'')],
-    ['Impact',m.imp.method==='const'?m.imp.val:'AREMA steel formula'],['Values',view==='f'?`Factored per girder (LLF ${m.llf} x DF)`:'Unfactored per lane incl. impact'],[],HDR];
+    ['Impact',m.imp.method==='const'?m.imp.val:m.imp.method==='std'?'AASHTO Std. Spec. 50/(L+125) <= 0.30':'AREMA steel formula'],['Values',view==='f'?`Factored per girder (LLF ${m.llf} x DF)`:'Unfactored per lane incl. impact'],[],HDR];
   rows.filter(r=>r.t%2===0).forEach(r=>L.push(line(r,(r.t/20).toFixed(1))));
   const T=rows.trans||[]; if(T.length){L.push([],['Plate transitions'],HDR);T.forEach(t=>L.push(line(t,((t.x-R.sup[t.k])/m.spans[t.k]).toFixed(3))));}
   L.push([],['Support','x (ft)','Max R (kips)','Min R (kips)','Gov max','Gov min']);
@@ -1329,7 +1387,7 @@ exportCsv=function(){
 // --- Report: |V| row, transitions per vehicle, separate highway / rail sections ---
 const _reportHTML=reportHTML;
 reportHTML=function(out,o,base,dk){
-  const G=g=>g?`${g.lab} ${g.dir>0?'→':'←'} lead axle @ ${g.p.toFixed(1)}'`:'—';
+  const G=g=>g?(g.lane?`${g.lab} @ ${g.p.toFixed(1)}'`:`${g.lab} ${g.dir>0?'→':'←'} lead axle @ ${g.p.toFixed(1)}'`):'—';
   const patch=(html,arr)=>{const parts=html.split('<h3>Moment Envelope</h3>');
     for(let i=0;i<arr.length&&i<parts.length-1;i++){const R=arr[i].R,F=arr[i].E.F;let bv=null;
       R.effs.forEach((ef,ei)=>{if(ef.t!=='V')return;[[R.res[ei].max,R.res[ei].maxG],[R.res[ei].min,R.res[ei].minG]].forEach(([v,g])=>{const f=F(ei,v);if(!bv||Math.abs(f)>Math.abs(bv.v))bv={v:f,x:ef.x,g};});});
@@ -1417,7 +1475,7 @@ async function runSensitivity(){
 function loadClosedForm(){
   $('nSpans').value='2';renderSpans();$('L0').value=120;$('L1').value=120;
   segs=[{len:0,bt:14,tt:0.625,D:54,tw:0.5,bb:14,tb:0.875,Io:66340}];
-  $('preset').value='HS20';applyPreset('HS20');$('impM').value='const';$('impV').value=1;
+  $('preset').value='HS20';applyPreset('HS20');$('stdLane').checked=false;$('impM').value='const';$('impV').value=1;
   $('bothDir').checked=true;$('step').value=1;$('hStep').value=2;$('refineChk').checked=true;
   $('lls').value='1.00';$('llf').value=1;['0','1'].forEach(i=>{$('dfm'+i).value=1;$('dfv'+i).value=1;});$('dfNeg').value='';
   $('viewMode').value='f';renderSegs();syncVis();run();
@@ -1752,6 +1810,7 @@ initSelects(); renderSpans(); $('preset').value='HL93-Truck'; applyPreset('HL93-
     if(!Array.isArray(p.spans)||!p.spans.length) errs.push('no span lengths');
     else p.spans.forEach(function(L,i){ if(!fin(L)||!(L>0)) errs.push('span '+(i+1)+' length = '+JSON.stringify(L)); });
     if(p.skew!=null && (!fin(p.skew)||p.skew<0||p.skew>90)) errs.push('skew = '+JSON.stringify(p.skew));
+    if(p.skewShear!=null && (!fin(p.skewShear)||Math.abs(p.skewShear)>=90)) errs.push('skewShear = '+JSON.stringify(p.skewShear));
     if(p.Nb!=null && (!fin(p.Nb)||p.Nb<1||Math.round(p.Nb)!==p.Nb)) errs.push('Nb = '+JSON.stringify(p.Nb));
     if(!p.governing||typeof p.governing!=='object') errs.push('no governing DFs');
     checkEnv(p.governing,'governing',errs);
@@ -1819,6 +1878,7 @@ initSelects(); renderSpans(); $('preset').value='HL93-Truck'; applyPreset('HL93-
     }
     var pos=pick(p.governing,c)||{};
     var fat={M:fin(pos.fatM)?pos.fatM:null, V:fin(pos.fatV)?pos.fatV:null, negM:(ng&&fin(ng.fatM))?ng.fatM:null};
+    var fatN=(setNeg&&fat.negM!=null)?fat.negM:null;   // fatigue negative-moment DF follows the negative-moment tick box
     // overwrite list
     var ch=[], row=function(lab,from,to){ if(String(from)!==String(to)) ch.push([lab,from,to]); };
     if(setSpans){ row('Number of spans',mine.length,nL); ls.forEach(function(L,i){ row('Span '+(i+1)+' length (ft)',i<mine.length?mine[i]:'(new)',L); }); }
@@ -1827,13 +1887,17 @@ initSelects(); renderSpans(); $('preset').value='HL93-Truck'; applyPreset('HL93-
       row('Span '+(k+1)+' DF moment',e1?e1.value:'(new)',dfM[k]); row('Span '+(k+1)+' DF shear',e2?e2.value:'(new)',dfV[k]);
     }
     if(neg!=null) row('Negative moment DF',el('dfNeg').value||'(blank = span DF)',neg);
-    return {errs:errs,notes:notes,mismatch:mismatch,canSet:canSet,setSpans:setSpans,n:n,perSpan:perSpan,dfM:dfM,dfV:dfV,neg:neg,fat:fat,changes:ch,mine:mine};
+    if(fat.M!=null) row('Fatigue truck DF moment',el('fDFm').value||'(blank)',fat.M);
+    if(fat.V!=null) row('Fatigue truck DF shear',el('fDFv').value||'(blank)',fat.V);
+    if(fatN!=null) row('Fatigue truck neg. M DF',el('fDFn').value||'(blank)',fatN);
+    return {errs:errs,notes:notes,mismatch:mismatch,canSet:canSet,setSpans:setSpans,n:n,perSpan:perSpan,dfM:dfM,dfV:dfV,neg:neg,fat:fat,fatN:fatN,changes:ch,mine:mine};
   }
 
   /* ---- dialog ---- */
   document.body.insertAdjacentHTML('beforeend','<div id="lxModal" class="mdl hidden"><div class="mdlc">'+
     '<h3>Pull distribution factors from LL &amp; DL Distribution</h3>'+
     '<div id="lxHead" style="font-size:12px;color:#334155;line-height:1.6"></div>'+
+    '<div id="lxStrip" class="warn hidden"></div>'+
     '<div class="f"><label>Girder to take the DFs for</label><select id="lxGirder"></select></div>'+
     '<label class="chk"><input type="checkbox" id="lxNeg" checked>Set the negative-moment DF from lldf\'s interior-support (negative-region) DF</label>'+
     '<div id="lxSpanWarn" class="warn hidden"></div>'+
@@ -1848,10 +1912,10 @@ initSelects(); renderSpans(); $('preset').value='HL93-Truck'; applyPreset('HL93-
 
   function fatHtml(fat,label){
     if(fat.M==null&&fat.V==null) return 'lldf sent no fatigue DFs for this girder.';
-    return '<b>Fatigue truck DFs (not applied):</b> g<sub>fat</sub> = <b>'+f4(fat.M)+'</b> moment, <b>'+f4(fat.V)+'</b> shear'+
+    return '<b>Fatigue truck DFs:</b> g<sub>fat</sub> = <b>'+f4(fat.M)+'</b> moment, <b>'+f4(fat.V)+'</b> shear'+
       (fat.negM!=null?', <b>'+f4(fat.negM)+'</b> negative moment at piers':'')+
       ' — '+h(label)+'. One-lane DF ÷ 1.2 (multiple presence removed, LRFD 3.6.1.4.3b / C3.6.1.1.2), skew included. '+
-      'This tool has one DF set for all vehicles, so these are <b>not</b> written to the DF inputs; they are repeated in the fatigue-truck warning.';
+      'They are written to the <b>fatigue truck DF</b> inputs (used only for the LRFD Fatigue Truck preset), not to the highway DFs.';
   }
   function refresh(){
     var p=CUR&&CUR.p; if(!p) return;
@@ -1886,8 +1950,14 @@ initSelects(); renderSpans(); $('preset').value='HL93-Truck'; applyPreset('HL93-
     CUR={p:p,via:via};
     el('lxHead').innerHTML='From: <b>'+h(p.producer||'?')+'</b> ('+h(p.producerFile||'lldf.html')+') · sent '+h(when(p.producedAt))+
       ' · project: '+h(projOf(p)||'(none)')+(via==='file'?' · from a JSON file':'')+
-      '<br>Bridge type '+h(p.bridgeType||'?')+' · N<sub>b</sub> = '+h(p.Nb!=null?p.Nb:'?')+' · skew '+h(p.skew!=null?p.skew:'?')+'° · spans '+h(p.spans.join(' + '))+' ft'+
+      '<br>Bridge type '+h(p.bridgeType||'?')+' · N<sub>b</sub> = '+h(p.Nb!=null?p.Nb:'?')+' · skew '+h(p.skew!=null?p.skew:'?')+'°'+
+      (p.skewShear!=null?' (moment), '+h(Math.abs(p.skewShear))+'° (shear)':'')+' · spans '+h(p.spans.join(' + '))+' ft'+
       (p.designLanes!=null?' · '+h(p.designLanes)+' design lanes':'');
+    // CIP slab (lldf perFootStrip): the DFs are per 1-ft strip of slab width. They are applied as sent (a
+    // strip analysis is a valid use of this tool), but every result is then per foot of slab width.
+    el('lxStrip').classList.toggle('hidden',p.perFootStrip!==true);
+    el('lxStrip').innerHTML=(p.perFootStrip===true)?'⚠ <b>Cast-in-place slab:</b> these DFs are per <b>1-ft strip</b> of slab width (AASHTO LRFD 4.6.2.3), not per girder. '+
+      'If you apply them, every "per girder" result here is <b>per foot of slab width</b>. Do not use them for a girder.':'';
     el('lxGirder').innerHTML=ch.map(function(o){ return '<option value="'+h(o.v)+'">'+h(o.t)+'</option>'; }).join('');
     el('lxGirder').value=defChoice(p,ch);
     el('lxSpans').checked=false; el('lxNeg').checked=!!p.governingNeg;
@@ -1908,11 +1978,14 @@ initSelects(); renderSpans(); $('preset').value='HL93-Truck'; applyPreset('HL93-
       P.dfM.forEach(function(v,i){ el('dfm'+i).value=String(v); });
       P.dfV.forEach(function(v,i){ el('dfv'+i).value=String(v); });
       if(P.neg!=null) el('dfNeg').value=String(P.neg);
+      if(P.fat.M!=null) el('fDFm').value=String(P.fat.M);
+      if(P.fat.V!=null) el('fDFv').value=String(P.fat.V);
+      if(P.fatN!=null) el('fDFn').value=String(P.fatN);
     } finally { applying=false; }
     SRC={producer:p.producer||'LL & DL Distribution', producerFile:p.producerFile||'lldf.html', producedAt:p.producedAt||'',
       project:projOf(p), via:CUR.via, girder:c, girderLabel:choiceLabel(p,c), perSpan:P.perSpan, spansSet:P.setSpans,
-      negSet:P.neg!=null, multiplePresence:true, skew:true,
-      fatM:P.fat.M, fatV:P.fat.V, fatNegM:P.fat.negM, adoptedAt:new Date().toISOString(), edited:false};
+      negSet:P.neg!=null, multiplePresence:true, skew:true, perFootStrip:(p.perFootStrip===true),
+      fatM:P.fat.M, fatV:P.fat.V, fatNegM:P.fat.negM, fatSet:(P.fat.M!=null||P.fat.V!=null), adoptedAt:new Date().toISOString(), edited:false};
     if(window.BridgeXfer) BridgeXfer.markAdopted(CH,RID,p.producedAt);
     el('lxModal').classList.add('hidden'); CUR=null;
     syncVis(); paint(); run();      // run() also autosaves (wrapped in the save block)
@@ -1935,6 +2008,7 @@ initSelects(); renderSpans(); $('preset').value='HL93-Truck'; applyPreset('HL93-
     return 'Highway DFs from '+SRC.producer+', '+when(SRC.producedAt)+(SRC.project?' ('+SRC.project+')':'')+' — '+SRC.girderLabel+
       (SRC.perSpan?', per span':', governing envelope over all spans')+(SRC.negSet?'; negative-moment DF from interior supports':'')+
       (SRC.spansSet?'; spans set from lldf':'')+'; multiple presence and skew included'+
+      (SRC.perFootStrip?'; CIP slab DFs per 1-ft strip: results are per foot of slab width, not per girder':'')+
       (SRC.edited?' — DF or span inputs edited after the pull':'');
   }
   function paint(){
@@ -1958,7 +2032,7 @@ initSelects(); renderSpans(); $('preset').value='HL93-Truck'; applyPreset('HL93-
   document.addEventListener('input',function(e){
     if(applying||!SRC||SRC.edited) return;
     var id=e.target&&e.target.id||'';
-    if(/^(dfm\d|dfv\d|dfNeg|L\d|nSpans)$/.test(id)){ SRC.edited=true; paint(); }
+    if(/^(dfm\d|dfv\d|dfNeg|fDF[mvn]|L\d|nSpans)$/.test(id)){ SRC.edited=true; paint(); }
   },true);
 
   /* ---- saved state: new optional field 'lldfSource' (old saves load unchanged) ---- */
@@ -1972,13 +2046,14 @@ initSelects(); renderSpans(); $('preset').value='HL93-Truck'; applyPreset('HL93-
     if(!SRC||(SRC.fatM==null&&SRC.fatV==null)) return '';
     return 'From '+SRC.producer+' ('+when(SRC.producedAt)+', '+SRC.girderLabel+'): use g_fat = '+f4(SRC.fatM)+' (moment) and '+f4(SRC.fatV)+' (shear)'+
       (SRC.fatNegM!=null?', '+f4(SRC.fatNegM)+' (negative moment at piers)':'')+
-      ' — one-lane DF ÷ 1.2, skew included. They are NOT applied automatically; the DF inputs above hold lldf\'s strength DFs.';
+      ' — one-lane DF ÷ 1.2, skew included'+(SRC.fatSet?'; written to the fatigue truck DF inputs by the pull.':'. This pull was made before the fatigue DF inputs existed, so they were not written; enter them under Factors & Analysis.');
   }
   var _an=analyze; analyze=function(m){
     var R=_an(m);
     try{ var t=(m&&m.short==='Fatigue'&&!m.rail)?fatLine():'';
       if(t){ var i=-1; R.warn.forEach(function(w,k){ if(i<0&&/^LRFD fatigue truck/.test(w)) i=k; });
         if(i>=0) R.warn[i]+=' '+t; else R.warn.push(t); } }catch(e){}
+    try{ if(SRC&&SRC.perFootStrip&&R&&R.warn&&!(m&&m.rail)) R.warn.push('Highway DFs pulled from LL & DL are for a cast-in-place slab, per 1-ft strip of slab width: the factored results are per foot of slab width, not per girder.'); }catch(e){}
     return R;
   };
 
@@ -2013,7 +2088,7 @@ initSelects(); renderSpans(); $('preset').value='HL93-Truck'; applyPreset('HL93-
     [/^E steel|^Every span length/,'spans'],
     [/^Segment lengths reach|^A segment has invalid geometry/,'girder'],
     [/^One or more axles have zero/,'vehicle'],
-    [/^Variable spacing|^The multi-vehicle case needs|^A uniform load mode is selected/,'rules'],
+    [/^Variable spacing|^The multi-vehicle case needs|^A uniform load mode is selected|^Std\. Spec\. lane loading: /,'rules'],
     [/^The impact multiplier/,'impact'],
     [/^One or more distribution factors/,'factors']];
   var KEY='movingLoadGen.inputTab.v1', cur=null;
@@ -2029,7 +2104,7 @@ initSelects(); renderSpans(); $('preset').value='HL93-Truck'; applyPreset('HL93-
     '.mlgInDot{display:none;width:7px;height:7px;border-radius:50%;background:#dc2626;margin-left:5px;box-shadow:0 0 0 1.5px #fff}'+
     '.mlgInTab.has-err .mlgInDot{display:inline-block}'+
     '.mlgInTab[hidden],.mlgInPane[hidden]{display:none!important}'+
-    '@media(max-width:900px){aside{overflow:visible}#mlgInTabs{top:var(--mlgHdrH,54px);margin-top:calc(var(--mlgHdrH,54px) - 54px)}}'+
+    '@media(max-width:900px){aside{overflow:visible}#mlgInTabs{top:0}}'+
     '@media print{#mlgInTabs{display:none!important}.mlgInPane[hidden]{display:block!important}}'+
     '</style>');
   var bar=document.createElement('div'); bar.id='mlgInTabs'; bar.setAttribute('role','tablist'); bar.setAttribute('aria-label','Input groups');

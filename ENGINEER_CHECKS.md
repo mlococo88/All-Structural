@@ -2,7 +2,7 @@
 
 Things only the engineer can do (check against printed specs, open files in CAD, try in a real browser) or decide. Kept here so nothing is lost; the same list is shown at the top of `tools.html` ("Open engineer checks"). **When an item is done or decided, remove it from both places** and record the outcome in the tool's fix log.
 
-Last updated: 2026-10-11.
+Last updated: 2026-10-12 (after the all-tools open-item sweep, PRs #121–#160).
 
 ## A. Checks (engineer's own action)
 
@@ -18,15 +18,54 @@ Last updated: 2026-10-11.
 | A8 | Gusset Plate Rating | Check every "verify" value against the printed MBE / FHWA guide / AASHTO (rivet and fastener strengths, K, LFR values, etc.). | `fixlog/Gusset Plate Rating.md` O8 |
 | A9 | Gusset Plate Rating | Open an exported DXF in AutoCAD and MicroStation, save it from each, and re-import it. | O13 |
 
-## B. Decisions (engineer to choose)
+## B. Results that changed in the 2026-10-12 sweep — please review first
 
-| # | Tool | Question | Recommendation |
+These changes were made under your delegation ("use your best judgment"). They are code-based and more conservative unless noted, but they change results of existing projects. Each has a before/after check case in the tool's fix log and PR.
+
+| # | Tool | What changed | PR |
 |---|---|---|---|
-| B1 | Gusset Plate Rating | Stagger search band s_b = 2√(L·d_n): rows farther than this from the Whitmore line are ignored for the Whitmore net width. Without the band, net width is smaller in 5 members of 17 custom models (worst −17.5 % tension fracture capacity; no governing RF changed). How far from the line may a row count? | Remove the band (search every hole path in the fastener group) — more conservative. |
-| B2 | Gusset Plate Rating | Missing checks — which to add, in what order, and with which MBE / FHWA provisions: O1 chord splice check and combined shear + axial + moment on a plane; O2 Whitmore section clipped at adjacent members (now only a warning); O3 free-edge buckling; O4 eccentric fastener groups / unequal sharing between plates; O16 heel-joint shear plane including the normal force. | Engineer to prioritise. |
-| B3 | Section Property Calculator | A plate in face contact with a rectangular HSS gives "J n/a — elements cross without a connection". Handle it? | Yes — treat like other face contacts. |
-| B4 | Section Property Calculator | Shear flow in a section where a part has parallel load paths (e.g. the built-up I: web plate also bears on the flange plates) shows n/a. Is switching the bearing contacts to "not connected" (Torsion tab) the intended workflow, or a stiffness-based split? | Switch bearing contacts off (riveted-girder behaviour). |
-| B5 | Section Property Calculator | Shear flow sign under combined V_x + V_y: V_x, V_y taken as force components along +x, +y (consistent with the Stresses tab). Confirm. | Keep. |
-| B6 | Section Property Calculator | My sections library sits at the bottom of the Templates tab; a separate "Library" tab would need slightly narrower tabs. Keep? | Keep. |
-| B7 | Section Property Calculator | Validation tab shows machine-precision differences as e.g. −2.2e-15 / 9.5e-14 %. Show them as 0 / "< 1e-12" instead? | Keep (shows exact agreement). |
-| B8 | Pile Designer | Open calculation items from the audit and the 2026-10-10 review (details in `fixlog/Pile Designer.md`): O1 outer 0.85 factor and min(fyb, fyc) in structural axial; O2 casing counted in tension through threaded joints (potentially unconservative); O3 uncased flexure checked only at the casing tip (unconservative with typed-in LPILE moments); O4 CFST f′c/Ec consistency; O5 H-pile clay tip φ 0.35 vs 0.40; O6 no SVL service check; O7 multi-case LPILE import; O8 H-pile φc good driving; O9 small-group 0.80 reduction; O11 unused φV; O12 old saves with fyb = 150; O13 blank fields compute NaN in-session; O14 punching citation "5.8.4"; O16 H-pile geotech capacity 0 at defaults (no SPT N); O17 IAB eligibility shown as ratio, blank inputs fail without hint; O18 IAB equation shows raw source; O19 H-pile plot shows micropile labels; O20 φc default 0.80 vs AASHTO 6.5.4.2 0.95/0.90; O21 "UNVERIFIED φ" banner still shown. O22 report Assumptions prints "beta" with a line break (double-escaped TeX); O23 report has no section for the Module G limit checks (uncased flexure NG at defaults, bond length, plunge, cover). (O19, O24–O26, O29, O31–O34, O36–O39, O41–O43, O45–O48 fixed or decided 2026-10-10/11, F16–F28); O35 Extreme Event φ = 1.0 in "Run all cases" is not applied to H-pile φ inputs; O40 integral-abutment Tier-2 graphs still plot the curve p at tiny clay deflections (display); verify AASHTO LRFD 10th Ed. Art. 10.7.3.13.4 as the Davisson & Robinson depth-to-fixity reference (label on the lateral graphs; Module 10 note still says "Not an AASHTO equation"); O27 old H-pile section plot empty (replaced by S-1); O28 no H-pile corrosion input. Group items (O41–O43, O45–O48 fixed 2026-10-11, F30–F37): O44 micropile with d_h ≠ casing OD — which width defines "spacing × dia" (Module 11 uses d_h, the cases/plan use OD); O49 a V_x-only Group row distributes over the groupNrows rows while biaxial V_x uses the grid columns (differ on non-square grids); O50 biaxial H-pile groups solved on one p-y bending axis; O51 AASHTO 10.7.3.9 details not implemented (stiff-surface waiver, confirm the 0.50 ksf soft-clay threshold, strong-over-weak layers, mixed-profile block) — verify all F34 article/table numbers and values; O52 printed report has no η / block section. Layout question: micropile Module 09 (tension/uplift) is on the Geotechnical output tab — move to Structural? Also: proposals — output tabs, print-section chooser and print restyle, one save path, blank title-block defaults, Client/Date fields. | Decide item by item; O2 and O3 first (possibly unconservative). |
+| B1 | Pile Designer | Micropile casing tension through threaded joints now **0 %** by default (FHWA: neglect unless joint capacity is documented); old projects too. Default tension capacity 626 → 53 kip. Enter the supplier's joint efficiency if documented. | #144 |
+| B2 | Light Pole and Sign Post | Poles with n₁ < 1 Hz use the flexible gust factor G_f with damping β = 0.005 (default). A 60 ft pole: G_f ≈ 1.77, anchors 96 % → 202 %. Confirm β for your poles (0.01–0.02 also common; G_f 1.20 at 0.02). Monopost signs now check torsion (default monopost anchors NG 1.21). | #136, #138 |
+| B3 | Bridge Substructure Loading | Seismic Zones 2–4: pier foundations use R/2 (Zone 2) or 1.0 (Zones 3–4), bearings R = 0.8 (AASHTO 3.10.9 / Table 3.10.7.1-2). Old Zone 2–4 projects get larger forces; a "Unit R" option restores the old numbers. | #149 |
+| B4 | Abutment, SubLoads | Extreme Event I γEH = γp (1.50/0.90) for new projects; existing saves keep their stored value as "agency policy". If 1.00 is not your policy, switch old projects to γp. | #147, #152 |
+| B5 | Steel Beam Design | §H3.3(c) torsion buckling added (W18X35, L_b 20 ft example 0.70 → 2.19 FAIL); axial tension now checked (§D2, H1.2); imported roof live load now gets load factors. | #153 |
+| B6 | Timber Beam Check | Point loads within d of a support now count in design shear (were ignored). x/d option off by default. | #150 |
+| B7 | Moving Load Generator | HS20/H20 lane loading now enveloped with the truck (pier −M 2×100 ft −1516 → −2608 kip-ft). Old HS20 saves keep it off with a warning. | #151 |
+| B8 | Bridge Geometry → LL & DL | Skew sent for moment = smallest skew (absolute) (0 if adjacent supports differ > 10°); shear uses the largest. LL & DL now applies both from one hand-off. | #148, #160 |
+| B9 | LL & DL | Concrete girders: n = E_c,girder/E_c,deck from f′c (was 1); d_e no longer clamped at the upper bound. | #160 |
+| B10 | ST-Girder, PS-Beam | Exterior girder b_eff and deck DL use S/2 + overhang; exterior fatigue DFs by lever rule (ST exterior fatigue now FAILS in the check case); Service II rating added and governs the ST default; φc/φs inputs. | #129, #131 |
+| B11 | index (MCT / rating) | Rolled-shape capacity from AASHTO App. A6/6.10.8 when plates and L_b are entered (old zones keep Fy·Zx with a red warning); composite D_p/D_t reduction; Service II/III LL scaled by g(1+IM); MBE permit γLL table. | #135 |
+| B12 | Retaining Wall | Rock bearing uses linear pressure; ACI base friction default tan(⅔φ). | #128 |
+| B13 | Concrete Beam Capacity / Rebar | ACI ε_t ≥ ε_ty + 0.003; #14/#18 hooks lose ψr/ψo = 1.0 (l_dh ×1.6–2.0). | #140 |
+| B14 | Gusset Plate Rating | Stagger band removed; chord splice rating check added (from secondary sources — see C below). | #123, #130 |
+| B16 | Stone Masonry Arch | Trucks now side by side on barrels ≥ 20 ft (Auto lanes, Art. 3.6.3): default HS20 RF 0.77 → 0.63, old projects too. "1 lane" restores the old numbers. | #163 |
+| B17 | Bridge suite hand-offs | CIP slab DFs (per 1-ft strip) are now refused by index, PS-Beam, ST-Girder and Steel Bridge (they were applied as girder DFs). | #166 |
+| B15 | Spread Footing | Depth factors default Off for new projects (default DCR 0.64 → 0.70). | #142 |
+
+## C. Questions for you (decisions and printed-spec checks)
+
+Each item has my recommendation; the tool currently follows it. Details are in the tool's fix log.
+
+**Pile Designer** — φt micropile tension 0.90 vs AASHTO 0.80 (verify; not changed) · φc default 0.80 → pick 0.90 (composite) or 0.95 (steel) · confirm micropile group widths (f_m on casing OD, η/block on d_h) · O50: should toggle-off Group rows follow the web direction · verify AASHTO 10.7.3.13.4 (Davisson fixity), 10.7.3.9 details (stiff-surface waiver, 0.50 ksf), 10.7.5 / GEC 12 (section loss) · typed M_max with no LPILE profile now fails the uncased check — import the profile · small: punching 0.125 vs 0.126, CFST M_r φ, Extreme φ on CFST/block factors · map Client/Date to shared project info?
+**Gusset** — MBE 6A.6.12.6.9 chord splice (equation, K 0.65, KL/r 25, φ_cs 0.85, tension eccentricity); drop chord Whitmore buckling for a compression splice?; splice demand basis; O2 Whitmore at adjacent members (built per NCHRP 12-84); advisory formulas.
+**Light Pole** — soil torsion for monopost shafts (add a geotech allowable torque input?) · IBC 15× cap reading and section number · anchor breakout method for a bolt circle in a round shaft (still "NOT CHECKED") · ASD embedment P-Δ (rec no).
+**SubLoads / Abutment** — seismic connection force MassDOT 0.10 vs AASHTO 0.15/0.25 (rec AASHTO) · γSH 0.5 default for concrete units (rec yes for new) · Service IV 0.75V, γWS 1.00 · IM on buried footings (rec keep).
+**index** — staged section moduli for Service II/III (rec yes) · HL-93 variable axle / 90 % two-truck case (rec yes) · MBE permit table values and special permits · GFS lane-load placement · bolted two-girder φs 0.85 · AREMA printed checks · φs on shear · Service III 0.6/0.3 ksi caps (rec yes) · drop index from HANDOFF §4.4 superReactions (rec).
+**ST-Girder** — sign off stud fatigue change (less conservative, FAIL → PASS) · printed checks 6.10.10.4.2, Tables 4.6.2.2.2d-1/3b-1, C6.10.1, 6.10.1.10.2 · 1.3R_hM_y cap (rec keep) · R_b = 1.0 (rec yes after check).
+**PS-Beam** — NEXT DFs per beam vs per stem · cracked-section strand fatigue (rec yes) · full PCI/Mast lifting (large) · φs on shear · overhang thickness · relabel "9th Ed." after printed check.
+**Steel Bridge Beam Modules** — L_p coefficient 1.1 vs 1.0, C_b equation · 10th Ed. Q_n equation · 1-1/8 in hole width · 6.13.6.1.3b φc 0.95, 6.10.11.2.4b web strip · MassDOT E_c unit weight 0.145 kcf? · open once with network access.
+**Base Plate / Concrete Anchor** — ASCE 7-22 snow factors · −W combos and rain slot · plate b_eff rule (rec 2l_x) · narrow-member c_a1 limit (less conservative; rec yes) · §17.6.2.1.2 interpretation · seismic §17.10 (rec warning) · inline CSS instead of Tailwind CDN (rec).
+**Concrete Beam Capacity / Rebar / ASD** — sign off A_ℓ,min (9.6.4.3) and A_v,min trigger (9.6.3.1), both less conservative per 318-19 · printed checks of AASHTO 5.6.2.1, 5.4.3.1, 5.10.8.2.4b, 5.10.8.4.2a · ASD operating f_c 1,900 psi (MassDOT?) · ASD allowables for other grades · Headed Bar tab (rec yes) · relabel "9th Ed.".
+**Retaining Wall** — φτ 1.00 vs MassDOT 0.80 · MassDOT collision values · φb 0.45 on rock (rec) · w_c in E_c.
+**Elastomeric** — 14.7.6.3.2/14.7.6.3.5 printed check · plain-pad rotation form · MassDOT 0.03 rad / 4.75 limits · anchorage basis · 0.005 rad about each axis.
+**Spread Footing** — Direct mode basis (label ASCE 7 / indicative) · seismic E load type · old saves depth factors On (rec keep) · passive on the footing face.
+**Timber** — deflection transient set (rec keep) · x/d option default off · ASCE 7 edition.
+**Moving Load** — Std. Spec. impact loaded length on continuous spans · old HS20 saves lane check (rec leave off).
+**Steel Beam** — accept the §H3.3(c) per-stress form · blank A_n/U defaults.
+**LL & DL** — f′c defaults 8/4 ksi and w_c · N_b = 3 exterior rule · negative-region K_g · MassDOT "two adjacent beams" relief.
+**Bridge Geometry** — chord vs radial skew · seat haunch method · curved vs chorded girders · NAD83/WGS84 and a combined scale factor input.
+**Stone Arch** — confirm side-by-side trucks and the Auto lane rule for arches (MassDOT §7.2.7) · AREMA impact 0.60 basis · Type 3-3 for posting · re-run the K-01-001 file.
+**ASCE 7 Load Generator** — printed 7.6.1 / Fig. 7.6-1 minimum l_u for unbalanced snow (rec 25 ft) · 780 CMR amendments to hurricane-prone / debris rules · 7.7.2 windward drift reading.
+**Moving Load (slab DFs)** — confirm it should apply CIP slab strip DFs (with warnings) rather than refuse them.
+**Shear & Moment** — overhang deflection l = 2 × cantilever (rec keep L).
+**Suite-wide** — ASCE 7 edition per tool (7-16 vs 7-22) · converge KaTeX/Plotly versions (needs your OK, CLAUDE.md §2) · SRI hashes · which CDN hosts the work laptop reaches (inline Tailwind?) · one verified vehicle table across tools · relabel edition lines after the printed checks.

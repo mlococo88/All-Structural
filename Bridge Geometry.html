@@ -240,7 +240,7 @@
       <div id="svg_prof_a" class="plotbox" style="height:340px"></div>
     </div>
     <div class="svgcard">
-      <div class="cap"><span>3D · alignment, deck &amp; substructure</span><span class="note" style="text-transform:none;letter-spacing:0;">drag orbit · scroll zoom</span>
+      <div class="cap"><span>3D · alignment, deck &amp; substructure</span><span class="pill vdatum_pill" style="text-transform:none;letter-spacing:0;" title="Label only — no datum conversion is applied.">datum: not specified</span><span class="note" style="text-transform:none;letter-spacing:0;">drag orbit · scroll zoom</span>
         <span class="gctrl" data-three="align"><button data-plan>plan</button><button data-elev>elev</button><button data-iso>iso</button><button data-fit>fit</button><span class="sep"></span><button data-pngexp>PNG</button></span>
       </div>
       <canvas id="three_align" class="view3d view3d-tall"></canvas>
@@ -359,7 +359,7 @@
             <span id="l3_exag_val" style="font-family:monospace;">1.0&times;</span></span>
         </div>
         <div class="svgcard">
-          <div class="cap"><span>3D</span><span class="note" style="text-transform:none;letter-spacing:0;">deck, girders, beam seats &amp; substructure</span>
+          <div class="cap"><span>3D</span><span class="pill vdatum_pill" style="text-transform:none;letter-spacing:0;" title="Label only — no datum conversion is applied.">datum: not specified</span><span class="note" style="text-transform:none;letter-spacing:0;">deck, girders, beam seats &amp; substructure</span>
             <span class="gctrl" data-three="sub"><button data-plan>plan</button><button data-elev>elev</button><button data-iso>iso</button><button data-fit>fit</button><span class="sep"></span><button data-pngexp>PNG</button></span>
           </div>
           <canvas id="three_sub" class="view3d"></canvas>
@@ -421,7 +421,7 @@
         </select></label>
     </div>
     <div class="svgcard">
-      <div class="cap"><span>Deck plan · top-of-deck elevation</span><span class="note" style="text-transform:none;letter-spacing:0;">hover elev · shift-drag pan · scroll zoom</span>
+      <div class="cap"><span>Deck plan · top-of-deck elevation</span><span class="pill vdatum_pill" style="text-transform:none;letter-spacing:0;" title="Label only — no datum conversion is applied.">datum: not specified</span><span class="note" style="text-transform:none;letter-spacing:0;">hover elev · shift-drag pan · scroll zoom</span>
         <span class="gctrl" data-heat><button data-zin>+</button><button data-zout>−</button><button data-reset>reset</button><span class="sep"></span><button data-pngexp>PNG</button></span>
       </div>
       <canvas id="heat" width="1000" height="560" style="cursor:crosshair;"></canvas>
@@ -448,7 +448,7 @@
       <span class="note" id="sec_cut_note" style="margin:0; color:var(--ink-soft)"></span>
     </div>
     <div class="svgcard">
-      <div class="cap"><span>Section</span><span class="pill" id="sec_sta">@ sta —</span>
+      <div class="cap"><span>Section</span><span class="pill" id="sec_sta">@ sta —</span><span class="pill vdatum_pill" style="text-transform:none;letter-spacing:0;" title="Label only — no datum conversion is applied.">datum: not specified</span>
         <span class="gctrl" data-svg="svg_sec"><button data-zin>+</button><button data-zout>−</button><button data-reset>reset</button><span class="sep"></span><button data-svgexp>SVG</button></span>
       </div>
       <div id="svg_sec" class="plotbox" style="height:360px"></div>
@@ -615,6 +615,7 @@
           </div>
           <p class="note" id="pick_so_msg" style="margin:4px 0 0"></p>
 
+          <p class="note vdatum_cap" style="margin:8px 0 0;" title="Label only — no datum conversion is applied.">Elevations in feet · vertical datum: not specified</p>
           <div id="pick_table" style="margin-top:8px; overflow-x:auto"></div>
         </fieldset>
       </div>
@@ -976,19 +977,24 @@ function chordGeom(align){
 function projectToPGL(align, x, y){
   const s0=align.staStart, s1=align.staEnd;
   const f=(s)=>{ const a=align.at(s); return (x-a.x)*Math.sin(a.brg)+(y-a.y)*Math.cos(a.brg); }; // along-tangent component
-  // coarse scan for a sign change of f (the closest-station condition is f=0)
+  // coarse scan for EVERY sign change of f (the closest-station condition is f=0). BG-O7: on reverse
+  // curves or near a curve centre f can change sign more than once; each bracket is refined and the
+  // root nearest the point is kept (was: the first sign change). One root -> the same result as before.
   const N=Math.max(50, Math.ceil((s1-s0)/2));
-  let prevS=s0, prevF=f(s0), bestS=s0, bestAbs=Math.abs(prevF), lo=null, hi=null;
+  let prevS=s0, prevF=f(s0), bestS=s0, bestAbs=Math.abs(prevF); const brk=[];
   for(let i=1;i<=N;i++){ const s=s0+(s1-s0)*i/N, fv=f(s);
     if(Math.abs(fv)<bestAbs){ bestAbs=Math.abs(fv); bestS=s; }
-    if(prevF===0){ lo=hi=prevS; break; }
-    if((prevF<0)!==(fv<0)){ lo=prevS; hi=s; break; }
+    if(prevF===0) brk.push([prevS,prevS]);
+    else if((prevF<0)!==(fv<0)) brk.push([prevS,s]);
     prevS=s; prevF=fv;
   }
   let sstar;
-  if(lo!==null){ let a=lo,b=hi;
-    for(let k=0;k<60;k++){ const m=(a+b)/2, fm=f(m); if(Math.abs(fm)<1e-9){a=b=m;break;} const fa=f(a); if((fa<0)!==(fm<0)) b=m; else a=m; }
-    sstar=(a+b)/2;
+  if(brk.length){ let bestD=Infinity;
+    for(const [lo,hi] of brk){ let a=lo,b=hi;
+      for(let k=0;k<60;k++){ const m=(a+b)/2, fm=f(m); if(Math.abs(fm)<1e-9){a=b=m;break;} const fa=f(a); if((fa<0)!==(fm<0)) b=m; else a=m; }
+      const r=(a+b)/2, q=align.at(r), d=Math.hypot(x-q.x, y-q.y);
+      if(d<bestD){ bestD=d; sstar=r; }
+    }
   } else { sstar=bestS; } // no sign change (point beyond the ends) -> nearest endpoint station
   const a=align.at(sstar); const nrm=a.brg+Math.PI/2;
   const off=(x-a.x)*Math.sin(nrm)+(y-a.y)*Math.cos(nrm); // signed perpendicular offset
@@ -3846,7 +3852,7 @@ function exportPickCSV(){ if(PICKPTS.length===0) return;
     p.pave!=null?p.pave.toFixed(3):'', p.deck!=null?p.deck.toFixed(3):'', p.outside?'yes':'no']));
   const csv=rows.map(r=>r.map(c=>/[",\n]/.test(String(c))?'"'+String(c).replace(/"/g,'""')+'"':c).join(',')).join('\n');
   const blob=new Blob([csv],{type:'text/csv'}); const url=URL.createObjectURL(blob);
-  const a=document.createElement('a'); a.href=url; a.download='picked-points.csv'; a.click(); setTimeout(()=>URL.revokeObjectURL(url),1000);
+  const a=document.createElement('a'); a.href=url; a.download='picked-points'+vDatumFileTag()+'.csv'; a.click(); setTimeout(()=>URL.revokeObjectURL(url),1000);
 }
 
 /* ---- plan overlay: canvas layer pinned to the map via a similarity transform from 2 control points ---- */
@@ -4291,6 +4297,12 @@ function vDatumLabel(){ // null when not specified
   if(sys==='other') return txt||'Other (not described)';
   return VDATUM_NAMES[sys]||sys;
 }
+// BG-OD2: the datum in the CSV file names ('' when not specified, so those names are unchanged). The CSV content is
+// unchanged (a header or comment line would break column parsing). e.g. NAVD 88 -> "-NAVD88".
+function vDatumFileTag(){
+  const lab=(typeof vDatumLabel==='function')?vDatumLabel():null; if(!lab) return '';
+  const t=lab.replace(/[^A-Za-z0-9]+/g,'').slice(0,32); return t?'-'+t:'';
+}
 function renderVDatum(){
   const sys=(document.getElementById('vdatum_sys')||{}).value||'', lab=vDatumLabel();
   const box=document.getElementById('vdatum_txt_box'); if(box) box.style.display=(sys==='local'||sys==='other')?'':'none';
@@ -4430,7 +4442,7 @@ function tableCSV(wrapId){
 function exportTableCSV(wrapId, base){
   const csv=tableCSV(wrapId); if(!csv){ setStatus('nothing to export'); return; }
   const blob=new Blob([csv],{type:'text/csv'}); const url=URL.createObjectURL(blob); const a=document.createElement('a');
-  a.href=url; a.download=`${base}-${new Date().toISOString().slice(0,10)}.csv`; document.body.appendChild(a); a.click();
+  a.href=url; a.download=`${base}${vDatumFileTag()}-${new Date().toISOString().slice(0,10)}.csv`; document.body.appendChild(a); a.click();
   document.body.removeChild(a); URL.revokeObjectURL(url);
 }
 
@@ -4727,19 +4739,25 @@ else { setStatus('autosave OFF — browser storage blocked here. Use Export JSON
 /* ===== Hand-off: Bridge Geometry -> LL & DL Distribution (lldf.html) =====
    Channel bridgeSuite.v1.lldfGeom, _schema 'bridge-lldf-geometry' (HANDOFF.md §4.2). Writes the shape
    lldf.html already consumes (its K_GEOM reader): inputs.spans / inputs.spacings / inputs.skew /
-   inputs.OL / inputs.OR, plus Nb. Read-only on this tool's state: nothing here changes any
+   inputs.OL / inputs.OR / inputs.ts / inputs.depth, plus Nb, and the optional top-level skewDetail
+   (the per-support skews and the moment / shear values; lldf applies skewDetail.moment / .shear in one run). Read-only on this tool's state: nothing here changes any
    geometry result, and nothing is saved in this tool's project format. Uses BridgeXfer above. */
 (function(){
   'use strict';
   const r3=v=>+(+v).toFixed(3), r2=v=>+(+v).toFixed(2);
   const escT=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
-  /* Build the payload. opt = {spanBasis:'cl'|'brg', skewRule:'max'|'min'|'mean', girders:'global'|'<span no.>'}.
+  /* Build the payload. opt = {spanBasis:'cl'|'brg', skewRule:'moment'|'max'|'min'|'mean', girders:'global'|'<span no.>',
+     depths:true|false (send t_s and d; default true)}.
      Returns {payload, summary[]} or {error}. */
   function bgxBuildLldfGeom(opt){
     opt=opt||{};
     const spanBasis=(opt.spanBasis==='brg')?'brg':'cl';
-    const skewRule=(['max','min','mean'].indexOf(opt.skewRule)>=0)?opt.skewRule:'max';
+    // BG-OH2: default 'moment' (was 'max'). LL & DL takes ONE skew and uses it for both the moment reduction
+    // (Table 4.6.2.2.2e-1) and the shear correction (Table 4.6.2.2.3c-1); the largest |skew| gave the largest
+    // moment reduction (unconservative for moment DFs when the supports' skews differ).
+    const skewRule=(['moment','max','min','mean'].indexOf(opt.skewRule)>=0)?opt.skewRule:'moment';
+    const sendDepths=(opt.depths!==false);
     const gsrc=opt.girders||'global';
     const gErr=geometryInputErrors();
     if(gErr.length) return {error:'Fix the geometry input errors first: '+gErr[0]};
@@ -4761,7 +4779,13 @@ else { setStatus('autosave OFF — browser storage blocked here. Use Export JSON
     // ---- skew: per support, from the normal to the chord; the sign is dropped ----
     const sk=su.map(u=>Math.abs(+u.skew||0));
     if(sk.some(v=>!isFinite(v)||v>=90)) return {error:'A support skew is not a number between -90 and 90 degrees.'};
-    const skewVal=r2(skewRule==='min'?Math.min.apply(null,sk):(skewRule==='mean'?sk.reduce((s,v)=>s+v,0)/sk.length:Math.max.apply(null,sk)));
+    const skMin=Math.min.apply(null,sk), skMax=Math.max.apply(null,sk);
+    // largest change of the (signed) skew between adjacent supports, i.e. the angle between the two support lines
+    let skAdj=0; for(let i=1;i<su.length;i++) skAdj=Math.max(skAdj,Math.abs((+su[i].skew||0)-(+su[i-1].skew||0)));
+    // moment DFs: smallest |skew|; no reduction (0) when adjacent supports differ by more than 10 deg (Art. 4.6.2.2.2e)
+    const skNoRed=skAdj>10+1e-9, skMoment=skNoRed?0:skMin;
+    const skewVal=r2(skewRule==='moment'?skMoment:(skewRule==='min'?skMin:(skewRule==='mean'?sk.reduce((s,v)=>s+v,0)/sk.length:skMax)));
+    const skDiffer=(skMax-skMin>1e-9)||skNoRed;
 
     // ---- girders and deck edges (ft from the construction reference line, left negative) ----
     let offs, eL, eR, layoutLbl;
@@ -4776,6 +4800,15 @@ else { setStatus('autosave OFF — browser storage blocked here. Use Export JSON
     offs=offs.map(Number).filter(v=>isFinite(v)).sort((x,y)=>x-y);
     const inputs={spans:spans, skew:skewVal};
     const notes=[], units={spans:'ft', skew:'deg'};
+    // BG-OH1: deck structural thickness and default beam depth (both inches, as lldf's t_s and d)
+    const dNotes=[];
+    if(sendDepths){
+      const ts=+document.getElementById('d_slab').value, dd=+document.getElementById('d_beam').value;
+      if(isFinite(ts)&&ts>0){ inputs.ts=r3(ts); units.ts='in'; } else dNotes.push('Slab thickness not sent: the deck structural thickness is not a number > 0.');
+      const ovr=[].concat(Object.values(PERBEAM.beam||{}),Object.values(PERBEAMSPAN.beam||{})).filter(v=>v!=null&&v!==''&&+v!==dd);
+      if(ovr.length) dNotes.push('Beam depth not sent: Bridge Geometry has per-beam / per-span beam-depth overrides ('+ovr.length+' differ from the default '+dd+' in). Enter d in LL & DL.');
+      else if(isFinite(dd)&&dd>0){ inputs.depth=r3(dd); units.depth='in'; } else dNotes.push('Beam depth not sent: the default beam depth is not a number > 0.');
+    }
     let Nb=null;
     if(offs.length>=2){
       const sp=[]; for(let k=1;k<offs.length;k++) sp.push(r3(offs[k]-offs[k-1]));
@@ -4796,12 +4829,28 @@ else { setStatus('autosave OFF — browser storage blocked here. Use Export JSON
         +(spanBasis==='brg'?'bearing lines (pier bearing offsets applied; abutments at their bearing line)':'support centerlines (the support stations)')
         +'. On a curved alignment these differ from the PGL station differences in the Bridge Geometry span summary. Rounded to 0.001 ft.',
       'Skew is measured at each support from the normal to the construction reference line chord (0 deg = support square to the chord); the sign is dropped. '
-        +'Per support: '+su.map((u,i)=>u.name+' '+sk[i].toFixed(2)).join(', ')+' deg. Sent: the '
-        +(skewRule==='min'?'smallest':(skewRule==='mean'?'average':'largest'))+' |skew| = '+skewVal.toFixed(2)+' deg.',
+        +'Per support: '+su.map((u,i)=>u.name+' '+sk[i].toFixed(2)).join(', ')+' deg. Sent: '
+        +(skewRule==='moment'?('the skew for moment DFs = '+skewVal.toFixed(2)+' deg ('+(skNoRed?'0: adjacent supports differ by more than 10 deg, so AASHTO LRFD Art. 4.6.2.2.2e allows no moment reduction':'the smallest |skew|')+').')
+          :('the '+(skewRule==='min'?'smallest':(skewRule==='mean'?'average':'largest'))+' |skew| = '+skewVal.toFixed(2)+' deg.')),
       (Nb?('Girder spacings and overhangs are from '+layoutLbl+', measured perpendicular to the reference line (girders are parallel to it), girders numbered left to right looking up-station. '
         +'Overhang = deck edge to exterior girder centerline. No barrier face or d_e is sent; LL & DL keeps its own curb/railing inputs.'):'')
     );
     if(notes[2]==='') notes.splice(2,1);
+    // BG-OH2 / lldf SW3: when the skews differ, LL & DL reads skewDetail and applies the moment and the shear
+    // value in one run; the single inputs.skew matters only to a reader that does not use skewDetail.
+    if(skDiffer) notes.push('Skews differ between supports (|skew| '+skMin.toFixed(2)+' to '+skMax.toFixed(2)+' deg; largest change between adjacent supports '+skAdj.toFixed(2)+' deg). '
+      +'Moment DFs need skew = '+skMoment.toFixed(2)+' deg (smallest |skew|; 0 when adjacent supports differ by more than 10 deg; AASHTO LRFD Art. 4.6.2.2.2e, Table 4.6.2.2.2e-1). '
+      +'Shear DFs need skew = '+skMax.toFixed(2)+' deg (largest |skew|, obtuse corner; Art. 4.6.2.2.3c, Table 4.6.2.2.3c-1). '
+      +'LL & DL takes both from this hand-off (skewDetail) in one run: theta = '+skMoment.toFixed(2)+' deg for moment and theta_V = '+skMax.toFixed(2)+' deg for shear, whichever single value is sent. '
+      +'The single skew sent ('+skewVal.toFixed(2)+' deg) is used for both actions only by a reader that does not use skewDetail'
+      +(skewRule==='moment'?'; for such a reader take the shear DFs from a second run "for shear DFs".'
+        :(skewRule==='max'?'; for such a reader its MOMENT DFs are unconservative.'
+          :'; for such a reader take moment and shear DFs from separate "for moment DFs" / "for shear DFs" runs.')));
+    if(sendDepths){
+      if(inputs.ts!=null||inputs.depth!=null) notes.push((inputs.ts!=null?'Slab thickness t_s = Bridge Geometry deck structural thickness ('+inputs.ts+' in)':'')
+        +(inputs.ts!=null&&inputs.depth!=null?'; ':'')+(inputs.depth!=null?'beam depth d = Bridge Geometry default beam depth, top to bottom of beam ('+inputs.depth+' in)':'')+'.');
+      dNotes.forEach(t=>notes.push(t));
+    }
     const diff=[]; for(let s=1;s<su.length;s++){ const ov=SPAN_OV[s]; if(ov&&(ov.girders||ov.edgeL!=null||ov.edgeR!=null)&&String(s)!==String(gsrc)) diff.push(s); }
     if(diff.length) notes.push('Span'+(diff.length>1?'s ':' ')+diff.join(', ')+' '+(diff.length>1?'have':'has')+' a different girder or deck-edge layout in Bridge Geometry, which was NOT sent.');
     if(spans.length>6) notes.push('Bridge Geometry has '+spans.length+' spans; LL & DL is built for up to 6.');
@@ -4814,29 +4863,38 @@ else { setStatus('autosave OFF — browser storage blocked here. Use Export JSON
       basis:{spans:(spanBasis==='brg'?'chord, bearing lines':'chord, support centerlines'), skew:skewRule, girders:gsrc},
       de:null, inputs:inputs};
     if(Nb) payload.Nb=Nb;
+    // BG-OH2: optional, additive (lldf ignores it): the per-support skews (signed, deg, as entered) and the
+    // values for moment and shear DFs, so the hand-off records what the single inputs.skew stands for.
+    payload.skewDetail={bySupport:su.map(u=>({name:String(u.name||''), skew:r2(+u.skew||0)})),
+      absMin:r2(skMin), absMax:r2(skMax), maxAdjacentDiff:r2(skAdj), moment:r2(skMoment), shear:r2(skMax), sent:skewVal};
     const summary=[
       ['Spans', spans.map(v=>v.toFixed(3)).join(' / ')+' ft'],
-      ['Skew θ', skewVal.toFixed(2)+'°'],
+      ['Skew θ', skewVal.toFixed(2)+'°'+(skDiffer?(' (for moment DFs: '+skMoment.toFixed(2)+'°; for shear DFs: '+skMax.toFixed(2)+'°)'):'')],
       ['Beams N_b', Nb?String(Nb):'— (not sent)'],
       ['Girder spacings', inputs.spacings?inputs.spacings.map(v=>v.toFixed(3)).join(' / ')+' ft':'— (not sent)'],
       ['Overhang O_L / O_R', (inputs.OL!=null?inputs.OL.toFixed(3):'—')+' / '+(inputs.OR!=null?inputs.OR.toFixed(3):'—')+' ft'],
+      ['Slab t_s / beam d', (inputs.ts!=null?String(inputs.ts):'—')+' / '+(inputs.depth!=null?String(inputs.depth):'—')+' in'+(sendDepths?'':' (not sent)')],
       ['Project', project.name||'—']
     ];
-    return {payload:payload, summary:summary};
+    return {payload:payload, summary:summary, skewWarn:skDiffer};
   }
   window.bgxBuildLldfGeom=bgxBuildLldfGeom;
 
   /* ---- review dialog: the engineer sees and picks the assumptions before anything is sent ---- */
   let dlg=null;
-  function opts(){ return { spanBasis:dlg.querySelector('#bgx_span').value, skewRule:dlg.querySelector('#bgx_skew').value, girders:dlg.querySelector('#bgx_gird').value }; }
+  function opts(){ return { spanBasis:dlg.querySelector('#bgx_span').value, skewRule:dlg.querySelector('#bgx_skew').value, girders:dlg.querySelector('#bgx_gird').value, depths:dlg.querySelector('#bgx_dep').checked }; }
   function refresh(){
     const r=bgxBuildLldfGeom(opts()), out=dlg.querySelector('#bgx_prev');
-    const ok=!r.error;
+    // BG-OH2: when the skews differ the engineer must say which DFs this hand-off is for (no silent default)
+    const need=!r.error&&r.skewWarn&&!dlg.querySelector('#bgx_skew').value;
+    const ok=!r.error&&!need;
     dlg.querySelector('#bgx_do_send').disabled=!ok; dlg.querySelector('#bgx_do_export').disabled=!ok;
-    if(!ok){ out.innerHTML='<p style="color:var(--oxide);margin:6px 0">'+escT(r.error)+'</p>'; return null; }
-    out.innerHTML='<table style="font-size:12px;margin:6px 0"><tbody>'+r.summary.map(x=>'<tr><td class="lbl" style="text-align:left">'+escT(x[0])+'</td><td style="text-align:left">'+escT(x[1])+'</td></tr>').join('')+'</tbody></table>'
+    if(r.error){ out.innerHTML='<p style="color:var(--oxide);margin:6px 0">'+escT(r.error)+'</p>'; return null; }
+    out.innerHTML=(need?'<p style="color:var(--oxide);margin:6px 0;font-size:12px"><b>Choose &ldquo;Skew sent&rdquo;</b> (for moment DFs or for shear DFs) before sending.</p>':'')
+      +(r.skewWarn?'<p style="color:var(--oxide);margin:6px 0;font-size:12px"><b>Skews differ between supports.</b> LL &amp; DL takes both values from this hand-off in one run: the moment skew for the moment DFs and the shear skew (largest) for the shear DFs. The single &ldquo;Skew sent&rdquo; value matters only to a reader that does not use the moment / shear detail (see the notes).</p>':'')
+      +'<table style="font-size:12px;margin:6px 0"><tbody>'+r.summary.map(x=>'<tr><td class="lbl" style="text-align:left">'+escT(x[0])+'</td><td style="text-align:left">'+escT(x[1])+'</td></tr>').join('')+'</tbody></table>'
       +'<p class="note" style="margin:4px 0 0">Notes sent with the data (shown in LL &amp; DL):</p><ul class="note" style="margin:2px 0 0 18px;padding:0">'+r.payload.notes.map(t=>'<li>'+escT(t)+'</li>').join('')+'</ul>';
-    return r;
+    return ok?r:null;
   }
   function openDlg(){
     if(!dlg){
@@ -4847,14 +4905,15 @@ else { setStatus('autosave OFF — browser storage blocked here. Use Export JSON
         +'<p class="note" style="margin-top:0">LL &amp; DL shows these values and asks before it overwrites anything. Pick how the values are taken from this bridge:</p>'
         +'<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px">'
         +'<div><label>Span length between</label><select id="bgx_span"><option value="cl" selected>support centerlines</option><option value="brg">bearing lines</option></select></div>'
-        +'<div><label>Skew sent (one value)</label><select id="bgx_skew"><option value="max" selected>largest |skew|</option><option value="min">smallest |skew|</option><option value="mean">average |skew|</option></select></div>'
+        +'<div><label>Skew sent (one value)</label><select id="bgx_skew" title="The single skew in the hand-off. LL &amp; DL also receives the moment and shear values and applies both in one run (moment reduction Art. 4.6.2.2.2e; shear correction Art. 4.6.2.2.3c); this single value is for a reader that uses one skew for both. For moment DFs: the smallest |skew|, or 0 when adjacent supports differ by more than 10 deg. For shear DFs: the largest |skew|."><option value="">choose&hellip;</option><option value="moment" selected>for moment DFs</option><option value="max">for shear DFs (largest)</option><option value="min">smallest |skew|</option><option value="mean">average |skew|</option></select></div>'
         +'<div><label>Girder layout from</label><select id="bgx_gird"></select></div></div>'
+        +'<label style="display:inline-flex;gap:6px;align-items:center;margin:8px 0 0;text-transform:none;letter-spacing:0"><input type="checkbox" id="bgx_dep" checked style="width:auto"> Also send the deck structural thickness t_s and the default beam depth d (in)</label>'
         +'<div id="bgx_prev"></div>'
         +'<div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap"><button class="sm" id="bgx_do_send" type="button">Send to LL &amp; DL</button>'
         +'<button class="sm ghost" id="bgx_do_export" type="button">Export hand-off (JSON)</button>'
         +'<button class="sm ghost" id="bgx_cancel" type="button" style="margin-left:auto">Cancel</button></div></div>';
       document.body.appendChild(dlg);
-      ['#bgx_span','#bgx_skew','#bgx_gird'].forEach(id=>dlg.querySelector(id).addEventListener('change',refresh));
+      ['#bgx_span','#bgx_skew','#bgx_gird','#bgx_dep'].forEach(id=>dlg.querySelector(id).addEventListener('change',refresh));
       dlg.querySelector('#bgx_cancel').addEventListener('click',()=>{ dlg.style.display='none'; });
       dlg.querySelector('#bgx_do_send').addEventListener('click',()=>{
         const r=refresh(); if(!r) return;
@@ -4877,6 +4936,9 @@ else { setStatus('autosave OFF — browser storage blocked here. Use Export JSON
     for(let s=1;s<su.length;s++){ const ov=SPAN_OV[s]; const own=ov&&(ov.girders||ov.edgeL!=null||ov.edgeR!=null);
       h+='<option value="'+s+'">span '+s+(own?' (own layout)':'')+'</option>'; }
     sel.innerHTML=h; sel.value=[...sel.options].some(o=>o.value===prev)?prev:'global';
+    // Start on "for moment DFs". When the skews differ, LL & DL takes the moment and shear values from skewDetail
+    // in one run (lldf SW3), so the forced "choose..." start (BG-OH2) is no longer needed.
+    dlg.querySelector('#bgx_skew').value='moment';
     dlg.style.display='flex';
     refresh();
   }

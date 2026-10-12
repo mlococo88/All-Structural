@@ -622,7 +622,7 @@ Note on the code below: strings in the file use JavaScript `\uXXXX` escapes for 
 - **How verified:** every plain inline script passes `node --check`; jsdom run of the real page: `solve()` output identical to origin/main (JSON of `R`); `bxBuildingLoadsPayload()` checked against `R` for the default project, a 6:12 gable with a lower-roof drift (unbalanced and drift sent under `info.snow` only), an open canopy (wall fields `null`), Site Class F (seismic `null`) and a blocked calculation (refused). End-to-end Send → Steel Beam Pull test, see the Steel Beam fix log C1.
 - **Other copies of this code:** none. BridgeXfer v1 (unchanged) is also in: ACI Rebar Development Length.html, Concrete Beam Capacity.html, Steel Beam Design - AISC 15th.html, Shear and Moment Diagrams.html, and the other Step 1 tools.
 
-## Open items (not changed)
+## Open items (recorded 2026-10-04; status after the 2026-10-12 sweep: see "Earlier open items: status after this PR" below)
 - O1. Unbalanced snow (Sec. 7.6.1) uses `W` with no lower bound on lu, while drifts use `max(lu, 25 ft)` (`figHd`). Fig. 7.6-1 / Sec. 7.6.1 text should be checked for whether a 20 ft minimum applies to the unbalanced hd. — Not changed: the edition text was not available to confirm. — Engineer to confirm the floor (if any) for the unbalanced drift and for `figHd`.
 - O2. Hurricane-prone region test: `hurricaneProne = (S.jur==="MA") || (site.V>115)`. It treats all of Massachusetts as hurricane-prone and uses the risk-category wind speed rather than the Risk Category II speed. The Risk Category I exemption for glazing protection is also unverified. — Needs 780 CMR / ASCE 7-16 Sec. 26.2 / 26.12.3 confirmation for MA. — Engineer decision.
 - O3. ASD display strings other than ASD-9: the 780 CMR "⅔ × LRFD" table string omits the L term (display only). Not changed.
@@ -631,3 +631,188 @@ Note on the code below: strings in the file use JavaScript `\uXXXX` escapes for 
 - O6. The tool has no rain load R; LRFD-3W is labelled "(Lr or S)" like the other rows.
 - O7. Ch. 29 "Hexagonal or octagonal" is one Fig. 29.4-1 row, now Kd = 1.00. If hexagonal members are common, the row could be split into two (Kd 0.95 / 1.00) with a label migration. — Engineer to decide.
 - O8. Adjacent-structure windward drift: applied only when the Sec. 7.7.2 separation test (s < 20 ft and s < 6h) is met, and not truncated at the lower-roof edge (conservative). Confirm this reading of Sec. 7.7.2.
+
+## 2026-10-12 — PR: claude/sweep-asce7 (open-item sweep; PR link added after merge)
+
+Engineer's instruction (2026-10-12): work through every open item, use best judgment, and list what needs the engineer. Basis: ASCE/SEI 7-16 (the edition this tool implements), with 780 CMR 10th Ed. where the tool already applies it. Provisions I could not confirm against the printed standard are marked **verify**. Line numbers are approximate (after the fix). New strings use `\uXXXX` escapes like the rest of the file.
+
+### W1. Blank or zero inputs that silently change a result now block the calculation   [bug fix] [results change only for blank/zero inputs, which are now refused] (open item O5)
+- **Where:** `solve()`, end of the function (≈ line 1306), anchor: the line `if(S.Lx<=0||S.Ly<=0||g.h<=0) R.err.push(`; `doExcel()` (≈ line 5427), anchor `function doExcel(){`.
+- **Problem:** `num()` stores a blank number box as 0 (`i.value===""?0:parseFloat(i.value)`). With a topographic feature selected, L_h = 0 gave K₂ = 0 and K_zt = 1.0, and H = 0 gave K₁ = 0 and K_zt = 1.0, both with only a "condition not met" note. T_L = 0 made Eq. 12.8-4 return C_s,max = 0, so C_s fell to C_s,min (unconservative, silently). h_n = 0, W = 0, ρ = 0 and an override G = 0 likewise gave a period of zero, V = 0, E = 0 or zero wind with no warning. The Excel export ran even when the calculation was blocked.
+- **Governing provision:** ASCE 7-16 Fig. 26.8-1 (H, L_h); Sec. 26.11 (G); Sec. 12.8.2.1 (h_n); Fig. 22-14 to 22-17 (T_L); Sec. 12.7.2 (W); Sec. 12.3.4 (ρ = 1.0 or 1.3).
+- **Before:**
+  ```js
+  if(S.Lx<=0||S.Ly<=0||g.h<=0) R.err.push("Building plan dimensions and height must all be greater than zero.");
+  if(g.h>60) R.warn.push(
+  ```
+  ```js
+  function doExcel(){
+    const btn=document.getElementById("xlbtn");
+  ```
+- **After:**
+  ```js
+  if(S.Lx<=0||S.Ly<=0||g.h<=0) R.err.push("Building plan dimensions and height must all be greater than zero.");
+  /* A blank number box reads as 0 (num()). For these inputs a zero would silently change a result
+     (K_zt to 1.0, C_s to its floor, V to 0, E or the wind to 0), so it blocks the calculation. */
+  if(S.topoType!=="None" && !(S.topoH>0 && S.topoLh>0))
+    R.err.push("Topography: the feature height H and the upwind distance Lₕ must both be greater than zero (Fig. 26.8-1). A blank entry reads as zero and would silently give Kᴢₜ = 1.0. Enter both values, or set the topographic feature to None.");
+  if(S.Goverride && !(S.Gval>0))
+    R.err.push("The gust-effect factor override G must be greater than zero (Sec. 26.11). Enter G, or clear the override.");
+  if(sq.Fa!==null){
+    if(!(S.hn>0)) R.err.push("Seismic: the structural height hₙ must be greater than zero (Sec. 12.8.2.1).");
+    if(!(S.TL>0)) R.err.push("Seismic: the long-period transition period Tʟ must be greater than zero (Fig. 22-14 to 22-17). A blank entry reads as zero and would silently send Cₛ to its lower limit.");
+    if(!(S.seisW>0)) R.err.push("Seismic: the effective seismic weight W must be greater than zero (Sec. 12.7.2).");
+    if(!(S.rho>=1.0)) R.err.push("Seismic: the redundancy factor ρ must be at least 1.0 (Sec. 12.3.4 gives 1.0 or 1.3).");
+  }
+  if(g.h>60) R.warn.push(
+  ```
+  ```js
+  function doExcel(){
+    if(R && R.err && R.err.length){ alert("The calculation is blocked; resolve these first:\n\n"+R.err.join("\n")); return; }
+    const btn=document.getElementById("xlbtn");
+  ```
+  The seismic checks apply only when the seismic calculation runs (`sq.Fa!==null`); with Site Class F (no tabulated coefficients) a blank T_L is not an error. A blocked calculation already shows "Blocking Errors" on the dashboard and "Calculation Blocked" on every other tab (existing `render()`), and the hand-off sender already refuses to send.
+- **Check case:** default project (Melrose, Site D, steel not detailed for seismic, R = 3, W = 1,200 k), T_L box cleared.
+  - Before: T_L = 0 < T → C_s,max = S_D1·T_L/(T²·R/I_e) = 0 → C_s = C_s,min = max(0.044 × 0.3094 × 1.0, 0.01) = 0.01361; V = 16.34 k (instead of C_s = 0.1031, V = 123.74 k).
+  - After: "Seismic: the long-period transition period T_L must be greater than zero ..." blocking error; no results, no Excel, no hand-off.
+  - Topography 2D escarpment, H = 50 ft, L_h cleared: before K_zt = 1.0 with the "H/L_h = 0.000 is less than 0.2" note; after a blocking error.
+- **How verified:** jsdom, main vs branch, 24 states (`R` JSON, rendered text of every tab, `snapshot()` and the hand-off payload): the blank-input states differ only by the new `R.err` entry (and the refused hand-off); every other state is identical apart from the items below. `doExcel()` with T_L = 0 shows the alert and builds no workbook.
+- **Other copies of this code:** none known.
+
+### W2. Unbalanced snow: l_u = W not taken less than 25 ft in Fig. 7.6-1   [calc change] [**MORE conservative**, only where W < 25 ft] (open item O1)
+- **Where:** `solve()`, Sec. 7.6.1 block (≈ line 630), anchor `ub.sqrtS=Math.sqrt(ub.S);`; `renderSnow` unbalanced panel (≈ lines 2269–2276), anchors `"Fig. 7.6-1 with lᵤ = W"` and `"h_d = 0.43\\,("+R2(ub.W)+")`; User Manual Part 6 text (≈ line 4055), anchor `and h<sub>d</sub> from Fig. 7.6-1 using l<sub>u</sub> = W.`; Excel `out("hd","Drift height"` (≈ line 5121).
+- **Problem:** the unbalanced drift height used h_d from Fig. 7.6-1 with l_u = W and no lower bound, while every drift in this tool uses `figHd`, which takes l_u not less than 25 ft. For W < 25 ft (gable roofs up to 50 ft wide, not using the W ≤ 20 ft simply-supported exception) the unbalanced surcharge was smaller than the same roof's drift basis.
+- **Decision:** the inventory asked the engineer to confirm whether ASCE 7-16 puts a floor on l_u for Sec. 7.6.1. Without the printed text I applied the tool's existing 25 ft drift floor, because it is the conservative choice and makes the tool consistent with itself. **Verify:** if ASCE 7-16 Sec. 7.6.1 / Fig. 7.6-1 has no minimum for the unbalanced case (or a 20 ft minimum), the floor can be removed (or set to 20) on the lines listed above; see "Needs engineer".
+- **Governing provision:** ASCE 7-16 Sec. 7.6.1 (h_d from Fig. 7.6-1 with l_u = W) and Fig. 7.6-1 (h_d = 0.43·l_u^(1/3)·(p_g + 10)^(1/4) − 1.5); the 25 ft floor is the one this tool already applies under Sec. 7.7.1 / 7.8 (**verify** the edition text for both).
+- **Before:**
+  ```js
+      ub.hd=Math.max(0,0.43*Math.pow(ub.W,1/3)*Math.pow(sn.pg+10,0.25)-1.5);
+  ```
+  ```js
+            ["h<sub>d</sub>","Drift height",R2(ub.hd)+" ft","Fig. 7.6-1 with lᵤ = W"]]);
+  ```
+  ```js
+      "h_d = 0.43\\,("+R2(ub.W)+")^{1/3}\\,("+R2(sn.pg)+"+10)^{1/4} - 1.5","h_d = "+R2(ub.hd)+"\\ \\text{ft}");
+  ```
+  ```
+  `+K("\\gamma = 0.13 p_g + 14 \\le 30\\ \\mathrm{pcf}")+` and h<sub>d</sub> from Fig. 7.6-1 using l<sub>u</sub> = W.
+  ```
+  ```js
+      {formula:"MAX(0,0.43*"+A("Wrun")+"^(1/3)*("+A("pg")+"+10)^0.25-1.5)",result:sn.unbal.hd},NF.f3,"Fig. 7.6-1");
+  ```
+- **After:**
+  ```js
+      /* Fig. 7.6-1 with l_u = W, taken as not less than 25 ft: the same l_u floor this tool applies to every
+         drift (figHd below). Conservative where W < 25 ft; the ASCE 7-16 Sec. 7.6.1 / Fig. 7.6-1 floor is to be verified. */
+      ub.luUsed=Math.max(ub.W,25);
+      ub.hd=Math.max(0,0.43*Math.pow(ub.luUsed,1/3)*Math.pow(sn.pg+10,0.25)-1.5);
+  ```
+  ```js
+            ["h<sub>d</sub>","Drift height",R2(ub.hd)+" ft","Fig. 7.6-1 with lᵤ = W, not less than 25 ft"]]);
+  ```
+  ```js
+      "h_d = 0.43\\,("+R2(ub.luUsed)+")^{1/3}\\,("+R2(sn.pg)+"+10)^{1/4} - 1.5","h_d = "+R2(ub.hd)+"\\ \\text{ft}");
+    if(ub.W<25) note(b,"W = "+R2(ub.W)+" ft is less than 25 ft, so lᵤ = 25 ft is used in Fig. 7.6-1, the same minimum fetch this tool applies to every drift calculation (conservative).","k");
+  ```
+  ```
+  `+K("\\gamma = 0.13 p_g + 14 \\le 30\\ \\mathrm{pcf}")+` and h<sub>d</sub> from Fig. 7.6-1 using l<sub>u</sub> = W, not taken less than 25 ft (the same floor as the drifts; see 7.3 below).
+  ```
+  ```js
+      {formula:"MAX(0,0.43*MAX("+A("Wrun")+",25)^(1/3)*("+A("pg")+"+10)^0.25-1.5)",result:sn.unbal.hd},NF.f3,"Fig. 7.6-1, l_u = W not less than 25 ft");
+  ```
+- **Check case:** Melrose defaults (p_g = 40 psf, p_s = 28.0 psf, γ = 0.13·40 + 14 = 19.2 pcf, D = 15 psf, L_r = 20 psf), gable 6:12 (S = 2, √S = 1.4142), 120 × 30 ft, ridge along X, so W = 15 ft.
+  - Before: h_d = 0.43·15^(1/3)·50^(1/4) − 1.5 = 0.43 × 2.4662 × 2.6591 − 1.5 = 1.320 ft; p_sur = 1.320 × 19.2/1.4142 = 17.92 psf over 8 × 1.320 × 1.4142/3 = 4.98 ft; leeward peak 28.0 + 17.92 = **45.92 psf**. LRFD-3 net roof max 1.2·15 + 1.6·45.92 = 91.47 psf; governing gravity LRFD-3W 95.22 psf.
+  - After: l_u = 25 ft; h_d = 0.43 × 2.9240 × 2.6591 − 1.5 = 1.843 ft; p_sur = 1.843 × 19.2/1.4142 = 25.03 psf over 6.95 ft; leeward peak **53.03 psf** (+15.5%). LRFD-3 102.84 psf; governing LRFD-3W 106.59 psf.
+  - W = 22 ft, 4:12: leeward peak 46.89 → 48.43 psf. W ≥ 25 ft: unchanged. W ≤ 20 ft with the simply-supported exception: the load I_s·p_g is unchanged (only the displayed h_d changes).
+- **Hand-off:** `info.snow.unbalanced` (information only; the receiver does not import it) carries the new leeward peak and surcharge length, and the matching note text changes; no other field changes.
+- **How verified:** jsdom main vs branch (the gable cases above; hip W = 40 ft unchanged); Excel workbook built with ExcelJS 4.4.0 in node: cell formula `MAX(0,0.43*MAX(I66,25)^(1/3)*(I51+10)^0.25-1.5)`, cached 1.8434.
+- **Other copies of this code:** none known.
+
+### W3. Hurricane-prone test uses the Risk Category II speed   [calc change with no result change] [neutral] (open item O2, part)
+- **Where:** `solve()` wind-borne debris block (≈ line 552), anchor `dbr.hurricaneProne =`; `renderEncl` debris table (≈ line 2131), anchor `[{v:"Hurricane-prone region`.
+- **Problem:** `hurricaneProne = (S.jur==="MA") || (site.V>115)` treated all of Massachusetts as hurricane-prone and, for manual entry, used the Risk Category speed rather than the Risk Category II speed that Sec. 26.2 names. The screen said "Massachusetts is on the Atlantic coast".
+- **Governing provision:** ASCE 7-16 Sec. 26.2, "Hurricane-prone regions" (Atlantic and Gulf of Mexico coasts where V for Risk Category II > 115 mph) and "Wind-borne debris regions"; Sec. 26.12.3.
+- **Before:**
+  ```js
+  dbr.hurricaneProne = (S.jur==="MA") || (site.V>115);
+  ```
+  ```js
+    [{v:"Hurricane-prone region"},{v:S.jur==="MA"?"Massachusetts is on the Atlantic coast":"V = "+R2(R.site.V)+" mph"},{v:YN(d.hurricaneProne)}],
+    [{v:"Wind speed on the governing basis"},{v:"Risk Category "+d.Vbasis+" map value"},{v:R2(d.Vdbr)+" mph"}],
+  ```
+- **After:**
+  ```js
+  /* Sec. 26.2: hurricane-prone = Atlantic and Gulf coasts where the Risk Category II basic wind speed exceeds 115 mph.
+     Massachusetts: the community's tabulated Risk Category II speed. Manual entry: only the speed entered (the
+     Risk Category speed) is known, which is equal to or higher than the Risk Category II speed for RC II to IV. */
+  const dbrTown = (S.jur==="MA") ? MA_TOWNS.find(r=>r[0]===S.town) : null;
+  dbr.Vii = dbrTown ? dbrTown[4] : null;
+  dbr.hurricaneProne = dbrTown ? (dbr.Vii>115) : (site.V>115);
+  ```
+  ```js
+    [{v:"Hurricane-prone region: Atlantic coast, Risk Category II V > 115 mph"},{v:d.Vii!==null?"Risk Category II map value "+R2(d.Vii)+" > 115":"V = "+R2(R.site.V)+" mph as entered > 115"},{v:YN(d.hurricaneProne)}],
+    [{v:"Wind speed on the governing basis"},{v:d.Vii!==null?"Risk Category "+d.Vbasis+" map value":"speed entered (Risk Category "+S.risk+")"},{v:R2(d.Vdbr)+" mph"}],
+  ```
+  plus, right after that table (anchor `  ]);` followed by `  if(d.inRegion){` in `renderEncl`):
+  ```js
+    if(d.Vii===null) note(b,"Manual hazard entry: only the wind speed entered for Risk Category "+S.risk+" is known, so it is used for both tests above. "+
+      "For Risk Category III and IV it is higher than the Risk Category II (or III) speed the code calls for, so the tests err on the side of "+
+      "placing the site in the region. Confirm that the site is on the Atlantic or Gulf of Mexico coast, or set the region by override.","k");
+  ```
+- **Why no result changes:** the debris region also needs V ≥ 130 mph (coastal) or ≥ 140 mph on the Risk Category II (III for RC IV) basis. Any Massachusetts community that reaches 130 mph on that basis has a Risk Category II speed above 115 mph, so the stricter hurricane-prone test never removes a site from the region. 113 of the 351 communities are now "not hurricane-prone"; none of them was in the region before.
+- **Check case:** Nantucket (V_II = 137 mph), RC III, coastal: hurricane-prone Yes (137 > 115), coastal trigger Yes → in region; same as before. Adams (V_II = 111 mph): before Yes ("Massachusetts is on the Atlantic coast"), after No; debris region No before and after (111 < 130).
+- **How verified:** jsdom, every Massachusetts community × Risk Category I–IV × coastal yes/no, plus manual entry V = 100–180 mph × RC × coastal (2,896 runs, 500 ft² of glazing on wall 1): debris region, glazing counted and enclosure class identical to main in every run.
+- **Not changed (needs engineer):** whether 780 CMR 10th Ed. amends the hurricane-prone or wind-borne debris definitions for Massachusetts.
+- **Other copies of this code:** none known.
+
+### W4. 780 CMR "⅔ × LRFD" ASD strings show the L term   [display] [no result change] (open item O3)
+- **Where:** `renderComb`, 780 CMR ASD table (≈ line 3079), anchor `{v:(2/3*c.D).toFixed(3)+"D + "`.
+- **Problem:** the combination string omitted L, so ⅔ × LRFD-4 read "0.800D + 0.333(Lr or S) + 0.667W + 0.000E" although the combination carries 1.0L × ⅔ = 0.667L. The net roof values are unaffected (L acts on the floor below).
+- **Governing provision:** 780 CMR 10th Ed. 1605.1 (⅔ of the ASCE 7-16 Sec. 2.3 combinations that include W or E).
+- **Before:**
+  ```js
+        {v:(2/3*c.D).toFixed(3)+"D + "+(2/3*c.S).toFixed(3)+(c.useLr?"(Lᵣ or S)":"S")+" + "+(2/3*c.W).toFixed(3)+"W + "+(2/3*c.E).toFixed(3)+"E"},
+  ```
+- **After:**
+  ```js
+        {v:(2/3*c.D).toFixed(3)+"D + "+(2/3*c.L).toFixed(3)+"L + "+(2/3*c.S).toFixed(3)+(c.useLr?"(Lᵣ or S)":"S")+" + "+(2/3*c.W).toFixed(3)+"W + "+(2/3*c.E).toFixed(3)+"E"},
+  ```
+- **Check case:** default: LRFD-4a reads "0.800D + 0.667L + 0.333(Lr or S) + 0.667W + 0.000E"; LRFD-5a "0.800D + 0.667L + 0.133S + 0.000W + 0.667E"; LRFD-3Wa, 6a, 7a show "0.000L". Net roof columns unchanged.
+- **How verified:** headless Chromium screenshot of the ASD panel; jsdom text diff.
+- **Other copies of this code:** none.
+
+### W5. Rain load R: stated on the Combinations tab   [display] [no result change] (open item O6)
+- **Where:** `renderComb`, panel "Basis for the Combinations" (≈ line 2996), anchor: the note ending `"load L acts on the framing below and does not appear in the roof pressure.");`.
+- **Problem:** the combinations read "(Lr or S)" while Sec. 2.3.1 reads "(Lr or S or R)"; the omission of R was stated only in the User Manual scope list.
+- **Decision:** the combination labels are left as they are (they are also the Excel and worked-panel labels, and "(Lr or S or R)" would suggest R is included). A warning note is added instead.
+- **Before:** (no note)
+- **After** (inserted after that note):
+  ```js
+    note(b,"Rain load R (Ch. 8) is not computed by this tool. Sec. 2.3.1 combinations 2, 3 and 4 read (Lᵣ or S or R); the "+
+      "(Lᵣ or S) term below omits R. Where rain on the roof can exceed Lᵣ and S (for example a roof that relies on "+
+      "secondary drainage, or one prone to ponding), evaluate R by hand and substitute it.","w");
+  ```
+- **Governing provision:** ASCE 7-16 Sec. 2.3.1 combinations 2–4; Ch. 8.
+- **Check case:** n/a (text).
+- **How verified:** headless Chromium screenshot; jsdom text diff.
+- **Other copies of this code:** none.
+
+### Earlier open items: status after this PR
+- **O1:** fixed conservatively (W2); the floor value needs the printed-text check (see "Needs engineer").
+- **O2:** hurricane-prone test corrected (W3, no result change). The Risk Category I exemption is kept: my reading of Sec. 26.12.3.2 is that glazing protection is required for Risk Category II, III and IV buildings only (**verify**). The 780 CMR question is under "Needs engineer".
+- **O3:** fixed (W4).
+- **O4, q_i part closed, not an issue:** q_i = q_h for positive internal pressure in a partially enclosed building is permitted by ASCE 7-16 Sec. 27.3.1 ("for positive internal pressure evaluation, q_i may conservatively be evaluated at height h (q_i = q_h)"; **verify** wording), and the tool takes no opening heights, so q_z at the highest opening could not be computed anyway. **R_i** (Sec. 26.13.1.1) is still not applied; that is conservative (R_i ≤ 1.0). See "Remaining open items".
+- **O5:** fixed (W1).
+- **O6:** addressed by a note (W5); R itself is still not computed (outside the tool's scope, as the User Manual states).
+- **O7 closed, kept as is:** the combined Fig. 29.4-1 "Hexagonal or octagonal" row keeps K_d = 1.00 (5% conservative for hexagonal members). Splitting the row would add a near-duplicate row to the Fig. 29.4-1 table and a saved-label migration for a 5% gain; not done. See "Remaining open items" if wanted.
+- **O8:** not changed; needs engineer (below).
+
+### Needs engineer
+1. **O1, Sec. 7.6.1 l_u floor.** Does the printed ASCE 7-16 Sec. 7.6.1 / Fig. 7.6-1 give a minimum l_u (20 ft or 25 ft) for the unbalanced drift height, and is the 25 ft floor the tool uses for drifts (Sec. 7.7.1 / 7.8) right for 7-16? Recommendation: keep 25 ft for both unless the printed text says otherwise (conservative).
+2. **O2, 780 CMR.** Does 780 CMR 10th Ed. amend the hurricane-prone or wind-borne debris region definitions (or the glazing-protection requirement) for Massachusetts? Recommendation: if not amended, keep the ASCE 7-16 Sec. 26.2 test as now implemented.
+3. **O8, adjacent structures, Sec. 7.7.2.** For a windward drift on a lower roof next to a separate taller structure, does it apply only when s < 20 ft and s < 6h (the tool's reading), or for any separation, truncated at the lower-roof edge? Recommendation: keep the current reading (the full untruncated drift where s < 20 ft is conservative); if the engineer reads 7.7.2 as "any separation", add the windward drift for s ≥ 20 ft truncated at the edge (it reaches the lower roof only when 4h_d > s).
+
+### Remaining open items
+- **R_i (O4):** optional Sec. 26.13.1.1 reduction for partially enclosed buildings with a single unpartitioned volume: a checkbox (default off), V_i from the geometry, A_og from the opening schedule, GC_pi × R_i on screen and in Excel. Conservative as it stands; implement only if wanted.
+- **Hexagonal members (O7):** if wanted, add a separate "Hexagonal" Fig. 29.4-1 row with K_d = 0.95 and keep "Hexagonal or octagonal" (K_d = 1.00) for old projects, so no saved label changes.
+- **Observed, not changed:** the unbalanced surcharge length 8h_d√S/3 is not truncated at the eave (L_sur can exceed W on low slopes). This only overstates the displayed extent of a load that cannot exist past the eave (conservative, display).

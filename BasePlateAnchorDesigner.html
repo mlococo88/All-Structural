@@ -38,6 +38,7 @@
   #hdr h1{font-size:15pt;margin:0;letter-spacing:.4px;font-family:var(--font-ui);font-weight:600;color:#fff;}
   #hdr .byline{font-size:9pt;font-style:normal;color:#C7D4E4;margin-top:1px;font-family:var(--font-ui);}
   #projGrid{display:grid;grid-template-columns:repeat(6,minmax(120px,1fr));gap:4px 10px;margin-top:6px;}
+  @media (max-width:600px){ #projGrid{grid-template-columns:repeat(2,minmax(0,1fr));} }
   #projGrid label{display:flex;flex-direction:column;font-size:10pt;}
   #projGrid label span{font-weight:bold;font-size:10pt;}
   #projGrid input{font-family:var(--font-ui);font-size:9.5pt;padding:3px 6px;border:1px solid var(--color-border);border-radius:4px;background:#fff;color:var(--color-fg);transition:border-color .15s, box-shadow .15s;}
@@ -699,46 +700,78 @@ function defaultCombos(){
    require them for the anchorage.
    ===================================================================== */
 const ASCE722 = {
-  /* [label, {D,L,Lr,S,W,E}] — Lr and S share the roof-live slot */
-  basic:[
-    ["1.4D",                 {D:1.4}],
-    ["1.2D+1.6L+0.5Lr",      {D:1.2,L:1.6,Lr:0.5}],
-    ["1.2D+1.6Lr+1.0L",      {D:1.2,Lr:1.6,L:1.0}],
-    ["1.2D+1.6Lr+0.5W",      {D:1.2,Lr:1.6,W:0.5}],
-    ["1.2D+1.0W+1.0L+0.5Lr", {D:1.2,W:1.0,L:1.0,Lr:0.5}],
-    ["0.9D+1.0W",            {D:0.9,W:1.0}],
-    ["0.9D-1.0W",            {D:0.9,W:-1.0}]
-  ],
-  seismic:(sds)=>{
-    const up=0.2*(sds||0);
+  /* [label, {D,L,Lr,S,W,E}]. The roof term "(Lr or S or R)" of §2.3.1 is generated
+     once for Lr and once for S, each in its own combination (R has no slot).
+     Previously Lr and S shared one slot and S was ignored.
+       roofs : ["Lr"], ["S"] or ["Lr","S"] (see generateCombos)
+       fL    : live-load factor in combinations 3, 4 and 6 (1.0; 0.5 when the
+               §2.3.1 Exception 1 option is ticked)
+       sf    : snow factors {p: primary (comb. 3), c: companion (comb. 2, 4),
+               e: seismic (comb. 6)} — see SNOW_FACTORS */
+  basic:(roofs, fL, sf)=>{
+    const L=(fL===undefined)?1.0:fL, F=sf||SNOW_FACTORS["1.6"];
+    const pf=r=>(r==="S"? F.p : 1.6), cf=r=>(r==="S"? F.c : 0.5);
+    const out=[["1.4D", {D:1.4}]];
+    const each=fn=>roofs.forEach(r=>out.push(fn(r)));
+    each(r=>["1.2D+1.6L+"+fmt(cf(r),1)+r,         {D:1.2, L:1.6, [r]:cf(r)}]);
+    each(r=>["1.2D+"+fmt(pf(r),1)+r+"+"+fmt(L,1)+"L", {D:1.2, [r]:pf(r), L:L}]);
+    each(r=>["1.2D+"+fmt(pf(r),1)+r+"+0.5W",      {D:1.2, [r]:pf(r), W:0.5}]);
+    each(r=>["1.2D+1.0W+"+fmt(L,1)+"L+"+fmt(cf(r),1)+r, {D:1.2, W:1.0, L:L, [r]:cf(r)}]);
+    out.push(["0.9D+1.0W", {D:0.9, W:1.0}], ["0.9D-1.0W", {D:0.9, W:-1.0}]);
+    return out;
+  },
+  /* fS = snow factor in combination 6 (0 when the S case is empty, so the label
+     and the result are as before) */
+  seismic:(sds, fL, fS)=>{
+    const up=0.2*(sds||0), L=(fL===undefined)?1.0:fL, s=fS||0;
+    const sT=s>0? "+"+fmt(s,2)+"S" : "";
     return [
-      ["("+fmt(1.2+up,2)+")D+1.0E+1.0L", {D:1.2+up, E:1.0, L:1.0}],
-      ["("+fmt(1.2+up,2)+")D-1.0E+1.0L", {D:1.2+up, E:-1.0, L:1.0}],
+      ["("+fmt(1.2+up,2)+")D+1.0E+"+fmt(L,1)+"L"+sT, {D:1.2+up, E:1.0, L:L, S:s}],
+      ["("+fmt(1.2+up,2)+")D-1.0E+"+fmt(L,1)+"L"+sT, {D:1.2+up, E:-1.0, L:L, S:s}],
       ["("+fmt(0.9-up,2)+")D+1.0E",      {D:0.9-up, E:1.0}],
       ["("+fmt(0.9-up,2)+")D-1.0E",      {D:0.9-up, E:-1.0}]
     ];
   },
-  omega:(sds,om)=>{
-    const up=0.2*(sds||0), o=om||2.5;
+  omega:(sds,om,fL,fS)=>{
+    const up=0.2*(sds||0), o=om||2.5, L=(fL===undefined)?1.0:fL, s=fS||0;
+    const sT=s>0? "+"+fmt(s,2)+"S" : "";
     return [
-      ["("+fmt(1.2+up,2)+")D+"+fmt(o,1)+"E+1.0L", {D:1.2+up, E:o, L:1.0}],
-      ["("+fmt(1.2+up,2)+")D-"+fmt(o,1)+"E+1.0L", {D:1.2+up, E:-o, L:1.0}],
+      ["("+fmt(1.2+up,2)+")D+"+fmt(o,1)+"E+"+fmt(L,1)+"L"+sT, {D:1.2+up, E:o, L:L, S:s}],
+      ["("+fmt(1.2+up,2)+")D-"+fmt(o,1)+"E+"+fmt(L,1)+"L"+sT, {D:1.2+up, E:-o, L:L, S:s}],
       ["("+fmt(0.9-up,2)+")D+"+fmt(o,1)+"E",      {D:0.9-up, E:o}],
       ["("+fmt(0.9-up,2)+")D-"+fmt(o,1)+"E",      {D:0.9-up, E:-o}]
     ];
   }
+};
+/* Snow-load factors. Which set applies depends on how S was computed:
+     "1.6" — service-level snow (ASCE 7-16 §2.3.1 / §2.3.6 form): 1.6S primary,
+             0.5S companion, 0.2S with seismic. DEFAULT (the larger gravity factors).
+     "1.0" — ASCE 7-22 strength-level snow from the reliability-targeted ground
+             snow load: 1.0S primary, 0.3S companion, 0.15S with seismic
+             (ASCE 7-22 §2.3.1 / §2.3.6 — verify against the printed standard). */
+const SNOW_FACTORS = {
+  "1.6":{p:1.6, c:0.5, e:0.2,  label:"1.6S / 0.5S / 0.2S — service-level snow (ASCE 7-16 form)"},
+  "1.0":{p:1.0, c:0.3, e:0.15, label:"1.0S / 0.3S / 0.15S — ASCE 7-22 strength-level snow (verify)"}
 };
 
 /* Build factored combinations from the service-load table. */
 function generateCombos(){
   const SL=S.serviceLoads;
   if(!SL) return [];
-  const sets=[].concat(
-    SL.useBasic!==false ? ASCE722.basic : [],
-    SL.useSeismic ? ASCE722.seismic(SL.SDS) : [],
-    SL.useOmega   ? ASCE722.omega(SL.SDS, SL.omega) : []
-  );
   const F=["P","Vx","Vy","Mx","My"];
+  const nz=k=>{ const c=SL.cases&&SL.cases[k]; return !!c && F.some(f=>Math.abs(+c[f]||0)>1e-12); };
+  /* roof term: Lr and/or S. With both empty, Lr is kept so the set (and its
+     labels) is exactly as before. */
+  const hasS=nz("S");
+  const roofs=hasS? (nz("Lr")? ["Lr","S"] : ["S"]) : ["Lr"];
+  const fL=SL.halfL? 0.5 : 1.0;                       /* §2.3.1 Exception 1 (option, default off) */
+  const sf=SNOW_FACTORS[SL.snowFactors]||SNOW_FACTORS["1.6"];
+  const fS=hasS? sf.e : 0;
+  const sets=[].concat(
+    SL.useBasic!==false ? ASCE722.basic(roofs, fL, sf) : [],
+    SL.useSeismic ? ASCE722.seismic(SL.SDS, fL, fS) : [],
+    SL.useOmega   ? ASCE722.omega(SL.SDS, SL.omega, fL, fS) : []
+  );
   const out=[];
   sets.forEach(([label,fac])=>{
     const c={name:label};
@@ -1289,10 +1322,15 @@ function bearingCap(){
      similar area grows by the same factor k in both directions until it meets
      the nearest pedestal edge:  k = min[(Bx/2 − |ox|)/(A1_w/2), (By/2 − |oy|)/(A1_l/2)].
      (Previously A2 = min(Bx,3A1_w)·min(By,3A1_l): neither similar nor concentric
-     for an offset plate or a non-proportional pedestal.) The 1:2 frustum depth
-     limit against the pedestal height is not checked. */
+     for an offset plate or a non-proportional pedestal.)
+     Frustum depth (§22.8.3.2, Fig. R22.8.3.2): A2 is the lower base of a frustum
+     with side slopes of 1 vertical to 2 horizontal contained wholly within the
+     support, so each side may grow by at most 2·H over the pedestal height H:
+     k ≤ 1 + 4H/A1_w and k ≤ 1 + 4H/A1_l. (Previously not checked.) */
   const oX=Math.abs(C.plate_off_x||0), oY=Math.abs(C.plate_off_y||0);
-  const kSim=Math.max(1, Math.min((C.Bx/2-oX)/(A1_w/2), (C.By/2-oY)/(A1_l/2)));
+  const Hs=Math.max(+C.H||0, 0);
+  const kDepth=Math.min(1+4*Hs/A1_w, 1+4*Hs/A1_l);
+  const kSim=Math.max(1, Math.min((C.Bx/2-oX)/(A1_w/2), (C.By/2-oY)/(A1_l/2), kDepth));
   const A2=A1*kSim*kSim;
   let sqrtRatio=Math.sqrt(A2/A1); if(sqrtRatio>2) sqrtRatio=2;
   let fp = 0.85*fc*sqrtRatio;
@@ -1300,7 +1338,8 @@ function bearingCap(){
   /* grout strength may govern the interface bearing */
   const fpGrout = G.present? 0.85*Math.min(G.fc_grout,10) : Infinity;
   const fp_gov = Math.min(fp, fpGrout);
-  return {fc,A1,A2,A1_w,A1_l,sqrtRatio,fp,fpGrout,fp_gov,phi,phiFp:phi*fp_gov,
+  return {fc,A1,A2,A1_w,A1_l,sqrtRatio,fp,fpGrout,fp_gov,phi,phiFp:phi*fp_gov,kDepth,
+    depthGoverns:(kDepth<Math.min((C.Bx/2-oX)/(A1_w/2), (C.By/2-oY)/(A1_l/2)) && kDepth<2),
     groutGoverns:(fpGrout<fp)};
 }
 
@@ -1408,18 +1447,34 @@ function tensionBreakoutGroup(nT, ca_min, eccX, eccY, tensPts, condA){
   const ext=breakoutExtents(tp, hef, C, pxo, pyo);
   const ANc=ext.ANc;
   const ANcRatio=Math.min(ANc/ANco, nT);
-  /* All-anchor cone, retained for PRYOUT (§17.7.3 uses the group of anchors
-     resisting shear). Ratio cap kept exactly as before so pryout is unchanged. */
+  /* All-anchor cone for PRYOUT (§17.7.3 uses the group of anchors resisting
+     shear). §17.6.2.1: A_Nc ≤ n·A_Nco with n = the anchors of THAT group, i.e.
+     all anchors. (Previously capped at nT, the tension-anchor count.) */
   const extAll=breakoutExtents(g.pts, hef, C, pxo, pyo);
-  const ANcAll=extAll.ANc, ANcRatioAll=Math.min(ANcAll/ANco, nT);
-  /* Nb: kc=24 cast-in; alt 16 form for 11<=hef<=25 — use larger (§17.6.2.2.3) */
+  const nAll=g.pts.length;
+  const ANcAll=extAll.ANc, ANcRatioAll=Math.min(ANcAll/ANco, nAll);
+  /* Nb: kc=24 cast-in (§17.6.2.2.1). §17.6.2.2.3: for cast-in HEADED studs and
+     headed bolts with 11 <= hef <= 25 in, Nb = 16·λa·√f'c·hef^(5/3) is used
+     whenever it applies (compliant whether the clause is read as mandatory or
+     as an alternative; same as Concrete Anchor.html). Previously max(24-form,
+     16-form), which was higher for 11 <= hef < 11.39 in, and also applied to a
+     plain rod (not headed), which now keeps the 24-form. */
   const kc=24, lam=1.0;
   const Nb1=kc*lam*Math.sqrt(fc*1000)/1000*Math.pow(hef,1.5);
   let NbAlt=0, useAlt=false;
-  if(hef>=11 && hef<=25){ NbAlt=16*lam*Math.sqrt(fc*1000)/1000*Math.pow(hef,5/3); if(NbAlt>Nb1)useAlt=true; }
-  const Nb=Math.max(Nb1,NbAlt);
-  /* psi_ed,N */
-  const ca=ca_min;
+  const headed=(A.head!=="plainrod");
+  if(headed && hef>=11 && hef<=25){ NbAlt=16*lam*Math.sqrt(fc*1000)/1000*Math.pow(hef,5/3); useAlt=true; }
+  const Nb=useAlt? NbAlt : Nb1;
+  /* psi_ed,N — §17.6.2.4: c_a,min of the anchors IN TENSION (the same anchors
+     as A_Nc and e'_N). Each anchor's edge distance = the group's edge distance
+     (geometric or overridden) plus its set-back from the outermost anchor line.
+     (Previously c_a,min of ALL anchors.) Pryout keeps the all-anchor value
+     (caAll / psi_edAll), matching its all-anchor cone. */
+  const caOf=p=>Math.min(g.ca_x_pos+(g.xmax-p.x), g.ca_x_neg+(p.x-g.xmin),
+                         g.ca_y_pos+(g.ymax-p.y), g.ca_y_neg+(p.y-g.ymin));
+  const caAll=ca_min;
+  const ca=Math.min(...tp.map(caOf));            /* ≥ caAll by construction */
+  const psi_edAll = (caAll>=1.5*hef)?1.0:(0.7+0.3*caAll/(1.5*hef));
   const edges=[g.ca_x_pos,g.ca_x_neg,g.ca_y_pos,g.ca_y_neg];
   const nearEdges=edges.filter(e=>e<1.5*hef).length;
   const isCorner = nearEdges>=2;
@@ -1440,13 +1495,13 @@ function tensionBreakoutGroup(nT, ca_min, eccX, eccY, tensPts, condA){
      intercept check shows it crossing the failure surface (condA === true). */
   const phi = (condA===true)?0.75:0.70;
   const Ncbg=ANcRatio*psi_ec*psi_ed*psi_c*psi_cp*Nb;
-  return {phi,hef,hefNom,hefEff:he,fc,ANco,ANc,ANcRatio,ANcAll,ANcRatioAll,nTensPts:tp.length,Nb1,NbAlt,useAlt,Nb,psi_ed,psi_c,psi_cp,psi_ec,psi_ec1,psi_ec2,eN1,eN2,eN,ca,isCorner,nearEdges,Ncbg,phiNcbg:phi*Ncbg,
+  return {phi,hef,hefNom,hefEff:he,fc,ANco,ANc,ANcRatio,ANcAll,ANcRatioAll,nAll,caAll,psi_edAll,nTensPts:tp.length,Nb1,NbAlt,useAlt,Nb,psi_ed,psi_c,psi_cp,psi_ec,psi_ec1,psi_ec2,eN1,eN2,eN,ca,isCorner,nearEdges,Ncbg,phiNcbg:phi*Ncbg,
     steps:[
       {title:"Basic breakout strength of single anchor (tension)",ref:"ACI 318-19 §17.6.2.2.1, Eq.(17.6.2.2.1)"+(useAlt?" & §17.6.2.2.3":""),
        lines:[
         "N_b = k_c\\,\\lambda_a\\sqrt{f'_c}\\,h_{ef}^{1.5}",
         "N_b = 24\\times1.0\\times\\sqrt{"+fmt(fc*1000,0)+"}\\times"+fmt(hef,2)+"^{1.5} = "+fmt(Nb1,2)+"\\ \\text{kip}"
-        ].concat(useAlt?["N_{b,alt}=16\\lambda_a\\sqrt{f'_c}\\,h_{ef}^{5/3} = "+fmt(NbAlt,2)+"\\ \\text{kip}\\;\\Rightarrow\\;\\text{governs}"]:[]),
+        ].concat(useAlt?["N_{b}=16\\lambda_a\\sqrt{f'_c}\\,h_{ef}^{5/3} = "+fmt(NbAlt,2)+"\\ \\text{kip}\\;\\Rightarrow\\;\\text{used (headed anchor, }11\\le h_{ef}\\le25\\text{ in, §17.6.2.2.3)}"]:[]),
        vars:[["k_c","24","cast-in anchors §17.6.2.2.1"],["\\lambda_a","1.0","normalweight concrete"],
              ["f'_c",fmt(fc,2)+" ksi","capped 10 ksi"],["h_{ef}",fmt(hef,2)+" in",he.applies?("REDUCED per §17.6.2.1.2 (from nominal "+fmt(hefNom,2)+" in)"):"effective embedment (user input)"]]}
         ].concat(he.applies?[{title:"Effective embedment reduction",ref:"ACI 318-19 §17.6.2.1.2",
@@ -1465,7 +1520,7 @@ function tensionBreakoutGroup(nT, ca_min, eccX, eccY, tensPts, condA){
        vars:[["\\psi_{ec1,N}\\times\\psi_{ec2,N}",fmt(psi_ec1,3)+" \u00d7 "+fmt(psi_ec2,3)+" = "+fmt(psi_ec,3),"per-axis eccentricity factors, e'_N1="+fmt(eN1,2)+"\", e'_N2="+fmt(eN2,2)+"\" \u2014 applied as a product per \u00a717.6.2.3 (matches PROFIS \u03c8_ec1,N \u00b7 \u03c8_ec2,N)"],
              ["\\psi_{c,N}",fmt(psi_c,2),C.cracked?"cracked §17.6.2.6":"uncracked cast-in §17.6.2.6"],
              ["\\psi_{cp,N}","1.0","cast-in §17.6.2.7"],
-             ["c_{a,min}",fmt(ca,2)+" in","controlling edge distance"+(isCorner?" (CORNER: "+nearEdges+" edges within 1.5h_ef)":"")]]},
+             ["c_{a,min}",fmt(ca,2)+" in","smallest edge distance of the "+tp.length+" anchor"+(tp.length>1?"s":"")+" in tension (§17.6.2.4)"+(isCorner?" (CORNER: "+nearEdges+" edges within 1.5h_ef)":"")]]},
       {title:"Concrete breakout strength of anchor group (tension)",ref:"§17.6.2.1b, Eq.(17.6.2.1b)",
        lines:[
         "\\phi N_{cbg}=\\phi\\frac{A_{Nc}}{A_{Nco}}\\psi_{ec,N}\\psi_{ed,N}\\psi_{c,N}\\psi_{cp,N}N_b",
@@ -1716,7 +1771,6 @@ function shearBreakout(nV, ca1, ha, shearDir, caOffset, condA){
   } else {
     psi_cV = 1.0; psi_cV_why = "cracked, no supplementary reinforcement (§17.7.2.5)";
   }
-  const psi_hV = (ha<1.5*ca1)? Math.sqrt(1.5*ca1/ha) : 1.0;
   /* ACI 318-19 Table 17.5.3, concrete shear (breakout): Condition A 0.75, Condition B 0.70
      (Condition A only when the hairpin intercept check passes — conditionA()) */
   const phi = (condA===true)?0.75:0.70;
@@ -1779,8 +1833,11 @@ function shearBreakout(nV, ca1, ha, shearDir, caOffset, condA){
     /* §17.7.2.1(c): shear PARALLEL to an edge — evaluate as if perpendicular with
        psi_ed,V = 1.0, and twice the resulting Vcbg is permitted. */
     if(parallel) psi_edV=1.0;
-    /* ψ_h,V with the §17.7.2.1.2-limited c_a1 (never larger than the value used before) */
-    const psi_hV_e = narrow ? Math.min(psi_hV, (ha<1.5*c1)? Math.sqrt(1.5*c1/ha) : 1.0) : psi_hV;
+    /* ψ_h,V (§17.7.2.6) from c_a1 of THIS edge (the §17.7.2.1.2-limited value
+       where the narrow-member rule applies) — the same c_a1 as A_Vc, A_Vco and
+       V_b. (Previously the `ca1` argument — the group's smallest edge distance
+       in the main check — was used for every edge outside the narrow case.) */
+    const psi_hV_e = (ha<1.5*c1)? Math.sqrt(1.5*c1/ha) : 1.0;
     const Vcbg=AVcRatio*1.0*psi_edV*psi_cV*psi_hV_e*Vb*(parallel?2:1);
     return {name:e.name+(parallel?" (parallel)":""),parallel:!!parallel,ca1:c1,ca2:e.ca2,Vb,VbA,VbB,VbGov,castInHeaded,AVco,AVc,AVcRatio,psi_edV,psi_hV:psi_hV_e,narrow,width,depth,Vcbg,phiVcbg:phi*Vcbg};
   }
@@ -1898,25 +1955,29 @@ function pryout(nV, tb){
      section 4.3, which lists psi_ec1,N = psi_ec2,N = 1.000 while still showing
      psi_ed,N = 0.957 in the same Calculations block. */
   /* Pryout uses the cone of ALL anchors (ANcAll), not the tension-anchor cone
-     that tension breakout now uses — numerically identical to the previous code. */
-  const Ncbg = tb.ANcRatioAll * tb.psi_ed * tb.psi_c * tb.psi_cp * tb.Nb;
+     that tension breakout now uses, with the all-anchor ψ_ed,N (psi_edAll) and the
+     all-anchor cap n (BP-O5 / BP-O7, 2026-10-12). */
+  const Ncbg = tb.ANcRatioAll * tb.psi_edAll * tb.psi_c * tb.psi_cp * tb.Nb;
   const Vcpg = kcp*Ncbg;
   const fcUse=Math.min(S.conc.fc,10);
   return {phi,kcp,Ncbg,Vcpg,phiVcpg:phi*Vcpg,
-    ANc:tb.ANcAll,ANco:tb.ANco,ANcRatio:tb.ANcRatioAll,psi_ed:tb.psi_ed,psi_c:tb.psi_c,
-    psi_cp:tb.psi_cp,psi_ec_tension:tb.psi_ec,Nb:tb.Nb,hef:tb.hef,ca:tb.ca,NcbgTension:tb.Ncbg,
+    ANc:tb.ANcAll,ANco:tb.ANco,ANcRatio:tb.ANcRatioAll,psi_ed:tb.psi_edAll,psi_c:tb.psi_c,
+    psi_cp:tb.psi_cp,psi_ec_tension:tb.psi_ec,Nb:tb.Nb,hef:tb.hef,ca:tb.caAll,NcbgTension:tb.Ncbg,
     steps:[
       {title:"Step 1 — Projected areas (same breakout cone as tension)",ref:"ACI 318-19 §17.6.2.1, Fig. R17.6.2.1(b)",
        lines:[
         "A_{Nc0} = 9\\,h_{ef}^2 = 9\\times("+fmt(tb.hef,3)+")^2 = "+fmt(tb.ANco,2)+"\\ \\text{in}^2",
         "A_{Nc} = "+fmt(tb.ANcAll,2)+"\\ \\text{in}^2\\quad\\text{(group cone, clipped at member edges)}",
-        "\\frac{A_{Nc}}{A_{Nc0}} = \\frac{"+fmt(tb.ANcAll,2)+"}{"+fmt(tb.ANco,2)+"} = "+fmt(tb.ANcRatioAll,4)],
+        "\\frac{A_{Nc}}{A_{Nc0}} = \\frac{"+fmt(tb.ANcAll,2)+"}{"+fmt(tb.ANco,2)+"} = "+fmt(tb.ANcRatioAll,4)+"\\quad(\\le n="+tb.nAll+")"],
        vars:[["h_{ef}",fmt(tb.hef,3)+" in","effective embedment used for breakout"],
              ["A_{Nc}",fmt(tb.ANcAll,2)+" in^2","projected failure area of the anchor group (all anchors)"],
-             ["A_{Nc0}",fmt(tb.ANco,2)+" in^2","projected area of one anchor, no edge effects"]]},
+             ["A_{Nc0}",fmt(tb.ANco,2)+" in^2","projected area of one anchor, no edge effects"],
+             ["n",String(tb.nAll),"anchors in the group; A_Nc/A_Nc0 is capped at n (§17.6.2.1)"]]},
 
-      {title:"Step 2 — Basic single-anchor breakout strength",ref:"ACI 318-19 §17.6.2.2.1, Eq.(17.6.2.2.1)",
-       lines:[
+      {title:"Step 2 — Basic single-anchor breakout strength",ref:"ACI 318-19 §17.6.2.2.1, Eq.(17.6.2.2.1)"+(tb.useAlt?" & §17.6.2.2.3":""),
+       lines: tb.useAlt ? [
+        "N_b = 16\\,\\lambda_a\\,\\sqrt{f'_c}\\,h_{ef}^{5/3}\\quad(\\text{headed, }11\\le h_{ef}\\le25\\text{ in})",
+        "N_b = 16\\times1.000\\times\\sqrt{"+fmt(fcUse*1000,0)+"}\\times("+fmt(tb.hef,3)+")^{5/3} = "+fmt(tb.Nb*1000,0)+"\\ \\text{lb} = "+fmt(tb.Nb,3)+"\\ \\text{kip}"] : [
         "N_b = k_c\\,\\lambda_a\\,\\sqrt{f'_c}\\,h_{ef}^{1.5}",
         "N_b = 24\\times1.000\\times\\sqrt{"+fmt(fcUse*1000,0)+"}\\times("+fmt(tb.hef,3)+")^{1.5} = "+fmt(tb.Nb*1000,0)+"\\ \\text{lb} = "+fmt(tb.Nb,3)+"\\ \\text{kip}"],
        vars:[["k_c","24","cast-in anchors (§17.6.2.2.1)"],
@@ -1927,18 +1988,18 @@ function pryout(nV, tb){
       {title:"Step 3 — Modification factors",ref:"ACI 318-19 §17.6.2.3 – §17.6.2.6",
        lines:[
         "\\psi_{ec,N} = 1.000\\quad\\text{(pryout is concentric — eccentricity not applied)}",
-        "\\psi_{ed,N} = 0.7+0.3\\frac{c_{a,min}}{1.5h_{ef}} = 0.7+0.3\\times\\frac{"+fmt(tb.ca,3)+"}{1.5\\times"+fmt(tb.hef,3)+"} = "+fmt(tb.psi_ed,4),
+        "\\psi_{ed,N} = 0.7+0.3\\frac{c_{a,min}}{1.5h_{ef}} = 0.7+0.3\\times\\frac{"+fmt(tb.caAll,3)+"}{1.5\\times"+fmt(tb.hef,3)+"} = "+fmt(tb.psi_edAll,4),
         "\\psi_{c,N} = "+fmt(tb.psi_c,3)+",\\qquad \\psi_{cp,N} = "+fmt(tb.psi_cp,3)],
        vars:[["\\psi_{ec,N}","1.000","= 1.0: the pry force acts through the group centroid"],
-             ["\\psi_{ed,N}",fmt(tb.psi_ed,4),"edge-distance factor — RETAINED (PROFIS lists this same value on its pryout page)"],
-             ["c_{a,min}",fmt(tb.ca,3)+" in","smallest edge distance"],
+             ["\\psi_{ed,N}",fmt(tb.psi_edAll,4),"edge-distance factor — RETAINED (PROFIS lists this same value on its pryout page)"],
+             ["c_{a,min}",fmt(tb.caAll,3)+" in","smallest edge distance of all anchors in the group"],
              ["\\psi_{c,N}",fmt(tb.psi_c,3),S.conc.cracked?"cracked concrete":"uncracked concrete"],
              ["\\psi_{cp,N}",fmt(tb.psi_cp,3),"splitting control (cast-in = 1.0)"]]},
 
       {title:"Step 4 — Concentric group breakout N_cbg",ref:"ACI 318-19 Eq.(17.6.2.1b)",
        lines:[
         "N_{cbg} = \\frac{A_{Nc}}{A_{Nc0}}\\,\\psi_{ec,N}\\,\\psi_{ed,N}\\,\\psi_{c,N}\\,\\psi_{cp,N}\\,N_b",
-        "N_{cbg} = "+fmt(tb.ANcRatioAll,4)+"\\times1.000\\times"+fmt(tb.psi_ed,4)+"\\times"+fmt(tb.psi_c,3)+"\\times"+fmt(tb.psi_cp,3)+"\\times"+fmt(tb.Nb,3)+" = "+fmt(Ncbg,3)+"\\ \\text{kip}"],
+        "N_{cbg} = "+fmt(tb.ANcRatioAll,4)+"\\times1.000\\times"+fmt(tb.psi_edAll,4)+"\\times"+fmt(tb.psi_c,3)+"\\times"+fmt(tb.psi_cp,3)+"\\times"+fmt(tb.Nb,3)+" = "+fmt(Ncbg,3)+"\\ \\text{kip}"],
        vars:[["N_{cbg}",fmt((Ncbg)*forceFactor(),3)+" "+forceUnit(),"group breakout used for pryout"],
              ["tension N_{cbg}",fmt((tb.Ncbg)*forceFactor(),3)+" "+forceUnit(),"the tension-breakout value, which also includes \\psi_{ec,N}="+fmt(tb.psi_ec,4)]]},
 
@@ -3498,8 +3559,10 @@ function tensionRebarCheck(cc){
 function shearRebarIntercept(cc){
   if(!S.vRebar.present) return null;
   const R=S.vRebar, rb=rebarOf(R.size), A=S.anchor, C=S.conc, g=anchorGeom();
-  const dev=tensionDevLengths(R);
   const cover=Math.max(R.cover!==undefined?R.cover:2.0,0);
+  /* S.vRebar has no `cover` field, so ℓ_d came out NaN and no hairpin leg could
+     ever be credited. Pass the cover this check uses (2.0 in. unless set). */
+  const dev=tensionDevLengths(Object.assign({}, R, {cover}));
 
   /* governing combination = the one with the largest resultant shear */
   let govC=null, Vmax=-1;
@@ -3692,7 +3755,7 @@ function shearRebarCheck(cc){
   let Vmax=0, gov="—";
   cc.combos.forEach(c=>{ if(c.Vres>Vmax){Vmax=c.Vres;gov=c.name;} });
   const dcr = phiVr>0? Vmax/phiVr : (Vmax>0? Infinity : 0);
-  const dev=ic? ic.dev : tensionDevLengths(R);
+  const dev=ic? ic.dev : tensionDevLengths(Object.assign({}, R, {cover:Math.max(R.cover!==undefined?R.cover:2.0,0)}));
   return {phi,As,AsClaimed,fy,phiVr,Vmax,gov,dcr,rb,ic,
     nLegsTotal,nLegsEff,qtyPieces:R.qty,devDCR:ic?ic.devDCR:Infinity,
     steps:[
@@ -3868,8 +3931,13 @@ function standoffCompressionCheck(cc){
   if(!(so.hasStandoff && !so.groutFilled)) return null;
   const A=S.anchor, sp=anchorSpec(A.dia), g=agrade(A.grade);
   const d=A.dia;
-  const Ag=sp.Ag;                       /* gross area for compression */
-  const r=d/4;                          /* radius of gyration of solid round = d/4 */
+  /* The exposed length of a leveling-nut stand-off is threaded, so the threaded
+     section governs: A = A_se (tensile stress area) and r = d_root/4 with the
+     basic minor (root) diameter d_root = d − 1.2990/n (UN thread; the same root
+     used in A_se = 0.7854(d − 0.9743/n)²). Previously gross A_g and r = d/4. */
+  const dRoot=Math.max(d-1.2990/sp.n, 0.01);
+  const Ag=sp.Ase;                      /* threaded (stress) area for compression; name kept for the report fields */
+  const r=dRoot/4;                      /* radius of gyration of the root section = d_root/4 */
   const K=(so.type==="clamp")?1.0:2.0;  /* clamped: both ends restrained-ish; unclamped: cantilever-like */
   const L=Math.max(so.z,0.01);
   const KLr=K*L/r;
@@ -3880,14 +3948,22 @@ function standoffCompressionCheck(cc){
   const Fcr=(KLr<=lim)? Math.pow(0.658, Fy/Fe)*Fy : 0.877*Fe;
   const phi=0.90;
   const phiPn=phi*Fcr*Ag;
-  /* governing per-anchor compression across combos: rigid plate, compression side */
+  /* governing per-anchor compression across combos. With an open gap there is
+     no bearing block, so the rods carry ALL the compression: take it from the
+     elastic bolt group, T_i = P/n + Mx·y_i/Σy² − My·x_i/Σx² (the same expression
+     and signs as the "elastic" force model in computeAll), WHATEVER force model
+     is selected. (Previously c.perAnchor was used; under the default
+     neutral-axis model it never has compression, so C_u was always 0.) */
+  const gp=anchorGeom().pts, nG=Math.max(gp.length,1);
+  const sx2=gp.reduce((a,p)=>a+p.x*p.x,0)||1e-9, sy2=gp.reduce((a,p)=>a+p.y*p.y,0)||1e-9;
   let Cmax=0, gov="—";
   cc.combos.forEach(c=>{
-    if(!c.perAnchor) return;
-    c.perAnchor.forEach(p=>{ const comp=-p.t; if(comp>Cmax){Cmax=comp;gov=c.name;} });
+    const cb=c.raw||c;
+    gp.forEach(p=>{ const t=(+cb.P||0)/nG + (+cb.Mx||0)*p.y/sy2 - (+cb.My||0)*p.x/sx2;
+      const comp=-t; if(comp>Cmax){Cmax=comp;gov=c.name;} });
   });
   const dcr=(phiPn>0)?Cmax/phiPn:0;
-  return {K,L,r,KLr,Fe,Fcr,Fy,Ag,phi,phiPn,Cmax,gov,dcr,lim,soLabel:so.label,
+  return {K,L,r,KLr,Fe,Fcr,Fy,Ag,dRoot,phi,phiPn,Cmax,gov,dcr,lim,soLabel:so.label,
     steps:[
       {title:"Exposed rod compression — open stand-off",ref:"AISC 360 §E3 (no grout: anchors carry compression)",
        lines:[
@@ -3895,13 +3971,13 @@ function standoffCompressionCheck(cc){
         "F_e=\\frac{\\pi^2E}{(KL/r)^2}="+fmt(Fe,1)+"\\ \\text{ksi}",
         (KLr<=lim? "F_{cr}=0.658^{F_y/F_e}F_y="+fmt(Fcr,1)+"\\ \\text{ksi}\\quad(KL/r\\le"+fmt(lim,0)+")"
                  : "F_{cr}=0.877F_e="+fmt(Fcr,1)+"\\ \\text{ksi}\\quad(KL/r>"+fmt(lim,0)+")"),
-        "\\phi P_n=\\phi F_{cr}A_g="+fmt(phi,2)+"\\times"+fmt(Fcr,1)+"\\times"+fmt(Ag,3)+"="+fmt(phiPn,2)+"\\ \\text{kip}",
+        "\\phi P_n=\\phi F_{cr}A_{se}="+fmt(phi,2)+"\\times"+fmt(Fcr,1)+"\\times"+fmt(Ag,3)+"="+fmt(phiPn,2)+"\\ \\text{kip}",
         "\\text{DCR}=C_u/\\phi P_n="+fmt(Cmax,2)+"/"+fmt(phiPn,2)+"="+fmt(dcr,2)],
        vars:[["K",fmt(K,1),so.type==="clamp"?"1.0 — plate clamped by nuts both sides":"2.0 — unclamped, plate free to translate/rotate"],
              ["L",fmt(L,2)+" in","exposed stand-off length"],
-             ["r",fmt(r,3)+" in","radius of gyration, d/4 (solid round)"],
-             ["A_g",fmt(Ag,3)+" in^2","gross rod area"],
-             ["C_u",fmt((Cmax)*forceFactor(),2)+" "+forceUnit(),"max per-anchor compression ("+gov+")"],
+             ["r",fmt(r,3)+" in","radius of gyration of the threaded root, d_root/4, d_root = d − 1.299/n = "+fmt(dRoot,3)+" in"],
+             ["A_{se}",fmt(Ag,3)+" in^2","tensile stress area of the threaded rod (the stand-off length is threaded)"],
+             ["C_u",fmt((Cmax)*forceFactor(),2)+" "+forceUnit(),"max per-anchor compression ("+gov+"), elastic bolt group P/n ± M·c/Σc² — open gap, no bearing block, whatever force model is selected"],
              ["\\phi","0.90","compression §E1"]]}
     ]};
 }
@@ -3945,7 +4021,7 @@ function bearingCheck(cc){
           ? "\\text{Large eccentricity ("+gov+", "+govAxis+"): bearing governed by the DG1 Y solution, } \\text{DCR}=\\frac{P_uf+M_u}{f_{p,max}B(f+N/2)^2/2}="+fmtDCR(dcr,2)
           : "\\text{DCR}=f_p/\\phi f_p,\\ \\text{max over combinations and axes}="+fmtDCR(dcr,2)+"\\quad(q_{max}="+fmt(qmax,2)+"\\ \\text{ksi})"],
        vars:[["A_1",fmt(bc.A1,1)+" in^2","loaded area (grout footprint)"],
-             ["A_2",fmt(bc.A2,1)+" in^2","largest supporting area geometrically similar to and concentric with A_1 (plate offset included)"],
+             ["A_2",fmt(bc.A2,1)+" in^2","largest supporting area geometrically similar to and concentric with A_1 (plate offset included), 1V:2H frustum within the pedestal height H"+(bc.depthGoverns?" — LIMITED BY H":"")],
              ["\\sqrt{A_2/A_1}",fmt(bc.sqrtRatio,2),"≤ 2.0"],
              ["\\phi","0.65","bearing on concrete"],
              ["basis",largeGov?"DG1 Y solution":"f_p / φf_p",largeGov
@@ -5213,6 +5289,21 @@ function buildSummary(pg){
       pg.appendChild(b);
     }
   });
+  /* hairpins: fewer legs effective than claimed (BP-O8 / N4). The Condition A
+     rule is unchanged (≥ 1 effective leg); this only makes the shortfall visible. */
+  if(S.vRebar.present){
+    const ic=shearRebarIntercept(CC);
+    if(ic && ic.nLegsTotal>0 && ic.nEff<ic.nLegsTotal){
+      const b=el("div","warnBox");
+      b.innerHTML="<b>Shear hairpins: only "+ic.nEff+" of "+ic.nLegsTotal+" claimed legs are effective</b> "+
+        "(&sect;17.5.2.1.2 — position, depth, development or spacing; see the Shear Rebar tab). "+
+        "&phi;V<sub>r</sub> counts the effective legs only. "+
+        (ic.nEff>0
+          ? "Condition A (&phi; = 0.75, Table 17.5.3) is still applied to shear breakout because at least one leg is effective — confirm the detail is acceptable with the reduced number of legs."
+          : "No leg is effective, so shear breakout uses Condition B (&phi; = 0.70).");
+      pg.appendChild(b);
+    }
+  }
 
   /* per-check governing table */
   mkSection("sumTable","Governing Demand–Capacity Summary",body=>{
@@ -9266,10 +9357,13 @@ function openComboGenerator(){
   const SL=S.serviceLoads;
   const overlay=el("div","modal"), box=el("div","modalBox wide");
   box.appendChild(el("h3",null,"Generate load combinations — ASCE 7-22"));
-  box.appendChild(el("div","note",
+  { const nt=el("div","note");   /* innerHTML: el() sets textContent, which showed the <b> tags literally */
+    nt.innerHTML=
     "Enter SERVICE (unfactored) loads by case. The program applies the ASCE 7-22 §2.3.1 "+
     "strength combinations. Sign convention as elsewhere: <b>P positive = tension/uplift</b>, "+
-    "negative = compression, so gravity dead load is a negative P."));
+    "negative = compression, so gravity dead load is a negative P. Roof live (Lr) and snow (S) "+
+    "each get their own combinations (the “Lr or S” term).";
+    box.appendChild(nt); }
 
   const Fu=forceUnit(), Mu=momentUnit(), uf=forceFactor();
   const cases=[["D","Dead"],["L","Live"],["Lr","Roof live"],["S","Snow"],["W","Wind"],["E","Seismic"]];
@@ -9312,6 +9406,13 @@ function openComboGenerator(){
   mkChk("Basic combinations (§2.3.1) — gravity, wind",()=>SL.useBasic!==false,v=>SL.useBasic=v);
   mkChk("Seismic combinations (§2.3.6, includes 0.2·S_DS·D vertical)",()=>!!SL.useSeismic,v=>SL.useSeismic=v);
   mkChk("Overstrength (Ω₀) combinations — may be required by §17.10",()=>!!SL.useOmega,v=>SL.useOmega=v);
+  mkChk("0.5L in combinations 3, 4 and 6 (§2.3.1 Exception 1: L₀ ≤ 100 psf, not garages or public assembly)",()=>!!SL.halfL,v=>SL.halfL=v);
+  { const row=el("div","chkRow"); row.appendChild(document.createTextNode("Snow (S) factors: "));
+    const sel=document.createElement("select");
+    Object.keys(SNOW_FACTORS).forEach(k=>{ const o=document.createElement("option"); o.value=k; o.textContent=SNOW_FACTORS[k].label; sel.appendChild(o); });
+    sel.value=SNOW_FACTORS[SL.snowFactors]? SL.snowFactors : "1.6";
+    sel.addEventListener("change",()=>{ SL.snowFactors=sel.value; autosave(); renderPreview(); });
+    row.appendChild(sel); opts.appendChild(row); }
   const numRow=el("div"); numRow.style.cssText="display:flex;gap:14px;align-items:center;margin-top:6px;";
   [["S_DS",()=>SL.SDS,v=>SL.SDS=v,0.05],["Ω₀",()=>SL.omega,v=>SL.omega=v,0.5]].forEach(([lab,get,set,stp])=>{
     const w=el("span"); w.appendChild(document.createTextNode(lab+" "));
@@ -9632,7 +9733,8 @@ function wireHeader(){
       if(lsGet(LS_LAST)===nm) lsSet(LS_LAST,"");
       refreshProjSelect(""); } });
   document.getElementById("btnExport").addEventListener("click",()=>{
-    const blob=new Blob([JSON.stringify(S,null,2)],{type:"application/json"});
+    /* format tag (new optional fields, stripped again on import) */
+    const blob=new Blob([JSON.stringify(Object.assign({_bpad:"project",_bpadVersion:1},S),null,2)],{type:"application/json"});
     const a=document.createElement("a"); a.href=URL.createObjectURL(blob);
     a.download=(S.proj.name||"baseplate")+".json"; a.click(); });
   document.getElementById("btnImport").addEventListener("click",()=>document.getElementById("fileImport").click());
@@ -9673,7 +9775,21 @@ function wireHeader(){
   }
   document.getElementById("fileImport").addEventListener("change",e=>{
     const f=e.target.files[0]; if(!f)return; const rd=new FileReader();
-    rd.onload=()=>{ try{ S=mergeState(JSON.parse(rd.result)); buildProjHeader(); refreshAll(); }catch(err){ alert("Invalid JSON."); } };
+    rd.onload=()=>{ try{
+        const d=JSON.parse(rd.result);
+        if(!d || typeof d!=="object" || Array.isArray(d)){ alert("This file is not a BasePlate project (not a JSON object). Nothing was changed."); return; }
+        /* format check: files exported by this version carry _bpad:"project";
+           older exports have no tag and are recognised by their plate/anchor/conc
+           groups. Anything else asks first. */
+        if(d._bpad==="workspace"){ alert("This is a whole-workspace backup. Use “Restore All” to load it. Nothing was changed."); return; }
+        const looksLike = d.plate && typeof d.plate==="object" && d.anchor && typeof d.anchor==="object" && d.conc && typeof d.conc==="object";
+        if(d._bpad!==undefined && d._bpad!=="project"){
+          if(!confirm("This file is tagged \""+String(d._bpad)+"\", not a BasePlate project. Load it anyway?")) return; }
+        else if(d._bpad===undefined && !looksLike){
+          if(!confirm("This file does not look like a BasePlate project"+(d._schema?" (it is a \""+String(d._schema)+"\" file)":"")+". Missing inputs will be set to defaults. Load it anyway?")) return; }
+        delete d._bpad; delete d._bpadVersion;
+        S=mergeState(d); buildProjHeader(); refreshAll();
+      }catch(err){ alert("Invalid JSON."); } };
     rd.readAsText(f); });
   document.getElementById("btnPrint").addEventListener("click",openPrintSettings);
   { const b=document.getElementById("btnImportProfis"); if(b) b.addEventListener("click",openProfisImport); }
@@ -10213,7 +10329,7 @@ async function extractPdfText(file){
   if(!window.pdfjsLib) throw new Error("PDF library not loaded (needs internet access to cdn.jsdelivr.net).");
   pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js";
   const buf=await file.arrayBuffer();
-  const pdf=await pdfjsLib.getDocument({data:buf}).promise;
+  const pdf=await pdfjsLib.getDocument({data:buf, isEvalSupported:false}).promise;   /* CVE-2024-4367 mitigation (pdf.js 3.11.174) */
   const pages=[];
   for(let p=1;p<=pdf.numPages;p++){
     const page=await pdf.getPage(p);
@@ -11951,7 +12067,6 @@ manPart("pA","A. Notation & References",[
       else if(['Vx','Vy','Mx','My'].some(function(k){ return (c[k]||0)!==0; }))
         r.warn.push('Slot '+slot+' keeps its existing shear/moment (Vx '+f2(c.Vx||0)+', Vy '+f2(c.Vy||0)+' kip; Mx '+f2((c.Mx||0)/12)+', My '+f2((c.My||0)/12)+' kip·ft). Tick the option below to set them to 0.');
     });
-    if(add.S!==undefined) r.warn.push('The ASCE 7-22 generator in this tool does not use the S (snow) slot: Lr and S share the roof-live term (open item O1 in its fix log). Snow put in slot S has no effect on the combinations; map it to Lr if snow governs the roof load.');
     if(add.E!==undefined && !(SL.useSeismic||SL.useOmega)) r.warn.push('Slot E is used only when the seismic or overstrength combinations are switched on in the generator.');
     if(o.regen){
       var save=JSON.parse(JSON.stringify(SL.cases));

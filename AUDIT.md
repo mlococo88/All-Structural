@@ -12,7 +12,7 @@
 - **Medium:** likely wrong, but it depends on the edition, an owner (MassDOT) rule, or an interpretation the engineer should confirm.
 - **Low:** worth a look; it may be intentional.
 
-Where a finding depends on recollection of a code provision rather than the text, it says **verify**. Nothing in this document has been fixed. Line numbers are 1-based and refer to the files as committed on `main`.
+Where a finding depends on recollection of a code provision rather than the text, it says **verify**. **Status (2026-10-12):** most findings have since been fixed or decided — every tool had an open-item sweep (PRs #121–#160). The fix logs in `fixlog/` are the record of what changed (search a finding ID there); open questions are in `ENGINEER_CHECKS.md`. This document itself is the 2026-10-03 snapshot and is not updated item by item. Line numbers are 1-based and refer to the files as committed on `main`.
 
 > **Important context for every finding:** in Chromium-based browsers (Chrome/Edge), *all* pages opened from `file://` share **one** localStorage origin. Every tool can read and overwrite every other tool's keys. Several findings below depend on this.
 

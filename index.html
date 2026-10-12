@@ -123,6 +123,7 @@ var st=document.createElement('style'); st.textContent=css;
   var NS='bridgeSuite.v1';
   var SCHEMA='psbeam-external-demands';          // canonical shared id (both design apps accept)
   var K_HANDOFFS=NS+'.handoffs', K_LATEST=NS+'.latestId', K_UPDATED=NS+'.updatedAt';
+  var KEEP_N=20, KEEP_DAYS=30;                   // hand-off pruning, see prune()
   function K_ADOPTED(app){ return NS+'.adopted.'+app; }
   function slug(s){ return (s==null?'':(''+s)).toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'')||'untitled'; }
   function lsOK(){ try{ var k='__bh_t'; localStorage.setItem(k,'1'); localStorage.removeItem(k); return true; }catch(e){ return false; } }
@@ -139,16 +140,36 @@ var st=document.createElement('style'); st.textContent=css;
     out.handoffId=slug(proj)+'__'+slug(mem);
     return out;
   }
+  /* The hand-off map was never cleaned, and every tool opened from file:// in
+     Chrome/Edge shares one ~5 MB storage area (X-S8). On each publish, keep the
+     newest KEEP_N entries that are at most KEEP_DAYS old (an entry with no
+     readable date passes the age test but ranks last). Always kept, whatever
+     their age: the entry being published, and the one the latest pointer names
+     -- the only entry the design apps read, so the one a receiver may not have
+     pulled yet. Entry format and keys are unchanged; only old entries go. */
+  function prune(map,keep){
+    var ids=Object.keys(map), cutoff=Date.now()-KEEP_DAYS*864e5, out={};
+    ids.sort(function(a,b){ return String((map[b]||{}).producedAt||'').localeCompare(String((map[a]||{}).producedAt||'')); });
+    ids.forEach(function(id,i){
+      var t=Date.parse((map[id]||{}).producedAt||''), fresh=isNaN(t)||t>=cutoff;
+      if(keep.indexOf(id)>=0||(i<KEEP_N&&fresh)) out[id]=map[id];
+    });
+    return out;
+  }
   function publish(raw){
     if(!lsOK()) return {ok:false,reason:'localStorage unavailable'};
     var p=stamp(raw);
     try{
       var map=readMap(); map[p.handoffId]=p;
+      map=prune(map,[p.handoffId,localStorage.getItem(K_LATEST)]);
       localStorage.setItem(K_HANDOFFS,JSON.stringify(map));
       localStorage.setItem(K_LATEST,p.handoffId);
       localStorage.setItem(K_UPDATED,p.producedAt);
       return {ok:true,handoffId:p.handoffId,payload:p};
-    }catch(e){ return {ok:false,reason:e&&e.message||('storage error')}; }
+    }catch(e){
+      try{ if(window.BridgeApps&&window.BridgeApps.storageWarn) window.BridgeApps.storageWarn('the analysis hand-off',e); }catch(x){}
+      return {ok:false,reason:e&&e.message||('storage error')};
+    }
   }
   function tokenOf(p){ return p?((p.handoffId||'')+'@'+(p.producedAt||'')):''; }
   function readOne(id){
@@ -222,7 +243,8 @@ var st=document.createElement('style'); st.textContent=css;
   function now(){ try{return new Date().toISOString();}catch(e){return '';} }
   function newId(){ return 'bp_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,6); }
   function readReg(){ try{return JSON.parse(localStorage.getItem(K_PROJ)||'{}')||{};}catch(e){return {};} }
-  function writeReg(r){ try{localStorage.setItem(K_PROJ,JSON.stringify(r));return true;}catch(e){return false;} }
+  function writeReg(r){ try{localStorage.setItem(K_PROJ,JSON.stringify(r));return true;}
+    catch(e){ try{ if(window.BridgeApps&&window.BridgeApps.storageWarn) window.BridgeApps.storageWarn('the shared project',e); }catch(x){} return false;} }
   function raw(){ return readReg(); }
   function list(){ var r=readReg(); return Object.keys(r).map(function(id){var e=r[id];
     return {id:id,name:e.name,savedAt:e.savedAt,apps:Object.keys(e.slices||{}),hasDemands:!!e.demands};})
@@ -303,8 +325,37 @@ var st=document.createElement('style'); st.textContent=css;
   var ME='';                                   // which app this file is, set by boot()
   var MAXDIRS=24;                              // folders remembered per app
   function read(){ try{ return JSON.parse(localStorage.getItem(KEY))||{}; }catch(e){ return {}; } }
-  function write(o){ try{ localStorage.setItem(KEY,JSON.stringify(o)); return true; }catch(e){ return false; } }
+  function write(o){ try{ localStorage.setItem(KEY,JSON.stringify(o)); return true; }catch(e){ storageWarn('the app-path record',e); return false; } }
   function now(){ return new Date().toISOString(); }
+  /* A write to the shared browser storage that fails because the storage is
+     FULL is shown, not swallowed (X-S8). Every tool opened from file:// in
+     Chrome/Edge shares one ~5 MB area, so once it fills, every autosave and
+     hand-off stops at once. One banner per page, one line per item; the other
+     shared blocks reach it through window.BridgeApps.storageWarn. */
+  var warned={};
+  function isQuota(e){ return !!e&&(e.name==='QuotaExceededError'||e.name==='NS_ERROR_DOM_QUOTA_REACHED'||
+    e.code===22||e.code===1014||/quota/i.test(String(e.message||''))); }
+  function storageWarn(what,e){
+    if(!isQuota(e)||warned[what]) return false;
+    warned[what]=true;
+    var show=function(){ try{
+      var b=document.getElementById('bridgeStorageWarn');
+      if(!b){
+        b=document.createElement('div'); b.id='bridgeStorageWarn'; b.setAttribute('role','alert');
+        b.style.cssText='position:fixed;left:8px;right:8px;bottom:8px;z-index:2147483647;background:#fdecea;color:#7a1a12;'
+          +'border:1px solid #b3261e;border-radius:6px;padding:8px 34px 8px 12px;font:13px/1.4 system-ui,sans-serif;box-shadow:0 2px 8px rgba(0,0,0,.25)';
+        var x=document.createElement('button'); x.type='button'; x.textContent='\u00d7'; x.title='Dismiss'; x.setAttribute('aria-label','Dismiss');
+        x.style.cssText='position:absolute;top:4px;right:6px;border:0;background:none;font-size:18px;line-height:1;cursor:pointer;color:#7a1a12';
+        x.onclick=function(){ if(b.parentNode) b.parentNode.removeChild(b); };
+        b.appendChild(x); document.body.appendChild(b);
+      }
+      var line=document.createElement('div');
+      line.textContent='\u26a0 Browser storage is full: '+what+' was not saved. Export your work as JSON now, then delete old projects to free space.';
+      b.appendChild(line);
+    }catch(x){} };
+    if(document.body) show(); else { try{ document.addEventListener('DOMContentLoaded',show); }catch(x){} }
+    return true;
+  }
   /* This app's own file name as the browser sees it. Decoded, because a name
      with a space arrives percent-encoded and the value is shown to a human. */
   function selfFile(){
@@ -405,8 +456,19 @@ var st=document.createElement('style'); st.textContent=css;
     // fact loaded and was working. This standing listener lets the parent re-ask at
     // any time with a {whois:true} ping, so the handshake self-heals instead of
     // requiring a full reload of the suite.
+    // Only the page framing this one, the window that opened it, or a frame
+    // this window holds may ask (X-S10; same rule as the abutment / EDM links).
+    var asker=function(src){
+      if(!src) return false;
+      try{
+        if(window.parent!==window&&src===window.parent) return true;
+        if(window.opener&&src===window.opener) return true;
+        for(var i=0;i<window.frames.length;i++) if(window.frames[i]===src) return true;
+      }catch(x){}
+      return false;
+    };
     try{ window.addEventListener('message',function(e){
-      var d=e&&e.data; if(d&&d.source==='bridge-suite'&&d.whois) send();
+      var d=e&&e.data; if(d&&d.source==='bridge-suite'&&d.whois&&asker(e.source)) send();
     }); }catch(e){}
   }
   function boot(app){ if(NAMES[app]) ME=app; register(app); announce(app); }
@@ -414,7 +476,7 @@ var st=document.createElement('style'); st.textContent=css;
   function href(app){ return path(app); }
   window.BridgeApps={ KEY:KEY, DEFAULTS:DEF, NAMES:NAMES, selfFile:selfFile, selfDir:selfDir,
     register:register, announce:announce, boot:boot, set:set, path:path, href:href,
-    info:info, all:all };
+    info:info, all:all, storageWarn:storageWarn };
 })();
 
 try{ window.BridgeApps.boot('mct'); }catch(e){}
@@ -1335,6 +1397,13 @@ const VEHICLE_GROUPS = [
       trailingLoad:0, laneLoad:0.64,
       trailingNote:'Lane load 0.64 k/lf — written to the MCT as a separate HL-93LANE vehicle and combined into the same *MVLDCASE at scale 1.0, because LRFD 3.6.2.1 forbids applying IM to the lane load',
     },
+    // Fatigue truck (sweep IDX-O14): one design truck, constant 30 ft between the 32-kip axles,
+    // no lane load, IM = 15 % (LRFD 10th Ed. 3.6.1.4.1, Table 3.6.2.1-1).
+    { name:"LRFD-FATIGUE", label:"LRFD Fatigue Truck", code:"AASHTO-LRFD", defaultDLA:15,
+      gvwKips:72, description:'AASHTO LRFD 3.6.1.4.1 — fatigue truck · 8k + 32k + 32k @ 14\', 30\' (fixed) · no lane load · IM 15 % (Table 3.6.2.1-1)',
+      axles:[{load:8,dist:0},{load:32,dist:14},{load:32,dist:44}],
+      trailingLoad:0, trailingNote:'',
+    },
   ]},
   { group:"AASHTO Standard", color:"#0369a1", vehicles:[
     { name:"H20-44", label:"H20-44", code:"AASHTO-STD", defaultDLA:0,
@@ -1348,19 +1417,24 @@ const VEHICLE_GROUPS = [
       trailingLoad:0, trailingNote:'Rear spacing 14\'–30\' varies to maximize effect',
     },
   ]},
+  // MBE 6A.4.4.3 applies IM = 33 % to legal loads (sweep IDX-O7). defaultDLA stays 0 so a saved
+  // project keeps the MCT its MIDAS results came from (the Rating tab adds IM for these trucks
+  // through its IM factor). selectDLA = 33 is written into cfg.vehicleDLA when the truck is
+  // SELECTED in Step 5, so new models carry the IM in the *MVLDCASE scale (C6A.4.4.3 reductions:
+  // edit the per-vehicle DLA). SU4 already had defaultDLA 33.
   { group:"AASHTO Legal / Posting", color:"#6d28d9", vehicles:[
-    { name:"AASHTO Legal Type 3",     label:"Legal Type 3",   code:"AASHTO LEGAL/PERMIT LOAD", defaultDLA:0,
+    { name:"AASHTO Legal Type 3",     label:"Legal Type 3",   code:"AASHTO LEGAL/PERMIT LOAD", defaultDLA:0, selectDLA:33,
       gvwKips:50, description:'MBE Appendix D — 3-axle SU truck · 16k front + 17k + 17k tandem (4\' spacing) · 50k GVW = 25T',
       axles:[{load:16,dist:0},{load:17,dist:15},{load:17,dist:19}],
       trailingLoad:0, trailingNote:'',
     },
-    { name:"AASHTO Legal Type 3-3",   label:"Legal Type 3-3", code:"AASHTO LEGAL/PERMIT LOAD", defaultDLA:0,
+    { name:"AASHTO Legal Type 3-3",   label:"Legal Type 3-3", code:"AASHTO LEGAL/PERMIT LOAD", defaultDLA:0, selectDLA:33,
       gvwKips:80, description:'MBE Appendix D6A — 6-axle combination truck · 12k, 12k, 12k, 16k, 14k, 14k @ 15\', 4\', 15\', 16\', 4\' · 80k GVW = 40T',
       axles:[{load:12,dist:0},{load:12,dist:15},{load:12,dist:19},
              {load:16,dist:34},{load:14,dist:50},{load:14,dist:54}],
       trailingLoad:0, trailingNote:'',
     },
-    { name:"AASHTO Legal Type 3S2",   label:"Legal Type 3S2", code:"AASHTO LEGAL/PERMIT LOAD", defaultDLA:0,
+    { name:"AASHTO Legal Type 3S2",   label:"Legal Type 3S2", code:"AASHTO LEGAL/PERMIT LOAD", defaultDLA:0, selectDLA:33,
       gvwKips:72, description:'MBE Appendix D6A — 5-axle tractor-semitrailer · 10k, 15.5k, 15.5k, 15.5k, 15.5k @ 11\', 4\', 22\', 4\' · 72k GVW = 36T',
       axles:[{load:10,dist:0},{load:15.5,dist:11},{load:15.5,dist:15},
              {load:15.5,dist:37},{load:15.5,dist:41}],
@@ -1371,17 +1445,17 @@ const VEHICLE_GROUPS = [
       axles:[{load:12,dist:0},{load:8,dist:10},{load:17,dist:14},{load:17,dist:18}],
       trailingLoad:0, trailingNote:'',
     },
-    { name:"AASHTO Posting load SU5", label:"Posting SU5", code:"AASHTO LEGAL/PERMIT LOAD", defaultDLA:0,
+    { name:"AASHTO Posting load SU5", label:"Posting SU5", code:"AASHTO LEGAL/PERMIT LOAD", defaultDLA:0, selectDLA:33,
       gvwKips:62, description:'MBE Appendix D6A posting vehicle — 5-axle SU truck · 12k, 8k, 8k, 17k, 17k @ 10\', 4\', 4\', 4\' · 62k GVW = 31T',
       axles:[{load:12,dist:0},{load:8,dist:10},{load:8,dist:14},{load:17,dist:18},{load:17,dist:22}],
       trailingLoad:0, trailingNote:'',
     },
-    { name:"AASHTO Posting load SU6", label:"Posting SU6", code:"AASHTO LEGAL/PERMIT LOAD", defaultDLA:0,
+    { name:"AASHTO Posting load SU6", label:"Posting SU6", code:"AASHTO LEGAL/PERMIT LOAD", defaultDLA:0, selectDLA:33,
       gvwKips:69.5, description:'MBE Appendix D6A posting vehicle — 6-axle SU truck · 11.5k, 8k, 8k, 17k, 17k, 8k @ 10\', 4\', 4\', 4\', 4\' · 69.5k GVW = 34.75T',
       axles:[{load:11.5,dist:0},{load:8,dist:10},{load:8,dist:14},{load:17,dist:18},{load:17,dist:22},{load:8,dist:26}],
       trailingLoad:0, trailingNote:'',
     },
-    { name:"AASHTO Posting load SU7", label:"Posting SU7", code:"AASHTO LEGAL/PERMIT LOAD", defaultDLA:0,
+    { name:"AASHTO Posting load SU7", label:"Posting SU7", code:"AASHTO LEGAL/PERMIT LOAD", defaultDLA:0, selectDLA:33,
       gvwKips:77.5, description:'MBE Appendix D6A posting vehicle — 7-axle SU truck · 11.5k, 8k, 8k, 17k, 17k, 8k, 8k @ 10\', 4\', 4\', 4\', 4\', 4\' · 77.5k GVW = 38.75T',
       axles:[{load:11.5,dist:0},{load:8,dist:10},{load:8,dist:14},{load:17,dist:18},
              {load:17,dist:22},{load:8,dist:26},{load:8,dist:30}],
@@ -1655,6 +1729,8 @@ const ROLLED_SHAPES = {
   'S15X42.9': {d:15.00, bf:5.50, tf:0.622, tw:0.411, Fy:36},
   'S18X54.7': {d:18.00, bf:6.00, tf:0.691, tw:0.461, Fy:36},
   'S24X79.9': {d:24.00, bf:7.00, tf:0.870, tw:0.500, Fy:36},
+  // S30X118 / S36X150: no S30 or S36 in AISC v16.0 (largest S is S24) — kept for saved projects,
+  // labelled "not an AISC v16 shape" in the picker (sweep IDX-O1).
   'S30X118': {d:30.00, bf:8.00, tf:0.625, tw:0.625, Fy:36},
   'S36X150': {d:36.00, bf:8.00, tf:0.625, tw:0.625, Fy:36},
 };
@@ -1974,6 +2050,11 @@ function buildPSBeamExport({cfg, origRows, nodePositions, isGFS, gfsMember, gfsM
     factored:false,                   // unfactored by component — PS-Beam applies LRFD combos
     liveLoadType,                     // 'AREMA' | 'HL-93' | 'custom' | 'none' — so PS-Beam doesn't mislabel
     selfWeightExcluded:excludeSelfweight,  // true ⇒ DC1 has NO member self-weight; PS-Beam adds concrete girder wt
+    // New optional flags (sweep IDX-O12), informational until the receivers read them:
+    // imIncluded = every LL case in the envelope carries the DLA in the MCT *MVLDCASE scale;
+    // dfIncluded = lateral distribution is in the analysis (GFS grillage), not in a beam-line model.
+    imIncluded: llEnvCases.length>0 && llEnvCases.every(lc=>mctCarriesImpact(cfg, lc)),
+    dfIncluded: !!isGFS,
     member:{ mode:isGFS?'gfs':'beam', key:gfsMember||'',
              type:memberInfo?.type||'beam', span:+(+span||0).toFixed(3),
              supports, spans,
@@ -3854,7 +3935,7 @@ function generateGFS_MCT(cfg) {
   const lines=[]; const p=(...a)=>a.forEach(l=>lines.push(l));
   const g=cfg.gfs||{}; const geo=generateGFSGeometry(g);
   if(!geo) return ';ERROR\n*ENDDATA';
-  const {projectName='',projectUser='HDR',projectClient='',projectBridgeId='',projectDate='',projectRevision='0',projectAddress='',version='9.5.5',materialGrade='A36'}=cfg;
+  const {projectName='',projectUser='',projectClient='',projectBridgeId='',projectDate='',projectRevision='0',projectAddress='',version='9.5.5',materialGrade='A36'}=cfg;
   const span=geo.span, width=geo.width, nG=geo.nG, Y=geo.Y;
   const md=g.meshDensity||{girder:10,floorbeam:6,stringer:8};
   const ePP_G=md.girder||10, ePP_FB=md.floorbeam||6, ePP_S=md.stringer||8;
@@ -4258,6 +4339,13 @@ function generateGFS_MCT(cfg) {
     });
     for(let i=0;i<pairs.length;i+=5) p('        '+pairs.slice(i,i+5).join(', '));
   });
+  // HL-93 design lane load (LRFD 3.6.1.2.4) as its own zero-axle vehicle, exactly as the
+  // beam generator writes it, so a GFS model with the HL-93 truck/tandem carries the
+  // 0.64 k/ft too (it used to be missing, sweep IDX-O11). Only written when a selected
+  // vehicle has a lane load, so AREMA / transit / legal models are unchanged.
+  const gfsLaneLoad=Math.max(0,...selVehs.map(v=>+v.laneLoad||0));
+  const gfsLaneVeh=gfsLaneLoad>0?'HL-93LANE':'';
+  if(gfsLaneVeh) p(`   NAME=${gfsLaneVeh}, 2, NO, ${gfsLaneLoad}, 0, 0, 0, 0, NO`);
   p('');
 
   // ── Moving Load Cases (each vehicle on all stringer lanes) ──
@@ -4267,9 +4355,14 @@ function generateGFS_MCT(cfg) {
   const laneList=laneNames.join(', ');
   selVehs.forEach(v=>{
     const caseName=`${v.name}_GFS`;
-    p(`   NAME=${caseName}, 0, 1, 1, 1, 1, 1, 1, INDEPENDENT, , 0, NO, 0`);
+    const wLane=(+v.laneLoad||0)>0 && !!gfsLaneVeh;
+    // COMBINED: truck and lane act together (LRFD 3.6.1.3.1). Both at the same 0.5 wheel-line
+    // scale as the truck. No IM here: GFS writes none, the rating applies it (to the lane too,
+    // which is conservative — LRFD 3.6.2.1 exempts the lane load).
+    p(`   NAME=${caseName}, 0, 1, 1, 1, 1, 1, 1, ${wLane?'COMBINED':'INDEPENDENT'}, , 0, NO, 0`);
     p(`        1, 1, 1, 1, 1, 0.5, 0.25`);
     p(`        VL, ${v.name}, 0.5, 0, 1, ${laneList}`);
+    if(wLane) p(`        VL, ${gfsLaneVeh}, 0.5, 0, 1, ${laneList}`);
   });
   p('');
 
@@ -5124,7 +5217,7 @@ function AremaLibraryEditor({AS, setAS, totalLen, customRolledShapes = {}, isGFS
           </optgroup>
           <optgroup label="Built-in S-Shapes">
             {Object.keys(ROLLED_SHAPES).filter(k => k.startsWith('S')).map(name => (
-              <option key={name} value={name}>{name}</option>
+              <option key={name} value={name}>{name}{(name==='S30X118'||name==='S36X150')?' — not an AISC v16 shape (unverified dims)':''}</option>
             ))}
           </optgroup>
           {Object.keys(customRolledShapes).length > 0 && (
@@ -6209,8 +6302,18 @@ function psLibShape(key,wOverride){
 }
 
 function readPSSectionRaw(){
-  try{ const raw=localStorage.getItem('bridgeSuite.v1.psSection'); return raw?JSON.parse(raw):null; }
-  catch(e){ return null; }
+  return readPSSectionChecked().d;
+}
+// bridgeSuite.v1.psSection with its _schema / schemaVersion checked (sweep IDX-S6): anything
+// that is not a v1 'bridge-ps-section' payload is refused, with the reason in `why`.
+function readPSSectionChecked(){
+  let raw=null, d=null;
+  try{ raw=localStorage.getItem('bridgeSuite.v1.psSection'); }catch(e){}
+  if(!raw) return {d:null, why:''};
+  try{ d=JSON.parse(raw); }catch(e){ return {d:null, why:'The PS-Beam section data could not be read: '+((e&&e.message)||e)}; }
+  if(!d||d._schema!=='bridge-ps-section') return {d:null, why:'The shared section data is not a PS-Beam section payload (_schema "'+(d&&d._schema)+'"). Nothing was changed.'};
+  if((d.schemaVersion||1)>1) return {d:null, why:'The PS-Beam section data is v'+d.schemaVersion+'; this MCT build supports v1. Update the MCT app.'};
+  return {d, why:''};
 }
 
 // The profile the 3D view should draw, or null to leave the beam as-is. Deck dimensions come from
@@ -6323,8 +6426,9 @@ function StepSections({cfg,set}) {
           <div style={{fontSize:'10.5px',color:'#6b7280',margin:'3px 0 0 24px'}}>Enter the composite section by properties instead of a steel shape (written as a MIDAS “Value / General Section”).</div>
           {cfg.ps&&cfg.ps.enabled&&(()=>{
             const P=cfg.ps||{}; const setP=patch=>set('ps',{...P,...patch});
-            const readPS=()=>{ try{ const raw=localStorage.getItem('bridgeSuite.v1.psSection'); return raw?JSON.parse(raw):null; }catch(e){ return null; } };
-            const autofill=()=>{ const d=readPS();
+            const readPS=()=>readPSSectionChecked().d;
+            const autofill=()=>{ const chk=readPSSectionChecked(); const d=chk.d;
+              if(chk.why){ alert(chk.why); return; }
               if(!d||!d.Ic){ alert('No composite section is available yet.\n\nOpen the PS-Beam app, select or enter the member you want, and let it compute — it publishes the composite section here automatically. Then click “Auto-fill from PS-Beam” again.'); return; }
               setP({A:+d.Ac, Ix:+d.Ic, Iweak:(d.Iweak!=null?+d.Iweak:P.Iweak), J:(d.J!=null?+d.J:P.J), E:+d.Ecg, wsw:+d.wsw||0, wdk:+d.wdk||0, srcMember:d.memberKey||'', srcAt:d.producedAt||''}); };
             const av=readPS();
@@ -6780,7 +6884,11 @@ function lldfResolveMCT(){
   let raw=null; try{ raw=localStorage.getItem(LLDF_KEY); }catch(e){}
   if(!raw) return {why:'No distribution factors have been published.\n\nOpen the LL & DL Distribution app, compute the factors, and click "Send DFs to Design Apps".'};
   let d; try{ d=JSON.parse(raw); }catch(e){ return {why:'Could not read the LLDF payload: '+((e&&e.message)||e)}; }
+  if(!d||d._schema!=='bridge-lldf-factors') return {why:'The published distribution data is not an LL & DL factors payload (_schema "'+(d&&d._schema)+'"). Nothing was applied.'};
   if((d.schemaVersion||1)>1) return {why:'The LL & DL Distribution data is v'+d.schemaVersion+'; this MCT build supports v1. Update the MCT app.'};
+  // CIP slab (lldf perFootStrip): the factors are per 1-ft strip of slab width, not per
+  // girder, so they cannot scale a girder-line rating. Refused, never converted (HANDOFF.md §4.3).
+  if(d.perFootStrip===true) return {why:'The published distribution factors are for a cast-in-place slab: they are per 1-ft strip of slab width (AASHTO LRFD 4.6.2.3), not per girder. They cannot be used as the girder distribution factor here, so nothing was applied.\n\nIf this MIDAS model is a 1-ft slab strip, enter the strip factor by hand.'};
   // Prefer the specific beam named by the shared design-beam chip -- its own
   // factors, not the interior/exterior envelope. Fall back to the envelope when
   // no beam is selected or the payload predates the per-beam breakdown.
@@ -7020,15 +7128,25 @@ function StepLoads({cfg,set,dlLocked,onToggleDLLock}) {
 
 function StepMovingLoads({cfg,set}) {
   const isGFS = (cfg.geomMode||'beam')==='gfs';
+  // Newly selected vehicles with a selectDLA (legal / posting trucks, MBE 6A.4.4.3) get that
+  // DLA written explicitly, unless a per-vehicle value is already set (sweep IDX-O7).
+  const applySelectDLA=added=>{
+    const patch={};
+    added.forEach(n=>{ const v=ALL_VEHICLES.find(x=>x.name===n);
+      if(v&&v.selectDLA!=null&&(cfg.vehicleDLA||{})[n]===undefined) patch[n]=v.selectDLA; });
+    if(Object.keys(patch).length) set('vehicleDLA',{...(cfg.vehicleDLA||{}),...patch});
+  };
   const toggleV=name=>{
     const cur=cfg.selectedVehicles;
     set('selectedVehicles',cur.includes(name)?cur.filter(v=>v!==name):[...cur,name]);
+    if(!cur.includes(name)) applySelectDLA([name]);
   };
   const setVDLA=(name,val)=>set('vehicleDLA',{...cfg.vehicleDLA,[name]:parseInt(val)||0});
   const toggleGroup=grp=>{
     const names=grp.vehicles.map(v=>v.name);
     const allSel=names.every(n=>cfg.selectedVehicles.includes(n));
     set('selectedVehicles',allSel?cfg.selectedVehicles.filter(n=>!names.includes(n)):[...new Set([...cfg.selectedVehicles,...names])]);
+    if(!allSel) applySelectDLA(names.filter(n=>!cfg.selectedVehicles.includes(n)));
   };
 
   return (<div><StepHeader icon="🚛" title="Moving Loads" sub={isGFS?"Select vehicles — lanes are auto-generated per stringer line":"Live load vehicles, lane geometry, and impact factors"}/>
@@ -7096,7 +7214,8 @@ function StepMovingLoads({cfg,set}) {
             Vehicles <span style={{color:'#9ca3af',fontWeight:'400'}}>({cfg.selectedVehicles.length} of {ALL_VEHICLES.length} selected)</span>
           </div>
           <div style={{display:'flex',gap:'6px'}}>
-            <button onClick={()=>set('selectedVehicles',ALL_VEHICLES.map(v=>v.name))}
+            <button onClick={()=>{ set('selectedVehicles',ALL_VEHICLES.map(v=>v.name));
+                applySelectDLA(ALL_VEHICLES.map(v=>v.name).filter(n=>!cfg.selectedVehicles.includes(n))); }}
               style={{background:'#fff',border:'1px solid #d1d5db',borderRadius:'5px',color:'#374151',padding:'4px 10px',cursor:'pointer',fontSize:'11px'}}>All</button>
             <button onClick={()=>set('selectedVehicles',[])}
               style={{background:'#fff',border:'1px solid #d1d5db',borderRadius:'5px',color:'#374151',padding:'4px 10px',cursor:'pointer',fontSize:'11px'}}>None</button>
@@ -7520,7 +7639,7 @@ function buildPSBeamCombos(cfg) {
     const lc = isGFS ? `${vn}_GFS` : `${vn}_${mctLaneName(cfg)}`;
     // ASCII name: LL_<vehicle> (strip non-word chars from the vehicle name)
     out.push({id:'psb_ll_'+i, name:'LL_'+vn.replace(/[^A-Za-z0-9]+/g,''), kind:'SERVICE', active:true,
-              note:note+' - LL envelope per MIDAS (DF and IM applied)',
+              note:note+' - LL per MIDAS (IM per Step 5 DLA; no DF in a beam-line model)',
               terms:[{lc, type:'MV', factor:1, _key:'psb_ll_'+i}]});
   });
 
@@ -9524,7 +9643,7 @@ const W_SHAPE_PROPS = {
   'W21X44':[20.7,0.350,95.4,81.6],'W21X48':[20.6,0.350,107,93.0],'W21X55':[20.8,0.375,126,110],
   'W21X57':[21.1,0.405,129,111],'W21X62':[21.0,0.400,144,127],'W21X68':[21.1,0.430,160,140],
   'W21X73':[21.2,0.455,172,151],'W21X83':[21.4,0.515,196,171],'W21X93':[21.6,0.580,221,192],
-  'W24X55':[23.6,0.395,131,114],'W24X62':[23.7,0.430,153,131],'W24X68':[23.7,0.415,177,154],
+  'W24X55':[23.6,0.395,134,114],'W24X62':[23.7,0.430,153,131],'W24X68':[23.7,0.415,177,154],
   'W24X76':[23.9,0.440,200,176],'W24X84':[24.1,0.470,224,196],'W24X94':[24.3,0.515,254,222],
   'W24X104':[24.1,0.500,289,258],'W24X117':[24.3,0.550,327,291],
   'W27X84':[26.7,0.460,244,213],'W27X94':[26.9,0.490,278,243],'W27X102':[27.1,0.515,305,267],
@@ -9938,7 +10057,7 @@ const LRFR_FACTORS = {
       Inventory:{ DC:1.25,DW:1.50,LL:1.75 },
       Operating:{ DC:1.25,DW:1.50,LL:1.35 },
       Legal:    { DC:1.25,DW:1.50,LL:null }, // LL from ADTT
-      Permit:   { DC:1.25,DW:1.50,LL:1.10 },
+      Permit:   { DC:1.25,DW:1.50,LL:null }, // LL from permitLLfactor (Table 6A.4.5.4.2a-1)
     },
     'Service II':{
       Inventory:{ DC:1.00,DW:1.00,LL:1.30 },
@@ -9959,6 +10078,15 @@ const PHI_SYSTEM = {
   'Bolted I-girder, multiple lanes': 1.00,
   'Bolted I-girder, two-girder':     0.85,
   'Single load path structure':      0.85,
+  // Rows of MBE Table 6A.4.2.4-1 that were missing (sweep IDX-O3). New keys only: the keys
+  // above are saved in projects (rating.sysKey) and are not renamed. "Bolted ... two-girder"
+  // is not an MBE row (the table lists riveted 0.90 and welded 0.85); it keeps 0.85.
+  'Riveted members, two-girder / truss / arch': 0.90,
+  'Multiple eyebar members, truss':             0.90,
+  'Three-girder bridge, girder spacing ≤ 6 ft':  0.85,
+  'Four-girder bridge, girder spacing ≤ 4 ft':   0.95,
+  'Floorbeams spaced > 12 ft, noncontinuous stringers': 0.85,
+  'Redundant stringer subsystem between floorbeams':    1.00,
   'Custom':                          null,
 };
 // MBE Table 6A.4.2.3-1 — Condition factor φ_c
@@ -10017,6 +10145,9 @@ const AREMA_SFT = { A:14, B:10, C:8, D:6, E:4, F:3 };
 // AASHTO 6.10.7.1.2 — plastic moment of composite section (PNA method)
 // Inputs (all from zone): Fy, Fyr (rebar), fc, b_eff, ts, th (haunch), Zx, tw, d, tf
 // Returns { MnPos, MnNeg, PNA, Ybar, a }
+
+// Modulus of elasticity of structural steel, ksi (AASHTO LRFD 6.4.1)
+const STEEL_E = 29000;
 
 // Modular ratio n from fc (AASHTO Table 6.10.1.1.1b-1)
 function compN(fc) {
@@ -10118,7 +10249,21 @@ function compPlasticPos(z) {
   const y = compSolvePNA(net, 0, yTop + (+z.d||0));
   const yc = Math.min(y, ts), Cc = cDeck*yc;
   const M = Cc*(y - yc/2) + compSteelMoment(layers, y, Fy);
-  return { Mn: Math.max(0, +(M/12).toFixed(1)), yPNA:+y.toFixed(3),
+  // AASHTO LRFD 10th Ed. 6.10.7.1.2: Mn = Mp when Dp <= 0.1·Dt, otherwise
+  // Mn = Mp·(1.07 − 0.7·Dp/Dt). Dp = top of deck to the PNA, Dt = total depth of the
+  // composite section (deck + haunch + steel). Ductility 6.10.7.3: Dp <= 0.42·Dt.
+  const Mp = Math.max(0, +(M/12).toFixed(1));
+  const Dt = yTop + (+z.d||0), Dp = y;
+  const red = Dt>0 && Dp > 0.1*Dt ? (1.07 - 0.7*Dp/Dt) : 1;
+  // Web compactness of the composite section, 6.10.6.2.2 (shown, not applied: a
+  // noncompact section needs 6.10.7.2, which this zone cannot evaluate).
+  const Lw = layers[1];
+  const Dcp = Math.max(0, Math.min(y, Lw.y1) - Lw.y0);
+  const twc = +z.tw||0, Dweb = Lw.y1 - Lw.y0;
+  const webCompact = !(twc>0) || (2*Dcp/twc <= 3.76*Math.sqrt(STEEL_E/Fy) && Dweb/twc <= 150);
+  return { Mn: Math.max(0, +(Mp*red).toFixed(1)), Mp, yPNA:+y.toFixed(3),
+           Dp:+Dp.toFixed(3), Dt:+Dt.toFixed(3), redDpDt:+red.toFixed(4),
+           ductOK: Dp <= 0.42*Dt + 1e-9, webCompact, Dcp:+Dcp.toFixed(3),
            inDeck: y <= ts + 1e-6, derived: st.derived,
            As:+As.toFixed(2), Ps:+(As*Fy).toFixed(0), Pc:+(cDeck*ts).toFixed(0) };
 }
@@ -10158,6 +10303,213 @@ function computeCompositeMnNeg(z) {
   return Zx > 0 ? +(Fy*Zx/12).toFixed(1) : 0;
 }
 
+/* ── Steel I-section flexure and shear — AASHTO LRFD 10th Ed. ─────────────────
+   Replaces Mn = Fy·Zx and Vn = 0.6·Fy·Aw in the "Steel Calc" and "Composite" zones,
+   which assumed a compact, fully braced section with C = 1 whatever the plates or
+   the bracing were. Needs the plates (d, tw, bf/tf top and bottom, in) and the
+   unbraced length Lb of the compression flange (ft). Without them the zone falls
+   back to the old formulas and says so (capWarn). Homogeneous section, Rh = 1.
+     Flexure: App. A6 when 6.10.6.2.3 allows it (Fy <= 70 ksi, 2Dc/tw < 5.7√(E/Fyc),
+              Iyc/Iyt >= 0.3), else 6.10.8 (Fnc·Sxc with Rb, and Fyt·Sxt).
+     Shear:   6.10.9 — Vn = C·Vp (unstiffened, k = 5), or the stiffened interior-panel
+              equations when a stiffener spacing do <= 3D is entered.            */
+function steelPlateSection(z) {
+  const d=+z.d||0, tw=+z.tw||0, bft=+z.bfTop||0, tft=+z.tfTop||0, bfb=+z.bfBot||0, tfb=+z.tfBot||0;
+  if (!(d>0 && tw>0 && bft>0 && tft>0 && bfb>0 && tfb>0 && d>tft+tfb)) return null;
+  const D = d-tft-tfb;
+  const parts = [{A:bft*tft, y:tft/2,   I0:bft*tft*tft*tft/12},
+                 {A:tw*D,    y:tft+D/2, I0:tw*D*D*D/12},
+                 {A:bfb*tfb, y:d-tfb/2, I0:bfb*tfb*tfb*tfb/12}];
+  const A = parts.reduce((s,p)=>s+p.A,0);
+  const ybar = parts.reduce((s,p)=>s+p.A*p.y,0)/A;                 // from top of steel
+  const Ix = parts.reduce((s,p)=>s+p.I0+p.A*(p.y-ybar)*(p.y-ybar),0);
+  const layers = [{a:bft*tft, y0:0, y1:tft}, {a:tw*D, y0:tft, y1:d-tfb}, {a:bfb*tfb, y0:d-tfb, y1:d}];
+  const J = (D*tw*tw*tw + bft*tft*tft*tft*(1-0.63*tft/bft) + bfb*tfb*tfb*tfb*(1-0.63*tfb/bfb))/3;
+  return { d, tw, bft, tft, bfb, tfb, D, A, ybar, Ix, Stop:Ix/ybar, Sbot:Ix/(d-ybar), J, layers };
+}
+
+// Plastic moment (kip·in) and plastic neutral axis (from top of steel) of the bare steel.
+function steelPlastic(s, Fy) {
+  const net = y => Fy*(2*compAreaAbove(s.layers, y) - s.A);
+  const y = compSolvePNA(net, 0, s.d);
+  return { Mp: compSteelMoment(s.layers, y, Fy), yp: y };
+}
+
+// Nominal flexural resistance (kip·in) of a steel I-section with the compression flange
+// 'top' or 'bot'. o = {Fy, comp, Lb (in), Cb, Mp (kip·in, optional: tabulated Fy·Zx)}.
+function steelIFlexure(s, o) {
+  const E = STEEL_E, Fy = +o.Fy||50, Rh = 1, top = o.comp !== 'bot';
+  const bfc = top?s.bft:s.bfb, tfc = top?s.tft:s.tfb, bftn = top?s.bfb:s.bft, tftn = top?s.tfb:s.tft;
+  const Sxc = top?s.Stop:s.Sbot, Sxt = top?s.Sbot:s.Stop;
+  const pl = steelPlastic(s, Fy);
+  const Mp = (+o.Mp>0) ? +o.Mp : pl.Mp;
+  const webTop = s.tft, webBot = s.d - s.tfb;
+  const clampD = v => Math.min(Math.max(v,0), s.D);
+  const Dc  = clampD(top ? s.ybar - webTop : webBot - s.ybar);      // elastic, D6.3.1
+  const Dcp = clampD(top ? pl.yp - webTop  : webBot - pl.yp);       // plastic, D6.3.2
+  const Myc = Fy*Sxc, Myt = Fy*Sxt, My = Math.min(Myc, Myt);
+  const lamRw = 5.7*Math.sqrt(E/Fy);
+  const Iyc = tfc*bfc*bfc*bfc/12, Iyt = tftn*bftn*bftn*bftn/12;
+  const lamF = bfc/(2*tfc), lamPf = 0.38*Math.sqrt(E/Fy);
+  const rt = bfc/Math.sqrt(12*(1 + Dc*s.tw/(3*bfc*tfc)));
+  const Lb = Math.max(0, +o.Lb||0), Cb = (+o.Cb>0) ? +o.Cb : 1;
+  const a6 = Fy <= 70 && 2*Dc/s.tw < lamRw && Iyc/Iyt >= 0.3;       // 6.10.6.2.3
+  if (a6) {
+    // App. A6 — web plastification factors (A6.2), FLB (A6.3.2), LTB (A6.3.3), TFY (A6.4)
+    const base = 0.54*Mp/(Rh*My) - 0.09;
+    let lamPwDcp = Math.sqrt(E/Fy)/(base*base);
+    if (Dc > 0) lamPwDcp = Math.min(lamPwDcp, lamRw*Dcp/Dc);
+    const webCompact = 2*Dcp/s.tw <= lamPwDcp;
+    let Rpc = Mp/Myc, Rpt = Mp/Myt;
+    if (!webCompact) {
+      const lamW = 2*Dc/s.tw, lamPwDc = Math.min(Dcp>0 ? lamPwDcp*Dc/Dcp : lamRw, lamRw);
+      const f = lamRw > lamPwDc ? (lamW - lamPwDc)/(lamRw - lamPwDc) : 1;
+      Rpc = Math.min((1 - (1 - Rh*Myc/Mp)*f)*Mp/Myc, Mp/Myc);
+      Rpt = Math.min((1 - (1 - Rh*Myt/Mp)*f)*Mp/Myt, Mp/Myt);
+    }
+    const FL = Sxt/Sxc >= 0.7 ? 0.7*Fy : Math.max(Rh*Fy*Sxt/Sxc, 0.5*Fy);
+    const kc = Math.min(Math.max(4/Math.sqrt(s.D/s.tw), 0.35), 0.76);
+    const lamRf = 0.95*Math.sqrt(E*kc/FL);
+    const RM = Rpc*Myc, red = 1 - FL*Sxc/RM;
+    const Mflb = lamF <= lamPf ? RM : (1 - red*(lamF-lamPf)/(lamRf-lamPf))*RM;
+    const h = s.d - tfc/2 - tftn/2;
+    const Lp = rt*Math.sqrt(E/Fy);
+    const Lr = 1.95*rt*(E/FL)*Math.sqrt(s.J/(Sxc*h))*Math.sqrt(1 + Math.sqrt(1 + 6.76*Math.pow(FL*Sxc*h/(E*s.J),2)));
+    let Mltb;
+    if (Lb <= Lp) Mltb = RM;
+    else if (Lb <= Lr) Mltb = Math.min(Cb*(1 - red*(Lb-Lp)/(Lr-Lp))*RM, RM);
+    else { const Fcr = Cb*Math.PI*Math.PI*E/Math.pow(Lb/rt,2)*Math.sqrt(1 + 0.078*s.J/(Sxc*h)*Math.pow(Lb/rt,2));
+           Mltb = Math.min(Fcr*Sxc, RM); }
+    const Mnt = Rpt*Myt;
+    const Mn = Math.max(0, Math.min(Mflb, Mltb, Mnt));
+    return { Mn, method:'A6', webCompact, Rpc, Rpt, Lp, Lr, rt, Dc, Dcp, Mp, Myc,
+             gov: Mn >= 0.9999*Mp ? 'Mp' : Mn===Mnt ? 'TFY' : Mn===Mflb ? 'FLB' : 'LTB' };
+  }
+  // 6.10.8 — compression flange (6.10.8.2) and tension flange yielding (6.10.8.3)
+  const Fyr = Math.max(Math.min(0.7*Fy, Rh*Fy*Sxt/Sxc, Fy), 0.5*Fy);
+  const awc = 2*Dc*s.tw/(bfc*tfc);
+  const Rb = 2*Dc/s.tw <= lamRw ? 1 : Math.min(1, 1 - awc/(1200+300*awc)*(2*Dc/s.tw - lamRw));
+  const lamRf = 0.56*Math.sqrt(E/Fyr);
+  const Fmax = Rb*Rh*Fy, red = 1 - Fyr/(Rh*Fy);
+  const Fflb = lamF <= lamPf ? Fmax : (1 - red*(lamF-lamPf)/(lamRf-lamPf))*Fmax;
+  const Lp = rt*Math.sqrt(E/Fy), Lr = Math.PI*rt*Math.sqrt(E/Fyr);
+  let Fltb;
+  if (Lb <= Lp) Fltb = Fmax;
+  else if (Lb <= Lr) Fltb = Math.min(Cb*(1 - red*(Lb-Lp)/(Lr-Lp))*Fmax, Fmax);
+  else Fltb = Math.min(Cb*Rb*Math.PI*Math.PI*E/Math.pow(Lb/rt,2), Fmax);
+  const Mnc = Math.min(Fflb, Fltb)*Sxc, Mnt = Rh*Fy*Sxt;
+  const Mn = Math.max(0, Math.min(Mnc, Mnt));
+  return { Mn, method:'6.10.8', Rb, Lp, Lr, rt, Dc, Dcp, Mp, Myc,
+           gov: Mn===Mnt ? 'TFY' : Fflb<=Fltb ? 'FLB' : 'LTB' };
+}
+
+// Nominal shear resistance (kips), AASHTO 6.10.9. doIn = transverse stiffener spacing (in);
+// blank/0 or > 3D = unstiffened. End panels (6.10.9.3.3) are C·Vp: leave do blank there.
+function steelIVn(s, Fy, doIn) {
+  const E = STEEL_E, D = s.D, tw = s.tw, dO = +doIn||0;
+  const stiff = dO > 0 && dO <= 3*D;
+  const k = stiff ? 5 + 5/((dO/D)*(dO/D)) : 5;
+  const r = D/tw, lim = Math.sqrt(E*k/Fy);
+  const C = r <= 1.12*lim ? 1 : r <= 1.40*lim ? 1.12*lim/r : 1.57*E*k/(Fy*r*r);
+  const Vp = 0.58*Fy*D*tw;
+  let Vn = C*Vp;
+  if (stiff) {
+    const q = dO/D, ratio = 2*D*tw/(s.bft*s.tft + s.bfb*s.tfb);
+    Vn = ratio <= 2.5 ? Vp*(C + 0.87*(1-C)/Math.sqrt(1+q*q))
+                      : Vp*(C + 0.87*(1-C)/(Math.sqrt(1+q*q) + q));
+  }
+  return { Vn, C, Vp, k, stiff };
+}
+
+// Unbraced length entered? Blank means unknown (not "braced"): the AASHTO path needs it.
+function capLbKnown(z) { return z.Lb!=null && z.Lb!=='' && isFinite(+z.Lb) && +z.Lb >= 0; }
+
+/* Capacities of a 'quickcalc' or 'composite' zone: {MnPos, MnNeg (ft·k), Vn (k),
+   basis:{pos,neg,v}, warn:[...]}. Old zones without plates/Lb keep the old numbers
+   and carry a warning instead; nothing is assumed in place of a missing input. */
+function steelZoneCaps(z) {
+  const Fy = +z.Fy||50, warn = [], basis = {};
+  const s = steelPlateSection(z), lbOK = capLbKnown(z), Lb = lbOK ? +z.Lb*12 : 0, Cb = +z.Cb||1;
+  const need = !s ? 'enter d, tw and the four flange plates' + (lbOK ? '' : ' and Lb')
+                  : 'enter Lb (unbraced length of the compression flange)';
+  const flex = (comp, Zx) => {
+    const r = steelIFlexure(s, {Fy, comp, Lb, Cb, Mp: Zx>0 ? Fy*Zx : 0});
+    return { Mn: +(r.Mn/12).toFixed(1), txt: (r.method==='A6'?'App. A6':'6.10.8')+' ('+r.gov+')' };
+  };
+  let MnPos, MnNeg, Vn;
+  if (z.type === 'composite') {
+    const pp = compPlasticPos(z);
+    MnPos = pp ? pp.Mn : 0;
+    basis.pos = pp ? ('6.10.7.1.2 Mp'+(pp.redDpDt<1 ? '·(1.07−0.7Dp/Dt)='+pp.redDpDt.toFixed(3) : ' (Dp ≤ 0.1Dt)')) : '—';
+    if (pp && !pp.ductOK) warn.push('Mn⁺: Dp = '+pp.Dp+'" > 0.42·Dt = '+(0.42*pp.Dt).toFixed(2)+'" — fails the 6.10.7.3 ductility requirement');
+    if (pp && !pp.webCompact) warn.push('Mn⁺: web is not compact (6.10.6.2.2) — Mn⁺ needs 6.10.7.2 (not computed here); the plastic value is unconservative');
+    // Negative moment
+    const gate = (z.useCompNeg && s && lbOK) ? compNegPlasticGate(z, s, Lb) : null;
+    if (z.useCompNeg && gate && gate.ok) {
+      MnNeg = computeCompositeMnNeg(z); basis.neg = 'App. A6 — composite Mp (steel + rebar)';
+    } else if (s && lbOK) {
+      const f = flex('bot', +z.ZxNeg||0); MnNeg = f.Mn; basis.neg = f.txt+' — steel only';
+      if (z.useCompNeg) warn.push('Mn⁻: composite plastic moment not used — '+(gate?gate.why:'')+'; steel section only');
+    } else {
+      MnNeg = z.ZxNeg>0 ? Fy*z.ZxNeg/12 : (z.MnNeg||0);
+      basis.neg = z.ZxNeg>0 ? 'Fy·Zx⁻ (not checked)' : 'entered';
+      if (z.ZxNeg>0 || z.useCompNeg) warn.push('Mn⁻ = Fy·Zx⁻ assumes a compact, braced section — '+need+' for App. A6 / 6.10.8'
+        +(z.useCompNeg ? ' (composite Mn⁻ needs them too)' : ''));
+    }
+  } else {
+    if (s && lbOK) {
+      const fp = flex('top', +z.ZxPos||0), fn = flex('bot', +z.ZxNeg||0);
+      MnPos = fp.Mn; basis.pos = fp.txt; MnNeg = fn.Mn; basis.neg = fn.txt;
+    } else {
+      MnPos = z.ZxPos>0 ? Fy*z.ZxPos/12 : z.MnPos;
+      MnNeg = z.ZxNeg>0 ? Fy*z.ZxNeg/12 : z.MnNeg;
+      basis.pos = z.ZxPos>0 ? 'Fy·Zx⁺ (not checked)' : 'entered';
+      basis.neg = z.ZxNeg>0 ? 'Fy·Zx⁻ (not checked)' : 'entered';
+      if (z.ZxPos>0 || z.ZxNeg>0) warn.push('Mn = Fy·Zx assumes a compact, fully braced section — '+need+' for App. A6 / 6.10.8');
+    }
+  }
+  if (s) {
+    const v = steelIVn(s, Fy, z.do); Vn = +v.Vn.toFixed(1);
+    basis.v = '6.10.9 C='+v.C.toFixed(3)+(v.stiff?' (stiffened)':' (unstiffened)');
+  } else {
+    Vn = z.Aw>0 ? 0.6*Fy*z.Aw : (z.Vn||0);
+    basis.v = z.Aw>0 ? '0.6·Fy·Aw (not checked)' : 'entered';
+    if (z.Aw>0) warn.push('Vn = 0.6·Fy·Aw assumes C = 1 — enter d, tw and the flange plates for 6.10.9 (Vn = C·0.58·Fy·D·tw)');
+  }
+  return { MnPos, MnNeg, Vn, basis, warn };
+}
+
+/* App. A6 gate for the optional composite plastic Mn⁻ (steel + deck rebar). Allowed only
+   when the section qualifies for A6 (6.10.6.2.3), the web is compact (A6.2.1), the
+   compression flange is compact (A6.3.2) and Lb <= Lp (A6.3.3) — then A6 gives Mn = Mp.
+   Dc uses steel + longitudinal rebar (D6.3.1). My for λpw is the bare-steel yield moment,
+   a lower bound on the staged composite My, which makes the web test stricter. */
+function compNegPlasticGate(z, s, LbIn) {
+  const E = STEEL_E, Fy = +z.Fy||50, ts = +z.ts||8, th = +z.th||0, yTop = ts+th;
+  const Asr = +z.Asr||0, dsr = (+z.dsr||0)>0 ? +z.dsr : ts/2;
+  const pn = compPlasticNeg(z);
+  if (!pn) return {ok:false, why:'plastic Mn⁻ cannot be computed'};
+  const webBot = yTop + s.d - s.tfb, webTop = yTop + s.tft;
+  const ybar = (s.A*(yTop + s.ybar) + Asr*dsr)/(s.A + Asr);
+  const clampD = v => Math.min(Math.max(v,0), s.D);
+  const Dc = clampD(webBot - Math.max(ybar, webTop));
+  const Dcp = clampD(webBot - Math.max(pn.yPNA, webTop));
+  const Mp = pn.Mn*12, My = Fy*Math.min(s.Stop, s.Sbot);
+  const lamRw = 5.7*Math.sqrt(E/Fy);
+  if (Fy > 70) return {ok:false, why:'Fy > 70 ksi (6.10.6.2.3)'};
+  if (!(2*Dc/s.tw < lamRw)) return {ok:false, why:'2Dc/tw ≥ 5.7√(E/Fyc) (6.10.6.2.3)'};
+  if (!((s.tfb*Math.pow(s.bfb,3))/(s.tft*Math.pow(s.bft,3)) >= 0.3)) return {ok:false, why:'Iyc/Iyt < 0.3 (6.10.6.2.3)'};
+  const base = 0.54*Mp/My - 0.09;
+  let lamPw = Math.sqrt(E/Fy)/(base*base);
+  if (Dc > 0) lamPw = Math.min(lamPw, lamRw*Dcp/Dc);
+  if (!(2*Dcp/s.tw <= lamPw)) return {ok:false, why:'web not compact, 2Dcp/tw = '+(2*Dcp/s.tw).toFixed(1)+' > λpw = '+lamPw.toFixed(1)+' (A6.2.1)'};
+  if (!(s.bfb/(2*s.tfb) <= 0.38*Math.sqrt(E/Fy))) return {ok:false, why:'bottom flange not compact (A6.3.2)'};
+  const rt = s.bfb/Math.sqrt(12*(1 + Dc*s.tw/(3*s.bfb*s.tfb)));
+  const Lp = rt*Math.sqrt(E/Fy);
+  if (!(LbIn <= Lp)) return {ok:false, why:'Lb = '+(LbIn/12).toFixed(2)+' ft > Lp = '+(Lp/12).toFixed(2)+' ft (A6.3.3)'};
+  return {ok:true, why:'', Dc, Dcp, Lp};
+}
+
 function psGammaP(fpu, fpy) {
   const r = fpy / fpu;
   if (r >= 0.9)  return 0.28;
@@ -10171,30 +10523,46 @@ function psBeta1(fc) {
   return Math.max(0.65, 0.85 - 0.05*(fc - 4));
 }
 
-// Compute fps (stress in PS steel at nominal resistance) — AASHTO 5.6.3.1.1
+// α1 — AASHTO LRFD 10th Ed. 5.6.2.2: 0.85 up to f'c = 10 ksi, −0.02 per ksi above, ≥ 0.75
+function psAlpha1(fc) { return fc <= 10 ? 0.85 : Math.max(0.75, 0.85 - 0.02*(fc - 10)); }
+
+// Compute fps (stress in PS steel at nominal resistance) — AASHTO LRFD 10th Ed. 5.6.3.1.1
+//   fps = fpu·(1 − k·c/dp), k = 2·(1.04 − fpy/fpu)                  (Eq. 5.6.3.1.1-1, -2)
+//   rectangular: c = (Aps·fpu + As·fs − A's·f's) / (α1·f'c·β1·b + k·Aps·fpu/dp)      (-4)
+//   T-section when a = β1·c > hf (5.6.3.2.2):
+//                c = (Aps·fpu + As·fs − A's·f's − α1·f'c·(b − bw)·hf) / (α1·f'c·β1·bw + k·Aps·fpu/dp)  (-3)
+// fs = fy and f's = fy are assumed; mild steel counts only with its depth (ds, ds') entered.
+// hf = compression flange (deck) thickness; blank = rectangular behaviour assumed (warned).
+// Replaces the ACI-style approximate fps with mixed γp/k that ignored bw (sweep IDX-O10).
 function computePSfps(z) {
-  const { Aps=0, fpu=270, fpy=243, dp=0, fc=5, b=48, bw=7,
+  const { Aps=0, fpu=270, fpy=243, dp=0, fc=5, b=48, bw=7, hf=0,
           As=0, Asp=0, fy=60, ds=0, dsp=0 } = z;
-  if (!Aps || !dp || !fc || !b) return { fps:0, a:0, c:0 };
-  const beta1 = psBeta1(fc);
-  const gamP  = psGammaP(fpu, fpy);
-  const rhop  = Aps / (b * dp);
-  const omg   = As  > 0 && ds  > 0 ? (As /(b*ds)) *(fy /fc) : 0;
-  const omgp  = Asp > 0 && dsp > 0 ? (Asp/(b*dsp))*(fy /fc) : 0;
-  const k     = gamP / beta1;
-  const fps   = fpu * (1 - k * (rhop*(fpu/fc) + (ds/dp||0)*(omg - omgp)));
-  // Depth of stress block
-  const a = (Aps*fps + As*fy - Asp*fy) / (0.85 * fc * b);
-  const c = a / beta1;
-  return { fps: Math.max(0, Math.min(fps, fpu)), a: Math.max(0,a), c: Math.max(0,c) };
+  if (!Aps || !dp || !fc || !b) return { fps:0, a:0, c:0, rect:true };
+  const beta1 = psBeta1(fc), a1 = psAlpha1(fc);
+  const k   = 2*(1.04 - (fpy||0.9*fpu)/fpu);
+  const AsF = As>0 && ds>0 ? As*fy : 0;
+  const AspF = Asp>0 && dsp>0 ? Asp*fy : 0;
+  let c = (Aps*fpu + AsF - AspF) / (a1*fc*beta1*b + k*Aps*fpu/dp);
+  let rect = true;
+  if (hf>0 && bw>0 && bw<b && beta1*c > hf) {
+    rect = false;
+    c = (Aps*fpu + AsF - AspF - a1*fc*(b-bw)*hf) / (a1*fc*beta1*bw + k*Aps*fpu/dp);
+  }
+  c = Math.max(0, c);
+  const fps = fpu*(1 - k*c/dp);
+  const a = beta1*c;
+  return { fps: Math.max(0, Math.min(fps, fpu)), a, c, rect, k };
 }
 
-// Compute Mn (ft-kips) from PS zone — AASHTO 5.6.3.2
+// Compute Mn (ft-kips) from PS zone — AASHTO 5.6.3.2.2 (flanged) / 5.6.3.2.3 (rectangular)
 function computePSMn(z) {
-  const { Aps=0, dp=0, As=0, fy=60, ds=0, Asp=0, dsp=0 } = z;
-  const { fps, a } = computePSfps(z);
-  const Mn = (Aps*fps*(dp - a/2) + As*fy*(ds - a/2) - Asp*fy*(dsp - a/2)) / 12;
-  return Math.max(0, Mn); // ft-kips
+  const { Aps=0, dp=0, As=0, fy=60, ds=0, Asp=0, dsp=0, fc=5, b=48, bw=7, hf=0 } = z;
+  const { fps, a, rect } = computePSfps(z);
+  let Mn = Aps*fps*(dp - a/2)
+         + (As>0 && ds>0 ? As*fy*(ds - a/2) : 0)
+         - (Asp>0 && dsp>0 ? Asp*fy*(dsp - a/2) : 0);
+  if (rect === false) Mn += psAlpha1(fc)*fc*(b - bw)*hf*(a/2 - hf/2);
+  return Math.max(0, Mn/12); // ft-kips
 }
 
 // Compute Vn (kips) — AASHTO 5.7.3 simplified (MCFT β=user input, or 2.0 default)
@@ -10958,6 +11326,33 @@ function legalLLfactor(adtt) {
   return +(1.30 + (1.45 - 1.30) * (adtt - 1000) / (5000 - 1000)).toFixed(4);
 }
 
+// Permit live-load factor — MBE (3rd Ed.) Table 6A.4.5.4.2a-1, ROUTINE / ANNUAL permits
+// (unlimited crossings, mixed with traffic, two or more lanes loaded). Columns are the
+// permit weight ratio GVW/AL (kip/ft): <= 2.0 | 2.0–3.0 | >= 3.0; rows ADTT (one direction)
+// >= 5000 | 1000 | <= 100, linear between ADTT rows. Not interpolated across the weight-ratio
+// columns (the factor falls as GVW/AL rises, so taking the lower column is conservative).
+// VERIFY against the printed MBE edition in use. Special / limited-crossing permits
+// (escorted single trip, single trip or < 100 crossings mixed with traffic) are not
+// tabulated here: override γLL for those vehicles. Replaces the flat 1.10 (sweep IDX-O9).
+const PERMIT_GAMLL_ROUTINE = [[5000,[1.40,1.35,1.30]],[1000,[1.35,1.25,1.20]],[100,[1.30,1.20,1.15]]];
+function permitWeightRatio(vehicleNameOrLabel) {
+  const v = ALL_VEHICLES.find(x=>x.name===vehicleNameOrLabel||x.label===vehicleNameOrLabel);
+  const ax = (v&&v.axles)||[];
+  if (ax.length<2) return null;
+  const gvw = ax.reduce((s,a)=>s+(+a.load||0),0);
+  const AL = Math.max(...ax.map(a=>+a.dist||0)) - Math.min(...ax.map(a=>+a.dist||0));
+  return AL>0 ? gvw/AL : null;
+}
+function permitLLfactor(adtt, wr) {
+  const col = (wr==null || !(wr>2.0)) ? 0 : (wr<3.0 ? 1 : 2);
+  const T = PERMIT_GAMLL_ROUTINE.map(([a,f])=>[a,f[col]]);
+  const A = (adtt==null || !(adtt>=0)) ? 5000 : +adtt;       // unknown ADTT -> highest row
+  if (A >= T[0][0]) return T[0][1];
+  if (A <= T[2][0]) return T[2][1];
+  const [hi,lo] = A >= T[1][0] ? [T[0],T[1]] : [T[1],T[2]];
+  return +(lo[1] + (hi[1]-lo[1])*(A-lo[0])/(hi[0]-lo[0])).toFixed(4);
+}
+
 // Determine MBE rating category for a vehicle based on its group
 function defaultVehicleCategory(vehicleName) {
   const grp = VEHICLE_GROUPS.find(g=>g.vehicles.some(v=>v.name===vehicleName));
@@ -10969,7 +11364,7 @@ function defaultVehicleCategory(vehicleName) {
 }
 
 // Return { inv, op } γ_LL for a vehicle per MBE Table 6A.4.2.2-1
-function vehicleGamLL(category, limitState, method, adtt) {
+function vehicleGamLL(category, limitState, method, adtt, vehicleName) {
   if (method === 'LFR') {
     return { inv: 2.17, op: 1.30 };
   }
@@ -10979,7 +11374,8 @@ function vehicleGamLL(category, limitState, method, adtt) {
     return { inv: ll, op: ll }; // Legal: same factor, level expressed through RF interpretation
   }
   if (category === 'Permit') {
-    return { inv: ls.Permit?.LL ?? 1.10, op: ls.Permit?.LL ?? 1.10 };
+    const g = permitLLfactor(adtt, permitWeightRatio(vehicleName));
+    return { inv: g, op: g };
   }
   // Design
   return { inv: ls.Inventory?.LL ?? 1.75, op: ls.Operating?.LL ?? 1.35 };
@@ -11011,6 +11407,21 @@ function mctCarriesImpact(cfg, lcName){
   // vehicle carried it (otherwise IM is applied in the rating — the conservative side).
   return sel.every(n=>dlaOf(n)>0);
 }
+// The dynamic load allowance (%) the MCT carries for an LL case: the DLA of the traced
+// vehicle, 0 when the case is not carrying IM; for a case not traceable to one vehicle,
+// the smallest DLA of the selected vehicles (all of them must carry one, as above).
+function mctImpactPct(cfg, lcName){
+  if(!mctCarriesImpact(cfg, lcName)) return 0;
+  const sel = cfg?.selectedVehicles || [];
+  const dlaOf = n => cfg.useGlobalDLA
+    ? (+cfg.globalDLA||0)
+    : (+(cfg.vehicleDLA?.[n] ?? ALL_VEHICLES.find(v=>v.name===n)?.defaultDLA ?? 0)||0);
+  const nm = typeof lcName==='string' ? lcName.trim() : '';
+  const hit = nm ? sel.filter(n=>nm===n || nm.includes(n+'_')).sort((a,b)=>b.length-a.length)[0] : null;
+  return hit ? dlaOf(hit) : Math.min(...sel.map(dlaOf));
+}
+// Fatigue IM, LRFD 10th Ed. Table 3.6.2.1-1 (all other components, fatigue limit state).
+const FATIGUE_IM = 15;
 // LL multiplier: g × (1+IM/100) × m × F1 × F2, with IM dropped when it is already
 // baked into the imported results.
 function ratingLLScaleOf(factors, carriesIM){
@@ -11324,6 +11735,9 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
   const fatigueCategory   = R.fatigueCategory    ?? 'C';
   const fatigueLimitState = R.fatigueLimitState  ?? 'I';
   const fatigueZoneCategories = R.fatigueZoneCategories ?? {};
+  // Fatigue distribution factor g_fat (one-lane g ÷ 1.2, LRFD 3.6.1.1.2 / 3.6.1.4.3b);
+  // blank = not applied (the MIDAS girder-line result is used as is). Sweep IDX-O14.
+  const fatigueDF         = R.fatigueDF          ?? null;
 
   // PS Concrete — Service III inputs
   const ps3DcLC      = R.ps3DcLC      ?? '';
@@ -11412,11 +11826,13 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
     if (!props) return;
     const [d,,Zx,Sx] = props;
     const Aw = +(d*props[1]).toFixed(2);
-    updateCapZone(zoneId,'ZxPos',Zx);
-    updateCapZone(zoneId,'ZxNeg',Zx);
-    updateCapZone(zoneId,'SxPos',Sx);
-    updateCapZone(zoneId,'SxNeg',Sx);
-    updateCapZone(zoneId,'Aw',Aw);
+    // One update, not five: each updateCapZone() maps the same stale capZones, so only
+    // the last field (Aw) used to survive. Plates come from ROLLED_SHAPES when it has
+    // the shape (for the AASHTO A6 / 6.10.8 / 6.10.9 check); Lb is never guessed.
+    const rs = ROLLED_SHAPES[secZone.name];
+    const plates = rs ? {d:rs.d, tw:rs.tw, bfTop:rs.bf, tfTop:rs.tf, bfBot:rs.bf, tfBot:rs.tf}
+                      : {d, tw:props[1]};
+    setCapZones(capZones.map(q=>q.id===zoneId?{...q, ZxPos:Zx, ZxNeg:Zx, SxPos:Sx, SxNeg:Sx, Aw, ...plates}:q));
   };
 
   // ── Design-app capacity zone: interpolate the per-station table published by PS-Beam / ST-Girder ──
@@ -11449,18 +11865,20 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
                Vn: d.phiVn/(ratingPhiV||1), SxPos: d.SxPos, SxNeg: d.SxNeg, _design:z };
     }
     if (z.type==='quickcalc') {
+      // AASHTO A6 / 6.10.8 / 6.10.9 when the plates and Lb are entered; otherwise the
+      // old Fy·Zx and 0.6·Fy·Aw with a warning (steelZoneCaps, sweep IDX-A1).
+      const c = steelZoneCaps(z);
       return {
-        MnPos: z.ZxPos>0 ? z.Fy*z.ZxPos/12 : z.MnPos,
-        MnNeg: z.ZxNeg>0 ? z.Fy*z.ZxNeg/12 : z.MnNeg,
-        Vn:    z.Aw>0    ? 0.6*z.Fy*z.Aw   : z.Vn,
-        SxPos: z.SxPos||0, SxNeg: z.SxNeg||0,
+        MnPos: c.MnPos, MnNeg: c.MnNeg, Vn: c.Vn,
+        SxPos: z.SxPos||0, SxNeg: z.SxNeg||0, _basis:c.basis, _warn:c.warn,
       };
     }
     if (z.type==='composite') {
-      const MnPos = computeCompositeMnPos(z);
-      const MnNeg = z.useCompNeg ? computeCompositeMnNeg(z) : (z.ZxNeg>0 ? z.Fy*z.ZxNeg/12 : z.MnNeg||0);
-      const Vn    = z.Aw>0 ? 0.6*z.Fy*z.Aw : z.Vn||0;
-      return { MnPos, MnNeg, Vn, SxPos: z.SxPos||0, SxNeg: z.SxNeg||0, _zone:z };
+      // Mn⁺ with the 6.10.7.1.2 Dp/Dt reduction; Mn⁻ and Vn as for the steel zone, the
+      // composite plastic Mn⁻ only behind the App. A6 gate (sweep IDX-A2/A3).
+      const c = steelZoneCaps(z);
+      return { MnPos:c.MnPos, MnNeg:c.MnNeg, Vn:c.Vn, SxPos: z.SxPos||0, SxNeg: z.SxNeg||0, _zone:z,
+               _basis:c.basis, _warn:c.warn };
     }
     if (z.type==='psconc') {
       const MnPos = computePSMn(z);
@@ -11627,13 +12045,16 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
         // Auto-assign category and gamLL if not manually set
         const category = existing.category || defaultVehicleCategory(vn);
         const { inv: gamLLinv, op: gamLLop } = vehicleGamLL(
-          category, ratingLimitState, ratingMethod, ratingAdtt
+          category, ratingLimitState, ratingMethod, ratingAdtt, vn
         );
+        // A value the engineer typed (customGam) is kept; an auto value follows the table,
+        // so a stored factor from an older build (e.g. the flat permit 1.10) is refreshed.
+        const keep = existing.customGam;
         next[vn] = {
           posLC: posLC||'', negLC,
           category,
-          gamLLinv:  existing.gamLLinv  !== undefined ? existing.gamLLinv  : +gamLLinv.toFixed(4),
-          gamLLop:   existing.gamLLop   !== undefined ? existing.gamLLop   : +gamLLop.toFixed(4),
+          gamLLinv:  keep && existing.gamLLinv !== undefined ? existing.gamLLinv : +gamLLinv.toFixed(4),
+          gamLLop:   keep && existing.gamLLop  !== undefined ? existing.gamLLop  : +gamLLop.toFixed(4),
           customGam: existing.customGam || false,
         };
       });
@@ -11661,8 +12082,10 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
     if (ratingMethod==='LFR') return LRFR_FACTORS.LFR[ratingLevel]||{DC:1.3,DW:1.3,LL:2.17};
     const ls = LRFR_FACTORS.LRFR[ratingLimitState]||{};
     if (ratingCategory==='Legal') return {...(ls.Legal||{DC:1.25,DW:1.50}), LL:legalLLfactor(ratingAdtt)};
+    // Permit: MBE Table 6A.4.5.4.2a-1 (routine), not the design Inventory/Operating factor.
+    if (ratingCategory==='Permit'&&ratingLimitState==='Strength I') return {DC:1.25, DW:1.50, LL:permitLLfactor(ratingAdtt, permitWeightRatio(ratingVehicleName))};
     return ls[ratingLevel]||ls.Any||{DC:1.25,DW:1.50,LL:1.75};
-  },[ratingMethod,ratingLevel,ratingLimitState,ratingCategory,ratingAdtt]);
+  },[ratingMethod,ratingLevel,ratingLimitState,ratingCategory,ratingAdtt,ratingVehicleName]);
 
   const gamDC = ratingCustomFact ? ratingGamDC : (autoFactors.DC??1.25);
   const gamDW = ratingCustomFact ? ratingGamDW : (autoFactors.DW??1.50);
@@ -11759,6 +12182,9 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
   const phiS = phiCSfloored ? Math.ceil(0.85/phiC*1e6)/1e6 : phiSsel;
   // PS-concrete zones with no Mn⁻ entered fall back to the 0.7·Mn⁺ placeholder in capAt().
   const psNegPlaceholder = capZones.filter(z=>z.type==='psconc'&&!z.MnNeg);
+  // Steel Calc / Composite zones still on the unchecked Fy·Zx / 0.6·Fy·Aw (no plates or Lb).
+  const steelCapWarn = capZones.map((z,i)=>({i, w:(z.type==='quickcalc'||z.type==='composite') ? steelZoneCaps(z).warn : []}))
+    .filter(x=>x.w.length);
 
   // Effective capacity preview (for the first/only zone, or global)
   const firstZone = capAt(totalBridgeForCap/2);
@@ -11853,8 +12279,9 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
     if (ratingMethod==='LFR') return LRFR_FACTORS.LFR['Operating']||{DC:1.3,DW:1.3,LL:1.30};
     const ls = LRFR_FACTORS.LRFR[ratingLimitState]||{};
     if (ratingCategory==='Legal') return {...(ls.Legal||{DC:1.25,DW:1.50}), LL:legalLLfactor(ratingAdtt)};
+    if (ratingCategory==='Permit'&&ratingLimitState==='Strength I') return {DC:1.25, DW:1.50, LL:permitLLfactor(ratingAdtt, permitWeightRatio(ratingVehicleName))};
     return ls['Operating']||ls.Any||{DC:1.25,DW:1.50,LL:1.35};
-  },[ratingMethod,ratingLimitState,ratingCategory,ratingAdtt]);
+  },[ratingMethod,ratingLimitState,ratingCategory,ratingAdtt,ratingVehicleName]);
 
   const gamLL_op = ratingCustomFact ? ratingGamLL : (opFactors.LL??1.35);
 
@@ -11875,6 +12302,18 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
   // sum says pass/fail, the RF says by how much live load may be scaled.
   // f = M·12 / Sx  (moment in ft·k, Sx in in³, stress in ksi)
   // Sx is taken from cap zone SxPos/SxNeg fields; Fyf from zone Fy field
+  // γLL for Service II, MBE Table 6A.4.2.2-1 (steel): design Inventory 1.30, design
+  // Operating 1.00, legal 1.30, permit 1.00 (was 1.30 for every level, sweep IDX-O6).
+  const serviceIIGamLL = ratingMethod!=='LRFR' ? SERVICE_II_FACTORS.LL
+    : ratingCategory==='Permit' ? 1.00 : ratingCategory==='Legal' ? 1.30
+    : (ratingLevel==='Operating' ? 1.00 : 1.30);
+  // Live-load scale g·(1+IM)·m·F1·F2 for Service II, as Strength I applies it: IM is
+  // dropped when the MCT already carries it for this LL case; the hogging check uses
+  // the negative-moment g (sweep IDX-O6).
+  const serviceIICarriesIM = useMemo(()=>mctCarriesImpact(cfg, serviceIILLposLC),
+    [JSON.stringify(cfg.selectedVehicles),JSON.stringify(cfg.vehicleDLA),cfg.useGlobalDLA,cfg.globalDLA,cfg.geomMode,serviceIILLposLC]);
+  const serviceIIScale    = ratingLLScaleOf(ratingLLFactors, serviceIICarriesIM);
+  const serviceIIScaleNeg = (dfOn && dfNeg>0) ? serviceIIScale*(dfNeg/dfBase) : serviceIIScale;
   const serviceIIData = useMemo(()=>{
     if (!capZones.length || !origRows.length || (!serviceIIDcLC && !serviceIILLposLC)) return [];
     const nodeList = [...new Set(origRows.map(r=>r.node).filter(Boolean))]
@@ -11901,14 +12340,14 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
 
       const Mdc  = dc?.momentY  || 0;
       const Mdw  = dw?.momentY  || 0;
-      const Mllp = llp?.momentY || 0;
-      const Mlln = -hoggingMag(lln?.momentY);
+      const Mllp = (llp?.momentY || 0) * serviceIIScale;
+      const Mlln = -hoggingMag(lln?.momentY) * serviceIIScaleNeg;
 
       // Bottom flange positive moment check
       const fDCpos  = toStress(Math.abs(Mdc), SxPos);
       const fDWpos  = toStress(Math.abs(Mdw), SxPos);
       const fLLpos  = toStress(Math.max(0,Mllp), SxPos);
-      const demPos  = fDCpos!=null&&fLLpos!=null ? fDCpos+(fDWpos||0)+SERVICE_II_FACTORS.LL*fLLpos : null;
+      const demPos  = fDCpos!=null&&fLLpos!=null ? fDCpos+(fDWpos||0)+serviceIIGamLL*fLLpos : null;
       // MBE 6A.4.2.1: RF = (C − γDC·fDC − γDW·fDW) / (γLL·fLL). Dead load comes
       // OFF the capacity; it is not part of the denominator. The old
       // limit/total-stress ratio agrees only at RF = 1 and reads high whenever
@@ -11917,17 +12356,17 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
       // was invalid too.
       const _rfPos  = fLLpos!=null ? mbeRF(limit, SERVICE_II_FACTORS.DC, fDCpos||0,
                                             SERVICE_II_FACTORS.DW, fDWpos||0,
-                                            SERVICE_II_FACTORS.LL, fLLpos) : null;
+                                            serviceIIGamLL, fLLpos) : null;
       const rfPos   = _rfPos!=null ? +_rfPos.toFixed(4) : null;
 
       // Top flange negative moment check
       const fDCneg  = toStress(Math.abs(Mdc), SxNeg);
       const fDWneg  = toStress(Math.abs(Mdw), SxNeg);
       const fLLneg  = toStress(Math.abs(Mlln), SxNeg);
-      const demNeg  = fDCneg!=null&&fLLneg!=null&&fLLneg>0 ? fDCneg+(fDWneg||0)+SERVICE_II_FACTORS.LL*fLLneg : null;
+      const demNeg  = fDCneg!=null&&fLLneg!=null&&fLLneg>0 ? fDCneg+(fDWneg||0)+serviceIIGamLL*fLLneg : null;
       const _rfNeg  = fDCneg!=null&&fLLneg!=null ? mbeRF(limit, SERVICE_II_FACTORS.DC, fDCneg,
                                                         SERVICE_II_FACTORS.DW, fDWneg||0,
-                                                        SERVICE_II_FACTORS.LL, fLLneg) : null;
+                                                        serviceIIGamLL, fLLneg) : null;
       const rfNeg   = _rfNeg!=null ? +_rfNeg.toFixed(4) : null;
 
       const rfGov = rfPos!=null||rfNeg!=null
@@ -11948,7 +12387,7 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
       };
     }).filter(p=>p.rfGov!=null);
   },[origRows, capZones, nodePositions, serviceIIDcLC, serviceIIDwLC,
-     serviceIILLposLC, serviceIILLnegLC, serviceIIRh]);
+     serviceIILLposLC, serviceIILLnegLC, serviceIIRh, serviceIIGamLL, serviceIIScale, serviceIIScaleNeg]);
 
   const govServiceII = serviceIIData.length
     ? serviceIIData.reduce((a,b)=>a.rfGov<b.rfGov?a:b, serviceIIData[0])
@@ -11959,6 +12398,11 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
   // Fatigue II: RF = (ΔF)_n / (γ_II · Δf)  where γ_II = 0.80
   // Δf = stress range from fatigue vehicle = ΔM·12/Sx  (ksi)
   // (ΔF)_n = (A/N)^(1/3), N = 365·75·n·p·ADTT_SL
+  // Fatigue LL scale: IM brought to 15 % — (1.15)/(1 + IM carried by the MCT) — times g_fat
+  // when entered (sweep IDX-O14). The old code used the raw MIDAS moment range.
+  const fatigueImPct = useMemo(()=>mctImpactPct(cfg, fatigueLCpos),
+    [JSON.stringify(cfg.selectedVehicles),JSON.stringify(cfg.vehicleDLA),cfg.useGlobalDLA,cfg.globalDLA,cfg.geomMode,fatigueLCpos]);
+  const fatigueScale = (1+FATIGUE_IM/100)/(1+fatigueImPct/100) * ((+fatigueDF>0) ? +fatigueDF : 1);
   const fatigueData = useMemo(()=>{
     if (!capZones.length || !origRows.length || !fatigueLCpos) return [];
     const p_lanes = FATIGUE_P[Math.min(fatigueLanes,3)] ?? 0.80;
@@ -11987,7 +12431,7 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
       // Stress range: max positive moment minus min (most negative) moment
       const Mmax = llp?.momentY || 0;
       const Mmin = lln?.momentY ?? 0;
-      const dM   = Math.abs(Mmax - Mmin); // moment range, ft-kips
+      const dM   = Math.abs(Mmax - Mmin) * fatigueScale; // moment range × IM/g scale, ft-kips
       const Sx   = Mmax >= 0 ? SxPos : SxNeg; // use appropriate Sx
       const df   = Sx>0 ? dM*12/Sx : null;   // stress range, ksi
 
@@ -12012,7 +12456,7 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
     }).filter(Boolean);
   },[origRows, capZones, nodePositions, fatigueLCpos, fatigueLCneg,
      fatigueAdtt, fatigueLanes, fatigueCyclesN, fatigueCategory,
-     fatigueZoneCategories, fatigueLimitState]);
+     fatigueZoneCategories, fatigueLimitState, fatigueScale]);
 
   const govFatigue = fatigueData.length
     ? fatigueData.reduce((a,b)=>a.rfGov<b.rfGov?a:b, fatigueData[0])
@@ -12024,6 +12468,11 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
   // ps3 = Service III — dedicated check per AASHTO MBE 6A.5.4.2
   // f_bot = MDC/Sb + MDW/Sb + γ_LL·MLL/Sb ≤ fr + fpe (compression positive)
   // RF = (fr + fpe - fDC - fDW) / (γ_LL · fLL)
+  // LL scale g·(1+IM)·m·F1·F2 for PS Service III, as for Strength I (sweep IDX-O6).
+  const ps3CarriesIM = useMemo(()=>mctCarriesImpact(cfg, ps3LLposLC),
+    [JSON.stringify(cfg.selectedVehicles),JSON.stringify(cfg.vehicleDLA),cfg.useGlobalDLA,cfg.globalDLA,cfg.geomMode,ps3LLposLC]);
+  const ps3Scale    = ratingLLScaleOf(ratingLLFactors, ps3CarriesIM);
+  const ps3ScaleNeg = (dfOn && dfNeg>0) ? ps3Scale*(dfNeg/dfBase) : ps3Scale;
   const psServiceIIIData = useMemo(()=>{
     if (!capZones.length || !origRows.length || !ps3LLposLC) return [];
     const hasPSzones = capZones.some(z=>z.type==='psconc');
@@ -12033,9 +12482,10 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
       .filter(n=>nodePositions[n]!==undefined)
       .sort((a,b)=>nodePositions[a]-nodePositions[b]);
 
-    // Modulus of rupture — AASHTO 5.4.2.6
-    // Moderate exposure: fr = 0.19·√f'c (ksi)
-    // Severe exposure:   fr = 0.0948·√f'c (ksi)  [cracked section allowed]
+    // Concrete TENSION LIMIT f_t (stored as `fr`), AASHTO LRFD Table 5.9.2.3.2b-1 — not the
+    // modulus of rupture of 5.4.2.6 (sweep IDX-A5: label only, no value change).
+    // Moderate exposure: f_t = 0.19·√f'c (ksi)
+    // Severe exposure:   f_t = 0.0948·√f'c (ksi)
     const frCoeff = ps3Exposure==='severe' ? 0.0948 : 0.19;
 
     return nodeList.map(node=>{
@@ -12061,8 +12511,8 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
       // Moments (ft-kips), signs: positive = sagging
       const MDC  = dc?.momentY  || 0;
       const MDW  = dw?.momentY  || 0;
-      const MLLp = Math.max(0, llp?.momentY||0);  // positive envelope
-      const MLLn = Math.abs(Math.min(0, lln?.momentY||0)); // negative envelope magnitude
+      const MLLp = Math.max(0, llp?.momentY||0) * ps3Scale;  // positive envelope × LL scale
+      const MLLn = Math.abs(Math.min(0, lln?.momentY||0)) * ps3ScaleNeg; // negative envelope magnitude × LL scale
 
       // Bottom fiber stresses (ksi) — tension positive convention
       // For positive moment: bottom in tension
@@ -12114,7 +12564,7 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
       };
     }).filter(Boolean);
   },[origRows, capZones, nodePositions, ps3DcLC, ps3DwLC, ps3LLposLC, ps3LLnegLC,
-     ps3GamLL, ps3Exposure]);
+     ps3GamLL, ps3Exposure, ps3Scale, ps3ScaleNeg]);
 
   const govPS3 = psServiceIIIData.length
     ? psServiceIIIData.reduce((a,b)=>a.rfGov<b.rfGov?a:b, psServiceIIIData[0])
@@ -13475,7 +13925,7 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
                     {cat}
                   </button>
                 ))}
-                {ratingCategory==='Legal'&&(
+                {(ratingCategory==='Legal'||ratingCategory==='Permit')&&(
                   <div style={{display:'flex',alignItems:'center',gap:'5px',marginLeft:'6px'}}>
                     <span style={{fontSize:'10px',color:'#9ca3af',fontFamily:'monospace'}}>ADTT:</span>
                     <input type="number" style={{...INP,width:'70px',padding:'4px 6px',fontSize:'12px'}}
@@ -13500,14 +13950,14 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
             {[
               {label:'γ_DC (struct. DC)',val:gamDC,set:setRatingGamDC,hint:'MBE Table 6A.4.2.2-1'},
               {label:'γ_DW (wearing surf.)',val:gamDW,set:setRatingGamDW,hint:'Future overlay / utilities'},
-              {label:'γ_LL (live load)',val:gamLL,set:setRatingGamLL,hint:ratingCategory==='Legal'?`Legal @ ADTT ${ratingAdtt}`:`${ratingMethod} ${ratingLevel}`},
-              {label:'η Load Modifier',val:ratingEta,set:setRatingEta,hint:'MBE 6A.4.1 — typically 1.0'},
+              {label:'γ_LL (live load)',val:gamLL,set:setRatingGamLL,hint:ratingCategory==='Legal'?`Legal @ ADTT ${ratingAdtt}`:ratingCategory==='Permit'&&ratingMethod==='LRFR'?`Routine permit @ ADTT ${ratingAdtt} (Table 6A.4.5.4.2a-1)`:`${ratingMethod} ${ratingLevel}`},
+              {label:'η Load Modifier',val:ratingEta,set:setRatingEta,hint:'Not used — MBE 6A LRFR has no η (RF is not multiplied by it)'},
             ].map(({label,val,set:setter,hint})=>(
               <div key={label} style={{background:'#f9fafb',borderRadius:'6px',padding:'8px 10px',border:'1px solid #e5e7eb'}}>
                 <div style={{fontSize:'10px',fontFamily:'monospace',color:'#6b7280',marginBottom:'3px'}}>{label}</div>
                 <input type="number" step="0.01" style={{...INP,padding:'4px 6px',fontSize:'13px',fontFamily:'monospace',
                   fontWeight:'700',color:'#111827',background:ratingCustomFact?'#fff':'#f3f4f6'}}
-                  value={val} disabled={!ratingCustomFact&&label!=='η Load Modifier'}
+                  value={val} disabled={!ratingCustomFact||label==='η Load Modifier'}
                   onChange={e=>setter(parseFloat(e.target.value)||0)}/>
                 <div style={{fontSize:'9px',color:'#9ca3af',fontFamily:'monospace',marginTop:'2px'}}>{hint}</div>
               </div>
@@ -13679,7 +14129,7 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
 
           {/* Rating equation preview */}
           <div style={{marginTop:'12px',padding:'8px 12px',background:'#f0f9ff',border:'1px solid #bfdbfe',borderRadius:'5px',fontSize:'11.5px',fontFamily:'monospace',color:'#1e40af'}}>
-            RF = (φ_c·φ_s·φ·Rn − {gamDC}·DC − {gamDW}·DW) / ({gamLL} · LL · ×{ratingLLScale.toFixed(4)}) · η={ratingEta}
+            RF = (φ_c·φ_s·φ·Rn − {gamDC}·DC − {gamDW}·DW) / ({gamLL} · LL · ×{ratingLLScale.toFixed(4)}) · η not used (MBE 6A)
           </div>
         </div>
 
@@ -13833,7 +14283,7 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
                 <div style={{fontSize:'10px',fontFamily:'monospace',color:'#6b7280',marginBottom:'3px'}}>φ_s — System Factor (MBE Table 6A.4.2.4-1)</div>
                 <select style={{...INP,fontSize:'12px'}} value={ratingSysKey} onChange={e=>setRatingSysKey(e.target.value)}>
                   {Object.entries(PHI_SYSTEM).map(([k,v])=>(
-                    <option key={k} value={k}>{k}{v!==null?' → φ_s = '+v:''}</option>
+                    <option key={k} value={k}>{k}{k==='Bolted I-girder, two-girder'?' (not an MBE row; welded value)':''}{v!==null?' → φ_s = '+v:''}</option>
                   ))}
                 </select>
                 {ratingSysKey==='Custom'&&(
@@ -13855,6 +14305,9 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
               {psNegPlaceholder.length>0&&<div style={{color:'#b91c1c',fontWeight:600,marginBottom:'3px'}}>
                 ⚠ PS Conc zone{psNegPlaceholder.length>1?'s':''} {psNegPlaceholder.map(z=>capZones.indexOf(z)+1).join(', ')}: no Mn⁻ entered — the negative-moment rating uses a PLACEHOLDER Mn⁻ = 0.7·Mn⁺, not a computed capacity. Enter Mn⁻ for any hogging region.
               </div>}
+              {steelCapWarn.map(x=><div key={'scw'+x.i} style={{color:'#b91c1c',fontWeight:600,marginBottom:'3px'}}>
+                ⚠ Zone {x.i+1}: {x.w.join(' · ')}
+              </div>)}
               {phiCSfloored&&<div style={{color:'#b45309',fontWeight:600,marginBottom:'3px'}}>
                 ⚠ φ_c·φ_s = {phiC}·{phiSsel} = {(phiC*phiSsel).toFixed(3)} &lt; 0.85 → floored at 0.85 (MBE Eq. 6A.4.2.1-3); effective φ_s = {phiS}
               </div>}
@@ -13971,7 +14424,7 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
                     {/* Import from section props button */}
                     {matchSec&&W_SHAPE_PROPS[matchSec.name]&&z.type==='quickcalc'&&(
                       <button onClick={()=>importFromSectionProps(z.id)}
-                        title={`Import Zx and Aw from ${matchSec.name}`}
+                        title={`Import Zx, Sx, Aw, d, tw (and flange plates when listed) from ${matchSec.name}`}
                         style={{background:'#eff6ff',border:'1px solid #bfdbfe',borderRadius:'4px',
                           color:'#1d4ed8',padding:'3px 9px',cursor:'pointer',fontSize:'10.5px'}}>
                         ↓ From {matchSec.name}
@@ -14035,10 +14488,28 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
                           </div>
                         ))}
                       </div>
+                      {/* Steel Calc: plates, bracing and stiffener spacing for App. A6 / 6.10.8 / 6.10.9 */}
+                      {z.type==='quickcalc'&&(
+                        <div style={{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:'6px',marginBottom:'6px'}}>
+                          {[['d (in)','d'],['tw (in)','tw'],['bf top (in)','bfTop'],['tf top (in)','tfTop'],['bf bot (in)','bfBot'],
+                            ['tf bot (in)','tfBot'],['Lb (ft)','Lb'],['Cb','Cb'],['do (in) stiff.','do']].map(([lbl,field])=>(
+                            <div key={field}>
+                              <div style={{fontSize:'9.5px',fontFamily:'monospace',color:'#6b7280',marginBottom:'3px'}}>{lbl}</div>
+                              <input type="number" step="0.01" style={{...INP2,fontFamily:'monospace',fontWeight:'600',fontSize:'12px'}}
+                                value={z[field]??''} placeholder={field==='Cb'?'1.0':field==='do'?'unstiff.':'—'}
+                                onChange={e=>updateCapZone(z.id,field,e.target.value===''?null:(parseFloat(e.target.value)||0))}/>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                       <div style={{fontSize:'10px',fontFamily:'monospace',color:'#6b7280'}}>
-                        → Mn⁺ = {(z.ZxPos>0?z.Fy*(z.ZxPos||0)/12:z.MnPos||0).toFixed(1)} ft·k &nbsp;
-                           Mn⁻ = {(z.ZxNeg>0?z.Fy*(z.ZxNeg||0)/12:z.MnNeg||0).toFixed(1)} ft·k &nbsp;
-                           Vn = {(z.Aw>0?0.6*(z.Fy||0)*(z.Aw||0):z.Vn||0).toFixed(1)} kips
+                        → Mn⁺ = {(+cap.MnPos||0).toFixed(1)} ft·k &nbsp;
+                           Mn⁻ = {(+cap.MnNeg||0).toFixed(1)} ft·k &nbsp;
+                           Vn = {(+cap.Vn||0).toFixed(1)} kips
+                        {cap._basis&&<div style={{color:'#9ca3af',marginTop:'2px'}}>
+                          basis: Mn⁺ {cap._basis.pos} · Mn⁻ {cap._basis.neg} · Vn {cap._basis.v}
+                        </div>}
+                        {(cap._warn||[]).map((w,k)=><div key={k} style={{color:'#b91c1c',fontWeight:600,marginTop:'2px'}}>⚠ {w}</div>)}
                       </div>
                       {/* Sx for Service II / Fatigue */}
                       <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'6px',marginTop:'8px',
@@ -14096,7 +14567,20 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
                           </div>
                         ))}
                       </div>
+                      <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:'5px',marginTop:'5px'}}>
+                        {[["Lb (ft) unbraced",'Lb','—'],["Cb",'Cb','1.0'],["do (in) stiffeners",'do','unstiff.']
+                        ].map(([lbl,field,ph])=>(
+                          <div key={field}>
+                            <div style={STYLES.monoTiny2}>{lbl}</div>
+                            <input type="number" step="0.01" style={{...INP2,fontFamily:'monospace',fontWeight:'600',fontSize:'11px'}}
+                              value={z[field]??''} placeholder={ph}
+                              onChange={e=>updateCapZone(z.id,field,e.target.value===''?null:(parseFloat(e.target.value)||0))}/>
+                          </div>
+                        ))}
+                      </div>
                       <div style={{marginTop:'4px',fontSize:'8.5px',fontFamily:'monospace',color:'#9ca3af'}}>
+                        Lb = unbraced length of the bottom (compression) flange in the negative-moment region · do = transverse
+                        stiffener spacing for 6.10.9 interior panels (blank = unstiffened web; leave blank for end panels) ·
                         Zx⁻ = plastic section modulus of steel for negative moment zones ·
                         flange plates are optional — leave blank and a symmetric I is backed out of Zx⁺/Zx⁻,
                         d and tw (a few percent conservative). Enter them when the PNA lands in a flange.
@@ -14169,9 +14653,10 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
                     {/* Live preview */}
                     {(()=>{
                       const pp    = compPlasticPos(z);
-                      const MnPos = pp ? pp.Mn : 0;
-                      const MnNeg = z.useCompNeg ? computeCompositeMnNeg(z) : (z.ZxNeg>0?z.Fy*z.ZxNeg/12:z.MnNeg||0);
-                      const Vn    = z.Aw>0 ? 0.6*(z.Fy||50)*z.Aw : (z.Vn||0);
+                      const cc    = steelZoneCaps(z);
+                      const MnPos = cc.MnPos;
+                      const MnNeg = cc.MnNeg;
+                      const Vn    = cc.Vn;
                       return (
                         <div style={{fontSize:'9.5px',fontFamily:'monospace',color:pp?'#1e40af':'#92400e',
                           padding:'5px 8px',background:pp?'#dbeafe':'#fef3c7',
@@ -14180,6 +14665,9 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
                             PNA {pp.yPNA.toFixed(2)}&quot; below top of deck — {pp.inDeck?'in the deck (full composite)':'in the steel (partial composite)'}
                             &nbsp;·&nbsp; As = {pp.As} in² {pp.derived?'(from Zx⁺)':'(from flange plates)'}
                             &nbsp;·&nbsp; Ps = {pp.Ps} k, Pc = {pp.Pc} k
+                            <br/>
+                            Mp = {pp.Mp.toFixed(1)} ft·k · Dp/Dt = {pp.Dp.toFixed(2)}/{pp.Dt.toFixed(2)} = {(pp.Dt>0?pp.Dp/pp.Dt:0).toFixed(3)}
+                            {pp.redDpDt<1?<> → Mn⁺ = Mp·(1.07 − 0.7·Dp/Dt) = Mp·{pp.redDpDt.toFixed(3)}</>:<> ≤ 0.1 → Mn⁺ = Mp</>} (6.10.7.1.2)
                             <br/>
                             Mn⁺ = {MnPos.toFixed(1)} ft·k &nbsp;·&nbsp; Mn⁻ = {MnNeg.toFixed(1)} ft·k &nbsp;·&nbsp; Vn = {Vn.toFixed(1)} kips
                             <br/>
@@ -14202,9 +14690,9 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
                     </div>
 
                     {/* Row 1: Concrete + section geometry */}
-                    <div style={{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:'6px'}}>
+                    <div style={{display:'grid',gridTemplateColumns:'repeat(6,1fr)',gap:'6px'}}>
                       {[["f'c (ksi)",'fc',5,0.5],["β₁",'beta1',0,'auto'],["b (in) flange",'b',48,1],
-                        ["bw (in) web",'bw',7,0.5],["dv (in) eff. shear",'dv',0,0.5]
+                        ["hf (in) flange thk",'hf',0,0.25],["bw (in) web",'bw',7,0.5],["dv (in) eff. shear",'dv',0,0.5]
                       ].map(([lbl,field,def,step])=>(
                         <div key={field}>
                           <div style={STYLES.monoTiny}>{lbl}</div>
@@ -14240,9 +14728,9 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
                     </div>
 
                     {/* Row 3: Non-prestressed steel */}
-                    <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:'6px'}}>
+                    <div style={{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:'6px'}}>
                       {[["As (in²) tension",'As',0,0.01],["fy (ksi)",'fy',60,1],
-                        ["ds (in)",'ds',0,0.5],["As' (in²) comp.",'Asp',0,0.01]
+                        ["ds (in)",'ds',0,0.5],["As' (in²) comp.",'Asp',0,0.01],["ds' (in)",'dsp',0,0.25]
                       ].map(([lbl,field,def,step])=>(
                         <div key={field}>
                           <div style={STYLES.monoTiny}>{lbl}</div>
@@ -14301,7 +14789,7 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
                           ))}
                         </div>
                         <div style={{marginTop:'4px',fontSize:'8px',fontFamily:'monospace',color:'#9ca3af'}}>
-                          fr = {(0.19*Math.sqrt(z.fc||5)).toFixed(3)} ksi &nbsp;·&nbsp; limit = fr+fpe = {((0.19*Math.sqrt(z.fc||5))+(z.fpe||0)).toFixed(3)} ksi
+                          f_t = 0.19√f'c = {(0.19*Math.sqrt(z.fc||5)).toFixed(3)} ksi (tension limit, not f_r) &nbsp;·&nbsp; limit = f_t+fpe = {((0.19*Math.sqrt(z.fc||5))+(z.fpe||0)).toFixed(3)} ksi
                         </div>
                       </div>
                     </div>
@@ -15311,7 +15799,7 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
                          gov:govRating, hasTons:true},
                         {ls:'Strength I', level:'Operating', gam:gamLL_op,
                          gov:govOperating, hasTons:true},
-                        ...(serviceIIData.length?[{ls:'Service II (Steel)',level:'—',gam:1.3,
+                        ...(serviceIIData.length?[{ls:'Service II (Steel)',level:'—',gam:serviceIIGamLL,
                           gov:govServiceII,hasTons:false}]:[]),
                         ...(fatigueData.length&&govFatigue?[
                           {ls:'Fatigue I',  level:'Infinite Life', gam:FATIGUE_GAMMA['I'],
@@ -15497,7 +15985,7 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
                     const catColor = cat==='Permit'?'#be123c':cat==='Legal'?'#6d28d9':'#1d4ed8';
                     const catBg   = cat==='Permit'?'#fff1f2':cat==='Legal'?'#f5f3ff':'#eff6ff';
                     // Recompute default gamLL when category changes
-                    const defaultGam = vehicleGamLL(cat, ratingLimitState, ratingMethod, ratingAdtt);
+                    const defaultGam = vehicleGamLL(cat, ratingLimitState, ratingMethod, ratingAdtt, vn);
                     return (
                       <div key={vn} style={{display:'grid',gridTemplateColumns:'160px 1fr 1fr 100px 130px 80px',gap:'8px',
                         alignItems:'center',padding:'8px',borderRadius:'6px',
@@ -15536,7 +16024,7 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
                         <select value={cat}
                           onChange={e=>{
                             const newCat = e.target.value;
-                            const newGam = vehicleGamLL(newCat, ratingLimitState, ratingMethod, ratingAdtt);
+                            const newGam = vehicleGamLL(newCat, ratingLimitState, ratingMethod, ratingAdtt, vn);
                             setVehicleLCMap(prev=>({...prev,[vn]:{
                               ...(prev[vn]||{}),
                               category:newCat,
@@ -15575,7 +16063,7 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
                           </div>
                           {assign.customGam&&(
                             <button onClick={()=>{
-                              const g=vehicleGamLL(cat,ratingLimitState,ratingMethod,ratingAdtt);
+                              const g=vehicleGamLL(cat,ratingLimitState,ratingMethod,ratingAdtt,vn);
                               setVehicleLCMap(prev=>({...prev,[vn]:{...(prev[vn]||{}),
                                 gamLLinv:+g.inv.toFixed(4),gamLLop:+g.op.toFixed(4),customGam:false}}));
                             }} style={{fontSize:'8.5px',fontFamily:'monospace',color:'#9ca3af',
@@ -15789,8 +16277,9 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
                 <div style={{fontSize:'13px',fontWeight:'600',color:'#111827',marginBottom:'4px'}}>Service II — Flange Stress Check</div>
                 <div style={{fontSize:'11px',fontFamily:'monospace',color:'#6b7280',marginBottom:'12px',
                   padding:'7px 10px',background:'#f0f9ff',border:'1px solid #bfdbfe',borderRadius:'5px'}}>
-                  AASHTO LRFD 6.10.4.2 · f_DC + f_DW + 1.3·f_LL ≤ 0.95·Rh·Fyf · f = M·12/Sx (ksi)
-                  <br/>MBE 6A.4.2.1 · RF = (0.95·Rh·Fyf − f_DC − f_DW) / (1.3·f_LL)
+                  AASHTO LRFD 6.10.4.2 · f_DC + f_DW + γ_LL·f_LL ≤ 0.95·Rh·Fyf · f = M·12/Sx (ksi)
+                  <br/>MBE 6A.4.2.1 · RF = (0.95·Rh·Fyf − f_DC − f_DW) / (γ_LL·f_LL) · γ_LL = {serviceIIGamLL} (MBE Table 6A.4.2.2-1: Inv 1.30 · Op 1.00 · Legal 1.30 · Permit 1.00)
+                  <br/>f_LL = M_LL × {serviceIIScale.toFixed(4)} (g·(1+IM)·m·F₁·F₂ from the Inputs tab{serviceIICarriesIM?'; IM already in the MCT':''}){Math.abs(serviceIIScaleNeg-serviceIIScale)>1e-6?<> · hogging × {serviceIIScaleNeg.toFixed(4)} (g⁻)</>:null}
                   &nbsp;·&nbsp; <strong>Sx must be entered in the Capacity Zones above</strong>
                 </div>
 
@@ -15896,7 +16385,7 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
                   </div>
                   <div style={{padding:'6px 12px',background:'#f9fafb',borderTop:'1px solid #e5e7eb',
                     fontSize:'9.5px',fontFamily:'monospace',color:'#9ca3af'}}>
-                    γ_DC=1.0 · γ_DW=1.0 · γ_LL=1.3 · Rh={serviceIIRh} · limit = 0.95·Rh·Fyf · f = M·12/Sx
+                    γ_DC=1.0 · γ_DW=1.0 · γ_LL={serviceIIGamLL} · LL × {serviceIIScale.toFixed(4)} · Rh={serviceIIRh} · limit = 0.95·Rh·Fyf · f = M·12/Sx
                   </div>
                 </>)}
               </div>
@@ -15966,6 +16455,25 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
                           (ΔF)_TH ({fatigueCategory}) = {(FATIGUE_CATEGORIES[fatigueCategory]||FATIGUE_CATEGORIES['C']).threshold} ksi
                         </>;
                       })()}
+                    </div>
+                    {/* Fatigue LL scale: IM 15 % and g_fat (sweep IDX-O14) */}
+                    <div style={{display:'grid',gridTemplateColumns:'140px 1fr',gap:'8px',alignItems:'start'}}>
+                      <div>
+                        <div style={STYLES.monoSmall}>g_fat (one-lane g ÷ 1.2)</div>
+                        <input type="number" step="0.001" min="0" value={fatigueDF??''} placeholder="not applied"
+                          onChange={e=>setRating('fatigueDF', e.target.value===''?null:(parseFloat(e.target.value)||0))}
+                          style={{...INP2,fontFamily:'monospace',fontWeight:'600',fontSize:'12px'}}/>
+                        {(()=>{ const d=lldfFeed&&lldfFeed.d; const g=d&&d.governing; const c=g?['interior','exterior'].map(k=>g[k]).filter(o=>o&&o.fatM!=null):[];
+                          const f=c.length?Math.max(...c.map(o=>+o.fatM||0)):0;
+                          return f>0?<button onClick={()=>setRating('fatigueDF',+f.toFixed(4))}
+                            style={{marginTop:'3px',fontSize:'9px',fontFamily:'monospace',background:'#eff6ff',border:'1px solid #bfdbfe',
+                              borderRadius:'4px',color:'#1d4ed8',cursor:'pointer',padding:'2px 6px'}}>use LL &amp; DL fatM = {f.toFixed(4)}</button>:null; })()}
+                      </div>
+                      <div style={{fontSize:'9.5px',fontFamily:'monospace',color:'#374151',padding:'6px 9px',background:'#fdf4ff',border:'1px solid #e9d5ff',borderRadius:'5px',lineHeight:1.5}}>
+                        ΔM = ΔM_MIDAS × (1 + {FATIGUE_IM}/100)/(1 + {fatigueImPct}/100) {(+fatigueDF>0)?<>× g_fat {(+fatigueDF).toFixed(4)}</>:<>(g_fat not applied)</>} = ΔM_MIDAS × <b>{fatigueScale.toFixed(4)}</b>
+                        <br/>IM for fatigue = 15 % (LRFD Table 3.6.2.1-1); the MCT carries {fatigueImPct} % for this case.
+                        Use the <b>LRFD Fatigue Truck</b> (30 ft rear spacing, 3.6.1.4.1) results — the HL-93 truck overstates the range.
+                      </div>
                     </div>
                   </div>
 
@@ -16146,7 +16654,7 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
                     </div>
                     <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(280px,1fr))',gap:'8px'}}>
                       {capZones.filter(z=>z.type==='psconc').map((z,i)=>{
-                        const {fps,a,c} = computePSfps(z);
+                        const {fps,a,c,rect,k} = computePSfps(z);
                         const Mn  = computePSMn(z);
                         const Vn  = computePSVn(z);
                         const phi_Mn = phiC*phiS*ratingPhiF*Mn;
@@ -16174,8 +16682,12 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
                             </div>
                             <div style={{marginTop:'6px',padding:'5px 8px',background:'#eff6ff',
                               border:'1px solid #bfdbfe',borderRadius:'4px',fontSize:'10px',fontFamily:'monospace',color:'#1d4ed8'}}>
-                              fps = {fps.toFixed(2)} ksi &nbsp;·&nbsp; a = {a.toFixed(3)} in &nbsp;·&nbsp; c = {c.toFixed(3)} in
+                              fps = fpu(1 − k·c/dp) = {fps.toFixed(2)} ksi (k = {(k||0).toFixed(2)}) &nbsp;·&nbsp; a = {a.toFixed(3)} in &nbsp;·&nbsp; c = {c.toFixed(3)} in
+                              &nbsp;·&nbsp; {rect?'rectangular':'T-section (a > hf)'} — AASHTO 5.6.3.1.1
                             </div>
+                            {!(z.hf>0)&&(+z.Aps>0)&&<div style={{marginTop:'4px',fontSize:'9.5px',fontFamily:'monospace',color:'#b91c1c',fontWeight:600}}>
+                              ⚠ hf (compression flange thickness) not entered — rectangular behaviour assumed; enter hf for the T-section check (5.6.3.2.2)
+                            </div>}
                             <div style={{marginTop:'4px',padding:'5px 8px',background:'#f0fdf4',
                               border:'1px solid #bbf7d0',borderRadius:'4px',fontSize:'10px',fontFamily:'monospace',color:'#166534'}}>
                               Mn = {Mn.toFixed(1)} ft·k &nbsp;→&nbsp; <strong>φMn = {phi_Mn.toFixed(1)} ft·k</strong>
@@ -16289,8 +16801,9 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
                 </div>
                 <div style={{fontSize:'11px',fontFamily:'monospace',color:'#6b7280',marginBottom:'12px',
                   padding:'7px 10px',background:'#f5f3ff',border:'1px solid #ddd6fe',borderRadius:'5px'}}>
-                  AASHTO MBE 6A.5.4.2 · Bottom fiber: f_DC/Sb + f_DW/Sb + γ_LL·f_LL/Sb ≤ fr + fpe
-                  &nbsp;·&nbsp; RF = (fr + fpe − fDC − fDW) / (γ_LL · fLL) &nbsp;·&nbsp;
+                  AASHTO MBE 6A.5.4.2 · Bottom fiber: f_DC/Sb + f_DW/Sb + γ_LL·f_LL/Sb ≤ f_t + fpe
+                  &nbsp;·&nbsp; RF = (f_t + fpe − fDC − fDW) / (γ_LL · fLL) &nbsp;·&nbsp; f_t = concrete tension limit (LRFD Table 5.9.2.3.2b-1), not the modulus of rupture
+                  &nbsp;·&nbsp; f_LL = M_LL × {ps3Scale.toFixed(4)} (g·(1+IM)·m·F₁·F₂{ps3CarriesIM?'; IM already in the MCT':''}) &nbsp;·&nbsp;
                   <strong>Requires PS Concrete zones with Sb, St, fpe defined above</strong>
                 </div>
 
@@ -16336,7 +16849,7 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
                   <div style={{display:'flex',alignItems:'center',gap:'8px'}}>
                     <span style={{fontSize:'11px',fontFamily:'monospace',color:'#374151'}}>Exposure</span>
                     <div style={{display:'flex',borderRadius:'5px',overflow:'hidden',border:'1px solid #e5e7eb'}}>
-                      {[['moderate','Moderate (fr=0.19√f\'c)'],['severe','Severe (fr=0.0948√f\'c)']].map(([v,lbl])=>(
+                      {[['moderate','Moderate (f_t=0.19√f\'c)'],['severe','Severe (f_t=0.0948√f\'c)']].map(([v,lbl])=>(
                         <button key={v} onClick={()=>setRating('ps3Exposure',v)}
                           style={{padding:'5px 12px',border:'none',cursor:'pointer',fontSize:'11px',
                             background:ps3Exposure===v?'#7c3aed':'#fff',
@@ -16365,7 +16878,7 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
                        color:govPS3?.rfGov>=1?'#059669':govPS3?.rfGov>=0.5?'#d97706':'#dc2626'},
                       {label:'Governing node', value:govPS3?`N${govPS3.node} · ${govPS3.pos.toFixed(2)} ft`:'—', color:'#374151'},
                       {label:'Controls',  value:govPS3?.governs??'—', color:'#7c3aed'},
-                      {label:'fr + fpe limit', value:govPS3?`${govPS3.limit.toFixed(3)} ksi`:'—', color:'#059669'},
+                      {label:'f_t + fpe limit', value:govPS3?`${govPS3.limit.toFixed(3)} ksi`:'—', color:'#059669'},
                     ].map(({label,value,color})=>(
                       <div key={label} style={{background:'#f9fafb',border:'1px solid #e5e7eb',borderRadius:'7px',padding:'10px 14px'}}>
                         <div style={{fontSize:'9.5px',fontFamily:'monospace',color:'#9ca3af',textTransform:'uppercase',letterSpacing:'0.06em',marginBottom:'4px'}}>{label}</div>
@@ -16446,7 +16959,7 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
 
                   <div style={{padding:'6px 12px',background:'#f9fafb',borderTop:'1px solid #e5e7eb',
                     fontSize:'9.5px',fontFamily:'monospace',color:'#9ca3af'}}>
-                    γ_LL={ps3GamLL} · fr=0.19√f'c ({ps3Exposure}) · limit=fr+fpe · all stresses in ksi · f=M·12/Sb
+                    γ_LL={ps3GamLL} · LL × {ps3Scale.toFixed(4)} · f_t={ps3Exposure==='severe'?'0.0948':'0.19'}√f'c tension limit ({ps3Exposure}) · limit=f_t+fpe · all stresses in ksi · f=M·12/Sb
                     &nbsp;·&nbsp; MBE 6A.5.4.2
                   </div>
                 </>)}
@@ -18435,7 +18948,7 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
                       </div>
                       <div style={{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:'8px',marginBottom:'20px'}}>
                         {[['γ_DC',gamDC],['γ_DW',gamDW],['γ_LL (Inv)',gamLL],['γ_LL (Op)',gamLL_op.toFixed(2)],['LL Scale',ratingLLScale.toFixed(4)],
-                          ['φ_c',phiC],['φ_s',phiS],['φ_f',ratingPhiF],['φ_v',ratingPhiV],['η',ratingEta]
+                          ['φ_c',phiC],['φ_s',phiS],['φ_f',ratingPhiF],['φ_v',ratingPhiV],['η','not used']
                         ].map(([l,v])=>(
                           <div key={l} style={{background:'#f8fafc',border:'1px solid #e5e7eb',borderRadius:'5px',padding:'6px 8px',textAlign:'center'}}>
                             <div style={{fontSize:'9.5px',color:'#6b7280',fontFamily:'monospace',textTransform:'uppercase'}}>{l}</div>
@@ -19037,8 +19550,10 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
 }
 
 
+// Title-block defaults: blank engineer and today's date (YYYY/M/D, the MIDAS *PROJINFO form);
+// were a hard-coded firm name and a fixed date (sweep IDX-C6). Saved projects keep their own.
 const DEFAULT_CFG = {
-  projectUser:'HDR',projectDate:'2026/4/15',version:'9.5.5',
+  projectUser:'',projectDate:(()=>{ const t=new Date(); return t.getFullYear()+'/'+(t.getMonth()+1)+'/'+t.getDate(); })(),version:'9.5.5',
   projectName:'',projectBridgeId:'',projectClient:'',
   projectDesc:'',projectRevision:'0',projectAddress:'',
   spans:[20.25,20.25,20.25,20.25],elemsPerSpan:10,
@@ -19434,7 +19949,7 @@ function generateReportHTML({ cfg, mctOutput, rows, nodePositions, ratingData,
               dfSplit?'  (positive moment)':''}</td></tr>
             ${dfSplit?`<tr><td>LL Scale — hogging moment</td><td class="mono">×${(ratingLLScaleMn||ratingLLScale||1).toFixed(4)}</td></tr>
             <tr><td>LL Scale — shear</td><td class="mono">×${(ratingLLScaleV||ratingLLScale||1).toFixed(4)}</td></tr>`:''}
-            <tr><td>η Load Modifier</td><td class="mono">${ratingEta||1.0}</td></tr>
+            <tr><td>η Load Modifier</td><td class="mono">not used (MBE 6A LRFR has no η)</td></tr>
             <tr><td>φ_c (condition)</td><td class="mono">${phiC}</td></tr>
             <tr><td>φ_s (system; effective, φ_c·φ_s ≥ 0.85 per MBE Eq. 6A.4.2.1-3)</td><td class="mono">${phiS}</td></tr>
             <tr><td>φ_f (flexure)</td><td class="mono">${ratingPhiF}</td></tr>
@@ -19469,7 +19984,7 @@ function generateReportHTML({ cfg, mctOutput, rows, nodePositions, ratingData,
             <td>${i+1}</td>
             <td class="mono">${parseFloat(z.startX).toFixed(3)}</td>
             <td class="mono">${parseFloat(z.endX).toFixed(3)}</td>
-            <td>${z.type==='quickcalc'?`Fy=${z.Fy}ksi Zx+=${z.ZxPos} Zx-=${z.ZxNeg} Aw=${z.Aw}`:'Manual'}</td>
+            <td>${z.type==='quickcalc'?`Fy=${z.Fy}ksi Zx+=${z.ZxPos} Zx-=${z.ZxNeg} Aw=${z.Aw}`:'Manual'}${cap._basis?`<br/><span style="font-size:8pt;color:#6b7280">Mn⁺ ${cap._basis.pos} · Mn⁻ ${cap._basis.neg} · Vn ${cap._basis.v}</span>`:''}${(cap._warn||[]).map(w=>`<br/><span style="font-size:8pt;color:#b91c1c">⚠ ${w}</span>`).join('')}</td>
             <td class="mono">${cap.MnPos.toFixed(1)}</td>
             <td class="mono">${cap.MnNeg.toFixed(1)}</td>
             <td class="mono">${cap.Vn.toFixed(1)}</td>
@@ -20189,6 +20704,33 @@ function EmbedTrouble({app,name,health,onUse,onClose}){
     </div>);
 }
 
+/* Project data saved by an older build that the 2026-10-04 library corrections (F1, F2, F5)
+   could not rewrite, because it is user data (sweep IDX-O15). Returns one line per item;
+   shown once per load as a dismissible notice. Nothing is changed automatically. */
+function staleProjectNotes(cfg){
+  const out=[];
+  try{
+    const R=cfg.rating||{};
+    const vt=VEHICLE_TONS[R.vehicleName];
+    if(vt!=null && R.vehicleTon!=null && Math.abs(+R.vehicleTon-vt)>1e-6)
+      out.push('Rating tonnage W = '+R.vehicleTon+' t for '+R.vehicleName+'; the vehicle library now gives '+vt+' t. Re-select the vehicle (AASHTO Rating → Vehicle for Rating Tonnage) unless the value was entered on purpose.');
+    (cfg.loadCombos||[]).forEach(c=>{
+      if(c.kind!=='FATIGUE') return;
+      if(+c.llFactor===1.5 || +c.llFactor===0.75)
+        out.push('Combination "'+c.name+'" has the old fatigue LL factor '+c.llFactor+' (LRFD 10th Ed. Table 3.4.1-1: Fatigue I 1.75, Fatigue II 0.80). Re-apply the preset in Combos.');
+    });
+    ((cfg.aremaSection&&cfg.aremaSection.sectionLibrary)||[]).forEach(sec=>{
+      if(sec.type!=='rolled' || !sec.rolledName) return;
+      const r=ROLLED_SHAPES[sec.rolledName]; if(!r) return;
+      const cp=(sec.aremaComps||[]).find(c=>c.id==='tcp'), w=(sec.aremaComps||[]).find(c=>c.id==='web');
+      const off=(a,b)=>Math.abs((+a||0)-(+b||0))>5e-4;
+      if((cp&&(off(cp.w,r.bf)||off(cp.t,r.tf))) || (w&&(off(w.w,r.tw)||off(w.h,r.d-2*r.tf))))
+        out.push('Section "'+(sec.name||sec.rolledName)+'" was converted from '+sec.rolledName+' with dimensions that differ from the corrected AISC v16.0 table (bf '+r.bf+', tf '+r.tf+', tw '+r.tw+', d '+r.d+'). Re-convert the shape unless the plates were edited on purpose.');
+    });
+  }catch(e){}
+  return out;
+}
+
 function App() {
   const [step,setStepRaw]=useState(0);
   // ── Embedded sibling apps (full-screen overlay inside MCT; kept mounted so switching is instant) ──
@@ -20204,7 +20746,11 @@ function App() {
     const g=cfg.gfs||{};
     let spans=Array.isArray(cfg.spans)?cfg.spans.map(Number).filter(v=>v>0):[];
     if(!spans.length && isGFS && +g.span>0) spans=[+g.span];
-    const inputs={type:'a', spans};                            // 'a' = steel I-girder (MCT builds steel)
+    // Table 4.6.2.2.1-1 type: 'k' (precast concrete I / bulb-tee) when the member is
+    // prestressed concrete here, else 'a' (steel). Was always 'a' (sweep IDX-O13); LL & DL
+    // keeps its own classification and ignores this field, so it is informational.
+    const isPS=!!((cfg.ps&&cfg.ps.enabled)||(cfg.rating&&cfg.rating.structType==='psconc'));
+    const inputs={type:isPS?'k':'a', spans};
     let Nb;
     if(isGFS){
       Nb=Math.max(2,Math.round(+g.nGirders||2));
@@ -20294,7 +20840,14 @@ function App() {
   // and announce which app they are so a mis-named file is caught.
   useEffect(()=>{ const h=(e)=>{ const d=e&&e.data;
       if(!d||d.source!=='bridge-suite') return;
-      if('embed' in d){ openEmbed(d.embed||null); return; }
+      // Only a sibling app framed by this window may switch the frame (sweep IDX-S10):
+      // a message from any other window or origin is ignored.
+      if('embed' in d){
+        let ours=false;
+        Object.keys(frameRefs.current).forEach(a=>{ const el=frameRefs.current[a];
+          try{ if(el&&el.contentWindow&&el.contentWindow===e.source) ours=true; }catch(err){} });
+        if(ours) openEmbed(d.embed||null);
+        return; }
       if(d.hello){
         // Identify the speaker by window, not by what the message claims: the
         // whole point is that the frame may not be the app we asked for.
@@ -21052,6 +21605,9 @@ function App() {
     ratingCapZones,           setRatingCapZones,
     onReportState:setReportState,
   };
+  // One-time notice for stale library data in the loaded project (sweep IDX-O15).
+  const staleNotes=useMemo(()=>staleProjectNotes(cfg),[cfg.rating&&cfg.rating.vehicleName,cfg.rating&&cfg.rating.vehicleTon,cfg.loadCombos,cfg.aremaSection]);
+  const [staleDismissed,setStaleDismissed]=useState(false);
   const steps=[<StepProject cfg={cfg} set={set}/>,<StepGeometry cfg={cfg} set={set}/>,
     <StepSections cfg={cfg} set={set}/>,<StepLoads cfg={cfg} set={set} dlLocked={dlLocked} onToggleDLLock={onToggleDLLock}/>,
     <StepMovingLoads cfg={cfg} set={set}/>,<StepCombos cfg={cfg} set={set}/>,
@@ -21310,6 +21866,17 @@ function App() {
           </div>
           {/* Form */}
           <div style={{flex:1,overflowY:'auto',padding:'24px 32px'}}>
+            {!staleDismissed&&staleNotes.length>0&&(
+              <div style={{margin:'0 0 14px',padding:'10px 14px',borderRadius:'8px',border:'1px solid #fde68a',
+                borderLeft:'4px solid #d97706',background:'#fffbeb',fontSize:'12px',color:'#92400e',lineHeight:1.5}}>
+                <div style={{display:'flex',alignItems:'center',gap:'10px'}}>
+                  <b>⚠ This project holds data from an older version of the libraries</b>
+                  <button onClick={()=>setStaleDismissed(true)} style={{marginLeft:'auto',background:'#fff',border:'1px solid #fcd34d',
+                    borderRadius:'5px',color:'#92400e',padding:'3px 10px',cursor:'pointer',fontSize:'11px'}}>Dismiss</button>
+                </div>
+                <ul style={{margin:'6px 0 0 18px'}}>{staleNotes.map((t,i)=><li key={i}>{t}</li>)}</ul>
+              </div>
+            )}
             <StepErrorBoundary key={step}>{steps[step]}</StepErrorBoundary>
           </div>
           {/* Footer */}

@@ -1145,3 +1145,216 @@ Feature (**no calculation changes**): a **Vertical datum** label on the Alignmen
   - O-D1. Carrying the datum in a hand-off (e.g. an optional field on `projectMeta` or `lldfGeom`) needs a HANDOFF.md change and the receiving tools: not done here.
   - O-D2. The datum is not written to the CSV exports (see above). If wanted, it could go in an extra column or in the file name; say which.
   - O-D3. The heatmap, cross-section, 3D and Site Map views show elevations without the datum label; the table captions on the same tabs carry it.
+
+## 2026-10-12 — PR: claude/sweep-bridgegeom (PR link added after merge)
+
+Open-item sweep (inventory section 24). Engineer's instruction 2026-10-12: work through the open items using best judgement, and list what needs the engineer. Changes: the LL & DL hand-off skew (BG-OH2, **calc: hand-off value**), deck thickness and beam depth in the hand-off (BG-OH1), `projectToPGL` nearest root (BG-O7, bug), datum labels on the views and in the CSV file names (BG-OD2/OD3). **No Top-of-Deck, Beam Seat, derived-geometry or saved-project result changes** on any of the tested bridges (see "How verified"). `lldf.html` is not changed.
+
+### W1. BG-OH2: skew sent to LL & DL: moment / shear choice, Art. 4.6.2.2.2e 10° rule   [calc change: hand-off value] [MORE conservative for moment DFs; see the shear note]
+- **Where:** the LL & DL hand-off `<script>` block: `bgxBuildLldfGeom(opt)` and the send dialog (`opts()`, `refresh()`, `openDlg()`). Anchors: `const skewRule=(`, `const skewVal=r2(`, `if(notes[2]==='') notes.splice(2,1);`, `if(Nb) payload.Nb=Nb;`, `['Skew θ',`, `<select id="bgx_skew"`, `sel.innerHTML=h; sel.value=`.
+- **Problem:** when the supports' skews differ, LL & DL (one θ input) was sent the largest |θ| by default. LL & DL uses that one θ for both the moment reduction (Table 4.6.2.2.2e-1) and the shear correction (Table 4.6.2.2.3c-1). The largest |θ| is conservative for shear but gives the **largest moment reduction: unconservative for moment DFs**. It also ignored Art. 4.6.2.2.2e, which permits the moment reduction only when the skews of two adjacent support lines differ by no more than 10°.
+- **Governing provision:** AASHTO LRFD 10th Ed. (2024) Art. 4.6.2.2.2e and Table 4.6.2.2.2e-1 (moment reduction; "the difference between skew angles of two adjacent lines of supports does not exceed 10°": verify the wording against the printed 10th Ed.); Art. 4.6.2.2.3c and Table 4.6.2.2.3c-1 (shear correction at the obtuse corner).
+- **Before:**
+  ```js
+      const skewRule=(['max','min','mean'].indexOf(opt.skewRule)>=0)?opt.skewRule:'max';
+  ...
+      const skewVal=r2(skewRule==='min'?Math.min.apply(null,sk):(skewRule==='mean'?sk.reduce((s,v)=>s+v,0)/sk.length:Math.max.apply(null,sk)));
+  ```
+  ```js
+          +'<div><label>Skew sent (one value)</label><select id="bgx_skew"><option value="max" selected>largest |skew|</option><option value="min">smallest |skew|</option><option value="mean">average |skew|</option></select></div>'
+  ```
+- **After:**
+  ```js
+      // BG-OH2: default 'moment' (was 'max'). LL & DL takes ONE skew and uses it for both the moment reduction
+      // (Table 4.6.2.2.2e-1) and the shear correction (Table 4.6.2.2.3c-1); the largest |skew| gave the largest
+      // moment reduction (unconservative for moment DFs when the supports' skews differ).
+      const skewRule=(['moment','max','min','mean'].indexOf(opt.skewRule)>=0)?opt.skewRule:'moment';
+      const sendDepths=(opt.depths!==false);
+  ...
+      const skMin=Math.min.apply(null,sk), skMax=Math.max.apply(null,sk);
+      // largest change of the (signed) skew between adjacent supports, i.e. the angle between the two support lines
+      let skAdj=0; for(let i=1;i<su.length;i++) skAdj=Math.max(skAdj,Math.abs((+su[i].skew||0)-(+su[i-1].skew||0)));
+      // moment DFs: smallest |skew|; no reduction (0) when adjacent supports differ by more than 10 deg (Art. 4.6.2.2.2e)
+      const skNoRed=skAdj>10+1e-9, skMoment=skNoRed?0:skMin;
+      const skewVal=r2(skewRule==='moment'?skMoment:(skewRule==='min'?skMin:(skewRule==='mean'?sk.reduce((s,v)=>s+v,0)/sk.length:skMax)));
+      const skDiffer=(skMax-skMin>1e-9)||skNoRed;
+  ```
+  ```js
+          +'<div><label>Skew sent (one value)</label><select id="bgx_skew" title="LL &amp; DL uses one skew for both the moment reduction (Art. 4.6.2.2.2e) and the shear correction (Art. 4.6.2.2.3c). For moment DFs: the smallest |skew|, or 0 when adjacent supports differ by more than 10 deg. For shear DFs: the largest |skew|."><option value="">choose&hellip;</option><option value="moment" selected>for moment DFs</option><option value="max">for shear DFs (largest)</option><option value="min">smallest |skew|</option><option value="mean">average |skew|</option></select></div>'
+  ```
+  Also (exact code in the PR diff; anchors above):
+  - The "Sent:" sentence of the skew note now reads "the skew for moment DFs = X deg (the smallest |skew|)" or "(0: adjacent supports differ by more than 10 deg, so AASHTO LRFD Art. 4.6.2.2.2e allows no moment reduction)". The other rules keep their old wording.
+  - When the skews differ, a new note (shown in LL & DL's banner) gives both values and the articles. It says which value this hand-off carries and that the other action needs a second run. For "for shear DFs" it says that the MOMENT DFs of that run are unconservative.
+  - New optional **top-level** payload field `skewDetail` = `{bySupport:[{name, skew (signed, deg, as entered)}], absMin, absMax, maxAdjacentDiff, moment, shear, sent}` (deg). It is outside `inputs` on purpose: lldf merges `inputs` into its saved state, and it ignores unknown top-level fields (checked: `skewDetail` is not in `lldf_autosave_v1`).
+  - The summary row `Skew θ` adds "(for moment DFs: X°; for shear DFs: Y°)" when the values differ. `bgxBuildLldfGeom` also returns `skewWarn`.
+  - **Dialog:** when the skews differ, "Skew sent" opens on **choose…**, and Send / Export stay disabled until a rule is picked. A red line explains the two runs. When all supports have the same skew, it opens on "for moment DFs", which then equals the old value.
+- **Default picked and why:** no single θ is conservative for both actions. So:
+  1. In the dialog, the engineer must choose whenever the skews differ.
+  2. The builder default (`bgxBuildLldfGeom()` without a rule) is the moment value: the old default was unconservative for moment, and the moment value follows the 10° rule of Art. 4.6.2.2.2e.
+  `basis.skew` gains the value `'moment'` (HANDOFF.md §4.2 lists max|min|mean; lldf does not read `basis`).
+- **Shear note:** a "for moment DFs" hand-off gives LL & DL a smaller θ, so its **shear** correction is smaller (less conservative for shear) than with the old default. The note and the dialog say to take the shear DFs from a "for shear DFs" run, which sends the old default value.
+- **Check case 1 (hand-checkable; Example 3 with skews Abut 1 40°, Pier 1 35°, Abut 2 30°):**
+  - Inputs: |θ| = 40, 35, 30; adjacent differences 5° and 5° (≤ 10°).
+  - Before: θ sent = max = **40.00°** (basis `max`). After: "for moment DFs" θ = min = **30.00°** (basis `moment`); "for shear DFs" θ = **40.00°** (basis `max`). Checked in Chromium: main gives `[40,"max"]`; the branch gives `[30,"moment"]` by default (adjacent difference 5) and `[40,"max"]` for `max`.
+  - Effect in LL & DL (type (a), beam-slab; illustrative values L = 100 ft, S = 8 ft, t_s = 8 in, K_g = 500,000 in⁴): c₁ = 0.25 (K_g / 12 L t_s³)^0.25 (S/L)^0.5 = 0.25 × (500000/614400)^0.25 × 0.08^0.5 = 0.25 × 0.9498 × 0.2828 = 0.06716.
+    - Moment factor 1 − c₁ (tan θ)^1.5: before (40°) 1 − 0.06716 × 0.8391^1.5 = 1 − 0.06716 × 0.76864 = **0.9484**; after (30°) 1 − 0.06716 × 0.57735^1.5 = 1 − 0.06716 × 0.43869 = **0.9705**. Moment DFs are 2.3 % higher: **more conservative**.
+    - Shear factor 1 + 0.20 (12 L t_s³/K_g)^0.3 tan θ, with (614400/500000)^0.3 = 1.0638: at 40° it is 1 + 0.2 × 1.0638 × 0.8391 = **1.1785** (the "for shear DFs" run, the same as before). The 30° moment run would give 1.1228, so the shear DFs must come from the shear run, as the notes say.
+- **Check case 2 (demo bridge: Abut 1 0°, Pier 1 15°, Abut 2 0°):** adjacent differences 15° and 15° > 10°, so moment θ = **0.00°** (no moment reduction permitted) and shear θ = **15.00°**. Before: 15.00° sent by default. Now the dialog opens on "choose…" with Send disabled.
+- **Check case 3 (no change):** Examples 1–5 and the validation set have equal skews at all supports. There the "for moment DFs" value equals the old default (0, 25, 0, 15, 0 and 0°), and `inputs`, spans, spacings and overhangs are identical; `basis.skew` reads `'moment'`.
+- **How verified:** see "How verified (W1–W4)".
+- **Other copies:** none (`lldf.html` unchanged; BridgeXfer untouched).
+
+### W2. BG-OH1: deck structural thickness t_s and default beam depth d sent to LL & DL   [hand-off: existing optional fields] [no result change in this tool]
+- **Where:** `bgxBuildLldfGeom`, after `const notes=[], units={spans:'ft', skew:'deg'};`; the notes block after the W1 note; the summary row `['Slab t_s / beam d', …]`; the dialog checkbox `#bgx_dep` (default checked) and `opts()`.
+- **After:**
+  ```js
+      // BG-OH1: deck structural thickness and default beam depth (both inches, as lldf's t_s and d)
+      const dNotes=[];
+      if(sendDepths){
+        const ts=+document.getElementById('d_slab').value, dd=+document.getElementById('d_beam').value;
+        if(isFinite(ts)&&ts>0){ inputs.ts=r3(ts); units.ts='in'; } else dNotes.push('Slab thickness not sent: the deck structural thickness is not a number > 0.');
+        const ovr=[].concat(Object.values(PERBEAM.beam||{}),Object.values(PERBEAMSPAN.beam||{})).filter(v=>v!=null&&v!==''&&+v!==dd);
+        if(ovr.length) dNotes.push('Beam depth not sent: Bridge Geometry has per-beam / per-span beam-depth overrides ('+ovr.length+' differ from the default '+dd+' in). Enter d in LL & DL.');
+        else if(isFinite(dd)&&dd>0){ inputs.depth=r3(dd); units.depth='in'; } else dNotes.push('Beam depth not sent: the default beam depth is not a number > 0.');
+      }
+  ```
+  A note states the source of each value: "Slab thickness t_s = Bridge Geometry deck structural thickness (8 in); beam depth d = Bridge Geometry default beam depth, top to bottom of beam (36 in)."
+- **Problem:** lldf's t_s and d (used in K_g, c₁, the skew factors and the box/spread-box equations) had to be retyped.
+- **Format:** `inputs.ts` / `inputs.depth` are the field names lldf's reader already accepts (`validateGeom`, `geomOverwriteList`, `geomSource.fields`), in **inches** (lldf's units). `units.ts` / `units.depth = 'in'` are added (lldf checks units only for spans, spacings, OL, OR, de and skew). lldf's banner lists both as "will overwrite" before anything changes.
+- **Default:** sent (checkbox on). The beam depth is **not** sent when any per-beam or per-span beam-depth override differs from the default, because no single d represents them; the note says so.
+- **Governing provision:** n/a (data transfer; t_s and d as defined in AASHTO LRFD 10th Ed. Art. 4.6.2.2.1, used by lldf).
+- **Check case:**
+  - Demo: `inputs.ts = 8`, `inputs.depth = 36`.
+  - Example 5: 8 / 54.
+  - Custom case with `PERBEAM.beam = {1:'48'}`: `ts = 8`, no `depth`, and the note "Beam depth not sent … (1 differ from the default 36 in)".
+  - Pulled into lldf.html (Chromium): t_s 8 and d 36, or d left at its value when it is not sent.
+
+### W3. BG-O7: `projectToPGL` keeps the nearest root   [bug fix] [no change for single-root cases]
+- **Where:** `projectToPGL(align, x, y)` (≈ line 976). Anchor: `// coarse scan for`.
+- **Before:**
+  ```js
+    // coarse scan for a sign change of f (the closest-station condition is f=0)
+    const N=Math.max(50, Math.ceil((s1-s0)/2));
+    let prevS=s0, prevF=f(s0), bestS=s0, bestAbs=Math.abs(prevF), lo=null, hi=null;
+    for(let i=1;i<=N;i++){ const s=s0+(s1-s0)*i/N, fv=f(s);
+      if(Math.abs(fv)<bestAbs){ bestAbs=Math.abs(fv); bestS=s; }
+      if(prevF===0){ lo=hi=prevS; break; }
+      if((prevF<0)!==(fv<0)){ lo=prevS; hi=s; break; }
+      prevS=s; prevF=fv;
+    }
+    let sstar;
+    if(lo!==null){ let a=lo,b=hi;
+      for(let k=0;k<60;k++){ const m=(a+b)/2, fm=f(m); if(Math.abs(fm)<1e-9){a=b=m;break;} const fa=f(a); if((fa<0)!==(fm<0)) b=m; else a=m; }
+      sstar=(a+b)/2;
+    } else { sstar=bestS; } // no sign change (point beyond the ends) -> nearest endpoint station
+  ```
+- **After:**
+  ```js
+    // coarse scan for EVERY sign change of f (the closest-station condition is f=0). BG-O7: on reverse
+    // curves or near a curve centre f can change sign more than once; each bracket is refined and the
+    // root nearest the point is kept (was: the first sign change). One root -> the same result as before.
+    const N=Math.max(50, Math.ceil((s1-s0)/2));
+    let prevS=s0, prevF=f(s0), bestS=s0, bestAbs=Math.abs(prevF); const brk=[];
+    for(let i=1;i<=N;i++){ const s=s0+(s1-s0)*i/N, fv=f(s);
+      if(Math.abs(fv)<bestAbs){ bestAbs=Math.abs(fv); bestS=s; }
+      if(prevF===0) brk.push([prevS,prevS]);
+      else if((prevF<0)!==(fv<0)) brk.push([prevS,s]);
+      prevS=s; prevF=fv;
+    }
+    let sstar;
+    if(brk.length){ let bestD=Infinity;
+      for(const [lo,hi] of brk){ let a=lo,b=hi;
+        for(let k=0;k<60;k++){ const m=(a+b)/2, fm=f(m); if(Math.abs(fm)<1e-9){a=b=m;break;} const fa=f(a); if((fa<0)!==(fm<0)) b=m; else a=m; }
+        const r=(a+b)/2, q=align.at(r), d=Math.hypot(x-q.x, y-q.y);
+        if(d<bestD){ bestD=d; sstar=r; }
+      }
+    } else { sstar=bestS; } // no sign change (point beyond the ends) -> nearest endpoint station
+  ```
+- **Problem:** the first sign change of the along-tangent residual is not always the nearest station (reverse curves, points near a curve centre). The function is used by `getDeckPoint` for chord points, by `deckPointAtXY` (Site Map picked points) and by the heatmap.
+- **Governing provision:** n/a (geometry).
+- **Check case:** S-curve with POB 0+00 at (0, 0), bearing N90E: tangent 150, curve R 400 L 300, curve R −400 L 300, tangent 150. Point (x 759.895, y 272.845):
+  - Before: Sta 4+44.55, offset −508.13 ft (508.13 ft from that PGL point).
+  - After: Sta 8+14.58, offset −487.49 ft (487.49 ft, the nearer foot of the perpendicular).
+  - On a 31 × 31 grid extending 300 ft beyond the alignment, 6 of 961 points change, all about 500 ft from the PGL. Every deck point (tables, `getDeckPoint` samples, heatmap) is unchanged.
+- **Cost:** the scan no longer stops at the first sign change (same N). Measured 0.01–0.11 ms per call on both main and the branch (noise level).
+
+### W4. BG-OD2 / BG-OD3: vertical datum on the views and in the CSV file names   [UI] [no result change]
+- **Where:**
+  - A new pill `<span class="pill vdatum_pill" style="text-transform:none;letter-spacing:0;" title="Label only — no datum conversion is applied.">datum: not specified</span>` (the Profile pill's markup, filled by the existing `renderVDatum()`) in the caps of:
+    - `3D · alignment, deck &amp; substructure`;
+    - the Bridge tab `3D` card;
+    - `Deck plan · top-of-deck elevation` (the heatmap);
+    - `Section` (after `id="sec_sta"`).
+  - Site Map, pick-points fieldset, before `<div id="pick_table"`: `<p class="note vdatum_cap" style="margin:8px 0 0;" title="Label only — no datum conversion is applied.">Elevations in feet · vertical datum: not specified</p>` (filled by `renderVDatum()`).
+  - A new `vDatumFileTag()` before `function renderVDatum(){`. `exportTableCSV` now uses `` a.download=`${base}${vDatumFileTag()}-${…}.csv` ``, and `exportPickCSV` uses `a.download='picked-points'+vDatumFileTag()+'.csv'`.
+    ```js
+    function vDatumFileTag(){
+      const lab=(typeof vDatumLabel==='function')?vDatumLabel():null; if(!lab) return '';
+      const t=lab.replace(/[^A-Za-z0-9]+/g,'').slice(0,32); return t?'-'+t:'';
+    }
+    ```
+- **Default picked:** the CSV **content** is unchanged, because a header or comment line would break column parsing (as D1 noted). The datum goes in the **file name** instead, e.g. `beam-seat-NAVD88-2026-10-12.csv`. With the datum "Not specified" the file names are unchanged. PNG/SVG exports of the views do not carry the pill (canvas/SVG only).
+- **Check case:** with datum NAVD 88:
+  - the four caps show the pill "datum: NAVD 88";
+  - the pick-points caption reads "Elevations in feet · vertical datum: NAVD 88";
+  - the Beam Seat CSV is named `beam-seat-NAVD88-2026-10-12.csv`.
+
+### Items closed (no code change)
+- **BG-OD1 (datum in the hand-off):** not needed. `lldfGeom` carries no elevations (spans, spacings, skew, overhangs, t_s, d), and `projectMeta` is title-block data. No hand-off carries an elevation, so there is nothing for the datum to qualify.
+- **BG-OX2 (PVI/BVC/EVC vs VPI/VPC/VPT):** already decided by the engineer on 2026-10-06: keep (see the D1 entry).
+- **BG-OX3 (no barrier layer):** not an issue in the DXF writer. The tool has no barrier input, so there is nothing to draw; curbs go on `BG-CURB`. A barrier model would be a feature request.
+- **BG-DEP (plotly-basic 3.7.0, OSM/Esri tiles):** left as is (the inventory default).
+
+### How verified (W1–W4)
+- `node --check` on all four inline scripts.
+- Chromium (Playwright, CDN libraries served locally; Leaflet is not available offline, so the Site Map was not plotted), main vs branch. Cases: the demo bridge, Examples 1–5, the validation set, and a custom S-curve (skews +20 / −10 / +15, dual-bearing pier, span-2 girder override; also run with a beam-depth override). Results:
+  - All `<table>` text is identical (only the library "saved" timestamps differ). `serializeProject()` is identical (without `savedAt`). The 123 `getDeckPoint` x/y/z samples are identical, and the heatmap canvas is identical (MD5 of `toDataURL`).
+  - `projectToPGL` on 961 grid points: identical, except 6 points in the S-curve case (W3).
+  - The hand-off payload for the old rules `max` / `min` / `mean`, with t_s/d off, is identical to main except for `skewDetail` (new) and the notes. The new W1 note appears only when the skews differ (the demo and the custom case).
+  - No page errors. The only console errors are the two blocked Leaflet requests, the same on main.
+- Receiver: each new payload was published through `BridgeXfer.publish` and pulled into the unchanged `lldf.html` ("Pull geometry" → "Prefill from Bridge Geometry"). It was accepted, and skew, t_s, d, O_L and O_R were prefilled as sent. `geomSource.fields` lists slab thickness and beam depth, `skewDetail` is not in `lldf_autosave_v1`, and there were no page errors.
+- Screenshots checked by eye: the dialog ("choose…" and "for moment DFs", wide and narrow), the four caps and the pick-points caption.
+
+### Needs engineer
+- **Q-BG1 (BG-OH2).** Confirm the hand-off rule:
+  - moment θ = smallest |θ| (0 when adjacent support lines differ by more than 10°, Art. 4.6.2.2.2e);
+  - shear θ = largest |θ|;
+  - the dialog forces the moment / shear choice when the skews differ.
+  Recommendation: keep. A two-value hand-off would need a receiving change in lldf.html (separate PR).
+- **Q-BG2 (BG-O1, skew datum):** should skew be measured from the chord normal (current) or radially at each support? Recommendation: keep the chord, since the girders are on the chord.
+- **Q-BG3 (BG-O3, seat stack):** net vs gross camber, cross-slope × ½ flange width, the VC ordinate between bearings, and a midspan haunch check. Recommendation: add cross-slope × b_f/2 and the VC ordinate as optional terms; the engineer to give the preferred method.
+- **Q-BG4 (BG-O5):** curved or per-span-chorded girders? Recommendation: per-span chords (a smaller change than curved girders). This is the engineer's modelling decision.
+- **Q-BG5 (BG-O6):** NAD83 is treated as WGS84 on the map (≈1–1.5 m); there is no combined scale factor and no SPCS2022. Recommendation: add a CSF input and a `+towgs84` option (map only).
+
+### Remaining open items
+- **BG-O2 (superelevation runout/runoff table):** not done (M; it changes elevations when used). Recommendation: an optional transition table (station, left slope, right slope) that overrides the per-unit controls when present.
+- **BG-O4 (degree of curve, spiral reports, station equations):** not done (L; a feature on request).
+- **HANDOFF.md §4.2 (docs):** add `basis.skew:'moment'`, the optional `skewDetail` field, and the `ts`/`depth` fields (inches) that Bridge Geometry now sends. Not edited here (tool file and fix log only).
+
+## 2026-10-12 — PR: claude/lldf-receivers (cross-tool: lldf DF payload `perFootStrip` / `skewShear` receivers; PR link added after merge)
+
+Cross-tool connection PR (CLAUDE.md §7 exception): receivers of the `bridgeSuite.v1.lldf` payload honour lldf's new optional fields (fixlog/lldf.md 2026-10-12 SW3 `skewShear`, SW6 `perFootStrip`), and Bridge Geometry's skew note is softened. Tools changed: index.html, psbeam.html, stgirder.html, Moving Load Generator.html, Steel Bridge Beam Modules.html, Bridge Geometry.html; HANDOFF.md §4.2 / §4.3. The shared `bridgeSuite.v1.*` bootstrap blocks are not touched. No formula, factor, unit or code reference changed. Payloads without the new fields give the same results as before (checked).
+
+### LR1. "Skews differ" note and send dialog: LL & DL takes moment and shear skews in one run   [hand-off notes / UI] [no result change]
+- **Where:** "Hand-off: Bridge Geometry -> LL & DL Distribution" script. Anchors: `LL & DL takes both from this hand-off (skewDetail) in one run`, `LL &amp; DL takes both values from this hand-off in one run`, `<select id="bgx_skew" title="The single skew in the hand-off.`, `dlg.querySelector('#bgx_skew').value='moment';`, header comment `lldf applies skewDetail.moment / .shear in one run`.
+- **Before:** the note said LL & DL uses the one skew sent for both actions, and asked for a second run ("send again with "for shear DFs" and take the shear DFs from that run"). The dialog repeated it in red and, when the skews differed, started the "Skew sent" select on "choose…" so that Send stayed disabled until a choice was made (BG-OH2).
+- **After:**
+  ```js
+    if(skDiffer) notes.push('Skews differ between supports (|skew| '+skMin.toFixed(2)+' to '+skMax.toFixed(2)+' deg; largest change between adjacent supports '+skAdj.toFixed(2)+' deg). '
+      +'Moment DFs need skew = '+skMoment.toFixed(2)+' deg (smallest |skew|; 0 when adjacent supports differ by more than 10 deg; AASHTO LRFD Art. 4.6.2.2.2e, Table 4.6.2.2.2e-1). '
+      +'Shear DFs need skew = '+skMax.toFixed(2)+' deg (largest |skew|, obtuse corner; Art. 4.6.2.2.3c, Table 4.6.2.2.3c-1). '
+      +'LL & DL takes both from this hand-off (skewDetail) in one run: theta = '+skMoment.toFixed(2)+' deg for moment and theta_V = '+skMax.toFixed(2)+' deg for shear, whichever single value is sent. '
+      +'The single skew sent ('+skewVal.toFixed(2)+' deg) is used for both actions only by a reader that does not use skewDetail'
+      +(skewRule==='moment'?'; for such a reader take the shear DFs from a second run "for shear DFs".'
+        :(skewRule==='max'?'; for such a reader its MOMENT DFs are unconservative.'
+          :'; for such a reader take moment and shear DFs from separate "for moment DFs" / "for shear DFs" runs.')));
+  ```
+  - Dialog red line: "Skews differ between supports. LL & DL takes both values from this hand-off in one run: the moment skew for the moment DFs and the shear skew (largest) for the shear DFs. The single "Skew sent" value matters only to a reader that does not use the moment / shear detail (see the notes)."
+  - The select starts on "for moment DFs" every time (`dlg.querySelector('#bgx_skew').value='moment';`, was `''` when the skews differ). The "choose…" option and the guard that disables Send while it is selected are kept.
+  - The select tooltip says LL & DL also receives and applies both values.
+- **Why:** lldf now reads `skewDetail.moment` / `.shear` and applies both in one run (fixlog/lldf.md 2026-10-12 SW3), so the second run is no longer needed for LL & DL. The forced choice and the two-run instruction now apply only to a reader that does not read `skewDetail` (none today; `lldfGeom` has one receiver, lldf).
+- **Payload:** unchanged except the text of this one note: same `inputs`, `basis`, `skewDetail` (checked).
+- **Governing provision:** AASHTO LRFD 10th Ed. Art. 4.6.2.2.2e / Table 4.6.2.2.2e-1 (moment θ) and Art. 4.6.2.2.3c / Table 4.6.2.2.3c-1 (shear θ). No formula changed.
+- **Check case:** demo bridge (supports 0° / 15° / 0°): `skewDetail` moment 0, shear 15 (unchanged). Dialog before: select "choose…", Send disabled. After: select "for moment DFs", Send enabled; notes as above. In lldf this payload sets θ = 0, θ_V = 15 (lldf SW3 check case).
+- **How verified:** headless Chromium, main vs branch: `bgxBuildLldfGeom({skewRule:'moment'})` (only the note text differs), `bgxOpenLldfGeom()` (select value, Send state); screenshot `bg_dialog_br.png` looked at. No page errors.
+- **Closes:** the HANDOFF.md §4.2 open item from the 2026-10-12 sweep entry (now documented in this PR).

@@ -708,3 +708,400 @@ function InputsTab({inp,set,R}){
 - **How verified:** @babel/standalone 7.23.5 transpile of the `text/babel` block plus `node --check` on all 8 inline scripts (main and branch): pass. Headless Chromium 1194 (Playwright), with React 18.2.0, React-DOM 18.2.0, Babel 7.23.5, Plotly 2.27.0 and KaTeX 0.16.9 served locally at the pinned versions. Google Fonts were blocked in both runs. origin/main and the branch were compared over 18 scenarios: default; the 4 section presets; 3 other steel grades; flange transitions on; deck design on; noncomposite; LL manual; exterior girder; typed edits (Span L, bft, haunch, ADTT); Es blank; MIDAS envelope import (2-span continuous with section.zones) on span 1 and span 2; and Export → Reset → Import round trip. In every scenario these were **identical**: the text of every result tab, the Inputs page text, the inventory and values of all inputs, the status band, the `stgirder.session` autosave, the exported JSON, the `bridgeSuite.v1.*` key set and the superReactions, capacity (Send capacity to MCT Rating) and lldfGeom (Send geometry to LL & DL) payloads (timestamps masked). The round trip was exact on both. The branch adds no console errors (both have the same NaN SVG warnings in the Es-blank case). UI checks: all 63 default inputs are in exactly one pane, with none outside; no dot in the default state; dot on blank and unparsable entries, and it clears; arrow/Home/End keys; the key survives a reload and a result-tab switch; sticky strip; the strip wraps at 400 px; print shows all 6 panes. Screenshots of every sub-tab at 1500 px and 400 px were checked.
 - **Other copies of this code:** none. The bridgeSuite / BridgeXfer shared snippets were not touched.
 - **Open items:** at 400 px the page scrolls sideways because of the title block (`.tb-grid`, 532 px). This happens on main too and was not changed.
+
+## 2026-10-12 — PR: claude/sweep-stgirder (PR link added after merge)
+
+Open-item sweep of inventory section 4 (engineer 2026-10-12: "continue making updates and fixes until it's completed … use your best judgment"). Basis: AASHTO LRFD 10th Ed. (2024) and MBE 3rd Ed. Article numbers marked "verify" were not checked against a printed copy.
+
+How every item was verified (applies to all entries below): `node --check` of all 8 inline scripts after a @babel/standalone 7.23.5 transpile of the `text/babel` block (origin/main d6edfdd and branch); the real `computeAll()` of both files run in node over 17 input variants (scratch `stgsweep/cases.js`, `detail.js`), every changed number traced to an item; headless Chromium 1194 (Playwright) with React 18.2.0, React-DOM 18.2.0, Babel 7.23.5, Plotly 2.27.0 and KaTeX 0.16.9 served locally, main vs branch over the 18 scenarios of the earlier tab comparison (text of every result tab, Inputs page, status band, `stgirder.session`, exported JSON, superReactions / capacity / lldfGeom payloads, Export → Reset → Import round trip: exact on both), plus a UI script (screenshots of the changed Inputs, Rating, Connectors, Constructibility and Fatigue tabs, the autosave banner and 400 px; all looked at). Console errors: the same 9 NaN-SVG warnings in the "Es blank" scenario on main and branch, nothing new. Interior-girder simple-span scenarios: the capacity and superReactions payloads are byte-identical to main; every other difference is listed under the item that causes it.
+
+Saved data (CLAUDE.md §5): no key or format changed. New optional fields, all with defaults merged in by `mergeInputs` so old sessions and exported files load unchanged: `deck.extTribAuto` (true), `loads.fatV` (0), `stiff.Fys` (50), `rate.phiC` / `rate.phiS` (1.0). The lldfGeom hand-off gets a new optional field `inputs.nRaw`, and `inputs.n` now carries the rounded n (W11).
+
+### W1. Exterior girder: tributary width S/2 + overhang for the auto b_eff and the deck dead load (STG-O4)   [calc change] [mixed: b_eff smaller and deck DL smaller when the overhang < S/2 — capacity LESS, demand LESS; both larger when the overhang > S/2]
+- **Where:** `computeAll` (anchor `const extTrib = inp.loads.pos==='exterior'`), `loadsCalc` (new 4th argument `tribOver`), `DEFAULTS.deck.extTribAuto`, Inputs → Deck card (new checkbox, overhang input when deck design is off, hint).
+- **Problem:** an exterior girder used the girder spacing S for b_eff and for the deck dead load. 4.6.2.6.1 takes the tributary width: S/2 + overhang for an exterior girder. Mp, the stresses and the DC1 load of an exterior girder were wrong (overstated b_eff when the overhang < S/2).
+- **Governing provision:** AASHTO LRFD 10th Ed. 4.6.2.6.1 (effective flange width = tributary width); deck DL by statics.
+- **Before:**
+  ```js
+    // effective flange width (4.6.2.6 — tributary width; interior = S)
+    const beff = deck0.beffAuto? geom.S*12 : +deck0.beff;
+  ...
+    const Ld=loadsCalc(inp,{n,bare},wswAvg);
+  ...
+  function loadsCalc(inp,part,wswOver){
+  ...
+    const wdk = deck.deckOn? (geom.S*(tsLoad/12)*(+deck.wc) + (sec.bft/12)*(deck.haunch/12)*(+deck.wc)) : 0;
+  ```
+- **After:**
+  ```js
+    const extTrib = inp.loads.pos==='exterior' && deck0.extTribAuto!==false;
+    const tribFt = extTrib? (+geom.S)/2 + Math.max(+deck0.oh||0,0) : +geom.S;
+    const beff = deck0.beffAuto? tribFt*12 : +deck0.beff;
+  ...
+    const Ld=loadsCalc(inp,{n,bare},wswAvg,tribFt);
+  ...
+  function loadsCalc(inp,part,wswOver,tribOver){
+    const {geom,deck,loads,sec}=inp, L=geom.L;
+    const trib=(tribOver!==undefined&&isFinite(tribOver))? tribOver : geom.S;   // deck tributary width, ft (STG-O4)
+  ...
+    const wdk = deck.deckOn? (trib*(tsLoad/12)*(+deck.wc) + (sec.bft/12)*(deck.haunch/12)*(+deck.wc)) : 0;
+  ```
+  `loadsCalc` also returns `trib`. Option: unticking "Exterior girder: tributary width = S/2 + overhang …" (`deck.extTribAuto=false`) restores the old basis. The overhang is `deck.oh` (girder CL → deck edge, the existing deck-design input; it is now also shown for an exterior girder when deck design is off). Default chosen: on (code basis).
+- **Check case:** defaults, exterior girder (S = 9 ft, oh = 3.0 ft, ts = 8 in, wc = 0.150 kcf, haunch 2 in × bft 16 in). Tributary = 9/2 + 3.0 = 7.50 ft → b_eff = 90.0 in (before 108). Deck DL = 7.50·(8/12)·0.150 + (16/12)(2/12)(0.150) = 0.750 + 0.0333 = **0.7833 klf** (before 9·0.6667·0.150 + 0.0333 = 0.9333). Mp 12,440 → 12,177 k-ft, peak Mu 9,540 → 9,203 k-ft, flexure D/C 0.784 → **0.775**. With oh = 5.5 ft: b_eff 120 in, DL 1.033 klf, flexure D/C 0.784 → 0.791. With the option off: identical to main. Interior girder: identical to main.
+- **Hand-offs:** for an exterior girder the superReactions DC1 and the capacity φMn⁺ / Sx change with the section (intended).
+
+### W2. Exterior girder fatigue DFs: one-lane lever rule (not less than the rigid-section value) ÷ 1.2; optional single-lane shear DF from LL & DL (STG-O5)   [calc change] [MORE conservative for exterior girders]
+- **Where:** `distFactorsSteel` (`rigid1`), `computeAll` fatigue block (anchor `const dfX=Ld.df||{}, extFat=`), `lldfResolveFor` / `lldfMineFor` / `lldfTheirsFor` / `applyLLDFTo` / `LLDF_LABELS` / `LLDF_DIG` (`fatV`), Loads card hint, pull confirmation text.
+- **Problem:** the exterior girder used the interior one-lane DFs m1/1.2 and v1/1.2. LL & DL publishes `fatV`, which was not read.
+- **Governing provision:** AASHTO LRFD 10th Ed. Table 4.6.2.2.2d-1 and Table 4.6.2.2.3b-1 (exterior girder, one lane: lever rule), 4.6.2.2.2d (rigid-section check, also for shear per 4.6.2.2.3b — verify), 3.6.1.4.3b (m = 1.2 removed for fatigue).
+- **Before:**
+  ```js
+    const dfFat=(+inp.loads.fatM>0)? +inp.loads.fatM : (Ld.df? Ld.df.m1:Ld.dfm)/1.2;
+    const fatDfSource=(+inp.loads.fatM>0)?'LL & DL Distribution (single-lane)':'auto: (1-lane moment DF)÷1.2';
+  ...
+    const dfFatV=(Ld.df? Ld.df.v1:Ld.dfv)/1.2;
+    const fatDfVSource='auto: (1-lane shear DF v₁)÷1.2';
+  ```
+- **After:**
+  ```js
+    const dfX=Ld.df||{}, extFat=!!dfX.ext, extFat1=extFat? Math.max(dfX.lever||0, dfX.rigid1||0) : 0;
+    const dfFat=(+inp.loads.fatM>0)? +inp.loads.fatM : (extFat? extFat1 : (Ld.df? Ld.df.m1:Ld.dfm))/1.2;
+    const fatDfSource=(+inp.loads.fatM>0)?'LL & DL Distribution (single-lane)'
+      :(extFat?'auto: exterior, max(lever rule, rigid section) for one lane ÷1.2':'auto: (1-lane moment DF)÷1.2');
+  ...
+    const dfFatV=(+inp.loads.fatV>0)? +inp.loads.fatV : (extFat? extFat1 : (Ld.df? Ld.df.v1:Ld.dfv))/1.2;
+    const fatDfVSource=(+inp.loads.fatV>0)?'LL & DL Distribution (single-lane shear)'
+      :(extFat?'auto: exterior, max(lever rule, rigid section) for one lane ÷1.2':'auto: (1-lane shear DF v₁)÷1.2');
+  ```
+  In `distFactorsSteel`: `let …,rigid1=0;` and `if(NL===1) rigid1=rr;` inside the rigid-section loop; `rigid1` returned. `lldfResolveFor` returns `fatV` (`gov.fatV`, 0 when absent); the mine/theirs/apply helpers carry `fatV` next to `fatM` (new optional `loads.fatV`, default 0 = auto).
+- **Check case:** defaults, exterior (Nb = 5, S = 9 ft, de = 2.5 ft). Lever: wheels at 0.5 ft and −5.5 ft from the exterior web → R = 0.5(9.5/9) + 0.5(3.5/9) = 0.722; × 1.2 = 0.867. Rigid, one lane: 1.2·(1/5 + 18·15.5/810) = 0.653. DF_fat = max(0.867, 0.653)/1.2 = **0.722** (before m1/1.2 = 0.390; shear before v1/1.2 = 0.600). Flange fatigue (Fatigue II, (ΔF)n = 5.437 ksi): Mrange 1,644.8 k-ft × 1.15 × 0.722 = 1,366.1 k-ft, Δf = 1,366.1·12/2,351.8 = 6.970 ksi, γΔf/(ΔF)n = 0.80·6.970/5.437 = **1.026 FAIL** (before 0.548). Web special fatigue 0.321 → 0.332. Interior girder: unchanged.
+
+### W3. Rating: φc, φs inputs; capacity and demand at the same station; staged section moduli for noncompact flexure (STG-O3)   [calc change] [MORE conservative for noncompact sections and when φc·φs < 1; otherwise unchanged]
+- **Where:** `computeAll` rating block (anchor `const phiCS=Math.max(phiC*phiS,0.85)`), `DEFAULTS.rate`, `RatingTab` (new "Rating factors φc, φs" card, table rows show the governing x; the App passes `inp`/`set`).
+- **Problem:** φc·φs was fixed at 1.0. The flexure RF combined the capacity of the governing-D/C segment with the demands of the max-Mu station. For a noncompact section the capacity was converted to a moment with the short-term moduli for every load stage.
+- **Governing provision:** MBE 3rd Ed. 6A.4.2.1 (Eq. 6A.4.2.1-1, φc·φs ≥ 0.85), Table 6A.4.2.3-1 (φc), Table 6A.4.2.4-1 (φs), Table 6A.4.2.2-1 (γ); LRFD 10th Ed. 6.10.1.1.1 (staged sections), 6.10.7.2.
+- **Before:**
+  ```js
+    const capM=sgPos.compact? phif*MnGov
+      : phif*Math.min(sgPos.FncPos*sgPos.cN.StSteel, sgPos.Fnt*sgPos.cN.Sb)/12;   // stress→moment approx
+    const MDC=stPos.M1+stPos.M2, MDWr=stPos.Mw, MLLr=stPos.Ml;
+    const VDC=Math.abs(stVGov.V1+stVGov.V2), VDWr=Math.abs(stVGov.Vw), VLLr=Math.abs(stVGov.Vl);
+    const rating={
+      flexInv:rf(capM,MDC,MDWr,MLLr,1.75), flexOpr:rf(capM,MDC,MDWr,MLLr,1.35),
+      shearInv:rf(Vcr,VDC,VDWr,VLLr,1.75), shearOpr:rf(Vcr,VDC,VDWr,VLLr,1.35),
+      capM,capV:Vcr,MDC,MDWr,MLLr,VDC,VDWr,VLLr};
+  ...
+      rating.negInv=fLL1>1e-6? (phif*sgN.FncNeg.Fnc-Math.abs(Math.min(fPerm,0)))/(1.75*fLL1):99;
+      rating.negOpr=fLL1>1e-6? (phif*sgN.FncNeg.Fnc-Math.abs(Math.min(fPerm,0)))/(1.35*fLL1):99;
+  ```
+- **After:**
+  ```js
+    const rq=inp.rate||{};
+    const phiC=(+rq.phiC>0)? +rq.phiC : 1.0, phiS=(+rq.phiS>0)? +rq.phiS : 1.0;
+    const phiCS=Math.max(phiC*phiS,0.85), phiCSfloor=phiC*phiS<0.85;
+    const rfStress=(F,fd,fl,g)=>fl>1e-6? (phiCS*phif*F-fd)/(g*fl) : 99;
+    let flexRow=null;
+    stations.forEach(st=>{ if(!(st.Ml>1e-6)||!(st.Mu>0)) return; const sg=segP[st.si];   // positive-flexure stations
+      let inv,opr,cap=null,basis;
+      if(sg.compact){
+        const fc=flexCalc.find(f=>f.x===st.x), MnSt=(fc&&fc.pos&&fc.pos.Mn!=null)? fc.pos.Mn : sg.Mn_kft;
+        cap=phiCS*phif*MnSt; basis='Mp';
+        inv=rf(cap,st.M1+st.M2,st.Mw,st.Ml,1.75); opr=rf(cap,st.M1+st.M2,st.Mw,st.Ml,1.35);
+      } else {
+        const fd=stageF(st,1.25,1.25,1.5,0).pos, fl=stageF(st,0,0,0,1).pos; basis='stress';
+        inv=Math.min(rfStress(sg.FncPos,fd.fT,fl.fT,1.75), rfStress(sg.Fnt,fd.fB,fl.fB,1.75));
+        opr=Math.min(rfStress(sg.FncPos,fd.fT,fl.fT,1.35), rfStress(sg.Fnt,fd.fB,fl.fB,1.35));
+      }
+      if(!flexRow||inv<flexRow.inv) flexRow={inv,opr,cap,basis,x:st.x,MDC:st.M1+st.M2,MDW:st.Mw,MLL:st.Ml};
+    });
+    if(!flexRow) flexRow={inv:99,opr:99,cap:null,basis:sgPos.compact?'Mp':'stress',x:stPos.x,MDC:stPos.M1+stPos.M2,MDW:stPos.Mw,MLL:stPos.Ml};
+    const capM=flexRow.cap;
+    const MDC=flexRow.MDC, MDWr=flexRow.MDW, MLLr=flexRow.MLL;
+    let shRow=null;
+    stations.forEach(st=>{ const dc=Math.abs(st.V1+st.V2), dw=Math.abs(st.Vw), ll=Math.abs(st.Vl);
+      const inv=rf(phiCS*phiv*Vcr,dc,dw,ll,1.75);
+      if(!shRow||inv<shRow.inv) shRow={inv,opr:rf(phiCS*phiv*Vcr,dc,dw,ll,1.35),x:st.x,VDC:dc,VDW:dw,VLL:ll}; });
+    const VDC=shRow.VDC, VDWr=shRow.VDW, VLLr=shRow.VLL;
+    const rating={
+      flexInv:flexRow.inv, flexOpr:flexRow.opr, flexX:flexRow.x, flexBasis:flexRow.basis,
+      shearInv:shRow.inv, shearOpr:shRow.opr, shearX:shRow.x,
+      capM,capV:phiCS*phiv*Vcr,MDC,MDWr,MLLr,VDC,VDWr,VLLr,phiC,phiS,phiCS,phiCSfloor};
+  ...
+      rating.negInv=fLL1>1e-6? (phiCS*phif*sgN.FncNeg.Fnc-Math.abs(Math.min(fPerm,0)))/(1.75*fLL1):99;
+      rating.negOpr=fLL1>1e-6? (phiCS*phif*sgN.FncNeg.Fnc-Math.abs(Math.min(fPerm,0)))/(1.35*fLL1):99;
+      rating.negX=stN.x;
+  ```
+  φc, φs apply to the strength rating only (not Service II, W4) and not to the capacity hand-off to the MCT (`chartFlex` unchanged). Shear keeps the end-panel C·Vp capacity.
+- **Check cases:**
+  - Defaults (compact, uniform section): governing station x = 60 ft for flexure and x = 120 ft for shear, as before. RF_inv flexure = (12,163.5 − 1.25·2,660.4 − 1.5·450)/(1.75·2,503.1) = **1.864** (unchanged); shear 2.153 (unchanged).
+  - φc = 0.95, φs = 0.85: product 0.8075 < 0.85 → 0.85 used. Flexure (0.85·12,163.5 − 3,325.5 − 675)/4,380.4 = **1.447** (before 1.864); shear (0.85·552.65 − 110.85 − 22.5)/194.76 = **1.727** (before 2.153).
+  - Noncompact (D = 84, tw = 0.5625, top 12×0.625, bottom 24×2.5, ts = 7 in, b_eff = 60 in), x = 60 ft: M_DC1 = 2,192.3, M_DC2 = 540, M_DW = 450, M_LL = 2,899.1 k-ft; S_bare top/bot = 1,733.0 / 4,392.0, S_3n 3,570.5 / 5,384.0, S_n 7,424.4 / 6,054.5 in³; F_nc = F_nt = 50 ksi. Top: f_D = 1.25·2,192.3·12/1,733.0 + (1.25·540 + 1.5·450)·12/3,570.5 = 18.98 + 4.54 = 23.51 ksi, f_LL = 2,899.1·12/7,424.4 = 4.686 ksi → RF = (50 − 23.51)/(1.75·4.686) = **3.230**. Bottom: f_D = 7.49 + 3.01 = 10.50, f_LL = 5.746 → 3.928. Before: C = min(50·7,424.4, 50·6,054.5)/12 = 25,227 k-ft → (25,227 − 3,415.4 − 675)/(1.75·2,899.1) = 4.166. Governing Inventory RF 3.552 (shear) → **3.230**.
+
+### W4. Service II load rating (STG-O2)   [calc change: new rating row] [MORE conservative — governs the default design]
+- **Where:** `computeAll` rating block (anchor `// Service II rating (MBE 6A.6.4.2.2, STG-O2)`), `RatingTab` row "Service II flange".
+- **Problem:** no Service II rating; the governing RF ignored it.
+- **Governing provision:** MBE 3rd Ed. 6A.6.4.2.2 and Table 6A.4.2.2-1 (steel Service II: γLL = 1.30 Inventory, 1.00 Operating); LRFD 10th Ed. 6.10.4.2.2 (f_R = 0.95RhFyf composite; the app's 0.80RhFyf for a noncomposite section is kept, as in the design check).
+- **Before:**
+  ```js
+    rating.govInv=Math.min(rating.flexInv,rating.shearInv,rating.negInv??99);
+    rating.govOpr=Math.min(rating.flexOpr,rating.shearOpr,rating.negOpr??99);
+  ```
+- **After:**
+  ```js
+    let s2Row=null;
+    stations.forEach(st=>{ const sg=segP[st.si], fR=s2Coef*sg.Rh*Fyf, s=stageF(st,1,1,1,1);
+      const fD={fB:s.parts.dc.fB+s.parts.d2.fB+s.parts.dw.fB, fT:s.parts.dc.fT+s.parts.d2.fT+s.parts.dw.fT};
+      [['bot +LL',fD.fB,s.parts.lp.fB],['top +LL',fD.fT,s.parts.lp.fT],['bot −LL',fD.fB,s.parts.ln.fB],['top −LL',fD.fT,s.parts.ln.fT]].forEach(([tag,fd,fl])=>{
+        if(!(Math.abs(fl)>1e-6)) return; const sgn=Math.sign(fl), base=(fR-sgn*fd)/Math.abs(fl);
+        if(!s2Row||base/1.30<s2Row.inv) s2Row={inv:base/1.30,opr:base/1.00,x:st.x,tag,fR,fD:sgn*fd,fLL:Math.abs(fl)}; }); });
+    if(s2Row){ rating.servInv=s2Row.inv; rating.servOpr=s2Row.opr; rating.serv=s2Row; }
+    rating.govInv=Math.min(rating.flexInv,rating.shearInv,rating.negInv??99,rating.servInv??99);
+    rating.govOpr=Math.min(rating.flexOpr,rating.shearOpr,rating.negOpr??99,rating.servOpr??99);
+  ```
+- **Check case:** defaults, x = 60 ft, bottom flange, +LL: f_R = 0.95·1.0·50 = 47.5 ksi; f_D (DC1 bare + DC2/DW 3n, unfactored) = 20.49 ksi; f_LL (n section, incl. IM and DF) = 12.64 ksi. RF_inv = (47.5 − 20.49)/(1.30·12.64) = **1.644**; RF_opr = 27.01/12.64 = **2.137**. Governing RF: Inventory 1.864 → **1.644**, Operating 2.416 → **2.137** (Service II governs). Consistency with the design check: (20.49 + 1.30·12.64)/47.5 = 0.777 = Service II D/C on the status band.
+
+### W5. Continuous-span stud strength requirement P = Pp + Pn (STG-O7)   [calc change: new check basis in continuous spans] [MORE conservative]
+- **Where:** `computeAll` connectors (anchor `let contStud=null;`), check row "Shear studs — strength", `ConnTab` (tile, step 3 and table).
+- **Problem:** with imported continuous demands the strength studs were still counted for P = Pp over L/2.
+- **Governing provision:** AASHTO LRFD 10th Ed. 6.10.10.4.2 (P = √(P_T² + F_T²), P_T = P_p + P_n, F_T = 0 for a straight girder; P_n = min(F_yw·D·t_w + F_yt·b_ft·t_ft + F_yc·b_fc·t_fc, 0.45f′c·b_s·t_s) — verify equation numbers), 6.10.10.4.1 (studs between the max +M point and the adjacent support).
+- **Before:**
+  ```js
+    checks.push({n:'Shear studs — strength', t:'Studs str', v:nReq, lim:nProv, r:nReq/Math.max(nProv,1), u:'#', ref:'6.10.10.4', loc:0});
+  ```
+- **After:** (block above the `const conn=` line, see anchor)
+  ```js
+    let contStud=null;
+    if(contSpan && deck.deckOn){
+      const stEnds=[stations[0],stations[stations.length-1]], xP=stPos.x, dimsP=segP[stPos.si].dims;
+      const PpS=Fyw*D*tw+Fyf*(dimsP.bft*dimsP.tft+dimsP.bfb*dimsP.tfb), Pp=Math.min(Pslab,PpS);
+      const sides=stEnds.map((se,k)=>{ const dS=segP[se.si].dims, pier=se.Mun<-1;
+        const PnS=Fyw*D*tw+Fyf*(dS.bft*dS.tft+dS.bfb*dS.tfb), PnC=0.45*deck.fc*beff*deck.ts, Pn=pier?Math.min(PnS,PnC):0;
+        const len=k===0? xP : Lft-xP, P=Pp+Pn, req=P/Qr, prov=nRow*Math.floor((len*12)/Math.max(pitch,1));
+        return {end:k===0?'left':'right', pier, len, Pp, PnS, PnC, Pn, P, nReq:req, nProv:prov, r:req/Math.max(prov,1)}; });
+      const gov=sides[0].r>=sides[1].r? sides[0] : sides[1];
+      contStud={xP, Pp, PpS, Pslab, sides, gov};
+    }
+  ...
+    if(contStud) conn.strOK=contStud.gov.nProv>=contStud.gov.nReq;
+  ...
+    if(contStud) checks.push({n:'Shear studs — strength (continuous, P = Pp + Pn, '+contStud.gov.end+' side)', t:'Studs str', v:contStud.gov.nReq, lim:contStud.gov.nProv, r:contStud.gov.r, u:'#', ref:'6.10.10.4.2', loc:contStud.gov.end==='left'?0:Lft});
+    else checks.push({n:'Shear studs — strength', t:'Studs str', v:nReq, lim:nProv, r:nReq/Math.max(nProv,1), u:'#', ref:'6.10.10.4', loc:0});
+  ```
+  Continuous = `contSpan` (imported demands with factored −M, the F4 trigger). An end is an interior support when the factored −M there is < −1 k-ft. Simple spans: unchanged.
+- **Check case:** test 2 × 120 ft continuous MIDAS file (scratch `stg/midas.json`), span 1, interior girder, defaults: max +M at x = 54 ft; Q_r = 30.67 kip; P_p = min(0.85·4·108·8 = 2,937.6, 50·66·0.5 + 50·(16·0.75 + 18·1.25) = 3,375) = 2,937.6 kip. Right end (pier): P_n = min(3,375, 0.45·4·108·8 = 1,555.2) = 1,555.2 kip; P = 4,492.8 kip; n_req = 146.5; n_prov = 3·⌊66·12/12⌋ = 198 → **0.740**. Left end (abutment): n_req 95.8, n_prov 162 → 0.591. Before: 95.8 / 180 = **0.532**.
+
+### W6. Stud fatigue shear range: fatigue truck, range per station (STG-O6)   [calc change] [LESS conservative at the defaults — §4 sign-off needed]
+- **Where:** new function `fatShearRangeAt(L,x)` (before the LOADS banner), `computeAll` connectors (anchor `let fatStud=null;`), check row loc, `ConnTab` variables / equation / note.
+- **Problem:** the stud shear range used the HL-93 design-truck shear at the support (14-ft rear spacing) with the midspan section. 6.10.10.1.2 uses the shear range from the fatigue load (fatigue truck, 30-ft rear spacing), at each section.
+- **Governing provision:** AASHTO LRFD 10th Ed. 6.10.10.1.2 (V_sr = V_f·Q/I, V_f = shear range under the fatigue load combination), 3.6.1.4.1 (fatigue truck), 3.6.2.1 (IM 15%), 6.10.10.2 (Z_r).
+- **Before:**
+  ```js
+    const yDeckNA=(bare.hs+deck.haunch+deck.ts/2)-cN.ybar, Qslab=(beff*deck.ts/n)*yDeckNA;
+    const VfatU=Ld.hl.Vtr*1.15*dfFatV;                   // unfactored range: HL-93 truck shear at support, IM 1.15, 1-lane SHEAR DF
+    const Vfat=gammaFat*VfatU;                           // factored per the governing fatigue combination
+    const Vsr=Vfat*Qslab/cN.I, pReq=nRow*Zr/Math.max(Vsr,1e-6);
+  ```
+- **After:**
+  ```js
+    let fatStud=null;
+    stations.forEach(st=>{ const sg=segP[st.si], cc=sg.cN;
+      const yNA=(sg.bare.hs+deck.haunch+deck.ts/2)-cc.ybar, Q=(beff*deck.ts/n)*yNA;
+      const rg=fatShearRangeAt(Lft,st.x), VfU=rg.range*1.15*dfFatV, Vf=gammaFat*VfU, vsr=Vf*Q/cc.I;
+      const p_=nRow*Zr/Math.max(vsr,1e-6);
+      if(!fatStud||p_<fatStud.pReq) fatStud={x:st.x,si:st.si,Vpos:rg.Vpos,Vneg:rg.Vneg,range:rg.range,VfatU:VfU,Vfat:Vf,Qslab:Q,Icomp:cc.I,Vsr:vsr,pReq:p_}; });
+    const yDeckNA=(bare.hs+deck.haunch+deck.ts/2)-cN.ybar;
+    const Qslab=fatStud.Qslab, VfatU=fatStud.VfatU, Vfat=fatStud.Vfat, Vsr=fatStud.Vsr, pReq=fatStud.pReq;
+  ```
+  `fatShearRangeAt` moves the fatigue truck (8-32-32 kip, 14 ft + 30 ft, both directions) in 1-ft steps plus the positions that put each axle exactly at / just left of x, and returns max V⁺, max V⁻ and the range.
+- **Check case:** defaults (Fatigue II, γ = 0.80, Z_r = 2.043 kip, 3 studs/row, DF_V = 0.600, Q = 1,964.7 in³, I = 138,030 in⁴). Governing station x = 0: V⁺ = 32 + 32·90/120 + 8·76/120 = 61.07 kip, V⁻ = 0. V_f = 0.80·61.07·1.15·0.600 = 33.71 kip; V_sr = 33.71·1,964.7/138,030 = 0.480 kip/in; p_req = 3·2.043/0.480 = **12.77 in** → pitch 12 in: D/C **0.940 PASS**. Before: V_tr = 66.40 kip → V_sr 0.522, p_req 11.75 in, D/C **1.022 FAIL**. ADTT 2000 (Fatigue I): 1.084 → 0.997.
+
+### W7. Stiffener yield strength F_ys input (STG-A1)   [calc change only when the input differs from 50] [default unchanged]
+- **Where:** `computeAll` (anchor `const Fys=(+inp.stiff.Fys>0)?`), `DEFAULTS.stiff.Fys`, Inputs → Stiffeners card ("Stiffener Fys"), StiffTab variable table and the two equations that printed 50.
+- **Before:** `const Fys=50;` / `['F_ys','Stiffener yield',50,'ksi'],` / `\sqrt{29000/50}` / `\cdot50=`
+- **After:** `const Fys=(+inp.stiff.Fys>0)? +inp.stiff.Fys : 50;` (and `bearing.Fys`), `['F_ys','Stiffener yield',br.Fys,'ksi'],`, `\sqrt{${(+R.matR.Es).toFixed(0)}/${(+br.Fys).toFixed(0)}}`, `\cdot${nx(br.Fys,0)}=`.
+- **Governing provision:** AASHTO LRFD 10th Ed. 6.10.11.1.3 (F_crs ≤ F_ys), 6.10.11.2.2 (b_t ≤ 0.48t_p√(E/F_ys)), 6.10.11.2.3 (R_sb = 1.4A_pn·F_ys), 6.10.11.2.4 (column).
+- **Check case:** F_ys = 36 ksi, defaults: R_sb = 1.4·8.25·36 = 415.8 kip (before 577.5) → bearing D/C 328.1/415.8 = **0.789** (before 0.568); b_b,max = 0.48·0.75·√(29,000/36) = 10.22 in → 7/10.22 = **0.685** (before 0.807 with 50). F_ys = 50: identical to main.
+
+### W8. Hybrid factor R_h: A_fn is the flange on the side of D_n (STG-O9, R_h part)   [calc change, hybrid girders only] [LESS conservative for composite +M where the bottom flange is the larger one]
+- **Where:** `hybridRh` (anchor `const DnTop=el.yt-tft, DnBot=el.yb-sec.tfb;`).
+- **Problem:** A_fn was always the top flange, whichever side D_n is on.
+- **Governing provision:** AASHTO LRFD 10th Ed. 6.10.1.10.1 (A_fn = flange area on the side of the neutral axis corresponding to D_n).
+- **Before:**
+  ```js
+    const Dn=Math.max(el.yt-tft, el.yb-sec.tfb);          // larger dist NA→flange (approx)
+    const Afn=bft*tft;                                    // area of flange on side of larger Dn (approx top)
+  ```
+- **After:**
+  ```js
+    const DnTop=el.yt-tft, DnBot=el.yb-sec.tfb;           // NA → inside face of each flange
+    const Dn=Math.max(DnTop, DnBot);                      // larger distance NA→flange
+    // Afn = flange on the side of the NA corresponding to Dn (6.10.1.10.1; STG-O9 — was always the top flange)
+    const Afn=(DnTop>=DnBot)? bft*tft : sec.bfb*sec.tfb;
+  ```
+- **Check case:** defaults with Fyf = 70, Fyw = 50, hybrid on (short-term composite NA: y_t = 9.918 in, y_b = 58.082 in): D_n = 58.082 − 1.25 = 56.83 in (bottom), A_fn = 18·1.25 = 22.5 in², β = 2·56.83·0.5/22.5 = 2.526, ρ = 50/70 = 0.714, 3ρ − ρ³ = 1.778; R_h = (12 + 2.526·1.778)/(12 + 2·2.526) = **0.967**. Before A_fn = 16·0.75 = 12: β = 4.736, R_h = **0.951**. Service II D/C 0.584 → 0.574; flexure (compact, Mp basis) unchanged. Non-hybrid: R_h = 1.0, unchanged.
+- **Rb part of STG-O9 (staged Dc):** not changed. 6.10.1.10.2 (as read here — verify) sets R_b = 1.0 for a composite section in positive flexure whose web meets 6.10.2.1.1 (D/t_w ≤ 150, checked by the app), so the app's R_b from the short-term D_c is equal or conservative there; for the noncomposite case the bare-section D_c is the correct one. No unconservative case found; adopting R_b = 1.0 is listed under "Needs engineer".
+
+### W9. Warnings: flange lateral bending f_ℓ not computed (STG-O1); fatigue with imported continuous demands (STG-O8)   [display only — no result change]
+- **Where:** `computeAll` (anchor `/* ---------- warnings for effects not computed (display only) ---------- */`, returned as `R.warnings`), new component `StgWarn` (before `function StressTab`), one `<StgWarn …/>` line at the top of `StressTab`, `FlexTab`, `ConstructTab` (f_ℓ), `FatigueTab`, `ConnTab` (fatigue) and `ReportTab` (both).
+- **Rules:** f_ℓ warning when skew > 20° (C6.10.1, verify) or the girder is exterior (overhang brackets 6.10.3.4 / C6.10.3.4; wind 4.6.2.7), with a note that curved girders are outside the app. Fatigue warning whenever imported MIDAS demands are active: the fatigue checks use the fatigue truck on a simple span of L, and negative-moment fatigue details at interior piers are not checked.
+- **Before:** none. **After:** the callouts above; no check, factor or value changed.
+- **Check case:** exterior default → 2 f_ℓ lines on Constructibility / Stresses / Flexure / Report; skew 30° → 2 lines; MIDAS span 1 → fatigue line on Fatigue / Connectors / Report; interior default → no callout.
+- **Why not more:** f_ℓ inputs per region (6.10.1.6) and a fatigue envelope in the MCT export (`psbeam-external-demands` carries none) are larger, cross-tool changes — see "Remaining open items".
+
+### W10. Report "φMn flexure" for noncompact sections (STG-O11, display part)   [display only]
+- **Where:** `computeAll` `flex.phiMnRep` (anchor `phiMnRep: sgPos.compact?`), `ReportTab` key-results row.
+- **Before:** `['φMn flexure',fmt(R.flex.compact?R.flex.Mn_kft:0,0),'k-ft'],` (0 for a noncompact section; the uncapped Mn for a compact one)
+- **After:** `[R.flex.compact?'φMn flexure':'φMn flexure (stress-basis equivalent, φf·min(Fnc·S_t, Fnt·S_b))',fmt(R.flex.phiMnRep,0),'k-ft'],` with `phiMnRep = compact ? φf·MnGov (incl. the 1.3RhMy cap) : φf·min(Fnc·S_t,n, Fnt·S_b,n)/12`.
+- **Check case:** noncompact case of W3: min(50·7,424.4, 50·6,054.5)/12 = **25,227 k-ft** (before 0). Defaults: 12,163 (unchanged). Continuous MIDAS span 1: 11,990 (the capped value of F4; before 12,163).
+
+### W11. lldfGeom hand-off sends the n this app uses (STG-O11, modular-ratio part)   [hand-off value change; no ST-Girder result change]
+- **Where:** `sendLLDF` payload (anchor `n:+(+R.n).toFixed(2), nRaw:+R.nRaw.toFixed(2)}};`).
+- **Problem:** ST-Girder computes its sections and its own K_g with n rounded (≥ 6), but sent the unrounded Es/Ec to LL & DL, so the two apps' K_g differed.
+- **Before:** `I:Math.round(R.bare.I), A:+R.bare.A.toFixed(1), eg:+egv.toFixed(2), n:+R.nRaw.toFixed(2)}};`
+- **After:** `I:…, eg:+egv.toFixed(2),` / `n:+(+R.n).toFixed(2), nRaw:+R.nRaw.toFixed(2)}};` (new optional field `nRaw`; LL & DL reads `inputs.n` only).
+- **Governing provision:** AASHTO LRFD 10th Ed. 4.6.2.2.1 (K_g = n(I + A·e_g²)); 6.10.1.1.1b (n).
+- **Check case:** defaults: Ec = 120,000·0.150²·4^0.33 = 4,266 ksi, Es/Ec = 6.80 → n = 7. Payload n 6.80 → **7**, nRaw 6.80. In LL & DL, K_g for this girder rises by 7/6.80 = 2.9% and its moment DF by about 0.3% (more conservative), matching ST-Girder's own K_g.
+
+### W12. Narrow screens: title block wraps (STG-UI1)   [UI only]
+- **Where:** CSS after `@media(max-width:1080px){…}`.
+- **Before:** none. **After:**
+  ```css
+  /* narrow screens (STG-UI1): the title block stacks and its grid wraps to two columns, so the page does not scroll sideways */
+  @media(max-width:600px){.tblock{grid-template-columns:minmax(0,1fr)}.tb-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.tb-cell input{min-width:0;width:100%}}
+  ```
+- **Check:** document scroll width at 400 px: main 532 → branch **400**; layout above 600 px unchanged (1500 px comparison identical apart from the items above).
+
+### W13. Autosave failures shown (STG-S8, this tool's part of X-S8)   [UI only]
+- **Where:** `App()` (anchor `const [saveFail,setSaveFail]=useState('')`), the autosave effect, the "✓ auto-saved" label, and a callout above `<LockAutoSync …/>`.
+- **Before:**
+  ```js
+    saveTimer.current=setTimeout(()=>{ saveInputs(inp);          // per-session autosave (always)
+      // Contribute to the ACTIVE shared project only — never create or rename one (that's MCT's job).
+      try{ if(BP()){ const cur=BP().current(); if(cur&&BP().get(cur)) BP().saveSlice(cur,undefined,ST_APP,JSON.parse(JSON.stringify(inp))); } }catch(e){}
+    },400);
+  ```
+- **After:**
+  ```js
+    saveTimer.current=setTimeout(()=>{ const okS=saveInputs(inp);          // per-session autosave (always)
+      // Contribute to the ACTIVE shared project only — never create or rename one (that's MCT's job).
+      let okP=true;
+      try{ if(BP()){ const cur=BP().current(); if(cur&&BP().get(cur)) okP=!!BP().saveSlice(cur,undefined,ST_APP,JSON.parse(JSON.stringify(inp))); } }catch(e){ okP=false; }
+      // STG-S8: a failed write (browser storage full or blocked) is shown, not swallowed
+      setSaveFail(!okS?'session':(!okP?'project':''));
+    },400);
+  ```
+  The header label reads "⚠ autosave failed" (red) and a callout says what failed and to use Export JSON. It clears on the next successful save. Nothing is written or pruned; the shared bootstrap blocks are unchanged.
+- **Check:** Chromium with `localStorage.setItem('stgirder.session', …)` forced to throw: banner shown; after the throw is removed and a field edited: banner gone.
+
+### Items closed / not changed
+- **STG-O10** (1.3RhMy trigger `useExt && hasNeg`; B6.2 not evaluated): kept. Applying the cap whenever the span is continuous is the conservative reading of 6.10.7.1.2; B6.2 is an optional refined method. Listed under "Needs engineer" only to confirm.
+- **STG-OR1** (MIDAS reactions at an interior pier): not changed. The MCT export has one station per node, so the shear at a pier node can come from either adjacent element and ST-Girder cannot tell which. The superReactions notes already say "At an interior pier they are this span's share only; add the share of the adjacent span" and Substructure Loading warns on negative dead-load reactions.
+- **STG-O12** (10th Ed. article-by-article check): needs the printed spec (see "Needs engineer").
+
+### Needs engineer
+1. **STG-O12** — Please check against your printed 10th Ed. (2024): 6.10.10.4.2 (P = Pp + Pn, P_n with 0.45f′c·b_s·t_s), Tables 4.6.2.2.2d-1 / 4.6.2.2.3b-1 and 4.6.2.2.3b (rigid-section check for exterior shear), C6.10.1 (f_ℓ may be ignored for skew ≤ 20°?), 6.10.1.10.2 (R_b = 1.0 for composite +M with D/t_w ≤ 150), and the F6–F10 provisions listed in O12 above. Recommendation: confirm; the code follows the reading stated in each entry.
+2. **STG-O10** — Keep the 1.3RhMy cap for every continuous span (no B6.2 exemption)? Recommendation: keep (conservative).
+3. **STG-O9 (R_b)** — Adopt R_b = 1.0 for composite sections in positive flexure with D/t_w ≤ 150 (6.10.1.10.2)? It would raise F_nc of slender-web noncompact composite sections (less conservative). Recommendation: yes, after the printed-spec check in 1.
+4. **STG-OR1** — Accept the existing note for MIDAS-mode pier reactions, or should ST-Girder refuse to send reactions at interior supports? Recommendation: keep the note.
+5. **W6 sign-off** — W6 makes the stud fatigue pitch check less conservative (default D/C 1.022 FAIL → 0.940 PASS). It follows 6.10.10.1.2 / 3.6.1.4.1; please sign off.
+
+### Remaining open items (not done in this PR)
+- **STG-O1 (inputs):** f_ℓ inputs per region (constructibility, Service II f_f + f_ℓ/2, Strength 6.10.7.2 / 6.10.8.1 with f_ℓ/3) — L. Recommendation: add f_ℓ fields for the top flange during the deck pour and for each region, default 0, with the warning of W9 kept when skew > 20° or the girder is exterior.
+- **STG-O8 (calc):** negative-moment fatigue at piers needs a fatigue-truck envelope from the continuous analysis. The `psbeam-external-demands` schema exported by index.html has no fatigue fields, so this is a cross-tool change (index.html sender + this receiver; allowed in one PR as a HANDOFF.md connection). Recommendation: add optional `M_FATpos / M_FATneg / V_FATpos / V_FATneg` station fields and use them here when present.
+- **STG-S8 (rest of X-S8):** pruning of `bridgeSuite.v1.handoffs` lives in the shared bootstrap block (index/lldf/psbeam/stgirder) and was not touched here, as instructed.
+- **New, found during this sweep:** (a) the fatigue DFs (m1/1.2, v1/1.2, and the exterior lever/rigid values of W2) carry no skew correction (4.6.2.2.2e / 4.6.2.2.3c); the shear skew factor is > 1, so omitting it is slightly unconservative for skewed bridges. Recommendation: apply skV to the fatigue shear DF and skM to the fatigue moment DF. (b) `hybridRh` uses the short-term composite section for the −M checks too; 6.10.1.10.1 uses the steel + reinforcement section in negative flexure. Hybrid girders only, small. Recommendation: pass the cracked section for `FncNeg` / negative-moment Rh.
+
+## 2026-10-12 — PR: claude/bootstrap-sync (shared `bridgeSuite.v1.*` bootstrap; PR link added after merge)
+
+Cross-tool sync of the shared bootstrap blocks. The same change is in index.html, lldf.html, psbeam.html and stgirder.html (CLAUDE.md §3). No engineering formula, factor, unit or code reference changed; no computed value changes. Storage keys and saved formats are unchanged (the hand-off map keeps its key and entry format; it only loses old entries).
+
+This closes **STG-S8 (rest of X-S8)** listed in the 2026-10-12 sweep entry above, and AUDIT S3 (see XS4).
+
+### XS1. `whois` responder answers only the framing page, the opener, or an own frame (X-S10)   [robustness] [no result change]
+- **Where:** `BridgeApps.announce()` in the "SHARED APP PATHS" block. Anchor: `d.source==='bridge-suite'&&d.whois`.
+- **Before:**
+  ```js
+    try{ window.addEventListener('message',function(e){
+      var d=e&&e.data; if(d&&d.source==='bridge-suite'&&d.whois) send();
+    }); }catch(e){}
+  ```
+- **After:**
+  ```js
+    // Only the page framing this one, the window that opened it, or a frame
+    // this window holds may ask (X-S10; same rule as the abutment / EDM links).
+    var asker=function(src){
+      if(!src) return false;
+      try{
+        if(window.parent!==window&&src===window.parent) return true;
+        if(window.opener&&src===window.opener) return true;
+        for(var i=0;i<window.frames.length;i++) if(window.frames[i]===src) return true;
+      }catch(x){}
+      return false;
+    };
+    try{ window.addEventListener('message',function(e){
+      var d=e&&e.data; if(d&&d.source==='bridge-suite'&&d.whois&&asker(e.source)) send();
+    }); }catch(e){}
+  ```
+- **Problem:** any window (e.g. a sibling frame) could make the app post its hello. Low risk; the reply only names the app. Same approach as abutment F10 / EDM S4.
+- **Check:** host page framing lldf.html plus a sibling frame. Sibling sends `{source:'bridge-suite',whois:true}` to the lldf frame: main 1 hello reaches the host, branch 0. Host (parent) sends the same ping: 1 hello on both. The boot burst is unchanged.
+
+### XS2. Hand-off map pruned on publish (X-S8)   [storage] [no result change]
+- **Where:** `BridgeHandoff` block (index.html, psbeam.html, stgirder.html; lldf.html has no copy of this block). Anchors: `function prune(map,keep)`, `map=prune(map,[p.handoffId,localStorage.getItem(K_LATEST)]);`.
+- **Before:** `publish()` added the entry to `bridgeSuite.v1.handoffs` and never removed any.
+- **After:** new constants `var KEEP_N=20, KEEP_DAYS=30;` and
+  ```js
+  function prune(map,keep){
+    var ids=Object.keys(map), cutoff=Date.now()-KEEP_DAYS*864e5, out={};
+    ids.sort(function(a,b){ return String((map[b]||{}).producedAt||'').localeCompare(String((map[a]||{}).producedAt||'')); });
+    ids.forEach(function(id,i){
+      var t=Date.parse((map[id]||{}).producedAt||''), fresh=isNaN(t)||t>=cutoff;
+      if(keep.indexOf(id)>=0||(i<KEEP_N&&fresh)) out[id]=map[id];
+    });
+    return out;
+  }
+  ```
+  called in `publish()` right after `map[p.handoffId]=p;`. Rule: keep the newest 20 entries that are at most 30 days old; always keep the entry being published and the entry the `latestId` pointer named before this publish (the design apps read only the latest entry, so that is the one a receiver may not have pulled yet).
+- **Check:** map seeded with 25 entries (m0–m14 aged 0–14 days, m15–m24 aged 55–64 days, `latestId`=m24) plus one entry with no date; publish `p/new`. Main: 27 entries kept. Branch: 17 (m0–m14, m24, new); `latestId` = `p__new` on both.
+
+### XS3. Storage-full writes in the shared blocks are shown (X-S8)   [UI] [no result change]
+- **Where:** "SHARED APP PATHS" block: new `isQuota()` / `storageWarn(what,e)` after `function now()`, exported as `BridgeApps.storageWarn`; called from `write()` (app paths), `BridgeProjects` `writeReg()` and `BridgeHandoff` `publish()` catch blocks. Anchor: `id='bridgeStorageWarn'`.
+- **Before (examples):**
+  ```js
+  function write(o){ try{ localStorage.setItem(KEY,JSON.stringify(o)); return true; }catch(e){ return false; } }
+  function writeReg(r){ try{localStorage.setItem(K_PROJ,JSON.stringify(r));return true;}catch(e){return false;} }
+  ```
+- **After:**
+  ```js
+  function write(o){ try{ localStorage.setItem(KEY,JSON.stringify(o)); return true; }catch(e){ storageWarn('the app-path record',e); return false; } }
+  function writeReg(r){ try{localStorage.setItem(K_PROJ,JSON.stringify(r));return true;}
+    catch(e){ try{ if(window.BridgeApps&&window.BridgeApps.storageWarn) window.BridgeApps.storageWarn('the shared project',e); }catch(x){} return false;} }
+  ```
+  and in `publish()`'s catch: `window.BridgeApps.storageWarn('the analysis hand-off',e)`. `storageWarn` acts only on a quota error (`QuotaExceededError`, `NS_ERROR_DOM_QUOTA_REACHED`, code 22 / 1014, or "quota" in the message), so a browser that blocks storage outright is not nagged. It shows one fixed red banner per page (id `bridgeStorageWarn`, dismissable), one line per item: "⚠ Browser storage is full: <item> was not saved. Export your work as JSON now, then delete old projects to free space." Return values are unchanged (`false` / `null` / `{ok:false}`).
+- **Check:** index.html with `setItem` for `bridgeSuite.v1.projects` / `.handoffs` throwing `QuotaExceededError`: `publish()` → `ok:false`, `saveSlice()` → `null` on both; main shows nothing, branch shows the banner with both lines (screenshot `quota_banner_br.png`).
+
+### XS4. Shared blocks byte-identical (AUDIT S3)
+- The `BridgeApps` block was already the same in all four files (stgirder F1, 2026-10-04); AUDIT S3 is closed by that entry. The `BridgeHandoff` block differed in formatting and comments between index.html and psbeam/stgirder.html; it is now the index.html text (plus XS2/XS3) in all three. The file-header comments above each block are per-file and were not touched.
+- **Proof:** extracted blocks compared after the change (md5): `BridgeApps` block identical in the four files; `BridgeProjects` block identical in the four; `BridgeHandoff` block identical in index/psbeam/stgirder; `BridgeLocks` block unchanged and identical.
+
+### How verified
+- `node --check` on every plain `<script>` that holds the shared blocks, all four files.
+- Headless Chromium, main vs branch, same steps: index publishes the PS demands payload → psbeam shows "New analysis data available", "Load these demands" adopts it (adopted token `test__beam@2026-10-12T10:00:00.000Z`); index publishes the steel payload → stgirder banner and adoption; lldf boots and resolves `BridgeApps.path('psbeam')`. Same results and the same storage keys on both; key values differ only in timestamps. No page errors (only Babel's "deoptimised styling" notes).
+- **Other copies:** index.html, lldf.html, psbeam.html, stgirder.html (all changed in this PR; lldf.html has no `BridgeHandoff` block, so XS2 and the hand-off call of XS3 are not in it).
+
+## 2026-10-12 — PR: claude/lldf-receivers (cross-tool: lldf DF payload `perFootStrip` / `skewShear` receivers; PR link added after merge)
+
+Cross-tool connection PR (CLAUDE.md §7 exception): receivers of the `bridgeSuite.v1.lldf` payload honour lldf's new optional fields (fixlog/lldf.md 2026-10-12 SW3 `skewShear`, SW6 `perFootStrip`), and Bridge Geometry's skew note is softened. Tools changed: index.html, psbeam.html, stgirder.html, Moving Load Generator.html, Steel Bridge Beam Modules.html, Bridge Geometry.html; HANDOFF.md §4.2 / §4.3. The shared `bridgeSuite.v1.*` bootstrap blocks are not touched. No formula, factor, unit or code reference changed. Payloads without the new fields give the same results as before (checked).
+
+### LR1. CIP slab DFs (`perFootStrip`) refused by the LL & DL pull and lock   [hand-off] [no result change for girder payloads]
+- **Where:** `lldfResolveFor(inp)`. Anchor: `if(d.perFootStrip===true) return {why:`. Used by the Pull button and by the locked auto-sync (`LockAutoSync`), so a locked channel shows the warning state and applies nothing.
+- **Before:** (no check; the slab factors went into DF +M / −M / V and the fatigue DF.)
+- **After** (inserted after `if((d.schemaVersion||1)>1) return {why:'LL & DL Distribution data is v'…'Update ST-Girder.'};`):
+  ```js
+    // CIP slab (lldf perFootStrip): factors per 1-ft strip of slab width, not per girder. Refused (HANDOFF.md §4.3).
+    if(d.perFootStrip===true) return {why:'The published distribution factors are for a cast-in-place slab: they are per 1-ft strip of slab width (AASHTO LRFD 4.6.2.3), not per girder. ST-Girder needs girder factors, so nothing was applied.\n\nRecompute in LL & DL Distribution with the girder cross-section type, then send again.'};
+  ```
+- **Problem:** a strip factor (≈ 0.08) used as a girder DF makes every live-load effect about 1/10 of the girder value: very unconservative.
+- **Skew:** this tool does not read the payload skew; lldf's g_V already carries the shear correction at θ_V. Nothing to change.
+- **Check case:** lldf type "Cast-in-place concrete slab", 1 span 120 ft, default inputs → payload `perFootStrip:true`, interior gM = gV = 0.076 (per 1-ft strip), fatM = fatV = 0.045. Before: g_M = g_V = 0.076 (fatigue 0.045) applied. After: refused with the message above; nothing applied. Girder payload (type a, θ = 30°, θ_V = 40°: gM 0.7128, gV 1.0582, fatM 0.4019, fatV 0.7075): identical before and after.
+- **Governing provision:** AASHTO LRFD 10th Ed. Art. 4.6.2.3 (equivalent strip widths for slab-type bridges: the slab DF is per unit width, not per girder). No formula changed.
+- **How verified:** headless Chromium, main vs branch: lldf "Send DFs" for the slab and the girder case, then the resolver called on this tool (`lldfResolveFor({loads:{pos:'interior'}})`). Slab: main applied, branch refused. Girder: identical results (only `producedAt` differs). No page errors.
