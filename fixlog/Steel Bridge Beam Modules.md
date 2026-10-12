@@ -785,3 +785,593 @@ Cross-tool connection PR (CLAUDE.md §7 exception): receivers of the `bridgeSuit
 - **Governing provision:** AASHTO LRFD 10th Ed. Art. 4.6.2.3 (slab strip, per unit width); Art. 4.6.2.2.2e / 4.6.2.2.3c (moment θ vs shear θ). No formula changed.
 - **Check case:** demo bridge (3 spans, supports up to 15°). Slab payload: before errors = [span count]; after errors also include the slab refusal. Girder payload θ = 30°, θ_V = 40°: before warning "LL & DL 30°, this bridge up to 15°"; after "LL & DL 40° for shear (30° for moment), this bridge up to 15°". Payload without `skewShear`: unchanged.
 - **How verified:** headless Chromium, main vs branch, `gdLldfPlan(payload,'type')` on the lldf slab and girder payloads. No page errors.
+
+## 2026-10-12 — PR: claude/gd-prelim-splice-xframe (engineer's requests; PR link added after merge)
+
+Engineer's requests (2026-10-12): (1) an edit in Preliminary sizing must not move the page to another tab; (2) excluded field splices must show no splice results, and the splice location and size should be suggested; (3) cross-frames only on girders deep enough, otherwise channel or rolled diaphragms; (4) Suggest the number of girders, spacing, and overhangs from the out-to-out deck width; (5) hide the variable bay spacings when the spacing is Equal. Basis: AASHTO LRFD 10th Ed. (2024). **No check, formula, load or resistance factor, unit, or code reference of an existing check changed.** New computations: the channel diaphragm properties (G3), the new practice check CF10 (G3), and the width study (G4); see the §4 callouts in each item. Every default threshold is listed under "Needs engineer".
+
+**PlateLine (`PL:`) edits** (G3, G4, G5): base64-decode `const PL_B64 = '...'` (standard alphabet, `=` padding, one line; UTF-8 HTML with LF line endings), apply the PlateLine diff at the end of this entry, encode again without line wrapping. After this PR the string is 579,240 characters (decoded 434,429 bytes; before: 557,928 / 418,445). The first 56,984 decoded bytes are unchanged. Line numbers below: main page ≈ line, `PL:` ≈ line in the decoded PlateLine.
+
+**Exact before/after code:** the two unified diffs at the end of this entry (main page with the base64 string masked, and the decoded PlateLine). Each hunk's context lines are the anchors; the items below name the functions and anchor text.
+
+### G1. Preliminary sizing edits no longer switch the page to Shear connectors; every refresh runs in the background   [bug fix / speed] [no result change]
+- **Where:** new `GD_BG` and `gdBg(fn)` just before `function recompute()` (≈ 6540); `recompute()` first line `if (GD_BG) return;`; `fillInputs()` (≈ 6496) `if (GD_BG) { syncSame(); return; }`; `srcPanel()` `if (GD_BG) return;`; `loadAllInbox(j)` and `designAllRun(j, quiet)` now wrap `loadAllInbox0` / `designAllRun0` (the old bodies) in `gdBg`; `markLocks()` (≈ 5172) builds one label table. Anchors: `function designAllRun(j, quiet) {`, `function loadAllInbox(j) {`, `function markLocks() {`.
+- **Cause:** a change to the bridge in Preliminary sizing schedules `gdScheduleRefresh` → `getDemands(…, 'refresh')` → `designAllRun(j, true)`. That function switches `P.mod` to each module in turn, and `runAutoDesign` → `recompute()` → `applyMod()` drew each module (tab buttons, `body.mod-pl` off). It ended with `P.mod = cur; setMod(cur)`, but `setMod` returns at once when `P.mod === cur`, so the screen was left on the last module drawn, Shear connectors (step 3, the stud redesign), while `P.mod` said Preliminary sizing. Also, `markLocks()` ran `document.querySelector('label[for=…]')` once per input (every module's inputs are in the page): about 1.5 s per call, 10 calls per refresh.
+- **Fix:** multi-module runs (bridge auto-refresh, Design all, Load all, and the girder report's load step) compute and auto-design every module without drawing any; at the end the module on screen is redrawn once and the scroll positions (`.tab-panels`, `#side`, window) are restored. `fillInputs` keeps its data part (`syncSame`) in the background, so the data are the same as before. `markLocks` finds the same labels (first `label[for]` in document order) from one table.
+- **Check case:** built-in example, Preliminary sizing open, edit girder spacing S 9.5 → 9.75 ft. Before: after the refresh the Shear connectors module is shown (`P.mod` = 'pl'); after: Preliminary sizing stays, its scroll (300 px) unchanged. Same for S, left overhang, t_s, N_b, D, haunch, f′c (each edit checked for 16 s). On Girder section scrolled to 600 px, a refresh: before → Shear connectors, scroll 24; after → Girder section, scroll 600. Refresh time (headless Chromium, `designAllRun`): 19.1–20.4 s before (markLocks 14.5 s), 3.4 s after.
+- **Results:** Design all on the built-in example, main vs branch: every module's text and every check item (ID, status, cells, ratio) identical; the saved project differs only by the new optional fields (G2, G3).
+- **Governing provision:** none (UI).
+
+### G2. Field splices: "not included" shows one line only; Suggest splice proposes the location and the size   [UI / design suggestion] [no splice check changed]
+- **Where (main page):** `GD_DEFAULT.spl` (≈ 1228); `spIncl`, `spStdT`, `spNextT`, `spLocSuggest`, `spSuggestSize`, `spSugBox`, `spSuggest` after `function spUndoBtn()` (≈ 6880); splice pane section `sec-spl` (anchor `${secHd('sec-spl', 'Field splices: inclusion and suggestion')}`); `recompute()` splice branch and new `renderSplOff()` (anchor `function renderSplOff()`); `modStatus` / `setMark` (`{ off: true }`); `designAllRun0` (`splOn`), `loadAllInbox0`, `applyInboxTo` (`P.spl.plN`); girder report (`if (mod === 'splice' && !spIncl())`); DXF (`dxfDetails`, `dxfBuild`: `FIELD SPLICES NOT INCLUDED`); `faImport('splice')`; `renderReportTab`, `openReport`; `spliceApply` (user's own plates kept); `onInput` (`P.spl.own = true`); `runAutoDesign('splice')` and `sp_auto` (`P.spl.own = false`); `autoDesignSplice` / `fitSplice` thickness steps and 3d pitch; manual "Field splices: inclusion and Suggest splice".
+- **Problem:** with no field splices in the sizing layout, the Field splice module kept its earlier (or example) data and its checks: the tab mark and summary showed failures for a splice that does not exist (reproduced: 5 failing checks shown after the layout's splices were removed). There was no way to exclude splices, no location suggestion, and the splice auto-design used one bolt size and 1/16 in steps above 1 in.
+- **Inclusion:** new select "Field splices" (`spl.inc`): `auto` (default, "As in Preliminary sizing": not included when the last sizing layout received has no field splices, recorded as `spl.plN` = number of splice cases received), `yes`, `no`. Not included → the splice module shows "Field splices not included" (status bar and Summary), no checks, report, drawings, 3D, DXF sheet, fatigue import, Design all row ("Field splices not included"), splice quantities or costs, splice/cross-frame conflicts, girder-report chapter (one line), and the tab mark is "–". Design all also clears the stud module's splice gaps (`sc.splX`, `sc.splL`) and redesigns the studs when splices are not included and gaps were set (no splice plates to avoid).
+- **Suggest splice** (button on the Splice tab): 
+  - *Location:* continuous unit — the dead-load (DC1 + DC2 + DW) contraflexure points next to each interior pier, from the Structural analysis module for an interior girder (G2; G1 with fewer than 3 girders), linear interpolation between nodes, rounded to the nearest foot; simple spans — the girder ends at the piers; then every field section longer than the maximum field-section length (`spl.maxLen`, default 120 ft, "shipping/erection assumption; verify") is divided into equal lengths (odd count in a simple span), and a splice closer than `spl.minSup` (default 10 ft) to a support is moved to that distance. The result is listed beside the stations in Preliminary sizing; the stations themselves stay in Preliminary sizing (the user's; not overwritten).
+  - *Size:* `autoDesignSplice()` (unchanged search) run for each bolt diameter offered, 7/8, 1, 1-1/8 in (only the Bolts tab diameter when it is locked); among layouts passing every splice check, the least `bolts × std.cBolt + plate lb × std.cDet` (Owner standards, $15 and $3.50/lb) is kept. Plate thicknesses are standard: 1/16 in steps up to 1 in, 1/8 in above (`spNextT`/`spStdT` in the flange loop, inner-plate rounding, and `fitSplice`); the flange and web bolt pitches are at least 3d (changes only 1-1/8 in bolts: 3 3/8 in). Undo restores plates, web and bolts.
+  - *Overrides:* editing any splice plate or the bolt diameter (`top.*`, `bot.*`, `web.*`, `bolts.d`) sets `spl.own`; imports and refreshes then keep the user's splice (source note says so) until Suggest splice or Auto-design splice is pressed. When demands are imported the splice is auto-designed with the Bolts tab diameter (as before).
+- **§4 callout:** no splice check, resistance factor, or formula changed (TF, BF, MT, WS, DT are untouched). Auto-design suggestions change only (a) where a plate thicker than 1 in is chosen (now 1/8 in steps: 1 1/16 in is no longer offered) and (b) with 1-1/8 in bolts (pitch 3 3/8 in instead of 3 in, which failed DT1/DT9 before). The built-in example's 8 splice cases designed by Design all are identical main vs branch (all plates ≤ 7/8 in, 7/8 in bolts).
+- **Worked example (built-in example, Field splice FS1 case, bridge from Preliminary sizing, Suggest splice):**
+  - Location: 78, 142, 218, 282 ft (Preliminary sizing's Suggest placed 82, 145, 215, 278 ft from its constant-EI analysis; this uses the staged Structural analysis of G2). Rule text as above; no field section exceeds 120 ft (78, 64, 76, 64, 78 ft), no move for the 10 ft limit.
+  - Size: 7/8 in: 96 bolts, 446 lb of plates, $3,001; **1 in: 96 bolts, 426 lb, $2,931 (chosen)**; 1-1/8 in: 96 bolts, 475 lb, $3,104. Top flange: single shear, 2 lines each side × 4 rows (32 bolts), outer PL 16 × 13/16. Bottom flange: double shear, 2 lines × 3 rows (24 bolts), outer PL 16 × 5/8, 2 inner PL 6 1/2 × 13/16. Web: 2 PL 57 × 1/2, 10 rows × 2 columns each side (40 bolts). Total 96 bolts.
+  - Governing D/C after (before = the example's entered splice): TF1 0.941 (0.855), TF2 0.359 (0.550), TF3 0.874 (0.762), TF4 0.972 (0.842), TF5 0.806 (0.965), TF6 n/a, BF1 0.753 (0.769), BF2 0.495 (0.403), BF3 0.582 (0.571), BF4 0.986 (0.902), BF5 0.942 (0.820), BF6 n/a, MT1 0.940 (0.901), WS1 0.250 (0.195), WS2 0.458 (0.260), WS3 0.167 (0.128), WS4 0.264 (0.372), WS5 n/a, DT1 1.000 (0.875), DT2 0.917 (0.522), DT3 1.000 (0.857), DT4 0.714 (0.643), DT5 pass, DT6 pass, DT7 0.625 (0.714), DT8 0.923 (0.804), DT9 0.917 (0.571), DT10 1.000 (1.000), DT11 0.825 (0.658). Every check passes (29 checks: 26 OK, 3 n/a).
+  - Override: top outer plate typed as 7/8 in → bridge refresh → kept (7/8 in, source note "as entered by the user"); Suggest splice again → 13/16 in.
+- **Not-included check case:** built-in example, Preliminary sizing splices removed (`girder.splices = []`), example splice made to fail (top flange 1 row, 5/16 in plate). Before: Design all "Field splices: All checks pass; 0 cases designed" with $0 splice rows, tab mark "5" (failing), module "5 splice checks fail", governing 2.56. After: Design all "Field splices not included", no splice rows, tab mark "–", module one line "Field splices not included. The Preliminary sizing layout has no field splices." Setting "Not included" with splices present: the same, girder report chapter "Field splices not included.", report tab one line.
+- **Saved data:** new optional object `spl: { inc, maxLen, minSup, own }` (+ `plN`, `sug` when used) inside the existing project/autosave JSON (`girderdetail_autosave_v1`); older files get the defaults through `deepMerge` (included, as before). No key renamed.
+- **How verified:** headless Chromium, main vs branch (built-in example, Design all; no splices; Suggest splice; override; girder report; report tab).
+
+### G3. Cross-frames: minimum girder depth, recommended bracing type (CF10), channel diaphragms   [new practice check (warning only) + new diaphragm option] [existing results unchanged]
+- **Where (main page):** `CF_CH` before `const CF_DIA` (≈ 2645); `cfDiaChecks` (channel lookup `chS`, channel `I_y`, title, note, depth item); `GM.cf` `groups` (+ 'Bracing type'), `def.dMinXF: 48`, Geometry pane input `cf.dMinXF`, diaphragm section labels and shape list, validation, new check `CF10` at the end of `checks`; new `cfTypeRec(p)` before `function cfSVG(R)`; `AD.cf` adds the recommendation line (anchor `{ const TR = cfTypeRec(C0);`); manual "Channel diaphragms and the bracing type".
+- **Where (PL):** `DEFAULT.framing.xfMinD: 48` (PL ≈ 1019); Framing tab input `framing.xfMinD` (PL ≈ 3402); detail export `cf.dMinXF` (PL ≈ 3252, anchor `const cf = { S: r2(m.S * 12)`); Suggest tab note `xfNoteHtml(s)` (anchor `host.innerHTML = wsHtml() + xfNoteHtml(s) + h;`).
+- **Rule (CF10, src "Practice", status warning only):** girder depth d (out-to-out of the flanges: the "Girder depth d" input, which Preliminary sizing fills with D + t_top + t_bot at Abutment 1) ≥ `dMinXF` (default 48 in, "common practice (e.g. AISC/NSBA G13.1 guidance; owner standards govern) — verify") → cross-frame recommended (X or K by S/h > 1.5, the auto-designer's rule); d < minimum → the lightest channel with depth ≥ 0.5d (C8x11.5 … MC18x42.7), else the lightest W ≥ 0.5d from the existing W list. Status: pass when d ≥ minimum or a diaphragm is selected (`dia.on = 'yes'`); **warning** when d < minimum and a cross-frame is selected. The selected type is never changed (existing projects keep theirs).
+- **Channel diaphragms:** the diaphragm alternative's shape list adds C8x11.5, C10x15.3, C12x20.7, MC12x31, C15x33.9, MC18x42.7 (nominal d, b_f, t_f, t_w from the AISC Manual — verify). They take the existing rolled-diaphragm checks (S10 path: brace stiffness 6EI_x/S, brace moment vs φ_fM_n by `ltbFnc` with L_b = S, C_b = 1.0, shear, jacking, eccentric bolt group with F_ub from the grade); differences: I_y about the channel's own centroid, the depth item compares with 0.5 × girder depth d (warning), and the note says the 6.10.8 I-section LTB model is an approximation for a channel (verify against AISC 360-16 F2).
+- **§4 callout (new computation, existing values unchanged):**
+  - Channel properties (fillets neglected): A = 2b_ft_f + h_wt_w; I_x = b_fd³/12 − (b_f − t_w)h_w³/12 (as for the W); x̄ = (h_wt_w·t_w/2 + 2b_ft_f·b_f/2)/A; I_y = h_wt_w³/12 + h_wt_w(t_w/2 − x̄)² + 2[t_fb_f³/12 + b_ft_f(b_f/2 − x̄)²].
+  - Check case MC18x42.7 (d = 18, b_f = 3.95, t_f = 0.625, t_w = 0.450 in), girder depth 36 in, S = 114 in, 50 ksi: h_w = 16.75 in; A = 2(3.95)(0.625) + 16.75(0.45) = 12.475 in² (AISC 12.6); I_x = 3.95(18)³/12 − 3.50(16.75)³/12 = 549.0 in⁴ (AISC 554); S_x = 61.0 in³; x̄ = 0.918 in; I_y = 15.68 in⁴ (AISC 14.9); β_br = 6(29,000)(549.0)/114 = 838,001 kip-in/rad (tool: 838,001); φ_fM_n = 1,158 kip-in (F_nc = 18.98 ksi × 61.0); depth 18.00 ≥ 0.5(36) = 18.00 in (ratio 1.00). W shapes: unchanged (the same code path; W21x44 at d = 36 in: depth item 20.70 vs 0.75(60) = 45.00 in warning, as before).
+  - CF10 check cases (cross-frame default, S = 114 in, h = 48 in): d = 62.5 in → pass, "K-frame (S/h = 2.38)"; d = 48.0 → pass; d = 47.9 → **warning**, "rolled diaphragm W27x84" (no channel reaches 24 in); d = 36 → **warning**, "channel diaphragm MC18x42.7 (or a rolled W)"; d = 36 with the MC18x42.7 or W21x44 diaphragm on → pass.
+- **Results:** built-in example: the Cross-frames module gains CF10 (pass): "10 checks: 9 OK" instead of "9 checks: 8 OK"; nothing else changes. Shallow case (Preliminary sizing D = 33 in, girder depth 34.88 in, Design all): only change "Cross-frames: Fails: CF8; warnings CF10" and the CF10 row. `AD.cf` adds "Girder depth 36.00 in is below the 48.00 in minimum for cross-frames: a channel diaphragm MC18x42.7 (or a rolled W) is recommended (the cross-frame type is kept; …)".
+- **Saved data / hand-off:** new optional `cf.dMinXF` (GirderDetail), `framing.xfMinD` (PlateLine), and `mods.cf.dMinXF` in the `girderdetail_inbox_v1` payload (imported like the other cross-frame geometry, override kept). Older data get 48 in.
+- **Governing provision:** practice (AISC/NSBA G13.1 guidance; owner standards); AASHTO LRFD 10th Ed. 6.7.4.2 (diaphragm depth: 0.5 of a rolled beam, 0.75 of a plate girder), 6.7.4.2.2, 6.10.8 (unchanged use).
+- **How verified:** `GM.cf.compute`/`checks` and Design all in headless Chromium, main vs branch; report tab renders CF10 and the channel title; hand numbers above.
+
+### G4. PlateLine: girder count, spacing, and overhangs from the out-to-out deck width   [new feature] [nothing changes until applied]
+- **Where (PL):** `DEFAULT.ws` (PL ≈ 1023); Suggest input tab section `sec-sgws` (anchor `${secHd('sec-sgws', 'Girder count from the deck width')}`); new `WS`, `wsKey`, `wsSetup`, `wsEval`, `wsCase`, `wsRun`, `renderSuggestSafe`, `wsPick`, `wsHtml`, `wsApply`, `xfNoteHtml` before `/* ---------------- alternatives study ---------------- */`; Suggest tab output `host.innerHTML = wsHtml() + xfNoteHtml(s) + h;`; manual "Girder count from the deck width".
+- **Inputs (all "verify / owner"):** out-to-out deck width W (blank: Suggest uses N and S from the Bridge tab, as before); overhang 1.5 to 4.0 ft and ≤ 0.5S; d_e −1.0 to 5.5 ft; S 3.5 to 16 ft; objective least total steel weight (default) or fewest girders. Barrier/curb width comes from the Bridge tab (`brGeom(...).bar`, as Suggest uses it).
+- **Method:** for N = 3, 4, …: overhangs on a 0.25 ft grid within the limits; S = (W − 2·oh)/(N − 1); kept when S, oh ≤ 0.5S and d_e = oh − barrier width are within the limits. Overhang choice: a trial size with oh nearest 0.375S gives K_g (longest span); then the feasible oh whose exterior and interior live-load moment distribution factors (`sgDF`, this tool's AASHTO 4.6.2.2 equations: Table 4.6.2.2.2b-1 interior; exterior max(lever rule, e·g_int), Table 4.6.2.2.2d-1) are closest (ties: nearest 0.375S); the girder is sized with Suggest fast mode for that N, S, oh (`suggestLayout` with the trial bridge) and checked with `runChecks` + `framingChecks` (like an Alternatives row). Table: N, S, overhang, d_e, g_M interior/exterior, section, steel per girder and total (kip), lb/ft² of deck, governing ratio of the layout checks, bracing type (G3), pass/fail; recommendation = passing row with least lb/ft² (= least total weight, W fixed) or fewest girders. Apply (one click + confirm, undo snapshot) sets N, S (equal), both overhangs, the girder plates and splices, and the stiffener setting. Runs in chunks (progress shown); GirderDetail refreshes in the background afterwards (G1).
+- **Worked example (built-in bridge, W = 4 × 9.5 + 2 × 3.25 = 44.5 ft, barrier 1.5 ft):** N = 3 not feasible (S = (44.5 − 2·4.0)/2 = 18.25 > 16 ft). Sized:
+
+  | N | S (ft) | oh (ft) | d_e | g_M int | g_M ext | web | kip/girder | total kip | lb/ft² | gov. ratio | bracing | checks |
+  |---|---|---|---|---|---|---|---|---|---|---|---|---|
+  | **4** | **13.00** | **2.75** | 1.25 | 0.855 | 0.854 | 66 × 1/2 stiff. | 98.32 | 393.28 | **24.55** | 1.00 (W3) | cross-frames | pass |
+  | 5 | 10.00 | 2.25 | 0.75 | 0.696 | 0.690 | 65 × 1/2 stiff. | 87.68 | 438.41 | 27.37 | 1.00 (W3) | cross-frames | pass |
+  | 6 | 8.00 | 2.25 | 0.75 | 0.571 | 0.563 | 52 × 1/2 stiff. | 79.40 | 476.41 | 29.74 | 1.00 (W3) | cross-frames | pass |
+  | 7 | 6.67 | 2.25 | 0.75 | 0.489 | 0.487 | 44 × 1/2 unst. | 74.36 | 520.54 | 32.49 | 1.00 (W3) | channel / rolled | pass |
+  | 8 | 5.79 | 2.00 | 0.50 | 0.447 | 0.444 | 47 × 1/2 unst. | 70.79 | 566.31 | 35.35 | 1.04 (D6) | cross-frames | pass, warnings |
+  | 9 | 5.13 | 1.75 | 0.25 | 0.410 | 0.395 | 47 × 1/2 unst. | 67.33 | 605.98 | 37.83 | 1.04 (D6) | cross-frames | pass, warnings |
+  | 10 | 4.56 | 1.75 | 0.25 | 0.381 | 0.370 | 50 × 1/2 unst. | 67.17 | 671.74 | 41.93 | 1.04 (D6) | cross-frames | pass, warnings |
+  | 11 | 4.10 | 1.75 | 0.25 | 0.351 | 0.344 | 44 × 1/2 unst. | 64.13 | 705.43 | 44.03 | 1.07 (G6) | channel / rolled | pass, warnings |
+  | 12 | 3.73 | 1.75 | 0.25 | 0.333 | 0.318 | 50 × 1/2 unst. | 64.67 | 775.99 | 48.44 | 1.17 (G6) | cross-frames | pass, warnings |
+
+  Chosen (least weight): 4 girders at 13.00 ft, overhangs 2.75 ft. Hand check: S = (44.5 − 2·2.75)/3 = 13.00 ft; d_e = 2.75 − 1.5 = 1.25 ft; 2.75 ≤ 0.5·13.0; exterior lever rule a₁ = S + d_e − 2 = 12.25 ft, a₂ = 6.25 ft, g = 1.2 × 0.5(12.25 + 6.25)/13.00 = 0.854 (table 0.854) against the interior 0.855. At N = 5 the rule picks 2.25 ft overhangs (S = 10.00 ft) rather than the project's 3.25 ft (S = 9.50 ft), because the exterior and interior factors balance better. Apply → N = 4, S = 13, overhangs 2.75 ft, D = 66 in; GirderDetail stays on Preliminary sizing.
+- **§4 callout:** no existing formula changed; the distribution factors are the existing `sgDF` equations, labelled as an estimate (run LL & DL for the chosen layout). The governing ratio is the largest item ratio among PlateLine's layout checks (practice checks included, so a "pass, warnings" row can show more than 1.00).
+- **Saved data:** new optional `ws` object in the PlateLine project/autosave (`plateline_autosave_v1`); older projects get the defaults (W blank: feature off). Results are not saved.
+- **How verified:** headless Chromium (table, recommendation, Apply, undo snapshot); `node --check` on the decoded PlateLine.
+
+### G5. PlateLine Bridge tab: "Bay spacings (variable)" hidden while the spacing is Equal   [display only] [no result change]
+- **Where (PL):** new `syncSpacingVis()` before `function onScalar(e)`; called from `onScalar` when `bridge.spacing` changes and at the end of `fillInputs()`.
+- **Change:** the input's `.ig` block gets `display: none` with Equal spacing and is shown again with Variable. `P.bridge.bays` is not touched (switching back shows the same values).
+- **Check case:** Equal → hidden, `bays` = "9.5, 9.5, 9.5, 9.5"; Variable → shown, same text; Equal again → hidden, same text. Screenshot `shot_pl_bridge_equal.png`.
+
+### Verification summary
+- `node --check`: every inline script of the page and of the decoded PlateLine: pass.
+- Headless Chromium, main vs branch, built-in example: fresh load, Design all, and the main-saved autosave loaded into the branch: every module's text and every check item identical except the intended CF10 row; saved data and the `girderdetail_inbox_v1` payload differ only by the new optional fields. No console errors.
+- Shallow girder (D = 33 in): only CF10 (warning) differs. Splices excluded: one line, no outputs. Tab and scroll unchanged on every Preliminary sizing edit and on a refresh while in another module.
+
+### Raised, not changed
+- `AD.cf` sets `type = 'K'` when S/h > 1.5, but the module's type values are `X`, `Kb`, `Kt`; `'K'` is computed as `Kt` (diagonals meeting at the top chord) and shows as "K-frame" in some places and not in the type select. Needs a decision: Kb or Kt for the auto-designed K-frame.
+- The remaining refresh (≈ 3.4 s headless, mostly the splice and module auto-designers) still runs in one piece; it no longer moves the page, but the window does not respond for that time. Splitting it into steps would change the order of Design all; not done.
+
+### Needs engineer
+1. Minimum girder depth for cross-frames, default **48 in**, compared with the girder depth d (out-to-out of flanges), not the web depth.
+2. Maximum field-section length **120 ft** (shipping/erection) and minimum splice distance from a support **10 ft**.
+3. Splice location rule: dead-load (DC1 + DC2 + DW) contraflexure of an interior girder from the staged Structural analysis, rounded to 1 ft (Preliminary sizing's Suggest uses its constant-EI analysis, so the two can differ by a few feet: 78/142/218/282 vs 82/145/215/278 ft in the example).
+4. Splice size objective: bolts × $15 + plate steel × $3.50/lb (Owner standards) across 7/8, 1, 1-1/8 in bolts; on import the Bolts tab diameter is kept (to keep the refresh fast). Confirm, or always search all diameters.
+5. Channel list and dimensions (C8x11.5 … MC18x42.7), the 6.10.8 LTB approximation for channels, and the 0.5d channel depth.
+6. Width study limits: overhang 1.5–4.0 ft and ≤ 0.5S, d_e −1.0 to 5.5 ft, S 3.5–16 ft, N from 3; the overhang rule (balance of exterior and interior moment factors; ties at 0.375S); objective default least weight.
+
+### Exact changes: main page (unified diff, base64 string masked)
+
+```diff
+--- m_main.html	2026-10-12 20:41:13.315720093 +0000
++++ m_br.html	2026-10-12 20:41:13.320988749 +0000
+@@ -1225,2 +1225,3 @@
+   clr: { cw: 0.5, cv: 1.5 },
++  spl: { inc: 'auto', maxLen: 120, minSup: 10, own: false },   // field splices: inclusion, location rule inputs, user-entered plates flag (2026-10-12)
+   ui: { itab: 'project', otab: 'summary', col: {}, man: 'p1', rpt: { inputs: true, combos: true, checks: true, summary: true, drawings: true, manual: false, detail: 'full' }, v3: { gird: true, plates: true, bolts: true, op: 0.35 } }
+@@ -2134,2 +2135,3 @@
+ <h3>Rolled diaphragm alternative (Cross-frames)</h3><p>A W-shape diaphragm can be checked beside the cross-frame: depth (6.7.4.2), torsional brace stiffness with β<sub>br</sub> = 6EI<sub>x</sub>/S (6.7.4.2.2), brace moment against φM<sub>n</sub> (6.10.8, L<sub>b</sub> = S, C<sub>b</sub> = 1.0), shear, jacking flexure and shear, and the eccentric bolted connection. Nominal dimensions, fillets neglected. Axial load from wind or seismic forces is not considered.</p>
++<h3>Channel diaphragms and the bracing type (Cross-frames)</h3><p>The diaphragm alternative also offers channels (C8x11.5 to MC18x42.7, nominal AISC dimensions; verify). A channel takes the same checks as the rolled W (brace stiffness, brace moment by the 6.10.8 model with L<sub>b</sub> = S and C<sub>b</sub> = 1.0, which is an approximation for a channel, shear, jacking, and the bolted connection), with I<sub>y</sub> about the channel's own centroid, and its depth is compared with half the girder depth. <b>CF10</b> recommends the intermediate bracing type from the girder depth d (out-to-out of the flanges, the "Girder depth d" input, not the web depth): at or above the <b>Minimum girder depth for cross-frames</b> (default 48 in; common practice, e.g. AISC/NSBA G13.1 guidance; owner standards govern; verify) a cross-frame (X or K by S/h, as the auto-design chooses), below it the lightest channel at least half the girder depth, or a rolled W. A cross-frame on a girder below the minimum gives a warning, not a failure. The selected type is never changed automatically; Preliminary sizing sends its own minimum (Framing tab) with the cross-frame geometry, and its Suggest tab states the recommendation.</p>
+ <h3>Live load: vehicles and what controls (SA5)</h3><p>At every analysis point the HL-93 design truck (rear axle spacing varied from 14 to 30 ft in 1 ft steps, both directions) and design tandem are moved across the influence line, each with IM, and combined with the design lane load; in negative moment regions and for interior reactions, 90% of two design trucks plus 90% of the lane load is also evaluated. The Combinations tab card <b>Live load: vehicles evaluated and what controls</b> shows, at tenth points, each vehicle's moment per lane, the controlling truck spacing, which combination controls, the distribution factor, and the girder LL+IM; its chart shows every vehicle along the girder. The fatigue table gives the fatigue truck (30 ft rear spacing, IM 15%, one truck) range per lane, the fatigue distribution factor (single-lane ÷ 1.2), the girder range, and the Fatigue I range (× 1.75). Check SA5 records what was evaluated and how often each vehicle controls.</p>
+@@ -2138,3 +2140,3 @@
+ <h3>DXF export (AutoCAD)</h3><p><b>Format.</b> The default format is an AutoCAD 2018 DXF with the drawings at full size (inches, units stored in the file) in model space and one paper space layout per sheet (tabs 01, 02, …): a true 34 × 22 (or 17 × 11) page with the border and title block and a locked viewport at the sheet scale; plot each layout at 1:1. Linetypes scale with the viewport (PSLTSCALE on). Every layout's page setup is ready to plot: DWG To PDF.pc3, ANSI full-bleed D (or B) paper, 1:1, and the monochrome.ctb plot style, so all sheets plot black and white. To plot the whole set to one PDF, type PUBLISH in AutoCAD, keep the listed layouts (remove the Model entry), set Publish to PDF with Multi-sheet file, and click Publish. With Elevation of every girder selected, each girder also gets its own elevation sheet with its bearing stations, connection plates, moment envelope, and camber. Everything in model space lies on a sheet: each sheet's drawings are sized to fit its viewport with a 1/4 in. margin (text and dimension extents included), no two viewports show the same area, and the export warns if a sheet cannot fit even at 1:1200. This format is written by the ezdxf library running in the browser; the first export downloads it (internet needed, about 15–30 s), later exports are quick. The R12 option works offline and draws each sheet's border around the drawings in model space instead (plot each by window at the scale in its title block).</p><p><b>Also:</b> analysis diagrams for an exterior girder (G1) and an interior girder (G2): moment and shear envelopes (DC1, DC2 + DW, LL+IM, Strength I, values labeled), top and bottom flange stresses by stage with Service II against 0.95F<sub>y</sub>, and dead load deflections, each band at a stated vertical scale; a design summary (every Girder section check with its governing ratio and location, and each detail module's Design all result); and a standard details sheet filled in from the design (bolt holes and edge distances, stiffener clip and weld termination, connection plate at the tension flange, shear studs, flange transitions, splice fillers, camber measurement, bearing stiffeners at skewed supports, weld symbol legend) with typical construction staging notes. A load rating table will follow once rating is added.</p><p><b>Sheets available:</b> cover and sheet index with a revisions table; framing plan (top flanges to scale, connection plates, bearing and intermediate stiffeners, top flange splice plates, bearings, dimension chains, girder length and cross-frame location tables, and callouts to the cross-frame details); erection diagram with piece marks, the shipping piece table (plate weights at 490 pcf, plus 5% for details, heaviest piece flagged), steel by girder, and girder work points relative to CL bearing Abut. 1 at G1; girder elevation and camber with callouts to the connection plate, bearing stiffener, and splice sheets (sheet numbers filled in); typical section with flange-to-web weld symbols, general notes, and quantities; bearing reactions (unfactored DC1, DC2, DW, LL+IM max and min, pedestrian, service max and min, uplift flagged) for every girder and support; fatigue and fracture tables; deck overhang with the temporary bracket; every field splice; bearing stiffener, cross-frame (intermediate, end cross-frame along the skew, typical connection), stiffener and connection plate, shear connector, and flange transition details with weld symbols. In the layout format, bolts are GD_BOLT blocks and callouts are GD_SECT blocks with a TAG attribute. Not generated: sole plate and bearing details (bearings are not designed here), a deck placement sequence (needs a staged deck analysis), survey coordinates (work points are given relative to the girder layout), and office title blocks or layer standards (supply them to have them used).</p><p><b>Export DXF</b> (top bar) writes plot-ready sheets. Each sheet is a border and title block (project, project number, sheet title, scale, designed/checked, sheet n of N) drawn at its plot scale around full-size geometry in inches in model space; the scale is the smallest standard scale at which the sheet's content fits (34 × 22 or 17 × 11 sheets), so plot each sheet window at the scale in its title block. Sheets: 1, framing plan with girder spacing, cross-frame spacing along the exterior girders, field splice and span dimensions, the girder length and splice location table, and the cross-frame location table; 2, girder elevation with flange and web plates, connection plates, transverse stiffeners, bearing stiffeners, stud pitch zones, field splices and bearings, plate and span dimension chains, the plate schedule, the total dead load deflection (camber) table for every girder, the deflection components for a chosen girder, and the camber diagram of all girders; 3, the typical cross-section fully dimensioned, general notes (specification, steel, NSTM status, bolts, studs, deck, welding, camber), and the quantities from Design all; then one sheet per field splice case of the last Design all (plans of both flange splices and the elevation, with plates, fillers, bolts, and dimension chains of pitches, gages, end distances, and plate sizes); bearing stiffener, cross-frame, transverse stiffener and connection plate, and shear connector details; and flange transition details, one per distinct transition with its locations listed (the sheet is omitted when the girder has no shop transitions). Dimensions are AutoCAD DIMENSION entities with a dimension style per scale (GD + scale: ticks, text 0.1 in above the line, feet-inches to 1/8 in); text uses the GD style (romans.shx). Layers are named by content with the prefix you choose (default S-). Set the drawing units to inches in AutoCAD after opening and save as DWG.</p>
+-<h3>Automatic refresh</h3><p>When the bridge changes in Preliminary sizing (spans, skews, girders, spacing, plates, splices), every module is updated automatically about 1.5 s after the last edit: demands are re-imported from the last demand source used (Preliminary sizing, or Structural analysis for a chosen girder), overrides and locked values are kept, auto-design runs if it is switched on in Owner standards, every module's checks are recomputed so the status marks on the module tabs are current, and you stay in the module you are working in. Switch it off with Auto-refresh every module when the bridge changes in Owner standards.</p>
++<h3>Automatic refresh</h3><p>When the bridge changes in Preliminary sizing (spans, skews, girders, spacing, plates, splices), every module is updated automatically about 1.5 s after the last edit: demands are re-imported from the last demand source used (Preliminary sizing, or Structural analysis for a chosen girder), overrides and locked values are kept, auto-design runs if it is switched on in Owner standards, every module's checks are recomputed so the status marks on the module tabs are current, and you stay in the module you are working in. The update runs in the background: no module is drawn while it runs (only the module on screen is redrawn once at the end), so the tab and the scroll position do not change. Switch it off with Auto-refresh every module when the bridge changes in Owner standards.</p>
+ <h3>Girder report</h3><p><b>Girder report</b> (top bar) builds one calculation package for a selected girder. Choose the girder, the chapters, and whether to re-run auto-design for that girder (otherwise the plates, bolts, and welds as currently entered are checked). Every module is loaded with that girder's demands from the Structural analysis module (its own distribution factors, dead loads, and effective flange width), and each chapter is that module's full worked report: 1, bridge and girder geometry (bridge data, typical cross-section, framing plan, girder elevation, plate schedule); 2, loads and live load distribution factors with derivations; 3, structural analysis (moment and shear envelopes, reactions, deflections, stresses by construction stage); 4, girder section (Strength I, Service II, constructibility, and fatigue at the critical sections); 5, fatigue details; then one chapter per field splice on the girder; bearing stiffeners; transverse stiffeners and connection plates; shear connectors; cross-frames; deck overhang (exterior girders only); and web-to-flange welds and transitions. The package opens with a title page (girder, source of demands, basis of the details, specification, preparer and checker) and a contents list, starts each chapter on a new page, and carries "Girder G# calculation package" in the running header; print it to PDF. The app returns to the module you started from when printing is finished.</p>
+@@ -2148,3 +2150,4 @@
+ <h3>Splices from Preliminary sizing</h3><p><b>Sealing, stitching, gage lines, and wrench clearance.</b> DT2 limits the pitch along free edges for sealing, s ≤ 4.0 + 4.0t ≤ 7.0 in (6.13.2.6.2), with t the thinner outside plate: on a flange with inner plates, the thinner of the outer and inner plates. DT3 applies the maximum edge distance 8t ≤ 5.0 in to the splice plates. DT9 applies the stitch-bolt limits of 6.13.2.6.3 to the splice plates, taken to act in compression (the flange splices are designed for P<sub>fy</sub> in tension and compression, and the web plates carry the compressive part of the flange force transferred to the web): pitch s ≤ 12.0t along the force, gage g ≤ 24.0t between lines, including across the web on the outer plate; the end-pitch rule for compression members (6.13.2.6.4) is for built-up members and is not applied. A setting on the Bolts tab makes DT9 advisory instead of required. DT10 is the owner or office minimum number of bolt lines each side of the web (default 2; AASHTO itself requires only two rows along the force, DT6). Staggered holes are not used. DT11 checks the clearance needed to tighten the nuts: flange bolts to the face of the web splice plate, and the web bolts nearest the flanges to the face of the flange splice plates, against C₁ (defaults 1.25, 1.50, 1.625, 1.75 in for 3/4, 7/8, 1, 1-1/8 in bolts; confirm with the AISC Manual Table 7-16 and the fabricator).</p>
+-<p><b>Auto-design splice</b> (Splice tab) finds the most economical splice that passes every strength and detailing check (TF, BF, MT, WS, and DT1 to DT11, including plate area not less than the connected area, stitching, the minimum gage lines, and wrench clearance). If a flange is too narrow for the minimum gage lines without staggering, it reports the width needed and leaves the splice unchanged: for each flange it tries double shear (inner plates, where they fit) and single shear with the minimum number of bolt lines (DT10) up to three each side of the web, the first line placed for edge distance and wrench clearance, takes the fewest bolt rows that pass shear and slip, then the thinnest plates (1/16 in steps from 5/16 in, inner and outer areas balanced) that pass bearing, yield, fracture, block shear, fatigue, and the edge-distance limits, and keeps the layout with the fewest bolts, then the least plate steel. The web splice uses plates as deep as the web less the clearances, the fewest bolt columns, the widest vertical pitch the sealing limit allows, and the thinnest passing plate. Geometry is fitted throughout: outer plates to the narrower flange, inner plates to the clearance from the web plate, bolt gages to the edge distances. <b>Undo auto-design</b> restores the previous layout; <b>Fit geometry only</b> keeps your bolts and thicknesses and only fits widths, gages, and the web plate. When a splice is loaded from an analysis, it is auto-designed for those demands automatically. Verification: the example splice drops from 124 to 96 bolts and the Br. 037201 interior splice from 268 to 152, both passing every check; review the result against your standard details.</p>
++<p><b>Auto-design splice</b> (Splice tab) finds the most economical splice that passes every strength and detailing check (TF, BF, MT, WS, and DT1 to DT11, including plate area not less than the connected area, stitching, the minimum gage lines, and wrench clearance). If a flange is too narrow for the minimum gage lines without staggering, it reports the width needed and leaves the splice unchanged: for each flange it tries double shear (inner plates, where they fit) and single shear with the minimum number of bolt lines (DT10) up to three each side of the web, the first line placed for edge distance and wrench clearance, takes the fewest bolt rows that pass shear and slip, then the thinnest plates (1/16 in steps from 5/16 in, inner and outer areas balanced) that pass bearing, yield, fracture, block shear, fatigue, and the edge-distance limits, and keeps the layout with the fewest bolts, then the least plate steel. The web splice uses plates as deep as the web less the clearances, the fewest bolt columns, the widest vertical pitch the sealing limit allows, and the thinnest passing plate. Geometry is fitted throughout: outer plates to the narrower flange, inner plates to the clearance from the web plate, bolt gages to the edge distances. <b>Undo auto-design</b> restores the previous layout; <b>Fit geometry only</b> keeps your bolts and thicknesses and only fits widths, gages, and the web plate. When a splice is loaded from an analysis, it is auto-designed for those demands automatically. Verification: the example splice drops from 124 to 96 bolts and the Br. 037201 interior splice from 268 to 152, both passing every check; review the result against your standard details. Plate thicknesses are standard: 1/16 in steps up to 1 in, 1/8 in steps above; the bolt pitch is at least 3d.</p>
++<h3>Field splices: inclusion and Suggest splice</h3><p><b>Field splices</b> (Splice tab) is "As in Preliminary sizing" by default: the splice module is not included when the last sizing layout received has no field splices; "Included" and "Not included" override that. When splices are not included, no splice checks, results, warnings, report, drawings, Design all rows, quantities, or tab status appear; the module shows one line, "Field splices not included", and the stud module gets no splice gaps from Design all. <b>Suggest splice</b> proposes the location and the size. Location: in a continuous unit, at the dead-load (DC1 + DC2 + DW) points of contraflexure next to each interior pier, from the Structural analysis module for an interior girder, rounded to the nearest foot (6.13.6.1.1); in simple spans, the girder ends at the piers; then any field section longer than the <b>Maximum field-section length</b> (default 120 ft, a shipping and erection assumption; verify) is divided into equal lengths (an odd number in a simple span, so no splice falls at midspan), and a splice closer than the <b>Minimum distance from a support</b> (default 10 ft; verify) is moved to that distance. The suggested stations are listed beside the ones in Preliminary sizing; the splice stations themselves are set on its Girder tab (your stations are kept until you change them). Size: Auto-design splice is run with each bolt diameter offered (7/8, 1, and 1-1/8 in; only the Bolts tab diameter when it is locked), and the layout that passes every splice check with the least cost of bolts (installed) plus plate steel (per lb), from the Owner standards, is kept. When demands are imported, the splice is auto-designed with the Bolts tab diameter. Plates or bolt diameter you edit are kept by imports and refreshes until you press Suggest splice or Auto-design splice. The splice checks themselves are unchanged.</p>
+ <ol><li><b>Project tab.</b> Fill in the calculation header. To start from PlateLine, send the splices from PlateLine's Analysis tab (same browser and site), or import PlateLine's splice JSON with Import JSON, then choose a splice under Import from PlateLine.</li>
+@@ -2644,12 +2647,16 @@
+ const CF_MEM = [['top', 'Top chord'], ['bot', 'Bottom chord'], ['diag', 'Diagonals']];
++/* channels for diaphragms on shallow girders: [name, d, b_f, t_f (average), t_w] in in, nominal dimensions from the AISC Manual (verify) */
++const CF_CH = [['C8x11.5', 8.00, 2.26, 0.390, 0.220], ['C10x15.3', 10.0, 2.60, 0.436, 0.240], ['C12x20.7', 12.0, 2.94, 0.501, 0.282], ['MC12x31', 12.0, 3.67, 0.700, 0.370], ['C15x33.9', 15.0, 3.40, 0.650, 0.400], ['MC18x42.7', 18.0, 3.95, 0.625, 0.450]];
+ const CF_DIA = [['W18x35', 17.7, 6.00, 0.425, 0.300], ['W21x44', 20.7, 6.50, 0.450, 0.350], ['W24x55', 23.6, 7.01, 0.505, 0.395], ['W24x76', 23.9, 8.99, 0.680, 0.440], ['W27x84', 26.7, 9.96, 0.640, 0.460], ['W30x99', 29.7, 10.5, 0.670, 0.520], ['W33x118', 32.9, 11.5, 0.740, 0.550], ['W36x135', 35.6, 12.0, 0.790, 0.600]];
+ function cfDiaChecks(R, out) {
+-  const p = R.p, q = p.dia || {}; if (q.on !== 'yes') return; const pre = CF_DIA.find(s => s[0] === q.shape), d = pre ? pre[1] : +q.d, bf = pre ? pre[2] : +q.bf, tf = pre ? pre[3] : +q.tf, tw = pre ? pre[4] : +q.tw, Fy = +q.gr || 50, E = 29000, S = R.S, SB = R.SB;
+-  const hw = d - 2 * tf, A = 2 * bf * tf + hw * tw, Ix = bf * d ** 3 / 12 - (bf - tw) * hw ** 3 / 12, Sx = 2 * Ix / d, Iy = 2 * tf * bf ** 3 / 12 + hw * tw ** 3 / 12, ry = Math.sqrt(Iy / A), Dg = SB ? SB.Dg : null, nm_ = pre ? q.shape : `W ${f2(d)} x ${f2(bf)}`;
++  const p = R.p, q = p.dia || {}; if (q.on !== 'yes') return; const chS = CF_CH.find(s => s[0] === q.shape), pre = CF_DIA.find(s => s[0] === q.shape) || chS, d = pre ? pre[1] : +q.d, bf = pre ? pre[2] : +q.bf, tf = pre ? pre[3] : +q.tf, tw = pre ? pre[4] : +q.tw, Fy = +q.gr || 50, E = 29000, S = R.S, SB = R.SB;
++  const hw = d - 2 * tf, A = 2 * bf * tf + hw * tw, Ix = bf * d ** 3 / 12 - (bf - tw) * hw ** 3 / 12, Sx = 2 * Ix / d,
++    Iy = chS ? (() => { const xb = (hw * tw * tw / 2 + 2 * bf * tf * bf / 2) / A; return hw * tw ** 3 / 12 + hw * tw * (tw / 2 - xb) ** 2 + 2 * (tf * bf ** 3 / 12 + bf * tf * (bf / 2 - xb) ** 2); })() : 2 * tf * bf ** 3 / 12 + hw * tw ** 3 / 12, /* channel: I_y about its own centroid */ ry = Math.sqrt(Iy / A), Dg = SB ? SB.Dg : null, nm_ = pre ? q.shape : `W ${f2(d)} x ${f2(bf)}`;
+   const lt = ltbFnc({ bfc: bf, tfc: tf, Dc: hw / 2, tw, Lb: S, Cb: 1.0, Rb: 1, Rh: 1, Fyc: Fy, Fyw: Fy }), Mn = lt.Fnc * Sx;   // 6.10.8 for a noncomposite rolled I-section, Lb = girder spacing
+   const k = 5, lam = hw / tw, r1 = 1.12 * Math.sqrt(E * k / Fy), r2 = 1.40 * Math.sqrt(E * k / Fy), C = lam <= r1 ? 1 : lam <= r2 ? r1 / lam : 1.57 / lam ** 2 * (E * k / Fy), Vn = C * 0.58 * Fy * hw * tw;
+-  const c = { id: 'CFD', grp: 'Rolled diaphragm alternative', title: `Rolled diaphragm ${nm_} (alternative to the cross-frame)`, ref: 'AASHTO LRFD 6.7.4.2, 6.7.4.2.2, 6.10.8, 6.10.9, 6.13.2, 3.4.3.1', src: 'Code', sym: T`\beta_{br} = \frac{6EI_x}{S},\quad M_{br} \le \phi_f M_n`, cols: ['Check', 'Demand', 'Resistance', 'Ratio'], items: [],
+-    note: `Properties from nominal dimensions (d = ${f2(d)}, b_f = ${f2(bf)}, t_f = ${f3(tf)}, t_w = ${f3(tw)} in; fillets neglected): I_x = ${f0(Ix)} in⁴, S_x = ${f0(Sx)} in³, r_y = ${f2(ry)} in. Flexural resistance per 6.10.8 as a noncomposite rolled I-section braced only at the girders (L_b = S, C_b = 1.0, conservative). The brace stiffness 6EI/S assumes reverse-curvature bending between girders.` };
++  const c = { id: 'CFD', grp: 'Rolled diaphragm alternative', title: `${chS ? 'Channel' : 'Rolled'} diaphragm ${nm_} (alternative to the cross-frame)`, ref: 'AASHTO LRFD 6.7.4.2, 6.7.4.2.2, 6.10.8, 6.10.9, 6.13.2, 3.4.3.1', src: 'Code', sym: T`\beta_{br} = \frac{6EI_x}{S},\quad M_{br} \le \phi_f M_n`, cols: ['Check', 'Demand', 'Resistance', 'Ratio'], items: [],
++    note: `Properties from nominal dimensions (d = ${f2(d)}, b_f = ${f2(bf)}, t_f = ${f3(tf)}, t_w = ${f3(tw)} in; fillets neglected): I_x = ${f0(Ix)} in⁴, S_x = ${f0(Sx)} in³, r_y = ${f2(ry)} in. Flexural resistance per 6.10.8 as a noncomposite rolled I-section braced only at the girders (L_b = S, C_b = 1.0, conservative). The brace stiffness 6EI/S assumes reverse-curvature bending between girders.${chS ? ' Channel: the same checks as the rolled W diaphragm; the 6.10.8 lateral-torsional buckling model is for I-sections and is used here as an approximation for the channel (verify against AISC 360-16 F2 with c = (h_o/2)√(I_y/C_w)).' : ''}` };
+   const it = (loc, dem, res, st, r) => c.items.push({ loc, cells: [dem, res, r != null ? f2(r) : '—'], st, r, work: T`\text{${loc}}` });
+-  if (Dg) it('Depth (6.7.4.2: at least 0.75 of the plate girder depth)', `${f2(d)} in`, `${f2(0.75 * Dg)} in`, d >= 0.75 * Dg - 1e-6 ? 'pass' : 'warn', 0.75 * Dg / d);
++  if (chS) { const dgT = nm(p.dg); if (dgT > 0) it('Depth (at least about half the girder depth; 6.7.4.2: 0.5 of a rolled beam depth)', `${f2(d)} in`, `${f2(0.5 * dgT)} in`, d >= 0.5 * dgT - 1e-6 ? 'pass' : 'warn', 0.5 * dgT / d); }
++  else if (Dg) it('Depth (6.7.4.2: at least 0.75 of the plate girder depth)', `${f2(d)} in`, `${f2(0.75 * Dg)} in`, d >= 0.75 * Dg - 1e-6 ? 'pass' : 'warn', 0.75 * Dg / d);
+   if (SB) { const bbr = 6 * E * Ix / S, bT = 1 / (1 / bbr + (isFinite(SB.bsec) ? 1 / SB.bsec : 0) + 1 / SB.bg), r = SB.bReq / bT;
+@@ -2669,4 +2676,4 @@
+   id: 'cf', label: 'Cross-frames', title: 'intermediate cross-frames, AASHTO LRFD 6.7.4, 6.9.4.4', rptTitle: 'Cross-Frame Design', rptRef: 'AASHTO LRFD Articles 4.6.2.7, 6.7.4, 6.8, 6.9.4.4, and 6.13.2',
+-  groups: ['Members', 'Connections'], itabs: [['cf_geo', 'Geometry and loads'], ['cf_mem', 'Members']],
+-  def: { type: 'X', S: 114, h: 48, dg: 62.5, Lb: 25, gA: '36', gG: '50', primary: 'no', dia: { on: 'no', shape: 'W21x44', d: 20.7, bf: 6.5, tf: 0.45, tw: 0.35, gr: '50', nb: 4, pitch: 3, ecc: 3.5, end: 'no', Rj: 0, aj: 12, P: 0 },
++  groups: ['Members', 'Connections', 'Bracing type'], itabs: [['cf_geo', 'Geometry and loads'], ['cf_mem', 'Members']],
++  def: { type: 'X', S: 114, h: 48, dg: 62.5, dMinXF: 48, Lb: 25, gA: '36', gG: '50', primary: 'no', dia: { on: 'no', shape: 'W21x44', d: 20.7, bf: 6.5, tf: 0.45, tw: 0.35, gr: '50', nb: 4, pitch: 3, ecc: 3.5, end: 'no', Rj: 0, aj: 12, P: 0 },
+     wind: { V: 130, Kz: 1.0, G: 1.0, Cd: 1.3 },
+@@ -2681,2 +2688,3 @@
+         ${fld('Girder spacing S', 'cf.S', 'in')}${fld('Chord work-point depth h', 'cf.h', 'in')}${fld('Girder depth d', 'cf.dg', 'in')}${fld('Cross-frame spacing L<sub>b</sub>', 'cf.Lb', 'ft')}
++        ${fld('Minimum girder depth for cross-frames', 'cf.dMinXF', 'in', 'num', { full: true, note: 'common practice (e.g. AISC/NSBA G13.1 guidance; owner standards govern); verify' })}
+         ${fld('Primary members', 'cf.primary', '', 'sel', { options: [['no', 'No (straight, skew ≤ 20°)'], ['yes', 'Yes (curved or skewed)']] })}<div></div></div>
+@@ -2693,3 +2701,3 @@
+         ${CF_MEM.map(([k, l]) => `<h4 class="sub-h full">${l}</h4>${mem(k)}`).join('')}</div>
+-        ${secHd('sec-cfd', 'Rolled diaphragm alternative')}<div class="sec-body" id="sec-cfd">${fld('Check a rolled W-shape diaphragm', 'cf.dia.on', '', 'sel', { options: [['no', 'No'], ['yes', 'Yes']] })}${fld('Shape (nominal dimensions)', 'cf.dia.shape', '', 'sel', { options: CF_DIA.map(s => [s[0], s[0]]).concat([['custom', 'Custom (enter below)']]) })}${fld('Depth d', 'cf.dia.d', 'in')}${fld('Flange width b<sub>f</sub>', 'cf.dia.bf', 'in')}${fld('Flange thickness t<sub>f</sub>', 'cf.dia.tf', 'in')}${fld('Web thickness t<sub>w</sub>', 'cf.dia.tw', 'in')}${fld('Grade', 'cf.dia.gr', '', 'sel', { options: [['36', '36'], ['50', '50']] })}${fld('Bolts per end (one vertical line)', 'cf.dia.nb', '')}${fld('Bolt pitch', 'cf.dia.pitch', 'in')}${fld('Bolt line to girder web', 'cf.dia.ecc', 'in')}${fld('End diaphragm (jacking)', 'cf.dia.end', '', 'sel', { options: [['no', 'No'], ['yes', 'Yes']] })}${fld('Jacking reaction per jack, 1.3 × permanent (3.4.3.1)', 'cf.dia.Rj', 'kip')}${fld('Jack offset from girder centerline', 'cf.dia.aj', 'in')}</div>
++        ${secHd('sec-cfd', 'Rolled or channel diaphragm alternative')}<div class="sec-body" id="sec-cfd">${fld('Check a rolled W or channel (C, MC) diaphragm', 'cf.dia.on', '', 'sel', { options: [['no', 'No'], ['yes', 'Yes']] })}${fld('Shape (nominal dimensions)', 'cf.dia.shape', '', 'sel', { options: CF_DIA.map(s => [s[0], s[0]]).concat(CF_CH.map(s => [s[0], `${s[0]} (channel)`]), [['custom', 'Custom W (enter below)']]) })}${fld('Depth d', 'cf.dia.d', 'in')}${fld('Flange width b<sub>f</sub>', 'cf.dia.bf', 'in')}${fld('Flange thickness t<sub>f</sub>', 'cf.dia.tf', 'in')}${fld('Web thickness t<sub>w</sub>', 'cf.dia.tw', 'in')}${fld('Grade', 'cf.dia.gr', '', 'sel', { options: [['36', '36'], ['50', '50']] })}${fld('Bolts per end (one vertical line)', 'cf.dia.nb', '')}${fld('Bolt pitch', 'cf.dia.pitch', 'in')}${fld('Bolt line to girder web', 'cf.dia.ecc', 'in')}${fld('End diaphragm (jacking)', 'cf.dia.end', '', 'sel', { options: [['no', 'No'], ['yes', 'Yes']] })}${fld('Jacking reaction per jack, 1.3 × permanent (3.4.3.1)', 'cf.dia.Rj', 'kip')}${fld('Jack offset from girder centerline', 'cf.dia.aj', 'in')}</div>
+         ${secHd('sec-cfc', 'End connections')}<div class="sec-body" id="sec-cfc">${fld('Bolt diameter', 'cf.conn.d', '', 'sel', { options: [['0.875', '7/8 in'], ['1', '1 in']] })}${fld('Grade', 'cf.conn.gr', '', 'sel', { options: [['A325', 'F3125 A325'], ['A490', 'F3125 A490']] })}
+@@ -2705,2 +2713,3 @@
+     ['s', 'e', 'tg'].forEach(k => { if (!(nm(C[k]) > 0)) errors.push(`Connection "${k}" must be positive.`); });
++    if (!(nm(p.dMinXF) > 0)) errors.push('The minimum girder depth for cross-frames must be positive.');
+     ['StrI', 'Con'].forEach(c => ['top', 'bot', 'diag'].forEach(k => { if (!isFinite(nm(p.user[c][k]))) errors.push(`User force ${c} ${k} must be a number.`); }));
+@@ -2826,2 +2835,8 @@
+     cfDiaChecks(R, out);
++    { const TR = cfTypeRec(R.p), c = { id: 'CF10', grp: 'Bracing type', title: 'Intermediate bracing type for the girder depth', ref: 'Common practice (e.g. AISC/NSBA G13.1 guidance; owner standards govern); AASHTO LRFD 6.7.4.2', src: 'Practice',
++        sym: T`d \ge d_{min} = ${f2(TR.dMin)}\ \text{in} \Rightarrow \text{cross-frame}; \qquad d < d_{min} \Rightarrow \text{channel (C, MC) or rolled W diaphragm}`, cols: ['Girder depth d', 'Minimum for cross-frames', 'Recommended', 'Selected'], items: [],
++        note: 'Basis: the girder depth d (out-to-out of the flanges, the "Girder depth d" input), not the web depth. Below the minimum, a cross-frame is too shallow for efficient diagonals, so a channel (depth about half the girder depth or more) or a rolled W diaphragm is used; the selected type is never changed automatically. The rolled or channel diaphragm is checked on the Members tab (Rolled or channel diaphragm alternative).' };
++      c.items.push({ loc: 'Intermediate bracing', cells: [`${f2(TR.dg)} in`, `${f2(TR.dMin)} in`, TR.rec, TR.sel], st: TR.deep || !TR.xf ? 'pass' : 'warn',
++        work: TR.deep ? T`d = ${f2(TR.dg)} \ge ${f2(TR.dMin)}\ \text{in: cross-frames}` : T`d = ${f2(TR.dg)} < ${f2(TR.dMin)}\ \text{in: ${TR.xf ? 'cross-frame selected; a channel or rolled diaphragm is recommended' : 'diaphragm selected'}}` });
++      out.add(c); }
+     return out;
+@@ -2842,2 +2857,11 @@
+ };
++/* recommended intermediate bracing type from the girder depth (2026-10-12): cross-frame at or above the minimum depth (X or K by S/h, as the auto-design does),
++   otherwise the lightest channel at least half the girder depth, or else the lightest W at least half the girder depth */
++function cfTypeRec(p) {
++  const dg = nm(p.dg), dMin = nm(p.dMinXF), S = nm(p.S), h = nm(p.h), deep = dg >= dMin - 1e-9, xf = (p.dia || {}).on !== 'yes';
++  const ch = CF_CH.filter(s => s[1] >= 0.5 * dg - 1e-9).sort((a, b) => (2 * a[2] * a[3] + (a[1] - 2 * a[3]) * a[4]) - (2 * b[2] * b[3] + (b[1] - 2 * b[3]) * b[4]))[0], w = CF_DIA.find(s => s[1] >= 0.5 * dg - 1e-9);
++  const rec = deep ? `${S / h > 1.5 ? 'K' : 'X'}-frame (S/h = ${f2(S / h)})` : ch ? `channel diaphragm ${ch[0]} (or a rolled W)` : w ? `rolled diaphragm ${w[0]}` : 'rolled W diaphragm';
++  const sel = xf ? ({ X: 'X-frame', Kb: 'K-frame', Kt: 'K-frame' }[p.type] || 'cross-frame') : `${CF_CH.some(s => s[0] === (p.dia || {}).shape) ? 'channel' : 'rolled'} diaphragm ${(p.dia || {}).shape === 'custom' ? 'custom W' : (p.dia || {}).shape}`;
++  return { dg, dMin, deep, xf, rec, sel, ch: ch && ch[0], w: w && w[0] };
++}
+ function cfSVG(R) {
+@@ -3666,3 +3690,3 @@
+       add.push({ ...common, name: `${r.name}: bottom flange at flange-to-web weld`, det: 'B-weld', loc: 'bfo' }, { ...common, name: `${r.name}: top flange at flange-to-web weld`, det: 'B-weld', loc: 'tfo', Vf: 0 }); }); }
+-  else if (src === 'splice') { const R = gdCompute(P); if (R.errors.length) return 'Field splice has input errors.'; const s = R.sm, d = P.dem, n2 = v => nm(v);
++  else if (src === 'splice') { if (!spIncl()) return 'Field splices not included.'; const R = gdCompute(P); if (R.errors.length) return 'Field splice has input errors.'; const s = R.sm, d = P.dem, n2 = v => nm(v);
+     const common = { ...base, D: R.D, tw: s.tw, topB: s.topB, topT: s.topT, botB: s.botB, botT: s.botT, MfP: n2(d.dMp), MfN: -n2(d.dMn), MD1: n2(d.MDC1), MD2: n2(d.MDC2) + n2(d.MDW), det: 'B-bolt' };
+@@ -4906,3 +4930,3 @@
+   try { let R, C;
+-    if (id === 'splice') { R = gdCompute(P); if (R.errors.length) return { err: true }; C = gdChecks(R); }
++    if (id === 'splice') { if (!spIncl()) return { off: true }; R = gdCompute(P); if (R.errors.length) return { err: true }; C = gdChecks(R); }
+     else if (id === 'bstf') { R = bsCompute(P); if (R.errors.length) return { err: true }; C = bsChecks(R); }
+@@ -4913,2 +4937,3 @@
+ function setMark(id, s) { const el = document.querySelector(`.mtab-s[data-s="${id}"]`); if (!el) return;
++  if (s && s.off) { el.className = 'mtab-s'; el.textContent = '–'; el.setAttribute('aria-label', 'field splices not included'); el.title = 'Field splices not included'; return; }
+   el.className = 'mtab-s' + (s ? s.err ? ' err' : s.f ? ' fail' : s.w ? ' warn' : ' pass' : '');
+@@ -4980,2 +5005,3 @@
+ function srcPanel() {
++  if (GD_BG) return;
+   const host = document.getElementById('srcbox'); if (!host) return; const m = GM[P.mod];
+@@ -5015,3 +5041,4 @@
+   const src = j.srcLabel || 'Preliminary sizing'; let kept = 0, what = '';
+-  if (mod === 'splice') { if (!j.splices || !j.splices.length) return 'No field splices in the sizing layout.';
++  if (mod === 'splice') { if (Array.isArray(j.splices)) P.spl.plN = j.splices.length; if (!j.splices || !j.splices.length) { fillInputs(); recompute(); autosave(); return 'No field splices in the sizing layout.'; }
++    if (!spIncl()) return 'Field splices are set to "Not included" on the Splice tab; nothing was loaded.';
+     const curFS = (/FS(\d+)/.exec(P.meta.subject || '') || [])[1], s = j.splices.find(q => curFS && q.label.startsWith(`FS${curFS} `)) || j.splices[0];
+@@ -5041,3 +5068,4 @@
+ const adLocked = path => !!adLocks()[path];
+-function markLocks() { const L = adLocks(); document.querySelectorAll('[data-k]').forEach(el => { const on = !!L[el.dataset.k]; el.classList.toggle('locked', on); const lb = el.id && document.querySelector(`label[for="${el.id}"]`); if (lb) lb.classList.toggle('locked', on); }); }
++function markLocks() { const L = adLocks(), lbs = new Map(); document.querySelectorAll('label[for]').forEach(l => { if (!lbs.has(l.htmlFor)) lbs.set(l.htmlFor, l); });   // one lookup table (was one document query per input, about 1.5 s per call with every module's inputs in the page)
++  document.querySelectorAll('[data-k]').forEach(el => { const on = !!L[el.dataset.k]; el.classList.toggle('locked', on); const lb = el.id && lbs.get(el.id); if (lb) lb.classList.toggle('locked', on); }); }
+ document.addEventListener('dblclick', e => { const lb = e.target.closest && e.target.closest('label'); if (!lb || !lb.htmlFor) return; const inp = document.getElementById(lb.htmlFor); if (!inp || !inp.dataset.k || inp.dataset.k.startsWith('std.')) return;
+@@ -5144,2 +5172,3 @@
+     const hk = C0.type === 'X' ? null : C0.type === 'Kb' ? 'top' : 'bot', a = up('diag'), b = hk ? up(hk) : false; if (!a && !b) { out.push('The largest standard angles do not satisfy CF8'); break; } }
++  { const TR = cfTypeRec(C0); if (!TR.deep) out.push(`Girder depth ${f2(TR.dg)} in is below the ${f2(TR.dMin)} in minimum for cross-frames: a ${TR.rec} is recommended${TR.xf ? ' (the cross-frame type is kept; turn on the rolled or channel diaphragm on the Members tab to check one)' : ''}`); }
+   const r = adEval('cf'), S = r && r.R.SB;
+@@ -5158,3 +5187,3 @@
+ function runAutoDesign(mod, quiet) {
+-  if (mod === 'splice') { const r = autoDesignSplice(); fillInputs(); recompute(); autosave(); if (!quiet) alert(`Splice auto-design\n\n${r.msg}`); return r.msg; }
++  if (mod === 'splice') { P.spl.own = false; const r = autoDesignSplice(); fillInputs(); recompute(); autosave(); if (!quiet) alert(`Splice auto-design\n\n${r.msg}`); return r.msg; }
+   if (!AD[mod]) return null; const root = adRootOf(mod), before = JSON.stringify(P[root]); P._adUndo = P._adUndo || {}; P._adUndo[mod] = before;
+@@ -5190,3 +5219,4 @@
+   m.innerHTML = `<div class="da-card"><button type="button" class="da-x" id="da_close" aria-label="Close">×</button>${html}</div>`; m.hidden = false; }
+-function designAllRun(j, quiet) {
++function designAllRun(j, quiet) { return gdBg(() => designAllRun0(j, quiet)); }
++function designAllRun0(j, quiet) {
+   const cur = P.mod, S = { ...STD_COST, ...std() }, q = j.qty || {}, nb = q.nb || 5, lbS = 0.2836, single = j.src === 'sa';
+@@ -5195,4 +5225,4 @@
+   // 1. every field splice case
+-  const spl = []; P.mod = 'splice';
+-  (j.splices || []).forEach(s => { importInto('splice', () => spliceApply(j, s), j.srcLabel); const R = gdCompute(P); if (R.errors.length) return; const C = gdChecks(R), W = R.web;
++  const spl = []; P.mod = 'splice'; if (Array.isArray(j.splices)) P.spl.plN = j.splices.length; const splOn = spIncl();   // excluded field splices: no cases, no status, no quantities, no conflicts
++  (splOn ? (j.splices || []) : []).forEach(s => { importInto('splice', () => spliceApply(j, s), j.srcLabel); const R = gdCompute(P); if (R.errors.length) return; const C = gdChecks(R), W = R.web;
+     const fl = F => (F.bo * F.to + (F.inner ? 2 * F.bi * F.ti : 0)) * F.Lpl * lbS, Lw = parseDim(P.bolts.gap) + 2 * (parseDim(P.web.ew) + (W.ncw - 1) * parseDim(P.web.sh) + parseDim(P.web.ewp));
+@@ -5203,5 +5233,7 @@
+   if (spl.length) { P.sc.splX = [...new Set(spl.map(s => +(+s.x).toFixed(2)))].join(', '); P.sc.splL = +(Math.max(...spl.map(s => s.Lpl)) / 12).toFixed(2); P.mod = 'sc'; if (std().auto !== 'off') runAutoDesign('sc', true); }
++  else if (!splOn && (P.sc.splX || +P.sc.splL)) { P.sc.splX = ''; P.sc.splL = 0; P.mod = 'sc'; if (std().auto !== 'off') runAutoDesign('sc', true); }   // splices not included: no stud gaps for splice plates
+   // 4. status of every module
+   const mods = ['splice', 'bstf', 'ts', 'sc', 'cf', 'oh', 'wt', 'gs', 'fa'], stat = [];
+-  mods.forEach(mm => { P.mod = mm; let R, C; try { if (mm === 'splice') { R = gdCompute(P); C = R.errors.length ? null : gdChecks(R); } else { const e = adEval(mm); R = e && e.R; C = e && e.C; } } catch (er) { C = null; }
++  mods.forEach(mm => { if (mm === 'splice' && !splOn) { stat.push({ mm, name: 'Field splices', fails: [], warns: [], note: '', off: true }); return; }
++    P.mod = mm; let R, C; try { if (mm === 'splice') { R = gdCompute(P); C = R.errors.length ? null : gdChecks(R); } else { const e = adEval(mm); R = e && e.R; C = e && e.C; } } catch (er) { C = null; }
+     const name = mm === 'splice' ? 'Field splices' : mm === 'bstf' ? 'Bearing stiffeners' : GM[mm].label;
+@@ -5215,3 +5247,3 @@
+   const splN = spl.reduce((a, s) => a + cnt(s.label), 0), splB = spl.reduce((a, s) => a + s.bolts * cnt(s.label), 0), splLb = spl.reduce((a, s) => a + s.lb * cnt(s.label), 0);
+-  add(`Field splices (${splN} girder splices): plates`, splLb / 1000, 'kip', splLb * S.cDet); add('Field splices: bolts', splB, 'each', splB * S.cBolt);
++  if (splOn) { add(`Field splices (${splN} girder splices): plates`, splLb / 1000, 'kip', splLb * S.cDet); add('Field splices: bolts', splB, 'each', splB * S.cBolt); }
+   const ty = P.ts.types, cpT = ty.B || Object.values(ty)[0], stT = ty.A || cpT, nCP = Math.max(0, (q.frames || 0) - (q.framesSup || 0)) * 2, cpLb = nCP * parseDim(cpT.bt) * parseDim(cpT.tp) * D * lbS * (cpT.sides === '2' ? 2 : 1);
+@@ -5227,3 +5259,3 @@
+   const conf = [], Lh = spl.length ? Math.max(...spl.map(s => s.Lpl)) / 24 : 0, clr = 0.5;
+-  (q.splX || []).forEach(sx => (q.frX || []).forEach(fx => { if (Math.abs(fx - sx) < Lh + clr) conf.push(`Cross-frame at ${f2(fx)} ft is within the field splice plates at ${f2(sx)} ft (plates extend ±${f2(Lh)} ft): move the cross-frame or the splice`); }));
++  (splOn ? (q.splX || []) : []).forEach(sx => (q.frX || []).forEach(fx => { if (Math.abs(fx - sx) < Lh + clr) conf.push(`Cross-frame at ${f2(fx)} ft is within the field splice plates at ${f2(sx)} ft (plates extend ±${f2(Lh)} ft): move the cross-frame or the splice`); }));
+   (q.trX || []).forEach(tx => (q.frX || []).forEach(fx => { if (Math.abs(fx - tx) < 0.5) conf.push(`Cross-frame at ${f2(fx)} ft is within 6 in of the flange shop transition at ${f2(tx)} ft`); }));
+@@ -5234,3 +5266,3 @@
+   daModal(`<h3>Design all: ${esc(j.srcLabel || 'Preliminary sizing')}</h3>
+-    <table class="tbl"><thead><tr><th>Module</th><th>Result</th></tr></thead><tbody>${stat.map(s => `<tr><td class="lbl">${s.name}</td><td>${s.fails.length ? `<b class="st-fail">Fails: ${s.fails.join(', ')}</b>` : '<span class="st-pass">All checks pass</span>'}${s.warns.length ? `; warnings ${s.warns.join(', ')}` : ''}${s.note ? `; ${s.note}` : ''}</td></tr>`).join('')}</tbody></table>
++    <table class="tbl"><thead><tr><th>Module</th><th>Result</th></tr></thead><tbody>${stat.map(s => `<tr><td class="lbl">${s.name}</td><td>${s.off ? 'Field splices not included' : s.fails.length ? `<b class="st-fail">Fails: ${s.fails.join(', ')}</b>` : '<span class="st-pass">All checks pass</span>'}${s.warns.length ? `; warnings ${s.warns.join(', ')}` : ''}${s.note ? `; ${s.note}` : ''}</td></tr>`).join('')}</tbody></table>
+     <h4>Quantities and costs</h4><table class="tbl"><thead><tr><th>Item</th><th class="right">Quantity</th><th class="right">Cost</th></tr></thead><tbody>${cost.map(c => `<tr><td class="lbl">${c.item}</td><td class="val">${c.unit === 'kip' ? f2(c.qn) : f0(c.qn)} ${c.unit}</td><td class="val">${money(c.c)}</td></tr>`).join('')}<tr class="tot"><td>Total</td><td></td><td class="val"><b>${money(total)}</b></td></tr></tbody></table>
+@@ -5238,3 +5270,3 @@
+     <h4>Redundancy (NSTM)</h4><p>${nb >= 4 ? `${nb} girders: load-path redundant; the girders are not nonredundant steel tension members (NSTM).` : nb === 3 ? '3 girders: NSTM designation of the girder tension zones is an owner decision, which a system-redundancy evaluation can support.' : `${nb} girders: the girder tension flanges and web tension zones are NSTM (10th Ed. 6.6.2): specify the NSTM Charpy requirements of Table 6.6.2.1-2 for the temperature zone, fabrication under the AASHTO/AWS D1.5 Clause 12 fracture control plan, and NSTM inspection.`}</p>
+-    <h4>Geometry conflicts</h4>${conf.length ? `<ul>${conf.map(c => `<li>${esc(c)}</li>`).join('')}</ul>` : '<p>None found (cross-frames clear of the splice plates and shop transitions; studs omitted over the splice plates with enough remaining).</p>'}`);
++    <h4>Geometry conflicts</h4>${conf.length ? `<ul>${conf.map(c => `<li>${esc(c)}</li>`).join('')}</ul>` : (splOn ? '<p>None found (cross-frames clear of the splice plates and shop transitions; studs omitted over the splice plates with enough remaining).</p>' : '<p>None found (cross-frames clear of the shop transitions).</p>')}`);
+ }
+@@ -5317,2 +5349,3 @@
+       if (mod === 'df') DF_VIEW.j = g - 1;
++      if (mod === 'splice' && !spIncl()) { add('Field splices', '<p class="cr-p">Field splices not included.</p>', []); continue; }
+       if (mod === 'splice') { for (const s of (j.splices || [])) { importInto('splice', () => spliceApply(j, s), j.srcLabel); const c = await grChapter('splice', k + 1, o, `G${g}: bolted field splice ${s.label.replace(/, G\d+$/, '')}`); add(`Field splice ${s.label}`, c.html, c.toc); } continue; }
+@@ -5832,3 +5865,3 @@
+   let j = null; try { j = JSON.parse(localStorage.getItem(KEY_IN) || 'null'); } catch (e) {}
+-  if (j && j.splices && j.splices.length) { const snap = JSON.stringify(P);
++  if (spIncl() && j && j.splices && j.splices.length) { const snap = JSON.stringify(P);
+     try { j.splices.forEach(s => { importInto('splice', () => spliceApply(j, s), j.srcLabel); const R = gdCompute(P); if (!R || !R.fl) return; const mt = /FS(\d+)/.exec(s.label || ''), kk = mt ? +mt[1] - 1 : 0;
+@@ -5850,3 +5883,4 @@
+   // every field splice case from the last demand import (designed as in Design all), then the state is restored
+-  if (o.draw.splice) { const snap = JSON.stringify(P); let j = null; try { j = JSON.parse(localStorage.getItem(KEY_IN) || 'null'); } catch (e) {}
++  if (o.draw.splice && !spIncl()) skip('FIELD SPLICE', 'FIELD SPLICES NOT INCLUDED');
++  if (o.draw.splice && spIncl()) { const snap = JSON.stringify(P); let j = null; try { j = JSON.parse(localStorage.getItem(KEY_IN) || 'null'); } catch (e) {}
+     const cases = j && j.splices && j.splices.length ? j.splices : [null];
+@@ -6278,2 +6312,3 @@
+   const sc = document.querySelector('.tab-panels'), keep = sc ? sc.scrollTop : 0, wasBuilt = !!host.querySelector('.crv-doc');
++  if (!CK && P.mod === 'splice' && !spIncl()) { host.innerHTML = '<div class="alert info"><b>Field splices not included.</b></div>'; CR_STALE = true; return; }
+   if (!CK) { host.innerHTML = `<div class="alert fail"><b>The report is unavailable until the input errors are fixed.</b> See the status bar for the list.</div>`; CR_STALE = true; return; }
+@@ -6427,2 +6462,7 @@
+     splice: `
++      ${secHd('sec-spl', 'Field splices: inclusion and suggestion')}
++      <div class="sec-body" id="sec-spl">${fld('Field splices', 'spl.inc', '', 'sel', { full: true, options: [['auto', 'As in Preliminary sizing (not included when its layout has none)'], ['yes', 'Included'], ['no', 'Not included']] })}
++        ${fld('Maximum field-section length (shipping/erection assumption; verify)', 'spl.maxLen', 'ft')}${fld('Minimum distance from a support', 'spl.minSup', 'ft')}
++        <button type="button" class="proj-btn proj-btn-primary full" id="sp_suggest" style="width:100%">Suggest splice (location and size)</button>
++        <div id="sp_sugbox" class="full"></div></div>
+       <div class="pad"><button type="button" class="proj-btn proj-btn-primary" id="sp_auto" style="width:100%">Auto-design splice</button>
+@@ -6430,3 +6470,3 @@
+         <button type="button" class="proj-btn" id="sp_undo" style="width:100%;margin-top:6px" hidden>Undo auto-design</button>
+-        <p class="hint static">Auto-design finds the most economical splice that passes every strength and detailing check: for each flange it tries single and double shear and one to three bolt lines, takes the fewest bolt rows, then the thinnest plates (inner and outer areas balanced); for the web, full-depth plates with the fewest bolt columns and the thinnest plate. Runs automatically when splices come from an analysis.</p></div>
++        <p class="hint static">Suggest splice (above) also compares the bolt diameters and suggests the location. Auto-design finds the most economical splice that passes every strength and detailing check: for each flange it tries single and double shear and one to three bolt lines, takes the fewest bolt rows, then the thinnest plates (inner and outer areas balanced); for the web, full-depth plates with the fewest bolt columns and the thinnest plate. Runs automatically when splices come from an analysis.</p></div>
+       ${secHd('sec-gap', 'General')}
+@@ -6456,3 +6496,4 @@
+ }
+-function fillInputs() { $$('[data-k]').forEach(el => { const v = getPath(P, el.dataset.k); if (el.dataset.t === 'bool') el.checked = !!v; else if (el.dataset.t === 'dim') el.value = typeof v === 'number' ? frac(v) : (v ?? ''); else el.value = v ?? ''; }); syncSame();  markOverrides(); if (typeof markLocks === 'function') markLocks(); }
++function fillInputs() { if (GD_BG) { syncSame(); return; }   // background run: the inputs on screen are filled once at the end (gdBg)
++  $$('[data-k]').forEach(el => { const v = getPath(P, el.dataset.k); if (el.dataset.t === 'bool') el.checked = !!v; else if (el.dataset.t === 'dim') el.value = typeof v === 'number' ? frac(v) : (v ?? ''); else el.value = v ?? ''; }); syncSame();  markOverrides(); if (typeof markLocks === 'function') markLocks(); }
+ /* field splice: right-side parts that match the left are copied and locked */
+@@ -6473,2 +6514,3 @@
+   if (/^sec\.(L\.|same\.)/.test(el.dataset.k)) syncSame();
++  if (/^(top|bot|web)\./.test(el.dataset.k) || el.dataset.k === 'bolts.d') P.spl.own = true;   // the user's splice plates and bolts: imports and Suggest keep them
+   if (el.dataset.k.startsWith('dem.')) P.source = P.source ? P.source.replace(/ \(edited\)$/, '') + ' (edited)' : '';
+@@ -6498,3 +6540,13 @@
+ function setMod(m) { if (P.mod === m) return; P.mod = m; P.ui.col = {}; $('#tab-v3d').innerHTML = ''; if (V3) { V3.framed = false; V3.framedB = false; } applyMod(); renderInbox(); recompute(); autosave(); }
++/* background runs (bridge auto-refresh, Design all, Load all): every module is computed and auto-designed without being drawn,
++   so the module on screen, its tab, and its scroll position do not change; the module on screen is redrawn once at the end */
++let GD_BG = 0;
++function gdBg(fn) {
++  const tp = document.querySelector('.tab-panels'), sd = document.getElementById('side'), pos = { tp: tp ? tp.scrollTop : 0, sd: sd ? sd.scrollTop : 0, x: window.scrollX, y: window.scrollY }, mod = P.mod;
++  GD_BG++;
++  try { return fn(); }
++  finally { GD_BG--; if (!GD_BG) { P.mod = mod; fillInputs(); renderInbox(); recompute(); if (tp) tp.scrollTop = pos.tp; if (sd) sd.scrollTop = pos.sd; window.scrollTo(pos.x, pos.y); } }
++}
+ function recompute() {
++  if (GD_BG) return;
+   applyMod(); refreshMarks();
+@@ -6510,2 +6562,4 @@
+   }
++  spSugBox();
++  if (!spIncl()) { RS = { errors: ['Field splices not included.'], off: true }; CK = null; renderSplOff(); return; }
+   RS = gdCompute(P); showN('sec', RS.MR);
+@@ -6517,2 +6571,9 @@
+ }
++/* field splices not included: one line where the splice results would be */
++function renderSplOff() { crMarkStale();
++  const why = (P.spl || {}).inc === 'no' ? 'Field splices are set to "Not included" on the Splice tab.' : 'The Preliminary sizing layout has no field splices.';
++  $('#status-bar').innerHTML = `<div class="verdict"><span class="vd-ico">–</span>Field splices not included</div><div class="sb-msg">${why}</div>`;
++  $('#dem-src').innerHTML = '';
++  ['summary', 'combos', 'checks', 'drawings', 'v3d'].forEach(t => { const el = $('#tab-' + t); if (el) el.innerHTML = t === 'summary' ? `<div class="alert info" style="margin:0"><b>Field splices not included.</b> ${why} No splice checks are made. To design a splice, set "Field splices" on the Splice tab to Included, or add field splices in Preliminary sizing.</div>` : ''; });
++}
+ function typeset(root) { if (window.MathJax && MathJax.typesetPromise) { const els = root ? [root] : ['#tab-summary', '#tab-combos', '#tab-cap', '#tab-geometry', '#tab-checks', '#tab-manual'].map(s => $(s)).filter(Boolean); try { MathJax.typesetClear(els); } catch (e) {} MathJax.typesetPromise(els).catch(() => {}); } }
+@@ -6746,3 +6807,3 @@
+     if (!fails.length) break; let ch = false;
+-    const thick = F => { F.to = parseDim(F.to) + 0.0625; if (F.inner) F.ti = parseDim(F.ti) + 0.0625; ch = true; };
++    const thick = F => { F.to = spNextT(parseDim(F.to)); if (F.inner) F.ti = spNextT(parseDim(F.ti)); ch = true; };
+     if (fails.some(id => /^TF[123]$/.test(id)) && P.top.nr < 14) { P.top.nr++; ch = true; }
+@@ -6752,3 +6813,3 @@
+     if (fails.some(id => /^WS[123]$/.test(id)) && P.web.nc < 4) { P.web.nc++; ch = true; }
+-    if (fails.some(id => /^WS[45]$/.test(id))) { P.web.t = parseDim(P.web.t) + 0.0625; ch = true; }
++    if (fails.some(id => /^WS[45]$/.test(id))) { P.web.t = spNextT(parseDim(P.web.t)); ch = true; }
+     if (!ch) break;
+@@ -6772,4 +6833,4 @@
+   // ---- web: full-depth plates, fewest columns, then thinnest plate
+-  const designWeb = () => { const hw = q2(R0.D - 2 * cv); P.web.h = hw; P.web.sh = 3; let best = null;
+-    for (let nc = 1; nc <= 4; nc++) for (const sv of [3, 3.5, 4, 4.5, 5, 5.5, 6]) { const tMin = Math.max(0.3125, std().minPlate); const nr = Math.max(2, 1 + Math.floor((hw - 2 * em) / sv + 1e-9)), bolts = 2 * nr * nc; if (best && bolts > best.bolts) continue;
++  const designWeb = () => { const hw = q2(R0.D - 2 * cv); P.web.h = hw; P.web.sh = Math.max(3, u4(3 * d)); let best = null;
++    for (let nc = 1; nc <= 4; nc++) for (const sv of [3, 3.5, 4, 4.5, 5, 5.5, 6]) { if (sv < 3 * d - 1e-9) continue; /* pitch at least 3d (6.13.2.6.1) */ const tMin = Math.max(0.3125, std().minPlate); const nr = Math.max(2, 1 + Math.floor((hw - 2 * em) / sv + 1e-9)), bolts = 2 * nr * nc; if (best && bolts > best.bolts) continue;
+       P.web.nc = nc; P.web.sv = sv; P.web.nr = nr;
+@@ -6781,3 +6842,3 @@
+     for (const inner of [true, false]) for (let nl = nMin; nl <= Math.max(nMin, 3); nl++) {
+-      F.bo = bmin; F.g = g; F.inner = inner;
++      F.bo = bmin; F.g = g; F.inner = inner; if (parseDim(F.s) < 3 * d - 1e-9) F.s = u4(3 * d);   // pitch at least 3d (only 1-1/8 in bolts change)
+       if (inner) { const bi = q4(bmin / 2 - tw / 2 - twp - cw); if (bi < 2 * em + 0.25) continue; F.bi = bi; }
+@@ -6787,3 +6848,3 @@
+       if (!ok) continue; ok = false;
+-      for (let to = Math.max(0.3125, std().minPlate); to <= 2.0 + 1e-9; to += 0.0625) { F.to = to; if (inner) F.ti = Math.max(0.3125, std().minPlate, u16(to * F.bo / (2 * F.bi))); r = run(); if (!r) break;
++      for (let to = Math.max(0.3125, std().minPlate); to <= 2.0 + 1e-9; to = spNextT(to)) { F.to = to; if (inner) F.ti = Math.max(0.3125, std().minPlate, spStdT(to * F.bo / (2 * F.bi))); r = run(); if (!r) break;
+         if (good(r.C, [pre + '1', pre + '2', pre + '3', pre + '4', pre + '5', pre + '6']) && good(r.C, DT, part)) { ok = true; break; } }
+@@ -6807,5 +6868,64 @@
+ document.addEventListener('click', e => { if (P.mod !== 'splice') return;
+-  if (e.target.id === 'sp_auto') { const r = autoDesignSplice(); fillInputs(); recompute(); autosave(); alert(`Splice auto-design\n\n${r.msg}\n\nUse "Undo auto-design" to go back.`); spUndoBtn(); }
++  if (e.target.id === 'sp_auto') { P.spl.own = false; const r = autoDesignSplice(); fillInputs(); recompute(); autosave(); alert(`Splice auto-design\n\n${r.msg}\n\nUse "Undo auto-design" to go back.`); spUndoBtn(); }
+   else if (e.target.id === 'sp_undo') { undoAutoDesign(); spUndoBtn(); } });
+ function spUndoBtn() { const b = document.getElementById('sp_undo'); if (b) b.hidden = !P._spUndo; }
++/* ---------- field splices: inclusion, suggested location, suggested size (2026-10-12) ---------- */
++/* included unless set to "Not included", or set to "As in Preliminary sizing" and the last sizing layout received had no field splices */
++function spIncl() { const s = (P && P.spl) || {}; return s.inc === 'no' ? false : s.inc === 'yes' ? true : s.plN !== 0; }
++/* standard plate thicknesses: 1/16 in steps up to 1 in, 1/8 in steps above */
++const spStdT = v => v <= 1 + 1e-9 ? Math.ceil(v * 16 - 1e-6) / 16 : Math.ceil(v * 8 - 1e-6) / 8;
++const spNextT = t => spStdT(t + (t < 1 - 1e-9 ? 0.0625 : 0.125) - 1e-6);
++/* location: dead-load contraflexure next to each interior pier (continuous), girder ends at piers (simple spans),
++   field sections longer than the maximum divided equally (an odd number of pieces in a simple span), none closer than the minimum to a support */
++function spLocSuggest() {
++  const b = P.df && P.df.bridge, s = P.spl, maxL = nm(s.maxLen), minS = nm(s.minSup);
++  if (!(maxL > 0) || !(minS >= 0)) return { ok: false, msg: 'Enter a positive maximum field-section length and a minimum distance from a support of zero or more.' };
++  if (!b || !b.ok || !Array.isArray(b.spans) || !b.spans.length) return { ok: false, msg: 'The location needs the bridge from Preliminary sizing (spans and continuity).' };
++  const spans = b.spans.map(Number), cont = !!b.cont && spans.length > 1, sup = [0]; spans.forEach(L => sup.push(sup[sup.length - 1] + L)); const Lt = sup[sup.length - 1], x = [], notes = [];
++  let g = 0;
++  if (cont) { g = b.nb >= 3 ? 2 : 1; let R = null; try { R = GM.sa.compute({ ...P.sa, girder: g }); } catch (e) { R = null; }
++    if (!R || (R.errors && R.errors.length)) return { ok: false, msg: `The location needs the Structural analysis module (dead-load moments): ${R && R.errors ? R.errors[0] : 'not available'}` };
++    const X = Array.from(R.xs), M = X.map((_, i) => R.MDC1[i] + R.MDC2[i] + R.MDW[i]), cross = (i, j) => X[i] + (X[j] - X[i]) * M[i] / (M[i] - M[j]);
++    for (let k = 1; k < R.sup.length - 1; k++) { const ip = R.sup[k], Mp = M[ip];
++      for (let i = ip - 1; i >= R.sup[k - 1]; i--) if (M[i] * Mp <= 0 && M[i] !== M[i + 1]) { x.push(Math.round(cross(i, i + 1))); break; }
++      for (let i = ip + 1; i <= R.sup[k + 1]; i++) if (M[i] * Mp <= 0 && M[i] !== M[i - 1]) { x.push(Math.round(cross(i - 1, i))); break; } } }
++  const edges = [...new Set([0, ...(cont ? x : sup.slice(1, -1)), Lt])].sort((a, c) => a - c);
++  for (let i = 0; i < edges.length - 1; i++) { const a = edges[i], len = edges[i + 1] - a; let n = Math.ceil(len / maxL - 1e-9); if (!cont && n > 1 && n % 2 === 0) n++;
++    for (let k = 1; k < n; k++) x.push(Math.round(a + len * k / n)); }
++  const out = [...new Set(x)].sort((a, c) => a - c).map(v => { const near = sup.reduce((p, q) => Math.abs(q - v) < Math.abs(p - v) ? q : p, sup[0]), d = Math.abs(v - near);
++    if (d < minS - 1e-9) { const nv = +(near + (v >= near ? 1 : -1) * minS).toFixed(2); notes.push(`${f2(v)} ft moved to ${f2(nv)} ft (at least ${f2(minS)} ft from the support at ${f2(near)} ft)`); return nv; } return v; });
++  const xs = [...new Set(out)].filter(v => v > 0 && v < Lt).sort((a, c) => a - c);
++  const rule = cont ? `Continuous: at the dead-load (DC1 + DC2 + DW, G${g}) points of contraflexure next to each interior pier, from the Structural analysis module, rounded to the nearest foot; field sections longer than ${f2(maxL)} ft divided into equal lengths; no splice closer than ${f2(minS)} ft to a support.`
++    : `Simple spans: girder ends at the piers (not field splices); a span longer than ${f2(maxL)} ft divided into an odd number of equal pieces (no splice at midspan); no splice closer than ${f2(minS)} ft to a support.`;
++  let cur = []; try { const j = readInbox(); cur = j && Array.isArray(j.splices) ? [...new Set(j.splices.map(q => +(+q.x).toFixed(2)))].sort((a, c) => a - c) : []; } catch (e) {}
++  return { ok: true, x: xs, cur, rule, notes, cont };
++}
++/* size: Auto-design splice for each bolt diameter offered (7/8, 1, 1-1/8 in; only the one on the Bolts tab when it is locked), keep the passing layout with the least
++   bolts-plus-plate cost from the owner standards (bolt installed, detail steel per lb); the splice checks themselves are unchanged */
++function spSuggestSize() {
++  const R0 = gdCompute(P); if (R0.errors.length) return { ok: false, msg: 'Fix the splice input errors first.' };
++  const start = JSON.parse(JSON.stringify({ top: P.top, bot: P.bot, web: P.web, bolts: P.bolts })), S = { ...STD_COST, ...std() }, lbS = 0.2836, ds = adLocked('bolts.d') ? [String(P.bolts.d)] : ['0.875', '1', '1.125'], tried = [];
++  let best = null;
++  for (const dd of ds) { Object.assign(P, JSON.parse(JSON.stringify(start))); P.bolts.d = dd; const r = autoDesignSplice(); const R = gdCompute(P); if (R.errors.length) continue; const C = gdChecks(R), fails = C.filter(c => c.status === 'fail').map(c => c.id), W = R.web;
++    const fl = F => (F.bo * F.to + (F.inner ? 2 * F.bi * F.ti : 0)) * F.Lpl * lbS, Lw = parseDim(P.bolts.gap) + 2 * (parseDim(P.web.ew) + (W.ncw - 1) * parseDim(P.web.sh) + parseDim(P.web.ewp));
++    const bolts = 2 * R.fl.top.n + 2 * R.fl.bot.n + 2 * W.nrw * W.ncw, lb = fl(R.fl.top) + fl(R.fl.bot) + W.Awp * Lw * lbS, cost = bolts * S.cBolt + lb * S.cDet;
++    tried.push({ d: dd, ok: !fails.length, bolts, lb, cost, fails, msg: r.msg, st: JSON.parse(JSON.stringify({ top: P.top, bot: P.bot, web: P.web, bolts: P.bolts })) }); }
++  const pass = tried.filter(t => t.ok); best = pass.length ? pass.reduce((a, t) => t.cost < a.cost - 1e-6 ? t : a) : (tried.find(t => t.d === String(start.bolts.d)) || tried[0]);
++  if (!best) { Object.assign(P, start); return { ok: false, msg: 'No bolt size could be evaluated.' }; }
++  Object.assign(P, JSON.parse(JSON.stringify(best.st))); P._spUndo = start;
++  const tbl = tried.map(t => `${frac(+t.d)} in: ${t.ok ? `${t.bolts} bolts, ${f0(t.lb)} lb of plates, $${f0(t.cost)}` : `does not pass (${t.fails.join(', ')})`}`).join('; ');
++  return { ok: best.ok, d: best.d, msg: `${best.ok ? `Chosen: ${frac(+best.d)} in bolts` : 'No bolt size passes every check; shown'}: ${best.msg} Compared (bolts × $${(+S.cBolt).toFixed(2)} + plate steel × $${(+S.cDet).toFixed(2)}/lb): ${tbl}.`, tried };
++}
++function spSugBox() { const el = document.getElementById('sp_sugbox'); if (!el) return; const s = P.spl || {}, g = s.sug;
++  el.innerHTML = `<p class="hint static">${!spIncl() ? 'Field splices not included.' : s.own ? 'Plates and bolts: entered by you. Imports and Suggest keep them; Suggest splice or Auto-design splice redesigns them.' : 'Plates and bolts: designed automatically when demands are imported (bolt size from the Bolts tab); Suggest splice also compares the bolt sizes.'}</p>`
++    + (g && spIncl() ? `<p class="hint static"><b>Last suggestion (${new Date(g.ts).toLocaleDateString()}).</b> Location: ${g.x && g.x.length ? g.x.map(v => f2(v) + ' ft').join(', ') : 'none needed'}${g.cur && g.cur.length ? `; Preliminary sizing has ${g.cur.map(v => f2(v) + ' ft').join(', ')}` : ''}. ${esc(g.rule || '')} Size: ${esc(g.size || '')}</p>` : ''); }
++function spSuggest() {
++  if (!spIncl()) { alert('Field splices are not included. Set "Field splices" to Included (or add field splices in Preliminary sizing) to get a suggestion.'); return; }
++  const loc = spLocSuggest(), size = spSuggestSize(); P.spl.own = false;
++  P.spl.sug = { ts: Date.now(), x: loc.ok ? loc.x : [], cur: loc.ok ? loc.cur : [], rule: loc.ok ? loc.rule + (loc.notes.length ? ' ' + loc.notes.join('; ') + '.' : '') : loc.msg, size: size.msg, ok: size.ok };
++  fillInputs(); recompute(); autosave(); spUndoBtn();
++  const same = loc.ok && loc.cur.length === loc.x.length && loc.x.every((v, i) => Math.abs(v - loc.cur[i]) < 0.5);
++  alert(`Suggest splice\n\nLocation: ${loc.ok ? `${loc.x.length ? loc.x.map(v => f2(v) + ' ft').join(', ') : 'no field splice needed'}\n${loc.rule}${loc.notes.length ? '\n' + loc.notes.join('\n') : ''}\n${loc.cur.length ? `Preliminary sizing now has: ${loc.cur.map(v => f2(v) + ' ft').join(', ')}${same ? ' (the same).' : '. Move the splices on its Girder tab if you accept the suggestion; the demands follow on the next refresh.'}` : ''}` : loc.msg}\n\nSize (this splice case): ${size.msg}\n\nUse "Undo auto-design" to go back.`);
++}
++document.addEventListener('click', e => { if (e.target.id === 'sp_suggest' && P.mod === 'splice') spSuggest(); });
+ document.addEventListener('click', e => { if (e.target.id !== 'sp_fit' || P.mod !== 'splice') return; const r = fitSplice(); fillInputs(); recompute(); autosave(); alert(`Splice fitted to the girder.\n\n${r.msg}`); });
+@@ -6813,2 +6933,3 @@
+   if (typeof std === 'function' && std().auto === 'off') { P.source += ' Splice plates and bolts as entered (not redesigned for these demands).'; return; }
++  if (P.spl && P.spl.own) { P.source += ' Splice plates and bolts as entered by the user (kept; Suggest splice or Auto-design splice redesigns them).'; return; }
+   const fit = autoDesignSplice(); delete P._spUndo; P.source += ` Splice plates and bolts were auto-designed for these demands: ${fit.msg}`; setTimeout(() => flash(fit.ok ? 'Splice plates and bolts auto-designed; every check passes.' : `Splice designed; still failing: ${(fit.fails || []).join(', ')}.`), 300); }
+@@ -6825,5 +6946,7 @@
+ window.addEventListener('resize', () => { if (P && P.mod === 'pl') $('#pl-wrap').style.top = Math.ceil($('#modbar').getBoundingClientRect().bottom) + 'px'; });
+-function loadAllInbox(j) {
++function loadAllInbox(j) { return gdBg(() => loadAllInbox0(j)); }
++function loadAllInbox0(j) {
+   const done = [];
+-  if (j.splices?.length) { importInto('splice', () => spliceApply(j, j.splices[0]), j.srcLabel); done.push(`Field splice (${j.splices[0].label}; pick another case on its Project tab)`); }
++  if (Array.isArray(j.splices)) P.spl.plN = j.splices.length;   // field splices in the sizing layout (0: none, so the splice module is not included unless set to Included)
++  if (j.splices?.length && spIncl()) { importInto('splice', () => spliceApply(j, j.splices[0]), j.srcLabel); done.push(`Field splice (${j.splices[0].label}; pick another case on its Project tab)`); }
+   if (j.bearings?.length) { importInto('bstf', () => bsApply(j), j.srcLabel); done.push('Bearing stiffeners'); }
+@@ -6858,3 +6981,3 @@
+ const CR_OPTS = [['inputs', 'Input parameters'], ['combos', 'Section properties, loads, and combinations'], ['cap', 'Section capacity (Girder section module)'], ['stress', 'Stresses by construction stage (Structural analysis)'], ['checks', 'Design checks, worked'], ['summary', 'Summary of results'], ['drawings', 'Drawings'], ['manual', 'Appendix: design basis (user manual)']];
+-function openReport() { if (P.mod === 'pl') { if (PL_FRAME && PL_FRAME.contentWindow.openReport) PL_FRAME.contentWindow.openReport(); return; } if (!CK) { alert('Fix the input errors before printing.'); return; }
++function openReport() { if (P.mod === 'pl') { if (PL_FRAME && PL_FRAME.contentWindow.openReport) PL_FRAME.contentWindow.openReport(); return; } if (!CK) { alert(P.mod === 'splice' && !spIncl() ? 'Field splices not included: there is no splice report.' : 'Fix the input errors before printing.'); return; }
+   const r = P.ui.rpt; $('#rpt-opts').innerHTML = `<div class="ck-row"><input type="checkbox" checked disabled><label>Cover, references, table of contents, and objectives (always printed)</label></div>`
+```
+
+### Exact changes: decoded PlateLine (unified diff)
+
+```diff
+--- pl_main.html	2026-10-12 19:59:01.324288801 +0000
++++ pl_br.html	2026-10-12 20:26:06.462334120 +0000
+@@ -1019,5 +1019,6 @@
+   },
+-  framing: { spacing: 25, orient: 'auto', arrange: 'contiguous', supClear: 3, stagMin: 4, stiff: 'on', doRatio: 1.0, stB: 6, stT: 0.5, cpB: 6, cpT: 0.5, bsB: 7, bsT: 1, clip: 1, bsPairs: 1, gS: '50' },
++  framing: { spacing: 25, orient: 'auto', arrange: 'contiguous', supClear: 3, stagMin: 4, stiff: 'on', doRatio: 1.0, stB: 6, stT: 0.5, cpB: 6, cpT: 0.5, bsB: 7, bsT: 1, clip: 1, bsPairs: 1, gS: '50', xfMinD: 48 },
+   costs: { steel: 3.00, trans: 1500, splice: 6000, stiff: 150, xf: 2500, bearing: 4000 },
+   alts: { nbList: '4, 5, 6, 7', ldLo: 22, ldHi: 36, ldStep: 2, web: 'stiffened', holdW: true },
++  ws: { W: '', ohMin: 1.5, ohMax: 4.0, ohS: 0.5, deMin: -1.0, deMax: 5.5, sMin: 3.5, sMax: 16, obj: 'wt' },   // girder count from the out-to-out deck width (2026-10-12); W blank = not used
+   suggest: { lsdS: 25, lsdC: 30, keepD: false, web: 'auto', kbt: 6, weld: 1000, eff: 0.85, fws: 25, sip: 15, bar: 0.40, cll: 20, gtype: 'envelope',
+@@ -2352,2 +2353,3 @@
+ ['p2', 'Using the program', `
++<h3>Girder count from the deck width</h3><p>With an <b>Out-to-out deck width</b> W on the Suggest input tab, <b>Suggest girder count, spacing, and overhangs</b> compares girder counts. For each N from 3, every overhang on a 0.25 ft grid within the limits gives S = (W &minus; 2&middot;overhang)/(N &minus; 1); a layout is kept when S, the overhang (also &le; a fraction of S), and d<sub>e</sub> = overhang &minus; barrier (or curb) width are within the limits (defaults: overhang 1.5 to 4.0 ft and &le; 0.5S; d<sub>e</sub> &minus;1.0 to 5.5 ft; S 3.5 to 16 ft, the ranges of the 4.6.2.2 equations; verify / owner). Of those, the overhang whose exterior and interior girder live load moment distribution factors (this tool's 4.6.2.2 equations, longest span) are closest is used (ties: nearest 0.375S); the girder is then sized with Suggest (fast mode) and checked like an alternative. The table lists N, S, overhang, d<sub>e</sub>, the factors, the section, the steel per girder and in total (lb/ft<sup>2</sup> of deck), the governing ratio of the layout checks, the bracing type from the girder depth, and pass/fail. The recommendation is the passing row with the least total steel (or the fewest girders, if chosen). Nothing changes until you press Apply. With W blank, Suggest uses the girder count and spacing on the Bridge tab as before. Distribution factors are an estimate for comparing layouts: run LL &amp; DL for the chosen layout.</p>
+ <h3>Suggest: lowest-cost layout</h3><p>Suggest proposes the web and flange layout and the field splices for the bridge on the Bridge tab, with one layout for all girders (designed for the envelope of the interior and exterior girders). It searches web depths from about L/36 to L/18 and, unless one is chosen, both an unstiffened and a transversely stiffened web, and keeps the layout with the <b>lowest total cost</b>: structural steel (weight × $/lb), flange shop transitions, transverse stiffeners, and field splices, each priced from the <b>Unit costs</b> on the Suggest tab, which are the same single price list used by the Alternatives study (and sent to GirderDetail's Design all). The defaults are placeholders; only their ratios affect the choice, and the tab shows each as an equivalent weight of steel. Within each field piece the flange width is constant and the thicknesses are chosen by an optimization that adds a transition only where it saves more than it costs. Field splices are placed by the program near the dead-load points of contraflexure and within the shipping length and weight, and moved off cross-frame locations where the framing check X4 finds a conflict.</p>
+@@ -2583,2 +2585,13 @@
+     </div>
++    ${secHd('sec-sgws', 'Girder count from the deck width')}
++    <div class="sec-body" id="sec-sgws">
++      ${fld('Out-to-out deck width', 'ws.W', 'ft', 'num', { full: true, note: '(blank: Suggest uses the girders and spacing on the Bridge tab)' })}
++      ${fld('Overhang, minimum', 'ws.ohMin', 'ft')}${fld('Overhang, maximum', 'ws.ohMax', 'ft')}
++      ${fld('Overhang / S, maximum', 'ws.ohS', '')}${fld('Objective', 'ws.obj', '', 'sel', { options: [['wt', 'Least total steel weight'], ['nb', 'Fewest girders']] })}
++      ${fld('d<sub>e</sub>, minimum (4.6.2.2)', 'ws.deMin', 'ft')}${fld('d<sub>e</sub>, maximum (4.6.2.2)', 'ws.deMax', 'ft')}
++      ${fld('Girder spacing S, minimum', 'ws.sMin', 'ft')}${fld('Girder spacing S, maximum', 'ws.sMax', 'ft')}
++      <p class="note full">Limits: verify / owner. Defaults: overhang 1.5 to 4.0 ft and not more than 0.5S; d<sub>e</sub> from −1.0 to 5.5 ft and S from 3.5 to 16.0 ft (the ranges of the AASHTO 4.6.2.2 distribution factor equations). For each girder count from 3 that fits the limits, S = (W − 2·overhang)/(N − 1), the overhang is chosen to balance the exterior and interior live load moment distribution factors, and the girder is sized with Suggest. Nothing on the Bridge or Girder tab changes until you apply a row.</p>
++      <button type="button" class="proj-btn proj-btn-primary full" id="ws_run">Suggest girder count, spacing, and overhangs</button>
++      <div id="ws_prog" class="full"></div>
++    </div>
+     ${secHd('sec-sgload', 'Loads')}
+@@ -2781,3 +2794,3 @@
+     <li>The suggested layout still has to be verified with the analysis and design apps before use.</li></ul>`);
+-  host.innerHTML = h;
++  host.innerHTML = wsHtml() + xfNoteHtml(s) + h;
+   $('#sg_apply').onclick = applySuggestion;
+@@ -3238,2 +3251,3 @@
+   const cf = { S: r2(m.S * 12), h: Math.round(Math.max(m.D - 8, m.D * 0.75)), dg: r2(dg), Lb: r2(FR.sp), primary: m.skews.some(s => Math.abs(s) > 20) ? 'yes' : 'no' };
++  if (num(P.framing.xfMinD) > 0) cf.dMinXF = num(P.framing.xfMinD);   // minimum girder depth for cross-frames (GirderDetail recommends the bracing type)
+   { // stability bracing during deck placement: the span with the largest factored deck-placement moment
+@@ -3388,2 +3402,3 @@
+       ${fld('Normal frames', 'framing.arrange', '', 'sel', { options: [['contiguous', 'Contiguous lines'], ['staggered', 'Staggered by bay']] })}${fld('Min. offset if not aligned', 'framing.stagMin', 'ft')}
++      ${fld('Minimum girder depth for cross-frames', 'framing.xfMinD', 'in', 'num', { full: true, note: 'common practice (e.g. AISC/NSBA G13.1 guidance; owner standards govern); verify' })}
+       <p class="note">Cross-frames are placed at every bearing line and evenly between them, with extra frames added in skewed corners and where needed to clear field splices and flange transitions.</p>
+@@ -3421,2 +3436,87 @@
+ 
++/* ---------------- girder count, spacing, and overhangs from the out-to-out deck width (2026-10-12) ----------------
++   For N = 3, 4, ... every overhang on a 0.25 ft grid within the limits gives S = (W - 2 oh)/(N - 1); the layout is feasible when
++   S_min <= S <= S_max, oh <= (oh/S)_max S and d_e = oh - barrier (or curb) width is within the d_e limits. Of the feasible overhangs the one
++   whose exterior and interior girder live load moment distribution factors (this tool's AASHTO 4.6.2.2 equations, longest span) are closest is used
++   (ties: closest to 0.375S). Each candidate is sized with Suggest (fast mode) and checked like an alternative. Nothing is applied without a click. */
++let WS = null, WS_RUN = 0;
++function wsKey() { return JSON.stringify([P.bridge, P.ws, P.limits, P.suggest, P.framing, P.costs, P.girder.gF, P.girder.gW]); }
++function wsSetup() {
++  const w = P.ws, W = num(w.W), L = { ohMin: num(w.ohMin), ohMax: num(w.ohMax), ohS: num(w.ohS), deMin: num(w.deMin), deMax: num(w.deMax), sMin: num(w.sMin), sMax: num(w.sMax) }, errs = [];
++  if (!(W > 0)) errs.push('Enter the out-to-out deck width.');
++  if (!(L.ohMin >= 0 && L.ohMax >= L.ohMin)) errs.push('Overhang limits: 0 ≤ minimum ≤ maximum.');
++  if (!(L.ohS > 0)) errs.push('The maximum overhang / S must be positive.');
++  if (!(isFinite(L.deMin) && L.deMax >= L.deMin)) errs.push('d_e limits: minimum ≤ maximum.');
++  if (!(L.sMin > 0 && L.sMax >= L.sMin)) errs.push('Spacing limits: 0 < minimum ≤ maximum.');
++  const BG = brGeom(P.bridge, num(P.suggest.bar)), bar = BG.bar; if (!(bar >= 0)) errs.push('Complete the barrier or curb inputs on the Bridge tab.');
++  if (errs.length) return { errs };
++  const ohs = []; for (let o = L.ohMin; o <= L.ohMax + 1e-9; o += 0.25) ohs.push(+o.toFixed(4)); if (Math.abs(ohs[ohs.length - 1] - L.ohMax) > 1e-6) ohs.push(L.ohMax);
++  const cases = [], skip = [];
++  for (let N = 3; N <= 30; N++) { const ok = ohs.map(oh => ({ oh, S: (W - 2 * oh) / (N - 1), de: oh - bar })).filter(c => c.S >= L.sMin - 1e-9 && c.S <= L.sMax + 1e-9 && c.oh <= L.ohS * c.S + 1e-9 && c.de >= L.deMin - 1e-9 && c.de <= L.deMax + 1e-9);
++    if (ok.length) cases.push({ N, ok }); else if ((W - 2 * L.ohMax) / (N - 1) >= L.sMin - 1e-9) skip.push(N);
++    if ((W - 2 * L.ohMin) / (N - 1) < L.sMin - 1e-9) break; }
++  return { errs, W, L, bar, cases, skip };
++}
++function wsEval(N, S, oh) {
++  const Pc0 = { ...P, bridge: { ...P.bridge, nb: N, S, spacing: 'equal', ohL: oh, ohR: oh } }, r = suggestLayout(Pc0);
++  if (r.errors.length) return { N, S, oh, err: r.errors[0] };
++  const strip = l => l.map(x => { const o = { L: x.L, t: x.t }; if (x.b !== undefined) o.b = x.b; return o; });
++  const fr0 = { ...P.framing }; if (r.webType) fr0.stiff = r.webType === 'stiffened' ? 'on' : 'off'; if (r.webType === 'stiffened' && r.doR) fr0.doRatio = r.doR;
++  const Pc = { ...Pc0, girder: { ...P.girder, D: r.D, web: strip(r.web), top: strip(r.top), bot: strip(r.bot), splices: [...r.splices] }, framing: fr0 };
++  const m = buildModel(Pc); if (m.errors.length) return { N, S, oh, err: m.errors[0] };
++  const fr = framingLayout(Pc, m), cc = [...runChecks(m), ...framingChecks(m, fr, Pc)];
++  let gov = { r: 0, id: '' }; cc.forEach(c => (c.items || []).forEach(i => { if (typeof i.r === 'number' && isFinite(i.r) && i.r > gov.r) gov = { r: i.r, id: c.id }; }));
++  const iMax = r.spans.indexOf(Math.max(...r.spans)), T = r.rec.types || {}, gI = T.int ? T.int.dfSpan[iMax].mM : null, gE = T.ext ? T.ext.dfSpan[iMax].mM : null;
++  const mx = l => l.reduce((a, g) => (g.b * g.t > a.b * a.t ? g : a), l[0]), dg = r.D + r.top[0].t + r.bot[0].t;
++  return { N, S, oh, de: r.de, gI, gE, D: r.D, tw: r.tw, top: mx(r.top), bot: mx(r.bot), webType: r.webType, wt: m.wt, psf: m.psf, tot: m.wt * N, gov, fails: cc.filter(k => k.status === 'fail').map(k => k.id), warns: cc.filter(k => k.status === 'warn').map(k => k.id), girder: Pc.girder, framing: { stiff: fr0.stiff, doRatio: fr0.doRatio }, dg, Kg: r.rec.Kg && r.rec.Kg[iMax] ? r.rec.Kg[iMax].Kg : null };
++}
++function wsCase(c, setup) {   // one girder count: pick the overhang, size the girder
++  const S0 = c.ok.reduce((a, q) => Math.abs(q.oh - 0.375 * q.S) < Math.abs(a.oh - 0.375 * a.S) ? q : a);
++  const r0 = wsEval(c.N, S0.S, S0.oh); if (r0.err) return { ...r0, rule: 'trial' };
++  const sp = (P.bridge.spans || []).map(num), iMax = sp.indexOf(Math.max(...sp)), Kg = r0.Kg, ts = num(P.bridge.ts);   // K_g of the trial girder
++  if (!Kg) return { ...r0, rule: '0.375S' };
++  const sc = c.ok.map(q => { const gi = sgDF(q.S, sp[iMax], Kg, ts, q.de, c.N, false).mM, ge = sgDF(q.S, sp[iMax], Kg, ts, q.de, c.N, true).mM; return { ...q, d: Math.abs(ge - gi) }; });
++  const best = sc.reduce((a, q) => q.d < a.d - 1e-6 || (Math.abs(q.d - a.d) <= 1e-6 && Math.abs(q.oh - 0.375 * q.S) < Math.abs(a.oh - 0.375 * a.S)) ? q : a);
++  if (Math.abs(best.oh - S0.oh) < 1e-9) return { ...r0, rule: 'balanced' };
++  const r1 = wsEval(c.N, best.S, best.oh); return r1.err ? { ...r0, rule: '0.375S' } : { ...r1, rule: 'balanced' };
++}
++function wsRun() {
++  const st = wsSetup(), prog = $('#ws_prog');
++  if (st.errs.length) { if (prog) prog.innerHTML = `<p class="hint static" style="color:var(--fail)">${st.errs.map(esc).join(' ')}</p>`; return; }
++  if (!st.cases.length) { WS = { key: wsKey(), done: true, res: [], st }; if (prog) prog.innerHTML = '<p class="hint static">No girder count fits the limits.</p>'; renderSuggestSafe(); return; }
++  const run = ++WS_RUN, res = []; WS = { key: wsKey(), done: false, res, st, i: 0, total: st.cases.length };
++  let i = 0; const step = () => { if (run !== WS_RUN) return; const t0 = performance.now();
++    while (i < st.cases.length && performance.now() - t0 < 60) { try { res.push(wsCase(st.cases[i], st)); } catch (e) { res.push({ N: st.cases[i].N, err: e.message }); } i++; }
++    WS.i = i; if (prog) prog.innerHTML = `<div class="prog"><i style="width:${(100 * i / st.cases.length).toFixed(0)}%"></i></div><p class="hint static">${i} of ${st.cases.length} girder counts sized…</p>`;
++    if (i < st.cases.length) setTimeout(step, 0); else { WS.done = true; if (prog) prog.innerHTML = `<p class="hint static">Done: ${res.length} girder counts compared; see the Suggest tab.</p>`; if (P.ui.otab !== 'suggest') setOTab('suggest'); renderSuggestSafe(); } };
++  setTimeout(step, 20);
++}
++function renderSuggestSafe() { try { if (SG && !SG.errors.length) renderSuggest(); else maybeSuggest(true); } catch (e) { console.error(e); } }
++function wsPick(res) { const ok = res.filter(r => !r.err && !r.fails.length); if (!ok.length) return null;
++  return P.ws.obj === 'nb' ? ok.reduce((a, r) => r.N < a.N || (r.N === a.N && r.psf < a.psf) ? r : a) : ok.reduce((a, r) => r.psf < a.psf - 1e-9 ? r : a); }
++function wsHtml() {
++  if (!WS) return '';
++  if (!WS.done) return `<div class="alert info"><b>Girder count from the deck width:</b> sizing ${WS.i} of ${WS.total}…</div>`;
++  const st = WS.st, ok = WS.res.filter(r => !r.err), best = wsPick(WS.res), stale = WS.key !== wsKey(), dmin = num(P.framing.xfMinD) || 48;
++  const rows = ok.map(r => `<tr class="${r === best ? 'gov' : ''}"><td>${r.N}</td><td class="val">${f2(r.S)}</td><td class="val">${f2(r.oh)}</td><td class="val">${f2(r.de)}</td><td class="val">${r.gI != null ? f3(r.gI) : '—'}</td><td class="val">${r.gE != null ? f3(r.gE) : '—'}</td>
++      <td class="lbl">${frac(r.D)} × ${frac(r.tw)} web (${r.webType === 'stiffened' ? 'stiff.' : 'unstiff.'}); top ${frac(r.top.b)} × ${frac(r.top.t)}, bottom ${frac(r.bot.b)} × ${frac(r.bot.t)} max.</td>
++      <td class="val">${f2(r.wt)}</td><td class="val">${f2(r.tot)}</td><td class="val">${f2(r.psf)}</td><td class="val">${f2(r.gov.r)}${r.gov.id ? ` (${r.gov.id})` : ''}</td><td>${r.dg >= dmin - 1e-9 ? 'Cross-frames' : 'Channel / rolled diaphragms'}</td>
++      <td>${r.fails.length ? `<span class="badge fail" title="${r.fails.join(', ')}">${r.fails.length} fail</span>` : r.warns.length ? `<span class="badge warn" title="${r.warns.join(', ')}">pass, ${r.warns.length} warn</span>` : badge('pass')}</td>
++      <td><button type="button" class="dg-btn" data-wsapply="${WS.res.indexOf(r)}">Apply</button></td></tr>`).join('');
++  const errs = WS.res.filter(r => r.err);
++  return card('ws-tbl', 'Girder count from the out-to-out deck width', `W = ${f2(st.W)} ft`, `
++    ${stale ? '<div class="alert warn" style="margin:0 0 8px"><b>Inputs changed since this study.</b> Run it again from the Suggest input tab.</div>' : ''}
++    ${best ? `<div class="sg-head pass"><div><b>Recommended (${P.ws.obj === 'nb' ? 'fewest girders' : 'least total steel weight'}): ${best.N} girders at ${f2(best.S)} ft, overhangs ${f2(best.oh)} ft</b><span>${f2(best.psf)} lb/ft² of deck, ${f2(best.wt)} kip per girder, web ${frac(best.D)} × ${frac(best.tw)}</span></div><button type="button" class="btn btn-primary" data-wsapply="${WS.res.indexOf(best)}">Apply</button></div>` : '<div class="alert warn" style="margin:0 0 8px"><b>No candidate passes every check.</b> Any row can still be applied.</div>'}
++    <div class="tscroll"><table class="tbl alttbl"><thead><tr><th>N</th><th class="right">S (ft)</th><th class="right">Overhang (ft)</th><th class="right">d<sub>e</sub> (ft)</th><th class="right">g<sub>M</sub> int.</th><th class="right">g<sub>M</sub> ext.</th><th>Girder section</th><th class="right">Steel per girder (kip)</th><th class="right">Total (kip)</th><th class="right">lb/ft² of deck</th><th class="right">Governing ratio</th><th>Bracing</th><th>Checks</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
++    <p class="note-p">Distribution factors: this tool's built-in AASHTO 4.6.2.2 equations (longest span, moment, interior: Table 4.6.2.2.2b-1; exterior: lever rule and Table 4.6.2.2.2d-1), an estimate for comparing girder counts; run LL &amp; DL (lldf) for the chosen layout before final design. Overhang: the value within the limits that balances the exterior and interior moment factors (ties: nearest 0.375S). Steel weight includes the ${f2(P.limits.allow)}% detail allowance. Governing ratio: the largest ratio among this tool's layout checks (proportions, transitions, splices, framing) for the sized girder; the strength design is by Suggest's approximate method. Bracing: girder depth at Abutment 1 against the ${f2(dmin)} in minimum for cross-frames (Framing tab).${st.skip.length ? ` No overhang within the limits works for N = ${st.skip.join(', ')}.` : ''}${errs.length ? ` Not sized: ${errs.map(r => `N = ${r.N} (${esc(r.err)})`).join('; ')}.` : ''} Limits: overhang ${f2(st.L.ohMin)} to ${f2(st.L.ohMax)} ft and ≤ ${f2(st.L.ohS)}S, d<sub>e</sub> ${f2(st.L.deMin)} to ${f2(st.L.deMax)} ft, S ${f2(st.L.sMin)} to ${f2(st.L.sMax)} ft (verify / owner).</p>`);
++}
++function wsApply(i) { const r = WS && WS.res[i]; if (!r || r.err) return;
++  if (!confirm(`Apply ${r.N} girders at ${f2(r.S)} ft with ${f2(r.oh)} ft overhangs and the sized girder (web ${frac(r.D)} × ${frac(r.tw)}) to the project? This replaces the girder count, spacing, overhangs, girder plates, splices, and the stiffener setting. You can revert afterwards.`)) return;
++  snapshotBefore(`Girder count from deck width (${r.N} girders at ${f2(r.S)} ft)`);
++  P.bridge.nb = r.N; P.bridge.S = +r.S.toFixed(4); P.bridge.spacing = 'equal'; P.bridge.ohL = r.oh; P.bridge.ohR = r.oh; P.girder = JSON.parse(JSON.stringify(r.girder)); P.framing.stiff = r.framing.stiff; P.framing.doRatio = r.framing.doRatio;
++  fillInputs(); ['web', 'top', 'bot', 'spl'].forEach(renderArr); recompute(); setOTab('summary'); autosave(); }
++document.addEventListener('click', e => { if (e.target.id === 'ws_run') { wsRun(); return; } const a = e.target.closest && e.target.closest('[data-wsapply]'); if (a) wsApply(+a.dataset.wsapply); });
++function xfNoteHtml(s) { const dmin = num(P.framing.xfMinD) || 48, d = s.D + s.top[0].t + s.bot[0].t;
++  return `<div class="alert info"><b>Intermediate bracing:</b> girder depth d = ${f2(d)} in at Abutment 1 ${d >= dmin - 1e-9 ? `≥ ${f2(dmin)} in: cross-frames.` : `< ${f2(dmin)} in (minimum for cross-frames, Framing tab; common practice, owner standards govern): channel (C, MC, depth about half the girder depth or more) or rolled W diaphragms; check them in GirderDetail's Cross-frames module.`}</div>`; }
++
+ /* ---------------- alternatives study ---------------- */
+@@ -3761,3 +3861,5 @@
+   });
++  syncSpacingVis();
+ }
++function syncSpacingVis() { const el = document.getElementById('f_bridge_bays'), ig = el && el.closest('.ig'); if (ig) ig.style.display = P.bridge.spacing === 'variable' ? '' : 'none'; }
+ function onScalar(e) {
+@@ -3770,2 +3872,3 @@
+   setPath(P, el.dataset.k, v);
++  if (el.dataset.k === 'bridge.spacing') syncSpacingVis();
+   if (el.dataset.k === 'limits.dot') { /* profile switched: nothing else */ }
+```
