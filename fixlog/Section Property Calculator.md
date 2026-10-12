@@ -2286,7 +2286,7 @@ Every number in the report is the same as on main: compared token by token over 
 #### Open items
 
 - PR1-O1. Validation tab: tool values and |Δ| of the checks whose reference is 0 are printed in exponent form (e.g. W14X90 β<sub>x</sub> = −2.201853e-15, |Δ| = 2.2e-15) and the relative differences as e.g. "9.52e-14 %". Left unchanged: they are the evidence that the tool reproduces the closed form to machine precision. Engineer to decide whether to show them as 0 / "< 1e-12".
-- PR1-O2. On screen, the Q tab "Cut at y" input still shows the raw value (e.g. 6.3869009956e-16) when the cut is at the centroid; only the report shows 0. Changing the input formatting affects every number field; not done without a decision.
+- PR1-O2. **Resolved in P2b; re-checked 2026-10-12 (claude/sweep-spc).** On screen, the Q tab "Cut at y" input still shows the raw value (e.g. 6.3869009956e-16) when the cut is at the centroid; only the report shows 0. Changing the input formatting affects every number field; not done without a decision.
 
 ## 2026-10-10 — PR: claude/spc-shearflow (PR link added after merge)
 
@@ -2373,7 +2373,7 @@ Units: V kip (kN), q kip/in (N/mm), lengths in (mm), φR<sub>n</sub> kip (kN), F
 
 - P2b-O1. **Sign of the V<sub>x</sub> term.** The brief wrote q = [(V<sub>y</sub>I<sub>y</sub> − V<sub>x</sub>I<sub>xy</sub>)Q<sub>x</sub> **−** (V<sub>x</sub>I<sub>x</sub> − V<sub>y</sub>I<sub>xy</sub>)Q<sub>y</sub>]/D. With V<sub>x</sub>, V<sub>y</sub> as force components along +x, +y (one right-handed frame), equilibrium gives **+** (derivation above; same expression as the existing Q tab; checked against the Stresses-tab σ). The minus form corresponds to V<sub>x</sub> taken with the opposite sign. Results with one load component are unaffected; with both, case 3 gives 7.2477 (implemented) vs 0.4194 kip/in (minus form). Confirm the convention (V<sub>x</sub> positive along +x).
 - P2b-O2. Closed loops that are not cells (e.g. angles bolted to a web and to a flange plate that also touches the web) are n/a unless symmetric with the extra contact switched off. Confirm switching off non-structural bearing contacts is the intended workflow, or say if a stiffness-based split is wanted.
-- P2b-O3. Thin-wall closed-cell values (centre-line model, extensions into junctions, load corrected per part) are approximate ("thin-wall — verify"); cells with n ≠ 1 and face-contact stacks in a cell are n/a.
+- P2b-O3. **Closed 2026-10-12 (claude/sweep-spc): left as flagged.** Thin-wall closed-cell values (centre-line model, extensions into junctions, load corrected per part) are approximate ("thin-wall — verify"); cells with n ≠ 1 and face-contact stacks in a cell are n/a.
 - P2b-O4. Weld check: φ = 0.75 / Ω = 2.00, 0.60F<sub>EXX</sub>, throat 0.707w, no directional increase — verify against AISC 360-16 J2.4; detailing limits not checked (listed on the tab).
 
 ## 2026-10-10 — PR: claude/spc-library (PR link added after merge)
@@ -2470,8 +2470,8 @@ None (data management and UI). No engineering value, unit or reference changed.
 #### Open items
 
 - L-O1. Location: the library is at the end of the Templates tab (keeps the tab bar on one row). If the engineer prefers a separate "Library" tab, the input tab bar wraps to two rows at the 430 px panel unless the tab padding is reduced — decide.
-- L-O2. The library lives in this browser's localStorage (shared `file://` origin in Chrome/Edge, like the other keys); clearing site data deletes it. Export all regularly to keep a copy.
-- L-O3. Connector inputs left in `sf.conn` after undoing an insert (or deleting parts) stay in the project file keyed to contacts that no longer exist (pre-existing P2b behaviour for deleted parts; no effect on results).
+- L-O2. **Closed 2026-10-12 (claude/sweep-spc): the export reminder exists.** The library lives in this browser's localStorage (shared `file://` origin in Chrome/Edge, like the other keys); clearing site data deletes it. Export all regularly to keep a copy.
+- L-O3. **Resolved 2026-10-12 (L2, claude/sweep-spc).** Connector inputs left in `sf.conn` after undoing an insert (or deleting parts) stay in the project file keyed to contacts that no longer exist (pre-existing P2b behaviour for deleted parts; no effect on results).
 
 ---
 
@@ -2549,3 +2549,83 @@ None (the torsion engine exists only in this tool).
 #### Open items
 
 None new. O1-O1 closed.
+
+---
+
+## 2026-10-12 — PR: claude/sweep-spc (open-item sweep; PR link added after merge)
+
+Engineer's instruction (2026-10-12): work through every open item using best judgment, and record anything that needs the engineer. Inventory section 26 lists 11 items. One code change (L2 below). Every other item is closed with evidence or left for the engineer, with a recommendation.
+
+### L2 (L-O3). Stale connector inputs are left out of saved data   [saved data / code health — no change to any formula, computed property, storage key or file version]
+- **Where:** new `persistModel(m)` just before `function autosave()`; `autosave()`; `saveFile()`; the project "Save" button in `buildProjPane`. Anchor: `function persistModel(m) {`.
+- **Problem:** connector inputs in `sf.conn` are keyed by contact (`partId|partId`). When a part is deleted, or an insert is undone, its entries stayed in the autosave, the named project and the saved file, keyed to parts that no longer exist. There was no effect on results.
+- **Change:**
+  - When the model is written (autosave, named project, Save file), entries whose key does not name two existing parts are left out.
+  - The model in memory is not changed. The undo snapshot holds only parts and contacts, so undoing a delete brings the part back and finds its connector inputs again.
+  - Part ids are unique (`newId()` is time-based), so a stale key cannot attach to a new contact. The library already filtered keys this way (`libClean`, `inside`).
+  - The file format is unchanged: fewer entries, same schema and version. Old files load unchanged.
+- **Governing provision:** none (no engineering change); CLAUDE.md §5 (saved data: format unchanged, nothing a user can still reach is discarded).
+- **Before / After:**
+  1.
+     - Before:
+  ```js
+function autosave() { lsSet(LS_AUTO, JSON.stringify(M)); }
+  ```
+     - After:
+  ```js
+/* Model as written to storage or a file: connector inputs (sf.conn) whose contact key names a part that no longer exists
+   are left out (fix log L-O3). The model in memory keeps them, so undoing a delete still finds them. Results unaffected. */
+function persistModel(m) {
+  if (!m.sf || !m.sf.conn) return m;
+  const ids = new Set(m.parts.map(p => p.id)), ks = Object.keys(m.sf.conn);
+  const keep = ks.filter(k => { const s = String(k).split('|'); return s.length === 2 && ids.has(s[0]) && ids.has(s[1]); });
+  if (keep.length === ks.length) return m;
+  const conn = {}; keep.forEach(k => { conn[k] = m.sf.conn[k]; });
+  return Object.assign({}, m, { sf: Object.assign({}, m.sf, { conn }) });
+}
+function autosave() { lsSet(LS_AUTO, JSON.stringify(persistModel(M))); }
+  ```
+  2.
+     - Before:
+  ```js
+  const out = Object.assign({}, M, { _schema: SCHEMA, version: SCHEMA_VER, app: 'Section Property Calculator', savedAt: new Date().toISOString() });
+  ```
+     - After:
+  ```js
+  const out = Object.assign({}, persistModel(M), { _schema: SCHEMA, version: SCHEMA_VER, app: 'Section Property Calculator', savedAt: new Date().toISOString() });
+  ```
+  3.
+     - Before:
+  ```js
+      p[n] = { t: Date.now(), d: JSON.parse(JSON.stringify(M)) };
+  ```
+     - After:
+  ```js
+      p[n] = { t: Date.now(), d: JSON.parse(JSON.stringify(persistModel(M))) };
+  ```
+- **Check case:** two plates in contact (keys `a|c` and `c|a` set). Autosave holds 2 entries. Delete plate c: autosave holds 0, memory still holds 2, `persistModel(M)` (what Save file writes) holds 0. Undo: autosave holds 2 again.
+- **How verified:**
+  - `node --check`: 4 scripts, 0 errors.
+  - Headless Chromium (KaTeX 0.16.11 served locally from the npm package of the same version), main vs branch:
+    - Validation tab: 121/121 pass on both, every row identical.
+    - Default example and the 8 templates (box, box2c, coverW, dblL, dblC, girder, star, laced): A, I, J, C<sub>w</sub>, centroid and Z, the autosave JSON (part ids normalised) and the output text length are identical.
+    - No console or page errors.
+  - Branch-only scripted test: the check case above.
+- **Other copies:** none.
+
+### Items closed with evidence (no code change)
+- **PR1-O2 (Q-tab "Cut at y" shows 6.4e-16):** already fixed in P2b (`qPosDisp`, see the 2026-10-10 claude/spc-shearflow entry). Re-checked on main: `qPosDisp(6.3869009956e-16)` → 0 and `qPosDisp(3.55363737868)` → 3.5536. Closed.
+- **L-O2 (library only in browser storage):** the library pane already says "The library is kept in this browser; export it to a file to keep or move it.", and the quota message names "Export all". The inventory's default ("a reminder to export (exists)") is met. Closed.
+- **P2b-O3 (thin-wall closed-cell shear flow approximate; n ≠ 1 cells and face-contact stacks n/a):** left as flagged ("thin-wall — verify" on the tab), per the inventory default. Closed as decided; reopen only if a refined cell model is wanted.
+
+### Needs engineer (unchanged; each with a recommendation)
+- **P2b-O4 (printed-spec check):** weld strength in the shear-flow check uses φ = 0.75 / Ω = 2.00, 0.60F<sub>EXX</sub>, throat 0.707w and no directional increase. Does this match AISC 360-16 Sec. J2.4 / Table J2.5 in your printed copy? Recommendation: keep (no directional increase is conservative for longitudinal welds).
+- **P2a-O1 (printed-spec check):** confirm the equation numbers AISC 360-16 E4-8 (H), E4-9 (r̄<sub>o</sub>²) and F2-7 (r<sub>ts</sub>). They stay marked "verify" until then.
+- **X-O1 (engineer's own CAD check):** AutoCAD MASSPROP product-of-inertia sign and principal-moment order, on first use with the 1 × 1 square (Method tab).
+- **P2b-O1:** shear-flow sign with both V<sub>x</sub> and V<sub>y</sub>: confirm that V<sub>x</sub> is positive along +x (the "+" form, implemented). Recommendation: keep.
+- **P2b-O2:** closed loops that are not cells are n/a unless the extra bearing contact is switched off. Is switching off non-structural bearing contacts the intended workflow? Recommendation: yes, keep.
+- **PR1-O1:** the Validation tab prints machine-precision differences in exponent form (e.g. 2.2e-15). Recommendation: keep; they are the evidence of exact agreement.
+- **L-O1:** the library stays at the end of the Templates tab rather than in its own tab. Recommendation: keep (the tab bar stays on one row at 430 px).
+
+### Remaining open items
+None besides the "Needs engineer" list above.
