@@ -923,3 +923,323 @@ Fixes open items O-T4 and O-T3 (above), per the engineer's decision of 2026-10-0
 - **Open items (found, not changed):**
   - O-T5. When locking, the "before" values in the lock's change-log entry and toast still come from `lldfMineFor()`, so a blank box is logged as `0.000 → 0.650`. This is text only (nothing is restored from it), and it is produced inside the shared `BL.adopt`. Left as is.
   - O-T6. After a dead-load (`dlLoads`) restore, a DC2 / DW box that was blank shows `0`. Same calculation (blank = 0 there); display only.
+
+## 2026-10-12 — PR: claude/sweep-psbeam (PR link added after merge)
+
+Open-item sweep (engineer, 2026-10-12: "continue making updates and fixes until it's completed … use your best judgment"). It covers every psbeam item in the open-item inventory: O1–O8, OR1, OT5/OT6, AUDIT S7, A1 and A2. Items are listed in priority order: unconservative calc first, then bugs, UI, docs. Basis: AASHTO LRFD 10th Ed. (2024); MBE 3rd Ed. for the rating. Article numbers marked "verify" were not checked against a printed 10th Ed.
+
+Line numbers are approximate, for the file after this PR. "Default" means the shipped `DEFAULTS` (PCI BT-72, L = 120 ft, S = 9 ft, interior). Every check case below was produced by the real `computeAll()` of origin/main (d6edfdd) and of this branch, run in headless Chromium (scratch `probe.mjs`).
+
+New optional saved fields (all in `inp.opt`, with defaults in `DEFAULTS.opt`). Older files load unchanged, and a missing field takes its default through `mergeInputs`:
+- `relCfac` (0.65)
+- `rtPhiC` (1.0)
+- `rtPhiS` (1.0)
+
+No storage key was added or changed. The `bridgeSuite.v1.*` bootstrap / BridgeLocks / BridgeXfer blocks were not touched.
+
+### W1. Exterior girder: effective flange width and deck dead load use S/2 + overhang (PSB-O5)   [calc change] [direction depends on the overhang: less conservative for DL and stresses when oh < S/2, more conservative for capacity/stiffness when oh > S/2]
+- **Where:** `compositeProps()`, I-girder branch (≈ line 2043). Anchor: `const tribW=extG? (inp.S/2+ohT)*12 : inp.S*12;`
+- **Problem:** the AUTO effective width and the deck dead-load width were S·12 for every girder. 4.6.2.6.1 takes the tributary width, which for an exterior girder is half the adjacent spacing plus the full overhang.
+- **Governing provision:** AASHTO LRFD 10th Ed. 4.6.2.6.1 (effective flange width = tributary width perpendicular to the axis of the member).
+- **Before:**
+  ```js
+    const beff=inp.beffAuto? inp.S*12 : +inp.beff;
+  ...
+            tsLoad, wdkW:inp.S*12, wdkHW:g.btf,
+            wdkDeck:(inp.S*12*tsLoad/144)*(+inp.mat.wcdLoad||+inp.mat.wcd), wdkHaunch:(g.btf*th/144)*(+inp.mat.wcdLoad||+inp.mat.wcd),
+            wdk:(inp.S*12*tsLoad/144)*(+inp.mat.wcdLoad||+inp.mat.wcd) + (g.btf*th/144)*(+inp.mat.wcdLoad||+inp.mat.wcd), isNext:false};
+  ```
+- **After:**
+  ```js
+    const extG=!!(inp.loads&&inp.loads.pos==='exterior');
+    const ohT=extG? Math.max(+((inp.deck&&inp.deck.oh)||0)||0,0) : 0;
+    const tribW=extG? (inp.S/2+ohT)*12 : inp.S*12;    // in
+    const beff=inp.beffAuto? tribW : +inp.beff;
+  ...
+            tsLoad, wdkW:tribW, wdkHW:g.btf, extG, ohT,
+            wdkDeck:(tribW*tsLoad/144)*(+inp.mat.wcdLoad||+inp.mat.wcd), wdkHaunch:(g.btf*th/144)*(+inp.mat.wcdLoad||+inp.mat.wcd),
+            wdk:(tribW*tsLoad/144)*(+inp.mat.wcdLoad||+inp.mat.wcd) + (g.btf*th/144)*(+inp.mat.wcdLoad||+inp.mat.wcd), isNext:false};
+  ```
+  - The overhang is the existing `deck.oh` box ("Overhang (web→edge)", default 3.0 ft) of the Deck Design card. No new field was added.
+  - For an exterior I-girder the same box now also shows on the Geometry card ("Deck overhang, girder CL → deck edge"). The AUTO button reads `AUTO (=S/2+oh)` there.
+  - `computeAll` warns when an exterior girder with AUTO b_eff has an overhang of 0.
+  - A MANUAL b_eff still overrides the effective width, but not the deck weight.
+  - NEXT, adjacent-box and deck-slab sections keep their own branches and are unchanged.
+  - The Section Props and Report b_eff and w_dk lines print the exterior form.
+- **Check case:** the default girder set to exterior (posAuto off), S = 9 ft, oh = 3.0 ft, t_s = 8 in, w_cd = 0.150 kcf.
+  - b_eff = (9/2 + 3.0)·12 = 90 in (was 108).
+  - Deck weight = 90·8/144·0.150 = 0.750 klf (was 108·8/144·0.150 = 0.900). w_DC1 = 0.750 + 0.0875 haunch + 0.100 = 0.9375 klf (was 1.0875).
+  - ΔM_DC1 at midspan = 0.15·120²/8 = 270 k-ft. M_u = 10,767.8 → 10,430.3 k-ft, which is 1.25·270 lower ✓.
+  - Flexure M_u/φM_n: 10,768/13,639 = 0.790 → 10,430/13,451 = 0.775.
+  - Service III bottom: −0.158 ksi (D/C 0.29) → no tension (0.00).
+  - Service I compression (perm) 0.486 → 0.440. Deck compression 0.352 → 0.397. LL deflection 0.73 → 0.77.
+  - Flexure RF_inv 1.561 → 1.591. DC1 reaction sent to Substructure Loading 114.785 → 105.785 kip (= 0.15·120/2 = 9.0 kip less).
+  - With oh = 4.5 ft = S/2 every result is unchanged (b_eff 108 in).
+  - Interior girders: unchanged.
+- **How verified:** probe old/new; UI run (overhang box shown only for an exterior I-girder; warning at oh = 0); screenshots `new-ext-geom.png`, `new-report-beff-ext.png`.
+
+### W2. Exterior-girder fatigue DF: lever rule / rigid section (one lane) ÷ 1.2 (PSB-O3d)   [calc change] [more conservative for exterior girders]
+- **Where:** `distFactors()` exterior block (`rigid1`, ≈ line 2527) and the fatigue block of `computeAll` (≈ line 3349). Anchor: `const dfFatAuto=df.ext? Math.max(df.lever,df.rigid1||0) : df.m1;`
+- **Problem:** with AUTO DFs the fatigue DF was the interior one-lane m1/1.2 for both girder positions.
+- **Governing provision:** AASHTO LRFD 10th Ed. 3.6.1.4.3b (fatigue: one design lane, MPF removed), 4.6.2.2.2d (exterior, one lane: lever rule), C4.6.2.2.2d (rigid-section check), 3.6.1.1.2 (m = 1.2).
+- **Before:**
+  ```js
+    let lever=0,eM=0,eV=0,rigid=0,rigidNL=0;
+  ...
+        const rr=mpf[NL-1]*(NL/Nb+Xext*sumE/sumX2);
+        if(rr>rigid){rigid=rr;rigidNL=NL;}
+  ...
+    return {Kg,eg,m1,m2,v1,v2,skM,skV,th,ext,lever,eM,eV,rigid,rigidNL,dfmRaw,dfvRaw,
+  ...
+    const dfFat=(+inp.loads.fatM>0)? +inp.loads.fatM : (inp.loads.dfAuto? df.m1 : +inp.loads.dfm)/1.2;
+  ```
+- **After:**
+  ```js
+    let lever=0,eM=0,eV=0,rigid=0,rigidNL=0,rigid1=0;
+  ...
+        const rr=mpf[NL-1]*(NL/Nb+Xext*sumE/sumX2);
+        if(NL===1) rigid1=rr;                     // one loaded lane (m = 1.2) — for the fatigue DF
+        if(rr>rigid){rigid=rr;rigidNL=NL;}
+  ...
+    return {Kg,eg,m1,m2,v1,v2,skM,skV,th,ext,lever,eM,eV,rigid,rigidNL,rigid1,dfmRaw,dfvRaw,
+  ...
+    const dfFatAuto=df.ext? Math.max(df.lever,df.rigid1||0) : df.m1;
+    const dfFat=(+inp.loads.fatM>0)? +inp.loads.fatM : (inp.loads.dfAuto? dfFatAuto : +inp.loads.dfm)/1.2;
+  ```
+  A pulled LL & DL fatigue DF (`fatM > 0`) and MANUAL DFs are unchanged. NEXT stays on m1 (`ext` is always false for NEXT; see O4). The Stresses tab fatigue step prints the formula that was used.
+- **Check case:** the default girder, exterior, oh = 4.5 ft (so b_eff is unchanged), d_e = 2 ft, N_b = 5.
+  - Lever rule: wheels at 0 and −6 ft from the exterior web, so R = 0.5(9+0)/9 + 0.5(9−6)/9 = 0.6667 and g_lever = 1.2·0.6667 = 0.800.
+  - Rigid section, one lane: X_ext = 18 ft, Σx² = 810 ft², e = 18 + 2 − 5 = 15 ft, so g = 1.2(1/5 + 18·15/810) = 0.640.
+  - DF_fat = 0.800/1.2 = **0.6667** (was m1/1.2 = 0.4086).
+  - M_fat,girder = 1,624·1.15·DF: 763 → 1,245 k-ft.
+  - Strand Δf = 4.416 → **7.205 ksi** (D/C 0.245 → 0.400; ratio 0.6667/0.4086 = 1.632 ✓).
+- **How verified:** probe old/new; screenshot `new-fatigue.png` (exterior run).
+
+### W3. Concrete compression fatigue check, 5.5.3.1 (PSB-O3b)   [calc change: new check] [more conservative]
+- **Where:** fatigue block of `computeAll` (≈ line 3366, `fcFat`) and a new `checks` row after `Fatigue I (strand)`. Anchors: `const ftPermFat=` and `{n:'Fatigue I (concrete, 5.5.3.1)'`. A new Step was added to the Stresses tab fatigue card.
+- **Problem:** the 0.40 f′c limit was not checked.
+- **Governing provision:** AASHTO LRFD 10th Ed. 5.5.3.1. For fully prestressed components (other than segmental), the compressive stress due to the Fatigue I combination plus one-half the sum of the effective prestress and the permanent loads shall not exceed 0.40 f′c. The Fatigue I load factor is 1.75 (Table 3.4.1-1, unchanged).
+- **Before:** no check. `const fat={Mfat:hl.Mfat,dfFat,Mfat1,fbPerm,dfbFat,fbMinFat,frFat,cracksFat,dfStrand,fatLimit, dc:dfStrand/fatLimit, ok:dfStrand<=fatLimit};`
+- **After:**
+  ```js
+    const ftPermFat=PeM/g.A-PeM*ss.eMid/g.St+(Mg(L/2)+Mdc1(L/2))/g.St+(Mdc2(L/2)+Mdw(L/2))/cp.Stg;   // +comp
+    const dftFat=1.75*Mfat1*12/cp.Stg;
+    const fcTopFat=0.5*ftPermFat+dftFat;
+    const botPermFat=grid.reduce((b,r)=>{ const f=r.s3Bot+(+inp.opt.gLLs3||0)*r.Mll/cp.Sbc; return f>b.f?{f,x:r.x}:b; },{f:-Infinity,x:L/2});
+    const fcBotFat=0.5*botPermFat.f;
+    const fcFatLim=0.40*m.fc;
+    const fcFatTop=fcTopFat>=fcBotFat;
+    const fcFat={top:fcTopFat,topPerm:ftPermFat,dTop:dftFat,bot:fcBotFat,botPerm:botPermFat.f,xBot:botPermFat.x,lim:fcFatLim,
+                 v:fcFatTop?fcTopFat:fcBotFat, x:fcFatTop?L/2:botPermFat.x, where:fcFatTop?'top':'bottom',
+                 dc:Math.max(fcTopFat,fcBotFat)/fcFatLim, ok:Math.max(fcTopFat,fcBotFat)<=fcFatLim};
+    const fat={…as before…, extDF:!!(df.ext&&inp.loads.dfAuto&&!(+inp.loads.fatM>0)), conc:fcFat};
+  ...
+      {n:'Fatigue I (concrete, 5.5.3.1)',v:fat.conc.v,lim:fat.conc.lim,r:fat.conc.dc,loc:fat.conc.x,u:'ksi'},
+  ```
+  - Top fibre at midspan, where the fatigue moment is computed.
+  - Bottom fibre: the largest ½(f_pe + permanent) over the stress grid. The live load only relieves the bottom fibre.
+  - f_pe is taken without elastic gains, as in the existing fatigue block.
+- **Check case:** defaults, f′c = 8.5 ksi, limit 0.40·8.5 = 3.40 ksi.
+  - Top at midspan: permanent stress = 1.860 ksi; ΔLL = 1.75·763.1·12/S_tg = 0.232 ksi; ½(1.860) + 0.232 = 1.162 ksi.
+  - Bottom: the largest permanent stress is 2.942 ksi at x = 3.0 ft (end of the transfer length); ½(2.942) = 1.471 ksi, which governs.
+  - **D/C = 1.471/3.40 = 0.433**, PASS (new row; was not checked).
+  - The strand optimizer and the span sweep include the new row in their pass/fail.
+- **How verified:** probe; screenshot `new-fatigue.png`.
+
+### W4. Rating: condition and system factors φc, φs with the 0.85 floor (PSB-O2a)   [calc change] [more conservative where φc·φs < 1]
+- **Where:** rating block of `computeAll` (≈ line 3459), the shear rating `shrate`, the vehicle ratings, and a new "Condition & System Factors" card on the Rating tab. Anchor: `const phiCS=clamp(phiCraw*phiSraw,0.85,1.0);`
+- **Problem:** `const phiC=1.0;` was hard-coded.
+- **Governing provision:**
+  - MBE 3rd Ed. Eq. 6A.4.2.1-1 (RF with φc φs).
+  - Eq. 6A.4.2.1-3: φc φs ≥ 0.85.
+  - Table 6A.4.2.3-1 (φc = 1.00 / 0.95 / 0.85).
+  - Table 6A.4.2.4-1 (φs).
+  - Equation numbers: verify.
+- **Before:** `const phiC=1.0; // condition*system factor product …` and `const cap=phiVn_r-1.25*V_DCr-1.50*V_DWr;` (shear), `const capMflex = Rn; const capVshear = phiVn_r;` (vehicles).
+- **After:**
+  ```js
+    const rtF=(v)=>{ if(v===''||v==null) return 1; const n=+v; return (isFinite(n)&&n>0)? n : 1; };
+    const phiCraw=rtF(inp.opt.rtPhiC), phiSraw=rtF(inp.opt.rtPhiS);
+    const phiCS=clamp(phiCraw*phiSraw,0.85,1.0);
+    const phiC=phiCS;
+  ...
+    const shrate=(gLL)=>{ const cap=phiC*phiVn_r-1.25*V_DCr-1.50*V_DWr; … };
+  ...
+    const capMflex = phiC*RnMid;  const capVshear = phiC*phiVn_r;
+  ```
+  - Inputs: `opt.rtPhiC` and `opt.rtPhiS`, default 1.0. Blank means 1.0. The product is floored at 0.85 and capped at 1.0.
+  - Applied to the flexure and shear strength ratings and to the user-entered vehicles.
+  - Not applied to the Service III rating, which is a stress limit.
+- **Check case:** defaults with φc = 0.95, φs = 0.85: product 0.8075, floored to 0.85.
+  - Flexure (midspan governs then): (0.85·13,639 − 1.25·3,984 − 1.50·450)/(1.75·2,627) = 5,938/4,597 = **1.292** (was 1.737).
+  - Shear @ 30.0 ft: (0.85·334.6 − 1.25·66.4 − 1.50·7.50)/(1.75·84.0) = 190.2/147.0 = **1.294** (was 1.635).
+  - With the default 1.0 / 1.0 nothing changes.
+- **How verified:** probe; UI run (0.85 × 0.85 = 0.722 → "used 0.850 (floored at 0.85 …)"); screenshot `new-rating.png`.
+
+### W5. Flexure rating at the governing station of `flexFull` (PSB-O2b)   [calc change] [more conservative (RF ≤ the midspan RF)]
+- **Where:** rating block of `computeAll`. Anchor: `flexFull.forEach(r=>{ const mll=r.mLLpos;`
+- **Problem:** the HL-93 flexure rating used midspan only (`fMid`), although the strength check uses every station since F5.
+- **Governing provision:** MBE 3rd Ed. 6A.4.2.1 (rate at the critical sections). The RF equation is unchanged.
+- **Before:**
+  ```js
+    const Rn=fMid.phiMn/12;
+    const MDC=(Mg(L/2)+Mdc1(L/2)+Mdc2(L/2))/12;
+    const MDWr=Mdw(L/2)/12;
+    const MLLr=MLL;
+    const rate=(gDC,gDW,gLL)=>{ const cap=phiC*Rn-gDC*MDC-gDW*MDWr; return gLL>0? cap/(gLL*MLLr):0; };
+    const RFinv=rate(1.25,1.50,1.75); const RFopr=rate(1.25,1.50,1.35);
+  ```
+- **After:**
+  ```js
+    const rateAt=(Rn_,MDC_,MDW_,MLL_,gLL)=>{ const cap=phiC*Rn_-1.25*MDC_-1.50*MDW_; return gLL>0? cap/(gLL*MLL_):0; };
+    let rGov=null;
+    flexFull.forEach(r=>{ const mll=r.mLLpos; if(!(mll>1e-6)||!(r.phiMn>0)) return;
+      const mdc=r.mSW+r.mDC1+r.mDC2, mdw=r.mDW, rn=r.phiMn/12, rf=rateAt(rn,mdc,mdw,mll,1.75);
+      if(!rGov||rf<rGov.RFinv) rGov={x:r.x,Rn:rn,MDC:mdc,MDW:mdw,MLL:mll,RFinv:rf}; });
+    if(!rGov) rGov={x:L/2,Rn:RnMid,MDC:MDCmid,MDW:MDWmid,MLL:MLLr,RFinv:rateAt(RnMid,MDCmid,MDWmid,MLLr,1.75)};
+    const RFinv=rGov.RFinv; const RFopr=rateAt(rGov.Rn,rGov.MDC,rGov.MDW,rGov.MLL,1.35);
+  ```
+  - `R.rating` gains `x` and `mid` (the midspan values, shown in the derivation note).
+  - The user-entered vehicles stay at midspan: a single entered moment has no station.
+- **Check case:**
+  - Defaults: governing x = 58.0 ft, φM_n 13,639, M_DC 3,979.1, M_DW 449.5, M_LL 2,628.7 k-ft.
+    RF_inv = (13,639 − 4,973.9 − 674.3)/(1.75·2,628.7) = 1.73701. The midspan value was 1.73706. The truck envelope peaks just off midspan.
+  - L = 70 ft, debonded rows (scratch `debond2`): governing x = 33.83 ft, RF_inv 3.657 → 3.647.
+- **How verified:** probe; Rating tab text.
+
+### W6. Severe-corrosion Service III tension limit capped at 0.3 ksi; normal-weight warning (PSB-A1)   [calc change] [more conservative, f′c > 10.0 ksi only]
+- **Where:** `lim` in `computeAll` (≈ line 2965) and a warning at the top of `computeAll`. Anchors: `srvT:inp.opt.corrosion==='severe'? Math.min(0.0948*sqrt(m.fc),0.3)` and `Lightweight concrete (`.
+- **Problem:**
+  - The severe-corrosion limit had no 0.3 ksi cap.
+  - Nothing told the user that λ is not modelled.
+- **Governing provision:** AASHTO LRFD 10th Ed. Table 5.9.2.3.2b-1 (severe: 0.0948λ√f′c ≤ 0.3 ksi); 5.4.2.8 (λ; normal weight w_c ≥ 0.135 kcf, verify).
+- **Before:** `srvT:inp.opt.corrosion==='severe'? 0.0948*sqrt(m.fc) : Math.min(0.19*sqrt(m.fc),0.6),`
+- **After:** `srvT:inp.opt.corrosion==='severe'? Math.min(0.0948*sqrt(m.fc),0.3) : Math.min(0.19*sqrt(m.fc),0.6),`
+  - A new warning appears when the girder w_c, or the deck w_cd with a deck, is below 0.135 kcf. The app uses λ = 1.0 everywhere; λ is not implemented, so a lightweight design must be checked by hand.
+  - The Stresses, Rating and Report texts now read "0.0948√f′c ≤ 0.3".
+- **Check case:** severe corrosion, f′c = 12 ksi.
+  - Limit = min(0.0948·√12 = 0.328, 0.3) = **0.300 ksi** (was 0.328).
+  - Service III D/C 0.215 → 0.236.
+  - Service III RF = (0.300 + 4.566 − 3.094 − 0.270)/(0.8·1.591) = **1.180** (was 1.202).
+  - f′c ≤ 10.0 ksi: unchanged (0.0948√10 = 0.2998).
+- **How verified:** probe (scenarios `severe`, `severe12`, `lw`).
+
+### W7. Shear critical section at d_v from the inside face of the bearing (PSB-O6b)   [calc change] [LESS conservative: the critical section moves into the span]
+- **Where:** shear-station set-up in `computeAll` (≈ line 3086). Anchor: `const dvEst=(()=>{ let x=xBear+0.72*cp.hc/12;`
+- **Problem:** the critical section was 0.72h_c from the bearing centerline, not d_v from the internal face of the support.
+- **Governing provision:** AASHTO LRFD 10th Ed. 5.7.3.2 (critical section d_v from the internal face of the support).
+- **Before:** `const dvEst=0.72*cp.hc/12;` (defined before `xBear`).
+- **After:**
+  ```js
+    const dvEst=(()=>{ let x=xBear+0.72*cp.hc/12;
+      for(let it=0;it<4;it++){ const f=flexure(inp,g,cp,ss,x,fpe);
+        const dv=Math.max(f.dp-f.a/2,0.9*f.dp,0.72*cp.hc), xn=xBear+dv/12;
+        if(!isFinite(xn)) break; if(Math.abs(xn-x)<1e-4){ x=xn; break; } x=xn; }
+      return x; })();
+  ```
+  - `xBear` = L_pad/2 (the existing "Bearing pad length" input, default 12 in) is the inside face.
+  - The station is mirrored at the right end, as before. The end-zone station rule uses it unchanged.
+  - The Shear-tab label now reads "Critical section: d_v from the inside face of the bearing (5.7.3.2)".
+- **Check case:** defaults, x_bear = 0.5 ft.
+  - d_v(5.41 ft) = max(59.0, 55.1, 57.6) = 58.92 in, so x = 0.5 + 58.92/12 = **5.41 ft** (was 4.80 ft).
+  - At the critical section: V_u 361.6 → 358.6 kip; φV_n 638.2 → 639.4 kip; D/C 0.567 → 0.561.
+  - The governing shear check (0.721 @ 30.01 ft) is unchanged.
+  - Other runs:
+    - MIDAS span 1: critical x 4.80 → 5.44 ft. Interface shear D/C 0.433 → 0.442, because the mirrored station 94.56 ft sits closer to the pier.
+    - Debonded L = 70 ft: x 4.80 → 6.72 ft.
+- **How verified:** probe; Shear / Report text compared old vs new.
+
+### W8. Release compression limit factor as an input, default 0.65 (PSB-A2)   [calc change only when the input is changed]
+- **Where:** new `relCfacOf(inp)` next to `Ec()`, `lim.relC` in `computeAll`, `limC` in `handlingCalc`, and a new box in Analysis Options → Service stresses. The labels on the Stresses / Report / Nomenclature / heat-map read the factor.
+- **Governing provision:** AASHTO LRFD 10th Ed. Table 5.9.2.3.1a-1 (0.65 f′ci, pretensioned).
+- **Before:** `relC:0.65*m.fci,` and `const limC=0.65*m.fci, …`
+- **After:** `relC:relCfac*m.fci,` with `function relCfacOf(inp){ const v=inp&&inp.opt&&inp.opt.relCfac; if(v===''||v==null) return 0.65; const n=+v; return (isFinite(n)&&n>0)? n : 0.65; }`. `handlingCalc` uses the same factor.
+- **Check case:** defaults 0.65: unchanged (Release comp 4.174/4.42 = 0.944). With 0.60: limit 0.60·6.8 = 4.08 ksi, so D/C = **1.023 FAIL**.
+- **How verified:** probe; screenshot `new-opts.png`.
+
+### W9. Shear and Report tabs: the interface-shear step prints the row at the same station as its V_u (PSB-O7b)   [display bug fix]
+- **Where:** `ShearTab` derivation and `ReportTab` §10. Anchor: `if0=R.iface[R.shear.indexOf(sh0)]||R.iface[0]`. All 13 `R.iface[0].` references in those two places became `if0.`.
+- **Problem:** `iface[0]` is the bearing-face row, but V_u and d_v were printed from `sh0` (the d_v station). The printed equation did not add up: before, 361.6/(42·58.8) printed as 0.154 ksi.
+- **Check case:** defaults: 358.6/(42·58.9) = **0.145 ksi** ✓.
+- **How verified:** Shear and Report tab text old vs new.
+
+### W10. psSection published only from the tab on screen (AUDIT S7)   [bug fix — hand-off timing; payload unchanged]
+- **Where:** `App()`, psSection publisher effect (≈ line 7813). Anchor: `if(document.visibilityState==='hidden') return;      // background tab: hold`
+- **Problem:** every recompute published `bridgeSuite.v1.psSection`. Consider a second PS-Beam tab for another girder, hidden in the background, with a locked channel that changes its inputs. Its recompute overwrote what MCT and LL & DL follow.
+- **Fix:**
+  - A hidden tab does not publish.
+  - On `visibilitychange` back to visible, the held change is published. The existing signature check means nothing is published when nothing changed.
+  - The payload, key and schema are unchanged.
+- **Check case (headless Chromium):**
+  - Tab hidden, S changed 9 → 8 ft: main republished at once (I_c 1,126,663 → 1,091,313 in⁴); the branch kept 1,126,663.
+  - When the tab is shown again, the branch publishes 1,091,313.
+- **Governing provision:** none (HANDOFF.md psSection channel).
+
+### W11. Lock change-log / restore texts and the DC2 / DW snapshot keep a blank box blank (PSB-OT5, OT6)   [display / restore fix — no calculation change]
+- **Where:** new `dlSnapFor`, `dlBackDeltas` and `psbAdopt` after `dlMineFor` (≈ line 4444). `LockAutoSync` and the two lock toggles call `psbAdopt(…, lldfBackDeltas(lldfSnapFor(inp),after))` / `dlBackDeltas(dlSnapFor(inp),after)` instead of `BL.adopt({before:lldfMineFor(inp) / dlMineFor(inp), …})`. The dlLoads snapshot uses `dlSnapFor(inp)` instead of `dlMine()`.
+- `psbAdopt` repeats the three steps of the shared `BL.adopt` (apply, `BL.log`, `BL.toast`) with deltas computed here. The shared block is untouched.
+- **Check case (headless Chromium):**
+  - MIDAS, DF +M blank → Lock. The log read "DF +M 0.000 → 0.650"; it now reads "DF +M blank (1.0 used) → 0.650".
+  - HL-93, DC2 blank → Lock dlLoads:
+    - Log "DC2 … 0.000 → 0.400" → "blank (0 used) → 0.400".
+    - Snapshot `{"wBar":0,…}` → `{"wBar":"",…}`.
+    - On Unlock → Restore, the box showed `0` and now stays blank.
+  - The status band is identical; blank = 0 in both.
+- The snapshot stays under the same key, `bridgeSuite.v1.lockSnap.psbeam`. An older snapshot holding `0` restores as before.
+
+### W12. Lifting / hauling stability labelled "screening only — not PCI (2016) / Mast" (PSB-O1)   [UI / docs]
+- **Where:** Handling card (refTag, sub-heading, callout, off-hint), Handling tab (tiles, derivation title, callout), and two check names.
+- Check names: `'Lifting FS (crack)'` → `'Lifting FS (crack, screening)'`, `'Hauling FS (crack)'` → `'Hauling FS (crack, screening)'`. The two `ck.find` calls were updated. The optimizer's `/FS/` filter still matches.
+- The formulas are unchanged. A full PCI / Mast implementation is listed under Needs engineer.
+
+### W13. HL-93 "RF × 36 tons" removed from the rating tiles and text (PSB-O2c)   [UI]
+- The three tiles now show the operating RF and the station instead of "≈ N tons".
+- The callout explains that HL-93 has no gross weight.
+- `RTinv` / `RTopr` / `RT` are still in R, not displayed.
+- The vehicle-table tonnage, which uses the user's entered weight, is unchanged.
+
+### W14. MIDAS span ending at an interior pier: hand-check warning (PSB-OR1)   [warning only]
+- **Where:** after the imported-DF warning in `computeAll`. Anchor: `is an interior pier. The import has one station per node there`.
+- The MCT export (`index.html`) writes one station per node. At an interior pier that one value (V_DC2, V_DW, V_LL) can be either span's element end.
+- A warning now names the pier end(s) of the selected span and asks for a hand check of the shear near the pier and of the reactions sent to Substructure Loading. No value changes.
+- Check: test file with supports [0, 100, 200] ft. Span 1 → "the right end (x = 100.00 ft) is an interior pier"; span 2 → left end.
+
+### Closed / left by decision (no code change)
+- **PSB-O6a (Δf_cd omits the (Δf_pSR + Δf_pCR + Δf_pR1) term, 5.9.3.4.3b):** left as is. Omitting the term over-predicts Δf_pCD, which is conservative. Adding it would lower losses and needs a §4 sign-off for a small gain. Recommendation: leave.
+- **PSB-O7a (5.7.4.2 relaxation, Avf,min ≤ the amount for 1.33V_ui/φ):** not implemented. That is conservative. Recommendation: leave unless a design is governed by Avf,min.
+- **PSB-O2c (W13), O1 (W12), OT5/OT6 (W11), O7b (W9), AUDIT S7 (W10):** fixed above.
+
+### Needs engineer
+1. **PSB-O4 — NEXT F distribution factors.** With no topping the K_g term is omitted; S is the beam width; there is no exterior case and no range check. Question: should NEXT beams be distributed as type (i)/(j) per beam (S = beam width, current), or per stem (S = stem spacing)? And which exterior rule should apply? Recommendation: type (i)/(j) acting as a unit, per beam, with the exterior girder by the lever rule. Range checks per Table 4.6.2.2.2b-1.
+2. **PSB-O3a — strand fatigue range.** The range is taken at the bottom fibre (conservative), with an arbitrary ×1.5 when cracked. Question: is a cracked-section strand-stress analysis wanted? Recommendation: yes, compute n·Δf at the strand centroid on the cracked transformed section when f_b,min < −0.095√f′c. M size.
+3. **PSB-O1 — PCI (2016) / Mast lifting and hauling.** Question: implement the full PCI method (roll stiffness K_θ, tilt equilibrium, FS against cracking, failure and rollover)? It is now labelled screening-only. L size.
+4. **PSB-O8 — edition labels.** Please confirm against the printed 10th Ed. (2024) before the page label "AASHTO LRFD BDS (9th Ed. article numbering)" (Report basis line) is relabelled:
+   - 0.210 ksi (5.7.4.2)
+   - Eq. 5.4.2.3.2-5
+   - 3.6.1.4.1
+   - 5.5.3.1 (0.40 f′c)
+   - Table 5.9.2.3.2b-1 (0.3 ksi cap)
+   - 5.4.2.8 (λ)
+   - MBE Eq. 6A.4.2.1-3
+5. **φs for shear (W4).** The product φc·φs is applied to the shear rating as well as flexure, which is conservative. Question: does your MBE edition / owner manual take φs = 1.0 for shear? If yes, the shear rating should use φc only.
+6. **Exterior DL tributary (W1).** The deck weight of an exterior girder now uses (S/2 + oh)·t_s, the same slab thickness as the bay. Question: does the overhang have a different (thicker) section, or should the barrier / overhang deck be taken from the LL & DL app (dlLoads) instead? Recommendation: keep the code tributary width; enter any extra overhang concrete as "Add'l non-comp distributed".
+
+### Remaining open items
+- O4, O3a, O1 (full PCI), O8: see Needs engineer.
+- Found, not changed:
+  - **Section Props / Report composite-centroid line:** with the haunch EXCLUDED, the printed A_h term (e.g. 70.1 in²) is still shown in "A_c = A_g + A_d + A_h". The total (1,368 = 767 + 600.8) correctly omits it. Display only.
+  - **Shear derivation V_u line:** it prints the closed-form w(L/2 − x) terms even under a MIDAS import. Display only; the value is right.
+
+### How verified (all items)
+- `node --check` on all 8 inline scripts. The `text/babel` block was transpiled with @babel/standalone 7.23.5, main and branch.
+- Headless Chromium (Playwright, `/opt/pw-browsers/chromium`), pinned React 18.2.0 / ReactDOM 18.2.0 / Babel 7.23.5 / Plotly 2.27.0 / KaTeX 0.16.9 served locally, main (d6edfdd) vs branch, clock frozen. Scenarios: default; all-ON; Custom; BIII-36 box; exterior; NEXT 36F; MIDAS 2-span (span 1 and span 2); blank Area per leg.
+- Captured in each scenario: every tab's text, Export JSON, all localStorage, Send reactions, Export hand-off and an Export → Import → Export round trip.
+  - Export JSON and the round trip are identical after removing the three new `opt` fields.
+  - localStorage is identical, except psSection and superReactions in the exterior scenario (W1).
+  - The hand-off file is identical except in the exterior scenario (DC1 114.785 → 105.785 kip).
+  - Every text difference is explained by W1–S14. The status band gains the new "Fatigue I (concrete, 5.5.3.1)" row.
+  - No console errors; the only message is Babel's existing size note, which main shows too.
+- `computeAll()` probes for 17 scenarios (scratch `probe.mjs`) gave every number above.
+- UI runs (scratch `ui.mjs`): lock / unlock texts (W11), the psSection visibility gate (W10), φc / φs inputs (W4), and the exterior overhang box and warning (W1).
+- Screenshots looked at: `new-rating.png`, `new-ext-geom.png`, `new-opts.png`, `new-fatigue.png`, `new-report-beff-ext.png`, `new-handling-card.png`, `*-ot6-restored.png`.
+- **Other copies:** none. stgirder.html has the same exterior-b_eff and φc·φs items (STG-O4, STG-O3), not changed here (one tool per PR).
