@@ -486,16 +486,230 @@ Check cases: jsdom runs of the page before and after this change (scratch harnes
   - Default page: the text of all 8 output tab pages plus the `lpp_session_v1` autosave are byte-identical between main and branch.
 - **Other copies:** none.
 
-## Open items (not changed)
-- **O2. G for flexible poles:** G = 0.85 (rigid) is used, with no natural-frequency or G_f check. Decide whether to add an n₁ estimate and a warning.
-- **O3. P-δ / B1** amplification of first-order moments (AISC Ch. C) is not applied, and no warning was added. Decide whether to add a B1 estimate.
-- **O4. Wind-on-ice omits G** (conservative, about +18%). Left as is per the brief.
-- **O5. IBC §1806.3.4** cap (lateral bearing increase ≤ 15× the tabulated value) is not applied. Left as is per the brief.
-- **O6. A blank or zero pole height H or shaft diameter b crashes `calc()`** in `drawElev` ("Invalid array length"), in both the original and fixed files. The page then keeps the stale results. Input validation (AUDIT B12) was not in this brief.
-- **O8. Shear breakout / side-face blowout (F7)** are not computed. A method for a bolt circle in a round shaft is needed if you want them implemented.
-- **O9. Pole/post combined stress** still uses the max-moment LRFD combination. Lower axial reduces the H1 ratio, so that combination governs for these structures, but it is not proven for every case.
-- **O11. Horizontal page scroll at 400 px** (pre-existing, same on main: scrollWidth 649 px). The fixture and cable tables have 8–9 input columns with a 52 px minimum width, and they make the single-column layout wider than the screen. The new input tab strip wraps inside the column, but the column itself is wider than 400 px in light-pole mode. Sign mode fits. Fixing this needs a table layout change.
-- **O12. Hidden pole-only output cards keep stale text in sign mode** (pre-existing). After switching to sign mode, the hidden `.poleOnly` / fixture / cable output cards still hold the last light-pole numbers until a reload, which shows "—" instead. They are not shown or printed (`display:none`), so displayed results are not affected.
+## 2026-10-12 — Open-item sweep (branch claude/sweep-lightpole)
+
+Engineer's instruction (2026-10-12): work through every open item, use engineering judgment, and list only what truly needs the engineer. Basis: ASCE 7-22, AISC 360-16, ACI 318-19 and IBC 2021, as stated by the tool. Article numbers marked "verify" were not checked against the printed code.
+
+Check cases come from headless Chromium (Playwright). The page's own functions (`poleWindNominal`, `poleStress`, `signPostStress`, `anchorBolts`, `solveEmbed`, `signWind`, `fixtureComponents`, `cableComponents`) were wrapped to log their inputs and outputs, on main (606b2ec) and on the branch. Units are lb, ft and in. "Default pole" and "default monopost" mean the tool's default inputs.
+
+### F15. Mast wind integrated over the height (LP-A1)   [calc change] [mixed: tapered mast slightly LESS, prismatic mast MORE]
+- **Where:** `poleWindNominal` (anchor `const NSTRIP=100`), `poleStress` (anchor `const sList=(pw.strips||[])`), `windWorkedHTML` step 3, report §2 (anchor `The distributed wind on the shaft is integrated`).
+- **Problem:** the mast wind was one resultant, q_z(H/2)·G·C_f·D̄·H, acting at H/2. With a power-law q_z profile this under-estimates the base moment of a prismatic mast. It also ignored the taper: on a tapered mast the area centroid is below H/2. `poleStress` spread that force uniformly (w = F/H).
+- **Governing provision:** ASCE 7-22 §29.4.1, F = q_z·G·C_f·A_f with q_z at the centroid of A_f, applied to each of 100 strips.
+- **Before:**
+  ```js
+  const Fpole=qzMid*inp.G*inp.cfPole*Apole;
+  const FpoleI=qzMidI*inp.cfPole*ApoleI;
+  return {Wpole:Fpole, Mpole:Fpole*inp.H/2, Fpole, FpoleI, MpoleI:FpoleI*inp.H/2, ...
+  // poleStress
+  const wMast=(gov.poleWind)/inp.H;  ...  const Hm=wMast*(inp.H-z); const armM=(inp.H-z)/2;
+  ```
+- **After:**
+  ```js
+  const NSTRIP=100, dzs=inp.H/NSTRIP, strips=[];
+  for(i…){ const z=(i+0.5)*dzs; const w_in=Dt+(Db-Dt)*(H-z)/H; const Kzs=Kz(z,expo);
+    const F =0.00256*Kzs*Kzt*Kd*V²*G*cfPole*(w_in/12)*dzs;
+    const FI=0.00256*Kzs*Kzt*Kd*Vice²*G*cfPole*((w_in+2t)/12)*dzs;
+    strips.push({z,F,FI}); Fpole+=F; Mpole+=F*z; FpoleI+=FI; MpoleI+=FI*z; }
+  return {Wpole:Fpole, Mpole, Fpole, FpoleI, MpoleI, strips, NSTRIP, zF:Mpole/Fpole, …}
+  // poleStress: each factored strip above the cut adds F_i and F_i·(z_i − z)
+  ```
+  Sign posts are not changed: they use their own exposed-post drag (`signWind`), which is exact for a clearance up to 15 ft.
+- **Check case (default pole, unfactored mast wind, K_d = 1.0):**
+  - Before: F = 29.69 × 0.85 × 0.70 × 23.33 = 412.2 lb at 17.5 ft, M = 7,213 lb·ft.
+  - After: F = 420.0 lb, M = 6,980 lb·ft, resultant at 16.62 ft (−3.2 % M).
+  - Default-pole results: ASD M 11,599 → 11,460 lb·ft, d 6.24 → 6.23 ft.
+  - Hand check (node, 200 strips): prismatic 8 in × 35 ft, Exp. C: M 7,213 → 7,673 (+6.4 %). 60 ft prismatic, Exp. B: +7.3 %.
+- **How verified:** Playwright run, main vs branch; independent node integration.
+
+### F16. Wind-on-ice carries the gust factor G (LP-O4)   [calc change] [LESS conservative, ×0.85 at G = 0.85]
+- **Where:** `cableComponents` (anchor `const qWI= qBase*inp.G*inp.Vice*inp.Vice;`), `fixtureComponents` (anchor `const qzi = 0.00256*Kzf*inp.Kzt*inp.Kd*inp.G*inp.Vice*inp.Vice;`), mast strips (F15). Text: manual §4A.2, cable/fixture worked examples, report notes.
+- **Problem:** wind-on-ice was computed without G ("Ch. 10: no gust"). ASCE 7-22 §10.5 (verify) sends wind on ice-covered structures to Chapters 26–29 with V_c, which include G. Omitting G over-estimated wind-on-ice by 1/G = 1.18.
+- **Before → After:** `qBase*inp.Vice*inp.Vice` → `qBase*inp.G*inp.Vice*inp.Vice`. Fixture `…*inp.Kd*inp.Vice*inp.Vice` → `…*inp.Kd*inp.G*inp.Vice*inp.Vice`. Mast `qzMidI*inp.cfPole*ApoleI` → strips × G.
+- **Check case (default pole):**
+  - Cable 1 q_Wi: 7.010 → 5.958 psf (× 0.85).
+  - Fixture 1 q_zi: 6.494 → 5.520 psf. F_wi 12.98 → 11.04 lb.
+  - Mast F_wi: 103.1 → 89.4 lb (G and F15).
+  - Heavy-ice case (t = 1.5 in, V_ice = 60 mph): ASD D+0.7Di+0.7Wi M 14,141 → 12,307 lb·ft, d 6.64 → 6.32 ft. The governing LRFD combination moves from 1.2D+1.0Di+1.0Wi (20,153 lb·ft) to 1.2D+1.0W (19,078 lb·ft first-order).
+- **LESS conservative:** this was a known conservative over-estimate (inventory LP-O4, "Default: apply G").
+
+### F17. P-Δ amplifier B₂ (AISC 360-16 App. 8) on pole/post, anchor and shaft LRFD moments (LP-O3)   [calc change] [MORE conservative]
+- **Where:**
+  - New `poleSecAt`, `poleDeflection` and `poleB2`, after `hssLimitFlags`.
+  - `poleStress`: `secForces`, `Nbase`, `p2`, rows `M = B2·M1`.
+  - `signPostStress` (rewritten, see F19).
+  - `calc()` (anchor `const psAll=[], b2ByKey={};`) and `calcSign` (anchor `const psList=[];`): `lrfdCands` / the sign `cands` carry `M:M1*B2`.
+  - Worked example step 1 (`poleWorkedBody`), summary flag, key-inputs row and governing-demands note.
+- **Problem:** no second-order effects. AISC 360-16 Ch. C requires them. The pole is a free-standing cantilever (a sway column).
+- **Method (default chosen):**
+  - B₂ = 1/(1 − α·P_story/P_e,story) ≥ 1, α = 1.0 (Eq. A-8-6).
+  - P_e,story = R_M·H·L/Δ_H (Eq. A-8-7), R_M = 0.85 (the pole is its own moment-resisting column, Eq. A-8-8).
+  - H·L is taken as the first-order base moment M₀, so distributed load and eccentric gravity couples are handled. For a single tip load this is exact; for a lower load centroid it gives a smaller P_e (conservative).
+  - Δ_H is the first-order top drift: the curvature M/EI is integrated twice on 200 stations using the tapered section (I_x / I_y).
+  - P_story is the factored axial at the base.
+  - B₂ multiplies the whole first-order moment at every section. B₁ ≤ B₂ for this member (App. 8 user note).
+  - The B₂ of each LRFD combination (at its governing azimuth) also multiplies the LRFD base moment passed to the anchors and the shaft (second-order connection/foundation demand).
+  - The ASD embedment (IBC) keeps the first-order moment; see N3.
+- **Check case — default pole, 1.2D+1.0W, wind 0°:**
+  - M₀ = 19,282 lb·ft = 231.4 kip-in. Δ_H = 6.879 in.
+  - P_e = 0.85 × 231.4/6.879 = 28.59 kip. P_story = 0.956 kip.
+  - B₂ = 1/(1 − 0.956/28.59) = **1.0346**.
+  - Pole H1: M_r 19,282 → 19,949 lb·ft, ratio 0.237 → **0.242**.
+  - Anchors: M_u = 1.0346 × 19,078 = 19,737 lb·ft; T_max 9,458 → 9,671 lb; ratio 0.47 → 0.48.
+  - Shaft M_u 19,299 → 19,737 lb·ft.
+- **Other cases:** 60 ft pole (8 → 12 in): B₂ = 1.130, anchor tension 17,695 → 19,351 lb (88 % → 96 %). Default monopost: B₂ = 1.022.
+- **Hand checks of the helpers (in the page):**
+  - Prismatic 8 × 0.25 in, L = 20 ft, 1,000 lb tip load: Δ 3.47340 in vs PL³/3EI 3.47342 in.
+  - UDL 50 lb/ft: 1.30252 vs wL⁴/8EI 1.30253 in.
+  - B₂ (P = 2,000 lb) 1.035253 vs exact 1.035254.
+
+### F18. Natural frequency estimate and flexible-structure warning (LP-O2)   [new check, warning only] [no result change]
+- **Where:** new `poleNatFreq`; `calc()` (anchor `const nat=poleNatFreq(`); `calcSign` (anchor `const nat=poleNatFreq(inp, poleSeg.segs`); summary warning box, key-inputs row and a pole flag.
+- **Method:** Rayleigh, n₁ = (1/2π)·√(g·ΣW·y/ΣW·y²), with the weights applied laterally to the same tapered cantilever as F17.
+  - Pole weights: segments, fixtures, misc. DL at the top, and half of each cable's dead weight at its attachment. Cable tension stiffening is ignored, which lowers n₁ (conservative for the check).
+  - Sign weights: post segments plus the post's share of the panel at the panel centroid.
+- **Behaviour:** when n₁ < 1 Hz, a red warning says the structure is flexible (ASCE 7-22 §26.2) and that G must be G_f from §26.11.5. The G input is used as entered; G_f is not computed (see N1).
+- **Check case:**
+  - Default pole: n₁ = 1.67 Hz (rigid).
+  - 60 ft pole, 8 → 12 in: 0.82 Hz (warning).
+  - Default monopost: 2.59 Hz.
+  - Uniform cantilever hand check: 5.314 Hz (tool) vs 1.875²/(2π)·√(EI/mL⁴) = 5.292 Hz (Rayleigh +0.4 %).
+
+### F19. Monopost sign: Cases B and C applied; torsion checked (LP-A2)   [calc change] [MORE conservative]
+- **Where:**
+  - `evalSignComboDir`: Cases B/C now apply to every post count. Each record carries `T` and `Tmax`/`tCase`.
+  - `signPostStress`: rewritten. It takes `gLRFD.T`, applies §H3.2 Eq. H3-6, and calls the new `hssTorsionShear`.
+  - `anchorBolts`: `Tu` → each bolt's shear gets T/(n·R).
+  - `designFoundationStack`: `Tu`, `phiTth`.
+  - `collectChecks`: new check "Shaft torsion ≤ φT_th".
+  - Sign case table, torsion note, post block, load-path derivation, sign wind worked example, masthead text, manual (Torsion row, Case C row, warn box).
+- **Problem:** on a monopost only Case A was used. The eccentric Cases B (e = 0.2B) and C (e_C) were dropped ("torsion out of scope"), so the post, base and shaft were never checked for the resulting torsion. Case C was also left out of the flexure envelope.
+- **Governing provisions:**
+  - ASCE 7-22 Fig. 29.3-1 (Cases A, B, C).
+  - AISC 360-16 §H3.1(a)/(b): T_c = φ_T·F_cr·C, φ_T = 0.90. Shear §G5 (round) / §G4 (rect.). §H3.2 Eq. H3-6 when T_r > 0.2T_c.
+  - ACI 318-19 §22.7.1.1 / Table 22.7.4.1(a): T_th = λ√f′c·A_cp²/p_cp, φ = 0.75.
+  - ACI 318-19 Ch. 17: anchor shear.
+- **After (key lines):**
+  ```js
+  cases.push({name:'B', F:sw.F_A*onFace, x:0.2*sw.B*windSign});
+  if(sw.caseC){ cases.push({name:'C', F:sw.caseC.F*onFace, x:sw.caseC.e*windSign}); }
+  const T=nPost===1? Math.abs(Fp*cs.x) : 0;
+  // anchorBolts
+  const VbT = Tu>0 ? Tu/(n*R) : 0;  b.V=Vu/n+VbT;  const Vb=Vu/n+VbT;
+  // signPostStress
+  if(tv.applies){ ratio=(prPc+mratio)+Math.pow(Vr/ts.Vc+Tr/ts.Tc,2); form='H3-6'; }
+  // designFoundationStack
+  const phiTth=0.75*1.0*Math.sqrt(inp.fc)*Acp*Acp/pcp/12;   // lb-ft
+  ```
+  Flexure and shear use the max-moment case. Torsion uses the max-torsion case: the post is checked for both, and the anchors and shaft use the envelope (max M with max T, conservative). On two posts nothing changes: B/C were already resolved as a force split.
+- **Check case — default monopost (12 × 6 ft panel, clearance 10 ft, 6 in × 0.1875 in round post), 1.2D+1.0W:**
+  - F_A = 2,671 lb, e_B = 2.40 ft → T_B = 6,411 lb·ft. F_C = 2,842 lb, e_C = −0.60 ft → T_C = 1,705 lb·ft.
+  - **Flexure:** Case C now governs the moment, 2,842 × 13 + 86 × 5 = 37,368 lb·ft (was Case A, 35,151).
+    - ASD M 21,091 → 22,421 lb·ft; embedment d 8.31 → **8.50 ft**.
+  - **Post, Case B (H3-6):**
+    - P_r/P_c = 0.704/20.11 = 0.035. M_r/M_c = 1.022 × 35,151 × 12/1000 / 285.2 = 431.1/285.2 = 1.512. V_r/V_c = 2.757/46.22 = 0.060.
+    - C = π(6 − 0.1875)²(0.1875)/2 = 9.95 in³. F_cr = 0.6F_y = 30 ksi. T_c = 0.9 × 30 × 9.95 = 268.7 kip-in.
+    - T_r/T_c = 76.93/268.7 = 0.286 > 0.2.
+    - H3-6 = 0.035 + 1.512 + (0.060 + 0.286)² = **1.666** (was H1 1.485; both NG).
+  - **Anchors:**
+    - T/(n·R) = 6,411 × 12/(6 × 8) = 1,603 lb. V_b = 2,927/6 + 1,603 = 2,090 lb (was 459).
+    - T_max 17,488 → 18,976 lb.
+    - Interaction 0.941 + 0.273 = **1.21 > 1.2, NG** (was 0.87).
+  - **Shaft:** A_cp = π·36²/4 = 1,018 in², p_cp = 113.1 in. φT_th = 0.75·√4000·1018²/113.1/12 = 36,212 lb·ft ≥ 6,411 lb·ft → OK.
+  - The soil's torsional resistance is NOT checked (warning, N2).
+- **Note:** this item uncovered F21 (panel weight missing from the post axial).
+
+### F20. Pole/post combined stress for every LRFD combination and azimuth (LP-O9)   [calc change] [MORE conservative or equal]
+- **Where:** `calc()` (anchor `const psAll=[], b2ByKey={};`, `const pstress=psAll.reduce(`), `calcSign` (anchor `const pstress=psList.reduce(`). `poleStress` / `signPostStress` return `comboName`, `phi`, `tCase`. These are shown in the worked example and in the sign post block.
+- **Before:** `const pstress=poleStress(inp,poleSeg,comps,fxs,pw,govLRFD);` (max-moment combination only). Sign: `signPostStress(inp,poleSeg,pw,gLRFD,sw)`.
+- **After:**
+  - Pole: `poleStress` runs for every LRFD combination × each of the 4 azimuths (16 runs), and the largest H1 ratio governs.
+  - Sign: `signPostStress` runs for every LRFD combination, plus the monopost torsion case.
+- **Governing provision:** ASCE 7-22 §2.3.1 (all combinations); AISC 360-16 §H1.1.
+- **Check case:** default pole: the governing run stays 1.2D+1.0W at 0° (0.242, with F17). For the default two-post sign, P1 is 1.193 → 1.215 (F17 + F21; the governing case is still B).
+
+### F21. Post/pole axial includes the panel share and the misc. dead load (found during LP-A2/LP-O3)   [calc change] [MORE conservative]
+- **Where:** `signPostStress` (`Npanel=f.D*(inp.signWt||0)/(inp.signPosts||1)`, `N+=f.D*(s.cumWabove+(inp.DL||0))+Npanel`); `poleStress` (`N+=f.D*(s.cumWabove+(inp.DL||0))…`).
+- **Problem:**
+  - The sign post's H1 axial used the post self-weight only. The panel weight that the foundation axial already carries was missing.
+  - The pole/post H1 axial also omitted the misc. dead load DL. Its height is not stated, so it is now applied over the full height.
+- **Before → After:** sign `N+=f.D*s.cumWabove;` → `N+=f.D*(s.cumWabove+(inp.DL||0))+Npanel;`. Pole `N+=f.D*s.cumWabove + …` → `N+=f.D*(s.cumWabove+(inp.DL||0)) + …`.
+- **Check case:**
+  - Default monopost: P_r 0.224 → 0.704 kip (1.2 × (186 + 400) lb).
+  - Default pole (DL = 0): unchanged.
+  - 45 ft thin pole with DL = 800 lb: included, together with F17 (the H1 ratio 0.93 → 1.73 there is mostly B₂ = 1.44 on a 0.29 Hz pole).
+- **Governing provision:** AISC 360-16 §H1.1 (P_r = required axial).
+
+### F22. IBC lateral-bearing depth increase capped at 15 × tabulated (LP-O5)   [calc change] [MORE conservative when d/3 > 15 ft (non-constrained) or d > 15 ft (constrained)]
+- **Where:** `solveEmbed` (anchor `const S1=S1coef*Math.min(d/3,15);`), embedment worked examples (pole tab, sign stack, report), manual §4B.2.
+- **Governing provision:** IBC 2021 §1806.3.3 "increase for depth" (verify the number; the inventory cites §1806.3.4, which is the isolated-pole doubling). The tabulated value may be increased per foot of depth up to 15 × the tabulated value.
+- **Before:** `const S1=S1coef*(d/3);` … `const S3=S1coef*d;`
+- **After:** `const S1=S1coef*Math.min(d/3,15);` … `const S3=S1coef*Math.min(d,15);` The isolated-pole ×2 (`isoFac`) multiplies the capped value. See N4 for the stricter reading.
+- **Check case (default pole, constrained, S₁ = 4 psf/ft, b = 3 ft):**
+  - Before: d = (4.25 × 11,599/(4 × 3))^(1/3) = **16.02 ft** (S₃ = 64.1 psf).
+  - After (with F15's M = 11,460): S₃ = 4 × 15 = 60 psf, d = √(4.25 × 11,460/(60 × 3)) = **16.45 ft**. With the old M the cap alone gives 16.55 ft (+3.3 %).
+  - Defaults are not affected (d < 15 ft).
+
+### F23. Blocking input errors (LP-O6)   [bug fix] [no result change for valid inputs]
+- **Where:** new `lppInputErrors` and `lppShowInputErrors` (before `kdComponents`). Call at the top of `calc()` (anchor `const errs=lppInputErrors(inp); lppShowInputErrors(errs); if(errs.length) return;`). New `<div id="lppInErr" role="alert">` after `#tabBar`. CSS `#lppInErr`, `.lpp-blocked>.tabpage:not([data-page="manual"])`.
+- **Problem:** a blank or zero H or b crashed `calc()` in `drawElev` ("Invalid array length") and left stale results on screen.
+- **After:** before any calculation, `calc()` checks the following, and any failure shows a red list above the results and hides every output tab except Manual (also in print) until fixed:
+  - V > 0; H > 0 (pole);
+  - B, s > 0, clearance ≥ 0, spacing > 0 when two-post (sign);
+  - section dimensions and walls > 0, with 2t < D;
+  - F_y, b, S₁, q_a, f′c, f_y > 0;
+  - bolts ≥ 1, BC > 0, h_ef > 0.
+- **Check case:**
+  - H blank: banner "Pole height H must be greater than 0.", results hidden, no console errors. Main gave "Invalid array length" plus 40 SVG NaN errors, and showed d = 5.22 ft.
+  - b = 0: banner shown. Main showed "ERR ft".
+  - Restoring the values brings back d = 6.23 ft.
+
+### F24. Stale hidden cards cleared on a mode switch (LP-O12)   [UI] [no result change]
+- **Where:** `LPP_MODE_OUT_SNAP`, `lppSnapPoleOutputs`, `lppResetPoleOutputs` (before `boot`). `lppSnapPoleOutputs()` is called in `boot()` after `renderFixtures()`. `applyMode()` calls `lppResetPoleOutputs(sign?'pole':'sign')`.
+- **After:**
+  - At start-up the id'd output elements (those without form controls) of the light-pole-only cards (`.poleOnly`, `#fixOutCard`, `#cableOutCard`) and of the sign-only cards (`#signWindCard`, `#signComboCard`, `#signPostsCard`) are snapshotted.
+  - On each mode switch the hidden mode's elements are reset to that "—" content.
+- **Check:**
+  - Switching pole → sign: the hidden pole cards show "—" (no "x,xxx lb" values).
+  - Pole → sign → pole gives page text identical to a fresh load. Without the sign-side reset, the stale sign cards differed.
+
+### F25. Narrow screens: no horizontal page scroll (LP-O11)   [UI] [no result change]
+- **Where:** CSS after the `.tabpage>section.card:first-child` rule. The fixture and cable tables are wrapped in `<div class="lppTblScroll">`.
+- **After:**
+  - Fixture/cable input tables scroll inside their card.
+  - At ≤ 900 px only: grid column `minmax(0,1fr)`; output tables `display:block; overflow-x:auto`; `.row` select may shrink; `.katex-display` scrolls.
+  - Desktop layout is unchanged.
+- **Check:** scrollWidth at 400 px, every input tab and every output tab, pole and sign mode (KaTeX loaded): 400/400 everywhere. Main: 445–667 px.
+- **Pre-existing, not changed:** at 400 px the masthead's right-hand reference block overlaps the title.
+
+### F26. Summary "Anchor bolts" row printed "Gr.[object Object]"   [display bug]
+- **Where:** `summaryHTML`, `drow('Anchor bolts', …)`. Before `Gr.${st.found.bolts.gr}` → after `Gr.${inp.boltGrade}`.
+- **Check:** "(6) 1.000 in Gr.55, BC 16.0 in, h_ef 18.0 in".
+
+### Verification (F15–F26)
+- `node --check` on the inline script: 0 failures.
+- **Playwright (Chromium 1194, KaTeX 0.16.9 served locally), main vs branch, 16 scenarios:**
+  - default pole; no cables; square; rect; constrained + iso 2; 60 ft constrained / non-constrained; thin 45 ft with DL 800; constrained S₁ 4; non-constrained S₁ 5 at 50 ft; heavy ice;
+  - monopost round / square / 16 × 4 ft; two-post default / 30 × 2 ft.
+- The text of every output tab and every table was dumped and compared. Each change traces to an item above. No other result changed.
+- `captureState()` JSON (saved projects, `lpp_session_v1` autosave) is identical in all 16 scenarios. No storage key, input id or saved field was added or changed.
+- No page or console errors in any scenario, and 0 "ERR" tokens.
+- UI checks: O6, O11 and O12 scripted as above.
+- Screenshots reviewed: monopost Summary and Post tab (H3-6 worked example), input error banner, 400 px fixture tab.
+- **Other copies:** none.
+
+## Needs engineer
+- **N1 (LP-O2):** for a flexible pole (n₁ < 1 Hz) the tool now warns but still uses the entered G. Should it compute G_f (ASCE 7-22 §26.11.5)? That needs a damping ratio β. Recommendation: compute G_f with β = 0.005 for steel poles (verify against your practice) and use max(G, G_f).
+- **N2 (LP-A2):** monopost torsion — the soil's torsional resistance around the drilled shaft is not checked (warning shown). Which method do you want (for example, side shear × radius from the geotechnical report)? Recommendation: an input "allowable torsional resistance (from geotech)" checked against the ASD torsion.
+- **N3 (LP-O3):** B₂ is applied to the LRFD pole, anchor and shaft moments, but not to the ASD embedment moment. Should the IBC embedment use an ASD second-order moment (AISC uses 1.6 × ASD loads for the amplifier)? Recommendation: keep first-order for the empirical IBC §1807.3 check; the effect is a few percent.
+- **N4 (LP-O5):** IBC 15 × cap with the isolated-pole doubling. Implemented as S = 2 × S₁ × min(depth, 15). The stricter reading caps at 15 × the undoubled tabulated value (min(2 × depth, 15)). Please confirm the reading and the section number (§1806.3.3 vs §1806.3.4).
+- **N5 (LP-O8, unchanged):** anchor concrete breakout in shear (§17.7.2) and side-face blowout (§17.6.4) for a bolt circle in a round shaft are still "NOT CHECKED". A method is needed: c_a1 to the curved face, which bolts form the group, and the A_Vc geometry. Recommendation: treat the single most-loaded bolt at c_a1 = R_edge − R with A_Vc from a straight tangent edge, and n_eff = bolts within 1.5c_a1. Or design for anchor reinforcement (§17.7.2.5) and require it.
+- **N6 (new finding, not changed):** `evalComboDir` takes the cable pull moment as (ΣH)·h_c,eff with h_c,eff = Σ|H|·h_c/Σ|H|, while `poleStress` uses Σ H_i·h_ci (exact). Default pole, 1.2D+1.0W: base moment 19,078 (foundation path) vs 19,282 lb·ft (exact), −1 %. Recommendation: use the exact vector sum in `evalComboDir`. The `h` display and the drawings would then need the exact sum too.
+- **N7 (new finding, not changed):** in sign mode the misc. dead load DL is not in the foundation axial (`evalSignComboDir` uses panel + post only). It is now in the post H1 axial (F21). Recommendation: add f_D·DL to the sign foundation axial as well.
+
+## Remaining open items
+- N1–N7 above.
+- Sign-post exposed drag still uses a single q_z(clr/2). This is exact for clearance ≤ 15 ft (K_z floor); for higher clearances it is slightly unconservative. Recommendation: integrate the same way as F15.
 
 ## Resolved items
 - **O1. Kd = 0.85 recommended for round masts** (default and manual). ASCE 7-22 Table 26.6-1 gives 1.0 for round chimneys/tanks/similar structures, while 0.85 applies to solid signs and trussed towers. **Question:** which Kd do you want as the default for round light masts, and should the mast and sign use different Kd?
@@ -504,3 +718,4 @@ Check cases: jsdom runs of the page before and after this change (scratch harnes
   - **RESOLVED 2026-10-04 (F11):** engineer keeps the full w_h on every cable. No change.
 - **O10. Generic `activeTab` localStorage key** (output tabs, `switchTab`). Every file:// page in Chromium shares this name, and CLAUDE.md §5 forbids generic names. It was left unchanged in F9 and F13 because changing a key needs a migration. Decide whether to move it to `lpp_activeTab_v1` and migrate the old value.
   - **RESOLVED 2026-10-09 (F14):** engineer: rename to `lpp_activeTab_v1`. The old value is migrated once if it is a valid output-tab id; the old `activeTab` key is left in place and no longer written.
+- **O2, O3, O4, O5, O6, O9, O11, O12 / LP-A1, LP-A2:** RESOLVED 2026-10-12 (sweep), see F15–F25. The open sub-questions are listed under "Needs engineer" (N1–N7).
