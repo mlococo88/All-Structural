@@ -549,7 +549,12 @@ function solve(S){
   dbr.Vdbr = (S.jur==="MA" && MA_TOWNS.find(r=>r[0]===S.town))
     ? (function(t){return {I:t[3],II:t[4],III:t[5],IV:t[6]}[dbr.Vbasis];})(MA_TOWNS.find(r=>r[0]===S.town))
     : site.V;
-  dbr.hurricaneProne = (S.jur==="MA") || (site.V>115);
+  /* Sec. 26.2: hurricane-prone = Atlantic and Gulf coasts where the Risk Category II basic wind speed exceeds 115 mph.
+     Massachusetts: the community's tabulated Risk Category II speed. Manual entry: only the speed entered (the
+     Risk Category speed) is known, which is equal to or higher than the Risk Category II speed for RC II to IV. */
+  const dbrTown = (S.jur==="MA") ? MA_TOWNS.find(r=>r[0]===S.town) : null;
+  dbr.Vii = dbrTown ? dbrTown[4] : null;
+  dbr.hurricaneProne = dbrTown ? (dbr.Vii>115) : (site.V>115);
   dbr.trigCoastal = S.coastal && dbr.Vdbr>=130;
   dbr.trig140 = dbr.Vdbr>=140;
   dbr.autoIn = dbr.hurricaneProne && (dbr.trigCoastal || dbr.trig140);
@@ -623,7 +628,10 @@ function solve(S){
       ub.gamma=Math.min(0.13*sn.pg+14,30);
       ub.S=g.slope>0?1/g.slope:0;
       ub.sqrtS=Math.sqrt(ub.S);
-      ub.hd=Math.max(0,0.43*Math.pow(ub.W,1/3)*Math.pow(sn.pg+10,0.25)-1.5);
+      /* Fig. 7.6-1 with l_u = W, taken as not less than 25 ft: the same l_u floor this tool applies to every
+         drift (figHd below). Conservative where W < 25 ft; the ASCE 7-16 Sec. 7.6.1 / Fig. 7.6-1 floor is to be verified. */
+      ub.luUsed=Math.max(ub.W,25);
+      ub.hd=Math.max(0,0.43*Math.pow(ub.luUsed,1/3)*Math.pow(sn.pg+10,0.25)-1.5);
       ub.smallCase=(ub.W<=20 && S.simplySupported);
       if(ub.smallCase){
         ub.windward=0; ub.leewardUniform=sn.Is*sn.pg; ub.surchargeInt=0; ub.surchargeLen=0;
@@ -1296,6 +1304,18 @@ function solve(S){
   R.xBlocked=XC.some(c=>c.sev==="err");
 
   if(S.Lx<=0||S.Ly<=0||g.h<=0) R.err.push("Building plan dimensions and height must all be greater than zero.");
+  /* A blank number box reads as 0 (num()). For these inputs a zero would silently change a result
+     (K_zt to 1.0, C_s to its floor, V to 0, E or the wind to 0), so it blocks the calculation. */
+  if(S.topoType!=="None" && !(S.topoH>0 && S.topoLh>0))
+    R.err.push("Topography: the feature height H and the upwind distance L\u2095 must both be greater than zero (Fig. 26.8-1). A blank entry reads as zero and would silently give K\u1d22\u209c = 1.0. Enter both values, or set the topographic feature to None.");
+  if(S.Goverride && !(S.Gval>0))
+    R.err.push("The gust-effect factor override G must be greater than zero (Sec. 26.11). Enter G, or clear the override.");
+  if(sq.Fa!==null){
+    if(!(S.hn>0)) R.err.push("Seismic: the structural height h\u2099 must be greater than zero (Sec. 12.8.2.1).");
+    if(!(S.TL>0)) R.err.push("Seismic: the long-period transition period T\u029f must be greater than zero (Fig. 22-14 to 22-17). A blank entry reads as zero and would silently send C\u209b to its lower limit.");
+    if(!(S.seisW>0)) R.err.push("Seismic: the effective seismic weight W must be greater than zero (Sec. 12.7.2).");
+    if(!(S.rho>=1.0)) R.err.push("Seismic: the redundancy factor \u03C1 must be at least 1.0 (Sec. 12.3.4 gives 1.0 or 1.3).");
+  }
   if(g.h>60) R.warn.push("Mean roof height exceeds 60 ft. The building is no longer low-rise; confirm the rigid-structure assumption and consider whether Chapter 27 Part 1 remains the appropriate procedure.");
   if(sq.Fa===null) R.warn.push("Site Class "+S.siteClass+" has no tabulated site coefficient at the mapped accelerations for this site. A site response analysis is required.");
   return R;
@@ -2108,13 +2128,16 @@ function renderEncl(host){
     "used is the Risk Category II value for Risk Category II and III buildings, and the Risk Category III value for Risk "+
     "Category IV buildings and Risk Category III health care facilities.");
   dtable(b,null,["Test","Basis","Result"],[
-    [{v:"Hurricane-prone region"},{v:S.jur==="MA"?"Massachusetts is on the Atlantic coast":"V = "+R2(R.site.V)+" mph"},{v:YN(d.hurricaneProne)}],
-    [{v:"Wind speed on the governing basis"},{v:"Risk Category "+d.Vbasis+" map value"},{v:R2(d.Vdbr)+" mph"}],
+    [{v:"Hurricane-prone region: Atlantic coast, Risk Category II V > 115 mph"},{v:d.Vii!==null?"Risk Category II map value "+R2(d.Vii)+" > 115":"V = "+R2(R.site.V)+" mph as entered > 115"},{v:YN(d.hurricaneProne)}],
+    [{v:"Wind speed on the governing basis"},{v:d.Vii!==null?"Risk Category "+d.Vbasis+" map value":"speed entered (Risk Category "+S.risk+")"},{v:R2(d.Vdbr)+" mph"}],
     [{v:"Within 1 mile of coastal mean high water"},{v:"user input"},{v:YN(S.coastal)}],
     [{v:"Coastal trigger: within 1 mile and V \u2265 130 mph"},{v:R2(d.Vdbr)+" \u2265 130"},{v:YN(d.trigCoastal)}],
     [{v:"Inland trigger: V \u2265 140 mph"},{v:R2(d.Vdbr)+" \u2265 140"},{v:YN(d.trig140)}],
     [{v:"In a wind-borne debris region"},{v:d.overridden?"user override":"computed"},{v:YN(d.inRegion),cls:d.inRegion?"hl":""}]
   ]);
+  if(d.Vii===null) note(b,"Manual hazard entry: only the wind speed entered for Risk Category "+S.risk+" is known, so it is used for both tests above. "+
+    "For Risk Category III and IV it is higher than the Risk Category II (or III) speed the code calls for, so the tests err on the side of "+
+    "placing the site in the region. Confirm that the site is on the Atlantic or Gulf of Mexico coast, or set the region by override.","k");
   if(d.inRegion){
     if(d.exemptRisk) note(b,"Risk Category I. Sec. 26.12.3.2 does not require glazing in Risk Category I buildings to be protected, so glazed area is not added to the opening area.","k");
     else if(S.glazProt) note(b,"Glazing is declared impact-protected in accordance with Sec. 26.12.3.2, so it is not treated as opening area. The protection must be specified on the drawings and shown to meet the missile test standards referenced by Sec. 26.12.3.2.","k");
@@ -2244,11 +2267,12 @@ function renderSnow(host){
     vars(b,[["W","Eave to ridge horizontal distance",R2(ub.W)+" ft","geometry"],
             ["S","Run for a rise of one",RN(ub.S,3),"1/m"],
             ["\u03B3","Snow density",R2(ub.gamma)+" pcf","Eq. 7.7-1, capped at 30 pcf"],
-            ["h<sub>d</sub>","Drift height",R2(ub.hd)+" ft","Fig. 7.6-1 with l\u1d64 = W"]]);
+            ["h<sub>d</sub>","Drift height",R2(ub.hd)+" ft","Fig. 7.6-1 with l\u1d64 = W, not less than 25 ft"]]);
     eq(b,"Snow density","ASCE 7-16 Eq. 7.7-1","\\gamma = 0.13\\,p_g + 14 \\le 30\\ \\text{pcf}",
       "\\gamma = 0.13("+R2(sn.pg)+") + 14","\\gamma = "+R2(ub.gamma)+"\\ \\text{pcf}");
     eq(b,"Drift height","ASCE 7-16 Fig. 7.6-1","h_d = 0.43\\,l_u^{1/3}\\,(p_g+10)^{1/4} - 1.5",
-      "h_d = 0.43\\,("+R2(ub.W)+")^{1/3}\\,("+R2(sn.pg)+"+10)^{1/4} - 1.5","h_d = "+R2(ub.hd)+"\\ \\text{ft}");
+      "h_d = 0.43\\,("+R2(ub.luUsed)+")^{1/3}\\,("+R2(sn.pg)+"+10)^{1/4} - 1.5","h_d = "+R2(ub.hd)+"\\ \\text{ft}");
+    if(ub.W<25) note(b,"W = "+R2(ub.W)+" ft is less than 25 ft, so l\u1D64 = 25 ft is used in Fig. 7.6-1, the same minimum fetch this tool applies to every drift calculation (conservative).","k");
     if(ub.smallCase){
       note(b,esc(ub.note),"w");
       eq(b,"Leeward uniform load","ASCE 7-16 Sec. 7.6.1","p_{unb} = I_s\\,p_g",
@@ -2969,6 +2993,9 @@ function renderComb(host){
   note(b,"Roof pressures below are net downward on the horizontal projection; negative is net uplift. Lateral force is the "+
     "total on the MWFRS in the stated direction, already raised to the Sec. 27.1.5 minimum where that governs. The floor live "+
     "load L acts on the framing below and does not appear in the roof pressure.");
+  note(b,"Rain load R (Ch. 8) is not computed by this tool. Sec. 2.3.1 combinations 2, 3 and 4 read (L\u1D63 or S or R); the "+
+    "(L\u1D63 or S) term below omits R. Where rain on the roof can exceed L\u1D63 and S (for example a roof that relies on "+
+    "secondary drainage, or one prone to ponding), evaluate R by hand and substitute it.","w");
 
   b=panel(host,"o-cb1",++n+".","Combination Summary","ASCE 7-16 Sec. 2.3.1");
   dtable(b,null,["ID","Combination","Sub-cases","Net roof, min (psf)","Net roof, max (psf)","Lateral, max (kip)","Governs"],
@@ -3049,7 +3076,7 @@ function renderComb(host){
       "include wind or earthquake shall be used instead. 780 CMR 1605.2 is deleted in its entirety.","w");
     dtable(b,"ASD combinations for structural steel under 780 CMR",["ID","Basis","Combination","Net roof p\u1d64 (psf)"],
       R.combos.filter(c=>c.W>0||c.E>0).map(c=>[{v:c.id+"a"},{v:"\u2154 \u00D7 "+c.id},
-        {v:(2/3*c.D).toFixed(3)+"D + "+(2/3*c.S).toFixed(3)+(c.useLr?"(L\u1d63 or S)":"S")+" + "+(2/3*c.W).toFixed(3)+"W + "+(2/3*c.E).toFixed(3)+"E"},
+        {v:(2/3*c.D).toFixed(3)+"D + "+(2/3*c.L).toFixed(3)+"L + "+(2/3*c.S).toFixed(3)+(c.useLr?"(L\u1d63 or S)":"S")+" + "+(2/3*c.W).toFixed(3)+"W + "+(2/3*c.E).toFixed(3)+"E"},
         {v:R2(2/3*c.puMin)+" to "+R2(2/3*c.puMax),cls:"hl"}]),
       "Applies to structural steel only. ASD-5 through ASD-10 above are struck for structural steel in Massachusetts.");
   } else {
@@ -4025,7 +4052,7 @@ unbalanced or partial loading.</p>
 <p>Sec. 7.6.1 applies between 2.38&deg; (half on twelve) and 30.2&deg; (seven on twelve). Outside that band it is not required.
 Within it, the windward side carries `+K("0.3 p_s")+` and the leeward side carries `+K("p_s")+` plus a rectangular surcharge of
 intensity `+K("h_d \\gamma / \\sqrt{S}")+` extending `+K("8 h_d \\sqrt{S} / 3")+` horizontally from the ridge, with
-`+K("\\gamma = 0.13 p_g + 14 \\le 30\\ \\mathrm{pcf}")+` and h<sub>d</sub> from Fig. 7.6-1 using l<sub>u</sub> = W.
+`+K("\\gamma = 0.13 p_g + 14 \\le 30\\ \\mathrm{pcf}")+` and h<sub>d</sub> from Fig. 7.6-1 using l<sub>u</sub> = W, not taken less than 25 ft (the same floor as the drifts; see 7.3 below).
 The exception for W &le; 20 ft with simply supported prismatic members spanning eave to ridge replaces all of that with a
 uniform `+K("I_s p_g")+` on the leeward side and nothing on the windward side.</p>
 <div class="keybox"><b>Key point.</b> Unbalanced snow is a <i>separate required load case</i>, not an alternative reading of the balanced case, and it is not an output to be admired and then set aside. Both faces of it are carried into every load combination as their own snow case alongside the balanced case, so the leeward peak reaches the gravity combinations, where it normally governs the members near the ridge.</div>
@@ -5092,7 +5119,7 @@ function buildWorkbook(S,R,ExcelJS,tb){
     out("gam","Snow density","\u03B3",{formula:"MIN(0.13*"+A("pg")+"+14,30)",result:sn.unbal.gamma},NF.pcf,"Eq. 7.7-1");
     out("Srun","Run for a rise of one","S",{formula:"1/"+A("m"),result:sn.unbal.S},NF.n3,"Sec. 7.6.1");
     out("hd","Drift height","h_d",
-      {formula:"MAX(0,0.43*"+A("Wrun")+"^(1/3)*("+A("pg")+"+10)^0.25-1.5)",result:sn.unbal.hd},NF.f3,"Fig. 7.6-1");
+      {formula:"MAX(0,0.43*MAX("+A("Wrun")+",25)^(1/3)*("+A("pg")+"+10)^0.25-1.5)",result:sn.unbal.hd},NF.f3,"Fig. 7.6-1, l_u = W not less than 25 ft");
     out("puw","Windward side","p_{ww}",{formula:"0.3*"+A("ps"),result:sn.unbal.windward},NF.p,"Sec. 7.6.1");
     out("psur","Leeward surcharge intensity at the ridge","p_{sur}",
       {formula:A("hd")+"*"+A("gam")+"/SQRT("+A("Srun")+")",result:sn.unbal.surchargeInt},NF.p,"Sec. 7.6.1");
@@ -5398,6 +5425,7 @@ function buildWorkbook(S,R,ExcelJS,tb){
    Section I.3 : DOWNLOAD
    ================================================================== */
 function doExcel(){
+  if(R && R.err && R.err.length){ alert("The calculation is blocked; resolve these first:\n\n"+R.err.join("\n")); return; }
   const btn=document.getElementById("xlbtn");
   if(btn){ btn.disabled=true; btn.textContent="Building workbook\u2026"; }
   loadExcelJS().then(()=>{
