@@ -2598,7 +2598,7 @@ function solvePyWithRetry(input, D) {
    GROUP LATERAL p-MULTIPLIERS BY ROW (F29, 2026-10-11)
    ------------------------------------------------------------
    Row f_m for the leading row, the 2nd row and the 3rd and later rows, from the
-   c/c spacing in diameters s_dia (s / B, as Module 11 computes it; micropile B = casing OD since F62).
+   c/c spacing in diameters s_dia (s / B, as Module 11 computes it; micropile B = casing OD since F62, for f_m only).
    Sources (I.groupPmSource):
    - "aashto" (default for new projects): AASHTO LRFD 10th Ed. Table 10.7.2.4-1
      (verify table number / values): 3B 0.80 / 0.40 / 0.30, 5B 1.00 / 0.85 / 0.70,
@@ -3068,11 +3068,12 @@ function bondHoleDia(I) {
      F30 Module 11 used groupSpacingDia x bondHoleDia(I) in H-pile mode too.
      F31 (2026-10-11): H-pile "spacing x dia" = x B (groupB), here and in the workspace
      (groupWsSpacing), so s/B = groupSpacingDia exactly. */
-/* F62 (O58, 2026-10-12): micropile B = the casing OD (pileWidth: the width the p-y analysis
-   uses, buildPySetup D = I.OD), consistent with the F30 rule and with the F45 spacing "x dia" =
-   x OD, so "3 x dia" is s/B = 3.00 for the row f_m, eta and Converse-Labarre theta. Before F62:
-   bondHoleDia(I) (d_h). Equal when d_h is not entered separately. The micropile grout-bond
-   block footprint keeps d_h (see the group block). */
+/* F62 (O58, 2026-10-12): micropile B for the LATERAL row p-multipliers f_m (AASHTO Table
+   10.7.2.4-1) = the casing OD (pileWidth: the width the p-y analysis uses, buildPySetup D = I.OD),
+   consistent with the F30 rule and the F45 spacing "x dia" = x OD. Before F62: bondHoleDia(I)
+   (d_h). The AXIAL group efficiency eta, the Converse-Labarre theta and the grout-bond block
+   footprint keep d_h (the bond zone, where the axial load transfers): see the group block.
+   Equal when d_h is not entered separately. */
 function groupB(I) {
   if (I.pileType === "hpile") return I.hpAxis === "weak" ? I.hpD : I.hpBf;
   return pileWidth(I);
@@ -3095,8 +3096,10 @@ function groupWsSpacing(I) {
   if (I.groupSpacingIn && I.groupSpacingIn > 0) return I.groupSpacingIn;
   return (I.groupSpacingDia || 3) * (I.pileType === "hpile" ? groupB(I) : pileWidth(I));
 }
-// Label of B in the Module 11 / report text: micropile "casing OD" (F62; "bond dia" before), H-pile "B".
-function groupBLabel(I) { return I.pileType === "hpile" ? "B" : "casing OD"; }
+// Label of B in the Module 11 / report text: micropile "casing OD (p-y width)" (F62, the f_m width;
+// "bond dia" before), H-pile "B". F62: the eta width label: micropile "d_h (bond zone)", H-pile "B".
+function groupBLabel(I) { return I.pileType === "hpile" ? "B" : "casing OD (p-y width)"; }
+function groupEtaBLabel(I) { return I.pileType === "hpile" ? "B" : "d_h (bond zone)"; }
 /* F43 (O3, 2026-10-12): demand for the micropile uncased-flexure check (Module G) = the
    largest |M| over the whole uncased length below the casing tip, with its depth (ft below
    grade) and source:
@@ -4284,9 +4287,13 @@ function computeAll(I, opts = {}) {
   const spacingThreshDia = 3.0;
   // F31: compared with a 1e-9 tolerance (as the p-multiplier table's 3B / 5B tests), so a spacing
   // entered as exactly 3 x B is not put below 3B by round-off (e.g. 3 x 14.70 / 14.70 = 2.9999999999999996).
-  const spacingOKforEta = s_dia >= spacingThreshDia - 1e-9;
+  // F62 (O58): micropile eta / theta use d_h (the grout-bond diameter: the axial group effect is
+  // in the bond zone); H-pile: B, as before. s_dia (s/B, B = casing OD) drives the lateral f_m only.
+  const dEta_in = (Ig.pileType === "hpile") ? dh_in : bondHoleDia(Ig);
+  const sEta_dia = s_in/Math.max(dEta_in,1e-6);
+  const spacingOKforEta = sEta_dia >= spacingThreshDia - 1e-9;
   // Converse-Labarre: eta = 1 - (theta/90)*[ (n-1)m + (m-1)n ] / (m*n),  theta=atan(d/s)
-  const thetaDeg = Math.atan(dh_in/Math.max(s_in,1e-6))*180/PI;
+  const thetaDeg = Math.atan(dEta_in/Math.max(s_in,1e-6))*180/PI;
   const clEff = 1 - (thetaDeg/90)*(((nCols-1)*nRows + (nRows-1)*nCols)/(nRows*nCols));
   const eta_auto = spacingOKforEta ? 1.0 : Math.max(Math.min(clEff,1.0),0.5);
   const eta = I.groupEtaOverride ? Math.max(Math.min(I.groupEta,1.0),0.1) : eta_auto;
@@ -4307,7 +4314,7 @@ function computeAll(I, opts = {}) {
   // vs sum of individual bond capacities; lesser governs the group.
   // F62 (O58): the micropile grout-bond block is formed by the bond zone -> its footprint keeps
   // d_h (bondHoleDia), as before; H-pile footprint B as before (F30)
-  const Bblk_in = (Ig.pileType === "hpile") ? dh_in : bondHoleDia(Ig);
+  const Bblk_in = dEta_in;
   const Bx = (nCols-1)*s_in + Bblk_in;       // block width (in)
   const By = (nRows-1)*s_in + Bblk_in;       // block length (in)
   const blockPerim_in = 2*(Bx+By);         // in  (matches single-pile dh*PI which is in inches)
@@ -4326,6 +4333,7 @@ function computeAll(I, opts = {}) {
 
   R.group = {
     enable: grpOn, nRows, nCols, nPiles, dh_in, s_in, s_dia, Blbl: groupBLabel(Ig),
+    dEta_in, sEta_dia, etaBlbl: groupEtaBLabel(Ig), // F62 (O58): the eta / theta width (micropile d_h)
     // axial efficiency
     eta, eta_auto, etaOverride: I.groupEtaOverride, spacingOKforEta, spacingThreshDia, thetaDeg, clEff,
     Pn_geo_single: R.geo.Pn_geo, Pn_geo_group, phiPn_geo_group, geoGroup_pass,
@@ -8942,12 +8950,12 @@ function RptGroupChecks({ I, r }) {
   const govB = (on, t1, t0) => e("b", { style: { color: on ? "#B91C1C" : "#047857" } }, on ? t1 : t0);
   return e("div", { className: "rpt-section" },
     e(RptHeading, { n: "11", title: "Pile Group — Axial Efficiency & Block Failure", code: code }),
-    line(g.nPiles + " piles (" + g.nRows + "×" + g.nCols + "), spacing = " + fmt(g.s_dia, 1) + "× " + g.Blbl + " (" + fmt(g.s_in, 1) + " in), " + g.Blbl + " = " + fmt(g.dh_in, 2) + " in" + (I.pileType === "hpile" ? " (H-pile " + (I.hpAxis === "weak" ? "d, weak-axis" : "b_f, strong-axis") + " bending: the p-y width normal to the load)" : "")),
+    line(g.nPiles + " piles (" + g.nRows + "×" + g.nCols + "), spacing = " + fmt(g.s_dia, 1) + "× " + g.Blbl + " (" + fmt(g.s_in, 1) + " in), " + g.Blbl + " = " + fmt(g.dh_in, 2) + " in" + (I.pileType === "hpile" ? " (H-pile " + (I.hpAxis === "weak" ? "d, weak-axis" : "b_f, strong-axis") + " bending: the p-y width normal to the load)" : " \u2014 f\u2098: s/B with B = casing OD (p-y width); \u03b7: s/d_h = " + fmt(g.sEta_dia, 2) + " (d_h = " + fmt(g.dEta_in, 2) + " in, bond zone)")),
     // ---- 1. axial group efficiency ----
     subh(hp ? "1 · Axial group efficiency (η) — reduces the H-pile static resistance" : "1 · Axial group efficiency (η) — reduces bond capacity"),
     hp
       ? e(Narr, null, "AASHTO LRFD 10th Ed. Art. 10.7.3.9 (driven piles; verify): cohesionless soil η = 1.0. Cohesive soil: η = 1.0 when the pile cap is in firm contact with the ground; when it is not (or the soil at the surface is soft, S", e("sub", null, "u"), " < " + fmt(HP_SOFT_SU_KSF, 2) + " ksf, treated as not in contact) η = 0.65 at s = 2.5B rising linearly to 1.0 at 6B. η reduces the H-pile static resistance φR", e("sub", null, "n"), " of Module 01 (skin + tip, φ per layer). Conservative choices (verify): no waiver of the reduction when the cap is not in contact but the surface soil is stiff, and \"soft\" = S", e("sub", null, "u"), " < " + fmt(HP_SOFT_SU_KSF, 2) + " ksf.")
-      : e(Narr, null, "FHWA NHI-05-039: micropiles may be treated as individual elements (η = 1.0) when center-to-center spacing ≥ 3× the bond diameter. Below that, a reduction applies (Converse-Labarre efficiency shown). This tool takes the diameter B as the casing OD (the p-y width, F62); with a separate bond-hole d\u2095, verify which diameter the spacing rule needs."),
+      : e(Narr, null, "FHWA NHI-05-039: micropiles may be treated as individual elements (η = 1.0) when center-to-center spacing ≥ 3× the bond diameter. Below that, a reduction applies (Converse-Labarre efficiency shown). This tool uses s/d\u2095 (the bond-zone diameter) for \u03b7 and \u03b8; the lateral row f\u2098 use s/B with B = the casing OD (the p-y width) (F62)."),
     hp && a
       ? e(React.Fragment, null,
           line("Soil along the embedded length (", fmt(a.Z, 1), " ft): cohesive ", fmt(a.hClay, 1), " ft, cohesionless ", fmt(a.hCoh, 1), " ft → ", e("b", null, a.cohesive ? "cohesive" : "cohesionless"),
@@ -8960,8 +8968,8 @@ function RptGroupChecks({ I, r }) {
                 line(a.contactEff ? "η = 1.0" : "η = 0.65 + 0.35 × (s/B − 2.5)/3.5 at s/B = " + fmt(g.s_dia, 2) + " → η = " + fmt(a.eta, 3) + (a.below25 ? " (s < 2.5B: below the AASHTO minimum spacing; 0.65 used)" : "")))
             : line("η = 1.0 (cohesionless; no block check)"))
       : !hp ? line(g.spacingOKforEta
-          ? "✓ Spacing " + fmt(g.s_dia, 1) + "× ≥ 3× " + g.Blbl + " → η = 1.0 permitted (individual elements)"
-          : "⚠ Spacing " + fmt(g.s_dia, 1) + "× < 3× " + g.Blbl + " → Converse-Labarre η = " + fmt(g.clEff, 3) + (I.pileType === "hpile" ? " (θ=atan(B/s)=" : " (θ=atan(d/s)=") + fmt(g.thetaDeg, 1) + "°)") : null,
+          ? "✓ Spacing " + fmt(g.sEta_dia, 1) + "× ≥ 3× " + g.etaBlbl + " → η = 1.0 permitted (individual elements)"
+          : "⚠ Spacing " + fmt(g.sEta_dia, 1) + "× < 3× " + g.etaBlbl + " → Converse-Labarre η = " + fmt(g.clEff, 3) + (I.pileType === "hpile" ? " (θ=atan(B/s)=" : " (θ=atan(d/s)=") + fmt(g.thetaDeg, 1) + "°)") : null,
     line("η override (Group options): " + (I.groupEtaOverride ? "on, η = " + fmt(I.groupEta, 3) : "off")),
     hp
       ? line("η used = ", e("b", null, fmt(g.eta, 3)), " → per-pile H-pile φR", e("sub", null, "n"), " = ", fmt(g.phiRn_single, 1), " kip (R", e("sub", null, "n"), " = ", fmt(g.Pn_geo_single, 1), " kip) → ηφR", e("sub", null, "n"), " = ", e("b", null, fmt(g.phiPn_geo_group, 1), " kip"))
@@ -16499,7 +16507,7 @@ function App() {
       /*#__PURE__*/React.createElement("input", { type: "checkbox", "aria-label": "Pile cap in firm contact with the ground", checked: I.hpCapContact !== false, onChange: e => set('hpCapContact', e.target.checked) }),
       "pile cap in firm contact with the ground"),
     r.group.capBasis === "hpile" && r.group.aashto ? /*#__PURE__*/React.createElement("p", { className: "text-[10px] text-slate-500 leading-snug mt-2" }, "Computed \u03b7 = ", fmt(r.group.eta_auto, 3), " (AASHTO 10.7.3.9: ", r.group.aashto.etaCase, "; cap contact matters only in cohesive soil, and soft surface clay is treated as not in contact). Group layout and cap loads are set in the Pile group workspace (Loads & group tab).") :
-    /*#__PURE__*/React.createElement("p", { className: "text-[10px] text-slate-500 leading-snug mt-2" }, "Computed \u03b7 = ", fmt(r.group.eta, 3), r.group.spacingOKforEta ?" (spacing \u2265 3\u00d7 " + (r.group.Blbl || "bond dia") + " \u2192 individual elements)" : " (Converse-Labarre)", ". Group layout and cap loads are set in the Pile group workspace (Loads & group tab).")), /*#__PURE__*/(I.pileType !== "iab") && /*#__PURE__*/React.createElement(Panel, {
+    /*#__PURE__*/React.createElement("p", { className: "text-[10px] text-slate-500 leading-snug mt-2" }, "Computed \u03b7 = ", fmt(r.group.eta, 3), r.group.spacingOKforEta ?" (spacing \u2265 3\u00d7 " + (r.group.etaBlbl || "bond dia") + " \u2192 individual elements)" : " (Converse-Labarre)", ". Group layout and cap loads are set in the Pile group workspace (Loads & group tab).")), /*#__PURE__*/(I.pileType !== "iab") && /*#__PURE__*/React.createElement(Panel, {
     title: "Buckling",
     sub: "unsupported span and column parameters (10)"
   }, /*#__PURE__*/React.createElement(Toggle, {
@@ -18468,7 +18476,7 @@ function App() {
     }, "Layout, spacing, and cap loads are defined in the ", /*#__PURE__*/React.createElement("b", null, "Pile Group Workspace"), " (", /*#__PURE__*/React.createElement("button", { type: "button", onClick: () => gotoLoadsTab(setRailTab, "group"), className: "underline text-[var(--blueprint2)]" }, "Loads & group input tab \u2192"), "). The efficiency, p-multiplier, and block-failure checks below use that layout."),
     /*#__PURE__*/React.createElement("div", {
       className: "text-[10px] font-mono-tech text-slate-500 mb-4"
-    }, r.group.nPiles + " piles (" + r.group.nRows + "×" + r.group.nCols + "), spacing = " + fmt(r.group.s_dia, 1) + "× " + r.group.Blbl + " (" + fmt(r.group.s_in, 1) + " in), " + r.group.Blbl + " = " + fmt(r.group.dh_in, 2) + " in" + (I.pileType === "hpile" ? " (H-pile " + (I.hpAxis === "weak" ? "d, weak-axis" : "b_f, strong-axis") + " bending: the p-y width normal to the load)" : "")),
+    }, r.group.nPiles + " piles (" + r.group.nRows + "×" + r.group.nCols + "), spacing = " + fmt(r.group.s_dia, 1) + "× " + r.group.Blbl + " (" + fmt(r.group.s_in, 1) + " in), " + r.group.Blbl + " = " + fmt(r.group.dh_in, 2) + " in" + (I.pileType === "hpile" ? " (H-pile " + (I.hpAxis === "weak" ? "d, weak-axis" : "b_f, strong-axis") + " bending: the p-y width normal to the load)" : " \u2014 f\u2098: s/B with B = casing OD (p-y width); \u03b7: s/d_h = " + fmt(r.group.sEta_dia, 2) + " (d_h = " + fmt(r.group.dEta_in, 2) + " in, bond zone)")),
 
     // === PER-PILE DISTRIBUTION BY LOAD CASE ===
     /*#__PURE__*/React.createElement("div", { className: "rounded-sm border border-slate-200 p-3 mb-3" },
@@ -18483,7 +18491,7 @@ function App() {
         // F32 (O43): H-pile -- eta reduces the H-pile static resistance of Module 01, not the micropile bond
         // F34 (O45): eta per AASHTO 10.7.3.9 (driven piles)
         ? /*#__PURE__*/React.createElement("p", { className: "text-[9.5px] text-slate-600 leading-snug mb-2" }, "AASHTO LRFD 10th Ed. Art. 10.7.3.9 (driven piles; verify): cohesionless soil η = 1.0. Cohesive soil: η = 1.0 when the pile cap is in firm contact with the ground; when it is not (or the soil at the surface is soft, S", /*#__PURE__*/React.createElement("sub", null, "u"), " < " + fmt(HP_SOFT_SU_KSF, 2) + " ksf, treated as not in contact) η = 0.65 at s = 2.5B rising linearly to 1.0 at 6B. η reduces the H-pile static resistance φR", /*#__PURE__*/React.createElement("sub", null, "n"), " of Module 01 (skin + tip, φ per layer). Conservative choices (verify): no waiver of the reduction when the cap is not in contact but the surface soil is stiff, and “soft” = S", /*#__PURE__*/React.createElement("sub", null, "u"), " < " + fmt(HP_SOFT_SU_KSF, 2) + " ksf.")
-        : /*#__PURE__*/React.createElement("p", { className: "text-[9.5px] text-slate-600 leading-snug mb-2" }, "FHWA NHI-05-039: micropiles may be treated as individual elements (η = 1.0) when center-to-center spacing ≥ 3× the bond diameter. Below that, a reduction applies (Converse-Labarre efficiency shown). This tool takes the diameter B as the casing OD (the p-y width, F62); with a separate bond-hole d\u2095, verify which diameter the spacing rule needs."),
+        : /*#__PURE__*/React.createElement("p", { className: "text-[9.5px] text-slate-600 leading-snug mb-2" }, "FHWA NHI-05-039: micropiles may be treated as individual elements (η = 1.0) when center-to-center spacing ≥ 3× the bond diameter. Below that, a reduction applies (Converse-Labarre efficiency shown). This tool uses s/d\u2095 (the bond-zone diameter) for \u03b7 and \u03b8; the lateral row f\u2098 use s/B with B = the casing OD (the p-y width) (F62)."),
       r.group.capBasis === "hpile" && r.group.aashto
         // F34 (O45): soil classification, cap contact and the AASHTO eta
         ? /*#__PURE__*/React.createElement("div", { className: "text-[10px] font-mono-tech rounded-sm p-1.5 mb-2 leading-relaxed", style: { background: r.group.aashto.eta < 1 ? "rgba(178,59,59,0.06)" : "rgba(47,111,62,0.06)", color: "#14304a" } },
@@ -18497,8 +18505,8 @@ function App() {
               : "η = 1.0 (cohesionless; no block check)")
         : /*#__PURE__*/React.createElement("div", { className: "text-[10px] font-mono-tech rounded-sm p-1.5 mb-2", style: { background: r.group.spacingOKforEta ? "rgba(47,111,62,0.06)" : "rgba(178,59,59,0.06)", color: "#14304a" } },
         r.group.spacingOKforEta
-          ? /*#__PURE__*/React.createElement(React.Fragment, null, "✓ Spacing ", fmt(r.group.s_dia, 1), "× ≥ 3× " + r.group.Blbl + " → η = 1.0 permitted (individual elements)")
-          : /*#__PURE__*/React.createElement(React.Fragment, null, "⚠ Spacing ", fmt(r.group.s_dia, 1), "× < 3× " + r.group.Blbl + " → Converse-Labarre η = ", fmt(r.group.clEff, 3), I.pileType === "hpile" ? " (θ=atan(B/s)=" : " (θ=atan(d/s)=", fmt(r.group.thetaDeg, 1), "°)")),
+          ? /*#__PURE__*/React.createElement(React.Fragment, null, "✓ Spacing ", fmt(r.group.sEta_dia, 1), "× ≥ 3× " + r.group.etaBlbl + " → η = 1.0 permitted (individual elements)")
+          : /*#__PURE__*/React.createElement(React.Fragment, null, "⚠ Spacing ", fmt(r.group.sEta_dia, 1), "× < 3× " + r.group.etaBlbl + " → Converse-Labarre η = ", fmt(r.group.clEff, 3), I.pileType === "hpile" ? " (θ=atan(B/s)=" : " (θ=atan(d/s)=", fmt(r.group.thetaDeg, 1), "°)")),
       r.group.capBasis === "hpile"
         ? /*#__PURE__*/React.createElement("div", { className: "text-[10px] font-mono-tech mb-2" }, "η used = ", /*#__PURE__*/React.createElement("b", null, fmt(r.group.eta, 3)), " → per-pile H-pile φR", /*#__PURE__*/React.createElement("sub", null, "n"), " = ", fmt(r.group.phiRn_single, 1), " kip (R", /*#__PURE__*/React.createElement("sub", null, "n"), " = ", fmt(r.group.Pn_geo_single, 1), " kip) → ηφR", /*#__PURE__*/React.createElement("sub", null, "n"), " = ", /*#__PURE__*/React.createElement("b", null, fmt(r.group.phiPn_geo_group, 1), " kip"))
         : /*#__PURE__*/React.createElement("div", { className: "text-[10px] font-mono-tech mb-2" }, "η used = ", /*#__PURE__*/React.createElement("b", null, fmt(r.group.eta, 3)), " → per-pile bond P", /*#__PURE__*/React.createElement("sub", null, "n"), " = ", fmt(r.group.Pn_geo_single, 0), " → ", /*#__PURE__*/React.createElement("b", null, fmt(r.group.phiPn_geo_group, 0), " kip")),
