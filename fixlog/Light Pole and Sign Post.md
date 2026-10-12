@@ -698,18 +698,113 @@ Check cases come from headless Chromium (Playwright). The page's own functions (
 - Screenshots reviewed: monopost Summary and Post tab (H3-6 worked example), input error banner, 400 px fixture tab.
 - **Other copies:** none.
 
+## 2026-10-12 — Follow-up: N1, N6, N7, sign-post drag (branch claude/lightpole-followup)
+
+Engineer's decisions (2026-10-12, after #136):
+- N6: use the exact Σ H_i·h_ci.
+- N7: add the misc. DL to the sign foundation axial.
+- Integrate the sign-post exposed drag.
+- N1: compute G_f with a new β input (default 0.005) and use max(entered G, G_f).
+
+Check cases come from headless Chromium, main (e29761a) vs branch, with the page's functions wrapped to log their values. Units are lb, ft and in.
+
+### F27. Cable pull moment is the exact vector sum Σ H_i·h_ci (N6)   [calc change] [exact; mixed — default pole MORE (+1.1 %)]
+- **Where:** `evalComboDir`. Anchors `cMx+=r.Hx*cp.c.hc; cMy+=r.Hy*cp.c.hc;` and `Mx+=cMx; My+=cMy;`. Also `M_cable`.
+- **Problem:** the base moment used (ΣH)·h_c,eff with h_c,eff = Σ|H|·h_c/Σ|H|. This is not the moment of the individual pulls when they act at different heights and partly cancel. `poleStress` already used the exact sum, so the foundation path and the pole check disagreed by about 1 %.
+- **Governing provision:** statics; ASCE 7-22 §2.3/§2.4 demands.
+- **Before:**
+  ```js
+  Mx+=cx*hcEff; My+=cy*hcEff;
+  … M_cable:Math.hypot(cx,cy)*hcEff
+  ```
+- **After:**
+  ```js
+  cMx+=r.Hx*cp.c.hc; cMy+=r.Hy*cp.c.hc;   // in the cable loop
+  Mx+=cMx; My+=cMy;
+  … M_cable:Math.hypot(cMx,cMy)
+  ```
+  `hcEff` is kept for the elevation drawing only.
+- **Check case (default pole, 1.2D+1.0W, wind 0°):**
+  - Cables (H_x, H_y, h_c): (389.1, 104.3, 32), (−249.2, 249.2, 32), (−104.2, −388.9, 30).
+  - Before: ΣH = (35.7, −35.4) × h_c,eff 31.305 → (1,117.6, −1,108.2), |M_c| = 1,573 lb·ft.
+  - After: M_cx = 389.1(32) − 249.2(32) − 104.2(30) = 1,350.8; M_cy = 104.3(32) + 249.2(32) − 388.9(30) = −355.0; |M_c| = 1,396 lb·ft.
+  - Base M (with the wind terms): 19,077.6 → **19,281.8 lb·ft**. This now equals the `poleStress` base M₁ of F17.
+  - Anchor tension 9,671 → 9,791 lb. ASD M 11,460 → 11,584 lb·ft; d 6.23 → 6.24 ft.
+
+### F28. Sign foundation axial includes the misc. dead load (N7)   [calc change] [mixed: more bearing, less anchor uplift]
+- **Where:** `evalSignComboDir` (anchor `const axial=f.D*(perPostDeadSign+postSelfW+(inp.DL||0));`); `signLoadPathHTML` steps 2 and 5 (N_DL term).
+- **Before → After:** `f.D*(perPostDeadSign+postSelfW)` → `f.D*(perPostDeadSign+postSelfW+(inp.DL||0))`. DL is per post, as for the post H1 axial (F21) and `inp.DLtotal`.
+- **Check case (two-post, clearance 25 ft, DL = 300 lb):** LRFD N 673 → 1,033 lb (+1.2 × 300). ASD N 561 → 861 lb. Bearing 0.08 → 0.12 ksf. With DL = 0 (the default) nothing changes.
+
+### F29. Sign-post exposed drag integrated over the clearance height   [calc change] [MORE conservative when clearance > 15 ft; identical at ≤ 15 ft]
+- **Where:** `signWind` (anchor `const NPS=50, dzp=postExpH/NPS, postStrips=[];`), `signPostStress.secM` (anchor `sw.postStrips.forEach`), `signLoadPathHTML` step 3 (q̄_z, z_drag). A text fix in step 1 says the drag acts at z_drag; it wrongly said h/2.
+- **Problem:** one force at q_z(clr/2) acting at clr/2. Because K_z is floored at 15 ft this was exact for clearance ≤ 15 ft and under-estimated the drag above that.
+- **Governing provision:** ASCE 7-22 §29.4.1 per strip (as F15).
+- **Before:** `Fpost=qzPost*cfPost*Apost; zPost=clr/2; Mpost=Fpost*zPost;` and a uniform w in `signPostStress`.
+- **After:** 50 strips, `F_i = 0.00256·K_z(z_i)·K_zt·K_d·G·V²·C_f·w·Δz`, `Fpost=ΣF_i`, `Mpost=ΣF_i z_i`, `zPost=Mpost/Fpost`. `qzPost` is the area average (display). The post stress uses the factored strips.
+- **Check case (6 in post, clearance 25 ft, Exp. C, V 115):**
+  - Before: q_z(12.5) = q_z(15 ft floor) = 24.41 psf; F = 24.41 × 0.7 × 0.5 × 25 = 213.8 lb; M = 213.8 × 12.5 = 2,672 lb·ft.
+  - After: F = 218.9 lb, M = 2,783.5 lb·ft (z = 12.71 ft); independent node integration gives 218.9 / 2,784.
+  - Two-post LRFD M 72,906 → 73,018 lb·ft (+111.6 × 1.0).
+  - Default sign (clearance 10 ft): identical.
+
+### F30. Flexible gust-effect factor G_f when n₁ < 1 Hz (N1)   [calc change] [MORE conservative for flexible structures; rigid structures unchanged]
+- **Where:**
+  - New `GF_TBL`, `gustFlexible` and `lppApplyGf` (after `poleNatFreq`).
+  - `calc()`: `nat` is now computed right after `poleSegments` (anchor `lppApplyGf(inp, nat, {h:inp.H`), before any wind force; the later `nat` block is removed.
+  - `calcSign`: `lppApplyGf(inp, nat, {h:inp.signClr+inp.signS`.
+  - New input `lppBeta` (Wind & site card) with note `#lppGfNote`.
+  - `INPUT_IDS` gets `'lppBeta'`; `applyState` sets the default.
+  - Validation: β > 0.
+  - Flexible warnings in the summary and the pole flags; manual input table (G row, new β row).
+- **Governing provision:** ASCE 7-22 §26.11.5, Eqs. 26.11-10 to 26.11-16, Table 26.11-1 (verify constants):
+  - B: b̄ 0.45, ᾱ 1/4, c 0.30, ℓ 320, ε̄ 1/3, z_min 30;
+  - C: b̄ 0.65, ᾱ 1/6.5, c 0.20, ℓ 500, ε̄ 1/5, z_min 15;
+  - D: b̄ 0.80, ᾱ 1/9, c 0.15, ℓ 650, ε̄ 1/8, z_min 7.
+- **Before:** G = entered value always (0.85 default); only a warning for n₁ < 1 Hz.
+- **After:**
+  ```js
+  if(nat.n1<1.0){ const gf=gustFlexible(expo,V,h,B,L,n1,beta); inp.G=Math.max(inp.Ginput,gf.Gf); }
+  ```
+  - Pole: h = H, B = mean width, L = mean depth.
+  - Sign: h = clearance + s, B = panel width, L = post width.
+  - The G used drives every wind force: mast, fixtures, cables, wind-on-ice, sign q_h and post drag.
+  - The note under G states n₁, G_f, β and the G used. The Summary key inputs show the G used.
+- **Saved data:** new optional field `inputs.lppBeta` (tool-prefixed). An older save without it loads with β = 0.005, tested by loading a save with lppBeta removed after setting the input to 0.02. All other saved fields are identical to main in all 20 scenarios.
+- **Check case (60 ft pole, 8 → 12 in, Exp. C, V = 115 mph, β = 0.005):**
+  - n₁ = 0.821 Hz. z̄ = max(0.6 × 60, 15) = 36 ft.
+  - I_z̄ = 0.20(33/36)^(1/6) = 0.1971. L_z̄ = 500(36/33)^(1/5) = 508.8 ft.
+  - Q² = 1/(1 + 0.63(60.83/508.8)^0.63) = 0.8582.
+  - V̄_z̄ = 0.65(36/33)^(1/6.5)(115)(88/60) = 111.1 ft/s.
+  - N₁ = 3.760, R_n = 0.0607, R_h = 0.3721 (η = 2.04), R_B = 0.9814, R_L = 0.9397.
+  - R² = (1/0.005)(0.0607)(0.3721)(0.9814)(0.9717) = 4.309. g_R = 4.142.
+  - G_f = 0.925(1 + 1.7 × 0.1971 × √(3.4² × 0.8582 + 4.142² × 4.309))/(1 + 1.7 × 3.4 × 0.1971) = **1.76** (page: 1.768 with the unrounded n₁).
+  - G used = max(0.85, 1.768) = 1.768, so every wind force × 2.08: ASD M 20,859 → 43,622 lb·ft, d 13.06 → 17.17 ft, anchor tension 96 % → 202 % (NG).
+  - With β = 0.02: G_f = 1.20, d 14.90 ft, anchors 138 %. With β = 0.05: G_f = 1.04.
+  - Default pole (n₁ = 1.67 Hz) and default signs (2.6–6.4 Hz): unchanged.
+
+### Verification (F27–F30)
+- `node --check`: 0 failures.
+- Playwright, main vs branch, 20 scenarios (the 16 of the sweep plus pole β = 0.02, flexible monopost, and monopost/two-post with clearance 25 ft and DL 300):
+  - Rigid scenarios differ only by F27 (pole) or not at all (signs with clearance ≤ 15 ft and DL = 0).
+  - Flexible scenarios differ by G_f as above.
+  - Saved state differs only by the new `lppBeta` field. No console or page errors.
+- Screenshot reviewed: flexible pole Summary with the G_f note under the G input.
+- **Other copies:** none.
+
 ## Needs engineer
-- **N1 (LP-O2):** for a flexible pole (n₁ < 1 Hz) the tool now warns but still uses the entered G. Should it compute G_f (ASCE 7-22 §26.11.5)? That needs a damping ratio β. Recommendation: compute G_f with β = 0.005 for steel poles (verify against your practice) and use max(G, G_f).
+- **N1 (LP-O2) — RESOLVED 2026-10-12 (F30):** G_f with β input (default 0.005), G = max(G, G_f). Original note: for a flexible pole (n₁ < 1 Hz) the tool now warns but still uses the entered G. Should it compute G_f (ASCE 7-22 §26.11.5)? That needs a damping ratio β. Recommendation: compute G_f with β = 0.005 for steel poles (verify against your practice) and use max(G, G_f).
 - **N2 (LP-A2):** monopost torsion — the soil's torsional resistance around the drilled shaft is not checked (warning shown). Which method do you want (for example, side shear × radius from the geotechnical report)? Recommendation: an input "allowable torsional resistance (from geotech)" checked against the ASD torsion.
 - **N3 (LP-O3):** B₂ is applied to the LRFD pole, anchor and shaft moments, but not to the ASD embedment moment. Should the IBC embedment use an ASD second-order moment (AISC uses 1.6 × ASD loads for the amplifier)? Recommendation: keep first-order for the empirical IBC §1807.3 check; the effect is a few percent.
 - **N4 (LP-O5):** IBC 15 × cap with the isolated-pole doubling. Implemented as S = 2 × S₁ × min(depth, 15). The stricter reading caps at 15 × the undoubled tabulated value (min(2 × depth, 15)). Please confirm the reading and the section number (§1806.3.3 vs §1806.3.4).
 - **N5 (LP-O8, unchanged):** anchor concrete breakout in shear (§17.7.2) and side-face blowout (§17.6.4) for a bolt circle in a round shaft are still "NOT CHECKED". A method is needed: c_a1 to the curved face, which bolts form the group, and the A_Vc geometry. Recommendation: treat the single most-loaded bolt at c_a1 = R_edge − R with A_Vc from a straight tangent edge, and n_eff = bolts within 1.5c_a1. Or design for anchor reinforcement (§17.7.2.5) and require it.
-- **N6 (new finding, not changed):** `evalComboDir` takes the cable pull moment as (ΣH)·h_c,eff with h_c,eff = Σ|H|·h_c/Σ|H|, while `poleStress` uses Σ H_i·h_ci (exact). Default pole, 1.2D+1.0W: base moment 19,078 (foundation path) vs 19,282 lb·ft (exact), −1 %. Recommendation: use the exact vector sum in `evalComboDir`. The `h` display and the drawings would then need the exact sum too.
-- **N7 (new finding, not changed):** in sign mode the misc. dead load DL is not in the foundation axial (`evalSignComboDir` uses panel + post only). It is now in the post H1 axial (F21). Recommendation: add f_D·DL to the sign foundation axial as well.
+- **N6 — RESOLVED 2026-10-12 (F27).** Original note: `evalComboDir` takes the cable pull moment as (ΣH)·h_c,eff with h_c,eff = Σ|H|·h_c/Σ|H|, while `poleStress` uses Σ H_i·h_ci (exact). Default pole, 1.2D+1.0W: base moment 19,078 (foundation path) vs 19,282 lb·ft (exact), −1 %. Recommendation: use the exact vector sum in `evalComboDir`. The `h` display and the drawings would then need the exact sum too.
+- **N7 — RESOLVED 2026-10-12 (F28).** Original note: in sign mode the misc. dead load DL is not in the foundation axial (`evalSignComboDir` uses panel + post only). It is now in the post H1 axial (F21). Recommendation: add f_D·DL to the sign foundation axial as well.
 
 ## Remaining open items
-- N1–N7 above.
-- Sign-post exposed drag still uses a single q_z(clr/2). This is exact for clearance ≤ 15 ft (K_z floor); for higher clearances it is slightly unconservative. Recommendation: integrate the same way as F15.
+- N2–N5 above.
+- N8 (new): G_f with β = 0.005 is large for slender poles (e.g. 1.77 for a 60 ft pole at 0.82 Hz). Please confirm the default β for your pole types (0.01–0.02 is also used in practice for steel poles with attachments).
+- Sign-post exposed drag: RESOLVED 2026-10-12 (F29).
 
 ## Resolved items
 - **O1. Kd = 0.85 recommended for round masts** (default and manual). ASCE 7-22 Table 26.6-1 gives 1.0 for round chimneys/tanks/similar structures, while 0.85 applies to solid signs and trussed towers. **Question:** which Kd do you want as the default for round light masts, and should the mast and sign use different Kd?
