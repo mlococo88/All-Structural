@@ -469,6 +469,7 @@ function defaultCombos(){return[
   {id:'c14', f:{DL:1.4}, on:true, stage:'final'},
   {id:'c216',f:{DL:1.2,LL:1.6,SL:0.5}, on:true, stage:'final'},
   {id:'c2S', f:{DL:1.2,LL:1.0,SL:1.6}, on:true, stage:'final'},
+  {id:'c3SW',f:{DL:1.2,SL:1.6,WL:0.5}, on:true, stage:'final'},   /* ASCE 7-16 \u00A72.3.1 combination 3, (L or 0.5W) with 0.5W */
   {id:'c2W', f:{DL:1.2,LL:1.0,SL:0.5,WL:1.0}, on:true, stage:'final'},
   {id:'c09W',f:{DL:0.9,WL:1.0}, on:true, stage:'final'}
 ];}
@@ -2411,6 +2412,7 @@ function rebuildInputs(){
     addC.addEventListener('click',()=>{S.combos.push({id:'c'+Date.now()%100000,f:{},on:true,stage:'final'});rebuildInputs();schedule(true);});
     const pres=el('button','btn sm','Preset: ASCE 7 LRFD basics');
     pres.addEventListener('click',()=>{S.combos=defaultCombos();
+      if(!(S.cases.some(c=>c.id==='SL')&&S.cases.some(c=>c.id==='WL')))S.combos=S.combos.filter(c=>c.id!=='c3SW');   /* 1.2D + 1.6S + 0.5W only when both cases exist */
       if(S.cases.some(c=>c.id==='LR'))lrCombosFor('LR').forEach(c=>S.combos.push(c));   /* roof live load, ASCE 7-16 \u00A72.3.1 */
       rebuildInputs();schedule(true);});
     bts.appendChild(addC);bts.appendChild(pres);body.appendChild(bts);

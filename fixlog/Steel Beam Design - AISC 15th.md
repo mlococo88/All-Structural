@@ -1707,6 +1707,40 @@ Batch rows with an open-section torsion case now run the same buckling check thr
   - Validation tab text identical (all benchmarks pass). No console errors.
 - Screenshots (looked at): import dialog, torque-per-case inputs and torsion tab, H3.3(c) block, Chapter D section and inputs, in `scratchpad/followups/sbdsw/`.
 
+## 2026-10-12 — PR: claude/steelbeam-q3 (PR link added after merge)
+Engineer's decision 2026-10-12 on Q3 of the sweep (closes O14).
+
+### Q3. Default combination set gets 1.2D + 1.6S + 0.5W   [calc change] [more conservative]
+- **Where:** `defaultCombos` (anchor `{id:'c2S', f:{DL:1.2,LL:1.0,SL:1.6}, on:true, stage:'final'},`), and the "Preset: ASCE 7 LRFD basics" button in `rebuildInputs` (anchor `pres.addEventListener('click',()=>{S.combos=defaultCombos();`).
+- **Problem:** ASCE 7-16 §2.3.1 combination 3 is 1.2D + 1.6(Lr or S or R) + (L or 0.5W). The default set had only the "L" half for snow (1.2D + 1.0L + 1.6S). With downward roof wind and little live load, the "0.5W" half governs.
+- **Governing provision:** ASCE 7-16 §2.3.1, combination 3.
+- **Before:**
+  ```js
+    {id:'c2S', f:{DL:1.2,LL:1.0,SL:1.6}, on:true, stage:'final'},
+    {id:'c2W', f:{DL:1.2,LL:1.0,SL:0.5,WL:1.0}, on:true, stage:'final'},
+  ...
+      pres.addEventListener('click',()=>{S.combos=defaultCombos();
+        if(S.cases.some(c=>c.id==='LR'))lrCombosFor('LR').forEach(c=>S.combos.push(c));   /* roof live load, ASCE 7-16 \u00A72.3.1 */
+  ```
+- **After:**
+  ```js
+    {id:'c2S', f:{DL:1.2,LL:1.0,SL:1.6}, on:true, stage:'final'},
+    {id:'c3SW',f:{DL:1.2,SL:1.6,WL:0.5}, on:true, stage:'final'},   /* ASCE 7-16 \u00A72.3.1 combination 3, (L or 0.5W) with 0.5W */
+    {id:'c2W', f:{DL:1.2,LL:1.0,SL:0.5,WL:1.0}, on:true, stage:'final'},
+  ...
+      pres.addEventListener('click',()=>{S.combos=defaultCombos();
+        if(!(S.cases.some(c=>c.id==='SL')&&S.cases.some(c=>c.id==='WL')))S.combos=S.combos.filter(c=>c.id!=='c3SW');   /* 1.2D + 1.6S + 0.5W only when both cases exist */
+        if(S.cases.some(c=>c.id==='LR'))lrCombosFor('LR').forEach(c=>S.combos.push(c));   /* roof live load, ASCE 7-16 \u00A72.3.1 */
+  ```
+- **Saved projects:** not modified. `mergeState` replaces arrays wholesale, so a saved project keeps its own `combos` list; the new combination appears only in new projects and when the user presses the preset button (and only if cases SL and WL both exist).
+- **Check case:** default W18X50, one 20 ft simple span, trib width 10 ft, self-weight on; DL 15 psf, LL 0, SL 30 psf, WL +20 psf (downward). w_D = 0.150 + 0.050 = 0.200, w_S = 0.300, w_W = 0.200 klf.
+  - Before (new project or preset): governing 1.2D + 1.0L + 1.6S: w_u = 0.24 + 0 + 0.48 = 0.720 klf, M_u = 0.72 × 20²/8 = **36.0 kip-ft**, flexure DCR 36.0/378.75 = **0.0950**.
+  - After: 1.2D + 1.6S + 0.5W: w_u = 0.24 + 0.48 + 0.10 = 0.820 klf, M_u = **41.0 kip-ft**, DCR **0.1083** (governs).
+  - The same loads in a project saved before the change (five combinations): 36.0 kip-ft, unchanged.
+  - Default project (LL 40, SL 0, WL 0): the new combination gives 12.0 kip-ft; governing result unchanged (44.0 kip-ft, 1.2D + 1.6L + 0.5S).
+- **How verified:** `node --check` on all inline scripts. Headless Chromium, origin/main against the branch: new default project and new roof project (above), a saved project with the old five-combination list (every tab's text and saved state identical), and the preset button with SL/WL present (adds `c3SW`) and with WL removed (does not). Validation tab identical. No console errors.
+- **Other copies of this code:** none.
+
 ## Open items (not changed)
 - O1. **Resolved 2026-10-12 by SW1** (checked as f_a/(φF_cr,E) + (f_bx + f_by + σ_w)/(φF_cr,F) ≤ 1.0; method to confirm, Q1). **H3.3(c) buckling limit state** is not implemented, only warned (F5). Decide on the method (e.g. f_bx + σ_w ≤ φF_cr with F_cr = M_n/S_x from Chapter F, or a DG 9 interaction) before coding it as a check.
 - O2. **Resolved 2026-10-12 by SW1/SW5** (batch runs the same check). **Batch mode** has no H3.3 buckling warning and keeps its existing tension note. Decide whether to add a matching batch note.
@@ -1721,5 +1755,5 @@ Batch rows with an open-section torsion case now run the same buckling check thr
 - O11. **Resolved 2026-10-09 by R1** (block computed through the rib concrete). **Compression block in the ribs with parallel deck.** When a > t (C reaches into the ribs), the tool keeps a uniform-width block of depth a = C/(0.85f′_c b_eff) and d₁ = Y_con − a/2, and warns "verify by hand". With parallel ribs the true block under the slab is only the rib width, so its centroid is lower. In A1 case (b), the true centroid is 3.19 in below the slab top, not 3.00 in, so d₁ = 4.31 in rather than 4.50 in and M_n is about 0.7 % high. Pre-existing; not changed. Decide whether to compute the block through the ribs.
 - O12. **Kept 2026-10-12** (sweep decision: add only if batch PARA rows need rib concrete). **Batch template has no rib width or rib spacing columns.** After A1, batch PERP rows count no rib concrete (§I3.2c) and PARA rows count none either, with a warning. Add `w_r` / `s_r` columns only if batch PARA rows need the rib concrete.
 - O13. **Resolved 2026-10-10 by E3** (L_v measured to the point of zero shear within the span; support jumps excluded). **Round HSS / pipe shear length L_v at an interior support** (found while checking E2). The G5 L_v is the distance from the V_u station to the nearest entry in the "V = 0" list. That list includes the sign change across the shear jump at a support, so when V_u is at an interior support, L_v is about 0. Before E2 the jump crossing was interpolated a grid step away, giving L_v ≈ 0.08 ft and F_cr = 0.6F_y. With E2 it lands on the support, L_v can be exactly 0, and `shearMajor` treats 0 as "no zero-shear point" (`LvIn||1e9`): the derivation then shows L_v ≈ 83 000 000 ft and F_cr = max(G5-2b, ~0) ≤ 0.6F_y. For standard pipes and most round HSS (D/t below about 90) G5-2b still exceeds 0.6F_y, so V_n does not change (checked: Pipe8XS and Pipe12STD on 2 × 20 ft spans, F_cr = 21 ksi before and after). For very slender rounds it is lower, which is conservative. Both the old and the new L_v are artefacts. The intended L_v is the distance to the zero-shear point within the span (12.5 ft from the interior support of a 2 × 20 ft UDL beam). Decide whether to exclude support-jump crossings from the L_v search.
-- O14. **New 2026-10-12 (Q3 of the sweep).** `defaultCombos` has 1.2D + 1.0L + 1.6S but not 1.2D + 1.6S + 0.5W (the other half of ASCE 7-16 §2.3.1 combination 3). Not changed; engineer to decide.
+- O14. **Resolved 2026-10-12 by Q3** (added to the default set and the preset when S and W cases exist). **New 2026-10-12 (Q3 of the sweep).** `defaultCombos` has 1.2D + 1.0L + 1.6S but not 1.2D + 1.6S + 0.5W (the other half of ASCE 7-16 §2.3.1 combination 3). Not changed; engineer to decide.
 - C1 open items (C&C, drift, Lr): **resolved 2026-10-12 by SW3** (Lr combinations added on import; C&C and drift warned in the dialog and on the dashboard). C2 (pattern loading in the reaction hand-off): kept, documented.
