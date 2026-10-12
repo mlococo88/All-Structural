@@ -2419,3 +2419,184 @@ index fcc5211..6c9b39f 100644
 +        "The vertical live-load surcharge over the heel (LSv) is included as in the calculator's bearing and pile checks. Each live-load permutation is also offered without it (its sliding and eccentricity checks leave it out where it helps); a case picked from those is marked \"(no heel LS)\".",
          pile? "Moments are about the pile-group centroid. My is + toward the toe here (the calculator's pile table uses ex + toward the heel)." : "Moments are about the footing centre (B/2 from the toe, on the abutment centreline).",
 ```
+
+## 2026-10-12 — PR: claude/abutment-followup (PR link added after merge)
+
+Follow-up to the sweep (#145): N4, N2, and the Service I part of the F15 limits. Basis: AASHTO LRFD 10th Ed. (2024). The exact edits are in the appendix as a unified diff of `abutment_calculator.html` against origin/main `1cc655a`. Numbers come from the real `computeAll()` of the old and new files in headless Chromium. "Benchmark" = `benchState()`.
+
+### F24. Pile branch: toe designed for every strength / EE permutation (N4)   [calc change] [MORE conservative]
+- **Where:** `computeAll`, pile branch, anchor `// TOE — every strength / EE permutation (as the heel)`; helper `toePile(loads)`; `toeDem` gains `ls`, `lsV`; display note of Tab 5 §5.3 (pile).
+- **Problem:** the toe used only the permutation with the largest single pile reaction (`R.checks.pileComp.det`). Another permutation (e.g. γEV min with γEH max) can load the toe-side pile row more. Since F5 the heel already checks every permutation.
+- **Governing provision:** AASHTO LRFD 10th Ed. Art. 3.4.1, Table 3.4.1-2 (γp max or min, whichever is critical for the force effect).
+- **Before:** `rows` from `det.loads` only; `toeDem={Mu:Math.max(0,MtoeUp-MtoeDn), …}`.
+- **After:** the max-compression case first, then every permutation of `STR_LIMITS` (strength, construction and, when on, EE-I) through `pileLoadsFor(c)`. M_u is the largest toe moment (with its rows, M_up and label) and V_u is the largest face shear. A tie keeps the old case.
+- **Check case (benchmark, piles, L_toe = 8 ft, row spacing 5.5 / 5.5 ft → B = 17.5 ft, rows at 3.25 / 8.75 / 14.25 ft from the toe; only the 3.25 ft row is in front of the face):**
+  - Before (max-pile case 1.25DC + 1.50DW + 1.35EV + 0.90EH + 1.75(LL,BR,LS)…): toe row ΣP = 826.83 kip, M_up = 826.83/44·(8 − 3.25) = 89.26; M_dn = 0.9·0.45·8²/2 = 12.96; **M_u = 76.30 kip-ft/ft** (flexure D/C 0.507).
+  - After (1.25DC + 1.50DW + 1.00EV + 1.50EH + 1.75(LL,BR,LS)…): ΣP = 1025.10 kip, M_up = 110.66; **M_u = 97.70 kip-ft/ft** (+28%; D/C 0.650). V_u 15.55 → 20.06 kip/ft.
+- **Pile benchmark (default layout):** unchanged (45.52 kip-ft/ft). With EE-I on and A_s = 0.40 the toe is governed by EE-I (45.52 → 51.89, this includes F25).
+
+### F25. Extreme Event I γEH: γp max/min default, fixed value as "agency policy" (N2)   [calc change] [MORE conservative for new projects]
+- **Where:** `defaultState()` new field `seismic.gEHEQmode:"gp"`; `migrate()` anchor `// EE-I γEH mode`; global `function eqEHfixed()`; uses in `comboEffects` (γ and label), the stem loop `gEH_ls`, `R.vmGamma`, the load-factor table (Tab 2 §2.1), the report input echo; I-11 input: select "γEH at Extreme Event I" (γp max/min | Fixed value (agency policy)), with the γEH number shown only for the agency option.
+- **Problem:** EE-I used a fixed γEH = 1.00 by default. Table 3.4.1-1 gives γp for EH in Extreme Event I, i.e. the Table 3.4.1-2 values (active: 1.50 max / 0.90 min).
+- **Governing provision:** AASHTO LRFD 10th Ed. Table 3.4.1-1 (Extreme Event I row, γp) and Table 3.4.1-2 (EH active 1.50/0.90).
+- **Before:** `gamma = L.eq ? +S.seismic.gEHEQ : …` (1.00). **After:** `gamma = (L.eq && eqEHfixed()!==null) ? eqEHfixed() : (L.perm ? GP.EH[perm.EH] : 1.0)`; EE-I already permutes EH max/min, so both 1.50 and 0.90 are tried. The stem (wall design) takes γEH max.
+- **Saved data (which rule applies):** every project saved by an earlier version stores `seismic.gEHEQ` (it has been in `defaultState()` since the seismic block was added), so on load `migrate()` sets `gEHEQmode = "agency"` and the project **keeps its saved value** (normally 1.00) — results unchanged, verified: a main export imported into the branch gives identical D/Cs for all 22 dashboard checks. Only a project with no `gEHEQ` (no seismic block at all) gets the new default `"gp"`. New projects and Reset Defaults use `"gp"`. The new field changes the Input ID (fingerprint) of every project once.
+- **Check case (benchmark with EE-I on, new default), governing EE-I permutation 0.90DC + 0.65DW + 1.00EV + γEH·EH + 1.00EQ:** V = 1657.83 kip, ΣM_V = 11902.79 kip-ft; EH_h = 392.60 kip, M_EH = 2879.09 kip-ft; EQ terms ΣH = 192.20 kip, ΣM = 2374.36 kip-ft.
+  - Sliding: H = γEH·392.60 + 192.20; R_n = 1657.83·tan 29° = 918.95 kip (φτ,EE = 1.0). Before γEH 1.00: H = 584.81, D/C **0.636**. After γEH 1.50: H = 781.11, D/C **0.850**.
+  - Eccentricity: ΣM_H = γEH·2879.09 + 2374.36. Before 5253.44 → x̄ = 4.011, e = 2.489 ft, D/C = 2.489/4.333 = **0.574**. After 6692.99 → x̄ = 3.143, e = 3.357 ft, D/C **0.775** (EE-I governs eccentricity in both).
+  - EE-I bearing q (not governing): 5.56 → 6.56 ksf. Stem, bearing and sliding dashboard governors (Strength I / Constr–Str I) unchanged.
+  - Agency option with 1.00 reproduces the old numbers exactly.
+
+### F26. Service I bearing pressure with the transverse eccentricity e_L (F15 limit)   [calc change, informational] [MORE conservative]
+- **Where:** Service I loop, anchor `// transverse eccentricity e_L (as the strength bearing check, F15)`; `sv` gains `qP`, `qminP`, `eL`, `bx`; panel 3.4 shows e_L and the kern test; the plot draws the along-B curve (`sv.qP`), the corner value is reported; the triangular-pressure warning also fires for biaxial partial contact; the non-convergence warning now covers both loops.
+- **After:** when e_L = |M_t|/V > 0, the planar no-tension pressure of F15 (`biaxRockQ`) gives the corner q_max (and q_min when in full contact). Service pressure is linear on soil and rock alike, so the same planar model is used for both.
+- **Governing provision:** AASHTO LRFD 10th Ed. Art. 10.6.1.3, 10.6.2 (service), 10.6.5.
+- **Check case (benchmark, Service I with LL):** V = 2312.10 kip, e = 1.503 ft, M_t = 2.5·6·17 + 1.0·6·17 = 357 kip-ft → e_L = 0.1544 ft. V/(BL) = 4.042 ksf; 6e/B = 0.6935, 6e_L/L = 0.0211, sum 0.7146 ≤ 1. Before q_max = 4.042(1.6935) = **6.845 ksf**, q_min 1.239. After q_max = 4.042(1.7146) = **6.930 ksf** (corner), q_min 1.154. With the girders offset 2 ft: 6.845 → 7.424 ksf.
+- This value is a flag for the geotechnical engineer (no D/C).
+
+### Remaining open items (updated)
+- ABT-O8 remainder (vertical wind row); the per-ft toe/heel strip design still ignores e_L.
+- N1 (seismic connection force 0.10 vs 0.15/0.25) and N3 (IM on the footing) still need the engineer.
+
+### How verified
+- `vm.Script` syntax check of all 13 inline scripts: 0 errors.
+- Headless Chromium, main (1cc655a) vs branch, the same 14 scenarios plus Export→Import, Save→Reset→Load and SubLoads pull+apply. Differences: the new `seismic.gEHEQmode` field (state, autosave, Input ID); EE-I results in the seismic scenarios (F25); the Service I panel/plot (F26); the pile toe note (F24). Every other dashboard value, tab text and the foundation hand-off are identical; no console or page errors.
+- Old-project rule: a project with `gEHEQ` stored and no mode → "agency" (main export imported: identical D/Cs); without `gEHEQ` or without a seismic block → "gp".
+- Screenshots (scratchpad `followups/abtfollow/`): I-11 with both options, Service I panel.
+- **Other copies:** none.
+
+### Appendix — unified diff (exact before/after)
+```diff
+diff --git a/abutment_calculator.html b/abutment_calculator.html
+index 6c9b39f..ebe0502 100644
+--- a/abutment_calculator.html
++++ b/abutment_calculator.html
+@@ -596,3 +596,4 @@ function defaultState(){
+     seismic:{ on:false, As:0.15, khR:0.5, kv:0.0, hEQr:0.6,       // EE-I: site accel coeff, kh = khR·As (walls free to displace), ΔPAE at hEQr·H
+-      gEHEQ:1.00, gEQll:0.0,                                      // γEH at EE-I; γEQ on live load (project-specific)
++      gEHEQ:1.00, gEQll:0.0,                                      // γEH at EE-I (used only with gEHEQmode "agency"); γEQ on live load (project-specific)
++      gEHEQmode:"gp",                                             // EE-I γEH: "gp" = γp max/min [T.3.4.1-1/-2]; "agency" = fixed gEHEQ
+       phiTauEQ:1.00, phiBEQ:1.00, phiCEQ:1.00, eFracEQ:0.3333 },  // extreme-event resistance factors & e/B limit (soil ⅓, rock 0.45)
+@@ -642,2 +643,4 @@ let WARNINGS = [];   // {level:'warn'|'err', msg}
+ function warn(msg,level="warn"){ WARNINGS.push({level,msg}); }
++// Extreme Event I γEH: null = γp max/min permuted [T.3.4.1-1, T.3.4.1-2] (default); a number = the "agency policy" fixed value seismic.gEHEQ
++function eqEHfixed(){ const s=S.seismic||{}; return s.gEHEQmode==="agency"? +s.gEHEQ : null; }
+ </script>
+@@ -920,3 +923,5 @@ function migrate(){
+   if(S.piles.dd===undefined){ S.piles.dd=0; S.piles.gDD=1.40; }
+-  if(!S.seismic) S.seismic={on:false,As:0.15,khR:0.5,kv:0.0,hEQr:0.6,gEHEQ:1.00,gEQll:0.0,phiTauEQ:1.00,phiBEQ:1.00,phiCEQ:1.00,eFracEQ:0.3333};
++  // EE-I γEH mode: a project that stores gEHEQ keeps that fixed value ("agency"); one without it gets the γp default
++  if(S.seismic && S.seismic.gEHEQmode===undefined) S.seismic.gEHEQmode=(S.seismic.gEHEQ!==undefined)?"agency":"gp";
++  if(!S.seismic) S.seismic={on:false,As:0.15,khR:0.5,kv:0.0,hEQr:0.6,gEHEQ:1.00,gEHEQmode:"gp",gEQll:0.0,phiTauEQ:1.00,phiBEQ:1.00,phiCEQ:1.00,eFracEQ:0.3333};
+   if(!S.meta) S.meta={revs:[]};
+@@ -1249,3 +1254,4 @@ function buildInputs(){
+       ${inpRow("ΔP<sub>AE</sub> application height ratio (× H)","seismic.hEQr","–",{title:"Dynamic increment applied at this fraction of H (0.6H classic Seed–Whitman; static part stays at H/3)."})}
+-      ${inpRow("γ<sub>EH</sub> at Extreme Event I","seismic.gEHEQ","–",{title:"Static earth-pressure factor within EE-I; commonly 1.0 with the full M–O thrust. EOR confirm."})}
++      ${selRow("γ<sub>EH</sub> at Extreme Event I","seismic.gEHEQmode",[["gp","γp max/min, as Strength (1.50 / 0.90) [T.3.4.1-1, -2]"],["agency","Fixed value (agency policy)"]],{rebuild:true})}
++      ${S.seismic.gEHEQmode==="agency"?inpRow("&nbsp;&nbsp;γ<sub>EH</sub> (agency policy)","seismic.gEHEQ","–",{title:"Fixed static earth-pressure factor within EE-I (e.g. 1.0 with the full M–O thrust) where the owner allows it instead of γp."}):""}
+       ${inpRow("γ<sub>EQ</sub> on live load","seismic.gEQll","–",{title:"Project-specific per 3.4.1; commonly 0 for abutments, up to 0.5 where live presence during EQ is credible."})}
+@@ -1672,3 +1678,3 @@ function computeAll(){
+       if(["DC","DW","EV","ES"].includes(gr.cls)) gamma = L.perm ? GP[gr.cls][perm[gr.cls]??1] : 1.0;
+-      else if(gr.cls==="EH") gamma = L.eq ? +S.seismic.gEHEQ : (L.perm ? GP.EH[perm.EH] : 1.0);
++      else if(gr.cls==="EH") gamma = (L.eq && eqEHfixed()!==null) ? eqEHfixed() : (L.perm ? GP.EH[perm.EH] : 1.0);
+       else if(gr.cls==="LL") gamma = liveOn ? L.LL : 0;
+@@ -1688,3 +1694,3 @@ function computeAll(){
+     const lbl = L.perm
+-      ? `${(perm.DC===1&&L.dcMax?L.dcMax:GP.DC[perm.DC]).toFixed(2)}·DC + ${GP.DW[perm.DW].toFixed(2)}·DW + ${GP.EV[perm.EV].toFixed(2)}·EV + ${(L.eq?+S.seismic.gEHEQ:GP.EH[perm.EH]).toFixed(2)}·EH`
++      ? `${(perm.DC===1&&L.dcMax?L.dcMax:GP.DC[perm.DC]).toFixed(2)}·DC + ${GP.DW[perm.DW].toFixed(2)}·DW + ${GP.EV[perm.EV].toFixed(2)}·EV + ${((L.eq&&eqEHfixed()!==null)?eqEHfixed():GP.EH[perm.EH]).toFixed(2)}·EH`
+         +(esOn?` + ${GP.ES[perm.ES??1].toFixed(2)}·ES`:"")
+@@ -1789,3 +1795,2 @@ function computeAll(){
+     if(brgOut) warn("One or more strength permutations put the factored resultant outside the footing (B′ ≤ 0 or L′ ≤ 0); they are excluded from the bearing check — see the eccentricity check.");
+-    if(brgBxBad) warn("Rock bearing with transverse eccentricity: the biaxial no-tension pressure solution did not converge for at least one permutation — check the bearing pressure by hand.","err");
+ 
+@@ -1801,6 +1806,10 @@ function computeAll(){
+       else continue;
+-      if(qmax>sv.q) sv={q:qmax,qmin,e,eSigned:eS,side:eS>=0?"toe":"heel",Lc,V:c.V,mode,lbl:c.lbl,c};
++      // transverse eccentricity e_L (as the strength bearing check, F15): planar no-tension pressure, peak corner [10.6.1.3, 10.6.5]
++      const eL=Math.abs(c.Mt)/c.V, qP=qmax, qminP=qmin; let bx=null;
++      if(eL>1e-9){ if(eL>=Lftg/2) continue; bx=biaxRockQ(c.V,e,eL,B,Lftg); qmax=bx.qmax; qmin=bx.full?bx.qmin:0; if(!bx.ok) brgBxBad=true; }
++      if(qmax>sv.q) sv={q:qmax,qmin,qP,qminP,eL,bx,e,eSigned:eS,side:eS>=0?"toe":"heel",Lc,V:c.V,mode,lbl:c.lbl,c};
+     }
+     R.serviceBearing=sv;
+-    if(sv.mode==="tri") warn("Service-level bearing pressure is triangular (resultant outside the middle third) — verify serviceability/settlement with the geotechnical engineer.");
++    if(brgBxBad) warn("Bearing with transverse eccentricity: the biaxial no-tension pressure solution did not converge for at least one permutation — check the bearing pressure by hand.","err");
++    if(sv.mode==="tri"||(sv.bx&&!sv.bx.full)) warn("Service-level bearing pressure is "+(sv.mode==="tri"?"triangular (resultant outside the middle third)":"partial-contact (resultant outside the kern with the transverse eccentricity)")+" — verify serviceability/settlement with the geotechnical engineer.");
+   }
+@@ -1998,3 +2007,3 @@ function computeAll(){
+     const L=LIMITS[lsName], ns=L.noSuper?0:1;
+-    const gEH_ls=L.eq? +S.seismic.gEHEQ : gEH_max;
++    const gEH_ls=(L.eq&&eqEHfixed()!==null)? eqEHfixed() : gEH_max;
+     // construction stage: reduced backfill height for the wall pressures
+@@ -2084,15 +2093,25 @@ function computeAll(){
+     const det=R.checks.pileComp.det, act=activePiles();
+-    // per-foot upward line loads by pile row (x from footing CL)
+-    const rows={};
+-    act.forEach((p,i)=>{ const key=p.x.toFixed(4); (rows[key]=rows[key]||{x:p.x,P:0}).P+=det.loads[i]; });
+-    const rowArr=Object.values(rows);
+-    let MtoeUp=0,VtoeUp=0,MheelUp=0,VheelUp=0;
+-    rowArr.forEach(r=>{
+-      const xT=B/2+r.x;
+-      if(xT<g.Ltoe){ VtoeUp+=r.P/Lftg; MtoeUp+=r.P/Lftg*(g.Ltoe-xT); }
+-      if(xT>xStemBack){ VheelUp+=r.P/Lftg; MheelUp+=r.P/Lftg*(xT-xStemBack); }
+-    });
++    // TOE — every strength / EE permutation (as the heel); per-foot upward line loads by pile row (x from footing CL).
++    // The max-pile-compression case is evaluated first, so it is kept on a tie.
+     const MtoeDn=0.9*wFoot*g.Ltoe*g.Ltoe/2;
+-    toeDem={Mu:Math.max(0,MtoeUp-MtoeDn), Vu:Math.max(0,VtoeUp-0.9*wFoot*g.Ltoe),
+-      MtoeUp,VtoeUp,MtoeDn,rowArr, lbl:det.c?.lbl+" ("+R.checks.pileComp.ls+")", src:"pile"};
++    function toePile(loads){
++      const rows={};
++      act.forEach((p,i)=>{ const key=p.x.toFixed(4); (rows[key]=rows[key]||{x:p.x,P:0}).P+=loads[i]; });
++      const rowArr=Object.values(rows);
++      let MtoeUp=0,VtoeUp=0;
++      rowArr.forEach(r=>{ const xT=B/2+r.x; if(xT<g.Ltoe){ VtoeUp+=r.P/Lftg; MtoeUp+=r.P/Lftg*(g.Ltoe-xT); } });
++      return {rowArr,MtoeUp,VtoeUp,Mu:Math.max(0,MtoeUp-MtoeDn),Vu:Math.max(0,VtoeUp-0.9*wFoot*g.Ltoe)};
++    }
++    let tM=Object.assign(toePile(det.loads),{c:det.c,ls:R.checks.pileComp.ls}), tVu=tM.Vu, tVls=tM.ls;
++    for(const lsName of STR_LIMITS){
++      for(const pl of permutations(lsName)){
++        const c=comboEffects(lsName,pl.perm,pl.liveOn,false);
++        const loads=pileLoadsFor(c); if(!loads) continue;
++        const t=toePile(loads);
++        if(t.Mu>tM.Mu+1e-9) tM=Object.assign(t,{c,ls:lsName});
++        if(t.Vu>tVu+1e-9){ tVu=t.Vu; tVls=lsName; }
++      }
++    }
++    toeDem={Mu:tM.Mu, Vu:tVu, MtoeUp:tM.MtoeUp, VtoeUp:tM.VtoeUp, MtoeDn, rowArr:tM.rowArr, ls:tM.ls, lsV:tVls,
++      lbl:tM.c?.lbl+" ("+tM.ls+")", src:"pile"};
+     // HEEL — every strength permutation; downward loads and pile reactions from the same permutation (consistent combination)
+@@ -2431,3 +2450,3 @@ function computeAll(){
+     return { DC:L.perm?(L.dcMax||GP.DC[1]):1, DW:ns*(L.perm?GP.DW[1]:1), LL:ns*L.LL, EV:L.perm?GP.EV[1]:1,
+-      EH:L.eq? +S.seismic.gEHEQ : (L.perm?GP.EH[1]:1), LS:L.LL, ES:L.perm?GP.ES[1]:1,
++      EH:(L.eq&&eqEHfixed()!==null)? eqEHfixed() : (L.perm?GP.EH[1]:1), LS:L.LL, ES:L.perm?GP.ES[1]:1,
+       BR:ns*L.LL, TU:ns*L.TU, CRSH:ns*L.CR, WS:ns*L.WS, WL:ns*L.WL, ns };
+@@ -2874,3 +2893,3 @@ function renderTabComb(R){
+       <td>${p?fmt(GP.EV[1])+" / "+fmt(GP.EV[0]):"1.00"}</td>
+-      <td>${L.eq?fmt(+S.seismic.gEHEQ):(p?fmt(GP.EH[1])+" / "+fmt(GP.EH[0]):"1.00")}</td>
++      <td>${(L.eq&&eqEHfixed()!==null)?fmt(eqEHfixed())+" (agency)":(p?fmt(GP.EH[1])+" / "+fmt(GP.EH[0]):"1.00")}</td>
+       <td>${p?fmt(GP.ES[1])+" / "+fmt(GP.ES[0]):"1.00"}</td>
+@@ -3018,3 +3037,4 @@ function renderTabStab(R){
+         sv.mode==="trap"?"q_{max,min} = \\dfrac{\\Sigma V}{B\\,L_{ab}}\\left(1\\pm\\dfrac{6e}{B}\\right)":"q_{max} = \\dfrac{2\\,\\Sigma V}{3\\,L_{ab}(B/2-e)}\\ \\text{over } L_c=3(B/2-e)",
+-        `q_{max} = ${fmtT(sv.q)}\\ \\text{ksf}, \\qquad q_{min} = ${fmtT(sv.qmin)}\\ \\text{ksf}, \\qquad e_{svc} = ${fmtT(sv.e)}\\ \\text{ft}`])}
++        ...(sv.bx?[`e_L = \\dfrac{|\\Sigma M_t|}{\\Sigma V} = \\dfrac{${fmtT(Math.abs(sv.c.Mt))}}{${fmtT(sv.V)}} = ${fmtT(sv.eL,3)}\\ \\text{ft}\\,, \\quad \\dfrac{6e}{B}+\\dfrac{6e_L}{L_{ftg}} = ${fmtT(sv.bx.kern,3)}\\ ${sv.bx.full?"\\le":">"}\\ 1 \\;\\Rightarrow\\; ${sv.bx.full?"q = \\dfrac{\\Sigma V}{B\\,L_{ftg}}\\left(1\\pm\\dfrac{6e}{B}\\pm\\dfrac{6e_L}{L_{ftg}}\\right)":"\\text{planar no-tension pressure (solved numerically)}"}`]:[]),
++        `q_{max} = ${fmtT(sv.q)}\\ \\text{ksf}${sv.bx?"\\ (\\text{corner})":""}, \\qquad q_{min} = ${fmtT(sv.qmin)}\\ \\text{ksf}, \\qquad e_{svc} = ${fmtT(sv.e)}\\ \\text{ft}`])}
+       <div class="note-box"><b>External geotechnical items (not solved in this tool):</b> settlement and overall (global slope) stability are to be evaluated by the geotechnical engineer using the Service I pressures and loads above. [10.6.2.4, 11.6.2.3, 11.6.3.7]</div>
+@@ -3241,3 +3261,3 @@ function renderTabStruct(R){
+         `M_u = ${fmtT(td.Mu)}\\ \\text{kip-ft/ft}\\,, \\qquad V_u = ${fmtT(td.Vu)}\\ \\text{kip/ft}`],
+-        "Pile rows forward of the stem front face, using the governing max-compression case per-pile loads.")
++        "Pile rows forward of the stem front face; every strength / Extreme Event permutation is checked and the one giving the largest toe moment is shown"+(td.lsV&&td.lsV!==td.ls?" (V_u from "+td.lsV+")":"")+".")
+     : `<div class="note-box">No toe demand source (check inputs).</div>`;
+@@ -3817,4 +3837,5 @@ function drawChartsFor(tabId,R){
+     let xsv=[],qsv=[];
+-    if(sv.mode==="trap"){ xsv=[0,B]; qsv=[sv.q,sv.qmin]; }
+-    else { xsv=[0,sv.Lc,sv.Lc,B]; qsv=[sv.q,0,0,0]; }
++    const sq=sv.qP??sv.q, sqm=sv.qminP??sv.qmin;   // along-B curve (averaged along L when e_L > 0; the corner peak is reported in §3.4)
++    if(sv.mode==="trap"){ xsv=[0,B]; qsv=[sq,sqm]; }
++    else { xsv=[0,sv.Lc,sv.Lc,B]; qsv=[sq,0,0,0]; }
+     let xst=[],qst=[];
+@@ -4754,3 +4775,3 @@ function inputEchoHTML(){
+   h+="<h3>Seismic / scour</h3>"+echoRows([
+-    ["Extreme Event I",S.seismic.on?("ON — As="+fmt(+S.seismic.As,3)+", kh="+fmt(+S.seismic.khR,2)+"·As, kv="+fmt(+S.seismic.kv,2)+", ΔPAE @ "+fmt(+S.seismic.hEQr,2)+"H; φτ/φb/φc(EE)="+fmt(+S.seismic.phiTauEQ,2)+"/"+fmt(+S.seismic.phiBEQ,2)+"/"+fmt(+S.seismic.phiCEQ,2)+", e/B ≤ "+fmt(+S.seismic.eFracEQ,3)):"OFF",""],
++    ["Extreme Event I",S.seismic.on?("ON — As="+fmt(+S.seismic.As,3)+", kh="+fmt(+S.seismic.khR,2)+"·As, kv="+fmt(+S.seismic.kv,2)+", ΔPAE @ "+fmt(+S.seismic.hEQr,2)+"H; φτ/φb/φc(EE)="+fmt(+S.seismic.phiTauEQ,2)+"/"+fmt(+S.seismic.phiBEQ,2)+"/"+fmt(+S.seismic.phiCEQ,2)+", e/B ≤ "+fmt(+S.seismic.eFracEQ,3)+", γEH(EE) = "+(eqEHfixed()!==null?fmt(eqEHfixed(),2)+" (agency policy)":"γp max/min")):"OFF",""],
+     ["Scour condition",f.scour?"ON — passive eliminated; qn at scoured grade":"off",""]]);
+```
