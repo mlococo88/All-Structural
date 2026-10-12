@@ -220,12 +220,12 @@ All "before/after" numbers below were produced by running `computeEDM` from the 
 ## Open items (not changed)
 - O1. **10th Ed. text not available in this environment.** F5 (1.25GS ≤ 1.25 ksi; no increase for "fixed against shear") and F6 (0.75 for circular) were made from my knowledge of the post-2009 AASHTO text, supported by DOT manual excerpts found by search. — Engineer to confirm both against the 10th Ed., Art. 14.7.6.3.2 and 14.7.6.3.5. The `fixedShear` toggle now affects only Method B stability.
 - O3. **Plain-pad rotation check (14.7.6.3.5).** Not added; I am not confident of the 10th Ed. form for plain pads.
-- O4. **Construction tolerance on transverse rotation.** The MassDOT tolerance (0.03) is applied once (to the longitudinal rotation / resultant), per the existing §3.5.7.6 note. It is not applied to the rectangular transverse check (F3, F6). AASHTO 14.4.2.1's 0.005 rad may apply about each axis. — Engineer to decide.
 - O7. **MassDOT values kept (needs MassDOT confirmation):** construction rotation tolerance 0.03 rad (AASHTO 14.4.2.1: 0.005) and combined-strain limit 4.75 (AASHTO 5.0).
 - O12. **Anchorage check basis (S2).** (a) Δu is taken as the input Δs (MassDOT ×1.2 movement), treated as the factored strength-limit shear deformation (γTU = 1.20) — verify; creep/shrinkage in Δs at their own strength factors would change it slightly. (b) Method B uses the specified G (no +15% tolerance); Method A / plain pads use the upper-bound durometer G (`coef.GmaxA`). (c) P_min defaults to the unfactored service P_DL; enter a lower P_min (e.g. 0.9·P_DL, or DC only without DW) if the owner requires it. — Engineer to confirm (a)–(c).
-- O13. **Anchored / doweled pads (S2).** There is no "pad secured against horizontal movement" toggle; an anchored pad that exceeds P_min/5 still shows FAIL with the message "must be secured". Plain 1 × 5 pads under adjacent deck beams commonly exceed it (worked case in S2). Recommend: add a toggle `tog.anchored` (default off) that reports the check as "secured — OK" when on. Not added without the engineer's OK.
 
 ## Resolved items
+- O4. Construction tolerance on the rectangular transverse rotation → **fixed in A2** (2026-10-12, `claude/edm-anchored`): AASHTO 0.005 now also added about W; MassDOT 0.03 stays applied once (coordinator decision).
+- O13. Anchored / doweled pad toggle → **added in A1** (`tog.anchored`, default off).
 - O5. Method A uplift G → **fixed in S1** (2026-10-12, `claude/sweep-edm`).
 - O6. Method B G warning range → **fixed in S3**.
 - O8. Anchorage / slip check → **fixed in S2**.
@@ -559,3 +559,107 @@ Inventory items worked: EDM-O5, EDM-O8, EDM-O6, EDM-O10, EDM-O11 (fixed); EDM-O9
 - EDM-O4: should the construction tolerance also be added to the rectangular transverse rotation (θt about W)? Recommendation: yes for the AASHTO 0.005 per axis; MassDOT §3.5.7.6 to confirm for 0.03.
 - EDM-O7: MassDOT 0.03 rad tolerance and 4.75 combined-strain limit. Confirm with MassDOT. Recommendation: keep (conservative).
 - O12 and O13 in "Open items" above (anchorage basis; anchored-pad toggle).
+
+## 2026-10-12 — PR: claude/edm-anchored (follow-up to #139; PR link added after merge)
+
+Coordinator request after #139: (1) O13, an anchored / doweled toggle; (2) O4, the AASHTO 0.005 tolerance on the rectangular transverse rotation (MassDOT 0.03 unchanged).
+Check-case pad unless stated: rectangular 18 × 24, hri = 0.5, n = 6, cover 0.25, G = 0.160, P_DL = 80, P_LL = 55, θLL = 0.004, seat slope 0.010, Δs = 0.35. Derived: A = 432 in², S = 10.286, hrt = 3.50, σDL = 0.1852, σLL = 0.1273, σTL = 0.3125 ksi; γa,st = 1.4·0.1852/(0.16·10.286) = 0.158, γa,cy = 0.108, γs = 0.100.
+
+### A1. Anchored / doweled toggle for the anchorage check (O13)   [behaviour option; default unchanged] [LESS conservative only when switched on]
+- **Where:** `defaultState().tog` (anchor `anchored:false`), panel I-5 in `buildInputs()` (new checkbox after "Exterior-beam check"), `computeEDM` (`R.anc.anchored`, new `addAnc` helper replacing the three anchorage `add(...)` calls, the anchorage warning), `ancEq(R)`, `renderDashboard` / `buildReport` check counts and the report verdict column, `inputEcho()`.
+- **Problem:** an anchored or doweled pad that exceeds P_min/5 still showed FAIL and "must be secured", and failed the PAD hand-off.
+- **Governing provision:** AASHTO LRFD 10th Ed. (2024), Art. 14.7.5.4 / 14.7.6.4 (when H > P_min/5 the pad shall be secured against horizontal movement). Once secured, the anchorage must be designed for H (Art. 14.6.3.1); this tool does not design it.
+- **Before:**
+  ```js
+      exteriorCheck:false    // exterior-beam check → uses 5.0 limit regardless
+  ```
+  ```js
+    R.anc={G:GAnc,H:Hanc,Pmin:PminUsed,PminFromDL:!(PminIn>0),dc:ancDC,ref:(S.method==="B"&&!isPlain())?"14.7.5.4":"14.7.6.4"};
+  ```
+  ```js
+    add("ancP","Anchorage H ≤ P_min/5 [14.7.6.4]",ancDC,"H ≤ P_min/5");
+    add("anc","Anchorage H ≤ P_min/5 [14.7.5.4]",ancDC,"H ≤ P_min/5");
+    add("ancA","Anchorage H ≤ P_min/5 [14.7.6.4]",ancDC,"H ≤ P_min/5");
+  ```
+  ```js
+    if(isFinite(ancDC)&&ancDC>1.0001) warn(
+  ```
+  `renderDashboard` / `buildReport`: `R.dash.length` (3 places); report verdict `${d.pass?"PASS":"FAIL"}`; `ancEq` ends `+checkLine("Anchorage H ≤ P_min/5",a.dc,"["+a.ref+"]"); }`.
+- **After:**
+  ```js
+      exteriorCheck:false,   // exterior-beam check → uses 5.0 limit regardless
+      anchored:false         // pad anchored / doweled against horizontal movement → anchorage check is informational (design the anchorage for H)
+  ```
+  ```js
+    R.anc={G:GAnc,H:Hanc,Pmin:PminUsed,PminFromDL:!(PminIn>0),dc:ancDC,ref:(S.method==="B"&&!isPlain())?"14.7.5.4":"14.7.6.4",anchored:!!tg.anchored};
+  ```
+  ```js
+    // anchorage item: a D/C check, or (pad anchored / doweled) an informational item with no D/C and no pass/fail, so nFail / governing D/C exclude it
+    const addAnc=id=>{ if(R.anc.anchored) dash.push({id,name:"Anchorage ["+R.anc.ref+"] — anchored/doweled: design the anchorage for H = "+fmt(Hanc)+" kip",dc:null,pass:null,ref:"info"});
+      else add(id,"Anchorage H ≤ P_min/5 ["+R.anc.ref+"]",ancDC,"H ≤ P_min/5"); };
+  ```
+  The three calls become `addAnc("ancP");`, `addAnc("anc");`, `addAnc("ancA");` (same positions, same names as before when the toggle is off). Warning: `if(!R.anc.anchored&&isFinite(ancDC)&&ancDC>1.0001) warn(`.
+  - Check counts: `R.dash.filter(d=>d.pass!==null).length` in place of `R.dash.length`. This is identical while there is no info item.
+  - Report verdict: `${d.pass===null?"INFO":d.pass?"PASS":"FAIL"}`.
+  - `ancEq`: when anchored, a grey "INFO" line "Pad anchored / doweled (panel I-5) — design the anchorage for H = … kip per bearing; H/(P_min/5) = … for reference (not a pass/fail check)" replaces the check line.
+  - `inputEcho()`: new row `["Pad anchored / doweled", anchored ? "yes — anchorage force H = …" : "no", anchored ? "kip" : ""]`.
+  - Checkbox (I-5): `<input type="checkbox" data-path="tog.anchored">` "Pad anchored / doweled against horizontal movement (anchorage check becomes "design the anchorage for H")".
+- **Saved data:** new optional field `tog.anchored` (default false). Old files load with false and give the #139 results.
+- **Effect when on:** the anchorage item has no D/C and no pass/fail. It is left out of `nFail`, the governing D/C, the check count, the D/C chart and the PAD `pass` / `govDC`. H is shown in the dashboard, the Design Checks tab, the report summary table and the input echo.
+- **Check cases:**
+  - Default circular pad, toggle on: H = 0.160·201.06·0.35/3.5 = 3.22 kip. Dashboard: before (off) "Anchorage H ≤ P_min/5 [14.7.5.4] (0.20) · All 7 checks PASS · governing D/C = 0.80"; on: "Anchorage [14.7.5.4] — anchored/doweled: design the anchorage for H = 3.22 kip · All 6 checks PASS · governing D/C = 0.80".
+  - Default circular pad with P_min = 10 kip: off → D/C 1.61, "1 of 7 checks FAIL", PAD pass false / govDC 1.61; on → "All 6 checks PASS", PAD pass true / govDC 0.80, no "must be secured" warning; report row "… H = 3.22 kip — INFO".
+  - Plain pad (default plain state), on: the 3.78 anchorage FAIL becomes info (H = 60.48 kip). Shear deformation (1.40) still fails: "1 of 3 checks FAIL · governing D/C = 1.40".
+- **Other copies:** none.
+
+### A2. AASHTO 0.005 construction tolerance added about W for the rectangular transverse checks (O4)   [calc change] [MORE conservative]
+- **Where:** `computeEDM` (anchor `const tolW=`; `grW_st`; `upliftAW`), new helper `thTWtex(R)` before `hbuEq`, transverse lines and note in `renderDesign` (Method B rotational-strain block and Method A uplift block).
+- **Problem:** with the AASHTO 0.005 rad tolerance selected, the tolerance was added only to the longitudinal rotation (about L). The rectangular transverse checks about W used θt alone.
+- **Governing provision:** AASHTO LRFD 10th Ed. (2024), Art. 14.4.2.1 (the design rotation includes an allowance of 0.005 rad for uncertainties, taken about each axis — verify the "each axis" reading against the printed text); used in Art. 14.7.5.3.3 (γr, Method B) and Art. 14.7.6.3.5 (Method A uplift). The MassDOT 0.03 rad option is unchanged and still applied once, to the resultant/longitudinal rotation (MassDOT §3.5.7.6), as the coordinator asked.
+- **Before:**
+  ```js
+    R.rot={thLongStatic,thLongCyclic,thTrans,thTotal,tol:+tg.rotTol};
+  ```
+  ```js
+    // rectangular: transverse rotation θt about W (tolerance applied once, to the longitudinal rotation, per MassDOT §3.5.7.6)
+    const grW_st=(!isCirc()&&!isPlain())?Dr*Math.pow(planW/hri,2)*(thTrans/n):0;
+  ```
+  ```js
+    const upliftAW=(!isCirc()&&!isPlain())?DrA*GmA*Sf*Math.pow(planW/hri,2)*(thTrans/n):0;   // rectangular: transverse rotation about W
+  ```
+- **After:**
+  ```js
+    // rectangular transverse checks (θt about W): the AASHTO 0.005-rad tolerance is added about this axis too [14.4.2.1]; the MassDOT 0.03 is applied once, to the resultant [§3.5.7.6]
+    const tolW=(Math.abs(+tg.rotTol-0.005)<1e-9)?0.005:0;
+    const thTransW=thTrans+tolW;
+    R.rot={thLongStatic,thLongCyclic,thTrans,thTotal,tol:+tg.rotTol,tolW,thTransW};
+  ```
+  ```js
+    // rectangular: transverse rotation θt about W (+0.005 with the AASHTO tolerance; MassDOT 0.03 applied once, to the longitudinal rotation, per §3.5.7.6)
+    const grW_st=(!isCirc()&&!isPlain())?Dr*Math.pow(planW/hri,2)*(thTransW/n):0;
+  ```
+  ```js
+    const upliftAW=(!isCirc()&&!isPlain())?DrA*GmA*Sf*Math.pow(planW/hri,2)*(thTransW/n):0;   // rectangular: transverse rotation about W (+0.005 with the AASHTO tolerance)
+  ```
+  ```js
+  function thTWtex(R){ const r=R.rot; return r.tolW>0?`\\theta_t = ${fmtT(r.thTrans,4)}+${fmtT(r.tolW,3)} = ${fmtT(r.thTransW,4)}`:`\\theta_t = ${fmtT(r.thTransW,4)}`; }   // transverse rotation used about W (incl. the AASHTO tolerance)
+  ```
+  - The Method B transverse γr line and the Method A transverse uplift line end with `, \\quad ${thTWtex(R)}`.
+  - The rectangular note in the Method B block adds: "With the AASHTO 0.005-rad tolerance it is also added to θt [14.4.2.1]; the MassDOT 0.03 rad is applied once, to the longitudinal rotation [§3.5.7.6]."
+- **Not affected:** circular pads (θst is already the resultant plus the tolerance once), the displayed design rotation θs, the Method B/A longitudinal checks, plain pads, and every case with the MassDOT 0.03 option.
+- **Check cases** (rectangular pad above, AASHTO tolerance 0.005):
+  - Method B, θt = 0.005: γr,st,W = 0.5·(24/0.5)²·θ/6 = 192·θ. Before θ = 0.005 → 0.960, combinedW = 0.158 + 0.960 + 0.100 + 1.75·0.108 = 1.407. After θ = 0.010 → 1.920, combinedW = 2.367. Longitudinal combined = 0.158 + 0.5·36²·0.015/6 (= 1.620) + 0.100 + 1.75(0.108 + 0.432) = 2.823 still governs → combined-strain D/C 0.59, unchanged.
+  - Method B, θt = 0.020: before 192·0.020 = 3.840, combinedW = 4.287, D/C 4.287/4.75 = 0.90 PASS. After 192·0.025 = 4.800, combinedW = 5.247, D/C 1.10 FAIL (governs; PAD pass true → false).
+  - Method B, θt = 0: before combinedW = 0.447; after γr,st,W = 0.960, combinedW = 1.407 (longitudinal still governs).
+  - Method A, θt = 0.005: σs,min,W = 0.5·0.200·10.286·48²·θ/6 = 394.97·θ. Before 1.975 ksi (D/C 1.975/0.3125 = 6.32); after 3.950 ksi (D/C 12.64).
+  - MassDOT 0.03, θt = 0.005: unchanged (Method A transverse 1.975 ksi, D/C 6.32).
+- **Other copies:** none.
+
+### Verification
+- `node --check` on all six inline scripts of the old and new file: all pass.
+- Headless Chromium, main (a794071) vs branch, KaTeX 0.16.11 / Plotly 2.35.2 served locally, 16 scenarios plus the Abutment opener hand-off. Scenarios: default; rect; plain; Method A; circular with tolerance 0.005; rect with θt = 0.005 at 0.03 and 0.005; rect with θt = 0 at 0.005; rect Method A with θt = 0.005 at 0.005 and 0.03; rect with θt = 0.02 at 0.005; anchored (default, with P_min = 10, plain, Method A); unanchored with P_min = 10.
+  - Results change only in the A2 cases above (combinedW, upliftAW and their D/Cs, only with the 0.005 option on rectangular pads) and the A1 cases (anchorage item info, counts, PAD pass/govDC).
+  - Every other `LAST` value is identical. The only additions are the new fields `rot.tolW`, `rot.thTransW` and `anc.anchored`. The state differs only by the new `tog.anchored`.
+  - Text changes elsewhere are the new input-echo row and the new θt line in the rectangular design blocks. Circular, plain and MassDOT-0.03 results are unchanged.
+  - No console errors.
+- Screenshots (I-5 with the toggle, the anchored anchorage block, the Method B and Method A transverse lines) inspected: `scratchpad/followups/edm-anchored/`.
