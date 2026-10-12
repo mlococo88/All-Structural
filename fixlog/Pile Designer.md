@@ -11911,6 +11911,140 @@ index 638e8e4..53816e5 100644
        /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-400 mt-1 leading-snug" }, "\u03b8\u1d62 = 1.75 applies to compact sections in weak-axis bending with no unbraced length (non-scour). The linear p\u2013y solve uses a constant subgrade k per Table 3.10.11-1, matching MassDOT's basis; the nonlinear solve uses the full Reese/Matlock curves. Both are displacement-controlled (imposed \u03b4\u1d1b, fixed head). For the non-scour case they should agree and reproduce the tabulated Pu closely; the nonlinear result is the appropriate refined check under scour. Sanity-check aid \u2014 independent PE review required."));
 ```
 
+## 2026-10-12 — PR: claude/pile-ui2 (PR link added after merge)
+
+Engineer's instruction 2026-10-12: "continue ... use your best judgment"; the decisions per item were made by the coordinator under that delegation (listed in each entry). One calculation change (F58, opt-in: its default of 0 gives bit-identical results); everything else is display, input UI or the LPILE import.
+
+**How verified (all entries):** `node --check` on every inline script. Headless Chromium (Playwright, pinned libraries served locally), origin/main vs this branch, all three pile types, "Run all cases" and every case made active: the default micropile, H-pile and integral-abutment projects and 13 saved test projects (micropile and H-pile groups with AASHTO / legacy p-multipliers, clay / mixed / soft-clay profiles, biaxial Group rows for both pile types, η override, single pile, integral abutment Tier 2 sand and clay). Every value of `R` (the full result object, every key), the per-case envelope rows, the module texts and statuses: **identical**. The autosave differs only by the new keys (`hpCorrLoss`, `hpCorrTop`, `hpCorrBot`, `projClient`, `projDate`) and, for projects that do not store a title block, the blank title-block defaults (F59). The report text differs only where listed in each entry. No console errors (one pre-existing exception: a blank casing OD logs SVG "NaN" attribute errors on main and on this branch alike). Screenshots of every changed screen element were looked at.
+
+### F52. LPILE import: every load case of a multi-case output, with a case picker (default: the first case, as before) and an envelope option (O7)   [LPILE import / UI] [no result change: the first case is the default and its values are those used before]
+
+- **Decision (coordinator, 2026-10-12):** parse every load case; a picker, default = the first case (today's behaviour); optional "envelope of all cases"; remember the pick in the existing project field.
+- **Where:** new functions `lpileCaseBlocks`, `lpileCaseLoads`, `lpileAddCases`, `lpileWithCase` just above `parseLpileText` (anchor `function lpileCaseBlocks(raw)`); `handleLpileFile` (anchor `const parsed = lpileAddCases(parseLpileText(text), text);`); the LPILE import panel in Module 02 (anchor `"pd-lp-case flex items-center gap-2 flex-wrap mb-1.5"`).
+- **Before:** `const parsed = parseLpileText(text);` — `parseLpileText` reads the first "Maximum bending moment = …" summary line (or the first "Computed Values of Pile Loading and Deflection" table) in the file, so a multi-case output gave case 1 only, with no indication that more cases existed.
+- **After:**
+  ```js
+  const parsed = lpileAddCases(parseLpileText(text), text); // F52 (O7): every load case
+  ```
+  `parseLpileText` is unchanged and still produces the top-level `summary` / `records` / `source` / `inputs` / `warnings` from case 1. `lpileAddCases` splits the text at each "Computed Values of Pile Loading and Deflection" header; with two or more blocks it adds `out.cases` (case 1 = the same top-level objects; cases 2…n = `parseLpileText(block)`, with the head shear "Shear force at pile head = … lbs" and axial "Axial thrust load on pile head = … lbs" of each block) and `out.caseSel = 0`. The picker calls `lpileWithCase(lp, sel)`, which copies the picked case's `summary`, `records`, `source`, `warnings` and loads (`inputs.shear_kip`, `inputs.axial_kip`) to the top level, so every existing reader (the "Use … kip·ft as the design moment" button, the LPILE-vs-app reconciliation, the LPILE graphs) follows the pick. "Envelope of all cases": M_max = the largest |M_max| of the cases (its case also gives the depth of M_max, the profiles, the fixity and the loads compared), max deflection and max shear = the largest of the cases; a note under the picker names the case each value comes from.
+- **Saved data:** the pick is kept in the existing LPILE import object (`caseSel`, saved with `cases` in `micropile_lrfd_lpile_v1`, the project file's `lpile` field and the library record). A single-case file, and every LPILE import saved before, have no `cases` / `caseSel` keys and load and behave exactly as before. No key renamed.
+- **Check case:** a three-case LPILE-format text file (V = 10 / 15 / 8 kip, P = 100 / 80 / 120 kip):
+  - main and this branch, default: M_max 17.5 kip·ft (case 1); the stored import's top-level keys identical (the branch adds `cases`, `caseSel`); applying gives I.Mmax = 17.5 on both, Module 04 text identical.
+  - picker: case 2 → 25.8 kip·ft, case 3 → 13.5 kip·ft, envelope → 25.8 kip·ft (case 2), each warning line converts that case's moment ("converted to 25.80 kip-ft"); the pick ("env") survives a page reload.
+  - single-case file: stored import and panel text identical to main.
+- **Governing provision:** none (import of an external analysis; no formula).
+
+### F53. φv (steel shear) marked "unused" (O11); one-click "Use fyb = 120 ksi" for a Gr150 bar entered at 150 ksi (O12)   [UI] [no result change]
+
+- **Decisions:** O11 — keep the field (saved data), mark it rather than hide it (less intrusive). O12 — keep the warning, add a one-click button, no automatic conversion. Basis checked first: F1 (2026-10-04) — ASTM A722 Type II bar, f_pu = 150 ksi, minimum f_py = 0.80 f_pu = 120 ksi; the warning text already says so.
+- **O11 where / before / after:**
+  - φ grid (anchor `["φv (unused)", "phiV"]`): `["φv", "phiV"]` → `["φv (unused)", "phiV"]`.
+  - `PHI_INFO.phiV.what`: "Steel-member shear factor. It is NOT applied to the concrete cap punching check (that uses φv punch); it is kept for the presets and saved projects." → "Steel-member shear factor. Not used by any check in this tool (the concrete cap punching check uses φv punch); the field is kept so presets and saved projects load unchanged."
+  - Report A, "Resistance factors · micropile": note "not used for punching" → "not used by any check".
+- **O12 where:** `BarSelect`, after the `fyb ≥ 150 ksi` warning text (anchor `"Use fyb = 120 ksi (Gr150 bar yield)"`).
+  - Before: the warning text only.
+  - After: the same text, then
+    ```js
+    React.createElement("button", { type: "button", onClick: () => set('fyb', 120), title: "Sets the bar yield fyb to 120 ksi (ASTM A722 Gr150: fpy = 0.80 fpu). Only fyb changes; the bar area is kept.", … }, "Use fyb = 120 ksi (Gr150 bar yield)")
+    ```
+  - Only `fyb` changes, only when clicked; loading a project never changes it.
+- **Check case (O12):** a project saved with fyb = 150: the warning and the button show under the centre-bar selector; one click → autosaved fyb = 120 (F1's check case then applies: Tn,bar 237.0 → 189.6 kip for A_b = 1.58 in²).
+
+### F54. Blank or invalid numeric inputs: "enter a value" at the field and a banner instead of unexplained "—" / NG (O13)   [display] [no result change]
+
+- **Decision:** show "enter a value" on blank / invalid numeric inputs and a clear message instead of NaN results.
+- **Where:** `Field` (anchor `const bad = !disabled && typeof value === "number" && isNaN(value);`); `computeAll` start (anchor `if (blankInputs.length) R.blankInputs = blankInputs;`); helper `blankInputsMsg` after `fmt`; the on-screen error block (anchor `"pd-blank-banner text-[11px] px-2 py-1 mb-1 rounded-sm"`) and the report title-block notes (anchor `"⚠ Enter a value: "`).
+- **Before:** a blank number field is stored as NaN; every result that uses it shows "—" and its check fails, with no message (until a reload restores the default, F8).
+- **After:**
+  - `Field`: when its value is NaN, a red border, `aria-invalid="true"` and the line "enter a value" under the input.
+  - `computeAll` lists the input keys whose value is NaN (top level, and one level into arrays of objects such as `soilLayers[2].gamma`) in `R.blankInputs` (set only when the list is not empty, so every valid project's `R` is unchanged). It is display only: it is not an input error and does not change `allPass` or any check.
+  - Screen (above the outputs) and report (under the title block): "⚠ Enter a value: blank or invalid input fub. Results that use it are not valid (shown as — or NG) until a number is entered; the field is marked “enter a value” in the inputs."
+- **Check case:** blank "Bar fub" (micropile), "Casing OD" (micropile) and "Yield Fy" (H-pile) in-session, main vs branch: every `R` value identical except the new `R.blankInputs` (["fub"], ["OD"], ["hpFy"]); the banner and the field hint show; typing a value removes both.
+
+### F55. Edge distance labelled "pile centre to cap edge" (O15); integral abutment eligibility shown as "eligible / not eligible" with a hint for blank inputs (O17)   [display] [no result change]
+
+- **O15 decision:** label the input to match the calculation (`d_edge = min(de1, de2)` is the pile-centre-to-cap-edge distance in the bearing A2 and the punching `bo2` legs). Display only.
+  - Cap geometry panel: label "Edge dist 1" / "Edge dist 2" → "Edge distance 1" / "Edge distance 2" with the sub-label "pile centre to cap edge".
+  - Module 06/07 variable table: "edge distances pile→cap edge, two directions …" → "edge distances, pile centre to cap edge, two directions …".
+- **O17 decision:** show eligible / not eligible (not a ratio), with an "enter bridge length / abutment height" hint when blank.
+  - New helpers `IAB_ELIG_LBL`, `iabEligMissing`, `iabEligText` (anchor `function iabEligText(I, ok)`).
+  - Summary of checks (`UtilizationDashboard`): the eligibility row shows the text "eligible" or "not eligible — enter bridge length and abutment height" (the missing ones only) in place of the bar, "OK" / "NG" in place of the ratio; the "governs:" line and the aria label say the same. Before: "Simplified-Method eligibility 2.00 ✗". The row's sort value (0.2 / 2.0) is unchanged, so the row order is unchanged.
+  - Report "Summary of Results": capacity "—" and demand "eligible" / "not eligible — enter …" for that row. Before: "1.0" and "1.00".
+  - Inputs: under "Total bridge length (ft)" "enter the bridge length (eligibility)", under "Abut. height (ft)" "enter a value", while the value is 0 / blank.
+  - The eligibility rule (`bc`, `simplifiedApplies`) is unchanged.
+- **Check case:** default integral abutment project (bridge length 0, abutment height 0): before "2.00 ✗", after "not eligible — enter bridge length and abutment height · NG ✗"; with 120 ft and 12 ft (other conditions met): before "0.20 ✓", after "eligible · OK ✓".
+
+### F56. H-pile "UNVERIFIED φ" banner replaced by a factual "verify" note in the tool's amber verify style (O21)   [display] [no result change]
+
+- **Decision:** keep a verification note, in the amber "verify" style used elsewhere (the "PDF — verify" chip: background rgba(138,109,59,0.15), text #8a6d3b); keep the text factual (F3 set the H-pile defaults to AASHTO values; the engineer still confirms).
+- **Where:** pile-type card (anchor `"pd-verify-chip font-mono-tech text-[10px] rounded-sm px-2 py-0.5"`).
+  - Before: amber Tailwind chip "⚠ UNVERIFIED φ — driven-pile module, confirm vs AASHTO 10th Ed before use"; and below it "… elastic section modulus (Sx) and placeholder resistance factors flagged UNVERIFIED. …".
+  - After: chip "φ — verify: H-pile defaults are AASHTO LRFD 10th Ed. Art. 6.5.4.2 / Table 10.5.5.2.3-1 values; confirm for your edition and driving conditions"; below it "… elastic section modulus (Sx) and the resistance factors entered in the Pile Section panel (defaults from AASHTO 6.5.4.2 and Table 10.5.5.2.3-1 — verify). …".
+- Not changed: the micropile `PHI_INFO` notes "VALUE UNVERIFIED" (φcc, φcu, uplift) and the red "UNVERIFIED — confirm before use" on micropile presets marked `guess`. Those values were not set from a cited table (F3 covered the H-pile factors only), so the flag is still factual.
+
+### F57. Module G (H-pile): the empty "Cross-section (to scale, in)" plot removed (O27)   [display] [no result change]
+
+- **Decision:** remove it; S-1 (Structural tab) draws the section.
+- **Where:** Module G, H-pile branch (anchor `// F57 (O27): the empty "Cross-section (to scale, in)" plot is removed`).
+- **Before:** a two-column grid, left cell "Cross-section (to scale, in)" with `<HPileCrossSection I={I}/>` (rendered axes only), right cell the section-property derivation.
+- **After:** the derivation alone, preceded by "The cross-section drawing to scale is S-1 on the Structural tab. S-1 →" (a button that opens the Structural tab at S-1). `HPileCrossSection` is kept (the integral-abutment module still uses it).
+
+### F58. H-pile section loss (corrosion): optional loss per exposed face, applied to the structural resistances (O28)   [calc change, opt-in] [default 0: bit-identical. Loss > 0: MORE conservative (smaller A, S, r, shear and tension areas)]
+
+- **Decision (coordinator, 2026-10-12):** an optional input "H-pile section loss per exposed face (in)", default 0 (results identical), with a depth range (default the full length); apply it to the structural properties of the H-pile checks; if applying it to the p-y EI is complex, apply it to the structural capacity only and say so.
+- **Rule (before → after):**
+  - Before: every H-pile property nominal (d, b_f, t_f, t_w as entered); no input. S-1 said "No corrosion loss is modelled for H-piles in this tool (no input)".
+  - After: with δ = loss per exposed face, every exposed steel face loses δ — both faces of each flange, both faces of the web, and the flange tips:
+    d′ = d − 2δ, b_f′ = b_f − 2δ, t_f′ = t_f − 2δ, t_w′ = t_w − 2δ.
+    Reducing t_f alone, with d unchanged, would move the flanges outward (unconservative for I_x); with d′ the flange centroid stays at (d − t_f)/2 and the clear web h_w′ = d′ − 2t_f′ grows by 2δ, which is the physical section. The flange-tip loss reduces b_f by 2δ (small; included so every face is treated alike).
+  - Zone: from `hpCorrTop` to `hpCorrBot`, ft below the pile head; bottom 0 / blank = the pile toe (head-to-toe length = L_embed + stickup), so the default zone is the full length. The structural checks are not depth-specific (P_o, φM_n, V_n, tension and the column check are single values), so the corroded section is used for every H-pile structural resistance whenever the zone overlaps the pile; a zone that lies entirely below the toe applies nothing. This is conservative where the zone does not reach the governing section; a depth-specific check needs the moment envelope over the zone (open item O57).
+  - Applied to: Module 03 (A_g, local slenderness b_f/2t_f and h/t_w, A_eff, P_o), 04 (S), 05 (P_r, M_r), 07 (web or flange shear area), 09 (tension yield and fracture on A_g), and Module 10's column resistance (A, r, P_o → KL/r, P_e, P_n, φP_n) and the closed-form stability margin that uses it.
+  - Not applied (analysis stiffness and geometry stay nominal): the p-y EI and bearing width (lateral analysis), the Davisson fixity EI, the LPILE deflection match, the nonlinear P_cr ramp, the H-pile geotechnical box perimeter / tip area, and the group spacing width B. A reduced EI changes the p-y moments only slightly and in either direction; keeping the solver nominal keeps one p-y model for the structure.
+- **Governing provision:** AASHTO LRFD 10th Ed. Art. 10.7.5 (corrosion and deterioration of driven piles — the effect is to be considered; the loss itself comes from the corrosion / geotechnical report) — verify the article number; FHWA GEC 12 (FHWA-NHI-16-009) on sacrificial steel allowances for steel piles — verify the section. The structural articles are unchanged (6.9.4.1, 6.9.4.2, 6.12, 6.10.9.2 / 6.12.1.2.3a, 6.8).
+- **Where:**
+  - `hpCorrInfo(I)` and `hpileSectionForChecks(I)` after `hpileSection` (anchor `function hpCorrInfo(I)`).
+  - `computeAll`, H-pile structural block: before `const hp = hpileSection({ d: I.hpD, bf: I.hpBf, tf: I.hpTf, tw: I.hpTw, Fy: I.hpFy, E: I.E || 29000 });` → after `const hp = hpileSectionForChecks(I); const hpCorr = hpCorrInfo(I);` and `if (hpCorr && hpCorr.applied) R.hpileStruct.corr = hpCorr;` after the `R.hpileStruct` object.
+  - `computeAll`, buckling block (anchor `const _hpR = hpileSectionForChecks(I);`): before `bklA = _hp.A; bklR = _strong ? _hp.rx : _hp.ry;` → after `bklA = _hpR.A; bklR = _strong ? _hpR.rx : _hpR.ry;` (`bklI`, hence `EI_bkl`, stays `_hp`, nominal).
+  - `computeAll` start: an input error when 2δ ≥ t_f or t_w ("No section remains").
+  - Inputs: Pile Section panel (H-pile), after "φ uplift": "Section loss / face" (in), and, when > 0, "Loss zone top" / "Loss zone bottom" (ft below pile head; 0 = pile toe). Blank is stored as 0.
+  - `DEFAULT_INPUTS`: `hpCorrLoss: 0, hpCorrTop: 0, hpCorrBot: 0` (new optional keys; old saves load with 0 = no loss).
+  - Case-envelope reset list (anchor `I.hpCorrLoss, I.hpCorrTop, I.hpCorrBot, pmAutoOn, pmRowKey]`).
+  - Display: `HpCorrNote` at the top of H-pile Modules 03, 04, 05, 07, 09; S-1 keeps the nominal outline and analysis rows and lists "After section loss (checks)" and "A_g / S, governing axis (checks)"; Module G "Gross area Ag … (… after section loss)" and a "Section loss / face" row; report A input rows "Section loss per exposed face" and "Section-loss zone" (only when > 0) and a line at the top of report 03–09.
+- **Check case:** default H-pile (HP 13.83 × 14.70, t_f = t_w = 0.615 in, F_y 50 ksi, strong axis, L_embed 30 ft, stickup 3 ft, STL 86 kip, P_lat 6 kip), T_u = 50 kip, Module 10 on with L_u = 5 ft (Davisson), δ = 0.0625 in (1/16 in) per face, zone 0 to toe (33 ft):
+  - Section: d′ = 13.705, b_f′ = 14.575, t_f′ = t_w′ = 0.490, h_w′ = 13.705 − 0.98 = 12.725 in.
+  - A: 2(14.70)(0.615) + (12.60)(0.615) = 25.83 → 2(14.575)(0.49) + (12.725)(0.49) = 20.519 in².
+  - I_x: 892.49 → 708.03 in⁴ (d_f = 6.6075 in both); S_x = I_x/(d/2): 129.07 → 708.03/6.8525 = 103.32 in³; r_x 5.878 → 5.874 in.
+  - Flange b/2t: 11.95 → 7.2875/0.49 = 14.87 > λ_r = 0.56√(29000/50) = 13.49 → slender: A_eff = 20.519 − 4(7.2875 − 13.49/14.87 × 7.2875)(0.49) = 19.19 in²; P_o = 50 × 19.19 = 959.4 kip (before 1291.5).
+  - Module 10 (Davisson; EI and L_f = 8.92 ft unchanged): P_o,col = 50 × 20.519 = 1025.9 kip, KL/r 59.69 → 59.73, P_e 2074.7 → 1645.9 kip, P_n 995.3 → 790.3 kip, φP_n = 0.60 × P_n: 597.2 → 474.2 kip ≥ 86 OK.
+  - Flexure: M_n = F_y S_x = 50 × 103.32 / 12 = 430.5 kip·ft (before 537.8); φ_f = 1.00; M_u = 40.42 kip·ft unchanged (p-y nominal) → D/C 0.075 → 0.094.
+  - Combined: P_r = 0.70 × 790.3 = 553.2 kip (before 696.7); P_u/P_r = 0.155 < 0.2 → 0.155/2 + 40.42/430.5 = 0.172 (before 0.137).
+  - Shear (web): V_n = 0.58 × 50 × 12.725 × 0.49 = 180.8 kip (before 224.7).
+  - Tension: φ_y F_y A_g = 0.95 × 50 × 20.519 = 974.6 kip (before 1226.9); fracture 0.80 × 65 × 20.519 = 1067.0 kip.
+  - Unchanged: M_max, y₀ and every p-y value, the geotechnical φR_n, the group values.
+  - Zone checks: zone 50 ft to toe (below the 33 ft pile) → nothing applied, every value identical to main; zone 0–10 ft → the same corroded values as the full length (not depth-specific).
+- **Verified:** the section properties above from `hpileSection` in Node for the nominal and corroded dimensions; every result in the page, main vs branch (main ignores the new keys, so it is the "before"); loss 0 bit-identical in all the parity runs.
+
+### F59. Title block: optional Client and Date fields printed in the report header; blank title block for new projects   [UI / report] [no result change]
+
+- **Decisions:** Client and Date, optional, printed in the report header. Blank defaults for new projects only if existing saved projects are not altered. "One save path": see below.
+- **Where:** `DEFAULT_INPUTS` (anchor `// F59: blank title block for NEW projects`); header `pd-projGrid` (two `HdrField`s after "Checked by"; the grid gets two more columns: `repeat(3, …)` → `repeat(5, …)`); `HdrField` gains an optional `placeholder`; `PrintReport` (`rptDate`, the title block, report A "Project" rows, the running header and the footer line); `pileProjShareValues` (anchor `PILE_PROJ_OLD_PLACEHOLDER`).
+- **Before → after:**
+  - `DEFAULT_INPUTS`: `projName: "Project Name", projNum: "Job No.", projBy: "ABC", projChk: "XYZ", projSubject: "Drilled micropile design for platform piers"` → all `""`; new `projClient: ""`, `projDate: ""`.
+  - Report: date `today` → `rptDate` = the entered Date, else today (title block "Date", the running header, the footer). A "Client:" line in the title block and "Client" / "Date" rows in report A when entered. The footer "— Job no. · date" drops an empty job number instead of printing "—  · date".
+  - Shared project info: `pileProjShareValues` blanks a value equal to the default **or** to the old placeholder, so a project that still holds "Project Name" / "Job No." / "ABC" / "XYZ" shares blank exactly as before. Client and Date are not mapped to the shared project info (the share payload is unchanged).
+- **Saved projects:** the autosave, the project file and the library store the whole input set, so a saved project keeps its title block (placeholders included) — verified: a project saved with the old placeholders loads with them, a project saved with real names keeps them, and the shared-project-info payload is identical to main for the default, the old placeholders and real names. Only a file that has no title-block keys at all (a hand-made partial JSON) now loads blank instead of the placeholders. New keys only; no key renamed.
+- **One save path:** already done on main — the bottom "Save scenario" button calls `exportProject` and "Load scenario" calls `importProject` (comment "ONE save path" in `App`), so both buttons write and read the same complete file. Removing the duplicate buttons would change the layout for no data benefit; not changed.
+
+### F60. Module 09 stays on the Geotechnical tab with a link from the Structural tab; Module 11 grid-row table counts the design pile's row from the leading row (O54)   [display] [no result change]
+
+- **Module 09 layout decision:** leave micropile Module 09 (tension / uplift) on the Geotechnical tab (it holds the geotechnical pullout); add a cross-link on the Structural tab.
+  - Where: before the micropile Module 09 (anchor `"pd-m09-link no-print bg-white border border-slate-200 rounded-md px-4 py-2 text-[10.5px] text-slate-600 leading-snug"`), a screen-only card on the Structural tab at Module 09's position (order 90): "09 · Tension / uplift (structural bar and casing tension, and the geotechnical pullout) is Module 09 on the Geotechnical tab. Open Module 09 →" (`jumpToModule("module-09")`). The H-pile Module 09 (structural tension) is on the Structural tab already. The printed report is unchanged.
+- **O54 decision:** with a manual case (and with the per-row toggle off), label the design pile's row with the "y-row k (from the leading row)" convention of the V_y rows (row 1 = the grid row at the largest y).
+  - Where: Module 11, fallback grid-row table (anchor `r.group.pMultipliers.length - Math.floor((r.capDist.sel.id - 1) / r.group.nCols)`).
+  - Before: `selRow = Math.floor((id − 1)/nCols) + 1` (counted from y = 0); header "Row (from lead)"; rows "Row k" / "Row 1 (leading)".
+  - After: `selRow = nRows − Math.floor((id − 1)/nCols)` (generated grid, ids row-major from y = 0, as `pmSetRowOfPile` for +V_y); header "y-row (from lead)" (tooltip "y-rows: the grid rows; y-row 1 = the row at the largest y (as for +V_y)"); rows "y-row k", "y-row 1 (leading, largest y)". The f_m values per row are unchanged.
+  - Check case: micropile group, 3 grid rows × 2 columns at 3B, per-row toggle off, design pile in the grid row at y = 0: before tagged "Row 1 (leading)" (f_m 0.80), after tagged "y-row 3" (f_m 0.30), as the V_y-row tables count it (y-row 1 = the row at the largest y).
+
 ## Open items (not changed)
 - O1. **Uncased/cased structural axial: outer 0.85 factor and `fy = min(fyb, fyc)`** (`Rn_cased/Rn_ucased`, ≈ line 1675).
   - Neither AASHTO 10.9.3.10.2 nor FHWA NHI-05-039 Eq. 5-13 has the outer 0.85, and the uncased section has no casing, so min(fyb, fyc) is arbitrary there.
@@ -11930,7 +12064,7 @@ index 638e8e4..53816e5 100644
   - **Ask:** add a separate tip φ (0.40)?
 - O6. **SVL service axial check.** SVL is entered but no service settlement or elastic-shortening check exists (10.9.2 service).
   - **Needs:** a scope decision.
-- O7. **Multi-case LPILE import.** `parseLpileText` takes only the first load case.
+- O7. **Closed by F52 (2026-10-12).** Coordinator's decision 2026-10-12 (engineer: "use your best judgment"): every load case parsed, a case picker (default = the first case), an envelope option; the pick saved in the LPILE import object. Original text: **Multi-case LPILE import.** `parseLpileText` takes only the first load case.
   - **Needs:** a decision on the UI for picking or enveloping cases.
 - O8. **H-pile φc for good driving.** The task brief said "0.70 good driving". AASHTO 6.5.4.2 (as I read the 9th/10th Ed.) gives 0.60 for good-driving axial (no pile tip) and 0.70 for combined axial + flexure of undamaged piles.
   - The defaults are 0.60 axial / 0.70 combined, which equal what the calc always used.
@@ -11940,21 +12074,21 @@ index 638e8e4..53816e5 100644
 - O10. **Linear (Winkler) solver with layers missing `nh`/`kh`** (`subgradeAt`: `L.nh || 0` → zero soil; `analysisDepth`).
   - New imports now keep or backfill `nh`/`kh` (F6), but layers saved by the old importer still give zero stiffness in that legacy solver.
   - Not changed: outside the listed scope, and the linear solver is not the design basis.
-- O11. **`phiV` (steel shear)** is now applied by no micropile check (punching uses `phiVpunch`). It is kept so that saved data and presets are unchanged.
+- O11. **Closed by F53 (2026-10-12).** Coordinator's decision 2026-10-12: kept (saved data) and marked "φv (unused)" / "not used by any check". Original text: **`phiV` (steel shear)** is now applied by no micropile check (punching uses `phiVpunch`). It is kept so that saved data and presets are unchanged.
   - **Ask:** hide it, or relabel it?
-- O12. **Saved projects with `fyb = 150`** keep 150; the code cannot tell an intentional value from an old catalog pick. A red warning appears under the bar selector.
+- O12. **Closed by F53 (2026-10-12).** Coordinator's decision 2026-10-12: the warning stays; a one-click "Use fyb = 120 ksi" button; no automatic conversion. Original text: **Saved projects with `fyb = 150`** keep 150; the code cannot tell an intentional value from an old catalog pick. A red warning appears under the bar selector.
   - **Ask:** should load auto-convert 150 → 120 for an area that matches a Gr150 catalog bar?
-- O13. **In-session blank fields still compute with NaN** (fail, without explanation) until reload. Only the reload path was in scope.
+- O13. **Closed by F54 (2026-10-12).** Coordinator's decision 2026-10-12: "enter a value" at the field and a banner (screen and report); display only. Original text: **In-session blank fields still compute with NaN** (fail, without explanation) until reload. Only the reload path was in scope.
 - O14. **Punching citation.** The summary table row "Punching shear" still cites "5.8.4" (an old article number). The code comment now says 5.12.8.6.3.
   - Not changed (a code reference change needs sign-off).
   - **Confirm** relabelling it to 5.12.8.6.3.
-- O15. **Punching `bo2` leg length.** It uses d_edge as the pile-centre-to-edge distance, consistent with the bearing A2 calculation. If "Edge dist" is measured from the pile face instead, the legs are short by OD/2.
+- O15. **Closed by F55 (2026-10-12).** Coordinator's decision 2026-10-12: the input is labelled "Edge distance … pile centre to cap edge", matching the calculation; display only. Original text: **Punching `bo2` leg length.** It uses d_edge as the pile-centre-to-edge distance, consistent with the bearing A2 calculation. If "Edge dist" is measured from the pile face instead, the legs are short by OD/2.
   - **Confirm** how the edge distance is measured.
 - O16. **H-pile geotechnical capacity is 0 at the defaults.** Found in the 2026-10-10 review.
   - The soil layer carried over from the micropile mode has no SPT N, so the sand SPT method gives qs = qp = 0 and φRn = 0 kip against STL = 86 kip.
   - The summary row "Geotech axial (tip+skin)" shows "0.00 ✗": an empty bar for a failing check.
   - **Ask:** require N (or warn) in H-pile mode, and show "capacity 0 — NG" instead of a 0.00 ratio.
-- O17. **Integral abutment: eligibility shown as a ratio.** The summary shows "Simplified-Method eligibility 2.00 ✗" for a pass/fail eligibility.
+- O17. **Closed by F55 (2026-10-12).** Coordinator's decision 2026-10-12: "eligible / not eligible" with an "enter bridge length / abutment height" hint. Original text: **Integral abutment: eligibility shown as a ratio.** The summary shows "Simplified-Method eligibility 2.00 ✗" for a pass/fail eligibility.
   - Blank/0 bridge length and abutment height show ✗ with no "enter a value" hint: `(I.iabBridgeLength || 0) > 0 && …`, ≈ line 3528.
   - **Ask:** show eligible / not eligible, plus a hint for missing inputs.
 - O18. **Closed by F41 (2026-10-11).** `L_f` set outside `\text`; the equation renders. Original text: **Integral abutment, Module 01 §4: equation does not render.** The "Required pile length" line shows raw KaTeX source in red: `\text{(governs: fixity (L_f + 5 ft))}`; the `_` inside `\text` fails. The value is correct. Equation-text fix pending sign-off.
@@ -11963,15 +12097,15 @@ index 638e8e4..53816e5 100644
   - AASHTO LRFD 10th Ed. 6.5.4.2 gives 0.95 (steel-only) and 0.90 (composite). The tool's own φ info says "resolve which applies before sealing".
   - The default is conservative.
   - **Engineer to confirm** the basis.
-- O21. **"UNVERIFIED" φ labels.** The H-pile banner "⚠ UNVERIFIED φ — driven-pile module, confirm vs AASHTO 10th Ed before use" and the PHI_INFO notes "VALUE UNVERIFIED" (micropile φcc, φcu and uplift) are still shown, although F3 set the H-pile defaults to AASHTO values.
+- O21. **Closed by F56 (2026-10-12).** Coordinator's decision 2026-10-12: the H-pile banner is a factual "φ — verify" note in the amber verify style; the micropile notes are unchanged (still uncited values). Original text: **"UNVERIFIED" φ labels.** The H-pile banner "⚠ UNVERIFIED φ — driven-pile module, confirm vs AASHTO 10th Ed before use" and the PHI_INFO notes "VALUE UNVERIFIED" (micropile φcc, φcu and uplift) are still shown, although F3 set the H-pile defaults to AASHTO values.
   - **Ask:** confirm the values and remove or relabel, or keep.
 - O22. **Closed by F41 (2026-10-11).** `tex: "\\beta"`; β renders. Original text: **Report, Assumptions & Design Notes (micropile): the bond-value item prints a line break and the word "beta".** The `RTex` call has `tex: "\\\\beta"`, which reaches KaTeX as `\\beta` (a line break, then text "beta") instead of β. Found in the 2026-10-10 output/print work; text in an equation, so listed rather than changed.
 - O23. **Closed by F40 (2026-10-11).** Engineer's decision 2026-10-11 ("Fix whatever you recommend"): report section "G Code-Limit Checks" (micropile) and a Summary of Results "Uncased flexure (below casing tip)" row. Original text: **The printed report has no section for the Module G code-limit checks** (uncased flexure below the casing tip, minimum bond length, plunge, cover). On screen Module G is NG at the micropile defaults (uncased flexure D/C 1.34), but the report only lists materials and geometry under G, and the Summary of Results table has no uncased-flexure row. **Ask:** add the G checks to the report (new report content).
 - O24. **Weak-rock p-y units.** Fixed in F17 (2026-10-10): q_u and E_m are converted ksi → psi inside `PY.weakrock`, so the springs are in lb/in as the solver expects. The model is still flagged uncalibrated (no LPILE weak-rock benchmark).
 - O25. **H-pile p-y model length.** Fixed in F18 (2026-10-10): the p-y model's toe is now `solverLembed` below grade (pile length from the head = stickup + `solverLembed`). See O31 for the axial datum.
 - O26. **`pyRes` memo dependencies.** Fixed in F16 (2026-10-10): `I.bucklingEnable` and `I.LuFree` added; the case-envelope and Pcr reset lists completed as well.
-- O27. **Module G H-pile "Cross-section (to scale, in)" plot is empty** (axes only, no section) on main as well, in headless Chromium at 1500 px. The new S-1 card on the Structural tab draws the section. **Ask:** fix or remove the empty plot.
-- O28. **H-pile corrosion.** The tool has no section-loss input for H-piles; every H-pile property is nominal. **Ask:** add a corrosion loss (per face) if the piles are permanent in aggressive ground.
+- O27. **Closed by F57 (2026-10-12).** Coordinator's decision 2026-10-12: removed; S-1 draws the section. Original text: **Module G H-pile "Cross-section (to scale, in)" plot is empty** (axes only, no section) on main as well, in headless Chromium at 1500 px. The new S-1 card on the Structural tab draws the section. **Ask:** fix or remove the empty plot.
+- O28. **Closed by F58 (2026-10-12).** Coordinator's decision 2026-10-12: optional "section loss per exposed face" (default 0) with a depth range, applied to the H-pile structural resistances; p-y EI nominal. See O55 and O57. Original text: **H-pile corrosion.** The tool has no section-loss input for H-piles; every H-pile property is nominal. **Ask:** add a corrosion loss (per face) if the piles are permanent in aggressive ground.
 - O29. **Module 11 / report 11 distribution case.** Fixed in F21 (2026-10-11): the distribution follows the active Group row (by `_groupCaseId`); with a manual row active it shows the first non-zero group case and says so.
 - O30. **HANDOFF.md §4.6 (Pile Designer receiver)** still says the pull buttons are in the "Project panel". Since F15 they are in the Loads & group tab and are not shown in integral-abutment mode. HANDOFF.md was outside this PR. **Update** it in a docs PR.
 - O31. **H-pile static axial capacity datum.** Fixed in F19 (2026-10-11): skin from grade (or the buried head) to the toe at `solverLembed` below grade, tip at the toe; Module G prints the toe at `solverLembed`.
@@ -12003,4 +12137,10 @@ index 638e8e4..53816e5 100644
 - O51. **AASHTO 10.7.3.9 details not implemented by F34 (ask).** (1) As recalled, AASHTO waives the cohesive η reduction when the cap is not in contact but the surface soil is stiff; F34 follows the engineer's rule (not in contact → 0.65–1.0 whatever the surface stiffness; more conservative). Apply the stiff-surface waiver? (2) "Soft" surface = cohesive with S_u < 0.50 ksf (Terzaghi & Peck; verify) — confirm the threshold. (3) The group in a strong layer over a weaker compressible layer, and group settlement, are not checked. (4) For mixed profiles the block counts cohesionless layers as S_u = 0 along the side and no base when the toe is cohesionless (conservative) — acceptable, or check both mechanisms separately?
 - O52. **Closed by F40 (2026-10-11).** Engineer's decision 2026-10-11: report section "11 Pile Group — Axial Efficiency & Block Failure" (both pile types) and Summary of Results rows "Group efficiency (η)" / "Group block". Original text: **The printed report has no group efficiency / block section** (Module 11 sections 1 and 3 are on screen only; the report shows the inputs and the rigid-cap distribution; the summary table has the "Group block" row). Pre-existing for micropiles too. **Ask:** add them to report 11?
 - O53. **Closed by F38, part b (2026-10-11).** Engineer's decision (via the coordinator) 2026-10-11: P_cr p-multiplier from the rows of the active case's direction (biaxial: min over both); Module 11 table / plan and the report line follow the active case. Original text: **Direction-aware displays and P_cr not changed by F38 (found in F38).** (1) Module 11's "f_m by row" reference table, its group plan (load arrow along y) and report 11's p-multiplier line still list the grid rows (f_m for `groupNrows` rows) while the active case is a V_x-only Group row shared over the grid columns; the per-row results table right below names the direction and the piles of each row. (2) The P_cr ramp p-multiplier (`pcrGPM`, F29) is still the smallest grid-row f_m × modifier for every case (2 × 3 grid: 0.30; the V_x-only rows' smallest is 0.40, so this is the conservative side there, but on a 3-column × 2-row grid the grid rows give 0.40 while the V_x-only rows reach 0.30 — LESS conservative for that case). **Ask:** make the Module 11 table / plan follow the active case's direction, and base `pcrGPM` on the smallest f_m over both directions?
-- O54. **Module 11 grid-row table marks the design pile's row by grid index (found in F38, part b, not changed).** With the toggle off or a manual case active, the "Row (from lead)" table tags DESIGN PILE on row ⌊(id − 1)/nC⌋ + 1, i.e. counted from y = 0, while the rows are numbered from the leading row and F33 / F36 / F38 take the leading row at the largest y for +V_y (e.g. design pile P1 at y = 0 is tagged on "Row 1 (leading)"). Display only; the directional tables of F38 part b count from the leading line. **Ask:** for manual cases (no load direction), which grid row is "row 1"? Tag the design pile accordingly, or drop the tag there?
+- O54. **Closed by F60 (2026-10-12).** Coordinator's decision 2026-10-12: with a manual case (or the toggle off) the design pile is tagged with the "y-row k from the leading row" convention (y-row 1 = the row at the largest y). Original text: **Module 11 grid-row table marks the design pile's row by grid index (found in F38, part b, not changed).** With the toggle off or a manual case active, the "Row (from lead)" table tags DESIGN PILE on row ⌊(id − 1)/nC⌋ + 1, i.e. counted from y = 0, while the rows are numbered from the leading row and F33 / F36 / F38 take the leading row at the largest y for +V_y (e.g. design pile P1 at y = 0 is tagged on "Row 1 (leading)"). Display only; the directional tables of F38 part b count from the leading line. **Ask:** for manual cases (no load direction), which grid row is "row 1"? Tag the design pile accordingly, or drop the tag there?
+- O55. **H-pile column path uses A_g where the braced path uses A_eff (found in F58, not changed).** With Module 10 on and an unsupported length, the H-pile axial resistance is `R.buckling.sel.Pn`, whose column check uses P_o = F_y·A_g (`bklPo`, comment "slender-element Aeff reduction is applied in the axial module"), while the braced path (no stickup) uses P_o = F_y·A_eff. For a section with a slender element the column path therefore ignores the local-buckling reduction (unconservative). It applies to nominal sections too; F58 makes it visible because a section loss can make the flange slender (F58 check case: A_eff = 19.19 in², P_o 959 kip braced, but the column uses 1026 kip). **Ask:** use F_y·A_eff in the column check (AASHTO 6.9.4.1.1 with Q / 6.9.4.2.2)?
+- O56. **Module 10, "Critical buckling load" equation prints EI/A as E (display, found in F58, not changed).** `P_e = \dfrac{\pi^2 E A}{(KL/r)^2}` shows `fmt(b.EI_bkl / b.Acas / 1e3, 0)` "k" as E, which is E·r², not E (P_e itself is computed correctly). **Ask:** print E (`Es`) there.
+- O57. **H-pile section loss is not depth-specific (F58).** Every structural resistance uses the corroded section when the loss zone overlaps the pile. A depth-specific check would compare the moment, shear and axial demand inside the zone with the corroded section and outside it with the nominal section (needs the p-y moment envelope over the zone). Also verify the article references: AASHTO LRFD 10th Ed. Art. 10.7.5 (corrosion and deterioration) and FHWA GEC 12 (FHWA-NHI-16-009) on corrosion allowances. **Ask:** is the conservative rule acceptable, or should the check be depth-specific?
+- O58. **Client and Date are not shared through "Share / Use shared project info" (F59).** The shared project record (`bridgeSuite.v1.projectMeta`) has `client` and `date` fields; `PILE_PROJ_MAP` maps only project name, job no., prepared by and checked by, so the share payload is unchanged. **Ask:** map Client (and Date) too? Sharing would overwrite the shared client with this tool's value.
+- **Module 09 layout question (ENGINEER_CHECKS B8): decided 2026-10-12 (F60).** Micropile Module 09 stays on the Geotechnical tab (it holds the geotechnical pullout); the Structural tab has a link card to it. The H-pile Module 09 (structural tension) is on the Structural tab, as before.
+- **Proposals (ENGINEER_CHECKS B8): Client / Date fields and blank title-block defaults done in F59; "one save path" was already done on main (both save buttons call `exportProject`), not changed further.**

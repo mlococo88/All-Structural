@@ -271,7 +271,7 @@
   .app-shell .pd-stats .text-\[\#9fc0d8\] { color: #B9C8DB; font-size: 12px; }
   .pd-overall { display: flex; align-items: center; gap: 6px; }
   .pd-overall-lbl { font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: #B9C8DB; }
-  .pd-projGrid { display: grid; grid-template-columns: minmax(120px, 1.3fr) minmax(160px, 2fr) repeat(3, minmax(96px, 1fr)); gap: 4px 8px; margin-top: 7px; }
+  .pd-projGrid { display: grid; grid-template-columns: minmax(120px, 1.3fr) minmax(160px, 2fr) repeat(5, minmax(96px, 1fr)); gap: 4px 8px; margin-top: 7px; } /* F59: + Client, Date */
   .pd-fld { display: block; min-width: 0; }
   .pd-fld > span { display: block; font-size: 10.5px; text-transform: uppercase; letter-spacing: .5px; color: #B9C8DB; margin-bottom: 1px; }
   .app-shell .pd-fld input[type=text] { width: 100%; font-family: var(--f-ui); font-size: 12.5px; padding: 3px 6px; border: 1px solid #ffffff33; border-radius: 3px; background: #ffffff14; color: #fff; text-align: left; }
@@ -611,7 +611,9 @@ var PILE_PROJ_MAP=[{shared:'projectName',key:'projName',label:'Project name'},
                    {shared:'jobNo',key:'projNum',label:'Job no.'},
                    {shared:'preparedBy',key:'projBy',label:'By'},
                    {shared:'checkedBy',key:'projChk',label:'Chk'}];
-function pileProjShareValues(I){ var v={}; PILE_PROJ_MAP.forEach(function(m){ var d=(typeof DEFAULT_INPUTS!=='undefined')?DEFAULT_INPUTS[m.key]:undefined; v[m.key]=(I[m.key]===d)?'':I[m.key]; }); return v; }
+/* F59: the defaults are now blank; a saved project can still hold the old placeholders, which stay shared as blank. */
+var PILE_PROJ_OLD_PLACEHOLDER={projName:'Project Name',projNum:'Job No.',projBy:'ABC',projChk:'XYZ'};
+function pileProjShareValues(I){ var v={}; PILE_PROJ_MAP.forEach(function(m){ var d=(typeof DEFAULT_INPUTS!=='undefined')?DEFAULT_INPUTS[m.key]:undefined; v[m.key]=(I[m.key]===d||I[m.key]===PILE_PROJ_OLD_PLACEHOLDER[m.key])?'':I[m.key]; }); return v; }
 </script>
 <script>
 /* Foundation-load hand-off receiver (HANDOFF.md §4.6, channel foundationLoads; senders: abutment_calculator.html,
@@ -1334,6 +1336,9 @@ const fmt = (x, d = 2) => {
   });
 };
 
+// F54 (O13): banner text for blank / invalid numeric inputs (input keys as stored)
+const blankInputsMsg = keys => "blank or invalid input" + (keys.length > 1 ? "s " : " ") + keys.join(", ") + ". Results that use " + (keys.length > 1 ? "them" : "it") + " are not valid (shown as \u2014 or NG) until a number is entered; the field" + (keys.length > 1 ? "s are" : " is") + " marked \u201center a value\u201d in the inputs.";
+
 /* ============================================================
    CALC ENGINE  — mirrors GeoEngineers reference (Derby-Shelton)
    All structural references AASHTO LRFD BDS 10th Ed (2024) [relabelled from 9th Ed; article numbers to be confirmed by the EOR],
@@ -1549,7 +1554,7 @@ const PHI_INFO = {
     ] },
   phiV: { key: "phiV", sym: "φ_v", title: "Shear (steel members)",
     art: "AASHTO 6.5.4.2",
-    what: "Steel-member shear factor. It is NOT applied to the concrete cap punching check (that uses φv punch); it is kept for the presets and saved projects.",
+    what: "Steel-member shear factor. Not used by any check in this tool (the concrete cap punching check uses φv punch); the field is kept so presets and saved projects load unchanged.",
     options: [
       { v: "1.00", who: "Shear, steel members", mean: "AASHTO 6.5.4.2 shear resistance factor for steel members.", cited: true }
     ] },
@@ -1914,6 +1919,38 @@ function hpileSection({ d, bf, tf, tw, Fy, E }) {
     flange_bt, web_htw, lim,
     flangeFlexClass, webFlexClass, flangeCompSlender, webCompSlender
   };
+}
+/* F58 (O28, 2026-10-12): H-pile section loss (corrosion), optional.
+   delta = I.hpCorrLoss, the loss per exposed face (in); 0 / blank = none (the default: every result
+   is then computed from the nominal section exactly as before). Rule: every exposed steel face loses
+   delta -- both faces of each flange, both faces of the web and the flange tips -- so
+     d' = d - 2 delta,  b_f' = b_f - 2 delta,  t_f' = t_f - 2 delta,  t_w' = t_w - 2 delta
+   (the flange centroid stays at (d - t_f)/2; the clear web h_w' = d' - 2 t_f' grows by 2 delta).
+   Basis: AASHTO LRFD 10th Ed. Art. 10.7.5 (corrosion and deterioration of driven piles: consider the
+   effect; the loss itself comes from the geotechnical / corrosion report -- verify the article); FHWA
+   GEC 12 (FHWA-NHI-16-009) for corrosion allowances on steel piles (verify the section).
+   Zone: I.hpCorrTop to I.hpCorrBot, ft below the pile head (bottom 0 / blank = the pile toe, so the
+   default zone is the full length). The structural checks are not depth-specific, so the corroded
+   section is used for every H-pile structural RESISTANCE (03 axial and local buckling, 04 flexure,
+   05 combined, 07 shear, 09 tension, Module 10 column A, r and P_o) whenever the zone overlaps the
+   pile (conservative). The analysis STIFFNESS stays nominal: p-y EI, Davisson EI, the LPILE
+   deflection match and the P_cr ramp; the geotechnical box and group widths stay nominal too. */
+function hpCorrInfo(I) {
+  const loss = (typeof I.hpCorrLoss === "number" && isFinite(I.hpCorrLoss) && I.hpCorrLoss > 0) ? I.hpCorrLoss : 0;
+  if (!(loss > 0)) return null;
+  const L = Math.max(I.solverLembed || 30, 1) + (I.solverFree || 0); // pile head to toe (ft)
+  const top = (typeof I.hpCorrTop === "number" && isFinite(I.hpCorrTop) && I.hpCorrTop > 0) ? I.hpCorrTop : 0;
+  const bot = (typeof I.hpCorrBot === "number" && isFinite(I.hpCorrBot) && I.hpCorrBot > 0) ? Math.min(I.hpCorrBot, L) : L;
+  const applied = bot > top;
+  return { loss, top, bot, L, applied, toToe: !(I.hpCorrBot > 0) || I.hpCorrBot >= L,
+    d: I.hpD - 2 * loss, bf: I.hpBf - 2 * loss, tf: I.hpTf - 2 * loss, tw: I.hpTw - 2 * loss };
+}
+// the H-pile section the structural resistances use: corroded when a loss zone applies, else nominal
+function hpileSectionForChecks(I) {
+  const c = hpCorrInfo(I);
+  return (c && c.applied)
+    ? hpileSection({ d: c.d, bf: c.bf, tf: c.tf, tw: c.tw, Fy: I.hpFy, E: I.E || 29000 })
+    : hpileSection({ d: I.hpD, bf: I.hpBf, tf: I.hpTf, tw: I.hpTw, Fy: I.hpFy, E: I.E || 29000 });
 }
 
 /* Driven H-pile geotechnical axial capacity — AASHTO LRFD 10th Ed (2024) static analysis.
@@ -2856,6 +2893,19 @@ function computeAll(I, opts = {}) {
   const inputErrors = [], inputNotes = [];
   R.inputErrors = inputErrors;
   R.inputNotes = inputNotes;
+  if (I.pileType === "hpile") {
+    const _hc = hpCorrInfo(I); // F58 (O28)
+    if (_hc && _hc.applied && !(_hc.tf > 0 && _hc.tw > 0)) inputErrors.push("H-pile section loss: 2 \u00d7 " + fmt(_hc.loss, 3) + " in per face leaves t_f = " + fmt(_hc.tf, 3) + " in, t_w = " + fmt(_hc.tw, 3) + " in. No section remains, so the structural results are not meaningful.");
+  }
+  // F54 (O13): blank / invalid numeric inputs (NaN) -- listed in a banner (screen and report) so
+  // the "—" and NG results they cause are explained. Display only: no check, ratio or allPass changes.
+  const blankInputs = [];
+  for (const k of Object.keys(I)) {
+    const v = I[k];
+    if (typeof v === "number" && isNaN(v)) blankInputs.push(k);
+    else if (Array.isArray(v)) v.forEach((o, i) => { if (o && typeof o === "object") for (const kk of Object.keys(o)) if (typeof o[kk] === "number" && isNaN(o[kk])) blankInputs.push(k + "[" + (i + 1) + "]." + kk); });
+  }
+  if (blankInputs.length) R.blankInputs = blankInputs;
   if (I.pileType !== "hpile" && I.pileType !== "iab") {
     if (!(I.OD > 0)) inputErrors.push("Casing OD must be greater than 0 (it is " + fmt(I.OD, 3) + " in). Bond, area and capacity results are not meaningful.");
     if (!(I.phiGeo > 0)) inputErrors.push("Geotechnical \u03c6geo must be greater than 0 (it is " + fmt(I.phiGeo, 2) + "). The required bond length divides by it.");
@@ -3507,8 +3557,11 @@ function computeAll(I, opts = {}) {
     const _hp = hpileSection({ d: I.hpD, bf: I.hpBf, tf: I.hpTf, tw: I.hpTw, Fy: I.hpFy, E: I.E || 29000 });
     const _strong = I.hpAxis !== "weak";   // strong is the default, matching the axial module
     bklI = _strong ? _hp.Ix : _hp.Iy;
-    bklA = _hp.A;                       // Ag; slender-element Aeff reduction is applied in the axial module
-    bklR = _strong ? _hp.rx : _hp.ry;
+    // F58 (O28): with a section-loss zone the column resistance (A, r, P_o) uses the corroded
+    // section; bklI (EI: Davisson fixity, LPILE match, P_cr back-calc) stays nominal
+    const _hpR = hpileSectionForChecks(I);
+    bklA = _hpR.A;                       // Ag; slender-element Aeff reduction is applied in the axial module
+    bklR = _strong ? _hpR.rx : _hpR.ry;
     bklPo = (I.hpFy || 50) * bklA;
     bklPhiC = I.hpPhiC != null ? I.hpPhiC : 0.60; // H-pile phi_c input (6.5.4.2: 0.60 good driving / 0.50 severe)
   }
@@ -4147,7 +4200,9 @@ function computeAll(I, opts = {}) {
     }
 
     // ---- H-PILE STRUCTURAL (AASHTO 10th Ed Section 6) ----
-    const hp = hpileSection({ d: I.hpD, bf: I.hpBf, tf: I.hpTf, tw: I.hpTw, Fy: I.hpFy, E: I.E || 29000 });
+    // F58 (O28): the corroded section when a section-loss zone applies (hpCorrInfo), else nominal
+    const hp = hpileSectionForChecks(I);
+    const hpCorr = hpCorrInfo(I);
     const Es = I.E || 29000;
     const Fy = I.hpFy;
     const axisStrong = I.hpAxis !== "weak";
@@ -4300,6 +4355,7 @@ function computeAll(I, opts = {}) {
       // pass rollup for non-pcrit checks (axial/combined may be null under pcrit until computed)
       Fy, Es
     };
+    if (hpCorr && hpCorr.applied) R.hpileStruct.corr = hpCorr; // F58 (O28): shown in the modules / report
 
     // -- Cap-embedment head fixity (detailing) --
     // SINGLE SOURCE OF TRUTH: R.headFix (computed above) is now pile-type aware and
@@ -4781,6 +4837,8 @@ function Field({
   step = "any",
   disabled
 }) {
+  // F54 (O13): a blank or invalid number is stored as NaN -> say so at the field (display only)
+  const bad = !disabled && typeof value === "number" && isNaN(value);
   return /*#__PURE__*/React.createElement("label", {
     className: "block"
   }, /*#__PURE__*/React.createElement("div", {
@@ -4797,8 +4855,10 @@ function Field({
     value: value,
     disabled: disabled,
     onChange: e => onChange(parseFloat(e.target.value)),
+    "aria-invalid": bad ? "true" : undefined,
+    style: bad ? { borderColor: "#b23b3b" } : undefined,
     className: "mt-1 w-full font-mono-tech text-[13px] px-2 py-1.5 bg-white border rounded-sm outline-none transition " + (disabled ? "opacity-50 border-slate-200 " : "border-slate-300 focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)]")
-  }));
+  }), bad && /*#__PURE__*/React.createElement("div", { className: "pd-fld-bad text-[10px] mt-0.5 leading-tight", style: { color: "#b23b3b" } }, "enter a value"));
 }
 function TextField({
   label,
@@ -4822,14 +4882,15 @@ function HdrField({
   label,
   value,
   onChange,
-  wide
+  wide,
+  placeholder
 }) {
   return /*#__PURE__*/React.createElement("label", {
     className: "pd-fld" + (wide ? " pd-fld-wide" : "")
   }, /*#__PURE__*/React.createElement("span", null, label), /*#__PURE__*/React.createElement("input", {
     type: "text",
     value: value,
-    placeholder: label,
+    placeholder: placeholder || label,
     onChange: e => onChange(e.target.value)
   }));
 }
@@ -6213,7 +6274,8 @@ function PileSectionsFig({ I, r, pyRes, ei, print }) {
     note ? e("div", { className: print ? "" : "pd-gfx-note", style: print ? { fontSize: "7.5px", color: "#475569", marginTop: "2px" } : undefined }, gfxSub(note)) : null);
   const svgStyle = { display: "block", width: "100%", height: "auto", maxWidth: print ? "3.3in" : "340px", fontFamily: GFX_FONT };
   if (I.pileType === "hpile") {
-    const hs = r.hpileStruct, hp = hs ? hs.hp : hpileSection({ d: I.hpD, bf: I.hpBf, tf: I.hpTf, tw: I.hpTw, Fy: I.hpFy, E: I.E || 29000 });
+    // F58 (O28): with a section loss the outline / analysis rows stay nominal and the corroded check values are listed
+    const hs = r.hpileStruct, hc = hs && hs.corr, hp = (hs && !hc) ? hs.hp : hpileSection({ d: I.hpD, bf: I.hpBf, tf: I.hpTf, tw: I.hpTw, Fy: I.hpFy, E: I.E || 29000 });
     const strong = I.hpAxis !== "weak";
     const W = 340, H = 300, cx = 132, cy = 152, k = 190 / Math.max(hp.d, hp.bf, 0.1);
     const hd = hp.d * k / 2, hb = hp.bf * k / 2, tf = hp.tf * k, tw = hp.tw * k;
@@ -6235,7 +6297,9 @@ function PileSectionsFig({ I, r, pyRes, ei, print }) {
       e(GfxText, { key: "bax", x: 6, y: H - 8, s: "Bending axis used: " + (strong ? "strong (x–x)" : "weak (y–y)") + " — lateral load " + (strong ? "parallel to the web" : "parallel to the flanges"), size: 9, fill: GFX_ACC, weight: 600 })];
     const svg = e("svg", { viewBox: "0 0 " + W + " " + H, width: "100%", role: "img", "aria-label": "H-pile cross-section", style: svgStyle }, els);
     const rows = [["Section", "HP " + fmt(hp.d, 2) + " × " + fmt(hp.bf, 2) + " (" + (I.hpGrade || "") + ")"], ["Gross area A_g", fmt(hp.A, 2) + " in²"],
-      hs && Math.abs(hs.Aeff - hs.Ag) > 1e-9 ? ["Effective area A_eff (slender)", fmt(hs.Aeff, 2) + " in²"] : null,
+      hc ? ["After section loss (checks)", fmt(hc.d, 3) + " × " + fmt(hc.bf, 3) + ", t_f " + fmt(hc.tf, 3) + ", t_w " + fmt(hc.tw, 3) + " in"] : null,
+      hc ? ["A_g / S, governing axis (checks)", fmt(hs.Ag, 2) + " in², " + fmt(hs.S_sel, 1) + " in³"] : null,
+      hs && Math.abs(hs.Aeff - hs.Ag) > 1e-9 ? ["Effective area A_eff (slender" + (hc ? ", after section loss" : "") + ")", fmt(hs.Aeff, 2) + " in²"] : null,
       ["I_x / I_y", fmt(hp.Ix, 1) + " / " + fmt(hp.Iy, 1) + " in⁴"], ["S_x / S_y", fmt(hp.Sx, 1) + " / " + fmt(hp.Sy, 1) + " in³"],
       ["Z_x / Z_y (reference)", fmt(hp.Zx, 1) + " / " + fmt(hp.Zy, 1) + " in³"], ["r_x / r_y", fmt(hp.rx, 2) + " / " + fmt(hp.ry, 2) + " in"],
       ["Governing axis: I, S", fmt(strong ? hp.Ix : hp.Iy, 1) + " in⁴, " + fmt(strong ? hp.Sx : hp.Sy, 1) + " in³"],
@@ -6243,7 +6307,8 @@ function PileSectionsFig({ I, r, pyRes, ei, print }) {
       ["p-y bearing width", fmt(strong ? hp.bf : hp.d, 2) + " in (" + (strong ? "b_f" : "d") + ")"]];
     return e("div", { className: "pd-gfx-fig", "data-pd-gfx": "xs" },
       e("div", { className: "pd-xs-grid" }, panel("H-pile section (to scale)", svg, rows,
-        "No corrosion loss is modelled for H-piles in this tool (no input): the outline and every property are nominal. Fillets neglected, as in the property calculation (Module G).")));
+        hc ? "Outline and properties are nominal (the p-y analysis uses them). Section loss " + fmt(hc.loss, 4) + " in per exposed face, " + fmt(hc.top, 1) + "–" + fmt(hc.bot, 1) + " ft below the head: d, b_f, t_f, t_w each − 2 × loss; the structural checks use the values marked (checks). Fillets neglected, as in the property calculation (Module G)."
+          : "No section loss is entered (Pile Section panel, section loss / face = 0): the outline and every property are nominal. Fillets neglected, as in the property calculation (Module G).")));
   }
   // ---- micropile: cased and uncased (bond zone) sections, one scale ----
   const ax = r.axial, OD = I.OD, ODr = ax.OD_r, ID = ax.ID, dh = r.geo.dh, db = ax.barDia;
@@ -7725,6 +7790,9 @@ const DEFAULT_INPUTS = {
   hpLu: 0,         // unbraced length for buckling (ft), 0 = soil-braced (no column buckling check)
   // hpBuckMethod RETIRED — superseded by the shared bklTab (davisson|deflmatch|pcrit).
   hpFu: 65,        // tensile strength Fu (ksi), A572-50 default
+  hpCorrLoss: 0,   // F58 (O28): section loss per exposed face (in); 0 = none
+  hpCorrTop: 0,    // F58: loss zone top, ft below the pile head
+  hpCorrBot: 0,    // F58: loss zone bottom, ft below the pile head (0 = the pile toe)
   // materials
   fc: 4000,
   fcGrout: 4000,
@@ -7877,11 +7945,16 @@ const DEFAULT_INPUTS = {
   groupPmAuto: false,   // F29: "Apply group p-multipliers automatically (per row)"
   groupPmMod: 1.0,      // F29: user modifier on the row f_m when the toggle is on
   // project metadata
-  projName: "Project Name",
-  projNum: "Job No.",
-  projBy: "ABC",
-  projChk: "XYZ",
-  projSubject: "Drilled micropile design for platform piers"
+  // F59: blank title block for NEW projects (was "Project Name" / "Job No." / "ABC" / "XYZ" /
+  // "Drilled micropile design for platform piers"). Saved projects keep their saved values.
+  projName: "",
+  projNum: "",
+  projBy: "",
+  projChk: "",
+  projSubject: "",
+  // F59: optional title-block fields, printed in the report header ("" = not shown; Date "" = today)
+  projClient: "",
+  projDate: ""
 };
 
 /* ============================================================
@@ -7891,6 +7964,68 @@ const DEFAULT_INPUTS = {
    quantities. Designed to be tolerant of column spacing and to FAIL
    LOUDLY (return what it found + warnings) rather than guess silently.
 ============================================================ */
+// F52 (O7, 2026-10-12): an LPILE output with several load cases. parseLpileText() still returns
+// the FIRST case at the top level (summary / records / source / inputs, exactly as before);
+// lpileAddCases() adds out.cases (every case, case 1 = that same top-level data) and out.caseSel
+// (0 = the first case) when the file has two or more "Computed Values of Pile Loading and
+// Deflection" blocks. lpileWithCase() puts the picked case (or the envelope) at the top level, so
+// every existing reader (apply Mmax, reconciliation, LPILE graphs) uses the pick. A single-case
+// file is unchanged (no cases / caseSel keys).
+function lpileCaseBlocks(raw) {
+  const re = /Computed Values of Pile Loading and Deflection/gi;
+  const at = [];
+  let m;
+  while ((m = re.exec(raw)) !== null) at.push(m.index);
+  if (at.length < 2) return null;
+  return at.map((a, i) => raw.slice(a, i + 1 < at.length ? at[i + 1] : raw.length));
+}
+function lpileCaseLoads(block) {
+  const j = block.replace(/\u00a0/g, " ");
+  const g = re => { const m = j.match(re); return m ? Number(m[1].replace(/,/g, "")) : null; };
+  const no = g(/Load Case (?:Number|No\.?)\s*([0-9]+)/i);
+  const shr = g(/Shear force at pile head\s*=\s*([\-0-9.eE+,]+)\s*lbs/i);
+  const ax = g(/Axial thrust load on pile head\s*=\s*([\-0-9.eE+,]+)\s*lbs/i);
+  return { no, shear_kip: shr != null && isFinite(shr) ? shr / 1000 : null, axial_kip: ax != null && isFinite(ax) ? ax / 1000 : null };
+}
+function lpileAddCases(out, raw) {
+  if (!out || !out.ok || typeof raw !== "string") return out;
+  const blocks = lpileCaseBlocks(raw.replace(/\u00a0/g, " "));
+  if (!blocks) return out;
+  const top = out.inputs || {};
+  const cases = blocks.map((b, i) => {
+    const ld = lpileCaseLoads(b);
+    const label = "Load case " + (ld.no != null ? ld.no : i + 1);
+    if (i === 0) return { label, ok: true, source: out.source, summary: out.summary, records: out.records, warnings: (out.warnings || []).slice(), loads: { shear_kip: top.shear_kip, axial_kip: top.axial_kip }, V: ld.shear_kip, P: ld.axial_kip };
+    const c = parseLpileText(b);
+    return { label, ok: !!c.ok, source: c.source, summary: c.summary, records: c.records, warnings: c.warnings,
+      loads: { shear_kip: ld.shear_kip, axial_kip: ld.axial_kip }, V: ld.shear_kip, P: ld.axial_kip };
+  });
+  out.cases = cases;
+  out.caseSel = 0;
+  return out;
+}
+// the parse with case `sel` (index, or "env" = envelope of all cases) at the top level
+function lpileWithCase(lp, sel) {
+  if (!lp || !Array.isArray(lp.cases) || lp.cases.length < 2) return lp;
+  const okc = lp.cases.map((c, i) => ({ c, i })).filter(x => x.c.ok && x.c.summary && isFinite(x.c.summary.Mmax));
+  if (sel === "env") {
+    if (!okc.length) return lp;
+    const by = k => okc.reduce((b, x) => (x.c.summary[k] != null && (b == null || Math.abs(x.c.summary[k]) > Math.abs(b.c.summary[k]))) ? x : b, null);
+    const gM = by("Mmax"), gY = by("ymax"), gV = by("Vmax");
+    const sm = gM.c.summary;
+    const summary = Object.assign({}, sm, {
+      ymax: gY ? gY.c.summary.ymax : sm.ymax, Vmax: gV ? gV.c.summary.Vmax : sm.Vmax,
+      envelope: { n: okc.length, M: gM.c.label, y: gY ? gY.c.label : null, V: gV ? gV.c.label : null }
+    });
+    return Object.assign({}, lp, { caseSel: "env", source: gM.c.source, summary, records: gM.c.records, warnings: gM.c.warnings || [],
+      inputs: Object.assign({}, lp.inputs, gM.c.loads) });
+  }
+  const i = Math.max(0, Math.min(lp.cases.length - 1, parseInt(sel, 10) || 0));
+  const c = lp.cases[i];
+  if (!c || !c.ok) return lp;
+  return Object.assign({}, lp, { caseSel: i, source: c.source, summary: c.summary, records: c.records, warnings: c.warnings || [],
+    inputs: Object.assign({}, lp.inputs, c.loads) });
+}
 function parseLpileText(raw) {
   const out = {
     ok: false,
@@ -8668,7 +8803,8 @@ function PrintReport({
   const cssStr = v => String(v == null ? "" : v).replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/[\r\n]+/g, " ");
   const footLeft = [I.projName, I.projNum, I.pileType === "iab" ? "Integral abutment pile" : I.pileType === "hpile" ? "Driven H-pile" : "Drilled micropile"].filter(Boolean).join("  \u00b7  ");
   const headLeft = [I.projName, I.projSubject].filter(Boolean).join(" \u2014 ");
-  const headRight = ["Pile Designer", I.projBy, today].filter(Boolean).join("  \u00b7  ");
+  const rptDate = (I.projDate != null && String(I.projDate).trim()) ? String(I.projDate).trim() : today; // F59
+  const headRight = ["Pile Designer", I.projBy, rptDate].filter(Boolean).join("  \u00b7  ");
   const pageCss = "@media print { @page { @top-left { content: \"" + cssStr(headLeft) + "\"; font: 7.5pt 'Times New Roman', Times, serif; color: #5A6B80; } @top-right { content: \"" + cssStr(headRight) + "\"; font: 7.5pt 'Times New Roman', Times, serif; color: #5A6B80; } @bottom-left { content: \"" + cssStr(footLeft) + "\"; font: 8pt 'Times New Roman', Times, serif; color: #475569; } @bottom-right { content: \"Sheet \" counter(page) \" of \" counter(pages); font: 8pt 'Times New Roman', Times, serif; color: #475569; } } }";
   // print-section chooser: hide the section (or group block) that holds a heading of an unticked group
   const hideCss = RPT_GRP_ORDER.filter(g => sel && sel[g] === false).map(g => ".print-only :is(.rpt-section, .rpt-grp):has(> .rpt-h[data-rgrp=\"" + g + "\"]) { display: none !important; }").join("\n");
@@ -8739,14 +8875,18 @@ function PrintReport({
       row("a", "Project", I.projName, "Job no.", I.projNum),
       row("b", "Subject / member", I.projSubject, "Units", "US customary (kip, ft, in, ksi)"),
       row("c", "Prepared by", I.projBy, "Checked by", I.projChk),
+      // F59: optional Client line (only when entered)
+      (I.projClient != null && String(I.projClient).trim()) ? /*#__PURE__*/React.createElement("tr", { key: "cl" },
+        /*#__PURE__*/React.createElement("td", { style: tdS, colSpan: 2 }, lab("Client"), I.projClient)) : null,
       /*#__PURE__*/React.createElement("tr", { key: "d" },
-        /*#__PURE__*/React.createElement("td", { style: tdS }, lab("Date"), today),
+        /*#__PURE__*/React.createElement("td", { style: tdS }, lab("Date"), rptDate),
         /*#__PURE__*/React.createElement("td", { style: tdS }, /*#__PURE__*/React.createElement("span", {
           style: { fontFamily: RPT_UI, fontSize: "9.5px", fontWeight: 700, color: "#41546E" }
         }, "Design basis: "), "AASHTO LRFD Bridge Design Specifications; FHWA NHI-05-039"))));
-  })()), ((r.inputErrors && r.inputErrors.length) || (r.inputNotes && r.inputNotes.length)) ? /*#__PURE__*/React.createElement("div", {
+  })()), ((r.inputErrors && r.inputErrors.length) || (r.inputNotes && r.inputNotes.length) || r.blankInputs) ? /*#__PURE__*/React.createElement("div", {
     style: { marginTop: "6px", fontSize: "10px", color: "#8a2a2a" }
-  }, (r.inputErrors || []).map((m, i) => /*#__PURE__*/React.createElement("div", { key: "e" + i }, "\u26a0 Input error: ", m)),
+  }, r.blankInputs && /*#__PURE__*/React.createElement("div", null, "\u26a0 Enter a value: ", blankInputsMsg(r.blankInputs)),
+    (r.inputErrors || []).map((m, i) => /*#__PURE__*/React.createElement("div", { key: "e" + i }, "\u26a0 Input error: ", m)),
     (r.inputNotes || []).map((m, i) => /*#__PURE__*/React.createElement("div", { key: "n" + i, style: { color: "#7a4d15" } }, "\u26a0 Note: ", m))) : null, /*#__PURE__*/React.createElement("div", {
     className: "rpt-avoid",
     style: {
@@ -8803,6 +8943,8 @@ function PrintReport({
       ["Subject", I.projSubject, "", ""],
       ["Prepared by", I.projBy, "", ""],
       ["Checked by", I.projChk, "", ""],
+      ["Client", I.projClient, "", ""],
+      ["Date", I.projDate, "", "blank = date printed"],
       ["Foundation loads from", (window.PileFoundationXfer && PileFoundationXfer.sourceLine(I)) || null, "", "hand-off (HANDOFF.md §4.6)"],
       ["Pile type", I.pileType === "iab" ? "Integral abutment H-pile (MassDOT)" : I.pileType === "hpile" ? "Driven H-pile" : "Cased drilled micropile", "", ""]
     ] }),
@@ -8839,6 +8981,8 @@ function PrintReport({
       ["Flange width b\u1da0", I.hpBf, "in", ""],
       ["Flange thickness t\u1da0", I.hpTf, "in", ""],
       ["Web thickness t\u1d65\u1d65", I.hpTw, "in", ""],
+      ["Section loss per exposed face", (I.hpCorrLoss > 0) ? I.hpCorrLoss : null, "in", "corrosion; d, b\u1da0, t\u1da0, t\u1d65\u1d65 each \u2212 2\u00d7loss"],
+      ["Section-loss zone", (I.hpCorrLoss > 0) ? (fmt(I.hpCorrTop > 0 ? I.hpCorrTop : 0, 1) + " to " + (I.hpCorrBot > 0 ? fmt(I.hpCorrBot, 1) : "toe")) : null, "ft below head", "structural checks use the corroded section"],
       ["Steel grade", I.hpGrade, "", ""],
       ["Yield F\u1d67", I.hpFy, "ksi", ""],
       ["Tensile F\u1d64", I.hpFu, "ksi", ""],
@@ -8965,7 +9109,7 @@ function PrintReport({
       ["\u03c6 flexure", I.phiF, "", ""],
       ["\u03c6 axial (column/buckling)", I.phiC, "", ""],
       ["\u03c6 bearing", I.phiB, "", ""],
-      ["\u03c6 shear (steel)", I.phiV, "", "not used for punching"],
+      ["\u03c6 shear (steel)", I.phiV, "", "not used by any check"],
       ["\u03c6 punching shear (cap concrete)", r.punch ? r.punch.phi_v : null, "", "5.5.4.2"],
       ["\u03c6 uplift", I.phiUp, "", ""],
       ["\u03c6 tension", I.phiT, "", ""],
@@ -9142,6 +9286,7 @@ function PrintReport({
       const nc = !!r.lateralNoConv; // F22 (O33): p-y did not converge -> flexure / combined NG
       if (nc) cPass = false;
       return /*#__PURE__*/React.createElement("div", null,
+        hs.corr && line("Section loss " + fmt(hs.corr.loss, 4) + " in per exposed face (" + fmt(hs.corr.top, 1) + "–" + fmt(hs.corr.bot, 1) + " ft below head): corroded d × bf = " + fmt(hs.corr.d, 3) + " × " + fmt(hs.corr.bf, 3) + " in, tf = " + fmt(hs.corr.tf, 3) + " in, tw = " + fmt(hs.corr.tw, 3) + " in; A = " + fmt(hs.Ag, 2) + " in², S = " + fmt(hs.S_sel, 1) + " in³ (all structural checks below; p-y EI nominal)."),
         line("Axial: Po = Fy·A = " + fmt(hs.Po, 0) + " kip · " + (hs.hasStickup ? ({davisson:"Davisson",deflmatch:"deflection-matched",pcrit:"nonlinear P-crit"}[r.buckling.bklTab] || "Davisson") : "fully braced") + (Pn != null ? " · Pn = " + fmt(Pn, 0) + " kip" : " · (compute Pcr)")),
         phiPn != null && /*#__PURE__*/React.createElement(RptRow, { label: "Axial: φc·Pn ≥ STL (φc=" + fmt(hs.phi_c_axial, 2) + ")", val: fmt(phiPn, 0) + " ≥ " + fmt(hs.STL, 0) + " kip", pass: axPass }),
         line("Flexure: Mn = Fy·S = " + fmt(hs.Mn_elastic, 1) + " kip·ft (elastic; Mp = " + fmt(hs.Mp, 1) + " permitted)"),
@@ -10072,12 +10217,12 @@ function PrintReport({
       ...cell,
       textAlign: "right"
     }
-  }, fmt(cap, name.includes("D/C") ? 2 : 1), " ", unit), /*#__PURE__*/React.createElement("td", {
+  }, (I.pileType === "iab" && name === IAB_ELIG_LBL) ? "\u2014" : [fmt(cap, name.includes("D/C") ? 2 : 1), " ", unit]), /*#__PURE__*/React.createElement("td", {
     style: {
       ...cell,
       textAlign: "right"
     }
-  }, (r.lateralNoConv && PY_LAT_ROW.test(name)) ? "p-y did not converge" : [fmt(dem, name.includes("D/C") ? 3 : 2), " ", unit]), /*#__PURE__*/React.createElement("td", {
+  }, (r.lateralNoConv && PY_LAT_ROW.test(name)) ? "p-y did not converge" : (I.pileType === "iab" && name === IAB_ELIG_LBL) ? iabEligText(I, pass) : [fmt(dem, name.includes("D/C") ? 3 : 2), " ", unit]), /*#__PURE__*/React.createElement("td", {
     style: {
       ...cell,
       textAlign: "center",
@@ -10102,7 +10247,7 @@ function PrintReport({
       fontFamily: "monospace",
       lineHeight: 1.5
     }
-  }, "Computed checks follow AASHTO LRFD Bridge Design Specifications and FHWA NHI-05-039 methodology. This calculation package is a design aid; all results, assumptions, and input load effects must be independently verified and sealed by a licensed Professional Engineer prior to use for construction. " + (I.pileType === "hpile" ? "Nominal geotechnical resistances are from static analysis and must be field-verified by dynamic testing / driving criteria (AASHTO Table 10.5.5.2.3-1)." : "Bond values are preliminary (AASHTO Table C10.9.3.5.2-1) and must be confirmed by load testing.") + " — ", I.projNum, " · ", today)));
+  }, "Computed checks follow AASHTO LRFD Bridge Design Specifications and FHWA NHI-05-039 methodology. This calculation package is a design aid; all results, assumptions, and input load effects must be independently verified and sealed by a licensed Professional Engineer prior to use for construction. " + (I.pileType === "hpile" ? "Nominal geotechnical resistances are from static analysis and must be field-verified by dynamic testing / driving criteria (AASHTO Table 10.5.5.2.3-1)." : "Bond values are preliminary (AASHTO Table C10.9.3.5.2-1) and must be confirmed by load testing.") + " — ", [I.projNum, rptDate].filter(Boolean).join(" · "))));
 }
 
 /* ---- Nonlinear p-y panel: layer table with real soil parameters ---- */
@@ -10502,7 +10647,10 @@ function BarSelect({ I, set, areaKey, setGrade, label }) {
       /*#__PURE__*/React.createElement("option", { value: "custom" }, "custom — " + fmt(I[areaKey], 2) + " in²"),
       BAR_CATALOG.map(b => /*#__PURE__*/React.createElement("option", { key: b.id, value: b.id }, b.lbl))),
     setGrade && I.fyb >= 149.5 && /*#__PURE__*/React.createElement("div", { className: "text-[9px] mt-1 leading-snug", style: { color: "#b23b3b" } },
-      "\u26a0 fyb \u2265 150 ksi: for an ASTM A722 Gr150 threadbar, 150 ksi is the ULTIMATE strength (fpu). Yield fpy = 0.80\u00b7fpu = 120 ksi \u2014 re-select the bar or set fyb = 120."));
+      "\u26a0 fyb \u2265 150 ksi: for an ASTM A722 Gr150 threadbar, 150 ksi is the ULTIMATE strength (fpu). Yield fpy = 0.80\u00b7fpu = 120 ksi \u2014 re-select the bar or set fyb = 120.",
+      // F53 (O12): one click sets fyb = 120 ksi; nothing is converted automatically
+      /*#__PURE__*/React.createElement("button", { type: "button", onClick: () => set('fyb', 120), title: "Sets the bar yield fyb to 120 ksi (ASTM A722 Gr150: fpy = 0.80 fpu). Only fyb changes; the bar area is kept.",
+        className: "block mt-1 px-1.5 py-0.5 rounded-sm text-[9px] font-mono-tech text-white", style: { background: "var(--blueprint2)" } }, "Use fyb = 120 ksi (Gr150 bar yield)")));
 }
 
 // variant "edit": the editable table in the Loads & group input tab (results stay on the Summary
@@ -10594,6 +10742,28 @@ function LoadCasesCard({ cases, updCases, applyCase, runAllCases, caseRes, I, up
       /*#__PURE__*/React.createElement(LatGraphsLinks, { ids: ["mcases"], lead: "Moment profiles of all cases (Figure F-2) are on the Lateral graphs tab:" })));
 }
 
+// F55 (O17): integral abutment Simplified-Method eligibility is pass / fail, not a ratio.
+// The hint names the boundary-condition inputs that are still blank / 0 (bridge length, abutment height).
+const IAB_ELIG_LBL = "Simplified-Method eligibility";
+function iabEligMissing(I) {
+  const m = [];
+  if (!((I.iabBridgeLength || 0) > 0)) m.push("bridge length");
+  if (!((I.iabAbutHeight || 0) > 0)) m.push("abutment height");
+  return m;
+}
+function iabEligText(I, ok) {
+  const m = iabEligMissing(I);
+  return ok ? "eligible" : "not eligible" + (m.length ? " \u2014 enter " + m.join(" and ") : "");
+}
+// F58 (O28): one-line note in the H-pile structural modules when a section loss applies
+function HpCorrNote({ c }) {
+  if (!c || !c.applied) return null;
+  return /*#__PURE__*/React.createElement("div", { className: "pd-hpcorr text-[9.5px] leading-snug mb-2 p-1.5 rounded-sm", style: { background: "rgba(138,109,59,0.10)", color: "#5c4a26", border: "1px solid rgba(138,109,59,0.30)" } },
+    /*#__PURE__*/React.createElement("b", null, "Section loss: "), fmt(c.loss, 4), " in per exposed face, ", fmt(c.top, 1), "\u2013", fmt(c.bot, 1), " ft below the pile head", c.toToe ? " (to the toe)" : "",
+    ". d, b", /*#__PURE__*/React.createElement("sub", null, "f"), ", t", /*#__PURE__*/React.createElement("sub", null, "f"), ", t", /*#__PURE__*/React.createElement("sub", null, "w"), " each reduced by 2\u00d7", fmt(c.loss, 4), " in \u2192 ",
+    fmt(c.d, 3), " \u00d7 ", fmt(c.bf, 3), " in, t", /*#__PURE__*/React.createElement("sub", null, "f"), " ", fmt(c.tf, 3), " in, t", /*#__PURE__*/React.createElement("sub", null, "w"), " ", fmt(c.tw, 3),
+    " in. The section properties below are the corroded section (all structural checks; conservative, not depth-specific). The p\u2013y analysis and Davisson fixity use the nominal EI.");
+}
 function UtilizationDashboard({ r, I, pyRes }) {
   // Build demand/capacity ratios from the same data the report uses.
   // rows: [label, capacity, unit, demand, pass, code]. For most, DCR = demand/capacity.
@@ -10669,7 +10839,7 @@ function UtilizationDashboard({ r, I, pyRes }) {
     // show NG and sort as governing (like the stability row), not a ratio of the fallback moment
     if (r.lateralNoConv && !isIAB && PY_LAT_ROW.test(label)) return { label, dcr: 2.0, pass: false, code, cap, dem, isStab: false, nc: true };
     const dcr = cap > 0 ? Math.abs(dem) / cap : 0;
-    return { label, dcr, pass, code, cap, dem, isStab: label === "Combined-load stability" };
+    return { label, dcr, pass, code, cap, dem, isStab: label === "Combined-load stability", isElig: isIAB && label === IAB_ELIG_LBL };
   }).filter(x => isFinite(x.dcr));
   // sort governing (highest DCR) first
   rows.sort((a, b) => b.dcr - a.dcr);
@@ -10679,7 +10849,7 @@ function UtilizationDashboard({ r, I, pyRes }) {
     /*#__PURE__*/React.createElement("div", { className: "flex items-baseline justify-between mb-2" },
       /*#__PURE__*/React.createElement("div", { className: "text-[11px] font-mono-tech text-[var(--blueprint)] uppercase tracking-wider" }, "Summary of checks · demand / capacity"),
       gov && /*#__PURE__*/React.createElement("div", { className: "text-[10px] font-mono-tech", style: { color: barColor(gov.dcr) } },
-        "governs: ", /*#__PURE__*/React.createElement("b", null, gov.label), gov.isStab ? (gov.pass ? " \u00b7 stable" : " \u00b7 UNSTABLE") : gov.nc ? " \u00b7 p-y did not converge" : " @ " + fmt(gov.dcr, 2))),
+        "governs: ", /*#__PURE__*/React.createElement("b", null, gov.label), gov.isStab ? (gov.pass ? " \u00b7 stable" : " \u00b7 UNSTABLE") : gov.nc ? " \u00b7 p-y did not converge" : gov.isElig ? " \u00b7 " + iabEligText(I, gov.pass) : " @ " + fmt(gov.dcr, 2))),
     // F25 (O37): large head-deflection warning (amber, warning only; not a row, no D/C)
     (() => {
       const w = (!isIAB && I.lateralSource === "py" && pyRes && pyRes.ok) ? pyDeflWarnInfo(pyRes.headDefl_in, pyRes.setup && pyRes.setup.D, I) : null;
@@ -10696,13 +10866,14 @@ function UtilizationDashboard({ r, I, pyRes }) {
         key: i, type: target ? "button" : undefined,
         onClick: target ? () => jumpToModule(target) : undefined,
         title: target ? "Show the full calculation" : undefined,
-        "aria-label": target ? (x.label + ", D/C " + (x.isStab ? (x.pass ? "stable" : "unstable") : x.nc ? "not available, p-y did not converge" : fmt(x.dcr, 2)) + ", " + (x.pass ? "OK" : "not satisfied") + ". Show calculation.") : undefined,
+        "aria-label": target ? (x.label + (x.isElig ? ": " + iabEligText(I, x.pass) : ", D/C " + (x.isStab ? (x.pass ? "stable" : "unstable") : x.nc ? "not available, p-y did not converge" : fmt(x.dcr, 2))) + ", " + (x.pass ? "OK" : "not satisfied") + ". Show calculation.") : undefined,
         className: "util-row w-full flex items-center gap-2 text-left rounded-sm " + (target ? "hover:bg-slate-50 cursor-pointer" : "") },
         /*#__PURE__*/React.createElement("div", { className: "text-[9.5px] text-slate-600 text-right", style: { width: "108px", flexShrink: 0 } }, x.label),
+        x.isElig ? /*#__PURE__*/React.createElement("div", { className: "pd-elig flex-1 text-[9.5px] font-mono-tech leading-tight", style: { color: x.pass ? "#2f6f3e" : "#b23b3b" } }, iabEligText(I, x.pass)) :
         /*#__PURE__*/React.createElement("div", { className: "relative flex-1 h-3.5 rounded-sm overflow-hidden", style: { background: "#eef2f6" } },
           /*#__PURE__*/React.createElement("div", { style: { position: "absolute", left: 0, top: 0, bottom: 0, width: pct + "%", background: barColor(x.dcr), opacity: 0.85 } }),
           /*#__PURE__*/React.createElement("div", { style: { position: "absolute", left: (1/1.35*100) + "%", top: 0, bottom: 0, width: "1px", background: "#334", opacity: 0.5 } })),
-        /*#__PURE__*/React.createElement("div", { className: "text-[9.5px] font-mono-tech text-right", style: { width: "34px", color: barColor(x.dcr) } }, (x.isStab || x.nc) ? (x.pass ? "OK" : "NG") : fmt(x.dcr, 2)),
+        /*#__PURE__*/React.createElement("div", { className: "text-[9.5px] font-mono-tech text-right", style: { width: "34px", color: barColor(x.dcr) } }, (x.isStab || x.nc || x.isElig) ? (x.pass ? "OK" : "NG") : fmt(x.dcr, 2)),
         /*#__PURE__*/React.createElement("div", { style: { width: "12px", color: x.pass ? "#2f6f3e" : "#b23b3b", fontSize: "10px" } }, x.pass ? "✓" : "✗"),
         /*#__PURE__*/React.createElement("div", { className: "util-code text-[9px] text-slate-400 font-mono-tech", style: { width: "92px", flexShrink: 0 } }, x.code || ""));
     })),
@@ -13657,7 +13828,7 @@ function App() {
       } else {
         text = await file.text();
       }
-      const parsed = parseLpileText(text);
+      const parsed = lpileAddCases(parseLpileText(text), text); // F52 (O7): every load case
       parsed.fileName = file.name;
       parsed.isPdf = isPdf;
       setLpileParse(parsed);
@@ -14210,7 +14381,7 @@ function App() {
       set('loadCases', cleaned.length ? cleaned : [{ name: "Case 1 — Strength", type: "strength", STL: I.STL, Plat: I.Plat, Mhead: I.pyMhead || 0 }]);
     }
   }, []);
-  React.useEffect(() => { setCaseRes(null); }, [JSON.stringify(I.soilLayers), I.OD, I.dhBond, I.dhBondSeparate, I.tc, I.corr, I.fyc, I.Ab, I.fyb, I.fcGrout, I.fc, I.Lcased, I.Lplunge, I.LbProvided, I.beta, I.pyEIvar, I.pyEIBasis, I.pyPM, I.pyYM, I.pyCyclic, I.pyKrot, I.pyNodes, I.solverHead, I.solverFree, I.bucklingEnable, I.LuFree, I.Kb, I.pileType, I.lateralSource, I.E, I.solverLembed, I.hpD, I.hpBf, I.hpTf, I.hpTw, I.hpFy, I.hpAxis, pmAutoOn, pmRowKey]);
+  React.useEffect(() => { setCaseRes(null); }, [JSON.stringify(I.soilLayers), I.OD, I.dhBond, I.dhBondSeparate, I.tc, I.corr, I.fyc, I.Ab, I.fyb, I.fcGrout, I.fc, I.Lcased, I.Lplunge, I.LbProvided, I.beta, I.pyEIvar, I.pyEIBasis, I.pyPM, I.pyYM, I.pyCyclic, I.pyKrot, I.pyNodes, I.solverHead, I.solverFree, I.bucklingEnable, I.LuFree, I.Kb, I.pileType, I.lateralSource, I.E, I.solverLembed, I.hpD, I.hpBf, I.hpTf, I.hpTw, I.hpFy, I.hpAxis, I.hpCorrLoss, I.hpCorrTop, I.hpCorrBot, pmAutoOn, pmRowKey]);
   // F38b (O53): the P_cr ramp p-multiplier from the rows the active case is distributed over
   const pcrGPM = pcrGPMFor(I, pmTblApp, (pmAutoOn && I.lateralSource === "py") ? cases[Math.min(Math.max(I.activeCase || 0, 0), cases.length - 1)] : null);
   // Invalidate the Pcr ramp whenever the MODEL it was run on changes. Without this,
@@ -15120,6 +15291,15 @@ function App() {
     label: "Checked by",
     value: I.projChk,
     onChange: v => setStr('projChk', v)
+  }), /*#__PURE__*/React.createElement(HdrField, {
+    label: "Client",
+    value: I.projClient || "",
+    onChange: v => setStr('projClient', v)
+  }), /*#__PURE__*/React.createElement(HdrField, {
+    label: "Date",
+    value: I.projDate || "",
+    placeholder: "Date (blank = today)",
+    onChange: v => setStr('projDate', v)
   })), /*#__PURE__*/React.createElement("div", {
     className: "pd-projShare no-print"
   }, /*#__PURE__*/React.createElement("button", {
@@ -15144,9 +15324,10 @@ function App() {
     previewing: previewReport,
     onPrint: printReport,
     caseLabel: (cases && cases[activeIdx]) ? (cases[activeIdx].name || ("Case " + (activeIdx + 1))) : null
-  }), ((r.inputErrors && r.inputErrors.length) || (r.inputNotes && r.inputNotes.length) || loadNotes.length) ? /*#__PURE__*/React.createElement("div", {
+  }), ((r.inputErrors && r.inputErrors.length) || (r.inputNotes && r.inputNotes.length) || loadNotes.length || r.blankInputs) ? /*#__PURE__*/React.createElement("div", {
     className: "max-w-[1920px] mx-auto px-6 pt-3 no-print"
-  }, (r.inputErrors || []).map((m, i) => /*#__PURE__*/React.createElement("div", { key: "e" + i, className: "text-[11px] px-2 py-1 mb-1 rounded-sm", style: { background: "rgba(178,59,59,0.10)", color: "#8a2a2a", border: "1px solid rgba(178,59,59,0.35)" } }, /*#__PURE__*/React.createElement("b", null, "\u26a0 Input error: "), m)),
+  }, r.blankInputs && /*#__PURE__*/React.createElement("div", { className: "pd-blank-banner text-[11px] px-2 py-1 mb-1 rounded-sm", style: { background: "rgba(178,59,59,0.10)", color: "#8a2a2a", border: "1px solid rgba(178,59,59,0.35)" } }, /*#__PURE__*/React.createElement("b", null, "\u26a0 Enter a value: "), blankInputsMsg(r.blankInputs)),
+    (r.inputErrors || []).map((m, i) => /*#__PURE__*/React.createElement("div", { key: "e" + i, className: "text-[11px] px-2 py-1 mb-1 rounded-sm", style: { background: "rgba(178,59,59,0.10)", color: "#8a2a2a", border: "1px solid rgba(178,59,59,0.35)" } }, /*#__PURE__*/React.createElement("b", null, "\u26a0 Input error: "), m)),
     (r.inputNotes || []).concat(loadNotes).map((m, i) => /*#__PURE__*/React.createElement("div", { key: "n" + i, className: "text-[11px] px-2 py-1 mb-1 rounded-sm", style: { background: "rgba(201,98,46,0.10)", color: "#7a4d15", border: "1px solid rgba(201,98,46,0.30)" } }, /*#__PURE__*/React.createElement("b", null, "\u26a0 Note: "), m)),
     loadNotes.length > 0 && /*#__PURE__*/React.createElement("button", { onClick: () => setLoadNotes([]), className: "text-[10px] text-slate-500 underline" }, "dismiss load notes")) : null, /*#__PURE__*/React.createElement("div", {
     className: "max-w-[1920px] mx-auto px-6 py-6 grid grid-cols-1 lg:grid-cols-[1fr_2fr] gap-6"
@@ -15292,11 +15473,13 @@ function App() {
           /*#__PURE__*/React.createElement("option", { value: "concrete" }, "Concrete (\u2264200 ft)"))),
       /*#__PURE__*/React.createElement("div", null,
         /*#__PURE__*/React.createElement("div", { className: "text-[10px] text-slate-500 mb-0.5" }, "Total bridge length (ft)"),
-        /*#__PURE__*/React.createElement("input", { type: "number", className: "w-full text-[10px] px-1.5 py-1 rounded-sm border border-slate-300", value: I.iabBridgeLength || 0, onChange: e => set('iabBridgeLength', parseFloat(e.target.value) || 0) }))),
+        /*#__PURE__*/React.createElement("input", { type: "number", className: "w-full text-[10px] px-1.5 py-1 rounded-sm border border-slate-300", value: I.iabBridgeLength || 0, onChange: e => set('iabBridgeLength', parseFloat(e.target.value) || 0) }),
+        !((I.iabBridgeLength || 0) > 0) && /*#__PURE__*/React.createElement("div", { className: "text-[9px] mt-0.5 leading-tight", style: { color: "#b23b3b" } }, "enter the bridge length (eligibility)"))),
     /*#__PURE__*/React.createElement("div", { className: "grid grid-cols-3 gap-2 mb-2" },
       /*#__PURE__*/React.createElement("div", null,
         /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-500 mb-0.5" }, "Abut. height (ft)"),
-        /*#__PURE__*/React.createElement("input", { type: "number", className: "w-full text-[10px] px-1 py-1 rounded-sm border border-slate-300", value: I.iabAbutHeight || 0, onChange: e => set('iabAbutHeight', parseFloat(e.target.value) || 0) })),
+        /*#__PURE__*/React.createElement("input", { type: "number", className: "w-full text-[10px] px-1 py-1 rounded-sm border border-slate-300", value: I.iabAbutHeight || 0, onChange: e => set('iabAbutHeight', parseFloat(e.target.value) || 0) }),
+        !((I.iabAbutHeight || 0) > 0) && /*#__PURE__*/React.createElement("div", { className: "text-[9px] mt-0.5 leading-tight", style: { color: "#b23b3b" } }, "enter a value")),
       /*#__PURE__*/React.createElement("div", null,
         /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-500 mb-0.5" }, "Grade diff (%)"),
         /*#__PURE__*/React.createElement("input", { type: "number", className: "w-full text-[10px] px-1 py-1 rounded-sm border border-slate-300", value: I.iabGradeDiff || 0, onChange: e => set('iabGradeDiff', parseFloat(e.target.value) || 0) })),
@@ -15573,7 +15756,11 @@ function App() {
     /*#__PURE__*/React.createElement(Field, { label: "\u03c6u tension fracture", value: I.hpPhiTu, onChange: v => set('hpPhiTu', v) }),
     /*#__PURE__*/React.createElement(Field, { label: "\u03c6 geo sand/silt", sub: "SPT side + tip", value: I.hpPhiGeo, onChange: v => set('hpPhiGeo', v) }),
     /*#__PURE__*/React.createElement(Field, { label: "\u03c6 geo clay", sub: "\u03b1 side + 9Su tip", value: I.hpPhiGeoClay, onChange: v => set('hpPhiGeoClay', v) }),
-    /*#__PURE__*/React.createElement(Field, { label: "\u03c6 uplift", sub: "SPT / \u03b1 side", value: I.hpPhiUp, onChange: v => set('hpPhiUp', v) })) : /*#__PURE__*/React.createElement("div", {
+    /*#__PURE__*/React.createElement(Field, { label: "\u03c6 uplift", sub: "SPT / \u03b1 side", value: I.hpPhiUp, onChange: v => set('hpPhiUp', v) }),
+    // F58 (O28): optional section loss (corrosion); blank = 0 = none
+    /*#__PURE__*/React.createElement(Field, { label: "Section loss / face", sub: "corrosion, each exposed face (0 = none)", unit: "in", step: 0.01, value: I.hpCorrLoss || 0, onChange: v => set('hpCorrLoss', (isFinite(v) && v > 0) ? v : 0) }),
+    (I.hpCorrLoss > 0) && /*#__PURE__*/React.createElement(Field, { label: "Loss zone top", sub: "below pile head", unit: "ft", value: I.hpCorrTop || 0, onChange: v => set('hpCorrTop', (isFinite(v) && v > 0) ? v : 0) }),
+    (I.hpCorrLoss > 0) && /*#__PURE__*/React.createElement(Field, { label: "Loss zone bottom", sub: "below pile head; 0 = pile toe", unit: "ft", value: I.hpCorrBot || 0, onChange: v => set('hpCorrBot', (isFinite(v) && v > 0) ? v : 0) })) : /*#__PURE__*/React.createElement("div", {
     className: "grid grid-cols-2 gap-3"
   }, /*#__PURE__*/React.createElement(CasingSelect, { I: I, set: set }),
   /*#__PURE__*/React.createElement(Field, {
@@ -15710,7 +15897,7 @@ function App() {
       /*#__PURE__*/React.createElement("div", { className: "text-slate-500 mt-0.5" }, I.phiPresetNote.note)),
   /*#__PURE__*/React.createElement("div", {
     className: "grid grid-cols-3 gap-2"
-  }, [["φgeo", "phiGeo"], ["φcc", "phiCC"], ["φcu", "phiCU"], ["φf", "phiF"], ["φc", "phiC"], ["φb", "phiB"], ["φv", "phiV"], ["φup", "phiUp"], ["φt", "phiT"], ["φv punch", "phiVpunch"]].map(([lbl, key]) =>
+  }, [["φgeo", "phiGeo"], ["φcc", "phiCC"], ["φcu", "phiCU"], ["φf", "phiF"], ["φc", "phiC"], ["φb", "phiB"], ["φv (unused)", "phiV"], ["φup", "phiUp"], ["φt", "phiT"], ["φv punch", "phiVpunch"]].map(([lbl, key]) =>
     /*#__PURE__*/React.createElement("div", { key: key, className: "relative" },
       /*#__PURE__*/React.createElement(Field, { label: lbl, value: I[key], onChange: v => set(key, v) }),
       /*#__PURE__*/React.createElement("button", { title: "AASHTO definition & options", onClick: () => setPhiInfo({ open: true, key: key }),
@@ -15798,12 +15985,14 @@ function App() {
   }, /*#__PURE__*/React.createElement("div", {
     className: "grid grid-cols-2 gap-3"
   }, /*#__PURE__*/React.createElement(Field, {
-    label: "Edge dist 1",
+    label: "Edge distance 1",
+    sub: "pile centre to cap edge",
     unit: "ft",
     value: I.de1,
     onChange: v => set('de1', v)
   }), /*#__PURE__*/React.createElement(Field, {
-    label: "Edge dist 2",
+    label: "Edge distance 2",
+    sub: "pile centre to cap edge",
     unit: "ft",
     value: I.de2,
     onChange: v => set('de2', v)
@@ -15860,12 +16049,14 @@ function App() {
               (I.pileType === key ? "text-white" : "text-[var(--blueprint)] hover:bg-slate-50"),
             style: I.pileType === key ? { background: "var(--blueprint)" } : {}
           }, lbl))),
+      // F56 (O21): verification note in the tool's amber "verify" chip style (as "PDF — verify")
       I.pileType === "hpile" && /*#__PURE__*/React.createElement("span", {
-        className: "font-mono-tech text-[10px] text-amber-700 bg-amber-50 border border-amber-300 rounded-sm px-2 py-0.5"
-      }, "⚠ UNVERIFIED φ — driven-pile module, confirm vs AASHTO 10th Ed before use")),
+        className: "pd-verify-chip font-mono-tech text-[10px] rounded-sm px-2 py-0.5",
+        style: { background: "rgba(138,109,59,0.15)", color: "#8a6d3b" }
+      }, "φ — verify: H-pile defaults are AASHTO LRFD 10th Ed. Art. 6.5.4.2 / Table 10.5.5.2.3-1 values; confirm for your edition and driving conditions")),
     I.pileType === "hpile" && /*#__PURE__*/React.createElement("div", {
       className: "text-[10px] text-slate-500 mt-1.5 leading-snug"
-    }, "Driven steel H-pile mode. Soil profile, pile group, load cases, and geometry carry over. Structural/geotechnical checks use elastic section modulus (Sx) and placeholder resistance factors flagged UNVERIFIED. Sanity-check aid only — independent PE review required."),
+    }, "Driven steel H-pile mode. Soil profile, pile group, load cases, and geometry carry over. Structural/geotechnical checks use elastic section modulus (Sx) and the resistance factors entered in the Pile Section panel (defaults from AASHTO 6.5.4.2 and Table 10.5.5.2.3-1 \u2014 verify). Sanity-check aid only — independent PE review required."),
     I.pileType === "iab" && /*#__PURE__*/React.createElement("div", {
       className: "text-[10px] text-slate-500 mt-1.5 leading-snug"
     }, "Integral abutment pile mode — MassDOT Bridge Manual Part I \u00a73.10 Simplified Method. Single row of vertical H-piles (HP10\u00d757 or HP12\u00d784, Grade 50), webs parallel to the abutment, bending about the weak axis under thermal movement. Capacity is read from MassDOT's pre-computed tables (thermal + skew effects already embedded) \u2014 no p-y analysis required for the non-scour case. Sanity-check aid only \u2014 independent PE review required.")),
@@ -15922,7 +16113,10 @@ function App() {
           [["Section", "HP " + fmt(I.hpD, 2) + " \u00d7 " + fmt(I.hpBf, 2) + " (" + (I.hpGrade || "") + ")"],
            ["Depth d / flange bf", fmt(I.hpD, 2) + " / " + fmt(I.hpBf, 2) + " in"],
            ["Flange tf / web tw", fmt(I.hpTf, 3) + " / " + fmt(I.hpTw, 3) + " in"],
-           ["Gross area Ag", fmt(r.hpileStruct ? r.hpileStruct.Ag : 0, 2) + " in\u00b2"],
+           (r.hpileStruct && r.hpileStruct.corr)
+             ? ["Gross area Ag", fmt(hpileSection({ d: I.hpD, bf: I.hpBf, tf: I.hpTf, tw: I.hpTw, Fy: I.hpFy, E: I.E || 29000 }).A, 2) + " in\u00b2 (" + fmt(r.hpileStruct.Ag, 2) + " after section loss)"]
+             : ["Gross area Ag", fmt(r.hpileStruct ? r.hpileStruct.Ag : 0, 2) + " in\u00b2"],
+           ...((r.hpileStruct && r.hpileStruct.corr) ? [["Section loss / face", fmt(r.hpileStruct.corr.loss, 4) + " in, " + fmt(r.hpileStruct.corr.top, 1) + "\u2013" + fmt(r.hpileStruct.corr.bot, 1) + " ft"]] : []),
            ["Yield Fy", fmt(I.hpFy, 0) + " ksi"],
            ["Bending axis", I.hpAxis === "weak" ? "weak (y-y)" : "strong (x-x)"],
            ["Embedded length", fmt(Math.max(I.solverLembed || 30, 1), 1) + " ft below grade"],
@@ -15936,11 +16130,12 @@ function App() {
       r.hpileHeadFix && r.hpileHeadFix.isFixedHead && /*#__PURE__*/React.createElement("div", { className: "mt-2 p-1.5 rounded-sm text-[9px] leading-snug", style: r.hpileHeadFix.develops ? { background: "rgba(47,111,62,0.07)", color: "#256436", border: "1px solid rgba(47,111,62,0.25)" } : { background: "rgba(178,59,59,0.08)", color: "#8a2a2a", border: "1px solid rgba(178,59,59,0.3)" } },
         r.hpileHeadFix.develops ? "\u2713 " : "\u26a0 ", "Fixed head + cap embedment ", fmt(r.hpileHeadFix.capEmbed_in, 1), " in ", r.hpileHeadFix.develops ? "\u2265 " : "< ", "required ", fmt(r.hpileHeadFix.embedReq_in, 1), " in (", fmt(r.hpileHeadFix.kFix, 1), "\u00d7d). ",
         r.hpileHeadFix.develops ? "Adequate to develop the fixed-head moment connection \u2014 see Module 06." : "Insufficient to develop a fixed-head moment connection \u2014 the head will behave as pinned. Increase embedment or reanalyze as free/pinned (Module HK)."))),
-  /*#__PURE__*/React.createElement("div", { className: "grid xl:grid-cols-[280px_1fr] gap-4 items-start mb-3" },
-    /*#__PURE__*/React.createElement("div", { className: "bg-slate-50 rounded-sm p-2 border border-slate-200 overflow-hidden" },
-      /*#__PURE__*/React.createElement("div", { className: "text-[9px] font-mono-tech text-[var(--blueprint2)] uppercase tracking-wider mb-1" }, "Cross-section (to scale, in)"),
-      /*#__PURE__*/React.createElement(HPileCrossSection, { I: I })),
+  // F57 (O27): the empty "Cross-section (to scale, in)" plot is removed; the section is drawn on the
+  // Structural tab (S-1, H-pile cross-section to scale)
+  /*#__PURE__*/React.createElement("div", { className: "mb-3" },
     /*#__PURE__*/React.createElement("div", null,
+        /*#__PURE__*/React.createElement("p", { className: "text-[9px] text-slate-500 leading-snug mb-1" }, "The cross-section drawing to scale is S-1 on the Structural tab. ", (r.hpileStruct && r.hpileStruct.corr) ? "The derivation below is for the nominal section; with the section loss entered, the structural checks (03\u201309) use the corroded section. " : null,
+          /*#__PURE__*/React.createElement("button", { type: "button", onClick: () => { const c = [...document.querySelectorAll(".pd-gfx-card")].find(x => { const b = x.querySelector(".module-badge"); return b && b.textContent === "S-1"; }); if (c) { showOutTabOf(c); setTimeout(() => c.scrollIntoView({ block: "start" }), 30); } }, className: "underline text-[var(--blueprint2)]" }, "S-1 \u2192")),
         /*#__PURE__*/React.createElement("div", { className: "text-[9px] font-mono-tech text-[var(--blueprint2)] uppercase tracking-wider mb-1" }, "Derived section properties \u2014 derivation"),
         (() => {
           const hp = hpileSection({ d: I.hpD, bf: I.hpBf, tf: I.hpTf, tw: I.hpTw, Fy: I.hpFy, E: I.E || 29000 });
@@ -16311,6 +16506,7 @@ function App() {
       if (r.buckling.bklTab === "pcrit" && !r.buckling.pcrKip) needCompute = true;
     }
     return /*#__PURE__*/React.createElement("div", null,
+      /*#__PURE__*/React.createElement(HpCorrNote, { c: hs.corr }),
       /*#__PURE__*/React.createElement(Narr, null, "The factored axial compressive resistance is ", /*#__PURE__*/React.createElement(RTex, { tex: "P_r=\\phi_c P_n" }), ", where the nominal resistance ", /*#__PURE__*/React.createElement(RTex, { tex: "P_n" }), " follows the AASHTO unified column curve as a function of the yield resistance ", /*#__PURE__*/React.createElement(RTex, { tex: "P_o=F_yA_g" }), " and the elastic critical buckling resistance ", /*#__PURE__*/React.createElement(RTex, { tex: "P_e" }), ". For a driven H-pile the effective length is governed by the soil\u2013pile system: with no stickup the embedded pile is taken as fully braced (", /*#__PURE__*/React.createElement(RTex, { tex: "P_n=P_o" }), "); with stickup, ", /*#__PURE__*/React.createElement(RTex, { tex: "P_e" }), " is found either from the assumed effective-length factor or, more refined, from the nonlinear thrust-to-instability analysis on the p\u2013y model."),
       /*#__PURE__*/React.createElement(RptHeading, { n: "1", title: "Section & local buckling classification", code: "AASHTO 6.9.4.2.1 \u00b7 Table 6.9.4.2.1-1" }),
       /*#__PURE__*/React.createElement(Calc, { label: "Gross area", eq: `A_g = ${fmt(hp.A,2)}\\ \\text{in}^2`, note: "rectangular idealization" }),
@@ -16379,6 +16575,7 @@ function App() {
   }, (() => {
     const hs = r.hpileStruct, hp = hs.hp;
     return /*#__PURE__*/React.createElement("div", null,
+      /*#__PURE__*/React.createElement(HpCorrNote, { c: hs.corr }),
       /*#__PURE__*/React.createElement(Narr, null, "The factored flexural resistance is ", /*#__PURE__*/React.createElement(RTex, { tex: "M_r=\\phi_f M_n" }), ". This tool takes the nominal flexural resistance as the elastic yield moment ", /*#__PURE__*/React.createElement(RTex, { tex: "M_n=F_yS" }), " about the ", hs.axisStrong ? "strong (x\u2013x)" : "weak (y\u2013y)", " axis, where ", /*#__PURE__*/React.createElement(RTex, { tex: "S" }), " is the elastic section modulus. Lateral\u2013torsional buckling need not be checked for a soil-braced pile."),
       /*#__PURE__*/React.createElement(RptHeading, { n: "1", title: "Section modulus", code: "governing axis" }),
       /*#__PURE__*/React.createElement(Calc, { label: hs.axisStrong ? "Strong-axis elastic modulus" : "Weak-axis elastic modulus", eq: hs.axisStrong ? `S_x=\\dfrac{I_x}{d/2}=\\dfrac{${fmt(hp.Ix,1)}}{${fmt(hp.d/2,2)}}=${fmt(hp.Sx,1)}\\ \\text{in}^3` : `S_y=\\dfrac{I_y}{b_f/2}=\\dfrac{${fmt(hp.Iy,1)}}{${fmt(hp.bf/2,2)}}=${fmt(hp.Sy,1)}\\ \\text{in}^3` }),
@@ -16406,6 +16603,7 @@ function App() {
     if (needCompute) return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement(Narr, null, "Nonlinear P-crit is selected. Compute ", /*#__PURE__*/React.createElement(RTex, { tex: "P_{cr}" }), " in the Structural Axial module first; the interaction below updates automatically."));
     const PuPr = hs.STL / Pr, MuMr = hs.Mr > 0 ? hs.Mu / hs.Mr : 0;
     return /*#__PURE__*/React.createElement("div", null,
+      /*#__PURE__*/React.createElement(HpCorrNote, { c: hs.corr }),
       /*#__PURE__*/React.createElement(Narr, null, "Members under combined axial compression and flexure must satisfy the AASHTO beam-column interaction. The form depends on the axial demand ratio ", /*#__PURE__*/React.createElement(RTex, { tex: "P_u/P_r" }), ": below 0.2 the axial term is halved, at or above 0.2 the flexural term carries the 8/9 factor. The resistances use ", /*#__PURE__*/React.createElement(RTex, { tex: "\\phi_c=0.70" }), " and ", /*#__PURE__*/React.createElement(RTex, { tex: "\\phi_f=1.00" }), " per the undamaged-H-pile values in 6.5.4.2."),
       /*#__PURE__*/React.createElement(RptHeading, { n: "1", title: "Factored resistances", code: "AASHTO 6.9.2.1 / 6.12" }),
       /*#__PURE__*/React.createElement(Calc, { label: "Axial", eq: `P_r=\\phi_c P_n=${fmt(hs.phi_c_comb,2)}\\times ${fmt(Pn,0)}=${fmt(Pr,0)}\\ \\text{kip}`, cite: "\u03c6c=" + fmt(hs.phi_c_comb, 2) }),
@@ -16427,6 +16625,7 @@ function App() {
   }, (() => {
     const hs = r.hpileStruct, hp = hs.hp;
     return /*#__PURE__*/React.createElement("div", null,
+      /*#__PURE__*/React.createElement(HpCorrNote, { c: hs.corr }),
       /*#__PURE__*/React.createElement(Narr, null, hs.axisStrong ? "For strong-axis bending the shear is carried by the web. The nominal shear resistance is the plastic shear force reduced by the buckling coefficient C, which is unity for the stocky webs typical of rolled H-piles." : "For weak-axis bending the shear is carried by the flanges, with a shear-buckling coefficient k=1.2 per 6.12.1.2.3a."),
       /*#__PURE__*/React.createElement(RptHeading, { n: "1", title: "Plastic shear force", code: hs.axisStrong ? "AASHTO 6.10.9.2" : "AASHTO 6.12.1.2.3a" }),
       hs.axisStrong
@@ -16449,6 +16648,7 @@ function App() {
   }, (() => {
     const hs = r.hpileStruct;
     return /*#__PURE__*/React.createElement("div", null,
+      /*#__PURE__*/React.createElement(HpCorrNote, { c: hs.corr }),
       /*#__PURE__*/React.createElement(Narr, null, "The factored tensile resistance is the lesser of yielding on the gross section and fracture on the net section. For a plain driven pile without holes the net area equals the gross area, so yielding on gross typically governs."),
       /*#__PURE__*/React.createElement(RptHeading, { n: "1", title: "Yielding on gross section", code: "\u03c6y=" + fmt(hs.phi_ty, 2) }),
       /*#__PURE__*/React.createElement(Calc, { label: "Yield resistance", eq: `\\phi_y F_y A_g=${fmt(hs.phi_ty,2)}\\times ${fmt(hs.Fy,0)}\\times ${fmt(hs.Ag,2)}`, result: `=${fmt(hs.phiPn_ty,0)}\\ \\text{kip}` }),
@@ -16638,7 +16838,19 @@ function App() {
       }
     }, lpileParse.source === "summary" ? "from LPILE summary line" : "from data table"), s.nRows && /*#__PURE__*/React.createElement("span", {
       className: "text-slate-400"
-    }, "· ", s.nRows, " rows · ", fmt(s.depthRange[0], 0), "–", fmt(s.depthRange[1], 0), " ft")), /*#__PURE__*/React.createElement("table", {
+    }, "· ", s.nRows, " rows · ", fmt(s.depthRange[0], 0), "–", fmt(s.depthRange[1], 0), " ft")),
+    // F52 (O7): load-case picker (multi-case LPILE file); the first case is the default, as before
+    Array.isArray(lpileParse.cases) && lpileParse.cases.length > 1 && /*#__PURE__*/React.createElement("div", { className: "pd-lp-case flex items-center gap-2 flex-wrap mb-1.5" },
+      /*#__PURE__*/React.createElement("span", { className: "text-slate-500" }, lpileParse.cases.length, " load cases in the file \u00b7 use:"),
+      /*#__PURE__*/React.createElement("select", { "aria-label": "LPILE load case", className: "font-mono-tech text-[10px] px-1 py-0.5 rounded-sm border border-slate-300 bg-white",
+        value: lpileParse.caseSel === "env" ? "env" : String(lpileParse.caseSel || 0),
+        onChange: e => setLpileParse(lp => lpileWithCase(lp, e.target.value === "env" ? "env" : parseInt(e.target.value, 10))) },
+        lpileParse.cases.map((c, i) => /*#__PURE__*/React.createElement("option", { key: i, value: String(i), disabled: !c.ok },
+          c.label + (c.V != null ? " \u00b7 V " + fmt(c.V, 1) + " kip" : "") + (c.P != null ? " \u00b7 P " + fmt(c.P, 0) + " kip" : "") + (c.ok && c.summary ? " \u00b7 Mmax " + fmt(c.summary.Mmax, 1) + " kip\u00b7ft" : " \u00b7 not parsed") + (i === 0 ? " (first)" : ""))),
+        /*#__PURE__*/React.createElement("option", { value: "env" }, "Envelope of all cases (largest Mmax, deflection, shear)"))),
+    lpileParse.caseSel === "env" && s.envelope && /*#__PURE__*/React.createElement("p", { className: "text-[9.5px] text-slate-500 leading-snug mb-1.5" },
+      "Envelope of ", s.envelope.n, " cases: M", /*#__PURE__*/React.createElement("sub", null, "max"), " from ", s.envelope.M, ", deflection from ", s.envelope.y || "\u2014", ", shear from ", s.envelope.V || "\u2014",
+      ". The profiles, fixity, depth of M", /*#__PURE__*/React.createElement("sub", null, "max"), " and the loads compared below are those of ", s.envelope.M, "."), /*#__PURE__*/React.createElement("table", {
       className: "w-full",
       style: {
         borderCollapse: "collapse"
@@ -17298,7 +17510,7 @@ function App() {
     /*#__PURE__*/React.createElement("div", { className: "text-[9px] font-mono-tech text-[var(--blueprint2)] uppercase tracking-wider mb-1" }, "Bearing & punching geometry — variables"),
     /*#__PURE__*/React.createElement("table", { className: "w-full text-[9px] font-mono-tech", style: { borderCollapse: "collapse" } },
       /*#__PURE__*/React.createElement("tbody", null,
-        [["d_e1, d_e2", "edge distances pile→cap edge, two directions (min governs the spread cone)", fmt(I.de1, 2) + " / " + fmt(I.de2, 2) + " ft"],
+        [["d_e1, d_e2", "edge distances, pile centre to cap edge, two directions (min governs the spread cone)", fmt(I.de1, 2) + " / " + fmt(I.de2, 2) + " ft"],
          ["t1, t2", "cap thickness, two directions (min governs)", fmt(I.t1, 2) + " / " + fmt(I.t2, 2) + " ft"],
          ["h_e", "pile head embedment into the cap", fmt(Math.min(I.he1, I.he2), 2) + " ft"],
          ["d_b", "cap reinforcing bar diameter", fmt(I.capBar, 3) + " in"],
@@ -17391,7 +17603,14 @@ function App() {
   }), /*#__PURE__*/React.createElement(CheckRow, {
     pass: r.tests.proof_pass,
     tex: `P_t=${fmt(r.tests.Pt_proof, 0)}${r.tests.proof_pass ? ' \\geq ' : ' < '}STL=${fmt(r.tests.STL, 0)}\\text{ kip}`
-  })), /*#__PURE__*/(I.pileType === "micropile") && React.createElement(Module, {
+  })),
+  // F60 (Module 09 layout question): Module 09 stays on the Geotechnical tab (it holds the
+  // geotechnical pullout); this note on the Structural tab links to it (screen only)
+  /*#__PURE__*/(I.pileType === "micropile") && React.createElement("div", { "data-otab-fixed": "struct", style: { order: 90 }, className: "pd-m09-link no-print bg-white border border-slate-200 rounded-md px-4 py-2 text-[10.5px] text-slate-600 leading-snug" },
+    /*#__PURE__*/React.createElement("span", { className: "module-badge font-mono-tech text-[10px] text-white px-1.5 py-0.5 rounded-sm mr-2", style: { background: "var(--blueprint)" } }, "09"),
+    "Tension / uplift (structural bar and casing tension, and the geotechnical pullout) is Module 09 on the Geotechnical tab. ",
+    /*#__PURE__*/React.createElement("button", { type: "button", onClick: () => jumpToModule("module-09"), className: "underline text-[var(--blueprint2)]" }, "Open Module 09 \u2192")),
+  /*#__PURE__*/(I.pileType === "micropile") && React.createElement(Module, {
     idx: "09",
     title: "Tension / Uplift Resistance",
     code: "AASHTO 10.5.5.2.5 · FHWA NHI-05-039",
@@ -17729,12 +17948,14 @@ function App() {
           }))))) : null; })(),
       !(r.group.pmAuto && pyRes && pmViewSets(pyRes.pmAuto)) && /*#__PURE__*/React.createElement(GroupPlan, { I: I, g: r.group }), !(r.group.pmAuto && pyRes && pmViewSets(pyRes.pmAuto)) && /*#__PURE__*/React.createElement("table", { className: "w-full text-[10px] font-mono-tech mb-1" },
         /*#__PURE__*/React.createElement("thead", null, /*#__PURE__*/React.createElement("tr", { className: "text-slate-400" },
-          /*#__PURE__*/React.createElement("td", { className: "pr-3" }, "Row (from lead)"), /*#__PURE__*/React.createElement("td", null, "p-multiplier f", /*#__PURE__*/React.createElement("sub", null, "m")))),
+          /*#__PURE__*/React.createElement("td", { className: "pr-3", title: "y-rows: the grid rows; y-row 1 = the row at the largest y (as for +V_y)" }, "y-row (from lead)"), /*#__PURE__*/React.createElement("td", null, "p-multiplier f", /*#__PURE__*/React.createElement("sub", null, "m")))),
         /*#__PURE__*/React.createElement("tbody", null, r.group.pMultipliers.map((p, i) => {
-          const selRow = (r.capDist && r.capDist.sel && r.group.nCols > 0) ? Math.floor((r.capDist.sel.id - 1) / r.group.nCols) + 1 : null;
+          // F60 (O54): the design pile's row counted from the leading row, as the V_y rows are
+          // (y-row 1 = the grid row at the largest y; generated grid, pile id = row-major from y = 0)
+          const selRow = (r.capDist && r.capDist.sel && r.group.nCols > 0) ? r.group.pMultipliers.length - Math.floor((r.capDist.sel.id - 1) / r.group.nCols) : null;
           const isSelRow = selRow === p.row;
           return /*#__PURE__*/React.createElement("tr", { key: i, style: { borderTop: "1px solid #eef2f6", background: isSelRow ? "rgba(201,98,46,0.10)" : "transparent" } },
-          /*#__PURE__*/React.createElement("td", { className: "py-0.5 pr-3 text-slate-500" }, "Row " + p.row + (p.row === 1 ? " (leading)" : ""), isSelRow ? /*#__PURE__*/React.createElement("span", { className: "ml-1 text-[7.5px] px-1 py-0.5 rounded-sm text-white align-middle", style: { background: "var(--accent)" } }, "DESIGN PILE") : null),
+          /*#__PURE__*/React.createElement("td", { className: "py-0.5 pr-3 text-slate-500" }, "y-row " + p.row + (p.row === 1 ? " (leading, largest y)" : ""), isSelRow ? /*#__PURE__*/React.createElement("span", { className: "ml-1 text-[7.5px] px-1 py-0.5 rounded-sm text-white align-middle", style: { background: "var(--accent)" } }, "DESIGN PILE") : null),
           /*#__PURE__*/React.createElement("td", { className: "py-0.5 font-bold", style: { color: "#14304a" } }, fmt(p.fm, 2)));
         }))),
       /*#__PURE__*/React.createElement("p", { className: "text-[9px] text-slate-400 mt-1 leading-snug" }, "At " + fmt(r.group.s_dia, 1) + "× spacing (avg f", "" , /*#__PURE__*/React.createElement("sub", null, "m"), " = " + fmt(r.group.pmAvg, 2) + "). ",
@@ -18734,4 +18955,4 @@ function CheckIndex({ pileLabel, allPass, onSave, onPreview, previewing, onPrint
 ReactDOM.createRoot(document.getElementById("root")).render(/*#__PURE__*/React.createElement(App, null));
 </script>
 </body>
-</html>
+</html>
