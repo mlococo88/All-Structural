@@ -1725,7 +1725,9 @@ function railNodeLoad(model,vehicle,pos,dir,i,detail){
   }
   let wTr=0;
   if(vehicle.trail>0){
-    const tailX=(dir>0)?pos+maxOff:pos;
+    /* trailGap: distance from the last axle to the start of the uniform load
+       (5 ft on the Cooper E-80 diagram; 0 where none is given). */
+    const tg=vehicle.trailGap||0, tailX=(dir>0)?pos+maxOff+tg:pos-tg;
     wTr=vehicle.trail*((dir>0)?coverFrac(T,tailX,Math.max(T[1],tailX))
                               :coverFrac(T,Math.min(T[0],tailX),tailX));
   }
@@ -1801,6 +1803,77 @@ function shallowRuleOn(p){return !p||p.shallowRule!=="spread";}
    factor of two. Overlap only arises once E exceeds the 6 ft gage, i.e. for a
    clear span beyond about 33 ft, but that is an ordinary arch span. */
 function stripLoadConc(Pax,E){return ((E>GAGE)?2:1)*(Pax/2)/E;}
+/* ---------- side-by-side trucks (highway) ----------
+   One vehicle used to be placed on the strip. On a barrel wide enough for more
+   than one lane, identical vehicles in the adjacent lanes stand at the same
+   station, and their wheel loads reach the strip too:
+     - Art. 6.4.2: where the spread areas of several concentrations overlap, the
+       total load is distributed over the outside limits of the combined area
+       (the same rule this program already applies to the two wheels of an axle);
+     - Art. 3.24.3.2 (the concentrated 6.4.1 branch): no merge provision, the
+       wheel-line widths superimpose where they overlap;
+     - Art. 3.12.1: 100% of the live load for one or two lanes, 90% for three,
+       75% for four or more.
+   A truck occupies 10 ft with its wheels 2 ft inside each edge (Art. 3.6 / 3.7),
+   so the least distance between wheel lines of adjacent trucks is 4 ft; that is
+   the default spacing and the one that concentrates the load most.
+   Lanes: Art. 3.6.3 on the roadway width (two lanes from 20 to 24 ft, otherwise
+   the integer part of W/12). "auto" applies it to the barrel width, which is at
+   least the roadway width, so it errs toward more lanes; a number overrides it.
+   The result is a transverse factor kappa = (peak line load on the strip with the
+   governing number of loaded lanes) / (the one-truck value) >= 1, which multiplies
+   the one-truck pressure. With one lane kappa is exactly 1. */
+const TRUCK_CLR=4.0;
+function lanesOn(p){
+  const s=String((p&&p.lanes!=null)?p.lanes:"auto");
+  if(/^[1-9]$/.test(s))return +s;
+  const W=(p&&+p.barrelW>0)?+p.barrelW:0;
+  if(W<20)return 1;
+  if(W<=24)return 2;
+  return Math.floor(W/12);
+}
+function truckClr(p){const c=(p&&p.truckClr!=null&&p.truckClr!=="")?+p.truckClr:TRUCK_CLR;return (isFinite(c)&&c>=0)?c:TRUCK_CLR;}
+function multiPres(n){return (n<=2)?1.0:((n===3)?0.90:0.75);}
+function wheelLinesX(n,c){const xs=[];for(let k=0;k<n;k++){const o=k*(GAGE+c);xs.push(o,o+GAGE);}return xs;}
+/* Peak strip line load per unit axle load, n trucks, spread width w, 6.4.2 merge
+   over the outside limits (wheel spreads merge when the gap is <= w, matching
+   the w_t >= s_g test for one axle). */
+function transDisp(w,n,c){
+  const xs=wheelLinesX(n,c); let best=0,bk=0,bw=0;
+  for(let i=0;i<xs.length;){
+    let j=i; while(j+1<xs.length&&xs[j+1]-xs[j]<=w)j++;
+    const k=j-i+1, width=xs[j]-xs[i]+w, v=k*0.5/width;
+    if(v>best){best=v;bk=k;bw=width;}
+    i=j+1;
+  }
+  return {v:best,k:bk,width:bw};
+}
+/* Same for the concentrated branch: widths E superimpose where they overlap
+   (strictly, matching E > s_g for one axle). */
+function transConc(E,n,c){
+  const xs=wheelLinesX(n,c); let k=1;
+  for(let i=0;i<xs.length;i++){let m=0;for(let j=i;j<xs.length;j++)if(xs[j]-xs[i]<E)m++;k=Math.max(k,m);}
+  return {v:k*0.5/E,k,width:E};
+}
+function sideBySide(p,w,conc){
+  const N=lanesOn(p), c=truckClr(p);
+  const f=conc?transConc:transDisp;
+  const one=f(w,1,c);
+  let best={v:one.v,n:1,k:one.k,width:one.width,m:1};
+  for(let n=2;n<=N;n++){
+    const t=f(w,n,c), m=multiPres(n), v=m*t.v;
+    if(v>best.v*(1+1e-12))best={v,n,k:t.k,width:t.width,m};
+  }
+  best.kappa=(best.n===1)?1:best.v/one.v; best.lanes=N; best.clr=c; best.one=one; best.w=w; best.conc=!!conc;
+  return best;
+}
+/* The same at a cover depth H, on the branch an axle landing there takes (for
+   reports; the solver calls sideBySide with the width it is already using). */
+function sideBySideAt(p,H){
+  if(H>=SHALLOW_FILL){const dT=deepTire(p);return sideBySide(p,dT.b+1.75*H,false);}
+  const r=shallowRate(p);
+  return (r>0)?sideBySide(p,TIRE_W+r*H,false):sideBySide(p,shallowWidth(p),true);
+}
 /* Transverse distribution width for the shallow-fill branch.
 
      "tire"  DEFAULT. The tire contact width alone: no transverse distribution
@@ -1935,18 +2008,19 @@ function nodalLL(model,vehicle,pos,dir){
   for(let i=1;i<model.nN-1;i++){
     const h=model.coverAt(i), T=tribSpan(model,i);
     const dT=deepTire(model.p), spreadL=dT.l+1.75*h, wtr=dT.b+1.75*h;
+    const kD=disp.length?sideBySide(model.p,wtr,false).kappa:1;   // side-by-side trucks
     let press=0;
     for(const a of disp){
       const f=coverFrac(T,a.xa-spreadL/2,a.xa+spreadL/2);
-      if(f>0)press += f*((wtr>=GAGE)? a.ax.P/((GAGE+wtr)*spreadL) : (a.ax.P/2)/(wtr*spreadL));
+      if(f>0)press += f*((wtr>=GAGE)? a.ax.P/((GAGE+wtr)*spreadL) : (a.ax.P/2)/(wtr*spreadL))*kD;
     }
     q[i]=press*model.tribH[i];
   }
   if(conc.length){
     const r=shallowRate(model.p);
     if(r<=0){
-      const E=shallowWidth(model.p);
-      for(const a of conc)addConc(model,q,a.xa,stripLoadConc(a.ax.P,E));
+      const E=shallowWidth(model.p), kC=sideBySide(model.p,E,true).kappa;
+      for(const a of conc)addConc(model,q,a.xa,stripLoadConc(a.ax.P,E)*kC);
     }else{
       /* Same arithmetic as the 6.4.2 branch, at the credited rate. The overlap
          treatment goes with it: a fill spread is exactly the mechanism 6.4.2
@@ -1954,11 +2028,11 @@ function nodalLL(model,vehicle,pos,dir){
          their outside limits. */
       for(let i=1;i<model.nN-1;i++){
         const h=model.coverAt(i), T=tribSpan(model,i);
-        const sL=TIRE_L+r*h, wt2=TIRE_W+r*h;
+        const sL=TIRE_L+r*h, wt2=TIRE_W+r*h, k2=sideBySide(model.p,wt2,false).kappa;
         let pr=0;
         for(const a of conc){
           const f=coverFrac(T,a.xa-sL/2,a.xa+sL/2);
-          if(f>0)pr+=f*((wt2>=GAGE)?a.ax.P/((GAGE+wt2)*sL):(a.ax.P/2)/(wt2*sL));
+          if(f>0)pr+=f*((wt2>=GAGE)?a.ax.P/((GAGE+wt2)*sL):(a.ax.P/2)/(wt2*sL))*k2;
         }
         q[i]+=pr*model.tribH[i];
       }
@@ -2002,7 +2076,7 @@ function nodalLLByAxle(model,vehicle,pos,dir){
           const sL=TIRE_L+rg.r*H, wt2=TIRE_W+rg.r*H;
           const f=coverFrac(T,xa-sL/2,xa+sL/2);
           if(f>0){
-            const pp=f*((wt2>=GAGE)?ax.P/((GAGE+wt2)*sL):(ax.P/2)/(wt2*sL));
+            const pp=f*((wt2>=GAGE)?ax.P/((GAGE+wt2)*sL):(ax.P/2)/(wt2*sL))*sideBySide(p,wt2,false).kappa;
             axP[k][i]=pp; axQ[k][i]=pp*tb;
           }
         }else if(rg.conc){
@@ -2012,12 +2086,12 @@ function nodalLLByAxle(model,vehicle,pos,dir){
              length, which keeps the identity q = p·b·t true on every row of the
              contribution matrix whichever branch produced it. */
           const one=new Array(nN).fill(0);
-          addConc(model,one,xa,stripLoadConc(ax.P,E));
+          addConc(model,one,xa,stripLoadConc(ax.P,E)*sideBySide(p,E,true).kappa);
           if(one[i]){axQ[k][i]=one[i]; axP[k][i]=(tb>1e-9)?one[i]/tb:0;}
         }else{
           const f=coverFrac(T,xa-spreadL/2,xa+spreadL/2);
           if(f>0){
-            const pp=f*((wtr>=GAGE)?ax.P/((GAGE+wtr)*spreadL):(ax.P/2)/(wtr*spreadL));
+            const pp=f*((wtr>=GAGE)?ax.P/((GAGE+wtr)*spreadL):(ax.P/2)/(wtr*spreadL))*sideBySide(p,wtr,false).kappa;
             axP[k][i]=pp; axQ[k][i]=pp*tb;
           }
         }
@@ -2499,7 +2573,7 @@ function thrustOffsets(model,F){ // F: per-node {C,M}
    standard 8-5-5-5-9-5-6-5-8-8-5-5-5-9-5-6-5 spacing, 1136 kip over 104 ft. */
 const RAIL_VEHICLES=[
  {id:"E80",name:"AREMA Cooper E-80",mode:"rail",eRef:80,tons:40,gvw:80,
-  trail:8,trailNote:"8,000 lb/lf uniform trailing load",
+  trail:8,trailGap:5,trailNote:"8,000 lb/lf uniform trailing load, starting 5 ft behind the last axle",
   axles:[{x:0,P:40},{x:8,P:80},{x:13,P:80},{x:18,P:80},{x:23,P:80},
          {x:32,P:52},{x:37,P:52},{x:43,P:52},{x:48,P:52},
          {x:56,P:40},
@@ -2554,6 +2628,7 @@ const VEHICLES=[
  {id:"HS20", name:"HS20 (V=14′)",tons:36,  axles:[{x:0,P:8},{x:14,P:32},{x:28,P:32}]},
  {id:"T3",   name:"Type 3",     tons:25,   axles:[{x:0,P:16},{x:15,P:17},{x:19,P:17}]},
  {id:"T3S2", name:"Type 3S2",   tons:36,   axles:[{x:0,P:10},{x:11,P:15.5},{x:15,P:15.5},{x:37,P:15.5},{x:41,P:15.5}]},
+ {id:"T33",  name:"Type 3-3",   tons:40,   axles:[{x:0,P:12},{x:15,P:12},{x:19,P:12},{x:34,P:16},{x:50,P:14},{x:54,P:14}]},
  {id:"SU4",  name:"SU4",        tons:27,   axles:[{x:0,P:12},{x:10,P:8},{x:14,P:17},{x:18,P:17}]},
  {id:"SU5",  name:"SU5",        tons:31,   axles:[{x:0,P:12},{x:10,P:8},{x:14,P:8},{x:18,P:17},{x:22,P:17}]},
  {id:"SU6",  name:"SU6",        tons:34.75,axles:[{x:0,P:11.5},{x:10,P:8},{x:14,P:8},{x:18,P:17},{x:22,P:17},{x:26,P:8}]},
@@ -2568,7 +2643,7 @@ return {buildModel,buildGeometry,denseIntrados,fitAll,fitOk,stressPair,
         SHALLOW_FILL,slabWidthE,shallowWidth,shallowRate,shallowRuleOn,stripLoadConc,coverAtX,llRegime,deepTire,
         RAIL_VEHICLES,ALL_VEHICLES,vehiclesFor,railSpread,railGroups,railTracks,TIE_LONG,nodalLL,nodalLLByAxle,llEffects,stressMax,
         impactFor,impactForRail,impactAt,baseDepth,faAt,leadAxleX,shearRF,deterZones,tribSpan,coverFrac,rateTrace,rateAllSections,extremeAt,railRate,llEffectsSplit,llAtSection,axleLs,axleTrib,axleFoot,axleHalves,trackExtents,applyLocalImpact,rateVehicle,thrustOffsets,VEHICLES,
-        TIRE_L,TIRE_W,GAGE};
+        TIRE_L,TIRE_W,GAGE,sideBySide,sideBySideAt,lanesOn,TRUCK_CLR};
 })();
 
 </script>
@@ -3464,7 +3539,11 @@ contains errors of its own, identified below. Where the two disagree it is not a
 is wrong, and it is not automatically the reference either.</p>
 
 <p>Run on the reference package's own distribution assumption — tire footprint transversely, wheel concentrated
-longitudinally, which is this program's default — the two agree as follows on governing rating factor:</p>
+longitudinally, which is this program's default — the two agreed as follows on governing rating factor. <b>These
+"This program" figures date from the 2021 comparison run</b> and have not been re-run since: the SU6 and SU7 axle
+loads were corrected to the MBE specialized hauling vehicles (v2026.10.04), the Art. 6.4.2 spread at 2 ft of fill
+or more became the literal 1.75H square, and side-by-side trucks are now placed on multi-lane barrels
+(v2026.10.12; this 50 ft barrel gets four lanes on Auto). Re-run the K-01-001 project file before quoting them.</p>
 
 <table class="t">
 <tr><th>Vehicle</th><th>Reference, 2021</th><th>This program</th><th>Difference</th></tr>
@@ -3487,8 +3566,9 @@ on the reference's own load effects the answer is about 0.65. This program solve
 bisection on the actual stress state, so it lands on the converged value in one pass.</p>
 
 <p><b>The SU4–SU7 residual is a position sweep.</b> All four vehicles share a 17 kip maximum axle, and on a 20 ft
-span with a single governing axle they should rate within a fraction of a percent of one another, which is what
-this program produces. A reference spread of 1.585 to 4.153 across those four is the signature of a sweep step
+span with a single governing axle they rated within a fraction of a percent of one another in the 2021 run (with
+the SU6 and SU7 axle loads as then coded; after the correction to the MBE vehicles their trailing 8 kip axles
+change the arrangement, and they no longer need to agree with SU4 and SU5). A reference spread of 1.585 to 4.153 across those four is the signature of a sweep step
 coarse enough to step over the governing placement. This program sweeps at a true quarter foot and reports the
 step actually used.</p>
 
@@ -3520,32 +3600,36 @@ crown impact basis, 20 elements. Rate the HS20 vehicle.</p>
 
 <h3>8.2 Inputs to enter</h3>
 <p>Geometry source <i>Idealized curve</i>, circular, span 40, rise 10; restraint <i>Fixed</i>; elements 20;
-ring depth 2.0 at both crown and springings; grade definition <i>Crown cover + slope</i>, cover 2.0, slope 0;
-wearing surface 0.33; unit weights 170 / 120 / 140; K 0.25; E 1500; impact basis <i>Crown fill</i>;
-f<sub>a</sub> 250; vehicle HS20.</p>
+ring depth 24 in at both crown and springings; grade definition <i>Crown cover + slope</i>, cover 2.0, slope 0;
+wearing surface 4 in; unit weights 170 / 120 / 140; K 0.25; E 1500; impact basis <i>Crown fill</i>;
+f<sub>a</sub> 250; barrel width 24 ft with Trucks side by side on <i>Auto</i> (two lanes); vehicle HS20.
+These are the program defaults.</p>
 
 <h3>8.3 Expected results</h3>
 <ul>
 <li>Crown cover plus wearing surface = 2.33 ft, so impact <b>I = 10%</b> per Std. Spec. 3.8.2.3.</li>
-<li>Dead load at the crown: thrust <b>17.64 k/ft</b>, moment <b>−0.03 k·ft/ft</b>, eccentricity <b>0.002 ft</b>
-— essentially funicular under dead load alone, as expected for a well-proportioned arch under its own fill.</li>
-<li>Dead load at the springline: moment <b>−7.30 k·ft/ft</b> — hogging, tension at the extrados, which is the
+<li>Dead load at the crown: thrust <b>18.31 k/ft</b>, moment <b>−1.15 k·ft/ft</b>, eccentricity <b>0.063 ft</b>
+(0.75 in, well inside the 4 in kern) — close to funicular under dead load alone, as expected for a
+well-proportioned arch under its own fill.</li>
+<li>Dead load at the springline: moment <b>−9.08 k·ft/ft</b> — hogging, tension at the extrados, which is the
 fixed-end restraint moment.</li>
-<li>HS20 rating factor <b>RF ≈ 1.33</b>, giving <b>≈ 47.9 tons</b>, governing at a <b>springline</b>.</li>
+<li>HS20 rating factor <b>RF ≈ 0.63</b>, giving <b>≈ 22.5 tons</b>, governing at a <b>springline</b>. With Trucks
+side by side set to 1 lane the rating factor is about <b>0.77</b>: under the deep fill at the springings the
+spreads of the two side-by-side trucks overlap.</li>
 </ul>
 
 <h3>8.4 Confirming the behavior</h3>
 <p>Two sensitivity checks worth running to confirm the program behaves as documented:</p>
 <ul>
 <li>Change the restraint to <b>pinned</b>. The springline moment must become exactly zero, the governing section
-must move inboard, and the rating factor should rise to about <b>1.77</b>.</li>
+must move inboard, and the rating factor should rise to about <b>1.28</b>.</li>
 <li>Add a ring depth override bracketing a deteriorated crown zone — three lines,
-<span class="mono">15, 2.0</span> / <span class="mono">20, 1.2</span> / <span class="mono">25, 2.0</span>.
-The rating factor should fall sharply, to roughly <b>0.24</b>, and the governing section should move to the
+<span class="mono">15, 24</span> / <span class="mono">20, 14.4</span> / <span class="mono">25, 24</span> (depths in inches).
+The rating factor should fall sharply, to roughly <b>0.44</b>, and the governing section should move to the
 crown. This demonstrates how strongly effective ring depth controls the rating. Note that the override needs at
 least two points; a single point is rejected because it would be a depth discontinuity at one node.</li>
-<li>Switch <b>shear deformation</b> to <i>Neglect</i>. The springline dead load moment should rise from about
-6.98 to 7.13 k·ft/ft and the rating factor fall to about 1.11 — the slender-beam idealization delivering more
+<li>Switch <b>beam theory</b> to <i>Bernoulli</i>. The springline dead load moment should rise from about
+9.08 to 9.24 k·ft/ft and the rating factor fall to about 0.60 — the slender-beam idealization delivering more
 moment to the supports.</li>
 </ul>
 `],
@@ -3669,7 +3753,7 @@ const MESHCONV=(()=>{
       p.dC,p.dS,(p.dOver||[]).map(o=>[o.x,o.d]),
       (p.deter||[]).map(e=>[e.node,e.x,e.x2,e.d,e.fa,e.hinge]),p.deterFace,
       p.gradeMode,p.gradePct,p.cover,p.covL,p.covR,p.tws,p.gm,p.gf,p.gws,p.K,p.E,
-      p.shearDef,p.impMode,p.shallowE,p.shallowRate,p.deepSpread,p.fa,p.fv,p.barrelW,
+      p.shearDef,p.impMode,p.shallowE,p.shallowRate,p.deepSpread,p.lanes,p.truckClr,p.fa,p.fv,p.barrelW,
       (p.sdl||[]).map(i=>i.w),p.loadMode,p.tieLen,p.tieDepth,(p.tracks||[]),
       (p.vehicles||[]).slice().sort()]);
   }
@@ -5305,7 +5389,7 @@ function draw(svg,p,M,opt){
       txt(svg,X(xa),Y(ys)+17,F(ax.P,0)+"k",{size:11});
     }
     if(veh.trail>0){
-      const tL=Math.max(pos+lastX,xlo);
+      const tL=Math.max(pos+lastX+(veh.trailGap||0),xlo);
       if(xR>tL){
         const yb=Y(g.surfAt((tL+xR)/2))-20;
         el("rect",{x:X(tL),y:yb-14,width:X(xR)-X(tL),height:14,fill:"rgba(26,26,26,.28)",
@@ -6395,7 +6479,7 @@ function draw(svg,veh){
   txt(svg,W/2,dy+18,"axle spacing, ft   ·   overall "+nfx(L,2)+" ft",{size:11,fill:"#1f4e79"});
   // trailing load
   if(veh.trail>0){
-    const x0=X(L)+6;
+    const x0=Math.min(X(L+(veh.trailGap||0))+6,W-40);
     el("rect",{x:x0,y:bodyTop+8,width:W-8-x0,height:16,fill:"rgba(26,26,26,.28)",
       stroke:"#1a1a1a","stroke-dasharray":"4 3"},svg);
     txt(svg,(x0+W-8)/2,bodyTop+20,nfx(veh.trail,1)+" k/ft",{size:10,fill:"#1a1a1a"});
@@ -6767,7 +6851,7 @@ function validate(p,M,results){
           "no fill weight and no lateral earth pressure. That can be real on a crown with a thin cover and a "+
           "steep grade, but it is worth confirming against the section — it is also what a mis-entered rise "+
           "or cover looks like.","§7.2.7.3B");
-      else if(p.tws<=0)
+      else if(p.tws<=0&&p.loadMode!=="rail")
         add("wn","No wearing surface thickness entered",
           "t_ws = 0, so no wearing surface weight is in the model and the surcharge term in the lateral earth "+
           "pressure is zero. That is correct only if the deck genuinely has no pavement, or if its weight is "+
@@ -6824,12 +6908,35 @@ function validate(p,M,results){
           "The tire contact area is grown at 1.75H. Std. Spec. Art. 6.4.2 as written uses a 1.75H square with no "+
           "tire dimensions, so this basis spreads the load further and gives lower pressures than the cited "+
           "article. State it in the assumptions, or select the literal 6.4.2 basis on the input panel.","Std Spec 6.4.2");
-      add("wn","One truck placed transversely",
-        "Each rating places a single vehicle (two wheel lines at 6 ft gage) on the strip. Side-by-side trucks in "+
-        `adjacent lanes are not placed, so on a multi-lane barrel (this one is ${nfx(p.barrelW,1)} ft wide) the `+
-        "overlap of their spread areas under deep fill, which Art. 6.4.2 combines, is not considered.","Std Spec 6.4.2");
+      {
+        const sbC=ARCH.sideBySideAt(p,M.g.coverCrown+p.tws);
+        if(sbC.lanes<=1)
+          add("wn","One truck placed transversely",
+            ((p.lanes==="1")?"Trucks side by side is set to 1 lane, so each rating places a single vehicle "
+              :`The barrel is ${nfx(p.barrelW,1)} ft wide, less than 20 ft, so one lane is assumed (Art. 3.6.3) and each rating places a single vehicle `)+
+            "(two wheel lines at 6 ft gage) on the strip. If the roadway carries more than one lane, select the number "+
+            "of lanes: under deep fill the spread areas of side-by-side trucks overlap, and Art. 6.4.2 combines them.",
+            "Std Spec 3.6.3 / 6.4.2");
+        else
+          add("ok","Side-by-side trucks",
+            `${sbC.lanes} lanes `+((p.lanes==="auto")
+              ?`from the ${nfx(p.barrelW,1)} ft barrel width (Art. 3.6.3 applied to the barrel width, which is at least the roadway width)`
+              :"as selected")+
+            `: identical vehicles stand at the same station with ${nfx(sbC.clr,2)} ft between the wheel lines of `+
+            "adjacent trucks. Where their spreads overlap, the strip pressure of one truck is multiplied by κ, the "+
+            "peak line load of the loaded lanes (Art. 6.4.2 outside limits, Art. 3.12.1 reduction for three or more "+
+            `lanes) over that of one truck. At the crown κ = ${nfx(sbC.kappa,3)}`+
+            ((sbC.n>1)?` (${sbC.n} lanes loaded govern).`:" (the spreads of adjacent trucks do not overlap there)."),
+            "Std Spec 3.6.3 / 6.4.2 / 3.12.1");
+      }
     }
 
+    if(p.loadMode==="rail"&&p.tws>0)
+      add("wn","Wearing surface entered under railroad loading",
+        `t_ws = ${nfx(inOf(p.tws),1)} in. It is carried as dead load (${nfx(p.gws*p.tws,0)} psf) and it raises the `+
+        "surface that the cover is measured from, so it lengthens the tie spread and lowers the AREMA impact. "+
+        "A ballasted track normally has no pavement: enter 0 unless there is one. Switching a highway project to "+
+        "railroad loading sets an untouched 4 in default to 0.","§7.2.7.3B / AREMA");
     if(__trackWarn)
       add("wn","Track layout not entered",
         "No track offsets were given, so the rating assumes <b>a single track on the barrel centerline</b>. "+
@@ -7724,7 +7831,7 @@ function liveLoadSectionRail(p,M,veh,pos,dir){
       `contributes that part and no more. Summing φ over the nodes returns the footprint length exactly, `+
       `which is what keeps the load applied to the model equal to the load on the bridge.`});
   if(veh.trail>0){
-    const tailX=(dir>0)?pos+maxOff:pos;
+    const tailX=(dir>0)?pos+maxOff+(veh.trailGap||0):pos-(veh.trailGap||0);
     const behind=((dir>0)?ARCH.coverFrac(TB,tailX,Math.max(TB[1],tailX))
                          :ARCH.coverFrac(TB,Math.min(TB[0],tailX),tailX))>0;
     h+=step({label:"Uniform trailing load at this node",sym:"w_{trail}",
@@ -7871,11 +7978,26 @@ function liveLoadSection(p,M,veh,pos,dir){
       : "Std. Spec. Art. 6.4.2 as written: each wheel load is distributed over a square whose sides are 1.75 times "+
         "the depth of fill, with no tire contact dimensions added. The tire patch + 1.75H basis is available on "+
         "the input panel.");
-  h+=msg("warn","One truck transversely",
-    "A single vehicle is placed on the strip: one axle with two wheel lines at the 6 ft gage. No adjacent-lane "+
-    `vehicle is placed, so on a barrel wide enough for two lanes (this one is ${nfx(p.barrelW,1)} ft) the overlap of `+
-    "spread areas from side-by-side trucks, which Art. 6.4.2 combines, is not considered. Under deep fill that "+
-    "overlap can raise the strip pressure above the single-truck value.");
+  const nLanes=ARCH.lanesOn(p);
+  if(nLanes<=1)
+    h+=msg("warn","One truck transversely",
+      "A single vehicle is placed on the strip: one axle with two wheel lines at the 6 ft gage"+
+      ((p.lanes==="1")?" (Trucks side by side is set to 1 lane). ":
+        ` (the ${nfx(p.barrelW,1)} ft barrel is narrower than 20 ft, so one lane is assumed per Art. 3.6.3). `)+
+      "If the roadway carries more than one lane, select the number of lanes on the input panel: under deep fill "+
+      "the spread areas of side-by-side trucks overlap and Art. 6.4.2 combines them.");
+  else
+    h+=msg("inf","Side-by-side trucks",
+      `${nLanes} lanes `+((p.lanes==="auto")?`from the ${nfx(p.barrelW,1)} ft barrel width (Art. 3.6.3: two lanes for 20 to `+
+        "24 ft, otherwise the integer part of W/12; the barrel width is at least the roadway width, so this errs "+
+        "toward more lanes)":"as selected on the input panel")+
+      `. Identical vehicles stand at the same station with ${nfx(ARCH.sideBySide(p,1,false).clr,2)} ft between the wheel `+
+      "lines of adjacent trucks. Every number of loaded lanes from one up is tried, with the Art. 3.12.1 reduction "+
+      "(100% for one or two lanes, 90% for three, 75% for four or more), and the largest strip load governs. "+
+      "Where the spreads of adjacent trucks overlap they are combined over their outside limits (Art. 6.4.2) or "+
+      "superimposed (Art. 3.24.3.2, concentrated branch); the result is a factor κ ≥ 1 on the one-truck pressure:"+
+      "<br>κ = max over n of [ (1, 1, 0.90, 0.75…)·k_n·(P/2) / W_n ] ÷ [ the same for one truck ],"+
+      "<br>with k_n wheel lines in the governing merged group of width W_n.");
   h+=step({label:"Longitudinal spread length at depth H",ref:"Std Spec 6.4",
     sym:dTL.tire?"L_s=\\ell_t+1.75H":"L_s=1.75H",sub:dTL.tire?`${num(ARCH.TIRE_L,3)}+1.75H`:"1.75H",res:"",units:"ft"});
   h+=step({label:"Transverse spread width at depth H",ref:"Std Spec 6.4",
@@ -7899,6 +8021,7 @@ function liveLoadSection(p,M,veh,pos,dir){
   const nd=M.g.nodes[jm], H=M.coverAt(jm);
   const Ls=dTL.l+1.75*H, wt=dTL.b+1.75*H;
   const merged=(wt>=ARCH.GAGE);
+  const sbW=ARCH.sideBySide(p,wt,false), kW=sbW.kappa;   // side-by-side trucks
   const offs=veh.axles.map(a=>a.x), maxOff=offs[offs.length-1];
   const contrib=[];
   let concHere=0;
@@ -7908,7 +8031,8 @@ function liveLoadSection(p,M,veh,pos,dir){
     if(reg.conc){
       /* concentrated axle — this node gets its interpolation share, if any */
       const one=new Array(M.nN).fill(0);
-      const w=ARCH.stripLoadConc(ax.P,reg.E);
+      const kC=ARCH.sideBySide(p,reg.E,true).kappa;
+      const w=ARCH.stripLoadConc(ax.P,reg.E)*kC;
       const nds=M.g.nodes;
       for(let k=0;k<M.nN-1;k++){
         const a2=nds[k],b2=nds[k+1];
@@ -7919,10 +8043,10 @@ function liveLoadSection(p,M,veh,pos,dir){
         }
       }
       if(one[jm]>0){concHere+=one[jm];
-        contrib.push({ax,xa,conc:true,w,share:one[jm],
+        contrib.push({ax,xa,conc:true,w,share:one[jm],kC,
           p:(M.tribH[jm]>1e-9)?one[jm]/M.tribH[jm]:0,E:reg.E,Hax:reg.H});}
     }else if(Math.abs(nd.x-xa)<=Ls/2)contrib.push({ax,xa,
-      p:merged?ax.P/((ARCH.GAGE+wt)*Ls):(ax.P/2)/(wt*Ls)});
+      p:(merged?ax.P/((ARCH.GAGE+wt)*Ls):(ax.P/2)/(wt*Ls))*kW});
   }
   const pTot=contrib.reduce((a,c)=>a+c.p,0);
 
@@ -7940,6 +8064,14 @@ function liveLoadSection(p,M,veh,pos,dir){
     note:merged?"The transverse spreads of the two wheel lines overlap, so the full axle load is distributed over "+
       "the combined width (s_g + w_t)."
       :"The spreads do not reach each other; each wheel line is distributed over its own width w_t."});
+  if(sbW.lanes>1)
+    h+=step({label:"Side-by-side trucks",ref:"Std Spec 6.4.2 / 3.12.1",
+      sym:"\\kappa=\\dfrac{m_n\\,k_n\\,(P/2)/W_n}{\\text{one truck}}",
+      sub:(sbW.n>1)?`\\dfrac{${num(sbW.m,2)}\\times${sbW.k}\\times0.5/${num(sbW.width,3)}}{${num(sbW.one.v,5)}}`:"\\text{no overlap with the adjacent truck}",
+      res:num(kW,4),units:"",
+      note:(sbW.n>1)?`${sbW.n} lanes loaded govern: ${sbW.k} wheel lines merge over W = ${nfx(sbW.width,3)} ft `+
+        `(gap ${nfx(sbW.clr,2)} ft between adjacent trucks), multiple presence m = ${nfx(sbW.m,2)}.`
+        :`With a ${nfx(sbW.clr,2)} ft gap between adjacent trucks and w_t = ${nfx(wt,3)} ft their spreads do not meet here.`});
   if(contrib.length===0){
     h+=msg("inf","No axle over this node","At this truck position no axle spread reaches the node.");
   }else{
@@ -7948,18 +8080,18 @@ function liveLoadSection(p,M,veh,pos,dir){
         const mg=(c.E>ARCH.GAGE);
         h+=step({label:`Concentrated axle at x = ${nfx(c.xa,2)} ft (P = ${nfx(c.ax.P,1)} kip, cover there H = ${nfx(c.Hax,3)} ft < ${nfx(ARCH.SHALLOW_FILL,1)} ft)`,
           ref:"Std Spec 6.4.1 / 3.24.3.2",
-          sym:mg?"w=\\dfrac{P_{ax}}{E}":"w=\\dfrac{P_{ax}/2}{E}",
-          sub:mg?`\\dfrac{${num(c.ax.P,1)}}{${num(c.E,3)}}`
-                :`\\dfrac{${num(c.ax.P,1)}/2}{${num(c.E,3)}}`,
+          sym:(mg?"w=\\dfrac{P_{ax}}{E}":"w=\\dfrac{P_{ax}/2}{E}")+(c.kC!==1?"\\,\\kappa":""),
+          sub:(mg?`\\dfrac{${num(c.ax.P,1)}}{${num(c.E,3)}}`
+                :`\\dfrac{${num(c.ax.P,1)}/2}{${num(c.E,3)}}`)+(c.kC!==1?`\\times${num(c.kC,4)}`:""),
           res:num(c.w,4),units:"kip on the strip",
           note:`This node's share of that strip load, by linear interpolation between the two bracketing nodes, `+
             `is ${nfx(c.share,4)} kip — equivalent to a pressure of ${nfx(c.p,4)} ksf over the node's `+
             `${nfx(M.tribH[jm],3)} ft tributary length.`});
       }else{
         h+=step({label:`Pressure from axle at x = ${nfx(c.xa,2)} ft (P = ${nfx(c.ax.P,1)} kip)`,ref:"Std Spec 6.4",
-          sym:merged?"p_i=\\dfrac{P_{ax}}{(s_g+w_t)L_s}":"p_i=\\dfrac{P_{ax}/2}{w_t L_s}",
-          sub:merged?`\\dfrac{${num(c.ax.P,1)}}{(${num(ARCH.GAGE,2)}+${num(wt,3)})\\times${num(Ls,3)}}`
-                    :`\\dfrac{${num(c.ax.P,1)}/2}{${num(wt,3)}\\times${num(Ls,3)}}`,
+          sym:(merged?"p_i=\\dfrac{P_{ax}}{(s_g+w_t)L_s}":"p_i=\\dfrac{P_{ax}/2}{w_t L_s}")+(kW!==1?"\\,\\kappa":""),
+          sub:(merged?`\\dfrac{${num(c.ax.P,1)}}{(${num(ARCH.GAGE,2)}+${num(wt,3)})\\times${num(Ls,3)}}`
+                    :`\\dfrac{${num(c.ax.P,1)}/2}{${num(wt,3)}\\times${num(Ls,3)}}`)+(kW!==1?`\\times${num(kW,4)}`:""),
           res:num(c.p,4),units:"ksf"});
       }
     });
@@ -8514,7 +8646,7 @@ function liveWorked(p,M,veh,pos,dir,node,part){
     const ids=[],near=[];
     let sumP=0;
     if(br&&br.axQ)br.axQ.forEach((a,kx)=>{ if(a[i]>0){ids.push("A"+(kx+1));sumP+=veh.axles[kx].P;} });
-    let Ls,wid,wEff,branch,nWheel;
+    let Ls,wid,wEff,branch,nWheel,kap=1;
     if(rail){
       const S=ARCH.railSpread(p,H);
       const grp=S.groups.reduce((x,y)=>(y.width>=x.width?y:x));
@@ -8527,10 +8659,11 @@ function liveWorked(p,M,veh,pos,dir,node,part){
       wEff=merged?(ARCH.GAGE+wid):wid;
       branch=merged?("merged, w_t ≥ "+nfx(ARCH.GAGE,2)):("separate, w_t < "+nfx(ARCH.GAGE,2));
       nWheel=merged?2:1;
+      kap=ARCH.sideBySideAt(p,H).kappa;
     }
     return {__i:i,tag:CALC.secTag(M,i),x:n.x,H:H,
       Hi:local?H:(M.g.coverCrown+p.tws),
-      Ls:Ls,wid:wid,branch:branch,wEff:wEff,area:wEff*Ls,
+      Ls:Ls,wid:wid,branch:branch,wEff:wEff,area:wEff*Ls,kap:kap,
       nAx:ids.length,ids:ids.join(" ")||"—",wheels:nWheel,
       sumP:sumP,trail:(rail&&br&&br.trQ&&br.trQ[i]>0)?"yes":"—",
       p:M.tribH[i]>0?q[i]/M.tribH[i]:0,
@@ -8547,7 +8680,8 @@ function liveWorked(p,M,veh,pos,dir,node,part){
     {k:"wid",h:rail?"W_tr = L_tie+2h (ft)":(ARCH.deepTire(p).tire?"w_t = 20″+1.75H (ft)":"w_t = 1.75H (ft)"),dp:3},
     {k:"branch",h:rail?"tracks":"Std Spec 6.4 branch",txt:1},
     {k:"wEff",h:"effective width (ft)",dp:3},{k:"area",h:"patch area (ft²)",dp:2},
-    {k:"wheels",h:rail?"tracks in group":"wheel lines",dp:0},
+    {k:"wheels",h:rail?"tracks in group":"wheel lines",dp:0}].concat(
+      (!rail&&ARCH.lanesOn(p)>1)?[{k:"kap",h:"κ side-by-side trucks",dp:3}]:[]).concat([
     {k:"nAx",h:"axles",dp:0},{k:"ids",h:"which axles",txt:1},
     {k:"sumP",h:"Σ axle load (kip)",dp:1}].concat(
       rail?[{k:"trail",h:"trailing load",txt:1}]:[]).concat([
@@ -8561,7 +8695,7 @@ function liveWorked(p,M,veh,pos,dir,node,part){
     {k:"q0",h:local?"q before impact (k/ft)":"q (k/ft)",dp:5}]).concat(
     local?[{k:"q",h:"q applied (k/ft)",dp:5}]:[]).concat([
     {k:"pct",h:"% of Σq",dp:1}]).concat(
-      rail?[]:[{k:"shallow",h:"caveat",txt:1}]),
+      rail?[]:[{k:"shallow",h:"caveat",txt:1}])),
     rowsD,{govIdx:node})+
     `<div class="note">One row per node, in the order the calculation takes them.
    <b>H</b> is the cover over that node and sets how far the load has spread by the time it arrives, which is why
@@ -8752,6 +8886,7 @@ function rows(p,M,veh,pos,dir){
       ang:Math.atan2(n.nx,n.ny)*180/Math.PI,
       hf,H,z:hf+((p.gf>0)?(p.gws/p.gf)*p.tws:0),
       Ls:LsR,wt:wtR,merged:branch,wEff:wEffR,area:wEffR*LsR,press,nAx,
+      kap:rail?1:ARCH.sideBySideAt(p,H).kappa,
       trib:M.tribH[i],q:qImp[i]||0,imp:Ii*100,
       ilMax:M.ILsum[i].maxM,ilMaxX:M.ILsum[i].maxAtX,
       ilMin:M.ILsum[i].minM,ilMinX:M.ILsum[i].minAtX,
@@ -8823,9 +8958,10 @@ function section(p,M,veh,pos,dir,govSec){
       {k:"Ls",h:isRail?"L_s = 3.0+2h (ft)":(ARCH.deepTire(p).tire?"L_s = 10″+1.75H (ft)":"L_s = 1.75H (ft)"),dp:3},
       {k:"wt",h:isRail?"W_tr = L_tie+2h (ft)":(ARCH.deepTire(p).tire?"w_t = 20″+1.75H (ft)":"w_t = 1.75H (ft)"),dp:3},
       {k:"merged",h:isRail?"tracks":"wheel lines",txt:1},{k:"wEff",h:"effective width (ft)",dp:3},
-      {k:"area",h:"spread area (ft²)",dp:3},{k:"nAx",h:"axles",dp:0},
+      {k:"area",h:"spread area (ft²)",dp:3}].concat(
+      (!isRail&&ARCH.lanesOn(p)>1)?[{k:"kap",h:"κ side-by-side trucks",dp:3}]:[]).concat([{k:"nAx",h:"axles",dp:0},
       {k:"press",h:"pressure p (ksf)",dp:5},{k:"trib",h:"trib length (ft)",dp:3},
-      {k:"q",h:"q_j (k/ft)",dp:4}],rs,opt)+
+      {k:"q",h:"q_j (k/ft)",dp:4}]),rs,opt)+
     `<div class="note">${isRail
       ? "Railroad distribution: load enters at the bottom of the ties over the tie length transversely and 3.0 ft "+
         "longitudinally, then spreads at the rate set in the Track and Tie panel — r horizontal per unit of "+
@@ -9123,7 +9259,7 @@ function worked(p,M,veh,pos,dir,i){
         `than all or nothing. The φ over all nodes sum to the footprint length, so no load is created or `+
         `lost in the discretisation.`});
     if(veh.trail>0){
-      const tailX=(dir>0)?pos+maxOff:pos;
+      const tailX=(dir>0)?pos+maxOff+(veh.trailGap||0):pos-(veh.trailGap||0);
       const TT=ARCH.tribSpan(M,i);
       const behind=((dir>0)?ARCH.coverFrac(TT,tailX,Math.max(TT[1],tailX))
                            :ARCH.coverFrac(TT,Math.min(TT[0],tailX),tailX))>0;
@@ -9176,12 +9312,22 @@ function worked(p,M,veh,pos,dir,i){
     sub:merged?`${num(ARCH.GAGE,2)}+${num(wt,4)}`:`${num(wt,4)}`,res:num(wEff,4),units:"ft"});
   h+=step({label:"Spread area",sym:"A_{sp}=w_{eff}\\,L_s",
     sub:`${num(wEff,4)}\\times${num(Ls,4)}`,res:num(wEff*Ls,4),units:"ft²"});
+  const sbK=ARCH.sideBySide(p,wt,false), kW=sbK.kappa;   // side-by-side trucks
+  if(sbK.lanes>1)
+    h+=step({label:"Side-by-side trucks",ref:"Std Spec 6.4.2 / 3.12.1",
+      sym:"\\kappa=\\dfrac{m_n\\,k_n\\,(P/2)/W_n}{\\text{one truck}}",
+      sub:(sbK.n>1)?`\\dfrac{${num(sbK.m,2)}\\times${sbK.k}\\times0.5/${num(sbK.width,4)}}{${num(sbK.one.v,5)}}`:"\\text{no overlap with the adjacent truck}",
+      res:num(kW,4),units:"",
+      note:`${sbK.lanes} lanes on this barrel. `+((sbK.n>1)?`${sbK.n} lanes loaded govern: ${sbK.k} wheel lines merge over `+
+        `W = ${nfx(sbK.width,4)} ft (gap ${nfx(sbK.clr,2)} ft between adjacent trucks), multiple presence m = ${nfx(sbK.m,2)}; `+
+        "the one-truck pressure is multiplied by κ."
+        :`With a ${nfx(sbK.clr,2)} ft gap between adjacent trucks and w_t = ${nfx(wt,4)} ft their spreads do not meet, so κ = 1.`)});
 
   const contrib=[];
   if(i>0&&i<M.nN-1)for(const ax of veh.axles){
     const xa=(dir>0)?pos+ax.x:pos+maxOff-ax.x;
     if(ARCH.coverFrac(ARCH.tribSpan(M,i),xa-Ls/2,xa+Ls/2)>0)contrib.push({ax,xa,
-      p:merged?ax.P/(wEff*Ls):(ax.P/2)/(wEff*Ls)});
+      p:(merged?ax.P/(wEff*Ls):(ax.P/2)/(wEff*Ls))*kW});
   }
   if(i===0||i===M.nN-1){
     h+=msg("inf","Support node",
@@ -9196,9 +9342,9 @@ function worked(p,M,veh,pos,dir,i){
     contrib.forEach(cc=>{
       h+=step({label:`Pressure from the axle at x = ${nfx(cc.xa,2)} ft, P = ${nfx(cc.ax.P,2)} kip`,
         ref:"Std Spec 6.4",
-        sym:merged?"p_i=\\dfrac{P_{ax}}{w_{eff}L_s}":"p_i=\\dfrac{P_{ax}/2}{w_{eff}L_s}",
-        sub:merged?`\\dfrac{${num(cc.ax.P,2)}}{${num(wEff,4)}\\times${num(Ls,4)}}`
-                  :`\\dfrac{${num(cc.ax.P,2)}/2}{${num(wEff,4)}\\times${num(Ls,4)}}`,
+        sym:(merged?"p_i=\\dfrac{P_{ax}}{w_{eff}L_s}":"p_i=\\dfrac{P_{ax}/2}{w_{eff}L_s}")+(kW!==1?"\\,\\kappa":""),
+        sub:(merged?`\\dfrac{${num(cc.ax.P,2)}}{${num(wEff,4)}\\times${num(Ls,4)}}`
+                  :`\\dfrac{${num(cc.ax.P,2)}/2}{${num(wEff,4)}\\times${num(Ls,4)}}`)+(kW!==1?`\\times${num(kW,4)}`:""),
         res:num(cc.p,5),units:"ksf",
         note:`Within the footprint: |${nfx(n.x,2)} − ${nfx(cc.xa,2)}| = ${nfx(Math.abs(n.x-cc.xa),3)} ≤ L_s/2 = ${nfx(Ls/2,3)} ft.`});
     });
@@ -9423,6 +9569,7 @@ let axExtLast=null;
 /* Set when a pre-inch session was converted on open, so the fact is reported
    rather than left for the user to notice from the numbers. */
 let unitMigrated=null, tieReverted=null;
+let twsAuto=false;   // t_ws set to 0 by the switch to railroad loading (see bind)
 let dgState=null;
 
 /* ---------------- input definitions ---------------- */
@@ -9430,7 +9577,7 @@ const F={
   geoMode:"ideal",shape:"circular",span:"40",rise:"10",measPts:"",fitSel:"auto",
   support:"fixed",nelem:"0",dCrown:"24",dSpring:"24",dOver:"",deter:"",deterFace:"intrados",
   gradeMode:"crown",gradePct:"0",cover:"2.0",covL:"12.0",covR:"12.0",tws:"4",
-  gm:"170",gf:"120",gws:"140",kcoef:"0.25",emod:"1500",shearDef:"1",impMode:"crown",llAdverse:"0",shallowE:"tire",shallowRate:"0",deepSpread:"std",fallow:"250",fv:"0",
+  gm:"170",gf:"120",gws:"140",kcoef:"0.25",emod:"1500",shearDef:"1",impMode:"crown",llAdverse:"0",shallowE:"tire",shallowRate:"0",deepSpread:"std",lanes:"auto",truckClr:"4",fallow:"250",fv:"0",
   barrelW:"24",sdlItems:"",loadMode:"hwy",tieLen:"8.5",tieDepth:"0.583",railSpread:"0.5",railCapLong:"0",tracks:"0",
   assume:"",vehicles:ARCH.VEHICLES.map(v=>v.id).join(",")
 };
@@ -9525,7 +9672,11 @@ function inputPanel(){
           ["1.75","1.75H both directions — Art. 6.4.2 rate (continuous at 2 ft with the tire-patch basis below)"]]))+
       row("Wheel spread, fill 2 ft or more","Std. Spec. 6.4.2",
         sel("deepSpread",[["std","Std. Spec. 6.4.2 literal — 1.75H square (default)"],
-          ["tire","Tire patch + 1.75H (10 in + 1.75H by 20 in + 1.75H) — less conservative"]])))+
+          ["tire","Tire patch + 1.75H (10 in + 1.75H by 20 in + 1.75H) — less conservative"]]))+
+      row("Trucks side by side","lanes loaded at the same station; Std. Spec. 3.6.3, 6.4.2, 3.12.1",
+        sel("lanes",[["auto","Auto — lanes from the barrel width (default)"],
+          ["1","1 lane — one truck only"],["2","2 lanes"],["3","3 lanes"],["4","4 lanes"]]))+
+      row("Gap between adjacent trucks' wheel lines","ft — 4 ft for 10 ft trucks in adjacent lanes",nb("truckClr","0.5",0)))+
     row("Allowable compressive stress f<sub>a</sub>","psi — MBE 6B.5.2.6 with field judgment",nb("fallow","10"))+
     row("Allowable shear stress f<sub>v</sub>",
       "psi — 0 disables the check. §7.2.7 does not require a shear rating; entering a value adds one to the "+
@@ -9759,6 +9910,9 @@ function readP(){
     `The barrel width is ${nfx(n("barrelW"),2)} ft. It must be positive: the superimposed dead loads `+
     `(curbs, railings, sidewalks, spandrel walls) are spread across it per §7.2.7.4B, and with a zero width `+
     `they would all be dropped from the rating. Enter the out-to-out width of the arch.`);
+  if(g("loadMode")!=="rail"&&(String(g("truckClr")).trim()===""||!(n("truckClr")>=0)))throw new Error(
+    `The gap between the wheel lines of adjacent trucks is ${nfx(n("truckClr"),2)} ft. Enter a value of zero or `+
+    `more (4 ft for 10 ft trucks in adjacent lanes), or set Trucks side by side to 1 lane.`);
   if(badCov.length)throw new Error(
     badCov.map(b=>`${b[0]} is ${nfx(b[1],3)} ${b[2]||"ft"}.`).join(" ")+
     " A negative cover or thickness puts the road surface below the extrados, which is not a structure the "+
@@ -9776,6 +9930,7 @@ function readP(){
     llAdverse:g("llAdverse")==="1",
     impMode:g("impMode"),shallowRule:"6.4.1",shallowE:g("shallowE")||"tire",shallowRate:+(g("shallowRate")||0),
     deepSpread:(g("deepSpread")==="tire")?"tire":"std",fa:n("fallow"),fv:n("fv"),
+    lanes:g("lanes")||"auto",truckClr:n("truckClr"),
     barrelW:n("barrelW"),sdl:readSdl(g("sdlItems")),
     loadMode:g("loadMode"),tieLen:n("tieLen"),tieDepth:n("tieDepth"),
     railSpread:n("railSpread"),railCapLong:g("railCapLong")==="1",
@@ -9913,7 +10068,7 @@ function schematic(svg,pos,opt){
     }
     // ---------- 3. uniform trailing load ----------
     if(veh.trail>0){
-      const tailX=pos+lx;                       // drawn for travel left→right
+      const tailX=pos+lx+(veh.trailGap||0);     // drawn for travel left→right
       const tL=Math.max(tailX,xlo), tR=xR;
       if(tR>tL){
         const yb=Y(g.surfAt((tL+tR)/2))-13;
@@ -12051,6 +12206,10 @@ function restore(o){
      vehicle selection, because none of the saved ids match a checkbox. */
   F.loadMode=(o.fields.loadMode==="rail")?"rail":"hwy";
   if(o.fields.vehicles!=null)F.vehicles=String(o.fields.vehicles);
+  /* Side-by-side trucks (v2026.10.12). A file written before then has neither
+     field and opens on the defaults: lanes from the barrel width, 4 ft gap. */
+  F.lanes=(o.fields.lanes!=null)?String(o.fields.lanes):"auto";
+  F.truckClr=(o.fields.truckClr!=null)?String(o.fields.truckClr):"4";
   $("inPanel").innerHTML=inputPanel();
   UI.wire($("inPanel"));
   archInputTabs($("inPanel"));
@@ -12073,7 +12232,7 @@ function restore(o){
     /* Cleared on every restore. It is a statement about THIS file; leaving the
        previous file's flag standing put the conversion banner on files that
        were never converted, which teaches the reader to ignore it. */
-    unitMigrated=null; tieReverted=null;
+    unitMigrated=null; tieReverted=null; twsAuto=false;
     const b=String((o&&o.build)||"");
     const legacyFeet=(!b)||(b<"v2026.08.10k");
     if(legacyFeet&&o.fields){
@@ -12244,6 +12403,7 @@ function wireProject(){
     try{localStorage.removeItem(LSA);}catch(e){}
     curProj=""; restoredAt=null;
     F.loadMode="hwy"; F.vehicles=ARCH.VEHICLES.map(v=>v.id).join(",");
+    F.lanes="auto"; F.truckClr="4"; twsAuto=false;
     animVehId=null;ndVeh=null;ndPos=null;ndNode=null;xsNode=null;
     impText="";impParsed=null;impCmp=null;impErr="";activeTab="sum";
     $("inPanel").innerHTML=inputPanel(); UI.wire($("inPanel")); archInputTabs($("inPanel"));
@@ -12836,6 +12996,14 @@ function init(){
           archInputTabs($("inPanel"));
           for(const k in snap.fields)if($(k)&&k!=="vehicles"&&k!=="loadMode")$(k).value=snap.fields[k];
           $("loadMode").value=e2.value;
+          /* A railroad has no pavement by default: the highway default of 4 in would add dead load and
+             raise the surface the rail spread and impact are measured from. Only the untouched highway
+             default is changed, and it is put back on the way to highway if still 0. */
+          if($("tws")){
+            const tv=parseFloat($("tws").value);
+            if(e2.value==="rail"&&tv===4){$("tws").value="0";twsAuto=true;}
+            else if(e2.value!=="rail"&&twsAuto&&tv===0){$("tws").value="4";twsAuto=false;}
+          }
           document.querySelectorAll(".vchk").forEach(cb=>{cb.checked=true;});
           deterRows=null; bind(); deterRender(); wireProject(); refreshProjSel();
           syncCond(); render(); autosave(); return;
@@ -12847,6 +13015,8 @@ function init(){
         if(e2.id==="shallowE")F.shallowE=e2.value;
         if(e2.id==="shallowRate")F.shallowRate=e2.value;
         if(e2.id==="deepSpread")F.deepSpread=e2.value;
+        if(e2.id==="lanes")F.lanes=e2.value;
+        if(e2.id==="truckClr")F.truckClr=e2.value;
         syncCond();render();autosave();});
       if(e2.type==="number")e2.addEventListener("input",()=>{render();autosave();});
     });

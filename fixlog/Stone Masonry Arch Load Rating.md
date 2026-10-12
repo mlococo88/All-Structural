@@ -142,7 +142,7 @@ Default check model used below: the tool's default inputs (circular arch, span 4
 - **How verified:** syntax check; jsdom.
 - **Other copies of this code:** none known.
 
-## Open items (not changed)
+## Open items (recorded 2026-10-04; status after the 2026-10-12 sweep: see "Earlier open items: status after this PR" at the end)
 - O1. Railroad impact expression `IM = (1-(H-1.5)/8.5)*0.60` (coefficient changed from 0.40 by the author; source equation ambiguous). — Needs the governing AREMA Ch. 8 edition or the railroad owner's criteria. — Engineer to confirm.
 - O2. Cooper E-80 trailing uniform load starts at the last axle; the standard diagram starts it 5 ft behind the last driver axle. Conservative. — Engineer to decide whether to match the diagram.
 - O3. Rail mode carries the highway wearing-surface default (tws = 4 in), which adds dead load and shifts the cover datum used for rail spread and impact. — Engineer to decide (e.g. default tws = 0 in rail mode, or a warning).
@@ -302,3 +302,82 @@ Default check model used below: the tool's default inputs (circular arch, span 4
 - **How verified:** `node --check` on all 15 inline scripts. Headless Chromium (Playwright), `origin/main` vs branch, with KaTeX 0.16.9 and Plotly 2.27.0 (the pinned versions) served locally: the text of all 13 output tabs and `snapshot()` identical for highway default, measured geometry typed/pasted into the survey box, grade by springing covers + depth override + SDL line items pasted + a deterioration row, after error states, railroad mode with track offsets pasted, and after save → change → load and page reload (autosave restore); saved-project JSON, exported JSON and the `bridgeSuite.v1.projectMeta` payload identical; the list of input/select/textarea/button ids, classes and checkbox values identical in both modes, each in exactly one pane; red dots checked for E = 0, a bad SDL line, a bad override line and an unparsable number; tab remembered across reload and when storage throws; arrow/Home/End keys; "Start a new calculation" gives the same state and output as before; no console errors. Screenshots of every tab at 1500 and 400 px. The only differences in output text were the Rating Summary's own run-time note ("Computed in x s", printed only when a sweep takes over 0.4 s), which varies from run to run. At 400 px the page is 534 px wide on both main and the branch. The cause is the existing header title block (`#tblk{min-width:420px}`), not the tab strip, and it was left alone.
 - **Other copies:** none.
 - **Open items:** none.
+
+## 2026-10-12 — PR: claude/sweep-stonearch (open-item sweep; PR link added after merge)
+
+Engineer's instruction (2026-10-12): work through every open item, use best judgment, and list what needs the engineer. Basis as at the top of this log (AASHTO Std. Spec. 17th Ed., MBE, MassDOT BM Pt. I §7.2.7). Provisions I could not confirm against the printed text are marked **verify**. Line numbers are approximate (after the fix). Default model = the tool's defaults (40 ft circular, 10 ft rise, 24 in ring, cover 2 ft + 4 in wearing surface, barrel 24 ft, f_a = 250 psi).
+
+### W1. Side-by-side trucks on multi-lane barrels   [calc change] [**MORE conservative**; default changes results of highway ratings on barrels 20 ft wide or more] (open item O5)
+- **Where (engine):** new block after `function stripLoadConc(` (≈ line 1804): `TRUCK_CLR`, `lanesOn`, `truckClr`, `multiPres`, `wheelLinesX`, `transDisp`, `transConc`, `sideBySide`, `sideBySideAt`; exported from `ARCH` (anchor `TIRE_L,TIRE_W,GAGE,sideBySide,sideBySideAt,lanesOn,TRUCK_CLR};`). `nodalLL()` (anchors `const kD=disp.length?sideBySide(`, `kC=sideBySide(model.p,E,true)`, `k2=sideBySide(model.p,wt2,false)`) and `nodalLLByAxle()` (three `*sideBySide(...).kappa` factors) multiply the one-truck pressure by κ.
+- **Where (input / saved data):** `F` gains `lanes:"auto",truckClr:"4"`; two rows after the `deepSpread` select in the Materials & Loads card (highway only): select `lanes` (Auto / 1 / 2 / 3 / 4 lanes) and number `truckClr` (ft); `readP()` reads `lanes:g("lanes")||"auto",truckClr:n("truckClr")` and refuses a blank or negative gap in highway mode; result fingerprint gains `p.lanes,p.truckClr`; `bind` mirrors both to `F` (like `deepSpread`); `restore()` sets `F.lanes`/`F.truckClr` from the file or to the defaults when the file has none; "Start a new calculation" resets them.
+- **Where (reports):** dashboard check (anchor `const sbC=ARCH.sideBySideAt(p,M.g.coverCrown+p.tws);`, replaces the F3 "One truck placed transversely" warning, which is kept for one lane); Live Load tab message (anchor `const nLanes=ARCH.lanesOn(p);`) and worked example (`const sbW=ARCH.sideBySide(p,wt,false), kW=sbW.kappa;`, κ step, κ in the p_i and concentrated w equations); distribution table and Nodal Results table get a "κ side-by-side trucks" column when more than one lane is on; node worked calculation (`const sbK=ARCH.sideBySide(p,wt,false), kW=sbK.kappa;`, κ step, κ in p_i).
+- **Problem:** one vehicle was placed transversely. On a barrel wide enough for two or more lanes, trucks in adjacent lanes stand at the same station; under deep fill their spread areas overlap with the first truck's, and Art. 6.4.2 combines overlapping areas over their outside limits. Only a warning was given (F3).
+- **Rule implemented:** identical trucks side by side, 6 ft gage, `truckClr` (default 4 ft: 10 ft trucks with the wheels 2 ft inside each edge, adjacent) between the wheel lines of adjacent trucks. For n = 1 … N loaded lanes, the peak strip line load per unit axle load is m_n·k·(1/2)/W over each merged group of k wheel lines of outside width W (6.4.2 merge where gap ≤ w; the concentrated 6.4.1 branch superimposes widths E where gap < E, as `stripLoadConc` does). m_n = 1.00 (1–2 lanes), 0.90 (3), 0.75 (4+). κ = max over n ÷ the one-truck value (κ ≡ 1 with one lane). N: `auto` = Art. 3.6.3 on the barrel width (W < 20 ft → 1; 20–24 ft → 2; otherwise ⌊W/12⌋), which is at least the roadway width and so errs toward more lanes; or the number selected.
+- **Governing provision:** AASHTO Std. Spec. 17th Ed. Art. 6.4.2 (overlapping areas), 3.24.3.2, 3.12.1 (reduction in load intensity), 3.6.3 / 3.7 (lanes, truck width) (**verify** the 3.6.3 lane rule and the 4 ft spacing against the printed edition).
+- **Before (engine, `nodalLL`):**
+  ```js
+      if(f>0)press += f*((wtr>=GAGE)? a.ax.P/((GAGE+wtr)*spreadL) : (a.ax.P/2)/(wtr*spreadL));
+  ```
+  ```js
+      for(const a of conc)addConc(model,q,a.xa,stripLoadConc(a.ax.P,E));
+  ```
+- **After:**
+  ```js
+      const kD=disp.length?sideBySide(model.p,wtr,false).kappa:1;   // side-by-side trucks
+      ...
+      if(f>0)press += f*((wtr>=GAGE)? a.ax.P/((GAGE+wtr)*spreadL) : (a.ax.P/2)/(wtr*spreadL))*kD;
+  ```
+  ```js
+      const E=shallowWidth(model.p), kC=sideBySide(model.p,E,true).kappa;
+      for(const a of conc)addConc(model,q,a.xa,stripLoadConc(a.ax.P,E)*kC);
+  ```
+  (and `*k2` on the credited-spread branch; the same three factors in `nodalLLByAxle`, so the axle breakdown still reproduces `nodalLL`). Copy the helper block from the file (it is self-contained, ~60 lines).
+- **Saved data:** two new optional fields `lanes`, `truckClr` in the project JSON (no new storage key). Old files and autosaves open on the **new default (Auto)**: their highway ratings on barrels ≥ 20 ft wide go down. Selecting "1 lane" reproduces the old result exactly (verified, default model: all ten ratings identical to main to 4 decimals).
+- **Check case:** default model, 24 ft barrel → 2 lanes, gap 4 ft.
+  - Crown, H = 2.333 ft, w = 1.75H = 4.083 ft < 6: one truck 0.5/4.083 = 0.12245 per kip; two trucks: inner wheels 4 ft apart merge (4 ≤ 4.083): 2 × 0.5/(4 + 4.083) = 0.12371 → κ = 1.0103.
+  - A node with H = 8 ft, w = 14 ft: one truck merged 1/(6 + 14) = 0.0500; two trucks, all four wheels merge, 2/(16 + 14) = 0.0667 → κ = 1.333.
+  - Ratings, main → branch (Auto): H20 0.8418 → 0.6896; HS20 0.7723 → 0.6259; Type 3 0.9985 → 0.8219; 3S2 1.1123 → 0.9015; SU4 0.8614 → 0.7046; SU5 0.8276 → 0.6754; SU6 0.7896 → 0.6378; SU7 0.8180 → 0.6564; EV2 0.7816 → 0.6382; EV3 0.5491 → 0.4507. They govern at the springings, where the cover is deep and κ approaches 4/3.
+- **How verified:** jsdom (whole page) `ARCH.rateVehicle` main vs branch with Lanes = 1 (identical) and Auto (above); headless Chromium render of all 13 output tabs, highway and railroad, no console errors; screenshots of the input card and Live Load tab.
+- **Not changed (noted):** the transverse figure on the Live Load tab still draws one truck (its pressure label is read back from the solver, so the value is right); Art. 6.4.2's limit that the distribution width may not exceed the slab (barrel) width is not applied, for one truck or several (see Remaining).
+- **Other copies:** none.
+
+### W2. Cooper E-80 trailing load starts 5 ft behind the last axle   [calc change] [LESS conservative, only where the trailing load reaches the section] (open item O2)
+- **Where:** `RAIL_VEHICLES` E80 (anchor `trail:8,trailGap:5,`); `railNodeLoad()` (anchor `const tg=vehicle.trailGap||0, tailX=`); the two worked trailing-load steps (anchor `const tailX=(dir>0)?pos+maxOff+(veh.trailGap||0)`), the elevation figure (`const tL=Math.max(pos+lastX+(veh.trailGap||0),xlo);`), the animation figure (`const tailX=pos+lx+(veh.trailGap||0);`) and the vehicle diagram (`const x0=Math.min(X(L+(veh.trailGap||0))+6,W-40);`).
+- **Problem:** the 8 k/ft uniform load started at the last axle; the standard Cooper E-80 diagram starts it 5 ft behind the last axle.
+- **Governing provision:** AREMA Manual Ch. 8 (and Ch. 15), Cooper E-80 load diagram (**verify** edition).
+- **Before:** `const tailX=(dir>0)?pos+maxOff:pos;`  **After:** `const tg=vehicle.trailGap||0, tailX=(dir>0)?pos+maxOff+tg:pos-tg;` (other vehicles have no `trailGap`, so 0 and unchanged).
+- **Check case:** default model in railroad mode, t_ws = 0, crown node 5 (x = 20.80 ft, tributary 4.979 ft, W = 9.917 ft), last axle 3 ft left of the node: nodal load before 6.0316 k/ft, after 2.4101 k/ft; the difference 3.6215 = 8 × (22.80 − 18.31)/9.917 is the trailing load on the 4.49 ft of the tributary that now lies inside the 5 ft gap. E-80 rating factor on the default model unchanged (0.1144 at t_ws = 4 in): the axles govern there.
+- **How verified:** jsdom (`ARCH.nodalLL`) main vs branch; Chromium render of the railroad tabs.
+
+### W3. Railroad mode: wearing surface defaults to 0 and is flagged   [input default + message] [results change only for new rail projects switched from the untouched highway default; MORE conservative there] (open item O3)
+- **Where:** `bind()` loadMode branch (anchor `/* A railroad has no pavement by default`), new global `let twsAuto=false;` (after `let unitMigrated=null, tieReverted=null;`), reset in `restore()` and "Start a new calculation"; dashboard: the "No wearing surface thickness entered" warning is highway only (`else if(p.tws<=0&&p.loadMode!=="rail")`), and a new rail warning "Wearing surface entered under railroad loading" when t_ws > 0.
+- **Problem:** rail mode kept the highway t_ws = 4 in: about 47 psf of extra dead load, and a surface 4 in higher, which lengthens the tie spread and lowers the AREMA impact (cover is measured from that surface).
+- **Rule:** switching to railroad sets t_ws to 0 only when it is exactly the untouched 4 in, and puts 4 back on the way to highway if it is still 0. Saved rail projects keep their t_ws and show the warning.
+- **Check case:** default model switched to railroad: E-80 RF 0.1144 (t_ws = 4 in, main) → 0.1116 (t_ws = 0).
+- **Governing provision:** MassDOT BM Pt. I §7.2.7.3B; AREMA (impact depth below the base of rail).
+
+### W4. AASHTO Type 3-3 legal vehicle added   [new vehicle] (open item O4, in part)
+- **Where:** `VEHICLES`, after `{id:"T3S2",` (anchor `{id:"T33",`).
+- **After:** `{id:"T33",  name:"Type 3-3",   tons:40,   axles:[{x:0,P:12},{x:15,P:12},{x:19,P:12},{x:34,P:16},{x:50,P:14},{x:54,P:14}]},` — 12, 12, 12, 16, 14, 14 k at 15, 4, 15, 16, 4 ft, 80 k = 40 t (MBE Appendix D6A; matches `index.html`).
+- New projects rate it by default (the vehicle list defaults to all); saved projects keep their own selection. Default model: Type 3-3 RF 1.2314 (one lane), 0.9981 (Auto).
+- Whether MassDOT §7.2.4.1B requires it for posting is under Needs engineer.
+
+### W5. User Manual: K-01-001 cross-check flagged as dated; §8 worked example re-run   [docs] (open item O6)
+- **Where:** Manual §5.6 (anchors `Run on the reference package's own distribution assumption` and `The SU4–SU7 residual is a position sweep.`) and §8 (8.2 inputs, 8.3 expected results, 8.4 checks).
+- **§5.6:** the K-01-001 project file is not in the repository, and an idealized 20 ft / 4 ft model does not reproduce the quoted figures (Type 3 1.31 against 1.243), so the "This program" column could not be re-run. The text now says those figures are from the 2021 run, lists the changes since (F1 SU6/SU7, F2 spread basis, W1 side-by-side trucks: 4 lanes on that 50 ft barrel), and asks for a re-run before quoting; the SU4–SU7 paragraph no longer claims the four must agree (after F1, SU6/SU7 carry trailing 8 k axles).
+- **§8:** inputs restated in current units (ring 24 in, wearing surface 4 in, override depths in inches) and with the side-by-side setting; expected values re-run on this build: DL crown thrust 17.64 → 18.31 k/ft, crown moment −0.03 → −1.15 k·ft/ft (e 0.002 → 0.063 ft), springline moment −7.30 → −9.08 k·ft/ft; HS20 RF 1.33 (47.9 t) → 0.63 (22.5 t) at a springline (0.77 with one lane); pinned 1.77 → 1.28; crown override 0.24 → 0.44; Bernoulli: springline moment 9.08 → 9.24, RF 0.60. The old numbers predate several earlier releases.
+
+### Earlier open items: status after this PR
+- **O1** (rail impact coefficient 0.60): not changed; needs engineer.
+- **O2:** fixed (W2). **O3:** fixed (W3). **O4:** vehicle added (W4); the required set needs the engineer. **O5:** fixed (W1). **O6:** addressed (W5); K-01-001 re-run needs the project file.
+- **O7** (figure-only cone): closed, it is a drawing and the solver does not use it.
+
+### Needs engineer
+1. **O1, rail impact.** Confirm the AREMA Ch. 8 edition (or the railroad's criteria) for IM = [1 − (H − 1.5)/8.5] × 0.60 (60% at 1.5 ft to 0 at 10 ft). Recommendation: keep 0.60 (the conservative reading of the ambiguous typesetting) until checked.
+2. **O4, vehicle set.** Does MassDOT §7.2.4.1B require Type 3-3 (and any other legal or SHV vehicles) for posting? Recommendation: keep Type 3-3 available and selected by default.
+3. **O5, lanes.** Confirm rating with side-by-side trucks per Art. 3.6.3 / 6.4.2 / 3.12.1 for arch barrels under MassDOT §7.2.7, and the Auto rule (lanes from the barrel width). Recommendation: keep Auto, and set the lane count from the roadway width where it is known.
+4. **O6, K-01-001.** Re-run the K-01-001 project file on this build and update Manual §5.6.
+
+### Remaining open items
+- Art. 6.4.2 "the total width of distribution shall not exceed the total width of the supporting slab": not applied (one or several trucks). Under very deep fill on a narrow barrel the merged width can exceed the barrel width, which understates the pressure. Recommendation: cap the merged width at the barrel width (a §4 calc change; not done here).
+- The Live Load transverse figure draws one truck; it could draw the adjacent truck when κ > 1.
