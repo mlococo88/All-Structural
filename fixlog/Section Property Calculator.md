@@ -2472,3 +2472,80 @@ None (data management and UI). No engineering value, unit or reference changed.
 - L-O1. Location: the library is at the end of the Templates tab (keeps the tab bar on one row). If the engineer prefers a separate "Library" tab, the input tab bar wraps to two rows at the 430 px panel unless the tab padding is reduced — decide.
 - L-O2. The library lives in this browser's localStorage (shared `file://` origin in Chrome/Edge, like the other keys); clearing site data deletes it. Export all regularly to keep a copy.
 - L-O3. Connector inputs left in `sf.conn` after undoing an insert (or deleting parts) stay in the project file keyed to contacts that no longer exist (pre-existing P2b behaviour for deleted parts; no effect on results).
+
+---
+
+## 2026-10-11 — PR: claude/spc-hss-contact (PR link added after merge)
+
+### H1. Torsion: a plate in face contact with the flat of a rectangular HSS / tube is joined like the other face contacts (open item O1-O1 closed)   [CALCULATION CHANGE — torsion model: J of these sections (C<sub>w</sub> and the shear centre stay n/a for closed cells); no other result, key or file format changed]
+
+Engineer's decision 2026-10-11: "Fix whatever you recommend and merge"; recommendation: treat it like the other face contacts.
+
+#### Problem
+
+HSS10X6X1/2 with a PL 10 × 1/2 on top gave "J n/a — elements of V1+V2 and link cross without a connection (contact switched off?)" although the contact was on. The face-contact step already combined the tube's top flat with the plate (t = 0.465 + 0.5 = 0.965 on the combined mid-plane, t<sub>p</sub>/2 = 0.25 in above the tube's centre line). The corner chord that continues from the end of the flat was then "re-attached" by **extending it along its own direction** up to the combined line — the rule used for a web or an angle leg meeting a stacked plate at 90°. The first corner chord leaves the flat at 7.5°, so the extension ran 0.25/tan 7.5° = 1.90 in **back along the combined element** and crossed the rigid link that carries the plate's overhang (false crossing → n/a). With no overhang (plate exactly as wide as the flat, end within the contact tolerance) nothing crossed, but the model was wrong: the two extended chords (t = 0.465) replaced the middle of the combined top wall and the combined element became two open branches (HSS10X6X1/2 + PL 4.14 × 1/2: J = 181.97 instead of 197.84 in⁴).
+
+Affected: rectangular tubes / HSS with rounded corners (r > 0) whose flat is in face contact with a plate (or another flat part) that reaches the end of the flat — on top, on a side, wider than the tube, one side only, plates on two faces. A plate narrower than the flat (ends inside the flat) was already right and is unchanged; square-cornered tubes (90° corners) are unchanged.
+
+#### Fix
+
+`thinWall`, step 1 (face-contact stacks), re-attachment of element ends lying on a stacked plate's centre line. Anchor: `const par = Le === 0 || Math.abs(dot(de, st.nrm)) < 0.0087 * Le;`
+
+An end of an element that (a) belongs to the **same part** as the stacked element, (b) lies at that element's **end** (within the contact tolerance) and (c) would be moved **along the stack by more than half its thickness** by the extension (a shallow-angle continuation such as a corner chord) now gets a **rigid link** (t = 0) across to the combined line at the zone end — the same treatment as a plate that continues from a combined zone on its own line. Every other end is handled exactly as before (perpendicular continuations such as angle heels and square tube corners move by 0 along the stack, so they are still extended; parallel ones are still linked). Contacts switched off on the Torsion tab are not stacked (unchanged `allowed()` test), so the switch is respected.
+
+**Before:**
+```js
+              const par = Le === 0 || Math.abs(dot(de, st.nrm)) < 0.0087 * Le;
+              if (par) { if (!endsSeen.some(x => len(sub(x, P)) < 1e-9)) { endsSeen.push(P); links.push({ p: P, q: Q, t: 0, parts: e.parts, link: true, src: 'link' }); } }
+              else { const lam = (z.w - w) / dot(de, st.nrm); e[k] = add(P, mul(de, lam)); }
+```
+**After:**
+```js
+              const par = Le === 0 || Math.abs(dot(de, st.nrm)) < 0.0087 * Le;
+              // the same part continuing from the end of its stacked element at a shallow angle (the corner chords of a
+              // rectangular tube / HSS whose flat is in face contact): extending it along its own direction would run it back
+              // along the combined element; it gets a rigid link across to the combined line at the zone end instead, as a
+              // plate that continues on a different line does. Engineer's decision 2026-10-11 (O1-O1).
+              const lam = par ? 0 : (z.w - w) / dot(de, st.nrm);
+              const own = !par && e.parts.some(x => m.e.parts.includes(x)) && Math.min(Math.abs(s - m.lo), Math.abs(s - m.hi)) <= ltol && Math.abs(lam * dot(de, st.u)) > e.t / 2 + ltol;
+              if (par || own) { if (!endsSeen.some(x => len(sub(x, P)) < 1e-9)) { endsSeen.push(P); links.push({ p: P, q: Q, t: 0, parts: e.parts, link: true, src: 'link' }); } }
+              else { e[k] = add(P, mul(de, lam)); }
+```
+(The extension `add(P, mul(de, lam))` with `lam = (z.w - w) / dot(de, st.nrm)` is the same expression as before, so every extended end is bit-identical.)
+
+Other edits:
+1. `runValidation`: new group **19** after group 18 (anchor `// 19 plate in face contact with the flat of an HSS`), 4 checks (one closed cell; J plate on top; J plate on a long side; contact switched off = sum of the pieces). Groups 1–18 (117 checks) unchanged and in the same order.
+2. `buildManual` → Torsion → "Connections": after "…where the combination changes, the lines are joined by a rigid link." added "A plate on the flat of a rectangular tube / HSS wall is combined with the flat the same way (the cell stays one cell); at the end of the flat the tube's rounded corner is joined to the combined line by a rigid link."
+
+#### Governing provision
+
+Thin-walled torsion as already used by the tool: Bredt single cell J = 4A<sub>m</sub>²/∮ds/t; open parts Σbt³/3 (AISC Design Guide 9, Seaburg & Carter 1997, as the tool already cites); plates in face contact combined into one element of Σt (engineer's decision 2026-10-10, entry O1). HSS geometry as the tool models it: t<sub>des</sub>, outside corner radius 2t<sub>des</sub>, centre-line corner radius 1.5t<sub>des</sub> drawn as 6 chords per corner (AISC Shapes Database v16.0). No formula, factor, unit or reference changed — only which centre-line elements the formula is applied to.
+
+#### Check cases (hand calculation = Validation group 19)
+
+HSS10X6X1/2: t = 0.465, B = 6, H = 10. Centre line a = B − t = 5.535, b = H − t = 9.535, r<sub>m</sub> = 1.5t = 0.6975, chord c = 2r<sub>m</sub> sin 7.5° = 0.182084 (24 chords, Σ = 4.370017), flats f<sub>B</sub> = a − 2r<sub>m</sub> = 4.14, f<sub>H</sub> = b − 2r<sub>m</sub> = 8.14.
+A<sub>m,tube</sub> = ab − 4r<sub>m</sub>² + 24·½r<sub>m</sub>² sin 15° = 52.776225 − 1.946025 + 1.511005 = 52.341205 in². Tube alone: ∮ds/t = (2·4.14 + 2·8.14 + 4.370017)/0.465 = 62.21509, J = 4·52.341205²/62.21509 = **176.137** in⁴ (AISC 176; unchanged).
+The combined wall (t + t<sub>p</sub> = 0.965) lies at Σt·w/Σt = t<sub>p</sub>/2 = 0.25 in outside the tube's centre line, so A<sub>m</sub> grows by f·0.25.
+
+1. **PL 10 × 1/2 on top** (wider than the tube): A<sub>m</sub> = 52.341205 + 4.14·0.25 = 53.376205; ∮ds/t = 4.14/0.965 + (4.14 + 2·8.14 + 4.370017)/0.465 = 4.290155 + 53.311865 = 57.602020; J<sub>cell</sub> = 4·53.376205²/57.602020 = 197.8416; overhangs 2 × (5 − 4.14/2) = 2 × 2.93 in: J<sub>open</sub> = 5.86·0.5³/3 = 0.2442. **J = 198.086 in⁴. Before: n/a.** (Contact switched off: 176.137 + Roark 10 × 1/2 0.4035 = 176.541, unchanged.)
+2. **PL 10 × 1/2 on a long (10 in) side**: A<sub>m</sub> = 52.341205 + 8.14·0.25 = 54.376205; ∮ds/t = 8.14/0.965 + (2·4.14 + 8.14 + 4.370017)/0.465 = 8.435233 + 44.709714 = 53.144947; J<sub>cell</sub> = 4·54.376205²/53.144947 = 222.5440; overhangs 2 × (5 − 4.07) = 2 × 0.93: J<sub>open</sub> = 1.86·0.125/3 = 0.0775. **J = 222.621 in⁴. Before: n/a.** (The 0.93 in overhangs are flagged b/t < 10, as any stocky open element.)
+3. PL 4.14 × 1/2 on top (exactly the flat width): before 181.969 in⁴ (wrong model, see Problem), after 197.842 in⁴ = J<sub>cell</sub> of case 1 (no overhang).
+4. PL 4 × 1/2 on top (narrower than the flat): 197.049 in⁴ before and after (bit-identical).
+
+The tool reproduces cases 1 and 2 to 3e-17 and 7e-17 relative.
+
+#### How verified
+
+- `node --check` of the 4 inline scripts: 0 errors.
+- Engine, main vs branch (Node, the engine block run in a VM): the 5,247 models of the O1 parity set (every single rolled shape, 2L, star, double channel, boxed channels, laced 2C/4L, cover-plated W/M/S/HP, boxes, girders, the engineer's model, 400 random plate assemblies and rotated copies): **5,247 bit-identical** (A, I, Z, S, J, C<sub>w</sub>, shear centre, r̄<sub>o</sub>², cells (A<sub>m</sub>, ∮ds/t, q), open rows, merges, junctions, elements).
+- HSS sweep, every HSSR in the database (525 shapes × 7): plate narrower than the flat on top and on a side (1,050): 1,046 identical, 4 n/a → value (plate 0.5 in, wider than the flat of the tiny tubes); plate = flat width (525): 296 value → value (all larger, 1.019–1.248 ×, the wrong model of case 3), 225 n/a → value, 4 identical; plate = B on top, B + 4 on top, = H on a side (1,575): n/a → value; contact switched off (525): identical. No value → n/a anywhere.
+- Browser (headless Chromium, KaTeX served locally), main vs branch, default example + 8 templates in in and mm: results, saved model, drawing and the text of every output tab identical except the Method tab (branch text = main text + the one added sentence, checked by string removal); Validation main 117/117, branch 121/121 with the first 117 identical; no console errors.
+- Browser, new case: HSS10X6X1/2 + PL 10 × 1/2 on top / on the long side loaded as a project: J 198.086 / 222.621 in⁴, one closed cell (A<sub>m</sub> 53.376 / 54.376 in²), face-contact note "HSS1 + PL1", Q & shear flow: the contact is open (V·Q/I of the plate), A and I unchanged; contact unticked → 2 pieces, J 176.541 (same as main). Screenshots looked at: `branch_top_torsion.png`, `branch_side_torsion.png`, `branch_validation19.png`.
+
+#### Other copies
+
+None (the torsion engine exists only in this tool).
+
+#### Open items
+
+None new. O1-O1 closed.
