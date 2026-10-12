@@ -868,10 +868,10 @@ Every error, code-limit failure and note of the pre-R1 engine is produced with t
 - R1-c. **Cantilever deflection limit:** L = twice the cantilever length (IBC 2018 Table 1604.3 footnote h, as recalled). Confirm the footnote and the intent. *(Engineer 2026-10-10: confirmed. No change; R2.)*
 - R1-d. **Pattern (skip) live loading** is not generated for continuous beams (Steel Beam does not either); an advisory is shown. Decision: add automatic patterns? *(Engineer 2026-10-10: declined; the advisory stays. R2.)*
 - R1-e. **Cb at interior supports:** ticked by default for an interior support (member continues past it). Confirm. *(R5: closed. Engineer's decision 2026-10-10: keep C<sub>b</sub> ticked by default at interior supports. No change.)*
-- R1-f. **NDS equation numbers** in the calc sheets (3.3-2, 3.3-5, 3.3-6, 3.4-2, 3.4-3, 3.5-1, 3.10-2) are as recalled; verify against the printed NDS 2018. *(R5: still open; cannot be closed by code. Verify against the printed NDS 2018 and supply any corrected numbers.)*
+- R1-f. **NDS equation numbers** in the calc sheets (3.3-2, 3.3-5, 3.3-6, 3.4-2, 3.4-3, 3.5-1, 3.10-2) are as recalled; verify against the printed NDS 2018. *(R5: still open; cannot be closed by code. Verify against the printed NDS 2018 and supply any corrected numbers.)* *(S1: still open; see S1, Needs engineer 4.)*
 - R1-g. **Shared project info:** `TBC_PROJ_MAP` is unchanged (Client, Job #, Designer). The new fields Project, Checked by and Date could be mapped to `projectName`, `checkedBy`, `date`. Decision? *(R5: closed. Engineer's decision 2026-10-10: mapped. Project → `projectName`, Checked by → `checkedBy`, Date → `date`; existing mappings kept.)*
 - R1-h. **Observation (Steel Beam, not changed here):** in `Steel Beam Design - AISC 15th.html`, `evalVM(X, …)` includes the reaction couple of a node at `X` itself, so at x = L with a fixed right end it returns M = 0 instead of the end moment (fixed-pin-fixed 10 + 10 ft, w = 75 plf: 0 vs −2187.5 ft-lb at x = 20 ft). The station just before it is close, so the effect is small but unconservative. For a separate Steel Beam PR if wanted.
-- R1-i. **Fixed supports** are offered (as in Steel Beam) but rare in timber; the bearing check uses the vertical reaction only.
+- R1-i. **Fixed supports** are offered (as in Steel Beam) but rare in timber; the bearing check uses the vertical reaction only. *(S1: closed; an advisory is shown whenever a support is fixed; see S1-c.)*
 
 ## 2026-10-10 — PR: claude/timber-rebuild-p2 (PR link added after merge)
 
@@ -1236,31 +1236,157 @@ Method & Manual: Bending item ("R<sub>B</sub> ≤ 50 is enforced … for each ed
 - **Project-info round trip (same `file://` origin in one Chromium context):** Timber title block filled (Project, Member, Client, Job #, Designer, Checked by, Date) → "Share project info" → `bridgeSuite.v1.projectMeta.fields` = projectName / client / jobNo / preparedBy / checkedBy / date with the typed values (bridgeId, location blank; producer "Timber Beam Check") → Steel Beam "Use shared project info" fills its Project name, Prepared by, Checked by and Date with them. Reverse: Steel Beam values typed and shared → Timber "Use shared project info" fills Project, Designer, Checked by and Date; Client, Job # and Member keep their values (Steel shares them blank). Project object keys unchanged. No console errors or warnings on any of the three pages.
 - **Other copies of this code:** none (tool-specific). The `ProjMetaUI` helper (shared with other tools) is unchanged.
 
+## 2026-10-12 — PR: claude/sweep-timber (PR link added after merge)
+
+### S1. Open-item sweep: every open item of this tool (O4–O8, O11–O14, R1-f, R1-i, P2-3)   [calc change: O4 shear, MORE conservative by default] [notes / advisories / text only for the rest]
+
+- **Date / type:** 2026-10-12. Engineer's instruction of 2026-10-12: "continue making updates and fixes until it's completed. Use your best judgment ... If there is something that absolutely needs my input then note it." Only `Timber Beam Check.html` and this log change. CRLF kept. No storage key changed; one new optional saved field (`design.shearXd`, below).
+- **Status of the O-items before this sweep:** O4–O8 and O11–O14 had no R4 / R5 annotation. R5 closed only R1-b, R1-e and P2-4 to P2-9 by name ("the rest closed as built" in the R5 heading refers to those), so they were still open. Each is settled below.
+
+| Item | Result |
+|---|---|
+| O4 | **Fixed (calc).** Re-checked: the item was mis-described. The tool did not "not reduce" point loads within d; it left them out of the design shear altogether (unconservative). Now included at full value (default) or times x/d (new option). See S1-a. |
+| O5 | Closed, no change: the footnote 1 general rule is used with point loads; conservative; documented (Method & Manual, Bending; Design Values). |
+| O6 | Closed, no change: the tool follows NDS 2018 Table 3.3.3 (see S1-b). Printed-table check stays with R1-f. |
+| O7 | **Needs engineer** (no code change): see "Needs engineer" below. |
+| O8 | Closed as a documented limitation: the notch input hint now says one depth at both ends and that interior and compression-face notches are not checked; Method & Manual limitation reworded. |
+| O11 | **Needs engineer** (values): with P2-3. |
+| O12 | Closed with the conservative default: C<sub>F</sub> = 1.1 not applied; a note now appears on the Summary when the case arises (S1-c). |
+| O13 | **Needs engineer** (cross-tool X-C8): ASCE 7-16 kept. |
+| O14 | Closed with the conservative default: C<sub>i</sub> stays applied to timbers when ticked; a note now appears (S1-c). |
+| R1-f | **Needs engineer** (printed NDS 2018). |
+| R1-i | Closed: an advisory is now shown whenever a support is fixed (S1-c). |
+| P2-3 | **Needs engineer** (values). |
+
+#### S1-a. O4: point loads within d of a support in the design shear   [calc change] [MORE conservative by default; the new x/d option lowers V again, never below the region value]
+
+- **Where:** `tbcRun`, per-combination block. Anchors: `const shearOf = (bmS, PS, bmR) =>` (new) and `const dft = dep / 12;` (the `xdFac` helper follows it). Also `tbcDefaultModel` (`shearXd: false`), `tbcFromLegacy` (`shearXd: false`), `tbcSanitize` (`shearXd: bo(dz.shearXd, false)`), the result object (`shearXd`), and each combination object (`vZone, Pv, xdUsed`).
+- **Problem:** the design shear V was the largest |V| in the region from d off each support to d off the next support. That applies NDS 3.4.3.1(a) (uniform load within d may be ignored) correctly, but a concentrated load *inside* the zone within d of a support is on the support side of the section at d, so it never entered V (its only effect on the region was a small opposite-signed P·a/L). NDS 3.4.3.1(b) only permits such a load to be **multiplied by x/d**, not ignored. Fix log F9 / O4 described this as "not reduced (conservative)"; it was in fact unconservative, by up to the whole point load. The original (pre-F9) code did the same (`if (d_ft > pl.loc) V_crit -= pl.mag`).
+- **Governing provision:** NDS 2018 3.4.3.1(a) and (b) (verify wording against the printed NDS: (b) "concentrated loads within a distance d from supports shall be permitted to be multiplied by x/d", x = distance from the beam support face to the load).
+- **Before:**
+  ```js
+        // Design shear: max |V| between d from each support (NDS 3.4.3.1(a)); no x/d reduction of point loads
+        let Vd = 0, xV = 0;
+        shearRegion.forEach(x => { const v = Math.max(Math.abs(bm.V(x, false)), Math.abs(bm.V(x, true))); if (v > Vd) { Vd = v; xV = x; } });
+  ```
+- **After:**
+  ```js
+    const dft = dep / 12;
+    // NDS 3.4.3.1(b) option (fix log O4): point loads within d of a support multiplied by x/d for the design shear only;
+    // x = distance from the support point (node). Off (default): point loads within d count at full value.
+    const shearXd = !!dz.shearXd;
+    const supXs = xN.filter((_, j) => types[j] !== 'free');
+    const xdFac = (loc) => { const x = Math.min(...supXs.map(s => Math.abs(loc - s))); return x < dft ? x / dft : 1; };
+  ...
+        // Design shear: max |V| between d from each support (NDS 3.4.3.1(a): uniform load within d ignored). Fix log O4: a point
+        // load within d of a support adds to the shear at that support (the region alone left it out) at full value.
+        const shearOf = (bmS, PS, bmR) => {   // bmS / PS: model and loads at the supports; bmR: an extra model for the region (envelope)
+            let Vd = 0, xV = 0, vZone = null;
+            shearRegion.forEach(x => { [bmS, bmR].forEach(q => { if (!q) return; const v = Math.max(Math.abs(q.V(x, false)), Math.abs(q.V(x, true))); if (v > Vd) { Vd = v; xV = x; } }); });
+            Ls.forEach((Li, i) => {
+                const lo = xN[i] + (types[i] !== 'free' ? dft : 0), hi = xN[i + 1] - (types[i + 1] !== 'free' ? dft : 0);
+                if (simple ? !(L > 2 * dft) : lo > hi) return;   // short span: the whole span is in the shear region already
+                [[i, 1], [i + 1, -1]].forEach(([j, dir]) => {
+                    if (types[j] === 'free') return;
+                    const s0 = xN[j];
+                    if (!PS.some(p => p.mag !== 0 && dir * (p.loc - s0) > 0 && dir * (p.loc - s0) < dft)) return;   // no point load inside this zone
+                    // shear at the support with the uniform load within d ignored = V at d + the point loads within d
+                    const v = Math.abs(dir > 0 ? bmS.V(s0, true) - w * dft : bmS.V(s0, false) + w * dft);
+                    if (v > Vd) { Vd = v; xV = s0; vZone = j; }
+                });
+            });
+            return { Vd, xV, vZone };
+        };
+        let { Vd, xV, vZone } = shearOf(bm, P, null);
+        // NDS 3.4.3.1(b) option: downward point loads within d of a support times x/d. The reduced model gives the shear at the
+        // supports; the region takes the larger of the full and reduced models (a reduced load must not lower the shear
+        // elsewhere, e.g. a load on an overhang); the result is used only when it is lower than without the reduction.
+        const Pv = shearXd ? P.map(p => { const k = xdFac(p.loc); return (k < 1 && p.mag > 0) ? { mag: p.mag * k, loc: p.loc } : p; }) : P;
+        let xdUsed = false;
+        if (Pv.some((p, k) => p !== P[k])) {
+            const sx = shearOf(simple ? beam(w, Pv) : beamG(w, Pv), Pv, bm);
+            if (sx.Vd < Vd) { ({ Vd, xV, vZone } = sx); xdUsed = true; }
+        }
+  ```
+  and `Vd, xV, Rmax,` → `Vd, xV, vZone, Pv, xdUsed, Rmax,` in the combination object.
+- **Method:** where a non-zero point load lies strictly inside the zone within d of a support (not at the support itself, which goes straight into the reaction), the shear at that support is evaluated with the uniform load in the zone ignored: V<sub>s</sub> = V(s<sup>+</sup>) − w·d on the span side to the right of the support, V(s<sup>−</sup>) + w·d to the left (identical to "V at d plus the point loads in the zone"). The design shear is the larger of this and the region maximum. Cases with no point load inside a zone are computed exactly as before (no round-off change: the support value is not evaluated at all).
+- **Option (new input, Loads tab, under the point loads):** "Reduce point loads within d of a support by x/d (shear, NDS 3.4.3.1(b))", **default unticked** (the code-compliant and conservative choice: the reduction is a permission, and it needs a beam in full bearing on one face with the loads on the opposite face, which the tool cannot know). When ticked, downward point loads within d of a support are multiplied by x/d for the design shear only; x is measured from the support point (node), which gives a larger x/d than the support face (conservative). Upward point loads are not reduced. Reactions, bearing, notch shear (full reaction, unchanged), moments, deflections and the plotted shear diagram use the full loads. The region is enveloped with the full-load model, and the reduced result is used only if it is lower than the unreduced one.
+- **Saved data (§5):** new optional field `design.shearXd` (boolean). Files without it (every earlier file, all versions, and pre-R1 flat files) open with `false`: results as the default above. Saved-data version numbers unchanged (2, or 3 with glulam / SCL / LRFD). No storage key added or changed.
+- **Check case (hand-checkable; also on the Validation tab as 6 benchmarks):** the fix-log joist (DF-L No.2 2x10 @ 16 in., simple span 14 ft, D 10 / L 40 psf, self-weight on: w = 50 × 16/12 + 34 × 13.875/144 = 66.667 + 3.276 = 69.943 plf) plus a 1000 lb D point load at x = 0.5 ft. d = 9.25 in. = 0.7708 ft; A = 13.875 in²; D + L: C<sub>D</sub> = 1.0, F′<sub>v</sub> = 180 psi.
+  - R<sub>A</sub> = 69.943 × 7 + 1000 × 13.5/14 = 489.60 + 964.29 = 1453.88 lb; R<sub>B</sub> = 489.60 + 1000 × 0.5/14 = 525.31 lb.
+  - **Before:** region only. At x = d: 1453.88 − 69.943 × 0.7708 − 1000 = 399.97 lb; at x = L − d: 525.31 − 53.91 = 471.40 lb → V = 471.4 lb, f<sub>v</sub> = 1.5 × 471.40/13.875 = 50.96 psi, **ratio 0.283**.
+  - **After (default, full value):** V at A = 1453.88 − 53.91 = **1399.97 lb** (x = 0), f<sub>v</sub> = 151.35 psi, **ratio 0.841**. MORE conservative.
+  - **After (x/d ticked):** P′ = 1000 × 0.5/0.7708 = 648.65 lb; R′<sub>A</sub> = 489.60 + 648.65 × 13.5/14 = 1115.08 lb; V at A = 1115.08 − 53.91 = **1061.17 lb**, f<sub>v</sub> = 114.72 psi, **ratio 0.637** (region, envelope of full and reduced models: 471.4 lb, does not govern). Less conservative than the new default, more conservative than before.
+  - Headline unchanged (bending 0.972 governs).
+  - Second case (continuous, in the node run only): 2 × 12 ft, default 2x10 DF-L No.2 @ 16 in., D 15 / L 40 psf, 1500 lb L at x = 12.4 ft (0.4 ft right of B): D + L V = 539.3 lb (x = 11.23 ft) before → 1989.3 lb at support B (ratio 0.324 → 1.195, NG) → with x/d 1280.3 lb (ratio 0.769).
+- **UI / text:** Loads tab hint and the new checkbox; Shear tab "Design shear V" (formula line says "at support X, uniform load within d ignored, point loads within d included" when that governs; the result line lists the x/d-reduced loads or says the loads are at full value); Analysis tab hint; Schematic & Inputs row "Point loads within d of a support (shear): full value / times x/d"; Method & Manual (Inputs, Shear, Limitations); Validation hint mentions S1.
+
+#### S1-b. O6: l<sub>e</sub> for a single span with uniform load at l<sub>u</sub>/d > 14.3   [closed, no change]
+
+- NDS 2018 Table 3.3.3, row "Single span beam, uniformly distributed load": l<sub>e</sub> = 2.06 l<sub>u</sub> for l<sub>u</sub>/d < 7, and l<sub>e</sub> = 1.63 l<sub>u</sub> + 3d for l<sub>u</sub>/d ≥ 7 (two columns; no 14.3 break). The three-range rule with 1.84 l<sub>u</sub> for l<sub>u</sub>/d > 14.3 is footnote 1 (single span or cantilever with any loading not listed). The tool already does exactly this (anchor `else if (fn1 && luD > 14.3)`): uniform load on a simple span → table row; point loads, continuous, cantilever → footnote 1. The reviewer's 1.84 l<sub>u</sub> is the footnote value. The tool is therefore right as built; changing the condition would be more conservative than the table but not what it says. As recalled — confirm against the printed table (open item R1-f / ENGINEER_CHECKS A6, unchanged).
+
+#### S1-c. O12, O14, R1-i: notes and advisory (no result change)
+
+- **Where:** `tbcRun`. Anchors: after `CFnote = \`Table 4A, ${wg >= 14` (O12), after `notes.push('Ci applies to sawn lumber only` (O14), before `if (hasNotch && notchJ.length < 2 && !simple) adv.push(` (R1-i).
+- **Added:**
+  ```js
+        if (!userVals && mt.species === 'SP' && thick4 && wg >= 8) notes.push('Southern Pine 4 in. thick, 8 in. and wider: the Table 4B footnote permits CF = 1.1 on Fb. Not applied (conservative, fix log O12).');
+    if (ciOn && cat === 'timber') notes.push('Incised timber: NDS 4.3.8 and Table 4.3.8 are written for dimension lumber. Their Ci values are applied to this timber as ticked (conservative, fix log O14). Untick Incised if the timber is not incised.');
+    if (types.some(t => t === 'fixed')) adv.push('Fixed support: bearing is checked with the vertical reaction only (uniform Fc⊥ stress over the bearing length). The effect of the fixing moment on the bearing stress, and the connection that provides the fixity, are not checked (fix log R1-i).');
+  ```
+- **O12 decision:** NDS Supplement 2018 Table 4B size-factor footnote *permits* C<sub>F</sub> = 1.1 on F<sub>b</sub> for 4 in. thick, 8 in. and wider (verify wording). Permitted, not required, so the conservative default (not applied) is kept and the user is told. Affects only a Custom-size SP section 2.5 < b ≤ 3.5 in. with d > 5.5 in. (no built-in size).
+- **O14 decision:** keep applying the dimension-lumber C<sub>i</sub> (0.80 / 0.80 / 1.0 / 0.95) to an incised timber when ticked (conservative stand-in); note shown.
+- **R1-i:** the bearing check is unchanged; the advisory makes the limitation visible.
+- **Check cases (node and browser):** default model with species SP, Custom 3.5 × 9.25 in. → the O12 note, results identical to main; 6x12 DF-L No.2, spacing 48 in., Incised ticked → the O14 note, results identical; cantilever 6 ft fixed-free → the R1-i advisory, results identical.
+
+#### S1-d. O8: notch limitation stated at the input   [text only]
+
+- Notch input hint (sawn and glulam) now ends: "The same depth is used at both end supports. Interior notches and notches on the compression face are not checked (fix log O8)." Method & Manual limitation: "no interior or compression-face notches, one notch depth at both ends (O8)". Anchor: `fRow(body, 'Notch depth at end supports'` (the hint ternary is wrapped in parentheses to append the sentence).
+
+#### Needs engineer
+
+1. **O7 (deflection).** The tool applies K<sub>cr</sub> to the dead load only (no sustained-live-load input), leaves wind out, and takes the live/transient deflection as the largest of L, Lr, S, 0.75L + 0.75Lr, 0.75L + 0.75S. Question: is this transient set what you want? Recommendation: keep it (it brackets the IBC 1604.3 live / snow checks); add a "sustained portion of L" input only if you design storage floors with it.
+2. **O13 / X-C8 (ASCE 7 edition).** The tool states ASCE 7-16 Sec. 2.4.1 / 2.3.1. Question: governing edition for the suite? Recommendation: keep 7-16 until the cross-tool X-C8 decision; the combinations used are the same in 7-22 for D, L, Lr, S, W (as recalled; verify).
+3. **O11 / P2-3 (values).** Stud 8 in. and wider (Table 4A directs No.3 values), SP Stud (Table 4B), SPF timbers (Table 4D), Dense / Non-Dense grades, other glulam combinations: please supply the printed Supplement values to build in. Until then the tool asks for Manual values.
+4. **R1-f (equation numbers) and S1-b (Table 3.3.3 layout).** Check against the printed NDS 2018: Eq. 3.3-2, 3.3-5, 3.3-6, 3.4-2, 3.4-3, 3.5-1, 3.10-2; Table 3.3.3 single-span uniform-load row (two columns, 7 as the only break) and footnote 1 (three ranges); 3.4.3.1(b) wording (x from the support face).
+5. **O4 default (confirmation only).** The x/d reduction defaults to off. If you would rather it default on for new projects, say so (old files would still open with it off).
+
+#### How verified
+
+- `node --check` on all 4 inline scripts: no errors.
+- **Engine parity (Node, scratchpad `tbsweep/parity.js`):** origin/main engine vs this engine, deep comparison of every `tbcRun` field, plus this engine with the new support-zone line removed by text substitution (must equal main apart from the new fields and the three new notes/advisory).
+  - **20,417 Phase 1 / Phase 2 cases** (old file formats): migrated model identical apart from `shearXd: false`; zone-undone vs main **0 differences**; this engine vs main: **1,643 cases change, all in shear fields only** (V<sub>d</sub>, x<sub>V</sub>, f<sub>v</sub>, shear ratio, governing shear combination, and the headline / controlling name where shear now governs); **V<sub>d</sub> never lower**; every changed combination has its design shear at a support with a non-zero point load strictly within d of it; no case turns NG by headline (largest increase × 18.7).
+  - **6,000 random Phase 2 models** (R4 generator and seed; half of the point loads moved to within 1.5 ft of a node; incising randomised): 0 migration differences; zone-undone vs main 0; **1,048 change, shear fields only**, V<sub>d</sub> never lower, all at a support with a point load within d; 4 go from OK to NG.
+  - **x/d option on vs off (4,992 valid random models):** 1,707 change, only shear fields; **no combination has a larger V<sub>d</sub> with the option on**; no change where no point load lies within d of a support.
+- **Hand check:** the S1-a case reproduced live on the Validation tab (6 new benchmarks); **all 102 benchmarks match** (96 earlier + 6) in Chromium.
+- **Browser (headless Chromium, `file://`, KaTeX / plotly served locally), main vs branch, every output tab's text, the governing strip and the saved model, 13 cases:** default, glulam, glulam 2-span wet notched, SP glulam LRFD with overhang and uplift, 6x12, SP No.1, LVL, LRFD joist with notch, rand 108 (five point loads), cantilever (fixed support), the S1-a check case, SP 3.5 × 9.25 in., incised 6x12. Saved model identical in every case apart from the added `shearXd: false`. Results identical in every case except the S1-a case (shear 0.283 → 0.841; headline 97.2 % unchanged). Text differences, all intended: the new Schematic & Inputs row (all cases), the Analysis and Shear tab wording (all), the R1-i advisory (cantilever), the O12 note (SP 3.5 × 9.25), the O14 note (incised 6x12). Ticking the new box in the UI on the check case gives V = 1061.17 lb (hand 1061.17). No console errors or warnings, no NaN / undefined, no KaTeX errors. Screenshots: scratchpad `tbsweep/shots/` (Loads tab with the box, Shear tab main / branch / x/d, Validation).
+- **Other copies of this code:** none (tool-specific).
+
 ## Open items (not changed)
 - O1. **Libraries.** Versions pinned 2026-10-09 (L1): `@babel/standalone@7.29.10`, `lucide@1.54.0` (unused), Tailwind Play CDN 3.4.17. Still open: *(R1: resolved; the rebuild uses only KaTeX 0.16.11 and plotly-basic 2.35.2.)*
   - Tailwind Play CDN (`cdn.tailwindcss.com`) is meant for development only.
   - esm.sh serves React 18.2.0 and lucide-react (exact versions) and is not on the CLAUDE.md host list.
 - O2. **Southern Pine SS, No.1 and Stud (Table 4B)**, and the SP Ft/Fc values, were not entered because I am not confident of them. The tool asks for Manual values. Decision: supply the values from the Supplement to add. *(R3: SS, No.1 and F<sub>t</sub>/F<sub>c</sub> added (verify); Stud still not built in, P2-3.)*
 - O3. **Table 4D timbers** (Beams & Stringers, Posts & Timbers) values are not built in, and flat use of timbers is blocked. Recommendation: add DF-L/HF/SP Table 4D values from the Supplement if timbers are needed. *(R3: added for DF-L, HF, SP, incl. flat use (verify); SPF not built in, P2-3.)*
-- O4. **NDS 3.4.3.1(b)** permits reducing concentrated loads within d of a support by x/d. This is not applied, which is conservative. Decision: add it as an option?
-- O5. **Table 3.3.3 concentrated-load rows** (e.g. a central point load: 1.80lu / 1.37lu + 3d) are not used. With point loads, the footnote-1 general rule is used, which is conservative.
-- O6. **le for uniform load at lu/d > 14.3.** The reviewer said 1.84lu; the tool uses 1.63lu + 3d (the uniform-load row). Please confirm against NDS 2018 Table 3.3.3. If 1.84lu is wanted for uniform load as well, change the `else if (hasPL && luD > 14.3)` condition to `else if (luD > 14.3)`.
+- O4. **NDS 3.4.3.1(b)** permits reducing concentrated loads within d of a support by x/d. This is not applied, which is conservative. Decision: add it as an option? *(S1: fixed. The item was mis-described: point loads within d were left out of V altogether (unconservative). Now included at full value (default) or times x/d (new option); see S1-a.)*
+- O5. **Table 3.3.3 concentrated-load rows** (e.g. a central point load: 1.80lu / 1.37lu + 3d) are not used. With point loads, the footnote-1 general rule is used, which is conservative. *(S1: closed, no change; conservative and documented.)*
+- O6. **le for uniform load at lu/d > 14.3.** The reviewer said 1.84lu; the tool uses 1.63lu + 3d (the uniform-load row). Please confirm against NDS 2018 Table 3.3.3. If 1.84lu is wanted for uniform load as well, change the `else if (hasPL && luD > 14.3)` condition to `else if (luD > 14.3)`. *(S1: closed, no change. The tool already follows Table 3.3.3: 1.63lu + 3d is the uniform-load row for all lu/d ≥ 7; 1.84lu is footnote 1, used for other loading. Printed-table check with R1-f; see S1-b.)*
 - O7. **Deflection:**
   - Kcr is applied to D only. There is no "sustained live load" input.
   - The total check uses Kcr·ΔD + ΔLL against L/240. This is more conservative than the IBC D + L check without creep, and it is the existing behaviour.
   - Wind is excluded from deflection.
-  - The transient case set {L, Lr, S, 0.75L + 0.75(Lr or S)} is my interpretation of "include S/Lr in the live portion appropriately". Please confirm.
-- O8. **Notch model.** One end-notch depth applies at both ends, on the tension face at the supports. Interior notches (≤ d/6 in the outer thirds; none in the middle third, NDS 4.4.3) and compression-side notches (NDS 3.4.3.2(c)) are not modelled.
+  - The transient case set {L, Lr, S, 0.75L + 0.75(Lr or S)} is my interpretation of "include S/Lr in the live portion appropriately". Please confirm. *(S1: still open; needs the engineer. See S1, Needs engineer 1.)*
+- O8. **Notch model.** One end-notch depth applies at both ends, on the tension face at the supports. Interior notches (≤ d/6 in the outer thirds; none in the middle third, NDS 4.4.3) and compression-side notches (NDS 3.4.3.2(c)) are not modelled. *(S1: closed as a documented limitation; stated at the notch input and in Method & Manual; see S1-d.)*
 - O9. **Uplift (0.6D + 0.6W with W negative).** The tool flags the net uplift and reminds the user about bottom-edge bracing. CL is still based on the single lateral-support setting, and bearing ignores negative reactions. Decision: add a separate bottom-edge unbraced length? *(R1: bottom-edge lateral support input added; files from the earlier version open with "same as top edge"; see R1-a.)* *(R2: old files now open with the bottom edge "at supports only".)*
 - O10. **Span slider** is limited to 4–40 ft (unchanged UI). *(R1: resolved, spans are typed.)*
-- O11. **Stud grade 8 in. and wider** (Table 4A directs No.3 values) is not built in; the tool asks for Manual values.
-- O12. **SP 4-in.-thick, 8 in. and wider:** Table 4B permits CF = 1.1 on Fb. It is not applied (conservative).
-- O13. **ASCE 7 edition:** 7-16 assumed. ASCE 7-22 Sec. 2.4.1 is believed to have the same forms for these load types. Confirm the governing edition.
-- O14. **Ci is applied to timbers if ticked.** NDS 4.3.8 is written for dimension lumber. Minor; confirm.
+- O11. **Stud grade 8 in. and wider** (Table 4A directs No.3 values) is not built in; the tool asks for Manual values. *(S1: still open; values needed, with P2-3. See S1, Needs engineer 3.)*
+- O12. **SP 4-in.-thick, 8 in. and wider:** Table 4B permits CF = 1.1 on Fb. It is not applied (conservative). *(S1: closed with the conservative default, not applied; a note is shown when the case arises; see S1-c.)*
+- O13. **ASCE 7 edition:** 7-16 assumed. ASCE 7-22 Sec. 2.4.1 is believed to have the same forms for these load types. Confirm the governing edition. *(S1: still open; cross-tool decision X-C8. See S1, Needs engineer 2.)*
+- O14. **Ci is applied to timbers if ticked.** NDS 4.3.8 is written for dimension lumber. Minor; confirm. *(S1: closed with the conservative default, kept; a note is shown; see S1-c.)*
 - O15. **Not in scope:** no print button (C4 in the audit); `projectInfo.notes` has no input; the app title differs from the file name. *(R1: resolved: Print report, a Notes input, title "Timber Beam Check".)*
 - P2-1. **Round-off negative moment (observation, not changed).** The bottom-edge slenderness failure ("Bottom edge (negative moment): slenderness RB = … exceeds 50") is raised when any combination has `c.bend[i].Mn > 0`. A moment of about 1e-12 ft-lb from floating-point round-off at an end support counts, so a member with no real negative moment can be flagged NG when its bottom-edge R<sub>B</sub> exceeds 50 (1 of 20,417 parity cases: 29.7 ft span, five point loads). The advisory beside it already uses a 1e-9 tolerance. Proposed fix: `c.bend[i].Mn > 1e-9` in the anchor `if (s.bot.RB > 50 && combos.some(c => c.bend[i].Mn > 0))`. Decision? *(R4: closed. Engineer's decision 2026-10-10: region moments with |M| ≤ max(1e-6 ft-lb, 1e-9 × M<sub>max</sub>) are zero; the false NG is gone.)*
 - P2-2. **6x8 and 8x8 dressed sizes.** The size list (unchanged since the original tool) has 6x8 = 5.5 × 7.25 in. and 8x8 = 7.25 × 7.25 in.; NDS Supplement Table 1B gives 5.5 × 7.5 and 7.5 × 7.5 in. for timbers. The smaller section is conservative. Not changed (it changes results of existing files). Decision: correct them? *(R4: closed. Corrected to 5.5 × 7.5 and 7.5 × 7.5 in.; results of files with these sizes change.)*
-- P2-3. **Not built in:** Southern Pine Stud (Table 4B), Spruce-Pine-Fir timbers (Table 4D), Dense / Non-Dense grades, glulam combinations other than the seven listed. These still ask for Manual / custom values. Supply the values if wanted. *(R5: still open; cannot be closed by code. Verify against the printed NDS 2018 Supplement and supply the values to build in.)*
+- P2-3. **Not built in:** Southern Pine Stud (Table 4B), Spruce-Pine-Fir timbers (Table 4D), Dense / Non-Dense grades, glulam combinations other than the seven listed. These still ask for Manual / custom values. Supply the values if wanted. *(R5: still open; cannot be closed by code. Verify against the printed NDS 2018 Supplement and supply the values to build in.)* *(S1: still open; see S1, Needs engineer 3.)*
 - P2-4. **Southern Pine Table 4D and wet service.** The SP timber F<sub>c⊥</sub> = 375 psi (≈ 0.67 × 565) suggests the SP timber values may already be for wet service; the tool still applies C<sub>M</sub> = 0.67 to F<sub>c⊥</sub> when Wet is ticked (conservative if so). Confirm the Table 4D footnote. *(R5: closed. Engineer's decision 2026-10-10: keep applying C<sub>M</sub> to SP timber F<sub>c⊥</sub> when wet (conservative). No change.)*
 - P2-5. **Table 4D flat use.** Beams and Stringers loaded on the wide face: F<sub>b</sub> × 0.86 (SS), 0.74 (No.1), 1.00 (No.2) as recalled; Posts and Timbers 1.00; Southern Pine timbers take the B&S factors (conservative). Confirm. *(R5: closed. Engineer's decision 2026-10-10: keep the flat-use factors as built; the values stay marked "verify" on the Reference Values tab. No change.)*
 - P2-6. **Glulam:** (a) F<sub>vx</sub> of the stress classes when made of Southern Pine (a Table 5A footnote may allow 300 psi; the tool uses the tabulated 210 / 265, conservative); (b) no balanced-layup option for the stress classes (F<sub>bx</sub><sup>−</sup> = F<sub>bx</sub><sup>+</sup>; use Custom values); (c) flat use (y–y) not supported; (d) notch rules (NDS 5.4.4.1 lesser of d/10 and 3 in.; C<sub>vr</sub> = 0.72, NDS 5.3.10) as recalled; (e) C<sub>V</sub> length L taken between the points of zero moment of each combination around the governing moment (for a cantilever: from the tip to the inflection point in the back span, or the support); (f) density 35 / 36 pcf (tool values). Confirm. *(R5: closed. Engineer's decision 2026-10-10: keep (a)–(f) as built (conservative choices). No change.)*

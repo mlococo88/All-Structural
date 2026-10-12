@@ -551,6 +551,7 @@ function tbcDefaultModel() {
         design: {
             method: 'ASD', moisture: 'Dry', temp: 'Normal', incising: false, repetitive: true, flatUse: false,
             latTop: 'Continuous', luTop: 0, latBot: 'Supports', luBot: 0, creep: 1.5, deflLL: 360, deflTL: 240, lrfdLive: 'occupancy',
+            shearXd: false,   // NDS 3.4.3.1(b) x/d reduction of point loads within d of a support (fix log O4); absent in older files = false
         },
         ui: { diagCombo: 'GOV' },
     };
@@ -802,6 +803,7 @@ function tbcRun(m) {
         if (cfIncluded) { CF = (!userVals && mt.species === 'SP' && wg >= 14) ? 0.9 : 1.0; CFnote = !userVals ? 'Table 4B (size-specific values)' : 'included in entered Fb'; }
         else if (useStudCF) { CF = T4A_CF_FB_STUD[wg]; CFnote = `Table 4A Stud, ${wg}" wide`; }
         else { CF = T4A_CF_FB[wg][thick4 ? 1 : 0]; CFnote = `Table 4A, ${wg >= 14 ? '14"+' : wg + '"'} wide, ${thick4 ? '4"' : '2"-3"'} thick`; }
+        if (!userVals && mt.species === 'SP' && thick4 && wg >= 8) notes.push('Southern Pine 4 in. thick, 8 in. and wider: the Table 4B footnote permits CF = 1.1 on Fb. Not applied (conservative, fix log O12).');
     } else if (cat === 'timber') {
         // depth in the direction of the load: d edgewise, b in flat use (flat use of timbers added in Phase 2)
         const dCF = flat ? b : d;
@@ -820,6 +822,7 @@ function tbcRun(m) {
     const Ct = { Fb: ct.other, Fv: ct.other, Fcp: ct.other, E: ct.E };
     const ciOn = !!dz.incising && !isGL && !isSCL;
     if (dz.incising && (isGL || isSCL)) notes.push('Ci applies to sawn lumber only (NDS 4.3.8); Ci = 1.0 used.');
+    if (ciOn && cat === 'timber') notes.push('Incised timber: NDS 4.3.8 and Table 4.3.8 are written for dimension lumber. Their Ci values are applied to this timber as ticked (conservative, fix log O14). Untick Incised if the timber is not incised.');
     const Ci = { Fb: ciOn ? 0.80 : 1.0, Fv: ciOn ? 0.80 : 1.0, Fcp: 1.0, E: ciOn ? 0.95 : 1.0 };
     // Repetitive member factor: dimension lumber 1.15 (NDS 4.3.9); SCL 1.04 (NDS 8.3.7; engineer's decision P2-7, 2026-10-10, fix log R4)
     const Cr = (dz.repetitive && cat === 'dim' && spacing <= 24) ? 1.15 : (dz.repetitive && cat === 'scl' && spacing <= 24) ? SCL_CR : 1.0;
@@ -879,6 +882,7 @@ function tbcRun(m) {
     if (hasNotch && notch > notchLim) fails.push(isGL ? `End notch ${notch} in. exceeds the lesser of d/10 = ${(dep / 10).toFixed(2)} in. and 3 in. (NDS 5.4.4.1). Not permitted.` : `End notch ${notch} in. exceeds d/4 = ${(dep / 4).toFixed(2)} in. (NDS 4.4.3.2). Not permitted.`);
     const Cn = hasNotch ? Math.pow(dn / dep, 2) : 1.0;
     const notchJ = [0, nS].filter(j => types[j] !== 'free');   // supports at the member ends
+    if (types.some(t => t === 'fixed')) adv.push('Fixed support: bearing is checked with the vertical reaction only (uniform Fc⊥ stress over the bearing length). The effect of the fixing moment on the bearing stress, and the connection that provides the fixity, are not checked (fix log R1-i).');
     if (hasNotch && notchJ.length < 2 && !simple) adv.push(notchJ.length ? `End notch: applied at end support ${notchJ.map(j => TBC_NODE[j]).join(', ')} only (the other end is a cantilever tip).` : 'End notch: neither member end is supported (both ends cantilever); the notch input is not used.');
 
     // --- Loads (plf for uniform, lb for point) ---
@@ -912,6 +916,11 @@ function tbcRun(m) {
     const plLocs = new Set(pls.map(p => p.loc));
     const nodeSet = new Set(xN);
     const dft = dep / 12;
+    // NDS 3.4.3.1(b) option (fix log O4): point loads within d of a support multiplied by x/d for the design shear only;
+    // x = distance from the support point (node). Off (default): point loads within d count at full value.
+    const shearXd = !!dz.shearXd;
+    const supXs = xN.filter((_, j) => types[j] !== 'free');
+    const xdFac = (loc) => { const x = Math.min(...supXs.map(s => Math.abs(loc - s))); return x < dft ? x / dft : 1; };
     const inSpan = (x, i) => x >= xN[i] && x <= xN[i + 1];
     // Shear region: from d off each support face to d off the next support (or to a cantilever tip)
     let shearRegion;
@@ -966,9 +975,35 @@ function tbcRun(m) {
         // (|M| <= the larger of 1e-6 ft-lb and 1e-9 x the largest |M| of the combination) is zero: no top- or bottom-edge check.
         const Mtol = Math.max(M_TOL_ABS, M_TOL_REL * Mmax);
         reg.forEach(r => { if (r.Mp <= Mtol) { r.Mp = 0; r.xp = null; } if (r.Mn <= Mtol) { r.Mn = 0; r.xn = null; } });
-        // Design shear: max |V| between d from each support (NDS 3.4.3.1(a)); no x/d reduction of point loads
-        let Vd = 0, xV = 0;
-        shearRegion.forEach(x => { const v = Math.max(Math.abs(bm.V(x, false)), Math.abs(bm.V(x, true))); if (v > Vd) { Vd = v; xV = x; } });
+        // Design shear: max |V| between d from each support (NDS 3.4.3.1(a): uniform load within d ignored). Fix log O4: a point
+        // load within d of a support adds to the shear at that support (the region alone left it out) at full value.
+        const shearOf = (bmS, PS, bmR) => {   // bmS / PS: model and loads at the supports; bmR: an extra model for the region (envelope)
+            let Vd = 0, xV = 0, vZone = null;
+            shearRegion.forEach(x => { [bmS, bmR].forEach(q => { if (!q) return; const v = Math.max(Math.abs(q.V(x, false)), Math.abs(q.V(x, true))); if (v > Vd) { Vd = v; xV = x; } }); });
+            Ls.forEach((Li, i) => {
+                const lo = xN[i] + (types[i] !== 'free' ? dft : 0), hi = xN[i + 1] - (types[i + 1] !== 'free' ? dft : 0);
+                if (simple ? !(L > 2 * dft) : lo > hi) return;   // short span: the whole span is in the shear region already
+                [[i, 1], [i + 1, -1]].forEach(([j, dir]) => {
+                    if (types[j] === 'free') return;
+                    const s0 = xN[j];
+                    if (!PS.some(p => p.mag !== 0 && dir * (p.loc - s0) > 0 && dir * (p.loc - s0) < dft)) return;   // no point load inside this zone
+                    // shear at the support with the uniform load within d ignored = V at d + the point loads within d
+                    const v = Math.abs(dir > 0 ? bmS.V(s0, true) - w * dft : bmS.V(s0, false) + w * dft);
+                    if (v > Vd) { Vd = v; xV = s0; vZone = j; }
+                });
+            });
+            return { Vd, xV, vZone };
+        };
+        let { Vd, xV, vZone } = shearOf(bm, P, null);
+        // NDS 3.4.3.1(b) option: downward point loads within d of a support times x/d. The reduced model gives the shear at the
+        // supports; the region takes the larger of the full and reduced models (a reduced load must not lower the shear
+        // elsewhere, e.g. a load on an overhang); the result is used only when it is lower than without the reduction.
+        const Pv = shearXd ? P.map(p => { const k = xdFac(p.loc); return (k < 1 && p.mag > 0) ? { mag: p.mag * k, loc: p.loc } : p; }) : P;
+        let xdUsed = false;
+        if (Pv.some((p, k) => p !== P[k])) {
+            const sx = shearOf(simple ? beam(w, Pv) : beamG(w, Pv), Pv, bm);
+            if (sx.Vd < Vd) { ({ Vd, xV, vZone } = sx); xdUsed = true; }
+        }
         const Rmax = simple ? Math.max(Math.abs(bm.RL), Math.abs(bm.RR)) : (notchJ.length ? Math.max(...notchJ.map(j => Math.abs(bm.R[j]))) : 0);
         // Adjusted design values (Fb* excludes CL, CV and Cfu; glulam: Fbx+ for M > 0, Fbx- for M < 0)
         const Fb_star = ref.Fb * TF * CM.Fb * Ct.Fb * CF * Ci.Fb * Cr * KF.Fb * PHI.Fb;
@@ -1027,7 +1062,7 @@ function tbcRun(m) {
         const r_b = legacyBend ? fb / Fb_p : gb.r, r_v1 = fv / Fv_p, r_vn = hasNotch ? fvn / (Fv_p * Cn * Cvr) : 0, r_c = legacyBear ? fcp / Fcp_p : gc.r;
         // equilibrium check: sum of reactions = sum of applied loads
         const sumF = w * L + P.reduce((s, p) => s + p.mag, 0), sumR = bm.R.reduce((s, v) => s + v, 0);
-        return { key: c.key, name: c.name, f: c.f, CD, lam, TF, CV, Fb_s, Fbn_star, w, P, bm, RL: bm.RL, RR: bm.RR, R: bm.R, Rm: bm.Rm, Mmax, xM, Vd, xV, Rmax, Rbear, Fb_star, CL, Fb_p, Fv_p, Fcp_p, fb, fv, fvn, fcp, r_b, r_v1, r_vn, r_v: Math.max(r_v1, r_vn), r_c,
+        return { key: c.key, name: c.name, f: c.f, CD, lam, TF, CV, Fb_s, Fbn_star, w, P, bm, RL: bm.RL, RR: bm.RR, R: bm.R, Rm: bm.Rm, Mmax, xM, Vd, xV, vZone, Pv, xdUsed, Rmax, Rbear, Fb_star, CL, Fb_p, Fv_p, Fcp_p, fb, fv, fvn, fcp, r_b, r_v1, r_vn, r_v: Math.max(r_v1, r_vn), r_c,
             bend, gbSpan: gb.span, gbSign: gb.sign, Mgov, xMgov, bear, gcJ: gc.j, sumF, sumR };
     });
     const govBy = (k) => combos.reduce((g2, c) => (c[k] > g2[k] ? c : g2), combos[0]);
@@ -1134,7 +1169,7 @@ function tbcRun(m) {
         xs, Cbs, lbs, cbOn, stab, stabBot, latTop, latBot, hasPL, fn1, notchJ, Kcr, spacing, legacyBear,
         // Phase 2 additions
         mtype, isGL, isSCL, method: lrfd ? 'LRFD' : 'ASD', lrfd, KF, PHI, cls4D, glX, glGrp, glGrpKey, CVscl, sclN, sclRef, sclMax, Cvr, notchLim, legacyBend,
-        lrfdLive: dz.lrfdLive === 'storage' ? 'storage' : 'occupancy',
+        lrfdLive: dz.lrfdLive === 'storage' ? 'storage' : 'occupancy', shearXd,
     };
 }
 
@@ -1184,7 +1219,7 @@ function tbcFromLegacy(d) {
         // had the top edge at supports only with an entered unbraced length, that length is carried to the bottom edge too
         // (the earlier tool used it for both edges); otherwise l_u,bottom = 0 (= the span length).
         latBot: 'Supports', luBot: (st(d.latSupport, 'Continuous', ['Continuous', 'Supports']) === 'Supports') ? n(d.unbracedLen, 0) : 0,
-        creep: n(d.creepFactor, 1.5), deflLL: n(d.deflLimitLL, 360), deflTL: n(d.deflLimitTL, 240),
+        creep: n(d.creepFactor, 1.5), deflLL: n(d.deflLimitLL, 360), deflTL: n(d.deflLimitTL, 240), shearXd: false,
     };
     m.ui = { diagCombo: st(d.loadCombo, 'GOV', ['GOV', ...COMBOS.map(c => c.key)]) };
     return m;
@@ -1243,7 +1278,7 @@ function tbcSanitize(d) {
         latTop: st(dz.latTop, 'Continuous', ['Continuous', 'Supports']), luTop: nb(dz.luTop, 0),
         latBot: st(dz.latBot, 'Supports', ['same', 'Supports', 'Continuous']), luBot: nb(dz.luBot, 0),
         creep: nb(dz.creep, 1.5), deflLL: nb(dz.deflLL, 360), deflTL: nb(dz.deflTL, 240),
-        lrfdLive: st(dz.lrfdLive, 'occupancy', ['occupancy', 'storage']),
+        lrfdLive: st(dz.lrfdLive, 'occupancy', ['occupancy', 'storage']), shearXd: bo(dz.shearXd, false),
     };
     m.ui = { diagCombo: st(ui.diagCombo, 'GOV', ['GOV', 'ENV', ...COMBOS.map(c => c.key), ...COMBOS_LRFD.map(c => c.key)]) };
     if (ui.outTab && typeof ui.outTab === 'string') m.ui.outTab = ui.outTab;
@@ -1749,7 +1784,9 @@ function buildLoadsPane(P) {
     const add = el('button', 'btn sm', '+ Add point load'); add.type = 'button';
     add.addEventListener('click', () => { const L0 = M.geom.spans[0].L; pts.push({ mag: 500, loc: (L0 > 0 ? L0 : 0.1) / 2, type: 'D' }); schedule(true); });
     body.appendChild(el('div', 'btnRow')).appendChild(add);
-    body.appendChild(el('div', 'hint', 'Positive = downward. x is measured from the left end of the beam (node A). The type sets the load case (and C<sub>D</sub>). Concentrated loads within d of a support are <b>not</b> reduced by x/d (NDS 3.4.3.1(b) not applied; conservative, fix log O4).'));
+    body.appendChild(el('div', 'hint', 'Positive = downward. x is measured from the left end of the beam (node A). The type sets the load case (and C<sub>D</sub>). A point load within d of a support counts in the design shear at that support at full value, or times x/d with the box below (fix log O4).'));
+    chkRow(body, 'Reduce point loads within d of a support by x/d (shear, NDS 3.4.3.1(b))', chkIn(() => M.design.shearXd, v => { M.design.shearXd = v; }, 'shearXd'),
+      'Design shear only (reactions, bearing, notch shear, moments and deflections use the full loads). Permitted only for a beam in full bearing on one face with the loads applied to the opposite face. x is measured from the support point (conservative compared with the support face). Unticked = no reduction.');
   }, { noNum: true });
 }
 
@@ -1848,9 +1885,9 @@ function buildMaterialPane(P) {
   }, { noNum: true });
   mkSec(P, 'inNotch', 'End notch', body => {
     fRow(body, 'Notch depth at end supports', numIn(() => mt.notch, v => { mt.notch = v; }, 'notch'), 'in',
-      mt.type === 'glulam' ? 'Notch on the tension face at the end supports (NDS 3.4.3.2(a), with C<sub>vr</sub> = 0.72, NDS 5.3.10); limited to the lesser of d/10 and 3 in. (NDS 5.4.4.1). 0 = no notch.'
+      (mt.type === 'glulam' ? 'Notch on the tension face at the end supports (NDS 3.4.3.2(a), with C<sub>vr</sub> = 0.72, NDS 5.3.10); limited to the lesser of d/10 and 3 in. (NDS 5.4.4.1). 0 = no notch.'
         : mt.type === 'scl' ? 'SCL: notches are governed by the manufacturer’s literature and are not checked here; keep 0.'
-        : 'Notch on the tension face at the end supports (NDS 3.4.3.2(a)); limited to d/4 (NDS 4.4.3.2). 0 = no notch.');
+        : 'Notch on the tension face at the end supports (NDS 3.4.3.2(a)); limited to d/4 (NDS 4.4.3.2). 0 = no notch.') + (mt.type === 'scl' ? '' : ' The same depth is used at both end supports. Interior notches and notches on the compression face are not checked (fix log O8).'));
   }, { noNum: true });
   mkSec(P, 'inCost', 'Cost estimate', body => {
     fRow(body, 'Cost', numIn(() => mt.costPerBF, v => { mt.costPerBF = v; }, 'cost'), '$/BF');
@@ -2133,7 +2170,7 @@ function buildSchem(pg) {
     rows.push(
       ['Reference values', R.ref ? refLineHTML() : '—'],
       ['Orientation', dz.flatUse ? 'Flat (load on the wide face)' : 'Edgewise'], ['Wet service', dz.moisture === 'Wet' ? 'yes' : 'no'], ['Temperature', { Normal: 'T ≤ 100 °F', '100-125': '100–125 °F', '125-150': '125–150 °F' }[dz.temp] || dz.temp],
-      ['Incised', dz.incising ? 'yes' : 'no'], ['Repetitive member', dz.repetitive ? 'yes' : 'no'], ['End notch', (mt.notch || 0) > 0 ? g4(mt.notch) + ' in.' : 'none'],
+      ['Incised', dz.incising ? 'yes' : 'no'], ['Repetitive member', dz.repetitive ? 'yes' : 'no'], ['End notch', (mt.notch || 0) > 0 ? g4(mt.notch) + ' in.' : 'none'], ['Point loads within d of a support (shear)', dz.shearXd ? 'times x/d (NDS 3.4.3.1(b))' : 'full value'],
       ['Lateral support, top edge', dz.latTop === 'Supports' ? `at supports only, l<sub>u</sub> = ${dz.luTop > 0 ? g4(dz.luTop) + ' ft' : 'span length'}` : 'continuous'],
       ['Lateral support, bottom edge', dz.latBot === 'same' ? 'same as top edge (earlier tool versions)' : dz.latBot === 'Supports' ? `at supports only, l<sub>u</sub> = ${dz.luBot > 0 ? g4(dz.luBot) + ' ft' : 'span length'}` : 'continuous'],
       ['Creep factor K<sub>cr</sub>', g4(dz.creep)], ['Deflection limits', `L/${g4(dz.deflLL)} live/snow, L/${g4(dz.deflTL)} total`], ['Design method', dz.method === 'LRFD' ? `LRFD (NDS 2018 Appendix N; floor live load from ${dz.lrfdLive === 'storage' ? 'storage, λ = 0.7' : 'occupancy, λ = 0.8'})` : 'ASD (NDS 2018)']);
@@ -2227,7 +2264,7 @@ function buildAnalysis(pg) {
       return [c.name, f0(mp.v), mp.x == null ? '—' : f2(mp.x), mn.v > 0 ? f0(-mn.v) : '0', mn.x == null || !(mn.v > 0) ? '—' : f2(mn.x), f0(c.Vd), f2(c.xV)];
     });
     body.appendChild(tblEl(['Combination', '+M max (ft-lb)', 'x (ft)', '−M max (ft-lb)', 'x (ft)', 'V design (lb)', 'x (ft)'], rows, { left: [0] }));
-    body.appendChild(el('div', 'hint', 'Moments are evaluated at 100 stations per span, at every point load and support, and at the analytical zero-shear points. V design = largest |V| outside the zones within d of the supports (NDS 3.4.3.1(a)).'));
+    body.appendChild(el('div', 'hint', 'Moments are evaluated at 100 stations per span, at every point load and support, and at the analytical zero-shear points. V design = largest |V| outside the zones within d of the supports (NDS 3.4.3.1(a)), or the shear at a support when a point load lies within d of it (full value, or times x/d when ticked; fix log O4).'));
   });
 }
 
@@ -2403,10 +2440,15 @@ function buildShear(pg) {
   const c = R.gov.v, r = R.ref;
   pg.appendChild(el('div', 'note', `Governing combination for shear: <b>${esc(c.name)}</b> (${tfH(c)}). Ratio ${f3(c.r_v)}${shearIsNotch(c) ? ' (notched end governs)' : ''}.`));
   mkSec(pg, 'sDemand', 'Design shear and shear stress', body => {
-    calc(body, { title: 'Design shear V', ref: 'NDS 3.4.3.1(a)',
-      lines: [T`V = \max |V(x)|\ \text{for}\ x\ \text{at least}\ d\ \text{from each support face} = ${f0(c.Vd)}\ \text{lb}\ \ (x = ${f2(c.xV)}\ \text{ft})`],
-      where: [['d', 'member depth (bending)', `${g4(R.dep)} in. = ${f3(R.dep / 12)}`, 'ft', ''], ['V', 'largest shear outside the end zones, ' + esc(c.name), f0(c.Vd), 'lb', 'Analysis Results tab']],
-      result: 'Concentrated loads within d of a support are not reduced (NDS 3.4.3.1(b) not applied; conservative, O4).' });
+    const xdList = !c.xdUsed ? [] : (c.Pv || []).map((p, k) => p !== c.P[k] ? `${f0(c.P[k].mag)} lb at x = ${f2(p.loc)} ft × ${f3(p.mag / c.P[k].mag)} = ${f0(p.mag)} lb` : null).filter(Boolean);
+    calc(body, { title: 'Design shear V', ref: R.shearXd ? 'NDS 3.4.3.1(a), (b)' : 'NDS 3.4.3.1(a)',
+      lines: [c.vZone !== null
+        ? T`V = |V|\ \text{at support}\ ${nodeN(c.vZone)},\ \text{uniform load within}\ d\ \text{ignored, point loads within}\ d\ \text{included} = ${f0(c.Vd)}\ \text{lb}\ \ (x = ${f2(c.xV)}\ \text{ft})`
+        : T`V = \max |V(x)|\ \text{for}\ x\ \text{at least}\ d\ \text{from each support face} = ${f0(c.Vd)}\ \text{lb}\ \ (x = ${f2(c.xV)}\ \text{ft})`],
+      where: [['d', 'member depth (bending)', `${g4(R.dep)} in. = ${f3(R.dep / 12)}`, 'ft', ''], ['V', c.vZone !== null ? 'design shear at the support, ' + esc(c.name) : 'largest shear outside the end zones, ' + esc(c.name), f0(c.Vd), 'lb', c.vZone !== null ? 'point load within d (fix log O4)' : 'Analysis Results tab']],
+      result: R.shearXd
+        ? 'Point loads within d of a support multiplied by x/d (NDS 3.4.3.1(b); x from the support point): ' + (xdList.length ? xdList.join('; ') : 'not used in this combination (no downward point load within d of a support, or the reduction does not lower V)') + '.'
+        : 'Point loads within d of a support are included at full value (the NDS 3.4.3.1(b) x/d reduction is not used; it can be ticked on the Loads tab; fix log O4).' });
     calc(body, { title: 'Shear stress', ref: 'NDS 3.4.2, Eq. 3.4-2',
       lines: [T`f_v = \frac{3V}{2A} = \frac{1.5 \times ${f0(c.Vd)}}{${f3(R.A)}} = ${f1(c.fv)}\ \text{psi}`], result: `f<sub>v</sub> = ${f1(c.fv)} psi` });
   });
@@ -2693,6 +2735,16 @@ function runBenchmarks() {
       add(g, 'M fixed end = −112.25 × 16²/2 (ft-lb)', 14368, k.Mgov, 'ft-lb', 1e-9); add(g, 'bottom-edge R_B = √(2.06 × 48 × 24/1.75²)', 27.837, q.stab[0].bot.RB, '', 1e-4);
       add(g, 'C_L bottom edge (F_bE 1495.9 / F_b* 2600)', 0.54308, k.CL, '', 1e-4); add(g, "F'b = 2600 × min(C_L, C_V 0.92595) (psi)", 1412.0, k.Fb_p, 'psi', 1e-4);
       add(g, 'fb/F′b = 1026.3/1412.0', 0.7268, k.r_b, '', 1e-3); add(g, 'Headline (bending, D + L)', 0.7268, q.dcrMax, '', 1e-3); }
+    // 6. Open-item sweep 2026-10-12 (fix log S1, O4): a point load within d of a support in the design shear (NDS 3.4.3.1)
+    { const mk = (xd) => { const m = tbcFromLegacy({ span: 14, spacing: 16, wDead: 10, wLive: 40 }); m.loads.points = [{ mag: 1000, loc: 0.5, type: 'D' }]; m.design.shearXd = xd; return tbcRun(m); };
+      const q = mk(false), k = comb(q, 'D+L'), kx = comb(mk(true), 'D+L');
+      const g = 'Point load within d of a support (fix log S1, O4): fix-log joist (DF-L No.2 2x10 @ 16 in., 14 ft, D 10 / L 40 psf, w = 69.94 plf) + 1000 lb D at x = 0.5 ft; d = 0.7708 ft';
+      add(g, 'R_A = 69.94 × 7 + 1000 × 13.5/14 (lb)', 1453.88, k.RL, 'lb', 1e-5);
+      add(g, 'V at A, uniform load within d ignored = 1453.88 − 69.94 × 0.7708 (lb; was 471.4 at L − d with the load left out)', 1399.97, k.Vd, 'lb', 1e-5);
+      add(g, 'fv/F′v = (1.5 × 1399.97/13.875)/180 (was 0.283)', 0.8408, k.r_v, '', 1e-3);
+      add(g, "x/d ticked: P′ = 1000 × 0.5/0.7708 (lb)", 648.65, kx.Pv[0].mag, 'lb', 1e-5);
+      add(g, "x/d ticked: V = 69.94 × 7 + 648.65 × 13.5/14 − 69.94 × 0.7708 (lb)", 1061.17, kx.Vd, 'lb', 1e-5);
+      add(g, 'x/d ticked: fv/F′v = (1.5 × 1061.17/13.875)/180', 0.6373, kx.r_v, '', 1e-3); }
   } catch (e) { out.push({ grp: 'error', what: 'Benchmark failed to run: ' + e.message, hand: NaN, tool: NaN, unit: '', diff: NaN, ok: false }); }
   return out;
 }
@@ -2704,7 +2756,7 @@ function buildValid(pg) {
     B.forEach(b => { if (b.grp !== grp) { grp = b.grp; rows.push({ cls: 'gov', cells: [{ h: '<b>' + esc(grp) + '</b>' }, '', '', '', '', ''] }); }
       rows.push([b.what, b.unit === '' ? f3(b.hand) : g4(b.hand), b.unit === 'in.' || b.unit === '' ? (b.tool).toFixed(4) : f2(b.tool), b.unit, (b.diff * 100).toFixed(4) + ' %', { cls: b.ok ? 'ok' : 'ng', h: b.ok ? 'match' : 'differs' }]); });
     body.appendChild(tblEl(['Quantity (hand calculation / closed form)', 'Hand', 'Tool', 'Unit', 'Diff.', 'Status'], rows, { left: [0] }));
-    body.appendChild(el('div', 'hint', 'Closed forms: AISC Steel Construction Manual Table 3-23 beam diagrams (any linear-elastic beam). The closed-form benchmarks use the 2x10 DF-L No.2 section with E′ = 1,600,000 psi and dead load only (spacing 12 in., no self-weight). The fix-log case reproduces the engineer’s accepted 84.4 % result. Hand values of the fix-log case and of the Phase 2 hand checks (fix log R3, R4, R5) are rounded as printed there (tolerance 0.01–0.2 %).'));
+    body.appendChild(el('div', 'hint', 'Closed forms: AISC Steel Construction Manual Table 3-23 beam diagrams (any linear-elastic beam). The closed-form benchmarks use the 2x10 DF-L No.2 section with E′ = 1,600,000 psi and dead load only (spacing 12 in., no self-weight). The fix-log case reproduces the engineer’s accepted 84.4 % result. Hand values of the fix-log case and of the Phase 2 hand checks (fix log R3, R4, R5, S1) are rounded as printed there (tolerance 0.01–0.2 %).'));
   });
   if (R.ok) mkSec(pg, 'vEq', 'Equilibrium of the current model', body => {
     body.appendChild(tblEl(['Combination', 'Σ applied loads (lb)', 'Σ reactions (lb)', 'Difference (lb)', 'Status'], R.combos.map(c => { const d = c.sumR - c.sumF; const ok = Math.abs(d) <= 1e-6 * Math.max(1, Math.abs(c.sumF)); return [c.name, f2(c.sumF), f2(c.sumR), d.toExponential(2), { cls: ok ? 'ok' : 'ng', h: ok ? 'OK' : 'check' }]; }), { left: [0] }));
@@ -2723,7 +2775,7 @@ function buildManual(pg) {
   P('Beams of sawn lumber (visually graded dimension lumber, Tables 4A / 4B; timbers, Table 4D), structural glued laminated timber (glulam, Table 5A) and structural composite lumber (LVL, PSL, LSL, with the manufacturer’s values) checked by NDS 2018 ASD or LRFD (Appendix N) for bending (with beam stability and, for glulam and SCL, the volume / size factor), shear (with end notches), bearing perpendicular to grain at every support and deflection. The beam can be a simple span, a continuous beam over any number of supports, or have cantilevers (free ends).');
   H('Inputs');
   UL(['<b>Geometry:</b> spans (ft) and one support per node: pin/roller, fixed, or free (ends only, makes a cantilever). Each support has its own bearing length and a "≥ 3 in. from member end" box for C<sub>b</sub>.',
-    '<b>Loads:</b> area loads D, L, Lr, S, W in psf on the tributary width (spacing/12), on all spans; self-weight from the density; point loads (lb, + down) at x from the left end, each with a load type.',
+    '<b>Loads:</b> area loads D, L, Lr, S, W in psf on the tributary width (spacing/12), on all spans; self-weight from the density; point loads (lb, + down) at x from the left end, each with a load type; optional x/d reduction of point loads within d of a support for shear (NDS 3.4.3.1(b)).',
     '<b>Material:</b> sawn lumber: species, grade and size select the NDS Supplement values (Table 4A; Table 4B for Southern Pine SS, No.1, No.2; Table 4D for timbers 5 in. and thicker, Beams and Stringers or Posts and Timbers from the section). Manual values or a custom species can be entered instead. Glulam: a Table 5A stress class or combination (or custom values), the species group, the width and the number of laminations (or any b × d). SCL: the product’s values and size factor from the manufacturer.',
     '<b>Factors:</b> design method (ASD or LRFD, with the source of the floor live load for λ); wet service, temperature, incising, repetitive member, flat use; lateral support of the top and bottom edges; creep factor and deflection limits.']);
   H('Analysis');
@@ -2734,7 +2786,7 @@ function buildManual(pg) {
     'Pattern (skip) live loading is <b>not</b> generated for continuous beams (as in Steel Beam Design); check it separately where it matters.']);
   H('Checks');
   UL(['<b>Bending (NDS 3.3):</b> per span, the largest positive moment is checked with the top-edge C<sub>L</sub> and the largest negative moment with the bottom-edge C<sub>L</sub>. l<sub>u</sub> = the entered unbraced length, else the span length (cantilever: its length). l<sub>e</sub> per Table 3.3.3: a simple span with uniform load only uses the uniform-load row; other loading, continuous beams and cantilevers use the footnote 1 general rule, which is not less than the cantilever rows. R<sub>B</sub> ≤ 50 is enforced (NG otherwise) for each edge in a span where that edge is in compression in some combination (top edge: positive moment; bottom edge: negative moment; fix log R4, R5).',
-    '<b>Shear (NDS 3.4):</b> V = largest |V| between d from each support face (or to a cantilever tip); f<sub>v</sub> = 3V/2A. Point loads within d are not reduced (O4). End notch (tension face, at end supports): f<sub>v,n</sub> = 3R/(2 b d<sub>n</sub>) with the full reaction, against F′<sub>v</sub>(d<sub>n</sub>/d)<sup>2</sup>; notch > d/4 is NG (NDS 4.4.3.2).',
+    '<b>Shear (NDS 3.4):</b> V = largest |V| between d from each support face (or to a cantilever tip); f<sub>v</sub> = 3V/2A. A point load within d of a support adds to the shear at that support (uniform load within d ignored), at full value, or times x/d (NDS 3.4.3.1(b)) when ticked on the Loads tab (fix log O4). End notch (tension face, at end supports): f<sub>v,n</sub> = 3R/(2 b d<sub>n</sub>) with the full reaction, against F′<sub>v</sub>(d<sub>n</sub>/d)<sup>2</sup>; notch > d/4 is NG (NDS 4.4.3.2).',
     '<b>Bearing (NDS 3.10):</b> at every support, f<sub>c⊥</sub> = R/(b l<sub>b</sub>) with the downward reaction; C<sub>b</sub> only when the bearing is ≥ 3 in. from the member end. Net uplift is reported (provide a connection).',
     '<b>Deflection (NDS 3.5):</b> per span, Δ<sub>LL</sub> = max of L, Lr, S, 0.75L + 0.75Lr, 0.75L + 0.75S; Δ<sub>T</sub> = K<sub>cr</sub>Δ<sub>D</sub> + Δ<sub>LL</sub>. Limits L/n with L = span, or twice the cantilever length (IBC Table 1604.3 footnote h). Wind is excluded. Always at service loads (also with LRFD).',
     '<b>Glulam (NDS Ch. 5):</b> F<sub>bx</sub><sup>+</sup> for positive and F<sub>bx</sub><sup>−</sup> for negative moment; volume factor C<sub>V</sub> = (21/L)<sup>1/x</sup>(12/d)<sup>1/x</sup>(5.125/b)<sup>1/x</sup> ≤ 1.0 per bending region, with L = the distance between the points of zero moment around the governing moment (found on the moment diagram of the combination); the lesser of C<sub>L</sub> and C<sub>V</sub> applies (NDS 5.3.6). Wet service per Table 5A. End notch ≤ the lesser of d/10 and 3 in., with C<sub>vr</sub> = 0.72 in the notch shear check. Bearing with the tension-face F<sub>c⊥x</sub>.',
@@ -2746,7 +2798,7 @@ function buildManual(pg) {
     '<b>Shared project info</b> (bridgeSuite.v1.projectMeta): Project, Client, Job #, Designer, Checked by and Date are shared and received (shared fields <code>projectName</code>, <code>client</code>, <code>jobNo</code>, <code>preparedBy</code>, <code>checkedBy</code>, <code>date</code>; Project, Checked by and Date added in fix log R5). Member / mark and Notes stay in this tool.']);
   H('Limitations and open items');
   UL(['Built-in reference values and factors must be verified against the printed NDS Supplement (Reference Values tab).',
-    'No axial load, no torsion, no lateral load on the weak axis; no interior or compression-face notches (O8); no x/d shear reduction (O4); no sustained live load in creep (O7).',
+    'No axial load, no torsion, no lateral load on the weak axis; no interior or compression-face notches, one notch depth at both ends (O8); x/d shear reduction only when ticked (O4); no sustained live load in creep (O7).',
     'Glulam: straight prismatic members bending about x–x only (no flat use, curvature, taper or balanced-layup option for the stress classes; use custom values). SCL: no product values built in.',
     'Equation numbers are quoted from NDS 2018 as recalled; verify them against the printed standard.',
     'Continuous beams: one section for all spans; no pattern loading; no support settlement.']);

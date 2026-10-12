@@ -3847,7 +3847,17 @@ let SEL = new Set(), SELORD = [];       // selection and selection order (for "a
 let UNDO = [], REDO = [], CLIP = null, CLIPN = 0;
 function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
 function lsSet(k, v) { try { localStorage.setItem(k, v); return true; } catch (e) { return false; } }
-function autosave() { lsSet(LS_AUTO, JSON.stringify(M)); }
+/* Model as written to storage or a file: connector inputs (sf.conn) whose contact key names a part that no longer exists
+   are left out (fix log L-O3). The model in memory keeps them, so undoing a delete still finds them. Results unaffected. */
+function persistModel(m) {
+  if (!m.sf || !m.sf.conn) return m;
+  const ids = new Set(m.parts.map(p => p.id)), ks = Object.keys(m.sf.conn);
+  const keep = ks.filter(k => { const s = String(k).split('|'); return s.length === 2 && ids.has(s[0]) && ids.has(s[1]); });
+  if (keep.length === ks.length) return m;
+  const conn = {}; keep.forEach(k => { conn[k] = m.sf.conn[k]; });
+  return Object.assign({}, m, { sf: Object.assign({}, m.sf, { conn }) });
+}
+function autosave() { lsSet(LS_AUTO, JSON.stringify(persistModel(M))); }
 function getProjects() { try { const p = JSON.parse(lsGet(LS_PROJ) || '{}'); return (p && typeof p === 'object' && !Array.isArray(p)) ? p : {}; } catch (e) { return {}; } }
 function setProjects(p) { return lsSet(LS_PROJ, JSON.stringify(p)); }
 // "Prevent overlap" is a per-browser setting, not project data (key spc_preventOverlap_v1: '1' / '0'; default on)
@@ -3882,7 +3892,7 @@ function openFileText(text) {
   loadModel(d);
 }
 function saveFile() {
-  const out = Object.assign({}, M, { _schema: SCHEMA, version: SCHEMA_VER, app: 'Section Property Calculator', savedAt: new Date().toISOString() });
+  const out = Object.assign({}, persistModel(M), { _schema: SCHEMA, version: SCHEMA_VER, app: 'Section Property Calculator', savedAt: new Date().toISOString() });
   const blob = new Blob([JSON.stringify(out, null, 2)], { type: 'application/json' });
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
   a.download = ((M.project.name || '').trim() ? M.project.name.trim().replace(/[^\w\-]+/g, '_') : 'section_properties') + '.json';
@@ -4355,7 +4365,7 @@ function buildProjPane(P) {
     row.appendChild(btn('Save', 'primary sm', () => {
       const n = (M.project.name || '').trim() || 'Untitled';
       const p = getProjects(); if (p[n] && !confirm(`Replace the saved project "${n}"?`)) return;
-      p[n] = { t: Date.now(), d: JSON.parse(JSON.stringify(M)) };
+      p[n] = { t: Date.now(), d: JSON.parse(JSON.stringify(persistModel(M))) };
       if (!setProjects(p)) { alert('Could not save: browser storage is not available or full. Use "Save file" instead.'); return; }
       toast(`Saved "${n}"`); rebuildInputs();
     }));

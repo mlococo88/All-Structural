@@ -721,3 +721,278 @@ Default girder: lldf's design beam (`designBeam.index`) if `byBeam` has it, othe
 - **How verified:** `node --check` on all four inline scripts. Headless Chromium (Playwright), original file (origin/main) vs this branch, in the same sequence: default; all 13 presets (12 + Custom); 1, 3, 4, 2 spans; uniform load modes lane / trail / full / none; AREMA impact; multi-vehicle; + Segment; + Axle; E = 0 error; DF = 0 warning. For every step the whole results text of `<main>`, the status, the warning box, every results canvas (size + image data), `mlgSnapshot()` and the autosave JSON (`savedAt` removed) are **identical**. Save → load round trip (`mlgSnapshot` → `mlgApply` → `mlgSnapshot`) identical. FHWA benchmark and closed-form check text identical. Print Report (all presets, tenth-point tables) HTML identical. "Share project info" `bridgeSuite.v1.projectMeta` payload identical (timestamp removed). lldf hand-off: buttons present; pull + apply of a test payload gives identical results and saved state (`adoptedAt` removed). Input inventory (tag, id, name, class, `data-i`, `data-k`, type) of all 99 inputs / selects identical; all 71 in the panel are each in exactly one pane (Spans 4, Girder 23, Vehicle 9, Rules 14, Impact 7, Factors 14). Keyboard (→, End, → wraps, Home, ←), tab remembered after reload, red dots (above, plus typed "1e" in E → Spans), print media (tab strip hidden, all 6 panes shown) checked. No horizontal scroll at 1400 px or 400 px. Console errors: only the tool's own `console.error` for the deliberate E = 0 case, the same on main. Screenshots of every tab at 1400 px and 400 px inspected.
 - **Other copies of this code:** none.
 - **Open items:** (1) Pre-existing, not changed: at narrow widths (seen at 400 px) the header's buttons wrap beyond its fixed 54 px height; some spill below it and the top ones are cut off above the page. The tab strip is placed below the spill, but the header itself was left as it is. (2) The Spans hint still says the girder is defined "in the Girder Section panel below"; it is now on the Girder tab (text left unchanged).
+
+## 2026-10-12 — PR: claude/sweep-movingload (PR link added after merge)
+
+Open-item sweep (inventory section 5: MLG-O1 … O6, MLG-H1, MLG-T1). Engineer's instruction of 2026-10-12: work through every open item, use a defensible default, and list what needs the engineer. The file keeps its CRLF line endings. Exact before/after code of every hunk is in the `diff` blocks below (`-` = before, `+` = after); anchors are given for each.
+
+**Results that change:** HS20 and H20 presets (lane loading now checked: MORE conservative), blank E or span (now an input error instead of a silent default). **Opt-in, no change unless selected or entered:** the Std. Spec. impact option, the fatigue truck DFs. **Unchanged:** every other preset and configuration (verified identical, see "How verified").
+
+**Saved data (CLAUDE.md §5):** no key or format changed. New optional fields in `fields` of `movingLoadGen.autosave.v1` / Save JSON: `stdLane`, `slW`, `slPM`, `slPV`, `fDFm`, `fDFv`, `fDFn`; `impM` may now also hold `'std'`. New optional field in `lldfSource`: `fatSet`. An old save has none of them: the lane check stays **off** and the fatigue DFs stay blank, so an old project reloads with **identical results** (verified), and an HS20 / H20 project shows the warning "the AASHTO Std. Spec. lane loading is not checked". The new inputs are inside `<aside>`, so the existing save selector picks them up with no change to the save code.
+
+### F6 (MLG-O1). HS20 / H20: AASHTO Std. Spec. lane loading added as a separate case   [calc — MORE conservative]
+- **Where:** Load Model Rules panel (anchor `id="udlTrunc"`), presets `const HW=` / `'HS20':HW(` / `'H20':HW(`, `applyPreset`, `syncVis`, `readModel`, `analyze` (anchor `AASHTO Std. Spec. lane loading, separate case enveloped`), `modelFor`, `drawVehicle` (`vehInfo`), the governing-case formatters `G=g=>g?` (render, report ×2, CSV), a `jumpTo` wrapper (anchor `Std. Spec. lane case: no vehicle position`), `loadClosedForm`, tab error map (`MSG`).
+- **Problem:** the HS20 / H20 presets modelled the truck only. Std. Spec. Art. 3.7.1.1 requires the truck **or** the lane loading, whichever governs; the lane loading governs negative moment and pier reactions of continuous spans from short spans on, and positive moment for long spans. Unconservative.
+- **Governing provision:** AASHTO Standard Specifications for Highway Bridges, 17th Ed. (2002): Art. 3.7.1.1 and Fig. 3.7.6B (H20-44 / HS20-44 lane loading: 0.64 k/ft + 18 k concentrated load for moment, 26 k for shear); Art. 3.11.3 (continuous spans: for maximum negative moment a second, equal concentrated load in one other span; for positive moment one concentrated load); Art. 3.8.1 (impact applies to the lane loading). Article numbers from the 17th Ed.; verify against the printed edition.
+- **Model:** a separate case, enveloped with the truck cases, per effect (each section M and V, each reaction):
+  - max = I⁺ · (w · A⁺ + P · η_max), min = I⁻ · (w · A⁻ + P · η_min [+ P · η_min,other span]),
+  - A⁺ / A⁻ = positive / negative influence-line area (the uniform load is patterned on the influence line, as the existing "Lane" mode does), η = influence ordinate; P = P moment (18 k) for moment effects, P shear (26 k) for shear **and reactions**; the second concentrated load is added only for the negative moment of a moment effect with 2 or more spans, at the most negative ordinate in a span other than the one holding the first load.
+  - Impact: the effect's impact (constant, AREMA or the new Std. Spec. option) is applied to the whole lane case, whatever "Apply impact to uniform load" says (Std. Spec. 3.8.1).
+  - Where it governs, the governing-case label reads `Std. lane 18k @x'` / `Std. lane 2×18k @x'` / `Std. lane 26k @x'` (x = first concentrated load). Clicking such a value explains that there is no vehicle position for step mode.
+- **Defaults (and why):** the HS20 and H20 presets now switch the lane check **on** (0.64 / 18 / 26, the code values for both H20-44 and HS20-44), because the spec requires it. Every other preset switches it off. Preset keys are unchanged; the labels become "HS20 Truck + Std. Spec. lane loading" / "H20 Truck + Std. Spec. lane loading". The closed-form check (which loads HS20 and is a truck-only exact solution) switches the lane check off after loading the preset, so its results are unchanged.
+- **Before / After:**
+  ```diff
+  -const HW=(label,axles,o={})=>Object.assign({label,axles,udl:{mode:'lane',w:0.64,gap:0,trunc:false},vary:NOV,neglect:true,secondary:'',multi:{on:false,scale:0.9,hmin:50,fixed:14},imp:{method:'const',val:1.33,onUdl:false}},o);
+  +const NOSL={on:false,w:0.64,PM:18,PV:26}, SL20={on:true,w:0.64,PM:18,PV:26};   // AASHTO Std. Spec. 17th Ed. Fig. 3.7.6B (H20-44 / HS20-44 lane loading)
+  +const HW=(label,axles,o={})=>Object.assign({label,axles,udl:{mode:'lane',w:0.64,gap:0,trunc:false},vary:NOV,neglect:true,secondary:'',multi:{on:false,scale:0.9,hmin:50,fixed:14},imp:{method:'const',val:1.33,onUdl:false},stdLane:NOSL},o);
+  -  'HS20':HW('HS20 Truck — truck only (no Std. Spec. lane load)',[[8,0],[32,14],[32,14]],{udl:NOUDL,vary:{k:3,min:14,max:30},neglect:false,imp:{method:'const',val:1.30,onUdl:false}}),
+  -  'H20':HW('H20 Truck — truck only (no Std. Spec. lane load)',[[8,0],[32,14]],{udl:NOUDL,neglect:false,imp:{method:'const',val:1.30,onUdl:false}}),
+  +  'HS20':HW('HS20 Truck + Std. Spec. lane loading',[[8,0],[32,14],[32,14]],{udl:NOUDL,vary:{k:3,min:14,max:30},neglect:false,imp:{method:'const',val:1.30,onUdl:false},stdLane:SL20}),
+  +  'H20':HW('H20 Truck + Std. Spec. lane loading',[[8,0],[32,14]],{udl:NOUDL,neglect:false,imp:{method:'const',val:1.30,onUdl:false},stdLane:SL20}),
+  ```
+  Load Model Rules, after `<label class="chk" id="truncF">…</label>`:
+  ```diff
+  +    <label class="chk"><input type="checkbox" id="stdLane">AASHTO Std. Spec. lane loading, checked as a separate case</label>
+  +    <div id="stdLaneF" class="g3">
+  +      <div class="f"><label>w (k/ft)</label><input id="slW" type="number" step="0.01" value="0.64"></div>
+  +      <div class="f"><label>P moment (kips)</label><input id="slPM" type="number" step="0.5" value="18"></div>
+  +      <div class="f"><label>P shear (kips)</label><input id="slPV" type="number" step="0.5" value="26"></div>
+  +    </div>
+  +    <p class="hint" id="stdLaneH">AASHTO Std. Spec. 17th Ed. Art. 3.7.1.1, Fig. 3.7.6B (H20 / HS20: 0.64 k/ft + 18 k for moment, 26 k for shear and reactions) and Art. 3.11.3 (negative moment in continuous spans: a second, equal P moment in one other span). The uniform load is patterned on the influence line. Enveloped with the truck (truck OR lane, not both); impact is applied to the lane case. DFs here are per lane: a Std. Spec. wheel-line DF (e.g. S/5.5) must be divided by 2.</p>
+  ```
+  `applyPreset` (after the `$('impM').value=p.imp.method;…` line), `syncVis`, `readModel`, `modelFor`:
+  ```diff
+  +  const sl=p.stdLane||NOSL; $('stdLane').checked=sl.on; $('slW').value=sl.w; $('slPM').value=sl.PM; $('slPV').value=sl.PV;
+  +  $('stdLaneF').classList.toggle('hidden',!$('stdLane').checked);
+  +    stdLane:$('stdLane').checked?{w:num('slW',NaN),PM:num('slPM',NaN),PV:num('slPV',NaN)}:null,
+  -    imp:{...m.imp,method:p.imp.method,val:p.imp.val,onUdl:p.imp.onUdl}};
+  +    imp:{...m.imp,method:p.imp.method,val:p.imp.val,onUdl:p.imp.onUdl},stdLane:p.stdLane&&p.stdLane.on?{w:p.stdLane.w,PM:p.stdLane.PM,PV:p.stdLane.PV}:null};
+  ```
+  `analyze`, input check (after the span checks) and the lane case (inserted before `const warn=[]; let segSum=0;`):
+  ```diff
+  +  if(m.stdLane&&![m.stdLane.w,m.stdLane.PM,m.stdLane.PV].every(v=>isFinite(v)&&v>=0)) throw new Error('Std. Spec. lane loading: w, P moment and P shear must be numbers ≥ 0.');
+  +  // ── AASHTO Std. Spec. lane loading, separate case enveloped with the truck (17th Ed. 3.7.1.1, Fig. 3.7.6B, 3.11.3; impact 3.8.1) ──
+  +  // max = I+(w*positive IL area + P*max ordinate); min = I-(w*negative IL area + P*min ordinate [+ P*min ordinate in one other span, negative moment, 2+ spans])
+  +  if(m.stdLane){const SL=m.stdLane;
+  +    effs.forEach((ef,ei)=>{
+  +      const P1=ef.t==='M'?SL.PM:SL.PV, D=DER[ei], spMin=m.spans.map(()=>[0,0]);
+  +      let hi=0,xh=0,lo=0,xl=0,kl=-1,k=0;
+  +      for(let j=0;j<nn-1;j++){const [a,bb]=ends(ei,j),xm=(x[j]+x[j+1])/2;while(k<ns-1&&xm>sup[k+1])k++;
+  +        [[a,x[j]],[bb,x[j+1]]].forEach(([v,xv])=>{if(v>hi){hi=v;xh=xv;}if(v<lo){lo=v;xl=xv;kl=k;}if(v<spMin[k][0])spMin[k]=[v,xv];});}
+  +      let lo2=0,x2=null;
+  +      if(ef.t==='M'&&ns>1&&kl>=0)spMin.forEach(([v,xv],s)=>{if(s!==kl&&v<lo2){lo2=v;x2=xv;}});
+  +      const vMax=imArr[ei]*(SL.w*D.lp+P1*hi), vMin=imMinArr[ei]*(SL.w*D.ln+P1*(lo+lo2)), r=res[ei];
+  +      const lab=`Std. lane ${P1}k`;
+  +      if(vMax>r.max+1e-9){r.max=vMax;r.maxG={lab,p:xh,dir:1,pos:[xh],lane:true};}
+  +      if(vMin<r.min-1e-9){r.min=vMin;r.minG={lab:x2!=null?`Std. lane 2×${P1}k`:lab,p:xl,dir:1,pos:x2!=null?[xl,x2]:[xl],lane:true};}
+  +    });
+  +  }
+  ```
+  Warnings (after the fatigue warning):
+  ```diff
+  +  if(m.stdLane)warn.push(`Std. Spec. lane loading (${m.stdLane.w} k/ft + ${m.stdLane.PM} k moment / ${m.stdLane.PV} k shear and reactions; a second ${m.stdLane.PM} k in one other span for negative moment) is checked as a separate case and enveloped with the vehicle, with impact. Where it governs, the case reads "Std. lane" and "@" is the concentrated-load position.`);
+  +  else if(m.short==='HS20'||m.short==='H20')warn.push(`${m.short}: the AASHTO Std. Spec. lane loading is not checked (Load Model Rules). It can govern longer spans (Std. Spec. 17th Ed. Art. 3.7.1.1, Fig. 3.7.6B).`);
+  ```
+  Display only (governing-case text; same change in `render`, both `reportHTML` and the active `exportCsv=function`):
+  ```diff
+  -  const G=g=>g?`${g.lab} ${g.dir>0?'→':'←'} @${g.p.toFixed(1)}'`:'—';
+  +  const G=g=>g?(g.lane?`${g.lab} @${g.p.toFixed(1)}'`:`${g.lab} ${g.dir>0?'→':'←'} @${g.p.toFixed(1)}'`):'—';
+  -  const f1=v=>(+v).toFixed(1), G=g=>g?`${g.lab} ${g.dir>0?'→':'←'} lead axle @ ${g.p.toFixed(1)}'`:'—';
+  +  const f1=v=>(+v).toFixed(1), G=g=>g?(g.lane?`${g.lab} @ ${g.p.toFixed(1)}'`:`${g.lab} ${g.dir>0?'→':'←'} lead axle @ ${g.p.toFixed(1)}'`):'—';
+  -  const F=(ei,v)=>view==='f'?m.llf*R.dfOf(effs[ei],v)*v:v,G=g=>g?`${g.lab} ${g.dir>0?'->':'<-'} @${g.p.toFixed(1)}`:'';
+  +  const F=(ei,v)=>view==='f'?m.llf*R.dfOf(effs[ei],v)*v:v,G=g=>g?(g.lane?`${g.lab} @${g.p.toFixed(1)}`:`${g.lab} ${g.dir>0?'->':'<-'} @${g.p.toFixed(1)}`):'';
+  -  const G=g=>g?`${g.lab} ${g.dir>0?'→':'←'} lead axle @ ${g.p.toFixed(1)}'`:'—';
+  +  const G=g=>g?(g.lane?`${g.lab} @ ${g.p.toFixed(1)}'`:`${g.lab} ${g.dir>0?'→':'←'} lead axle @ ${g.p.toFixed(1)}'`):'—';
+  ```
+  `drawVehicle` summary, the `jumpTo` wrapper (after the `$('rB').addEventListener('click',…)` block), `loadClosedForm`, tab error map:
+  ```diff
+  -… · Impact: ${m.imp.method==='const'?m.imp.val:'AREMA formula'}${m.imp.onUdl?' (incl. uniform load)':''}`+
+  +… · Impact: ${m.imp.method==='const'?m.imp.val:m.imp.method==='std'?'Std. Spec. 50/(L+125) ≤ 0.30':'AREMA formula'}${m.imp.onUdl?' (incl. uniform load)':''}${m.stdLane?` · Std. Spec. lane ${m.stdLane.w} k/ft + ${m.stdLane.PM} k / ${m.stdLane.PV} k (separate case, with impact)`:''}`+
+  +// Std. Spec. lane case: no vehicle position to load into step mode
+  +{const _jt=jumpTo;jumpTo=function(ei,isMax){const r=RES&&RES.res[ei],g=r&&(isMax?r.maxG:r.minG);
+  +  if(g&&g.lane){$('stepNote').textContent=`The governing ${isMax?'max':'min'} at x = ${RES.effs[ei].x.toFixed(2)}' is the AASHTO Std. Spec. lane loading case (${g.lab} at ${g.pos.map(v=>v.toFixed(1)+"'").join(' and ')} + patterned uniform load), not a vehicle position, so it cannot be shown in step mode.`;$('stepCard').scrollIntoView({behavior:'smooth',block:'start'});return;}
+  +  return _jt(ei,isMax);};}
+  -  $('preset').value='HS20';applyPreset('HS20');$('impM').value='const';$('impV').value=1;
+  +  $('preset').value='HS20';applyPreset('HS20');$('stdLane').checked=false;$('impM').value='const';$('impV').value=1;
+  -    [/^Variable spacing|^The multi-vehicle case needs|^A uniform load mode is selected/,'rules'],
+  +    [/^Variable spacing|^The multi-vehicle case needs|^A uniform load mode is selected|^Std\. Spec\. lane loading: /,'rules'],
+  ```
+- **Check case (hand-checkable):** default inputs (2 × 100 ft, uniform section, DF 1.00, LLF 1.75, impact 1.30 constant), preset HS20.
+  - −M at the pier. Before (truck only): −866.5 kip-ft per lane → × 1.75 = **−1516.4** kip-ft. After: uniform w on both spans: 0.125 · 0.64 · 100² = 800.0; concentrated loads at the peak ordinate of M_B, a = L/√3 = 57.7 ft: η = a(L² − a²)/(4L²) = 57.7 × 6,666.7 / 40,000 = 9.62 ft; two 18 k loads (Art. 3.11.3): 2 × 18 × 9.62 = 346.4; (800.0 + 346.4) × 1.30 = 1490.3 kip-ft per lane (tool 1490.25) → × 1.75 = **−2607.9** kip-ft.
+  - Pier reaction B. Before: **161.8** kips. After: 0.64 × (1.25 × 100) + 26 × 1.0 = 106.0; × 1.30 = 137.8; × 1.75 = **241.1** kips (tool 241.1).
+  - +M at 0.4L: 2803.4 kip-ft before and after (the truck governs).
+  - 3 spans 150 + 200 + 150 ft: max −M −2909.7 → −6433.4, max +M 4852.7 → 5409.8, max reaction 163.2 → 360.6 kips.
+  - **MORE conservative** (the envelope can only grow).
+
+### F7 (MLG-O1). Impact option: AASHTO Std. Spec. I = 50/(L + 125) ≤ 0.30   [calc — opt-in; LESS conservative than the 1.30 constant when chosen]
+- **Where:** Impact panel (`<select id="impM">`, new hint `#impSF`), `syncVis`, `analyze` (anchor `const stdL=(ef,isMax)=>`), the sweep (`act.push`, `for(const [ei,dMax,dMin,im,cutEl,cutL,imn] of act)`), `refineAt`, `laneMin`, CSV "Impact" row.
+- **Problem:** HS20 / H20 used only a constant 1.30 (the Std. Spec. maximum), with no way to use the span-dependent value. Conservative, so the default is **unchanged**: the presets still load 1.30 and the new method is an option.
+- **Governing provision:** AASHTO Std. Spec. 17th Ed. Art. 3.8.2.1 (I = 50/(L + 125), max 30 %) and Art. 3.8.2.2 (loaded length L).
+- **L used (verify for continuous spans):** positive moment = span length (pier sections: mean of the adjacent spans, as before); negative moment = mean of the two spans next to the nearest interior support (3.8.2.2(d)); shear = loaded length from the section to the far reaction of its span (3.8.2.2(c)): +V → to the right support, −V → to the left support (+V is produced by loads to the right of the section in this tool; checked on the influence line); reactions = mean of the adjacent spans (end reactions: the end span). Step mode and deflection use the span-length value.
+- **Engine change:** the impact can now differ between the max and the min of one effect, so a second array `imMinArr` is passed to the min term. For the constant and AREMA methods `imMinArr[i] === imArr[i]`, so their results are bit-for-bit unchanged (verified).
+  ```diff
+  -  const imOf=ef=>{if(m.imp.method==='const')return m.imp.val;
+  +  // AASHTO Std. Spec. 17th Ed. 3.8.2.1: I = 50/(L+125) <= 0.30; L per 3.8.2.2 (isMax: + effect, else − effect)
+  +  const stdL=(ef,isMax)=>{const S=m.spans,k=ef.spans[0];
+  +    if(ef.t==='V'){const a=sup[k],b=sup[k+1];return isMax?b-ef.x:ef.x-a;}
+  +    if(ef.t==='M'&&!isMax&&ns>1){if(ef.spans.length>1)return (S[ef.spans[0]]+S[ef.spans[1]])/2;
+  +      const q=k===0?1:k===ns-1?ns-1:(ef.x-sup[k]<=sup[k+1]-ef.x?k:k+1);return (S[q-1]+S[q])/2;}
+  +    return ef.spans.reduce((a,s)=>a+S[s],0)/ef.spans.length;};
+  +  const imOf=(ef,isMax=true)=>{if(m.imp.method==='std')return 1+Math.min(0.30,50/(Math.max(0,stdL(ef,isMax))+125));
+  +    if(m.imp.method==='const')return m.imp.val;
+  -  const imArr=effs.map(imOf);
+  +  const imArr=effs.map(ef=>imOf(ef,true)), imMinArr=effs.map((ef,i)=>m.imp.method==='std'?imOf(ef,false):imArr[i]);
+  -  const laneMin=effs.map((ef,ei)=>{const uf=m.imp.onUdl?imArr[ei]:1;return m.udl.mode==='lane'?uf*uw*DER[ei].ln:uf*uw*DER[ei].end;});
+  +  const laneMin=effs.map((ef,ei)=>{const uf=m.imp.onUdl?imMinArr[ei]:1;return m.udl.mode==='lane'?uf*uw*DER[ei].ln:uf*uw*DER[ei].end;});
+  -    const act=[]; effs.forEach((ef,ei)=>{const s=cfg.sel(ef);if(s[0]||s[1])act.push([ei,s[0],s[1],imArr[ei],ef.t==='V'?ef.el:-1,ef.cutL]);});
+  +    const act=[]; effs.forEach((ef,ei)=>{const s=cfg.sel(ef);if(s[0]||s[1])act.push([ei,s[0],s[1],imArr[ei],ef.t==='V'?ef.el:-1,ef.cutL,imMinArr[ei]]);});
+  -        for(const [ei,dMax,dMin,im,cutEl,cutL] of act){
+  +        for(const [ei,dMax,dMin,im,cutEl,cutL,imn] of act){
+  -          const uf=m.imp.onUdl?im:1;
+  -          const vMax=cfg.scale*(im*axMax+uf*uMax+laneMax[ei]), vMin=cfg.scale*(im*axMin+uf*uMin+laneMin[ei]);
+  +          const uf=m.imp.onUdl?im:1, ufn=m.imp.onUdl?imn:1;
+  +          const vMax=cfg.scale*(im*axMax+uf*uMax+laneMax[ei]), vMin=cfg.scale*(imn*axMin+ufn*uMin+laneMin[ei]);
+  -      const ef=effs[ei],f=IL[ei],im=imArr[ei],cutEl=ef.t==='V'?ef.el:-1;let tot=0,ps=0,ng=0;
+  +      const ef=effs[ei],f=IL[ei],im=imArr[ei],imn=imMinArr[ei],cutEl=ef.t==='V'?ef.el:-1;let tot=0,ps=0,ng=0;
+  -      const uf=m.imp.onUdl?im:1,vMax=cfg.scale*(im*axMax+uf*uMax+laneMax[ei]),vMin=cfg.scale*(im*axMin+uf*uMin+laneMin[ei]),r=res[ei];
+  +      const uf=m.imp.onUdl?im:1,ufn=m.imp.onUdl?imn:1,vMax=cfg.scale*(im*axMax+uf*uMax+laneMax[ei]),vMin=cfg.scale*(imn*axMin+ufn*uMin+laneMin[ei]),r=res[ei];
+  ```
+  HTML / UI:
+  ```diff
+  -      <select id="impM"><option value="const">Constant multiplier</option><option value="arema">AREMA steel (span-dependent)</option></select></div>
+  +      <select id="impM"><option value="const">Constant multiplier</option><option value="arema">AREMA steel (span-dependent)</option><option value="std">AASHTO Std. Spec. 50/(L + 125) ≤ 0.30</option></select></div>
+  +    <p class="hint" id="impSF">AASHTO Std. Spec. 17th Ed. Art. 3.8.2.1: I = 50/(L + 125) ≤ 0.30. L per Art. 3.8.2.2: positive moment = span length; negative moment = mean of the two spans adjacent to the nearest interior support; shear = loaded length from the section to the far reaction of its span (+V: to the right support, −V: to the left support); reactions = mean of the adjacent spans. Verify the shear and reaction L for continuous spans.</p>
+  -  const um=$('udlMode').value, ar=$('impM').value==='arema';
+  +  const um=$('udlMode').value, ar=$('impM').value==='arema', sd=$('impM').value==='std';
+  -  $('impCF').classList.toggle('hidden',ar);
+  +  $('impCF').classList.toggle('hidden',ar||sd);
+  +  $('impSF').classList.toggle('hidden',!sd);
+  -    ['Impact',m.imp.method==='const'?m.imp.val:'AREMA steel formula'],…
+  +    ['Impact',m.imp.method==='const'?m.imp.val:m.imp.method==='std'?'AASHTO Std. Spec. 50/(L+125) <= 0.30':'AREMA steel formula'],…
+  ```
+- **Check case:** 2 × 100 ft, HS20, lane check off, DF 1.00, LLF 1.75. Constant 1.30 → Std. Spec. option:
+  - +M at 0.4L: L = 100, I = 50/225 = 0.222 → 2803.4 × 1.222/1.30 = **2635.7** (tool 2635.7).
+  - +V at 0.0L: loaded length 100 → 1.222: 144.8 → **136.2**. −V at 0.0L: loaded length 0 → capped 0.30 → −15.2 (unchanged).
+  - +V at 0.4L: loaded length 60, I = 50/185 = 0.270 → 68.3 × 1.270/1.30 = **66.7**.
+  - −M at the pier: mean of spans = 100 → 1.222: −1516.4 → **−1425.7**. With the lane check on: −2607.9 → **−2451.9**; reaction 241.1 → 226.7.
+  - LESS conservative than the 1.30 constant, and only when the engineer picks the option. The presets keep 1.30.
+
+### F8 (MLG-O2). LRFD fatigue truck: its own DF set   [calc — opt-in; LESS conservative when entered]
+- **Where:** Factors & Analysis (new inputs `fDFm`, `fDFv`, `fDFn` after the hint `LRFD DFs already include multiple presence`), `applyFam` (anchor `LRFD fatigue truck: its own DF set`), the fatigue warning in `analyze`, report inputs table, and the lldf hand-off receiver (`makePlan`, `fatHtml`, `apply`, `fatLine`, edit flag).
+- **Problem:** the fatigue truck was analysed with the strength (multi-lane) DFs; only a warning (F1) said so. The tool had no per-vehicle DF. Conservative.
+- **Governing provision:** AASHTO LRFD 10th Ed. Art. 3.6.1.4.3b and C3.6.1.1.2 (fatigue: one-lane DF with the multiple presence factor removed, ÷ 1.2).
+- **Fix:** three optional inputs "LRFD fatigue truck DFs" (moment, shear, negative moment). When the vehicle is the LRFD Fatigue Truck preset (main view and report): a moment DF > 0 replaces the span moment DFs on every span, and the negative-moment DF is the fatigue negative DF if given, else the fatigue moment DF; a shear DF > 0 replaces the span shear DFs; a blank input keeps the highway DF, **so with all three blank (the default, and every old save) results are unchanged**. The fatigue warning says which DFs were used. The lldf pull now writes lldf's `fatM` / `fatV` (and `fatM` of the negative region when "Set the negative-moment DF" is ticked) into these inputs, listed in "This will overwrite"; before, they were only shown.
+  ```diff
+  +    <div class="lbl" style="margin-top:4px">LRFD fatigue truck DFs (blank = use the highway DFs above)</div>
+  +    <div class="g3"><div class="f"><label>DF moment</label><input id="fDFm" type="number" step="0.01" placeholder="Same"></div><div class="f"><label>DF shear</label><input id="fDFv" type="number" step="0.01" placeholder="Same"></div><div class="f"><label>Neg. M DF</label><input id="fDFn" type="number" step="0.01" placeholder="Fatigue M"></div></div>
+  +    <p class="hint">Used only for the LRFD Fatigue Truck preset (here and in the report): one-lane DF ÷ 1.2, LRFD 3.6.1.4.3b and C3.6.1.1.2. They replace the span DFs for every span.</p>
+  -  else{m.dfM=m.spans.map((_,i)=>num('dfm'+i,1));m.dfV=m.spans.map((_,i)=>num('dfv'+i,1));m.dfNeg=num('dfNeg',0);}
+  +  else{m.dfM=m.spans.map((_,i)=>num('dfm'+i,1));m.dfV=m.spans.map((_,i)=>num('dfv'+i,1));m.dfNeg=num('dfNeg',0);
+  +    // LRFD fatigue truck: its own DF set (one-lane DF / 1.2, LRFD 3.6.1.4.3b, C3.6.1.1.2); blank = highway DFs (as before)
+  +    if(key==='Fatigue'){const fm=num('fDFm',0),fv=num('fDFv',0),fn=num('fDFn',0);
+  +      if(fm>0){m.dfM=Array(n).fill(fm);m.dfNeg=fn>0?fn:0;}else if(fn>0)m.dfNeg=fn;
+  +      if(fv>0)m.dfV=Array(n).fill(fv);
+  +      if(fm>0||fv>0||fn>0)m.fatDF={M:fm>0?fm:null,V:fv>0?fv:null,N:fn>0?fn:null};}}
+  ```
+  Fatigue warning in `analyze`:
+  ```diff
+  -  if(m.short==='Fatigue'){const ll=m.llf,fl=Math.abs(ll-1.75)<1e-9||Math.abs(ll-0.80)<1e-9;
+  -    warn.push(`LRFD fatigue truck: the distribution factors and live load factor entered (LLF = ${ll}) are applied exactly as given. … Table 3.4.1-1.${fl?'':' The current LLF is not a fatigue load factor.'}`);}
+  +  if(m.short==='Fatigue'){const ll=m.llf,fl=Math.abs(ll-1.75)<1e-9||Math.abs(ll-0.80)<1e-9,fd=m.fatDF;
+  +    if(fd&&!m.rail)warn.push(`LRFD fatigue truck: the fatigue DFs entered under Factors & Analysis are used for this vehicle (moment ${fd.M!=null?fd.M:'= highway span DFs'}, shear ${fd.V!=null?fd.V:'= highway span DFs'}, negative moment ${fd.N!=null?fd.N:fd.M!=null?fd.M:'= highway DF'}); they should be the ONE-LANE DF divided by 1.2 (LRFD 3.6.1.4.3b, C3.6.1.1.2). LLF = ${ll}: use γ = 1.75 (Fatigue I) or 0.80 (Fatigue II), Table 3.4.1-1.${fl?'':' The current LLF is not a fatigue load factor.'}`);
+  +    else warn.push(`LRFD fatigue truck: the distribution factors and live load factor entered (LLF = ${ll}) are applied exactly as given. … Table 3.4.1-1.${fl?'':' The current LLF is not a fatigue load factor.'}${m.rail?'':' Enter the fatigue DFs under Factors & Analysis to apply them to this vehicle.'}`);}
+  ```
+  (the "…" text is unchanged from F1.) Report inputs table (after `['Results basis',unit]`):
+  ```diff
+  +  {const fm=num('fDFm',0),fv=num('fDFv',0),fn=num('fDFn',0);if(fm>0||fv>0||fn>0)inp.splice(5,0,['LRFD fatigue truck DFs (fatigue truck only)',`moment ${fm>0?fm:'= highway span DFs'}, shear ${fv>0?fv:'= highway span DFs'}, negative moment ${fn>0?fn:fm>0?fm:'= highway DF'}`]);}
+  ```
+  lldf receiver (`makePlan`, `fatHtml`, `apply`, edit flag, `fatLine`):
+  ```diff
+  +    var fatN=(setNeg&&fat.negM!=null)?fat.negM:null;   // fatigue negative-moment DF follows the negative-moment tick box
+  +    if(fat.M!=null) row('Fatigue truck DF moment',el('fDFm').value||'(blank)',fat.M);
+  +    if(fat.V!=null) row('Fatigue truck DF shear',el('fDFv').value||'(blank)',fat.V);
+  +    if(fatN!=null) row('Fatigue truck neg. M DF',el('fDFn').value||'(blank)',fatN);
+  -    return {…,neg:neg,fat:fat,changes:ch,mine:mine};
+  +    return {…,neg:neg,fat:fat,fatN:fatN,changes:ch,mine:mine};
+  -    return '<b>Fatigue truck DFs (not applied):</b> g<sub>fat</sub> = …
+  +    return '<b>Fatigue truck DFs:</b> g<sub>fat</sub> = …
+  -      'This tool has one DF set for all vehicles, so these are <b>not</b> written to the DF inputs; they are repeated in the fatigue-truck warning.';
+  +      'They are written to the <b>fatigue truck DF</b> inputs (used only for the LRFD Fatigue Truck preset), not to the highway DFs.';
+  +      if(P.fat.M!=null) el('fDFm').value=String(P.fat.M);
+  +      if(P.fat.V!=null) el('fDFv').value=String(P.fat.V);
+  +      if(P.fatN!=null) el('fDFn').value=String(P.fatN);
+  -      fatM:P.fat.M, fatV:P.fat.V, fatNegM:P.fat.negM, adoptedAt:new Date().toISOString(), edited:false};
+  +      fatM:P.fat.M, fatV:P.fat.V, fatNegM:P.fat.negM, fatSet:(P.fat.M!=null||P.fat.V!=null), adoptedAt:new Date().toISOString(), edited:false};
+  -    if(/^(dfm\d|dfv\d|dfNeg|L\d|nSpans)$/.test(id)){ SRC.edited=true; paint(); }
+  +    if(/^(dfm\d|dfv\d|dfNeg|fDF[mvn]|L\d|nSpans)$/.test(id)){ SRC.edited=true; paint(); }
+  -      ' — one-lane DF ÷ 1.2, skew included. They are NOT applied automatically; the DF inputs above hold lldf\'s strength DFs.';
+  +      ' — one-lane DF ÷ 1.2, skew included'+(SRC.fatSet?'; written to the fatigue truck DF inputs by the pull.':'. This pull was made before the fatigue DF inputs existed, so they were not written; enter them under Factors & Analysis.');
+  ```
+- **Check case:** 2 × 100 ft, preset LRFD Fatigue Truck, LLF 1.75, highway DFs 1.00. Fatigue DF moment 0.40, shear 0.60: max +M 2084.2 → 2084.2 × 0.40 = **833.7** kip-ft (tool 833.7); max +V 125.8 → 125.8 × 0.60 = **75.5** kips (tool 75.5); max −M −1220.7 → × 0.40 (negative DF = fatigue moment DF) = **−488.3**. With the inputs blank: 2084.2 / 125.8 / −1220.7, unchanged. lldf pull check: payload interior fatM 0.45, fatV 0.66, negative-region fatM 0.42 → the dialog lists the three fatigue rows, the inputs become 0.45 / 0.66 / 0.42, the highway DFs get the strength DFs as before, and the Fatigue preset max +M = 2084.2 × 0.45 = 937.9 (tool 937.9).
+- **LESS conservative when entered** (code-correct); default unchanged.
+
+### F9 (MLG-O4). Blank E or blank span length is an input error   [bug — result changes only for blank input]
+- **Where:** `readModel` (anchors `spans.push(Math.max(1,num('L'+i,` and `E:num('Es',`), start of `analyze`.
+- **Problem:** `num()` silently replaced a blank E with 29,000 ksi and a blank span with 100 ft, and the run reported "Solved".
+- **Governing provision:** n/a.
+  ```diff
+  -  for(let i=0;i<ns;i++) spans.push(Math.max(1,num('L'+i,100)));
+  +  for(let i=0;i<ns;i++) spans.push(Math.max(1,num('L'+i,NaN)));   // blank -> NaN -> input error in analyze (no silent 100 ft)
+  -  return {spans,E:num('Es',29000),segs:sg,axles:axles.map(a=>[...a]),short:pk,
+  +  return {spans,E:num('Es',NaN),segs:sg,axles:axles.map(a=>[...a]),short:pk,
+  +  if(isNaN(m.E)) throw new Error('E steel is blank or not a number. Enter E in ksi.');
+  +  if(m.spans.some(l=>isNaN(l))) throw new Error(`Every span length must be a number greater than 0; span ${m.spans.findIndex(l=>isNaN(l))+1} is blank or not a number.`);
+  ```
+  The messages start with "E steel" / "Every span length", so the existing F4 error display and the red dot on the Spans tab apply.
+- **Check case:** E blank. Before: "Solved", +M 3932.2. After: "Error: E steel is blank or not a number. Enter E in ksi.", headline values "—", Spans tab marked. Span 2 blank: before "Solved" with 100 ft; after "Error: Every span length must be a number greater than 0; span 2 is blank or not a number." Valid inputs: identical results.
+
+### F10 (MLG-O5). Code basis stated   [docs — no result change]
+- **Where:** end of Factors & Analysis (new `<p class="hint" id="mlgBasis">`, after the `id="hStep"` row) and a "Code basis" row in the printed report's inputs table (anchor `['Results basis',unit]`).
+  ```diff
+  +    <p class="hint" id="mlgBasis">Basis: AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024): HL-93 and fatigue truck (Art. 3.6.1.2–3.6.1.4), load factors (Table 3.4.1-1), IM (Art. 3.6.2). HS20 / H20: AASHTO Standard Specifications for Highway Bridges, 17th Ed. (2002), Art. 3.7, 3.8, 3.11. Rail: AREMA Manual Ch. 8 / 15 (edition per owner).</p>
+  -    ['Results basis',unit]];
+  +    ['Results basis',unit],['Code basis',esc($('mlgBasis').textContent.replace(/^Basis: /,''))]];
+  ```
+- **Check case:** n/a (text only).
+
+### F11 (MLG-T1). Header at narrow widths; Spans hint   [UI — no result change]
+- **Where:** top `<style>` (anchor `@media(max-width:900px){.body{`), the girder-panel block (anchor `defined in the Girder Section panel below`), and the input-tabs block CSS (anchor `#mlgInTabs{top:`).
+- **Problem:** at ≤ 900 px the fixed 54 px header could not hold the 9 header buttons: they spilled below it and the top ones were cut off above the page. The Spans hint pointed to a "Girder Section panel below", which is now the Girder tab.
+- **Fix:** at ≤ 900 px only, the header grows with its content, wraps its buttons, and scrolls with the page (`position:static`, so a three-row header does not cover the screen); the input tab strip then sticks at the top of the viewport (`top:0`), and the old `margin-top` offset that made room for the spilled buttons is removed. Desktop (> 900 px) is unchanged (header height 54 px, checked).
+  ```diff
+  +@media(max-width:900px){.hdr{height:auto;min-height:54px;flex-wrap:wrap;gap:6px;padding:6px 12px;position:static}.hdr>div:last-child{display:flex;flex-wrap:wrap;align-items:center;gap:6px 0}}
+  -    '@media(max-width:900px){aside{overflow:visible}#mlgInTabs{top:var(--mlgHdrH,54px);margin-top:calc(var(--mlgHdrH,54px) - 54px)}}'+
+  +    '@media(max-width:900px){aside{overflow:visible}#mlgInTabs{top:0}}'+
+  -  const h=first.querySelector('.hint');if(h)h.textContent='Pinned supports. Deck, girder segments, and flange transitions are defined in the Girder Section panel below.';
+  +  const h=first.querySelector('.hint');if(h)h.textContent='Pinned supports. Deck, girder segments, and flange transitions are defined on the Girder tab.';
+  ```
+- **Check case:** 400 px: header 172 px tall with every button visible, no horizontal scroll (scroll width 400). 1400 px: header 54 px, unchanged.
+
+### Closed without a code change
+- **MLG-O3** (dfNeg applies to every negative moment, including reversal moments in positive-moment regions): checked in `dfOf` — `ef.t==='M'?(v<0&&m.dfNeg>0?m.dfNeg:…)`. The negative-moment DF is normally ≥ the span DF over the piers, and reversal moments in the positive region are small and do not govern design; using it there is conservative. Closed per the inventory default ("leave").
+- **MLG-H1** (one negative-moment DF; lldf's envelope over all piers used at every pier): conservative for 3–4 spans (the larger pier DF is used at every pier). Closed per the inventory default ("leave").
+- **MLG-O6** (dead code: the original `function exportCsv` near the end is replaced at run time by `exportCsv=function(){…}` in the batch block): confirmed — the function declaration is hoisted and the later assignment overrides it, so the old body never runs. Left in place (CLAUDE.md §7: minimal diffs); the F6 / F7 label changes were made only in the active version.
+
+### How verified
+- `node --check` on all four inline scripts.
+- Headless Chromium (Playwright), origin/main vs this branch, 30 configurations (default; all 12 presets; 1, 3, 4 spans; uniform-load modes trail / full / none; AREMA impact; multi-vehicle off; negative-moment and per-span DFs; E = 0; DF = 0; E blank; span blank; HS20 3 × 150/200/150; HS20 lane off; HS20 Std. Spec. impact; Fatigue with fatigue DFs). Compared: the whole results text of `<main>`, the status line, the warning box and `mlgSnapshot()`.
+  - **Identical** for the default, HL-93 truck / tandem, all 7 rail presets, every span count, uniform-load mode, AREMA, multi-vehicle, DF and E = 0 case.
+  - **Fatigue preset (blank fatigue DFs):** results identical; the warning gains one sentence.
+  - **HS20 / H20:** results change as in F6; with the lane check off, results identical to main (warning and label only).
+  - E blank / span blank: error as in F9.
+  - Saved state: the only differences are the 7 new fields (and `impM:'std'` when chosen).
+- Closed-form check and FHWA benchmark: card text and the whole `<main>` text **identical** to main.
+- Print report, all 13 presets (FHWA inputs, tenth-point tables, deflection): identical except the HS20 / H20 sections (lane case, as intended), the fatigue warning sentence, the preset labels, and the new "Code basis" row.
+- Old save restore: an HS20 3-span project saved by the **main** file, restored in the new file, gives `<main>` text identical to the same save restored in the main file (except the new warning and the preset label); `stdLane` stays off, fatigue DFs stay blank.
+- lldf hand-off: test payload pulled; dialog rows, written inputs and fatigue results as in the F8 check case; `lldfSource.fatSet` = true.
+- Std. Spec. lane input blank → error, red dot on the Rules tab.
+- Console errors: only the tool's own `console.error` for the deliberate E = 0 / blank cases (E = 0 is the same on main).
+- Screenshots (Rules, Impact, Factors tabs at 1400 px and 400 px; header at 400 px before and after) inspected.
+
+### Needs engineer
+1. **Std. Spec. impact L for shear and reactions in continuous spans (F7):** I used the loaded length from the section to the far support **of its span** for shear, and the mean of the adjacent spans for reactions. Art. 3.8.2.2(c) says "from the point under consideration to the far reaction" without saying how that applies across continuous spans. Recommendation: keep it as is (it gives the 30 % cap near the near support and the span value at the far end). Is that the interpretation you use?
+2. **Old HS20 / H20 projects (F6):** to keep saved data unchanged, a project saved before this change reloads with the lane check **off** (and a warning). Should old saves switch it on automatically instead? Recommendation: leave it off plus the warning, so an old calculation reproduces exactly.
+3. **Std. Spec. lane patterning (F6):** the uniform lane load is patterned on the influence line (partial spans), which is slightly conservative compared with the Art. 3.11.3 wording "as many spans loaded uniformly as required". Recommendation: keep it.
+
+## Open items (after the 2026-10-12 sweep)
+- Inventory section 5 items MLG-O1, O2, O4, O5, T1 are fixed (F6–F11 above); O3, H1 and O6 are closed. Only the three "Needs engineer" questions above remain.
