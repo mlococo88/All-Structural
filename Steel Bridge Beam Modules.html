@@ -4561,10 +4561,16 @@ function gdLldfPlan(pl, basis) {
   const plNb = Number(pl.Nb);
   if (pl.Nb != null && plNb !== nb) warn.push(`Number of girders differs: LL & DL ${esc(pl.Nb)}, this bridge ${nb}.`);
   if (basis === 'beam' && plNb !== nb) err.push('"Same beam number" needs the same number of girders in both tools. Use the interior / exterior envelope.');
+  // CIP slab (lldf perFootStrip): factors per 1-ft strip of slab width, not per girder. Refused (HANDOFF.md §4.3).
+  if (pl.perFootStrip === true) err.push('LL & DL sent cast-in-place slab factors: they are per 1-ft strip of slab width (AASHTO LRFD 4.6.2.3), not per girder. This tool needs girder factors.');
   if (pl.bridgeType && pl.bridgeType !== 'a') warn.push(`LL & DL computed the factors for cross-section type (${esc(pl.bridgeType)}); this tool designs steel I-girders, type (a).`);
   const skM = b.skews && b.skews.length ? Math.max(...b.skews.map(Math.abs)) : 0;
   if (pl.skew != null && (typeof pl.skew !== 'number' || !isFinite(pl.skew))) err.push('The hand-off skew is not a number.');
-  else if (pl.skew != null && Math.abs(Math.abs(pl.skew) - skM) > 0.5) warn.push(`Skew differs: LL & DL ${f0(pl.skew)}°, this bridge up to ${f0(skM)}°.`);
+  else if (pl.skewShear != null && (typeof pl.skewShear !== 'number' || !isFinite(pl.skewShear))) err.push('The hand-off shear skew (skewShear) is not a number.');
+  // lldf's shear θ_V (skewShear, when sent) is the largest |skew|; compare that with this bridge's largest skew.
+  // `skew` is then lldf's moment θ, which may be smaller by design (Art. 4.6.2.2.2e), so it is not compared.
+  else if (pl.skewShear != null && Math.abs(Math.abs(pl.skewShear) - skM) > 0.5) warn.push(`Skew differs: LL & DL ${f0(Math.abs(pl.skewShear))}° for shear (${f0(pl.skew)}° for moment), this bridge up to ${f0(skM)}°.`);
+  else if (pl.skewShear == null && pl.skew != null && Math.abs(Math.abs(pl.skew) - skM) > 0.5) warn.push(`Skew differs: LL & DL ${f0(pl.skew)}°, this bridge up to ${f0(skM)}°.`);
   const pick = g => !g || typeof g !== 'object' ? null : basis === 'beam' ? (g.byBeam || {})[String(j + 1)] || null : g[tKey] || null;
   const pos = pick(pl.governing), neg = pick(pl.governingNeg);
   if (!pos) err.push(`The hand-off has no positive-region factors for ${basis === 'beam' ? `beam ${j + 1}` : `the ${tKey} girder`}.`);

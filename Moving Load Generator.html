@@ -1810,6 +1810,7 @@ initSelects(); renderSpans(); $('preset').value='HL93-Truck'; applyPreset('HL93-
     if(!Array.isArray(p.spans)||!p.spans.length) errs.push('no span lengths');
     else p.spans.forEach(function(L,i){ if(!fin(L)||!(L>0)) errs.push('span '+(i+1)+' length = '+JSON.stringify(L)); });
     if(p.skew!=null && (!fin(p.skew)||p.skew<0||p.skew>90)) errs.push('skew = '+JSON.stringify(p.skew));
+    if(p.skewShear!=null && (!fin(p.skewShear)||Math.abs(p.skewShear)>=90)) errs.push('skewShear = '+JSON.stringify(p.skewShear));
     if(p.Nb!=null && (!fin(p.Nb)||p.Nb<1||Math.round(p.Nb)!==p.Nb)) errs.push('Nb = '+JSON.stringify(p.Nb));
     if(!p.governing||typeof p.governing!=='object') errs.push('no governing DFs');
     checkEnv(p.governing,'governing',errs);
@@ -1896,6 +1897,7 @@ initSelects(); renderSpans(); $('preset').value='HL93-Truck'; applyPreset('HL93-
   document.body.insertAdjacentHTML('beforeend','<div id="lxModal" class="mdl hidden"><div class="mdlc">'+
     '<h3>Pull distribution factors from LL &amp; DL Distribution</h3>'+
     '<div id="lxHead" style="font-size:12px;color:#334155;line-height:1.6"></div>'+
+    '<div id="lxStrip" class="warn hidden"></div>'+
     '<div class="f"><label>Girder to take the DFs for</label><select id="lxGirder"></select></div>'+
     '<label class="chk"><input type="checkbox" id="lxNeg" checked>Set the negative-moment DF from lldf\'s interior-support (negative-region) DF</label>'+
     '<div id="lxSpanWarn" class="warn hidden"></div>'+
@@ -1948,8 +1950,14 @@ initSelects(); renderSpans(); $('preset').value='HL93-Truck'; applyPreset('HL93-
     CUR={p:p,via:via};
     el('lxHead').innerHTML='From: <b>'+h(p.producer||'?')+'</b> ('+h(p.producerFile||'lldf.html')+') · sent '+h(when(p.producedAt))+
       ' · project: '+h(projOf(p)||'(none)')+(via==='file'?' · from a JSON file':'')+
-      '<br>Bridge type '+h(p.bridgeType||'?')+' · N<sub>b</sub> = '+h(p.Nb!=null?p.Nb:'?')+' · skew '+h(p.skew!=null?p.skew:'?')+'° · spans '+h(p.spans.join(' + '))+' ft'+
+      '<br>Bridge type '+h(p.bridgeType||'?')+' · N<sub>b</sub> = '+h(p.Nb!=null?p.Nb:'?')+' · skew '+h(p.skew!=null?p.skew:'?')+'°'+
+      (p.skewShear!=null?' (moment), '+h(Math.abs(p.skewShear))+'° (shear)':'')+' · spans '+h(p.spans.join(' + '))+' ft'+
       (p.designLanes!=null?' · '+h(p.designLanes)+' design lanes':'');
+    // CIP slab (lldf perFootStrip): the DFs are per 1-ft strip of slab width. They are applied as sent (a
+    // strip analysis is a valid use of this tool), but every result is then per foot of slab width.
+    el('lxStrip').classList.toggle('hidden',p.perFootStrip!==true);
+    el('lxStrip').innerHTML=(p.perFootStrip===true)?'⚠ <b>Cast-in-place slab:</b> these DFs are per <b>1-ft strip</b> of slab width (AASHTO LRFD 4.6.2.3), not per girder. '+
+      'If you apply them, every "per girder" result here is <b>per foot of slab width</b>. Do not use them for a girder.':'';
     el('lxGirder').innerHTML=ch.map(function(o){ return '<option value="'+h(o.v)+'">'+h(o.t)+'</option>'; }).join('');
     el('lxGirder').value=defChoice(p,ch);
     el('lxSpans').checked=false; el('lxNeg').checked=!!p.governingNeg;
@@ -1976,7 +1984,7 @@ initSelects(); renderSpans(); $('preset').value='HL93-Truck'; applyPreset('HL93-
     } finally { applying=false; }
     SRC={producer:p.producer||'LL & DL Distribution', producerFile:p.producerFile||'lldf.html', producedAt:p.producedAt||'',
       project:projOf(p), via:CUR.via, girder:c, girderLabel:choiceLabel(p,c), perSpan:P.perSpan, spansSet:P.setSpans,
-      negSet:P.neg!=null, multiplePresence:true, skew:true,
+      negSet:P.neg!=null, multiplePresence:true, skew:true, perFootStrip:(p.perFootStrip===true),
       fatM:P.fat.M, fatV:P.fat.V, fatNegM:P.fat.negM, fatSet:(P.fat.M!=null||P.fat.V!=null), adoptedAt:new Date().toISOString(), edited:false};
     if(window.BridgeXfer) BridgeXfer.markAdopted(CH,RID,p.producedAt);
     el('lxModal').classList.add('hidden'); CUR=null;
@@ -2000,6 +2008,7 @@ initSelects(); renderSpans(); $('preset').value='HL93-Truck'; applyPreset('HL93-
     return 'Highway DFs from '+SRC.producer+', '+when(SRC.producedAt)+(SRC.project?' ('+SRC.project+')':'')+' — '+SRC.girderLabel+
       (SRC.perSpan?', per span':', governing envelope over all spans')+(SRC.negSet?'; negative-moment DF from interior supports':'')+
       (SRC.spansSet?'; spans set from lldf':'')+'; multiple presence and skew included'+
+      (SRC.perFootStrip?'; CIP slab DFs per 1-ft strip: results are per foot of slab width, not per girder':'')+
       (SRC.edited?' — DF or span inputs edited after the pull':'');
   }
   function paint(){
@@ -2044,6 +2053,7 @@ initSelects(); renderSpans(); $('preset').value='HL93-Truck'; applyPreset('HL93-
     try{ var t=(m&&m.short==='Fatigue'&&!m.rail)?fatLine():'';
       if(t){ var i=-1; R.warn.forEach(function(w,k){ if(i<0&&/^LRFD fatigue truck/.test(w)) i=k; });
         if(i>=0) R.warn[i]+=' '+t; else R.warn.push(t); } }catch(e){}
+    try{ if(SRC&&SRC.perFootStrip&&R&&R.warn&&!(m&&m.rail)) R.warn.push('Highway DFs pulled from LL & DL are for a cast-in-place slab, per 1-ft strip of slab width: the factored results are per foot of slab width, not per girder.'); }catch(e){}
     return R;
   };
 

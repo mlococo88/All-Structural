@@ -6886,6 +6886,9 @@ function lldfResolveMCT(){
   let d; try{ d=JSON.parse(raw); }catch(e){ return {why:'Could not read the LLDF payload: '+((e&&e.message)||e)}; }
   if(!d||d._schema!=='bridge-lldf-factors') return {why:'The published distribution data is not an LL & DL factors payload (_schema "'+(d&&d._schema)+'"). Nothing was applied.'};
   if((d.schemaVersion||1)>1) return {why:'The LL & DL Distribution data is v'+d.schemaVersion+'; this MCT build supports v1. Update the MCT app.'};
+  // CIP slab (lldf perFootStrip): the factors are per 1-ft strip of slab width, not per
+  // girder, so they cannot scale a girder-line rating. Refused, never converted (HANDOFF.md §4.3).
+  if(d.perFootStrip===true) return {why:'The published distribution factors are for a cast-in-place slab: they are per 1-ft strip of slab width (AASHTO LRFD 4.6.2.3), not per girder. They cannot be used as the girder distribution factor here, so nothing was applied.\n\nIf this MIDAS model is a 1-ft slab strip, enter the strip factor by hand.'};
   // Prefer the specific beam named by the shared design-beam chip -- its own
   // factors, not the interior/exterior envelope. Fall back to the envelope when
   // no beam is selected or the payload predates the per-beam breakdown.
