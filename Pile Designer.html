@@ -2775,6 +2775,39 @@ function pmDirRowPiles(dir, k, nR, nC) {
   else { const ri = dir.V > 0 ? nR - k : k - 1; for (let ci = 0; ci < nC; ci++) ids.push(ri * nC + ci + 1); }
   return ids;
 }
+/* F38b (O53, 2026-10-11): the row f_m set(s) of the direction the active case loads.
+   pcrGPMFor: the P_cr ramp p-multiplier (F29: the smallest row f_m x modifier) from the rows
+   the active case is actually distributed over: a V_x-only Group row -> the grid columns
+   (pmRowsDirX); a biaxial Group row -> the smaller of the smallest grid-row and grid-column
+   f_m (as F36's min(f_m,x, f_m,y)); otherwise (manual case, V_y-only row) the grid rows, as
+   before. Toggle off (t = null): I.pyPM, as before.
+   pmViewSets: the row sets for the Module 11 / report f_m displays (null: grid rows, as before). */
+function pcrGPMFor(I, t, c) {
+  if (!t) return I.pyPM || 1;
+  const mod = groupPmModOf(I), mn = rows => Math.min(...rows.map(p => p.fm));
+  if (c && c._fromGroup && isBiaxShear(c._Vx, c._Vy)) return Math.min(mn(t.rows), mn(pmRowsDirX(I, t).rows)) * mod;
+  if (c && c._fromGroup && isVxOnlyShear(c._Vx, c._Vy)) return mn(pmRowsDirX(I, t).rows) * mod;
+  return mn(t.rows) * mod;
+}
+function pmViewSets(a) {
+  if (!a) return null;
+  if (a.biax) {
+    const b = a.biax;
+    return [{ axis: "x", V: b.VxP, nR: b.nR, nC: b.nC, rows: b.fmX.map((fm, k) => ({ row: k + 1, fm })) },
+            { axis: "y", V: b.VyP, nR: b.nR, nC: b.nC, rows: b.fmY.map((fm, k) => ({ row: k + 1, fm })) }];
+  }
+  if (a.dir && a.rows) return [{ axis: a.dir.axis, V: a.dir.V, nR: a.dir.nR, nC: a.dir.nC, explicit: a.dir.explicit, rows: a.rows.map(r => ({ row: r.row, fm: r.fm })) }];
+  return null;
+}
+// the row (1 = leading) of set s that generated-grid pile id lies in
+function pmSetRowOfPile(s, id) {
+  const ri = Math.floor((id - 1) / s.nC), ci = (id - 1) % s.nC;
+  return s.axis === "x" ? (s.V > 0 ? s.nC - ci : ci + 1) : (s.V > 0 ? s.nR - ri : ri + 1);
+}
+function pmSetTitle(s) {
+  return s.axis === "x" ? "x-rows ⟂ Vₓ (" + (s.V > 0 ? "+x" : "−x") + "): the grid columns, " + s.nC + " rows of " + s.nR + " piles; x-row 1 = the column at the " + (s.V > 0 ? "largest" : "smallest") + " x"
+    : "y-rows ⟂ V_y (" + (s.V > 0 ? "+y" : "−y") + "): the grid rows, " + s.nR + " rows of " + s.nC + " piles; y-row 1 = the row at the " + (s.V > 0 ? "largest" : "smallest") + " y";
+}
 function bondHoleDia(I) {
   return (I.dhBondSeparate && isFinite(I.dhBond) && I.dhBond > 0) ? I.dhBond : I.OD;
 }
@@ -9781,7 +9814,10 @@ function PrintReport({
     // F29: row p-multipliers (source, warnings) and, with the per-row toggle on, the per-row results
     r.group && r.group.pMultipliers && /*#__PURE__*/React.createElement("div", { style: { fontSize: "8.5px", color: "#16304F", margin: "4px 0" } },
       "Lateral p-multipliers by row (", r.group.pmSourceLabel, ") at s = ", fmt(r.group.s_dia, 2), " \u00d7 " + (r.group.Blbl || "bond dia") + ": ",
-      r.group.pMultipliers.map(p => "row " + p.row + " " + fmt(p.fm, 2)).join(", "), ". ",
+      // F38b (O53): the rows of the active case's load direction(s), labelled
+      (pmViewSets(pyRes && r.group.pmAuto ? pyRes.pmAuto : null) || [null]).map(s => s
+        ? pmSetTitle(s) + ": " + s.rows.map(p => s.axis + "-row " + p.row + " " + fmt(p.fm, 2)).join(", ")
+        : r.group.pMultipliers.map(p => "row " + p.row + " " + fmt(p.fm, 2)).join(", ")).join("; "), ". ",
       r.group.pmBelowTable && r.group.pmSource === "aashto" ? "\u26a0 Spacing below 3B \u2014 outside the table; the 3B values are used. " : "",
       r.group.pmAboveTable && r.group.pmSource === "aashto" ? "Spacing above 5B: the 5B values are used. " : "",
       I.lateralSource === "py" ? (r.group.pmAuto ? "Applied automatically per row (p-multiplier = row f\u2098 \u00d7 " + fmt(r.group.pmMod, 2) + "); the lateral results are the governing row's." : "Not applied automatically; the p-y analysis used the entered p-multiplier " + fmt(I.pyPM || 1, 2) + ".") : ""),
@@ -11913,7 +11949,8 @@ function PmBiaxTable({ info, print }) {
       "Row 1 = the leading row in the direction of that load component. Each pile: V = √(Vₓ² + V_y²) of its two rows, solved and checked with p-multiplier = the smaller of its two row fₘ × modifier (" + fmt(info.mod || 1, 2) + ") (conservative; the pile's single p-y width / bending axis — verify); the case's axial load, head moment and head condition. fₘ from " + info.srcLabel + " at s = " + fmt(info.s_dia, 2) + " × " + (info.Blbl || "bond dia") + ". " +
       "Governing pile = largest D/C of flexure / combined (a pile that did not converge governs, NG; ties → larger Mₘₐₓ); when any pile's lateral status is NG, the failing pile with the largest D/C governs. The lateral results, graphs and checks shown are the governing pile's. " + b.nSolves + " p-y solves."));
 }
-function GroupPlan({ I, g }) {
+function GroupPlan({ I, g, sets }) {
+  if (sets) return GroupPlanDir({ I, g, sets });
   const s = g.s_in, D = g.dh_in, nR = g.nRows, nC = g.nCols;
   const shapes = [];
   for (let ri = 0; ri < nR; ri++) for (let ci = 0; ci < nC; ci++) {
@@ -11936,6 +11973,47 @@ function GroupPlan({ I, g }) {
       height: Math.min(140 + nR * 34, 300) }),
     /*#__PURE__*/React.createElement("p", { className: "text-[8.5px] text-slate-400 mt-0.5 leading-snug" },
       "Rows numbered from the leading row (load direction shown); f\u2098 = row p-multiplier (" + (g.pmSource === "rollins" ? "Rollins / FHWA legacy curve" : "AASHTO Table 10.7.2.4-1") + "). \u03b7 = " + fmt(g.eta, 2) + " axial efficiency."));
+}
+
+// F38b (O53): group plan for the active Group row's load direction(s): +x right, +y up (as the
+// workspace plan, pile P1 at the lower left); x-rows labelled above the columns, y-rows to the
+// right of the rows; an arrow per load component.
+function GroupPlanDir({ I, g, sets }) {
+  const s = g.s_in, D = g.dh_in, nR = sets[0].nR, nC = sets[0].nC;
+  const shapes = [], anns = [];
+  const explicit = Array.isArray(I.groupPiles) && I.groupPiles.length > 0;
+  for (let ri = 0; ri < nR; ri++) for (let ci = 0; ci < nC; ci++) {
+    const x = ci * s, y = ri * s;
+    shapes.push({ type: "circle", xref: "x", yref: "y", x0: x - D / 2, x1: x + D / 2, y0: y - D / 2, y1: y + D / 2,
+      fillcolor: "rgba(20,48,74,0.75)", line: { color: "#14304a", width: 1 } });
+    if (!explicit) anns.push({ x: x + D / 2, y: y + D / 2, xanchor: "left", yanchor: "bottom", showarrow: false, text: "P" + (ri * nC + ci + 1), font: { size: 8, family: PLOT_FONT, color: "#14304a" } });
+  }
+  const C = "#c9622e", G = "#2f6f3e";
+  sets.forEach(st => {
+    st.rows.forEach(p => {
+      if (st.axis === "x") { const ci = st.V > 0 ? nC - p.row : p.row - 1; anns.push({ x: ci * s, y: (nR - 1) * s + s * 0.55, yanchor: "bottom", showarrow: false, text: "x" + p.row + ": fₘ=" + fmt(p.fm, 2), font: { size: 8.5, family: PLOT_FONT, color: C } }); }
+      else { const ri = st.V > 0 ? nR - p.row : p.row - 1; anns.push({ x: (nC - 1) * s + s * 0.75, y: ri * s, xanchor: "left", showarrow: false, text: "y" + p.row + ": fₘ=" + fmt(p.fm, 2), font: { size: 8.5, family: PLOT_FONT, color: C } }); }
+    });
+    if (st.axis === "x") { const y0 = -s * 0.8, xa = st.V > 0 ? -s * 0.4 : (nC - 1) * s + s * 0.4, xb = st.V > 0 ? (nC - 1) * s * 0.5 + s * 0.2 : (nC - 1) * s * 0.5 - s * 0.2;
+      anns.push({ x: xb, y: y0, ax: xa, ay: y0, axref: "x", ayref: "y", showarrow: true, arrowhead: 2, arrowcolor: G, arrowwidth: 2, text: "", font: { size: 9 } });
+      anns.push({ x: xa, y: y0, xanchor: st.V > 0 ? "right" : "left", showarrow: false, text: "Vₓ", font: { size: 9, family: PLOT_FONT, color: G } }); }
+    else { const x0 = -s * 0.8, ya = st.V > 0 ? -s * 0.4 : (nR - 1) * s + s * 0.4, yb = st.V > 0 ? (nR - 1) * s * 0.5 + s * 0.2 : (nR - 1) * s * 0.5 - s * 0.2;
+      anns.push({ x: x0, y: yb, ax: x0, ay: ya, axref: "x", ayref: "y", showarrow: true, arrowhead: 2, arrowcolor: G, arrowwidth: 2, text: "", font: { size: 9 } });
+      anns.push({ x: x0, y: ya, yanchor: st.V > 0 ? "top" : "bottom", showarrow: false, text: "V_y", font: { size: 9, family: PLOT_FONT, color: G } }); }
+  });
+  const pad = s * 1.4;
+  const H = Math.min(160 + nR * 34, 320);
+  return /*#__PURE__*/React.createElement("div", { className: "bg-white rounded-sm p-2 border border-slate-200 mt-3" },
+    /*#__PURE__*/React.createElement("div", { className: "text-[10px] font-mono-tech text-[var(--blueprint)] uppercase tracking-wider mb-1" }, "Group plan (to scale) · s = " + fmt(g.s_dia, 1) + (g.Blbl === "B" ? "B" : "D") + " · rows of the active case's load direction" + (sets.length > 1 ? "s" : "")),
+    /*#__PURE__*/React.createElement(Plot, {
+      data: [{ x: [0], y: [0], mode: "markers", marker: { size: 0.1, color: "rgba(0,0,0,0)" }, hoverinfo: "skip" }],
+      layout: baseLayout({ height: H, margin: { l: 8, r: 8, t: 6, b: 6 }, shapes, annotations: anns, showlegend: false,
+        xaxis: { range: [-pad, (nC - 1) * s + pad + s * 2.2], visible: false },
+        yaxis: { range: [-pad, (nR - 1) * s + pad], visible: false, scaleanchor: "x", scaleratio: 1 } }),
+      height: H }),
+    /*#__PURE__*/React.createElement("p", { className: "text-[8.5px] text-slate-400 mt-0.5 leading-snug" },
+      "+x to the right, +y up (as the group workspace plan). " + sets.map(st => (st.axis === "x" ? "x-rows (above the columns): the grid columns, perpendicular to Vₓ" : "y-rows (right of the rows): the grid rows, perpendicular to V_y") + ", numbered from the leading line in the load direction (arrow)").join("; ") +
+      "; fₘ = row p-multiplier (" + (g.pmSource === "rollins" ? "Rollins / FHWA legacy curve" : "AASHTO Table 10.7.2.4-1") + ")" + (explicit ? "; rows on the generated " + nR + " × " + nC + " grid (explicit pile coordinates not used for the rows)" : "") + ". η = " + fmt(g.eta, 2) + " axial efficiency."));
 }
 
 /* AASHTO LRFD Table C10.9.3.5.2-1 (modified after Sabatini et al. 2005):
@@ -13921,7 +13999,7 @@ function App() {
   const pmRowKey = pmTblApp ? pmTblApp.rows.map(p => p.fm).join(",") + "|" + groupPmModOf(I) + "|" + pmTblApp.src : "";
   // F29: Compute P_cr ramp p-multiplier: with the toggle on, the smallest row value x modifier
   // (the trailing row: least soil support, lowest P_cr); off, I.pyPM as before.
-  const pcrGPM = pmTblApp ? Math.min(...pmTblApp.rows.map(p => p.fm)) * groupPmModOf(I) : (I.pyPM || 1);
+  // F38b (O53): defined below the case list (pcrGPMFor), from the rows of the active case's direction.
   const pyResSingle = useMemo(() => {
     if (I.lateralSource !== "py") return null;
     if (pmAutoOn) return null;
@@ -14004,6 +14082,8 @@ function App() {
     }
   }, []);
   React.useEffect(() => { setCaseRes(null); }, [JSON.stringify(I.soilLayers), I.OD, I.dhBond, I.dhBondSeparate, I.tc, I.corr, I.fyc, I.Ab, I.fyb, I.fcGrout, I.fc, I.Lcased, I.Lplunge, I.LbProvided, I.beta, I.pyEIvar, I.pyEIBasis, I.pyPM, I.pyYM, I.pyCyclic, I.pyKrot, I.pyNodes, I.solverHead, I.solverFree, I.bucklingEnable, I.LuFree, I.Kb, I.pileType, I.lateralSource, I.E, I.solverLembed, I.hpD, I.hpBf, I.hpTf, I.hpTw, I.hpFy, I.hpAxis, pmAutoOn, pmRowKey]);
+  // F38b (O53): the P_cr ramp p-multiplier from the rows the active case is distributed over
+  const pcrGPM = pcrGPMFor(I, pmTblApp, (pmAutoOn && I.lateralSource === "py") ? cases[Math.min(Math.max(I.activeCase || 0, 0), cases.length - 1)] : null);
   // Invalidate the Pcr ramp whenever the MODEL it was run on changes. Without this,
   // switching pile type (or editing soil, section, loads, head condition...) left the
   // PREVIOUS model's Pcr on screen -- e.g. the H-pile's critical load displayed as the
@@ -17501,7 +17581,23 @@ function App() {
       r.group.pmBelowTable && r.group.pmSource === "aashto" && /*#__PURE__*/React.createElement("div", { className: "mb-2 p-2 rounded-sm text-[9px] leading-snug", style: { background: "rgba(183,121,31,0.10)", border: "1px solid rgba(183,121,31,0.35)", color: "#7a4d15" } },
         "⚠ Spacing ", fmt(r.group.s_dia, 2), "× is below 3B — outside the table. The 3B values are used; closer spacing has more shadowing, so they may be unconservative. Verify with the geotechnical engineer."),
       r.group.pmAboveTable && r.group.pmSource === "aashto" && /*#__PURE__*/React.createElement("div", { className: "mb-2 text-[9px] text-slate-500" }, "Spacing ", fmt(r.group.s_dia, 2), "× is above 5B: the 5B values are used (the table stops at 5B)."),
-      /*#__PURE__*/React.createElement(GroupPlan, { I: I, g: r.group }), /*#__PURE__*/React.createElement("table", { className: "w-full text-[10px] font-mono-tech mb-1" },
+      // F38b (O53): with the per-row toggle on and a Group row active, the plan and the table show the
+      // rows of that case's load direction(s) (x-rows = grid columns, y-rows = grid rows)
+      (() => { const sets = pmViewSets(r.group.pmAuto && pyRes ? pyRes.pmAuto : null); return sets ? /*#__PURE__*/React.createElement(React.Fragment, null,
+        /*#__PURE__*/React.createElement(GroupPlan, { I: I, g: r.group, sets }),
+        sets.map((s, si) => /*#__PURE__*/React.createElement("table", { key: si, className: "w-full text-[10px] font-mono-tech mb-1" },
+          /*#__PURE__*/React.createElement("thead", null,
+            /*#__PURE__*/React.createElement("tr", null, /*#__PURE__*/React.createElement("td", { colSpan: 2, className: "pt-1 text-[9.5px] text-[var(--blueprint)]" }, pmSetTitle(s))),
+            /*#__PURE__*/React.createElement("tr", { className: "text-slate-400" },
+            /*#__PURE__*/React.createElement("td", { className: "pr-3" }, s.axis + "-row (from lead)"), /*#__PURE__*/React.createElement("td", null, "p-multiplier f", /*#__PURE__*/React.createElement("sub", null, "m")))),
+          /*#__PURE__*/React.createElement("tbody", null, s.rows.map((p, i) => {
+            const selRow = (!s.explicit && r.capDist && r.capDist.sel && !(Array.isArray(I.groupPiles) && I.groupPiles.length)) ? pmSetRowOfPile(s, r.capDist.sel.id) : null;
+            const isSelRow = selRow === p.row;
+            return /*#__PURE__*/React.createElement("tr", { key: i, style: { borderTop: "1px solid #eef2f6", background: isSelRow ? "rgba(201,98,46,0.10)" : "transparent" } },
+            /*#__PURE__*/React.createElement("td", { className: "py-0.5 pr-3 text-slate-500" }, s.axis + "-row " + p.row + (p.row === 1 ? " (leading)" : p.row === s.rows.length && s.rows.length > 1 ? " (trailing)" : ""), (Array.isArray(I.groupPiles) && I.groupPiles.length) ? "" : " — " + pmDirRowPiles(s, p.row, s.nR, s.nC).map(id => "P" + id).join(", "), isSelRow ? /*#__PURE__*/React.createElement("span", { className: "ml-1 text-[7.5px] px-1 py-0.5 rounded-sm text-white align-middle", style: { background: "var(--accent)" } }, "DESIGN PILE") : null),
+            /*#__PURE__*/React.createElement("td", { className: "py-0.5 font-bold", style: { color: "#14304a" } }, fmt(p.fm, 2)));
+          }))))) : null; })(),
+      !(r.group.pmAuto && pyRes && pmViewSets(pyRes.pmAuto)) && /*#__PURE__*/React.createElement(GroupPlan, { I: I, g: r.group }), !(r.group.pmAuto && pyRes && pmViewSets(pyRes.pmAuto)) && /*#__PURE__*/React.createElement("table", { className: "w-full text-[10px] font-mono-tech mb-1" },
         /*#__PURE__*/React.createElement("thead", null, /*#__PURE__*/React.createElement("tr", { className: "text-slate-400" },
           /*#__PURE__*/React.createElement("td", { className: "pr-3" }, "Row (from lead)"), /*#__PURE__*/React.createElement("td", null, "p-multiplier f", /*#__PURE__*/React.createElement("sub", null, "m")))),
         /*#__PURE__*/React.createElement("tbody", null, r.group.pMultipliers.map((p, i) => {
