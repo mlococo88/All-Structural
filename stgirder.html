@@ -52,6 +52,8 @@ html,body{background:var(--paper);color:var(--ink);font-family:var(--sans);font-
 .cols{display:grid;grid-template-columns:minmax(0,1fr) 392px;gap:18px;padding-top:16px;align-items:start}
 .cols-full{padding-top:16px}
 @media(max-width:1080px){.cols{grid-template-columns:1fr}.gfx{position:static}}
+/* narrow screens (STG-UI1): the title block stacks and its grid wraps to two columns, so the page does not scroll sideways */
+@media(max-width:600px){.tblock{grid-template-columns:minmax(0,1fr)}.tb-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.tb-cell input{min-width:0;width:100%}}
 .gfx{position:sticky;top:12px}
 /* Inputs page sub-tabs (UI only — see stgInTabs in InputsTab) */
 .stgInTabs{position:sticky;top:0;z-index:7;display:flex;flex-wrap:wrap;gap:0;margin:0 0 14px;background:var(--sheet);border-bottom:1.5px solid var(--ink)}
@@ -1681,16 +1683,16 @@ const DEFAULTS = {
   negM:{As:12.0, dTop:4.0},                                  // longitudinal deck rebar (cracked pier section)
   mat:{grade:'HPS 50W (Fy=50)', Fyw:50, Fyf:50, Fu:70, Es:29000, hybrid:false},
   deck:{fc:4.0, wc:0.150, ts:8.0, haunch:2.0, tsSeparate:false, tsDL:8.0, beffAuto:true, beff:108, deckOn:true,
-        designOn:true, oh:3.0, fyd:60, barTop:0.31, barBot:0.31, sTop:6, sBot:6,
+        designOn:true, oh:3.0, extTribAuto:true, fyd:60, barTop:0.31, barBot:0.31, sTop:6, sBot:6,
         coverT:2.5, coverB:1.0, wsFut:0.025,
         bBar:18, wBar:0.30,          // barrier base width (in) and weight (klf of edge)
         xnegAuto:true, xneg:0},      // −M design section from girder CL (in); auto per 4.6.2.1.6
   geom:{L:120, S:9.0, nGirders:5, Lb:20, shored:false},
   loads:{wDCextra:0.015, wBar:0.30, wDW:0.25, wConstr:0.010, diaph:[],
-         pos:'interior', posAuto:true, de:2.5, skew:0, NL:2, fatM:0,   // posAuto: follow the shared design beam
+         pos:'interior', posAuto:true, de:2.5, skew:0, NL:2, fatM:0, fatV:0,   // posAuto: follow the shared design beam; fatV = single-lane fatigue SHEAR DF override (0 = auto)
          llAuto:true, MLL:0, VLL:0, dfAuto:true, dfm:0, dfv:0,
          extDFpos:1.0, extDFneg:1.0, extDFv:1.0, extLLmpf:1.0},  // fatM = single-lane fatigue DF override (0 = auto); applied to imported LL (impact already in envelope)
-  stiff:{transverse:true, doSpc:60, bt:6, tp:0.5, bearB:7, bearT:0.75, bearN:2},
+  stiff:{transverse:true, doSpc:60, bt:6, tp:0.5, bearB:7, bearT:0.75, bearN:2, Fys:50},   // Fys = stiffener yield (ksi)
   conn:{studD:0.875, studH:6, nRow:3, pitch:12},
   fatigue:{category:'C', ADTT:1000, life:'infinite',
     adttIsSingleLane:true,   // true → ADTT field is already (ADTT)SL; false → gross both-directions, apply p
@@ -1699,6 +1701,7 @@ const DEFAULTS = {
     designLife:75,          // fatigue design life (yr)
     lsMode:'auto'},         // 'auto' | 'I' | 'II' — auto decides Fatigue I vs II from (ADTT)SL crossover
   rateVeh:[],
+  rate:{phiC:1.0, phiS:1.0},   // MBE 6A.4.2.3 condition factor φc, 6A.4.2.4 system factor φs (strength rating only)
   opt:{},
   external:null,
 };
@@ -1778,8 +1781,10 @@ function plasticMoment(sec, mat, deck){
 function hybridRh(sec,mat,el){
   if(!mat.hybrid || mat.Fyw>=mat.Fyf) return 1.0;
   const {D,tw,tft,bft}=sec;
-  const Dn=Math.max(el.yt-tft, el.yb-sec.tfb);          // larger dist NA→flange (approx)
-  const Afn=bft*tft;                                    // area of flange on side of larger Dn (approx top)
+  const DnTop=el.yt-tft, DnBot=el.yb-sec.tfb;           // NA → inside face of each flange
+  const Dn=Math.max(DnTop, DnBot);                      // larger distance NA→flange
+  // Afn = flange on the side of the NA corresponding to Dn (6.10.1.10.1; STG-O9 — was always the top flange)
+  const Afn=(DnTop>=DnBot)? bft*tft : sec.bfb*sec.tfb;
   const beta=2*Dn*tw/Math.max(Afn,1e-6);
   const rho=Math.min(mat.Fyw/mat.Fyf,1);
   return (12+beta*(3*rho-Math.pow(rho,3)))/(12+2*beta);
@@ -1900,6 +1905,20 @@ function fatShearAt(L,x){
   return best;
 }
 
+// Fatigue-truck shear RANGE at section x, per lane, no IM (STG-O6): largest positive shear and largest
+// negative shear over all positions, both directions; range = Vpos − Vneg (6.10.10.1.2 / 3.6.1.4.1).
+function fatShearRangeAt(L,x){
+  const sets=[[[0,8],[14,32],[44,32]],[[0,32],[30,32],[44,8]]];
+  let vp=0, vn=0;
+  for(const set of sets){
+    const pos=[]; for(let s=-44;s<=L;s+=1) pos.push(s);
+    set.forEach(([d])=>{ pos.push(x-d); pos.push(x-d-1e-6); });        // an axle exactly at / just left of x
+    pos.forEach(s=>{ let V=0;
+      set.forEach(([d,P])=>{const a=s+d; if(a>=0&&a<=L) V+= a>=x? P*(L-a)/L : -P*a/L;});
+      if(V>vp) vp=V; if(V<vn) vn=V; }); }
+  return {Vpos:vp, Vneg:vn, range:vp-vn};
+}
+
 /* ================= LOADS (HL-93, distribution factors, dead load) ========= */
 // HL-93 moments/shears per lane, impact included in .M/.V (ported from PS-Girder, LRFD 3.6).
 function hl93(L){
@@ -1935,7 +1954,7 @@ function distFactorsSteel(inp,part){
   const skM=1-c1*Math.pow(tanT,1.5);                        // 4.6.2.2.2e
   const skV=1+0.20*Math.pow(12*L*ts3/Kg,0.3)*tanT;          // 4.6.2.2.3c
   const ext=ld.pos==='exterior';
-  let lever=0,eM=0,eV=0,rigid=0,rigidNL=0;
+  let lever=0,eM=0,eV=0,rigid=0,rigidNL=0,rigid1=0;   // rigid1 = one-lane rigid-section value (with m = 1.2), for fatigue
   let dfmRaw=Math.max(m1,m2), dfvRaw=Math.max(v1,v2);
   if(ext){
     const de=+ld.de||0;
@@ -1947,21 +1966,22 @@ function distFactorsSteel(inp,part){
     const Xext=(Nb-1)*S/2; let sumX2=0; for(let i=0;i<Nb;i++){const xi=-Xext+i*S; sumX2+=xi*xi;}
     const mpf=[1.2,1.0,0.85,0.65];
     for(let NL=1;NL<=NLmax;NL++){ let sumE=0; for(let j=0;j<NL;j++) sumE+=Xext+de-5-12*j;
-      const rr=mpf[NL-1]*(NL/Nb+Xext*sumE/Math.max(sumX2,1e-6)); if(rr>rigid){rigid=rr;rigidNL=NL;} }
+      const rr=mpf[NL-1]*(NL/Nb+Xext*sumE/Math.max(sumX2,1e-6)); if(NL===1) rigid1=rr; if(rr>rigid){rigid=rr;rigidNL=NL;} }
     dfmRaw=Math.max(eM*m2, lever, rigid); dfvRaw=Math.max(eV*v2, lever, rigid);
   }
-  return {Kg,eg,m1,m2,v1,v2,skM,skV,th,ext,lever,eM,eV,rigid,rigidNL,dfmRaw,dfvRaw,
+  return {Kg,eg,m1,m2,v1,v2,skM,skV,th,ext,lever,eM,eV,rigid,rigidNL,rigid1,dfmRaw,dfvRaw,
     dfm:dfmRaw*skM, dfv:dfvRaw*skV};
 }
 // Dead loads (per girder) + resulting service demands. Steel unit weight 0.490 kcf.
-function loadsCalc(inp,part,wswOver){
+function loadsCalc(inp,part,wswOver,tribOver){
   const {geom,deck,loads,sec}=inp, L=geom.L;
+  const trib=(tribOver!==undefined&&isFinite(tribOver))? tribOver : geom.S;   // deck tributary width, ft (STG-O4)
   const wsw=(wswOver!==undefined)? wswOver : part.bare.A*0.490/144;   // steel self-weight, klf
   // Dead-load deck thickness may differ from the structural (capacity) thickness — e.g. a
   // sacrificial/integral wearing course or overpour that adds weight but is not counted in
   // the composite section. Capacity uses deck.ts; DL weight uses tsLoad.
   const tsLoad = deck.tsSeparate ? (+deck.tsDL||+deck.ts) : +deck.ts;
-  const wdk = deck.deckOn? (geom.S*(tsLoad/12)*(+deck.wc) + (sec.bft/12)*(deck.haunch/12)*(+deck.wc)) : 0;
+  const wdk = deck.deckOn? (trib*(tsLoad/12)*(+deck.wc) + (sec.bft/12)*(deck.haunch/12)*(+deck.wc)) : 0;
   const wDC1=wsw+wdk+(+loads.wDCextra||0);
   const dia=loads.diaph||[];
   const Pdia=dia.reduce((s,d)=>s+(+d.P||0),0);
@@ -1980,7 +2000,7 @@ function loadsCalc(inp,part,wswOver){
   const Mu=1.25*(Mdc1+Mdc2)+1.50*Mdw+1.75*MLL;         // Strength I
   const Vu=1.25*(Vdc1+Vdc2)+1.50*Vdw+1.75*VLL;
   const Mserv2=(Mdc1+Mdc2+Mdw)+1.30*MLL;               // Service II
-  return {wsw,wdk,wDC1,wDC2,wDW,Pdia,Mdia,hl,df,dfm,dfv,MLL,VLL,
+  return {wsw,wdk,trib,wDC1,wDC2,wDW,Pdia,Mdia,hl,df,dfm,dfv,MLL,VLL,
     Mdc1,Mdc2,Mdw,Vdc1,Vdc2,Vdw,Mu,Vu,Mserv2};
 }
 
@@ -2201,8 +2221,13 @@ function computeAll(inp){
     // resolve grades
     const Fyf=+mat.Fyf, Fyw=+mat.Fyw, Es=+mat.Es||29000, Fyc=Fyf, Fyt=Fyf;
     const matR={...mat,Fyf,Fyw,Es,Fyc,Fyt};
-    // effective flange width (4.6.2.6 — tributary width; interior = S)
-    const beff = deck0.beffAuto? geom.S*12 : +deck0.beff;
+    // effective flange width (4.6.2.6.1 — tributary width; interior = S)
+    // Exterior girder (STG-O4): tributary width = S/2 + overhang (deck.oh, girder CL → deck edge),
+    // used for the auto b_eff and for the deck dead load. deck.extTribAuto === false keeps the old
+    // "S for every girder" basis (option for saved projects that carried the overhang otherwise).
+    const extTrib = inp.loads.pos==='exterior' && deck0.extTribAuto!==false;
+    const tribFt = extTrib? (+geom.S)/2 + Math.max(+deck0.oh||0,0) : +geom.S;
+    const beff = deck0.beffAuto? tribFt*12 : +deck0.beff;
     const deck={...deck0, beff, fc:+deck0.fc};
     // modular ratio
     const EcDeck=Ec(deck.fc, +deck0.wc);
@@ -2255,7 +2280,7 @@ function computeAll(inp){
     const My_bareTop=Fyf*bare.StSteel, My_bareBot=Fyf*bare.Sb;
     // area-weighted self-weight over the segments
     const wswAvg=segP.reduce((s,g)=>s+g.wsw*(g.x1-g.x0),0)/Lft0;
-    const Ld=loadsCalc(inp,{n,bare},wswAvg);
+    const Ld=loadsCalc(inp,{n,bare},wswAvg,tribFt);
     /* ---------- external demands (continuous spans from imported envelope) ---------- */
     const mpfExt=+inp.loads.extLLmpf||1;
     const ext=buildExternal(inp.external,Lft0,
@@ -2462,7 +2487,10 @@ function computeAll(inp){
     const flex={phif,Mp_kft,Mn_kft,MnGov,contSpan,my13:posGov.my13||null,MuPeak,flexMode,flexDC:posGov.r,Fnc:sgPos.FncPos,Fnt:sgPos.Fnt,
       FncPosNC:sgPos.FncPosNC||null,composite:!!deck.deckOn,
       fbuTop:fStr.pos.fT,fbuBot:fStr.pos.fB,compact:sgPos.compact,Dp:sgPos.pl.Dp,Dt:sgPos.pl.Dt,
-      ductOK:sgPos.ductOK,gov:posGov};
+      ductOK:sgPos.ductOK,gov:posGov,
+      // report value (STG-O11): φMn for a compact section (incl. the 1.3RhMy cap); for a noncompact or
+      // noncomposite section the stress-basis equivalent φf·min(Fnc·S_top, Fnt·S_bot) on the n section
+      phiMnRep: sgPos.compact? phif*MnGov : phif*Math.min(sgPos.FncPos*sgPos.cN.StSteel, sgPos.Fnt*sgPos.cN.Sb)/12};
     // negative-region summary (1% deck reinforcement per 6.10.1.7)
     const AsMin1pct=0.01*beff*deck.ts;
     const neg=hasNeg? {negBGov,negTGov,MunPeak,AsProv:+inp.negM.As||0,AsMin1pct,
@@ -2574,12 +2602,18 @@ function computeAll(inp){
     const Acat=fcat.A, THcat=fcat.TH;
     // Single-lane fatigue distribution factor: prefer the LLDF-pulled value (loads.fatM); else the
     // one-lane moment DF ÷ 1.2 (removes the multiple-presence factor, LRFD 3.6.1.4.3b).
-    const dfFat=(+inp.loads.fatM>0)? +inp.loads.fatM : (Ld.df? Ld.df.m1:Ld.dfm)/1.2;
-    const fatDfSource=(+inp.loads.fatM>0)?'LL & DL Distribution (single-lane)':'auto: (1-lane moment DF)÷1.2';
+    // Exterior girder (STG-O5): the one-lane DF is the lever rule (Tables 4.6.2.2.2d-1 / 4.6.2.2.3b-1),
+    // not less than the one-lane rigid-section value (4.6.2.2.2d); both carry m = 1.2, removed here.
+    const dfX=Ld.df||{}, extFat=!!dfX.ext, extFat1=extFat? Math.max(dfX.lever||0, dfX.rigid1||0) : 0;
+    const dfFat=(+inp.loads.fatM>0)? +inp.loads.fatM : (extFat? extFat1 : (Ld.df? Ld.df.m1:Ld.dfm))/1.2;
+    const fatDfSource=(+inp.loads.fatM>0)?'LL & DL Distribution (single-lane)'
+      :(extFat?'auto: exterior, max(lever rule, rigid section) for one lane ÷1.2':'auto: (1-lane moment DF)÷1.2');
     // Shear effects (stud shear range 6.10.10.1.2, web special fatigue 6.10.5.3) use the one-lane
     // SHEAR distribution factor ÷ 1.2 (4.6.2.2.3a, MPF removed per 3.6.1.4.3b), not the moment DF.
-    const dfFatV=(Ld.df? Ld.df.v1:Ld.dfv)/1.2;
-    const fatDfVSource='auto: (1-lane shear DF v₁)÷1.2';
+    // A single-lane shear DF pulled from LL & DL (loads.fatV, optional) takes precedence.
+    const dfFatV=(+inp.loads.fatV>0)? +inp.loads.fatV : (extFat? extFat1 : (Ld.df? Ld.df.v1:Ld.dfv))/1.2;
+    const fatDfVSource=(+inp.loads.fatV>0)?'LL & DL Distribution (single-lane shear)'
+      :(extFat?'auto: exterior, max(lever rule, rigid section) for one lane ÷1.2':'auto: (1-lane shear DF v₁)÷1.2');
     // Single-lane fraction p of truck traffic (Table 3.6.1.4.2-1) → (ADTT)SL = p·ADTT.
     const pFrac = fq.lanes>=3?0.80 : fq.lanes==2?0.85 : 1.00;
     const adttRaw=+fq.ADTT||1000;
@@ -2626,7 +2660,8 @@ function computeAll(inp){
       nCyc, lifeYr, Nfat, adttSLcross, xGov:fatGov.x, webFatGov, Vcr, fatCalc};
 
     /* ---------- Stiffeners (6.10.11) ---------- */
-    const Fys=50;
+    // stiffener yield strength (STG-A1): input stiff.Fys, default 50 ksi (the old fixed value)
+    const Fys=(+inp.stiff.Fys>0)? +inp.stiff.Fys : 50;
     let tStiff=null;
     if(stiffened){ const bt=+inp.stiff.bt, tp=+inp.stiff.tp, do_=doSpc;
       // 6.10.11.1.2 projecting width: b_t >= 2.0 + D/30, and 16.0 t_p >= b_t >= b_f/4,
@@ -2663,7 +2698,7 @@ function computeAll(inp){
     const KLr=0.75*D/Math.max(rcol,1e-6), lamC=Math.pow(KLr/Math.PI,2)*(Fys/Es);
     const Pn=(lamC<=2.25? Math.pow(0.658,lamC):0.877/lamC)*Fys*Acol, phic=0.95;
     const bearing={Apn,RsbN,Rreact:VuPeak,bearingOK:RsbN>=VuPeak,Pr:phic*Pn,axialOK:phic*Pn>=VuPeak,
-                   rcol,KLr,bb,tb,nb,bbMax,widthOK:bb<=bbMax*1.0001};
+                   rcol,KLr,bb,tb,nb,bbMax,widthOK:bb<=bbMax*1.0001,Fys};
 
     /* ---------- Shear connectors (6.10.10) ---------- */
     const Asc=Math.PI*Math.pow(+inp.conn.studD,2)/4, Fustud=60;
@@ -2682,32 +2717,99 @@ function computeAll(inp){
     const alphaF=Math.max(34.5-4.28*(Math.log(Nfat)/Math.LN10),0);
     const dStud2=Math.pow(+inp.conn.studD,2);
     const Zr=fatInf? 5.5*dStud2 : alphaF*dStud2;
-    const yDeckNA=(bare.hs+deck.haunch+deck.ts/2)-cN.ybar, Qslab=(beff*deck.ts/n)*yDeckNA;
-    const VfatU=Ld.hl.Vtr*1.15*dfFatV;                   // unfactored range: HL-93 truck shear at support, IM 1.15, 1-lane SHEAR DF
-    const Vfat=gammaFat*VfatU;                           // factored per the governing fatigue combination
-    const Vsr=Vfat*Qslab/cN.I, pReq=nRow*Zr/Math.max(Vsr,1e-6);
+    // Fatigue shear range per station (STG-O6): the FATIGUE truck (3.6.1.4.1, 30-ft rear axle spacing)
+    // shear range V+max − V−min at each station, IM 1.15, one-lane shear DF, on the short-term
+    // composite section of that station (6.10.10.1.2). The governing station is the one needing the
+    // closest pitch. (Before: the HL-93 design-truck shear at the support, midspan section.)
+    let fatStud=null;
+    stations.forEach(st=>{ const sg=segP[st.si], cc=sg.cN;
+      const yNA=(sg.bare.hs+deck.haunch+deck.ts/2)-cc.ybar, Q=(beff*deck.ts/n)*yNA;
+      const rg=fatShearRangeAt(Lft,st.x), VfU=rg.range*1.15*dfFatV, Vf=gammaFat*VfU, vsr=Vf*Q/cc.I;
+      const p_=nRow*Zr/Math.max(vsr,1e-6);
+      if(!fatStud||p_<fatStud.pReq) fatStud={x:st.x,si:st.si,Vpos:rg.Vpos,Vneg:rg.Vneg,range:rg.range,VfatU:VfU,Vfat:Vf,Qslab:Q,Icomp:cc.I,Vsr:vsr,pReq:p_}; });
+    const yDeckNA=(bare.hs+deck.haunch+deck.ts/2)-cN.ybar;
+    const Qslab=fatStud.Qslab, VfatU=fatStud.VfatU, Vfat=fatStud.Vfat, Vsr=fatStud.Vsr, pReq=fatStud.pReq;
+    // 6.10.10.4.2 (STG-O7): in a CONTINUOUS span (imported demands with factored −M) the studs between
+    // the point of maximum positive moment and the centerline of an adjacent interior support must
+    // develop P = Pp + Pn (straight girder: radial force F_p = 0), with
+    //   Pp = min(0.85f'c·b_s·t_s, Fyw·D·tw + Fyt·b_ft·t_ft + Fyc·b_fc·t_fc)  at the max +M section,
+    //   Pn = min(Fyw·D·tw + Fyt·b_ft·t_ft + Fyc·b_fc·t_fc, 0.45f'c·b_s·t_s)  at the interior support.
+    // A span end is an interior support when the factored −M demand there is < −1 k-ft.
+    // Provided studs are counted from the max +M station to each end at the given pitch.
+    let contStud=null;
+    if(contSpan && deck.deckOn){
+      const stEnds=[stations[0],stations[stations.length-1]], xP=stPos.x, dimsP=segP[stPos.si].dims;
+      const PpS=Fyw*D*tw+Fyf*(dimsP.bft*dimsP.tft+dimsP.bfb*dimsP.tfb), Pp=Math.min(Pslab,PpS);
+      const sides=stEnds.map((se,k)=>{ const dS=segP[se.si].dims, pier=se.Mun<-1;
+        const PnS=Fyw*D*tw+Fyf*(dS.bft*dS.tft+dS.bfb*dS.tfb), PnC=0.45*deck.fc*beff*deck.ts, Pn=pier?Math.min(PnS,PnC):0;
+        const len=k===0? xP : Lft-xP, P=Pp+Pn, req=P/Qr, prov=nRow*Math.floor((len*12)/Math.max(pitch,1));
+        return {end:k===0?'left':'right', pier, len, Pp, PnS, PnC, Pn, P, nReq:req, nProv:prov, r:req/Math.max(prov,1)}; });
+      const gov=sides[0].r>=sides[1].r? sides[0] : sides[1];
+      contStud={xP, Pp, PpS, Pslab, sides, gov};
+    }
     const conn={Asc,Qn,Qr,Pshear,nReq,nProv,strOK:nProv>=nReq,Zr,Vsr,pReq,pitch,pitchOK:pitch<=pReq,nRow,
-                Vfat,VfatU,gammaFat,fatInf,alphaF,Qslab,Icomp:cN.I,dfFatV,Vtr:Ld.hl.Vtr};
+                Vfat,VfatU,gammaFat,fatInf,alphaF,Qslab,Icomp:fatStud.Icomp,dfFatV,Vtr:Ld.hl.Vtr,fatStud,contStud,yDeckNA};
+    if(contStud) conn.strOK=contStud.gov.nProv>=contStud.gov.nReq;
 
     /* ---------- Load rating (LRFR, MBE) — station-based ---------- */
     const rf=(C,dc,dw,ll,g)=>ll>1e-6? (C-1.25*dc-1.5*dw)/(g*ll) : 99;
-    const capM=sgPos.compact? phif*MnGov
-      : phif*Math.min(sgPos.FncPos*sgPos.cN.StSteel, sgPos.Fnt*sgPos.cN.Sb)/12;   // stress→moment approx
-    const MDC=stPos.M1+stPos.M2, MDWr=stPos.Mw, MLLr=stPos.Ml;
-    const VDC=Math.abs(stVGov.V1+stVGov.V2), VDWr=Math.abs(stVGov.Vw), VLLr=Math.abs(stVGov.Vl);
+    // MBE 6A.4.2.1: strength capacity C = φc·φs·φ·Rn with φc·φs ≥ 0.85 (STG-O3). Inputs rate.phiC
+    // (condition, Table 6A.4.2.3-1) and rate.phiS (system, Table 6A.4.2.4-1); both default 1.0.
+    const rq=inp.rate||{};
+    const phiC=(+rq.phiC>0)? +rq.phiC : 1.0, phiS=(+rq.phiS>0)? +rq.phiS : 1.0;
+    const phiCS=Math.max(phiC*phiS,0.85), phiCSfloor=phiC*phiS<0.85;
+    // Flexure (+M): capacity and demand at the SAME station, governing = lowest RF over the stations
+    // (STG-O3). Compact → moment basis with this station's Mn (incl. the 1.3RhMy cap). Noncompact /
+    // noncomposite → stress basis per flange with the staged moduli of stageF (DC1 bare, DC2/DW 3n,
+    // LL n): RF = (φcφsφf·F − γDC·f_DC − γDW·f_DW)/(γLL·f_LL).
+    const rfStress=(F,fd,fl,g)=>fl>1e-6? (phiCS*phif*F-fd)/(g*fl) : 99;
+    let flexRow=null;
+    stations.forEach(st=>{ if(!(st.Ml>1e-6)||!(st.Mu>0)) return; const sg=segP[st.si];   // positive-flexure stations
+      let inv,opr,cap=null,basis;
+      if(sg.compact){
+        const fc=flexCalc.find(f=>f.x===st.x), MnSt=(fc&&fc.pos&&fc.pos.Mn!=null)? fc.pos.Mn : sg.Mn_kft;
+        cap=phiCS*phif*MnSt; basis='Mp';
+        inv=rf(cap,st.M1+st.M2,st.Mw,st.Ml,1.75); opr=rf(cap,st.M1+st.M2,st.Mw,st.Ml,1.35);
+      } else {
+        const fd=stageF(st,1.25,1.25,1.5,0).pos, fl=stageF(st,0,0,0,1).pos; basis='stress';
+        inv=Math.min(rfStress(sg.FncPos,fd.fT,fl.fT,1.75), rfStress(sg.Fnt,fd.fB,fl.fB,1.75));
+        opr=Math.min(rfStress(sg.FncPos,fd.fT,fl.fT,1.35), rfStress(sg.Fnt,fd.fB,fl.fB,1.35));
+      }
+      if(!flexRow||inv<flexRow.inv) flexRow={inv,opr,cap,basis,x:st.x,MDC:st.M1+st.M2,MDW:st.Mw,MLL:st.Ml};
+    });
+    if(!flexRow) flexRow={inv:99,opr:99,cap:null,basis:sgPos.compact?'Mp':'stress',x:stPos.x,MDC:stPos.M1+stPos.M2,MDW:stPos.Mw,MLL:stPos.Ml};
+    const capM=flexRow.cap;
+    const MDC=flexRow.MDC, MDWr=flexRow.MDW, MLLr=flexRow.MLL;
+    // Shear: φcφs·φv·Vcr (end-panel basis, unchanged) against the demand at each station; lowest RF.
+    let shRow=null;
+    stations.forEach(st=>{ const dc=Math.abs(st.V1+st.V2), dw=Math.abs(st.Vw), ll=Math.abs(st.Vl);
+      const inv=rf(phiCS*phiv*Vcr,dc,dw,ll,1.75);
+      if(!shRow||inv<shRow.inv) shRow={inv,opr:rf(phiCS*phiv*Vcr,dc,dw,ll,1.35),x:st.x,VDC:dc,VDW:dw,VLL:ll}; });
+    const VDC=shRow.VDC, VDWr=shRow.VDW, VLLr=shRow.VLL;
     const rating={
-      flexInv:rf(capM,MDC,MDWr,MLLr,1.75), flexOpr:rf(capM,MDC,MDWr,MLLr,1.35),
-      shearInv:rf(Vcr,VDC,VDWr,VLLr,1.75), shearOpr:rf(Vcr,VDC,VDWr,VLLr,1.35),
-      capM,capV:Vcr,MDC,MDWr,MLLr,VDC,VDWr,VLLr};
+      flexInv:flexRow.inv, flexOpr:flexRow.opr, flexX:flexRow.x, flexBasis:flexRow.basis,
+      shearInv:shRow.inv, shearOpr:shRow.opr, shearX:shRow.x,
+      capM,capV:phiCS*phiv*Vcr,MDC,MDWr,MLLr,VDC,VDWr,VLLr,phiC,phiS,phiCS,phiCSfloor};
     if(hasNeg&&negBGov.r>0){ const stN=stations.reduce((b,st)=>st.Mun<b.Mun?st:b,stations[0]);
       const sgN=segP[stN.si];
       const fPerm=stageF(stN,1.25,1.25,1.5,0).neg.fB;         // factored permanent, compression (−)
       const fLL1=Math.abs(stN.Mln*12/sgN.cr.Sb);              // LL stress per γ=1.0
-      rating.negInv=fLL1>1e-6? (phif*sgN.FncNeg.Fnc-Math.abs(Math.min(fPerm,0)))/(1.75*fLL1):99;
-      rating.negOpr=fLL1>1e-6? (phif*sgN.FncNeg.Fnc-Math.abs(Math.min(fPerm,0)))/(1.35*fLL1):99;
+      rating.negInv=fLL1>1e-6? (phiCS*phif*sgN.FncNeg.Fnc-Math.abs(Math.min(fPerm,0)))/(1.75*fLL1):99;
+      rating.negOpr=fLL1>1e-6? (phiCS*phif*sgN.FncNeg.Fnc-Math.abs(Math.min(fPerm,0)))/(1.35*fLL1):99;
+      rating.negX=stN.x;
     }
-    rating.govInv=Math.min(rating.flexInv,rating.shearInv,rating.negInv??99);
-    rating.govOpr=Math.min(rating.flexOpr,rating.shearOpr,rating.negOpr??99);
+    // Service II rating (MBE 6A.6.4.2.2, STG-O2): RF = (f_R − f_D)/(γLL·f_LL), f_R = 0.95RhFyf
+    // (composite; 0.80RhFyf noncomposite, as the design check), γD = 1.0, γLL = 1.30 Inventory /
+    // 1.00 Operating. Both flanges, +LL and −LL, every station; f_D in the direction of f_LL.
+    let s2Row=null;
+    stations.forEach(st=>{ const sg=segP[st.si], fR=s2Coef*sg.Rh*Fyf, s=stageF(st,1,1,1,1);
+      const fD={fB:s.parts.dc.fB+s.parts.d2.fB+s.parts.dw.fB, fT:s.parts.dc.fT+s.parts.d2.fT+s.parts.dw.fT};
+      [['bot +LL',fD.fB,s.parts.lp.fB],['top +LL',fD.fT,s.parts.lp.fT],['bot −LL',fD.fB,s.parts.ln.fB],['top −LL',fD.fT,s.parts.ln.fT]].forEach(([tag,fd,fl])=>{
+        if(!(Math.abs(fl)>1e-6)) return; const sgn=Math.sign(fl), base=(fR-sgn*fd)/Math.abs(fl);
+        if(!s2Row||base/1.30<s2Row.inv) s2Row={inv:base/1.30,opr:base/1.00,x:st.x,tag,fR,fD:sgn*fd,fLL:Math.abs(fl)}; }); });
+    if(s2Row){ rating.servInv=s2Row.inv; rating.servOpr=s2Row.opr; rating.serv=s2Row; }
+    rating.govInv=Math.min(rating.flexInv,rating.shearInv,rating.negInv??99,rating.servInv??99);
+    rating.govOpr=Math.min(rating.flexOpr,rating.shearOpr,rating.negOpr??99,rating.servOpr??99);
 
     /* ---------- push remaining checks ---------- */
     checks.push({n:'Constr. comp flange (FLB/LTB/web)', t:'Cnstr FLB', v:constr.fbuTopC, lim:constr.FncC.Fnc, r:cGov.r, u:'ksi', ref:'6.10.3.2.1', loc:constr.xGov});
@@ -2729,8 +2831,9 @@ function computeAll(inp){
     if(stiffened) checks.push({n:'End-panel stiffener spacing d_o ≤ 1.5D', t:'End panel', v:doRaw, lim:doEndMax, r:doRaw/doEndMax, u:'in', ref:'6.10.9.3.3', loc:0});
     checks.push({n:'Bearing stiffener', t:'Brg stiff', v:VuPeak, lim:Math.min(RsbN,phic*Pn), r:VuPeak/Math.min(RsbN,phic*Pn), u:'kip', ref:'6.10.11.2', loc:0});
     checks.push({n:'Bearing stiffener width b_b ≤ 0.48t_b√(E/F_ys)', t:'Brg bb', v:bb, lim:bbMax, r:bb/Math.max(bbMax,1e-6), u:'in', ref:'6.10.11.2.2', loc:0});
-    checks.push({n:'Shear studs — strength', t:'Studs str', v:nReq, lim:nProv, r:nReq/Math.max(nProv,1), u:'#', ref:'6.10.10.4', loc:0});
-    checks.push({n:'Shear studs — fatigue pitch', t:'Studs fat', v:pitch, lim:pReq, r:pitch/pReq, u:'in', ref:'6.10.10.2', loc:0});
+    if(contStud) checks.push({n:'Shear studs — strength (continuous, P = Pp + Pn, '+contStud.gov.end+' side)', t:'Studs str', v:contStud.gov.nReq, lim:contStud.gov.nProv, r:contStud.gov.r, u:'#', ref:'6.10.10.4.2', loc:contStud.gov.end==='left'?0:Lft});
+    else checks.push({n:'Shear studs — strength', t:'Studs str', v:nReq, lim:nProv, r:nReq/Math.max(nProv,1), u:'#', ref:'6.10.10.4', loc:0});
+    checks.push({n:'Shear studs — fatigue pitch', t:'Studs fat', v:pitch, lim:pReq, r:pitch/pReq, u:'in', ref:'6.10.10.2', loc:fatStud.x||0});
 
     /* ---------- Deck design (transverse, LRFD 4.6.2.1 / 9.7.3) ---------- */
     let deckD=null;
@@ -2748,13 +2851,23 @@ function computeAll(inp){
 
     const checksF=checks.map(c=>({...c,loc:c.loc||0,pass:c.r<=1.0001}));
 
+    /* ---------- warnings for effects not computed (display only) ---------- */
+    const warnings={fl:[],fat:[]};
+    const skewDeg=+inp.loads.skew||0;
+    // STG-O1: f_l is taken as 0 in 6.10.3.2 (constructibility), 6.10.4.2.2 (Service II) and 6.10.7/6.10.8 (Strength).
+    if(skewDeg>20) warnings.fl.push('Flange lateral bending f\u2113 not computed: skew = '+fmt(skewDeg,1)+'\u00b0 > 20\u00b0. Cross-frame forces in skewed bridges cause f\u2113 (C6.10.1, verify), which this app takes as 0 in the constructibility, Service II and Strength flange checks. Determine f\u2113 from a refined analysis or an approximate method and check the flanges by hand.');
+    if(inp.loads.pos==='exterior') warnings.fl.push('Flange lateral bending f\u2113 not computed: exterior girder. The deck-overhang brackets load the top flange laterally during the deck pour (6.10.3.4 / C6.10.3.4), and wind on the fascia adds f\u2113 (4.6.2.7). This app takes f\u2113 = 0; check the constructibility and Strength flange stresses with f\u2113 separately.');
+    if(warnings.fl.length) warnings.fl.push('The app assumes a straight girder; a horizontally curved girder needs f\u2113 from curvature (4.6.1.2.4) and is outside its scope.');
+    // STG-O8: the imported envelopes carry no fatigue demands.
+    if(useExt) warnings.fat.push('Imported MIDAS demands: the fatigue checks still use the fatigue truck on a SIMPLE span of L = '+fmt(Lft,1)+' ft (flange stress range, web special fatigue, stud pitch). Negative-moment fatigue at interior piers (top flange and its welded attachments, deck reinforcement) is not checked'+(hasNeg?', although this span has negative moment':'')+'. Check those details with a fatigue-truck range from the continuous analysis.');
+
     return {ok:true, sec, matR, deck, geom, beff, n, nRaw, EcDeck,
       bare, cN, c3N, pl, compact, compactWeb, compactMat, compactDtw, lambdaPw,
       Rh, Rb, ductOK, Iyc, Iyt, IycIyt, My_bareTop, My_bareBot,
       loads:Ld, hl:Ld.hl, df:Ld.df, dfm:Ld.dfm, dfv:Ld.dfv, MLL:Ld.MLL, VLL:Ld.VLL,
       segP, stations, useExt, ext, hasNeg, neg,
       stress, diag, flex, shearR, constr, camber, fatigue, tStiff, bearing, conn, rating, deckD,
-      chartS2, chartFlex, chartFat, flexCalc, shearCalc,
+      chartS2, chartFlex, chartFat, flexCalc, shearCalc, warnings,
       checks:checksF};
   }catch(e){ return {ok:false, error:e.message}; }
 }
@@ -2960,21 +3073,22 @@ function lldfResolveFor(inp){
     const gMneg=(govN&&govN.gM!=null)?+(+govN.gM).toFixed(4):gMpos;   // −M region DF (½-span L); falls back to +M
     const gV=+(+gov.gV).toFixed(4);
     const fatM=(gov.fatM!=null)?+(+gov.fatM).toFixed(4):0;            // single-lane fatigue DF (no MPF)
-    return {d,src,gMpos,gMneg,gV,fatM,hasNeg:!!govN,at:d.producedAt||'',project:d.project||''};
+    const fatV=(gov.fatV!=null)?+(+gov.fatV).toFixed(4):0;            // single-lane fatigue SHEAR DF (no MPF); 0 = not published
+    return {d,src,gMpos,gMneg,gV,fatM,fatV,hasNeg:!!govN,at:d.producedAt||'',project:d.project||''};
 }
 
-const LLDF_LABELS={extDFpos:'DF +M',extDFneg:'DF −M',extDFv:'DF V',extLLmpf:'MPF',fatM:'fatigue DF',dfm:'DFm',dfv:'DFv'};
-const LLDF_DIG={extDFpos:3,extDFneg:3,extDFv:3,extLLmpf:2,fatM:3,dfm:3,dfv:3};
+const LLDF_LABELS={extDFpos:'DF +M',extDFneg:'DF −M',extDFv:'DF V',extLLmpf:'MPF',fatM:'fatigue DF',fatV:'fatigue shear DF',dfm:'DFm',dfv:'DFv'};
+const LLDF_DIG={extDFpos:3,extDFneg:3,extDFv:3,extLLmpf:2,fatM:3,fatV:3,dfm:3,dfv:3};
 function lldfMineFor(inp){ const loads=inp.loads; return extActiveOf(inp)
-  ? {extDFpos:+loads.extDFpos, extDFneg:+loads.extDFneg, extDFv:+loads.extDFv, extLLmpf:+loads.extLLmpf, fatM:+loads.fatM}
-  : {dfm:+loads.dfm, dfv:+loads.dfv, fatM:+loads.fatM}; }
+  ? {extDFpos:+loads.extDFpos, extDFneg:+loads.extDFneg, extDFv:+loads.extDFv, extLLmpf:+loads.extLLmpf, fatM:+loads.fatM, fatV:+loads.fatV||0}
+  : {dfm:+loads.dfm, dfv:+loads.dfv, fatM:+loads.fatM, fatV:+loads.fatV||0}; }
 function lldfTheirsFor(inp,r){ return extActiveOf(inp)
-  ? {extDFpos:r.gMpos, extDFneg:r.gMneg, extDFv:r.gV, extLLmpf:1.0, fatM:r.fatM}
-  : {dfm:r.gMpos, dfv:r.gV, fatM:r.fatM}; }
+  ? {extDFpos:r.gMpos, extDFneg:r.gMneg, extDFv:r.gV, extLLmpf:1.0, fatM:r.fatM, fatV:r.fatV||0}
+  : {dfm:r.gMpos, dfv:r.gV, fatM:r.fatM, fatV:r.fatV||0}; }
 function applyLLDFTo(set,inp,r){
   const t=lldfTheirsFor(inp,r);
-  if(extActiveOf(inp)) set(p=>({...p, loads:{...p.loads, extDFpos:t.extDFpos, extDFneg:t.extDFneg, extDFv:t.extDFv, extLLmpf:t.extLLmpf, fatM:t.fatM}}));
-  else set(p=>({...p, loads:{...p.loads, llAuto:true, dfAuto:false, dfm:t.dfm, dfv:t.dfv, fatM:t.fatM}}));
+  if(extActiveOf(inp)) set(p=>({...p, loads:{...p.loads, extDFpos:t.extDFpos, extDFneg:t.extDFneg, extDFv:t.extDFv, extLLmpf:t.extLLmpf, fatM:t.fatM, fatV:t.fatV}}));
+  else set(p=>({...p, loads:{...p.loads, llAuto:true, dfAuto:false, dfm:t.dfm, dfv:t.dfv, fatM:t.fatM, fatV:t.fatV}}));
 }
 function dlResolveFor(inp){
     let raw=null; try{raw=localStorage.getItem('bridgeSuite.v1.dlLoads');}catch(e){}
@@ -3135,7 +3249,8 @@ function InputsTab({inp,set,R}){
       +'  g_M +M (moment DF)   = '+r.gMpos.toFixed(3)+'\n'
       +'  g_M −M (pier region) = '+r.gMneg.toFixed(3)+(r.hasNeg?'':'  (no continuity region → = +M)')+'\n'
       +'  g_V (shear DF)       = '+r.gV.toFixed(3)+'\n'
-      +(r.fatM>0?'  fatigue DF (1 lane)  = '+r.fatM.toFixed(3)+'\n':'')+'\n'
+      +(r.fatM>0?'  fatigue DF (1 lane)  = '+r.fatM.toFixed(3)+'\n':'')
+      +(r.fatV>0?'  fatigue shear DF (1 lane) = '+r.fatV.toFixed(3)+'\n':'')+'\n'
       +(extActive
         ?'Applies to the imported-LL DF fields: +M DF = g_M(+M), −M DF = g_M(−M), shear DF = g_V, multiple presence = 1.0 (already in the factors)'+(r.fatM>0?', fatigue DF = single-lane value.':'.')
         :'Applies as manual distribution factors (DF auto off): DFm = g_M(+M), DFv = g_V'+(r.fatM>0?', fatigue DF = single-lane value.':'.'))
@@ -3238,7 +3353,10 @@ function InputsTab({inp,set,R}){
         Nb, de:(loads.de!=null?+loads.de:null),
         inputs:{type:'a', spans:spansOut, spacings:Array(Math.max(1,Nb-1)).fill(+geom.S),
           ts:+deck.ts, skew:+loads.skew||0, depth:+R.bare.hs||undefined,
-          I:Math.round(R.bare.I), A:+R.bare.A.toFixed(1), eg:+egv.toFixed(2), n:+R.nRaw.toFixed(2)}};
+          I:Math.round(R.bare.I), A:+R.bare.A.toFixed(1), eg:+egv.toFixed(2),
+          // STG-O11: send the modular ratio this app uses for its own section and K_g (rounded, ≥ 6),
+          // so LL & DL computes K_g on the same n; the unrounded Es/Ec goes along as nRaw (new optional field)
+          n:+(+R.n).toFixed(2), nRaw:+R.nRaw.toFixed(2)}};
       const rawGeom=JSON.stringify(payload);
       if(silent){
         // A locked republish carrying the same layout is not news. Strip the
@@ -3417,8 +3535,17 @@ function InputsTab({inp,set,R}){
       <div style={{margin:'8px 0'}}>
         <label style={{fontSize:11,color:'var(--ink2)',display:'flex',gap:7,alignItems:'center'}}>
           <input type="checkbox" checked={deck.beffAuto} onChange={e=>S('deck.beffAuto',e.target.checked)}/>
-          Auto effective width = girder spacing S (interior, 4.6.2.6)</label></div>
+          Auto effective width = tributary width (interior S; exterior S/2 + overhang, 4.6.2.6.1)</label></div>
       {!deck.beffAuto && <div className="frow"><Num l="b_eff" u="in" v={deck.beff} set={v=>S('deck.beff',v)} step={1}/></div>}
+      {loads.pos==='exterior'&&<div style={{margin:'8px 0'}}>
+        <label style={{fontSize:11,color:'var(--ink2)',display:'flex',gap:7,alignItems:'center'}}>
+          <input type="checkbox" checked={deck.extTribAuto!==false} onChange={e=>S('deck.extTribAuto',e.target.checked)}/>
+          Exterior girder: tributary width = S/2 + overhang for the auto b_eff and the deck dead load (4.6.2.6.1)</label>
+        {!deck.designOn&&<div className="frow" style={{marginTop:6}}><Num l="Overhang (web→edge)" u="ft" v={deck.oh} set={v=>S('deck.oh',v)} step={0.25}/></div>}
+        <div className="hint" style={{marginTop:4}}>{deck.extTribAuto!==false
+          ? <span>Tributary width = {fmt(+geom.S/2,2)} + {fmt(Math.max(+deck.oh||0,0),2)} = <b>{fmt(+geom.S/2+Math.max(+deck.oh||0,0),2)} ft</b> (overhang measured from the girder centerline to the deck edge){deck.beffAuto?<span>; b_eff = <b>{fmt((+geom.S/2+Math.max(+deck.oh||0,0))*12,1)} in</b></span>:null}.</span>
+          : <span>Off: the girder spacing S = {fmt(+geom.S,2)} ft is used for the exterior girder as for an interior one (the basis before 2026-10-12).</span>}</div>
+      </div>}
       <div style={{marginTop:10,marginBottom:2}}>
         <label style={{fontSize:11,color:'var(--ink2)',display:'flex',gap:7,alignItems:'center'}}>
           <input type="checkbox" checked={deck.designOn} onChange={e=>S('deck.designOn',e.target.checked)}/>
@@ -3555,6 +3682,7 @@ function InputsTab({inp,set,R}){
         </div>
         {lldfLocked&&BLU.DrivenStrip&&<BLU.DrivenStrip ch="lldf" detail={lldfSrc} onUnlock={()=>toggleLLDFLock(false)}/>}
         {(+loads.fatM>0)&&<div className="hint" style={{marginTop:0,marginBottom:10}}>Fatigue DF override from LL &amp; DL: <b>{fmt(+loads.fatM,3)}</b> (single-lane, no MPF) — used on the Fatigue tab in place of the DF÷1.2 estimate. <button className="btn sm ghost" style={{padding:'1px 8px',marginLeft:4}} onClick={()=>S('loads.fatM',0)}>clear → auto</button></div>}
+        {(+loads.fatV>0)&&<div className="hint" style={{marginTop:0,marginBottom:10}}>Fatigue shear DF override from LL &amp; DL: <b>{fmt(+loads.fatV,3)}</b> (single-lane, no MPF) — used for the stud shear range and the web special-fatigue check in place of the shear DF÷1.2 estimate. <button className="btn sm ghost" style={{padding:'1px 8px',marginLeft:4}} onClick={()=>S('loads.fatV',0)}>clear → auto</button></div>}
         {extActive&&<React.Fragment>
           <div className="hint" style={{marginBottom:8}}>Imported ±LL envelopes with <b>impact already included</b>. Apply the distribution factor (per effect) and multiple presence below if not already in the envelope (1.0 = no adjustment).</div>
           <div className="frow">
@@ -3615,6 +3743,7 @@ function InputsTab({inp,set,R}){
         <Num l="Bearing stiff. width" u="in" v={inp.stiff.bearB} set={v=>S('stiff.bearB',v)} step={0.5}/>
         <Num l="Bearing stiff. thick" u="in" v={inp.stiff.bearT} set={v=>S('stiff.bearT',v)} step={0.0625}/>
         <Num l="Bearing plates (ea. side)" v={inp.stiff.bearN} set={v=>S('stiff.bearN',v)} step={1}/>
+        <Num l="Stiffener Fys" u="ksi" v={inp.stiff.Fys} set={v=>S('stiff.Fys',v)} step={1}/>
       </div>
       <div className="grouplabel">Shear connectors (studs)</div>
       <div className="frow">
@@ -3651,7 +3780,7 @@ function InputsTab({inp,set,R}){
           </select></div></div>
         <Num l="Fatigue design life (yr)" v={inp.fatigue.designLife||75} set={v=>S('fatigue.designLife',v)} step={5}/>
       </div>
-      <div className="hint" style={{margin:'2px 0 0'}}>{(+inp.loads.fatM>0)?<span>A single-lane fatigue distribution factor <b>{fmt(+inp.loads.fatM,3)}</b> is pulled from the LL &amp; DL Distribution app and will be used for the stress range. Clear it on the Loads card to fall back to the DF÷1.2 estimate.</span>:<span>The single-lane fatigue distribution factor is estimated as (1-lane moment DF)÷1.2 (removes multiple presence). Pull an exact value from the LL &amp; DL Distribution app if desired.</span>}</div>
+      <div className="hint" style={{margin:'2px 0 0'}}>{(+inp.loads.fatM>0)?<span>A single-lane fatigue distribution factor <b>{fmt(+inp.loads.fatM,3)}</b> is pulled from the LL &amp; DL Distribution app and will be used for the stress range. Clear it on the Loads card to fall back to the DF÷1.2 estimate.</span>:<span>The single-lane fatigue distribution factor is estimated as (1-lane moment DF)÷1.2 (removes multiple presence){inp.loads.pos==='exterior'?'; for an exterior girder the one-lane DF is the larger of the lever rule and the rigid-section value':''}. Pull an exact value from the LL &amp; DL Distribution app if desired.</span>}</div>
     </Card>
     </div>
   </div>);
@@ -3767,6 +3896,15 @@ function SectionTab({R}){
   </div>);
 }
 
+/* Warnings for effects this app does not compute (STG-O1 flange lateral bending, STG-O8 fatigue with
+   imported continuous demands). Display only. */
+function StgWarn({R,kind}){
+  if(!R||!R.ok||!R.warnings) return null;
+  const w=R.warnings, items=kind==='fl'? w.fl : kind==='fat'? w.fat : [...w.fl,...w.fat];
+  if(!items.length) return null;
+  return <div className="callout warn" style={{marginTop:0,marginBottom:12}}>
+    {items.map((t,i)=><div key={i} style={{marginTop:i?6:0}}>{t}</div>)}</div>;
+}
 function StressTab({R}){
   if(!R.ok) return null;
   const st=R.stress;
@@ -3787,6 +3925,7 @@ function StressTab({R}){
     if(Math.abs(x-govX)<0.06) t.push('governing');
     return 'x = '+x.toFixed(1)+' ft'+(t.length?'  ·  '+t.join(', '):''); };
   return (<div>
+    <StgWarn R={R} kind="fl"/>
     <div className="bigres">
       <div className={'br '+(botPass?'p':'f')}><div className="l">Service II — bottom flange</div><div className="n">{fmt(st.fBot.serv2,1)}</div><div className="u">ksi vs {fmt(st.fServLim,1)} · {fmt(st.s2Coef,2)}RhFyf</div></div>
       <div className={'br '+(topPass?'p':'f')}><div className="l">Service II — top flange</div><div className="n">{fmt(st.fTop.serv2,1)}</div><div className="u">ksi vs {fmt(st.fServLim,1)}</div></div>
@@ -3980,6 +4119,7 @@ function FlexTab({R}){
     </React.Fragment>;
   };
   return (<div>
+    <StgWarn R={R} kind="fl"/>
     <div className="bigres">
       <div className={'br '+(pass?'p':'f')}><div className="l">{f.compact?'Mu / φMn':'Strength flexure D/C'}</div><div className="n">{fmt(f.flexDC,2)}</div><div className="u">{f.compact?fmt(f.MuPeak,0)+' / '+fmt(f.phif*f.MnGov,0)+' k-ft':'stress basis'}</div></div>
       <div className="br"><div className="l">Plastic moment Mp</div><div className="n">{fmt(f.Mp_kft,0)}</div><div className="u">k-ft · PNA {pl.region}</div></div>
@@ -4215,6 +4355,7 @@ function ConstructTab({R}){
     t.push(p.region==='neg'?'−M (uplift)':'+M');
     return 'x = '+x.toFixed(1)+' ft  ·  '+t.join(', '); };
   return (<div>
+    <StgWarn R={R} kind="fl"/>
     <div className="bigres">
       <div className={'br '+(fPass&&yPass&&wPass?'p':'f')}><div className="l">Top flange (constr.)</div><div className="n">{fmt(c.fbuTopC,1)}</div><div className="u">ksi · Fnc = {fmt(c.FncC.Fnc,1)}</div></div>
       <div className={'br '+(vPass?'p':'f')}><div className="l">Construction shear</div><div className="n">{fmt(c.VcU/c.VcrC,2)}</div><div className="u">{fmt(c.VcU,0)} / {fmt(c.VcrC,0)} kip</div></div>
@@ -4327,6 +4468,7 @@ function FatigueTab({R}){
   const stepHdr=(t)=>(<div style={{fontStretch:'75%',fontWeight:800,fontSize:12.5,letterSpacing:'.6px',
     textTransform:'uppercase',color:'var(--blue)',margin:'2px 0 8px'}}>{t}</div>);
   return (<div>
+    <StgWarn R={R} kind="fat"/>
     <div className="bigres">
       <div className={'br '+(pass?'p':'f')}><div className="l">γ(Δf) / (ΔF)n</div><div className="n">{fmt(f.fatDC,2)}</div><div className="u">cat {f.cat} · {lsName}</div></div>
       <div className="br"><div className="l">Governing Δf</div><div className="n">{fmt(f.dfRange,2)}</div><div className="u">ksi · btm flange @ {fmt(f.xGov,1)} ft</div></div>
@@ -4466,7 +4608,7 @@ function StiffTab({R}){
       <VarTable title="Variables — bearing stiffener" rows={[
         ['n_b','Plates each side',br.nb,'—'],['b_b','Plate width',br.bb,'in'],['t_b','Plate thickness',br.tb,'in'],
         ['A_pn','Net bearing area (less corner clip)',br.Apn,'in²'],
-        ['F_ys','Stiffener yield',50,'ksi'],
+        ['F_ys','Stiffener yield',br.Fys,'ksi'],
         ['b_b,max','Projecting-width limit 0.48·t_p·√(E/F_ys)',br.bbMax,'in'],
         ['R_sb','Bearing resistance 1.4·A_pn·F_ys',br.RsbN,'kip'],
         ['KL/r','Effective column slenderness',br.KLr,'—'],
@@ -4474,9 +4616,9 @@ function StiffTab({R}){
         ['R_u','Support reaction (Strength I V_u)',br.Rreact,'kip'],
       ]}/>
       <SG n="1">Projecting width</SG>
-      <ML s={Tx`b_b=${nx(br.bb,2)}\;\text{in}\;\le\;0.48\,t_p\sqrt{E/F_{ys}}=0.48(${nx(br.tb,3)})\sqrt{29000/50}=${nx(br.bbMax,2)}\;\text{in}\;${br.widthOK?'\\checkmark':'\\text{N.G.}'}`}/>
+      <ML s={Tx`b_b=${nx(br.bb,2)}\;\text{in}\;\le\;0.48\,t_p\sqrt{E/F_{ys}}=0.48(${nx(br.tb,3)})\sqrt{${(+R.matR.Es).toFixed(0)}/${(+br.Fys).toFixed(0)}}=${nx(br.bbMax,2)}\;\text{in}\;${br.widthOK?'\\checkmark':'\\text{N.G.}'}`}/>
       <SG n="2">Bearing resistance</SG>
-      <ML s={Tx`R_{sb}=1.4\,A_{pn}F_{ys}=1.4\cdot${nx(br.Apn,1)}\cdot50=${nx(br.RsbN,0)}\;\text{kip}\qquad\frac{R_u}{R_{sb}}=${nx(br.Rreact/br.RsbN,3)}\;${br.bearingOK?'\\checkmark':'\\text{N.G.}'}`}/>
+      <ML s={Tx`R_{sb}=1.4\,A_{pn}F_{ys}=1.4\cdot${nx(br.Apn,1)}\cdot${nx(br.Fys,0)}=${nx(br.RsbN,0)}\;\text{kip}\qquad\frac{R_u}{R_{sb}}=${nx(br.Rreact/br.RsbN,3)}\;${br.bearingOK?'\\checkmark':'\\text{N.G.}'}`}/>
       <SG n="3">Axial column check (effective section: stiffener plates + 9t_w web each side)</SG>
       <ML s={Tx`\frac{KL}{r}=\frac{0.75D}{r}=${nx(br.KLr,1)}\qquad\phi_cP_n=${nx(br.Pr,0)}\;\text{kip}\qquad\frac{R_u}{\phi_cP_n}=${nx(br.Rreact/br.Pr,3)}\;${br.axialOK?'\\checkmark':'\\text{N.G.}'}`}/>
       <div className="mnote">The bearing stiffener transmits the support reaction R_u = {fmt(br.Rreact,0)} kip into the web. It is checked two ways: local bearing on the milled contact area (net of the corner clip that clears the web-to-flange weld), and as an axial column — the stiffener plates plus a strip of web 9t_w wide on each side, with an effective length 0.75D.</div>
@@ -4488,8 +4630,11 @@ function ConnTab({R}){
   if(!R.ok) return null;
   const c=R.conn;
   return (<div>
+    <StgWarn R={R} kind="fat"/>
     <div className="bigres">
-      <div className={'br '+(c.strOK?'p':'f')}><div className="l">Studs — strength</div><div className="n">{fmt(c.nReq/Math.max(c.nProv,1),2)}</div><div className="u">{Math.ceil(c.nReq)} req / {c.nProv} prov</div></div>
+      {c.contStud
+        ? <div className={'br '+(c.strOK?'p':'f')}><div className="l">Studs — strength (continuous)</div><div className="n">{fmt(c.contStud.gov.r,2)}</div><div className="u">{Math.ceil(c.contStud.gov.nReq)} req / {c.contStud.gov.nProv} prov · {c.contStud.gov.end} side</div></div>
+        : <div className={'br '+(c.strOK?'p':'f')}><div className="l">Studs — strength</div><div className="n">{fmt(c.nReq/Math.max(c.nProv,1),2)}</div><div className="u">{Math.ceil(c.nReq)} req / {c.nProv} prov</div></div>}
       <div className={'br '+(c.pitchOK?'p':'f')}><div className="l">Studs — fatigue pitch</div><div className="n">{fmt(c.pitch/c.pReq,2)}</div><div className="u">{fmt(c.pitch,1)} / {fmt(c.pReq,1)} in</div></div>
     </div>
 
@@ -4512,13 +4657,22 @@ function ConnTab({R}){
       <SG n="2">Number of studs required (strength)</SG>
       <ML s={Tx`n=\frac{P}{Q_r}=\frac{${nx(c.Pshear,0)}}{${nx(c.Qr,1)}}=${nx(c.nReq,1)}\;\text{studs}\quad\text{(max-M}\to\text{support)}`}/>
       <ML s={Tx`n_{prov}=${nx(c.nProv,0)}\;${c.strOK?'\\ge':'<'}\;n_{req}=${nx(c.nReq,1)}\;${c.strOK?'\\checkmark':'\\text{N.G.}'}`}/>
-      <div className="mnote">P is the smaller of the slab force 0.85f′_c·b_eff·t_s and the steel force F_y·A_steel — the total horizontal shear that must be transferred between the point of maximum moment and the support.</div>
+      <div className="mnote">P is the smaller of the slab force 0.85f′_c·b_eff·t_s and the steel force F_y·A_steel — the total horizontal shear that must be transferred between the point of maximum moment and the support.{c.contStud?' In this continuous span the governing requirement is the one below (6.10.10.4.2).':''}</div>
+      {c.contStud&&<React.Fragment>
+        <SG n="3">Continuous span — max +M to the interior support (6.10.10.4.2)</SG>
+        <ML s={Tx`P_p=\min\!\left(0.85f'_cb_st_s,\;F_{yw}Dt_w+F_{yt}b_{ft}t_{ft}+F_{yc}b_{fc}t_{fc}\right)=\min(${nx(c.contStud.Pslab,0)},\;${nx(c.contStud.PpS,0)})=${nx(c.contStud.Pp,0)}\;\text{kip}\quad(x_{+M}=${nx(c.contStud.xP,1)}\;\text{ft})`}/>
+        <Tbl head={['End','Interior support?','Length max +M → end (ft)','P_n = min(steel, 0.45f′c·b_s·t_s) (kip)','P = P_p + P_n (kip)','n req','n prov','Ratio']}
+          rows={c.contStud.sides.map(sd=>({_cls:sd===c.contStud.gov?'tot':'',c:[sd.end,sd.pier?'yes':'no (P = P_p)',fmt(sd.len,1),sd.pier?fmt(sd.PnS,0)+' / '+fmt(sd.PnC,0)+' → '+fmt(sd.Pn,0):'—',fmt(sd.P,0),fmt(sd.nReq,1),fmt(sd.nProv,0),{v:fmt(sd.r,2),cls:sd.r<=1.0001?'ok':'no'}]}))}/>
+        <div className="mnote">The span is continuous (the imported demands have factored negative moment). Between the point of maximum positive moment and the centerline of an adjacent interior support the studs must develop P = P<sub>p</sub> + P<sub>n</sub> (6.10.10.4.2; straight girder, radial force F<sub>p</sub> = 0 — verify equation numbers against the 10th Ed.). An end is taken as an interior support when the factored −M there is below −1 k-ft. Provided studs are counted at the uniform pitch from the max +M station to that end.</div>
+      </React.Fragment>}
     </Deriv>
 
     <Deriv title="Fatigue pitch requirement" refTag="6.10.10.1.2 / 6.10.10.2">
       <VarTable title="Variables — fatigue" rows={[
         ['\u03b3','Fatigue load factor ('+(c.fatInf?'Fatigue I, infinite life':'Fatigue II, finite life')+')',c.gammaFat,'—'],
         ['Z_r','Fatigue shear resistance of one stud',c.Zr,'kip'],
+        ['x','Governing station (closest required pitch)',c.fatStud.x,'ft'],
+        ['V_+ / V_−','Fatigue-truck shear at x, per lane, no IM (max +, max −)',c.fatStud.Vpos.toFixed(2)+' / '+c.fatStud.Vneg.toFixed(2),'kip'],
         ['V_sr','Fatigue horizontal shear range per unit length',c.Vsr,'kip/in'],
         ['n','Studs per row (transverse)',c.nRow,'—'],
         ['p_req','Maximum permitted pitch n·Z_r/V_sr',c.pReq,'in'],
@@ -4527,17 +4681,19 @@ function ConnTab({R}){
       <ML s={c.fatInf
         ? Tx`Z_r=5.5\,d^{2}=${nx(c.Zr,2)}\;\tfrac{\text{kip}}{\text{stud}}\quad(\text{Fatigue I, infinite life, Eq. 6.10.10.2-1})`
         : Tx`Z_r=\alpha d^{2}=(${nx(c.alphaF,2)})d^{2}=${nx(c.Zr,2)}\;\tfrac{\text{kip}}{\text{stud}}\quad(\text{Fatigue II, finite life})`}/>
-      <ML s={Tx`V_f=\gamma\,V_{tr}(1.15)\,g_{V,1}=${nx(c.gammaFat,2)}\cdot${nx(c.Vtr,2)}\cdot1.15\cdot${nx(c.dfFatV,3)}=${nx(c.gammaFat,2)}\cdot${nx(c.VfatU,2)}=${nx(c.Vfat,2)}\;\text{kip}\qquad V_{sr}=\frac{V_f\,Q}{I}=\frac{${nx(c.Vfat,2)}\cdot${nx(c.Qslab,0)}}{${nx(c.Icomp,0)}}=${nx(c.Vsr,3)}\;\tfrac{\text{kip}}{\text{in}}`}/>
+      <ML s={Tx`V_f=\gamma\,(V_{+}-V_{-})(1.15)\,g_{V,1}=${nx(c.gammaFat,2)}\cdot${nx(c.fatStud.range,2)}\cdot1.15\cdot${nx(c.dfFatV,3)}=${nx(c.gammaFat,2)}\cdot${nx(c.VfatU,2)}=${nx(c.Vfat,2)}\;\text{kip}\qquad V_{sr}=\frac{V_f\,Q}{I}=\frac{${nx(c.Vfat,2)}\cdot${nx(c.Qslab,0)}}{${nx(c.Icomp,0)}}=${nx(c.Vsr,3)}\;\tfrac{\text{kip}}{\text{in}}`}/>
       <div className="mnote">The load factor and the Z<sub>r</sub> branch are a pair (6.10.10.2 with Table 3.4.1-1): Fatigue&nbsp;I applies γ&nbsp;=&nbsp;1.75 against the infinite-life resistance 5.5d², Fatigue&nbsp;II applies γ&nbsp;=&nbsp;0.80 against αd². Which one is in force is decided on the Fatigue tab and follows the same (ADTT)<sub>SL</sub> crossover as the flange check.</div>
       <ML s={Tx`p\le\frac{n\,Z_r}{V_{sr}}=\frac{${nx(c.nRow,0)}\cdot${nx(c.Zr,2)}}{${nx(c.Vsr,3)}}=${nx(c.pReq,1)}\;\text{in}\qquad p_{prov}=${nx(c.pitch,1)}\;${c.pitchOK?'\\le':'>'}\;p_{req}\;${c.pitchOK?'\\checkmark':'\\text{N.G.}'}`}/>
-      <div className="mnote">Z_r is the fatigue shear resistance of one stud (Fatigue&nbsp;II: α = 34.5 − 4.28·log N; Fatigue&nbsp;I: 5.5d²). V_sr = V_f·Q/I is the horizontal shear range per unit length from the fatigue truck on the short-term composite section. The required pitch is the closest fatigue-controlled spacing; the provided pitch must not exceed it.</div>
+      <div className="mnote">Z_r is the fatigue shear resistance of one stud (Fatigue&nbsp;II: α = 34.5 − 4.28·log N; Fatigue&nbsp;I: 5.5d²). V_sr = V_f·Q/I is the horizontal shear range per unit length on the short-term composite section, with V_f the shear range V<sub>+</sub> − V<sub>−</sub> of the fatigue truck (3.6.1.4.1, 30-ft rear axle spacing, one lane, IM 1.15) at each station; the station needing the closest pitch governs (x = {fmt(c.fatStud.x,1)} ft). Radial fatigue shear F<sub>fat</sub> (curved or skewed girders) is not included. The required pitch is the closest fatigue-controlled spacing; the provided pitch must not exceed it.</div>
     </Deriv>
   </div>);
 }
 
-function RatingTab({R,onSendCapacity,capLocked,onToggleCapLock}){
+function RatingTab({R,inp,set,onSendCapacity,capLocked,onToggleCapLock}){
   if(!R.ok) return null;
   const r=R.rating, cell=v=>({v:fmt(v,2),cls:v>=1?'ok':'no'});
+  const setRate=(k,v)=>{ if(set) set(p=>({...p, rate:{...((p&&p.rate)||{}), [k]:v}})); };
+  const rq=(inp&&inp.rate)||{};
   return (<div>
     {onSendCapacity&&<div className="callout" style={{marginTop:0,marginBottom:12,borderLeftColor:capLocked?'#ea580c':'var(--blue)',background:capLocked?'#fff7ed':'#EEF4FF',display:'flex',alignItems:'center',gap:12,flexWrap:'wrap'}}>
       <div style={{flex:'1 1 340px'}}><b>Feed this capacity to the MCT rating.</b> Publishes φM<sub>n</sub>⁺ / φM<sub>n</sub>⁻ / φV<sub>n</sub> (plus Service II limits and fatigue resistance) at <b>every station across all spans</b> of the member, so the MCT app can rate any vehicle against the real section-by-section resistance instead of a few assumed points.</div>
@@ -4554,13 +4710,21 @@ function RatingTab({R,onSendCapacity,capLocked,onToggleCapLock}){
       <div className={'br '+(r.govInv>=1?'p':'f')}><div className="l">Inventory RF (gov)</div><div className="n">{fmt(r.govInv,2)}</div><div className="u">HL-93 · γLL = 1.75</div></div>
       <div className={'br '+(r.govOpr>=1?'p':'f')}><div className="l">Operating RF (gov)</div><div className="n">{fmt(r.govOpr,2)}</div><div className="u">HL-93 · γLL = 1.35</div></div>
     </div>
+    <Card title="Rating factors φc, φs" refTag="MBE 6A.4.2.3 · 6A.4.2.4">
+      <div className="frow">
+        <Num l="Condition factor φc" v={rq.phiC} set={v=>setRate('phiC',v)} step={0.05}/>
+        <Num l="System factor φs" v={rq.phiS} set={v=>setRate('phiS',v)} step={0.05}/>
+      </div>
+      <div className="hint">φc: good or satisfactory 1.00, fair 0.95, poor 0.85 (MBE Table 6A.4.2.3-1). φs: 1.00 for multi-girder bridges; lower for welded two-girder, truss and arch members and for some three- and four-girder layouts (MBE Table 6A.4.2.4-1). They multiply the strength capacities only (not Service II); φc·φs is taken not less than 0.85 (MBE 6A.4.2.1){r.phiCSfloor?<b style={{color:'var(--warn)'}}> — the product {fmt(r.phiC*r.phiS,3)} is below 0.85, so 0.85 is used</b>:null}. Used here: φc·φs = <b>{fmt(r.phiCS,3)}</b>.</div>
+    </Card>
     <Card title="LRFR design-load rating" refTag="MBE 6A · RF = (C − γDC·DC − γDW·DW)/(γLL·LL)">
       <Tbl head={['Limit state','Capacity C','DC','DW','LL+IM','RF Inv','RF Opr']} rows={[
-        {c:['Flexure +M (k-ft)',fmt(r.capM,0),fmt(r.MDC,0),fmt(r.MDWr,0),fmt(r.MLLr,0),cell(r.flexInv),cell(r.flexOpr)]},
-        ...(r.negInv!==undefined?[{c:['Flexure −M (stress basis)','φFnc','—','—','—',cell(r.negInv),cell(r.negOpr)]}]:[]),
-        {c:['Shear (kip)',fmt(r.capV,0),fmt(r.VDC,0),fmt(r.VDWr,0),fmt(r.VLLr,0),cell(r.shearInv),cell(r.shearOpr)]},
+        {c:['Flexure +M ('+(r.flexBasis==='Mp'?'k-ft':'stress basis')+') @ x = '+fmt(r.flexX,1)+' ft',r.capM!=null?fmt(r.capM,0):'φcφsφf·F',fmt(r.MDC,0),fmt(r.MDWr,0),fmt(r.MLLr,0),cell(r.flexInv),cell(r.flexOpr)]},
+        ...(r.negInv!==undefined?[{c:['Flexure −M (stress basis) @ x = '+fmt(r.negX,1)+' ft','φcφsφFnc','—','—','—',cell(r.negInv),cell(r.negOpr)]}]:[]),
+        {c:['Shear (kip) @ x = '+fmt(r.shearX,1)+' ft',fmt(r.capV,0),fmt(r.VDC,0),fmt(r.VDWr,0),fmt(r.VLLr,0),cell(r.shearInv),cell(r.shearOpr)]},
+        ...(r.servInv!==undefined?[{c:['Service II flange ('+r.serv.tag+', ksi) @ x = '+fmt(r.serv.x,1)+' ft',fmt(r.serv.fR,1),{v:fmt(r.serv.fD,1)+' (DC+DW)'},'—',fmt(r.serv.fLL,1),cell(r.servInv),cell(r.servOpr)]}]:[]),
       ]}/>
-      <div className="hint">Design-load rating on HL-93 with condition and system factors φc·φs = 1.0 (good condition). Inventory γLL = 1.75, Operating γLL = 1.35 (MBE Table 6A.4.2.2-1). Flexure capacity is φf Mn; shear is φv Vn (end panel). RF ≥ 1.0 means the girder carries the rating vehicle at that level. Legal- and permit-vehicle rating uses the same equation with the entered live-load effects and LRFR factors — a small extension planned next.</div>
+      <div className="hint">Design-load rating on HL-93. Strength: Inventory γLL = 1.75, Operating γLL = 1.35 (MBE Table 6A.4.2.2-1); capacity C = φc·φs·φ·Rn. Each rating factor is evaluated at every station with that station's own capacity and demands, and the lowest is shown with its location. Flexure +M uses φf Mn (Mp basis, incl. the 1.3R<sub>h</sub>M<sub>y</sub> cap in continuous spans) for compact sections, or the flange stresses on the staged sections (DC1 bare steel, DC2 + DW long-term 3n, LL short-term n) against φF<sub>nc</sub> / φF<sub>nt</sub> otherwise. Shear is φv Vn (end-panel C·V<sub>p</sub>, conservative). Service II (MBE 6A.6.4.2.2): RF = (f<sub>R</sub> − f<sub>D</sub>)/(γLL·f<sub>LL</sub>) with f<sub>R</sub> = {fmt(R.stress.s2Coef,2)}R<sub>h</sub>F<sub>yf</sub>, γLL = 1.30 Inventory and 1.00 Operating, unfactored dead load, both flanges. RF ≥ 1.0 means the girder carries the rating vehicle at that level. Legal- and permit-vehicle rating uses the same equation with the entered live-load effects and LRFR factors — a small extension planned next.</div>
     </Card>
   </div>);
 }
@@ -4615,6 +4779,7 @@ function ReportTab({R}){
   if(!R.ok) return null;
   const allPass=R.checks.every(c=>c.pass);
   return (<div>
+    <StgWarn R={R} kind="all"/>
     <Card title="Design summary — all limit-state checks" refTag="AASHTO LRFD Section 6">
       <Tbl head={['Check','Ref','Demand','Capacity','D/C','Status']}
         rows={R.checks.map(c=>({c:[c.n,c.ref,fmt(c.v,2)+' '+c.u,fmt(c.lim,2)+' '+c.u,fmt(c.r,2),PF(c.pass)]}))}/>
@@ -4623,7 +4788,7 @@ function ReportTab({R}){
       <KV rows={[
         ['Section','built-up '+fmt(R.sec.D,0)+'×'+fmt(R.sec.tw,3)+' web',''],
         ['Plastic moment Mp',fmt(R.pl.Mp/12,0),'k-ft'],
-        ['φMn flexure',fmt(R.flex.compact?R.flex.Mn_kft:0,0),'k-ft'],
+        [R.flex.compact?'φMn flexure':'φMn flexure (stress-basis equivalent, φf·min(Fnc·S_t, Fnt·S_b))',fmt(R.flex.phiMnRep,0),'k-ft'],
         ['Peak Mu (Strength I)',fmt(R.flex.MuPeak,0),'k-ft'],
         ['φVn end panel',fmt(R.shearR.Vcr,0),'kip'],
         ['Peak Vu',fmt(R.shearR.VuPeak,0),'kip'],
@@ -4719,6 +4884,7 @@ function BeamChip({nb,setBy}){
 
 function App(){
   const canSave=useMemo(()=>lsAvailable(),[]);
+  const [saveFail,setSaveFail]=useState('');   // '' | 'session' | 'project' — last autosave write failed (STG-S8)
   const [inp,setInpRaw]=useState(()=>canSave?(mergeInputs(loadSaved())||DEFAULTS):DEFAULTS);
   const [tab,setTab]=useState('inputs');
   const undoStack=useRef([]), redoStack=useRef([]);
@@ -4984,9 +5150,12 @@ function App(){
     return ()=>window.removeEventListener('storage',onStorage);
   },[curProjId]);
   useEffect(()=>{ if(!canSave)return; clearTimeout(saveTimer.current);
-    saveTimer.current=setTimeout(()=>{ saveInputs(inp);          // per-session autosave (always)
+    saveTimer.current=setTimeout(()=>{ const okS=saveInputs(inp);          // per-session autosave (always)
       // Contribute to the ACTIVE shared project only — never create or rename one (that's MCT's job).
-      try{ if(BP()){ const cur=BP().current(); if(cur&&BP().get(cur)) BP().saveSlice(cur,undefined,ST_APP,JSON.parse(JSON.stringify(inp))); } }catch(e){}
+      let okP=true;
+      try{ if(BP()){ const cur=BP().current(); if(cur&&BP().get(cur)) okP=!!BP().saveSlice(cur,undefined,ST_APP,JSON.parse(JSON.stringify(inp))); } }catch(e){ okP=false; }
+      // STG-S8: a failed write (browser storage full or blocked) is shown, not swallowed
+      setSaveFail(!okS?'session':(!okP?'project':''));
     },400); return ()=>clearTimeout(saveTimer.current); },[inp,canSave]);
   useEffect(()=>{ const h=e=>{ const mod=e.ctrlKey||e.metaKey; if(!mod)return; const k=e.key.toLowerCase();
     if(k==='z'&&!e.shiftKey){e.preventDefault();undo();} else if((k==='z'&&e.shiftKey)||k==='y'){e.preventDefault();redo();} };
@@ -5118,7 +5287,9 @@ function App(){
           <BeamChip nb={Math.max(2,Math.round(+(inp.geom&&inp.geom.nGirders)||0))||null} setBy="ST-Girder"/>
           <span style={{width:1,height:20,background:'var(--line)',margin:'0 3px'}}></span>
           {canSave
-            ? <span style={{fontSize:10.5,color:'var(--ink2)',fontFamily:'var(--mono)',marginRight:2}}>✓ auto-saved</span>
+            ? (saveFail
+              ? <span style={{fontSize:10.5,color:'var(--fail)',fontFamily:'var(--mono)',fontWeight:700,marginRight:2}} title="The last autosave could not be written to browser storage">⚠ autosave failed</span>
+              : <span style={{fontSize:10.5,color:'var(--ink2)',fontFamily:'var(--mono)',marginRight:2}}>✓ auto-saved</span>)
             : <span style={{fontSize:10.5,color:'var(--ink2)',fontFamily:'var(--mono)',marginRight:2}}>⚠ session not saved here</span>}
           <button className="btn sm ghost" onClick={undo} disabled={!undoStack.current.length} style={!undoStack.current.length?{opacity:.4}:{}}>↶ Undo</button>
           <button className="btn sm ghost" onClick={redo} disabled={!redoStack.current.length} style={!redoStack.current.length?{opacity:.4}:{}}>↷ Redo</button>
@@ -5146,6 +5317,7 @@ function App(){
       </div>
     </div>
 
+    {saveFail&&<div className="callout warn noprint" style={{marginTop:14}}><b>Autosave failed.</b> The last change could not be written to browser storage ({saveFail==='session'?'ST-Girder session key stgirder.session':'the active shared project'}). The storage is probably full: every tool opened from this folder shares one browser storage area (about 5 MB). Use <b>Export JSON</b> now to keep your work, then free space (for example delete old projects in the MCT app). This message clears on the next successful save.</div>}
     <LockAutoSync inp={inp} set={setInp}/>
     {!R.ok?
       <div className="callout warn" style={{marginTop:14}}><b>Input error:</b> {R.error}. Check the plate dimensions.</div>
@@ -5174,7 +5346,7 @@ function App(){
         {tab==='fatigue'&&<FatigueTab R={R}/>}
         {tab==='stiff'&&<StiffTab R={R}/>}
         {tab==='conn'&&<ConnTab R={R}/>}
-        {tab==='rating'&&<RatingTab R={R} onSendCapacity={publishCapacity} capLocked={capLocked} onToggleCapLock={toggleCapLock}/>}
+        {tab==='rating'&&<RatingTab R={R} inp={inp} set={setInp} onSendCapacity={publishCapacity} capLocked={capLocked} onToggleCapLock={toggleCapLock}/>}
         {tab==='optimize'&&<OptimizeTab R={R} inp={inp}/>}
         {tab==='nomen'&&<NomenclatureTab/>}
         {tab==='report'&&<ReportTab R={R}/>}
