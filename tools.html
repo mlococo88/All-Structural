@@ -44,9 +44,16 @@ details.checks ul{margin:0;padding-left:20px}details.checks li{margin:3px 0}deta
 <li><b>Timber:</b> supply values not built in if wanted (SP Stud, SPF timbers, Dense/Non-Dense, other glulam).</li>
 <li><b>Gusset:</b> check all "verify" values against the printed MBE / FHWA guide / AASHTO.</li>
 <li><b>Gusset:</b> open an exported DXF in AutoCAD and MicroStation and re-import it.</li>
+</ul><h3>Results changed in the 2026-10-12 sweep — review first</h3><ul>
+<li><b>Pile:</b> micropile casing tension through threaded joints now 0 % by default (FHWA) — enter the joint efficiency if documented (tension capacity at defaults 626 → 53 kip).</li>
+<li><b>Light Pole:</b> flexible poles (n&#8321; &lt; 1 Hz) use G<sub>f</sub> with damping &beta; = 0.005 — confirm &beta;; monopost torsion now checked.</li>
+<li><b>SubLoads:</b> Zones 2–4 seismic — foundations R/2 or 1.0, bearings R = 0.8 ("Unit R" option restores old numbers).</li>
+<li><b>Abutment, SubLoads:</b> EE-I &gamma;<sub>EH</sub> = &gamma;<sub>p</sub> for new projects; old saves keep their stored value.</li>
+<li><b>Steel Beam:</b> H3.3(c) torsion buckling and axial tension now checked. <b>Timber:</b> point loads within d now in shear. <b>Moving Load:</b> HS20/H20 lane loading enveloped.</li>
+<li><b>Bridge suite:</b> exterior-girder b<sub>eff</sub>/DL and fatigue DFs; Service II rating; skew for moment vs shear; n from f&prime;c for concrete girders.</li>
 </ul><h3>Decisions</h3><ul>
-<li><b>Gusset:</b> missing checks O1–O4, O16 are being added (2026-10-12) — review when done.</li>
-<li><b>Pile Designer:</b> open items being worked 2026-10-12 (fix log); verify Art. 10.7.3.13.4 as the Davisson fixity reference. Remaining questions will be listed here.</li>
+<li>About 100 questions across all tools, each with a recommendation the tool currently follows — see section C of ENGINEER_CHECKS.md.</li>
+<li><b>Suite-wide:</b> ASCE 7 edition per tool; library version convergence; CDN reachability on the work laptop (inline Tailwind?).</li>
 </ul>
 <p class="sub" style="margin:10px 0 2px;font-size:13px">Full list with details: ENGINEER_CHECKS.md in the repository. Remove an item here and there when it is done.</p>
 </details>
