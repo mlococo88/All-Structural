@@ -1375,3 +1375,155 @@ Engineer's requests (2026-10-12): (1) an edit in Preliminary sizing must not mov
 +  if (el.dataset.k === 'bridge.spacing') syncSpacingVis();
    if (el.dataset.k === 'limits.dot') { /* profile switched: nothing else */ }
 ```
+
+## 2026-10-12 — PR: claude/gd-kframe-kb (auto-designed K-frame is Kb; PR link added after merge)
+
+Engineer's decision (2026-10-12), on the item raised in G3 ("Raised, not changed"): **"Use Kb for the K-frame."**
+
+### K1. Cross-frame auto-design writes `'Kb'` instead of the invalid `'K'`; stored `'K'` loads as `'Kb'`   [calc change for auto-designed K-frames] [member forces move between the chords; see the check case]
+- **Where (main page; the embedded PlateLine is not changed):**
+  - `AD.cf`, first line after `setMem` (≈ 5154). Anchor: `if (!adLocked('cf.type')) { const S = D(C0.S), h = D(C0.h); C0.type = S / h > 1.5 ?`
+  - `AD.cf` summary line (≈ 5175). Anchor: ``out.push(`${C0.type === 'X' ? 'X' :``
+  - `cfTypeRec` recommendation text (≈ 2863). Anchor: ``const rec = deep ? `${S / h > 1.5 ?``
+  - DXF cross-frame elevation (≈ 5651, 5658). Anchors: `const memb = p.type ===`, `INTERMEDIATE CROSS-FRAME (TYPE`
+  - 3D view cross-frames (≈ 6039). Anchor: `// cross-frames (members on their work points)` (the `if (cf.type === 'K'` line below it)
+  - New `gdMigrateK(p)` after `function initP()`; it is called at the end of `initP()` (autosave) and in `loadData()` (Open, Import JSON, New from example).
+- **Problem:** `AD.cf` set `type = 'K'` when S/h > 1.5. The module's types are `X`, `Kb` and `Kt`. `GM.cf.compute` builds `X` and `Kb` explicitly and puts everything else in its `else` branch, which is `Kt`, so `'K'` was **computed as Kt** (diagonals meeting at the top chord). Meanwhile:
+  - the DXF and 3D view **drew** `'K'` as Kb (diagonals meeting at the bottom chord);
+  - the Type select showed no matching option;
+  - the summary "Type" read "undefined".
+- **Before / after (code):** see the diff at the end of this entry. The essential line:
+  ```js
+  // before
+  if (!adLocked('cf.type')) { const S = D(C0.S), h = D(C0.h); C0.type = S / h > 1.5 ? 'K' : 'X'; }
+  // after
+  if (!adLocked('cf.type')) { const S = D(C0.S), h = D(C0.h); C0.type = S / h > 1.5 ? 'Kb' : 'X'; }   // K-frame: diagonals meet at the bottom chord (engineer's decision 2026-10-12; was the invalid 'K', computed as Kt)
+  ```
+  - DXF and 3D: `Kb` (and any remaining `'K'`) are drawn with the diagonals meeting at the bottom chord, as `'K'` was. `Kt` (user-selected) is now drawn with the diagonals meeting at the top chord; before, it was drawn as an X.
+  - Summary and recommendation texts read "K (bottom)-frame".
+- **Migration (saved data, CLAUDE.md §5):** on load (`initP` for the autosave, `loadData` for Open, Import JSON and New), `gdMigrateK(p)` changes a stored `cf.type === 'K'` to `'Kb'`.
+  - Kb is Kt mirrored top to bottom, so the migration also **swaps the top and bottom chord angle selections**: `cf.mem.top` ↔ `cf.mem.bot`, whole objects (`sec`, `b1`, `b2`, `t`). It also swaps their auto-design locks (`_lock['cf.mem.top.sec']` ↔ `_lock['cf.mem.bot.sec']`).
+  - The continuous chord keeps its angle and the split chord keeps its angle, so the design is equivalent: the D/C values mirror and nothing newly fails.
+  - The cross-frame auto-design undo copy (`_adUndo.cf`, a JSON string) is migrated the same way.
+  - User member forces (`cf.user.*`) are physical chord forces from an analysis and are not swapped. They are 0 unless entered.
+  - A one-line note, "Migrated from 'K' (computed as Kt) to Kb; top/bottom chords swapped.", is shown once at the top of the Cross-frames Summary. It is kept in the transient field `cf.migK` until shown, then removed and autosaved. The same text goes to the console.
+  - Saved projects in the project list are migrated when opened. No storage key or format changed.
+- **Governing provision:** the checks are unchanged: AASHTO LRFD 10th Ed. 6.9.4.4 and 6.9.4.1.1 (CF1), 6.8.2 (CF2), 6.9.3 / 6.8.4 (CF3), 6.13.2.7 (CF4), 6.13.2.9 (CF5), 6.7.4.2.2 (CF7, CF8). Only the truss geometry the auto-designer selects changes, from Kt to Kb.
+- **§4 check case 1: Cross-frames module default (S = 114 in, h = 48 in, S/h = 2.38, L_b = 25 ft, stability bracing on, M_br = 389.2 kip-in), "Auto-design cross-frames".**
+  - Before (stored `'K'`, computed as Kt):
+    - Members: top chord L3x3x3/8 in two 57.00 in pieces; bottom chord L5x5x3/8, 114.00 in; diagonals L3x3x3/8, 74.52 in; 2 bolts.
+    - Forces per kip of F_w at the bottom flange: top chords +0.500 / −0.500, bottom chord −0.500, diagonals ∓0.654.
+    - Strength III (F_w = 3.66 kip): chords 1.83 kip each, diagonals 2.39 kip.
+    - Constructibility: chords 8.11 kip (brace couple 389.2/48).
+    - D/C: CF1 top 0.236 / bottom 0.154 / diagonals 0.085; CF2 0.143 / 0.101 / 0.042; CF4 0.156 / 0.156 / 0.046; CF5 0.140 / 0.140 / 0.041; CF7 0.236 / 0.154 / 0.085; CF8 β_T = 258,103 against 39,531 kip-in/rad required (0.153). Governing 0.236 (top chord).
+  - After (`'Kb'`):
+    - Members: top chord **L5x5x3/8**, 114.00 in; bottom chord **L3x3x3/8** in two 57.00 in pieces; diagonals L3x3x3/8, 74.52 in; 2 bolts.
+    - Forces per kip of F_w: bottom chord 1 **−1.000**, bottom chord 2 0, top chord 0, diagonals ±0.654.
+    - Strength III: bottom chord 1 **3.66 kip**, diagonals 2.39 kip.
+    - Constructibility: all chords 8.11 kip.
+    - D/C: CF1 top 0.154 / bottom 0.236 / diagonals 0.085; CF2 0.101 / 0.143 / 0.042; CF4 0.156 / 0.156 / 0.046; CF5 0.140 / 0.140 / 0.041; CF7 0.154 / 0.236 / 0.085; CF8 unchanged 0.153 (the K horizontal is L5x5x3/8 in both: Kt used the bottom chord area, Kb the top chord area, 2.346 in² × 0.65). Governing 0.236 (bottom chord).
+  - Hand check of the wind force: in Kb, the loaded node BL connects only the bottom chord 1 (horizontal) and the girder web (vertical). Horizontal equilibrium gives a chord 1 force of F_w = 3.66 kip; the 0.5F_w in each chord was a Kt result.
+- **§4 check case 2: built-in example after Design all (Preliminary sizing demands; S = 114 in, h = 52 in, d = 61.88 in).**
+  - Before (`'K'`, Kt): top L3x3x3/8, bottom L5x5x3/8, diagonals L3x3x3/8.
+    - CF1: top 2.83 kip (Con) 0.082; bottom 2.83 kip 0.054; diagonals 2.45 kip (StrIII) 0.092.
+    - CF2: 0.050 / 0.035 / 0.043.
+    - CF4: 0.054 / 0.054 / 0.047.
+    - CF7: 0.082 / 0.054 / 0.092.
+    - CF8 System 0.056.
+    - Summary "Type": undefined.
+  - After (`'Kb'`): top L5x5x3/8, bottom L3x3x3/8, diagonals L3x3x3/8.
+    - CF1: top 2.83 kip 0.054; bottom **3.63 kip (StrIII) 0.106**; diagonals 0.092.
+    - CF2: 0.035 / 0.064 / 0.043.
+    - CF4: 0.054 / 0.070 / 0.047.
+    - CF5: 0.049 / 0.062 / 0.042.
+    - CF7: 0.054 / 0.106 / 0.092.
+    - CF8 unchanged 0.056.
+    - Summary "Type": K-frame (bottom).
+  - No status changes. Every other module is identical, main vs branch.
+- **§4 check case 3: migration.** A project auto-designed on main (type `'K'`) loads on the branch as `'Kb'` with the chords swapped. Before = main showing the stored `'K'` (Kt); after = branch after migration.
+  - **h = 48 in, F_w = 3.66 kip.**
+    - Main: top L3x3x3/8 (2 × 57 in), bottom L5x5x3/8 (114 in). D/C: CF1 0.236 / 0.154 / 0.085, CF2 0.143 / 0.101 / 0.042, CF3 0.694 / 0.823 / 0.907, CF4 0.156 / 0.156 / 0.046, CF5 0.140 / 0.140 / 0.041, CF7 0.236 / 0.154 / 0.085, CF8 0.153.
+    - Branch after migration: top **L5x5x3/8** (114 in), bottom **L3x3x3/8** (2 × 57 in). D/C: CF1 0.154 / 0.236 / 0.085, CF2 0.101 / 0.143 / 0.042, CF3 0.823 / 0.694 / 0.907, CF4 and CF5 unchanged, CF7 0.154 / 0.236 / 0.085, CF8 0.153.
+    - Governing code D/C 0.907 (CF3, diagonals) in both. No failing check in either.
+  - **h = 52 in.**
+    - Main: CF1 0.218 / 0.142 / 0.093, CF3 0.694 / 0.823 / 0.939.
+    - Branch: CF1 0.142 / 0.218 / 0.093, CF3 0.823 / 0.694 / 0.939.
+    - Governing 0.939 in both, no failures.
+  - Without the swap (the first version of this PR), the 114 in top chord would have been the L3x3x3/8 and CF3 would fail: ℓ/r_z = 114/0.586 ≈ 194 > 140.
+  - Unit test of `gdMigrateK`:
+    - `{type:'K', top L3, bot L5, lock on top}` → `Kb`, top L5, bot L3, lock moved to bottom.
+    - Undo copy `{K, top L3, bot L6}` → `{Kb, top L6, bot L3}`.
+    - A stored `Kt` is left unchanged.
+- **How verified:**
+  - `node --check` on the page and the decoded PlateLine (unchanged).
+  - Headless Chromium, main vs branch:
+    - `runAutoDesign('cf')` on the default (case 1).
+    - Design all on the built-in example: module text and checks identical except Cross-frames (case 2).
+    - An autosave from main containing `'K'` loads as `'Kb'` with the chords swapped, the same governing D/C and no failure (case 3).
+    - The note is shown on the first view of the Cross-frames module and not on the second; `cf.migK` is gone from the autosave afterwards. No alert.
+    - The Cross-frames drawings tab with `Kb`, `Kt` and `X`: no console errors.
+- **Other copies:** none (PlateLine does not set the cross-frame type).
+
+### Exact changes: main page (unified diff, base64 string masked and unchanged)
+
+```diff
+--- km_main.html	2026-10-12 20:58:24.878999548 +0000
++++ km_br.html	2026-10-12 21:03:17.590981331 +0000
+@@ -2862,3 +2862,3 @@
+   const ch = CF_CH.filter(s => s[1] >= 0.5 * dg - 1e-9).sort((a, b) => (2 * a[2] * a[3] + (a[1] - 2 * a[3]) * a[4]) - (2 * b[2] * b[3] + (b[1] - 2 * b[3]) * b[4]))[0], w = CF_DIA.find(s => s[1] >= 0.5 * dg - 1e-9);
+-  const rec = deep ? `${S / h > 1.5 ? 'K' : 'X'}-frame (S/h = ${f2(S / h)})` : ch ? `channel diaphragm ${ch[0]} (or a rolled W)` : w ? `rolled diaphragm ${w[0]}` : 'rolled W diaphragm';
++  const rec = deep ? `${S / h > 1.5 ? 'K (bottom)' : 'X'}-frame (S/h = ${f2(S / h)})` : ch ? `channel diaphragm ${ch[0]} (or a rolled W)` : w ? `rolled diaphragm ${w[0]}` : 'rolled W diaphragm';
+   const sel = xf ? ({ X: 'X-frame', Kb: 'K-frame', Kt: 'K-frame' }[p.type] || 'cross-frame') : `${CF_CH.some(s => s[0] === (p.dia || {}).shape) ? 'channel' : 'rolled'} diaphragm ${(p.dia || {}).shape === 'custom' ? 'custom W' : (p.dia || {}).shape}`;
+@@ -4891,2 +4891,3 @@
+   showN(m.id, RS.MR); if (m.after) m.after(RS); CK = m.checks(RS); renderStatus(); gmSummary(m);
++  if (m.id === 'cf' && d.migK) { $('#tab-summary').insertAdjacentHTML('afterbegin', '<div class="alert info" style="margin:0 0 12px">Migrated from \'K\' (computed as Kt) to Kb; top/bottom chords swapped.</div>'); delete d.migK; autosave(); }   // shown once per project
+   $('#tab-combos').innerHTML = `<div class="ctl-row"><button type="button" class="dg-btn" data-exp="combos">Expand all</button><button type="button" class="dg-btn" data-col="combos">Collapse all</button></div>` + (RS.MR ? card('cb-mr', 'Modular ratio', 'AASHTO LRFD 5.4.2.4, 6.10.1.1.1b', eq('Short-term modular ratio', '5.4.2.4-1', modTex(RS.MR)) + `<p class="note-p">The long-term (creep) section uses 3n = ${f2(3 * RS.MR.n)}.</p>`) : '') + m.combos(RS);
+@@ -5153,3 +5154,3 @@
+   const names = Object.keys(ANGLES).sort((a, b) => area(a) - area(b)), setMem = (k, n) => { const [b1, b2, t] = ANGLES[n]; C0.mem[k] = { sec: n, b1, b2, t }; };
+-  if (!adLocked('cf.type')) { const S = D(C0.S), h = D(C0.h); C0.type = S / h > 1.5 ? 'K' : 'X'; }
++  if (!adLocked('cf.type')) { const S = D(C0.S), h = D(C0.h); C0.type = S / h > 1.5 ? 'Kb' : 'X'; }   // K-frame: diagonals meet at the bottom chord (engineer's decision 2026-10-12; was the invalid 'K', computed as Kt)
+   const keys = ['diag', 'top', 'bot'], ids = ['CF1', 'CF2', 'CF3', 'CF4', 'CF5', 'CF6', 'CF7', 'CF9']; let done = null;
+@@ -5174,3 +5175,3 @@
+   const r = adEval('cf'), S = r && r.R.SB;
+-  out.push(`${C0.type === 'X' ? 'X' : 'K'}-frame (S/h = ${f2(D(C0.S) / D(C0.h))}${adLocked('cf.type') ? ', type locked' : ''}); top chord ${C0.mem.top.sec}, bottom chord ${C0.mem.bot.sec}, diagonals ${C0.mem.diag.sec}; ${C0.conn.n} bolts per member end`);
++  out.push(`${C0.type === 'X' ? 'X' : C0.type === 'Kt' ? 'K (top)' : 'K (bottom)'}-frame (S/h = ${f2(D(C0.S) / D(C0.h))}${adLocked('cf.type') ? ', type locked' : ''}); top chord ${C0.mem.top.sec}, bottom chord ${C0.mem.bot.sec}, diagonals ${C0.mem.diag.sec}; ${C0.conn.n} bolts per member end`);
+   if (S) out.push(`Bracing stiffness β_T = ${f0(S.bT)} kip-in/rad against ${f0(S.bReq)} required (ratio ${f2(S.bReq / S.bT)})`);
+@@ -5650,3 +5651,4 @@
+     const sg = x === 0 ? 1 : -1; D.rect(ly.cp, x + sg * tw / 2, bf.t, x + sg * (tw / 2 + 0.5), bf.t + Dm); D.line(ly.c, x, -2 * h, x, Dt + 2 * h, cl); });
+-  const memb = p.type === 'K' ? [['top', [0, yt], [S, yt]], ['bot', [0, yb], [S, yb]], ['diag', [0, yt], [S / 2, yb]], ['diag', [S, yt], [S / 2, yb]]] : [['bot', [0, yb], [S, yb]], ['top', [0, yt], [S, yt]], ['diag', [0, yb], [S, yt]], ['diag', [0, yt], [S, yb]]];
++  const memb = p.type === 'Kb' || p.type === 'K' ? [['top', [0, yt], [S, yt]], ['bot', [0, yb], [S, yb]], ['diag', [0, yt], [S / 2, yb]], ['diag', [S, yt], [S / 2, yb]]]
++    : p.type === 'Kt' ? [['bot', [0, yb], [S, yb]], ['top', [0, yt], [S, yt]], ['diag', [0, yb], [S / 2, yt]], ['diag', [S, yb], [S / 2, yt]]] : [['bot', [0, yb], [S, yb]], ['top', [0, yt], [S, yt]], ['diag', [0, yb], [S, yt]], ['diag', [0, yt], [S, yb]]];
+   memb.forEach(([k, a, b]) => { const mm = p.mem[k] || {}, L = Math.hypot(b[0] - a[0], b[1] - a[1]), u = [(b[0] - a[0]) / L, (b[1] - a[1]) / L], nv = [-u[1], u[0]], w = +mm.b1 || 4;
+@@ -5657,3 +5659,3 @@
+   D.dimH(ly.d, 0, S, Dt + 4 * h, Dt, 'GIRDER SPACING <>'); D.dimV(ly.d, yb, yt, S + tf.b / 2 + 4 * h, S, 'WORK PT. <>'); D.dimV(ly.d, 0, yb, S + tf.b / 2 + 4 * h, S);
+-  D.text(ly.t, 0, Dt + 8 * h, h * 1.3, `INTERMEDIATE CROSS-FRAME (TYPE ${p.type === 'K' ? 'K' : 'X'})`);
++  D.text(ly.t, 0, Dt + 8 * h, h * 1.3, `INTERMEDIATE CROSS-FRAME (TYPE ${/^K/.test(p.type) ? 'K' : 'X'})`);
+   { const th = Math.max(...m.skews.map(v => Math.abs(v))), Se = S / Math.cos(th * Math.PI / 180), ox = S + tf.b + 30 * h, i0 = D.mark();
+@@ -6038,3 +6040,4 @@
+       rod(A, Bb, r, M.xf); rod(At, Bt, r, M.xf);
+-      if (cf.type === 'K' && f.type !== 'sup') { const Mb = [(xa + xc) / 2, yb, (za + zc) / 2]; rod(At, Mb, r, M.xf); rod(Bt, Mb, r, M.xf); } else { rod(A, Bt, r, M.xf); rod(At, Bb, r, M.xf); } }); }
++      if ((cf.type === 'Kb' || cf.type === 'K') && f.type !== 'sup') { const Mb = [(xa + xc) / 2, yb, (za + zc) / 2]; rod(At, Mb, r, M.xf); rod(Bt, Mb, r, M.xf); }
++      else if (cf.type === 'Kt' && f.type !== 'sup') { const Mt = [(xa + xc) / 2, yt, (za + zc) / 2]; rod(A, Mt, r, M.xf); rod(Bb, Mt, r, M.xf); } else { rod(A, Bt, r, M.xf); rod(At, Bb, r, M.xf); } }); }
+   // bearings and substructure seats along the skewed support lines
+@@ -6383,3 +6386,14 @@
+ let P = null, RS = null, CK = null, CUR = '';
+-function initP() { P = GD_FULL(); try { const a = LS && JSON.parse(localStorage.getItem(KEY_AS) || 'null'); if (a && a.data) { P = deepMerge(GD_FULL(), a.data); CUR = a.name || ''; } } catch (e) {} }
++function initP() { P = GD_FULL(); try { const a = LS && JSON.parse(localStorage.getItem(KEY_AS) || 'null'); if (a && a.data) { P = deepMerge(GD_FULL(), a.data); CUR = a.name || ''; } } catch (e) {} gdMigrateK(P); }
++/* migration (2026-10-12): the cross-frame auto-designer stored the invalid type 'K', computed as Kt (diagonals meeting at the top chord).
++   The engineer's decision is Kb (diagonals meeting at the bottom chord). Kb is Kt mirrored top to bottom, so a stored 'K' loads as 'Kb' with the
++   top and bottom chord angle selections (section, legs, thickness) and their auto-design locks swapped: the continuous chord keeps its angle and the
++   split chord keeps its angle, so the design is equivalent. The same is done in the auto-design undo copy. A one-line note is shown once in the module. */
++function gdMigrateK(p) { if (!p) return 0; let n = 0;
++  const swap = c => { if (!c || c.type !== 'K') return false; c.type = 'Kb'; if (c.mem) { const t = c.mem.top; c.mem.top = c.mem.bot; c.mem.bot = t; } return true; };
++  if (swap(p.cf)) { n++; p.cf.migK = 1;
++    const L = p._lock; if (L) { const a = L['cf.mem.top.sec'], b = L['cf.mem.bot.sec']; delete L['cf.mem.top.sec']; delete L['cf.mem.bot.sec']; if (b) L['cf.mem.top.sec'] = b; if (a) L['cf.mem.bot.sec'] = a; } }
++  const u = p._adUndo && p._adUndo.cf; if (typeof u === 'string') { try { const o = JSON.parse(u); if (swap(o)) { p._adUndo.cf = JSON.stringify(o); n++; } } catch (e) {} }
++  if (n) console.info("GirderDetail: Migrated from 'K' (computed as Kt) to Kb; top/bottom chords swapped.");
++  return n; }
+ 
+@@ -6763,3 +6777,3 @@
+ function refreshList() { const n = Object.keys(store()).sort(); $('#proj_list').innerHTML = n.length ? n.map(x => `<option ${x === CUR ? 'selected' : ''}>${esc(x)}</option>`).join('') : '<option value="">No saved projects</option>'; }
+-function loadData(d, name) { P = deepMerge(GD_FULL(), d); bsRebuildRows(); Object.keys(GM).forEach(gmBuildPanes); CUR = name || ''; fillInputs(); setITab(P.ui.itab || 'project'); setOTab(P.ui.otab || 'summary'); recompute(); autosave(); }
++function loadData(d, name) { P = deepMerge(GD_FULL(), d); gdMigrateK(P); bsRebuildRows(); Object.keys(GM).forEach(gmBuildPanes); CUR = name || ''; fillInputs(); setITab(P.ui.itab || 'project'); setOTab(P.ui.otab || 'summary'); recompute(); autosave(); }
+ function initProjects() {
+```

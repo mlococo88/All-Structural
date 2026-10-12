@@ -2860,7 +2860,7 @@ tabs: { combos: 'Member forces', rptCombos: 'Loads and member forces' },
 function cfTypeRec(p) {
   const dg = nm(p.dg), dMin = nm(p.dMinXF), S = nm(p.S), h = nm(p.h), deep = dg >= dMin - 1e-9, xf = (p.dia || {}).on !== 'yes';
   const ch = CF_CH.filter(s => s[1] >= 0.5 * dg - 1e-9).sort((a, b) => (2 * a[2] * a[3] + (a[1] - 2 * a[3]) * a[4]) - (2 * b[2] * b[3] + (b[1] - 2 * b[3]) * b[4]))[0], w = CF_DIA.find(s => s[1] >= 0.5 * dg - 1e-9);
-  const rec = deep ? `${S / h > 1.5 ? 'K' : 'X'}-frame (S/h = ${f2(S / h)})` : ch ? `channel diaphragm ${ch[0]} (or a rolled W)` : w ? `rolled diaphragm ${w[0]}` : 'rolled W diaphragm';
+  const rec = deep ? `${S / h > 1.5 ? 'K (bottom)' : 'X'}-frame (S/h = ${f2(S / h)})` : ch ? `channel diaphragm ${ch[0]} (or a rolled W)` : w ? `rolled diaphragm ${w[0]}` : 'rolled W diaphragm';
   const sel = xf ? ({ X: 'X-frame', Kb: 'K-frame', Kt: 'K-frame' }[p.type] || 'cross-frame') : `${CF_CH.some(s => s[0] === (p.dia || {}).shape) ? 'channel' : 'rolled'} diaphragm ${(p.dia || {}).shape === 'custom' ? 'custom W' : (p.dia || {}).shape}`;
   return { dg, dMin, deep, xf, rec, sel, ch: ch && ch[0], w: w && w[0] };
 }
@@ -4889,6 +4889,7 @@ function gmRecompute() {
     if (RS.locked) { plEnsure(); $('#status-bar').innerHTML = `<div class="verdict warn"><span class="vd-ico">!</span>Waiting for the bridge</div><div class="sb-msg">Define a complete bridge in Preliminary sizing.</div>`; ['combos', 'checks', 'drawings', 'cap'].forEach(t => { const el = $('#tab-' + t); if (el) el.innerHTML = ''; }); $('#tab-summary').innerHTML = card('lock', 'Waiting for a complete bridge', '', `<div class="df-lockview"><p><b>This module works only from a fully defined bridge.</b> ${esc(RS.errors[0])}</p><p>The Preliminary sizing module publishes its bridge automatically every time it recalculates without input errors; this module unlocks and stays in sync from then on.</p><button type="button" class="btn btn-primary" data-dfpl="1">Open Preliminary sizing</button></div>`); }
     return; }
   showN(m.id, RS.MR); if (m.after) m.after(RS); CK = m.checks(RS); renderStatus(); gmSummary(m);
+  if (m.id === 'cf' && d.migK) { $('#tab-summary').insertAdjacentHTML('afterbegin', '<div class="alert info" style="margin:0 0 12px">Migrated from \'K\' (computed as Kt) to Kb; top/bottom chords swapped.</div>'); delete d.migK; autosave(); }   // shown once per project
   $('#tab-combos').innerHTML = `<div class="ctl-row"><button type="button" class="dg-btn" data-exp="combos">Expand all</button><button type="button" class="dg-btn" data-col="combos">Collapse all</button></div>` + (RS.MR ? card('cb-mr', 'Modular ratio', 'AASHTO LRFD 5.4.2.4, 6.10.1.1.1b', eq('Short-term modular ratio', '5.4.2.4-1', modTex(RS.MR)) + `<p class="note-p">The long-term (creep) section uses 3n = ${f2(3 * RS.MR.n)}.</p>`) : '') + m.combos(RS);
   if (m.capacity) $('#tab-cap').innerHTML = m.capacity(RS);
   if (m.stresses) { $('#tab-stress').innerHTML = m.stresses(RS); setTimeout(() => renderPlots(), 0); }
@@ -5151,7 +5152,7 @@ AD.wt = () => { const S = std(), W = P.wt, out = [], D = k => parseDim(k);
   return out; };
 AD.cf = () => { const C0 = P.cf, out = [], D = k => parseDim(k), area = n => { const [b1, b2, t] = ANGLES[n]; return t * (b1 + b2 - t); };
   const names = Object.keys(ANGLES).sort((a, b) => area(a) - area(b)), setMem = (k, n) => { const [b1, b2, t] = ANGLES[n]; C0.mem[k] = { sec: n, b1, b2, t }; };
-  if (!adLocked('cf.type')) { const S = D(C0.S), h = D(C0.h); C0.type = S / h > 1.5 ? 'K' : 'X'; }
+  if (!adLocked('cf.type')) { const S = D(C0.S), h = D(C0.h); C0.type = S / h > 1.5 ? 'Kb' : 'X'; }   // K-frame: diagonals meet at the bottom chord (engineer's decision 2026-10-12; was the invalid 'K', computed as Kt)
   const keys = ['diag', 'top', 'bot'], ids = ['CF1', 'CF2', 'CF3', 'CF4', 'CF5', 'CF6', 'CF7', 'CF9']; let done = null;
   for (let n = 2; n <= 6 && !done; n++) { if (adLocked('cf.conn.n') && n !== D(C0.conn.n)) continue; C0.conn.n = n; let ok = true;
     for (const k of keys) { if (adLocked(`cf.mem.${k}.sec`)) continue; let found = null;
@@ -5172,7 +5173,7 @@ AD.cf = () => { const C0 = P.cf, out = [], D = k => parseDim(k), area = n => { c
     const hk = C0.type === 'X' ? null : C0.type === 'Kb' ? 'top' : 'bot', a = up('diag'), b = hk ? up(hk) : false; if (!a && !b) { out.push('The largest standard angles do not satisfy CF8'); break; } }
   { const TR = cfTypeRec(C0); if (!TR.deep) out.push(`Girder depth ${f2(TR.dg)} in is below the ${f2(TR.dMin)} in minimum for cross-frames: a ${TR.rec} is recommended${TR.xf ? ' (the cross-frame type is kept; turn on the rolled or channel diaphragm on the Members tab to check one)' : ''}`); }
   const r = adEval('cf'), S = r && r.R.SB;
-  out.push(`${C0.type === 'X' ? 'X' : 'K'}-frame (S/h = ${f2(D(C0.S) / D(C0.h))}${adLocked('cf.type') ? ', type locked' : ''}); top chord ${C0.mem.top.sec}, bottom chord ${C0.mem.bot.sec}, diagonals ${C0.mem.diag.sec}; ${C0.conn.n} bolts per member end`);
+  out.push(`${C0.type === 'X' ? 'X' : C0.type === 'Kt' ? 'K (top)' : 'K (bottom)'}-frame (S/h = ${f2(D(C0.S) / D(C0.h))}${adLocked('cf.type') ? ', type locked' : ''}); top chord ${C0.mem.top.sec}, bottom chord ${C0.mem.bot.sec}, diagonals ${C0.mem.diag.sec}; ${C0.conn.n} bolts per member end`);
   if (S) out.push(`Bracing stiffness β_T = ${f0(S.bT)} kip-in/rad against ${f0(S.bReq)} required (ratio ${f2(S.bReq / S.bT)})`);
   return out; };
 AD.oh = () => { const O = P.oh, out = [], D = k => parseDim(k);
@@ -5648,14 +5649,15 @@ function dxfCF(D, C) {
   const S = +p.S, hh = +p.h, tf = m.top[0], bf = m.bot[0], Dm = m.D, Dt = Dm + tf.t + bf.t, yb = (Dt - hh) / 2, yt = yb + hh, tw = m.web[0].t, cn = p.conn || {}, rb = (+cn.d || 0.875) / 2 + 0.0625;
   [0, S].forEach(x => { D.rect(ly.g, x - bf.b / 2, 0, x + bf.b / 2, bf.t); D.rect(ly.g, x - tw / 2, bf.t, x + tw / 2, bf.t + Dm); D.rect(ly.g, x - tf.b / 2, bf.t + Dm, x + tf.b / 2, Dt);
     const sg = x === 0 ? 1 : -1; D.rect(ly.cp, x + sg * tw / 2, bf.t, x + sg * (tw / 2 + 0.5), bf.t + Dm); D.line(ly.c, x, -2 * h, x, Dt + 2 * h, cl); });
-  const memb = p.type === 'K' ? [['top', [0, yt], [S, yt]], ['bot', [0, yb], [S, yb]], ['diag', [0, yt], [S / 2, yb]], ['diag', [S, yt], [S / 2, yb]]] : [['bot', [0, yb], [S, yb]], ['top', [0, yt], [S, yt]], ['diag', [0, yb], [S, yt]], ['diag', [0, yt], [S, yb]]];
+  const memb = p.type === 'Kb' || p.type === 'K' ? [['top', [0, yt], [S, yt]], ['bot', [0, yb], [S, yb]], ['diag', [0, yt], [S / 2, yb]], ['diag', [S, yt], [S / 2, yb]]]
+    : p.type === 'Kt' ? [['bot', [0, yb], [S, yb]], ['top', [0, yt], [S, yt]], ['diag', [0, yb], [S / 2, yt]], ['diag', [S, yb], [S / 2, yt]]] : [['bot', [0, yb], [S, yb]], ['top', [0, yt], [S, yt]], ['diag', [0, yb], [S, yt]], ['diag', [0, yt], [S, yb]]];
   memb.forEach(([k, a, b]) => { const mm = p.mem[k] || {}, L = Math.hypot(b[0] - a[0], b[1] - a[1]), u = [(b[0] - a[0]) / L, (b[1] - a[1]) / L], nv = [-u[1], u[0]], w = +mm.b1 || 4;
     const a2 = [a[0] + u[0] * (tw / 2 + 1.5), a[1] + u[1] * (tw / 2 + 1.5)], b2 = [b[0] - u[0] * (b[0] === S / 2 ? 0 : tw / 2 + 1.5), b[1] - u[1] * (b[0] === S / 2 ? 0 : tw / 2 + 1.5)];
     D.line(ly.c, a[0], a[1], b[0], b[1], cl); [0.5, -0.5].forEach(f => D.line(ly.x, a2[0] + nv[0] * w * f, a2[1] + nv[1] * w * f, b2[0] + nv[0] * w * f, b2[1] + nv[1] * w * f));
     const n = Math.max(1, +cn.n || 2); [a2].concat(b[0] === S / 2 ? [] : [b2]).forEach((q, e) => { const sgn = e ? -1 : 1; for (let i = 0; i < n; i++) D.circle(ly.bo, q[0] + sgn * u[0] * ((+cn.e || 1.5) + i * (+cn.s || 3)), q[1] + sgn * u[1] * ((+cn.e || 1.5) + i * (+cn.s || 3)), rb); });
     const mid = [(a[0] + b[0]) / 2 + nv[0] * (w / 2 + 1.2 * h), (a[1] + b[1]) / 2 + nv[1] * (w / 2 + 1.2 * h)], ang = Math.atan2(u[1], u[0]) * 180 / Math.PI; D.text(ly.t, mid[0], mid[1], h * 0.8, dxfStr(mm.sec || ''), 1, ang > 90 || ang < -90 ? ang + 180 : ang); });
   D.dimH(ly.d, 0, S, Dt + 4 * h, Dt, 'GIRDER SPACING <>'); D.dimV(ly.d, yb, yt, S + tf.b / 2 + 4 * h, S, 'WORK PT. <>'); D.dimV(ly.d, 0, yb, S + tf.b / 2 + 4 * h, S);
-  D.text(ly.t, 0, Dt + 8 * h, h * 1.3, `INTERMEDIATE CROSS-FRAME (TYPE ${p.type === 'K' ? 'K' : 'X'})`);
+  D.text(ly.t, 0, Dt + 8 * h, h * 1.3, `INTERMEDIATE CROSS-FRAME (TYPE ${/^K/.test(p.type) ? 'K' : 'X'})`);
   { const th = Math.max(...m.skews.map(v => Math.abs(v))), Se = S / Math.cos(th * Math.PI / 180), ox = S + tf.b + 30 * h, i0 = D.mark();
     [0, Se].forEach(x => { D.rect(ly.g, ox + x - bf.b / 2, 0, ox + x + bf.b / 2, bf.t); D.rect(ly.g, ox + x - tw / 2, bf.t, ox + x + tw / 2, bf.t + Dm); D.rect(ly.g, ox + x - tf.b / 2, bf.t + Dm, ox + x + tf.b / 2, Dt); D.rect(ly.cp, ox + x + (x ? -1 : 1) * (tw / 2), bf.t, ox + x + (x ? -1 : 1) * (tw / 2 + 0.75), bf.t + Dm); });
     [[[0, yt], [Se, yt]], [[0, yb], [Se, yb]], [[0, yb], [Se, yt]], [[0, yt], [Se, yb]]].forEach(([a, b]) => D.line(ly.x, ox + a[0], a[1], ox + b[0], b[1]));
@@ -6036,7 +6038,8 @@ function v3bBuild() {
   if (lay.xf && !single) { const cf = P.cf || {}, Dt = D + tTmax + tBmax, h = Math.min(+cf.h || D * 0.8, Dt - 4), yb = -tBmax + (Dt - h) / 2, yt = yb + h, r = 1.4;
     FR.frames.forEach(f => { const za = Z(f.bay), zc = Z(f.bay + 1), xa = f.xa * 12, xc = f.xc * 12, A = [xa, yb, za], At = [xa, yt, za], Bb = [xc, yb, zc], Bt = [xc, yt, zc];
       rod(A, Bb, r, M.xf); rod(At, Bt, r, M.xf);
-      if (cf.type === 'K' && f.type !== 'sup') { const Mb = [(xa + xc) / 2, yb, (za + zc) / 2]; rod(At, Mb, r, M.xf); rod(Bt, Mb, r, M.xf); } else { rod(A, Bt, r, M.xf); rod(At, Bb, r, M.xf); } }); }
+      if ((cf.type === 'Kb' || cf.type === 'K') && f.type !== 'sup') { const Mb = [(xa + xc) / 2, yb, (za + zc) / 2]; rod(At, Mb, r, M.xf); rod(Bt, Mb, r, M.xf); }
+      else if (cf.type === 'Kt' && f.type !== 'sup') { const Mt = [(xa + xc) / 2, yt, (za + zc) / 2]; rod(A, Mt, r, M.xf); rod(Bb, Mt, r, M.xf); } else { rod(A, Bt, r, M.xf); rod(At, Bb, r, M.xf); } }); }
   // bearings and substructure seats along the skewed support lines
   if (lay.brg) { gl.forEach(i => { const g = FR.girders[i]; g.bear.forEach(b => box(Xg(g, b), -tBmax - 2, Z(i), 20, 4, 16, M.brg)); });
     if (!single) m.sup.forEach((_, k) => { const ax = FR.xb(k, 0) * 12, az = Z(0), bx = FR.xb(k, nb - 1) * 12, bz = Z(nb - 1), ex = (+B.ohL + 1) * 12, L = Math.hypot(bx - ax, bz - az), ux = (bx - ax) / L, uz = (bz - az) / L;
@@ -6381,7 +6384,18 @@ const getPath = (o, p) => p.split('.').reduce((a, k) => a?.[k], o);
 const setPath = (o, p, v) => { const ks = p.split('.'); let a = o; ks.slice(0, -1).forEach(k => a = a[k]); a[ks[ks.length - 1]] = v; };
 
 let P = null, RS = null, CK = null, CUR = '';
-function initP() { P = GD_FULL(); try { const a = LS && JSON.parse(localStorage.getItem(KEY_AS) || 'null'); if (a && a.data) { P = deepMerge(GD_FULL(), a.data); CUR = a.name || ''; } } catch (e) {} }
+function initP() { P = GD_FULL(); try { const a = LS && JSON.parse(localStorage.getItem(KEY_AS) || 'null'); if (a && a.data) { P = deepMerge(GD_FULL(), a.data); CUR = a.name || ''; } } catch (e) {} gdMigrateK(P); }
+/* migration (2026-10-12): the cross-frame auto-designer stored the invalid type 'K', computed as Kt (diagonals meeting at the top chord).
+   The engineer's decision is Kb (diagonals meeting at the bottom chord). Kb is Kt mirrored top to bottom, so a stored 'K' loads as 'Kb' with the
+   top and bottom chord angle selections (section, legs, thickness) and their auto-design locks swapped: the continuous chord keeps its angle and the
+   split chord keeps its angle, so the design is equivalent. The same is done in the auto-design undo copy. A one-line note is shown once in the module. */
+function gdMigrateK(p) { if (!p) return 0; let n = 0;
+  const swap = c => { if (!c || c.type !== 'K') return false; c.type = 'Kb'; if (c.mem) { const t = c.mem.top; c.mem.top = c.mem.bot; c.mem.bot = t; } return true; };
+  if (swap(p.cf)) { n++; p.cf.migK = 1;
+    const L = p._lock; if (L) { const a = L['cf.mem.top.sec'], b = L['cf.mem.bot.sec']; delete L['cf.mem.top.sec']; delete L['cf.mem.bot.sec']; if (b) L['cf.mem.top.sec'] = b; if (a) L['cf.mem.bot.sec'] = a; } }
+  const u = p._adUndo && p._adUndo.cf; if (typeof u === 'string') { try { const o = JSON.parse(u); if (swap(o)) { p._adUndo.cf = JSON.stringify(o); n++; } } catch (e) {} }
+  if (n) console.info("GirderDetail: Migrated from 'K' (computed as Kt) to Kb; top/bottom chords swapped.");
+  return n; }
 
 /* ---------- field builders ---------- */
 const CHEV = '<svg class="sec-hd-chevron" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.5 6 7.5 9 4.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
@@ -6761,7 +6775,7 @@ const store = () => { try { return JSON.parse(localStorage.getItem(KEY_PR) || '{
 const putStore = s => { try { localStorage.setItem(KEY_PR, JSON.stringify(s)); return true; } catch (e) { return false; } };
 function flash(m, c = 'pass') { const el = $('#proj_msg'); if (!el) return; el.textContent = m; el.style.color = c === 'fail' ? 'var(--fail)' : 'var(--pass)'; clearTimeout(flash.t); flash.t = setTimeout(() => el.textContent = '', 3500); }
 function refreshList() { const n = Object.keys(store()).sort(); $('#proj_list').innerHTML = n.length ? n.map(x => `<option ${x === CUR ? 'selected' : ''}>${esc(x)}</option>`).join('') : '<option value="">No saved projects</option>'; }
-function loadData(d, name) { P = deepMerge(GD_FULL(), d); bsRebuildRows(); Object.keys(GM).forEach(gmBuildPanes); CUR = name || ''; fillInputs(); setITab(P.ui.itab || 'project'); setOTab(P.ui.otab || 'summary'); recompute(); autosave(); }
+function loadData(d, name) { P = deepMerge(GD_FULL(), d); gdMigrateK(P); bsRebuildRows(); Object.keys(GM).forEach(gmBuildPanes); CUR = name || ''; fillInputs(); setITab(P.ui.itab || 'project'); setOTab(P.ui.otab || 'summary'); recompute(); autosave(); }
 function initProjects() {
   refreshList();
   $('#pb_save').onclick = () => { let n = CUR || P.meta.name || prompt('Save project as:'); if (!n) return; const s = store(); s[n] = clone(P); if (putStore(s)) { CUR = n; refreshList(); flash(`Saved "${n}".`); } };
