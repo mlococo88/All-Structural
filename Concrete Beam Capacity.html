@@ -4610,7 +4610,7 @@ function defaultState(){
     proj:{name:&quot;&quot;,num:&quot;&quot;,subj:&quot;Beam Load Rating (ASD)&quot;,
           by:&quot;M. Lococo&quot;,date:new Date().toISOString().slice(0,10),
           chk:&quot;&quot;,chkDate:&quot;&quot;,sheet:&quot;R-1&quot;},
-    mode:{momentType:&quot;pos&quot;, inv:true, op:true},
+    mode:{momentType:&quot;pos&quot;, inv:true, op:true, asd_beffLim:true},   /* asd_beffLim: Std. Spec. 8.10.1.1 limit on (absent in older saves = on) */
     allow:{fc_inv:1200, fs_inv:20000, fc_op:1900, fs_op:28000, ovr:{fc_inv:false,fs_inv:false,fs_op:false}},
     loads:{m_dl:250, m_ll:400},
     inherit:{fc:3000, fy:40000, b_eff:90, h_f:7.0, b_w:14, h_total:32, d_eff:28.5, as:8.00, shape:&quot;tee&quot;, src:false},
@@ -4844,6 +4844,8 @@ function buildInput(){
     b.appendChild(t);
     b.appendChild(el(&quot;div&quot;,&quot;note&quot;,&quot;Live from the Beam Capacity tab. Edit materials, geometry or &quot;+
       &quot;reinforcement there and they update here automatically.&quot;));
+    if(I.shape==='tee')
+      chkRow(b,&quot;Limit b_eff to b_w + 12h_f (Std. Spec. 8.10.1.1)&quot;,()=>S.mode.asd_beffLim!==false,v=>S.mode.asd_beffLim=v,&quot;asdBeffLim&quot;);
   },P,&quot;govSec&quot;);
 
   /* 3. Allowable stresses */
@@ -4896,8 +4898,16 @@ function compute(){
   if(errors.length) return {errors};
   const I=S.inherit, M=S.mode, A=S.allow, L=S.loads;
   const fc=Math.max(1,+I.fc||3000), fy=+I.fy||40000;
-  const b_eff=+I.b_eff||0, h_f=+I.h_f||0, b_w=Math.max(0.01,+I.b_w||0);
+  let b_eff=+I.b_eff||0;
+  const h_f=+I.h_f||0, b_w=Math.max(0.01,+I.b_w||0);
   const isPos = M.momentType==='pos';
+  /* Std. Spec. 17th Ed. 8.10.1.1: flange overhang each side <= 6h_f, so b_eff <= b_w + 12h_f (positive-moment T-beam only;
+     the span/4 and web-spacing limits are not checked: no inputs). Option S.mode.asd_beffLim, on by default. */
+  let beffLim=null, beffEntered=null;
+  if(I.shape==='tee' &amp;&amp; isPos &amp;&amp; +I.b_w>0){
+    beffLim=b_w+12*Math.max(0,h_f);
+    if(b_eff>beffLim){ beffEntered=b_eff; if(M.asd_beffLim!==false) b_eff=beffLim; }
+  }
   /* The Capacity tab sends d and A_s for BOTH senses (d_pos/as_pos, d_neg/as_neg); use the pair that
      matches this tab's moment sense. Fall back to the single d_eff/as (older state or no live values). */
   const dS=isPos?I.d_pos:I.d_neg, aS=isPos?I.as_pos:I.as_neg;
@@ -4937,6 +4947,7 @@ function compute(){
   const ctrl_op =M_conc_op <M_steel_op ?'Concrete':'Steel';
 
   return {fc,fy,b_eff,h_f,b_w,d,h,As,isPos,shape,b_calc,Ec,n,rho,k,kd,j,z,isTee,tsolve,Cff,
+    beffLim,beffEntered,beffCapped:beffEntered!==null &amp;&amp; b_eff===beffLim,
     A,L,M_conc_inv,M_steel_inv,M_inv,M_conc_op,M_steel_op,M_op,rf_inv,rf_op,ctrl_inv,ctrl_op};
 }
 
@@ -5030,6 +5041,32 @@ function buildSummaryTab(pg){
   const sc=el(&quot;div&quot;,&quot;note&quot;);
   sc.innerHTML=&quot;<b>Scope:</b> singly reinforced flexure only (working stress, AASHTO Std. Spec. 8.15). Compression steel (8.15.3, 2n&amp;middot;A&amp;prime;<sub>s</sub>) is ignored and ASD shear (8.15.5) is not checked.&quot;;
   pg.appendChild(sc);
+  /* Std. Spec. 8.10.1.1 effective flange width note */
+  if(R.beffEntered!==null){
+    const bn=el(&quot;div&quot;,R.beffCapped?&quot;warnBox&quot;:&quot;errBox&quot;);
+    bn.innerHTML=&quot;Entered b<sub>eff</sub> = &quot;+fmt(R.beffEntered)+&quot; in. exceeds the Std. Spec. 8.10.1.1 limit b<sub>w</sub> + 12h<sub>f</sub> = &quot;+
+      fmt(R.b_w)+&quot; + 12&amp;middot;&quot;+fmt(R.h_f)+&quot; = &quot;+fmt(R.beffLim)+&quot; in. &quot;+
+      (R.beffCapped?&quot;b<sub>eff</sub> = &quot;+fmt(R.beffLim)+&quot; in. is used.&quot;:&quot;<b>The limit is switched off: the entered width is used.</b>&quot;)+
+      &quot; The span/4 and web-spacing limits (8.10.1.1) and the one-sided-slab limit b<sub>w</sub> + 6h<sub>f</sub> (8.10.1.2) are not checked here; check them by hand.&quot;;
+    pg.appendChild(bn);
+  }
+  /* steel allowables with no grade rule may be left from an earlier f_y */
+  const aa=autoAllow(+S.inherit.fc||0,+S.inherit.fy||0);
+  [[&quot;fs_inv&quot;,&quot;f<sub>s,inv</sub>&quot;],[&quot;fs_op&quot;,&quot;f<sub>s,op</sub>&quot;]].forEach(([k,lb])=>{
+    if(!(S.allow.ovr&amp;&amp;S.allow.ovr[k]) &amp;&amp; aa[k]===null){
+      const wn=el(&quot;div&quot;,&quot;errBox&quot;);
+      wn.innerHTML=&quot;f<sub>y</sub> = &quot;+grp(R.fy)+&quot; psi has no automatic rule for &quot;+lb+&quot;: the value used (&quot;+grp(R.A[k])+
+        &quot; psi) is the field's current entry and may be left from an earlier f<sub>y</sub>. Check it against AASHTO MBE Table 6B.6.2.3-1.&quot;;
+      pg.appendChild(wn);
+    }
+  });
+  /* operating f_c above 0.60 f'c (MBE 6B.6.2.3) */
+  if(R.A.fc_op>0.60*R.fc+1e-9){
+    const on=el(&quot;div&quot;,&quot;warnBox&quot;);
+    on.innerHTML=&quot;Operating f<sub>c</sub> = &quot;+grp(R.A.fc_op)+&quot; psi is greater than 0.60f&amp;prime;<sub>c</sub> = &quot;+fmt(0.60*R.fc,1)+
+      &quot; psi (AASHTO MBE 6B.6.2.3). Confirm the owner's basis for this value (the 1,900 psi default is a MassDOT value).&quot;;
+    pg.appendChild(on);
+  }
 
   /* key parameters */
   mkSection(&quot;sumParams&quot;,&quot;Key Parameters&quot;,b=>{
