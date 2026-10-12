@@ -1298,3 +1298,111 @@ Order of work: unconservative calc items (S1, S2, S3), then the conservative cal
 - Console: main logged NaN SVG errors in both hairpin scenarios. The branch logs none.
   - Both builds log a harness-only error, "Cannot read properties of undefined (reading 'show')". It comes from the 3-D tab's delayed `setTimeout` firing after the test script resets `S`, and does not occur in normal use.
 - **Other copies of this code:** none. The generator, anchor checks and import code are local to this tool. The member-reaction receiver's `check()` and unit tables are duplicated in Spread Footing.html, but the removed warning line is in this tool's own `plan()` and is not duplicated.
+
+
+## 2026-10-12 — PR: claude/baseplate-n3 (PR link added after merge)
+
+Follow-up to the claude/sweep-baseplate entry (#132), on the coordinator's instruction of 2026-10-12: N3 fixed, N4 warning added, the §17.6.2.2.3 N_b basis aligned with Concrete Anchor.html (#134), and the generator note fixed. Units: kip, in, ksi. "Default model" is as defined in the earlier entries.
+
+### S11. Open stand-off: rod compression from the elastic bolt group, whatever force model is selected (closes N3)   [calc change] [MORE conservative]
+- **Where:** `standoffCompressionCheck` (anchor text `const gp=anchorGeom().pts, nG=Math.max(gp.length,1);`). The C_u row label also changes.
+- **Problem:**
+  - With the default neutral-axis force model (`forceModel.method "na"`), the per-anchor forces assume a concrete bearing block, so no anchor ever carries compression.
+  - For an open (ungrouted) stand-off there is no bearing (the bearing check is N/A). So C_u was always 0, the rod compression / buckling DCR always read 0.00, and the compression was not checked anywhere. This was unconservative.
+- **Before:**
+  ```js
+  /* governing per-anchor compression across combos: rigid plate, compression side */
+  let Cmax=0, gov="—";
+  cc.combos.forEach(c=>{
+    if(!c.perAnchor) return;
+    c.perAnchor.forEach(p=>{ const comp=-p.t; if(comp>Cmax){Cmax=comp;gov=c.name;} });
+  });
+  ```
+- **After:**
+  ```js
+  const gp=anchorGeom().pts, nG=Math.max(gp.length,1);
+  const sx2=gp.reduce((a,p)=>a+p.x*p.x,0)||1e-9, sy2=gp.reduce((a,p)=>a+p.y*p.y,0)||1e-9;
+  let Cmax=0, gov="—";
+  cc.combos.forEach(c=>{
+    const cb=c.raw||c;
+    gp.forEach(p=>{ const t=(+cb.P||0)/nG + (+cb.Mx||0)*p.y/sy2 - (+cb.My||0)*p.x/sx2;
+      const comp=-t; if(comp>Cmax){Cmax=comp;gov=c.name;} });
+  });
+  ```
+  - This is the same expression and sign convention as the "elastic" force model in `computeAll` (T_i = P/n + M_x·y_i/Σy² − M_y·x_i/Σx²). With the elastic model selected, the result is therefore unchanged (checked: 40.00 kip in both builds).
+  - The C_u row now says "elastic bolt group P/n ± M·c/Σc² — open gap, no bearing block, whatever force model is selected".
+  - The S2 variable label `A_se` is now written `A_{se}` so that KaTeX renders it as one subscript (it showed as "A_s e").
+- **Governing provision:** AISC 360-16 §E3 (column check of the exposed rod; unchanged). AISC Design Guide 1, 2nd Ed. §3.5 / §2.10 on leveling-nut stand-offs: with no grout, the rods carry all of the compression (verify the section numbers).
+- **Check case:** default model, open stand-off "no clamping" (K = 2), z = 2″, default neutral-axis model.
+  - Combination 1.2D+1.6L: P = −120, M_y = 240. Anchors at x = ±6, y = ±6, Σx² = 4(36) = 144.
+  - Anchor at x = +6: T = −120/4 − 240(6)/144 = −30 − 10 = **−40 kip**, so C_u = 40 kip.
+  - φP_n = 19.26 kip (S2: A_se 0.606, r 0.2094, KL/r 19.10, F_cr 35.32 ksi).
+  - Before: C_u = 0, DCR = **0.00 (PASS)**. After: C_u = 40.00 kip, DCR = 40.00/19.26 = **2.08 (FAIL)**.
+  - The same result is obtained for the clamped type. Grouted and flush stand-offs are unaffected, because the check returns null for them, as before.
+- **Conservatism:** more conservative.
+
+### S12. Hairpins: warn when fewer legs are effective than claimed (N4 / BP-O8)   [display only — Condition A rule unchanged]
+- **Where:** `buildSummary`, after the substitution-status loop (anchor text `/* hairpins: fewer legs effective than claimed (BP-O8 / N4).`).
+- **Before:** (no Summary warning. The Shear Rebar tab already had the `ineffCauseBanner` detail.)
+- **After:** when shear rebar is present and `shearRebarIntercept(CC).nEff < nLegsTotal`, the Summary shows a warning box (which also prints).
+  - Text: "Shear hairpins: only n_eff of N claimed legs are effective (§17.5.2.1.2 …). φV_r counts the effective legs only."
+  - It then adds either "Condition A (φ = 0.75 …) is still applied … because at least one leg is effective — confirm the detail is acceptable with the reduced number of legs", or, when n_eff = 0, "No leg is effective, so shear breakout uses Condition B (φ = 0.70)".
+- **Check:**
+  - Default model with hairpins on: "only 4 of 8" (Condition A).
+  - The same with `extBehind` = 2: "only 0 of 8" (Condition B).
+  - Group hairpin, 2 of 2 effective: no warning.
+- **Governing provision:** ACI 318-19 §17.5.2.1.2; Table 17.5.3. No result changes.
+
+### S13. N_b for headed anchors with 11 ≤ h_ef ≤ 25 in: the 16-form whenever it applies (consistency with Concrete Anchor.html #134)   [calc change] [MORE conservative]
+- **Where:** `tensionBreakoutGroup` (anchor text `const headed=(A.head!=="plainrod");`) and the Step 1 text. The pryout Step 2 text now shows the 16-form when it is used (before, it printed the 24-form equation next to the 16-form value).
+- **Before:**
+  ```js
+  /* Nb: kc=24 cast-in; alt 16 form for 11<=hef<=25 — use larger (§17.6.2.2.3) */
+  let NbAlt=0, useAlt=false;
+  if(hef>=11 && hef<=25){ NbAlt=16*lam*Math.sqrt(fc*1000)/1000*Math.pow(hef,5/3); if(NbAlt>Nb1)useAlt=true; }
+  const Nb=Math.max(Nb1,NbAlt);
+  ```
+- **After:**
+  ```js
+  let NbAlt=0, useAlt=false;
+  const headed=(A.head!=="plainrod");
+  if(headed && hef>=11 && hef<=25){ NbAlt=16*lam*Math.sqrt(fc*1000)/1000*Math.pow(hef,5/3); useAlt=true; }
+  const Nb=useAlt? NbAlt : Nb1;
+  ```
+  - "Headed" means every head type except the plain rod: hex / heavy hex / square heads, headed studs, and the plate washer. A plain rod has no head, so §17.6.2.2.3 does not apply and it keeps the 24-form.
+  - h_ef is the value used in the breakout equations (reduced per §17.6.2.1.2 where that applies), as before.
+- **Problem:** max(24-form, 16-form) reads §17.6.2.2.3 as an optional alternative. If ACI 318-19 makes the 16-form mandatory in that range, the max is unconservative for 11 ≤ h_ef < 11.39 in, where the 16-form is smaller. Using the 16-form throughout the range satisfies both readings. The max also wrongly applied the headed-anchor equation to plain rods.
+- **Governing provision:** ACI 318-19 §17.6.2.2.1 (Eq. 17.6.2.2.1, k_c = 24) and §17.6.2.2.3 (cast-in headed studs and headed bolts, 11 ≤ h_ef ≤ 25 in: N_b = 16λ_a√f'c h_ef^(5/3)).
+- **Check cases** (f'c = 4000 psi, √f'c = 63.246, pedestal 80×80×40 so h_ef is not reduced):
+  - **Headed, h_ef = 11.2:**
+    - 24-form = 24(63.246)(11.2^1.5 = 37.48)/1000 = 56.89 kip.
+    - 16-form = 16(63.246)(11.2^(5/3) = 56.06)/1000 = 56.73 kip.
+    - Before: N_b = 56.89 (max). After: N_b = **56.73** (−0.28%).
+    - φN_cbg (0.9D+1.0W): 73.35 → **73.15 kip**. Breakout (T) DCR 0.1139 → **0.1143**. Pryout DCR 0.1101 → **0.1104**.
+  - **Headed, h_ef = 18:** 16-form 125.10 > 24-form 115.92, so N_b = 125.10 in both builds (no change).
+  - **Plain rod, h_ef = 18:**
+    - Before: N_b = 125.10 (16-form). After: N_b = **115.92** (24-form, −7.3%).
+    - φN_cbg 130.82 → **121.21 kip**. Pryout φV_cpg 261.64 → **242.43 kip**, DCR 0.0617 → **0.0666**.
+  - Crossover: 24h^1.5 = 16h^(5/3) at h = 1.5^6 = 11.39 in. For headed anchors, results change only for 11 ≤ h_ef < 11.39 in (≤ 0.7%).
+- **Conservatism:** more conservative or equal.
+- **Other copies:** Concrete Anchor.html has its own N_b code, already changed the same way in #134 (its L-bolt keeps the 24-form, like the plain rod here). Not touched in this PR.
+
+### S14. Generator dialog note: bold text instead of literal `<b>` tags   [display only]
+- **Where:** `openComboGenerator`, anchor text `/* innerHTML: el() sets textContent`.
+- **Before:** `box.appendChild(el("div","note", "Enter SERVICE … <b>P positive = tension/uplift</b> …"));`. `el()` sets `textContent`, so the tags showed literally.
+- **After:** `{ const nt=el("div","note"); nt.innerHTML= "Enter SERVICE … <b>P positive = tension/uplift</b> …"; box.appendChild(nt); }`. The text is a static string with no user input.
+- **Check:** the note renders with one `<b>` element, and the screenshot was checked. The other `el("div","note", …)` calls in the file contain no tags.
+
+### Status of the earlier open items
+- N3: resolved by S11.
+- N4 (BP-O8): warning added (S12). The rule itself is unchanged, as instructed.
+- Still open: N1, N2, N5 (BP-O9) and BP-A1.
+
+### How verified
+- `node --check` on all 4 inline scripts: 0 failures.
+- Headless Chromium, origin/main (3da718f) vs branch, 18 model scenarios plus 7 generator scenarios, with the same harness as #132. Four scenarios were added: headed h_ef 11.2, headed h_ef 18, plain rod h_ef 18, and an open stand-off with the elastic model. A Summary-warning comparison was also added.
+  - Every result difference is explained by S11 (open and clamped stand-off) or S13 (h_ef 11.2, plain rod 18).
+  - Text-only differences come from S11 / S13 labels, the S12 warning, and S2's `A_{se}` label.
+  - The default model and every `VALIDATION_CASES` target are identical. The autosaved JSON is identical in every scenario. The generator lists are identical.
+- No console errors from the page in either build, apart from the harness-only 3-D `setTimeout` error noted in #132.
+- Screenshots checked: the Summary hairpin warning, the open stand-off rod-compression section (C_u 40.00, DCR 2.08 FAILS), and the generator note in bold.
