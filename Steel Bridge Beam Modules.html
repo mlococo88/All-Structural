@@ -4889,6 +4889,7 @@ function gmRecompute() {
     if (RS.locked) { plEnsure(); $('#status-bar').innerHTML = `<div class="verdict warn"><span class="vd-ico">!</span>Waiting for the bridge</div><div class="sb-msg">Define a complete bridge in Preliminary sizing.</div>`; ['combos', 'checks', 'drawings', 'cap'].forEach(t => { const el = $('#tab-' + t); if (el) el.innerHTML = ''; }); $('#tab-summary').innerHTML = card('lock', 'Waiting for a complete bridge', '', `<div class="df-lockview"><p><b>This module works only from a fully defined bridge.</b> ${esc(RS.errors[0])}</p><p>The Preliminary sizing module publishes its bridge automatically every time it recalculates without input errors; this module unlocks and stays in sync from then on.</p><button type="button" class="btn btn-primary" data-dfpl="1">Open Preliminary sizing</button></div>`); }
     return; }
   showN(m.id, RS.MR); if (m.after) m.after(RS); CK = m.checks(RS); renderStatus(); gmSummary(m);
+  if (m.id === 'cf' && d.migK) { $('#tab-summary').insertAdjacentHTML('afterbegin', '<div class="alert info" style="margin:0 0 12px">Migrated from \'K\' (computed as Kt) to Kb; top/bottom chords swapped.</div>'); delete d.migK; autosave(); }   // shown once per project
   $('#tab-combos').innerHTML = `<div class="ctl-row"><button type="button" class="dg-btn" data-exp="combos">Expand all</button><button type="button" class="dg-btn" data-col="combos">Collapse all</button></div>` + (RS.MR ? card('cb-mr', 'Modular ratio', 'AASHTO LRFD 5.4.2.4, 6.10.1.1.1b', eq('Short-term modular ratio', '5.4.2.4-1', modTex(RS.MR)) + `<p class="note-p">The long-term (creep) section uses 3n = ${f2(3 * RS.MR.n)}.</p>`) : '') + m.combos(RS);
   if (m.capacity) $('#tab-cap').innerHTML = m.capacity(RS);
   if (m.stresses) { $('#tab-stress').innerHTML = m.stresses(RS); setTimeout(() => renderPlots(), 0); }
@@ -6384,12 +6385,16 @@ const setPath = (o, p, v) => { const ks = p.split('.'); let a = o; ks.slice(0, -
 
 let P = null, RS = null, CK = null, CUR = '';
 function initP() { P = GD_FULL(); try { const a = LS && JSON.parse(localStorage.getItem(KEY_AS) || 'null'); if (a && a.data) { P = deepMerge(GD_FULL(), a.data); CUR = a.name || ''; } } catch (e) {} gdMigrateK(P); }
-/* migration (2026-10-12): the cross-frame auto-designer stored the invalid type 'K' (computed as Kt, diagonals meeting at the top chord);
-   the engineer's decision is the K-frame with diagonals meeting at the bottom chord, so a stored 'K' loads as 'Kb' (also in the auto-design undo copy) */
-function gdMigrateK(p) { if (!p) return; let n = 0;
-  if (p.cf && p.cf.type === 'K') { p.cf.type = 'Kb'; n++; }
-  const u = p._adUndo && p._adUndo.cf; if (typeof u === 'string') { try { const o = JSON.parse(u); if (o && o.type === 'K') { o.type = 'Kb'; p._adUndo.cf = JSON.stringify(o); n++; } } catch (e) {} }
-  if (n) { const msg = 'Cross-frames: the stored type "K" now loads as K-frame with diagonals meeting at the bottom chord (Kb); it was computed as meeting at the top chord. The angles were sized for the old geometry: re-run Auto-design on the Cross-frames module.'; console.info('GirderDetail: ' + msg); setTimeout(() => alert(msg), 1500); }   // once: the project is autosaved with 'Kb' afterwards
+/* migration (2026-10-12): the cross-frame auto-designer stored the invalid type 'K', computed as Kt (diagonals meeting at the top chord).
+   The engineer's decision is Kb (diagonals meeting at the bottom chord). Kb is Kt mirrored top to bottom, so a stored 'K' loads as 'Kb' with the
+   top and bottom chord angle selections (section, legs, thickness) and their auto-design locks swapped: the continuous chord keeps its angle and the
+   split chord keeps its angle, so the design is equivalent. The same is done in the auto-design undo copy. A one-line note is shown once in the module. */
+function gdMigrateK(p) { if (!p) return 0; let n = 0;
+  const swap = c => { if (!c || c.type !== 'K') return false; c.type = 'Kb'; if (c.mem) { const t = c.mem.top; c.mem.top = c.mem.bot; c.mem.bot = t; } return true; };
+  if (swap(p.cf)) { n++; p.cf.migK = 1;
+    const L = p._lock; if (L) { const a = L['cf.mem.top.sec'], b = L['cf.mem.bot.sec']; delete L['cf.mem.top.sec']; delete L['cf.mem.bot.sec']; if (b) L['cf.mem.top.sec'] = b; if (a) L['cf.mem.bot.sec'] = a; } }
+  const u = p._adUndo && p._adUndo.cf; if (typeof u === 'string') { try { const o = JSON.parse(u); if (swap(o)) { p._adUndo.cf = JSON.stringify(o); n++; } } catch (e) {} }
+  if (n) console.info("GirderDetail: Migrated from 'K' (computed as Kt) to Kb; top/bottom chords swapped.");
   return n; }
 
 /* ---------- field builders ---------- */
