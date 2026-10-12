@@ -503,3 +503,257 @@ window.addEventListener('storage', e => { if (!e.key || e.key.indexOf('bridgeSui
   - Not run here: an end-to-end DXF export in the browser (the Pyodide CDN is blocked in the test environment). **The engineer should run one DXF export after this change.**
 - **Other copies:** none (PlateLine does not use ezdxf).
 - **Open items:** ezdxf's own dependencies are not pinned (they are resolved by micropip); Pyodide itself is already pinned at v0.26.4.
+
+## 2026-10-12 — PR: claude/sweep-sbbm (open-item sweep; PR link added after merge)
+
+Engineer's instruction (2026-10-12): work through every open item, use best judgment, and list what needs the engineer. Basis: AASHTO LRFD 10th Ed. (2024). Items whose article number I could not confirm against the printed 10th Ed. are marked **verify**. Line numbers are approximate (main page ≈ line, or `PL:` ≈ line in the decoded PlateLine HTML).
+
+**How to re-apply a PlateLine (`PL:`) edit by hand:** base64-decode the `const PL_B64 = '...'` string (standard alphabet, `=` padding, one line; the bytes are UTF-8 HTML with LF line endings), make the edit, base64-encode again without line wrapping and put it back between the quotes. After this PR the string is 557,928 characters (decoded 418,445 bytes; before: 556,056 / 417,040). The first 143,329 decoded bytes are unchanged.
+
+### S1. Girder section: minimum permanent-load factors where a permanent load relieves the effect; moment-reversal check GS19   [calc change] [**MORE conservative**] (open item O9a)
+- **Where:** `GM.gs` (≈ lines 3127–3365). Anchors: `gam: { dc: 1.25, dw: 1.50,` (def), `${fld('γ<sub>DC</sub> Strength I', 'gs.gam.dc', '')}` (panes), `const G = { dc: gm('dc')` and `const comb = (a` (compute), `const MD1 =` (yield moment), `{ const c = { id: 'GS19'` (new check, after GS18), `combos(R) { let h = card('cb-g'` and `${row('DC1', 'DC1',` (Loads and stresses tab), `['Load factors', \`Str I` (report echo), manual part p18 "Other checks".
+- **Problem:** Strength I used γ_DC = 1.25 and γ_DW = 1.50 on every permanent moment, also where the permanent moment has the opposite sign to the location's moment (a positive-flexure location near a pier, a negative-flexure location near a contraflexure point). 3.4.1 requires the minimum factor on a load that reduces the effect. The opposite extreme (live load of the other sign with the minimum factors) was not looked at at all, so a moment reversal went unnoticed (the card only said "check the minimum factors separately").
+- **Governing provision:** AASHTO LRFD 10th Ed. Art. 3.4.1 (minimum factor on a load that reduces the force effect) and Table 3.4.1-2 (γ_p DC 1.25/0.90, DW 1.50/0.65).
+- **Before (compute):**
+  ```js
+  const G = { dc: gm('dc'), dw: gm('dw'), ll: gm('ll'), sll: gm('sll'), fat: gm('fat'), cdc: gm('cdc'), ccl: gm('ccl') };
+  ...
+      const comb = (a, b, c, l) => ({ top: a * r.stg.DC1.top + a * r.stg.DC2.top + b * r.stg.DW.top + l * r.stg.LL.top, bot: a * r.stg.DC1.bot + a * r.stg.DC2.bot + b * r.stg.DW.bot + l * r.stg.LL.bot });
+      r.str = comb(G.dc, G.dw, 0, G.ll); r.svc = comb(1, 1, 0, G.sll);
+      r.Mu = G.dc * (r.MDC1 + r.MDC2) + G.dw * r.MDW + G.ll * MLL; r.Ms = r.MDC1 + r.MDC2 + r.MDW + G.sll * MLL;
+  ...
+      const MD1 = G.dc * r.MDC1, MD2 = G.dc * r.MDC2 + G.dw * r.MDW; r.MD1x
+  ```
+- **After (compute):**
+  ```js
+  const G = { dc: gm('dc'), dw: gm('dw'), dcMin: gm('dcMin'), dwMin: gm('dwMin'), ll: gm('ll'), sll: gm('sll'), fat: gm('fat'), cdc: gm('cdc'), ccl: gm('ccl') };
+  ...
+      // 3.4.1: each permanent load takes its maximum factor where it adds to the location's governing effect and its minimum factor where it relieves it
+      const sg = pos ? 1 : -1, gF = (M, mx, mn, s1) => s1 * M >= 0 ? mx : mn, gSet = s1 => ({ DC1: gF(r.MDC1, G.dc, G.dcMin, s1), DC2: gF(r.MDC2, G.dc, G.dcMin, s1), DW: gF(r.MDW, G.dw, G.dwMin, s1) });
+      r.gm = gSet(sg);
+      const comb = (a1, a2, b, l) => ({ top: a1 * r.stg.DC1.top + a2 * r.stg.DC2.top + b * r.stg.DW.top + l * r.stg.LL.top, bot: a1 * r.stg.DC1.bot + a2 * r.stg.DC2.bot + b * r.stg.DW.bot + l * r.stg.LL.bot });
+      r.str = comb(r.gm.DC1, r.gm.DC2, r.gm.DW, G.ll); r.svc = comb(1, 1, 1, G.sll);
+      r.Mu = r.gm.DC1 * r.MDC1 + r.gm.DC2 * r.MDC2 + r.gm.DW * r.MDW + G.ll * MLL; r.Ms = r.MDC1 + r.MDC2 + r.MDW + G.sll * MLL;
+      { const gO = gSet(-sg), MLLo = pos ? r.MLLn : r.MLLp; r.gmO = gO; r.MLLo = MLLo; r.Mrev = gO.DC1 * r.MDC1 + gO.DC2 * r.MDC2 + gO.DW * r.MDW + G.ll * MLLo; r.rev = sg * r.Mrev < 0; }   // opposite extreme: moment reversal
+  ...
+      const MD1 = r.gm.DC1 * r.MDC1, MD2 = r.gm.DC2 * r.MDC2 + r.gm.DW * r.MDW; r.MD1x
+  ```
+  (`r.svc` is unchanged: the old call passed 1 for DW through its second argument.)
+- **Other edits:** def `gam` gains `dcMin: 0.90, dwMin: 0.65`; two inputs "γ_DC Strength I, minimum" (`gs.gam.dcMin`) and "γ_DW Strength I, minimum" (`gs.gam.dwMin`) are inserted after the γ_DW input; the stress-accumulation table shows the factor actually used per stage (`r.gm.DC1`, `r.gm.DC2`, `r.gm.DW` instead of `R.G.dc`, `R.G.dc`, `R.G.dw`); the load-combination note and the report echo name the minimum factors; new check **GS19 "Moment reversal under Strength I"** (group Strength I flexure) lists, per location, M_u and the opposite extreme M_u,opp = γ·M_DC1 + γ·M_DC2 + γ·M_DW + γ_LL·M_LL(other sign), with γ = min where the permanent moment opposes that extreme. Status: **warning** when the sign reverses ("also check as negative/positive flexure"), pass otherwise. The opposite sense of flexure is not designed automatically: the warning asks for a location with the other region.
+- **Shear:** unchanged. The module validates V_DC1, V_DC2, V_DW and V_LL ≥ 0 (magnitudes), so every permanent shear adds and the maximum factors are correct.
+- **Saved data:** two new optional fields `gs.gam.dcMin`, `gs.gam.dwMin` inside the existing autosave/project JSON (no new storage key). Older files load through `deepMerge` with the defaults 0.90 / 0.65.
+- **Check case** (Girder section, default section rows with the moments changed; k-ft):
+  - A1, positive region, M_DC1 = −200, M_DC2 = −30, M_DW = −35, M_LL+ = 900, M_LL− = −700. Before: M_u = 1.25(−230) + 1.50(−35) + 1.75(900) = −287.5 − 52.5 + 1575 = **1,235.00**. After: 0.90(−230) + 0.65(−35) + 1575 = −207.0 − 22.75 + 1575 = **1,345.25** (GS6 demand 1,235.00 → 1,345.25; bottom-flange f_bu 6.94 → 7.85 ksi). GS19: M_u,opp = 1.25(−230) + 1.50(−35) + 1.75(−700) = **−1,565.00** → reversal warning.
+  - A2, negative region, M_DC1 = 300, M_DC2 = 40, M_DW = 45, M_LL− = −900, M_LL+ = 600. Before: 1.25(340) + 1.50(45) − 1575 = **−1,082.50**; after: 0.90(340) + 0.65(45) − 1575 = **−1,239.75** (GS7 f_bu 4.93 → 5.70 ksi; GS9 M_u 1,082.50 → 1,239.75). GS19: 1.25(340) + 1.50(45) + 1.75(600) = **1,542.50** → reversal warning.
+  - Built-in example (Span 1 and Pier 1): every permanent moment has the sign of the location's moment, so all results are unchanged; GS19 gives 950.00 (Span 1) and −2,176.50 (Pier 1): no reversal. The module summary goes from 18 to 19 checks.
+- **How verified:** headless Chromium, main vs branch: `GM.gs.compute`/`checks` for the rows above and the default; default module text differs only by the new GS19 row and the check count.
+- **Other copies:** PlateLine's own envelope (`Mup`/`Mun`) already picked the factors by sign; its noncompact positive check did not (see S3).
+
+### S2. Girder section, Service II: f_ℓ/2 on the bottom flange   [calc change] [**MORE conservative** where f_ℓ > 0] (open item O9b)
+- **Where:** `GM.gs.checks`, check GS12. Anchor: `{ const c = { id: 'GS12', grp: SV, title: 'Permanent deformations: flange stresses'`.
+- **Problem:** Eq. 6.10.4.2.2-2 (bottom steel flange of composite sections) is f_f + f_ℓ/2 ≤ 0.95R_hF_yf; the check used f_f only.
+- **Governing provision:** AASHTO LRFD 10th Ed. Art. 6.10.4.2.2, Eqs. 6.10.4.2.2-1 (top) and -2 (bottom).
+- **Before:**
+  ```js
+  ref: 'AASHTO LRFD 6.10.4.2.2', src: 'Code', sym: T`f_f \le 0.95R_hF_{yf}\ \text{(composite section flanges)}`, ... note: '... (steel plus reinforcement), which is conservative.' };
+      R.rows.forEach(r => [['top', r.svc.top, R.Fyt], ['bottom', r.svc.bot, R.Fyb]].forEach(([f, v, Fy]) => { const a = Math.abs(v), cap = 0.95 * r.Rh * Fy; c.items.push(rc(`${L(r)}, ${f}`, [f2(a), f2(cap), f2(a / cap)], a, cap, T`|f_f| = ${f2(a)} ...`)); })); out.add(c); }
+  ```
+- **After:**
+  ```js
+  ref: 'AASHTO LRFD 6.10.4.2.2, Eqs. 6.10.4.2.2-1 and -2', src: 'Code', sym: T`f_f \le 0.95R_hF_{yf}\ \text{(top flange)}, \qquad f_f + \frac{f_\ell}{2} \le 0.95R_hF_{yf}\ \text{(bottom flange)}`, ... note: '... which is conservative. f_ℓ on the discretely braced bottom flange (Eq. 6.10.4.2.2-2) is the first-order value entered for the location, which is the Strength I value; using it for Service II is conservative.' };
+      R.rows.forEach(r => [['top', r.svc.top, R.Fyt, 0], ['bottom', r.svc.bot, R.Fyb, Math.max(r.fl, 0)]].forEach(([f, v, Fy, fl]) => { const a = Math.abs(v) + fl / 2, cap = 0.95 * r.Rh * Fy; c.items.push(rc(`${L(r)}, ${f}`, [f2(a), f2(cap), f2(a / cap)], a, cap, fl > 0 ? T`|f_f| + \frac{f_\ell}{2} = ...` : T`|f_f| = ${f2(a)} ...`)); })); out.add(c); }
+  ```
+  (The full work strings are in the file; with f_ℓ = 0 the work string is the old one.)
+- **f_ℓ used:** the location's entered f_ℓ (labelled Strength I, first order). The module has no Service II f_ℓ input; using the Strength I value is conservative. Manual p18 "Other checks" updated.
+- **Check case:** default Span 1 row with f_ℓ = 6 ksi: f_f = 29.50 ksi; before 29.50 ≤ 47.50 (ratio 0.62); after 29.50 + 6/2 = **32.50** ≤ 0.95(1.0)(50) = 47.50 (ratio **0.68**). Default Pier 1 with f_ℓ = 6: 29.44 → 32.44 ksi. With f_ℓ = 0 (built-in example) nothing changes.
+- **How verified:** as S1.
+
+### S3. PlateLine: noncompact positive-flexure compression flange includes DC2, DW and LL+IM; same γ_p as M_u+; edition reference 10th Ed.   [calc change] [**MORE conservative**] (open item O9c)
+- **Where:** decoded PlateLine, `checkLayout` (PL: ≈ 2193–2206). Anchors: `const Sb = { s: p.I / ybs, c3:`, `if (T.Mup[i] > 0) {`, `if (cont) { const MD1 =`, `} else { const g1 = 1.25, fb =`. Reference list PL: ≈ 2546, anchor `<li>AASHTO LRFD Bridge Design Specifications, 9th Edition`.
+- **Problem:** the noncompact positive check compared the top (compression) flange stress from DC1 alone (`ft = 1.25 M_DC1/S_top,steel`) with F_y; DC2, DW (on 3n) and LL+IM (on n) were left out. Both flange checks (and the 1.3R_hM_y cap) also used 1.25/1.50 regardless of the sign of the permanent moments, while M_u+ (`Mup`) picks the factor by sign.
+- **Governing provision:** AASHTO LRFD 10th Ed. Art. 6.10.7.2.1 (f_bu ≤ φ_fF_nc for the compression flange), 6.10.1.1.1a (stresses accumulated on the section that carries each load), 3.4.1 / Table 3.4.1-2.
+- **Before (PL):**
+  ```js
+          const Sb = { s: p.I / ybs, c3: c3.I / c3.yb, n: cn.I / cn.yb, cr: Icr / ybc }, St = { s: p.I / (d - ybs), cr: Icr / (d - ybc) };
+  ...
+        if (T.Mup[i] > 0) {
+          const pl = sgPlastic(q, D, beff, t, b, tw), comp = ...
+            if (cont) { const MD1 = 1.25 * M1, MD2 = 1.25 * M2 + 1.5 * Mw, MAD = ...
+          } else { const g1 = 1.25, fb = (g1 * M1 * 12 / Sb.s + (g1 * M2 + 1.5 * Mw) * 12 / Sb.c3 + 1.75 * Lp * 12 / Sb.n), ft = (g1 * M1 * 12 / St.s);
+  ```
+- **After (PL):**
+  ```js
+          const Sb = { s: p.I / ybs, c3: c3.I / c3.yb, n: cn.I / cn.yb, cr: Icr / ybc }, St = { s: p.I / (d - ybs), c3: c3.I / (d - c3.yb), n: cn.I / (d - cn.yb), cr: Icr / (d - ybc) };
+  ...
+        if (T.Mup[i] > 0) {
+          const gdP = M1 + M2 >= 0 ? 1.25 : 0.90, gwP = Mw >= 0 ? 1.50 : 0.65;   // the same permanent-load factors as M_u+ (3.4.1)
+          const pl = sgPlastic(q, D, beff, t, b, tw), comp = ...
+            if (cont) { const MD1 = gdP * M1, MD2 = gdP * M2 + gwP * Mw, MAD = ...
+          } else { const fb = (gdP * M1 * 12 / Sb.s + (gdP * M2 + gwP * Mw) * 12 / Sb.c3 + 1.75 * Lp * 12 / Sb.n), ft = (gdP * M1 * 12 / St.s + (gdP * M2 + gwP * Mw) * 12 / St.c3 + 1.75 * Lp * 12 / St.n);   // compression flange: every stage on its own section (6.10.7.2.1, 6.10.1.1.1a)
+  ```
+  Reference list: `9th Edition, ... 2020` → `10th Edition, ... 2024`.
+- **Check case** (PlateLine built-in bridge with D = 84 in, web 1/2 in, stiffened, so that the positive sections are noncompact; interior girder, x = 50 ft; M_DC1 = 952.06, M_DC2 = 116.52, M_DW = 151.12, M_LL+ = 1,943.61 k-ft; top of steel S_steel = 1,682.19, S_3n = 5,849.22, S_n = 16,859.65 in³):
+  - before: f_top = 1.25(952.06)(12)/1,682.19 = **8.49 ksi**, ratio 8.49/50 = 0.170;
+  - after: 8.49 + [1.25(116.52) + 1.50(151.12)](12)/5,849.22 + 1.75(1,943.61)(12)/16,859.65 = 8.49 + 0.76 + 2.42 = **11.67 ksi**, ratio **0.233** (now the governing top-flange check at that node).
+  - The γ_p part changes results only where M_DC1 + M_DC2 < 0 or M_DW < 0 at a node with M_u+ > 0 (near piers); there the minimum factors give a larger compression and a smaller tension-side relief (more conservative).
+  - Built-in example (compact positive sections): no change (all node ratios identical).
+- **How verified:** PlateLine run standalone in headless Chromium, `suggestLayout(P, { full: true, verify: ... })` for the current layout, node ratio arrays main vs branch; the node above instrumented in a scratch copy for the intermediate values.
+
+### S4. PlateLine, Service II: f_ℓ/2 from skew on the bottom flange   [calc change] [**MORE conservative**, skew > 20° only] (same provision as S2; found while doing O9b)
+- **Where:** PL `checkLayout`. Anchors: `fl = skM > 20 + 1e-9 ?` (adds `flS`), `'Service II, positive (6.10.4.2.2)'`, `'Service II, negative (6.10.4.2.2)'`.
+- **Before (PL):**
+  ```js
+  ... : (parseFloat(Lm.flSkI) || 10)) : 0;
+  put(rB, gB, i, (M1 * 12 / Sb.s + (M2 + Mw) * 12 / Sb.c3 + 1.3 * Lp * 12 / Sb.n) / (0.95 * Fy), 'Service II, positive (6.10.4.2.2)');
+  if (sb > 0) { put(rB, gB, i, sb / (0.95 * Fy), 'Service II, negative (6.10.4.2.2)');
+  ```
+- **After (PL):**
+  ```js
+  ... : (parseFloat(Lm.flSkI) || 10)) : 0, flS = fl > 0 ? fl / (parseFloat(Lm.flSkG) || 1.25) : 0;   // flS: unfactored f_l for Service II (Eq. 6.10.4.2.2-2)
+  put(rB, gB, i, (M1 * 12 / Sb.s + (M2 + Mw) * 12 / Sb.c3 + 1.3 * Lp * 12 / Sb.n + flS / 2) / (0.95 * Fy), flS ? 'Service II, positive, with skew f_ℓ/2 (6.10.4.2.2)' : 'Service II, positive (6.10.4.2.2)');
+  if (sb > 0) { put(rB, gB, i, (sb + flS / 2) / (0.95 * Fy), flS ? 'Service II, negative, with skew f_ℓ/2 (6.10.4.2.2)' : 'Service II, negative (6.10.4.2.2)');
+  ```
+- **f_ℓ used:** the skew estimate of C6.10.1 (Limits tab: 10 ksi interior, 7.5 ksi exterior) without its Strength load factor (`flSkG`, default 1.25), i.e. the Service II value. Web bend-buckling is unchanged.
+- **Governing provision:** AASHTO LRFD 10th Ed. Eq. 6.10.4.2.2-2; C6.10.1 (skew f_ℓ estimate).
+- **Check case** (built-in bridge with every skew 30°, interior girder, x = 1 ft): f_f = 51.18(12)/1,328.17 + (6.24 + 8.10)(12)/1,773.93 + 1.3(82.05)(12)/1,926.84 = 0.462 + 0.097 + 0.664 = 1.224 ksi. Before: 1.224/47.5 = 0.026 (not governing; node ratio 0.088 from another check). After: (1.224 + 10/2)/47.5 = **0.131**, now the governing bottom-flange check at that node. With skew ≤ 20° (built-in example: 15°) nothing changes.
+- **How verified:** as S3.
+
+### S5. PlateLine: Strength I design shear takes the minimum factor on a permanent shear that relieves the extreme   [calc change] [**MORE conservative**] (found during the sweep; same rule as S1)
+- **Where:** PL ≈ 2027, `analyzeGirder` envelope. Anchor: `let VuMax = 0, VuLoc = 0;` (next line).
+- **Before (PL):**
+  ```js
+        for (let e = 0; e < N - 1; e++) { const vd = 1.25 * VDC[e] + 1.5 * VDW[e]; const v = Math.max(Math.abs(vd + 1.75 * Vp[e]), Math.abs(vd + 1.75 * Vn[e])); if (v > VuMax) { VuMax = v; VuLoc = (xs[e] + xs[e + 1]) / 2; } }
+  ```
+- **After (PL):**
+  ```js
+        for (let e = 0; e < N - 1; e++) { const vf = s => (s * VDC[e] >= 0 ? 1.25 : 0.90) * VDC[e] + (s * VDW[e] >= 0 ? 1.5 : 0.65) * VDW[e];   // 3.4.1: minimum factors where a permanent load relieves the extreme
+          const v = Math.max(Math.abs(vf(1) + 1.75 * Vp[e]), Math.abs(vf(-1) + 1.75 * Vn[e])); if (v > VuMax) { VuMax = v; VuLoc = (xs[e] + xs[e + 1]) / 2; } }
+  ```
+- **Governing provision:** AASHTO LRFD 10th Ed. Art. 3.4.1, Table 3.4.1-2.
+- **Check case** (one element): V_DC = 10, V_DW = 2, V_LL+ = 5, V_LL− = −60 kip. Before: v_d = 1.25(10) + 1.5(2) = 15.5; max(|15.5 + 8.75|, |15.5 − 105|) = **89.5 kip**. After: positive extreme 24.25 (unchanged); negative extreme 0.90(10) + 0.65(2) − 105 = −94.7 → **94.7 kip** (+5.8 %). Built-in bridge: unchanged (the positive extreme governs everywhere).
+- **How verified:** PlateLine text and verify-mode ratios, main vs branch, built-in example: identical.
+
+### S6. PlateLine: round-off moments at the abutments no longer trigger the negative-flexure checks   [bug fix] [results change only where the old ratio was ~10¹¹] (found during the sweep)
+- **Where:** PL ≈ 2208. Anchor: `// negative flexure, Strength I (6.10.8) and Service II`.
+- **Problem:** at an abutment node M_u− is round-off (≈ −7 × 10⁻¹¹ kip-ft). With a skew over 20° the check adds f_ℓ/3 to a zero f_bu and divides by F_nc computed with C_b ≈ 3 × 10⁻¹³ from the near-zero moment diagram, so the ratio was 3.6 × 10¹¹ at node 0. The verify mode used by Suggest (`v.check.max <= 1.0005`) could therefore never accept a layout for a bridge skewed more than 20°.
+- **Before (PL):**
+  ```js
+          // negative flexure, Strength I (6.10.8) and Service II
+          if (T.Mun[i] < 0) {
+  ```
+- **After (PL):**
+  ```js
+          // negative flexure, Strength I (6.10.8) and Service II (round-off moments at the abutments, |M| < 1e-6 kip-ft, are not negative flexure)
+          if (T.Mun[i] < -1e-6) {
+  ```
+- **Governing provision:** none (numerical guard).
+- **Check case:** built-in bridge, all skews 30°, verify mode: before, node 0 bottom flange ratio 363,262,006,193 ("Strength I, negative, compression flange with skew f_ℓ"), layout max the same; after, node 0 ratio 0.1435 (Service II with skew f_ℓ/2), layout max **1.0586** (the same governing check as with 15° skew). Built-in example: unchanged.
+- **How verified:** as S3, with the node instrumented in a scratch copy (M_u− = −7.47 × 10⁻¹¹, C_b = 2.97 × 10⁻¹³, F_nc = 1.15 × 10⁻¹¹ ksi).
+
+### S7. Field splice: flange splice plates in compression use φ_c = 0.95   [calc change] [**LESS conservative**] (open item O6)
+- **Where:** `const PHI = {` (≈ 1206); `gdCompute` plate resistances (≈ 1429, anchor `c: PHI.c * gP.Fy * Ao`); `gdChecks` TF4/BF4 work string (≈ 1532, anchor `cm = [['compression', pr.c,`); manual part "Splice plates" (≈ 2191) and the validation note (≈ 2221).
+- **Before:**
+  ```js
+  const PHI = { f: 1.0, y: 0.95, u: 0.80, c: 0.90, s: 0.80, bb: 0.80, bs: 0.80, v: 1.0, vu: 0.80 };
+  ... c: PHI.c * gP.Fy * Ao } ... c: PHI.c * gP.Fy * Ai }
+  cm = [['compression', pr.c, T`\phi_cF_yA_s = 0.90(${f0(R.gP.Fy)})(${f2(pr.A)})`]];
+  ```
+- **After:**
+  ```js
+  const PHI = { f: 1.0, y: 0.95, u: 0.80, c: 0.90, cp: 0.95, s: 0.80, bb: 0.80, bs: 0.80, v: 1.0, vu: 0.80 };
+  ... c: PHI.cp * gP.Fy * Ao } ... c: PHI.cp * gP.Fy * Ai }
+  cm = [['compression', pr.c, T`\phi_cF_yA_s = 0.95(${f0(R.gP.Fy)})(${f2(pr.A)})`]];
+  ```
+  Manual: "Compression: φ_cF_yA_s with φ_c = 0.90." → "... with φ_c = 0.95 (6.5.4.2). The web splice plate check under H_w keeps 0.90, because it stands for tension as well, where net-section fracture is not checked separately." Validation note: "its splice plate compression check uses φ_y = 0.95 instead of φ_c = 0.90;" → "its splice plate compression check uses φ = 0.95, labelled φ_y (the program uses φ_c = 0.95, 6.5.4.2, the same value);".
+- **Not changed:** the web splice plate H_w check (`PHI.c` at ≈ 1621, φ = 0.90 "covers tension and compression"): in tension, net fracture (0.80F_uA_n) can govern over 0.95F_yA_g and is not checked there, so 0.90 is kept as the conservative cover.
+- **Governing provision:** AASHTO LRFD 10th Ed. Art. 6.13.6.1.3b (splice plates in compression, R_r = φ_cF_yA_s, φ_c per 6.5.4.2) and 6.5.4.2 (φ_c = 0.95, axial compression, steel only). **verify** the 10th Ed. 6.13.6.1.3b wording refers to 6.5.4.2.
+- **Check case** (built-in splice, 50 ksi plates): top outer plate A_s = 8.00 in²: before 0.90(50)(8.00) = 360.00 kip (TF4 ratio 265.26/360.00 = 0.74); after 0.95(50)(8.00) = **380.00 kip** (0.70). Top inner plates 8.13 in²: 365.63 → 385.94 kip (0.73 → 0.69). Bottom outer 11.00 in²: 495.00 → 522.50 kip (0.80 → 0.76); bottom inner 11.38 in²: 511.88 → 540.31 kip (0.78 → 0.74). No status change. The independent calculation quoted in the manual used 0.95, so it now agrees.
+- **How verified:** default splice in headless Chromium, main vs branch: only TF4/BF4 compression items changed.
+
+### S8. Shear connector auto-designer: strength loop may tighten the pitch down to 4d   [auto-design change] [no check changed] (open item O1)
+- **Where:** `AD.sc`, strength loop (≈ 5091). Anchor: `!adLocked(\`sc.zones.${zi}.p\`) && D(z.p) > Math.ceil(`.
+- **Before:** `D(z.p) > Math.ceil(6 * d)` — **After:** `D(z.p) > Math.ceil(4 * d)`.
+- **Governing provision:** AASHTO LRFD 10th Ed. Art. 6.10.10.1.2 (minimum pitch 4d; SC3 already checks 4d).
+- **Check case:** SC module default with the strength region shortened to 0–10 ft, 7/8 in studs, "Design" run: before, the loop stops at p = 6 in (ceil 5.25) with **SC2 failing**; after, it reaches p = **4 in** (≥ 4d = 3.50 in) and SC2 passes. Default example: same result (4 studs at 15 in, 3 at 17 in) before and after.
+- **How verified:** `runAutoDesign('sc', true)` in headless Chromium, main vs branch.
+
+### S9. Bearing stiffener: web strip reduced by F_yw/F_ys only once   [calc change] [**LESS conservative**, only where F_yw < 0.7F_ys] (open item O9d)
+- **Where:** `bsCompute` (≈ 1795, anchor `r.Po = Fys * (r.As + t.np * t.tp * tw)`); `bsChecks` P_o "where" text (≈ 1843, anchor `['P<sub>o</sub>', `).
+- **Problem:** when F_yw < 0.7F_ys the web strip length was reduced by F_yw/F_ys (correct: the reduced strip is an equivalent area at F_ys), and then that reduced area was multiplied by F_yw again, so the web contribution to P_o was reduced twice.
+- **Before:**
+  ```js
+      r.Po = Fys * (r.As + t.np * t.tp * tw) + Fyw * r.Aw;
+  ```
+- **After:**
+  ```js
+      r.AwS = (r.strip9 + r.sEnd) * tw; r.AwI = r.Aw - r.AwS;   // web strips outside the group (reduced by F_yw/F_ys when F_yw < 0.7F_ys), web between the plates
+      r.Po = Fys * (r.As + t.np * t.tp * tw) + (r.red < 1 ? Fys : Fyw) * r.AwS + Fyw * r.AwI;   // 6.10.11.2.4b: a reduced strip is an equivalent area at F_ys (single reduction)
+  ```
+  The web between multiple stiffener pairs (not reduced) keeps F_yw. With F_yw ≥ 0.7F_ys (`red = 1`) P_o is unchanged. The "where" line for P_o names the two web parts when the reduction applies.
+- **Governing provision:** AASHTO LRFD 10th Ed. Art. 6.10.11.2.4b (web strip; reduction by F_yw/F_ys when F_yw < 0.7F_ys). **verify** that the 10th Ed. wording reduces the *area* (equivalent area at F_ys).
+- **Check case** (built-in bearing stiffeners with web grade 36, stiffeners HPS70W): Abut. 1, Type A (1 pair, 7 × 7/8 in, t_w = 9/16 in): red = 36/70 = 0.514; strip 9t_w·red = 2.604 in; A_w = 2.929 in². Before P_o = 70(12.25 + 0.492) + 36(2.929) = 891.95 + 105.44 = 997.40 kip, P_r = 935.19 kip. After P_o = 891.95 + 70(2.929) = **1,096.98 kip** (= 36 × the unreduced 5.695 in²), P_r = **1,027.21 kip** (ratio 0.29 → 0.26). Pier 1, Type B (2 pairs): A_w = 2.929 (strips) + 6.188 (between the plates, F_yw) in²: P_r 2,488.71 → 2,581.34 kip. Same-grade default (50W/50W): unchanged.
+- **How verified:** `bsCompute`/`bsChecks` in headless Chromium, main vs branch.
+
+### S10. Rolled diaphragm bolts: F_ub from the selected bolt grade   [calc change] [**LESS conservative** for A490 only] (open item O9d)
+- **Where:** `cfDiaChecks` (≈ 2662). Anchor: `thr = (p.conn || {}).thr === 'excl' ? 0.56 : 0.45, phiRs = 0.80 * thr * Ab *`.
+- **Before:** `phiRs = 0.80 * thr * Ab * 120,` — **After:** `phiRs = 0.80 * thr * Ab * (FUB[(p.conn || {}).gr] || 120),` (`FUB = { A325: 120, A490: 150 }`, the table the cross-frame bolts already use).
+- **Governing provision:** AASHTO LRFD 10th Ed. Art. 6.13.2.7 (R_n = 0.45/0.56 A_bF_ub), 6.4.3.1 (F_ub: ASTM F3125 Grade A325 120 ksi, Grade A490 150 ksi).
+- **Check case** (cross-frame default with the rolled diaphragm on, 7/8 in bolts, threads included): A325 unchanged, 0.80(0.45)(0.6013)(120) = 25.98 kip. A490: before 25.98 kip; after 0.80(0.45)(0.6013)(150) = **32.47 kip** (ratio 1.59 → 1.27; still fails in this example).
+- **How verified:** `GM.cf.compute`/`checks` with `dia.on = 'yes'`, main vs branch.
+
+### S11. Splice report: V_r line shows the tension-field expression when it is used   [display] [no result change] (open item O8)
+- **Where:** `pfyCard` (≈ 6595). Anchor: `+ eq('Web factored shear resistance, smaller web', '6.13.6.1.3c, 6.10.9',`.
+- **Before:**
+  ```js
+  T`V_r = \phi_vV_n = 1.0(${f3(R.Cv)})(${f2(R.Vp)}) = ${f2(R.phVn)}\ \text{kip} \quad (k = ${f2(R.k)},\ \text{Eq. ${R.vnExpr.eq}})`
+  ```
+- **After:**
+  ```js
+  R.vnExpr.dD != null ? T`V_r = \phi_vV_n = 1.0(${f2(R.Vp)})\left[${f3(R.Cv)} + \frac{0.87(1 - ${f3(R.Cv)})}{\sqrt{1 + (${f3(R.vnExpr.dD)})^2}${R.vnExpr.eq === '6.10.9.3.2-8' ? T` + ${f3(R.vnExpr.dD)}` : ''}}\right] = ${f2(R.phVn)}\ \text{kip} \quad (k = ${f2(R.k)},\ d_o/D = ${f3(R.vnExpr.dD)},\ \text{Eq. ${R.vnExpr.eq}})` : <the old string>
+  ```
+- **Governing provision:** AASHTO LRFD 10th Ed. Eqs. 6.10.9.3.2-2 and -8 (display only).
+- **Check case:** built-in splice, web stiffened, d_o = 90 in: before "1.0(0.578)(978.75) = 765.05" (the product is 565.7, not 765.05); after "1.0(978.75)[0.578 + 0.87(1 − 0.578)/√(1 + 1.500²)] = 765.05 kip" (hand: 978.75 × (0.578 + 0.367/1.803) = 978.75 × 0.782 = 765.1). Unstiffened web: unchanged string.
+- **How verified:** `pfyCard(gdCompute(...))` string, main vs branch.
+
+### S12. Messages accepted only from the right window; PlateLine owner-default profiles guarded   [bug fix / robustness] [no result change] (open item O9e; AUDIT S9, S10)
+- **Where (main page):** new `const gdFromPL = e => typeof PL_FRAME !== 'undefined' && !!PL_FRAME && e.source === PL_FRAME.contentWindow;` before the `gd-bridge` listener (anchor `if (!e.data || e.data.type !== 'gd-bridge' || !e.data.bridge) return;`); `if (!gdFromPL(e)) return;` added as the first line of the `gd-bridge`, `gd-gs` and `gd-inbox` listeners; `gdFromPL(e) &&` added to the `pl-status` and `gd-inbox-err` one-liners.
+- **Where (PL):** `if (e.source !== window.parent) return;` first in the listener for `pl-bridge-req`/`gd-an`/`gd-dfx` (PL ≈ 3321) and in the `pl-export-req` listener (PL ≈ 3353). Owner-default profile buttons (PL ≈ 4179–4180, anchors `$('#pf_save').onclick =`, `$('#pf_load').onclick =`): `JSON.parse` and `localStorage.setItem` wrapped in try/catch.
+- **Before (PL, profiles):**
+  ```js
+    $('#pf_save').onclick = () => { if (!LS) return; const all = JSON.parse(localStorage.getItem(KEY_PF) || '{}'); all[P.limits.dot] = clone(P.limits); localStorage.setItem(KEY_PF, JSON.stringify(all)); flashPf(`Saved these limits as the ${P.limits.dot} defaults.`); };
+    $('#pf_load').onclick = () => { const all = LS ? JSON.parse(localStorage.getItem(KEY_PF) || '{}') : {}; const d = all[P.limits.dot]; ...
+  ```
+- **After (PL, profiles):**
+  ```js
+    $('#pf_save').onclick = () => { if (!LS) return; let all = {}; try { all = JSON.parse(localStorage.getItem(KEY_PF) || '{}') || {}; } catch (e) { flashPf('Not saved: the owner defaults already in browser storage could not be read (corrupt data), and saving would overwrite them.', 'fail'); return; } all[P.limits.dot] = clone(P.limits); try { localStorage.setItem(KEY_PF, JSON.stringify(all)); } catch (e) { flashPf('Could not save the defaults: the browser storage is full or blocked.', 'fail'); return; } flashPf(`Saved these limits as the ${P.limits.dot} defaults.`); };
+    $('#pf_load').onclick = () => { let all = {}; try { all = (LS ? JSON.parse(localStorage.getItem(KEY_PF) || '{}') : {}) || {}; } catch (e) { flashPf('The saved owner defaults could not be read (corrupt data in browser storage).', 'fail'); return; } const d = all[P.limits.dot]; ...
+  ```
+  A corrupt profile store is never overwritten (saved data is kept, CLAUDE.md §5).
+- **Problem:** any window that could post to the page (a framing page, another frame) could inject a bridge, sections, an inbox (including `target: 'all'`, which runs "Design all") or an alert. Corrupt or blocked storage threw uncaught errors on the profile buttons.
+- **Check case:** `window.postMessage({ type: 'gd-inbox-err', msg: 'SPOOF' }, '*')` from the page itself: before an alert "SPOOF"; after ignored. The real PlateLine frame still delivers: Structural analysis / LLDF and DLs text identical to main after load. Profiles: corrupt store → load: before uncaught SyntaxError; after message "could not be read"; save: before uncaught error, after "Not saved ..." and the stored text is unchanged; blocked setItem → "Could not save the defaults ...". Normal save/load unchanged.
+- **How verified:** headless Chromium (main page and PlateLine standalone).
+
+### S13. Autosave failure is shown instead of swallowed   [UI] [no result change] (AUDIT S8 / inventory X-S8, this tool's part)
+- **Where:** `autosave()` (≈ 6688). Anchor: `function autosave() { if (!LS) return; clearTimeout(asT);`.
+- **Before:** `... setTimeout(() => d.style.opacity = .25, 500); } } catch (e) {} }, 300); }`
+- **After:** `... setTimeout(() => d.style.opacity = .25, 500); } gdAsState(true); } catch (e) { gdAsState(false); } }, 300); }` plus the new function `gdAsState(ok)` right after it (dot turns red, the "Autosaves and restores your last session" text becomes "Autosave failed: browser storage is full or blocked. Use Export JSON to keep your work.", one alert per session; both revert after the next successful autosave).
+- **Check case:** `Storage.prototype.setItem` made to throw for `girderdetail_autosave_v1`: before nothing visible; after one alert, red dot and the message; restoring storage → the normal text returns. No storage key or format changed.
+- **How verified:** headless Chromium; screenshot `shot_autosave_fail.png`.
+
+### Earlier open items: status after this PR
+- **O1** fixed (S8). **O6** fixed (S7). **O8** fixed (S11). **O9**: GS factors (S1), Service II f_ℓ/2 (S2), bearing-stiffener double reduction and rolled-diaphragm F_ub (S9, S10), postMessage checks (S12), PlateLine DC1-only check, 9th Ed. reference and profile `JSON.parse` (S3, S12).
+- **O7 closed, not an issue.** The `crack: '15'` migration in `GM.sa.compute` (`if (!p.crackV) { if (p.crack === '15') p.crack = 'none'; p.crackV = 2; }`) never runs on a load: `GM.sa.def` contains `crackV: 2`, and every load goes through `deepMerge(GD_FULL(), saved)`, which supplies `crackV: 2` before `compute` sees the data. Test: autosave seeded with `{ sa: { crack: '15' } }` and no `crackV` → after load and after opening Structural analysis, `P.sa.crack` is still `'15'` (the saved value is kept, shown as "Cracked 15% ... (not per 6.10.1.5)"). Nothing is silently changed, so no notice is needed. The migration line is dead code and was left as is.
+- **P2 (ezdxf dependencies) and H1 (DF pull "pull again" warning):** left, as recommended in the inventory.
+- **O2, O3, O5:** need the printed 10th Ed. (see "Needs engineer").
+- **O4:** not done in this PR (see "Remaining open items").
+
+### Needs engineer
+1. **O5 — L_p and C_b (6.10.8.2.3, A6.3.3).** The tool uses L_p = 1.1r_t√(E/F_yc) and the quarter-point C_b, labelled 10th Ed. Please confirm Eqs. 6.10.8.2.3-4 and A6.3.3-4 (coefficient 1.1 or 1.0) and the 10th Ed. C_b equation from the printed spec. Recommendation: if the printed text is 1.0, change `Lp = 1.1 * rt` in the three places that have it: `ltbFnc` (used by every 6.10.8 check in the detail modules), the Appendix A6 block of `GM.gs.compute`, and PlateLine `Fnc`.
+2. **O3 — 10th Ed. Q_n (6.10.10.4.3).** Please supply the 10th Ed. equation text. Recommendation: code it as the default and keep the 9th Ed. equation as an option; until then the module uses the user-entered 10th Ed. Q_n or the 9th Ed. equation, as it warns.
+3. **O2 — hole width for 1-1/8 in bolts (6.8.3).** Confirm "standard hole + 1/16 in" (1.3125 in, current) or "bolt + 1/8 in" (1.25 in). Recommendation: keep the current, more conservative value unless the printed text says otherwise.
+4. **S7 / S9 verify flags:** confirm 6.13.6.1.3b refers splice plates in compression to φ_c of 6.5.4.2 (0.95), and that 6.10.11.2.4b reduces the web strip *area* by F_yw/F_ys.
+
+### Remaining open items
+- **O4 — unit weight for E_c (5.4.2.4, Table 3.5.1-1).** Not changed: the change reaches PlateLine (its own n and the modular ratio it sends), the LLDF and DLs module (K_g), the Structural analysis stiffness, and five detail modules (splice, studs, welds, girder section, fatigue), and it shifts the numbers quoted in several manual verification paragraphs and the splice validation table. Recommendation for a dedicated PR: in the five detail modules the `wc` input is used only for E_c, so relabel it "w_c for E_c (plain concrete, Table 3.5.1-1)" and change its default to 0.145 kcf (saved projects keep their stored value); in PlateLine add an optional `bridge.wcE` (default 0.145) used for E_c and sent to the modules, keeping `bridge.wc` (0.150) for dead load; in the LLDF and DLs module use `b.wcE` when present. Question for the engineer: does MassDOT practice use 0.145 kcf (plain concrete, f′c ≤ 5 ksi) for E_c?
+- **Girder section, constructibility:** M = γ_DC M_DC1 + γ M_CLL still uses the maximum factors on both; a construction live load of the opposite sign to M_DC1 is not checked with 0.90 M_DC1 (rare; recommendation: same sign rule as S1).
+- **Service II reversal** (S1 covers Strength I only) and **Service II f_ℓ input** (S2 uses the Strength I f_ℓ, conservative): recommendation, add an optional Service II f_ℓ per location if the conservatism matters.
