@@ -400,7 +400,7 @@ tbody tr.ud:hover td{background:#dbeafe}
     <button class="btn btn-s" id="psLRFD" title="Replace all combinations with the ASCE 7-16 Sec. 2.3.1 strength (LRFD) basic combinations for D, L, S, W">Preset: LRFD</button>
     <button class="btn btn-s" id="psASD" title="Replace all combinations with the ASCE 7-16 Sec. 2.4.1 allowable stress (ASD) basic combinations for D, L, S, W">Preset: ASD</button>
   </div>
-  <p class="hint">Names are generated from the factors. The single-combination dropdown and the envelope both follow this table. Presets: ASCE 7-16 Sec. 2.3.1 (LRFD) and Sec. 2.4.1 (ASD) basic combinations for D, L, S and W only (Lr, R, E and the alternate snow/wind arrangements are not included). The default list's "Unfactored (1.0 All)" row is not a code combination, and its wind row uses 0.5L (ASCE 7-16 Sec. 2.3.1 Exception 1: only where L<sub>o</sub> ≤ 100 psf, not garages or public assembly). Verify preset factors against your governing code edition.</p>
+  <p class="hint">Names are generated from the factors. The single-combination dropdown and the envelope both follow this table. Presets: ASCE 7-16 Sec. 2.3.1 (LRFD) and Sec. 2.4.1 (ASD) basic combinations for D, L, S and W only (Lr, R, E and the alternate snow/wind arrangements are not included). The default list's "Unfactored (1.0 All)" row is not a code combination. Its wind row is combination 4 with 1.0L; where ASCE 7-16 Sec. 2.3.1 Exception 1 applies (L<sub>o</sub> ≤ 100 psf, not garages or public assembly) you may edit the L factor to 0.5. Verify preset factors against your governing code edition.</p>
  </div>
 </div>
 
@@ -419,7 +419,7 @@ const defCombos=()=>[
  {id:'14',f:{DL:1.4},on:true},
  {id:'12_16',f:{DL:1.2,LL:1.6},on:true},
  {id:'12_16S',f:{DL:1.2,LL:1.6,SL:.5},on:true},
- {id:'12W',f:{DL:1.2,LL:.5,SL:.5,WL:1},on:true},
+ {id:'12W',f:{DL:1.2,LL:1,SL:.5,WL:1},on:true}, // ASCE 7-16 2.3.1 comb. 4 (was 0.5L: Exception 1 only)
  {id:'09W',f:{DL:.9,WL:1},on:true}];
 let CASES=defCases(),combosArr=defCombos();
 let caseView=null; // non-null => diagrams show a single load case at factor 1.0

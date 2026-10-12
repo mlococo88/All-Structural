@@ -1034,6 +1034,50 @@ function mkRow(x,t){
 - **F14 follow-up:** should combinations carry a "service" flag, so the deflection envelope uses only service combinations?
   - Recommendation: not needed now; every check names the governing combination.
 
+## 2026-10-12 — PR: claude/sm-12w (PR link added after merge)
+
+### F15 (O8). Default wind combination "12W" uses 1.0L   [CALCULATION CHANGE — default combination list only] [MORE conservative]
+- **Engineer's decision (2026-10-12, via coordinator):** change the default "12W" row to 1.2D + 1.0L + 0.5S + 1.0W. Apply it to new projects and defaults only; saved projects keep their lists.
+- **Where:** `defCombos()` (anchor `{id:'12W',f:`) and the hint under the combinations table (anchor `Its wind row is combination 4 with 1.0L`).
+- **Problem:** the default row was 1.2D + 0.5L + 0.5S + 1.0W. ASCE 7-16 Sec. 2.3.1 combination 4 is 1.2D + 1.0W + L + 0.5(Lr or S or R). The 0.5L factor is only permitted by Exception 1, where L_o ≤ 100 psf, excluding garages and areas of public assembly. The tool cannot know the occupancy, so the default was unconservative for occupancies that do not qualify.
+- **Governing provision:** ASCE 7-16 Sec. 2.3.1, combination 4 and Exception 1 (verify the numbering against the printed standard).
+- **Scope / saved data:**
+  - The row id stays `12W`, so a saved `cid` still points to it. Only the factor values in `defCombos()` change.
+  - Projects, autosaves and files store their own `combos` list, and `applyProject` uses it when present. Their results are therefore unchanged.
+  - The new factor applies to the start-up default (a browser with no autosave) and any file without a `combos` field.
+  - No key or format changed.
+- **Before / After:**
+  1.
+     - Before:
+  ```js
+ {id:'12W',f:{DL:1.2,LL:.5,SL:.5,WL:1},on:true},
+  ```
+     - After:
+  ```js
+ {id:'12W',f:{DL:1.2,LL:1,SL:.5,WL:1},on:true}, // ASCE 7-16 2.3.1 comb. 4 (was 0.5L: Exception 1 only)
+  ```
+  2.
+     - Before:
+  ```html
+The default list's "Unfactored (1.0 All)" row is not a code combination, and its wind row uses 0.5L (ASCE 7-16 Sec. 2.3.1 Exception 1: only where L<sub>o</sub> ≤ 100 psf, not garages or public assembly).
+  ```
+     - After:
+  ```html
+The default list's "Unfactored (1.0 All)" row is not a code combination. Its wind row is combination 4 with 1.0L; where ASCE 7-16 Sec. 2.3.1 Exception 1 applies (L<sub>o</sub> ≤ 100 psf, not garages or public assembly) you may edit the L factor to 0.5.
+  ```
+- **Check case:** simple span 20 ft; uniform DL 1, LL 1 and WL 1 kip/ft (wind downward); default combinations.
+  - "12W" single combination:
+    - Before: w = 1.2 + 0.5 + 1.0 = 2.7 kip/ft → R = wL/2 = 27.000 kip, M = wL²/8 = 2.7 × 400/8 = 135.000 kip·ft.
+    - After: w = 1.2 + 1.0 + 1.0 = 3.2 kip/ft → R = 32.000 kip, M = 160.000 kip·ft (+18.5%).
+  - Envelope:
+    - Before: |M| = 150.000 kip·ft, governed by "Unfactored (1.0 All)", w = 3.0.
+    - After: |M| = 160.000 kip·ft, governed by 1.2DL+1.0LL+0.5SL+1.0WL.
+  - The same project loaded with the old list saved in it: still 150.000 kip·ft and the old 12W factors (unchanged).
+- **How verified:**
+  - `node --check`: 3 inline scripts, 0 failures.
+  - Headless Chromium, origin/main against the branch: the check case above (new project, single 12W, and the saved old list), and the hint text. No page errors.
+- **Other copies of this code:** none. Steel Beam Design has its own default list, which is not changed here.
+
 ## Open items (not changed)
 - O1. **Resolved 2026-10-12 (F9, claude/sweep-sm).** **Unit conversion.** Only a notice was added (F8). Real conversion would scale spans, loads (4 types), E, I, c, A, σ, user stations and the W-shape d/t_w, and would need a decision on saved projects. Recommend it as a separate PR if wanted.
 - O2. **Resolved 2026-10-12 (F11, claude/sweep-sm).** **Roller → pin silent conversion** (`solve()`: `nodes.forEach(n2=>{if(n2.t==='roller')n2.t='pin';})`). Log only, as instructed. Pin and roller are mechanically identical in this model (no axial DOF), so no result is affected. The node dropdown offers only Pin/Fixed/Free, and the templates and "+ span" create 'roller', which is converted on the first solve. The only visible effect is the drawn symbol and the saved value. A proper fix means adding a "Roller" option (a UI change); not done.
@@ -1042,4 +1086,4 @@ function mkRow(x,t){
 - O5. **Resolved 2026-10-12 (F13, claude/sweep-sm): edition stated; "U" kept.** **Default combination list includes the all-1.0 "U" combination** in the envelope, and the edition of the "ASCE 7" presets is not stated. Not changed (review item 6, low).
 - O6. **Resolved 2026-10-12 (F12, claude/sweep-sm).** **Generic storage keys** `beamProSaves` / `beamProAuto` (shared file:// origin). Not changed: renaming needs a migration and was not in scope.
 - O7. **Resolved 2026-10-12 (F10, claude/sweep-sm).** **W-shape presets with non-kip force units** keep the previous E (existing behaviour: E is set only when fu = kip). Part of O1.
-- O8. (2026-10-12) Default wind combination `12W` uses 0.5L (ASCE 7-16 Sec. 2.3.1 Exception 1). Raised, not changed; see the 2026-10-12 "Needs engineer" list.
+- O8. **Resolved 2026-10-12 (F15, claude/sm-12w): default now 1.0L.** (2026-10-12) Default wind combination `12W` uses 0.5L (ASCE 7-16 Sec. 2.3.1 Exception 1). Raised, not changed; see the 2026-10-12 "Needs engineer" list.
