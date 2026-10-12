@@ -1243,3 +1243,80 @@ No storage key was added or changed. The `bridgeSuite.v1.*` bootstrap / BridgeLo
 - UI runs (scratch `ui.mjs`): lock / unlock texts (W11), the psSection visibility gate (W10), φc / φs inputs (W4), and the exterior overhang box and warning (W1).
 - Screenshots looked at: `new-rating.png`, `new-ext-geom.png`, `new-opts.png`, `new-fatigue.png`, `new-report-beff-ext.png`, `new-handling-card.png`, `*-ot6-restored.png`.
 - **Other copies:** none. stgirder.html has the same exterior-b_eff and φc·φs items (STG-O4, STG-O3), not changed here (one tool per PR).
+
+## 2026-10-12 — PR: claude/bootstrap-sync (shared `bridgeSuite.v1.*` bootstrap; PR link added after merge)
+
+Cross-tool sync of the shared bootstrap blocks. The same change is in index.html, lldf.html, psbeam.html and stgirder.html (CLAUDE.md §3). No engineering formula, factor, unit or code reference changed; no computed value changes. Storage keys and saved formats are unchanged (the hand-off map keeps its key and entry format; it only loses old entries).
+
+This is the shared-block part of X-S8 / X-S10 for PS-Beam.
+
+### XS1. `whois` responder answers only the framing page, the opener, or an own frame (X-S10)   [robustness] [no result change]
+- **Where:** `BridgeApps.announce()` in the "SHARED APP PATHS" block. Anchor: `d.source==='bridge-suite'&&d.whois`.
+- **Before:**
+  ```js
+    try{ window.addEventListener('message',function(e){
+      var d=e&&e.data; if(d&&d.source==='bridge-suite'&&d.whois) send();
+    }); }catch(e){}
+  ```
+- **After:**
+  ```js
+    // Only the page framing this one, the window that opened it, or a frame
+    // this window holds may ask (X-S10; same rule as the abutment / EDM links).
+    var asker=function(src){
+      if(!src) return false;
+      try{
+        if(window.parent!==window&&src===window.parent) return true;
+        if(window.opener&&src===window.opener) return true;
+        for(var i=0;i<window.frames.length;i++) if(window.frames[i]===src) return true;
+      }catch(x){}
+      return false;
+    };
+    try{ window.addEventListener('message',function(e){
+      var d=e&&e.data; if(d&&d.source==='bridge-suite'&&d.whois&&asker(e.source)) send();
+    }); }catch(e){}
+  ```
+- **Problem:** any window (e.g. a sibling frame) could make the app post its hello. Low risk; the reply only names the app. Same approach as abutment F10 / EDM S4.
+- **Check:** host page framing lldf.html plus a sibling frame. Sibling sends `{source:'bridge-suite',whois:true}` to the lldf frame: main 1 hello reaches the host, branch 0. Host (parent) sends the same ping: 1 hello on both. The boot burst is unchanged.
+
+### XS2. Hand-off map pruned on publish (X-S8)   [storage] [no result change]
+- **Where:** `BridgeHandoff` block (index.html, psbeam.html, stgirder.html; lldf.html has no copy of this block). Anchors: `function prune(map,keep)`, `map=prune(map,[p.handoffId,localStorage.getItem(K_LATEST)]);`.
+- **Before:** `publish()` added the entry to `bridgeSuite.v1.handoffs` and never removed any.
+- **After:** new constants `var KEEP_N=20, KEEP_DAYS=30;` and
+  ```js
+  function prune(map,keep){
+    var ids=Object.keys(map), cutoff=Date.now()-KEEP_DAYS*864e5, out={};
+    ids.sort(function(a,b){ return String((map[b]||{}).producedAt||'').localeCompare(String((map[a]||{}).producedAt||'')); });
+    ids.forEach(function(id,i){
+      var t=Date.parse((map[id]||{}).producedAt||''), fresh=isNaN(t)||t>=cutoff;
+      if(keep.indexOf(id)>=0||(i<KEEP_N&&fresh)) out[id]=map[id];
+    });
+    return out;
+  }
+  ```
+  called in `publish()` right after `map[p.handoffId]=p;`. Rule: keep the newest 20 entries that are at most 30 days old; always keep the entry being published and the entry the `latestId` pointer named before this publish (the design apps read only the latest entry, so that is the one a receiver may not have pulled yet).
+- **Check:** map seeded with 25 entries (m0–m14 aged 0–14 days, m15–m24 aged 55–64 days, `latestId`=m24) plus one entry with no date; publish `p/new`. Main: 27 entries kept. Branch: 17 (m0–m14, m24, new); `latestId` = `p__new` on both.
+
+### XS3. Storage-full writes in the shared blocks are shown (X-S8)   [UI] [no result change]
+- **Where:** "SHARED APP PATHS" block: new `isQuota()` / `storageWarn(what,e)` after `function now()`, exported as `BridgeApps.storageWarn`; called from `write()` (app paths), `BridgeProjects` `writeReg()` and `BridgeHandoff` `publish()` catch blocks. Anchor: `id='bridgeStorageWarn'`.
+- **Before (examples):**
+  ```js
+  function write(o){ try{ localStorage.setItem(KEY,JSON.stringify(o)); return true; }catch(e){ return false; } }
+  function writeReg(r){ try{localStorage.setItem(K_PROJ,JSON.stringify(r));return true;}catch(e){return false;} }
+  ```
+- **After:**
+  ```js
+  function write(o){ try{ localStorage.setItem(KEY,JSON.stringify(o)); return true; }catch(e){ storageWarn('the app-path record',e); return false; } }
+  function writeReg(r){ try{localStorage.setItem(K_PROJ,JSON.stringify(r));return true;}
+    catch(e){ try{ if(window.BridgeApps&&window.BridgeApps.storageWarn) window.BridgeApps.storageWarn('the shared project',e); }catch(x){} return false;} }
+  ```
+  and in `publish()`'s catch: `window.BridgeApps.storageWarn('the analysis hand-off',e)`. `storageWarn` acts only on a quota error (`QuotaExceededError`, `NS_ERROR_DOM_QUOTA_REACHED`, code 22 / 1014, or "quota" in the message), so a browser that blocks storage outright is not nagged. It shows one fixed red banner per page (id `bridgeStorageWarn`, dismissable), one line per item: "⚠ Browser storage is full: <item> was not saved. Export your work as JSON now, then delete old projects to free space." Return values are unchanged (`false` / `null` / `{ok:false}`).
+- **Check:** index.html with `setItem` for `bridgeSuite.v1.projects` / `.handoffs` throwing `QuotaExceededError`: `publish()` → `ok:false`, `saveSlice()` → `null` on both; main shows nothing, branch shows the banner with both lines (screenshot `quota_banner_br.png`).
+
+### XS4. Shared blocks byte-identical (AUDIT S3)
+- The `BridgeApps` block was already the same in all four files (stgirder F1, 2026-10-04); AUDIT S3 is closed by that entry. The `BridgeHandoff` block differed in formatting and comments between index.html and psbeam/stgirder.html; it is now the index.html text (plus XS2/XS3) in all three. The file-header comments above each block are per-file and were not touched.
+- **Proof:** extracted blocks compared after the change (md5): `BridgeApps` block identical in the four files; `BridgeProjects` block identical in the four; `BridgeHandoff` block identical in index/psbeam/stgirder; `BridgeLocks` block unchanged and identical.
+
+### How verified
+- `node --check` on every plain `<script>` that holds the shared blocks, all four files.
+- Headless Chromium, main vs branch, same steps: index publishes the PS demands payload → psbeam shows "New analysis data available", "Load these demands" adopts it (adopted token `test__beam@2026-10-12T10:00:00.000Z`); index publishes the steel payload → stgirder banner and adoption; lldf boots and resolves `BridgeApps.path('psbeam')`. Same results and the same storage keys on both; key values differ only in timestamps. No page errors (only Babel's "deoptimised styling" notes).
+- **Other copies:** index.html, lldf.html, psbeam.html, stgirder.html (all changed in this PR; lldf.html has no `BridgeHandoff` block, so XS2 and the hand-off call of XS3 are not in it).

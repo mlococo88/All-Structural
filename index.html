@@ -123,6 +123,7 @@ var st=document.createElement('style'); st.textContent=css;
   var NS='bridgeSuite.v1';
   var SCHEMA='psbeam-external-demands';          // canonical shared id (both design apps accept)
   var K_HANDOFFS=NS+'.handoffs', K_LATEST=NS+'.latestId', K_UPDATED=NS+'.updatedAt';
+  var KEEP_N=20, KEEP_DAYS=30;                   // hand-off pruning, see prune()
   function K_ADOPTED(app){ return NS+'.adopted.'+app; }
   function slug(s){ return (s==null?'':(''+s)).toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'')||'untitled'; }
   function lsOK(){ try{ var k='__bh_t'; localStorage.setItem(k,'1'); localStorage.removeItem(k); return true; }catch(e){ return false; } }
@@ -139,16 +140,36 @@ var st=document.createElement('style'); st.textContent=css;
     out.handoffId=slug(proj)+'__'+slug(mem);
     return out;
   }
+  /* The hand-off map was never cleaned, and every tool opened from file:// in
+     Chrome/Edge shares one ~5 MB storage area (X-S8). On each publish, keep the
+     newest KEEP_N entries that are at most KEEP_DAYS old (an entry with no
+     readable date passes the age test but ranks last). Always kept, whatever
+     their age: the entry being published, and the one the latest pointer names
+     -- the only entry the design apps read, so the one a receiver may not have
+     pulled yet. Entry format and keys are unchanged; only old entries go. */
+  function prune(map,keep){
+    var ids=Object.keys(map), cutoff=Date.now()-KEEP_DAYS*864e5, out={};
+    ids.sort(function(a,b){ return String((map[b]||{}).producedAt||'').localeCompare(String((map[a]||{}).producedAt||'')); });
+    ids.forEach(function(id,i){
+      var t=Date.parse((map[id]||{}).producedAt||''), fresh=isNaN(t)||t>=cutoff;
+      if(keep.indexOf(id)>=0||(i<KEEP_N&&fresh)) out[id]=map[id];
+    });
+    return out;
+  }
   function publish(raw){
     if(!lsOK()) return {ok:false,reason:'localStorage unavailable'};
     var p=stamp(raw);
     try{
       var map=readMap(); map[p.handoffId]=p;
+      map=prune(map,[p.handoffId,localStorage.getItem(K_LATEST)]);
       localStorage.setItem(K_HANDOFFS,JSON.stringify(map));
       localStorage.setItem(K_LATEST,p.handoffId);
       localStorage.setItem(K_UPDATED,p.producedAt);
       return {ok:true,handoffId:p.handoffId,payload:p};
-    }catch(e){ return {ok:false,reason:e&&e.message||('storage error')}; }
+    }catch(e){
+      try{ if(window.BridgeApps&&window.BridgeApps.storageWarn) window.BridgeApps.storageWarn('the analysis hand-off',e); }catch(x){}
+      return {ok:false,reason:e&&e.message||('storage error')};
+    }
   }
   function tokenOf(p){ return p?((p.handoffId||'')+'@'+(p.producedAt||'')):''; }
   function readOne(id){
@@ -222,7 +243,8 @@ var st=document.createElement('style'); st.textContent=css;
   function now(){ try{return new Date().toISOString();}catch(e){return '';} }
   function newId(){ return 'bp_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,6); }
   function readReg(){ try{return JSON.parse(localStorage.getItem(K_PROJ)||'{}')||{};}catch(e){return {};} }
-  function writeReg(r){ try{localStorage.setItem(K_PROJ,JSON.stringify(r));return true;}catch(e){return false;} }
+  function writeReg(r){ try{localStorage.setItem(K_PROJ,JSON.stringify(r));return true;}
+    catch(e){ try{ if(window.BridgeApps&&window.BridgeApps.storageWarn) window.BridgeApps.storageWarn('the shared project',e); }catch(x){} return false;} }
   function raw(){ return readReg(); }
   function list(){ var r=readReg(); return Object.keys(r).map(function(id){var e=r[id];
     return {id:id,name:e.name,savedAt:e.savedAt,apps:Object.keys(e.slices||{}),hasDemands:!!e.demands};})
@@ -303,8 +325,37 @@ var st=document.createElement('style'); st.textContent=css;
   var ME='';                                   // which app this file is, set by boot()
   var MAXDIRS=24;                              // folders remembered per app
   function read(){ try{ return JSON.parse(localStorage.getItem(KEY))||{}; }catch(e){ return {}; } }
-  function write(o){ try{ localStorage.setItem(KEY,JSON.stringify(o)); return true; }catch(e){ return false; } }
+  function write(o){ try{ localStorage.setItem(KEY,JSON.stringify(o)); return true; }catch(e){ storageWarn('the app-path record',e); return false; } }
   function now(){ return new Date().toISOString(); }
+  /* A write to the shared browser storage that fails because the storage is
+     FULL is shown, not swallowed (X-S8). Every tool opened from file:// in
+     Chrome/Edge shares one ~5 MB area, so once it fills, every autosave and
+     hand-off stops at once. One banner per page, one line per item; the other
+     shared blocks reach it through window.BridgeApps.storageWarn. */
+  var warned={};
+  function isQuota(e){ return !!e&&(e.name==='QuotaExceededError'||e.name==='NS_ERROR_DOM_QUOTA_REACHED'||
+    e.code===22||e.code===1014||/quota/i.test(String(e.message||''))); }
+  function storageWarn(what,e){
+    if(!isQuota(e)||warned[what]) return false;
+    warned[what]=true;
+    var show=function(){ try{
+      var b=document.getElementById('bridgeStorageWarn');
+      if(!b){
+        b=document.createElement('div'); b.id='bridgeStorageWarn'; b.setAttribute('role','alert');
+        b.style.cssText='position:fixed;left:8px;right:8px;bottom:8px;z-index:2147483647;background:#fdecea;color:#7a1a12;'
+          +'border:1px solid #b3261e;border-radius:6px;padding:8px 34px 8px 12px;font:13px/1.4 system-ui,sans-serif;box-shadow:0 2px 8px rgba(0,0,0,.25)';
+        var x=document.createElement('button'); x.type='button'; x.textContent='\u00d7'; x.title='Dismiss'; x.setAttribute('aria-label','Dismiss');
+        x.style.cssText='position:absolute;top:4px;right:6px;border:0;background:none;font-size:18px;line-height:1;cursor:pointer;color:#7a1a12';
+        x.onclick=function(){ if(b.parentNode) b.parentNode.removeChild(b); };
+        b.appendChild(x); document.body.appendChild(b);
+      }
+      var line=document.createElement('div');
+      line.textContent='\u26a0 Browser storage is full: '+what+' was not saved. Export your work as JSON now, then delete old projects to free space.';
+      b.appendChild(line);
+    }catch(x){} };
+    if(document.body) show(); else { try{ document.addEventListener('DOMContentLoaded',show); }catch(x){} }
+    return true;
+  }
   /* This app's own file name as the browser sees it. Decoded, because a name
      with a space arrives percent-encoded and the value is shown to a human. */
   function selfFile(){
@@ -405,8 +456,19 @@ var st=document.createElement('style'); st.textContent=css;
     // fact loaded and was working. This standing listener lets the parent re-ask at
     // any time with a {whois:true} ping, so the handshake self-heals instead of
     // requiring a full reload of the suite.
+    // Only the page framing this one, the window that opened it, or a frame
+    // this window holds may ask (X-S10; same rule as the abutment / EDM links).
+    var asker=function(src){
+      if(!src) return false;
+      try{
+        if(window.parent!==window&&src===window.parent) return true;
+        if(window.opener&&src===window.opener) return true;
+        for(var i=0;i<window.frames.length;i++) if(window.frames[i]===src) return true;
+      }catch(x){}
+      return false;
+    };
     try{ window.addEventListener('message',function(e){
-      var d=e&&e.data; if(d&&d.source==='bridge-suite'&&d.whois) send();
+      var d=e&&e.data; if(d&&d.source==='bridge-suite'&&d.whois&&asker(e.source)) send();
     }); }catch(e){}
   }
   function boot(app){ if(NAMES[app]) ME=app; register(app); announce(app); }
@@ -414,7 +476,7 @@ var st=document.createElement('style'); st.textContent=css;
   function href(app){ return path(app); }
   window.BridgeApps={ KEY:KEY, DEFAULTS:DEF, NAMES:NAMES, selfFile:selfFile, selfDir:selfDir,
     register:register, announce:announce, boot:boot, set:set, path:path, href:href,
-    info:info, all:all };
+    info:info, all:all, storageWarn:storageWarn };
 })();
 
 try{ window.BridgeApps.boot('mct'); }catch(e){}
