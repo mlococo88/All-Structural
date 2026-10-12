@@ -996,3 +996,21 @@ Open-item sweep (inventory section 5: MLG-O1 … O6, MLG-H1, MLG-T1). Engineer's
 
 ## Open items (after the 2026-10-12 sweep)
 - Inventory section 5 items MLG-O1, O2, O4, O5, T1 are fixed (F6–F11 above); O3, H1 and O6 are closed. Only the three "Needs engineer" questions above remain.
+
+## 2026-10-12 — PR: claude/lldf-receivers (cross-tool: lldf DF payload `perFootStrip` / `skewShear` receivers; PR link added after merge)
+
+Cross-tool connection PR (CLAUDE.md §7 exception): receivers of the `bridgeSuite.v1.lldf` payload honour lldf's new optional fields (fixlog/lldf.md 2026-10-12 SW3 `skewShear`, SW6 `perFootStrip`), and Bridge Geometry's skew note is softened. Tools changed: index.html, psbeam.html, stgirder.html, Moving Load Generator.html, Steel Bridge Beam Modules.html, Bridge Geometry.html; HANDOFF.md §4.2 / §4.3. The shared `bridgeSuite.v1.*` bootstrap blocks are not touched. No formula, factor, unit or code reference changed. Payloads without the new fields give the same results as before (checked).
+
+### LR1. lldf DF pull: CIP slab (`perFootStrip`) applied with warnings; shear skew shown   [hand-off] [no result change]
+- **Where:** the "Hand-off IN: distribution factors from LL & DL Distribution" script. Anchors: `p.skewShear!=null && (!fin(p.skewShear)`, `id="lxStrip"`, `el('lxStrip')`, `perFootStrip:(p.perFootStrip===true)`, `SRC.perFootStrip?'; CIP slab DFs per 1-ft strip`, `Highway DFs pulled from LL & DL are for a cast-in-place slab`.
+- **After:**
+  - `validate`: `if(p.skewShear!=null && (!fin(p.skewShear)||Math.abs(p.skewShear)>=90)) errs.push('skewShear = '+JSON.stringify(p.skewShear));`
+  - Dialog header: `· skew 30° (moment), 40° (shear) ·` when `skewShear` is sent (was `· skew 30° ·`).
+  - New dialog box `<div id="lxStrip" class="warn hidden">`, shown for `perFootStrip:true`: "⚠ Cast-in-place slab: these DFs are per 1-ft strip of slab width (AASHTO LRFD 4.6.2.3), not per girder. If you apply them, every "per girder" result here is per foot of slab width. Do not use them for a girder."
+  - `apply()`: `SRC` gets `perFootStrip:(p.perFootStrip===true)`; saved in the existing optional `lldfSource` (new optional key, old saves load unchanged).
+  - `srcText()` (sidebar source line and the printed report row) adds "; CIP slab DFs per 1-ft strip: results are per foot of slab width, not per girder".
+  - `analyze` wrapper: for highway vehicles, when `SRC.perFootStrip`, pushes the warning "Highway DFs pulled from LL & DL are for a cast-in-place slab, per 1-ft strip of slab width: the factored results are per foot of slab width, not per girder."
+- **Why applied, not refused:** this tool is a line analysis; a 1-ft slab strip analysed with the strip DF gives per-foot moments and shears, a valid use. Every place that shows the DF source now says so. The DF values are applied exactly as sent (no conversion).
+- **Governing provision:** AASHTO LRFD 10th Ed. Art. 4.6.2.3 (equivalent strip; force effects per unit width). No formula changed.
+- **Check case:** lldf slab payload (1 span 120 ft, interior gM = gV = 0.076, fatM = fatV = 0.045) pulled into 2 spans × 100 ft: before and after the same DF inputs are written (dfm0 = dfv0 = 0.076; fatigue 0.045), so the results are identical; after, the dialog shows the slab box, the source line ends with the per-foot note, and the results show the per-foot warning (2 places). Girder payload θ = 30°, θ_V = 40°: same inputs and source line as before; the header now reads "skew 30° (moment), 40° (shear)".
+- **How verified:** headless Chromium, main vs branch, `MLGlldf.openDlg(payload)` / `MLGlldf.apply()`; the per-foot text was found in 2 warning elements after the slab pull; screenshot `mlg_dialog_slab_br.png` looked at. No page errors.

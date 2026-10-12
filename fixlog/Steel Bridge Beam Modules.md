@@ -757,3 +757,31 @@ Engineer's instruction (2026-10-12): work through every open item, use best judg
 - **O4 — unit weight for E_c (5.4.2.4, Table 3.5.1-1).** Not changed: the change reaches PlateLine (its own n and the modular ratio it sends), the LLDF and DLs module (K_g), the Structural analysis stiffness, and five detail modules (splice, studs, welds, girder section, fatigue), and it shifts the numbers quoted in several manual verification paragraphs and the splice validation table. Recommendation for a dedicated PR: in the five detail modules the `wc` input is used only for E_c, so relabel it "w_c for E_c (plain concrete, Table 3.5.1-1)" and change its default to 0.145 kcf (saved projects keep their stored value); in PlateLine add an optional `bridge.wcE` (default 0.145) used for E_c and sent to the modules, keeping `bridge.wc` (0.150) for dead load; in the LLDF and DLs module use `b.wcE` when present. Question for the engineer: does MassDOT practice use 0.145 kcf (plain concrete, f′c ≤ 5 ksi) for E_c?
 - **Girder section, constructibility:** M = γ_DC M_DC1 + γ M_CLL still uses the maximum factors on both; a construction live load of the opposite sign to M_DC1 is not checked with 0.90 M_DC1 (rare; recommendation: same sign rule as S1).
 - **Service II reversal** (S1 covers Strength I only) and **Service II f_ℓ input** (S2 uses the Strength I f_ℓ, conservative): recommendation, add an optional Service II f_ℓ per location if the conservatism matters.
+
+## 2026-10-12 — PR: claude/lldf-receivers (cross-tool: lldf DF payload `perFootStrip` / `skewShear` receivers; PR link added after merge)
+
+Cross-tool connection PR (CLAUDE.md §7 exception): receivers of the `bridgeSuite.v1.lldf` payload honour lldf's new optional fields (fixlog/lldf.md 2026-10-12 SW3 `skewShear`, SW6 `perFootStrip`), and Bridge Geometry's skew note is softened. Tools changed: index.html, psbeam.html, stgirder.html, Moving Load Generator.html, Steel Bridge Beam Modules.html, Bridge Geometry.html; HANDOFF.md §4.2 / §4.3. The shared `bridgeSuite.v1.*` bootstrap blocks are not touched. No formula, factor, unit or code reference changed. Payloads without the new fields give the same results as before (checked).
+
+### LR1. lldf DF pull: CIP slab DFs refused; shear skew compared   [hand-off] [no result change]
+- **Where:** `gdLldfPlan(pl, basis)`. Anchors: `if (pl.perFootStrip === true) err.push(`, `pl.skewShear`.
+- **Before:**
+  ```js
+    if (pl.skew != null && (typeof pl.skew !== 'number' || !isFinite(pl.skew))) err.push('The hand-off skew is not a number.');
+    else if (pl.skew != null && Math.abs(Math.abs(pl.skew) - skM) > 0.5) warn.push(`Skew differs: LL & DL ${f0(pl.skew)}°, this bridge up to ${f0(skM)}°.`);
+  ```
+- **After:**
+  ```js
+    // CIP slab (lldf perFootStrip): factors per 1-ft strip of slab width, not per girder. Refused (HANDOFF.md §4.3).
+    if (pl.perFootStrip === true) err.push('LL & DL sent cast-in-place slab factors: they are per 1-ft strip of slab width (AASHTO LRFD 4.6.2.3), not per girder. This tool needs girder factors.');
+    …
+    if (pl.skew != null && (typeof pl.skew !== 'number' || !isFinite(pl.skew))) err.push('The hand-off skew is not a number.');
+    else if (pl.skewShear != null && (typeof pl.skewShear !== 'number' || !isFinite(pl.skewShear))) err.push('The hand-off shear skew (skewShear) is not a number.');
+    // lldf's shear θ_V (skewShear, when sent) is the largest |skew|; compare that with this bridge's largest skew.
+    // `skew` is then lldf's moment θ, which may be smaller by design (Art. 4.6.2.2.2e), so it is not compared.
+    else if (pl.skewShear != null && Math.abs(Math.abs(pl.skewShear) - skM) > 0.5) warn.push(`Skew differs: LL & DL ${f0(Math.abs(pl.skewShear))}° for shear (${f0(pl.skew)}° for moment), this bridge up to ${f0(skM)}°.`);
+    else if (pl.skewShear == null && pl.skew != null && Math.abs(Math.abs(pl.skew) - skM) > 0.5) warn.push(`Skew differs: LL & DL ${f0(pl.skew)}°, this bridge up to ${f0(skM)}°.`);
+  ```
+- **Problem:** (1) a slab payload passed the unit check (lldf writes `units.df` "lanes per girder" for every type) and only got the "type (slab)" warning, so per-strip factors could be applied to a steel girder (very unconservative). (2) With lldf's separate shear skew, `skew` is the moment θ (the smallest |skew|, or 0), so comparing it with this bridge's largest skew gave a false "Skew differs" warning. The right comparison is θ_V.
+- **Governing provision:** AASHTO LRFD 10th Ed. Art. 4.6.2.3 (slab strip, per unit width); Art. 4.6.2.2.2e / 4.6.2.2.3c (moment θ vs shear θ). No formula changed.
+- **Check case:** demo bridge (3 spans, supports up to 15°). Slab payload: before errors = [span count]; after errors also include the slab refusal. Girder payload θ = 30°, θ_V = 40°: before warning "LL & DL 30°, this bridge up to 15°"; after "LL & DL 40° for shear (30° for moment), this bridge up to 15°". Payload without `skewShear`: unchanged.
+- **How verified:** headless Chromium, main vs branch, `gdLldfPlan(payload,'type')` on the lldf slab and girder payloads. No page errors.

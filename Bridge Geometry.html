@@ -4740,7 +4740,7 @@ else { setStatus('autosave OFF — browser storage blocked here. Use Export JSON
    Channel bridgeSuite.v1.lldfGeom, _schema 'bridge-lldf-geometry' (HANDOFF.md §4.2). Writes the shape
    lldf.html already consumes (its K_GEOM reader): inputs.spans / inputs.spacings / inputs.skew /
    inputs.OL / inputs.OR / inputs.ts / inputs.depth, plus Nb, and the optional top-level skewDetail
-   (lldf ignores it; it records the per-support skews and the moment / shear values). Read-only on this tool's state: nothing here changes any
+   (the per-support skews and the moment / shear values; lldf applies skewDetail.moment / .shear in one run). Read-only on this tool's state: nothing here changes any
    geometry result, and nothing is saved in this tool's project format. Uses BridgeXfer above. */
 (function(){
   'use strict';
@@ -4836,14 +4836,16 @@ else { setStatus('autosave OFF — browser storage blocked here. Use Export JSON
         +'Overhang = deck edge to exterior girder centerline. No barrier face or d_e is sent; LL & DL keeps its own curb/railing inputs.'):'')
     );
     if(notes[2]==='') notes.splice(2,1);
-    // BG-OH2: LL & DL has one θ for both actions; say which value each action needs when the skews differ.
+    // BG-OH2 / lldf SW3: when the skews differ, LL & DL reads skewDetail and applies the moment and the shear
+    // value in one run; the single inputs.skew matters only to a reader that does not use skewDetail.
     if(skDiffer) notes.push('Skews differ between supports (|skew| '+skMin.toFixed(2)+' to '+skMax.toFixed(2)+' deg; largest change between adjacent supports '+skAdj.toFixed(2)+' deg). '
-      +'LL & DL uses the one skew sent for BOTH the moment reduction (AASHTO LRFD Art. 4.6.2.2.2e, Table 4.6.2.2.2e-1) and the shear correction (Art. 4.6.2.2.3c, Table 4.6.2.2.3c-1). '
-      +'Moment DFs: use skew = '+skMoment.toFixed(2)+' deg (smallest |skew|; 0 when adjacent supports differ by more than 10 deg). '
-      +'Shear DFs: use skew = '+skMax.toFixed(2)+' deg (largest |skew|, obtuse corner). '
-      +(skewRule==='moment'?'This hand-off carries the moment value: send again with "for shear DFs" and take the shear DFs from that run.'
-        :(skewRule==='max'?'This hand-off carries the shear value: its MOMENT DFs are unconservative; take the moment DFs from a run with "for moment DFs".'
-          :'The value sent is neither: take moment DFs from a "for moment DFs" run and shear DFs from a "for shear DFs" run.')));
+      +'Moment DFs need skew = '+skMoment.toFixed(2)+' deg (smallest |skew|; 0 when adjacent supports differ by more than 10 deg; AASHTO LRFD Art. 4.6.2.2.2e, Table 4.6.2.2.2e-1). '
+      +'Shear DFs need skew = '+skMax.toFixed(2)+' deg (largest |skew|, obtuse corner; Art. 4.6.2.2.3c, Table 4.6.2.2.3c-1). '
+      +'LL & DL takes both from this hand-off (skewDetail) in one run: theta = '+skMoment.toFixed(2)+' deg for moment and theta_V = '+skMax.toFixed(2)+' deg for shear, whichever single value is sent. '
+      +'The single skew sent ('+skewVal.toFixed(2)+' deg) is used for both actions only by a reader that does not use skewDetail'
+      +(skewRule==='moment'?'; for such a reader take the shear DFs from a second run "for shear DFs".'
+        :(skewRule==='max'?'; for such a reader its MOMENT DFs are unconservative.'
+          :'; for such a reader take moment and shear DFs from separate "for moment DFs" / "for shear DFs" runs.')));
     if(sendDepths){
       if(inputs.ts!=null||inputs.depth!=null) notes.push((inputs.ts!=null?'Slab thickness t_s = Bridge Geometry deck structural thickness ('+inputs.ts+' in)':'')
         +(inputs.ts!=null&&inputs.depth!=null?'; ':'')+(inputs.depth!=null?'beam depth d = Bridge Geometry default beam depth, top to bottom of beam ('+inputs.depth+' in)':'')+'.');
@@ -4889,7 +4891,7 @@ else { setStatus('autosave OFF — browser storage blocked here. Use Export JSON
     dlg.querySelector('#bgx_do_send').disabled=!ok; dlg.querySelector('#bgx_do_export').disabled=!ok;
     if(r.error){ out.innerHTML='<p style="color:var(--oxide);margin:6px 0">'+escT(r.error)+'</p>'; return null; }
     out.innerHTML=(need?'<p style="color:var(--oxide);margin:6px 0;font-size:12px"><b>Choose &ldquo;Skew sent&rdquo;</b> (for moment DFs or for shear DFs) before sending.</p>':'')
-      +(r.skewWarn?'<p style="color:var(--oxide);margin:6px 0;font-size:12px"><b>Skews differ between supports.</b> LL &amp; DL takes one skew for both moment and shear: send once &ldquo;for moment DFs&rdquo; and once &ldquo;for shear DFs&rdquo;, and take each DF from its own run (see the notes).</p>':'')
+      +(r.skewWarn?'<p style="color:var(--oxide);margin:6px 0;font-size:12px"><b>Skews differ between supports.</b> LL &amp; DL takes both values from this hand-off in one run: the moment skew for the moment DFs and the shear skew (largest) for the shear DFs. The single &ldquo;Skew sent&rdquo; value matters only to a reader that does not use the moment / shear detail (see the notes).</p>':'')
       +'<table style="font-size:12px;margin:6px 0"><tbody>'+r.summary.map(x=>'<tr><td class="lbl" style="text-align:left">'+escT(x[0])+'</td><td style="text-align:left">'+escT(x[1])+'</td></tr>').join('')+'</tbody></table>'
       +'<p class="note" style="margin:4px 0 0">Notes sent with the data (shown in LL &amp; DL):</p><ul class="note" style="margin:2px 0 0 18px;padding:0">'+r.payload.notes.map(t=>'<li>'+escT(t)+'</li>').join('')+'</ul>';
     return ok?r:null;
@@ -4903,7 +4905,7 @@ else { setStatus('autosave OFF — browser storage blocked here. Use Export JSON
         +'<p class="note" style="margin-top:0">LL &amp; DL shows these values and asks before it overwrites anything. Pick how the values are taken from this bridge:</p>'
         +'<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px">'
         +'<div><label>Span length between</label><select id="bgx_span"><option value="cl" selected>support centerlines</option><option value="brg">bearing lines</option></select></div>'
-        +'<div><label>Skew sent (one value)</label><select id="bgx_skew" title="LL &amp; DL uses one skew for both the moment reduction (Art. 4.6.2.2.2e) and the shear correction (Art. 4.6.2.2.3c). For moment DFs: the smallest |skew|, or 0 when adjacent supports differ by more than 10 deg. For shear DFs: the largest |skew|."><option value="">choose&hellip;</option><option value="moment" selected>for moment DFs</option><option value="max">for shear DFs (largest)</option><option value="min">smallest |skew|</option><option value="mean">average |skew|</option></select></div>'
+        +'<div><label>Skew sent (one value)</label><select id="bgx_skew" title="The single skew in the hand-off. LL &amp; DL also receives the moment and shear values and applies both in one run (moment reduction Art. 4.6.2.2.2e; shear correction Art. 4.6.2.2.3c); this single value is for a reader that uses one skew for both. For moment DFs: the smallest |skew|, or 0 when adjacent supports differ by more than 10 deg. For shear DFs: the largest |skew|."><option value="">choose&hellip;</option><option value="moment" selected>for moment DFs</option><option value="max">for shear DFs (largest)</option><option value="min">smallest |skew|</option><option value="mean">average |skew|</option></select></div>'
         +'<div><label>Girder layout from</label><select id="bgx_gird"></select></div></div>'
         +'<label style="display:inline-flex;gap:6px;align-items:center;margin:8px 0 0;text-transform:none;letter-spacing:0"><input type="checkbox" id="bgx_dep" checked style="width:auto"> Also send the deck structural thickness t_s and the default beam depth d (in)</label>'
         +'<div id="bgx_prev"></div>'
@@ -4934,9 +4936,9 @@ else { setStatus('autosave OFF — browser storage blocked here. Use Export JSON
     for(let s=1;s<su.length;s++){ const ov=SPAN_OV[s]; const own=ov&&(ov.girders||ov.edgeL!=null||ov.edgeR!=null);
       h+='<option value="'+s+'">span '+s+(own?' (own layout)':'')+'</option>'; }
     sel.innerHTML=h; sel.value=[...sel.options].some(o=>o.value===prev)?prev:'global';
-    // BG-OH2: skews differ -> start on "choose..." so the moment / shear choice is made each time; equal -> "for moment DFs"
-    const chk=bgxBuildLldfGeom({skewRule:'moment', girders:sel.value});
-    dlg.querySelector('#bgx_skew').value=(!chk.error&&chk.skewWarn)?'':'moment';
+    // Start on "for moment DFs". When the skews differ, LL & DL takes the moment and shear values from skewDetail
+    // in one run (lldf SW3), so the forced "choose..." start (BG-OH2) is no longer needed.
+    dlg.querySelector('#bgx_skew').value='moment';
     dlg.style.display='flex';
     refresh();
   }

@@ -3057,6 +3057,8 @@ function lldfResolveFor(inp){
     if(!raw) return {why:'No distribution-factor results found.\n\nOpen the LL & DL Distribution app, compute the factors, and click "Send DFs to Design Apps" — then pull here.'};
     let d; try{ d=JSON.parse(raw); }catch(e){ return {why:'Could not read LLDF data: '+(e&&e.message||e)}; }
     if((d.schemaVersion||1)>1) return {why:'LL & DL Distribution data is v'+d.schemaVersion+'; this app supports v1. Update ST-Girder.'};
+    // CIP slab (lldf perFootStrip): factors per 1-ft strip of slab width, not per girder. Refused (HANDOFF.md §4.3).
+    if(d.perFootStrip===true) return {why:'The published distribution factors are for a cast-in-place slab: they are per 1-ft strip of slab width (AASHTO LRFD 4.6.2.3), not per girder. ST-Girder needs girder factors, so nothing was applied.\n\nRecompute in LL & DL Distribution with the girder cross-section type, then send again.'};
     // Prefer the specific beam selected in the shared design-beam channel: its own DFs,
     // not the interior/exterior envelope. Fall back to the envelope when no beam is
     // selected, or when the published results predate the per-beam breakdown.

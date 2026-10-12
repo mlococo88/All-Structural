@@ -1010,3 +1010,21 @@ Saved data (CLAUDE.md §5): no key or format changed. New optional fields, all w
 - **STG-O8 (calc):** negative-moment fatigue at piers needs a fatigue-truck envelope from the continuous analysis. The `psbeam-external-demands` schema exported by index.html has no fatigue fields, so this is a cross-tool change (index.html sender + this receiver; allowed in one PR as a HANDOFF.md connection). Recommendation: add optional `M_FATpos / M_FATneg / V_FATpos / V_FATneg` station fields and use them here when present.
 - **STG-S8 (rest of X-S8):** pruning of `bridgeSuite.v1.handoffs` lives in the shared bootstrap block (index/lldf/psbeam/stgirder) and was not touched here, as instructed.
 - **New, found during this sweep:** (a) the fatigue DFs (m1/1.2, v1/1.2, and the exterior lever/rigid values of W2) carry no skew correction (4.6.2.2.2e / 4.6.2.2.3c); the shear skew factor is > 1, so omitting it is slightly unconservative for skewed bridges. Recommendation: apply skV to the fatigue shear DF and skM to the fatigue moment DF. (b) `hybridRh` uses the short-term composite section for the −M checks too; 6.10.1.10.1 uses the steel + reinforcement section in negative flexure. Hybrid girders only, small. Recommendation: pass the cracked section for `FncNeg` / negative-moment Rh.
+
+## 2026-10-12 — PR: claude/lldf-receivers (cross-tool: lldf DF payload `perFootStrip` / `skewShear` receivers; PR link added after merge)
+
+Cross-tool connection PR (CLAUDE.md §7 exception): receivers of the `bridgeSuite.v1.lldf` payload honour lldf's new optional fields (fixlog/lldf.md 2026-10-12 SW3 `skewShear`, SW6 `perFootStrip`), and Bridge Geometry's skew note is softened. Tools changed: index.html, psbeam.html, stgirder.html, Moving Load Generator.html, Steel Bridge Beam Modules.html, Bridge Geometry.html; HANDOFF.md §4.2 / §4.3. The shared `bridgeSuite.v1.*` bootstrap blocks are not touched. No formula, factor, unit or code reference changed. Payloads without the new fields give the same results as before (checked).
+
+### LR1. CIP slab DFs (`perFootStrip`) refused by the LL & DL pull and lock   [hand-off] [no result change for girder payloads]
+- **Where:** `lldfResolveFor(inp)`. Anchor: `if(d.perFootStrip===true) return {why:`. Used by the Pull button and by the locked auto-sync (`LockAutoSync`), so a locked channel shows the warning state and applies nothing.
+- **Before:** (no check; the slab factors went into DF +M / −M / V and the fatigue DF.)
+- **After** (inserted after `if((d.schemaVersion||1)>1) return {why:'LL & DL Distribution data is v'…'Update ST-Girder.'};`):
+  ```js
+    // CIP slab (lldf perFootStrip): factors per 1-ft strip of slab width, not per girder. Refused (HANDOFF.md §4.3).
+    if(d.perFootStrip===true) return {why:'The published distribution factors are for a cast-in-place slab: they are per 1-ft strip of slab width (AASHTO LRFD 4.6.2.3), not per girder. ST-Girder needs girder factors, so nothing was applied.\n\nRecompute in LL & DL Distribution with the girder cross-section type, then send again.'};
+  ```
+- **Problem:** a strip factor (≈ 0.08) used as a girder DF makes every live-load effect about 1/10 of the girder value: very unconservative.
+- **Skew:** this tool does not read the payload skew; lldf's g_V already carries the shear correction at θ_V. Nothing to change.
+- **Check case:** lldf type "Cast-in-place concrete slab", 1 span 120 ft, default inputs → payload `perFootStrip:true`, interior gM = gV = 0.076 (per 1-ft strip), fatM = fatV = 0.045. Before: g_M = g_V = 0.076 (fatigue 0.045) applied. After: refused with the message above; nothing applied. Girder payload (type a, θ = 30°, θ_V = 40°: gM 0.7128, gV 1.0582, fatM 0.4019, fatV 0.7075): identical before and after.
+- **Governing provision:** AASHTO LRFD 10th Ed. Art. 4.6.2.3 (equivalent strip widths for slab-type bridges: the slab DF is per unit width, not per girder). No formula changed.
+- **How verified:** headless Chromium, main vs branch: lldf "Send DFs" for the slab and the girder case, then the resolver called on this tool (`lldfResolveFor({loads:{pos:'interior'}})`). Slab: main applied, branch refused. Girder: identical results (only `producedAt` differs). No page errors.

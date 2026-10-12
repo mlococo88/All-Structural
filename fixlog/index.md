@@ -2813,3 +2813,22 @@ O1 → SW14 · O2 → SW12 · O3 → SW13 (+ N5) · O4, O5 → N6 · O6 → SW5,
 - **R2 (IDX-S10 rest).** The `whois` responder in the shared bootstrap block (`BridgeApps.announce`) answers any window; `e.source` check belongs in the shared block (all four files).
 - **R3.** Service II reads `origRows` only, so a "Computed Combos" case chosen for Service II finds no rows (it silently drops out). Pre-existing; noted only.
 - **R4.** The printed capacity table labels Composite / PS / AREMA zones "Manual" in the Type column (the basis line from SW2 now follows it). Display only.
+
+## 2026-10-12 — PR: claude/lldf-receivers (cross-tool: lldf DF payload `perFootStrip` / `skewShear` receivers; PR link added after merge)
+
+Cross-tool connection PR (CLAUDE.md §7 exception): receivers of the `bridgeSuite.v1.lldf` payload honour lldf's new optional fields (fixlog/lldf.md 2026-10-12 SW3 `skewShear`, SW6 `perFootStrip`), and Bridge Geometry's skew note is softened. Tools changed: index.html, psbeam.html, stgirder.html, Moving Load Generator.html, Steel Bridge Beam Modules.html, Bridge Geometry.html; HANDOFF.md §4.2 / §4.3. The shared `bridgeSuite.v1.*` bootstrap blocks are not touched. No formula, factor, unit or code reference changed. Payloads without the new fields give the same results as before (checked).
+
+### LR1. CIP slab DFs (`perFootStrip`) refused by the MCT rating DF pull   [hand-off] [no result change for girder payloads]
+- **Where:** `lldfResolveMCT()`. Anchor: `if(d.perFootStrip===true) return {why:`.
+- **Before:** (no check; after the `schemaVersion` line the slab factors were used as the girder g.)
+- **After** (inserted after `if((d.schemaVersion||1)>1) return {why:'The LL & DL Distribution data is v'…`):
+  ```js
+  // CIP slab (lldf perFootStrip): the factors are per 1-ft strip of slab width, not per
+  // girder, so they cannot scale a girder-line rating. Refused, never converted (HANDOFF.md §4.3).
+  if(d.perFootStrip===true) return {why:'The published distribution factors are for a cast-in-place slab: they are per 1-ft strip of slab width (AASHTO LRFD 4.6.2.3), not per girder. They cannot be used as the girder distribution factor here, so nothing was applied.\n\nIf this MIDAS model is a 1-ft slab strip, enter the strip factor by hand.'};
+  ```
+- **Problem:** a slab payload's g ≈ 0.076 lanes per 1-ft strip was applied as the girder-line LL factor: the rating LL would be scaled by about 1/13 of a girder value (very unconservative if the MIDAS model is a girder line).
+- **Skew:** this tool does not read the payload skew; g_V already includes lldf's shear correction (at θ_V when `skewShear` is sent). Nothing to change.
+- **Check case:** lldf type "Cast-in-place concrete slab", 1 span 120 ft, default inputs → payload `perFootStrip:true`, interior gM = gV = 0.076 (per 1-ft strip), fatM = fatV = 0.045. Before: g = 0.076, g_V = 0.076 applied to the rating (B2). After: refused with the message above; nothing applied. Girder payload (type a, θ = 30°, θ_V = 40°: gM 0.7128, gV 1.0582, fatM 0.4019, fatV 0.7075): identical before and after.
+- **Governing provision:** AASHTO LRFD 10th Ed. Art. 4.6.2.3 (equivalent strip widths for slab-type bridges: the slab DF is per unit width, not per girder). No formula changed.
+- **How verified:** headless Chromium, main vs branch: lldf "Send DFs" for the slab and the girder case, then the resolver called on this tool (`lldfResolveMCT()`). Slab: main applied, branch refused. Girder: identical results (only `producedAt` differs). No page errors.

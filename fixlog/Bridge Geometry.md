@@ -1330,3 +1330,31 @@ Open-item sweep (inventory section 24). Engineer's instruction 2026-10-12: work 
 - **BG-O2 (superelevation runout/runoff table):** not done (M; it changes elevations when used). Recommendation: an optional transition table (station, left slope, right slope) that overrides the per-unit controls when present.
 - **BG-O4 (degree of curve, spiral reports, station equations):** not done (L; a feature on request).
 - **HANDOFF.md §4.2 (docs):** add `basis.skew:'moment'`, the optional `skewDetail` field, and the `ts`/`depth` fields (inches) that Bridge Geometry now sends. Not edited here (tool file and fix log only).
+
+## 2026-10-12 — PR: claude/lldf-receivers (cross-tool: lldf DF payload `perFootStrip` / `skewShear` receivers; PR link added after merge)
+
+Cross-tool connection PR (CLAUDE.md §7 exception): receivers of the `bridgeSuite.v1.lldf` payload honour lldf's new optional fields (fixlog/lldf.md 2026-10-12 SW3 `skewShear`, SW6 `perFootStrip`), and Bridge Geometry's skew note is softened. Tools changed: index.html, psbeam.html, stgirder.html, Moving Load Generator.html, Steel Bridge Beam Modules.html, Bridge Geometry.html; HANDOFF.md §4.2 / §4.3. The shared `bridgeSuite.v1.*` bootstrap blocks are not touched. No formula, factor, unit or code reference changed. Payloads without the new fields give the same results as before (checked).
+
+### LR1. "Skews differ" note and send dialog: LL & DL takes moment and shear skews in one run   [hand-off notes / UI] [no result change]
+- **Where:** "Hand-off: Bridge Geometry -> LL & DL Distribution" script. Anchors: `LL & DL takes both from this hand-off (skewDetail) in one run`, `LL &amp; DL takes both values from this hand-off in one run`, `<select id="bgx_skew" title="The single skew in the hand-off.`, `dlg.querySelector('#bgx_skew').value='moment';`, header comment `lldf applies skewDetail.moment / .shear in one run`.
+- **Before:** the note said LL & DL uses the one skew sent for both actions, and asked for a second run ("send again with "for shear DFs" and take the shear DFs from that run"). The dialog repeated it in red and, when the skews differed, started the "Skew sent" select on "choose…" so that Send stayed disabled until a choice was made (BG-OH2).
+- **After:**
+  ```js
+    if(skDiffer) notes.push('Skews differ between supports (|skew| '+skMin.toFixed(2)+' to '+skMax.toFixed(2)+' deg; largest change between adjacent supports '+skAdj.toFixed(2)+' deg). '
+      +'Moment DFs need skew = '+skMoment.toFixed(2)+' deg (smallest |skew|; 0 when adjacent supports differ by more than 10 deg; AASHTO LRFD Art. 4.6.2.2.2e, Table 4.6.2.2.2e-1). '
+      +'Shear DFs need skew = '+skMax.toFixed(2)+' deg (largest |skew|, obtuse corner; Art. 4.6.2.2.3c, Table 4.6.2.2.3c-1). '
+      +'LL & DL takes both from this hand-off (skewDetail) in one run: theta = '+skMoment.toFixed(2)+' deg for moment and theta_V = '+skMax.toFixed(2)+' deg for shear, whichever single value is sent. '
+      +'The single skew sent ('+skewVal.toFixed(2)+' deg) is used for both actions only by a reader that does not use skewDetail'
+      +(skewRule==='moment'?'; for such a reader take the shear DFs from a second run "for shear DFs".'
+        :(skewRule==='max'?'; for such a reader its MOMENT DFs are unconservative.'
+          :'; for such a reader take moment and shear DFs from separate "for moment DFs" / "for shear DFs" runs.')));
+  ```
+  - Dialog red line: "Skews differ between supports. LL & DL takes both values from this hand-off in one run: the moment skew for the moment DFs and the shear skew (largest) for the shear DFs. The single "Skew sent" value matters only to a reader that does not use the moment / shear detail (see the notes)."
+  - The select starts on "for moment DFs" every time (`dlg.querySelector('#bgx_skew').value='moment';`, was `''` when the skews differ). The "choose…" option and the guard that disables Send while it is selected are kept.
+  - The select tooltip says LL & DL also receives and applies both values.
+- **Why:** lldf now reads `skewDetail.moment` / `.shear` and applies both in one run (fixlog/lldf.md 2026-10-12 SW3), so the second run is no longer needed for LL & DL. The forced choice and the two-run instruction now apply only to a reader that does not read `skewDetail` (none today; `lldfGeom` has one receiver, lldf).
+- **Payload:** unchanged except the text of this one note: same `inputs`, `basis`, `skewDetail` (checked).
+- **Governing provision:** AASHTO LRFD 10th Ed. Art. 4.6.2.2.2e / Table 4.6.2.2.2e-1 (moment θ) and Art. 4.6.2.2.3c / Table 4.6.2.2.3c-1 (shear θ). No formula changed.
+- **Check case:** demo bridge (supports 0° / 15° / 0°): `skewDetail` moment 0, shear 15 (unchanged). Dialog before: select "choose…", Send disabled. After: select "for moment DFs", Send enabled; notes as above. In lldf this payload sets θ = 0, θ_V = 15 (lldf SW3 check case).
+- **How verified:** headless Chromium, main vs branch: `bgxBuildLldfGeom({skewRule:'moment'})` (only the note text differs), `bgxOpenLldfGeom()` (select value, Send state); screenshot `bg_dialog_br.png` looked at. No page errors.
+- **Closes:** the HANDOFF.md §4.2 open item from the 2026-10-12 sweep entry (now documented in this PR).
