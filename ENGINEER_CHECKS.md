@@ -38,6 +38,8 @@ These changes were made under your delegation ("use your best judgment"). They a
 | B12 | Retaining Wall | Rock bearing uses linear pressure; ACI base friction default tan(⅔φ). | #128 |
 | B13 | Concrete Beam Capacity / Rebar | ACI ε_t ≥ ε_ty + 0.003; #14/#18 hooks lose ψr/ψo = 1.0 (l_dh ×1.6–2.0). | #140 |
 | B14 | Gusset Plate Rating | Stagger band removed; chord splice rating check added (from secondary sources — see C below). | #123, #130 |
+| B16 | Stone Masonry Arch | Trucks now side by side on barrels ≥ 20 ft (Auto lanes, Art. 3.6.3): default HS20 RF 0.77 → 0.63, old projects too. "1 lane" restores the old numbers. | #163 |
+| B17 | Bridge suite hand-offs | CIP slab DFs (per 1-ft strip) are now refused by index, PS-Beam, ST-Girder and Steel Bridge (they were applied as girder DFs). | #166 |
 | B15 | Spread Footing | Depth factors default Off for new projects (default DCR 0.64 → 0.70). | #142 |
 
 ## C. Questions for you (decisions and printed-spec checks)
@@ -62,5 +64,8 @@ Each item has my recommendation; the tool currently follows it. Details are in t
 **Steel Beam** — accept the §H3.3(c) per-stress form · blank A_n/U defaults.
 **LL & DL** — f′c defaults 8/4 ksi and w_c · N_b = 3 exterior rule · negative-region K_g · MassDOT "two adjacent beams" relief.
 **Bridge Geometry** — chord vs radial skew · seat haunch method · curved vs chorded girders · NAD83/WGS84 and a combined scale factor input.
+**Stone Arch** — confirm side-by-side trucks and the Auto lane rule for arches (MassDOT §7.2.7) · AREMA impact 0.60 basis · Type 3-3 for posting · re-run the K-01-001 file.
+**ASCE 7 Load Generator** — printed 7.6.1 / Fig. 7.6-1 minimum l_u for unbalanced snow (rec 25 ft) · 780 CMR amendments to hurricane-prone / debris rules · 7.7.2 windward drift reading.
+**Moving Load (slab DFs)** — confirm it should apply CIP slab strip DFs (with warnings) rather than refuse them.
 **Shear & Moment** — overhang deflection l = 2 × cantilever (rec keep L).
 **Suite-wide** — ASCE 7 edition per tool (7-16 vs 7-22) · converge KaTeX/Plotly versions (needs your OK, CLAUDE.md §2) · SRI hashes · which CDN hosts the work laptop reaches (inline Tailwind?) · one verified vehicle table across tools · relabel edition lines after the printed checks.
