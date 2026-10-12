@@ -469,9 +469,28 @@ function defaultCombos(){return[
   {id:'c14', f:{DL:1.4}, on:true, stage:'final'},
   {id:'c216',f:{DL:1.2,LL:1.6,SL:0.5}, on:true, stage:'final'},
   {id:'c2S', f:{DL:1.2,LL:1.0,SL:1.6}, on:true, stage:'final'},
+  {id:'c3SW',f:{DL:1.2,SL:1.6,WL:0.5}, on:true, stage:'final'},   /* ASCE 7-16 \u00A72.3.1 combination 3, (L or 0.5W) with 0.5W */
   {id:'c2W', f:{DL:1.2,LL:1.0,SL:0.5,WL:1.0}, on:true, stage:'final'},
   {id:'c09W',f:{DL:0.9,WL:1.0}, on:true, stage:'final'}
 ];}
+/* ASCE 7-16 \u00A72.3.1 strength combinations with roof live load Lr (case lc): combination 2 with 0.5Lr,
+   combination 3 with 1.6Lr and (L or 0.5W), combination 4 with 0.5Lr. Factors are only given for cases that exist
+   (lc itself always). L at 1.0 (the 0.5L exception of \u00A72.3.1 is not taken). Used by the building-load import and
+   by the "ASCE 7 LRFD basics" preset when the project has an LR case. */
+function lrCombosFor(lc){
+  const has=id=>id===lc||S.cases.some(c=>c.id===id);
+  const mk=(id,f)=>{const g={};Object.keys(f).forEach(k=>{if(has(k))g[k]=f[k];});
+    let id2=id,n=2;while(S.combos.some(c=>c.id===id2))id2=id+'_'+(n++);
+    return{id:id2,f:g,on:true,stage:'final'};};
+  const o=[],add=(id,f)=>{const c=mk(id,f);S.combos.push(c);o.push(c);};
+  /* ids are made unique against S.combos as they are added; the caller decides whether to keep them */
+  add('cLr2',{DL:1.2,LL:1.6,[lc]:0.5});
+  add('cLr3',{DL:1.2,[lc]:1.6,LL:1.0});
+  if(has('WL'))add('cLr3W',{DL:1.2,[lc]:1.6,WL:0.5});
+  add('cLr4',{DL:1.2,WL:1.0,LL:1.0,[lc]:0.5});
+  S.combos.splice(S.combos.length-o.length,o.length);
+  return o;
+}
 function defaultSvc(){return[
   {id:'sD',  f:{DL:1}, den:0, on:true},
   {id:'sDL', f:{DL:1,LL:1}, den:240, on:true},
@@ -506,7 +525,8 @@ function defaultState(){return{
     rows:[{id:'m1',name:'LC-1',Mux:0,Vux:0,Pu:0,Muy:0,Vuy:0,Tu:0}]},
   disp:{combo:'c216',view:'combo',userX:''},
   design:{CbMode:'unity',Kx:1,Ky:1,Kz:1,Lcx:null,Lcy:null,Lcz:null,lbSup:null,lbPt:null,
-    stiff:{on:false,a:null},tor:{on:false,caseId:'conc_pp',L:null,T:null,pos:null},man:{}},
+    stiff:{on:false,a:null},tor:{on:false,caseId:'conc_pp',L:null,T:null,pos:null},man:{},
+    ten:{An:null,U:null}},
   ui:{tab:'tabSummary',collapse:{},manualPart:'p0'},
   saved:[]
 };}
@@ -1757,6 +1777,18 @@ function compStrength(p,Lcx,Lcy,Lcz){
   out.Pn=Fcr*Ae;out.phiPn=0.9*out.Pn;
   return out;
 }
+/* ---------- axial tension, Chapter D ----------
+   \u00A7D2: phi_t P_n = min(0.90 F_y A_g (D2-1), 0.75 F_u A_e (D2-2)), A_e = U A_n (D3-1).
+   A_n and U are the end connection's (inputs S.design.ten.An / .U). Blank -> A_n = A_g and U = 1.0
+   (no holes; every element connected, Table D3.1 case 1); the user is warned when either is assumed. */
+function tensionStrength(p,An,U){
+  const Ag=p.A,Fy=p.mat.Fy,Fu=p.mat.Fu;
+  const AnDef=!(An>0),UDef=!(U>0);
+  const An2=AnDef?Ag:Math.min(An,Ag),U2=UDef?1:Math.min(U,1);
+  const Ae=U2*An2,Pny=Fy*Ag,Pnr=Fu*Ae,phiY=0.90*Pny,phiR=0.75*Pnr;
+  return{Ag,An:An2,U:U2,Ae,Fy,Fu,Pny,Pnr,phiY,phiR,phiPn:Math.min(phiY,phiR),rupture:phiR<phiY,
+    AnDef,UDef,AnCapped:!AnDef&&An>Ag,UCapped:!UDef&&U>1};
+}
 /* ---------- H3 torsion (HSS only) ---------- */
 function torsionHSS(p,Lin){
   const Fy=p.mat.Fy,E=EKSI;
@@ -1995,18 +2027,21 @@ function designAll(A){
     if(man.Pu>0){
       if(D.comp&&!D.comp.blocked){C.phiPn=D.comp.phiPn;C.dcrP=man.Pu/C.phiPn;}
       else C.compBlocked=(D.comp&&D.comp.blocked)||'no compression capacity';
+    }else if(man.Pu<0){   /* axial tension: \u00A7D2, and \u00A7H1.2 through the same interaction equations */
+      if(!D.ten)D.ten=tensionStrength(p,dsn.ten&&dsn.ten.An,dsn.ten&&dsn.ten.U);
+      C.tens=D.ten;C.phiPt=D.ten.phiPn;C.dcrPt=Math.abs(man.Pu)/C.phiPt;
     }
     /* torsion */
     if(D.torOpen&&!D.torOpen.blocked)
       C.h33=h33Check(p,D.torOpen,{Pu:man.Pu||0,Mux:C.flexGov?C.flexGov.Mu:0,Muy:man.Muy||0,
-        Vux:C.Vu||0,Vuy:man.Vuy||0});
+        Vux:C.Vu||0,Vuy:man.Vuy||0,kT:torScale(D.torOpen,cb.id)});
     if(man.Tu&&D.tors){
       if(D.tors.blocked)C.torsBlocked=D.tors.blocked;
       else{C.phiTn=D.tors.phiTn/12;C.dcrT=Math.abs(man.Tu)/C.phiTn;C.torsNeglect=C.dcrT<=0.20;}
     }
     /* interaction */
     const rx=C.flexGov?C.flexGov.dcr:0;
-    const ry=C.dcrMy||0,rp=C.dcrP||0;
+    const ry=C.dcrMy||0,rp=C.dcrP||C.dcrPt||0;
     if(C.dcrT!=null&&!C.torsNeglect){
       const vr=(C.dcrVx||0)+(C.dcrVy||0);
       C.inter={eq:'H3-6',value:(rp+rx+ry)+Math.pow(vr+C.dcrT,2),
@@ -2037,6 +2072,13 @@ function designAll(A){
 }
 
 function buildDesignChecks(D,A){
+  /* §H3.3(c) buckling stress for each combination, taken after the composite pass has set the region capacities */
+  D.perCombo.forEach(c=>{
+    if(!c.h33)return;
+    const FcrF=(c.flexGov&&!c.flexGov.blocked&&c.flexGov.phiMn>0)?c.flexGov.phiMn*12/0.90/D.p.Sx:null;
+    const FcrE=((+c.man.Pu||0)>0&&c.phiPn>0)?c.phiPn/0.90/D.p.A:null;
+    h33Buckling(c.h33,FcrF,FcrE);
+  });
   const gv=(fn)=>D.perCombo.reduce((m,c)=>{const v=fn(c);return(v!=null&&(m==null||v.d>m.d))?v:m;},null);
   const fGov=gv(c=>c.flexGov?{d:c.flexGov.dcr,c}:null);
   if(fGov)D.checks.push({label:'Flexure M\u2093',ref:D.perCombo[0].regions[0].cap.route,dcr:fGov.d,
@@ -2060,13 +2102,18 @@ function buildDesignChecks(D,A){
     dem:pGov.c.man.Pu,cap:pGov.c.phiPn,unit:'kip',capSym:'\u03C6P\u2099'});
   else if(D.perCombo.some(c=>c.compBlocked))D.checks.push({label:'Compression',ref:'E4',fail:true,dcr:Infinity,detail:'blocked \u2014 see Axial tab',tab:'tabComp'});
   else D.checks.push({label:'Compression',ref:'Ch. E',na:true,detail:'no P\u1D64 entered',tab:'tabComp'});
+  const ptGov=gv(c=>c.dcrPt!=null?{d:c.dcrPt,c}:null);
+  if(ptGov)D.checks.push({label:'Tension',ref:ptGov.c.tens.rupture?'D2(b)':'D2(a)',dcr:ptGov.d,combo:ptGov.c.name,tab:'tabComp',
+    dem:Math.abs(ptGov.c.man.Pu),cap:ptGov.c.phiPt,unit:'kip',capSym:'\u03C6\u209CP\u2099',
+    detail:ptGov.c.tens.rupture?'rupture, A\u2091 = UA\u2099':'yielding, A\u1D4D'});
   const hGov=gv(c=>c.h33?{d:c.h33.dcr,c}:null);
   const tGov=gv(c=>c.dcrT!=null?{d:c.dcrT,c}:null);
-  if(hGov)D.checks.push({label:'Torsion (open section)',ref:'H3.3 / DG 9',dcr:hGov.d,combo:hGov.c.name,tab:'tabTors',
-    dem:hGov.c.h33.dcrN>=hGov.c.h33.dcrV?hGov.c.h33.fn:hGov.c.h33.fv,
-    cap:hGov.c.h33.dcrN>=hGov.c.h33.dcrV?hGov.c.h33.phiFy:hGov.c.h33.phiFv,
-    unit:'ksi',capSym:hGov.c.h33.dcrN>=hGov.c.h33.dcrV?'\u03C6F\u1D67':'\u03C6(0.6F\u1D67)',
-    detail:(hGov.c.h33.dcrN>=hGov.c.h33.dcrV?'normal':'shear')+' stress at z = '+fmt(hGov.c.h33.z,1)+' in'});
+  if(hGov){const hg=h33Gov(hGov.c.h33);
+    D.checks.push({label:'Torsion (open section)',ref:hg==='B'?'H3.3(c) / DG 9':'H3.3 / DG 9',dcr:hGov.d,combo:hGov.c.name,tab:'tabTors',
+    dem:hg==='B'?hGov.c.h33.dcrB:hg==='V'?hGov.c.h33.fv:hGov.c.h33.fn,
+    cap:hg==='B'?1.0:hg==='N'?hGov.c.h33.phiFy:hGov.c.h33.phiFv,
+    unit:hg==='B'?'\u2014':'ksi',capSym:hg==='B'?'limit':hg==='N'?'\u03C6F\u1D67':'\u03C6(0.6F\u1D67)',
+    detail:(hg==='B'?'normal stresses against the buckling stresses':hg==='N'?'normal stress':'shear stress')+' at z = '+fmt(hGov.c.h33.z,1)+' in'});}
   else if(tGov)D.checks.push({label:'Torsion',ref:'H3',dcr:tGov.d,combo:tGov.c.name,tab:'tabTors',
     dem:Math.abs(tGov.c.man.Tu),cap:tGov.c.phiTn,unit:'kip\u00B7ft',capSym:'\u03C6T\u2099'});
   else D.checks.push({label:'Torsion',ref:(D.p._kind==='I'||D.p._kind==='C')?'H3.3 / DG 9':'H3.1',na:true,
@@ -2075,12 +2122,20 @@ function buildDesignChecks(D,A){
   const iGov=gv(c=>({d:c.inter.value,c}));
   if(iGov)D.checks.push({label:'Interaction',ref:iGov.c.inter.eq,dcr:iGov.d,combo:iGov.c.name,tab:'tabInter',
     dem:iGov.c.inter.value,cap:1.0,unit:'\u2014',capSym:'limit'});
-  const tenC=D.perCombo.filter(c=>c.man&&(+c.man.Pu||0)<0);
-  if(tenC.length)D.warns.push('Axial TENSION (P\u1D64 < 0) is entered for: '+tenC.map(c=>c.name).join(', ')+'. Tension is NOT checked: Chapter D (tensile yielding and rupture) and the \u00A7H1.2 interaction are not implemented, and the tension is left out of the H1-1 interaction. Check the member in tension and its connections separately.'+(D.perCombo.some(c=>c.h33)?' (The \u00A7H3.3 stress sum includes |P\u1D64|/A.)':''));
-  const h33B=D.perCombo.filter(c=>c.h33&&c.flexGov&&!c.flexGov.blocked&&c.flexGov.phiMn>0&&c.flexGov.phiMn*12/D.p.Sx<0.9*D.p.mat.Fy*(1-1e-9));
-  if(h33B.length){const c=h33B.reduce((m,q)=>(q.h33.fbx+q.h33.sigW)/(q.flexGov.phiMn*12/D.p.Sx)>(m.h33.fbx+m.h33.sigW)/(m.flexGov.phiMn*12/D.p.Sx)?q:m,h33B[0]);
-    const pF=c.flexGov.phiMn*12/D.p.Sx,fb=c.h33.fbx+c.h33.sigW;
-    D.warns.push('\u00A7H3.3 open-section torsion: the normal-stress check compares f\u2099 with \u03C6F\u1D67 only; the buckling limit state of \u00A7H3.3(c) is NOT checked. Flexural buckling (LTB or local buckling) governs below yield for '+h33B.map(q=>q.name).join(', ')+'. Worst: '+c.name+', \u03C6M\u2099/S\u2093 = '+fmt(pF,2)+' ksi < \u03C6F\u1D67 = '+fmt(0.9*D.p.mat.Fy,2)+' ksi; f\u1D47\u2093 + \u03C3\u1D42 = '+fmt(fb,2)+' ksi, indicative ratio (f\u1D47\u2093 + \u03C3\u1D42)/(\u03C6M\u2099/S\u2093) = '+fmt(fb/pF,3)+' (not a code DCR). Verify the buckling limit state by hand.');}
+  const tenC=D.perCombo.filter(c=>c.dcrPt!=null);
+  if(tenC.length){const t=tenC[0].tens,dflt=[];
+    if(t.AnDef)dflt.push('A\u2099 = A\u1D4D');if(t.UDef)dflt.push('U = 1.0');
+    D.warns.push('Axial TENSION (P\u1D64 < 0) is entered for: '+tenC.map(c=>c.name).join(', ')+'. It is checked for tensile yielding and rupture (\u00A7D2) with A\u2099 = '+fmt(t.An,2)+' in\u00B2 and U = '+fmt(t.U,2)+
+      (dflt.length?' \u2014 '+dflt.join(' and ')+' ASSUMED because the input is blank (no holes, every element connected); enter the net area and the shear-lag factor of the end connection (\u00A7D3, Table D3.1) under Compression Effective Lengths':'')+
+      (t.AnCapped?'; the entered A\u2099 exceeds A\u1D4D and was limited to A\u1D4D':'')+(t.UCapped?'; the entered U exceeds 1.0 and was limited to 1.0':'')+
+      '. Block shear (\u00A7J4.3) and the connection are not checked. The \u00A7H1.2 interaction uses P\u1D9C = \u03C6\u209CP\u2099 without the optional C\u1D47 increase (conservative).'+
+      (D.perCombo.some(c=>c.h33)?' (The \u00A7H3.3 stress sum includes |P\u1D64|/A.)':''));}
+  const bxImp=ty=>!D.member&&(S.loads||[]).some(ld=>!ld.off&&ld.bx&&ld.bx.ch==='buildingLoads'&&ld.bx.type===ty);
+  if(bxImp('W'))D.warns.push('Wind imported from the ASCE 7-16 hand-off is the MWFRS pressure. If this member is a component (a purlin, a girt, or any member loaded directly by the cladding), use the components and cladding pressures of ASCE 7-16 Ch. 30, which are usually higher and are not in the hand-off.');
+  if(bxImp('S'))D.warns.push('Snow imported from the ASCE 7-16 hand-off is the balanced roof snow only. Unbalanced snow and snow drifts (ASCE 7-16 Sec. 7.6 to 7.8) are not included; add them where this beam lies in an unbalanced or drift zone.');
+  const h33B=D.perCombo.filter(c=>c.h33&&c.h33.dcrB!=null);
+  if(h33B.length){const c=h33B.reduce((m,q)=>q.h33.dcrB>m.h33.dcrB?q:m,h33B[0]);
+    D.warns.push('\u00A7H3.3(c) open-section torsion, buckling: a Chapter E/F buckling stress is below F\u1D67 for '+h33B.map(q=>q.name).join(', ')+', so the normal stresses at the critical station are also checked against buckling: f\u2090/(\u03C6F\u1D9C\u02B3,E) + (f\u1D47\u2093 + f\u1D47\u1D67 + \u03C3\u1D42)/(\u03C6F\u1D9C\u02B3,F) \u2264 1.0, with F\u1D9C\u02B3,F = M\u2099/S\u2093 of the governing major-axis flexure check and F\u1D9C\u02B3,E = P\u2099/A\u1D4D. Worst: '+c.name+', ratio = '+fmt(c.h33.dcrB,3)+'. This is a conservative reading of \u00A7H3.3(c); a DG 9 interaction may be used instead by hand.');}
   if(D.j10){
     const wGov=gv(c=>{let m=null;(c.j10||[]).forEach(r=>{if(r.dcrWLY!=null&&(!m||r.dcrWLY>m.d))m={d:r.dcrWLY,c,r};});return m;});
     D.checks.push(wGov?{label:'Web local yielding',ref:'J10.2',dcr:wGov.d,combo:wGov.c.name,detail:wGov.r.label,tab:'tabJ10',
@@ -2356,7 +2411,10 @@ function rebuildInputs(){
     const addC=el('button','btn sm','+ Combination');
     addC.addEventListener('click',()=>{S.combos.push({id:'c'+Date.now()%100000,f:{},on:true,stage:'final'});rebuildInputs();schedule(true);});
     const pres=el('button','btn sm','Preset: ASCE 7 LRFD basics');
-    pres.addEventListener('click',()=>{S.combos=defaultCombos();rebuildInputs();schedule(true);});
+    pres.addEventListener('click',()=>{S.combos=defaultCombos();
+      if(!(S.cases.some(c=>c.id==='SL')&&S.cases.some(c=>c.id==='WL')))S.combos=S.combos.filter(c=>c.id!=='c3SW');   /* 1.2D + 1.6S + 0.5W only when both cases exist */
+      if(S.cases.some(c=>c.id==='LR'))lrCombosFor('LR').forEach(c=>S.combos.push(c));   /* roof live load, ASCE 7-16 \u00A72.3.1 */
+      rebuildInputs();schedule(true);});
     bts.appendChild(addC);bts.appendChild(pres);body.appendChild(bts);
     body.appendChild(el('div','hint','<b>Service combinations</b> \u2014 used for deflection. Limit = span/den per span; den 0 = report only:'));
     body.appendChild(comboTable(S.svc,true));
@@ -4152,7 +4210,7 @@ manPart('pS','V-b. Strength Methodology',[
 {p:'The \u00A7G2.1(a) allowance of \u03C6\u1D65 = 1.00 with C\u1D651 = 1.0 is written for <b>rolled</b> I-shaped members only. Tick <i>Built-up (welded) section</i> in Section &amp; Material when overriding properties to model a plate girder; the shear check then falls to \u00A7G2.1(b) at \u03C6\u1D65 = 0.90 and states why. Leaving the flag off on a genuinely built-up member overstates the shear strength by about 11%.'},
 {h3:'Torsion on open sections'},
 {p:'An I-shape or channel carries torque by two mechanisms at once: pure (St-Venant) shear and <b>warping</b>. The split, and therefore the stresses, depend on the loading pattern and on how the ends are restrained against warping \u2014 so a torque magnitude alone is not sufficient input, and there is no closed-form \u03C6T\u2099 as there is for an HSS.'},
-{p:'The tool solves EC\u1D65\u03B8\u2032\u2032\u2032\u2032 \u2212 GJ\u03B8\u2033 = t(z) exactly, segment by segment, for the case and end conditions stated (concentrated or uniformly distributed torque; warping-free \u201Cfork\u201D supports, warping-fixed ends, or a cantilever). It then forms the DG 9 stresses \u2014 \u03C4\u209C = Gt\u03B8\u2032, \u03C3\u1D65 = EW\u2099\u2092\u03B8\u2033, \u03C4\u1D65 = \u2212ES\u1D65\u2081\u03B8\u2034/t\u1DA0 \u2014 from the database warping properties W\u2099\u2092 and S\u1D65\u2081, and adds them to the axial, flexural and shear stresses at the critical station for the \u00A7H3.3 yielding check (f\u2099 \u2264 \u03C6F\u1D67 and f\u1D65 \u2264 \u03C6\u00B70.6F\u1D67, \u03C6 = 0.90). The characteristic length a = \u221A(EC\u1D65/GJ) sets which mechanism dominates: L/a below about 2 means warping controls, above about 10 means St-Venant controls.'},
+{p:'The tool solves EC\u1D65\u03B8\u2032\u2032\u2032\u2032 \u2212 GJ\u03B8\u2033 = t(z) exactly, segment by segment, for the case and end conditions stated (concentrated or uniformly distributed torque; warping-free \u201Cfork\u201D supports, warping-fixed ends, or a cantilever). It then forms the DG 9 stresses \u2014 \u03C4\u209C = Gt\u03B8\u2032, \u03C3\u1D65 = EW\u2099\u2092\u03B8\u2033, \u03C4\u1D65 = \u2212ES\u1D65\u2081\u03B8\u2034/t\u1DA0 \u2014 from the database warping properties W\u2099\u2092 and S\u1D65\u2081, and adds them to the axial, flexural and shear stresses at the critical station for the \u00A7H3.3 yielding check (f\u2099 \u2264 \u03C6F\u1D67 and f\u1D65 \u2264 \u03C6\u00B70.6F\u1D67, \u03C6 = 0.90). Where a Chapter E or F buckling stress is below F\u1D67, the \u00A7H3.3(c) buckling limit state is also checked: f\u2090/(\u03C6F\u1D9C\u02B3,E) + (f\u1D47\u2093 + f\u1D47\u1D67 + \u03C3\u1D42)/(\u03C6F\u1D9C\u02B3,F) \u2264 1.0, with F\u1D9C\u02B3,F = M\u2099/S\u2093 of the governing major-axis flexure check (LTB or local buckling) and F\u1D9C\u02B3,E = P\u2099/A\u1D4D when P\u1D64 is compression, each capped at F\u1D67. Putting the minor-axis and warping stresses with F\u1D9C\u02B3,F is conservative. The characteristic length a = \u221A(EC\u1D65/GJ) sets which mechanism dominates: L/a below about 2 means warping controls, above about 10 means St-Venant controls.'},
 {warn:'<b>No published worked example is embedded for this check.</b> Design Guide 9 is a separate document, so the Validation tab verifies the solver against an independent finite-difference solution of the same equation, two analytical limiting cases (C\u1D65\u21920 and J\u21920) and torsional equilibrium \u2014 all self-consistency checks rather than a published comparison. Verify against DG 9 by hand before relying on open-section torsion in production. Stresses are summed conservatively by magnitude at the critical station.'},
 {h3:'Graphics'},
 {p:'The cross section is drawn <b>to scale</b> from the resolved dimensions (Plotly with equal x and y scales), inline on the Section Properties, M\u2093 and Compression tabs. Rolled fillets are not drawn, so the outline encloses about 1\u20132% less area than the tabulated A\u1D4D for I-shapes and channels; HSS and pipe agree to better than 0.1%. Calculations always use the database properties, never the drawing.'},
@@ -4640,6 +4698,9 @@ function memberDesignAll(A){
     if((r.Pu||0)>0){
       if(D.comp&&!D.comp.blocked){C.phiPn=D.comp.phiPn;C.dcrP=r.Pu/C.phiPn;}
       else C.compBlocked=(D.comp&&D.comp.blocked)||'compression effective lengths not set (see Design Parameters)';
+    }else if((r.Pu||0)<0){   /* axial tension: \u00A7D2 and \u00A7H1.2 */
+      if(!D.ten)D.ten=tensionStrength(p,dsn.ten&&dsn.ten.An,dsn.ten&&dsn.ten.U);
+      C.tens=D.ten;C.phiPt=D.ten.phiPn;C.dcrPt=Math.abs(r.Pu)/C.phiPt;
     }
     if(D.torOpen&&!D.torOpen.blocked)
       C.h33=h33Check(p,D.torOpen,{Pu:r.Pu||0,Mux:r.Mux||0,Muy:r.Muy||0,Vux:r.Vux||0,Vuy:r.Vuy||0});
@@ -4647,7 +4708,7 @@ function memberDesignAll(A){
       if(D.tors.blocked)C.torsBlocked=D.tors.blocked;
       else{C.phiTn=D.tors.phiTn/12;C.dcrT=Math.abs(r.Tu)/C.phiTn;C.torsNeglect=C.dcrT<=0.20;}
     }
-    const rx=C.flexGov.dcr,ry=C.dcrMy||0,rp=C.dcrP||0;   /* a blocked flexure check (dcr = Infinity) makes the interaction FAIL, as in beam mode */
+    const rx=C.flexGov.dcr,ry=C.dcrMy||0,rp=C.dcrP||C.dcrPt||0;   /* a blocked flexure check (dcr = Infinity) makes the interaction FAIL, as in beam mode */
     if(C.dcrT!=null&&!C.torsNeglect){
       const vr=(C.dcrVx||0)+(C.dcrVy||0);
       C.inter={eq:'H3-6',value:(rp+rx+ry)+Math.pow(vr+C.dcrT,2),terms:{P:rp,Mx:rx,My:ry,V:vr,T:C.dcrT}};
@@ -4803,7 +4864,7 @@ MANUAL.p1.blocks.splice(0,0,
 '<b>Compression requires L\u1D9C\u2093 and L\u1D9C\u1D67</b> in Design Parameters; entering P\u1D64 without them withholds the result and says so.',
 '<b>Self-weight is available in both modes.</b> In beam analysis it is a generated uniform load from the shape weight (checkbox in the load generator, on by default). In member check mode there is no model, so enabling it asks for a span and a condition (simple span wL\u00B2/8, cantilever wL\u00B2/2, or custom k and c) plus the dead-load factor, derives \u0394M\u1D64\u2093 and \u0394V\u1D64\u2093 with the full substitution shown, adds them to every case, and both deliverables state whether self-weight was or was not included. The weight tracks the selected shape \u2014 change the section and the additions update.',
 '<b>Deflection can be checked</b> from a stated closed-form configuration (simple, cantilever, fixed\u2013fixed, propped, or point-load cases, or a custom coefficient) using the <b>service</b> load you supply. Left off, it reports N/A rather than passing silently.',
-'<b>Batch mode</b> checks many members at once from a spreadsheet. Download the template, fill in one row per member, upload it back. Each row is an independent member check with its own section, bracing, effective lengths, torsion case and demands; the results grid shows every capacity and DCR with a failures-only filter, and an Excel export with Results, Messages and Scope sheets. Each row carries two buttons: <b>\u2192 Import</b> loads that member into Member Check mode with all of its inputs, and the printer icon prints that one member\u2019s full report. <b>Print report\u2026</b> in the toolbar prints all members, only those not passing, or the summary alone, with a batch summary table, a scope page, and one page-break-separated calculation per member \u2014 each member is re-solved and its real output re-rendered, not summarised. Rows that cannot be checked \u2014 unknown shape, channel with axial load, T\u1D64 with no torsion case \u2014 report the reason and are never counted as passing. Batch does not check tension (Chapter D), deflection, or \u00A7J10; negative P\u1D64 is taken as zero and annotated.',
+'<b>Batch mode</b> checks many members at once from a spreadsheet. Download the template, fill in one row per member, upload it back. Each row is an independent member check with its own section, bracing, effective lengths, torsion case and demands; the results grid shows every capacity and DCR with a failures-only filter, and an Excel export with Results, Messages and Scope sheets. Each row carries two buttons: <b>\u2192 Import</b> loads that member into Member Check mode with all of its inputs, and the printer icon prints that one member\u2019s full report. <b>Print report\u2026</b> in the toolbar prints all members, only those not passing, or the summary alone, with a batch summary table, a scope page, and one page-break-separated calculation per member \u2014 each member is re-solved and its real output re-rendered, not summarised. Rows that cannot be checked \u2014 unknown shape, channel with axial load, T\u1D64 with no torsion case \u2014 report the reason and are never counted as passing. Batch does not check deflection or \u00A7J10 unless their optional columns are filled; a negative P\u1D64 is checked as tension (\u00A7D2, with the optional Tension An and U columns) and taken as zero for compression.',
 '<b>Both deliverables are stamped.</b> The printed report is titled \u201CSteel Member Capacity Check\u201D and carries a banner stating that no model was solved; the Excel header and demand block match. A capacity check cannot be mistaken for a beam analysis after the fact.'
 ]});
 /* =====================================================================
@@ -5000,10 +5061,10 @@ function buildVyTab(pg){
 /* =====================================================================
    COMPRESSION
    ===================================================================== */
-function buildCompTab(pg){
+function buildCompTabCore(pg){
   const D=dOrNull(pg),p=AN.sect;if(!D)return;
   const any=D.perCombo.some(C=>C.man.Pu>0);
-  if(!any)naBox(pg,'Axial compression','No P\u1D64 was entered on any '+(isMember()?'load case':'combination')+'. The available strength at the stated effective lengths is shown below for reference; the check itself is reported N/A.');
+  if(!any)naBox(pg,'Axial compression','No '+(D.perCombo.some(C=>C.dcrPt!=null)?'compressive ':'')+'P\u1D64 was entered on any '+(isMember()?'load case':'combination')+(D.perCombo.some(C=>C.dcrPt!=null)?' (the axial tension is checked under Axial Tension below)':'')+'. The available strength at the stated effective lengths is shown below for reference; the check itself is reported N/A.');
   if(p._kind==='C'){
     pg.appendChild(el('div','errBox','<b>Axial compression on channels is outside this tool.</b> A channel is singly symmetric about one axis, so \u00A7E4 flexural-torsional buckling governs and needs the shear-centre properties (e\u2092, r\u0304\u2092, H) in a coupled solution that is not implemented here. Check the member in a program that covers \u00A7E4, or use an I-shape or HSS.'));
     pg.appendChild(el('div','note','The channel\u2019s flexural and shear checks on the other tabs are unaffected.'));
@@ -5100,6 +5161,27 @@ function buildCompTab(pg){
     if(!(C.man.Pu>0)){body.appendChild(el('div','note','No P\u1D64 entered for this '+(isMember()?'case':'combination')+'.'));return;}
     if(C.compBlocked){body.appendChild(el('div','errBox',C.compBlocked));return;}
     dcrLine(body,'Compression DCR','Ch. E',' P',C.man.Pu,C.phiPn,C.dcrP);
+  },C=>String(C.man.Pu));
+}
+/* Compression tab = Chapter E, then Chapter D when an axial tension is entered */
+function buildCompTab(pg){buildCompTabCore(pg);tensionSections(pg);}
+function tensionSections(pg){
+  const D=AN&&AN.design;if(!D||!D.perCombo)return;
+  const tc=D.perCombo.filter(C=>C.dcrPt!=null);if(!tc.length)return;
+  const t=tc[0].tens;
+  mkSection('tnCap','Axial Tension (Chapter D)',body=>{
+    if(t.AnDef||t.UDef)body.appendChild(el('div','warnBox','<b>'+[t.AnDef?'A\u2099 = A\u1D4D':'',t.UDef?'U = 1.0':''].filter(x=>x).join(' and ')+' assumed</b> (input blank): no holes and every element connected. Enter the net area and shear-lag factor of the end connection under <b>Compression Effective Lengths</b> (\u00A7D3, Table D3.1).'));
+    body.appendChild(eqBlock({title:'Tensile yielding in the gross section',ref:'Eq. D2-1',
+      lines:['P_n=F_yA_g='+fmt(t.Fy,0)+'\\times '+fmt(t.Ag,2)+'=\\mathbf{'+fmt(t.Pny,1)+'\\ \\text{kip}},\\quad \\phi_tP_n=0.90\\times '+fmt(t.Pny,1)+'=\\mathbf{'+fmt(t.phiY,1)+'\\ \\text{kip}}']}));
+    body.appendChild(eqBlock({title:'Tensile rupture in the net section',ref:'Eqs. D2-2, D3-1',
+      lines:['A_e=UA_n='+fmt(t.U,2)+'\\times '+fmt(t.An,2)+'=\\mathbf{'+fmt(t.Ae,2)+'\\ \\text{in}^2}',
+        'P_n=F_uA_e='+fmt(t.Fu,0)+'\\times '+fmt(t.Ae,2)+'=\\mathbf{'+fmt(t.Pnr,1)+'\\ \\text{kip}},\\quad \\phi_tP_n=0.75\\times '+fmt(t.Pnr,1)+'=\\mathbf{'+fmt(t.phiR,1)+'\\ \\text{kip}}'],
+      vars:[['A_n',fmt(t.An,2)+' in\u00B2',t.AnDef?'blank \u2192 A\u1D4D':'entered'],['U',fmt(t.U,2),t.UDef?'blank \u2192 1.0':'entered (Table D3.1)']]}));
+    body.appendChild(el('div','note','Design tensile strength \u03C6\u209CP\u2099 = <b>'+fmt(t.phiPn,1)+' kip</b> ('+(t.rupture?'rupture, Eq. D2-2':'yielding, Eq. D2-1')+'). Block shear (\u00A7J4.3) and the end connection are not checked. Combined tension and flexure use \u00A7H1.2 (the H1-1 equations with P\u1D9C = \u03C6\u209CP\u2099); the optional C\u1D47 increase of \u00A7H1.2 is not taken.'));
+  },pg);
+  perComboSections(pg,'tn_',isMember()?'Case ':'Combination ',(body,C)=>{
+    if(C.dcrPt==null){body.appendChild(el('div','note','No axial tension for this '+(isMember()?'case':'combination')+'.'));return;}
+    dcrLine(body,'Tension DCR','\u00A7D2',' P',Math.abs(C.man.Pu),C.phiPt,C.dcrPt);
   },C=>String(C.man.Pu));
 }
 /* =====================================================================
@@ -5217,7 +5299,7 @@ function buildInterTab(pg){
     if(C.compBlocked)body.appendChild(el('div','errBox','Compression: '+C.compBlocked));
     if(C.torsBlocked)body.appendChild(el('div','errBox','Torsion: '+C.torsBlocked));
     const tm=C.inter.terms,lines=[];
-    if(tm.P)lines.push('\\tfrac{P_r}{P_c}=\\tfrac{'+fmt(C.man.Pu,1)+'}{'+fmt(C.phiPn||0,0)+'}='+fmt(tm.P,3));
+    if(tm.P)lines.push('\\tfrac{P_r}{P_c}=\\tfrac{'+fmt(Math.abs(C.man.Pu),1)+'}{'+fmt(C.phiPn||C.phiPt||0,0)+'}='+fmt(tm.P,3)+(C.dcrPt!=null?'\\ \\text{(tension, \u00A7H1.2)}':''));
     lines.push('\\tfrac{M_{rx}}{M_{cx}}='+fmt(tm.Mx,3)+'\\ \\text{(governing flexure DCR)}');
     if(tm.My)lines.push('\\tfrac{M_{ry}}{M_{cy}}=\\tfrac{'+fmt(Math.abs(C.man.Muy),1)+'}{'+fmt(C.phiMny||0,1)+'}='+fmt(tm.My,3));
     body.appendChild(eqBlock({title:'Component ratios',ref:'Ch. H',lines:[lines.join(',\\quad ')]}));
@@ -5396,6 +5478,7 @@ function phiTable(pg){
       '\u00A7G1 \u2014 the 1.00 exception is limited to \u00A7G2.1(a) webs and does <b>not</b> extend to \u00A7G6']);
     if(D.comp&&!D.comp.blocked)rows.push(['Compression','\u03C6\u1D9C','0.90','\u00A7E1']);
     if(D.tors&&!D.tors.blocked)rows.push(['Torsion','\u03C6\u1D40','0.90','\u00A7H3.1']);
+    if(D.ten)rows.push(['Tensile yielding','\u03C6\u209C','0.90','\u00A7D2(a)'],['Tensile rupture','\u03C6\u209C','0.75','\u00A7D2(b)']);
     if(D.j10)rows.push(['Web local yielding','\u03C6','1.00','\u00A7J10.2'],
                        ['Web local crippling','\u03C6','0.75','\u00A7J10.3']);
     const t=el('table','tbl');
@@ -5604,12 +5687,40 @@ function h33Check(p,tor,dem){
   const fvx=(Math.abs(dem.Vux||0))/(p.d*p.tw);
   const fvy=(Math.abs(dem.Vuy||0))/(2*p.bf*p.tf);
   const s=tor.crit;
-  const fn=fa+fbx+fby+Math.abs(s.sigW);
-  const fv=fvx+fvy+Math.abs(s.tauT)+Math.abs(s.tauW);
-  return{fa,fbx,fby,fvx,fvy,sigW:Math.abs(s.sigW),tauT:Math.abs(s.tauT),tauW:Math.abs(s.tauW),
+  /* kT scales the torsional stresses to this combination's torque (torque entered per load case); 1 = the torque as solved */
+  const kT=(dem.kT!=null&&isFinite(dem.kT))?Math.abs(dem.kT):1;
+  const sigW=kT*Math.abs(s.sigW),tauT=kT*Math.abs(s.tauT),tauW=kT*Math.abs(s.tauW);
+  const fn=fa+fbx+fby+sigW;
+  const fv=fvx+fvy+tauT+tauW;
+  const out={fa,fbx,fby,fvx,fvy,sigW,tauT,tauW,kT,
     z:s.z,fn,fv,phiFy:phi*Fy,phiFv:phi*0.6*Fy,
     dcrN:fn/(phi*Fy),dcrV:fv/(phi*0.6*Fy),
     dcr:Math.max(fn/(phi*Fy),fv/(phi*0.6*Fy))};
+  if(dem.FcrF!=null||dem.FcrE!=null)h33Buckling(out,dem.FcrF,dem.FcrE);
+  return out;
+}
+/* §H3.3(c) limit state of buckling: the normal stresses are checked against the buckling stress F_cr of the
+   section from Chapter E or F. Each normal stress is divided by the buckling stress that applies to it:
+     f_a/(phi F_cr,E) + (f_bx + f_by + sigma_w)/(phi F_cr,F) <= 1.0
+   F_cr,F = M_n/S_x of the governing major-axis flexure check for that combination (LTB or local buckling);
+   F_cr,E = P_n/A_g when P_u is compression (tension does not buckle: F_y). Both are capped at F_y.
+   Minor-axis bending and warping stress are put with F_cr,F (conservative). Where both equal F_y the ratio
+   equals the yielding check (a), so the check is only reported when a buckling stress is below F_y. */
+function h33Buckling(h,FcrF,FcrE){
+  const Fy=h.phiFy/0.90,ok=v=>v!=null&&isFinite(v);
+  delete h.FcrF;delete h.FcrE;delete h.FcrFsrc;delete h.FcrEsrc;delete h.dcrB;
+  h.dcr=Math.max(h.dcrN,h.dcrV);
+  const fF=ok(FcrF)?Math.max(0,Math.min(Fy,FcrF)):Fy,fE=ok(FcrE)?Math.max(0,Math.min(Fy,FcrE)):Fy;
+  if(!(Math.min(fF,fE)<Fy*(1-1e-9)))return h;
+  h.FcrF=fF;h.FcrE=fE;h.FcrFsrc=ok(FcrF)&&FcrF<Fy;h.FcrEsrc=ok(FcrE)&&FcrE<Fy;
+  h.dcrB=h.fa/(0.90*fE||1e-9)+(h.fbx+h.fby+h.sigW)/(0.90*fF||1e-9);
+  h.dcr=Math.max(h.dcr,h.dcrB);
+  return h;
+}
+/* governing §H3.3 stress for display: 'N' normal (yielding), 'V' shear, 'B' normal (buckling) */
+function h33Gov(h){
+  if(h.dcrB!=null&&h.dcrB>=h.dcrN&&h.dcrB>=h.dcrV)return'B';
+  return h.dcrN>=h.dcrV?'N':'V';
 }
 /* ---- independent verification (finite difference + limiting cases) ---- */
 function torsionSelfTest(){
@@ -5694,8 +5805,24 @@ function torsionInputs(body){
     o=>TOR_CASES[o].lab,null,'torCase'),'');
   fRow(body,'Torsional span  L',numInput(()=>t.L,v=>{t.L=v;},1,'torL'),'ft',spanHint(t.L));
   const conc=TOR_CASES[t.caseId].load==='conc';
-  fRow(body,conc?'Applied torque  T':'Total applied torque  \u03A3T',numInput(()=>t.T,v=>{t.T=v;},1,'torT'),'kip\u00B7ft',
-    conc?'concentrated':'distributed uniformly over L');
+  const byCase=!isMember()&&t.basis==='case';
+  if(!isMember())fRow(body,'Torque entered as',selInput(['factored','case'],()=>byCase?'case':'factored',
+    v=>{t.basis=v;if(v==='case'&&(!t.Tc||typeof t.Tc!=='object'))t.Tc={};rebuildInputs();schedule(false);},
+    o=>o==='case'?'per load case':'factored, all combos',null,'torBasis'),'',
+    'Per load case: each strength combination uses T\u1D64 = \u03A3\u03B3\u1D62T\u1D62 with its own load factors.');
+  if(byCase){
+    const tt=el('table','cfg');
+    const hd=el('tr');['Case',(conc?'T':'\u03A3T')+' unfactored (kip\u00B7ft)'].forEach(h=>hd.appendChild(el('th',null,h)));tt.appendChild(hd);
+    S.cases.forEach(cs=>{
+      const tr=el('tr');const c2=el('span','caseChip',cs.id);c2.setAttribute('style',caseStyle(cs.id));
+      const td0=el('td');td0.appendChild(c2);tr.appendChild(td0);
+      const td1=el('td');td1.appendChild(numInput(()=>t.Tc[cs.id],v=>{t.Tc[cs.id]=v;},1,'torTc'+cs.id));tr.appendChild(td1);
+      tt.appendChild(tr);
+    });
+    body.appendChild(tt);
+    body.appendChild(el('div','hint',(conc?'Concentrated':'Distributed uniformly over L')+'. Each combination\u2019s factored torque T\u1D64 = \u03A3\u03B3\u1D62T\u1D62 scales the torsional stresses (the solution is linear in T).'));
+  }else fRow(body,conc?'Factored torque  T\u1D64':'Total factored torque  \u03A3T\u1D64',numInput(()=>t.T,v=>{t.T=v;},1,'torT'),'kip\u00B7ft',
+    (conc?'concentrated':'distributed uniformly over L')+'; used unchanged in every '+(isMember()?'case':'combination'));
   if(conc&&TOR_CASES[t.caseId].ends[1]!=='free')
     fRow(body,'Torque location from left end',numInput(()=>t.pos,v=>{t.pos=v;},1,'torPos'),'ft','blank \u2192 midspan');
   body.appendChild(el('div','hint','Warping-free ("fork") supports resist twist but let the flanges warp; warping-fixed ends prevent flange warping (e.g. a heavy end plate or a boxed-in end). The difference is large \u2014 compare the cases.'));
@@ -5756,7 +5883,9 @@ function buildTorsTab(pg){
   }
   if(tor.blocked){pg.appendChild(el('div','errBox',tor.blocked));return;}
   mkSection('toDG','Warping Torsion \u2014 AISC Design Guide 9',body=>{
-    body.appendChild(el('div','note','<b>'+tor.caseLab+'</b><br>Applied torque '+fmt(tor.T/12,2)+' kip\u00B7ft over '+fmt(tor.L/12,2)+' ft.'));
+    body.appendChild(el('div','note','<b>'+tor.caseLab+'</b><br>'+(tor.byCase?
+      'Torque entered per load case. Solved for the largest factored torque T\u1D64 = '+fmt(tor.T/12,2)+' kip\u00B7ft'+(tor.byCase.refId?' ('+((AN.combos.find(c=>c.id===tor.byCase.refId)||{}).name||'')+')':'')+' over '+fmt(tor.L/12,2)+' ft; each combination scales the torsional stresses by its own T\u1D64.':
+      'Applied factored torque '+fmt(tor.T/12,2)+' kip\u00B7ft over '+fmt(tor.L/12,2)+' ft, the same in every '+(isMember()?'case':'combination')+'.')));
     body.appendChild(eqBlock({title:'Governing differential equation and torsional constant',ref:'DG 9 \u00A73',
       lines:['EC_w\\,\\theta\'\'\'\'-GJ\\,\\theta\'\'=t(z),\\qquad a=\\sqrt{\\tfrac{EC_w}{GJ}}=\\sqrt{\\tfrac{'+EKSI+'\\times '+fmt(p.Cw,0)+'}{'+GKSI+'\\times '+fmt(p.J,2)+'}}=\\mathbf{'+fmt(tor.a,1)+'\\ \\text{in}}',
         '\\tfrac{L}{a}=\\tfrac{'+fmt(tor.L,1)+'}{'+fmt(tor.a,1)+'}='+fmt(tor.L/tor.a,2)+
@@ -5778,7 +5907,10 @@ function buildTorsTab(pg){
   perComboSections(pg,'to_',isMember()?'Case ':'Combination ',(body,C)=>{
     const h=C.h33;
     if(!h){body.appendChild(el('div','note','No \u00A7H3.3 combination available for this '+(isMember()?'case':'combination')+'.'));return;}
-    body.appendChild(el('div','note','\u00A7H3.3 requires the torsional stresses to be added to the axial, flexural and shear stresses at the same point and checked against yielding \u2014 there is no separate \u201C\u03C6T\u2099\u201D for an open section.'));
+    if(tor.byCase){const cb=AN.combos.find(c=>c.id===C.id),bc=tor.byCase,tm=[];
+      if(cb)S.cases.forEach(cs=>{const g=cb.f[cs.id]||0,tv=+bc.Tc[cs.id]||0;if(g&&tv)tm.push(fmtF(g)+'\u00D7'+fmt(tv,2));});
+      body.appendChild(el('div','note','T\u1D64 = '+(tm.length?tm.join(' + '):'0')+' = <b>'+fmt(bc.Tu[C.id]||0,2)+' kip\u00B7ft</b>; torsional stresses = solved values \u00D7 '+fmt(h.kT,3)+'.'));}
+    body.appendChild(el('div','note','\u00A7H3.3 requires the torsional stresses to be added to the axial, flexural and shear stresses at the same point and checked against yielding and, where the Chapter E/F buckling stress is below F\u1D67, against buckling \u2014 there is no separate \u201C\u03C6T\u2099\u201D for an open section.'));
     body.appendChild(eqBlock({title:'Normal stresses at the critical station (z = '+fmt(h.z,1)+' in)',ref:'\u00A7H3.3(a)',
       lines:['f_n=\\tfrac{P_u}{A_g}+\\tfrac{M_{ux}}{S_x}+\\tfrac{M_{uy}}{S_y}+\\sigma_w='+
         fmt(h.fa,2)+'+'+fmt(h.fbx,2)+'+'+fmt(h.fby,2)+'+'+fmt(h.sigW,2)+'=\\mathbf{'+fmt(h.fn,2)+'\\ \\text{ksi}}',
@@ -5789,7 +5921,18 @@ function buildTorsTab(pg){
         fmt(h.fvx,2)+'+'+fmt(h.fvy,2)+'+'+fmt(h.tauT,2)+'+'+fmt(h.tauW,3)+'=\\mathbf{'+fmt(h.fv,2)+'\\ \\text{ksi}}',
         '\\text{DCR}=\\tfrac{f_v}{\\phi(0.6F_y)}=\\tfrac{'+fmt(h.fv,2)+'}{0.90\\times 0.6\\times '+p.mat.Fy+'}=\\mathbf{'+fmt(h.dcrV,3)+'}'+
         (h.dcrV>1?'\\ \\color{#B42318}{\\text{FAIL}}':'\\ \\checkmark')]}));
-    body.appendChild(el('div',h.dcr>1?'errBox':'okBox','Governing \u00A7H3.3 DCR = <b>'+fmt(h.dcr,3)+'</b> ('+(h.dcrN>=h.dcrV?'normal':'shear')+' stress)'));
+    if(h.dcrB!=null)body.appendChild(eqBlock({title:'Buckling limit state, same normal stresses',ref:'\u00A7H3.3(c)',
+      lines:['F_{cr,F}='+(h.FcrFsrc?'\\tfrac{M_n}{S_x}=\\tfrac{'+fmt(h.FcrF*p.Sx,0)+'}{'+fmt(p.Sx,1)+'}=':'F_y=')+'\\mathbf{'+fmt(h.FcrF,2)+'\\ \\text{ksi}},\\quad '+
+          'F_{cr,E}='+(h.FcrEsrc?'\\tfrac{P_n}{A_g}=\\tfrac{'+fmt(h.FcrE*p.A,1)+'}{'+fmt(p.A,2)+'}=':'F_y=')+'\\mathbf{'+fmt(h.FcrE,2)+'\\ \\text{ksi}}',
+        '\\tfrac{f_a}{\\phi F_{cr,E}}+\\tfrac{f_{bx}+f_{by}+\\sigma_w}{\\phi F_{cr,F}}=\\tfrac{'+fmt(h.fa,2)+'}{0.90\\times '+fmt(h.FcrE,2)+'}+\\tfrac{'+
+          fmt(h.fbx+h.fby+h.sigW,2)+'}{0.90\\times '+fmt(h.FcrF,2)+'}=\\mathbf{'+fmt(h.dcrB,3)+'}'+
+        (h.dcrB>1?'\\ \\color{#B42318}{\\text{FAIL}}':'\\ \\checkmark')],
+      vars:[['F_{cr,F}',fmt(h.FcrF,2)+' ksi',h.FcrFsrc?'Chapter F: M\u2099/S\u2093 of the governing major-axis flexure check of this '+(isMember()?'case':'combination')+' (LTB or local buckling)':'flexural buckling stress not below F\u1D67'],
+        ['F_{cr,E}',fmt(h.FcrE,2)+' ksi',h.FcrEsrc?'Chapter E: P\u2099/A\u1D4D at the stated effective lengths':(h.fa>0?'no compression buckling (P\u1D64 is not compression, or P\u2099/A\u1D4D \u2265 F\u1D67)':'no axial stress')],
+        ['f_{by},\\ \\sigma_w',fmt(h.fby,2)+' ksi, '+fmt(h.sigW,2)+' ksi','divided by F\u1D9C\u02B3,F (conservative)']]}));
+    else body.appendChild(el('div','note','\u00A7H3.3(c) buckling: the Chapter E/F buckling stress is not below F\u1D67 for this '+(isMember()?'case':'combination')+', so the yielding check (a) also covers buckling.'));
+    const hg=h33Gov(h);
+    body.appendChild(el('div',h.dcr>1?'errBox':'okBox','Governing \u00A7H3.3 DCR = <b>'+fmt(h.dcr,3)+'</b> ('+(hg==='B'?'normal stress, buckling':hg==='N'?'normal':'shear')+' stress)'));
   },C=>C.h33?fmt(C.h33.dcr,4):'x');
   pg.appendChild(el('div','hint','Stresses are combined conservatively by direct summation of magnitudes at the critical station, which is the practice DG 9 recommends for design. The critical station is chosen as the worst combination of warping normal and shear stress along the member.'));
 }
@@ -5907,6 +6050,16 @@ function secCompLengths(P){
     });
     body.appendChild(g);
     body.appendChild(el('div','hint','L\u1DBB is the length between points braced against twist, used for torsional buckling (\u00A7E4) of I-shapes.'));
+    if(!S.design.ten)S.design.ten={An:null,U:null};
+    const tg=el('div');tg.style.cssText='display:grid;grid-template-columns:repeat(3,1fr);gap:2px 8px';
+    [['An','A\u2099 (in\u00B2)',0.1],['U','U',0.05]].forEach(([k,lab,st])=>{
+      const r=el('div','fRow');r.style.gridTemplateColumns='minmax(46px,.8fr) 1fr';
+      r.appendChild(el('label','small',lab));
+      r.appendChild(numInput(()=>S.design.ten[k],v=>{S.design.ten[k]=v;},st,'dsnTen'+k));
+      tg.appendChild(r);
+    });
+    body.appendChild(tg);
+    body.appendChild(el('div','hint','<b>Axial tension</b> (P\u1D64 < 0, \u00A7D2): net area A\u2099 and shear-lag factor U (Table D3.1) at the end connection. Blank \u2192 A\u2099 = A\u1D4D and U = 1.0 (no holes, every element connected).'));
   },P,secOpts());
 }
 /* ---------- 5. web stiffeners ---------- */
@@ -6243,6 +6396,8 @@ async function exportExcel(){
   if(D.shearY)X.line('Shear strength, minor axis','\u03C6v',N2(D.shearY.phi,2),'\u2014','\u00A7G1',{kind:'in'});
   X.line('Compressive strength','\u03C6c',0.90,'\u2014','\u00A7E1',{kind:'in'});
   X.line('Torsional strength','\u03C6T',0.90,'\u2014','\u00A7H3',{kind:'in'});
+  if(D.ten){X.line('Tensile yielding','\u03C6t',0.90,'\u2014','\u00A7D2(a)',{kind:'in'});
+    X.line('Tensile rupture','\u03C6t',0.75,'\u2014','\u00A7D2(b)',{kind:'in'});}
   if(D.j10){X.line('Web local yielding','\u03C6',1.00,'\u2014','\u00A7J10.2',{kind:'in'});
     X.line('Web local crippling','\u03C6',0.75,'\u2014','\u00A7J10.3',{kind:'in'});}
   if(D.shearX&&D.shearX.route==='G2.1(a)')
@@ -6449,6 +6604,18 @@ async function xlChecks(X,p,D,mem,Fy,E){
         {v:N2(C.phiPn,2),dp:2},{v:N2(C.dcrP,3),dp:3,kind:C.dcrP>1?'bad':'ok'},
         {v:C.dcrP>1?'FAIL':'OK',kind:C.dcrP>1?'bad':'ok'}]));
   }
+  const tnC=D.perCombo.filter(C=>C.dcrPt!=null);
+  if(tnC.length){const t=tnC[0].tens;
+    X.sub('Axial tension  (Chapter D)');
+    X.line('Net area','An',N2(t.An,3),'in\u00B2',t.AnDef?'blank \u2192 Ag (assumed)':'entered',{kind:t.AnDef?'out':'in',dp:3});
+    X.line('Shear-lag factor','U',N2(t.U,3),'\u2014',t.UDef?'blank \u2192 1.0 (assumed)':'Table D3.1, entered',{kind:t.UDef?'out':'in',dp:3});
+    X.line('Tensile yielding','\u03C6tPn',N2(t.phiY,2),'kip','0.90\u00B7Fy\u00B7Ag, Eq. D2-1',{});
+    X.line('Tensile rupture','\u03C6tPn',N2(t.phiR,2),'kip','0.75\u00B7Fu\u00B7U\u00B7An, Eqs. D2-2, D3-1',{});
+    X.table(['Case','Pu (kip)','\u03C6tPn (kip)','DCR','Status'],
+      tnC.map(C=>[C.name,{v:N2(C.man.Pu,2),dp:2,kind:'imp'},{v:N2(C.phiPt,2),dp:2},
+        {v:N2(C.dcrPt,3),dp:3,kind:C.dcrPt>1?'bad':'ok'},{v:C.dcrPt>1?'FAIL':'OK',kind:C.dcrPt>1?'bad':'ok'}]));
+    X.note('Block shear (\u00A7J4.3) and the end connection are not checked. Combined forces use \u00A7H1.2 with Pc = \u03C6tPn.');
+  }
   X.gap();
   /* ---------- torsion ---------- */
   X.band('12.  TORSION',(p._kind==='I'||p._kind==='C')?'\u00A7H3.3 / DG 9':'\u00A7H3.1');
@@ -6456,7 +6623,8 @@ async function xlChecks(X,p,D,mem,Fy,E){
   if(tor&&!tor.blocked){
     X.note('Case: '+tor.caseLab);
     X.line('Torsional span','L',N2(tor.L/12,2),'ft','',{kind:'in'});
-    X.line('Applied torque','T',N2(tor.T/12,2),'k\u00B7ft','',{kind:'imp'});
+    X.line(tor.byCase?'Largest factored torque (solved)':'Applied factored torque','T',N2(tor.T/12,2),'k\u00B7ft','',{kind:'imp'});
+    if(tor.byCase)X.note('Torque entered per load case; Tu per combination: '+D.perCombo.map(C=>C.name+' = '+S2(tor.byCase.Tu[C.id]||0,2)+' k\u00B7ft').join('; ')+'. Torsional stresses are scaled by Tu/T.');
     X.eq('a = \u221A(E\u00B7Cw / (G\u00B7J)) = \u221A('+E+'\u00B7'+S2(p.Cw,0)+' / ('+GKSI+'\u00B7'+S2(p.J,2)+'))');
     X.line('Torsional characteristic length','a',{formula:'SQRT(\u00ABE\u00BB*\u00ABCw\u00BB/(\u00ABG\u00BB*\u00ABJ\u00BB))',result:N2(tor.a,2)},'in','DG 9 \u00A73',{ref:'aT'});
     X.line('Length ratio','L/a',N2(tor.L/tor.a,2),'\u2014','',{});
@@ -6473,6 +6641,15 @@ async function xlChecks(X,p,D,mem,Fy,E){
         {v:N2(C.h33.dcrV,3),dp:3,kind:C.h33.dcrV>1?'bad':'ok'},
         {v:C.h33.dcr>1?'FAIL':'OK',kind:C.h33.dcr>1?'bad':'ok'}]));
     X.note('fn = Pu/Ag + Mux/Sx + Muy/Sy + \u03C3w ;  fv = Vux/(d\u00B7tw) + Vuy/(2bf\u00B7tf) + \u03C4t + \u03C4w, summed by magnitude at the critical station.');
+    const hB=D.perCombo.filter(C=>C.h33&&C.h33.dcrB!=null);
+    if(hB.length){
+      X.sub('\u00A7H3.3(c) buckling limit state');
+      X.table(['Case','fa (ksi)','Fcr,E (ksi)','fbx+fby+\u03C3w (ksi)','Fcr,F (ksi)','Ratio','Status'],
+        hB.map(C=>[C.name,{v:N2(C.h33.fa,2),dp:2},{v:N2(C.h33.FcrE,2),dp:2},{v:N2(C.h33.fbx+C.h33.fby+C.h33.sigW,2),dp:2},
+          {v:N2(C.h33.FcrF,2),dp:2},{v:N2(C.h33.dcrB,3),dp:3,kind:C.h33.dcrB>1?'bad':'ok'},
+          {v:C.h33.dcrB>1?'FAIL':'OK',kind:C.h33.dcrB>1?'bad':'ok'}]));
+      X.note('Ratio = fa/(0.9\u00B7Fcr,E) + (fbx + fby + \u03C3w)/(0.9\u00B7Fcr,F). Fcr,F = Mn/Sx of the governing major-axis flexure check; Fcr,E = Pn/Ag when Pu is compression; each capped at Fy. The Status column of the table above includes this check.');
+    }
   }else if(D.tors&&!D.tors.blocked){
     X.line('Torsional constant','C',N2(p.Cc,2),'in\u00B3','',{kind:'in',ref:'Chz'});
     X.line('Critical stress','Fcr',N2(D.tors.Fcr,2),'ksi',D.tors.clause,{ref:'FcrT'});
@@ -6675,14 +6852,16 @@ const BATCH_COLS=[
   {k:'Cb',   h:'Cb',             syn:['cb','c_b','cb factor'],                    t:'n'},
   {k:'torC', h:'Torsion Case',   syn:['torsioncase','torcase','torsion','case'],  t:'s'},
   {k:'torL', h:'Torsion Span (ft)',syn:['torsionspan','torspan','torsion length'],t:'n'},
-  {k:'stfA', h:'Stiffener a (in)',syn:['stiffenera','stiffener spacing','a'],     t:'n'}
+  {k:'stfA', h:'Stiffener a (in)',syn:['stiffenera','stiffener spacing','a'],     t:'n'},
+  {k:'tAn',  h:'Tension An (in2)', syn:['tensionan','an','netarea'],               t:'n'},
+  {k:'tU',   h:'Tension U',        syn:['tensionu','u','shearlag'],                t:'n'}
 ];
 const BATCH_HELP={
   desc:'Free text, e.g. "W-Column" or "Hoist Beam". Carried through to the results and the printed report.',
   mid:'Your member mark or ID. Any text or number.',
   size:'REQUIRED. AISC label: W18X60, C15X33.9, HSS6X4X1/4, HSS8.625X0.322, Pipe8XS. Lower case and \u00D7 accepted.',
   grade:'Blank \u2192 family default (W/HP A992, C/MC/M/S A36, rect HSS A500 Gr. C, round HSS A500 Gr. C, pipe A53 Gr. B).',
-  Pu:'Axial force, kip. COMPRESSION POSITIVE. A negative value is treated as tension: the compression check is skipped and the row is annotated. Chapter D tension is NOT checked.',
+  Pu:'Axial force, kip. COMPRESSION POSITIVE. A negative value is treated as tension: the compression check is skipped and the member is checked for tensile yielding and rupture (\u00A7D2, using the Tension An and Tension U columns) and the \u00A7H1.2 interaction.',
   Vux:'Major-axis shear, kip. Sign ignored.',
   Vuy:'Minor-axis shear, kip. Sign ignored.',
   Mux:'Major-axis moment, kip-ft. Sign ignored.',
@@ -6698,7 +6877,9 @@ const BATCH_HELP={
   Cb:'Lateral-torsional buckling modification factor (Eq. F1-1 or Manual Table 3-1). Blank \u2192 1.0, which is conservative.',
   torC:'Required when Tu \u2260 0 on an I-shape or channel. Pick from the drop-down. NONE = no torsion check. HSS ignore this column and use the closed-form \u00A7H3.1 check.',
   torL:'Length over which the torsion case acts, ft. Blank \u2192 Lx.',
-  stfA:'Clear spacing of transverse web stiffeners, INCHES (not feet). Blank \u2192 unstiffened web, kv = 5.34.'
+  stfA:'Clear spacing of transverse web stiffeners, INCHES (not feet). Blank \u2192 unstiffened web, kv = 5.34.',
+  tAn:'Net area at the end connection for axial TENSION, in\u00B2 (\u00A7D2, \u00A7B4.3). Blank \u2192 A\u1D4D (no holes; the row is annotated).',
+  tU:'Shear-lag factor U for axial TENSION (\u00A7D3, Table D3.1). Blank \u2192 1.0 (every element connected; the row is annotated).'
 };
 const BATCH_TOR_CODES={NONE:'none',CONC_PP:'conc_pp',CONC_FF:'conc_ff',CONC_PF:'conc_pf',
   UNIF_PP:'unif_pp',UNIF_FF:'unif_ff',CANT_CONC:'cant_conc',CANT_UNIF:'cant_unif'};
@@ -6760,7 +6941,12 @@ function batchCheckRow(row){
   R.Lbx=Lbx;R.Lby=Lby;R.Lbz=Lbz;R.Lx=Lx;R.kx=kx;R.ky=ky;R.kz=kz;R.Cb=Cb;
   const Pu0=num(row.Pu)||0;
   const Pu=Pu0>0?Pu0:0;
-  if(Pu0<0)R.notes.push('P\u1D64 = '+fmt(Pu0,3)+' is tension; taken as zero for the compression check. Tensile yielding and rupture (Chapter D) are not implemented in this tool.');
+  if(Pu0<0){   /* axial tension: \u00A7D2 and the \u00A7H1.2 interaction */
+    R.ten=tensionStrength(p,num(row.tAn),num(row.tU));R.dcrPt=-Pu0/R.ten.phiPn;
+    const dflt=[];if(R.ten.AnDef)dflt.push('A\u2099 = A\u1D4D');if(R.ten.UDef)dflt.push('U = 1.0');
+    R.notes.push('P\u1D64 = '+fmt(Pu0,3)+' is tension (taken as zero for the compression check): \u00A7D2 \u03C6\u209CP\u2099 = '+fmt(R.ten.phiPn,2)+' kip ('+(R.ten.rupture?'rupture, A\u2091 = UA\u2099 = '+fmt(R.ten.Ae,2)+' in\u00B2':'yielding')+'), DCR = '+fmt(R.dcrPt,3)+
+      (dflt.length?'; '+dflt.join(' and ')+' assumed (column blank)':'')+'. Block shear and the connection are not checked.');
+  }
   const Mux=Math.abs(num(row.Mux)||0),Muy=Math.abs(num(row.Muy)||0);
   const Vux=Math.abs(num(row.Vux)||0),Vuy=Math.abs(num(row.Vuy)||0);
   const Tu=Math.abs(num(row.Tu)||0);
@@ -6815,8 +7001,13 @@ function batchCheckRow(row){
         if(tr.blocked)R.blockers.push('Torsion: '+tr.blocked);
         else{
           R.tor=tr;
-          R.h33=h33Check(p,tr,{Pu,Mux,Muy,Vux,Vuy});
+          /* §H3.3(c) buckling stress: Mn/Sx at Lbx and Cb (bare steel), or Pn/Ag when Pu is compression */
+          const FcrF=(R.capX&&R.capX.phiMn>0)?R.capX.phiMn/0.90/p.Sx:null;
+          const FcrE=(Pu>0&&R.phiPn>0)?R.phiPn/0.90/p.A:null;
+          R.h33=h33Check(p,tr,{Pu,Mux,Muy,Vux,Vuy,FcrF,FcrE});
           R.dcrT=R.h33.dcr;R.torMode='H3.3';
+          if(R.h33.dcrB!=null)R.notes.push('\u00A7H3.3(c) buckling: f\u2090/(\u03C6F\u1D9C\u02B3,E) + (f\u1D47\u2093 + f\u1D47\u1D67 + \u03C3\u1D42)/(\u03C6F\u1D9C\u02B3,F) = '+fmt(R.h33.dcrB,3)+
+            ' (F\u1D9C\u02B3,F = '+fmt(R.h33.FcrF,2)+' ksi, M\u2099/S\u2093 at L\u1D47\u2093 and C\u1D47 capped at F\u1D67; F\u1D9C\u02B3,E = '+fmt(R.h33.FcrE,2)+' ksi, P\u2099/A\u1D4D capped at F\u1D67); the torsion DCR is the largest of yielding, shear and buckling.');
         }
       }else R.torNA='T\u1D64 entered on an open section but no torsion case given \u2014 torsion NOT evaluated (\u00A7H3.3 needs the loading case and end warping restraint).';
     }else{
@@ -6830,7 +7021,7 @@ function batchCheckRow(row){
     try{batchExtras(R);}catch(e){R.warns.push('Extra checks failed: '+e.message);}
   }
   /* --- interaction --- */
-  const rx=R.dcrMx||0,ry=R.dcrMy||0,rp=R.dcrP||0;
+  const rx=R.dcrMx||0,ry=R.dcrMy||0,rp=R.dcrP||R.dcrPt||0;
   if(R.torMode==='H3.1'&&!R.torNeglect){
     const vr=(R.dcrVx||0)+(R.dcrVy||0);
     R.inter={eq:'H3-6',value:(rp+rx+ry)+Math.pow(vr+R.dcrT,2)};
@@ -6838,7 +7029,7 @@ function batchCheckRow(row){
   else R.inter={eq:'H1-1b',value:rp/2+(rx+ry)};
   /* --- governing --- */
   const cand=[['M\u2093',R.dcrMx],['M\u1D67',R.dcrMy],['V\u2093',R.dcrVx],['V\u1D67',R.dcrVy],
-    ['P',R.dcrP],['Torsion',R.torMode?R.dcrT:null],['WLY',R.dcrWLY],['WLC',R.dcrWLC],
+    ['P',R.dcrP],['Tension',R.dcrPt],['Torsion',R.torMode?R.dcrT:null],['WLY',R.dcrWLY],['WLC',R.dcrWLC],
     ['Deflection',R.defl?R.defl.dcr:null],
     ['Interaction',R.inter?R.inter.value:null]].filter(c=>c[1]!=null&&isFinite(c[1]));
   const g=cand.reduce((m,c)=>c[1]>(m?m[1]:-1)?c:m,null);
@@ -6949,7 +7140,7 @@ async function downloadBatchTemplate(){
   line('Torsion Span','Length over which the torsion case acts, ft. Blank \u2192 Lx.');
   line('','');
   line('Checks performed','Flexure \u00A7F2\u2013F8, shear \u00A7G2\u2013G6, compression \u00A7E3/E4/E7, combined forces \u00A7H1, torsion \u00A7H3.1 (HSS) or \u00A7H3.3 with Design Guide 9 (open sections).');
-  line('Not performed','Tension (Chapter D), deflection, web local yielding/crippling (\u00A7J10), and connection design. Rows that cannot be checked report a reason and are never shown as passing.');
+  line('Not performed','Block shear and connection design. Deflection and web local yielding/crippling (\u00A7J10) only when their optional columns are filled. Tension (\u00A7D2) uses the Tension An and Tension U columns, blank = A\u1D4D and 1.0. Rows that cannot be checked report a reason and are never shown as passing.');
   const buf=await wb.xlsx.writeBuffer();
   const blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
   const a=document.createElement('a');
@@ -7246,7 +7437,7 @@ function buildBatchTab(pg){
   },pg);
   mkSection('bScope','Scope of the Batch Check',body=>{
     body.appendChild(el('div','note','Each row runs: classification (Table B4.1), major and minor flexure (\u00A7F2\u2013F8), major and minor shear (\u00A7G2\u2013G6), axial compression (\u00A7E3/E4/E7), combined forces (\u00A7H1), and torsion (\u00A7H3.1 for HSS, \u00A7H3.3 with Design Guide 9 for open sections when a torsion case is given).'));
-    body.appendChild(el('div','warnBox','<b>Not checked in batch:</b> tensile yielding and rupture (Chapter D \u2014 negative P\u1D64 is taken as zero and noted), deflection, and web local yielding and crippling (\u00A7J10, which needs bearing lengths). Use Member Check mode on an individual row for J10 and deflection.'));
+    body.appendChild(el('div','warnBox','<b>Not checked in batch:</b> block shear and connections (a negative P\u1D64 is checked for tensile yielding and rupture, \u00A7D2, and taken as zero for compression), deflection, and web local yielding and crippling (\u00A7J10, which needs bearing lengths). Use Member Check mode on an individual row for J10 and deflection.'));
   },pg);
 }
 function applyRowToState(r){
@@ -7254,7 +7445,8 @@ function applyRowToState(r){
   S.section={family:r.fam,label:r.lbl,grade:r.grade,builtUp:false,ovr:{}};
   S.member.cont=false;S.member.Lb=r.Lbx;S.member.Cb=r.Cb;
   S.member.rows=[{id:'m1',name:(r.row.desc||'Member')+(r.row.mid!=null?(' #'+r.row.mid):''),
-    Mux:r.dem.Mux,Vux:r.dem.Vux,Pu:r.dem.Pu,Muy:r.dem.Muy,Vuy:r.dem.Vuy,Tu:r.dem.Tu}];
+    Mux:r.dem.Mux,Vux:r.dem.Vux,Pu:(r.dem.Pu0<0?r.dem.Pu0:r.dem.Pu),Muy:r.dem.Muy,Vuy:r.dem.Vuy,Tu:r.dem.Tu}];
+  S.design.ten={An:(r.row.tAn>0?+r.row.tAn:null),U:(r.row.tU>0?+r.row.tU:null)};
   S.design.Lcx=r.Lbx;S.design.Lcy=r.Lby;S.design.Lcz=r.Lbz;
   S.design.Kx=r.kx;S.design.Ky=r.ky;S.design.Kz=r.kz;
   S.design.stiff={on:!!(r.row.stfA>0),a:r.row.stfA||null};
@@ -7412,7 +7604,7 @@ async function exportBatchExcel(){
   };
   ln('Batch Member Check','Scope and limitations',true);
   ln('Checked','Classification (Table B4.1); major-axis flexure \u00A7F2\u2013F8; minor-axis flexure \u00A7F6/F7; major-axis shear \u00A7G2/G4/G5; minor-axis shear \u00A7G6; axial compression \u00A7E3, \u00A7E4 and \u00A7E7; combined forces \u00A7H1; torsion \u00A7H3.1 (HSS) or \u00A7H3.3 with Design Guide 9 (open sections, when a torsion case is supplied).');
-  ln('NOT checked','Tensile yielding and rupture (Chapter D). Negative Pu is treated as zero for the compression check and the row is annotated on the Messages sheet.');
+  ln('Tension','Negative Pu is checked for tensile yielding and rupture (\u00A7D2, Tension An and U columns; blank = Ag and 1.0) and enters the \u00A7H1.2 interaction; it is taken as zero for the compression check. Block shear and connections are NOT checked.');
   ln('Checked when supplied','Composite flexure (\u00A7I3.2a) where a slab depth is given \u2014 the positive-moment capacity then replaces the bare-steel value and the deflection uses I_LB. Construction-stage strength and deflection, camber and negative-moment composite action are NOT checked in batch; use Member Check mode for those.');
   ln('Checked when supplied','Simple-span deflection where a service load is given, over Lx, against L/n.');
   ln('Checked when supplied','Web local yielding and crippling (\u00A7J10.2, \u00A7J10.3) where a bearing length and a concentrated force are given.');
@@ -7577,7 +7769,7 @@ async function printBatchRows(rows,opts){
     const sec=el('div','prSec');
     sec.appendChild(el('h1',null,'Scope and Limitations'));
     [['Checked','Classification (Table B4.1); major-axis flexure \u00A7F2\u2013F8; minor-axis flexure \u00A7F6/F7; major-axis shear \u00A7G2/G4/G5; minor-axis shear \u00A7G6; axial compression \u00A7E3, \u00A7E4, \u00A7E7; combined forces \u00A7H1; torsion \u00A7H3.1 (HSS) or \u00A7H3.3 with Design Guide 9 (open sections, when a torsion case is supplied).'],
-     ['Not checked','Tensile yielding and rupture (Chapter D). A negative P\u1D64 is taken as zero for the compression check and the row is annotated.'],
+     ['Tension','A negative P\u1D64 is checked for tensile yielding and rupture (\u00A7D2) with the Tension An and U columns (blank: A\u2099 = A\u1D4D, U = 1.0) and enters the \u00A7H1.2 interaction; it is taken as zero for the compression check. Block shear and connections are not checked.'],
      ['Not checked','Deflection and serviceability.'],
      ['Not checked','Web local yielding and crippling (\u00A7J10), which require bearing lengths, and sidesway web buckling (\u00A7J10.4).'],
      ['Torsion','A torque magnitude alone does not determine the stresses in an I-shape or channel. Rows with T\u1D64 \u2260 0 and no torsion case are reported NOT EVALUATED, never as passing.'],
@@ -9202,7 +9394,27 @@ function openTorsionFor(A){
   if(!cfg)return null;
   const L=spanFor(cfg.L).v;
   if(!(L>0))return{blocked:'No torsional span is available \u2014 enter one, or give the member span.'};
-  return torsionOpen(A.sect,{L,caseId:cfg.caseId,T:cfg.T||0,pos:cfg.pos});
+  const bc=torByCase(A,cfg);
+  const r=torsionOpen(A.sect,{L,caseId:cfg.caseId,T:bc?bc.Tref:(cfg.T||0),pos:cfg.pos});
+  if(bc&&r&&!r.blocked)r.byCase=bc;
+  return r;
+}
+/* Torque entered per load case (beam mode, S.design.tor.basis = 'case'): each combination's factored torque is
+   T_u = sum(gamma_i T_i) with its own load factors. The torsion solution is linear in T, so it is solved once for the
+   largest |T_u| (Tref) and each combination scales the torsional stresses by |T_u|/Tref. Default basis (blank or
+   'factored'): the entered T is a factored torque used unchanged in every combination, as before. */
+function torByCase(A,cfg){
+  if(!cfg||cfg.basis!=='case'||isMember()||!A||!A.combos)return null;
+  const Tc=cfg.Tc||{},Tu={};let Tref=0,refId=null;
+  A.combos.forEach(cb=>{
+    let t=0;S.cases.forEach(cs=>{t+=(cb.f[cs.id]||0)*(+Tc[cs.id]||0);});
+    Tu[cb.id]=t;if(Math.abs(t)>Tref){Tref=Math.abs(t);refId=cb.id;}
+  });
+  return{Tu,Tref,refId,Tc};
+}
+function torScale(tor,id){
+  const bc=tor&&tor.byCase;if(!bc)return 1;
+  return bc.Tref>0?Math.abs(bc.Tu[id]||0)/bc.Tref:0;
 }
 /* =====================================================================
    BATCH: COMPOSITE, J10 AND DEFLECTION
@@ -9290,7 +9502,7 @@ function batchExtras(R){
   }
   /* --- governing, including the new checks --- */
   const cand=[['M\u2093',R.dcrMx],['M\u1D67',R.dcrMy],['V\u2093',R.dcrVx],['V\u1D67',R.dcrVy],
-    ['P',R.dcrP],['Torsion',R.torMode?R.dcrT:null],['WLY',R.dcrWLY],['WLC',R.dcrWLC],
+    ['P',R.dcrP],['Tension',R.dcrPt],['Torsion',R.torMode?R.dcrT:null],['WLY',R.dcrWLY],['WLC',R.dcrWLC],
     ['Deflection',R.defl?R.defl.dcr:null],
     ['Interaction',R.inter?R.inter.value:null]].filter(c=>c[1]!=null&&isFinite(c[1]));
   const g=cand.reduce((m,c)=>c[1]>(m?m[1]:-1)?c:m,null);
@@ -10614,19 +10826,19 @@ function colCurveFig(p,cc,D,Pu){
   function caseExists(id){ return S.cases.some(function(c){ return c.id===id; }); }
   function defaults(chk){
     var tw=(S.trib && (S.trib.twL+S.trib.twR)>0) ? S.trib.twL+S.trib.twR : 10;
-    var o={tw:tw, spans:'all', mode:'replace', wind:null, types:{}};
+    var o={tw:tw, spans:'all', mode:'replace', wind:null, types:{}, lrCombos:true};
     o.wind=isNum(chk.wind.roofUplift)?'roofUplift':(isNum(chk.wind.wall)?'wall':(Object.keys(chk.wind)[0]||null));
     TYPES.forEach(function(t){
       var v=(t==='W') ? (o.wind?chk.wind[o.wind]:null) : chk.psf[t];
       var cs=DEF_CASE[t];
       var dbl=S.trib && S.trib.on && (S.trib.p[cs]||0)!==0;
-      o.types[t]={on: isNum(v) && v!==0 && !dbl && caseUsed(cs), lc:cs};
+      o.types[t]={on: isNum(v) && v!==0 && !dbl && (caseUsed(cs) || (t==='Lr' && o.lrCombos)), lc:cs};
     });
     return o;
   }
   /* ---- the import plan: exactly what will be removed and added. Pure apart from reading S. ---- */
   function plan(p,chk,o){
-    var r={err:[],warn:[],remove:[],add:[],newCases:[],rows:[]};
+    var r={err:[],warn:[],remove:[],add:[],newCases:[],rows:[],lrCombos:[]};
     var tw=+o.tw;
     if(!isNum(tw) || tw<=0) r.err.push('Enter a tributary width greater than 0 ft.');
     else if(tw>200) r.err.push('Tributary width '+tw+' ft is outside the accepted range (0 to 200 ft).');
@@ -10648,8 +10860,11 @@ function colCurveFig(p,cc,D,Pu){
       if(!caseExists(lc) && r.newCases.indexOf(lc)<0) r.newCases.push(lc);
       if(seenCase[lc]) r.warn.push(seenCase[lc]+' and '+t+' are both imported into case '+lc+'.');
       seenCase[lc]=t;
-      if(caseExists(lc) && !caseUsed(lc)) r.warn.push('No active strength combination includes case '+lc+'; the imported '+t+' load has no effect on strength until you add a factor for '+lc+'.');
-      if(!caseExists(lc)) r.warn.push('Case '+lc+' will be created. No combination includes it yet: add its factors (e.g. ASCE 7-16 Sec. 2.3.1: 1.6(Lr or S or R) in combination 3, 0.5(Lr or S or R) in 2 and 4) or the load has no effect.');
+      var lrAdd=(t==='Lr' && o.lrCombos && !caseUsed(lc));
+      if(lrAdd){ r.lrCombos=lrCombosFor(lc);
+        r.warn.push((caseExists(lc)?'':'Case '+lc+' will be created. ')+r.lrCombos.length+' ASCE 7-16 Sec. 2.3.1 strength combinations with '+lc+' will be added: '+r.lrCombos.map(function(c){ return Object.keys(c.f).map(function(k){ return fmtF(c.f[k])+k; }).join(' + '); }).join('; ')+'. Review them in Load Cases & Combinations.'); }
+      else if(caseExists(lc) && !caseUsed(lc)) r.warn.push('No active strength combination includes case '+lc+'; the imported '+t+' load has no effect on strength until you add a factor for '+lc+'.');
+      else if(!caseExists(lc)) r.warn.push('Case '+lc+' will be created. No combination includes it yet: add its factors (e.g. ASCE 7-16 Sec. 2.3.1: 1.6(Lr or S or R) in combination 3, 0.5(Lr or S or R) in 2 and 4) or the load has no effect.');
       if(S.trib && S.trib.on && (S.trib.p[lc]||0)!==0) r.warn.push('The Tributary Load Generator already applies '+S.trib.p[lc]+' psf to case '+lc+'. The imported '+t+' load acts in addition to it.');
       if(t==='W' && (o.wind==='wall'||o.wind==='wallPressure'||o.wind==='wallSuction')) r.warn.push('Wall wind is applied in this beam\u2019s load plane (the tool\u2019s + direction). Use it only for a member spanning horizontally against the wall (e.g. a girt) and set the bracing to match.');
       var w=pUse*tw/1000;
@@ -10669,6 +10884,7 @@ function colCurveFig(p,cc,D,Pu){
   function apply(p,chk,o,via){
     var r=plan(p,chk,o); if(r.err.length) return r;
     r.newCases.forEach(function(id){ S.cases.push({id:id,name:id}); });
+    r.lrCombos.forEach(function(c){ S.combos.push(c); });
     var rm=r.remove;
     S.loads=S.loads.filter(function(ld){ return rm.indexOf(ld)<0; });
     r.add.forEach(function(ld){ var x=JSON.parse(JSON.stringify(ld)); x.id=newLoadId(); S.loads.push(x); });
@@ -10699,6 +10915,7 @@ function colCurveFig(p,cc,D,Pu){
       ' &middot; <b>sent</b> '+esc(when(p.producedAt))+' &middot; <b>project</b> '+esc((p.project&&p.project.name)||'\u2014')+
       ' &middot; '+esc(p.code||'')+' &middot; nominal (unfactored) area loads'+(via==='file'?' &middot; from a JSON file':'')));
     if(chk.warn.length) box.appendChild(el('div','warnBox',chk.warn.map(esc).join('<br>')));
+    box.appendChild(el('div','warnBox','<b>Not in this hand-off:</b> components and cladding (C&amp;C, ASCE 7-16 Ch. 30) wind pressures, which usually govern purlins, girts and other members loaded directly by the cladding; snow drift and unbalanced snow (Sec. 7.6 to 7.8). Only the MWFRS wind and the balanced roof snow are sent. Apply C&amp;C, drift and unbalanced loads by hand where this beam needs them.'));
     if(p.notes && p.notes.length){
       var nb=el('details'); nb.appendChild(el('summary','hint','Sender notes ('+p.notes.length+') \u2014 read before importing'));
       nb.appendChild(el('div','note',p.notes.map(function(n){ return '&bull; '+esc(n); }).join('<br>'))); nb.open=true; box.appendChild(nb);
@@ -10747,6 +10964,9 @@ function colCurveFig(p,cc,D,Pu){
       t.appendChild(tr);
     });
     box.appendChild(t);
+    var lrl=el('label'); var lrc=document.createElement('input'); lrc.type='checkbox'; lrc.checked=!!o.lrCombos; lrc.id='bxBldLrC';
+    lrl.appendChild(lrc); lrl.appendChild(document.createTextNode(' If no active combination includes the roof live load case yet, add the ASCE 7-16 Sec. 2.3.1 combinations with Lr (1.2D + 1.6L + 0.5Lr, 1.2D + 1.6Lr + L, 1.2D + 1.6Lr + 0.5W, 1.2D + 1.0W + L + 0.5Lr)'));
+    box.appendChild(lrl);
     /* mode */
     var md=el('div'); md.innerHTML='<b>Existing imported loads:</b> ';
     var mr=document.createElement('input'); mr.type='radio'; mr.name='bxBldMode'; mr.checked=true; mr.id='bxBldModeRep';
@@ -10765,6 +10985,7 @@ function colCurveFig(p,cc,D,Pu){
       o.tw=parseFloat(twi.value);
       o.spans=ra.checked ? 'all' : spChk.filter(function(c){ return c.checked; }).map(function(c){ return +c.dataset.si; });
       o.mode=mr.checked ? 'replace' : 'add';
+      o.lrCombos=lrc.checked;
       if(rowsUI.windSel && rowsUI.windSel.options.length) o.wind=rowsUI.windSel.value;
       TYPES.forEach(function(ty){ o.types[ty]={on:rowsUI[ty].cb.checked, lc:rowsUI[ty].cs.value}; });
       return o;

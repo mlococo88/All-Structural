@@ -1768,7 +1768,53 @@ The Rebar sweep R1–R7 (see `fixlog/ACI Rebar Development Length.md`, same date
 ### Remaining open items
 None from section 10 beyond the "Needs engineer" list.
 
+## 2026-10-12 — PR: claude/cbc-asd-beff (PR link added after merge)
+
+Follow-up to the standalone `Concrete Beam ASD.html` sweep (#143, its fix log F8–F10). The suite ASD tab has its own engine (`compute()` in the `#suite-frame-asd` srcdoc), so the same rule and notes are ported here. Edits were made on the un-escaped srcdoc by scripted exact-string replacement (each anchor found exactly once), re-escaped (`&` → `&amp;`, `"` → `&quot;`) and put back; CRLF kept. Only this file and this log changed.
+
+### W13. ASD tab: b_eff ≤ b_w + 12h_f for the positive-moment T-beam (Std. Spec. 8.10.1.1), option on by default   [calc change] [MORE conservative; only when the received b_eff exceeds b_w + 12h_f in positive moment]
+- **Where (ASD sub-app):** `defaultState()` (`mode.asd_beffLim:true`); `compute()` (anchor `let beffLim=null, beffEntered=null;`), result fields `beffLim`, `beffEntered`, `beffCapped`; "From Beam Capacity" input section (new checkbox "Limit b_eff to b_w + 12h_f (Std. Spec. 8.10.1.1)", data-fkey `asdBeffLim`, shown for a T-section only); Summary tab (note after the scope note, so it is also in the printed report).
+- **Problem:** the received b_eff (Capacity's flange width b_f) was used as entered. An over-wide b_eff lowers kd and raises z and the concrete capacity: unconservative.
+- **Before:**
+  ```js
+    const b_eff=+I.b_eff||0, h_f=+I.h_f||0, b_w=Math.max(0.01,+I.b_w||0);
+    const isPos = M.momentType==='pos';
+  ```
+- **After:**
+  ```js
+    let b_eff=+I.b_eff||0;
+    const h_f=+I.h_f||0, b_w=Math.max(0.01,+I.b_w||0);
+    const isPos = M.momentType==='pos';
+    let beffLim=null, beffEntered=null;
+    if(I.shape==='tee' && isPos && +I.b_w>0){
+      beffLim=b_w+12*Math.max(0,h_f);
+      if(b_eff>beffLim){ beffEntered=b_eff; if(M.asd_beffLim!==false) b_eff=beffLim; }
+    }
+  ```
+  The capped b_eff feeds ρ, the T-beam quadratic, the compression force, the Analysis/Input Echo tables and the section drawing. Negative moment and rectangular sections: unchanged. Note (amber when capped, red when the option is off): entered value, limit, and that the span/4, web-spacing (8.10.1.1) and one-sided-slab b_w + 6h_f (8.10.1.2) limits are not checked.
+- **Governing provision:** AASHTO Standard Specifications for Highway Bridges, 17th Ed. (2002), Art. 8.10.1.1 (overhang each side ≤ 6 × slab thickness). Same reading and default as the standalone F8.
+- **Saved data:** new optional field `S.mode.asd_beffLim` (boolean, tool-prefixed) in the ASD state (`asd_v1_auto`, projects, Export JSON). Older states have no field; `mergeState` fills the default (on), so an old state whose b_eff exceeds the limit now rates with the capped width and shows the note. No key change.
+- **§4 callout — before:** `b_calc = b_eff` (as received). **After:** `b_calc = min(b_eff, b_w + 12h_f)` (positive-moment T-beam, option on). The standalone F8 check cases, reproduced in this tab (f′c = 3,000 psi, Gr 40, f_c,inv 1,200, f_s,inv 20,000, f_c,op 1,900, f_s,op 28,000, b_w = 14, d = 28.5, M_DL = 250, M_LL+I = 400, n = 9):
+  - **Case 1** (h_f = 7, A_s = 8.00, b_eff = 120; limit 14 + 84 = **98 in.**): before b = 120, kd = 5.279, z = 26.740, M_inv = **356.5 k-ft** (steel), M_op **499.2**, RF **0.266 / 0.623**. After b = 98, kd = 5.778, z = 26.574, M_conc,inv 752.4, M_inv = **354.3 k-ft**, M_op **496.0**, RF **0.261 / 0.615**. Identical to the standalone. Option off: before values, red note.
+  - **Case 2** (h_f = 3, A_s = 14.00, b_eff = 120; limit **50 in.**): before kd = 8.122, z = 26.876, M_inv **627.1** (steel), M_op 877.9, RF 0.943 / 1.570. After kd = 11.843, z = 25.894, M_conc,inv **458.9** (governs), M_op **726.6**, RF **0.522 / 1.191**. Identical to the standalone.
+  - Default (b_eff 90 ≤ 98): unchanged, 353.3 / 494.7 k-ft, RF 0.258 / 0.612. b_eff = 98: unchanged. b_eff 120 in negative moment or rectangular: unchanged. h_f = 0: b_calc = b_w, results unchanged (T-beam with no flange).
+- **How verified:** see "Verification" below.
+
+### W14. ASD tab: notes for a steel allowable with no grade rule, and for f_c,op > 0.60f′c (ports of standalone F9, F10)   [display] [no result change]
+- **Where:** Summary tab after the b_eff note (so in the printed report). Anchors: `has no automatic rule for`, `Confirm the owner's basis for this value`.
+- **What:** for f_y with no automatic rule for f_s,inv (other than 40/50/60 ksi) or f_s,op (other than 40/60 ksi), and that field not overridden, a red note gives f_y and the value used and asks for a check against AASHTO MBE Table 6B.6.2.3-1 (verify table number). When f_c,op > 0.60f′c, an amber note gives both values and asks for the owner's basis (MBE 3rd Ed. 6B.6.2.3; the 1,900 psi MassDOT default is not changed). The suite tab had neither note.
+- **Check case:** defaults (f′c 3,000, f_c,op 1,900): note "Operating f_c = 1,900 psi is greater than 0.60f′c = 1800.0 psi …"; f_y = 50,000: red note for f_s,op (28,000 psi kept from Gr 40). Results unchanged.
+
+### Verification
+- `node --check` of all inline scripts of the shell and the three sub-apps (7 blocks, 0 failures).
+- Headless Chromium 1194, libraries served locally at the pinned versions, origin/main (ba1fd72) vs branch: the real `compute()` on the cases above (numbers quoted are from it), and the full suite comparison (Capacity, ASD and Dev scenarios of the previous sweep plus ASD b_eff 120, b_eff 120 option off, b_eff 120 negative moment, f_y 50,000). Differences only: the new Summary notes, the new checkbox in the ASD input panel, `mode.asd_beffLim` in the ASD state/autosave/export, and the capped results in the states where b_eff > b_w + 12h_f with the option on. Capacity and Dev outputs identical. Save → Load and Import round trips exact. No console errors.
+- Screenshot of the ASD tab with the checkbox and notes looked at.
+
+### Needs engineer
+- Same as the standalone: confirm the editions (Std. Spec. 17th Ed., MBE 3rd Ed.), the MassDOT basis for f_c,op = 1,900 psi (E1) and the steel allowables for other grades (E2).
+
 ## Open items (not changed)
+- **Status 2026-10-12 (claude/cbc-asd-beff):** suite ASD tab now applies b_eff ≤ b_w + 12h_f (W13, port of standalone ASD F8) and shows the stale-allowable and f_c,op > 0.60f′c notes (W14).
 - **Status 2026-10-12 (claude/sweep-cbc-rebar):** O1 → W1; O4 → W2 (ε_tl; ε_cl question open); O5 → W4; O6 → W5; O8 → W3; O9 → W7; O11 → W6; O13 → W8, W9, W10 (operating f_c still open); O17 → W11; O18 → Rebar R1–R7; S10 → W12. O3, O7, O10, O15 closed (kept); O12, O16 and O13d remain under "Needs engineer" in that entry.
 - O1. **ACI 318-19 §9.3.3.1 beam minimum strain** (`dEpsMin`, ACI branch) still checks εt ≥ 0.004. The review believes 318-19 changed this to εty + 0.003; I am not certain of the 318-19 wording, so per instructions the code is unchanged. — Please confirm against your copy of ACI 318-19 §9.3.3.1. If it reads εty + 0.003, change `0.004` to `S.mat.fy/ES+0.003` in that check (ACI only).
 - O3. **ACI Gr 60 εty.** F2 uses εty = fy/Es (0.002069 for Gr 60, so εtl = 0.005069). ACI 318-19 §21.2.2.1 permits εty = 0.002 for Grade 60, which would keep εtl = 0.005 and slightly raise φ in the transition zone. — Prefer the 0.002 permission for Gr 60?

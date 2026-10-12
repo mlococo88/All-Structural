@@ -1375,17 +1375,385 @@ Engineer's decision 2026-10-10 on O13 (closes O13). The rule for point loads was
 - **Saved projects whose results change:** round HSS or pipe in beam mode with V_u at an interior support, or at a fixed end next to a support jump. F_cr changes only for HSS26.000X0.313 when the in-span L_v exceeds about 81 ft (A500C) or about 82 ft (A1085).
 - **Other copies of this code:** none.
 
+## 2026-10-12 — PR: claude/sweep-steelbeam (PR link added after merge)
+Open-item sweep (engineer 2026-10-12: "continue making updates and fixes until it's completed; use your best judgment"). Items from the open-item inventory, section 13: SBD-O1, O3, C1, O6, O2 fixed; O5, C2, O4, O7, O12 closed or left with a reason (see "Sweep decisions" below). Basis: AISC 360-16 and ASCE 7-16, as the tool states.
+
+### SW1 (SBD-O1). §H3.3(c) buckling limit state is now checked for open-section torsion   [calc change] [more conservative]
+- **Where:**
+  - `h33Check` (defined once; anchor `const s=tor.crit;`), new functions `h33Buckling` and `h33Gov` right after it.
+  - `buildDesignChecks` (defined once): new loop at the top (anchor `/* §H3.3(c) buckling stress for each combination`); the "Torsion (open section)" dashboard check (anchor `if(hGov){const hg=h33Gov(`); the F5 warning (anchor `const h33B=`) is replaced.
+  - `batchCheckRow` torsion branch (anchor `const FcrF=(R.capX&&R.capX.phiMn>0)`).
+  - Display: live `buildTorsTab` (the second definition) per-combination block (anchor `Buckling limit state, same normal stresses`); Excel export `xlChecks` (anchor `§H3.3(c) buckling limit state`); User Manual "Torsion on open sections" paragraph (anchor `Where a Chapter E or F buckling stress is below`).
+- **Problem:** `h33Check` compared the total normal stress f_n with φF_y only. §H3.3(c) also requires the buckling limit state, with F_cr from Chapter E or F. F5 only warned. With L_b long enough for LTB to govern below yield, the H3.3 check passed members that are far over their buckling capacity once the warping stress is added (F5 check case: indicative ratio 2.19 while the tool showed 0.70 PASS).
+- **Method (my judgment, see "Needs engineer" Q1):** each normal stress at the critical station is divided by the buckling stress that applies to it:
+  f_a/(φF_cr,E) + (f_bx + f_by + σ_w)/(φF_cr,F) ≤ 1.0, φ = 0.90.
+  - F_cr,F = M_n/S_x of the governing major-axis flexure check of that combination (LTB or local buckling; after the composite pass). Capped at F_y.
+  - F_cr,E = P_n/A_g from Chapter E when P_u is compression (A_g, not A_e, so local buckling is in it). Tension does not buckle: F_y. Capped at F_y.
+  - f_by and σ_w (lateral bending of the flanges) are put with F_cr,F. This is conservative.
+  - When both buckling stresses equal F_y the ratio equals the yielding check (a), so the check is only reported when a buckling stress is below F_y. The H3.3 DCR is the largest of (a) yielding, (b) shear and (c) buckling.
+  - I first tried a single F_cr = min(M_n/S_x, P_n/A_g) for the whole f_n. That divides the bending stress by the column buckling stress and gave a ratio of 6.08 for a W18X35 with P_u = 40 kip at L_c = 20 ft. I judged that unreasonably severe and used the per-stress form above.
+- **Governing provision:** AISC 360-16 §H3.3(c) (F_n = F_cr, "buckling stress for the section as determined by Chapter E or F"), §F2.2 (LTB), §E3/E7; AISC Design Guide 9 §4.7 (verify the DG 9 section number) for the stress-summation approach.
+- **Before:**
+  ```js
+    const s=tor.crit;
+    const fn=fa+fbx+fby+Math.abs(s.sigW);
+    const fv=fvx+fvy+Math.abs(s.tauT)+Math.abs(s.tauW);
+    return{fa,fbx,fby,fvx,fvy,sigW:Math.abs(s.sigW),tauT:Math.abs(s.tauT),tauW:Math.abs(s.tauW),
+      z:s.z,fn,fv,phiFy:phi*Fy,phiFv:phi*0.6*Fy,
+      dcrN:fn/(phi*Fy),dcrV:fv/(phi*0.6*Fy),
+      dcr:Math.max(fn/(phi*Fy),fv/(phi*0.6*Fy))};
+  }
+  ```
+  and in `buildDesignChecks` the F5 warning block `const h33B=D.perCombo.filter(c=>c.h33&&c.flexGov&&!c.flexGov.blocked&&...` (see F5).
+- **After:**
+  ```js
+    const s=tor.crit;
+    /* kT scales the torsional stresses to this combination's torque (torque entered per load case); 1 = the torque as solved */
+    const kT=(dem.kT!=null&&isFinite(dem.kT))?Math.abs(dem.kT):1;
+    const sigW=kT*Math.abs(s.sigW),tauT=kT*Math.abs(s.tauT),tauW=kT*Math.abs(s.tauW);
+    const fn=fa+fbx+fby+sigW;
+    const fv=fvx+fvy+tauT+tauW;
+    const out={fa,fbx,fby,fvx,fvy,sigW,tauT,tauW,kT,
+      z:s.z,fn,fv,phiFy:phi*Fy,phiFv:phi*0.6*Fy,
+      dcrN:fn/(phi*Fy),dcrV:fv/(phi*0.6*Fy),
+      dcr:Math.max(fn/(phi*Fy),fv/(phi*0.6*Fy))};
+    if(dem.FcrF!=null||dem.FcrE!=null)h33Buckling(out,dem.FcrF,dem.FcrE);
+    return out;
+  }
+  /* §H3.3(c) limit state of buckling: the normal stresses are checked against the buckling stress F_cr of the
+     section from Chapter E or F. Each normal stress is divided by the buckling stress that applies to it:
+       f_a/(phi F_cr,E) + (f_bx + f_by + sigma_w)/(phi F_cr,F) <= 1.0
+     F_cr,F = M_n/S_x of the governing major-axis flexure check for that combination (LTB or local buckling);
+     F_cr,E = P_n/A_g when P_u is compression (tension does not buckle: F_y). Both are capped at F_y.
+     Minor-axis bending and warping stress are put with F_cr,F (conservative). Where both equal F_y the ratio
+     equals the yielding check (a), so the check is only reported when a buckling stress is below F_y. */
+  function h33Buckling(h,FcrF,FcrE){
+    const Fy=h.phiFy/0.90,ok=v=>v!=null&&isFinite(v);
+    delete h.FcrF;delete h.FcrE;delete h.FcrFsrc;delete h.FcrEsrc;delete h.dcrB;
+    h.dcr=Math.max(h.dcrN,h.dcrV);
+    const fF=ok(FcrF)?Math.max(0,Math.min(Fy,FcrF)):Fy,fE=ok(FcrE)?Math.max(0,Math.min(Fy,FcrE)):Fy;
+    if(!(Math.min(fF,fE)<Fy*(1-1e-9)))return h;
+    h.FcrF=fF;h.FcrE=fE;h.FcrFsrc=ok(FcrF)&&FcrF<Fy;h.FcrEsrc=ok(FcrE)&&FcrE<Fy;
+    h.dcrB=h.fa/(0.90*fE||1e-9)+(h.fbx+h.fby+h.sigW)/(0.90*fF||1e-9);
+    h.dcr=Math.max(h.dcr,h.dcrB);
+    return h;
+  }
+  /* governing §H3.3 stress for display: 'N' normal (yielding), 'V' shear, 'B' normal (buckling) */
+  function h33Gov(h){
+    if(h.dcrB!=null&&h.dcrB>=h.dcrN&&h.dcrB>=h.dcrV)return'B';
+    return h.dcrN>=h.dcrV?'N':'V';
+  }
+  ```
+  `buildDesignChecks`, top:
+  ```js
+  function buildDesignChecks(D,A){
+    /* §H3.3(c) buckling stress for each combination, taken after the composite pass has set the region capacities */
+    D.perCombo.forEach(c=>{
+      if(!c.h33)return;
+      const FcrF=(c.flexGov&&!c.flexGov.blocked&&c.flexGov.phiMn>0)?c.flexGov.phiMn*12/0.90/D.p.Sx:null;
+      const FcrE=((+c.man.Pu||0)>0&&c.phiPn>0)?c.phiPn/0.90/D.p.A:null;
+      h33Buckling(c.h33,FcrF,FcrE);
+    });
+  ```
+  Batch (`batchCheckRow`), torsion branch, bare-steel φM_n at L_bx and C_b:
+  ```js
+            /* §H3.3(c) buckling stress: Mn/Sx at Lbx and Cb (bare steel), or Pn/Ag when Pu is compression */
+            const FcrF=(R.capX&&R.capX.phiMn>0)?R.capX.phiMn/0.90/p.Sx:null;
+            const FcrE=(Pu>0&&R.phiPn>0)?R.phiPn/0.90/p.A:null;
+            R.h33=h33Check(p,tr,{Pu,Mux,Muy,Vux,Vuy,FcrF,FcrE});
+            R.dcrT=R.h33.dcr;R.torMode='H3.3';
+            if(R.h33.dcrB!=null)R.notes.push('\u00A7H3.3(c) buckling: f\u2090/(\u03C6F\u1D9C\u02B3,E) + (f\u1D47\u2093 + f\u1D47\u1D67 + \u03C3\u1D42)/(\u03C6F\u1D9C\u02B3,F) = '+fmt(R.h33.dcrB,3)+
+              ' (F\u1D9C\u02B3,F = '+fmt(R.h33.FcrF,2)+' ksi, M\u2099/S\u2093 at L\u1D47\u2093 and C\u1D47 capped at F\u1D67; F\u1D9C\u02B3,E = '+fmt(R.h33.FcrE,2)+' ksi, P\u2099/A\u1D4D capped at F\u1D67); the torsion DCR is the largest of yielding, shear and buckling.');
+  ```
+  The F5 warning is replaced by a note that names the combinations where (c) applies and the method.
+- **Check case (F5 case, member mode):** W18X35 A992 (S_x = 57.6 in³, A = 10.3 in²), L_b = 20 ft, C_b = 1, M_ux = 60 kip-ft, V_ux = 10 kip, open-section torsion `conc_pp`, L = 20 ft, T = 2 kip-ft at midspan.
+  - φM_n = 69.23 kip-ft (LTB). F_cr,F = 69.23 × 12 / 0.90 / 57.6 = **16.03 ksi** < F_y. F_cr,E = F_y (no axial).
+  - f_bx = 60 × 12 / 57.6 = 12.50 ksi; σ_w = 19.10 ksi (DG 9 solution); f_n = 31.60 ksi.
+  - Before: H3.3 DCR = f_n/(0.9 F_y) = 31.60/45 = **0.702 PASS**.
+  - After: (c) = 0 + 31.60/(0.90 × 16.03) = 31.60/14.43 = **2.191 FAIL**; H3.3 DCR = 2.191.
+  - F4 case (same, P_u = −50 kip): f_a = 4.85 ksi, F_cr,E = F_y. (c) = 4.85/45 + 31.60/14.43 = 0.108 + 2.191 = **2.299** (before 0.810).
+  - Braced beam (top flange continuously braced, default W18X35 beam with T = 2 kip-ft): M_n/S_x > F_y, so F_cr = F_y and nothing changes (only a note says (a) covers buckling).
+  - Batch row "Hoist Beam (torsion)" of the template (W8X28, P_u = 1.555 kip, L = 9.33 ft): F_cr,F = F_y, F_cr,E = 35.26 ksi; torsion DCR 1.001 → 1.003.
+- **MORE conservative.** Results change only where open-section torsion is enabled and LTB/local buckling or column buckling gives a buckling stress below F_y.
+- **How verified:** see "Verification" at the end of this PR's entries.
+- **Other copies of this code:** none (the earlier dead `buildTorsTab` copy at ≈ line 5188 does not display H3.3 and was not changed).
+
+### SW2 (SBD-O3). Axial tension: §D2 tensile yielding and rupture, and the §H1.2 interaction   [calc change] [more conservative]
+- **Where:**
+  - New function `tensionStrength(p,An,U)` just above `/* ---------- H3 torsion (HSS only) ---------- */`.
+  - `designAll` (anchor `}else if(man.Pu<0){`) and `memberDesignAll` (anchor `}else if((r.Pu||0)<0){`); interaction `rp=C.dcrP||C.dcrPt||0` in both.
+  - `buildDesignChecks`: new "Tension" dashboard check (anchor `const ptGov=gv(`); the F4 tension warning is replaced (anchor `const tenC=D.perCombo.filter(c=>c.dcrPt!=null);`).
+  - Inputs: `secCompLengths` (Compression Effective Lengths section) gets A_n and U fields (keys `dsnTenAn`, `dsnTenU`) and a hint.
+  - Compression tab: `buildCompTab` is renamed `buildCompTabCore`; the new `buildCompTab` calls it and then `tensionSections` (Chapter D derivation and per-combination DCR). The "not evaluated" box says "No compressive P_u" when a tension is entered.
+  - Interaction tab per-combination line uses |P_u| and φ_tP_n and is labelled "(tension, §H1.2)". Resistance-factor tables (screen `phiTable` and Excel section 5) list φ_t = 0.90/0.75 when a tension is entered. Excel `xlChecks` section 11 gets an "Axial tension (Chapter D)" block.
+  - Batch: new optional template columns `Tension An (in2)` (`tAn`) and `Tension U` (`tU`) with help text; `batchCheckRow` (anchor `if(Pu0<0){   /* axial tension`); interaction `rp=R.dcrP||R.dcrPt||0`; `['Tension',R.dcrPt]` added to both governing lists (`batchCheckRow` and `batchExtras`); `applyRowToState` (batch row → Member Check) now carries the negative P_u and A_n/U. Batch scope texts (Batch tab, template Instructions sheet, batch Excel Scope sheet, batch print scope, User Manual) updated.
+- **Problem:** a negative P_u (tension) was not checked at all (F4 only warned), and it was left out of the H1 interaction, which is unconservative for tension plus flexure.
+- **Defaults (my judgment, see "Needs engineer" Q2):** A_n blank → A_g; U blank → 1.0 (no holes; every element connected, Table D3.1 case 1). When either is assumed the dashboard warning, the Compression tab and the Excel sheet say so. An entered A_n > A_g is limited to A_g, U > 1 to 1.0, with a note. Block shear (§J4.3) and the connection are not checked (stated). The optional C_b increase of §H1.2 is not taken (conservative).
+- **Governing provision:** AISC 360-16 §D2 (Eqs. D2-1, D2-2, φ_t = 0.90 / 0.75), §D3 (Eq. D3-1, Table D3.1), §H1.2 (H1-1a/b with P_c = φ_tP_n).
+- **Before:** (no check)
+  ```js
+    if(man.Pu>0){
+      if(D.comp&&!D.comp.blocked){C.phiPn=D.comp.phiPn;C.dcrP=man.Pu/C.phiPn;}
+      else C.compBlocked=(D.comp&&D.comp.blocked)||'no compression capacity';
+    }
+  ...
+    const ry=C.dcrMy||0,rp=C.dcrP||0;
+  ```
+  batch: `if(Pu0<0)R.notes.push('Pᵤ = '+fmt(Pu0,3)+' is tension; taken as zero for the compression check. Tensile yielding and rupture (Chapter D) are not implemented in this tool.');` and `const rx=R.dcrMx||0,ry=R.dcrMy||0,rp=R.dcrP||0;`
+- **After:**
+  ```js
+  /* ---------- axial tension, Chapter D ----------
+     \u00A7D2: phi_t P_n = min(0.90 F_y A_g (D2-1), 0.75 F_u A_e (D2-2)), A_e = U A_n (D3-1).
+     A_n and U are the end connection's (inputs S.design.ten.An / .U). Blank -> A_n = A_g and U = 1.0
+     (no holes; every element connected, Table D3.1 case 1); the user is warned when either is assumed. */
+  function tensionStrength(p,An,U){
+    const Ag=p.A,Fy=p.mat.Fy,Fu=p.mat.Fu;
+    const AnDef=!(An>0),UDef=!(U>0);
+    const An2=AnDef?Ag:Math.min(An,Ag),U2=UDef?1:Math.min(U,1);
+    const Ae=U2*An2,Pny=Fy*Ag,Pnr=Fu*Ae,phiY=0.90*Pny,phiR=0.75*Pnr;
+    return{Ag,An:An2,U:U2,Ae,Fy,Fu,Pny,Pnr,phiY,phiR,phiPn:Math.min(phiY,phiR),rupture:phiR<phiY,
+      AnDef,UDef,AnCapped:!AnDef&&An>Ag,UCapped:!UDef&&U>1};
+  }
+  ```
+  `designAll`:
+  ```js
+      }else if(man.Pu<0){   /* axial tension: \u00A7D2, and \u00A7H1.2 through the same interaction equations */
+        if(!D.ten)D.ten=tensionStrength(p,dsn.ten&&dsn.ten.An,dsn.ten&&dsn.ten.U);
+        C.tens=D.ten;C.phiPt=D.ten.phiPn;C.dcrPt=Math.abs(man.Pu)/C.phiPt;
+      }
+  ```
+  `memberDesignAll`:
+  ```js
+      }else if((r.Pu||0)<0){   /* axial tension: \u00A7D2 and \u00A7H1.2 */
+        if(!D.ten)D.ten=tensionStrength(p,dsn.ten&&dsn.ten.An,dsn.ten&&dsn.ten.U);
+        C.tens=D.ten;C.phiPt=D.ten.phiPn;C.dcrPt=Math.abs(r.Pu)/C.phiPt;
+      }
+  ```
+  `buildDesignChecks`:
+  ```js
+    const ptGov=gv(c=>c.dcrPt!=null?{d:c.dcrPt,c}:null);
+    if(ptGov)D.checks.push({label:'Tension',ref:ptGov.c.tens.rupture?'D2(b)':'D2(a)',dcr:ptGov.d,combo:ptGov.c.name,tab:'tabComp',
+      dem:Math.abs(ptGov.c.man.Pu),cap:ptGov.c.phiPt,unit:'kip',capSym:'\u03C6\u209CP\u2099',
+      detail:ptGov.c.tens.rupture?'rupture, A\u2091 = UA\u2099':'yielding, A\u1D4D'});
+  ```
+  ```js
+    const tenC=D.perCombo.filter(c=>c.dcrPt!=null);
+    if(tenC.length){const t=tenC[0].tens,dflt=[];
+      if(t.AnDef)dflt.push('A\u2099 = A\u1D4D');if(t.UDef)dflt.push('U = 1.0');
+      D.warns.push('Axial TENSION (P\u1D64 < 0) is entered for: '+tenC.map(c=>c.name).join(', ')+'. It is checked for tensile yielding and rupture (\u00A7D2) with A\u2099 = '+fmt(t.An,2)+' in\u00B2 and U = '+fmt(t.U,2)+
+        (dflt.length?' \u2014 '+dflt.join(' and ')+' ASSUMED because the input is blank (no holes, every element connected); enter the net area and the shear-lag factor of the end connection (\u00A7D3, Table D3.1) under Compression Effective Lengths':'')+
+        (t.AnCapped?'; the entered A\u2099 exceeds A\u1D4D and was limited to A\u1D4D':'')+(t.UCapped?'; the entered U exceeds 1.0 and was limited to 1.0':'')+
+        '. Block shear (\u00A7J4.3) and the connection are not checked. The \u00A7H1.2 interaction uses P\u1D9C = \u03C6\u209CP\u2099 without the optional C\u1D47 increase (conservative).'+
+        (D.perCombo.some(c=>c.h33)?' (The \u00A7H3.3 stress sum includes |P\u1D64|/A.)':''));}
+    const bxImp=ty=>!D.member&&(S.loads||[]).some(ld=>!ld.off&&ld.bx&&ld.bx.ch==='buildingLoads'&&ld.bx.type===ty);
+    if(bxImp('W'))D.warns.push('Wind imported from the ASCE 7-16 hand-off is the MWFRS pressure. If this member is a component (a purlin, a girt, or any member loaded directly by the cladding), use the components and cladding pressures of ASCE 7-16 Ch. 30, which are usually higher and are not in the hand-off.');
+    if(bxImp('S'))D.warns.push('Snow imported from the ASCE 7-16 hand-off is the balanced roof snow only. Unbalanced snow and snow drifts (ASCE 7-16 Sec. 7.6 to 7.8) are not included; add them where this beam lies in an unbalanced or drift zone.');
+    const h33B=D.perCombo.filter(c=>c.h33&&c.h33.dcrB!=null);
+    if(h33B.length){const c=h33B.reduce((m,q)=>q.h33.dcrB>m.h33.dcrB?q:m,h33B[0]);
+      D.warns.push('\u00A7H3.3(c) open-section torsion, buckling: a Chapter E/F buckling stress is below F\u1D67 for '+h33B.map(q=>q.name).join(', ')+', so the normal stresses at the critical station are also checked against buckling: f\u2090/(\u03C6F\u1D9C\u02B3,E) + (f\u1D47\u2093 + f\u1D47\u1D67 + \u03C3\u1D42)/(\u03C6F\u1D9C\u02B3,F) \u2264 1.0, with F\u1D9C\u02B3,F = M\u2099/S\u2093 of the governing major-axis flexure check and F\u1D9C\u02B3,E = P\u2099/A\u1D4D. Worst: '+c.name+', ratio = '+fmt(c.h33.dcrB,3)+'. This is a conservative reading of \u00A7H3.3(c); a DG 9 interaction may be used instead by hand.');}
+  ```
+  (The last lines of this block are SW3's warnings and the SW1 note.)
+  `batchCheckRow`:
+  ```js
+    if(Pu0<0){   /* axial tension: \u00A7D2 and the \u00A7H1.2 interaction */
+      R.ten=tensionStrength(p,num(row.tAn),num(row.tU));R.dcrPt=-Pu0/R.ten.phiPn;
+      const dflt=[];if(R.ten.AnDef)dflt.push('A\u2099 = A\u1D4D');if(R.ten.UDef)dflt.push('U = 1.0');
+      R.notes.push('P\u1D64 = '+fmt(Pu0,3)+' is tension (taken as zero for the compression check): \u00A7D2 \u03C6\u209CP\u2099 = '+fmt(R.ten.phiPn,2)+' kip ('+(R.ten.rupture?'rupture, A\u2091 = UA\u2099 = '+fmt(R.ten.Ae,2)+' in\u00B2':'yielding')+'), DCR = '+fmt(R.dcrPt,3)+
+        (dflt.length?'; '+dflt.join(' and ')+' assumed (column blank)':'')+'. Block shear and the connection are not checked.');
+    }
+  ```
+- **Check case (member mode):** W18X35 A992 (A_g = 10.3 in², F_y = 50, F_u = 65), L_b = 20 ft, C_b = 1. LC-1: P_u = −100 kip, M_ux = 30 kip-ft. LC-2: P_u = −300 kip, M_ux = 10, M_uy = 5 kip-ft.
+  - A_n, U blank: φ_tP_n = min(0.90 × 50 × 10.3, 0.75 × 65 × 10.3) = min(463.5, 502.1) = **463.5 kip** (yielding).
+    - LC-2: tension DCR 300/463.5 = **0.647**; P_r/P_c = 0.647 ≥ 0.2 → H1-1a = 0.647 + 8/9 (0.144 + 0.165) = **0.923**. Before: tension not checked, H1-1b = 0 + 0.144 + 0.165 = 0.310.
+    - LC-1: 100/463.5 = 0.216 → H1-1a = 0.216 + 8/9 × 0.433 = **0.601** (before 0.433).
+  - A_n = 6.5 in², U = 0.85: A_e = 5.525 in²; φ_tP_n = min(463.5, 0.75 × 65 × 5.525 = 269.3) = **269.3 kip** (rupture). LC-2: DCR 300/269.3 = **1.114 FAIL**; H1-1a = 1.114 + 8/9 × 0.309 = **1.389 FAIL**.
+  - Beam mode, default beam (W18X50, A_g = 14.7 in²) with P_u = −40 kip entered on 1.2D + 1.6L: φ_tP_n = 661.5 kip, DCR 0.060; H1-1b = 0.060/2 + 0.116 = **0.146** (before 0.116).
+  - HSS8X8X1/2 A500C (A = 13.5 in²), P_u = −60 kip: φ_tP_n = min(607.5, 0.75 × 62 × 13.5 = 627.8) = 607.5 kip; DCR 0.099; H1-1b 0.071 → 0.120.
+  - Batch, W12X26 (A_g = 7.65 in²), P_u = −100 kip, M_ux = 30 kip-ft, L_bx = 10 ft, columns blank: φ_tP_n = 344.25 kip, DCR 0.290, H1-1a = 0.290 + 8/9 × 0.263 = **0.524** (before: Mₓ 0.263 governing). With Tension An = 6.5, U = 0.85 and P_u = −300 kip: DCR **1.114**, H1-1a **1.192 FAIL** (before PASS, 0.088).
+- **MORE conservative.** Results change only where a negative P_u is entered.
+- **Saved data:** new optional field `S.design.ten = {An, U}` (both null by default; `mergeState` fills it for old projects, which therefore load unchanged and give A_n = A_g, U = 1.0 when they contain a tension). New optional batch row fields `tAn`, `tU`. No storage key changed.
+- **Other copies of this code:** none.
+
+### SW3 (SBD-C1). Building-load import: Lr combinations, C&C and drift warnings   [calc change on import] [more conservative]
+- **Where:**
+  - New function `lrCombosFor(lc)` after `defaultCombos`.
+  - "Preset: ASCE 7 LRFD basics" button (anchor `pres.addEventListener('click',()=>{S.combos=defaultCombos();`): also adds the Lr combinations when the project has a case `LR`.
+  - Building-load receiver IIFE (`window.bxBld`): `defaults` (`lrCombos:true`; Lr ticked by default when non-zero), `plan` (anchor `var lrAdd=(t==='Lr'`), `apply` (anchor `r.lrCombos.forEach(function(c){ S.combos.push(c); });`), the dialog (a new warn box "Not in this hand-off: components and cladding …" and a checkbox `bxBldLrC` under the load table; `read()` reads it).
+  - `buildDesignChecks`: two new warnings when imported loads are present (anchor `const bxImp=ty=>`).
+- **Problem:** (1) An imported Lr created case LR with no factor in any combination, and the Lr row was unticked by default because the case was unused, so roof live load had no effect unless the user added combinations by hand. (2) The hand-off carries MWFRS wind and balanced snow only; C&C pressures (which usually govern purlins and girts) and drift/unbalanced snow were mentioned only in passing.
+- **Decision:** on import, if no active combination includes the target case, add the ASCE 7-16 §2.3.1 combinations with Lr (option, ticked by default):
+  1.2D + 1.6L + 0.5Lr; 1.2D + 1.6Lr + 1.0L; 1.2D + 1.6Lr + 0.5W (only if a WL case exists); 1.2D + 1.0W + 1.0L + 0.5Lr. L is taken at 1.0 (the 0.5L exception is not used, as in the tool's existing default set). The import summary lists the combinations before Import is pressed. Existing combinations are never changed.
+- **Governing provision:** ASCE 7-16 §2.3.1, combinations 2, 3 and 4; Ch. 30 (C&C); §7.6–7.8 (unbalanced snow, drifts, projections).
+- **Before:**
+  ```js
+      o.types[t]={on: isNum(v) && v!==0 && !dbl && caseUsed(cs), lc:cs};
+  ...
+      if(caseExists(lc) && !caseUsed(lc)) r.warn.push('No active strength combination includes case '+lc+'; ...');
+      if(!caseExists(lc)) r.warn.push('Case '+lc+' will be created. No combination includes it yet: ...');
+  ```
+- **After:**
+  ```js
+  /* ASCE 7-16 \u00A72.3.1 strength combinations with roof live load Lr (case lc): combination 2 with 0.5Lr,
+     combination 3 with 1.6Lr and (L or 0.5W), combination 4 with 0.5Lr. Factors are only given for cases that exist
+     (lc itself always). L at 1.0 (the 0.5L exception of \u00A72.3.1 is not taken). Used by the building-load import and
+     by the "ASCE 7 LRFD basics" preset when the project has an LR case. */
+  function lrCombosFor(lc){
+    const has=id=>id===lc||S.cases.some(c=>c.id===id);
+    const mk=(id,f)=>{const g={};Object.keys(f).forEach(k=>{if(has(k))g[k]=f[k];});
+      let id2=id,n=2;while(S.combos.some(c=>c.id===id2))id2=id+'_'+(n++);
+      return{id:id2,f:g,on:true,stage:'final'};};
+    const o=[],add=(id,f)=>{const c=mk(id,f);S.combos.push(c);o.push(c);};
+    /* ids are made unique against S.combos as they are added; the caller decides whether to keep them */
+    add('cLr2',{DL:1.2,LL:1.6,[lc]:0.5});
+    add('cLr3',{DL:1.2,[lc]:1.6,LL:1.0});
+    if(has('WL'))add('cLr3W',{DL:1.2,[lc]:1.6,WL:0.5});
+    add('cLr4',{DL:1.2,WL:1.0,LL:1.0,[lc]:0.5});
+    S.combos.splice(S.combos.length-o.length,o.length);
+    return o;
+  }
+  ```
+  ```js
+        var lrAdd=(t==='Lr' && o.lrCombos && !caseUsed(lc));
+        if(lrAdd){ r.lrCombos=lrCombosFor(lc);
+          r.warn.push((caseExists(lc)?'':'Case '+lc+' will be created. ')+r.lrCombos.length+' ASCE 7-16 Sec. 2.3.1 strength combinations with '+lc+' will be added: '+r.lrCombos.map(function(c){ return Object.keys(c.f).map(function(k){ return fmtF(c.f[k])+k; }).join(' + '); }).join('; ')+'. Review them in Load Cases & Combinations.'); }
+        else if(caseExists(lc) && !caseUsed(lc)) r.warn.push('No active strength combination includes case '+lc+'; the imported '+t+' load has no effect on strength until you add a factor for '+lc+'.');
+        else if(!caseExists(lc)) r.warn.push('Case '+lc+' will be created. No combination includes it yet: add its factors (e.g. ASCE 7-16 Sec. 2.3.1: 1.6(Lr or S or R) in combination 3, 0.5(Lr or S or R) in 2 and 4) or the load has no effect.');
+  ```
+  `apply`: `r.lrCombos.forEach(function(c){ S.combos.push(c); });` after the new cases are pushed. Warnings in `buildDesignChecks`:
+  ```js
+    const bxImp=ty=>!D.member&&(S.loads||[]).some(ld=>!ld.off&&ld.bx&&ld.bx.ch==='buildingLoads'&&ld.bx.type===ty);
+    if(bxImp('W'))D.warns.push('Wind imported from the ASCE 7-16 hand-off is the MWFRS pressure. If this member is a component (a purlin, a girt, or any member loaded directly by the cladding), use the components and cladding pressures of ASCE 7-16 Ch. 30, which are usually higher and are not in the hand-off.');
+    if(bxImp('S'))D.warns.push('Snow imported from the ASCE 7-16 hand-off is the balanced roof snow only. Unbalanced snow and snow drifts (ASCE 7-16 Sec. 7.6 to 7.8) are not included; add them where this beam lies in an unbalanced or drift zone.');
+  ```
+- **Check case:** default project (W18X50, one 20 ft simple span, trib DL 15 psf and LL 40 psf on TW = 10 ft, self-weight 50 plf), hand-off with Lr = 20 psf only, imported with TW = 8 ft → w_Lr = 20 × 8/1000 = 0.160 klf. w_D = 0.200, w_L = 0.400 klf.
+  - Before (Lr ticked by hand): case LR has no factor; governing 1.2D + 1.6L: w_u = 0.24 + 0.64 = 0.880 klf, M_u = 0.88 × 20²/8 = **44.0 kip-ft**, flexure DCR 44.0/378.75 = **0.1162**.
+  - After: 1.2D + 1.6L + 0.5Lr: w_u = 0.88 + 0.08 = 0.960 klf, M_u = **48.0 kip-ft**, DCR **0.1267** (governs). 1.2D + 1.6Lr + 1.0L: 0.24 + 0.256 + 0.40 = 0.896 klf, 44.8 kip-ft. 1.2D + 1.6Lr + 0.5W: 24.8 kip-ft. 1.2D + 1.0W + 1.0L + 0.5Lr: 36.0 kip-ft (W = 0). The tool gives the same values.
+- **MORE conservative** (roof live load now counted). No change to projects that do not import Lr, or whose LR case is already in a combination.
+- **Saved data / hand-off:** no format change. The added combinations are ordinary entries of `S.combos`. The hand-off schema and the adoption key are unchanged.
+- **Other copies of this code:** none.
+
+### SW4 (SBD-O6). Open-section torque: option to enter it per load case   [calc change, option] [neutral; default unchanged]
+- **Where:** live `openTorsionFor` (the second definition, ≈ line 9390) and new functions `torByCase`, `torScale` after it; `designAll` passes `kT:torScale(D.torOpen,cb.id)` to `h33Check` (SW1 snippet shows `kT`); `torsionInputs` (new "Torque entered as" select, key `torBasis`, and a per-case table, keys `torTc<case>`); torsion tab note (anchor `Torque entered per load case. Solved for the largest`) and per-combination T_u line; Excel torsion block.
+- **Problem:** one torque was applied unchanged to every strength combination (1.4D, 0.9D + W, …). The input label did not say whether it is factored.
+- **Decision:** new option `S.design.tor.basis`:
+  - blank / `'factored'` (default, and every existing project): the entered T is a **factored** torque used in every combination, as before. The label now says "Factored torque T_u … used unchanged in every combination".
+  - `'case'` (beam mode only): unfactored torques per load case `S.design.tor.Tc = {DL:…, LL:…}`; each combination uses T_u = Σγ_iT_i. The DG 9 solution is linear in T, so it is solved once for the largest |T_u| and each combination scales the torsional stresses by |T_u|/T_ref (`h33Check` `kT`). Member mode keeps the single factored torque (its cases are already factored).
+  - I kept the old behaviour as the default so saved projects do not change; with the default the user must enter the governing factored torque, which is what the new label says.
+- **Governing provision:** ASCE 7-16 §2.3.1 (load factors apply to the torque of each load type, as to every other load effect); AISC 360-16 §H3.3; DG 9.
+- **Before:**
+  ```js
+    return torsionOpen(A.sect,{L,caseId:cfg.caseId,T:cfg.T||0,pos:cfg.pos});
+  ```
+- **After:**
+  ```js
+    const bc=torByCase(A,cfg);
+    const r=torsionOpen(A.sect,{L,caseId:cfg.caseId,T:bc?bc.Tref:(cfg.T||0),pos:cfg.pos});
+    if(bc&&r&&!r.blocked)r.byCase=bc;
+    return r;
+  }
+  /* Torque entered per load case (beam mode, S.design.tor.basis = 'case'): each combination's factored torque is
+     T_u = sum(gamma_i T_i) with its own load factors. The torsion solution is linear in T, so it is solved once for the
+     largest |T_u| (Tref) and each combination scales the torsional stresses by |T_u|/Tref. Default basis (blank or
+     'factored'): the entered T is a factored torque used unchanged in every combination, as before. */
+  function torByCase(A,cfg){
+    if(!cfg||cfg.basis!=='case'||isMember()||!A||!A.combos)return null;
+    const Tc=cfg.Tc||{},Tu={};let Tref=0,refId=null;
+    A.combos.forEach(cb=>{
+      let t=0;S.cases.forEach(cs=>{t+=(cb.f[cs.id]||0)*(+Tc[cs.id]||0);});
+      Tu[cb.id]=t;if(Math.abs(t)>Tref){Tref=Math.abs(t);refId=cb.id;}
+    });
+    return{Tu,Tref,refId,Tc};
+  }
+  function torScale(tor,id){
+    const bc=tor&&tor.byCase;if(!bc)return 1;
+    return bc.Tref>0?Math.abs(bc.Tu[id]||0)/bc.Tref:0;
+  }
+  ```
+- **Check case:** W18X35 beam, 20 ft, L_b,top = 20 ft, `conc_pp` at midspan; per case T_DL = 1.0, T_LL = 1.5 kip-ft.
+  - 1.2D + 1.6L + 0.5S: T_u = 1.2 + 2.4 = 3.6 kip-ft = T_ref, k = 1. Same H3.3 results as the factored option with T = 3.6 (DCR 3.006, σ_w = 34.38 ksi).
+  - 1.4D: T_u = 1.4, k = 0.389, σ_w = 13.37 ksi; 0.9D + 1.0W: T_u = 0.9, k = 0.25, σ_w = 8.60 ksi.
+  - With the factored option and T = 3.6 every combination uses σ_w = 34.38 ksi.
+- **Neutral:** the default reproduces the old results exactly (checked: every regression scenario identical except for the SW1/SW2 changes and the label text).
+- **Saved data:** new optional fields `S.design.tor.basis` and `S.design.tor.Tc`; absent in old projects → old behaviour.
+- **Other copies of this code:** the dead first `openTorsionFor` (≈ line 5782) is overridden by the live one and was not changed (O4).
+
+### SW5 (SBD-O2). Batch mode has the §H3.3(c) check   [resolved by SW1]
+Batch rows with an open-section torsion case now run the same buckling check through `h33Check` (F_cr,F from the row's bare-steel φM_n at L_bx and C_b; F_cr,E from the row's φP_n when P_u > 0), with a row note when it applies. No separate warning needed.
+
+### Sweep decisions (no code change)
+- **SBD-O5 (calculated-C_b window clipped to the moment-sign region): kept.** Confirmed in `regionCheck` (anchor `const wLen=Math.min(regLen,LbFt);`): with calculated C_b the L_b window is taken inside each moment-sign region. The inventory rates this conservative as it stands, and the default C_b mode is "unity" (C_b = 1). Inventory default "leave"; no change.
+- **SBD-C2 (reaction hand-off has no pattern loading): kept, documented.** The sender sends each case as loaded; the dialog and HANDOFF note already say pattern cases must be marked "other". No change.
+- **SBD-O4 (duplicate function definitions): kept.** Every edit in this PR was made in the live (last) definition or in a function defined once; checked by name for `openTorsionFor`, `buildTorsTab`, `buildCompTab`, `designAll`, `memberDesignAll`, `buildDesignChecks`, `batchCheckRow`. A clean-up would be its own PR.
+- **SBD-O7 (AUDIT.md storage-key inventory lacks `sbd_inputTab_v1`): not in this PR.** AUDIT.md is a repository document, not this tool; tracked as X-DOC1.
+- **SBD-O12 (batch template has no w_r / s_r columns): kept.** Batch PARA rows count no rib concrete (conservative) and warn. Add the columns only if batch PARA rows are needed.
+
+### Needs engineer
+- **Q1 (SW1).** Is the per-stress §H3.3(c) form acceptable: f_a/(φF_cr,E) + (f_bx + f_by + σ_w)/(φF_cr,F) ≤ 1.0, F_cr,F = M_n/S_x, F_cr,E = P_n/A_g? Recommendation: keep it. It is conservative (f_by and σ_w are divided by the LTB stress). A DG 9 style interaction that puts σ_w with the minor-axis capacity would be less conservative.
+- **Q2 (SW2).** Blank A_n and U default to A_g and 1.0 with a warning. Recommendation: keep (a blank cannot be "unknown" without blocking the check; the warning is shown on the dashboard, the Compression tab and in Excel). Alternative: block the tension check until A_n and U are entered.
+- **Q3 (found in SW3, not changed).** The default combination set (`defaultCombos`) has 1.2D + 1.0L + 1.6S but not the other half of ASCE 7-16 combination 3, 1.2D + 1.6S + 0.5W. With downward roof wind and little live load, that combination can govern. Recommendation: add it to the preset (more conservative); it changes results of projects that reset to the preset, so I left it for your decision.
+
+### Remaining open items
+- None of the section-13 items remain open apart from Q1–Q3 (decisions) and O4/O7/O12 (left on purpose, above).
+
+### Verification (SW1–SW5)
+- `node --check` on all 5 inline scripts.
+- Headless Chromium (Playwright), origin/main against the branch, 13 scenarios: default beam; 2-span pin–pin–fix beam with snow and wind; beam with open-section torsion (top flange braced at 20 ft, and continuously braced); beam with tension and with compression on 1.2D + 1.6L; member mode F4 and F5 cases; member with compression and torsion; member tension (A_n/U blank and entered); HSS member in tension with torsion; batch (the template's three examples plus a long-torsion row and two tension rows).
+  - Every tab's text, the input panel, the dashboard checks and warnings were compared. All differences are the ones listed in SW1–SW4 (H3.3(c) DCRs and notes; the Tension check, Chapter D sections and H1.2 interaction values; "Applied factored torque" wording). Default beam, 2-span beam, braced-torsion beam, compression beam: all results identical; only the torsion wording differs.
+  - Saved state: identical except the new optional `design.ten` = {An:null, U:null}. Old projects (main's state) load and give the same results apart from the intended changes. localStorage keys: only `sbd_autosave_v1` (plus the existing hand-off keys).
+  - Member-reaction hand-off payload (`bxMr.build`) identical for the default and 2-span projects.
+  - Building-load import (`bxBld.check/defaults/plan/apply`) with a payload Lr = 20, S = 30, W uplift: branch adds the four Lr combinations and shows both new warnings; main adds none.
+  - Torque per case: the per-case result for 1.2D + 1.6L + 0.5S equals the factored option with T = 3.6 kip-ft (DCR 3.006 both).
+  - Excel export (ExcelJS 4.4.0 served locally): calc workbooks for the F4 case, the tension case, the torque-per-case beam and the default beam, and the batch workbook, compared cell by cell. Default beam identical; the others differ only by the new rows and values above.
+  - Validation tab text identical (all benchmarks pass). No console errors.
+- Screenshots (looked at): import dialog, torque-per-case inputs and torsion tab, H3.3(c) block, Chapter D section and inputs, in `scratchpad/followups/sbdsw/`.
+
+## 2026-10-12 — PR: claude/steelbeam-q3 (PR link added after merge)
+Engineer's decision 2026-10-12 on Q3 of the sweep (closes O14).
+
+### Q3. Default combination set gets 1.2D + 1.6S + 0.5W   [calc change] [more conservative]
+- **Where:** `defaultCombos` (anchor `{id:'c2S', f:{DL:1.2,LL:1.0,SL:1.6}, on:true, stage:'final'},`), and the "Preset: ASCE 7 LRFD basics" button in `rebuildInputs` (anchor `pres.addEventListener('click',()=>{S.combos=defaultCombos();`).
+- **Problem:** ASCE 7-16 §2.3.1 combination 3 is 1.2D + 1.6(Lr or S or R) + (L or 0.5W). The default set had only the "L" half for snow (1.2D + 1.0L + 1.6S). With downward roof wind and little live load, the "0.5W" half governs.
+- **Governing provision:** ASCE 7-16 §2.3.1, combination 3.
+- **Before:**
+  ```js
+    {id:'c2S', f:{DL:1.2,LL:1.0,SL:1.6}, on:true, stage:'final'},
+    {id:'c2W', f:{DL:1.2,LL:1.0,SL:0.5,WL:1.0}, on:true, stage:'final'},
+  ...
+      pres.addEventListener('click',()=>{S.combos=defaultCombos();
+        if(S.cases.some(c=>c.id==='LR'))lrCombosFor('LR').forEach(c=>S.combos.push(c));   /* roof live load, ASCE 7-16 \u00A72.3.1 */
+  ```
+- **After:**
+  ```js
+    {id:'c2S', f:{DL:1.2,LL:1.0,SL:1.6}, on:true, stage:'final'},
+    {id:'c3SW',f:{DL:1.2,SL:1.6,WL:0.5}, on:true, stage:'final'},   /* ASCE 7-16 \u00A72.3.1 combination 3, (L or 0.5W) with 0.5W */
+    {id:'c2W', f:{DL:1.2,LL:1.0,SL:0.5,WL:1.0}, on:true, stage:'final'},
+  ...
+      pres.addEventListener('click',()=>{S.combos=defaultCombos();
+        if(!(S.cases.some(c=>c.id==='SL')&&S.cases.some(c=>c.id==='WL')))S.combos=S.combos.filter(c=>c.id!=='c3SW');   /* 1.2D + 1.6S + 0.5W only when both cases exist */
+        if(S.cases.some(c=>c.id==='LR'))lrCombosFor('LR').forEach(c=>S.combos.push(c));   /* roof live load, ASCE 7-16 \u00A72.3.1 */
+  ```
+- **Saved projects:** not modified. `mergeState` replaces arrays wholesale, so a saved project keeps its own `combos` list; the new combination appears only in new projects and when the user presses the preset button (and only if cases SL and WL both exist).
+- **Check case:** default W18X50, one 20 ft simple span, trib width 10 ft, self-weight on; DL 15 psf, LL 0, SL 30 psf, WL +20 psf (downward). w_D = 0.150 + 0.050 = 0.200, w_S = 0.300, w_W = 0.200 klf.
+  - Before (new project or preset): governing 1.2D + 1.0L + 1.6S: w_u = 0.24 + 0 + 0.48 = 0.720 klf, M_u = 0.72 × 20²/8 = **36.0 kip-ft**, flexure DCR 36.0/378.75 = **0.0950**.
+  - After: 1.2D + 1.6S + 0.5W: w_u = 0.24 + 0.48 + 0.10 = 0.820 klf, M_u = **41.0 kip-ft**, DCR **0.1083** (governs).
+  - The same loads in a project saved before the change (five combinations): 36.0 kip-ft, unchanged.
+  - Default project (LL 40, SL 0, WL 0): the new combination gives 12.0 kip-ft; governing result unchanged (44.0 kip-ft, 1.2D + 1.6L + 0.5S).
+- **How verified:** `node --check` on all inline scripts. Headless Chromium, origin/main against the branch: new default project and new roof project (above), a saved project with the old five-combination list (every tab's text and saved state identical), and the preset button with SL/WL present (adds `c3SW`) and with WL removed (does not). Validation tab identical. No console errors.
+- **Other copies of this code:** none.
+
 ## Open items (not changed)
-- O1. **H3.3(c) buckling limit state** is not implemented, only warned (F5). Decide on the method (e.g. f_bx + σ_w ≤ φF_cr with F_cr = M_n/S_x from Chapter F, or a DG 9 interaction) before coding it as a check.
-- O2. **Batch mode** has no H3.3 buckling warning and keeps its existing tension note. Decide whether to add a matching batch note.
-- O3. **Axial tension (Chapter D / §H1.2)** is not implemented; it needs gross and net area, shear lag U, and the H1.2 interaction. Decide whether to add inputs for A_n and U.
+- O1. **Resolved 2026-10-12 by SW1** (checked as f_a/(φF_cr,E) + (f_bx + f_by + σ_w)/(φF_cr,F) ≤ 1.0; method to confirm, Q1). **H3.3(c) buckling limit state** is not implemented, only warned (F5). Decide on the method (e.g. f_bx + σ_w ≤ φF_cr with F_cr = M_n/S_x from Chapter F, or a DG 9 interaction) before coding it as a check.
+- O2. **Resolved 2026-10-12 by SW1/SW5** (batch runs the same check). **Batch mode** has no H3.3 buckling warning and keeps its existing tension note. Decide whether to add a matching batch note.
+- O3. **Resolved 2026-10-12 by SW2** (A_n and U inputs, blank = A_g and 1.0; batch columns Tension An / Tension U). **Axial tension (Chapter D / §H1.2)** is not implemented; it needs gross and net area, shear lag U, and the H1.2 interaction. Decide whether to add inputs for A_n and U.
 - O4. **Duplicate function definitions** (`TABS` ×4, `renderTab`, `buildSummaryTab`, `shearMajor`, `compositeFor`, `constructionStage`, `buildMxTab`, `buildServiceTab`, `memberDefl`, `openTorsionFor`, `regPlot`, `xsecBlock`, `classFlexBlock`, …). Only the last definition runs. **Not cleaned up**, per instruction. F2 also updated the label in the dead earlier `classFlexBlock` (≈ line 3136) so the two copies do not disagree.
-- O5. Calculated-C_b window clipped to the moment-sign region (lines ≈ 1817–1829). Not in scope; the default C_b = 1 is conservative.
-- O6. The open-section torque is a single value applied to every strength combination (not scaled per combination). Not in scope.
+- O5. **Kept 2026-10-12** (sweep decision, conservative as it stands). Calculated-C_b window clipped to the moment-sign region (lines ≈ 1817–1829). Not in scope; the default C_b = 1 is conservative.
+- O6. **Resolved 2026-10-12 by SW4** (option: torque per load case, factored by each combination; default unchanged). The open-section torque is a single value applied to every strength combination (not scaled per combination). Not in scope.
 - O7. **New localStorage key `sbd_inputTab_v1`** (T1, active input tab). The storage-key column of AUDIT.md still lists only `sbd_autosave_v1` and `sbd_projects_v1`; it was not edited in this PR (one tool per PR). Add the key to AUDIT.md in a later housekeeping PR.
 - O8. **Resolved 2026-10-09 by A1** (engineer's decision: perpendicular → 0 %, parallel → w_r/s_r with a new s_r input). **Rib concrete counted in A_c (defaults 0.50 perpendicular, 1.00 parallel).** Found while drawing D1; **not changed** (calculation). `slabArea` uses A_c = b_eff (t + fill·h_r). With parallel ribs and fill 1.00 this is the full b_eff × h_r rectangle, including the voids between the ribs (about half of it for w_r = 6 in at a 12 in rib spacing). My reading of AISC 360-16 §I3.2c is that concrete below the top of the deck is neglected in A_c for ribs perpendicular to the beam, and included for ribs parallel to the beam, where it is the rib concrete, not the voids. If so, both defaults can overstate A_c, and so C = 0.85f′_c A_c, when concrete crushing governs (the manual says the input only changes the answer then). Please confirm the provision and decide on the defaults; a parallel default of w_r / rib spacing would need a rib-spacing input.
 - O9. **Resolved 2026-10-09 by A2** (studs are welded to the flange). **Stud base and the §I3.2c cover check with a haunch.** The cover check takes cover = Y_con − haunch − L_s, i.e. the stud starts at the top of the haunch; D1 draws it that way. If studs are welded to the flange through the haunch, the cover is over-estimated by the haunch depth. Not changed; confirm which is intended.
 - O10. **Resolved 2026-10-09 by A1** (s_r is now an input; drawings use it). **Rib spacing is not an input.** The D1 drawings use an illustrative spacing max(6 in, 2w_r), labelled as such. Add an input only if the drawings need to show the real deck profile.
 - O11. **Resolved 2026-10-09 by R1** (block computed through the rib concrete). **Compression block in the ribs with parallel deck.** When a > t (C reaches into the ribs), the tool keeps a uniform-width block of depth a = C/(0.85f′_c b_eff) and d₁ = Y_con − a/2, and warns "verify by hand". With parallel ribs the true block under the slab is only the rib width, so its centroid is lower. In A1 case (b), the true centroid is 3.19 in below the slab top, not 3.00 in, so d₁ = 4.31 in rather than 4.50 in and M_n is about 0.7 % high. Pre-existing; not changed. Decide whether to compute the block through the ribs.
-- O12. **Batch template has no rib width or rib spacing columns.** After A1, batch PERP rows count no rib concrete (§I3.2c) and PARA rows count none either, with a warning. Add `w_r` / `s_r` columns only if batch PARA rows need the rib concrete.
+- O12. **Kept 2026-10-12** (sweep decision: add only if batch PARA rows need rib concrete). **Batch template has no rib width or rib spacing columns.** After A1, batch PERP rows count no rib concrete (§I3.2c) and PARA rows count none either, with a warning. Add `w_r` / `s_r` columns only if batch PARA rows need the rib concrete.
 - O13. **Resolved 2026-10-10 by E3** (L_v measured to the point of zero shear within the span; support jumps excluded). **Round HSS / pipe shear length L_v at an interior support** (found while checking E2). The G5 L_v is the distance from the V_u station to the nearest entry in the "V = 0" list. That list includes the sign change across the shear jump at a support, so when V_u is at an interior support, L_v is about 0. Before E2 the jump crossing was interpolated a grid step away, giving L_v ≈ 0.08 ft and F_cr = 0.6F_y. With E2 it lands on the support, L_v can be exactly 0, and `shearMajor` treats 0 as "no zero-shear point" (`LvIn||1e9`): the derivation then shows L_v ≈ 83 000 000 ft and F_cr = max(G5-2b, ~0) ≤ 0.6F_y. For standard pipes and most round HSS (D/t below about 90) G5-2b still exceeds 0.6F_y, so V_n does not change (checked: Pipe8XS and Pipe12STD on 2 × 20 ft spans, F_cr = 21 ksi before and after). For very slender rounds it is lower, which is conservative. Both the old and the new L_v are artefacts. The intended L_v is the distance to the zero-shear point within the span (12.5 ft from the interior support of a 2 × 20 ft UDL beam). Decide whether to exclude support-jump crossings from the L_v search.
+- O14. **Resolved 2026-10-12 by Q3** (added to the default set and the preset when S and W cases exist). **New 2026-10-12 (Q3 of the sweep).** `defaultCombos` has 1.2D + 1.0L + 1.6S but not 1.2D + 1.6S + 0.5W (the other half of ASCE 7-16 §2.3.1 combination 3). Not changed; engineer to decide.
+- C1 open items (C&C, drift, Lr): **resolved 2026-10-12 by SW3** (Lr combinations added on import; C&C and drift warned in the dialog and on the dashboard). C2 (pattern loading in the reaction hand-off): kept, documented.

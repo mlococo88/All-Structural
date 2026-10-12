@@ -656,3 +656,225 @@ document.addEventListener('click', e => {
 - **How verified:** `node --check` on every plain inline script of the four changed files (abutment 13, SubLoads 3, Pile Designer 4, Spread Footing 18 blocks; none is JSX — Pile Designer is pre-compiled `React.createElement`). End-to-end in jsdom with one shared localStorage stub (React UMD served locally): **79 of 79 assertions pass** — abutment default → Pile Designer; abutment pile branch → Pile Designer with the same pile layout; SubLoads Pier 2 top of footing → Spread Footing; SubLoads Pier 1 bottom of footing → Pile Designer (rotated axes); JSON export → import into both receivers; refusals (wrong `_schema`, `schemaVersion` 2 and 3, kN units, non-finite P, missing `factored`, corrupt JSON file, corrupt stored payload, nothing sent, service-only payload into the footing, integral-abutment mode). No-hand-off invariance against the pre-change files: abutment `computeAll()` (dashboard, every permutation table, Input ID); SubLoads `combine()` envelopes and `concurrentSets()` of every unit and `abutExportData()`; Spread Footing `computeAll()` + `computePhase2()` (by-type and Direct mode); Pile Designer `computeAll(DEFAULT_INPUTS)` and the rendered app text (identical apart from the two new buttons). The earlier e2e suites still pass on this branch: memberReactions (Steel Beam → BasePlate / Spread Footing, 56/56) and abutmentLoads (SubLoads → abutment, 57/57).
 - **Other copies:** BridgeXfer v1 (unchanged). The sender code exists only here.
 - **Open items:** individual footings of multi-column bents ("Footing i" groups have P and M but no shear) are not offered; service sets come from the same `comboEval` concurrency as the strength sets (the Combinations tab shows service as envelopes only).
+
+## 2026-10-12 — PR: claude/sweep-subloads (PR link added after merge)
+
+Open-item sweep of inventory section 19 (SUB-PEND, SUB-O1 to O4, SUB-F6, SUB-F8, SUB-USGS, SUB-XLSX). Basis: AASHTO LRFD 10th Ed. (2024). Article numbers marked "verify" were not checked against the printed 10th Ed. text.
+
+### S1. SUB-PEND (seismic): R for pier foundations and pier bearings in Zones 2 to 4   [calc change] [more conservative; Zones 2 to 4 only; option to restore]
+- **Where:**
+  - `eqLoads` (≈ line 2039). Anchor text: `function eqLoads(G, k, SM`
+  - new `eqCompR` and `eqFdnDef`, directly above `function phase5(k)`. Anchor text: `function eqCompR(k, zone)`
+  - `phase5` (≈ line 2066). Anchor text: `const cr = eqCompR(k, SM.site.zone)`
+- **Problem:** in Zones 2 to 4 every effect of a pier (columns, caps, bearings, footings) used the elastic force divided by the unit R of Table 3.10.7.1-1 (for example 5.0 for a multi-column bent). That R is too large for two kinds of output:
+  - **Foundations.** Zone 2 uses R/2, not less than 1.0 (3.10.9.3). Zones 3 and 4 use R = 1.0, the modified design force of 3.10.9.4.2. 3.10.9.4.1 takes the lesser of that and the plastic hinging force of 3.10.9.4.3, which this tool does not compute, so R = 1.0 is the upper bound.
+  - **Connections (bearings).** R = 0.8 (Table 3.10.7.1-2, through 3.10.7.1).
+
+  Pier foundations and pier bearings were therefore unconservative by a factor of 2 (Zone 2 foundations) up to 6.25 (bearings of a multi-column bent). The in-file PENDING item ("Zone 2 uses elastic/R rather than the specific 3.10.9.3 provisions") recorded this.
+- **Governing provision:** AASHTO LRFD 10th Ed.:
+  - Art. 3.10.7.1, with Tables 3.10.7.1-1 and 3.10.7.1-2 (connections: superstructure to abutment 0.8; columns, piers or pile bents to cap beam or superstructure 0.8; columns or piers to foundations 0.8);
+  - Art. 3.10.9.3 (Zone 2: foundations other than pile bents and retaining walls use R/2, not less than 1.0);
+  - Art. 3.10.9.4.1 and 3.10.9.4.2 (Zones 3 and 4: modified design forces; R = 1.0 for foundations);
+  - Art. 3.10.9.4.3 (plastic hinging forces, not computed).
+
+  Verify all of these articles against the printed 10th Ed. text.
+- **What changes:**
+  - **Units affected:** only piers (not abutments, which already use R = 0.8 for the whole unit), only in Zones 2 to 4, and only when the new option `br.eqCompR` is blank or `'code'` (the default).
+  - **Foundation effects** (`eqFdnDef`) use R_f = min(R, max(R/2, 1.0)) in Zone 2, or min(R, 1.0) in Zones 3 and 4. These effects are:
+    - the "Footing i" groups;
+    - every "…, bottom of footing" resultant;
+    - the "…, top of footing" resultant of a multi-column bent, whose columns have their own groups.
+  - **Bearings group** effects (row totals and the equal shares) use R_c = min(R, 0.8).
+  - **Unit R kept:** columns, piles, pile bents ("including pile bents", 3.10.9.3), walls and caps. The top of footing of a hammerhead and the base of a wall pier also keep the unit R, because they are the column/wall base design forces. The "Send foundation loads" dialog shows a red note when Extreme Event I is sent at one of those levels.
+  - **Scope:** only the EQ load vectors of `phase5` change, so the change flows to EE I in the envelopes, concurrent sets and the foundation hand-off. The "Design, long./trans." columns on the Seismic tab and the load diagrams still show the unit-R forces at the bearings, and the note says so.
+- **Before:**
+  ```js
+  function eqLoads(G, k, SM) {   // design horizontal forces at the rows of unit k, bridge axes: zone 1 connection force, else elastic / R
+  …
+    return rows.map(r => { let L = Z === 1 ? (r.restrL ? r.cf * Nt(r) : 0) : r.FL / r.RL.R, T = Z === 1 ? (r.restrT ? r.cf * Nt(r) : 0) : r.FT / r.RT.R;
+  ```
+  and in `phase5`, after `const UMe = umEE(k, 'eq'), vL = …, vT = …; out.vL = vL; out.vT = vT;` nothing.
+- **After:**
+  ```js
+  function eqLoads(G, k, SM, rf) {   // … ; rf (optional) maps the unit R to a component R (eqCompR)
+  …
+    return rows.map(r => { let L = Z === 1 ? (r.restrL ? r.cf * Nt(r) : 0) : r.FL / (rf ? rf(r.RL.R) : r.RL.R), T = Z === 1 ? (r.restrT ? r.cf * Nt(r) : 0) : r.FT / (rf ? rf(r.RT.R) : r.RT.R);
+  ```
+  ```js
+  function eqCompR(k, zone) {
+    const u = P.units[k]; if (!(zone >= 2) || !u || u.type === 'abut' || P.br.eqCompR === 'unit') return null;
+    return { fdn: R => Math.min(R, zone === 2 ? Math.max(R / 2, 1) : 1), con: R => Math.min(R, 0.8) };
+  }
+  function eqFdnDef(u, d) { return /^Footing \d+$/.test(d.grp) || (d.grp === 'Resultant' && (/, bottom of footing$/.test(d.label) || (u.type === 'mcb' && /, top of footing$/.test(d.label)))); }
+  ```
+  ```js
+      const cr = eqCompR(k, SM.site.zone); if (cr) {   // foundations and bearings with their own R (see eqCompR)
+        const ev = rf => { const Lc = eqLoads(G, k, SM, rf), m = (fL, fT) => { const lc = { rows: S.rows.map(() => ({ Hn: 0, Ht: 0 })) }; Lc.forEach(q => { const FL = fL * q.dL, FT = fT * q.dT; lc.rows[q.ri].Hn += FL * S.c - FT * S.s; lc.rows[q.ri].Ht += FL * S.s + FT * S.c; }); return lc; }; return [UMe.evalCase(m(1, 0)), UMe.evalCase(m(0, 1))]; };
+        const [fL, fT] = ev(cr.fdn), [cL, cT] = ev(cr.con), u = P.units[k];
+        UMe.defs.forEach((d, q) => { if (eqFdnDef(u, d)) { vL[q] = fL[q]; vT[q] = fT[q]; } else if (d.grp === 'Bearings') { vL[q] = cL[q]; vT[q] = cT[q]; } });
+        out.compR = { L: L.map(q => ({ ri: q.ri, fL: cr.fdn(q.RL.R), fT: cr.fdn(q.RT.R), cL: cr.con(q.RL.R), cT: cr.con(q.RT.R) })) }; }
+  ```
+- **Supporting edits (text and UI):**
+  - Bridge tab, Seismic section, after `fld('γ<sub>EQ</sub> on live load', 'br.gEQ')`: the new select `fld('R for pier foundations and bearings, Zones 2 to 4', 'br.eqCompR', …)` with the options "By component (code)" (`code`, the default) and "Unit R for every effect" (`unit`). The title gives the provisions.
+  - Seismic tab note (`eqHtml`): the text `Zone 2 connection forces follow 3.10.9.3.` / `Seismic Zones 3 and 4 also require capacity design …` is replaced by a sentence naming the R used for this unit's bearings and foundations, and a Zones 3/4 note that plastic hinging forces (which govern column shear) are not computed.
+  - Manual "Design forces" bullet extended.
+  - Report basis row "Analysis options": appends `; seismic R: pier foundations … , pier bearings 0.8 (Table 3.10.7.1-2)` (or `unit R for every effect`), only when the site is in Zone 2 to 4.
+  - "Send foundation loads" dialog (`render`): the red note described above.
+  - In-file PENDING list: the seismic item is reworded to the new state.
+- **Saved data:** new optional field `P.br.eqCompR` (`'code'` | `'unit'`). It is not added to `defP`, so a default project saves exactly as before. Old files: a blank field means `'code'`, so **old Zone 2 to 4 projects now get the larger pier foundation and bearing forces**. Choose "Unit R for every effect" to reproduce the old numbers. No key, no hand-off key and no payload format changed. The `foundationLoads` values for EE I change, as intended.
+- **Check case:** default example project (three spans 110/140/110 ft, skew 15°), site class D, PGA 0.15, S_s 0.35, S_1 0.10.
+  - Site: F_v = 2.4, S_D1 = 0.240 → Zone 2.
+  - Pier 1 (multi-column bent, operational class "other", R = 5.0): elastic F_L = 1086.34 kip, F_T = 655.25 kip.
+  - Before: every effect uses L = 1086.34/5 = 217.27 kip and T = 655.25/5 = 131.05 kip. V_l at the bottom of footing, 100/30 case = 217.27·cos 15° + 0.3·131.05·sin 15° = 209.86 + 10.18 = **220.04 kip**.
+  - After, foundations: R_f = max(5/2, 1) = 2.5 → L = 434.54, T = 262.10 → V_l,bottom of footing = **440.08 kip** (× 2.00). M_l,bottom of footing goes from 5,061 to 10,123 kip-ft.
+  - After, bearings: R_c = 0.8 → L = 1357.93, T = 819.06 → H_n,row total = 1357.93·0.9659 + 0.3·819.06·0.2588 = **1375.26 kip** (was 220.04; × 6.25).
+  - Pier 2 (hammerhead, single column, R = 3.0): foundations × 2.00 (R_f = 1.5); bearings × 3.75. The top of footing (the column base) is unchanged.
+  - Zone 3 (PGA 0.30, S_s 0.70, S_1 0.20; S_D1 = 0.40): Pier 1 foundations × 5.00 (R_f = 1.0); Pier 2 foundations × 3.00; bearings × 6.25 / × 3.75.
+  - Abutments, columns, piles, caps, and every non-EE limit state: unchanged. Zone 1 and no-ground-motion projects: unchanged.
+- **How verified:** see "How verified (S1–S3)" below.
+- **Other copies:** none.
+
+### S2. SUB-O2: γSH 0.5 option no longer applied to steel pile bents; default stays 1.0   [calc change, only with the 0.5 option] [more conservative]
+- **Where:** new function `gSHof(k)` directly above `function comboComps(k, c)`. Anchor text: `function gSHof(k)`. In `comboComps`, the anchor is `fix(p4.SH && sc(p4.SH,`.
+- **Problem:** the γSH = 0.5 option was applied to every unit. Table 3.4.1-3 gives 0.5 (with I_g) only for substructures supporting non-segmental superstructures; "Steel Substructures" take 1.0. A steel H-pile bent therefore got half the code SH force when the option was chosen. Round piles are "pipe or concrete" in this tool, so they are treated as possibly steel.
+- **Decision on the default (O2):** the default stays **1.0**. The AUDIT lists γSH among the "conservative-but-not-per-code items (each needs your sign-off)". 1.0 is conservative and is allowed with I_g. Setting 0.5 from `Ifac` automatically would lower results, so it is not done; it is listed under Needs engineer.
+- **Governing provision:** AASHTO LRFD 10th Ed., Table 3.4.1-3 (CR, SH: substructures supporting non-segmental superstructures, using I_g 0.50, using I_effective 1.00; steel substructures 1.00).
+- **Before:**
+  ```js
+  perm(DC, L.dc, 'DC'); perm(D.DW, L.dw, 'DW'); fix(p4.SH && sc(p4.SH, num(br.gSH) === 0.5 ? 0.5 : 1.0), 'SH');   // γSH, Table 3.4.1-3: 0.5 with I_g, 1.0 with I_eff
+  ```
+- **After:**
+  ```js
+  function gSHof(k) {   // γSH, Table 3.4.1-3: the 0.5 option (gross I_g) applies to concrete substructures; steel substructures take 1.0, so steel H-pile bents and round (pipe or concrete) pile bents stay at 1.0
+    const u = P.units[k]; if (num(P.br.gSH) !== 0.5) return 1.0;
+    return u && u.type === 'pile' && u.pile.shape !== 'square' ? 1.0 : 0.5;
+  }
+  …
+  perm(DC, L.dc, 'DC'); perm(D.DW, L.dw, 'DW'); fix(p4.SH && sc(p4.SH, gSHof(k)), 'SH');   // γSH, Table 3.4.1-3: 0.5 with I_g, 1.0 with I_eff; steel substructures 1.0
+  ```
+- **Supporting edits:**
+  - The option label changed from `'0.5 (substructure analysed with gross I_g)'` to `'0.5 (gross I_g; steel H-pile and round pile bents 1.0)'`.
+  - The basis row now prints `γSH = 0.50 (1.00 for steel H-pile and round pile bents)` when the option is chosen.
+  - New input check (in the checks list after `No ground motion entered: …`): a **warning** when γSH = 0.5 and `Ifac` < 1 ("γSH = 0.5 is for a substructure analysed with gross Ig …").
+- **Check case:** default project, Pier 1 changed to a 7-pile steel H-pile bent; shrinkage + creep strain 0.0003; γSH option 0.5.
+  - Unfactored SH at the bearing row: H_n = 6.834 kip.
+  - Strength I H_n row total, max. Before: 13.915 + 0.5·6.834 = 17.332 kip. After: 13.915 + 1.0·6.834 = **20.749 kip**.
+  - A square concrete pile bent, the multi-column bent and the hammerhead: unchanged (still 0.5). With the default (1.0): unchanged.
+- **Other copies:** the superseded early `combine` versions (not used) still add SH at 1.0; not touched (O4).
+
+### S3. SUB-F8: foundation hand-off limitations listed in the tool   [docs, no result change]
+- **Where:** the final PENDING push in the open-items block. Anchor text: `['Owner requirements', 'RIDOT and CTDOT amendments are not yet selectable.']`
+- **After:** one new item is added after it: `['Hand-offs', 'Send foundation loads offers the unit resultants only: the individual footings of multi-column bents ("Footing i", which have P and M but no shear) are not offered, and the Service cases use the same concurrent selection as the Strength cases.']`
+- **Decision:** document (inventory default). Adding "Footing i" groups needs a shear per footing that the model does not split; do this on request.
+
+### How verified (S1–S3)
+- `node --check` on all three plain inline scripts. The tool has no JSX.
+- Headless Chromium (Playwright, `/opt/pw-browsers/chromium`; three r128 / OrbitControls served locally), origin/main vs this branch. Sixteen scenarios: default; Zones 1, 2, 3 and 4; Zone 2 with the "unit R" option; Zone 2 with individual footings; Zone 2 with an H-pile Pier 1; SH strain with γSH 1.0 and 0.5 on H-pile, square-pile and round-pile bents; and γSH 0.5 with Ifac 0.5. For each unit the harness compared every `combine()` envelope, the EQ vectors, `concurrentSets()`, the foundation hand-off cases at every level, `abutExportData()`, `abutHandoffPayload()`, `JSON.stringify(P)`, the checks and `basisExtra()`. Every tab of every unit and the print report were also rendered as text in 5 scenarios.
+  - Default, Zone 1, the "unit R" option, and γSH 1.0: every number is identical. The abutment exports and payloads are identical apart from the `exported` time stamp. The saved project is byte-identical.
+  - Zones 2 to 4: only Pier 1 / Pier 2 Bearings, foundation resultants and Footing groups change, and only in EE I and the EQ vectors. The ratios are exactly 2.00 / 6.25 / 3.75 (Zone 2) and 5.00 / 3.00 / 6.25 / 3.75 (Zone 3), as in the check case. The H-pile Pier 1 changes only in Bearings (the piles keep R).
+  - γSH 0.5: only the H-pile and round-pile Pier 1 change (SH at 1.0). The square pile bent and the other units are unchanged.
+  - Text changes: only the Seismic-tab note, the Manual bullet, the open-items list, the basis row (Zone 2 to 4, or γSH 0.5) and the new warning.
+- No console errors in either file. The option select was driven through the UI: changing it to "Unit R for every effect" restores the old values (Pier 1 bearing H_n 1375.26 → 220.04 kip).
+- Screenshots of the Bridge tab Seismic section, the Seismic tab note and the foundation dialog note were checked.
+
+### Closed / not changed in this sweep
+- **SUB-PEND, item by item.** The source array has 23 entries. Later patches in the file already close, reword or drop most of them; the runtime list had 13 items before this PR.
+  - **Already resolved in the file:**
+    - soil over footings (EV), now carried;
+    - the abutment reaction export (built; also the F7 hand-off);
+    - pedestrian load (3.6.1.6), now with `plP`, and the export note was dropped;
+    - concurrent sets, now built;
+    - owner amendments (MassDOT built);
+    - individual bearing shears, as equal shares;
+    - pinned column base;
+    - transverse loads through the deck as a beam (option);
+    - wind by projected area (option);
+    - per-unit friction μ;
+    - static and vertical ice, as entered values;
+    - Zone 1 connection force with γEQ·LL;
+    - vehicle-collision direction (both offered);
+    - DXF dimensions;
+    - the 1.20 TU deformation column, which is reported on the Temperature tab.
+  - **Decided earlier, kept as documented limitations:**
+    - wind shielding and abutments not loaded by wind;
+    - the 0.30 klf minimum on Strength III ("as decided");
+    - thermal gradient not used (MassDOT 3.1.8.4);
+    - scour entered;
+    - soil over pier footings centred;
+    - Service sets and cap sections as envelopes;
+    - vessel amplification as a user factor.
+  - **Seismic item:** partly fixed by S1, then reworded.
+  - **Left as open items, needing the engineer or out of scope:** Strength II (permit vehicle), the load-factor defaults check, the remaining capacity design, vertical ground motion / multimode / Guide Spec / AASHTO-2023 data, the vessel Method II and barge-equation check, ice jams (3.9.4), MassDOT Guide-Spec seismic and the "High" SDC A provisions, and RIDOT/CTDOT.
+- **SUB-O1 (Service IV wind 0.75V, γWS = 1.00):** not changed. My reading of the 8th Ed.+ framework is consistent with the code (Table 3.8.1.1.2-1 Service IV = 0.75V; Table 3.4.1-1 Service IV γWS = 1.00). It is still listed as a quick printed-text confirmation.
+- **SUB-O3 (EE I γEH `gEHEQ` = 1.0):** not changed. Table 3.4.1-1 lists γp for EH in EE I, which would be 1.50/0.90 (Table 3.4.1-2) and more conservative. The abutment calculator uses the same 1.0 with "EOR confirm", and both tools should agree. Needs engineer.
+- **SUB-O4 (`combine` monkey-patches):** closed, won't fix (code health only; refactoring risks results).
+- **SUB-F6 (reaction pull, "same position as the source"):** not changed. The default applies one designed girder line to every girder of that position, and every overwritten cell is listed for confirmation. Needs engineer to confirm the default.
+- **SUB-USGS:** not changed. The `aashto-2009` endpoints are tried in turn, and manual entry with a message is the fallback. The 2023 dataset waits for owner adoption (engineer).
+- **SUB-XLSX:** not changed. SheetJS 0.18.5 is the last version on cdnjs. Note: it is used for the template download **and** for importing the user's own reaction workbook (the inventory said "export only"). The files are the engineer's own, so the risk stays low.
+
+### Needs engineer (left as is)
+1. **γSH default (O2).** Should γSH default to 0.5 when Ifac = 1.0 (gross I_g) for concrete units, per Table 3.4.1-3? Recommendation: yes for new projects only, if you accept the lower SH. The default stays at the conservative 1.0 until then.
+2. **EE I EH factor (O3).** Use γp (1.50/0.90, Table 3.4.1-2) for the static EH in EE I instead of 1.0? Recommendation: γp per Table 3.4.1-1, changed in SubLoads and the abutment calculator together.
+3. **Service IV wind (O1).** Confirm against the printed 10th Ed. Tables 3.8.1.1.2-1 and 3.4.1-1 that Service IV = 0.75V with γWS = 1.00. Recommendation: no change.
+4. **Bearing R = 0.8 at piers (S1).** Confirm that you want the Table 3.10.7.1-2 connection R on the pier bearing forces (×6.25 for a multi-column bent with R = 5). The alternative is the plastic-hinging force of the columns (3.10.9.4.3), which the tool does not compute. Recommendation: keep 0.8.
+5. **Reaction pull default (F6).** Keep "Same position as the source" as the default girder set? Recommendation: keep it; the dialog lists every cell.
+
+### Remaining open items (recommendations)
+- **Zones 3/4 column shear from plastic hinging.** Section 5 refers column shear to 3.10.9.4 (verify the 10th Ed. article). It would need column flexural overstrength, which needs reinforcement input. Recommendation: add a "column shear, R = 1.0" line for Zones 3/4 as an interim upper bound if Zones 3/4 work is expected.
+- **Strength II** (owner permit vehicle), the vessel Method II, ice jams (3.9.4), vertical ground motion and multimode analysis, the Guide Specifications and the AASHTO-2023 hazard data: each needs an owner or engineer decision.
+- **Foundation hand-off "Footing i" groups and service concurrency (F8):** add on request.
+
+## 2026-10-12 — PR: claude/subloads-eeieh (PR link added after merge)
+
+### S4. Extreme Event I static EH: γp max/min by default; fixed value kept as "agency policy" (SUB-O3)   [calc change] [MORE conservative for new projects and for files without the field]
+- **Engineer's decision (2026-10-12):** use γp, and match `abutment_calculator` F25 (#147). This closes SUB-O3 and Needs-engineer item 2 of the claude/sweep-subloads entry.
+- **Where:**
+  - new `eqEHfixed()`, directly above `function gSHof(k)`;
+  - `comboComps`, anchor `perm(ev('EH'), c.eq`;
+  - new `migEHEQ(j)`, directly above `function openProject(j, file)`, and called in `openProject` and in the `start()` localStorage merge;
+  - the earth-loads `defP` patch, anchor `hEQr: 0.6, gEHEQ: 1.0`;
+  - the Bridge tab "Earth loads" section, anchor `fld('γ<sub>EH</sub> in Extreme Event I'`;
+  - the SELECT rebuild regex in the `change` handler (adds `br\.ehEQmode$`);
+  - the earth-tab note, anchor `plus wall and soil-block inertia (Extreme Event I,`;
+  - the `basisExtra` "Backfill" row.
+- **Problem:** EE I combined the static earth pressure EH with one fixed factor `br.gEHEQ` (default 1.0) for both max and min. Table 3.4.1-1 gives γp for EH in Extreme Event I, that is the Table 3.4.1-2 values: active 1.50 max / 0.90 min, at rest 1.35 / 0.90.
+- **Governing provision:** AASHTO LRFD 10th Ed., Table 3.4.1-1 (Extreme Event I row, γp) and Table 3.4.1-2 (EH active 1.50/0.90, at rest 1.35/0.90).
+- **Before:**
+  ```js
+  perm(ev('EH'), c.eq ? [nz(br.gEHEQ) || 1, nz(br.gEHEQ) || 1] : svc ? [1, 1] : EH, 'EH'); perm(ev('EV'), …
+  ```
+- **After:**
+  ```js
+  function eqEHfixed() { return P.br.ehEQmode === 'agency' ? (nz(P.br.gEHEQ) || 1) : null; }   // EE I γEH: null = γp max/min (Table 3.4.1-1 → 3.4.1-2); a number = the fixed "agency policy" value br.gEHEQ
+  …
+  perm(ev('EH'), c.eq && eqEHfixed() !== null ? [eqEHfixed(), eqEHfixed()] : svc ? [1, 1] : EH, 'EH'); perm(ev('EV'), …
+  ```
+  With γp, EE I uses the same `EH` pair as the Strength limit states (active or at rest by abutment; editable `br.ehMax/ehMin/ehAtMax/ehAtMin`). The permanent-load engine takes the max factor where EH increases the effect and the min factor where it reduces it.
+- **Input:** "γEH in Extreme Event I" is now a select with two options:
+  - "γp max/min (Table 3.4.1-1, -2)" (`br.ehEQmode = 'gp'`);
+  - "Fixed value (agency policy)" (`'agency'`). The number field `br.gEHEQ` is shown only with this option.
+- **Saved data (which rule applies to existing saves):**
+  - The new optional field is `br.ehEQmode`. No key is renamed and no hand-off payload changes.
+  - Every file saved since the earth-loads phase stores `br.gEHEQ`, because it has been in `defP` since then. That covers project files and the autosave. On Open or start-up, `migEHEQ` sets `ehEQmode = 'agency'` for these files, so they **keep their saved value (normally 1.00) and their results are unchanged**.
+  - A file that has no `br.gEHEQ`, which means one saved before earth loads existed, gets `'gp'`.
+  - New projects (`defP`) get `'gp'`.
+  - Files saved by this version store `ehEQmode` and keep it.
+  - This is the same rule as abutment_calculator F25.
+- **Check case:** default example project, Abut. 1 (Rankine, active), no ground motion (EQ = 0). Extreme Event I.
+  - Unfactored EH at the bottom of footing: V_l = 339.728 kip, M_l = 2264.854 kip-ft (both increase the effect at max).
+  - V_l, bottom of footing, EE I. Before (γEH = 1.00): max = min = 1.00·339.728 = **339.728 kip**. After (γp): max = 1.50·339.728 = **509.592 kip**, min = 0.90·339.728 = **305.755 kip**.
+  - M_l, bottom of footing, EE I = (other loads) + γEH·2264.854, with other loads = −1394.172 at max. Before: max = −1394.172 + 2264.854 = **870.682 kip-ft**. After: max = −1394.172 + 1.50·2264.854 = **2003.109 kip-ft**. The min goes from −182.001 to −182.001 − 0.10·2264.854 = **−408.486 kip-ft**.
+  - Top of footing: V_l 245.454 → 368.180 / 220.908 kip; M_l 2252.309 → 2947.760 (max).
+  - Abut. 2 mirrors this. Piers (no EH) and every non-EE limit state: unchanged.
+  - "Fixed value (agency policy)" with 1.00 reproduces the old numbers exactly.
+- **How verified:**
+  - `node --check` on the three inline scripts.
+  - Headless Chromium, origin/main (c378e4c) vs branch, 9 scenarios. Each compared every `combine()` envelope, the EQ vectors, the concurrent sets, the foundation hand-off cases, both abutment exports, the saved `P`, the checks and the basis rows.
+    - Fresh project and fresh Zone 2: only abutment EE I resultants change (4 per abutment), as in the check case.
+    - Fresh project with the agency option; an old save in localStorage (with and without Zone 2); and an old file opened with Open (Zone 2): every number is identical to main. The saved state differs only by the added `ehEQmode: 'agency'`.
+    - An old file without `gEHEQ`, by Open and by localStorage: gets `'gp'`, and results equal the fresh-project case.
+    - The abutment export is identical. The abutment hand-off differs only in its `exported` time stamp.
+    - No console or page errors.
+  - Screenshot of the Bridge tab with the select, and with the agency value field shown, checked.
+- **Not changed:** the superseded early `combine` wrapper in the earth section (`const eh = c.eq ? [nz(br.gEHEQ) || 1, …`) is not used by the final engine and was left as is (O4).
+- **Other copies:** `abutment_calculator.html` F25 has the same rule (separate code; no shared snippet).

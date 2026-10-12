@@ -965,3 +965,328 @@ HUNK 11 (≈ line 3605 of the old file)
   - After: OL = 3.75, d_e(LLDF) = 2.25, matching the sent value. e_M = 0.77 + 2.25/9.1 = 1.017. Exterior gM = 0.833 (one-lane lever rule governs), gV = 0.859, fatM = 0.694.
 - **How verified:** jsdom, with lldf's real prefill button on main vs the fixed file (`railface.js`, `railface2.js`). The earlier data-loss test still passes, except its old-mapping assertion for OL, which now correctly reads 3.75.
 - **Other copies of this code:** none. The open item recorded in #36 is now resolved.
+
+## 2026-10-12 — PR: claude/sweep-lldf (PR link added after merge)
+
+Open-item sweep (inventory section 2). Engineer's instruction 2026-10-12: work through the open items using best judgement, and list what needs the engineer. Basis: AASHTO LRFD **10th Ed. (2024)**.
+
+Changes:
+- d_e upper-bound clamp removed (LLDF-O1, **calc**).
+- n from f′c for concrete girders (LLDF-O5, **calc**).
+- Separate moment / shear skew, and use of Bridge Geometry's `skewDetail` (follow-up to BG-OH2, **calc**).
+- Signed skew accepted as |θ| (LLDF-OH2, **calc** for a negative entry).
+- N_b = 3 lever rule over every truck count (LLDF-O8, **calc**, no change found).
+- `perFootStrip` flag (LLDF-O4, sender half).
+- Edition basis line (LLDF-O9).
+
+The shared `bridgeSuite.v1.*` bootstrap blocks, BridgeXfer, BridgeLocks and BridgeProjects are **not** touched. Saved data: three new optional input fields (`skewV`, `fcGirder`, `fcDeck`). Older saves load with them blank and give the same results, except where O1, O8 or OH2 apply (see each check case).
+
+### SW1. LLDF-O1: d_e no longer clamped at the upper bound of its range   [calc change] [MORE conservative]
+- **Where:**
+  - `memberDF(p,geo,Kg,skew,j)`, exterior branches of the box (f/g), spread box (b/c) and multicell (d) types. Anchors: `de=Math.min(de0,2.0)`, `de=Math.max(Math.min(de0,4.5),0)`, `de=Math.max(Math.min(de0,5.0),-2.0)`.
+  - `bridgeWarnings`, d_e range block. Anchor: `else if(BOX.has(p.type)){ hi=2.0;`.
+  - `memberSteps`, box d_e step. Anchor: `d_e=\\min\\!\\left(O-f,\\ 2.0\\right)`.
+- **Problem:**
+  - Above the range of applicability (adjacent box ≤ 2.0 ft, spread box ≤ 4.5 ft, multicell ≤ 5.0 ft), d_e was limited to the bound. That lowers e and the exterior DF, which is unconservative.
+  - A warning existed (F2), but the lower value was still used.
+  - The lower-bound clamps (spread box 0, multicell −2.0, beam-slab −1.0) raise e and are kept.
+- **Default picked:** use the actual d_e (extrapolate) and keep the out-of-range warning. It now reads: "The e-factor equations are extrapolated with the actual d_e (not limited to X ft, which would lower e); check the exterior girder by another method." There is no option: neither choice is "in range", and the clamp is the unconservative one.
+- **Governing provision:** AASHTO LRFD 10th Ed., with the ranges of applicability given in the same tables:
+  - Table 4.6.2.2.2d-1 (e for moment): box f/g 1.125 + d_e/30 and 1.04 + d_e/25; spread box 0.97 + d_e/28.5.
+  - Table 4.6.2.2.3b-1 (e for shear): box 1.25 + d_e/20 and 1 + ((d_e + b/12 − 2.0)/40)^0.5; spread box 0.8 + d_e/10; multicell 0.64 + d_e/12.5.
+- **Before:**
+  ```js
+    const side=(j===0)?"L":"R", de0=(side==="L")?geo.deL:geo.deR, de=Math.min(de0,2.0);
+  ...
+    const side=(j===0)?"L":"R", de0=(side==="L")?geo.deL:geo.deR, de=Math.max(Math.min(de0,4.5),0);
+  ...
+    const side=(j===0)?"L":"R", de0=(side==="L")?geo.deL:geo.deR, de=Math.max(Math.min(de0,5.0),-2.0);
+  ```
+  ```js
+    else if(BOX.has(p.type)){ hi=2.0; clampHi=true; }
+    else if(p.type==="bc"){ lo=0.0; hi=4.5; clampLo=clampHi=true; }
+    else if(p.type==="d"){ lo=-2.0; hi=5.0; clampLo=clampHi=true; }
+  ```
+- **After:**
+  ```js
+    // d_e above the 2.0 ft range limit is NOT clamped (the clamp lowered e: unconservative); the
+    // e-equations are extrapolated and bridgeWarnings says so.
+    const side=(j===0)?"L":"R", de0=(side==="L")?geo.deL:geo.deR, de=de0;
+  ...
+    // lower limit 0 kept (raises e); no upper clamp at 4.5 ft (extrapolated; the clamp lowered e)
+    const side=(j===0)?"L":"R", de0=(side==="L")?geo.deL:geo.deR, de=Math.max(de0,0);
+  ...
+    // lower limit −2.0 kept (raises e); no upper clamp at 5.0 ft (extrapolated; the clamp lowered e)
+    const side=(j===0)?"L":"R", de0=(side==="L")?geo.deL:geo.deR, de=Math.max(de0,-2.0);
+  ```
+  ```js
+    else if(BOX.has(p.type)){ hi=2.0; }
+    else if(p.type==="bc"){ lo=0.0; hi=4.5; clampLo=true; }
+    else if(p.type==="d"){ lo=-2.0; hi=5.0; clampLo=true; }
+  ```
+  - The extrapolation message replaces `The e-factor equations are extrapolated beyond their range; check the exterior girder by another method.` The `clampHi` branch is now unused.
+  - The box d_e calculation step changes from `d_e=min(O−f, 2.0)` ("d_e limited to 2.0 ft for box beams") to `d_e=O−f`, with the note: "Range of applicability d_e ≤ 2.0 ft; a larger d_e is used as is (the e-equations are extrapolated, which gives a larger e than limiting d_e to 2.0 ft)."
+- **Check case 1 (type f, adjacent boxes):**
+  - Inputs: L = 120 ft, b = 48 in, I = 110,499 in⁴, J = 200,000 in⁴, N_b = 8 @ 4 ft, O_L = 4.0 ft, rail face 1.5 ft (curb 18 in), so d_e = 2.50 ft; θ = 20°.
+  - Common values: k = 2.5(8)^−0.2 = 1.6494. Interior g: M1 = 0.15585, M2 = 0.26583, V1 = 0.40769, V2 = 0.43117. f_θ,M = 1.05 − 0.25 tan 20° = 0.95901. f_θ,V = 1 + (12×120/(90×33))√tan 20° = 1.29251.
+  - Before (d_e = 2.0):
+    - e_M1 = 1.125 + 2.0/30 = 1.19167; e_M2 = 1.04 + 2.0/25 = 1.12000.
+    - g_M = max(1.19167×0.15585, 1.12×0.26583) × 0.95901 = 0.29773 × 0.95901 = **0.2855**.
+    - e_V1 = 1.35; e_V2 = 1 + √((2.0 + 4 − 2)/40) = 1.31623.
+    - g_V = max(1.35×0.40769, 1.31623×0.43117) × 1.29251 = 0.56751 × 1.29251 = **0.7335**.
+  - After (d_e = 2.5):
+    - e_M2 = 1.14000, so g_M = 1.14 × 0.26583 × 0.95901 = **0.2906**.
+    - e_V2 = 1 + √(4.5/40) = 1.33541, so g_V = 1.33541 × 0.43117 × 1.29251 = **0.7442**.
+    - Fatigue: M 0.1484 → 0.1505; V 0.5928 → 0.6038.
+- **Check case 2 (type b/c, spread box):**
+  - Inputs: L = 100 ft, d = 48 in, S = 11 ft (4 beams), O_L = 7 ft, rail face 1.5 ft, so d_e = 5.50 ft. g_int,V2+ = (11/7.4)^0.8 (48/1200)^0.1 = 0.99526.
+  - Before (d_e = 4.5): e_V = 0.80 + 4.5/10 = 1.25, giving 1.24407. That is below the one-lane lever rule 1.2545, so g_V = **1.2545**.
+  - After (d_e = 5.5): e_V = 1.35, so g_V = 1.35 × 0.99526 = **1.3436**.
+  - Moment is unchanged: e_M·g = 0.8246, below the lever rule 1.2545.
+- **Check case 3 (type d, multicell):**
+  - Inputs: L = 100 ft, d = 60 in, S = 12 ft, O_L = 7 ft, so d_e = 5.50 ft. g_int,V2+ = (12/7.3)^0.9 (60/1200)^0.1 = 1.15923.
+  - Before: e_V = 0.64 + 5.0/12.5 = 1.04, giving 1.2056 (below the lever rule 1.25), so g_V = **1.25**.
+  - After: e_V = 1.08, so g_V = **1.2520**.
+- **d_e inside the range:** no change. Checked for types b/c, d, f and g.
+
+### SW2. LLDF-O5: modular ratio n from the girder and deck f′c for concrete girders   [calc change] [MORE conservative]
+- **Where:**
+  - HTML `#sectRow`: the n row, and a new row `#fcGirder` / `#fcDeck`.
+  - New helpers `fcInput` and `nFromFc` (before `readInputs`).
+  - `readInputs`, `applySection`, `serialize`, `applyState`.
+  - A new `input` listener after the `stdSection` listener.
+  - `bridgeWarnings`, and the `memberSteps` K_g step (n shown with 2 decimals).
+  - Anchors: `id="n" value=`, `function nFromFc(`, `const nc=nFromFc(fcInput("fcGirder"),fcInput("fcDeck"));`, `["fcGirder","fcDeck"].forEach(id=>$(id).addEventListener`, `Modular ratio n = `.
+- **Problem:** picking a concrete library section set n = 1, and the fresh page had n = 1 for an AASHTO Type IV. AASHTO n = E_B/E_D. With a girder f′c above the deck f′c, n ≈ 1.1–1.3, which raises K_g and the moment DFs.
+- **Default picked:**
+  - Two new inputs, "Girder / deck f′c", with fresh-page values 8.0 / 4.0 ksi.
+  - For a concrete girder (beam shape not "Steel I-beam"), a library pick or an f′c edit sets n = E_c,girder / E_c,deck, rounded to 0.01. n stays editable.
+  - A design-app section lock (geometry or psSection) still wins: f′c edits do not change n then.
+  - Steel picks keep n = 8 (unchanged).
+  - If an f′c is blank, a library pick sets n = 1 as before, and an info note asks for f′c.
+  - If both f′c are given and n differs from the computed value by more than 0.006, a warning says so (not while locked).
+- **Governing provision:** AASHTO LRFD 10th Ed.:
+  - Eq. 4.6.2.2.1-1 (K_g = n(I + A e_g²)) and Eq. 4.6.2.2.1-2 (n = E_B/E_D).
+  - Eq. 5.4.2.4-1, E_c = 120,000 K₁ w_c^2.0 f′c^0.33. K₁ = 1, and it cancels in the ratio.
+  - w_c for normal-weight concrete per Table 3.5.1-1: 0.145 kcf for f′c ≤ 5.0 ksi; 0.140 + 0.001 f′c for 5.0 < f′c ≤ 15.0 ksi (**verify** the table values against the printed 10th Ed.).
+- **Before:**
+  ```html
+              <div class="frow"><label>Modular ratio <span class="sym">n</span></label><div class="fval"><input type="number" id="n" value="1" step="0.1"/><span class="u"></span></div></div>
+  ```
+  ```js
+    else { $("I").value=s.I; $("A").value=s.A; if(s.yb!=null) $("eg").value=((s.d-s.yb)+ts/2).toFixed(2); $("n").value=1; }
+  ```
+- **After:**
+  ```html
+              <div class="frow"><label>Modular ratio <span class="sym">n</span></label><div class="fval"><input type="number" id="n" value="1.31" step="0.1" title="n = E_B / E_D (Eq. 4.6.2.2.1-2). For a concrete girder it is computed from the girder and deck f&prime;c below (Eq. 5.4.2.4-1); you can still type a value."/><span class="u"></span></div></div>
+              <div class="frow"><label>Girder / deck <span class="sym">f&prime;<sub>c</sub></span> <span style="font-size:10.5px;color:var(--muted)">concrete girder: sets n</span></label><div class="fval"><input type="number" id="fcGirder" value="8.0" step="0.5" style="width:72px" title="(see file)"/><span class="u">ksi</span><input type="number" id="fcDeck" value="4.0" step="0.5" style="width:72px" title="Deck concrete f&prime;c."/><span class="u">ksi</span></div></div>
+  ```
+  ```js
+  function fcInput(id){ const e=$(id); if(!e||e.value==="") return null; const v=+e.value; return (isFinite(v)&&v>0)?v:null; }
+  function nFromFc(fcB,fcD){
+    if(!(fcB>0&&fcD>0)) return null;
+    const wc=f=>f<=5.0?0.145:0.140+0.001*f, Ec=f=>120000*Math.pow(wc(f),2)*Math.pow(f,0.33);
+    return Math.round(Ec(fcB)/Ec(fcD)*100)/100;
+  }
+  ```
+  ```js
+    else { $("I").value=s.I; $("A").value=s.A; if(s.yb!=null) $("eg").value=((s.d-s.yb)+ts/2).toFixed(2);
+      // n = E_girder/E_deck from the two f'c (was hard-set to 1, which understates K_g); 1 if f'c is blank.
+      const nc=nFromFc(fcInput("fcGirder"),fcInput("fcDeck")); $("n").value=(nc!=null?nc:1); }
+  ```
+  - `readInputs` adds `fcGirder:fcInput("fcGirder"),fcDeck:fcInput("fcDeck")`.
+  - `serialize` adds `inputs.fcGirder` / `inputs.fcDeck` only when they are not blank. `applyState` sets them blank when absent.
+  - The K_g step and its "where" row show n with `f2` (was `f1`, which printed 1.31 as "1.3").
+- **Check case (fresh page):**
+  - Inputs: type k, AASHTO Type IV (I = 260,730 in⁴, A = 789 in², e_g = 35.5 in), L = 120 ft, t_s = 8 in, S = 9.75 ft, 5 beams.
+  - E_c,girder = 120,000 × 0.148² × 8^0.33 = 5,220.6 ksi. E_c,deck = 120,000 × 0.145² × 4^0.33 = 3,986.5 ksi. n = 1.3096, rounded to **1.31**.
+  - Before (n = 1):
+    - K_g = 260,730 + 789 × 35.5² = **1,255,067 in⁴**.
+    - (K_g/12Lt_s³)^0.1 = (1,255,067/737,280)^0.1 = 1.05464.
+    - g_M,2+ = 0.075 + (9.75/9.5)^0.6 (9.75/120)^0.2 × 1.05464 = 0.075 + 1.015702 × 0.605309 × 1.05464 = **0.7234**.
+    - Fatigue M = g_M,1/1.2 = 0.48974/1.2 = **0.4081**.
+  - After (n = 1.31):
+    - K_g = **1,644,138 in⁴**; the stiffness term = 1.08350.
+    - g_M,2+ = **0.7411**; fatigue M = 0.50150/1.2 = **0.4179**.
+  - Only the interior girders B2–B4 change. The exterior girders (lever rule 0.892) and all shear DFs (no K_g term without skew) are unchanged.
+  - Library pick AASHTO IV with f′c 8/4: n 1 → 1.31. Other f′c pairs: 6/4 gives n = 1.16; 6/5 gives 1.08; 10/5 gives 1.35.
+- **Saved data:** older saves and autosaves load with both f′c blank and **their own n**, so their results do not change. An info note then asks for f′c when n ≤ 1 on a concrete girder.
+
+### SW3. Separate skew for shear θ_V; Bridge Geometry `skewDetail` used (follow-up to BG-OH2)   [calc change: new optional input] [MORE conservative for moment when used; shear uses the sender's largest |θ|]
+- **Where:**
+  - HTML: new row `#skewV` under "Skew angle θ".
+  - Main script: `skewFactors`; `memberDF` (spread box `fV`, multicell `fVext`/`fVint`); `bridgeWarnings`; `inputErrors`; `memberSteps` (all shear skew steps); `readInputs` (`skewVInput`); `serialize`/`applyState`; `simpleIds`.
+  - Integration block: new `geomSkews(g)`; `geomOverwriteList`, `geomDelta`, `applyGeom`, the `renderGeomSource` labels, `GEOM_DRIVEN_IDS`, `buildDFPayload`.
+  - Anchors: `id="skewV"`, `function skewFactors(p,geo,Kg){`, `skew.tanV`, `Separate skews:`, `function geomSkews(g){`, `var gsk=geomSkews(g);`, `payload.skewShear`.
+- **Problem:**
+  - lldf takes one θ and uses it for both the moment reduction and the shear correction.
+  - Bridge Geometry (fixlog "Bridge Geometry" 2026-10-12 W1) now sends the moment value by default. It sends both values in the optional top-level `skewDetail`: `moment` = smallest |θ| (0 if adjacent supports differ by more than 10°) and `shear` = largest |θ|. It asks for a second run for the other action.
+- **After:**
+  ```js
+    const th=Math.abs(+p.skew||0), thV=(p.skewV!=null&&isFinite(p.skewV))?Math.abs(+p.skewV):th;
+    if(th<=0&&thV<=0) return {active:false,scfM:1,scfV:1,c1:0,thU:0,th:0,thV:0,thVU:0,tanV:0,kind:"none"};
+    const thU=Math.min(th,60), rad=thU*Math.PI/180, tan=Math.tan(rad);
+    const thVU=Math.min(thV,60), tanV=Math.tan(thVU*Math.PI/180);
+  ```
+  - Every shear correction uses `tanV` instead of `tan`: box `Math.sqrt(Math.max(0,tanV))`, beam-slab `…*tanV`, spread box and multicell `skew.tanV`. The moment corrections are unchanged.
+  - With θ_V blank, `thV = th`, and every result is identical to before.
+  ```js
+  function geomSkews(g){
+    var i=(g&&g.inputs)||{}, sd=g&&g.skewDetail;
+    var ok=function(v){ return typeof v==='number'&&isFinite(v)&&Math.abs(v)<90; };
+    if(sd&&typeof sd==='object'&&ok(sd.moment)&&ok(sd.shear)){
+      var m=+Math.abs(sd.moment).toFixed(3), v=+Math.abs(sd.shear).toFixed(3);
+      return {skew:m, skewV:(Math.abs(v-m)>1e-9)?v:'', fromDetail:true};
+    }
+    if(i.skew!=null) return {skew:Math.abs(+i.skew), skewV:'', fromDetail:false};
+    return null;
+  }
+  ```
+  - `applyGeom`, after the d_e → O_L line: `delete inp.skewV; var gsk=geomSkews(g); if(gsk){ inp.skew=gsk.skew; inp.skewV=gsk.skewV; }`.
+  - The banner lists "Skew θ (moment): a → b deg" and "Skew for shear θ_V: a → b deg / blank (= θ)".
+- **Behaviour:**
+  - A Bridge Geometry hand-off with a valid `skewDetail` sets θ = `skewDetail.moment` and θ_V = `skewDetail.shear` (blank when they are equal). This happens whichever single value the engineer chose to send in `inputs.skew`, so one run gives both.
+  - A hand-off with a skew but no `skewDetail` (MCT, PS-Beam, ST-Girder, older Bridge Geometry) sets θ and clears θ_V. A stale θ_V can never survive a new layout.
+  - An invalid `skewDetail` is ignored.
+  - `skewDetail` is still not saved; only the resulting `skew`/`skewV` inputs are.
+  - The DF hand-off adds `skewShear` (θ_V) only when θ_V is entered. `skew` stays the moment θ.
+- **Governing provision:** AASHTO LRFD 10th Ed.:
+  - Art. 4.6.2.2.2e and Table 4.6.2.2.2e-1: moment reduction, including the 10° adjacent-support rule (**verify** the wording against the printed 10th Ed.).
+  - Art. 4.6.2.2.3c and Table 4.6.2.2.3c-1: shear correction at the obtuse corner.
+- **Check case:**
+  - Inputs: type k with n = 1, so the inputs match the old defaults: L = 120 ft, S = 9.75 ft, t_s = 8 in, K_g = 1,255,067 in⁴.
+  - c₁ = 0.25 (1,255,067/737,280)^0.25 (9.75/120)^0.5 = 0.25 × 1.14225 × 0.28504 = 0.081398.
+  - Shear factor at 40°: 1 + 0.20 × (737,280/1,255,067)^0.3 × tan 40° = 1 + 0.2 × 0.85251 × 0.83910 = 1.14307.
+  - Single θ = 40° (before, the only option; the "shear" run):
+    - f_θ,M = 1 − 0.081398 × 0.83910^1.5 = 0.93743.
+    - Interior g_M = 0.72339 × 0.93743 = **0.6781**; g_V = 0.93487 × 1.14307 = **1.0686**.
+  - θ = 30°, θ_V = 40° (after, from `skewDetail` moment 30 / shear 40):
+    - f_θ,M = 1 − 0.081398 × 0.57735^1.5 = 0.96429.
+    - Interior g_M = **0.6976**: +2.9 %, more conservative than the 40° moment. g_V = **1.0686**, the same as the 40° run.
+    - Exterior g_M 0.8365 → 0.8604; g_V 1.020, unchanged.
+  - Bridge Geometry demo (supports 0° / 15° / 0°): `skewDetail` moment 0, shear 15, so θ = 0 and θ_V = 15. No moment reduction; the shear factor is taken at 15°.
+
+### SW4. LLDF-OH2: a signed (negative) skew is accepted and used as |θ|   [calc change for a negative entry] [shear MORE conservative; moment per the code]
+- **Where:**
+  - `validateGeom`. Anchor: `must be |θ| < 90 deg`.
+  - `geomSkews` / `applyGeom` (SW3).
+  - `readInputs`. Anchor: `skew:Math.abs(+$("skew").value)`.
+  - `skewFactors` (`Math.abs`).
+  - `serialize`. Anchor: `skew:+$("skew").value`.
+- **Problem:**
+  - A negative skew from MCT / PS-Beam / ST-Girder was refused by the hand-off validation added with the Bridge Geometry connection.
+  - A negative skew typed by hand gave **no** skew correction at all (`th<=0` made the skew inactive), so the shear correction was silently lost.
+  - The sign of θ does not enter Tables 4.6.2.2.2e-1 / 4.6.2.2.3c-1.
+- **Before:**
+  ```js
+    if(i.skew!=null&&(!fin(i.skew)||i.skew<0||i.skew>=90)) e.push('skew = '+i.skew+' (must be 0 ≤ θ < 90 deg)');
+  ```
+  ```js
+      ts:+$("ts").value,depth:+$("depth").value,skew:+$("skew").value,
+  ```
+- **After:**
+  ```js
+    // A negative (signed) skew is accepted and used as |θ|: the sign does not affect the DFs (LLDF-OH2).
+    if(i.skew!=null&&(!fin(i.skew)||Math.abs(i.skew)>=90)) e.push('skew = '+i.skew+' (must be |θ| < 90 deg)');
+  ```
+  ```js
+      ts:+$("ts").value,depth:+$("depth").value,skew:Math.abs(+$("skew").value),   // sign ignored (|θ|)
+  ```
+  - `serialize` writes the skew **as entered** (`skew:+$("skew").value`), so saved files keep the sign.
+  - The DF hand-off `skew` is |θ|.
+  - A non-positive t_s or depth is still refused (unchanged).
+- **Check case:** type k, n = 1, θ = −40° entered.
+  - Before: interior g_M 0.7234 / g_V 0.9349; exterior 0.8923 / 0.8923. No skew correction was applied.
+  - After: identical to +40°: interior 0.6781 / 1.0686; exterior 0.8365 / 1.020.
+  - An MCT payload with skew −20 was refused before ("must be 0 ≤ θ < 90 deg"). It now prefills θ = 20.
+
+### SW5. LLDF-O8: N_b = 3 lever rule takes the governing of every multi-truck count   [calc change] [never less conservative; no change found]
+- **Where:** `memberDF`, beam-slab interior and exterior N_b = 3 branches. Anchors: `} else if(n3){ // Nb=3`, `} else if(n3){ const lv2=`. `memberSteps` `n3Step` now shows the truck count.
+- **Before:**
+  ```js
+          const lv1=leverConfig(p,geo,j,1), lv2=leverConfig(p,geo,j,2);
+  ...
+      } else if(n3){ const lv2=leverConfig(p,geo,j,2); n3info={lv2,eqM:mE};
+  ```
+- **After:**
+  ```js
+          // lv2 = governing of N = 2..N_L trucks (leverMulti), as for S > 16 ft (was 2 trucks only)
+          const lv1=leverConfig(p,geo,j,1), lv2=leverMulti(p,geo,j);
+  ...
+      } else if(n3){ const lv2=leverMulti(p,geo,j); n3info={lv2,eqM:mE};   // governing of N = 2..N_L trucks
+  ```
+- **Governing provision:** AASHTO LRFD 10th Ed.:
+  - Tables 4.6.2.2.2b-1 / 4.6.2.2.3a-1 / 4.6.2.2.2d-1 / 4.6.2.2.3b-1: for N_b = 3, moment is the lesser of the equation and the lever rule, and shear is by the lever rule.
+  - Art. 3.6.1.1.2: multiple presence factors 1.00 / 0.85.
+- **Check case:**
+  - `leverMulti` returns the 2-truck configuration whenever only two lanes exist, so nothing changes there.
+  - Grid tried: types k and a, 3 girders, S = 8–16 ft, O = 2–6 ft, L = 100 ft, including 3-lane roadways. **No result changed**: three trucks × 0.85 never beat two trucks × 1.00 on three girders.
+  - Hand check (interior girder, S = 14 ft):
+    - 2 trucks, wheels at −8 / −2 / +2 / +8 ft: R = ½(0.429 + 0.857 + 0.857 + 0.429) = 1.286, so g = 1.286.
+    - 3 trucks centred, wheels at ±3 / ±7 / ±13 ft: R = 1.357, so g = 0.85 × 1.357 = 1.153, less than 1.286.
+
+### SW6. LLDF-O4 (sender half): `perFootStrip:true` on the CIP slab DF hand-off   [hand-off: new optional field] [no result change]
+- **Where:** `buildDFPayload`, before `return payload;`. Anchor: `payload.perFootStrip=true`.
+- **After:**
+  ```js
+    if(p.skewV!=null) payload.skewShear=+p.skewV;
+    if(p.type==='slab') payload.perFootStrip=true;
+  ```
+- For the slab type, `gM`/`gV`/`fatM`/`fatV` are per 1-ft strip; the flag says so.
+- The flag is absent for every other type, so their payloads are byte-identical to before (checked).
+- **Receivers are not changed** (other tools; see "Remaining open items").
+
+### SW7. LLDF-O9: edition basis line   [docs] [no result change]
+- **Where:** title block. Anchor: `<div class="sub">AASHTO LRFD Bridge Design Specifications`.
+- **Before:** `AASHTO LRFD Bridge Design Specifications · MassDOT Bridge Manual Part I`
+- **After:** `AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024) · MassDOT Bridge Manual Part I`. It is inside `#sheet`, so it prints.
+
+### Closed without a code change
+- **LLDF-O7 (CIP slab strip width on the clear roadway; no slab skew factor, Eq. 4.6.2.3-3):** both are conservative. A narrower W gives a smaller E and so a larger 12/E. The skew factor r ≤ 1.0 would only reduce the strip force. Kept as is by default, and noted on the record.
+- **LLDF-H1 (DF payload `project` is a string; no `producerFile`):** kept for the existing receivers, and documented in HANDOFF.md §4.3. No change.
+- **O-H1 (prefill wiped user data):** fixed by B1 (2026-10-04).
+- **O-B1:** fixed by F-rail (2026-10-05).
+
+### How verified
+- `node --check` on all nine inline scripts.
+- Headless Chromium (Playwright), origin/main vs branch, with the same harness (scratchpad `lldfsw/run.js`, `cmp.js`, `explore.js`, `handoff.js`, `fc.js`). The page needs no CDN (KaTeX is inlined). The only console error, on both, is the blocked Google Fonts request.
+- Regression set: the fresh page, 17 saved-input sets and 4 library picks.
+  - The sets cover types a, k, e, b/c, d, f, g and slab; 1 and 3 spans; N_b = 3; skews 0 / 35 / 40 / −40; d_e inside and outside the range.
+  - Compared: all per-region member DFs (`computeBridge` for every span and pier region), `serialize(true)`, the `bridgeSuite.v1.lldf` payload, and the warnings.
+  - Every difference is explained:
+    - fresh-page n (SW2);
+    - the −40° case (SW4);
+    - f_de_hi (SW1);
+    - the slab `perFootStrip` flag (SW6);
+    - warning texts: the SW1 wording, and the SW2 n note on concrete girders with n = 1 and blank f′c.
+  - Everything else is identical. This includes old saves loaded with n = 1 (their n and results are kept) and the serialized inputs (no new keys when the new fields are blank). Hand-off timestamps are excluded from the comparison.
+- d_e grid (`explore.js`, 41 configurations): results change only where d_e is above the upper bound and the e-factor governs (SW1 check cases 2 and 3).
+- Hand-off (`handoff.js`), through the real "Pull geometry" → banner → "Prefill" path:
+  - Bridge Geometry with `skewDetail` 30/40: θ 30, θ_V 40. The banner lines are correct, and `geomSource.fields` includes `skewV`.
+  - Equal skews: θ_V blank.
+  - `skewDetail` 0/15 with 15 sent: θ 0, θ_V 15.
+  - No `skewDetail`: θ as sent, and a stale θ_V is cleared.
+  - MCT payload with skew −20: refused on main; θ = 20 on the branch.
+  - No page errors.
+- f′c / n behaviour (`fc.js`): library picks, f′c edits, a typed n (warning), blank f′c (n = 1 and the note), steel (n = 8, f′c ignored).
+- Screenshots looked at (scratchpad `lldfsw/shots/`): the skew rows after a prefill, the banner, the section-property row (wide and 420 px), and the box skew steps with θ ≠ θ_V.
+
+### Needs engineer
+- **Q-L1 (LLDF-O5 defaults):**
+  - Confirm the fresh-page f′c defaults (8.0 ksi girder / 4.0 ksi deck, n = 1.31), or give the office defaults.
+  - Confirm that w_c per Table 3.5.1-1 (0.140 + 0.001 f′c above 5 ksi) is the intended basis. The alternative is one unit weight for both concretes, which gives n = (f′c,B/f′c,D)^0.33 = 1.257 for 8/4.
+  - Recommendation: keep both.
+- **Q-L2 (SW3):** a Bridge Geometry hand-off with `skewDetail` now fills both θ (moment) and θ_V (shear), whichever single value the sender's dialog chose. Recommendation: keep, since one run gives code-correct moment and shear DFs. Bridge Geometry's dialog notes still mention a second run; that text can be relaxed in a Bridge Geometry PR.
+- **LLDF-O2 (N_b = 3 exterior):** keep `min(e·g_int,eq, lever)` (current), or apply e to the reduced interior value? Recommendation: keep the current reading (the rigid floor still applies).
+- **LLDF-O3 (negative-region K_g):** add a separate negative-region K_g input? Recommendation: if the owner requires it, add an optional "K_g,neg" used only for the pier regions.
+- **LLDF-O6 ("two adjacent beams" relief):** keep the −P·a/S relief on the first interior beam (statics), or drop it like the MassDOT pile-cap option? Recommendation: MassDOT to confirm; keep statics meanwhile.
+
+### Remaining open items
+- **LLDF-S10 (postMessage source check):**
+  - The only `message` listener in lldf.html is the `whois` responder in `BridgeApps.announce`. It sits in the shared bootstrap block, which is also in index.html, psbeam.html and stgirder.html (see fixlog/index.md R2).
+  - The listener only re-sends the app's own name and file.
+  - Recommendation: add `if(e.source!==window.parent) return;` in all four files in one shared-snippet PR. Not changed here (shared block).
+- **LLDF-O4 (receivers):** index.html, psbeam.html, stgirder.html and Moving Load Generator.html should refuse or label a DF payload with `perFootStrip:true` (per-foot strip factors) before using `gM`/`gV` as per-girder factors. Separate PRs per receiver.
+- **HANDOFF.md (docs):** not edited here (tool file and fix log only).
+  - §4.3: add the optional `skewShear` and `perFootStrip` fields to `bridge-lldf-factors`.
+  - §4.2: note that lldf reads `skewDetail.moment` / `.shear`.
