@@ -1652,7 +1652,124 @@ function asdInputTabMarks(){
   - Screenshots of every tab of the three sub-apps at 1400 px and 400 px.
 - **Other copies:** the Dev tab code is the shared snippet also in `ACI Rebar Development Length.html` (now identical, modulo srcdoc escaping). The Capacity and ASD tab code exists only here (the standalone `Concrete Beam ASD.html` has its own, different tab code, `cbasd_inputTab_v1`, fix log there).
 
+## 2026-10-12 — PR: claude/sweep-cbc-rebar (PR link added after merge)
+
+Open-item sweep of inventory section 10 (engineer 2026-10-12: "continue making updates and fixes until it's completed … use your best judgment"). Basis: ACI 318-19 and AASHTO LRFD 10th Ed. (2024). Article numbers marked "verify" were not checked against a printed copy. Because the Dev tab is the shared ACI Rebar app (CLAUDE.md §3), this PR also changes `ACI Rebar Development Length.html` and its log (coordinator decision under the engineer's delegation).
+
+All edits were made on the un-escaped srcdoc of each sub-app by scripted exact-string replacement (each anchor found exactly once), then re-escaped (`&` → `&amp;`, `"` → `&quot;`) and put back; the escape round trip of the untouched text is exact. The shell relay (S10) was edited directly. CRLF kept.
+
+**How verified (all entries):** `node --check` of every inline script of the shell and the three sub-apps (7 blocks, 0 failures). Headless Chromium 1194 (Playwright) with KaTeX 0.16.11 / 0.16.9, Plotly 2.32.0 / 2.27.0 and three.js 0.160.0 served locally, origin/main 20830eb vs branch, 42 scenarios: Capacity 21 (the 15 of the T1 comparison plus Gr 80, heavily reinforced 6#9, AASHTO f′c 12 / fy 90 / fyt 110, ACI fy 75 with torsion, wide stirrup spacing with torsion, no stirrups with V_u 9 / 7 / 4 kip), ASD 9 (T1 set plus f′c = 0 received), Dev 12 (T1 set plus #14 hook confined, AASHTO #18, λ = 0.85, AASHTO lightweight, capped factors). Compared: HTML of every output tab, status chip, VALIDATION, printed report, state / Export JSON, autosave, saved-project list, Save → Load and Import round trips (exact on both), reload, input values, localStorage keys, ASD inherited values and summary, Share-project-info payload. Every difference was traced to an item below (the aggregated list of changed fragments is in the PR verification notes); nothing else changed. No console or page errors on main or branch. Separate checks: the real `computeAll()` numbers quoted in the check cases (main vs branch), the ASD title-block follow rule, spoofed postMessages (S10), screenshots of the changed ASD and Dev views (looked at).
+
+**Saved data (§5):** no key or format changed. New optional fields: ASD state `projFromCap` (object; absent = previous behaviour), Dev `inp.lwLambda` (see the Rebar log). New default title block (O17) affects new sessions only; saved states keep their own.
+
+### W1. ACI 9.3.3.1 beam minimum net tensile strain: ε_t ≥ ε_ty + 0.003 (CBC-O1)   [calc change (check limit)] [MORE conservative]
+- **Where:** `detailing`, check `dEpsMin`. Anchor: `const epsMinACI=fy/ES+0.003;`
+- **Before:** `F.eps_t,0.004,"\\ge","",F.eps_t>=0.004,` (both codes; AASHTO is advisory)
+- **After:** ACI: `need = fy/ES + 0.003`, `ok = F.eps_t >= fy/ES+0.003`, derivation `ε_t ≥ ε_ty + 0.003`. AASHTO advisory text and 0.004 unchanged.
+- **Governing provision:** ACI 318-19 §9.3.3.1 (nonprestressed beams with Pu < 0.10f′cAg: ε_t ≥ ε_ty + 0.003; 318-14 had 0.004). Please confirm against your printed copy (it was open item O1).
+- **Check case:** Gr 60: ε_ty = 60/29,000 = 0.002069 → limit **0.004 → 0.005069**. Gr 80: 0.002759 + 0.003 = 0.005759. Default section (ε_t = 0.01748): PASS before and after; the dashboard utilisation 0.004/0.01748 = 0.23 → 0.005069/0.01748 = 0.29. A Gr 60 beam with ε_t = 0.0045: PASS before, **FAIL** after.
+
+### W2. AASHTO φ: tension-controlled strain limit interpolated for fy > 75 ksi (CBC-O4)   [calc change] [MORE conservative for fy > 75 ksi; no change for fy ≤ 75]
+- **Where:** new `aashtoEtl(fy)` before `phiFlex`; `phiFlex` AASHTO branch; `workFlexure` Step 5 shows the ε_tl line when fy > 75; the AASHTO fy > 75 warning names ε_tl.
+- **Before:**
+  ```js
+    if(et>=0.005) return {phi:0.90,cls:"Tension Controlled"};
+    if(et<=ety)   return {phi:0.75,cls:"Compression Controlled"};
+    return {phi:0.75+0.15*(et-ety)/(0.005-ety),cls:"Transition"};
+  ```
+- **After:**
+  ```js
+  function aashtoEtl(fy){ return fy<=75 ? 0.005 : Math.min(0.008,0.005+0.003*(fy-75)/25); }
+  ...
+    const etlA=aashtoEtl(fy);
+    if(et>=etlA) return {phi:0.90,cls:"Tension Controlled"};
+    if(et<=ety)   return {phi:0.75,cls:"Compression Controlled"};
+    return {phi:0.75+0.15*(et-ety)/(etlA-ety),cls:"Transition"};
+  ```
+- **Governing provision:** AASHTO LRFD 10th Ed. 5.6.2.1 (ε_tl = 0.005 for fy ≤ 75 ksi, 0.008 for fy = 100 ksi, linear between — verify), 5.5.4.2 (φ transition). ε_cl kept at fy/Es (see Needs engineer 2).
+- **Check case:** AASHTO, 12 × 18 in., f′c = 4 ksi, 4 #8 bottom, fy = 90 ksi, M_u = 150 k-ft: ε_t = 0.003514, ε_cl = 90/29,000 = 0.003103, ε_tl = 0.005 + 0.003·15/25 = 0.0068. Before φ = 0.75 + 0.15(0.003514 − 0.003103)/(0.005 − 0.003103) = **0.7824**, φM_n = 0.7824 × 286.37 = **224.07 k-ft**. After φ = 0.75 + 0.15(0.000410)/(0.003697) = **0.7666**, φM_n = **219.55 k-ft**.
+
+### W3. AASHTO α1 reduced above 10 ksi (CBC-O8)   [calc change] [MORE conservative for AASHTO f′c > 10 ksi; no change otherwise, ACI never]
+- **Where:** new `alpha1(fc)` after `beta1`; `flexure` (`Cc` and the displaced-concrete terms use `A1` instead of `0.85`); `A1` returned in `F`; Flexure tab texts show `fmt(F.A1,2)` (reads "0.85" whenever α1 = 0.85) and an α1 line in Step 4 when α1 ≠ 0.85.
+- **Before:** `return 0.85*fc*(effTee?bf:bw)*a;` (and three more `0.85*fc`)
+- **After:** `function alpha1(fc){ return (S.code==='AASHTO' && fc>10) ? Math.max(0.75,0.85-0.02*(fc-10)) : 0.85; }` and `return A1*fc*(effTee?bf:bw)*a;` etc.
+- **Governing provision:** AASHTO LRFD 10th Ed. 5.6.2.2 (α1 = 0.85 for f′c ≤ 10 ksi, minus 0.02 per ksi above 10, ≥ 0.75). ACI 318-19 22.2.2.4.1 (0.85).
+- **Check case:** AASHTO, 12 × 18 in., f′c = 12 ksi (β1 = 0.65), fy = 60, 5 #9 bottom + 3 #5 top: α1 = 0.85 − 0.02·2 = **0.81**. a: 2.313 → **2.406 in.**, c: 3.558 → 3.701 in., M_n 342.15 → **340.73 k-ft**, φM_n 307.94 → **306.65 k-ft** (φ = 0.90 both).
+
+### W4. AASHTO transverse-reinforcement yield ≤ 100 ksi (CBC-O5)   [calc change] [MORE conservative only when fyt > 100 ksi is entered]
+- **Where:** `fytDesign` (anchor `function fytDesign(){`), new validation warning.
+- **Before:** `return S.code==='ACI' ? Math.min(S.mat.fyt,60) : S.mat.fyt;`
+- **After:** `return S.code==='ACI' ? Math.min(S.mat.fyt,60) : Math.min(S.mat.fyt,100);`
+- **Governing provision:** AASHTO LRFD 10th Ed. 5.4.3.1 / 5.7.2.8 (design yield of transverse reinforcement ≤ 100 ksi — verify; older editions used 75 ksi).
+- **Check case:** default section, AASHTO, fyt = 110 ksi, V_u = 40 kip: V_s 127.23 → **115.66 kip** (× 100/110); φV_n 128.98 → **118.57 kip**; A_v,min/s 0.00689 → 0.00758 in.²/in. fyt ≤ 100: unchanged.
+
+### W5. ACI torsion: longitudinal fy ≤ 60 ksi (CBC-O6)   [calc change] [MORE conservative when fy > 60 ksi and torsion is on]
+- **Where:** `torsion` (anchor `const fyl=Math.min(fy,60);`), used in `Tn_l`, `Al_req`, `AlT1`, `AlT2`; returned as `fyl`; displays in `detailing` (dTorAl, dTorAlReq) and `workTorsion` use `fyl`; new validation warning "longitudinal torsion steel … computed with f_y = 60 ksi".
+- **Before:** `const Tn_l=ph>0? 2*Ao*(Al/ph)*fy*tan : 0;` and `fy` in `Al_req`, `AlT1 = 5√f′c·Acp/fy`, `AlT2 = (At/s)·ph·fyt/fy`.
+- **After:** the same with `fyl = Math.min(fy,60)`.
+- **Governing provision:** ACI 318-19 Table 20.2.2.4(a) (torsion, longitudinal and transverse: fy, fyt ≤ 60,000 psi).
+- **Check case:** default section, fy = 75 ksi, A_ℓ = 1.2 in.², T_u = 8 k-ft, V_u = 20 kip: T_n,ℓ = 2A_o·A_ℓ·fy/p_h·tanθ: 30.74 → **24.59 k-ft** (× 60/75); T_n = min(28.69, T_n,ℓ): 28.69 → **24.59 k-ft** (longitudinal now governs); φT_n 21.52 → **18.44 k-ft**; A_ℓ,req 0.416 → **0.521 in.²**. Flexure unchanged (still 75 ksi).
+
+### W6. ACI A_ℓ,min: lesser of 9.6.4.3 (a) and (b) (CBC-O11)   [calc change] [LESS conservative when A_t/s < 25b_w/f_yt — §4 sign-off needed]
+- **Where:** `torsion` (anchor `const AtsCredit=Math.max(At_s,AtsFloor);`), dTorAl / dTorAts texts, `workTorsion` A_ℓ,min block.
+- **Before:** `const AlT2=At_s*ph*(fyt/fy); const Al_min=Math.max(0,AlT1-AlT2);` (expression (a) only)
+- **After:** `const AtsCredit=Math.max(At_s,AtsFloor); const AlT2=AtsCredit*ph*(fyt/fyl); const Al_min=Math.max(0,AlT1-AlT2);` (lesser of (a) and (b) = the larger credit)
+- **Governing provision:** ACI 318-19 §9.6.4.3 (A_ℓ,min = lesser of (a) 5√f′c·Acp/fy − (At/s)·ph·fyt/fy and (b) 5√f′c·Acp/fy − (25bw/fyt)·ph·fyt/fy).
+- **Check case:** changes only when A_t/s < 25b_w/f_yt. Default section, no stirrups, torsion on: A_cp = 216 in.², p_h = 44 in., term 1 = 5·63.25·216/60,000 = 1.138 in.²; 25b_w/f_yt = 25·12/60,000 = 0.0050 in.²/in.; A_t/s = 0. Before A_ℓ,min = 1.138 − 0 = **1.138 in.²**; after 1.138 − 0.0050·44·1 = **0.918 in.²**. With the default #4 at 6 in. (A_t/s = 0.0333 > 0.0050): unchanged.
+
+### W7. ACI A_v,min trigger without stirrups: V_u > φλ√f′c·b_w·d (CBC-O9)   [calc change (check trigger)] [LESS conservative — §4 sign-off needed]
+- **Where:** `detailing`, no-stirrup branch (anchor `const trigV  = code==='ACI'`).
+- **Before:** `const needAv = VuA > halfVc + 1e-9;` with `halfVc = 0.5·φ·V_c` (318-14 wording), V_c without A_v,min from Table 22.5.5.1(c).
+- **After:** `const trigV = code==='ACI' ? phiV*S.mat.lambda*Math.min(rt,100)*bw*sh.d/1000 : halfVc;` `const needAv = VuA > trigV + 1e-9;` (AASHTO unchanged). √f′c limited to 100 psi (conservative).
+- **Governing provision:** ACI 318-19 §9.6.3.1 (A_v,min where V_u > φλ√f′c·b_w·d, except Table 9.6.3.1 cases).
+- **Check case:** default 12 × 18 in., f′c = 4,000 psi, 3 #5, no stirrups (d = 15.69 in.): new trigger 0.75·1.0·63.25·12·15.69/1000 = **8.93 kip**; old 0.5·0.75·V_c = 0.5·0.75·14.31 = **5.37 kip**. V_u = 7 kip: before "A_v,min required, none provided — FAIL"; after **not triggered** (N/A). V_u = 9 kip: FAIL before and after.
+
+### W8. ASD tab: input errors instead of silent substitutes (CBC-O13a)   [bug fix] [no result change for valid inputs]
+- **Where:** ASD sub-app: new `asdInputErrors()` before `compute`; `compute` returns `{errors}`; `updateStatusChip` ("Input error"); `buildOutput` (error box, no results); "From Beam Capacity" input section (error box → red tab dot).
+- **Before:** `const fc=Math.max(1,+I.fc||3000), fy=+I.fy||40000;` … `d=Math.max(0.01,…||1)`, `b_w=Math.max(0.01,…)` silently replaced a blank / zero value.
+- **After:** f′c ≤ 0, f_y ≤ 0, d ≤ 0 or the governing width ≤ 0 → "Input error — no results" with the list. The arithmetic for valid values is unchanged (port of the standalone ASD tool's F3).
+- **Check case:** Capacity sends f′c = 0: before Inventory RF −0.56 computed with 3,000 psi; after "Input error — Concrete strength f′c must be greater than 0." Capacity with b_w = 0: before RF −0.62; after "Section width (b_w) must be greater than 0."
+
+### W9. ASD tab title block follows Beam Capacity field by field until edited (CBC-O13b)   [bug fix / UI] [no result change]
+- **Where:** ASD `message` listener. Anchor: `const last=(S.projFromCap && typeof S.projFromCap==='object')`.
+- **Before:** `S.proj={...S.proj,...p.proj};` on every refresh (ASD edits overwritten).
+- **After:** a field is updated when it is blank or still equals the value last received from Capacity (`S.projFromCap`, new optional state field); with no `projFromCap` (older saves, New) every field is taken, as before.
+- **Check:** ASD Project edited to "ASD own", then Capacity Project "Cap name" and No. "123": ASD keeps "ASD own" and takes "123".
+
+### W10. ASD tab scope note (CBC-O13c)   [display]
+- Summary tab, after the verdict box: "Scope: singly reinforced flexure only (working stress, AASHTO Std. Spec. 8.15). Compression steel (8.15.3, 2n·A′s) is ignored and ASD shear (8.15.5) is not checked." (text of the standalone ASD F7).
+
+### W11. Blank default project name and subject (CBC-O17 / X-C6)   [UI] [no result change]
+- `defaultState()` of Capacity: `name:"MBTA — Mini-Highs"` → `""`, `subj:"Lower Ramp Beam Capacity"` → `""`; ASD: `name` → `""`. "M. Lococo" kept. New sessions only; saved states keep theirs.
+
+### W12. postMessage source checks (CBC-S10, this tool's part of X-S10)   [robustness] [no result change]
+- **Shell relay** (`window.addEventListener('message'` in the shell): `sharedInputs` accepted only from `#suite-frame-capacity`'s window, `requestShared` only from `#suite-frame-asd`'s. **Capacity bridge:** `requestShared` only from `window.parent`. **ASD:** `sharedInputs` only from `window.parent`. Target origin stays `'*'` (srcdoc frames from `file://` have an opaque origin).
+- **Check:** a `sharedInputs` message with f′c = 1,234 posted by the top window, and one with 999 posted by the ASD frame to itself, are both ignored (ASD f′c stays 4,000); the normal Capacity → ASD link works in all 21 Capacity scenarios.
+
+### Dev tab (CBC-O18)
+The Rebar sweep R1–R7 (see `fixlog/ACI Rebar Development Length.md`, same date) is applied to the Dev tab identically.
+
+### Items closed / not changed
+- **CBC-O3** (Gr 60 ε_ty = 0.002 permission): not adopted; fy/Es is the general rule and slightly conservative. Listed under Needs engineer only as a preference.
+- **CBC-O7** (AASHTO s_x = d_v, a_g = 0 above 10 ksi): kept (conservative). An s_x input can be added on request.
+- **CBC-O10** (T-beam torsion web-only A_cp/p_cp): kept; disclosed in the Validation notes.
+- **CBC-O15** (γ3 options): no other specification requested; kept.
+- **CBC-O16** (two Plotly / two KaTeX versions): not changed; CLAUDE.md §2 needs a version-change OK, and the suite-wide choice is X-C3. See Needs engineer.
+
+### Needs engineer
+1. **W1, W2, W4 provisions** — confirm ACI 318-19 §9.3.3.1 (ε_ty + 0.003), AASHTO 10th Ed. 5.6.2.1 (ε_tl 0.005 → 0.008 between 75 and 100 ksi) and 5.4.3.1 / 5.7.2.8 (fyt ≤ 100 ksi).
+2. **CBC-O4 (ε_cl)** — AASHTO 5.6.2.1 compression-controlled limit kept at fy/Es. If your 10th Ed. gives larger values for high-strength bars (commentary table), φ in the transition zone should use them. Recommendation: confirm fy/Es.
+3. **W6 and W7 sign-off** — both follow the 318-19 text and are less conservative than before.
+4. **CBC-O13d / ASD-O1** — operating f_c = 1,900 psi default (MassDOT value; MBE gives 0.60f′c). Recommendation: keep only if it is MassDOT policy.
+5. **CBC-O12 / X-C1** — edition labels still read "AASHTO LRFD 9th". Recommendation: relabel to 10th after the printed-spec check.
+6. **CBC-O16 / X-C3** — converge on one Plotly / KaTeX version? Recommendation: do it suite-wide under X-C3 with visual checks.
+7. **CBC-O3** — use ε_ty = 0.002 for Gr 60 (ACI 21.2.2.1 permission)? Recommendation: no (keep fy/Es).
+
+### Remaining open items
+None from section 10 beyond the "Needs engineer" list.
+
 ## Open items (not changed)
+- **Status 2026-10-12 (claude/sweep-cbc-rebar):** O1 → W1; O4 → W2 (ε_tl; ε_cl question open); O5 → W4; O6 → W5; O8 → W3; O9 → W7; O11 → W6; O13 → W8, W9, W10 (operating f_c still open); O17 → W11; O18 → Rebar R1–R7; S10 → W12. O3, O7, O10, O15 closed (kept); O12, O16 and O13d remain under "Needs engineer" in that entry.
 - O1. **ACI 318-19 §9.3.3.1 beam minimum strain** (`dEpsMin`, ACI branch) still checks εt ≥ 0.004. The review believes 318-19 changed this to εty + 0.003; I am not certain of the 318-19 wording, so per instructions the code is unchanged. — Please confirm against your copy of ACI 318-19 §9.3.3.1. If it reads εty + 0.003, change `0.004` to `S.mat.fy/ES+0.003` in that check (ACI only).
 - O3. **ACI Gr 60 εty.** F2 uses εty = fy/Es (0.002069 for Gr 60, so εtl = 0.005069). ACI 318-19 §21.2.2.1 permits εty = 0.002 for Grade 60, which would keep εtl = 0.005 and slightly raise φ in the transition zone. — Prefer the 0.002 permission for Gr 60?
 - O4. **AASHTO φ for fy > 75 ksi.** `phiFlex` AASHTO branch keeps εtl = 0.005 and εcl = fy/Es; AASHTO 10th Ed. 5.5.4.2 / 5.6.2.1 vary these for higher-strength bars (εtl up to 0.008 at 100 ksi). Not changed (edition detail not re-verified). The tool warns above 75 ksi.
