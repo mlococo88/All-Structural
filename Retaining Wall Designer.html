@@ -1116,7 +1116,7 @@ window.MathJax = {
     <div class="ig full"><label for="mu_method">Base Friction Method</label>
       <select id="mu_method">
         <option value="phi">tan(φ) — soil on soil</option>
-        <option value="twothirds">tan(⅔φ) — concrete on soil</option>
+        <option value="twothirds" selected>tan(⅔φ) — concrete on soil</option>
         <option value="custom">Custom value</option>
       </select></div>
     <div class="ig full" id="grp_mu" style="display:none"><label for="custom_mu">μ (custom)</label>
@@ -1179,10 +1179,11 @@ window.MathJax = {
     <div class="ig full"><label for="aashto_qn_mode">Nominal Bearing Resistance q<sub>n</sub> Source</label>
       <select id="aashto_qn_mode" onchange="onInputChange()">
         <option value="estimate">Estimate as 3 × q_a (FS ≈ 3)</option>
-        <option value="manual">From geotech report (factored φ_b·q_n)</option>
+        <option value="manual" selected>From geotech report (factored φ_b·q_n)</option>
       </select></div>
-    <div class="ig full" id="grp_qn_manual" style="display:none"><label for="aashto_qR">Factored Bearing Resistance φ<sub>b</sub>q<sub>n</sub></label>
-      <div class="iw"><input type="number" id="aashto_qR" value="8000" min="1000" max="60000" step="500"><span class="iw-unit">psf</span></div></div></div>
+    <div class="ig full" id="grp_qn_manual"><label for="aashto_qR">Factored Bearing Resistance φ<sub>b</sub>q<sub>n</sub></label>
+      <div class="iw"><input type="number" id="aashto_qR" value="4950" min="1000" max="60000" step="500"><span class="iw-unit">psf</span></div>
+      <div class="hint static">Enter the factored bearing resistance from the geotechnical report. The default 4950 psf is a placeholder only (= 0.55 × 3 × the default q<sub>a</sub> of 3000 psf).</div></div></div>
 <button type="button" class="sec-hd aashto-only" data-target="sec-cd" style="display:none" aria-expanded="true"><span class="sec-hd-label">Concrete design <span class="sec-tag">AASHTO</span></span><svg class="sec-hd-chevron" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.5 6 7.5 9 4.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
 <div class="sec-body aashto-only" id="sec-cd" style="display:none"><div class="ig"><label for="aashto_gamma_e1">Exposure γ<sub>e</sub> (ftg/below grade)</label>
       <div class="iw"><input type="number" id="aashto_gamma_e1" value="1.0" min="0.5" max="1" step="0.05"><span class="iw-unit">—</span></div></div>
@@ -1950,9 +1951,9 @@ function calcAll(inp) {
 
   // ── FACTORED loads  U = 1.2D + 1.6H ─────────────────────────
   // Seismic uses 1.0E, not 1.6, so factor static Mo only and add Mo_seis at 1.0
-  const SumVu = 1.2 * (Wftg + Wstem + Wsoil) + 1.6 * (Wsur + Pa_tri_v) + Puf_max;
+  const SumVu = 1.2 * (Wftg + Wstem + Wsoil + W_bar) + 1.6 * (Wsur + Pa_tri_v) + Puf_max;
   const Mou   = 1.6 * (Mo_tri + Mo_sur + Mo_hyd) + 1.0 * Mo_seis;
-  const Msu   = 1.2 * (Ms_ftg + Ms_stem + Ms_soil) + 1.6 * (Ms_sur + Ms_Pv) + Puf_max * x_col;
+  const Msu   = 1.2 * (Ms_ftg + Ms_stem + Ms_soil + Ms_bar) + 1.6 * (Ms_sur + Ms_Pv) + Puf_max * x_col;
   const x_Ru  = SumVu > 0 ? (Msu - Mou) / SumVu : B / 2;
   const e_u   = B / 2 - x_Ru;
 
@@ -1976,8 +1977,8 @@ function calcAll(inp) {
   // ── FACTORED loads  U = 0.9D + 1.6H (minimum vertical; footing design only) ──
   // Dead load (concrete, soil, column DL) at 0.9; the vertical earth-thrust component resists
   // the primary (overturning) effect and is taken at 0.9; surcharge, column L/S/W omitted.
-  const SumVu_min = 0.9 * (Wftg + Wstem + Wsoil) + 0.9 * Pa_tri_v + 0.9 * pDL;
-  const Msu_min   = 0.9 * (Ms_ftg + Ms_stem + Ms_soil) + 0.9 * Ms_Pv + 0.9 * pDL * x_col;
+  const SumVu_min = 0.9 * (Wftg + Wstem + Wsoil + W_bar) + 0.9 * Pa_tri_v + 0.9 * pDL;
+  const Msu_min   = 0.9 * (Ms_ftg + Ms_stem + Ms_soil + Ms_bar) + 0.9 * Ms_Pv + 0.9 * pDL * x_col;
   const x_Ru_min  = SumVu_min > 0 ? (Msu_min - Mou) / SumVu_min : B / 2;
   const e_u_min   = B / 2 - x_Ru_min;
   let qu_toe_min, qu_heel_min;
@@ -2087,17 +2088,30 @@ function calcAll(inp) {
     const e_brg   = B/2 - x_R_brg;
     // Effective footing width (Meyerhof): B' = B − 2e
     const B_eff   = B - 2*Math.abs(e_brg);
-    const q_ult_A = B_eff > 0 ? V_str_max / B_eff : 999999;    // uniform over B'
+    // Footing on rock (eccentricity option "rock"): linear (trapezoidal / triangular) pressure,
+    // AASHTO LRFD 10th Ed. Art. 10.6.5 and Eqs. 11.6.3.2-2 / 11.6.3.2-3, instead of uniform over B'.
+    const onRock  = A.ecc_limit === 'rock';
+    const qRock   = (V, ecc) => { const ae = Math.abs(ecc);
+      if (!(V > 0)) return 0;
+      if (ae <= B/6) return V / B * (1 + 6*ae/B);                  // Eq. 11.6.3.2-2
+      return ae < B/2 ? 2*V / (3*(B/2 - ae)) : 999999; };           // Eq. 11.6.3.2-3
+    const q_ult_A = onRock ? qRock(V_str_max, e_brg)
+                           : (B_eff > 0 ? V_str_max / B_eff : 999999);    // uniform over B' (soil)
     // Factored bearing resistance: φb · qn  (qn ≈ qa · FS_implied; here use qa as nominal service,
     // conservatively take nominal qn = 3·qa for a typical FS=3 allowable, then φb applies)
     // Factored bearing resistance: from geotech report or estimated from allowable
     const useManualQn = A.qn_mode === 'manual';
     const q_n_A   = inp.qa * 3;                                // estimate (FS≈3)
     const q_R_A   = useManualQn ? A.qR : A.phi_b * q_n_A;      // factored resistance
+    if (useManualQn && A.qR === 4950)
+      warnings.push('AASHTO bearing: φb·qn = 4950 psf is the tool\'s default placeholder. Enter the factored bearing resistance from the geotechnical report.');
     // Strength Ia (min DC / EV / EH-vertical with max EH horizontal, AASHTO C11.5.6): the
     // same minimum-vertical set as the eccentricity check. Larger e → smaller B' can govern.
     const B_eff_Ia  = B - 2*Math.abs(e_A);
-    const q_ult_Ia  = B_eff_Ia > 0 ? Math.max(V_str_min, 0) / B_eff_Ia : 999999;
+    const q_ult_Ia  = onRock ? qRock(Math.max(V_str_min, 0), e_A)
+                             : (B_eff_Ia > 0 ? Math.max(V_str_min, 0) / B_eff_Ia : 999999);
+    if (onRock && !useManualQn && A.phi_b > 0.45)
+      warnings.push(`AASHTO bearing on rock: φb = ${f(A.phi_b,2)} is used. Table 10.5.5.2.2-1 gives φb = 0.45 for footings on rock (Table 11.5.7-1 gives 0.55 for semi-gravity walls). Confirm φb with the geotechnical engineer.`);
     const bearing_ok_max = q_ult_A <= q_R_A;
     const bearing_ok_Ia  = q_ult_Ia <= q_R_A;
     const bearing_Ia_governs = q_ult_Ia > q_ult_A;
@@ -2223,7 +2237,7 @@ function calcAll(inp) {
       const x_R_brg_ct = V_ct_max > 0 ? (Mr_ct + gLS_ct*Ms_sur - Mo_ct) / V_ct_max : B/2;
       const e_brg_ct   = B/2 - x_R_brg_ct;
       const B_eff_ct   = Math.max(0.1, B - 2*Math.abs(e_brg_ct));
-      const q_ult_ct   = V_ct_max / B_eff_ct;                 // psf
+      const q_ult_ct   = onRock ? qRock(V_ct_max, e_brg_ct) : V_ct_max / B_eff_ct;   // psf (rock: Eq. 11.6.3.2-2/-3)
       const q_n_ct     = useManualQn ? A.qR / Math.max(A.phi_b, 1e-6) : q_n_A;  // nominal
       const q_R_ct     = phi_ct * q_n_ct;                     // φ=1.0 × nominal
       const bearing_ok_ct = q_ult_ct <= q_R_ct;
@@ -2275,7 +2289,7 @@ function calcAll(inp) {
       // bearing
       V_str_max, Mr_str_max, x_R_brg, e_brg, B_eff, q_ult_A, q_n_A, q_R_A, bearing_ok_A,
       B_eff_Ia, q_ult_Ia, bearing_ok_max, bearing_ok_Ia, bearing_Ia_governs, q_ult_gov, gEH_min,
-      quA_toe, quA_heel, quA_front, quA_back, useManualQn,
+      quA_toe, quA_heel, quA_front, quA_back, useManualQn, onRock,
       V_str_min_tot, e_Ia, quIa_toe, quIa_heel, quIa_front, quIa_back,
     };
   }
@@ -2837,7 +2851,8 @@ function calcAll(inp) {
   if (isAASHTO && aashtoR) {
     const A = inp.aashto;
     const Es = 29000000;                                   // psi
-    const Ec = 33 * Math.pow(inp.gamma_c, 1.5) * Math.sqrt(inp.fc);  // psi (w in pcf, f'c in psi)
+    // AASHTO LRFD 10th Ed. Eq. 5.4.2.4-1: Ec = 120,000·K1·wc^2.0·f'c^0.33 (ksi; wc kcf, f'c ksi), K1 = 1.0
+    const Ec = 120000 * 1.0 * Math.pow(inp.gamma_c/1000, 2.0) * Math.pow(inp.fc/1000, 0.33) * 1000;  // psi
     const n_modular = Math.max(6, Math.round(Es / Ec));    // AASHTO 5.6.1: n = Es/Ec, min 6
     const fr = 0.24 * Math.sqrt(inp.fc/1000) * 1000;   // modulus of rupture (psi)
     const beta1 = inp.fc <= 4000 ? 0.85 : Math.max(0.65, 0.85 - (inp.fc-4000)/1000*0.05);
@@ -2918,7 +2933,7 @@ function calcAll(inp) {
     const M_serv_toe  = Math.abs(Mu_toe_net) / 1.5;
 
     aashtoR.serv = {
-      n_modular, fr, beta1, K_serv, Ko_serv, serv_ko: !!A.serv_ko,
+      n_modular, Ec, fr, beta1, K_serv, Ko_serv, serv_ko: !!A.serv_ko,
       M_serv_stem, M_serv_heel, M_serv_toe,
       stem: {
         minR: minReinf(d_stem, inp.ts_bot, sel_stem.As_prov, Mu_stem_lbft),
@@ -3752,13 +3767,13 @@ function renderStabilityAASHTO(r) {
      {sym:'M_o', desc:'factored overturning moment', val:F(a.Mo_str,0), unit:'lb·ft/ft'},
      {sym:'B', desc:'footing width', val:F(r.B,2), unit:'ft'},
      {sym:'e', desc:'eccentricity of resultant', val:F(a.e_A,3), unit:'ft'}]);
-  h += eqCheck('Eccentricity check \u2014 foundation on soil',
+  h += eqCheck('Eccentricity check \u2014 foundation on ' + (a.onRock ? 'rock' : 'soil'),
     `|e| = ${F(Math.abs(a.e_A),3)}\\ \\text{ft} \\leq ${a.e_limit_tex} = ${F(a.e_limit,3)}\\ \\text{ft}`, a.ecc_ok_A);
   h += `<div class="alert info" style="margin-top:6px;">${HINTS.aashto_ecc_limit[A.ecc_limit || 'b4']}</div>`;
   h += `</div></div>`;
 
   h += `<div class="card" style="margin-bottom:16px;">
-    <div class="card-hd"><span class="card-title">Step 6 \u2014 Bearing Resistance (Strength I)</span><span class="card-ref">AASHTO \u00a710.6.3.1 \u00b7 Meyerhof effective width</span></div>
+    <div class="card-hd"><span class="card-title">Step 6 \u2014 Bearing Resistance (Strength I)</span><span class="card-ref">${a.onRock ? 'AASHTO \u00a710.6.5 \u00b7 \u00a711.6.3.2 \u00b7 footing on rock, linear distribution' : 'AASHTO \u00a710.6.3.1 \u00b7 Meyerhof effective width'}</span></div>
     <div class="card-body">`;
   h += eq('Factored vertical load (max: 1.25DC + 1.35EV' + (r.Pa_tri_v>0?' + '+F(a.gEH_max,2)+'EH,v':'') + ' + 1.75LS' + (a.V_up>0?' − uplift U':'') + ')',
     `V_u = \\boxed{${F(a.V_str_max,0)}\\ \\text{lb/ft}} = ${Fk(a.V_str_max)}\\ \\text{kip/ft}`,'',
@@ -3767,7 +3782,15 @@ function renderStabilityAASHTO(r) {
     `e = ${F(a.e_brg,3)}\\ \\text{ft}, \\quad B' = B - 2e = \\boxed{${F(a.B_eff,3)}\\ \\text{ft}}`,'',
     [{sym:'e', desc:'bearing eccentricity', val:F(a.e_brg,3), unit:'ft'},
      {sym:"B'", desc:'effective (Meyerhof) footing width', val:F(a.B_eff,3), unit:'ft'}]);
-  h += eq('Uniform factored bearing pressure over effective width',
+  if (a.onRock) h += eq('Footing on rock \u2014 maximum factored bearing pressure (linear distribution)',
+    (Math.abs(a.e_brg) <= r.B/6
+      ? `q_u = \\frac{V_u}{B}\\left(1+\\frac{6e}{B}\\right) = \\frac{${F(a.V_str_max,0)}}{${F(r.B,2)}}\\left(1+\\frac{6(${F(Math.abs(a.e_brg),3)})}{${F(r.B,2)}}\\right) = \\boxed{${F(a.q_ult_A/1000,2)}\\ \\text{ksf}}`
+      : `q_u = \\frac{2V_u}{3(B/2-e)} = \\frac{2(${F(a.V_str_max,0)})}{3(${F(r.B/2,3)}-${F(Math.abs(a.e_brg),3)})} = \\boxed{${F(a.q_ult_A/1000,2)}\\ \\text{ksf}}`),
+    'AASHTO 10.6.5 \u00b7 Eq. 11.6.3.2-' + (Math.abs(a.e_brg) <= r.B/6 ? '2' : '3'),
+    [{sym:'V_u', desc:'factored vertical load', val:F(a.V_str_max,0), unit:'lb/ft'},
+     {sym:'e', desc:'eccentricity', val:F(Math.abs(a.e_brg),3), unit:'ft'},
+     {sym:'q_u', desc:'maximum factored bearing pressure (toe)', val:F(a.q_ult_A/1000,2), unit:'ksf'}]);
+  else h += eq('Uniform factored bearing pressure over effective width',
     `q_u = \\frac{V_u}{B'} = \\frac{${F(a.V_str_max,0)}}{${F(a.B_eff,3)}} = \\boxed{${F(a.q_ult_A/1000,2)}\\ \\text{ksf}}`,'',
     [{sym:'V_u', desc:'factored vertical load', val:F(a.V_str_max,0), unit:'lb/ft'},
      {sym:"B'", desc:'effective footing width', val:F(a.B_eff,3), unit:'ft'},
@@ -3782,13 +3805,16 @@ function renderStabilityAASHTO(r) {
   h += eqCheck('Bearing check \u2014 Strength I (max vertical)',
     `q_u = ${F(a.q_ult_A/1000,2)}\\ \\text{ksf} \\leq q_R = ${F(a.q_R_A/1000,2)}\\ \\text{ksf}`, a.bearing_ok_max);
   h += eq('Strength Ia (min vertical 0.90DC + 1.00EV' + (r.Pa_tri_v>0?' + 0.90EH,v':'') + ', max EH) \u2014 same e as the eccentricity check',
-    `B' = B - 2|e| = ${F(a.B_eff_Ia,3)}\\ \\text{ft}, \\quad q_u = \\frac{V}{B'} = \\frac{${F(a.V_str_min,0)}}{${F(a.B_eff_Ia,3)}} = \\boxed{${F(a.q_ult_Ia/1000,2)}\\ \\text{ksf}}`,'AASHTO C11.5.6',
+    a.onRock
+      ? `e = ${F(Math.abs(a.e_A),3)}\\ \\text{ft}, \\quad V = ${F(a.V_str_min,0)}\\ \\text{lb/ft} \\;\\Rightarrow\\; q_u = ${Math.abs(a.e_A) <= r.B/6 ? '\\frac{V}{B}\\left(1+\\frac{6e}{B}\\right)' : '\\frac{2V}{3(B/2-e)}'} = \\boxed{${F(a.q_ult_Ia/1000,2)}\\ \\text{ksf}}`
+      : `B' = B - 2|e| = ${F(a.B_eff_Ia,3)}\\ \\text{ft}, \\quad q_u = \\frac{V}{B'} = \\frac{${F(a.V_str_min,0)}}{${F(a.B_eff_Ia,3)}} = \\boxed{${F(a.q_ult_Ia/1000,2)}\\ \\text{ksf}}`,
+    a.onRock ? 'AASHTO C11.5.6 \u00b7 Eq. 11.6.3.2-' + (Math.abs(a.e_A) <= r.B/6 ? '2' : '3') : 'AASHTO C11.5.6',
     [{sym:'V', desc:'min factored vertical load', val:F(a.V_str_min,0), unit:'lb/ft'},
      {sym:"B'", desc:'effective width at the Strength Ia eccentricity', val:F(a.B_eff_Ia,3), unit:'ft'}]);
   h += eqCheck('Bearing check \u2014 Strength Ia (min vertical)',
     `q_u = ${F(a.q_ult_Ia/1000,2)}\\ \\text{ksf} \\leq q_R = ${F(a.q_R_A/1000,2)}\\ \\text{ksf}`, a.bearing_ok_Ia);
   if (!a.useManualQn)
-    h += `<div class="alert warn" style="margin-top:10px;">\u26a0 Nominal bearing resistance q_n is estimated as 3\u00d7q_a (assumes allowable was derived with FS\u22483). For final design, enter the site-specific factored bearing resistance from the geotechnical report using the "From geotech report" option (AASHTO \u00a710.6.3).</div>`;
+    h += `<div class="alert warn" style="margin-top:10px;">\u26a0 Nominal bearing resistance q_n is estimated as 3\u00d7q_a (assumes allowable was derived with FS\u22483). This is unconservative if q_a was derived with FS &lt; 3 or is set by settlement (the service settlement limit is then not checked). For final design, enter the site-specific factored bearing resistance from the geotechnical report using the "From geotech report" option (AASHTO \u00a710.6.3).</div>`;
   h += `</div></div>`;
 
   // ════ COLLISION (Extreme Event II) — MassDOT §3.3.2.4 ════
@@ -3864,7 +3890,10 @@ function renderStabilityAASHTO(r) {
       'extreme event',
       [{sym:'B', desc:'footing width', val:F(r.B,2), unit:'ft'},
        {sym:'e_{lim}', desc:`eccentricity limit (B/${F(E.eccDiv,0)})`, val:F(E.e_lim_ct,3), unit:'ft'}]);
-    h += eq('Effective width and bearing pressure (Meyerhof)',
+    h += a.onRock ? eq('Bearing pressure on rock (linear distribution)',
+      `e = ${F(Math.abs(E.e_brg_ct),3)}\\ \\text{ft} \\;\\Rightarrow\\; q_u = ${Math.abs(E.e_brg_ct) <= r.B/6 ? '\\frac{V}{B}\\left(1+\\frac{6e}{B}\\right)' : '\\frac{2V}{3(B/2-e)}'} = \\boxed{${F(E.q_ult_ct/1000,2)}\\ \\text{ksf}}`,'AASHTO 10.6.5 \u00b7 Eq. 11.6.3.2-' + (Math.abs(E.e_brg_ct) <= r.B/6 ? '2' : '3'),
+      [{sym:'q_u', desc:'maximum factored bearing pressure', val:F(E.q_ult_ct/1000,2), unit:'ksf'}])
+    : eq('Effective width and bearing pressure (Meyerhof)',
       `B' = B - 2|e| = ${F(E.B_eff_ct,3)}\\ \\text{ft} \\;\\Rightarrow\\; q_u = \\frac{V}{B'} = \\boxed{${F(E.q_ult_ct/1000,2)}\\ \\text{ksf}}`,'',
       [{sym:"B'", desc:'effective footing width', val:F(E.B_eff_ct,3), unit:'ft'},
        {sym:'q_u', desc:'factored bearing pressure', val:F(E.q_ult_ct/1000,2), unit:'ksf'}]);
@@ -3928,7 +3957,7 @@ function renderStabilityAASHTO(r) {
   if (a.serv) {
     const sv = a.serv;
     h += `<div class="card" style="margin-bottom:16px;">
-      <div class="card-hd"><span class="card-title">Step 9 \u2014 Serviceability: Crack Control (\u00a75.6.7) &amp; Min Reinf (\u00a75.6.3.3)</span><span class="card-ref">n = ${F(sv.n_modular,0)} \u00b7 f_r = ${F(sv.fr,0)} psi</span></div>
+      <div class="card-hd"><span class="card-title">Step 9 \u2014 Serviceability: Crack Control (\u00a75.6.7) &amp; Min Reinf (\u00a75.6.3.3)</span><span class="card-ref">n = ${F(sv.n_modular,0)} (E_c = ${F(sv.Ec/1000,0)} ksi, Eq. 5.4.2.4-1) \u00b7 f_r = ${F(sv.fr,0)} psi</span></div>
       <div class="card-body">`;
     h += eqCheck('Stem crack-control spacing',
       `s_{max} = ${F(sv.stem.crack.s_max,1)}\\ \\text{in} \\geq s = ${F(sv.stem.spacing,1)}\\ \\text{in}`, sv.stem.crack.ok,'\u00a75.6.7',
@@ -4240,7 +4269,7 @@ function renderStability(r) {
     <div class="card-hd"><span class="card-title">Step 7 — Factored Bearing for Footing Design</span><span class="card-ref">U = 1.2D + 1.6H (+ 1.0E seismic)</span></div>
     <div class="card-body">`;
   h += eq('Factored vertical load',
-    `\\Sigma V_u = 1.2(W_{ftg}+W_{stem}+W_{soil}) + 1.6(W_{sur}+P_{a,V})${r.hasCol?' + w_{col,u}':''} = \\boxed{${F(r.SumVu,1)}\\ \\text{lb/ft}}`,'',
+    `\\Sigma V_u = 1.2(W_{ftg}+W_{stem}+W_{soil}${r.W_bar>0?'+W_{bar}':''}) + 1.6(W_{sur}+P_{a,V})${r.hasCol?' + w_{col,u}':''} = \\boxed{${F(r.SumVu,1)}\\ \\text{lb/ft}}`,'',
     [{sym:'\\Sigma V_u', desc:'total factored vertical load', val:F(r.SumVu,1), unit:'lb/ft'}]);
   h += eq('Factored resultant location and eccentricity',
     `\\bar{x}_u = \\frac{M_{s,u} - M_{o,u}}{\\Sigma V_u} = ${F(r.x_Ru,4)}\\ \\text{ft}, \\quad e_u = \\boxed{${F(r.e_u,4)}\\ \\text{ft}}`,'',
@@ -4255,7 +4284,7 @@ function renderStability(r) {
     [{sym:'q_{u,front}', desc:'bearing at front (toe) face of stem', val:F(r.quf_front,1), unit:'psf'},
      {sym:'q_{u,back}', desc:'bearing at back (heel) face of stem', val:F(r.quf_back,1), unit:'psf'}]);
   h += eq('Minimum-vertical case U = 0.9D + 1.6H (footing design envelope)',
-    `\\Sigma V_u = 0.9(W_{ftg}+W_{stem}+W_{soil}+P_{a,V}${r.hasCol?'+w_{col,D}':''}) = ${F(r.SumVu_min,1)}\\ \\text{lb/ft}, \\; e_u = ${F(r.e_u_min,4)}\\ \\text{ft}, \\; q_{u,toe} = ${F(r.qu_toe_min,1)}, \\; q_{u,heel} = ${F(r.qu_heel_min,1)}\\ \\text{psf}`,'',
+    `\\Sigma V_u = 0.9(W_{ftg}+W_{stem}+W_{soil}${r.W_bar>0?'+W_{bar}':''}+P_{a,V}${r.hasCol?'+w_{col,D}':''}) = ${F(r.SumVu_min,1)}\\ \\text{lb/ft}, \\; e_u = ${F(r.e_u_min,4)}\\ \\text{ft}, \\; q_{u,toe} = ${F(r.qu_toe_min,1)}, \\; q_{u,heel} = ${F(r.qu_heel_min,1)}\\ \\text{psf}`,'',
     [{sym:'\\Sigma V_u', desc:'min factored vertical load (surcharge and column L/S/W omitted)', val:F(r.SumVu_min,1), unit:'lb/ft'},
      {sym:'q_{u,front}', desc:'bearing at front face of stem', val:F(r.quf_front_min,1), unit:'psf'},
      {sym:'q_{u,back}', desc:'bearing at back face of stem', val:F(r.quf_back_min,1), unit:'psf'}]);
@@ -5147,7 +5176,7 @@ const HINTS = {
     b6: '<b>e ≤ B/6 (middle third)</b> — keeps the entire base in compression (no heel uplift / soil tension). Classic ASD criterion and still required by several DOTs (the CTDOT reference calc checks B/6). Use for walls on compressible soils where differential settlement / tilt matters, for walls supporting settlement-sensitive structures, or where your DOT manual specifies it. Most restrictive.',
     b4: '<b>e ≤ B/4 (middle half)</b> — AASHTO LRFD limit for foundations on soil through the 2013 edition (§11.6.3.3/§10.6.3.3), paired with the factored-load (Strength I) check. Retained by many state DOT bridge manuals. Reasonable default when the governing agency has not adopted the newer limit.',
     b3: '<b>e ≤ B/3 (middle two-thirds)</b> — current AASHTO LRFD limit for foundations on soil (revised in the 2014 7th Ed. / later editions) under Strength limit states. Permitted because the Meyerhof effective-width bearing check already penalizes eccentric loading. Confirm your agency has adopted it — verify against your copy of §11.6.3.3.',
-    rock: '<b>e ≤ 0.45B (middle nine-tenths)</b> — current AASHTO limit for footings on <i>rock</i>, where bearing stiffness makes large eccentricity acceptable. Do not use for footings on soil.',
+    rock: '<b>e ≤ 0.45B (middle nine-tenths)</b> — current AASHTO limit for footings on <i>rock</i>, where bearing stiffness makes large eccentricity acceptable. Do not use for footings on soil. With this option the bearing check uses the linear (trapezoidal / triangular) pressure of AASHTO §10.6.5 / Eqs. 11.6.3.2-2 and -3 instead of the uniform Meyerhof B′.',
   },
 };
 function updateHints() {
@@ -7789,9 +7818,9 @@ $$e = \\frac{B}{2}-\\frac{M_r-M_o}{V} = ${fv(r.aashtoR.e_A,3)} \\text{ ft} \\leq
 <h3 class="sub">4.4 Bearing (Strength I)</h3>
 <div class="calc-block">
 $$V_u = 1.25 V_{DC}+1.35 V_{EV}+\\gamma_{EH} V_{EH,v}+1.75 V_{LS} = ${fv(r.aashtoR.V_str_max,0)} \\text{ lb/ft}$$
-$$B' = B-2e = ${fv(r.aashtoR.B_eff,3)} \\text{ ft}, \\quad q_u = \\frac{V_u}{B'} = ${fv(r.aashtoR.q_ult_A,0)} \\text{ psf}$$
+${r.aashtoR.onRock ? `$$\\text{Footing on rock (AASHTO 10.6.5, Eq. 11.6.3.2-${Math.abs(r.aashtoR.e_brg) <= r.B/6 ? '2' : '3'}): } e = ${fv(Math.abs(r.aashtoR.e_brg),3)} \\text{ ft}, \\quad q_u = ${Math.abs(r.aashtoR.e_brg) <= r.B/6 ? '\\frac{V_u}{B}\\left(1+\\frac{6e}{B}\\right)' : '\\frac{2V_u}{3(B/2-e)}'} = ${fv(r.aashtoR.q_ult_A,0)} \\text{ psf}$$` : `$$B' = B-2e = ${fv(r.aashtoR.B_eff,3)} \\text{ ft}, \\quad q_u = \\frac{V_u}{B'} = ${fv(r.aashtoR.q_ult_A,0)} \\text{ psf}$$`}
 $$q_u = ${fk2(r.aashtoR.q_ult_A,2)} \\text{ ksf} \\leq q_R = ${fk2(r.aashtoR.q_R_A,2)} \\text{ ksf}$$ ${ck(r.aashtoR.bearing_ok_max)}
-$$\\text{Strength Ia: } B' = ${fv(r.aashtoR.B_eff_Ia,3)} \\text{ ft}, \\quad q_u = ${fk2(r.aashtoR.q_ult_Ia,2)} \\text{ ksf} \\leq q_R = ${fk2(r.aashtoR.q_R_A,2)} \\text{ ksf}$$ ${ck(r.aashtoR.bearing_ok_Ia)}
+$$\\text{Strength Ia: } ${r.aashtoR.onRock ? `e = ${fv(Math.abs(r.aashtoR.e_A),3)}` : `B' = ${fv(r.aashtoR.B_eff_Ia,3)}`} \\text{ ft}, \\quad q_u = ${fk2(r.aashtoR.q_ult_Ia,2)} \\text{ ksf} \\leq q_R = ${fk2(r.aashtoR.q_R_A,2)} \\text{ ksf}$$ ${ck(r.aashtoR.bearing_ok_Ia)}
 </div>
 ${r.aashtoR.ct ? `
 <h3 class="sub">4.5 Vehicular Collision — Extreme Event II (MassDOT §3.3.2.4)</h3>
@@ -7811,7 +7840,7 @@ ${r.aashtoR.ct.ee2 ? `
 <div class="calc-block">
 $$\\text{Sliding: } \\Sigma\\gamma Q = ${fv(r.aashtoR.ct.ee2.H_drive_ct,0)} \\leq \\phi R = ${fv(r.aashtoR.ct.ee2.R_ct,0)} \\text{ lb/ft} \\;(DCR=${fv(r.aashtoR.ct.ee2.sliding_dcr_ct,2)})$$ ${ck(r.aashtoR.ct.ee2.sliding_ok_ct)}
 $$\\text{Eccentricity: } |e| = ${fv(Math.abs(r.aashtoR.ct.ee2.e_ct),3)} \\leq B/${fv(r.aashtoR.ct.ee2.eccDiv,0)} = ${fv(r.aashtoR.ct.ee2.e_lim_ct,3)} \\text{ ft}$$ ${ck(r.aashtoR.ct.ee2.ecc_ok_ct)}
-$$\\text{Bearing (Meyerhof): } q_u = ${fk2(r.aashtoR.ct.ee2.q_ult_ct,2)} \\leq q_R = ${fk2(r.aashtoR.ct.ee2.q_R_ct,2)} \\text{ ksf}$$ ${ck(r.aashtoR.ct.ee2.bearing_ok_ct)}
+$$\\text{Bearing (${r.aashtoR.onRock ? 'rock, linear' : 'Meyerhof'}): } q_u = ${fk2(r.aashtoR.ct.ee2.q_ult_ct,2)} \\leq q_R = ${fk2(r.aashtoR.ct.ee2.q_R_ct,2)} \\text{ ksf}$$ ${ck(r.aashtoR.ct.ee2.bearing_ok_ct)}
 </div>` : ''}
 ${r.aashtoR.ct.yl ? `
 <h3 class="sub">4.6 Barrier Yield-Line Capacity (AASHTO §A13.3.1 — ${r.aashtoR.ct.yl.isEnd?'end':'interior'} segment)</h3>
