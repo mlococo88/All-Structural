@@ -179,6 +179,7 @@
                             <input type="number" id="h_f" value="7.0" class="inp-field trigger-calc">
                             <span class="inp-unit">in</span>
                         </div>
+                        <label class="flange-input col-span-2 -mt-2 text-[10px] text-slate-600 cursor-pointer"><input type="checkbox" id="cbasd_beff_lim" checked class="trigger-vis accent-blue-600"> Limit $b_{eff}$ to $b_w + 12h_f$ (Std. Spec. 8.10.1.1)</label>
                         
                         <div class="inp-group">
                             <label>Web Width ($b_w$)</label>
@@ -541,12 +542,21 @@
             // Force geometric overrides based on shape/mode
             // If Rectangular Shape or Negative Moment, effective width is usually considered web width (or full width if slab)
             // For this tool: Rectangular shape -> use b_w as the width.
-            let b_calc;
+            let b_calc, beffLim = null, beffEntered = null;
             if (shape === 'rect') {
                 b_calc = v.b_w; // Rectangular beam uses web width as 'b'
                 v.b_eff = v.b_w; // Sync for calculation purposes
             } else {
                 // T-Beam
+                // Std. Spec. 8.10.1.1: flange overhang each side <= 6 h_f, so b_eff <= b_w + 12 h_f (positive moment only;
+                // the span/4 and web-spacing limits are not checked: no inputs). Option, on by default.
+                if (isPosMoment && v.b_w > 0) {
+                    beffLim = v.b_w + 12 * Math.max(0, v.h_f);
+                    if (v.b_eff > beffLim) {
+                        beffEntered = v.b_eff;
+                        if (document.getElementById('cbasd_beff_lim').checked) v.b_eff = beffLim;
+                    }
+                }
                 b_calc = isPosMoment ? v.b_eff : v.b_w; // Pos uses eff width, Neg uses web
             }
 
@@ -641,7 +651,8 @@
                 isPosMoment, isTBeamAction, n, rho, kd, k, j, z, 
                 C_force_factor, M_inv, M_op, M_conc_inv, M_steel_inv, 
                 M_conc_op, M_steel_op,
-                rf_inv, rf_op, v, shape, b_calc, n_raw, allowSrc
+                rf_inv, rf_op, v, shape, b_calc, n_raw, allowSrc, beffLim, beffEntered,
+                beffCapped: beffEntered !== null && v.b_eff === beffLim
             });
 
             drawDiagram(v, kd, z, isTBeamAction, isPosMoment, shape);
@@ -690,6 +701,8 @@
 
                     <!-- Scope note -->
                     <div class="text-xs text-amber-800 bg-amber-50 p-3 rounded border border-amber-200"><strong>Scope:</strong> singly reinforced flexure only (working stress, AASHTO Std. Spec. 8.15). Compression steel (8.15.3, 2n&middot;A's) is ignored and ASD shear (8.15.5) is not checked.</div>
+                    <p class="text-xs text-slate-500">Basis: AASHTO Standard Specifications for Highway Bridges, 17th Ed. (2002), Art. 8.15 (service load design) and 8.10.1 (effective flange width); AASHTO Manual for Bridge Evaluation, 3rd Ed., Part B, Art. 6B.6.2.3 (operating allowables).</p>
+                    ${res.beffEntered !== null ? `<div class="text-xs ${res.beffCapped ? 'text-amber-800 bg-amber-50 border-amber-200' : 'text-red-700 bg-red-50 border-red-200'} p-3 rounded border">Entered $b_{eff}$ = ${res.beffEntered} in. exceeds the Std. Spec. 8.10.1.1 limit $b_w + 12h_f$ = ${res.v.b_w} + 12&middot;${res.v.h_f} = ${+res.beffLim.toFixed(3)} in. ${res.beffCapped ? `$b_{eff}$ = ${+res.beffLim.toFixed(3)} in. is used.` : '<strong>The limit is switched off: the entered width is used.</strong>'} The span/4 and web-spacing limits (8.10.1.1) and the one-sided-slab limit $b_w + 6h_f$ (8.10.1.2) are not checked here; check them by hand.</div>` : ''}
                     ${loadNotice ? `<div class="text-xs text-red-700 bg-red-50 p-3 rounded border border-red-200">${loadNotice}</div>` : ''}
 
                     <!-- Params -->
@@ -731,6 +744,8 @@
                     <div>
                         <h4 class="text-sm font-bold text-slate-800 border-b pb-1 mb-2">3. Moment Capacity ($M_{all}$)</h4>
                         <p class="text-xs text-slate-500 mb-2">Allowables (psi): $f_{c,inv}$ = ${res.v.fc_inv} (${res.allowSrc.fc_inv === 'auto' ? "0.40f'c" : res.allowSrc.fc_inv}); $f_{s,inv}$ = ${res.v.fs_inv} (${res.allowSrc.fs_inv === 'auto' ? 'by grade' : res.allowSrc.fs_inv}); $f_{c,op}$ = ${res.v.fc_op} (input); $f_{s,op}$ = ${res.v.fs_op} (${res.allowSrc.fs_op === 'auto' ? 'by grade' : res.allowSrc.fs_op}).</p>
+                        ${['fs_inv', 'fs_op'].filter(id => res.allowSrc[id] === 'input (no grade rule)').map(id => `<p class="text-xs text-red-700 bg-red-50 p-2 rounded border border-red-200 mb-2">$f_y$ = ${res.v.fy} psi has no automatic rule for ${id === 'fs_inv' ? '$f_{s,inv}$' : '$f_{s,op}$'}: the value used (${res.v[id]} psi) is the field's current entry and may be left from an earlier $f_y$. Check it against AASHTO MBE Table 6B.6.2.3-1.</p>`).join('')}
+                        ${res.v.fc_op > 0.60 * res.v.fc + 1e-9 ? `<p class="text-xs text-amber-800 bg-amber-50 p-2 rounded border border-amber-200 mb-2">Operating $f_c$ = ${res.v.fc_op} psi is greater than $0.60f'_c$ = ${+(0.60 * res.v.fc).toFixed(1)} psi (AASHTO MBE 6B.6.2.3). Confirm the owner's basis for this value (the 1,900 psi default is a MassDOT value).</p>` : ''}
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">`;
 
             if (showInv) {
@@ -879,7 +894,7 @@
             const data = {};
             inputIds.forEach(id => { data[id] = parseFloat(document.getElementById(id).value) || 0; });
             ['moment_type', 'section_shape', 'bar_count', 'bar_size'].forEach(id => { data[id] = document.getElementById(id).value; });
-            ['chk_inv', 'chk_op'].forEach(id => { data[id] = document.getElementById(id).checked; });
+            ['chk_inv', 'chk_op', 'cbasd_beff_lim'].forEach(id => { data[id] = document.getElementById(id).checked; });
             data._allowOverride = Object.assign({}, allowOverride);
             const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(data));
             const el = document.createElement('a');
@@ -905,6 +920,8 @@
                     if (el.type === 'checkbox') el.checked = !!data[k];
                     else el.value = data[k];
                 });
+                // Files saved before the b_eff limit option have no 'cbasd_beff_lim': use the default (on).
+                if (data.cbasd_beff_lim === undefined) document.getElementById('cbasd_beff_lim').checked = true;
                 // Allowable overrides: newer files store the flags. Older files did not, so any saved
                 // allowable that differs from the f'c/fy-based value is kept as an override (not discarded).
                 const a = autoAllowables(parseFloat(data.fc) || 0, parseFloat(data.fy) || 0);
