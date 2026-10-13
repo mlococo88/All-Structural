@@ -7846,3 +7846,10 @@ Main page only; `PL_B64` (embedded Preliminary sizing) is not touched. Display o
 - **Problem:** Structural analysis SA4 and SA6 showed "I_s = 0.093", "N_b ≥ 4", "η = η_D η_R η_I = 1.0", "η_I = 1.05" literally. Cells are plain text (the Checks tab already escaped them; no cell in the built-in example or the 90 ft diaphragm case contains HTML), so the Detailing tab and the report now escape them the same way.
 - **Check case:** built-in example, Structural analysis, Checks, SA4 "Skew index, span 1: I<sub>s</sub> = 0.093"; SA6 "η = η<sub>D</sub> η<sub>R</sub> η<sub>I</sub> = 1.0". A scan of every td/th/p of the Summary, Checks, Drawings, Detailing and forces tabs of every module (built-in example) finds no other raw underscore in a cell.
 - **Other copies:** none.
+
+### Q18. b<sub>eff</sub> on the Structural analysis summary and F<sub>yw</sub> ≥ F<sub>yf</sub> in the Girder section R<sub>h</sub> line as subscripts   [text only]
+- **Where:** Structural analysis `kq(R)` (anchor `` b_eff ${f2(R.beffFt)} ft` ``); `rhFactor` (anchor `txt: 'Homogeneous section (F_yw ≥ F_yf)'`), shown only in the R<sub>h</sub> "where" row of the Girder section checks (`r.RhTxt`), which renders HTML.
+- **Before:** `` `G${R.j + 1} (${…}), b_eff ${f2(R.beffFt)} ft` `` and `'Homogeneous section (F_yw ≥ F_yf)'`
+- **After:** `` `G${R.j + 1} (${…}), b<sub>eff</sub> ${f2(R.beffFt)} ft` `` and `'Homogeneous section (F<sub>yw</sub> ≥ F<sub>yf</sub>)'`
+- **Check case:** built-in example: Structural analysis summary "G1 (exterior), b<sub>eff</sub> 8.00 ft"; Girder section, R<sub>h</sub> row "Homogeneous section (F<sub>yw</sub> ≥ F<sub>yf</sub>) 1.000".
+- **Other copies:** none.

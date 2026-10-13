@@ -3354,7 +3354,7 @@ function d61neg(r, X) {
   return { pos: false, P, Y, tests, cs, Yb, yp, out, ref: cs === 'I' ? 'top of the web' : 'top of the top flange', lead, leadTex, terms, Mp, crt, crb, D, tt, tb, d, Dcp: cs === 'I' ? D - Yb : cs === 'II' ? D : 0 };
 }
 function rhFactor(sec, r, Fyw, Fyt, Fyb) {
-  if (Fyw >= Math.min(Fyt, Fyb) - 1e-9) return { Rh: 1, txt: 'Homogeneous section (F_yw ≥ F_yf)' };
+  if (Fyw >= Math.min(Fyt, Fyb) - 1e-9) return { Rh: 1, txt: 'Homogeneous section (F<sub>yw</sub> ≥ F<sub>yf</sub>)' };
   const dT = r.botT + r.D - sec.yb, dB = sec.yb - r.botT, top = dT >= dB, Dn = Math.max(dT, dB), Afn = top ? r.topB * r.topT : r.botB * r.botT, fn = top ? Fyt : Fyb, beta = 2 * Dn * r.tw / Afn, rho = Math.min(Fyw / fn, 1);
   return { Rh: (12 + beta * (3 * rho - rho ** 3)) / (12 + 2 * beta), txt: `Hybrid: β = ${f3(beta)}, ρ = ${f3(rho)} (6.10.1.10.1)` };
 }
@@ -5045,7 +5045,7 @@ tabs: { combos: 'Results', cap: 'Method', drawings: 'Diagrams', rptCombos: 'Anal
     return out;
   },
   kq(R) { const mx = a => Math.max(...a), mn = a => Math.min(...a), pier = R.sup.slice(1, -1);
-    return [['Girder', `G${R.j + 1} (${R.ext ? 'exterior' : 'interior'}), b_eff ${f2(R.beffFt)} ft`], ['Strength I M', `+${f0(mx(R.StrMp))} / ${f0(mn(R.StrMn))} k-ft`], ['Strength I V', `${f0(mx(R.StrV))} kip`], ['Model', R.fe ? 'Variable EI, staged, cracked' : 'Constant EI']]; },
+    return [['Girder', `G${R.j + 1} (${R.ext ? 'exterior' : 'interior'}), b<sub>eff</sub> ${f2(R.beffFt)} ft`], ['Strength I M', `+${f0(mx(R.StrMp))} / ${f0(mn(R.StrMn))} k-ft`], ['Strength I V', `${f0(mx(R.StrV))} kip`], ['Model', R.fe ? 'Variable EI, staged, cracked' : 'Constant EI']]; },
   scope: ['Construction-stage deck pour sequence', 'Support settlement and thermal effects', 'Permit and legal vehicles', 'Curved-girder and grid effects (line-girder model with distribution factors)', 'Shear lag and nonlinear behavior'],
   combos(R) {
     const pt = t => `Span ${t.k + 1}, ${t.q === 10 ? 'end' : t.q === 0 ? 'start' : '0.' + t.q + 'L'}`, hasPL = R.wPL > 0, hasCL = R.wCL > 0;
