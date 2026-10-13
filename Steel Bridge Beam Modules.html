@@ -3878,13 +3878,16 @@ tabs: { combos: 'Traffic and loads', drawings: 'Fatigue map', rptCombos: 'Traffi
   inbox(j) {   // the fatigue detail inventory from the analysis (manual rows are kept)
     // deck, concrete and web grade of the analysed bridge (H1, 2026-10-13): from the same payload the Girder section module takes them from (was: the module's own values kept)
     const gen = (j && j.mods && ((j.mods.gs && j.mods.gs.gen) || (j.mods.wt && j.mods.wt.gen))) || {}, genApply = () => ['ts', 'hh', 'fc', 'wc', 'K1', 'gW'].forEach(k => { if (gen[k] != null && gen[k] !== '') P.fa[k] = gen[k]; });
-    const inv = j && j.mods && j.mods.fa; if (inv && inv.length) return { n: inv.length, what: 'fatigue details (web-to-flange welds, connection plates, stiffeners, studs, field splices, flange transitions)', apply: () => { genApply(); P.fa.rows = [...P.fa.rows.filter(q => q.src !== 'analysis'), ...JSON.parse(JSON.stringify(inv))]; } };
+    // first import (H2, 2026-10-13; as Girder section's first import): the built-in example's rows (equal to the module defaults) are dropped; rows the user entered or changed are kept
+    const isEx = q => GM.fa.def.rows.some(d => Object.keys(d).every(k => String(q[k]) === String(d[k]))), keepRows = o => { const fresh = !P.fa.source, keep = P.fa.rows.filter(q => q.src !== 'analysis' && !(fresh && isEx(q)));
+      if (fresh && keep.length < P.fa.rows.filter(q => q.src !== 'analysis').length) { o.note = 'the example locations were replaced'; o.what += ` (${o.note})`; } return keep; };
+    const inv = j && j.mods && j.mods.fa; if (inv && inv.length) { const o = { n: inv.length, what: 'fatigue details (web-to-flange welds, connection plates, stiffeners, studs, field splices, flange transitions)', apply: () => { genApply(); P.fa.rows = [...keepRows(o), ...JSON.parse(JSON.stringify(inv))]; } }; return o; }
     const rows = j && j.mods && j.mods.gs && j.mods.gs.rows; if (!rows || !rows.length) return null;
-    return { n: rows.length * 2, what: 'flange details at the critical sections', apply: () => { genApply();
+    const o = { n: rows.length * 2, what: 'flange details at the critical sections', apply: () => { genApply();
       const base = { src: 'analysis', det: 'B-weld', cat: 'B', mode: 'M', yo: 0, dfP: 0, dfN: 0, fDL: 0 }, add = [];
       rows.forEach(r => { const c = { ...base, x: r.x || 0, n: r.region === 'neg' ? '1.5' : '1', D: r.D, tw: r.tw, topB: r.topB, topT: r.topT, botB: r.botB, botT: r.botT, MfP: Math.max(+r.MfP || 0, 0), MfN: Math.min(+r.MfN || 0, 0), MD1: +r.MDC1 || 0, MD2: (+r.MDC2 || 0) + (+r.MDW || 0), Vp: (+r.VDC1 || 0) + (+r.VDC2 || 0) + (+r.VDW || 0), Vf: +r.Vf || 0, do: +r.do || 0 };
         add.push({ ...c, name: `${r.name}: bottom flange at flange-to-web weld`, loc: 'bfo' }, { ...c, name: `${r.name}: top flange at flange-to-web weld`, loc: 'tfo', Vf: 0 }); });
-      P.fa.rows = [...P.fa.rows.filter(q => q.src !== 'analysis'), ...add]; } };
+      P.fa.rows = [...keepRows(o), ...add]; } }; return o;
   }
 };
 function faMapSVG(R) {
@@ -7771,7 +7774,7 @@ function loadAllInbox0(j) {
   if (Array.isArray(j.splices)) P.spl.plN = j.splices.length;   // field splices in the sizing layout (0: none, so the splice module is not included unless set to Included)
   if (j.splices?.length && spIncl()) { importInto('splice', () => spliceApply(j, j.splices[0]), j.srcLabel); done.push(`Field splice (${j.splices[0].label}; pick another case on its Project tab)`); }
   if (j.bearings?.length) { importInto('bstf', () => bsApply(j), j.srcLabel); done.push('Bearing stiffeners'); }
-  Object.values(GM).forEach(m => { const x = m.inbox(j); if (x) { importInto(m.id, () => gmApply(m, x, j), j.srcLabel); done.push(m.label); } });
+  Object.values(GM).forEach(m => { const x = m.inbox(j); if (x) { importInto(m.id, () => gmApply(m, x, j), j.srcLabel); done.push(m.label + (x.note ? ` (${x.note})` : '')); } });
   P.meta.name = j.project || P.meta.name; bsRebuildRows(); Object.keys(GM).forEach(gmBuildPanes); fillInputs();
   if (std().auto !== 'off') { const cur = P.mod; ['ts', 'sc', 'bstf', 'wt', 'cf', 'oh'].forEach(mm => { try { P.mod = mm; runAutoDesign(mm, true); } catch (er) { console.error(er); } }); P.mod = cur; done.push('Transverse stiffeners, shear connectors, bearing stiffeners, welds, cross-frames, and deck overhang auto-designed'); }
   autosave(); return done;

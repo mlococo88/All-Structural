@@ -7215,3 +7215,37 @@ Main page and the embedded Preliminary sizing (PlateLine, `PL_B64`, decoded, edi
   - Other rows move the same way (e.g. Span 3 connection plate, exterior: 1.098 → 1.060). The Fatigue deck inputs read 9 / 3 / 5 after the import (before: 8 / 2 / 4).
 - **Saved data:** no key or format change; `P.fa.ts`, `hh`, `fc`, `wc`, `K1`, `gW` keep their meaning and are now written by the import (and recorded in the import snapshot `P._imp.fa`).
 - **Other copies:** none.
+
+### C9. Fatigue: the first import from Preliminary sizing (or Structural analysis) replaces the built-in example's rows   [results of the imported rows unchanged; the four example rows no longer remain in another bridge's check]
+- **Where (main page):** `GM.fa.inbox` (anchor `// first import (H2, 2026-10-13; as Girder section's first import)`) and `loadAllInbox0` (anchor `done.push(m.label + (x.note ?`).
+- **Before:**
+  ```js
+    const inv = j && j.mods && j.mods.fa; if (inv && inv.length) return { n: inv.length, what: '...', apply: () => { genApply(); P.fa.rows = [...P.fa.rows.filter(q => q.src !== 'analysis'), ...JSON.parse(JSON.stringify(inv))]; } };
+    ...
+    return { n: rows.length * 2, what: 'flange details at the critical sections', apply: () => { genApply();
+    ...
+        P.fa.rows = [...P.fa.rows.filter(q => q.src !== 'analysis'), ...add]; } };
+  ```
+  ```js
+    Object.values(GM).forEach(m => { const x = m.inbox(j); if (x) { importInto(m.id, () => gmApply(m, x, j), j.srcLabel); done.push(m.label); } });
+  ```
+- **After:**
+  ```js
+    // first import (H2, 2026-10-13; as Girder section's first import): the built-in example's rows (equal to the module defaults) are dropped; rows the user entered or changed are kept
+    const isEx = q => GM.fa.def.rows.some(d => Object.keys(d).every(k => String(q[k]) === String(d[k]))), keepRows = o => { const fresh = !P.fa.source, keep = P.fa.rows.filter(q => q.src !== 'analysis' && !(fresh && isEx(q)));
+      if (fresh && keep.length < P.fa.rows.filter(q => q.src !== 'analysis').length) { o.note = 'the example locations were replaced'; o.what += ` (${o.note})`; } return keep; };
+    const inv = j && j.mods && j.mods.fa; if (inv && inv.length) { const o = { n: inv.length, what: '...', apply: () => { genApply(); P.fa.rows = [...keepRows(o), ...JSON.parse(JSON.stringify(inv))]; } }; return o; }
+    ...
+    const o = { n: rows.length * 2, what: 'flange details at the critical sections', apply: () => { genApply();
+    ...
+        P.fa.rows = [...keepRows(o), ...add]; } }; return o;
+  ```
+  ```js
+    Object.values(GM).forEach(m => { const x = m.inbox(j); if (x) { importInto(m.id, () => gmApply(m, x, j), j.srcLabel); done.push(m.label + (x.note ? ` (${x.note})` : '')); } });
+  ```
+  "First import" means the module has no `P.fa.source` yet (set by `gmApply` after every import), the same test Girder section uses (`fresh = !P.gs.source`). On that import only, a non-analysis row is dropped when every field of one of the four built-in rows (`GM.fa.def.rows`) is equal to it (compared as text, so a value typed into a field still compares). A row the user added, or an example row the user edited, is kept; after the first import nothing is dropped (as before). The message says so: "Loaded 62 fatigue details (…) (the example locations were replaced) from …", and the Load all / Design all list shows "Fatigue (the example locations were replaced)".
+- **Problem:** the four example rows of the built-in project (a 60-in girder at stations 44, 110 and 180 ft with made-up moments) stayed in the Fatigue check of whatever bridge was imported, with their own (wrong) sections and moments. Results of a real bridge were mixed with the example's. Fixed.
+- **Governing provision:** none (input handling).
+- **Check case (built-in example, Fatigue, Get demands from Preliminary sizing):** before: 66 rows (4 example + 62 imported), the four example ratios 0.552, 0.719, 0.828, 0.260 listed among the results; after: 62 rows, all from the analysis, governing row unchanged (Span 1 connection plate, exterior, 1.136). With the second example row edited first (M<sub>f+</sub> 620 → 700): after the import 63 rows, the edited row kept (ratio 0.790), the other three dropped.
+- **Saved data:** no key or format change. Projects that already have `P.fa.source` (imported before) keep all their rows.
+- **Other copies:** none.
