@@ -7678,3 +7678,50 @@ Embedded Preliminary sizing (PlateLine, `PL_B64`, decoded, edited and re-encoded
 -  const frX = [...new Set(FR.frames.filter(f => f.bay === 0).map(f => +f.xa.toFixed(2)))].sort((p1, p2) => p1 - p2);
 +  const frX = stG([0], false);   // G1 stations (C24, 2026-10-13)
 ```
+
+### C25. Connection-plate candidates per girder type: the exterior rows consider the frames on G1 and G<sub>n</sub>, the interior rows the frames on both sides of every interior girder, each at that girder's own stations   [§4: location of the demand] [identical on bridges whose frames are at the same station on every girder (parallel frames with equal skews, or normal frames without stagger), including the built-in example] [resolves the C19–C23 open item]
+- **Where (decoded PlateLine):** `detailExport`: new `nbG`, `gOf` before `const frX0` (anchor `const nbG = FR.girders.length, gOf = gt =>`); `frX0` and `cpAt` take the girder type (anchor `const cpAt = (T, a, b, gt) =>`); the Transverse stiffeners connection-plate row (anchor `const cxF = cpAt(T, x0, x1, gt)`); `frX` (anchor `const frX = gt => stG(gOf(gt), false);`); the Fatigue span row (anchor `const fx = cpAt(T, a, b, gt);`); the C21 pier rows (anchors `frX0(gt).filter(x => x > xL`, `: frX(gt).filter(x => Math.abs(x - xp) > 0.5)`). Main page: only the re-encoded `PL_B64` line.
+- **Before (after C24):** for both girder types, the candidates were the intermediate frames on G1 (`stG([0], true)`), at G1's stations; the pier fallback the frames on G1 (`stG([0], false)`).
+- **After:** the candidates for a girder type are the intermediate frames on the girders that type stands for, each at the station along its own girder (`framingLayout`'s `girders[i].pts`, which hold the frames of the bays on both sides of girder i, with `s = (f.bay === i ? f.xa : f.xc) − x0(G_i)`):
+  - exterior (`'ext'`): G1 and G<sub>n</sub> (Preliminary sizing's exterior envelope is used for both exterior girders);
+  - interior (`'int'`): G2 to G<sub>n−1</sub>;
+  - demands from Structural analysis of one girder (`gLabel` "G<i>i</i>", C19 path): that girder alone;
+  - any other case: G1 (as before).
+  The rule within the candidates is unchanged (C4/C20/C21): inside the span 0.5 ft clear of the supports (span rows) or inside the pier's negative DC + DW region more than 0.5 ft from the pier (pier rows), the largest max(0, M<sub>f+</sub>) − min(0, M<sub>f−</sub>) at the node, ties to the first (lowest station); the pier fallback (nearest frame) uses all frames on the same girders.
+- **Problem:** an interior girder also carries the frames of the bay on its other side, and the exterior envelope also stands for G<sub>n</sub>, whose frames are in the last bay. With staggered frames, normal frames on a skew (corner fills) or unequal skews these stations differ from G1's, so the interior rows were checked at stations where the interior girders have no plate, and plates with a larger range were missed. Corrected.
+- **Governing provision:** as C24 (6.6.1.2.2, Table 6.6.1.2.3-1 detail 4.1, 6.6.1.2.5, 6.10.11.1, 6.10.9). Not changed. Not re-checked against the printed 10th Edition here: verify.
+- **Check case:**
+  - **Built-in example (15°, parallel frames), the 0° skew variant, 20° skew with 6 ft sidewalks, and the two XS projects:** every girder has its frames at the same stations (22, 44, 66, 88, 133.33, …), so the candidates and every result are identical to C24 (complete output compared).
+  - **Built-in example with 30° skews and staggered frames (normal to the girders, 6.7.4.2):** stations of the intermediate frames in Span 1: G1 10.97, 29.30, 47.64, 65.97, 84.30, 102.64; G2 (bay 1-2 and bay 2-3) 5.48, 14.65, 23.82, 32.98, 42.15, 51.32, 60.48, 69.65, 78.82, 87.98, 97.15, 106.32; G5 16.53, 34.86, 53.20, 71.53, 89.86. Exterior girder, Span 1: before, among G1's frames, 65.97 ft (M<sub>f+</sub> = 737.6, M<sub>f−</sub> = −380.6, range 1,118.2 k-ft); after, among G1's and G5's, 53.20 ft on G5 (M<sub>f+</sub> = 814.9, M<sub>f−</sub> = −305.6, range **1,120.5** k-ft).
+    - **CP2 (short-term section for both signs, b<sub>eff</sub> 96 in, ȳ<sub>n</sub> = 53.568, I<sub>n</sub> = 102,183 in⁴, y = 1.125 in):** before Δf = 1,118.2(12)(52.443)/102,183 = 6.89 ksi, γΔf = 12.06, ratio **1.00** (fail at 1.005); after Δf = 1,120.5(12)(52.443)/102,183 = 6.90 ksi, γΔf = 12.08, ratio **1.01**.
+    - **Fatigue FA1 (cracked negative section, cracked ȳ = 32.478, I = 48,254 in⁴):** before f<sub>+</sub> = 737.6(12)(52.443)/102,183 = 4.543, f<sub>−</sub> = 380.6(12)(31.353)/48,254 = 2.968, γΔf = 1.75(7.511) = 13.14 ksi, ratio **1.10**; after f<sub>+</sub> = 814.9(12)(52.443)/102,183 = 5.019, f<sub>−</sub> = 305.6(12)(31.353)/48,254 = 2.383, γΔf = 1.75(7.402) = 12.95 ksi, ratio **1.08**. The plate is chosen by the moment range (C4); with the cracked section for M<sub>f−</sub> the larger moment range here gives a slightly smaller stress range (open item below).
+    - Other rows that move (γΔf ksi, ratio): exterior Span 3 297.64 → 303.20 ft: FA1 13.25 → 13.18 (1.10 → 1.10), CP2 6.98 → 6.99 ksi (1.02); interior Span 1 65.97 → 58.68 ft: FA1 7.97 → 8.03 (0.66 → 0.67), CP2 4.18 → 4.26 (0.61 → 0.62); interior Span 2 190.97 → 167.98 ft: 6.61 → 6.62 (0.55); interior Span 3 297.64 → 301.32 ft: 8.04 → 8.03 (0.67); interior Pier 1 84.30 → 78.82 ft: 3.18 → 3.66 (0.26 → 0.31); interior Pier 2 279.30 → 281.18 ft: 3.71 → 3.66 (0.31). TS4 at the moved plates: interior 0.23 / 0.16 / 0.21 → 0.19 / 0.17 / 0.19, exterior Span 1 0.21 → 0.15, Span 3 0.19 → 0.16. Exterior Span 2 and both exterior pier rows do not move. The interior rows are now symmetric about midspan (58.68 / 301.32, 78.82 / 281.18 ft).
+    - **Structural analysis, G2:** G2's own frames: Span 1 65.97 → 60.48 ft (FA1 0.66 → 0.67, CP2 0.61 → 0.62), Pier 2 279.30 → 273.82 ft (0.31 → 0.27; 279.30 ft was a G1 station with no G2 plate). G1 from Structural analysis: identical to C24.
+- **Not changed (listed under open items):** the Girder section brace points (L<sub>b</sub>, C<sub>b</sub>) and the stability-bracing count remain those of G1 for both girder types (C24 corrected their stations only).
+- **Saved data:** no key or format change; as C24 (rows replaced on the next import, names change with the station).
+- **Other copies:** none.
+
+### Exact changes (C25): decoded PlateLine (unified diff against C24, no context; the main page changes only on the PL_B64 line)
+```diff
+@@ -3533,2 +3533,4 @@
+-  const frX0 = stG([0], true), rgF = (T, i) => Math.max(0, T.MfP[i]) - Math.min(0, T.MfN[i]);
+-  const cpAt = (T, a, b) => { const fs = frX0.filter(x => x > a + 0.5 && x < b - 0.5); return fs.length ? fs.reduce((q, x) => rgF(T, node(x)) > rgF(T, node(q)) ? x : q, fs[0]) : null; };
++  // the girders a girder type stands for (C25, 2026-10-13): exterior, G1 and Gn (the exterior envelope covers both); interior, G2 to G(n−1), with the frames of the bays on both sides; one girder (G<i>) when the arrays come from Structural analysis of that girder; the connection-plate candidates are the intermediate frames on those girders at their own stations (was the G1 line for every type)
++  const nbG = FR.girders.length, gOf = gt => { const g = /^G(\d+)$/.exec(AN.gLabel || ''); if (g && +g[1] >= 1 && +g[1] <= nbG) return [+g[1] - 1]; return gt === 'ext' ? [...new Set([0, nbG - 1])] : gt === 'int' && nbG > 2 ? [...Array(nbG - 2).keys()].map(i => i + 1) : [0]; };
++  const frX0 = gt => stG(gOf(gt), true), rgF = (T, i) => Math.max(0, T.MfP[i]) - Math.min(0, T.MfN[i]);
++  const cpAt = (T, a, b, gt) => { const fs = frX0(gt).filter(x => x > a + 0.5 && x < b - 0.5); return fs.length ? fs.reduce((q, x) => rgF(T, node(x)) > rgF(T, node(q)) ? x : q, fs[0]) : null; };
+@@ -3549 +3551 @@
+-      const cxF = cpAt(T, x0, x1), cx = cxF != null ? cxF : bx, s = sec(cx);
++      const cxF = cpAt(T, x0, x1, gt), cx = cxF != null ? cxF : bx, s = sec(cx);
+@@ -3612 +3614 @@
+-  const frX = stG([0], false);   // G1 stations (C24, 2026-10-13)
++  const frX = gt => stG(gOf(gt), false);   // stations of this type's girders (C24, C25, 2026-10-13)
+@@ -3620 +3622 @@
+-      const fx = cpAt(T, a, b); if (fx != null) row(`Span ${k + 1}, connection plate at cross-frame ${f2(fx)} ft, bottom flange`, 'Cp-stiff', 'bfi', fx, sec(fx));
++      const fx = cpAt(T, a, b, gt); if (fx != null) row(`Span ${k + 1}, connection plate at cross-frame ${f2(fx)} ft, bottom flange`, 'Cp-stiff', 'bfi', fx, sec(fx));
+@@ -3627,2 +3629,2 @@
+-      const inR = Mpm(ip) < 0 ? frX0.filter(x => x > xL && x < xR && Math.abs(x - xp) > 0.5) : [];
+-      const near = inR.length ? inR.reduce((q, x) => rgF(T, node(x)) > rgF(T, node(q)) ? x : q, inR[0]) : frX.filter(x => Math.abs(x - xp) > 0.5).sort((p1, p2) => Math.abs(p1 - xp) - Math.abs(p2 - xp))[0]; if (near != null) row(`Pier ${k}, connection plate at cross-frame ${f2(near)} ft, top flange`, 'Cp-stiff', 'tfi', near, sec(near)); });
++      const inR = Mpm(ip) < 0 ? frX0(gt).filter(x => x > xL && x < xR && Math.abs(x - xp) > 0.5) : [];
++      const near = inR.length ? inR.reduce((q, x) => rgF(T, node(x)) > rgF(T, node(q)) ? x : q, inR[0]) : frX(gt).filter(x => Math.abs(x - xp) > 0.5).sort((p1, p2) => Math.abs(p1 - xp) - Math.abs(p2 - xp))[0]; if (near != null) row(`Pier ${k}, connection plate at cross-frame ${f2(near)} ft, top flange`, 'Cp-stiff', 'tfi', near, sec(near)); });
+```
