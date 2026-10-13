@@ -7107,3 +7107,13 @@ Main page and the embedded Preliminary sizing (PlateLine, `PL_B64`, decoded, edi
   - Span 2, exterior (198.24 ft): cracked 0.996 → 1.002; uncracked 0.936 → 0.945. Interior rows: b<sub>eff</sub> 114 in, identical. The four manual rows of the built-in example: no b<sub>eff</sub>, identical.
 - **Saved data:** no key change. `P.fa.rows` items may carry the new optional number `beff` (rows from Preliminary sizing). A project saved here opens in main: main's `numRows` ignores the unknown field and uses the module's b<sub>eff</sub> (main's results). A project saved by main opens here unchanged until its rows are re-imported from Preliminary sizing.
 - **Other copies:** none.
+
+### C6. Preliminary sizing help text: where the Category C′ check is made   [text only] [results bit-identical]
+- **Where (decoded PlateLine):** the Manual paragraph "Quick suggestion and full design" (anchor `Category C′ at the connection plates welded to the flanges`) and the Full design summary note in `renderSuggest` (anchor `' and Category C′ at the connection plates welded to the flanges`). Main page: only the re-encoded `PL_B64` line.
+- **Before (both places):** "… and Category C′ at the connection plates welded to the flanges at every cross-frame (inner flange face, 6.6.1.3.1) …"
+- **After (both places):** "… and Category C′ at the connection plates welded to the flanges (inner flange face, 6.6.1.3.1; checked at every analysis point along the girder, not only at the cross-frames, which is conservative) …"
+- **Problem:** the text said the C′ check is made at every cross-frame; the check (`suggestLayout` → `checkLayout`, anchor `put(rB, gB, i, cB / thC, 'Fatigue I, Category C′ at connection plates (6.6.1.2)')`) is made at every analysis node of both girder types, as if a connection plate could be anywhere. That is conservative (the governing node can lie between cross-frames, e.g. 59 ft against the frame at 60.91 ft in the built-in example) and is kept: the cross-frame layout still moves during design. The text now says what is done. The code reference (6.6.1.3.1) is unchanged.
+- **Governing provision:** none changed.
+- **Check case:** none (text). The Full design note and the Manual paragraph read as above; every result is identical (below).
+- **Saved data:** none.
+- **Other copies:** none (the main page's Manual has no copy of this sentence).
