@@ -7379,3 +7379,37 @@ Main page and the embedded Preliminary sizing (PlateLine, `PL_B64`, decoded, edi
 - **Check case:** Splice module with "Field splices: Not included": `buildCalcReport(crOpts())` before: "Cannot read properties of null (reading 'filter')"; after: "Field splices not included.". With checks present the function is unchanged.
 - **Saved data:** none.
 - **Other copies:** none.
+
+### C17. Welds and transitions rows, and the Fatigue imports from Girder section, carry each girder's effective flange width   [§4: section properties per girder] [exterior rows; interior rows identical]
+- **Where:**
+  - Decoded PlateLine: `detailExport`, "flange-to-web welds and shop transitions": the `wt.fw.push` row (anchor `Vfr: r1(Math.max(...[e - 1, e, e + 1].filter(q => q >= 0 && q < T.Vfr.length).map(q => T.Vfr[q]))), beff:`) and the `wt.tr.push` row (anchor `dMn: r1(Math.abs(Math.min(0, T.MfN[i]))), beff:`). Main page: the re-encoded `PL_B64` line.
+  - Main page: `WT_FSPEC` and `WT_TSPEC` (last entry, anchor `['beff', 'b<sub>eff</sub> of this girder (blank: the b<sub>eff</sub> above)'`); `GM.wt.compute` (anchors `fw.forEach(r => { const dk_ = r.beff > 0 ?` and `S = secSet(r.D, s, r.beff > 0 ? { ...dk, beff: r.beff } : dk);`); `GM.wt.echo` (both tables, `; b_eff ... in`); `faImport` (Girder section branch, anchor `do: r.do, beff: r.beff > 0 ? r.beff : null };`; Welds and transitions branch, anchor `MfN: -r.dMn, beff: r.beff > 0 ? r.beff : null });`); `GM.fa.inbox`, Girder-section fallback (anchor `do: +r.do || 0, beff: +r.beff > 0 ? +r.beff : null };`).
+- **Before:**
+  - PlateLine sent one b<sub>eff</sub> for all Welds and transitions rows, the interior value: `gen: { ..., beff: r2((AN.beffFt || AN.S) * 12), ... }`; rows had no b<sub>eff</sub>.
+  - `GM.wt.compute`:
+    ```js
+        fw.forEach(r => { const S = secSet(r.D, r, dk), ...
+          const st = [['DC1', r.VDC1, G('dc'), S.s, 0, 'steel'], ['DC2', r.VDC2, G('dc'), S.c3, dk.beff * dk.ts / (3 * dk.n), '3n'], ['DW', r.VDW, G('dw'), S.c3, dk.beff * dk.ts / (3 * dk.n), '3n'], ['LL+IM', r.VLL, G('ll'), S.cn, dk.beff * dk.ts / dk.n, 'n']];
+        tr.forEach(r => { const s = ..., S = secSet(r.D, s, dk);
+    ```
+  - Fatigue rows built by "Import details from other modules → Girder section" / "→ Welds and transitions" and by the Girder-section fallback inventory had no `beff` (module b<sub>eff</sub>, 114 in, for every row).
+- **After:**
+  - PlateLine rows: `..., beff: r2(props(s, gt).beff) }` (welds) and `..., beff: r2(props(sec(t.x), gt).beff) }` (transitions): (b<sub>eff,ft</sub> from the analysis, or S/2 + overhang for exterior, S for interior) × 12, the value the Girder section and Fatigue rows already carry (C5). `gen.beff` (interior) is kept for rows without it.
+  - Row field (optional; blank = the module's b<sub>eff</sub>): `['beff', 'b<sub>eff</sub> of this girder (blank: the b<sub>eff</sub> above)', 'in', 'num', { opt: true }]` at the end of `WT_FSPEC` and `WT_TSPEC`.
+  - `GM.wt.compute`:
+    ```js
+        fw.forEach(r => { const dk_ = r.beff > 0 ? { ...dk, beff: r.beff } : dk, S = secSet(r.D, r, dk_), ...   // dk_: the row's own b_eff when given (L6, 2026-10-13)
+          const st = [['DC1', r.VDC1, G('dc'), S.s, 0, 'steel'], ['DC2', r.VDC2, G('dc'), S.c3, dk_.beff * dk.ts / (3 * dk.n), '3n'], ['DW', r.VDW, G('dw'), S.c3, dk_.beff * dk.ts / (3 * dk.n), '3n'], ['LL+IM', r.VLL, G('ll'), S.cn, dk_.beff * dk.ts / dk.n, 'n']];
+        tr.forEach(r => { const s = ..., S = secSet(r.D, s, r.beff > 0 ? { ...dk, beff: r.beff } : dk);   // the row's own b_eff when given (L6, 2026-10-13)
+    ```
+  - Fatigue: the rows from Girder section (button and fallback) take the Girder section row's `beff` (always given there); rows from Welds and transitions take the transition row's `beff` when it has one, else `null` (module b<sub>eff</sub>).
+- **Problem:** the exterior girder's welds and transitions, and the Fatigue rows imported from Girder section, were computed with the interior b<sub>eff</sub> (114 in instead of 96 in on the built-in example): composite section too stiff. Same issue C5 fixed for the Fatigue inventory (its open item). Small effect; exterior bottom-flange stress ranges up by about 1%; the top-flange weld shear flow down (less slab in Q).
+- **Governing provision:** AASHTO LRFD 10th Ed. 4.6.2.6.1 (effective flange width), 6.6.1.2.1, 6.13.3.2.4b (fillet weld shear flow VQ/I), 6.10.1.1.1b. Not changed. Not re-checked against the printed 10th Edition here: verify.
+- **Check case (built-in example; exterior girder b<sub>eff</sub> 96 in, interior 114 in; n = 6.80; t<sub>s</sub> 8, haunch 2):**
+  - **Fatigue, "Import from Girder section"** (Girder section loaded from Preliminary sizing), "Span 1, max. positive at 44.0 ft, exterior: bottom flange at flange-to-web weld" (Category B, 16.0 ksi; 60 × 9/16 web, top 16 × 3/4, bottom 16 × 1-1/8; M<sub>f+</sub> 873.7, M<sub>f−</sub> −262.9 k-ft; cracked negative section ȳ = 33.498 in, I = 50,834 in⁴; outer face y = 0):
+    - **Before (b<sub>eff</sub> 114):** ȳ<sub>n</sub> = 55.100, I<sub>n</sub> = 106,168; f<sub>+</sub> = 873.7(12)(55.100)/106,168 = 5.441; f<sub>−</sub> = 262.9(12)(33.498)/50,834 = 2.079; Δf = 7.520 ksi; ratio 1.75(7.520)/16 = **0.823**.
+    - **After (b<sub>eff</sub> 96):** ȳ<sub>n</sub> = 53.568, I<sub>n</sub> = 102,183; f<sub>+</sub> = 873.7(12)(53.568)/102,183 = 5.496; Δf = 7.575 ksi; ratio **0.829**. Top flange row 0.266 → 0.286. Interior rows identical (b<sub>eff</sub> 114).
+  - **Welds and transitions, TR1 (transition fatigue), exterior:** bottom flange at 100.0 ft γΔf 8.12 → 8.13 ksi (ratio 0.51, unchanged at two decimals); top flange at 100.0 ft 5.80 → 5.85 ksi (0.36 → 0.37). Interior rows identical.
+  - **Welds and transitions, FW1 (weld metal), exterior:** Abut. 1 top v<sub>u</sub> 3.935 → 3.908 kip/in, bottom 2.598 → 2.618 kip/in (R<sub>r</sub> 14.847 kip/in; ratios 0.27 → 0.26, 0.17 → 0.18). Interior rows identical. Weld sizes chosen by auto-design unchanged.
+- **Saved data:** no key change. `P.wt.fw`, `P.wt.tr` and `P.fa.rows` items may carry the optional number `beff`. A project saved here opens in main: main's `numRows` ignores the unknown field (main's results). A project saved by main opens here unchanged until its rows are re-imported.
+- **Other copies:** none.
