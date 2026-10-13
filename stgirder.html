@@ -2049,9 +2049,14 @@ function externalSpans(ext){
                 self-weight, no detail factor), EI = E_s·I_bare/144 kip-ft² (bare steel I of that zone).
    - 'constEI': no usable zones → w = ST-Girder's own self-weight (wswOwn) on every span, constant EI.
    - 'simple':  one span or no support layout → null here; the caller keeps w·x(L−x)/2 (correct then).
+   SW-ED (2026-10-13): selPlates = ST-Girder's current plates on the selected span ({edited, pieces:[{a,b,w,I}] global ft,
+   Iown}). 'zones' + edited → the selected span's zones are replaced by the edited plates (other spans keep the imported
+   zones); 'zones' unedited → imported zones everywhere (as before). 'constEI' with flange transitions on the selected
+   span → that span uses ST-Girder's segments (w, I per segment) and the other spans ST-Girder's own self-weight wswOwn
+   with the midspan bare-steel I (Iown); 'constEI' with one uniform section → constant EI exactly as before.
    Returns M (k-ft, sagging +) and V (kip, + = upward shear at the left end, = dM/dx) at a span-local x of the
    selected span, the selected span's end shears, and the support reactions (kip, + up). */
-function swContinuous(ext, sel, wswOwn, Es){
+function swContinuous(ext, sel, wswOwn, Es, selPlates){
   if(!ext||!sel) return null;
   const m=ext.member||{};
   let sup=null;
@@ -2080,6 +2085,20 @@ function swContinuous(ext, sel, wswOwn, Es){
     for(let i=1;i<pieces.length&&ok;i++){ if(pieces[i].a>reach+tol) ok=false; reach=Math.max(reach,pieces[i].b); }
     if(!ok||reach<X1-tol){ method='constEI'; warn='section.zones do not cover the girder from the first to the last support'; } }
   if(method==='constEI') pieces=[{a:X0,b:X1,A:null,I:1,w:wswOwn}];
+  // SW-ED: plates of the selected span (imported vs edited in ST-Girder)
+  const sx0=+sel.x0, sx1=+sel.x1;
+  const sp=selPlates&&Array.isArray(selPlates.pieces)? selPlates.pieces.filter(q=>q.b-q.a>tol&&q.w>0&&q.I>0) : [];
+  let selSrc=null, varEI=(method==='zones');
+  const outside=list=>{ const o=[]; list.forEach(q=>{ if(q.a<sx0-tol) o.push({...q,b:Math.min(q.b,sx0)});
+      if(q.b>sx1+tol) o.push({...q,a:Math.max(q.a,sx1)}); }); return o; };
+  if(selPlates&&method==='zones'){
+    if(selPlates.edited&&sp.length){ pieces=[...outside(pieces),...sp].sort((p,q)=>p.a-q.a); selSrc='edited'; }
+    else selSrc='imported';
+  } else if(selPlates&&method==='constEI'){
+    if(sp.length>1&&selPlates.Iown>0){ pieces=[...outside([{a:X0,b:X1,A:null,I:selPlates.Iown,w:wswOwn}]),...sp].sort((p,q)=>p.a-q.a);
+      selSrc='ownSegs'; varEI=true; }
+    else selSrc='own';
+  }
   // nodes: supports + zone boundaries
   const nset=new Set(sup.map(v=>+v.toFixed(6)));
   pieces.forEach(p=>{ nset.add(+p.a.toFixed(6)); nset.add(+p.b.toFixed(6)); });
@@ -2088,7 +2107,7 @@ function swContinuous(ext, sel, wswOwn, Es){
   const pieceAt=x=>{ let best=null; for(const p of pieces) if(x>=p.a-1e-9&&x<=p.b+1e-9) best=p; return best||pieces[pieces.length-1]; };
   const els=[];
   for(let i=0;i<nodes.length-1;i++){ const a=nodes[i], b=nodes[i+1], p=pieceAt((a+b)/2);
-    els.push({a,b,h:b-a,w:p.w,EI:(method==='zones'? Es*p.I/144 : 1)}); }
+    els.push({a,b,h:b-a,w:p.w,EI:(varEI? Es*p.I/144 : 1)}); }
   const nd=2*nodes.length, K=Array.from({length:nd},()=>new Array(nd).fill(0)), F=new Array(nd).fill(0);
   const ke=(EI,h)=>{ const c=EI/(h*h*h);
     return [[12*c,6*h*c,-12*c,6*h*c],[6*h*c,4*h*h*c,-6*h*c,2*h*h*c],[-12*c,-6*h*c,12*c,-6*h*c],[6*h*c,2*h*h*c,-6*h*c,4*h*h*c]]; };
@@ -2118,8 +2137,8 @@ function swContinuous(ext, sel, wswOwn, Es){
   const Vg=X=>{ const e=elAt(X), s=clamp(X-e.a,0,e.h); return e.V1-e.w*s; };
   const loc=x=>x0+clamp(x,0,Ls);
   return {method, warn, supports:sup, spans:sup.slice(0,-1).map((s,i)=>+(sup[i+1]-s).toFixed(3)),
-    selIdx:+sel.idx||null, x0, x1,
-    wZones:method==='zones'? pieces.map(p=>({a:p.a,b:p.b,w:p.w,I:p.I})) : null, wOwn:wswOwn,
+    selIdx:+sel.idx||null, x0, x1, selSrc,
+    wZones:varEI? pieces.map(p=>({a:p.a,b:p.b,w:p.w,I:p.I})) : null, wOwn:wswOwn,
     M:x=>Mg(loc(x)), V:x=>Vg(loc(x)),
     Rspan:[Vg(x0), -Vg(x1)],                              // this span's end shears as reactions (+ up)
     R:supNode.map(j=>R[j])};                              // support reactions of the whole girder (+ up)
@@ -2129,16 +2148,26 @@ function swContLabel(c){
   const f=v=>(+v).toFixed(1).replace(/\.0$/,'');
   const lay='supports at '+c.supports.map(f).join(', ')+' ft (spans '+c.spans.map(f).join(' + ')+' ft'+(c.selIdx?', span '+c.selIdx+' selected':'')+')';
   return c.method==='zones'
-    ? 'continuous girder, variable EI: stiffness analysis over all '+c.spans.length+' spans with the bare-steel section.zones of the import (I and weight per zone at 0.490 kcf), '+lay
+    ? 'continuous girder, variable EI: stiffness analysis over all '+c.spans.length+' spans with the bare-steel section.zones of the import (I and weight per zone at 0.490 kcf)'+(c.selSrc==='edited'?', the selected span with the plates edited in ST-Girder':'')+', '+lay
+    : c.selSrc==='ownSegs'
+    ? 'continuous girder, variable EI on the selected span: stiffness analysis over all '+c.spans.length+' spans; selected span with ST-Girder’s flange segments (I and weight per segment at 0.490 kcf), other spans with ST-Girder’s own self-weight '+(+c.wOwn).toFixed(3)+' klf and midspan bare-steel I, '+lay
     : 'continuous girder, constant EI: stiffness analysis over all '+c.spans.length+' spans with ST-Girder’s own self-weight '+(+c.wOwn).toFixed(3)+' klf on every span, '+lay;
+}
+// SW-ED: which plates the selected span uses in the self-weight analysis (Inputs banner, Camber note).
+function swSelPlatesText(c){
+  if(c.selSrc==='edited') return 'Selected span plates: edited in ST-Girder (the Section inputs differ from the imported section.zones of this span); the other spans keep the imported zones.';
+  if(c.selSrc==='imported') return 'Selected span plates: imported (section.zones of this span, as on the Section inputs).';
+  if(c.selSrc==='ownSegs') return 'Selected span plates: ST-Girder’s Section inputs (the import has no usable zones); the other spans use ST-Girder’s own section.';
+  if(c.selSrc==='own') return 'Selected span plates: ST-Girder’s Section inputs, one uniform section (the import has no usable zones), the same section on every span.';
+  return '';
 }
 function SwContNote({R}){
   if(!R||!R.ok||!R.ext||!R.ext.hasDC1||!R.ext.swExcl) return null;
   const c=R.swCont;
   if(!c) return <span> Self-weight method: <b>simple span</b>, w·x(L−x)/2 ({fmt(R.loads.wsw,3)} klf), because the import has one span or no support layout.</span>;
   const r=c.R.map((v,i)=>'R'+(i+1)+' = '+fmt(v,2)).join(', ');
-  return <span> Self-weight method: <b>{swContLabel(c)}</b>. Self-weight reactions of the whole girder: {r} kip; this span’s end shears {fmt(c.Rspan[0],2)} / {fmt(c.Rspan[1],2)} kip.
-    {c.method==='constEI'&&<b style={{color:'var(--warn)'}}> ⚠ Fallback to constant EI: {c.warn}; the flange transitions are ignored in the self-weight moments.</b>}</span>;
+  return <span> Self-weight method: <b>{swContLabel(c)}</b>. {swSelPlatesText(c)} Self-weight reactions of the whole girder: {r} kip; this span’s end shears {fmt(c.Rspan[0],2)} / {fmt(c.Rspan[1],2)} kip. Self-weight is applied between the first and last supports only (no overhang beyond the end supports is loaded).
+    {c.method==='constEI'&&<b style={{color:'var(--warn)'}}> ⚠ Fallback {c.selSrc==='ownSegs'?'(no imported zones)':'to constant EI'}: {c.warn}{c.selSrc==='ownSegs'?'; the selected span uses ST-Girder’s flange segments, the other spans one constant section':'; the flange transitions are ignored in the self-weight moments'}.</b>}</span>;
 }
 /* GirderDetail → ST-Girder (HANDOFF.md §4.9). An imported envelope whose LL+IM is already distributed to one girder. */
 function extPerGirderOf(ext){ return !!(ext&&ext.liveLoadPerGirder===true); }
@@ -2567,7 +2596,18 @@ function computeAll(inp){
     const useExt=!!ext;
     // SW-CONT (2026-10-13): the self-weight ST-Girder adds to an import with selfWeightExcluded:true is analysed on the
     // continuous girder of the import (swContinuous); null = one span / no support layout → simple span w·x(L−x)/2 as before.
-    const swCont=(useExt&&ext.hasDC1&&ext.swExcl)? swContinuous(inp.external, ext.sel, wswAvg, Es) : null;
+    // SW-ED (2026-10-13): the selected span uses ST-Girder's current plates when they differ from the imported zones of that span.
+    const swSelPlates=(useExt&&ext.hasDC1&&ext.swExcl)? (()=>{
+      const sel=ext.sel||{}, x0=+sel.x0||0, x1=+sel.x1, z=zonesToSec(inp.external, sel, sec);
+      const same=(a,b)=>Math.abs((+a)-(+b))<=1e-9;
+      const plateKeys=['D','tw','bft','tft','bfb','tfb'];
+      const edited= z? !(plateKeys.every(k=>same(sec[k],z[k])) && !!sec.useSegs===!!z.useSegs &&
+        (!z.useSegs || (Array.isArray(sec.segs)&&sec.segs.length===z.segs.length&&
+          z.segs.every((g,i)=>['xEnd','bft','tft','bfb','tfb'].every(k=>same(sec.segs[i][k],g[k])))))) : null;
+      return {edited, Iown:segMid.bare.I,
+        pieces:segP.map(g=>({a:x0+g.x0, b:Math.min(x0+g.x1, isFinite(x1)?x1:x0+g.x1), w:g.wsw, I:g.bare.I}))};
+    })() : null;
+    const swCont=(useExt&&ext.hasDC1&&ext.swExcl)? swContinuous(inp.external, ext.sel, wswAvg, Es, swSelPlates) : null;
 
     /* ---------- CHECKS (Phase 1: section proportion limits 6.10.2) ---------- */
     const {D,tw}=sec;
