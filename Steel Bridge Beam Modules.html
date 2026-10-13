@@ -4912,7 +4912,7 @@ tabs: { combos: 'Results', cap: 'Method', drawings: 'Diagrams', rptCombos: 'Anal
         ${fld('Fit condition (6.7.2; required when a skew exceeds 20°)', 'sa.fit', '', 'sel', { full: true, options: [['', 'Not specified'], ['nlf', 'No-load fit'], ['sdlf', 'Steel dead load fit'], ['tdlf', 'Total dead load fit']] })}${fld('Peak seismic ground acceleration coefficient A<sub>s</sub> (3.10.9.2)', 'sa.As', '')}${fld('γ<sub>EQ</sub>, live load in the seismic connection force', 'sa.gEQ', '')}${fld('Average column height H (4.7.4.4)', 'sa.Hcol', 'ft')}
         ${fld('Deck placement sequence analysis (6.10.3.4)', 'sa.seqOn', '', 'sel', { full: true, options: [['on', 'On'], ['off', 'Off']] })}${fld('Hardened pours act with', 'sa.seqMod', '', 'sel', { full: true, options: [['n', 'n (short-term)'], ['3n', '3n (long-term)']] })}${fld('Pour sequence (x1-x2 ft, in placement order; blank = automatic)', 'sa.seqCustom', '', 'text', { full: true })}
         ${fld('Longitudinal deck reinforcement', 'sa.rebar', '% of deck')}${fld('Live load deflection limit L /', 'sa.defl', '')}
-        <p class="note">This model is used by Preliminary sizing for its demands (and so by every module fed from it); changing it here changes the design demands. The reinforcement is taken at the deck centroid (1.0% is the minimum of 6.10.1.7).</p></div>` }; },
+        <p class="note">This model is used by Preliminary sizing for its demands (and so by every module fed from it); changing it here changes the design demands. The reinforcement is taken at the deck centroid (1.0% is the minimum of 6.10.1.7).</p></div>${secHd('sec-sast', 'Send to ST-Girder')}<div class="sec-body" id="sec-sast">${gdStUi()}</div>` }; },
   compute(p) {
     if (!p.crackV) { if (p.crack === '15') p.crack = 'none'; p.crackV = 2; }   // the former default (cracked 15%) is not per 6.10.1.5; migrate once
     const b = P.df.bridge;
@@ -5278,6 +5278,71 @@ document.addEventListener('change', e => {
   if (e.target.name === 'gdlldf-basis') { gdLldfDialog(e.target.value); return; }
   if (e.target.dataset && /^sa\.(girder|dfSrc)$/.test(e.target.dataset.k || '')) setTimeout(gdLldfPaint, 0); });
 window.addEventListener('storage', e => { if (!e.key || e.key.indexOf('bridgeSuite.v1.lldf') === 0) gdLldfPaint(); });
+/* ---------- Hand-off: "Send to ST-Girder" (HANDOFF.md §4.9, channel bridgeSuite.v1.girderDemands, _schema stgirder-external-demands) ----------
+   Export only (EX1, 2026-10-13): runs GM.sa.compute for the chosen girder and sends its UNFACTORED demands at every analysis node
+   (DC1, DC2, DW, LL+IM with this girder's distribution factors, fatigue truck with IM 15% and the fatigue factors, pedestrian load if any)
+   with the plates, materials, deck, bracing, skew and the distribution factors used, in ST-Girder's existing imported-demands schema
+   (the MIDAS station format, shears in its sign convention). Nothing in this tool's inputs, results or saved data changes. */
+const GD_ST = { ch: 'girderDemands', schema: 'stgirder-external-demands', producer: 'GirderDetail', file: 'Steel Bridge Beam Modules.html' };
+function gdStUi() {
+  const b = P && P.df && P.df.bridge, nb = b && b.ok ? b.nb : 0, g0 = Math.round(nm(P && P.sa && P.sa.girder)) || 1;
+  if (!nb) return '<p class="note full">Define the complete bridge in Preliminary sizing first.</p>';
+  return `<div class="full" id="gd-st-box"><div class="ig"><label for="gd-st-g">Girder to send</label><select id="gd-st-g">${[...Array(nb)].map((_, i) => `<option value="${i + 1}"${i + 1 === g0 ? ' selected' : ''}>G${i + 1} (${i === 0 || i === nb - 1 ? 'exterior' : 'interior'})</option>`).join('')}</select></div>
+    <div class="ck-row"><input type="checkbox" id="gd-st-pl" checked><label for="gd-st-pl">Add the pedestrian load (when there is one) to LL+IM, as this tool does for its own design demands</label></div>
+    <div class="fa-imp"><button type="button" class="proj-btn" data-gdst="send" title="Write this girder's analysis results to the shared browser storage for ST-Girder (stgirder.html): Pull from GirderDetail">Send to ST-Girder</button><button type="button" class="proj-btn" data-gdst="file" title="Save the same hand-off as a JSON file (ST-Girder: Import)">Export hand-off (JSON)</button></div>
+    <p class="note">Sends the unfactored forces of this analysis at every node (DC1, DC2, DW, LL+IM already multiplied by the girder's distribution factors, fatigue moments and shears) with the girder's plates, materials, deck, cross-frame spacing, skew and distribution factors, for ST-Girder's checks and LRFR rating. ST-Girder applies its own load factors and resistances and does not apply distribution factors again. Opened as files, both tools must be in one folder and opened in Chrome or Edge; otherwise use Export hand-off (JSON) and ST-Girder's Import.</p></div>`;
+}
+function gdStPayload(g, addPL) {
+  const R = GM.sa.compute({ ...P.sa, girder: g }); if (R.errors && R.errors.length) return { error: R.errors[0] };
+  const b = R.b, r3 = v => Math.round(v * 1000) / 1000, r4 = v => Math.round(v * 1e4) / 1e4, N = R.N, xs = R.xs, sup = Array.from(R.sup), lab = `G${g}`;
+  const hasPL = [...R.PLp, ...R.PVp].some(v => v > 1e-9) || [...R.PLn, ...R.PVn].some(v => v < -1e-9), pl = !!addPL && hasPL, a = (arr, k) => pl ? arr[k] : 0;
+  // shears: element just right of a node (as this tool tabulates them); at an interior support one station 0.001 ft each side.
+  // Sign: the schema's MIDAS convention (gravity shear negative at the left end of a span) = minus this tool's shear; ST-Girder negates it back.
+  const stations = [], row = (i, e, dx) => { const o = { x: r3(xs[i] + dx),
+      M_DC1: r3(R.MDC1[i]), V_DC1: r3(-R.VDC1[e]), M_DC2: r3(R.MDC2[i]), V_DC2: r3(-R.VDC2[e]), M_DW: r3(R.MDW[i]), V_DW: r3(-R.VDW[e]),
+      M_LLpos: r3(R.LLp[i] + a(R.PLp, i)), M_LLneg: r3(R.LLn[i] + a(R.PLn, i)), V_LLpos: r3(-(R.LVn[e] + a(R.PVn, e))), V_LLneg: r3(-(R.LVp[e] + a(R.PVp, e))),
+      M_FATpos: r3(R.FMp[i]), M_FATneg: r3(R.FMn[i]), V_FATpos: r3(-R.FVn[e]), V_FATneg: r3(-R.FVp[e]) };
+    if (hasPL) Object.assign(o, { M_PLpos: r3(R.PLp[i]), M_PLneg: r3(R.PLn[i]), V_PLpos: r3(-R.PVn[e]), V_PLneg: r3(-R.PVp[e]) });
+    stations.push(o); };
+  for (let i = 0; i < N; i++) { if (i > 0 && i < N - 1 && sup.includes(i)) { row(i, i - 1, -0.001); row(i, i, 0.001); } else row(i, Math.min(i, N - 2), 0); }
+  const PL_ = b.plates, cuts = [...new Set([...PL_.top, ...PL_.bot, ...PL_.web].flatMap(r => [r.x0, r.x1]))].sort((p, q) => p - q), zones = [];
+  for (let k = 0; k < cuts.length - 1; k++) { const x0 = cuts[k], x1 = cuts[k + 1]; if (x1 - x0 < 1e-6) continue; const s = saSec(PL_, (x0 + x1) / 2);
+    zones.push({ startX: r3(x0), endX: r3(x1), web: { depth: s.D, thickness: s.tw }, topFlange: { width: s.topB, thickness: s.topT }, botFlange: { width: s.botB, thickness: s.botT } }); }
+  const j = R.j, nb = b.nb, bays = R.DF.base.spacings, ext = R.ext, S = ext ? bays[j === 0 ? 0 : bays.length - 1] : (bays[j - 1] + bays[j]) / 2;
+  const gF = GD_GR[b.gF] || {}, gW = GD_GR[b.gW] || {}, cf = P.cf || {}, dia = cf.dia && cf.dia.on === 'yes';
+  const dfSpans = R.spans.map((L, i) => { const m = R.memS(i); return { span: i + 1, gM: r4(m.gM), gV: r4(m.gV), fatM: r4(m.fatM), fatV: r4(m.fatV) }; });
+  const dfPiers = R.cont ? sup.slice(1, -1).map((_, k) => ({ pier: k + 1, gM: r4(R.memP(k + 1).gM) })) : [];
+  const skews = (b.skews || []).map(v => +v || 0), model = R.fe ? 'staged, variable stiffness (steel / 3n / n)' : 'constant EI';
+  const notes = [
+    `Forces of girder ${lab} (${ext ? 'exterior' : 'interior'}) from GirderDetail's Structural analysis, ${model} line-girder model${R.cont ? ', continuous' : ''}. Unfactored: no load factors are applied.`,
+    `DC1 = steel, deck, haunch and other noncomposite dead load on the steel section (girder self-weight included); DC2 and DW on the long-term composite section.`,
+    `LL+IM = HL-93 per girder: already multiplied by this girder's distribution factors (multiple presence and skew correction included), IM ${f0(R.im * 100)}% on the truck and tandem only. The receiver must not apply distribution factors again.`,
+    `Fatigue (M_FAT, V_FAT) = fatigue truck (3.6.1.4.1) with IM ${f0(R.imf * 100)}% and the single-lane fatigue distribution factors (no multiple presence), unfactored (gamma not applied). Range = positive minus negative.`,
+    hasPL ? (pl ? 'The pedestrian load is ADDED to LL+IM (as GirderDetail does for its own design demands); M_PL/V_PL give it separately.' : 'The pedestrian load is NOT in LL+IM; M_PL/V_PL give it separately.') : 'No pedestrian load.',
+    'Moments sagging positive. Shears in the MIDAS convention of this schema (negative at the left end of a span under gravity load). Shear at a node is the element just right of it; at each interior support there is one station 0.001 ft either side.',
+    'Not sent: construction live load, deck placement sequence, wind and flange lateral bending.'];
+  const p = { _schema: GD_ST.schema, schemaVersion: 1, producer: GD_ST.producer, producerFile: GD_ST.file, producedAt: new Date().toISOString(),
+    project: String(b.project || 'GirderDetail'), source: `GirderDetail Structural analysis, ${lab} (${ext ? 'exterior' : 'interior'}), ${model}`, liveLoadType: 'HL-93',
+    units: { x: 'ft', moment: 'ft-kip', force: 'kip', plate: 'in', stress: 'ksi', deck: 'in', area: 'in2', unitWeight: 'kcf', spacing: 'ft', Lb: 'ft', skew: 'deg' },
+    factored: false, imIncluded: true, dfIncluded: true, multiplePresenceIncluded: true, liveLoadPerGirder: true, fatigueIncluded: true, pedestrianInLL: pl, selfWeightExcluded: false,
+    member: { key: lab, type: 'steel I-girder', totalLength: r3(xs[N - 1]), spans: R.spans.slice(), supports: sup.map(i => r3(xs[i])) },
+    section: { zones }, stations, notes,
+    girderDetail: { girder: g, label: lab, position: ext ? 'exterior' : 'interior', nGirders: nb, spacing: r4(S), overhang: ext ? (j === 0 ? b.ohL : b.ohR) : null, analysis: model,
+      materials: { Fyf: gF.Fy, Fyw: gW.Fy, Fu: gF.Fu, gradeFlange: b.gF, gradeWeb: b.gW, Es: ES, fc: b.fc, wc: b.wc, Ec: r3(R.DF.MR.Ec), n: r4(R.n) },
+      deck: { ts: b.tsDeck, haunch: b.haunch, beff: r3(R.beff), rebarPct: nm(R.p.rebar), Ar: r3(R.Ar), rebarAt: 'deck mid-depth' },
+      bracing: { Lb: nm(cf.Lb) > 0 ? nm(cf.Lb) : null, type: dia ? 'diaphragm' : `cross-frame (${cf.type || '?'})`, source: 'Cross-frames module input L_b (spacing of the intermediate cross-frames)' },
+      skew: { bySupport: skews, max: Math.max(0, ...skews.map(Math.abs)) },
+      df: { source: R.man ? 'entered manually in Structural analysis' : 'LLDF and DLs module', spans: dfSpans, piers: dfPiers }, im: { truck: r3(R.im * 100), fatigue: r3(R.imf * 100) } } };
+  return { ok: true, payload: p };
+}
+function gdStGet() { const s = document.getElementById('gd-st-g'), c = document.getElementById('gd-st-pl'); return gdStPayload(Math.round(nm(s ? s.value : P.sa.girder)) || 1, c ? c.checked : true); }
+document.addEventListener('click', e => { const t = e.target.closest && e.target.closest('[data-gdst]'); if (!t) return;
+  if (!window.BridgeXfer) { alert('The hand-off helper is not available in this browser.'); return; }
+  const r = gdStGet(); if (r.error) { alert(`Structural analysis: ${r.error}`); return; }
+  if (t.dataset.gdst === 'file') { BridgeXfer.exportFile(GD_ST.ch, r.payload); flash(`Hand-off file for ${r.payload.member.key} saved.`); return; }
+  const w = BridgeXfer.publish(GD_ST.ch, r.payload, GD_ST.producer, GD_ST.file);
+  if (w.error) { alert(`Could not send to ST-Girder: ${w.error}\n\nUse "Export hand-off (JSON)" and ST-Girder's Import instead.`); return; }
+  flash(`${r.payload.member.key} sent to ST-Girder (${r.payload.stations.length} stations). In stgirder.html click "Pull from GirderDetail".`); });
 /* stresses by construction stage at every node (tension +) */
 
 /* deck placement sequence (AASHTO LRFD 6.10.3.4): steel and other noncomposite load on the steel, then each pour's wet concrete on the
