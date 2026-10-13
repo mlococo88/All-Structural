@@ -10229,3 +10229,225 @@ All code in this PR except the GirderDetail drawing and Structural analysis hunk
    C.sort((a, b) => GROUPS.indexOf(a.grp) - GROUPS.indexOf(b.grp));
    M.st = sectionStatus(M, C);
 ````
+
+### TB3. Web shear and stiffener checks with the largest V<sub>u</sub> in each panel (6.10.9.3.1): Transverse stiffeners TS4/TS3, Girder section GS11, Preliminary sizing rows   [§4: demand definition] [results: TS4, TS3 ρ<sub>w</sub>, GS11 of every project once its rows are re-sent; old rows unchanged until then]
+- **Where:** decoded PL `detailExport`: new `shearP`, `uniOf`, `gsPan`, `gsDo` (reworked), TS rows (anchor `[[x0 + doFt, k, 1], [x1 - doFt, k + 1, -1]].forEach`) and cross-frame row, gs rows (`gsRow`, `gP`). GirderDetail page: `TS_ROWSPEC` / `TS_BRG` / new `TS_PN2`, TS `compute` (anchor `r.VuB = `), TS3 and TS4 notes and TS4 work line, Manual "Web shear (6.10.9)"; `GS_SPEC` / new `GS_PAN`, GS `compute` (anchor `r.Vu = G.dc * (r.VDC1 + r.VDC2)`), GS11.
+- **Before:** TS4 checked both panels at a stiffener with V<sub>u</sub> at the stiffener, except an end panel (largest V<sub>u</sub> in it, from the optional end-panel shears `VDC1b…VLLb`, sent for end rows only); TS3's ρ<sub>w</sub> used V<sub>u</sub> at the stiffener for both panels; GS11 used V<sub>u</sub> at the location.
+  ```js
+  r.VuB = r.end === 'yes' && r.VDC1b != null ? g('dc') * (r.VDC1b + r.VDC2b) + g('dw') * r.VDWb + g('ll') * r.VLLb : null;
+  r.Vu1 = r.VuB != null ? Math.max(r.VuB, r.Vu) : r.Vu;
+  ... q.Vu = i ? r.Vu : r.Vu1; ... q.rho = tfa && r.Vu > PHI.v * q.Vcr ? Math.min(1, (r.Vu - PHI.v * q.Vcr) / ...
+  ```
+- **After:** every TS row carries the largest shears in panel 1 (`VDC1b…VLLb`, now for every row) and in panel 2 (new optional `VDC1c…VLLc`); TS4 and TS3's ρ<sub>w</sub> use V<sub>u</sub> = max(the panel's largest, the shear at the stiffener) for each panel; a panel with blank shears (rows saved before, or typed) uses the shear at the stiffener and the item says so. Every gs row carries the largest shears in the web panel containing x (new optional `VDC1p…VLLp`): per-bay mode the panel of that girder's layout (at a boundary, the panel with the larger V<sub>u</sub>/V<sub>n</sub>), uniform mode the panel as the drawings place the stiffeners (at a boundary, the larger shear); GS11 uses V<sub>u</sub> = max(at the location, largest in the panel). Panel geometry for TS rows: per bay, the actual panels; uniform, the support or cross-frame and d<sub>o</sub> on each side.
+  ```js
+  r.VuB = r.VDC1b != null ? g('dc') * (r.VDC1b + r.VDC2b) + g('dw') * r.VDWb + g('ll') * r.VLLb : null;
+  r.VuC = r.VDC1c != null ? g('dc') * (r.VDC1c + r.VDC2c) + g('dw') * r.VDWc + g('ll') * r.VLLc : null;
+  r.Vu1 = r.VuB != null ? Math.max(r.VuB, r.Vu) : r.Vu; r.Vu2 = r.VuC != null ? Math.max(r.VuC, r.Vu) : r.Vu;
+  ... q.Vu = i ? r.Vu2 : r.Vu1; q.pan = (i ? r.VuC : r.VuB) != null; ... q.rho = tfa && q.Vu > PHI.v * q.Vcr ? Math.min(1, (q.Vu - PHI.v * q.Vcr) / ...
+  r.VuP = r.VDC1p != null ? Math.max(r.Vu, G.dc * (r.VDC1p + r.VDC2p) + G.dw * r.VDWp + G.ll * r.VLLp) : null;   // GS11
+  ```
+- **Saved data (§5):** new optional row fields only (`VDC1c…VLLc` on TS rows; `VDC1p…VLLp` on GS rows); the meaning of `VDC1b…VLLb` widens from "end panel 1" to "panel 1" (old rows had them only on end rows, with that meaning). Old rows without the fields compute as before; Preliminary sizing re-sends rows when it recomputes (Design all, Get demands, its automatic hand-off), and those carry the new fields.
+- **Governing provisions:** AASHTO LRFD 10th Ed. 6.10.9.3.1 ("The required transverse stiffener spacing shall be calculated using the maximum shear in a panel"); 6.10.11.1.3 (V<sub>u</sub> = maximum shear due to the factored loads in the web panel under consideration, for ρ<sub>w</sub>); 6.10.9.1 (Eq. 6.10.9.1-1).
+- **Check cases:**
+  - TS4, built-in example as shipped (D = 60 in, t<sub>w</sub> = 9/16 in, uniform d<sub>o</sub> = 60 in), "Span 1, first stiffener from Pier 1, interior", panel 1 (105–110 ft): before V<sub>u</sub> at the stiffener = 1.25(90.2 + 16.5) + 1.5(13.7) + 1.75(126.9) = 376.0 kip; after V<sub>u</sub> = 1.25(96.0 + 17.5) + 1.5(14.5) + 1.75(131.5) = 393.75 kip (largest in the panel, at the pier). φV<sub>n</sub>: k = 10, D/t<sub>w</sub> = 106.7, C = 0.800, V<sub>p</sub> = 978.75 kip, 2Dt<sub>w</sub>/(18·1.5 + 18·2) = 1.071 → Eq. 6.10.9.3.2-2: 903.55 kip. Ratio 0.416 → 0.436. Largest TS4: 0.43 → 0.44 (14 of 36 items change, all up).
+  - GS11, built-in, "Span 1, max. positive at 43.0 ft, interior": before V<sub>u</sub> = 1.25(6.2 + 1.0) + 1.5(0.8) + 1.75(51.3) = 99.97 kip; after the panel's largest LL shear 56.4 kip: V<sub>u</sub> = 108.90 kip; φV<sub>n</sub> = 903.55 kip; ratio 0.111 → 0.121. Largest GS11 unchanged at 0.44 (14 of 18 items change, all up).
+  - xsA: TS4 largest 0.49 → 0.51 (e.g. "Span 2, first stiffener from Pier 1", panel 1: 442.02 → 457.77 kip); GS11 largest 0.51 → 0.51 (14 of 18 up). Built-in with main's applied quick suggestion (D 69 uniform): TS4 0.60 → 0.60 (16 of 36 items up), GS11 0.50 → 0.50 (18 of 26 up). TS3 unchanged in all (no panel needs the tension field there). Per-bay built-in (TB1): TS3 0.846, TS4 0.752, TS5 0.995, GS11 0.75.
+- **How verified (full, the PR's final state):** `node --check` on both pages. Headless Chromium: (1) built-in, xsA, curb: every module identical to main except TS and GS (re-sent rows with panel shears; item-level changes listed above, all ratios equal or higher); (2) quick suggestion: unstiffened identical to main, "Optimize" off identical except DT1's D = 79 in candidate; per bay, tension field on/off: pass; Full design on/off: pass (D 69, 80 / 110 stiffeners); (3) per-bay project: Apply, Framing table, count edit, D3/D4, Design all (TS3/TS4/TS5 pass), Get demands vs Any location identical for G1, G2, G5 except the deck-casting MDC<sub>c</sub> differences that main shows identically on the same seed (pre-existing); DXF/3D positions; skew 35° staggered (TS5 0.998, D4 pass); save/load both ways (per-bay file in main: loads, uniform used, fields kept). No console errors. Screenshots: followups/stiffbays2/.
+
+  Decoded PL page:
+
+````diff
+--- before
++++ after
+@@ -3907,10 +3907,21 @@
+   // or the girder of a Structural analysis run) at that girder's own stations: TS rows at its first stiffener (or connection plate) from each support and at the
+   // cross-frame, with the actual adjacent panel widths; gs rows with the panel at x. Uniform mode (and stiffeners off): as before
+   const BM = stiff && tsBaysOn(P), panG = {}, pansOf = gt => { if (!BM) return null; const gi = gOf(gt)[0]; return panG[gi] || (panG[gi] = tsGirderBays(P, m, FR, gi).flatMap(tsPanels)); };
+-  const gsDo = (gt, x, s) => { const PG = pansOf(gt); if (!PG || !PG.length) return { do: stiff ? r2(doIn) : 0, end: 'no' };
+-    const c = PG.filter(q => x >= q.p - 0.05 && x <= q.q + 0.05), rat = 2 * s.D * s.tw / (s.topB * s.topT + s.botB * s.botT), vn = q => tsVn(s.D, s.tw, m.FyW, q.d, q.end, rat, true).Vn;
+-    const w = (c.length ? c : [PG.reduce((a, q) => Math.abs((q.p + q.q) / 2 - x) < Math.abs((a.p + a.q) / 2 - x) ? q : a)]).reduce((a, q) => vn(q) < vn(a) ? q : a);   // at a panel boundary: the panel with the smaller V_n
+-    return { do: r2(w.d), end: w.end ? 'yes' : 'no' }; };
++  // panel shears (TB3, 2026-10-13; 6.10.9.3.1 and the V_u of 6.10.11.1.3: the maximum shear in the panel): the largest DC1, DC2, DW and LL+IM shears between a and b, keys with suffix sfx
++  // (TS rows: b = panel 1, c = panel 2; gs rows: p = the panel at x)
++  const shearP = (T, a, b, sfx) => { const o = shearIn(T, Math.max(0, Math.min(a, b)), Math.min(m.Ltot, Math.max(a, b))); return { [`VDC1${sfx}`]: o.VDC1b, [`VDC2${sfx}`]: o.VDC2b, [`VDW${sfx}`]: o.VDWb, [`VLL${sfx}`]: o.VLLb }; };
++  // uniform spacing: the panels of girder gi as the drawings place them (a stiffener at d_o from each bearing and cross-frame, the last panel of a bay up to 1.5 d_o); no stiffeners: between cross-frames
++  const uniG = {}, uniOf = gt => { const gi = gOf(gt)[0]; if (uniG[gi]) return uniG[gi]; const g = FR.girders[gi], out = []; if (!g) return (uniG[gi] = out);
++    const pts = [...new Set([...g.bear, ...g.pts.filter(q => q.f.type === 'int').map(q => q.s)].map(v => +v.toFixed(3)))].sort((a, b) => a - b), dO = doIn / 12;
++    for (let i = 0; i < pts.length - 1; i++) { const xx = [pts[i]]; if (stiff) for (let x = pts[i] + dO; x < pts[i + 1] - dO * 0.5; x += dO) xx.push(x); xx.push(pts[i + 1]); for (let j = 0; j < xx.length - 1; j++) out.push({ p: xx[j], q: xx[j + 1], d: (xx[j + 1] - xx[j]) * 12, end: false }); }
++    return (uniG[gi] = out); };
++  // the panel of a gs row at x: per-bay, of two panels at a boundary the one with the larger V_u/V_n (with 1.25/1.50/1.75 for ranking); uniform, the one with the larger shear
++  const gsPan = (gt, T, x, s) => { const PG = pansOf(gt) || uniOf(gt); if (!PG || !PG.length) return null;
++    const c = PG.filter(q => x >= q.p - 0.05 && x <= q.q + 0.05), L = c.length ? c : [PG.reduce((a, q) => Math.abs((q.p + q.q) / 2 - x) < Math.abs((a.p + a.q) / 2 - x) ? q : a)];
++    const vu = q => { const o = shearIn(T, Math.max(0, q.p), Math.min(m.Ltot, q.q)); return 1.25 * (o.VDC1b + o.VDC2b) + 1.5 * o.VDWb + 1.75 * o.VLLb; }, rat = 2 * s.D * s.tw / (s.topB * s.topT + s.botB * s.botT);
++    const sc = q => BM ? vu(q) / tsVn(s.D, s.tw, m.FyW, q.d, q.end, rat, true).Vn : vu(q);
++    return L.reduce((a, q) => sc(q) > sc(a) ? q : a); };
++  const gsDo = (gt, x, s, w) => { if (!BM || !w) return { do: stiff ? r2(doIn) : 0, end: 'no' }; return { do: r2(w.d), end: w.end ? 'yes' : 'no' }; };
+   const pieceOf = x => m.pieces.find(p => x >= p.x0 - 1e-9 && x < p.x1 - 1e-9) || m.pieces[m.pieces.length - 1];
+   const bfw = x => { const p = pieceOf(x); return Math.max(...[...m.top, ...m.bot].filter(q => q.x1 > p.x0 + 1e-9 && q.x0 < p.x1 - 1e-9).map(q => q.b)); };
+   // Δf at the connection plate (M1, 2026-10-13): inner face of the bottom flange, the weld toe of Table 6.6.1.2.3-1 detail 4.1, short-term composite for both signs, as this tool's own Category C′ check (was the flange mid-thickness, c.yb - s.botT / 2)
+@@ -3934,14 +3945,15 @@
+       // end panel: next to an abutment, or next to any support of a simple span (each span is a girder with two ends; Q5)
+       const PG = pansOf(gt), gB = PG ? FR.girders[gOf(gt)[0]].bear : null;
+       [[x0 + doFt, k, 1], [x1 - doFt, k + 1, -1]].forEach(([x, ks, dir]) => { let end = ks === 0 || ks === nS - 1 || !m.cont, d1 = doIn, d2 = doIn, typ = stiff ? 'A' : 'B', xb = m.sup[ks];
+-        if (PG) { const sb = gB[ks], j = PG.findIndex(q => Math.abs((dir > 0 ? q.p : q.q) - sb) < 0.05); if (j >= 0) { const q1 = PG[j], q2 = PG[j + dir]; x = dir > 0 ? q1.q : q1.p; d1 = q1.d; d2 = q2 ? q2.d : q1.d; typ = (dir > 0 ? q1.sq : q1.sp) ? 'A' : 'B'; end = q1.end; xb = sb; } }
+-        const s = sec(x);
+-        ts.rows.push({ name: `Span ${k + 1}, first ${typ === 'A' ? 'stiffener' : 'connection plate'} from ${supN(ks)}, ${TT(gt)}`, type: typ, D: s.D, tw: s.tw, bfc: s.topB, tfc: s.topT, bft: s.botB, tft: s.botT, bfw: bfw(x), end: end ? 'yes' : 'no', do1: r2(d1), do2: r2(d2), ...shear(T, x), df: 0, ...(end ? shearIn(T, Math.min(x, xb), Math.max(x, xb)) : {}) }); });
++        let p2 = null; if (PG) { const sb = gB[ks], j = PG.findIndex(q => Math.abs((dir > 0 ? q.p : q.q) - sb) < 0.05); if (j >= 0) { const q1 = PG[j], q2 = PG[j + dir]; x = dir > 0 ? q1.q : q1.p; d1 = q1.d; d2 = q2 ? q2.d : q1.d; typ = (dir > 0 ? q1.sq : q1.sp) ? 'A' : 'B'; end = q1.end; xb = sb; if (q2) p2 = [q2.p, q2.q]; } }
++        const s = sec(x); if (!p2) p2 = [x, x + dir * d2 / 12];
++        ts.rows.push({ name: `Span ${k + 1}, first ${typ === 'A' ? 'stiffener' : 'connection plate'} from ${supN(ks)}, ${TT(gt)}`, type: typ, D: s.D, tw: s.tw, bfc: s.topB, tfc: s.topT, bft: s.botB, tft: s.botT, bfw: bfw(x), end: end ? 'yes' : 'no', do1: r2(d1), do2: r2(d2), ...shear(T, x), df: 0, ...shearIn(T, Math.min(x, xb), Math.max(x, xb)), ...shearP(T, p2[0], p2[1], 'c') }); });   // panel 1 (to the support) and panel 2 shears for every row (TB3; were: panel 1 for end panels only)
+       let best = -1, bx = (x0 + x1) / 2; xs.forEach((x, i) => { if (x > x0 && x < x1) { const rg = T.MfP[i] - T.MfN[i]; if (rg > best) { best = rg; bx = x; } } });
+       // the connection plate the Fatigue row checks (C20, 2026-10-13): the cross-frame with the largest fatigue moment range (was the cross-frame nearest the node of largest range, bx); bx only when the span has no cross-frame
+       const cxF = cpAt(T, x0, x1, gt), cx = cxF != null ? cxF : bx, s = sec(cx);
+-      let c1 = doIn, c2 = doIn; if (PG && PG.length) { const L0 = PG.find(q => Math.abs(q.q - cx) < 0.05), R0 = PG.find(q => Math.abs(q.p - cx) < 0.05), I0 = PG.find(q => cx > q.p && cx < q.q) || PG[0]; c1 = (L0 || R0 || I0).d; c2 = (R0 || L0 || I0).d; }
+-      ts.rows.push({ name: `Span ${k + 1}, cross-frame at ${cx.toFixed(1)} ft, ${TT(gt)}`, type: 'B', D: s.D, tw: s.tw, bfc: s.topB, tfc: s.topT, bft: s.botB, tft: s.botT, bfw: bfw(cx), end: 'no', do1: r2(c1), do2: r2(c2), ...shear(T, cx), df: fatBot(T, cx, gt) }); }); });
++      let c1 = doIn, c2 = doIn, P1 = null, P2 = null; if (PG && PG.length) { const L0 = PG.find(q => Math.abs(q.q - cx) < 0.05), R0 = PG.find(q => Math.abs(q.p - cx) < 0.05), I0 = PG.find(q => cx > q.p && cx < q.q) || PG[0]; c1 = (L0 || R0 || I0).d; c2 = (R0 || L0 || I0).d; P1 = L0 || I0; P2 = R0 || I0; }
++      const pa = P1 ? [P1.p, P1.q] : [cx - c1 / 12, cx], pb = P2 ? [P2.p, P2.q] : [cx, cx + c2 / 12];
++      ts.rows.push({ name: `Span ${k + 1}, cross-frame at ${cx.toFixed(1)} ft, ${TT(gt)}`, type: 'B', D: s.D, tw: s.tw, bfc: s.topB, tfc: s.topT, bft: s.botB, tft: s.botT, bfw: bfw(cx), end: 'no', do1: r2(c1), do2: r2(c2), ...shear(T, cx), df: fatBot(T, cx, gt), ...shearIn(T, pa[0], pa[1]), ...shearP(T, pb[0], pb[1], 'c') }); }); });
+   // --- shear connectors (interior girder, or exterior if it governs the fatigue shear)
+   const gtS = types.reduce((a, gt) => Math.max(...AN.R.types[gt].Vfr) > Math.max(...AN.R.types[a].Vfr) ? gt : a, types[0]), TS = AN.R.types[gtS], d = 0.875, Zr = 5.5 * d * d;
+   const sc = { zones: [], regions: [], gen: { d: '0.875', ts: AN.ts, hh: AN.hh, beff: r2(props(sec(1), gtS).beff), fc: m.fc, wc: m.wc, K1: 1.0, tdeck: AN.ts + 0.5, skew: m.skews.some(s => Math.abs(s) > 20) ? 'yes' : 'no' } };
+@@ -3979,7 +3991,7 @@
+         dMp: r1(Math.max(0, T.MfP[i])), dMn: r1(Math.abs(Math.min(0, T.MfN[i]))), beff: r2(props(sec(t.x), gt).beff), ...reb(sec(t.x), gt) }); }); });   // beff (L6, 2026-10-13); Ar, dr (C19)
+   // --- composite girder sections: max. positive per span, each pier, each shop transition (smaller side)
+   const gs = { rows: [], gen: { gT: m.gF, gB: m.gF, gW: m.gW, fc: m.fc, wc: m.wc, K1: 1.0, ts: AN.ts, hh: AN.hh, tdeck: AN.ts + 0.5 } };
+-  const gsRow = (gt, name, x, region) => { const T = AN.R.types[gt], i = node(x), e = el(x), s = sec(x);
++  const gsRow = (gt, name, x, region) => { const T = AN.R.types[gt], i = node(x), e = el(x), s = sec(x), gP = gsPan(gt, T, x, s);
+     // brace points at G1 stations (C24, 2026-10-13; was the global x of the G1 frames, f.xa)
+     const bp = [...new Set([...m.sup, ...stG([0], false, 3)])].sort((p1, p2) => p1 - p2).filter((v, k, arr) => k === 0 || v - arr[k - 1] > 0.25), Lend = m.sup[m.sup.length - 1];
+     // unbraced segment(s) containing x; at a brace point both adjacent segments are considered and the more critical (larger L_b/C_b) is used
+@@ -4020,9 +4032,9 @@
+     let nprC = ''; if (cC && cC.n2.kind === 'simp') nprC = { kind: 'simp', fl: sgC > 0 ? 'top' : 'bottom', b: cC.n2.big[kb], t: cC.n2.big[kt], Ir: r3(cC.n2.Ir) };
+     else if (cC && cC.n2.kind === 'ge') { const { A, mA, G } = cC.ge, fr = G ? fCon(G.s, i) : 0;
+       nprC = { kind: 'ge', fl: sgC > 0 ? 'top' : 'bottom', b: G ? G.s[kb] : s[kb], t: G ? G.s[kt] : s[kt], k: G && fr > 0 && !mA ? r3(Math.max(1, G.fm / fr)) : '', Ir: r3(cC.n2.Ir), why: cC.n2.why, A: geRec(A) }; }
+-    gs.rows.push({ name: `${name}, ${TT(gt)}`, gt, x: r2(x), region, cont: m.sup.length > 2 && m.cont ? 'yes' : 'no', beff: r2(props(s, gt).beff), ...s, Lb: r2(LbN), LbC: r2(FR.sp), Cb: +CbN.toFixed(3), CbC: +CbC.toFixed(3), lbB, lbT, npr, lbK, lbIr, nprWhy, geA, nprC, MDCc: T.MDCc ? +T.MDCc[i].toFixed(1) : '', ...gsDo(gt, x, s),
++    gs.rows.push({ name: `${name}, ${TT(gt)}`, gt, x: r2(x), region, cont: m.sup.length > 2 && m.cont ? 'yes' : 'no', beff: r2(props(s, gt).beff), ...s, Lb: r2(LbN), LbC: r2(FR.sp), Cb: +CbN.toFixed(3), CbC: +CbC.toFixed(3), lbB, lbT, npr, lbK, lbIr, nprWhy, geA, nprC, MDCc: T.MDCc ? +T.MDCc[i].toFixed(1) : '', ...gsDo(gt, x, s, gP),
+       MDC1: r1(T.MDC1[i]), MDC2: r1(T.MDC2[i]), MDW: r1(T.MDW[i]), MLLp: r1(Math.max(0, T.Mp[i])), MLLn: r1(Math.min(0, T.Mn[i])), MCL: r1(T.MCL[i]), MfP: r1(T.MfP[i]), MfN: r1(T.MfN[i]),
+-      ...shear(T, x), VCL: r1(vmax(T.VCL, e)), Vf: r1(Math.max(...[e - 1, e, e + 1].filter(q => q >= 0 && q < T.Vfm.length).map(q => T.Vfm[q]))), fl: skF(gt), flSrc: skF(gt) ? 'skew' : '', flC: 0 }); };
++      ...shear(T, x), VCL: r1(vmax(T.VCL, e)), Vf: r1(Math.max(...[e - 1, e, e + 1].filter(q => q >= 0 && q < T.Vfm.length).map(q => T.Vfm[q]))), fl: skF(gt), flSrc: skF(gt) ? 'skew' : '', flC: 0, ...(gP ? shearP(T, gP.p, gP.q, 'p') : {}) }); };
+   types.forEach(gt => { const T = AN.R.types[gt];
+     spans.forEach(k => { const x0 = m.sup[k], x1 = m.sup[k + 1]; let bx = (x0 + x1) / 2, mx = -Infinity; xs.forEach((x, i) => { if (x > x0 && x < x1 && T.Mup[i] > mx) { mx = T.Mup[i]; bx = x; } }); gsRow(gt, `Span ${k + 1}, max. positive at ${bx.toFixed(1)} ft`, bx, 'pos'); });
+     m.sup.slice(1, -1).forEach((x, k) => { if (m.cont) gsRow(gt, `Pier ${k + 1}`, x - 0.01, 'neg'); });
+````
+
+  GirderDetail page (PL_B64 line omitted):
+
+````diff
+--- before
++++ after
+@@ -2285,7 +2285,7 @@
+ <h3>Proportions (6.10.11.1.2)</h3><div class="eq-math">\\[b_t \\ge 2.0 + \\frac{D}{30}, \\qquad 16t_p \\ge b_t \\ge \\frac{b_f}{4}\\]</div><p>b<sub>f</sub> is the full width of the widest compression flange in the field section.</p>
+ <h3>Moment of inertia (6.10.11.1.3)</h3><div class="eq-math">\\[I_{t1} = b\\,t_w^3J,\\ J = \\frac{2.5}{(d_o/D)^2} - 2.0 \\ge 0.5; \\qquad I_{t2} = \\frac{D^4\\rho_t^{1.3}}{40}\\left(\\frac{F_{yw}}{E}\\right)^{1.5},\\ \\rho_t = \\max\\left(\\frac{F_{yw}}{F_{crs}}, 1\\right),\\ F_{crs} = \\frac{0.31E}{(b_t/t_p)^2} \\le F_{ys}\\]</div>
+ <p>d<sub>o</sub> is the smaller adjacent panel and b the smaller of d<sub>o</sub> and D. Where neither panel needs tension-field action, I<sub>t</sub> ≥ I<sub>t1</sub>. Otherwise I<sub>t</sub> ≥ I<sub>t1</sub> + (I<sub>t2</sub> − I<sub>t1</sub>)ρ<sub>w</sub> when I<sub>t2</sub> > I<sub>t1</sub>, else I<sub>t</sub> ≥ I<sub>t2</sub>, with ρ<sub>w</sub> the larger of (V<sub>u</sub> − φ<sub>v</sub>V<sub>cr</sub>)/(φ<sub>v</sub>V<sub>n</sub> − φ<sub>v</sub>V<sub>cr</sub>) in the two panels (confirm the equation numbering against your edition). I<sub>t</sub> is taken about the web face for a single plate and about the web mid-thickness for a pair.</p>
+-<h3>Web shear (6.10.9)</h3><p>Each adjacent panel is checked for V<sub>u</sub> ≤ φ<sub>v</sub>V<sub>n</sub> with k = 5 + 5/(d<sub>o</sub>/D)². Interior panels include tension-field action (Eq. 6.10.9.3.2-2 or -8 depending on 2Dt<sub>w</sub>/(b<sub>fc</sub>t<sub>fc</sub> + b<sub>ft</sub>t<sub>ft</sub>)); end panels use V<sub>n</sub> = CV<sub>p</sub> (Eq. 6.10.9.3.3-1). An interior panel wider than 3D or an end panel wider than 1.5D is not a stiffened panel (6.10.9.1): it is checked as unstiffened, k = 5 and V<sub>n</sub> = CV<sub>p</sub> (Eq. 6.10.9.2-1). V<sub>u</sub> is the Strength I shear at the stiffener for both panels, except that an end panel is checked with the largest V<sub>u</sub> in it (at the bearing): the location's end-panel shears (V<sub>DC1</sub>, V<sub>DC2</sub>, V<sub>DW</sub>, V<sub>LL+IM</sub>, the largest in panel 1, sent by Preliminary sizing and Structural analysis) give that V<sub>u</sub>, and the larger of it and the shear at the stiffener is used. When they are blank (projects saved before they existed, or entered by hand), the end panel uses the shear at the stiffener and the TS4 item says so. Check TS5 compares each panel with these limits, which decide only whether the panel counts as stiffened: a panel wider than its limit is advisory, because TS4 checks it as unstiffened (k = 5) and decides pass or fail. When the web has no intermediate stiffeners (connection plates only), it is designed as unstiffened and TS5 is not applicable.</p>
++<h3>Web shear (6.10.9)</h3><p>Each adjacent panel is checked for V<sub>u</sub> ≤ φ<sub>v</sub>V<sub>n</sub> with k = 5 + 5/(d<sub>o</sub>/D)². Interior panels include tension-field action (Eq. 6.10.9.3.2-2 or -8 depending on 2Dt<sub>w</sub>/(b<sub>fc</sub>t<sub>fc</sub> + b<sub>ft</sub>t<sub>ft</sub>)); end panels use V<sub>n</sub> = CV<sub>p</sub> (Eq. 6.10.9.3.3-1). An interior panel wider than 3D or an end panel wider than 1.5D is not a stiffened panel (6.10.9.1): it is checked as unstiffened, k = 5 and V<sub>n</sub> = CV<sub>p</sub> (Eq. 6.10.9.2-1). V<sub>u</sub> is the largest Strength I shear in each panel (6.10.9.3.1): the location's panel shears (V<sub>DC1</sub>, V<sub>DC2</sub>, V<sub>DW</sub>, V<sub>LL+IM</sub>, the largest in panel 1 and in panel 2, sent by Preliminary sizing and Structural analysis) give it, and the larger of it and the shear at the stiffener is used; ρ<sub>w</sub> of TS3 uses the same V<sub>u</sub>. When a panel's shears are blank (projects saved before they existed, or entered by hand), that panel uses the shear at the stiffener and the TS4 item says so. Check TS5 compares each panel with these limits, which decide only whether the panel counts as stiffened: a panel wider than its limit is advisory, because TS4 checks it as unstiffened (k = 5) and decides pass or fail. When the web has no intermediate stiffeners (connection plates only), it is designed as unstiffened and TS5 is not applicable.</p>
+ <h3>Welds and fatigue</h3><p>Intermediate stiffener web welds stop 4t<sub>w</sub> to 6t<sub>w</sub> from the web-to-flange weld at the tension flange (6.10.11.1.1). Connection plates are welded to both flanges and those welds are designed for 20 kip laterally on straight, nonskewed bridges, or the analysis force otherwise (6.6.1.3.1). Base metal at stiffener weld toes is Category C′, (ΔF)<sub>TH</sub> = 12 ksi. Minimum fillet sizes follow Table 6.13.3.4-1.</p>
+ <h3>Verification</h3><p>Location 1 of the example: V<sub>u</sub> = 1.25(55 + 8) + 1.50(9) + 1.75(85) = 241.0 kip; D/t<sub>w</sub> = 106.7, k = 10, C = 1.57/106.7² × (29,000 × 10/50) = 0.800; end panel φV<sub>n</sub> = 0.800 × 978.75 = 783.0 kip. I<sub>t1</sub> = 60(0.5625)³(0.5) = 5.34 in⁴; I<sub>t2</sub> = 60⁴/40 × (50/29,000)<sup>1.5</sup> = 23.2 in⁴; I<sub>t</sub> = 0.5(6)³/3 = 36.0 in⁴.</p>`],
+ ['p14', 'Shear connectors', `
+@@ -2358,7 +2358,7 @@
+ function buildManual() { $('#tab-manual').innerHTML = `<div class="man-nav">${MAN.map(([id, t], i) => `<button type="button" class="man-btn" data-man="${id}">${i + 1}. ${t}</button>`).join('')}</div>${MAN.map(([id, t, b], i) => `<article class="man-part" id="man-${id}"><h2 class="man-h">Part ${i + 1}. ${t}</h2>${b}</article>`).join('')}`; showManPart(); }
+ function showManPart() { const id = P.ui.man || 'p1'; $$('.man-btn').forEach(b => b.classList.toggle('active', b.dataset.man === id)); $$('.man-part').forEach(a => a.classList.toggle('active', a.id === 'man-' + id)); }
+ 
+ /* =====================================================================
+    GirderDetail: additional modules
+    ts  transverse stiffeners and connection plates (6.10.11.1, 6.6.1.3.1, 6.10.9)
+@@ -2406,9 +2406,13 @@
+   ['do1', 'Panel 1 width d<sub>o</sub>', 'in', 'dim'], ['do2', 'Panel 2 width d<sub>o</sub>', 'in', 'dim'],
+   ['VDC1', 'V<sub>DC1</sub>', 'kip', 'num', { min: 0 }], ['VDC2', 'V<sub>DC2</sub>', 'kip', 'num', { min: 0 }], ['VDW', 'V<sub>DW</sub>', 'kip', 'num', { min: 0 }], ['VLL', 'V<sub>LL+IM</sub>', 'kip', 'num', { min: 0 }],
+   ['df', 'Δf fatigue, tension flange', 'ksi', 'num', { min: 0 }],
+-  ['VDC1b', 'End panel: max. V<sub>DC1</sub> in panel 1', 'kip', 'num', { min: 0, opt: true }], ['VDC2b', 'End panel: max. V<sub>DC2</sub> in panel 1', 'kip', 'num', { min: 0, opt: true }],
+-  ['VDWb', 'End panel: max. V<sub>DW</sub> in panel 1', 'kip', 'num', { min: 0, opt: true }], ['VLLb', 'End panel: max. V<sub>LL+IM</sub> in panel 1', 'kip', 'num', { min: 0, opt: true }]];
+-const TS_BRG = ['VDC1b', 'VDC2b', 'VDWb', 'VLLb'];   // optional end-panel shears (largest in panel 1, at the bearing; Q4); all four blank = the shear at the stiffener is used
++  ['VDC1b', 'Max. V<sub>DC1</sub> in panel 1', 'kip', 'num', { min: 0, opt: true }], ['VDC2b', 'Max. V<sub>DC2</sub> in panel 1', 'kip', 'num', { min: 0, opt: true }],
++  ['VDWb', 'Max. V<sub>DW</sub> in panel 1', 'kip', 'num', { min: 0, opt: true }], ['VLLb', 'Max. V<sub>LL+IM</sub> in panel 1', 'kip', 'num', { min: 0, opt: true }],
++  ['VDC1c', 'Max. V<sub>DC1</sub> in panel 2', 'kip', 'num', { min: 0, opt: true }], ['VDC2c', 'Max. V<sub>DC2</sub> in panel 2', 'kip', 'num', { min: 0, opt: true }],
++  ['VDWc', 'Max. V<sub>DW</sub> in panel 2', 'kip', 'num', { min: 0, opt: true }], ['VLLc', 'Max. V<sub>LL+IM</sub> in panel 2', 'kip', 'num', { min: 0, opt: true }]];
++// optional panel shears, the largest in each panel (6.10.9.3.1; V_u of 6.10.11.1.3): panel 1 (Q4: the end panel, at the bearing; TB3, 2026-10-13: any panel 1) and panel 2 (TB3);
++// all four of a panel blank = the shear at the stiffener is used for that panel
++const TS_BRG = ['VDC1b', 'VDC2b', 'VDWb', 'VLLb'], TS_PN2 = ['VDC1c', 'VDC2c', 'VDWc', 'VLLc'];
+ GM.ts = {
+ tabs: { combos: 'Demands', rptCombos: 'Design demands' },
+   id: 'ts', label: 'Transverse stiffeners', title: 'transverse stiffeners and connection plates, AASHTO LRFD 6.10.11.1', rptTitle: 'Transverse Stiffener and Connection Plate Design', rptRef: 'AASHTO LRFD Articles 6.10.11.1, 6.10.9, and 6.6.1.3.1',
+@@ -2434,17 +2438,18 @@
+     if (!(Fexx > 0)) errors.push('F_EXX must be positive.');
+     const rows = numRows(p.rows, TS_ROWSPEC, 'Location', errors);
+     if (cfDiaOn(P.cf)) rows.forEach(r => { r.name = r.name.replace(/^(Span \d+, )cross-frame at /, '$1diaphragm at '); });   // rows named by Preliminary sizing: the bracing used here (L1, 2026-10-13); the saved name is not changed
+-    rows.forEach(r => { const n = TS_BRG.filter(k => r[k] != null).length; if (n && n < 4) errors.push(`${r.name}: enter all four end-panel shears, or leave all four blank.`); });
++    rows.forEach(r => [[TS_BRG, 1], [TS_PN2, 2]].forEach(([K, p]) => { const n = K.filter(k => r[k] != null).length; if (n && n < 4) errors.push(`${r.name}: enter all four panel ${p} shears, or leave all four blank.`); }));
+     if (!rows.length) errors.push('Add at least one stiffener location.');
+     if (errors.length) return { errors };
+     rows.forEach(r => { const t = types[r.type]; r.t = t;
+       r.Vu = g('dc') * (r.VDC1 + r.VDC2) + g('dw') * r.VDW + g('ll') * r.VLL;
+-      // end panel (Q4): the largest V_u in panel 1 (at the bearing) when the end-panel shears are given; otherwise the shear at the stiffener
+-      r.VuB = r.end === 'yes' && r.VDC1b != null ? g('dc') * (r.VDC1b + r.VDC2b) + g('dw') * r.VDWb + g('ll') * r.VLLb : null;
+-      r.Vu1 = r.VuB != null ? Math.max(r.VuB, r.Vu) : r.Vu;
++      // the largest V_u in each panel (6.10.9.3.1; TB3, 2026-10-13: every panel 1 and panel 2, was: the end panel only, Q4) when its panel shears are given; otherwise the shear at the stiffener
++      r.VuB = r.VDC1b != null ? g('dc') * (r.VDC1b + r.VDC2b) + g('dw') * r.VDWb + g('ll') * r.VLLb : null;
++      r.VuC = r.VDC1c != null ? g('dc') * (r.VDC1c + r.VDC2c) + g('dw') * r.VDWc + g('ll') * r.VLLc : null;
++      r.Vu1 = r.VuB != null ? Math.max(r.VuB, r.Vu) : r.Vu; r.Vu2 = r.VuC != null ? Math.max(r.VuC, r.Vu) : r.Vu;
+       const flgA = r.bfc * r.tfc + r.bft * r.tft;
+       r.p1 = webShear(r.D, r.tw, Fyw, r.do1, flgA, r.end === 'yes'); r.p2 = webShear(r.D, r.tw, Fyw, r.do2, flgA, false);
+-      [r.p1, r.p2].forEach((q, i) => { q.do = i ? r.do2 : r.do1; q.end = !i && r.end === 'yes'; q.Vu = i ? r.Vu : r.Vu1; q.phVn = PHI.v * q.Vn; const tfa = q.stiff && !q.end; q.rho = tfa && r.Vu > PHI.v * q.Vcr ? Math.min(1, (r.Vu - PHI.v * q.Vcr) / Math.max(q.phVn - PHI.v * q.Vcr, 1e-9)) : 0; });
++      [r.p1, r.p2].forEach((q, i) => { q.do = i ? r.do2 : r.do1; q.end = !i && r.end === 'yes'; q.Vu = i ? r.Vu2 : r.Vu1; q.pan = (i ? r.VuC : r.VuB) != null; q.phVn = PHI.v * q.Vn; const tfa = q.stiff && !q.end; q.rho = tfa && q.Vu > PHI.v * q.Vcr ? Math.min(1, (q.Vu - PHI.v * q.Vcr) / Math.max(q.phVn - PHI.v * q.Vcr, 1e-9)) : 0; });
+       r.rhow = Math.max(r.p1.rho, r.p2.rho);
+       r.It = t.sides === 2 ? t.tp * (2 * t.bt + r.tw) ** 3 / 12 : t.tp * t.bt ** 3 / 3;
+       r.dmin = Math.min(r.do1, r.do2); r.b = Math.min(r.dmin, r.D); r.J = Math.max(2.5 / (r.dmin / r.D) ** 2 - 2.0, 0.5); r.It1 = r.b * r.tw ** 3 * r.J;
+@@ -2467,14 +2472,14 @@
+     { const c = { id: 'TS3', grp: G1, title: 'Moment of inertia', ref: 'AASHTO LRFD 6.10.11.1.3', src: 'Code',
+         sym: T`I_t \ge I_{t1} = b\,t_w^3J\ \text{(no tension field)}; \quad I_t \ge I_{t1} + (I_{t2} - I_{t1})\rho_w\ \text{if}\ I_{t2} > I_{t1},\ \text{else}\ I_{t2}; \quad I_{t2} = \frac{D^4\rho_t^{1.3}}{40}\left(\frac{F_{yw}}{E}\right)^{1.5}`,
+         cols: ['Location', 'I_t (in⁴)', 'I_t1 (in⁴)', 'I_t2 (in⁴)', 'ρ_w', 'Required (in⁴)', 'Ratio'], items: [],
+-        note: 'I_t is about the edge in contact with the web for a single plate and about the mid-thickness of the web for a pair. ρ_w is the larger of (V_u − φ_vV_cr)/(φ_vV_n − φ_vV_cr) in the adjacent panels (0 when neither panel needs tension-field action; end panels cannot use it).' };
++        note: 'I_t is about the edge in contact with the web for a single plate and about the mid-thickness of the web for a pair. ρ_w is the larger of (V_u − φ_vV_cr)/(φ_vV_n − φ_vV_cr) in the adjacent panels, V_u the largest shear in each panel as in TS4 (6.10.11.1.3; 0 when neither panel needs tension-field action; end panels cannot use it).' };
+       R.rows.forEach(r => { const t = r.t; c.items.push(rc(L(r), [f2(r.It), f2(r.It1), f2(r.It2), f3(r.rhow), f2(r.Ireq), f2(r.Ireq / r.It)], r.Ireq, r.It,
+         T`\begin{aligned}I_t &= ${t.sides === 2 ? T`\frac{${f3(t.tp)}(2(${f2(t.bt)}) + ${f3(r.tw)})^3}{12}` : T`\frac{${f3(t.tp)}(${f2(t.bt)})^3}{3}`} = ${f2(r.It)}\ \text{in}^4 \\ J &= \max\left(\frac{2.5}{(${f2(r.dmin)}/${f2(r.D)})^2} - 2.0,\ 0.5\right) = ${f3(r.J)}, \quad I_{t1} = ${f2(r.b)}(${f3(r.tw)})^3(${f3(r.J)}) = ${f2(r.It1)}\ \text{in}^4 \\ F_{crs} &= \min\left(\frac{0.31(29{,}000)}{(${f2(t.bt)}/${f3(t.tp)})^2},\ ${f0(R.Fys)}\right) = ${f2(r.Fcrs)}\ \text{ksi}, \quad \rho_t = \max\left(\frac{${f0(R.Fyw)}}{${f2(r.Fcrs)}},\ 1.0\right) = ${f3(r.rhot)}, \quad I_{t2} = \frac{${f2(r.D)}^4(${f3(r.rhot)})^{1.3}}{40}\left(\frac{${f0(R.Fyw)}}{29{,}000}\right)^{1.5} = ${f2(r.It2)}\ \text{in}^4 \\ I_{req} &= ${f2(r.Ireq)}\ \text{in}^4\ (\text{Eq. ${r.IreqEq}}) \;${LE(r.Ireq, r.It)}\; I_t = ${f2(r.It)}\ \text{in}^4\end{aligned}`,
+         [['b', 'Smaller of d<sub>o</sub> (smaller adjacent panel) and D', f2(r.b), 'in'], ['ρ<sub>w</sub>', `Panel 1: ${f3(r.p1.rho)}, panel 2: ${f3(r.p2.rho)}`, f3(r.rhow), '']])); }); out.add(c); }
+     { const c = { id: 'TS4', grp: G2, title: 'Web shear resistance of adjacent panels', ref: 'AASHTO LRFD 6.10.9.3.2, 6.10.9.3.3', src: 'Code', sym: T`V_u \le \phi_vV_n, \quad \phi_v = 1.0`,
+-        cols: ['Location, panel', 'd_o (in)', 'V_u (kip)', 'C', 'φV_n (kip)', 'Ratio'], items: [], note: 'Interior stiffened panels include tension-field action (Eq. 6.10.9.3.2-2 or -8); stiffened end panels (d_o ≤ 1.5D) use V_n = CV_p with k = 5 + 5/(d_o/D)² (Eq. 6.10.9.3.3-1). Interior panels wider than 3D and end panels wider than 1.5D are unstiffened (6.10.9.1): k = 5, V_n = CV_p (Eq. 6.10.9.2-1). V_u is the Strength I shear at the stiffener, applied to both adjacent panels; an end panel is checked with the largest V_u in it (at the bearing, from the end-panel shears), or with the shear at the stiffener when they are blank (the item says which).' };
++        cols: ['Location, panel', 'd_o (in)', 'V_u (kip)', 'C', 'φV_n (kip)', 'Ratio'], items: [], note: 'Interior stiffened panels include tension-field action (Eq. 6.10.9.3.2-2 or -8); stiffened end panels (d_o ≤ 1.5D) use V_n = CV_p with k = 5 + 5/(d_o/D)² (Eq. 6.10.9.3.3-1). Interior panels wider than 3D and end panels wider than 1.5D are unstiffened (6.10.9.1): k = 5, V_n = CV_p (Eq. 6.10.9.2-1). V_u is the largest Strength I shear in each panel (6.10.9.3.1), from the location\'s panel 1 and panel 2 shears (sent by Preliminary sizing and Structural analysis); a panel whose shears are blank (rows saved before they existed, or entered by hand) uses the shear at the stiffener (the item says which).' };
+       R.rows.forEach(r => [r.p1, r.p2].forEach((q, i) => c.items.push(rc(`${L(r)}, panel ${i + 1}${q.end ? ' (end)' : ''}`, [f2(q.do), f2(q.Vu), f3(q.C), f2(q.phVn), f2(q.Vu / q.phVn)], q.Vu, q.phVn,
+-        T`k = ${q.stiff ? T`5 + \frac{5}{(${f2(q.do)}/${f2(r.D)})^2}` : '5'} = ${f3(q.k)}, \quad C = ${f3(q.C)}, \quad V_p = 0.58(${f0(R.Fyw)})(${f2(r.D)})(${f3(r.tw)}) = ${f2(q.Vp)}, \quad \phi_vV_n = ${f2(q.phVn)}\ \text{kip (Eq. ${q.eqn})} \;${GE(q.phVn, q.Vu)}\; V_u = ${f2(q.Vu)}\ \text{kip}${!q.end ? '' : r.VuB != null ? T`\ \text{(largest in the end panel: ${r.VuB >= r.Vu ? 'at the bearing' : 'at the stiffener'})}` : T`\ \text{(at the stiffener: no end-panel shears given)}`}`))));
++        T`k = ${q.stiff ? T`5 + \frac{5}{(${f2(q.do)}/${f2(r.D)})^2}` : '5'} = ${f3(q.k)}, \quad C = ${f3(q.C)}, \quad V_p = 0.58(${f0(R.Fyw)})(${f2(r.D)})(${f3(r.tw)}) = ${f2(q.Vp)}, \quad \phi_vV_n = ${f2(q.phVn)}\ \text{kip (Eq. ${q.eqn})} \;${GE(q.phVn, q.Vu)}\; V_u = ${f2(q.Vu)}\ \text{kip}${q.pan ? T`\ \text{(largest in the panel${q.end ? ', the end panel' : ''})}` : T`\ \text{(at the stiffener: no panel shears given)}`}`))));
+       out.add(c); }
+     { const c = { id: 'TS5', grp: G2, title: 'Stiffener spacing limits', ref: 'AASHTO LRFD 6.10.9.1, 6.10.9.3.3', src: 'Code', sym: T`d_o \le 3D\ \text{(interior panels)}, \qquad d_o \le 1.5D\ \text{(end panels)}`, cols: ['Location, panel', 'd_o (in)', 'Limit (in)', 'Ratio'], items: [], note: 'The 6.10.9.1 limits decide only whether a panel counts as stiffened for shear. A panel wider than its limit (3D, or 1.5D for an end panel) is advisory: it is treated as unstiffened in TS4 (k = 5, V_n = CV_p), and TS4 decides pass or fail. With connection plates only (no intermediate stiffener) the check is not applicable.' };
+       R.rows.forEach(r => [r.p1, r.p2].forEach((q, i) => { const lim = (q.end ? 1.5 : 3) * r.D, ok = ge(lim, q.do), adv = !ok && !q.stiff; c.items.push({ loc: `${L(r)}, panel ${i + 1}${q.end ? ' (end)' : ''}`, cells: [f2(q.do), f2(lim), f2(q.do / lim)], r: q.do / lim, st: ok ? 'pass' : adv ? 'adv' : 'warn', work: T`d_o = ${f2(q.do)} \;${LE(q.do, lim)}\; ${q.end ? '1.5' : '3'}(${f2(r.D)}) = ${f2(lim)}\ \text{in}${adv ? T`\ \text{(treated as unstiffened in TS4)}` : ''}` }); }));
+@@ -3308,7 +3313,10 @@
+   ['MDC1', 'M<sub>DC1</sub> (noncomposite)', 'k-ft', 'num', { any: true }], ['MDCc', 'M<sub>DC1</sub> for constructibility, deck sequence (0 = M<sub>DC1</sub>)', 'kip-ft', 'num', { any: true }], ['MDC2', 'M<sub>DC2</sub>', 'k-ft', 'num', { any: true }], ['MDW', 'M<sub>DW</sub>', 'k-ft', 'num', { any: true }], ['MLLp', 'M<sub>LL+IM</sub> positive', 'k-ft', 'num', { any: true }], ['MLLn', 'M<sub>LL+IM</sub> negative', 'k-ft', 'num', { any: true }],
+   ['MCL', 'M construction LL (pour)', 'k-ft', 'num', { any: true }], ['MfP', 'M fatigue truck, max.', 'k-ft', 'num', { any: true }], ['MfN', 'M fatigue truck, min.', 'k-ft', 'num', { any: true }],
+   ['VDC1', 'V<sub>DC1</sub>', 'kip', 'num', { min: 0 }], ['VDC2', 'V<sub>DC2</sub>', 'kip', 'num', { min: 0 }], ['VDW', 'V<sub>DW</sub>', 'kip', 'num', { min: 0 }], ['VLL', 'V<sub>LL+IM</sub>', 'kip', 'num', { min: 0 }], ['VCL', 'V construction LL', 'kip', 'num', { min: 0 }], ['Vf', 'V fatigue truck, max.', 'kip', 'num', { min: 0 }],
+-  ['fl', 'f<sub>ℓ</sub> Strength I, bottom flange', 'ksi', 'num', { min: 0 }], ['flC', 'f<sub>ℓ</sub> deck placement, comp. flange', 'ksi', 'num', { min: 0 }]];
++  ['fl', 'f<sub>ℓ</sub> Strength I, bottom flange', 'ksi', 'num', { min: 0 }], ['flC', 'f<sub>ℓ</sub> deck placement, comp. flange', 'ksi', 'num', { min: 0 }],
++  ['VDC1p', 'Web panel at the location: max. V<sub>DC1</sub>', 'kip', 'num', { min: 0, opt: true }], ['VDC2p', 'Web panel: max. V<sub>DC2</sub>', 'kip', 'num', { min: 0, opt: true }],
++  ['VDWp', 'Web panel: max. V<sub>DW</sub>', 'kip', 'num', { min: 0, opt: true }], ['VLLp', 'Web panel: max. V<sub>LL+IM</sub>', 'kip', 'num', { min: 0, opt: true }]];
++const GS_PAN = ['VDC1p', 'VDC2p', 'VDWp', 'VLLp'];   // optional (TB3, 2026-10-13): the largest shears in the web panel containing the location (6.10.9.3.1), for GS11; all four blank = the shear at the location
+ /* plastic analysis: bisect for the PNA; pos = true puts the top in compression, concrete counts only in compression */
+ function plasticNA(el, pos) {
+   const force = y => { let c = 0, t = 0; el.forEach(e => { if (e.pt) { const up = e.y > y; if (pos === up) c += e.A * e.F; else t += e.A * e.F; return; }
+@@ -3427,6 +3435,7 @@
+     Object.keys(p.gam).forEach(k => { if (!(gm(k) >= 0)) errors.push(`Load factor "${k}" must be zero or positive.`); });
+     if (g('crt') >= g('ts') || g('crb') >= g('ts')) errors.push('Rebar layers must lie within the structural slab.');
+     const rows = numRows(p.rows, GS_SPEC, 'Location', errors); if (!rows.length) errors.push('Add at least one location.');
++    rows.forEach(r => { const n = GS_PAN.filter(k => r[k] != null).length; if (n && n < 4) errors.push(`${r.name}: enter all four web panel shears, or leave all four blank.`); });
+     if (errors.length) return { errors };
+     const Fyt = GD_GR[p.gT].Fy, Fyb = GD_GR[p.gB].Fy, Fyw = GD_GR[p.gW].Fy, Fyr = g('Fyr'), fc = g('fc'), MR = modRatio(fc, g('wc'), g('K1'), p.nRule), n = MR.n, ts = g('ts'), hh = g('hh'), Art = g('Art'), Arb = g('Arb');
+     const G = { dc: gm('dc'), dw: gm('dw'), dcMin: gm('dcMin'), dwMin: gm('dwMin'), ll: gm('ll'), sll: gm('sll'), fat: gm('fat'), cdc: gm('cdc'), ccl: gm('ccl') };
+@@ -3449,6 +3458,7 @@
+       r.Mu = r.gm.DC1 * r.MDC1 + r.gm.DC2 * r.MDC2 + r.gm.DW * r.MDW + G.ll * MLL; r.Ms = r.MDC1 + r.MDC2 + r.MDW + G.sll * MLL;
+       { const gO = gSet(-sg), MLLo = pos ? r.MLLn : r.MLLp; r.gmO = gO; r.MLLo = MLLo; r.Mrev = gO.DC1 * r.MDC1 + gO.DC2 * r.MDC2 + gO.DW * r.MDW + G.ll * MLLo; r.rev = sg * r.Mrev < 0; }   // opposite extreme: moment reversal
+       r.Vu = G.dc * (r.VDC1 + r.VDC2) + G.dw * r.VDW + G.ll * r.VLL;
++      r.VuP = r.VDC1p != null ? Math.max(r.Vu, G.dc * (r.VDC1p + r.VDC2p) + G.dw * r.VDWp + G.ll * r.VLLp) : null;   // GS11: the largest V_u in the web panel (6.10.9.3.1; TB3), else the shear at the location
+       // compression / tension flange (strength)
+       r.cF = pos ? { lab: 'top', b: r.topB, t: r.topT, Fy: Fyt, f: -r.str.top } : { lab: 'bottom', b: r.botB, t: r.botT, Fy: Fyb, f: -r.str.bot };
+       r.tF = pos ? { lab: 'bottom', b: r.botB, t: r.botT, Fy: Fyb, f: r.str.bot } : { lab: 'top', b: r.topB, t: r.topT, Fy: Fyt, f: r.str.top };
+@@ -3618,9 +3628,9 @@
+       R.rows.forEach(r => { const fS = r.pos ? r.fl : r.am.fl; if (fS > 0) c.items.push(rc(`${L(r)}, Strength I, bottom flange`, [f2(fS), f2(0.6 * R.Fyb), f2(fS / (0.6 * R.Fyb))], fS, 0.6 * R.Fyb, T`f_\ell = ${f2(fS)} \;${LE(fS, 0.6 * R.Fyb)}\; 0.6(${f0(R.Fyb)}) = ${f2(0.6 * R.Fyb)}\ \text{ksi}`));
+         if (r.amC.fl > 0) c.items.push(rc(`${L(r)}, deck placement, ${r.conC.lab} flange`, [f2(r.amC.fl), f2(0.6 * r.conC.Fy), f2(r.amC.fl / (0.6 * r.conC.Fy))], r.amC.fl, 0.6 * r.conC.Fy, T`f_\ell = ${f2(r.amC.fl)} \;${LE(r.amC.fl, 0.6 * r.conC.Fy)}\; ${f2(0.6 * r.conC.Fy)}\ \text{ksi}`)); });
+       if (!c.items.length) c.naWhy = 'No flange lateral bending entered.'; out.add(c); }
+-    { const c = { id: 'GS11', grp: SH, title: 'Shear resistance', ref: 'AASHTO LRFD 6.10.9', src: 'Code', sym: T`V_u \le \phi_vV_n, \quad \phi_v = 1.0`, cols: ['Location', 'V_u (kip)', 'C', 'φV_n (kip)', 'Ratio'], items: [], note: 'Unstiffened webs and panels (d_o = 0, d_o > 3D, or an end panel with d_o > 1.5D; 6.10.9.1) use k = 5 and V_n = CV_p; stiffened end panels use V_n = CV_p with k from d_o (Eq. 6.10.9.3.3-1); interior stiffened panels include tension-field action.' };
+-      R.rows.forEach(r => { const q = r.sh; c.items.push(rc(L(r), [f2(r.Vu), f3(q.C), f2(q.Vn), f2(r.Vu / q.Vn)], r.Vu, q.Vn,
+-        T`V_u = ${f2(R.G.dc)}(${f2(r.VDC1)} + ${f2(r.VDC2)}) + ${f2(R.G.dw)}(${f2(r.VDW)}) + ${f2(R.G.ll)}(${f2(r.VLL)}) = ${f2(r.Vu)}; \quad k = ${f3(q.k)},\ C = ${f3(q.C)},\ V_p = ${f2(q.Vp)} \Rightarrow \phi_vV_n = ${f2(q.Vn)}\ \text{kip (Eq. ${q.eqn})}`)); }); out.add(c); }
++    { const c = { id: 'GS11', grp: SH, title: 'Shear resistance', ref: 'AASHTO LRFD 6.10.9', src: 'Code', sym: T`V_u \le \phi_vV_n, \quad \phi_v = 1.0`, cols: ['Location', 'V_u (kip)', 'C', 'φV_n (kip)', 'Ratio'], items: [], note: 'Unstiffened webs and panels (d_o = 0, d_o > 3D, or an end panel with d_o > 1.5D; 6.10.9.1) use k = 5 and V_n = CV_p; stiffened end panels use V_n = CV_p with k from d_o (Eq. 6.10.9.3.3-1); interior stiffened panels include tension-field action. V_u is the largest Strength I shear in the web panel containing the location (6.10.9.3.1) when the location has its web panel shears (sent by Preliminary sizing and Structural analysis), else the shear at the location.' };
++      R.rows.forEach(r => { const q = r.sh, V = r.VuP != null ? r.VuP : r.Vu; c.items.push(rc(L(r), [f2(V), f3(q.C), f2(q.Vn), f2(V / q.Vn)], V, q.Vn,
++        T`V_u = ${r.VuP != null ? T`\max\left[${f2(r.Vu)}\ \text{(at the location)},\ ${f2(R.G.dc)}(${f2(r.VDC1p)} + ${f2(r.VDC2p)}) + ${f2(R.G.dw)}(${f2(r.VDWp)}) + ${f2(R.G.ll)}(${f2(r.VLLp)})\ \text{(largest in the panel)}\right] = ${f2(V)}` : T`${f2(R.G.dc)}(${f2(r.VDC1)} + ${f2(r.VDC2)}) + ${f2(R.G.dw)}(${f2(r.VDW)}) + ${f2(R.G.ll)}(${f2(r.VLL)}) = ${f2(r.Vu)}`}; \quad k = ${f3(q.k)},\ C = ${f3(q.C)},\ V_p = ${f2(q.Vp)} \Rightarrow \phi_vV_n = ${f2(q.Vn)}\ \text{kip (Eq. ${q.eqn})}`)); }); out.add(c); }
+     { const c = { id: 'GS12', grp: SV, title: 'Permanent deformations: flange stresses', ref: 'AASHTO LRFD 6.10.4.2.2, Eqs. 6.10.4.2.2-1 and -2', src: 'Code', sym: T`f_f \le 0.95R_hF_{yf}\ \text{(top flange)}, \qquad f_f + \frac{f_\ell}{2} \le 0.95R_hF_{yf}\ \text{(bottom flange)}`, cols: ['Location, flange', 'f_f (ksi)', 'Limit (ksi)', 'Ratio'], items: [], note: 'Service II: DC + DW + 1.30(LL+IM), accumulated by stage. In negative flexure the deck is taken as cracked (steel plus reinforcement), which is conservative. f_ℓ on the discretely braced bottom flange (Eq. 6.10.4.2.2-2) is the first-order value entered for the location, which is the Strength I value; using it for Service II is conservative.' };
+       R.rows.forEach(r => [['top', r.svc.top, R.Fyt, 0], ['bottom', r.svc.bot, R.Fyb, Math.max(r.fl, 0)]].forEach(([f, v, Fy, fl]) => { const a = Math.abs(v) + fl / 2, cap = 0.95 * r.Rh * Fy; c.items.push(rc(`${L(r)}, ${f}`, [f2(a), f2(cap), f2(a / cap)], a, cap, fl > 0 ? T`|f_f| + \frac{f_\ell}{2} = ${f2(Math.abs(v))} + \frac{${f2(fl)}}{2} = ${f2(a)} \;${LE(a, cap)}\; 0.95(${f3(r.Rh)})(${f0(Fy)}) = ${f2(cap)}\ \text{ksi}` : T`|f_f| = ${f2(a)} \;${LE(a, cap)}\; 0.95(${f3(r.Rh)})(${f0(Fy)}) = ${f2(cap)}\ \text{ksi}`)); })); out.add(c); }
+     { const c = { id: 'GS13', grp: SV, title: 'Permanent deformations: web bend-buckling', ref: 'AASHTO LRFD 6.10.4.2.2, Eq. 6.10.4.2.2-4; 6.10.1.9.1; D6.3.1', src: 'Code', sym: T`f_c \le F_{crw} = \frac{0.9Ek}{(D/t_w)^2}, \quad k = \frac{9}{(D_c/D)^2}`, cols: ['Location', 'f_c (ksi)', 'D_c (in)', 'F_crw (ksi)', 'Ratio'], items: [], note: 'Not required for composite sections in positive flexure with D/t_w ≤ 150. D_c is found from the accumulated Service II flange stresses (D6.3.1).' };
+````
