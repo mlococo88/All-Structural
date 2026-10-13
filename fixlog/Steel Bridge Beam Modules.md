@@ -11017,3 +11017,128 @@ All code in this PR except the GirderDetail drawing and Structural analysis hunk
 +    <p class="cap">Steel self-weight${(P.analysis || {}).xf && P.analysis.xf.on ? ' (with the cross-frames and diaphragms from GirderDetail, point loads, in the steel column)' : ''} and deck (slab, haunch, SIP forms) act on the steel section; barriers and wearing surface act on the long-term composite section (3n = ${f2(3 * AN.n)}). The girder should be cambered upward by the total shown, plus any vertical profile ordinates. Deck pour sequence effects are not included.</p>`);
    const tenth = [];
 ```
+
+## 2026-10-13 — PR: claude/gd-xf-followup (cross-frame DC1 follow-ups: gusset and bolt allowance default 10%; DC1 recomputed once after the cross-frame auto-design; engineer's decisions 2026-10-13 on GD35; PR link added after merge)
+
+### XF2a. Gusset plate and bolt allowance on the computed cross-frame weight: default 0% → 10%   [results change: DC1; §4 callout in the PR]
+- **Where:** `GM.df.def.dl` (anchor `medJoint: 'no', xf: 'auto', xfAllow:`); the allowance field note (anchor `'Gusset plates and bolts allowance', 'df.dl.xfAllow'`); the XF1 comment (anchor `allow: % added for gusset plates and bolts`); `gdXfMark` (anchor `function gdXfMark(p, raw)`); the old-project notice in `gdXfAlerts` (anchor `as point loads at each frame, half to each girder`).
+- **Before:** `xfAllow: 0`; no migration of the allowance. **After:** `xfAllow: 10, …, xfV: 2`. `gdXfMark` sets `df.dl.xfAllow = 10` for a project saved without `df.dl.xfV` whose stored allowance is 0. That is the XF1 default, which the user could not have chosen apart from it. Projects saved before XF1 have no `xfAllow` and take the default of 10. `xfV: 2` comes with the defaults, so a 0 entered from now on is kept. The notice for old projects states the allowance and that 10% is the default and editable.
+- **Governing provision:** AASHTO LRFD 10th Ed. (2024) 3.5.1 (DC includes the nonstructural attachments; the gussets and bolts of the bracing). The 10% is the engineer's allowance (2026-10-13), not a code value.
+- **Check case (hand, the XF1 case):** simple span 120 ft, 5 girders at 9.5 ft, Kb frames h = 52 in, L5x5x3/8 top chord, L3x3x3/8 bottom chord and diagonals, frames at 24, 48, 72, 96 ft.
+  - Frame weights: intermediate W = 0.2772 × 1.10 = 0.30492 kip; end W = 0.3348 × 1.10 = 0.36828 kip.
+  - Interior G2 takes 0.30492 kip at each station.
+  - ΔM(60 ft) from the frames = 0.30492 × 72 = 21.954 kip-ft (program 2505.650 − 2483.696 = 21.954; with 0%: 19.958).
+  - ΔR = 0.30492 × 2 + 0.36828 = 0.97812 kip (program 0.97813).
+  - Steel camber at midspan from the frames: 0.03668 × 1.1 = 0.04035 in (program 0.04036).
+- **Built-in example (designed Kb frames), G2:**
+  - Frames 5.0945 → 5.6039 kip.
+  - M_DC1 +1018.194 → +1019.178 kip-ft and −2403.939 → −2406.075 kip-ft.
+  - R_DC1 Abut. 1 / Pier 1: 52.567 / 194.752 → 52.639 / 194.934 kip.
+  - Camber 1.9156 → 1.9169 in.
+- **As opened (Cross-frames module not designed, default X-frames):** G2 frames 8.5416 → 9.3958 kip; M_DC1 +1025.672 → +1027.404 kip-ft.
+
+### XF2b. DC1 recomputed once after the cross-frame auto-design   [results change only where the auto-design changes the frame weights]
+- **Where:** `getDemands` (anchor `function getDemands(src, tgt, xfPass)`). New `GD_XF_REQ`, `GD_XF_PASS`, `GD_XF_T`, `GD_XF_STALE`, `gdXfSig`, `gdXfReq` and `gdXfAfter` after the `gd-inbox-err` listener. The `gd-inbox` listener: anchor `const xs0 =`, the stale-reply check, `gdXfAfter(...)` in each branch, and the new target `'xfall'`. The summary notices in `gdXfAlerts` (anchor `const re = P.ui && P.ui.xfRe`).
+- **Problem:**
+  - Get demands, Design all and the automatic refresh import first, then auto-design the Cross-frames module.
+  - The imported DC1 therefore used the frame weights from before that design.
+  - Engineer's decision 2026-10-13: when the auto-design changes the frame weights, recompute the demands once with the new weights and say so; if they change again, ask for Get demands again; no further passes.
+- **After:**
+  - **Weight signature:** each request records the signature of the frame weight model (`gdXfSig`: kind, type, h, areas, gaps, entered weights, allowance).
+  - **Second pass:** after the import (and auto-design), if the signature changed, `gdXfPost` sends the new model to Preliminary sizing and the same request is made again once, after 300 ms, as the second pass. A load into every module without a target becomes `'xfall'`.
+  - **Messages:** if the second pass leaves the weights unchanged, the flash, the Design all window and every module summary say "DC1 recomputed with the designed cross-frame sizes" (`P.ui.xfRe = { st: 'ok' }`). If they change again, a warning asks for Get demands again (`st: 'again'`). The note clears on the next Get demands of the user.
+  - **Superseded passes:** a new request of the user cancels a pending second pass, and the reply of a running one is dropped (`GD_XF_STALE`).
+- **Saved data:** new optional `ui.xfRe` only.
+- **Check case:** the built-in example as opened, Cross-frames → Get demands (Preliminary sizing):
+  - Calls are `getDemands('pl')`, then `getDemands('pl', 'cf', true)`, ending with `xfRe.st = 'ok'`.
+  - The frames go from default X/48 in to Kb/52 in.
+  - The Cross-frames checks after the automatic second pass are identical to those after a manual second Get demands.
+  - The same holds from Structural analysis G2 and for Design all: two calls, and the Design all window ends with "DC1 recomputed with the designed cross-frame sizes".
+- **How verified (both items):**
+  - `node --check` passes on all blocks.
+  - Headless Chromium against main (f1b6d49) on the built-in example, xsA and curb.
+  - A test copy with the allowance default set back to 0 gives check items identical to main after Get demands from 'pl' and 'sa:2' in 9 modules.
+  - With 10%, only DC1-dependent results increase, by about 10% of the XF1 increment.
+  - Get demands vs Any location rows are identical.
+  - Migration: XF1-saved 0 → 10; a user-entered 0 is kept after reload; pre-XF1 projects get 10 plus the notice.
+  - Save and load both ways; the ST-Girder payload satisfies steel + wet = total.
+  - No console errors.
+- **Other copies:** none.
+
+#### Exact changes (`git diff -U1`, the `PL_B64` line is unchanged)
+```diff
+@@ -2717,3 +2717,3 @@ const cfDiaEnd = q => ({ ...q, shape: q.eShape || q.shape, nb: +q.eNb >= 2 ? q.e
+      kind 'ovr': Wi, We kip per frame;
+-     allow: % added for gusset plates and bolts (df.dl.xfAllow, default 0; the module does not size gussets). Connection plates are not added here:
++     allow: % added for gusset plates and bolts (df.dl.xfAllow, default 10 (XF2, engineer's decision 2026-10-13; was 0); the module does not size gussets). Connection plates are not added here:
+        they are in the girder's detail allowance. Steel at 490 pcf = 0.2836 lb/in^3.
+@@ -2771,3 +2771,5 @@ function gdXfDupRows() { return (((P.df || {}).extra) || []).filter(r => r && r.
+ function gdXfAlerts(dupOn) { const X = gdXfModel(), dup = X.on && dupOn ? gdXfDupRows() : [], o = [];
+-  if (P.df && P.df.xfNew && X.on) o.push(`<div class="alert warn" style="margin:0 0 12px"><b>DC1 now includes the cross-frames and diaphragms.</b> This project was saved before their weight was added to DC1 (engineer's decision 2026-10-13): ${esc(gdXfDesc(X))}, as point loads at each frame, half to each girder. DC1 moments, shears, reactions and camber, and every demand from them, are larger than when the project was saved; get the demands again in the detail modules. Change it under LLDF and DLs → Cross-section and dead loads → Cross-frames and diaphragms (DC1). <button type="button" class="link-btn" data-xfack="1">Dismiss</button></div>`);
++  if (P.df && P.df.xfNew && X.on) o.push(`<div class="alert warn" style="margin:0 0 12px"><b>DC1 now includes the cross-frames and diaphragms.</b> This project was saved before their weight was added to DC1 (engineer's decision 2026-10-13): ${esc(gdXfDesc(X))}, as point loads at each frame, half to each girder${X.kind !== 'ovr' ? ` (including a ${f0(X.allow)}% allowance for gusset plates and bolts; the default is 10%, editable there)` : ''}. DC1 moments, shears, reactions and camber, and every demand from them, are larger than when the project was saved; get the demands again in the detail modules. Change it under LLDF and DLs → Cross-section and dead loads → Cross-frames and diaphragms (DC1). <button type="button" class="link-btn" data-xfack="1">Dismiss</button></div>`);
++  const re = P.ui && P.ui.xfRe; if (re && re.st === 'again') o.push(`<div class="alert warn" style="margin:0 0 12px"><b>Run Get demands again.</b> The cross-frame auto-design changed the member sizes twice (${new Date(re.ts).toLocaleString()}); DC1 in the imported demands may not use the final cross-frame weights.</div>`);
++  else if (re && re.st === 'ok') o.push(`<div class="alert info" style="margin:0 0 12px"><b>DC1 recomputed with the designed cross-frame sizes</b> (${new Date(re.ts).toLocaleString()}): the cross-frame auto-design changed the member sizes, so the demands were computed again with the new frame weights.</div>`);   // XF2
+   if (dup.length) o.push(`<div class="alert warn" style="margin:0 0 12px"><b>Possible double counting.</b> The DC1 line load${dup.length > 1 ? 's' : ''} ${dup.map(r => `"${esc(r.name)}"`).join(', ')} look${dup.length > 1 ? '' : 's'} like cross-frame or diaphragm weight, and DC1 also includes the cross-frames computed from the Cross-frames module. Delete the row, or set Cross-frames and diaphragms (DC1) to "Not included" or to entered weights.</div>`);
+@@ -4579,3 +4581,3 @@ tabs: { combos: 'Factors and loads', cap: 'Derivations', rptCombos: 'Distributio
+   groups: ['Applicability', 'Distribution factors'], itabs: [['df_br', 'Bridge'], ['df_dl', 'Cross-section and dead loads']], capLabel: 'Factor derivations',
+-  def: { bridge: null, gap: 4, kg: 'max', skewV: 'all', feed: 'yes', extMin: 'no', radius: 0, dl: { method: 'massdot', ped: 0, swL: 0, swThkL: 8, swR: 0, swThkR: 8, medW: 0, medThk: 8, medJoint: 'no', xf: 'auto', xfAllow: 0, xfInt: '', xfEnd: '' },
++  def: { bridge: null, gap: 4, kg: 'max', skewV: 'all', feed: 'yes', extMin: 'no', radius: 0, dl: { method: 'massdot', ped: 0, swL: 0, swThkL: 8, swR: 0, swThkR: 8, medW: 0, medThk: 8, medJoint: 'no', xf: 'auto', xfAllow: 10, xfInt: '', xfEnd: '', xfV: 2 },
+     extra: [{ name: 'Utility (example, 0 = off)', cat: 'DW', x: 20, plf: 0, dist: 'auto' }] },
+@@ -4610,3 +4612,3 @@ tabs: { combos: 'Factors and loads', cap: 'Derivations', rptCombos: 'Distributio
+         ${secHd('sec-dfxf', 'Cross-frames and diaphragms (DC1)')}<div class="sec-body" id="sec-dfxf">${fld('Weight in DC1', 'df.dl.xf', '', 'sel', { full: true, options: [['auto', 'From the Cross-frames module (point loads at each frame)'], ['ovr', 'Entered weight per frame (override)'], ['off', 'Not included (for example, entered as a DC1 line load)']] })}
+-          ${fld('Gusset plates and bolts allowance', 'df.dl.xfAllow', '%', 'num', { note: 'on the computed weight' })}<div></div>${fld('Entered weight, intermediate frame', 'df.dl.xfInt', 'kip', 'num')}${fld('Entered weight, end frame (bearing lines)', 'df.dl.xfEnd', 'kip', 'num', { note: 'blank = intermediate' })}
++          ${fld('Gusset plates and bolts allowance', 'df.dl.xfAllow', '%', 'num', { note: 'on the computed weight; default 10' })}<div></div>${fld('Entered weight, intermediate frame', 'df.dl.xfInt', 'kip', 'num')}${fld('Entered weight, end frame (bearing lines)', 'df.dl.xfEnd', 'kip', 'num', { note: 'blank = intermediate' })}
+           <p class="note full">Each cross-frame or diaphragm is a DC1 point load on the steel section (the steel is erected before the deck), half of its weight on each of the two girders it connects, at each girder's own frame stations from Preliminary sizing's framing; exterior girders get one side, interior girders both. "From the Cross-frames module" uses its member sizes (angles, or the diaphragm when it is the bracing used; the end frames as Design all counts them); the allowance is added for gusset plates and bolts, which the module does not size (connection plates are in the girder's detail allowance). Entered weights are used as they are. It feeds Preliminary sizing, Structural analysis and everything sent from them. Do not also enter the cross-frames as a DC1 line load.</p></div>
+@@ -6119,3 +6121,4 @@ function srcPanel() {
+ }
+-function getDemands(src, tgt) { if (tgt !== 'refresh') P.ui.lastSrc = src;
++function getDemands(src, tgt, xfPass) { if (tgt !== 'refresh') P.ui.lastSrc = src;
++  gdXfReq(src, tgt || P.mod, xfPass);   // XF2 (2026-10-13): the frame weights these demands are computed with
+   plEnsure(); P.ui.srcSel = src; const target = tgt || P.mod, post = msg => { const go = () => { if (PL_FRAME && PL_FRAME.contentWindow) PL_FRAME.contentWindow.postMessage(msg, '*'); }; if (PL_FRAME && PL_FRAME.dataset.ready) go(); else setTimeout(go, 3500); };
+@@ -6153,3 +6156,18 @@ function applyInboxTo(mod, j) {
+ }
+-window.addEventListener('message', e => { if (gdFromPL(e) && e.data && e.data.type === 'gd-inbox-err') alert(e.data.msg); });
++window.addEventListener('message', e => { if (gdFromPL(e) && e.data && e.data.type === 'gd-inbox-err') { GD_XF_REQ = null; GD_XF_PASS = 0; GD_XF_STALE = null; alert(e.data.msg); } });
++/* XF2 (engineer's decision 2026-10-13): Get demands, Design all and the automatic refresh auto-design the Cross-frames module after importing, so the demands were
++   computed with the frame weights from before that design. When the auto-design changes the frame weights, the same request is made once more with the new
++   weights ("DC1 recomputed with the designed cross-frame sizes"); if they change again on that second pass, no third pass is made and a notice asks for Get demands
++   again (P.ui.xfRe). GD_XF_REQ: the request in flight { src, tgt, sig }; GD_XF_PASS: 1 on the second pass */
++let GD_XF_REQ = null, GD_XF_PASS = 0, GD_XF_T = null, GD_XF_STALE = null;   // GD_XF_T: the second pass not yet sent; GD_XF_STALE: the target of a second pass made obsolete by a newer request (its reply is dropped)
++function gdXfSig() { try { const X = gdXfModel(); return JSON.stringify(X.on ? ['kind', 'type', 'h', 'At', 'Ab', 'Ad', 'A', 'g', 'Ae', 'ge', 'Wi', 'We', 'allow'].map(k => X[k] ?? null) : 0); } catch (e) { return ''; } }
++function gdXfReq(src, tgt, pass) { if (!pass) { clearTimeout(GD_XF_T); GD_XF_T = null; if (GD_XF_PASS && GD_XF_REQ) GD_XF_STALE = GD_XF_REQ.tgt; if (P.ui) delete P.ui.xfRe; }   // a new request of the user replaces a pending or running second pass
++  GD_XF_PASS = pass ? 1 : 0; GD_XF_REQ = { src, tgt, sig: gdXfSig() }; }
++function gdXfAfter(sig0, tgt) {   // after an import: sig0 = the frame weights the demands were computed with
++  const R = GD_XF_REQ, pass = GD_XF_PASS, now = gdXfSig(), src = R ? R.src : 'pl', t = R ? R.tgt : tgt; GD_XF_REQ = null; GD_XF_PASS = 0;
++  const say = h => { const m = document.getElementById('da-modal'); if (m && !m.hidden) { const c = m.querySelector('.da-card'); if (c) c.insertAdjacentHTML('beforeend', h); } };
++  if (now === sig0) { if (pass) { P.ui.xfRe = { st: 'ok', ts: Date.now() }; autosave(); flash('DC1 recomputed with the designed cross-frame sizes.'); say('<p class="note-p"><b>DC1 recomputed with the designed cross-frame sizes.</b> The cross-frame auto-design changed the member sizes, so the demands were computed again with the new frame weights.</p>'); try { recompute(); } catch (e) {} } return; }
++  if (pass) { P.ui.xfRe = { st: 'again', ts: Date.now() }; autosave(); flash('The cross-frame sizes changed again after the second pass: run Get demands again.', 'fail'); say('<div class="alert warn"><b>Run Get demands again.</b> The cross-frame auto-design changed the member sizes again on the second pass, so DC1 may not use the final cross-frame weights.</div>'); try { recompute(); } catch (e) {} return; }
++  flash('The cross-frame auto-design changed the frame weights: recomputing DC1 with the designed cross-frame sizes…'); gdXfPost();
++  GD_XF_T = setTimeout(() => { GD_XF_T = null; getDemands(src, t === 'pl' || !t ? 'xfall' : t, true); }, 300); }
+ 
+@@ -7649,3 +7667,6 @@ function initP() { P = GD_FULL(); try { const a = LS && JSON.parse(localStorage.
+    a notice in LLDF and DLs and Structural analysis until dismissed. Nothing else in the saved data changes */
+-function gdXfMark(p, raw) { try { if (p && p.df && raw && raw.df && !(raw.df.dl && 'xf' in raw.df.dl)) p.df.xfNew = 1; } catch (e) {} }
++function gdXfMark(p, raw) { try { if (p && p.df && raw && raw.df && !(raw.df.dl && 'xf' in raw.df.dl)) p.df.xfNew = 1;
++  // XF2 (2026-10-13): the allowance default is 10%. A project saved before XF2 (no df.dl.xfV) that holds 0, the XF1 default it could not have chosen apart, gets 10%;
++  // projects saved before XF1 have no xfAllow and take the default. df.dl.xfV = 2 is written by the defaults, so a 0 entered from now on is kept
++  const q = raw && raw.df && raw.df.dl; if (p && p.df && p.df.dl && q && !('xfV' in q) && 'xfAllow' in q && !(nm(q.xfAllow) > 0)) p.df.dl.xfAllow = 10; } catch (e) {} }
+ /* migration (2026-10-12): the cross-frame auto-designer stored the invalid type 'K', computed as Kt (diagonals meeting at the top chord).
+@@ -8319,8 +8340,11 @@ window.addEventListener('message', e => {
+   if (!e.data || e.data.type !== 'gd-inbox' || !e.data.inbox) return; const j = e.data.inbox; try { localStorage.setItem(KEY_IN, JSON.stringify(j)); } catch (er) {}
+-  if (j.target === 'all') { designAllRun(j); return; }
+-  if (j.target === 'grpt') { girderReportRun(j); return; }
+-  if (j.target === 'refresh') { try { designAllRun(j, true); refreshMarks(); flash('All modules updated for the changed bridge.'); } catch (err) { console.error(err); } return; }
+-  if (j.target && j.target !== 'pl') { const msg = applyInboxTo(j.target, j); renderInbox(); if (j.target === 'splice' && msg === spNoPLMsg()) { flash(msg, 'fail'); alert(`Get demands: field splice\n\n${msg}`); } else flash(msg); return; }
+-  if (!confirm(`Load the sizing results from "${j.project}" into every detail module? This replaces the demands and locations in each module (your plate, bolt, and weld choices where a module keeps them).`)) { flash('Not loaded. Each module\'s Project tab still offers the results under Import from PlateLine.'); return; }
+-  const done = loadAllInbox(j); alert(`Loaded into ${done.length} modules:\n\n• ${done.join('\n• ')}\n\nChoose a module from the list at the top to review it.`);
++  if (GD_XF_STALE && j.target === GD_XF_STALE) { GD_XF_STALE = null; return; }   // XF2: the reply to a second pass that a newer request replaced
++  const xs0 = GD_XF_REQ ? GD_XF_REQ.sig : gdXfSig();   // XF2: the frame weights these demands were computed with
++  if (j.target === 'all') { designAllRun(j); gdXfAfter(xs0, 'all'); return; }
++  if (j.target === 'grpt') { GD_XF_REQ = null; GD_XF_PASS = 0; girderReportRun(j); return; }
++  if (j.target === 'refresh') { try { designAllRun(j, true); refreshMarks(); flash('All modules updated for the changed bridge.'); } catch (err) { console.error(err); } gdXfAfter(xs0, 'refresh'); return; }
++  if (j.target === 'xfall') { loadAllInbox(j); gdXfAfter(xs0, 'xfall'); return; }   // XF2: the second pass of a load into every module
++  if (j.target && j.target !== 'pl') { const msg = applyInboxTo(j.target, j); renderInbox(); if (j.target === 'splice' && msg === spNoPLMsg()) { flash(msg, 'fail'); alert(`Get demands: field splice\n\n${msg}`); } else flash(msg); gdXfAfter(xs0, j.target); return; }
++  if (!confirm(`Load the sizing results from "${j.project}" into every detail module? This replaces the demands and locations in each module (your plate, bolt, and weld choices where a module keeps them).`)) { GD_XF_REQ = null; flash('Not loaded. Each module\'s Project tab still offers the results under Import from PlateLine.'); return; }
++  const done = loadAllInbox(j); alert(`Loaded into ${done.length} modules:\n\n• ${done.join('\n• ')}\n\nChoose a module from the list at the top to review it.`); gdXfAfter(xs0, 'xfall');
+ });
+```
