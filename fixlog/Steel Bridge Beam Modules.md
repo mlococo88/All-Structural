@@ -7838,3 +7838,11 @@ Main page only; `PL_B64` (embedded Preliminary sizing) is not touched. Display o
 - **After:** `` `b<tspan baseline-shift="sub" font-size="8">f</tspan> ${frac(bf)}″` `` (the form the Bearing stiffeners drawing uses for b<sub>t</sub>).
 - **Check case:** built-in example, Shear connectors, Drawings, typical plan: "b<sub>f</sub> 16″".
 - **Other copies:** none.
+
+### Q17. Check item tables: symbols written with an underscore in a cell print as subscripts (I<sub>s</sub>, N<sub>b</sub>, η<sub>D</sub> η<sub>R</sub> η<sub>I</sub>)   [rendering only]
+- **Where:** the three renderers of check-item cells: `renderChecks` (anchor `` ${it.cells.map(c => `<td class="val">${esc(c)}</td>`).join('')} ``), the Detailing tab `renderGeometry` (anchor `` ${it.cells.map(c => `<td class="val">${c}</td>`).join('')} ``) and the calculation report (anchor `` ${it.cells.map(c => `<td class="n">${c}</td>`).join('')} ``).
+- **Before:** `${esc(c)}` (Checks tab), `${c}` (Detailing tab and report).
+- **After:** `${sub(c)}` in all three. `sub` is the existing helper already used for the item location in the same rows: `esc(s)` followed by `_x` → `<sub>x</sub>`.
+- **Problem:** Structural analysis SA4 and SA6 showed "I_s = 0.093", "N_b ≥ 4", "η = η_D η_R η_I = 1.0", "η_I = 1.05" literally. Cells are plain text (the Checks tab already escaped them; no cell in the built-in example or the 90 ft diaphragm case contains HTML), so the Detailing tab and the report now escape them the same way.
+- **Check case:** built-in example, Structural analysis, Checks, SA4 "Skew index, span 1: I<sub>s</sub> = 0.093"; SA6 "η = η<sub>D</sub> η<sub>R</sub> η<sub>I</sub> = 1.0". A scan of every td/th/p of the Summary, Checks, Drawings, Detailing and forces tabs of every module (built-in example) finds no other raw underscore in a cell.
+- **Other copies:** none.
