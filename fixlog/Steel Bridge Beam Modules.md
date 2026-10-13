@@ -5770,7 +5770,7 @@ New optional saved fields (absent in older projects; an older build ignores and 
   - **Check case 1 (built-in bridge with 6 ft sidewalks, 12 in thick, both sides; 5 girders at 9.50 ft, overhangs 3.25 ft, W = 44.50 ft; span 1 L = 110 ft, K<sub>g</sub> = 936,395 in⁴, t<sub>s</sub> = 8 in):** before: faces 1.50 / 1.50, bar = 1.50, roadway 44.50 − 3.00 = 41.50 ft (N<sub>L</sub> 3), d<sub>e</sub> = 3.25 − 1.50 = 1.75 ft; after: faces 6.00 / 6.00 (sidewalk curb face), roadway 32.50 ft (N<sub>L</sub> 2), d<sub>e</sub> = −2.75 ft (G7 "d<sub>e</sub>" item pass → warn, outside −1.0 to 5.5). Built-in exterior factor, span 1: lever a<sub>1</sub> = S + d<sub>e</sub> − 2: before 9.25, a<sub>2</sub> = 3.25, g = 1.2 × ½ × 12.50/9.50 = **0.789**; after a<sub>1</sub> = 4.75, a<sub>2</sub> < 0, g = 0.6 × 4.75/9.50 = **0.300**; e-factor before 0.962 × 0.708 = 0.681, after (0.77 − 2.75/9.1) × 0.708 = 0.468 × 0.708 = **0.331**; g<sub>M,ext</sub> 0.789 → **0.331**, g<sub>V,ext</sub> 0.789 → **0.300**; interior unchanged (0.708 / 0.918). Deflection factor 3(0.85)/5 = 0.510 → 2(1.00)/5 = **0.400** (A1 ratios 0.31 → 0.24). Fast suggestion web depth 63 → 61 in. With "Use these factors" Yes the analysis live load still uses GirderDetail's factors (unchanged: GirderDetail already used r = 6.00 ft since XS6).
   - **Check case 2 (sidewalks 6 ft × 8 in / 5 ft × 9 in with fences 0.050 klf at 5.50 ft and 0.030 klf at 4.50 ft, XS4 test project xsA):** faces 1.50 / 1.50 → 5.50 / 4.50 (fences); bar 1.50 → 5.00; roadway 41.50 → 34.50 ft (N<sub>L</sub> 3 → 2); d<sub>e</sub> 1.75 → −1.75 ft; fast suggestion web depth 63 → 60 in.
   - **Check case 3 (per-side weights, built-in bridge):** left barrier 0.500 klf, right 0.300 klf: DC2 = (0.500 + 0.300)/5 = 0.160 klf per girder (the same as 2 × 0.400/5); `suggest.bar` written 0.400. Right barrier 2.00 ft wide: faces 1.50 / 2.00, bar 1.75 (written to `bridge.barrier`), roadway 41.00 ft, d<sub>e</sub> 1.50 ft. Right side changed to curb 12 × 10 in with railing 0.050 klf at 0.50 ft (mountable: face 0.50 ft): w<sub>R</sub> = (12/12)(10/12)(0.150) + 0.050 = 0.175 klf; DC2 = (0.500 + 0.175)/5 = **0.135** klf; faces 1.50 / 0.50, roadway 42.50 ft; legacy fields: mode curb, left cw = ch = 0, rp = 0.75, rw = 0.500, f = 1.50.
-- **Open (not changed, for the engineer):** Preliminary sizing's built-in exterior factor (`sgDF`) has no rigid cross-section check and does not limit d<sub>e</sub> to −1.0 ft in the e-factor (GirderDetail does both). With a large live-load face (check case 1) its exterior factor drops to 0.331 while GirderDetail gives 0.621 (rigid). This matters only where the built-in factors are used (feed "No", or Suggest/Full design trial layouts). See the PR description.
+- **Found here, fixed in XS10:** Preliminary sizing's built-in exterior factor (`sgDF`) had no rigid cross-section check and did not limit d<sub>e</sub> to −1.0 ft in the e-factor (GirderDetail does both); with the larger live-load face of check case 1 its exterior factor dropped to 0.331 while GirderDetail gives 0.621. The values in check case 1 are those of this commit (XS9); XS10 raises the built-in exterior factor to 0.621.
 - **Other copies:** none.
 
 ### Exact changes (XS8): main page (unified diff against d7ca4d6; the PL_B64 line is not touched)
@@ -6161,3 +6161,163 @@ index c50f106..9121d62 100644
 - **Interaction (branch):** editing the deck edges in GirderDetail (unequal weights, unequal widths, a mixed barrier / curb side, curb faces cleared, a 12 in curb, an entered railing face): Preliminary sizing follows (values in the XS8/XS9 check cases), its fields are disabled with the note, the signature `sgGeoSig` matches the factors GirderDetail sends after each change ("Use these factors" in use), no message traffic in the 10 s after each change, typing in an edge field keeps the focus and text, the link opens LLDF and DLs at Deck edges. No console errors.
 - **Saved data both directions:** an edited project saved by this branch opened in `origin/main`: no errors, Preliminary sizing computes from its written fields with the same faces and loads (its analysis, suggestion and the `gd-dfx` payload identical to this branch; GirderDetail labels a barrier stored next to a curb side as a railing), and `P.df.edges` / `P.bridge.xs` are kept. A main-saved project opened here migrates as above.
 - **Screenshots:** Preliminary sizing Bridge tab (read-only fields and note, barrier and curb projects), Suggest tab note, GirderDetail Deck edges (barrier, curb with entered and derived faces, mixed), the link target.
+
+### XS10. Preliminary sizing's built-in exterior-girder factors follow the LLDF and DLs rules: d<sub>e</sub> limited to −1.0 ft in the e-factor, lever rule, rigid cross-section method, S > 16 ft and N<sub>b</sub> = 3 rules   [§4: built-in approximate live load distribution factors, exterior girders] [more conservative; changes Suggest, Full design and the width study]
+- **Decision:** coordinator, 2026-10-13 (engineer offline): "don't ship an unconservative built-in factor"; make `sgDF`'s exterior factors follow GirderDetail's LLDF module (copied, not shared: CLAUDE.md §3). This resolves the XS9 open item.
+- **Where (anchors), decoded PlateLine:** new `const SG_MPF`, `function sgLeverC`, `function sgLever(G, N)`, `function sgRigid(G)` (copies of GirderDetail `DF_MPF`, `dfLeverC`, `dfLever` for the exterior girder j = 0, `dfRigid`, adapted to equal spacing S, N<sub>b</sub> girders, d<sub>e</sub> the same on both sides, and the roadway w); `sgDF(S, L, Kg, ts, de, nb, ext, rdwy)` (new 8th argument, the roadway); callers `demand` (anchor `sgDF(S, Ls, KgS[i].Kg, ts, de, nb, ext, rdwy)`) and `wsCase` (anchor `setup.W - 2 * setup.bar`); the exterior-girder derivation block on the Suggest tab (anchor `4.6.2.2.2d rigid cross-section`). Main page: the `pl-goto` listener scrolls Deck edges below the sticky section header (`scrollMarginTop`), display only.
+- **Before:**
+  ```js
+  const a1 = S + de - 2, a2 = a1 - 6, lev = 1.2 * 0.5 * (Math.max(a1, 0) + Math.max(Math.min(a2, S), 0)) / S;   // lever rule, one lane, m = 1.2
+  if (!ext) return { mM: Math.max(m1, m2), mV: Math.max(v1, v2), m1, m2, v1, v2, kr };
+  const eM = 0.77 + de / 9.1, eV = 0.6 + de / 10;
+  return { mM: Math.max(lev, eM * m2), mV: Math.max(lev, eV * v2), m1, m2, v1, v2, kr, lev, eM, eV };
+  ```
+  g<sub>ext</sub> = max(lever 1 lane, e·g<sub>int,2+</sub>), e = 0.77 + d<sub>e</sub>/9.1 (moment), 0.60 + d<sub>e</sub>/10 (shear), d<sub>e</sub> not limited.
+- **After:** (interior factors unchanged)
+  ```js
+  const w = rdwy != null && isFinite(rdwy) ? rdwy : (nb - 1) * S + 2 * de, twoHalf = w >= 20.0 - 1e-9 && w <= 24.0 + 1e-9, NL = twoHalf ? 2 : Math.max(1, Math.floor(w / 12)), laneW = twoHalf ? w / 2 : 12;
+  ... G = { pos, nb, de, rw0: -de, rw1: -de + w, NL, laneW, xc, sumX2 };
+  const l1 = sgLever(G, 1), lev = l1 ? l1.df : 0, deE = Math.max(de, -1.0), eM = 0.77 + deE / 9.1, eV = 0.6 + deE / 10;
+  let mE = eM * m2, vE = eV * v2;
+  if (S > 16.0) { const l2 = sgLever(G, 2); mE = vE = l2 ? l2.df : 0; }
+  else if (nb === 3) { const l2 = sgLever(G, 2); mE = Math.min(mE, l2 ? l2.df : mE); vE = l2 ? l2.df : vE; }
+  const rig = sgRigid(G);
+  return { mM: Math.max(lev, mE, rig.g), mV: Math.max(lev, vE, rig.g), ..., lev, eM, eV, deE, mE, vE, rig: rig.g, rigN: rig.n, NL, w, rule };
+  ```
+  g<sub>ext,M</sub> = max(g<sub>lever,1</sub>, e<sub>M</sub>·g<sub>int,M,2+</sub>, g<sub>rigid</sub>), g<sub>ext,V</sub> = max(g<sub>lever,1</sub>, e<sub>V</sub>·g<sub>int,V,2+</sub>, g<sub>rigid</sub>), with d<sub>e</sub> ≥ −1.0 ft in e; g<sub>rigid</sub> = max over n = 1…N<sub>L</sub> of m<sub>n</sub>(n/N<sub>b</sub> + X<sub>ext</sub>Σe/Σx²), e<sub>i</sub> = X<sub>ext</sub> + d<sub>e</sub> − (5 + 12(i − 1)) ft; N<sub>L</sub> = INT(w/12) (two lanes of w/2 for 20 ≤ w ≤ 24 ft); S > 16 ft: two or more lanes by the lever rule; N<sub>b</sub> = 3: moment the lesser of the e-factor and the two-lane lever rule, shear the two-lane lever rule. These are exactly GirderDetail's `dfMember` rules for an exterior girder (without its skew factors: Preliminary sizing applies its own skew correction for shear as before, and takes no moment reduction). The one-lane lever rule (truck 2 ft from the traffic face, m = 1.2) gives the same value as before in every normal case (it no longer caps the second wheel at one spacing, which only matters for d<sub>e</sub> > 8 ft). The fatigue factors (lever/1.2 for the exterior girder) are unchanged; the deflection factor (N<sub>L</sub>m/N<sub>b</sub>) is computed elsewhere and was already on the same roadway (XS9). Interior girders keep the equations (GirderDetail's S > 16 ft / N<sub>b</sub> = 3 rules for interior girders are not ported: not requested).
+- **Problem:** the built-in exterior factor had no rigid cross-section check and no d<sub>e</sub> limit, so it was below GirderDetail's factor for the same bridge (built-in example 0.789 vs 0.811), and far below it with a live-load face inside a 12 in sidewalk (0.331 vs 0.621). Less conservative; fixed.
+- **Governing provision:** AASHTO LRFD 10th Ed. Table 4.6.2.2.2d-1 (exterior girder moment: lever rule one lane, e = 0.77 + d<sub>e</sub>/9.1, range −1.0 ≤ d<sub>e</sub> ≤ 5.5 ft), Table 4.6.2.2.3b-1 (shear: e = 0.60 + d<sub>e</sub>/10), 4.6.2.2.2d and Eq. C4.6.2.2.2d-1 (rigid cross-section, steel beam-slab bridges with diaphragms or cross-frames: the exterior factor is not less than this), 3.6.1.1.1 and 3.6.1.1.2 (lanes, multiple presence), Table 4.6.2.2.2b-1 note (N<sub>b</sub> = 3) and the S > 16 ft lever rule (Tables 4.6.2.2.2b-1, 4.6.2.2.3a-1).
+- **Check cases (span 1, L = 110 ft, K<sub>g</sub> = 936,395 in⁴, t<sub>s</sub> = 8 in, S = 9.50 ft, N<sub>b</sub> = 5: X<sub>ext</sub> = 19.00 ft, Σx² = 902.50 ft², g<sub>int,M,2+</sub> = 0.708, g<sub>int,V,2+</sub> = 0.918):**
+  - **Built-in example** (d<sub>e</sub> = 1.75 ft, w = 41.50 ft, N<sub>L</sub> = 3): lever 0.789; e-factor M 0.962 × 0.708 = 0.681, V 0.775 × 0.918 = 0.711; rigid: curb = 19.00 + 1.75 = 20.75, e = 15.75, 3.75, −8.25; 1 lane 1.2(0.200 + 19.00 × 15.75/902.50) = 0.638; 2 lanes 1.0(0.400 + 19.00 × 19.50/902.50) = **0.811**; 3 lanes 0.85(0.600 + 19.00 × 11.25/902.50) = 0.711. g<sub>M,ext</sub> 0.789 → **0.811**, g<sub>V,ext</sub> 0.789 → **0.811** (= GirderDetail 0.811 / 0.850 before its skew correction for shear; GirderDetail's shear includes its skew factor).
+  - **6 ft × 12 in sidewalks** (d<sub>e</sub> = −2.75 ft, w = 32.50 ft, N<sub>L</sub> = 2): lever 0.300; e-factor with d<sub>e</sub> limited to −1.0: e<sub>M</sub> = 0.77 − 1.0/9.1 = 0.660, 0.660 × 0.708 = 0.467; e<sub>V</sub> = 0.500, 0.459; rigid: curb = 16.25, e = 11.25, −0.75; 2 lanes 1.0(0.400 + 19.00 × 10.50/902.50) = **0.621**. g<sub>M,ext</sub> 0.331 → **0.621**, g<sub>V,ext</sub> 0.300 → **0.621** (GirderDetail: 0.621).
+  - **xsA** (fences; d<sub>e</sub> = −1.75 ft, w = 34.50 ft, N<sub>L</sub> = 2): lever 0.363; e-factor (d<sub>e</sub> → −1.0) 0.467 / 0.459; rigid 2 lanes 0.400 + 19.00(12.25 + 0.25)/902.50 = **0.663**; g<sub>M,ext</sub> 0.409 → **0.663**, g<sub>V,ext</sub> 0.390 → **0.663**.
+  - **Curb project, faces cleared** (d<sub>e</sub> = 2.375 ft, w = 42.75 ft): lever 0.868 governs (rigid 0.837): unchanged 0.868.
+- **Effect on the built-in example (saved with main, migrated):** with "Use these factors" Yes (default) the analysis of the current layout still uses GirderDetail's factors: its checks and demands are unchanged. The built-in factors are used for trial layouts, so these change:
+  - Fast suggestion: web depth 63 → **69 in**; flanges: top 1.500 → 1.375 in and 0.875 → 0.750 in in four pieces, bottom widths 16/20 → 15/19 in; estimated cost $1,696,419 → $1,714,870.
+  - Full design: top flange 1.125 → 1.250 in (two pieces), bottom 1.125 → 1.250 in (one piece); governing ratio 0.965 → 0.957; cost $1,597,506 → $1,616,264 (+1.2%).
+  - Width study (W = 44.50 ft, N = 4 to 12): the exterior factor now rises with the overhang (rigid method), so the "balanced" overhang (exterior g closest to interior g) moves to the minimum overhang, 1.50 ft (d<sub>e</sub> = 0) for every girder count (was 2.75 ft for N = 4, 2.25 ft for N = 5–7, 2.00 ft for N = 8, 1.75 ft for N = 9–10, 1.50 ft for N = 11–12); for N = 5: S 10.00 → 10.38 ft, g<sub>E</sub> 0.690 → 0.776, web 65 → 68 in, 27.37 → 27.91 psf. Every row still passes.
+  - Design all (built-in example and the sidewalk project): unchanged (it uses the current layout).
+  - With "Use these factors" No, the current layout's exterior factors also rise (0.789 → 0.811 for the built-in example).
+- **Other copies:** GirderDetail `DF_MPF`, `dfLeverC`, `dfLever`, `dfRigid`, `dfMember` (main page; the source, unchanged).
+
+### Exact changes (XS10): main page (unified diff against the XS9 commit; the changed PL_B64 line is omitted)
+
+```diff
+diff --git a/Steel Bridge Beam Modules.html b/Steel Bridge Beam Modules.html
+index 9121d62..fe483bb 100644
+--- a/Steel Bridge Beam Modules.html	
++++ b/Steel Bridge Beam Modules.html	
+@@ -2351,7 +2351,7 @@ const MAN = [
+ function buildManual() { $('#tab-manual').innerHTML = `<div class="man-nav">${MAN.map(([id, t], i) => `<button type="button" class="man-btn" data-man="${id}">${i + 1}. ${t}</button>`).join('')}</div>${MAN.map(([id, t, b], i) => `<article class="man-part" id="man-${id}"><h2 class="man-h">Part ${i + 1}. ${t}</h2>${b}</article>`).join('')}`; showManPart(); }
+ function showManPart() { const id = P.ui.man || 'p1'; $$('.man-btn').forEach(b => b.classList.toggle('active', b.dataset.man === id)); $$('.man-part').forEach(a => a.classList.toggle('active', a.id === 'man-' + id)); }
+ 
+ /* =====================================================================
+    GirderDetail: additional modules
+    ts  transverse stiffeners and connection plates (6.10.11.1, 6.6.1.3.1, 6.10.9)
+@@ -4537,7 +4537,7 @@ window.addEventListener('message', e => {
+ });
+ /* Preliminary sizing's "Set in LLDF and DLs" button (XS9) */
+ window.addEventListener('message', e => { if (!gdFromPL(e) || !e.data || e.data.type !== 'pl-goto') return;
+-  setMod('df'); setITab('df_dl'); const s = document.getElementById('sec-dfe'); if (s) { s.classList.remove('hidden'); (s.previousElementSibling || s).scrollIntoView({ block: 'start' }); } });
++  setMod('df'); setITab('df_dl'); const s = document.getElementById('sec-dfe'); if (s) { s.classList.remove('hidden'); const hd = s.previousElementSibling; s.style.scrollMarginTop = ((hd ? hd.offsetHeight : 0) + 8) + 'px'; s.scrollIntoView({ block: 'start' }); } });   // clear the sticky section header
+ document.addEventListener('click', e => { if (e.target.closest('[data-dfpl]')) setMod('pl'); });
+ 
+ /* =====================================================================
+```
+
+### Exact changes (XS10): decoded PlateLine (unified diff against XS9)
+
+```diff
+--- PlateLine (decoded PL_B64, XS9)
++++ PlateLine (decoded PL_B64, XS10)
+@@ -1791,15 +1791,52 @@
+ /* ---------- continuous beam, constant EI, influence lines ---------- */
+ const SG_CACHE = { key: '', beam: null };
+ /* ---------- distribution factors (AASHTO 4.6.2.2) ---------- */
+-function sgDF(S, L, Kg, ts, de, nb, ext) {
++/* Exterior girders follow GirderDetail's LLDF and DLs module (dfMember, dfLever, dfLeverC, dfRigid, copied and adapted to equal spacing
++   S, N_b girders, d_e on both sides and the roadway w; XS10): one lane by the lever rule (truck 2 ft from the traffic face, m = 1.2);
++   two or more lanes the larger of the e-factor with d_e not less than -1.0 ft (Table 4.6.2.2.2d-1 range; 4.6.2.2.3b for shear) and
++   the rigid cross-section method (4.6.2.2.2d); S > 16 ft: the lever rule; N_b = 3: moment the lesser of the e-factor and the lever
++   rule, shear the lever rule. Lanes: N_L = INT(w/12), or 2 lanes of w/2 for 20 <= w <= 24 ft (3.6.1.1.1). */
++const SG_MPF = n => n <= 1 ? 1.20 : n === 2 ? 1.00 : n === 3 ? 0.85 : 0.65;
++function sgLeverC(pos, Nb, j, uw) {
++  const uj = pos[j];
++  if (j < Nb - 1 && uw >= uj - 1e-9 && uw <= pos[j + 1] + 1e-9) return (pos[j + 1] - uw) / (pos[j + 1] - uj);
++  if (j > 0 && uw <= uj + 1e-9 && uw >= pos[j - 1] - 1e-9) return (uw - pos[j - 1]) / (uj - pos[j - 1]);
++  if (j === 0 && Nb > 1 && uw < uj) return (pos[1] - uw) / (pos[1] - pos[0]);
++  if (j === Nb - 1 && Nb > 1 && uw > uj) return (uw - pos[Nb - 2]) / (pos[Nb - 1] - pos[Nb - 2]);
++  return 0;
++}
++function sgLever(G, N) {   // exterior girder (j = 0), truck train, 6-ft axles, gaps of 4 ft, 2 ft from the traffic faces
++  const pos = G.pos, Nb = G.nb, rw0 = G.rw0, rw1 = G.rw1, laneW = G.laneW || 12;
++  if (laneW * N > rw1 - rw0 + 1e-9) return null;
++  const off = []; let cum = 0; for (let t = 0; t < N; t++) { off.push(cum, cum + 6); cum += 6 + (t < N - 1 ? 4 : 0); }
++  const train = off[off.length - 1]; if (train > rw1 - rw0 - 4 + 1e-9) return null;
++  let best = null;
++  for (let s = rw0 + 2; s <= rw1 - 2 - train + 1e-9; s += 0.25) { let R = 0; for (const o of off) R += 0.5 * sgLeverC(pos, Nb, 0, s + o); if (!best || R > best.R + 1e-9) best = { R, s }; }
++  if (!best) return null; const m = SG_MPF(N);
++  return { N, R: best.R, m, df: best.R * m };
++}
++function sgRigid(G) {
++  const Nb = G.nb, Xext = G.xc - G.pos[0], curb = Xext + G.de, laneW = G.laneW || 12;
++  const ecc = []; for (let i = 0; i < G.NL; i++) ecc.push(curb - (5 + i * laneW));
++  let best = { g: -Infinity };
++  for (let n = 1; n <= G.NL; n++) { const sumE = ecc.slice(0, n).reduce((a, b) => a + b, 0), m = SG_MPF(n), R = n / Nb + Xext * sumE / G.sumX2, g = m * R; if (g > best.g) best = { g, m, sumE, R, n }; }
++  return { ...best, Xext, sumX2: G.sumX2 };
++}
++function sgDF(S, L, Kg, ts, de, nb, ext, rdwy) {
+   const kr = Kg / (12 * L * ts ** 3);
+   const m1 = 0.06 + (S / 14) ** 0.4 * (S / L) ** 0.3 * kr ** 0.1;
+   const m2 = 0.075 + (S / 9.5) ** 0.6 * (S / L) ** 0.2 * kr ** 0.1;
+   const v1 = 0.36 + S / 25, v2 = 0.2 + S / 12 - (S / 35) ** 2;
+-  const a1 = S + de - 2, a2 = a1 - 6, lev = 1.2 * 0.5 * (Math.max(a1, 0) + Math.max(Math.min(a2, S), 0)) / S;   // lever rule, one lane, m = 1.2
+   if (!ext) return { mM: Math.max(m1, m2), mV: Math.max(v1, v2), m1, m2, v1, v2, kr };
+-  const eM = 0.77 + de / 9.1, eV = 0.6 + de / 10;
+-  return { mM: Math.max(lev, eM * m2), mV: Math.max(lev, eV * v2), m1, m2, v1, v2, kr, lev, eM, eV };
++  const w = rdwy != null && isFinite(rdwy) ? rdwy : (nb - 1) * S + 2 * de, twoHalf = w >= 20.0 - 1e-9 && w <= 24.0 + 1e-9, NL = twoHalf ? 2 : Math.max(1, Math.floor(w / 12)), laneW = twoHalf ? w / 2 : 12;
++  const pos = []; for (let i = 0; i < nb; i++) pos.push(i * S); const xc = (nb - 1) * S / 2, sumX2 = pos.reduce((a, x) => a + (x - xc) ** 2, 0) || 1e-9;
++  const G = { pos, nb, de, rw0: -de, rw1: -de + w, NL, laneW, xc, sumX2 };
++  const l1 = sgLever(G, 1), lev = l1 ? l1.df : 0, deE = Math.max(de, -1.0), eM = 0.77 + deE / 9.1, eV = 0.6 + deE / 10;
++  let mE = eM * m2, vE = eV * v2, rule = 'e';
++  if (S > 16.0) { const l2 = sgLever(G, 2); mE = vE = l2 ? l2.df : 0; rule = 'S16'; }
++  else if (nb === 3) { const l2 = sgLever(G, 2); mE = Math.min(mE, l2 ? l2.df : mE); vE = l2 ? l2.df : vE; rule = 'N3'; }
++  const rig = sgRigid(G);
++  return { mM: Math.max(lev, mE, rig.g), mV: Math.max(lev, vE, rig.g), m1, m2, v1, v2, kr, lev, eM, eV, deE, mE, vE, rig: rig.g, rigN: rig.n, NL, w, rule };
+ }
+ 
+ /* ---------- section helpers ---------- */
+@@ -2010,8 +2047,8 @@
+         cf.push({ pier: k, xl, xr });
+       }
+       // distribution factors
+-      const dfSpan = spans.map((Ls, i) => sgDF(S, Ls, KgS[i].Kg, ts, de, nb, ext));
+-      const dfPier = spans.slice(1).map((_, k) => sgDF(S, (spans[k] + spans[k + 1]) / 2, (KgS[k].Kg + KgS[k + 1].Kg) / 2, ts, de, nb, ext));
++      const dfSpan = spans.map((Ls, i) => sgDF(S, Ls, KgS[i].Kg, ts, de, nb, ext, rdwy));
++      const dfPier = spans.slice(1).map((_, k) => sgDF(S, (spans[k] + spans[k + 1]) / 2, (KgS[k].Kg + KgS[k + 1].Kg) / 2, ts, de, nb, ext, rdwy));
+       const skV = spans.map((Ls, i) => { const th = skewSpan(i) * Math.PI / 180; return 1 + 0.2 * (12 * Ls * ts ** 3 / KgS[i].Kg) ** 0.3 * Math.tan(th); });
+       if (XF) { XF.span.forEach((v, i) => { if (v && dfSpan[i]) dfSpan[i] = { ...dfSpan[i], ...v }; }); XF.pier.forEach((v, k) => { if (v && dfPier[k]) dfPier[k] = { ...dfPier[k], ...v }; }); skV.fill(1); }   // skew already in the module's factors
+       const Mp = new Float64Array(N), Mn = new Float64Array(N), mgM = new Float64Array(N);
+@@ -2991,7 +3028,7 @@
+   if (TI) { const d = TI.dfSpan[iMax];
+     dfw += `<div class="eq-block"><div class="eq-title"><span>Interior girder, moment, Span ${iMax + 1}</span><span class="eq-ref">AASHTO Table 4.6.2.2.2b-1</span></div><div class="eq-math">\\[\\begin{aligned}g_{1} &= 0.06 + \\left(\\frac{S}{14}\\right)^{0.4}\\left(\\frac{S}{L}\\right)^{0.3}\\left(\\frac{K_g}{12Lt_s^3}\\right)^{0.1} = 0.06 + \\left(\\frac{${f2(num(P.bridge.S))}}{14}\\right)^{0.4}\\left(\\frac{${f2(num(P.bridge.S))}}{${f2(Lm)}}\\right)^{0.3}(${f3(d.kr)})^{0.1} = ${f3(d.m1)} \\\\ g_{2+} &= 0.075 + \\left(\\frac{S}{9.5}\\right)^{0.6}\\left(\\frac{S}{L}\\right)^{0.2}\\left(\\frac{K_g}{12Lt_s^3}\\right)^{0.1} = ${f3(d.m2)} \\\\ g_M &= \\max(${f3(d.m1)},\\ ${f3(d.m2)}) = ${f3(d.mM)} \\qquad g_V = \\max(0.36 + S/25,\\ 0.2 + S/12 - (S/35)^2) = ${f3(d.mV)}\\end{aligned}\\]</div></div>`; }
+   if (TE) { const d = TE.dfSpan[iMax];
+-    dfw += `<div class="eq-block"><div class="eq-title"><span>Exterior girder, moment, Span ${iMax + 1}</span><span class="eq-ref">AASHTO Table 4.6.2.2.2d-1, lever rule</span></div><div class="eq-math">\\[\\begin{aligned}d_e &= ${f2(s.de)}\\ \\text{ft}, \\quad g_{1,lever} = 1.2 \\times \\frac{0.5\\,(a_1 + a_2)}{S} = ${f3(d.lev)}, \\quad a_1 = S + d_e - 2 = ${f2(num(P.bridge.S) + s.de - 2)}\\ \\text{ft} \\\\ e &= 0.77 + \\frac{d_e}{9.1} = ${f3(d.eM)}, \\quad g_{2+} = e\\,g_{2+,int} = ${f3(d.eM)}(${f3(d.m2)}) = ${f3(d.eM * d.m2)} \\\\ g_M &= \\max(${f3(d.lev)},\\ ${f3(d.eM * d.m2)}) = ${f3(d.mM)}\\end{aligned}\\]</div></div>`; }
++    dfw += `<div class="eq-block"><div class="eq-title"><span>Exterior girder, moment, Span ${iMax + 1}</span><span class="eq-ref">AASHTO Table 4.6.2.2.2d-1, lever rule; 4.6.2.2.2d rigid cross-section</span></div><div class="eq-math">\\[\\begin{aligned}d_e &= ${f2(s.de)}\\ \\text{ft}, \\quad w = ${f2(d.w)}\\ \\text{ft}, \\quad N_L = ${d.NL}, \\quad g_{1,lever} = 1.2 \\times \\frac{0.5\\,(a_1 + a_2)}{S} = ${f3(d.lev)}, \\quad a_1 = S + d_e - 2 = ${f2(num(P.bridge.S) + s.de - 2)}\\ \\text{ft} \\\\ e &= 0.77 + \\frac{${d.deE > s.de + 1e-9 ? '-1.00' : 'd_e'}}{9.1} = ${f3(d.eM)}${d.deE > s.de + 1e-9 ? '\\ (d_e \\text{ limited to } -1.0)' : ''}, \\quad g_{2+} = ${d.rule === 'e' ? `e\\,g_{2+,int} = ${f3(d.eM)}(${f3(d.m2)})` : d.rule === 'S16' ? '\\text{lever rule, 2 lanes (S > 16 ft)}' : '\\min(e\\,g_{2+,int},\\ \\text{lever, 2 lanes})\\ (N_b = 3)'} = ${f3(d.mE)} \\\\ g_{rigid} &= \\max_n\\, m\\left(\\frac{N_L}{N_b} + \\frac{X_{ext}\\sum e}{\\sum x^2}\\right) = ${f3(d.rig)}\\ (${d.rigN}\\ \\text{lane${d.rigN > 1 ? 's' : ''}}) \\\\ g_M &= \\max(${f3(d.lev)},\\ ${f3(d.mE)},\\ ${f3(d.rig)}) = ${f3(d.mM)}, \\quad g_V = \\max(${f3(d.lev)},\\ ${f3(d.vE)},\\ ${f3(d.rig)}) = ${f3(d.mV)}\\end{aligned}\\]</div></div>`; }
+   const skv = tr[0].skV.map((v, i) => `Span ${i + 1}: ${f3(v)}`).join(', ');
+   h += card('sg-loads', 'Loads and distribution factors', '', `${ltbl}
+     <p class="note-p">Live load: HL-93 design truck (rear axle spacing 14 to 30 ft) or design tandem, plus 0.64 klf design lane loaded wherever it increases the effect; IM = 33% on truck and tandem only (3.6.1.2, 3.6.2.1). In negative moment regions between permanent-load contraflexure points, 90% of two design trucks spaced at least 50 ft plus 90% of the lane is also considered (3.6.1.3.1). Distribution factors include multiple presence; negative-moment regions use the average length of the adjacent spans. The skew correction for shear (Table 4.6.2.2.3c-1) is applied along the whole span for conservatism: ${skv}. The skew reduction for moment is not taken.</p>${dfw}`);
+@@ -3759,7 +3796,7 @@
+   const r0 = wsEval(c.N, S0.S, S0.oh); if (r0.err) return { ...r0, rule: 'trial' };
+   const sp = (P.bridge.spans || []).map(num), iMax = sp.indexOf(Math.max(...sp)), Kg = r0.Kg, ts = num(P.bridge.ts);   // K_g of the trial girder
+   if (!Kg) return { ...r0, rule: '0.375S' };
+-  const sc = c.ok.map(q => { const gi = sgDF(q.S, sp[iMax], Kg, ts, q.de, c.N, false).mM, ge = sgDF(q.S, sp[iMax], Kg, ts, q.de, c.N, true).mM; return { ...q, d: Math.abs(ge - gi) }; });
++  const sc = c.ok.map(q => { const gi = sgDF(q.S, sp[iMax], Kg, ts, q.de, c.N, false).mM, ge = sgDF(q.S, sp[iMax], Kg, ts, q.de, c.N, true, setup.W - 2 * setup.bar).mM; return { ...q, d: Math.abs(ge - gi) }; });
+   const best = sc.reduce((a, q) => q.d < a.d - 1e-6 || (Math.abs(q.d - a.d) <= 1e-6 && Math.abs(q.oh - 0.375 * q.S) < Math.abs(a.oh - 0.375 * a.S)) ? q : a);
+   if (Math.abs(best.oh - S0.oh) < 1e-9) return { ...r0, rule: 'balanced' };
+   const r1 = wsEval(c.N, best.S, best.oh); return r1.err ? { ...r0, rule: '0.375S' } : { ...r1, rule: 'balanced' };
+```
+
+### Verification (XS10)
+- `node --check` on the main page and the decoded PlateLine; the new `sgDF` run in Node against the old one for the check cases above (values as listed); the lever rule equal to the old closed form in each case.
+- Headless Chromium: the eight XS8–XS9 test projects again (main vs this build). GirderDetail results, `gd-dfx`, Structural analysis, the Checks/Summary/Factors text, and Design all: unchanged. Preliminary sizing: the current-layout checks and demands unchanged where GirderDetail's factors are in use (only the stored built-in factor objects gain fields); the suggestion, Full design and width study change as listed. The Suggest-tab derivation shows the rigid method and the d<sub>e</sub> limit (screenshot). The link from Preliminary sizing now shows the first deck-edge field below the sticky header (screenshot). No console errors.
