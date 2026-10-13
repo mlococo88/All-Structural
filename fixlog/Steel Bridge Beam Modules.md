@@ -7756,3 +7756,14 @@ Embedded Preliminary sizing (PlateLine, `PL_B64`, decoded, edited and re-encoded
 - **Unequal skews at the supports:** the stations are measured from each girder's own Abut. 1 bearing, but the line-girder analysis has its supports at the centerline span lengths (`m.sup`). With different skews at different supports a girder's span lengths differ from the centerline spans, so its frames and bearings do not fall at the same fractions of the analysed spans. Inherent in the line-girder model; not changed.
 - **Transverse stiffeners end panel, unstiffened web:** the "first connection plate" rows use d<sub>o</sub> = the target frame spacing (`FR.sp`), not the station of the first frame on the girder (often shorter: 22.0 ft against 25 ft on the built-in example with stiffeners turned off). Conservative; not changed.
 - Carried over: row names from Preliminary sizing say "cross-frame" in the row editors (C18); Girder section's two-layer deck reinforcement is not sent (C19); auto-designed values outlined as overrides (audit item L8).
+
+## 2026-10-13 — PR: claude/girderdetail-quick1 (quick display fixes Q7 and on: wording, labels, formatting and layout on the main page; engineer offline, "clean up the app and use judgement"; PR link added after merge)
+
+Main page only; `PL_B64` (embedded Preliminary sizing) is not touched. Display only: no formula, factor, check, status, storage key, saved-data format or `bridgeSuite.v1.*` payload changes. Verified (light level): `node --check` on every inline script; the built-in example in headless Chromium with no console errors; a hash of every module's check results (id, status, governing index, every item's ratio, demand and capacity) equal to main; screenshots of the changed spots at 1000 px.
+
+### Q7. Summary card: the governing-ratio bar lines up with its number below 1100 px   [CSS only]
+- **Where:** the `@media (max-width: 1100px)` block of the main stylesheet (anchor `  .sc-gov { text-align: left; }`).
+- **Before:** the block set `.sc-gov { text-align: left; }` but the bar kept `.gov-bar { margin: 8px 0 4px auto; }`, so it stayed right-aligned under a left-aligned number (visible in Deck overhang at 1000 px, where the governing text is wider than the bar).
+- **After:** one added line in the same block: `  .sc-gov .gov-bar { margin-left: 0; }`.
+- **Check case:** built-in example, Deck overhang summary at 1000 px: the bar starts under "0.94".
+- **Other copies:** none.
