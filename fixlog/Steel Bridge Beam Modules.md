@@ -10694,3 +10694,326 @@ All code in this PR except the GirderDetail drawing and Structural analysis hunk
 - **How verified:** script blocks parsed (`new Function`). Headless Chromium, main vs branch: every module's checks (df, sa, gs, fa, splice, bstf, ts, sc, cf, oh, wt, and each with "Get demands"/"Load all") hash-identical; `girderdetail_autosave_v1` and `plateline_autosave_v1` identical; payload identical to main except the four new station fields and note 2; Export hand-off file = stored payload; no console errors. Send + open ST-Girder now (OD1 flow) passes (28 checks, file:// and http). ST-Girder reads the split (fixlog/stgirder.md CF4).
 - **Other copies:** receiver `stgirder.html`.
 - **Open items:** cross-frame weight is not part of GirderDetail's DC1 (only the plate detail allowance); engineer to decide whether a cross-frame DC1 load should be added by default.
+
+## 2026-10-13 — PR: claude/gd-crossframe-dc1 (DC1 includes the cross-frame and diaphragm weight, computed from the Cross-frames module; engineer's decision 2026-10-13; PR link added after merge)
+
+### XF1. Cross-frames and diaphragms as DC1 point loads on the steel section   [results change: DC1 and everything fed by it; §4 callout in the PR]
+- **Where (GirderDetail, outer page):**
+  - New helpers after `cfDiaEnd` (anchor `const cfDiaEnd = q =>`, about line 2706): `XF_ROW`, `gdXfW`, `gdXfModel`, `gdXfPts`, `gdXfNodal`, `gdXfPost`, `gdXfDesc`, `gdXfDupRows`, `gdXfAlerts`, and a click handler for `[data-xfack]`.
+  - LLDF and DLs (`GM.df`): `def.dl` (anchor `medJoint: 'no'`), the input section `sec-dfxf` (before `secHd('sec-dfd', 'Distribution method')`), input checks in `compute` (after `const xs = dfXsIn(p, errors);`), the line under the dead-load table (anchor `${f3(sum(D.pl))}</td></tr></tbody></table></div>`), the card `cb-xf` (before `card('cb-xl', 'Loads on the bridge'`); new functions `gdXfLine`, `gdXfCard` (before `/* report input echo of the cross-section (XS13)`).
+  - Structural analysis (`GM.sa.compute`): anchor `const wDeck = D.dc1[j], w1 =`; `MS`, `VS` on `wSX`; the return object; `saSeq` stage 0 (anchor `const M0 = load(`); the model card DC1 row and the deflection table header.
+  - `gdStPayload` note 2 (anchor `M_DC1steel/V_DC1steel = girder flanges and web`).
+  - `recompute()` (anchor `gdFatPost();   // F12-1`) and the `gd-bridge` listener (anchor `gdFatPost(); gdXfPost();`); `gdXfPost` also sends `pl-bridge-req` when the stored bridge has no frame list (a project saved before XF1, or loaded in the running session), so Preliminary sizing publishes it again.
+  - `gmRecompute` (anchor `gdXfAlerts(m.id === 'df'`): the notice in every module, the double-count warning in LLDF and DLs and Structural analysis.
+  - The bridge listener's "real change" test `nx` (anchor `const nx = o => {`): before `JSON.stringify({ ...o, ts: 0, xs: 0 })`, after `const { ts, xs, xf, ...r } = o; return JSON.stringify(r);`. The frame list is not a bridge change for the automatic refresh, and the keys are removed rather than zeroed (zeroing appended `xs` after `xf` on a bridge without `xs`, so the key order differed and every module was re-imported on first open).
+  - `initP` and `loadData` (`gdXfMark`).
+- **Where (embedded Preliminary sizing, `const PL_B64`, decoded):** new `plXfW`, `plXfLoads` before `function framingLayout(P, m)`; `suggestLayout` (anchor `const XFL = plXfLoads(`); `demand()` (anchor `const XT = XFL && XFL.types[gt]`) and its `out.types[gt]` (`wXF`, `xf`, `xfErr`); `analyzeGirder` (anchor `const wSteel = Tg.wXF ?`); `bridgeDef` (`xf` excluded from the analysis echo; `xf: plXfDef(FR)`); new `plXfDef` before `let _bdT = null`; new `plXfRow` before `function renderAnalysis()` and its use in the Suggest loads table; the camber caption; the manual DC1 paragraph.
+- **Problem / request:** GirderDetail's DC1 had no cross-frame or diaphragm weight unless the user entered a DC1 row (the Preliminary sizing "Detail allowance" covers only stiffeners, connection plates and splices). Engineer's decision 2026-10-13: add it by default, computed from the frames. More conservative (DC1 larger).
+- **What is computed:**
+  - Weight of one frame (kip), length S between the girder webs along the frame line (from Preliminary sizing's framing; S = bay/cos θ for frames along the skew), steel 490 pcf = 0.2836 lb/in³, × (1 + gusset/bolt allowance %, default 0):
+    - cross-frame of angles (Cross-frames module): X: (S·A_top + S·A_bot + 2·√(S² + h²)·A_diag); Kb and Kt: (S·A_top + S·A_bot + 2·√((S/2)² + h²)·A_diag), work point to work point; end (bearing-line) frames X-type with the same angles (as Design all's quantities, GD22);
+    - diaphragm (when it is the bracing used): A · (S − 2 · gap), gap = `cfDiaGap` (bolt line less 1.5 in), end diaphragms `cfDiaEnd` (as Design all);
+    - entered weights (option): W_int, W_end kip per frame.
+  - Each frame puts W/2 on each of the two girders it connects, at that girder's own station (Preliminary sizing's `framingLayout`: skewed, normal and staggered frames as laid out there), mapped into the analysis span proportionally between that girder's bearings; frames on a bearing line load the bearing only.
+  - Node loads: a point load P at x between nodes x_e and x_e+1 (about 1 ft apart) adds P(1 − t)/trib_e and P·t/trib_e+1 klf, t = (x − x_e)/(x_e+1 − x_e).
+  - Applied with the steel (steel section, before the deck): Structural analysis `wSX = wSt + wXF` gives `MS`, `VS`, `w1`, the deck-sequence stage 0, the camber "Steel" column and the ST-Girder `M_DC1steel`/`V_DC1steel`; Preliminary sizing adds `wXF` to `w1` (all its DC1 demands, quick suggestion, Full design, Alternatives) and to the steel camber.
+  - Preliminary sizing per girder type: the girder of that type with the largest frame total (built-in: G2 interior, G1 exterior); the framing of the current girder layout is used for every candidate.
+- **Saved data:** new optional fields only. `df.dl.xf` ('auto' default / 'ovr' / 'off'), `df.dl.xfAllow` (%), `df.dl.xfInt`, `df.dl.xfEnd` (kip); `df.xfNew` (notice flag, set on load for projects saved without `df.dl.xf`, removed by Dismiss); `df.bridge.xf` (frames from Preliminary sizing); Preliminary sizing `analysis.xf` (the weight model, from the gd-an message, not echoed in `bridge.analysis`). Projects saved before this change get 'auto' (on) and a notice. No key renamed or removed; storage keys unchanged.
+- **Governing provision:** AASHTO LRFD 10th Ed. (2024) 3.5.1 (DC: dead load of structural components and nonstructural attachments) and 6.10.1.1.1a (stresses from permanent loads applied before the deck is composite act on the steel section alone). Unit weight of steel 0.490 kcf (Table 3.5.1-1).
+- **Check case (hand):** simple span 120 ft, 5 girders at 9.5 ft, skew 0, Kb frames h = 52 in, top chord L5x5x3/8 (A = 3.609 in²), bottom chord and diagonals L3x3x3/8 (A = 2.109 in²), frames at 24, 48, 72 and 96 ft:
+  - intermediate W = [114(3.609 + 2.109) + 2√(57² + 52²)(2.109)](0.2836)/1000 = (651.94 + 325.50)(0.2836)/1000 = 0.2772 kip; per girder per frame 0.1386 kip;
+  - end frame (X) W = [651.94 + 2√(114² + 52²)(2.109)](0.2836)/1000 = 0.3348 kip; 0.1674 kip per girder;
+  - interior G2 (two frames at each station): P = 0.2772 kip at 24, 48, 72, 96 ft; ΔM(60 ft) = 0.2772 × (12 + 24 + 24 + 12) = 19.959 kip-ft; ΔR = 0.2772 × 2.0 + 0.3348 = 0.8892 kip;
+  - program G2: M_DC1(60) 2483.696 → 2503.654 (Δ 19.958); R_DC1 82.790 → 83.679 (Δ 0.889); G1: Δ 9.979 kip-ft, ΔR 0.4446 kip; steel camber at midspan Δ 0.03669 in (hand Σ 2P a(3L² − 4a²)/48EI with I = 49,019 in⁴: 0.03668 in).
+- **Built-in example and xsA:** see the PR (§4 table). As shipped, the built-in Cross-frames module has no design yet, so the default X-frames are used: L5x5x3/8, h = 48 in, 0.502 kip each; G2 8.54 kip; SA G2 M<sub>DC1</sub> +1008.35 → +1025.67 kip-ft. After its Get demands (auto-designed Kb frames), built-in G2: M_DC1 +1008.35 → +1018.19 kip-ft (321 ft), −2382.58 → −2403.94 (Pier 2); R_DC1 Abut. 51.844 → 52.567, Pier 192.927 → 194.752 kip; camber 1.9024 → 1.9156 in.
+- **How verified:** script blocks parse (node --check, outer page and decoded Preliminary sizing). Headless Chromium on the built-in example, xsA, curb and a 30° staggered variant: with the setting forced off (test copy), every check and number of every module (as loaded, and after Get demands from 'pl' and 'sa:2' in 9 modules) is identical to main; the only differences are the new optional fields in stored objects and the new display (LLDF and DLs card and line, Structural analysis text); with it on, only DC1-dependent results change, all in the expected direction (equilibrium: ΣR_DC1 increases by exactly the frame total); Get demands (sa:G) rows equal the Any location rows; save/load both ways; ST-Girder hand-off M_DC1 = steel + wet within 0.001 at all 363 stations, the wet part unchanged and the steel part larger by the frame moments; no console errors.
+- **Other copies:** none (the weight function is in both the outer page, `gdXfW`, and the embedded Preliminary sizing, `plXfW`; keep them identical).
+- **Note:** the frame weights are those of the Cross-frames module when the demands are computed. Get demands and Design all auto-design the Cross-frames module after importing, so after its member sizes change, get the demands again to carry the new weights (the next import uses them).
+- **Open items:** ENGINEER_CHECKS GD35 (gusset/bolt allowance default 0%; work-point member lengths; end frames X-type; representative girder per type in Preliminary sizing; no automatic re-import of stored detail-module demands for old projects).
+
+#### Exact changes, outer page (`git diff -U1`, the `PL_B64` line omitted)
+```diff
+@@ -2360,3 +2360,3 @@ function showManPart() { const id = P.ui.man || 'p1'; $$('.man-btn').forEach(b =
+ 
+ /* =====================================================================
+@@ -2706,2 +2706,71 @@ const cfDiaGap = q => Math.max(0.5, (+q.ecc || 3.5) - 1.5);
+ const cfDiaEnd = q => ({ ...q, shape: q.eShape || q.shape, nb: +q.eNb >= 2 ? q.eNb : q.nb });
++/* ---------- cross-frame and diaphragm weight in DC1 (XF1, engineer's decision 2026-10-13) ----------
++   DC1 includes the cross-frames or diaphragms as point loads at every frame, on the steel section (steel erected before the deck): each frame weighs
++   W and puts W/2 on each of the two girders it connects (an exterior girder gets one side, an interior girder both), at that girder's own frame
++   stations from Preliminary sizing's framing (skewed and staggered frames as laid out there; bridge.xf). Setting df.dl.xf (LLDF and DLs module):
++   'auto' (default, also for projects saved before): from the Cross-frames module's member sizes; 'ovr': entered kip per frame; 'off': none.
++   Weight model X:
++     kind 'xf': angles, type X / Kb / Kt, depth h (in), areas At, Ab, Ad (in^2) of the top chord, bottom chord and diagonals; the end (bearing-line)
++       frames are X-type with the same angles (as Design all's quantities); member lengths work point to work point over the frame length S between
++       the girder webs along the frame line: X: 2S + 2 sqrt(S^2 + h^2); K: 2S + 2 sqrt((S/2)^2 + h^2);
++     kind 'dia': channel or W, nominal area A over S less the end gap g at each girder (cfDiaGap: bolt line less 1.5 in); end diaphragms cfDiaEnd;
++     kind 'ovr': Wi, We kip per frame;
++     allow: % added for gusset plates and bolts (df.dl.xfAllow, default 0; the module does not size gussets). Connection plates are not added here:
++       they are in the girder's detail allowance. Steel at 490 pcf = 0.2836 lb/in^3.
++   The same weight function is in Preliminary sizing (plXfW); keep the two identical. */
++const XF_ROW = /cross[\s-]*frame|diaphragm|\bx[\s-]?frame|\bk[\s-]?frame|bracing/i;   // a DC1 line load that looks like cross-frame weight (double-count warning)
++function gdXfW(X, Lft, end) {
++  if (X.kind === 'ovr') return Math.max(0, +(end ? X.We : X.Wi) || 0);
++  const S = Lft * 12, k = 1 + (+X.allow || 0) / 100;
++  if (X.kind === 'dia') return (end ? X.Ae : X.A) * Math.max(0, S - 2 * (end ? X.ge : X.g)) * 0.2836 / 1000 * k;
++  const d = end || X.type === 'X' ? Math.hypot(S, X.h) : Math.hypot(S / 2, X.h);
++  return (S * (X.At + X.Ab) + 2 * d * X.Ad) * 0.2836 / 1000 * k;
++}
++/* the weight model from the current inputs; own = false: the Cross-frames module has not been designed, imported or edited (its default sizes are used) */
++function gdXfModel() {
++  const dl = (P && P.df && P.df.dl) || {}, mode = dl.xf === 'off' || dl.xf === 'ovr' ? dl.xf : 'auto', al = dfOpt(dl.xfAllow), allow = al > 0 ? al : 0;
++  if (mode === 'off') return { on: false, mode };
++  if (mode === 'ovr') { const Wi = dfOpt(dl.xfInt), e = dfOpt(dl.xfEnd), We = e === null ? Wi : e; return Wi >= 0 && We >= 0 ? { on: true, mode, kind: 'ovr', Wi, We } : { on: false, mode, bad: true }; }
++  const d = GM.cf.def, c0 = P.cf || d, dia = cfDiaOn(c0), own = !!c0.source || JSON.stringify(dia ? c0.dia : [c0.type, c0.h, c0.mem]) !== JSON.stringify(dia ? d.dia : [d.type, d.h, d.mem]);
++  if (dia) { let q = c0.dia, X = cfDiaSec(q), eq = cfDiaEnd(q), XE = cfDiaSec(eq), bad = false; if (!(X.A > 0 && XE.A > 0)) { q = d.dia; X = cfDiaSec(q); eq = cfDiaEnd(q); XE = cfDiaSec(eq); bad = true; }
++    return { on: true, mode, kind: 'dia', A: X.A, g: cfDiaGap(q), Ae: XE.A, ge: cfDiaGap(eq), allow, own: own && !bad, bad, nm: X.nm_, nmE: XE.nm_, wpf: X.wpf, wpfE: XE.wpf }; }
++  const ang = c => { const o = {}; for (const [k] of CF_MEM) { const m = (c.mem || {})[k] || {}, dims = m.sec === 'custom' ? [nm(m.b1), nm(m.b2), nm(m.t)] : ANGLES[m.sec];
++    if (!dims || !(dims[0] > 0 && dims[1] > 0 && dims[2] > 0 && dims[2] < Math.min(dims[0], dims[1]))) return null; o[k] = { A: angleProps(...dims).A, nm: m.sec === 'custom' ? `L${f2(dims[0])}x${f2(dims[1])}x${frac(dims[2])}` : m.sec.replace(' (LLV)', '') }; } return o; };
++  let c = c0, A = ang(c), bad = false; if (!A || !(nm(c.h) > 0)) { c = d; A = ang(d); bad = true; }
++  return { on: true, mode, kind: 'xf', type: c.type === 'X' || c.type === 'Kb' ? c.type : 'Kt', h: nm(c.h), At: A.top.A, Ab: A.bot.A, Ad: A.diag.A, allow, own: own && !bad, bad, nmT: A.top.nm, nmB: A.bot.nm, nmD: A.diag.nm };
++}
++/* the point loads of every girder (array per girder of { x (ft, analysis model), P (kip), end, W (kip, the whole frame), Lf (ft) }), or null without
++   the model or Preliminary sizing's framing. A station is mapped into its span proportionally between that girder's bearings (exact when the girder's
++   span equals the analysis span); a frame on a bearing line loads that bearing only */
++function gdXfPts(b, X) {
++  if (!X || !X.on || !b || !b.xf || !Array.isArray(b.xf.f) || !Array.isArray(b.xf.g)) return null;
++  const sp = b.spans, X0 = [0]; sp.forEach(L => X0.push(X0[X0.length - 1] + L)); const G = b.xf.g.map(() => []);
++  b.xf.f.forEach(([sup, k, bay, sa, sc, Lf]) => { const end = !!sup, W = gdXfW(X, Lf, end);
++    [[bay, sa], [bay + 1, sc]].forEach(([g, st]) => { const B = b.xf.g[g]; if (!B || !G[g]) return; let x;
++      if (end) x = X0[k]; else { const a = B[k], c = B[k + 1]; x = Math.max(X0[k], Math.min(X0[k + 1], X0[k] + (c > a ? (st - a) / (c - a) : 0.5) * sp[k])); }
++      G[g].push({ x, P: W / 2, end, W, Lf }); }); });
++  return G;
++}
++/* point loads as node loads: klf on each node's tributary length, a load split linearly between the two nodes of its element */
++function gdXfNodal(pts, xs, trib) { const N = xs.length, w = new Float64Array(N);
++  (pts || []).forEach(p => { let e = 0; while (e < N - 2 && xs[e + 1] < p.x - 1e-9) e++; const t = Math.max(0, Math.min(1, (p.x - xs[e]) / (xs[e + 1] - xs[e]))); w[e] += p.P * (1 - t) / trib[e]; w[e + 1] += p.P * t / trib[e + 1]; });
++  return w; }
++/* the model for Preliminary sizing (gd-an message, P.analysis.xf there; null = none), on every recompute here and whenever it publishes its bridge */
++function gdXfPost() { if (typeof PL_FRAME === 'undefined' || !PL_FRAME || !PL_FRAME.contentWindow) return; let xf = null;
++  try { const X = gdXfModel(); if (X.on) { xf = { on: true, kind: X.kind }; ['type', 'h', 'At', 'Ab', 'Ad', 'A', 'g', 'Ae', 'ge', 'Wi', 'We', 'allow'].forEach(k => { if (X[k] !== undefined) xf[k] = X[k]; }); } } catch (e) { xf = null; }
++  try { PL_FRAME.contentWindow.postMessage({ type: 'gd-an', analysis: { xf } }, '*'); } catch (e) {}
++  const br = P.df && P.df.bridge; if (xf && br && br.ok && !br.xf) try { PL_FRAME.contentWindow.postMessage({ type: 'pl-bridge-req' }, '*'); } catch (e) {} }   // a bridge without the frame list (saved before XF1, or a project loaded in this session): ask Preliminary sizing to publish it again
++/* words for the tables and notes */
++function gdXfDesc(X) { if (!X || !X.on) return 'not included';
++  if (X.kind === 'ovr') return `entered weights: ${f3(X.Wi)} kip per intermediate frame, ${f3(X.We)} kip per end frame`;
++  const al = X.allow > 0 ? ` + ${f0(X.allow)}% for gusset plates and bolts` : ' (no allowance for gusset plates and bolts)';
++  if (X.kind === 'dia') return `diaphragms ${X.nm} (${f2(X.wpf)} lb/ft) intermediate, ${X.nmE} (${f2(X.wpfE)} lb/ft) at the bearing lines, over the frame length less ${f2(X.g)} in at each end${al}`;
++  return `${X.type === 'X' ? 'X-frames' : X.type === 'Kb' ? 'K-frames (diagonals meet at the bottom chord)' : 'K-frames (diagonals meet at the top chord)'}, h = ${f2(X.h)} in: top chord ${X.nmT}, bottom chord ${X.nmB}, diagonals ${X.nmD}; end frames X-type with the same angles; member lengths work point to work point${al}`; }
++function gdXfDupRows() { return (((P.df || {}).extra) || []).filter(r => r && r.cat === 'DC1' && XF_ROW.test(String(r.name || '')) && nm(r.plf) > 0); }
++/* alerts for the LLDF and DLs and Structural analysis summaries: projects saved before XF1 (df.xfNew), and a DC1 row that looks like cross-frames */
++function gdXfAlerts(dupOn) { const X = gdXfModel(), dup = X.on && dupOn ? gdXfDupRows() : [], o = [];
++  if (P.df && P.df.xfNew && X.on) o.push(`<div class="alert warn" style="margin:0 0 12px"><b>DC1 now includes the cross-frames and diaphragms.</b> This project was saved before their weight was added to DC1 (engineer's decision 2026-10-13): ${esc(gdXfDesc(X))}, as point loads at each frame, half to each girder. DC1 moments, shears, reactions and camber, and every demand from them, are larger than when the project was saved; get the demands again in the detail modules. Change it under LLDF and DLs → Cross-section and dead loads → Cross-frames and diaphragms (DC1). <button type="button" class="link-btn" data-xfack="1">Dismiss</button></div>`);
++  if (dup.length) o.push(`<div class="alert warn" style="margin:0 0 12px"><b>Possible double counting.</b> The DC1 line load${dup.length > 1 ? 's' : ''} ${dup.map(r => `"${esc(r.name)}"`).join(', ')} look${dup.length > 1 ? '' : 's'} like cross-frame or diaphragm weight, and DC1 also includes the cross-frames computed from the Cross-frames module. Delete the row, or set Cross-frames and diaphragms (DC1) to "Not included" or to entered weights.</div>`);
++  return o.join(''); }
++document.addEventListener('click', e => { if (!e.target.closest || !e.target.closest('[data-xfack]')) return; if (P.df) delete P.df.xfNew; autosave(); recompute(); });
+ function cfDiaChecks(R, out, end) {   // end: the end (bearing-line) diaphragm, check CFE (2026-10-13)
+@@ -4510,3 +4579,3 @@ tabs: { combos: 'Factors and loads', cap: 'Derivations', rptCombos: 'Distributio
+   groups: ['Applicability', 'Distribution factors'], itabs: [['df_br', 'Bridge'], ['df_dl', 'Cross-section and dead loads']], capLabel: 'Factor derivations',
+-  def: { bridge: null, gap: 4, kg: 'max', skewV: 'all', feed: 'yes', extMin: 'no', radius: 0, dl: { method: 'massdot', ped: 0, swL: 0, swThkL: 8, swR: 0, swThkR: 8, medW: 0, medThk: 8, medJoint: 'no' },
++  def: { bridge: null, gap: 4, kg: 'max', skewV: 'all', feed: 'yes', extMin: 'no', radius: 0, dl: { method: 'massdot', ped: 0, swL: 0, swThkL: 8, swR: 0, swThkR: 8, medW: 0, medThk: 8, medJoint: 'no', xf: 'auto', xfAllow: 0, xfInt: '', xfEnd: '' },
+     extra: [{ name: 'Utility (example, 0 = off)', cat: 'DW', x: 20, plf: 0, dist: 'auto' }] },
+@@ -4540,2 +4609,5 @@ tabs: { combos: 'Factors and loads', cap: 'Derivations', rptCombos: 'Distributio
+         ${secHd('sec-dfx', 'Utilities and other line loads')}<div class="sec-body one-col" id="sec-dfx"><p class="note">Utilities are DW (MassDOT: DW = utilities and wearing surface); other superimposed line loads are DC2 (or DC1 if placed before the deck acts compositely). x is from the left deck edge.</p>${gmRowsHtml('df')}</div>
++        ${secHd('sec-dfxf', 'Cross-frames and diaphragms (DC1)')}<div class="sec-body" id="sec-dfxf">${fld('Weight in DC1', 'df.dl.xf', '', 'sel', { full: true, options: [['auto', 'From the Cross-frames module (point loads at each frame)'], ['ovr', 'Entered weight per frame (override)'], ['off', 'Not included (for example, entered as a DC1 line load)']] })}
++          ${fld('Gusset plates and bolts allowance', 'df.dl.xfAllow', '%', 'num', { note: 'on the computed weight' })}<div></div>${fld('Entered weight, intermediate frame', 'df.dl.xfInt', 'kip', 'num')}${fld('Entered weight, end frame (bearing lines)', 'df.dl.xfEnd', 'kip', 'num', { note: 'blank = intermediate' })}
++          <p class="note full">Each cross-frame or diaphragm is a DC1 point load on the steel section (the steel is erected before the deck), half of its weight on each of the two girders it connects, at each girder's own frame stations from Preliminary sizing's framing; exterior girders get one side, interior girders both. "From the Cross-frames module" uses its member sizes (angles, or the diaphragm when it is the bracing used; the end frames as Design all counts them); the allowance is added for gusset plates and bolts, which the module does not size (connection plates are in the girder's detail allowance). Entered weights are used as they are. It feeds Preliminary sizing, Structural analysis and everything sent from them. Do not also enter the cross-frames as a DC1 line load.</p></div>
+         ${secHd('sec-dfd', 'Distribution method')}<div class="sec-body" id="sec-dfd">${fld('Method', 'df.dl.method', '', 'sel', { full: true, options: [['massdot', 'MassDOT 3.5.3 (pile-cap for superimposed DC; wearing surface equally)'], ['aashto', 'Typical AASHTO (all loads equally to all beams)']] })}
+@@ -4555,2 +4627,4 @@ tabs: { combos: 'Factors and loads', cap: 'Derivations', rptCombos: 'Distributio
+     const xs = dfXsIn(p, errors);   // optional cross-section inputs (XS4); every one absent = the loads as before
++    { const q = p.dl || {}, al = dfOpt(q.xfAllow); if (al !== null && !(al >= 0)) errors.push('Cross-frames and diaphragms: the gusset plate and bolt allowance must be zero or positive (or blank).');   // XF1
++      if (q.xf === 'ovr') { const a = dfOpt(q.xfInt), c = dfOpt(q.xfEnd); if (!(a >= 0)) errors.push('Cross-frames and diaphragms: enter the weight of an intermediate frame (kip), or choose another option.'); if (c !== null && !(c >= 0)) errors.push('Cross-frames and diaphragms: the end-frame weight must be zero or positive (or blank).'); } }
+     const Ed = dfEdgeIn(p.edges, errors);   // deck edges set in this module (XS8); absent = as Preliminary sizing sends them
+@@ -4618,3 +4692,4 @@ tabs: { combos: 'Factors and loads', cap: 'Derivations', rptCombos: 'Distributio
+     const D = R.dead;
+-    h += card('cb-dl', 'Dead load distribution per girder', D.method === 'massdot' ? 'MassDOT Bridge Manual 3.5.3' : 'Typical AASHTO (equal)', `<div class="tscroll"><table class="tbl"><thead><tr><th>Girder</th><th>MassDOT classification</th><th class="right">Tributary (ft)</th><th class="right">Deck</th><th class="right">Haunch</th><th class="right">SIP forms</th><th class="right">DC1 total (klf)</th><th class="right">DC2 (klf)</th><th class="right">DW (klf)</th><th class="right">PL (klf)</th></tr></thead><tbody>${D.ub.map((x, i) => `<tr><td class="lbl">G${i + 1}</td><td>${DF_CLS[D.cls[i]]}${D.clsAuto && D.clsAuto[i] !== D.cls[i] ? ` <span class="df-ov" title="Automatic: ${DF_CLS[D.clsAuto[i]]}">set</span>` : ''}</td><td class="val">${f2(D.trib[i])}</td><td class="val">${f3(D.deck[i])}</td><td class="val">${f3(D.haunch[i])}</td><td class="val">${f3(D.sip[i])}</td><td class="val">${f3(D.dc1[i])}</td><td class="val">${f3(D.dc2[i])}</td><td class="val">${f3(D.dw[i])}</td><td class="val">${f3(D.pl[i])}</td></tr>`).join('')}<tr class="tot"><td colspan="3">Total</td><td class="val">${f3(sum(D.deck))}</td><td class="val">${f3(sum(D.haunch))}</td><td class="val">${f3(sum(D.sip))}</td><td class="val">${f3(sum(D.dc1))}</td><td class="val">${f3(sum(D.dc2))}</td><td class="val">${f3(sum(D.dw))}</td><td class="val">${f3(sum(D.pl))}</td></tr></tbody></table></div>`);
++    h += card('cb-dl', 'Dead load distribution per girder', D.method === 'massdot' ? 'MassDOT Bridge Manual 3.5.3' : 'Typical AASHTO (equal)', `<div class="tscroll"><table class="tbl"><thead><tr><th>Girder</th><th>MassDOT classification</th><th class="right">Tributary (ft)</th><th class="right">Deck</th><th class="right">Haunch</th><th class="right">SIP forms</th><th class="right">DC1 total (klf)</th><th class="right">DC2 (klf)</th><th class="right">DW (klf)</th><th class="right">PL (klf)</th></tr></thead><tbody>${D.ub.map((x, i) => `<tr><td class="lbl">G${i + 1}</td><td>${DF_CLS[D.cls[i]]}${D.clsAuto && D.clsAuto[i] !== D.cls[i] ? ` <span class="df-ov" title="Automatic: ${DF_CLS[D.clsAuto[i]]}">set</span>` : ''}</td><td class="val">${f2(D.trib[i])}</td><td class="val">${f3(D.deck[i])}</td><td class="val">${f3(D.haunch[i])}</td><td class="val">${f3(D.sip[i])}</td><td class="val">${f3(D.dc1[i])}</td><td class="val">${f3(D.dc2[i])}</td><td class="val">${f3(D.dw[i])}</td><td class="val">${f3(D.pl[i])}</td></tr>`).join('')}<tr class="tot"><td colspan="3">Total</td><td class="val">${f3(sum(D.deck))}</td><td class="val">${f3(sum(D.haunch))}</td><td class="val">${f3(sum(D.sip))}</td><td class="val">${f3(sum(D.dc1))}</td><td class="val">${f3(sum(D.dc2))}</td><td class="val">${f3(sum(D.dw))}</td><td class="val">${f3(sum(D.pl))}</td></tr></tbody></table></div>${gdXfLine(R.b)}`);
++    h += gdXfCard(R.b);   // XF1 (2026-10-13)
+     h += card('cb-xl', 'Loads on the bridge', D.method === 'massdot' ? 'MassDOT Bridge Manual 3.5.3' : 'Typical AASHTO (equal)', dfLoadsTbl(R));
+@@ -4654,2 +4729,15 @@ tabs: { combos: 'Factors and loads', cap: 'Derivations', rptCombos: 'Distributio
+ };
++/* XF1: the one-line summary under the dead-load table, and the card of the point loads per girder */
++function gdXfLine(b) { const X = gdXfModel();
++  if (!X.on) return `<p class="note-p"><b>Cross-frames/diaphragms:</b> not included in DC1${X.bad ? ' (enter the weight per frame)' : ''} (LLDF and DLs → Cross-section and dead loads).</p>`;
++  const G = gdXfPts(b, X), all = G ? G.flat() : [], rg = a => { if (!a.length) return '—'; const lo = Math.min(...a), hi = Math.max(...a); return hi - lo < 5e-4 ? f3(lo) : `${f3(lo)} to ${f3(hi)}`; };
++  const src = X.kind === 'ovr' ? 'entered weights' : X.own ? 'from Cross-frames module' : "Cross-frames module's default sizes: no design yet";
++  return `<p class="note-p"><b>Cross-frames/diaphragms (${src}):</b> ${G ? `${rg(all.filter(p => !p.end).map(p => p.W))} kip per intermediate frame, ${rg(all.filter(p => p.end).map(p => p.W))} kip per end frame (bearing lines), half to each girder it connects, DC1 point loads on the steel section; not in the klf above (see the next table).` : 'waiting for the framing from Preliminary sizing (recalculate it once).'}</p>`; }
++function gdXfCard(b) { const X = gdXfModel(), G = gdXfPts(b, X);
++  if (!X.on) return card('cb-xf', 'Cross-frames and diaphragms in DC1', 'Not included', `<p class="note-p">${X.bad ? 'Entered weights are selected but the intermediate-frame weight is blank: no cross-frame weight is in DC1.' : 'Set to "Not included": DC1 has no cross-frame or diaphragm weight unless it is entered as a DC1 line load.'}</p>`);
++  const L = b.spans.reduce((a, v) => a + v, 0), rows = G ? G.map((pts, i) => { const I = pts.filter(p => !p.end), E = pts.filter(p => p.end), t = pts.reduce((a, p) => a + p.P, 0);
++    return `<tr><td class="lbl">G${i + 1}</td><td class="val">${I.length}</td><td class="val">${I.length ? f3(Math.max(...I.map(p => p.P))) : '—'}</td><td class="val">${E.length}</td><td class="val">${E.length ? f3(Math.max(...E.map(p => p.P))) : '—'}</td><td class="val"><b>${f2(t)}</b></td><td class="val">${f3(t / L)}</td></tr>`; }).join('') : '';
++  const own = X.kind === 'ovr' ? '' : X.own ? '' : `<div class="alert warn" style="margin:0 0 8px"><b>The Cross-frames module has no design yet${X.bad ? ' (or its inputs are incomplete)' : ''}:</b> its default member sizes are used. Get its demands or auto-design it, then the weights follow.</div>`;
++  return card('cb-xf', 'Cross-frames and diaphragms in DC1', 'Point loads on the steel section', `${own}<p class="note-p">${esc(gdXfDesc(X))}. Steel 490 pcf. Each frame's weight W goes half to each of the two girders it connects, at that girder's frame stations (Preliminary sizing's framing; frames on the bearing lines load the bearings only). Applied with the steel, before the deck (DC1 on the steel section), in Preliminary sizing, Structural analysis and all demands sent from them.</p>
++    ${G ? `<div class="tscroll"><table class="tbl"><thead><tr><th>Girder</th><th class="right">Intermediate frames</th><th class="right">Point load, max (kip)</th><th class="right">End frames</th><th class="right">Point load, max (kip)</th><th class="right">Total (kip)</th><th class="right">Average over ${f2(L)} ft (klf)</th></tr></thead><tbody>${rows}</tbody></table></div>` : '<p class="note-p">Waiting for the framing from Preliminary sizing: open or recalculate it once.</p>'}`); }
+ /* report input echo of the cross-section (XS13): deck edges per side with the traffic-face rules, every superimposed element with its size,
+@@ -4955,3 +5043,3 @@ window.addEventListener('message', e => {
+   if (P.mod === 'df' || P.mod === 'sa') recompute(); else { refreshMarks(); try { dfFeed(GM.df.compute(P.df)); } catch (e) {} } dfXsPost(); autosave();
+-  const nx = o => JSON.stringify({ ...o, ts: 0, xs: 0 });   // the gd-xs echo alone (XS9) is not a change of the bridge
++  const nx = o => { const { ts, xs, xf, ...r } = o; return JSON.stringify(r); };   // the gd-xs echo alone (XS9) is not a change of the bridge; nor the cross-frame list (XF1: no automatic re-import of stored demands; keys removed, not zeroed, so their order cannot matter)
+   if (ob && ob.ok && nb.ok && nx(ob) !== nx(nb) && typeof gdScheduleRefresh === 'function') gdScheduleRefresh();   // a real change to an existing bridge: refresh every module
+@@ -5238,3 +5326,5 @@ tabs: { combos: 'Results', cap: 'Method', drawings: 'Diagrams', rptCombos: 'Anal
+     const wSt = xs.map(x => { const s = saSec(b.plates, x); return (s.topB * s.topT + s.botB * s.botT + s.D * s.tw) * SA_PLF / 1000 * (1 + b.allow / 100); });
+-    const wDeck = D.dc1[j], w1 = wSt.map(w => w + wDeck), wDC2 = D.dc2[j], wDW = D.dw[j], wPL = D.pl[j];
++    // XF1 (2026-10-13): the cross-frame and diaphragm point loads of this girder, as node loads with the steel (steel section); none = zeros, as before
++    const XFm = gdXfModel(), XFg = gdXfPts(b, XFm), xfP = XFg ? XFg[j] || [] : [], wXF = gdXfNodal(xfP, xs, trib), wSX = wSt.map((w, q) => w + wXF[q]);
++    const wDeck = D.dc1[j], w1 = wSX.map(w => w + wDeck), wDC2 = D.dc2[j], wDW = D.dw[j], wPL = D.pl[j];
+     const SP = x => { const s = saSec(b.plates, x); return { Is: steelProps(s.D, s).I, I3u: saComp(s, beff, 3 * n, ts, hh), Inu: saComp(s, beff, n, ts, hh), Icr: saCracked(s, Ar, ts, hh) }; };
+@@ -5244,5 +5334,5 @@ tabs: { combos: 'Results', cap: 'Method', drawings: 'Diagrams', rptCombos: 'Anal
+     const VofB = (bm, w) => { const V = new Float64Array(N - 1); for (let e = 0; e < N - 1; e++) { let t = 0; const r = e * N; for (let q = 0; q < N; q++) t += bm.ILV[r + q] * (typeof w === 'number' ? w : w[q]) * trib[q]; V[e] = t; } return V; };
+-    const MS = MofB(bS, wSt), MDk = MofB(bS, wDeck), MDC1 = MS.map((v, i) => v + MDk[i]), MDC2 = MofB(b3, wDC2), MDW = MofB(b3, wDW);
++    const MS = MofB(bS, wSX), MDk = MofB(bS, wDeck), MDC1 = MS.map((v, i) => v + MDk[i]), MDC2 = MofB(b3, wDC2), MDW = MofB(b3, wDW);
+     const VDC1 = VofB(bS, w1), VDC2 = VofB(b3, wDC2), VDW = VofB(b3, wDW);
+-    const VS = VofB(bS, wSt);   // CF4 (2026-10-13): steel part of V_DC1, for the ST-Girder hand-off's DC1 split only
++    const VS = VofB(bS, wSX);   // CF4 (2026-10-13): steel part of V_DC1, for the ST-Girder hand-off's DC1 split only (XF1: with the cross-frames)
+     // regions: negative permanent-load moment around interior supports takes the pier factor
+@@ -5294,3 +5384,3 @@ tabs: { combos: 'Results', cap: 'Method', drawings: 'Diagrams', rptCombos: 'Anal
+     const tenth = []; spans.forEach((Ls, k) => { for (let q = 0; q <= 10; q++) { if (k > 0 && q === 0) continue; const x = xs[sup[k]] + Ls * q / 10; let i = sup[k]; while (i < sup[k + 1] && xs[i] < x - 1e-6) i++; tenth.push({ k, q, i }); } });
+-    return { errors: [], b, DF, j, ext, beff, beffFt, n, Ar, fe, p, F, bS, b3, bN, b0, xs, N, sup, trib, spans, cont, wSt, wDeck, w1, wDC2, wDW, wPL, MS, MDk, MDC1, MDC2, MDW, VDC1, VDC2, VDW, VDC, VS, LLp, LLn, LVp, LVn, FMp, FMn, gMi, region,
++    return { errors: [], b, DF, j, ext, beff, beffFt, n, Ar, fe, p, F, bS, b3, bN, b0, xs, N, sup, trib, spans, cont, wSt, wSX, wXF, xf: { X: XFm, pts: xfP, miss: XFm.on && !XFg, tot: xfP.reduce((a, q) => a + q.P, 0) }, wDeck, w1, wDC2, wDW, wPL, MS, MDk, MDC1, MDC2, MDW, VDC1, VDC2, VDW, VDC, VS, LLp, LLn, LVp, LVn, FMp, FMn, gMi, region,
+       VH, StrMp, StrMn, SvcP, SvcN, StrV, CM, CV, MCL, VCL, PLp, PLn, PVp, PVn, FVp, FVn, im, imf, wCL, man, memS, memP, reac, dS, dDk, dSD, dTot, lld, cmp, eq: eqm, tenth, ver: feVerify() };
+@@ -5367,3 +5457,3 @@ tabs: { combos: 'Results', cap: 'Method', drawings: 'Diagrams', rptCombos: 'Anal
+     const facRow = C => C.fat ? [`—`, `—`, `—`, `${f2(C.fat)} (fatigue truck)`, `—`] : C.id === 'Con' ? [`${f2(C.dc1)} (DC1 only)`, `—`, `—`, `—`, `${f2(C.cl)}`] : [`${f2(C.dc[0])} / ${f2(C.dc[1])}`, `${f2(C.dw[0])} / ${f2(C.dw[1])}`, C.ll ? f2(C.ll) : '—', '—', '—'];
+-    let h = card('sa-model', 'Model and loads', `G${R.j + 1}`, `<table class="tbl"><tbody>${[['Girder', `G${R.j + 1} (${R.ext ? 'exterior' : 'interior'}); effective flange width ${f2(R.beffFt)} ft (tributary)`], ['Model', R.fe ? `Variable EI per element, staged; cracked composite ${R.F.mode === 'dl' ? 'over the negative dead-load region' : 'over 15% of the adjacent spans each side of interior supports'} (A<sub>r</sub> = ${f2(R.Ar)} in², ${f2(nm(R.p.rebar))}% of the deck)` : 'Constant EI'], ['Modular ratio', `n = ${f2(R.n)}, 3n = ${f2(3 * R.n)}`], ['DC1', `steel ${f3(Math.min(...R.wSt))} to ${f3(Math.max(...R.wSt))} klf (plates + ${f0(R.b.allow)}% details) + deck, haunch, SIP ${f3(R.wDeck)} klf`], ['DC2 / DW / PL / construction', `${f3(R.wDC2)} / ${f3(R.wDW)} / ${f3(R.wPL)} / ${f3(R.wCL)} klf`], ['Dynamic load allowance', `${f0(100 * R.im)}% truck and tandem, ${f0(100 * R.imf)}% fatigue (lane and pedestrian loads without IM)`], ['Distribution factors', R.man ? 'Entered manually for this girder' : `From the LLDF and DLs module, G${R.j + 1}`], ['Elements', `${R.N - 1} (nodes about 1 ft apart)`]].map(([k, v]) => `<tr><td class="lbl">${k}</td><td>${v}</td></tr>`).join('')}</tbody></table>`);
++    let h = card('sa-model', 'Model and loads', `G${R.j + 1}`, `<table class="tbl"><tbody>${[['Girder', `G${R.j + 1} (${R.ext ? 'exterior' : 'interior'}); effective flange width ${f2(R.beffFt)} ft (tributary)`], ['Model', R.fe ? `Variable EI per element, staged; cracked composite ${R.F.mode === 'dl' ? 'over the negative dead-load region' : 'over 15% of the adjacent spans each side of interior supports'} (A<sub>r</sub> = ${f2(R.Ar)} in², ${f2(nm(R.p.rebar))}% of the deck)` : 'Constant EI'], ['Modular ratio', `n = ${f2(R.n)}, 3n = ${f2(3 * R.n)}`], ['DC1', `steel ${f3(Math.min(...R.wSt))} to ${f3(Math.max(...R.wSt))} klf (plates + ${f0(R.b.allow)}% details) + deck, haunch, SIP ${f3(R.wDeck)} klf${R.xf.X.on ? (R.xf.miss ? ' + cross-frames: waiting for the framing from Preliminary sizing (none applied)' : ` + cross-frames and diaphragms: ${R.xf.pts.filter(q => !q.end).length} intermediate and ${R.xf.pts.filter(q => q.end).length} end-frame point loads, ${f2(R.xf.tot)} kip in all (${esc(R.xf.X.kind === 'ovr' ? 'entered weights' : R.xf.X.own ? 'Cross-frames module' : "Cross-frames module's default sizes, no design yet")}; LLDF and DLs module)`) : ' (cross-frames not included)'}`], ['DC2 / DW / PL / construction', `${f3(R.wDC2)} / ${f3(R.wDW)} / ${f3(R.wPL)} / ${f3(R.wCL)} klf`], ['Dynamic load allowance', `${f0(100 * R.im)}% truck and tandem, ${f0(100 * R.imf)}% fatigue (lane and pedestrian loads without IM)`], ['Distribution factors', R.man ? 'Entered manually for this girder' : `From the LLDF and DLs module, G${R.j + 1}`], ['Elements', `${R.N - 1} (nodes about 1 ft apart)`]].map(([k, v]) => `<tr><td class="lbl">${k}</td><td>${v}</td></tr>`).join('')}</tbody></table>`);
+     h += card('sa-lf', 'Load factors', 'AASHTO LRFD Tables 3.4.1-1 and 3.4.1-2; η = 1.0', `<div class="tscroll"><table class="tbl"><thead><tr><th>Combination</th><th class="right">γ DC (max / min)</th><th class="right">γ DW (max / min)</th><th class="right">γ LL+IM, PL</th><th class="right">γ fatigue</th><th class="right">γ construction</th><th>Use</th></tr></thead><tbody>${cmb.map(C => `<tr><td class="lbl">${C.name}</td>${facRow(C).map(v => `<td class="val">${v}</td>`).join('')}<td>${C.note}</td></tr>`).join('')}</tbody></table></div><p class="note-p">Maximum and minimum permanent-load factors are chosen at each point to give the extreme effect. Strength II (permit vehicles), Strength III and V and Service IV (wind), Service III (prestressed concrete tension), and extreme events do not apply to this vertical line-girder analysis.</p>`);
+@@ -5403,3 +5493,3 @@ tabs: { combos: 'Results', cap: 'Method', drawings: 'Diagrams', rptCombos: 'Anal
+     const f3z = x => f3(Math.abs(x) < 5e-4 ? 0 : x);   // no "-0.000" at the supports (L10, 2026-10-13)
+-    h += card('sa-d', 'Deflections (in, downward +)', 'Dead load (camber) and live load', T10(['Steel', 'Deck, haunch, SIP', 'DC2 + DW', 'Total dead load (camber)'], i => [f3z(R.dS[i]), f3z(R.dDk[i]), f3z(R.dSD[i]), f3z(R.dTot[i])]) + `<h4 class="sub-h">Live load deflection (Service I, all lanes, g<sub>Δ</sub>)</h4><div class="tscroll"><table class="tbl"><thead><tr><th>Span</th><th class="right">x (ft)</th><th class="right">g<sub>Δ</sub></th><th class="right">Truck (in)</th><th class="right">25% truck + lane (in)</th><th class="right">Δ (in)</th><th class="right">L/${f0(nm(R.p.defl))} (in)</th></tr></thead><tbody>${R.lld.map(d => `<tr><td class="lbl">Span ${d.k + 1}</td><td class="val">${f2(d.x)}</td><td class="val">${f3(d.gD)}</td><td class="val">${f3(d.dT * d.gD)}</td><td class="val">${f3(d.dL * d.gD)}</td><td class="val"><b>${f3(d.d)}</b></td><td class="val">${f3(d.lim)}</td></tr>`).join('')}</tbody></table></div>`);
++    h += card('sa-d', 'Deflections (in, downward +)', 'Dead load (camber) and live load', T10([R.xf.X.on && R.xf.pts.length ? 'Steel (with cross-frames)' : 'Steel', 'Deck, haunch, SIP', 'DC2 + DW', 'Total dead load (camber)'], i => [f3z(R.dS[i]), f3z(R.dDk[i]), f3z(R.dSD[i]), f3z(R.dTot[i])]) + `<h4 class="sub-h">Live load deflection (Service I, all lanes, g<sub>Δ</sub>)</h4><div class="tscroll"><table class="tbl"><thead><tr><th>Span</th><th class="right">x (ft)</th><th class="right">g<sub>Δ</sub></th><th class="right">Truck (in)</th><th class="right">25% truck + lane (in)</th><th class="right">Δ (in)</th><th class="right">L/${f0(nm(R.p.defl))} (in)</th></tr></thead><tbody>${R.lld.map(d => `<tr><td class="lbl">Span ${d.k + 1}</td><td class="val">${f2(d.x)}</td><td class="val">${f3(d.gD)}</td><td class="val">${f3(d.dT * d.gD)}</td><td class="val">${f3(d.dL * d.gD)}</td><td class="val"><b>${f3(d.d)}</b></td><td class="val">${f3(d.lim)}</td></tr>`).join('')}</tbody></table></div>`);
+     if (R.cmp) { const pts = []; R.spans.forEach((_, k) => { let im = R.sup[k]; for (let i = R.sup[k]; i <= R.sup[k + 1]; i++) if (R.LLp[i] > R.LLp[im]) im = i; pts.push([`Span ${k + 1}, max. +M (${f2(R.xs[im])} ft)`, im]); }); R.sup.slice(1, -1).forEach((s, k) => pts.push([`Pier ${k + 1}`, s]));
+@@ -5631,3 +5721,3 @@ function gdStPayload(g, addPL) {
+     `Forces of girder ${lab} (${ext ? 'exterior' : 'interior'}) from GirderDetail's Structural analysis, ${model} line-girder model${R.cont ? ', continuous' : ''}. Unfactored: no load factors are applied.`,
+-    `DC1 = steel, deck, haunch and other noncomposite dead load on the steel section (girder self-weight included); DC2 and DW on the long-term composite section. DC1 split (optional fields): M_DC1steel/V_DC1steel = girder flanges and web at 490 pcf × (1 + ${f0(b.allow)}% detail allowance for stiffeners, connection plates and splices; cross-frames not included); M_DC1wet/V_DC1wet = deck, haunch, SIP forms and any other DC1 rows of the LLDF and DLs module (${f3(R.wDeck)} klf); both on the steel section, simultaneous (no pour sequence); M_DC1 = their sum (±0.001 rounding).`,
++    `DC1 = steel, deck, haunch and other noncomposite dead load on the steel section (girder self-weight included); DC2 and DW on the long-term composite section. DC1 split (optional fields): M_DC1steel/V_DC1steel = girder flanges and web at 490 pcf × (1 + ${f0(b.allow)}% detail allowance for stiffeners, connection plates and splices)${R.xf.X.on && R.xf.pts.length ? ` plus the cross-frames and diaphragms as point loads at this girder's frames (${R.xf.pts.length} loads, ${f2(R.xf.tot)} kip in all; ${gdXfDesc(R.xf.X)})` : '; cross-frames not included'}; M_DC1wet/V_DC1wet = deck, haunch, SIP forms and any other DC1 rows of the LLDF and DLs module (${f3(R.wDeck)} klf); both on the steel section, simultaneous (no pour sequence); M_DC1 = their sum (±0.001 rounding).`,
+     `LL+IM = HL-93 per girder: already multiplied by this girder's distribution factors (multiple presence and skew correction included), IM ${f0(R.im * 100)}% on the truck and tandem only. The receiver must not apply distribution factors again.`,
+@@ -5692,3 +5782,3 @@ function saSeq(R) {
+   const comp = new Uint8Array(N), stages = [], cum = new Float64Array(N), envP = new Float64Array(N).fill(-Infinity), envN = new Float64Array(N).fill(Infinity), fdk = new Float64Array(N);
+-  const M0 = load(Array.from(R.wSt), Is); M0.forEach((v, i) => { cum[i] = v; envP[i] = Math.max(envP[i], v); envN[i] = Math.min(envN[i], v); }); stages.push({ name: 'Steel and other noncomposite load', M: M0 });
++  const M0 = load(Array.from(R.wSX || R.wSt), Is); M0.forEach((v, i) => { cum[i] = v; envP[i] = Math.max(envP[i], v); envN[i] = Math.min(envN[i], v); }); stages.push({ name: 'Steel and other noncomposite load', M: M0 });
+   pours.forEach((q, k) => { const EI = Is.map((v, e) => (comp[e] && comp[e + 1]) ? Ic[e] : v), w = xs.map(x => inP(x, q) ? R.wDeck : 0), M = load(w, EI);
+@@ -5900,2 +5990,3 @@ function gmRecompute() {
+   showN(m.id, RS.MR); if (m.after) m.after(RS); CK = m.checks(RS); renderStatus(); gmSummary(m);
++  if (typeof gdXfAlerts === 'function') { const a = gdXfAlerts(m.id === 'df' || m.id === 'sa'); if (a) $('#tab-summary').insertAdjacentHTML('afterbegin', a); }   // XF1 (2026-10-13): the notice in every module; the double-count warning in LLDF and DLs and Structural analysis
+   if (m.id === 'cf' && d.migK) { $('#tab-summary').insertAdjacentHTML('afterbegin', '<div class="alert info" style="margin:0 0 12px">Migrated from \'K\' (computed as Kt) to Kb; top/bottom chords swapped.</div>'); delete d.migK; autosave(); }   // shown once per project
+@@ -7555,3 +7646,6 @@ const setPath = (o, p, v) => { const ks = p.split('.'); let a = o; ks.slice(0, -
+ let P = null, RS = null, CK = null, CUR = '';
+-function initP() { P = GD_FULL(); try { const a = LS && JSON.parse(localStorage.getItem(KEY_AS) || 'null'); if (a && a.data) { P = deepMerge(GD_FULL(), a.data); CUR = a.name || ''; } } catch (e) {} gdMigrateK(P); }
++function initP() { P = GD_FULL(); try { const a = LS && JSON.parse(localStorage.getItem(KEY_AS) || 'null'); if (a && a.data) { P = deepMerge(GD_FULL(), a.data); CUR = a.name || ''; gdXfMark(P, a.data); } } catch (e) {} gdMigrateK(P); }
++/* XF1 (2026-10-13): a project saved before the cross-frame weight setting existed (no df.dl.xf) now has it on, by the engineer's decision; df.xfNew shows
++   a notice in LLDF and DLs and Structural analysis until dismissed. Nothing else in the saved data changes */
++function gdXfMark(p, raw) { try { if (p && p.df && raw && raw.df && !(raw.df.dl && 'xf' in raw.df.dl)) p.df.xfNew = 1; } catch (e) {} }
+ /* migration (2026-10-12): the cross-frame auto-designer stored the invalid type 'K', computed as Kt (diagonals meeting at the top chord).
+@@ -7762,2 +7856,3 @@ function recompute() {
+   gdFatPost();   // F12-1 (2026-10-13): the Fatigue module's limit-state settings to Preliminary sizing
++  gdXfPost();    // XF1 (2026-10-13): the cross-frame and diaphragm weight model to Preliminary sizing
+   applyMod(); refreshMarks();
+@@ -7974,3 +8069,3 @@ function flash(m, c = 'pass') { const el = $('#proj_msg'); if (!el) return; el.t
+ function refreshList() { const n = Object.keys(store()).sort(); $('#proj_list').innerHTML = n.length ? n.map(x => `<option ${x === CUR ? 'selected' : ''}>${esc(x)}</option>`).join('') : '<option value="">No saved projects</option>'; }
+-function loadData(d, name) { P = deepMerge(GD_FULL(), d); gdMigrateK(P); bsRebuildRows(); Object.keys(GM).forEach(gmBuildPanes); CUR = name || ''; fillInputs(); setITab(P.ui.itab || 'project'); setOTab(P.ui.otab || 'summary'); recompute(); autosave(); }
++function loadData(d, name) { P = deepMerge(GD_FULL(), d); gdXfMark(P, d); gdMigrateK(P); bsRebuildRows(); Object.keys(GM).forEach(gmBuildPanes); CUR = name || ''; fillInputs(); setITab(P.ui.itab || 'project'); setOTab(P.ui.otab || 'summary'); recompute(); autosave(); }
+ function initProjects() {
+@@ -8189,3 +8284,3 @@ function gdFatPost() { if (!PL_FRAME || !PL_FRAME.contentWindow) return; const s
+   try { PL_FRAME.contentWindow.postMessage({ type: 'gd-an', analysis: { fat } }, '*'); } catch (e) {} }
+-window.addEventListener('message', e => { if (gdFromPL(e) && e.data && e.data.type === 'gd-bridge') gdFatPost(); });
++window.addEventListener('message', e => { if (gdFromPL(e) && e.data && e.data.type === 'gd-bridge') { gdFatPost(); gdXfPost(); } });
+ function plEnsure() { if (!PL_FRAME) plShow(true); }   // load the sizing module in the background so it can publish the bridge
+```
+
+#### Exact changes, embedded Preliminary sizing (decoded `PL_B64`; `diff -U1` of the decoded page; re-encode the edited page as base64 on one line)
+```diff
+@@ -1979,2 +1979,3 @@
+   const types = SG.gtype === 'envelope' ? ['int', 'ext'] : [SG.gtype];
++  const XFL = plXfLoads(P, beam, spans, types);   // cross-frame and diaphragm point loads in DC1, steel stage (XF1, 2026-10-13); null = none (as before)
+ 
+@@ -2138,3 +2139,4 @@
+       const Vof = w => { const V = new Float64Array(N - 1); for (let e = 0; e < N - 1; e++) { let s = 0; const r = e * N; for (let j = 0; j < N; j++) s += ILV[r + j] * w[j] * trib[j]; V[e] = s; } return V; };
+-      const w1 = xs.map((_, j) => wSteel[j] + wDeck + wSip + wHaunch[j]);
++      const XT = XFL && XFL.types[gt], wXF = XT ? XT.w : null;   // XF1: cross-frame and diaphragm point loads as node loads (klf), on the steel section with the steel
++      const w1 = xs.map((_, j) => wSteel[j] + wDeck + wSip + wHaunch[j] + (wXF ? wXF[j] : 0));
+       // ---- stage stiffness: variable EI, DC1 on steel, DC2/DW on 3n, LL on n; cracked (steel + rebar) near interior supports
+@@ -2213,3 +2215,3 @@
+       }
+-      out.types[gt] = { gt, ext, feOn: FEon, IMk, IMf, bS, b3, bN, stg, VDC1, VDC2, VDW, VCL, Vp, Vn, MfP, MfN, Vfr, Vfm, w1, wSteel, wHaunch, wDeck, wSip, wHaunch0: wHaunch[0], wSteelMax: Math.max(...wSteel), wSteelMin: Math.min(...wSteel), wDC2, wDW, wCL, trW,
++      out.types[gt] = { gt, ext, feOn: FEon, IMk, IMf, bS, b3, bN, stg, VDC1, VDC2, VDW, VCL, Vp, Vn, MfP, MfN, Vfr, Vfm, w1, wSteel, wXF, xf: XT ? { g: XT.g, tot: XT.tot, nI: XT.nI, nE: XT.nE, pts: XT.pts } : null, xfErr: XFL && XFL.err || null, wHaunch, wDeck, wSip, wHaunch0: wHaunch[0], wSteelMax: Math.max(...wSteel), wSteelMin: Math.min(...wSteel), wDC2, wDW, wCL, trW,
+         MDC1, MDC2, MDW, MCL, Mp, Mn, Mup, Mun, Msp, Msn, Mc, mgM, dfSpan, dfPier, skV, VuMax, VuLoc, VuE, Abot, Atop, gB, gT, cf, Mperm };
+@@ -2733,3 +2735,3 @@
+ <h3>Loads</h3>
+-<p>DC1 (noncomposite): steel self-weight from the current plates increased by the detail allowance, deck slab over the tributary width (S for the interior girder, S/2 + overhang for the exterior girder), haunch, and SIP forms. DC2: two barriers shared equally by all girders. DW: wearing surface over the roadway, shared equally. Deck placement: 1.25 DC1 + 1.50 construction live load over the tributary width.</p>
++<p>DC1 (noncomposite): steel self-weight from the current plates increased by the detail allowance, the cross-frames and diaphragms when GirderDetail sends them (point loads at each frame, half of each frame to each girder it connects, from its Cross-frames module; the girder of each type with the largest total, framing of the current girder layout), deck slab over the tributary width (S for the interior girder, S/2 + overhang for the exterior girder), haunch, and SIP forms. DC2: two barriers shared equally by all girders. DW: wearing surface over the roadway, shared equally. Deck placement: 1.25 DC1 + 1.50 construction live load over the tributary width.</p>
+ <p>Live load is HL-93 (3.6.1.2, 3.6.1.3): the design truck with rear axle spacing 14, 18, 22, 26, and 30 ft, both directions, or the design tandem, plus the 0.64 klf lane on the parts of the influence line that increase the effect. IM = 33% is applied to the truck and tandem. In negative moment regions (between permanent-load contraflexure points around each pier), 90% of two trucks with 14 ft rear spacing, at least 50 ft apart, plus 90% of the lane is also considered.</p>
+@@ -3221,3 +3223,3 @@
+     <tr><td class="lbl">Tributary deck width</td>${tr.map(t => `<td class="val">${f2(t.trW)} ft</td>`).join('')}</tr>
+-    ${loadRows.map(([l, k]) => `<tr><td class="lbl">${l}</td>${tr.map(t => `<td class="val">${f3(t[k])}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
++    ${loadRows.map(([l, k]) => `<tr><td class="lbl">${l}</td>${tr.map(t => `<td class="val">${f3(t[k])}</td>`).join('')}</tr>`).join('')}${plXfRow(tr)}</tbody></table>`;
+   const iMax = s.spans.indexOf(Math.max(...s.spans)), Kg = s.rec.Kg[iMax];
+@@ -3346,2 +3348,41 @@
+    ===================================================================== */
++/* cross-frame and diaphragm weight in DC1 (XF1, engineer's decision 2026-10-13). GirderDetail sends the weight model of its Cross-frames module with the
++   gd-an message (P.analysis.xf; absent, null or on = false: no load, exactly as before):
++     kind 'xf': cross-frame of angles, type X / Kb / K, depth h (in), member areas At, Ab, Ad (in^2); end (bearing-line) frames are X-type with the same angles;
++     kind 'dia': diaphragm (channel or W), area A (in^2) over the frame length less the end gap g (in) at each girder; end diaphragms Ae, ge;
++     kind 'ovr': the weights entered in GirderDetail, Wi (intermediate) and We (end), kip per frame;
++     allow: % added for gusset plates and bolts (kinds 'xf' and 'dia').
++   Steel at 490 pcf (0.2836 lb/in^3). Member lengths are work point to work point over the frame length S (between girder webs, along the frame
++   line): X: 2S + 2 sqrt(S^2 + h^2); K: 2S + 2 sqrt((S/2)^2 + h^2). The same function is in GirderDetail (gdXfW); keep the two identical. */
++function plXfW(X, Lft, end) {
++  if (X.kind === 'ovr') return Math.max(0, +(end ? X.We : X.Wi) || 0);
++  const S = Lft * 12, k = 1 + (+X.allow || 0) / 100;
++  if (X.kind === 'dia') return (end ? X.Ae : X.A) * Math.max(0, S - 2 * (end ? X.ge : X.g)) * 0.2836 / 1000 * k;
++  const d = end || X.type === 'X' ? Math.hypot(S, X.h) : Math.hypot(S / 2, X.h);
++  return (S * (X.At + X.Ab) + 2 * d * X.Ad) * 0.2836 / 1000 * k;
++}
++/* the frame point loads of every girder (XF1): each frame of framingLayout weighs plXfW(its length between the girder webs, on a bearing line) and puts
++   half on each of the two girders it connects, at that girder's own station, mapped into the analysis span proportionally between that girder's
++   bearings (exact when the girder's span equals the analysis span); a frame on a bearing line loads that bearing only. Per girder type the girder of
++   that type with the largest total (ties: the lower number) is used; with two girders the interior type uses an exterior girder.
++   Returns null when GirderDetail sends no load; { err } when the framing cannot be built; else { X, types: { int|ext: { g, pts, tot, nI, nE, w } } },
++   w = the equivalent node loads as klf on the tributary length of each node (a point load split linearly between the two nodes of its element). */
++function plXfLoads(P, beam, spans, types) {
++  const X = (P.analysis || {}).xf; if (!X || !X.on) return null;
++  let m = null; try { m = buildModel(P); } catch (e) { m = null; }
++  if (!m || m.errors.length) return { X, err: 'the current girder layout has input errors, so its cross-frames cannot be located', types: {} };
++  const FR = framingLayout(P, m), { xs, N, trib } = beam, X0 = [0]; spans.forEach(Ls => X0.push(X0[X0.length - 1] + Ls));
++  const G = FR.girders.map(() => []);
++  const mapX = (q, s, f) => { if (f.type === 'sup') return X0[f.k]; const B = q.bear, k = f.k, a = B[k], b = B[k + 1];
++    return Math.max(X0[k], Math.min(X0[k + 1], X0[k] + (b > a ? (s - a) / (b - a) : 0.5) * spans[k])); };
++  FR.frames.forEach(f => { const Lf = Math.hypot(f.xc - f.xa, FR.ys[f.bay + 1] - FR.ys[f.bay]), end = f.type === 'sup', W = plXfW(X, Lf, end);
++    [[f.bay, f.xa], [f.bay + 1, f.xc]].forEach(([g, xg]) => { const q = FR.girders[g]; if (q) G[g].push({ x: mapX(q, xg - q.x0, f), P: W / 2, end, W, Lf }); }); });
++  const nodal = pts => { const w = new Float64Array(N); pts.forEach(p => { let e = 0; while (e < N - 2 && xs[e + 1] < p.x - 1e-9) e++; const t = Math.max(0, Math.min(1, (p.x - xs[e]) / (xs[e + 1] - xs[e])));
++    w[e] += p.P * (1 - t) / trib[e]; w[e + 1] += p.P * t / trib[e + 1]; }); return w; };
++  const nb = G.length, tot = g => G[g].reduce((a, p) => a + p.P, 0), pick = list => list.reduce((a, g) => tot(g) > tot(a) + 1e-9 ? g : a, list[0]);
++  const ints = [...Array(nb).keys()].filter(g => g > 0 && g < nb - 1), exts = [0, nb - 1], out = { X, types: {} };
++  types.forEach(gt => { const g = pick(gt === 'ext' || !ints.length ? exts : ints), pts = G[g];
++    out.types[gt] = { g, pts, tot: tot(g), nI: pts.filter(p => !p.end).length, nE: pts.filter(p => p.end).length, w: nodal(pts) }; });
++  return out;
++}
+ function framingLayout(P, m) {
+@@ -3760,3 +3801,3 @@
+     for (let i = 0; i < N; i++) { const s = secAt(xs[i]); Is[i] = props({ D: m.D, tw: s.tw, top: s.top, bot: s.bot }).I; I3[i] = compositeProps(s, m.D, beff, 3 * n, ts, hh).I; In[i] = compositeProps(s, m.D, beff, n, ts, hh).I; }
+-    const wSteel = Tg.wSteel, wDeck = Tg.w1.map((w, j) => w - wSteel[j]);
++    const wSteel = Tg.wXF ? Tg.wSteel.map((w, j) => w + Tg.wXF[j]) : Tg.wSteel, wDeck = Tg.w1.map((w, j) => w - wSteel[j]);   // XF1: the cross-frames are in the steel part
+     const bS = Tg.bS || beam, b3 = Tg.b3 || beam, bN = Tg.bN || beam, MofB = (bm, w) => { const M = new Float64Array(N); for (let i = 0; i < N; i++) { let s = 0; const q = i * N; for (let j = 0; j < N; j++) s += bm.ILM[q + j] * w[j] * trib[j]; M[i] = s; } return M; };
+@@ -4109,4 +4150,9 @@
+     plates: { D: m.D, top: m.top.map(r => ({ x0: r.x0, x1: r.x1, b: r.b, t: r.t })), bot: m.bot.map(r => ({ x0: r.x0, x1: r.x1, b: r.b, t: r.t })), web: m.web.map(r => ({ x0: r.x0, x1: r.x1, t: r.t })) },
+-    allow: num(P.limits.allow), analysis: (({ fat, ...a }) => ({ method: 'fe', rebar: 1.0, ...a, crack: 'none' }))(P.analysis || {}), ...(B.xs ? { xs: B.xs } : {}) };
++    allow: num(P.limits.allow), analysis: (({ fat, xf, ...a }) => ({ method: 'fe', rebar: 1.0, ...a, crack: 'none' }))(P.analysis || {}), ...(B.xs ? { xs: B.xs } : {}), ...(FR ? { xf: plXfDef(FR) } : {}) };
+ }
++/* the cross-frames of the current framing for GirderDetail's DC1 (XF1, 2026-10-13): per girder its bearing stations (ft, from its Abut. 1 bearing);
++   per frame [on a bearing line 1/0, span or support index k, bay (girders bay and bay + 1), station on girder bay, station on girder bay + 1, length between
++   the girder webs along the frame line (ft)] */
++function plXfDef(FR) { const r = v => Math.round(v * 1000) / 1000;
++  return { v: 1, g: FR.girders.map(g => g.bear.map(r)), f: FR.frames.map(f => [f.type === 'sup' ? 1 : 0, f.k, f.bay, r(f.xa - FR.girders[f.bay].x0), r(f.xc - FR.girders[f.bay + 1].x0), r(Math.hypot(f.xc - f.xa, FR.ys[f.bay + 1] - FR.ys[f.bay]))]) }; }
+ let _bdT = null, _bdLast = '';
+@@ -4575,2 +4621,6 @@
+ /* ---------------- analysis tab ---------------- */
++/* XF1: the cross-frame and diaphragm DC1 point loads of each girder type, for the loads tables */
++function plXfRow(tr) { const X = (P.analysis || {}).xf; if (!X || !X.on) return '';
++  const k = X.kind === 'ovr' ? 'entered weights' : X.kind === 'dia' ? 'diaphragms' : 'cross-frames';
++  return `<tr><td class="lbl">Cross-frames and diaphragms (DC1, point loads from GirderDetail's Cross-frames module, ${k}; half of each frame to each girder it connects)</td>${tr.map(t => `<td class="val">${t.xf ? `G${t.xf.g + 1}: ${t.xf.nI} + ${t.xf.nE} at bearings, ${f2(t.xf.tot)} kip` : t.xfErr ? 'none: ' + esc(t.xfErr) : '—'}</td>`).join('')}</tr>`; }
+ function renderAnalysis() {
+@@ -4581,3 +4631,3 @@
+   h += card('an-cam', 'Dead load deflection (camber required)', 'Downward positive, in', `<div id="plt-cam" class="plt tall"></div>
+-    <p class="cap">Steel self-weight and deck (slab, haunch, SIP forms) act on the steel section; barriers and wearing surface act on the long-term composite section (3n = ${f2(3 * AN.n)}). The girder should be cambered upward by the total shown, plus any vertical profile ordinates. Deck pour sequence effects are not included.</p>`);
++    <p class="cap">Steel self-weight${(P.analysis || {}).xf && P.analysis.xf.on ? ' (with the cross-frames and diaphragms from GirderDetail, point loads, in the steel column)' : ''} and deck (slab, haunch, SIP forms) act on the steel section; barriers and wearing surface act on the long-term composite section (3n = ${f2(3 * AN.n)}). The girder should be cambered upward by the total shown, plus any vertical profile ordinates. Deck pour sequence effects are not included.</p>`);
+   const tenth = [];
+```
