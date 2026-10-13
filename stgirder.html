@@ -2041,6 +2041,105 @@ function externalSpans(ext){
   const xs=ext.stations.map(s=>s.x); const x0=Math.min(...xs),x1=Math.max(...xs);
   return [{idx:1,x0,x1,len:+(x1-x0).toFixed(3)}];
 }
+/* SW-CONT (2026-10-13, engineer's Option B): girder self-weight that ST-Girder adds when an import has
+   selfWeightExcluded:true, analysed on the CONTINUOUS girder of the import (all spans of member.supports /
+   member.spans, knife-edge supports, first to last support) by the direct stiffness method (Euler-Bernoulli
+   beam elements, 2 DOF per node; the element nodal forces are exact for a uniform load on a prismatic element).
+   - 'zones':   one element per section.zones piece; w = A_steel·0.490/144 klf (same unit weight as ST-Girder's own
+                self-weight, no detail factor), EI = E_s·I_bare/144 kip-ft² (bare steel I of that zone).
+   - 'constEI': no usable zones → w = ST-Girder's own self-weight (wswOwn) on every span, constant EI.
+   - 'simple':  one span or no support layout → null here; the caller keeps w·x(L−x)/2 (correct then).
+   Returns M (k-ft, sagging +) and V (kip, + = upward shear at the left end, = dM/dx) at a span-local x of the
+   selected span, the selected span's end shears, and the support reactions (kip, + up). */
+function swContinuous(ext, sel, wswOwn, Es){
+  if(!ext||!sel) return null;
+  const m=ext.member||{};
+  let sup=null;
+  if(Array.isArray(m.supports)&&m.supports.length>=3) sup=m.supports.map(Number);
+  else if(Array.isArray(m.spans)&&m.spans.length>=2){ let x=0; sup=[0]; m.spans.forEach(l=>{x+=+l; sup.push(x);}); }
+  if(!sup||sup.some(v=>!isFinite(v))) return null;
+  sup=[...sup].sort((a,b)=>a-b);
+  const X0=sup[0], X1=sup[sup.length-1];
+  if(!(X1-X0>0)||!(+sel.x1>+sel.x0)) return null;
+  const tol=0.01;
+  // zones → bare-steel pieces clipped to [X0, X1]; usable only if they cover it without gaps
+  const zs=ext.section&&Array.isArray(ext.section.zones)? ext.section.zones : [];
+  let pieces=[], warn=null;
+  zs.forEach(z=>{ if(!z||!z.web||!z.topFlange||!z.botFlange) return;
+    const dims={D:+z.web.depth, tw:+z.web.thickness, bft:+z.topFlange.width, tft:+z.topFlange.thickness,
+      bfb:+z.botFlange.width, tfb:+z.botFlange.thickness};
+    if(!Object.values(dims).every(v=>isFinite(v)&&v>0)) return;
+    const a=Math.max(+z.startX,X0), b=Math.min(+z.endX,X1);
+    if(!(b-a>tol)) return;
+    const p=elasticProps(dims,null,null);
+    pieces.push({a,b,A:p.A,I:p.I,w:p.A*0.490/144}); });
+  pieces.sort((p,q)=>p.a-q.a);
+  let method='zones';
+  if(!pieces.length){ method='constEI'; warn=zs.length? 'section.zones could not be read' : 'the import has no section.zones'; }
+  else { let ok=Math.abs(pieces[0].a-X0)<=tol; let reach=pieces[0].b;
+    for(let i=1;i<pieces.length&&ok;i++){ if(pieces[i].a>reach+tol) ok=false; reach=Math.max(reach,pieces[i].b); }
+    if(!ok||reach<X1-tol){ method='constEI'; warn='section.zones do not cover the girder from the first to the last support'; } }
+  if(method==='constEI') pieces=[{a:X0,b:X1,A:null,I:1,w:wswOwn}];
+  // nodes: supports + zone boundaries
+  const nset=new Set(sup.map(v=>+v.toFixed(6)));
+  pieces.forEach(p=>{ nset.add(+p.a.toFixed(6)); nset.add(+p.b.toFixed(6)); });
+  const nodes=[...nset].filter(v=>v>=X0-1e-9&&v<=X1+1e-9).sort((a,b)=>a-b)
+    .filter((v,i,a)=>i===0||v-a[i-1]>1e-6);
+  const pieceAt=x=>{ let best=null; for(const p of pieces) if(x>=p.a-1e-9&&x<=p.b+1e-9) best=p; return best||pieces[pieces.length-1]; };
+  const els=[];
+  for(let i=0;i<nodes.length-1;i++){ const a=nodes[i], b=nodes[i+1], p=pieceAt((a+b)/2);
+    els.push({a,b,h:b-a,w:p.w,EI:(method==='zones'? Es*p.I/144 : 1)}); }
+  const nd=2*nodes.length, K=Array.from({length:nd},()=>new Array(nd).fill(0)), F=new Array(nd).fill(0);
+  const ke=(EI,h)=>{ const c=EI/(h*h*h);
+    return [[12*c,6*h*c,-12*c,6*h*c],[6*h*c,4*h*h*c,-6*h*c,2*h*h*c],[-12*c,-6*h*c,12*c,-6*h*c],[6*h*c,2*h*h*c,-6*h*c,4*h*h*c]]; };
+  const fef=(w,h)=>[w*h/2, w*h*h/12, w*h/2, -w*h*h/12];      // fixed-end forces on the element (up, ccw) for downward w
+  els.forEach((e,i)=>{ const k=ke(e.EI,e.h), f=fef(e.w,e.h), dof=[2*i,2*i+1,2*i+2,2*i+3];
+    for(let r=0;r<4;r++){ F[dof[r]]-=f[r]; for(let c=0;c<4;c++) K[dof[r]][dof[c]]+=k[r][c]; } });
+  const supNode=sup.map(s=>{ let j=0; nodes.forEach((v,i)=>{ if(Math.abs(v-s)<Math.abs(nodes[j]-s)) j=i; }); return j; });
+  const fixed=new Set(supNode.map(j=>2*j));
+  const free=[...Array(nd).keys()].filter(d=>!fixed.has(d));
+  // solve K_ff·d_f = F_f (Gauss elimination, partial pivoting)
+  const n=free.length, Aug=free.map(r=>[...free.map(c=>K[r][c]),F[r]]);
+  for(let c=0;c<n;c++){ let p=c; for(let r=c+1;r<n;r++) if(Math.abs(Aug[r][c])>Math.abs(Aug[p][c])) p=r;
+    if(Math.abs(Aug[p][c])<1e-300) return null; [Aug[c],Aug[p]]=[Aug[p],Aug[c]];
+    for(let r=c+1;r<n;r++){ const t=Aug[r][c]/Aug[c][c]; if(t) for(let k=c;k<=n;k++) Aug[r][k]-=t*Aug[c][k]; } }
+  const dfree=new Array(n).fill(0);
+  for(let r=n-1;r>=0;r--){ let s=Aug[r][n]; for(let k=r+1;k<n;k++) s-=Aug[r][k]*dfree[k]; dfree[r]=s/Aug[r][r]; }
+  const d=new Array(nd).fill(0); free.forEach((g,i)=>{ d[g]=dfree[i]; });
+  const R=new Array(nodes.length).fill(0);
+  els.forEach((e,i)=>{ const k=ke(e.EI,e.h), f=fef(e.w,e.h), de=[d[2*i],d[2*i+1],d[2*i+2],d[2*i+3]];
+    const end=f.map((fr,r)=>fr+k[r].reduce((s,kv,c)=>s+kv*de[c],0));
+    e.V1=end[0]; e.M1=end[1]; R[i]+=end[0]; R[i+1]+=end[2]; });
+  const x0=+sel.x0, x1=+sel.x1, Ls=x1-x0;
+  const spanEls=els.filter(e=>e.a>=x0-1e-6&&e.b<=x1+1e-6);
+  if(!spanEls.length) return null;
+  const elAt=x=>{ for(const e of spanEls) if(x<=e.b+1e-9) return e; return spanEls[spanEls.length-1]; };
+  const Mg=X=>{ const e=elAt(X), s=clamp(X-e.a,0,e.h); return -e.M1+e.V1*s-e.w*s*s/2; };
+  const Vg=X=>{ const e=elAt(X), s=clamp(X-e.a,0,e.h); return e.V1-e.w*s; };
+  const loc=x=>x0+clamp(x,0,Ls);
+  return {method, warn, supports:sup, spans:sup.slice(0,-1).map((s,i)=>+(sup[i+1]-s).toFixed(3)),
+    selIdx:+sel.idx||null, x0, x1,
+    wZones:method==='zones'? pieces.map(p=>({a:p.a,b:p.b,w:p.w,I:p.I})) : null, wOwn:wswOwn,
+    M:x=>Mg(loc(x)), V:x=>Vg(loc(x)),
+    Rspan:[Vg(x0), -Vg(x1)],                              // this span's end shears as reactions (+ up)
+    R:supNode.map(j=>R[j])};                              // support reactions of the whole girder (+ up)
+}
+// SW-CONT display: one-line description of the method and the support layout (Inputs banner, Camber, reactions note).
+function swContLabel(c){
+  const f=v=>(+v).toFixed(1).replace(/\.0$/,'');
+  const lay='supports at '+c.supports.map(f).join(', ')+' ft (spans '+c.spans.map(f).join(' + ')+' ft'+(c.selIdx?', span '+c.selIdx+' selected':'')+')';
+  return c.method==='zones'
+    ? 'continuous girder, variable EI: stiffness analysis over all '+c.spans.length+' spans with the bare-steel section.zones of the import (I and weight per zone at 0.490 kcf), '+lay
+    : 'continuous girder, constant EI: stiffness analysis over all '+c.spans.length+' spans with ST-Girder’s own self-weight '+(+c.wOwn).toFixed(3)+' klf on every span, '+lay;
+}
+function SwContNote({R}){
+  if(!R||!R.ok||!R.ext||!R.ext.hasDC1||!R.ext.swExcl) return null;
+  const c=R.swCont;
+  if(!c) return <span> Self-weight method: <b>simple span</b>, w·x(L−x)/2 ({fmt(R.loads.wsw,3)} klf), because the import has one span or no support layout.</span>;
+  const r=c.R.map((v,i)=>'R'+(i+1)+' = '+fmt(v,2)).join(', ');
+  return <span> Self-weight method: <b>{swContLabel(c)}</b>. Self-weight reactions of the whole girder: {r} kip; this span’s end shears {fmt(c.Rspan[0],2)} / {fmt(c.Rspan[1],2)} kip.
+    {c.method==='constEI'&&<b style={{color:'var(--warn)'}}> ⚠ Fallback to constant EI: {c.warn}; the flange transitions are ignored in the self-weight moments.</b>}</span>;
+}
 /* GirderDetail → ST-Girder (HANDOFF.md §4.9). An imported envelope whose LL+IM is already distributed to one girder. */
 function extPerGirderOf(ext){ return !!(ext&&ext.liveLoadPerGirder===true); }
 function extFromGD(ext){ return !!(ext&&ext.producer==='GirderDetail'&&ext.girderDetail); }
@@ -2367,10 +2466,11 @@ function bxSuperRxPayload(inp,R){
     'Unfactored. DC1 = steel self-weight '+Ld.wsw.toFixed(3)+' klf + deck/haunch '+Ld.wdk.toFixed(3)+' klf + other DC '+(+inp.loads.wDCextra||0).toFixed(3)+' klf'+(dph.length?' + '+dph.length+' diaphragm point load(s)':'')+', all on the non-composite girder. DC2 = barrier / SIDL. DW = wearing surface.'];
   if(R.useExt&&R.ext){
     const e=R.ext, sL=e.spanLen, sel=e.sel||{}, i=Math.max(1,+sel.idx||1), x0=+sel.x0||0;
-    if(e.hasDC1) dc1=[e.V_DC1(0)+(e.swExcl?half(Ld.wsw):0), -e.V_DC1(L)+(e.swExcl?half(Ld.wsw):0)];
+    const swc=R.swCont;                                                   // SW-CONT: continuous self-weight → this span's end shears
+    if(e.hasDC1) dc1=[e.V_DC1(0)+(e.swExcl?(swc?swc.Rspan[0]:half(Ld.wsw)):0), -e.V_DC1(L)+(e.swExcl?(swc?swc.Rspan[1]:half(Ld.wsw)):0)];
     dc2=[e.V_DC2(0),-e.V_DC2(L)]; dw=[e.V_DW(0),-e.V_DW(L)];             // V_ already sign-flipped to + up at the left end
     ids=['Support '+i,'Support '+(i+1)]; xs=[x0,x0+sL]; span={index:i,length:+sL.toFixed(3)};
-    notes.push('MIDAS import active (span '+i+'): '+(e.hasDC1?'DC1, ':'')+'DC2 and DW are the imported shears at the two ends of this span, sign-corrected to reactions (+ up)'+(e.hasDC1&&e.swExcl?', with the steel self-weight added by ST-Girder':'')+'. At an interior pier they are this span\'s share only; add the share of the adjacent span.'+(e.hasDC1?'':' DC1 is computed by ST-Girder on the simple span (L = '+L.toFixed(2)+' ft).'));
+    notes.push('MIDAS import active (span '+i+'): '+(e.hasDC1?'DC1, ':'')+'DC2 and DW are the imported shears at the two ends of this span, sign-corrected to reactions (+ up)'+(e.hasDC1&&e.swExcl?', with the steel self-weight added by ST-Girder'+(swc?' ('+swContLabel(swc)+')':''):'')+'. At an interior pier they are this span\'s share only; add the share of the adjacent span.'+(e.hasDC1?'':' DC1 is computed by ST-Girder on the simple span (L = '+L.toFixed(2)+' ft).'));
   } else {
     notes.push('Simple span L = '+L.toFixed(2)+' ft: R = wL/2 for each uniform load; diaphragm point loads by statics.');
     const hl=R.hl;
@@ -2465,6 +2565,9 @@ function computeAll(inp){
     const ext=buildExternal(inp.external,Lft0, extPerGirder? {pos:1,neg:1,v:1} :
       {pos:(+inp.loads.extDFpos||1)*mpfExt, neg:(+inp.loads.extDFneg||1)*mpfExt, v:(+inp.loads.extDFv||1)*mpfExt});
     const useExt=!!ext;
+    // SW-CONT (2026-10-13): the self-weight ST-Girder adds to an import with selfWeightExcluded:true is analysed on the
+    // continuous girder of the import (swContinuous); null = one span / no support layout → simple span w·x(L−x)/2 as before.
+    const swCont=(useExt&&ext.hasDC1&&ext.swExcl)? swContinuous(inp.external, ext.sel, wswAvg, Es) : null;
 
     /* ---------- CHECKS (Phase 1: section proportion limits 6.10.2) ---------- */
     const {D,tw}=sec;
@@ -2501,10 +2604,11 @@ function computeAll(inp){
     segP.forEach(g=>{ if(g.x1>0.05&&g.x1<Lft-0.05){ xsSet.add(+(g.x1-0.01).toFixed(3)); xsSet.add(+(g.x1+0.01).toFixed(3)); } });
     const xs=[...xsSet].sort((a,b)=>a-b);
     const simpleM=(w,x)=>w*x*(Lft-x)/2, simpleV=(w,x)=>w*(Lft/2-x);
+    const swM=x=>swCont? swCont.M(x) : simpleM(wswAvg,x), swV=x=>swCont? swCont.V(x) : simpleV(wswAvg,x);   // SW-CONT
     const stations=xs.map(x=>{
       const si=segIdxAt(x);
-      const M1= (useExt&&ext.hasDC1)? ext.M_DC1(x)+(ext.swExcl? simpleM(wswAvg,x):0) : simpleM(Ld.wDC1,x)+diaM(x);
-      const V1= (useExt&&ext.hasDC1)? ext.V_DC1(x)+(ext.swExcl? simpleV(wswAvg,x):0) : simpleV(Ld.wDC1,x)+diaV(x);
+      const M1= (useExt&&ext.hasDC1)? ext.M_DC1(x)+(ext.swExcl? swM(x):0) : simpleM(Ld.wDC1,x)+diaM(x);
+      const V1= (useExt&&ext.hasDC1)? ext.V_DC1(x)+(ext.swExcl? swV(x):0) : simpleV(Ld.wDC1,x)+diaV(x);
       const M2= useExt? ext.M_DC2(x) : simpleM(Ld.wDC2,x);
       const V2= useExt? ext.V_DC2(x) : simpleV(Ld.wDC2,x);
       const Mw= useExt? ext.M_DW(x)  : simpleM(Ld.wDW,x);
@@ -2725,9 +2829,9 @@ function computeAll(inp){
     let cGov={r:0,fbuTopC:0}, cNegGov={r:0}, cWebGov={r:0}, cTenGov={r:0}, VcUmax=0;
     const constrCalc=[];                                // per-station worked-calc data (Constructibility location picker)
     stations.forEach(st=>{ const sg=segP[st.si];
-      const M1c=(useExt&&ext.hasDC1)? ext.M_DC1(st.x)+(ext.swExcl? simpleM(wswAvg,st.x):0) : simpleM(Ld.wDC1,st.x)+diaM(st.x);
+      const M1c=(useExt&&ext.hasDC1)? ext.M_DC1(st.x)+(ext.swExcl? swM(st.x):0) : simpleM(Ld.wDC1,st.x)+diaM(st.x);
       const Mc=1.25*M1c + 1.5*simpleM(wConstr,st.x);    // construction live on the erected span
-      const V1c=(useExt&&ext.hasDC1)? ext.V_DC1(st.x)+(ext.swExcl? simpleV(wswAvg,st.x):0) : simpleV(Ld.wDC1,st.x)+diaV(st.x);
+      const V1c=(useExt&&ext.hasDC1)? ext.V_DC1(st.x)+(ext.swExcl? swV(st.x):0) : simpleV(Ld.wDC1,st.x)+diaV(st.x);
       const Vc=Math.abs(1.25*V1c)+1.5*Math.abs(simpleV(wConstr,st.x));
       VcUmax=Math.max(VcUmax,Vc);
       let cc;
@@ -2768,7 +2872,7 @@ function computeAll(inp){
     for(let i=0;i<=camN;i++) camSet.add(+(Lft*i/camN).toFixed(4));
     if(useExt) ext.slice.forEach(s=>{ if(s.xr>1e-6&&s.xr<Lft-1e-6) camSet.add(+s.xr.toFixed(4)); });
     const camSt=[...camSet].filter(x=>x>=0&&x<=Lft).sort((a,b)=>a-b).map(x=>({x, si:segIdxAt(x),
-      M1: (useExt&&ext.hasDC1)? ext.M_DC1(x)+(ext.swExcl? simpleM(wswAvg,x):0) : simpleM(Ld.wDC1,x)+diaM(x),
+      M1: (useExt&&ext.hasDC1)? ext.M_DC1(x)+(ext.swExcl? swM(x):0) : simpleM(Ld.wDC1,x)+diaM(x),
       M2: useExt? ext.M_DC2(x) : simpleM(Ld.wDC2,x),
       Mw: useExt? ext.M_DW(x)  : simpleM(Ld.wDW,x)}));
     // deflShape: the deflected shape at every camber station (in, + up, so sagging gives negative values); deflOf = its largest magnitude.
@@ -2787,7 +2891,7 @@ function computeAll(inp){
     // rest of DC1 (deck slab + haunch + Add'l DC1), taken as M1 − M_steel so the two parts sum to M1 exactly. Imported DC1 is split
     // by the payload's M_DC1steel when present (GirderDetail, CF4), or by the self-weight ST-Girder adds (selfWeightExcluded); else not split.
     const dc1Split = !(useExt&&ext.hasDC1) ? 'app' : ext.swExcl ? 'swExcl' : ext.hasDC1split ? 'import' : 'none';
-    const Msteel = st => dc1Split==='app' ? simpleM(Ld.wsw,st.x)+diaM(st.x) : dc1Split==='swExcl' ? simpleM(wswAvg,st.x) : dc1Split==='import' ? ext.M_DC1steel(st.x) : 0;
+    const Msteel = st => dc1Split==='app' ? simpleM(Ld.wsw,st.x)+diaM(st.x) : dc1Split==='swExcl' ? swM(st.x) : dc1Split==='import' ? ext.M_DC1steel(st.x) : 0;
     const shDC1=deflShape(s=>s.M1,'bare'), shDC2=deflShape(s=>s.M2,'c3N'), shDW=deflShape(s=>s.Mw,'c3N');
     const shSW = dc1Split==='none' ? null : deflShape(Msteel,'bare');
     const shWet= dc1Split==='none' ? null : deflShape(s=>s.M1-Msteel(s),'bare');
@@ -3085,7 +3189,7 @@ function computeAll(inp){
       segP, stations, useExt, ext, hasNeg, neg,
       stress, diag, flex, shearR, constr, camber, fatigue, tStiff, bearing, conn, rating, deckD,
       chartS2, chartFlex, chartFat, flexCalc, shearCalc, warnings,
-      checks:checksF};
+      checks:checksF, ...(swCont?{swCont}:{})};
   }catch(e){ return {ok:false, error:e.message}; }
 }
 
@@ -3648,7 +3752,7 @@ function InputsTab({inp,set,R}){
         {extRaw.units?' · units: '+(extRaw.units.moment||'ft-kip')+' / '+(extRaw.units.force||'kip'):''}.
         Impact is assumed already in the imported LL envelope{extPerGirderOf(extRaw)?<b>, and so are the distribution factors (per-girder LL+IM): the DF and multiple-presence multipliers below are not applied</b>:null}. DC2, DW, and ±LL come from the import;
         {R&&R.ok&&R.ext&&R.ext.hasDC1?' DC1 also from the import (continuous erection).':' DC1 (steel + wet deck) is computed by the app on the selected span — for girders erected continuous, include M_DC1/V_DC1 in the export so the pier picks up the DC1 negative moment.'}
-        {R&&R.ok&&R.ext&&R.ext.swExcl&&<span> <b>Self-weight excluded from the import</b> — the app adds girder self-weight ({fmt(R.loads.wsw,3)} klf) on the selected span (simple-span basis; small vs. total DC1 — include self weight in the MIDAS DC1 case for exact pier values).</span>}
+        {R&&R.ok&&R.ext&&R.ext.swExcl&&<span> <b>Self-weight excluded from the import</b> — the app adds the girder self-weight to DC1 (all checks, reactions and camber).<SwContNote R={R}/></span>}
         {extRaw.section&&extRaw.section.zones&&<span> <b>Plate geometry imported</b> from section.zones → web + flange segment table populated automatically (editable below).</span>}
         {extRaw.factored===true&&<b style={{color:'var(--fail)'}}> ⚠ File is flagged FACTORED — this app applies its own load factors; export unfactored envelopes.</b>}
         {R&&R.ok&&R.fatigue&&R.fatigue.fatImp&&<span> <b>Fatigue moments{R.fatigue.fatImpV?' and shears':''} imported</b> — the Fatigue tab{R.fatigue.fatImpV?' and the stud fatigue pitch use them':' uses them'} instead of the simple-span fatigue truck.</span>}
@@ -4679,7 +4783,7 @@ function CamberBreakdown({R,fig}){
     <Tbl head={T.head} rows={T.rows}/>
     <div className="hint" style={{marginTop:6}}>Downward dead-load deflection, in (+ = down) = camber (upward offset) to fabricate, at tenth points{sh.splices.length?' and flange transitions':''}. DC1 (steel self-weight and wet concrete) acts on the bare steel; DC2 and DW on the long-term (3n) composite section. Total = sum of the columns at each station.
       {sh.dc1Split==='app'&&<span> Steel self-weight = girder steel at 0.490 kcf ({fmt(R.loads.wsw,3)} klf){sh.hasDia?' + the diaphragm point loads':''}; wet concrete = deck slab + haunch ({fmt(R.loads.wdk,3)} klf) + Add'l DC1 (forms, details: {fmt(+R.loads.wDC1-R.loads.wsw-R.loads.wdk,3)} klf).</span>}
-      {sh.dc1Split==='swExcl'&&<span> The imported DC1 excludes self-weight; ST-Girder adds the girder self-weight ({fmt(R.loads.wsw,3)} klf) on the span. The imported remainder is not split further.</span>}
+      {sh.dc1Split==='swExcl'&&<span> The imported DC1 excludes self-weight; ST-Girder adds the girder self-weight. The imported remainder is not split further.<SwContNote R={R}/></span>}
       {sh.dc1Split==='import'&&<span> DC1 is imported ({(R.ext&&R.ext.sel&&'span '+(R.ext.sel.idx||1))||'import'}) with its split: steel = the payload's M_DC1steel (girder plates + the details allowance, on the steel section), wet concrete = M_DC1 − M_DC1steel (deck, haunch, SIP forms and other noncomposite DC1).</span>}
       {sh.dc1Split==='none'&&<span> <b>DC1 is imported</b> ({(R.ext&&R.ext.sel&&'span '+(R.ext.sel.idx||1))||'import'}) as one total; the import does not separate steel self-weight from wet concrete, so DC1 is shown as one column.</span>}
       {d>0.0005&&<span> The largest total ({fmt(cm.camTotMax,3)} in, the headline value) is {fmt(d,3)} in less than Δ_total = Δ_DC1 + Δ_DC2 + Δ_DW ({fmt(cm.camTot,3)} in, the sum of the stage maxima) because the stage maxima occur at different stations.</span>}
