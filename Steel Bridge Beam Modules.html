@@ -5586,8 +5586,8 @@ function gdStUi() {
   if (!nb) return '<p class="note full">Define the complete bridge in Preliminary sizing first.</p>';
   return `<div class="full" id="gd-st-box"><div class="ig"><label for="gd-st-g">Girder to send</label><select id="gd-st-g">${[...Array(nb)].map((_, i) => `<option value="${i + 1}"${i + 1 === g0 ? ' selected' : ''}>G${i + 1} (${i === 0 || i === nb - 1 ? 'exterior' : 'interior'})</option>`).join('')}</select></div>
     <div class="ck-row"><input type="checkbox" id="gd-st-pl" checked><label for="gd-st-pl">Add the pedestrian load (when there is one) to LL+IM, as this tool does for its own design demands</label></div>
-    <div class="fa-imp"><button type="button" class="proj-btn" data-gdst="send" title="Write this girder's analysis results to the shared browser storage for ST-Girder (stgirder.html): Pull from GirderDetail">Send to ST-Girder</button><button type="button" class="proj-btn" data-gdst="file" title="Save the same hand-off as a JSON file (ST-Girder: Import)">Export hand-off (JSON)</button></div>
-    <p class="note">Sends the unfactored forces of this analysis at every node (DC1, DC2, DW, LL+IM already multiplied by the girder's distribution factors, fatigue moments and shears) with the girder's plates, materials, deck, cross-frame spacing, skew and distribution factors, for ST-Girder's checks and LRFR rating. ST-Girder applies its own load factors and resistances and does not apply distribution factors again. Opened as files, both tools must be in one folder and opened in Chrome or Edge; otherwise use Export hand-off (JSON) and ST-Girder's Import.</p></div>`;
+    <div class="fa-imp"><button type="button" class="proj-btn" data-gdst="send" title="Write this girder's analysis results to the shared browser storage for ST-Girder (stgirder.html): Pull from GirderDetail. Then offers to open ST-Girder in a new tab with this girder loaded">Send to ST-Girder</button><button type="button" class="proj-btn" data-gdst="file" title="Save the same hand-off as a JSON file (ST-Girder: Import)">Export hand-off (JSON)</button></div>
+    <p class="note">Sends the unfactored forces of this analysis at every node (DC1, DC2, DW, LL+IM already multiplied by the girder's distribution factors, fatigue moments and shears) with the girder's plates, materials, deck, cross-frame spacing, skew and distribution factors, for ST-Girder's checks and LRFR rating. ST-Girder applies its own load factors and resistances and does not apply distribution factors again. After sending you can open ST-Girder in a new tab with this girder loaded, or click Pull from GirderDetail there later. Opened as files, both tools must be in one folder and opened in Chrome or Edge; otherwise use Export hand-off (JSON) and ST-Girder's Import.</p></div>`;
 }
 function gdStPayload(g, addPL) {
   const R = GM.sa.compute({ ...P.sa, girder: g }); if (R.errors && R.errors.length) return { error: R.errors[0] };
@@ -5639,7 +5639,23 @@ document.addEventListener('click', e => { const t = e.target.closest && e.target
   if (t.dataset.gdst === 'file') { BridgeXfer.exportFile(GD_ST.ch, r.payload); flash(`Hand-off file for ${r.payload.member.key} saved.`); return; }
   const w = BridgeXfer.publish(GD_ST.ch, r.payload, GD_ST.producer, GD_ST.file);
   if (w.error) { alert(`Could not send to ST-Girder: ${w.error}\n\nUse "Export hand-off (JSON)" and ST-Girder's Import instead.`); return; }
-  flash(`${r.payload.member.key} sent to ST-Girder (${r.payload.stations.length} stations). In stgirder.html click "Pull from GirderDetail".`); });
+  const sent = `${r.payload.member.key} sent to ST-Girder (${r.payload.stations.length} stations).`, id = w.payload && w.payload.producedAt;
+  // OD1 (2026-10-13): offer to open ST-Girder in a new tab with this girder loaded (ST-Girder applies it on load, keyed to producedAt).
+  // window.open stays inside this click handler so it is not popup-blocked.
+  if (id && confirm(`${sent}\n\nOpen ST-Girder now with this girder loaded? This replaces ST-Girder's current girder inputs (plates, materials, deck, bracing, skew, forces).`)) {
+    let win = null; try { win = window.open(`${gdStHref()}#gdpull=${encodeURIComponent(id)}`, '_blank'); } catch (er) { win = null; }
+    if (win) { flash(`${sent} ST-Girder opened in a new tab.`); return; }
+    flash(`${sent} In stgirder.html click "Pull from GirderDetail".`);
+    alert(`The browser blocked the new tab.\n\nOpen ST-Girder (stgirder.html, in the same folder or on the same website as this tool) and click "Pull from GirderDetail".`); return; }
+  flash(`${sent} In stgirder.html click "Pull from GirderDetail".`); });
+/* ST-Girder's file for "open now" (OD1): where the bridge suite last saw ST-Girder in this folder (read only, key bridgeSuite.v1.appPaths,
+   the same record and rules as BridgeApps.path in stgirder.html / lldf.html / psbeam.html / index.html), else stgirder.html next to this file. */
+function gdStHref() { let f = '';
+  try { const o = JSON.parse(localStorage.getItem('bridgeSuite.v1.appPaths') || '{}') || {}, e = o.stgirder, h = String(location.href || '').split('#')[0].split('?')[0], d = h.slice(0, h.lastIndexOf('/') + 1);
+    if (e && e.at && e.at[d] && e.at[d].file) f = e.at[d].file; else if (e && e.file && !e.dir) f = e.file;
+    let me = (location.pathname || '').split('/').pop() || ''; try { me = decodeURIComponent(me); } catch (er) { }
+    if (f && f.toLowerCase() === me.toLowerCase()) f = ''; } catch (er) { f = ''; }
+  return encodeURI(f || 'stgirder.html'); }
 /* stresses by construction stage at every node (tension +) */
 
 /* deck placement sequence (AASHTO LRFD 6.10.3.4): steel and other noncomposite load on the steel, then each pour's wet concrete on the
