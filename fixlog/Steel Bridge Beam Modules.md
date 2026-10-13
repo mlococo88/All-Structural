@@ -6755,3 +6755,291 @@ index bfad74d..7e38858 100644
 - **Saved data in both directions:**
   - Projects saved by main load here unchanged (above).
   - A project saved here, after a fill and with the 3D elements layer off, opens in main without errors. The filled values and Source line are kept, `P.ui.v3b.lay.app` is kept, and the 3D view opens.
+
+## 2026-10-13 — PR: claude/girderdetail-cleanup1 (clean-up of known open items; engineer offline, "continue to clean up the app and use judgement"; PR link added after merge)
+
+Main page and the embedded Preliminary sizing (PlateLine, `PL_B64`, decoded, edited and re-encoded on its one line). No storage key, saved field or `bridgeSuite.v1.*` payload is added, renamed or removed. `lldf.html` is unchanged.
+
+### C1. Design all counts the end (bearing-line) cross-frames in the cross-frame case   [quantities and cost only; no check changes] [resolves CF-D9 open item 2]
+- **Where:** `designAllRun0`, the cross-frame branch of step 5 (anchor `else if (cfE) { const R = cfE.R, nF = Math.max(0, (q.frames || 0) - (q.framesSup || 0))`); two new rows after "Cross-frames: bolts" (anchor `// end (bearing-line) cross-frames (C1, 2026-10-13)`). Manual, part "Design all": "cross-frame members and bolts" → "cross-frame members and bolts, intermediate and end (bearing-line) frames".
+- **What the module assumes for the end frames:** the Cross-frames module has **no separate end-frame members**; it designs one intermediate frame (top chord, bottom chord, diagonal angles; `cf.mem.top`, `cf.mem.bot`, `cf.mem.diag`; bolts `cf.conn.n` per member end). The DXF end detail (`dxfCF`, title "END CROSS-FRAME AT BEARINGS (ALONG θ DEG. SKEW)", note "MEMBERS PER THE CROSS-FRAME DESIGN") and the 3D view draw every end frame as an **X-frame** along the bearing line (top chord, bottom chord, two diagonals, also when the intermediate frames are K-frames), of length S/cos θ with θ the largest skew. Design all now counts them the same way:
+  - n = `qty.framesSup` (the bearing-line frames Preliminary sizing counts, the same n the end diaphragms use);
+  - S<sub>e</sub> = S/cos θ<sub>max</sub> (S = `cf.S`, θ<sub>max</sub> = largest |skew| of `P.df.bridge.skews`, 0 if none), work-point lengths as for the intermediate frames: top and bottom chord S<sub>e</sub>, two diagonals √(S<sub>e</sub>² + h²) (h = `cf.h`);
+  - steel per frame = [S<sub>e</sub>(A<sub>top</sub> + A<sub>bot</sub>) + 2√(S<sub>e</sub>² + h²)A<sub>diag</sub>] × 0.2836 lb/in³, at `cDet`; bolts per frame = 4 members × 2 ends × `cf.conn.n`, at `cBolt`.
+  - Rows: "End cross-frames at the bearing lines (n, X-type, S<sub>e</sub> ft [along θ° skew]): members" and "End cross-frames: bolts". They also appear in the DXF "ESTIMATED QUANTITIES" table, which lists the Design all rows.
+  - Not changed: the diaphragm branch, the intermediate cross-frame rows, the connection plate count (still intermediate frames only; the end frames connect to the bearing stiffeners), every check, auto-design and the drawings.
+- **Before:**
+  ```js
+      add(`Intermediate cross-frames (${nF}): members`, nF * lbF / 1000, 'kip', nF * lbF * S.cDet); add('Cross-frames: bolts', nF * bF, 'each', nF * bF * S.cBolt); }
+  ```
+- **After:**
+  ```js
+      add(`Intermediate cross-frames (${nF}): members`, nF * lbF / 1000, 'kip', nF * lbF * S.cDet); add('Cross-frames: bolts', nF * bF, 'each', nF * bF * S.cBolt);
+      const nE = Math.max(0, q.framesSup || 0), skw = ((P.df || {}).bridge || {}).skews || [], skM = skw.length ? Math.max(...skw.map(v => Math.abs(+v) || 0)) : 0, Se = R.S / Math.cos(skM * Math.PI / 180), lbE = (Se * (R.mem.top.A + R.mem.bot.A) + 2 * Math.hypot(Se, R.h) * R.mem.diag.A) * lbS, bE = 4 * 2 * parseDim(P.cf.conn.n);   // ...
+      if (nE) { add(`End cross-frames at the bearing lines (${nE}, X-type, ${f2(Se / 12)} ft${skM ? ` along ${f0(skM)}° skew` : ''}): members`, nE * lbE / 1000, 'kip', nE * lbE * S.cDet); add('End cross-frames: bolts', nE * bE, 'each', nE * bE * S.cBolt); } }
+  ```
+- **Problem:** Design all left out every end cross-frame (CF-D9 open item 2), so the cross-frame quantities and the total were low. Quantities only; no engineering check depends on them.
+- **Governing provision:** none (quantity estimate). Steel density 0.2836 lb/in³ (490 pcf), as for every other Design all row.
+- **Check case (built-in example, Design all from Preliminary sizing; 5 girders, 4 spans, 4 bearing lines, skew 15°; after auto-design: K-frame (Kb), S = 114 in, h = 52 in; top chord L5x5x3/8, A = (5 + 5 − 0.375)(0.375) = 3.609 in²; bottom chord and diagonals L3x3x3/8, A = (3 + 3 − 0.375)(0.375) = 2.109 in²; 2 bolts per member end; detail steel $3.50/lb, bolts $15.00):**
+  - n = `framesSup` = 4 bearing lines × 4 bays = 16; S<sub>e</sub> = 114/cos 15° = 118.02 in (9.84 ft); diagonal √(118.02² + 52²) = 128.97 in.
+  - Steel per frame [118.02(3.609 + 2.109) + 2(128.97)(2.109)](0.2836) = (674.8 + 544.0)(0.2836) = 345.7 lb; 16 frames 5,531 lb = **5.53 kip, $19,360**. Bolts 16 × 4 × 2 × 2 = **256, $3,840**.
+  - **Before:** rows end at "Intermediate cross-frames (52): members 14.41 kip $50,451" and "Cross-frames: bolts 1,040 $15,600"; total **$1,676,544**.
+  - **After:** the same rows, plus "End cross-frames at the bearing lines (16, X-type, 9.84 ft along 15° skew): members 5.53 kip $19,360" and "End cross-frames: bolts 256 $3,840"; total **$1,699,744** (+$23,200). Every other row, every module status and the geometry conflicts are identical.
+- **Saved data:** no key or format change; `P.designAll.cost` gains the two rows (an array of `{ item, qn, unit, c }`, as before).
+- **Other copies:** none.
+
+### Exact changes (C1): main page (unified diff, the Manual line abbreviated to the changed words)
+
+```diff
+@@ Manual, part "Design all" @@
+-... studs, and cross-frame members and bolts (owner-standard unit costs, placeholders until replaced) ...
++... studs, and cross-frame members and bolts, intermediate and end (bearing-line) frames (owner-standard unit costs, placeholders until replaced) ...
+@@ -5915,3 +5915,5 @@ function designAllRun0(j, quiet) {
+   else if (cfE) { const R = cfE.R, nF = Math.max(0, (q.frames || 0) - (q.framesSup || 0)), lbF = R.frames.reduce((a, e) => a + e.L * R.mem[e.k].A * lbS, 0), bF = R.frames.length * 2 * parseDim(P.cf.conn.n);
+-    add(`Intermediate cross-frames (${nF}): members`, nF * lbF / 1000, 'kip', nF * lbF * S.cDet); add('Cross-frames: bolts', nF * bF, 'each', nF * bF * S.cBolt); }
++    add(`Intermediate cross-frames (${nF}): members`, nF * lbF / 1000, 'kip', nF * lbF * S.cDet); add('Cross-frames: bolts', nF * bF, 'each', nF * bF * S.cBolt);
++    const nE = Math.max(0, q.framesSup || 0), skw = ((P.df || {}).bridge || {}).skews || [], skM = skw.length ? Math.max(...skw.map(v => Math.abs(+v) || 0)) : 0, Se = R.S / Math.cos(skM * Math.PI / 180), lbE = (Se * (R.mem.top.A + R.mem.bot.A) + 2 * Math.hypot(Se, R.h) * R.mem.diag.A) * lbS, bE = 4 * 2 * parseDim(P.cf.conn.n);   // end (bearing-line) cross-frames (C1, 2026-10-13): X-type with the module's top chord, bottom chord and diagonal angles, along the largest skew, as the DXF end detail and the 3D view draw them
++    if (nE) { add(`End cross-frames at the bearing lines (${nE}, X-type, ${f2(Se / 12)} ft${skM ? ` along ${f0(skM)}° skew` : ''}): members`, nE * lbE / 1000, 'kip', nE * lbE * S.cDet); add('End cross-frames: bolts', nE * bE, 'each', nE * bE * S.cBolt); } }
+   const total = cost.reduce((a, c) => a + c.c, 0);
+```
+
+
+### C2. Preliminary sizing's built-in interior-girder factors: S > 16 ft and N<sub>b</sub> = 3 rules, as in LLDF and DLs   [§4: built-in approximate live load distribution factors, interior girders] [more conservative; the built-in example is unchanged]
+- **Decision:** clean-up of the open item left by XS10 ("GirderDetail's S > 16 ft / N<sub>b</sub> = 3 rules for interior girders are not ported"); coordinator, 2026-10-13 (engineer offline: "continue to clean up the app and use judgement"). Copied from GirderDetail `dfMember` (interior branch), not shared (CLAUDE.md §3).
+- **Where (anchors), decoded PlateLine:** the comment above `const SG_MPF` (interior rules added); `function sgLever(G, N, j = 0)` (new third argument, the girder; the exterior calls keep j = 0), anchor `R += 0.5 * sgLeverC(pos, Nb, j, s + o)`; `function sgDF(S, L, Kg, ts, de, nb, ext, rdwy)`: the geometry block becomes a local `geo()` (anchor `const geo = () =>`) used by the new interior branch (anchor `// interior girders (C2): GirderDetail dfMember`) and by the exterior branch (`const { w, NL, G } = geo();`, the same arithmetic as before); `renderSuggest`, the "Interior girder, moment" derivation block (anchor `d.rule === 'S16' ? \`S &> 16`) and its reference (anchor `'; S > 16 ft: lever rule'`); Manual, distribution factors paragraph (anchor `for S &gt; 16 ft the lever rule, and for N<sub>b</sub> = 3`). Main page: only the re-encoded `PL_B64` line.
+- **Before (interior):**
+  ```js
+    if (!ext) return { mM: Math.max(m1, m2), mV: Math.max(v1, v2), m1, m2, v1, v2, kr };
+  ```
+  g<sub>M,int</sub> = max(g<sub>1</sub>, g<sub>2+</sub>) by the equations of Table 4.6.2.2.2b-1, g<sub>V,int</sub> = max(0.36 + S/25, 0.2 + S/12 − (S/35)²) (Table 4.6.2.2.3a-1), for every S and N<sub>b</sub>.
+- **After (interior):**
+  ```js
+    if (!ext) {
+      if (!(nb >= 3 && (S > 16.0 || nb === 3))) return { mM: Math.max(m1, m2), mV: Math.max(v1, v2), m1, m2, v1, v2, kr };
+      const { G } = geo(), lv = N => { let b = null; for (let j = 1; j < nb - 1; j++) { const l = sgLever(G, N, j); if (l && (b == null || l.df > b)) b = l.df; } return b; }, l1 = lv(1), l2 = lv(2);
+      let iM1 = m1, iM2 = m2, iV1 = v1, iV2 = v2, rule;
+      if (S > 16.0) { iM1 = iV1 = l1 != null ? l1 : 0; iM2 = iV2 = l2 != null ? l2 : 0; rule = 'S16'; }
+      else { iM1 = Math.min(m1, l1 != null ? l1 : m1); iM2 = Math.min(m2, l2 != null ? l2 : m2); iV1 = l1 != null ? l1 : v1; iV2 = l2 != null ? l2 : v2; rule = 'N3'; }
+      return { mM: Math.max(iM1, iM2), mV: Math.max(iV1, iV2), m1: iM1, m2: iM2, v1: iV1, v2: iV2, kr, rule, eq: { m1, m2, v1, v2 }, l1, l2 };
+    }
+  ```
+  - S > 16 ft: one lane g<sub>1</sub> = lever rule (one truck, m = 1.2), two or more lanes g<sub>2+</sub> = lever rule (two trucks with a 4 ft gap, m = 1.0), for moment and shear;
+  - N<sub>b</sub> = 3 (S ≤ 16 ft): moment g<sub>1</sub> = min(equation, lever 1 lane), g<sub>2+</sub> = min(equation, lever 2 lanes); shear g<sub>1</sub>, g<sub>2+</sub> = lever rule;
+  - the lever rule is taken for each interior girder (trucks 2 ft from the traffic faces, stepped 0.25 ft, as GirderDetail's `dfLever`) and the largest is used, because GirderDetail sends the largest factor over its interior girders (`dfPayload`); N<sub>L</sub> and the lane width as in XS10 (w/2 lanes for 20 ≤ w ≤ 24 ft); a lever case that does not fit the roadway counts as 0 (S > 16 ft) or is not used (N<sub>b</sub> = 3), as in `dfMember`;
+  - the fatigue factors follow: `m1`, `v1` now carry the rule's one-lane values (Preliminary sizing's interior fatigue factor is m1/1.2 and v1/1.2, as GirderDetail's fatM, fatV = r.mom1/1.2, r.shr1/1.2);
+  - every other case (N<sub>b</sub> ≥ 4 with S ≤ 16 ft, and N<sub>b</sub> = 2) returns the same object as before, so those results are bit-identical; the exterior branch is unchanged (same arithmetic, the geometry moved into `geo()`).
+  - As for the exterior girders (XS10), no skew factor is applied here: Preliminary sizing applies its own skew correction for shear along the span; GirderDetail's interior shear includes its skew factor (1.048 at 15°, below).
+- **Problem:** with S > 16 ft or N<sub>b</sub> = 3 the built-in interior factors used the equations outside their range. They were below GirderDetail's factors for the same layout (S = 17 ft: moment 1.083 vs 1.412), so Suggest, Full design and the width study could size trial girders unconservatively. Less conservative; fixed. The G7 range-of-applicability warning (N<sub>b</sub> ≥ 4, S ≤ 16 ft) is unchanged.
+- **Governing provision:** AASHTO LRFD 10th Ed. Table 4.6.2.2.2b-1 (interior moment; range 3.5 ≤ S ≤ 16.0 ft, N<sub>b</sub> ≥ 4; for N<sub>b</sub> = 3 the lesser of the equation and the lever rule), Table 4.6.2.2.3a-1 (interior shear; lever rule for N<sub>b</sub> = 3; range 3.5 ≤ S ≤ 16.0 ft), 4.6.2.2.1 (outside the range of applicability: the lever rule unless specified otherwise), 3.6.1.1.1 and 3.6.1.1.2 (lanes, multiple presence). These are the tables GirderDetail's DF1 check cites ("AASHTO LRFD Tables 4.6.2.2.2b-1, 4.6.2.2.3a-1, 4.6.2.2.2d-1") and the rules its `dfMember` labels ("S > 16 ft: lever rule"; "N_b = 3: moment lesser of equation and lever rule; shear by lever rule"). Not re-checked against the printed 10th Edition here (no copy in the repo): verify.
+- **Check cases (sgDF in Node, old vs new; L = 110 ft, K<sub>g</sub> = 936,395 in⁴, t<sub>s</sub> = 8 in, d<sub>e</sub> = 1.75 ft, w = (N<sub>b</sub> − 1)S + 2d<sub>e</sub>; equations: k<sub>r</sub> as before):**
+  - **N<sub>b</sub> = 3, S = 9.50 ft** (w = 22.50 ft: 2 lanes of 11.25 ft; interior girder G2 at 9.50 ft, girders at 0, 9.50, 19.00 ft; traffic faces at −1.75 and 20.75 ft): equations g<sub>1,M</sub> = 0.484, g<sub>2+,M</sub> = 0.708, g<sub>1,V</sub> = 0.36 + 9.50/25 = 0.740, g<sub>2+,V</sub> = 0.2 + 9.50/12 − (9.50/35)² = 0.918.
+    - Lever, 1 lane: wheels at 9.50 and 15.50 ft: R = ½[1 + (19.00 − 15.50)/9.50] = 0.684, g = 1.2 × 0.684 = **0.821**.
+    - Lever, 2 lanes: wheels at 2.75, 8.75, 12.75, 18.75 ft (the train's last position, 2 ft from the right face): R = ½(2.75 + 8.75 + 6.25 + 0.25)/9.50 = 0.947, g = 1.0 × 0.947 = **0.947**.
+    - Moment: min(0.484, 0.821) = 0.484, min(0.708, 0.947) = 0.708: g<sub>M</sub> **0.708 → 0.708** (unchanged). Shear: max(0.740, 0.918) = **0.918 → max(0.821, 0.947) = 0.947**; fatigue shear factor v<sub>1</sub>/1.2: 0.740/1.2 = 0.617 → 0.821/1.2 = 0.684.
+  - **N<sub>b</sub> = 5, S = 17.00 ft** (w = 71.50 ft, N<sub>L</sub> = 5; G2 at 17.00 ft): lever 1 lane: wheels at 17.00 and 23.00: ½(1 + 11/17) = 0.824 × 1.2 = **0.988**; 2 lanes: wheels at 7, 13, 17, 23: ½(7/17 + 13/17 + 1 + 11/17) = 1.412 × 1.0 = **1.412** (G3 gives no more). g<sub>M</sub> 1.083 → **1.412**, g<sub>V</sub> 1.381 → **1.412**; m<sub>1</sub> 0.698 → 0.988, v<sub>1</sub> 1.040 → 0.988.
+  - N<sub>b</sub> = 4 and N<sub>b</sub> = 3 with S = 17.00 ft: the same 0.988 / 1.412. N<sub>b</sub> = 3, S = 12.00 ft: g<sub>M</sub> 0.838 unchanged, g<sub>V</sub> 1.082 → 1.167. N<sub>b</sub> = 6, S = 16.00 ft, N<sub>b</sub> = 2, and the built-in example (N<sub>b</sub> = 5, S = 9.50 ft), interior and exterior: identical objects.
+- **Same layout in both tools (headless Chromium, built-in example with Preliminary sizing changed; span 1, 110 ft; built-in = with GirderDetail's factors switched off):**
+  - N<sub>b</sub> = 3, S = 9.50 ft: built-in interior, before: g<sub>M</sub> 0.708, g<sub>V</sub> 0.918, m<sub>1</sub> 0.484, v<sub>1</sub> 0.740; after: 0.708, **0.947**, 0.484, **0.821**; GirderDetail: 0.708, 0.993, 0.484, 0.861 (= 0.947 and 0.821 × its skew factor for shear 1.048 at 15°). Exterior unchanged (0.795). Fast suggestion unchanged (D = 65 in, $1,011,528).
+  - N<sub>b</sub> = 3, S = 17.00 ft: built-in interior, before: g<sub>M</sub> 1.083, g<sub>V</sub> 1.381, m<sub>1</sub> 0.698, v<sub>1</sub> 1.040; after: **1.412, 1.412, 0.988, 0.988**; GirderDetail: 1.412, 1.480, 0.988, 1.036 (shear × 1.048). Fast suggestion (trial girders use the built-in factors): web depth 66 → **74 in**, top flanges 22 → 23 in wide, estimated cost $1,281,604 → **$1,365,308**.
+  - The Suggest tab's interior derivation shows the rule (screenshots `scratchpad/followups/gd-c1/c2_nb3.png`, `c2_nb3_S17.png`).
+- **Effect on the built-in example (N<sub>b</sub> = 5, S = 9.50 ft):** none. The fast suggestion, Full design and every Preliminary sizing result are identical (below), and the width study (W = 44.50 ft, N = 4 to 12, S ≤ 16 ft) is identical row for row: no row has S > 16 ft or N<sub>b</sub> = 3 (N = 3 needs S ≥ 18.25 ft, above the 16 ft limit, so it is not a row).
+- **Saved data:** no key or format change. The built-in factor objects (not saved) gain `rule`, `eq`, `l1`, `l2` in the S > 16 ft and N<sub>b</sub> = 3 cases only.
+- **Other copies:** GirderDetail `dfMember`, `dfLever`, `dfLeverC` (main page; the source, unchanged). `lldf.html` is not touched.
+
+### Exact changes (C2): decoded PlateLine (unified diff against main; the main page changes only on the PL_B64 line)
+
+```diff
+--- PlateLine (decoded PL_B64, main 77973a3)
++++ PlateLine (decoded PL_B64, C2)
+@@ -1795,7 +1795,10 @@
+    S, N_b girders, d_e on both sides and the roadway w; XS10): one lane by the lever rule (truck 2 ft from the traffic face, m = 1.2);
+    two or more lanes the larger of the e-factor with d_e not less than -1.0 ft (Table 4.6.2.2.2d-1 range; 4.6.2.2.3b for shear) and
+    the rigid cross-section method (4.6.2.2.2d); S > 16 ft: the lever rule; N_b = 3: moment the lesser of the e-factor and the lever
+-   rule, shear the lever rule. Lanes: N_L = INT(w/12), or 2 lanes of w/2 for 20 <= w <= 24 ft (3.6.1.1.1). */
++   rule, shear the lever rule. Lanes: N_L = INT(w/12), or 2 lanes of w/2 for 20 <= w <= 24 ft (3.6.1.1.1).
++   Interior girders (C2, copied from dfMember): the equations (Tables 4.6.2.2.2b-1, 4.6.2.2.3a-1); S > 16 ft: one lane and two or
++   more lanes by the lever rule; N_b = 3: moment the lesser of the equation and the lever rule (one lane, and two or more lanes),
++   shear the lever rule; the lever rule is the largest over the interior girders (GirderDetail sends the largest interior factor). */
+ const SG_MPF = n => n <= 1 ? 1.20 : n === 2 ? 1.00 : n === 3 ? 0.85 : 0.65;
+ function sgLeverC(pos, Nb, j, uw) {
+   const uj = pos[j];
+@@ -1805,13 +1808,13 @@
+   if (j === Nb - 1 && Nb > 1 && uw > uj) return (uw - pos[Nb - 2]) / (pos[Nb - 1] - pos[Nb - 2]);
+   return 0;
+ }
+-function sgLever(G, N) {   // exterior girder (j = 0), truck train, 6-ft axles, gaps of 4 ft, 2 ft from the traffic faces
++function sgLever(G, N, j = 0) {   // girder j (default the exterior girder, j = 0), truck train, 6-ft axles, gaps of 4 ft, 2 ft from the traffic faces
+   const pos = G.pos, Nb = G.nb, rw0 = G.rw0, rw1 = G.rw1, laneW = G.laneW || 12;
+   if (laneW * N > rw1 - rw0 + 1e-9) return null;
+   const off = []; let cum = 0; for (let t = 0; t < N; t++) { off.push(cum, cum + 6); cum += 6 + (t < N - 1 ? 4 : 0); }
+   const train = off[off.length - 1]; if (train > rw1 - rw0 - 4 + 1e-9) return null;
+   let best = null;
+-  for (let s = rw0 + 2; s <= rw1 - 2 - train + 1e-9; s += 0.25) { let R = 0; for (const o of off) R += 0.5 * sgLeverC(pos, Nb, 0, s + o); if (!best || R > best.R + 1e-9) best = { R, s }; }
++  for (let s = rw0 + 2; s <= rw1 - 2 - train + 1e-9; s += 0.25) { let R = 0; for (const o of off) R += 0.5 * sgLeverC(pos, Nb, j, s + o); if (!best || R > best.R + 1e-9) best = { R, s }; }
+   if (!best) return null; const m = SG_MPF(N);
+   return { N, R: best.R, m, df: best.R * m };
+ }
+@@ -1827,10 +1830,18 @@
+   const m1 = 0.06 + (S / 14) ** 0.4 * (S / L) ** 0.3 * kr ** 0.1;
+   const m2 = 0.075 + (S / 9.5) ** 0.6 * (S / L) ** 0.2 * kr ** 0.1;
+   const v1 = 0.36 + S / 25, v2 = 0.2 + S / 12 - (S / 35) ** 2;
+-  if (!ext) return { mM: Math.max(m1, m2), mV: Math.max(v1, v2), m1, m2, v1, v2, kr };
+-  const w = rdwy != null && isFinite(rdwy) ? rdwy : (nb - 1) * S + 2 * de, twoHalf = w >= 20.0 - 1e-9 && w <= 24.0 + 1e-9, NL = twoHalf ? 2 : Math.max(1, Math.floor(w / 12)), laneW = twoHalf ? w / 2 : 12;
+-  const pos = []; for (let i = 0; i < nb; i++) pos.push(i * S); const xc = (nb - 1) * S / 2, sumX2 = pos.reduce((a, x) => a + (x - xc) ** 2, 0) || 1e-9;
+-  const G = { pos, nb, de, rw0: -de, rw1: -de + w, NL, laneW, xc, sumX2 };
++  const geo = () => { const w = rdwy != null && isFinite(rdwy) ? rdwy : (nb - 1) * S + 2 * de, twoHalf = w >= 20.0 - 1e-9 && w <= 24.0 + 1e-9, NL = twoHalf ? 2 : Math.max(1, Math.floor(w / 12)), laneW = twoHalf ? w / 2 : 12;
++    const pos = []; for (let i = 0; i < nb; i++) pos.push(i * S); const xc = (nb - 1) * S / 2, sumX2 = pos.reduce((a, x) => a + (x - xc) ** 2, 0) || 1e-9;
++    return { w, NL, G: { pos, nb, de, rw0: -de, rw1: -de + w, NL, laneW, xc, sumX2 } }; };
++  if (!ext) {
++    if (!(nb >= 3 && (S > 16.0 || nb === 3))) return { mM: Math.max(m1, m2), mV: Math.max(v1, v2), m1, m2, v1, v2, kr };
++    const { G } = geo(), lv = N => { let b = null; for (let j = 1; j < nb - 1; j++) { const l = sgLever(G, N, j); if (l && (b == null || l.df > b)) b = l.df; } return b; }, l1 = lv(1), l2 = lv(2);   // interior girders (C2): GirderDetail dfMember
++    let iM1 = m1, iM2 = m2, iV1 = v1, iV2 = v2, rule;
++    if (S > 16.0) { iM1 = iV1 = l1 != null ? l1 : 0; iM2 = iV2 = l2 != null ? l2 : 0; rule = 'S16'; }
++    else { iM1 = Math.min(m1, l1 != null ? l1 : m1); iM2 = Math.min(m2, l2 != null ? l2 : m2); iV1 = l1 != null ? l1 : v1; iV2 = l2 != null ? l2 : v2; rule = 'N3'; }
++    return { mM: Math.max(iM1, iM2), mV: Math.max(iV1, iV2), m1: iM1, m2: iM2, v1: iV1, v2: iV2, kr, rule, eq: { m1, m2, v1, v2 }, l1, l2 };
++  }
++  const { w, NL, G } = geo();
+   const l1 = sgLever(G, 1), lev = l1 ? l1.df : 0, deE = Math.max(de, -1.0), eM = 0.77 + deE / 9.1, eV = 0.6 + deE / 10;
+   let mE = eM * m2, vE = eV * v2, rule = 'e';
+   if (S > 16.0) { const l2 = sgLever(G, 2); mE = vE = l2 ? l2.df : 0; rule = 'S16'; }
+@@ -2568,7 +2579,7 @@
+ <p>DC1 (noncomposite): steel self-weight from the current plates increased by the detail allowance, deck slab over the tributary width (S for the interior girder, S/2 + overhang for the exterior girder), haunch, and SIP forms. DC2: two barriers shared equally by all girders. DW: wearing surface over the roadway, shared equally. Deck placement: 1.25 DC1 + 1.50 construction live load over the tributary width.</p>
+ <p>Live load is HL-93 (3.6.1.2, 3.6.1.3): the design truck with rear axle spacing 14, 18, 22, 26, and 30 ft, both directions, or the design tandem, plus the 0.64 klf lane on the parts of the influence line that increase the effect. IM = 33% is applied to the truck and tandem. In negative moment regions (between permanent-load contraflexure points around each pier), 90% of two trucks with 14 ft rear spacing, at least 50 ft apart, plus 90% of the lane is also considered.</p>
+ <h3>Distribution factors</h3>
+-<p>Interior girder moment and shear use Table 4.6.2.2.2b-1 and 4.6.2.2.3a-1, taking the larger of one lane and two or more lanes. K<sub>g</sub> uses the steel section at each span's midspan. The exterior girder uses the lever rule (one lane, multiple presence 1.2) and e × interior (two or more lanes), per Tables 4.6.2.2.2d-1 and 4.6.2.2.3b-1. Negative moment regions use the average length and K<sub>g</sub> of the adjacent spans. The skew correction for shear (Table 4.6.2.2.3c-1) is applied along the whole span; the skew reduction for moment is not taken.</p>
++<p>Interior girder moment and shear use Table 4.6.2.2.2b-1 and 4.6.2.2.3a-1, taking the larger of one lane and two or more lanes; for S &gt; 16 ft the lever rule, and for N<sub>b</sub> = 3 the lesser of the equation and the lever rule for moment and the lever rule for shear (the largest over the interior girders), as GirderDetail's LLDF and DLs module does. K<sub>g</sub> uses the steel section at each span's midspan. The exterior girder uses the lever rule (one lane, multiple presence 1.2) and e × interior (two or more lanes), per Tables 4.6.2.2.2d-1 and 4.6.2.2.3b-1. Negative moment regions use the average length and K<sub>g</sub> of the adjacent spans. The skew correction for shear (Table 4.6.2.2.3c-1) is applied along the whole span; the skew reduction for moment is not taken.</p>
+ <h3>Combinations</h3>
+ <div class="eq-math">\\[M_u = \\gamma_{DC}M_{DC} + \\gamma_{DW}M_{DW} + 1.75M_{LL+IM}, \\qquad \\gamma_{DC} = 1.25\\ \\text{or}\\ 0.90, \\quad \\gamma_{DW} = 1.50\\ \\text{or}\\ 0.65\\]</div>
+ <div class="eq-math">\\[M_s = M_{DC} + M_{DW} + 1.30M_{LL+IM} \\quad (\\text{Service II}), \\qquad M_c = 1.25M_{DC1} + 1.50M_{CLL}\\]</div>
+@@ -3026,7 +3037,7 @@
+   const TI = R.types.int || null, TE = R.types.ext || null, Lm = s.spans[iMax];
+   let dfw = `<div class="eq-block"><div class="eq-title"><span>Longitudinal stiffness, Span ${iMax + 1} midspan section</span><span class="eq-ref">AASHTO 4.6.2.2.1-1, 5.4.2.4-1</span></div><div class="eq-math">\\[\\begin{aligned}E_c &= 120{,}000(1.0)(${f3(num(P.bridge.wc))})^2(${f2(num(P.bridge.fc))})^{0.33} = ${f0(s.Ec)}\\ \\text{ksi}, \\quad n = \\frac{29{,}000}{${f0(s.Ec)}} = ${f2(s.n)} \\\\ K_g &= n\\left(I + A e_g^2\\right) = ${f2(s.n)}\\left[${f0(Kg.I)} + ${f2(Kg.A)}(${f2(Kg.eg)})^2\\right] = ${f0(Kg.Kg)}\\ \\text{in}^4\\end{aligned}\\]</div></div>`;
+   if (TI) { const d = TI.dfSpan[iMax];
+-    dfw += `<div class="eq-block"><div class="eq-title"><span>Interior girder, moment, Span ${iMax + 1}</span><span class="eq-ref">AASHTO Table 4.6.2.2.2b-1</span></div><div class="eq-math">\\[\\begin{aligned}g_{1} &= 0.06 + \\left(\\frac{S}{14}\\right)^{0.4}\\left(\\frac{S}{L}\\right)^{0.3}\\left(\\frac{K_g}{12Lt_s^3}\\right)^{0.1} = 0.06 + \\left(\\frac{${f2(num(P.bridge.S))}}{14}\\right)^{0.4}\\left(\\frac{${f2(num(P.bridge.S))}}{${f2(Lm)}}\\right)^{0.3}(${f3(d.kr)})^{0.1} = ${f3(d.m1)} \\\\ g_{2+} &= 0.075 + \\left(\\frac{S}{9.5}\\right)^{0.6}\\left(\\frac{S}{L}\\right)^{0.2}\\left(\\frac{K_g}{12Lt_s^3}\\right)^{0.1} = ${f3(d.m2)} \\\\ g_M &= \\max(${f3(d.m1)},\\ ${f3(d.m2)}) = ${f3(d.mM)} \\qquad g_V = \\max(0.36 + S/25,\\ 0.2 + S/12 - (S/35)^2) = ${f3(d.mV)}\\end{aligned}\\]</div></div>`; }
++    dfw += `<div class="eq-block"><div class="eq-title"><span>Interior girder, moment, Span ${iMax + 1}</span><span class="eq-ref">AASHTO Table 4.6.2.2.2b-1${d.rule === 'S16' ? '; S > 16 ft: lever rule' : d.rule === 'N3' ? ', N<sub>b</sub> = 3; Table 4.6.2.2.3a-1' : ''}</span></div><div class="eq-math">\\[\\begin{aligned}g_{1} &= 0.06 + \\left(\\frac{S}{14}\\right)^{0.4}\\left(\\frac{S}{L}\\right)^{0.3}\\left(\\frac{K_g}{12Lt_s^3}\\right)^{0.1} = 0.06 + \\left(\\frac{${f2(num(P.bridge.S))}}{14}\\right)^{0.4}\\left(\\frac{${f2(num(P.bridge.S))}}{${f2(Lm)}}\\right)^{0.3}(${f3(d.kr)})^{0.1} = ${f3(d.eq ? d.eq.m1 : d.m1)} \\\\ g_{2+} &= 0.075 + \\left(\\frac{S}{9.5}\\right)^{0.6}\\left(\\frac{S}{L}\\right)^{0.2}\\left(\\frac{K_g}{12Lt_s^3}\\right)^{0.1} = ${f3(d.eq ? d.eq.m2 : d.m2)} \\\\ ${d.rule === 'S16' ? `S &> 16\\ \\text{ft: lever rule},\\quad g_1 = ${f3(d.m1)}\\ (1\\ \\text{lane}),\\quad g_{2+} = ${f3(d.m2)}\\ (2\\ \\text{lanes}) \\\\ ` : d.rule === 'N3' ? `N_b &= 3:\\quad g_1 = \\min(${f3(d.eq.m1)},\\ ${d.l1 != null ? f3(d.l1) : '\\text{n/a}'}) = ${f3(d.m1)},\\quad g_{2+} = \\min(${f3(d.eq.m2)},\\ ${d.l2 != null ? f3(d.l2) : '\\text{n/a}'}) = ${f3(d.m2)}\\ (\\text{lesser of equation and lever rule}) \\\\ ` : ''}g_M &= \\max(${f3(d.m1)},\\ ${f3(d.m2)}) = ${f3(d.mM)} \\qquad g_V = ${d.rule ? `\\max(${f3(d.v1)},\\ ${f3(d.v2)})\\ (\\text{lever rule})` : '\\max(0.36 + S/25,\\ 0.2 + S/12 - (S/35)^2)'} = ${f3(d.mV)}\\end{aligned}\\]</div></div>`; }
+   if (TE) { const d = TE.dfSpan[iMax];
+     dfw += `<div class="eq-block"><div class="eq-title"><span>Exterior girder, moment, Span ${iMax + 1}</span><span class="eq-ref">AASHTO Table 4.6.2.2.2d-1, lever rule; 4.6.2.2.2d rigid cross-section</span></div><div class="eq-math">\\[\\begin{aligned}d_e &= ${f2(s.de)}\\ \\text{ft}, \\quad w = ${f2(d.w)}\\ \\text{ft}, \\quad N_L = ${d.NL}, \\quad g_{1,lever} = 1.2 \\times \\frac{0.5\\,(a_1 + a_2)}{S} = ${f3(d.lev)}, \\quad a_1 = S + d_e - 2 = ${f2(num(P.bridge.S) + s.de - 2)}\\ \\text{ft} \\\\ e &= 0.77 + \\frac{${d.deE > s.de + 1e-9 ? '-1.00' : 'd_e'}}{9.1} = ${f3(d.eM)}${d.deE > s.de + 1e-9 ? '\\ (d_e \\text{ limited to } -1.0)' : ''}, \\quad g_{2+} = ${d.rule === 'e' ? `e\\,g_{2+,int} = ${f3(d.eM)}(${f3(d.m2)})` : d.rule === 'S16' ? '\\text{lever rule, 2 lanes (S > 16 ft)}' : '\\min(e\\,g_{2+,int},\\ \\text{lever, 2 lanes})\\ (N_b = 3)'} = ${f3(d.mE)} \\\\ g_{rigid} &= \\max_n\\, m\\left(\\frac{N_L}{N_b} + \\frac{X_{ext}\\sum e}{\\sum x^2}\\right) = ${f3(d.rig)}\\ (${d.rigN}\\ \\text{lane${d.rigN > 1 ? 's' : ''}}) \\\\ g_M &= \\max(${f3(d.lev)},\\ ${f3(d.mE)},\\ ${f3(d.rig)}) = ${f3(d.mM)}, \\quad g_V = \\max(${f3(d.lev)},\\ ${f3(d.vE)},\\ ${f3(d.rig)}) = ${f3(d.mV)}\\end{aligned}\\]</div></div>`; }
+   const skv = tr[0].skV.map((v, i) => `Span ${i + 1}: ${f3(v)}`).join(', ');
+```
+
+
+### C3. Preliminary sizing's cross-section drawing shows GirderDetail's deck edges and appurtenances   [display only] [results bit-identical] [optional fields in the `gd-xs` record]
+- **Where (anchors), main page:** `dfXsMsg(p)` (anchor `const ll = dfLLFace({}, p.dl, xs, Ed.L.f, Ed.R.f), side = sd => { const q = Ed[sd], fx = xs['fenceX' + sd];`) and its header comment (anchor `Optional drawing fields (C3`).
+- **Where (anchors), decoded PlateLine:** `xsSVG(m)` (anchors `const XS = P.bridge && P.bridge.xs && P.bridge.xs.L && P.bridge.xs.R ? P.bridge.xs : null, xa = XS ? xsApp(XS, m.width) : null;`, `if (XS) o += xsAppSVG(xa, X, k, yTop, m.ts);`, and the caption `cap: XS ? \`To scale.`); new `function xsApp(XS, Wd)` and `function xsAppSVG(xa, X, k, yTop, ts)` after `xsSVG`.
+- **Before:** the Drawings-tab cross-section drew a 42 in rectangle of width `m.barrier` at each deck edge. Since XS9, with deck edges from GirderDetail, `m.barrier` is the average live-load traffic face. So a project with 6 ft sidewalks drew two 5 to 6 ft wide "barriers", and curbs were drawn as barriers.
+- **After (only when `bridge.xs`, GirderDetail's record, is present; the same test `brGeom` uses):** each side is drawn as entered in LLDF and DLs → Cross-section and dead loads:
+  - barrier: width `bw` at the deck edge, 34 in high (schematic, as GirderDetail's drawing, DXF and 3D);
+  - curb: `cw` × `ch` in; its railing (when `rw` > 0) as a post with a top rail at `rp`, 42 in high (schematic), standing on the curb when `rp` is on it, else on the deck or sidewalk surface;
+  - sidewalk (optional fields): `sw` ft × `swT` in at the deck edge, with the barrier or curb on it (as GirderDetail's `dfApp`); its railing or fence at `fx`;
+  - raised median (optional field `med`): `w` ft × `t` in, centered, with a dashed line for a longitudinal joint;
+  - the live-load traffic faces `r` (each side) as dashed red lines labeled "LL face".
+  
+  The caption lists each side and the faces, for example: "Deck edges and appurtenances as set in GirderDetail (LLDF and DLs → Cross-section and dead loads): left barrier 1.50 ft, sidewalk 6.00 ft × 8.00 in with railing or fence at 5.50 ft; right barrier 1.50 ft, sidewalk 5.00 ft × 9.00 in with railing or fence at 4.50 ft; median 4.00 ft × 9.00 in with longitudinal joint. Barrier (34 in) and railing or fence (42 in) heights are schematic. Dashed red lines: live-load traffic faces, 5.50 ft (left) and 4.50 ft (right) from the deck edges." The drawing area grows to fit the tallest element. Without `bridge.xs` the SVG and caption are the same string as before (checked).
+- **Record (`gd-xs`, stored by Preliminary sizing as `bridge.xs` and echoed in `gd-bridge`):** new **optional** fields, written only when the project has the element, so a record without sidewalks, fences or a median is unchanged (byte for byte) and nothing is re-sent for it:
+  - per side `sw` (sidewalk width, ft) and `swT` (thickness, in), when the sidewalk width is > 0; `fx` (sidewalk railing or fence, ft from the deck edge), when one is entered;
+  - `med` = `{ w, t, joint }` (ft, in, boolean), when the median width is > 0.
+  They are the module's inputs (`P.df.dl.swL`, `swThkL`, `swR`, `swThkR`, the validated `fenceXL`/`fenceXR`, `medW`, `medThk`, `medJoint`), not results, so the record still depends only on GirderDetail's inputs and the exchange ends after one round (checked). Preliminary sizing reads them only in the drawing; `brGeom`, `xsLegacy` and every calculation ignore them, and its own saved fields (`bridge.barrier`, `bridge.edge`, `suggest.bar`) are unchanged.
+- **Problem:** the drawing did not show the deck edges GirderDetail sends; with sidewalks it showed wide "barriers" that do not exist. Display only.
+- **Governing provision:** none (drawing only). No formula, load or input changed.
+- **Check case:** xsA test project (sidewalks 6 ft × 8 in and 5 ft × 9 in with fences at 5.50 and 4.50 ft, 1.50 ft barriers, median 4 ft × 9 in with a joint): record gains `L: { sw: 6, swT: 8, fx: 5.5 }`, `R: { sw: 5, swT: 9, fx: 4.5 }`, `med: { w: 4, t: 9, joint: true }`; the drawing shows both sidewalks with the barriers on them, the fences, the median and joint, and LL faces at 5.50 and 4.50 ft (was: two 5.00 ft wide, 42 in "barriers"). Built-in example: 1.50 ft barriers 34 in high and LL faces at 1.50 ft; record unchanged. Curb project with a left sidewalk: left curb 12 × 10 in on the sidewalk with its railing at 0.50 ft, right curb 10 × 8 in with its railing at 1.25 ft on the deck, LL faces 1.00 / 1.50 ft. Screenshots: `scratchpad/followups/gd-c1/c3_{def,xsA,curbsw}_pl_xs.png` (branch) and `main_{def,xsA}_pl_xs.png` (main).
+- **Saved data:** no key renamed or removed; `bridge.xs` (Preliminary sizing) and its echo `P.df.bridge.xs` (GirderDetail) gain the optional fields above in projects that have those elements. An older build ignores them; it re-sends its own record on opening (without them) and Preliminary sizing stores that, with the same results; this build adds them back when the project is opened again.
+- **Other copies:** none. (GirderDetail's own drawing, `dfXsSVG`/`dfFoot`, is the reference for what is drawn; unchanged.)
+
+### Exact changes (C3): main page (unified diff against the C2 commit; the changed PL_B64 line is omitted)
+
+```diff
+diff --git a/Steel Bridge Beam Modules.html b/Steel Bridge Beam Modules.html
+index 6d16ec4..a6a31f6 100644
+--- a/Steel Bridge Beam Modules.html	
++++ b/Steel Bridge Beam Modules.html	
+@@ -4581,3 +4581,6 @@ function dfPayload(R, p) {
+    live-load face r (after the mountable-sidewalk rule, XS6), plus the appurtenance unit weight. Preliminary sizing stores it as bridge.xs,
+-   writes its own deck-edge fields from it (read-only there), and echoes it in gd-bridge; it is sent only when the echo differs. */
++   writes its own deck-edge fields from it (read-only there), and echoes it in gd-bridge; it is sent only when the echo differs.
++   Optional drawing fields (C3; present only when the project has them, so a record without these elements is unchanged): per side the
++   sidewalk width sw (ft) and thickness swT (in) and the sidewalk railing or fence position fx (ft from the deck edge), and the raised
++   median med { w (ft), t (in), joint }. Preliminary sizing only draws them (cross-section drawing); no calculation reads them. */
+ function dfXsMsg(p) {
+@@ -4585,4 +4588,5 @@ function dfXsMsg(p) {
+   const xs = dfXsIn(p, errs); ['swL', 'swThkL', 'swR', 'swThkR'].forEach(k => { if (!(nm(p.dl[k]) >= 0)) errs.push(k); }); if (errs.length) return null;
+-  const ll = dfLLFace({}, p.dl, xs, Ed.L.f, Ed.R.f), side = sd => { const q = Ed[sd]; return { type: q.type, bw: q.bw, bwt: q.bwt, cw: q.cw, ch: q.ch, rw: q.rw, rp: q.rp, rf: q.rf, face: q.face, f: q.f, r: ll[sd].r }; };
+-  return { L: side('L'), R: side('R'), wcA: xs.wcA };
++  const ll = dfLLFace({}, p.dl, xs, Ed.L.f, Ed.R.f), side = sd => { const q = Ed[sd], fx = xs['fenceX' + sd]; return { type: q.type, bw: q.bw, bwt: q.bwt, cw: q.cw, ch: q.ch, rw: q.rw, rp: q.rp, rf: q.rf, face: q.face, f: q.f, r: ll[sd].r, ...(ll[sd].sw > 0 ? { sw: ll[sd].sw, swT: ll[sd].t } : {}), ...(ll[sd].sw > 0 && fx > 0 ? { fx } : {}) }; };
++  const medW = nm(p.dl.medW) > 0 ? nm(p.dl.medW) : 0, medT = nm(p.dl.medThk);
++  return { L: side('L'), R: side('R'), wcA: xs.wcA, ...(medW > 0 && medT >= 0 ? { med: { w: medW, t: medT, joint: p.dl.medJoint === 'yes' } } : {}) };
+ }
+```
+
+### Exact changes (C3): decoded PlateLine (unified diff against C2)
+
+```diff
+--- PlateLine (decoded PL_B64, C2)
++++ PlateLine (decoded PL_B64, C3)
+@@ -4566,10 +4566,12 @@
+   const W = 1000, pad = 60, k = (W - 2 * pad) / (m.width * 12), X = inch => pad + inch * k;
+   const mid = m.spans.indexOf(Math.max(...m.spans)), xm = (m.sup[mid] + m.sup[mid + 1]) / 2;
+   const s = m.secs.find(q => xm >= q.x0 - 1e-9 && xm < q.x1 + 1e-9) || m.secs[0];
+-  const bh = 42 * k, yTop = 40 + bh, yDeckB = yTop + m.ts * k, yTF = yDeckB + m.haunch * k, H = yTF + s.p.d * k + 110;
++  const XS = P.bridge && P.bridge.xs && P.bridge.xs.L && P.bridge.xs.R ? P.bridge.xs : null, xa = XS ? xsApp(XS, m.width) : null;   // deck edges from GirderDetail (C3): drawn as entered there
++  const bh = XS ? Math.max(42, xa.top) * k + 18 : 42 * k, yTop = 40 + bh, yDeckB = yTop + m.ts * k, yTF = yDeckB + m.haunch * k, H = yTF + s.p.d * k + 110;
+   let o = '';
+   o += `<rect x="${X(0)}" y="${yTop}" width="${m.width * 12 * k}" height="${m.ts * k}" fill="#e6e8e4" stroke="#4a5562" stroke-width="1"/>`;
+-  [[0, 1], [m.width * 12 - m.barrier * 12, -1]].forEach(([x0]) => o += `<path d="M${X(x0)} ${yTop}v${-bh}h${m.barrier * 12 * k}v${bh}z" fill="#f1f2ef" stroke="#7a8590" stroke-width=".8"/>`);
++  if (XS) o += xsAppSVG(xa, X, k, yTop, m.ts);
++  else [[0, 1], [m.width * 12 - m.barrier * 12, -1]].forEach(([x0]) => o += `<path d="M${X(x0)} ${yTop}v${-bh}h${m.barrier * 12 * k}v${bh}z" fill="#f1f2ef" stroke="#7a8590" stroke-width=".8"/>`);
+   const gx = [m.ohL * 12]; m.bays.forEach(v => gx.push(gx[gx.length - 1] + v * 12));
+   gx.forEach(g => {
+     const cx = X(g), tb = s.top.b * k, bb = s.bot.b * k;
+@@ -4586,7 +4588,35 @@
+   o += dim(0, m.width * 12, yd + 32, `Out-to-out ${f2(m.width)} ft`);
+   o += `<text x="${X(m.width * 12) + 6}" y="${yTop + m.ts * k / 2 + 4}" class="sv-t">t<tspan baseline-shift="sub" font-size="9">s</tspan> = ${f2(m.ts)} in</text>`;
+   o += `<text x="${X(gx[0]) + s.top.b * k / 2 + 6}" y="${yTF + s.p.d * k / 2}" class="sv-t sv-dim">${s.type}</text>`;
+-  return { svg: `<svg viewBox="0 0 ${W + 60} ${H}" class="dwg" role="img" aria-label="Typical cross-section">${o}</svg>`, cap: `To scale. Girders drawn with section ${s.type} (at midspan of Span ${mid + 1}). Barrier height drawn at 42 in for illustration only.`, sec: s };
++  return { svg: `<svg viewBox="0 0 ${W + 60} ${H}" class="dwg" role="img" aria-label="Typical cross-section">${o}</svg>`, cap: XS ? `To scale. Girders drawn with section ${s.type} (at midspan of Span ${mid + 1}). Deck edges${xa.more ? ' and appurtenances' : ''} as set in GirderDetail (LLDF and DLs → Cross-section and dead loads): ${xa.txt}. Barrier (34 in) and railing or fence (42 in) heights are schematic. Dashed red lines: live-load traffic faces, ${f2(XS.L.r)} ft (left) and ${f2(XS.R.r)} ft (right) from the deck edges.` : `To scale. Girders drawn with section ${s.type} (at midspan of Span ${mid + 1}). Barrier height drawn at 42 in for illustration only.`, sec: s };
++}
++/* deck edges and appurtenances from GirderDetail's record bridge.xs (C3, display only; no calculation reads them). Per side: barrier
++   (width bw ft, schematic 34 in high) or curb (cw x ch in) with its railing (line at rp ft, schematic 42 in, on the curb when rp is
++   on it); optional sidewalk (sw ft x swT in) with its railing or fence (fx ft); optional median (med.w ft x med.t in, centered, joint).
++   x in ft from the left deck edge, heights in inches above the deck top. */
++function xsApp(XS, Wd) {
++  const el = [], ok = v => typeof v === 'number' && isFinite(v), xd = (sd, x) => sd === 'L' ? x : Wd - x, med = XS.med && XS.med.w > 0 ? XS.med : null, txt = [];
++  const surf = x => { for (const sd of ['L', 'R']) { const q = XS[sd]; if (q.sw > 0 && (sd === 'L' ? x <= q.sw + 1e-9 : x >= Wd - q.sw - 1e-9)) return ok(q.swT) ? q.swT : 0; } return med && Math.abs(x - Wd / 2) <= med.w / 2 + 1e-9 && ok(med.t) ? med.t : 0; };
++  ['L', 'R'].forEach(sd => { const q = XS[sd], nm_ = sd === 'L' ? 'left' : 'right', y0 = q.sw > 0 && ok(q.swT) ? q.swT : 0, span = w => { const a = xd(sd, 0), b = xd(sd, w); return [Math.min(a, b), Math.max(a, b)]; }; let t;
++    if (q.sw > 0) el.push({ k: 'sw', x: span(q.sw), y0: 0, h: y0 });
++    if (q.type === 'curb') { const cw = ok(q.cw) && ok(q.ch) && q.cw > 0 && q.ch > 0 ? q.cw / 12 : 0; if (cw) el.push({ k: 'curb', x: span(cw), y0, h: q.ch });
++      t = `${nm_} curb ${cw ? `${f2(q.cw)} × ${f2(q.ch)} in` : '(none)'}`;
++      if (q.rw > 0 && ok(q.rp)) { const on = cw && q.rp <= cw + 1e-9; el.push({ k: 'rail', x: xd(sd, q.rp), y0: on ? y0 + q.ch : surf(xd(sd, q.rp)), h: 42 }); t += ` with railing at ${f2(q.rp)} ft`; } }
++    else { if (ok(q.bw) && q.bw > 0) el.push({ k: 'bar', x: span(q.bw), y0, h: 34 }); t = `${nm_} barrier ${ok(q.bw) ? f2(q.bw) : '?'} ft`; }
++    if (q.sw > 0) { t += `, sidewalk ${f2(q.sw)} ft × ${ok(q.swT) ? f2(q.swT) : '?'} in`; if (q.fx > 0) { el.push({ k: 'rail', x: xd(sd, q.fx), y0, h: 42 }); t += ` with railing or fence at ${f2(q.fx)} ft`; } }
++    if (ok(q.r)) el.push({ k: 'face', sd, x: xd(sd, q.r) });
++    txt.push(t); });
++  if (med) { el.push({ k: 'med', x: [Wd / 2 - med.w / 2, Wd / 2 + med.w / 2], y0: 0, h: ok(med.t) ? med.t : 0, joint: !!med.joint }); txt.push(`median ${f2(med.w)} ft × ${ok(med.t) ? f2(med.t) : '?'} in${med.joint ? ' with longitudinal joint' : ''}`); }
++  return { el, top: Math.max(0, ...el.filter(e => e.k !== 'face').map(e => e.y0 + e.h)), more: !!(XS.L.sw > 0 || XS.R.sw > 0 || med), txt: txt.join('; ') };
++}
++function xsAppSVG(xa, X, k, yTop, ts) {
++  const Y = h => yTop - h * k, px = x => X(x * 12); let o = '', f = '';
++  xa.el.forEach(e => {
++    if (e.k === 'sw' || e.k === 'med' || e.k === 'curb' || e.k === 'bar') { if (!(e.h > 0)) return; o += `<rect x="${px(e.x[0])}" y="${Y(e.y0 + e.h)}" width="${(e.x[1] - e.x[0]) * 12 * k}" height="${e.h * k}" fill="${e.k === 'bar' ? '#f1f2ef' : '#e6e8e4'}" stroke="#7a8590" stroke-width=".8"/>`;
++      if (e.k === 'med' && e.joint) o += `<path d="M${px((e.x[0] + e.x[1]) / 2)} ${Y(e.h)}V${yTop + ts * k}" stroke="#4a5562" stroke-width=".8" stroke-dasharray="3 2"/>`; }
++    else if (e.k === 'rail') o += `<path d="M${px(e.x)} ${Y(e.y0)}V${Y(e.y0 + e.h)}M${px(e.x) - 4} ${Y(e.y0 + e.h)}h8M${px(e.x) - 3} ${Y(e.y0 + e.h * 0.55)}h6" stroke="#4a5562" stroke-width="1.6" fill="none"/>`;
++    else if (e.k === 'face') { const x = px(e.x), yT = Y(xa.top) - 4; f += `<path d="M${x} ${yT}V${yTop + ts * k + 4}" stroke="#b42318" stroke-width="1" stroke-dasharray="5 3"/><text x="${x + (e.sd === 'L' ? 4 : -4)}" y="${yT - 2}" class="sv-t" text-anchor="${e.sd === 'L' ? 'start' : 'end'}" style="fill:#b42318">LL face</text>`; } });
++  return o + f;
+ }
+ function secSVG(ty, sc) {
+   const s = ty.sec, W = 330, d = s.p.d * sc, H = d + 96, cx = 150, y0 = 44;
+```
+
+
+### Verification (C1–C3)
+- **Syntax:** `node --check` on every inline script of the main page and of the decoded PlateLine after each item.
+- **C2 in Node:** `sgDF` of main and of C2 on 16 cases (interior and exterior; N<sub>b</sub> = 2, 3, 4, 5, 6; S = 9.50, 12.00, 16.00, 17.00 ft): exterior and every interior case outside the two rules bit-identical (`JSON.stringify` equal); the changed cases as listed in C2, with the lever-rule values checked by hand.
+- **Results, main (77973a3) against the final build (headless Chromium, Playwright):** the eight XS test projects saved with d7ca4d6 (built-in example; sidewalks with median, ped and added rows; curb mode; curb mode with a sidewalk; AASHTO; 6 ft × 12 in sidewalks; xsA; "two adjacent"), migrated on opening. Compared (hashed): `compute` and `checks` of every module in `GM`, the field splice, the bearing stiffeners, `GM.sa.compute` for every girder, the Drawings-tab cross-section SVG, the `gd-dfx` payload, Preliminary sizing's analysis, fast suggestion and check statuses, the saved `P` and every localStorage key.
+  - Built-in example, curb mode: **identical, saved data included**.
+  - The other six: every result identical once the `xs` echo is left out (checked by hashing without the key `xs`); the only data differences are the optional C3 fields in `bridge.xs` / `P.df.bridge.xs`, and, in the two projects whose migration triggers "Bridge changed: updating every module" (which re-runs Design all quietly), the two C1 rows in the stored `P.designAll` (the field splice result object carries `P`, so its hash follows).
+  - Built-in example with Full design (`runFullDesign`) also run: identical (C2 does not apply to N<sub>b</sub> = 5, S = 9.50 ft). Width study (W = 44.50 ft, N = 4 to 12): identical row for row.
+- **C1:** Design all from Preliminary sizing on the built-in example, main and C1: every status, conflict and existing row identical; the two new rows and the total as in the C1 check case; the saved project otherwise identical (hash); screenshot of the Design all table `scratchpad/followups/gd-c1/c1_designall.png`.
+- **C2 in the page:** Preliminary sizing changed to N<sub>b</sub> = 3 (S = 9.50 ft and S = 17.00 ft): built-in interior factors against GirderDetail's (values in C2); the Suggest-tab derivation (screenshots `c2_nb3.png`, `c2_nb3_S17.png`).
+- **C3:** drawing hashes with and without `bridge.xs` (without: the same SVG string as main); message traffic on xsA after loading and after editing the median width: one `gd-xs` and one `gd-bridge`, then none in the next 10 s; screenshots (C3 check case).
+- **Saved data both directions:** projects saved by main open here as above. The xsA project saved by this build (raw localStorage, with the new optional fields and the C1 rows) opened in main: no errors; main re-sends its own record (without the optional fields) and every result equals main's own run of the same project; the stored Design all rows are kept as saved until Design all is run again.
+- **Console:** no errors or alerts in any run.
+- **Tools containing shared snippets touched:** none (`bridgeSuite.v1.*` bootstrap and handoff code unchanged; no other tool file changed).
