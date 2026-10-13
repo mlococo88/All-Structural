@@ -7316,3 +7316,66 @@ Main page and the embedded Preliminary sizing (PlateLine, `PL_B64`, decoded, edi
 - **Check case:** built-in example, Design all from Preliminary sizing: two new first rows "LLDF and DLs: All checks pass", "Structural analysis: All checks pass"; every other row, every quantity and the total ($1,699,744) identical. Built-in example with 3 girders at 12 ft in Preliminary sizing and an 8 ft × 12 in left sidewalk: "LLDF and DLs: Fails: DF3; warnings DF1", "Structural analysis: All checks pass; warnings SA4", equal to those modules' tab marks. Screenshots `scratchpad/followups/gd-c3/m3_before_designall.png`, `m3_after_designall.png`.
 - **Saved data:** no key or format change; `P.designAll.stat` items keep their shape (`{ mm, name, fails, warns, note }`), two more items.
 - **Other copies:** none.
+
+### C13. Cross-frames: the custom W and custom angle dimensions are shown only when the shape is custom   [UI only; results bit-identical]
+- **Where (main page):** `cfUiSync` (anchor `// custom dimensions only with a custom shape (L7, 2026-10-13)`), the CSS rule after `.cf-tsoff` (anchor `.cf-cust { display: none !important; }`), and the report input echo `crInputs` (anchor `if (el.closest('.cf-off, .cf-tsoff, .cf-cust')) return;`).
+- **Before:** the diaphragm inputs "Depth d", "Flange width b<sub>f</sub>", "Flange thickness t<sub>f</sub>", "Web thickness t<sub>w</sub>" and, for each angle member, "Connected leg", "Outstanding leg", "Thickness" were always shown (and echoed in the report), although the compute uses them only for a custom shape (`cfDiaSec`: `pre ? pre[1] : +q.d`; members: `m.sec === 'custom' ? [nm(m.b1), nm(m.b2), nm(m.t)] : ANGLES[m.sec]`).
+  ```js
+          if (el.closest('.cf-off, .cf-tsoff')) return;
+  ```
+- **After:**
+  ```js
+    // custom dimensions only with a custom shape (L7, 2026-10-13): the values the compute ignores for a listed shape are hidden, not deleted
+    { const cust = (k, on) => { const e = ig(k); if (e) e.classList.toggle('cf-cust', !on); }, dq = P.cf.dia || {}, dCus = !(CF_DIA.some(s => s[0] === dq.shape) || CF_CH.some(s => s[0] === dq.shape));
+      ['cf.dia.d', 'cf.dia.bf', 'cf.dia.tf', 'cf.dia.tw'].forEach(k => cust(k, dCus)); CF_MEM.forEach(([m]) => { const on = ((P.cf.mem || {})[m] || {}).sec === 'custom'; ['b1', 'b2', 't'].forEach(f => cust(`cf.mem.${m}.${f}`, on)); }); }
+  ```
+  ```css
+  .cf-cust { display: none !important; }   /* Cross-frames: custom W and custom angle dimensions while a listed shape is selected (L7, 2026-10-13) */
+  ```
+  ```js
+          if (el.closest('.cf-off, .cf-tsoff, .cf-cust')) return;
+  ```
+  The condition is the compute's own: the W dimensions apply when the shape is not a listed W or channel; the angle legs when the section is "Custom angle". The values stay in the project.
+- **Problem:** inputs that had no effect looked like they did. UI only.
+- **Governing provision:** none.
+- **Check case:** built-in example, Cross-frames, Members tab: before, the four W and nine angle dimension inputs are shown; after, hidden. With the diaphragm shape "Custom W" and the top chord "Custom angle": the four W inputs and the top chord's three inputs are shown, the other members' are not. Report input echo: "Connected leg" 3 times before, once after (custom top chord only). Screenshots `scratchpad/followups/gd-c3/l7_before_listed.png`, `l7_after_listed.png`, `l7_before_custom.png`, `l7_after_custom.png`.
+- **Saved data:** none.
+- **Other copies:** none.
+
+### C14. Opening a project: a null array in the saved data keeps the default   [robustness; normal data bit-identical]
+- **Where (main page):** `deepMerge`; anchor `function deepMerge(b, o) {`.
+- **Before:**
+  ```js
+  function deepMerge(b, o) { if (Array.isArray(b) || Array.isArray(o)) return o !== undefined ? o : b; ...
+  ```
+- **After:**
+  ```js
+  // L9 (2026-10-13): a null array in saved data keeps the default (was o !== undefined, so { gs: { rows: null } } broke Girder section, Fatigue and Transverse stiffeners)
+  function deepMerge(b, o) { if (Array.isArray(b) || Array.isArray(o)) return o != null ? o : b; ...
+  ```
+- **Problem:** a project or autosave with `rows: null` (hand-edited JSON or a truncated export) made the modules throw ("Cannot read properties of null (reading 'map')"). Now the default rows are used. Any non-null saved value is used exactly as before.
+- **Governing provision:** none.
+- **Check case:** `loadData({ gs: { rows: null }, fa: { rows: null }, ts: { rows: null } })`: before, Girder section, Fatigue and Transverse stiffeners throw; after, they open with their default rows (2, 4, 2).
+- **Saved data:** read side only; nothing is written differently.
+- **Other copies:** none.
+
+### C15. Structural analysis: no "-0.000" in the dead-load deflection table   [display only]
+- **Where (main page):** `GM.sa`, Loads tab, card `sa-d`; anchor `const f3z = x => f3(Math.abs(x) < 5e-4 ? 0 : x);`.
+- **Before:** `T10([...], i => [f3(R.dS[i]), f3(R.dDk[i]), f3(R.dSD[i]), f3(R.dTot[i])])`
+- **After:** `const f3z = x => f3(Math.abs(x) < 5e-4 ? 0 : x);` (own line before the card) and `T10([...], i => [f3z(R.dS[i]), f3z(R.dDk[i]), f3z(R.dSD[i]), f3z(R.dTot[i])])`
+- **Governing provision:** none.
+- **Check case:** built-in example, "Span 1, start": "-0.000 -0.000 -0.000 -0.000" → "0.000 0.000 0.000 0.000"; every other cell identical. The DXF camber table (2 decimals) is not changed.
+- **Saved data:** none.
+- **Other copies:** none.
+
+### C16. Calculation report with no checks (splices not included, or input errors) no longer throws   [robustness]
+- **Where (main page):** `buildCalcReport`, first line; anchor `if (!CK) { window.CR_TOC = []; return`.
+- **Before:** `buildCalcReport` read `CK.filter(...)` with `CK = null` and threw a TypeError. The Report tab and Print guard this, but the Girder report builds each module's chapter with `buildCalcReport` directly, so one module with input errors stopped the whole Girder report.
+- **After:**
+  ```js
+    if (!CK) { window.CR_TOC = []; return `<p class="cr-p">${P.mod === 'splice' && !spIncl() ? 'Field splices not included.' : 'The report is unavailable until the input errors are fixed (see the status bar).'}</p>`; }   // no checks: splices not included or input errors (L11, 2026-10-13; was a TypeError on CK.filter)
+  ```
+- **Governing provision:** none.
+- **Check case:** Splice module with "Field splices: Not included": `buildCalcReport(crOpts())` before: "Cannot read properties of null (reading 'filter')"; after: "Field splices not included.". With checks present the function is unchanged.
+- **Saved data:** none.
+- **Other copies:** none.

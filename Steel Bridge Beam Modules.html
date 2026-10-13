@@ -770,7 +770,8 @@ body.mod-pl #app { display: none !important; }
 .row-hd { display: flex; gap: 6px; align-items: center; font-size: 13px; margin-bottom: 6px; } .row-hd span { flex: 1; font-weight: 600; }
 .itab[hidden] { display: none !important; }
 .cf-off { display: none !important; }
-.cf-tsoff { display: none !important; }   /* Cross-frames: b_s, t_s inputs while the Transverse stiffeners module gives the connection plate (CF-D13) */
+.cf-tsoff { display: none !important; }
+.cf-cust { display: none !important; }   /* Cross-frames: custom W and custom angle dimensions while a listed shape is selected (L7, 2026-10-13) */   /* Cross-frames: b_s, t_s inputs while the Transverse stiffeners module gives the connection plate (CF-D13) */
 .same-row { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-bottom: 4px; }
 .same-row .ck-row { margin: 0; }
 output.calc-out { display: flex; align-items: baseline; gap: 8px; min-height: 34px; padding: 6px 10px; border: 1px dashed var(--border-hi); border-radius: var(--r); background: var(--sidebar); font-weight: 600; font-variant-numeric: tabular-nums; }
@@ -5077,7 +5078,8 @@ tabs: { combos: 'Results', cap: 'Method', drawings: 'Diagrams', rptCombos: 'Anal
         ${plotBox('sa-seq-plot', [tr(Array.from(R.MDC1), 'DC1, deck placed at once', '#7a8590', 'dash'), tr(S.envP, 'Sequence: noncomposite envelope (+)', '#b23a2a'), tr(S.envN, 'Sequence: noncomposite envelope (−)', '#1f4e8c'), tr(S.cum, 'Sequence: final accumulated', '#12806e', 'dot')], { ...lay, legend: { ...lay.legend, y: -0.28 } }, 400)}
         <div class="tscroll"><table class="tbl sa-t"><thead><tr><th>Point</th><th class="right">x (ft)</th>${S.stages.map(s => `<th class="right">${s.name}</th>`).join('')}<th class="right">Accumulated</th><th class="right">Noncomposite envelope +/−</th><th class="right">Deck at once</th><th class="right">Deck tension (ksi)</th></tr></thead><tbody>${T.map(t => `<tr><td class="lbl">${lab(t)}</td><td class="val">${f2(xs[t.i])}</td>${S.stages.map(s => `<td class="val">${f0(s.M[t.i])}</td>`).join('')}<td class="val">${f0(S.cum[t.i])}</td><td class="val">${f0(S.envP[t.i])} / ${f0(S.envN[t.i])}</td><td class="val">${f0(R.MDC1[t.i])}</td><td class="val">${f2(S.fdk[t.i])}</td></tr>`).join('')}</tbody></table></div>`); } }
     h += card('sa-stage-note', 'Stresses by construction stage', '', '<p class="note-p">Flange and deck stresses for each construction stage (noncomposite, long-term composite, short-term composite), their Service II and Strength I totals, stress profiles through the depth, and the section properties of each stage are on the <b>Stresses</b> tab.</p>');
-    h += card('sa-d', 'Deflections (in, downward +)', 'Dead load (camber) and live load', T10(['Steel', 'Deck, haunch, SIP', 'DC2 + DW', 'Total dead load (camber)'], i => [f3(R.dS[i]), f3(R.dDk[i]), f3(R.dSD[i]), f3(R.dTot[i])]) + `<h4 class="sub-h">Live load deflection (Service I, all lanes, g<sub>Δ</sub>)</h4><div class="tscroll"><table class="tbl"><thead><tr><th>Span</th><th class="right">x (ft)</th><th class="right">g<sub>Δ</sub></th><th class="right">Truck (in)</th><th class="right">25% truck + lane (in)</th><th class="right">Δ (in)</th><th class="right">L/${f0(nm(R.p.defl))} (in)</th></tr></thead><tbody>${R.lld.map(d => `<tr><td class="lbl">Span ${d.k + 1}</td><td class="val">${f2(d.x)}</td><td class="val">${f3(d.gD)}</td><td class="val">${f3(d.dT * d.gD)}</td><td class="val">${f3(d.dL * d.gD)}</td><td class="val"><b>${f3(d.d)}</b></td><td class="val">${f3(d.lim)}</td></tr>`).join('')}</tbody></table></div>`);
+    const f3z = x => f3(Math.abs(x) < 5e-4 ? 0 : x);   // no "-0.000" at the supports (L10, 2026-10-13)
+    h += card('sa-d', 'Deflections (in, downward +)', 'Dead load (camber) and live load', T10(['Steel', 'Deck, haunch, SIP', 'DC2 + DW', 'Total dead load (camber)'], i => [f3z(R.dS[i]), f3z(R.dDk[i]), f3z(R.dSD[i]), f3z(R.dTot[i])]) + `<h4 class="sub-h">Live load deflection (Service I, all lanes, g<sub>Δ</sub>)</h4><div class="tscroll"><table class="tbl"><thead><tr><th>Span</th><th class="right">x (ft)</th><th class="right">g<sub>Δ</sub></th><th class="right">Truck (in)</th><th class="right">25% truck + lane (in)</th><th class="right">Δ (in)</th><th class="right">L/${f0(nm(R.p.defl))} (in)</th></tr></thead><tbody>${R.lld.map(d => `<tr><td class="lbl">Span ${d.k + 1}</td><td class="val">${f2(d.x)}</td><td class="val">${f3(d.gD)}</td><td class="val">${f3(d.dT * d.gD)}</td><td class="val">${f3(d.dL * d.gD)}</td><td class="val"><b>${f3(d.d)}</b></td><td class="val">${f3(d.lim)}</td></tr>`).join('')}</tbody></table></div>`);
     if (R.cmp) { const pts = []; R.spans.forEach((_, k) => { let im = R.sup[k]; for (let i = R.sup[k]; i <= R.sup[k + 1]; i++) if (R.LLp[i] > R.LLp[im]) im = i; pts.push([`Span ${k + 1}, max. +M (${f2(R.xs[im])} ft)`, im]); }); R.sup.slice(1, -1).forEach((s, k) => pts.push([`Pier ${k + 1}`, s]));
       h += card('sa-c', 'Effect of the stiffness model', 'Staged variable EI vs constant EI, same loads and factors', `<div class="tscroll"><table class="tbl"><thead><tr><th>Location</th><th class="right">DC + DW, staged</th><th class="right">constant EI</th><th class="right">Change in magnitude</th><th class="right">LL+IM, staged</th><th class="right">constant EI</th><th class="right">Change in magnitude</th></tr></thead><tbody>${pts.map(([l, i]) => { const pm = R.MDC1[i] + R.MDC2[i] + R.MDW[i], pc = R.cmp.Mperm[i], neg = R.region[i] >= 1, ls = neg ? R.LLn[i] : R.LLp[i], lc = neg ? R.cmp.LLn[i] : R.cmp.LLp[i], pct = (a, c) => { const d = (Math.abs(a) - Math.abs(c)) / Math.abs(c || 1); return `${d >= 0 ? '+' : ''}${f2(100 * d)}%`; }; return `<tr><td class="lbl">${l}</td><td class="val">${f0(pm)}</td><td class="val">${f0(pc)}</td><td class="val">${pct(pm, pc)}</td><td class="val">${f0(ls)}</td><td class="val">${f0(lc)}</td><td class="val">${pct(ls, lc)}</td></tr>`; }).join('')}</tbody></table></div><p class="note-p">Moments in kip-ft. Differences come from the flange changes along the girder, composite action, and the cracked zones: stiffer regions attract moment.</p>`); }
     return h; },
@@ -6933,7 +6935,7 @@ function crInputs() {
       const rows = [...body.querySelectorAll('.row-blk')];
       body.querySelectorAll('.ig, .ck-row, p.note, .row-blk').forEach(el => {
         if (el.closest('.row-blk') && !el.classList.contains('row-blk')) return;
-        if (el.closest('.cf-off, .cf-tsoff')) return;   // inputs hidden because they do not apply (Cross-frames module with the diaphragm; b_s, t_s replaced by the Transverse stiffeners connection plate)
+        if (el.closest('.cf-off, .cf-tsoff, .cf-cust')) return;   // inputs hidden because they do not apply (Cross-frames module with the diaphragm; b_s, t_s replaced by the Transverse stiffeners connection plate)
         if (el.classList.contains('row-blk')) return;
         if (el.matches('p.note')) { h += `<p class="cr-note">${el.innerHTML}</p>`; return; }
         const lab = el.querySelector('label'), inp = el.querySelector('[data-k]'), out = el.querySelector('output.calc-out');
@@ -6986,6 +6988,7 @@ function crCheck(k, full) {
 }
 
 function buildCalcReport(o) {
+  if (!CK) { window.CR_TOC = []; return `<p class="cr-p">${P.mod === 'splice' && !spIncl() ? 'Field splices not included.' : 'The report is unavailable until the input errors are fixed (see the status bar).'}</p>`; }   // no checks: splices not included or input errors (L11, 2026-10-13; was a TypeError on CK.filter)
   const mod = P.mod, M = MODS[mod], g = GM[mod], meta = CR_META[mod] || { refs: ['LRFD'], obj: () => '' }, mt = P.meta;
   const toc = []; let n = 0, body = '';
   const H1 = t => { n++; toc.push({ n, t, id: `cr-s${n}`, subs: [] }); return `<h2 class="cr-h1" id="cr-s${n}">${n}. ${esc(t)}:</h2>`; };
@@ -7130,7 +7133,8 @@ const LS = (() => { try { localStorage.setItem('__gd', '1'); localStorage.remove
 const STLBL = { pass: 'OK', fail: 'Fail', warn: 'Warning', adv: 'Advisory', na: 'N/A' }, STCLS = { pass: 'pass', fail: 'fail', warn: 'warn', adv: 'info', na: 'na' };
 const badge = st => `<span class="badge ${STCLS[st]}">${STLBL[st]}</span>`;
 const srcTag = s => `<span class="src src-${s.toLowerCase()}">${s}</span>`;
-function deepMerge(b, o) { if (Array.isArray(b) || Array.isArray(o)) return o !== undefined ? o : b; if (typeof b !== 'object' || b === null) return o !== undefined ? o : b; const r = { ...b }; if (o && typeof o === 'object') Object.keys(o).forEach(k => r[k] = deepMerge(b[k], o[k])); return r; }
+// L9 (2026-10-13): a null array in saved data keeps the default (was o !== undefined, so { gs: { rows: null } } broke Girder section, Fatigue and Transverse stiffeners)
+function deepMerge(b, o) { if (Array.isArray(b) || Array.isArray(o)) return o != null ? o : b; if (typeof b !== 'object' || b === null) return o !== undefined ? o : b; const r = { ...b }; if (o && typeof o === 'object') Object.keys(o).forEach(k => r[k] = deepMerge(b[k], o[k])); return r; }
 const getPath = (o, p) => p.split('.').reduce((a, k) => a?.[k], o);
 const setPath = (o, p, v) => { const ks = p.split('.'); let a = o; ks.slice(0, -1).forEach(k => a = a[k]); a[ks[ks.length - 1]] = v; };
 
@@ -7315,6 +7319,9 @@ function cfUiSync() {
   ['sec-cfu', 'sec-cfm'].forEach(id => { off(document.getElementById(id)); off(document.querySelector(`.sec-hd[data-target="${id}"]`)); });
   const fh = ig('cf.user.Fat.top'); off(fh && fh.previousElementSibling && fh.previousElementSibling.matches('h4') ? fh.previousElementSibling : null);
   ['#sec-cfsb > p.note', '#sec-cfc > p.note'].forEach(q => off(document.querySelector(q)));
+  // custom dimensions only with a custom shape (L7, 2026-10-13): the values the compute ignores for a listed shape are hidden, not deleted
+  { const cust = (k, on) => { const e = ig(k); if (e) e.classList.toggle('cf-cust', !on); }, dq = P.cf.dia || {}, dCus = !(CF_DIA.some(s => s[0] === dq.shape) || CF_CH.some(s => s[0] === dq.shape));
+    ['cf.dia.d', 'cf.dia.bf', 'cf.dia.tf', 'cf.dia.tw'].forEach(k => cust(k, dCus)); CF_MEM.forEach(([m]) => { const on = ((P.cf.mem || {})[m] || {}).sec === 'custom'; ['b1', 'b2', 't'].forEach(f => cust(`cf.mem.${m}.${f}`, on)); }); }
   [['f_cf_Lb', 'Diaphragm spacing L<sub>b</sub>'], ['f_cf_sb_full', 'Diaphragm depth and connection plates']].forEach(([id, t]) => { const l = document.querySelector(`label[for="${id}"]`); if (!l) return;
     if (dia && l.dataset.cfLbl === undefined) { l.dataset.cfLbl = l.innerHTML; l.innerHTML = t; } else if (!dia && l.dataset.cfLbl !== undefined) { l.innerHTML = l.dataset.cfLbl; delete l.dataset.cfLbl; } });
   // connection plate from the Transverse stiffeners module (CF-D13, 2026-10-13): shown read-only, the module's own b_s, t_s inputs hidden (values kept) unless it has no connection-plate type
