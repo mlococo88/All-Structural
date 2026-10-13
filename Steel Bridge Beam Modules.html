@@ -2632,7 +2632,7 @@ function scPlanSVG(R) {
   const dimV = (ya, yb, x, t) => `<path d="M${x} ${ya}V${yb}M${x - 5} ${ya}h10M${x - 5} ${yb}h10" stroke="#17212b" stroke-width=".7"/><text x="${x + 8}" y="${(ya + yb) / 2 + 4}" class="sv-t sv-sm">${t}</text>`;
   const xr = ox + L * s2 + 18; e += dimH(ox + p / 2 * s2, ox + 1.5 * p * s2, oy - bf / 2 * s2 - 14, `pitch ${frac(p)}″ (≥ 4d = ${frac(4 * d)}″)`);
   if (n > 1) e += dimV(oy - g0 / 2 * s2, oy - (g0 / 2 - st) * s2, xr, `${frac(st)}″ transverse (≥ 4d = ${frac(4 * d)}″)`);
-  e += dimV(oy - bf / 2 * s2, oy - (g0 / 2 + d / 2) * s2, xr + (n > 1 ? 150 : 0), `${frac(clr)}″ clear to edge (≥ 1″)`) + dimV(oy - bf / 2 * s2, oy + bf / 2 * s2, ox - 22, `b_f ${frac(bf)}″`).replace('x="' + (ox - 14), 'x="' + (ox - 90));
+  e += dimV(oy - bf / 2 * s2, oy - (g0 / 2 + d / 2) * s2, xr + (n > 1 ? 150 : 0), `${frac(clr)}″ clear to edge (≥ 1″)`) + dimV(oy - bf / 2 * s2, oy + bf / 2 * s2, ox - 22, `b<tspan baseline-shift="sub" font-size="8">f</tspan> ${frac(bf)}″`).replace('x="' + (ox - 14), 'x="' + (ox - 90));
   e += `<text x="${ox}" y="${oy + bf / 2 * s2 + 34}" class="sv-t">Typical plan, ${esc(zt.name || '')}, to scale: ${n} studs per row, ${frac(d)}″ dia. × ${frac(R.h)}″, ${[p >= 4 * d - 1e-6 ? '' : 'PITCH < 4d', n < 2 || st >= 4 * d - 1e-6 ? '' : 'TRANSVERSE < 4d', clr >= 1 - 1e-6 ? '' : 'CLEAR EDGE < 1″'].filter(Boolean).join(', ') || 'spacing and edge limits met (6.10.10.1.2 to 6.10.10.1.4)'}</text>`;
   return `<svg class="dwg" viewBox="0 0 ${Wpx} ${oy + bf / 2 * s2 + 50}" xmlns="http://www.w3.org/2000/svg"><defs><pattern id="schatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><path d="M0 0V6" stroke="#c0392b" stroke-width="1"/></pattern></defs>${o}${e}</svg>`;
 }

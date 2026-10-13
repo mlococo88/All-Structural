@@ -7831,3 +7831,10 @@ Main page only; `PL_B64` (embedded Preliminary sizing) is not touched. Display o
 - **After:** one added line: `.card-right { flex-shrink: 1; min-width: 0; justify-content: flex-end; } .card-right > * { flex-shrink: 0; } .card-right > .card-ref { flex-shrink: 1; min-width: 0; text-align: right; } .cc-hd > .card-title { flex-shrink: 0; max-width: 60%; }   /* Q15: … */` — the title keeps its width up to 60% of the header; only the subtitle text shrinks and wraps (right-aligned); badges and the chevron keep their size.
 - **Check case:** built-in example at 1000 px: Shear connectors, Drawings, card 1 title on one line "Stud layout: plan" with the subtitle wrapped on the right.
 - **Other copies:** none.
+
+### Q16. Shear connectors typical stud plan: "b_f" shown as b<sub>f</sub>   [drawing label only]
+- **Where:** Shear connectors stud-layout drawing, typical plan (anchor `` `b_f ${frac(bf)}″` ``).
+- **Before:** `` `b_f ${frac(bf)}″` `` (the SVG printed the underscore: "b_f 16″").
+- **After:** `` `b<tspan baseline-shift="sub" font-size="8">f</tspan> ${frac(bf)}″` `` (the form the Bearing stiffeners drawing uses for b<sub>t</sub>).
+- **Check case:** built-in example, Shear connectors, Drawings, typical plan: "b<sub>f</sub> 16″".
+- **Other copies:** none.
