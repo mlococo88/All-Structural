@@ -3067,3 +3067,108 @@ All changes are inside the embedded PlateLine (Preliminary sizing) page, the bas
  /* ---------------- alternatives study ---------------- */
  function altKey() { return JSON.stringify([P.bridge, P.limits, P.suggest, P.framing, P.costs, P.alts, P.girder.gF, P.girder.gW]); }
 ```
+
+## 2026-10-13 — PR: claude/girderdetail-cf-dia2 (engineer's decisions 2026-10-12; PR link added after merge)
+
+Engineer's decisions (2026-10-12), follow-ups to CF-D1 to CF-D7: (1) when the diaphragm is the bracing used, the 6.7.4.2.2 torsional bracing calculation uses the diaphragm's own depth instead of the cross-frame chord depth `cf.h`; (2) the end (bearing-line) frames become diaphragms as well, sized by auto-design (lightest passing at least 0.75 d, same bolting rules, same section as the intermediate or deeper), with actual tabulated depths kept. Basis: AASHTO LRFD 10th Ed. (2024). Cross-frames module (`GM.cf`) on the main page only; the PlateLine string `PL_B64` is not touched. Line numbers ≈ branch.
+
+### CF-D8. Torsional bracing with a diaphragm: β_sec and the coefficient C use the diaphragm depth   [§4: CFD stiffness item, M_br and β_T,req can change when the diaphragm is used] [cross-frame projects bit-identical]
+- **Where:**
+  - `GM.cf.compute(p)`, stability-bracing block (≈ 2773–2780). Anchor `const hBr = cfDiaOn(p) && cfDiaSec(p.dia).d > 0`.
+    Before:
+    ```js
+          const deepFrame = h >= 0.8 * Dg, C = sb.full === 'yes' && deepFrame ? 2.4 : 3.6, Mbr = …;
+          SB = { …, full: sb.full === 'yes' && deepFrame, fullSet: sb.full === 'yes', deepFrame };
+          …
+          const deep = h >= 0.8 * Dg, bs = gd('bs'), tsp = gd('tsp'), bsec = deep ? Infinity : 3.3 * ES / ho * (1.5 * ho * tw ** 3 / 12 + tsp * bs ** 3 / 12);
+    ```
+    After:
+    ```js
+          const hBr = cfDiaOn(p) && cfDiaSec(p.dia).d > 0 ? cfDiaSec(p.dia).d : h;   // bracing depth for the 0.8 D test …
+          const deepFrame = hBr >= 0.8 * Dg, C = sb.full === 'yes' && deepFrame ? 2.4 : 3.6, Mbr = …;
+          SB = { …, full: sb.full === 'yes' && deepFrame, fullSet: sb.full === 'yes', deepFrame, hBr };
+          …
+          const deep = hBr >= 0.8 * Dg, bs = gd('bs'), …   // β_sec formula unchanged
+    ```
+    `d_dia` is the actual tabulated depth of the preset channel/W (`CF_CH`/`CF_DIA`), or the custom `cf.dia.d`. With the cross-frame (`cf.dia.on` ≠ 'yes') `hBr = h`, so nothing changes.
+  - `cfDiaChecks`, stiffness item (anchor `β_sec = ${isFinite(SB.bsec)`): the resistance cell now lists β_br, β_sec, β_g and the 0.8 D test (`β_T = 112,558 (β_br = 14,330,661, β_sec = ∞, β_g = 113,449; d_dia ≥ 0.8 D = 29.60 in)`); CFD note adds one sentence on the basis.
+  - `adCfDia` (auto-design of the diaphragm): a stiffness shortfall is treated as one "no diaphragm can fix" only when the **deepest** candidate also falls short (anchor `const deepest = cands.reduce(`); before, any candidate with a shortfall had its stiffness item ignored, which with a depth-dependent β_sec would accept a too-shallow section. The message names the deepest candidate's depth against 0.8 D instead of "the chord work-point depth h".
+- **Problem:** the "deep bracing" test (β_sec infinite; C = 2.4 with full-depth plates) compared the cross-frame chord work-point depth `cf.h` with 0.8 D even when a diaphragm, not a cross-frame, was the bracing. Less conservative when the diaphragm is deeper than `cf.h` (higher β_T, possibly lower M_br and β_T,req); more conservative when shallower.
+- **§4 callout:**
+  - **Governing provision:** AASHTO LRFD 10th Ed. (2024) Art. 6.7.4.2.2 (torsional bracing of I-section members: brace system stiffness β_T from β_br, β_sec, β_g in series; M_br). The tool cites "6.7.4.2.2 (10th Ed.)" and "Eq. 6.7.4.2.2-14 and -15" for M_br; it cites no equation number for β_sec or β_T,req. I could not verify the equation numbers against the printed edition; please confirm.
+  - **Before:** deep = (`cf.h` ≥ 0.8 D); β_sec = ∞ if deep, else 3.3E/h_o (1.5h_o t_w³/12 + t_s b_s³/12); C = 2.4 if (full-depth plates and deep) else 3.6; C_s = 2.4 if (full-depth plates and deep) else 3.6/0.75.
+  - **After (diaphragm used):** deep = (d_dia ≥ 0.8 D); the rest unchanged.
+  - **Check case (repro, headless Chromium):** 90 ft simple span, N_b = 10, S = 48 in, D = 37 in, t_w = 0.5 in, h_o = 37.94 in, connection plate 5 × 1/2 in, `sb.full` = 'no' (so C = 3.6 and C_s = 4.8 before and after), W30x99 (d_dia = 29.70 in), `cf.h` = 29 in, 0.8 D = 29.60 in.
+    - β_br = 6EI_x/S = 6(29,000)(3,953)/48 = 14,330,661 kip-in/rad (I_x = 10.5(29.70)³/12 − 9.98(28.36)³/12 = 3,953 in⁴).
+    - β_g = 24(n_g − 1)²S²EI_x,g/(n_gL³) = 24(9)²(48)²(29,000)(11,002.6)/(10 × 1080³) = 113,449 kip-in/rad.
+    - β_T,req = C_sLM_u²/(nEI_yeff C_b²) = 4.8(1080)(10,996.8)²/(3 × 29,000 × 333.65 × 1.0²) = 21,597 kip-in/rad.
+    - **Before:** 29.00 < 29.60, β_sec = 3.3(29,000)/37.94 × (1.5(37.94)(0.5)³/12 + 0.5(5)³/12) = 2,522.6 × 5.801 = 14,634; β_T = 1/(1/14,330,661 + 1/14,634 + 1/113,449) = **12,950 < 21,597, fail (1.67)**.
+    - **After:** 29.70 ≥ 29.60, β_sec = ∞; β_T = 1/(1/14,330,661 + 1/113,449) = **112,558 ≥ 21,597, pass (0.19)**.
+    - M_br = 256 kip-in unchanged (C = 3.6 both, `sb.full` = 'no'). With `sb.full` = 'yes' the coefficient would also change: C 3.6 → 2.4 (M_br × 2/3) and C_s 4.8 → 2.4 (β_T,req ÷ 2).
+  - **Auto-design:** still W30x99 with 5 bolts at 3 in (every lighter channel/W is shallower than 0.75 d = 29.16 in, CF-D1); CFD now passes every item; Design all row "Fails: CFD" → no failures; quantities unchanged (27 diaphragms, 9.71 kip, 270 bolts).
+  - **Default example (cross-frame):** every module's checks, Summary text, cross-frame report, drawings, member forces, auto-design result, DXF text, Design all, and saved autosave/inbox data are bit-identical main vs branch (timestamps masked).
+- **How verified:** `node --check` on the inline scripts; headless Chromium main vs branch (default example, repro).
+- **Other copies:** none.
+
+### Exact changes (CF-D8): main page (unified diff)
+
+```diff
+diff --git a/Steel Bridge Beam Modules.html b/Steel Bridge Beam Modules.html
+index 772181c..3093042 100644
+--- a/Steel Bridge Beam Modules.html	
++++ b/Steel Bridge Beam Modules.html	
+@@ -2669,11 +2669,11 @@ function cfDiaChecks(R, out) {
+   const k = 5, lam = hw / tw, r1 = 1.12 * Math.sqrt(E * k / Fy), r2 = 1.40 * Math.sqrt(E * k / Fy), C = lam <= r1 ? 1 : lam <= r2 ? r1 / lam : 1.57 / lam ** 2 * (E * k / Fy), Vn = C * 0.58 * Fy * hw * tw;
+   const wk = R.W.III.Fw >= R.W.V.Fw ? 'III' : 'V', Fw = R.W[wk].Fw, Mw = Fw * dgT, Vw = 2 * Mw / S;   // wind on the diaphragm: the module's own bottom-flange wind force (4.6.2.7.1) times the lever arm d to the deck
+   const c = { id: 'CFD', grp: 'Diaphragm (intermediate bracing used)', title: `${chS ? 'Channel' : 'Rolled'} diaphragm ${nm_} (intermediate bracing used in place of the cross-frame)`, ref: 'AASHTO LRFD 6.7.4.2, 6.7.4.2.2, 6.10.8, 6.10.9, 6.13.2, 3.4.3.1, 4.6.2.7.1', src: 'Code', sym: T`\beta_{br} = \frac{6EI_x}{S},\quad M_{br} \le \phi_f M_n,\quad M_w = F_w\,d`, cols: ['Check', 'Demand', 'Resistance', 'Ratio'], items: [],
+-    note: `Properties from nominal dimensions (d = ${f2(d)}, b_f = ${f2(bf)}, t_f = ${f3(tf)}, t_w = ${f3(tw)} in; fillets neglected): I_x = ${f0(Ix)} in⁴, S_x = ${f0(Sx)} in³, r_y = ${f2(ry)} in. Flexural resistance per 6.10.8 as a noncomposite rolled I-section braced only at the girders (L_b = S, C_b = 1.0, conservative). The brace stiffness 6EI/S assumes reverse-curvature bending between girders.${chS ? ' Channel: the same checks as the rolled W diaphragm; the 6.10.8 lateral-torsional buckling model is for I-sections and is used here as an approximation for the channel (verify against AISC 360-16 F2 with c = (h_o/2)√(I_y/C_w)).' : ''} Depth: AASHTO LRFD 6.7.4.2 asks for diaphragms at least 0.75 of the girder depth for plate girders (0.5 for rolled beams); the girders here are plate girders, so 0.75 of the "Girder depth d" input is used for channels and W shapes alike (a warning, not a failure, since the article says "should"). Wind (Strength ${wk}, the governing of Strength III and V): the bottom-flange wind force F_w = ${f2(Fw)} kip of the exterior girder (the same force the cross-frame model uses, 4.6.2.7.1) is carried to the deck at the top flange through the girder and the diaphragm, a torque F_w × d = ${f2(Fw)} × ${f2(dgT)} = ${f0(Mw)} kip-in resisted by diaphragm bending, taken as the diaphragm end moment with shear 2M_w/S (reverse curvature, as for the brace moment); the bolts also take F_w horizontally. Axial force F_w in the diaphragm (f_a = ${f2(Fw / A)} ksi) is not combined with the flexure (assumption to verify). Assumed details (verify): the channel or W web is bolted to the connection plate with one vertical row of bolts, and the diaphragm is centered on the girder web depth; flanges coped to clear the connection plate as needed.` };
++    note: `Properties from nominal dimensions (d = ${f2(d)}, b_f = ${f2(bf)}, t_f = ${f3(tf)}, t_w = ${f3(tw)} in; fillets neglected): I_x = ${f0(Ix)} in⁴, S_x = ${f0(Sx)} in³, r_y = ${f2(ry)} in. Flexural resistance per 6.10.8 as a noncomposite rolled I-section braced only at the girders (L_b = S, C_b = 1.0, conservative). The brace stiffness 6EI/S assumes reverse-curvature bending between girders. Web distortion β_sec and the coefficient C (2.4 or 3.6/φ) of 6.7.4.2.2 use the diaphragm depth d_dia = ${f2(d)} in for the 0.8 D bracing-depth test (β_sec infinite and, with full-depth connection plates, C = 2.4 when d_dia ≥ 0.8 D).${chS ? ' Channel: the same checks as the rolled W diaphragm; the 6.10.8 lateral-torsional buckling model is for I-sections and is used here as an approximation for the channel (verify against AISC 360-16 F2 with c = (h_o/2)√(I_y/C_w)).' : ''} Depth: AASHTO LRFD 6.7.4.2 asks for diaphragms at least 0.75 of the girder depth for plate girders (0.5 for rolled beams); the girders here are plate girders, so 0.75 of the "Girder depth d" input is used for channels and W shapes alike (a warning, not a failure, since the article says "should"). Wind (Strength ${wk}, the governing of Strength III and V): the bottom-flange wind force F_w = ${f2(Fw)} kip of the exterior girder (the same force the cross-frame model uses, 4.6.2.7.1) is carried to the deck at the top flange through the girder and the diaphragm, a torque F_w × d = ${f2(Fw)} × ${f2(dgT)} = ${f0(Mw)} kip-in resisted by diaphragm bending, taken as the diaphragm end moment with shear 2M_w/S (reverse curvature, as for the brace moment); the bolts also take F_w horizontally. Axial force F_w in the diaphragm (f_a = ${f2(Fw / A)} ksi) is not combined with the flexure (assumption to verify). Assumed details (verify): the channel or W web is bolted to the connection plate with one vertical row of bolts, and the diaphragm is centered on the girder web depth; flanges coped to clear the connection plate as needed.` };
+   const it = (loc, dem, res, st, r) => c.items.push({ loc, cells: [dem, res, r != null ? f2(r) : '—'], st, r, work: T`\text{${loc}}` });
+   if (dgT > 0) it('Depth (6.7.4.2: at least 0.75 of the plate girder depth d)', `${f2(d)} in`, `${f2(0.75 * dgT)} in`, d >= 0.75 * dgT - 1e-6 ? 'pass' : 'warn', 0.75 * dgT / d);
+   if (SB) { const bbr = 6 * E * Ix / S, bT = 1 / (1 / bbr + (isFinite(SB.bsec) ? 1 / SB.bsec : 0) + 1 / SB.bg), r = SB.bReq / bT;
+-    it('Torsional brace system stiffness (6.7.4.2.2)', `β_T,req = ${f0(SB.bReq)} kip-in/rad`, `β_T = ${f0(bT)} (β_br = ${f0(bbr)})`, r <= 1 ? 'pass' : 'fail', r);
++    it('Torsional brace system stiffness (6.7.4.2.2)', `β_T,req = ${f0(SB.bReq)} kip-in/rad`, `β_T = ${f0(bT)} (β_br = ${f0(bbr)}, β_sec = ${isFinite(SB.bsec) ? f0(SB.bsec) : '∞'}, β_g = ${f0(SB.bg)}; d_dia ${SB.deep ? '≥' : '<'} 0.8 D = ${f2(0.8 * SB.Dg)} in)`, r <= 1 ? 'pass' : 'fail', r);
+     const rm = SB.Mbr / (1.0 * Mn); it('Brace moment M_br (6.7.4.2.2)', `${f0(SB.Mbr)} kip-in`, `φ_f M_n = ${f0(Mn)} kip-in (F_nc = ${f2(lt.Fnc)} ksi)`, rm <= 1 ? 'pass' : 'fail', rm);
+     const Vb = 2 * SB.Mbr / S; it('Shear from the brace moment', `${f2(Vb)} kip`, `φ_v V_n = ${f2(Vn)} kip (C = ${f3(C)})`, Vb <= Vn ? 'pass' : 'fail', Vb / Vn); }
+   else it('Stability bracing', 'enter the girder and bracing data (Stability bracing inputs)', '—', 'na');
+@@ -2770,12 +2770,13 @@ tabs: { combos: 'Member forces', rptCombos: 'Loads and member forces' },
+     if (sbOn) { const gd = k => nm(sb[k]), Dg = gd('D'), tc = gd('tc'), bc = gd('bc'), tt = gd('tt'), bt = gd('bt'), tw = gd('tw');
+       const s0 = steelProps(Dg, { tw, topB: bc, topT: tc, botB: bt, botT: tt }), yc = s0.d - tc / 2, yt = tt / 2, cD = yc - s0.yb, tD = s0.yb - yt;
+       const Iyc = tc * bc ** 3 / 12, Iyt = tt * bt ** 3 / 12, Iyeff = Iyc + tD / cD * Iyt, ho = Dg + (tc + tt) / 2, L = gd('L') * 12, n = gd('n'), Mu = gd('Mu') * 12, Cb = gd('Cb'), Lb = g('Lb') * 12;
+-      const deepFrame = h >= 0.8 * Dg, C = sb.full === 'yes' && deepFrame ? 2.4 : 3.6, Mbr = C * L / (n * ES * Iyeff) * (Mu / Cb) ** 2 * Lb / (500 * ho);
+-      SB = { Dg, tc, bc, tt, bt, tw, Iyc, Iyt, Iyeff, cD, tD, ho, L, n, Mu, Cb, Lb, C, Mbr, full: sb.full === 'yes' && deepFrame, fullSet: sb.full === 'yes', deepFrame };
++      const hBr = cfDiaOn(p) && cfDiaSec(p.dia).d > 0 ? cfDiaSec(p.dia).d : h;   // bracing depth for the 0.8 D test: the diaphragm's own depth when the diaphragm is used (engineer's decision 2026-10-12), else the chord work-point depth h
++      const deepFrame = hBr >= 0.8 * Dg, C = sb.full === 'yes' && deepFrame ? 2.4 : 3.6, Mbr = C * L / (n * ES * Iyeff) * (Mu / Cb) ** 2 * Lb / (500 * ho);
++      SB = { Dg, tc, bc, tt, bt, tw, Iyc, Iyt, Iyeff, cD, tD, ho, L, n, Mu, Cb, Lb, C, Mbr, full: sb.full === 'yes' && deepFrame, fullSet: sb.full === 'yes', deepFrame, hBr };
+       // torsional brace system stiffness (6.7.4.2.2): brace, web distortion, girder in-plane stiffness, in series
+       const Rf = 0.65, Ad = Rf * mem.diag.A, isX = p.type === 'X', Lc = isX ? Math.hypot(S, h) : Math.hypot(S / 2, h), Ah = Rf * (p.type === 'Kb' ? mem.top.A : mem.bot.A);
+       const bbr = isX ? Ad * ES * S ** 2 * h ** 2 / Lc ** 3 : 2 * ES * S ** 2 * h ** 2 / (8 * Lc ** 3 / Ad + S ** 3 / Ah);
+-      const deep = h >= 0.8 * Dg, bs = gd('bs'), tsp = gd('tsp'), bsec = deep ? Infinity : 3.3 * ES / ho * (1.5 * ho * tw ** 3 / 12 + tsp * bs ** 3 / 12);
++      const deep = hBr >= 0.8 * Dg, bs = gd('bs'), tsp = gd('tsp'), bsec = deep ? Infinity : 3.3 * ES / ho * (1.5 * ho * tw ** 3 / 12 + tsp * bs ** 3 / 12);
+       const ng = Math.max(2, Math.round(gd('ng') || 2)), bg = 24 * (ng - 1) ** 2 * S ** 2 * ES * s0.I / (ng * L ** 3), bT = 1 / (1 / bbr + (isFinite(bsec) ? 1 / bsec : 0) + 1 / bg);
+       const Cs = SB.full ? 2.4 : 3.6 / 0.75, bReq = Cs * L * Mu ** 2 / (n * ES * Iyeff * Cb ** 2);
+       Object.assign(SB, { Rf, Ad, Lc, Ah, isX, bbr, deep, bs, tsp, bsec, ng, bg, bT, Cs, bReq, Ix: s0.I }); }
+@@ -5239,9 +5240,11 @@ const adCfDia = (C0, out, TR, lk) => { const q = C0.dia, dg = TR.dg, need = 0.75
+   const failsOf = r => { const c = r && r.C.find(x => x.id === 'CFD'); return c ? c.items.filter(i => !AD_OK.includes(i.st)).map(i => i.loc.replace(/ \(.*$/, '')) : ['input errors']; };
+   // a torsional-brace stiffness shortfall that no diaphragm can fix (β_sec and β_g in series below the requirement even with a rigid brace) is reported, not chased with ever larger sections (as for the angles and CF8)
+   const sysMax = r => { const S = r && r.R.SB; return S ? 1 / ((isFinite(S.bsec) ? 1 / S.bsec : 0) + 1 / S.bg) : Infinity; }, sysOut = r => { const S = r && r.R.SB; return !!S && sysMax(r) < S.bReq; }, isK = i => i.loc.startsWith('Torsional brace system stiffness'), isDep = i => !deepEnough.length && i.loc.startsWith('Depth');   // no listed section is deep enough: the depth item warns, the rest decide
+-  let done = null, sys = null;
++  // beta_sec and C now depend on the diaphragm depth (2026-10-12): the shortfall is unfixable only if the deepest candidate also falls short
++  const deepest = cands.reduce((a, x) => x[1] > a[1] ? x : a, cands[0]); let sysFix = true, sys0 = null; { const s0 = q.shape; if (!lkS) q.shape = deepest[0]; const r0 = adEval('cf'); sysFix = !(r0 && sysOut(r0)); if (!sysFix) sys0 = r0.R.SB; q.shape = s0; }
++  let done = null, sys = sys0;
+   for (const sec of cands) { if (!lkS) q.shape = sec[0]; let last = null;
+-    for (let n = lkN ? D(q.nb) : 2; n <= (lkN ? D(q.nb) : nMax(sec)); n++) { q.nb = n; const r = adEval('cf'); last = r; if (r && sysOut(r)) sys = r.R.SB; if (r && adGood(r.C, ['CFD'], i => !(sysOut(r) && isK(i)) && !isDep(i))) { done = { sec, n }; break; } }
++    for (let n = lkN ? D(q.nb) : 2; n <= (lkN ? D(q.nb) : nMax(sec)); n++) { q.nb = n; const r = adEval('cf'); last = r; if (r && adGood(r.C, ['CFD'], i => !(!sysFix && sysOut(r) && isK(i)) && !isDep(i))) { done = { sec, n }; break; } }
+     if (done) break; skipped.push(`${sec[0]} (${[...new Set(failsOf(last))].join(', ')})`); }
+   if (!lkS) { const lighter = all.slice(0, all.findIndex(x => x[0] === (done ? done.sec[0] : cands[cands.length - 1][0]))).filter(x => x[1] < need - 1e-9);
+     if (lighter.length && deepEnough.length) out.push(`Lighter sections are shallower than 0.75 d = ${f2(need)} in (6.7.4.2, plate girders): ${lighter.map(x => `${x[0]} ${f2(x[1])} in`).join(', ')}`); }
+@@ -5250,7 +5253,7 @@ const adCfDia = (C0, out, TR, lk) => { const q = C0.dia, dg = TR.dg, need = 0.75
+     out.push(`No ${lkS ? 'bolt count for the locked shape' : 'channel or W at least 0.75 d deep'} passes every diaphragm check (CFD): ${skipped.join('; ')}. ${lkS ? 'The locked shape' : `The largest, ${big[0]},`} with ${q.nb} bolts per end was left in place to show the remaining ratios${r ? `; still failing: ${[...new Set(failsOf(r))].join(', ')}` : ''}`); return out; }
+   if (skipped.length) out.push(`Deep enough but failing a CFD item: ${skipped.join('; ')}`);
+   const r = adEval('cf'), c = r && r.C.find(x => x.id === 'CFD'), g = c && c.items[c.gov];
+-  if (sys) out.push(`Torsional brace system stiffness (CFD) cannot be met by any diaphragm: with a rigid brace, β_sec = ${isFinite(sys.bsec) ? f0(sys.bsec) : '∞'} and β_g = ${f0(sys.bg)} kip-in/rad in series give at most ${f0(1 / ((isFinite(sys.bsec) ? 1 / sys.bsec : 0) + 1 / sys.bg))} against β_T,req = ${f0(sys.bReq)} kip-in/rad (C = ${f2(sys.Cs)}; the 0.8 D bracing-depth test uses the chord work-point depth h = ${f2(D(C0.h))} in against D = ${f2(sys.Dg)} in). ${sys.bg < sys.bReq ? 'The girders\' in-plane stiffness β_g is itself below the requirement: more girders, a shorter span, or top lateral bracing is needed' : 'Web distortion governs: full-depth connection plates, a wider or thicker connection plate, or a bracing depth of at least 0.8 D is needed'}. The section below passes every other CFD item; CFD still fails on the stiffness`);
++  if (sys) out.push(`Torsional brace system stiffness (CFD) cannot be met by any diaphragm: with a rigid brace, β_sec = ${isFinite(sys.bsec) ? f0(sys.bsec) : '∞'} and β_g = ${f0(sys.bg)} kip-in/rad in series give at most ${f0(1 / ((isFinite(sys.bsec) ? 1 / sys.bsec : 0) + 1 / sys.bg))} against β_T,req = ${f0(sys.bReq)} kip-in/rad (C = ${f2(sys.Cs)}; the 0.8 D bracing-depth test uses the depth of the deepest candidate diaphragm, ${f2(sys.hBr)} in, against 0.8 D = ${f2(0.8 * sys.Dg)} in). ${sys.bg < sys.bReq ? 'The girders\' in-plane stiffness β_g is itself below the requirement: more girders, a shorter span, or top lateral bracing is needed' : 'Web distortion governs: full-depth connection plates, a wider or thicker connection plate, or a bracing depth of at least 0.8 D is needed'}. The section below passes every other CFD item; CFD still fails on the stiffness`);
+   out.push(`${CF_CH.some(x => x[0] === q.shape) ? 'Channel' : 'Rolled'} diaphragm ${q.shape} (d = ${f2(done.sec[1])} in ${done.sec[1] >= need - 1e-9 ? "≥" : "<"} 0.75 d = ${f2(need)} in${lkS ? ', shape locked' : ''}${lk ? ', bracing type locked' : ''}): the lightest channel or W that passes every CFD item${sys ? ' other than the system stiffness' : ''}; ${q.nb} - ${frac(db)} in bolts per end in one vertical row at ${f2(s)} in${g ? `; governing: ${g.loc.replace(/ \(.*$/, '')}, ratio ${g.r != null ? f2(g.r) : '—'}` : ''}`);
+   return out; };
+ AD.oh = () => { const O = P.oh, out = [], D = k => parseDim(k);
+```
