@@ -9039,3 +9039,31 @@ Main page (Girder section, Deck overhang reference and Manual text) and the embe
 - **How verified:** `node --check`-equivalent parse of every inline script (`new Function`); headless Chromium (Playwright) with both files in one folder, served over http (`python3 -m http.server`) and opened as `file://`: 28 checks pass in each (the ST-Girder side is in fixlog/stgirder.md OD1: inputs and results identical to a manual Pull, refresh, mismatched / missing / invalid flag, undo); the `gdStHref()` cases run in Node with a stubbed `localStorage`/`location`. No console errors.
 - **Other copies:** the receiving side is in `stgirder.html` (fixlog/stgirder.md OD1). The BridgeApps path rules are mirrored (read only) from the bootstrap block in `index.html`, `lldf.html`, `psbeam.html`, `stgirder.html`; that block is unchanged.
 - **Open items:** whether a browser allows `window.open` after the confirm dialog is up to its popup blocker (Chrome/Edge normally allow it from a click handler; the blocked case falls back to the message and alert). Not testable headless with a real popup blocker.
+
+## 2026-10-13 — PR: claude/gd-stiffener-per-bay (Preliminary sizing: D/t<sub>w</sub> ≤ 150 for stiffened webs; transverse stiffeners designed per cross-frame bay with optional tension-field action; engineer-approved 2026-10-13; PR link added after merge)
+
+All code in this PR except the GirderDetail drawing and Structural analysis hunks is inside the embedded Preliminary sizing page (`const PL_B64 = '…'`, base64 of a UTF-8 HTML file). To re-apply by hand: decode `PL_B64` (base64 → UTF-8), edit the decoded page as below, re-encode it to base64 on one line, and replace the string. Line numbers "PL ~n" are lines of the decoded page.
+
+### DT1. Suggest sizes a transversely stiffened web from D/t<sub>w</sub> ≤ 150 (was 300)   [§4: code limit] [results: only where D/150 governs t<sub>w</sub>]
+- **Where:** decoded PL, new constant after `const SG_PLF = 490 / 144;` (PL ~1868); `sizeForDepth` (anchor `let tw = up(Math.max(L.minTw, D / ((wt || SG.web) === 'stiffened'`, PL ~2050); `webFromShear` → `size` (anchor `let tw = up(Math.max(L.minTw, D / (st ?`, PL ~2210); Suggest input tab note "AASHTO LRFD minimums always apply" (PL ~2860) and Manual Part 2 "Rules." (PL ~2586).
+- **Before:**
+  ```js
+  let tw = up(Math.max(L.minTw, D / ((wt || SG.web) === 'stiffened' ? 300 : 150), 0.3125, twMin || 0), L.incTw);
+  let tw = up(Math.max(L.minTw, D / (st ? 300 : 150), 0.3125, twMin || 0), L.incTw), C, Vn, lam;
+  ```
+  text: `D/t<sub>w</sub> ≤ 150 unstiffened or 300 stiffened (6.10.2.1)` (2 places)
+- **After:**
+  ```js
+  // D/t_w limit Suggest sizes a transversely stiffened web to: 150, AASHTO LRFD 10th Ed. Eq. 6.10.2.1.1-1 (webs without longitudinal stiffeners; approved 2026-10-13,
+  // was 300, the limit of Eq. 6.10.2.1.2-1 for longitudinally stiffened webs, which this tool does not design). Unstiffened webs: 150 (same equation)
+  const SG_DTW_ST = 150;
+  let tw = up(Math.max(L.minTw, D / ((wt || SG.web) === 'stiffened' ? SG_DTW_ST : 150), 0.3125, twMin || 0), L.incTw);
+  let tw = up(Math.max(L.minTw, D / (st ? SG_DTW_ST : 150), 0.3125, twMin || 0), L.incTw), C, Vn, lam;
+  ```
+  text: `D/t<sub>w</sub> ≤ 150, stiffened or not (Eq. 6.10.2.1.1-1, webs without longitudinal stiffeners)` (2 places)
+- **Problem:** AASHTO LRFD 10th Ed. 6.10.2.1.1 (Eq. 6.10.2.1.1-1) limits D/t<sub>w</sub> to 150 for webs without longitudinal stiffeners, transversely stiffened or not; 300 (Eq. 6.10.2.1.2-1) applies only to webs with longitudinal stiffeners, which this tool does not design (its own check W1 already applies 150). Suggest could start a stiffened web thinner than W1 allows. More conservative.
+- **Governing provision:** AASHTO LRFD 10th Ed. (2024) Art. 6.10.2.1.1, Eq. 6.10.2.1.1-1; Art. 6.10.2.1.2, Eq. 6.10.2.1.2-1.
+- **Check case:** built-in example, D = 60 in, G12.1 on (minimum t<sub>w</sub> 1/2 in): start t<sub>w</sub> before = up(max(0.5, 60/300 = 0.20, 0.3125), 1/16) = 0.5 in; after = up(max(0.5, 60/150 = 0.40, 0.3125)) = 0.5 in (unchanged; the owner minimum governs). G12.1 off (minimum 5/16 in): before up(max(0.3125, 0.20)) = 0.3125 in; after up(max(0.3125, 0.40)) = 0.4375 in. In both cases shear (k = 10) governs the final t<sub>w</sub> (7/16 in at D = 55 in, G12.1 off), so the quick suggestion is unchanged; only the D = 79 in candidate (79/150 = 0.527 → 9/16 in, was 1/2 in) moves in the candidate list.
+- **How verified:** decoded page parsed (`node --check` on its scripts); headless Chromium quick suggestion, built-in example and xsA, G12.1 on and off, main vs this change.
+- **Other copies:** none.
+- **Open items:** none.
