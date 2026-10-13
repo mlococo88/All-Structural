@@ -5899,7 +5899,7 @@ function designAllRun0(j, quiet) {
   if (spl.length) { P.sc.splX = [...new Set(spl.map(s => +(+s.x).toFixed(2)))].join(', '); P.sc.splL = +(Math.max(...spl.map(s => s.Lpl)) / 12).toFixed(2); P.mod = 'sc'; if (std().auto !== 'off') runAutoDesign('sc', true); }
   else if (!splOn && (P.sc.splX || +P.sc.splL)) { P.sc.splX = ''; P.sc.splL = 0; P.mod = 'sc'; if (std().auto !== 'off') runAutoDesign('sc', true); }   // splices not included: no stud gaps for splice plates
   // 4. status of every module
-  const mods = ['splice', 'bstf', 'ts', 'sc', 'cf', 'oh', 'wt', 'gs', 'fa'], stat = [];
+  const mods = ['df', 'sa', 'splice', 'bstf', 'ts', 'sc', 'cf', 'oh', 'wt', 'gs', 'fa'], stat = [];   // + LLDF and DLs, Structural analysis (M3, 2026-10-13): status from their own check lists
   mods.forEach(mm => { if (mm === 'splice' && !splOn) { stat.push({ mm, name: 'Field splices', fails: [], warns: [], note: '', off: true }); return; }
     P.mod = mm; let R, C; try { if (mm === 'splice') { R = gdCompute(P); C = R.errors.length ? null : gdChecks(R); } else { const e = adEval(mm); R = e && e.R; C = e && e.C; } } catch (er) { C = null; }
     const name = mm === 'splice' ? 'Field splices' : mm === 'bstf' ? 'Bearing stiffeners' : GM[mm].label;

@@ -7299,3 +7299,20 @@ Main page and the embedded Preliminary sizing (PlateLine, `PL_B64`, decoded, edi
   - Built-in example without the sidewalk: 1.75 ft both sides before and after.
 - **Saved data:** none.
 - **Other copies:** none.
+
+### C12. Design all: the result table also lists LLDF and DLs and Structural analysis   [status display only; no calculation change]
+- **Where (main page):** `designAllRun0`, step 4; anchor `// 4. status of every module`.
+- **Before:**
+  ```js
+    const mods = ['splice', 'bstf', 'ts', 'sc', 'cf', 'oh', 'wt', 'gs', 'fa'], stat = [];
+  ```
+- **After:**
+  ```js
+    const mods = ['df', 'sa', 'splice', 'bstf', 'ts', 'sc', 'cf', 'oh', 'wt', 'gs', 'fa'], stat = [];   // + LLDF and DLs, Structural analysis (M3, 2026-10-13): status from their own check lists
+  ```
+  The two modules go through the existing generic branch (`adEval(mm)` → `GM[mm].compute(P[mm])` and `GM[mm].checks(R)`), the same evaluation as their tab marks (`modStatus`). Their rows appear first, in tab order, in the Design all table and in the DXF "Design all" status table (which reads the same `P.designAll.stat`).
+- **Problem:** the Design all summary did not show failures or warnings of the two modules that produce the girder loads, so a failing distribution-factor or analysis check could be missed.
+- **Governing provision:** none.
+- **Check case:** built-in example, Design all from Preliminary sizing: two new first rows "LLDF and DLs: All checks pass", "Structural analysis: All checks pass"; every other row, every quantity and the total ($1,699,744) identical. Built-in example with 3 girders at 12 ft in Preliminary sizing and an 8 ft × 12 in left sidewalk: "LLDF and DLs: Fails: DF3; warnings DF1", "Structural analysis: All checks pass; warnings SA4", equal to those modules' tab marks. Screenshots `scratchpad/followups/gd-c3/m3_before_designall.png`, `m3_after_designall.png`.
+- **Saved data:** no key or format change; `P.designAll.stat` items keep their shape (`{ mm, name, fails, warns, note }`), two more items.
+- **Other copies:** none.
