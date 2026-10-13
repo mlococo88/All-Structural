@@ -6695,3 +6695,63 @@ index 1a9659b..bfad74d 100644
  }
  function gmApply(m, x, j) { x.apply(); P[m.id].source = `${j.srcLabel || 'PlateLine approximate analysis'} (${new Date(j.ts).toLocaleDateString()}). Confirm the geometry${j.src === 'sa' ? '' : ' and replace the demands with refined analysis results before final design'}.`; }
 ```
+
+### XS14. Clean-up (display only): label leaders no longer cross the labels in the Drawings-tab cross-section   [display only] [results bit-identical]
+- **Where (anchors):** `dfXsSVG`, anchors `let llt = '';`, `let lo = '', lt = '';`, `${o}${lo}${llt}${lt}</svg>`.
+- **Before:** each label's leader and text were written in turn, so a later leader was drawn over an earlier label's text. On crowded sections, such as the sidewalk projects, the leader lines struck through the load labels. The "LL face" labels were drawn under the leaders, without a halo.
+- **After:** all leaders are drawn first, then the "LL face" labels and then the load labels, each with the white halo the load labels already had. The labels sit over the leaders. Positions, text, and colours are unchanged.
+- **Also checked and left as is:** the label row assignment (no overlapping texts in the XS1/XS2 screenshots or in the eight test projects). The LL face label next to a railing post on a curb is now readable over the post because of its halo.
+- **Governing provision:** none (drawing only).
+- **Check case:** xsA and curb-with-sidewalk projects: screenshots before and after (`scratchpad/followups/xs4/xsA13_xs.png` vs `xsA14_xs.png`). The SVG differs from XS13 only by the element order and the halo attributes on the two LL-face labels (+104 characters).
+- **Other copies:** none.
+
+### Exact changes (XS14): main page (unified diff against the XS13 commit)
+
+```diff
+diff --git a/Steel Bridge Beam Modules.html b/Steel Bridge Beam Modules.html
+index bfad74d..7e38858 100644
+--- a/Steel Bridge Beam Modules.html	
++++ b/Steel Bridge Beam Modules.html	
+@@ -4453,7 +4453,8 @@ function dfXsSVG(R) {
+     o += `<text x="${cx}" y="${yF + gH + 15}" class="sv-t sv-sm" text-anchor="middle" font-weight="600">G${i + 1}</text>` + ln.map(([k, v], r) => `<text x="${cx}" y="${yF + gH + 29 + r * 12}" class="sv-t sv-sm" text-anchor="middle" fill="${DF_LCOL[k]}">${k} ${f3(v)}</text>`).join(''); });
+   if (b.sip > 0 && N > 1 && D.bays[0] > 0) o += `<text x="${(X(D.ub[0]) + X(D.ub[1])) / 2}" y="${yF + 12}" class="sv-t sv-sm" text-anchor="middle" fill="${DF_LCOL.DC1}">SIP forms ${f0(b.sip)} psf</text>`;
+   // live-load traffic faces (XS6)
+-  if (R.ll) ['L', 'R'].forEach(sd => { const q = R.ll[sd], xf = X(sd === 'L' ? q.r : Wd - q.r); o += `<path d="M${xf} ${surf(sd === 'L' ? q.r + 0.01 : Wd - q.r - 0.01) - 30}V${tD}" stroke="#c0392b" stroke-width=".9" stroke-dasharray="4 2"/><text x="${xf + (sd === 'L' ? 3 : -3)}" y="${surf(sd === 'L' ? q.r + 0.01 : Wd - q.r - 0.01) - 32}" class="sv-t sv-sm" fill="#c0392b" text-anchor="${sd === 'L' ? 'start' : 'end'}">LL face${q.mount ? ' (mountable sidewalk ignored)' : ''}</text>`; });
++  let llt = '';   // the face labels are drawn over the label leaders, with a halo (XS14)
++  if (R.ll) ['L', 'R'].forEach(sd => { const q = R.ll[sd], xf = X(sd === 'L' ? q.r : Wd - q.r); o += `<path d="M${xf} ${surf(sd === 'L' ? q.r + 0.01 : Wd - q.r - 0.01) - 30}V${tD}" stroke="#c0392b" stroke-width=".9" stroke-dasharray="4 2"/>`; llt += `<text x="${xf + (sd === 'L' ? 3 : -3)}" y="${surf(sd === 'L' ? q.r + 0.01 : Wd - q.r - 0.01) - 32}" class="sv-t sv-sm" fill="#c0392b" text-anchor="${sd === 'L' ? 'start' : 'end'}" stroke="#fff" stroke-width="3" paint-order="stroke">LL face${q.mount ? ' (mountable sidewalk ignored)' : ''}</text>`; });
+   // dimension chain and centroid
+   const yd = yF + gH + 29 + (D.pl.some(v => v > 0) ? 4 : 3) * 12 + 6, ch = [0, ...D.ub, Wd];
+   ch.slice(1).forEach((x, k) => { if (x - ch[k] > 1e-6) o += dimH(X(ch[k]), X(x), yd, f2(x - ch[k])); });
+@@ -4463,12 +4464,12 @@ function dfXsSVG(R) {
+   const top0 = Math.min(-medH, -swH.L - Math.max(ed.L.cH || 0, ed.L.w ? BAR : 0) - (byId('railL') ? RAIL : 0), -swH.R - Math.max(ed.R.cH || 0, ed.R.w ? BAR : 0) - (byId('railR') ? RAIL : 0), ...labs.map(q => q.top)) - 12, rowEnd = [];
+   labs.sort((a, c) => a.x - c.x).forEach(q => { const w = q.t.length * 5.9 + 6, left = cl(q.x - w / 2, 2, W - 2 - w); let r = rowEnd.findIndex(e => e < left - 6); if (r < 0) { r = rowEnd.length; rowEnd.push(0); } rowEnd[r] = left + w; q.r = r; q.lx = left + w / 2; });
+   const nr = rowEnd.length, yRow = r => top0 - r * 15;
+-  let lo = ''; labs.forEach(q => { const y = yRow(q.r); lo += `<path d="M${q.x} ${q.top - 1}V${y + 3}" stroke="${q.col}" stroke-width=".6" opacity=".7"/><text x="${q.lx}" y="${y}" class="sv-t sv-sm" text-anchor="middle" fill="${q.col}" stroke="#fff" stroke-width="3" paint-order="stroke">${esc(q.t)}</text>`; });
++  let lo = '', lt = ''; labs.forEach(q => { const y = yRow(q.r); lo += `<path d="M${q.x} ${q.top - 1}V${y + 3}" stroke="${q.col}" stroke-width=".6" opacity=".7"/>`; lt += `<text x="${q.lx}" y="${y}" class="sv-t sv-sm" text-anchor="middle" fill="${q.col}" stroke="#fff" stroke-width="3" paint-order="stroke">${esc(q.t)}</text>`; });
+   // legend
+   const yl = yd + 48; let lx = mL; const lg = [['DC1', 'DC1 (deck, haunch, SIP)'], ['DC2', 'DC2 (superimposed)'], ['DW', D.per.some(L => L.cat === 'DW' && L.id !== 'ws') ? 'DW (wearing surface, overlays, utilities)' : 'DW (wearing surface)']].concat(D.per.some(L => L.cat === 'PL') ? [['PL', 'PL (pedestrian)']] : []);
+   let yl2 = yl; lg.forEach(([k, t]) => { const w = 34 + t.length * 5.9; if (lx + w > W && lx > mL) { lx = mL; yl2 += 16; } o += `<rect x="${lx}" y="${yl2 - 8}" width="10" height="10" fill="${DF_LCOL[k]}"/><text x="${lx + 14}" y="${yl2 + 1}" class="sv-t sv-sm">${t}</text>`; lx += w; });
+   const y0 = (nr ? yRow(nr - 1) : top0) - 14, H = yl2 + 10 - y0;
+-  return `<svg viewBox="0 ${y0} ${W} ${H}" class="dwg dfxs" role="img" aria-label="Cross-section with the superimposed dead loads"><defs><marker id="dfxp" markerWidth="6" markerHeight="6" refX="3" refY="5" orient="auto"><path d="M0 0L3 5L6 0z" fill="${DF_LCOL.PL}"/></marker>${Object.entries(DF_LCOL).map(([k, c]) => `<marker id="dfxu${k}" markerWidth="8" markerHeight="8" refX="4" refY="7" orient="0"><path d="M0 0L8 0L4 8z" fill="${c}"/></marker>`).join('')}</defs>${o}${lo}</svg>`;
++  return `<svg viewBox="0 ${y0} ${W} ${H}" class="dwg dfxs" role="img" aria-label="Cross-section with the superimposed dead loads"><defs><marker id="dfxp" markerWidth="6" markerHeight="6" refX="3" refY="5" orient="auto"><path d="M0 0L3 5L6 0z" fill="${DF_LCOL.PL}"/></marker>${Object.entries(DF_LCOL).map(([k, c]) => `<marker id="dfxu${k}" markerWidth="8" markerHeight="8" refX="4" refY="7" orient="0"><path d="M0 0L8 0L4 8z" fill="${c}"/></marker>`).join('')}</defs>${o}${lo}${llt}${lt}</svg>`;
+ }
+ /* "Loads on the bridge": every superimposed load with its girder reactions and the ΣR = P check, per load and per class */
+ function dfLoadsTbl(R) {
+```
+
+### Verification (XS11–XS14)
+- **Syntax:** `node --check` on every inline script after each item.
+- **Results:** headless Chromium (Playwright), `origin/main` (4d56d55) against each commit (XS11, XS12, XS13 on two projects, XS14).
+  - Projects: the eight XS8–XS10 test projects, saved with d7ca4d6 and migrated on opening: the built-in example; sidewalks with median, ped and added rows; curb mode; curb mode with a sidewalk; AASHTO; 6 ft × 12 in sidewalks; xsA; "two adjacent".
+  - Compared (hashed): for every module in `GM` (Transverse stiffeners, Shear connectors, Cross-frames, **Deck overhang**, Welds and transitions, Girder section, Fatigue, LLDF and DLs, Structural analysis), `compute` and `checks`; the field splice (`gdCompute` and `gdChecks`); the bearing stiffeners (`bsCompute` and `bsChecks`); `GM.sa.compute` for every girder; the `gd-dfx` payload; Preliminary sizing's analysis, its fast suggestion and its check statuses; the saved `P`; and every localStorage key.
+  - Outcome: **identical on all eight projects for every commit**, Deck overhang included (the button was not pressed). The only exception is the Drawings-tab cross-section SVG at XS14 (intended, +104 characters). The SVG is identical through XS13, which shows that the `dfFoot` refactor is exact.
+- **Deck overhang button:** tested on the built-in example, the curb-with-sidewalk project, and the built-in example with a 4.50 ft right overhang. Values are as in the XS11 check case. The undo restores the inputs and the Source line. A locked input is kept. No console errors.
+- **DXF:**
+  - R12 and the AutoCAD 2018 layouts spec (run through the page's `GD_DXF_PY` with ezdxf 1.4.4) both read back with 0 audit errors. Projects: xsA, the curb project with a sidewalk, and the built-in example.
+  - Entity counts change only on the new DECK-* layers, ANNO-TEXT, and DIMS.
+  - The typical section was rendered to PNG with ezdxf's matplotlib backend and inspected: `scratchpad/followups/xs4/*_dxf_sec.png`.
+- **3D:** whole-bridge view with the elements on and off (`scratchpad/followups/xs4/*_3d*.png`). The note names the elements. No console errors.
+- **Report:** the input echo was rendered in print mode (`*_report_echo.png`) for xsA with overrides, and the text was checked for the curb project.
+- **Saved data in both directions:**
+  - Projects saved by main load here unchanged (above).
+  - A project saved here, after a fill and with the 3D elements layer off, opens in main without errors. The filled values and Source line are kept, `P.ui.v3b.lay.app` is kept, and the 3D view opens.
