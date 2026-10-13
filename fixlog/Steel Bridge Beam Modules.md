@@ -3434,4 +3434,210 @@ index 3093042..2721ab0 100644
  function counts() { const c = { fail: 0, warn: 0, adv: 0, pass: 0, na: 0 }; CK.forEach(k => c[k.status]++); return c; }
  function renderStatus() { crMarkStale();
    const c = counts(), v = c.fail ? { cls: 'fail', ico: '✕', t: `${c.fail} check${c.fail > 1 ? 's' : ''} fail` } : { cls: 'pass', ico: '✓', t: 'All checks pass' };
+
+## 2026-10-13 — PR: claude/girderdetail-end-panel-k (engineer's decision 2026-10-13; PR link added after merge)
+
+Engineer's decision: an end panel whose stiffener spacing d<sub>o</sub> exceeds 1.5D is not a stiffened end panel, so its shear resistance uses k = 5 (unstiffened), V<sub>n</sub> = CV<sub>p</sub> (Eq. 6.10.9.2-1), no tension field. Interior panels are unchanged (wider than 3D already unstiffened). This closes the open item of Q3. Main page and the embedded PlateLine (`PL_B64`, decoded, edited, re-encoded on one line) are changed; the Cross-frames module (GM.cf) is not touched.
+
+### Places that compute web shear resistance (all searched; listed whether changed or not)
+
+| Place | Before | After |
+|---|---|---|
+| Main `webShear()` (≈ 2367): used by Transverse stiffeners TS4 (both adjacent panels), Girder section GS11 and GS16 (`r.sh`), Fatigue (`GM.fa`, ≈ 3627) | stiffened if 0 < d<sub>o</sub> ≤ 3D for every panel | stiffened if 0 < d<sub>o</sub> ≤ 3D, or ≤ 1.5D for an end panel (EK1) |
+| Transverse stiffeners TS4 | end panel 1.5D < d<sub>o</sub> ≤ 3D: k = 5 + 5/(d<sub>o</sub>/D)², Eq. 6.10.9.3.3-1 | k = 5, Eq. 6.10.9.2-1 (via `webShear`) |
+| Transverse stiffeners TS3 (I<sub>t</sub>, ρ<sub>w</sub>) | end panels already ρ = 0 (`tfa = q.stiff && !q.end`) | unchanged |
+| Transverse stiffeners TS5 (spacing) | end panel 1.5D–3D: warning | advisory "(treated as unstiffened in TS4)", N/A with connection plates only (EK2) |
+| Girder section GS11 (strength shear) and GS16 (deck placement, V<sub>cr</sub> = CV<sub>p</sub>) | rows with "End panel = Yes" and 1.5D < d<sub>o</sub> ≤ 3D used k from d<sub>o</sub> | k = 5 (via `webShear`). Rows from Preliminary sizing are never end panels (`end: 'no'`: max. positive, piers, transitions), so imported demands are not affected |
+| Girder section fatigue shear (6.10.5.3, ≈ 3408) | filters `r.sh.stiff && r.end !== 'yes'` (interior panels only) | unchanged in result (end panels were already excluded) |
+| Fatigue module (`GM.fa`, special fatigue shear) | `webShear(..., false)`: interior panels only | unchanged (no end-panel input; 6.10.5.3 applies to interior panels) |
+| Field splice V<sub>r</sub> = φ<sub>v</sub>V<sub>n</sub> of the smaller web (≈ 1324, `stiffW`, `vnExpr`, `over3D`) | stiffened if d<sub>o</sub> ≤ 3D | unchanged, already correct: a field splice is inside a span and the module has no end-panel input |
+| Bearing stiffeners | no web shear resistance computed | n/a |
+| Auto-design (`AD.ts`) | sizes plates only; does not choose stiffener spacing | message text only (EK2) |
+| PlateLine `webFromShear()` (Suggest quick/fast sizing; also used by Full design, Alternatives, girder-count study through `suggestLayout`) | one constant web sized for the largest V<sub>u</sub> with k = 5 + 5/min(d<sub>o</sub>/D, 3)², d<sub>o</sub>/D from the Framing ratio or the d<sub>o</sub>/D search [1, 1.5, 2, 3]; end panels at the same spacing | also sized for the largest V<sub>u</sub> within d<sub>o</sub> of each girder end with k = 5 when d<sub>o</sub>/D > 1.5; the thicker web governs (EK3) |
+| PlateLine check D4 (d<sub>o</sub> ≤ 3D, "Intermediate panels") and D3 (I<sub>t</sub>) | spacing / inertia, not shear resistance | unchanged |
+| PlateLine `checkLayout` (quick check, Full design verify) | no web shear check (`rWeb` is web bend-buckling) | unchanged |
+| PlateLine `detailExport` (TS rows sent to GirderDetail) | first stiffener from each abutment: `end: 'yes'`, do1 = d<sub>o</sub>/D × D | unchanged; GirderDetail's TS4 now treats those end panels as unstiffened when d<sub>o</sub>/D > 1.5 |
+
+### EK1. `webShear()`: an end panel wider than 1.5D is unstiffened (k = 5)   [§4: calculation change]
+
+- **Where:** main page, `function webShear(D, tw, Fyw, doIn, flgA, end)` (≈ 2367). Anchor `function webShear(D, tw, Fyw, doIn, flgA, end) {`.
+- **Before:** `const stiff = doIn > 0 && doIn <= 3 * D + 1e-9, k = stiff ? 5 + 5 / (doIn / D) ** 2 : 5, ...`
+- **After:** `const stiff = doIn > 0 && doIn <= (end ? 1.5 : 3) * D + 1e-9, k = stiff ? 5 + 5 / (doIn / D) ** 2 : 5, ...` (comment added on the function line). The rest of the function is unchanged: `if (!stiff || end) Vn = C·Vp` with `eqn = end && stiff ? '6.10.9.3.3-1' : '6.10.9.2-1'`, so an end panel with d<sub>o</sub> > 1.5D now reports k = 5 and Eq. 6.10.9.2-1.
+- **Before/after expression (end panel, 1.5D < d<sub>o</sub> ≤ 3D):** k = 5 + 5/(d<sub>o</sub>/D)², V<sub>n</sub> = CV<sub>p</sub> (Eq. 6.10.9.3.3-1) → k = 5, V<sub>n</sub> = CV<sub>p</sub> (Eq. 6.10.9.2-1). C from Eq. 6.10.9.3.2-4 to -6 in both. End panels with d<sub>o</sub> ≤ 1.5D, interior panels, and panels wider than 3D: identical.
+- **Governing provision:** AASHTO LRFD 10th Ed. (2024) Art. 6.10.9.1 (web panels considered stiffened when the transverse stiffener spacing does not exceed 3D) and Art. 6.10.9.3.3 (end panels: V<sub>n</sub> = V<sub>cr</sub> = CV<sub>p</sub>, Eq. 6.10.9.3.3-1; transverse stiffener spacing of end panels not to exceed 1.5D); unstiffened webs Art. 6.10.9.2, Eq. 6.10.9.2-1 with k = 5. The tool already cites 6.10.9.1 and 6.10.9.3.3 in TS5. **Wording check for the engineer:** 6.10.9.3.3 states the 1.5D end-panel spacing as a limit ("shall not exceed"), not as a definition of an unstiffened panel; treating a wider end panel as unstiffened is the engineer's decision of 2026-10-13, not a quotation.
+- **Problem:** an end panel with 1.5D < d<sub>o</sub> ≤ 3D got the stiffened k although 6.10.9.3.3 does not let that spacing count as a stiffened end panel. Unconservative: φ<sub>v</sub>V<sub>n</sub> drops by up to 20% (k 6.25 → 5 at d<sub>o</sub> = 2D, C ∝ k in the elastic range).
+- **Check case (hand check; engineer's case):** D = 60 in, t<sub>w</sub> = 0.5625 in, F<sub>yw</sub> = 50 ksi, end panel d<sub>o</sub> = 120 in = 2D (> 1.5D = 90 in).
+  - D/t<sub>w</sub> = 106.67; (D/t<sub>w</sub>)² = 11,377.8; V<sub>p</sub> = 0.58(50)(60)(0.5625) = 978.75 kip.
+  - Before: k = 5 + 5/2² = 6.25; √(Ek/F<sub>yw</sub>) = √(29,000 × 6.25/50) = 60.21; 1.40 × 60.21 = 84.29 < 106.67, so C = 1.57/11,377.8 × (29,000 × 6.25/50) = 1.57 × 3,625/11,377.8 = 0.5002; V<sub>n</sub> = 0.5002 × 978.75 = 489.58 kip; φ<sub>v</sub>V<sub>n</sub> = 1.0 × 489.58 = **489.58 kip**.
+  - After: k = 5; √(29,000 × 5/50) = 53.85; 1.40 × 53.85 = 75.39 < 106.67, so C = 1.57 × 2,900/11,377.8 = 0.4002; V<sub>n</sub> = 0.4002 × 978.75 = 391.66 kip; φ<sub>v</sub>V<sub>n</sub> = **391.66 kip** (−20.0%).
+  - Tool (headless Chromium, `webShear(60, 0.5625, 50, 120, flgA, true)`): main k 6.25, C 0.50021, V<sub>n</sub> 489.58, Eq. 6.10.9.3.3-1; branch k 5, C 0.40017, V<sub>n</sub> 391.66, Eq. 6.10.9.2-1.
+  - Transverse stiffeners default example with row 1 d<sub>o1</sub> = 120 in (V<sub>u</sub> = 241.00 kip): TS4 end panel C 0.500 → 0.400, φV<sub>n</sub> 489.58 → 391.66 kip, ratio 0.49 → 0.62 (pass both). TS5 warn → advisory. Status bar "All checks pass, 1 warning, ! Web shear" → "All checks pass, No warnings, ✓ Web shear"; module tab badge "1" → none.
+  - Same end panel at d<sub>o</sub> = 150 in: φV<sub>n</sub> 454.33 → 391.66 kip (k 5.80 → 5); at 180 in = 3D: 435.18 → 391.66 kip (k 5.556 → 5). At 90 in (= 1.5D) and 200 in (> 3D): unchanged.
+  - Girder section default example with every row set to End panel = Yes, d<sub>o</sub> = 120 in (D = 60, t<sub>w</sub> = 0.5625): GS11 row 1 φV<sub>n</sub> 489.58 → 391.66 kip, ratio 0.21 → 0.26; row 2 0.70 → 0.88; GS16 V<sub>cr</sub> 489.58 → 391.66 kip (ratios 0.06 → 0.08, 0.28 → 0.35). With d<sub>o</sub> = 90 in, or End panel = No at 120 in: unchanged.
+- **Effect on layouts made before this change** (Preliminary sizing → Get demands, stiffened web, d<sub>o</sub>/D = 2, 120 ft simple span, default bridge otherwise): main's Full design layout D = 58 in, t<sub>w</sub> = 1/2 in now gives in TS4 (hand computed with the TS4 demand of the main run), first stiffener from Abut. 1, end panel d<sub>o</sub> = 116 in, V<sub>u</sub> = 302.00 kip: φV<sub>n</sub> = 355.70 → 284.56 kip (C 0.423 → 0.338), ratio 0.85 → **1.06 (fail)**; main's quick suggestion D = 61 in, t<sub>w</sub> = 1/2 in: V<sub>u</sub> = 299.68 kip, φV<sub>n</sub> 338.21 → 270.57 kip, ratio 0.89 → **1.11 (fail)**. Projects saved with such layouts will show these TS4 failures when reopened; re-run the Suggest / Full design (EK3 now sizes the web for it) or reduce the end-panel spacing to 1.5D.
+
+### EK2. TS5, TS4/GS11 notes, auto-design message, manual: end panels wider than 1.5D are advisory   [text and status only]
+
+- **TS5** (`GM.ts.checks()`, ≈ 2454; anchor `{ const c = { id: 'TS5', grp: G2, title: 'Stiffener spacing limits'`): the item logic is unchanged (`adv = !ok && !q.stiff`); since `q.stiff` now follows the 1.5D end-panel limit, an end panel wider than 1.5D is advisory "(treated as unstiffened in TS4)" like an interior panel wider than 3D, and with connection plates only the check becomes N/A (Q3's rule: no `'int'` role and no warning item). The `'warn'` branch is kept but no longer reachable (both limits use the same 1e-9 tolerance).
+  - Note before: "… A panel wider than 3D is advisory: it is treated as unstiffened in TS4 (k = 5, V_n = CV_p), and TS4 decides pass or fail. An end panel wider than 1.5D but not wider than 3D stays a warning (TS4 checks it with V_n = CV_p and k from its d_o). With connection plates only …"
+  - Note after: "… A panel wider than its limit (3D, or 1.5D for an end panel) is advisory: it is treated as unstiffened in TS4 (k = 5, V_n = CV_p), and TS4 decides pass or fail. With connection plates only …"
+  - Comment above the N/A line updated.
+- **TS4 note** (≈ 2450): "…; end panels and panels wider than 3D use V_n = CV_p. …" → "…; stiffened end panels (d_o ≤ 1.5D) use V_n = CV_p with k = 5 + 5/(d_o/D)² (Eq. 6.10.9.3.3-1). Interior panels wider than 3D and end panels wider than 1.5D are unstiffened (6.10.9.1): k = 5, V_n = CV_p (Eq. 6.10.9.2-1). …". The worked line already shows `k = 5` when `q.stiff` is false.
+- **GS11 note** (≈ 3381): "Unstiffened webs (d_o = 0 or d_o > 3D) and end panels use V_n = CV_p; …" → "Unstiffened webs and panels (d_o = 0, d_o > 3D, or an end panel with d_o > 1.5D; 6.10.9.1) use k = 5 and V_n = CV_p; stiffened end panels use V_n = CV_p with k from d_o (Eq. 6.10.9.3.3-1); …".
+- **`AD.ts`** (≈ 5152; anchor `const ts5 = r ? r.C.find(c => c.id === 'TS5')`): advisory line "panels wider than 3D are not stiffened panels …" → "panels wider than 3D (end panels: 1.5D) are not stiffened panels …"; the "TS5 warnings: end panels wider than 1.5D …; TS4 checks them with V_n = CV_p and k from d_o" line is removed (no longer true or reachable).
+- **Manual**, Transverse stiffeners, "Web shear (6.10.9)" (≈ 2275): the end-panel sentence now says stiffened end panels use Eq. 6.10.9.3.3-1, and an interior panel wider than 3D or an end panel wider than 1.5D is checked as unstiffened (k = 5, Eq. 6.10.9.2-1); TS5 "a panel wider than its limit is advisory" (the "end panel … is a warning" clause removed).
+- **Q3 variants re-run (TS module, default example):**
+  | Variant | TS5 main | TS5 branch | TS4 end panel φV<sub>n</sub> main → branch |
+  |---|---|---|---|
+  | Type A end panel 120 in | warn | adv | 489.58 → 391.66 |
+  | Connection plates only, 150 in, first row an end panel | warn | N/A | 454.33 → 391.66 |
+  | Connection plates only, end panel 120 in, others 240 in | warn (warn, adv, adv, adv) | N/A | 489.58 → 391.66 |
+  | Type A panel 2 at 200 in; Type A end panel 200 in; connection plates only 240 in | adv / adv / N/A | same | unchanged |
+
+### EK3. PlateLine Suggest: web thickness also sized for the end panels with k = 5 when d<sub>o</sub>/D > 1.5   [§4: suggested web thickness / depth can change]
+
+- **Where (decoded PlateLine, PL ≈):** `webFromShear(D, Vu, loc, wt, twMin, R)` (≈ 2067; anchor `/* ---- web thickness from shear (no tension field) ---- */`); `demand()` envelope loop (≈ 2029; anchor `let VuMax = 0, VuLoc = 0;`) stores the Strength I |V<sub>u</sub>| of every element in `VuE` (per girder type, `out.types[gt].VuE`; the existing V<sub>u</sub> expression unchanged); `sizeForDepth()` (≈ 1919) passes `R`; Suggest web card (≈ 2866) and manual Part 6 "Web" (≈ 2528).
+- **Before:** t<sub>w</sub> = smallest on the increment with C(k)·0.58F<sub>yw</sub>Dt<sub>w</sub> ≥ V<sub>u,max</sub>, k = 5 + 5/min(d<sub>o</sub>/D, 3)² (stiffened) or 5.
+- **After:** the same t<sub>w</sub> (unchanged code, now the inner `size(k, Vu, loc)`), and in addition, when the web is stiffened and d<sub>o</sub>/D > 1.5: t<sub>w,end</sub> from k = 5 and V<sub>u,end</sub> = the largest element V<sub>u</sub> within d<sub>o</sub> = (d<sub>o</sub>/D)·D of a girder end (both abutments for a continuous unit; every support for simple spans, each being a girder end), over the girder types. The web is the larger; if the end panel governs, the result carries `end: true`, and the Suggest web card names it ("end panel (d_o = 2.00D > 1.5D, unstiffened), maximum V_u in the end panels at … ft", k described as "an end panel wider than 1.5D is not a stiffened panel (6.10.9.1, 6.10.9.3.3), so k = 5"). With d<sub>o</sub>/D ≤ 1.5 or an unstiffened web: identical code path and result. Tension-field action is still not used.
+- **Provision:** as EK1 (6.10.9.1, 6.10.9.3.3, 6.10.9.2; AASHTO LRFD 10th Ed.).
+- **Hand check (120 ft simple span, default bridge, stiffened, d<sub>o</sub>/D = 2, web depth kept at 61 in):** V<sub>u,max</sub> = 334.14 kip (main) at 119.5 ft (an end panel). Before: k = 6.25, D/t<sub>w</sub> = 122, C = 1.57 × 3,625/14,884 = 0.3824, φV<sub>n</sub> = 0.3824 × 0.58(50)(61)(0.5) = 0.3824 × 884.5 = 338.21 ≥ 334.14 → t<sub>w</sub> = 1/2 in. After: k = 5 at t<sub>w</sub> = 1/2: C = 1.57 × 2,900/14,884 = 0.3059, φV<sub>n</sub> = 270.57 < 335.49 kip; t<sub>w</sub> = 9/16: D/t<sub>w</sub> = 108.44, C = 1.57 × 2,900/11,760 = 0.3872, φV<sub>n</sub> = 0.3872 × 995.06 = 385.24 ≥ 335.49 kip → **t<sub>w</sub> = 9/16 in** (tool: same values; V<sub>u</sub> 335.49 kip because the heavier web adds self-weight). Fast cost $555,024 → $587,113; bottom plates 19 × 1 / 19 × 1 5/8 / 19 × 1 → 20 × 7/8 / 20 × 1 5/8 / 20 × 1.
+
+### Before/after of the suggestions and built-in examples
+
+| Case | Main | Branch |
+|---|---|---|
+| GirderDetail default project, every module (gs, fa, splice, bstf, ts, sc, cf, oh, wt, df, sa): every check, status and item | — | identical; only the TS4, TS5 and GS11 note text differ |
+| PlateLine built-in example (110-140-110 ft, d<sub>o</sub>/D search on): fast pick, candidate list (incl. d<sub>o</sub>/D = 2 and 3 candidates), quick suggestion, Full design (D 71, 1/2 in web, $1,597,506), Apply → TS and GS modules | — | identical (V<sub>u,max</sub> is at the piers, interior panels govern; the d<sub>o</sub>/D = 2 and 3 candidates keep 9/16 in) |
+| Same, forced stiffened d<sub>o</sub>/D = 3 | D 63, 9/16 in; TS4 Abut. 1 end panel (189 in, V<sub>u</sub> 214.65): C 0.403, φV<sub>n</sub> 414.46, 0.52; TS5 warn | sizing identical; TS4 C 0.363, φV<sub>n</sub> 373.01, 0.58; TS5 adv, no warnings |
+| 90 ft repro (10 girders at 4 ft, overhangs 2.25 ft, span-to-depth off; `ws-full/repro*.mjs` setup): quick and Full design | D 30 / 34 in, unstiffened, 1/2 in | identical (unstiffened web; with stiffened d<sub>o</sub>/D = 2 forced: identical sizing, C = 1, TS5 warn → adv) |
+| 80-80-80 ft continuous, 5 girders at 9 ft | D 40, unstiffened | identical |
+| 160 ft simple, 5 at 9 ft (search on) | D 78, d<sub>o</sub>/D = 1 | identical pick; only the ranking of lower candidates (d<sub>o</sub>/D 1.5–3) changes |
+| 160 ft simple, forced d<sub>o</sub>/D = 3 | D 72, 5/8 in | identical (5/8 in also satisfies k = 5 at the ends: φV<sub>n</sub> 447.72 ≥ 396.56 kip); TS4 end panel 0.68 → 0.76; TS5 warn → adv |
+| 120 ft simple, default bridge, forced stiffened d<sub>o</sub>/D = 2, quick suggestion | D 61, 1/2 in, $555,024; bottom 19 × 1 / 19 × 1 5/8 / 19 × 1; TS4 end panel 0.89 (k 6.25) | D 47, 1/2 in, $578,236; top 17 × 3/4 / 17 × 1 1/4 / 17 × 3/4, bottom 22 × 1 / 22 × 1 3/4 / 22 × 1 1/8; TS4 end panel 0.89 (k 5, φV<sub>n</sub> 351.16) |
+| Same, Run full design | D 58, 1/2 in, $502,011, passes | D 53, 9/16 in, $533,684, passes; top 17 × 7/8; bottom 19 × 7/8 / 19 × 1 1/2 / 19 × 7/8 |
+
+### Verification
+
+- `node --check` on every inline script of the main page and of the decoded PlateLine; the base64 round trip of the unchanged page was byte-identical before editing.
+- Headless Chromium (Playwright), main vs branch: every module's checks on the default project (above); TS and GS variants (above); PlateLine cases (fast, quick, Full design, Apply, then Get demands in the Transverse stiffeners and Girder section modules). No console errors, no alerts.
+- Saved data: localStorage keys `girderdetail_autosave_v1`, `plateline_autosave_v1` only, unchanged. A project saved by main (TS end panel 120 in) loads in the branch with identical inputs (and shows the new TS4 result), and the reverse. No format change; the new `VuE` arrays are in memory only.
+- Screenshots (session scratchpad `followups/endk/`): TS4 and TS5 cards and status bar (end panel 120 in; connection plates only), GS11 card, PlateLine web card with the end panel governing; main and branch.
+- **Other copies / shared snippets:** none (no `bridgeSuite.v1.*` code or other shared snippet touched).
+- **Open items (raised, not changed):** (1) PlateLine's `detailExport` flags only the panels next to the abutments as end panels (`end = ks === 0 || ks === nS - 1`); for simple spans the panels next to a pier are also girder ends. EK3's sizing treats them as end panels; GirderDetail's TS4 rows from Preliminary sizing do not. (2) TS4 checks each panel with V<sub>u</sub> at the stiffener; for an end panel the largest shear is at the bearing, which no GirderDetail check uses (GS rows are never at the abutments). (3) Q3's N/A text "web shear is checked as unstiffened in TS4" is applied with connection plates only even when an interior panel is ≤ 3D (TS4 then uses the stiffened k and tension field for it), e.g. connection plates at 150 in with D = 60; unchanged from Q3. (4) PlateLine sizes one constant web thickness for the whole girder, so an end panel governing thickens the whole web; a smaller end-panel spacing (≤ 1.5D) is not modelled by the single d<sub>o</sub>/D ratio. (5) PlateLine's minimum D/t<sub>w</sub> uses 300 for a stiffened web (`D / (st ? 300 : 150)`); not changed here.
+
+### Exact changes (EK1, EK2): main page (unified diff, PL_B64 line omitted)
+
+```diff
+diff --git a/Steel Bridge Beam Modules.html b/Steel Bridge Beam Modules.html
+index 772181c..eabc23f 100644
+--- a/Steel Bridge Beam Modules.html	
++++ b/Steel Bridge Beam Modules.html	
+@@ -2274,3 +2274,3 @@ const MAN = [
+ <p>d<sub>o</sub> is the smaller adjacent panel and b the smaller of d<sub>o</sub> and D. Where neither panel needs tension-field action, I<sub>t</sub> ≥ I<sub>t1</sub>. Otherwise I<sub>t</sub> ≥ I<sub>t1</sub> + (I<sub>t2</sub> − I<sub>t1</sub>)ρ<sub>w</sub> when I<sub>t2</sub> > I<sub>t1</sub>, else I<sub>t</sub> ≥ I<sub>t2</sub>, with ρ<sub>w</sub> the larger of (V<sub>u</sub> − φ<sub>v</sub>V<sub>cr</sub>)/(φ<sub>v</sub>V<sub>n</sub> − φ<sub>v</sub>V<sub>cr</sub>) in the two panels (confirm the equation numbering against your edition). I<sub>t</sub> is taken about the web face for a single plate and about the web mid-thickness for a pair.</p>
+-<h3>Web shear (6.10.9)</h3><p>Each adjacent panel is checked for V<sub>u</sub> ≤ φ<sub>v</sub>V<sub>n</sub> with k = 5 + 5/(d<sub>o</sub>/D)². Interior panels include tension-field action (Eq. 6.10.9.3.2-2 or -8 depending on 2Dt<sub>w</sub>/(b<sub>fc</sub>t<sub>fc</sub> + b<sub>ft</sub>t<sub>ft</sub>)); end panels and panels wider than 3D use V<sub>n</sub> = CV<sub>p</sub>. Check TS5 compares each panel with the limits of 6.10.9.1 (1.5D for end panels, 3D for interior panels), which decide only whether the panel counts as stiffened: a panel wider than 3D is advisory, because TS4 checks it as unstiffened (k = 5) and decides pass or fail; an end panel wider than 1.5D but not wider than 3D is a warning. When the web has no intermediate stiffeners (connection plates only), it is designed as unstiffened and TS5 is not applicable.</p>
++<h3>Web shear (6.10.9)</h3><p>Each adjacent panel is checked for V<sub>u</sub> ≤ φ<sub>v</sub>V<sub>n</sub> with k = 5 + 5/(d<sub>o</sub>/D)². Interior panels include tension-field action (Eq. 6.10.9.3.2-2 or -8 depending on 2Dt<sub>w</sub>/(b<sub>fc</sub>t<sub>fc</sub> + b<sub>ft</sub>t<sub>ft</sub>)); end panels use V<sub>n</sub> = CV<sub>p</sub> (Eq. 6.10.9.3.3-1). An interior panel wider than 3D or an end panel wider than 1.5D is not a stiffened panel (6.10.9.1): it is checked as unstiffened, k = 5 and V<sub>n</sub> = CV<sub>p</sub> (Eq. 6.10.9.2-1). Check TS5 compares each panel with these limits, which decide only whether the panel counts as stiffened: a panel wider than its limit is advisory, because TS4 checks it as unstiffened (k = 5) and decides pass or fail. When the web has no intermediate stiffeners (connection plates only), it is designed as unstiffened and TS5 is not applicable.</p>
+ <h3>Welds and fatigue</h3><p>Intermediate stiffener web welds stop 4t<sub>w</sub> to 6t<sub>w</sub> from the web-to-flange weld at the tension flange (6.10.11.1.1). Connection plates are welded to both flanges and those welds are designed for 20 kip laterally on straight, nonskewed bridges, or the analysis force otherwise (6.6.1.3.1). Base metal at stiffener weld toes is Category C′, (ΔF)<sub>TH</sub> = 12 ksi. Minimum fillet sizes follow Table 6.13.3.4-1.</p>
+@@ -2366,4 +2366,4 @@ function numRows(rows, spec, lbl, errors) { return rows.map((r0, i) => { const r
+     if (!isFinite(v) || v < min) errors.push(`${r.name}: "${spec.find(s => s[0] === k)[1].replace(/<[^>]+>/g, '')}" must be ${o && o.any ? 'a number' : min === 0 ? 'zero or positive' : 'positive'}.`); }); return r; }); }
+-function webShear(D, tw, Fyw, doIn, flgA, end) {
+-  const stiff = doIn > 0 && doIn <= 3 * D + 1e-9, k = stiff ? 5 + 5 / (doIn / D) ** 2 : 5, lam = D / tw, r = Math.sqrt(ES * k / Fyw);
++function webShear(D, tw, Fyw, doIn, flgA, end) {   // stiffened panel (6.10.9.1, 6.10.9.3.3): d_o <= 3D, or d_o <= 1.5D for an end panel; otherwise unstiffened (k = 5)
++  const stiff = doIn > 0 && doIn <= (end ? 1.5 : 3) * D + 1e-9, k = stiff ? 5 + 5 / (doIn / D) ** 2 : 5, lam = D / tw, r = Math.sqrt(ES * k / Fyw);
+   const C = lam <= 1.12 * r ? 1 : lam <= 1.40 * r ? 1.12 * r / lam : 1.57 / lam ** 2 * (ES * k / Fyw), Vp = 0.58 * Fyw * D * tw;
+@@ -2449,3 +2449,3 @@ tabs: { combos: 'Demands', rptCombos: 'Design demands' },
+     { const c = { id: 'TS4', grp: G2, title: 'Web shear resistance of adjacent panels', ref: 'AASHTO LRFD 6.10.9.3.2, 6.10.9.3.3', src: 'Code', sym: T`V_u \le \phi_vV_n, \quad \phi_v = 1.0`,
+-        cols: ['Location, panel', 'd_o (in)', 'V_u (kip)', 'C', 'φV_n (kip)', 'Ratio'], items: [], note: 'Interior stiffened panels include tension-field action (Eq. 6.10.9.3.2-2 or -8); end panels and panels wider than 3D use V_n = CV_p. V_u is the Strength I shear at the stiffener, applied to both adjacent panels.' };
++        cols: ['Location, panel', 'd_o (in)', 'V_u (kip)', 'C', 'φV_n (kip)', 'Ratio'], items: [], note: 'Interior stiffened panels include tension-field action (Eq. 6.10.9.3.2-2 or -8); stiffened end panels (d_o ≤ 1.5D) use V_n = CV_p with k = 5 + 5/(d_o/D)² (Eq. 6.10.9.3.3-1). Interior panels wider than 3D and end panels wider than 1.5D are unstiffened (6.10.9.1): k = 5, V_n = CV_p (Eq. 6.10.9.2-1). V_u is the Strength I shear at the stiffener, applied to both adjacent panels.' };
+       R.rows.forEach(r => [r.p1, r.p2].forEach((q, i) => c.items.push(rc(`${L(r)}, panel ${i + 1}${q.end ? ' (end)' : ''}`, [f2(q.do), f2(r.Vu), f3(q.C), f2(q.phVn), f2(r.Vu / q.phVn)], r.Vu, q.phVn,
+@@ -2453,5 +2453,5 @@ tabs: { combos: 'Demands', rptCombos: 'Design demands' },
+       out.add(c); }
+-    { const c = { id: 'TS5', grp: G2, title: 'Stiffener spacing limits', ref: 'AASHTO LRFD 6.10.9.1, 6.10.9.3.3', src: 'Code', sym: T`d_o \le 3D\ \text{(interior panels)}, \qquad d_o \le 1.5D\ \text{(end panels)}`, cols: ['Location, panel', 'd_o (in)', 'Limit (in)', 'Ratio'], items: [], note: 'The 6.10.9.1 limits decide only whether a panel counts as stiffened for shear. A panel wider than 3D is advisory: it is treated as unstiffened in TS4 (k = 5, V_n = CV_p), and TS4 decides pass or fail. An end panel wider than 1.5D but not wider than 3D stays a warning (TS4 checks it with V_n = CV_p and k from its d_o). With connection plates only (no intermediate stiffener) the check is not applicable.' };
++    { const c = { id: 'TS5', grp: G2, title: 'Stiffener spacing limits', ref: 'AASHTO LRFD 6.10.9.1, 6.10.9.3.3', src: 'Code', sym: T`d_o \le 3D\ \text{(interior panels)}, \qquad d_o \le 1.5D\ \text{(end panels)}`, cols: ['Location, panel', 'd_o (in)', 'Limit (in)', 'Ratio'], items: [], note: 'The 6.10.9.1 limits decide only whether a panel counts as stiffened for shear. A panel wider than its limit (3D, or 1.5D for an end panel) is advisory: it is treated as unstiffened in TS4 (k = 5, V_n = CV_p), and TS4 decides pass or fail. With connection plates only (no intermediate stiffener) the check is not applicable.' };
+       R.rows.forEach(r => [r.p1, r.p2].forEach((q, i) => { const lim = (q.end ? 1.5 : 3) * r.D, ok = ge(lim, q.do), adv = !ok && !q.stiff; c.items.push({ loc: `${L(r)}, panel ${i + 1}${q.end ? ' (end)' : ''}`, cells: [f2(q.do), f2(lim), f2(q.do / lim)], r: q.do / lim, st: ok ? 'pass' : adv ? 'adv' : 'warn', work: T`d_o = ${f2(q.do)} \;${LE(q.do, lim)}\; ${q.end ? '1.5' : '3'}(${f2(r.D)}) = ${f2(lim)}\ \text{in}${adv ? T`\ \text{(treated as unstiffened in TS4)}` : ''}` }); }));
+-      // web designed unstiffened (connection plates only): connection-plate spacing is not limited by 6.10.9.1 (an end panel that TS4 still checks with k from d_o keeps its warning)
++      // web designed unstiffened (connection plates only): connection-plate spacing is not limited by 6.10.9.1 (TS4 checks every panel wider than its limit as unstiffened)
+       if (!R.rows.some(r => r.t.role === 'int') && !c.items.some(i => i.st === 'warn')) { c.items = []; c.naWhy = 'Web designed as unstiffened (connection plates only): connection-plate spacing is not limited by 6.10.9.1; web shear is checked as unstiffened in TS4.'; }
+@@ -3380,3 +3380,3 @@ tabs: { combos: 'Loads and stresses', cap: 'Resistances', geometry: 'Proportions
+       if (!c.items.length) c.naWhy = 'No flange lateral bending entered.'; out.add(c); }
+-    { const c = { id: 'GS11', grp: SH, title: 'Shear resistance', ref: 'AASHTO LRFD 6.10.9', src: 'Code', sym: T`V_u \le \phi_vV_n, \quad \phi_v = 1.0`, cols: ['Location', 'V_u (kip)', 'C', 'φV_n (kip)', 'Ratio'], items: [], note: 'Unstiffened webs (d_o = 0 or d_o > 3D) and end panels use V_n = CV_p; interior stiffened panels include tension-field action.' };
++    { const c = { id: 'GS11', grp: SH, title: 'Shear resistance', ref: 'AASHTO LRFD 6.10.9', src: 'Code', sym: T`V_u \le \phi_vV_n, \quad \phi_v = 1.0`, cols: ['Location', 'V_u (kip)', 'C', 'φV_n (kip)', 'Ratio'], items: [], note: 'Unstiffened webs and panels (d_o = 0, d_o > 3D, or an end panel with d_o > 1.5D; 6.10.9.1) use k = 5 and V_n = CV_p; stiffened end panels use V_n = CV_p with k from d_o (Eq. 6.10.9.3.3-1); interior stiffened panels include tension-field action.' };
+       R.rows.forEach(r => { const q = r.sh; c.items.push(rc(L(r), [f2(r.Vu), f3(q.C), f2(q.Vn), f2(r.Vu / q.Vn)], r.Vu, q.Vn,
+@@ -5152,4 +5152,3 @@ AD.ts = () => { const S = std(), T = P.ts, out = [], D = k => parseDim(k);
+   const ts5 = r ? r.C.find(c => c.id === 'TS5') : null, ts5x = st => ts5 ? ts5.items.some(i => i.st === st) : false;
+-  if (ts5x('adv')) out.push('TS5 advisories: panels wider than 3D are not stiffened panels (6.10.9.1) and are treated as unstiffened in TS4, which decides the web shear');
+-  if (ts5x('warn')) out.push('TS5 warnings: end panels wider than 1.5D (6.10.9.1); TS4 checks them with V_n = CV_p and k from d_o');
++  if (ts5x('adv')) out.push('TS5 advisories: panels wider than 3D (end panels: 1.5D) are not stiffened panels (6.10.9.1) and are treated as unstiffened in TS4, which decides the web shear');
+   if (panel.length) out.push(`Panel shear or spacing fails at ${[...new Set(panel)].join('; ')}: these depend on the stiffener spacing (Framing tab in Preliminary sizing), not the plate size`);
+```
+
+### Exact changes (EK3): decoded PlateLine (unified diff)
+
+```diff
+--- a/PlateLine (decoded PL_B64)
++++ b/PlateLine (decoded PL_B64)
+@@ -1918,3 +1918,3 @@
+       // web thickness from shear
+-      const W = webFromShear(D, R.VuMax, R.VuLoc, wt, twMin);
++      const W = webFromShear(D, R.VuMax, R.VuLoc, wt, twMin, R);
+       tw = W.tw; web = [{ L: Ltot, t: tw }];
+@@ -2028,5 +2028,5 @@
+       }
+-      let VuMax = 0, VuLoc = 0;
++      let VuMax = 0, VuLoc = 0; const VuE = new Float64Array(N - 1);   // VuE: Strength I |V_u| per element (end-panel shear, webFromShear)
+       for (let e = 0; e < N - 1; e++) { const vf = s => (s * VDC[e] >= 0 ? 1.25 : 0.90) * VDC[e] + (s * VDW[e] >= 0 ? 1.5 : 0.65) * VDW[e];   // 3.4.1: minimum factors where a permanent load relieves the extreme
+-        const v = Math.max(Math.abs(vf(1) + 1.75 * Vp[e]), Math.abs(vf(-1) + 1.75 * Vn[e])); if (v > VuMax) { VuMax = v; VuLoc = (xs[e] + xs[e + 1]) / 2; } }
++        const v = Math.max(Math.abs(vf(1) + 1.75 * Vp[e]), Math.abs(vf(-1) + 1.75 * Vn[e])); VuE[e] = v; if (v > VuMax) { VuMax = v; VuLoc = (xs[e] + xs[e + 1]) / 2; } }
+       // required flange areas (in^2)
+@@ -2049,3 +2049,3 @@
+       out.types[gt] = { gt, ext, feOn: FEon, IMk, IMf, bS, b3, bN, stg, VDC1, VDC2, VDW, VCL, Vp, Vn, MfP, MfN, Vfr, Vfm, w1, wSteel, wHaunch, wDeck, wSip, wHaunch0: wHaunch[0], wSteelMax: Math.max(...wSteel), wSteelMin: Math.min(...wSteel), wDC2, wDW, wCL, trW,
+-        MDC1, MDC2, MDW, MCL, Mp, Mn, Mup, Mun, Msp, Msn, Mc, mgM, dfSpan, dfPier, skV, VuMax, VuLoc, Abot, Atop, gB, gT, cf, Mperm };
++        MDC1, MDC2, MDW, MCL, Mp, Mn, Mup, Mun, Msp, Msn, Mc, mgM, dfSpan, dfPier, skV, VuMax, VuLoc, VuE, Abot, Atop, gB, gT, cf, Mperm };
+     }
+@@ -2066,13 +2066,23 @@
+   /* ---- web thickness from shear (no tension field) ---- */
+-  function webFromShear(D, Vu, loc, wt, twMin) {
+-    const st = (wt || SG.web) === 'stiffened', k = st ? 5 + 5 / Math.min(DO_R, 3) ** 2 : 5, E = ES;
+-    let tw = up(Math.max(L.minTw, D / (st ? 300 : 150), 0.3125, twMin || 0), L.incTw), C, Vn, lam;
+-    for (let g = 0; g < 80; g++) {
+-      lam = D / tw; const r = Math.sqrt(E * k / FyW);
+-      C = lam <= 1.12 * r ? 1 : lam <= 1.40 * r ? 1.12 * r / lam : 1.57 / lam ** 2 * (E * k / FyW);
+-      Vn = C * 0.58 * FyW * D * tw;
+-      if (Vn >= Vu - 1e-9) break;
+-      tw += L.incTw;
++  function webFromShear(D, Vu, loc, wt, twMin, R) {
++    const st = (wt || SG.web) === 'stiffened', E = ES;
++    const size = (k, Vu, loc) => {
++      let tw = up(Math.max(L.minTw, D / (st ? 300 : 150), 0.3125, twMin || 0), L.incTw), C, Vn, lam;
++      for (let g = 0; g < 80; g++) {
++        lam = D / tw; const r = Math.sqrt(E * k / FyW);
++        C = lam <= 1.12 * r ? 1 : lam <= 1.40 * r ? 1.12 * r / lam : 1.57 / lam ** 2 * (E * k / FyW);
++        Vn = C * 0.58 * FyW * D * tw;
++        if (Vn >= Vu - 1e-9) break;
++        tw += L.incTw;
++      }
++      return { tw, k, C, Vn, Vu, lam, loc, Vp: 0.58 * FyW * D * tw };
++    };
++    const W = size(st ? 5 + 5 / Math.min(DO_R, 3) ** 2 : 5, Vu, loc);
++    // end panels (6.10.9.1, 6.10.9.3.3): with d_o > 1.5D the end panel is not a stiffened panel, so the shear in it is resisted with k = 5 (unstiffened)
++    if (st && DO_R > 1.5 + 1e-9 && R && R.types) {
++      const dE = DO_R * D / 12, ends = cont ? [0, Ltot] : supX; let VuEnd = 0, xEnd = 0, gEnd = '';
++      Object.values(R.types).forEach(Tg => { if (Tg.VuE) for (let e = 0; e < N - 1; e++) if (ends.some(xe => xs[e] < xe + dE - 1e-9 && xs[e + 1] > xe - dE + 1e-9) && Tg.VuE[e] > VuEnd) { VuEnd = Tg.VuE[e]; xEnd = (xs[e] + xs[e + 1]) / 2; gEnd = Tg.gt; } });
++      if (VuEnd > 0) { const We = size(5, VuEnd, xEnd); if (We.tw > W.tw + 1e-9) return { ...We, end: true, doR: DO_R, gt: gEnd }; }
+     }
+-    return { tw, k, C, Vn, Vu, lam, loc, Vp: 0.58 * FyW * D * tw };
++    return W;
+   }
+@@ -2517,3 +2527,3 @@
+ <h3>Web</h3>
+-<p>Web depth D = ⌈L<sub>max</sub>(12)/r − 2.5⌉ on the depth increment, increased until G1 and G2 pass. Web thickness is the smallest on the thickness increment satisfying the minimum thickness, D/t<sub>w</sub> ≤ 150, and φ<sub>v</sub>V<sub>n</sub> = C(0.58F<sub>yw</sub>Dt<sub>w</sub>) ≥ V<sub>u</sub> (6.10.9.2, 6.10.9.3.2), with C from Eq. 6.10.9.3.2-4 to -6. Tension-field action is not used, which is conservative.</p>
++<p>Web depth D = ⌈L<sub>max</sub>(12)/r − 2.5⌉ on the depth increment, increased until G1 and G2 pass. Web thickness is the smallest on the thickness increment satisfying the minimum thickness, D/t<sub>w</sub> ≤ 150, and φ<sub>v</sub>V<sub>n</sub> = C(0.58F<sub>yw</sub>Dt<sub>w</sub>) ≥ V<sub>u</sub> (6.10.9.2, 6.10.9.3.2), with C from Eq. 6.10.9.3.2-4 to -6. Tension-field action is not used, which is conservative. With transverse stiffeners at d<sub>o</sub> > 1.5D, the end panels (d<sub>o</sub> from each girder end) are not stiffened panels (6.10.9.1, 6.10.9.3.3): the largest V<sub>u</sub> in them is also checked with k = 5 (unstiffened), and the thicker web governs.</p>
+ <h3>Required flange areas</h3>
+@@ -2855,5 +2865,5 @@
+     <div class="eq-where"><table><tr><td class="wsym">r</td><td class="wdesc">Target L/D<sub>st</sub> (${R.D.cont ? 'continuous' : 'simple'}); 2.5 in allows for flange thicknesses</td><td class="wval">${f2(R.D.ratio)}</td></tr></table></div></div>
+-    <div class="eq-block"><div class="eq-title"><span>Web thickness from shear, maximum V<sub>u</sub> at ${f2(W.loc)} ft (${TT(R.VuType)} girder)</span><span class="eq-ref">AASHTO 6.10.9.2, 6.10.9.3.2 (no tension-field action)</span></div>
++    <div class="eq-block"><div class="eq-title"><span>Web thickness from shear, ${W.end ? `end panel (d<sub>o</sub> = ${f2(W.doR)}D > 1.5D, unstiffened), maximum V<sub>u</sub> in the end panels` : 'maximum V<sub>u</sub>'} at ${f2(W.loc)} ft (${TT(W.gt || R.VuType)} girder)</span><span class="eq-ref">AASHTO 6.10.9.2, 6.10.9.3.2 (no tension-field action)</span></div>
+     <div class="eq-math">\\[\\begin{aligned}\\frac{D}{t_w} &= \\frac{${f2(s.D)}}{${f3(W.tw)}} = ${f2(W.lam)}, \\qquad \\sqrt{\\frac{Ek}{F_{yw}}} = \\sqrt{\\frac{29{,}000(${W.k})}{${f2(Fyw)}}} = ${f2(Math.sqrt(ES * W.k / Fyw))} \\\\ C &= ${W.C >= 1 - 1e-9 ? '1.00' : W.lam <= 1.40 * Math.sqrt(ES * W.k / Fyw) ? `\\frac{1.12}{D/t_w}\\sqrt{\\frac{Ek}{F_{yw}}}` : `\\frac{1.57}{(D/t_w)^2}\\frac{Ek}{F_{yw}}`} = ${f3(W.C)} \\\\ \\phi_v V_n &= 1.0\\,C\\,(0.58F_{yw}Dt_w) = ${f3(W.C)}(0.58)(${f2(Fyw)})(${f2(s.D)})(${f3(W.tw)}) = ${f2(W.Vn)}\\ \\text{kip} \\;${W.Vn >= W.Vu ? '\\ge' : '<'}\\; V_u = ${f2(W.Vu)}\\ \\text{kip}\\end{aligned}\\]</div>
+-    <div class="eq-where"><table><tr><td class="wsym">k</td><td class="wdesc">${P.suggest.web === 'stiffened' ? 'Shear buckling coefficient, transverse stiffeners at d<sub>o</sub> = D: 5 + 5/(d<sub>o</sub>/D)²' : 'Shear buckling coefficient, unstiffened web'}</td><td class="wval">${W.k}</td></tr>
++    <div class="eq-where"><table><tr><td class="wsym">k</td><td class="wdesc">${W.end ? 'Shear buckling coefficient: an end panel wider than 1.5D is not a stiffened panel (6.10.9.1, 6.10.9.3.3), so k = 5 (unstiffened); it governs the constant web thickness' : P.suggest.web === 'stiffened' ? 'Shear buckling coefficient, transverse stiffeners at d<sub>o</sub> = D: 5 + 5/(d<sub>o</sub>/D)²' : 'Shear buckling coefficient, unstiffened web'}</td><td class="wval">${W.k}</td></tr>
+     <tr><td class="wsym">t<sub>w</sub></td><td class="wdesc">Smallest thickness on the ${frac(P.limits.incTw)} in increment that satisfies shear, D/t<sub>w</sub> ≤ 150, and the minimum ${frac(P.limits.minTw)} in</td><td class="wval">${frac(W.tw)}<span class="wunit">in</span></td></tr></table></div></div>`);
 ```
