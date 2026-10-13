@@ -7784,3 +7784,10 @@ Main page only; `PL_B64` (embedded Preliminary sizing) is not touched. Display o
 - **Also (report inputs table, anchor `['User forces Str I (top/bot/diag)'`):** `'User forces Str I (top/bot/diag)'` → `'Member forces from analysis, Strength I (top / bottom / diagonal)'` and `'User forces Con (top/bot/diag)'` → `'Member forces from analysis, Constructibility (top / bottom / diagonal)'` (the input card's own heading).
 - **Check case:** built-in example, Cross-frames CF1: "Bottom chord (L3x3x3/8), Strength III", "Top chord (L5x5x3/8), Constructibility"; ratios unchanged. The member-force table headers (`StrI T / C (kip)` …) are unchanged.
 - **Other copies:** none.
+
+### Q10. Manual, Part 1 introduction: two typos   [text only]
+- **Where:** Manual, first paragraph (anchor `the sizing module keeps its own saved projects.`).
+- **Before:** `In the field splice module, It covers flange splices with …` and `… the detailing rules of Article 6.13.2.6. every load combination is fully worked, …`
+- **After:** `The field splice module covers flange splices with …` and `… the detailing rules of Article 6.13.2.6. Every load combination is fully worked, …`
+- **Check case:** none (text).
+- **Other copies:** none.
