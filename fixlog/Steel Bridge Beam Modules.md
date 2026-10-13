@@ -7184,3 +7184,34 @@ Main page and the embedded Preliminary sizing (PlateLine, `PL_B64`, decoded, edi
 ### Open items (C4–C7)
 - The Fatigue module's "Import details from other modules → Girder section" and the Girder-section fallback inventory still build rows without b<sub>eff</sub>, so they use the module's single b<sub>eff</sub> even though each Girder section row has its own. Not changed (outside this item); decide whether those imports should carry the row's b<sub>eff</sub> too.
 - Pier connection-plate rows still take the cross-frame nearest the pier (C4 changes only the span rows).
+
+## 2026-10-13 — PR: claude/girderdetail-cleanup3 (clean-up 3: Fatigue takes the deck from Preliminary sizing, first import replaces the example, C′ basis, per-side traffic faces, Design all rows, wording and small fixes; engineer offline, "clean up the app and use judgement"; PR link added after merge)
+
+Main page and the embedded Preliminary sizing (PlateLine, `PL_B64`, decoded, edited and re-encoded on its one line). No storage key or `bridgeSuite.v1.*` payload is added, renamed or removed. `lldf.html` is unchanged.
+
+### C8. Fatigue: an import from Preliminary sizing also takes the deck, concrete and web grade of the analysed bridge   [§4: section properties of every Fatigue row] [identical on the built-in example; matters when the deck differs from the module's own inputs]
+- **Where (main page):** `GM.fa.inbox`; anchor `inbox(j) {   // the fatigue detail inventory from the analysis (manual rows are kept)`.
+- **Before:**
+  ```js
+    const inv = j && j.mods && j.mods.fa; if (inv && inv.length) return { n: inv.length, what: '...', apply: () => { P.fa.rows = [...P.fa.rows.filter(q => q.src !== 'analysis'), ...JSON.parse(JSON.stringify(inv))]; } };
+    const rows = j && j.mods && j.mods.gs && j.mods.gs.rows; if (!rows || !rows.length) return null;
+    return { n: rows.length * 2, what: 'flange details at the critical sections', apply: () => {
+  ```
+- **After:**
+  ```js
+    // deck, concrete and web grade of the analysed bridge (H1, 2026-10-13): from the same payload the Girder section module takes them from (was: the module's own values kept)
+    const gen = (j && j.mods && ((j.mods.gs && j.mods.gs.gen) || (j.mods.wt && j.mods.wt.gen))) || {}, genApply = () => ['ts', 'hh', 'fc', 'wc', 'K1', 'gW'].forEach(k => { if (gen[k] != null && gen[k] !== '') P.fa[k] = gen[k]; });
+    const inv = j && j.mods && j.mods.fa; if (inv && inv.length) return { n: inv.length, what: '...', apply: () => { genApply(); P.fa.rows = [...P.fa.rows.filter(q => q.src !== 'analysis'), ...JSON.parse(JSON.stringify(inv))]; } };
+    const rows = j && j.mods && j.mods.gs && j.mods.gs.rows; if (!rows || !rows.length) return null;
+    return { n: rows.length * 2, what: 'flange details at the critical sections', apply: () => { genApply();
+  ```
+  The values come from `mods.gs.gen` (structural t<sub>s</sub> `AN.ts`, haunch `AN.hh`, f′<sub>c</sub>, w<sub>c</sub>, K<sub>1</sub> = 1.0, web grade), the same object `GM.gs.inbox` copies into the Girder section module with `Object.assign(P.gs, s.gen)`; `mods.wt.gen` is a fallback with the same deck fields. They go through `importInto`, so they are tracked like every other imported value: a later edit by the user is shown as an override and kept on the next import. The module's single b<sub>eff</sub> is not changed (each Preliminary-sizing row carries its own b<sub>eff</sub> since C5). The deck reinforcement A<sub>r</sub> and its depth d<sub>r</sub> (negative-moment cracked section) are **not** in the payload for any module, so they stay the Fatigue module's own inputs (open item). The web grade is included because it is the same girder's grade (6.10.5.3 web check); the brief listed t<sub>s</sub>, haunch, f′<sub>c</sub>, w<sub>c</sub>, K<sub>1</sub>.
+- **Problem:** the Fatigue module took its rows (moments, sections) from Preliminary sizing but kept its own deck (t<sub>s</sub> 8 in, haunch 2 in, f′<sub>c</sub> 4 ksi), so a bridge with a different deck was checked with the wrong composite section and modular ratio. Less or more conservative depending on the deck; fixed.
+- **Governing provision:** AASHTO LRFD 10th Ed. 6.6.1.2.1 (stress range from the short-term composite section), 6.10.1.1.1b, 5.4.2.4 (E<sub>c</sub> = 120,000 K<sub>1</sub> w<sub>c</sub><sup>2.0</sup> f′<sub>c</sub><sup>0.33</sup>, the module's "exact" rule as before), 6.6.1.2.5 (Fatigue I). Not changed. Not re-checked against the printed 10th Edition here: verify.
+- **Check case 1 (built-in example; Preliminary sizing deck t<sub>s</sub> 8, haunch 2, f′<sub>c</sub> 4, w<sub>c</sub> 0.150; module defaults equal):** Fatigue imported from Preliminary sizing: every row identical before and after; governing row "Span 1, connection plate at cross-frame 60.91 ft, bottom flange, exterior" ratio **1.136** before and after.
+- **Check case 2 (built-in example with Preliminary sizing t<sub>s</sub> = 9 in, f′<sub>c</sub> = 5 ksi, haunch 3 in; Fatigue imported; same row: exterior girder, b<sub>eff</sub> 96 in, 60 × 9/16 web, top 16 × 3/4, bottom 16 × 1-1/8, inner face of bottom flange y = 1.125 in; M<sub>f+</sub> = 812.9, M<sub>f−</sub> = −364.3 k-ft; cracked negative section; γ = 1.75, (ΔF)<sub>TH</sub> = 12.0 ksi):**
+  - **Before (module deck 8 / 2 / 4 ksi, n = 6.80):** ȳ<sub>n</sub> = 53.568 in, I<sub>n</sub> = 102,183 in⁴; f<sub>+</sub> = 812.9(12)(52.443)/102,183 = 5.006 ksi; cracked ȳ = 33.498, I = 50,834 in⁴: f<sub>−</sub> = 364.3(12)(32.373)/50,834 = 2.784 ksi; Δf = 7.790 ksi; ratio 1.75(7.790)/12 = **1.136** (stale deck).
+  - **After (9 / 3 / 5 ksi; E<sub>c</sub> = 120,000(1.0)(0.150)²(5)<sup>0.33</sup> = 4,592 ksi, n = 29,000/4,592 = 6.32):** ȳ<sub>n</sub> = 56.292 in, I<sub>n</sub> = 112,075 in⁴; f<sub>+</sub> = 812.9(12)(55.167)/112,075 = 4.802 ksi; cracked (A<sub>r</sub> 9.8 in² at 3 + 9 − 4 = 8 in above the steel) ȳ = 33.764, I = 52,215 in⁴: f<sub>−</sub> = 364.3(12)(32.639)/52,215 = 2.733 ksi; Δf = 7.534 ksi; ratio **1.099**.
+  - Other rows move the same way (e.g. Span 3 connection plate, exterior: 1.098 → 1.060). The Fatigue deck inputs read 9 / 3 / 5 after the import (before: 8 / 2 / 4).
+- **Saved data:** no key or format change; `P.fa.ts`, `hh`, `fc`, `wc`, `K1`, `gW` keep their meaning and are now written by the import (and recorded in the import snapshot `P._imp.fa`).
+- **Other copies:** none.
