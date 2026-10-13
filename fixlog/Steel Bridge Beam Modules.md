@@ -7775,3 +7775,12 @@ Main page only; `PL_B64` (embedded Preliminary sizing) is not touched. Display o
 - **Problem:** LLDF and DLs and Structural analysis have only pass/warn checks without a demand/resistance ratio; the card showed "Governing ratio" and a bare dash.
 - **Check case:** built-in example, LLDF and DLs and Structural analysis summaries: "Governing ratio — No check with a ratio". Modules with a ratio unchanged.
 - **Other copies:** none.
+
+### Q9. Cross-frames CF1, CF2: the governing load case is named in full ("Strength III", "Constructibility"), not by its internal id ("StrIII", "Con")   [text only]
+- **Where:** Cross-frames `checks(R)` (anchor `lims = R.primary ? { c: 120, t: 140 } : { c: 140, t: 240 }`) and the CF1 / CF2 item locations (anchors `${m.l} (${m.name}), ${m.cC || '—'}` and `${m.l} (${m.name}), ${m.cT || '—'}`).
+- **Before:** `const out = ckNew(), M = Object.values(R.mem), lims = R.primary ? { c: 120, t: 140 } : { c: 140, t: 240 };` and `` `${m.l} (${m.name}), ${m.cC || '—'}` `` / `` `${m.l} (${m.name}), ${m.cT || '—'}` ``
+- **After:** `..., lims = ..., CN = { StrI: 'Strength I', StrIII: 'Strength III', StrV: 'Strength V', Con: 'Constructibility' };` and `` `${m.l} (${m.name}), ${CN[m.cC] || m.cC || '—'}` `` / `` `${m.l} (${m.name}), ${CN[m.cT] || m.cT || '—'}` ``
+- **Problem:** the governing column of the summary, checks and report read "Bottom chord (L3x3x3/8), StrIII" and "Top chord (L5x5x3/8), Con" (Con read as truncated).
+- **Also (report inputs table, anchor `['User forces Str I (top/bot/diag)'`):** `'User forces Str I (top/bot/diag)'` → `'Member forces from analysis, Strength I (top / bottom / diagonal)'` and `'User forces Con (top/bot/diag)'` → `'Member forces from analysis, Constructibility (top / bottom / diagonal)'` (the input card's own heading).
+- **Check case:** built-in example, Cross-frames CF1: "Bottom chord (L3x3x3/8), Strength III", "Top chord (L5x5x3/8), Constructibility"; ratios unchanged. The member-force table headers (`StrI T / C (kip)` …) are unchanged.
+- **Other copies:** none.
