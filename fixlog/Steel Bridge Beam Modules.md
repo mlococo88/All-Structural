@@ -3641,3 +3641,270 @@ index 772181c..eabc23f 100644
 +    <div class="eq-where"><table><tr><td class="wsym">k</td><td class="wdesc">${W.end ? 'Shear buckling coefficient: an end panel wider than 1.5D is not a stiffened panel (6.10.9.1, 6.10.9.3.3), so k = 5 (unstiffened); it governs the constant web thickness' : P.suggest.web === 'stiffened' ? 'Shear buckling coefficient, transverse stiffeners at d<sub>o</sub> = D: 5 + 5/(d<sub>o</sub>/D)²' : 'Shear buckling coefficient, unstiffened web'}</td><td class="wval">${W.k}</td></tr>
      <tr><td class="wsym">t<sub>w</sub></td><td class="wdesc">Smallest thickness on the ${frac(P.limits.incTw)} in increment that satisfies shear, D/t<sub>w</sub> ≤ 150, and the minimum ${frac(P.limits.minTw)} in</td><td class="wval">${frac(W.tw)}<span class="wunit">in</span></td></tr></table></div></div>`);
 ```
+
+## 2026-10-13 — PR: claude/plateline-suggest-compare (engineer's request 2026-10-13; PR link added after merge)
+
+Engineer's request: "in the quick suggest tab, it should show the existing configuration compared with the suggested configuration so we know what is suggested to change". SC1 is inside the embedded PlateLine (Preliminary sizing) page, the base64 string `const PL_B64 = '...'` of `Steel Bridge Beam Modules.html` (decode, edit, re-encode on one line). The exact changes are the unified diffs at the end of this entry; line numbers (PL ≈) refer to the decoded page.
+
+### SC1. Suggest tab: current girder compared with the quick suggestion or full design   [display only] [no formula, factor, check, or suggestion changed]
+
+- **Where (decoded PlateLine):**
+  - New globals and functions after `sgGovTxt()` (PL ≈ 2768–2895). Anchor `let SGC = null, SGC_RUN = 0, SGC_SHOWN = '';`: `sgcKey()`, `sgcIn()`, `sgCurStart()`, `sgFs()`, `sgCmpRows()`, `sgCmpHtml()`, `sgCmpPlot()`.
+  - `renderSuggest()`: calls `sgCurStart(); SGC_SHOWN = sgcKey();` after `const cur = ...`; the `wtCur` / `curCost` lines (cost of the current girder, `suggestLayout(P, { costOnly })`, unchanged) moved up from the cost card to the top so the comparison can use them; card `sg-sum` gains one line (what changes, or "No change suggested") and, when the current girder is valid, no longer shows the small Suggested/Current table and the three suggested plate lists (they are replaced by the comparison card; both are still shown when the current girder has input errors); new card `sg-cmp` right after `sg-sum`; `sgCmpPlot(mS, cur)` after `drawSuggestCharts(mS)`.
+  - `maybeSuggest()`: anchor `if (k === SG_KEY && SG && !force && !(SG.quick && SG.quick.qk !== sgQKey()))`. With unchanged Suggest inputs it used to return; now it re-renders the tab (no new suggestion) when the current girder changed since the last render (`SGC_SHOWN !== sgcKey()`), so the comparison follows Girder tab edits.
+  - CSS after `.sg-head.chk`: `.tbl tr.chg`, `.tbl td.chg-t`, `.cmp-tbls`, `.plt.short`.
+  - Manual Part 2, new paragraph "Current girder compared with the suggestion" after the "Quick suggestion and full design" paragraph.
+- **What the card shows** (title "Current girder compared with the quick suggestion" / "... with the full design"):
+  - Result line: "Current girder: largest ratio r (check, flange or web at x ft (Span k), interior/exterior girder)" and the same for the suggestion; heading "A change is needed: the current girder exceeds 1.0 (largest ratio r)" (or is shallower than the Table 2.5.2.6.3-1 minimum depth where Suggest applies it, or fails code proportion checks), "Not needed for strength or service: the current girder passes (largest ratio r)", or "No change suggested"; and the steel and cost difference ("would only save steel and cost", or "would not save cost: keep the current girder ...").
+  - Overall rows, current | suggested | change, changed rows highlighted: web depth D, web thickness t<sub>w</sub>, transverse stiffeners and d<sub>o</sub>/D, cross-frame spacing (the full design's spacing; the quick suggestion does not set it), field splices (added / removed / moved), shop transitions, steel per girder and per deck area, cost of all girders (Unit costs), largest strength and service ratio, code proportion check counts (the PlateLine proportion checks of the current girder from the existing `C`, the same check ids as the suggestion's `runChecks(mS)`).
+  - Top flange, web, bottom flange plate by plate (`sgCmpRows`): the two plate lists are merged by station (the union of both lists' segment ends; adjacent ranges with the same current and suggested plates merged), each row "From | To | Current b × t | Suggested b × t | Change"; change text "b 16 → 18", "t 1 1/8 → 1 1/4", "D 60 → 63", "new transition at 97 ft" (the suggestion changes plate where the current girder does not), "new plate change at the field splice at 81 ft", "plate change at 100 ft removed".
+  - Plot (Plotly, same style as the existing Suggest charts): flange thickness (upper) and width (lower) along the girder, top (blue) and bottom (green), current dashed, suggested solid; supports, suggested splices (blue dashed), current splices (grey dotted).
+  - If the current girder has input errors: "The current girder has input errors, so it cannot be compared or checked. Fix them on the Girder tab." with the error list.
+  - Decision on the old per-flange suggested plate lists: **replaced** by the comparison tables (which carry the same suggested plates and stations), kept only as the fallback when the current girder has input errors.
+- **Current-girder check:** `suggestLayout(PP, { full: true, verify: { D, wt, doR, top, bot, web, splices } })` on a copy of the project, the same call the quick suggestion's check makes (`suggestQuickCheck`), with the current plates (`M.top/bot/web`, `M.D`, `M.splices`), the Framing tab stiffener setting (`wt`), `doRatio`, and therefore its cross-frame spacing. Pass = `check.max ≤ 1.0005 && check.rWeb ≤ 1.0005 && dOK` (the quick check's criterion). Where GirderDetail's LLDF and DLs module factors match the current girder (`sgDfx`), that check uses them, as `demand()` already does; the card says so.
+- **Async behaviour:** `sgCurStart()` runs from `renderSuggest()` when `sgcKey()` (= `sgQKey()` + `P.girder` + `P.dfx`) changes; run token `SGC_RUN`; the verify runs after two timer ticks and a result is dropped if a newer run started or the key changed; when it finishes it re-renders the tab. While it runs the card shows "Checking the current girder for strength and service…".
+- **§4 callout:** none needed — no formula, load factor, resistance factor, unit or code reference changes; the quick suggestion, Full design, girder-count study and Alternatives results are unchanged (bit-identical, below). The only new computation is the existing verify applied to the current girder, for display.
+- **Check case (90 ft simple span, 10 girders at 4.0 ft, overhangs 2.25 ft, span-to-depth off; current girder D 36 × 1/2, top 14 × 3/4, bottom 16 × 1 / 16 × 1 1/2 / 16 × 1 at 30/30/30 ft, stiffened d<sub>o</sub> = D):** card: "Not needed for strength or service: the current girder passes (largest ratio 0.759)"; current 0.759 (Fatigue I C′ at connection plates, bottom flange 30 ft, exterior), quick suggestion 0.852 (same check, 39 ft); rows: D 36 → 30 (−6 in), stiffeners removed, transitions 2 → 0, steel 15.17 → 13.99 kip per girder (−7.77%), cost $636,511 → $532,139; top 0–90 ft "b 14 → 13"; bottom 0–30 "b 16 → 15; t 1 → 1 1/4", 30–60 "b 16 → 15; t 1 1/2 → 1 1/4; plate change at 30 ft removed", 60–90 "...; plate change at 60 ft removed". Hand check of a merged row: current bottom 16 × 1 1/2 over 30–60 ft, suggested 15 × 1 1/4 over 0–90 ft → row 30–60 ft, b 16 → 15, t 1 1/2 → 1 1/4; the current plate changes at 30 ft and the suggestion does not, so "plate change at 30 ft removed". Steel: 15.17 − 13.99 = 1.18 kip less (1.18/15.17 = 7.77%).
+- **Built-in example:** "A change is needed: the current girder exceeds 1.0 (largest ratio 1.059)" (PlateLine's Fatigue I C′ check at connection plates, bottom flange 301 ft, exterior — see open item (3) of SQ1–SQ4), quick suggestion 0.987; D 60 → 63, t<sub>w</sub> 9/16 → 1/2, splices moved 82 → 81, 145 → 139, 215 → 221, 278 → 279 ft, steel −2.97 kip per girder (−3.25%), cost −$46,840; 17 top and 17 bottom flange ranges.
+- **Equal case:** apply the quick suggestion (or the full design) on the 90 ft case, reopen the Suggest tab: "No change suggested"; every row unhighlighted; "The quick suggestion is the same as the current girder."
+
+### Verification (SC1)
+
+- `node --check` on the decoded PlateLine scripts; no console errors in any run.
+- Main vs branch, headless Chromium, built-in example and the 90 ft case: fast `suggestLayout(P)` result, deck-width study rows (W = 44.5 ft) and table HTML, and Run full design (D, plates, splices, cost, every candidate and check array, results table HTML) identical; the project `P` identical except the `dfx.ts` timestamp; the checked quick suggestion (plates, check, cost) and its cost card HTML identical (the cards after the new one are numbered one higher).
+- UI: the cases above; an edit during the current-girder check (three edits within ~20 ms): the first run stopped, 2 verifies of the current girder for 3 edits, the final card for the last girder; an edit made on another output tab refreshes the comparison when the Suggest tab is reopened; current girder with an input error; Full design (90 ft case) and its "No change suggested" after Apply; window widths 1600 and 1000 px.
+- Saved data: localStorage keys unchanged (`plateline_autosave_v1`, `plateline_undo_v1`, `girderdetail_*`); an autosave written by the branch loads in main with an identical project and vice versa. The current-girder check result is not saved.
+- An alert "Preliminary sizing has input errors; fix them first." seen once while a test left the Girder tab with an input error during GirderDetail's "Bridge changed: updating every module" refresh is existing behaviour (reproduced on main).
+- **Open items:** (1) For the built-in example the comparison says a change is needed because PlateLine's Category C′ fatigue check of the current girder gives 1.059 (open item (3) of SQ1–SQ4: GirderDetail's Girder section module did not fail it). (2) The current girder is checked at its Framing tab cross-frame spacing and the full design at its own; the card says so.
+- **Other copies:** none.
+
+### Exact changes (SC1): decoded PlateLine (unified diff)
+
+```diff
+--- PL (main 8425bcc)
++++ PL (after SC1)
+@@ -742,6 +742,8 @@
+ .sg-head span { font-size: 12.5px; color: var(--text-dim); }
+ .sg-head span.sg-ln { display: block; margin-top: 3px; } .sg-head > div:first-child { flex: 1 1 320px; }
+ .sg-head.chk { background: color-mix(in oklab, var(--ink, #1d56a3) 8%, transparent); } .sg-head.chk b { color: var(--ink, #1d56a3); } .sg-head .sg-prog-bar { margin: 8px 0 4px; max-width: 520px; }
++.tbl tr.chg td { background: color-mix(in oklab, var(--blue) 10%, transparent); } .tbl td.chg-t { font-weight: 600; color: var(--blue); }   /* current girder vs suggestion: changed rows (2026-10-13) */
++.cmp-tbls { display: grid; grid-template-columns: minmax(0,1fr); gap: 14px; margin-top: 12px; } .plt.short { height: 250px; }
+ .sg-h4 { font-size: 13px; font-weight: 650; margin: 4px 0 4px; }
+ .sgtbl td { vertical-align: top; font-size: 12.5px; }
+ #tab-suggest.busy { opacity: .55; transition: opacity .2s; }
+@@ -2413,6 +2415,7 @@
+ <h3>Suggest: lowest-cost layout</h3><p>Suggest proposes the web and flange layout and the field splices for the bridge on the Bridge tab, with one layout for all girders (designed for the envelope of the interior and exterior girders). It searches web depths from about L/36 to L/18 and, unless one is chosen, both an unstiffened and a transversely stiffened web, and keeps the layout with the <b>lowest total cost</b>: structural steel (weight × $/lb), flange shop transitions, transverse stiffeners, and field splices, each priced from the <b>Unit costs</b> on the Suggest tab, which are the same single price list used by the Alternatives study (and sent to GirderDetail's Design all). The defaults are placeholders; only their ratios affect the choice, and the tab shows each as an equivalent weight of steel. Within each field piece the flange width is constant and the thicknesses are chosen by an optimization that adds a transition only where it saves more than it costs. Field splices are placed by the program near the dead-load points of contraflexure and within the shipping length and weight, and moved off cross-frame locations where the framing check X4 finds a conflict.</p>
+ <p><b>Rules.</b> AASHTO LRFD minimums always apply: D/t<sub>w</sub> ≤ 150 unstiffened or 300 stiffened (6.10.2.1), b<sub>f</sub>/2t<sub>f</sub> ≤ 12, b<sub>f</sub> ≥ D/6, t<sub>f</sub> ≥ 1.1t<sub>w</sub>, 0.1 ≤ I<sub>yc</sub>/I<sub>yt</sub> ≤ 10 (6.10.2.2), plates at least 5/16 in (6.7.3), and one steel grade (no hybrid girders). With the AASHTO/NSBA G12.1 fabrication guidelines on (the default), the Limits tab minimum sizes, increments, and transition ratios also apply. The span-to-depth limits of Table 2.5.2.6.3-1 apply by default. The Suggest setting can turn them off only when the Limits tab does not treat span-to-depth as mandatory; with "Treat span-to-depth (G1, G2) as mandatory" on, Suggest (fast and full design, the deck-width study, and the web economy comparison) always applies them, so it never proposes a girder that fails G1 or G2. Full design also requires the final plates of each candidate to meet the minimum depths, since resizing can thin the flanges.</p><p><b>Optimizing the framing.</b> Stiffener spacing and cross-frame spacing are design variables. For stiffened webs, the fast search tries d<sub>o</sub>/D = 1.0, 1.5, 2.0, and 3.0 (shear buckling coefficient k = 5 + 5/(d<sub>o</sub>/D)²): wider panels need fewer stiffeners but a thicker web, and the cost decides. Full design then re-runs its best candidate at cross-frame spacings from 15 ft up to the maximum set on the Suggest tab (default 25 ft) in 2.5 ft steps, with every check (lateral-torsional buckling with the actual spacing and C<sub>b</sub>, deck placement, and the rest), adding the cost of each intermediate cross-frame, and keeps the cheapest. Apply sets the Framing tab spacing and d<sub>o</sub>/D. The deck overhang is not modeled in sizing: GirderDetail's Deck overhang auto-design gives the largest spacing the deck placement allows at the exterior girder, so set the maximum spacing no higher than that.</p><p><b>Flange widths.</b> Every flange at a field splice is made wide enough for the number of bolt gage lines each side of the web set on the Suggest tab (default 2) without staggering, using the same geometry as GirderDetail's splice auto-design: the first line clear of the web splice plate by the plate clearance plus the edge distance and by the tightening clearance C₁, the gage between lines, and the edge distance at the flange tip (about 14 in for 7/8 in bolts and two lines). The top flange is kept at one width along the girder unless turned off (it simplifies the haunch and stay-in-place forms), and the width of either flange changes by no more than the set maximum at a field splice (default 4 in; 0 for no limit). Widths are raised, never reduced, to meet these rules, and the thicknesses are then optimized at those widths.</p>
+ <p><b>Quick suggestion and full design.</b> Suggest has two modes. The <b>quick suggestion</b> updates as you edit. It picks the web depth and web type with the lowest estimated cost from a fast sizing (one constant-stiffness beam model, flange areas from lever-arm estimates, this tool's layout checks), then checks that girder with the same staged analysis and AASHTO checks as Full design (listed below) for the interior and exterior girders, including the Table 2.5.2.6.3-1 minimum depths when span-to-depth applies to Suggest. Where a ratio exceeds 1.0 it increases the flange plates there (required area = current area &times; ratio/0.97 &times; 1.01, at most 1.35 times per round, never less than the plate already there) and thickens the web by one increment if the web ratio exceeds 1.0, then checks again, up to 8 rounds. Plates are only increased, never trimmed, so the quick suggestion passes the strength and service checks (the card says so, or names the ratio that still exceeds 1.0) but is not necessarily the lightest girder. The check runs in the background after the fast result appears (the card shows &ldquo;checking&rdquo; with a progress bar; typically a second or less after the fast result); a new edit restarts it, and Apply pressed during the check applies the checked result, after confirmation, when it is ready. The girder-count study and the Alternatives study use the fast sizing only, without this check, to rank layouts. <b>Run full design</b> optimizes for the least steel: it takes the best fast candidates and, for each, repeats: the staged, cracked analysis of the current layout (the Structural analysis settings); the AASHTO checks at every node for the interior and exterior girders, on both sides of every plate boundary (Strength I positive flexure with the plastic moment, compactness, D<sub>p</sub>/D<sub>t</sub>, and 1.3M<sub>y</sub>; Strength I negative flexure by 6.10.8 with flange local buckling, lateral-torsional buckling at the cross-frame spacing with C<sub>b</sub> from the quarter-point moments of each unbraced segment (10th Edition 6.10.8.2.3b: C<sub>b</sub> = 12.5M<sub>max</sub>/(2.5M<sub>max</sub> + 3M<sub>A</sub> + 4M<sub>B</sub> + 3M<sub>C</sub>), with M<sub>max</sub> the largest moment compressing the flange and M<sub>A</sub>, M<sub>B</sub>, M<sub>C</sub> the absolute envelope values at the quarter points (largest compression, or smallest tension where the flange is never in compression), as defined in Appendix D6.6; brace points at the supports and at the cross-frame spacing), and R<sub>b</sub>; where the compression flange changes within the unbraced length, lateral-torsional buckling uses the smallest compression flange in it (conservative; the γ<sub>e</sub> methods of Appendix D6.6 are not implemented); deck-placement lateral-torsional buckling also uses C<sub>b</sub> from the deck-placement moments; Service II flange stresses and web bend-buckling; deck-placement constructibility; flange fatigue, Fatigue I, Category B at the flange-to-web welds (extreme fiber) and Category C′ at the connection plates welded to the flanges at every cross-frame (inner flange face, 6.6.1.3.1), unless turned off or limited to Category B; and optionally L/800 deflection); and resizing, with each flange's required area set from the check ratio so plates are thickened where a check exceeds 1.0 and trimmed where there is spare capacity. When the layout stops changing it is verified against its own recomputed demands, and the cheapest passing candidate is selected. The result lists the governing check and ratio for every plate. Applying it replaces the girder layout (and the stiffener setting); Revert restores the previous design.</p>
++<p><b>Current girder compared with the suggestion.</b> Below the quick suggestion (or full design) card, the Suggest tab compares the current girder (the Girder tab plates and splices, with the Framing tab stiffeners and cross-frame spacing) with the suggestion, so you can see what the suggestion changes. The overall rows give the web depth and thickness, transverse stiffeners and d<sub>o</sub>/D, cross-frame spacing, field splices, shop transitions, steel per girder and per deck area, cost (Unit costs), the largest strength and service ratio, and the code proportion check counts, with each changed row highlighted. The top flange, web, and bottom flange are then compared plate by plate: the two plate lists are merged by station, so each row is a station range with the current and the suggested plate and what changes (for example &ldquo;t 1 1/8 &rarr; 1 1/4&rdquo;, &ldquo;b 16 &rarr; 15&rdquo;, &ldquo;new transition at 28 ft&rdquo;). A plot shows the flange thickness and width along the girder for both. The current girder is checked in the background with the same staged analysis and strength and service checks as the quick suggestion, at its own cross-frame spacing (an edit restarts the check); the card says whether a change is needed (the current girder exceeds 1.0, is shallower than the Table 2.5.2.6.3-1 minimum depth where that applies, or fails a code proportion check) or would only save steel and cost, and &ldquo;No change suggested&rdquo; when the suggestion is the same as the current girder. If the current girder has input errors, the card lists them instead. The comparison changes nothing until you press Apply.</p>
+ <h3>Analysis model</h3><p>The analysis of the current design uses a variable-stiffness, staged line-girder model: DC1 on the steel section, DC2 and DW on the long-term composite section, and live load on the short-term composite section, with the composite stages cracked near interior supports. Its settings (staged or constant EI, cracked zones, deck reinforcement) are made in GirderDetail's Structural analysis module. Suggest mode searches trial layouts with the faster constant-EI model and then designs the chosen layout with the staged model.</p>
+ <h3>Variable spacing and deck edges</h3><p>On the Bridge tab, <b>Girder spacing</b> can be <i>Variable</i>: enter the bay spacings from left to right (one fewer than the number of girders). The framing plan, cross-section, deck width, and GirderDetail's LLDF and DLs module use each bay; the sizing checks and the built-in approximate distribution factors use the average spacing, and the spacing and overhang checks are made bay by bay. <b>Deck edges</b> can be a barrier (width and the Suggest barrier weight) or a <i>curb and railing</i> on each side: curb width and height, railing load point and weight, and the distance from the deck edge to the traffic face, which sets the roadway. When GirderDetail's LLDF and DLs module is in use, its factors and MassDOT dead loads replace the built-in ones (see the Analysis tab).</p>
+ <h3>Reverting a suggestion</h3><p>Applying a suggested layout (Suggest tab) or an alternative (Alternatives tab) keeps a copy of the design from just before it. A banner above the output tabs then offers <b>Revert to the previous design</b>; after reverting, the same button re-applies the change, so you can compare the two. The copy survives a reload and is replaced the next time you apply a suggestion or alternative. <b>Keep and dismiss</b> discards it.</p>
+@@ -2721,7 +2724,7 @@
+ function maybeSuggest(force) {
+   if (P.ui.otab !== 'suggest' && !force) return;
+   const k = sgKey();
+-  if (k === SG_KEY && SG && !force && !(SG.quick && SG.quick.qk !== sgQKey())) return;
++  if (k === SG_KEY && SG && !force && !(SG.quick && SG.quick.qk !== sgQKey())) { if (!SG.errors.length && SGC_SHOWN !== sgcKey()) { try { renderSuggest(); } catch (e) { console.error(e); } } return; }   // the current girder changed: refresh the comparison only
+   const host = $('#tab-suggest');
+   if (!force) { host.classList.add('busy'); if (!host.innerHTML.trim()) host.innerHTML = '<div class="pending">Computing suggested layout…</div>'; }
+   clearTimeout(SG_T);
+@@ -2765,6 +2768,129 @@
+   let a = 0, k = 0; for (; k < spans.length - 1; k++) { if (g.x <= a + spans[k] + 1e-9) break; a += spans[k]; }
+   return `${g.name}, ${g.where} at ${f2(g.x)} ft${spans.length > 1 ? ` (Span ${k + 1})` : ''}${g.gt ? `, ${g.gt === 'ext' ? 'exterior' : 'interior'} girder` : ''}`;
+ }
++/* Current girder vs suggestion (display only, 2026-10-13). The current girder (Girder tab, with the Framing tab stiffener setting and
++   cross-frame spacing) is checked with the same staged verify as the quick suggestion (suggestLayout opts.verify), in the background with
++   its own run token (SGC_RUN): renderSuggest starts it when the current girder or the inputs change, and a result for older inputs is
++   dropped. Nothing here changes a suggestion or a saved value. */
++let SGC = null, SGC_RUN = 0, SGC_SHOWN = '';
++function sgcKey() { return JSON.stringify([sgQKey(), P.girder, P.dfx || null]); }
++function sgcIn() { const m = M && !M.errors.length ? M : null; if (!m) return null; const F = P.framing || {};
++  return { D: m.D, wt: F.stiff === 'on' ? 'stiffened' : 'unstiffened', doR: num(F.doRatio) || 1, top: m.top.map(g => ({ L: g.L, b: g.b, t: g.t })), bot: m.bot.map(g => ({ L: g.L, b: g.b, t: g.t })), web: m.web.map(w => ({ L: w.L, t: w.t })), splices: [...m.splices] }; }
++function sgCurStart() {
++  const key = sgcKey(); if (SGC && SGC.key === key) return;
++  const inp = sgcIn(); if (!inp) { SGC_RUN++; SGC = { key, state: 'none' }; return; }
++  const run = ++SGC_RUN, PP = clone(P), me = SGC = { key, state: 'checking' };
++  setTimeout(async () => {
++    await new Promise(r => setTimeout(r, 0)); if (run !== SGC_RUN || SGC !== me) return;   // an edit in between started a new run: this one stops
++    let r;
++    try { const V = suggestLayout(PP, { full: true, verify: inp });
++      r = V.errors && V.errors.length ? { state: 'error', msg: V.errors[0] } : { state: 'done', V, pass: V.check.max <= 1.0005 && V.check.rWeb <= 1.0005 && V.dOK, dfx: !!sgDfx(PP, inp.D, inp.top, inp.bot, inp.web, false) }; }
++    catch (e) { console.error(e); r = { state: 'error', msg: e.message || String(e) }; }
++    if (run !== SGC_RUN || SGC !== me) return;
++    SGC = { key, ...r };
++    if (SG && !SG.errors.length && key === sgcKey()) { try { renderSuggest(); } catch (e) { console.error(e); } }
++  }, 40);
++}
++const sgFs = x => Math.abs(x - Math.round(x)) < 5e-3 ? String(Math.round(x)) : f2(x);   // station in ft, whole feet without decimals
++function sgCmpRows(cl, sl, isWeb, Dc, Ds, spl) {   // plate lists merged by station: one row per range over which neither girder changes plate
++  const r4 = v => Math.round(v * 1e4) / 1e4, Lt = r4(sl[sl.length - 1].x1);
++  const xs = [...new Set([0, Lt, ...cl.map(g => r4(g.x1)), ...sl.map(g => r4(g.x1))])].filter(x => x <= Lt).sort((a, b) => a - b);
++  const at = (l, x) => l.find(g => x >= g.x0 - 1e-6 && x < g.x1 - 1e-6) || l[l.length - 1];
++  const same = (a, b) => Math.abs(a.t - b.t) < 1e-9 && (isWeb || Math.abs(a.b - b.b) < 1e-9);
++  const rows = [];
++  for (let i = 0; i < xs.length - 1; i++) { if (xs[i + 1] - xs[i] < 1e-6) continue; const xm = (xs[i] + xs[i + 1]) / 2, c = at(cl, xm), g = at(sl, xm), p = rows[rows.length - 1];
++    if (p && same(p.c, c) && same(p.g, g)) { p.x1 = xs[i + 1]; continue; } rows.push({ x0: xs[i], x1: xs[i + 1], c, g }); }
++  rows.forEach((r, i) => { const n = [];
++    if (isWeb && Math.abs(Dc - Ds) > 1e-9) n.push(`D ${frac(Dc)} → ${frac(Ds)}`);
++    if (!isWeb && Math.abs(r.c.b - r.g.b) > 1e-9) n.push(`b ${frac(r.c.b)} → ${frac(r.g.b)}`);
++    if (Math.abs(r.c.t - r.g.t) > 1e-9) n.push(`t ${frac(r.c.t)} → ${frac(r.g.t)}`);
++    const p = rows[i - 1];
++    if (p) { const sC = !same(p.g, r.g), cC = !same(p.c, r.c), atS = spl.some(v => Math.abs(v - r.x0) < 1e-3);
++      if (sC && !cC) n.push(atS ? `new plate change at the field splice at ${sgFs(r.x0)} ft` : `new transition at ${sgFs(r.x0)} ft`);
++      if (cC && !sC) n.push(`plate change at ${sgFs(r.x0)} ft removed`); }
++    r.note = n.join('; '); r.chg = !!n.length; });
++  return rows;
++}
++function sgCmpHtml(o) {   // the comparison card and a one-line summary for the suggestion card
++  const { s, mS, cur, cS, cnt, Cs, curCost, Q, chk, gv } = o, F = P.framing || {}, money = v => '$' + Math.round(v).toLocaleString('en-US');
++  const what = s.full ? 'full design' : 'quick suggestion', W = s.full ? 'Full design' : 'Quick suggestion', ttl = `Current girder compared with the ${what}`;
++  if (!cur) { const er = (M && M.errors) || [];
++    return { line: 'The current girder (Girder tab) has input errors, so it is not compared.', html: card('sg-cmp', ttl, 'Not compared', `<div class="alert fail"><b>The current girder has input errors, so it cannot be compared or checked.</b> Fix them on the Girder tab.${er.length ? `<ul class="err-list">${er.slice(0, 6).map(e => `<li>${esc(e)}</li>`).join('')}</ul>` : ''}</div>`) }; }
++  const rT = sgCmpRows(cur.top, mS.top, false, 0, 0, s.splices), rW = sgCmpRows(cur.web, mS.web, true, cur.D, s.D, s.splices), rB = sgCmpRows(cur.bot, mS.bot, false, 0, 0, s.splices);
++  const pct = (d, b) => b > 0 ? `${d > 0 ? '+' : d < 0 ? '−' : ''}${f2(Math.abs(100 * d / b))}%` : '';
++  const sgn = (d, f) => `${d > 0 ? '+' : d < 0 ? '−' : ''}${f(Math.abs(d))}`;
++  const cSt = F.stiff === 'on', cDo = num(F.doRatio) || 1, sSt = s.webType ? s.webType === 'stiffened' : cSt, sDo = s.doR || cDo;
++  const stTxt = (st, d) => st ? `stiffened, d<sub>o</sub> = ${f2(d)}D` : 'unstiffened (connection plates only)';
++  const stChg = cSt !== sSt || (sSt && Math.abs(cDo - sDo) > 1e-6);
++  const cSp = num(F.spacing), sSp = s.spacing || cSp, spChg = !!s.spacing && Math.abs(sSp - cSp) > 1e-6;
++  const dChg = Math.abs(cur.D - s.D) > 1e-9, twC = [...new Set(cur.web.map(w => frac(w.t)))].join(', '), twS = [...new Set(mS.web.map(w => frac(w.t)))].join(', '), twChg = twC !== twS;
++  const has = (l, v) => l.some(u => Math.abs(u - v) < 1e-3), sAdd = s.splices.filter(v => !has(cur.splices, v)), sDel = cur.splices.filter(v => !has(s.splices, v)), splChg = !!(sAdd.length || sDel.length);
++  const nTc = cur.trans.filter(t => !t.atSplice).length, nTs = mS.trans.filter(t => !t.atSplice).length;
++  const ids = new Set(cS.map(k => k.id)), cP = { fail: 0, warn: 0 }; (C || []).forEach(k => { if (ids.has(k.id) && cP[k.status] !== undefined) cP[k.status]++; });
++  const chT = rT.some(r => r.chg), chB = rB.some(r => r.chg), chW = rW.some(r => r.chg);
++  const noChange = !chT && !chB && !chW && !dChg && !twChg && !splChg && !stChg && !spChg;
++  const S = SGC && SGC.key === sgcKey() ? SGC : { state: 'checking' };
++  const cg = S.state === 'done' ? sgGov(S.V.check, S.V.xs) : null;
++  const dep = ok => ok ? '' : '; shallower than the Table 2.5.2.6.3-1 minimum depth';
++  const curR = S.state === 'done' ? `Current girder: largest ratio ${f3(cg.r)} (${esc(sgGovTxt(cg, s.spans))})${dep(S.V.dOK)}.` : S.state === 'checking' ? 'Current girder: checking…' : `Current girder: the check could not be completed (${esc(S.msg || 'no result')}).`;
++  const sugR = gv ? `${W}: largest ratio ${f3(gv.r)} (${esc(sgGovTxt(gv, s.spans))})${dep(chk.dOK)}.` : Q && Q.state === 'checking' ? `${W}: checking…` : `${W}: not checked.`;
++  let cls = 'chk', head = 'Checking the current girder for strength and service…';
++  if (S.state === 'error' || S.state === 'none') { cls = 'fail'; head = 'The strength and service check of the current girder could not be completed'; }
++  else if (S.state === 'done') {
++    const why = []; if (!S.pass) why.push(cg.r > 1.0005 ? `exceeds 1.0 (largest ratio ${f3(cg.r)})` : 'is shallower than the Table 2.5.2.6.3-1 minimum depth'); if (cP.fail) why.push(`fails ${cP.fail} code proportion check${cP.fail > 1 ? 's' : ''}`);
++    if (noChange) { cls = S.pass && !cP.fail ? 'pass' : 'fail'; head = 'No change suggested'; }
++    else if (why.length) { cls = 'fail'; head = `A change is needed: the current girder ${why.join(' and ')}`; }
++    else { cls = 'pass'; head = `Not needed for strength or service: the current girder passes (largest ratio ${f3(cg.r)})`; } }
++  let sav = '';
++  if (noChange) sav = `The ${what} is the same as the current girder.`;
++  else if (Cs && curCost) { const dW = mS.wt - cur.wt, dC = Cs.total - curCost.total;
++    sav = `${W} compared with the current girder: steel ${Math.abs(dW) < 5e-3 ? 'the same' : `${f2(Math.abs(dW))} kip ${dW < 0 ? 'less' : 'more'} per girder (${pct(dW, cur.wt)})`}, cost ${Math.abs(dC) < 0.5 ? 'the same' : `${money(Math.abs(dC))} ${dC < 0 ? 'less' : 'more'} for all girders (${pct(dC, curCost.total)})`}.`;
++    if (S.state === 'done' && S.pass && !cP.fail) sav += dC < -0.5 ? ' The change would only save steel and cost.' : ` The change would not save cost: keep the current girder${s.full ? '' : ', or run full design for the least steel'}.`;
++    else if (S.state === 'done' && chk && !chk.pass) sav += ` The ${what} does not pass every check either; ${s.full ? 'review the Full design results' : 'run full design'}.`; }
++  const row = (l, a, b, chg, note) => `<tr class="${chg ? 'chg' : ''}"><td class="lbl">${l}</td><td class="val">${a}</td><td class="val">${b}</td><td class="${chg ? 'chg-t' : ''}">${chg ? note || 'changed' : ''}</td></tr>`;
++  const spl = l => l.length ? l.map(f2).join(', ') + ' ft' : 'none';
++  const dWt = mS.wt - cur.wt, dPsf = mS.psf - cur.psf, dCost = Cs && curCost ? Cs.total - curCost.total : 0;
++  const rr = (a, b) => a && b && Math.abs(a.r - b.r) > 5e-4;
++  const overall = `<div class="tscroll"><table class="tbl"><thead><tr><th></th><th class="right">Current girder</th><th class="right">${W}</th><th>Change</th></tr></thead><tbody>
++    ${row('Web depth D', `${frac(cur.D)} in`, `${frac(s.D)} in`, dChg, `${sgn(s.D - cur.D, frac)} in`)}
++    ${row('Web thickness t<sub>w</sub>', `${twC} in`, `${twS} in`, twChg, `${twC} → ${twS} in`)}
++    ${row('Transverse stiffeners', stTxt(cSt, cDo), stTxt(sSt, sDo), stChg, cSt !== sSt ? (sSt ? 'stiffeners added' : 'stiffeners removed') : `d<sub>o</sub>/D ${f2(cDo)} → ${f2(sDo)}`)}
++    ${row('Cross-frame spacing', `${f2(cSp)} ft`, s.spacing ? `${f2(sSp)} ft` : `${f2(cSp)} ft (not changed by the ${what})`, spChg, `${sgn(sSp - cSp, f2)} ft`)}
++    ${row('Field splices', spl(cur.splices), spl(s.splices), splChg, sAdd.length && sAdd.length === sDel.length ? `moved ${sDel.map((v, i) => `${sgFs(v)} → ${sgFs(sAdd[i])}`).join(', ')} ft` : [sAdd.length ? `added at ${sAdd.map(sgFs).join(', ')} ft` : '', sDel.length ? `removed at ${sDel.map(sgFs).join(', ')} ft` : ''].filter(Boolean).join('; '))}
++    ${row('Shop transitions (all flanges)', nTc, nTs, nTc !== nTs, sgn(nTs - nTc, String))}
++    ${row('Steel per girder, with allowance', `${f2(cur.wt)} kip`, `${f2(mS.wt)} kip`, Math.abs(dWt) >= 5e-3, `${sgn(dWt, f2)} kip (${pct(dWt, cur.wt)})`)}
++    ${row('Steel per deck area', `${f2(cur.psf)} psf`, `${f2(mS.psf)} psf`, Math.abs(dPsf) >= 5e-3, `${sgn(dPsf, f2)} psf (${pct(dPsf, cur.psf)})`)}
++    ${Cs && curCost ? row('Cost, all girders (Unit costs)', money(curCost.total), money(Cs.total), Math.abs(dCost) >= 0.5, `${dCost < 0 ? '−' : '+'}${money(Math.abs(dCost))} (${pct(dCost, curCost.total)})`) : ''}
++    ${row('Largest strength and service ratio', cg ? f3(cg.r) : S.state === 'checking' ? 'checking…' : '—', gv ? f3(gv.r) : Q && Q.state === 'checking' ? 'checking…' : '—', rr(cg, gv), cg && gv ? `${f3(cg.r)} → ${f3(gv.r)}` : '')}
++    ${row('Code proportion checks', `${cP.fail} fail, ${cP.warn} warn`, `${cnt.fail} fail, ${cnt.warn} warn`, cP.fail !== cnt.fail || cP.warn !== cnt.warn, [cP.fail !== cnt.fail ? `fail ${cP.fail} → ${cnt.fail}` : '', cP.warn !== cnt.warn ? `warn ${cP.warn} → ${cnt.warn}` : ''].filter(Boolean).join(', '))}</tbody></table></div>`;
++  const ptbl = (title, rows, isWeb) => `<div><h4 class="sg-h4">${title}</h4><div class="tscroll"><table class="tbl"><thead><tr><th class="right">From (ft)</th><th class="right">To (ft)</th><th class="right">Current (in)</th><th class="right">${W} (in)</th><th>Change</th></tr></thead><tbody>${rows.map(r => `<tr class="${r.chg ? 'chg' : ''}"><td class="val">${f2(r.x0)}</td><td class="val">${f2(r.x1)}</td><td class="val nw">${isWeb ? `${frac(cur.D)} × ${frac(r.c.t)}` : pl(r.c.b, r.c.t)}</td><td class="val nw">${isWeb ? `${frac(s.D)} × ${frac(r.g.t)}` : pl(r.g.b, r.g.t)}</td><td class="${r.chg ? 'chg-t' : ''}">${r.note}</td></tr>`).join('')}</tbody></table></div></div>`;
++  const nCh = [rT, rW, rB].reduce((a, l) => a + l.filter(r => r.chg).length, 0);
++  const parts = [dChg && 'web depth', twChg && 'web thickness', stChg && 'stiffeners', spChg && 'cross-frame spacing', splChg && 'field splices', chT && 'top flange plates', chB && 'bottom flange plates'].filter(Boolean);
++  const line = noChange ? `No change suggested: the ${what} is the same as the current girder.` : `Changes from the current girder: ${parts.join(', ')} (compared below).`;
++  const fast = Q && Q.state === 'checking' ? ` While the ${what} is being checked, the fast result is compared; its plates may still increase.` : '';
++  const note = `<p class="note-p">Current girder: the Girder tab plates and splices with the Framing tab stiffeners and cross-frame spacing. The two plate lists are merged by station, so each row below is a station range over which neither girder changes plate; changed rows are highlighted. Both girders are checked with the same staged analysis and AASHTO strength and service checks (those of the quick suggestion and Full design, for the interior and exterior girders)${s.full ? ', the current girder at its Framing tab cross-frame spacing and the full design at its own' : ''}. Steel includes the ${f2(P.limits.allow)}% detail allowance; costs use the Unit costs on the Suggest input tab.${S.dfx ? ' The current girder\'s check uses the factors and dead loads of GirderDetail\'s LLDF and DLs module (computed for this girder); the suggestion, the built-in ones.' : ''}${fast} Nothing changes until you press Apply.</p>`;
++  const html = card('sg-cmp', ttl, noChange ? 'No change suggested' : `${nCh} plate range${nCh === 1 ? '' : 's'} change`, `
++    <div class="sg-head ${cls}"><div><b>${head}</b><span class="sg-ln">${curR}</span><span class="sg-ln">${sugR}</span><span class="sg-ln">${sav}</span></div></div>${note}${overall}
++    <div class="cmp-tbls">${ptbl('Top flange', rT)}${ptbl('Web', rW, true)}${ptbl('Bottom flange', rB)}</div>
++    <h4 class="sg-h4" style="margin-top:14px">Flange plates along the girder</h4><div id="plt-sg-cmpT" class="plt"></div><div id="plt-sg-cmpB" class="plt short"></div>
++    <p class="cap">Thickness (upper plot) and width (lower plot) of the top and bottom flanges: current girder dashed, ${what} solid. Vertical lines mark supports (solid), the ${what}'s field splices (blue dashed), and the current field splices (grey dotted).</p>`);
++  return { line, html };
++}
++function sgCmpPlot(mS, cur) {   // flange thickness and width along the girder, current vs suggested
++  if (!window.Plotly || !SG || !cur || !$('#plt-sg-cmpT')) return;
++  const step = (l, f) => { const xx = [], yy = [], cd = []; l.forEach(r => { xx.push(r.x0, r.x1); yy.push(f(r), f(r)); cd.push(frac(f(r)), frac(f(r))); }); return { x: xx, y: yy, customdata: cd }; };
++  const vl = (x, color, dash) => ({ type: 'line', xref: 'x', yref: 'paper', x0: x, x1: x, y0: 0, y1: 1, line: { color, width: 1, dash } });
++  const sh = [...SG.beam.sup.map(i => vl(SG.beam.xs[i], '#17212b', 'solid')), ...SG.splices.map(v => vl(v, '#2346c2', 'dash')), ...cur.splices.map(v => vl(v, '#9aa3ab', 'dot'))];
++  const base = { font: PLOT_FONT, margin: { l: 70, r: 20, t: 16, b: 50 }, paper_bgcolor: '#fff', plot_bgcolor: '#fff', hovermode: 'x unified', legend: { orientation: 'h', y: -0.25 }, shapes: sh,
++    xaxis: { title: 'Station (ft)', range: [0, SG.beam.Ltot], gridcolor: '#edf0ec', zeroline: false } };
++  const tr = f => [
++    { ...step(cur.top, f), name: 'Top, current', line: { color: '#2346c2', width: 1.6, dash: 'dash' } }, { ...step(mS.top, f), name: 'Top, suggested', line: { color: '#2346c2', width: 2.4 } },
++    { ...step(cur.bot, f), name: 'Bottom, current', line: { color: '#15724a', width: 1.6, dash: 'dash' } }, { ...step(mS.bot, f), name: 'Bottom, suggested', line: { color: '#15724a', width: 2.4 } }];
++  const dT = tr(r => r.t), dB = tr(r => r.b);
++  [dT, dB].forEach(d => d.forEach(q => { q.mode = 'lines'; q.hovertemplate = `${q.name}: %{customdata} in<extra></extra>`; }));
++  Plotly.react($('#plt-sg-cmpT'), dT, { ...base, yaxis: { title: 'Flange thickness (in)', gridcolor: '#edf0ec', rangemode: 'tozero' } }, { displaylogo: false, responsive: true });
++  Plotly.react($('#plt-sg-cmpB'), dB, { ...base, showlegend: false, margin: { l: 70, r: 20, t: 10, b: 44 }, yaxis: { title: 'Flange width (in)', gridcolor: '#edf0ec', rangemode: 'tozero' } }, { displaylogo: false, responsive: true });
++}
+ function sgApplyLbl() {
+   const t = SG && SG.full ? 'Apply full design' : SGQ_APPLY && SGQ_APPLY === SGQ_RUN ? 'Apply quick suggestion (when checked)' : 'Apply quick suggestion';
+   ['#sg_apply', '#sg_apply_side'].forEach(id => { const b = $(id); if (b) b.textContent = t; });
+@@ -2791,6 +2917,9 @@
+   const issues = cS.filter(c => ['fail', 'warn', 'adv'].includes(c.status));
+   const R = s.rec, types = s.types, TT = t => t === 'int' ? 'interior' : 'exterior';
+   const cur = M && !M.errors.length ? M : null;
++  sgCurStart(); SGC_SHOWN = sgcKey();   // strength and service check of the current girder (background), for the comparison card
++  const wtCur = P.framing && P.framing.stiff === 'on' ? 'stiffened' : 'unstiffened';
++  const curCost = cur ? suggestLayout(P, { costOnly: { D: cur.D, wt: wtCur, top: P.girder.top.map(g => ({ L: num(g.L), b: num(g.b), t: num(g.t) })), bot: P.girder.bot.map(g => ({ L: num(g.L), b: num(g.b), t: num(g.t) })), web: P.girder.web.map(w => ({ L: num(w.L), t: num(w.t) })), splices: (P.girder.splices || []).map(num) } }).cost : null;
+ 
+   /* 1. summary */
+   const verdict = cnt.fail ? 'fail' : 'pass';
+@@ -2809,16 +2938,17 @@
+   else if (Q && Q.state === 'error') sv = `<b>The strength and service check could not be completed</b><span class="sg-ln">${esc(Q.msg || '')}. The fast result shown is not checked; run full design.</span>`;
+   else if (chk) sv = `<b>${chk.pass ? 'Passes the strength and service checks' : 'Does not pass every strength and service check'}: largest ratio ${f3(gv.r)}</b><span class="sg-ln">Governing: ${esc(sgGovTxt(gv, s.spans))}.${chk.dOK ? '' : ' The girder is shallower than the Table 2.5.2.6.3-1 minimum depth.'}${Q ? (Q.changed ? ` Plates increased in ${Q.iters} round${Q.iters > 1 ? 's' : ''} from the fast sizing (largest ratio before: ${f3(Math.max(Q.max0, Q.web0))}).` : Q.pass ? ' The fast sizing passed as is; no plate was changed.' : '') : ''}${chk.pass ? '' : s.full ? ' Review the Full design results below.' : ` ${Q.note ? `Stopped: ${esc(Q.note)}. ` : ''}Run full design for a layout that passes.`}</span>`;
+   const verdict2 = Q && Q.state === 'checking' ? 'chk' : cnt.fail || (chk && !chk.pass) || (Q && Q.state === 'error') ? 'fail' : 'pass';
++  const dnote = `<div class="note-p" style="margin:0">Designed for the ${SG_TYPES_TXT(types)}. Web depth ${s.rec.D.keep ? 'kept from the Girder tab' : `from the target L/D<sub>st</sub> of ${f2(R.D.ratio)}${R.D.bumps ? `, increased ${R.D.bumps} time${R.D.bumps > 1 ? 's' : ''} to satisfy G1/G2` : ''}`}. Widths are constant within each field piece; thickness changes only where the steel saved exceeds the ${f0(P.suggest.weld)} lb weld-cost equivalent.</div>`;   // design basis note (beside the plate lists when the current girder cannot be compared)
++  const cmpO = sgCmpHtml({ s, mS, cur, cS, cnt, Cs: s.cost, curCost, Q, chk, gv });   // current girder vs suggestion (2026-10-13)
+   const ttl = s.full ? 'Full design (Run full design) — optimized for least steel' : Q && Q.state === 'checking' ? 'Quick suggestion (updates as you edit) — checking strength and service…' : 'Quick suggestion (updates as you edit) — checked for strength and service';
+   h += card('sg-sum', ttl, `${R.iter} sizing iterations`, `
+-    <div class="sg-head ${verdict2}"><div>${sv}<span class="sg-ln">${prop}</span></div>
++    <div class="sg-head ${verdict2}"><div>${sv}<span class="sg-ln">${prop}</span><span class="sg-ln">${cmpO.line}</span></div>
+       <button type="button" class="btn btn-primary" id="sg_apply">${s.full ? 'Apply full design' : 'Apply quick suggestion'}</button></div>
+-    <div class="g2">${cmp}<div class="note-p" style="margin:0">Designed for the ${SG_TYPES_TXT(types)}. Web depth ${s.rec.D.keep ? 'kept from the Girder tab' : `from the target L/D<sub>st</sub> of ${f2(R.D.ratio)}${R.D.bumps ? `, increased ${R.D.bumps} time${R.D.bumps > 1 ? 's' : ''} to satisfy G1/G2` : ''}`}. Widths are constant within each field piece; thickness changes only where the steel saved exceeds the ${f0(P.suggest.weld)} lb weld-cost equivalent.</div></div>
+-    <div class="g3" style="margin-top:12px"><div><h4 class="sg-h4">Top flange</h4>${plates(mS.top)}</div><div><h4 class="sg-h4">Web</h4>${plates(mS.web, true)}</div><div><h4 class="sg-h4">Bottom flange</h4>${plates(mS.bot)}</div></div>`);
++    ${cur ? dnote : `<div class="g2">${cmp}${dnote}</div>
++    <div class="g3" style="margin-top:12px"><div><h4 class="sg-h4">Top flange</h4>${plates(mS.top)}</div><div><h4 class="sg-h4">Web</h4>${plates(mS.web, true)}</div><div><h4 class="sg-h4">Bottom flange</h4>${plates(mS.bot)}</div></div>`}`);
++  h += cmpO.html;
+ 
+   /* 1b. cost, candidates, full design */
+-  const wtCur = P.framing && P.framing.stiff === 'on' ? 'stiffened' : 'unstiffened';
+-  const curCost = cur ? suggestLayout(P, { costOnly: { D: cur.D, wt: wtCur, top: P.girder.top.map(g => ({ L: num(g.L), b: num(g.b), t: num(g.t) })), bot: P.girder.bot.map(g => ({ L: num(g.L), b: num(g.b), t: num(g.t) })), web: P.girder.web.map(w => ({ L: num(w.L), t: num(w.t) })), splices: (P.girder.splices || []).map(num) } }).cost : null;
+   const C = s.cost, money = v => '$' + Math.round(v).toLocaleString('en-US'), cc = curCost || { parts: { steel: 0, trans: 0, stiff: 0, splice: 0 }, wTot: 0, nTr: 0, nSt: 0, nSp: 0, total: 0 }, crow = (l, a, b2) => `<tr><td class="lbl">${l}</td><td class="val">${a}</td>${curCost ? `<td class="val">${b2}</td>` : ''}</tr>`;
+   if (C) h += card('sg-cost', s.full ? 'Cost of the full design' : 'Cost of the quick suggestion', `${C.nb} girders`, `<table class="tbl narrow"><thead><tr><th></th><th class="right">${s.full ? 'Full design' : 'Quick suggestion'}</th>${curCost ? '<th class="right">Current girder</th>' : ''}</tr></thead><tbody>
+       ${crow('Structural steel', `${money(C.parts.steel)} (${f0(C.wTot / 1000)} kip)`, `${money(cc.parts.steel)} (${f0(cc.wTot / 1000)} kip)`)}${crow('Flange transitions', `${money(C.parts.trans)} (${C.nTr} per girder)`, `${money(cc.parts.trans)} (${cc.nTr})`)}
+@@ -2908,7 +3038,7 @@
+     <li>The suggested layout still has to be verified with the analysis and design apps before use.</li></ul>`);
+   host.innerHTML = wsHtml() + xfNoteHtml(s) + h;
+   $('#sg_apply').onclick = applySuggestion; sgApplyLbl();
+-  applyCollapse(); drawSuggestCharts(mS); typeset(host);
++  applyCollapse(); drawSuggestCharts(mS); sgCmpPlot(mS, cur); typeset(host);
+ }
+ function SG_TYPES_TXT(t) { return t.length > 1 ? 'envelope of the interior and exterior girders' : t[0] === 'int' ? 'interior girder' : 'exterior girder'; }
+ function argmax(a) { let k = 0; for (let i = 1; i < a.length; i++) if (a[i] > a[k]) k = i; return k; }
+```
+
+### SC2. TS5 not-applicable text for connection-plate-only webs   [text only]
+
+- **Where (main page):** `ckNew()`, TS5 block. Anchor `c.naWhy = 'Web designed as unstiffened (connection plates only)`.
+- **Before:** `'Web designed as unstiffened (connection plates only): connection-plate spacing is not limited by 6.10.9.1; web shear is checked as unstiffened in TS4.'`
+- **After:** `'Connection plates only (no intermediate stiffeners): connection-plate spacing is not limited by 6.10.9.1; TS4 checks each panel as stiffened where its spacing is within the 6.10.9.1 limits (3D interior, 1.5D end panels) and as unstiffened where it is wider.'`
+- **Why:** since EK1/EK2, `webShear()` treats a panel bounded by connection plates as stiffened when d<sub>o</sub> ≤ 3D (interior) or ≤ 1.5D (end), so "checked as unstiffened" was wrong for those panels. The source comment above it gets the same correction. Governing provision: AASHTO LRFD 10th Ed. 6.10.9.1. No calculation or status changed.
+- **Check case:** GirderDetail Transverse stiffeners module, built-in example with both locations set to Type B (connection plate), first location d<sub>o1</sub> = 60 in (end panel, ≤ 1.5D = 90 in) and d<sub>o2</sub> = 200 in (> 3D = 180 in): TS4 panel 1 (end) C = 0.800, φV<sub>n</sub> = 783.32 kip (stiffened, k = 5 + 5/(60/60)² = 10); panel 2 C = 0.400, φV<sub>n</sub> = 391.66 kip (unstiffened, k = 5) — before and after identical; TS5 N/A, reason text before/after as above.
+- **How verified:** `node --check` on the main page scripts; headless Chromium (`GM.ts.compute` / `GM.ts.checks`) before and after; screenshot of the TS Summary tab. No console errors.
+- **Other copies:** none.
+
+### Exact changes (SC2): main page (unified diff, PL_B64 line omitted)
+
+```diff
+diff --git a/Steel Bridge Beam Modules.html b/Steel Bridge Beam Modules.html
+index 731db66..6202c96 100644
+--- a/Steel Bridge Beam Modules.html	
++++ b/Steel Bridge Beam Modules.html	
+@@ -2455,4 +2455,4 @@ tabs: { combos: 'Demands', rptCombos: 'Design demands' },
+       R.rows.forEach(r => [r.p1, r.p2].forEach((q, i) => { const lim = (q.end ? 1.5 : 3) * r.D, ok = ge(lim, q.do), adv = !ok && !q.stiff; c.items.push({ loc: `${L(r)}, panel ${i + 1}${q.end ? ' (end)' : ''}`, cells: [f2(q.do), f2(lim), f2(q.do / lim)], r: q.do / lim, st: ok ? 'pass' : adv ? 'adv' : 'warn', work: T`d_o = ${f2(q.do)} \;${LE(q.do, lim)}\; ${q.end ? '1.5' : '3'}(${f2(r.D)}) = ${f2(lim)}\ \text{in}${adv ? T`\ \text{(treated as unstiffened in TS4)}` : ''}` }); }));
+-      // web designed unstiffened (connection plates only): connection-plate spacing is not limited by 6.10.9.1 (TS4 checks every panel wider than its limit as unstiffened)
+-      if (!R.rows.some(r => r.t.role === 'int') && !c.items.some(i => i.st === 'warn')) { c.items = []; c.naWhy = 'Web designed as unstiffened (connection plates only): connection-plate spacing is not limited by 6.10.9.1; web shear is checked as unstiffened in TS4.'; }
++      // connection plates only (no intermediate stiffeners): connection-plate spacing is not limited by 6.10.9.1 (TS4 checks a panel within its limit as stiffened and a wider one as unstiffened)
++      if (!R.rows.some(r => r.t.role === 'int') && !c.items.some(i => i.st === 'warn')) { c.items = []; c.naWhy = 'Connection plates only (no intermediate stiffeners): connection-plate spacing is not limited by 6.10.9.1; TS4 checks each panel as stiffened where its spacing is within the 6.10.9.1 limits (3D interior, 1.5D end panels) and as unstiffened where it is wider.'; }
+       out.add(c); }
+```
