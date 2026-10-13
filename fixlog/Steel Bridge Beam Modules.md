@@ -7816,3 +7816,11 @@ Main page only; `PL_B64` (embedded Preliminary sizing) is not touched. Display o
 - **Check case:** built-in example, Shear connectors SC1 governing equation: denominator "106,168". Numbers unchanged.
 - **Open item:** about 100 other `f0(...)` values inside TeX templates (Girder section, Fatigue, LLDF and DLs K<sub>g</sub>, …) have the same spacing when they reach 1,000; not changed here (each is a separate equation line). A single change to the MathJax `tex.digits` pattern would cover all of them but also affects any integer list written without spaces; ask before doing that.
 - **Other copies:** none.
+
+### Q14. Cross-frames, wind input note: names diaphragms too   [text only]
+- **Where:** Cross-frames `panes()`, the note under "Wind on the exterior girder" (anchor `is carried by the bottom flange to the cross-frames (4.6.2.7.1).`).
+- **Before:** `… The lower half of the girder's wind load is carried by the bottom flange to the cross-frames (4.6.2.7.1).`
+- **After:** `… The lower half of the girder's wind load is carried by the bottom flange to the cross-frames or diaphragms (4.6.2.7.1).`
+- **Problem:** with the rolled diaphragm in use (CFD, CFE) the note still named cross-frames only; the diaphragm checks use the same wind force.
+- **Check case:** 90 ft simple span with the diaphragm on: the note reads "… to the cross-frames or diaphragms (4.6.2.7.1)."; F<sub>w</sub> = 1.87 kip unchanged.
+- **Other copies:** none.
