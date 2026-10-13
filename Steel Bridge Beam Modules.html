@@ -1019,6 +1019,7 @@ input.ovr, select.ovr { outline: 2px solid #c98a1b; outline-offset: -1px; backgr
 .df-src { padding: 10px 12px; border: 1px solid var(--border); border-left: 5px solid var(--pass); background: var(--sheet); font-size: 13.5px; line-height: 1.45; margin-bottom: 8px; }
 .df-src.df-lock { border-left-color: var(--warn); }
 .df-kv td { padding: 4px 8px; font-size: 13px; }
+.df-hr { border: 0; border-top: 1px solid var(--border); margin: 8px 0; }
 .df-lockview { padding: 6px 2px; font-size: 14.5px; line-height: 1.55; } .df-lockview p { margin: 0 0 10px; max-width: 68ch; }
 .fa-imp { display: flex; flex-wrap: wrap; gap: 6px; } .fa-imp .proj-btn { flex: 1 1 45%; }
 .cap-flag { margin: 14px 0 10px; padding: 12px 14px; border: 2px solid var(--fail); border-left-width: 8px; background: var(--fail-dim); color: var(--text); font-size: 14px; line-height: 1.5; }
@@ -3962,6 +3963,7 @@ function dfEdges(b, wcA) {   // wcA: optional appurtenance concrete unit weight 
   ['L', 'R'].forEach(sd => { const e = b.edge && b.edge[sd], nm_ = sd === 'L' ? 'Left' : 'Right';
     if (e && e.mode === 'curb') { if (e.cw > 0 && e.ch > 0) out.push({ id: 'curb' + sd, desc: `${nm_} curb`, cat: 'DC2', side: sd, x: e.cw / 24, plf: e.cw / 12 * e.ch / 12 * (wcA > 0 ? wcA : b.wc) });
       if (e.rw > 0) out.push({ id: 'rail' + sd, desc: `${nm_} railing`, cat: 'DC2', side: sd, x: e.rp, plf: e.rw }); }
+    else if (e && e.mode === 'barrier') { if (e.w > 0) out.push({ id: 'bar' + sd, desc: `${nm_} barrier`, cat: 'DC2', side: sd, x: e.bw / 2, plf: e.w }); }   // per side, set in this module (XS8)
     else if (b.barW > 0) out.push({ id: 'bar' + sd, desc: `${nm_} barrier`, cat: 'DC2', side: sd, x: b.barrier / 2, plf: b.barW }); });
   return out;
 }
@@ -4032,12 +4034,73 @@ function dfXsIn(p, errors) {
   return o;
 }
 
-/* deck edges as Preliminary sizing sends them (read-only here; PR3 of the cross-section plan moves them to this module) */
+/* Deck edges owned by this module (XS8, cross-section plan PR3). P.df.edges = { L: {...}, R: {...} }, per side:
+   type 'barrier' (bw: width at the deck, ft; bwt: weight, klf) or 'curb' (cw, ch: curb width and height, in; rw: railing weight, klf;
+   rp: railing load point from the edge, ft; rf: railing traffic face from the edge, ft, blank = rp); face: optional edge to traffic face (ft),
+   which governs when entered. Absent until the first complete bridge arrives from Preliminary sizing (dfEdgesInit, XS8 migration);
+   while absent the deck edges are those Preliminary sizing sends, as before. */
+const DF_EDGE_K = ['bw', 'bwt', 'cw', 'ch', 'rw', 'rp', 'rf', 'face'];
+const DF_EDGE_LBL = { bw: 'the barrier width', bwt: 'the barrier weight', cw: 'the curb width', ch: 'the curb height', rw: 'the railing weight', rp: 'the railing load point', rf: 'the railing traffic face', face: 'the edge to traffic face' };
+const dfHasEdges = p => !!(p && p.edges && p.edges.L && p.edges.R);
+/* each side normalized, with the traffic face at the deck edge f (before the sidewalk rule of dfLLFace). Curb and railing: a curb less
+   than 12 in high is mountable (engineer's rule 2026-10-13) and the face is the railing face; 12 in or higher, the curb face (or the
+   railing face if it is farther in). An entered "edge to traffic face" governs. */
+function dfEdgeIn(E, errors) {
+  if (!E || !E.L || !E.R) return null; const o = {};
+  ['L', 'R'].forEach(sd => { const e = E[sd] || {}, nm_ = sd === 'L' ? 'Left' : 'Right', q = { type: e.type === 'curb' ? 'curb' : 'barrier' };
+    DF_EDGE_K.forEach(k => { q[k] = dfOpt(e[k]); });
+    (q.type === 'curb' ? ['cw', 'ch', 'rw', 'rp'] : ['bw', 'bwt']).forEach(k => { if (!(q[k] !== null && q[k] >= 0)) errors.push(`${nm_} deck edge: enter ${DF_EDGE_LBL[k]} (zero or positive).`); });
+    ['rf', 'face'].forEach(k => { if (q[k] !== null && !(q[k] >= 0)) errors.push(`${nm_} deck edge: ${DF_EDGE_LBL[k]} must be zero or positive (or blank).`); });
+    if (q.type === 'barrier') { q.fAuto = q.bw; q.fbyAuto = 'barrier face'; }
+    else { const rf = q.rf !== null ? q.rf : q.rp, cf = q.cw / 12; q.mount = !(q.ch >= 12 - 1e-9);
+      if (q.mount) { q.fAuto = rf; q.fbyAuto = `railing face (the ${f2(q.ch)} in curb is mountable, < 12 in)`; }
+      else if (rf > cf + 1e-9) { q.fAuto = rf; q.fbyAuto = 'railing face'; } else { q.fAuto = cf; q.fbyAuto = `curb face (${f2(q.ch)} in ≥ 12 in)`; } }
+    if (q.face !== null) { q.f = q.face; q.fby = 'edge to traffic face entered'; } else { q.f = q.fAuto; q.fby = q.fbyAuto; }
+    o[sd] = q; });
+  return o;
+}
+/* the bridge from Preliminary sizing with this module's deck edges in place of the ones it sends (geometry, deck, plates, signature unchanged) */
+function dfBridgeEff(b, Ed) {
+  if (!Ed) return b; const edge = {};
+  ['L', 'R'].forEach(sd => { const q = Ed[sd]; edge[sd] = q.type === 'curb' ? { mode: 'curb', cw: q.cw, ch: q.ch, rp: q.rp, rw: q.rw, fby: q.fby } : { mode: 'barrier', bw: q.bw, w: q.bwt, fby: q.fby }; });
+  return { ...b, edge, faceL: Ed.L.f, faceR: Ed.R.f, gdEdges: Ed };
+}
+/* migration (XS8): the first complete bridge from Preliminary sizing initializes the deck edges from the values it holds, so every result
+   is unchanged: a GirderDetail record it already carries (bridge.xs, XS9), else its curb and railing values with its traffic faces as the
+   entered "edge to traffic face", else its barrier width and weight (the derived face is the barrier width, as before). */
+function dfEdgesInit(nb) {
+  const o = {}, ok = v => typeof v === 'number' && isFinite(v);
+  if (nb.xs && nb.xs.L && nb.xs.R) { ['L', 'R'].forEach(sd => { const s = nb.xs[sd] || {}; o[sd] = { type: s.type === 'curb' ? 'curb' : 'barrier' }; DF_EDGE_K.forEach(k => { if (ok(s[k])) o[sd][k] = s[k]; }); }); return o; }
+  ['L', 'R'].forEach(sd => { const e = nb.edge && nb.edge[sd], f = sd === 'L' ? nb.faceL : nb.faceR;
+    o[sd] = e && e.mode === 'curb' ? { type: 'curb', bw: nb.barrier, bwt: nb.barW, cw: e.cw, ch: e.ch, rw: e.rw, rp: e.rp, face: ok(f) ? f : nb.barrier }
+      : { type: 'barrier', bw: nb.barrier, bwt: nb.barW, cw: 12, ch: 10, rw: 0.05, rp: 0.5 }; });
+  return o;
+}
+/* deck-edge inputs (XS8): each side a barrier, or a curb and railing; the fields of the other type are hidden (dfEdgeVis) */
+function dfEdgeFields() {
+  const side = sd => { const s = sd === 'L' ? 'Left' : 'Right', k = `df.edges.${sd}.`;
+    return `<div class="pair">${fld(`${s} deck edge`, k + 'type', '', 'sel', { options: [['barrier', 'Barrier'], ['curb', 'Curb and railing']] })}<div></div></div>
+      <div class="pair" data-dfet="${sd}-barrier">${fld(`${s} barrier width at deck`, k + 'bw', 'ft')}${fld(`${s} barrier weight`, k + 'bwt', 'klf')}</div>
+      <div class="pair" data-dfet="${sd}-curb">${fld(`${s} curb width`, k + 'cw', 'in')}${fld(`${s} curb height`, k + 'ch', 'in')}${fld(`${s} railing weight`, k + 'rw', 'klf')}${fld(`${s} railing load point from edge`, k + 'rp', 'ft')}${fld(`${s} railing traffic face from edge`, k + 'rf', 'ft', 'num', { note: 'blank = load point' })}<div></div></div>
+      <div class="pair">${fld(`${s} edge to traffic face`, k + 'face', 'ft', 'num', { note: 'optional' })}<div class="ig"><p class="note" id="df-f${sd}" style="margin:18px 0 0"></p></div></div>`; };
+  return `${side('L')}<hr class="df-hr">${side('R')}<p class="note">Distances from the deck edge. These replace the deck-edge inputs of Preliminary sizing: its Bridge tab and its barrier weight follow them (read-only there), and its roadway and d<sub>e</sub> use the live-load traffic faces (Sidewalks). The traffic face at the deck edge: a barrier's width; a curb less than 12 in high is mountable and the railing face governs; a curb 12 in or higher, its face. An entered "edge to traffic face" governs. A sidewalk 12 in or thicker, or a railing or fence on a sidewalk, then moves the live-load face inward.</p>`;
+}
+const dfEdgeTxt = q => `${q.type === 'curb' ? `curb ${f2(q.cw)} × ${f2(q.ch)} in, railing ${f3(q.rw)} klf at ${f2(q.rp)} ft` : `barrier ${f2(q.bw)} ft, ${f3(q.bwt)} klf`}; traffic face ${f2(q.f)} ft (${q.fby})`;
+function dfEdgeVis() {
+  const E = P && P.df && P.df.edges; if (!dfHasEdges(P.df)) return; const errs = [], Ed = dfEdgeIn(E, errs);
+  ['L', 'R'].forEach(sd => { const t = E[sd].type === 'curb' ? 'curb' : 'barrier';
+    document.querySelectorAll(`[data-dfet^="${sd}-"]`).forEach(el => { el.style.display = el.dataset.dfet === `${sd}-${t}` ? '' : 'none'; });
+    const q = Ed && Ed[sd], fi = document.getElementById(`f_df_edges_${sd}_face`), nt = document.getElementById('df-f' + sd);
+    if (fi) fi.placeholder = q && isFinite(q.fAuto) ? f2(q.fAuto) : '';
+    if (nt) nt.innerHTML = q && isFinite(q.fAuto) ? (q.face !== null ? `Entered: ${f2(q.face)} ft (derived: ${f2(q.fAuto)} ft, ${q.fbyAuto})` : `Derived: ${f2(q.fAuto)} ft, ${q.fbyAuto}`) : ''; });
+}
+document.addEventListener('change', e => { const k = e.target && e.target.dataset && e.target.dataset.k; if (k && /^df\.edges\./.test(k)) dfEdgeVis(); });
+/* deck edges as Preliminary sizing sends them (before this module owns them) */
 function dfEdgeSummary(b) {
   if (!b) return '<p class="note">The deck edges come from Preliminary sizing once the bridge is complete.</p>';
   const row = (k, v) => `<tr><td class="lbl">${k}</td><td class="val">${v}</td></tr>`, side = sd => { const e = b.edge && b.edge[sd], f = sd === 'L' ? b.faceL : b.faceR, nm_ = sd === 'L' ? 'Left' : 'Right';
     return e && e.mode === 'curb' ? row(`${nm_} edge`, `curb ${f2(e.cw)} × ${f2(e.ch)} in; railing ${f3(e.rw)} klf at ${f2(e.rp)} ft; traffic face ${f2(f != null ? f : b.barrier)} ft`) : row(`${nm_} edge`, `barrier ${f2(b.barrier)} ft wide, ${f3(b.barW)} klf; traffic face ${f2(f != null ? f : b.barrier)} ft`); };
-  return `<table class="tbl df-kv"><tbody>${side('L')}${side('R')}</tbody></table><p class="note">Read-only: these come from the Bridge tab of Preliminary sizing (distances from the deck edge).</p>`;
+  return `<table class="tbl df-kv"><tbody>${side('L')}${side('R')}</tbody></table><p class="note">Read-only: these come from the Bridge tab of Preliminary sizing (distances from the deck edge). They are set here once Preliminary sizing next sends the bridge (open it once); its values are kept.</p><button type="button" class="proj-btn" data-dfpl="1" style="width:100%">Open Preliminary sizing</button>`;
 }
 
 /* Live-load traffic face each side (engineer's rule 2026-10-13): a curb or sidewalk less than 12 in high is mountable and is ignored
@@ -4047,7 +4110,7 @@ function dfEdgeSummary(b) {
 function dfLLFace(b, dl, xs, fL, fR) {
   const o = {};
   ['L', 'R'].forEach(sd => { const f = sd === 'L' ? fL : fR, sw = nm(dl['sw' + sd]) > 0 ? nm(dl['sw' + sd]) : 0, t = nm(dl['swThk' + sd]), curb = !!(b.edge && b.edge[sd] && b.edge[sd].mode === 'curb');
-    const mount = sw > 0 && !(t >= 12 - 1e-9), c = [{ x: f, by: curb ? 'curb and railing traffic face (Preliminary sizing)' : 'barrier face' }];
+    const mount = sw > 0 && !(t >= 12 - 1e-9), c = [{ x: f, by: b.edge && b.edge[sd] && b.edge[sd].fby ? b.edge[sd].fby : curb ? 'curb and railing traffic face (Preliminary sizing)' : 'barrier face' }];
     if (sw > 0 && !mount) c.push({ x: sw, by: `sidewalk curb face (${f2(t)} in ≥ 12 in)` });
     const fx = xs && xs['fenceX' + sd]; if (sw > 0 && fx > 0) c.push({ x: fx, by: 'railing or fence on the sidewalk' });
     const g = c.reduce((a, q) => q.x > a.x + 1e-9 ? q : a);
@@ -4090,7 +4153,7 @@ tabs: { combos: 'Factors and loads', cap: 'Derivations', rptCombos: 'Distributio
   panes(p) { const b0 = P && P.df && P.df.bridge, b = b0 && b0.ok ? b0 : null;   // an invalid handoff carries only its errors
     const src = b ? `<div class="df-src"><b>Bridge from Preliminary sizing</b> ("${esc(b.project)}", received ${new Date(b.ts).toLocaleString()}). It updates automatically whenever the sizing changes; edit the bridge there.</div>`
       : `<div class="df-src df-lock"><b>No complete bridge yet.</b> Define the bridge in Preliminary sizing; this module unlocks as soon as the sizing has no input errors.</div>`;
-    const kv = b ? `<table class="tbl df-kv"><tbody>${[['Spans', b.spans.map(s => f2(s)).join(' + ') + ' ft' + (b.cont ? ', continuous' : '')], ['Skew at supports', b.skews.map(s => f0(s) + '°').join(', ')], ['Girders', `${b.nb} at ${f2(b.S)} ft`], ['Overhangs L / R', `${f2(b.ohL)} / ${f2(b.ohR)} ft`], ['Barrier width', `${f2(b.barrier)} ft each side`], ['Deck', `t_s = ${f2(b.tsDeck)} in, haunch ${f2(b.haunch)} in, f′c = ${f2(b.fc)} ksi`], ['Barrier / FWS', `${f2(b.barW)} klf, ${f2(b.fws)} psf`]].map(([k, v]) => `<tr><td class="lbl">${k}</td><td class="val">${sub(v)}</td></tr>`).join('')}</tbody></table>` : '';
+    const kv = b ? `<table class="tbl df-kv"><tbody>${[['Spans', b.spans.map(s => f2(s)).join(' + ') + ' ft' + (b.cont ? ', continuous' : '')], ['Skew at supports', b.skews.map(s => f0(s) + '°').join(', ')], ['Girders', `${b.nb} at ${f2(b.S)} ft`], ['Overhangs L / R', `${f2(b.ohL)} / ${f2(b.ohR)} ft`], ...(dfHasEdges(P.df) ? [] : [['Barrier width', `${f2(b.barrier)} ft each side`]]), ['Deck', `t_s = ${f2(b.tsDeck)} in, haunch ${f2(b.haunch)} in, f′c = ${f2(b.fc)} ksi`], dfHasEdges(P.df) ? ['FWS', `${f2(b.fws)} psf (deck edges: Cross-section and dead loads tab)`] : ['Barrier / FWS', `${f2(b.barW)} klf, ${f2(b.fws)} psf`]].map(([k, v]) => `<tr><td class="lbl">${k}</td><td class="val">${sub(v)}</td></tr>`).join('')}</tbody></table>` : '';
     return {
       df_br: `<div class="pad" id="gm-src"></div>${secHd('sec-dfb', 'Bridge definition')}<div class="sec-body one-col" id="sec-dfb">${src}${kv}${gdLldfDfNote()}<button type="button" class="proj-btn" data-dfpl="1" style="width:100%">Open Preliminary sizing</button></div>
         ${secHd('sec-dfo', 'Options')}<div class="sec-body" id="sec-dfo">${fld('Gap between adjacent trucks (lever rule)', 'df.gap', 'ft')}<div></div>
@@ -4099,7 +4162,7 @@ tabs: { combos: 'Factors and loads', cap: 'Derivations', rptCombos: 'Distributio
           ${fld('Exterior girder factors not less than interior (owner policy)', 'df.extMin', '', 'sel', { full: true, options: [['no', 'No (AASHTO)'], ['yes', 'Yes: exterior g ≥ interior g, moment and shear']] })}
           ${fld('Girder radius (curved bridges; 0 = straight)', 'df.radius', 'ft')}<div></div>
           ${fld('Skew correction for shear', 'df.skewV', '', 'sel', { full: true, options: [['all', 'All girders (common owner practice, conservative)'], ['ext', 'Exterior girders only (obtuse corner, 4.6.2.2.3c)']] })}<p class="note">Wheel lines of adjacent trucks are at least 4 ft apart (3.6.1.3.1). Trucks stay 2 ft from the barrier faces.</p></div>`,
-      df_dl: `${secHd('sec-dfe', 'Deck edges')}<div class="sec-body one-col" id="sec-dfe">${dfEdgeSummary(b)}<button type="button" class="proj-btn" data-dfpl="1" style="width:100%">Edit the deck edges in Preliminary sizing</button>
+      df_dl: `${secHd('sec-dfe', 'Deck edges')}<div class="sec-body one-col" id="sec-dfe">${dfHasEdges(P && P.df) ? dfEdgeFields() : dfEdgeSummary(b)}
           <div class="pair">${fld('Appurtenance concrete γ<sub>c</sub>', 'df.dl.wcA', 'kcf', 'num', { note: 'blank = deck' })}<div></div></div>
           <p class="note">γ<sub>c</sub> applies to the curbs, sidewalks, and median; blank uses the deck w<sub>c</sub>${b ? ` (${b.wc} kcf)` : ''}. The deck, haunch, and SIP forms always use the deck w<sub>c</sub>.</p></div>
         ${secHd('sec-dfs', 'Sidewalks')}<div class="sec-body" id="sec-dfs">${fld('Left sidewalk width', 'df.dl.swL', 'ft')}${fld('Left sidewalk thickness', 'df.dl.swThkL', 'in')}${fld('Left railing or fence weight', 'df.dl.fenceL', 'klf', 'num', { note: 'optional' })}${fld('Left railing or fence, x from deck edge', 'df.dl.fenceXL', 'ft')}
@@ -4116,7 +4179,7 @@ tabs: { combos: 'Factors and loads', cap: 'Derivations', rptCombos: 'Distributio
           <div class="full"><h4 class="sub-h" style="margin:4px 0">Beam classification (labels only)</h4><div id="df-bcls"><p class="note">Shown once the module has computed.</p></div><p class="note">MassDOT Fig. 3.5.3-1 classes, assigned automatically from the layout. An override changes the label only (tables, report, CSV), not any load.</p></div></div>
         ${secHd('sec-dfov', 'Load overrides')}<div class="sec-body one-col" id="sec-dfov"><div id="df-ovr"><p class="note">Shown once the module has computed.</p></div><p class="note">For each automatic load, a blank cell uses the automatic value shown under its name; an entered value overrides it (outlined) and is kept until reset (↺). x is from the left deck edge. Added line loads, overlays, and the pedestrian load are set on their own inputs.</p></div>` }; },
   compute(p) {
-    const b = p.bridge;
+    let b = p.bridge;
     if (!b || !b.ok) return { errors: [b && b.why ? `The bridge in Preliminary sizing is not complete: ${b.why.join(' ')}` : 'The bridge is not defined. Define the complete bridge in the Preliminary sizing module; this module unlocks when the sizing has no input errors.'], locked: true };
     const bad = []; if (!(b.nb >= 2)) bad.push('at least two girders'); if (!(b.S > 0)) bad.push('a positive girder spacing'); if (!(b.tsDeck > 0)) bad.push('a positive deck thickness');
     if (!(b.spans.length && b.spans.every(s => s > 0))) bad.push('positive span lengths'); if (!(b.ohL >= 0 && b.ohR >= 0 && b.barrier >= 0)) bad.push('non-negative overhangs and barrier width'); if (!(b.fc > 0 && b.wc > 0)) bad.push('positive concrete strength and unit weight');
@@ -4126,7 +4189,9 @@ tabs: { combos: 'Factors and loads', cap: 'Derivations', rptCombos: 'Distributio
     const extra = numRows(p.extra, GM.df.rowSpec, 'Added load', errors);
     ['swL', 'swThkL', 'swR', 'swThkR', 'medW', 'medThk', 'ped'].forEach(k => { if (!(nm(p.dl[k]) >= 0)) errors.push(`Dead load "${k}" must be zero or positive.`); });
     const xs = dfXsIn(p, errors);   // optional cross-section inputs (XS4); every one absent = the loads as before
+    const Ed = dfEdgeIn(p.edges, errors);   // deck edges set in this module (XS8); absent = as Preliminary sizing sends them
     if (errors.length) return { errors };
+    b = dfBridgeEff(b, Ed);
     const MR = modRatio(b.fc, b.wc, 1.0, 'exact'), Nb = b.nb, spacings = b.bays && b.bays.length === Nb - 1 ? b.bays.slice() : new Array(Nb - 1).fill(b.S);
     const fL = b.faceL != null ? b.faceL : b.barrier, fR = b.faceR != null ? b.faceR : b.barrier, swL = nm(p.dl.swL), swR = nm(p.dl.swR);
     const ll = dfLLFace(b, p.dl, xs, fL, fR);   // live-load traffic faces: a sidewalk thinner than 12 in is mountable and ignored (XS6)
@@ -4218,9 +4283,9 @@ tabs: { combos: 'Factors and loads', cap: 'Derivations', rptCombos: 'Distributio
     return card('dw-xs', 'Cross-section and dead loads', R.dead.method === 'massdot' ? 'MassDOT 3.5.3' : 'Typical AASHTO (equal)', `<div class="dwg-wrap">${dfXsSVG(R)}</div><p class="cap">Superimposed loads are drawn where they act, labeled with their line load and colored by class (DC1, DC2, DW, pedestrian PL); arrows are the added line loads (utilities and other line loads). Heights of the barriers, curbs, railings and fences, sidewalks, median, wearing surface, and overlays are schematic; widths and girder positions are to scale. Red dashed lines: the live-load traffic faces (a sidewalk under 12 in is mountable and ignored for the live load). Below each girder: its share of DC1 (deck, haunch, SIP forms, and any DC1 added loads), DC2, DW${R.dead.pl.some(v => v > 0) ? ', and PL' : ''} in klf, from the dead-load distribution (Derivations tab).</p>`)
       + card('dw-df', 'Cross-section and lever rule', `${rg.label}; ${rg.members[v.j].label}`, `<div class="ctl-row dfv-ctl"><label>Region <select id="dfv-rg">${R.regions.map((r, k) => `<option value="${k}" ${k === v.rg ? 'selected' : ''}>${esc(r.label)} (${r.kind === 'span' ? '+M, V' : '−M'})</option>`).join('')}</select></label><label>Girder <select id="dfv-j">${rg.members.map((m, k) => `<option value="${k}" ${k === v.j ? 'selected' : ''}>${m.label} (${m.type === 'ext' ? 'exterior' : 'interior'})</option>`).join('')}</select></label></div><div class="dwg-wrap">${dfSVG(R, rg, v.j)}</div><p class="cap">Girders are colored by the method that governs their moment factor; hover a girder for its factors. Arrows are the wheels of the governing lever-rule truck train for the selected girder, labeled with each wheel's share of the reaction (before the multiple presence factor). Bars below the girders are DC + DW per girder.</p>`)
       + card('dw-sens', 'Sensitivity to girder spacing', `${rg.label}; K<sub>g</sub> held at ${f0(rg.Kg)} in⁴`, `${dfSensSVG(R, rg)}<p class="cap">All bays scaled together from 70% to 130% of the current layout with the overhangs, barriers, and K<sub>g</sub> held; the dot is the current design. Letters along the exterior line show the governing exterior method: L lever rule, R rigid cross-section, E e-factor. Use it to see how close the layout is to a change of governing method.</p>`); },
-  echo(R) { const b = R.b; return { kv: [['Bridge (from Preliminary sizing)', `"${esc(b.project)}", received ${new Date(b.ts).toLocaleString()}`], ['Spans', b.spans.map(s => f2(s)).join(' + ') + ' ft' + (b.cont ? ', continuous' : '')], ['Skew at supports', b.skews.map(s => f0(s) + '°').join(', ')], ['Girders', `${b.nb} at ${f2(b.S)} ft`], ['Overhangs L / R, barrier', `${f2(b.ohL)} / ${f2(b.ohR)} ft, ${f2(b.barrier)} ft`], ['Deck', `t_s = ${f2(b.tsDeck)} in, haunch ${f2(b.haunch)} in, f′c = ${f2(b.fc)} ksi, w_c = ${b.wc} kcf, n = ${f2(R.MR.n)}`], ['Superimposed', `barrier ${f2(b.barW)} klf each, FWS ${f2(b.fws)} psf`], ['Dead-load method', R.dead.method === 'massdot' ? 'MassDOT 3.5.3' : 'Typical AASHTO (equal)'], ['Truck gap', `${f2(R.base.gap)} ft`]],
+  echo(R) { const b = R.b; return { kv: [['Bridge (from Preliminary sizing)', `"${esc(b.project)}", received ${new Date(b.ts).toLocaleString()}`], ['Spans', b.spans.map(s => f2(s)).join(' + ') + ' ft' + (b.cont ? ', continuous' : '')], ['Skew at supports', b.skews.map(s => f0(s) + '°').join(', ')], ['Girders', `${b.nb} at ${f2(b.S)} ft`], b.gdEdges ? ['Overhangs L / R', `${f2(b.ohL)} / ${f2(b.ohR)} ft`] : ['Overhangs L / R, barrier', `${f2(b.ohL)} / ${f2(b.ohR)} ft, ${f2(b.barrier)} ft`], ['Deck', `t_s = ${f2(b.tsDeck)} in, haunch ${f2(b.haunch)} in, f′c = ${f2(b.fc)} ksi, w_c = ${b.wc} kcf, n = ${f2(R.MR.n)}`], ...(b.gdEdges ? [['Left deck edge', dfEdgeTxt(b.gdEdges.L)], ['Right deck edge', dfEdgeTxt(b.gdEdges.R)], ['Superimposed', `FWS ${f2(b.fws)} psf`]] : [['Superimposed', `barrier ${f2(b.barW)} klf each, FWS ${f2(b.fws)} psf`]]), ['Dead-load method', R.dead.method === 'massdot' ? 'MassDOT 3.5.3' : 'Typical AASHTO (equal)'], ['Truck gap', `${f2(R.base.gap)} ft`]],
       table: [['Region', 'L (ft)', 'Station (ft)', 'Section', 'K_g (in⁴)', 'Skew M / V'], R.regions.map(rg => [rg.label, f2(rg.L), f2(rg.x), secTxt(rg.sec), f0(rg.Kg), `${f0(rg.sk.thM)}° / ${f0(rg.sk.thV)}°`])] }; },
-  after(R) { dfFeed(R); dfOvrSync(R); },
+  after(R) { dfFeed(R); dfOvrSync(R); dfEdgeVis(); },
   inbox() { return null; }, noInbox: 'This module takes its bridge directly from the Preliminary sizing module (see the Bridge tab); nothing needs to be imported.'
 };
 const DF_VIEW = { rg: 0, j: 0 };
@@ -4260,7 +4325,7 @@ function dfXsSVG(R) {
   const medW = nm(dl.medW) > 0 ? nm(dl.medW) : 0, medH = medW ? ht(nm(dl.medThk), 6, 22) : 0, m0 = Wd / 2 - medW / 2, m1 = Wd / 2 + medW / 2;
   const xd = (sd, x) => sd === 'L' ? x : Wd - x, RAIL = 24, BAR = cl(34 / 12 * sc, 24, 44);
   const ed = {}; ['L', 'R'].forEach(sd => { const e = b.edge && b.edge[sd];
-    ed[sd] = e && e.mode === 'curb' ? { curb: true, cw: e.cw > 0 && e.ch > 0 ? e.cw / 12 : 0, cH: e.cw > 0 && e.ch > 0 ? ht(e.ch, 6, 40) : 0, rp: e.rp } : { curb: false, w: b.barrier > 0 ? b.barrier : 0 }; });
+    ed[sd] = e && e.mode === 'curb' ? { curb: true, cw: e.cw > 0 && e.ch > 0 ? e.cw / 12 : 0, cH: e.cw > 0 && e.ch > 0 ? ht(e.ch, 6, 40) : 0, rp: e.rp } : { curb: false, w: e && e.mode === 'barrier' ? (e.bw > 0 ? e.bw : 0) : b.barrier > 0 ? b.barrier : 0 }; });
   const surf = x => { if (x <= sw.L + 1e-9 && sw.L) return -swH.L; if (x >= Wd - sw.R - 1e-9 && sw.R) return -swH.R; if (medW && x >= m0 - 1e-9 && x <= m1 + 1e-9) return -medH; return 0; };
   const tD = Math.max(8, b.tsDeck / 12 * sc), labs = []; let o = '';
   const lab = (L, xpx, top) => { if (L) labs.push({ x: xpx, top, col: DF_LCOL[L.cat] || '#17212b', t: `${L.desc}: ${f3(L.plf)} klf ${L.cat}${L.ovr ? ' (override)' : ''}` }); };
@@ -4349,7 +4414,7 @@ function dfDLCalcs(R) {
   // 2a. the superimposed line loads from the cross-section (XS4)
   if (D.per.length) { const ed = sd => b.edge && b.edge[sd], dl = R.p.dl, wcA = nm(dl.wcA) > 0 ? nm(dl.wcA) : wc, wsW = L => f2(L.x1 - L.x0), qOf = L => L.thk ? `${f2(L.thk)}/12 × ${f3(L.gam)} × 1000 = ${f2(L.q)} psf; ` : '';
     const how = L => { const sd = /L$/.test(L.id) ? 'L' : 'R', e = ed(sd);
-      if (/^bar/.test(L.id) || /^rail/.test(L.id)) return 'from Preliminary sizing';
+      if (/^bar/.test(L.id) || /^rail/.test(L.id)) return b.gdEdges ? 'deck edges (entered)' : 'from Preliminary sizing';
       if (/^curb/.test(L.id)) return `(${f2(e.cw)}/12)(${f2(e.ch)}/12)(${f3(wcA)})`;
       if (/^sw[LR]$/.test(L.id)) return `${f2(nm(dl['sw' + sd]))} × (${f2(nm(dl['swThk' + sd]))}/12)(${f3(wcA)})`;
       if (L.id === 'med') return `${f2(nm(dl.medW))} × (${f2(nm(dl.medThk))}/12)(${f3(wcA)})`;
@@ -4445,7 +4510,8 @@ const gdFromPL = e => typeof PL_FRAME !== 'undefined' && !!PL_FRAME && e.source 
 window.addEventListener('message', e => {
   if (!gdFromPL(e)) return;
   if (!e.data || e.data.type !== 'gd-bridge' || !e.data.bridge) return; const nb = e.data.bridge, ob = P.df.bridge;
-  if (ob && JSON.stringify({ ...ob, ts: 0 }) === JSON.stringify({ ...nb, ts: 0 })) return;
+  const init = !!nb.ok && !dfHasEdges(P.df); if (init) P.df.edges = dfEdgesInit(nb);   // XS8 migration: once, from the values Preliminary sizing holds; never over the user's edges
+  if (!init && ob && JSON.stringify({ ...ob, ts: 0 }) === JSON.stringify({ ...nb, ts: 0 })) return;
   P.df.bridge = nb;
   gmBuildPanes('df'); if (GM.sa) gmBuildPanes('sa'); fillInputs(); if (P.mod === 'df' || P.mod === 'sa') recompute(); else { refreshMarks(); try { dfFeed(GM.df.compute(P.df)); } catch (e) {} } autosave();
   if (ob && ob.ok && nb.ok && typeof gdScheduleRefresh === 'function') gdScheduleRefresh();   // a real change to an existing bridge: refresh every module
