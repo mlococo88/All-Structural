@@ -2509,9 +2509,9 @@ function tsElevSVG(R, r) {
   let o = `<rect x="${X(-6)}" y="${Y(D + r.tfc)}" width="${(span + 12) * sc}" height="${r.tfc * sc}" fill="${DC.stl}" stroke="${DC.stlS}"/><rect x="${X(-6)}" y="${Y(D)}" width="${(span + 12) * sc}" height="${D * sc}" fill="#f6f7f9" stroke="${DC.stlS}" stroke-width=".7"/><rect x="${X(-6)}" y="${Y(0)}" width="${(span + 12) * sc}" height="${r.tft * sc}" fill="${DC.stl}" stroke="${DC.stlS}"/>`;
   [0, r.do1, span].forEach((x, i) => { const main = i === 1, cp = main ? t.role === 'cp' : true, gapIn = main && t.role === 'int' ? t.gap : 0;
     o += `<rect x="${X(x) - Math.max(2, t.tp * sc) / 2}" y="${Y(D)}" width="${Math.max(2, t.tp * sc)}" height="${(D - gapIn) * sc}" fill="${main ? DC.pl : '#e3e7ee'}" stroke="${main ? DC.plS : '#7a8590'}"/>`;
-    if (main && gapIn) o += dimV(X(x) + 16, Y(gapIn), Y(0), `g = ${frac(gapIn)}`, false); });
-  o += dimH(X(0), X(r.do1), Y(D + r.tfc) - 14, `do = ${f2(r.do1)} in${r.end === 'yes' ? ' (end panel)' : ''}`) + dimH(X(r.do1), X(span), Y(D + r.tfc) - 14, `do = ${f2(r.do2)} in`);
-  o += dimV(X(-6) - 14, Y(D), Y(0), `D = ${frac(D)}`);
+    if (main && gapIn) o += dimV(X(x) + 16, Y(gapIn), Y(0), `g = ${frac(gapIn)} in`, false); });
+  o += dimH(X(0), X(r.do1), Y(D + r.tfc) - 14, `d<tspan baseline-shift="sub" font-size="8">o</tspan> = ${f2(r.do1)} in${r.end === 'yes' ? ' (end panel)' : ''}`) + dimH(X(r.do1), X(span), Y(D + r.tfc) - 14, `d<tspan baseline-shift="sub" font-size="8">o</tspan> = ${f2(r.do2)} in`);
+  o += dimV(X(-6) - 14, Y(D), Y(0), `D = ${frac(D)} in`);
   o += `<text x="${X(r.do1) + 10}" y="${Y(D / 2)}" class="sv-t sv-sm">${t.role === 'cp' ? 'Connection plate, welded to both flanges' : 'Intermediate stiffener, tight fit at the compression flange'}</text><text x="${X(r.do1) + 10}" y="${Y(D / 2) + 15}" class="sv-t sv-sm">${t.sides === 2 ? 'Pair' : 'One side'}, PL ${frac(t.bt)} × ${frac(t.tp)}, ${frac(t.w)} fillet welds to web</text>`;
   return `<svg viewBox="0 0 ${Wpx} ${Y(0) + r.tft * sc + 20}" class="dwg" role="img" aria-label="Web panel elevation">${o}</svg>`;
 }

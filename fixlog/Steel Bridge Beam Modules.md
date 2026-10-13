@@ -7791,3 +7791,11 @@ Main page only; `PL_B64` (embedded Preliminary sizing) is not touched. Display o
 - **After:** `The field splice module covers flange splices with …` and `… the detailing rules of Article 6.13.2.6. Every load combination is fully worked, …`
 - **Check case:** none (text).
 - **Other copies:** none.
+
+### Q11. Transverse stiffeners drawing (web panel elevation): d<sub>o</sub> subscript and units on D and g   [drawing labels only]
+- **Where:** the Transverse stiffeners panel-elevation SVG (anchors `` `do = ${f2(r.do1)} in `` , `` `do = ${f2(r.do2)} in` ``, `` o += dimV(X(-6) - 14, Y(D), Y(0), `D = ${frac(D)}`); ``, `` `g = ${frac(gapIn)}`, false) ``).
+- **Before:** `` `do = ${f2(r.do1)} in${…}` ``, `` `do = ${f2(r.do2)} in` ``, `` `D = ${frac(D)}` ``, `` `g = ${frac(gapIn)}` ``
+- **After:** `` `d<tspan baseline-shift="sub" font-size="8">o</tspan> = ${f2(r.do1)} in${…}` `` (same for `do2`), `` `D = ${frac(D)} in` ``, `` `g = ${frac(gapIn)} in` ``
+- **Problem:** "do = 60.00 in" read as the word "do"; "D = 60" and "g = 2 3/4" had no unit while the panel widths did.
+- **Check case:** built-in example, Transverse stiffeners, Drawings: "d<sub>o</sub> = 60.00 in (end panel)", "D = 60 in", "g = 2 3/4 in".
+- **Other copies:** none.
