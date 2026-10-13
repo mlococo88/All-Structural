@@ -7184,3 +7184,277 @@ Main page and the embedded Preliminary sizing (PlateLine, `PL_B64`, decoded, edi
 ### Open items (C4–C7)
 - The Fatigue module's "Import details from other modules → Girder section" and the Girder-section fallback inventory still build rows without b<sub>eff</sub>, so they use the module's single b<sub>eff</sub> even though each Girder section row has its own. Not changed (outside this item); decide whether those imports should carry the row's b<sub>eff</sub> too.
 - Pier connection-plate rows still take the cross-frame nearest the pier (C4 changes only the span rows).
+
+## 2026-10-13 — PR: claude/girderdetail-cleanup3 (clean-up 3: Fatigue takes the deck from Preliminary sizing, first import replaces the example, C′ basis, per-side traffic faces, Design all rows, wording and small fixes; engineer offline, "clean up the app and use judgement"; PR link added after merge)
+
+Main page and the embedded Preliminary sizing (PlateLine, `PL_B64`, decoded, edited and re-encoded on its one line). No storage key or `bridgeSuite.v1.*` payload is added, renamed or removed. `lldf.html` is unchanged.
+
+### C8. Fatigue: an import from Preliminary sizing also takes the deck, concrete and web grade of the analysed bridge   [§4: section properties of every Fatigue row] [identical on the built-in example; matters when the deck differs from the module's own inputs]
+- **Where (main page):** `GM.fa.inbox`; anchor `inbox(j) {   // the fatigue detail inventory from the analysis (manual rows are kept)`.
+- **Before:**
+  ```js
+    const inv = j && j.mods && j.mods.fa; if (inv && inv.length) return { n: inv.length, what: '...', apply: () => { P.fa.rows = [...P.fa.rows.filter(q => q.src !== 'analysis'), ...JSON.parse(JSON.stringify(inv))]; } };
+    const rows = j && j.mods && j.mods.gs && j.mods.gs.rows; if (!rows || !rows.length) return null;
+    return { n: rows.length * 2, what: 'flange details at the critical sections', apply: () => {
+  ```
+- **After:**
+  ```js
+    // deck, concrete and web grade of the analysed bridge (H1, 2026-10-13): from the same payload the Girder section module takes them from (was: the module's own values kept)
+    const gen = (j && j.mods && ((j.mods.gs && j.mods.gs.gen) || (j.mods.wt && j.mods.wt.gen))) || {}, genApply = () => ['ts', 'hh', 'fc', 'wc', 'K1', 'gW'].forEach(k => { if (gen[k] != null && gen[k] !== '') P.fa[k] = gen[k]; });
+    const inv = j && j.mods && j.mods.fa; if (inv && inv.length) return { n: inv.length, what: '...', apply: () => { genApply(); P.fa.rows = [...P.fa.rows.filter(q => q.src !== 'analysis'), ...JSON.parse(JSON.stringify(inv))]; } };
+    const rows = j && j.mods && j.mods.gs && j.mods.gs.rows; if (!rows || !rows.length) return null;
+    return { n: rows.length * 2, what: 'flange details at the critical sections', apply: () => { genApply();
+  ```
+  The values come from `mods.gs.gen` (structural t<sub>s</sub> `AN.ts`, haunch `AN.hh`, f′<sub>c</sub>, w<sub>c</sub>, K<sub>1</sub> = 1.0, web grade), the same object `GM.gs.inbox` copies into the Girder section module with `Object.assign(P.gs, s.gen)`; `mods.wt.gen` is a fallback with the same deck fields. They go through `importInto`, so they are tracked like every other imported value: a later edit by the user is shown as an override and kept on the next import. The module's single b<sub>eff</sub> is not changed (each Preliminary-sizing row carries its own b<sub>eff</sub> since C5). The deck reinforcement A<sub>r</sub> and its depth d<sub>r</sub> (negative-moment cracked section) are **not** in the payload for any module, so they stay the Fatigue module's own inputs (open item). The web grade is included because it is the same girder's grade (6.10.5.3 web check); the brief listed t<sub>s</sub>, haunch, f′<sub>c</sub>, w<sub>c</sub>, K<sub>1</sub>.
+- **Problem:** the Fatigue module took its rows (moments, sections) from Preliminary sizing but kept its own deck (t<sub>s</sub> 8 in, haunch 2 in, f′<sub>c</sub> 4 ksi), so a bridge with a different deck was checked with the wrong composite section and modular ratio. Less or more conservative depending on the deck; fixed.
+- **Governing provision:** AASHTO LRFD 10th Ed. 6.6.1.2.1 (stress range from the short-term composite section), 6.10.1.1.1b, 5.4.2.4 (E<sub>c</sub> = 120,000 K<sub>1</sub> w<sub>c</sub><sup>2.0</sup> f′<sub>c</sub><sup>0.33</sup>, the module's "exact" rule as before), 6.6.1.2.5 (Fatigue I). Not changed. Not re-checked against the printed 10th Edition here: verify.
+- **Check case 1 (built-in example; Preliminary sizing deck t<sub>s</sub> 8, haunch 2, f′<sub>c</sub> 4, w<sub>c</sub> 0.150; module defaults equal):** Fatigue imported from Preliminary sizing: every row identical before and after; governing row "Span 1, connection plate at cross-frame 60.91 ft, bottom flange, exterior" ratio **1.136** before and after.
+- **Check case 2 (built-in example with Preliminary sizing t<sub>s</sub> = 9 in, f′<sub>c</sub> = 5 ksi, haunch 3 in; Fatigue imported; same row: exterior girder, b<sub>eff</sub> 96 in, 60 × 9/16 web, top 16 × 3/4, bottom 16 × 1-1/8, inner face of bottom flange y = 1.125 in; M<sub>f+</sub> = 812.9, M<sub>f−</sub> = −364.3 k-ft; cracked negative section; γ = 1.75, (ΔF)<sub>TH</sub> = 12.0 ksi):**
+  - **Before (module deck 8 / 2 / 4 ksi, n = 6.80):** ȳ<sub>n</sub> = 53.568 in, I<sub>n</sub> = 102,183 in⁴; f<sub>+</sub> = 812.9(12)(52.443)/102,183 = 5.006 ksi; cracked ȳ = 33.498, I = 50,834 in⁴: f<sub>−</sub> = 364.3(12)(32.373)/50,834 = 2.784 ksi; Δf = 7.790 ksi; ratio 1.75(7.790)/12 = **1.136** (stale deck).
+  - **After (9 / 3 / 5 ksi; E<sub>c</sub> = 120,000(1.0)(0.150)²(5)<sup>0.33</sup> = 4,592 ksi, n = 29,000/4,592 = 6.32):** ȳ<sub>n</sub> = 56.292 in, I<sub>n</sub> = 112,075 in⁴; f<sub>+</sub> = 812.9(12)(55.167)/112,075 = 4.802 ksi; cracked (A<sub>r</sub> 9.8 in² at 3 + 9 − 4 = 8 in above the steel) ȳ = 33.764, I = 52,215 in⁴: f<sub>−</sub> = 364.3(12)(32.639)/52,215 = 2.733 ksi; Δf = 7.534 ksi; ratio **1.099**.
+  - Other rows move the same way (e.g. Span 3 connection plate, exterior: 1.098 → 1.060). The Fatigue deck inputs read 9 / 3 / 5 after the import (before: 8 / 2 / 4).
+- **Saved data:** no key or format change; `P.fa.ts`, `hh`, `fc`, `wc`, `K1`, `gW` keep their meaning and are now written by the import (and recorded in the import snapshot `P._imp.fa`).
+- **Other copies:** none.
+
+### C9. Fatigue: the first import from Preliminary sizing (or Structural analysis) replaces the built-in example's rows   [results of the imported rows unchanged; the four example rows no longer remain in another bridge's check]
+- **Where (main page):** `GM.fa.inbox` (anchor `// first import (H2, 2026-10-13; as Girder section's first import)`) and `loadAllInbox0` (anchor `done.push(m.label + (x.note ?`).
+- **Before:**
+  ```js
+    const inv = j && j.mods && j.mods.fa; if (inv && inv.length) return { n: inv.length, what: '...', apply: () => { genApply(); P.fa.rows = [...P.fa.rows.filter(q => q.src !== 'analysis'), ...JSON.parse(JSON.stringify(inv))]; } };
+    ...
+    return { n: rows.length * 2, what: 'flange details at the critical sections', apply: () => { genApply();
+    ...
+        P.fa.rows = [...P.fa.rows.filter(q => q.src !== 'analysis'), ...add]; } };
+  ```
+  ```js
+    Object.values(GM).forEach(m => { const x = m.inbox(j); if (x) { importInto(m.id, () => gmApply(m, x, j), j.srcLabel); done.push(m.label); } });
+  ```
+- **After:**
+  ```js
+    // first import (H2, 2026-10-13; as Girder section's first import): the built-in example's rows (equal to the module defaults) are dropped; rows the user entered or changed are kept
+    const isEx = q => GM.fa.def.rows.some(d => Object.keys(d).every(k => String(q[k]) === String(d[k]))), keepRows = o => { const fresh = !P.fa.source, keep = P.fa.rows.filter(q => q.src !== 'analysis' && !(fresh && isEx(q)));
+      if (fresh && keep.length < P.fa.rows.filter(q => q.src !== 'analysis').length) { o.note = 'the example locations were replaced'; o.what += ` (${o.note})`; } return keep; };
+    const inv = j && j.mods && j.mods.fa; if (inv && inv.length) { const o = { n: inv.length, what: '...', apply: () => { genApply(); P.fa.rows = [...keepRows(o), ...JSON.parse(JSON.stringify(inv))]; } }; return o; }
+    ...
+    const o = { n: rows.length * 2, what: 'flange details at the critical sections', apply: () => { genApply();
+    ...
+        P.fa.rows = [...keepRows(o), ...add]; } }; return o;
+  ```
+  ```js
+    Object.values(GM).forEach(m => { const x = m.inbox(j); if (x) { importInto(m.id, () => gmApply(m, x, j), j.srcLabel); done.push(m.label + (x.note ? ` (${x.note})` : '')); } });
+  ```
+  "First import" means the module has no `P.fa.source` yet (set by `gmApply` after every import), the same test Girder section uses (`fresh = !P.gs.source`). On that import only, a non-analysis row is dropped when every field of one of the four built-in rows (`GM.fa.def.rows`) is equal to it (compared as text, so a value typed into a field still compares). A row the user added, or an example row the user edited, is kept; after the first import nothing is dropped (as before). The message says so: "Loaded 62 fatigue details (…) (the example locations were replaced) from …", and the Load all / Design all list shows "Fatigue (the example locations were replaced)".
+- **Problem:** the four example rows of the built-in project (a 60-in girder at stations 44, 110 and 180 ft with made-up moments) stayed in the Fatigue check of whatever bridge was imported, with their own (wrong) sections and moments. Results of a real bridge were mixed with the example's. Fixed.
+- **Governing provision:** none (input handling).
+- **Check case (built-in example, Fatigue, Get demands from Preliminary sizing):** before: 66 rows (4 example + 62 imported), the four example ratios 0.552, 0.719, 0.828, 0.260 listed among the results; after: 62 rows, all from the analysis, governing row unchanged (Span 1 connection plate, exterior, 1.136). With the second example row edited first (M<sub>f+</sub> 620 → 700): after the import 63 rows, the edited row kept (ratio 0.790), the other three dropped.
+- **Saved data:** no key or format change. Projects that already have `P.fa.source` (imported before) keep all their rows.
+- **Other copies:** none.
+
+### C10. Transverse stiffeners CP2: the Δf sent by Preliminary sizing is taken at the inner face of the bottom flange (the connection-plate weld toe), the basis of Preliminary sizing's own Category C′ check   [§4: location of the stress] [less conservative by the half flange thickness; now equal to Preliminary sizing's own check]
+- **Where:**
+  - Decoded PlateLine: `detailExport`, helper `fatBot`; anchor `const fatBot = (T, x, gt) => {`. Main page: the re-encoded `PL_B64` line.
+  - Main page: `GM.ts` checks, CP2 note; anchor `{ const c = { id: 'CP2', grp: G3, title: 'Fatigue at stiffener weld toes'`.
+- **Before:**
+  ```js
+    const fatBot = (T, x, gt) => { const i = node(x), s = sec(x), c = props(s, gt); return r2((Math.max(0, T.MfP[i]) - Math.min(0, T.MfN[i])) * 12 * (c.yb - s.botT / 2) / c.I); };
+  ```
+  ```js
+          note: 'Base metal at the toe of transverse stiffener-to-flange and stiffener-to-web welds is Category C′ (infinite life under Fatigue I). The tension flange stress range is used for the web weld toe near the tension flange, which is conservative.' };
+  ```
+- **After:**
+  ```js
+    // Δf at the connection plate (M1, 2026-10-13): inner face of the bottom flange, the weld toe of Table 6.6.1.2.3-1 detail 4.1, short-term composite for both signs, as this tool's own Category C′ check (was the flange mid-thickness, c.yb - s.botT / 2)
+    const fatBot = (T, x, gt) => { const i = node(x), s = sec(x), c = props(s, gt); return r2((Math.max(0, T.MfP[i]) - Math.min(0, T.MfN[i])) * 12 * (c.yb - s.botT) / c.I); };
+  ```
+  ```js
+          note: 'Base metal at the toe of transverse stiffener-to-flange and stiffener-to-web welds is Category C′ (infinite life under Fatigue I). The tension flange stress range is used for the web weld toe near the tension flange, which is conservative. Δf received from Preliminary sizing is the stress range at the inner face of the bottom flange (the weld toe) from the short-term composite section for both the positive and the negative fatigue moment, the basis of Preliminary sizing\'s own Category C′ check; the Fatigue module checks the same connection plates with its negative-moment section (steel + reinforcement by default) and is the full check.' };   // basis stated (M1, 2026-10-13)
+  ```
+  Distance from the neutral axis: before ȳ<sub>n</sub> − t<sub>bot</sub>/2; after ȳ<sub>n</sub> − t<sub>bot</sub>. Section (short-term composite with the girder's b<sub>eff</sub>, `props`) and the moment range (max(0, M<sub>f+</sub>) − min(0, M<sub>f−</sub>)) unchanged.
+- **Problem:** the same connection plate was checked at three different points: CP2 at the flange mid-thickness (short-term section), Preliminary sizing's own Category C′ check at the inner face (short-term section), and the Fatigue module at the inner face (cracked section for negative moment by default). The weld toe of a transverse connection plate fillet-welded to the flange (Table 6.6.1.2.3-1, detail 4.1) is at the flange–plate junction, i.e. the inner face, so CP2 now uses that point and agrees with Preliminary sizing. The Fatigue module, which may use the cracked negative section, stays the full check and the note says so. CP2 becomes slightly less conservative (by about 1%), and is now consistent with the provision.
+- **Governing provision:** AASHTO LRFD 10th Ed. 6.6.1.2.2, 6.6.1.2.5 (Fatigue I, (ΔF)<sub>TH</sub> = 12.0 ksi for C′), Table 6.6.1.2.3-1 detail 4.1, 6.6.1.2.1 (short-term composite section). Not changed. Not re-checked against the printed 10th Edition here: verify.
+- **Check case (built-in example, Transverse stiffeners, Get demands from Preliminary sizing; exterior girder, Span 1, cross-frame at 60.9 ft; 60 × 9/16 web, top 16 × 3/4, bottom 16 × 1-1/8; b<sub>eff</sub> 96 in, n = 6.80: ȳ<sub>n</sub> = 53.568 in, I<sub>n</sub> = 102,183 in⁴; M<sub>f+</sub> = 812.7, M<sub>f−</sub> = −364.5 k-ft, range 1,177.2 k-ft):**
+  - **Before:** Δf = 1,177.2(12)(53.568 − 0.5625)/102,183 = 7.33 ksi; γΔf = 1.75(7.33) = 12.83 ksi; ratio **1.07** (fail).
+  - **After:** Δf = 1,177.2(12)(53.568 − 1.125)/102,183 = 7.25 ksi; γΔf = 12.69 ksi; ratio **1.057** (fail), equal to Preliminary sizing's own Category C′ ratio at this girder (1.0573, C5 check case).
+  - Other rows: Span 3 exterior (296.5 ft) 1.06 → 1.05; Span 2 exterior (198.2 ft) 0.96 → 0.94 (Δf 6.55 → 6.48); interior rows 0.65 / 0.54 / 0.65 → 0.64 / 0.53 / 0.64.
+  - The Fatigue module's own row for this plate (cracked negative section) is unchanged: 1.136.
+- **Saved data:** no key or format change; the `df` field of the stiffener rows has the same meaning (ksi, tension-flange stress range) and is replaced on the next import.
+- **Other copies:** none.
+
+### C11. Preliminary sizing G7: d<sub>e</sub> of each exterior girder from that side's own traffic face   [range-of-applicability status and display only; no calculation uses it]
+- **Where (decoded PlateLine):** `runChecks`, check G7; anchor `rng(\`d_e, ${sd} exterior girder\``. Main page: the re-encoded `PL_B64` line.
+- **Before:**
+  ```js
+      [['left', m.ohL], ['right', m.ohR]].forEach(([sd, w]) => rng(`d_e, ${sd} exterior girder`, w - m.barrier, -1.0, 5.5, 'ft'));
+  ```
+- **After:**
+  ```js
+      [['left', m.ohL, m.faceL], ['right', m.ohR, m.faceR]].forEach(([sd, w, fc]) => rng(`d_e, ${sd} exterior girder`, w - fc, -1.0, 5.5, 'ft'));   // each side's own traffic face (M2, 2026-10-13; was the average of both sides, m.barrier)
+  ```
+  `m.faceL` / `m.faceR` are the traffic-face distances the model already carries (`bridgeGeom`: the barrier width, the curb faces, or the deck edges from the LLDF and DLs module); `m.barrier` is their average. With equal faces the values are identical.
+- **Problem:** with different edges (e.g. a sidewalk on one side only) both d<sub>e</sub> values were the overhang minus the average face, so the range warning could be raised on the wrong side, or on both, or missed. Status/display only: the distribution factors themselves are computed in the LLDF and DLs module, not from this row.
+- **Governing provision:** AASHTO LRFD 10th Ed. Table 4.6.2.2.2d-1 (d<sub>e</sub>: distance from the exterior web to the interior edge of curb or traffic barrier, −1.0 ≤ d<sub>e</sub> ≤ 5.5 ft). Not changed.
+- **Check case (built-in example, overhangs 3.25 ft both sides, barrier 1.5 ft; LLDF and DLs: left sidewalk 8 ft wide × 12 in thick, none on the right, so traffic faces 8.0 ft left and 1.5 ft right, average 4.75 ft):**
+  - **Before:** d<sub>e</sub> left = 3.25 − 4.75 = −1.50 ft (warn), right = −1.50 ft (warn).
+  - **After:** d<sub>e</sub> left = 3.25 − 8.00 = **−4.75 ft (warn)**, right = 3.25 − 1.50 = **1.75 ft (pass)**.
+  - Built-in example without the sidewalk: 1.75 ft both sides before and after.
+- **Saved data:** none.
+- **Other copies:** none.
+
+### C12. Design all: the result table also lists LLDF and DLs and Structural analysis   [status display only; no calculation change]
+- **Where (main page):** `designAllRun0`, step 4; anchor `// 4. status of every module`.
+- **Before:**
+  ```js
+    const mods = ['splice', 'bstf', 'ts', 'sc', 'cf', 'oh', 'wt', 'gs', 'fa'], stat = [];
+  ```
+- **After:**
+  ```js
+    const mods = ['df', 'sa', 'splice', 'bstf', 'ts', 'sc', 'cf', 'oh', 'wt', 'gs', 'fa'], stat = [];   // + LLDF and DLs, Structural analysis (M3, 2026-10-13): status from their own check lists
+  ```
+  The two modules go through the existing generic branch (`adEval(mm)` → `GM[mm].compute(P[mm])` and `GM[mm].checks(R)`), the same evaluation as their tab marks (`modStatus`). Their rows appear first, in tab order, in the Design all table and in the DXF "Design all" status table (which reads the same `P.designAll.stat`).
+- **Problem:** the Design all summary did not show failures or warnings of the two modules that produce the girder loads, so a failing distribution-factor or analysis check could be missed.
+- **Governing provision:** none.
+- **Check case:** built-in example, Design all from Preliminary sizing: two new first rows "LLDF and DLs: All checks pass", "Structural analysis: All checks pass"; every other row, every quantity and the total ($1,699,744) identical. Built-in example with 3 girders at 12 ft in Preliminary sizing and an 8 ft × 12 in left sidewalk: "LLDF and DLs: Fails: DF3; warnings DF1", "Structural analysis: All checks pass; warnings SA4", equal to those modules' tab marks. Screenshots `scratchpad/followups/gd-c3/m3_before_designall.png`, `m3_after_designall.png`.
+- **Saved data:** no key or format change; `P.designAll.stat` items keep their shape (`{ mm, name, fails, warns, note }`), two more items.
+- **Other copies:** none.
+
+### C13. Cross-frames: the custom W and custom angle dimensions are shown only when the shape is custom   [UI only; results bit-identical]
+- **Where (main page):** `cfUiSync` (anchor `// custom dimensions only with a custom shape (L7, 2026-10-13)`), the CSS rule after `.cf-tsoff` (anchor `.cf-cust { display: none !important; }`), and the report input echo `crInputs` (anchor `if (el.closest('.cf-off, .cf-tsoff, .cf-cust')) return;`).
+- **Before:** the diaphragm inputs "Depth d", "Flange width b<sub>f</sub>", "Flange thickness t<sub>f</sub>", "Web thickness t<sub>w</sub>" and, for each angle member, "Connected leg", "Outstanding leg", "Thickness" were always shown (and echoed in the report), although the compute uses them only for a custom shape (`cfDiaSec`: `pre ? pre[1] : +q.d`; members: `m.sec === 'custom' ? [nm(m.b1), nm(m.b2), nm(m.t)] : ANGLES[m.sec]`).
+  ```js
+          if (el.closest('.cf-off, .cf-tsoff')) return;
+  ```
+- **After:**
+  ```js
+    // custom dimensions only with a custom shape (L7, 2026-10-13): the values the compute ignores for a listed shape are hidden, not deleted
+    { const cust = (k, on) => { const e = ig(k); if (e) e.classList.toggle('cf-cust', !on); }, dq = P.cf.dia || {}, dCus = !(CF_DIA.some(s => s[0] === dq.shape) || CF_CH.some(s => s[0] === dq.shape));
+      ['cf.dia.d', 'cf.dia.bf', 'cf.dia.tf', 'cf.dia.tw'].forEach(k => cust(k, dCus)); CF_MEM.forEach(([m]) => { const on = ((P.cf.mem || {})[m] || {}).sec === 'custom'; ['b1', 'b2', 't'].forEach(f => cust(`cf.mem.${m}.${f}`, on)); }); }
+  ```
+  ```css
+  .cf-cust { display: none !important; }   /* Cross-frames: custom W and custom angle dimensions while a listed shape is selected (L7, 2026-10-13) */
+  ```
+  ```js
+          if (el.closest('.cf-off, .cf-tsoff, .cf-cust')) return;
+  ```
+  The condition is the compute's own: the W dimensions apply when the shape is not a listed W or channel; the angle legs when the section is "Custom angle". The values stay in the project.
+- **Problem:** inputs that had no effect looked like they did. UI only.
+- **Governing provision:** none.
+- **Check case:** built-in example, Cross-frames, Members tab: before, the four W and nine angle dimension inputs are shown; after, hidden. With the diaphragm shape "Custom W" and the top chord "Custom angle": the four W inputs and the top chord's three inputs are shown, the other members' are not. Report input echo: "Connected leg" 3 times before, once after (custom top chord only). Screenshots `scratchpad/followups/gd-c3/l7_before_listed.png`, `l7_after_listed.png`, `l7_before_custom.png`, `l7_after_custom.png`.
+- **Saved data:** none.
+- **Other copies:** none.
+
+### C14. Opening a project: a null array in the saved data keeps the default   [robustness; normal data bit-identical]
+- **Where (main page):** `deepMerge`; anchor `function deepMerge(b, o) {`.
+- **Before:**
+  ```js
+  function deepMerge(b, o) { if (Array.isArray(b) || Array.isArray(o)) return o !== undefined ? o : b; ...
+  ```
+- **After:**
+  ```js
+  // L9 (2026-10-13): a null array in saved data keeps the default (was o !== undefined, so { gs: { rows: null } } broke Girder section, Fatigue and Transverse stiffeners)
+  function deepMerge(b, o) { if (Array.isArray(b) || Array.isArray(o)) return o != null ? o : b; ...
+  ```
+- **Problem:** a project or autosave with `rows: null` (hand-edited JSON or a truncated export) made the modules throw ("Cannot read properties of null (reading 'map')"). Now the default rows are used. Any non-null saved value is used exactly as before.
+- **Governing provision:** none.
+- **Check case:** `loadData({ gs: { rows: null }, fa: { rows: null }, ts: { rows: null } })`: before, Girder section, Fatigue and Transverse stiffeners throw; after, they open with their default rows (2, 4, 2).
+- **Saved data:** read side only; nothing is written differently.
+- **Other copies:** none.
+
+### C15. Structural analysis: no "-0.000" in the dead-load deflection table   [display only]
+- **Where (main page):** `GM.sa`, Loads tab, card `sa-d`; anchor `const f3z = x => f3(Math.abs(x) < 5e-4 ? 0 : x);`.
+- **Before:** `T10([...], i => [f3(R.dS[i]), f3(R.dDk[i]), f3(R.dSD[i]), f3(R.dTot[i])])`
+- **After:** `const f3z = x => f3(Math.abs(x) < 5e-4 ? 0 : x);` (own line before the card) and `T10([...], i => [f3z(R.dS[i]), f3z(R.dDk[i]), f3z(R.dSD[i]), f3z(R.dTot[i])])`
+- **Governing provision:** none.
+- **Check case:** built-in example, "Span 1, start": "-0.000 -0.000 -0.000 -0.000" → "0.000 0.000 0.000 0.000"; every other cell identical. The DXF camber table (2 decimals) is not changed.
+- **Saved data:** none.
+- **Other copies:** none.
+
+### C16. Calculation report with no checks (splices not included, or input errors) no longer throws   [robustness]
+- **Where (main page):** `buildCalcReport`, first line; anchor `if (!CK) { window.CR_TOC = []; return`.
+- **Before:** `buildCalcReport` read `CK.filter(...)` with `CK = null` and threw a TypeError. The Report tab and Print guard this, but the Girder report builds each module's chapter with `buildCalcReport` directly, so one module with input errors stopped the whole Girder report.
+- **After:**
+  ```js
+    if (!CK) { window.CR_TOC = []; return `<p class="cr-p">${P.mod === 'splice' && !spIncl() ? 'Field splices not included.' : 'The report is unavailable until the input errors are fixed (see the status bar).'}</p>`; }   // no checks: splices not included or input errors (L11, 2026-10-13; was a TypeError on CK.filter)
+  ```
+- **Governing provision:** none.
+- **Check case:** Splice module with "Field splices: Not included": `buildCalcReport(crOpts())` before: "Cannot read properties of null (reading 'filter')"; after: "Field splices not included.". With checks present the function is unchanged.
+- **Saved data:** none.
+- **Other copies:** none.
+
+### C17. Welds and transitions rows, and the Fatigue imports from Girder section, carry each girder's effective flange width   [§4: section properties per girder] [exterior rows; interior rows identical]
+- **Where:**
+  - Decoded PlateLine: `detailExport`, "flange-to-web welds and shop transitions": the `wt.fw.push` row (anchor `Vfr: r1(Math.max(...[e - 1, e, e + 1].filter(q => q >= 0 && q < T.Vfr.length).map(q => T.Vfr[q]))), beff:`) and the `wt.tr.push` row (anchor `dMn: r1(Math.abs(Math.min(0, T.MfN[i]))), beff:`). Main page: the re-encoded `PL_B64` line.
+  - Main page: `WT_FSPEC` and `WT_TSPEC` (last entry, anchor `['beff', 'b<sub>eff</sub> of this girder (blank: the b<sub>eff</sub> above)'`); `GM.wt.compute` (anchors `fw.forEach(r => { const dk_ = r.beff > 0 ?` and `S = secSet(r.D, s, r.beff > 0 ? { ...dk, beff: r.beff } : dk);`); `GM.wt.echo` (both tables, `; b_eff ... in`); `faImport` (Girder section branch, anchor `do: r.do, beff: r.beff > 0 ? r.beff : null };`; Welds and transitions branch, anchor `MfN: -r.dMn, beff: r.beff > 0 ? r.beff : null });`); `GM.fa.inbox`, Girder-section fallback (anchor `do: +r.do || 0, beff: +r.beff > 0 ? +r.beff : null };`).
+- **Before:**
+  - PlateLine sent one b<sub>eff</sub> for all Welds and transitions rows, the interior value: `gen: { ..., beff: r2((AN.beffFt || AN.S) * 12), ... }`; rows had no b<sub>eff</sub>.
+  - `GM.wt.compute`:
+    ```js
+        fw.forEach(r => { const S = secSet(r.D, r, dk), ...
+          const st = [['DC1', r.VDC1, G('dc'), S.s, 0, 'steel'], ['DC2', r.VDC2, G('dc'), S.c3, dk.beff * dk.ts / (3 * dk.n), '3n'], ['DW', r.VDW, G('dw'), S.c3, dk.beff * dk.ts / (3 * dk.n), '3n'], ['LL+IM', r.VLL, G('ll'), S.cn, dk.beff * dk.ts / dk.n, 'n']];
+        tr.forEach(r => { const s = ..., S = secSet(r.D, s, dk);
+    ```
+  - Fatigue rows built by "Import details from other modules → Girder section" / "→ Welds and transitions" and by the Girder-section fallback inventory had no `beff` (module b<sub>eff</sub>, 114 in, for every row).
+- **After:**
+  - PlateLine rows: `..., beff: r2(props(s, gt).beff) }` (welds) and `..., beff: r2(props(sec(t.x), gt).beff) }` (transitions): (b<sub>eff,ft</sub> from the analysis, or S/2 + overhang for exterior, S for interior) × 12, the value the Girder section and Fatigue rows already carry (C5). `gen.beff` (interior) is kept for rows without it.
+  - Row field (optional; blank = the module's b<sub>eff</sub>): `['beff', 'b<sub>eff</sub> of this girder (blank: the b<sub>eff</sub> above)', 'in', 'num', { opt: true }]` at the end of `WT_FSPEC` and `WT_TSPEC`.
+  - `GM.wt.compute`:
+    ```js
+        fw.forEach(r => { const dk_ = r.beff > 0 ? { ...dk, beff: r.beff } : dk, S = secSet(r.D, r, dk_), ...   // dk_: the row's own b_eff when given (L6, 2026-10-13)
+          const st = [['DC1', r.VDC1, G('dc'), S.s, 0, 'steel'], ['DC2', r.VDC2, G('dc'), S.c3, dk_.beff * dk.ts / (3 * dk.n), '3n'], ['DW', r.VDW, G('dw'), S.c3, dk_.beff * dk.ts / (3 * dk.n), '3n'], ['LL+IM', r.VLL, G('ll'), S.cn, dk_.beff * dk.ts / dk.n, 'n']];
+        tr.forEach(r => { const s = ..., S = secSet(r.D, s, r.beff > 0 ? { ...dk, beff: r.beff } : dk);   // the row's own b_eff when given (L6, 2026-10-13)
+    ```
+  - Fatigue: the rows from Girder section (button and fallback) take the Girder section row's `beff` (always given there); rows from Welds and transitions take the transition row's `beff` when it has one, else `null` (module b<sub>eff</sub>).
+- **Problem:** the exterior girder's welds and transitions, and the Fatigue rows imported from Girder section, were computed with the interior b<sub>eff</sub> (114 in instead of 96 in on the built-in example): composite section too stiff. Same issue C5 fixed for the Fatigue inventory (its open item). Small effect; exterior bottom-flange stress ranges up by about 1%; the top-flange weld shear flow down (less slab in Q).
+- **Governing provision:** AASHTO LRFD 10th Ed. 4.6.2.6.1 (effective flange width), 6.6.1.2.1, 6.13.3.2.4b (fillet weld shear flow VQ/I), 6.10.1.1.1b. Not changed. Not re-checked against the printed 10th Edition here: verify.
+- **Check case (built-in example; exterior girder b<sub>eff</sub> 96 in, interior 114 in; n = 6.80; t<sub>s</sub> 8, haunch 2):**
+  - **Fatigue, "Import from Girder section"** (Girder section loaded from Preliminary sizing), "Span 1, max. positive at 44.0 ft, exterior: bottom flange at flange-to-web weld" (Category B, 16.0 ksi; 60 × 9/16 web, top 16 × 3/4, bottom 16 × 1-1/8; M<sub>f+</sub> 873.7, M<sub>f−</sub> −262.9 k-ft; cracked negative section ȳ = 33.498 in, I = 50,834 in⁴; outer face y = 0):
+    - **Before (b<sub>eff</sub> 114):** ȳ<sub>n</sub> = 55.100, I<sub>n</sub> = 106,168; f<sub>+</sub> = 873.7(12)(55.100)/106,168 = 5.441; f<sub>−</sub> = 262.9(12)(33.498)/50,834 = 2.079; Δf = 7.520 ksi; ratio 1.75(7.520)/16 = **0.823**.
+    - **After (b<sub>eff</sub> 96):** ȳ<sub>n</sub> = 53.568, I<sub>n</sub> = 102,183; f<sub>+</sub> = 873.7(12)(53.568)/102,183 = 5.496; Δf = 7.575 ksi; ratio **0.829**. Top flange row 0.266 → 0.286. Interior rows identical (b<sub>eff</sub> 114).
+  - **Welds and transitions, TR1 (transition fatigue), exterior:** bottom flange at 100.0 ft γΔf 8.12 → 8.13 ksi (ratio 0.51, unchanged at two decimals); top flange at 100.0 ft 5.80 → 5.85 ksi (0.36 → 0.37). Interior rows identical.
+  - **Welds and transitions, FW1 (weld metal), exterior:** Abut. 1 top v<sub>u</sub> 3.935 → 3.908 kip/in, bottom 2.598 → 2.618 kip/in (R<sub>r</sub> 14.847 kip/in; ratios 0.27 → 0.26, 0.17 → 0.18). Interior rows identical. Weld sizes chosen by auto-design unchanged.
+- **Saved data:** no key change. `P.wt.fw`, `P.wt.tr` and `P.fa.rows` items may carry the optional number `beff`. A project saved here opens in main: main's `numRows` ignores the unknown field (main's results). A project saved by main opens here unchanged until its rows are re-imported.
+- **Other copies:** none.
+
+### C18. Wording: diaphragms named as such outside the Cross-frames module; stale and misnamed text in LLDF and DLs and Preliminary sizing; per-side deck edges in Preliminary sizing's report echo   [text and status only; no calculation change]
+- **L1, diaphragm wording when the diaphragm is the bracing used (`cfDiaOn(P.cf)`, i.e. `cf.dia.on === 'yes'`; text identical with cross-frames):**
+  - DXF framing plan, girder length table header (anchor `cfDiaOn(P.cf) ? 'INT. DIAPHRAGMS' : 'INT. X-FRAMES'`): before `'INT. X-FRAMES'`; after `cfDiaOn(P.cf) ? 'INT. DIAPHRAGMS' : 'INT. X-FRAMES'`.
+  - DXF fit-condition note (anchor `. DETAIL ${cfDiaOn(P.cf) ? 'DIAPHRAGMS' : 'CROSS-FRAMES'} TO FIT`), erection note (anchor `INSTALL ${cfDiaOn(P.cf) ? 'DIAPHRAGMS' : 'CROSS-FRAMES'} BETWEEN THEM`), fracture-critical table row (anchor `` [`${cfDiaOn(P.cf) ? 'DIAPHRAGMS' : 'CROSS-FRAMES'}, STIFFENERS, CONNECTION PLATES`, `` ), staging notes (anchors `ERECT GIRDERS IN PAIRS WITH ${cfDiaOn` and `DO NOT REMOVE ${cfDiaOn`): before the literal "CROSS-FRAMES" in each; after `${cfDiaOn(P.cf) ? 'DIAPHRAGMS' : 'CROSS-FRAMES'}` (the single-quoted strings became template literals; `f\'c` became `f'c`, same text).
+  - Design all, geometry conflicts (`designAllRun0`, anchor `const xfC = cfDiaOn(P.cf) ? 'Diaphragm' : 'Cross-frame';`): before "Cross-frame at … ft is within …: move the cross-frame or the splice", "None found (cross-frames clear of …)"; after `${xfC}` / `${xfC.toLowerCase()}` ("Diaphragm at …", "None found (diaphragms clear of …)").
+  - Row names that Preliminary sizing gives (it does not know the bracing chosen here): at compute time only, `GM.ts.compute` (anchor `r.name.replace(/^(Span \d+, )cross-frame at /, '$1diaphragm at ')`) and `GM.fa.compute` for `src === 'analysis'` rows (anchor `r.name.replace(/\bcross-frame\b/g, 'diaphragm')`) show "Span 1, diaphragm at 60.9 ft, exterior" and "Span 1, connection plate at diaphragm 60.91 ft, bottom flange, exterior" in the checks, tables, reports and Design all. The saved row names (`P.ts.rows[i].name`, `P.fa.rows[i].name`) are **not** changed, because the import keeps the user's overrides by row name (`impRowId`); the row editor therefore still shows the name as received. Chosen over a generic "bracing at …" in Preliminary sizing for that reason (renaming the payload would drop existing overrides once). User-entered (manual) Fatigue rows are never renamed.
+- **L2, LLDF and DLs "Not included in this calculation" (`GM.df.scope`):** removed the stale item 'Variable girder spacing (the sizing module uses equal spacing)' (Preliminary sizing has had variable spacing, and this module uses each bay, since the cross-section work).
+- **L3, Preliminary sizing names the module "LLDF and DLs":** decoded PlateLine, three places: the comment above the geometry signature (anchor `factors from the LLDF and DLs module apply only to the exact bridge`), and the two alerts on the Analysis tab (anchors `Distribution factors from GirderDetail's LLDF and DLs module` and `The factors from the LLDF and DLs module were computed for a different bridge`); before "Distribution factors module".
+- **L4, Preliminary sizing report input echo (`renderReportHead`, new helper `rptEdges`, anchor `function rptEdges(m) {`):** before `['Barrier width', f2(m.barrier), 'ft']` (the average of the two traffic faces, mislabelled when the edges differ). After `...rptEdges(m)`:
+  ```js
+  function rptEdges(m) {
+    const X = P.bridge.xs && P.bridge.xs.L && P.bridge.xs.R ? P.bridge.xs : null, faces = ['Edge to traffic face, left / right', `${f2(m.faceL)} / ${f2(m.faceR)}`, 'ft'];
+    const ed = q => (q.type === 'curb' ? `curb ${f2(q.cw)} × ${f2(q.ch)} in${q.rw > 0 ? ' with railing' : ''}` : `barrier ${f2(q.bw)} ft`) + (q.sw > 0 ? `, sidewalk ${f2(q.sw)} ft × ${f2(q.swT)} in` : '');
+    if (X) return [['Deck edges, left / right (LLDF and DLs module)', `${ed(X.L)} / ${ed(X.R)}`], faces];
+    return m.curb || Math.abs(m.faceL - m.faceR) > 1e-9 ? [faces] : [['Barrier width', f2(m.barrier), 'ft']];
+  }
+  ```
+  A bridge with no edges from the LLDF and DLs module and the same plain barrier on both sides keeps the old line.
+- **L5, Manual, LLDF exterior girders (lever rule):** "with the wheels at least 2 ft from the barrier faces" → "with the wheels at least 2 ft from the traffic faces (barrier, curb or sidewalk face)" (what the lever rule does: `dfLLFace`, 3.6.1.3.1).
+- **Problem:** text that did not match the bridge (cross-frames named on a diaphragm bridge), a stale limitation, an old module name, and a report echo that showed an average as the barrier width.
+- **Governing provision:** none changed (3.6.1.3.1 quoted in L5 as already applied).
+- **Check case (light verification per the engineer's instruction for display-only items):**
+  - Built-in example with the 90 ft simple span, 10 girders at 4 ft (diaphragm selected), Design all: "Geometry conflicts: None found (diaphragms clear of the shop transitions)" (before "cross-frames clear of …"); Transverse stiffeners CP2 row "Span 1, diaphragm at 45.0 ft, exterior (Type B)" (before "cross-frame at 45.0 ft"); Fatigue "Span 1, connection plate at diaphragm 45.00 ft, bottom flange, exterior"; DXF girder length table header "INT. DIAPHRAGMS" (before "INT. X-FRAMES"; the wider header shifts the following table columns, coordinates only). Screenshot `scratchpad/followups/gd-c3/l1_after_designall_dia.png`.
+  - Preliminary sizing report echo, built-in example with an 8 ft × 12 in left sidewalk: before "Barrier width 4.75 ft"; after "Deck edges, left / right (LLDF and DLs module): barrier 1.50 ft, sidewalk 8.00 ft × 12.00 in / barrier 1.50 ft" and "Edge to traffic face, left / right 8.00 / 1.50 ft". Analysis-tab alert: "Distribution factors from GirderDetail's LLDF and DLs module (computed …)".
+  - `node --check` on every inline script of the page and of the decoded PlateLine; no console errors or alerts. Computed results unchanged: built-in example, every module loaded from Preliminary sizing, md5 of every module's `compute` + `checks` and of Preliminary sizing's checks, C17 build against this build: identical for all 12 (ts, sc, cf, oh, wt, gs, fa, df, sa, splice, bstf, Preliminary sizing).
+- **Saved data:** none (saved row names unchanged).
+- **Other copies:** none.
+
+### Verification (C8–C18)
+- **Syntax:** `node --check` on every inline script of the main page and of the decoded PlateLine (final build; one error found and fixed during C18, a trailing comment that swallowed the end of a DXF line).
+- **Level:** full verification for the items that change results or saved-data handling (C8, C9, C10, C17, C14), light verification for the display-only items (C11, C12, C13, C15, C16, C18), per the engineer's instruction of 2026-10-13.
+- **Each item in the page (headless Chromium, Playwright, main f88a31b against the branch):** the before/after values in each check case above were read from the running page (Fatigue, Transverse stiffeners CP2, Welds and transitions FW1/TR1, Preliminary sizing G7, Design all, report echo).
+- **Sweep (audit script: every module, every tab, side panels, report, Design all, DXF, Girder report G1 and G2), main against the branch, three projects:** built-in example with 6 ft × 10 in sidewalks and 20° skews; 90 ft simple span with 10 girders at 4 ft and diaphragms; built-in example (the built-in run crashed the headless browser midway on both builds, a memory limit of the test machine; the modules it reached are compared). Every module text identical except: Fatigue (C9: the four example rows gone; C8 deck; C10/C17 not involved), Transverse stiffeners (C10 Δf; C18 row names on the diaphragm bridge), Welds and transitions (C17, exterior rows), Cross-frames (C13: hidden custom inputs no longer echoed in the report), LLDF and DLs (C18 scope line), Structural analysis (C15 "0.000"), the field splice report on the bridge without splices (C16: "Field splices not included." instead of a TypeError), DXF (C12 status rows, C18 wording). No NaN, undefined, Infinity or "[object" in any text; no console errors; the only alert is Preliminary sizing's own "Replace the web, flange plates…" confirm of the 90 ft scenario setup, on both builds.
+- **Computed results, C17 build against the final build (built-in example, every module loaded from Preliminary sizing):** md5 of every module's `compute` and `checks` and of Preliminary sizing's checks identical (C18 changes no result).
+- **Saved data both directions (built-in example, every module loaded from Preliminary sizing, autosave, reopened without importing):** main → branch: all module results and the rows identical (66 Fatigue rows kept: the project already has an import source, so C9 does not apply). Branch → main: no errors; every module identical to the branch's results except Welds and transitions, which main computes with its single b<sub>eff</sub> (its hash equals main's own run: main ignores the optional `beff`). Branch → branch and main → main: identical.
+- **Console:** no errors in any run.
+- **Tools containing shared snippets touched:** none (`bridgeSuite.v1.*` bootstrap and handoff code unchanged; no other tool file changed).
+
+### Open items (C8–C18)
+- Deck reinforcement A<sub>r</sub> and its depth d<sub>r</sub> are not sent by Preliminary sizing to any module; the Fatigue (and Welds and transitions, Girder section) values stay the modules' own inputs. Decide whether Preliminary sizing should send them.
+- The Transverse stiffeners connection-plate row of each span is placed at the cross-frame nearest the node of largest fatigue range (e.g. 296.5 ft in Span 3 of the built-in example) while the Fatigue inventory's row uses the cross-frame with the largest range (310.91 ft, C4). Not changed.
+- Row names from Preliminary sizing still say "cross-frame" in the row editors (the saved names); only the computed names follow the bracing used (C18). Renaming them at the source would drop existing overrides once.
+- The DXF camber table (2 decimals) can still print "-0.00" at the supports. Not changed (outside the item).
+- Auto-designed values outlined as overrides (audit item L8): left as is, as instructed.
