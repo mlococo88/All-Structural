@@ -63,6 +63,7 @@ Fields marked *(existing)* already exist; their schemas are documented in `AUDIT
 | `foundationLoads` | `bridge-foundation-loads` | abutment_calculator, Bridge Substructure Loading | Pile Designer, Spread Footing |
 | `buildingLoads` | `bridge-building-loads` | ASCE7-16 Load Generator | Steel Beam Design |
 | `memberReactions` | `bridge-member-reactions` | Steel Beam Design | BasePlateAnchorDesigner, Spread Footing |
+| `girderDemands` | `stgirder-external-demands` (ST-Girder's existing imported-demands schema, §4.9) | Steel Bridge Beam Modules (GirderDetail) | stgirder |
 
 ### 4.1 `projectMeta`
 
@@ -243,6 +244,45 @@ This matches the existing BridgeLocks "project" channel (`index.html`).
 - **BasePlateAnchorDesigner** (receiver id `basePlate`): fills `S.serviceLoads.cases[slot].P` of its ASCE 7-22 generator. Its internal convention is **P + = tension**, so **P = −V**. Default mapping: same type → same slot; all-zero types and "other" cases → not imported. Replace (default) or add to P. Shear and moment are not imported (beam reactions give column axial only; the moment at a fixed beam support is not a column-base moment); existing `Vx`/`Vy`/`Mx`/`My` are kept unless the user ticks "set to 0". Combinations are regenerated only if the user ticks that option. Its generator does not use slot S (Lr and S share the roof-live term), and the dialog warns. Source: new optional field `S.bxSrc.memberReactions`, shown in the header and the printed report.
 - **Spread Footing** (receiver id `spreadFooting`): the user picks a support and a target pedestal; values go to that pedestal's by-load-type rows (`peds[i].loads[row]`, kips / kip-ft). P + = down in both tools, so **P = V**. Default mapping D/L/Lr/S → same row, W → Wx; E is not imported (the tool has no seismic type). A fixed-support `M` is applied as `My = ∓M` (beam toward footing ±x) or `Mx = ∓M` (±y), chosen by the user (default +x, i.e. `My = −M`), or not imported. Replace (default) or add; other components are kept unless the user ticks "set to 0". Source: new optional field `state.bxSrc.memberReactions`, shown under the title block and in the printed report header.
 - Both receivers accept force in kip or lb, and moment in kip-ft, kip-in, lb-ft or lb-in, converting explicitly; anything else, `factored:true`, or a non-finite number is refused.
+
+### 4.9 `girderDemands` (GirderDetail → ST-Girder; added 2026-10-13)
+
+One girder's line-girder analysis results from GirderDetail (Steel Bridge Beam Modules, Structural analysis) for ST-Girder's checks and LRFR rating: GirderDetail's forces and geometry, not ST-Girder's own analysis. The payload uses ST-Girder's **existing** imported-demands schema (the MIDAS station format ST-Girder already reads with Import), extended only with optional fields, so the same JSON file loads with ST-Girder's existing **Import** button.
+
+- **Transport.** Key `bridgeSuite.v1.girderDemands` (+ `.updatedAt`, `.adopted.stgirder`), written with `BridgeXfer.publish` on GirderDetail's **"Send to ST-Girder"**, and the same payload as a file with **"Export hand-off (JSON)"** (Structural analysis, "Girder and model" tab, section "Send to ST-Girder"). It is not written to the MCT hand-off map (`bridgeSuite.v1.handoffs` / `latestId`), because PS-Beam also reads that map (and auto-adopts it when its demands channel is locked); this channel is read by ST-Girder only. Opened as files, both tools must be in one folder and opened in Chrome or Edge (§1); otherwise use the file.
+- **Envelope differences** (kept for the existing schema): `_schema` is `stgirder-external-demands`, not `bridge-…`; `project` is a **string** (the bridge name from Preliminary sizing), as in the other external-demand files; `producer:"GirderDetail"`, `producerFile:"Steel Bridge Beam Modules.html"`.
+- **Shape:**
+
+  ```js
+  { _schema:"stgirder-external-demands", schemaVersion:1, producer:"GirderDetail", producerFile:"Steel Bridge Beam Modules.html",
+    producedAt, project:"<bridge name>", source:"GirderDetail Structural analysis, G2 (interior), staged, variable stiffness (steel / 3n / n)",
+    liveLoadType:"HL-93",
+    units:{ x:"ft", moment:"ft-kip", force:"kip", plate:"in", stress:"ksi", deck:"in", area:"in2", unitWeight:"kcf", spacing:"ft", Lb:"ft", skew:"deg" },
+    factored:false, imIncluded:true, dfIncluded:true, multiplePresenceIncluded:true,
+    liveLoadPerGirder:true,        // NEW (optional): LL+IM already distributed to this girder; the receiver must not apply DFs again
+    fatigueIncluded:true, pedestrianInLL:<bool>, selfWeightExcluded:false,
+    member:{ key:"G2", type:"steel I-girder", totalLength:<ft>, spans:[ft…], supports:[ft…] },
+    section:{ zones:[ { startX, endX, web:{depth,thickness}, topFlange:{width,thickness}, botFlange:{width,thickness} } ] },  // in; existing format
+    stations:[ { x:<ft>, M_DC1, V_DC1, M_DC2, V_DC2, M_DW, V_DW, M_LLpos, M_LLneg, V_LLpos, V_LLneg,   // existing fields
+                 M_FATpos, M_FATneg, V_FATpos, V_FATneg,      // NEW (optional): fatigue envelopes
+                 M_PLpos, M_PLneg, V_PLpos, V_PLneg } ],      // NEW (optional): pedestrian load alone, only when there is one
+    notes:[ "…" ],
+    girderDetail:{                 // NEW (optional): design inputs of this girder
+      girder:2, label:"G2", position:"interior"|"exterior", nGirders, spacing:<ft>, overhang:<ft>|null, analysis:"<model>",
+      materials:{ Fyf, Fyw, Fu, gradeFlange, gradeWeb, Es, fc, wc, Ec, n },          // ksi, kcf
+      deck:{ ts, haunch, beff, rebarPct, Ar, rebarAt:"deck mid-depth" },             // in, in², %
+      bracing:{ Lb:<ft>|null, type, source },                                        // Cross-frames module input L_b
+      skew:{ bySupport:[deg…], max },
+      df:{ source, spans:[{span, gM, gV, fatM, fatV}], piers:[{pier, gM}] },         // the factors already in the LL and fatigue values
+      im:{ truck:33, fatigue:15 } } }                                                 // %
+  ```
+
+- **Basis.** All values unfactored and per girder. DC1 = steel (with the detail allowance), deck, haunch and other noncomposite dead load on the steel section; DC2 and DW on the long-term composite section; LL+IM = HL-93 envelopes already multiplied by the girder's distribution factors (multiple presence and skew included; IM on the truck and tandem only; the 90% two-truck case in the pier regions). Fatigue = fatigue truck with IM 15% and the single-lane fatigue distribution factors (no multiple presence), γ not applied; range = `M_FATpos − M_FATneg`. When the bridge has a pedestrian load, GirderDetail's send dialog option (default on) adds it to `M_LL…`/`V_LL…` as GirderDetail does for its own design demands; `pedestrianInLL` says which, and `M_PL…` give it separately.
+- **Stations.** One per analysis node (about 1 ft). Moments sagging +. Shears in the existing schema's MIDAS sign convention (gravity shear **negative** at the left end of a span: GirderDetail's shears are negated; ST-Girder negates them back); shear at a node is the element just right of it, and each interior support has one station 0.001 ft either side carrying the shear on that side. Values rounded to 0.001.
+- **ST-Girder (receiver id `stgirder`).** Header button **"Pull from GirderDetail"** (with a new-data dot) and the existing **Import** button (a file with `producer:"GirderDetail"` and `girderDetail` takes the same path). Both validate (stations finite, units ft / ft-kip / kip, `factored:false`, span layout) and show a confirm dialog with the producer, time, project, stations and spans, every design input that changes (old → new) and the sender's `notes`; nothing is applied until confirmed, and nothing on page load. On OK: the payload becomes the imported envelope (`inp.external`, the existing field, which records `producer`/`producedAt`), span 1 is selected, plates are seeded from `section.zones` as for any import, and these existing inputs are set: `mat` (Fyf, Fyw, Fu, Es, hybrid; grade name = the list entry with the same Fy and Fu), `deck` (ts, haunch, f'c, w_c, b_eff fixed, overhang for an exterior girder), `negM` (As = Ar, dTop = ts/2, GirderDetail's rebar at the deck mid-depth), `geom` (S, nGirders, Lb), `loads` (pos, posAuto off, skew = largest support skew), `proj.girderId`. The span buttons of the imported-demands banner select the other spans (existing).
+  - `liveLoadPerGirder:true`: the imported-LL DF and multiple-presence multipliers are not applied (1.0) and their inputs are hidden; the factors used by GirderDetail are listed instead.
+  - Fatigue fields present: the Fatigue checks use them instead of the simple-span fatigue truck (fixlog/stgirder.md GD2). Without them (MCT/MIDAS imports) nothing changes.
+  - A note "Forces from GirderDetail (G#, staged analysis); resistances by ST-Girder's own checks" with the known differences between the tools is shown in the imported-demands banner, the Rating tab and the Report tab.
 
 ## 5. Shared helper (copy into each tool that sends or receives)
 

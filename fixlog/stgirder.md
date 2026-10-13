@@ -1105,3 +1105,92 @@ Cross-tool connection PR (CLAUDE.md §7 exception): receivers of the `bridgeSuit
 - **Check case:** lldf type "Cast-in-place concrete slab", 1 span 120 ft, default inputs → payload `perFootStrip:true`, interior gM = gV = 0.076 (per 1-ft strip), fatM = fatV = 0.045. Before: g_M = g_V = 0.076 (fatigue 0.045) applied. After: refused with the message above; nothing applied. Girder payload (type a, θ = 30°, θ_V = 40°: gM 0.7128, gV 1.0582, fatM 0.4019, fatV 0.7075): identical before and after.
 - **Governing provision:** AASHTO LRFD 10th Ed. Art. 4.6.2.3 (equivalent strip widths for slab-type bridges: the slab DF is per unit width, not per girder). No formula changed.
 - **How verified:** headless Chromium, main vs branch: lldf "Send DFs" for the slab and the girder case, then the resolver called on this tool (`lldfResolveFor({loads:{pos:'interior'}})`). Slab: main applied, branch refused. Girder: identical results (only `producedAt` differs). No page errors.
+
+## 2026-10-13 — PR: claude/girderdetail-to-stgirder (cross-tool connection GirderDetail → ST-Girder, HANDOFF.md §4.9; CLAUDE.md §7 exception: sender and receiver in one PR; PR link added after merge)
+
+Receiver of one girder's forces, plates and design inputs from GirderDetail (Steel Bridge Beam Modules.html, Structural analysis "Send to ST-Girder", fixlog/Steel Bridge Beam Modules.md EX1). The payload is this tool's existing imported-demands schema (`stgirder-external-demands`, MIDAS station format) with optional fields only. Without such a payload nothing changes (verified: 18 scenarios incl. the MIDAS import, bit-identical). Basis: AASHTO LRFD 10th Ed. (2024).
+
+### GD1. "Pull from GirderDetail" and Import of the hand-off file   [hand-off receiver] [inputs change only after the user confirms]
+- **Where:** `App`: new block right before `const uP=(k,v)=>setInp({...inp,proj:{...inp.proj,[k]:v}});` (`GD_CH`, `gdIsNew`, `gdNew` state + `storage` listener, `gdCheck`, `gdAdopt`, `pullGD`); `importJSON` (anchor `// external analysis envelope (MIDAS-style; PS-Girder or steel-beam schema)? attach, don't replace inputs.`); header button before `<button className="btn sm" onClick={exportJSON}>Export JSON</button>`; helpers `extPerGirderOf`, `extFromGD` after `externalSpans()`.
+- **Before (importJSON):** a `stgirder-external-demands` file was attached at once (`setInp({...inp, external:{...p,_selSpan:sel}, geom:{...inp.geom, L:sel.len}, ...secNew})`).
+- **After (importJSON):** inserted first: `if(p._schema==='stgirder-external-demands'&&extFromGD(p)){ gdAdopt(p,'file '+f.name); return; }` (only files with `producer:"GirderDetail"` and `girderDetail`; every other file takes the old path).
+- **gdAdopt:** validates (stations finite, units ft / ft-kip / kip, `factored:false`, span layout), then one confirm dialog: source, produced time, project, stations and spans, every input that changes (old → new) and the sender's notes. On OK: `external` = payload with span 1 selected, `geom.L` = span 1, plates from `section.zones` (`zonesToSec`, as every import), and `mat` (Fyf, Fyw, Fu, Es, hybrid; grade name = the `GRADES` entry with the same Fy and Fu, else unchanged), `deck` (ts, haunch, fc, wc, `beffAuto:false`, beff; `oh` for an exterior girder), `negM` (As = Ar, dTop = ts/2: GirderDetail takes the rebar at the deck mid-depth), `geom` (S, nGirders, Lb = the cross-frame spacing), `loads` (pos, `posAuto:false`, skew = largest support skew), `proj.girderId`; then `BridgeXfer.markAdopted('girderDemands','stgirder',producedAt)`. Saved data: only existing fields; the payload is kept in the existing `inp.external` (it carries `producer`/`producedAt`, the recorded source).
+- **Span selection (request item 4):** the existing span buttons of the imported-demands banner and the Diagrams span view work unchanged (member.supports).
+- **Check case:** built-in GirderDetail example, G2 → dialog lists b_eff auto → 114 in, A_s 12 → 9.12 in², S 9 → 9.5 ft, L_b 20 → 25 ft, skew 0 → 15°, girder ID G3 → G2; 363 stations, spans 110/140/110 ft, 3 span buttons; "Span 2" → L = 140 ft, 5 plate segments. G1 (exterior) additionally sets overhang 3 → 3.25 ft and position interior → exterior.
+- **Spot check of the demands (by hand against GirderDetail's Results tab, G2, unfactored; ST-Girder station = GirderDetail node):**
+
+  | Span, x | GirderDetail M_DC1 / M_DC2 / M_DW / LL+IM (+/−) k-ft; V_DC1 / LL+IM V kip | ST-Girder M1 / M2 / Mw / Ml / Mln; V1 / Vl |
+  |---|---|---|
+  | 1, 0 | 0 / 0 / 0 / 0 / 0; 51.18 / +111.55 −17.01 | 0 / 0 / 0 / 0 / 0; 51.18 / 111.55 |
+  | 1, 44 | 990.40 / 193.18 / 160.01 / 1827.35 / −550.59; −7.49 / +47.68 −49.35 | 990.40 / 193.18 / 160.00 / 1827.35 / −550.59; −7.49 / 49.35 |
+  | 1, 110 | −2382.10 / −426.45 / −353.21 / 341.17 / −2280.11; −95.90 (left) / −131.46 | −2382.10 / −426.45 / −353.21 / 341.17 / −2280.11; −95.90 / 131.46 |
+  | 2, 0 (x 110) | as above; +95.58 (right) / +134.88 | M as above; 95.58 / 134.88 |
+  | 2, 56 (x 166) | 801.15 / 162.79 / 134.83 / 1691.62 / −590.41; 18.08 / +68.20 | 801.14 / 162.78 / 134.83 / 1691.62 / −590.41; 18.08 / 68.20 |
+  | 2, 140 (x 250) | −2382.58 / … / −2280.11; −95.51 / −134.88 | −2382.58 / … / −2280.11; −95.51 / 134.88 |
+  | 3, 44 (x 294) | 518.36 / 107.89 / 89.36 / 1604.56 / −825.88; 35.48 / +76.93 | 518.36 / 107.89 / 89.36 / 1604.56 / −825.88; 35.48 / 76.93 |
+  | 3, 110 (x 360) | 0; −51.19 / −111.55 | 0; −51.19 / 111.55 |
+
+  (Vl is this tool's magnitude envelope max(|+|, |−|); 0.01 differences are the 0.001 rounding of the payload.)
+- **How verified:** JSX transpiled (Babel) and `node --check`; headless Chromium: Pull (new-data dot on, off after), the same via Import of the exported file (identical results), Export JSON, reopen in the branch (all tab texts identical, no dialog on open), the branch-saved session opened in main (no errors); no console errors.
+
+### GD2. Fatigue from the imported fatigue envelopes when the import has them   [§4: changes computed results — fatigue only, only for imports with M_FAT]   (engineer-approved 2026-10-13)
+- **Where:** `buildExternal()` (anchor `return { spanLen, slice, sel, hasDC1, swExcl,`); `computeAll()` fatigue block (the `stations.forEach(st=>{ const sg=segP[st.si];` loop with `fatMomentAt(Lft,st.x)`), stud fatigue (anchor `fatShearRangeAt(Lft,st.x)`), `fatigue` and `conn` objects, STG-O8 warning (anchor `// STG-O8: the imported envelopes carry no fatigue demands`).
+- **Before:**
+  ```js
+      const Mrange=fatMomentAt(Lft,st.x);                     // k-ft/lane, unfactored, no IM
+      const Mf=Mrange*1.15*dfFat;                             // k-ft (IM 1.15, single-lane DF)
+      …
+      const Vll=fatShearAt(Lft,st.x)*1.15*dfFatV;            // fatigue-truck shear, single-lane SHEAR DF, IM 1.15
+      …
+      const rg=fatShearRangeAt(Lft,st.x), VfU=rg.range*1.15*dfFatV, Vf=gammaFat*VfU, vsr=Vf*Q/cc.I;
+  ```
+- **After:**
+  ```js
+    const fatImp=!!(useExt&&ext.hasFat), fatImpV=!!(useExt&&ext.hasFatV);
+      const fP=fatImp? ext.M_FATpos(st.x) : 0, fN=fatImp? ext.M_FATneg(st.x) : 0;
+      const Mrange=fatImp? null : fatMomentAt(Lft,st.x);     // k-ft/lane, unfactored, no IM (built-in truck only)
+      const Mf=fatImp? Math.max(fP,0)-Math.min(fN,0) : Mrange*1.15*dfFat;   // k-ft (IM 1.15, single-lane DF)
+      …
+      const Vll=fatImpV? Math.max(Math.abs(ext.V_FATpos(st.x)),Math.abs(ext.V_FATneg(st.x)))
+        : fatShearAt(Lft,st.x)*1.15*dfFatV;                  // fatigue-truck shear, single-lane SHEAR DF, IM 1.15
+      …
+      const rg=fatImpV? (()=>{ const vp=ext.V_FATpos(st.x), vn=ext.V_FATneg(st.x); return {Vpos:vp, Vneg:vn, range:vp-vn}; })()
+        : fatShearRangeAt(Lft,st.x);
+      const VfU=fatImpV? rg.range : rg.range*1.15*dfFatV, Vf=gammaFat*VfU, vsr=Vf*Q/cc.I;   // imported: per girder, IM + DF in
+  ```
+  and in `buildExternal` (shears negated like V_LL, the schema's MIDAS sign): `hasFat`, `hasFatV`, `M_FATpos:(x)=>interp('M_FATpos',x)`, `M_FATneg:(x)=>interp('M_FATneg',x)`, `V_FATpos:(x)=>-interp('V_FATneg',x)`, `V_FATneg:(x)=>-interp('V_FATpos',x)`. `fatCalc` rows get `fP`, `fN` and `fatigue`/`conn` get `fatImp`/`fatImpV` (display). For these imports the STG-O8 warning is replaced by a note of what is used and what is not checked (top flange and deck reinforcement at piers); otherwise the old warning is unchanged.
+- **Problem:** with imported continuous demands the fatigue checks used the fatigue truck on a simple span of the selected span length, so the negative-moment part of the range and the continuity were missing (STG-O8). GirderDetail sends the fatigue envelopes of its continuous analysis.
+- **Governing provision:** AASHTO LRFD 10th Ed. 6.6.1.2.1 (live-load stress range on the short-term composite section for positive and negative flexure when shear connectors are provided throughout and the 6.10.1.7 reinforcement is provided), 6.6.1.2.2 (γ(Δf) ≤ (ΔF)_n), 3.6.1.4 (fatigue load), 6.10.5.3 (special fatigue requirement for webs), 6.10.10.1.2 / 6.10.10.2 (stud shear range and pitch). Load factors and resistances unchanged.
+- **Check case (GirderDetail built-in example, G2 interior; Fatigue II, γ = 0.80, category C, ADTT_SL 1000, 75 yr, (ΔF)_n = (44×10⁸/27 375 000)^⅓ = 5.437 ksi):**
+  - *Span 1, flange:* before: governing x = 49.5 ft, M_range = 1462.80 k-ft/lane (simple span 110 ft), g_fat = 0.4046 (this tool's 1-lane DF ÷ 1.2), M_f = 1462.80·1.15·0.4046 = 680.70 k-ft, S_b = 1923.66 in³ → Δf = 680.70·12/1923.66 = 4.246 ksi, D/C = 0.80·4.246/5.437 = 0.625. After: governing x = 60.5 ft, M_FAT+ = 500.53, M_FAT− = −221.84 (between nodes 60 and 61) → M_f = 722.38 k-ft → Δf = 4.506 ksi, D/C = 0.663.
+  - *Span 1, pier region (x = 110 ft):* before: M_f = 0 (simple-span support). After: M_FAT+ = 103.14, M_FAT− = −403.35 → M_f = 506.49 k-ft, S_b = 3080.27 in³ → Δf = 1.973 ksi (bottom flange).
+  - *Span 2 (140 ft):* before Δf = 5.043 ksi at 63 ft (D/C 0.742); after 3.768 ksi at 56 ft (D/C 0.554).
+  - *Web special fatigue, span 1, x = 110 ft:* V_perm = 127.95 kip; before V_f,LL = 42.14 → V_u = 127.95 + 1.75·42.14 = 201.69 kip, /783 = 0.257; after V_f,LL = max(47.14, 1.50) = 47.14 → V_u = 210.45 kip, 0.269.
+  - *Studs, span 1, x = 0:* before range = 60.07 kip/lane · 1.15 · 0.6167 = 42.60 kip, p_req = 11.17 in; after range = 41.86 − (−5.88) = 47.74 kip (per girder), V_f = 0.80·47.74 = 38.19 kip, p_req = 9.97 in (12 in provided: D/C 1.074 → 1.203).
+  - G1 (exterior): span 1 Δf 7.812 → 7.423 ksi (D/C 1.149 → 1.092); span 2 10.034 → 6.710 ksi (1.476 → 0.987).
+  - Rating factors and every strength and service check: identical before and after.
+- **How verified:** in the page, `computeAll` on the adopted inputs with and without the `M_FAT…`/`V_FAT…` fields (the "without" run is the old path); MIDAS/MCT imports (no fatigue fields) bit-identical to main.
+
+### GD3. Per-girder imported LL+IM: the imported-LL DF / multiple-presence multipliers are not applied   [§4: changes the LL factor for such imports only]
+- **Where:** `computeAll()`, anchor `const ext=buildExternal(inp.external,Lft0,`; Inputs tab, imported-LL DF block (anchor `{extActive&&!extPerGirderOf(extRaw)&&<React.Fragment>`).
+- **Before:** `const ext=buildExternal(inp.external,Lft0, {pos:(+inp.loads.extDFpos||1)*mpfExt, neg:(+inp.loads.extDFneg||1)*mpfExt, v:(+inp.loads.extDFv||1)*mpfExt});`
+- **After:**
+  ```js
+    const extPerGirder=extPerGirderOf(inp.external);
+    const ext=buildExternal(inp.external,Lft0, extPerGirder? {pos:1,neg:1,v:1} :
+      {pos:(+inp.loads.extDFpos||1)*mpfExt, neg:(+inp.loads.extDFneg||1)*mpfExt, v:(+inp.loads.extDFv||1)*mpfExt});
+  ```
+  The DF / m inputs are hidden for such imports; a hint lists the factors GirderDetail applied (per span g_M, g_V; per pier g_M).
+- **Problem:** GirderDetail's LL+IM is already per girder. With the LL & DL channel locked (or factors typed), the multipliers would have applied the DFs a second time.
+- **Governing provision:** AASHTO LRFD 10th Ed. 4.6.2.2 (distribution factors) and 3.6.1.1.2 (multiple presence), applied once, by the sender; HANDOFF.md §3.3.
+- **Check case:** G2 import with DF +M = 0.708 and m = 1.0 in the inputs: before M_LL+ (x = 44 ft) = 0.708 · 1827.35 = 1293.8 k-ft; after 1827.35 k-ft (= GirderDetail). With the defaults (1.0) there is no difference.
+
+### GD4. Note "Forces from GirderDetail …" and fatigue display   [display only]
+- **Where:** `gdNoteLines()`, `GdNote` (after `externalSpans()`); shown in the imported-demands banner (Inputs), the Rating tab (anchor `const rq=(inp&&inp.rate)||{};`) and the Report tab (`ReportTab({R,inp})`, now called with `inp`); Fatigue tab Step 4 and web note (`f.fatImp`, `f.fatImpV`); Connectors stud table row and V_f equation (`c.fatImpV`); banner sentence on imported fatigue.
+- **Text:** "Forces from GirderDetail (G#, staged analysis); resistances by ST-Girder's own checks." + source and time + "Known differences between the two tools: C_b = 1.0 and one unbraced length L_b for the whole span (GirderDetail: C_b and L_b per location); no Appendix A6 (web plastification) for negative flexure; shear without tension-field action (end-panel V_cr basis); fixed maximum load factors (1.25 DC, 1.50 DW, 1.75 LL; no minimum-factor combinations); L_p = 1.0 r_t √(E/F_yc) here vs 1.1 r_t in GirderDetail. Known differences to be confirmed by the engineer."
+- **Check case:** G2 import: the note in all three places; without a GirderDetail import nothing is rendered.
+
+### Open items (not changed)
+- The known differences above are listed, not resolved; the engineer to confirm each (L_p: AASHTO Eq. 6.10.8.2.3-4 gives 1.0 r_t √(E/F_yc)).
+- Top flange and deck reinforcement fatigue at interior piers are still not checked here (the imported range is applied to the bottom flange, as before).
+- "Send reactions to Substructure Loading" still labels an imported girder "MIDAS import (ST-Girder)".
