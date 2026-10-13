@@ -5071,3 +5071,645 @@ index 2799b7d..68b03a1 100644
    const pts = []; for (let f = 0.70; f <= 1.30 + 1e-9; f += 0.05) { const pp = { ...rg.pp, spacings: rg.pp.spacings.map(v => v * f) }, geo = dfGeometry(pp), sk = dfSkew(pp, geo, rg.Kg);
      const ms = []; for (let j = 0; j < pp.Nb; j++) ms.push(dfMember(pp, geo, rg.Kg, R.p.skewV === 'ext' && dfType(pp, j) === 'int' ? { ...sk, scfV: 1 } : sk, j));
 ```
+
+## 2026-10-13 — PR: claude/girderdetail-xs2 (cross-section and dead loads, PR2 of 4: inputs, overrides, mountable rule, F6; engineer's decisions 2026-10-13; PR link added after merge)
+
+LLDF and DLs module (`GM.df`), main page only. The PL_B64 line is not touched (the deck edges stay owned by Preliminary sizing until PR3). `lldf.html` is reference only and unchanged (CLAUDE.md §3). Every new input is optional and stored only when entered (no new default keys, so `deepMerge` of an older project adds nothing). XS4 and XS5 change no result for a project without the new inputs; XS6 and XS7 are §4 changes for the cases they state.
+
+### XS4. Input tab "Cross-section and dead loads": element inputs in sections; railings or fences on sidewalks, overlays, wearing surface by thickness, appurtenance γ<sub>c</sub>, utilities as DW   [new optional inputs] [results unchanged without them] [default example row: DW, "Follows the method"]
+- **Where (anchors):** `GM.df.itabs` (`['df_dl', 'Dead loads']` → `['df_dl', 'Cross-section and dead loads']`); `GM.df.panes` `df_dl:` (rewritten in sections: Deck edges, Sidewalks, Median, Wearing surface and overlays, Utilities and other line loads, Distribution method); new `function dfEdgeSummary(b)`, `const dfOpt`, `function dfXsIn(p, errors)` (before `GM.df = {`); `GM.df.rowSpec2` / `rowPath2: 'ovl'` / `rowNew` (overlay rows); `GM.df.def.extra[0]`; `GM.df.rowSpec` dist option `['auto', 'Follows the method']`; `GM.df.compute` (anchor `const xs = dfXsIn(p, errors)` and the `dfDead(...)` call); `dfEdges(b, wcA)`; `dfDead` (anchors `ua = a.uwcA > 0`, `id: 'fenceL'`, `id: 'ovl' + k`, `L.dist !== 'auto'`, `byMethod`); `gmRowEdit` (anchors `rows = P[id][path] || (P[id][path] = [])`, `GM[id].rowNew[path]`); display: `dfXsSVG` (overlay strips, fence posts, legend), `dfLoadsTbl` ("(method)"), `dfDLCalcs` (new step "Superimposed line loads from the cross-section", rules note, per-load reference), drawings caption.
+- **New optional saved fields (absent = today's behaviour):** `P.df.dl.wcA` (kcf; curbs, sidewalks, median; blank = deck w<sub>c</sub>), `P.df.dl.fenceL`, `fenceXL`, `fenceR`, `fenceXR` (railing or fence on a sidewalk: klf, ft from its deck edge; must lie on the sidewalk), `P.df.dl.wsMode` (`''` = psf from Preliminary sizing as today, `'thk'` = thickness × γ), `P.df.dl.wsThk` (in), `P.df.dl.wsGam` (kcf), `P.df.ovl` (rows `{name, mode: 'psf'|'thk', psf, thk, gam}`), and the row distribution value `'auto'` ("Follows the method"). No key renamed or removed; older builds ignore the new fields.
+- **What the loads are:** fence: DC2 line load at x (right side: W<sub>deck</sub> − x). Overlay: DW, q/1000 × (wearing-surface width), equal to all girders (as the wearing surface). Wearing surface by thickness: q = t/12 × γ × 1000 psf replaces the Preliminary sizing psf. γ<sub>c</sub>: curb (cw/12)(ch/12)γ<sub>c</sub>, sidewalk w(t/12)γ<sub>c</sub>, median w(t/12)γ<sub>c</sub>; deck, haunch, SIP keep the deck w<sub>c</sub>. "Follows the method" (engineer: DW = utilities + wearing surface, MassDOT pile-cap for DC2 and equal for DW): MassDOT → DW equally, DC1/DC2/PL pile-cap; AASHTO → equally. A row with an explicit rule keeps it (as before).
+- **Defaults:** the built-in example's 0-plf utility row becomes `cat: 'DW', dist: 'auto'` (was DC2, pile-cap). It is 0 klf (skipped by `dfDead`), so no result changes. Saved rows keep their stored category and rule (arrays are not merged).
+- **Governing provision:** MassDOT Bridge Manual Part I 3.5.3 (engineer's decisions 2026-10-13); AASHTO LRFD 10th Ed. 4.6.2.2.1 (equal option). No formula, factor, or existing input changed.
+- **Check case (built-in bridge, sidewalks 6 ft × 8 in / 5 ft × 9 in, γ<sub>c</sub> = 0.145, wearing surface 2.5 in × 0.144 kcf, overlays 5 psf and 1.25 in × 0.145 kcf, fences 0.050 klf at 5.5 ft (left) and 0.030 klf at 4.5 ft (right), gas main DW 0.080 klf at 25 ft "follows the method", signal conduit DC2 0.020 klf at 40 ft "follows the method"):** left sidewalk 6(8/12)(0.145) = 0.580 klf; wearing surface q = 2.5/12 × 0.144 × 1000 = 30.0 psf × (44.50 − 6 − 5 = 33.50 ft) = 1.005 klf, 0.201 per girder; latex overlay q = 15.10 psf → 0.506 klf; gas main equal 0.016 per girder; signal conduit pile-cap R<sub>5</sub> = 0.004 + 0.020(17.75)(19.00)/902.5 = 0.011 klf; right fence at x = 40.00 ft. Screen values identical.
+- **Other copies:** none (`lldf.html` `footprints`/`autoLoads` were the reference; not shared code).
+
+### Exact changes (XS4): main page (unified diff against b9e2254; the PL_B64 line is not touched)
+
+```diff
+diff --git a/Steel Bridge Beam Modules.html b/Steel Bridge Beam Modules.html
+index 68b03a1..c72a325 100644
+--- a/Steel Bridge Beam Modules.html	
++++ b/Steel Bridge Beam Modules.html	
+@@ -3955,24 +3955,27 @@ function dfMember(p, geo, Kg, sk, j) {
+   return { j, label, type, S, side, de0, de, emp, lever1, eM, eV, mE, vE, rig, alt, r, gM: Math.max(r.mom1, r.mom2), gV: Math.max(r.shr1, r.shr2), fatM: fat(r.mom1), fatV: fat(r.shr1), method: base };
+ }
+ /* edge loads from the bridge: a single barrier, or a curb plus a railing, per side */
+-function dfEdges(b) {
++function dfEdges(b, wcA) {   // wcA: optional appurtenance concrete unit weight (kcf); absent = the deck w_c
+   const out = [];
+   ['L', 'R'].forEach(sd => { const e = b.edge && b.edge[sd], nm_ = sd === 'L' ? 'Left' : 'Right';
+-    if (e && e.mode === 'curb') { if (e.cw > 0 && e.ch > 0) out.push({ id: 'curb' + sd, desc: `${nm_} curb`, cat: 'DC2', side: sd, x: e.cw / 24, plf: e.cw / 12 * e.ch / 12 * b.wc });
++    if (e && e.mode === 'curb') { if (e.cw > 0 && e.ch > 0) out.push({ id: 'curb' + sd, desc: `${nm_} curb`, cat: 'DC2', side: sd, x: e.cw / 24, plf: e.cw / 12 * e.ch / 12 * (wcA > 0 ? wcA : b.wc) });
+       if (e.rw > 0) out.push({ id: 'rail' + sd, desc: `${nm_} railing`, cat: 'DC2', side: sd, x: e.rp, plf: e.rw }); }
+     else if (b.barW > 0) out.push({ id: 'bar' + sd, desc: `${nm_} barrier`, cat: 'DC2', side: sd, x: b.barrier / 2, plf: b.barW }); });
+   return out;
+ }
+ /* MassDOT 3.5.3 / AASHTO equal dead-load distribution */
+ function dfDead(p, geo, a) {
+-  const N = p.Nb, ub = geo.pos.map(x => p.OL + x), Wd = geo.Wdeck, uc = a.uwc, F = [];
++  const N = p.Nb, ub = geo.pos.map(x => p.OL + x), Wd = geo.Wdeck, uc = a.uwc, ua = a.uwcA > 0 ? a.uwcA : uc, F = [];   // ua: curbs, sidewalks, median (blank = deck w_c)
+   const swL = a.swL > 0 ? a.swL : 0, swR = a.swR > 0 ? a.swR : 0;
+   (a.edges || []).forEach(E => F.push({ ...E, x: E.side === 'L' ? E.x : Wd - E.x }));
+-  if (swL) F.push({ id: 'swL', desc: 'Left sidewalk slab', cat: 'DC2', x: swL / 2, plf: swL * a.swThkL / 12 * uc, x0: 0, x1: swL });
+-  if (swR) F.push({ id: 'swR', desc: 'Right sidewalk slab', cat: 'DC2', x: Wd - swR / 2, plf: swR * a.swThkR / 12 * uc, x0: Wd - swR, x1: Wd });
+-  if (a.medW > 0) F.push({ id: 'med', desc: 'Raised median', cat: 'DC2', x: Wd / 2, plf: a.medW * a.medThk / 12 * uc, x0: Wd / 2 - a.medW / 2, x1: Wd / 2 + a.medW / 2, joint: a.medJoint === 'yes' });
++  if (swL) F.push({ id: 'swL', desc: 'Left sidewalk slab', cat: 'DC2', x: swL / 2, plf: swL * a.swThkL / 12 * ua, x0: 0, x1: swL });
++  if (swR) F.push({ id: 'swR', desc: 'Right sidewalk slab', cat: 'DC2', x: Wd - swR / 2, plf: swR * a.swThkR / 12 * ua, x0: Wd - swR, x1: Wd });
++  if (a.fenceL > 0) F.push({ id: 'fenceL', desc: 'Left sidewalk railing or fence', cat: 'DC2', x: a.fenceXL, plf: a.fenceL });
++  if (a.fenceR > 0) F.push({ id: 'fenceR', desc: 'Right sidewalk railing or fence', cat: 'DC2', x: Wd - a.fenceXR, plf: a.fenceR });
++  if (a.medW > 0) F.push({ id: 'med', desc: 'Raised median', cat: 'DC2', x: Wd / 2, plf: a.medW * a.medThk / 12 * ua, x0: Wd / 2 - a.medW / 2, x1: Wd / 2 + a.medW / 2, joint: a.medJoint === 'yes' });
+   const wx0 = p.rL, wx1 = Wd - p.rR;
+-  if (a.fws > 0 && wx1 > wx0) F.push({ id: 'ws', desc: 'Future wearing surface', cat: 'DW', x: (wx0 + wx1) / 2, plf: a.fws / 1000 * (wx1 - wx0), x0: wx0, x1: wx1, forceEqual: true });
++  if (a.fws > 0 && wx1 > wx0) F.push({ id: 'ws', desc: 'Future wearing surface', cat: 'DW', x: (wx0 + wx1) / 2, plf: a.fws / 1000 * (wx1 - wx0), x0: wx0, x1: wx1, forceEqual: true, ...(a.wsThk > 0 ? { q: a.fws, thk: a.wsThk, gam: a.wsGam } : {}) });
++  (a.ovl || []).forEach((o, k) => { if (o.q > 0 && wx1 > wx0) F.push({ id: 'ovl' + k, desc: o.name, cat: 'DW', x: (wx0 + wx1) / 2, plf: o.q / 1000 * (wx1 - wx0), x0: wx0, x1: wx1, forceEqual: true, q: o.q, thk: o.thk, gam: o.gam }); });   // overlays: DW over the wearing-surface width
+   const wkL = Math.max(swL - p.fL, 0), wkR = Math.max(swR - p.fR, 0);   // walkable width inside the railing
+   if (a.ped > 0) { if (wkL) F.push({ id: 'pedL', desc: 'Left pedestrian LL', cat: 'PL', x: p.fL + wkL / 2, plf: a.ped / 1000 * wkL }); if (wkR) F.push({ id: 'pedR', desc: 'Right pedestrian LL', cat: 'PL', x: Wd - p.fR - wkR / 2, plf: a.ped / 1000 * wkR }); }
+   (a.extra || []).forEach((u, k) => { if (u.plf) F.push({ id: 'u' + k, desc: u.desc || `Added load ${k + 1}`, cat: u.cat || 'DC2', x: u.x, plf: u.plf, dist: u.dist }); });
+@@ -3992,19 +3995,48 @@ function dfDead(p, geo, a) {
+   const deck = trib.map(t => t * p.ts / 12 * uc), bf = (a.bf || 0) / 12, haunch = ub.map(() => (a.hh || 0) / 12 * bf * uc);
+   const bays = ub.slice(1).map((x, i) => Math.max(x - ub[i] - bf, 0)), sip = ub.map((_, i) => (a.sip || 0) / 1000 * ((i > 0 ? bays[i - 1] / 2 : 0) + (i < N - 1 ? bays[i] / 2 : 0)));
+   const dc1 = deck.map((v, i) => v + haunch[i] + sip[i]), dc2 = ub.map(() => 0), dw = ub.map(() => 0), pl = ub.map(() => 0);
+-  const per = F.map(L => { const dist = L.dist || (L.forceEqual ? 'equal' : method === 'massdot' ? 'pilecap' : 'equal'), r = dist === 'equal' ? equal(L.plf) : dist === 'two' ? two(L.plf, L.x) : pile(L.plf, L.x);
+-    (L.cat === 'DC1' ? dc1 : L.cat === 'DW' ? dw : L.cat === 'PL' ? pl : dc2).forEach((_, i, arr) => arr[i] += r[i]); return { ...L, dist, e: L.x - xbar, r }; });
++  // an added row set to "follows the method" (dist 'auto'): MassDOT = equal for DW, pile-cap otherwise; AASHTO = equal. An explicit rule is kept under either method.
++  const per = F.map(L => { const dist = L.dist && L.dist !== 'auto' ? L.dist : (L.forceEqual ? 'equal' : method === 'massdot' ? (L.dist === 'auto' && L.cat === 'DW' ? 'equal' : 'pilecap') : 'equal'), r = dist === 'equal' ? equal(L.plf) : dist === 'two' ? two(L.plf, L.x) : pile(L.plf, L.x);
++    (L.cat === 'DC1' ? dc1 : L.cat === 'DW' ? dw : L.cat === 'PL' ? pl : dc2).forEach((_, i, arr) => arr[i] += r[i]); return { ...L, dist, ...(L.dist === 'auto' ? { byMethod: true } : {}), e: L.x - xbar, r }; });
+   return { N, ub, xbar, c, S2, trib, deck, haunch, sip, bf, bays, dc1, dc2, dw, pl, cls, method, per, Wd };
+ }
+ 
++/* optional cross-section inputs (XS4, 2026-10-13). Each is absent in projects saved before; absent (or blank) = the loads as before. */
++const dfOpt = v => (v == null || v === '' || (typeof v === 'number' && isNaN(v))) ? null : nm(v);
++function dfXsIn(p, errors) {
++  const dl = p.dl || {}, o = { wcA: null, fenceL: null, fenceXL: null, fenceR: null, fenceXR: null, wsThk: null, wsGam: null, fws: null, ovl: [] };
++  const wcA = dfOpt(dl.wcA); if (wcA !== null) { if (wcA > 0) o.wcA = wcA; else errors.push('Appurtenance concrete unit weight must be positive (or blank for the deck w_c).'); }
++  ['L', 'R'].forEach(sd => { const w = dfOpt(dl['fence' + sd]), x = dfOpt(dl['fenceX' + sd]), sw = nm(dl['sw' + sd]) > 0 ? nm(dl['sw' + sd]) : 0, nm_ = sd === 'L' ? 'Left' : 'Right';
++    if (w === null && x === null) return;
++    if (w !== null && !(w >= 0)) errors.push(`${nm_} sidewalk railing or fence: the weight must be zero or positive.`);
++    if (!(x > 0 && x <= sw + 1e-9)) errors.push(`${nm_} sidewalk railing or fence: its position from the deck edge must be on the ${sd === 'L' ? 'left' : 'right'} sidewalk (0 < x ≤ ${sw > 0 ? sw + ' ft' : 'the sidewalk width; no sidewalk is entered'}).`);
++    o['fence' + sd] = w !== null && w > 0 ? w : 0; o['fenceX' + sd] = x; });
++  if (dl.wsMode === 'thk') { const t = dfOpt(dl.wsThk), g = dfOpt(dl.wsGam);
++    if (!(t > 0) || !(g > 0)) errors.push('Wearing surface by thickness: enter a positive thickness and unit weight.'); else { o.wsThk = t; o.wsGam = g; o.fws = t / 12 * g * 1000; } }
++  const ov = numRows(Array.isArray(p.ovl) ? p.ovl : [], GM.df.rowSpec2, 'Overlay', errors);
++  o.ovl = ov.map(r => { if (r.mode === 'thk') { if (!(r.thk > 0) || !(r.gam > 0)) { errors.push(`${r.name}: enter a positive thickness and unit weight.`); return null; } return { name: r.name, q: r.thk / 12 * r.gam * 1000, thk: r.thk, gam: r.gam }; }
++    if (r.psf === null) { errors.push(`${r.name}: enter its weight in psf.`); return null; } return { name: r.name, q: r.psf }; }).filter(Boolean);
++  return o;
++}
++
++/* deck edges as Preliminary sizing sends them (read-only here; PR3 of the cross-section plan moves them to this module) */
++function dfEdgeSummary(b) {
++  if (!b) return '<p class="note">The deck edges come from Preliminary sizing once the bridge is complete.</p>';
++  const row = (k, v) => `<tr><td class="lbl">${k}</td><td class="val">${v}</td></tr>`, side = sd => { const e = b.edge && b.edge[sd], f = sd === 'L' ? b.faceL : b.faceR, nm_ = sd === 'L' ? 'Left' : 'Right';
++    return e && e.mode === 'curb' ? row(`${nm_} edge`, `curb ${f2(e.cw)} × ${f2(e.ch)} in; railing ${f3(e.rw)} klf at ${f2(e.rp)} ft; traffic face ${f2(f != null ? f : b.barrier)} ft`) : row(`${nm_} edge`, `barrier ${f2(b.barrier)} ft wide, ${f3(b.barW)} klf; traffic face ${f2(f != null ? f : b.barrier)} ft`); };
++  return `<table class="tbl df-kv"><tbody>${side('L')}${side('R')}</tbody></table><p class="note">Read-only: these come from the Bridge tab of Preliminary sizing (distances from the deck edge).</p>`;
++}
++
+ GM.df = {
+ tabs: { combos: 'Factors and loads', cap: 'Derivations', rptCombos: 'Distribution factors and dead loads', rptCap: 'Distribution factor derivations', noGeom: true },
+   id: 'df', label: 'LLDF and DLs', title: 'live load (AASHTO LRFD 4.6.2.2) and dead load (MassDOT 3.5.3) distribution, steel I-girders', rptTitle: 'Live Load and Dead Load Distribution', rptRef: 'AASHTO LRFD Article 4.6.2.2; MassDOT Bridge Manual Part I, 3.5.3',
+-  groups: ['Applicability', 'Distribution factors'], itabs: [['df_br', 'Bridge'], ['df_dl', 'Dead loads']], capLabel: 'Factor derivations',
++  groups: ['Applicability', 'Distribution factors'], itabs: [['df_br', 'Bridge'], ['df_dl', 'Cross-section and dead loads']], capLabel: 'Factor derivations',
+   def: { bridge: null, gap: 4, kg: 'max', skewV: 'all', feed: 'yes', extMin: 'no', radius: 0, dl: { method: 'massdot', ped: 0, swL: 0, swThkL: 8, swR: 0, swThkR: 8, medW: 0, medThk: 8, medJoint: 'no' },
+-    extra: [{ name: 'Utility (example, 0 = off)', cat: 'DC2', x: 20, plf: 0, dist: 'pilecap' }] },
+-  rowSpec: [['name', 'Description', '', 'text'], ['cat', 'Category', '', 'sel', { options: [['DC2', 'DC2'], ['DW', 'DW'], ['DC1', 'DC1'], ['PL', 'Pedestrian LL']] }], ['x', 'Location from left deck edge', 'ft', 'num', { min: 0 }], ['plf', 'Line load', 'klf', 'num', { min: 0 }], ['dist', 'Distribution', '', 'sel', { options: [['pilecap', 'MassDOT pile-cap'], ['equal', 'Equal (all beams)'], ['two', 'Two adjacent beams']] }]],
++    extra: [{ name: 'Utility (example, 0 = off)', cat: 'DW', x: 20, plf: 0, dist: 'auto' }] },
++  rowSpec: [['name', 'Description', '', 'text'], ['cat', 'Category', '', 'sel', { options: [['DC2', 'DC2'], ['DW', 'DW'], ['DC1', 'DC1'], ['PL', 'Pedestrian LL']] }], ['x', 'Location from left deck edge', 'ft', 'num', { min: 0 }], ['plf', 'Line load', 'klf', 'num', { min: 0 }], ['dist', 'Distribution', '', 'sel', { options: [['auto', 'Follows the method'], ['pilecap', 'MassDOT pile-cap'], ['equal', 'Equal (all beams)'], ['two', 'Two adjacent beams']] }]],
+   rowPath: 'extra', rowLbl: 'Added load',
++  rowSpec2: [['name', 'Description', '', 'text'], ['mode', 'Entered as', '', 'sel', { options: [['psf', 'Weight (psf)'], ['thk', 'Thickness × unit weight']] }], ['psf', 'Weight', 'psf', 'num', { min: 0, opt: true }], ['thk', 'Thickness', 'in', 'num', { min: 0, opt: true }], ['gam', 'Unit weight', 'kcf', 'num', { min: 0, opt: true }]],
++  rowPath2: 'ovl', rowLbl2: 'Overlay', rowNew: { ovl: [{ name: 'Overlay 1', mode: 'psf', psf: 0 }] },
+   panes(p) { const b0 = P && P.df && P.df.bridge, b = b0 && b0.ok ? b0 : null;   // an invalid handoff carries only its errors
+     const src = b ? `<div class="df-src"><b>Bridge from Preliminary sizing</b> ("${esc(b.project)}", received ${new Date(b.ts).toLocaleString()}). It updates automatically whenever the sizing changes; edit the bridge there.</div>`
+       : `<div class="df-src df-lock"><b>No complete bridge yet.</b> Define the bridge in Preliminary sizing; this module unlocks as soon as the sizing has no input errors.</div>`;
+@@ -4017,11 +4049,20 @@ tabs: { combos: 'Factors and loads', cap: 'Derivations', rptCombos: 'Distributio
+           ${fld('Exterior girder factors not less than interior (owner policy)', 'df.extMin', '', 'sel', { full: true, options: [['no', 'No (AASHTO)'], ['yes', 'Yes: exterior g ≥ interior g, moment and shear']] })}
+           ${fld('Girder radius (curved bridges; 0 = straight)', 'df.radius', 'ft')}<div></div>
+           ${fld('Skew correction for shear', 'df.skewV', '', 'sel', { full: true, options: [['all', 'All girders (common owner practice, conservative)'], ['ext', 'Exterior girders only (obtuse corner, 4.6.2.2.3c)']] })}<p class="note">Wheel lines of adjacent trucks are at least 4 ft apart (3.6.1.3.1). Trucks stay 2 ft from the barrier faces.</p></div>`,
+-      df_dl: `${secHd('sec-dfd', 'Dead-load distribution')}<div class="sec-body" id="sec-dfd">${fld('Method', 'df.dl.method', '', 'sel', { full: true, options: [['massdot', 'MassDOT 3.5.3 (pile-cap for superimposed DC; wearing surface equally)'], ['aashto', 'Typical AASHTO (all loads equally to all beams)']] })}
+-        ${fld('Left sidewalk width', 'df.dl.swL', 'ft')}${fld('Left sidewalk thickness', 'df.dl.swThkL', 'in')}${fld('Right sidewalk width', 'df.dl.swR', 'ft')}${fld('Right sidewalk thickness', 'df.dl.swThkR', 'in')}
+-        ${fld('Median width', 'df.dl.medW', 'ft')}${fld('Median thickness', 'df.dl.medThk', 'in')}${fld('Median longitudinal joint', 'df.dl.medJoint', '', 'sel', { options: [['no', 'No (continuous slab)'], ['yes', 'Yes (adjacent beams exterior)']] })}${fld('Pedestrian LL', 'df.dl.ped', 'psf')}
+-        <p class="note">Barrier or curb and railing weights, future wearing surface, SIP forms, haunch, deck thickness, and concrete unit weight come from Preliminary sizing. DC1 is the deck by tributary width plus the haunch over the top flange and the SIP forms over the clear bays; girder self-weight is excluded because the girder modules apply it from the section. Sidewalk widths are measured from the deck edge to the curb face; the roadway, design lanes, and d<sub>e</sub> are taken to that face.</p></div>
+-        ${secHd('sec-dfx', 'Added line loads')}<div class="sec-body one-col" id="sec-dfx">${gmRowsHtml('df')}</div>` }; },
++      df_dl: `${secHd('sec-dfe', 'Deck edges')}<div class="sec-body one-col" id="sec-dfe">${dfEdgeSummary(b)}<button type="button" class="proj-btn" data-dfpl="1" style="width:100%">Edit the deck edges in Preliminary sizing</button>
++          <div class="pair">${fld('Appurtenance concrete γ<sub>c</sub>', 'df.dl.wcA', 'kcf', 'num', { note: 'blank = deck' })}<div></div></div>
++          <p class="note">γ<sub>c</sub> applies to the curbs, sidewalks, and median; blank uses the deck w<sub>c</sub>${b ? ` (${b.wc} kcf)` : ''}. The deck, haunch, and SIP forms always use the deck w<sub>c</sub>.</p></div>
++        ${secHd('sec-dfs', 'Sidewalks')}<div class="sec-body" id="sec-dfs">${fld('Left sidewalk width', 'df.dl.swL', 'ft')}${fld('Left sidewalk thickness', 'df.dl.swThkL', 'in')}${fld('Left railing or fence weight', 'df.dl.fenceL', 'klf', 'num', { note: 'optional' })}${fld('Left railing or fence, x from deck edge', 'df.dl.fenceXL', 'ft')}
++        ${fld('Right sidewalk width', 'df.dl.swR', 'ft')}${fld('Right sidewalk thickness', 'df.dl.swThkR', 'in')}${fld('Right railing or fence weight', 'df.dl.fenceR', 'klf', 'num', { note: 'optional' })}${fld('Right railing or fence, x from deck edge', 'df.dl.fenceXR', 'ft')}
++        ${fld('Pedestrian LL', 'df.dl.ped', 'psf')}<div></div>
++        <p class="note full">Sidewalk widths are measured from the deck edge to the curb face; the roadway, design lanes, and d<sub>e</sub> are taken to that face. A railing or fence on a sidewalk is a DC2 line load at x from its deck edge (leave both blank for none).</p><div class="full" id="df-llface"></div></div>
++        ${secHd('sec-dfm', 'Median')}<div class="sec-body" id="sec-dfm">${fld('Median width', 'df.dl.medW', 'ft')}${fld('Median thickness', 'df.dl.medThk', 'in')}${fld('Median longitudinal joint', 'df.dl.medJoint', '', 'sel', { options: [['no', 'No (continuous slab)'], ['yes', 'Yes (adjacent beams exterior)']] })}<div></div></div>
++        ${secHd('sec-dfw', 'Wearing surface and overlays')}<div class="sec-body" id="sec-dfw">${fld('Future wearing surface', 'df.dl.wsMode', '', 'sel', { full: true, options: [['', `Weight from Preliminary sizing${b ? ` (${f2(b.fws)} psf)` : ''}`], ['thk', 'Thickness × unit weight (entered here)']] })}${fld('Wearing surface thickness', 'df.dl.wsThk', 'in')}${fld('Wearing surface unit weight', 'df.dl.wsGam', 'kcf')}
++        <p class="note full">The wearing surface and the overlays are DW over the roadway between the curb faces, distributed equally to all girders. Thickness and unit weight are used only with "Thickness × unit weight".</p></div>
++        <div class="sec-body one-col" style="padding-top:0">${gmRowsHtml('df', 2)}</div>
++        ${secHd('sec-dfx', 'Utilities and other line loads')}<div class="sec-body one-col" id="sec-dfx"><p class="note">Utilities are DW (MassDOT: DW = utilities and wearing surface); other superimposed line loads are DC2 (or DC1 if placed before the deck acts compositely). x is from the left deck edge.</p>${gmRowsHtml('df')}</div>
++        ${secHd('sec-dfd', 'Distribution method')}<div class="sec-body" id="sec-dfd">${fld('Method', 'df.dl.method', '', 'sel', { full: true, options: [['massdot', 'MassDOT 3.5.3 (pile-cap for superimposed DC; wearing surface equally)'], ['aashto', 'Typical AASHTO (all loads equally to all beams)']] })}
++        <p class="note full">MassDOT: barriers, curbs, railings, sidewalks, the median, and the pedestrian load by the pile-cap rule; the wearing surface and overlays (DW) equally. AASHTO: all of these equally. A line load row set to "Follows the method" takes the method's rule for its class (MassDOT: DW equally, DC1 and DC2 pile-cap; AASHTO: equally); a row with an explicit rule keeps it under either method. SIP forms, haunch, deck thickness, and the deck concrete unit weight come from Preliminary sizing. DC1 is the deck by tributary width plus the haunch over the top flange and the SIP forms over the clear bays; girder self-weight is excluded because the girder modules apply it from the section.</p></div>` }; },
+   compute(p) {
+     const b = p.bridge;
+     if (!b || !b.ok) return { errors: [b && b.why ? `The bridge in Preliminary sizing is not complete: ${b.why.join(' ')}` : 'The bridge is not defined. Define the complete bridge in the Preliminary sizing module; this module unlocks when the sizing has no input errors.'], locked: true };
+@@ -4032,6 +4073,7 @@ tabs: { combos: 'Factors and loads', cap: 'Derivations', rptCombos: 'Distributio
+     const errors = []; if (!(nm(p.gap) >= 4)) errors.push('Gap between adjacent trucks must be at least 4 ft.');
+     const extra = numRows(p.extra, GM.df.rowSpec, 'Added load', errors);
+     ['swL', 'swThkL', 'swR', 'swThkR', 'medW', 'medThk', 'ped'].forEach(k => { if (!(nm(p.dl[k]) >= 0)) errors.push(`Dead load "${k}" must be zero or positive.`); });
++    const xs = dfXsIn(p, errors);   // optional cross-section inputs (XS4); every one absent = the loads as before
+     if (errors.length) return { errors };
+     const MR = modRatio(b.fc, b.wc, 1.0, 'exact'), Nb = b.nb, spacings = b.bays && b.bays.length === Nb - 1 ? b.bays.slice() : new Array(Nb - 1).fill(b.S);
+     const fL = b.faceL != null ? b.faceL : b.barrier, fR = b.faceR != null ? b.faceR : b.barrier, swL = nm(p.dl.swL), swR = nm(p.dl.swR);
+@@ -4047,7 +4089,8 @@ tabs: { combos: 'Factors and loads', cap: 'Derivations', rptCombos: 'Distributio
+       const lever = members.map((m, j) => dfLeverAll(pp, geo, j)), mD = DF_MPF(geo.NL), gDef = geo.NL * mD / Nb;
+       return { ...rg, s, eg, Kg, KgAvg, pp, geo, sk, members, lever, mD, gDef };
+     });
+-    const g0 = regions[0].geo, dead = dfDead({ ...base }, g0, { ...p.dl, swL: nm(p.dl.swL), swThkL: nm(p.dl.swThkL), swR: nm(p.dl.swR), swThkR: nm(p.dl.swThkR), medW: nm(p.dl.medW), medThk: nm(p.dl.medThk), ped: nm(p.dl.ped), fws: b.fws, uwc: b.wc, hh: b.haunch, sip: b.sip, bf: regions[0].sec.topB, edges: dfEdges(b), extra: extra.map(e => ({ desc: e.name, cat: e.cat, x: e.x, plf: e.plf, dist: e.dist })) });
++    const g0 = regions[0].geo, dead = dfDead({ ...base }, g0, { ...p.dl, swL: nm(p.dl.swL), swThkL: nm(p.dl.swThkL), swR: nm(p.dl.swR), swThkR: nm(p.dl.swThkR), medW: nm(p.dl.medW), medThk: nm(p.dl.medThk), ped: nm(p.dl.ped), fws: xs.fws !== null ? xs.fws : b.fws, uwc: b.wc, hh: b.haunch, sip: b.sip, bf: regions[0].sec.topB, edges: dfEdges(b, xs.wcA), extra: extra.map(e => ({ desc: e.name, cat: e.cat, x: e.x, plf: e.plf, dist: e.dist })),
++      uwcA: xs.wcA, fenceL: xs.fenceL, fenceXL: xs.fenceXL, fenceR: xs.fenceR, fenceXR: xs.fenceXR, wsThk: xs.wsThk, wsGam: xs.wsGam, ovl: xs.ovl });
+     return { errors: [], b, MR, regions, dead, base, p };
+   },
+   checks(R) {
+@@ -4116,7 +4159,7 @@ tabs: { combos: 'Factors and loads', cap: 'Derivations', rptCombos: 'Distributio
+     h += card('cap-dl', 'Dead load distribution', D.method === 'massdot' ? 'MassDOT 3.5.3' : 'Equal', dfDLCalcs(R));
+     return h; },
+   drawings(R) { const v = dfView(R), rg = R.regions[v.rg];
+-    return card('dw-xs', 'Cross-section and dead loads', R.dead.method === 'massdot' ? 'MassDOT 3.5.3' : 'Typical AASHTO (equal)', `<div class="dwg-wrap">${dfXsSVG(R)}</div><p class="cap">Superimposed loads are drawn where they act, labeled with their line load and colored by class (DC1, DC2, DW, pedestrian PL); arrows are the added line loads. Heights of the barriers, curbs, sidewalks, median, and wearing surface are schematic; widths and girder positions are to scale. Below each girder: its share of DC1 (deck, haunch, SIP forms, and any DC1 added loads), DC2, DW${R.dead.pl.some(v => v > 0) ? ', and PL' : ''} in klf, from the dead-load distribution (Derivations tab).</p>`)
++    return card('dw-xs', 'Cross-section and dead loads', R.dead.method === 'massdot' ? 'MassDOT 3.5.3' : 'Typical AASHTO (equal)', `<div class="dwg-wrap">${dfXsSVG(R)}</div><p class="cap">Superimposed loads are drawn where they act, labeled with their line load and colored by class (DC1, DC2, DW, pedestrian PL); arrows are the added line loads (utilities and other line loads). Heights of the barriers, curbs, railings and fences, sidewalks, median, wearing surface, and overlays are schematic; widths and girder positions are to scale. Below each girder: its share of DC1 (deck, haunch, SIP forms, and any DC1 added loads), DC2, DW${R.dead.pl.some(v => v > 0) ? ', and PL' : ''} in klf, from the dead-load distribution (Derivations tab).</p>`)
+       + card('dw-df', 'Cross-section and lever rule', `${rg.label}; ${rg.members[v.j].label}`, `<div class="ctl-row dfv-ctl"><label>Region <select id="dfv-rg">${R.regions.map((r, k) => `<option value="${k}" ${k === v.rg ? 'selected' : ''}>${esc(r.label)} (${r.kind === 'span' ? '+M, V' : '−M'})</option>`).join('')}</select></label><label>Girder <select id="dfv-j">${rg.members.map((m, k) => `<option value="${k}" ${k === v.j ? 'selected' : ''}>${m.label} (${m.type === 'ext' ? 'exterior' : 'interior'})</option>`).join('')}</select></label></div><div class="dwg-wrap">${dfSVG(R, rg, v.j)}</div><p class="cap">Girders are colored by the method that governs their moment factor; hover a girder for its factors. Arrows are the wheels of the governing lever-rule truck train for the selected girder, labeled with each wheel's share of the reaction (before the multiple presence factor). Bars below the girders are DC + DW per girder.</p>`)
+       + card('dw-sens', 'Sensitivity to girder spacing', `${rg.label}; K<sub>g</sub> held at ${f0(rg.Kg)} in⁴`, `${dfSensSVG(R, rg)}<p class="cap">All bays scaled together from 70% to 130% of the current layout with the overhangs, barriers, and K<sub>g</sub> held; the dot is the current design. Letters along the exterior line show the governing exterior method: L lever rule, R rigid cross-section, E e-factor. Use it to see how close the layout is to a change of governing method.</p>`); },
+   echo(R) { const b = R.b; return { kv: [['Bridge (from Preliminary sizing)', `"${esc(b.project)}", received ${new Date(b.ts).toLocaleString()}`], ['Spans', b.spans.map(s => f2(s)).join(' + ') + ' ft' + (b.cont ? ', continuous' : '')], ['Skew at supports', b.skews.map(s => f0(s) + '°').join(', ')], ['Girders', `${b.nb} at ${f2(b.S)} ft`], ['Overhangs L / R, barrier', `${f2(b.ohL)} / ${f2(b.ohR)} ft, ${f2(b.barrier)} ft`], ['Deck', `t_s = ${f2(b.tsDeck)} in, haunch ${f2(b.haunch)} in, f′c = ${f2(b.fc)} ksi, w_c = ${b.wc} kcf, n = ${f2(R.MR.n)}`], ['Superimposed', `barrier ${f2(b.barW)} klf each, FWS ${f2(b.fws)} psf`], ['Dead-load method', R.dead.method === 'massdot' ? 'MassDOT 3.5.3' : 'Typical AASHTO (equal)'], ['Truck gap', `${f2(R.base.gap)} ft`]],
+@@ -4166,6 +4209,7 @@ function dfXsSVG(R) {
+   const lab = (L, xpx, top) => { if (L) labs.push({ x: xpx, top, col: DF_LCOL[L.cat] || '#17212b', t: `${L.desc}: ${f3(L.plf)} klf ${L.cat}` }); };
+   // wearing surface (under everything on the deck)
+   const ws = byId('ws'); if (ws) { o += `<rect x="${X(ws.x0)}" y="-4" width="${(ws.x1 - ws.x0) * sc}" height="4" fill="#cfe6dd" stroke="${DF_LCOL.DW}" stroke-width=".8"/>`; lab(ws, X(ws.x0 + 0.3 * (ws.x1 - ws.x0)), -4); }
++  D.per.filter(L => /^ovl\d/.test(L.id)).forEach((L, k) => { const y = -(ws ? 4 : 0) - 3 * (k + 1); o += `<rect x="${X(L.x0)}" y="${y}" width="${(L.x1 - L.x0) * sc}" height="3" fill="#e3f1ec" stroke="${DF_LCOL.DW}" stroke-width=".6" stroke-dasharray="3 1.5"/>`; lab(L, X(L.x0 + (0.55 + 0.12 * k) * (L.x1 - L.x0)), y); });   // overlays (XS4)
+   // deck slab
+   o += `<rect x="${X(0)}" y="0" width="${Wd * sc}" height="${tD}" fill="#eceae4" stroke="#7a8590"/>`;
+   // sidewalks (run to the deck edge; the barrier or curb sits on top)
+@@ -4179,6 +4223,9 @@ function dfXsSVG(R) {
+     if (e.cw > 0) { const a = sd === 'L' ? 0 : Wd - e.cw; o += `<rect x="${X(a)}" y="${y0 - e.cH}" width="${Math.max(e.cw * sc, 3)}" height="${e.cH}" fill="#c9ced6" stroke="#6b7280"/>`; lab(byId('curb' + sd), X(xd(sd, e.cw / 2)), y0 - e.cH); }
+     const rl = byId('rail' + sd); if (rl) { const xr = X(rl.x), base = e.cw > 0 && e.rp <= e.cw + 1e-9 ? y0 - e.cH : surf(rl.x), arm = 6;
+       o += `<path d="M${xr} ${base}V${base - RAIL}M${xr - arm} ${base - RAIL + 3}H${xr + arm}M${xr - arm} ${base - RAIL * 0.55}H${xr + arm}" stroke="#6b7280" stroke-width="1.6" fill="none"/>`; lab(rl, xr, base - RAIL); } });
++  // railing or fence on a sidewalk (XS4)
++  ['L', 'R'].forEach(sd => { const L = byId('fence' + sd); if (!L) return; const xr = X(L.x), base = surf(L.x), arm = 5;
++    o += `<path d="M${xr} ${base}V${base - RAIL}M${xr - arm} ${base - RAIL + 3}H${xr + arm}M${xr - arm} ${base - RAIL * 0.55}H${xr + arm}" stroke="#6b7280" stroke-width="1.4" fill="none"/>`; lab(L, xr, base - RAIL); });
+   // pedestrian load on the walkable width (as distributed by dfDead)
+   ['L', 'R'].forEach(sd => { const L = byId('ped' + sd); if (!L) return; const fx = sd === 'L' ? R.base.fL : Wd - sw.R, x1 = sd === 'L' ? sw.L : Wd - R.base.fR, top = -swH[sd];
+     for (let xa = X(fx) + 5; xa < X(x1) - 2; xa += 11) o += `<path d="M${xa} ${top - 11}V${top - 2}" stroke="${DF_LCOL.PL}" stroke-width="1.1" marker-end="url(#dfxp)"/>`; lab(L, X(L.x), top - 11); });
+@@ -4205,7 +4252,7 @@ function dfXsSVG(R) {
+   const nr = rowEnd.length, yRow = r => top0 - r * 15;
+   let lo = ''; labs.forEach(q => { const y = yRow(q.r); lo += `<path d="M${q.x} ${q.top - 1}V${y + 3}" stroke="${q.col}" stroke-width=".6" opacity=".7"/><text x="${q.lx}" y="${y}" class="sv-t sv-sm" text-anchor="middle" fill="${q.col}" stroke="#fff" stroke-width="3" paint-order="stroke">${esc(q.t)}</text>`; });
+   // legend
+-  const yl = yd + 48; let lx = mL; const lg = [['DC1', 'DC1 (deck, haunch, SIP)'], ['DC2', 'DC2 (superimposed)'], ['DW', 'DW (wearing surface)']].concat(D.per.some(L => L.cat === 'PL') ? [['PL', 'PL (pedestrian)']] : []);
++  const yl = yd + 48; let lx = mL; const lg = [['DC1', 'DC1 (deck, haunch, SIP)'], ['DC2', 'DC2 (superimposed)'], ['DW', D.per.some(L => L.cat === 'DW' && L.id !== 'ws') ? 'DW (wearing surface, overlays, utilities)' : 'DW (wearing surface)']].concat(D.per.some(L => L.cat === 'PL') ? [['PL', 'PL (pedestrian)']] : []);
+   let yl2 = yl; lg.forEach(([k, t]) => { const w = 34 + t.length * 5.9; if (lx + w > W && lx > mL) { lx = mL; yl2 += 16; } o += `<rect x="${lx}" y="${yl2 - 8}" width="10" height="10" fill="${DF_LCOL[k]}"/><text x="${lx + 14}" y="${yl2 + 1}" class="sv-t sv-sm">${t}</text>`; lx += w; });
+   const y0 = (nr ? yRow(nr - 1) : top0) - 14, H = yl2 + 10 - y0;
+   return `<svg viewBox="0 ${y0} ${W} ${H}" class="dwg dfxs" role="img" aria-label="Cross-section with the superimposed dead loads"><defs><marker id="dfxp" markerWidth="6" markerHeight="6" refX="3" refY="5" orient="auto"><path d="M0 0L3 5L6 0z" fill="${DF_LCOL.PL}"/></marker>${Object.entries(DF_LCOL).map(([k, c]) => `<marker id="dfxu${k}" markerWidth="8" markerHeight="8" refX="4" refY="7" orient="0"><path d="M0 0L8 0L4 8z" fill="${c}"/></marker>`).join('')}</defs>${o}${lo}</svg>`;
+@@ -4215,7 +4262,7 @@ function dfLoadsTbl(R) {
+   const D = R.dead, N = D.N, gh = D.ub.map((_, i) => `<th class="right">G${i + 1}</th>`).join(''), tol = 5e-7;
+   if (!D.per.length) return `<p class="note-p">No superimposed loads: no barrier or curb and railing weight, sidewalks, median, wearing surface, pedestrian load, or added line loads.</p>`;
+   const chk = (sR, P) => { const d = sR - P; return Math.abs(d) < tol ? 'ΣR = P' : d > 0 ? `ΣR = P + ${f3(d)}` : `ΣR = P − ${f3(-d)}`; };
+-  let rows = D.per.map(L => { const sR = sum(L.r); return `<tr><td class="lbl"><span style="color:${DF_LCOL[L.cat] || 'inherit'}">■</span> ${esc(L.desc)}</td><td>${L.cat}</td><td class="val">${f2(L.x)}</td><td class="val">${f3(L.plf)}</td><td style="white-space:nowrap">${DF_DIST[L.dist] || L.dist}</td>${L.r.map(v => `<td class="val">${f3(v)}</td>`).join('')}<td class="val">${f3(sR)}</td><td style="white-space:nowrap">${chk(sR, L.plf)}</td></tr>`; }).join('');
++  let rows = D.per.map(L => { const sR = sum(L.r); return `<tr><td class="lbl"><span style="color:${DF_LCOL[L.cat] || 'inherit'}">■</span> ${esc(L.desc)}</td><td>${L.cat}</td><td class="val">${f2(L.x)}</td><td class="val">${f3(L.plf)}</td><td style="white-space:nowrap">${DF_DIST[L.dist] || L.dist}${L.byMethod ? ' (method)' : ''}</td>${L.r.map(v => `<td class="val">${f3(v)}</td>`).join('')}<td class="val">${f3(sR)}</td><td style="white-space:nowrap">${chk(sR, L.plf)}</td></tr>`; }).join('');
+   const base1 = D.ub.map((_, i) => D.deck[i] + D.haunch[i] + D.sip[i]), bucket = { DC1: D.dc1.map((v, i) => v - base1[i]), DC2: D.dc2, DW: D.dw, PL: D.pl }, notes = [];
+   ['DC1', 'DC2', 'DW', 'PL'].forEach(k => { const Ls = D.per.filter(L => L.cat === k); if (!Ls.length) return; const P = sum(Ls.map(L => L.plf)), r = D.ub.map((_, i) => sum(Ls.map(L => L.r[i]))), sR = sum(r);
+     const same = r.every((v, i) => Math.abs(v - bucket[k][i]) < 1e-9); if (!same) notes.push(k);
+@@ -4239,6 +4286,20 @@ function dfDLCalcs(R) {
+   const add1 = D.ub.map((_, i) => { const v = D.dc1[i] - D.deck[i] - D.haunch[i] - D.sip[i]; return Math.abs(v) < 5e-7 ? 0 : v; }), hasAdd1 = D.per.some(L => L.cat === 'DC1');
+   E.push(tbl(`<th>DC1 (klf)</th>${gh}<th class="right">Σ</th>`, row('Deck', D.deck, f3, sum(D.deck)) + row('Haunch', D.haunch, f3, sum(D.haunch)) + row('SIP forms', D.sip, f3, sum(D.sip)) + (hasAdd1 ? row('Added DC1 loads', add1, f3, sum(add1)) : '') + row('DC1 total', D.dc1, f3, sum(D.dc1), 'tot'))
+     + `<p class="note-p">Check: Σ w<sub>deck</sub> = W<sub>deck</sub>(t<sub>s</sub>/12)γ<sub>c</sub> = ${f2(D.Wd)}(${f3(b.tsDeck / 12)})(${f3(wc)}) = ${f3(D.Wd * b.tsDeck / 12 * wc)} klf. Girder self-weight is not included; the girder modules apply it from the section.</p>`);
++  // 2a. the superimposed line loads from the cross-section (XS4)
++  if (D.per.length) { const ed = sd => b.edge && b.edge[sd], dl = R.p.dl, wcA = nm(dl.wcA) > 0 ? nm(dl.wcA) : wc, wsW = L => f2(L.x1 - L.x0), qOf = L => L.thk ? `${f2(L.thk)}/12 × ${f3(L.gam)} × 1000 = ${f2(L.q)} psf; ` : '';
++    const how = L => { const sd = /L$/.test(L.id) ? 'L' : 'R', e = ed(sd);
++      if (/^bar/.test(L.id) || /^rail/.test(L.id)) return 'from Preliminary sizing';
++      if (/^curb/.test(L.id)) return `(${f2(e.cw)}/12)(${f2(e.ch)}/12)(${f3(wcA)})`;
++      if (/^sw[LR]$/.test(L.id)) return `${f2(nm(dl['sw' + sd]))} × (${f2(nm(dl['swThk' + sd]))}/12)(${f3(wcA)})`;
++      if (L.id === 'med') return `${f2(nm(dl.medW))} × (${f2(nm(dl.medThk))}/12)(${f3(wcA)})`;
++      if (L.id === 'ws') return `${qOf(L)}${f2(L.q || L.plf * 1000 / (L.x1 - L.x0))} × ${wsW(L)}/1000`;
++      if (/^ovl/.test(L.id)) return `${qOf(L)}${f2(L.q)} × ${wsW(L)}/1000`;
++      if (/^ped/.test(L.id)) return `${f0(nm(dl.ped))} × ${f2(L.plf * 1000 / nm(dl.ped))}/1000 (walkable width)`;
++      return 'entered'; };
++    E.push(eq('Superimposed line loads from the cross-section', 'MassDOT 3.5.3', T`\begin{aligned} w &= b\,\tfrac{t}{12}\,\gamma_c && \text{curbs, sidewalks, median} \\ w &= \tfrac{q}{1000}\,(W_{deck} - s_L - s_R) && \text{wearing surface, overlays} \\ q &= \tfrac{t}{12}\,\gamma \cdot 1000 && \text{when entered as a thickness} \end{aligned}`,
++      [['γ<sub>c</sub>', `appurtenance concrete unit weight${nm(dl.wcA) > 0 ? ' (entered)' : ' (the deck w<sub>c</sub>)'}`, f3(wcA), ' kcf'], ['s<sub>L</sub>, s<sub>R</sub>', 'deck edge to the curb face each side (the larger of the traffic face and the sidewalk width)', '', ''], ['q', 'wearing surface or overlay weight', '', ' psf']])
++      + tbl('<th>Load</th><th>Class</th><th>Derivation</th><th class="right">P (klf)</th>', D.per.map(L => `<tr><td class="lbl">${esc(L.desc)}</td><td>${L.cat}</td><td>${how(L)}</td><td class="val">${f3(L.plf)}</td></tr>`).join(''))); }
+   // 3. pile-cap group properties
+   E.push(eq('Girder group properties (pile-cap analogy)', 'MassDOT 3.5.3', T`\bar{x} = \frac{\sum x_i}{N_b} = \frac{${f2(sum(D.ub))}}{${N}} = ${f2(D.xbar)}\ \text{ft}, \qquad c_i = x_i - \bar{x}, \qquad \sum c_i^2 = ${f2(D.S2)}\ \text{ft}^2`,
+     [['x̄', 'centroid of the girder group (each girder a unit pile)', f2(D.xbar), ' ft'], ['Σc<sup>2</sup>', 'second moment of the group about x̄', f2(D.S2), ' ft²']]));
+@@ -4246,7 +4307,7 @@ function dfDLCalcs(R) {
+   // 4. rules
+   E.push(eq('Distribution rules', 'MassDOT 3.5.3; AASHTO 4.6.2.2.1', T`\underbrace{R_i = \frac{P}{N_b}}_{\text{Equal}} \qquad \underbrace{R_i = \frac{P}{N_b} + \max\left(0,\ \frac{P\,e\,c_i}{\sum c^2}\right),\ e = x_L - \bar{x}}_{\text{MassDOT pile-cap}} \qquad \underbrace{R_k = P(1 - t),\ R_{k+1} = P\,t,\ t = \frac{x_L - x_k}{x_{k+1} - x_k}}_{\text{Two adjacent}}`,
+     [['P', 'line load being distributed (klf)', '', ''], ['x<sub>L</sub>', 'position of the load from the left deck edge (ft)', '', ''], ['e', 'eccentricity of the load about x̄ (ft)', '', '']])
+-    + `<p class="note-p">${D.method === 'massdot' ? 'Method: <b>MassDOT 3.5.3</b>. Barriers, curbs, railings, sidewalks, the median, and the pedestrian load use the pile-cap rule; the future wearing surface (DW) is always distributed equally.' : 'Method: <b>typical AASHTO</b>. All superimposed loads are distributed equally to all girders.'} An added line load uses the distribution chosen on its row. The pile-cap rule gives no uplift relief: a girder on the far side of the centroid is not reduced below P/N<sub>b</sub>, so ΣR ≥ P. Two adjacent: a load between two girders is split by simple-span lever between them; a load at or outside an exterior girder goes entirely to that girder.</p>`);
++    + `<p class="note-p">${D.method === 'massdot' ? 'Method: <b>MassDOT 3.5.3</b>. Barriers, curbs, railings, sidewalks, the median, and the pedestrian load use the pile-cap rule; the future wearing surface (DW) is always distributed equally.' : 'Method: <b>typical AASHTO</b>. All superimposed loads are distributed equally to all girders.'} An added line load uses the distribution chosen on its row; a row set to "follows the method" takes the method's rule for its class (MassDOT: DW equally, DC1 and DC2 pile-cap; AASHTO: equally). The pile-cap rule gives no uplift relief: a girder on the far side of the centroid is not reduced below P/N<sub>b</sub>, so ΣR ≥ P. Two adjacent: a load between two girders is split by simple-span lever between them; a load at or outside an exterior girder goes entirely to that girder.</p>`);
+   // 5. worked example
+   const pc = D.per.filter(L => L.dist === 'pilecap' && L.plf > 0).sort((a, c) => c.plf - a.plf)[0];
+   if (pc) { let gi = 0; pc.r.forEach((v, i) => { if (v > pc.r[gi]) gi = i; }); const raw = D.ub.map((_, i) => pc.plf * pc.e * D.c[i] / D.S2), Rg = pc.plf / N + raw[gi];
+@@ -4262,7 +4323,7 @@ function dfDLCalcs(R) {
+     else if (L.dist === 'two') { const k = kOf(L.x), out = L.x <= D.ub[0] || L.x >= D.ub[N - 1];
+       tx = out ? T`P = ${f3(L.plf)}\ \text{klf at } x = ${f2(L.x)}\ \text{ft (at or outside the exterior girder: all to it)} \\ &\Rightarrow ${tail}` : T`P = ${f3(L.plf)}\ \text{klf at } x = ${f2(L.x)}\ \text{ft},\ t = \tfrac{${f2(L.x)} - ${f2(D.ub[k])}}{${f2(D.ub[k + 1])} - ${f2(D.ub[k])}} = ${f3((L.x - D.ub[k]) / (D.ub[k + 1] - D.ub[k]))} \\ &\Rightarrow ${tail}`; }
+     else tx = T`P = ${f3(L.plf)}\ \text{klf},\ \tfrac{P}{N_b} = \tfrac{${f3(L.plf)}}{${N}} \\ &\Rightarrow ${tail}`;
+-    E.push(eq(`${esc(L.desc)} (${L.cat})`, DF_DIST[L.dist] || L.dist, T`\begin{aligned} &${tx} \\ &\textstyle\sum R = ${f3(sum(L.r))}\ \text{klf} \end{aligned}`)); });
++    E.push(eq(`${esc(L.desc)} (${L.cat})`, (DF_DIST[L.dist] || L.dist) + (L.byMethod ? ', follows the method' : ''), T`\begin{aligned} &${tx} \\ &\textstyle\sum R = ${f3(sum(L.r))}\ \text{klf} \end{aligned}`)); });
+   // 7. summary
+   const pl = D.pl.some(v => v > 0), tot = D.ub.map((_, i) => D.dc1[i] + D.dc2[i] + D.dw[i]);
+   E.push(eq('Dead load per girder', 'Summary', T`w_i = w_{DC1,i} + w_{DC2,i} + w_{DW,i}${pl ? T`, \qquad w_{PL,i}\ \text{(pedestrian live load, with the vehicular live load)}` : ''}`)
+@@ -5169,9 +5230,9 @@ function gmInitDom() {
+ }
+ function gmRowEdit(e) {
+   const d = e.target.closest('[data-gdel]'), a = e.target.closest('[data-gadd]'); if (!d && !a) return false;
+-  const [id, path] = (d || a).dataset[d ? 'gdel' : 'gadd'].split('.'), rows = P[id][path];
++  const [id, path] = (d || a).dataset[d ? 'gdel' : 'gadd'].split('.'), rows = P[id][path] || (P[id][path] = []);   // an optional list (absent in older projects) is created on the first Add
+   if (d) { const i = +d.dataset.i; if (!confirm(`Delete ${rows[i].name || 'this row'}?`)) return true; rows.splice(i, 1); }
+-  else { const src = rows[rows.length - 1] || GM[id].def[path][0]; rows.push({ ...clone(src), name: `${(GM[id].rowPath2 === path ? GM[id].rowLbl2 : GM[id].rowLbl)} ${rows.length + 1}` }); }
++  else { const src = rows[rows.length - 1] || (GM[id].def[path] || GM[id].rowNew[path])[0]; rows.push({ ...clone(src), name: `${(GM[id].rowPath2 === path ? GM[id].rowLbl2 : GM[id].rowLbl)} ${rows.length + 1}` }); }
+   gmBuildPanes(id); fillInputs(); recompute(); autosave(); return true;
+ }
+ function gmRecompute() {
+```
+
+### XS5. Per-load overrides of the automatic loads (distribution rule, line load, x) and beam-class labels   [new optional inputs] [results unchanged without them]
+- **Where (anchors):** `dfDead` (anchors `// per-load overrides of the automatic loads (XS5`, `const clsAuto = cls.slice()`, `...(a.bcls ? { clsAuto } : {})`); `GM.df.compute` (anchor `const g0 = regions[0].geo, lo = p.loadOverrides`; validation; `ovr: lo, bcls:` in the `dfDead` call); `GM.df.panes` `df_dl` (Distribution method: "Beam classification (labels only)" `#df-bcls`; new section "Load overrides" `#df-ovr`); `GM.df.after` (`dfOvrSync(R)`); new `function dfOvrSync(R)` and its `change`/`click` listeners (`data-dfov`, `data-dfcls`, `data-dfovr`), `const DF_DIST_S`; CSS `.df-ov`, `.df-ovt`; display: `cb-dl` classification cell ("set"), `dfXsSVG` labels "(override)" and barrier/curb labels at the load's x, `dfLoadsTbl` outlined overridden cells, `dfDLCalcs` per-load title "override of …".
+- **New optional saved fields:** `P.df.loadOverrides` = `{ <load id>: { x?, plf?, dist? } }` (as lldf `state.loadOverrides`; ids `barL`, `barR`, `curbL`, `curbR`, `railL`, `railR`, `swL`, `swR`, `fenceL`, `fenceR`, `med`, `ws`), and `P.df.beamClass` = `{ <girder index from 0>: <class key of DF_CLS> }`. Created only when a value is entered, removed when the last one is cleared. Ids that no longer exist (or girder indices ≥ N<sub>b</sub>) are kept but ignored, so nothing saved is discarded.
+- **Behaviour:** a blank cell uses the automatic value (shown under the load's name); an entered value replaces it before distribution and is outlined in the input table (as GD's import overrides) and in the "Loads on the bridge" table, with the automatic value on hover; ↺ resets the load. x is from the left deck edge (0 to W<sub>deck</sub>), line load ≥ 0. Added line loads, overlays, and the pedestrian load are not overridden here (they have their own inputs; the pedestrian load is left as is per the engineer). The beam-class override changes only the label (tables, CSV), not any load.
+- **AASHTO method and added rows:** a row set to "Follows the method" (XS4) becomes equal under AASHTO; a row with an explicit rule keeps it (stated on the input tab, with the example "a pile-cap row stays pile-cap under AASHTO").
+- **Governing provision:** MassDOT Bridge Manual Part I 3.5.3 and Fig. 3.5.3-1 (classes). No formula changed.
+- **Check case (built-in bridge with the XS4 sidewalks, fence 0.050 klf at 5.5 ft, overrides: left barrier x = 0.90 ft and 0.450 klf; right barrier x = 43.00 ft and "two adjacent"; right sidewalk "two adjacent"; median 0.500 klf; wearing surface pile-cap; G1 class "exterior safety curb", G3 "median beam (continuous)"):** left barrier R<sub>1</sub> = 0.450/5 + 0.450(0.90 − 22.25)(−19.00)/902.5 = 0.090 + 0.202 = 0.292 klf (screen 0.292); right barrier at 43.00 > 41.25: all to G5 = 0.400 (before F6, XS7); wearing surface pile-cap R<sub>5</sub> = 0.838/5 + 0.838(0.50)(19.00)/902.5 = 0.176 (screen 0.176); classes G1 "Exterior safety curb beam (set)", G3 "Median beam (continuous slab, interior) (set)"; loads unchanged by the class labels.
+- **Other copies:** none (`lldf.html` `loadOverrides` / `beamClass` were the reference).
+
+### Exact changes (XS5): main page (unified diff against the XS4 commit; the PL_B64 line is not touched)
+
+```diff
+diff --git a/Steel Bridge Beam Modules.html b/Steel Bridge Beam Modules.html
+index c72a325..2e973a9 100644
+--- a/Steel Bridge Beam Modules.html	
++++ b/Steel Bridge Beam Modules.html	
+@@ -1011,6 +1011,8 @@ input:focus, select:focus, textarea:focus { border-color: var(--ink); box-shadow
+ label.locked::after { content: ' \1F512'; font-size: 11px; } input.locked, select.locked { border-style: dashed; }
+ .ad-box { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border); } .ad-std summary { cursor: pointer; font-size: 13px; margin-top: 8px; } .ad-std .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 10px; margin-top: 8px; }
+ input.ovr, select.ovr { outline: 2px solid #c98a1b; outline-offset: -1px; background: #fff8ec; }
++.df-ov { outline: 2px solid #c98a1b; outline-offset: 1px; background: #fff8ec; border-radius: 2px; padding: 0 2px; }
++.df-ovt td, .df-ovt th { padding: 4px 3px; font-size: 11.5px; } .df-ovt input, .df-ovt select { font-size: 11.5px; padding: 3px 4px; }
+ .pl-plot { width: 100%; min-height: 200px; } .pl-plot-wait { display: grid; place-items: center; color: var(--text-dim); font-size: 13px; }
+ .sa-off { display: none; } .sa-lg.off { opacity: .35; } .sa-t th.sa-grp { text-align: center; border-bottom: 1px solid var(--border); } .sa-t td.val, .sa-t th { white-space: nowrap; }
+ .dfv-ctl { gap: 14px; } .dfv-ctl label { display: inline-flex; align-items: center; gap: 6px; font: 500 13px var(--cond); } .dfv-ctl select { width: auto; padding: 4px 8px; }
+@@ -3979,6 +3981,13 @@ function dfDead(p, geo, a) {
+   const wkL = Math.max(swL - p.fL, 0), wkR = Math.max(swR - p.fR, 0);   // walkable width inside the railing
+   if (a.ped > 0) { if (wkL) F.push({ id: 'pedL', desc: 'Left pedestrian LL', cat: 'PL', x: p.fL + wkL / 2, plf: a.ped / 1000 * wkL }); if (wkR) F.push({ id: 'pedR', desc: 'Right pedestrian LL', cat: 'PL', x: Wd - p.fR - wkR / 2, plf: a.ped / 1000 * wkR }); }
+   (a.extra || []).forEach((u, k) => { if (u.plf) F.push({ id: 'u' + k, desc: u.desc || `Added load ${k + 1}`, cat: u.cat || 'DC2', x: u.x, plf: u.plf, dist: u.dist }); });
++  // per-load overrides of the automatic loads (XS5; lldf loadOverrides): x, line load, rule. Added rows, overlays, and the pedestrian load are not overridden here.
++  const OV = a.ovr || {};
++  F.forEach(L => { const o = OV[L.id]; if (!o || /^(u\d|ovl|ped)/.test(L.id)) return; const ch = [];
++    if (o.x != null && isFinite(o.x)) { L.xAuto = L.x; L.x = +o.x; ch.push('x'); }
++    if (o.plf != null && isFinite(o.plf)) { L.plfAuto = L.plf; L.plf = +o.plf; ch.push('plf'); }
++    if (o.dist && DF_DIST[o.dist]) { L.distAuto = L.forceEqual || a.method === 'aashto' ? 'equal' : 'pilecap'; L.dist = o.dist; ch.push('dist'); }
++    if (ch.length) L.ovr = ch; });
+   // classification (MassDOT Fig. 3.5.3-1)
+   const cls = new Array(N).fill('interior'), sw = new Array(N).fill(false), inR = (x, f) => x >= f.x0 - 0.02 && x <= f.x1 + 0.02;
+   F.filter(f => f.id === 'swL' || f.id === 'swR').forEach(f => { let any = false; ub.forEach((x, i) => { if (inR(x, f)) { sw[i] = true; any = true; } }); if (!any) { let bi = 0; ub.forEach((x, i) => { if (Math.abs(x - f.x) < Math.abs(ub[bi] - f.x)) bi = i; }); sw[bi] = true; } });
+@@ -3987,6 +3996,7 @@ function dfDead(p, geo, a) {
+   const li = sw.findIndex(Boolean); if (li >= 0) cls[li] = 'ext-sw'; let ri = -1; for (let i = N - 1; i >= 0; i--) if (sw[i]) { ri = i; break; } if (ri >= 0) cls[ri] = 'ext-sw';
+   [0, N - 1].forEach(e => { if (cls[e] === 'interior') cls[e] = 'ext-curb'; });
+   for (let i = 0; i < N; i++) if (cls[i] === 'interior') { cls[i] = 'first-int'; break; } for (let i = N - 1; i >= 0; i--) if (cls[i] === 'interior') { cls[i] = 'first-int'; break; }
++  const clsAuto = cls.slice(); if (a.bcls) Object.entries(a.bcls).forEach(([i, k]) => { if (+i >= 0 && +i < N && DF_CLS[k]) cls[+i] = k; });   // beam-class override: labels only (XS5)
+   // distribution
+   const method = a.method === 'aashto' ? 'aashto' : 'massdot', xbar = ub.reduce((s, x) => s + x, 0) / N, c = ub.map(x => x - xbar), S2 = c.reduce((s, ci) => s + ci * ci, 0) || 1e-9;
+   const pile = (P, xL) => { const e = xL - xbar; return ub.map((x, i) => P / N + Math.max(0, P * e * c[i] / S2)); }, equal = P => ub.map(() => P / N);
+@@ -3998,7 +4008,7 @@ function dfDead(p, geo, a) {
+   // an added row set to "follows the method" (dist 'auto'): MassDOT = equal for DW, pile-cap otherwise; AASHTO = equal. An explicit rule is kept under either method.
+   const per = F.map(L => { const dist = L.dist && L.dist !== 'auto' ? L.dist : (L.forceEqual ? 'equal' : method === 'massdot' ? (L.dist === 'auto' && L.cat === 'DW' ? 'equal' : 'pilecap') : 'equal'), r = dist === 'equal' ? equal(L.plf) : dist === 'two' ? two(L.plf, L.x) : pile(L.plf, L.x);
+     (L.cat === 'DC1' ? dc1 : L.cat === 'DW' ? dw : L.cat === 'PL' ? pl : dc2).forEach((_, i, arr) => arr[i] += r[i]); return { ...L, dist, ...(L.dist === 'auto' ? { byMethod: true } : {}), e: L.x - xbar, r }; });
+-  return { N, ub, xbar, c, S2, trib, deck, haunch, sip, bf, bays, dc1, dc2, dw, pl, cls, method, per, Wd };
++  return { N, ub, xbar, c, S2, trib, deck, haunch, sip, bf, bays, dc1, dc2, dw, pl, cls, method, per, Wd, ...(a.bcls ? { clsAuto } : {}) };
+ }
+ 
+ /* optional cross-section inputs (XS4, 2026-10-13). Each is absent in projects saved before; absent (or blank) = the loads as before. */
+@@ -4027,6 +4037,26 @@ function dfEdgeSummary(b) {
+   return `<table class="tbl df-kv"><tbody>${side('L')}${side('R')}</tbody></table><p class="note">Read-only: these come from the Bridge tab of Preliminary sizing (distances from the deck edge).</p>`;
+ }
+ 
++/* load overrides and beam classification tables on the input tab (XS5): rebuilt after each compute unless the user is in them */
++function dfOvrSync(R) {
++  const D = R && R.dead; if (!D) return; const box = document.getElementById('df-ovr'), bc = document.getElementById('df-bcls'), lo = P.df.loadOverrides || {}, bo = P.df.beamClass || {};
++  if (box && !box.contains(document.activeElement)) { const Ls = D.per.filter(L => !/^(u\d|ovl|ped)/.test(L.id));
++    const inp = (L, f, v, ph) => `<input type="number" step="any" data-dfov="${L.id}" data-f="${f}" value="${v == null ? '' : v}" placeholder="${ph}" class="${v == null ? '' : 'ovr'}" style="width:100%;min-width:0" aria-label="${esc(L.desc)} ${f}">`;
++    box.innerHTML = Ls.length ? `<div class="tscroll"><table class="tbl df-ovt"><thead><tr><th>Load</th><th>x (ft)</th><th>w (klf)</th><th>Rule</th><th></th></tr></thead><tbody>${Ls.map(L => { const o = lo[L.id] || {}, xa = L.xAuto != null ? L.xAuto : L.x, pa = L.plfAuto != null ? L.plfAuto : L.plf, da = L.distAuto || L.dist;
++      return `<tr><td class="lbl" style="white-space:normal">${esc(L.desc)} <span class="lbl-note">${L.cat}</span><br><span class="lbl-note">auto: ${f2(xa)} ft, ${f3(pa)} klf, ${DF_DIST_S[da]}</span></td><td>${inp(L, 'x', o.x, f2(xa))}</td><td>${inp(L, 'plf', o.plf, f3(pa))}</td><td><select data-dfov="${L.id}" data-f="dist" class="${o.dist ? 'ovr' : ''}" style="width:100%;min-width:0" aria-label="${esc(L.desc)} rule"><option value="">Auto</option>${Object.entries(DF_DIST).map(([k, t]) => `<option value="${k}" ${o.dist === k ? 'selected' : ''}>${DF_DIST_S[k]}</option>`).join('')}</select></td><td>${L.ovr || lo[L.id] ? `<button type="button" class="link-btn" data-dfovr="${L.id}" title="Reset to the automatic values">↺</button>` : ''}</td></tr>`; }).join('')}</tbody></table></div>` : '<p class="note">No automatic loads.</p>'; }
++  if (bc && !bc.contains(document.activeElement)) { const au = D.clsAuto || D.cls;
++    bc.innerHTML = `<div class="tscroll"><table class="tbl"><tbody>${D.ub.map((x, i) => `<tr><td class="lbl">G${i + 1}</td><td><select data-dfcls="${i}" class="${bo[i] && DF_CLS[bo[i]] ? 'ovr' : ''}" style="width:100%;min-width:0" aria-label="G${i + 1} classification"><option value="">Auto: ${DF_CLS[au[i]]}</option>${Object.entries(DF_CLS).map(([k, t]) => `<option value="${k}" ${bo[i] === k ? 'selected' : ''}>${t}</option>`).join('')}</select></td></tr>`).join('')}</tbody></table></div>`; }
++}
++document.addEventListener('change', e => { const el = e.target;
++  if (el.dataset && el.dataset.dfov) { const id = el.dataset.dfov, f = el.dataset.f, o = P.df.loadOverrides || (P.df.loadOverrides = {}), c = o[id] || {}, v = String(el.value).trim();
++    if (v === '') delete c[f]; else c[f] = f === 'dist' ? v : Number(v);
++    if (Object.keys(c).length) o[id] = c; else delete o[id]; if (!Object.keys(o).length) delete P.df.loadOverrides;
++    el.classList.toggle('ovr', v !== ''); recompute(); autosave(); }
++  else if (el.dataset && el.dataset.dfcls !== undefined) { const i = el.dataset.dfcls, o = P.df.beamClass || (P.df.beamClass = {});
++    if (el.value) o[i] = el.value; else delete o[i]; if (!Object.keys(o).length) delete P.df.beamClass; el.classList.toggle('ovr', !!el.value); recompute(); autosave(); } });
++document.addEventListener('click', e => { const b = e.target.closest('[data-dfovr]'); if (!b || !P.df.loadOverrides) return; delete P.df.loadOverrides[b.dataset.dfovr]; if (!Object.keys(P.df.loadOverrides).length) delete P.df.loadOverrides;
++  const box = document.getElementById('df-ovr'); if (box) box.innerHTML = ''; recompute(); autosave(); });
++
+ GM.df = {
+ tabs: { combos: 'Factors and loads', cap: 'Derivations', rptCombos: 'Distribution factors and dead loads', rptCap: 'Distribution factor derivations', noGeom: true },
+   id: 'df', label: 'LLDF and DLs', title: 'live load (AASHTO LRFD 4.6.2.2) and dead load (MassDOT 3.5.3) distribution, steel I-girders', rptTitle: 'Live Load and Dead Load Distribution', rptRef: 'AASHTO LRFD Article 4.6.2.2; MassDOT Bridge Manual Part I, 3.5.3',
+@@ -4062,7 +4092,9 @@ tabs: { combos: 'Factors and loads', cap: 'Derivations', rptCombos: 'Distributio
+         <div class="sec-body one-col" style="padding-top:0">${gmRowsHtml('df', 2)}</div>
+         ${secHd('sec-dfx', 'Utilities and other line loads')}<div class="sec-body one-col" id="sec-dfx"><p class="note">Utilities are DW (MassDOT: DW = utilities and wearing surface); other superimposed line loads are DC2 (or DC1 if placed before the deck acts compositely). x is from the left deck edge.</p>${gmRowsHtml('df')}</div>
+         ${secHd('sec-dfd', 'Distribution method')}<div class="sec-body" id="sec-dfd">${fld('Method', 'df.dl.method', '', 'sel', { full: true, options: [['massdot', 'MassDOT 3.5.3 (pile-cap for superimposed DC; wearing surface equally)'], ['aashto', 'Typical AASHTO (all loads equally to all beams)']] })}
+-        <p class="note full">MassDOT: barriers, curbs, railings, sidewalks, the median, and the pedestrian load by the pile-cap rule; the wearing surface and overlays (DW) equally. AASHTO: all of these equally. A line load row set to "Follows the method" takes the method's rule for its class (MassDOT: DW equally, DC1 and DC2 pile-cap; AASHTO: equally); a row with an explicit rule keeps it under either method. SIP forms, haunch, deck thickness, and the deck concrete unit weight come from Preliminary sizing. DC1 is the deck by tributary width plus the haunch over the top flange and the SIP forms over the clear bays; girder self-weight is excluded because the girder modules apply it from the section.</p></div>` }; },
++        <p class="note full">MassDOT: barriers, curbs, railings, sidewalks, the median, and the pedestrian load by the pile-cap rule; the wearing surface and overlays (DW) equally. AASHTO: all of these equally. A line load row set to "Follows the method" takes the method's rule for its class (MassDOT: DW equally, DC1 and DC2 pile-cap; AASHTO: equally); a row with an explicit rule keeps it under either method (for example, a pile-cap row stays pile-cap under AASHTO). SIP forms, haunch, deck thickness, and the deck concrete unit weight come from Preliminary sizing. DC1 is the deck by tributary width plus the haunch over the top flange and the SIP forms over the clear bays; girder self-weight is excluded because the girder modules apply it from the section.</p>
++          <div class="full"><h4 class="sub-h" style="margin:4px 0">Beam classification (labels only)</h4><div id="df-bcls"><p class="note">Shown once the module has computed.</p></div><p class="note">MassDOT Fig. 3.5.3-1 classes, assigned automatically from the layout. An override changes the label only (tables, report, CSV), not any load.</p></div></div>
++        ${secHd('sec-dfov', 'Load overrides')}<div class="sec-body one-col" id="sec-dfov"><div id="df-ovr"><p class="note">Shown once the module has computed.</p></div><p class="note">For each automatic load, a blank cell uses the automatic value shown under its name; an entered value overrides it (outlined) and is kept until reset (↺). x is from the left deck edge. Added line loads, overlays, and the pedestrian load are set on their own inputs.</p></div>` }; },
+   compute(p) {
+     const b = p.bridge;
+     if (!b || !b.ok) return { errors: [b && b.why ? `The bridge in Preliminary sizing is not complete: ${b.why.join(' ')}` : 'The bridge is not defined. Define the complete bridge in the Preliminary sizing module; this module unlocks when the sizing has no input errors.'], locked: true };
+@@ -4089,8 +4121,11 @@ tabs: { combos: 'Factors and loads', cap: 'Derivations', rptCombos: 'Distributio
+       const lever = members.map((m, j) => dfLeverAll(pp, geo, j)), mD = DF_MPF(geo.NL), gDef = geo.NL * mD / Nb;
+       return { ...rg, s, eg, Kg, KgAvg, pp, geo, sk, members, lever, mD, gDef };
+     });
+-    const g0 = regions[0].geo, dead = dfDead({ ...base }, g0, { ...p.dl, swL: nm(p.dl.swL), swThkL: nm(p.dl.swThkL), swR: nm(p.dl.swR), swThkR: nm(p.dl.swThkR), medW: nm(p.dl.medW), medThk: nm(p.dl.medThk), ped: nm(p.dl.ped), fws: xs.fws !== null ? xs.fws : b.fws, uwc: b.wc, hh: b.haunch, sip: b.sip, bf: regions[0].sec.topB, edges: dfEdges(b, xs.wcA), extra: extra.map(e => ({ desc: e.name, cat: e.cat, x: e.x, plf: e.plf, dist: e.dist })),
+-      uwcA: xs.wcA, fenceL: xs.fenceL, fenceXL: xs.fenceXL, fenceR: xs.fenceR, fenceXR: xs.fenceXR, wsThk: xs.wsThk, wsGam: xs.wsGam, ovl: xs.ovl });
++    const g0 = regions[0].geo, lo = p.loadOverrides && typeof p.loadOverrides === 'object' ? p.loadOverrides : null;
++    if (lo) Object.entries(lo).forEach(([id, o]) => { if (!o || typeof o !== 'object') return; if (o.x != null && !(isFinite(o.x) && o.x >= 0 && o.x <= g0.Wdeck + 1e-9)) errors.push(`Override of "${id}": x must be from 0 to the deck width ${f2(g0.Wdeck)} ft.`); if (o.plf != null && !(isFinite(o.plf) && o.plf >= 0)) errors.push(`Override of "${id}": the line load must be zero or positive.`); });
++    if (errors.length) return { errors };
++    const dead = dfDead({ ...base }, g0, { ...p.dl, swL: nm(p.dl.swL), swThkL: nm(p.dl.swThkL), swR: nm(p.dl.swR), swThkR: nm(p.dl.swThkR), medW: nm(p.dl.medW), medThk: nm(p.dl.medThk), ped: nm(p.dl.ped), fws: xs.fws !== null ? xs.fws : b.fws, uwc: b.wc, hh: b.haunch, sip: b.sip, bf: regions[0].sec.topB, edges: dfEdges(b, xs.wcA), extra: extra.map(e => ({ desc: e.name, cat: e.cat, x: e.x, plf: e.plf, dist: e.dist })),
++      uwcA: xs.wcA, fenceL: xs.fenceL, fenceXL: xs.fenceXL, fenceR: xs.fenceR, fenceXR: xs.fenceXR, wsThk: xs.wsThk, wsGam: xs.wsGam, ovl: xs.ovl, ovr: lo, bcls: p.beamClass && typeof p.beamClass === 'object' ? p.beamClass : null });
+     return { errors: [], b, MR, regions, dead, base, p };
+   },
+   checks(R) {
+@@ -4131,7 +4166,7 @@ tabs: { combos: 'Factors and loads', cap: 'Derivations', rptCombos: 'Distributio
+     h += card('cb-defl', 'Live load deflection distribution factor', 'AASHTO LRFD 2.5.2.6.2', `<div class="tscroll"><table class="tbl"><thead><tr><th>Region</th><th class="right">N<sub>L</sub></th><th class="right">m</th><th class="right">N<sub>b</sub></th><th class="right">g<sub>Δ</sub> = mN<sub>L</sub>/N<sub>b</sub></th></tr></thead><tbody>${R.regions.map(rg => `<tr><td class="lbl">${rg.label}</td><td class="val">${rg.geo.NL}</td><td class="val">${f2(rg.mD)}</td><td class="val">${R.b.nb}</td><td class="val"><b>${f3(rg.gDef)}</b></td></tr>`).join('')}</tbody></table></div><p class="note-p">All design lanes loaded and all girders assumed to deflect equally, for the optional live load deflection criterion (L/800, 2.5.2.6.2).</p>`);
+     h += card('cb-rate', 'Load rating distribution factors', 'AASHTO MBE 6A.3.2, 6A.4.5.4.2', `<div class="tscroll"><table class="tbl"><thead><tr><th>Region</th><th>Girder</th><th class="right">Design and legal loads, M</th><th class="right">V</th><th class="right">Single-trip escorted permit, M (one lane, m removed)</th><th class="right">V</th></tr></thead><tbody>${R.regions.flatMap(rg => rg.members.map(m => `<tr><td class="lbl">${rg.label}</td><td>${m.label}</td><td class="val">${f3(m.gM)}</td><td class="val">${rg.kind === 'span' ? f3(m.gV) : '—'}</td><td class="val">${f3(m.r.mom1 / 1.2)}</td><td class="val">${rg.kind === 'span' ? f3(m.r.shr1 / 1.2) : '—'}</td></tr>`)).join('')}</tbody></table></div><p class="note-p">Design (HL-93), legal, and routine permit loads use the LRFD factors above. A special single-trip escorted permit uses the one-lane factor with the 1.2 multiple presence factor divided out. Confirm the owner's rating manual.</p>`);
+     const D = R.dead;
+-    h += card('cb-dl', 'Dead load distribution per girder', D.method === 'massdot' ? 'MassDOT Bridge Manual 3.5.3' : 'Typical AASHTO (equal)', `<div class="tscroll"><table class="tbl"><thead><tr><th>Girder</th><th>MassDOT classification</th><th class="right">Tributary (ft)</th><th class="right">Deck</th><th class="right">Haunch</th><th class="right">SIP forms</th><th class="right">DC1 total (klf)</th><th class="right">DC2 (klf)</th><th class="right">DW (klf)</th><th class="right">PL (klf)</th></tr></thead><tbody>${D.ub.map((x, i) => `<tr><td class="lbl">G${i + 1}</td><td>${DF_CLS[D.cls[i]]}</td><td class="val">${f2(D.trib[i])}</td><td class="val">${f3(D.deck[i])}</td><td class="val">${f3(D.haunch[i])}</td><td class="val">${f3(D.sip[i])}</td><td class="val">${f3(D.dc1[i])}</td><td class="val">${f3(D.dc2[i])}</td><td class="val">${f3(D.dw[i])}</td><td class="val">${f3(D.pl[i])}</td></tr>`).join('')}<tr class="tot"><td colspan="3">Total</td><td class="val">${f3(sum(D.deck))}</td><td class="val">${f3(sum(D.haunch))}</td><td class="val">${f3(sum(D.sip))}</td><td class="val">${f3(sum(D.dc1))}</td><td class="val">${f3(sum(D.dc2))}</td><td class="val">${f3(sum(D.dw))}</td><td class="val">${f3(sum(D.pl))}</td></tr></tbody></table></div>`);
++    h += card('cb-dl', 'Dead load distribution per girder', D.method === 'massdot' ? 'MassDOT Bridge Manual 3.5.3' : 'Typical AASHTO (equal)', `<div class="tscroll"><table class="tbl"><thead><tr><th>Girder</th><th>MassDOT classification</th><th class="right">Tributary (ft)</th><th class="right">Deck</th><th class="right">Haunch</th><th class="right">SIP forms</th><th class="right">DC1 total (klf)</th><th class="right">DC2 (klf)</th><th class="right">DW (klf)</th><th class="right">PL (klf)</th></tr></thead><tbody>${D.ub.map((x, i) => `<tr><td class="lbl">G${i + 1}</td><td>${DF_CLS[D.cls[i]]}${D.clsAuto && D.clsAuto[i] !== D.cls[i] ? ` <span class="df-ov" title="Automatic: ${DF_CLS[D.clsAuto[i]]}">set</span>` : ''}</td><td class="val">${f2(D.trib[i])}</td><td class="val">${f3(D.deck[i])}</td><td class="val">${f3(D.haunch[i])}</td><td class="val">${f3(D.sip[i])}</td><td class="val">${f3(D.dc1[i])}</td><td class="val">${f3(D.dc2[i])}</td><td class="val">${f3(D.dw[i])}</td><td class="val">${f3(D.pl[i])}</td></tr>`).join('')}<tr class="tot"><td colspan="3">Total</td><td class="val">${f3(sum(D.deck))}</td><td class="val">${f3(sum(D.haunch))}</td><td class="val">${f3(sum(D.sip))}</td><td class="val">${f3(sum(D.dc1))}</td><td class="val">${f3(sum(D.dc2))}</td><td class="val">${f3(sum(D.dw))}</td><td class="val">${f3(sum(D.pl))}</td></tr></tbody></table></div>`);
+     h += card('cb-xl', 'Loads on the bridge', D.method === 'massdot' ? 'MassDOT Bridge Manual 3.5.3' : 'Typical AASHTO (equal)', dfLoadsTbl(R));
+     return h; },
+   capacity(R) {
+@@ -4164,7 +4199,7 @@ tabs: { combos: 'Factors and loads', cap: 'Derivations', rptCombos: 'Distributio
+       + card('dw-sens', 'Sensitivity to girder spacing', `${rg.label}; K<sub>g</sub> held at ${f0(rg.Kg)} in⁴`, `${dfSensSVG(R, rg)}<p class="cap">All bays scaled together from 70% to 130% of the current layout with the overhangs, barriers, and K<sub>g</sub> held; the dot is the current design. Letters along the exterior line show the governing exterior method: L lever rule, R rigid cross-section, E e-factor. Use it to see how close the layout is to a change of governing method.</p>`); },
+   echo(R) { const b = R.b; return { kv: [['Bridge (from Preliminary sizing)', `"${esc(b.project)}", received ${new Date(b.ts).toLocaleString()}`], ['Spans', b.spans.map(s => f2(s)).join(' + ') + ' ft' + (b.cont ? ', continuous' : '')], ['Skew at supports', b.skews.map(s => f0(s) + '°').join(', ')], ['Girders', `${b.nb} at ${f2(b.S)} ft`], ['Overhangs L / R, barrier', `${f2(b.ohL)} / ${f2(b.ohR)} ft, ${f2(b.barrier)} ft`], ['Deck', `t_s = ${f2(b.tsDeck)} in, haunch ${f2(b.haunch)} in, f′c = ${f2(b.fc)} ksi, w_c = ${b.wc} kcf, n = ${f2(R.MR.n)}`], ['Superimposed', `barrier ${f2(b.barW)} klf each, FWS ${f2(b.fws)} psf`], ['Dead-load method', R.dead.method === 'massdot' ? 'MassDOT 3.5.3' : 'Typical AASHTO (equal)'], ['Truck gap', `${f2(R.base.gap)} ft`]],
+       table: [['Region', 'L (ft)', 'Station (ft)', 'Section', 'K_g (in⁴)', 'Skew M / V'], R.regions.map(rg => [rg.label, f2(rg.L), f2(rg.x), secTxt(rg.sec), f0(rg.Kg), `${f0(rg.sk.thM)}° / ${f0(rg.sk.thV)}°`])] }; },
+-  after(R) { dfFeed(R); },
++  after(R) { dfFeed(R); dfOvrSync(R); },
+   inbox() { return null; }, noInbox: 'This module takes its bridge directly from the Preliminary sizing module (see the Bridge tab); nothing needs to be imported.'
+ };
+ const DF_VIEW = { rg: 0, j: 0 };
+@@ -4196,6 +4231,7 @@ function dfSVG(R, rg, sel) {
+    worked calculations from lldf.html renderDLCalcs. Everything is read from R.dead (dfDead); nothing here feeds a result. ---- */
+ const DF_LCOL = { DC1: '#1f4e8c', DC2: '#3f7fc4', DW: '#12806e', PL: '#8a6d1d' };
+ const DF_DIST = { pilecap: 'MassDOT pile-cap', equal: 'Equal', two: 'Two adjacent' };
++const DF_DIST_S = { pilecap: 'Pile-cap', equal: 'Equal', two: 'Two adj.' };
+ function dfXsSVG(R) {
+   const D = R.dead, b = R.b, dl = R.p.dl, Wd = D.Wd, N = D.N, W = 640, mL = 24, sc = (W - 2 * mL) / Wd, X = x => mL + x * sc;
+   const cl = (v, lo, hi) => Math.max(lo, Math.min(hi, v)), ht = (inch, lo, hi) => cl(inch / 12 * sc * 1.4, lo, hi), byId = id => D.per.find(L => L.id === id);
+@@ -4206,7 +4242,7 @@ function dfXsSVG(R) {
+     ed[sd] = e && e.mode === 'curb' ? { curb: true, cw: e.cw > 0 && e.ch > 0 ? e.cw / 12 : 0, cH: e.cw > 0 && e.ch > 0 ? ht(e.ch, 6, 40) : 0, rp: e.rp } : { curb: false, w: b.barrier > 0 ? b.barrier : 0 }; });
+   const surf = x => { if (x <= sw.L + 1e-9 && sw.L) return -swH.L; if (x >= Wd - sw.R - 1e-9 && sw.R) return -swH.R; if (medW && x >= m0 - 1e-9 && x <= m1 + 1e-9) return -medH; return 0; };
+   const tD = Math.max(8, b.tsDeck / 12 * sc), labs = []; let o = '';
+-  const lab = (L, xpx, top) => { if (L) labs.push({ x: xpx, top, col: DF_LCOL[L.cat] || '#17212b', t: `${L.desc}: ${f3(L.plf)} klf ${L.cat}` }); };
++  const lab = (L, xpx, top) => { if (L) labs.push({ x: xpx, top, col: DF_LCOL[L.cat] || '#17212b', t: `${L.desc}: ${f3(L.plf)} klf ${L.cat}${L.ovr ? ' (override)' : ''}` }); };
+   // wearing surface (under everything on the deck)
+   const ws = byId('ws'); if (ws) { o += `<rect x="${X(ws.x0)}" y="-4" width="${(ws.x1 - ws.x0) * sc}" height="4" fill="#cfe6dd" stroke="${DF_LCOL.DW}" stroke-width=".8"/>`; lab(ws, X(ws.x0 + 0.3 * (ws.x1 - ws.x0)), -4); }
+   D.per.filter(L => /^ovl\d/.test(L.id)).forEach((L, k) => { const y = -(ws ? 4 : 0) - 3 * (k + 1); o += `<rect x="${X(L.x0)}" y="${y}" width="${(L.x1 - L.x0) * sc}" height="3" fill="#e3f1ec" stroke="${DF_LCOL.DW}" stroke-width=".6" stroke-dasharray="3 1.5"/>`; lab(L, X(L.x0 + (0.55 + 0.12 * k) * (L.x1 - L.x0)), y); });   // overlays (XS4)
+@@ -4219,8 +4255,8 @@ function dfXsSVG(R) {
+   // barriers, or curbs with railings
+   ['L', 'R'].forEach(sd => { const e = ed[sd], y0 = -swH[sd];
+     if (!e.curb) { if (!(e.w > 0)) return; const P = (f, h) => `${X(xd(sd, f * e.w))},${y0 - h * BAR}`;
+-      o += `<polygon points="${P(0, 0)} ${P(0, 1)} ${P(0.42, 1)} ${P(0.62, 0.3)} ${P(1, 0.12)} ${P(1, 0)}" fill="#c9ced6" stroke="#6b7280"/>`; lab(byId('bar' + sd), X(xd(sd, e.w / 2)), y0 - BAR); return; }
+-    if (e.cw > 0) { const a = sd === 'L' ? 0 : Wd - e.cw; o += `<rect x="${X(a)}" y="${y0 - e.cH}" width="${Math.max(e.cw * sc, 3)}" height="${e.cH}" fill="#c9ced6" stroke="#6b7280"/>`; lab(byId('curb' + sd), X(xd(sd, e.cw / 2)), y0 - e.cH); }
++      o += `<polygon points="${P(0, 0)} ${P(0, 1)} ${P(0.42, 1)} ${P(0.62, 0.3)} ${P(1, 0.12)} ${P(1, 0)}" fill="#c9ced6" stroke="#6b7280"/>`; const Lb = byId('bar' + sd); lab(Lb, X(Lb ? Lb.x : xd(sd, e.w / 2)), y0 - BAR); return; }
++    if (e.cw > 0) { const a = sd === 'L' ? 0 : Wd - e.cw; o += `<rect x="${X(a)}" y="${y0 - e.cH}" width="${Math.max(e.cw * sc, 3)}" height="${e.cH}" fill="#c9ced6" stroke="#6b7280"/>`; const Lc = byId('curb' + sd); lab(Lc, X(Lc ? Lc.x : xd(sd, e.cw / 2)), y0 - e.cH); }
+     const rl = byId('rail' + sd); if (rl) { const xr = X(rl.x), base = e.cw > 0 && e.rp <= e.cw + 1e-9 ? y0 - e.cH : surf(rl.x), arm = 6;
+       o += `<path d="M${xr} ${base}V${base - RAIL}M${xr - arm} ${base - RAIL + 3}H${xr + arm}M${xr - arm} ${base - RAIL * 0.55}H${xr + arm}" stroke="#6b7280" stroke-width="1.6" fill="none"/>`; lab(rl, xr, base - RAIL); } });
+   // railing or fence on a sidewalk (XS4)
+@@ -4262,13 +4298,14 @@ function dfLoadsTbl(R) {
+   const D = R.dead, N = D.N, gh = D.ub.map((_, i) => `<th class="right">G${i + 1}</th>`).join(''), tol = 5e-7;
+   if (!D.per.length) return `<p class="note-p">No superimposed loads: no barrier or curb and railing weight, sidewalks, median, wearing surface, pedestrian load, or added line loads.</p>`;
+   const chk = (sR, P) => { const d = sR - P; return Math.abs(d) < tol ? 'ΣR = P' : d > 0 ? `ΣR = P + ${f3(d)}` : `ΣR = P − ${f3(-d)}`; };
+-  let rows = D.per.map(L => { const sR = sum(L.r); return `<tr><td class="lbl"><span style="color:${DF_LCOL[L.cat] || 'inherit'}">■</span> ${esc(L.desc)}</td><td>${L.cat}</td><td class="val">${f2(L.x)}</td><td class="val">${f3(L.plf)}</td><td style="white-space:nowrap">${DF_DIST[L.dist] || L.dist}${L.byMethod ? ' (method)' : ''}</td>${L.r.map(v => `<td class="val">${f3(v)}</td>`).join('')}<td class="val">${f3(sR)}</td><td style="white-space:nowrap">${chk(sR, L.plf)}</td></tr>`; }).join('');
++  const ov = (L, f, t, a) => L.ovr && L.ovr.includes(f) ? `<span class="df-ov" title="Override; automatic ${a}">${t}</span>` : t;
++  let rows = D.per.map(L => { const sR = sum(L.r); return `<tr><td class="lbl"><span style="color:${DF_LCOL[L.cat] || 'inherit'}">■</span> ${esc(L.desc)}</td><td>${L.cat}</td><td class="val">${ov(L, 'x', f2(L.x), f2(L.xAuto))}</td><td class="val">${ov(L, 'plf', f3(L.plf), f3(L.plfAuto))}</td><td style="white-space:nowrap">${ov(L, 'dist', DF_DIST[L.dist] || L.dist, DF_DIST[L.distAuto])}${L.byMethod ? ' (method)' : ''}</td>${L.r.map(v => `<td class="val">${f3(v)}</td>`).join('')}<td class="val">${f3(sR)}</td><td style="white-space:nowrap">${chk(sR, L.plf)}</td></tr>`; }).join('');
+   const base1 = D.ub.map((_, i) => D.deck[i] + D.haunch[i] + D.sip[i]), bucket = { DC1: D.dc1.map((v, i) => v - base1[i]), DC2: D.dc2, DW: D.dw, PL: D.pl }, notes = [];
+   ['DC1', 'DC2', 'DW', 'PL'].forEach(k => { const Ls = D.per.filter(L => L.cat === k); if (!Ls.length) return; const P = sum(Ls.map(L => L.plf)), r = D.ub.map((_, i) => sum(Ls.map(L => L.r[i]))), sR = sum(r);
+     const same = r.every((v, i) => Math.abs(v - bucket[k][i]) < 1e-9); if (!same) notes.push(k);
+     rows += `<tr class="tot"><td colspan="3">${k} total${k === 'DC1' ? ' (added loads)' : ''}</td><td class="val">${f3(P)}</td><td></td>${r.map(v => `<td class="val">${f3(v)}</td>`).join('')}<td class="val">${f3(sR)}</td><td>${chk(sR, P)}</td></tr>`; });
+   return `<div class="tscroll"><table class="tbl"><thead><tr><th>Load</th><th>Class</th><th class="right">x (ft)</th><th class="right">P (klf)</th><th>Distribution</th>${gh}<th class="right">ΣR (klf)</th><th>Check</th></tr></thead><tbody>${rows}</tbody></table></div>
+-    <p class="note-p">x is measured from the left deck edge. Each load is distributed on its own by its rule and added into its class. Equal and two-adjacent distributions return exactly the load (ΣR = P). The MassDOT pile-cap rule gives no uplift relief (a girder on the far side of the centroid keeps P/N<sub>b</sub>), so ΣR exceeds P for an eccentric load; the excess is the conservatism of the method, not an error. ${notes.length ? `<b>Check:</b> the ${notes.join(', ')} class totals differ from the girder table.` : `The class totals per girder are the ${((a) => a.length > 1 ? a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1] : a[0])(['DC2', 'DW', 'PL', 'DC1'].filter(k => D.per.some(L => L.cat === k)).map(k => k === 'DC1' ? 'added DC1' : k))} values in the dead load table above (checked).`} The deck, haunch, and SIP forms (DC1) are distributed by tributary width (Derivations tab).</p>`;
++    <p class="note-p">x is measured from the left deck edge. Each load is distributed on its own by its rule and added into its class. Equal and two-adjacent distributions return exactly the load (ΣR = P). The MassDOT pile-cap rule gives no uplift relief (a girder on the far side of the centroid keeps P/N<sub>b</sub>), so ΣR exceeds P for an eccentric load; the excess is the conservatism of the method, not an error. ${notes.length ? `<b>Check:</b> the ${notes.join(', ')} class totals differ from the girder table.` : `The class totals per girder are the ${((a) => a.length > 1 ? a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1] : a[0])(['DC2', 'DW', 'PL', 'DC1'].filter(k => D.per.some(L => L.cat === k)).map(k => k === 'DC1' ? 'added DC1' : k))} values in the dead load table above (checked).`} The deck, haunch, and SIP forms (DC1) are distributed by tributary width (Derivations tab).${D.per.some(L => L.ovr) ? ' Outlined values are overrides entered on the input tab (hover for the automatic value).' : ''}</p>`;
+ }
+ /* worked dead-load distribution (Derivations tab, card cap-dl) */
+ function dfDLCalcs(R) {
+@@ -4323,7 +4360,7 @@ function dfDLCalcs(R) {
+     else if (L.dist === 'two') { const k = kOf(L.x), out = L.x <= D.ub[0] || L.x >= D.ub[N - 1];
+       tx = out ? T`P = ${f3(L.plf)}\ \text{klf at } x = ${f2(L.x)}\ \text{ft (at or outside the exterior girder: all to it)} \\ &\Rightarrow ${tail}` : T`P = ${f3(L.plf)}\ \text{klf at } x = ${f2(L.x)}\ \text{ft},\ t = \tfrac{${f2(L.x)} - ${f2(D.ub[k])}}{${f2(D.ub[k + 1])} - ${f2(D.ub[k])}} = ${f3((L.x - D.ub[k]) / (D.ub[k + 1] - D.ub[k]))} \\ &\Rightarrow ${tail}`; }
+     else tx = T`P = ${f3(L.plf)}\ \text{klf},\ \tfrac{P}{N_b} = \tfrac{${f3(L.plf)}}{${N}} \\ &\Rightarrow ${tail}`;
+-    E.push(eq(`${esc(L.desc)} (${L.cat})`, (DF_DIST[L.dist] || L.dist) + (L.byMethod ? ', follows the method' : ''), T`\begin{aligned} &${tx} \\ &\textstyle\sum R = ${f3(sum(L.r))}\ \text{klf} \end{aligned}`)); });
++    E.push(eq(`${esc(L.desc)} (${L.cat})${L.ovr ? ` — override of ${L.ovr.map(f => f === 'x' ? `x (auto ${f2(L.xAuto)} ft)` : f === 'plf' ? `P (auto ${f3(L.plfAuto)} klf)` : `rule (auto ${DF_DIST[L.distAuto]})`).join(', ')}` : ''}`, (DF_DIST[L.dist] || L.dist) + (L.byMethod ? ', follows the method' : ''), T`\begin{aligned} &${tx} \\ &\textstyle\sum R = ${f3(sum(L.r))}\ \text{klf} \end{aligned}`)); });
+   // 7. summary
+   const pl = D.pl.some(v => v > 0), tot = D.ub.map((_, i) => D.dc1[i] + D.dc2[i] + D.dw[i]);
+   E.push(eq('Dead load per girder', 'Summary', T`w_i = w_{DC1,i} + w_{DC2,i} + w_{DW,i}${pl ? T`, \qquad w_{PL,i}\ \text{(pedestrian live load, with the vehicular live load)}` : ''}`)
+```
+
+### XS6. Mountable sidewalks (< 12 in) are ignored when positioning the live load; the traffic face is the next non-mountable element   [§4: live load position, roadway, N<sub>L</sub>, d<sub>e</sub>] [changes projects with a sidewalk thinner than 12 in]
+- **Where (anchors):** new `function dfLLFace(b, dl, xs, fL, fR)` and `const dfLLTxt` (before `function dfOvrSync`); `GM.df.compute` — before: `rL: Math.max(fL, swL), rR: Math.max(fR, swR)` in `const base = {`; after: `const ll = dfLLFace(b, p.dl, xs, fL, fR);` and `rL: ll.L.r, rR: ll.R.r`; `R.ll` returned (`return { errors: [], b, MR, regions, dead, base, p, ll }`). `dfDead` — before: `const wx0 = p.rL, wx1 = Wd - p.rR;` after: `const wx0 = Math.max(p.fL, swL), wx1 = Wd - Math.max(p.fR, swR);` (the wearing surface keeps its width between the curb faces: identical to before in every case). Display: `dfOvrSync` (`#df-llface` note on the Sidewalks section), Derivations "Roadway and design lanes" (r<sub>L</sub>, r<sub>R</sub> rows with the governing element), `dfXsSVG` (red dashed "LL face" lines, caption), Sidewalks note, DF3 note.
+- **Rule (engineer's decision 2026-10-13):** a curb or sidewalk less than 12 in high is mountable and ignored when positioning the live load; 12 in or more limits it. Each side: r = the largest (innermost) of: the deck-edge traffic face f (barrier width, or in curb mode the "edge to traffic face" entered in Preliminary sizing), the sidewalk width when its thickness t ≥ 12 in, and the x of a railing or fence on the sidewalk (XS4) when entered.
+  - **Before:** r<sub>L</sub> = max(f<sub>L</sub>, w<sub>sw,L</sub>) for any sidewalk thickness.
+  - **After:** r<sub>L</sub> = max(f<sub>L</sub>, [w<sub>sw,L</sub> if t<sub>sw,L</sub> ≥ 12 in], [x<sub>fence,L</sub> if entered]); the same on the right.
+  - r feeds `dfGeometry` (roadway w = W<sub>deck</sub> − r<sub>L</sub> − r<sub>R</sub>, N<sub>L</sub>, lane width, d<sub>e</sub> = overhang − r), `dfLever` (trucks 2 ft from r), and `dfRigid` (curb position), so every live load distribution factor that uses them.
+- **Governing provision:** AASHTO LRFD 10th Ed. 3.6.1.1.1 (number of design lanes INT(w/12), w = clear roadway between curbs and/or barriers; the tool cites 3.6.1.1.1 for the roadway), 3.6.1.3.1 (design lane / wheel 2.0 ft from the face of the curb or railing; the tool's lever rule), 4.6.2.2.1 (d<sub>e</sub> to the interior edge of the curb or traffic barrier; DF1 and the e-factor), Tables 4.6.2.2.2d-1 and 4.6.2.2.3b-1 (e-factor), Eq. C4.6.2.2.2d-1 (rigid cross-section); the 12 in mountable-curb limit is the engineer's rule (owner practice), not an AASHTO number.
+- **In curb mode** the deck-edge face is the "edge to traffic face" f entered in Preliminary sizing, taken as given (a curb under 12 in at the deck edge is not re-evaluated until GirderDetail owns the deck edges in PR3).
+- **Check case (built-in example: 5 girders at 9.50 ft, overhangs 3.25 ft, barrier 1.50 ft, W<sub>deck</sub> = 44.50 ft, span 1 L = 110 ft; sidewalks 6.00 ft each side, no median or pedestrian load):**
+  - 10 in sidewalks, before: r = max(1.50, 6.00) = 6.00 ft; w = 44.50 − 12.00 = 32.50 ft, N<sub>L</sub> = 2; d<sub>e</sub> = 3.25 − 6.00 = −2.75 ft; exterior: rigid 2 lanes, curb at X<sub>ext</sub> + d<sub>e</sub> = 19.00 − 2.75 = 16.25 ft, Σe = 11.25 + (−0.75) = 10.50, R = 2/5 + 19.00(10.50)/902.50 = 0.621; e-factor with d<sub>e</sub> limited to −1.0: e<sub>M</sub> = 0.77 − 1.0/9.1 = 0.660, g = 0.660(0.708) = 0.467; lever 1 lane 0.300. g<sub>M,ext</sub> = **0.621**, g<sub>V,ext</sub> = **0.651**, fatigue M **0.250**, g<sub>Δ</sub> = 2(1.00)/5 = **0.400**.
+  - 10 in sidewalks, after (mountable: r = 1.50 ft, the barrier face): w = 44.50 − 3.00 = 41.50 ft, N<sub>L</sub> = 3; d<sub>e</sub> = 3.25 − 1.50 = 1.75 ft; rigid 2 lanes: curb 19.00 + 1.75 = 20.75 ft, Σe = 15.75 + 3.75 = 19.50, R = 0.400 + 19.00(19.50)/902.50 = 0.811 (3 lanes: 0.85(0.600 + 19.00(11.25)/902.50) = 0.711); e<sub>M</sub> = 0.77 + 1.75/9.1 = 0.962, g = 0.681; lever 1 lane 0.789. g<sub>M,ext</sub> = **0.811**, g<sub>V,ext</sub> = **0.850**, fatigue M **0.658**, g<sub>Δ</sub> = 3(0.85)/5 = **0.510**. Interior girders unchanged (0.708 / 0.963). Dead loads unchanged (DC2 G1 1.003, DW 0.186 to 0.206; the wearing surface stays 32.50 ft wide).
+  - 12 in sidewalks: r = 6.00 ft (sidewalk curb face) before and after; every result identical.
+- **Outputs that change (only where a sidewalk is thinner than 12 in and wider than the deck-edge face, or a railing/fence is entered):** roadway, N<sub>L</sub>, lane width, d<sub>e</sub> (DF1 items), every lever-rule, e-factor and rigid result and so the exterior (and, with N<sub>b</sub> = 3 or S > 16 ft, interior) moment, shear and fatigue factors, the deflection factor g<sub>Δ</sub>, the Factors and loads / Derivations / Drawings tabs, the `gd-dfx` payload to Preliminary sizing (span and pier factors; when "Use these factors" is Yes the sizing demands and everything fed from sizing), and the Structural analysis live load. Dead loads, the pedestrian load and its walkable width, and saved data do not change. **Note:** the sidewalk thickness default is 8 in, so every saved project with a sidewalk wider than its traffic face and a thickness left below 12 in changes.
+- **Preliminary sizing (PlateLine) is not changed:** its own roadway and d<sub>e</sub> (`brGeom`, its built-in approximate factors when "Use these factors" is No) still use its faces; it has no sidewalk input. That is left to PR3, when GirderDetail owns the deck edges.
+- **Other copies:** none (`lldf.html` `faceOffset` still uses max(railing/curb, sidewalk); unchanged per CLAUDE.md §3 and the plan).
+
+### Exact changes (XS6): main page (unified diff against the XS5 commit; the PL_B64 line is not touched)
+
+```diff
+diff --git a/Steel Bridge Beam Modules.html b/Steel Bridge Beam Modules.html
+index 2e973a9..a867bf1 100644
+--- a/Steel Bridge Beam Modules.html	
++++ b/Steel Bridge Beam Modules.html	
+@@ -3975,7 +3975,7 @@ function dfDead(p, geo, a) {
+   if (a.fenceL > 0) F.push({ id: 'fenceL', desc: 'Left sidewalk railing or fence', cat: 'DC2', x: a.fenceXL, plf: a.fenceL });
+   if (a.fenceR > 0) F.push({ id: 'fenceR', desc: 'Right sidewalk railing or fence', cat: 'DC2', x: Wd - a.fenceXR, plf: a.fenceR });
+   if (a.medW > 0) F.push({ id: 'med', desc: 'Raised median', cat: 'DC2', x: Wd / 2, plf: a.medW * a.medThk / 12 * ua, x0: Wd / 2 - a.medW / 2, x1: Wd / 2 + a.medW / 2, joint: a.medJoint === 'yes' });
+-  const wx0 = p.rL, wx1 = Wd - p.rR;
++  const wx0 = Math.max(p.fL, swL), wx1 = Wd - Math.max(p.fR, swR);   // wearing surface between the curb faces (a mountable sidewalk still bounds it)
+   if (a.fws > 0 && wx1 > wx0) F.push({ id: 'ws', desc: 'Future wearing surface', cat: 'DW', x: (wx0 + wx1) / 2, plf: a.fws / 1000 * (wx1 - wx0), x0: wx0, x1: wx1, forceEqual: true, ...(a.wsThk > 0 ? { q: a.fws, thk: a.wsThk, gam: a.wsGam } : {}) });
+   (a.ovl || []).forEach((o, k) => { if (o.q > 0 && wx1 > wx0) F.push({ id: 'ovl' + k, desc: o.name, cat: 'DW', x: (wx0 + wx1) / 2, plf: o.q / 1000 * (wx1 - wx0), x0: wx0, x1: wx1, forceEqual: true, q: o.q, thk: o.thk, gam: o.gam }); });   // overlays: DW over the wearing-surface width
+   const wkL = Math.max(swL - p.fL, 0), wkR = Math.max(swR - p.fR, 0);   // walkable width inside the railing
+@@ -4037,9 +4037,26 @@ function dfEdgeSummary(b) {
+   return `<table class="tbl df-kv"><tbody>${side('L')}${side('R')}</tbody></table><p class="note">Read-only: these come from the Bridge tab of Preliminary sizing (distances from the deck edge).</p>`;
+ }
+ 
++/* Live-load traffic face each side (engineer's rule 2026-10-13): a curb or sidewalk less than 12 in high is mountable and is ignored
++   when positioning the live load; the face is the innermost non-mountable element: the deck-edge barrier (or the traffic face entered
++   in Preliminary sizing for a curb and railing), a sidewalk 12 in or thicker (its curb face), or a railing or fence on the sidewalk.
++   Before: r = max(f, sidewalk width) for any sidewalk thickness. */
++function dfLLFace(b, dl, xs, fL, fR) {
++  const o = {};
++  ['L', 'R'].forEach(sd => { const f = sd === 'L' ? fL : fR, sw = nm(dl['sw' + sd]) > 0 ? nm(dl['sw' + sd]) : 0, t = nm(dl['swThk' + sd]), curb = !!(b.edge && b.edge[sd] && b.edge[sd].mode === 'curb');
++    const mount = sw > 0 && !(t >= 12 - 1e-9), c = [{ x: f, by: curb ? 'curb and railing traffic face (Preliminary sizing)' : 'barrier face' }];
++    if (sw > 0 && !mount) c.push({ x: sw, by: `sidewalk curb face (${f2(t)} in ≥ 12 in)` });
++    const fx = xs && xs['fenceX' + sd]; if (sw > 0 && fx > 0) c.push({ x: fx, by: 'railing or fence on the sidewalk' });
++    const g = c.reduce((a, q) => q.x > a.x + 1e-9 ? q : a);
++    o[sd] = { r: g.x, by: g.by, mount, sw, t, rOld: Math.max(f, sw) }; });
++  return o;
++}
++const dfLLTxt = q => `${f2(q.r)} ft to the ${q.by}${q.mount ? `; the ${f2(q.t)} in sidewalk is mountable (< 12 in) and ignored${Math.abs(q.rOld - q.r) > 1e-9 ? ` (it would give ${f2(q.rOld)} ft)` : ''}` : ''}`;
++
+ /* load overrides and beam classification tables on the input tab (XS5): rebuilt after each compute unless the user is in them */
+ function dfOvrSync(R) {
+-  const D = R && R.dead; if (!D) return; const box = document.getElementById('df-ovr'), bc = document.getElementById('df-bcls'), lo = P.df.loadOverrides || {}, bo = P.df.beamClass || {};
++  const D = R && R.dead; if (!D) return; const lf = document.getElementById('df-llface'); if (lf && R.ll) lf.innerHTML = `<p class="note"><b>Live load traffic faces</b> (from the deck edge; roadway, design lanes, d<sub>e</sub>, lever rule): left ${dfLLTxt(R.ll.L)}; right ${dfLLTxt(R.ll.R)}.</p>`;
++  const box = document.getElementById('df-ovr'), bc = document.getElementById('df-bcls'), lo = P.df.loadOverrides || {}, bo = P.df.beamClass || {};
+   if (box && !box.contains(document.activeElement)) { const Ls = D.per.filter(L => !/^(u\d|ovl|ped)/.test(L.id));
+     const inp = (L, f, v, ph) => `<input type="number" step="any" data-dfov="${L.id}" data-f="${f}" value="${v == null ? '' : v}" placeholder="${ph}" class="${v == null ? '' : 'ovr'}" style="width:100%;min-width:0" aria-label="${esc(L.desc)} ${f}">`;
+     box.innerHTML = Ls.length ? `<div class="tscroll"><table class="tbl df-ovt"><thead><tr><th>Load</th><th>x (ft)</th><th>w (klf)</th><th>Rule</th><th></th></tr></thead><tbody>${Ls.map(L => { const o = lo[L.id] || {}, xa = L.xAuto != null ? L.xAuto : L.x, pa = L.plfAuto != null ? L.plfAuto : L.plf, da = L.distAuto || L.dist;
+@@ -4085,7 +4102,7 @@ tabs: { combos: 'Factors and loads', cap: 'Derivations', rptCombos: 'Distributio
+         ${secHd('sec-dfs', 'Sidewalks')}<div class="sec-body" id="sec-dfs">${fld('Left sidewalk width', 'df.dl.swL', 'ft')}${fld('Left sidewalk thickness', 'df.dl.swThkL', 'in')}${fld('Left railing or fence weight', 'df.dl.fenceL', 'klf', 'num', { note: 'optional' })}${fld('Left railing or fence, x from deck edge', 'df.dl.fenceXL', 'ft')}
+         ${fld('Right sidewalk width', 'df.dl.swR', 'ft')}${fld('Right sidewalk thickness', 'df.dl.swThkR', 'in')}${fld('Right railing or fence weight', 'df.dl.fenceR', 'klf', 'num', { note: 'optional' })}${fld('Right railing or fence, x from deck edge', 'df.dl.fenceXR', 'ft')}
+         ${fld('Pedestrian LL', 'df.dl.ped', 'psf')}<div></div>
+-        <p class="note full">Sidewalk widths are measured from the deck edge to the curb face; the roadway, design lanes, and d<sub>e</sub> are taken to that face. A railing or fence on a sidewalk is a DC2 line load at x from its deck edge (leave both blank for none).</p><div class="full" id="df-llface"></div></div>
++        <p class="note full">Sidewalk widths are measured from the deck edge to the curb face. A sidewalk 12 in or thicker limits the live load at its curb face; a thinner one is mountable and the live load is positioned to the next non-mountable element (railing or fence on the sidewalk, else the barrier or the traffic face from Preliminary sizing). The wearing surface stays between the curb faces. A railing or fence on a sidewalk is a DC2 line load at x from its deck edge (leave both blank for none).</p><div class="full" id="df-llface"></div></div>
+         ${secHd('sec-dfm', 'Median')}<div class="sec-body" id="sec-dfm">${fld('Median width', 'df.dl.medW', 'ft')}${fld('Median thickness', 'df.dl.medThk', 'in')}${fld('Median longitudinal joint', 'df.dl.medJoint', '', 'sel', { options: [['no', 'No (continuous slab)'], ['yes', 'Yes (adjacent beams exterior)']] })}<div></div></div>
+         ${secHd('sec-dfw', 'Wearing surface and overlays')}<div class="sec-body" id="sec-dfw">${fld('Future wearing surface', 'df.dl.wsMode', '', 'sel', { full: true, options: [['', `Weight from Preliminary sizing${b ? ` (${f2(b.fws)} psf)` : ''}`], ['thk', 'Thickness × unit weight (entered here)']] })}${fld('Wearing surface thickness', 'df.dl.wsThk', 'in')}${fld('Wearing surface unit weight', 'df.dl.wsGam', 'kcf')}
+         <p class="note full">The wearing surface and the overlays are DW over the roadway between the curb faces, distributed equally to all girders. Thickness and unit weight are used only with "Thickness × unit weight".</p></div>
+@@ -4109,7 +4126,8 @@ tabs: { combos: 'Factors and loads', cap: 'Derivations', rptCombos: 'Distributio
+     if (errors.length) return { errors };
+     const MR = modRatio(b.fc, b.wc, 1.0, 'exact'), Nb = b.nb, spacings = b.bays && b.bays.length === Nb - 1 ? b.bays.slice() : new Array(Nb - 1).fill(b.S);
+     const fL = b.faceL != null ? b.faceL : b.barrier, fR = b.faceR != null ? b.faceR : b.barrier, swL = nm(p.dl.swL), swR = nm(p.dl.swR);
+-    const base = { Nb, spacings, OL: b.ohL, OR: b.ohR, rL: Math.max(fL, swL), rR: Math.max(fR, swR), fL, fR, ts: b.tsDeck, gap: nm(p.gap), simple: p.kg === 'simple' };
++    const ll = dfLLFace(b, p.dl, xs, fL, fR);   // live-load traffic faces: a sidewalk thinner than 12 in is mountable and ignored (XS6)
++    const base = { Nb, spacings, OL: b.ohL, OR: b.ohR, rL: ll.L.r, rR: ll.R.r, fL, fR, ts: b.tsDeck, gap: nm(p.gap), simple: p.kg === 'simple' };
+     const KgOf = s => { const eg = (s.d - s.yb) + b.haunch + b.tsDeck / 2; return { eg, Kg: MR.n * (s.I + s.A * eg * eg) }; };
+     const regions = b.regions.map(rg => {
+       const s = steelProps(rg.sec.D, rg.sec), k0 = KgOf(s), eg = k0.eg; let Kg = k0.Kg, KgAvg = null;
+@@ -4126,7 +4144,7 @@ tabs: { combos: 'Factors and loads', cap: 'Derivations', rptCombos: 'Distributio
+     if (errors.length) return { errors };
+     const dead = dfDead({ ...base }, g0, { ...p.dl, swL: nm(p.dl.swL), swThkL: nm(p.dl.swThkL), swR: nm(p.dl.swR), swThkR: nm(p.dl.swThkR), medW: nm(p.dl.medW), medThk: nm(p.dl.medThk), ped: nm(p.dl.ped), fws: xs.fws !== null ? xs.fws : b.fws, uwc: b.wc, hh: b.haunch, sip: b.sip, bf: regions[0].sec.topB, edges: dfEdges(b, xs.wcA), extra: extra.map(e => ({ desc: e.name, cat: e.cat, x: e.x, plf: e.plf, dist: e.dist })),
+       uwcA: xs.wcA, fenceL: xs.fenceL, fenceXL: xs.fenceXL, fenceR: xs.fenceR, fenceXR: xs.fenceXR, wsThk: xs.wsThk, wsGam: xs.wsGam, ovl: xs.ovl, ovr: lo, bcls: p.beamClass && typeof p.beamClass === 'object' ? p.beamClass : null });
+-    return { errors: [], b, MR, regions, dead, base, p };
++    return { errors: [], b, MR, regions, dead, base, p, ll };
+   },
+   checks(R) {
+     const out = ckNew();
+@@ -4142,7 +4160,7 @@ tabs: { combos: 'Factors and loads', cap: 'Derivations', rptCombos: 'Distributio
+         work: T`g_M = \max(${f3(m.r.mom1)},\ ${f3(m.r.mom2)})${m.policyM ? T` \to ${f3(m.gM)}\ \text{(not less than interior)}` : T` = ${f3(m.gM)}`}${rg.kind === 'span' ? T`, \quad g_V = ${m.policyV ? T`${f3(m.gV)}\ \text{(policy)}` : T`\max(${f3(m.r.shr1)},\ ${f3(m.r.shr2)}) = ${f3(m.gV)}`}` : ''}, \quad g_{fat} = ${f3(m.r.mom1)}/1.2 = ${f3(m.fatM)}` })));
+       out.add(c); }
+     { const dl = R.p.dl, c = { id: 'DF3', grp: 'Applicability', title: 'Pedestrian live load on sidewalks', ref: 'AASHTO LRFD 3.6.1.6', src: 'Code', sym: T`PL \ge 0.075\ \text{ksf on sidewalks wider than 2.0 ft, simultaneous with the vehicular live load}`, cols: ['Sidewalk', 'Width (ft)', 'PL (psf)'], items: [],
+-        note: 'The pedestrian load is distributed to the girders with the dead-load method (PL column) and acts with the vehicular live load; the roadway, lanes, and d_e are already taken to the curb face.' };
++        note: 'The pedestrian load is distributed to the girders with the dead-load method (PL column) and acts with the vehicular live load. The roadway, lanes, and d_e are taken to the curb face of a sidewalk 12 in or thicker; a thinner (mountable) sidewalk is ignored for the live load position.' };
+       [['Left', nm(dl.swL), R.base.fL], ['Right', nm(dl.swR), R.base.fR]].forEach(([sd, w, f]) => { const wk = Math.max(w - f, 0); if (w <= 0) return; const need = wk > 2.0, ok = !need || nm(dl.ped) >= 75 - 1e-9;
+         c.items.push({ loc: `${sd} sidewalk (walkable ${f2(wk)} ft)`, cells: [f2(w), f0(nm(dl.ped))], st: ok ? 'pass' : 'fail', work: need ? T`\text{walkable width } ${f2(wk)} > 2.0\ \text{ft} \Rightarrow PL = ${f0(nm(dl.ped))} \;${ok ? '\\ge' : '<'}\; 75\ \text{psf}` : T`\text{walkable width } ${f2(wk)} \le 2.0\ \text{ft: pedestrian load not required}` }); });
+       if (!c.items.length) c.naWhy = 'No sidewalks.'; out.add(c); }
+@@ -4176,7 +4194,7 @@ tabs: { combos: 'Factors and loads', cap: 'Derivations', rptCombos: 'Distributio
+       const kgMax = R.MR.n * (rg.s.I + rg.s.A * rg.eg * rg.eg);
+       add(S('Longitudinal stiffness parameter'), '4.6.2.2.1-1', T`\begin{aligned}e_g &= (d - \bar{y}) + t_h + \tfrac{t_s}{2} = (${f2(rg.s.d)} - ${f2(rg.s.yb)}) + ${f2(b.haunch)} + \tfrac{${f2(b.tsDeck)}}{2} = ${f2(rg.eg)}\ \text{in} \\ K_g &= n(I + Ae_g^2) = ${f2(R.MR.n)}(${f0(rg.s.I)} + ${f2(rg.s.A)}(${f2(rg.eg)})^2) = ${f0(kgMax)}\ \text{in}^4\ \text{(section at the maximum-moment point)}${R.p.kg === 'avg' && rg.KgAvg ? T` \\ K_{g,avg} &= \frac{\sum K_{g,i}L_i}{\sum L_i} = \frac{${rg.KgAvg.parts.map(q => `${f0(q.Kg)}(${f2(q.L)})`).join(' + ')}}{${f2(rg.KgAvg.Lt)}} = ${f0(rg.KgAvg.Kg)}\ \text{in}^4\ \text{(used)}` : ''}\end{aligned}`, [['Section', secTxt(rg.sec), `x = ${f2(rg.x)}`, 'ft'], ['n', 'E<sub>s</sub>/E<sub>c</sub>, K<sub>1</sub> = 1.0', f2(R.MR.n), '']]);
+       if (R.p.kg === 'simple') E.push(`<p class="note-p"><b>Simplified basis (Table 4.6.2.2.1-3, type a):</b> (K<sub>g</sub>/12Lt<sub>s</sub>³)<sup>0.1</sup> = 1.02, (K<sub>g</sub>/12Lt<sub>s</sub>³)<sup>0.25</sup> = 1.03, and (12Lt<sub>s</sub>³/K<sub>g</sub>)<sup>0.3</sup> = 0.97 replace the computed terms below. For preliminary design only; the computed K<sub>g</sub> above is shown for comparison.</p>`);
+-      add(S('Roadway and design lanes'), '3.6.1.1.1', T`w = W_{deck} - r_L - r_R = ${f2(g.Wdeck)} - ${f2(rg.pp.rL)} - ${f2(rg.pp.rR)} = ${f2(g.roadway)}\ \text{ft} \;\Rightarrow\; N_L = ${g.twoHalf ? T`2\ (20 \le w \le 24\ \text{ft: two lanes of } w/2 = ${f2(g.laneW)}\ \text{ft})` : T`\text{INT}(w/12) = ${g.NL}`}`);
++      add(S('Roadway and design lanes'), '3.6.1.1.1', T`w = W_{deck} - r_L - r_R = ${f2(g.Wdeck)} - ${f2(rg.pp.rL)} - ${f2(rg.pp.rR)} = ${f2(g.roadway)}\ \text{ft} \;\Rightarrow\; N_L = ${g.twoHalf ? T`2\ (20 \le w \le 24\ \text{ft: two lanes of } w/2 = ${f2(g.laneW)}\ \text{ft})` : T`\text{INT}(w/12) = ${g.NL}`}`, R.ll ? [['r<sub>L</sub>', `left traffic face: ${dfLLTxt(R.ll.L).replace(/^[\d.]+ ft to the /, '')}`, f2(R.ll.L.r), ' ft'], ['r<sub>R</sub>', `right traffic face: ${dfLLTxt(R.ll.R).replace(/^[\d.]+ ft to the /, '')}`, f2(R.ll.R.r), ' ft']] : undefined);
+       const mi = rg.members.find(m => m.type === 'int');
+       if (mi) { const e = mi.emp;
+         add(S(`Interior girder ${mi.label}: equations`), 'Tables 4.6.2.2.2b-1, 4.6.2.2.3a-1', T`\begin{aligned}\left(\tfrac{K_g}{12Lt_s^3}\right)^{0.1} &= \left(\tfrac{${f0(rg.Kg)}}{12(${f2(rg.L)})(${f2(b.tsDeck)})^3}\right)^{0.1} = ${f3(e.kterm)} \\ g_{M1} &= 0.06 + \left(\tfrac{S}{14}\right)^{0.4}\left(\tfrac{S}{L}\right)^{0.3}\left(\tfrac{K_g}{12Lt_s^3}\right)^{0.1} = 0.06 + \left(\tfrac{${f2(mi.S)}}{14}\right)^{0.4}\left(\tfrac{${f2(mi.S)}}{${f2(rg.L)}}\right)^{0.3}(${f3(e.kterm)}) = ${f3(e.mom1)} \\ g_{M2} &= 0.075 + \left(\tfrac{S}{9.5}\right)^{0.6}\left(\tfrac{S}{L}\right)^{0.2}\left(\tfrac{K_g}{12Lt_s^3}\right)^{0.1} = ${f3(e.mom2)} \\ g_{V1} &= 0.36 + \tfrac{S}{25} = 0.36 + \tfrac{${f2(mi.S)}}{25} = ${f3(e.shr1)}, \qquad g_{V2} = 0.2 + \tfrac{S}{12} - \left(\tfrac{S}{35}\right)^2 = ${f3(e.shr2)}\end{aligned}`);
+@@ -4194,7 +4212,7 @@ tabs: { combos: 'Factors and loads', cap: 'Derivations', rptCombos: 'Distributio
+     h += card('cap-dl', 'Dead load distribution', D.method === 'massdot' ? 'MassDOT 3.5.3' : 'Equal', dfDLCalcs(R));
+     return h; },
+   drawings(R) { const v = dfView(R), rg = R.regions[v.rg];
+-    return card('dw-xs', 'Cross-section and dead loads', R.dead.method === 'massdot' ? 'MassDOT 3.5.3' : 'Typical AASHTO (equal)', `<div class="dwg-wrap">${dfXsSVG(R)}</div><p class="cap">Superimposed loads are drawn where they act, labeled with their line load and colored by class (DC1, DC2, DW, pedestrian PL); arrows are the added line loads (utilities and other line loads). Heights of the barriers, curbs, railings and fences, sidewalks, median, wearing surface, and overlays are schematic; widths and girder positions are to scale. Below each girder: its share of DC1 (deck, haunch, SIP forms, and any DC1 added loads), DC2, DW${R.dead.pl.some(v => v > 0) ? ', and PL' : ''} in klf, from the dead-load distribution (Derivations tab).</p>`)
++    return card('dw-xs', 'Cross-section and dead loads', R.dead.method === 'massdot' ? 'MassDOT 3.5.3' : 'Typical AASHTO (equal)', `<div class="dwg-wrap">${dfXsSVG(R)}</div><p class="cap">Superimposed loads are drawn where they act, labeled with their line load and colored by class (DC1, DC2, DW, pedestrian PL); arrows are the added line loads (utilities and other line loads). Heights of the barriers, curbs, railings and fences, sidewalks, median, wearing surface, and overlays are schematic; widths and girder positions are to scale. Red dashed lines: the live-load traffic faces (a sidewalk under 12 in is mountable and ignored for the live load). Below each girder: its share of DC1 (deck, haunch, SIP forms, and any DC1 added loads), DC2, DW${R.dead.pl.some(v => v > 0) ? ', and PL' : ''} in klf, from the dead-load distribution (Derivations tab).</p>`)
+       + card('dw-df', 'Cross-section and lever rule', `${rg.label}; ${rg.members[v.j].label}`, `<div class="ctl-row dfv-ctl"><label>Region <select id="dfv-rg">${R.regions.map((r, k) => `<option value="${k}" ${k === v.rg ? 'selected' : ''}>${esc(r.label)} (${r.kind === 'span' ? '+M, V' : '−M'})</option>`).join('')}</select></label><label>Girder <select id="dfv-j">${rg.members.map((m, k) => `<option value="${k}" ${k === v.j ? 'selected' : ''}>${m.label} (${m.type === 'ext' ? 'exterior' : 'interior'})</option>`).join('')}</select></label></div><div class="dwg-wrap">${dfSVG(R, rg, v.j)}</div><p class="cap">Girders are colored by the method that governs their moment factor; hover a girder for its factors. Arrows are the wheels of the governing lever-rule truck train for the selected girder, labeled with each wheel's share of the reaction (before the multiple presence factor). Bars below the girders are DC + DW per girder.</p>`)
+       + card('dw-sens', 'Sensitivity to girder spacing', `${rg.label}; K<sub>g</sub> held at ${f0(rg.Kg)} in⁴`, `${dfSensSVG(R, rg)}<p class="cap">All bays scaled together from 70% to 130% of the current layout with the overhangs, barriers, and K<sub>g</sub> held; the dot is the current design. Letters along the exterior line show the governing exterior method: L lever rule, R rigid cross-section, E e-factor. Use it to see how close the layout is to a change of governing method.</p>`); },
+   echo(R) { const b = R.b; return { kv: [['Bridge (from Preliminary sizing)', `"${esc(b.project)}", received ${new Date(b.ts).toLocaleString()}`], ['Spans', b.spans.map(s => f2(s)).join(' + ') + ' ft' + (b.cont ? ', continuous' : '')], ['Skew at supports', b.skews.map(s => f0(s) + '°').join(', ')], ['Girders', `${b.nb} at ${f2(b.S)} ft`], ['Overhangs L / R, barrier', `${f2(b.ohL)} / ${f2(b.ohR)} ft, ${f2(b.barrier)} ft`], ['Deck', `t_s = ${f2(b.tsDeck)} in, haunch ${f2(b.haunch)} in, f′c = ${f2(b.fc)} ksi, w_c = ${b.wc} kcf, n = ${f2(R.MR.n)}`], ['Superimposed', `barrier ${f2(b.barW)} klf each, FWS ${f2(b.fws)} psf`], ['Dead-load method', R.dead.method === 'massdot' ? 'MassDOT 3.5.3' : 'Typical AASHTO (equal)'], ['Truck gap', `${f2(R.base.gap)} ft`]],
+@@ -4277,6 +4295,8 @@ function dfXsSVG(R) {
+     const ln = [['DC1', D.dc1[i]], ['DC2', D.dc2[i]], ['DW', D.dw[i]]].concat(D.pl.some(v => v > 0) ? [['PL', D.pl[i]]] : []);
+     o += `<text x="${cx}" y="${yF + gH + 15}" class="sv-t sv-sm" text-anchor="middle" font-weight="600">G${i + 1}</text>` + ln.map(([k, v], r) => `<text x="${cx}" y="${yF + gH + 29 + r * 12}" class="sv-t sv-sm" text-anchor="middle" fill="${DF_LCOL[k]}">${k} ${f3(v)}</text>`).join(''); });
+   if (b.sip > 0 && N > 1 && D.bays[0] > 0) o += `<text x="${(X(D.ub[0]) + X(D.ub[1])) / 2}" y="${yF + 12}" class="sv-t sv-sm" text-anchor="middle" fill="${DF_LCOL.DC1}">SIP forms ${f0(b.sip)} psf</text>`;
++  // live-load traffic faces (XS6)
++  if (R.ll) ['L', 'R'].forEach(sd => { const q = R.ll[sd], xf = X(sd === 'L' ? q.r : Wd - q.r); o += `<path d="M${xf} ${surf(sd === 'L' ? q.r + 0.01 : Wd - q.r - 0.01) - 30}V${tD}" stroke="#c0392b" stroke-width=".9" stroke-dasharray="4 2"/><text x="${xf + (sd === 'L' ? 3 : -3)}" y="${surf(sd === 'L' ? q.r + 0.01 : Wd - q.r - 0.01) - 32}" class="sv-t sv-sm" fill="#c0392b" text-anchor="${sd === 'L' ? 'start' : 'end'}">LL face${q.mount ? ' (mountable sidewalk ignored)' : ''}</text>`; });
+   // dimension chain and centroid
+   const yd = yF + gH + 29 + (D.pl.some(v => v > 0) ? 4 : 3) * 12 + 6, ch = [0, ...D.ub, Wd];
+   ch.slice(1).forEach((x, k) => { if (x - ch[k] > 1e-6) o += dimH(X(ch[k]), X(x), yd, f2(x - ch[k])); });
+```
+
+### XS7. "Two adjacent" rule: a load on an overhang is levered about the first interior girder (port of lldf F6)   [§4: dead-load distribution] [more conservative for the exterior girder; less conservative (relief) for the first interior girder]
+- **Where (anchors):** `dfDead`, arrow `two` (anchor `// two adjacent (lldf F6, XS7)`); display: `dfDLCalcs` "Distribution rules" equation and note, and the per-load equation for a two-adjacent load outside the exterior girder (anchor `overhang } a =`).
+- **Before:**
+  ```js
+  const two = (P, xL) => { const r = ub.map(() => 0); if (xL <= ub[0]) r[0] = P; else if (xL >= ub[N - 1]) r[N - 1] = P; else { let k = 0; while (k < N - 2 && ub[k + 1] < xL) k++; const t = (xL - ub[k]) / (ub[k + 1] - ub[k]); r[k] = P * (1 - t); r[k + 1] = P * t; } return r; };
+  ```
+- **After:**
+  ```js
+  // two adjacent (lldf F6, XS7): a load outside an exterior girder is levered about the first interior girder, R_ext = P(1 + a/S), R_next = -P a/S (sums to P)
+  const two = (P, xL) => { const r = ub.map(() => 0);
+    if (xL <= ub[0]) { const S1 = N > 1 ? ub[1] - ub[0] : 0, a = ub[0] - xL; if (S1 > 0 && a > 0) { r[0] = P * (1 + a / S1); r[1] = -P * a / S1; } else r[0] = P; }
+    else if (xL >= ub[N - 1]) { const S1 = N > 1 ? ub[N - 1] - ub[N - 2] : 0, a = xL - ub[N - 1]; if (S1 > 0 && a > 0) { r[N - 1] = P * (1 + a / S1); r[N - 2] = -P * a / S1; } else r[N - 1] = P; } else { let k = 0; while (k < N - 2 && ub[k + 1] < xL) k++; const t = (xL - ub[k]) / (ub[k + 1] - ub[k]); r[k] = P * (1 - t); r[k + 1] = P * t; } return r; };
+  ```
+  (lldf F6 code adapted: `a > 0` added so a load exactly on the exterior girder still gives P to it and 0, not −0, to the next.)
+- **Problem:** a load outside the exterior girder set to "Two adjacent beams" went entirely (P) to the exterior girder. Simple-span lever action about the first interior girder gives P(1 + a/S) to the exterior girder and −Pa/S to the next one. lldf.html made this change as F6; GD's copy was not updated.
+- **Governing provision:** statics (simple-span lever distribution between the exterior and first interior girders), the "two adjacent beams" option of MassDOT Bridge Manual Part I 3.5.3 as implemented in lldf.html (fixlog/lldf.md F6). **Open:** lldf O6 / LLDF-O6 (MassDOT to confirm whether the negative share on the first interior girder should be kept, as statics gives, or dropped like the pile-cap rule's no-uplift relief) is still open; this port keeps the statics, as lldf does meanwhile.
+- **Check case (built-in example, girders at 3.25, 12.75, 22.25, 31.75, 41.25 ft, S = 9.50 ft):**
+  - P = 0.500 klf at x = 1.00 ft (a = 2.25 ft): before G1 0.500, G2 0; after G1 = 0.500(1 + 2.25/9.50) = **0.618**, G2 = −0.500(2.25/9.50) = **−0.118** (Σ = 0.500).
+  - P = 0.200 klf at x = 43.50 ft (a = 2.25 ft): before G5 0.200, G4 0; after G5 **0.247**, G4 **−0.047**.
+  - P = 0.050 klf at x = 2.00 ft (a = 1.25 ft): G1 0.050 → **0.057**, G2 0 → **−0.007**.
+  - Loads between girders and loads exactly on a girder: unchanged.
+  - With all three in the sidewalk test project: DC2 G1 1.465 → 1.590, G2 0.703 → 0.578, G4 0.698 → 0.651, G5 1.105 → 1.153 klf; the gd-dfx dead loads to Preliminary sizing (ext DC2 1.465 → 1.590, int 0.703 → 0.651) and the Structural analysis DC2 moments change accordingly.
+- **Affected projects:** only those with a load whose rule is "Two adjacent beams" and whose x is outside an exterior girder: an added line load row with that rule, or (XS5) an automatic load overridden to it. The defaults never use "Two adjacent". Changes: the per-girder DC1/DC2/DW/PL of the two girders, the gd-dfx dead loads (when "Use these factors" is Yes, the sizing DC2/DW demands), Structural analysis dead-load effects.
+- **Other copies:** `lldf.html` `distribute` arrow `two` (F6; the source, unchanged).
+
+### Exact changes (XS7): main page (unified diff against the XS6 commit; the PL_B64 line is not touched)
+
+```diff
+diff --git a/Steel Bridge Beam Modules.html b/Steel Bridge Beam Modules.html
+index a867bf1..ab2a881 100644
+--- a/Steel Bridge Beam Modules.html	
++++ b/Steel Bridge Beam Modules.html	
+@@ -4000,7 +4000,10 @@ function dfDead(p, geo, a) {
+   // distribution
+   const method = a.method === 'aashto' ? 'aashto' : 'massdot', xbar = ub.reduce((s, x) => s + x, 0) / N, c = ub.map(x => x - xbar), S2 = c.reduce((s, ci) => s + ci * ci, 0) || 1e-9;
+   const pile = (P, xL) => { const e = xL - xbar; return ub.map((x, i) => P / N + Math.max(0, P * e * c[i] / S2)); }, equal = P => ub.map(() => P / N);
+-  const two = (P, xL) => { const r = ub.map(() => 0); if (xL <= ub[0]) r[0] = P; else if (xL >= ub[N - 1]) r[N - 1] = P; else { let k = 0; while (k < N - 2 && ub[k + 1] < xL) k++; const t = (xL - ub[k]) / (ub[k + 1] - ub[k]); r[k] = P * (1 - t); r[k + 1] = P * t; } return r; };
++  // two adjacent (lldf F6, XS7): a load outside an exterior girder is levered about the first interior girder, R_ext = P(1 + a/S), R_next = -P a/S (sums to P)
++  const two = (P, xL) => { const r = ub.map(() => 0);
++    if (xL <= ub[0]) { const S1 = N > 1 ? ub[1] - ub[0] : 0, a = ub[0] - xL; if (S1 > 0 && a > 0) { r[0] = P * (1 + a / S1); r[1] = -P * a / S1; } else r[0] = P; }
++    else if (xL >= ub[N - 1]) { const S1 = N > 1 ? ub[N - 1] - ub[N - 2] : 0, a = xL - ub[N - 1]; if (S1 > 0 && a > 0) { r[N - 1] = P * (1 + a / S1); r[N - 2] = -P * a / S1; } else r[N - 1] = P; } else { let k = 0; while (k < N - 2 && ub[k + 1] < xL) k++; const t = (xL - ub[k]) / (ub[k + 1] - ub[k]); r[k] = P * (1 - t); r[k + 1] = P * t; } return r; };
+   const trib = ub.map((x, i) => (i === N - 1 ? Wd : (ub[i + 1] + x) / 2) - (i === 0 ? 0 : (ub[i - 1] + x) / 2));
+   const deck = trib.map(t => t * p.ts / 12 * uc), bf = (a.bf || 0) / 12, haunch = ub.map(() => (a.hh || 0) / 12 * bf * uc);
+   const bays = ub.slice(1).map((x, i) => Math.max(x - ub[i] - bf, 0)), sip = ub.map((_, i) => (a.sip || 0) / 1000 * ((i > 0 ? bays[i - 1] / 2 : 0) + (i < N - 1 ? bays[i] / 2 : 0)));
+@@ -4362,9 +4365,9 @@ function dfDLCalcs(R) {
+     [['x̄', 'centroid of the girder group (each girder a unit pile)', f2(D.xbar), ' ft'], ['Σc<sup>2</sup>', 'second moment of the group about x̄', f2(D.S2), ' ft²']]));
+   E.push(tbl(`<th>Girder</th>${gh}<th class="right">Σ</th>`, row('c<sub>i</sub> = x<sub>i</sub> − x̄ (ft)', D.c, f2, sum(D.c)) + row('c<sub>i</sub><sup>2</sup> (ft²)', D.c.map(v => v * v), f2, D.S2)));
+   // 4. rules
+-  E.push(eq('Distribution rules', 'MassDOT 3.5.3; AASHTO 4.6.2.2.1', T`\underbrace{R_i = \frac{P}{N_b}}_{\text{Equal}} \qquad \underbrace{R_i = \frac{P}{N_b} + \max\left(0,\ \frac{P\,e\,c_i}{\sum c^2}\right),\ e = x_L - \bar{x}}_{\text{MassDOT pile-cap}} \qquad \underbrace{R_k = P(1 - t),\ R_{k+1} = P\,t,\ t = \frac{x_L - x_k}{x_{k+1} - x_k}}_{\text{Two adjacent}}`,
++  E.push(eq('Distribution rules', 'MassDOT 3.5.3; AASHTO 4.6.2.2.1', T`\underbrace{R_i = \frac{P}{N_b}}_{\text{Equal}} \qquad \underbrace{R_i = \frac{P}{N_b} + \max\left(0,\ \frac{P\,e\,c_i}{\sum c^2}\right),\ e = x_L - \bar{x}}_{\text{MassDOT pile-cap}} \qquad \underbrace{R_k = P(1 - t),\ R_{k+1} = P\,t,\ t = \frac{x_L - x_k}{x_{k+1} - x_k};\ \text{overhang: } R_{ext} = P\left(1 + \frac{a}{S}\right),\ R_{next} = -\frac{P\,a}{S}}_{\text{Two adjacent}}`,
+     [['P', 'line load being distributed (klf)', '', ''], ['x<sub>L</sub>', 'position of the load from the left deck edge (ft)', '', ''], ['e', 'eccentricity of the load about x̄ (ft)', '', '']])
+-    + `<p class="note-p">${D.method === 'massdot' ? 'Method: <b>MassDOT 3.5.3</b>. Barriers, curbs, railings, sidewalks, the median, and the pedestrian load use the pile-cap rule; the future wearing surface (DW) is always distributed equally.' : 'Method: <b>typical AASHTO</b>. All superimposed loads are distributed equally to all girders.'} An added line load uses the distribution chosen on its row; a row set to "follows the method" takes the method's rule for its class (MassDOT: DW equally, DC1 and DC2 pile-cap; AASHTO: equally). The pile-cap rule gives no uplift relief: a girder on the far side of the centroid is not reduced below P/N<sub>b</sub>, so ΣR ≥ P. Two adjacent: a load between two girders is split by simple-span lever between them; a load at or outside an exterior girder goes entirely to that girder.</p>`);
++    + `<p class="note-p">${D.method === 'massdot' ? 'Method: <b>MassDOT 3.5.3</b>. Barriers, curbs, railings, sidewalks, the median, and the pedestrian load use the pile-cap rule; the future wearing surface (DW) is always distributed equally.' : 'Method: <b>typical AASHTO</b>. All superimposed loads are distributed equally to all girders.'} An added line load uses the distribution chosen on its row; a row set to "follows the method" takes the method's rule for its class (MassDOT: DW equally, DC1 and DC2 pile-cap; AASHTO: equally). The pile-cap rule gives no uplift relief: a girder on the far side of the centroid is not reduced below P/N<sub>b</sub>, so ΣR ≥ P. Two adjacent: a load between two girders is split by simple-span lever between them; a load on an overhang, a distance a outside the exterior girder, is levered about the first interior girder (S = exterior bay): P(1 + a/S) to the exterior girder and −Pa/S (relief) to the next one, so ΣR = P; a load exactly on a girder goes to it.</p>`);
+   // 5. worked example
+   const pc = D.per.filter(L => L.dist === 'pilecap' && L.plf > 0).sort((a, c) => c.plf - a.plf)[0];
+   if (pc) { let gi = 0; pc.r.forEach((v, i) => { if (v > pc.r[gi]) gi = i; }); const raw = D.ub.map((_, i) => pc.plf * pc.e * D.c[i] / D.S2), Rg = pc.plf / N + raw[gi];
+@@ -4378,7 +4381,8 @@ function dfDLCalcs(R) {
+     let tx;
+     if (L.dist === 'pilecap') tx = T`P = ${f3(L.plf)}\ \text{klf at } x = ${f2(L.x)}\ \text{ft},\ e = ${f2(L.e)}\ \text{ft} \\ &\Rightarrow ${tail}`;
+     else if (L.dist === 'two') { const k = kOf(L.x), out = L.x <= D.ub[0] || L.x >= D.ub[N - 1];
+-      tx = out ? T`P = ${f3(L.plf)}\ \text{klf at } x = ${f2(L.x)}\ \text{ft (at or outside the exterior girder: all to it)} \\ &\Rightarrow ${tail}` : T`P = ${f3(L.plf)}\ \text{klf at } x = ${f2(L.x)}\ \text{ft},\ t = \tfrac{${f2(L.x)} - ${f2(D.ub[k])}}{${f2(D.ub[k + 1])} - ${f2(D.ub[k])}} = ${f3((L.x - D.ub[k]) / (D.ub[k + 1] - D.ub[k]))} \\ &\Rightarrow ${tail}`; }
++      const lt = L.x < D.ub[0], aa = lt ? D.ub[0] - L.x : L.x - D.ub[N - 1], S1 = N > 1 ? (lt ? D.ub[1] - D.ub[0] : D.ub[N - 1] - D.ub[N - 2]) : 0;
++      tx = out ? (aa > 0 && S1 > 0 ? T`P = ${f3(L.plf)}\ \text{klf at } x = ${f2(L.x)}\ \text{ft, overhang } a = ${f2(aa)}\ \text{ft},\ S = ${f2(S1)}\ \text{ft:}\ R_{${lt ? 1 : N}} = P\left(1 + \tfrac{a}{S}\right) = ${f3(L.plf * (1 + aa / S1))},\ R_{${lt ? 2 : N - 1}} = -\tfrac{Pa}{S} = ${f3(-L.plf * aa / S1)} \\ &\Rightarrow ${tail}` : T`P = ${f3(L.plf)}\ \text{klf at } x = ${f2(L.x)}\ \text{ft (on the exterior girder: all to it)} \\ &\Rightarrow ${tail}`) : T`P = ${f3(L.plf)}\ \text{klf at } x = ${f2(L.x)}\ \text{ft},\ t = \tfrac{${f2(L.x)} - ${f2(D.ub[k])}}{${f2(D.ub[k + 1])} - ${f2(D.ub[k])}} = ${f3((L.x - D.ub[k]) / (D.ub[k + 1] - D.ub[k]))} \\ &\Rightarrow ${tail}`; }
+     else tx = T`P = ${f3(L.plf)}\ \text{klf},\ \tfrac{P}{N_b} = \tfrac{${f3(L.plf)}}{${N}} \\ &\Rightarrow ${tail}`;
+     E.push(eq(`${esc(L.desc)} (${L.cat})${L.ovr ? ` — override of ${L.ovr.map(f => f === 'x' ? `x (auto ${f2(L.xAuto)} ft)` : f === 'plf' ? `P (auto ${f3(L.plfAuto)} klf)` : `rule (auto ${DF_DIST[L.distAuto]})`).join(', ')}` : ''}`, (DF_DIST[L.dist] || L.dist) + (L.byMethod ? ', follows the method' : ''), T`\begin{aligned} &${tx} \\ &\textstyle\sum R = ${f3(sum(L.r))}\ \text{klf} \end{aligned}`)); });
+   // 7. summary
+```
+
+### Verification (XS4–XS7)
+- `node --check` on every inline script after each item.
+- Headless Chromium (Playwright), `origin/main` (b9e2254) against the branch after XS4, after XS5 and after XS7. The XS1 test projects were used: (1) the built-in example; (2) sidewalks 6 ft × 8 in and 5 ft × 9 in, a median with a joint, ped 75 psf, and the added rows; (3) curb mode; (4) curb mode with a sidewalk; (5) AASHTO. Compared: `GM.df.compute`, `GM.sa.compute` for every girder, the `gd-dfx` payload, Design all (projects 1 and 2), the saved `P` and every localStorage key, and the Factors and loads, Derivations, Drawings, Checks and Summary text.
+  - **XS4 and XS5:** results, payload, Design all, Checks and Summary are identical on all five projects. The only data difference is in the built-in example (projects 1 and 3): the 0-plf example row now reads `cat: 'DW', dist: 'auto'`. Timestamps also differ. Only the Derivations and Drawings text changed (new step, caption).
+  - **XS7 build:**
+    - Projects 1 and 3: results identical. The only addition is the new `R.ll` key in the compute output. The Checks text differs only in the DF3 note.
+    - Projects 2, 4 and 5: the expected XS6 changes (8 in and 9 in sidewalks are now mountable) and XS7 changes (the "Light pole" row, two adjacent at x = 2.00 ft, outside G1).
+    - Check projects with 6 ft sidewalks: at 12 in, every live-load result is identical, and only the XS7 change of the Light pole row remains. At 10 in, the XS6 values are as in the check case.
+  - **New inputs** (fences, γ<sub>c</sub>, wearing surface by thickness, overlays, "Follows the method" rows, AASHTO with a 12 in sidewalk, overrides and class labels): the hand checks in XS4, XS5 and XS7 match the screen. No console errors in any run.
+- **Saved data in both directions:**
+  - A main-saved project loads in this build with `P.df` unchanged (same keys and values).
+  - A project saved here with overrides, class labels and fences loads in the main build without errors (the new fields are ignored and kept).
+  - The new fields are written only when entered.
+- **Screenshots:** the input tab, cross-section, loads table and Derivations at 1400 px and 1000 px viewport widths were checked. The sidebar inputs, including the overrides table, fit the 343 px sidebar. The labels do not overlap.
