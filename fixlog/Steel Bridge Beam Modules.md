@@ -4297,3 +4297,278 @@ index 6fc90a2..fcacee5 100644
 +  const ids = GEO[P.mod] || [], ks = P.mod === 'cf' && cfDiaOn(P.cf) ? CK.filter(k => k.id === 'CFD' || k.id === 'CFE').map(k => ({ ...k, items: k.items.filter(i => /^(Depth|Bolt line)/.test(i.loc)) })).filter(k => k.items.length) : CK.filter(k => ids.includes(k.id)), items = ks.flatMap(k => k.items), nf = items.filter(i => i.st === 'fail').length, nw = items.filter(i => i.st === 'warn').length;
    let h = card('geo-head', 'Geometric proportions and detailing', '', `<p class="note-p">${ks.length ? `${ks.length} checks covering ${items.length} dimensions: ${items.length - nf - nw} satisfied, ${nf} not satisfied, ${nw} warning${nw === 1 ? '' : 's'}. Each check also appears, fully worked, on the Checks tab and in the report.` : 'This module has no geometric proportion limits of its own. Flange and web proportions for the girder are checked in the Girder section module (GS1 to GS3).'}</p>`);
 ```
+
+## 2026-10-13 — PR: claude/girderdetail-q4 (engineer's approved items Q4–Q6, 2026-10-13; PR link added after merge)
+
+Engineer's approval (2026-10-13) of three items: (Q4) Transverse stiffeners TS4 checks each end panel with the largest V<sub>u</sub> in it (at the bearing), not only the shear at the first stiffener; (Q5) for simple spans, PlateLine flags the panels next to an interior support as end panels too (each is a girder end); (Q6) PlateLine Bridge tab, third girder spacing mode "From exterior girders". Main page and the embedded PlateLine (`const PL_B64 = '...'`, decoded, edited, re-encoded on one line, no wrapping) are changed. Basis: AASHTO LRFD 10th Ed. (2024). Line numbers ≈ branch (main page) or decoded PlateLine (PL ≈). Builds on EK1–EK3 (end panel wider than 1.5D is unstiffened, k = 5), Q3 (TS5) and SC1/SC2. No `bridgeSuite.v1.*` code or other shared snippet is touched.
+
+### Q4. TS4: an end panel is checked with the largest V<sub>u</sub> in it (at the bearing)   [§4: demand location change] [optional saved fields `ts.rows[i].VDC1b`, `VDC2b`, `VDWb`, `VLLb`]
+
+- **Where (main page):**
+  - `TS_ROWSPEC` (≈ 2389; anchor `['df', 'Δf fatigue, tension flange', 'ksi', 'num', { min: 0 }]`): four optional inputs per location, "End panel: max. V<sub>DC1</sub> / V<sub>DC2</sub> / V<sub>DW</sub> / V<sub>LL+IM</sub> in panel 1" (kip, `{ min: 0, opt: true }`), and `const TS_BRG` (their keys).
+  - `numRows()` (≈ 2362; anchor `function numRows(rows, spec, lbl, errors)`): a spec entry with `opt: true` left blank (missing, `''`, `null`, or NaN) is `null` instead of an input error. No other spec uses `opt`, so every other module is unchanged.
+  - `GM.ts.compute()` (≈ 2419): error "enter all four end-panel shears, or leave all four blank" when only some are given; new `r.VuB` (Strength I of the end-panel shears, same γ inputs) and `r.Vu1` (panel 1 demand); `q.Vu` per panel (panel 1: `r.Vu1`, panel 2: `r.Vu`).
+  - `GM.ts.checks()` TS4 (≈ 2457): items use `q.Vu`; the worked line says "(largest in the end panel: at the bearing)" (or "at the stiffener" when that is larger) or "(at the stiffener: no end-panel shears given)"; note extended.
+  - Key quantities "Max. V<sub>u</sub>" (`kq`) uses `r.Vu1`; Demands tab (`combos`) adds "Strength I, end panel (largest in panel 1, at the bearing)"; report input table (`echo`) adds "; end panel a / b / c / d" to the shear cell; Locations note and manual "Web shear (6.10.9)" paragraph.
+- **Where (decoded PlateLine):** `detailExport()` (PL ≈ 3470; anchor `const shear = (T, x) => { const e = el(x);`): new `shearIn(T, a, b)`, the largest |V| of each component (DC1, DC2, DW, and the larger of LL+IM positive/negative) over the analysis elements between the bearing (`m.sup[ks]`) and the first stiffener; the TS rows flagged `end: 'yes'` carry it as `VDC1b`, `VDC2b`, `VDWb`, `VLLb` (appended after `df`). Rows that are not end panels are unchanged. The Structural analysis source goes through the same `detailExport` with that girder's arrays (`pl-export-req`, `src: 'sa'`), so its support shear is used the same way.
+- **Before:** TS4 panel 1 of an end location: V<sub>u</sub> = γ<sub>DC</sub>(V<sub>DC1</sub> + V<sub>DC2</sub>) + γ<sub>DW</sub>V<sub>DW</sub> + γ<sub>LL</sub>V<sub>LL+IM</sub> with the shears at the stiffener.
+- **After:** V<sub>u,end</sub> = max(V<sub>u,stiffener</sub>, γ<sub>DC</sub>(V<sub>DC1b</sub> + V<sub>DC2b</sub>) + γ<sub>DW</sub>V<sub>DWb</sub> + γ<sub>LL</sub>V<sub>LLb</sub>) when the four end-panel shears are given; otherwise as before, and the item says "(at the stiffener: no end-panel shears given)". Panel 2, TS3 (ρ<sub>w</sub>: end panels have none), TS1/TS2/TS5–CP2: unchanged. φ<sub>v</sub>V<sub>n</sub> unchanged.
+- **Governing provision:** AASHTO LRFD 10th Ed. (2024) Art. 6.10.9.1 (V<sub>u</sub> ≤ φ<sub>v</sub>V<sub>n</sub>, Eq. 6.10.9.1-1, V<sub>u</sub> = shear in the web at the section under consideration due to the factored loads), Art. 6.10.9.3.3 (end panels, V<sub>n</sub> = V<sub>cr</sub> = CV<sub>p</sub>, Eq. 6.10.9.3.3-1) and Art. 6.10.9.2 (unstiffened, Eq. 6.10.9.2-1, end panels wider than 1.5D per EK1). The end panel is the web panel from the bearing to the first stiffener, so the largest shear in it (at the bearing) is the demand for that panel.
+- **Problem:** the larger shear at the bearing was not checked anywhere in GirderDetail (the Girder section rows are never at a bearing). Unconservative: the end panel's V<sub>u</sub> was low by the shear drop over d<sub>o</sub>.
+- **Envelope note:** each component is its own maximum over the panel (as `shear()` already does for the three elements around a stiffener), so V<sub>u,end</sub> can be slightly larger than the largest V<sub>u</sub> of one load position; at a simple support or an abutment all components peak in the element next to the bearing.
+- **Check case 1 (PlateLine built-in example, 110-140-110 ft continuous, D = 60 in, t<sub>w</sub> = 9/16 in, F<sub>yw</sub> = 50 ksi, stiffened, d<sub>o</sub> = D = 60 in; Transverse stiffeners → Get demands from Preliminary sizing):** Span 1, first stiffener from Abut. 1, interior girder, panel 1 (end):
+  - Before (shears at the stiffener, 5 ft from the bearing): V<sub>DC1</sub> = 47.2, V<sub>DC2</sub> = 9.0, V<sub>DW</sub> = 7.5, V<sub>LL+IM</sub> = 106.6 kip; V<sub>u</sub> = 1.25(47.2 + 9.0) + 1.50(7.5) + 1.75(106.6) = 70.25 + 11.25 + 186.55 = **268.05 kip**.
+  - After (largest in the end panel, the element at the bearing): 51.2, 9.8, 8.1, 111.6 kip; V<sub>u</sub> = 1.25(51.2 + 9.8) + 1.50(8.1) + 1.75(111.6) = 76.25 + 12.15 + 195.30 = **283.70 kip**.
+  - Resistance (both): D/t<sub>w</sub> = 106.67, k = 5 + 5/(60/60)² = 10, √(Ek/F<sub>yw</sub>) = √(29,000 × 10/50) = 76.16, 1.40 × 76.16 = 106.62 < 106.67, so C = 1.57/106.67² × 5,800 = 0.800; V<sub>p</sub> = 0.58(50)(60)(0.5625) = 978.75 kip; φ<sub>v</sub>V<sub>n</sub> = 0.800 × 978.75 = **783.32 kip** (Eq. 6.10.9.3.3-1). Ratio 268.05/783.32 = **0.34 → 283.70/783.32 = 0.36** (pass).
+  - Other end panels of the example: Abut. 2 interior 262.90 → 283.70 kip (0.34 → 0.36); Abut. 1 exterior 240.92 → 255.03 (0.31 → 0.33); Abut. 2 exterior 236.30 → 255.03 (0.30 → 0.33). Every other TS item, the status bar and every other check: unchanged.
+  - Same with Structural analysis, G2: identical numbers (268.05 → 283.70, 262.90 → 283.70).
+- **Check case 2 (90 ft simple span, 10 girders at 4 ft, overhangs 2.25 ft, span-to-depth off; quick suggestion applied: D = 30 in, t<sub>w</sub> = 1/2 in, unstiffened, connection plates at 25 ft, end panel d<sub>o</sub> = 300 in):** Span 1, first connection plate from Abut. 1, interior girder, panel 1 (end):
+  - Before: 13.5, 3.5, 2.0, 39.5 kip at the connection plate; V<sub>u</sub> = 1.25(17.0) + 1.50(2.0) + 1.75(39.5) = 21.25 + 3.00 + 69.13 = **93.38 kip**.
+  - After: 27.9, 7.2, 4.2, 58.9 kip at the bearing; V<sub>u</sub> = 1.25(35.1) + 1.50(4.2) + 1.75(58.9) = 43.88 + 6.30 + 103.08 = **153.25 kip**.
+  - Resistance (both): unstiffened, k = 5; D/t<sub>w</sub> = 60 ≤ 1.12√(29,000 × 5/50) = 60.31, so C = 1.0; φ<sub>v</sub>V<sub>n</sub> = 0.58(50)(30)(0.5) = **435.00 kip** (Eq. 6.10.9.2-1). Ratio **0.21 → 0.35** (pass). Exterior girder: 79.82 → 133.40 kip (0.18 → 0.31); Abut. 2: 90.88 → 153.25 (interior), 77.45 → 133.40 (exterior).
+- **Check case 3 (GirderDetail default project, Transverse stiffeners, hand-entered example):** no end-panel shears → TS4 panel 1 (end) unchanged, V<sub>u</sub> = 241.00 kip, φ<sub>v</sub>V<sub>n</sub> = 783.32, ratio 0.31; the worked line adds "(at the stiffener: no end-panel shears given)". Entering 60 / 9 / 10 / 95 kip: V<sub>u</sub> = 1.25(69) + 1.50(10) + 1.75(95) = 86.25 + 15.00 + 166.25 = 267.50 kip, ratio 0.34; Key quantities "Max. V<sub>u</sub>" 267.50 kip. Entering only V<sub>DC1b</sub>: input error "Span 1, first stiffener from Abut. 1: enter all four end-panel shears, or leave all four blank."
+- **Saved data and hand-off:** no key changed (`girderdetail_autosave_v1`, `girderdetail_inbox_v1`, `plateline_autosave_v1`). The four fields are optional: an old project, an old saved inbox, or rows entered by hand load and use the shear at the stiffener (and say so). A project saved by the branch with them loads in main (main ignores them and keeps them; TS4 as before) and back in the branch unchanged. The PlateLine payload (`mods.ts.rows`) only gains the four fields on end-panel rows.
+- **How verified:** `node --check` on every inline script (main page and decoded PlateLine); headless Chromium main vs branch (below).
+- **Other copies:** none.
+- **Open items:** none new. The GS rows are still never at a bearing (unchanged; TS4 now carries the end-panel shear check).
+
+### Exact changes (Q4): main page (unified diff, PL_B64 line omitted)
+
+```diff
+--- a/Steel Bridge Beam Modules.html
++++ b/Steel Bridge Beam Modules.html
+@@ -2274,3 +2274,3 @@
+ <p>d<sub>o</sub> is the smaller adjacent panel and b the smaller of d<sub>o</sub> and D. Where neither panel needs tension-field action, I<sub>t</sub> ≥ I<sub>t1</sub>. Otherwise I<sub>t</sub> ≥ I<sub>t1</sub> + (I<sub>t2</sub> − I<sub>t1</sub>)ρ<sub>w</sub> when I<sub>t2</sub> > I<sub>t1</sub>, else I<sub>t</sub> ≥ I<sub>t2</sub>, with ρ<sub>w</sub> the larger of (V<sub>u</sub> − φ<sub>v</sub>V<sub>cr</sub>)/(φ<sub>v</sub>V<sub>n</sub> − φ<sub>v</sub>V<sub>cr</sub>) in the two panels (confirm the equation numbering against your edition). I<sub>t</sub> is taken about the web face for a single plate and about the web mid-thickness for a pair.</p>
+-<h3>Web shear (6.10.9)</h3><p>Each adjacent panel is checked for V<sub>u</sub> ≤ φ<sub>v</sub>V<sub>n</sub> with k = 5 + 5/(d<sub>o</sub>/D)². Interior panels include tension-field action (Eq. 6.10.9.3.2-2 or -8 depending on 2Dt<sub>w</sub>/(b<sub>fc</sub>t<sub>fc</sub> + b<sub>ft</sub>t<sub>ft</sub>)); end panels use V<sub>n</sub> = CV<sub>p</sub> (Eq. 6.10.9.3.3-1). An interior panel wider than 3D or an end panel wider than 1.5D is not a stiffened panel (6.10.9.1): it is checked as unstiffened, k = 5 and V<sub>n</sub> = CV<sub>p</sub> (Eq. 6.10.9.2-1). Check TS5 compares each panel with these limits, which decide only whether the panel counts as stiffened: a panel wider than its limit is advisory, because TS4 checks it as unstiffened (k = 5) and decides pass or fail. When the web has no intermediate stiffeners (connection plates only), it is designed as unstiffened and TS5 is not applicable.</p>
++<h3>Web shear (6.10.9)</h3><p>Each adjacent panel is checked for V<sub>u</sub> ≤ φ<sub>v</sub>V<sub>n</sub> with k = 5 + 5/(d<sub>o</sub>/D)². Interior panels include tension-field action (Eq. 6.10.9.3.2-2 or -8 depending on 2Dt<sub>w</sub>/(b<sub>fc</sub>t<sub>fc</sub> + b<sub>ft</sub>t<sub>ft</sub>)); end panels use V<sub>n</sub> = CV<sub>p</sub> (Eq. 6.10.9.3.3-1). An interior panel wider than 3D or an end panel wider than 1.5D is not a stiffened panel (6.10.9.1): it is checked as unstiffened, k = 5 and V<sub>n</sub> = CV<sub>p</sub> (Eq. 6.10.9.2-1). V<sub>u</sub> is the Strength I shear at the stiffener for both panels, except that an end panel is checked with the largest V<sub>u</sub> in it (at the bearing): the location's end-panel shears (V<sub>DC1</sub>, V<sub>DC2</sub>, V<sub>DW</sub>, V<sub>LL+IM</sub>, the largest in panel 1, sent by Preliminary sizing and Structural analysis) give that V<sub>u</sub>, and the larger of it and the shear at the stiffener is used. When they are blank (projects saved before they existed, or entered by hand), the end panel uses the shear at the stiffener and the TS4 item says so. Check TS5 compares each panel with these limits, which decide only whether the panel counts as stiffened: a panel wider than its limit is advisory, because TS4 checks it as unstiffened (k = 5) and decides pass or fail. When the web has no intermediate stiffeners (connection plates only), it is designed as unstiffened and TS5 is not applicable.</p>
+ <h3>Welds and fatigue</h3><p>Intermediate stiffener web welds stop 4t<sub>w</sub> to 6t<sub>w</sub> from the web-to-flange weld at the tension flange (6.10.11.1.1). Connection plates are welded to both flanges and those welds are designed for 20 kip laterally on straight, nonskewed bridges, or the analysis force otherwise (6.6.1.3.1). Base metal at stiffener weld toes is Category C′, (ΔF)<sub>TH</sub> = 12 ksi. Minimum fillet sizes follow Table 6.13.3.4-1.</p>
+@@ -2362,3 +2362,5 @@
+ function numRows(rows, spec, lbl, errors) { return rows.map((r0, i) => { const r = { i, name: r0.name || `${lbl} ${i + 1}` };
+-  spec.forEach(([k, , , ty, o]) => { if (ty === 'text' || ty === 'sel') { r[k] = r0[k]; return; } const v = nm(r0[k]); r[k] = v;
++  spec.forEach(([k, , , ty, o]) => { if (ty === 'text' || ty === 'sel') { r[k] = r0[k]; return; }
++    if (o && o.opt && (r0[k] == null || r0[k] === '' || (typeof r0[k] === 'number' && isNaN(r0[k])))) { r[k] = null; return; }   // optional input left blank
++    const v = nm(r0[k]); r[k] = v;
+     const min = o && o.min !== undefined ? o.min : (o && o.any ? -Infinity : 1e-12);
+@@ -2389,3 +2391,6 @@
+   ['VDC1', 'V<sub>DC1</sub>', 'kip', 'num', { min: 0 }], ['VDC2', 'V<sub>DC2</sub>', 'kip', 'num', { min: 0 }], ['VDW', 'V<sub>DW</sub>', 'kip', 'num', { min: 0 }], ['VLL', 'V<sub>LL+IM</sub>', 'kip', 'num', { min: 0 }],
+-  ['df', 'Δf fatigue, tension flange', 'ksi', 'num', { min: 0 }]];
++  ['df', 'Δf fatigue, tension flange', 'ksi', 'num', { min: 0 }],
++  ['VDC1b', 'End panel: max. V<sub>DC1</sub> in panel 1', 'kip', 'num', { min: 0, opt: true }], ['VDC2b', 'End panel: max. V<sub>DC2</sub> in panel 1', 'kip', 'num', { min: 0, opt: true }],
++  ['VDWb', 'End panel: max. V<sub>DW</sub> in panel 1', 'kip', 'num', { min: 0, opt: true }], ['VLLb', 'End panel: max. V<sub>LL+IM</sub> in panel 1', 'kip', 'num', { min: 0, opt: true }]];
++const TS_BRG = ['VDC1b', 'VDC2b', 'VDWb', 'VLLb'];   // optional end-panel shears (largest in panel 1, at the bearing; Q4); all four blank = the shear at the stiffener is used
+ GM.ts = {
+@@ -2406,3 +2411,3 @@
+         ${fld('γ<sub>DC</sub>', 'ts.gam.dc', '')}${fld('γ<sub>DW</sub>', 'ts.gam.dw', '')}${fld('γ<sub>LL</sub> Strength I', 'ts.gam.ll', '')}${fld('γ Fatigue I', 'ts.gam.fat', '')}</div>
+-        ${secHd('sec-tsr', 'Stiffener locations')}<div class="sec-body one-col" id="sec-tsr">${gmRowsHtml('ts')}<p class="note">Shears at the stiffener, per girder, magnitudes. Panel 1 and panel 2 are the web panels on either side. Δf is the unfactored fatigue-truck stress range in the tension flange at the stiffener (0 to skip).</p></div>`,
++        ${secHd('sec-tsr', 'Stiffener locations')}<div class="sec-body one-col" id="sec-tsr">${gmRowsHtml('ts')}<p class="note">Shears at the stiffener, per girder, magnitudes. Panel 1 and panel 2 are the web panels on either side. When panel 1 is an end panel, the four end-panel shears are the largest in that panel (at the bearing) and TS4 checks it with them; leave all four blank to use the shears at the stiffener. Δf is the unfactored fatigue-truck stress range in the tension flange at the stiffener (0 to skip).</p></div>`,
+       ts_pl: `${secHd('sec-tsA', 'Type A')}<div class="sec-body" id="sec-tsA">${ty('A')}</div>${secHd('sec-tsB', 'Type B')}<div class="sec-body" id="sec-tsB">${ty('B')}</div>
+@@ -2414,2 +2419,3 @@
+     const rows = numRows(p.rows, TS_ROWSPEC, 'Location', errors);
++    rows.forEach(r => { const n = TS_BRG.filter(k => r[k] != null).length; if (n && n < 4) errors.push(`${r.name}: enter all four end-panel shears, or leave all four blank.`); });
+     if (!rows.length) errors.push('Add at least one stiffener location.');
+@@ -2418,5 +2424,8 @@
+       r.Vu = g('dc') * (r.VDC1 + r.VDC2) + g('dw') * r.VDW + g('ll') * r.VLL;
++      // end panel (Q4): the largest V_u in panel 1 (at the bearing) when the end-panel shears are given; otherwise the shear at the stiffener
++      r.VuB = r.end === 'yes' && r.VDC1b != null ? g('dc') * (r.VDC1b + r.VDC2b) + g('dw') * r.VDWb + g('ll') * r.VLLb : null;
++      r.Vu1 = r.VuB != null ? Math.max(r.VuB, r.Vu) : r.Vu;
+       const flgA = r.bfc * r.tfc + r.bft * r.tft;
+       r.p1 = webShear(r.D, r.tw, Fyw, r.do1, flgA, r.end === 'yes'); r.p2 = webShear(r.D, r.tw, Fyw, r.do2, flgA, false);
+-      [r.p1, r.p2].forEach((q, i) => { q.do = i ? r.do2 : r.do1; q.end = !i && r.end === 'yes'; q.phVn = PHI.v * q.Vn; const tfa = q.stiff && !q.end; q.rho = tfa && r.Vu > PHI.v * q.Vcr ? Math.min(1, (r.Vu - PHI.v * q.Vcr) / Math.max(q.phVn - PHI.v * q.Vcr, 1e-9)) : 0; });
++      [r.p1, r.p2].forEach((q, i) => { q.do = i ? r.do2 : r.do1; q.end = !i && r.end === 'yes'; q.Vu = i ? r.Vu : r.Vu1; q.phVn = PHI.v * q.Vn; const tfa = q.stiff && !q.end; q.rho = tfa && r.Vu > PHI.v * q.Vcr ? Math.min(1, (r.Vu - PHI.v * q.Vcr) / Math.max(q.phVn - PHI.v * q.Vcr, 1e-9)) : 0; });
+       r.rhow = Math.max(r.p1.rho, r.p2.rho);
+@@ -2448,5 +2457,5 @@
+     { const c = { id: 'TS4', grp: G2, title: 'Web shear resistance of adjacent panels', ref: 'AASHTO LRFD 6.10.9.3.2, 6.10.9.3.3', src: 'Code', sym: T`V_u \le \phi_vV_n, \quad \phi_v = 1.0`,
+-        cols: ['Location, panel', 'd_o (in)', 'V_u (kip)', 'C', 'φV_n (kip)', 'Ratio'], items: [], note: 'Interior stiffened panels include tension-field action (Eq. 6.10.9.3.2-2 or -8); stiffened end panels (d_o ≤ 1.5D) use V_n = CV_p with k = 5 + 5/(d_o/D)² (Eq. 6.10.9.3.3-1). Interior panels wider than 3D and end panels wider than 1.5D are unstiffened (6.10.9.1): k = 5, V_n = CV_p (Eq. 6.10.9.2-1). V_u is the Strength I shear at the stiffener, applied to both adjacent panels.' };
+-      R.rows.forEach(r => [r.p1, r.p2].forEach((q, i) => c.items.push(rc(`${L(r)}, panel ${i + 1}${q.end ? ' (end)' : ''}`, [f2(q.do), f2(r.Vu), f3(q.C), f2(q.phVn), f2(r.Vu / q.phVn)], r.Vu, q.phVn,
+-        T`k = ${q.stiff ? T`5 + \frac{5}{(${f2(q.do)}/${f2(r.D)})^2}` : '5'} = ${f3(q.k)}, \quad C = ${f3(q.C)}, \quad V_p = 0.58(${f0(R.Fyw)})(${f2(r.D)})(${f3(r.tw)}) = ${f2(q.Vp)}, \quad \phi_vV_n = ${f2(q.phVn)}\ \text{kip (Eq. ${q.eqn})} \;${GE(q.phVn, r.Vu)}\; V_u = ${f2(r.Vu)}\ \text{kip}`))));
++        cols: ['Location, panel', 'd_o (in)', 'V_u (kip)', 'C', 'φV_n (kip)', 'Ratio'], items: [], note: 'Interior stiffened panels include tension-field action (Eq. 6.10.9.3.2-2 or -8); stiffened end panels (d_o ≤ 1.5D) use V_n = CV_p with k = 5 + 5/(d_o/D)² (Eq. 6.10.9.3.3-1). Interior panels wider than 3D and end panels wider than 1.5D are unstiffened (6.10.9.1): k = 5, V_n = CV_p (Eq. 6.10.9.2-1). V_u is the Strength I shear at the stiffener, applied to both adjacent panels; an end panel is checked with the largest V_u in it (at the bearing, from the end-panel shears), or with the shear at the stiffener when they are blank (the item says which).' };
++      R.rows.forEach(r => [r.p1, r.p2].forEach((q, i) => c.items.push(rc(`${L(r)}, panel ${i + 1}${q.end ? ' (end)' : ''}`, [f2(q.do), f2(q.Vu), f3(q.C), f2(q.phVn), f2(q.Vu / q.phVn)], q.Vu, q.phVn,
++        T`k = ${q.stiff ? T`5 + \frac{5}{(${f2(q.do)}/${f2(r.D)})^2}` : '5'} = ${f3(q.k)}, \quad C = ${f3(q.C)}, \quad V_p = 0.58(${f0(R.Fyw)})(${f2(r.D)})(${f3(r.tw)}) = ${f2(q.Vp)}, \quad \phi_vV_n = ${f2(q.phVn)}\ \text{kip (Eq. ${q.eqn})} \;${GE(q.phVn, q.Vu)}\; V_u = ${f2(q.Vu)}\ \text{kip}${!q.end ? '' : r.VuB != null ? T`\ \text{(largest in the end panel: ${r.VuB >= r.Vu ? 'at the bearing' : 'at the stiffener'})}` : T`\ \text{(at the stiffener: no end-panel shears given)}`}`))));
+       out.add(c); }
+@@ -2473,6 +2482,6 @@
+   },
+-  kq(R) { return Object.values(R.types).filter(t => R.rows.some(r => r.type === t.k)).map(t => [`Type ${t.k}, ${t.name}`, `${t.sides === 2 ? 'Pair' : 'One side'}, ${frac(t.bt)} × ${frac(t.tp)}`]).concat([['Locations', String(R.rows.length)], ['Max. V<sub>u</sub>', `${f2(Math.max(...R.rows.map(r => r.Vu)))} kip`]]); },
++  kq(R) { return Object.values(R.types).filter(t => R.rows.some(r => r.type === t.k)).map(t => [`Type ${t.k}, ${t.name}`, `${t.sides === 2 ? 'Pair' : 'One side'}, ${frac(t.bt)} × ${frac(t.tp)}`]).concat([['Locations', String(R.rows.length)], ['Max. V<sub>u</sub>', `${f2(Math.max(...R.rows.map(r => r.Vu1)))} kip`]]); },
+   scope: ['Bearing stiffeners (use the Bearing stiffeners module)', 'Longitudinal stiffeners', 'Cross-frame member and connection forces (use the Cross-frames module)', 'Distortion-induced fatigue from differential girder deflection in skewed bridges'],
+   combos(R) { let h = card('cb-g', 'Strength I and Fatigue I', 'AASHTO LRFD Table 3.4.1-1', `<p class="note-p">Strength I gives the shear used for the web panels and the tension-field ratio; Fatigue I (γ = ${f2(R.g.fat)}) gives the stress range at the weld toes.</p>` + eq('Strength I shear', '', T`V_u = ${f2(R.g.dc)}(V_{DC1} + V_{DC2}) + ${f2(R.g.dw)}V_{DW} + ${f2(R.g.ll)}V_{LL+IM}`));
+-    R.rows.forEach(r => h += card('cb-r' + r.i, esc(r.name), `Type ${r.type}`, eq('Strength I', '', T`V_u = ${f2(R.g.dc)}(${f2(r.VDC1)} + ${f2(r.VDC2)}) + ${f2(R.g.dw)}(${f2(r.VDW)}) + ${f2(R.g.ll)}(${f2(r.VLL)}) = ${f2(r.Vu)}\ \text{kip}`) + (r.df > 0 ? eq('Fatigue I', '', T`\gamma(\Delta f) = ${f2(R.g.fat)}(${f2(r.df)}) = ${f2(r.fat)}\ \text{ksi}`) : '')));
++    R.rows.forEach(r => h += card('cb-r' + r.i, esc(r.name), `Type ${r.type}`, eq('Strength I', '', T`V_u = ${f2(R.g.dc)}(${f2(r.VDC1)} + ${f2(r.VDC2)}) + ${f2(R.g.dw)}(${f2(r.VDW)}) + ${f2(R.g.ll)}(${f2(r.VLL)}) = ${f2(r.Vu)}\ \text{kip}`) + (r.VuB != null ? eq('Strength I, end panel (largest in panel 1, at the bearing)', '', T`V_u = ${f2(R.g.dc)}(${f2(r.VDC1b)} + ${f2(r.VDC2b)}) + ${f2(R.g.dw)}(${f2(r.VDWb)}) + ${f2(R.g.ll)}(${f2(r.VLLb)}) = ${f2(r.VuB)}\ \text{kip}`) : '') + (r.df > 0 ? eq('Fatigue I', '', T`\gamma(\Delta f) = ${f2(R.g.fat)}(${f2(r.df)}) = ${f2(r.fat)}\ \text{ksi}`) : '')));
+     return h; },
+@@ -2482,3 +2491,3 @@
+     return { kv: [['Grades: web / stiffeners', `${P.ts.gW} / ${P.ts.gS}`], ['F_EXX', f0(R.Fexx), 'ksi'], ['Load factors DC / DW / LL / Fatigue', `${f2(R.g.dc)} / ${f2(R.g.dw)} / ${f2(R.g.ll)} / ${f2(R.g.fat)}`], t('A'), t('B')],
+-      table: [['Location', 'Type', 'Web', 'Flanges (top / bottom)', 'd_o 1 / 2', 'V: DC1 / DC2 / DW / LL', 'Δf'], R.rows.map(r => [esc(r.name), r.type, `${frac(r.D)} × ${frac(r.tw)}`, `${frac(r.bfc)} × ${frac(r.tfc)} / ${frac(r.bft)} × ${frac(r.tft)}`, `${f2(r.do1)}${r.end === 'yes' ? ' (end)' : ''} / ${f2(r.do2)}`, `${f2(r.VDC1)} / ${f2(r.VDC2)} / ${f2(r.VDW)} / ${f2(r.VLL)}`, f2(r.df)])] }; },
++      table: [['Location', 'Type', 'Web', 'Flanges (top / bottom)', 'd_o 1 / 2', 'V: DC1 / DC2 / DW / LL', 'Δf'], R.rows.map(r => [esc(r.name), r.type, `${frac(r.D)} × ${frac(r.tw)}`, `${frac(r.bfc)} × ${frac(r.tfc)} / ${frac(r.bft)} × ${frac(r.tft)}`, `${f2(r.do1)}${r.end === 'yes' ? ' (end)' : ''} / ${f2(r.do2)}`, `${f2(r.VDC1)} / ${f2(r.VDC2)} / ${f2(r.VDW)} / ${f2(r.VLL)}${r.end === 'yes' && r.VDC1b != null ? `; end panel ${f2(r.VDC1b)} / ${f2(r.VDC2b)} / ${f2(r.VDWb)} / ${f2(r.VLLb)}` : ''}`, f2(r.df)])] }; },
+   inbox(j) { return j && j.mods && j.mods.ts && j.mods.ts.rows.length ? { n: j.mods.ts.rows.length, what: 'stiffener locations', apply: () => { P.ts.rows = clone(j.mods.ts.rows); if (j.mods.ts.types) ['A', 'B'].forEach(k => Object.assign(P.ts.types[k], j.mods.ts.types[k])); if (j.mods.ts.gW) P.ts.gW = j.mods.ts.gW; } } : null; }
+```
+
+### Exact changes (Q4): decoded PlateLine (unified diff)
+
+```diff
+--- PlateLine (decoded PL_B64, main f16c6bf)
++++ PlateLine (after Q4)
+@@ -3470,2 +3470,5 @@
+   const shear = (T, x) => { const e = el(x); return { VDC1: r1(vmax(T.VDC1, e)), VDC2: r1(vmax(T.VDC2, e)), VDW: r1(vmax(T.VDW, e)), VLL: r1(Math.max(vmax(T.Vp, e), vmax(T.Vn, e))) }; };
++  // end panel (Q4): the largest shears in the elements between the bearing and the first stiffener (a < b), for GirderDetail's TS4 end-panel check
++  const shearIn = (T, a, b) => { const mx = arr => { let v = 0; for (let e = 0; e < N - 1; e++) if (xs[e] < b - 1e-9 && xs[e + 1] > a + 1e-9) v = Math.max(v, Math.abs(arr[e] || 0)); return v; };
++    return { VDC1b: r1(mx(T.VDC1)), VDC2b: r1(mx(T.VDC2)), VDWb: r1(mx(T.VDW)), VLLb: r1(Math.max(mx(T.Vp), mx(T.Vn))) }; };
+   const nS = m.sup.length, supN = k => k === 0 ? 'Abut. 1' : k === nS - 1 ? 'Abut. 2' : `Pier ${k}`;
+@@ -3476,3 +3479,3 @@
+       [[x0 + doFt, k, 1], [x1 - doFt, k + 1, -1]].forEach(([x, ks, dir]) => { const s = sec(x), end = ks === 0 || ks === nS - 1;
+-        ts.rows.push({ name: `Span ${k + 1}, first ${stiff ? 'stiffener' : 'connection plate'} from ${supN(ks)}, ${TT(gt)}`, type: stiff ? 'A' : 'B', D: s.D, tw: s.tw, bfc: s.topB, tfc: s.topT, bft: s.botB, tft: s.botT, bfw: bfw(x), end: end ? 'yes' : 'no', do1: r2(doIn), do2: r2(doIn), ...shear(T, x), df: 0 }); });
++        ts.rows.push({ name: `Span ${k + 1}, first ${stiff ? 'stiffener' : 'connection plate'} from ${supN(ks)}, ${TT(gt)}`, type: stiff ? 'A' : 'B', D: s.D, tw: s.tw, bfc: s.topB, tfc: s.topT, bft: s.botB, tft: s.botT, bfw: bfw(x), end: end ? 'yes' : 'no', do1: r2(doIn), do2: r2(doIn), ...shear(T, x), df: 0, ...(end ? shearIn(T, Math.min(x, m.sup[ks]), Math.max(x, m.sup[ks])) : {}) }); });
+       let best = -1, bx = (x0 + x1) / 2; xs.forEach((x, i) => { if (x > x0 && x < x1) { const rg = T.MfP[i] - T.MfN[i]; if (rg > best) { best = rg; bx = x; } } });
+```
+
+### Q5. Simple spans: the panels next to an interior support are end panels   [§4: panel classification change] [no formula, factor or saved-data change]
+
+- **Where (decoded PlateLine):** `detailExport()`, transverse stiffener rows (PL ≈ 3479; anchor `[[x0 + doFt, k, 1], [x1 - doFt, k + 1, -1]].forEach(([x, ks, dir]) => { const s = sec(x), end =`).
+- **Before:** `end = ks === 0 || ks === nS - 1` (only the panels next to the abutments).
+- **After:** `end = ks === 0 || ks === nS - 1 || !m.cont` (comment added). `m.cont` is `bridge.cont === 'continuous' && spans > 1`, so for simple spans every first stiffener (or connection plate) from a pier is an end panel; continuous units are unchanged. Such a row is sent with `end: 'yes'` and, with Q4, the end-panel shears (`VDC1b` …). In GirderDetail it therefore gets the 1.5D limit of TS5, the end-panel resistance of TS4 (no tension field; k = 5 when d<sub>o</sub> > 1.5D per EK1), and Q4's bearing shear. EK3's web sizing already treated these panels as end panels (`ends = cont ? [0, Ltot] : supX`), so Suggest / Full design results are unchanged.
+- **Governing provision:** AASHTO LRFD 10th Ed. (2024) Art. 6.10.9.3.3 (end panels: the panels adjacent to the simple supports / girder ends, V<sub>n</sub> = CV<sub>p</sub>, d<sub>o</sub> ≤ 1.5D) and Art. 6.10.9.1; a simple span is a girder with a bearing at each end, including over a pier.
+- **Problem:** for a simple-span bridge with more than one span, the panels at the piers were checked as interior panels (tension-field action, 3D limit), which 6.10.9.3.3 does not allow at a girder end. Unconservative.
+- **Check case (2 × 120 ft simple spans, default bridge otherwise, stiffened, d<sub>o</sub>/D = 2, quick suggestion applied: D = 47 in, t<sub>w</sub> = 1/2 in, F<sub>yw</sub> = 50 ksi; Transverse stiffeners → Get demands):** Span 1, first stiffener from Pier 1, interior girder, panel 1, d<sub>o</sub> = 94 in:
+  - D/t<sub>w</sub> = 94, (D/t<sub>w</sub>)² = 8,836; V<sub>p</sub> = 0.58(50)(47)(0.5) = 681.50 kip.
+  - Before (interior panel, stiffened, k = 5 + 5/2² = 6.25): √(29,000 × 6.25/50) = 60.21, 1.40 × 60.21 = 84.29 < 94, C = 1.57 × 3,625/8,836 = 0.644; tension field (2Dt<sub>w</sub>/(b<sub>fc</sub>t<sub>fc</sub> + b<sub>ft</sub>t<sub>ft</sub>) ≤ 2.5, Eq. 6.10.9.3.2-2): V<sub>n</sub> = 681.50[0.644 + 0.87(1 − 0.644)/√(1 + 2²)] = 681.50 × 0.7826 = **533.32 kip**; V<sub>u</sub> at the stiffener = 1.25(73.7 + 13.4) + 1.50(11.1) + 1.75(107.5) = 108.88 + 16.65 + 188.13 = **313.65 kip**; ratio **0.59**. TS5: 94 ≤ 3(47) = 141 in, pass.
+  - After (end panel, d<sub>o</sub> = 94 > 1.5D = 70.5 in, unstiffened per EK1, k = 5): √(29,000 × 5/50) = 53.85, C = 1.57 × 2,900/8,836 = 0.515; V<sub>n</sub> = 0.515 × 681.50 = **351.16 kip** (Eq. 6.10.9.2-1); V<sub>u</sub> at the bearing (Q4) = 1.25(81.5 + 14.9) + 1.50(12.3) + 1.75(115.3) = 120.50 + 18.45 + 201.78 = **340.73 kip**; ratio **0.97** (pass). TS5: 94 > 70.5 in, advisory "(treated as unstiffened in TS4)".
+  - The other pier panels: Span 2 interior 313.90 kip / 0.59 → 341.23 kip / 0.97; exterior 283.48 / 0.53 → 308.23 / 0.88 (Span 1) and 283.73 / 0.53 → 308.60 / 0.88 (Span 2). The abutment panels (already end panels) change with Q4 only: 313.77 → 340.98 kip (0.89 → 0.97). Status: all checks pass before and after.
+- **Check case (2 × 90 ft simple spans, 10 girders at 4 ft, overhangs 2.25 ft, quick suggestion D = 30 in, t<sub>w</sub> = 1/2 in, connection plates only at 25 ft, d<sub>o</sub> = 300 in):** pier rows `end: 'no'` → `'yes'` (location text "panel 1" → "panel 1 (end)"); φ<sub>v</sub>V<sub>n</sub> = 435.00 kip both (unstiffened, C = 1.0); V<sub>u</sub> (Q4) interior 91.00 → 153.38 kip (0.21 → 0.35), exterior 77.58 → 133.65 kip (0.18 → 0.31); TS5 not applicable in both (connection plates only).
+- **Unchanged:** continuous units (2 × 90 ft continuous: TS rows and every TS check identical to Q4 alone; the built-in 110-140-110 ft example: identical), single simple spans (both supports are abutments), Suggest / Full design / Alternatives / width study results (EK3 already sized these ends).
+- **How verified:** `node --check`; headless Chromium Q4-only vs Q4 + Q5 for the cases above.
+- **Other copies:** none. **Open items:** none.
+
+### Exact changes (Q5): decoded PlateLine (unified diff)
+
+```diff
+--- PlateLine (after Q4)
++++ PlateLine (after Q5)
+@@ -3478,3 +3478,4 @@
+     spans.forEach(k => { const x0 = m.sup[k], x1 = m.sup[k + 1];
+-      [[x0 + doFt, k, 1], [x1 - doFt, k + 1, -1]].forEach(([x, ks, dir]) => { const s = sec(x), end = ks === 0 || ks === nS - 1;
++      // end panel: next to an abutment, or next to any support of a simple span (each span is a girder with two ends; Q5)
++      [[x0 + doFt, k, 1], [x1 - doFt, k + 1, -1]].forEach(([x, ks, dir]) => { const s = sec(x), end = ks === 0 || ks === nS - 1 || !m.cont;
+         ts.rows.push({ name: `Span ${k + 1}, first ${stiff ? 'stiffener' : 'connection plate'} from ${supN(ks)}, ${TT(gt)}`, type: stiff ? 'A' : 'B', D: s.D, tw: s.tw, bfc: s.topB, tfc: s.topT, bft: s.botB, tft: s.botT, bfw: bfw(x), end: end ? 'yes' : 'no', do1: r2(doIn), do2: r2(doIn), ...shear(T, x), df: 0, ...(end ? shearIn(T, Math.min(x, m.sup[ks]), Math.max(x, m.sup[ks])) : {}) }); });
+```
+
+### Q6. PlateLine Bridge tab: girder spacing "From exterior girders"   [new input mode] [no calculation change] [optional saved field `bridge.Wcc`]
+
+- **What it does:** Girder spacing gets a third option beside Equal and Variable, **From exterior girders**: input W<sub>cc</sub>, the center-to-center distance between the exterior girders (ft, new optional field `bridge.Wcc`). **S = W<sub>cc</sub>/(N<sub>b</sub> − 1)**, recomputed whenever N<sub>b</sub> or W<sub>cc</sub> changes (every recompute), and shown read-only under the input with the out-to-out deck width W<sub>cc</sub> + left overhang + right overhang. In this mode the "Girder spacing S (equal)" input is hidden (as the bay list is hidden for Equal). When the mode is first selected with no W<sub>cc</sub>, W<sub>cc</sub> starts at the current layout's sum of bays (so the geometry does not change).
+- **How S reaches every consumer (design decision):** the computed S is written to `bridge.S` (the mode is equal spacing with S derived), so every reader of `P.bridge.S` / equal spacing is unchanged: `brGeom()` (only `'variable'` reads the bay list), `buildModel`, Suggest (`suggestLayout`, quick check, Full design), girder-count / width study, Alternatives, quantities and costs, drawings, GirderDetail's bridge definition (`bridgeDef()`, which already sends the computed `nb`, `S`, `bays`), detail demands (`detailExport`), the DXF/report bay text (`B.spacing === 'variable' ? ... : nb − 1 @ S`). The geometry signature `sgGeoSig()` signs the mode as `'equal'`, so GirderDetail's LLDF/DL factors (matched by that signature, `sgDfx`) still apply to the same bridge, and the `gd-bridge` payload is identical to Equal mode. The `bridgeSuite.v1.*` handoff code and payloads are not touched.
+- **Applies (width study "Apply", its Full design "Apply", Alternatives "Apply"):** they set N<sub>b</sub> and S as before. Before, they always set `spacing = 'equal'`; now, if the mode is "From exterior girders" it is kept and W<sub>cc</sub> = (N<sub>b</sub> − 1)·S (unrounded S of the result, 6 decimals), so S stays the applied spacing (to < 1e-6 ft; S is then re-derived from W<sub>cc</sub>); in Equal or Variable mode they set Equal exactly as before (`spKeepExt()`). Alternatives keep the deck width and overhangs, so W<sub>cc</sub> is unchanged by them (case below: 40 → 40); the width study changes the overhangs, so W<sub>cc</sub> follows (40 → 39 with 4 girders at 13 ft, overhangs 2.75 ft, out-to-out 44.50 ft).
+- **Where (decoded PlateLine):**
+  - Bridge tab inputs (PL ≈ 4125; anchor `${fld('Girder spacing', 'bridge.spacing', '', 'sel'`): option `['exterior', 'From exterior girders']`; `fld('Exterior girders, center to center W<sub>cc</sub>', 'bridge.Wcc', 'ft')` after the bay list; `<p class="hint static full" id="br-wcc-info">`.
+  - `syncSpacingVis()` (PL ≈ 4211): also hides `bridge.S` and shows `bridge.Wcc` in the new mode; new `spExtS()`, `spExtSync()`, `spExtInfo()`, `spKeepExt()` after it.
+  - `onScalar()` (PL ≈ 4228): first selection of the mode with no W<sub>cc</sub> sets W<sub>cc</sub> = Σ bays.
+  - `recompute()` (PL ≈ 4297): `spExtSync()` first (S = W<sub>cc</sub>/(N<sub>b</sub> − 1) when the mode is on and the inputs are valid; also updates the hidden S input).
+  - `brGeom()` (PL ≈ 1088): input errors "Girder spacing from the exterior girders: enter a positive center-to-center distance between the exterior girders." and "... needs at least 2 girders." (mode on only).
+  - `sgGeoSig()` (PL ≈ 1808): `(B.spacing === 'exterior' ? 'equal' : B.spacing) || 'equal'`.
+  - `wsApply()`, `wsfApply()`, `applyAlt()`: `P.bridge.spacing = 'equal'` → `spKeepExt(P.bridge, r.S)`.
+  - Manual: "Variable spacing and deck edges" paragraph and the input table (row W<sub>cc</sub>).
+- **§4:** no formula, factor, unit or reference changed; S is derived as stated, and with the same N<sub>b</sub> and S every result is identical to Equal mode (verified below).
+- **Check case (built-in example, 5 girders at 9.5 ft, overhangs 3.25 ft):** select "From exterior girders": W<sub>cc</sub> = 38 ft, S = 38/4 = 9.500 ft, out-to-out 38 + 3.25 + 3.25 = 44.50 ft. N<sub>b</sub> = 6: S = 38/5 = 7.600 ft (model bays 5 × 7.6). Same bridge in Equal mode with N<sub>b</sub> = 6, S = 7.6: fast suggestion, `detailExport`, `bridgeDef` (without `ts`), `sgGeoSig`, every PlateLine check status, and GirderDetail's received `P.df.bridge`: identical. W<sub>cc</sub> = 40: S = 8.000 ft, out-to-out 46.50 ft. W<sub>cc</sub> blank: input error (above). N<sub>b</sub> = 1: input error. Switching back to Equal shows S = 7.6 in the S input.
+- **Saved data:** no key changed. `bridge.Wcc` is only written when the mode is used (not added to the defaults), so projects that do not use it save exactly as before. A project saved in the new mode loads in main with an identical `P.bridge` and identical model (main reads `spacing: 'exterior'` as equal spacing with the stored S; its select shows blank because main has no such option); it loads in the branch unchanged. Old projects load as before.
+- **UI:** Equal and Variable modes: the Cross-section section is pixel-identical to main (screenshots). New mode: W<sub>cc</sub> in the S cell, the read-only line below it (full width), the rest of the section flows on.
+- **How verified:** `node --check`; headless Chromium (case above; Alternatives Apply and width-study Apply run in the new mode — the width study's Full design Apply uses the same `spKeepExt()` line and was not run; saved data both directions; no console errors).
+- **Other copies:** none. **Open items:** none.
+
+### Exact changes (Q6): decoded PlateLine (unified diff)
+
+```diff
+--- PlateLine (after Q5)
++++ PlateLine (after Q6)
+@@ -1087,2 +1087,3 @@
+     if (bays.some(v => !(v > 0))) errs.push('Variable spacing: every bay must be a positive number.'); }
++  if (b.spacing === 'exterior') { if (!(num(b.Wcc) > 0)) errs.push('Girder spacing from the exterior girders: enter a positive center-to-center distance between the exterior girders.'); if (!(nb >= 2)) errs.push('Girder spacing from the exterior girders needs at least 2 girders.'); }
+   const S = bays.length ? bays.reduce((a, v) => a + v, 0) / bays.length : num(b.S);
+@@ -1807,3 +1808,3 @@
+ function sgGeoSig(B, D, top, bot, web) { const r3 = v => Math.round(+v * 1000) / 1000, L = r => r3(r.L != null ? r.L : r.x1 - r.x0);
+-  return JSON.stringify([B.nb, B.S, B.spacing || 'equal', B.bays || '', B.ohL, B.ohR, B.barrier, B.edge || null, B.spans, B.skews, B.ts, B.haunch, B.fc, B.wc, r3(D), top.map(r => [L(r), +r.b, +r.t]), bot.map(r => [L(r), +r.b, +r.t]), web.map(r => [L(r), +r.t])]); }
++  return JSON.stringify([B.nb, B.S, (B.spacing === 'exterior' ? 'equal' : B.spacing) || 'equal', B.bays || '', B.ohL, B.ohR, B.barrier, B.edge || null, B.spans, B.skews, B.ts, B.haunch, B.fc, B.wc, r3(D), top.map(r => [L(r), +r.b, +r.t]), bot.map(r => [L(r), +r.b, +r.t]), web.map(r => [L(r), +r.t])]); }
+ function sgDfx(P, D, top, bot, web, ext) {
+@@ -2419,3 +2420,3 @@
+ <h3>Analysis model</h3><p>The analysis of the current design uses a variable-stiffness, staged line-girder model: DC1 on the steel section, DC2 and DW on the long-term composite section, and live load on the short-term composite section, with the composite stages cracked near interior supports. Its settings (staged or constant EI, cracked zones, deck reinforcement) are made in GirderDetail's Structural analysis module. Suggest mode searches trial layouts with the faster constant-EI model and then designs the chosen layout with the staged model.</p>
+-<h3>Variable spacing and deck edges</h3><p>On the Bridge tab, <b>Girder spacing</b> can be <i>Variable</i>: enter the bay spacings from left to right (one fewer than the number of girders). The framing plan, cross-section, deck width, and GirderDetail's LLDF and DLs module use each bay; the sizing checks and the built-in approximate distribution factors use the average spacing, and the spacing and overhang checks are made bay by bay. <b>Deck edges</b> can be a barrier (width and the Suggest barrier weight) or a <i>curb and railing</i> on each side: curb width and height, railing load point and weight, and the distance from the deck edge to the traffic face, which sets the roadway. When GirderDetail's LLDF and DLs module is in use, its factors and MassDOT dead loads replace the built-in ones (see the Analysis tab).</p>
++<h3>Variable spacing and deck edges</h3><p>On the Bridge tab, <b>Girder spacing</b> can be <i>Variable</i>: enter the bay spacings from left to right (one fewer than the number of girders). It can also be <i>From exterior girders</i>: enter the center-to-center distance W<sub>cc</sub> between the two exterior girders, and the equal spacing is S = W<sub>cc</sub>/(N<sub>b</sub> − 1), recomputed whenever N<sub>b</sub> or W<sub>cc</sub> changes and shown with the out-to-out deck width W<sub>cc</sub> + left overhang + right overhang; everything else then works exactly as with equal spacing S. The framing plan, cross-section, deck width, and GirderDetail's LLDF and DLs module use each bay; the sizing checks and the built-in approximate distribution factors use the average spacing, and the spacing and overhang checks are made bay by bay. <b>Deck edges</b> can be a barrier (width and the Suggest barrier weight) or a <i>curb and railing</i> on each side: curb width and height, railing load point and weight, and the distance from the deck edge to the traffic face, which sets the roadway. When GirderDetail's LLDF and DLs module is in use, its factors and MassDOT dead loads replace the built-in ones (see the Analysis tab).</p>
+ <h3>Reverting a suggestion</h3><p>Applying a suggested layout (Suggest tab) or an alternative (Alternatives tab) keeps a copy of the design from just before it. A banner above the output tabs then offers <b>Revert to the previous design</b>; after reverting, the same button re-applies the change, so you can compare the two. The copy survives a reload and is replaced the next time you apply a suggestion or alternative. <b>Keep and dismiss</b> discards it.</p>
+@@ -2448,2 +2449,3 @@
+ <tr><td>Girder spacing S</td><td>ft</td><td>Uniform center-to-center spacing.</td></tr>
++<tr><td>Exterior girders, center to center W<sub>cc</sub></td><td>ft</td><td>Spacing mode "From exterior girders" only: S = W<sub>cc</sub>/(N<sub>b</sub> − 1).</td></tr>
+ <tr><td>Overhangs</td><td>ft</td><td>Exterior girder centerline to edge of deck, each side.</td></tr>
+@@ -3769,3 +3771,3 @@
+   snapshotBefore(`Girder count from deck width (${r.N} girders at ${f2(r.S)} ft)`);
+-  P.bridge.nb = r.N; P.bridge.S = +r.S.toFixed(4); P.bridge.spacing = 'equal'; P.bridge.ohL = r.oh; P.bridge.ohR = r.oh; P.girder = JSON.parse(JSON.stringify(r.girder)); P.framing.stiff = r.framing.stiff; P.framing.doRatio = r.framing.doRatio;
++  P.bridge.nb = r.N; P.bridge.S = +r.S.toFixed(4); spKeepExt(P.bridge, r.S); P.bridge.ohL = r.oh; P.bridge.ohR = r.oh; P.girder = JSON.parse(JSON.stringify(r.girder)); P.framing.stiff = r.framing.stiff; P.framing.doRatio = r.framing.doRatio;
+   fillInputs(); ['web', 'top', 'bot', 'spl'].forEach(renderArr); recompute(); setOTab('summary'); autosave(); }
+@@ -3856,3 +3858,3 @@
+   snapshotBefore(`Girder count from deck width, full design (${r.N} girders at ${f2(r.S)} ft)`);
+-  P.bridge.nb = r.N; P.bridge.S = +r.S.toFixed(4); P.bridge.spacing = 'equal'; P.bridge.ohL = r.oh; P.bridge.ohR = r.oh; P.girder = JSON.parse(JSON.stringify(r.girder));
++  P.bridge.nb = r.N; P.bridge.S = +r.S.toFixed(4); spKeepExt(P.bridge, r.S); P.bridge.ohL = r.oh; P.bridge.ohR = r.oh; P.girder = JSON.parse(JSON.stringify(r.girder));
+   P.framing.stiff = r.framing.stiff; if (r.webType === 'stiffened' && r.doR) P.framing.doRatio = r.framing.doRatio; if (r.spacing) P.framing.spacing = r.framing.spacing;
+@@ -3977,3 +3979,3 @@
+   snapshotBefore(`Alternative (${r.nb} girders at ${f2(r.S)} ft)`);
+-  P.bridge.nb = r.nb; P.bridge.S = +r.S.toFixed(4); P.bridge.spacing = 'equal'; P.girder = JSON.parse(JSON.stringify(r.girder)); P.framing.stiff = r.web === 'stiffened' ? 'on' : 'off';
++  P.bridge.nb = r.nb; P.bridge.S = +r.S.toFixed(4); spKeepExt(P.bridge, r.S); P.girder = JSON.parse(JSON.stringify(r.girder)); P.framing.stiff = r.web === 'stiffened' ? 'on' : 'off';
+   fillInputs(); ['web', 'top', 'bot', 'spl'].forEach(renderArr); recompute(); setOTab('summary'); autosave();
+@@ -4119,4 +4121,4 @@
+       <div class="sec-body" id="sec-xs">
+-        ${fld('Number of girders', 'bridge.nb', '')}${fld('Girder spacing', 'bridge.spacing', '', 'sel', { options: [['equal', 'Equal'], ['variable', 'Variable (bay by bay)']] })}
+-        ${fld('Girder spacing S (equal)', 'bridge.S', 'ft')}${fld('Bay spacings, left to right (variable)', 'bridge.bays', 'ft', 'text')}
++        ${fld('Number of girders', 'bridge.nb', '')}${fld('Girder spacing', 'bridge.spacing', '', 'sel', { options: [['equal', 'Equal'], ['variable', 'Variable (bay by bay)'], ['exterior', 'From exterior girders']] })}
++        ${fld('Girder spacing S (equal)', 'bridge.S', 'ft')}${fld('Bay spacings, left to right (variable)', 'bridge.bays', 'ft', 'text')}${fld('Exterior girders, center to center W<sub>cc</sub>', 'bridge.Wcc', 'ft')}<p class="hint static full" id="br-wcc-info"></p>
+         ${fld('Left overhang', 'bridge.ohL', 'ft')}${fld('Right overhang', 'bridge.ohR', 'ft')}
+@@ -4205,3 +4207,13 @@
+ }
+-function syncSpacingVis() { const el = document.getElementById('f_bridge_bays'), ig = el && el.closest('.ig'); if (ig) ig.style.display = P.bridge.spacing === 'variable' ? '' : 'none'; }
++function syncSpacingVis() { const el = document.getElementById('f_bridge_bays'), ig = el && el.closest('.ig'); if (ig) ig.style.display = P.bridge.spacing === 'variable' ? '' : 'none';
++  const ext = P.bridge.spacing === 'exterior', vis = (id, on) => { const e = document.getElementById(id), g = e && e.closest('.ig'); if (g) g.style.display = on ? '' : 'none'; };
++  vis('f_bridge_S', !ext); vis('f_bridge_Wcc', ext); spExtInfo(); }
++/* girder spacing "From exterior girders" (Q6): S = W_cc/(N_b - 1) is kept in bridge.S (equal spacing), so every reader of bridge.S and the hand-offs are unchanged */
++function spExtS(b) { const nb = Math.round(Number(b.nb)), w = Number(b.Wcc); return b.spacing === 'exterior' && nb >= 2 && w > 0 ? w / (nb - 1) : null; }
++function spExtSync() { const s = spExtS(P.bridge); if (s != null && !(Math.abs(Number(P.bridge.S) - s) < 1e-6)) { P.bridge.S = s; const el = document.getElementById('f_bridge_S'); if (el) el.value = s; } spExtInfo(); }
++function spExtInfo() { const el = document.getElementById('br-wcc-info'); if (!el) return; const B = P.bridge, ext = B.spacing === 'exterior'; el.style.display = ext ? '' : 'none'; if (!ext) { el.innerHTML = ''; return; }
++  const s = spExtS(B), nb = Math.round(Number(B.nb)), w = Number(B.Wcc), oL = Number(B.ohL), oR = Number(B.ohR);
++  el.innerHTML = s == null ? 'Enter W<sub>cc</sub> (and at least 2 girders) to set the spacing.' : `S = W<sub>cc</sub>/(N<sub>b</sub> − 1) = ${f2(w)}/${nb - 1} = <b>${f3(s)} ft</b> (read-only). Out-to-out deck width = W<sub>cc</sub> + left + right overhang = ${f2(w)} + ${f2(oL)} + ${f2(oR)} = <b>${f2(w + oL + oR)} ft</b>.`; }
++/* an Apply that sets the girder count and equal spacing keeps the "From exterior girders" mode with W_cc = (N_b - 1)S; otherwise it sets equal spacing as before */
++function spKeepExt(B, S0) { if (B.spacing === 'exterior') B.Wcc = +((Math.round(Number(B.nb)) - 1) * S0).toFixed(6); else B.spacing = 'equal'; }
+ function onScalar(e) {
+@@ -4214,2 +4226,5 @@
+   setPath(P, el.dataset.k, v);
++  if (el.dataset.k === 'bridge.spacing' && P.bridge.spacing === 'exterior' && !(Number(P.bridge.Wcc) > 0)) {   // start from the current layout: W_cc = sum of the bays
++    const nb = Math.round(Number(P.bridge.nb)), bays = M && !M.errors.length && M.bays && M.bays.length === nb - 1 ? M.bays : new Array(Math.max(nb - 1, 0)).fill(Number(P.bridge.S));
++    const w = bays.reduce((a, v) => a + v, 0); if (w > 0) { P.bridge.Wcc = +w.toFixed(4); const wi = document.getElementById('f_bridge_Wcc'); if (wi) wi.value = P.bridge.Wcc; } }
+   if (el.dataset.k === 'bridge.spacing') syncSpacingVis();
+@@ -4281,2 +4296,3 @@
+ function recompute() {
++  spExtSync();   // "From exterior girders": S = W_cc/(N_b - 1) before anything reads bridge.S (Q6)
+   const drn = $('#sg-dr-note'); if (drn) drn.hidden = !(P.limits.sdMandatory && P.suggest.depthRule === 'off');   // Suggest span-to-depth setting overridden by the Limits tab (2026-10-12)
+```
+
+### Verification (Q4–Q6)
+
+- `node --check` on every inline script of the main page and of the decoded PlateLine. The base64 round trip of the unchanged page was byte-identical before editing.
+- **Headless Chromium (Playwright), main vs branch, GirderDetail default project, every module** (gs, fa, splice, bstf, ts, sc, cf, oh, wt, df, sa): every check, status and item is identical. The only differences are the TS4 note and one TS4 worked line ("(at the stiffener: no end-panel shears given)").
+- **PlateLine built-in example, 90 ft simple span and 120 ft simple span with d<sub>o</sub>/D = 2:** compared fast pick, quick suggestion, Full design (default and 90 ft), Apply, Transverse stiffeners and Girder section demands. The sizing, girder plates and every GS check are identical. Only the TS4 end-panel V<sub>u</sub> changes, as intended:
+  - built-in example after Full design: 265.25 → 285.70 kip, ratio 0.57 → 0.61;
+  - 90 ft simple span after Full design: 93.13 → 152.75 kip, ratio 0.21 → 0.35;
+  - 120 ft simple span: 313.77 → 340.98 kip, ratio 0.89 → 0.97.
+- **Built-in example, width study (W = 44.5 ft) and Full design:** results, table HTML and project identical (except the `dfx.ts` timestamp).
+- **Hand-off payloads** (built-in example and 2 × 180 ft simple spans):
+  - PlateLine → GirderDetail inbox: identical except the new optional `VDC1b`/`VDC2b`/`VDWb`/`VLLb` on end-panel TS rows, and (Q5, simple spans) `end: 'no'` → `'yes'` on the pier rows.
+  - `bridgeDef` / `gd-bridge` and GirderDetail's `P.df.bridge`: identical.
+  - localStorage key list: identical.
+- **Saved data:** checked both directions for Q4 (TS rows with end-panel shears) and Q6 (project in the new spacing mode). See Q4 and Q6 above.
+- **Console:** no errors in any run. One alert, "Preliminary sizing has input errors; fix them first.", appeared only while a test deliberately left N<sub>b</sub> = 1 or W<sub>cc</sub> blank. This is existing behaviour of GirderDetail's bridge refresh.
+- **Screenshots** (session scratchpad `followups/gd-q4/`):
+  - TS location row with the end-panel inputs, blank and filled;
+  - TS Demands tab and TS4 card;
+  - PlateLine Cross-section section in Equal and Variable modes (pixel-identical to main), the new mode (5 and 6 girders), blank W<sub>cc</sub>, and after width-study Apply.
+- **Shared snippets:** none touched (no `bridgeSuite.v1.*` code).
+
+- **After merging main b1c9e77 (#179, CF-D10–CF-D12):** the PlateLine string was untouched by #179, and the merged `PL_B64` decodes to the same page as above. All checks were re-run on the merged page against the new main, with the same results and only the intended differences:
+  - `node --check`;
+  - every module on the default project;
+  - built-in example and 90 ft span with Full design → TS/GS;
+  - width study plus Full design;
+  - 2 × 120 ft simple spans;
+  - hand-off payloads;
+  - Q4 UI and saved data;
+  - Q6 UI, Applies and saved data.
