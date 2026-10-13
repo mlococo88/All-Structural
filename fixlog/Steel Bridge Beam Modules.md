@@ -6921,3 +6921,125 @@ Main page and the embedded Preliminary sizing (PlateLine, `PL_B64`, decoded, edi
      dfw += `<div class="eq-block"><div class="eq-title"><span>Exterior girder, moment, Span ${iMax + 1}</span><span class="eq-ref">AASHTO Table 4.6.2.2.2d-1, lever rule; 4.6.2.2.2d rigid cross-section</span></div><div class="eq-math">\\[\\begin{aligned}d_e &= ${f2(s.de)}\\ \\text{ft}, \\quad w = ${f2(d.w)}\\ \\text{ft}, \\quad N_L = ${d.NL}, \\quad g_{1,lever} = 1.2 \\times \\frac{0.5\\,(a_1 + a_2)}{S} = ${f3(d.lev)}, \\quad a_1 = S + d_e - 2 = ${f2(num(P.bridge.S) + s.de - 2)}\\ \\text{ft} \\\\ e &= 0.77 + \\frac{${d.deE > s.de + 1e-9 ? '-1.00' : 'd_e'}}{9.1} = ${f3(d.eM)}${d.deE > s.de + 1e-9 ? '\\ (d_e \\text{ limited to } -1.0)' : ''}, \\quad g_{2+} = ${d.rule === 'e' ? `e\\,g_{2+,int} = ${f3(d.eM)}(${f3(d.m2)})` : d.rule === 'S16' ? '\\text{lever rule, 2 lanes (S > 16 ft)}' : '\\min(e\\,g_{2+,int},\\ \\text{lever, 2 lanes})\\ (N_b = 3)'} = ${f3(d.mE)} \\\\ g_{rigid} &= \\max_n\\, m\\left(\\frac{N_L}{N_b} + \\frac{X_{ext}\\sum e}{\\sum x^2}\\right) = ${f3(d.rig)}\\ (${d.rigN}\\ \\text{lane${d.rigN > 1 ? 's' : ''}}) \\\\ g_M &= \\max(${f3(d.lev)},\\ ${f3(d.mE)},\\ ${f3(d.rig)}) = ${f3(d.mM)}, \\quad g_V = \\max(${f3(d.lev)},\\ ${f3(d.vE)},\\ ${f3(d.rig)}) = ${f3(d.mV)}\\end{aligned}\\]</div></div>`; }
    const skv = tr[0].skV.map((v, i) => `Span ${i + 1}: ${f3(v)}`).join(', ');
 ```
+
+
+### C3. Preliminary sizing's cross-section drawing shows GirderDetail's deck edges and appurtenances   [display only] [results bit-identical] [optional fields in the `gd-xs` record]
+- **Where (anchors), main page:** `dfXsMsg(p)` (anchor `const ll = dfLLFace({}, p.dl, xs, Ed.L.f, Ed.R.f), side = sd => { const q = Ed[sd], fx = xs['fenceX' + sd];`) and its header comment (anchor `Optional drawing fields (C3`).
+- **Where (anchors), decoded PlateLine:** `xsSVG(m)` (anchors `const XS = P.bridge && P.bridge.xs && P.bridge.xs.L && P.bridge.xs.R ? P.bridge.xs : null, xa = XS ? xsApp(XS, m.width) : null;`, `if (XS) o += xsAppSVG(xa, X, k, yTop, m.ts);`, and the caption `cap: XS ? \`To scale.`); new `function xsApp(XS, Wd)` and `function xsAppSVG(xa, X, k, yTop, ts)` after `xsSVG`.
+- **Before:** the Drawings-tab cross-section drew a 42 in rectangle of width `m.barrier` at each deck edge. Since XS9, with deck edges from GirderDetail, `m.barrier` is the average live-load traffic face. So a project with 6 ft sidewalks drew two 5 to 6 ft wide "barriers", and curbs were drawn as barriers.
+- **After (only when `bridge.xs`, GirderDetail's record, is present; the same test `brGeom` uses):** each side is drawn as entered in LLDF and DLs → Cross-section and dead loads:
+  - barrier: width `bw` at the deck edge, 34 in high (schematic, as GirderDetail's drawing, DXF and 3D);
+  - curb: `cw` × `ch` in; its railing (when `rw` > 0) as a post with a top rail at `rp`, 42 in high (schematic), standing on the curb when `rp` is on it, else on the deck or sidewalk surface;
+  - sidewalk (optional fields): `sw` ft × `swT` in at the deck edge, with the barrier or curb on it (as GirderDetail's `dfApp`); its railing or fence at `fx`;
+  - raised median (optional field `med`): `w` ft × `t` in, centered, with a dashed line for a longitudinal joint;
+  - the live-load traffic faces `r` (each side) as dashed red lines labeled "LL face".
+  
+  The caption lists each side and the faces, for example: "Deck edges and appurtenances as set in GirderDetail (LLDF and DLs → Cross-section and dead loads): left barrier 1.50 ft, sidewalk 6.00 ft × 8.00 in with railing or fence at 5.50 ft; right barrier 1.50 ft, sidewalk 5.00 ft × 9.00 in with railing or fence at 4.50 ft; median 4.00 ft × 9.00 in with longitudinal joint. Barrier (34 in) and railing or fence (42 in) heights are schematic. Dashed red lines: live-load traffic faces, 5.50 ft (left) and 4.50 ft (right) from the deck edges." The drawing area grows to fit the tallest element. Without `bridge.xs` the SVG and caption are the same string as before (checked).
+- **Record (`gd-xs`, stored by Preliminary sizing as `bridge.xs` and echoed in `gd-bridge`):** new **optional** fields, written only when the project has the element, so a record without sidewalks, fences or a median is unchanged (byte for byte) and nothing is re-sent for it:
+  - per side `sw` (sidewalk width, ft) and `swT` (thickness, in), when the sidewalk width is > 0; `fx` (sidewalk railing or fence, ft from the deck edge), when one is entered;
+  - `med` = `{ w, t, joint }` (ft, in, boolean), when the median width is > 0.
+  They are the module's inputs (`P.df.dl.swL`, `swThkL`, `swR`, `swThkR`, the validated `fenceXL`/`fenceXR`, `medW`, `medThk`, `medJoint`), not results, so the record still depends only on GirderDetail's inputs and the exchange ends after one round (checked). Preliminary sizing reads them only in the drawing; `brGeom`, `xsLegacy` and every calculation ignore them, and its own saved fields (`bridge.barrier`, `bridge.edge`, `suggest.bar`) are unchanged.
+- **Problem:** the drawing did not show the deck edges GirderDetail sends; with sidewalks it showed wide "barriers" that do not exist. Display only.
+- **Governing provision:** none (drawing only). No formula, load or input changed.
+- **Check case:** xsA test project (sidewalks 6 ft × 8 in and 5 ft × 9 in with fences at 5.50 and 4.50 ft, 1.50 ft barriers, median 4 ft × 9 in with a joint): record gains `L: { sw: 6, swT: 8, fx: 5.5 }`, `R: { sw: 5, swT: 9, fx: 4.5 }`, `med: { w: 4, t: 9, joint: true }`; the drawing shows both sidewalks with the barriers on them, the fences, the median and joint, and LL faces at 5.50 and 4.50 ft (was: two 5.00 ft wide, 42 in "barriers"). Built-in example: 1.50 ft barriers 34 in high and LL faces at 1.50 ft; record unchanged. Curb project with a left sidewalk: left curb 12 × 10 in on the sidewalk with its railing at 0.50 ft, right curb 10 × 8 in with its railing at 1.25 ft on the deck, LL faces 1.00 / 1.50 ft. Screenshots: `scratchpad/followups/gd-c1/c3_{def,xsA,curbsw}_pl_xs.png` (branch) and `main_{def,xsA}_pl_xs.png` (main).
+- **Saved data:** no key renamed or removed; `bridge.xs` (Preliminary sizing) and its echo `P.df.bridge.xs` (GirderDetail) gain the optional fields above in projects that have those elements. An older build ignores them; it re-sends its own record on opening (without them) and Preliminary sizing stores that, with the same results; this build adds them back when the project is opened again.
+- **Other copies:** none. (GirderDetail's own drawing, `dfXsSVG`/`dfFoot`, is the reference for what is drawn; unchanged.)
+
+### Exact changes (C3): main page (unified diff against the C2 commit; the changed PL_B64 line is omitted)
+
+```diff
+diff --git a/Steel Bridge Beam Modules.html b/Steel Bridge Beam Modules.html
+index 6d16ec4..a6a31f6 100644
+--- a/Steel Bridge Beam Modules.html	
++++ b/Steel Bridge Beam Modules.html	
+@@ -4581,3 +4581,6 @@ function dfPayload(R, p) {
+    live-load face r (after the mountable-sidewalk rule, XS6), plus the appurtenance unit weight. Preliminary sizing stores it as bridge.xs,
+-   writes its own deck-edge fields from it (read-only there), and echoes it in gd-bridge; it is sent only when the echo differs. */
++   writes its own deck-edge fields from it (read-only there), and echoes it in gd-bridge; it is sent only when the echo differs.
++   Optional drawing fields (C3; present only when the project has them, so a record without these elements is unchanged): per side the
++   sidewalk width sw (ft) and thickness swT (in) and the sidewalk railing or fence position fx (ft from the deck edge), and the raised
++   median med { w (ft), t (in), joint }. Preliminary sizing only draws them (cross-section drawing); no calculation reads them. */
+ function dfXsMsg(p) {
+@@ -4585,4 +4588,5 @@ function dfXsMsg(p) {
+   const xs = dfXsIn(p, errs); ['swL', 'swThkL', 'swR', 'swThkR'].forEach(k => { if (!(nm(p.dl[k]) >= 0)) errs.push(k); }); if (errs.length) return null;
+-  const ll = dfLLFace({}, p.dl, xs, Ed.L.f, Ed.R.f), side = sd => { const q = Ed[sd]; return { type: q.type, bw: q.bw, bwt: q.bwt, cw: q.cw, ch: q.ch, rw: q.rw, rp: q.rp, rf: q.rf, face: q.face, f: q.f, r: ll[sd].r }; };
+-  return { L: side('L'), R: side('R'), wcA: xs.wcA };
++  const ll = dfLLFace({}, p.dl, xs, Ed.L.f, Ed.R.f), side = sd => { const q = Ed[sd], fx = xs['fenceX' + sd]; return { type: q.type, bw: q.bw, bwt: q.bwt, cw: q.cw, ch: q.ch, rw: q.rw, rp: q.rp, rf: q.rf, face: q.face, f: q.f, r: ll[sd].r, ...(ll[sd].sw > 0 ? { sw: ll[sd].sw, swT: ll[sd].t } : {}), ...(ll[sd].sw > 0 && fx > 0 ? { fx } : {}) }; };
++  const medW = nm(p.dl.medW) > 0 ? nm(p.dl.medW) : 0, medT = nm(p.dl.medThk);
++  return { L: side('L'), R: side('R'), wcA: xs.wcA, ...(medW > 0 && medT >= 0 ? { med: { w: medW, t: medT, joint: p.dl.medJoint === 'yes' } } : {}) };
+ }
+```
+
+### Exact changes (C3): decoded PlateLine (unified diff against C2)
+
+```diff
+--- PlateLine (decoded PL_B64, C2)
++++ PlateLine (decoded PL_B64, C3)
+@@ -4566,10 +4566,12 @@
+   const W = 1000, pad = 60, k = (W - 2 * pad) / (m.width * 12), X = inch => pad + inch * k;
+   const mid = m.spans.indexOf(Math.max(...m.spans)), xm = (m.sup[mid] + m.sup[mid + 1]) / 2;
+   const s = m.secs.find(q => xm >= q.x0 - 1e-9 && xm < q.x1 + 1e-9) || m.secs[0];
+-  const bh = 42 * k, yTop = 40 + bh, yDeckB = yTop + m.ts * k, yTF = yDeckB + m.haunch * k, H = yTF + s.p.d * k + 110;
++  const XS = P.bridge && P.bridge.xs && P.bridge.xs.L && P.bridge.xs.R ? P.bridge.xs : null, xa = XS ? xsApp(XS, m.width) : null;   // deck edges from GirderDetail (C3): drawn as entered there
++  const bh = XS ? Math.max(42, xa.top) * k + 18 : 42 * k, yTop = 40 + bh, yDeckB = yTop + m.ts * k, yTF = yDeckB + m.haunch * k, H = yTF + s.p.d * k + 110;
+   let o = '';
+   o += `<rect x="${X(0)}" y="${yTop}" width="${m.width * 12 * k}" height="${m.ts * k}" fill="#e6e8e4" stroke="#4a5562" stroke-width="1"/>`;
+-  [[0, 1], [m.width * 12 - m.barrier * 12, -1]].forEach(([x0]) => o += `<path d="M${X(x0)} ${yTop}v${-bh}h${m.barrier * 12 * k}v${bh}z" fill="#f1f2ef" stroke="#7a8590" stroke-width=".8"/>`);
++  if (XS) o += xsAppSVG(xa, X, k, yTop, m.ts);
++  else [[0, 1], [m.width * 12 - m.barrier * 12, -1]].forEach(([x0]) => o += `<path d="M${X(x0)} ${yTop}v${-bh}h${m.barrier * 12 * k}v${bh}z" fill="#f1f2ef" stroke="#7a8590" stroke-width=".8"/>`);
+   const gx = [m.ohL * 12]; m.bays.forEach(v => gx.push(gx[gx.length - 1] + v * 12));
+   gx.forEach(g => {
+     const cx = X(g), tb = s.top.b * k, bb = s.bot.b * k;
+@@ -4586,7 +4588,35 @@
+   o += dim(0, m.width * 12, yd + 32, `Out-to-out ${f2(m.width)} ft`);
+   o += `<text x="${X(m.width * 12) + 6}" y="${yTop + m.ts * k / 2 + 4}" class="sv-t">t<tspan baseline-shift="sub" font-size="9">s</tspan> = ${f2(m.ts)} in</text>`;
+   o += `<text x="${X(gx[0]) + s.top.b * k / 2 + 6}" y="${yTF + s.p.d * k / 2}" class="sv-t sv-dim">${s.type}</text>`;
+-  return { svg: `<svg viewBox="0 0 ${W + 60} ${H}" class="dwg" role="img" aria-label="Typical cross-section">${o}</svg>`, cap: `To scale. Girders drawn with section ${s.type} (at midspan of Span ${mid + 1}). Barrier height drawn at 42 in for illustration only.`, sec: s };
++  return { svg: `<svg viewBox="0 0 ${W + 60} ${H}" class="dwg" role="img" aria-label="Typical cross-section">${o}</svg>`, cap: XS ? `To scale. Girders drawn with section ${s.type} (at midspan of Span ${mid + 1}). Deck edges${xa.more ? ' and appurtenances' : ''} as set in GirderDetail (LLDF and DLs → Cross-section and dead loads): ${xa.txt}. Barrier (34 in) and railing or fence (42 in) heights are schematic. Dashed red lines: live-load traffic faces, ${f2(XS.L.r)} ft (left) and ${f2(XS.R.r)} ft (right) from the deck edges.` : `To scale. Girders drawn with section ${s.type} (at midspan of Span ${mid + 1}). Barrier height drawn at 42 in for illustration only.`, sec: s };
++}
++/* deck edges and appurtenances from GirderDetail's record bridge.xs (C3, display only; no calculation reads them). Per side: barrier
++   (width bw ft, schematic 34 in high) or curb (cw x ch in) with its railing (line at rp ft, schematic 42 in, on the curb when rp is
++   on it); optional sidewalk (sw ft x swT in) with its railing or fence (fx ft); optional median (med.w ft x med.t in, centered, joint).
++   x in ft from the left deck edge, heights in inches above the deck top. */
++function xsApp(XS, Wd) {
++  const el = [], ok = v => typeof v === 'number' && isFinite(v), xd = (sd, x) => sd === 'L' ? x : Wd - x, med = XS.med && XS.med.w > 0 ? XS.med : null, txt = [];
++  const surf = x => { for (const sd of ['L', 'R']) { const q = XS[sd]; if (q.sw > 0 && (sd === 'L' ? x <= q.sw + 1e-9 : x >= Wd - q.sw - 1e-9)) return ok(q.swT) ? q.swT : 0; } return med && Math.abs(x - Wd / 2) <= med.w / 2 + 1e-9 && ok(med.t) ? med.t : 0; };
++  ['L', 'R'].forEach(sd => { const q = XS[sd], nm_ = sd === 'L' ? 'left' : 'right', y0 = q.sw > 0 && ok(q.swT) ? q.swT : 0, span = w => { const a = xd(sd, 0), b = xd(sd, w); return [Math.min(a, b), Math.max(a, b)]; }; let t;
++    if (q.sw > 0) el.push({ k: 'sw', x: span(q.sw), y0: 0, h: y0 });
++    if (q.type === 'curb') { const cw = ok(q.cw) && ok(q.ch) && q.cw > 0 && q.ch > 0 ? q.cw / 12 : 0; if (cw) el.push({ k: 'curb', x: span(cw), y0, h: q.ch });
++      t = `${nm_} curb ${cw ? `${f2(q.cw)} × ${f2(q.ch)} in` : '(none)'}`;
++      if (q.rw > 0 && ok(q.rp)) { const on = cw && q.rp <= cw + 1e-9; el.push({ k: 'rail', x: xd(sd, q.rp), y0: on ? y0 + q.ch : surf(xd(sd, q.rp)), h: 42 }); t += ` with railing at ${f2(q.rp)} ft`; } }
++    else { if (ok(q.bw) && q.bw > 0) el.push({ k: 'bar', x: span(q.bw), y0, h: 34 }); t = `${nm_} barrier ${ok(q.bw) ? f2(q.bw) : '?'} ft`; }
++    if (q.sw > 0) { t += `, sidewalk ${f2(q.sw)} ft × ${ok(q.swT) ? f2(q.swT) : '?'} in`; if (q.fx > 0) { el.push({ k: 'rail', x: xd(sd, q.fx), y0, h: 42 }); t += ` with railing or fence at ${f2(q.fx)} ft`; } }
++    if (ok(q.r)) el.push({ k: 'face', sd, x: xd(sd, q.r) });
++    txt.push(t); });
++  if (med) { el.push({ k: 'med', x: [Wd / 2 - med.w / 2, Wd / 2 + med.w / 2], y0: 0, h: ok(med.t) ? med.t : 0, joint: !!med.joint }); txt.push(`median ${f2(med.w)} ft × ${ok(med.t) ? f2(med.t) : '?'} in${med.joint ? ' with longitudinal joint' : ''}`); }
++  return { el, top: Math.max(0, ...el.filter(e => e.k !== 'face').map(e => e.y0 + e.h)), more: !!(XS.L.sw > 0 || XS.R.sw > 0 || med), txt: txt.join('; ') };
++}
++function xsAppSVG(xa, X, k, yTop, ts) {
++  const Y = h => yTop - h * k, px = x => X(x * 12); let o = '', f = '';
++  xa.el.forEach(e => {
++    if (e.k === 'sw' || e.k === 'med' || e.k === 'curb' || e.k === 'bar') { if (!(e.h > 0)) return; o += `<rect x="${px(e.x[0])}" y="${Y(e.y0 + e.h)}" width="${(e.x[1] - e.x[0]) * 12 * k}" height="${e.h * k}" fill="${e.k === 'bar' ? '#f1f2ef' : '#e6e8e4'}" stroke="#7a8590" stroke-width=".8"/>`;
++      if (e.k === 'med' && e.joint) o += `<path d="M${px((e.x[0] + e.x[1]) / 2)} ${Y(e.h)}V${yTop + ts * k}" stroke="#4a5562" stroke-width=".8" stroke-dasharray="3 2"/>`; }
++    else if (e.k === 'rail') o += `<path d="M${px(e.x)} ${Y(e.y0)}V${Y(e.y0 + e.h)}M${px(e.x) - 4} ${Y(e.y0 + e.h)}h8M${px(e.x) - 3} ${Y(e.y0 + e.h * 0.55)}h6" stroke="#4a5562" stroke-width="1.6" fill="none"/>`;
++    else if (e.k === 'face') { const x = px(e.x), yT = Y(xa.top) - 4; f += `<path d="M${x} ${yT}V${yTop + ts * k + 4}" stroke="#b42318" stroke-width="1" stroke-dasharray="5 3"/><text x="${x + (e.sd === 'L' ? 4 : -4)}" y="${yT - 2}" class="sv-t" text-anchor="${e.sd === 'L' ? 'start' : 'end'}" style="fill:#b42318">LL face</text>`; } });
++  return o + f;
+ }
+ function secSVG(ty, sc) {
+   const s = ty.sec, W = 330, d = s.p.d * sc, H = d + 96, cx = 150, y0 = 44;
+```
+
+
+### Verification (C1–C3)
+- **Syntax:** `node --check` on every inline script of the main page and of the decoded PlateLine after each item.
+- **C2 in Node:** `sgDF` of main and of C2 on 16 cases (interior and exterior; N<sub>b</sub> = 2, 3, 4, 5, 6; S = 9.50, 12.00, 16.00, 17.00 ft): exterior and every interior case outside the two rules bit-identical (`JSON.stringify` equal); the changed cases as listed in C2, with the lever-rule values checked by hand.
+- **Results, main (77973a3) against the final build (headless Chromium, Playwright):** the eight XS test projects saved with d7ca4d6 (built-in example; sidewalks with median, ped and added rows; curb mode; curb mode with a sidewalk; AASHTO; 6 ft × 12 in sidewalks; xsA; "two adjacent"), migrated on opening. Compared (hashed): `compute` and `checks` of every module in `GM`, the field splice, the bearing stiffeners, `GM.sa.compute` for every girder, the Drawings-tab cross-section SVG, the `gd-dfx` payload, Preliminary sizing's analysis, fast suggestion and check statuses, the saved `P` and every localStorage key.
+  - Built-in example, curb mode: **identical, saved data included**.
+  - The other six: every result identical once the `xs` echo is left out (checked by hashing without the key `xs`); the only data differences are the optional C3 fields in `bridge.xs` / `P.df.bridge.xs`, and, in the two projects whose migration triggers "Bridge changed: updating every module" (which re-runs Design all quietly), the two C1 rows in the stored `P.designAll` (the field splice result object carries `P`, so its hash follows).
+  - Built-in example with Full design (`runFullDesign`) also run: identical (C2 does not apply to N<sub>b</sub> = 5, S = 9.50 ft). Width study (W = 44.50 ft, N = 4 to 12): identical row for row.
+- **C1:** Design all from Preliminary sizing on the built-in example, main and C1: every status, conflict and existing row identical; the two new rows and the total as in the C1 check case; the saved project otherwise identical (hash); screenshot of the Design all table `scratchpad/followups/gd-c1/c1_designall.png`.
+- **C2 in the page:** Preliminary sizing changed to N<sub>b</sub> = 3 (S = 9.50 ft and S = 17.00 ft): built-in interior factors against GirderDetail's (values in C2); the Suggest-tab derivation (screenshots `c2_nb3.png`, `c2_nb3_S17.png`).
+- **C3:** drawing hashes with and without `bridge.xs` (without: the same SVG string as main); message traffic on xsA after loading and after editing the median width: one `gd-xs` and one `gd-bridge`, then none in the next 10 s; screenshots (C3 check case).
+- **Saved data both directions:** projects saved by main open here as above. The xsA project saved by this build (raw localStorage, with the new optional fields and the C1 rows) opened in main: no errors; main re-sends its own record (without the optional fields) and every result equals main's own run of the same project; the stored Design all rows are kept as saved until Design all is run again.
+- **Console:** no errors or alerts in any run.
+- **Tools containing shared snippets touched:** none (`bridgeSuite.v1.*` bootstrap and handoff code unchanged; no other tool file changed).
