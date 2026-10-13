@@ -1914,7 +1914,13 @@ function buildExternal(ext, L, llf){
   // (sagging +) and are untouched. V_LL is a magnitude envelope (max of |+|,|−|), so it is
   // unaffected by the sign flip; the swapped branches are exposed as V_LLpos/V_LLneg for
   // completeness (app-positive branch = minus MIDAS's most-negative branch).
-  return { spanLen, slice, sel, hasDC1, swExcl,
+  // Optional fatigue envelopes (GirderDetail export, HANDOFF.md §4.9): per girder, IM and the single-lane fatigue DF
+  // included, unfactored. Shears in the same MIDAS sign convention, so they are negated like V_LL (app + branch = −MIDAS − branch).
+  const hasFat=slice.some(s=>s.M_FATpos!==undefined&&s.M_FATneg!==undefined);
+  const hasFatV=hasFat&&slice.some(s=>s.V_FATpos!==undefined&&s.V_FATneg!==undefined);
+  return { spanLen, slice, sel, hasDC1, swExcl, hasFat, hasFatV,
+    M_FATpos:(x)=>interp('M_FATpos',x), M_FATneg:(x)=>interp('M_FATneg',x),
+    V_FATpos:(x)=>-interp('V_FATneg',x), V_FATneg:(x)=>-interp('V_FATpos',x),
     M_DC1:(x)=>interp('M_DC1',x), V_DC1:(x)=>-interp('V_DC1',x),       // k-ft / kip
     M_DC2:(x)=>interp('M_DC2',x), V_DC2:(x)=>-interp('V_DC2',x),
     M_DW :(x)=>interp('M_DW',x),  V_DW :(x)=>-interp('V_DW',x),
@@ -1952,6 +1958,29 @@ function externalSpans(ext){
   }
   const xs=ext.stations.map(s=>s.x); const x0=Math.min(...xs),x1=Math.max(...xs);
   return [{idx:1,x0,x1,len:+(x1-x0).toFixed(3)}];
+}
+/* GirderDetail → ST-Girder (HANDOFF.md §4.9). An imported envelope whose LL+IM is already distributed to one girder. */
+function extPerGirderOf(ext){ return !!(ext&&ext.liveLoadPerGirder===true); }
+function extFromGD(ext){ return !!(ext&&ext.producer==='GirderDetail'&&ext.girderDetail); }
+// The note shown wherever the imported demands are described (Inputs banner, Rating, Report).
+function gdNoteLines(ext){
+  if(!extFromGD(ext)) return null;
+  const g=ext.girderDetail||{}, lab=g.label||(ext.member&&ext.member.key)||'G?';
+  return {head:'Forces from GirderDetail ('+lab+', staged analysis); resistances by ST-Girder’s own checks.',
+    src:'Source: '+(ext.source||'GirderDetail')+(ext.project?' · '+ext.project:'')+(ext.producedAt?' · produced '+new Date(ext.producedAt).toLocaleString():'')+'.',
+    diffs:['C_b = 1.0 and one unbraced length L_b for the whole span (GirderDetail: C_b and L_b per location)',
+      'no Appendix A6 (web plastification) for negative flexure',
+      'shear without tension-field action (end-panel V_cr basis)',
+      'fixed maximum load factors (1.25 DC, 1.50 DW, 1.75 LL; no minimum-factor combinations)',
+      'L_p = 1.0 r_t √(E/F_yc) here vs 1.1 r_t in GirderDetail'],
+    tbc:'Known differences to be confirmed by the engineer.'};
+}
+function GdNote({ext,style}){
+  const n=gdNoteLines(ext); if(!n) return null;
+  return <div className="callout" style={{marginTop:0,marginBottom:12,borderColor:'var(--blue)',background:'#EEF4FF',...(style||{})}}>
+    <b>{n.head}</b> <span style={{fontSize:11.5}}>{n.src}</span>
+    <div style={{fontSize:11.5,marginTop:4,lineHeight:1.6}}>Known differences between the two tools: {n.diffs.join('; ')}. <i>{n.tbc}</i></div>
+  </div>;
 }
 // Fatigue-truck (30-ft rear axle) moment & shear at section x, per lane, no IM.
 function fatMomentAt(L,x){
@@ -2349,7 +2378,10 @@ function computeAll(inp){
     const Ld=loadsCalc(inp,{n,bare},wswAvg,tribFt);
     /* ---------- external demands (continuous spans from imported envelope) ---------- */
     const mpfExt=+inp.loads.extLLmpf||1;
-    const ext=buildExternal(inp.external,Lft0,
+    // GirderDetail export (HANDOFF.md §4.9): the LL+IM is already per girder (its own DFs applied), so the
+    // imported-LL DF / multiple-presence multipliers are NOT applied (1.0), whatever the inputs hold.
+    const extPerGirder=extPerGirderOf(inp.external);
+    const ext=buildExternal(inp.external,Lft0, extPerGirder? {pos:1,neg:1,v:1} :
       {pos:(+inp.loads.extDFpos||1)*mpfExt, neg:(+inp.loads.extDFneg||1)*mpfExt, v:(+inp.loads.extDFv||1)*mpfExt});
     const useExt=!!ext;
 
@@ -2704,26 +2736,33 @@ function computeAll(inp){
     let fatGov={dfRange:0,si:0}, webFatGov={r:0};
     const chartFat=[];                                        // per-station fatigue demands for the Fatigue tab charts
     const fatCalc=[];                                         // per-station worked-calc data (Fatigue location picker)
+    // Imported fatigue envelopes (GirderDetail, HANDOFF.md §4.9; engineer-approved 2026-10-13): per girder, IM and the
+    // single-lane fatigue DF already in. Then M_f = M_FAT+ − M_FAT− (the range, both signs on the short-term composite
+    // section, 6.6.1.2.1), the web shear is the larger of |V_FAT+|, |V_FAT−|, and the stud range is V_FAT+ − V_FAT−.
+    // Without them (built-in span, MIDAS / MCT imports) the simple-span fatigue truck below is used, as before.
+    const fatImp=!!(useExt&&ext.hasFat), fatImpV=!!(useExt&&ext.hasFatV);
     stations.forEach(st=>{ const sg=segP[st.si];
-      const Mrange=fatMomentAt(Lft,st.x);                     // k-ft/lane, unfactored, no IM
-      const Mf=Mrange*1.15*dfFat;                             // k-ft (IM 1.15, single-lane DF)
+      const fP=fatImp? ext.M_FATpos(st.x) : 0, fN=fatImp? ext.M_FATneg(st.x) : 0;
+      const Mrange=fatImp? null : fatMomentAt(Lft,st.x);     // k-ft/lane, unfactored, no IM (built-in truck only)
+      const Mf=fatImp? Math.max(fP,0)-Math.min(fN,0) : Mrange*1.15*dfFat;   // k-ft (IM 1.15, single-lane DF)
       const rng=Mf*12/sg.cN.Sb;                               // Δf, bottom-flange stress range (short-term composite)
       if(rng>fatGov.dfRange) fatGov={dfRange:rng,MfatR:Mf,MrangeR:Mrange,SbR:sg.cN.Sb,x:st.x,si:st.si};
       // special fatigue for webs (6.10.5.3): unfactored permanent + Fatigue I LL shear ≤ Vcr
       const Vperm=Math.abs(st.V1+st.V2+st.Vw);
-      const Vll=fatShearAt(Lft,st.x)*1.15*dfFatV;            // fatigue-truck shear, single-lane SHEAR DF, IM 1.15
+      const Vll=fatImpV? Math.max(Math.abs(ext.V_FATpos(st.x)),Math.abs(ext.V_FATneg(st.x)))
+        : fatShearAt(Lft,st.x)*1.15*dfFatV;                  // fatigue-truck shear, single-lane SHEAR DF, IM 1.15
       const Vf=Vperm+1.75*Vll;                                // Fatigue I factored (γ=1.75) per 6.10.5.3
       if(Vf/Vcr>webFatGov.r) webFatGov={r:Vf/Vcr,Vf,Vperm,Vll,x:st.x};
       chartFat.push({x:st.x, rng, Vf});
       fatCalc.push({x:st.x, si:st.si, Mrange, Mf, Sb:sg.cN.Sb, rng, gRng:gammaFat*rng,
-        Vperm, Vll, Vf, dcFlex:gammaFat*rng/FnFat, dcWeb:Vf/Vcr});
+        Vperm, Vll, Vf, dcFlex:gammaFat*rng/FnFat, dcWeb:Vf/Vcr, ...(fatImp?{fP,fN}:{})});
     });
     const dfRange=fatGov.dfRange, MfatR=fatGov.MfatR;
     const fatigue={cat:fq.category||'C', Acat, TH:THcat,
       dfRange, MfatR, MrangeR:fatGov.MrangeR, SbR:fatGov.SbR, gammaFat, FnFat, FnFatII,
       fatDC:gammaFat*dfRange/FnFat, fatInf, lsMode, recFatI, dfFat, fatDfSource, dfFatV, fatDfVSource, fatGRatio,
       adttRaw, adttSL, pFrac, lanes:fq.lanes||2, adttIsSingleLane:fq.adttIsSingleLane!==false,
-      nCyc, lifeYr, Nfat, adttSLcross, xGov:fatGov.x, webFatGov, Vcr, fatCalc};
+      nCyc, lifeYr, Nfat, adttSLcross, xGov:fatGov.x, webFatGov, Vcr, fatCalc, fatImp, fatImpV};
 
     /* ---------- Stiffeners (6.10.11) ---------- */
     // stiffener yield strength (STG-A1): input stiff.Fys, default 50 ksi (the old fixed value)
@@ -2790,7 +2829,9 @@ function computeAll(inp){
     let fatStud=null;
     stations.forEach(st=>{ const sg=segP[st.si], cc=sg.cN;
       const yNA=(sg.bare.hs+deck.haunch+deck.ts/2)-cc.ybar, Q=(beff*deck.ts/n)*yNA;
-      const rg=fatShearRangeAt(Lft,st.x), VfU=rg.range*1.15*dfFatV, Vf=gammaFat*VfU, vsr=Vf*Q/cc.I;
+      const rg=fatImpV? (()=>{ const vp=ext.V_FATpos(st.x), vn=ext.V_FATneg(st.x); return {Vpos:vp, Vneg:vn, range:vp-vn}; })()
+        : fatShearRangeAt(Lft,st.x);
+      const VfU=fatImpV? rg.range : rg.range*1.15*dfFatV, Vf=gammaFat*VfU, vsr=Vf*Q/cc.I;   // imported: per girder, IM + DF in
       const p_=nRow*Zr/Math.max(vsr,1e-6);
       if(!fatStud||p_<fatStud.pReq) fatStud={x:st.x,si:st.si,Vpos:rg.Vpos,Vneg:rg.Vneg,range:rg.range,VfatU:VfU,Vfat:Vf,Qslab:Q,Icomp:cc.I,Vsr:vsr,pReq:p_}; });
     const yDeckNA=(bare.hs+deck.haunch+deck.ts/2)-cN.ybar;
@@ -2814,7 +2855,7 @@ function computeAll(inp){
       contStud={xP, Pp, PpS, Pslab, sides, gov};
     }
     const conn={Asc,Qn,Qr,Pshear,nReq,nProv,strOK:nProv>=nReq,Zr,Vsr,pReq,pitch,pitchOK:pitch<=pReq,nRow,
-                Vfat,VfatU,gammaFat,fatInf,alphaF,Qslab,Icomp:fatStud.Icomp,dfFatV,Vtr:Ld.hl.Vtr,fatStud,contStud,yDeckNA};
+                Vfat,VfatU,gammaFat,fatInf,alphaF,Qslab,Icomp:fatStud.Icomp,dfFatV,Vtr:Ld.hl.Vtr,fatStud,contStud,yDeckNA,fatImpV};
     if(contStud) conn.strOK=contStud.gov.nProv>=contStud.gov.nReq;
 
     /* ---------- Load rating (LRFR, MBE) — station-based ---------- */
@@ -2924,8 +2965,9 @@ function computeAll(inp){
     if(skewDeg>20) warnings.fl.push('Flange lateral bending f\u2113 not computed: skew = '+fmt(skewDeg,1)+'\u00b0 > 20\u00b0. Cross-frame forces in skewed bridges cause f\u2113 (C6.10.1, verify), which this app takes as 0 in the constructibility, Service II and Strength flange checks. Determine f\u2113 from a refined analysis or an approximate method and check the flanges by hand.');
     if(inp.loads.pos==='exterior') warnings.fl.push('Flange lateral bending f\u2113 not computed: exterior girder. The deck-overhang brackets load the top flange laterally during the deck pour (6.10.3.4 / C6.10.3.4), and wind on the fascia adds f\u2113 (4.6.2.7). This app takes f\u2113 = 0; check the constructibility and Strength flange stresses with f\u2113 separately.');
     if(warnings.fl.length) warnings.fl.push('The app assumes a straight girder; a horizontally curved girder needs f\u2113 from curvature (4.6.1.2.4) and is outside its scope.');
-    // STG-O8: the imported envelopes carry no fatigue demands.
-    if(useExt) warnings.fat.push('Imported MIDAS demands: the fatigue checks still use the fatigue truck on a SIMPLE span of L = '+fmt(Lft,1)+' ft (flange stress range, web special fatigue, stud pitch). Negative-moment fatigue at interior piers (top flange and its welded attachments, deck reinforcement) is not checked'+(hasNeg?', although this span has negative moment':'')+'. Check those details with a fatigue-truck range from the continuous analysis.');
+    // STG-O8: the imported envelopes carry no fatigue demands -- unless they do (GirderDetail export, HANDOFF.md §4.9).
+    if(useExt&&fatImp) warnings.fat.push('Fatigue from the imported fatigue envelopes ('+((inp.external&&inp.external.producer)||'import')+': fatigue truck, IM and single-lane fatigue distribution factors included): bottom-flange stress range = (M_FAT+ \u2212 M_FAT\u2212)/S_b on the short-term composite section for both signs (6.6.1.2.1; requires shear connectors throughout and the 6.10.1.7 deck reinforcement)'+(fatImpV?', web special fatigue and stud fatigue pitch from the imported fatigue shears':'; no fatigue shears imported, so the web special fatigue and stud pitch still use the fatigue truck on a simple span of L = '+fmt(Lft,1)+' ft')+'. The top flange and its attachments and the deck reinforcement at interior piers are not checked here.');
+    else if(useExt) warnings.fat.push('Imported MIDAS demands: the fatigue checks still use the fatigue truck on a SIMPLE span of L = '+fmt(Lft,1)+' ft (flange stress range, web special fatigue, stud pitch). Negative-moment fatigue at interior piers (top flange and its welded attachments, deck reinforcement) is not checked'+(hasNeg?', although this span has negative moment':'')+'. Check those details with a fatigue-truck range from the continuous analysis.');
 
     return {ok:true, sec, matR, deck, geom, beff, n, nRaw, EcDeck,
       bare, cN, c3N, pl, compact, compactWeb, compactMat, compactDtw, lambdaPw,
@@ -3487,12 +3529,14 @@ function InputsTab({inp,set,R}){
       <div style={{fontSize:11.5,marginTop:4,lineHeight:1.6}}>
         Source: {extRaw.source||'external analysis'}{extRaw.project?' · '+extRaw.project:''} · {extRaw.stations.length} stations · LL: <b>{extRaw.liveLoadType||'HL-93'}</b>
         {extRaw.units?' · units: '+(extRaw.units.moment||'ft-kip')+' / '+(extRaw.units.force||'kip'):''}.
-        Impact is assumed already in the imported LL envelope. DC2, DW, and ±LL come from the import;
+        Impact is assumed already in the imported LL envelope{extPerGirderOf(extRaw)?<b>, and so are the distribution factors (per-girder LL+IM): the DF and multiple-presence multipliers below are not applied</b>:null}. DC2, DW, and ±LL come from the import;
         {R&&R.ok&&R.ext&&R.ext.hasDC1?' DC1 also from the import (continuous erection).':' DC1 (steel + wet deck) is computed by the app on the selected span — for girders erected continuous, include M_DC1/V_DC1 in the export so the pier picks up the DC1 negative moment.'}
         {R&&R.ok&&R.ext&&R.ext.swExcl&&<span> <b>Self-weight excluded from the import</b> — the app adds girder self-weight ({fmt(R.loads.wsw,3)} klf) on the selected span (simple-span basis; small vs. total DC1 — include self weight in the MIDAS DC1 case for exact pier values).</span>}
         {extRaw.section&&extRaw.section.zones&&<span> <b>Plate geometry imported</b> from section.zones → web + flange segment table populated automatically (editable below).</span>}
         {extRaw.factored===true&&<b style={{color:'var(--fail)'}}> ⚠ File is flagged FACTORED — this app applies its own load factors; export unfactored envelopes.</b>}
+        {R&&R.ok&&R.fatigue&&R.fatigue.fatImp&&<span> <b>Fatigue moments{R.fatigue.fatImpV?' and shears':''} imported</b> — the Fatigue tab{R.fatigue.fatImpV?' and the stud fatigue pitch use them':' uses them'} instead of the simple-span fatigue truck.</span>}
       </div>
+      <GdNote ext={extRaw} style={{marginTop:8,marginBottom:0}}/>
       {spans.length>1&&<div style={{marginTop:8}}>
         <div style={{fontSize:11,color:'var(--ink2)',marginBottom:4}}>Select span to investigate ({spans.length}-span continuous member):</div>
         <div className="btnrow" style={{flexWrap:'wrap'}}>{spans.map(sp=>
@@ -3751,7 +3795,8 @@ function InputsTab({inp,set,R}){
         {lldfLocked&&BLU.DrivenStrip&&<BLU.DrivenStrip ch="lldf" detail={lldfSrc} onUnlock={()=>toggleLLDFLock(false)}/>}
         {(+loads.fatM>0)&&<div className="hint" style={{marginTop:0,marginBottom:10}}>Fatigue DF override from LL &amp; DL: <b>{fmt(+loads.fatM,3)}</b> (single-lane, no MPF) — used on the Fatigue tab in place of the DF÷1.2 estimate. <button className="btn sm ghost" style={{padding:'1px 8px',marginLeft:4}} onClick={()=>S('loads.fatM',0)}>clear → auto</button></div>}
         {(+loads.fatV>0)&&<div className="hint" style={{marginTop:0,marginBottom:10}}>Fatigue shear DF override from LL &amp; DL: <b>{fmt(+loads.fatV,3)}</b> (single-lane, no MPF) — used for the stud shear range and the web special-fatigue check in place of the shear DF÷1.2 estimate. <button className="btn sm ghost" style={{padding:'1px 8px',marginLeft:4}} onClick={()=>S('loads.fatV',0)}>clear → auto</button></div>}
-        {extActive&&<React.Fragment>
+        {extActive&&extPerGirderOf(extRaw)&&<div className="hint" style={{marginBottom:8}}>Imported ±LL+IM is <b>per girder</b> ({extRaw.producer||'import'}: impact, distribution factors and multiple presence already included). The DF and multiple-presence multipliers are <b>not applied</b> to it{extRaw.girderDetail&&extRaw.girderDetail.df&&Array.isArray(extRaw.girderDetail.df.spans)?<span> — factors used by {extRaw.producer}: {extRaw.girderDetail.df.spans.map(d=>'span '+d.span+' g_M = '+fmt(d.gM,3)+', g_V = '+fmt(d.gV,3)).join('; ')}{(extRaw.girderDetail.df.piers||[]).length?'; '+extRaw.girderDetail.df.piers.map(d=>'pier '+d.pier+' g_M = '+fmt(d.gM,3)).join('; '):''}</span>:null}.</div>}
+        {extActive&&!extPerGirderOf(extRaw)&&<React.Fragment>
           <div className="hint" style={{marginBottom:8}}>Imported ±LL envelopes with <b>impact already included</b>. Apply the distribution factor (per effect) and multiple presence below if not already in the envelope (1.0 = no adjustment).</div>
           <div className="frow">
             <Num l="DF — positive moment" v={loads.extDFpos} set={v=>S('loads.extDFpos',v)} step={0.05} min={0} driven={lldfLocked} src={lldfSrc}/>
@@ -4592,6 +4637,19 @@ function FatigueTab({R}){
           borderRadius:4,background:'#fff',color:'var(--ink)',maxWidth:240}}>
         {fcAll.map((p,i,a)=><option key={i} value={i}>{stnLabel(p,i,a)}</option>)}
       </select>}>
+      {f.fatImp
+      ? <React.Fragment>
+      <div className="callout" style={{marginTop:0,marginBottom:10}}>
+        Imported fatigue envelopes: fatigue-truck moments of the continuous analysis, per girder, with IM and the single-lane fatigue distribution factor already included, unfactored. The range is the positive minus the negative moment; both act on the short-term composite section (6.6.1.2.1).
+      </div>
+      <KV rows={[
+        ['Location x', fmt(sel.x,1), 'ft'],
+        ['Fatigue moment +M / −M', fmt(sel.fP,0)+' / '+fmt(sel.fN,0), 'k-ft (unfactored, IM and DF included)'],
+        ['Short-term composite Sₓ (bottom)', fmt(sel.Sb,0), 'in³'],
+      ]}/>
+      <ML s={Tx`M_{f}=M_{fat}^{+}-M_{fat}^{-}=${nx(Math.max(sel.fP,0),0)}-(${nx(Math.min(sel.fN,0),0)})=${nx(sel.Mf,0)}\;\text{k-ft}`}/>
+      </React.Fragment>
+      : <React.Fragment>
       <div className="callout" style={{marginTop:0,marginBottom:10}}>
         Fatigue truck (LRFD 3.6.1.4.1): one design truck, axles <b>8 – 32 – 32 kip</b> with a <b>constant 30-ft</b> spacing between the two 32-kip axles, a single lane, no multiple-presence factor. Dynamic allowance IM = <b>15%</b> (Table 3.6.2.1-1). Distribution factor from {f.fatDfSource} = <b>{fmt(f.dfFat,3)}</b>.
       </div>
@@ -4601,6 +4659,7 @@ function FatigueTab({R}){
         ['Short-term composite Sₓ (bottom)', fmt(sel.Sb,0), 'in³'],
       ]}/>
       <ML s={Tx`M_{f}=M_{range}\,(1+IM)\,g_{fat}=${nx(sel.Mrange,0)}\cdot1.15\cdot${nx(f.dfFat,3)}=${nx(sel.Mf,0)}\;\text{k-ft}`}/>
+      </React.Fragment>}
       <ML s={Tx`\Delta f=\frac{M_{f}\cdot12}{S_{x}}=\frac{${nx(sel.Mf,0)}\cdot12}{${nx(sel.Sb,0)}}=${nx(sel.rng,2)}\;\text{ksi}`}/>
       <ML s={Tx`\gamma(\Delta f)=${nx(f.gammaFat,2)}\cdot${nx(sel.rng,2)}=${nx(sel.gRng,2)}\;\text{ksi}\qquad\frac{\gamma(\Delta f)}{(\Delta F)_n}=\frac{${nx(sel.gRng,2)}}{${nx(f.FnFat,2)}}=${nx(sel.dcFlex,3)}\;${sel.dcFlex<=1.0001?'\\checkmark':'\\text{N.G.}'}`}/>
       <div className="mnote">The stress range is computed on the <b>short-term composite</b> section (modular ratio n) at the bottom flange — the fatigue range is a service-level effect, so the uncracked composite section is used along the whole span. The load factor γ is the {lsName} value.</div>
@@ -4624,7 +4683,9 @@ function FatigueTab({R}){
     <Card title="Special fatigue requirement for webs" refTag="6.10.5.3 · Vu(fatigue) ≤ Vcr">
       {(()=>{ const w=f.webFatGov;
         return <React.Fragment>
-        <div className="mnote" style={{marginTop:0}}>Fatigue-truck shear uses the single-lane <b>shear</b> distribution factor {f.fatDfVSource} = <b>{fmt(f.dfFatV,3)}</b>, IM = 15%.</div>
+        {f.fatImpV
+          ? <div className="mnote" style={{marginTop:0}}>Fatigue shear V<sub>f,LL</sub> = the larger of |V<sub>fat</sub><sup>+</sup>| and |V<sub>fat</sub><sup>−</sup>| from the imported fatigue envelopes (per girder, IM and the single-lane fatigue DF included).</div>
+          : <div className="mnote" style={{marginTop:0}}>Fatigue-truck shear uses the single-lane <b>shear</b> distribution factor {f.fatDfVSource} = <b>{fmt(f.dfFatV,3)}</b>, IM = 15%.</div>}
         <ML s={Tx`V_{u}=V_{perm}+1.75\,V_{f,LL}=${nx(w.Vperm||0,0)}+1.75\cdot${nx(w.Vll||0,0)}=${nx(w.Vf||0,0)}\;\text{kip}`}/>
         <ML s={Tx`\frac{V_{u}}{V_{cr}}=\frac{${nx(w.Vf||0,0)}}{${nx(f.Vcr,0)}}=${nx(w.r,3)}\;${webPass?'\\checkmark':'\\text{N.G.}'}\qquad(\text{at }x=${nx(w.x||0,1)}')`}/>
         </React.Fragment>; })()}
@@ -4740,7 +4801,7 @@ function ConnTab({R}){
         ['\u03b3','Fatigue load factor ('+(c.fatInf?'Fatigue I, infinite life':'Fatigue II, finite life')+')',c.gammaFat,'—'],
         ['Z_r','Fatigue shear resistance of one stud',c.Zr,'kip'],
         ['x','Governing station (closest required pitch)',c.fatStud.x,'ft'],
-        ['V_+ / V_−','Fatigue-truck shear at x, per lane, no IM (max +, max −)',c.fatStud.Vpos.toFixed(2)+' / '+c.fatStud.Vneg.toFixed(2),'kip'],
+        ['V_+ / V_−',c.fatImpV?'Imported fatigue shear at x, per girder, IM and DF included (max +, max −)':'Fatigue-truck shear at x, per lane, no IM (max +, max −)',c.fatStud.Vpos.toFixed(2)+' / '+c.fatStud.Vneg.toFixed(2),'kip'],
         ['V_sr','Fatigue horizontal shear range per unit length',c.Vsr,'kip/in'],
         ['n','Studs per row (transverse)',c.nRow,'—'],
         ['p_req','Maximum permitted pitch n·Z_r/V_sr',c.pReq,'in'],
@@ -4749,7 +4810,7 @@ function ConnTab({R}){
       <ML s={c.fatInf
         ? Tx`Z_r=5.5\,d^{2}=${nx(c.Zr,2)}\;\tfrac{\text{kip}}{\text{stud}}\quad(\text{Fatigue I, infinite life, Eq. 6.10.10.2-1})`
         : Tx`Z_r=\alpha d^{2}=(${nx(c.alphaF,2)})d^{2}=${nx(c.Zr,2)}\;\tfrac{\text{kip}}{\text{stud}}\quad(\text{Fatigue II, finite life})`}/>
-      <ML s={Tx`V_f=\gamma\,(V_{+}-V_{-})(1.15)\,g_{V,1}=${nx(c.gammaFat,2)}\cdot${nx(c.fatStud.range,2)}\cdot1.15\cdot${nx(c.dfFatV,3)}=${nx(c.gammaFat,2)}\cdot${nx(c.VfatU,2)}=${nx(c.Vfat,2)}\;\text{kip}\qquad V_{sr}=\frac{V_f\,Q}{I}=\frac{${nx(c.Vfat,2)}\cdot${nx(c.Qslab,0)}}{${nx(c.Icomp,0)}}=${nx(c.Vsr,3)}\;\tfrac{\text{kip}}{\text{in}}`}/>
+      <ML s={c.fatImpV? Tx`V_f=\gamma\,(V_{+}-V_{-})=${nx(c.gammaFat,2)}\cdot${nx(c.VfatU,2)}=${nx(c.Vfat,2)}\;\text{kip}\qquad V_{sr}=\frac{V_f\,Q}{I}=\frac{${nx(c.Vfat,2)}\cdot${nx(c.Qslab,0)}}{${nx(c.Icomp,0)}}=${nx(c.Vsr,3)}\;\tfrac{\text{kip}}{\text{in}}` : Tx`V_f=\gamma\,(V_{+}-V_{-})(1.15)\,g_{V,1}=${nx(c.gammaFat,2)}\cdot${nx(c.fatStud.range,2)}\cdot1.15\cdot${nx(c.dfFatV,3)}=${nx(c.gammaFat,2)}\cdot${nx(c.VfatU,2)}=${nx(c.Vfat,2)}\;\text{kip}\qquad V_{sr}=\frac{V_f\,Q}{I}=\frac{${nx(c.Vfat,2)}\cdot${nx(c.Qslab,0)}}{${nx(c.Icomp,0)}}=${nx(c.Vsr,3)}\;\tfrac{\text{kip}}{\text{in}}`}/>
       <div className="mnote">The load factor and the Z<sub>r</sub> branch are a pair (6.10.10.2 with Table 3.4.1-1): Fatigue&nbsp;I applies γ&nbsp;=&nbsp;1.75 against the infinite-life resistance 5.5d², Fatigue&nbsp;II applies γ&nbsp;=&nbsp;0.80 against αd². Which one is in force is decided on the Fatigue tab and follows the same (ADTT)<sub>SL</sub> crossover as the flange check.</div>
       <ML s={Tx`p\le\frac{n\,Z_r}{V_{sr}}=\frac{${nx(c.nRow,0)}\cdot${nx(c.Zr,2)}}{${nx(c.Vsr,3)}}=${nx(c.pReq,1)}\;\text{in}\qquad p_{prov}=${nx(c.pitch,1)}\;${c.pitchOK?'\\le':'>'}\;p_{req}\;${c.pitchOK?'\\checkmark':'\\text{N.G.}'}`}/>
       <div className="mnote">Z_r is the fatigue shear resistance of one stud (Fatigue&nbsp;II: α = 34.5 − 4.28·log N; Fatigue&nbsp;I: 5.5d²). V_sr = V_f·Q/I is the horizontal shear range per unit length on the short-term composite section, with V_f the shear range V<sub>+</sub> − V<sub>−</sub> of the fatigue truck (3.6.1.4.1, 30-ft rear axle spacing, one lane, IM 1.15) at each station; the station needing the closest pitch governs (x = {fmt(c.fatStud.x,1)} ft). Radial fatigue shear F<sub>fat</sub> (curved or skewed girders) is not included. The required pitch is the closest fatigue-controlled spacing; the provided pitch must not exceed it.</div>
@@ -4763,6 +4824,7 @@ function RatingTab({R,inp,set,onSendCapacity,capLocked,onToggleCapLock}){
   const setRate=(k,v)=>{ if(set) set(p=>({...p, rate:{...((p&&p.rate)||{}), [k]:v}})); };
   const rq=(inp&&inp.rate)||{};
   return (<div>
+    <GdNote ext={inp&&inp.external}/>
     {onSendCapacity&&<div className="callout" style={{marginTop:0,marginBottom:12,borderLeftColor:capLocked?'#ea580c':'var(--blue)',background:capLocked?'#fff7ed':'#EEF4FF',display:'flex',alignItems:'center',gap:12,flexWrap:'wrap'}}>
       <div style={{flex:'1 1 340px'}}><b>Feed this capacity to the MCT rating.</b> Publishes φM<sub>n</sub>⁺ / φM<sub>n</sub>⁻ / φV<sub>n</sub> (plus Service II limits and fatigue resistance) at <b>every station across all spans</b> of the member, so the MCT app can rate any vehicle against the real section-by-section resistance instead of a few assumed points.</div>
       {BLU.LockBtn
@@ -4843,10 +4905,11 @@ function NomenclatureTab(){
   </Card></div>);
 }
 
-function ReportTab({R}){
+function ReportTab({R,inp}){
   if(!R.ok) return null;
   const allPass=R.checks.every(c=>c.pass);
   return (<div>
+    <GdNote ext={inp&&inp.external}/>
     <StgWarn R={R} kind="all"/>
     <Card title="Design summary — all limit-state checks" refTag="AASHTO LRFD Section 6">
       <Tbl head={['Check','Ref','Demand','Capacity','D/C','Status']}
@@ -5233,6 +5296,8 @@ function App(){
     const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=(inp.proj.name||'stgirder').replace(/\W+/g,'_')+'.json'; a.click(); };
   const importJSON=e=>{ const f=e.target.files[0]; if(!f)return; const rd=new FileReader();
     rd.onload=()=>{ try{ const p=JSON.parse(rd.result);
+      // GirderDetail hand-off file (HANDOFF.md §4.9): same confirm-and-apply path as "Pull from GirderDetail".
+      if(p._schema==='stgirder-external-demands'&&extFromGD(p)){ gdAdopt(p,'file '+f.name); return; }
       // external analysis envelope (MIDAS-style; PS-Girder or steel-beam schema)? attach, don't replace inputs.
       if(p._schema==='psbeam-external-demands'||p._schema==='stgirder-external-demands'||p._schema==='steelbeam-external-demands'){
         const spans=externalSpans(p);
@@ -5242,6 +5307,76 @@ function App(){
         return;
       }
       setInp(mergeInputs(p)); }catch(err){alert('Invalid file: '+err.message);} }; rd.readAsText(f); };
+  /* ---- GirderDetail -> ST-Girder (HANDOFF.md §4.9): channel bridgeSuite.v1.girderDemands, receiver id 'stgirder' ----
+     "Pull from GirderDetail" (or Import of the hand-off file) shows what will change and applies nothing until confirmed.
+     It attaches the payload as the imported envelope (inp.external, the existing field; the payload itself records producer
+     and producedAt), seeds the plates from section.zones as any import does, and fills the existing design inputs listed
+     in the dialog. Opening the app never applies it. */
+  const GD_CH='girderDemands', GD_SCHEMA='stgirder-external-demands', GD_RX='stgirder';
+  const gdIsNew=()=>{ try{ return !!(window.BridgeXfer&&BridgeXfer.isNew(GD_CH,GD_RX)); }catch(e){ return false; } };
+  const [gdNew,setGdNew]=useState(gdIsNew);
+  useEffect(()=>{ const h=e=>{ if(!e.key||e.key.indexOf('bridgeSuite.v1.'+GD_CH)===0) setGdNew(gdIsNew()); };
+    window.addEventListener('storage',h); return ()=>window.removeEventListener('storage',h); },[]);
+  const gdCheck=p=>{
+    if(!p||!Array.isArray(p.stations)||p.stations.length<2) return 'no stations';
+    const u=p.units||{};
+    if((u.x&&u.x!=='ft')||(u.moment&&u.moment!=='ft-kip')||(u.force&&u.force!=='kip')) return 'units must be ft / ft-kip / kip (got '+[u.x,u.moment,u.force].join(' / ')+')';
+    if(p.factored!==false) return 'the forces must be unfactored (factored:false)';
+    const keys=['x','M_DC1','V_DC1','M_DC2','V_DC2','M_DW','V_DW','M_LLpos','M_LLneg','V_LLpos','V_LLneg'];
+    for(const st of p.stations){ for(const k of keys) if(typeof st[k]!=='number'||!isFinite(st[k])) return 'station value '+k+' is not a number';
+      for(const k of ['M_FATpos','M_FATneg','V_FATpos','V_FATneg']) if(st[k]!==undefined&&!(typeof st[k]==='number'&&isFinite(st[k]))) return 'station value '+k+' is not a number'; }
+    const sp=externalSpans(p); if(!sp.length||sp.some(s=>!(s.len>0))) return 'invalid span layout';
+    return null; };
+  const gdAdopt=(p,how)=>{
+    const err=gdCheck(p); if(err){ alert('Cannot use the GirderDetail hand-off: '+err+'.'); return false; }
+    const cur=inpRef.current, g=p.girderDetail||{}, m=g.materials||{}, d=g.deck||{}, br=g.bracing||{}, sk=g.skew||{};
+    const spans=externalSpans(p), sel=spans[0];
+    const secNew=zonesToSec(p,sel,cur.sec);
+    const nx={...cur, external:{...p,_selSpan:sel}, geom:{...cur.geom,L:sel.len}, ...(secNew?{sec:secNew}:{})};
+    const rows=[], chg=(lab,a,b,u)=>{ if(String(a)!==String(b)) rows.push('  '+lab+': '+a+' \u2192 '+b+(u?' '+u:'')); };
+    const pos=v=>typeof v==='number'&&isFinite(v)&&v>0;
+    if(pos(m.Fyf)&&pos(m.Fyw)&&pos(m.Fu)){
+      const gk=Object.keys(GRADES).find(k=>GRADES[k].Fy===m.Fyf&&GRADES[k].Fu===m.Fu)||cur.mat.grade;
+      nx.mat={...cur.mat, grade:gk, Fyf:m.Fyf, Fyw:m.Fyw, Fu:m.Fu, Es:pos(m.Es)?m.Es:cur.mat.Es, hybrid:m.Fyw!==m.Fyf};
+      chg('Steel grade (list)',cur.mat.grade,gk); chg('Flange Fyf',cur.mat.Fyf,m.Fyf,'ksi'); chg('Web Fyw',cur.mat.Fyw,m.Fyw,'ksi'); chg('Fu',cur.mat.Fu,m.Fu,'ksi'); chg('Es',cur.mat.Es,nx.mat.Es,'ksi'); chg('Hybrid',cur.mat.hybrid,nx.mat.hybrid); }
+    const dk={...cur.deck};
+    if(pos(d.ts)){ dk.ts=d.ts; chg('Deck t_s',cur.deck.ts,d.ts,'in'); }
+    if(typeof d.haunch==='number'&&d.haunch>=0){ dk.haunch=d.haunch; chg('Haunch',cur.deck.haunch,d.haunch,'in'); }
+    if(pos(m.fc)){ dk.fc=m.fc; chg("f'c",cur.deck.fc,m.fc,'ksi'); }
+    if(pos(m.wc)){ dk.wc=m.wc; chg('w_c',cur.deck.wc,m.wc,'kcf'); }
+    if(pos(d.beff)){ dk.beffAuto=false; dk.beff=d.beff; chg('b_eff',(cur.deck.beffAuto?'auto':cur.deck.beff),d.beff,'in (fixed)'); }
+    if(g.position==='exterior'&&typeof g.overhang==='number'&&g.overhang>=0){ dk.oh=g.overhang; chg('Overhang',cur.deck.oh,g.overhang,'ft'); }
+    nx.deck=dk;
+    if(pos(d.Ar)){ const dTop=pos(d.ts)?d.ts/2:cur.negM.dTop; nx.negM={...cur.negM, As:d.Ar, dTop};
+      chg('Deck rebar A_s (\u2212M)',cur.negM.As,d.Ar,'in\u00b2'); chg('Rebar depth d_top',cur.negM.dTop,dTop,'in (deck mid-depth, as GirderDetail)'); }
+    const gm={...nx.geom};
+    if(pos(g.spacing)){ gm.S=g.spacing; chg('Girder spacing S',cur.geom.S,g.spacing,'ft'); }
+    if(pos(g.nGirders)){ gm.nGirders=g.nGirders; chg('Number of girders',cur.geom.nGirders,g.nGirders); }
+    if(pos(br.Lb)){ gm.Lb=br.Lb; chg('Unbraced length L_b',cur.geom.Lb,br.Lb,'ft ('+(br.type||'bracing')+')'); }
+    nx.geom=gm;
+    const ld={...cur.loads};
+    if(g.position==='interior'||g.position==='exterior'){ ld.pos=g.position; ld.posAuto=false; chg('Girder position',cur.loads.pos,g.position,'(no longer follows the design-beam chip)'); }
+    if(typeof sk.max==='number'&&isFinite(sk.max)){ ld.skew=sk.max; chg('Skew',cur.loads.skew,sk.max,'deg (largest support skew)'); }
+    nx.loads=ld;
+    if(g.label){ const gid=g.label+(g.position?' ('+g.position.charAt(0).toUpperCase()+g.position.slice(1)+')':''); nx.proj={...cur.proj, girderId:gid}; chg('Girder ID',cur.proj.girderId,gid); }
+    const when=p.producedAt?new Date(p.producedAt).toLocaleString():'time unknown';
+    const msg='Pull from GirderDetail ('+how+')\n'+(p.source||'')+'\nProduced '+when+(p.project?' \u00b7 project "'+p.project+'"':'')+'\n\n'
+      +'Imported demands: '+p.stations.length+' stations, '+spans.length+' span'+(spans.length>1?'s':'')+' ('+spans.map(s=>fmt(s.len,1)).join(', ')+' ft); span 1 is selected.\n'
+      +'Per girder, unfactored; LL+IM with GirderDetail\u2019s distribution factors (not applied again here)'+(p.stations.some(s=>s.M_FATpos!==undefined)?'; fatigue moments and shears for the Fatigue and stud checks':'')+'.\n'
+      +(secNew?'Plates: web and flange segments from the girder\u2019s plate zones.\n':'')
+      +(rows.length?'\nDesign inputs that change:\n'+rows.join('\n')+'\n':'')
+      +((p.notes||[]).length?'\nNotes from GirderDetail:\n- '+p.notes.join('\n- ')+'\n':'')
+      +'\nApply?';
+    if(!window.confirm(msg)) return false;
+    setInp(nx);
+    try{ if(window.BridgeXfer&&p.producedAt) BridgeXfer.markAdopted(GD_CH,GD_RX,p.producedAt); }catch(e){}
+    setGdNew(gdIsNew()); return true; };
+  const pullGD=()=>{
+    if(!window.BridgeXfer){ alert('The hand-off helper is not available in this browser.'); return; }
+    const r=BridgeXfer.read(GD_CH,GD_SCHEMA,1);
+    if(r.error){ alert(r.empty?'Nothing has been sent yet. In GirderDetail (Steel Bridge Beam Modules.html), Structural analysis, click "Send to ST-Girder"; or save its "Export hand-off (JSON)" file and use Import here.':'Cannot use the GirderDetail hand-off: '+r.error); return; }
+    if(!extFromGD(r.payload)){ alert('The hand-off on this channel is not from GirderDetail.'); return; }
+    gdAdopt(r.payload,'shared browser storage'); };
   const uP=(k,v)=>setInp({...inp,proj:{...inp.proj,[k]:v}});
   /* Shared project info (HANDOFF.md §4.1): title block <-> shared fields. Girder ID is not a bridge ID, so it is not mapped. */
   const BX_MAP={projectName:'name',preparedBy:'by',date:'date',jobNo:'job'};
@@ -5377,6 +5512,8 @@ function App(){
           <button className="btn sm ghost" onClick={bxSendRx} title="Send the unfactored DC1, DC2 and DW end reactions of this girder line (kip) to Bridge Substructure Loading">Send reactions to Substructure Loading</button>
           <button className="btn sm ghost" onClick={bxExportRx} title="Save the same reactions hand-off as a JSON file (for Import hand-off in Substructure Loading, or a calc package)">Export hand-off (JSON)</button>
           <span style={{width:1,height:20,background:'var(--line)',margin:'0 3px'}}></span>
+          <button className="btn sm ghost" onClick={pullGD} title="Load the forces, plates and design inputs of one girder sent by GirderDetail (Steel Bridge Beam Modules.html, Structural analysis: Send to ST-Girder). Its hand-off file loads with Import.">⇩ Pull from GirderDetail{gdNew&&<span style={{color:'#ea580c'}}> ●</span>}</button>
+          <span style={{width:1,height:20,background:'var(--line)',margin:'0 3px'}}></span>
           <button className="btn sm" onClick={exportJSON}>Export JSON</button>
           <button className="btn sm" onClick={()=>fileRef.current.click()}>Import</button>
           <button className="btn sm ghost" onClick={resetAll}>Reset</button>
@@ -5417,7 +5554,7 @@ function App(){
         {tab==='rating'&&<RatingTab R={R} inp={inp} set={setInp} onSendCapacity={publishCapacity} capLocked={capLocked} onToggleCapLock={toggleCapLock}/>}
         {tab==='optimize'&&<OptimizeTab R={R} inp={inp}/>}
         {tab==='nomen'&&<NomenclatureTab/>}
-        {tab==='report'&&<ReportTab R={R}/>}
+        {tab==='report'&&<ReportTab R={R} inp={inp}/>}
       </div>}
     </React.Fragment>}
 
