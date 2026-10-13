@@ -6755,3 +6755,50 @@ index bfad74d..7e38858 100644
 - **Saved data in both directions:**
   - Projects saved by main load here unchanged (above).
   - A project saved here, after a fill and with the 3D elements layer off, opens in main without errors. The filled values and Source line are kept, `P.ui.v3b.lay.app` is kept, and the 3D view opens.
+
+## 2026-10-13 — PR: claude/girderdetail-cleanup1 (clean-up of known open items; engineer offline, "continue to clean up the app and use judgement"; PR link added after merge)
+
+Main page and the embedded Preliminary sizing (PlateLine, `PL_B64`, decoded, edited and re-encoded on its one line). No storage key, saved field or `bridgeSuite.v1.*` payload is added, renamed or removed. `lldf.html` is unchanged.
+
+### C1. Design all counts the end (bearing-line) cross-frames in the cross-frame case   [quantities and cost only; no check changes] [resolves CF-D9 open item 2]
+- **Where:** `designAllRun0`, the cross-frame branch of step 5 (anchor `else if (cfE) { const R = cfE.R, nF = Math.max(0, (q.frames || 0) - (q.framesSup || 0))`); two new rows after "Cross-frames: bolts" (anchor `// end (bearing-line) cross-frames (C1, 2026-10-13)`). Manual, part "Design all": "cross-frame members and bolts" → "cross-frame members and bolts, intermediate and end (bearing-line) frames".
+- **What the module assumes for the end frames:** the Cross-frames module has **no separate end-frame members**; it designs one intermediate frame (top chord, bottom chord, diagonal angles; `cf.mem.top`, `cf.mem.bot`, `cf.mem.diag`; bolts `cf.conn.n` per member end). The DXF end detail (`dxfCF`, title "END CROSS-FRAME AT BEARINGS (ALONG θ DEG. SKEW)", note "MEMBERS PER THE CROSS-FRAME DESIGN") and the 3D view draw every end frame as an **X-frame** along the bearing line (top chord, bottom chord, two diagonals, also when the intermediate frames are K-frames), of length S/cos θ with θ the largest skew. Design all now counts them the same way:
+  - n = `qty.framesSup` (the bearing-line frames Preliminary sizing counts, the same n the end diaphragms use);
+  - S<sub>e</sub> = S/cos θ<sub>max</sub> (S = `cf.S`, θ<sub>max</sub> = largest |skew| of `P.df.bridge.skews`, 0 if none), work-point lengths as for the intermediate frames: top and bottom chord S<sub>e</sub>, two diagonals √(S<sub>e</sub>² + h²) (h = `cf.h`);
+  - steel per frame = [S<sub>e</sub>(A<sub>top</sub> + A<sub>bot</sub>) + 2√(S<sub>e</sub>² + h²)A<sub>diag</sub>] × 0.2836 lb/in³, at `cDet`; bolts per frame = 4 members × 2 ends × `cf.conn.n`, at `cBolt`.
+  - Rows: "End cross-frames at the bearing lines (n, X-type, S<sub>e</sub> ft [along θ° skew]): members" and "End cross-frames: bolts". They also appear in the DXF "ESTIMATED QUANTITIES" table, which lists the Design all rows.
+  - Not changed: the diaphragm branch, the intermediate cross-frame rows, the connection plate count (still intermediate frames only; the end frames connect to the bearing stiffeners), every check, auto-design and the drawings.
+- **Before:**
+  ```js
+      add(`Intermediate cross-frames (${nF}): members`, nF * lbF / 1000, 'kip', nF * lbF * S.cDet); add('Cross-frames: bolts', nF * bF, 'each', nF * bF * S.cBolt); }
+  ```
+- **After:**
+  ```js
+      add(`Intermediate cross-frames (${nF}): members`, nF * lbF / 1000, 'kip', nF * lbF * S.cDet); add('Cross-frames: bolts', nF * bF, 'each', nF * bF * S.cBolt);
+      const nE = Math.max(0, q.framesSup || 0), skw = ((P.df || {}).bridge || {}).skews || [], skM = skw.length ? Math.max(...skw.map(v => Math.abs(+v) || 0)) : 0, Se = R.S / Math.cos(skM * Math.PI / 180), lbE = (Se * (R.mem.top.A + R.mem.bot.A) + 2 * Math.hypot(Se, R.h) * R.mem.diag.A) * lbS, bE = 4 * 2 * parseDim(P.cf.conn.n);   // ...
+      if (nE) { add(`End cross-frames at the bearing lines (${nE}, X-type, ${f2(Se / 12)} ft${skM ? ` along ${f0(skM)}° skew` : ''}): members`, nE * lbE / 1000, 'kip', nE * lbE * S.cDet); add('End cross-frames: bolts', nE * bE, 'each', nE * bE * S.cBolt); } }
+  ```
+- **Problem:** Design all left out every end cross-frame (CF-D9 open item 2), so the cross-frame quantities and the total were low. Quantities only; no engineering check depends on them.
+- **Governing provision:** none (quantity estimate). Steel density 0.2836 lb/in³ (490 pcf), as for every other Design all row.
+- **Check case (built-in example, Design all from Preliminary sizing; 5 girders, 4 spans, 4 bearing lines, skew 15°; after auto-design: K-frame (Kb), S = 114 in, h = 52 in; top chord L5x5x3/8, A = (5 + 5 − 0.375)(0.375) = 3.609 in²; bottom chord and diagonals L3x3x3/8, A = (3 + 3 − 0.375)(0.375) = 2.109 in²; 2 bolts per member end; detail steel $3.50/lb, bolts $15.00):**
+  - n = `framesSup` = 4 bearing lines × 4 bays = 16; S<sub>e</sub> = 114/cos 15° = 118.02 in (9.84 ft); diagonal √(118.02² + 52²) = 128.97 in.
+  - Steel per frame [118.02(3.609 + 2.109) + 2(128.97)(2.109)](0.2836) = (674.8 + 544.0)(0.2836) = 345.7 lb; 16 frames 5,531 lb = **5.53 kip, $19,360**. Bolts 16 × 4 × 2 × 2 = **256, $3,840**.
+  - **Before:** rows end at "Intermediate cross-frames (52): members 14.41 kip $50,451" and "Cross-frames: bolts 1,040 $15,600"; total **$1,676,544**.
+  - **After:** the same rows, plus "End cross-frames at the bearing lines (16, X-type, 9.84 ft along 15° skew): members 5.53 kip $19,360" and "End cross-frames: bolts 256 $3,840"; total **$1,699,744** (+$23,200). Every other row, every module status and the geometry conflicts are identical.
+- **Saved data:** no key or format change; `P.designAll.cost` gains the two rows (an array of `{ item, qn, unit, c }`, as before).
+- **Other copies:** none.
+
+### Exact changes (C1): main page (unified diff, the Manual line abbreviated to the changed words)
+
+```diff
+@@ Manual, part "Design all" @@
+-... studs, and cross-frame members and bolts (owner-standard unit costs, placeholders until replaced) ...
++... studs, and cross-frame members and bolts, intermediate and end (bearing-line) frames (owner-standard unit costs, placeholders until replaced) ...
+@@ -5915,3 +5915,5 @@ function designAllRun0(j, quiet) {
+   else if (cfE) { const R = cfE.R, nF = Math.max(0, (q.frames || 0) - (q.framesSup || 0)), lbF = R.frames.reduce((a, e) => a + e.L * R.mem[e.k].A * lbS, 0), bF = R.frames.length * 2 * parseDim(P.cf.conn.n);
+-    add(`Intermediate cross-frames (${nF}): members`, nF * lbF / 1000, 'kip', nF * lbF * S.cDet); add('Cross-frames: bolts', nF * bF, 'each', nF * bF * S.cBolt); }
++    add(`Intermediate cross-frames (${nF}): members`, nF * lbF / 1000, 'kip', nF * lbF * S.cDet); add('Cross-frames: bolts', nF * bF, 'each', nF * bF * S.cBolt);
++    const nE = Math.max(0, q.framesSup || 0), skw = ((P.df || {}).bridge || {}).skews || [], skM = skw.length ? Math.max(...skw.map(v => Math.abs(+v) || 0)) : 0, Se = R.S / Math.cos(skM * Math.PI / 180), lbE = (Se * (R.mem.top.A + R.mem.bot.A) + 2 * Math.hypot(Se, R.h) * R.mem.diag.A) * lbS, bE = 4 * 2 * parseDim(P.cf.conn.n);   // end (bearing-line) cross-frames (C1, 2026-10-13): X-type with the module's top chord, bottom chord and diagonal angles, along the largest skew, as the DXF end detail and the 3D view draw them
++    if (nE) { add(`End cross-frames at the bearing lines (${nE}, X-type, ${f2(Se / 12)} ft${skM ? ` along ${f0(skM)}° skew` : ''}): members`, nE * lbE / 1000, 'kip', nE * lbE * S.cDet); add('End cross-frames: bolts', nE * bE, 'each', nE * bE * S.cBolt); } }
+   const total = cost.reduce((a, c) => a + c.c, 0);
+```
