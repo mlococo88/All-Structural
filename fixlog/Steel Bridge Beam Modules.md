@@ -7070,3 +7070,40 @@ Main page and the embedded Preliminary sizing (PlateLine, `PL_B64`, decoded, edi
   - Other rows that move: Span 2 (exterior 174.91 → 198.24 ft, ratio 0.981 → 0.996; interior 174.91 → 198.24 ft, 0.557 → 0.565), Span 1 interior (38.91 → 60.91 ft, 0.632 → 0.693). Span 3 (310.91 ft) does not move. Every other row identical.
 - **Saved data:** no key or format change. The rows of `P.fa.rows` with `src: 'analysis'` are replaced on the next import from Preliminary sizing, as before (manual rows are never changed).
 - **Other copies:** none.
+
+### C5. Fatigue rows from Preliminary sizing carry their girder's effective flange width   [§4: section properties, b<sub>eff</sub> per girder] [exterior rows more conservative on the built-in example] [optional field in the Fatigue rows]
+- **Where:**
+  - Decoded PlateLine: `detailExport`, the `row` helper of the fatigue inventory; anchor `Vf: r1(T.Vfm[e] || 0), do: 0, dfP: 0, dfN: 0, fDL: 0`.
+  - Main page: `FA_SPEC` (anchor `['do', 'Stiffener spacing d<sub>o</sub> (0 = none)', 'in', 'dim', { min: 0 }]`); `GM.fa.compute` (anchor `const S = secSet(r.D, r,`); `GM.fa.capacity`, step "Detail elevation and sections" (anchor `\text{in above the bottom of the steel (${locT.toLowerCase()})}; \quad`); `GM.fa.echo`, column "Section" (anchor `r.mode === 'M' ? secTxt(r)`).
+- **Before:** every row used the module's one "b<sub>eff</sub>" input (`fa.beff`, 114 in in the built-in example, the interior value) for its short-term (n) and long-term (3n) composite sections:
+  ```js
+          const S = secSet(r.D, r, dk), d = S.s.d, ...
+  ```
+  and the PlateLine rows had no b<sub>eff</sub>:
+  ```js
+  ... Vf: r1(T.Vfm[e] || 0), do: 0, dfP: 0, dfN: 0, fDL: 0 }); };
+  ```
+- **After:**
+  - PlateLine sends each row's girder b<sub>eff</sub>, the same value its Girder section rows carry (`props(s, gt).beff` = (b<sub>eff,ft</sub> from the analysis, or S/2 + overhang for exterior, S for interior) × 12):
+    ```js
+    ... Vf: r1(T.Vfm[e] || 0), do: 0, dfP: 0, dfN: 0, fDL: 0, beff: r2(props(s, gt).beff) }); };   // beff (C5, 2026-10-13): this girder's effective flange width, as the Girder section rows
+    ```
+  - Fatigue row field (optional; blank = the module's b<sub>eff</sub>), added at the end of `FA_SPEC`:
+    ```js
+      ['beff', 'b<sub>eff</sub> of this girder (blank: the b<sub>eff</sub> above)', 'in', 'num', { opt: true }]];   // optional (C5, 2026-10-13): Preliminary sizing sends each girder's effective flange width
+    ```
+  - `compute`:
+    ```js
+            const S = secSet(r.D, r, r.beff > 0 ? { ...dk, beff: r.beff } : dk), d = S.s.d, ...
+    ```
+  - Display: the calculation step "Detail elevation and sections" shows `b_eff = 96.00 in (this girder)` and the report's "Section" column appends `; b_eff 96.00 in`, only for rows that have their own b<sub>eff</sub>.
+  - Rows without the field (manual rows, rows imported from the other modules, rows saved before this change, rows from the Girder-section fallback) give `null` and use the module's b<sub>eff</sub> exactly as before. A row b<sub>eff</sub> of 0 or a negative value is an input error ("must be positive"), as for the other optional row fields.
+- **Problem:** the Fatigue module computed the exterior-girder rows with the interior b<sub>eff</sub> (114 in instead of 96 in), so the composite section was too stiff and the bottom-flange stress range too low, and its result did not match Preliminary sizing's own C′ check or the Girder section rows (which already use b<sub>eff</sub> per girder: interior 114 in, exterior 96 in, checked on the built-in example). Less conservative for exterior rows; fixed. The negative-moment cracked section (steel + reinforcement) does not depend on b<sub>eff</sub> and is unchanged. The long-term (3n) section for M<sub>D2</sub> also uses the row b<sub>eff</sub>, so f<sub>DL</sub> (net-tension rule) changes slightly for the same rows.
+- **Governing provision:** AASHTO LRFD 10th Ed. 4.6.2.6.1 (effective flange width: for exterior girders, the tributary width; the analysis's value is used as is), 6.6.1.2.1 (stress range from the short-term composite section for positive moment; the negative-moment section per the module's option), 6.10.1.1.1b. Not changed. Not re-checked against the printed 10th Edition here: verify.
+- **Check case (built-in example; exterior girder, Span 1, connection plate at 60.91 ft (after C4), bottom flange inner face y = 1.125 in; M<sub>f+</sub> = 812.7, M<sub>f−</sub> = −364.5 k-ft; n = 6.80; t<sub>s</sub> = 8 in, haunch 2 in):**
+  - Short-term composite section with b<sub>eff</sub> = 114 in (before): ȳ<sub>n</sub> = 55.100 in, I<sub>n</sub> = 106,168 in⁴; with **b<sub>eff</sub> = 96 in** (after): ȳ<sub>n</sub> = 53.568 in, I<sub>n</sub> = 102,183 in⁴ (slab area 96(8)/6.80 = 112.98 in² instead of 134.17 in²).
+  - **Negative section uncracked:** before f<sub>+</sub> = 812.7(12)(53.975)/106,168 = 4.958, f<sub>−</sub> = 364.5(12)(53.975)/106,168 = 2.224, Δf = 7.182 ksi, ratio 1.75(7.182)/12 = **1.047**; after f<sub>+</sub> = 812.7(12)(52.443)/102,183 = 5.005, f<sub>−</sub> = 364.5(12)(52.443)/102,183 = 2.245, Δf = 7.250 ksi, ratio **1.057**. Preliminary sizing's own Category C′ ratio for the exterior girder at 61 ft: 1.0573 (the same section; it uses the short-term section for both signs).
+  - **Cracked (default):** before Δf = 4.958 + 2.786 = 7.744 ksi, ratio 1.129; after 5.005 + 2.786 = 7.791 ksi, ratio **1.136**.
+  - Span 2, exterior (198.24 ft): cracked 0.996 → 1.002; uncracked 0.936 → 0.945. Interior rows: b<sub>eff</sub> 114 in, identical. The four manual rows of the built-in example: no b<sub>eff</sub>, identical.
+- **Saved data:** no key change. `P.fa.rows` items may carry the new optional number `beff` (rows from Preliminary sizing). A project saved here opens in main: main's `numRows` ignores the unknown field and uses the module's b<sub>eff</sub> (main's results). A project saved by main opens here unchanged until its rows are re-imported from Preliminary sizing.
+- **Other copies:** none.
