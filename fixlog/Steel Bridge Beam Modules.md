@@ -4562,3 +4562,13 @@ Engineer's approval (2026-10-13) of three items: (Q4) Transverse stiffeners TS4 
   - TS Demands tab and TS4 card;
   - PlateLine Cross-section section in Equal and Variable modes (pixel-identical to main), the new mode (5 and 6 girders), blank W<sub>cc</sub>, and after width-study Apply.
 - **Shared snippets:** none touched (no `bridgeSuite.v1.*` code).
+
+- **After merging main b1c9e77 (#179, CF-D10–CF-D12):** the PlateLine string was untouched by #179, and the merged `PL_B64` decodes to the same page as above. All checks were re-run on the merged page against the new main, with the same results and only the intended differences:
+  - `node --check`;
+  - every module on the default project;
+  - built-in example and 90 ft span with Full design → TS/GS;
+  - width study plus Full design;
+  - 2 × 120 ft simple spans;
+  - hand-off payloads;
+  - Q4 UI and saved data;
+  - Q6 UI, Applies and saved data.
