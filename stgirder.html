@@ -5310,7 +5310,7 @@ function App(){
      "Pull from GirderDetail" (or Import of the hand-off file) shows what will change and applies nothing until confirmed.
      It attaches the payload as the imported envelope (inp.external, the existing field; the payload itself records producer
      and producedAt), seeds the plates from section.zones as any import does, and fills the existing design inputs listed
-     in the dialog. Opening the app never applies it. */
+     in the dialog. Opening the app never applies it, except when GirderDetail opened it with the #gdpull flag (OD1, below). */
   const GD_CH='girderDemands', GD_SCHEMA='stgirder-external-demands', GD_RX='stgirder';
   const gdIsNew=()=>{ try{ return !!(window.BridgeXfer&&BridgeXfer.isNew(GD_CH,GD_RX)); }catch(e){ return false; } };
   const [gdNew,setGdNew]=useState(gdIsNew);
@@ -5326,8 +5326,9 @@ function App(){
       for(const k of ['M_FATpos','M_FATneg','V_FATpos','V_FATneg']) if(st[k]!==undefined&&!(typeof st[k]==='number'&&isFinite(st[k]))) return 'station value '+k+' is not a number'; }
     const sp=externalSpans(p); if(!sp.length||sp.some(s=>!(s.len>0))) return 'invalid span layout';
     return null; };
-  const gdAdopt=(p,how)=>{
-    const err=gdCheck(p); if(err){ alert('Cannot use the GirderDetail hand-off: '+err+'.'); return false; }
+  const gdAdopt=(p,how,auto)=>{
+    const err=gdCheck(p); if(err){ if(auto){ setGdAuto({ok:false,text:'The GirderDetail hand-off cannot be used: '+err+'. Nothing was changed.'}); return false; }
+      alert('Cannot use the GirderDetail hand-off: '+err+'.'); return false; }
     const cur=inpRef.current, g=p.girderDetail||{}, m=g.materials||{}, d=g.deck||{}, br=g.bracing||{}, sk=g.skew||{};
     const spans=externalSpans(p), sel=spans[0];
     const secNew=zonesToSec(p,sel,cur.sec);
@@ -5366,9 +5367,11 @@ function App(){
       +(rows.length?'\nDesign inputs that change:\n'+rows.join('\n')+'\n':'')
       +((p.notes||[]).length?'\nNotes from GirderDetail:\n- '+p.notes.join('\n- ')+'\n':'')
       +'\nApply?';
-    if(!window.confirm(msg)) return false;
+    // auto (OD1): opened from GirderDetail's "Send to ST-Girder" after the engineer confirmed there; same changes, no dialog, summary in a banner.
+    if(!auto&&!window.confirm(msg)) return false;
     setInp(nx);
     try{ if(window.BridgeXfer&&p.producedAt) BridgeXfer.markAdopted(GD_CH,GD_RX,p.producedAt); }catch(e){}
+    if(auto) setGdAuto({ok:true,text:msg.replace(/^[^\n]*\n/,'').replace(/\n+Apply\?$/,'')});
     setGdNew(gdIsNew()); return true; };
   const pullGD=()=>{
     if(!window.BridgeXfer){ alert('The hand-off helper is not available in this browser.'); return; }
@@ -5376,6 +5379,26 @@ function App(){
     if(r.error){ alert(r.empty?'Nothing has been sent yet. In GirderDetail (Steel Bridge Beam Modules.html), Structural analysis, click "Send to ST-Girder"; or save its "Export hand-off (JSON)" file and use Import here.':'Cannot use the GirderDetail hand-off: '+r.error); return; }
     if(!extFromGD(r.payload)){ alert('The hand-off on this channel is not from GirderDetail.'); return; }
     gdAdopt(r.payload,'shared browser storage'); };
+  /* OD1 (2026-10-13): GirderDetail's "Send to ST-Girder" can open this app in a new tab as stgirder.html#gdpull=<producedAt>.
+     The flag is read once and removed from the address (a refresh does not re-import). The stored hand-off is applied only if
+     its producedAt equals the flag; otherwise nothing changes and a message says why. Applied one render after mount, from
+     inpRef, so the saved session and any mount-time updates are already in place; the autosave then saves it like a manual pull. */
+  const [gdAuto,setGdAuto]=useState(null);       // {ok, text}: banner after an open-from-GirderDetail
+  const [gdPullReq,setGdPullReq]=useState(null);
+  useEffect(()=>{ let m=null; try{ m=/^#gdpull=([^&]*)/.exec(window.location.hash||''); }catch(e){} if(!m) return;
+    let id=''; try{ id=decodeURIComponent(m[1]); }catch(e){ id=''; }
+    try{ window.history.replaceState(null,'',window.location.pathname+window.location.search); }catch(e){}
+    setGdPullReq({id}); },[]);
+  useEffect(()=>{ if(!gdPullReq) return; setGdPullReq(null);
+    const how='Use GirderDetail\u2019s "Export hand-off (JSON)" and Import here, or click "Pull from GirderDetail" to review what is stored.';
+    const same='The tools must be opened the same way: both from the website, or both as files in one folder, in Chrome or Edge.';
+    const no=t=>setGdAuto({ok:false,text:t+' Nothing was changed.\n'+same+'\n'+how});
+    if(!window.BridgeXfer){ no('The hand-off helper is not available in this browser.'); return; }
+    const r=BridgeXfer.read(GD_CH,GD_SCHEMA,1);
+    if(r.error||!r.payload){ no('The hand-off from GirderDetail was not found in this browser'+(r.empty?'':' ('+r.error+')')+'.'); return; }
+    if(!extFromGD(r.payload)){ no('The hand-off stored in this browser is not from GirderDetail.'); return; }
+    if(!gdPullReq.id||r.payload.producedAt!==gdPullReq.id){ no('The hand-off stored in this browser is not the one GirderDetail sent (sent '+(gdPullReq.id||'?')+', stored '+(r.payload.producedAt||'?')+').'); return; }
+    gdAdopt(r.payload,'opened from GirderDetail',true); },[gdPullReq]);
   const uP=(k,v)=>setInp({...inp,proj:{...inp.proj,[k]:v}});
   /* Shared project info (HANDOFF.md §4.1): title block <-> shared fields. Girder ID is not a bridge ID, so it is not mapped. */
   const BX_MAP={projectName:'name',preparedBy:'by',date:'date',jobNo:'job'};
@@ -5421,6 +5444,19 @@ function App(){
               <button className="btn sm ghost" onClick={dismissHandoff}>Not now</button>
             </div>
           </div>
+        </div>)}
+    {gdAuto&&(gdAuto.ok
+      ? <div className="callout" style={{marginTop:14,marginBottom:0,borderLeftColor:'#16a34a',background:'#f0fdf4'}}>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'baseline',flexWrap:'wrap',gap:8}}>
+            <b>Loaded from GirderDetail</b>
+            <button className="btn sm ghost" onClick={()=>setGdAuto(null)}>✕ dismiss</button></div>
+          <div style={{fontSize:11.5,marginTop:4,lineHeight:1.6,whiteSpace:'pre-wrap'}}>{'Applied as confirmed in GirderDetail (Send to ST-Girder). Undo (Ctrl+Z) restores the previous inputs.\n\n'+gdAuto.text}</div>
+        </div>
+      : <div className="callout warn" style={{marginTop:14,marginBottom:0}}>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'baseline',flexWrap:'wrap',gap:8}}>
+            <b>⚠ GirderDetail hand-off not loaded</b>
+            <button className="btn sm ghost" onClick={()=>setGdAuto(null)}>✕ dismiss</button></div>
+          <div style={{fontSize:11.5,marginTop:4,lineHeight:1.6,whiteSpace:'pre-wrap'}}>{gdAuto.text}</div>
         </div>)}
     {geomChanges&&!demandsLocked&&(
       <div className="geom-change-banner" onClick={()=>setGeomModalOpen(true)}>

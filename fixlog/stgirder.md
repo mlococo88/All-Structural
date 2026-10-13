@@ -1231,3 +1231,59 @@ Engineer's decision 2026-10-13: AASHTO LRFD 10th Ed. Eq. 6.10.8.2.3a-4 is L_p = 
 - L_r: the tool keeps L_r = πr_t√(E/F_yr) (the 9th Ed. Eq. 6.10.8.2.3-5 form). The 10th Ed. definition the engineer supplied adds "and geometric imperfection effects" and continues past the screenshot, so the 10th Ed. expression could differ. Engineer to confirm the 10th Ed. L_r equation.
 - F_e in Eq. 6.10.8.2.3a-3 is taken as C_bπ²E/(L_b/r_t)² (the 9th Ed. F_cr without R_b); confirm against the printed 10th Ed. definition of F_e.
 - The r_t comment still cites "6.10.8.2.3-9" (9th Ed. numbering); the 10th Ed. equation number for r_t was not in the supplied text, so it was not renumbered.
+
+## 2026-10-13 — PR: claude/gd-st-open-direct (open from GirderDetail with the girder loaded; cross-tool connection HANDOFF.md §4.9, sender and receiver in one PR per the CLAUDE.md §7 exception; PR link added after merge)
+
+### OD1. `#gdpull=<producedAt>`: apply the GirderDetail hand-off on load without the confirm, with a summary banner   [hand-off receiver] [no computed result, key, channel or schema changes; manual Pull and Import unchanged]
+- **Where:** `App()`: `gdAdopt` (anchor `const gdAdopt=(p,how`), new state and effects after `pullGD` (anchor `/* OD1 (2026-10-13): GirderDetail's "Send to ST-Girder" can open this app`), the banner before `{geomChanges&&!demandsLocked&&(`, and the comment above `const GD_CH='girderDemands'`. About lines 5310–5460.
+- **Before:**
+  ```js
+  const gdAdopt=(p,how)=>{
+    const err=gdCheck(p); if(err){ alert('Cannot use the GirderDetail hand-off: '+err+'.'); return false; }
+  …
+    if(!window.confirm(msg)) return false;
+    setInp(nx);
+    try{ if(window.BridgeXfer&&p.producedAt) BridgeXfer.markAdopted(GD_CH,GD_RX,p.producedAt); }catch(e){}
+    setGdNew(gdIsNew()); return true; };
+  ```
+  Comment: `in the dialog. Opening the app never applies it. */`
+- **After:**
+  ```js
+  const gdAdopt=(p,how,auto)=>{
+    const err=gdCheck(p); if(err){ if(auto){ setGdAuto({ok:false,text:'The GirderDetail hand-off cannot be used: '+err+'. Nothing was changed.'}); return false; }
+      alert('Cannot use the GirderDetail hand-off: '+err+'.'); return false; }
+  …
+    // auto (OD1): opened from GirderDetail's "Send to ST-Girder" after the engineer confirmed there; same changes, no dialog, summary in a banner.
+    if(!auto&&!window.confirm(msg)) return false;
+    setInp(nx);
+    try{ if(window.BridgeXfer&&p.producedAt) BridgeXfer.markAdopted(GD_CH,GD_RX,p.producedAt); }catch(e){}
+    if(auto) setGdAuto({ok:true,text:msg.replace(/^[^\n]*\n/,'').replace(/\n+Apply\?$/,'')});
+    setGdNew(gdIsNew()); return true; };
+  ```
+  Comment: `in the dialog. Opening the app never applies it, except when GirderDetail opened it with the #gdpull flag (OD1, below). */`
+  Added after `pullGD`:
+  ```js
+  const [gdAuto,setGdAuto]=useState(null);       // {ok, text}: banner after an open-from-GirderDetail
+  const [gdPullReq,setGdPullReq]=useState(null);
+  useEffect(()=>{ let m=null; try{ m=/^#gdpull=([^&]*)/.exec(window.location.hash||''); }catch(e){} if(!m) return;
+    let id=''; try{ id=decodeURIComponent(m[1]); }catch(e){ id=''; }
+    try{ window.history.replaceState(null,'',window.location.pathname+window.location.search); }catch(e){}
+    setGdPullReq({id}); },[]);
+  useEffect(()=>{ if(!gdPullReq) return; setGdPullReq(null);
+    const how='Use GirderDetail’s "Export hand-off (JSON)" and Import here, or click "Pull from GirderDetail" to review what is stored.';
+    const same='The tools must be opened the same way: both from the website, or both as files in one folder, in Chrome or Edge.';
+    const no=t=>setGdAuto({ok:false,text:t+' Nothing was changed.\n'+same+'\n'+how});
+    if(!window.BridgeXfer){ no('The hand-off helper is not available in this browser.'); return; }
+    const r=BridgeXfer.read(GD_CH,GD_SCHEMA,1);
+    if(r.error||!r.payload){ no('The hand-off from GirderDetail was not found in this browser'+(r.empty?'':' ('+r.error+')')+'.'); return; }
+    if(!extFromGD(r.payload)){ no('The hand-off stored in this browser is not from GirderDetail.'); return; }
+    if(!gdPullReq.id||r.payload.producedAt!==gdPullReq.id){ no('The hand-off stored in this browser is not the one GirderDetail sent (sent '+(gdPullReq.id||'?')+', stored '+(r.payload.producedAt||'?')+').'); return; }
+    gdAdopt(r.payload,'opened from GirderDetail',true); },[gdPullReq]);
+  ```
+  Banner (JSX, before the MCT geometry-change banner): a `callout` with a green left border, title "Loaded from GirderDetail", text "Applied as confirmed in GirderDetail (Send to ST-Girder). Undo (Ctrl+Z) restores the previous inputs." followed by the dialog's summary (source, time, project, stations and spans, plates, design inputs that change, GirderDetail's notes) and a dismiss button; or a `callout warn` "⚠ GirderDetail hand-off not loaded" with the reason. Same style as the existing "New analysis data available" banner.
+- **Problem / request:** GirderDetail's Send to ST-Girder can now open this app in a new tab (fixlog/Steel Bridge Beam Modules.md OD1). The engineer confirmed there, so the payload is applied without a second dialog and the summary is shown without blocking. The flag is handled in a second effect, one render after mount, from `inpRef`, so the saved session (`stgirder.session`, read in the `useState` initializer) and any mount-time update are in place first; the existing autosave effect then writes the session and the active shared-project slice as after a manual pull. `markAdopted` is set as before. The flag is removed from the address, so a refresh does not re-import.
+- **Governing provision:** none (hand-off UI; the applied inputs are the same as a manual Pull from GirderDetail).
+- **Check case:** GirderDetail built-in example G2 sent; ST-Girder with a saved session (defaults, project name "KEEPME"); opened as `stgirder.html#gdpull=<producedAt>` → address `stgirder.html`, no dialog, banner "Loaded from GirderDetail" with "Design inputs that change: b_eff auto → 114 in (fixed); A_s (−M) 12 → 9.12 in²; S 9 → 9.5 ft; L_b 20 → 25 ft; skew 0 → 15 deg; Girder ID G3 (Interior) → G2 (Interior)" and the notes; project name KEEPME kept; Fyf 50, t_s 8, 5 girders, interior; 30/31 checks pass, governing rating inventory 1.1565 (span 1) — identical to Pull from GirderDetail from the same starting session. `#gdpull=2020-01-01T00:00:00.000Z` → warning "…not the one GirderDetail sent…", nothing changed. Channel empty → "…was not found in this browser. Nothing was changed. The tools must be opened the same way…". Stored payload with `factored:true` → "…cannot be used: the forces must be unfactored (factored:false). Nothing was changed."
+- **How verified:** JSX transpiled with @babel/standalone (preset react) and every script block parsed (`new Function`); headless Chromium (Playwright), both files in one folder, over http and as `file://`, 28 checks pass in each: GirderDetail confirm text; new tab opened and flag removed; banner summary equal to the manual confirm's; no dialog in ST-Girder; `bridgeSuite.v1.girderDemands.adopted.stgirder` = producedAt; autosaved session holds the payload as `inp.external`; inputs equal to GirderDetail's values; saved project name kept; Ctrl+Z restores the previous inputs and Ctrl+Y re-applies; refresh: no banner, no re-import, session unchanged; manual Pull from the same starting session still shows the confirm and gives byte-identical session JSON, identical `computeAll` checks and rating, identical Rating tab text; mismatched, missing and invalid payloads apply nothing; GirderDetail cancel and blocked-tab paths. No console or page errors.
+- **Other copies:** sender in `Steel Bridge Beam Modules.html` (fixlog/Steel Bridge Beam Modules.md OD1).
+- **Open items:** an ST-Girder tab that was already open keeps its own inputs (it shows the new-data dot); all tabs share `stgirder.session`, so its next edit autosaves over the session written by the new tab (existing multi-tab behaviour, not changed). If the MCT demands channel is locked and adopts on the same load, the GirderDetail hand-off is applied after it and replaces the imported demands (the engineer chose it in GirderDetail).

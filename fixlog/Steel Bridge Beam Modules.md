@@ -9003,3 +9003,39 @@ Main page (Girder section, Deck overhang reference and Manual text) and the embe
 - **Deck-placement C<sub>b,C</sub>** uses 1.25DC1 + 1.5CL without the deck-casting-sequence envelope (`MDCc`), and L<sub>b,C</sub> is the frame spacing while C<sub>b,C</sub> is over the actual segment (as before for C<sub>b</sub>).
 - **Not changed:** Preliminary sizing's own checks keep their segments at `spCF` from the nearest support (`seg`), so a pier node takes the segment on its right; Cross-frames M<sub>br</sub> C<sub>b</sub> = 1.0 (conservative); Deck overhang C<sub>b</sub> input (default 1.0); L<sub>b</sub>/C<sub>b</sub> from G1's frames for every girder (LOC1 open item). ST-Girder (`stgirder.html`, other tool) still cites "6.10.8.2.3-9" for r<sub>t</sub> in two comments (10th Ed. Eq. 6.10.8.2.3b-3); it uses C<sub>b</sub> = 1.0 (permitted, conservative).
 - **Other copies:** none (the main page's `feCb` is an unused copy; comment updated only).
+
+## 2026-10-13 — PR: claude/gd-st-open-direct (Send to ST-Girder: open ST-Girder now with this girder loaded; cross-tool connection HANDOFF.md §4.9, sender and receiver in one PR per the CLAUDE.md §7 exception; PR link added after merge)
+
+### OD1. "Send to ST-Girder" offers to open ST-Girder in a new tab with the girder loaded   [hand-off UI] [no computed result, saved data, key, channel or payload changes]
+- **Where:** Structural analysis, section "Send to ST-Girder": the `document.addEventListener('click', …'[data-gdst]'…)` handler (anchor `const w = BridgeXfer.publish(GD_ST.ch, r.payload, GD_ST.producer, GD_ST.file);`), new function `gdStHref()` right after it, and `gdStUi()` (button title and note). About lines 5589–5660.
+- **Before (end of the handler):**
+  ```js
+  flash(`${r.payload.member.key} sent to ST-Girder (${r.payload.stations.length} stations). In stgirder.html click "Pull from GirderDetail".`); });
+  ```
+- **After:**
+  ```js
+  const sent = `${r.payload.member.key} sent to ST-Girder (${r.payload.stations.length} stations).`, id = w.payload && w.payload.producedAt;
+  // OD1 (2026-10-13): offer to open ST-Girder in a new tab with this girder loaded (ST-Girder applies it on load, keyed to producedAt).
+  // window.open stays inside this click handler so it is not popup-blocked.
+  if (id && confirm(`${sent}\n\nOpen ST-Girder now with this girder loaded? This replaces ST-Girder's current girder inputs (plates, materials, deck, bracing, skew, forces).`)) {
+    let win = null; try { win = window.open(`${gdStHref()}#gdpull=${encodeURIComponent(id)}`, '_blank'); } catch (er) { win = null; }
+    if (win) { flash(`${sent} ST-Girder opened in a new tab.`); return; }
+    flash(`${sent} In stgirder.html click "Pull from GirderDetail".`);
+    alert(`The browser blocked the new tab.\n\nOpen ST-Girder (stgirder.html, in the same folder or on the same website as this tool) and click "Pull from GirderDetail".`); return; }
+  flash(`${sent} In stgirder.html click "Pull from GirderDetail".`); });
+  /* ST-Girder's file for "open now" (OD1): where the bridge suite last saw ST-Girder in this folder (read only, key bridgeSuite.v1.appPaths,
+     the same record and rules as BridgeApps.path in stgirder.html / lldf.html / psbeam.html / index.html), else stgirder.html next to this file. */
+  function gdStHref() { let f = '';
+    try { const o = JSON.parse(localStorage.getItem('bridgeSuite.v1.appPaths') || '{}') || {}, e = o.stgirder, h = String(location.href || '').split('#')[0].split('?')[0], d = h.slice(0, h.lastIndexOf('/') + 1);
+      if (e && e.at && e.at[d] && e.at[d].file) f = e.at[d].file; else if (e && e.file && !e.dir) f = e.file;
+      let me = (location.pathname || '').split('/').pop() || ''; try { me = decodeURIComponent(me); } catch (er) { }
+      if (f && f.toLowerCase() === me.toLowerCase()) f = ''; } catch (er) { f = ''; }
+    return encodeURI(f || 'stgirder.html'); }
+  ```
+- **Text (`gdStUi`):** button title `…for ST-Girder (stgirder.html): Pull from GirderDetail` → `…for ST-Girder (stgirder.html): Pull from GirderDetail. Then offers to open ST-Girder in a new tab with this girder loaded`; the note gets the sentence `After sending you can open ST-Girder in a new tab with this girder loaded, or click Pull from GirderDetail there later.` before `Opened as files, …`.
+- **Problem / request:** the engineer asked to go straight from GirderDetail to ST-Girder with the girder loaded, instead of switching tools and clicking Pull from GirderDetail. Cancel keeps the previous behaviour (message only). The payload, the channel (`bridgeSuite.v1.girderDemands`), its keys and schema are unchanged; `producedAt` (as stamped by `BridgeXfer.publish`) is the flag value ST-Girder matches. `bridgeSuite.v1.appPaths` is only read.
+- **Governing provision:** none (hand-off UI; no engineering value changes).
+- **Check case:** built-in example, Preliminary sizing built, Structural analysis, G2: Send → dialog "G2 sent to ST-Girder (363 stations). … Open ST-Girder now with this girder loaded? …" → OK → new tab `stgirder.html` (flag removed) with the girder loaded; message "G2 sent to ST-Girder (363 stations). ST-Girder opened in a new tab." Cancel → no tab, message "… In stgirder.html click "Pull from GirderDetail"." `window.open` returning null → the same message and the alert "The browser blocked the new tab. …". `gdStHref()`: no record → `stgirder.html`; record for this folder `ST Girder v2.html` → `ST%20Girder%20v2.html`; record for another folder only → `stgirder.html`; legacy record without a folder → its file; record naming this file → `stgirder.html`; unreadable record → `stgirder.html`.
+- **How verified:** `node --check`-equivalent parse of every inline script (`new Function`); headless Chromium (Playwright) with both files in one folder, served over http (`python3 -m http.server`) and opened as `file://`: 28 checks pass in each (the ST-Girder side is in fixlog/stgirder.md OD1: inputs and results identical to a manual Pull, refresh, mismatched / missing / invalid flag, undo); the `gdStHref()` cases run in Node with a stubbed `localStorage`/`location`. No console errors.
+- **Other copies:** the receiving side is in `stgirder.html` (fixlog/stgirder.md OD1). The BridgeApps path rules are mirrored (read only) from the bootstrap block in `index.html`, `lldf.html`, `psbeam.html`, `stgirder.html`; that block is unchanged.
+- **Open items:** whether a browser allows `window.open` after the confirm dialog is up to its popup blocker (Chrome/Edge normally allow it from a click handler; the blocked case falls back to the message and alert). Not testable headless with a real popup blocker.
