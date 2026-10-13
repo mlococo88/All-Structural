@@ -4029,3 +4029,33 @@ Engineer's approval (2026-10-13) of three items: (Q4) Transverse stiffeners TS4 
 +        ts.rows.push({ name: `Span ${k + 1}, first ${stiff ? 'stiffener' : 'connection plate'} from ${supN(ks)}, ${TT(gt)}`, type: stiff ? 'A' : 'B', D: s.D, tw: s.tw, bfc: s.topB, tfc: s.topT, bft: s.botB, tft: s.botT, bfw: bfw(x), end: end ? 'yes' : 'no', do1: r2(doIn), do2: r2(doIn), ...shear(T, x), df: 0, ...(end ? shearIn(T, Math.min(x, m.sup[ks]), Math.max(x, m.sup[ks])) : {}) }); });
        let best = -1, bx = (x0 + x1) / 2; xs.forEach((x, i) => { if (x > x0 && x < x1) { const rg = T.MfP[i] - T.MfN[i]; if (rg > best) { best = rg; bx = x; } } });
 ```
+
+### Q5. Simple spans: the panels next to an interior support are end panels   [§4: panel classification change] [no formula, factor or saved-data change]
+
+- **Where (decoded PlateLine):** `detailExport()`, transverse stiffener rows (PL ≈ 3479; anchor `[[x0 + doFt, k, 1], [x1 - doFt, k + 1, -1]].forEach(([x, ks, dir]) => { const s = sec(x), end =`).
+- **Before:** `end = ks === 0 || ks === nS - 1` (only the panels next to the abutments).
+- **After:** `end = ks === 0 || ks === nS - 1 || !m.cont` (comment added). `m.cont` is `bridge.cont === 'continuous' && spans > 1`, so for simple spans every first stiffener (or connection plate) from a pier is an end panel; continuous units are unchanged. Such a row is sent with `end: 'yes'` and, with Q4, the end-panel shears (`VDC1b` …). In GirderDetail it therefore gets the 1.5D limit of TS5, the end-panel resistance of TS4 (no tension field; k = 5 when d<sub>o</sub> > 1.5D per EK1), and Q4's bearing shear. EK3's web sizing already treated these panels as end panels (`ends = cont ? [0, Ltot] : supX`), so Suggest / Full design results are unchanged.
+- **Governing provision:** AASHTO LRFD 10th Ed. (2024) Art. 6.10.9.3.3 (end panels: the panels adjacent to the simple supports / girder ends, V<sub>n</sub> = CV<sub>p</sub>, d<sub>o</sub> ≤ 1.5D) and Art. 6.10.9.1; a simple span is a girder with a bearing at each end, including over a pier.
+- **Problem:** for a simple-span bridge with more than one span, the panels at the piers were checked as interior panels (tension-field action, 3D limit), which 6.10.9.3.3 does not allow at a girder end. Unconservative.
+- **Check case (2 × 120 ft simple spans, default bridge otherwise, stiffened, d<sub>o</sub>/D = 2, quick suggestion applied: D = 47 in, t<sub>w</sub> = 1/2 in, F<sub>yw</sub> = 50 ksi; Transverse stiffeners → Get demands):** Span 1, first stiffener from Pier 1, interior girder, panel 1, d<sub>o</sub> = 94 in:
+  - D/t<sub>w</sub> = 94, (D/t<sub>w</sub>)² = 8,836; V<sub>p</sub> = 0.58(50)(47)(0.5) = 681.50 kip.
+  - Before (interior panel, stiffened, k = 5 + 5/2² = 6.25): √(29,000 × 6.25/50) = 60.21, 1.40 × 60.21 = 84.29 < 94, C = 1.57 × 3,625/8,836 = 0.644; tension field (2Dt<sub>w</sub>/(b<sub>fc</sub>t<sub>fc</sub> + b<sub>ft</sub>t<sub>ft</sub>) ≤ 2.5, Eq. 6.10.9.3.2-2): V<sub>n</sub> = 681.50[0.644 + 0.87(1 − 0.644)/√(1 + 2²)] = 681.50 × 0.7826 = **533.32 kip**; V<sub>u</sub> at the stiffener = 1.25(73.7 + 13.4) + 1.50(11.1) + 1.75(107.5) = 108.88 + 16.65 + 188.13 = **313.65 kip**; ratio **0.59**. TS5: 94 ≤ 3(47) = 141 in, pass.
+  - After (end panel, d<sub>o</sub> = 94 > 1.5D = 70.5 in, unstiffened per EK1, k = 5): √(29,000 × 5/50) = 53.85, C = 1.57 × 2,900/8,836 = 0.515; V<sub>n</sub> = 0.515 × 681.50 = **351.16 kip** (Eq. 6.10.9.2-1); V<sub>u</sub> at the bearing (Q4) = 1.25(81.5 + 14.9) + 1.50(12.3) + 1.75(115.3) = 120.50 + 18.45 + 201.78 = **340.73 kip**; ratio **0.97** (pass). TS5: 94 > 70.5 in, advisory "(treated as unstiffened in TS4)".
+  - The other pier panels: Span 2 interior 313.90 kip / 0.59 → 341.23 kip / 0.97; exterior 283.48 / 0.53 → 308.23 / 0.88 (Span 1) and 283.73 / 0.53 → 308.60 / 0.88 (Span 2). The abutment panels (already end panels) change with Q4 only: 313.77 → 340.98 kip (0.89 → 0.97). Status: all checks pass before and after.
+- **Check case (2 × 90 ft simple spans, 10 girders at 4 ft, overhangs 2.25 ft, quick suggestion D = 30 in, t<sub>w</sub> = 1/2 in, connection plates only at 25 ft, d<sub>o</sub> = 300 in):** pier rows `end: 'no'` → `'yes'` (location text "panel 1" → "panel 1 (end)"); φ<sub>v</sub>V<sub>n</sub> = 435.00 kip both (unstiffened, C = 1.0); V<sub>u</sub> (Q4) interior 91.00 → 153.38 kip (0.21 → 0.35), exterior 77.58 → 133.65 kip (0.18 → 0.31); TS5 not applicable in both (connection plates only).
+- **Unchanged:** continuous units (2 × 90 ft continuous: TS rows and every TS check identical to Q4 alone; the built-in 110-140-110 ft example: identical), single simple spans (both supports are abutments), Suggest / Full design / Alternatives / width study results (EK3 already sized these ends).
+- **How verified:** `node --check`; headless Chromium Q4-only vs Q4 + Q5 for the cases above.
+- **Other copies:** none. **Open items:** none.
+
+### Exact changes (Q5): decoded PlateLine (unified diff)
+
+```diff
+--- PlateLine (after Q4)
++++ PlateLine (after Q5)
+@@ -3478,3 +3478,4 @@
+     spans.forEach(k => { const x0 = m.sup[k], x1 = m.sup[k + 1];
+-      [[x0 + doFt, k, 1], [x1 - doFt, k + 1, -1]].forEach(([x, ks, dir]) => { const s = sec(x), end = ks === 0 || ks === nS - 1;
++      // end panel: next to an abutment, or next to any support of a simple span (each span is a girder with two ends; Q5)
++      [[x0 + doFt, k, 1], [x1 - doFt, k + 1, -1]].forEach(([x, ks, dir]) => { const s = sec(x), end = ks === 0 || ks === nS - 1 || !m.cont;
+         ts.rows.push({ name: `Span ${k + 1}, first ${stiff ? 'stiffener' : 'connection plate'} from ${supN(ks)}, ${TT(gt)}`, type: stiff ? 'A' : 'B', D: s.D, tw: s.tw, bfc: s.topB, tfc: s.topT, bft: s.botB, tft: s.botT, bfw: bfw(x), end: end ? 'yes' : 'no', do1: r2(doIn), do2: r2(doIn), ...shear(T, x), df: 0, ...(end ? shearIn(T, Math.min(x, m.sup[ks]), Math.max(x, m.sup[ks])) : {}) }); });
+```
