@@ -8111,3 +8111,313 @@ Main page (Girder section, Shear connectors, Fatigue module note, Manual) and th
 -    <ul class="dlist"><li>Flexural resistance: Strength I, Service II flange stresses, and constructibility during deck casting (6.10.3, 6.10.4, 6.10.6 to 6.10.8)</li><li>Shear resistance and transverse stiffener spacing (6.10.9, 6.10.11.1)</li><li>Fatigue at flange transitions, stiffener and connection plate welds (6.6.1)</li><li>Refined camber including deck pour sequence and vertical profile (preliminary values are on the Analysis tab)</li><li>Bearing stiffener axial (column) resistance, cross-frame members and connections, field splice design (6.10.11.2.4, 6.7.4, 6.13.6)</li><li>Shear connector design (6.10.10)</li><li>Economy of each flange transition (needs moment demand)</li></ul>`);
 +    <ul class="dlist"><li>Flexural resistance: Strength I, Service II flange stresses, and constructibility during deck casting (6.10.3, 6.10.4, 6.10.6 to 6.10.8)</li><li>Shear resistance and transverse stiffener spacing (6.10.9, 6.10.11.1)</li><li>Fatigue at flange transitions, stiffener and connection plate welds (6.6.1)</li><li>Refined camber including deck pour sequence and vertical profile (preliminary values are on the Analysis tab)</li><li>Cross-frame members and connections, field splice design (6.7.4, 6.13.6)</li><li>Shear connector design (6.10.10)</li><li>Economy of each flange transition (needs moment demand)</li></ul>`);
 ```
+
+## 2026-10-13 — PR: claude/girderdetail-gs-anywhere (Girder section: check at any location; engineer-approved feature; PR link added after merge)
+
+Main page only; `PL_B64` (embedded Preliminary sizing) is not touched. New UI plus a wrapper around existing code. No formula, factor, check, status, unit or code reference changed. The module's rows, checks, Design all and report are unchanged (hashes below). Saved data: one new optional UI key, `P.ui.gsAny = { g, x, snap }` (girder, station, snap mode), plus the collapse flags `P.ui.col['ga-…']`. No existing key or format changed and no migration is needed: older files do not have the key, and older versions ignore it. No `bridgeSuite.v1.*` payload changes. Tools containing shared snippets touched: none.
+
+### LOC1. Girder section: new output tab "Any location" (check any station of any girder)   [new feature] [existing results bit-identical]
+- **What it does:** the tab is shown only in the Girder section module. Controls:
+  - girder picker G1…Gn; the default is the exterior girder (G1 or G<sub>n</sub>) with the larger Strength I moment from Structural analysis;
+  - station box (ft) and slider;
+  - snap to analysis nodes, supports, flange and web changes, the selected girder's cross-frames and diaphragms, or all key points;
+  - ◀ ▶ step buttons, and ◀ Peak, Max., Peak ▶.
+
+  At the station, one Girder section row is built and run through the unchanged `GM.gs.compute` and `GM.gs.checks` (GS1–GS19). The tab shows:
+  - a checks-at-a-glance table;
+  - the row (section, L<sub>b</sub>/L<sub>b,C</sub>/C<sub>b</sub>, d<sub>o</sub>, all demands; `GM.gs.echo`);
+  - every check, with every item worked (Checks-tab markup);
+  - in a collapsed card, the modular ratio, `GM.gs.combos` and `GM.gs.capacity` for this row.
+
+  A plot shows the largest ratio, overall and per check group, at every analysis node of the girder, with a station marker. Clicking the plot moves the station. The plot is computed when the tab opens and cached until an input changes in this module, Structural analysis, LLDF and DLs, or Preliminary sizing.
+- **How the row is built (reuse, no new engineering rules):**
+  - **Demands:** `GM.sa.compute({ ...P.sa, girder: g })`. The arrays are assembled exactly as `getDemands('sa:g')` does: `gsaSA` copies the `arr`/`reac` lines of `getDemands`, including the deck-placement sequence `MDCc` from `saSeq`. The analysis object is the one Preliminary sizing makes from them (a copy of the `ANx` line of its `pl-export-req` handler).
+  - **Row:** Preliminary sizing's own `detailExport(P, M, ANx, FR, extra)`, called in the embedded page with the station as an `extra` row (the path its "custom station" send uses). It supplies:
+    - the section from the plates at x, and b<sub>eff</sub>;
+    - L<sub>b</sub> and C<sub>b</sub> from the bracing layout (`feCb`), and the nonprismatic flange;
+    - the flexure region, from the larger Strength I moment at the nearest node;
+    - d<sub>o</sub>, and f<sub>ℓ</sub> from skew;
+    - the shears (the largest of the element and its neighbours) and the fatigue M and V.
+  - **Stations:**
+    - at a flange or web change, both sides (x ∓ 0.01 ft) are checked and the smaller section is marked;
+    - at an interior support, x − 0.01 ft, as the Pier rows;
+    - at the girder ends, 0.01 ft inside.
+  - **Three new wrapper rules (stated on the tab):**
+    1. **Interpolation.** More than 0.01 ft from an analysis node, the moments M<sub>DC1</sub>, M<sub>DC2</sub>, M<sub>DW</sub>, M<sub>LL+</sub>, M<sub>LL−</sub>, M<sub>CL</sub>, M<sub>f</sub>± and M<sub>DCc</sub> are interpolated linearly and rounded to 0.1 k-ft, as the builder rounds. At a node, the node values are used, as in the builder.
+    2. **End panel.** A stiffened web within d<sub>o</sub> of an abutment bearing (or of any bearing of a simple span) gets `end = 'yes'`: V<sub>n</sub> = CV<sub>p</sub> (6.10.9.3.3), and GS18 does not apply. This is the rule of the Transverse stiffeners end-panel rows. The existing GS rows never fall in an end panel.
+    3. **Abutment bearing.** Both Strength I moments there are round-off (about 1e-10 k-ft), so the builder's sign test gives negative flexure with C<sub>b</sub> = 0, which is an input error. When both moments are below 0.001 k-ft, the row is set to positive flexure with L<sub>b</sub> = L<sub>b,C</sub>, C<sub>b</sub> = 1 and a prismatic section. This is what the builder produces for a positive row.
+  - Materials, deck, load factors and the Fatigue I/II limit state are this module's current inputs (`{ ...P.gs, rows: [row] }`), the same as for the module's own rows.
+- **Ratio plot:**
+  - All nodes (369 rows on the built-in example) go through one builder call and one compute/checks call. Rows with an input error are left out and show as a gap.
+  - "Governing" is the largest ratio over all items, leaving out N/A items and "(not the method in use)" items. Each check group has its own line.
+  - The Peak and Max. buttons use the largest ratio of the demand checks: every group except Proportions, which depends on the plates only.
+- **Where:**
+  - CSS: 4 lines after `.pl-plot { width: 100%; …`, including `@media print { #tab-gsany { display: none !important; } }`.
+  - Tab button after `data-tab="checks">Checks</button>`.
+  - Panel after `<div class="tab-panel" id="tab-checks"></div>`.
+  - New block after `GM.gs.capacity` (anchor `const GA = { key: ''`).
+  - `gmRecompute` (anchor `RS = m.compute(d);`).
+  - End of `applyMod` (anchor `// Girder section: check at any location (LOC1)`).
+- **Exact changes:** unified diff against main 9d7fa9b, no context:
+
+```diff
+@@ -1020,0 +1021,4 @@ input.ovr, select.ovr { outline: 2px solid #c98a1b; outline-offset: -1px; backgr
++.ga-ctl { margin-bottom: 6px; } .ga-btns { display: inline-flex; gap: 4px; } .ga-sl { width: 100%; margin: 6px 0 0; accent-color: var(--blue); } .ga-scale { position: relative; height: 18px; margin: 0 8px 6px; font: 500 11.5px var(--cond); color: var(--text-dim); } .ga-scale span { position: absolute; transform: translateX(-50%); white-space: nowrap; }
++.ga-plot { width: 100%; min-height: 40px; } .ga-head { display: flex; justify-content: space-between; gap: 16px; align-items: center; padding: 10px 12px; margin-bottom: 10px; border: 1px solid var(--border); border-left: 5px solid var(--pass); font-size: 13.5px; line-height: 1.45; } .ga-head.fail { border-left-color: var(--fail); }
++.ga-gov { display: flex; flex-direction: column; align-items: flex-end; min-width: 150px; text-align: right; font-size: 12px; color: var(--text-dim); } .ga-gov b { font: 700 24px var(--mono); color: var(--pass); } .ga-gov b.fail { color: var(--fail); }
++@media print { #tab-gsany { display: none !important; } }
+@@ -1194 +1198 @@ window.MathJax = { tex: { inlineMath: [['\\(','\\)']], displayMath: [['\\[','\\]
+-    <button type="button" class="tab-btn active" data-tab="summary">Summary</button><button type="button" class="tab-btn" data-tab="combos">Combinations</button><button type="button" class="tab-btn" data-tab="cap">Section capacity</button><button type="button" class="tab-btn" data-tab="stress" hidden>Stresses</button><button type="button" class="tab-btn" data-tab="checks">Checks</button>
++    <button type="button" class="tab-btn active" data-tab="summary">Summary</button><button type="button" class="tab-btn" data-tab="combos">Combinations</button><button type="button" class="tab-btn" data-tab="cap">Section capacity</button><button type="button" class="tab-btn" data-tab="stress" hidden>Stresses</button><button type="button" class="tab-btn" data-tab="checks">Checks</button><button type="button" class="tab-btn" data-tab="gsany" hidden>Any location</button>
+@@ -1198 +1202 @@ window.MathJax = { tex: { inlineMath: [['\\(','\\)']], displayMath: [['\\[','\\]
+-    <div class="tab-panel active" id="tab-summary"></div><div class="tab-panel" id="tab-combos"></div><div class="tab-panel" id="tab-cap"></div><div class="tab-panel" id="tab-stress"></div><div class="tab-panel" id="tab-checks"></div><div class="tab-panel" id="tab-drawings"></div><div class="tab-panel" id="tab-v3d"></div><div class="tab-panel" id="tab-geometry"></div><div class="tab-panel" id="tab-report"></div><div class="tab-panel" id="tab-manual"></div>
++    <div class="tab-panel active" id="tab-summary"></div><div class="tab-panel" id="tab-combos"></div><div class="tab-panel" id="tab-cap"></div><div class="tab-panel" id="tab-stress"></div><div class="tab-panel" id="tab-checks"></div><div class="tab-panel" id="tab-gsany"></div><div class="tab-panel" id="tab-drawings"></div><div class="tab-panel" id="tab-v3d"></div><div class="tab-panel" id="tab-geometry"></div><div class="tab-panel" id="tab-report"></div><div class="tab-panel" id="tab-manual"></div>
+@@ -3720,0 +3725,199 @@ GM.gs.capacity = function (R) {
++/* =====================================================================
++   Girder section: check at any location (LOC1, 2026-10-13)
++   A station picked on the girder is checked exactly like a Girder section row imported from Structural analysis ("Get demands", sa:Gi):
++   the row is built by Preliminary sizing's own row builder (detailExport, the "extra" rows of its custom-station send) from this module's
++   analysis arrays of the selected girder, so the section, L_b and C_b from the bracing layout, the flexure region, d_o, the deck rebar and
++   the demands are taken the same way; between analysis nodes the moments are interpolated linearly. The row then runs through GM.gs.compute
++   and GM.gs.checks unchanged. Nothing here is saved except the view (P.ui.gsAny: girder, station, snap); the rows, checks and report of the
++   module are not touched.
++   ===================================================================== */
++const GA = { key: '', AN: null, g: 0, S: null, plot: null, plotKey: '', tF: null, tS: null, busy: false, last: null };
++const GA_GRP = [['Strength I flexure', 'Flexure', '#2346c2'], ['Strength I shear', 'Shear', '#c2410c'], ['Service II', 'Service II', '#15724a'], ['Constructibility', 'Constructibility', '#7c3aed'], ['Fatigue', 'Fatigue', '#a16207'], ['Proportions', 'Proportions', '#64748b']];
++function gsaUi() { const u = P.ui.gsAny = P.ui.gsAny && typeof P.ui.gsAny === 'object' ? P.ui.gsAny : {}; if (!u.snap) u.snap = 'node'; return u; }
++function gsaPL() {   // the embedded Preliminary sizing page: its analysis, framing and row builder
++  if (!PL_FRAME) plEnsure(); const W = PL_FRAME && PL_FRAME.contentWindow;
++  if (!W || !PL_FRAME.dataset.ready || typeof W.detailExport !== 'function') return { wait: true };
++  if (GA.W !== W) { GA.W = W; GA.get = W.eval('() => ({ P, M, AN, FR })'); }
++  const G = GA.get(); if (!G.M || (G.M.errors && G.M.errors.length)) return { err: 'Preliminary sizing has input errors; fix them first.' };
++  if (!G.AN || G.AN.errors) return { err: 'The preliminary analysis is not available.' };
++  return { W, G };
++}
++// the Structural analysis arrays of girder g, as "Get demands" sends them (getDemands), and the analysis Preliminary sizing builds from them (its pl-export-req handler, src 'sa')
++function gsaSA(g, G) {
++  const R = GM.sa.compute({ ...P.sa, girder: g }); if (R.errors.length) return { err: `Structural analysis: ${R.errors[0]}` };
++  const A = a => Array.from(a), add = (a, b) => A(a).map((v, i) => v + b[i]);
++  const arr = { MDC1: A(R.MDC1), MDC2: A(R.MDC2), MDW: A(R.MDW), MCL: A(R.MCL), Mp: add(R.LLp, R.PLp), Mn: add(R.LLn, R.PLn), Mup: A(R.CM.StrI.max), Mun: A(R.CM.StrI.min), Mc: A(R.MDC1).map((v, i) => 1.25 * v + 1.5 * R.MCL[i]),
++    MfP: A(R.FMp), MfN: A(R.FMn), VDC1: A(R.VDC1), VDC2: A(R.VDC2), VDW: A(R.VDW), VCL: A(R.VCL), Vp: add(R.LVp, R.PVp), Vn: add(R.LVn, R.PVn), Vfr: A(R.FVp).map((v, e) => v - R.FVn[e]), Vfm: A(R.FVp).map((v, e) => Math.max(v, -R.FVn[e])) };
++  { const S = saSeq(R); if (S) arr.MDCc = A(R.MDC1).map((v, i) => v >= 0 ? Math.max(v, S.envP[i]) : Math.min(v, S.envN[i])); }
++  const reac = R.reac.map(r => ({ k: r.k, name: r.name, DC1: r.DC1, DC: r.DC1 + r.DC2, DW: r.DW, llMax: r.llMax + r.Pp, llMin: r.llMin + r.Pn, strMin: r.cmb.StrI.min, strMax: r.cmb.StrI.max }));
++  const AN = G.AN, gt = R.ext ? 'ext' : 'int', k0 = Object.keys(AN.R.types)[0], toF = o => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, Float64Array.from(v)]));
++  if (AN.xs.length !== R.N) return { err: 'Preliminary sizing and Structural analysis use different analysis nodes; recalculate Preliminary sizing.' };
++  const ANx = { ...AN, types: { [gt]: { ...(AN.types[gt] || AN.types[k0]), reac } }, R: { ...AN.R, types: { [gt]: { ...(AN.R.types[gt] || AN.R.types[k0]), ...toF(arr) } } }, beffFt: R.beffFt, gLabel: `G${g}`, rebarPct: nm(R.p.rebar) };
++  // snap targets: analysis nodes, supports, flange and web changes (plates of Preliminary sizing), cross-frames and diaphragms of this girder
++  const xs = A(R.xs), L = xs[xs.length - 1], pl = R.b.plates, chg = [];
++  [['top', 'top flange'], ['bot', 'bottom flange'], ['web', 'web']].forEach(([k, w]) => (pl[k] || []).forEach((s, i, a) => { const n = a[i + 1]; if (!n || (n.b === s.b && n.t === s.t)) return; const x = +s.x1.toFixed(3), c = chg.find(q => Math.abs(q.x - x) < 0.011); if (c) c.what.push(w); else chg.push({ x, what: [w] }); }));
++  chg.sort((a, b) => a.x - b.x);
++  const fr = ((G.FR.girders[g - 1] || {}).pts || []).map(q => ({ x: +q.s.toFixed(3), sup: q.f.type !== 'int' })).filter((q, i, a) => a.findIndex(o => Math.abs(o.x - q.x) < 0.011) === i).sort((a, b) => a.x - b.x);
++  const sup = A(R.sup).map(i => xs[i]), F = G.P.framing, stiff = F.stiff === 'on', doFt = stiff ? F.doRatio * G.M.D / 12 : 0;
++  return { g, R, arr, ANx, gt, xs, L, chg, fr, sup, cont: G.M.cont, doFt, ext: R.ext };
++}
++function gsaState() {   // cached per girder until an input changes (this module, Structural analysis, LLDF and DLs, or a new preliminary analysis)
++  const L0 = gsaPL(); if (L0.wait || L0.err) return L0;
++  const nb = (P.df.bridge && P.df.bridge.nb) || 0, u = gsaUi(), key = JSON.stringify([P.sa, P.df]);
++  if (key !== GA.key || GA.AN !== L0.G.AN) { GA.key = key; GA.AN = L0.G.AN; GA.byG = {}; GA.plot = null; GA.plotKey = ''; GA.dflt = null; }
++  if (!(u.g >= 1 && u.g <= nb)) {   // default: the exterior girder with the larger Strength I moment
++    if (!GA.dflt) { let best = 1, bm = -1; [...new Set([1, nb])].forEach(g => { const S0 = GA.byG[g] = GA.byG[g] || gsaSA(g, L0.G); if (S0.err) return; const m = Math.max(...S0.arr.Mup.map(Math.abs), ...S0.arr.Mun.map(Math.abs)); if (m > bm) { bm = m; best = g; } }); GA.dflt = best; }
++    u.g = GA.dflt; }
++  if (!GA.byG[u.g]) GA.byG[u.g] = gsaSA(u.g, L0.G);
++  const S = GA.byG[u.g]; if (S.err) return S;
++  if (!(u.x >= 0 && u.x <= S.L)) { let i = 0; S.arr.Mup.forEach((v, k) => { if (v > S.arr.Mup[i]) i = k; }); u.x = S.xs[i]; }
++  return (GA.cur = { ...L0, S, nb });
++}
++// the station(s) checked for a picked x: both sides of a flange or web change, the Pier-row side (x − 0.01 ft) at an interior support, inside the girder at its ends
++function gsaStations(S, x) {
++  const L = S.L, c = S.chg.find(q => Math.abs(q.x - x) < 0.011);
++  if (c && c.x > 0.02 && c.x < L - 0.02) return [{ x: c.x - 0.01, side: 'left', chg: c }, { x: c.x + 0.01, side: 'right', chg: c }];
++  const sp = S.sup.find(v => Math.abs(v - x) < 0.011);
++  if (sp != null) return [{ x: sp < 0.02 ? 0.01 : sp > L - 0.02 ? L - 0.01 : sp - 0.01 }];
++  return [{ x: Math.min(Math.max(x, 0.01), L - 0.01) }];
++}
++function gsaRows(st, S, list, names) {   // Girder section rows at the stations in list, by Preliminary sizing's row builder
++  const ext = list.map((q, k) => ({ gt: S.gt, x: q.x, name: names ? names[k] : `@${k}` })), dx = st.W.detailExport(st.G.P, st.G.M, S.ANx, st.G.FR, ext);
++  if (!dx || !dx.gs) return null;
++  const rows = dx.gs.rows.slice(-ext.length), xs = S.xs, N = xs.length, r1 = v => +(+v).toFixed(1), a = S.arr;
++  rows.forEach((r, k) => { const x = list[k].x; let i0 = 0; while (i0 < N - 2 && xs[i0 + 1] <= x) i0++;
++    const t = (x - xs[i0]) / (xs[i0 + 1] - xs[i0]), near = Math.abs(x - xs[i0]) <= 0.0101 ? i0 : Math.abs(xs[i0 + 1] - x) <= 0.0101 ? i0 + 1 : -1;
++    if (near < 0) { const ip = A => A[i0] + t * (A[i0 + 1] - A[i0]);   // between analysis nodes: moments interpolated (the builder takes the nearest node)
++      Object.assign(r, { MDC1: r1(ip(a.MDC1)), MDC2: r1(ip(a.MDC2)), MDW: r1(ip(a.MDW)), MLLp: r1(Math.max(0, ip(a.Mp))), MLLn: r1(Math.min(0, ip(a.Mn))), MCL: r1(ip(a.MCL)), MfP: r1(ip(a.MfP)), MfN: r1(ip(a.MfN)) });
++      if (a.MDCc) r.MDCc = +ip(a.MDCc).toFixed(1); }
++    // at an abutment bearing both Strength I moments are zero (round-off of 1e-10 k-ft); the builder's sign test then reads negative flexure with C_b = 0: the row is taken as positive flexure, as the builder makes it (L_b = cross-frame spacing, C_b = 1, prismatic)
++    { let i = 0; xs.forEach((v, q) => { if (Math.abs(v - x) < Math.abs(xs[i] - x)) i = q; }); if (r.region === 'neg' && Math.max(Math.abs(a.Mup[i]), Math.abs(a.Mun[i])) < 1e-3) Object.assign(r, { region: 'pos', Lb: r.LbC, Cb: 1, lbB: 0, lbT: 0 }); }
++    // end panel (6.10.9.3.3): a stiffened web within d_o of an abutment bearing, or of any bearing of a simple span, as the Transverse stiffeners rows
++    if (r.do > 0 && S.sup.some((s, k2) => (k2 === 0 || k2 === S.sup.length - 1 || !S.cont) && Math.abs(x - s) <= S.doFt + 1e-6)) r.end = 'yes';
++    r.x = +x.toFixed(2); });
++  rows.forEach((r, k) => { r.name = names ? names[k] : `@${k}`; });
++  return { rows, gen: dx.gs.gen };
++}
++function gsaRun(rows) { const p = { ...P.gs, rows: rows.map(r => ({ ...r })) }, R = GM.gs.compute(p); return R.errors.length ? { err: R.errors[0], R } : { R, CK: GM.gs.checks(R) }; }
++// the largest ratio of each row, overall and per check group; items of the method not in use, and N/A items, are left out
++function gsaRatios(CK, n, idx) {
++  const gov = new Array(n).fill(0), grp = {}, at = new Array(n).fill(null); GA_GRP.forEach(([g]) => grp[g] = new Array(n).fill(null));
++  CK.forEach(c => c.items.forEach(it => { if (it.st === 'na' || !isFinite(it.r) || / \(not the method in use\)$/.test(it.loc)) return; const k = idx(it.loc); if (k == null || k < 0 || k >= n) return;
++    if (it.r > gov[k]) { const w = it.loc.replace(/^@\d+(, )?/, ''); gov[k] = it.r; at[k] = w ? `${c.id}, ${w}` : c.id; } if (grp[c.grp]) grp[c.grp][k] = Math.max(grp[c.grp][k] ?? 0, it.r); }));
++  return { gov, grp, at };
++}
++function gsaLocTxt(S, x) {
++  const sp = S.sup; let k = 0; while (k < sp.length - 2 && x > sp[k + 1] + 1e-9) k++;
++  const sn = j => j === 0 ? 'Abut. 1' : j === sp.length - 1 ? 'Abut. 2' : `Pier ${j}`, s = sp.findIndex(v => Math.abs(v - x) < 0.011);
++  const c = S.chg.find(q => Math.abs(q.x - x) < 0.011), f = S.fr.find(q => Math.abs(q.x - x) < 0.011);
++  let t = s >= 0 ? `at ${sn(s)}` : `Span ${k + 1}, ${f3((x - sp[k]) / (sp[k + 1] - sp[k]))}L`;
++  if (c) t += `; ${c.what.join(' and ')} change (both sides checked)`; if (f && s < 0) t += '; cross-frame';
++  return t;
++}
++function gsaTargets(S, mode) { const u = (a, b) => [...a, ...b].sort((p, q) => p - q).filter((v, i, z) => i === 0 || v - z[i - 1] > 0.011);
++  return mode === 'sup' ? S.sup : mode === 'chg' ? S.chg.map(c => c.x) : mode === 'xf' ? S.fr.map(q => q.x) : mode === 'key' ? u(u(S.sup, S.chg.map(c => c.x)), S.fr.map(q => q.x)) : S.xs; }
++function gsaSnap(S, x) { const m = gsaUi().snap; if (m === 'none') return Math.round(x * 100) / 100; const T = gsaTargets(S, m); return T.reduce((b, v) => Math.abs(v - x) < Math.abs(b - x) ? v : b, T[0] ?? x); }
++function gsaRefresh() {
++  const host = $('#tab-gsany'); if (!host) return;
++  if (P.mod !== 'gs' || P.ui.otab !== 'gsany') { GA.stale = true; return; }
++  GA.stale = false; clearTimeout(GA.tW);
++  GA.cur = null; const st = gsaState();
++  if (st.wait) { host.innerHTML = card('ga-ctl', 'Check at any location', '', '<p class="note-p">Loading Preliminary sizing (it builds the rows from the bridge layout)…</p>'); GA.tW = setTimeout(gsaRefresh, 1500); return; }
++  if (st.err) { host.innerHTML = card('ga-ctl', 'Check at any location', '', `<div class="alert warn" style="margin:0"><b>Not available.</b> ${esc(st.err)} The check at any location uses the Structural analysis module's results for the selected girder; it returns once the analysis runs without errors.</div>`); return; }
++  const S = st.S, u = gsaUi(), nb = st.nb, modes = [['none', 'Off (0.01 ft)'], ['node', 'Analysis nodes'], ['sup', 'Supports'], ['chg', 'Flange and web changes'], ['xf', 'Cross-frames and diaphragms'], ['key', 'All of the above but nodes']];
++  host.innerHTML = `<div class="ctl-row"><button type="button" class="dg-btn" data-exp="gsany">Expand all</button><button type="button" class="dg-btn" data-col="gsany">Collapse all</button></div>`
++    + card('ga-ctl', 'Check at any location', 'Same rows and checks as Girder section (GS1 to GS19)', `<div class="ctl-row dfv-ctl ga-ctl">
++      <label>Girder <select id="ga-g">${[...Array(nb)].map((_, i) => `<option value="${i + 1}" ${i + 1 === u.g ? 'selected' : ''}>G${i + 1} (${i === 0 || i === nb - 1 ? 'exterior' : 'interior'})</option>`).join('')}</select></label>
++      <label>Station <input type="number" id="ga-x" step="0.01" min="0" max="${S.L}" value="${(+u.x).toFixed(2)}" style="width:110px;padding:4px 8px"> ft</label>
++      <label>Snap to <select id="ga-snap">${modes.map(([k, t]) => `<option value="${k}" ${k === u.snap ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
++      <span class="ga-btns"><button type="button" class="dg-btn" id="ga-prev" title="Previous snap point">◀</button><button type="button" class="dg-btn" id="ga-next" title="Next snap point">▶</button></span>
++      <span class="ga-btns"><button type="button" class="dg-btn" id="ga-pkp" title="Previous peak of the largest demand-check ratio">◀ Peak</button><button type="button" class="dg-btn" id="ga-max" title="Largest demand-check ratio on this girder (all groups but Proportions)">Max.</button><button type="button" class="dg-btn" id="ga-pkn" title="Next peak of the largest demand-check ratio">Peak ▶</button></span></div>
++      <input type="range" id="ga-sl" class="ga-sl" min="0" max="${S.L}" step="0.01" value="${u.x}" aria-label="Station along the girder">
++      <div class="ga-scale">${S.sup.map((v, k) => `<span style="left:${v / S.L * 100}%">${k === 0 ? 'Abut. 1' : k === S.sup.length - 1 ? 'Abut. 2' : `Pier ${k}`}</span>`).join('')}</div>
++      <div id="ga-plot" class="ga-plot"></div><p class="note-p" id="ga-plot-note"></p>
++      <p class="note-p">Demands are this module's Structural analysis results for the selected girder (as "Get demands" from Structural analysis); the section, L<sub>b</sub> and C<sub>b</sub> from the bracing layout, d<sub>o</sub>, and the flexure region (the larger of the Strength I moments at the nearest node) are taken as for the Girder section rows Preliminary sizing builds. Moments are interpolated between analysis nodes; shears are the largest in the element at the station and its neighbours, as the rows. Materials, deck and load factors are this module's inputs. Not saved as a location and not in the report.</p>`)
++    + '<div id="ga-res"></div>';
++  gsaShow(true); setTimeout(() => gsaPlot(st), 30);
++}
++function gsaSet(x, now) { const st = GA.cur; if (!st) return; const u = gsaUi(); u.x = Math.min(Math.max(+x, 0), st.S.L); const xi = $('#ga-x'), sl = $('#ga-sl'); if (xi && document.activeElement !== xi) xi.value = u.x.toFixed(2); if (sl) sl.value = u.x; autosave(); gsaShow(now); }
++function gsaShow(now) {   // results: the summary at once, the worked calculations when the station settles
++  clearTimeout(GA.tF); clearTimeout(GA.tS);
++  const go = () => { const st = GA.cur; if (!st) return; const S = st.S, u = gsaUi(), x = +u.x, list = gsaStations(S, x);
++    const nm0 = q => `G${S.g}, ${q.x.toFixed(2)} ft${q.side ? ` (${q.side} side)` : ''}`, B = gsaRows(st, S, list, list.map(nm0)), res = $('#ga-res'); if (!res) return;
++    gsaMark(x);
++    if (!B) { res.innerHTML = '<div class="alert warn">Preliminary sizing could not build the row.</div>'; return; }
++    if (list.length > 1) { const ar = r => r.topB * r.topT + r.botB * r.botT + r.D * r.tw, sm = ar(B.rows[0]) <= ar(B.rows[1]) ? 0 : 1; B.rows[sm].name += ', smaller section'; }
++    const O = gsaRun(B.rows); GA.last = { x, O };
++    if (O.err) { res.innerHTML = `<div class="alert fail"><b>The row has an input error:</b> ${esc(O.err)}</div>`; return; }
++    const R = O.R, CK = O.CK, c = { fail: 0, warn: 0 }; CK.forEach(k => { if (c[k.status] != null) c[k.status]++; });
++    const gv = CK.filter(k => k.items.length && k.src === 'Code').map(k => ({ k, it: k.items[k.gov] })).filter(q => q.it.r !== undefined && isFinite(q.it.r)).sort((a, b) => b.it.r - a.it.r)[0];
++    const E = GM.gs.echo(R), tb = (T, cls) => `<div class="tscroll"><table class="tbl ${cls || ''}"><thead><tr>${T[0].map(h => `<th>${sub(h)}</th>`).join('')}</tr></thead><tbody>${T[1].map(r => `<tr>${r.map(v => `<td>${v}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
++    const rowsT = CK.map(k => { const g = k.items[k.gov]; return `<tr class="row-${k.status}"><td><span class="cid">${k.id}</span></td><td>${esc(k.grp)}</td><td>${esc(k.title)}</td><td class="lbl">${g ? sub(g.loc) : `<span class="n-dim">${esc(k.naWhy || '')}</span>`}</td><td class="val">${g && g.r !== undefined && isFinite(g.r) ? f2(g.r) : '—'}</td><td>${badge(k.status)}</td></tr>`; }).join('');
++    const head = `<div class="ga-head ${c.fail ? 'fail' : 'pass'}"><div><b>G${S.g} at ${x.toFixed(2)} ft</b> <span class="n-dim">(${esc(gsaLocTxt(S, x))})</span><br>${c.fail ? `${c.fail} check${c.fail > 1 ? 's' : ''} fail` : 'Every check is satisfied'}${c.warn ? `, ${c.warn} warning${c.warn > 1 ? 's' : ''}` : ''}. ${R.rows.map(r => `${esc(r.name)}: ${r.pos ? 'positive' : 'negative'} flexure`).join('; ')}.</div><div class="ga-gov"><span>Governing ratio</span><b class="${gv && gv.it.r > 1 ? 'fail' : ''}">${gv ? f2(gv.it.r) : '—'}</b><span>${gv ? `${gv.k.id}, ${sub(gv.it.loc)}` : ''}</span></div></div>`;
++    res.innerHTML = card('ga-sum', 'Checks at this station', `G${S.g}, ${x.toFixed(2)} ft`, head + `<div class="tscroll"><table class="tbl sumtbl"><thead><tr><th>ID</th><th>Group</th><th>Check</th><th>Governing</th><th class="right">Ratio</th><th>Status</th></tr></thead><tbody>${rowsT}</tbody></table></div>`)
++      + card('ga-row', 'Row checked (section, bracing, and demands)', 'From Structural analysis', tb(E.table) + tb(E.table2) + (R.rows.some(r => r.end === 'yes') ? '<p class="note-p">End panel: the station is within d<sub>o</sub> of an abutment bearing (or a bearing of a simple span), so V<sub>n</sub> = CV<sub>p</sub> (6.10.9.3.3) and GS18 does not apply.</p>' : ''))
++      + '<div id="ga-calc" class="ga-calc"></div>';
++    applyCollapse();
++    clearTimeout(GA.tS); GA.tS = setTimeout(() => gsaCalc(R, CK), now ? 0 : 350); };
++  if (now) go(); else GA.tF = setTimeout(go, 40);
++}
++function gsaCalc(R, CK) {   // full worked calculations of every check (Checks tab layout, every item worked), then the section, stresses and resistances
++  const el = $('#ga-calc'); if (!el || !GA.last || GA.last.O.CK !== CK) return;
++  let h = '';
++  GM.gs.groups.forEach(g => { const ks = CK.filter(k => k.grp === g); if (!ks.length) return; h += `<h3 class="grp-hd">${g}</h3>`;
++    ks.forEach(k => { let b = `<div class="eq-block"><div class="eq-title"><span>Criterion</span><span class="eq-ref">${esc(k.ref)}</span></div><div class="eq-math">\\[${k.sym}\\]</div></div>`;
++      if (!k.items.length) b += `<div class="alert info"><b>Not applicable.</b> ${esc(k.naWhy || '')}</div>`;
++      else { b += `<div class="tscroll"><table class="tbl itbl"><thead><tr><th>${sub(k.cols[0])}</th>${k.cols.slice(1).map(c => `<th class="right">${sub(c)}</th>`).join('')}<th>Status</th></tr></thead><tbody>${k.items.map((it, i) => `<tr class="${i === k.gov ? 'gov' : ''}"><td class="lbl">${sub(it.loc)}${i === k.gov ? ' <span class="gov-tag">governs</span>' : ''}</td>${it.cells.map(c => `<td class="val">${sub(c)}</td>`).join('')}<td>${badge(it.st)}</td></tr>`).join('')}</tbody></table></div>`;
++        k.items.forEach((it, i) => { if (it.work) b += eq(`${sub(it.loc)}${i === k.gov && k.items.length > 1 ? ' (governs)' : ''}`, '', it.work, it.where, it.st === 'fail' ? 'eq-fail' : ''); }); }
++      if (k.note) b += `<p class="note-p">${sub(k.note)}</p>`;
++      h += card('ga-chk-' + k.id, `<span class="cid">${k.id}</span>${esc(k.title)}`, '', b, `${srcTag(k.src)}${badge(k.status)}`); }); });
++  const re = s => s.replace(/(id|data-cc)="(c[bap][\w-]*)"/g, '$1="ga-$2"');   // the module's own card ids stay unique
++  if (!('ga-more' in P.ui.col)) P.ui.col['ga-more'] = true;
++  h += card('ga-more', 'Section properties, stresses, and resistances at this station', 'Combinations and Resistances tabs, for this row', re((R.MR ? eq('Short-term modular ratio', '5.4.2.4-1', modTex(R.MR)) : '') + GM.gs.combos(R) + GM.gs.capacity(R)));
++  el.innerHTML = h; applyCollapse(); typeset(el);
++}
++function gsaPlot(st) {   // governing ratio along the girder at every analysis node; computed when the tab opens, kept until an input changes
++  const S = st.S, el = $('#ga-plot'), note = $('#ga-plot-note'); if (!el) return;
++  const key = GA.key + '|' + S.g + '|' + JSON.stringify({ ...P.gs, rows: 0, source: 0 });
++  if (GA.plotKey !== key || !GA.plot) {
++    const t0 = performance.now(), list = [], node = [];
++    S.xs.forEach((x, i) => gsaStations(S, x).forEach(q => { list.push(q); node.push(i); }));
++    const B = gsaRows(st, S, list), ok = B ? B.rows.filter(r => { const e = []; numRows([r], GS_SPEC, 'Location', e); return !e.length; }) : [], O = B ? gsaRun(ok) : { err: 'no rows' };   // a row with an input error leaves a gap
++    if (O.err) { GA.plot = { err: O.err }; } else {
++      const n = S.xs.length, Q = gsaRatios(O.CK, list.length, loc => { const m = /^@(\d+)/.exec(loc); return m ? +m[1] : null; });
++      const gov = new Array(n).fill(null), at = new Array(n).fill(''), grp = {}, okN = new Set(ok.map(r => r.name)); GA_GRP.forEach(([g]) => grp[g] = new Array(n).fill(null));
++      list.forEach((q, k) => { const i = node[k]; if (!okN.has('@' + k)) return; if (Q.gov[k] >= (gov[i] ?? -1)) { gov[i] = Q.gov[k]; at[i] = Q.at[k] || ''; } GA_GRP.forEach(([g]) => { const v = Q.grp[g][k]; if (v != null) grp[g][i] = Math.max(grp[g][i] ?? 0, v); }); });
++      // peaks and the largest ratio for the buttons: the demand checks (Proportions, GS1 to GS3, depend on the plates only)
++      const dem = gov.map((_, i) => { const v = GA_GRP.filter(([g]) => g !== 'Proportions').map(([g]) => grp[g][i]).filter(q => q != null); return v.length ? Math.max(...v) : null; });
++      const pk = []; for (let i = 0; i < n; i++) { const a = i > 0 ? dem[i - 1] ?? -1 : -1, b = i < n - 1 ? dem[i + 1] ?? -1 : -1; if (dem[i] > 0 && dem[i] >= a && dem[i] > b) pk.push(S.xs[i]); }
++      GA.plot = { gov, dem, at, grp, pk, ms: performance.now() - t0, n: list.length, bad: list.length - ok.length }; }
++    GA.plotKey = key; }
++  const D = GA.plot;
++  if (D.err) { el.innerHTML = ''; note.innerHTML = `The ratio plot could not be computed: ${esc(D.err)}`; return; }
++  note.innerHTML = `Largest ratio of each check group at every analysis node of G${S.g} (${D.n} rows, ${f0(D.ms)} ms${D.bad ? `; ${D.bad} with an input error left out` : ''}); click the plot to move the station there. The governing line leaves out N/A items and the negative-flexure method not in use. The Peak and Max. buttons follow the largest ratio of the demand checks (all groups but Proportions, which depend on the plates only): ${D.pk.length} peaks.`;
++  if (!window.Plotly) { el.innerHTML = '<p class="note-p">The plot needs Plotly, which loads from the internet.</p>'; return; }
++  const x = S.xs, data = [{ x, y: D.gov, name: 'Governing', mode: 'lines', line: { color: '#17212b', width: 2.6 }, customdata: D.at, hovertemplate: 'Governing %{y:.2f}: %{customdata}<extra></extra>' }]
++    .concat(GA_GRP.map(([g, t, c]) => ({ x, y: D.grp[g], name: t, mode: 'lines', line: { color: c, width: 1.3 }, connectgaps: false, hovertemplate: `${t} %{y:.2f}<extra></extra>` })));
++  const xm = +gsaUi().x, sh = [{ type: 'line', xref: 'x', yref: 'paper', x0: xm, x1: xm, y0: 0, y1: 1, line: { color: '#d97706', width: 2 } }, { type: 'line', xref: 'paper', yref: 'y', x0: 0, x1: 1, y0: 1, y1: 1, line: { color: '#b42318', width: 1, dash: 'dash' } }]
++    .concat(S.sup.map(v => ({ type: 'line', xref: 'x', yref: 'paper', x0: v, x1: v, y0: 0, y1: 1, line: { color: '#9aa3ad', width: 1, dash: 'dot' } })));
++  const lay = plotLayout({ xTitle: 'Station from Abut. 1 bearing (ft)', yTitle: 'Ratio', shapes: sh, xaxis: { range: [0, S.L] }, yaxis: { rangemode: 'tozero' } });
++  el.style.height = '330px'; Plotly.react(el, data, { ...lay, height: 330, margin: { ...lay.margin, t: 10 } }, PL_CFG);
++  if (!el._gaOn) { el._gaOn = 1; el.on('plotly_click', d => { const p = d && d.points && d.points[0]; if (p) gsaSet(p.x, true); }); }
++}
++function gsaMark(x) { const el = $('#ga-plot'); if (el && el.data && window.Plotly) Plotly.relayout(el, { 'shapes[0].x0': x, 'shapes[0].x1': x }); }
++function gsaStep(dir, peaks) { const st = GA.cur; if (!st) return; const S = st.S, x = +gsaUi().x;
++  const T = peaks ? ((GA.plot && GA.plot.pk) || []) : gsaTargets(S, gsaUi().snap === 'none' ? 'node' : gsaUi().snap);
++  const v = dir > 0 ? T.find(t => t > x + 0.011) : [...T].reverse().find(t => t < x - 0.011); if (v != null) gsaSet(v, true); }
++document.addEventListener('click', e => { const t = e.target; if (!t.closest) return;
++  if (t.closest('.tab-btn[data-tab="gsany"]')) { setTimeout(gsaRefresh, 0); return; }
++  const b = t.closest('#ga-prev, #ga-next, #ga-pkp, #ga-pkn, #ga-max'); if (!b) return;
++  if (b.id === 'ga-max') { const D = GA.plot, S = GA.cur && GA.cur.S; if (D && D.dem && S) { let i = 0; D.dem.forEach((v, k) => { if (v > (D.dem[i] ?? -1)) i = k; }); gsaSet(S.xs[i], true); } return; }
++  gsaStep(b.id === 'ga-next' || b.id === 'ga-pkn' ? 1 : -1, b.id === 'ga-pkp' || b.id === 'ga-pkn'); });
++document.addEventListener('input', e => { const t = e.target; if (t.id === 'ga-sl') { const st = GA.cur; if (!st) return; const x = gsaSnap(st.S, +t.value); if (gsaUi().snap !== 'none') t.value = x; gsaSet(x); } });
++document.addEventListener('change', e => { const t = e.target;
++  if (t.id === 'ga-x') { const v = parseFloat(t.value); if (isFinite(v)) gsaSet(v, true); }
++  else if (t.id === 'ga-g') { gsaUi().g = +t.value; delete gsaUi().x; autosave(); gsaRefresh(); }
++  else if (t.id === 'ga-snap') { gsaUi().snap = t.value; autosave(); } });
++document.addEventListener('keydown', e => { if (e.target.id === 'ga-sl' && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) { e.preventDefault(); gsaStep(e.key === 'ArrowRight' ? 1 : -1); } });
++window.addEventListener('plotly-ready', () => { if (P && P.mod === 'gs' && P.ui.otab === 'gsany' && GA.cur) gsaPlot(GA.cur); });
++
+@@ -5607 +5810 @@ function gmRecompute() {
+-  const m = GM[P.mod], d = P[m.id]; RS = m.compute(d);
++  const m = GM[P.mod], d = P[m.id]; RS = m.compute(d); if (m.id === 'gs') setTimeout(gsaRefresh, 0);   // check at any location (LOC1)
+@@ -7426,0 +7630 @@ function applyMod() {
++  { const on = P.mod === 'gs'; $('.tab-btn[data-tab="gsany"]').hidden = !on; if (!on) { $('#tab-gsany').innerHTML = ''; if (P.ui.otab === 'gsany') setOTab('summary'); } }   // Girder section: check at any location (LOC1)
+```
+
+- **Check case (built-in example, G1, Get demands sa:1 from Structural analysis):**
+  - Span 1 max. positive at 44.0 ft: the tab at 44.00 ft gives the same row inputs as the imported row and identical GS1–GS19 items (cells, status, ratio, worked TeX). Governing ratio 0.89 (GS2, top flange b/2t = 16/(2·0.75) = 10.67 ≤ 12, ratio 0.889).
+  - Pier 1 at 109.99 ft: identical; governing ratio 0.83.
+  - Interpolation by hand at 44.5 ft: M<sub>DC1</sub> = (832.62 + 826.30)/2 = 829.46 → 829.5 k-ft (tab: 829.5). M<sub>LL+</sub> = (2092.5 + 2096.2)/2 = 2094.35 → 2094.3 (tab: 2094.3, from 0.1 rounding of the unrounded node values).
+  - End panel: at 3.0 ft the web is stiffened with d<sub>o</sub> = 60 in = 5 ft, so `end = 'yes'`.
+- **Other copies:** none.
+
+### Verification (LOC1)
+- **Level:** full verification that existing results are unchanged; the new tab is checked against imported rows.
+- **Syntax:** `node --check` on every inline script after the merge of main 9d7fa9b.
+- **Existing results, main (9d7fa9b) against the branch:** headless Chromium, built-in example and XS project xsA.
+  - **Hashed:** sha256 of:
+    - every module's `RS` (df, sa, gs, fa, splice, bstf, ts, sc, cf, oh, wt);
+    - each module's check list (id, status, governing item, and every item's location, cells, status, ratio, worked TeX and where table);
+    - each module's calc report HTML (`buildCalcReport`) and output tabs;
+    - the Girder section again after Get demands sa:1;
+    - the saved project `P` without `P.ui`.
+  - **Result:** every hash is equal. Timestamps (`ts`) and MathJax menu counters were normalised first, because they differ even between two runs of main.
+  - **Run with the tab used:** a third branch run opens the new tab and moves the station first. Every hash is still equal, except the Field splice `RS`: it embeds a copy of `P.ui`, which now holds `gsAny` (UI state only).
+- **New tab against imported rows:**
+  - **Method:** Get demands from Structural analysis for G1, G2 and G5. Each imported row (max. positive per span, piers, flange transitions on the smaller side; 9 per girder) is compared with the tab at the row's station.
+  - **Built-in example:** 27/27 identical, in both the row inputs and the GS1–GS19 items, including the GS17 Fatigue I/II column of main 9d7fa9b.
+  - **xsA:** 27/27 identical with "Keep my overrides when importing" off. With it on, the G1 import keeps 9 of the saved project's earlier `MDCc = 0` overrides, so GS14 differs: the tab uses the analysis value.
+- **Performance (built-in example, 361 nodes):**
+  - ratio plot: 140–235 ms for 369 rows;
+  - one station (builder + compute + checks): 4–7 ms average, 14 ms max.;
+  - the summary updates 40 ms after a slider move;
+  - the worked calculations are typeset about 0.5–0.65 s after the station settles (350 ms debounce).
+- **UI:** each of these works as intended:
+  - slider drag and the station box;
+  - snap modes and the step buttons;
+  - keyboard arrows on the slider;
+  - plot click, and Peak/Max.;
+  - girder change;
+  - the tab is hidden in other modules.
+
+  Screenshots: `scratchpad/followups/gs-slider/ga_top.png`, `ga_results.png`, `ga_calc.png`, `ga_g3.png`. No console errors or alerts.
+
+### Open items (LOC1)
+- **L<sub>b</sub>/C<sub>b</sub> per girder (carried over from C24–C26, not changed):** the builder uses G1's frames for the unbraced segments of every girder. The tab snaps to the selected girder's own frames, but L<sub>b</sub>/C<sub>b</sub> at a station follow the builder (G1). On skewed or staggered layouts, an interior girder's segments differ.
+- **Shear between nodes:** shears are the builder's largest of three elements around the station (as for the rows), not interpolated. This is conservative.
+- **Abutment rows:** see wrapper rule 3 above. The engineer may prefer the builder itself to treat zero moment as positive flexure.
