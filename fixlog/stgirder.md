@@ -1194,3 +1194,40 @@ Receiver of one girder's forces, plates and design inputs from GirderDetail (Ste
 - The known differences above are listed, not resolved; the engineer to confirm each (L_p: AASHTO Eq. 6.10.8.2.3-4 gives 1.0 r_t √(E/F_yc)).
 - Top flange and deck reinforcement fatigue at interior piers are still not checked here (the imported range is applied to the bottom flange, as before).
 - "Send reactions to Substructure Loading" still labels an imported girder "MIDAS import (ST-Girder)".
+
+## 2026-10-13 — PR: claude/stgirder-lp-10th (L_p = 1.1 r_t per the 10th Ed.; PR link added after merge)
+
+Engineer's decision 2026-10-13: AASHTO LRFD 10th Ed. Eq. 6.10.8.2.3a-4 is L_p = 1.1 r_t √(E/F_yc) (text supplied by the engineer). Closes the L_p item of GD4 above.
+
+### LP1. Compression-flange L_p = 1.1 r_t √(E/F_yc)   [§4: calc change] [LESS conservative — larger L_p, higher F_nc(LTB) when L_p < L_b ≤ L_r]
+- **Where:** `flangeFnc(bfc,tfc,tw,D,Lb_in,Fyc,Es,Rb,Rh,Cb,Dc,Fyw)` (~line 2124), anchor `const Lp=`.
+- **Before:**
+  ```js
+  const Lp=1.0*rt*sqrt(Es/Fyc), Lr=Math.PI*rt*sqrt(Es/FyrV);
+  ```
+- **After:**
+  ```js
+  const Lp=1.1*rt*sqrt(Es/Fyc), Lr=Math.PI*rt*sqrt(Es/FyrV);   // Lp: 10th Ed. Eq. 6.10.8.2.3a-4 (9th Ed.: 1.0 r_t)
+  ```
+  Comments only on the next two lines (code unchanged): `// Eq. 6.10.8.2.3a-2` after the `else if(Lb_in<=Lr)` line and `// Eq. 6.10.8.2.3a-3: R_b F_e, F_e = C_b π²E/(L_b/r_t)²` after the `else` line.
+- **Governing provision:** AASHTO LRFD 10th Ed. (2024) Art. 6.10.8.2.3a, Eq. 6.10.8.2.3a-4 (9th Ed. Eq. 6.10.8.2.3-4 was 1.0 r_t). Eq. a-2 and a-3 checked against the engineer's text: the code already uses F_yr/(R_hF_yc), the R_bR_hF_yc cap, and R_b on the elastic term (C_bR_bπ²E/(L_b/r_t)² ≤ R_bR_hF_yc). L_r = πr_t√(E/F_yr) is unchanged (see open items).
+- **Affected outputs:** every `flangeFnc` use — constructibility top flange (`FncTop`), constructibility −M bottom flange (`FncBotBare`), strength −M bottom flange (`FncNeg`, check "Neg flexure — bot flange (FLB/LTB)"), noncomposite +M (`FncPosNC`), the ratings that use them (−M and noncomposite +M), the `bridgeSuite.v1.capacity` payload `phiMn_neg`, and the L_p values printed on the Constructibility, Flexure and Report tabs. Results change only where LTB governs F_nc and L_b > 1.0 r_t√(E/F_yc).
+- **Check case 1 (defaults, constructibility top flange 16 × 0.75, L_b = 20 ft, F_yc = 50, F_yr = 35, R_b = R_h = 1.0, C_b = 1.0):** r_t = 3.7321 in, √(E/F_yc) = √(29000/50) = 24.083. L_p before = 1.0 · 3.7321 · 24.083 / 12 = 7.490 ft; after 1.1 × = 8.239 ft. L_r = 28.125 ft.
+  F_nc(LTB) before = [1 − (1 − 35/50)(20 − 7.490)/(28.125 − 7.490)] · 50 = [1 − 0.3 · 0.6063] · 50 = **40.906 ksi**; after = [1 − 0.3 · (11.761/19.886)] · 50 = [1 − 0.3 · 0.5914] · 50 = **41.129 ksi** (+0.55 %). The constructibility ratio (0.6395) is unchanged because the web governs there. −M bottom flange at the defaults: F_nc 43.711 → 44.040 ksi; capacity payload φM_n,neg −7083.8 → −7137.1 kip-ft.
+- **Check case 2 (GirderDetail built-in example G2 imported, Span 1, pier x = 110 ft, −M bottom flange of the pier segment, L_b = 25 ft, F_yr = 35 ksi, R_b = R_h = 1.0):** r_t = 4.8266 in, L_p 9.687 → 10.655 ft, L_r = 36.372 ft.
+  F_nc before = [1 − 0.3 · (25 − 9.687)/(36.372 − 9.687)] · 50 = [1 − 0.3 · 0.5738] · 50 = 41.392 ksi; after = [1 − 0.3 · (14.345/25.717)] · 50 = [1 − 0.3 · 0.5578] · 50 = 41.633 ksi.
+  Neg flexure check f_bu = 38.698 ksi: ratio 0.9349 → **0.9295**. Rating (governing) inventory 1.1437 → 1.1565, operating 1.4826 → 1.4992. Span 2 (pier x = 140 ft): ratio 0.9350 → 0.9296; rating 1.1435 → 1.1564 / 1.4823 → 1.4990.
+- **Other results (before → after, branch vs main):** noncomposite defaults +M strength 1.5054 → 1.4972 (F_nc 39.949 → 40.166 ksi), rating 0.519/0.672 → 0.524/0.679; presets top-flange F_nc: Shallow 36.514 → 36.571 (Cnstr FLB 1.6973 → 1.6947), Deep 42.596 → 42.882, Symmetric 41.986 → 42.249 (ratio 0.6023 → 0.5985).
+- **How verified:** headless Chromium, origin/main 1f5b31a vs branch: 18 UI scenarios (default, 4 presets, 3 grades, segments, deck design, noncomposite, LL manual, exterior, typed inputs, blank E_s, MIDAS 2-span span 1/2, export–reset–import round trip). Differences only on the Constructibility, Flexure, Report, Rating, Optimize tabs, the status band, and the capacity payload; session (`stgirder.session`), Export JSON, superReactions and lldfGeom payloads, and all inputs identical; round trip identical; same console messages on both (blocked CDN fonts and pre-existing NaN SVG messages in the typed-inputs scenario); no page errors. `computeAll()` on default, presets, noncomposite and the GirderDetail G2 import (spans 1 and 2) gave the values above.
+- **Other copies:** GirderDetail (`Steel Bridge Beam Modules.html`, `ltbFnc`, the Deck overhang module, A6.3.3, and PlateLine `PL_B64` `Fnc`) already use 1.1 r_t; not changed.
+
+### LP2. GirderDetail note: "L_p = 1.0 r_t … vs 1.1 r_t in GirderDetail" removed   [display only]
+- **Where:** `gdNoteLines(ext)`, the `diffs:[…]` list.
+- **Before:** last item `'L_p = 1.0 r_t √(E/F_yc) here vs 1.1 r_t in GirderDetail'` after `'fixed maximum load factors (1.25 DC, 1.50 DW, 1.75 LL; no minimum-factor combinations)',`.
+- **After:** the item removed; the list ends with `'fixed maximum load factors (1.25 DC, 1.50 DW, 1.75 LL; no minimum-factor combinations)'],`.
+- **Check case:** G2 import: the note lists four known differences (screenshot checked).
+
+### Open items (not changed)
+- L_r: the tool keeps L_r = πr_t√(E/F_yr) (the 9th Ed. Eq. 6.10.8.2.3-5 form). The 10th Ed. definition the engineer supplied adds "and geometric imperfection effects" and continues past the screenshot, so the 10th Ed. expression could differ. Engineer to confirm the 10th Ed. L_r equation.
+- F_e in Eq. 6.10.8.2.3a-3 is taken as C_bπ²E/(L_b/r_t)² (the 9th Ed. F_cr without R_b); confirm against the printed 10th Ed. definition of F_e.
+- The r_t comment still cites "6.10.8.2.3-9" (9th Ed. numbering); the 10th Ed. equation number for r_t was not in the supplied text, so it was not renumbered.

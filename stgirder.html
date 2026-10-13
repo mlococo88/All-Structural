@@ -1971,8 +1971,7 @@ function gdNoteLines(ext){
     diffs:['C_b = 1.0 and one unbraced length L_b for the whole span (GirderDetail: C_b and L_b per location)',
       'no Appendix A6 (web plastification) for negative flexure',
       'shear without tension-field action (end-panel V_cr basis)',
-      'fixed maximum load factors (1.25 DC, 1.50 DW, 1.75 LL; no minimum-factor combinations)',
-      'L_p = 1.0 r_t √(E/F_yc) here vs 1.1 r_t in GirderDetail'],
+      'fixed maximum load factors (1.25 DC, 1.50 DW, 1.75 LL; no minimum-factor combinations)'],
     tbc:'Known differences to be confirmed by the engineer.'};
 }
 function GdNote({ext,style}){
@@ -2128,11 +2127,11 @@ function flangeFnc(bfc,tfc,tw,D,Lb_in,Fyc,Es,Rb,Rh,Cb,Dc,Fyw){
   const lf=bfc/(2*tfc), lpf=0.38*sqrt(Es/Fyc), lrf=0.56*sqrt(Es/FyrV);
   let FncFLB = lf<=lpf? Rb*Rh*Fyc : (1-(1-FyrV/(Rh*Fyc))*((lf-lpf)/(lrf-lpf)))*Rb*Rh*Fyc;
   const rt=bfc/sqrt(12*(1+(DcV*tw)/(3*bfc*tfc)));     // 6.10.8.2.3-9 (Dc)
-  const Lp=1.0*rt*sqrt(Es/Fyc), Lr=Math.PI*rt*sqrt(Es/FyrV);
+  const Lp=1.1*rt*sqrt(Es/Fyc), Lr=Math.PI*rt*sqrt(Es/FyrV);   // Lp: 10th Ed. Eq. 6.10.8.2.3a-4 (9th Ed.: 1.0 r_t)
   let FncLTB;
   if(Lb_in<=Lp) FncLTB=Rb*Rh*Fyc;
-  else if(Lb_in<=Lr) FncLTB=Math.min(Cb*(1-(1-FyrV/(Rh*Fyc))*((Lb_in-Lp)/(Lr-Lp)))*Rb*Rh*Fyc, Rb*Rh*Fyc);
-  else FncLTB=Math.min(Cb*Math.PI*Math.PI*Es*Rb/Math.pow(Lb_in/rt,2), Rb*Rh*Fyc);
+  else if(Lb_in<=Lr) FncLTB=Math.min(Cb*(1-(1-FyrV/(Rh*Fyc))*((Lb_in-Lp)/(Lr-Lp)))*Rb*Rh*Fyc, Rb*Rh*Fyc);   // Eq. 6.10.8.2.3a-2
+  else FncLTB=Math.min(Cb*Math.PI*Math.PI*Es*Rb/Math.pow(Lb_in/rt,2), Rb*Rh*Fyc);   // Eq. 6.10.8.2.3a-3: R_b F_e, F_e = C_b π²E/(L_b/r_t)²
   return {Fnc:Math.min(FncFLB,FncLTB),FncFLB,FncLTB,lf,lpf,lrf,rt,Lp:Lp/12,Lr:Lr/12,Fyr:FyrV,Dc:DcV};
 }
 // Web bend-buckling resistance Fcrw, AASHTO 6.10.1.9.1.
