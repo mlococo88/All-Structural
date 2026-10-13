@@ -7756,3 +7756,105 @@ Embedded Preliminary sizing (PlateLine, `PL_B64`, decoded, edited and re-encoded
 - **Unequal skews at the supports:** the stations are measured from each girder's own Abut. 1 bearing, but the line-girder analysis has its supports at the centerline span lengths (`m.sup`). With different skews at different supports a girder's span lengths differ from the centerline spans, so its frames and bearings do not fall at the same fractions of the analysed spans. Inherent in the line-girder model; not changed.
 - **Transverse stiffeners end panel, unstiffened web:** the "first connection plate" rows use d<sub>o</sub> = the target frame spacing (`FR.sp`), not the station of the first frame on the girder (often shorter: 22.0 ft against 25 ft on the built-in example with stiffeners turned off). Conservative; not changed.
 - Carried over: row names from Preliminary sizing say "cross-frame" in the row editors (C18); Girder section's two-layer deck reinforcement is not sent (C19); auto-designed values outlined as overrides (audit item L8).
+
+## 2026-10-13 — PR: claude/girderdetail-quick1 (quick display fixes Q7 and on: wording, labels, formatting and layout on the main page; engineer offline, "clean up the app and use judgement"; PR link added after merge)
+
+Main page only; `PL_B64` (embedded Preliminary sizing) is not touched. Display only: no formula, factor, check, status, storage key, saved-data format or `bridgeSuite.v1.*` payload changes. Verified (light level): `node --check` on every inline script; the built-in example in headless Chromium with no console errors; a hash of every module's check results (id, status, governing index, every item's ratio, demand and capacity) equal to main; screenshots of the changed spots at 1000 px.
+
+### Q7. Summary card: the governing-ratio bar lines up with its number below 1100 px   [CSS only]
+- **Where:** the `@media (max-width: 1100px)` block of the main stylesheet (anchor `  .sc-gov { text-align: left; }`).
+- **Before:** the block set `.sc-gov { text-align: left; }` but the bar kept `.gov-bar { margin: 8px 0 4px auto; }`, so it stayed right-aligned under a left-aligned number (visible in Deck overhang at 1000 px, where the governing text is wider than the bar).
+- **After:** one added line in the same block: `  .sc-gov .gov-bar { margin-left: 0; }`.
+- **Check case:** built-in example, Deck overhang summary at 1000 px: the bar starts under "0.94".
+- **Other copies:** none.
+
+### Q8. Summary card: "Governing ratio —" says why when no check has a ratio   [text only]
+- **Where:** `bsRenderSummary` (Bearing stiffeners), `gmSummary` (every other module) and `renderSummary` (Field splice); anchor `<div class="w">${gv ? `${gv.k.id}, ${esc(gv.it.loc)}` : ''}</div>` (3 places).
+- **Before:** `` <div class="w">${gv ? `${gv.k.id}, ${esc(gv.it.loc)}` : ''}</div> ``
+- **After:** `` <div class="w">${gv ? `${gv.k.id}, ${esc(gv.it.loc)}` : 'No check with a ratio'}</div> ``
+- **Problem:** LLDF and DLs and Structural analysis have only pass/warn checks without a demand/resistance ratio; the card showed "Governing ratio" and a bare dash.
+- **Check case:** built-in example, LLDF and DLs and Structural analysis summaries: "Governing ratio — No check with a ratio". Modules with a ratio unchanged.
+- **Other copies:** none.
+
+### Q9. Cross-frames CF1, CF2: the governing load case is named in full ("Strength III", "Constructibility"), not by its internal id ("StrIII", "Con")   [text only]
+- **Where:** Cross-frames `checks(R)` (anchor `lims = R.primary ? { c: 120, t: 140 } : { c: 140, t: 240 }`) and the CF1 / CF2 item locations (anchors `${m.l} (${m.name}), ${m.cC || '—'}` and `${m.l} (${m.name}), ${m.cT || '—'}`).
+- **Before:** `const out = ckNew(), M = Object.values(R.mem), lims = R.primary ? { c: 120, t: 140 } : { c: 140, t: 240 };` and `` `${m.l} (${m.name}), ${m.cC || '—'}` `` / `` `${m.l} (${m.name}), ${m.cT || '—'}` ``
+- **After:** `..., lims = ..., CN = { StrI: 'Strength I', StrIII: 'Strength III', StrV: 'Strength V', Con: 'Constructibility' };` and `` `${m.l} (${m.name}), ${CN[m.cC] || m.cC || '—'}` `` / `` `${m.l} (${m.name}), ${CN[m.cT] || m.cT || '—'}` ``
+- **Problem:** the governing column of the summary, checks and report read "Bottom chord (L3x3x3/8), StrIII" and "Top chord (L5x5x3/8), Con" (Con read as truncated).
+- **Also (report inputs table, anchor `['User forces Str I (top/bot/diag)'`):** `'User forces Str I (top/bot/diag)'` → `'Member forces from analysis, Strength I (top / bottom / diagonal)'` and `'User forces Con (top/bot/diag)'` → `'Member forces from analysis, Constructibility (top / bottom / diagonal)'` (the input card's own heading).
+- **Check case:** built-in example, Cross-frames CF1: "Bottom chord (L3x3x3/8), Strength III", "Top chord (L5x5x3/8), Constructibility"; ratios unchanged. The member-force table headers (`StrI T / C (kip)` …) are unchanged.
+- **Other copies:** none.
+
+### Q10. Manual, Part 1 introduction: two typos   [text only]
+- **Where:** Manual, first paragraph (anchor `the sizing module keeps its own saved projects.`).
+- **Before:** `In the field splice module, It covers flange splices with …` and `… the detailing rules of Article 6.13.2.6. every load combination is fully worked, …`
+- **After:** `The field splice module covers flange splices with …` and `… the detailing rules of Article 6.13.2.6. Every load combination is fully worked, …`
+- **Check case:** none (text).
+- **Other copies:** none.
+
+### Q11. Transverse stiffeners drawing (web panel elevation): d<sub>o</sub> subscript and units on D and g   [drawing labels only]
+- **Where:** the Transverse stiffeners panel-elevation SVG (anchors `` `do = ${f2(r.do1)} in `` , `` `do = ${f2(r.do2)} in` ``, `` o += dimV(X(-6) - 14, Y(D), Y(0), `D = ${frac(D)}`); ``, `` `g = ${frac(gapIn)}`, false) ``).
+- **Before:** `` `do = ${f2(r.do1)} in${…}` ``, `` `do = ${f2(r.do2)} in` ``, `` `D = ${frac(D)}` ``, `` `g = ${frac(gapIn)}` ``
+- **After:** `` `d<tspan baseline-shift="sub" font-size="8">o</tspan> = ${f2(r.do1)} in${…}` `` (same for `do2`), `` `D = ${frac(D)} in` ``, `` `g = ${frac(gapIn)} in` ``
+- **Problem:** "do = 60.00 in" read as the word "do"; "D = 60" and "g = 2 3/4" had no unit while the panel widths did.
+- **Check case:** built-in example, Transverse stiffeners, Drawings: "d<sub>o</sub> = 60.00 in (end panel)", "D = 60 in", "g = 2 3/4 in".
+- **Other copies:** none.
+
+### Q12. Field splice elevation drawing: flange thicknesses in the title readable   [drawing label only]
+- **Where:** Field splice elevation SVG (anchor `Gap ${frac(gap)} in; left:`).
+- **Before:** `` Gap ${frac(gap)} in; left: ${frac(L.topT)}/${frac(L.botT)} flanges; right: ${frac(Rr.topT)}/${frac(Rr.botT)} flanges ``
+- **After:** `` Gap ${frac(gap)} in; flanges (top / bottom): left ${frac(L.topT)} / ${frac(L.botT)} in, right ${frac(Rr.topT)} / ${frac(Rr.botT)} in ``
+- **Problem:** the fraction slash ran into the separator: "left: 3/4/1 1/8 flanges; right: 1/1 1/4 flanges", with no unit.
+- **Check case:** built-in example: "Gap 1/2 in; flanges (top / bottom): left 3/4 / 1 1/8 in, right 1 / 1 1/4 in".
+- **Other copies:** none.
+
+### Q13. Equations: thousands separators set as "106,168", not "106, 168" (Shear connectors SC1 / fatigue shear flow; modular ratio E<sub>c</sub>)   [equation typesetting only]
+- **Where:** Shear connectors SC1 item work and the "Fatigue I shear flow range" report equation (anchor `` (${f2(z.Q)})}{${f0(z.I)}} = ${f3(z.Vfat)} ``, 2 places); `modTex` (anchor `const modTex = `, the two `${Math.round(m.Ec).toLocaleString('en-US')}`).
+- **Before:** `` {${f0(z.I)}} `` and `` ${Math.round(m.Ec).toLocaleString('en-US')} ``
+- **After:** `` {${f0(z.I).replace(/,/g, '{,}')}} `` and `` ${Math.round(m.Ec).toLocaleString('en-US').replace(/,/g, '{,}')} ``
+- **Problem:** in TeX a bare comma is punctuation and gets a space after it, so I = 106,168 in⁴ printed as "106, 168" (and E<sub>c</sub> = 3,834 ksi as "3, 834"). `{,}` is the form the file already uses for constants (`29{,}000`).
+- **Check case:** built-in example, Shear connectors SC1 governing equation: denominator "106,168". Numbers unchanged.
+- **Open item:** about 100 other `f0(...)` values inside TeX templates (Girder section, Fatigue, LLDF and DLs K<sub>g</sub>, …) have the same spacing when they reach 1,000; not changed here (each is a separate equation line). A single change to the MathJax `tex.digits` pattern would cover all of them but also affects any integer list written without spaces; ask before doing that.
+- **Other copies:** none.
+
+### Q14. Cross-frames, wind input note: names diaphragms too   [text only]
+- **Where:** Cross-frames `panes()`, the note under "Wind on the exterior girder" (anchor `is carried by the bottom flange to the cross-frames (4.6.2.7.1).`).
+- **Before:** `… The lower half of the girder's wind load is carried by the bottom flange to the cross-frames (4.6.2.7.1).`
+- **After:** `… The lower half of the girder's wind load is carried by the bottom flange to the cross-frames or diaphragms (4.6.2.7.1).`
+- **Problem:** with the rolled diaphragm in use (CFD, CFE) the note still named cross-frames only; the diaphragm checks use the same wind force.
+- **Check case:** 90 ft simple span with the diaphragm on: the note reads "… to the cross-frames or diaphragms (4.6.2.7.1)."; F<sub>w</sub> = 1.87 kip unchanged.
+- **Other copies:** none.
+
+### Q15. Output cards: a long subtitle wraps instead of squeezing the card title   [CSS only]
+- **Where:** main stylesheet, after `.card-right { display: inline-flex; align-items: center; gap: 8px; flex-shrink: 0; }` (anchor).
+- **Before:** that line only; `.card-right` never shrank, so a long right-hand subtitle (e.g. Shear connectors "Every stud row by zone, omitted regions at field splices, and a typical plan to scale") pushed the title into a narrow column ("Stud / layout: plan") at 1000 px.
+- **After:** one added line: `.card-right { flex-shrink: 1; min-width: 0; justify-content: flex-end; } .card-right > * { flex-shrink: 0; } .card-right > .card-ref { flex-shrink: 1; min-width: 0; text-align: right; } .cc-hd > .card-title { flex-shrink: 0; max-width: 60%; }   /* Q15: … */` — the title keeps its width up to 60% of the header; only the subtitle text shrinks and wraps (right-aligned); badges and the chevron keep their size.
+- **Check case:** built-in example at 1000 px: Shear connectors, Drawings, card 1 title on one line "Stud layout: plan" with the subtitle wrapped on the right.
+- **Other copies:** none.
+
+### Q16. Shear connectors typical stud plan: "b_f" shown as b<sub>f</sub>   [drawing label only]
+- **Where:** Shear connectors stud-layout drawing, typical plan (anchor `` `b_f ${frac(bf)}″` ``).
+- **Before:** `` `b_f ${frac(bf)}″` `` (the SVG printed the underscore: "b_f 16″").
+- **After:** `` `b<tspan baseline-shift="sub" font-size="8">f</tspan> ${frac(bf)}″` `` (the form the Bearing stiffeners drawing uses for b<sub>t</sub>).
+- **Check case:** built-in example, Shear connectors, Drawings, typical plan: "b<sub>f</sub> 16″".
+- **Other copies:** none.
+
+### Q17. Check item tables: symbols written with an underscore in a cell print as subscripts (I<sub>s</sub>, N<sub>b</sub>, η<sub>D</sub> η<sub>R</sub> η<sub>I</sub>)   [rendering only]
+- **Where:** the three renderers of check-item cells: `renderChecks` (anchor `` ${it.cells.map(c => `<td class="val">${esc(c)}</td>`).join('')} ``), the Detailing tab `renderGeometry` (anchor `` ${it.cells.map(c => `<td class="val">${c}</td>`).join('')} ``) and the calculation report (anchor `` ${it.cells.map(c => `<td class="n">${c}</td>`).join('')} ``).
+- **Before:** `${esc(c)}` (Checks tab), `${c}` (Detailing tab and report).
+- **After:** `${sub(c)}` in all three. `sub` is the existing helper already used for the item location in the same rows: `esc(s)` followed by `_x` → `<sub>x</sub>`.
+- **Problem:** Structural analysis SA4 and SA6 showed "I_s = 0.093", "N_b ≥ 4", "η = η_D η_R η_I = 1.0", "η_I = 1.05" literally. Cells are plain text (the Checks tab already escaped them; no cell in the built-in example or the 90 ft diaphragm case contains HTML), so the Detailing tab and the report now escape them the same way.
+- **Check case:** built-in example, Structural analysis, Checks, SA4 "Skew index, span 1: I<sub>s</sub> = 0.093"; SA6 "η = η<sub>D</sub> η<sub>R</sub> η<sub>I</sub> = 1.0". A scan of every td/th/p of the Summary, Checks, Drawings, Detailing and forces tabs of every module (built-in example) finds no other raw underscore in a cell.
+- **Other copies:** none.
+
+### Q18. b<sub>eff</sub> on the Structural analysis summary and F<sub>yw</sub> ≥ F<sub>yf</sub> in the Girder section R<sub>h</sub> line as subscripts   [text only]
+- **Where:** Structural analysis `kq(R)` (anchor `` b_eff ${f2(R.beffFt)} ft` ``); `rhFactor` (anchor `txt: 'Homogeneous section (F_yw ≥ F_yf)'`), shown only in the R<sub>h</sub> "where" row of the Girder section checks (`r.RhTxt`), which renders HTML.
+- **Before:** `` `G${R.j + 1} (${…}), b_eff ${f2(R.beffFt)} ft` `` and `'Homogeneous section (F_yw ≥ F_yf)'`
+- **After:** `` `G${R.j + 1} (${…}), b<sub>eff</sub> ${f2(R.beffFt)} ft` `` and `'Homogeneous section (F<sub>yw</sub> ≥ F<sub>yf</sub>)'`
+- **Check case:** built-in example: Structural analysis summary "G1 (exterior), b<sub>eff</sub> 8.00 ft"; Girder section, R<sub>h</sub> row "Homogeneous section (F<sub>yw</sub> ≥ F<sub>yf</sub>) 1.000".
+- **Other copies:** none.
+
+### Open items (Q7–Q18, not changed)
+- About 100 other `f0(...)` values inside TeX templates print "1, 234" once they reach 1,000 (see Q13). The options are a per-equation `{,}` or one change to the MathJax `tex.digits` pattern, which also affects integer lists written without spaces. Ask.
+- CF10 reference and the "Minimum girder depth for cross-frames" note read "AISC/NSBA G13.1 guidance". The G-series documents are from the AASHTO/NSBA Steel Bridge Collaboration, and the Field splice References list calls G12.1 and G13.1 "bolted splice detailing guidance". This is a code reference, not changed; the engineer to confirm the intended document.
+- Field splice check title "Web splice plates, axial force from H_w" keeps the underscore. Titles also go to plain-text outputs, so it was not changed.
