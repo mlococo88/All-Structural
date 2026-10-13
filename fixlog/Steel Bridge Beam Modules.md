@@ -7249,3 +7249,33 @@ Main page and the embedded Preliminary sizing (PlateLine, `PL_B64`, decoded, edi
 - **Check case (built-in example, Fatigue, Get demands from Preliminary sizing):** before: 66 rows (4 example + 62 imported), the four example ratios 0.552, 0.719, 0.828, 0.260 listed among the results; after: 62 rows, all from the analysis, governing row unchanged (Span 1 connection plate, exterior, 1.136). With the second example row edited first (M<sub>f+</sub> 620 → 700): after the import 63 rows, the edited row kept (ratio 0.790), the other three dropped.
 - **Saved data:** no key or format change. Projects that already have `P.fa.source` (imported before) keep all their rows.
 - **Other copies:** none.
+
+### C10. Transverse stiffeners CP2: the Δf sent by Preliminary sizing is taken at the inner face of the bottom flange (the connection-plate weld toe), the basis of Preliminary sizing's own Category C′ check   [§4: location of the stress] [less conservative by the half flange thickness; now equal to Preliminary sizing's own check]
+- **Where:**
+  - Decoded PlateLine: `detailExport`, helper `fatBot`; anchor `const fatBot = (T, x, gt) => {`. Main page: the re-encoded `PL_B64` line.
+  - Main page: `GM.ts` checks, CP2 note; anchor `{ const c = { id: 'CP2', grp: G3, title: 'Fatigue at stiffener weld toes'`.
+- **Before:**
+  ```js
+    const fatBot = (T, x, gt) => { const i = node(x), s = sec(x), c = props(s, gt); return r2((Math.max(0, T.MfP[i]) - Math.min(0, T.MfN[i])) * 12 * (c.yb - s.botT / 2) / c.I); };
+  ```
+  ```js
+          note: 'Base metal at the toe of transverse stiffener-to-flange and stiffener-to-web welds is Category C′ (infinite life under Fatigue I). The tension flange stress range is used for the web weld toe near the tension flange, which is conservative.' };
+  ```
+- **After:**
+  ```js
+    // Δf at the connection plate (M1, 2026-10-13): inner face of the bottom flange, the weld toe of Table 6.6.1.2.3-1 detail 4.1, short-term composite for both signs, as this tool's own Category C′ check (was the flange mid-thickness, c.yb - s.botT / 2)
+    const fatBot = (T, x, gt) => { const i = node(x), s = sec(x), c = props(s, gt); return r2((Math.max(0, T.MfP[i]) - Math.min(0, T.MfN[i])) * 12 * (c.yb - s.botT) / c.I); };
+  ```
+  ```js
+          note: 'Base metal at the toe of transverse stiffener-to-flange and stiffener-to-web welds is Category C′ (infinite life under Fatigue I). The tension flange stress range is used for the web weld toe near the tension flange, which is conservative. Δf received from Preliminary sizing is the stress range at the inner face of the bottom flange (the weld toe) from the short-term composite section for both the positive and the negative fatigue moment, the basis of Preliminary sizing\'s own Category C′ check; the Fatigue module checks the same connection plates with its negative-moment section (steel + reinforcement by default) and is the full check.' };   // basis stated (M1, 2026-10-13)
+  ```
+  Distance from the neutral axis: before ȳ<sub>n</sub> − t<sub>bot</sub>/2; after ȳ<sub>n</sub> − t<sub>bot</sub>. Section (short-term composite with the girder's b<sub>eff</sub>, `props`) and the moment range (max(0, M<sub>f+</sub>) − min(0, M<sub>f−</sub>)) unchanged.
+- **Problem:** the same connection plate was checked at three different points: CP2 at the flange mid-thickness (short-term section), Preliminary sizing's own Category C′ check at the inner face (short-term section), and the Fatigue module at the inner face (cracked section for negative moment by default). The weld toe of a transverse connection plate fillet-welded to the flange (Table 6.6.1.2.3-1, detail 4.1) is at the flange–plate junction, i.e. the inner face, so CP2 now uses that point and agrees with Preliminary sizing. The Fatigue module, which may use the cracked negative section, stays the full check and the note says so. CP2 becomes slightly less conservative (by about 1%), and is now consistent with the provision.
+- **Governing provision:** AASHTO LRFD 10th Ed. 6.6.1.2.2, 6.6.1.2.5 (Fatigue I, (ΔF)<sub>TH</sub> = 12.0 ksi for C′), Table 6.6.1.2.3-1 detail 4.1, 6.6.1.2.1 (short-term composite section). Not changed. Not re-checked against the printed 10th Edition here: verify.
+- **Check case (built-in example, Transverse stiffeners, Get demands from Preliminary sizing; exterior girder, Span 1, cross-frame at 60.9 ft; 60 × 9/16 web, top 16 × 3/4, bottom 16 × 1-1/8; b<sub>eff</sub> 96 in, n = 6.80: ȳ<sub>n</sub> = 53.568 in, I<sub>n</sub> = 102,183 in⁴; M<sub>f+</sub> = 812.7, M<sub>f−</sub> = −364.5 k-ft, range 1,177.2 k-ft):**
+  - **Before:** Δf = 1,177.2(12)(53.568 − 0.5625)/102,183 = 7.33 ksi; γΔf = 1.75(7.33) = 12.83 ksi; ratio **1.07** (fail).
+  - **After:** Δf = 1,177.2(12)(53.568 − 1.125)/102,183 = 7.25 ksi; γΔf = 12.69 ksi; ratio **1.057** (fail), equal to Preliminary sizing's own Category C′ ratio at this girder (1.0573, C5 check case).
+  - Other rows: Span 3 exterior (296.5 ft) 1.06 → 1.05; Span 2 exterior (198.2 ft) 0.96 → 0.94 (Δf 6.55 → 6.48); interior rows 0.65 / 0.54 / 0.65 → 0.64 / 0.53 / 0.64.
+  - The Fatigue module's own row for this plate (cracked negative section) is unchanged: 1.136.
+- **Saved data:** no key or format change; the `df` field of the stiffener rows has the same meaning (ksi, tension-flange stress range) and is replaced on the next import.
+- **Other copies:** none.
