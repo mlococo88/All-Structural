@@ -7853,3 +7853,8 @@ Main page only; `PL_B64` (embedded Preliminary sizing) is not touched. Display o
 - **After:** `` `G${R.j + 1} (${…}), b<sub>eff</sub> ${f2(R.beffFt)} ft` `` and `'Homogeneous section (F<sub>yw</sub> ≥ F<sub>yf</sub>)'`
 - **Check case:** built-in example: Structural analysis summary "G1 (exterior), b<sub>eff</sub> 8.00 ft"; Girder section, R<sub>h</sub> row "Homogeneous section (F<sub>yw</sub> ≥ F<sub>yf</sub>) 1.000".
 - **Other copies:** none.
+
+### Open items (Q7–Q18, not changed)
+- About 100 other `f0(...)` values inside TeX templates print "1, 234" once they reach 1,000 (see Q13). The options are a per-equation `{,}` or one change to the MathJax `tex.digits` pattern, which also affects integer lists written without spaces. Ask.
+- CF10 reference and the "Minimum girder depth for cross-frames" note read "AISC/NSBA G13.1 guidance". The G-series documents are from the AASHTO/NSBA Steel Bridge Collaboration, and the Field splice References list calls G12.1 and G13.1 "bolted splice detailing guidance". This is a code reference, not changed; the engineer to confirm the intended document.
+- Field splice check title "Web splice plates, axial force from H_w" keeps the underscore. Titles also go to plain-text outputs, so it was not changed.
