@@ -3882,3 +3882,29 @@ Engineer's request: "in the quick suggest tab, it should show the existing confi
  function SG_TYPES_TXT(t) { return t.length > 1 ? 'envelope of the interior and exterior girders' : t[0] === 'int' ? 'interior girder' : 'exterior girder'; }
  function argmax(a) { let k = 0; for (let i = 1; i < a.length; i++) if (a[i] > a[k]) k = i; return k; }
 ```
+
+### SC2. TS5 not-applicable text for connection-plate-only webs   [text only]
+
+- **Where (main page):** `ckNew()`, TS5 block. Anchor `c.naWhy = 'Web designed as unstiffened (connection plates only)`.
+- **Before:** `'Web designed as unstiffened (connection plates only): connection-plate spacing is not limited by 6.10.9.1; web shear is checked as unstiffened in TS4.'`
+- **After:** `'Connection plates only (no intermediate stiffeners): connection-plate spacing is not limited by 6.10.9.1; TS4 checks each panel as stiffened where its spacing is within the 6.10.9.1 limits (3D interior, 1.5D end panels) and as unstiffened where it is wider.'`
+- **Why:** since EK1/EK2, `webShear()` treats a panel bounded by connection plates as stiffened when d<sub>o</sub> ≤ 3D (interior) or ≤ 1.5D (end), so "checked as unstiffened" was wrong for those panels. The source comment above it gets the same correction. Governing provision: AASHTO LRFD 10th Ed. 6.10.9.1. No calculation or status changed.
+- **Check case:** GirderDetail Transverse stiffeners module, built-in example with both locations set to Type B (connection plate), first location d<sub>o1</sub> = 60 in (end panel, ≤ 1.5D = 90 in) and d<sub>o2</sub> = 200 in (> 3D = 180 in): TS4 panel 1 (end) C = 0.800, φV<sub>n</sub> = 783.32 kip (stiffened, k = 5 + 5/(60/60)² = 10); panel 2 C = 0.400, φV<sub>n</sub> = 391.66 kip (unstiffened, k = 5) — before and after identical; TS5 N/A, reason text before/after as above.
+- **How verified:** `node --check` on the main page scripts; headless Chromium (`GM.ts.compute` / `GM.ts.checks`) before and after; screenshot of the TS Summary tab. No console errors.
+- **Other copies:** none.
+
+### Exact changes (SC2): main page (unified diff, PL_B64 line omitted)
+
+```diff
+diff --git a/Steel Bridge Beam Modules.html b/Steel Bridge Beam Modules.html
+index 731db66..6202c96 100644
+--- a/Steel Bridge Beam Modules.html	
++++ b/Steel Bridge Beam Modules.html	
+@@ -2455,4 +2455,4 @@ tabs: { combos: 'Demands', rptCombos: 'Design demands' },
+       R.rows.forEach(r => [r.p1, r.p2].forEach((q, i) => { const lim = (q.end ? 1.5 : 3) * r.D, ok = ge(lim, q.do), adv = !ok && !q.stiff; c.items.push({ loc: `${L(r)}, panel ${i + 1}${q.end ? ' (end)' : ''}`, cells: [f2(q.do), f2(lim), f2(q.do / lim)], r: q.do / lim, st: ok ? 'pass' : adv ? 'adv' : 'warn', work: T`d_o = ${f2(q.do)} \;${LE(q.do, lim)}\; ${q.end ? '1.5' : '3'}(${f2(r.D)}) = ${f2(lim)}\ \text{in}${adv ? T`\ \text{(treated as unstiffened in TS4)}` : ''}` }); }));
+-      // web designed unstiffened (connection plates only): connection-plate spacing is not limited by 6.10.9.1 (TS4 checks every panel wider than its limit as unstiffened)
+-      if (!R.rows.some(r => r.t.role === 'int') && !c.items.some(i => i.st === 'warn')) { c.items = []; c.naWhy = 'Web designed as unstiffened (connection plates only): connection-plate spacing is not limited by 6.10.9.1; web shear is checked as unstiffened in TS4.'; }
++      // connection plates only (no intermediate stiffeners): connection-plate spacing is not limited by 6.10.9.1 (TS4 checks a panel within its limit as stiffened and a wider one as unstiffened)
++      if (!R.rows.some(r => r.t.role === 'int') && !c.items.some(i => i.st === 'warn')) { c.items = []; c.naWhy = 'Connection plates only (no intermediate stiffeners): connection-plate spacing is not limited by 6.10.9.1; TS4 checks each panel as stiffened where its spacing is within the 6.10.9.1 limits (3D interior, 1.5D end panels) and as unstiffened where it is wider.'; }
+       out.add(c); }
+```
