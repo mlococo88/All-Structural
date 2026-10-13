@@ -10661,3 +10661,36 @@ All code in this PR except the GirderDetail drawing and Structural analysis hunk
          work: T`\begin{aligned}J &= \max\left(\frac{2.5}{(${f2(dd)}/${f2(D)})^2} - 2.0,\ 0.5\right) = ${f3(J)}, \quad I_{t1} = (${f2(bb)})(${f3(tw)})^3(${f3(J)}) = ${f2(It1)}\ \text{in}^4 \\ F_{crs} &= \min\left(\frac{0.31(29{,}000)}{(${f2(b)}/${f3(t)})^2},\ ${f2(Fys)}\right) = ${f2(Fcrs)}\ \text{ksi}, \quad \rho_t = ${f3(rt)}, \quad I_{t2} = \frac{${f2(D)}^4(${f3(rt)})^{1.3}}{40}\left(\frac{${f2(Fyw)}}{29{,}000}\right)^{1.5} = ${f2(It2)}\ \text{in}^4 \\ &${d3Br(o)} \\ I_{req} &= ${d3Pre(o)}${f2(req)}\ \text{in}^4\ (\text{Eq. ${eq}}) \;${It >= req - 1e-9 ? '\\le' : '>'}\; I_t = \frac{(${f3(t)})(${f2(b)})^3}{3} = ${f2(It)}\ \text{in}^4\end{aligned}` });
      })); }
 ````
+
+## 2026-10-13 — PR: claude/camber-followups (Send to ST-Girder: optional DC1 split for ST-Girder's camber; cross-tool connection HANDOFF.md §4.9, receiver `stgirder.html` in the same PR; PR link added after merge)
+
+### CF4. `girderDemands` hand-off: optional per-station DC1 split `M_DC1steel`, `V_DC1steel`, `M_DC1wet`, `V_DC1wet`   [hand-off sender] [no result, saved data, key, channel or schema version changed; new optional fields only]
+- **Where:** `GM.sa.compute` (anchor `const VDC1 = VofB(bS, w1), VDC2 = VofB(b3, wDC2), VDW = VofB(b3, wDW);`, about line 5246, and its `return { … VDC, VS, …`), `gdStPayload()` station row (anchor `M_DC1steel: r3(R.MS[i])`) and its second note (anchor `DC1 split (optional fields)`).
+- **Before:**
+  ```js
+    const VDC1 = VofB(bS, w1), VDC2 = VofB(b3, wDC2), VDW = VofB(b3, wDW);
+  …
+      M_FATpos: r3(R.FMp[i]), M_FATneg: r3(R.FMn[i]), V_FATpos: r3(-R.FVn[e]), V_FATneg: r3(-R.FVp[e]) };
+  …
+    `DC1 = steel, deck, haunch and other noncomposite dead load on the steel section (girder self-weight included); DC2 and DW on the long-term composite section.`,
+  ```
+  and `return { … VDC1, VDC2, VDW, VDC, LLp, …`.
+- **After:**
+  ```js
+    const VDC1 = VofB(bS, w1), VDC2 = VofB(b3, wDC2), VDW = VofB(b3, wDW);
+    const VS = VofB(bS, wSt);   // CF4 (2026-10-13): steel part of V_DC1, for the ST-Girder hand-off's DC1 split only
+  …
+      M_FATpos: r3(R.FMp[i]), M_FATneg: r3(R.FMn[i]), V_FATpos: r3(-R.FVn[e]), V_FATneg: r3(-R.FVp[e]),
+      // CF4 (2026-10-13): optional DC1 split (HANDOFF.md 4.9), both on the steel section bS: steel = R.MS (plates x 490 pcf x (1 + detail allowance)); wet = R.MDk (deck, haunch, SIP, other DC1 rows)
+      M_DC1steel: r3(R.MS[i]), V_DC1steel: r3(-R.VS[e]), M_DC1wet: r3(R.MDk[i]), V_DC1wet: r3(-(R.VDC1[e] - R.VS[e])) };
+  …
+    `DC1 = steel, deck, haunch and other noncomposite dead load on the steel section (girder self-weight included); DC2 and DW on the long-term composite section. DC1 split (optional fields): M_DC1steel/V_DC1steel = girder flanges and web at 490 pcf × (1 + ${f0(b.allow)}% detail allowance for stiffeners, connection plates and splices; cross-frames not included); M_DC1wet/V_DC1wet = deck, haunch, SIP forms and any other DC1 rows of the LLDF and DLs module (${f3(R.wDeck)} klf); both on the steel section, simultaneous (no pour sequence); M_DC1 = their sum (±0.001 rounding).`,
+  ```
+  and `return { … VDC1, VDC2, VDW, VDC, VS, LLp, …`.
+- **Component definitions (GirderDetail's own, unchanged):** `wSt` = (flanges + web area) × 3.4 plf/in² (490 pcf) × (1 + Preliminary sizing "Detail allowance" %, for stiffeners, connection plates and splice material; cross-frames not included) → `MS = MofB(bS, wSt)`; `wDeck = D.dc1[j]` = deck + haunch + SIP forms + any other DC1 rows of the LLDF and DLs module → `MDk = MofB(bS, wDeck)`; `MDC1 = MS + MDk`; all on the steel-stage model `bS` (variable EI), simultaneous (the deck-placement sequence `saSeq` is not used for the hand-off, as before). `VS = VofB(bS, wSt)`; wet shear = `VDC1 − VS` (linear, same model). Sent with the existing MIDAS shear sign (negated).
+- **Problem / request:** ST-Girder's camber needs the self-weight / wet-concrete split for imported DC1 (engineer's decision 2026-10-13, item 4). `M_DC1`/`V_DC1` unchanged; the split sums to them within the 0.001 rounding.
+- **Governing provision:** none (hand-off fields; no formula changed).
+- **Check case (built-in example, G2, payload):** 363 stations, all with the four fields; max |M_DC1steel + M_DC1wet − M_DC1| = 0.001 k-ft and max |V…| = 0.001 kip (rounding). x = 44 ft: M_DC1 990.401 = 164.482 + 825.919; V_DC1 7.493 = 1.382 + 6.110. Pier (109.999 ft): M_DC1 −2382.099 = −432.721 − 1949.377 (+0.001); V_DC1 95.900 = 17.911 + 77.990 (−0.001). Note 2 gives "5% detail allowance" and "1.106 klf".
+- **How verified:** script blocks parsed (`new Function`). Headless Chromium, main vs branch: every module's checks (df, sa, gs, fa, splice, bstf, ts, sc, cf, oh, wt, and each with "Get demands"/"Load all") hash-identical; `girderdetail_autosave_v1` and `plateline_autosave_v1` identical; payload identical to main except the four new station fields and note 2; Export hand-off file = stored payload; no console errors. Send + open ST-Girder now (OD1 flow) passes (28 checks, file:// and http). ST-Girder reads the split (fixlog/stgirder.md CF4).
+- **Other copies:** receiver `stgirder.html`.
+- **Open items:** cross-frame weight is not part of GirderDetail's DC1 (only the plate detail allowance); engineer to decide whether a cross-frame DC1 load should be added by default.

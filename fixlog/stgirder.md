@@ -1417,3 +1417,100 @@ function CamberBreakdown({R,fig}){
   - The double integration uses the analysis stations (L/20 plus ±0.01 ft at flange transitions), trapezoidal; on the built-in example it gives Δ_DC1 = 3.859 in vs 3.875 in closed form (−0.4 %, slightly low for camber). Not changed; a finer station set would change the headline values.
   - `selfWeightExcluded:true` imports: the self-weight added by ST-Girder is a simple-span moment on the selected span (existing, stated in the import banner). On a continuous span this overstates the self-weight deflection (GirderDetail example span 2 with the flag set: 1.89 in self-weight vs 1.58 in for the imported remainder). Not changed.
   - Diaphragm point loads are grouped with the steel self-weight; Add'l DC1 ("forms, details") with the wet concrete. Engineer to confirm, or ask for a separate column.
+
+## 2026-10-13 — PR: claude/camber-followups (Camber follow-ups CF1, CF3, CF4: fine integration, headline max and location, GirderDetail DC1 split; engineer's decisions 2026-10-13; cross-tool connection HANDOFF.md §4.9, sender `Steel Bridge Beam Modules.html` in the same PR; PR link added after merge)
+
+### CF1. Camber: camber-only fine station set (about 0.5 ft) for the double integration   [§4: calc change] [MORE conservative — larger camber; checks unchanged]
+- **Where:** `computeAll()`, Camber block (anchor `/* ---------- Camber — numeric double integration`), about line 2681. The check stations (`stations`, L/20 plus ±0.01 ft at flange transitions) are not changed; camber gets its own set `camSt`.
+- **Before:**
+  ```js
+    const deflShape=(Mkey,Ikey)=>{
+      const nS=stations.length, xin=stations.map(s=>s.x*12);
+      const k=stations.map(s=>(Mkey(s)*12)/(Es*segP[s.si][Ikey].I));
+      …
+    const shTot=stations.map((_,i)=>shDC1[i]+shDC2[i]+shDW[i]);
+    camber.shape={x:stations.map(s=>s.x), …
+  ```
+  (the deflection integrated on the 21 check stations of the built-in example, h = 6 ft).
+- **After (whole block, CF1 + CF3 + CF4 receiver):**
+  ```js
+    /* ---------- Camber — numeric double integration (handles segments & continuous M) ---------- */
+    // CF1 (2026-10-13): camber-only fine station set (the checks keep `stations`): about 0.5 ft spacing (at least L/20),
+    // plus every check station (supports, ±0.01 ft at flange transitions) and the imported payload's own stations in this span.
+    // The moments are the same expressions as `stations` (M1, M2, Mw), evaluated at the fine stations.
+    const camH=0.5, camN=Math.max(Ndiv,Math.ceil(Lft/camH));
+    const camSet=new Set(xs);
+    for(let i=0;i<=camN;i++) camSet.add(+(Lft*i/camN).toFixed(4));
+    if(useExt) ext.slice.forEach(s=>{ if(s.xr>1e-6&&s.xr<Lft-1e-6) camSet.add(+s.xr.toFixed(4)); });
+    const camSt=[...camSet].filter(x=>x>=0&&x<=Lft).sort((a,b)=>a-b).map(x=>({x, si:segIdxAt(x),
+      M1: (useExt&&ext.hasDC1)? ext.M_DC1(x)+(ext.swExcl? simpleM(wswAvg,x):0) : simpleM(Ld.wDC1,x)+diaM(x),
+      M2: useExt? ext.M_DC2(x) : simpleM(Ld.wDC2,x),
+      Mw: useExt? ext.M_DW(x)  : simpleM(Ld.wDW,x)}));
+    // deflShape: the deflected shape at every camber station (in, + up, so sagging gives negative values); deflOf = its largest magnitude.
+    const deflShape=(Mkey,Ikey)=>{
+      const nS=camSt.length, xin=camSt.map(s=>s.x*12);
+      const k=camSt.map(s=>(Mkey(s)*12)/(Es*segP[s.si][Ikey].I));
+      const th=[0]; for(let i=1;i<nS;i++) th.push(th[i-1]+0.5*(k[i]+k[i-1])*(xin[i]-xin[i-1]));
+      const v=[0];  for(let i=1;i<nS;i++) v.push(v[i-1]+0.5*(th[i]+th[i-1])*(xin[i]-xin[i-1]));
+      const vc=v.map((vi,i)=>vi - v[nS-1]*xin[i]/Math.max(xin[nS-1],1e-6));
+      return vc;
+    };
+    const deflOf=(Mkey,Ikey)=>Math.max(...deflShape(Mkey,Ikey).map(Math.abs));
+    const camDC1=deflOf(s=>s.M1,'bare'), camDC2=deflOf(s=>s.M2,'c3N'), camDW=deflOf(s=>s.Mw,'c3N');
+    const camber={camDC1,camDC2,camDW,camTot:camDC1+camDC2+camDW};
+    // Breakdown by load (display only). DC1 on the bare steel is split into steel self-weight (+ diaphragm point loads) and the
+    // rest of DC1 (deck slab + haunch + Add'l DC1), taken as M1 − M_steel so the two parts sum to M1 exactly. Imported DC1 is split
+    // by the payload's M_DC1steel when present (GirderDetail, CF4), or by the self-weight ST-Girder adds (selfWeightExcluded); else not split.
+    const dc1Split = !(useExt&&ext.hasDC1) ? 'app' : ext.swExcl ? 'swExcl' : ext.hasDC1split ? 'import' : 'none';
+    const Msteel = st => dc1Split==='app' ? simpleM(Ld.wsw,st.x)+diaM(st.x) : dc1Split==='swExcl' ? simpleM(wswAvg,st.x) : dc1Split==='import' ? ext.M_DC1steel(st.x) : 0;
+    const shDC1=deflShape(s=>s.M1,'bare'), shDC2=deflShape(s=>s.M2,'c3N'), shDW=deflShape(s=>s.Mw,'c3N');
+    const shSW = dc1Split==='none' ? null : deflShape(Msteel,'bare');
+    const shWet= dc1Split==='none' ? null : deflShape(s=>s.M1-Msteel(s),'bare');
+    const shTot=camSt.map((_,i)=>shDC1[i]+shDC2[i]+shDW[i]);
+    const argMax=a=>{ let j=0; a.forEach((v,i)=>{ if(Math.abs(v)>Math.abs(a[j])) j=i; }); return j; };
+    camber.shape={x:camSt.map(s=>s.x), dc1Split, hasDia:dc1Split==='app'&&dph.length>0,
+      sw:shSW, wet:shWet, dc1:shDC1, dc2:shDC2, dw:shDW, tot:shTot,
+      splices:segP.filter(g=>g.x1>0.05&&g.x1<Lft-0.05).map(g=>g.x1)};
+    camber.xDC1=camSt[argMax(shDC1)].x; camber.xTot=camSt[argMax(shTot)].x;   // CF3: locations of the maxima (headline)
+  ```
+  `camber.camTotMax=Math.max(...shTot.map(Math.abs));` follows, as before.
+- **Problem:** trapezoidal double integration of M/(E·I) on the L/20 check stations under-estimates the deflection (−0.4 % on the built-in example), and on imported continuous spans it interpolated the moment diagram between stations L/20 apart, missing its curvature (−2 % on the GirderDetail example span 2). The fine set (≥ L/20, about 0.5 ft) also includes every check station (supports, both sides of each flange transition) and every station of the imported payload inside the span.
+- **Governing provision:** none changed (M/(E·I) on the stage sections: DC1 bare steel, DC2 and DW long-term 3n; E_s, units and sections as before). AASHTO LRFD 10th Ed. Art. 6.7.2 (dead-load camber) is the context; no equation of it is coded.
+- **Check case (built-in example):** L = 120 ft, E = 29,000 ksi, I_bare = 48,910.36 in⁴, I_3n = 100,950.64 in⁴, w_DC1 = 1.178021 klf, w_DC2 = 0.30, w_DW = 0.25 klf.
+  - Hand: Δ = 5wL⁴/(384EI), L = 1440 in: Δ_DC1 = 5(1.178021/12)(1440)⁴/(384·29,000·48,910.36) = 3.8749 in; Δ_DC2 = 5(0.025)(1440)⁴/(384·29,000·100,950.64) = 0.4781 in; Δ_DW = 0.3984 in; total 4.7514 in.
+  - Before: 3.8594 / 0.4762 / 0.3968, Δ_total 4.7324 in. After: 3.8748 / 0.4781 / 0.3984, Δ_total 4.7513 in (displayed 3.87 / 0.478 / 0.398 / 4.75).
+  - Convergence (camH): 6 ft 3.8594; 2 ft 3.8732; 1 ft 3.8745; 0.5 ft 3.8748; 0.25 ft 3.8749; 0.1 ft 3.8749 in. GirderDetail example G2 span 2 (140 ft, imported): L/20 1.5806 → 0.5 ft 1.6129; 0.25 ft 1.6130; 0.1 ft 1.6130 in.
+  - Other cases, before → after (Δ_total): flange transitions on 4.5958 → 4.6150; L = 100 ft 2.2822 → 2.2913; diaphragms 2 × 2 kip 4.8620 → 4.8812; GirderDetail example spans 1/2/3 (imported, defaults otherwise) 1.5852 → 1.6013, 1.8731 → 1.9110, 1.5866 → 1.6027; MIDAS 2-span test 2.1014 → 2.1263 in.
+- **How verified:** see CF4.
+- **Other copies:** none.
+
+### CF3. Camber headline: "Total DL camber (max)" with its location; Δ DC1 with its location   [display] [headline value = largest per-station total]
+- **Where:** `CamberTab` (anchor `Total DL camber (max)`), `ReportTab` Key results (anchor `['Total DL camber (max)'`), `CamberBreakdown` note (anchor `the headline value`).
+- **Before:**
+  ```jsx
+      <div className="br"><div className="l">Total DL camber (mid)</div><div className="n">{fmt(cm.camTot,2)}</div><div className="u">in ↑ offset</div></div>
+      <div className="br"><div className="l">Δ DC1 (bare steel)</div><div className="n">{fmt(cm.camDC1,2)}</div><div className="u">in</div></div>
+  ```
+  `['Total DL camber',fmt(R.camber.camTot,2),'in'],`
+- **After:**
+  ```jsx
+      <div className="br"><div className="l">Total DL camber (max)</div><div className="n">{fmt(cm.camTotMax,2)}</div><div className="u">in ↑ offset · at x = {fmt(cm.xTot,1)} ft</div></div>
+      <div className="br"><div className="l">Δ DC1 (bare steel)</div><div className="n">{fmt(cm.camDC1,2)}</div><div className="u">in · at x = {fmt(cm.xDC1,1)} ft</div></div>
+  ```
+  `['Total DL camber (max)',fmt(R.camber.camTotMax,2),'in at x = '+fmt(R.camber.xTot,1)+' ft'],`
+  Note when they differ: "The largest total (… in, the headline value) is … in less than Δ_total = Δ_DC1 + Δ_DC2 + Δ_DW (… in, the sum of the stage maxima) because the stage maxima occur at different stations."
+- **Problem:** "(mid)" is wrong on continuous spans (GirderDetail example span 1 peaks at 44.5 ft of 110). The headline now shows the largest total deflection along the span (the camber at one point) and where it occurs, on every span. Δ_total in the derivation stays the sum of the stage maxima (it is ≥ the headline value; equal when all maxima are at one station).
+- **Check case:** built-in 4.75 in at x = 60.0 ft (= Δ_total 4.751); GirderDetail example span 1 (imported via Import, browser): 1.60 in at x = 44.5 ft, Δ_DC1 1.36 in at 44.0 ft; app-computed DC1 on an imported span without M_DC1 (GirderDetail span 1 without M_DC1): headline 3.741 in at x = 53.5 ft vs Δ_total = 3.752 in (larger by 0.012 in; note shown).
+- **Governing provision:** none.
+
+### CF4. Camber: use the GirderDetail DC1 split (`M_DC1steel`) when the payload has it   [hand-off receiver, display] [no check result changes]
+- **Where:** `buildExternal()` (anchors `const hasDC1split=` and `M_DC1steel:(x)=>interp('M_DC1steel',x)`), the Camber block (`dc1Split … 'import'`, above), `camberSeries`/`CamberBreakdown` labels and note (anchor `sh.dc1Split==='import'`), `gdCheck` optional-field validation (anchor `'M_DC1steel','V_DC1steel','M_DC1wet','V_DC1wet'`).
+- **Before:** `const dc1Split = !(useExt&&ext.hasDC1) ? 'app' : (ext.swExcl ? 'swExcl' : 'none');` — an imported DC1 was always shown as one total ("DC1 (imported, not split)").
+- **After:** `const dc1Split = !(useExt&&ext.hasDC1) ? 'app' : ext.swExcl ? 'swExcl' : ext.hasDC1split ? 'import' : 'none';` with steel = `ext.M_DC1steel(x)` and wet concrete = `M1 − M_steel`. Curves/columns "Steel (imported: girder + details)" and "Wet concrete (imported: deck, haunch, SIP, other DC1)". `gdCheck` also rejects a non-numeric value in the four new optional fields (absent is fine). Older payloads: unchanged ("not split").
+- **Governing provision:** none (display of the imported moments; same sections as DC1).
+- **Check case:** GirderDetail example G2, span 1, x = 44 ft: M_DC1 = 990.401, M_DC1steel = 164.482, M_DC1wet = 825.919 k-ft (sum 990.401). Camber maxima (browser, imported): steel 0.220 in at 43.5 ft, wet concrete 1.141 in at 44.5 ft, DC2 0.129, DW 0.107, total 1.597 in at 44.5 ft; steel + wet = DC1 shape within 1e-14 in at every station.
+- **How verified (CF1, CF3, CF4):** JSX transpiled with @babel/standalone and all script blocks parsed. Node, `computeAll` main vs branch, 16 cases (built-in, diaphragms, flange transitions, L = 100 ft, GirderDetail example spans 1–3 with the old and the new payload, MIDAS 2-span spans 1–2, selfWeightExcluded): every result other than `camber` identical (JSON); the camber values as listed in CF1. Headless Chromium, main vs branch, 20 scenarios (built-in, presets, grades, flange transitions, deck design, noncomposite, manual LL, exterior, typed inputs, MIDAS import spans 1/2, GirderDetail hand-off file (new payload) spans 1/2, export/import round trip): inputs, status band, every tab except Camber and Report, autosave, Export JSON and all hand-offs identical; round trip identical; console errors identical (pre-existing font blocks and "Es blank" NaN SVG warnings). GirderDetail → ST-Girder "Send" + open-now flow (OD1 test, 28 checks) passes as file:// and over http with no console errors. Screenshots of the Camber tab checked.
+- **Other copies:** sender: `Steel Bridge Beam Modules.html` (fixlog/Steel Bridge Beam Modules.md CF4).
+- **Open items:**
+  - CF2 (self-weight added by ST-Girder on continuous imported spans, `selfWeightExcluded:true`) not implemented: options sent to the engineer (it changes M_DC1 for every check, not only camber).
+  - GirderDetail's DC1 has no cross-frame weight unless the user enters a DC1 row (its detail allowance covers stiffeners, connection plates and splices).
