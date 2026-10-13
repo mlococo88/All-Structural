@@ -7594,3 +7594,17 @@ Main page and the embedded Preliminary sizing (PlateLine, `PL_B64`, decoded, edi
 +      const inR = Mpm(ip) < 0 ? frX0.filter(x => x > xL && x < xR && Math.abs(x - xp) > 0.5) : [];
 +      const near = inR.length ? inR.reduce((q, x) => rgF(T, node(x)) > rgF(T, node(q)) ? x : q, inR[0]) : frX.filter(x => Math.abs(x - xp) > 0.5).sort((p1, p2) => Math.abs(p1 - xp) - Math.abs(p2 - xp))[0]; if (near != null) row(`Pier ${k}, connection plate at cross-frame ${f2(near)} ft, top flange`, 'Cp-stiff', 'tfi', near, sec(near)); });
 ```
+
+### C22. DXF camber table "-0.00" at the supports (C8–C18 open item)   [no change needed]
+- **Finding:** the DXF camber tables (`dxfElev`: "TOTAL DEAD LOAD DEFLECTION (IN, DOWNWARD) = CAMBER, …", all girders, and "DEAD LOAD DEFLECTION COMPONENTS, G… (IN)") format with the page's `f2`, which already writes any |x| < 0.005 as 0: `const f2 = x => (isFinite(x) ? (Math.abs(x) < 5e-3 ? 0 : x).toFixed(2) : '—');`. A support value of −0.0001 in is therefore written "0.00", not "-0.00". (C15 was needed because `f3` has no such clamp.)
+- **Check:** built-in example, Export DXF (all drawings, the elevation and camber sheets for every girder, 472,038 lines): no text entity "-0.00" (or any "-0.0…" zero); the support rows read "0.00". The open item was raised from the C15 reasoning, not from an observed output. No code changed.
+
+### C23. Manual, "Fatigue detail inventory": where the connection-plate rows are placed, and the per-girder b<sub>eff</sub> and A<sub>r</sub>   [text only] [results bit-identical]
+- **Where (main page):** Manual paragraph after `<h3>Fatigue detail inventory</h3>`.
+- **Before:** "connection plates (C′) at the cross-frame with the largest positive range in each span (bottom flange) and next to each pier (top flange);" … "each shop flange transition (B, ground flush, smaller side). Cycles per truck passage are 1.5 …"
+- **After:** "connection plates (C′) at the intermediate cross-frame with the largest fatigue moment range in each span (bottom flange; the same plate the Transverse stiffeners CP2 row checks) and in each pier's negative dead-load region, between the dead-load contraflexure points (top flange);" … "each shop flange transition (B, ground flush, smaller side). Each row carries its girder's effective flange width and deck reinforcement A<sub>r</sub> = (rebar %) × b<sub>eff</sub> × t<sub>s</sub> at mid-depth of the slab, as the analysis uses them; rows entered by hand use the module's b<sub>eff</sub> and A<sub>r</sub>. Cycles per truck passage are 1.5 …"
+- **Problem:** the text described the selection before C4 ("largest positive range") and the pier rule before C21, and did not mention the per-girder section data (C5, C19).
+- **Governing provision:** none.
+- **Check case:** light verification: the paragraph as quoted (screenshot `scratchpad/followups/gd-c4/c23_manual.png`); every module's results on the built-in example (all modules, after Get demands from Preliminary sizing in Fatigue, Transverse stiffeners, Welds and transitions and Girder section) hash-identical to the C21 build.
+- **Saved data:** none.
+- **Other copies:** none.
