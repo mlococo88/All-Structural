@@ -6802,3 +6802,122 @@ Main page and the embedded Preliminary sizing (PlateLine, `PL_B64`, decoded, edi
 +    if (nE) { add(`End cross-frames at the bearing lines (${nE}, X-type, ${f2(Se / 12)} ft${skM ? ` along ${f0(skM)}° skew` : ''}): members`, nE * lbE / 1000, 'kip', nE * lbE * S.cDet); add('End cross-frames: bolts', nE * bE, 'each', nE * bE * S.cBolt); } }
    const total = cost.reduce((a, c) => a + c.c, 0);
 ```
+
+
+### C2. Preliminary sizing's built-in interior-girder factors: S > 16 ft and N<sub>b</sub> = 3 rules, as in LLDF and DLs   [§4: built-in approximate live load distribution factors, interior girders] [more conservative; the built-in example is unchanged]
+- **Decision:** clean-up of the open item left by XS10 ("GirderDetail's S > 16 ft / N<sub>b</sub> = 3 rules for interior girders are not ported"); coordinator, 2026-10-13 (engineer offline: "continue to clean up the app and use judgement"). Copied from GirderDetail `dfMember` (interior branch), not shared (CLAUDE.md §3).
+- **Where (anchors), decoded PlateLine:** the comment above `const SG_MPF` (interior rules added); `function sgLever(G, N, j = 0)` (new third argument, the girder; the exterior calls keep j = 0), anchor `R += 0.5 * sgLeverC(pos, Nb, j, s + o)`; `function sgDF(S, L, Kg, ts, de, nb, ext, rdwy)`: the geometry block becomes a local `geo()` (anchor `const geo = () =>`) used by the new interior branch (anchor `// interior girders (C2): GirderDetail dfMember`) and by the exterior branch (`const { w, NL, G } = geo();`, the same arithmetic as before); `renderSuggest`, the "Interior girder, moment" derivation block (anchor `d.rule === 'S16' ? \`S &> 16`) and its reference (anchor `'; S > 16 ft: lever rule'`); Manual, distribution factors paragraph (anchor `for S &gt; 16 ft the lever rule, and for N<sub>b</sub> = 3`). Main page: only the re-encoded `PL_B64` line.
+- **Before (interior):**
+  ```js
+    if (!ext) return { mM: Math.max(m1, m2), mV: Math.max(v1, v2), m1, m2, v1, v2, kr };
+  ```
+  g<sub>M,int</sub> = max(g<sub>1</sub>, g<sub>2+</sub>) by the equations of Table 4.6.2.2.2b-1, g<sub>V,int</sub> = max(0.36 + S/25, 0.2 + S/12 − (S/35)²) (Table 4.6.2.2.3a-1), for every S and N<sub>b</sub>.
+- **After (interior):**
+  ```js
+    if (!ext) {
+      if (!(nb >= 3 && (S > 16.0 || nb === 3))) return { mM: Math.max(m1, m2), mV: Math.max(v1, v2), m1, m2, v1, v2, kr };
+      const { G } = geo(), lv = N => { let b = null; for (let j = 1; j < nb - 1; j++) { const l = sgLever(G, N, j); if (l && (b == null || l.df > b)) b = l.df; } return b; }, l1 = lv(1), l2 = lv(2);
+      let iM1 = m1, iM2 = m2, iV1 = v1, iV2 = v2, rule;
+      if (S > 16.0) { iM1 = iV1 = l1 != null ? l1 : 0; iM2 = iV2 = l2 != null ? l2 : 0; rule = 'S16'; }
+      else { iM1 = Math.min(m1, l1 != null ? l1 : m1); iM2 = Math.min(m2, l2 != null ? l2 : m2); iV1 = l1 != null ? l1 : v1; iV2 = l2 != null ? l2 : v2; rule = 'N3'; }
+      return { mM: Math.max(iM1, iM2), mV: Math.max(iV1, iV2), m1: iM1, m2: iM2, v1: iV1, v2: iV2, kr, rule, eq: { m1, m2, v1, v2 }, l1, l2 };
+    }
+  ```
+  - S > 16 ft: one lane g<sub>1</sub> = lever rule (one truck, m = 1.2), two or more lanes g<sub>2+</sub> = lever rule (two trucks with a 4 ft gap, m = 1.0), for moment and shear;
+  - N<sub>b</sub> = 3 (S ≤ 16 ft): moment g<sub>1</sub> = min(equation, lever 1 lane), g<sub>2+</sub> = min(equation, lever 2 lanes); shear g<sub>1</sub>, g<sub>2+</sub> = lever rule;
+  - the lever rule is taken for each interior girder (trucks 2 ft from the traffic faces, stepped 0.25 ft, as GirderDetail's `dfLever`) and the largest is used, because GirderDetail sends the largest factor over its interior girders (`dfPayload`); N<sub>L</sub> and the lane width as in XS10 (w/2 lanes for 20 ≤ w ≤ 24 ft); a lever case that does not fit the roadway counts as 0 (S > 16 ft) or is not used (N<sub>b</sub> = 3), as in `dfMember`;
+  - the fatigue factors follow: `m1`, `v1` now carry the rule's one-lane values (Preliminary sizing's interior fatigue factor is m1/1.2 and v1/1.2, as GirderDetail's fatM, fatV = r.mom1/1.2, r.shr1/1.2);
+  - every other case (N<sub>b</sub> ≥ 4 with S ≤ 16 ft, and N<sub>b</sub> = 2) returns the same object as before, so those results are bit-identical; the exterior branch is unchanged (same arithmetic, the geometry moved into `geo()`).
+  - As for the exterior girders (XS10), no skew factor is applied here: Preliminary sizing applies its own skew correction for shear along the span; GirderDetail's interior shear includes its skew factor (1.048 at 15°, below).
+- **Problem:** with S > 16 ft or N<sub>b</sub> = 3 the built-in interior factors used the equations outside their range. They were below GirderDetail's factors for the same layout (S = 17 ft: moment 1.083 vs 1.412), so Suggest, Full design and the width study could size trial girders unconservatively. Less conservative; fixed. The G7 range-of-applicability warning (N<sub>b</sub> ≥ 4, S ≤ 16 ft) is unchanged.
+- **Governing provision:** AASHTO LRFD 10th Ed. Table 4.6.2.2.2b-1 (interior moment; range 3.5 ≤ S ≤ 16.0 ft, N<sub>b</sub> ≥ 4; for N<sub>b</sub> = 3 the lesser of the equation and the lever rule), Table 4.6.2.2.3a-1 (interior shear; lever rule for N<sub>b</sub> = 3; range 3.5 ≤ S ≤ 16.0 ft), 4.6.2.2.1 (outside the range of applicability: the lever rule unless specified otherwise), 3.6.1.1.1 and 3.6.1.1.2 (lanes, multiple presence). These are the tables GirderDetail's DF1 check cites ("AASHTO LRFD Tables 4.6.2.2.2b-1, 4.6.2.2.3a-1, 4.6.2.2.2d-1") and the rules its `dfMember` labels ("S > 16 ft: lever rule"; "N_b = 3: moment lesser of equation and lever rule; shear by lever rule"). Not re-checked against the printed 10th Edition here (no copy in the repo): verify.
+- **Check cases (sgDF in Node, old vs new; L = 110 ft, K<sub>g</sub> = 936,395 in⁴, t<sub>s</sub> = 8 in, d<sub>e</sub> = 1.75 ft, w = (N<sub>b</sub> − 1)S + 2d<sub>e</sub>; equations: k<sub>r</sub> as before):**
+  - **N<sub>b</sub> = 3, S = 9.50 ft** (w = 22.50 ft: 2 lanes of 11.25 ft; interior girder G2 at 9.50 ft, girders at 0, 9.50, 19.00 ft; traffic faces at −1.75 and 20.75 ft): equations g<sub>1,M</sub> = 0.484, g<sub>2+,M</sub> = 0.708, g<sub>1,V</sub> = 0.36 + 9.50/25 = 0.740, g<sub>2+,V</sub> = 0.2 + 9.50/12 − (9.50/35)² = 0.918.
+    - Lever, 1 lane: wheels at 9.50 and 15.50 ft: R = ½[1 + (19.00 − 15.50)/9.50] = 0.684, g = 1.2 × 0.684 = **0.821**.
+    - Lever, 2 lanes: wheels at 2.75, 8.75, 12.75, 18.75 ft (the train's last position, 2 ft from the right face): R = ½(2.75 + 8.75 + 6.25 + 0.25)/9.50 = 0.947, g = 1.0 × 0.947 = **0.947**.
+    - Moment: min(0.484, 0.821) = 0.484, min(0.708, 0.947) = 0.708: g<sub>M</sub> **0.708 → 0.708** (unchanged). Shear: max(0.740, 0.918) = **0.918 → max(0.821, 0.947) = 0.947**; fatigue shear factor v<sub>1</sub>/1.2: 0.740/1.2 = 0.617 → 0.821/1.2 = 0.684.
+  - **N<sub>b</sub> = 5, S = 17.00 ft** (w = 71.50 ft, N<sub>L</sub> = 5; G2 at 17.00 ft): lever 1 lane: wheels at 17.00 and 23.00: ½(1 + 11/17) = 0.824 × 1.2 = **0.988**; 2 lanes: wheels at 7, 13, 17, 23: ½(7/17 + 13/17 + 1 + 11/17) = 1.412 × 1.0 = **1.412** (G3 gives no more). g<sub>M</sub> 1.083 → **1.412**, g<sub>V</sub> 1.381 → **1.412**; m<sub>1</sub> 0.698 → 0.988, v<sub>1</sub> 1.040 → 0.988.
+  - N<sub>b</sub> = 4 and N<sub>b</sub> = 3 with S = 17.00 ft: the same 0.988 / 1.412. N<sub>b</sub> = 3, S = 12.00 ft: g<sub>M</sub> 0.838 unchanged, g<sub>V</sub> 1.082 → 1.167. N<sub>b</sub> = 6, S = 16.00 ft, N<sub>b</sub> = 2, and the built-in example (N<sub>b</sub> = 5, S = 9.50 ft), interior and exterior: identical objects.
+- **Same layout in both tools (headless Chromium, built-in example with Preliminary sizing changed; span 1, 110 ft; built-in = with GirderDetail's factors switched off):**
+  - N<sub>b</sub> = 3, S = 9.50 ft: built-in interior, before: g<sub>M</sub> 0.708, g<sub>V</sub> 0.918, m<sub>1</sub> 0.484, v<sub>1</sub> 0.740; after: 0.708, **0.947**, 0.484, **0.821**; GirderDetail: 0.708, 0.993, 0.484, 0.861 (= 0.947 and 0.821 × its skew factor for shear 1.048 at 15°). Exterior unchanged (0.795). Fast suggestion unchanged (D = 65 in, $1,011,528).
+  - N<sub>b</sub> = 3, S = 17.00 ft: built-in interior, before: g<sub>M</sub> 1.083, g<sub>V</sub> 1.381, m<sub>1</sub> 0.698, v<sub>1</sub> 1.040; after: **1.412, 1.412, 0.988, 0.988**; GirderDetail: 1.412, 1.480, 0.988, 1.036 (shear × 1.048). Fast suggestion (trial girders use the built-in factors): web depth 66 → **74 in**, top flanges 22 → 23 in wide, estimated cost $1,281,604 → **$1,365,308**.
+  - The Suggest tab's interior derivation shows the rule (screenshots `scratchpad/followups/gd-c1/c2_nb3.png`, `c2_nb3_S17.png`).
+- **Effect on the built-in example (N<sub>b</sub> = 5, S = 9.50 ft):** none. The fast suggestion, Full design and every Preliminary sizing result are identical (below), and the width study (W = 44.50 ft, N = 4 to 12, S ≤ 16 ft) is identical row for row: no row has S > 16 ft or N<sub>b</sub> = 3 (N = 3 needs S ≥ 18.25 ft, above the 16 ft limit, so it is not a row).
+- **Saved data:** no key or format change. The built-in factor objects (not saved) gain `rule`, `eq`, `l1`, `l2` in the S > 16 ft and N<sub>b</sub> = 3 cases only.
+- **Other copies:** GirderDetail `dfMember`, `dfLever`, `dfLeverC` (main page; the source, unchanged). `lldf.html` is not touched.
+
+### Exact changes (C2): decoded PlateLine (unified diff against main; the main page changes only on the PL_B64 line)
+
+```diff
+--- PlateLine (decoded PL_B64, main 77973a3)
++++ PlateLine (decoded PL_B64, C2)
+@@ -1795,7 +1795,10 @@
+    S, N_b girders, d_e on both sides and the roadway w; XS10): one lane by the lever rule (truck 2 ft from the traffic face, m = 1.2);
+    two or more lanes the larger of the e-factor with d_e not less than -1.0 ft (Table 4.6.2.2.2d-1 range; 4.6.2.2.3b for shear) and
+    the rigid cross-section method (4.6.2.2.2d); S > 16 ft: the lever rule; N_b = 3: moment the lesser of the e-factor and the lever
+-   rule, shear the lever rule. Lanes: N_L = INT(w/12), or 2 lanes of w/2 for 20 <= w <= 24 ft (3.6.1.1.1). */
++   rule, shear the lever rule. Lanes: N_L = INT(w/12), or 2 lanes of w/2 for 20 <= w <= 24 ft (3.6.1.1.1).
++   Interior girders (C2, copied from dfMember): the equations (Tables 4.6.2.2.2b-1, 4.6.2.2.3a-1); S > 16 ft: one lane and two or
++   more lanes by the lever rule; N_b = 3: moment the lesser of the equation and the lever rule (one lane, and two or more lanes),
++   shear the lever rule; the lever rule is the largest over the interior girders (GirderDetail sends the largest interior factor). */
+ const SG_MPF = n => n <= 1 ? 1.20 : n === 2 ? 1.00 : n === 3 ? 0.85 : 0.65;
+ function sgLeverC(pos, Nb, j, uw) {
+   const uj = pos[j];
+@@ -1805,13 +1808,13 @@
+   if (j === Nb - 1 && Nb > 1 && uw > uj) return (uw - pos[Nb - 2]) / (pos[Nb - 1] - pos[Nb - 2]);
+   return 0;
+ }
+-function sgLever(G, N) {   // exterior girder (j = 0), truck train, 6-ft axles, gaps of 4 ft, 2 ft from the traffic faces
++function sgLever(G, N, j = 0) {   // girder j (default the exterior girder, j = 0), truck train, 6-ft axles, gaps of 4 ft, 2 ft from the traffic faces
+   const pos = G.pos, Nb = G.nb, rw0 = G.rw0, rw1 = G.rw1, laneW = G.laneW || 12;
+   if (laneW * N > rw1 - rw0 + 1e-9) return null;
+   const off = []; let cum = 0; for (let t = 0; t < N; t++) { off.push(cum, cum + 6); cum += 6 + (t < N - 1 ? 4 : 0); }
+   const train = off[off.length - 1]; if (train > rw1 - rw0 - 4 + 1e-9) return null;
+   let best = null;
+-  for (let s = rw0 + 2; s <= rw1 - 2 - train + 1e-9; s += 0.25) { let R = 0; for (const o of off) R += 0.5 * sgLeverC(pos, Nb, 0, s + o); if (!best || R > best.R + 1e-9) best = { R, s }; }
++  for (let s = rw0 + 2; s <= rw1 - 2 - train + 1e-9; s += 0.25) { let R = 0; for (const o of off) R += 0.5 * sgLeverC(pos, Nb, j, s + o); if (!best || R > best.R + 1e-9) best = { R, s }; }
+   if (!best) return null; const m = SG_MPF(N);
+   return { N, R: best.R, m, df: best.R * m };
+ }
+@@ -1827,10 +1830,18 @@
+   const m1 = 0.06 + (S / 14) ** 0.4 * (S / L) ** 0.3 * kr ** 0.1;
+   const m2 = 0.075 + (S / 9.5) ** 0.6 * (S / L) ** 0.2 * kr ** 0.1;
+   const v1 = 0.36 + S / 25, v2 = 0.2 + S / 12 - (S / 35) ** 2;
+-  if (!ext) return { mM: Math.max(m1, m2), mV: Math.max(v1, v2), m1, m2, v1, v2, kr };
+-  const w = rdwy != null && isFinite(rdwy) ? rdwy : (nb - 1) * S + 2 * de, twoHalf = w >= 20.0 - 1e-9 && w <= 24.0 + 1e-9, NL = twoHalf ? 2 : Math.max(1, Math.floor(w / 12)), laneW = twoHalf ? w / 2 : 12;
+-  const pos = []; for (let i = 0; i < nb; i++) pos.push(i * S); const xc = (nb - 1) * S / 2, sumX2 = pos.reduce((a, x) => a + (x - xc) ** 2, 0) || 1e-9;
+-  const G = { pos, nb, de, rw0: -de, rw1: -de + w, NL, laneW, xc, sumX2 };
++  const geo = () => { const w = rdwy != null && isFinite(rdwy) ? rdwy : (nb - 1) * S + 2 * de, twoHalf = w >= 20.0 - 1e-9 && w <= 24.0 + 1e-9, NL = twoHalf ? 2 : Math.max(1, Math.floor(w / 12)), laneW = twoHalf ? w / 2 : 12;
++    const pos = []; for (let i = 0; i < nb; i++) pos.push(i * S); const xc = (nb - 1) * S / 2, sumX2 = pos.reduce((a, x) => a + (x - xc) ** 2, 0) || 1e-9;
++    return { w, NL, G: { pos, nb, de, rw0: -de, rw1: -de + w, NL, laneW, xc, sumX2 } }; };
++  if (!ext) {
++    if (!(nb >= 3 && (S > 16.0 || nb === 3))) return { mM: Math.max(m1, m2), mV: Math.max(v1, v2), m1, m2, v1, v2, kr };
++    const { G } = geo(), lv = N => { let b = null; for (let j = 1; j < nb - 1; j++) { const l = sgLever(G, N, j); if (l && (b == null || l.df > b)) b = l.df; } return b; }, l1 = lv(1), l2 = lv(2);   // interior girders (C2): GirderDetail dfMember
++    let iM1 = m1, iM2 = m2, iV1 = v1, iV2 = v2, rule;
++    if (S > 16.0) { iM1 = iV1 = l1 != null ? l1 : 0; iM2 = iV2 = l2 != null ? l2 : 0; rule = 'S16'; }
++    else { iM1 = Math.min(m1, l1 != null ? l1 : m1); iM2 = Math.min(m2, l2 != null ? l2 : m2); iV1 = l1 != null ? l1 : v1; iV2 = l2 != null ? l2 : v2; rule = 'N3'; }
++    return { mM: Math.max(iM1, iM2), mV: Math.max(iV1, iV2), m1: iM1, m2: iM2, v1: iV1, v2: iV2, kr, rule, eq: { m1, m2, v1, v2 }, l1, l2 };
++  }
++  const { w, NL, G } = geo();
+   const l1 = sgLever(G, 1), lev = l1 ? l1.df : 0, deE = Math.max(de, -1.0), eM = 0.77 + deE / 9.1, eV = 0.6 + deE / 10;
+   let mE = eM * m2, vE = eV * v2, rule = 'e';
+   if (S > 16.0) { const l2 = sgLever(G, 2); mE = vE = l2 ? l2.df : 0; rule = 'S16'; }
+@@ -2568,7 +2579,7 @@
+ <p>DC1 (noncomposite): steel self-weight from the current plates increased by the detail allowance, deck slab over the tributary width (S for the interior girder, S/2 + overhang for the exterior girder), haunch, and SIP forms. DC2: two barriers shared equally by all girders. DW: wearing surface over the roadway, shared equally. Deck placement: 1.25 DC1 + 1.50 construction live load over the tributary width.</p>
+ <p>Live load is HL-93 (3.6.1.2, 3.6.1.3): the design truck with rear axle spacing 14, 18, 22, 26, and 30 ft, both directions, or the design tandem, plus the 0.64 klf lane on the parts of the influence line that increase the effect. IM = 33% is applied to the truck and tandem. In negative moment regions (between permanent-load contraflexure points around each pier), 90% of two trucks with 14 ft rear spacing, at least 50 ft apart, plus 90% of the lane is also considered.</p>
+ <h3>Distribution factors</h3>
+-<p>Interior girder moment and shear use Table 4.6.2.2.2b-1 and 4.6.2.2.3a-1, taking the larger of one lane and two or more lanes. K<sub>g</sub> uses the steel section at each span's midspan. The exterior girder uses the lever rule (one lane, multiple presence 1.2) and e × interior (two or more lanes), per Tables 4.6.2.2.2d-1 and 4.6.2.2.3b-1. Negative moment regions use the average length and K<sub>g</sub> of the adjacent spans. The skew correction for shear (Table 4.6.2.2.3c-1) is applied along the whole span; the skew reduction for moment is not taken.</p>
++<p>Interior girder moment and shear use Table 4.6.2.2.2b-1 and 4.6.2.2.3a-1, taking the larger of one lane and two or more lanes; for S &gt; 16 ft the lever rule, and for N<sub>b</sub> = 3 the lesser of the equation and the lever rule for moment and the lever rule for shear (the largest over the interior girders), as GirderDetail's LLDF and DLs module does. K<sub>g</sub> uses the steel section at each span's midspan. The exterior girder uses the lever rule (one lane, multiple presence 1.2) and e × interior (two or more lanes), per Tables 4.6.2.2.2d-1 and 4.6.2.2.3b-1. Negative moment regions use the average length and K<sub>g</sub> of the adjacent spans. The skew correction for shear (Table 4.6.2.2.3c-1) is applied along the whole span; the skew reduction for moment is not taken.</p>
+ <h3>Combinations</h3>
+ <div class="eq-math">\\[M_u = \\gamma_{DC}M_{DC} + \\gamma_{DW}M_{DW} + 1.75M_{LL+IM}, \\qquad \\gamma_{DC} = 1.25\\ \\text{or}\\ 0.90, \\quad \\gamma_{DW} = 1.50\\ \\text{or}\\ 0.65\\]</div>
+ <div class="eq-math">\\[M_s = M_{DC} + M_{DW} + 1.30M_{LL+IM} \\quad (\\text{Service II}), \\qquad M_c = 1.25M_{DC1} + 1.50M_{CLL}\\]</div>
+@@ -3026,7 +3037,7 @@
+   const TI = R.types.int || null, TE = R.types.ext || null, Lm = s.spans[iMax];
+   let dfw = `<div class="eq-block"><div class="eq-title"><span>Longitudinal stiffness, Span ${iMax + 1} midspan section</span><span class="eq-ref">AASHTO 4.6.2.2.1-1, 5.4.2.4-1</span></div><div class="eq-math">\\[\\begin{aligned}E_c &= 120{,}000(1.0)(${f3(num(P.bridge.wc))})^2(${f2(num(P.bridge.fc))})^{0.33} = ${f0(s.Ec)}\\ \\text{ksi}, \\quad n = \\frac{29{,}000}{${f0(s.Ec)}} = ${f2(s.n)} \\\\ K_g &= n\\left(I + A e_g^2\\right) = ${f2(s.n)}\\left[${f0(Kg.I)} + ${f2(Kg.A)}(${f2(Kg.eg)})^2\\right] = ${f0(Kg.Kg)}\\ \\text{in}^4\\end{aligned}\\]</div></div>`;
+   if (TI) { const d = TI.dfSpan[iMax];
+-    dfw += `<div class="eq-block"><div class="eq-title"><span>Interior girder, moment, Span ${iMax + 1}</span><span class="eq-ref">AASHTO Table 4.6.2.2.2b-1</span></div><div class="eq-math">\\[\\begin{aligned}g_{1} &= 0.06 + \\left(\\frac{S}{14}\\right)^{0.4}\\left(\\frac{S}{L}\\right)^{0.3}\\left(\\frac{K_g}{12Lt_s^3}\\right)^{0.1} = 0.06 + \\left(\\frac{${f2(num(P.bridge.S))}}{14}\\right)^{0.4}\\left(\\frac{${f2(num(P.bridge.S))}}{${f2(Lm)}}\\right)^{0.3}(${f3(d.kr)})^{0.1} = ${f3(d.m1)} \\\\ g_{2+} &= 0.075 + \\left(\\frac{S}{9.5}\\right)^{0.6}\\left(\\frac{S}{L}\\right)^{0.2}\\left(\\frac{K_g}{12Lt_s^3}\\right)^{0.1} = ${f3(d.m2)} \\\\ g_M &= \\max(${f3(d.m1)},\\ ${f3(d.m2)}) = ${f3(d.mM)} \\qquad g_V = \\max(0.36 + S/25,\\ 0.2 + S/12 - (S/35)^2) = ${f3(d.mV)}\\end{aligned}\\]</div></div>`; }
++    dfw += `<div class="eq-block"><div class="eq-title"><span>Interior girder, moment, Span ${iMax + 1}</span><span class="eq-ref">AASHTO Table 4.6.2.2.2b-1${d.rule === 'S16' ? '; S > 16 ft: lever rule' : d.rule === 'N3' ? ', N<sub>b</sub> = 3; Table 4.6.2.2.3a-1' : ''}</span></div><div class="eq-math">\\[\\begin{aligned}g_{1} &= 0.06 + \\left(\\frac{S}{14}\\right)^{0.4}\\left(\\frac{S}{L}\\right)^{0.3}\\left(\\frac{K_g}{12Lt_s^3}\\right)^{0.1} = 0.06 + \\left(\\frac{${f2(num(P.bridge.S))}}{14}\\right)^{0.4}\\left(\\frac{${f2(num(P.bridge.S))}}{${f2(Lm)}}\\right)^{0.3}(${f3(d.kr)})^{0.1} = ${f3(d.eq ? d.eq.m1 : d.m1)} \\\\ g_{2+} &= 0.075 + \\left(\\frac{S}{9.5}\\right)^{0.6}\\left(\\frac{S}{L}\\right)^{0.2}\\left(\\frac{K_g}{12Lt_s^3}\\right)^{0.1} = ${f3(d.eq ? d.eq.m2 : d.m2)} \\\\ ${d.rule === 'S16' ? `S &> 16\\ \\text{ft: lever rule},\\quad g_1 = ${f3(d.m1)}\\ (1\\ \\text{lane}),\\quad g_{2+} = ${f3(d.m2)}\\ (2\\ \\text{lanes}) \\\\ ` : d.rule === 'N3' ? `N_b &= 3:\\quad g_1 = \\min(${f3(d.eq.m1)},\\ ${d.l1 != null ? f3(d.l1) : '\\text{n/a}'}) = ${f3(d.m1)},\\quad g_{2+} = \\min(${f3(d.eq.m2)},\\ ${d.l2 != null ? f3(d.l2) : '\\text{n/a}'}) = ${f3(d.m2)}\\ (\\text{lesser of equation and lever rule}) \\\\ ` : ''}g_M &= \\max(${f3(d.m1)},\\ ${f3(d.m2)}) = ${f3(d.mM)} \\qquad g_V = ${d.rule ? `\\max(${f3(d.v1)},\\ ${f3(d.v2)})\\ (\\text{lever rule})` : '\\max(0.36 + S/25,\\ 0.2 + S/12 - (S/35)^2)'} = ${f3(d.mV)}\\end{aligned}\\]</div></div>`; }
+   if (TE) { const d = TE.dfSpan[iMax];
+     dfw += `<div class="eq-block"><div class="eq-title"><span>Exterior girder, moment, Span ${iMax + 1}</span><span class="eq-ref">AASHTO Table 4.6.2.2.2d-1, lever rule; 4.6.2.2.2d rigid cross-section</span></div><div class="eq-math">\\[\\begin{aligned}d_e &= ${f2(s.de)}\\ \\text{ft}, \\quad w = ${f2(d.w)}\\ \\text{ft}, \\quad N_L = ${d.NL}, \\quad g_{1,lever} = 1.2 \\times \\frac{0.5\\,(a_1 + a_2)}{S} = ${f3(d.lev)}, \\quad a_1 = S + d_e - 2 = ${f2(num(P.bridge.S) + s.de - 2)}\\ \\text{ft} \\\\ e &= 0.77 + \\frac{${d.deE > s.de + 1e-9 ? '-1.00' : 'd_e'}}{9.1} = ${f3(d.eM)}${d.deE > s.de + 1e-9 ? '\\ (d_e \\text{ limited to } -1.0)' : ''}, \\quad g_{2+} = ${d.rule === 'e' ? `e\\,g_{2+,int} = ${f3(d.eM)}(${f3(d.m2)})` : d.rule === 'S16' ? '\\text{lever rule, 2 lanes (S > 16 ft)}' : '\\min(e\\,g_{2+,int},\\ \\text{lever, 2 lanes})\\ (N_b = 3)'} = ${f3(d.mE)} \\\\ g_{rigid} &= \\max_n\\, m\\left(\\frac{N_L}{N_b} + \\frac{X_{ext}\\sum e}{\\sum x^2}\\right) = ${f3(d.rig)}\\ (${d.rigN}\\ \\text{lane${d.rigN > 1 ? 's' : ''}}) \\\\ g_M &= \\max(${f3(d.lev)},\\ ${f3(d.mE)},\\ ${f3(d.rig)}) = ${f3(d.mM)}, \\quad g_V = \\max(${f3(d.lev)},\\ ${f3(d.vE)},\\ ${f3(d.rig)}) = ${f3(d.mV)}\\end{aligned}\\]</div></div>`; }
+   const skv = tr[0].skV.map((v, i) => `Span ${i + 1}: ${f3(v)}`).join(', ');
+```
