@@ -4059,3 +4059,117 @@ Engineer's approval (2026-10-13) of three items: (Q4) Transverse stiffeners TS4 
 +      [[x0 + doFt, k, 1], [x1 - doFt, k + 1, -1]].forEach(([x, ks, dir]) => { const s = sec(x), end = ks === 0 || ks === nS - 1 || !m.cont;
          ts.rows.push({ name: `Span ${k + 1}, first ${stiff ? 'stiffener' : 'connection plate'} from ${supN(ks)}, ${TT(gt)}`, type: stiff ? 'A' : 'B', D: s.D, tw: s.tw, bfc: s.topB, tfc: s.topT, bft: s.botB, tft: s.botT, bfw: bfw(x), end: end ? 'yes' : 'no', do1: r2(doIn), do2: r2(doIn), ...shear(T, x), df: 0, ...(end ? shearIn(T, Math.min(x, m.sup[ks]), Math.max(x, m.sup[ks])) : {}) }); });
 ```
+
+### Q6. PlateLine Bridge tab: girder spacing "From exterior girders"   [new input mode] [no calculation change] [optional saved field `bridge.Wcc`]
+
+- **What it does:** Girder spacing gets a third option beside Equal and Variable, **From exterior girders**: input W<sub>cc</sub>, the center-to-center distance between the exterior girders (ft, new optional field `bridge.Wcc`). **S = W<sub>cc</sub>/(N<sub>b</sub> − 1)**, recomputed whenever N<sub>b</sub> or W<sub>cc</sub> changes (every recompute), and shown read-only under the input with the out-to-out deck width W<sub>cc</sub> + left overhang + right overhang. In this mode the "Girder spacing S (equal)" input is hidden (as the bay list is hidden for Equal). When the mode is first selected with no W<sub>cc</sub>, W<sub>cc</sub> starts at the current layout's sum of bays (so the geometry does not change).
+- **How S reaches every consumer (design decision):** the computed S is written to `bridge.S` (the mode is equal spacing with S derived), so every reader of `P.bridge.S` / equal spacing is unchanged: `brGeom()` (only `'variable'` reads the bay list), `buildModel`, Suggest (`suggestLayout`, quick check, Full design), girder-count / width study, Alternatives, quantities and costs, drawings, GirderDetail's bridge definition (`bridgeDef()`, which already sends the computed `nb`, `S`, `bays`), detail demands (`detailExport`), the DXF/report bay text (`B.spacing === 'variable' ? ... : nb − 1 @ S`). The geometry signature `sgGeoSig()` signs the mode as `'equal'`, so GirderDetail's LLDF/DL factors (matched by that signature, `sgDfx`) still apply to the same bridge, and the `gd-bridge` payload is identical to Equal mode. The `bridgeSuite.v1.*` handoff code and payloads are not touched.
+- **Applies (width study "Apply", its Full design "Apply", Alternatives "Apply"):** they set N<sub>b</sub> and S as before. Before, they always set `spacing = 'equal'`; now, if the mode is "From exterior girders" it is kept and W<sub>cc</sub> = (N<sub>b</sub> − 1)·S (unrounded S of the result, 6 decimals), so S stays the applied spacing (to < 1e-6 ft; S is then re-derived from W<sub>cc</sub>); in Equal or Variable mode they set Equal exactly as before (`spKeepExt()`). Alternatives keep the deck width and overhangs, so W<sub>cc</sub> is unchanged by them (case below: 40 → 40); the width study changes the overhangs, so W<sub>cc</sub> follows (40 → 39 with 4 girders at 13 ft, overhangs 2.75 ft, out-to-out 44.50 ft).
+- **Where (decoded PlateLine):**
+  - Bridge tab inputs (PL ≈ 4125; anchor `${fld('Girder spacing', 'bridge.spacing', '', 'sel'`): option `['exterior', 'From exterior girders']`; `fld('Exterior girders, center to center W<sub>cc</sub>', 'bridge.Wcc', 'ft')` after the bay list; `<p class="hint static full" id="br-wcc-info">`.
+  - `syncSpacingVis()` (PL ≈ 4211): also hides `bridge.S` and shows `bridge.Wcc` in the new mode; new `spExtS()`, `spExtSync()`, `spExtInfo()`, `spKeepExt()` after it.
+  - `onScalar()` (PL ≈ 4228): first selection of the mode with no W<sub>cc</sub> sets W<sub>cc</sub> = Σ bays.
+  - `recompute()` (PL ≈ 4297): `spExtSync()` first (S = W<sub>cc</sub>/(N<sub>b</sub> − 1) when the mode is on and the inputs are valid; also updates the hidden S input).
+  - `brGeom()` (PL ≈ 1088): input errors "Girder spacing from the exterior girders: enter a positive center-to-center distance between the exterior girders." and "... needs at least 2 girders." (mode on only).
+  - `sgGeoSig()` (PL ≈ 1808): `(B.spacing === 'exterior' ? 'equal' : B.spacing) || 'equal'`.
+  - `wsApply()`, `wsfApply()`, `applyAlt()`: `P.bridge.spacing = 'equal'` → `spKeepExt(P.bridge, r.S)`.
+  - Manual: "Variable spacing and deck edges" paragraph and the input table (row W<sub>cc</sub>).
+- **§4:** no formula, factor, unit or reference changed; S is derived as stated, and with the same N<sub>b</sub> and S every result is identical to Equal mode (verified below).
+- **Check case (built-in example, 5 girders at 9.5 ft, overhangs 3.25 ft):** select "From exterior girders": W<sub>cc</sub> = 38 ft, S = 38/4 = 9.500 ft, out-to-out 38 + 3.25 + 3.25 = 44.50 ft. N<sub>b</sub> = 6: S = 38/5 = 7.600 ft (model bays 5 × 7.6). Same bridge in Equal mode with N<sub>b</sub> = 6, S = 7.6: fast suggestion, `detailExport`, `bridgeDef` (without `ts`), `sgGeoSig`, every PlateLine check status, and GirderDetail's received `P.df.bridge`: identical. W<sub>cc</sub> = 40: S = 8.000 ft, out-to-out 46.50 ft. W<sub>cc</sub> blank: input error (above). N<sub>b</sub> = 1: input error. Switching back to Equal shows S = 7.6 in the S input.
+- **Saved data:** no key changed. `bridge.Wcc` is only written when the mode is used (not added to the defaults), so projects that do not use it save exactly as before. A project saved in the new mode loads in main with an identical `P.bridge` and identical model (main reads `spacing: 'exterior'` as equal spacing with the stored S; its select shows blank because main has no such option); it loads in the branch unchanged. Old projects load as before.
+- **UI:** Equal and Variable modes: the Cross-section section is pixel-identical to main (screenshots). New mode: W<sub>cc</sub> in the S cell, the read-only line below it (full width), the rest of the section flows on.
+- **How verified:** `node --check`; headless Chromium (case above; Alternatives Apply and width-study Apply run in the new mode — the width study's Full design Apply uses the same `spKeepExt()` line and was not run; saved data both directions; no console errors).
+- **Other copies:** none. **Open items:** none.
+
+### Exact changes (Q6): decoded PlateLine (unified diff)
+
+```diff
+--- PlateLine (after Q5)
++++ PlateLine (after Q6)
+@@ -1087,2 +1087,3 @@
+     if (bays.some(v => !(v > 0))) errs.push('Variable spacing: every bay must be a positive number.'); }
++  if (b.spacing === 'exterior') { if (!(num(b.Wcc) > 0)) errs.push('Girder spacing from the exterior girders: enter a positive center-to-center distance between the exterior girders.'); if (!(nb >= 2)) errs.push('Girder spacing from the exterior girders needs at least 2 girders.'); }
+   const S = bays.length ? bays.reduce((a, v) => a + v, 0) / bays.length : num(b.S);
+@@ -1807,3 +1808,3 @@
+ function sgGeoSig(B, D, top, bot, web) { const r3 = v => Math.round(+v * 1000) / 1000, L = r => r3(r.L != null ? r.L : r.x1 - r.x0);
+-  return JSON.stringify([B.nb, B.S, B.spacing || 'equal', B.bays || '', B.ohL, B.ohR, B.barrier, B.edge || null, B.spans, B.skews, B.ts, B.haunch, B.fc, B.wc, r3(D), top.map(r => [L(r), +r.b, +r.t]), bot.map(r => [L(r), +r.b, +r.t]), web.map(r => [L(r), +r.t])]); }
++  return JSON.stringify([B.nb, B.S, (B.spacing === 'exterior' ? 'equal' : B.spacing) || 'equal', B.bays || '', B.ohL, B.ohR, B.barrier, B.edge || null, B.spans, B.skews, B.ts, B.haunch, B.fc, B.wc, r3(D), top.map(r => [L(r), +r.b, +r.t]), bot.map(r => [L(r), +r.b, +r.t]), web.map(r => [L(r), +r.t])]); }
+ function sgDfx(P, D, top, bot, web, ext) {
+@@ -2419,3 +2420,3 @@
+ <h3>Analysis model</h3><p>The analysis of the current design uses a variable-stiffness, staged line-girder model: DC1 on the steel section, DC2 and DW on the long-term composite section, and live load on the short-term composite section, with the composite stages cracked near interior supports. Its settings (staged or constant EI, cracked zones, deck reinforcement) are made in GirderDetail's Structural analysis module. Suggest mode searches trial layouts with the faster constant-EI model and then designs the chosen layout with the staged model.</p>
+-<h3>Variable spacing and deck edges</h3><p>On the Bridge tab, <b>Girder spacing</b> can be <i>Variable</i>: enter the bay spacings from left to right (one fewer than the number of girders). The framing plan, cross-section, deck width, and GirderDetail's LLDF and DLs module use each bay; the sizing checks and the built-in approximate distribution factors use the average spacing, and the spacing and overhang checks are made bay by bay. <b>Deck edges</b> can be a barrier (width and the Suggest barrier weight) or a <i>curb and railing</i> on each side: curb width and height, railing load point and weight, and the distance from the deck edge to the traffic face, which sets the roadway. When GirderDetail's LLDF and DLs module is in use, its factors and MassDOT dead loads replace the built-in ones (see the Analysis tab).</p>
++<h3>Variable spacing and deck edges</h3><p>On the Bridge tab, <b>Girder spacing</b> can be <i>Variable</i>: enter the bay spacings from left to right (one fewer than the number of girders). It can also be <i>From exterior girders</i>: enter the center-to-center distance W<sub>cc</sub> between the two exterior girders, and the equal spacing is S = W<sub>cc</sub>/(N<sub>b</sub> − 1), recomputed whenever N<sub>b</sub> or W<sub>cc</sub> changes and shown with the out-to-out deck width W<sub>cc</sub> + left overhang + right overhang; everything else then works exactly as with equal spacing S. The framing plan, cross-section, deck width, and GirderDetail's LLDF and DLs module use each bay; the sizing checks and the built-in approximate distribution factors use the average spacing, and the spacing and overhang checks are made bay by bay. <b>Deck edges</b> can be a barrier (width and the Suggest barrier weight) or a <i>curb and railing</i> on each side: curb width and height, railing load point and weight, and the distance from the deck edge to the traffic face, which sets the roadway. When GirderDetail's LLDF and DLs module is in use, its factors and MassDOT dead loads replace the built-in ones (see the Analysis tab).</p>
+ <h3>Reverting a suggestion</h3><p>Applying a suggested layout (Suggest tab) or an alternative (Alternatives tab) keeps a copy of the design from just before it. A banner above the output tabs then offers <b>Revert to the previous design</b>; after reverting, the same button re-applies the change, so you can compare the two. The copy survives a reload and is replaced the next time you apply a suggestion or alternative. <b>Keep and dismiss</b> discards it.</p>
+@@ -2448,2 +2449,3 @@
+ <tr><td>Girder spacing S</td><td>ft</td><td>Uniform center-to-center spacing.</td></tr>
++<tr><td>Exterior girders, center to center W<sub>cc</sub></td><td>ft</td><td>Spacing mode "From exterior girders" only: S = W<sub>cc</sub>/(N<sub>b</sub> − 1).</td></tr>
+ <tr><td>Overhangs</td><td>ft</td><td>Exterior girder centerline to edge of deck, each side.</td></tr>
+@@ -3769,3 +3771,3 @@
+   snapshotBefore(`Girder count from deck width (${r.N} girders at ${f2(r.S)} ft)`);
+-  P.bridge.nb = r.N; P.bridge.S = +r.S.toFixed(4); P.bridge.spacing = 'equal'; P.bridge.ohL = r.oh; P.bridge.ohR = r.oh; P.girder = JSON.parse(JSON.stringify(r.girder)); P.framing.stiff = r.framing.stiff; P.framing.doRatio = r.framing.doRatio;
++  P.bridge.nb = r.N; P.bridge.S = +r.S.toFixed(4); spKeepExt(P.bridge, r.S); P.bridge.ohL = r.oh; P.bridge.ohR = r.oh; P.girder = JSON.parse(JSON.stringify(r.girder)); P.framing.stiff = r.framing.stiff; P.framing.doRatio = r.framing.doRatio;
+   fillInputs(); ['web', 'top', 'bot', 'spl'].forEach(renderArr); recompute(); setOTab('summary'); autosave(); }
+@@ -3856,3 +3858,3 @@
+   snapshotBefore(`Girder count from deck width, full design (${r.N} girders at ${f2(r.S)} ft)`);
+-  P.bridge.nb = r.N; P.bridge.S = +r.S.toFixed(4); P.bridge.spacing = 'equal'; P.bridge.ohL = r.oh; P.bridge.ohR = r.oh; P.girder = JSON.parse(JSON.stringify(r.girder));
++  P.bridge.nb = r.N; P.bridge.S = +r.S.toFixed(4); spKeepExt(P.bridge, r.S); P.bridge.ohL = r.oh; P.bridge.ohR = r.oh; P.girder = JSON.parse(JSON.stringify(r.girder));
+   P.framing.stiff = r.framing.stiff; if (r.webType === 'stiffened' && r.doR) P.framing.doRatio = r.framing.doRatio; if (r.spacing) P.framing.spacing = r.framing.spacing;
+@@ -3977,3 +3979,3 @@
+   snapshotBefore(`Alternative (${r.nb} girders at ${f2(r.S)} ft)`);
+-  P.bridge.nb = r.nb; P.bridge.S = +r.S.toFixed(4); P.bridge.spacing = 'equal'; P.girder = JSON.parse(JSON.stringify(r.girder)); P.framing.stiff = r.web === 'stiffened' ? 'on' : 'off';
++  P.bridge.nb = r.nb; P.bridge.S = +r.S.toFixed(4); spKeepExt(P.bridge, r.S); P.girder = JSON.parse(JSON.stringify(r.girder)); P.framing.stiff = r.web === 'stiffened' ? 'on' : 'off';
+   fillInputs(); ['web', 'top', 'bot', 'spl'].forEach(renderArr); recompute(); setOTab('summary'); autosave();
+@@ -4119,4 +4121,4 @@
+       <div class="sec-body" id="sec-xs">
+-        ${fld('Number of girders', 'bridge.nb', '')}${fld('Girder spacing', 'bridge.spacing', '', 'sel', { options: [['equal', 'Equal'], ['variable', 'Variable (bay by bay)']] })}
+-        ${fld('Girder spacing S (equal)', 'bridge.S', 'ft')}${fld('Bay spacings, left to right (variable)', 'bridge.bays', 'ft', 'text')}
++        ${fld('Number of girders', 'bridge.nb', '')}${fld('Girder spacing', 'bridge.spacing', '', 'sel', { options: [['equal', 'Equal'], ['variable', 'Variable (bay by bay)'], ['exterior', 'From exterior girders']] })}
++        ${fld('Girder spacing S (equal)', 'bridge.S', 'ft')}${fld('Bay spacings, left to right (variable)', 'bridge.bays', 'ft', 'text')}${fld('Exterior girders, center to center W<sub>cc</sub>', 'bridge.Wcc', 'ft')}<p class="hint static full" id="br-wcc-info"></p>
+         ${fld('Left overhang', 'bridge.ohL', 'ft')}${fld('Right overhang', 'bridge.ohR', 'ft')}
+@@ -4205,3 +4207,13 @@
+ }
+-function syncSpacingVis() { const el = document.getElementById('f_bridge_bays'), ig = el && el.closest('.ig'); if (ig) ig.style.display = P.bridge.spacing === 'variable' ? '' : 'none'; }
++function syncSpacingVis() { const el = document.getElementById('f_bridge_bays'), ig = el && el.closest('.ig'); if (ig) ig.style.display = P.bridge.spacing === 'variable' ? '' : 'none';
++  const ext = P.bridge.spacing === 'exterior', vis = (id, on) => { const e = document.getElementById(id), g = e && e.closest('.ig'); if (g) g.style.display = on ? '' : 'none'; };
++  vis('f_bridge_S', !ext); vis('f_bridge_Wcc', ext); spExtInfo(); }
++/* girder spacing "From exterior girders" (Q6): S = W_cc/(N_b - 1) is kept in bridge.S (equal spacing), so every reader of bridge.S and the hand-offs are unchanged */
++function spExtS(b) { const nb = Math.round(Number(b.nb)), w = Number(b.Wcc); return b.spacing === 'exterior' && nb >= 2 && w > 0 ? w / (nb - 1) : null; }
++function spExtSync() { const s = spExtS(P.bridge); if (s != null && !(Math.abs(Number(P.bridge.S) - s) < 1e-6)) { P.bridge.S = s; const el = document.getElementById('f_bridge_S'); if (el) el.value = s; } spExtInfo(); }
++function spExtInfo() { const el = document.getElementById('br-wcc-info'); if (!el) return; const B = P.bridge, ext = B.spacing === 'exterior'; el.style.display = ext ? '' : 'none'; if (!ext) { el.innerHTML = ''; return; }
++  const s = spExtS(B), nb = Math.round(Number(B.nb)), w = Number(B.Wcc), oL = Number(B.ohL), oR = Number(B.ohR);
++  el.innerHTML = s == null ? 'Enter W<sub>cc</sub> (and at least 2 girders) to set the spacing.' : `S = W<sub>cc</sub>/(N<sub>b</sub> − 1) = ${f2(w)}/${nb - 1} = <b>${f3(s)} ft</b> (read-only). Out-to-out deck width = W<sub>cc</sub> + left + right overhang = ${f2(w)} + ${f2(oL)} + ${f2(oR)} = <b>${f2(w + oL + oR)} ft</b>.`; }
++/* an Apply that sets the girder count and equal spacing keeps the "From exterior girders" mode with W_cc = (N_b - 1)S; otherwise it sets equal spacing as before */
++function spKeepExt(B, S0) { if (B.spacing === 'exterior') B.Wcc = +((Math.round(Number(B.nb)) - 1) * S0).toFixed(6); else B.spacing = 'equal'; }
+ function onScalar(e) {
+@@ -4214,2 +4226,5 @@
+   setPath(P, el.dataset.k, v);
++  if (el.dataset.k === 'bridge.spacing' && P.bridge.spacing === 'exterior' && !(Number(P.bridge.Wcc) > 0)) {   // start from the current layout: W_cc = sum of the bays
++    const nb = Math.round(Number(P.bridge.nb)), bays = M && !M.errors.length && M.bays && M.bays.length === nb - 1 ? M.bays : new Array(Math.max(nb - 1, 0)).fill(Number(P.bridge.S));
++    const w = bays.reduce((a, v) => a + v, 0); if (w > 0) { P.bridge.Wcc = +w.toFixed(4); const wi = document.getElementById('f_bridge_Wcc'); if (wi) wi.value = P.bridge.Wcc; } }
+   if (el.dataset.k === 'bridge.spacing') syncSpacingVis();
+@@ -4281,2 +4296,3 @@
+ function recompute() {
++  spExtSync();   // "From exterior girders": S = W_cc/(N_b - 1) before anything reads bridge.S (Q6)
+   const drn = $('#sg-dr-note'); if (drn) drn.hidden = !(P.limits.sdMandatory && P.suggest.depthRule === 'off');   // Suggest span-to-depth setting overridden by the Limits tab (2026-10-12)
+```
+
+### Verification (Q4–Q6)
+
+- `node --check` on every inline script of the main page and of the decoded PlateLine. The base64 round trip of the unchanged page was byte-identical before editing.
+- **Headless Chromium (Playwright), main vs branch, GirderDetail default project, every module** (gs, fa, splice, bstf, ts, sc, cf, oh, wt, df, sa): every check, status and item is identical. The only differences are the TS4 note and one TS4 worked line ("(at the stiffener: no end-panel shears given)").
+- **PlateLine built-in example, 90 ft simple span and 120 ft simple span with d<sub>o</sub>/D = 2:** compared fast pick, quick suggestion, Full design (default and 90 ft), Apply, Transverse stiffeners and Girder section demands. The sizing, girder plates and every GS check are identical. Only the TS4 end-panel V<sub>u</sub> changes, as intended:
+  - built-in example after Full design: 265.25 → 285.70 kip, ratio 0.57 → 0.61;
+  - 90 ft simple span after Full design: 93.13 → 152.75 kip, ratio 0.21 → 0.35;
+  - 120 ft simple span: 313.77 → 340.98 kip, ratio 0.89 → 0.97.
+- **Built-in example, width study (W = 44.5 ft) and Full design:** results, table HTML and project identical (except the `dfx.ts` timestamp).
+- **Hand-off payloads** (built-in example and 2 × 180 ft simple spans):
+  - PlateLine → GirderDetail inbox: identical except the new optional `VDC1b`/`VDC2b`/`VDWb`/`VLLb` on end-panel TS rows, and (Q5, simple spans) `end: 'no'` → `'yes'` on the pier rows.
+  - `bridgeDef` / `gd-bridge` and GirderDetail's `P.df.bridge`: identical.
+  - localStorage key list: identical.
+- **Saved data:** checked both directions for Q4 (TS rows with end-panel shears) and Q6 (project in the new spacing mode). See Q4 and Q6 above.
+- **Console:** no errors in any run. One alert, "Preliminary sizing has input errors; fix them first.", appeared only while a test deliberately left N<sub>b</sub> = 1 or W<sub>cc</sub> blank. This is existing behaviour of GirderDetail's bridge refresh.
+- **Screenshots** (session scratchpad `followups/gd-q4/`):
+  - TS location row with the end-panel inputs, blank and filled;
+  - TS Demands tab and TS4 card;
+  - PlateLine Cross-section section in Equal and Variable modes (pixel-identical to main), the new mode (5 and 6 girders), blank W<sub>cc</sub>, and after width-study Apply.
+- **Shared snippets:** none touched (no `bridgeSuite.v1.*` code).
