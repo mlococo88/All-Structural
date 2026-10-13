@@ -7767,3 +7767,11 @@ Main page only; `PL_B64` (embedded Preliminary sizing) is not touched. Display o
 - **After:** one added line in the same block: `  .sc-gov .gov-bar { margin-left: 0; }`.
 - **Check case:** built-in example, Deck overhang summary at 1000 px: the bar starts under "0.94".
 - **Other copies:** none.
+
+### Q8. Summary card: "Governing ratio —" says why when no check has a ratio   [text only]
+- **Where:** `bsRenderSummary` (Bearing stiffeners), `gmSummary` (every other module) and `renderSummary` (Field splice); anchor `<div class="w">${gv ? `${gv.k.id}, ${esc(gv.it.loc)}` : ''}</div>` (3 places).
+- **Before:** `` <div class="w">${gv ? `${gv.k.id}, ${esc(gv.it.loc)}` : ''}</div> ``
+- **After:** `` <div class="w">${gv ? `${gv.k.id}, ${esc(gv.it.loc)}` : 'No check with a ratio'}</div> ``
+- **Problem:** LLDF and DLs and Structural analysis have only pass/warn checks without a demand/resistance ratio; the card showed "Governing ratio" and a bare dash.
+- **Check case:** built-in example, LLDF and DLs and Structural analysis summaries: "Governing ratio — No check with a ratio". Modules with a ratio unchanged.
+- **Other copies:** none.
