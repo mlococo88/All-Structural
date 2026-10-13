@@ -9039,3 +9039,1415 @@ Main page (Girder section, Deck overhang reference and Manual text) and the embe
 - **How verified:** `node --check`-equivalent parse of every inline script (`new Function`); headless Chromium (Playwright) with both files in one folder, served over http (`python3 -m http.server`) and opened as `file://`: 28 checks pass in each (the ST-Girder side is in fixlog/stgirder.md OD1: inputs and results identical to a manual Pull, refresh, mismatched / missing / invalid flag, undo); the `gdStHref()` cases run in Node with a stubbed `localStorage`/`location`. No console errors.
 - **Other copies:** the receiving side is in `stgirder.html` (fixlog/stgirder.md OD1). The BridgeApps path rules are mirrored (read only) from the bootstrap block in `index.html`, `lldf.html`, `psbeam.html`, `stgirder.html`; that block is unchanged.
 - **Open items:** whether a browser allows `window.open` after the confirm dialog is up to its popup blocker (Chrome/Edge normally allow it from a click handler; the blocked case falls back to the message and alert). Not testable headless with a real popup blocker.
+
+## 2026-10-13 — PR: claude/gd-stiffener-per-bay (Preliminary sizing: D/t<sub>w</sub> ≤ 150 for stiffened webs; transverse stiffeners designed per cross-frame bay with optional tension-field action; engineer-approved 2026-10-13; PR link added after merge)
+
+All code in this PR except the GirderDetail drawing and Structural analysis hunks is inside the embedded Preliminary sizing page (`const PL_B64 = '…'`, base64 of a UTF-8 HTML file). To re-apply by hand: decode `PL_B64` (base64 → UTF-8), edit the decoded page as below, re-encode it to base64 on one line, and replace the string. Line numbers "PL ~n" are lines of the decoded page.
+
+### DT1. Suggest sizes a transversely stiffened web from D/t<sub>w</sub> ≤ 150 (was 300)   [§4: code limit] [results: only where D/150 governs t<sub>w</sub>]
+- **Where:** decoded PL, new constant after `const SG_PLF = 490 / 144;` (PL ~1868); `sizeForDepth` (anchor `let tw = up(Math.max(L.minTw, D / ((wt || SG.web) === 'stiffened'`, PL ~2050); `webFromShear` → `size` (anchor `let tw = up(Math.max(L.minTw, D / (st ?`, PL ~2210); Suggest input tab note "AASHTO LRFD minimums always apply" (PL ~2860) and Manual Part 2 "Rules." (PL ~2586).
+- **Before:**
+  ```js
+  let tw = up(Math.max(L.minTw, D / ((wt || SG.web) === 'stiffened' ? 300 : 150), 0.3125, twMin || 0), L.incTw);
+  let tw = up(Math.max(L.minTw, D / (st ? 300 : 150), 0.3125, twMin || 0), L.incTw), C, Vn, lam;
+  ```
+  text: `D/t<sub>w</sub> ≤ 150 unstiffened or 300 stiffened (6.10.2.1)` (2 places)
+- **After:**
+  ```js
+  // D/t_w limit Suggest sizes a transversely stiffened web to: 150, AASHTO LRFD 10th Ed. Eq. 6.10.2.1.1-1 (webs without longitudinal stiffeners; approved 2026-10-13,
+  // was 300, the limit of Eq. 6.10.2.1.2-1 for longitudinally stiffened webs, which this tool does not design). Unstiffened webs: 150 (same equation)
+  const SG_DTW_ST = 150;
+  let tw = up(Math.max(L.minTw, D / ((wt || SG.web) === 'stiffened' ? SG_DTW_ST : 150), 0.3125, twMin || 0), L.incTw);
+  let tw = up(Math.max(L.minTw, D / (st ? SG_DTW_ST : 150), 0.3125, twMin || 0), L.incTw), C, Vn, lam;
+  ```
+  text: `D/t<sub>w</sub> ≤ 150, stiffened or not (Eq. 6.10.2.1.1-1, webs without longitudinal stiffeners)` (2 places)
+- **Problem:** AASHTO LRFD 10th Ed. 6.10.2.1.1 (Eq. 6.10.2.1.1-1) limits D/t<sub>w</sub> to 150 for webs without longitudinal stiffeners, transversely stiffened or not; 300 (Eq. 6.10.2.1.2-1) applies only to webs with longitudinal stiffeners, which this tool does not design (its own check W1 already applies 150). Suggest could start a stiffened web thinner than W1 allows. More conservative.
+- **Governing provision:** AASHTO LRFD 10th Ed. (2024) Art. 6.10.2.1.1, Eq. 6.10.2.1.1-1; Art. 6.10.2.1.2, Eq. 6.10.2.1.2-1.
+- **Check case:** built-in example, D = 60 in, G12.1 on (minimum t<sub>w</sub> 1/2 in): start t<sub>w</sub> before = up(max(0.5, 60/300 = 0.20, 0.3125), 1/16) = 0.5 in; after = up(max(0.5, 60/150 = 0.40, 0.3125)) = 0.5 in (unchanged; the owner minimum governs). G12.1 off (minimum 5/16 in): before up(max(0.3125, 0.20)) = 0.3125 in; after up(max(0.3125, 0.40)) = 0.4375 in. In both cases shear (k = 10) governs the final t<sub>w</sub> (7/16 in at D = 55 in, G12.1 off), so the quick suggestion is unchanged; only the D = 79 in candidate (79/150 = 0.527 → 9/16 in, was 1/2 in) moves in the candidate list.
+- **How verified:** decoded page parsed (`node --check` on its scripts); headless Chromium quick suggestion, built-in example and xsA, G12.1 on and off, main vs this change.
+- **Other copies:** none.
+- **Open items:** none.
+
+### TB1. Suggest designs transverse stiffeners per cross-frame bay, with optional tension-field action; per-bay layout on the Framing tab and in every consumer   [§4: shear design method, new option] [§5: new optional fields only] [results: Suggest with "Optimize stiffener spacing" on; projects in per-bay mode]
+- **Where (decoded PL):** new block before `function framingChecks(m, FR, P) {` (constants `TS_DMIN, TS_DLOW, TS_TWSTEPS, TS_PHIV`, functions `tsVn`, `tsBaysOf`, `tsBayX`, `tsPanels`, `tsEvalBay`, `tsDesignBay`, `tsVu`, `tsSecFns`, `tsDesign`, `tsBaysOn`, `tsGirderBays`, `tsGirderX`, `tsGLbl`); `suggestLayout` (`PB`, `TFA`, `stiffBays`, `costOf`, `evalCand`, `clearFrames`, `opts.clear/costOnly/verify/only`, `tryPB`/`tryD`, fine search, return; `webFromShear` per-bay branch); `suggestFull` (`refine`, picks, return); `suggestQuickCheck`; `sgQuickStart`; `sgFrStiff` (new) and `applySuggestion`; `wsEval`, `wsApply`, `wsfEval`, `wsfApply`, `evalCase`, `applyAlt`; `framingChecks` D3/D4; `quantities`; `detailExport` (TS rows, `gsDo` for gs rows); `DEFAULT` (`framing.doMode: 'uniform'`, `suggest.tfa: 'on'`); Suggest input tab (web option label, Optimize stiffener spacing options, new Tension-field action select and note); Framing tab (Stiffener spacing select, `#fr-bays`, `f1`, `frBaysHtml`, `renderFrBays`, change/click handlers, CSS `.atbl.tsb`); `recompute` (calls `renderFrBays`); `sgQKey`, `sgcKey`, `sgCurNSt` (new), `sgcIn`; `renderSuggest` (cost card, depth candidates, Full design table, web card via `sgWebPB`, new card `sgBaysCard`); `sgCmpHtml` and new `sgBayCmp`; Alternatives web table label; Manual (Part 1 Framing tab and inputs table, Part 2 Suggest rules and Apply, Part 3 web thickness and D3/D4, Alternatives cost note).
+- **Where (GirderDetail page):** `gsaSA` (Structural analysis, anchor `const sup = A(R.sup).map(i => xs[i]), F = G.P.framing`), new `gdStiffX` / `gdStiffBays` before `const dxfPM = () =>`, `dxfPlan` and `dxfElev` stiffener loops, 3D view (`v3bBuild`) stiffener loop.
+- **Data model (§5):** `framing.doRatio` and `framing.stiff` keep their meaning. New optional fields: `framing.doMode` (`'uniform'` default for new and old projects, through `deepMerge` with `DEFAULT`; `'bays'` uses the per-bay layout) and `framing.bays = { v: 1, D, tw, tfa, list: [{ g, a, b, n, e0?, e1? }] }` (girder g 1-based, bay a..b in ft at that girder's own stations from its Abut. 1 bearing, n intermediate stiffeners, e0/e1 in: end panel with its own stiffener). `suggest.tfa` (`'on'` default for new and old projects). No key or format removed or renamed. A project without the fields loads and computes exactly as before (uniform; verified, below). A project saved with the fields opens in an older copy without errors and uses the uniform d<sub>o</sub>/D; the fields are kept on save (unknown keys survive `deepMerge`). The ST-Girder hand-off (`gdStPayload`) carries no d<sub>o</sub> or stiffener data, so it is unchanged.
+- **Before:** Suggest with a stiffened web and "Optimize stiffener spacing" on tried one uniform d<sub>o</sub>/D from {1, 1.5, 2, 3} per depth (`doList`), sized t<sub>w</sub> for the maximum Strength I shear with k = 5 + 5/(d<sub>o</sub>/D)² and no tension field (end panels with d<sub>o</sub> > 1.5D with k = 5), and priced `ceil(L·12/(d_o·D)) − ceil(L/s_xf)` stiffeners per girder. The quick check and Full design never re-checked shear with the staged demands. Every consumer used `framing.doRatio·D` everywhere.
+- **After:** with "Optimize stiffener spacing" on (default), a stiffened web is designed per cross-frame bay (connection plates act as stiffeners):
+  1. Floor web (`webFromShear`, per-bay branch): the thinnest t<sub>w</sub> (D/t<sub>w</sub> ≤ 150, owner minimum) for which every analysis element passes with d<sub>o</sub> = 1.0D: V<sub>u</sub> (Strength I, envelope of the girder types) ≤ φ<sub>v</sub>V<sub>n</sub>, V<sub>n</sub> = CV<sub>p</sub> (Eq. 6.10.9.3.3-1) within 1.0D of an abutment or simple-span bearing, else interior V<sub>n</sub> by Eq. 6.10.9.3.2-2 (2Dt<sub>w</sub>/(b<sub>fc</sub>t<sub>fc</sub> + b<sub>ft</sub>t<sub>ft</sub>) ≤ 2.5, Eq. 6.10.9.3.2-1) or -8, or CV<sub>p</sub> with tension-field action off.
+  2. Web candidates (`tryPB`): the floor web and up to 6 webs one increment thicker each, while stiffeners remain; each is sized (flanges re-sized) and priced with its own per-bay stiffener count; the cheapest candidate is kept (replaces the d<sub>o</sub>/D list).
+  3. Bays (`tsDesignBay`, per girder, its own bearings and cross-frame points): n = 0 if every panel passes with the connection plates only (a bay > 3D is then unstiffened, 6.10.9.1/6.10.9.2); else interior bays start at the largest spacing allowed, n = ⌈L/3D⌉ − 1 (6.10.9.1), and add one stiffener at a time; a bay at an end support tries, for each n, the even layout and then an end stiffener at the widest whole inch ≤ 1.5D (down to 0.5D) whose end panel carries its largest V<sub>u</sub> with V<sub>n</sub> = CV<sub>p</sub> (6.10.9.3.3), the rest evenly spaced. Each panel is checked with the largest V<sub>u</sub> in it (6.10.9.3.1) and the largest 2Dt<sub>w</sub>/(b<sub>fc</sub>t<sub>fc</sub> + b<sub>ft</sub>t<sub>ft</sub>) along it (6.10.9.3.2). Down to d<sub>o</sub> = 0.5D; a bay that still fails flags the candidate (`bayFail`): the fast search drops it, the quick check and Full design thicken the web.
+  4. The quick suggestion's check and Full design redo the bays with the staged shears (`opts.verify` cost); Apply writes `framing.doMode = 'bays'` and `framing.bays` (`sgFrStiff`), also from the girder-count study, its Full design, and the Alternatives study.
+  5. Consumers with `framing.doMode === 'bays'`: D3 (narrowest panel in each field piece), D4 (each bay: interior panels against 3D, own-stiffener end panels against 1.5D, wider even end panels advisory), quantities (sum of the counts), TS rows (first stiffener or connection plate from each support at its actual station with the actual panel widths and end flag; cross-frame row with its adjacent panels), gs rows (`do`/`end` of the panel at x: of two at a boundary, the one with the smaller V<sub>n</sub>), Structural analysis / Any location (no extra end panel: `doFt = 0`, the rows carry it), DXF plan and elevation and 3D stiffener positions (`gdStiffX` → `tsGirderX`), Suggest cost and comparison card (per-bay table). Uniform mode: every consumer as before (same code path).
+  With the setting off: the uniform Framing tab ratio as before (only DT1 differs).
+- **Problem / request:** engineer's decision 2026-10-13: design the stiffener spacing per cross-frame bay at the largest spacing the code allows, tightened only where φ<sub>v</sub>V<sub>n</sub> < V<sub>u</sub>; tension-field action in interior panels as an option; keep the web-thickness cost trade-off; per-bay layout stored and used everywhere. Fewer stiffeners than the uniform d<sub>o</sub> = 1.0D (less conservative only in the sense of fewer stiffeners; every panel is checked against its own largest V<sub>u</sub>, and the staged shear is now checked, which the uniform method did not do).
+- **Governing provisions:** AASHTO LRFD 10th Ed. (2024) Art. 6.10.9.1 (Eq. 6.10.9.1-1; interior panel without longitudinal stiffeners stiffened when d<sub>o</sub> ≤ 3D; end panel when d<sub>o</sub> ≤ 1.5D; stiffeners required wherever V<sub>u</sub> > φ<sub>v</sub>V<sub>n</sub> of the unstiffened web), 6.10.9.2 (Eqs. 6.10.9.2-1, -2, k = 5), 6.10.9.3.1 (spacing from the maximum shear in a panel), 6.10.9.3.2 (Eqs. 6.10.9.3.2-1 to -8), 6.10.9.3.3 (Eq. 6.10.9.3.3-1; end panel ≤ 1.5D), 6.5.4.2 (φ<sub>v</sub> = 1.00); 6.10.11.1.1 (connection plates as stiffeners).
+- **Check case (built-in example, quick suggestion, GirderDetail LLDF factors not applied (`P.dfx = null`), tension-field action on):** D = 63 in, t<sub>w</sub> = 1/2 in, F<sub>yw</sub> = 50 ksi, V<sub>p</sub> = 0.58(50)(63)(0.5) = 913.5 kip, D/t<sub>w</sub> = 126.
+  - Interior bay G1–G5, Span 1, 88–110 ft (L = 264 in): n = 0 → d<sub>o</sub> = 264 in > 3D = 189 in, unstiffened, k = 5, √(Ek/F<sub>yw</sub>) = 53.85, 1.40×53.85 = 75.4 < 126 → C = 1.57/126² × 29,000(5)/50 = 0.2868, φV<sub>n</sub> = 262.0 kip < V<sub>u</sub> = 383.1 kip → n = ⌈264/189⌉ − 1 = 1: d<sub>o</sub> = 132 in = 2.095D, k = 5 + 5/2.095² = 6.139, C = 1.57/126² × 29,000(6.139)/50 = 0.3521; panel 99–110 ft: 2Dt<sub>w</sub>/(18×1.5 + 20×1.625) = 63/59.5 = 1.059 ≤ 2.5 → Eq. 6.10.9.3.2-2: 0.87(1 − 0.3521)/√(1 + 2.095²) = 0.2428, φV<sub>n</sub> = 913.5(0.3521 + 0.2428) = 543.4 kip ≥ V<sub>u</sub> = 383.1 kip (ratio 0.705). n = 1.
+  - End bay G1–G5, Span 1, 0–22 ft (Abut. 1): n = 0 → 264 in > 1.5D, k = 5, φV<sub>n</sub> = 262.0 < 280.9 kip; n = 1 even → end panel 132 in > 1.5D = 94.5 in, unstiffened, 262.0 < 280.9 kip; n = 1 with an end stiffener at e = 94 in (largest whole inch ≤ 94.5): k = 5 + 5/(94/63)² = 7.246, C = 1.57/126² × 29,000(7.246)/50 = 0.4156, φV<sub>n</sub> = 0.4156(913.5) = 379.7 kip ≥ 280.9 kip (Eq. 6.10.9.3.3-1); remaining panel 170 in = 2.698D: k = 5.687, C = 0.3262, 2Dt<sub>w</sub>/(18×0.75 + 16×1.25) = 1.881 → Eq. -2: 0.87(0.6738)/√(1 + 2.698²) = 0.2037, φV<sub>n</sub> = 913.5(0.5299) = 484.1 kip ≥ 245.8 kip. n = 1, e<sub>0</sub> = 94 in.
+  - Before (main, same inputs): D = 69 in, t<sub>w</sub> = 1/2 in, uniform d<sub>o</sub> = 1.0D (k = 10, no tension field), 48 stiffeners per girder (240 for 5 girders) in the Suggest cost. After: D = 63 in, t<sub>w</sub> = 1/2 in, 50 intermediate stiffeners for all 5 girders (10 per girder); cost (Unit costs) $1,714,870 → $1,682,391. Tension-field action off: 80 stiffeners, $1,686,891.
+- **How verified:** decoded page and GirderDetail scripts `node --check`; headless Chromium (Playwright): (1) old projects (built-in, xsA, curb) main vs branch: every module's checks, results, calc report and tab HTML hashes and the saved project identical (only an unrelated LLDF `ts` time stamp differed in one run), DXF text identical (built-in), TS module identical; (2) quick suggestion with "Optimize" off and with the unstiffened web: identical to main except the D = 79 in candidate of DT1; (3) quick suggestion and Full design, tension-field action on and off, web auto/stiffened: no errors, quick check passes, Full design passes; (4) Apply → Framing per-bay table, D3/D4, quantities (50), count edit → quantities 55; (5) per-bay project: Design all → TS rows with actual panels (e.g. "Span 1, first stiffener from Abut. 1": d<sub>o</sub> 94 / 170 in, end panel), TS4 0.770, TS5 advisory 1.481 (connection-plate panels > 3D, unstiffened by design), Structural analysis Get demands vs Any location identical for G1, G2, G5 at every row; Any location d<sub>o</sub>/end: 0.01 ft 94 in end, 7.9 ft 170 in, 30 ft 264 in; DXF and 3D stiffener positions = the bay layout (10 per girder); skew 35°, staggered frames: per-girder bays (7/1/0/2/8 stiffeners on G1–G5), no errors; (6) save/load: per-bay project → export JSON → load: framing and checks identical; per-bay project opened in main: no errors (uniform used, fields kept); Alternatives and girder-count study run with per-bay results. Screenshots: followups/stiffbays/.
+- **Other copies:** none (the shear equations mirror GirderDetail's `webShear`, which is unchanged).
+- **Open items:** see ENGINEER_CHECKS GD30–GD32: the interpretation choices (n = 0 bays, end-panel layout, 0.5D floor, envelope over girders, skew), old projects' Suggest results changing with "Optimize" on by default, PL D3 not checking Eq. 6.10.11.1.3-2 when Suggest uses the tension field (GirderDetail TS3 does), TS4 applying V<sub>u</sub> at the stiffener to both panels rather than the largest V<sub>u</sub> in each panel (6.10.9.3.1). Noted, not changed: `clearFrames` re-sized the best candidate of the former d<sub>o</sub>/D list with the Framing tab ratio instead of its own (it passes no doR to `evalCand`); with the list replaced by the per-bay design (and "Optimize" off using the Framing tab ratio anyway) this no longer arises.
+- **Exact changes:** unified diffs below (decoded PL page from the DT1 state; GirderDetail page).
+
+  Decoded PL page:
+
+````diff
+--- decoded PL (after DT1)
++++ decoded PL (after TB1)
+@@ -627,6 +627,10 @@
+ .atbl td.ax { width: 1%; }
+ .atbl input { height: 30px; font-size: 12.5px; padding: 0 26px 0 7px !important; }
+ .atbl .iw-unit { right: 6px; font-size: 10.5px; }
++.atbl.tsb td, .atbl.tsb th { font-size: 11.5px; padding: 2px 3px; white-space: nowrap; }
++.atbl.tsb input.tsb-n { width: 46px; height: 26px; padding: 0 4px !important; }
++.atbl.tsb tr.tsb-g td { font-weight: 600; color: var(--text-dim); padding-top: 6px; }
++.atbl.tsb .tsb-e { font-size: 10px; color: var(--muted); } .atbl.tsb td.tsb-x { color: var(--fail); font-weight: 600; }
+ .x-btn { width: 24px; height: 24px; border: 0; background: none; border-radius: 5px; color: var(--muted); font-size: 16px; line-height: 1; cursor: pointer; }
+ .x-btn:hover { background: var(--fail-dim); color: var(--fail); }
+ .arr-foot { display: flex; align-items: center; gap: 10px; justify-content: space-between; padding-top: 6px; flex-wrap: wrap; }
+@@ -1023,12 +1027,12 @@
+     shipLen: 120, shipWt: 90, lbRatio: 85, allow: 5,
+     ohFrac: 0.40, ohMax: 4.0, deflOn: true, deflRatio: 800, intL: 300, intSkew: 30, sLo: 6.0, sHi: 12.0, endLo: 0.70, endHi: 0.85, skewIdx: 0.30, flSkI: 10, flSkE: 7.5, flSkG: 1.25
+   },
+-  framing: { spacing: 25, orient: 'auto', arrange: 'contiguous', supClear: 3, stagMin: 4, stiff: 'on', doRatio: 1.0, stB: 6, stT: 0.5, cpB: 6, cpT: 0.5, bsB: 7, bsT: 1, clip: 1, bsPairs: 1, gS: '50', xfMinD: 48 },
++  framing: { spacing: 25, orient: 'auto', arrange: 'contiguous', supClear: 3, stagMin: 4, stiff: 'on', doRatio: 1.0, doMode: 'uniform', stB: 6, stT: 0.5, cpB: 6, cpT: 0.5, bsB: 7, bsT: 1, clip: 1, bsPairs: 1, gS: '50', xfMinD: 48 },
+   costs: { steel: 3.00, trans: 1500, splice: 6000, stiff: 150, xf: 2500, bearing: 4000 },
+   alts: { nbList: '4, 5, 6, 7', ldLo: 22, ldHi: 36, ldStep: 2, web: 'stiffened', holdW: true },
+   ws: { W: '', ohMin: 1.5, ohMax: 4.0, ohS: 0.5, deMin: -1.0, deMax: 5.5, sMin: 3.5, sMax: 16, obj: 'wt', nFull: 3 },   // girder count from the out-to-out deck width (2026-10-12); W blank = not used; nFull: girder counts re-sized by Full design (optional field, 2026-10-12)
+   suggest: { lsdS: 25, lsdC: 30, keepD: false, web: 'auto', kbt: 6, weld: 1000, eff: 0.85, fws: 25, sip: 15, bar: 0.40, cll: 20, gtype: 'envelope',
+-    mode: 'fast', fab: 'on', depthRule: 'on', defl: 'off', fat: 'I', topConst: 'on', maxDb: 4, spD: 0.875, spLines: 2, spG: 3, spTwp: 0.5, spCw: 0.5, spC1: 1.5, cfOpt: 'on', cfMax: 25, doOpt: 'on' },
++    mode: 'fast', fab: 'on', depthRule: 'on', defl: 'off', fat: 'I', topConst: 'on', maxDb: 4, spD: 0.875, spLines: 2, spG: 3, spTwp: 0.5, spCw: 0.5, spC1: 1.5, cfOpt: 'on', cfMax: 25, doOpt: 'on', tfa: 'on' },
+   ui: { itab: 'project', otab: 'summary', col: {}, man: 'p1', rpt: { summary: true, drawings: true, checks: true, schedule: true, suggest: false, manual: false } }
+ };
+ 
+@@ -1982,11 +1986,26 @@
+   const cS = num(CO.steel) || 3, cT = num(CO.trans) || 0, cSt = num(CO.stiff) || 0, cSp = num(CO.splice) || 0, cCF = num(CO.xf) || 0, spCF = num(P.framing && P.framing.spacing) || 25;
+   const nFr = (nb - 1) * (spans.reduce((a, Ls) => a + Math.max(0, Math.ceil(Ls / spCF - 1e-9) - 1), 0) + spans.length + 1);   // cross-frames, intermediate and on the bearing lines (as in Alternatives)
+   let DO_R = num(P.framing && P.framing.doRatio) || 1;   // stiffener spacing d_o/D of the candidate being sized
+-  function costOf(res, D, wt, doR) {
++  // per-bay stiffener design (TB1, 2026-10-13): with "Optimize stiffener spacing" on (suggest.doOpt, the default), a stiffened web gets stiffeners per cross-frame bay
++  // (tsDesign), sized for the Strength I shear envelope of the girder types; TFA: tension-field action in interior panels (suggest.tfa, default on). Off: the uniform
++  // Framing tab ratio, as before
++  const PB = SG.doOpt !== 'off', TFA = SG.tfa !== 'off';
++  function stiffBays(D, res, R) {   // the per-bay layout of a sized candidate: its own model and cross-frames (framingLayout), the shear envelope of R
++    if (typeof framingLayout !== 'function' || !R || !R.types) return null;
++    const Pg = { ...P, girder: { ...P.girder, D, web: res.web.map(w => ({ L: w.L, t: w.t })), top: res.top.map(g => ({ L: g.L, b: g.b, t: g.t })), bot: res.bot.map(g => ({ L: g.L, b: g.b, t: g.t })), splices: [...res.splices] } };
++    const m = buildModel(Pg); if (m.errors.length) return null;
++    return tsDesign(m, framingLayout(Pg, m), FyW, tsVu(xs, R.types), TFA);
++  }
++  // st (optional): { keep: true } the stiffeners of the current girder (no per-bay design): nAll, their count for all girders, or the uniform formula
++  function costOf(res, D, wt, doR, R, st) {
++    const bd = wt === 'stiffened' && PB && !(st && st.keep) ? stiffBays(D, res, R) : null, nAll = st && st.nAll != null ? st.nAll : bd ? bd.tot : null;
+     const lb = l => l.reduce((a, r) => a + r.b * r.t * r.L, 0), wG = (lb(res.top) + lb(res.bot) + res.web.reduce((a, r) => a + D * r.t * r.L, 0)) * SG_PLF * (1 + L.allow / 100);
+     const pieces = res.splices.length + 1, nTr = (res.top.length - pieces) + (res.bot.length - pieces), nSt = wt === 'stiffened' ? Math.max(0, Math.ceil(Ltot * 12 / ((doR || DO_R) * D)) - Math.ceil(Ltot / spCF)) : 0, nSp = res.splices.length;
+-    const parts = { steel: nb * wG * cS, trans: nb * nTr * cT, stiff: nb * nSt * cSt, splice: nb * nSp * cSp, frames: nFr * cCF };
+-    return { total: parts.steel + parts.trans + parts.stiff + parts.splice + parts.frames, parts, wG, wTot: nb * wG, nTr, nSt, nSp, nb, nFr, spCF, doR: doR || DO_R };
++    const parts = { steel: nb * wG * cS, trans: nb * nTr * cT, stiff: nAll != null && wt === 'stiffened' ? nAll * cSt : nb * nSt * cSt, splice: nb * nSp * cSp, frames: nFr * cCF };
++    const o = { total: parts.steel + parts.trans + parts.stiff + parts.splice + parts.frames, parts, wG, wTot: nb * wG, nTr, nSt, nSp, nb, nFr, spCF, doR: doR || DO_R };
++    if (nAll != null && wt === 'stiffened') { o.nSt = nAll / nb; o.nStTot = nAll; }   // per-bay counts: nStTot for all girders, nSt the average per girder
++    if (bd) { o.bays = bd.data; o.bayRows = bd.rows; o.bayGov = bd.gov; o.bayFail = bd.fail; }
++    return o;
+   }
+   function depthOK(res, D) {   // Table 2.5.2.6.3-1 minimum depths, from the plates directly
+     if (SG.depthRule === 'off' && !P.limits.sdMandatory) return true;   // the Suggest setting applies only when the Limits tab does not treat span-to-depth as mandatory (2026-10-12)
+@@ -1995,7 +2014,8 @@
+       for (let x = a + 0.5; x < c; x += 1) dmin = Math.min(dmin, D + sgAt(t, x).t + sgAt(b, x).t);
+       return dmin >= (cont ? 0.027 : 0.033) * Ls * 12 - 1e-9 && dmin + hh + ts >= (cont ? 0.032 : 0.040) * Ls * 12 - 1e-9; });
+   }
+-  const evalCand = (D, wt, kT, kB, twMin, shifts, doR) => { const d0 = DO_R; if (doR) DO_R = doR; const res = sizeForDepth(D, wt, kT, kB, twMin, null, shifts), c = { D, wt, doR: DO_R, res, cost: costOf(res, D, wt, DO_R), ok: depthOK(res, D), shifts: shifts || [] }; DO_R = d0; return c; };
++  // twC (per-bay stiffeners): the web is at least twC thick, a thicker-web candidate of the cost trade-off (0: the floor web)
++  const evalCand = (D, wt, kT, kB, twMin, shifts, doR, twC) => { const d0 = DO_R; if (doR) DO_R = doR; const res = sizeForDepth(D, wt, kT, kB, Math.max(twMin || 0, twC || 0), null, shifts), c = { D, wt, doR: DO_R, res, cost: costOf(res, D, wt, DO_R, res.rec), ok: depthOK(res, D), shifts: shifts || [] }; if (twC) c.twC = twC; if (c.cost.bayFail) c.ok = false; DO_R = d0; return c; };
+   function clearFrames(c) {   // move field splices off cross-frame locations on every girder (framing check X4), then re-size
+     if (typeof framingLayout !== 'function') return c;
+     const clr = num(P.limits.spliceClear) || 4, sp = c.res.splices;
+@@ -2011,37 +2031,42 @@
+       for (let d = 1; d <= 15 && !done; d++) for (const s of [d, -d]) { const np = g.length === 2 ? [g[0] + s, g[1] - s] : [g[0] + s];
+         if (np.every(v => v > L.minSeg && v < Ltot - L.minSeg && okAt(v))) { g.forEach((v, k) => shifts.push({ from: v, to: np[k] })); done = true; break; } } }
+     if (!shifts.length) return c;
+-    const out = evalCand(c.D, c.wt, null, null, 0, shifts); return out;
++    const out = evalCand(c.D, c.wt, null, null, 0, shifts, null, c.twC); return out;
+   }
+ 
+   const Lmax = Math.max(...spans), ratio = cont ? num(SG.lsdC) : num(SG.lsdS), webTypes = SG.web === 'auto' ? ['unstiffened', 'stiffened'] : [SG.web];
+-  if (opts.clear) { if (opts.clear.doR) DO_R = opts.clear.doR; const c0 = evalCand(opts.clear.D, opts.clear.wt); return { errors: [], shifts: clearFrames(c0).shifts }; }
+-  if (opts.costOnly) { const V = opts.costOnly; return { errors: [], cost: costOf(V, V.D, V.wt, V.doR) }; }
++  if (opts.clear) { if (opts.clear.doR) DO_R = opts.clear.doR; const c0 = evalCand(opts.clear.D, opts.clear.wt, null, null, 0, null, null, opts.clear.twC); return { errors: [], shifts: clearFrames(c0).shifts }; }
++  if (opts.costOnly) { const V = opts.costOnly; return { errors: [], cost: costOf(V, V.D, V.wt, V.doR, null, { keep: true, nAll: V.nStTot }) }; }
+   if (opts.verify) {         // staged demands and AASHTO checks for a given layout (no resizing)
+     const V = opts.verify, cp = l => l.map(r => ({ ...r })), t = cp(V.top), b = cp(V.bot), w = cp(V.web); sgLists(t, b, w);
+-    if (V.doR) DO_R = V.doR; const Rv = demand(V.D, t, b, w); return { errors: [], check: checkLayout(V.D, t, b, w, Rv), dOK: depthOK({ top: t, bot: b, web: w }, V.D), cost: costOf({ top: t, bot: b, web: w, splices: V.splices }, V.D, V.wt, V.doR), N, xs };
++    if (V.doR) DO_R = V.doR; const Rv = demand(V.D, t, b, w); return { errors: [], check: checkLayout(V.D, t, b, w, Rv), dOK: depthOK({ top: t, bot: b, web: w }, V.D), cost: costOf({ top: t, bot: b, web: w, splices: V.splices }, V.D, V.wt, V.doR, Rv, V.keepSt ? { keep: true, nAll: V.nStTot } : null), N, xs };
+   }
+   if (opts.only) {           // one candidate: size with area factors against the staged demands of the previous layout
+     const o = opts.only; let R0 = null; if (o.doR) DO_R = o.doR;
+     if (opts.layout) { const cp = l => l.map(r => ({ ...r })), t = cp(opts.layout.top), b = cp(opts.layout.bot), w = cp(opts.layout.web); sgLists(t, b, w); R0 = demand(o.D, t, b, w); }
+-    const res = sizeForDepth(o.D, o.wt, opts.kT, opts.kB, opts.twMin, R0, opts.shifts), c = { D: o.D, wt: o.wt, doR: DO_R, res, cost: costOf(res, o.D, o.wt, DO_R) };
++    const res = sizeForDepth(o.D, o.wt, opts.kT, opts.kB, Math.max(opts.twMin || 0, o.twC || 0), R0, opts.shifts), c = { D: o.D, wt: o.wt, doR: DO_R, twC: o.twC, res, cost: costOf(res, o.D, o.wt, DO_R, res.rec) };
+     c.check = R0 ? checkLayout(o.D, res.top, res.bot, res.web, R0) : null; c.dOK = depthOK(res, o.D); return { errors: [], ...c, N, xs };
+   }
+   const rec = { D: { Lmax, ratio, cont, Dst: Lmax * 12 / ratio, keep: !!SG.keepD, bumps: 0 } }, cands = [];
+   const doList = SG.doOpt === 'off' ? [num(P.framing.doRatio) || 1] : [1, 1.5, 2, 3];
+-  const tryD = D => webTypes.forEach(wt => (wt === 'stiffened' ? doList : [DO_R]).forEach(doR => { if (cands.some(c => c.D === D && c.wt === wt && c.doR === doR)) return; cands.push(evalCand(D, wt, null, null, 0, null, doR)); }));
++  // per-bay stiffeners (TB1): instead of the d_o/D list, the floor web (shear with d_o = 1.0D in every panel) and up to TS_TWSTEPS thicker webs, one increment at a
++  // time while stiffeners remain: each priced with its own per-bay stiffener count, so the cost decides between a thinner web with more stiffeners and a thicker
++  // web with fewer
++  const tryPB = D => { if (cands.some(c => c.D === D && c.wt === 'stiffened')) return; let c = evalCand(D, 'stiffened', null, null, 0, null, null, 0); cands.push(c);
++    for (let j = 1; j <= TS_TWSTEPS && c.cost.nStTot > 0; j++) { const c2 = evalCand(D, 'stiffened', null, null, 0, null, null, c.res.tw + L.incTw); if (!(c2.res.tw > c.res.tw + 1e-9)) break; cands.push(c2); c = c2; } };
++  const tryD = D => webTypes.forEach(wt => wt === 'stiffened' && PB ? tryPB(D) : (wt === 'stiffened' ? doList : [DO_R]).forEach(doR => { if (cands.some(c => c.D === D && c.wt === wt && c.doR === doR)) return; cands.push(evalCand(D, wt, null, null, 0, null, doR)); }));
+   if (SG.keepD || opts.D) tryD(num(P.girder.D));
+   else {
+     const Dlo = up(Math.max(24, Lmax * 12 / 36), L.incD), Dhi = up(Lmax * 12 / 18, L.incD), step = Math.max(L.incD, up((Dhi - Dlo) / 6, L.incD));
+     for (let D = Dlo; D <= Dhi + 1e-9; D += step) tryD(D);
+     const best0 = cands.filter(c => c.ok).sort((a, b) => a.cost.total - b.cost.total)[0] || cands.sort((a, b) => a.cost.total - b.cost.total)[0];
+-    const fine = Math.max(L.incD, up(step / 3, L.incD)); for (const d of [-2, -1, 1, 2]) { const D = best0.D + d * fine; if (D >= 24 && !cands.some(c => c.D === D && c.wt === best0.wt && c.doR === best0.doR)) cands.push(evalCand(D, best0.wt, null, null, 0, null, best0.doR)); }
++    const fine = Math.max(L.incD, up(step / 3, L.incD)); for (const d of [-2, -1, 1, 2]) { const D = best0.D + d * fine; if (D >= 24 && !cands.some(c => c.D === D && c.wt === best0.wt && c.doR === best0.doR && (c.twC || 0) === (best0.twC || 0))) cands.push(evalCand(D, best0.wt, null, null, 0, null, best0.doR, best0.twC)); }
+   }
+   const valid = cands.filter(c => c.ok), pool = valid.length ? valid : cands;
+   pool.sort((a, b) => a.cost.total - b.cost.total);
+   let best = pool[0]; const cleared = clearFrames(best); if (cleared !== best && cleared.ok) { cands[cands.indexOf(best)] = cleared; best = cleared; } const D = best.D; rec.D.final = D; rec.D.search = !SG.keepD && !opts.D;
+-  rec.cands = cands.map(c => ({ D: c.D, wt: c.wt, doR: c.doR, tw: c.res.tw, cost: c.cost, ok: c.ok, best: c === best })).sort((a, b) => a.cost.total - b.cost.total);
+-  return { errors: [], D, webType: best.wt, doR: best.doR, spacing: spCF, cost: best.cost, shifts: best.shifts, ...best.res, rec: { ...rec, ...best.res.rec }, beam, cont, spans, width, rdwy, de, n, Ec, types, noValid: !valid.length };
++  rec.cands = cands.map(c => ({ D: c.D, wt: c.wt, doR: c.doR, twC: c.twC, tw: c.res.tw, cost: c.cost, ok: c.ok, best: c === best })).sort((a, b) => a.cost.total - b.cost.total);
++  return { errors: [], D, webType: best.wt, doR: best.doR, twC: best.twC, bays: best.wt === 'stiffened' && best.cost.bays || null, spacing: spCF, cost: best.cost, shifts: best.shifts, ...best.res, rec: { ...rec, ...best.res.rec }, beam, cont, spans, width, rdwy, de, n, Ec, types, noValid: !valid.length };
+ 
+   /* =================================================================
+      Size web, splices, and flanges for a given web depth
+@@ -2056,7 +2081,7 @@
+       if (kT && kT.areq) { R.Atop = Float64Array.from(kT.top); R.Abot = Float64Array.from(kT.bot); }
+       else if (kT) { R.Atop = R.Atop.map((a, i) => a * kT[i]); R.Abot = R.Abot.map((a, i) => a * kB[i]); }
+       // web thickness from shear
+-      const W = webFromShear(D, R.VuMax, R.VuLoc, wt, twMin, R);
++      const W = webFromShear(D, R.VuMax, R.VuLoc, wt, twMin, R, { top, bot });
+       tw = W.tw; web = [{ L: Ltot, t: tw }];
+       // splices
+       if (!splices || it < 3) splices = spliceLocations(R, extraSplits, shifts);
+@@ -2203,9 +2228,23 @@
+     return out;
+   }
+ 
+-  /* ---- web thickness from shear (no tension field) ---- */
+-  function webFromShear(D, Vu, loc, wt, twMin, R) {
++  /* ---- web thickness from shear (no tension field; per-bay stiffeners: the floor web below) ---- */
++  function webFromShear(D, Vu, loc, wt, twMin, R, fl) {
+     const st = (wt || SG.web) === 'stiffened', E = ES;
++    // per-bay stiffeners (TB1, 2026-10-13): the thinnest web for which every panel works at d_o = TS_DMIN·D (1.0D): at each analysis element, the Strength I |V_u|
++    // (envelope of the girder types) against phi_v V_n of an end panel (6.10.9.3.3, CV_p) within d_o of an end support, else of an interior panel (6.10.9.3.2, with
++    // tension-field action when TFA is on, Eq. -2 or -8 by 2Dt_w/(b_fc t_fc + b_ft t_ft) of the current flanges at the element); the bays then get the fewest stiffeners
++    if (st && PB && R && R.types && fl) {
++      const dI = TS_DMIN * D, dE = dI / 12, ends = cont ? [0, Ltot] : supX, VE = new Float64Array(N - 1), gtE = new Array(N - 1).fill('');
++      Object.values(R.types).forEach(Tg => { if (Tg.VuE) for (let e = 0; e < N - 1; e++) if (Tg.VuE[e] > VE[e]) { VE[e] = Tg.VuE[e]; gtE[e] = Tg.gt; } });
++      const els = []; for (let e = 0; e < N - 1; e++) if (VE[e] > 0) { const xm = (xs[e] + xs[e + 1]) / 2, t = sgAt(fl.top, xm), b = sgAt(fl.bot, xm);
++        els.push({ e, xm, Vu: VE[e], end: ends.some(xe => xs[e] < xe + dE - 1e-9 && xs[e + 1] > xe - dE + 1e-9), A: t.b * t.t + b.b * b.t }); }
++      let tw = up(Math.max(L.minTw, D / SG_DTW_ST, 0.3125, twMin || 0), L.incTw), g = null;
++      for (let it = 0; it < 120; it++) { g = null; for (const q of els) { const V = tsVn(D, tw, FyW, dI, q.end, 2 * D * tw / q.A, TFA); if (TS_PHIV * V.Vn < q.Vu - 1e-9) { g = { ...V, q }; break; } } if (!g) break; tw += L.incTw; }
++      let gv = null; els.forEach(q => { const V = tsVn(D, tw, FyW, dI, q.end, 2 * D * tw / q.A, TFA), r = q.Vu / (TS_PHIV * V.Vn); if (!gv || r > gv.r) gv = { ...V, r, q }; });
++      return gv ? { tw, k: gv.k, C: gv.C, Vn: gv.Vn, Vu: gv.q.Vu, lam: D / tw, loc: gv.q.xm, Vp: gv.Vp, pb: true, end: gv.end, eq: gv.eq, tf: gv.tf, rat: gv.rat, doR: TS_DMIN, gt: gtE[gv.q.e], tfa: TFA }
++        : { tw, k: 5 + 5 / TS_DMIN ** 2, C: 1, Vn: 0, Vu: 0, lam: D / tw, loc: 0, Vp: 0.58 * FyW * D * tw, pb: true, doR: TS_DMIN, tfa: TFA };
++    }
+     const size = (k, Vu, loc) => {
+       let tw = up(Math.max(L.minTw, D / (st ? SG_DTW_ST : 150), 0.3125, twMin || 0), L.incTw), C, Vn, lam;
+       for (let g = 0; g < 80; g++) {
+@@ -2446,29 +2485,29 @@
+   const tick = () => new Promise(r => setTimeout(r, 0)), fast = suggestLayout(P); if (fast.errors.length) return fast;
+   const SG = P.suggest, okC = fast.rec.cands.filter(c => c.ok), pool = okC.length ? okC : fast.rec.cands, picks = pool.slice(0, SG.keepD ? 2 : 3);
+   const key = r => JSON.stringify([r.tw, r.splices, r.top.map(g => [g.L, g.b, g.t]), r.bot.map(g => [g.L, g.b, g.t])]), out = []; let step = 0; const steps = (picks.length + 6) * 7;
+-  const refine = async (PP, c, tag) => { const P = PP, cc = { D: c.D, wt: c.wt, doR: c.doR };
++  const refine = async (PP, c, tag) => { const P = PP, cc = { D: c.D, wt: c.wt, doR: c.doR, twC: c.twC };
+     const shifts = suggestLayout(P, { clear: cc }).shifts;
+-    let lay = suggestLayout(P, { only: cc, shifts }).res, req = null, twMin = 0, prev = '', it = 0, llCache = null; const passed = [], costs = [];
++    let lay = suggestLayout(P, { only: cc, shifts }).res, req = null, twMin = c.twC || 0, prev = '', it = 0, llCache = null; const passed = [], costs = [];
+     const areaAt = (list, x) => { const g = sgAt(list, x + 1e-6); return g.b * g.t; };
+     for (; it < 12; it++) {
+       if (cancelled && cancelled()) return null; prog && prog(Math.min(0.96, ++step / steps), `${tag || `Depth ${c.D} in, ${c.wt} web`}: iteration ${it + 1}`); await tick();
+       const r = suggestLayout(P, { full: true, only: cc, kT: req, twMin, layout: { D: c.D, ...lay }, llCache, shifts }), ch = r.check;
+       if (!llCache && r.res.rec && r.res.rec.types) { llCache = {}; Object.entries(r.res.rec.types).forEach(([g, T]) => { if (T.bN) llCache[g] = T.bN; }); }
+-      const k = key(r.res), pass = ch.max <= 1.0005 && ch.rWeb <= 1.0005 && r.dOK; costs.push(r.cost.total);
++      const k = key(r.res), pass = ch.max <= 1.0005 && ch.rWeb <= 1.0005 && r.dOK && !r.cost.bayFail; costs.push(r.cost.total);   // bayFail: a bay cannot be stiffened enough (per-bay stiffeners, TB1)
+       if (pass) passed.push(r);
+       const settled = costs.length >= 3 && Math.abs(costs[costs.length - 1] - costs[costs.length - 3]) / costs[costs.length - 1] < 0.003;
+       if (pass && (k === prev || settled)) break;
+       const nxt = (list, rr, aa) => Float64Array.from(r.xs, (x, i) => { const a = aa[i] || areaAt(list, x), q = rr[i]; if (!(q > 0)) return 0; const f = q / 0.97; return a * (f > 1 ? Math.min(f * 1.01, 1.35) : Math.max(f, 0.8)); });
+       sgLists(r.res.top, r.res.bot, r.res.web);
+-      req = { areq: true, top: nxt(r.res.top, ch.rT, ch.aT), bot: nxt(r.res.bot, ch.rB, ch.aB) }; if (ch.rWeb > 1.0005) twMin = r.res.tw + P.limits.incTw;
++      req = { areq: true, top: nxt(r.res.top, ch.rT, ch.aT), bot: nxt(r.res.bot, ch.rB, ch.aB) }; if (ch.rWeb > 1.0005 || r.cost.bayFail) twMin = r.res.tw + P.limits.incTw;
+       prev = k; lay = r.res;
+     }
+     // verify the cheapest passing iterations against their own, fully recomputed staged demands
+     passed.sort((a, b) => a.cost.total - b.cost.total); let best = null, V = null;
+-    for (const cand of passed.slice(0, 3)) { prog && prog(Math.min(0.98, ++step / steps), `${tag || `Depth ${c.D} in`}: verifying`); await tick(); const v = suggestLayout(P, { full: true, verify: { ...cc, ...cand.res } }); if (v.check.max <= 1.0005 && v.check.rWeb <= 1.0005 && v.dOK) { best = cand; V = v; break; } }
++    for (const cand of passed.slice(0, 3)) { prog && prog(Math.min(0.98, ++step / steps), `${tag || `Depth ${c.D} in`}: verifying`); await tick(); const v = suggestLayout(P, { full: true, verify: { ...cc, ...cand.res } }); if (v.check.max <= 1.0005 && v.check.rWeb <= 1.0005 && v.dOK && !v.cost.bayFail) { best = cand; V = v; break; } }
+     if (!best) { best = passed[0] || suggestLayout(P, { full: true, only: cc, kT: req, twMin, layout: { D: c.D, ...lay }, shifts }); V = suggestLayout(P, { full: true, verify: { ...cc, ...best.res } }); }
+     // cleanup: replace a plate by its lighter neighbor where the design still passes and costs less (removes leftovers of the iteration, such as heavy short end plates)
+-    if (V && V.check.max <= 1.0005 && V.check.rWeb <= 1.0005 && V.dOK) { let res = JSON.parse(JSON.stringify(best.res)), Vb = V, better = true, n = 0;
++    if (V && V.check.max <= 1.0005 && V.check.rWeb <= 1.0005 && V.dOK && !V.cost.bayFail) { let res = JSON.parse(JSON.stringify(best.res)), Vb = V, better = true, n = 0;
+       const spn = (P.bridge.spans || []).map(Number), skw = (P.bridge.skews || []).map(v => Math.abs(+v || 0)), pal = a => a.every((v, i) => Math.abs(v - a[a.length - 1 - i]) < 1e-6), symB = pal(spn) && pal(skw);
+       const symL = L => L.every((q, i) => { const r = L[L.length - 1 - i]; return Math.abs(q.L - r.L) < 1e-6 && q.b === r.b && q.t === r.t; });
+       while (better && n++ < 24) { better = false;
+@@ -2477,26 +2516,26 @@
+             const mir = symB && symL(Lst) ? Lst.length - 1 - i : i;   // symmetric bridge: change the plate and its mirror together
+             const merged = []; Lst.map((q, j) => j === i || j === mir ? { ...q, b: nb.b, t: nb.t } : { ...q }).forEach(q => { const la = merged[merged.length - 1]; if (la && la.b === q.b && la.t === q.t) la.L += q.L; else merged.push(q); });
+             const cand = { ...res, [fk]: merged }, v = suggestLayout(P, { full: true, verify: { ...cc, ...cand } });
+-            if (v.check.max <= 1.0005 && v.check.rWeb <= 1.0005 && v.dOK && v.cost.total < Vb.cost.total - 1) { res = cand; Vb = v; better = true; } }
++            if (v.check.max <= 1.0005 && v.check.rWeb <= 1.0005 && v.dOK && !v.cost.bayFail && v.cost.total < Vb.cost.total - 1) { res = cand; Vb = v; better = true; } }
+           if (better) break; } }
+       if (Vb !== V) { best = { ...best, res }; V = Vb; } }
+-    const pass = V.check.max <= 1.0005 && V.check.rWeb <= 1.0005 && V.dOK; let defl = null;
++    const pass = V.check.max <= 1.0005 && V.check.rWeb <= 1.0005 && V.dOK && !V.cost.bayFail; let defl = null;
+     if (pass && SG.defl === 'on') { const Pc = { ...P, girder: { ...P.girder, D: c.D, web: best.res.web.map(w => ({ L: w.L, t: w.t })), top: best.res.top.map(g => ({ L: g.L, b: g.b, t: g.t })), bot: best.res.bot.map(g => ({ L: g.L, b: g.b, t: g.t })), splices: best.res.splices } };
+       const m = buildModel(Pc); if (!m.errors.length) { const an = analyzeGirder(Pc, m); if (!an.errors) defl = Object.values(an.types).flatMap(T => T.dl).reduce((a, q) => (!a || q.d / q.lim > a.d / a.lim) ? q : a, null); } }
+-    return { D: c.D, wt: c.wt, doR: c.doR, spacing: +PP.framing.spacing, res: best.res, check: V.check, cost: V.cost, pass: pass && (!defl || defl.d <= defl.lim + 1e-9), dOK: V.dOK, iters: it + 1, defl, xs: best.xs, fastCost: c.cost };
++    return { D: c.D, wt: c.wt, doR: c.doR, twC: c.twC, spacing: +PP.framing.spacing, res: best.res, check: V.check, cost: V.cost, pass: pass && (!defl || defl.d <= defl.lim + 1e-9), dOK: V.dOK, iters: it + 1, defl, xs: best.xs, fastCost: c.cost };
+   };
+   for (const c of picks) { const r = await refine(P, c); if (!r) return null; out.push(r); }
+   // cross-frame spacing: re-run the best candidate at other spacings, cross-frame cost included
+   const sp0 = +P.framing.spacing || 25, spList = SG.cfOpt === 'off' ? [] : [15, 17.5, 20, 22.5, 25, 27.5, 30].filter(v => v <= (parseFloat(SG.cfMax) || 25) + 1e-9 && Math.abs(v - sp0) > 0.01), spOut = [];
+   if (spList.length) { const okO = out.filter(o => o.pass).sort((a, b) => a.cost.total - b.cost.total)[0];
+-    if (okO) { const c0 = picks.find(p => p.D === okO.D && p.wt === okO.wt && p.doR === okO.doR) || { D: okO.D, wt: okO.wt, doR: okO.doR, cost: okO.fastCost };
++    if (okO) { const c0 = picks.find(p => p.D === okO.D && p.wt === okO.wt && p.doR === okO.doR && (p.twC || 0) === (okO.twC || 0)) || { D: okO.D, wt: okO.wt, doR: okO.doR, twC: okO.twC, cost: okO.fastCost };
+       for (const sp of spList) { const PP = { ...P, framing: { ...P.framing, spacing: sp } }; const r = await refine(PP, c0, `Cross-frames at ${sp} ft`); if (!r) return null; r.spTry = true; spOut.push(r); out.push(r); } } }
+   prog && prog(1, 'Done');
+   const ok = out.filter(o => o.pass).sort((a, b) => a.cost.total - b.cost.total), best = ok[0] || out.slice().sort((a, b) => a.check.max - b.check.max)[0];
+   const gov = (list, ratios, names) => { let x = 0; return list.map(g => { const x0 = x; x += g.L; let rm = 0, nm = ''; best.xs.forEach((xx, i) => { if (xx >= x0 - 1e-6 && xx < x - 1e-6 && ratios[i] > rm) { rm = ratios[i]; nm = names[i]; } }); return { ...g, x0, x1: x, ratio: rm, gov: nm }; }); };
+   const res = best.res, ch = best.check;
+-  return { ...fast, D: best.D, webType: best.wt, doR: best.doR, spacing: best.spacing, cost: best.cost, tw: res.tw, web: res.web, top: res.top, bot: res.bot, splices: res.splices, rec: { ...fast.rec, ...res.rec, D: { ...fast.rec.D, final: best.D } },
+-    full: { cands: out.map(o => ({ D: o.D, wt: o.wt, doR: o.doR, spacing: o.spacing, pass: o.pass, dOK: o.dOK, iters: o.iters, max: o.check.max, web: o.check.rWeb, cost: o.cost, fastCost: o.fastCost, defl: o.defl, best: o === best })), check: ch, topGov: gov(res.top, ch.rT, ch.gT), botGov: gov(res.bot, ch.rB, ch.gB), passed: best.pass, fastCost: fast.cost } };
++  return { ...fast, D: best.D, webType: best.wt, doR: best.doR, twC: best.twC, bays: best.wt === 'stiffened' && best.cost.bays || null, spacing: best.spacing, cost: best.cost, tw: res.tw, web: res.web, top: res.top, bot: res.bot, splices: res.splices, rec: { ...fast.rec, ...res.rec, D: { ...fast.rec.D, final: best.D } },
++    full: { cands: out.map(o => ({ D: o.D, wt: o.wt, doR: o.doR, twC: o.twC, spacing: o.spacing, pass: o.pass, dOK: o.dOK, iters: o.iters, max: o.check.max, web: o.check.rWeb, cost: o.cost, fastCost: o.fastCost, defl: o.defl, best: o === best })), check: ch, topGov: gov(res.top, ch.rT, ch.gT), botGov: gov(res.bot, ch.rB, ch.gB), passed: best.pass, fastCost: fast.cost } };
+ }
+ 
+ /* Quick suggestion: strength and service check and fix of the fast result (approved 2026-10-12).
+@@ -2509,8 +2548,8 @@
+    Depth, web type, d_o/D, and splice shifts of the fast pick are kept. Full design (suggestFull) does not use this. */
+ async function suggestQuickCheck(P, fast, prog, cancelled) {
+   const tick = () => new Promise(r => setTimeout(r, 0)), OK = 1.0005, t0 = performance.now(), MAXIT = 8;
+-  const cc = { D: fast.D, wt: fast.webType, doR: fast.doR }, shifts = fast.shifts, incTw = num(P.limits.incTw) || 0.0625;
+-  const cp = l => l.map(r => ({ ...r })), pass = v => v.check.max <= OK && v.check.rWeb <= OK && v.dOK;
++  const cc = { D: fast.D, wt: fast.webType, doR: fast.doR, twC: fast.twC }, shifts = fast.shifts, incTw = num(P.limits.incTw) || 0.0625;
++  const cp = l => l.map(r => ({ ...r })), pass = v => v.check.max <= OK && v.check.rWeb <= OK && v.dOK && !v.cost.bayFail;   // bayFail: per-bay stiffeners (TB1) cannot carry the staged shear
+   const ver = L => suggestLayout(P, { full: true, verify: { ...cc, top: cp(L.top), bot: cp(L.bot), web: cp(L.web), splices: [...L.splices] } });
+   const areaAt = (list, x) => { const g = sgAt(list, x); return g.b * g.t; };
+   const spn = (P.bridge.spans || []).map(Number), skw = (P.bridge.skews || []).map(v => Math.abs(+v || 0)), pal = a => a.every((v, i) => Math.abs(v - a[a.length - 1 - i]) < 1e-6), symB = pal(spn) && pal(skw);
+@@ -2525,7 +2564,7 @@
+     const kT = { areq: true, top: req(lay.top, ch.rT, ch.aT), bot: req(lay.bot, ch.rB, ch.aB) };
+     if (symB) { const nP = lay.splices.length + 1, mir = xs.map(x => { const q = nP - 1 - pieceOf(x); let j = -1; xs.forEach((y, k) => { if (pieceOf(y) === q && (j < 0 || Math.abs(y - (Lt - x)) < Math.abs(xs[j] - (Lt - x)))) j = k; }); return j; });   // symmetric bridge: symmetric required areas (the larger of each mirrored pair, nearest node of the mirrored field piece)
+       ['top', 'bot'].forEach(fk => { const A = kT[fk], B2 = Float64Array.from(A); mir.forEach((j, i) => { if (j >= 0) B2[i] = Math.max(A[i], A[j]); }); kT[fk] = B2; }); }
+-    if (ch.rWeb > OK) twMin = lay.tw + incTw;
++    if (ch.rWeb > OK || V.cost.bayFail) twMin = lay.tw + incTw;
+     const r = suggestLayout(P, { only: cc, kT, twMin, shifts }); if (r.errors && r.errors.length) { note = r.errors[0]; break; }
+     const nl = { top: r.res.top, bot: r.res.bot, web: r.res.web, splices: r.res.splices, tw: r.res.tw }; sgLists(nl.top, nl.bot, nl.web); sgLists(lay.top, lay.bot, lay.web);
+     // plates only increase: every node, both sides, both flanges, and the web
+@@ -2584,7 +2623,7 @@
+ <h3>Girder count from the deck width</h3><p>With an <b>Out-to-out deck width</b> W on the Suggest input tab, <b>Suggest girder count, spacing, and overhangs</b> compares girder counts. For each N from 3, every overhang on a 0.25 ft grid within the limits gives S = (W &minus; 2&middot;overhang)/(N &minus; 1); a layout is kept when S, the overhang (also &le; a fraction of S), and d<sub>e</sub> = overhang &minus; barrier (or curb) width are within the limits (defaults: overhang 1.5 to 4.0 ft and &le; 0.5S; d<sub>e</sub> &minus;1.0 to 5.5 ft; S 3.5 to 16 ft, the ranges of the 4.6.2.2 equations; verify / owner). The overhang limits used are the stricter of these settings and the Limits tab overhang limits of check G6 (overhang / S and maximum overhang, 0.40S and 4.0 ft by default), so the study never proposes an overhang that G6 warns about; the results note says which value governs. Of those, the overhang whose exterior and interior girder live load moment distribution factors (this tool's 4.6.2.2 equations, longest span) are closest is used (ties: nearest 0.375S); the girder is then sized with Suggest's fast sizing (without the quick suggestion's strength and service check) and checked like an alternative. The table lists N, S, overhang, d<sub>e</sub>, the factors, the section, the steel per girder and in total (lb/ft<sup>2</sup> of deck), the governing ratio of the layout checks, the bracing type from the girder depth, and pass/fail. The recommendation is the passing row with the least total steel (or the fewest girders, if chosen). Nothing changes until you press Apply. With W blank, Suggest uses the girder count and spacing on the Bridge tab as before. Distribution factors are an estimate for comparing layouts: run LL &amp; DL for the chosen layout.</p>
+ <p><b>Fast study, then full design of the best few.</b> The study sizes every girder count with Suggest's <i>fast sizing</i> (without the quick suggestion's strength and service check): one constant-stiffness continuous-beam model, flange areas from lever-arm estimates, and only this tool's layout checks (proportions, transitions, splices, framing), with no strength, service, or fatigue check. That makes it quick enough to try every girder count, but its weights are a ranking aid. The overhang of each row is chosen with the K<sub>g</sub> of a trial girder sized at the overhang nearest 0.375S. When the study finishes, the Suggest tab offers <b>Full design of the best N</b> (N on the Suggest input tab, default 3, at most 5). It takes the best N rows (by the objective: passing rows first, then the others by governing ratio) and runs Full design (see <i>Quick suggestion and full design</i> below) on each with that row's girder count, spacing, and overhangs, on a copy of the project: each iteration re-runs the staged analysis of the current plates (DC1 on the steel section; DC2 and DW on the long-term composite section, 3n; live load on the short-term composite section, n; cracked near interior piers), recomputes the 4.6.2.2 distribution factors from that section's K<sub>g</sub>, checks every node, and resizes; the live load model of the first iteration is reused inside the loop, and the final verification recomputes everything, so the pass/fail of each row comes from fully recomputed demands. The girder count, spacing, and overhangs are kept from the fast study. Full design takes about 20 to 60 s for each girder count, which is why it runs only for the best few and only when you press the button (it can be cancelled). The results table lists the full-design section, cross-frame spacing, steel per girder, total and per deck area (with the fast-study value beside it), the largest ratio of the final verification, the interior and exterior moment distribution factors of the final girder (longest span), the iterations, and pass/fail (every full-design check at or below 1.0 and no failing layout check; failing Analysis tab checks A1 to A3 are named beside it but do not decide it, because they depend on the bearing stiffener and bearings, which Suggest does not size); the recommendation follows the same objective. Apply sets the girder count, spacing, overhangs, plates, splices, stiffener setting, and cross-frame spacing (Revert restores the previous design). The result is still preliminary: run LL &amp; DL (lldf) for the chosen layout and complete the design checks in GirderDetail.</p>
+ <h3>Suggest: lowest-cost layout</h3><p>Suggest proposes the web and flange layout and the field splices for the bridge on the Bridge tab, with one layout for all girders (designed for the envelope of the interior and exterior girders). It searches web depths from about L/36 to L/18 and, unless one is chosen, both an unstiffened and a transversely stiffened web, and keeps the layout with the <b>lowest total cost</b>: structural steel (weight × $/lb), flange shop transitions, transverse stiffeners, and field splices, each priced from the <b>Unit costs</b> on the Suggest tab, which are the same single price list used by the Alternatives study (and sent to GirderDetail's Design all). The defaults are placeholders; only their ratios affect the choice, and the tab shows each as an equivalent weight of steel. Within each field piece the flange width is constant and the thicknesses are chosen by an optimization that adds a transition only where it saves more than it costs. Field splices are placed by the program near the dead-load points of contraflexure and within the shipping length and weight, and moved off cross-frame locations where the framing check X4 finds a conflict.</p>
+-<p><b>Rules.</b> AASHTO LRFD minimums always apply: D/t<sub>w</sub> ≤ 150, stiffened or not (Eq. 6.10.2.1.1-1, webs without longitudinal stiffeners), b<sub>f</sub>/2t<sub>f</sub> ≤ 12, b<sub>f</sub> ≥ D/6, t<sub>f</sub> ≥ 1.1t<sub>w</sub>, 0.1 ≤ I<sub>yc</sub>/I<sub>yt</sub> ≤ 10 (6.10.2.2), plates at least 5/16 in (6.7.3), and one steel grade (no hybrid girders). With the AASHTO/NSBA G12.1 fabrication guidelines on (the default), the Limits tab minimum sizes, increments, and transition ratios also apply. The span-to-depth limits of Table 2.5.2.6.3-1 apply by default. The Suggest setting can turn them off only when the Limits tab does not treat span-to-depth as mandatory; with "Treat span-to-depth (G1, G2) as mandatory" on, Suggest (fast and full design, the deck-width study, and the web economy comparison) always applies them, so it never proposes a girder that fails G1 or G2. Full design also requires the final plates of each candidate to meet the minimum depths, since resizing can thin the flanges.</p><p><b>Optimizing the framing.</b> Stiffener spacing and cross-frame spacing are design variables. For stiffened webs, the fast search tries d<sub>o</sub>/D = 1.0, 1.5, 2.0, and 3.0 (shear buckling coefficient k = 5 + 5/(d<sub>o</sub>/D)²): wider panels need fewer stiffeners but a thicker web, and the cost decides. Full design then re-runs its best candidate at cross-frame spacings from 15 ft up to the maximum set on the Suggest tab (default 25 ft) in 2.5 ft steps, with every check (lateral-torsional buckling with the actual spacing and C<sub>b</sub>, deck placement, and the rest), adding the cost of each intermediate cross-frame, and keeps the cheapest. Apply sets the Framing tab spacing and d<sub>o</sub>/D. The deck overhang is not modeled in sizing: GirderDetail's Deck overhang auto-design gives the largest spacing the deck placement allows at the exterior girder, so set the maximum spacing no higher than that.</p><p><b>Flange widths.</b> Every flange at a field splice is made wide enough for the number of bolt gage lines each side of the web set on the Suggest tab (default 2) without staggering, using the same geometry as GirderDetail's splice auto-design: the first line clear of the web splice plate by the plate clearance plus the edge distance and by the tightening clearance C₁, the gage between lines, and the edge distance at the flange tip (about 14 in for 7/8 in bolts and two lines). The top flange is kept at one width along the girder unless turned off (it simplifies the haunch and stay-in-place forms), and the width of either flange changes by no more than the set maximum at a field splice (default 4 in; 0 for no limit). Widths are raised, never reduced, to meet these rules, and the thicknesses are then optimized at those widths.</p>
++<p><b>Rules.</b> AASHTO LRFD minimums always apply: D/t<sub>w</sub> ≤ 150, stiffened or not (Eq. 6.10.2.1.1-1, webs without longitudinal stiffeners), b<sub>f</sub>/2t<sub>f</sub> ≤ 12, b<sub>f</sub> ≥ D/6, t<sub>f</sub> ≥ 1.1t<sub>w</sub>, 0.1 ≤ I<sub>yc</sub>/I<sub>yt</sub> ≤ 10 (6.10.2.2), plates at least 5/16 in (6.7.3), and one steel grade (no hybrid girders). With the AASHTO/NSBA G12.1 fabrication guidelines on (the default), the Limits tab minimum sizes, increments, and transition ratios also apply. The span-to-depth limits of Table 2.5.2.6.3-1 apply by default. The Suggest setting can turn them off only when the Limits tab does not treat span-to-depth as mandatory; with "Treat span-to-depth (G1, G2) as mandatory" on, Suggest (fast and full design, the deck-width study, and the web economy comparison) always applies them, so it never proposes a girder that fails G1 or G2. Full design also requires the final plates of each candidate to meet the minimum depths, since resizing can thin the flanges.</p><p><b>Optimizing the framing.</b> Stiffener spacing and cross-frame spacing are design variables. For stiffened webs with "Optimize stiffener spacing" on (the default), the stiffeners are designed per cross-frame bay: the floor web is the thinnest that works with d<sub>o</sub> = 1.0D in every panel (k = 5 + 5/(d<sub>o</sub>/D)²; interior panels with tension-field action when that setting is on, Eq. 6.10.9.3.2-2 or -8; end panels at an abutment or simple-span bearing with V<sub>n</sub> = CV<sub>p</sub>, 6.10.9.3.3); then each bay between bearings and cross-frames (connection plates act as stiffeners) gets no intermediate stiffener where the connection plates alone carry the shear (6.10.9.1), else the largest spacing allowed (d<sub>o</sub> ≤ 3D) and one more stiffener at a time until every panel passes with its largest Strength I V<sub>u</sub> (6.10.9.3.1; envelope of the interior and exterior girders); an end panel that needs it gets its own stiffener at up to 1.5D from the bearing and the rest of the bay is evenly spaced. Webs up to six increments thicker than the floor are priced with their own stiffener counts (a thinner web with more stiffeners against a thicker web with fewer), and the cheapest is kept. The quick suggestion's check and Full design redo the bays with the staged shears and thicken the web if a bay cannot be stiffened enough (d<sub>o</sub> down to 0.5D). With the setting off, the Framing tab ratio d<sub>o</sub>/D is used uniformly, as before. Full design then re-runs its best candidate at cross-frame spacings from 15 ft up to the maximum set on the Suggest tab (default 25 ft) in 2.5 ft steps, with every check (lateral-torsional buckling with the actual spacing and C<sub>b</sub>, deck placement, and the rest), adding the cost of each intermediate cross-frame, and keeps the cheapest. Apply sets the Framing tab cross-frame spacing and the stiffeners (per bay: the Framing tab per-bay table; uniform: d<sub>o</sub>/D). The deck overhang is not modeled in sizing: GirderDetail's Deck overhang auto-design gives the largest spacing the deck placement allows at the exterior girder, so set the maximum spacing no higher than that.</p><p><b>Flange widths.</b> Every flange at a field splice is made wide enough for the number of bolt gage lines each side of the web set on the Suggest tab (default 2) without staggering, using the same geometry as GirderDetail's splice auto-design: the first line clear of the web splice plate by the plate clearance plus the edge distance and by the tightening clearance C₁, the gage between lines, and the edge distance at the flange tip (about 14 in for 7/8 in bolts and two lines). The top flange is kept at one width along the girder unless turned off (it simplifies the haunch and stay-in-place forms), and the width of either flange changes by no more than the set maximum at a field splice (default 4 in; 0 for no limit). Widths are raised, never reduced, to meet these rules, and the thicknesses are then optimized at those widths.</p>
+ <p><b>Quick suggestion and full design.</b> Suggest has two modes. The <b>quick suggestion</b> updates as you edit. It picks the web depth and web type with the lowest estimated cost from a fast sizing (one constant-stiffness beam model, flange areas from lever-arm estimates, this tool's layout checks), then checks that girder with the same staged analysis and AASHTO checks as Full design (listed below) for the interior and exterior girders, including the Table 2.5.2.6.3-1 minimum depths when span-to-depth applies to Suggest. Where a ratio exceeds 1.0 it increases the flange plates there (required area = current area &times; ratio/0.97 &times; 1.01, at most 1.35 times per round, never less than the plate already there) and thickens the web by one increment if the web ratio exceeds 1.0, then checks again, up to 8 rounds. Plates are only increased, never trimmed, so the quick suggestion passes the strength and service checks (the card says so, or names the ratio that still exceeds 1.0) but is not necessarily the lightest girder. The check runs in the background after the fast result appears (the card shows &ldquo;checking&rdquo; with a progress bar; typically a second or less after the fast result); a new edit restarts it, and Apply pressed during the check applies the checked result, after confirmation, when it is ready. The girder-count study and the Alternatives study use the fast sizing only, without this check, to rank layouts. <b>Run full design</b> optimizes for the least steel: it takes the best fast candidates and, for each, repeats: the staged, cracked analysis of the current layout (the Structural analysis settings); the AASHTO checks at every node for the interior and exterior girders, on both sides of every plate boundary (Strength I positive flexure with the plastic moment, compactness, D<sub>p</sub>/D<sub>t</sub>, and 1.3M<sub>y</sub>; Strength I negative flexure by 6.10.8 with flange local buckling, lateral-torsional buckling at the cross-frame spacing with C<sub>b</sub> from the quarter-point moments of each unbraced segment (10th Edition 6.10.8.2.3b: C<sub>b</sub> = 12.5M<sub>max</sub>/(2.5M<sub>max</sub> + 3M<sub>A</sub> + 4M<sub>B</sub> + 3M<sub>C</sub>), with M<sub>max</sub> the largest moment compressing the flange and M<sub>A</sub>, M<sub>B</sub>, M<sub>C</sub> the absolute envelope values at the quarter points (largest compression, or smallest tension where the flange is never in compression), as defined in 6.10.8.2.3b, Eq. 6.10.8.2.3b-1, with F<sub>nc</sub> by Eqs. 6.10.8.2.3a-2 to a-5; brace points at the supports and at the cross-frame spacing), and R<sub>b</sub>; where the section changes within the unbraced length, 6.10.8.2.3c: its simplification where it holds (one change to a smaller section within 0.2L<sub>b</sub> of the brace point with the smaller moment, the larger moment in the larger section, I<sub>y1</sub>/I<sub>y2</sub> ≥ 0.5: prismatic with the larger section), otherwise C<sub>b</sub> = 1.0 and F<sub>e</sub> = γ<sub>e</sub>f<sub>bu</sub> with r<sub>t</sub> = (L<sub>b</sub>/π)√(F<sub>e</sub>/E) (Eqs. c-1 to c-3), γ<sub>e</sub> by Appendix D6.6.2 Method A (γ<sub>e</sub> = χC<sub>be</sub>/(M<sub>u</sub>/M<sub>e1</sub>)<sub>max</sub>, Eqs. D6.6.2-1, D6.6.2-2, D6.6.2.2-1), or, where a flange's lateral moment of inertia changes by more than a factor 2.0 at a step (the D6.6.2.2 limit), the conservative bound (each section of the unbraced length as a prismatic member over L<sub>b</sub> under uniform moment at its largest stress), flagged for review; deck-placement lateral-torsional buckling also uses C<sub>b</sub> from the deck-placement moments, and the same nonprismatic rules; Service II flange stresses and web bend-buckling; deck-placement constructibility; flange fatigue, Fatigue I, Category B at the flange-to-web welds (extreme fiber) and Category C′ at the connection plates welded to the flanges (inner flange face, 6.6.1.3.1; checked at every analysis point along the girder, not only at the cross-frames, which is conservative), unless turned off or limited to Category B; and optionally L/800 deflection); and resizing, with each flange's required area set from the check ratio so plates are thickened where a check exceeds 1.0 and trimmed where there is spare capacity. When the layout stops changing it is verified against its own recomputed demands, and the cheapest passing candidate is selected. The result lists the governing check and ratio for every plate. Applying it replaces the girder layout (and the stiffener setting); Revert restores the previous design.</p>
+ <p><b>Current girder compared with the suggestion.</b> Below the quick suggestion (or full design) card, the Suggest tab compares the current girder (the Girder tab plates and splices, with the Framing tab stiffeners and cross-frame spacing) with the suggestion, so you can see what the suggestion changes. The overall rows give the web depth and thickness, transverse stiffeners and d<sub>o</sub>/D, cross-frame spacing, field splices, shop transitions, steel per girder and per deck area, cost (Unit costs), the largest strength and service ratio, and the code proportion check counts, with each changed row highlighted. The top flange, web, and bottom flange are then compared plate by plate: the two plate lists are merged by station, so each row is a station range with the current and the suggested plate and what changes (for example &ldquo;t 1 1/8 &rarr; 1 1/4&rdquo;, &ldquo;b 16 &rarr; 15&rdquo;, &ldquo;new transition at 28 ft&rdquo;). A plot shows the flange thickness and width along the girder for both. The current girder is checked in the background with the same staged analysis and strength and service checks as the quick suggestion, at its own cross-frame spacing (an edit restarts the check); the card says whether a change is needed (the current girder exceeds 1.0, is shallower than the Table 2.5.2.6.3-1 minimum depth where that applies, or fails a code proportion check) or would only save steel and cost, and &ldquo;No change suggested&rdquo; when the suggestion is the same as the current girder. If the current girder has input errors, the card lists them instead. The comparison changes nothing until you press Apply.</p>
+ <h3>Analysis model</h3><p>The analysis of the current design uses a variable-stiffness, staged line-girder model: DC1 on the steel section, DC2 and DW on the long-term composite section, and live load on the short-term composite section, with the composite stages cracked near interior supports. Its settings (staged or constant EI, cracked zones, deck reinforcement) are made in GirderDetail's Structural analysis module. Suggest mode searches trial layouts with the faster constant-EI model and then designs the chosen layout with the staged model.</p>
+@@ -2597,7 +2636,7 @@
+ <li><b>Bridge tab.</b> Enter span lengths, continuity, skew at each support line, and the deck cross-section.</li>
+ <li><b>Girder tab.</b> Enter the web depth and grades, then the web, top flange, and bottom flange plate segments from Abutment 1, and the field splice stations. Each segment table shows its running total against the girder length; "Fit last to girder" sets the final segment to the remaining length.</li>
+ <li><b>Limits tab.</b> Choose the owner and confirm every limit. Save verified limits as that owner's defaults so later projects can load them.</li>
+-<li><b>Framing tab.</b> Set the cross-frame spacing and orientation rule, the stiffener arrangement, and the stiffener, connection plate, and bearing stiffener sizes. The framing plan on the Drawings tab updates live.</li>
++<li><b>Framing tab.</b> Set the cross-frame spacing and orientation rule, the stiffener arrangement, and the stiffener, connection plate, and bearing stiffener sizes. Stiffener spacing is either uniform (d<sub>o</sub>/D in every bay) or per cross-frame bay: a table of the bays of each girder (stations along the girder from its Abut. 1 bearing, length, number of intermediate stiffeners n, the widest panel d<sub>o</sub> and d<sub>o</sub>/D, and the largest V<sub>u</sub>/φV<sub>n</sub> of its panels with the Analysis tab shears), girders with the same layout together. Suggest Apply fills it; the counts can be edited. A bay with no stored count (the framing changed afterwards) uses the uniform d<sub>o</sub>/D and is flagged. The framing plan on the Drawings tab updates live.</li>
+ <li><b>Suggest (optional).</b> With the Bridge and Limits tabs complete, open the Suggest output tab to see a proposed layout with its full derivation, adjust the settings on the Suggest input tab, and choose "Apply to girder" to copy it into the Girder tab. Everything on the Girder tab can then be edited by hand.</li>
+ <li><b>Review the output.</b> The status bar and Summary tab show the verdict and the governing location for every check. Click any check ID or status chip to jump to its derivation.</li>
+ <li><b>Print.</b> "Print report" opens a dialog to choose the report contents, then prints to PDF.</li>
+@@ -2632,7 +2671,7 @@
+ <tr><td>Cross-frame spacing</td><td>ft</td><td>Target maximum distance between bracing points along any girder (X2). Default 25 ft.</td></tr>
+ <tr><td>Orientation, arrangement</td><td>—</td><td>Automatic follows 6.7.4.2 (parallel to the skew at 20° or less, otherwise normal). Normal frames may be contiguous lines or staggered by bay.</td></tr>
+ <tr><td>Clear of skewed bearing line, min. offset</td><td>ft</td><td>Minimum distance of a normal intermediate frame from a skewed bearing line; minimum offset between non-aligned frames on opposite sides of a girder (X3).</td></tr>
+-<tr><td>Transverse stiffeners, d<sub>o</sub>/D</td><td>—</td><td>Whether the web has intermediate stiffeners and their spacing as a multiple of D.</td></tr>
++<tr><td>Transverse stiffeners, d<sub>o</sub>/D</td><td>—</td><td>Whether the web has intermediate stiffeners and their spacing as a multiple of D (uniform), or per cross-frame bay (the count in each bay; Suggest Apply sets it).</td></tr>
+ <tr><td>Stiffener, connection plate, bearing stiffener sizes</td><td>in</td><td>Projecting width and thickness; bearing stiffener corner clip and pairs per bearing; plate grade.</td></tr>
+ <tr><td>Live load deflection limit</td><td>—</td><td>On/off and the L/ ratio (default 800) for check A1.</td></tr>
+ <tr><td>Integral limits</td><td>ft, deg</td><td>Maximum total length and abutment skew for integral abutments (placeholders).</td></tr>
+@@ -2640,7 +2679,7 @@
+ <tr><td>Unit costs</td><td>$</td><td>Price per lb of steel and per each shop transition, girder field splice, stiffener or connection plate, cross-frame, and bearing (placeholders).</td></tr>
+ <tr><td>Girder designed (Suggest)</td><td>—</td><td>Interior, exterior, or the envelope of both. The envelope takes the larger required area at every point.</td></tr>
+ <tr><td>Target L / D<sub>st</sub></td><td>—</td><td>Longest span divided by steel depth, used to choose the web depth: default 25 (simple) and 30 (continuous). The depth is increased if G1 or G2 would fail.</td></tr>
+-<tr><td>Web shear basis</td><td>—</td><td>Transversely stiffened at d<sub>o</sub> = D (k = 10) or unstiffened (k = 5). Tension-field action is not used.</td></tr>
++<tr><td>Web shear basis</td><td>—</td><td>Unstiffened (k = 5), or transversely stiffened: per cross-frame bay (default; tension-field action in interior panels optional, never in end panels) or at the uniform Framing tab d<sub>o</sub>/D (no tension-field action).</td></tr>
+ <tr><td>FWS, SIP forms, barrier, construction LL</td><td>psf, psf, klf, psf</td><td>Loads for Suggest mode. Barrier weight is per barrier; two barriers are shared by all girders.</td></tr>
+ <tr><td>Target b<sub>f</sub>/2t<sub>f</sub></td><td>—</td><td>Width-to-thickness ratio aimed for when choosing flange width from the required area, b<sub>f</sub> = √(2kA). Default 6.</td></tr>
+ <tr><td>Compression flange efficiency η</td><td>—</td><td>Fraction of F<sub>y</sub> assumed for compression flanges (negative flexure bottom flange, deck placement top flange). Default 0.85.</td></tr>
+@@ -2700,7 +2739,7 @@
+ <div class="eq-math">\\[M_u = \\gamma_{DC}M_{DC} + \\gamma_{DW}M_{DW} + 1.75M_{LL+IM}, \\qquad \\gamma_{DC} = 1.25\\ \\text{or}\\ 0.90, \\quad \\gamma_{DW} = 1.50\\ \\text{or}\\ 0.65\\]</div>
+ <div class="eq-math">\\[M_s = M_{DC} + M_{DW} + 1.30M_{LL+IM} \\quad (\\text{Service II}), \\qquad M_c = 1.25M_{DC1} + 1.50M_{CLL}\\]</div>
+ <h3>Web</h3>
+-<p>Web depth D = ⌈L<sub>max</sub>(12)/r − 2.5⌉ on the depth increment, increased until G1 and G2 pass. Web thickness is the smallest on the thickness increment satisfying the minimum thickness, D/t<sub>w</sub> ≤ 150, and φ<sub>v</sub>V<sub>n</sub> = C(0.58F<sub>yw</sub>Dt<sub>w</sub>) ≥ V<sub>u</sub> (6.10.9.2, 6.10.9.3.2), with C from Eq. 6.10.9.3.2-4 to -6. Tension-field action is not used, which is conservative. With transverse stiffeners at d<sub>o</sub> > 1.5D, the end panels (d<sub>o</sub> from each girder end) are not stiffened panels (6.10.9.1, 6.10.9.3.3): the largest V<sub>u</sub> in them is also checked with k = 5 (unstiffened), and the thicker web governs.</p>
++<p>Web depth D = ⌈L<sub>max</sub>(12)/r − 2.5⌉ on the depth increment, increased until G1 and G2 pass. Web thickness is the smallest on the thickness increment satisfying the minimum thickness, D/t<sub>w</sub> ≤ 150, and φ<sub>v</sub>V<sub>n</sub> = C(0.58F<sub>yw</sub>Dt<sub>w</sub>) ≥ V<sub>u</sub> (6.10.9.2, 6.10.9.3.2), with C from Eq. 6.10.9.3.2-4 to -6. Tension-field action is not used, which is conservative (uniform stiffener spacing; per-bay stiffeners: see Part 2, Suggest). With transverse stiffeners at d<sub>o</sub> > 1.5D, the end panels (d<sub>o</sub> from each girder end) are not stiffened panels (6.10.9.1, 6.10.9.3.3): the largest V<sub>u</sub> in them is also checked with k = 5 (unstiffened), and the thicker web governs.</p>
+ <h3>Required flange areas</h3>
+ <p>With a<sub>c</sub> = t<sub>fb</sub>/2 + D + t<sub>ft</sub> + h<sub>h</sub> + t<sub>s</sub>/2 (bottom flange to mid-deck) and a<sub>s</sub> = D + (t<sub>ft</sub> + t<sub>fb</sub>)/2 (between flange centroids), the required areas are the largest of:</p>
+ <div class="eq-math">\\[A_{fb} \\ge \\frac{M_u^+}{F_y a_c},\\quad \\frac{1}{0.95F_y}\\left(\\frac{M_{DC1}}{a_s} + \\frac{M_{DC2}+M_{DW}+1.3M_{LL}}{a_c}\\right),\\quad \\frac{|M_u^-|}{\\eta F_y a_s},\\quad \\frac{|M_s^-|}{0.95F_y a_s},\\quad \\frac{M_c}{F_y a_s}\\]</div>
+@@ -2717,7 +2756,7 @@
+ <h3>Detailing checks</h3>
+ <p>Transverse stiffeners and connection plates (which act as stiffeners) must satisfy 6.10.11.1.2 and 6.10.11.1.3:</p>
+ <div class="eq-math">\\[b_t \\ge 2.0 + \\frac{D}{30}, \\qquad 16t_p \\ge b_t \\ge \\frac{b_f}{4}, \\qquad I_t = \\frac{t_p b_t^3}{3} \\ge b\\,t_w^3 J, \\quad J = \\frac{2.5}{(d_o/D)^2} - 2.0 \\ge 0.5\\]</div>
+-<p>b<sub>f</sub> is the widest flange in the field piece (conservatively either flange), t<sub>w</sub> the thickest web in the piece, and b the smaller of d<sub>o</sub> and D. Connection plates use d<sub>o</sub> equal to the stiffener spacing if stiffeners are present, otherwise the cross-frame spacing. Bearing stiffeners satisfy b<sub>t</sub> ≤ 0.48t<sub>p</sub>√(E/F<sub>ys</sub>) (6.10.11.2.2) and must fit within the bottom flange (practice).</p>
++<p>b<sub>f</sub> is the widest flange in the field piece (conservatively either flange), t<sub>w</sub> the thickest web in the piece, and b the smaller of d<sub>o</sub> and D. Connection plates use d<sub>o</sub> equal to the stiffener spacing if stiffeners are present, otherwise the cross-frame spacing. With per-bay stiffeners, D3 uses the narrowest panel in each field piece and D4 lists every bay with intermediate stiffeners (interior panels against 3D; an end panel with its own stiffener against 1.5D; a wider end panel of an evenly spaced bay is an unstiffened end panel, advisory). Bearing stiffeners satisfy b<sub>t</sub> ≤ 0.48t<sub>p</sub>√(E/F<sub>ys</sub>) (6.10.11.2.2) and must fit within the bottom flange (practice).</p>
+ <h3>Camber and deflection</h3>
+ <p>Moments come from the constant-EI influence lines described in the Suggest methodology. Deflections are then computed by virtual work with the actual stiffness at each point:</p>
+ <div class="eq-math">\\[\\Delta(x) = \\int \\frac{M(s)\\,m_x(s)}{E\\,I(s)}\\,ds\\]</div>
+@@ -2730,7 +2769,7 @@
+ <p>For each girder count N<sub>b</sub> in the list, the out-to-out width and both overhangs are held and S = (width − overhangs)/(N<sub>b</sub> − 1). For each L/D<sub>st</sub> in the range, D = ⌈L<sub>max</sub>(12)/r − 2.5⌉ on the depth increment (duplicates removed). Each combination is sized with Suggest's fast sizing (without the quick suggestion's strength and service check) at that fixed depth (G1 and G2 are not forced, so shallow alternatives may fail them), the cross-frames are laid out, all proportion and framing checks are run, and quantities are priced. With the "cheaper of both" web basis, each is sized stiffened and unstiffened and the cheaper is kept.</p>
+ <h3>Cost model</h3>
+ <div class="eq-math">\\[C = c_{st}W_{st} + c_{tr}n_{tr} + c_{sp}n_{sp} + c_{sf}(n_{stiff} + n_{conn}) + c_{xf}n_{xf} + c_{br}n_{br}\\]</div>
+-<p>W<sub>st</sub> is the girder steel for all girders including the detail allowance; n<sub>tr</sub> the shop transitions, n<sub>sp</sub> the girder field splices (locations times girders), n<sub>stiff</sub> the transverse stiffeners at d<sub>o</sub> less those replaced by connection plates, n<sub>conn</sub> two connection plates per cross-frame, n<sub>xf</sub> the cross-frames, and n<sub>br</sub> the bearings. The recommended alternative is the least cost with no failed check. Deck, substructure, and deck thickness changes with spacing are not priced.</p>`],
++<p>W<sub>st</sub> is the girder steel for all girders including the detail allowance; n<sub>tr</sub> the shop transitions, n<sub>sp</sub> the girder field splices (locations times girders), n<sub>stiff</sub> the transverse stiffeners at d<sub>o</sub> less those replaced by connection plates (per-bay stiffeners: the sum of the bay counts), n<sub>conn</sub> two connection plates per cross-frame, n<sub>xf</sub> the cross-frames, and n<sub>br</sub> the bearings. The recommended alternative is the least cost with no failed check. Deck, substructure, and deck thickness changes with spacing are not priced.</p>`],
+ ['p6', 'Verification', `
+ <p>No independent reference program has been run against this build yet. That comparison is planned: girders from the FHWA Steel Bridge Design Handbook design examples will be entered and checked for clean results, and selected layouts will be compared with NSBA LRFD Simon output for the proportion limits.</p>
+ <p>The check engine was verified by hand calculation on the built-in example (Part 7) and by a failure test in which the web was reduced to 3/8 in, the depth to 58.5 in, a flange to 10 × 1/2, a transition made 1 1/4 to 3 1/4 in, a splice moved to 1 ft from a pier, and the skew raised to 50°. Each expected failure, warning, and advisory was produced (W1, W3, W4, F5, F7, T1 to T4, S1, S4, S5, G8), and each hand-calculated value matched. Mismatched segment lengths and out-of-range splice stations block the checks with specific messages.</p>
+@@ -2815,7 +2854,7 @@
+       ${fld('Girder designed', 'suggest.gtype', '', 'sel', { full: true, options: [['envelope', 'Envelope of interior and exterior'], ['int', 'Interior girder'], ['ext', 'Exterior girder']] })}
+       ${fld('Target L / D<sub>st</sub>, simple', 'suggest.lsdS', '')}${fld('Target L / D<sub>st</sub>, continuous', 'suggest.lsdC', '')}
+       ${fld('Keep the web depth on the Girder tab', 'suggest.keepD', '', 'bool')}
+-      ${fld('Web', 'suggest.web', '', 'sel', { full: true, options: [['auto', 'Choose the cheaper of stiffened and unstiffened'], ['stiffened', 'Transversely stiffened, d_o = D (k = 10)'], ['unstiffened', 'Unstiffened (k = 5)']] })}
++      ${fld('Web', 'suggest.web', '', 'sel', { full: true, options: [['auto', 'Choose the cheaper of stiffened and unstiffened'], ['stiffened', 'Transversely stiffened (spacing: Unit costs, Optimize stiffener spacing)'], ['unstiffened', 'Unstiffened (k = 5)']] })}
+       <p class="hint static">Steel grades come from the Girder tab. Plate minimums, increments, and shipping limits come from the Limits tab.</p>
+     </div>
+     ${secHd('sec-sgws', 'Girder count from the deck width')}
+@@ -2866,7 +2905,9 @@
+       ${fld('Transverse stiffener or connection plate, each', 'costs.stiff', '$')}${fld('Field splice, per girder', 'costs.splice', '$')}
+       ${fld('Cross-frame, each', 'costs.xf', '$')}${fld('Bearing, each', 'costs.bearing', '$')}
+       ${fld('Optimize cross-frame spacing (full design)', 'suggest.cfOpt', '', 'sel', { options: [['on', 'Yes'], ['off', 'No: Framing tab spacing']] })}${fld('Maximum cross-frame spacing', 'suggest.cfMax', 'ft')}
+-      ${fld('Optimize stiffener spacing d<sub>o</sub>/D', 'suggest.doOpt', '', 'sel', { full: true, options: [['on', 'Yes: 1.0, 1.5, 2.0, 3.0'], ['off', 'No: Framing tab ratio']] })}
++      ${fld('Optimize stiffener spacing d<sub>o</sub>/D', 'suggest.doOpt', '', 'sel', { full: true, options: [['on', 'Yes: per cross-frame bay, web thickness by cost'], ['off', 'No: Framing tab ratio, uniform']] })}
++      ${fld('Tension-field action, interior panels (6.10.9.3.2)', 'suggest.tfa', '', 'sel', { full: true, options: [['on', 'Use (end panels never: 6.10.9.3.3)'], ['off', 'Do not use (V_n = CV_p)']] })}
++      <p class="note full">Per cross-frame bay: in each bay between connection plates (which act as stiffeners) the intermediate stiffeners are evenly spaced at the largest spacing AASHTO LRFD 6.10.9.1 allows (3D in interior panels; none where the connection plates alone carry the shear), and tightened only where φ<sub>v</sub>V<sub>n</sub> &lt; V<sub>u</sub> (Strength I, envelope of the interior and exterior girders, the largest V<sub>u</sub> in each panel). At an abutment, or any bearing of a simple span, the end panel is checked with V<sub>n</sub> = CV<sub>p</sub> (6.10.9.3.3); where that needs it, it gets its own stiffener at up to 1.5D from the bearing and the rest of the bay is evenly spaced. Web thicknesses from the thinnest that works with d<sub>o</sub> = 1.0D up to six increments thicker are priced with their own stiffener counts, and the cheapest is kept. Apply writes the counts to the Framing tab (per-bay table).</p>
+       <p class="note full" id="sg_equiv"></p>
+     </div>
+     ${secHd('sec-sgrun', 'Full design')}
+@@ -2893,7 +2934,7 @@
+ document.addEventListener('click', e => { if (e.target.id === 'sg_full') runFullDesign(); else if (e.target.id === 'sg_cancel' && SG_RUN) SG_RUN.cancel = true; });
+ function sgEquiv() { const el = document.getElementById('sg_equiv'); if (!el) return; const s = P.costs, c = num(s.steel) || 1; el.innerHTML = `One price list for Suggest, Full design, and the Alternatives study (placeholders; replace them with fabricator or owner data). In pounds of steel: a transition = ${f0(num(s.trans) / c)} lb, a stiffener = ${f0(num(s.stiff) / c)} lb, a field splice = ${f0(num(s.splice) / c)} lb per girder, a cross-frame = ${f0(num(s.xf) / c)} lb. Only the ratios affect the choice of layout.`; }
+ function sgKey() { return JSON.stringify([P.bridge, P.limits, P.suggest, P.girder.gF, P.girder.gW, P.suggest.keepD ? P.girder.D : 0]); }
+-function sgQKey() { return JSON.stringify([sgKey(), P.framing, P.analysis, P.costs]); }   // the quick check also depends on the cross-frame spacing and the analysis settings
++function sgQKey() { const { doMode, bays, ...fr } = P.framing || {}; return JSON.stringify([sgKey(), fr, P.analysis, P.costs]); }   // per-bay stiffener layout (TB1) left out: Suggest designs its own   // the quick check also depends on the cross-frame spacing and the analysis settings
+ function maybeSuggest(force) {
+   if (P.ui.otab !== 'suggest' && !force) return;
+   const k = sgKey();
+@@ -2925,7 +2966,9 @@
+     if (run !== SGQ_RUN || SG !== base || !r) return;
+     if (r.err) { base.quick = { ...base.quick, state: 'error', msg: r.err }; SGQ_APPLY = 0; try { renderSuggest(); } catch (e) { console.error(e); } return; }
+     const q = { state: 'done', qk: base.quick.qk, pass: r.pass, changed: r.changed, iters: r.iters, note: r.note, ms: r.ms, check: r.V.check, dOK: r.V.dOK, max0: r.V0.check.max, web0: r.V0.check.rWeb, pass0: r.V0.check.max <= 1.0005 && r.V0.check.rWeb <= 1.0005 && r.V0.dOK, fastCost: base.cost };
+-    SG = r.changed ? { ...base, top: r.lay.top, bot: r.lay.bot, web: r.lay.web, tw: r.lay.tw, splices: r.lay.splices, cost: r.V.cost, quick: q } : { ...base, quick: q };
++    // per-bay stiffeners (TB1): the layout and cost of the checked girder under its staged shear (the fast one used the constant-stiffness shear)
++    const pbV = base.webType === 'stiffened' && r.V.cost.bays ? { cost: r.V.cost, bays: r.V.cost.bays } : {};
++    SG = r.changed ? { ...base, top: r.lay.top, bot: r.lay.bot, web: r.lay.web, tw: r.lay.tw, splices: r.lay.splices, cost: r.V.cost, ...pbV, quick: q } : { ...base, ...pbV, quick: q };
+     const pend = SGQ_APPLY === run; if (pend) SGQ_APPLY = 0;
+     try { renderSuggest(); } catch (e) { console.error(e); }
+     if (pend) { if (SG_KEY === key && sgKey() === key) applySuggestion(); else flash('The inputs changed while the quick suggestion was being checked; press Apply again.', 'fail'); }
+@@ -2946,9 +2989,11 @@
+    its own run token (SGC_RUN): renderSuggest starts it when the current girder or the inputs change, and a result for older inputs is
+    dropped. Nothing here changes a suggestion or a saved value. */
+ let SGC = null, SGC_RUN = 0, SGC_SHOWN = '';
+-function sgcKey() { return JSON.stringify([sgQKey(), P.girder, P.dfx || null]); }
++function sgcKey() { return JSON.stringify([sgQKey(), P.girder, P.dfx || null, (P.framing || {}).doMode, (P.framing || {}).bays || null]); }
++// stiffeners of the current girder for its cost (TB1): per-bay counts of all girders when the Framing tab is per bay; undefined: the uniform count as before
++function sgCurNSt() { return tsBaysOn(P) && M && !M.errors.length && FR ? FR.girders.reduce((a, g, i) => a + tsGirderBays(P, M, FR, i).reduce((q, B) => q + B.n, 0), 0) : undefined; }
+ function sgcIn() { const m = M && !M.errors.length ? M : null; if (!m) return null; const F = P.framing || {};
+-  return { D: m.D, wt: F.stiff === 'on' ? 'stiffened' : 'unstiffened', doR: num(F.doRatio) || 1, top: m.top.map(g => ({ L: g.L, b: g.b, t: g.t })), bot: m.bot.map(g => ({ L: g.L, b: g.b, t: g.t })), web: m.web.map(w => ({ L: w.L, t: w.t })), splices: [...m.splices] }; }
++  return { D: m.D, wt: F.stiff === 'on' ? 'stiffened' : 'unstiffened', doR: num(F.doRatio) || 1, keepSt: true, nStTot: sgCurNSt(), top: m.top.map(g => ({ L: g.L, b: g.b, t: g.t })), bot: m.bot.map(g => ({ L: g.L, b: g.b, t: g.t })), web: m.web.map(w => ({ L: w.L, t: w.t })), splices: [...m.splices] }; }
+ function sgCurStart() {
+   const key = sgcKey(); if (SGC && SGC.key === key) return;
+   const inp = sgcIn(); if (!inp) { SGC_RUN++; SGC = { key, state: 'none' }; return; }
+@@ -2993,8 +3038,10 @@
+   const pct = (d, b) => b > 0 ? `${d > 0 ? '+' : d < 0 ? '−' : ''}${f2(Math.abs(100 * d / b))}%` : '';
+   const sgn = (d, f) => `${d > 0 ? '+' : d < 0 ? '−' : ''}${f(Math.abs(d))}`;
+   const cSt = F.stiff === 'on', cDo = num(F.doRatio) || 1, sSt = s.webType ? s.webType === 'stiffened' : cSt, sDo = s.doR || cDo;
+-  const stTxt = (st, d) => st ? `stiffened, d<sub>o</sub> = ${f2(d)}D` : 'unstiffened (connection plates only)';
+-  const stChg = cSt !== sSt || (sSt && Math.abs(cDo - sDo) > 1e-6);
++  // per-bay stiffeners (TB1): the count of each bay, current vs suggested (sgBayCmp); uniform on both sides: as before
++  const cBM = cSt && tsBaysOn(P), sBM = sSt && !!s.bays, BC = (cBM || sBM) && sSt ? sgBayCmp(s, mS) : null;
++  const stTxt = (st, d, bm, n) => !st ? 'unstiffened (connection plates only)' : bm ? `per cross-frame bay, ${n} intermediate stiffeners in all girders` : `stiffened, d<sub>o</sub> = ${f2(d)}D`;
++  const stChg = cSt !== sSt || (sSt && (BC ? BC.nChg > 0 || cBM !== sBM : Math.abs(cDo - sDo) > 1e-6));
+   const cSp = num(F.spacing), sSp = s.spacing || cSp, spChg = !!s.spacing && Math.abs(sSp - cSp) > 1e-6;
+   const dChg = Math.abs(cur.D - s.D) > 1e-9, twC = [...new Set(cur.web.map(w => frac(w.t)))].join(', '), twS = [...new Set(mS.web.map(w => frac(w.t)))].join(', '), twChg = twC !== twS;
+   const has = (l, v) => l.some(u => Math.abs(u - v) < 1e-3), sAdd = s.splices.filter(v => !has(cur.splices, v)), sDel = cur.splices.filter(v => !has(s.splices, v)), splChg = !!(sAdd.length || sDel.length);
+@@ -3027,7 +3074,7 @@
+   const overall = `<div class="tscroll"><table class="tbl"><thead><tr><th></th><th class="right">Current girder</th><th class="right">${W}</th><th>Change</th></tr></thead><tbody>
+     ${row('Web depth D', `${frac(cur.D)} in`, `${frac(s.D)} in`, dChg, `${sgn(s.D - cur.D, frac)} in`)}
+     ${row('Web thickness t<sub>w</sub>', `${twC} in`, `${twS} in`, twChg, `${twC} → ${twS} in`)}
+-    ${row('Transverse stiffeners', stTxt(cSt, cDo), stTxt(sSt, sDo), stChg, cSt !== sSt ? (sSt ? 'stiffeners added' : 'stiffeners removed') : `d<sub>o</sub>/D ${f2(cDo)} → ${f2(sDo)}`)}
++    ${row('Transverse stiffeners', stTxt(cSt, cDo, cBM, BC && BC.nC), stTxt(sSt, sDo, sBM, BC && BC.nS), stChg, cSt !== sSt ? (sSt ? 'stiffeners added' : 'stiffeners removed') : BC ? `${BC.nChg} bay${BC.nChg === 1 ? '' : 's'} changed, ${BC.nC} → ${BC.nS} stiffeners (per-bay table below)` : `d<sub>o</sub>/D ${f2(cDo)} → ${f2(sDo)}`)}
+     ${row('Cross-frame spacing', `${f2(cSp)} ft`, s.spacing ? `${f2(sSp)} ft` : `${f2(cSp)} ft (not changed by the ${what})`, spChg, `${sgn(sSp - cSp, f2)} ft`)}
+     ${row('Field splices', spl(cur.splices), spl(s.splices), splChg, sAdd.length && sAdd.length === sDel.length ? `moved ${sDel.map((v, i) => `${sgFs(v)} → ${sgFs(sAdd[i])}`).join(', ')} ft` : [sAdd.length ? `added at ${sAdd.map(sgFs).join(', ')} ft` : '', sDel.length ? `removed at ${sDel.map(sgFs).join(', ')} ft` : ''].filter(Boolean).join('; '))}
+     ${row('Shop transitions (all flanges)', nTc, nTs, nTc !== nTs, sgn(nTs - nTc, String))}
+@@ -3044,11 +3091,31 @@
+   const note = `<p class="note-p">Current girder: the Girder tab plates and splices with the Framing tab stiffeners and cross-frame spacing. The two plate lists are merged by station, so each row below is a station range over which neither girder changes plate; changed rows are highlighted. Both girders are checked with the same staged analysis and AASHTO strength and service checks (those of the quick suggestion and Full design, for the interior and exterior girders)${s.full ? ', the current girder at its Framing tab cross-frame spacing and the full design at its own' : ''}. Steel includes the ${f2(P.limits.allow)}% detail allowance; costs use the Unit costs on the Suggest input tab.${S.dfx ? ' The current girder\'s check uses the factors and dead loads of GirderDetail\'s LLDF and DLs module (computed for this girder); the suggestion, the built-in ones.' : ''}${fast} Nothing changes until you press Apply.</p>`;
+   const html = card('sg-cmp', ttl, noChange ? 'No change suggested' : `${nCh} plate range${nCh === 1 ? '' : 's'} change`, `
+     <div class="sg-head ${cls}"><div><b>${head}</b><span class="sg-ln">${curR}</span><span class="sg-ln">${sugR}</span><span class="sg-ln">${sav}</span></div></div>${note}${overall}
+-    <div class="cmp-tbls">${ptbl('Top flange', rT)}${ptbl('Web', rW, true)}${ptbl('Bottom flange', rB)}</div>
++    <div class="cmp-tbls">${ptbl('Top flange', rT)}${ptbl('Web', rW, true)}${ptbl('Bottom flange', rB)}</div>${BC ? BC.html : ''}
+     <h4 class="sg-h4" style="margin-top:14px">Flange plates along the girder</h4><div id="plt-sg-cmpT" class="plt"></div><div id="plt-sg-cmpB" class="plt short"></div>
+     <p class="cap">Thickness (upper plot) and width (lower plot) of the top and bottom flanges: current girder dashed, ${what} solid. Vertical lines mark supports (solid), the ${what}'s field splices (blue dashed), and the current field splices (grey dotted).</p>`);
+   return { line, html };
+ }
++/* per-bay stiffener comparison (TB1, 2026-10-13): bays of the current framing (current counts: Framing tab per-bay table, or the uniform d_o/D as the
++   drawings place it) and of the suggested girder's framing (suggested counts), matched by girder and stations; girders with the same rows together */
++function sgBayCmp(s, mS) {
++  if (!M || M.errors.length || !FR) return null;
++  const F = P.framing, cBM = F.stiff === 'on' && tsBaysOn(P), dO = (num(F.doRatio) || 1) * M.D / 12;
++  const uni = B => { if (F.stiff !== 'on') return 0; let n = 0; for (let x = B.a + dO; x < B.b - dO * 0.5; x += dO) n++; return n; };   // as GirderDetail's drawings place a uniform d_o
++  const cur = FR.girders.map((g, i) => cBM ? tsGirderBays(P, M, FR, i) : tsBaysOf(M, FR, i).map(B => ({ ...B, n: uni(B) })));
++  const Pg = { ...P, girder: sgGirder(), framing: { ...P.framing, spacing: s.spacing || P.framing.spacing, stiff: 'on', doMode: s.bays ? 'bays' : 'uniform', bays: s.bays || P.framing.bays, doRatio: s.doR || F.doRatio } };
++  const FRs = framingLayout(Pg, mS), sug = FRs.girders.map((g, i) => s.bays ? tsGirderBays(Pg, mS, FRs, i) : tsBaysOf(mS, FRs, i).map(B => ({ ...B, n: Math.max(0, Math.ceil((B.b - B.a) * 12 / ((s.doR || 1) * mS.D) - 1e-9) - 1) })));
++  const per = cur.map((cl, i) => { const sl = sug[i] || [], keys = [...new Set([...cl, ...sl].map(B => `${B.a.toFixed(2)}|${B.b.toFixed(2)}`))].sort((a, b) => parseFloat(a) - parseFloat(b) || parseFloat(a.split('|')[1]) - parseFloat(b.split('|')[1]));
++    return keys.map(k => { const [a, b] = k.split('|').map(Number), c = cl.find(B => Math.abs(B.a - a) < 0.02 && Math.abs(B.b - b) < 0.02), q = sl.find(B => Math.abs(B.a - a) < 0.02 && Math.abs(B.b - b) < 0.02);
++      return { a, b, k: (c || q).k, c: c ? c.n : null, s: q ? q.n : null }; }); });
++  const nC = cur.reduce((a, l) => a + l.reduce((q, B) => q + B.n, 0), 0), nS = sug.reduce((a, l) => a + l.reduce((q, B) => q + B.n, 0), 0);
++  const grp = []; per.forEach((l, i) => { const k = JSON.stringify(l), q = grp.find(z => z.k === k); if (q) q.gs.push(i + 1); else grp.push({ k, gs: [i + 1], l }); });
++  let nChg = 0; per.forEach(l => l.forEach(r => { if (r.c !== r.s) nChg++; }));
++  const rows = grp.map(G => G.l.map((r, j) => { const ch = r.c !== r.s; return `<tr class="${ch ? 'chg' : ''}">${j ? '<td></td>' : `<td class="lbl">${tsGLbl(G.gs)}</td>`}<td class="val">${r.k + 1}</td><td class="val nw">${f2(r.a)}–${f2(r.b)}</td><td class="val">${r.c ?? '—'}</td><td class="val">${r.s ?? '—'}</td><td class="${ch ? 'chg-t' : ''}">${ch ? (r.c == null ? 'new bay (framing changed)' : r.s == null ? 'bay not in the suggestion (framing changed)' : `${r.c} → ${r.s}`) : ''}</td></tr>`; }).join('')).join('');
++  const html = `<h4 class="sg-h4" style="margin-top:14px">Transverse stiffeners per cross-frame bay</h4><p class="cap">Intermediate stiffeners in each bay (between bearings and cross-frames; stations along each girder from its Abut. 1 bearing). Current: ${cBM ? 'the Framing tab per-bay counts' : `uniform d<sub>o</sub> = ${f2(num(F.doRatio) || 1)}D as drawn (from each cross-frame at d<sub>o</sub>)`}; suggested: ${s.bays ? 'the per-bay design' : `uniform d<sub>o</sub> = ${f2(s.doR || 1)}D, evenly spaced`}. Changed bays are highlighted.</p>
++    <div class="tscroll"><table class="tbl"><thead><tr><th>Girders</th><th class="right">Span</th><th class="right">Bay (ft)</th><th class="right">Current</th><th class="right">Suggested</th><th>Change</th></tr></thead><tbody>${rows}</tbody></table></div>`;
++  return { nC, nS, nChg, html };
++}
+ function sgCmpPlot(mS, cur) {   // flange thickness and width along the girder, current vs suggested
+   if (!window.Plotly || !SG || !cur || !$('#plt-sg-cmpT')) return;
+   const step = (l, f) => { const xx = [], yy = [], cd = []; l.forEach(r => { xx.push(r.x0, r.x1); yy.push(f(r), f(r)); cd.push(frac(f(r)), frac(f(r))); }); return { x: xx, y: yy, customdata: cd }; };
+@@ -3068,6 +3135,10 @@
+   const t = SG && SG.full ? 'Apply full design' : SGQ_APPLY && SGQ_APPLY === SGQ_RUN ? 'Apply quick suggestion (when checked)' : 'Apply quick suggestion';
+   ['#sg_apply', '#sg_apply_side'].forEach(id => { const b = $(id); if (b) b.textContent = t; });
+ }
++// the Framing tab stiffener setting from a Suggest result (TB1, 2026-10-13): the per-bay layout when the result has one (framing.doMode 'bays', framing.bays);
++// otherwise the uniform d_o/D as before (framing.doRatio; doMode back to 'uniform' if it was 'bays')
++function sgFrStiff(F, r, wt) { wt = wt || r.webType; if (wt) F.stiff = wt === 'stiffened' ? 'on' : 'off';
++  if (wt === 'stiffened' && r.bays) { F.doMode = 'bays'; F.bays = clone(r.bays); } else if (wt === 'stiffened' && r.doR) { F.doRatio = r.doR; if (F.doMode === 'bays') F.doMode = 'uniform'; } }
+ function applySuggestion() {
+   if (!SG || SG.errors.length) { maybeSuggest(true); if (!SG || SG.errors.length) return; }
+   if (!SG.full && SG.quick && SG.quick.state === 'checking') { SGQ_APPLY = SGQ_RUN; sgApplyLbl(); flash('Checking the quick suggestion for strength and service; it will be applied (after you confirm) when the check finishes.'); return; }
+@@ -3077,7 +3148,7 @@
+   if (bad) warn = `Warning: the ${what} does not pass every strength and service check: ${!ch ? 'the check could not be completed' : g.r > 1.0005 ? `ratio ${f3(g.r)} > 1.0 (${sgGovTxt(g, SG.spans)})${Q && !Q.dOK ? '; the girder is also shallower than the Table 2.5.2.6.3-1 minimum depth' : ''}` : SG.full ? 'a minimum depth (Table 2.5.2.6.3-1) or deflection limit is not met' : 'the girder is shallower than the Table 2.5.2.6.3-1 minimum depth'}. ${SG.full ? 'Review the Full design results, adjust the inputs, and run full design again before relying on it.' : 'Run full design (Suggest input tab) for a layout that passes.'}\n\n`;
+   if (!confirm(`${warn}Replace the web, flange plates, and field splices on the Girder tab with the ${what}? You can revert to the current layout afterwards.`)) return;
+   snapshotBefore(SG.full ? 'Full design' : 'Quick suggestion');
+-  P.girder = sgGirder(); if (SG.webType) P.framing.stiff = SG.webType === 'stiffened' ? 'on' : 'off'; if (SG.webType === 'stiffened' && SG.doR) P.framing.doRatio = SG.doR; if (SG.spacing) P.framing.spacing = SG.spacing; fillInputs(); ['web', 'top', 'bot', 'spl'].forEach(renderArr); recompute(); setOTab('summary'); autosave();
++  P.girder = sgGirder(); sgFrStiff(P.framing, SG); if (SG.spacing) P.framing.spacing = SG.spacing; fillInputs(); ['web', 'top', 'bot', 'spl'].forEach(renderArr); recompute(); setOTab('summary'); autosave();
+ }
+ 
+ function renderSuggest() {
+@@ -3092,7 +3163,7 @@
+   const cur = M && !M.errors.length ? M : null;
+   sgCurStart(); SGC_SHOWN = sgcKey();   // strength and service check of the current girder (background), for the comparison card
+   const wtCur = P.framing && P.framing.stiff === 'on' ? 'stiffened' : 'unstiffened';
+-  const curCost = cur ? suggestLayout(P, { costOnly: { D: cur.D, wt: wtCur, top: P.girder.top.map(g => ({ L: num(g.L), b: num(g.b), t: num(g.t) })), bot: P.girder.bot.map(g => ({ L: num(g.L), b: num(g.b), t: num(g.t) })), web: P.girder.web.map(w => ({ L: num(w.L), t: num(w.t) })), splices: (P.girder.splices || []).map(num) } }).cost : null;
++  const curCost = cur ? suggestLayout(P, { costOnly: { D: cur.D, wt: wtCur, nStTot: sgCurNSt(), top: P.girder.top.map(g => ({ L: num(g.L), b: num(g.b), t: num(g.t) })), bot: P.girder.bot.map(g => ({ L: num(g.L), b: num(g.b), t: num(g.t) })), web: P.girder.web.map(w => ({ L: num(w.L), t: num(w.t) })), splices: (P.girder.splices || []).map(num) } }).cost : null;
+ 
+   /* 1. summary */
+   const verdict = cnt.fail ? 'fail' : 'pass';
+@@ -3125,13 +3196,13 @@
+   const C = s.cost, money = v => '$' + Math.round(v).toLocaleString('en-US'), cc = curCost || { parts: { steel: 0, trans: 0, stiff: 0, splice: 0 }, wTot: 0, nTr: 0, nSt: 0, nSp: 0, total: 0 }, crow = (l, a, b2) => `<tr><td class="lbl">${l}</td><td class="val">${a}</td>${curCost ? `<td class="val">${b2}</td>` : ''}</tr>`;
+   if (C) h += card('sg-cost', s.full ? 'Cost of the full design' : 'Cost of the quick suggestion', `${C.nb} girders`, `<table class="tbl narrow"><thead><tr><th></th><th class="right">${s.full ? 'Full design' : 'Quick suggestion'}</th>${curCost ? '<th class="right">Current girder</th>' : ''}</tr></thead><tbody>
+       ${crow('Structural steel', `${money(C.parts.steel)} (${f0(C.wTot / 1000)} kip)`, `${money(cc.parts.steel)} (${f0(cc.wTot / 1000)} kip)`)}${crow('Flange transitions', `${money(C.parts.trans)} (${C.nTr} per girder)`, `${money(cc.parts.trans)} (${cc.nTr})`)}
+-      ${crow('Transverse stiffeners', `${money(C.parts.stiff)} (${C.nSt} per girder${C.nSt ? `, d<sub>o</sub> = ${f2(C.doR)}D` : ''})`, `${money(cc.parts.stiff)} (${cc.nSt})`)}${crow('Intermediate cross-frames', `${money(C.parts.frames || 0)} (${C.nFr || 0} at ${f2(C.spCF || 0)} ft)`, `${money((cc.parts || {}).frames || 0)} (${cc.nFr || 0})`)}${crow('Field splices', `${money(C.parts.splice)} (${C.nSp} per girder)`, `${money(cc.parts.splice)} (${cc.nSp})`)}
++      ${crow('Transverse stiffeners', C.nStTot != null ? `${money(C.parts.stiff)} (${C.nStTot} in all girders, per cross-frame bay)` : `${money(C.parts.stiff)} (${C.nSt} per girder${C.nSt ? `, d<sub>o</sub> = ${f2(C.doR)}D` : ''})`, cc.nStTot != null ? `${money(cc.parts.stiff)} (${cc.nStTot} in all girders)` : `${money(cc.parts.stiff)} (${cc.nSt})`)}${crow('Intermediate cross-frames', `${money(C.parts.frames || 0)} (${C.nFr || 0} at ${f2(C.spCF || 0)} ft)`, `${money((cc.parts || {}).frames || 0)} (${cc.nFr || 0})`)}${crow('Field splices', `${money(C.parts.splice)} (${C.nSp} per girder)`, `${money(cc.parts.splice)} (${cc.nSp})`)}
+       <tr class="tot"><td>Total</td><td class="val"><b>${money(C.total)}</b></td>${curCost ? `<td class="val">${money(curCost.total)}</td>` : ''}</tr></tbody></table>
+       ${s.full ? `<p class="note-p">Fast sizing (the quick suggestion before its strength and service check) for comparison: ${money(s.full.fastCost.total)}; the full design is ${f2(100 * (1 - C.total / s.full.fastCost.total))}% cheaper.</p>` : ''}${Q && Q.changed ? `<p class="note-p">Fast sizing before the strength and service check: ${money(Q.fastCost.total)}; the plates added by the check: ${money(C.total - Q.fastCost.total)}.</p>` : ''}
+-      ${!s.full && s.rec.cands ? `<h4 class="sg-h4">Depth candidates (fast sizing before the strength and service check, lowest cost first)</h4><div class="tscroll"><table class="tbl"><thead><tr><th class="right">D (in)</th><th>Web</th><th class="right">d<sub>o</sub>/D</th><th class="right">t<sub>w</sub></th><th class="right">Steel (kip)</th><th class="right">Transitions</th><th class="right">Stiffeners</th><th class="right">Cost</th><th>Span-to-depth</th></tr></thead><tbody>${s.rec.cands.slice(0, 10).map(c => `<tr class="${c.best ? 'gov' : ''}"><td class="val">${f0(c.D)}</td><td>${c.wt}</td><td class="val">${c.wt === 'stiffened' ? f2(c.doR) : '—'}</td><td class="val">${frac(c.tw)}</td><td class="val">${f0(c.cost.wTot / 1000)}</td><td class="val">${c.cost.nTr}</td><td class="val">${c.cost.nSt}</td><td class="val">${money(c.cost.total)}</td><td>${c.ok ? 'OK' : 'Too shallow'}</td></tr>`).join('')}</tbody></table></div>` : ''}`);
++      ${!s.full && s.rec.cands ? `<h4 class="sg-h4">Depth candidates (fast sizing before the strength and service check, lowest cost first)</h4><div class="tscroll"><table class="tbl"><thead><tr><th class="right">D (in)</th><th>Web</th><th class="right">d<sub>o</sub>/D</th><th class="right">t<sub>w</sub></th><th class="right">Steel (kip)</th><th class="right">Transitions</th><th class="right">Stiffeners${s.rec.cands.some(c => c.cost.nStTot != null) ? ' (per girder; per bay: all girders)' : ''}</th><th class="right">Cost</th><th>Span-to-depth</th></tr></thead><tbody>${s.rec.cands.slice(0, 10).map(c => `<tr class="${c.best ? 'gov' : ''}"><td class="val">${f0(c.D)}</td><td>${c.wt}</td><td class="val">${c.wt === 'stiffened' ? (c.cost.nStTot != null ? 'per bay' : f2(c.doR)) : '—'}</td><td class="val">${frac(c.tw)}</td><td class="val">${f0(c.cost.wTot / 1000)}</td><td class="val">${c.cost.nTr}</td><td class="val">${c.cost.nStTot ?? c.cost.nSt}</td><td class="val">${money(c.cost.total)}</td><td>${c.ok ? 'OK' : 'Too shallow'}</td></tr>`).join('')}</tbody></table></div>` : ''}`);
+   if (s.full) { const F = s.full, gt = list => `<div class="tscroll"><table class="tbl"><thead><tr><th class="right">From (ft)</th><th class="right">To (ft)</th><th class="right">Plate (in)</th><th class="right">Ratio</th><th>Governing check</th></tr></thead><tbody>${list.map(g => `<tr><td class="val">${f2(g.x0)}</td><td class="val">${f2(g.x1)}</td><td class="val" style="white-space:nowrap">${frac(g.b)} × ${frac(g.t)}</td><td class="val">${g.ratio ? f3(g.ratio) : '—'}</td><td>${g.gov || 'Minimum size or proportion'}</td></tr>`).join('')}</tbody></table></div>`;
+     h += card('sg-full', 'Full design', F.passed ? 'Every check at or below 1.0' : 'No candidate passed every check', `<p class="note-p">${F.passed ? '' : '<b>Review:</b> the layout shown is the closest candidate. '}Each candidate was iterated with the staged, cracked analysis (Structural analysis settings) until its layout stopped changing, then verified against its own recomputed demands. Every iteration re-runs the analysis on the current plates and recomputes the live load distribution factors (4.6.2.2) from that section's K<sub>g</sub>; the live load stage model of the first iteration is reused inside the loop to save time, and the final verification recomputes everything. Checks at every node for the interior and exterior girders: Strength I positive flexure (6.10.7, plastic moment, compactness, D<sub>p</sub>/D<sub>t</sub>, 1.3M<sub>y</sub> for continuous spans), Strength I negative flexure (6.10.8: flange local buckling, lateral-torsional buckling with L<sub>b</sub> = ${f2(F.check.Lb)} ft and C<sub>b</sub> of Eq. 6.10.8.2.3b-1 for each unbraced segment, R<sub>b</sub>; tension flange), Service II flange stresses and web bend-buckling (6.10.4.2.2), deck-placement constructibility (6.10.3.2), and flange fatigue when selected. Plate boundaries are checked on both sides. Where the section changes within an unbraced length, 6.10.8.2.3c: its simplification where it holds, otherwise C<sub>b</sub> = 1.0 and F<sub>e</sub> = γ<sub>e</sub>f<sub>bu</sub> (Eqs. c-1 to c-3) with γ<sub>e</sub> by App. D6.6.2 Method A (or the conservative bound, each section as a prismatic member over L<sub>b</sub> under uniform moment at its largest stress, where the D6.6.2.2 step limit is exceeded). Shear is sized by 6.10.9.${(P.suggest.depthRule !== 'off' || P.limits.sdMandatory) ? ' A candidate passes only if its final plates also meet the Table 2.5.2.6.3-1 minimum depths (span-to-depth applies to Suggest).' : ''}</p>
+-      <div class="tscroll"><table class="tbl"><thead><tr><th class="right">D (in)</th><th>Web</th><th class="right">Cross-frames</th><th class="right">Iterations</th><th class="right">Max. flange ratio</th><th class="right">Web ratio</th><th class="right">Cost</th><th class="right">Fast-sizing cost</th><th>Result</th></tr></thead><tbody>${F.cands.map(c => `<tr class="${c.best ? 'gov' : ''}"><td class="val">${f0(c.D)}</td><td>${c.wt}${c.wt === 'stiffened' ? `, d<sub>o</sub> = ${f2(c.doR)}D` : ''}</td><td class="val">${f2(c.spacing)} ft</td><td class="val">${c.iters}</td><td class="val">${f3(c.max)}</td><td class="val">${f3(c.web)}</td><td class="val">${money(c.cost.total)}</td><td class="val">${money(c.fastCost.total)}</td><td>${c.pass ? (c.best ? 'Selected' : 'Passes') : c.dOK === false ? 'Too shallow (Table 2.5.2.6.3-1)' : 'Does not pass'}${c.defl ? `; Δ<sub>LL</sub> ${f3(c.defl.d)} / ${f3(c.defl.lim)} in` : ''}</td></tr>`).join('')}</tbody></table></div>
++      <div class="tscroll"><table class="tbl"><thead><tr><th class="right">D (in)</th><th>Web</th><th class="right">Cross-frames</th><th class="right">Iterations</th><th class="right">Max. flange ratio</th><th class="right">Web ratio</th><th class="right">Cost</th><th class="right">Fast-sizing cost</th><th>Result</th></tr></thead><tbody>${F.cands.map(c => `<tr class="${c.best ? 'gov' : ''}"><td class="val">${f0(c.D)}</td><td>${c.wt}${c.wt === 'stiffened' ? (c.cost.nStTot != null ? `, ${c.cost.nStTot} stiffeners per bay` : `, d<sub>o</sub> = ${f2(c.doR)}D`) : ''}</td><td class="val">${f2(c.spacing)} ft</td><td class="val">${c.iters}</td><td class="val">${f3(c.max)}</td><td class="val">${f3(c.web)}</td><td class="val">${money(c.cost.total)}</td><td class="val">${money(c.fastCost.total)}</td><td>${c.pass ? (c.best ? 'Selected' : 'Passes') : c.dOK === false ? 'Too shallow (Table 2.5.2.6.3-1)' : 'Does not pass'}${c.defl ? `; Δ<sub>LL</sub> ${f3(c.defl.d)} / ${f3(c.defl.lim)} in` : ''}</td></tr>`).join('')}</tbody></table></div>
+       <div class="g2" style="margin-top:10px"><div><h4 class="sg-h4">Top flange: governing checks</h4>${gt(F.topGov)}</div><div><h4 class="sg-h4">Bottom flange: governing checks</h4>${gt(F.botGov)}</div></div>
+       <p class="note-p">Web: ${F.check.gWeb ? `${F.check.gWeb}, ratio ${f3(F.check.rWeb)} at ${f2(F.check.xWeb)} ft` : 'no bend-buckling demand'}.${F.check.other.length ? ` Also: ${[...new Set(F.check.other.map(o => o.name))].join('; ')} exceeded at some points.` : ''}${(F.check.npW || []).length ? ` <b>Review:</b> outside the D6.6.2.2 step limit, so the conservative γ<sub>e</sub> bound (each section prismatic over L<sub>b</sub> at its largest stress) is used instead of App. D6.6.2 Method A; engineer to review: ${[...new Set(F.check.npW)].map(esc).join('; ')}.` : ''} ${F.check.fat ? `Flange fatigue: ${plFatTxt(P)}, Category B at the flange-to-web welds (extreme fiber)${P.suggest.fat !== 'B' ? ' and Category C′ at the connection plates welded to the flanges (inner flange face, 6.6.1.3.1; checked at every analysis point along the girder, not only at the cross-frames, which is conservative)' : ''} (6.6.1.2), short-term composite section for both signs (minimum reinforcement per 6.10.1.7).` : 'Flange fatigue was not checked (turned off).'} Other fatigue details are checked in the Fatigue module.</p>`); }
+ 
+@@ -3166,10 +3237,12 @@
+   h += card('sg-web', 'Web depth and thickness', '', `${fastNote}
+     <div class="eq-block"><div class="eq-title"><span>Web depth</span><span class="eq-ref">Target span-to-depth (practice); AASHTO 2.5.2.6.3</span></div><div class="eq-math">\\[${R.D.keep ? `D = ${f2(s.D)}\\ \\text{in (kept from the Girder tab)}` : `D = \\left\\lceil \\frac{L_{max}(12)}{r} - 2.5 \\right\\rceil = \\left\\lceil \\frac{${f2(R.D.Lmax)}(12)}{${f2(R.D.ratio)}} - 2.5 \\right\\rceil = ${f2(s.D - R.D.bumps * P.limits.incD)}\\ \\text{in}${R.D.bumps ? `\\;\\rightarrow\\; ${f2(s.D)}\\ \\text{in (G1/G2)}` : ''}`}\\]</div>
+     <div class="eq-where"><table><tr><td class="wsym">r</td><td class="wdesc">Target L/D<sub>st</sub> (${R.D.cont ? 'continuous' : 'simple'}); 2.5 in allows for flange thicknesses</td><td class="wval">${f2(R.D.ratio)}</td></tr></table></div></div>
+-    <div class="eq-block"><div class="eq-title"><span>Web thickness from shear, ${W.end ? `end panel (d<sub>o</sub> = ${f2(W.doR)}D > 1.5D, unstiffened), maximum V<sub>u</sub> in the end panels` : 'maximum V<sub>u</sub>'} at ${f2(W.loc)} ft (${TT(W.gt || R.VuType)} girder)</span><span class="eq-ref">AASHTO 6.10.9.2, 6.10.9.3.2 (no tension-field action)</span></div>
++    ${W.pb ? sgWebPB(W, s, Fyw, TT(W.gt || R.VuType)) : `<div class="eq-block"><div class="eq-title"><span>Web thickness from shear, ${W.end ? `end panel (d<sub>o</sub> = ${f2(W.doR)}D > 1.5D, unstiffened), maximum V<sub>u</sub> in the end panels` : 'maximum V<sub>u</sub>'} at ${f2(W.loc)} ft (${TT(W.gt || R.VuType)} girder)</span><span class="eq-ref">AASHTO 6.10.9.2, 6.10.9.3.2 (no tension-field action)</span></div>
+     <div class="eq-math">\\[\\begin{aligned}\\frac{D}{t_w} &= \\frac{${f2(s.D)}}{${f3(W.tw)}} = ${f2(W.lam)}, \\qquad \\sqrt{\\frac{Ek}{F_{yw}}} = \\sqrt{\\frac{29{,}000(${W.k})}{${f2(Fyw)}}} = ${f2(Math.sqrt(ES * W.k / Fyw))} \\\\ C &= ${W.C >= 1 - 1e-9 ? '1.00' : W.lam <= 1.40 * Math.sqrt(ES * W.k / Fyw) ? `\\frac{1.12}{D/t_w}\\sqrt{\\frac{Ek}{F_{yw}}}` : `\\frac{1.57}{(D/t_w)^2}\\frac{Ek}{F_{yw}}`} = ${f3(W.C)} \\\\ \\phi_v V_n &= 1.0\\,C\\,(0.58F_{yw}Dt_w) = ${f3(W.C)}(0.58)(${f2(Fyw)})(${f2(s.D)})(${f3(W.tw)}) = ${f2(W.Vn)}\\ \\text{kip} \\;${W.Vn >= W.Vu ? '\\ge' : '<'}\\; V_u = ${f2(W.Vu)}\\ \\text{kip}\\end{aligned}\\]</div>
+     <div class="eq-where"><table><tr><td class="wsym">k</td><td class="wdesc">${W.end ? 'Shear buckling coefficient: an end panel wider than 1.5D is not a stiffened panel (6.10.9.1, 6.10.9.3.3), so k = 5 (unstiffened); it governs the constant web thickness' : P.suggest.web === 'stiffened' ? 'Shear buckling coefficient, transverse stiffeners at d<sub>o</sub> = D: 5 + 5/(d<sub>o</sub>/D)²' : 'Shear buckling coefficient, unstiffened web'}</td><td class="wval">${W.k}</td></tr>
+-    <tr><td class="wsym">t<sub>w</sub></td><td class="wdesc">Smallest thickness on the ${frac(P.limits.incTw)} in increment that satisfies shear, D/t<sub>w</sub> ≤ 150, and the minimum ${frac(P.limits.minTw)} in</td><td class="wval">${frac(W.tw)}<span class="wunit">in</span></td></tr></table></div></div>`);
++    <tr><td class="wsym">t<sub>w</sub></td><td class="wdesc">Smallest thickness on the ${frac(P.limits.incTw)} in increment that satisfies shear, D/t<sub>w</sub> ≤ 150, and the minimum ${frac(P.limits.minTw)} in</td><td class="wval">${frac(W.tw)}<span class="wunit">in</span></td></tr></table></div></div>`}`);
++  /* 6b. transverse stiffeners per cross-frame bay (TB1) */
++  if (s.webType === 'stiffened' && s.cost && s.cost.bayRows) h += sgBaysCard(s);
+ 
+   /* 7. flange sizing */
+   const iB = argmax(R.Abot), iT = argmax(R.Atop);
+@@ -3213,6 +3286,31 @@
+   $('#sg_apply').onclick = applySuggestion; sgApplyLbl();
+   applyCollapse(); drawSuggestCharts(mS); sgCmpPlot(mS, cur); typeset(host);
+ }
++/* Suggest, per-bay stiffeners (TB1, 2026-10-13): the floor web (web card) and the per-bay table with the governing panel worked out */
++function sgWebPB(W, s, Fyw, gtTxt) {
++  const tf = W.tf > 0, frm = W.eq === '6.10.9.3.2-2' ? '\\frac{0.87(1 - C)}{\\sqrt{1 + (d_o/D)^2}}' : '\\frac{0.87(1 - C)}{\\sqrt{1 + (d_o/D)^2} + d_o/D}';
++  return `<div class="eq-block"><div class="eq-title"><span>Web thickness from shear: the thinnest web that works with d<sub>o</sub> = ${f2(W.doR)}D in every panel (per-bay stiffeners), governing ${W.end ? 'end panel' : 'interior panel'} at ${f2(W.loc)} ft (${gtTxt} girder)</span><span class="eq-ref">AASHTO 6.10.9.1, ${W.end ? '6.10.9.3.3 (no tension field in end panels)' : W.tfa ? `6.10.9.3.2, Eq. ${W.eq.replace('6.10.9.3.2', '6.10.9.3.2')} (tension-field action)` : '6.10.9.3.2 (no tension-field action: V_n = CV_p)'}</span></div>
++    <div class="eq-math">\\[\\begin{aligned}\\frac{D}{t_w} &= \\frac{${f2(s.D)}}{${f3(W.tw)}} = ${f2(W.lam)}, \\qquad k = 5 + \\frac{5}{(${f2(W.doR)})^2} = ${f3(W.k)}, \\qquad C = ${f3(W.C)}, \\qquad V_p = 0.58(${f2(Fyw)})(${f2(s.D)})(${f3(W.tw)}) = ${f2(W.Vp)}\\ \\text{kip} \\\\ \\phi_v V_n &= ${tf ? `1.0\\,V_p\\left[C + ${frm}\\right] = ${f2(W.Vp)}\\left[${f3(W.C)} + ${f3(W.tf)}\\right]` : `1.0\\,C\\,V_p = ${f3(W.C)}(${f2(W.Vp)})`} = ${f2(W.Vn)}\\ \\text{kip} \\;${W.Vn >= W.Vu ? '\\ge' : '<'}\\; V_u = ${f2(W.Vu)}\\ \\text{kip}\\end{aligned}\\]</div>
++    <div class="eq-where"><table><tr><td class="wsym">k</td><td class="wdesc">Shear buckling coefficient at d<sub>o</sub> = ${f2(W.doR)}D, the tightest spacing Suggest uses (Eq. 6.10.9.3.2-7)</td><td class="wval">${f3(W.k)}</td></tr>
++    ${tf ? `<tr><td class="wsym">2Dt<sub>w</sub>/(b<sub>fc</sub>t<sub>fc</sub> + b<sub>ft</sub>t<sub>ft</sub>)</td><td class="wdesc">${W.rat <= 2.5 ? '≤ 2.5 (Eq. 6.10.9.3.2-1): Eq. 6.10.9.3.2-2' : '> 2.5: Eq. 6.10.9.3.2-8'}</td><td class="wval">${f3(W.rat)}</td></tr>` : ''}
++    <tr><td class="wsym">t<sub>w</sub></td><td class="wdesc">Floor web: the smallest thickness on the ${frac(P.limits.incTw)} in increment that satisfies this at every analysis element (end panels within d<sub>o</sub> of an abutment or simple-span bearing with V<sub>n</sub> = CV<sub>p</sub>), D/t<sub>w</sub> ≤ 150, and the minimum ${frac(P.limits.minTw)} in. Suggest also prices webs up to ${TS_TWSTEPS} increments thicker with their own per-bay stiffener counts and keeps the cheapest: ${frac(s.tw)} in here.</td><td class="wval">${frac(W.tw)}<span class="wunit">in</span></td></tr></table></div></div>`;
++}
++function sgBaysCard(s) {
++  const C = s.cost, rows = C.bayRows, D = s.D, tfa = P.suggest.tfa !== 'off', byG = {};
++  rows.forEach(r => (byG[r.g] = byG[r.g] || []).push(r));
++  const grp = []; Object.keys(byG).map(Number).sort((a, b) => a - b).forEach(g => { const l = byG[g], k = JSON.stringify(l.map(r => [r.a, r.b, r.n, r.e0 || 0, r.e1 || 0])), q = grp.find(z => z.k === k); if (q) q.gs.push(g); else grp.push({ k, gs: [g], l }); });
++  const lay = r => !r.n ? 'connection plates only' : (r.e0 || r.e1) ? `end stiffener at ${[r.e0, r.e1].filter(Boolean).map(f0).join(' and ')} in, rest even` : 'evenly spaced';
++  let body = '';
++  grp.forEach(G => G.l.forEach((r, j) => { const g = r.gov;
++    body += `<tr class="${r.fail ? 'fail' : ''}">${j ? '<td></td>' : `<td class="lbl" rowspan="1">${tsGLbl(G.gs)}</td>`}<td class="val">${r.k + 1}</td><td class="val nw">${f2(r.a)}–${f2(r.b)}</td><td class="val">${f2(r.b - r.a)}</td><td class="val"><b>${r.n}</b></td><td>${lay(r)}</td><td class="val">${f1(g.d)}${g.end ? ' (end)' : ''}</td><td class="val">${f2(g.d / D)}</td><td class="val">${f1(g.Vu)}</td><td class="val">${f1(g.phVn)}</td><td class="val">${f3(g.r)}</td><td class="nw">${g.eq}</td></tr>`; }));
++  const G0 = C.bayGov, q = G0 && G0.gov, tf = q && q.tf > 0, frm = q && q.eq === '6.10.9.3.2-2' ? '\\frac{0.87(1 - C)}{\\sqrt{1 + (d_o/D)^2}}' : '\\frac{0.87(1 - C)}{\\sqrt{1 + (d_o/D)^2} + d_o/D}';
++  const work = q ? `<div class="eq-block"><div class="eq-title"><span>Governing panel: G${G0.g}, bay ${f2(G0.a)}–${f2(G0.b)} ft, ${G0.n} stiffener${G0.n === 1 ? '' : 's'}, panel ${f2(q.p)}–${f2(q.q)} ft${q.end ? ' (end panel)' : ''}</span><span class="eq-ref">AASHTO LRFD Eq. ${q.eq}</span></div>
++    <div class="eq-math">\\[\\begin{aligned}d_o &= ${f2(q.d)}\\ \\text{in} = ${f3(q.d / D)}D, \\qquad k = ${q.stiff ? `5 + \\frac{5}{(${f3(q.d / D)})^2}` : '5\\ (\\text{unstiffened})'} = ${f3(q.k)}, \\qquad \\frac{D}{t_w} = ${f2(q.lam)}, \\qquad C = ${f3(q.C)}, \\qquad V_p = ${f2(q.Vp)}\\ \\text{kip} \\\\ \\phi_v V_n &= ${tf ? `1.0\\,V_p\\left[C + ${frm}\\right] = ${f2(q.Vp)}\\left[${f3(q.C)} + ${f3(q.tf)}\\right]` : `1.0\\,C\\,V_p = ${f3(q.C)}(${f2(q.Vp)})`} = ${f2(q.phVn)}\\ \\text{kip} \\;${q.phVn >= q.Vu ? '\\ge' : '<'}\\; V_u = ${f2(q.Vu)}\\ \\text{kip}\\end{aligned}\\]</div></div>` : '';
++  const fails = rows.filter(r => r.fail).length;
++  return card('sg-bays', 'Transverse stiffeners per cross-frame bay', `${C.nStTot} in all girders${fails ? `; ${fails} bay${fails > 1 ? 's' : ''} cannot be stiffened enough` : ''}`, `
++    <p class="note-p">Each bay runs between bearings and cross-frames (connection plates act as stiffeners), at each girder's own stations from its Abut. 1 bearing; girders with the same bays and counts are listed together. Bays where the connection plates alone carry the shear get no intermediate stiffener (6.10.9.1); the others get the largest spacing allowed (d<sub>o</sub> ≤ 3D, interior panels) and one more stiffener at a time until every panel has φ<sub>v</sub>V<sub>n</sub> ≥ V<sub>u</sub>, with V<sub>u</sub> the largest Strength I shear in the panel (6.10.9.3.1; envelope of the interior and exterior girders${s.quick && s.quick.state === 'done' ? ', staged analysis of the strength and service check' : s.full ? ', staged analysis of Full design' : ', fast sizing'}). Interior panels ${tfa ? 'use tension-field action (Eq. 6.10.9.3.2-2 where 2Dt<sub>w</sub>/(b<sub>fc</sub>t<sub>fc</sub> + b<sub>ft</sub>t<sub>ft</sub>) ≤ 2.5 along the whole panel, else Eq. 6.10.9.3.2-8)' : 'do not use tension-field action (V<sub>n</sub> = CV<sub>p</sub>; Suggest setting)'}; end panels at an abutment or a simple-span bearing use V<sub>n</sub> = CV<sub>p</sub> (6.10.9.3.3), stiffened only up to 1.5D, with their own stiffener where the even layout does not work. Columns d<sub>o</sub> to Eq.: the governing panel of the bay. Apply writes the counts to the Framing tab.</p>
++    <div class="tscroll"><table class="tbl"><thead><tr><th>Girders</th><th class="right">Span</th><th class="right">Bay (ft)</th><th class="right">L (ft)</th><th class="right">n</th><th>Layout</th><th class="right">d<sub>o</sub> (in)</th><th class="right">d<sub>o</sub>/D</th><th class="right">V<sub>u</sub> (kip)</th><th class="right">φV<sub>n</sub> (kip)</th><th class="right">Ratio</th><th>Eq.</th></tr></thead><tbody>${body}</tbody></table></div>${work}`);
++}
+ function SG_TYPES_TXT(t) { return t.length > 1 ? 'envelope of the interior and exterior girders' : t[0] === 'int' ? 'interior girder' : 'exterior girder'; }
+ function argmax(a) { let k = 0; for (let i = 1; i < a.length; i++) if (a[i] > a[k]) k = i; return k; }
+ 
+@@ -3296,6 +3394,110 @@
+   return { frames, girders, orient, xb, ys, yc, sp };
+ }
+ 
++/* ---------- transverse stiffeners per cross-frame bay (TB1, 2026-10-13) ----------
++   A bay is the length of one girder between consecutive bearings and intermediate cross-frame points of that girder, at that girder's own
++   stations (from its Abut. 1 bearing, framingLayout's girder points); the connection plates at the cross-frames act as stiffeners.
++   framing.doMode: 'uniform' (the default, and every project saved before: d_o = framing.doRatio·D, computed exactly as before) or 'bays' (framing.bays).
++   framing.bays (optional; written by Suggest Apply, edited on the Framing tab): { v: 1, D, tw, tfa, list: [{ g, a, b, n, e0, e1 }] }: girder g (1-based),
++   bay a..b (ft, that girder's stations), n intermediate stiffeners in the bay; e0 / e1 (in, optional): the end panel at a / b has its own stiffener
++   at that distance and the rest of the bay is evenly spaced; without them the n stiffeners divide the bay evenly. A bay of the current framing with
++   no entry (the framing changed after the layout was set) takes the uniform d_o/D, evenly spaced, and is flagged (Framing tab, check D4). */
++const TS_DMIN = 1.0, TS_DLOW = 0.5, TS_TWSTEPS = 6, TS_PHIV = 1.0;   // d_o/D the floor web of Suggest is sized for (the tightest of the former list 1.0 to 3.0); the tightest d_o/D a bay is designed to; thicker-web candidates per depth; phi_v (6.5.4.2)
++// nominal shear resistance of one web panel of width dIn (in), AASHTO LRFD 10th Ed.: 6.10.9.1 (stiffened when d_o <= 3D, interior, or d_o <= 1.5D, end panel;
++// otherwise unstiffened, 6.10.9.2: k = 5, V_n = CV_p, Eq. 6.10.9.2-1); 6.10.9.3.2 interior panel with tension-field action: Eq. 6.10.9.3.2-2 when
++// 2Dt_w/(b_fc t_fc + b_ft t_ft) <= 2.5 (Eq. 6.10.9.3.2-1, rat), else Eq. 6.10.9.3.2-8; tfa false: V_n = V_cr = CV_p (tension field neglected, conservative);
++// 6.10.9.3.3 end panel: V_n = CV_p (Eq. 6.10.9.3.3-1); C by Eqs. 6.10.9.3.2-4 to -6 with k = 5 + 5/(d_o/D)^2 (Eq. 6.10.9.3.2-7). The same equations as
++// GirderDetail's webShear (Transverse stiffeners TS4), with the tension field optional
++function tsVn(D, tw, Fyw, dIn, end, rat, tfa) {
++  const stiff = dIn > 0 && dIn <= (end ? 1.5 : 3) * D + 1e-9, k = stiff ? 5 + 5 / (dIn / D) ** 2 : 5, lam = D / tw, r = Math.sqrt(ES * k / Fyw);
++  const C = lam <= 1.12 * r ? 1 : lam <= 1.40 * r ? 1.12 * r / lam : 1.57 / lam ** 2 * (ES * k / Fyw), Vp = 0.58 * Fyw * D * tw, o = { k, C, Vp, lam, stiff, end: !!end, tfa: false, tf: 0, d: dIn };
++  if (!stiff) return { ...o, Vn: C * Vp, eq: '6.10.9.2-1' };
++  if (end) return { ...o, Vn: C * Vp, eq: '6.10.9.3.3-1' };
++  if (!tfa) return { ...o, Vn: C * Vp, eq: '6.10.9.3.2, V_cr = CV_p (no tension field)' };
++  const dD = dIn / D, eq2 = rat <= 2.5, tf = eq2 ? 0.87 * (1 - C) / Math.sqrt(1 + dD ** 2) : 0.87 * (1 - C) / (Math.sqrt(1 + dD ** 2) + dD);
++  return { ...o, Vn: Vp * (C + tf), tfa: true, tf, rat, eq: eq2 ? '6.10.9.3.2-2' : '6.10.9.3.2-8' };
++}
++// the bays of girder i (0-based): { a, b, endA, endB, k (span) }; endA / endB: the bay ends at an abutment bearing, or at any bearing of a simple span
++// (the end panel of 6.10.9.3.3, as GirderDetail's Transverse stiffeners rows); cross-frames on a bearing line sit on the bearing
++function tsBaysOf(m, FR, i) {
++  const g = FR && FR.girders[i]; if (!g) return [];
++  const nS = m.sup.length, endK = k => k === 0 || k === nS - 1 || !m.cont, pts = [];
++  g.bear.forEach((x, k) => pts.push({ s: x, e: endK(k) }));
++  g.pts.forEach(q => { if (q.f.type === 'int') pts.push({ s: q.s, e: false }); });
++  pts.sort((p, q) => p.s - q.s);
++  const u = []; pts.forEach(p => { const l = u[u.length - 1]; if (l && p.s - l.s < 0.05) { l.e = l.e || p.e; return; } u.push({ ...p }); });
++  const spanOf = x => { let k = 0; while (k < g.bear.length - 2 && x >= g.bear[k + 1] - 1e-6) k++; return k; };
++  const out = []; for (let j = 0; j < u.length - 1; j++) out.push({ a: +u[j].s.toFixed(3), b: +u[j + 1].s.toFixed(3), endA: u[j].e, endB: u[j + 1].e, k: spanOf((u[j].s + u[j + 1].s) / 2) });
++  return out;
++}
++// stiffener stations of a bay { a, b, n, e0, e1 } (ft): the end stiffeners at e0 / e1 (in) from a / b first, then the rest evenly
++function tsBayX(B) {
++  let lo = B.a, hi = B.b, n = Math.max(0, Math.round(+B.n || 0)); const xs = [];
++  if (+B.e0 > 0 && n > 0 && lo + B.e0 / 12 < hi - 0.05) { lo += B.e0 / 12; xs.push(lo); n--; }
++  if (+B.e1 > 0 && n > 0 && hi - B.e1 / 12 > lo + 0.05) { hi -= B.e1 / 12; xs.push(hi); n--; }
++  for (let j = 1; j <= n; j++) xs.push(lo + (hi - lo) * j / (n + 1));
++  return xs.sort((p, q) => p - q);
++}
++// panels of a bay: p..q (ft), width d (in), end (adjacent to an end support), sp / sq: the panel starts / ends at an intermediate stiffener (not a cross-frame or bearing)
++function tsPanels(B) { const x = [B.a, ...tsBayX(B), B.b]; return x.slice(1).map((q, j) => ({ p: x[j], q, d: (q - x[j]) * 12, end: (j === 0 && !!B.endA) || (j === x.length - 2 && !!B.endB), sp: j > 0, sq: j < x.length - 2 })); }
++// a bay's panels against the shear: vu(p, q) the largest |V_u| (kip) in p..q (6.10.9.3.1: spacing from the maximum shear in a panel), rat(p, q) the largest
++// 2Dt_w/(b_fc t_fc + b_ft t_ft) along it (6.10.9.3.2: the section along the entire panel), twAt(p, q) the thinnest web in it
++function tsEvalBay(B, D, twAt, Fyw, vu, rat, tfa) {
++  let r = 0, gov = null; const pans = tsPanels(B).map(pn => { const V = tsVn(D, twAt(pn.p, pn.q), Fyw, pn.d, pn.end, rat(pn.p, pn.q), tfa), Vu = vu(pn.p, pn.q), q = { ...pn, ...V, Vu, phVn: TS_PHIV * V.Vn, r: Vu / Math.max(TS_PHIV * V.Vn, 1e-9) };
++    if (!gov || q.r > r) { r = q.r; gov = q; } return q; });
++  return { r, gov, pans };
++}
++// the fewest stiffeners that make every panel of the bay pass (Suggest). n = 0 when the bay passes with the connection plates only (6.10.9.1: stiffeners
++// are required only where V_u > phi_v V_n of the unstiffened web); otherwise the largest spacing the code allows first (interior bays: n with d_o <= 3D,
++// 6.10.9.1), then one more stiffener at a time. A bay at an end support tries, for each n, the n stiffeners evenly spaced and then an end stiffener at e
++// (the widest whole inch <= 1.5D, 6.10.9.3.3, down to 0.5D, whose end panel carries its largest V_u with V_n = CV_p) with the rest of the bay evenly spaced;
++// the even layout is kept when both pass. Down to d_o = 0.5D (TS_DLOW); a bay that still fails is returned with fail: true
++function tsDesignBay(B0, D, twAt, Fyw, vu, rat, tfa) {
++  const L = (B0.b - B0.a) * 12, ok = E => E.r <= 1 + 1e-9, ev = B => ({ ...B, ...tsEvalBay(B, D, twAt, Fyw, vu, rat, tfa) });
++  let E = ev({ ...B0, n: 0 }); if (ok(E)) return E;
++  const nE = (B0.endA ? 1 : 0) + (B0.endB ? 1 : 0), nHi = Math.max(1, Math.ceil(L / (TS_DLOW * D) - 1e-9) - 1);
++  const eW = (x0, dir) => { for (let e = Math.floor(1.5 * D + 1e-9); e >= Math.ceil(TS_DLOW * D - 1e-9); e--) { const p = dir > 0 ? x0 : x0 - e / 12, q = dir > 0 ? x0 + e / 12 : x0;
++    if (vu(p, q) <= TS_PHIV * tsVn(D, twAt(p, q), Fyw, e, true, 0, false).Vn + 1e-9) return e; } return 0; };
++  const e0 = B0.endA ? eW(B0.a, 1) : 0, e1 = B0.endB ? eW(B0.b, -1) : 0, endOK = (!B0.endA || e0) && (!B0.endB || e1);
++  const n0 = nE ? 1 : Math.max(1, Math.ceil(L / (3 * D) - 1e-9) - 1);
++  let last = E;
++  for (let n = n0; n <= nHi; n++) {
++    E = ev({ ...B0, n }); if (ok(E)) return E; last = E;
++    if (nE && endOK && n >= nE) { const B = { ...B0, n }; if (e0) B.e0 = e0; if (e1) B.e1 = e1; const Eb = ev(B); if (ok(Eb)) return Eb; }
++  }
++  return { ...last, fail: true };
++}
++// largest Strength I |V_u| in p..q (ft): the envelope over the girder types of the per-element shears VuE at analysis stations xs
++function tsVu(xs, types) { const N = xs.length, v = new Float64Array(Math.max(N - 1, 0)); Object.values(types || {}).forEach(Tg => { if (Tg && Tg.VuE) for (let e = 0; e < N - 1; e++) v[e] = Math.max(v[e], Tg.VuE[e] || 0); });
++  return (p, q) => { let lo = 0, hi = N - 2; while (lo < hi) { const md = (lo + hi + 1) >> 1; if (xs[md] <= p + 1e-9) lo = md; else hi = md - 1; }
++    let mx = 0; for (let e = lo; e < N - 1 && xs[e] < q - 1e-9; e++) if (xs[e + 1] > p + 1e-9) mx = Math.max(mx, v[e]); return mx; }; }
++// thinnest web and largest 2Dt_w/(b_fc t_fc + b_ft t_ft) in p..q (ft), from a model's plates (both sides of every plate change inside)
++function tsSecFns(m) {
++  const pts = (p, q) => { const xs = [p, q]; [m.top, m.bot, m.web].forEach(l => l.forEach(g => { if (g.x0 > p && g.x0 < q) xs.push(g.x0 - 1e-6, g.x0 + 1e-6); })); return xs.map(x => Math.min(Math.max(x, 1e-6), m.Ltot - 1e-6)); };
++  return { twAt: (p, q) => Math.min(...pts(p, q).map(x => m.at(m.web, x).t)),
++    rat: (p, q) => Math.max(...pts(p, q).map(x => { const t = m.at(m.top, x), b = m.at(m.bot, x); return 2 * m.D * m.at(m.web, x).t / (t.b * t.t + b.b * b.t); })) };
++}
++// Suggest: the per-bay layout of every girder for the envelope shear vu (one design for all girders; equal bays share the result)
++function tsDesign(m, FR, Fyw, vu, tfa) {
++  const fns = tsSecFns(m), memo = {}, list = [], rows = []; let tot = 0, fail = false, gov = null;
++  FR.girders.forEach((g, i) => tsBaysOf(m, FR, i).forEach(B0 => { const key = [B0.a, B0.b, B0.endA, B0.endB].join();
++    const E = memo[key] || (memo[key] = tsDesignBay(B0, m.D, fns.twAt, Fyw, vu, fns.rat, tfa)), q = { g: i + 1, a: B0.a, b: B0.b, n: E.n };
++    if (E.e0) q.e0 = E.e0; if (E.e1) q.e1 = E.e1; list.push(q); rows.push({ ...E, g: i + 1 }); tot += E.n; if (E.fail) fail = true; if (!gov || E.r > gov.r) gov = { ...E, g: i + 1 }; }));
++  return { data: { v: 1, D: m.D, tw: Math.max(...m.web.map(w => w.t)), tfa: tfa ? 'on' : 'off', list }, rows, tot, fail, gov };
++}
++function tsBaysOn(P) { const F = (P && P.framing) || {}; return F.stiff === 'on' && F.doMode === 'bays'; }
++// the bays of girder i with their stiffeners: the stored entry for each bay (set: true) or, where none matches, the uniform d_o/D evenly spaced (set: false)
++function tsGirderBays(P, m, FR, i) {
++  const F = P.framing || {}, st = F.bays && Array.isArray(F.bays.list) ? F.bays.list.filter(q => +q.g === i + 1) : [], dR = num(F.doRatio) || 1;
++  return tsBaysOf(m, FR, i).map(B0 => { const q = st.find(z => Math.abs(+z.a - B0.a) < 0.02 && Math.abs(+z.b - B0.b) < 0.02);
++    if (q) return { ...B0, n: Math.max(0, Math.round(+q.n || 0)), e0: +q.e0 || 0, e1: +q.e1 || 0, set: true };
++    return { ...B0, n: Math.max(0, Math.ceil((B0.b - B0.a) * 12 / (dR * m.D) - 1e-9) - 1), e0: 0, e1: 0, set: false }; });
++}
++// intermediate stiffener stations of girder i (ft from its Abut. 1 bearing), for GirderDetail's drawings, DXF and 3D view
++function tsGirderX(P, m, FR, i) { return tsGirderBays(P, m, FR, i).flatMap(tsBayX); }
++// girder list label: G1–G5 when consecutive, else G1, G3
++function tsGLbl(gs) { const a = [...gs].sort((p, q) => p - q); return a.length > 1 && a[a.length - 1] - a[0] === a.length - 1 ? `G${a[0]}–G${a[a.length - 1]}` : a.map(g => `G${g}`).join(', '); }
++
+ function framingChecks(m, FR, P) {
+   const F = P.framing, L = P.limits, out = [], D = m.D;
+   const add = c => { c.status = c.items.length ? worst(c.items.map(i => i.st)) : 'na'; let gi = -1; c.items.forEach((it, k) => { if (gi < 0 || RANK[it.st] > RANK[c.items[gi].st] || (RANK[it.st] === RANK[c.items[gi].st] && (it.r ?? -1) > (c.items[gi].r ?? -1))) gi = k; }); c.gov = gi; out.push(c); };
+@@ -3375,6 +3577,9 @@
+   }
+   /* D: stiffeners */
+   const Fys = GRADES[F.gS], stiff = F.stiff === 'on', doIn = stiff ? F.doRatio * D : FR.sp * 12;
++  // per-bay stiffeners (TB1, 2026-10-13): the bays of every girder; D3 takes the narrowest panel in each field piece (the largest J), D4 lists each bay
++  const BM = stiff && tsBaysOn(P), BG = BM ? FR.girders.map((g, i) => tsGirderBays(P, m, FR, i)) : null;
++  const ddPiece = p => { let d = Infinity; BG.forEach(l => l.forEach(B => tsPanels(B).forEach(q => { if (Math.min(p.x1, q.q) - Math.max(p.x0, q.p) > 1e-6) d = Math.min(d, q.d); }))); return isFinite(d) ? d : doIn; };
+   const pieceInfo = m.pieces.map(p => { let bf = 0, tw = 0; m.secs.forEach(s => { if (Math.min(p.x1, s.x1) - Math.max(p.x0, s.x0) > 1e-9) { bf = Math.max(bf, s.top.b, s.bot.b); tw = Math.max(tw, s.tw); } }); return { p, bf, tw }; });
+   const plates = [...(stiff ? [['Transverse stiffener', F.stB, F.stT, doIn]] : []), ['Connection plate', F.cpB, F.cpT, stiff ? doIn : FR.sp * 12]];
+   {
+@@ -3394,8 +3599,9 @@
+   {
+     const c = { id: 'D3', grp, title: 'Stiffener and connection plate moment of inertia', ref: 'AASHTO LRFD 6.10.11.1.3, Eq. 6.10.11.1.3-1', src: 'Code',
+       sym: T`I_t \ge b\,t_w^3\,J, \quad J = \frac{2.5}{(d_o/D)^2} - 2.0 \ge 0.5, \quad I_t = \frac{t_p\,b_t^3}{3}`, cols: ['Plate, piece', 'd_o (in)', 'I_t (in⁴)', 'Required (in⁴)', 'Ratio'], items: [],
+-      note: 'Single-sided plates, inertia taken about the face of the web in contact with the plate. b is the smaller of d_o and D. The tension-field requirement (Eq. 6.10.11.1.3-2) is not checked because the web sizing in this app does not use tension-field action.' };
+-    plates.forEach(([n, b, t, dd]) => pieceInfo.forEach(({ p, tw }) => {
++      note: !BM ? 'Single-sided plates, inertia taken about the face of the web in contact with the plate. b is the smaller of d_o and D. The tension-field requirement (Eq. 6.10.11.1.3-2) is not checked because the web sizing in this app does not use tension-field action.'
++        : `Single-sided plates, inertia taken about the face of the web in contact with the plate. b is the smaller of d_o and D; per-bay stiffeners: d_o is the narrowest panel in the field piece. The tension-field requirement (Eq. 6.10.11.1.3-2) is not checked here${P.suggest && P.suggest.tfa !== 'off' ? ': Suggest uses tension-field action in interior panels, so check the stiffeners with GirderDetail\'s Transverse stiffeners module (TS3 includes Eq. 6.10.11.1.3-2)' : ' (Suggest\'s tension-field setting is off); GirderDetail\'s Transverse stiffeners module TS3 checks it'}.` };
++    plates.forEach(([n, b, t, dd0]) => pieceInfo.forEach(({ p, tw }) => { const dd = BM ? ddPiece(p) : dd0;
+       const J = Math.max(2.5 / (dd / D) ** 2 - 2, 0.5), bb = Math.min(dd, D), req = bb * tw ** 3 * J, It = t * b ** 3 / 3, r = req / It;
+       c.items.push({ loc: `${n}, piece ${p.i + 1}`, cells: [f2(dd), f2(It), f2(req), f2(r)], r, st: It >= req - 1e-9 ? 'pass' : 'fail',
+         work: T`J = \max\left(\frac{2.5}{(${f2(dd)}/${f2(D)})^2} - 2.0,\ 0.5\right) = ${f3(J)}, \quad I_t = \frac{(${f3(t)})(${f2(b)})^3}{3} = ${f2(It)} \;${It >= req - 1e-9 ? '\\ge' : '<'}\; (${f2(bb)})(${f3(tw)})^3(${f3(J)}) = ${f2(req)}\ \text{in}^4` });
+@@ -3403,9 +3609,20 @@
+     add(c);
+   }
+   {
+-    const c = { id: 'D4', grp, title: 'Transverse stiffener spacing for a stiffened web panel', ref: 'AASHTO LRFD 6.10.9.1, 6.10.9.3.2', src: 'Code',
+-      sym: T`d_o \le 3D`, cols: ['Item', 'd_o (in)', '3D (in)', 'Ratio'], items: [], note: 'Panels with stiffener spacing greater than 3D are unstiffened for shear.' };
++    const c = { id: 'D4', grp, title: 'Transverse stiffener spacing for a stiffened web panel', ref: BM ? 'AASHTO LRFD 6.10.9.1, 6.10.9.3.2, 6.10.9.3.3' : 'AASHTO LRFD 6.10.9.1, 6.10.9.3.2', src: 'Code',
++      sym: BM ? T`d_o \le 3D\ \text{(interior panels)}, \qquad d_o \le 1.5D\ \text{(end panels)}` : T`d_o \le 3D`, cols: ['Item', 'd_o (in)', BM ? 'Limit (in)' : '3D (in)', 'Ratio'], items: [],
++      note: BM ? 'Per-bay stiffeners (Framing tab): each bay with intermediate stiffeners, girders with the same layout together. Interior panels: the widest against 3D. An end panel with its own stiffener: against 1.5D. An end panel of an evenly spaced bay wider than 1.5D is an unstiffened end panel (6.10.9.1), advisory: its shear is checked with k = 5 (Suggest, GirderDetail TS4). Bays without intermediate stiffeners (connection plates only) are not listed.' : 'Panels with stiffener spacing greater than 3D are unstiffened for shear.' };
+     if (!stiff) na(c, 'Transverse stiffeners are turned off; the web is designed as unstiffened (connection plates only).');
++    else if (BM) { const grp2 = {};
++      BG.forEach((l, i) => l.forEach(B => { const key = JSON.stringify([B.a, B.b, B.n, B.e0, B.e1, B.set]); (grp2[key] = grp2[key] || { B, gs: [] }).gs.push(i + 1); }));
++      Object.values(grp2).forEach(({ B, gs }) => { const at = `${tsGLbl(gs)}, Span ${B.k + 1}, bay ${f2(B.a)}–${f2(B.b)} ft`;
++        if (!B.set) c.items.push({ loc: `${at}: no per-bay entry for this bay (the framing changed after the layout was set); the uniform d_o/D = ${f2(num(F.doRatio))} is used`, cells: ['—', '—', '—'], r: null, st: 'warn', work: T`\text{Apply Suggest again or set the count on the Framing tab}` });
++        if (!B.n) return; const pans = tsPanels(B), inr = pans.filter(q => !q.end);
++        if (inr.length) { const d = Math.max(...inr.map(q => q.d)); c.items.push({ loc: `${at}, ${B.n} stiffener${B.n > 1 ? 's' : ''}, interior panels`, cells: [f2(d), f2(3 * D), f2(d / (3 * D))], r: d / (3 * D), st: d <= 3 * D + 1e-9 ? 'pass' : 'fail', work: T`d_o = ${f2(d)} \;${d <= 3 * D + 1e-9 ? '\le' : '>'}\; 3D = ${f2(3 * D)}\ \text{in}` }); }
++        pans.filter(q => q.end).forEach(q => { const own = (q.p === B.a ? +B.e0 : +B.e1) > 0, ok = q.d <= 1.5 * D + 1e-9;
++          c.items.push({ loc: `${at}, end panel at ${f2(q.p === B.a ? B.a : B.b)} ft${own ? ' (own stiffener)' : ''}`, cells: [f2(q.d), f2(1.5 * D), f2(q.d / (1.5 * D))], r: q.d / (1.5 * D), st: ok ? 'pass' : own ? 'fail' : 'adv',
++            work: T`d_o = ${f2(q.d)} \;${ok ? '\le' : '>'}\; 1.5D = ${f2(1.5 * D)}\ \text{in}${ok ? '' : own ? '' : T`\ \text{(unstiffened end panel, 6.10.9.1: k = 5)}`}` }); }); });
++      if (c.items.length) add(c); else na(c, 'Per-bay stiffeners: no bay has intermediate stiffeners (connection plates only).'); }
+     else { c.items.push({ loc: 'Intermediate panels', cells: [f2(doIn), f2(3 * D), f2(doIn / (3 * D))], r: doIn / (3 * D), st: doIn <= 3 * D + 1e-9 ? 'pass' : 'fail', work: T`d_o = ${f2(F.doRatio)}(${f2(D)}) = ${f2(doIn)} \;\le\; 3D = ${f2(3 * D)}\ \text{in}` }); add(c); }
+   }
+   {
+@@ -3432,7 +3649,8 @@
+   const nSup = m.sup.length, simple = !m.cont && m.spans.length > 1;
+   const frames = FR.frames.length, intPerG = FR.girders.map(g => g.pts.filter(p => p.f.type === 'int').length);
+   let stiff = 0;
+-  if (F.stiff === 'on') FR.girders.forEach((g, i) => { let n = 0; m.spans.forEach(Ls => n += Math.max(0, Math.ceil(Ls * 12 / (F.doRatio * D) - 1e-9) - 1)); stiff += Math.max(0, n - intPerG[i]); });
++  if (tsBaysOn(P)) FR.girders.forEach((g, i) => tsGirderBays(P, m, FR, i).forEach(B => { stiff += B.n; }));   // per-bay stiffeners (TB1, 2026-10-13): the counts of the Framing tab
++  else if (F.stiff === 'on') FR.girders.forEach((g, i) => { let n = 0; m.spans.forEach(Ls => n += Math.max(0, Math.ceil(Ls * 12 / (F.doRatio * D) - 1e-9) - 1)); stiff += Math.max(0, n - intPerG[i]); });
+   const conn = FR.frames.length * 2;
+   const bearings = nb * (nSup + (simple ? nSup - 2 : 0));
+   const bstiffPairs = bearings * F.bsPairs;
+@@ -3672,6 +3890,14 @@
+     return -(gd * M1 * 12 / p.Ss + (gd * M2 + gw * Mw + 1.75 * T.Mn[k]) * 12 / p.Scr); };
+   const types = Object.keys(AN.types), TT = gt => gt === 'ext' ? 'exterior' : 'interior', spans = [...Array(m.sup.length - 1).keys()];
+   const stiff = F.stiff === 'on', doIn = stiff ? F.doRatio * m.D : FR.sp * 12, doFt = doIn / 12;
++  // per-bay stiffeners (TB1, 2026-10-13): with framing.doMode 'bays' a girder type takes the panels of its first girder (gOf: G1 for the exterior type, G2 for the interior,
++  // or the girder of a Structural analysis run) at that girder's own stations: TS rows at its first stiffener (or connection plate) from each support and at the
++  // cross-frame, with the actual adjacent panel widths; gs rows with the panel at x. Uniform mode (and stiffeners off): as before
++  const BM = stiff && tsBaysOn(P), panG = {}, pansOf = gt => { if (!BM) return null; const gi = gOf(gt)[0]; return panG[gi] || (panG[gi] = tsGirderBays(P, m, FR, gi).flatMap(tsPanels)); };
++  const gsDo = (gt, x, s) => { const PG = pansOf(gt); if (!PG || !PG.length) return { do: stiff ? r2(doIn) : 0, end: 'no' };
++    const c = PG.filter(q => x >= q.p - 0.05 && x <= q.q + 0.05), rat = 2 * s.D * s.tw / (s.topB * s.topT + s.botB * s.botT), vn = q => tsVn(s.D, s.tw, m.FyW, q.d, q.end, rat, true).Vn;
++    const w = (c.length ? c : [PG.reduce((a, q) => Math.abs((q.p + q.q) / 2 - x) < Math.abs((a.p + a.q) / 2 - x) ? q : a)]).reduce((a, q) => vn(q) < vn(a) ? q : a);   // at a panel boundary: the panel with the smaller V_n
++    return { do: r2(w.d), end: w.end ? 'yes' : 'no' }; };
+   const pieceOf = x => m.pieces.find(p => x >= p.x0 - 1e-9 && x < p.x1 - 1e-9) || m.pieces[m.pieces.length - 1];
+   const bfw = x => { const p = pieceOf(x); return Math.max(...[...m.top, ...m.bot].filter(q => q.x1 > p.x0 + 1e-9 && q.x0 < p.x1 - 1e-9).map(q => q.b)); };
+   // Δf at the connection plate (M1, 2026-10-13): inner face of the bottom flange, the weld toe of Table 6.6.1.2.3-1 detail 4.1, short-term composite for both signs, as this tool's own Category C′ check (was the flange mid-thickness, c.yb - s.botT / 2)
+@@ -3693,12 +3919,16 @@
+   types.forEach(gt => { const T = AN.R.types[gt];
+     spans.forEach(k => { const x0 = m.sup[k], x1 = m.sup[k + 1];
+       // end panel: next to an abutment, or next to any support of a simple span (each span is a girder with two ends; Q5)
+-      [[x0 + doFt, k, 1], [x1 - doFt, k + 1, -1]].forEach(([x, ks, dir]) => { const s = sec(x), end = ks === 0 || ks === nS - 1 || !m.cont;
+-        ts.rows.push({ name: `Span ${k + 1}, first ${stiff ? 'stiffener' : 'connection plate'} from ${supN(ks)}, ${TT(gt)}`, type: stiff ? 'A' : 'B', D: s.D, tw: s.tw, bfc: s.topB, tfc: s.topT, bft: s.botB, tft: s.botT, bfw: bfw(x), end: end ? 'yes' : 'no', do1: r2(doIn), do2: r2(doIn), ...shear(T, x), df: 0, ...(end ? shearIn(T, Math.min(x, m.sup[ks]), Math.max(x, m.sup[ks])) : {}) }); });
++      const PG = pansOf(gt), gB = PG ? FR.girders[gOf(gt)[0]].bear : null;
++      [[x0 + doFt, k, 1], [x1 - doFt, k + 1, -1]].forEach(([x, ks, dir]) => { let end = ks === 0 || ks === nS - 1 || !m.cont, d1 = doIn, d2 = doIn, typ = stiff ? 'A' : 'B', xb = m.sup[ks];
++        if (PG) { const sb = gB[ks], j = PG.findIndex(q => Math.abs((dir > 0 ? q.p : q.q) - sb) < 0.05); if (j >= 0) { const q1 = PG[j], q2 = PG[j + dir]; x = dir > 0 ? q1.q : q1.p; d1 = q1.d; d2 = q2 ? q2.d : q1.d; typ = (dir > 0 ? q1.sq : q1.sp) ? 'A' : 'B'; end = q1.end; xb = sb; } }
++        const s = sec(x);
++        ts.rows.push({ name: `Span ${k + 1}, first ${typ === 'A' ? 'stiffener' : 'connection plate'} from ${supN(ks)}, ${TT(gt)}`, type: typ, D: s.D, tw: s.tw, bfc: s.topB, tfc: s.topT, bft: s.botB, tft: s.botT, bfw: bfw(x), end: end ? 'yes' : 'no', do1: r2(d1), do2: r2(d2), ...shear(T, x), df: 0, ...(end ? shearIn(T, Math.min(x, xb), Math.max(x, xb)) : {}) }); });
+       let best = -1, bx = (x0 + x1) / 2; xs.forEach((x, i) => { if (x > x0 && x < x1) { const rg = T.MfP[i] - T.MfN[i]; if (rg > best) { best = rg; bx = x; } } });
+       // the connection plate the Fatigue row checks (C20, 2026-10-13): the cross-frame with the largest fatigue moment range (was the cross-frame nearest the node of largest range, bx); bx only when the span has no cross-frame
+       const cxF = cpAt(T, x0, x1, gt), cx = cxF != null ? cxF : bx, s = sec(cx);
+-      ts.rows.push({ name: `Span ${k + 1}, cross-frame at ${cx.toFixed(1)} ft, ${TT(gt)}`, type: 'B', D: s.D, tw: s.tw, bfc: s.topB, tfc: s.topT, bft: s.botB, tft: s.botT, bfw: bfw(cx), end: 'no', do1: r2(doIn), do2: r2(doIn), ...shear(T, cx), df: fatBot(T, cx, gt) }); }); });
++      let c1 = doIn, c2 = doIn; if (PG && PG.length) { const L0 = PG.find(q => Math.abs(q.q - cx) < 0.05), R0 = PG.find(q => Math.abs(q.p - cx) < 0.05), I0 = PG.find(q => cx > q.p && cx < q.q) || PG[0]; c1 = (L0 || R0 || I0).d; c2 = (R0 || L0 || I0).d; }
++      ts.rows.push({ name: `Span ${k + 1}, cross-frame at ${cx.toFixed(1)} ft, ${TT(gt)}`, type: 'B', D: s.D, tw: s.tw, bfc: s.topB, tfc: s.topT, bft: s.botB, tft: s.botT, bfw: bfw(cx), end: 'no', do1: r2(c1), do2: r2(c2), ...shear(T, cx), df: fatBot(T, cx, gt) }); }); });
+   // --- shear connectors (interior girder, or exterior if it governs the fatigue shear)
+   const gtS = types.reduce((a, gt) => Math.max(...AN.R.types[gt].Vfr) > Math.max(...AN.R.types[a].Vfr) ? gt : a, types[0]), TS = AN.R.types[gtS], d = 0.875, Zr = 5.5 * d * d;
+   const sc = { zones: [], regions: [], gen: { d: '0.875', ts: AN.ts, hh: AN.hh, beff: r2(props(sec(1), gtS).beff), fc: m.fc, wc: m.wc, K1: 1.0, tdeck: AN.ts + 0.5, skew: m.skews.some(s => Math.abs(s) > 20) ? 'yes' : 'no' } };
+@@ -3777,7 +4007,7 @@
+     let nprC = ''; if (cC && cC.n2.kind === 'simp') nprC = { kind: 'simp', fl: sgC > 0 ? 'top' : 'bottom', b: cC.n2.big[kb], t: cC.n2.big[kt], Ir: r3(cC.n2.Ir) };
+     else if (cC && cC.n2.kind === 'ge') { const { A, mA, G } = cC.ge, fr = G ? fCon(G.s, i) : 0;
+       nprC = { kind: 'ge', fl: sgC > 0 ? 'top' : 'bottom', b: G ? G.s[kb] : s[kb], t: G ? G.s[kt] : s[kt], k: G && fr > 0 && !mA ? r3(Math.max(1, G.fm / fr)) : '', Ir: r3(cC.n2.Ir), why: cC.n2.why, A: geRec(A) }; }
+-    gs.rows.push({ name: `${name}, ${TT(gt)}`, gt, x: r2(x), region, cont: m.sup.length > 2 && m.cont ? 'yes' : 'no', beff: r2(props(s, gt).beff), ...s, Lb: r2(LbN), LbC: r2(FR.sp), Cb: +CbN.toFixed(3), CbC: +CbC.toFixed(3), lbB, lbT, npr, lbK, lbIr, nprWhy, geA, nprC, MDCc: T.MDCc ? +T.MDCc[i].toFixed(1) : '', do: stiff ? r2(doIn) : 0, end: 'no',
++    gs.rows.push({ name: `${name}, ${TT(gt)}`, gt, x: r2(x), region, cont: m.sup.length > 2 && m.cont ? 'yes' : 'no', beff: r2(props(s, gt).beff), ...s, Lb: r2(LbN), LbC: r2(FR.sp), Cb: +CbN.toFixed(3), CbC: +CbC.toFixed(3), lbB, lbT, npr, lbK, lbIr, nprWhy, geA, nprC, MDCc: T.MDCc ? +T.MDCc[i].toFixed(1) : '', ...gsDo(gt, x, s),
+       MDC1: r1(T.MDC1[i]), MDC2: r1(T.MDC2[i]), MDW: r1(T.MDW[i]), MLLp: r1(Math.max(0, T.Mp[i])), MLLn: r1(Math.min(0, T.Mn[i])), MCL: r1(T.MCL[i]), MfP: r1(T.MfP[i]), MfN: r1(T.MfN[i]),
+       ...shear(T, x), VCL: r1(vmax(T.VCL, e)), Vf: r1(Math.max(...[e - 1, e, e + 1].filter(q => q >= 0 && q < T.Vfm.length).map(q => T.Vfm[q]))), fl: skF(gt), flSrc: skF(gt) ? 'skew' : '', flC: 0 }); };
+   types.forEach(gt => { const T = AN.R.types[gt];
+@@ -3934,6 +4164,8 @@
+     ${secHd('sec-stf', 'Stiffeners and connection plates')}
+     <div class="sec-body" id="sec-stf">
+       ${fld('Transverse stiffeners', 'framing.stiff', '', 'sel', { options: [['on', 'Yes'], ['off', 'No (unstiffened web)']] })}${fld('Spacing d<sub>o</sub> / D', 'framing.doRatio', '')}
++      ${fld('Stiffener spacing', 'framing.doMode', '', 'sel', { full: true, options: [['uniform', 'Uniform d<sub>o</sub>/D (above), every bay'], ['bays', 'Per cross-frame bay (table below; Suggest Apply sets it)']] })}
++      <div id="fr-bays" class="full"></div>
+       ${fld('Stiffener width b<sub>t</sub>', 'framing.stB', 'in', 'dim')}${fld('Stiffener thickness t<sub>p</sub>', 'framing.stT', 'in', 'dim')}
+       ${fld('Connection plate b<sub>t</sub>', 'framing.cpB', 'in', 'dim')}${fld('Connection plate t<sub>p</sub>', 'framing.cpT', 'in', 'dim')}
+       ${fld('Plate grade', 'framing.gS', '', 'sel', { full: true, options: G })}
+@@ -3944,6 +4176,43 @@
+       ${fld('Corner clip', 'framing.clip', 'in', 'dim')}${fld('Pairs per bearing', 'framing.bsPairs', '')}
+     </div>`;
+ }
++const f1 = x => (isFinite(x) ? x.toFixed(1) : '—');   // one decimal (per-bay stiffener tables, TB1)
++/* per-bay stiffener table on the Framing tab (TB1, 2026-10-13): one row per bay, girders with the same bays and counts together; the count is editable
++   (all girders of the row); d_o: the widest panel of the bay; V_u/φV_n: the largest of its panels for the current girder, with the Analysis tab shears
++   (envelope of the girder types) and Suggest's tension-field setting */
++function frBaysHtml() {
++  const F = P.framing, D = M.D, nb = FR.girders.length, BG = FR.girders.map((g, i) => tsGirderBays(P, M, FR, i));
++  const vu = AN && !AN.errors && AN.R && AN.xs ? tsVu(AN.xs, AN.R.types) : null, fns = tsSecFns(M), tfa = P.suggest.tfa !== 'off';
++  const grp = []; BG.forEach((l, i) => { const k = JSON.stringify(l.map(B => [B.a, B.b, B.n, B.e0, B.e1, B.set])), g = grp.find(q => q.k === k); if (g) g.gs.push(i + 1); else grp.push({ k, gs: [i + 1], l }); });
++  const stale = BG.reduce((a, l) => a + l.filter(B => !B.set).length, 0), tot = BG.reduce((a, l) => a + l.reduce((q, B) => q + B.n, 0), 0);
++  let h = `<p class="hint static">${tot} intermediate stiffener${tot === 1 ? '' : 's'} in all ${nb} girders. Stations along each girder from its Abut. 1 bearing; a bay runs between bearings and cross-frames (connection plates act as stiffeners). n: intermediate stiffeners in the bay, evenly spaced unless an end panel has its own stiffener (e).</p>`;
++  if (stale) h += `<p class="hint static" style="color:var(--fail)">${stale} bay${stale === 1 ? '' : 's'} of the current cross-frames ${stale === 1 ? 'has' : 'have'} no stored count (the framing changed after the layout was set): the uniform d<sub>o</sub>/D is used there (marked *). Apply Suggest again or set the counts.</p>`;
++  h += `<div class="tscroll"><table class="atbl tsb"><tr><th>Bay (ft)</th><th>L (ft)</th><th>n</th><th>d<sub>o</sub> (in)</th><th>d<sub>o</sub>/D</th><th>V<sub>u</sub>/φV<sub>n</sub></th></tr>`;
++  grp.forEach(G => { let k0 = -1;
++    G.l.forEach((B, j) => { if (B.k !== k0) { k0 = B.k; h += `<tr class="tsb-g"><td colspan="6">${tsGLbl(G.gs)}, Span ${B.k + 1}</td></tr>`; }
++      const pans = tsPanels(B), dI = Math.max(...pans.map(q => q.d)), ends = [B.e0 > 0 && B.n > 0 ? `e ${f0(B.e0)}` : '', B.e1 > 0 && B.n > (B.e0 > 0 ? 1 : 0) ? `e ${f0(B.e1)}` : ''].filter(Boolean).join(', ');
++      const r = vu ? tsEvalBay(B, D, fns.twAt, M.FyW, vu, fns.rat, tfa).r : null;
++      h += `<tr><td class="an">${f2(B.a)}–${f2(B.b)}${B.set ? '' : '*'}</td><td>${f2(B.b - B.a)}</td><td><input type="number" min="0" step="1" class="tsb-n" data-tsbay="${G.gs.join(',')}" data-a="${B.a}" data-b="${B.b}" value="${B.n}" aria-label="Stiffeners in bay ${f2(B.a)} to ${f2(B.b)} ft, ${tsGLbl(G.gs)}"></td><td>${f1(dI)}${ends ? `<br><span class="tsb-e">${ends}</span>` : ''}</td><td>${f2(dI / D)}</td><td${r != null && r > 1 + 1e-9 ? ' class="tsb-x"' : ''}>${r != null ? f2(r) : '—'}</td></tr>`; }); });
++  h += `</table></div><div class="arr-foot"><button type="button" class="link-btn" data-tsfill="1">Set every bay from the uniform d<sub>o</sub>/D</button></div>`;
++  return h;
++}
++function renderFrBays() {
++  const host = $('#fr-bays'); if (!host) return; const F = P.framing, sel = $('#f_framing_doMode'), ig = sel && sel.closest('.ig');
++  if (ig) ig.style.display = F.stiff === 'on' ? '' : 'none';
++  if (F.stiff !== 'on' || !M || M.errors.length || !FR) { host.innerHTML = ''; return; }
++  if (F.doMode !== 'bays') { host.innerHTML = `<p class="hint static">Uniform: d<sub>o</sub> = ${f2(num(F.doRatio))}D = ${f2(num(F.doRatio) * M.D)} in in every bay.${F.bays && F.bays.list && F.bays.list.length ? ' A per-bay layout is stored (from Suggest or an earlier edit): choose Per cross-frame bay to use it.' : ''}</p>`; return; }
++  try { host.innerHTML = frBaysHtml(); } catch (e) { console.error(e); host.innerHTML = `<p class="hint static">The per-bay table could not be built: ${esc(e.message)}</p>`; }
++}
++document.addEventListener('change', e => { const el = e.target; if (!el || !el.dataset || !el.dataset.tsbay || !M || !FR) return;
++  const n = Math.round(Number(el.value)); if (!(n >= 0)) { el.classList.add('err'); return; } el.classList.remove('err');
++  const F = P.framing; if (!F.bays || !Array.isArray(F.bays.list)) F.bays = { v: 1, D: M.D, list: [] }; const a = +el.dataset.a, b = +el.dataset.b;
++  el.dataset.tsbay.split(',').map(Number).forEach(g => { const q = F.bays.list.find(z => +z.g === g && Math.abs(+z.a - a) < 0.02 && Math.abs(+z.b - b) < 0.02); if (q) q.n = n; else F.bays.list.push({ g, a, b, n }); });
++  schedule(); });
++document.addEventListener('click', e => { const b = e.target.closest && e.target.closest('[data-tsfill]'); if (!b || !M || !FR) return;
++  if (!confirm('Set the count of every bay from the uniform d_o/D (evenly spaced)? This replaces the per-bay counts on the Framing tab.')) return;
++  const list = []; FR.girders.forEach((g, i) => tsBaysOf(M, FR, i).forEach(B => list.push({ g: i + 1, a: B.a, b: B.b, n: Math.max(0, Math.ceil((B.b - B.a) * 12 / ((num(P.framing.doRatio) || 1) * M.D) - 1e-9) - 1) })));
++  P.framing.bays = { v: 1, D: M.D, list }; schedule(); });
++
+ function tslSections() {
+   return `
+     ${secHd('sec-alt', 'Alternatives study (TS&L)')}
+@@ -3994,14 +4263,14 @@
+   const Pc0 = { ...P, bridge: { ...P.bridge, nb: N, S, spacing: 'equal', ohL: oh, ohR: oh } }, r = suggestLayout(Pc0);
+   if (r.errors.length) return { N, S, oh, err: r.errors[0] };
+   const strip = l => l.map(x => { const o = { L: x.L, t: x.t }; if (x.b !== undefined) o.b = x.b; return o; });
+-  const fr0 = { ...P.framing }; if (r.webType) fr0.stiff = r.webType === 'stiffened' ? 'on' : 'off'; if (r.webType === 'stiffened' && r.doR) fr0.doRatio = r.doR;
++  const fr0 = { ...P.framing }; sgFrStiff(fr0, r);
+   const Pc = { ...Pc0, girder: { ...P.girder, D: r.D, web: strip(r.web), top: strip(r.top), bot: strip(r.bot), splices: [...r.splices] }, framing: fr0 };
+   const m = buildModel(Pc); if (m.errors.length) return { N, S, oh, err: m.errors[0] };
+   const fr = framingLayout(Pc, m), cc = [...runChecks(m), ...framingChecks(m, fr, Pc)];
+   let gov = { r: 0, id: '' }; cc.forEach(c => (c.items || []).forEach(i => { if (typeof i.r === 'number' && isFinite(i.r) && i.r > gov.r) gov = { r: i.r, id: c.id }; }));
+   const iMax = r.spans.indexOf(Math.max(...r.spans)), T = r.rec.types || {}, gI = T.int ? T.int.dfSpan[iMax].mM : null, gE = T.ext ? T.ext.dfSpan[iMax].mM : null;
+   const mx = l => l.reduce((a, g) => (g.b * g.t > a.b * a.t ? g : a), l[0]), dg = r.D + r.top[0].t + r.bot[0].t;
+-  return { N, S, oh, de: r.de, gI, gE, D: r.D, tw: r.tw, top: mx(r.top), bot: mx(r.bot), webType: r.webType, wt: m.wt, psf: m.psf, tot: m.wt * N, gov, fails: cc.filter(k => k.status === 'fail').map(k => k.id), warns: cc.filter(k => k.status === 'warn').map(k => k.id), girder: Pc.girder, framing: { stiff: fr0.stiff, doRatio: fr0.doRatio }, dg, Kg: r.rec.Kg && r.rec.Kg[iMax] ? r.rec.Kg[iMax].Kg : null };
++  return { N, S, oh, de: r.de, gI, gE, D: r.D, tw: r.tw, top: mx(r.top), bot: mx(r.bot), webType: r.webType, wt: m.wt, psf: m.psf, tot: m.wt * N, gov, fails: cc.filter(k => k.status === 'fail').map(k => k.id), warns: cc.filter(k => k.status === 'warn').map(k => k.id), girder: Pc.girder, framing: { stiff: fr0.stiff, doRatio: fr0.doRatio, doMode: fr0.doMode, bays: fr0.bays }, dg, Kg: r.rec.Kg && r.rec.Kg[iMax] ? r.rec.Kg[iMax].Kg : null };
+ }
+ function wsCase(c, setup) {   // one girder count: pick the overhang, size the girder
+   const S0 = c.ok.reduce((a, q) => Math.abs(q.oh - 0.375 * q.S) < Math.abs(a.oh - 0.375 * a.S) ? q : a);
+@@ -4047,7 +4316,7 @@
+ function wsApply(i) { const r = WS && WS.res[i]; if (!r || r.err) return;
+   if (!confirm(`Apply ${r.N} girders at ${f2(r.S)} ft with ${f2(r.oh)} ft overhangs and the sized girder (web ${frac(r.D)} × ${frac(r.tw)}) to the project? This replaces the girder count, spacing, overhangs, girder plates, splices, and the stiffener setting. You can revert afterwards.`)) return;
+   snapshotBefore(`Girder count from deck width (${r.N} girders at ${f2(r.S)} ft)`);
+-  P.bridge.nb = r.N; P.bridge.S = +r.S.toFixed(4); spKeepExt(P.bridge, r.S); P.bridge.ohL = r.oh; P.bridge.ohR = r.oh; P.girder = JSON.parse(JSON.stringify(r.girder)); P.framing.stiff = r.framing.stiff; P.framing.doRatio = r.framing.doRatio;
++  P.bridge.nb = r.N; P.bridge.S = +r.S.toFixed(4); spKeepExt(P.bridge, r.S); P.bridge.ohL = r.oh; P.bridge.ohR = r.oh; P.girder = JSON.parse(JSON.stringify(r.girder)); P.framing.stiff = r.framing.stiff; P.framing.doRatio = r.framing.doRatio; if (r.framing.doMode) P.framing.doMode = r.framing.doMode; if (r.framing.bays) P.framing.bays = clone(r.framing.bays);
+   fillInputs(); ['web', 'top', 'bot', 'spl'].forEach(renderArr); recompute(); setOTab('summary'); autosave(); }
+ document.addEventListener('click', e => { if (e.target.id === 'ws_run') { wsRun(); return; } const a = e.target.closest && e.target.closest('[data-wsapply]'); if (a) wsApply(+a.dataset.wsapply); });
+ /* ---------------- full design of the best girder counts from the deck-width study (2026-10-12) ----------------
+@@ -4066,7 +4335,7 @@
+   const base = { N: c.N, S: c.S, oh: c.oh, de: c.de, fastPsf: c.psf, fastWt: c.wt, secs };
+   if (!r || (r.errors && r.errors.length)) return { ...base, err: r ? r.errors[0] : 'No result.' };
+   const strip = l => l.map(x => { const o = { L: x.L, t: x.t }; if (x.b !== undefined) o.b = x.b; return o; });
+-  const fr0 = { ...Pc.framing }; if (r.webType) fr0.stiff = r.webType === 'stiffened' ? 'on' : 'off'; if (r.webType === 'stiffened' && r.doR) fr0.doRatio = r.doR; if (r.spacing) fr0.spacing = r.spacing;
++  const fr0 = { ...Pc.framing }; sgFrStiff(fr0, r); if (r.spacing) fr0.spacing = r.spacing;
+   const girder = { ...Pc.girder, D: r.D, web: strip(r.web), top: strip(r.top), bot: strip(r.bot), splices: [...r.splices] }, Pg = { ...Pc, girder, framing: fr0 };
+   const m = buildModel(Pg); if (m.errors.length) return { ...base, err: m.errors[0] };
+   const fr = framingLayout(Pg, m), cc = [...runChecks(m), ...framingChecks(m, fr, Pg)];
+@@ -4078,7 +4347,7 @@
+   const aFails = ac.filter(k => k.status === 'fail').map(k => k.id);
+   return { ...base, aFails, D: r.D, tw: r.tw, webType: r.webType, doR: r.doR, spacing: r.spacing, top: mx(r.top), bot: mx(r.bot), wt: m.wt, psf: m.psf, tot: m.wt * c.N, cost: r.cost.total,
+     fMax: F.check.max, fWeb: F.check.rWeb, fPass: !!F.passed, iters: sel.iters, nCand: F.cands.length, gI, gE, dfx: !!A.dfxUsed, fails, warns, pass: !!F.passed && !fails.length,
+-    dg: r.D + r.top[0].t + r.bot[0].t, girder, framing: { stiff: fr0.stiff, doRatio: fr0.doRatio, spacing: fr0.spacing } };
++    dg: r.D + r.top[0].t + r.bot[0].t, girder, framing: { stiff: fr0.stiff, doRatio: fr0.doRatio, spacing: fr0.spacing, doMode: fr0.doMode, bays: fr0.bays } };
+ }
+ function wsfPick(res) { const ok = res.filter(r => !r.err && r.pass); if (!ok.length) return null;
+   return P.ws.obj === 'nb' ? ok.reduce((a, r) => r.N < a.N || (r.N === a.N && r.psf < a.psf) ? r : a) : ok.reduce((a, r) => r.psf < a.psf - 1e-9 ? r : a); }
+@@ -4135,7 +4404,7 @@
+   if (!confirm(`Apply ${r.N} girders at ${f2(r.S)} ft with ${f2(r.oh)} ft overhangs and the full-design girder (web ${frac(r.D)} × ${frac(r.tw)}, cross-frames at ${f2(r.spacing)} ft) to the project? This replaces the girder count, spacing, overhangs, girder plates, splices, the stiffener setting, and the cross-frame spacing. You can revert afterwards.`)) return;
+   snapshotBefore(`Girder count from deck width, full design (${r.N} girders at ${f2(r.S)} ft)`);
+   P.bridge.nb = r.N; P.bridge.S = +r.S.toFixed(4); spKeepExt(P.bridge, r.S); P.bridge.ohL = r.oh; P.bridge.ohR = r.oh; P.girder = JSON.parse(JSON.stringify(r.girder));
+-  P.framing.stiff = r.framing.stiff; if (r.webType === 'stiffened' && r.doR) P.framing.doRatio = r.framing.doRatio; if (r.spacing) P.framing.spacing = r.framing.spacing;
++  P.framing.stiff = r.framing.stiff; if (r.webType === 'stiffened' && r.doR) P.framing.doRatio = r.framing.doRatio; if (r.framing.doMode) P.framing.doMode = r.framing.doMode; if (r.framing.bays) P.framing.bays = clone(r.framing.bays); if (r.spacing) P.framing.spacing = r.framing.spacing;
+   fillInputs(); ['web', 'top', 'bot', 'spl'].forEach(renderArr); recompute(); setOTab('summary'); autosave(); }
+ document.addEventListener('click', e => { if (e.target.id === 'wsf_run') { wsfRun(); return; } if (e.target.id === 'wsf_cancel' && WSF && WSF.running) { WSF.cancel = true; return; } const a = e.target.closest && e.target.closest('[data-wsfapply]'); if (a) wsfApply(+a.dataset.wsfapply); });
+ function xfNoteHtml(s) { const dmin = num(P.framing.xfMinD) || 48, d = s.D + s.top[0].t + s.bot[0].t;
+@@ -4158,11 +4427,11 @@
+   const r = suggestLayout(P, { nb: c.nb, S: c.S, D: c.D, web: c.web });
+   if (r.errors.length) return { ...c, err: r.errors[0] };
+   const strip = l => l.map(x => { const o = { L: x.L, t: x.t }; if (x.b !== undefined) o.b = x.b; return o; });
+-  const Pc = { ...P, bridge: { ...P.bridge, nb: c.nb, S: c.S, spacing: 'equal' }, girder: { ...P.girder, D: r.D, web: strip(r.web), top: strip(r.top), bot: strip(r.bot), splices: [...r.splices] }, framing: { ...P.framing, stiff: c.web === 'stiffened' ? 'on' : 'off' } };
++  const Pc = { ...P, bridge: { ...P.bridge, nb: c.nb, S: c.S, spacing: 'equal' }, girder: { ...P.girder, D: r.D, web: strip(r.web), top: strip(r.top), bot: strip(r.bot), splices: [...r.splices] }, framing: (f => { sgFrStiff(f, r, c.web); if (c.web === 'stiffened' && !r.bays) f.doRatio = P.framing.doRatio; return f; })({ ...P.framing }) };   // per-bay stiffeners of the sized girder (TB1); uniform: the Framing tab ratio, as before
+   const m = buildModel(Pc); if (m.errors.length) return { ...c, err: m.errors[0] };
+   const fr = framingLayout(Pc, m), cc = [...runChecks(m), ...framingChecks(m, fr, Pc)], q = quantities(Pc, m, fr);
+   const fails = cc.filter(k => k.status === 'fail'), warns = cc.filter(k => k.status === 'warn');
+-  return { ...c, D: r.D, tw: r.tw, girder: Pc.girder, psf: m.psf, wt: m.wt, q, cost: q.total, cpsf: q.psfCost, fails: fails.map(k => k.id), warns: warns.map(k => k.id),
++  return { ...c, D: r.D, tw: r.tw, girder: Pc.girder, fr: Pc.framing, psf: m.psf, wt: m.wt, q, cost: q.total, cpsf: q.psfCost, fails: fails.map(k => k.id), warns: warns.map(k => k.id),
+     tr: m.trans.filter(t => !t.atSplice).length, spl: m.splices.length, dmin: Math.min(...m.secs.map(s => s.p.d)) };
+ }
+ function maybeAlts(force) {
+@@ -4225,7 +4494,7 @@
+     const row = (l, a, b, fmt, u) => `<tr><td class="lbl">${l}</td><td class="val">${fmt(a)}</td><td class="val">${fmt(b)}</td><td class="unit">${u}</td></tr>`;
+     const cheaper = ws.cost <= wu.cost ? 'stiffened' : 'unstiffened', diff = Math.abs(ws.cost - wu.cost);
+     h += card('alt-web', 'Web economy: stiffened versus unstiffened', `At ${M ? M.nb : P.bridge.nb} girders, current Suggest settings`, `
+-      <table class="tbl narrow"><thead><tr><th></th><th class="right">Stiffened (d<sub>o</sub> = ${f2(P.framing.doRatio)}D)</th><th class="right">Unstiffened</th><th></th></tr></thead><tbody>
++      <table class="tbl narrow"><thead><tr><th></th><th class="right">${P.suggest.doOpt !== 'off' ? 'Stiffened (per cross-frame bay)' : `Stiffened (d<sub>o</sub> = ${f2(P.framing.doRatio)}D)`}</th><th class="right">Unstiffened</th><th></th></tr></thead><tbody>
+       ${row('Web', ws, wu, c => `${frac(c.D)} × ${frac(c.tw)}`, 'in')}${row('Steel per girder', ws.wt, wu.wt, f2, 'kip')}${row('Steel', ws.psf, wu.psf, f2, 'psf')}
+       ${row('Stiffeners and connection plates', ws.q.stiff + ws.q.conn, wu.q.stiff + wu.q.conn, f0, 'ea')}${row('Cost', ws.cost, wu.cost, v => '$' + f0(v), '')}</tbody></table>
+       <p class="note-p">The <b>${cheaper}</b> web is cheaper by about $${f0(diff)} (${f2(100 * diff / Math.max(ws.cost, wu.cost))}%) with these unit prices. The unstiffened web is thicker to carry the same shear without stiffeners (k = 5 instead of 10); the stiffened web saves web steel but adds stiffeners.</p>`);
+@@ -4255,7 +4524,7 @@
+   const r = ALT.res.filter(x => !x.err)[i]; if (!r) return;
+   if (!confirm(`Apply ${r.nb} girders at ${f2(r.S)} ft with a ${frac(r.D)} × ${frac(r.tw)} web to the project? This replaces the girder count, spacing, girder plates, splices, and the stiffener setting. You can revert afterwards.`)) return;
+   snapshotBefore(`Alternative (${r.nb} girders at ${f2(r.S)} ft)`);
+-  P.bridge.nb = r.nb; P.bridge.S = +r.S.toFixed(4); spKeepExt(P.bridge, r.S); P.girder = JSON.parse(JSON.stringify(r.girder)); P.framing.stiff = r.web === 'stiffened' ? 'on' : 'off';
++  P.bridge.nb = r.nb; P.bridge.S = +r.S.toFixed(4); spKeepExt(P.bridge, r.S); P.girder = JSON.parse(JSON.stringify(r.girder)); P.framing.stiff = r.web === 'stiffened' ? 'on' : 'off'; if (r.web === 'stiffened' && r.fr && r.fr.doMode === 'bays' && r.fr.bays) { P.framing.doMode = 'bays'; P.framing.bays = clone(r.fr.bays); }
+   fillInputs(); ['web', 'top', 'bot', 'spl'].forEach(renderArr); recompute(); setOTab('summary'); autosave();
+ }
+ 
+@@ -4576,14 +4845,14 @@
+   spExtSync();   // "From exterior girders": S = W_cc/(N_b - 1) before anything reads bridge.S (Q6)
+   const drn = $('#sg-dr-note'); if (drn) drn.hidden = !(P.limits.sdMandatory && P.suggest.depthRule === 'off');   // Suggest span-to-depth setting overridden by the Limits tab (2026-10-12)
+   M = buildModel(P);
+-  if (M.errors.length) { C = null; FR = null; AN = null; renderErrors(); maybeSuggest(); maybeAlts(); return; }
++  if (M.errors.length) { C = null; FR = null; AN = null; renderErrors(); renderFrBays(); maybeSuggest(); maybeAlts(); return; }
+   C = runChecks(M);
+   FR = framingLayout(P, M); C.push(...framingChecks(M, FR, P));
+   try { AN = analyzeGirder(P, M); } catch (e) { AN = { errors: ['Analysis failed: ' + e.message] }; console.error(e); }
+   C.push(...analysisChecks(M, AN, P));
+   C.sort((a, b) => GROUPS.indexOf(a.grp) - GROUPS.indexOf(b.grp));
+   M.st = sectionStatus(M, C);
+-  renderStatus(); renderSummary(); renderDrawings(); renderChecks(); renderAnalysis(); renderSchedule(); renderReportHead();
++  renderStatus(); renderSummary(); renderDrawings(); renderChecks(); renderAnalysis(); renderSchedule(); renderReportHead(); renderFrBays();
+   applyCollapse(); typeset(); maybeSuggest(); maybeAlts();
+ }
+ function typeset(root) {
+````
+
+  GirderDetail page:
+
+````diff
+--- Steel Bridge Beam Modules.html (GirderDetail page, PL_B64 line omitted)
++++ after TB1
+@@ -2358,7 +2358,7 @@
+ function buildManual() { $('#tab-manual').innerHTML = `<div class="man-nav">${MAN.map(([id, t], i) => `<button type="button" class="man-btn" data-man="${id}">${i + 1}. ${t}</button>`).join('')}</div>${MAN.map(([id, t, b], i) => `<article class="man-part" id="man-${id}"><h2 class="man-h">Part ${i + 1}. ${t}</h2>${b}</article>`).join('')}`; showManPart(); }
+ function showManPart() { const id = P.ui.man || 'p1'; $$('.man-btn').forEach(b => b.classList.toggle('active', b.dataset.man === id)); $$('.man-part').forEach(a => a.classList.toggle('active', a.id === 'man-' + id)); }
+ 
+ /* =====================================================================
+    GirderDetail: additional modules
+    ts  transverse stiffeners and connection plates (6.10.11.1, 6.6.1.3.1, 6.10.9)
+@@ -3809,7 +3809,8 @@
+   [['top', 'top flange'], ['bot', 'bottom flange'], ['web', 'web']].forEach(([k, w]) => (pl[k] || []).forEach((s, i, a) => { const n = a[i + 1]; if (!n || (n.b === s.b && n.t === s.t)) return; const x = +s.x1.toFixed(3), c = chg.find(q => Math.abs(q.x - x) < 0.011); if (c) c.what.push(w); else chg.push({ x, what: [w] }); }));
+   chg.sort((a, b) => a.x - b.x);
+   const fr = ((G.FR.girders[g - 1] || {}).pts || []).map(q => ({ x: +q.s.toFixed(3), sup: q.f.type !== 'int' })).filter((q, i, a) => a.findIndex(o => Math.abs(o.x - q.x) < 0.011) === i).sort((a, b) => a.x - b.x);
+-  const sup = A(R.sup).map(i => xs[i]), F = G.P.framing, stiff = F.stiff === 'on', doFt = stiff ? F.doRatio * G.M.D / 12 : 0;
++  // per-bay stiffeners (TB1, 2026-10-13; framing.doMode 'bays'): Preliminary sizing's rows carry the panel width d_o and the end-panel flag of this girder, so no end panel is added here (doFt = 0)
++  const sup = A(R.sup).map(i => xs[i]), F = G.P.framing, stiff = F.stiff === 'on', doFt = stiff && F.doMode !== 'bays' ? F.doRatio * G.M.D / 12 : 0;
+   return { g, R, arr, ANx, gt, xs, L, chg, fr, sup, cont: G.M.cont, doFt, ext: R.ext };
+ }
+ function gsaState() {   // cached per girder until an input changes (this module, Structural analysis, LLDF and DLs, or a new preliminary analysis)
+@@ -6532,6 +6533,12 @@
+ function dxfNotes(D, l, x, y, title, lines, wchars = 70) { const h = D.h; D.text(l, x, y, h, title); let yy = y - 1.8 * h;
+   lines.forEach((s, i) => { const words = dxfStr(s).split(' '), out = []; let cur = ''; words.forEach(w => { if ((cur + ' ' + w).trim().length > wchars) { out.push(cur.trim()); cur = w; } else cur += ' ' + w; }); out.push(cur.trim());
+     out.forEach((ln, j) => { D.text(l, x + (j ? 2.2 * h : 0), yy, h * 0.8, j ? ln : `${i + 1}. ${ln}`); yy -= 1.35 * h; }); yy -= 0.3 * h; }); return yy; }
++/* intermediate transverse stiffener stations of girder i (ft from its Abut. 1 bearing; pts: its bearings and cross-frame points, sorted): the per-bay layout of
++   Preliminary sizing (TB1, 2026-10-13; framing.doMode 'bays', tsGirderX in the sizing page) or the uniform d_o placed from each point as before */
++function gdStiffX(PP, m, FR, i, pts) { const F = PP && PP.framing; if (!F || F.stiff !== 'on') return [];
++  if (F.doMode === 'bays') { try { const pw = PL_FRAME && PL_FRAME.contentWindow; if (pw && typeof pw.tsGirderX === 'function') return pw.tsGirderX(PP, m, FR, i); } catch (e) { console.error(e); } }
++  const dO = (+F.doRatio || 1.5) * m.D / 12, out = []; for (let q = 0; q < pts.length - 1; q++) for (let x = pts[q] + dO; x < pts[q + 1] - dO * 0.5; x += dO) out.push(x); return out; }
++const gdStiffBays = PP => !!(PP && PP.framing && PP.framing.stiff === 'on' && PP.framing.doMode === 'bays');
+ const dxfPM = () => { const pw = PL_FRAME && PL_FRAME.contentWindow; try { return { m: pw.eval('M'), PP: pw.eval('P'), FR: pw.eval('FR') }; } catch (e) { return {}; } };
+ /* ---------- 1: framing plan and framing data ---------- */
+ function dxfPlan(D, C) {
+@@ -6550,8 +6557,8 @@
+     const bs = det.bs || { bt: 7, tp: 0.75, np: 1, sp: 0 }; g.bear.forEach(b => { const xc = X(g.x0 + b), grp = (bs.np - 1) * (bs.sp || 0);
+       for (let q = 0; q < bs.np; q++) { const x = xc - grp / 2 + q * (bs.sp || 0); [-1, 1].forEach(sg => D.rect(lst, x - bs.tp / 2, gy, x + bs.tp / 2, gy + sg * (bs.bt + 0.3))); }
+       D.rect(lbr, xc - 0.6 * h, gy - 0.6 * h, xc + 0.6 * h, gy + 0.6 * h); });
+-    const F = C.PP && C.PP.framing; if (F && F.stiff === 'on') { const dO = (+F.doRatio || 1.5) * m.D / 12, pts = [...g.bear, ...FR.frames.filter(f => f.type !== 'sup' && (f.bay === i || f.bay === i - 1)).map(f => (f.bay === i ? f.xa : f.xc) - g.x0)].sort((a, b) => a - b), ts = det.ts || cp, sg = i === 0 ? 1 : -1;
+-      for (let q = 0; q < pts.length - 1; q++) for (let x = pts[q] + dO; x < pts[q + 1] - dO * 0.5; x += dO) D.rect(lst, X(g.x0 + x) - ts.tp / 2, gy, X(g.x0 + x) + ts.tp / 2, gy + sg * (ts.bt + 0.3)); }
++    const F = C.PP && C.PP.framing; if (F && F.stiff === 'on') { const pts = [...g.bear, ...FR.frames.filter(f => f.type !== 'sup' && (f.bay === i || f.bay === i - 1)).map(f => (f.bay === i ? f.xa : f.xc) - g.x0)].sort((a, b) => a - b), ts = det.ts || cp, sg = i === 0 ? 1 : -1;
++      gdStiffX(C.PP, m, FR, i, pts).forEach(x => D.rect(lst, X(g.x0 + x) - ts.tp / 2, gy, X(g.x0 + x) + ts.tp / 2, gy + sg * (ts.bt + 0.3))); }
+     m.splices.forEach((sx, k) => { const sp = (det.spl && det.spl[k] && (det.spl[k][ext ? 'ext' : 'int'] || det.spl[k].int || det.spl[k].ext)) || null; if (sp) D.rect(lsp, X(g.x0 + sx) - sp.Lpl / 2, gy - sp.bo / 2, X(g.x0 + sx) + sp.Lpl / 2, gy + sp.bo / 2); });
+     D.line(gcl, X(g.x0), gy, X(g.x0 + g.bear[g.bear.length - 1]), gy, cl); D.text(ly.t, X(g.x0 + g.bear[g.bear.length - 1]) + 2 * h, Y(g.y) - h / 2, h, `G${i + 1}`);
+     m.splices.forEach(s => D.line(ly.s, X(g.x0 + s), Y(g.y) - h * 0.8, X(g.x0 + s), Y(g.y) + h * 0.8)); });
+@@ -6589,7 +6596,9 @@
+   cps.forEach(x => D.line(ly.st, X(x), yB, X(x), yB + Dw)); if (cps.length) D.text(ly.t, X(cps[0]) + 0.4 * h, yB + Dw * 0.6, h * 0.7, 'CONN. PL. (TYP.)');
+   g.bear.forEach(bx => [-1, 1].forEach(sg => D.line(ly.st, X(bx) + sg * 0.5, yB, X(bx) + sg * 0.5, yB + Dw)));
+   const F = PP.framing, stf = F && F.stiff === 'on', dO = stf ? (+F.doRatio || 1.5) * m.D / 12 : 0;
+-  if (stf && dO > 0) { const pts = [...g.bear, ...cps].sort((a, b) => a - b); for (let i = 0; i < pts.length - 1; i++) { for (let x = pts[i] + dO; x < pts[i + 1] - dO * 0.5; x += dO) D.line(ly.st, X(x), yB + Dw * 0.06, X(x), yB + Dw, D.ltype('HIDDEN')); } D.text(ly.t, X(pts[0] + dO) + 0.4 * h, yB + Dw * 0.4, h * 0.7, `TRANS. STIFF. @ ${dxfIn(dO * 12)} MAX. (TYP.)`); }
++  if (stf && dO > 0) { const pts = [...g.bear, ...cps].sort((a, b) => a - b), sx = gdStiffX(PP, m, FR, gi, pts); sx.forEach(x => D.line(ly.st, X(x), yB + Dw * 0.06, X(x), yB + Dw, D.ltype('HIDDEN')));
++    if (!gdStiffBays(PP)) D.text(ly.t, X(pts[0] + dO) + 0.4 * h, yB + Dw * 0.4, h * 0.7, `TRANS. STIFF. @ ${dxfIn(dO * 12)} MAX. (TYP.)`);
++    else if (sx.length) D.text(ly.t, X(sx[0]) + 0.4 * h, yB + Dw * 0.4, h * 0.7, 'TRANS. STIFF. AS SHOWN (SPACING PER CROSS-FRAME BAY, TYP.)'); }
+   // stud zones (Shear connectors module)
+   let SC = null; try { const r = GM.sc.compute(P.sc); if (!(r.errors && r.errors.length)) SC = r; } catch (e) {}
+   const yS = yB + Dw + tmax + 4 * h; if (SC && SC.zones) SC.zones.forEach(z => { const x1 = X(+z.x1), x2 = X(+z.x2); D.line(ly.sc, x1, yS, x2, yS); D.line(ly.sc, x1, yS - 0.4 * h, x1, yS + 0.4 * h); D.line(ly.sc, x2, yS - 0.4 * h, x2, yS + 0.4 * h); D.text(ly.t, (x1 + x2) / 2, yS + 0.4 * h, h * 0.75, `${z.nr} STUDS @ ${dxfIn(+z.p)}`, 1); });
+@@ -7141,8 +7150,8 @@
+   if (lay.stf) gl.forEach(i => { const g = FR.girders[i], z = Z(i), tw = m.web[0].t, cp = det.cp || { bt: 6, tp: 0.5 }, bs = det.bs || { bt: 7, tp: 0.75, np: 1, sp: 0 };
+     FR.frames.filter(f => f.type !== 'sup' && (f.bay === i || f.bay === i - 1)).forEach(f => { const x = (f.bay === i ? f.xa : f.xc) * 12, sg = f.bay === i ? 1 : -1; box(x, D / 2, z + sg * (tw / 2 + cp.bt / 2), cp.tp, D, cp.bt, M.stf); });
+     g.bear.forEach(b => { const grp = (bs.np - 1) * (bs.sp || 0); for (let q = 0; q < bs.np; q++) { const x = Xg(g, b) - grp / 2 + q * (bs.sp || 0); [-1, 1].forEach(sg => box(x, D / 2, z + sg * (tw / 2 + bs.bt / 2), bs.tp, D, bs.bt, M.stf)); } });
+-    const F = PP.framing; if (F && F.stiff === 'on') { const dO = (+F.doRatio || 1.5) * D / 12, ts2 = det.ts || cp, pts = [...g.bear, ...FR.frames.filter(f => f.type !== 'sup' && (f.bay === i || f.bay === i - 1)).map(f => (f.bay === i ? f.xa : f.xc) - g.x0)].sort((a, b) => a - b), sg = i === 0 ? 1 : -1;
+-      for (let q = 0; q < pts.length - 1; q++) for (let x = pts[q] + dO; x < pts[q + 1] - dO * 0.5; x += dO) box(Xg(g, x), D / 2 + 2, z + sg * (tw / 2 + ts2.bt / 2), ts2.tp, D - 4, ts2.bt, M.stf); } });
++    const F = PP.framing; if (F && F.stiff === 'on') { const ts2 = det.ts || cp, pts = [...g.bear, ...FR.frames.filter(f => f.type !== 'sup' && (f.bay === i || f.bay === i - 1)).map(f => (f.bay === i ? f.xa : f.xc) - g.x0)].sort((a, b) => a - b), sg = i === 0 ? 1 : -1;
++      gdStiffX(PP, m, FR, i, pts).forEach(x => box(Xg(g, x), D / 2 + 2, z + sg * (tw / 2 + ts2.bt / 2), ts2.tp, D - 4, ts2.bt, M.stf)); } });
+   // field splices: outer flange plates, web plates, bolts
+   if (lay.spl) gl.forEach(i => { const g = FR.girders[i], z = Z(i), ext = i === 0 || i === nb - 1, tw = m.web[0].t;
+     m.splices.forEach((sx, k) => { const rec = det.spl[k] && (det.spl[k][ext ? 'ext' : 'int'] || det.spl[k].int || det.spl[k].ext); if (!rec || !rec.full) return; const S = rec.full, F = S.fl, Wb = S.web, xc = Xg(g, sx);
+````
+
+### TB1 (update). Every panel of a stiffened web within the 6.10.9.1 limits   [§4: design rule, engineer's decision 2026-10-13] [results: Suggest per-bay layouts; D4]
+- **Where (decoded PL):** `tsDesignBay` (anchor `function tsDesignBay(B0, D, twAt, Fyw, vu, rat, tfa) {`), `framingChecks` D4 per-bay branch (anchor `else if (BM) { const grp2 = {};`), Suggest input note, `sgBaysCard` note, Manual Part 2 (Suggest rules) and Part 3 (D3/D4 not yet, see TB2).
+- **Before (TB1 as first built):** a bay got no intermediate stiffener when its panels passed with the connection plates only, even if wider than 3D (an unstiffened panel, k = 5, 6.10.9.1/6.10.9.2); otherwise n started at ⌈L/3D⌉ − 1; an evenly spaced end bay could leave an end panel wider than 1.5D (unstiffened end panel, k = 5). D4 listed only bays with stiffeners; a wide even end panel was advisory.
+  ```js
+  const L = (B0.b - B0.a) * 12, ok = E => E.r <= 1 + 1e-9, ev = ...;
+  let E = ev({ ...B0, n: 0 }); if (ok(E)) return E;
+  ...
+  const n0 = nE ? 1 : Math.max(1, Math.ceil(L / (3 * D) - 1e-9) - 1);
+  for (let n = n0; n <= nHi; n++) { ... }
+  ```
+- **After:** engineer's rule (2026-10-13): in a stiffened web every panel is a stiffened panel, d<sub>o</sub> ≤ 3D interior and d<sub>o</sub> ≤ 1.5D at an end support. A layout is accepted only when every panel meets those limits and φ<sub>v</sub>V<sub>n</sub> ≥ V<sub>u</sub>; n counts up from 0, so the first accepted layout is the fewest stiffeners that meet the limits (the largest spacing allowed), tightened only where shear needs it; end bays try even spacing, then an own end stiffener at the widest whole inch ≤ 1.5D that passes, the rest even. D4 lists every bay; interior panels > 3D and end panels > 1.5D fail (no advisory).
+  ```js
+  const L = (B0.b - B0.a) * 12, geo = E => E.pans.every(q => q.d <= (q.end ? 1.5 : 3) * D + 1e-9), ok = E => E.r <= 1 + 1e-9 && geo(E), ev = ...;
+  let E = ev({ ...B0, n: 0 }); if (ok(E)) return E;
+  ...
+  for (let n = 1; n <= nHi + nE; n++) { E = ev({ ...B0, n }); if (ok(E)) return E; if (geo(E) || !geo(last)) last = E; /* end-stiffener variant as before */ }
+  ```
+- **Governing provisions:** AASHTO LRFD 10th Ed. 6.10.9.1 (interior panel stiffened when d<sub>o</sub> ≤ 3D; end panel when d<sub>o</sub> ≤ 1.5D), 6.10.9.3.3 (end panel ≤ 1.5D), 6.10.9.3.2.
+- **Check case (built-in, quick suggestion, `P.dfx = null`, D = 63 in, t<sub>w</sub> = 1/2 in, V<sub>p</sub> = 913.5 kip):** bay Span 1, 22–44 ft (264 in): before n = 0 (264 > 3D = 189 in, unstiffened, k = 5, C = 0.2868, φV<sub>n</sub> = 262.0 kip ≥ V<sub>u</sub> = 173.0 kip, ratio 0.660). After: n = 0 fails the limit (264 > 189 in), n = 1: d<sub>o</sub> = 132 in (2.095D), k = 6.139, C = 0.3521, 2Dt<sub>w</sub>/(18·0.75 + 16·1.25) = 1.881 ≤ 2.5 → Eq. 6.10.9.3.2-2: 0.87(1 − 0.3521)/√(1 + 2.095²) = 0.2428, φV<sub>n</sub> = 913.5(0.5949) = 543.4 kip ≥ 173.0 kip (ratio 0.318) → n = 1. Bay 88–110 ft: n = 1 before and after (d<sub>o</sub> = 132 in, φV<sub>n</sub> = 543.4 ≥ 383.1 kip). End bay 0–22 ft: n = 1 with end panel 94 in before and after. Totals: 50 → 80 intermediate stiffeners (16 per girder; tension field off: 80 → 110); quick suggestion cost $1,682,391 → $1,686,891; Full design $1,554,461 → $1,558,961 (D 69, same plates). After Apply + Design all: TS5 1.481 advisory → 0.995 pass; TS4 0.770 → 0.752; D4 0.995 pass (18 items).
+- **Also:** the D4 work lines printed "le" for ≤ (JS source `'\le'` is `'le'`); now `'\\le'`.
+- **How verified:** see TB3 (full verification of the PR's final state).
+
+  Decoded PL page:
+
+````diff
+--- before
++++ after
+@@ -2623,7 +2623,7 @@
+ <h3>Girder count from the deck width</h3><p>With an <b>Out-to-out deck width</b> W on the Suggest input tab, <b>Suggest girder count, spacing, and overhangs</b> compares girder counts. For each N from 3, every overhang on a 0.25 ft grid within the limits gives S = (W &minus; 2&middot;overhang)/(N &minus; 1); a layout is kept when S, the overhang (also &le; a fraction of S), and d<sub>e</sub> = overhang &minus; barrier (or curb) width are within the limits (defaults: overhang 1.5 to 4.0 ft and &le; 0.5S; d<sub>e</sub> &minus;1.0 to 5.5 ft; S 3.5 to 16 ft, the ranges of the 4.6.2.2 equations; verify / owner). The overhang limits used are the stricter of these settings and the Limits tab overhang limits of check G6 (overhang / S and maximum overhang, 0.40S and 4.0 ft by default), so the study never proposes an overhang that G6 warns about; the results note says which value governs. Of those, the overhang whose exterior and interior girder live load moment distribution factors (this tool's 4.6.2.2 equations, longest span) are closest is used (ties: nearest 0.375S); the girder is then sized with Suggest's fast sizing (without the quick suggestion's strength and service check) and checked like an alternative. The table lists N, S, overhang, d<sub>e</sub>, the factors, the section, the steel per girder and in total (lb/ft<sup>2</sup> of deck), the governing ratio of the layout checks, the bracing type from the girder depth, and pass/fail. The recommendation is the passing row with the least total steel (or the fewest girders, if chosen). Nothing changes until you press Apply. With W blank, Suggest uses the girder count and spacing on the Bridge tab as before. Distribution factors are an estimate for comparing layouts: run LL &amp; DL for the chosen layout.</p>
+ <p><b>Fast study, then full design of the best few.</b> The study sizes every girder count with Suggest's <i>fast sizing</i> (without the quick suggestion's strength and service check): one constant-stiffness continuous-beam model, flange areas from lever-arm estimates, and only this tool's layout checks (proportions, transitions, splices, framing), with no strength, service, or fatigue check. That makes it quick enough to try every girder count, but its weights are a ranking aid. The overhang of each row is chosen with the K<sub>g</sub> of a trial girder sized at the overhang nearest 0.375S. When the study finishes, the Suggest tab offers <b>Full design of the best N</b> (N on the Suggest input tab, default 3, at most 5). It takes the best N rows (by the objective: passing rows first, then the others by governing ratio) and runs Full design (see <i>Quick suggestion and full design</i> below) on each with that row's girder count, spacing, and overhangs, on a copy of the project: each iteration re-runs the staged analysis of the current plates (DC1 on the steel section; DC2 and DW on the long-term composite section, 3n; live load on the short-term composite section, n; cracked near interior piers), recomputes the 4.6.2.2 distribution factors from that section's K<sub>g</sub>, checks every node, and resizes; the live load model of the first iteration is reused inside the loop, and the final verification recomputes everything, so the pass/fail of each row comes from fully recomputed demands. The girder count, spacing, and overhangs are kept from the fast study. Full design takes about 20 to 60 s for each girder count, which is why it runs only for the best few and only when you press the button (it can be cancelled). The results table lists the full-design section, cross-frame spacing, steel per girder, total and per deck area (with the fast-study value beside it), the largest ratio of the final verification, the interior and exterior moment distribution factors of the final girder (longest span), the iterations, and pass/fail (every full-design check at or below 1.0 and no failing layout check; failing Analysis tab checks A1 to A3 are named beside it but do not decide it, because they depend on the bearing stiffener and bearings, which Suggest does not size); the recommendation follows the same objective. Apply sets the girder count, spacing, overhangs, plates, splices, stiffener setting, and cross-frame spacing (Revert restores the previous design). The result is still preliminary: run LL &amp; DL (lldf) for the chosen layout and complete the design checks in GirderDetail.</p>
+ <h3>Suggest: lowest-cost layout</h3><p>Suggest proposes the web and flange layout and the field splices for the bridge on the Bridge tab, with one layout for all girders (designed for the envelope of the interior and exterior girders). It searches web depths from about L/36 to L/18 and, unless one is chosen, both an unstiffened and a transversely stiffened web, and keeps the layout with the <b>lowest total cost</b>: structural steel (weight × $/lb), flange shop transitions, transverse stiffeners, and field splices, each priced from the <b>Unit costs</b> on the Suggest tab, which are the same single price list used by the Alternatives study (and sent to GirderDetail's Design all). The defaults are placeholders; only their ratios affect the choice, and the tab shows each as an equivalent weight of steel. Within each field piece the flange width is constant and the thicknesses are chosen by an optimization that adds a transition only where it saves more than it costs. Field splices are placed by the program near the dead-load points of contraflexure and within the shipping length and weight, and moved off cross-frame locations where the framing check X4 finds a conflict.</p>
+-<p><b>Rules.</b> AASHTO LRFD minimums always apply: D/t<sub>w</sub> ≤ 150, stiffened or not (Eq. 6.10.2.1.1-1, webs without longitudinal stiffeners), b<sub>f</sub>/2t<sub>f</sub> ≤ 12, b<sub>f</sub> ≥ D/6, t<sub>f</sub> ≥ 1.1t<sub>w</sub>, 0.1 ≤ I<sub>yc</sub>/I<sub>yt</sub> ≤ 10 (6.10.2.2), plates at least 5/16 in (6.7.3), and one steel grade (no hybrid girders). With the AASHTO/NSBA G12.1 fabrication guidelines on (the default), the Limits tab minimum sizes, increments, and transition ratios also apply. The span-to-depth limits of Table 2.5.2.6.3-1 apply by default. The Suggest setting can turn them off only when the Limits tab does not treat span-to-depth as mandatory; with "Treat span-to-depth (G1, G2) as mandatory" on, Suggest (fast and full design, the deck-width study, and the web economy comparison) always applies them, so it never proposes a girder that fails G1 or G2. Full design also requires the final plates of each candidate to meet the minimum depths, since resizing can thin the flanges.</p><p><b>Optimizing the framing.</b> Stiffener spacing and cross-frame spacing are design variables. For stiffened webs with "Optimize stiffener spacing" on (the default), the stiffeners are designed per cross-frame bay: the floor web is the thinnest that works with d<sub>o</sub> = 1.0D in every panel (k = 5 + 5/(d<sub>o</sub>/D)²; interior panels with tension-field action when that setting is on, Eq. 6.10.9.3.2-2 or -8; end panels at an abutment or simple-span bearing with V<sub>n</sub> = CV<sub>p</sub>, 6.10.9.3.3); then each bay between bearings and cross-frames (connection plates act as stiffeners) gets no intermediate stiffener where the connection plates alone carry the shear (6.10.9.1), else the largest spacing allowed (d<sub>o</sub> ≤ 3D) and one more stiffener at a time until every panel passes with its largest Strength I V<sub>u</sub> (6.10.9.3.1; envelope of the interior and exterior girders); an end panel that needs it gets its own stiffener at up to 1.5D from the bearing and the rest of the bay is evenly spaced. Webs up to six increments thicker than the floor are priced with their own stiffener counts (a thinner web with more stiffeners against a thicker web with fewer), and the cheapest is kept. The quick suggestion's check and Full design redo the bays with the staged shears and thicken the web if a bay cannot be stiffened enough (d<sub>o</sub> down to 0.5D). With the setting off, the Framing tab ratio d<sub>o</sub>/D is used uniformly, as before. Full design then re-runs its best candidate at cross-frame spacings from 15 ft up to the maximum set on the Suggest tab (default 25 ft) in 2.5 ft steps, with every check (lateral-torsional buckling with the actual spacing and C<sub>b</sub>, deck placement, and the rest), adding the cost of each intermediate cross-frame, and keeps the cheapest. Apply sets the Framing tab cross-frame spacing and the stiffeners (per bay: the Framing tab per-bay table; uniform: d<sub>o</sub>/D). The deck overhang is not modeled in sizing: GirderDetail's Deck overhang auto-design gives the largest spacing the deck placement allows at the exterior girder, so set the maximum spacing no higher than that.</p><p><b>Flange widths.</b> Every flange at a field splice is made wide enough for the number of bolt gage lines each side of the web set on the Suggest tab (default 2) without staggering, using the same geometry as GirderDetail's splice auto-design: the first line clear of the web splice plate by the plate clearance plus the edge distance and by the tightening clearance C₁, the gage between lines, and the edge distance at the flange tip (about 14 in for 7/8 in bolts and two lines). The top flange is kept at one width along the girder unless turned off (it simplifies the haunch and stay-in-place forms), and the width of either flange changes by no more than the set maximum at a field splice (default 4 in; 0 for no limit). Widths are raised, never reduced, to meet these rules, and the thicknesses are then optimized at those widths.</p>
++<p><b>Rules.</b> AASHTO LRFD minimums always apply: D/t<sub>w</sub> ≤ 150, stiffened or not (Eq. 6.10.2.1.1-1, webs without longitudinal stiffeners), b<sub>f</sub>/2t<sub>f</sub> ≤ 12, b<sub>f</sub> ≥ D/6, t<sub>f</sub> ≥ 1.1t<sub>w</sub>, 0.1 ≤ I<sub>yc</sub>/I<sub>yt</sub> ≤ 10 (6.10.2.2), plates at least 5/16 in (6.7.3), and one steel grade (no hybrid girders). With the AASHTO/NSBA G12.1 fabrication guidelines on (the default), the Limits tab minimum sizes, increments, and transition ratios also apply. The span-to-depth limits of Table 2.5.2.6.3-1 apply by default. The Suggest setting can turn them off only when the Limits tab does not treat span-to-depth as mandatory; with "Treat span-to-depth (G1, G2) as mandatory" on, Suggest (fast and full design, the deck-width study, and the web economy comparison) always applies them, so it never proposes a girder that fails G1 or G2. Full design also requires the final plates of each candidate to meet the minimum depths, since resizing can thin the flanges.</p><p><b>Optimizing the framing.</b> Stiffener spacing and cross-frame spacing are design variables. For stiffened webs with "Optimize stiffener spacing" on (the default), the stiffeners are designed per cross-frame bay: the floor web is the thinnest that works with d<sub>o</sub> = 1.0D in every panel (k = 5 + 5/(d<sub>o</sub>/D)²; interior panels with tension-field action when that setting is on, Eq. 6.10.9.3.2-2 or -8; end panels at an abutment or simple-span bearing with V<sub>n</sub> = CV<sub>p</sub>, 6.10.9.3.3); then each bay between bearings and cross-frames (connection plates act as stiffeners) gets the fewest stiffeners that make every panel a stiffened panel (d<sub>o</sub> ≤ 3D interior, ≤ 1.5D end panels; 6.10.9.1, 6.10.9.3.3) and one more stiffener at a time until every panel passes with its largest Strength I V<sub>u</sub> (6.10.9.3.1; envelope of the interior and exterior girders); an end panel gets its own stiffener at up to 1.5D from the bearing where the even layout does not work, and the rest of the bay is evenly spaced. Webs up to six increments thicker than the floor are priced with their own stiffener counts (a thinner web with more stiffeners against a thicker web with fewer), and the cheapest is kept. The quick suggestion's check and Full design redo the bays with the staged shears and thicken the web if a bay cannot be stiffened enough (d<sub>o</sub> down to 0.5D). With the setting off, the Framing tab ratio d<sub>o</sub>/D is used uniformly, as before. Full design then re-runs its best candidate at cross-frame spacings from 15 ft up to the maximum set on the Suggest tab (default 25 ft) in 2.5 ft steps, with every check (lateral-torsional buckling with the actual spacing and C<sub>b</sub>, deck placement, and the rest), adding the cost of each intermediate cross-frame, and keeps the cheapest. Apply sets the Framing tab cross-frame spacing and the stiffeners (per bay: the Framing tab per-bay table; uniform: d<sub>o</sub>/D). The deck overhang is not modeled in sizing: GirderDetail's Deck overhang auto-design gives the largest spacing the deck placement allows at the exterior girder, so set the maximum spacing no higher than that.</p><p><b>Flange widths.</b> Every flange at a field splice is made wide enough for the number of bolt gage lines each side of the web set on the Suggest tab (default 2) without staggering, using the same geometry as GirderDetail's splice auto-design: the first line clear of the web splice plate by the plate clearance plus the edge distance and by the tightening clearance C₁, the gage between lines, and the edge distance at the flange tip (about 14 in for 7/8 in bolts and two lines). The top flange is kept at one width along the girder unless turned off (it simplifies the haunch and stay-in-place forms), and the width of either flange changes by no more than the set maximum at a field splice (default 4 in; 0 for no limit). Widths are raised, never reduced, to meet these rules, and the thicknesses are then optimized at those widths.</p>
+ <p><b>Quick suggestion and full design.</b> Suggest has two modes. The <b>quick suggestion</b> updates as you edit. It picks the web depth and web type with the lowest estimated cost from a fast sizing (one constant-stiffness beam model, flange areas from lever-arm estimates, this tool's layout checks), then checks that girder with the same staged analysis and AASHTO checks as Full design (listed below) for the interior and exterior girders, including the Table 2.5.2.6.3-1 minimum depths when span-to-depth applies to Suggest. Where a ratio exceeds 1.0 it increases the flange plates there (required area = current area &times; ratio/0.97 &times; 1.01, at most 1.35 times per round, never less than the plate already there) and thickens the web by one increment if the web ratio exceeds 1.0, then checks again, up to 8 rounds. Plates are only increased, never trimmed, so the quick suggestion passes the strength and service checks (the card says so, or names the ratio that still exceeds 1.0) but is not necessarily the lightest girder. The check runs in the background after the fast result appears (the card shows &ldquo;checking&rdquo; with a progress bar; typically a second or less after the fast result); a new edit restarts it, and Apply pressed during the check applies the checked result, after confirmation, when it is ready. The girder-count study and the Alternatives study use the fast sizing only, without this check, to rank layouts. <b>Run full design</b> optimizes for the least steel: it takes the best fast candidates and, for each, repeats: the staged, cracked analysis of the current layout (the Structural analysis settings); the AASHTO checks at every node for the interior and exterior girders, on both sides of every plate boundary (Strength I positive flexure with the plastic moment, compactness, D<sub>p</sub>/D<sub>t</sub>, and 1.3M<sub>y</sub>; Strength I negative flexure by 6.10.8 with flange local buckling, lateral-torsional buckling at the cross-frame spacing with C<sub>b</sub> from the quarter-point moments of each unbraced segment (10th Edition 6.10.8.2.3b: C<sub>b</sub> = 12.5M<sub>max</sub>/(2.5M<sub>max</sub> + 3M<sub>A</sub> + 4M<sub>B</sub> + 3M<sub>C</sub>), with M<sub>max</sub> the largest moment compressing the flange and M<sub>A</sub>, M<sub>B</sub>, M<sub>C</sub> the absolute envelope values at the quarter points (largest compression, or smallest tension where the flange is never in compression), as defined in 6.10.8.2.3b, Eq. 6.10.8.2.3b-1, with F<sub>nc</sub> by Eqs. 6.10.8.2.3a-2 to a-5; brace points at the supports and at the cross-frame spacing), and R<sub>b</sub>; where the section changes within the unbraced length, 6.10.8.2.3c: its simplification where it holds (one change to a smaller section within 0.2L<sub>b</sub> of the brace point with the smaller moment, the larger moment in the larger section, I<sub>y1</sub>/I<sub>y2</sub> ≥ 0.5: prismatic with the larger section), otherwise C<sub>b</sub> = 1.0 and F<sub>e</sub> = γ<sub>e</sub>f<sub>bu</sub> with r<sub>t</sub> = (L<sub>b</sub>/π)√(F<sub>e</sub>/E) (Eqs. c-1 to c-3), γ<sub>e</sub> by Appendix D6.6.2 Method A (γ<sub>e</sub> = χC<sub>be</sub>/(M<sub>u</sub>/M<sub>e1</sub>)<sub>max</sub>, Eqs. D6.6.2-1, D6.6.2-2, D6.6.2.2-1), or, where a flange's lateral moment of inertia changes by more than a factor 2.0 at a step (the D6.6.2.2 limit), the conservative bound (each section of the unbraced length as a prismatic member over L<sub>b</sub> under uniform moment at its largest stress), flagged for review; deck-placement lateral-torsional buckling also uses C<sub>b</sub> from the deck-placement moments, and the same nonprismatic rules; Service II flange stresses and web bend-buckling; deck-placement constructibility; flange fatigue, Fatigue I, Category B at the flange-to-web welds (extreme fiber) and Category C′ at the connection plates welded to the flanges (inner flange face, 6.6.1.3.1; checked at every analysis point along the girder, not only at the cross-frames, which is conservative), unless turned off or limited to Category B; and optionally L/800 deflection); and resizing, with each flange's required area set from the check ratio so plates are thickened where a check exceeds 1.0 and trimmed where there is spare capacity. When the layout stops changing it is verified against its own recomputed demands, and the cheapest passing candidate is selected. The result lists the governing check and ratio for every plate. Applying it replaces the girder layout (and the stiffener setting); Revert restores the previous design.</p>
+ <p><b>Current girder compared with the suggestion.</b> Below the quick suggestion (or full design) card, the Suggest tab compares the current girder (the Girder tab plates and splices, with the Framing tab stiffeners and cross-frame spacing) with the suggestion, so you can see what the suggestion changes. The overall rows give the web depth and thickness, transverse stiffeners and d<sub>o</sub>/D, cross-frame spacing, field splices, shop transitions, steel per girder and per deck area, cost (Unit costs), the largest strength and service ratio, and the code proportion check counts, with each changed row highlighted. The top flange, web, and bottom flange are then compared plate by plate: the two plate lists are merged by station, so each row is a station range with the current and the suggested plate and what changes (for example &ldquo;t 1 1/8 &rarr; 1 1/4&rdquo;, &ldquo;b 16 &rarr; 15&rdquo;, &ldquo;new transition at 28 ft&rdquo;). A plot shows the flange thickness and width along the girder for both. The current girder is checked in the background with the same staged analysis and strength and service checks as the quick suggestion, at its own cross-frame spacing (an edit restarts the check); the card says whether a change is needed (the current girder exceeds 1.0, is shallower than the Table 2.5.2.6.3-1 minimum depth where that applies, or fails a code proportion check) or would only save steel and cost, and &ldquo;No change suggested&rdquo; when the suggestion is the same as the current girder. If the current girder has input errors, the card lists them instead. The comparison changes nothing until you press Apply.</p>
+ <h3>Analysis model</h3><p>The analysis of the current design uses a variable-stiffness, staged line-girder model: DC1 on the steel section, DC2 and DW on the long-term composite section, and live load on the short-term composite section, with the composite stages cracked near interior supports. Its settings (staged or constant EI, cracked zones, deck reinforcement) are made in GirderDetail's Structural analysis module. Suggest mode searches trial layouts with the faster constant-EI model and then designs the chosen layout with the staged model.</p>
+@@ -2907,7 +2907,7 @@
+       ${fld('Optimize cross-frame spacing (full design)', 'suggest.cfOpt', '', 'sel', { options: [['on', 'Yes'], ['off', 'No: Framing tab spacing']] })}${fld('Maximum cross-frame spacing', 'suggest.cfMax', 'ft')}
+       ${fld('Optimize stiffener spacing d<sub>o</sub>/D', 'suggest.doOpt', '', 'sel', { full: true, options: [['on', 'Yes: per cross-frame bay, web thickness by cost'], ['off', 'No: Framing tab ratio, uniform']] })}
+       ${fld('Tension-field action, interior panels (6.10.9.3.2)', 'suggest.tfa', '', 'sel', { full: true, options: [['on', 'Use (end panels never: 6.10.9.3.3)'], ['off', 'Do not use (V_n = CV_p)']] })}
+-      <p class="note full">Per cross-frame bay: in each bay between connection plates (which act as stiffeners) the intermediate stiffeners are evenly spaced at the largest spacing AASHTO LRFD 6.10.9.1 allows (3D in interior panels; none where the connection plates alone carry the shear), and tightened only where φ<sub>v</sub>V<sub>n</sub> &lt; V<sub>u</sub> (Strength I, envelope of the interior and exterior girders, the largest V<sub>u</sub> in each panel). At an abutment, or any bearing of a simple span, the end panel is checked with V<sub>n</sub> = CV<sub>p</sub> (6.10.9.3.3); where that needs it, it gets its own stiffener at up to 1.5D from the bearing and the rest of the bay is evenly spaced. Web thicknesses from the thinnest that works with d<sub>o</sub> = 1.0D up to six increments thicker are priced with their own stiffener counts, and the cheapest is kept. Apply writes the counts to the Framing tab (per-bay table).</p>
++      <p class="note full">Per cross-frame bay: in each bay between connection plates (which act as stiffeners) the intermediate stiffeners are evenly spaced at the largest spacing AASHTO LRFD 6.10.9.1 allows (every panel a stiffened panel: 3D in interior panels, 1.5D in end panels), and tightened only where φ<sub>v</sub>V<sub>n</sub> &lt; V<sub>u</sub> (Strength I, envelope of the interior and exterior girders, the largest V<sub>u</sub> in each panel). At an abutment, or any bearing of a simple span, the end panel is at most 1.5D and is checked with V<sub>n</sub> = CV<sub>p</sub> (6.10.9.3.3); where the even layout does not give that, it gets its own stiffener at up to 1.5D from the bearing and the rest of the bay is evenly spaced. Web thicknesses from the thinnest that works with d<sub>o</sub> = 1.0D up to six increments thicker are priced with their own stiffener counts, and the cheapest is kept. Apply writes the counts to the Framing tab (per-bay table).</p>
+       <p class="note full" id="sg_equiv"></p>
+     </div>
+     ${secHd('sec-sgrun', 'Full design')}
+@@ -3308,7 +3308,7 @@
+     <div class="eq-math">\\[\\begin{aligned}d_o &= ${f2(q.d)}\\ \\text{in} = ${f3(q.d / D)}D, \\qquad k = ${q.stiff ? `5 + \\frac{5}{(${f3(q.d / D)})^2}` : '5\\ (\\text{unstiffened})'} = ${f3(q.k)}, \\qquad \\frac{D}{t_w} = ${f2(q.lam)}, \\qquad C = ${f3(q.C)}, \\qquad V_p = ${f2(q.Vp)}\\ \\text{kip} \\\\ \\phi_v V_n &= ${tf ? `1.0\\,V_p\\left[C + ${frm}\\right] = ${f2(q.Vp)}\\left[${f3(q.C)} + ${f3(q.tf)}\\right]` : `1.0\\,C\\,V_p = ${f3(q.C)}(${f2(q.Vp)})`} = ${f2(q.phVn)}\\ \\text{kip} \\;${q.phVn >= q.Vu ? '\\ge' : '<'}\\; V_u = ${f2(q.Vu)}\\ \\text{kip}\\end{aligned}\\]</div></div>` : '';
+   const fails = rows.filter(r => r.fail).length;
+   return card('sg-bays', 'Transverse stiffeners per cross-frame bay', `${C.nStTot} in all girders${fails ? `; ${fails} bay${fails > 1 ? 's' : ''} cannot be stiffened enough` : ''}`, `
+-    <p class="note-p">Each bay runs between bearings and cross-frames (connection plates act as stiffeners), at each girder's own stations from its Abut. 1 bearing; girders with the same bays and counts are listed together. Bays where the connection plates alone carry the shear get no intermediate stiffener (6.10.9.1); the others get the largest spacing allowed (d<sub>o</sub> ≤ 3D, interior panels) and one more stiffener at a time until every panel has φ<sub>v</sub>V<sub>n</sub> ≥ V<sub>u</sub>, with V<sub>u</sub> the largest Strength I shear in the panel (6.10.9.3.1; envelope of the interior and exterior girders${s.quick && s.quick.state === 'done' ? ', staged analysis of the strength and service check' : s.full ? ', staged analysis of Full design' : ', fast sizing'}). Interior panels ${tfa ? 'use tension-field action (Eq. 6.10.9.3.2-2 where 2Dt<sub>w</sub>/(b<sub>fc</sub>t<sub>fc</sub> + b<sub>ft</sub>t<sub>ft</sub>) ≤ 2.5 along the whole panel, else Eq. 6.10.9.3.2-8)' : 'do not use tension-field action (V<sub>n</sub> = CV<sub>p</sub>; Suggest setting)'}; end panels at an abutment or a simple-span bearing use V<sub>n</sub> = CV<sub>p</sub> (6.10.9.3.3), stiffened only up to 1.5D, with their own stiffener where the even layout does not work. Columns d<sub>o</sub> to Eq.: the governing panel of the bay. Apply writes the counts to the Framing tab.</p>
++    <p class="note-p">Each bay runs between bearings and cross-frames (connection plates act as stiffeners), at each girder's own stations from its Abut. 1 bearing; girders with the same bays and counts are listed together. Every panel is a stiffened panel (engineer's rule): each bay gets the fewest stiffeners that keep d<sub>o</sub> ≤ 3D in interior panels and ≤ 1.5D in end panels (6.10.9.1, 6.10.9.3.3), then one more stiffener at a time until every panel has φ<sub>v</sub>V<sub>n</sub> ≥ V<sub>u</sub>, with V<sub>u</sub> the largest Strength I shear in the panel (6.10.9.3.1; envelope of the interior and exterior girders${s.quick && s.quick.state === 'done' ? ', staged analysis of the strength and service check' : s.full ? ', staged analysis of Full design' : ', fast sizing'}). Interior panels ${tfa ? 'use tension-field action (Eq. 6.10.9.3.2-2 where 2Dt<sub>w</sub>/(b<sub>fc</sub>t<sub>fc</sub> + b<sub>ft</sub>t<sub>ft</sub>) ≤ 2.5 along the whole panel, else Eq. 6.10.9.3.2-8)' : 'do not use tension-field action (V<sub>n</sub> = CV<sub>p</sub>; Suggest setting)'}; end panels at an abutment or a simple-span bearing use V<sub>n</sub> = CV<sub>p</sub> (6.10.9.3.3), stiffened only up to 1.5D, with their own stiffener where the even layout does not work. Columns d<sub>o</sub> to Eq.: the governing panel of the bay. Apply writes the counts to the Framing tab.</p>
+     <div class="tscroll"><table class="tbl"><thead><tr><th>Girders</th><th class="right">Span</th><th class="right">Bay (ft)</th><th class="right">L (ft)</th><th class="right">n</th><th>Layout</th><th class="right">d<sub>o</sub> (in)</th><th class="right">d<sub>o</sub>/D</th><th class="right">V<sub>u</sub> (kip)</th><th class="right">φV<sub>n</sub> (kip)</th><th class="right">Ratio</th><th>Eq.</th></tr></thead><tbody>${body}</tbody></table></div>${work}`);
+ }
+ function SG_TYPES_TXT(t) { return t.length > 1 ? 'envelope of the interior and exterior girders' : t[0] === 'int' ? 'interior girder' : 'exterior girder'; }
+@@ -3447,23 +3447,23 @@
+     if (!gov || q.r > r) { r = q.r; gov = q; } return q; });
+   return { r, gov, pans };
+ }
+-// the fewest stiffeners that make every panel of the bay pass (Suggest). n = 0 when the bay passes with the connection plates only (6.10.9.1: stiffeners
+-// are required only where V_u > phi_v V_n of the unstiffened web); otherwise the largest spacing the code allows first (interior bays: n with d_o <= 3D,
+-// 6.10.9.1), then one more stiffener at a time. A bay at an end support tries, for each n, the n stiffeners evenly spaced and then an end stiffener at e
+-// (the widest whole inch <= 1.5D, 6.10.9.3.3, down to 0.5D, whose end panel carries its largest V_u with V_n = CV_p) with the rest of the bay evenly spaced;
+-// the even layout is kept when both pass. Down to d_o = 0.5D (TS_DLOW); a bay that still fails is returned with fail: true
++// the fewest stiffeners that make every panel of the bay a stiffened panel and pass (Suggest). Engineer's rule (2026-10-13): in a stiffened web every panel is
++// within the 6.10.9.1 limits, d_o <= 3D interior and d_o <= 1.5D at an end support (6.10.9.3.3), so the first layout tried is the fewest stiffeners that meet
++// them (the largest spacing the code allows), then one more stiffener at a time until phi_v V_n >= V_u in every panel. For each n, a bay at an end support
++// tries the n stiffeners evenly spaced and then an end stiffener at e (the widest whole inch <= 1.5D, down to 0.5D, whose end panel carries its largest V_u
++// with V_n = CV_p) with the rest of the bay evenly spaced; the even layout is kept when both pass. Down to d_o = 0.5D (TS_DLOW); a bay that still fails is
++// returned with fail: true
+ function tsDesignBay(B0, D, twAt, Fyw, vu, rat, tfa) {
+-  const L = (B0.b - B0.a) * 12, ok = E => E.r <= 1 + 1e-9, ev = B => ({ ...B, ...tsEvalBay(B, D, twAt, Fyw, vu, rat, tfa) });
++  const L = (B0.b - B0.a) * 12, geo = E => E.pans.every(q => q.d <= (q.end ? 1.5 : 3) * D + 1e-9), ok = E => E.r <= 1 + 1e-9 && geo(E), ev = B => ({ ...B, ...tsEvalBay(B, D, twAt, Fyw, vu, rat, tfa) });
+   let E = ev({ ...B0, n: 0 }); if (ok(E)) return E;
+   const nE = (B0.endA ? 1 : 0) + (B0.endB ? 1 : 0), nHi = Math.max(1, Math.ceil(L / (TS_DLOW * D) - 1e-9) - 1);
+   const eW = (x0, dir) => { for (let e = Math.floor(1.5 * D + 1e-9); e >= Math.ceil(TS_DLOW * D - 1e-9); e--) { const p = dir > 0 ? x0 : x0 - e / 12, q = dir > 0 ? x0 + e / 12 : x0;
+     if (vu(p, q) <= TS_PHIV * tsVn(D, twAt(p, q), Fyw, e, true, 0, false).Vn + 1e-9) return e; } return 0; };
+   const e0 = B0.endA ? eW(B0.a, 1) : 0, e1 = B0.endB ? eW(B0.b, -1) : 0, endOK = (!B0.endA || e0) && (!B0.endB || e1);
+-  const n0 = nE ? 1 : Math.max(1, Math.ceil(L / (3 * D) - 1e-9) - 1);
+   let last = E;
+-  for (let n = n0; n <= nHi; n++) {
+-    E = ev({ ...B0, n }); if (ok(E)) return E; last = E;
+-    if (nE && endOK && n >= nE) { const B = { ...B0, n }; if (e0) B.e0 = e0; if (e1) B.e1 = e1; const Eb = ev(B); if (ok(Eb)) return Eb; }
++  for (let n = 1; n <= nHi + nE; n++) {
++    E = ev({ ...B0, n }); if (ok(E)) return E; if (geo(E) || !geo(last)) last = E;
++    if (nE && endOK && n >= nE) { const B = { ...B0, n }; if (e0) B.e0 = e0; if (e1) B.e1 = e1; const Eb = ev(B); if (ok(Eb)) return Eb; if (geo(Eb)) last = Eb; }
+   }
+   return { ...last, fail: true };
+ }
+@@ -3611,18 +3611,18 @@
+   {
+     const c = { id: 'D4', grp, title: 'Transverse stiffener spacing for a stiffened web panel', ref: BM ? 'AASHTO LRFD 6.10.9.1, 6.10.9.3.2, 6.10.9.3.3' : 'AASHTO LRFD 6.10.9.1, 6.10.9.3.2', src: 'Code',
+       sym: BM ? T`d_o \le 3D\ \text{(interior panels)}, \qquad d_o \le 1.5D\ \text{(end panels)}` : T`d_o \le 3D`, cols: ['Item', 'd_o (in)', BM ? 'Limit (in)' : '3D (in)', 'Ratio'], items: [],
+-      note: BM ? 'Per-bay stiffeners (Framing tab): each bay with intermediate stiffeners, girders with the same layout together. Interior panels: the widest against 3D. An end panel with its own stiffener: against 1.5D. An end panel of an evenly spaced bay wider than 1.5D is an unstiffened end panel (6.10.9.1), advisory: its shear is checked with k = 5 (Suggest, GirderDetail TS4). Bays without intermediate stiffeners (connection plates only) are not listed.' : 'Panels with stiffener spacing greater than 3D are unstiffened for shear.' };
++      note: BM ? 'Per-bay stiffeners (Framing tab): every bay, girders with the same layout together (engineer\'s rule, 2026-10-13: in a stiffened web every panel is a stiffened panel). Interior panels: the widest against 3D (6.10.9.1). End panels at an abutment or a simple-span bearing: against 1.5D (6.10.9.1, 6.10.9.3.3). Connection plates act as stiffeners.' : 'Panels with stiffener spacing greater than 3D are unstiffened for shear.' };
+     if (!stiff) na(c, 'Transverse stiffeners are turned off; the web is designed as unstiffened (connection plates only).');
+     else if (BM) { const grp2 = {};
+       BG.forEach((l, i) => l.forEach(B => { const key = JSON.stringify([B.a, B.b, B.n, B.e0, B.e1, B.set]); (grp2[key] = grp2[key] || { B, gs: [] }).gs.push(i + 1); }));
+       Object.values(grp2).forEach(({ B, gs }) => { const at = `${tsGLbl(gs)}, Span ${B.k + 1}, bay ${f2(B.a)}–${f2(B.b)} ft`;
+         if (!B.set) c.items.push({ loc: `${at}: no per-bay entry for this bay (the framing changed after the layout was set); the uniform d_o/D = ${f2(num(F.doRatio))} is used`, cells: ['—', '—', '—'], r: null, st: 'warn', work: T`\text{Apply Suggest again or set the count on the Framing tab}` });
+-        if (!B.n) return; const pans = tsPanels(B), inr = pans.filter(q => !q.end);
+-        if (inr.length) { const d = Math.max(...inr.map(q => q.d)); c.items.push({ loc: `${at}, ${B.n} stiffener${B.n > 1 ? 's' : ''}, interior panels`, cells: [f2(d), f2(3 * D), f2(d / (3 * D))], r: d / (3 * D), st: d <= 3 * D + 1e-9 ? 'pass' : 'fail', work: T`d_o = ${f2(d)} \;${d <= 3 * D + 1e-9 ? '\le' : '>'}\; 3D = ${f2(3 * D)}\ \text{in}` }); }
++        const pans = tsPanels(B), inr = pans.filter(q => !q.end);
++        if (inr.length) { const d = Math.max(...inr.map(q => q.d)); c.items.push({ loc: `${at}, ${B.n} stiffener${B.n === 1 ? '' : 's'}, interior panels`, cells: [f2(d), f2(3 * D), f2(d / (3 * D))], r: d / (3 * D), st: d <= 3 * D + 1e-9 ? 'pass' : 'fail', work: T`d_o = ${f2(d)} \;${d <= 3 * D + 1e-9 ? '\\le' : '>'}\; 3D = ${f2(3 * D)}\ \text{in}` }); }
+         pans.filter(q => q.end).forEach(q => { const own = (q.p === B.a ? +B.e0 : +B.e1) > 0, ok = q.d <= 1.5 * D + 1e-9;
+-          c.items.push({ loc: `${at}, end panel at ${f2(q.p === B.a ? B.a : B.b)} ft${own ? ' (own stiffener)' : ''}`, cells: [f2(q.d), f2(1.5 * D), f2(q.d / (1.5 * D))], r: q.d / (1.5 * D), st: ok ? 'pass' : own ? 'fail' : 'adv',
+-            work: T`d_o = ${f2(q.d)} \;${ok ? '\le' : '>'}\; 1.5D = ${f2(1.5 * D)}\ \text{in}${ok ? '' : own ? '' : T`\ \text{(unstiffened end panel, 6.10.9.1: k = 5)}`}` }); }); });
+-      if (c.items.length) add(c); else na(c, 'Per-bay stiffeners: no bay has intermediate stiffeners (connection plates only).'); }
++          c.items.push({ loc: `${at}, end panel at ${f2(q.p === B.a ? B.a : B.b)} ft${own ? ' (own stiffener)' : ''}`, cells: [f2(q.d), f2(1.5 * D), f2(q.d / (1.5 * D))], r: q.d / (1.5 * D), st: ok ? 'pass' : 'fail',
++            work: T`d_o = ${f2(q.d)} \;${ok ? '\\le' : '>'}\; 1.5D = ${f2(1.5 * D)}\ \text{in}` }); }); });
++      if (c.items.length) add(c); else na(c, 'Per-bay stiffeners: no bays.'); }
+     else { c.items.push({ loc: 'Intermediate panels', cells: [f2(doIn), f2(3 * D), f2(doIn / (3 * D))], r: doIn / (3 * D), st: doIn <= 3 * D + 1e-9 ? 'pass' : 'fail', work: T`d_o = ${f2(F.doRatio)}(${f2(D)}) = ${f2(doIn)} \;\le\; 3D = ${f2(3 * D)}\ \text{in}` }); add(c); }
+   }
+   {
+````
+
+### TB2. Preliminary sizing D3: stiffener moment of inertia with tension-field action (Eqs. 6.10.11.1.3-7 / -8), per-bay stiffeners   [§4: check added] [results: D3 of per-bay projects; uniform mode unchanged]
+- **Where (decoded PL):** `framingChecks` signature (new optional `AN0`), D3 block (anchor `const c = { id: 'D3', grp, title: 'Stiffener and connection plate moment of inertia'`), `recompute` (the analysis now runs before `framingChecks`, which gets `AN`; the order of the checks in `C` is unchanged), Manual Part 3 (D3/D4 sentence).
+- **Before:** D3 required I<sub>t</sub> ≥ I<sub>t1</sub> = b t<sub>w</sub>³ J (Eq. 6.10.11.1.3-1) only; per-bay mode used the narrowest panel of each field piece; its note said the tension-field requirement is not checked (GirderDetail TS3 checks it).
+- **After (per-bay mode only; uniform mode unchanged):** every intermediate stiffener and connection plate (bearing stiffeners excluded: D5/D6) of every girder with its two adjacent panels: d<sub>o</sub> = the smaller panel, b = min(d<sub>o</sub>, D), J = max(2.5/(d<sub>o</sub>/D)² − 2, 0.5), I<sub>t1</sub> = b t<sub>w</sub>³ J; F<sub>crs</sub> = min(0.31E/(b<sub>t</sub>/t<sub>p</sub>)², F<sub>ys</sub>) (Eq. -6), ρ<sub>t</sub> = max(F<sub>yw</sub>/F<sub>crs</sub>, 1.0), I<sub>t2</sub> = D⁴ρ<sub>t</sub><sup>1.3</sup>/40 (F<sub>yw</sub>/E)<sup>1.5</sup> (Eq. -4). A panel relies on tension-field action when it is an interior stiffened panel, Suggest's tension-field setting is on, and V<sub>u</sub> > φ<sub>v</sub>V<sub>cr</sub>, V<sub>cr</sub> = CV<sub>p</sub> (Eq. -9) with k of the panel, V<sub>u</sub> the largest Strength I shear in the panel (Analysis tab, envelope of the girder types); ρ<sub>w</sub> = (V<sub>u</sub> − φ<sub>v</sub>V<sub>cr</sub>)/(φ<sub>v</sub>V<sub>n</sub> − φ<sub>v</sub>V<sub>cr</sub>) ≤ 1, the larger of the two panels. ρ<sub>w</sub> > 0: I<sub>req</sub> = I<sub>t1</sub> + (I<sub>t2</sub> − I<sub>t1</sub>)ρ<sub>w</sub> if I<sub>t2</sub> > I<sub>t1</sub> (Eq. -7), else I<sub>t2</sub> (Eq. -8); otherwise I<sub>t1</sub> (Eq. -1, as before). The governing plate of each field piece and plate type is listed. Same equations as GirderDetail TS3.
+- **Governing provision:** AASHTO LRFD 10th Ed. (2024) Art. 6.10.11.1.3, Eqs. 6.10.11.1.3-1, -3 to -10 (read from the 10th Ed. text: ρ<sub>w</sub> "maximum ratio … within the two web panels" when both rely on the tension field, else the one panel; V<sub>u</sub> = the maximum shear in the web panel under consideration).
+- **Check case (built-in per-bay layout after Apply, D = 63 in, t<sub>w</sub> = 1/2 in, F<sub>yw</sub> = F<sub>ys</sub> = 50 ksi, stiffener 6 × 1/2 in):** G1 stiffener at 121.67 ft (field piece 2), panels 110–121.67 and 121.67–133.33 ft, both 140 in: J = max(2.5/2.222² − 2, 0.5) = 0.5, I<sub>t1</sub> = 63(0.5)³(0.5) = 3.94 in⁴; F<sub>crs</sub> = min(0.31·29,000/12², 50) = 50 ksi, ρ<sub>t</sub> = 1.0, I<sub>t2</sub> = 63⁴/40 × (50/29,000)<sup>1.5</sup> = 28.19 in⁴; panel 110–121.67: k = 6.0125, C = 0.3449, φV<sub>cr</sub> = 315.0 kip, φV<sub>n</sub> = 913.5(0.3449 + 0.2339) = 528.7 kip, V<sub>u</sub> = 396.8 kip → ρ<sub>w</sub> = (396.8 − 315.0)/(528.7 − 315.0) = 0.382; I<sub>req</sub> = 3.94 + (28.19 − 3.94)(0.382) = 13.22 in⁴ (Eq. -7) ≤ I<sub>t</sub> = 0.5(6)³/3 = 36.00 in⁴, ratio 0.367. Before: 3.94/36.00 = 0.110. D3 status pass before and after (largest 0.109 → 0.367); tension field off: 0.109 (ρ<sub>w</sub> = 0).
+- **Suggest:** stiffener plate sizes come from the Framing tab (Suggest does not size them), so the stiffener cost per plate is unchanged; D3 now reports when the plate is too small for the tension field Suggest relied on (GirderDetail's auto-design sizes plates with TS3).
+- **Open item:** for panels not relying on the tension field the 10th Ed. text requires I<sub>t</sub> ≥ the smaller of I<sub>t1</sub> and I<sub>t2</sub> (Eqs. -1, -2); D3 and GirderDetail TS3 both require I<sub>t1</sub> (conservative when I<sub>t2</sub> < I<sub>t1</sub>). Not changed (ENGINEER_CHECKS GD33).
+- **How verified:** see TB3.
+
+  Decoded PL page:
+
+````diff
+--- before
++++ after
+@@ -2756,7 +2756,7 @@
+ <h3>Detailing checks</h3>
+ <p>Transverse stiffeners and connection plates (which act as stiffeners) must satisfy 6.10.11.1.2 and 6.10.11.1.3:</p>
+ <div class="eq-math">\\[b_t \\ge 2.0 + \\frac{D}{30}, \\qquad 16t_p \\ge b_t \\ge \\frac{b_f}{4}, \\qquad I_t = \\frac{t_p b_t^3}{3} \\ge b\\,t_w^3 J, \\quad J = \\frac{2.5}{(d_o/D)^2} - 2.0 \\ge 0.5\\]</div>
+-<p>b<sub>f</sub> is the widest flange in the field piece (conservatively either flange), t<sub>w</sub> the thickest web in the piece, and b the smaller of d<sub>o</sub> and D. Connection plates use d<sub>o</sub> equal to the stiffener spacing if stiffeners are present, otherwise the cross-frame spacing. With per-bay stiffeners, D3 uses the narrowest panel in each field piece and D4 lists every bay with intermediate stiffeners (interior panels against 3D; an end panel with its own stiffener against 1.5D; a wider end panel of an evenly spaced bay is an unstiffened end panel, advisory). Bearing stiffeners satisfy b<sub>t</sub> ≤ 0.48t<sub>p</sub>√(E/F<sub>ys</sub>) (6.10.11.2.2) and must fit within the bottom flange (practice).</p>
++<p>b<sub>f</sub> is the widest flange in the field piece (conservatively either flange), t<sub>w</sub> the thickest web in the piece, and b the smaller of d<sub>o</sub> and D. Connection plates use d<sub>o</sub> equal to the stiffener spacing if stiffeners are present, otherwise the cross-frame spacing. With per-bay stiffeners, D3 checks every intermediate stiffener and connection plate with its two adjacent panels, adding Eq. 6.10.11.1.3-7 or -8 where a panel relies on tension-field action (ρ<sub>w</sub> from the largest V<sub>u</sub> in each panel), and D4 lists every bay (interior panels against 3D, end panels against 1.5D). Bearing stiffeners satisfy b<sub>t</sub> ≤ 0.48t<sub>p</sub>√(E/F<sub>ys</sub>) (6.10.11.2.2) and must fit within the bottom flange (practice).</p>
+ <h3>Camber and deflection</h3>
+ <p>Moments come from the constant-EI influence lines described in the Suggest methodology. Deflections are then computed by virtual work with the actual stiffness at each point:</p>
+ <div class="eq-math">\\[\\Delta(x) = \\int \\frac{M(s)\\,m_x(s)}{E\\,I(s)}\\,ds\\]</div>
+@@ -3498,7 +3498,7 @@
+ // girder list label: G1–G5 when consecutive, else G1, G3
+ function tsGLbl(gs) { const a = [...gs].sort((p, q) => p - q); return a.length > 1 && a[a.length - 1] - a[0] === a.length - 1 ? `G${a[0]}–G${a[a.length - 1]}` : a.map(g => `G${g}`).join(', '); }
+ 
+-function framingChecks(m, FR, P) {
++function framingChecks(m, FR, P, AN0) {   // AN0 (optional): the Analysis tab result, for the shears of D3's tension-field requirement (per-bay stiffeners)
+   const F = P.framing, L = P.limits, out = [], D = m.D;
+   const add = c => { c.status = c.items.length ? worst(c.items.map(i => i.st)) : 'na'; let gi = -1; c.items.forEach((it, k) => { if (gi < 0 || RANK[it.st] > RANK[c.items[gi].st] || (RANK[it.st] === RANK[c.items[gi].st] && (it.r ?? -1) > (c.items[gi].r ?? -1))) gi = k; }); c.gov = gi; out.push(c); };
+   const na = (c, why) => { c.items = []; c.naWhy = why; add(c); };
+@@ -3597,11 +3597,24 @@
+     add(c);
+   }
+   {
+-    const c = { id: 'D3', grp, title: 'Stiffener and connection plate moment of inertia', ref: 'AASHTO LRFD 6.10.11.1.3, Eq. 6.10.11.1.3-1', src: 'Code',
+-      sym: T`I_t \ge b\,t_w^3\,J, \quad J = \frac{2.5}{(d_o/D)^2} - 2.0 \ge 0.5, \quad I_t = \frac{t_p\,b_t^3}{3}`, cols: ['Plate, piece', 'd_o (in)', 'I_t (in⁴)', 'Required (in⁴)', 'Ratio'], items: [],
++    const c = { id: 'D3', grp, title: 'Stiffener and connection plate moment of inertia', ref: BM ? 'AASHTO LRFD 6.10.11.1.3, Eqs. 6.10.11.1.3-1, -7, -8' : 'AASHTO LRFD 6.10.11.1.3, Eq. 6.10.11.1.3-1', src: 'Code',
++      sym: BM ? T`I_t \ge I_{t1} = b\,t_w^3J\ \text{(no tension field)}; \quad I_t \ge I_{t1} + (I_{t2} - I_{t1})\rho_w\ \text{if}\ I_{t2} > I_{t1},\ \text{else}\ I_{t2}; \quad I_{t2} = \frac{D^4\rho_t^{1.3}}{40}\left(\frac{F_{yw}}{E}\right)^{1.5}` : T`I_t \ge b\,t_w^3\,J, \quad J = \frac{2.5}{(d_o/D)^2} - 2.0 \ge 0.5, \quad I_t = \frac{t_p\,b_t^3}{3}`, cols: ['Plate, piece', 'd_o (in)', 'I_t (in⁴)', 'Required (in⁴)', 'Ratio'], items: [],
+       note: !BM ? 'Single-sided plates, inertia taken about the face of the web in contact with the plate. b is the smaller of d_o and D. The tension-field requirement (Eq. 6.10.11.1.3-2) is not checked because the web sizing in this app does not use tension-field action.'
+-        : `Single-sided plates, inertia taken about the face of the web in contact with the plate. b is the smaller of d_o and D; per-bay stiffeners: d_o is the narrowest panel in the field piece. The tension-field requirement (Eq. 6.10.11.1.3-2) is not checked here${P.suggest && P.suggest.tfa !== 'off' ? ': Suggest uses tension-field action in interior panels, so check the stiffeners with GirderDetail\'s Transverse stiffeners module (TS3 includes Eq. 6.10.11.1.3-2)' : ' (Suggest\'s tension-field setting is off); GirderDetail\'s Transverse stiffeners module TS3 checks it'}.` };
+-    plates.forEach(([n, b, t, dd0]) => pieceInfo.forEach(({ p, tw }) => { const dd = BM ? ddPiece(p) : dd0;
++        : `Per-bay stiffeners (TB2, 2026-10-13): every intermediate stiffener and connection plate (not the bearing stiffeners, D5/D6) with its two adjacent panels, d_o the smaller of them, b the smaller of d_o and D, t_w the web at the plate; single-sided plates, I_t about the face in contact with the web. Where a panel relies on tension-field action (V_u > φ_vV_cr, V_cr = CV_p, interior stiffened panel, Suggest's tension-field setting ${P.suggest && P.suggest.tfa === 'off' ? 'off: not relied on' : 'on'}), Eq. 6.10.11.1.3-7 (I_t2 > I_t1) or -8 applies with ρ_w = (V_u − φ_vV_cr)/(φ_vV_n − φ_vV_cr), the larger of the two panels, V_u the largest Strength I shear in each panel from the Analysis tab (envelope of the girder types); otherwise Eq. 6.10.11.1.3-1. F_crs = 0.31E/(b_t/t_p)² ≤ F_ys (Eq. 6.10.11.1.3-6), ρ_t = max(F_yw/F_crs, 1.0). The governing plate of each field piece is listed.${AN0 && !AN0.errors ? '' : ' No analysis result: tension-field requirement not checked here.'}` };
++    if (BM) { const tfa = !(P.suggest && P.suggest.tfa === 'off'), vu = AN0 && !AN0.errors && AN0.R && AN0.xs ? tsVu(AN0.xs, AN0.R.types) : null, fns = tsSecFns(m), Fyw = m.FyW, best = {};
++      BG.forEach((l, gi) => { const pans = l.flatMap(tsPanels), br = FR.girders[gi].bear;
++        for (let j = 0; j < pans.length - 1; j++) { const Lp = pans[j], Rp = pans[j + 1], x = Lp.q; if (Math.abs(Rp.p - x) > 0.01 || br.some(v => Math.abs(v - x) < 0.05)) continue;
++          const nm = Lp.sq ? 'Transverse stiffener' : 'Connection plate', bt = Lp.sq ? F.stB : F.cpB, tp = Lp.sq ? F.stT : F.cpT;
++          const p = m.pieces.find(q => x >= q.x0 - 1e-9 && x < q.x1 - 1e-9) || m.pieces[m.pieces.length - 1], tw = m.at(m.web, x).t, dmin = Math.min(Lp.d, Rp.d), bb = Math.min(dmin, D), J = Math.max(2.5 / (dmin / D) ** 2 - 2, 0.5), It1 = bb * tw ** 3 * J;
++          const Fcrs = Math.min(0.31 * ES / (bt / tp) ** 2, Fys), rt = Math.max(Fyw / Fcrs, 1), It2 = D ** 4 * rt ** 1.3 / 40 * (Fyw / ES) ** 1.5;
++          const rho = q => { if (!vu || !tfa || q.end || !(q.d <= 3 * D + 1e-9)) return 0; const V = tsVn(D, fns.twAt(q.p, q.q), Fyw, q.d, false, fns.rat(q.p, q.q), true), Vcr = TS_PHIV * V.C * V.Vp, Vn = TS_PHIV * V.Vn, Vu = vu(q.p, q.q);
++            return Vu > Vcr + 1e-9 ? Math.min(1, (Vu - Vcr) / Math.max(Vn - Vcr, 1e-9)) : 0; };
++          const rw = Math.max(rho(Lp), rho(Rp)), req = rw > 0 ? (It2 > It1 ? It1 + (It2 - It1) * rw : It2) : It1, eq = rw > 0 ? (It2 > It1 ? '6.10.11.1.3-7' : '6.10.11.1.3-8') : '6.10.11.1.3-1', It = tp * bt ** 3 / 3, r = req / It, k = nm + '|' + p.i;
++          if (!best[k] || r > best[k].r) best[k] = { nm, p, x, gi, dmin, bb, J, tw, It1, It2, Fcrs, rt, rw, req, eq, It, r, bt, tp }; } });
++      Object.values(best).sort((a, b) => (a.nm === 'Transverse stiffener' ? 0 : 1) - (b.nm === 'Transverse stiffener' ? 0 : 1) || a.p.i - b.p.i).forEach(o => c.items.push({ loc: `${o.nm}, piece ${o.p.i + 1} (G${o.gi + 1} at ${f2(o.x)} ft)`, cells: [f2(o.dmin), f2(o.It), f2(o.req), f2(o.r)], r: o.r, st: o.It >= o.req - 1e-9 ? 'pass' : 'fail',
++        work: T`\begin{aligned}J &= \max\left(\frac{2.5}{(${f2(o.dmin)}/${f2(D)})^2} - 2.0,\ 0.5\right) = ${f3(o.J)}, \quad I_{t1} = (${f2(o.bb)})(${f3(o.tw)})^3(${f3(o.J)}) = ${f2(o.It1)}\ \text{in}^4 \\ F_{crs} &= \min\left(\frac{0.31(29{,}000)}{(${f2(o.bt)}/${f3(o.tp)})^2},\ ${f2(Fys)}\right) = ${f2(o.Fcrs)}\ \text{ksi}, \quad \rho_t = ${f3(o.rt)}, \quad I_{t2} = \frac{${f2(D)}^4(${f3(o.rt)})^{1.3}}{40}\left(\frac{${f2(Fyw)}}{29{,}000}\right)^{1.5} = ${f2(o.It2)}\ \text{in}^4 \\ \rho_w &= ${f3(o.rw)}, \quad I_{req} = ${f2(o.req)}\ \text{in}^4\ (\text{Eq. ${o.eq}}) \;${o.It >= o.req - 1e-9 ? '\\le' : '>'}\; I_t = \frac{(${f3(o.tp)})(${f2(o.bt)})^3}{3} = ${f2(o.It)}\ \text{in}^4\end{aligned}` }));
++    } else
++    plates.forEach(([n, b, t, dd0]) => pieceInfo.forEach(({ p, tw }) => { const dd = dd0;
+       const J = Math.max(2.5 / (dd / D) ** 2 - 2, 0.5), bb = Math.min(dd, D), req = bb * tw ** 3 * J, It = t * b ** 3 / 3, r = req / It;
+       c.items.push({ loc: `${n}, piece ${p.i + 1}`, cells: [f2(dd), f2(It), f2(req), f2(r)], r, st: It >= req - 1e-9 ? 'pass' : 'fail',
+         work: T`J = \max\left(\frac{2.5}{(${f2(dd)}/${f2(D)})^2} - 2.0,\ 0.5\right) = ${f3(J)}, \quad I_t = \frac{(${f3(t)})(${f2(b)})^3}{3} = ${f2(It)} \;${It >= req - 1e-9 ? '\\ge' : '<'}\; (${f2(bb)})(${f3(tw)})^3(${f3(J)}) = ${f2(req)}\ \text{in}^4` });
+@@ -4847,8 +4860,9 @@
+   M = buildModel(P);
+   if (M.errors.length) { C = null; FR = null; AN = null; renderErrors(); renderFrBays(); maybeSuggest(); maybeAlts(); return; }
+   C = runChecks(M);
+-  FR = framingLayout(P, M); C.push(...framingChecks(M, FR, P));
++  FR = framingLayout(P, M);
+   try { AN = analyzeGirder(P, M); } catch (e) { AN = { errors: ['Analysis failed: ' + e.message] }; console.error(e); }
++  C.push(...framingChecks(M, FR, P, AN));   // after the analysis: D3 (per-bay stiffeners) uses its shears (TB2, 2026-10-13); the checks' order in C is unchanged
+   C.push(...analysisChecks(M, AN, P));
+   C.sort((a, b) => GROUPS.indexOf(a.grp) - GROUPS.indexOf(b.grp));
+   M.st = sectionStatus(M, C);
+````
+
+### TB3. Web shear and stiffener checks with the largest V<sub>u</sub> in each panel (6.10.9.3.1): Transverse stiffeners TS4/TS3, Girder section GS11, Preliminary sizing rows   [§4: demand definition] [results: TS4, TS3 ρ<sub>w</sub>, GS11 of every project once its rows are re-sent; old rows unchanged until then]
+- **Where:** decoded PL `detailExport`: new `shearP`, `uniOf`, `gsPan`, `gsDo` (reworked), TS rows (anchor `[[x0 + doFt, k, 1], [x1 - doFt, k + 1, -1]].forEach`) and cross-frame row, gs rows (`gsRow`, `gP`). GirderDetail page: `TS_ROWSPEC` / `TS_BRG` / new `TS_PN2`, TS `compute` (anchor `r.VuB = `), TS3 and TS4 notes and TS4 work line, Manual "Web shear (6.10.9)"; `GS_SPEC` / new `GS_PAN`, GS `compute` (anchor `r.Vu = G.dc * (r.VDC1 + r.VDC2)`), GS11.
+- **Before:** TS4 checked both panels at a stiffener with V<sub>u</sub> at the stiffener, except an end panel (largest V<sub>u</sub> in it, from the optional end-panel shears `VDC1b…VLLb`, sent for end rows only); TS3's ρ<sub>w</sub> used V<sub>u</sub> at the stiffener for both panels; GS11 used V<sub>u</sub> at the location.
+  ```js
+  r.VuB = r.end === 'yes' && r.VDC1b != null ? g('dc') * (r.VDC1b + r.VDC2b) + g('dw') * r.VDWb + g('ll') * r.VLLb : null;
+  r.Vu1 = r.VuB != null ? Math.max(r.VuB, r.Vu) : r.Vu;
+  ... q.Vu = i ? r.Vu : r.Vu1; ... q.rho = tfa && r.Vu > PHI.v * q.Vcr ? Math.min(1, (r.Vu - PHI.v * q.Vcr) / ...
+  ```
+- **After:** every TS row carries the largest shears in panel 1 (`VDC1b…VLLb`, now for every row) and in panel 2 (new optional `VDC1c…VLLc`); TS4 and TS3's ρ<sub>w</sub> use V<sub>u</sub> = max(the panel's largest, the shear at the stiffener) for each panel; a panel with blank shears (rows saved before, or typed) uses the shear at the stiffener and the item says so. Every gs row carries the largest shears in the web panel containing x (new optional `VDC1p…VLLp`): per-bay mode the panel of that girder's layout (at a boundary, the panel with the larger V<sub>u</sub>/V<sub>n</sub>), uniform mode the panel as the drawings place the stiffeners (at a boundary, the larger shear); GS11 uses V<sub>u</sub> = max(at the location, largest in the panel). Panel geometry for TS rows: per bay, the actual panels; uniform, the support or cross-frame and d<sub>o</sub> on each side.
+  ```js
+  r.VuB = r.VDC1b != null ? g('dc') * (r.VDC1b + r.VDC2b) + g('dw') * r.VDWb + g('ll') * r.VLLb : null;
+  r.VuC = r.VDC1c != null ? g('dc') * (r.VDC1c + r.VDC2c) + g('dw') * r.VDWc + g('ll') * r.VLLc : null;
+  r.Vu1 = r.VuB != null ? Math.max(r.VuB, r.Vu) : r.Vu; r.Vu2 = r.VuC != null ? Math.max(r.VuC, r.Vu) : r.Vu;
+  ... q.Vu = i ? r.Vu2 : r.Vu1; q.pan = (i ? r.VuC : r.VuB) != null; ... q.rho = tfa && q.Vu > PHI.v * q.Vcr ? Math.min(1, (q.Vu - PHI.v * q.Vcr) / ...
+  r.VuP = r.VDC1p != null ? Math.max(r.Vu, G.dc * (r.VDC1p + r.VDC2p) + G.dw * r.VDWp + G.ll * r.VLLp) : null;   // GS11
+  ```
+- **Saved data (§5):** new optional row fields only (`VDC1c…VLLc` on TS rows; `VDC1p…VLLp` on GS rows); the meaning of `VDC1b…VLLb` widens from "end panel 1" to "panel 1" (old rows had them only on end rows, with that meaning). Old rows without the fields compute as before; Preliminary sizing re-sends rows when it recomputes (Design all, Get demands, its automatic hand-off), and those carry the new fields.
+- **Governing provisions:** AASHTO LRFD 10th Ed. 6.10.9.3.1 ("The required transverse stiffener spacing shall be calculated using the maximum shear in a panel"); 6.10.11.1.3 (V<sub>u</sub> = maximum shear due to the factored loads in the web panel under consideration, for ρ<sub>w</sub>); 6.10.9.1 (Eq. 6.10.9.1-1).
+- **Check cases:**
+  - TS4, built-in example as shipped (D = 60 in, t<sub>w</sub> = 9/16 in, uniform d<sub>o</sub> = 60 in), "Span 1, first stiffener from Pier 1, interior", panel 1 (105–110 ft): before V<sub>u</sub> at the stiffener = 1.25(90.2 + 16.5) + 1.5(13.7) + 1.75(126.9) = 376.0 kip; after V<sub>u</sub> = 1.25(96.0 + 17.5) + 1.5(14.5) + 1.75(131.5) = 393.75 kip (largest in the panel, at the pier). φV<sub>n</sub>: k = 10, D/t<sub>w</sub> = 106.7, C = 0.800, V<sub>p</sub> = 978.75 kip, 2Dt<sub>w</sub>/(18·1.5 + 18·2) = 1.071 → Eq. 6.10.9.3.2-2: 903.55 kip. Ratio 0.416 → 0.436. Largest TS4: 0.43 → 0.44 (14 of 36 items change, all up).
+  - GS11, built-in, "Span 1, max. positive at 43.0 ft, interior": before V<sub>u</sub> = 1.25(6.2 + 1.0) + 1.5(0.8) + 1.75(51.3) = 99.97 kip; after the panel's largest LL shear 56.4 kip: V<sub>u</sub> = 108.90 kip; φV<sub>n</sub> = 903.55 kip; ratio 0.111 → 0.121. Largest GS11 unchanged at 0.44 (14 of 18 items change, all up).
+  - xsA: TS4 largest 0.49 → 0.51 (e.g. "Span 2, first stiffener from Pier 1", panel 1: 442.02 → 457.77 kip); GS11 largest 0.51 → 0.51 (14 of 18 up). Built-in with main's applied quick suggestion (D 69 uniform): TS4 0.60 → 0.60 (16 of 36 items up), GS11 0.50 → 0.50 (18 of 26 up). TS3 unchanged in all (no panel needs the tension field there). Per-bay built-in (TB1): TS3 0.846, TS4 0.752, TS5 0.995, GS11 0.75.
+- **How verified (full, the PR's final state):** `node --check` on both pages. Headless Chromium: (1) built-in, xsA, curb: every module identical to main except TS and GS (re-sent rows with panel shears; item-level changes listed above, all ratios equal or higher); (2) quick suggestion: unstiffened identical to main, "Optimize" off identical except DT1's D = 79 in candidate; per bay, tension field on/off: pass; Full design on/off: pass (D 69, 80 / 110 stiffeners); (3) per-bay project: Apply, Framing table, count edit, D3/D4, Design all (TS3/TS4/TS5 pass), Get demands vs Any location identical for G1, G2, G5 except the deck-casting MDC<sub>c</sub> differences that main shows identically on the same seed (pre-existing); DXF/3D positions; skew 35° staggered (TS5 0.998, D4 pass); save/load both ways (per-bay file in main: loads, uniform used, fields kept). No console errors. Screenshots: followups/stiffbays2/.
+
+  Decoded PL page:
+
+````diff
+--- before
++++ after
+@@ -3907,10 +3907,21 @@
+   // or the girder of a Structural analysis run) at that girder's own stations: TS rows at its first stiffener (or connection plate) from each support and at the
+   // cross-frame, with the actual adjacent panel widths; gs rows with the panel at x. Uniform mode (and stiffeners off): as before
+   const BM = stiff && tsBaysOn(P), panG = {}, pansOf = gt => { if (!BM) return null; const gi = gOf(gt)[0]; return panG[gi] || (panG[gi] = tsGirderBays(P, m, FR, gi).flatMap(tsPanels)); };
+-  const gsDo = (gt, x, s) => { const PG = pansOf(gt); if (!PG || !PG.length) return { do: stiff ? r2(doIn) : 0, end: 'no' };
+-    const c = PG.filter(q => x >= q.p - 0.05 && x <= q.q + 0.05), rat = 2 * s.D * s.tw / (s.topB * s.topT + s.botB * s.botT), vn = q => tsVn(s.D, s.tw, m.FyW, q.d, q.end, rat, true).Vn;
+-    const w = (c.length ? c : [PG.reduce((a, q) => Math.abs((q.p + q.q) / 2 - x) < Math.abs((a.p + a.q) / 2 - x) ? q : a)]).reduce((a, q) => vn(q) < vn(a) ? q : a);   // at a panel boundary: the panel with the smaller V_n
+-    return { do: r2(w.d), end: w.end ? 'yes' : 'no' }; };
++  // panel shears (TB3, 2026-10-13; 6.10.9.3.1 and the V_u of 6.10.11.1.3: the maximum shear in the panel): the largest DC1, DC2, DW and LL+IM shears between a and b, keys with suffix sfx
++  // (TS rows: b = panel 1, c = panel 2; gs rows: p = the panel at x)
++  const shearP = (T, a, b, sfx) => { const o = shearIn(T, Math.max(0, Math.min(a, b)), Math.min(m.Ltot, Math.max(a, b))); return { [`VDC1${sfx}`]: o.VDC1b, [`VDC2${sfx}`]: o.VDC2b, [`VDW${sfx}`]: o.VDWb, [`VLL${sfx}`]: o.VLLb }; };
++  // uniform spacing: the panels of girder gi as the drawings place them (a stiffener at d_o from each bearing and cross-frame, the last panel of a bay up to 1.5 d_o); no stiffeners: between cross-frames
++  const uniG = {}, uniOf = gt => { const gi = gOf(gt)[0]; if (uniG[gi]) return uniG[gi]; const g = FR.girders[gi], out = []; if (!g) return (uniG[gi] = out);
++    const pts = [...new Set([...g.bear, ...g.pts.filter(q => q.f.type === 'int').map(q => q.s)].map(v => +v.toFixed(3)))].sort((a, b) => a - b), dO = doIn / 12;
++    for (let i = 0; i < pts.length - 1; i++) { const xx = [pts[i]]; if (stiff) for (let x = pts[i] + dO; x < pts[i + 1] - dO * 0.5; x += dO) xx.push(x); xx.push(pts[i + 1]); for (let j = 0; j < xx.length - 1; j++) out.push({ p: xx[j], q: xx[j + 1], d: (xx[j + 1] - xx[j]) * 12, end: false }); }
++    return (uniG[gi] = out); };
++  // the panel of a gs row at x: per-bay, of two panels at a boundary the one with the larger V_u/V_n (with 1.25/1.50/1.75 for ranking); uniform, the one with the larger shear
++  const gsPan = (gt, T, x, s) => { const PG = pansOf(gt) || uniOf(gt); if (!PG || !PG.length) return null;
++    const c = PG.filter(q => x >= q.p - 0.05 && x <= q.q + 0.05), L = c.length ? c : [PG.reduce((a, q) => Math.abs((q.p + q.q) / 2 - x) < Math.abs((a.p + a.q) / 2 - x) ? q : a)];
++    const vu = q => { const o = shearIn(T, Math.max(0, q.p), Math.min(m.Ltot, q.q)); return 1.25 * (o.VDC1b + o.VDC2b) + 1.5 * o.VDWb + 1.75 * o.VLLb; }, rat = 2 * s.D * s.tw / (s.topB * s.topT + s.botB * s.botT);
++    const sc = q => BM ? vu(q) / tsVn(s.D, s.tw, m.FyW, q.d, q.end, rat, true).Vn : vu(q);
++    return L.reduce((a, q) => sc(q) > sc(a) ? q : a); };
++  const gsDo = (gt, x, s, w) => { if (!BM || !w) return { do: stiff ? r2(doIn) : 0, end: 'no' }; return { do: r2(w.d), end: w.end ? 'yes' : 'no' }; };
+   const pieceOf = x => m.pieces.find(p => x >= p.x0 - 1e-9 && x < p.x1 - 1e-9) || m.pieces[m.pieces.length - 1];
+   const bfw = x => { const p = pieceOf(x); return Math.max(...[...m.top, ...m.bot].filter(q => q.x1 > p.x0 + 1e-9 && q.x0 < p.x1 - 1e-9).map(q => q.b)); };
+   // Δf at the connection plate (M1, 2026-10-13): inner face of the bottom flange, the weld toe of Table 6.6.1.2.3-1 detail 4.1, short-term composite for both signs, as this tool's own Category C′ check (was the flange mid-thickness, c.yb - s.botT / 2)
+@@ -3934,14 +3945,15 @@
+       // end panel: next to an abutment, or next to any support of a simple span (each span is a girder with two ends; Q5)
+       const PG = pansOf(gt), gB = PG ? FR.girders[gOf(gt)[0]].bear : null;
+       [[x0 + doFt, k, 1], [x1 - doFt, k + 1, -1]].forEach(([x, ks, dir]) => { let end = ks === 0 || ks === nS - 1 || !m.cont, d1 = doIn, d2 = doIn, typ = stiff ? 'A' : 'B', xb = m.sup[ks];
+-        if (PG) { const sb = gB[ks], j = PG.findIndex(q => Math.abs((dir > 0 ? q.p : q.q) - sb) < 0.05); if (j >= 0) { const q1 = PG[j], q2 = PG[j + dir]; x = dir > 0 ? q1.q : q1.p; d1 = q1.d; d2 = q2 ? q2.d : q1.d; typ = (dir > 0 ? q1.sq : q1.sp) ? 'A' : 'B'; end = q1.end; xb = sb; } }
+-        const s = sec(x);
+-        ts.rows.push({ name: `Span ${k + 1}, first ${typ === 'A' ? 'stiffener' : 'connection plate'} from ${supN(ks)}, ${TT(gt)}`, type: typ, D: s.D, tw: s.tw, bfc: s.topB, tfc: s.topT, bft: s.botB, tft: s.botT, bfw: bfw(x), end: end ? 'yes' : 'no', do1: r2(d1), do2: r2(d2), ...shear(T, x), df: 0, ...(end ? shearIn(T, Math.min(x, xb), Math.max(x, xb)) : {}) }); });
++        let p2 = null; if (PG) { const sb = gB[ks], j = PG.findIndex(q => Math.abs((dir > 0 ? q.p : q.q) - sb) < 0.05); if (j >= 0) { const q1 = PG[j], q2 = PG[j + dir]; x = dir > 0 ? q1.q : q1.p; d1 = q1.d; d2 = q2 ? q2.d : q1.d; typ = (dir > 0 ? q1.sq : q1.sp) ? 'A' : 'B'; end = q1.end; xb = sb; if (q2) p2 = [q2.p, q2.q]; } }
++        const s = sec(x); if (!p2) p2 = [x, x + dir * d2 / 12];
++        ts.rows.push({ name: `Span ${k + 1}, first ${typ === 'A' ? 'stiffener' : 'connection plate'} from ${supN(ks)}, ${TT(gt)}`, type: typ, D: s.D, tw: s.tw, bfc: s.topB, tfc: s.topT, bft: s.botB, tft: s.botT, bfw: bfw(x), end: end ? 'yes' : 'no', do1: r2(d1), do2: r2(d2), ...shear(T, x), df: 0, ...shearIn(T, Math.min(x, xb), Math.max(x, xb)), ...shearP(T, p2[0], p2[1], 'c') }); });   // panel 1 (to the support) and panel 2 shears for every row (TB3; were: panel 1 for end panels only)
+       let best = -1, bx = (x0 + x1) / 2; xs.forEach((x, i) => { if (x > x0 && x < x1) { const rg = T.MfP[i] - T.MfN[i]; if (rg > best) { best = rg; bx = x; } } });
+       // the connection plate the Fatigue row checks (C20, 2026-10-13): the cross-frame with the largest fatigue moment range (was the cross-frame nearest the node of largest range, bx); bx only when the span has no cross-frame
+       const cxF = cpAt(T, x0, x1, gt), cx = cxF != null ? cxF : bx, s = sec(cx);
+-      let c1 = doIn, c2 = doIn; if (PG && PG.length) { const L0 = PG.find(q => Math.abs(q.q - cx) < 0.05), R0 = PG.find(q => Math.abs(q.p - cx) < 0.05), I0 = PG.find(q => cx > q.p && cx < q.q) || PG[0]; c1 = (L0 || R0 || I0).d; c2 = (R0 || L0 || I0).d; }
+-      ts.rows.push({ name: `Span ${k + 1}, cross-frame at ${cx.toFixed(1)} ft, ${TT(gt)}`, type: 'B', D: s.D, tw: s.tw, bfc: s.topB, tfc: s.topT, bft: s.botB, tft: s.botT, bfw: bfw(cx), end: 'no', do1: r2(c1), do2: r2(c2), ...shear(T, cx), df: fatBot(T, cx, gt) }); }); });
++      let c1 = doIn, c2 = doIn, P1 = null, P2 = null; if (PG && PG.length) { const L0 = PG.find(q => Math.abs(q.q - cx) < 0.05), R0 = PG.find(q => Math.abs(q.p - cx) < 0.05), I0 = PG.find(q => cx > q.p && cx < q.q) || PG[0]; c1 = (L0 || R0 || I0).d; c2 = (R0 || L0 || I0).d; P1 = L0 || I0; P2 = R0 || I0; }
++      const pa = P1 ? [P1.p, P1.q] : [cx - c1 / 12, cx], pb = P2 ? [P2.p, P2.q] : [cx, cx + c2 / 12];
++      ts.rows.push({ name: `Span ${k + 1}, cross-frame at ${cx.toFixed(1)} ft, ${TT(gt)}`, type: 'B', D: s.D, tw: s.tw, bfc: s.topB, tfc: s.topT, bft: s.botB, tft: s.botT, bfw: bfw(cx), end: 'no', do1: r2(c1), do2: r2(c2), ...shear(T, cx), df: fatBot(T, cx, gt), ...shearIn(T, pa[0], pa[1]), ...shearP(T, pb[0], pb[1], 'c') }); }); });
+   // --- shear connectors (interior girder, or exterior if it governs the fatigue shear)
+   const gtS = types.reduce((a, gt) => Math.max(...AN.R.types[gt].Vfr) > Math.max(...AN.R.types[a].Vfr) ? gt : a, types[0]), TS = AN.R.types[gtS], d = 0.875, Zr = 5.5 * d * d;
+   const sc = { zones: [], regions: [], gen: { d: '0.875', ts: AN.ts, hh: AN.hh, beff: r2(props(sec(1), gtS).beff), fc: m.fc, wc: m.wc, K1: 1.0, tdeck: AN.ts + 0.5, skew: m.skews.some(s => Math.abs(s) > 20) ? 'yes' : 'no' } };
+@@ -3979,7 +3991,7 @@
+         dMp: r1(Math.max(0, T.MfP[i])), dMn: r1(Math.abs(Math.min(0, T.MfN[i]))), beff: r2(props(sec(t.x), gt).beff), ...reb(sec(t.x), gt) }); }); });   // beff (L6, 2026-10-13); Ar, dr (C19)
+   // --- composite girder sections: max. positive per span, each pier, each shop transition (smaller side)
+   const gs = { rows: [], gen: { gT: m.gF, gB: m.gF, gW: m.gW, fc: m.fc, wc: m.wc, K1: 1.0, ts: AN.ts, hh: AN.hh, tdeck: AN.ts + 0.5 } };
+-  const gsRow = (gt, name, x, region) => { const T = AN.R.types[gt], i = node(x), e = el(x), s = sec(x);
++  const gsRow = (gt, name, x, region) => { const T = AN.R.types[gt], i = node(x), e = el(x), s = sec(x), gP = gsPan(gt, T, x, s);
+     // brace points at G1 stations (C24, 2026-10-13; was the global x of the G1 frames, f.xa)
+     const bp = [...new Set([...m.sup, ...stG([0], false, 3)])].sort((p1, p2) => p1 - p2).filter((v, k, arr) => k === 0 || v - arr[k - 1] > 0.25), Lend = m.sup[m.sup.length - 1];
+     // unbraced segment(s) containing x; at a brace point both adjacent segments are considered and the more critical (larger L_b/C_b) is used
+@@ -4020,9 +4032,9 @@
+     let nprC = ''; if (cC && cC.n2.kind === 'simp') nprC = { kind: 'simp', fl: sgC > 0 ? 'top' : 'bottom', b: cC.n2.big[kb], t: cC.n2.big[kt], Ir: r3(cC.n2.Ir) };
+     else if (cC && cC.n2.kind === 'ge') { const { A, mA, G } = cC.ge, fr = G ? fCon(G.s, i) : 0;
+       nprC = { kind: 'ge', fl: sgC > 0 ? 'top' : 'bottom', b: G ? G.s[kb] : s[kb], t: G ? G.s[kt] : s[kt], k: G && fr > 0 && !mA ? r3(Math.max(1, G.fm / fr)) : '', Ir: r3(cC.n2.Ir), why: cC.n2.why, A: geRec(A) }; }
+-    gs.rows.push({ name: `${name}, ${TT(gt)}`, gt, x: r2(x), region, cont: m.sup.length > 2 && m.cont ? 'yes' : 'no', beff: r2(props(s, gt).beff), ...s, Lb: r2(LbN), LbC: r2(FR.sp), Cb: +CbN.toFixed(3), CbC: +CbC.toFixed(3), lbB, lbT, npr, lbK, lbIr, nprWhy, geA, nprC, MDCc: T.MDCc ? +T.MDCc[i].toFixed(1) : '', ...gsDo(gt, x, s),
++    gs.rows.push({ name: `${name}, ${TT(gt)}`, gt, x: r2(x), region, cont: m.sup.length > 2 && m.cont ? 'yes' : 'no', beff: r2(props(s, gt).beff), ...s, Lb: r2(LbN), LbC: r2(FR.sp), Cb: +CbN.toFixed(3), CbC: +CbC.toFixed(3), lbB, lbT, npr, lbK, lbIr, nprWhy, geA, nprC, MDCc: T.MDCc ? +T.MDCc[i].toFixed(1) : '', ...gsDo(gt, x, s, gP),
+       MDC1: r1(T.MDC1[i]), MDC2: r1(T.MDC2[i]), MDW: r1(T.MDW[i]), MLLp: r1(Math.max(0, T.Mp[i])), MLLn: r1(Math.min(0, T.Mn[i])), MCL: r1(T.MCL[i]), MfP: r1(T.MfP[i]), MfN: r1(T.MfN[i]),
+-      ...shear(T, x), VCL: r1(vmax(T.VCL, e)), Vf: r1(Math.max(...[e - 1, e, e + 1].filter(q => q >= 0 && q < T.Vfm.length).map(q => T.Vfm[q]))), fl: skF(gt), flSrc: skF(gt) ? 'skew' : '', flC: 0 }); };
++      ...shear(T, x), VCL: r1(vmax(T.VCL, e)), Vf: r1(Math.max(...[e - 1, e, e + 1].filter(q => q >= 0 && q < T.Vfm.length).map(q => T.Vfm[q]))), fl: skF(gt), flSrc: skF(gt) ? 'skew' : '', flC: 0, ...(gP ? shearP(T, gP.p, gP.q, 'p') : {}) }); };
+   types.forEach(gt => { const T = AN.R.types[gt];
+     spans.forEach(k => { const x0 = m.sup[k], x1 = m.sup[k + 1]; let bx = (x0 + x1) / 2, mx = -Infinity; xs.forEach((x, i) => { if (x > x0 && x < x1 && T.Mup[i] > mx) { mx = T.Mup[i]; bx = x; } }); gsRow(gt, `Span ${k + 1}, max. positive at ${bx.toFixed(1)} ft`, bx, 'pos'); });
+     m.sup.slice(1, -1).forEach((x, k) => { if (m.cont) gsRow(gt, `Pier ${k + 1}`, x - 0.01, 'neg'); });
+````
+
+  GirderDetail page (PL_B64 line omitted):
+
+````diff
+--- before
++++ after
+@@ -2285,7 +2285,7 @@
+ <h3>Proportions (6.10.11.1.2)</h3><div class="eq-math">\\[b_t \\ge 2.0 + \\frac{D}{30}, \\qquad 16t_p \\ge b_t \\ge \\frac{b_f}{4}\\]</div><p>b<sub>f</sub> is the full width of the widest compression flange in the field section.</p>
+ <h3>Moment of inertia (6.10.11.1.3)</h3><div class="eq-math">\\[I_{t1} = b\\,t_w^3J,\\ J = \\frac{2.5}{(d_o/D)^2} - 2.0 \\ge 0.5; \\qquad I_{t2} = \\frac{D^4\\rho_t^{1.3}}{40}\\left(\\frac{F_{yw}}{E}\\right)^{1.5},\\ \\rho_t = \\max\\left(\\frac{F_{yw}}{F_{crs}}, 1\\right),\\ F_{crs} = \\frac{0.31E}{(b_t/t_p)^2} \\le F_{ys}\\]</div>
+ <p>d<sub>o</sub> is the smaller adjacent panel and b the smaller of d<sub>o</sub> and D. Where neither panel needs tension-field action, I<sub>t</sub> ≥ I<sub>t1</sub>. Otherwise I<sub>t</sub> ≥ I<sub>t1</sub> + (I<sub>t2</sub> − I<sub>t1</sub>)ρ<sub>w</sub> when I<sub>t2</sub> > I<sub>t1</sub>, else I<sub>t</sub> ≥ I<sub>t2</sub>, with ρ<sub>w</sub> the larger of (V<sub>u</sub> − φ<sub>v</sub>V<sub>cr</sub>)/(φ<sub>v</sub>V<sub>n</sub> − φ<sub>v</sub>V<sub>cr</sub>) in the two panels (confirm the equation numbering against your edition). I<sub>t</sub> is taken about the web face for a single plate and about the web mid-thickness for a pair.</p>
+-<h3>Web shear (6.10.9)</h3><p>Each adjacent panel is checked for V<sub>u</sub> ≤ φ<sub>v</sub>V<sub>n</sub> with k = 5 + 5/(d<sub>o</sub>/D)². Interior panels include tension-field action (Eq. 6.10.9.3.2-2 or -8 depending on 2Dt<sub>w</sub>/(b<sub>fc</sub>t<sub>fc</sub> + b<sub>ft</sub>t<sub>ft</sub>)); end panels use V<sub>n</sub> = CV<sub>p</sub> (Eq. 6.10.9.3.3-1). An interior panel wider than 3D or an end panel wider than 1.5D is not a stiffened panel (6.10.9.1): it is checked as unstiffened, k = 5 and V<sub>n</sub> = CV<sub>p</sub> (Eq. 6.10.9.2-1). V<sub>u</sub> is the Strength I shear at the stiffener for both panels, except that an end panel is checked with the largest V<sub>u</sub> in it (at the bearing): the location's end-panel shears (V<sub>DC1</sub>, V<sub>DC2</sub>, V<sub>DW</sub>, V<sub>LL+IM</sub>, the largest in panel 1, sent by Preliminary sizing and Structural analysis) give that V<sub>u</sub>, and the larger of it and the shear at the stiffener is used. When they are blank (projects saved before they existed, or entered by hand), the end panel uses the shear at the stiffener and the TS4 item says so. Check TS5 compares each panel with these limits, which decide only whether the panel counts as stiffened: a panel wider than its limit is advisory, because TS4 checks it as unstiffened (k = 5) and decides pass or fail. When the web has no intermediate stiffeners (connection plates only), it is designed as unstiffened and TS5 is not applicable.</p>
++<h3>Web shear (6.10.9)</h3><p>Each adjacent panel is checked for V<sub>u</sub> ≤ φ<sub>v</sub>V<sub>n</sub> with k = 5 + 5/(d<sub>o</sub>/D)². Interior panels include tension-field action (Eq. 6.10.9.3.2-2 or -8 depending on 2Dt<sub>w</sub>/(b<sub>fc</sub>t<sub>fc</sub> + b<sub>ft</sub>t<sub>ft</sub>)); end panels use V<sub>n</sub> = CV<sub>p</sub> (Eq. 6.10.9.3.3-1). An interior panel wider than 3D or an end panel wider than 1.5D is not a stiffened panel (6.10.9.1): it is checked as unstiffened, k = 5 and V<sub>n</sub> = CV<sub>p</sub> (Eq. 6.10.9.2-1). V<sub>u</sub> is the largest Strength I shear in each panel (6.10.9.3.1): the location's panel shears (V<sub>DC1</sub>, V<sub>DC2</sub>, V<sub>DW</sub>, V<sub>LL+IM</sub>, the largest in panel 1 and in panel 2, sent by Preliminary sizing and Structural analysis) give it, and the larger of it and the shear at the stiffener is used; ρ<sub>w</sub> of TS3 uses the same V<sub>u</sub>. When a panel's shears are blank (projects saved before they existed, or entered by hand), that panel uses the shear at the stiffener and the TS4 item says so. Check TS5 compares each panel with these limits, which decide only whether the panel counts as stiffened: a panel wider than its limit is advisory, because TS4 checks it as unstiffened (k = 5) and decides pass or fail. When the web has no intermediate stiffeners (connection plates only), it is designed as unstiffened and TS5 is not applicable.</p>
+ <h3>Welds and fatigue</h3><p>Intermediate stiffener web welds stop 4t<sub>w</sub> to 6t<sub>w</sub> from the web-to-flange weld at the tension flange (6.10.11.1.1). Connection plates are welded to both flanges and those welds are designed for 20 kip laterally on straight, nonskewed bridges, or the analysis force otherwise (6.6.1.3.1). Base metal at stiffener weld toes is Category C′, (ΔF)<sub>TH</sub> = 12 ksi. Minimum fillet sizes follow Table 6.13.3.4-1.</p>
+ <h3>Verification</h3><p>Location 1 of the example: V<sub>u</sub> = 1.25(55 + 8) + 1.50(9) + 1.75(85) = 241.0 kip; D/t<sub>w</sub> = 106.7, k = 10, C = 1.57/106.7² × (29,000 × 10/50) = 0.800; end panel φV<sub>n</sub> = 0.800 × 978.75 = 783.0 kip. I<sub>t1</sub> = 60(0.5625)³(0.5) = 5.34 in⁴; I<sub>t2</sub> = 60⁴/40 × (50/29,000)<sup>1.5</sup> = 23.2 in⁴; I<sub>t</sub> = 0.5(6)³/3 = 36.0 in⁴.</p>`],
+ ['p14', 'Shear connectors', `
+@@ -2358,7 +2358,7 @@
+ function buildManual() { $('#tab-manual').innerHTML = `<div class="man-nav">${MAN.map(([id, t], i) => `<button type="button" class="man-btn" data-man="${id}">${i + 1}. ${t}</button>`).join('')}</div>${MAN.map(([id, t, b], i) => `<article class="man-part" id="man-${id}"><h2 class="man-h">Part ${i + 1}. ${t}</h2>${b}</article>`).join('')}`; showManPart(); }
+ function showManPart() { const id = P.ui.man || 'p1'; $$('.man-btn').forEach(b => b.classList.toggle('active', b.dataset.man === id)); $$('.man-part').forEach(a => a.classList.toggle('active', a.id === 'man-' + id)); }
+ 
+ /* =====================================================================
+    GirderDetail: additional modules
+    ts  transverse stiffeners and connection plates (6.10.11.1, 6.6.1.3.1, 6.10.9)
+@@ -2406,9 +2406,13 @@
+   ['do1', 'Panel 1 width d<sub>o</sub>', 'in', 'dim'], ['do2', 'Panel 2 width d<sub>o</sub>', 'in', 'dim'],
+   ['VDC1', 'V<sub>DC1</sub>', 'kip', 'num', { min: 0 }], ['VDC2', 'V<sub>DC2</sub>', 'kip', 'num', { min: 0 }], ['VDW', 'V<sub>DW</sub>', 'kip', 'num', { min: 0 }], ['VLL', 'V<sub>LL+IM</sub>', 'kip', 'num', { min: 0 }],
+   ['df', 'Δf fatigue, tension flange', 'ksi', 'num', { min: 0 }],
+-  ['VDC1b', 'End panel: max. V<sub>DC1</sub> in panel 1', 'kip', 'num', { min: 0, opt: true }], ['VDC2b', 'End panel: max. V<sub>DC2</sub> in panel 1', 'kip', 'num', { min: 0, opt: true }],
+-  ['VDWb', 'End panel: max. V<sub>DW</sub> in panel 1', 'kip', 'num', { min: 0, opt: true }], ['VLLb', 'End panel: max. V<sub>LL+IM</sub> in panel 1', 'kip', 'num', { min: 0, opt: true }]];
+-const TS_BRG = ['VDC1b', 'VDC2b', 'VDWb', 'VLLb'];   // optional end-panel shears (largest in panel 1, at the bearing; Q4); all four blank = the shear at the stiffener is used
++  ['VDC1b', 'Max. V<sub>DC1</sub> in panel 1', 'kip', 'num', { min: 0, opt: true }], ['VDC2b', 'Max. V<sub>DC2</sub> in panel 1', 'kip', 'num', { min: 0, opt: true }],
++  ['VDWb', 'Max. V<sub>DW</sub> in panel 1', 'kip', 'num', { min: 0, opt: true }], ['VLLb', 'Max. V<sub>LL+IM</sub> in panel 1', 'kip', 'num', { min: 0, opt: true }],
++  ['VDC1c', 'Max. V<sub>DC1</sub> in panel 2', 'kip', 'num', { min: 0, opt: true }], ['VDC2c', 'Max. V<sub>DC2</sub> in panel 2', 'kip', 'num', { min: 0, opt: true }],
++  ['VDWc', 'Max. V<sub>DW</sub> in panel 2', 'kip', 'num', { min: 0, opt: true }], ['VLLc', 'Max. V<sub>LL+IM</sub> in panel 2', 'kip', 'num', { min: 0, opt: true }]];
++// optional panel shears, the largest in each panel (6.10.9.3.1; V_u of 6.10.11.1.3): panel 1 (Q4: the end panel, at the bearing; TB3, 2026-10-13: any panel 1) and panel 2 (TB3);
++// all four of a panel blank = the shear at the stiffener is used for that panel
++const TS_BRG = ['VDC1b', 'VDC2b', 'VDWb', 'VLLb'], TS_PN2 = ['VDC1c', 'VDC2c', 'VDWc', 'VLLc'];
+ GM.ts = {
+ tabs: { combos: 'Demands', rptCombos: 'Design demands' },
+   id: 'ts', label: 'Transverse stiffeners', title: 'transverse stiffeners and connection plates, AASHTO LRFD 6.10.11.1', rptTitle: 'Transverse Stiffener and Connection Plate Design', rptRef: 'AASHTO LRFD Articles 6.10.11.1, 6.10.9, and 6.6.1.3.1',
+@@ -2434,17 +2438,18 @@
+     if (!(Fexx > 0)) errors.push('F_EXX must be positive.');
+     const rows = numRows(p.rows, TS_ROWSPEC, 'Location', errors);
+     if (cfDiaOn(P.cf)) rows.forEach(r => { r.name = r.name.replace(/^(Span \d+, )cross-frame at /, '$1diaphragm at '); });   // rows named by Preliminary sizing: the bracing used here (L1, 2026-10-13); the saved name is not changed
+-    rows.forEach(r => { const n = TS_BRG.filter(k => r[k] != null).length; if (n && n < 4) errors.push(`${r.name}: enter all four end-panel shears, or leave all four blank.`); });
++    rows.forEach(r => [[TS_BRG, 1], [TS_PN2, 2]].forEach(([K, p]) => { const n = K.filter(k => r[k] != null).length; if (n && n < 4) errors.push(`${r.name}: enter all four panel ${p} shears, or leave all four blank.`); }));
+     if (!rows.length) errors.push('Add at least one stiffener location.');
+     if (errors.length) return { errors };
+     rows.forEach(r => { const t = types[r.type]; r.t = t;
+       r.Vu = g('dc') * (r.VDC1 + r.VDC2) + g('dw') * r.VDW + g('ll') * r.VLL;
+-      // end panel (Q4): the largest V_u in panel 1 (at the bearing) when the end-panel shears are given; otherwise the shear at the stiffener
+-      r.VuB = r.end === 'yes' && r.VDC1b != null ? g('dc') * (r.VDC1b + r.VDC2b) + g('dw') * r.VDWb + g('ll') * r.VLLb : null;
+-      r.Vu1 = r.VuB != null ? Math.max(r.VuB, r.Vu) : r.Vu;
++      // the largest V_u in each panel (6.10.9.3.1; TB3, 2026-10-13: every panel 1 and panel 2, was: the end panel only, Q4) when its panel shears are given; otherwise the shear at the stiffener
++      r.VuB = r.VDC1b != null ? g('dc') * (r.VDC1b + r.VDC2b) + g('dw') * r.VDWb + g('ll') * r.VLLb : null;
++      r.VuC = r.VDC1c != null ? g('dc') * (r.VDC1c + r.VDC2c) + g('dw') * r.VDWc + g('ll') * r.VLLc : null;
++      r.Vu1 = r.VuB != null ? Math.max(r.VuB, r.Vu) : r.Vu; r.Vu2 = r.VuC != null ? Math.max(r.VuC, r.Vu) : r.Vu;
+       const flgA = r.bfc * r.tfc + r.bft * r.tft;
+       r.p1 = webShear(r.D, r.tw, Fyw, r.do1, flgA, r.end === 'yes'); r.p2 = webShear(r.D, r.tw, Fyw, r.do2, flgA, false);
+-      [r.p1, r.p2].forEach((q, i) => { q.do = i ? r.do2 : r.do1; q.end = !i && r.end === 'yes'; q.Vu = i ? r.Vu : r.Vu1; q.phVn = PHI.v * q.Vn; const tfa = q.stiff && !q.end; q.rho = tfa && r.Vu > PHI.v * q.Vcr ? Math.min(1, (r.Vu - PHI.v * q.Vcr) / Math.max(q.phVn - PHI.v * q.Vcr, 1e-9)) : 0; });
++      [r.p1, r.p2].forEach((q, i) => { q.do = i ? r.do2 : r.do1; q.end = !i && r.end === 'yes'; q.Vu = i ? r.Vu2 : r.Vu1; q.pan = (i ? r.VuC : r.VuB) != null; q.phVn = PHI.v * q.Vn; const tfa = q.stiff && !q.end; q.rho = tfa && q.Vu > PHI.v * q.Vcr ? Math.min(1, (q.Vu - PHI.v * q.Vcr) / Math.max(q.phVn - PHI.v * q.Vcr, 1e-9)) : 0; });
+       r.rhow = Math.max(r.p1.rho, r.p2.rho);
+       r.It = t.sides === 2 ? t.tp * (2 * t.bt + r.tw) ** 3 / 12 : t.tp * t.bt ** 3 / 3;
+       r.dmin = Math.min(r.do1, r.do2); r.b = Math.min(r.dmin, r.D); r.J = Math.max(2.5 / (r.dmin / r.D) ** 2 - 2.0, 0.5); r.It1 = r.b * r.tw ** 3 * r.J;
+@@ -2467,14 +2472,14 @@
+     { const c = { id: 'TS3', grp: G1, title: 'Moment of inertia', ref: 'AASHTO LRFD 6.10.11.1.3', src: 'Code',
+         sym: T`I_t \ge I_{t1} = b\,t_w^3J\ \text{(no tension field)}; \quad I_t \ge I_{t1} + (I_{t2} - I_{t1})\rho_w\ \text{if}\ I_{t2} > I_{t1},\ \text{else}\ I_{t2}; \quad I_{t2} = \frac{D^4\rho_t^{1.3}}{40}\left(\frac{F_{yw}}{E}\right)^{1.5}`,
+         cols: ['Location', 'I_t (in⁴)', 'I_t1 (in⁴)', 'I_t2 (in⁴)', 'ρ_w', 'Required (in⁴)', 'Ratio'], items: [],
+-        note: 'I_t is about the edge in contact with the web for a single plate and about the mid-thickness of the web for a pair. ρ_w is the larger of (V_u − φ_vV_cr)/(φ_vV_n − φ_vV_cr) in the adjacent panels (0 when neither panel needs tension-field action; end panels cannot use it).' };
++        note: 'I_t is about the edge in contact with the web for a single plate and about the mid-thickness of the web for a pair. ρ_w is the larger of (V_u − φ_vV_cr)/(φ_vV_n − φ_vV_cr) in the adjacent panels, V_u the largest shear in each panel as in TS4 (6.10.11.1.3; 0 when neither panel needs tension-field action; end panels cannot use it).' };
+       R.rows.forEach(r => { const t = r.t; c.items.push(rc(L(r), [f2(r.It), f2(r.It1), f2(r.It2), f3(r.rhow), f2(r.Ireq), f2(r.Ireq / r.It)], r.Ireq, r.It,
+         T`\begin{aligned}I_t &= ${t.sides === 2 ? T`\frac{${f3(t.tp)}(2(${f2(t.bt)}) + ${f3(r.tw)})^3}{12}` : T`\frac{${f3(t.tp)}(${f2(t.bt)})^3}{3}`} = ${f2(r.It)}\ \text{in}^4 \\ J &= \max\left(\frac{2.5}{(${f2(r.dmin)}/${f2(r.D)})^2} - 2.0,\ 0.5\right) = ${f3(r.J)}, \quad I_{t1} = ${f2(r.b)}(${f3(r.tw)})^3(${f3(r.J)}) = ${f2(r.It1)}\ \text{in}^4 \\ F_{crs} &= \min\left(\frac{0.31(29{,}000)}{(${f2(t.bt)}/${f3(t.tp)})^2},\ ${f0(R.Fys)}\right) = ${f2(r.Fcrs)}\ \text{ksi}, \quad \rho_t = \max\left(\frac{${f0(R.Fyw)}}{${f2(r.Fcrs)}},\ 1.0\right) = ${f3(r.rhot)}, \quad I_{t2} = \frac{${f2(r.D)}^4(${f3(r.rhot)})^{1.3}}{40}\left(\frac{${f0(R.Fyw)}}{29{,}000}\right)^{1.5} = ${f2(r.It2)}\ \text{in}^4 \\ I_{req} &= ${f2(r.Ireq)}\ \text{in}^4\ (\text{Eq. ${r.IreqEq}}) \;${LE(r.Ireq, r.It)}\; I_t = ${f2(r.It)}\ \text{in}^4\end{aligned}`,
+         [['b', 'Smaller of d<sub>o</sub> (smaller adjacent panel) and D', f2(r.b), 'in'], ['ρ<sub>w</sub>', `Panel 1: ${f3(r.p1.rho)}, panel 2: ${f3(r.p2.rho)}`, f3(r.rhow), '']])); }); out.add(c); }
+     { const c = { id: 'TS4', grp: G2, title: 'Web shear resistance of adjacent panels', ref: 'AASHTO LRFD 6.10.9.3.2, 6.10.9.3.3', src: 'Code', sym: T`V_u \le \phi_vV_n, \quad \phi_v = 1.0`,
+-        cols: ['Location, panel', 'd_o (in)', 'V_u (kip)', 'C', 'φV_n (kip)', 'Ratio'], items: [], note: 'Interior stiffened panels include tension-field action (Eq. 6.10.9.3.2-2 or -8); stiffened end panels (d_o ≤ 1.5D) use V_n = CV_p with k = 5 + 5/(d_o/D)² (Eq. 6.10.9.3.3-1). Interior panels wider than 3D and end panels wider than 1.5D are unstiffened (6.10.9.1): k = 5, V_n = CV_p (Eq. 6.10.9.2-1). V_u is the Strength I shear at the stiffener, applied to both adjacent panels; an end panel is checked with the largest V_u in it (at the bearing, from the end-panel shears), or with the shear at the stiffener when they are blank (the item says which).' };
++        cols: ['Location, panel', 'd_o (in)', 'V_u (kip)', 'C', 'φV_n (kip)', 'Ratio'], items: [], note: 'Interior stiffened panels include tension-field action (Eq. 6.10.9.3.2-2 or -8); stiffened end panels (d_o ≤ 1.5D) use V_n = CV_p with k = 5 + 5/(d_o/D)² (Eq. 6.10.9.3.3-1). Interior panels wider than 3D and end panels wider than 1.5D are unstiffened (6.10.9.1): k = 5, V_n = CV_p (Eq. 6.10.9.2-1). V_u is the largest Strength I shear in each panel (6.10.9.3.1), from the location\'s panel 1 and panel 2 shears (sent by Preliminary sizing and Structural analysis); a panel whose shears are blank (rows saved before they existed, or entered by hand) uses the shear at the stiffener (the item says which).' };
+       R.rows.forEach(r => [r.p1, r.p2].forEach((q, i) => c.items.push(rc(`${L(r)}, panel ${i + 1}${q.end ? ' (end)' : ''}`, [f2(q.do), f2(q.Vu), f3(q.C), f2(q.phVn), f2(q.Vu / q.phVn)], q.Vu, q.phVn,
+-        T`k = ${q.stiff ? T`5 + \frac{5}{(${f2(q.do)}/${f2(r.D)})^2}` : '5'} = ${f3(q.k)}, \quad C = ${f3(q.C)}, \quad V_p = 0.58(${f0(R.Fyw)})(${f2(r.D)})(${f3(r.tw)}) = ${f2(q.Vp)}, \quad \phi_vV_n = ${f2(q.phVn)}\ \text{kip (Eq. ${q.eqn})} \;${GE(q.phVn, q.Vu)}\; V_u = ${f2(q.Vu)}\ \text{kip}${!q.end ? '' : r.VuB != null ? T`\ \text{(largest in the end panel: ${r.VuB >= r.Vu ? 'at the bearing' : 'at the stiffener'})}` : T`\ \text{(at the stiffener: no end-panel shears given)}`}`))));
++        T`k = ${q.stiff ? T`5 + \frac{5}{(${f2(q.do)}/${f2(r.D)})^2}` : '5'} = ${f3(q.k)}, \quad C = ${f3(q.C)}, \quad V_p = 0.58(${f0(R.Fyw)})(${f2(r.D)})(${f3(r.tw)}) = ${f2(q.Vp)}, \quad \phi_vV_n = ${f2(q.phVn)}\ \text{kip (Eq. ${q.eqn})} \;${GE(q.phVn, q.Vu)}\; V_u = ${f2(q.Vu)}\ \text{kip}${q.pan ? T`\ \text{(largest in the panel${q.end ? ', the end panel' : ''})}` : T`\ \text{(at the stiffener: no panel shears given)}`}`))));
+       out.add(c); }
+     { const c = { id: 'TS5', grp: G2, title: 'Stiffener spacing limits', ref: 'AASHTO LRFD 6.10.9.1, 6.10.9.3.3', src: 'Code', sym: T`d_o \le 3D\ \text{(interior panels)}, \qquad d_o \le 1.5D\ \text{(end panels)}`, cols: ['Location, panel', 'd_o (in)', 'Limit (in)', 'Ratio'], items: [], note: 'The 6.10.9.1 limits decide only whether a panel counts as stiffened for shear. A panel wider than its limit (3D, or 1.5D for an end panel) is advisory: it is treated as unstiffened in TS4 (k = 5, V_n = CV_p), and TS4 decides pass or fail. With connection plates only (no intermediate stiffener) the check is not applicable.' };
+       R.rows.forEach(r => [r.p1, r.p2].forEach((q, i) => { const lim = (q.end ? 1.5 : 3) * r.D, ok = ge(lim, q.do), adv = !ok && !q.stiff; c.items.push({ loc: `${L(r)}, panel ${i + 1}${q.end ? ' (end)' : ''}`, cells: [f2(q.do), f2(lim), f2(q.do / lim)], r: q.do / lim, st: ok ? 'pass' : adv ? 'adv' : 'warn', work: T`d_o = ${f2(q.do)} \;${LE(q.do, lim)}\; ${q.end ? '1.5' : '3'}(${f2(r.D)}) = ${f2(lim)}\ \text{in}${adv ? T`\ \text{(treated as unstiffened in TS4)}` : ''}` }); }));
+@@ -3308,7 +3313,10 @@
+   ['MDC1', 'M<sub>DC1</sub> (noncomposite)', 'k-ft', 'num', { any: true }], ['MDCc', 'M<sub>DC1</sub> for constructibility, deck sequence (0 = M<sub>DC1</sub>)', 'kip-ft', 'num', { any: true }], ['MDC2', 'M<sub>DC2</sub>', 'k-ft', 'num', { any: true }], ['MDW', 'M<sub>DW</sub>', 'k-ft', 'num', { any: true }], ['MLLp', 'M<sub>LL+IM</sub> positive', 'k-ft', 'num', { any: true }], ['MLLn', 'M<sub>LL+IM</sub> negative', 'k-ft', 'num', { any: true }],
+   ['MCL', 'M construction LL (pour)', 'k-ft', 'num', { any: true }], ['MfP', 'M fatigue truck, max.', 'k-ft', 'num', { any: true }], ['MfN', 'M fatigue truck, min.', 'k-ft', 'num', { any: true }],
+   ['VDC1', 'V<sub>DC1</sub>', 'kip', 'num', { min: 0 }], ['VDC2', 'V<sub>DC2</sub>', 'kip', 'num', { min: 0 }], ['VDW', 'V<sub>DW</sub>', 'kip', 'num', { min: 0 }], ['VLL', 'V<sub>LL+IM</sub>', 'kip', 'num', { min: 0 }], ['VCL', 'V construction LL', 'kip', 'num', { min: 0 }], ['Vf', 'V fatigue truck, max.', 'kip', 'num', { min: 0 }],
+-  ['fl', 'f<sub>ℓ</sub> Strength I, bottom flange', 'ksi', 'num', { min: 0 }], ['flC', 'f<sub>ℓ</sub> deck placement, comp. flange', 'ksi', 'num', { min: 0 }]];
++  ['fl', 'f<sub>ℓ</sub> Strength I, bottom flange', 'ksi', 'num', { min: 0 }], ['flC', 'f<sub>ℓ</sub> deck placement, comp. flange', 'ksi', 'num', { min: 0 }],
++  ['VDC1p', 'Web panel at the location: max. V<sub>DC1</sub>', 'kip', 'num', { min: 0, opt: true }], ['VDC2p', 'Web panel: max. V<sub>DC2</sub>', 'kip', 'num', { min: 0, opt: true }],
++  ['VDWp', 'Web panel: max. V<sub>DW</sub>', 'kip', 'num', { min: 0, opt: true }], ['VLLp', 'Web panel: max. V<sub>LL+IM</sub>', 'kip', 'num', { min: 0, opt: true }]];
++const GS_PAN = ['VDC1p', 'VDC2p', 'VDWp', 'VLLp'];   // optional (TB3, 2026-10-13): the largest shears in the web panel containing the location (6.10.9.3.1), for GS11; all four blank = the shear at the location
+ /* plastic analysis: bisect for the PNA; pos = true puts the top in compression, concrete counts only in compression */
+ function plasticNA(el, pos) {
+   const force = y => { let c = 0, t = 0; el.forEach(e => { if (e.pt) { const up = e.y > y; if (pos === up) c += e.A * e.F; else t += e.A * e.F; return; }
+@@ -3427,6 +3435,7 @@
+     Object.keys(p.gam).forEach(k => { if (!(gm(k) >= 0)) errors.push(`Load factor "${k}" must be zero or positive.`); });
+     if (g('crt') >= g('ts') || g('crb') >= g('ts')) errors.push('Rebar layers must lie within the structural slab.');
+     const rows = numRows(p.rows, GS_SPEC, 'Location', errors); if (!rows.length) errors.push('Add at least one location.');
++    rows.forEach(r => { const n = GS_PAN.filter(k => r[k] != null).length; if (n && n < 4) errors.push(`${r.name}: enter all four web panel shears, or leave all four blank.`); });
+     if (errors.length) return { errors };
+     const Fyt = GD_GR[p.gT].Fy, Fyb = GD_GR[p.gB].Fy, Fyw = GD_GR[p.gW].Fy, Fyr = g('Fyr'), fc = g('fc'), MR = modRatio(fc, g('wc'), g('K1'), p.nRule), n = MR.n, ts = g('ts'), hh = g('hh'), Art = g('Art'), Arb = g('Arb');
+     const G = { dc: gm('dc'), dw: gm('dw'), dcMin: gm('dcMin'), dwMin: gm('dwMin'), ll: gm('ll'), sll: gm('sll'), fat: gm('fat'), cdc: gm('cdc'), ccl: gm('ccl') };
+@@ -3449,6 +3458,7 @@
+       r.Mu = r.gm.DC1 * r.MDC1 + r.gm.DC2 * r.MDC2 + r.gm.DW * r.MDW + G.ll * MLL; r.Ms = r.MDC1 + r.MDC2 + r.MDW + G.sll * MLL;
+       { const gO = gSet(-sg), MLLo = pos ? r.MLLn : r.MLLp; r.gmO = gO; r.MLLo = MLLo; r.Mrev = gO.DC1 * r.MDC1 + gO.DC2 * r.MDC2 + gO.DW * r.MDW + G.ll * MLLo; r.rev = sg * r.Mrev < 0; }   // opposite extreme: moment reversal
+       r.Vu = G.dc * (r.VDC1 + r.VDC2) + G.dw * r.VDW + G.ll * r.VLL;
++      r.VuP = r.VDC1p != null ? Math.max(r.Vu, G.dc * (r.VDC1p + r.VDC2p) + G.dw * r.VDWp + G.ll * r.VLLp) : null;   // GS11: the largest V_u in the web panel (6.10.9.3.1; TB3), else the shear at the location
+       // compression / tension flange (strength)
+       r.cF = pos ? { lab: 'top', b: r.topB, t: r.topT, Fy: Fyt, f: -r.str.top } : { lab: 'bottom', b: r.botB, t: r.botT, Fy: Fyb, f: -r.str.bot };
+       r.tF = pos ? { lab: 'bottom', b: r.botB, t: r.botT, Fy: Fyb, f: r.str.bot } : { lab: 'top', b: r.topB, t: r.topT, Fy: Fyt, f: r.str.top };
+@@ -3618,9 +3628,9 @@
+       R.rows.forEach(r => { const fS = r.pos ? r.fl : r.am.fl; if (fS > 0) c.items.push(rc(`${L(r)}, Strength I, bottom flange`, [f2(fS), f2(0.6 * R.Fyb), f2(fS / (0.6 * R.Fyb))], fS, 0.6 * R.Fyb, T`f_\ell = ${f2(fS)} \;${LE(fS, 0.6 * R.Fyb)}\; 0.6(${f0(R.Fyb)}) = ${f2(0.6 * R.Fyb)}\ \text{ksi}`));
+         if (r.amC.fl > 0) c.items.push(rc(`${L(r)}, deck placement, ${r.conC.lab} flange`, [f2(r.amC.fl), f2(0.6 * r.conC.Fy), f2(r.amC.fl / (0.6 * r.conC.Fy))], r.amC.fl, 0.6 * r.conC.Fy, T`f_\ell = ${f2(r.amC.fl)} \;${LE(r.amC.fl, 0.6 * r.conC.Fy)}\; ${f2(0.6 * r.conC.Fy)}\ \text{ksi}`)); });
+       if (!c.items.length) c.naWhy = 'No flange lateral bending entered.'; out.add(c); }
+-    { const c = { id: 'GS11', grp: SH, title: 'Shear resistance', ref: 'AASHTO LRFD 6.10.9', src: 'Code', sym: T`V_u \le \phi_vV_n, \quad \phi_v = 1.0`, cols: ['Location', 'V_u (kip)', 'C', 'φV_n (kip)', 'Ratio'], items: [], note: 'Unstiffened webs and panels (d_o = 0, d_o > 3D, or an end panel with d_o > 1.5D; 6.10.9.1) use k = 5 and V_n = CV_p; stiffened end panels use V_n = CV_p with k from d_o (Eq. 6.10.9.3.3-1); interior stiffened panels include tension-field action.' };
+-      R.rows.forEach(r => { const q = r.sh; c.items.push(rc(L(r), [f2(r.Vu), f3(q.C), f2(q.Vn), f2(r.Vu / q.Vn)], r.Vu, q.Vn,
+-        T`V_u = ${f2(R.G.dc)}(${f2(r.VDC1)} + ${f2(r.VDC2)}) + ${f2(R.G.dw)}(${f2(r.VDW)}) + ${f2(R.G.ll)}(${f2(r.VLL)}) = ${f2(r.Vu)}; \quad k = ${f3(q.k)},\ C = ${f3(q.C)},\ V_p = ${f2(q.Vp)} \Rightarrow \phi_vV_n = ${f2(q.Vn)}\ \text{kip (Eq. ${q.eqn})}`)); }); out.add(c); }
++    { const c = { id: 'GS11', grp: SH, title: 'Shear resistance', ref: 'AASHTO LRFD 6.10.9', src: 'Code', sym: T`V_u \le \phi_vV_n, \quad \phi_v = 1.0`, cols: ['Location', 'V_u (kip)', 'C', 'φV_n (kip)', 'Ratio'], items: [], note: 'Unstiffened webs and panels (d_o = 0, d_o > 3D, or an end panel with d_o > 1.5D; 6.10.9.1) use k = 5 and V_n = CV_p; stiffened end panels use V_n = CV_p with k from d_o (Eq. 6.10.9.3.3-1); interior stiffened panels include tension-field action. V_u is the largest Strength I shear in the web panel containing the location (6.10.9.3.1) when the location has its web panel shears (sent by Preliminary sizing and Structural analysis), else the shear at the location.' };
++      R.rows.forEach(r => { const q = r.sh, V = r.VuP != null ? r.VuP : r.Vu; c.items.push(rc(L(r), [f2(V), f3(q.C), f2(q.Vn), f2(V / q.Vn)], V, q.Vn,
++        T`V_u = ${r.VuP != null ? T`\max\left[${f2(r.Vu)}\ \text{(at the location)},\ ${f2(R.G.dc)}(${f2(r.VDC1p)} + ${f2(r.VDC2p)}) + ${f2(R.G.dw)}(${f2(r.VDWp)}) + ${f2(R.G.ll)}(${f2(r.VLLp)})\ \text{(largest in the panel)}\right] = ${f2(V)}` : T`${f2(R.G.dc)}(${f2(r.VDC1)} + ${f2(r.VDC2)}) + ${f2(R.G.dw)}(${f2(r.VDW)}) + ${f2(R.G.ll)}(${f2(r.VLL)}) = ${f2(r.Vu)}`}; \quad k = ${f3(q.k)},\ C = ${f3(q.C)},\ V_p = ${f2(q.Vp)} \Rightarrow \phi_vV_n = ${f2(q.Vn)}\ \text{kip (Eq. ${q.eqn})}`)); }); out.add(c); }
+     { const c = { id: 'GS12', grp: SV, title: 'Permanent deformations: flange stresses', ref: 'AASHTO LRFD 6.10.4.2.2, Eqs. 6.10.4.2.2-1 and -2', src: 'Code', sym: T`f_f \le 0.95R_hF_{yf}\ \text{(top flange)}, \qquad f_f + \frac{f_\ell}{2} \le 0.95R_hF_{yf}\ \text{(bottom flange)}`, cols: ['Location, flange', 'f_f (ksi)', 'Limit (ksi)', 'Ratio'], items: [], note: 'Service II: DC + DW + 1.30(LL+IM), accumulated by stage. In negative flexure the deck is taken as cracked (steel plus reinforcement), which is conservative. f_ℓ on the discretely braced bottom flange (Eq. 6.10.4.2.2-2) is the first-order value entered for the location, which is the Strength I value; using it for Service II is conservative.' };
+       R.rows.forEach(r => [['top', r.svc.top, R.Fyt, 0], ['bottom', r.svc.bot, R.Fyb, Math.max(r.fl, 0)]].forEach(([f, v, Fy, fl]) => { const a = Math.abs(v) + fl / 2, cap = 0.95 * r.Rh * Fy; c.items.push(rc(`${L(r)}, ${f}`, [f2(a), f2(cap), f2(a / cap)], a, cap, fl > 0 ? T`|f_f| + \frac{f_\ell}{2} = ${f2(Math.abs(v))} + \frac{${f2(fl)}}{2} = ${f2(a)} \;${LE(a, cap)}\; 0.95(${f3(r.Rh)})(${f0(Fy)}) = ${f2(cap)}\ \text{ksi}` : T`|f_f| = ${f2(a)} \;${LE(a, cap)}\; 0.95(${f3(r.Rh)})(${f0(Fy)}) = ${f2(cap)}\ \text{ksi}`)); })); out.add(c); }
+     { const c = { id: 'GS13', grp: SV, title: 'Permanent deformations: web bend-buckling', ref: 'AASHTO LRFD 6.10.4.2.2, Eq. 6.10.4.2.2-4; 6.10.1.9.1; D6.3.1', src: 'Code', sym: T`f_c \le F_{crw} = \frac{0.9Ek}{(D/t_w)^2}, \quad k = \frac{9}{(D_c/D)^2}`, cols: ['Location', 'f_c (ksi)', 'D_c (in)', 'F_crw (ksi)', 'Ratio'], items: [], note: 'Not required for composite sections in positive flexure with D/t_w ≤ 150. D_c is found from the accumulated Service II flange stresses (D6.3.1).' };
+````
