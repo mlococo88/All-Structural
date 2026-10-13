@@ -1935,7 +1935,7 @@ function elevSVG(R) {
   o += dimV(X(-half) - 14, webTop, webBot, `D = ${frac(D)} in`);
   const yb = yWc + hw / 2 * sc + 16;
   o += dimH(X(-wpL / 2), X(wpL / 2), webBot + (tBmax + F.bot.to) * sc + 44, `Web plates ${f2(wpL)} in long`, 13);
-  o += `<text x="${cx}" y="${top - 30}" class="sv-t" text-anchor="middle" font-weight="600">Gap ${frac(gap)} in; left: ${frac(L.topT)}/${frac(L.botT)} flanges; right: ${frac(Rr.topT)}/${frac(Rr.botT)} flanges</text>`;
+  o += `<text x="${cx}" y="${top - 30}" class="sv-t" text-anchor="middle" font-weight="600">Gap ${frac(gap)} in; flanges (top / bottom): left ${frac(L.topT)} / ${frac(L.botT)} in, right ${frac(Rr.topT)} / ${frac(Rr.botT)} in</text>`;
   const H = webBot + (tBmax + F.bot.to) * sc + 64;
   return `<svg viewBox="0 0 ${Wpx} ${H}" class="dwg" role="img" aria-label="Splice elevation">${o}</svg>`;
 }

@@ -7799,3 +7799,11 @@ Main page only; `PL_B64` (embedded Preliminary sizing) is not touched. Display o
 - **Problem:** "do = 60.00 in" read as the word "do"; "D = 60" and "g = 2 3/4" had no unit while the panel widths did.
 - **Check case:** built-in example, Transverse stiffeners, Drawings: "d<sub>o</sub> = 60.00 in (end panel)", "D = 60 in", "g = 2 3/4 in".
 - **Other copies:** none.
+
+### Q12. Field splice elevation drawing: flange thicknesses in the title readable   [drawing label only]
+- **Where:** Field splice elevation SVG (anchor `Gap ${frac(gap)} in; left:`).
+- **Before:** `` Gap ${frac(gap)} in; left: ${frac(L.topT)}/${frac(L.botT)} flanges; right: ${frac(Rr.topT)}/${frac(Rr.botT)} flanges ``
+- **After:** `` Gap ${frac(gap)} in; flanges (top / bottom): left ${frac(L.topT)} / ${frac(L.botT)} in, right ${frac(Rr.topT)} / ${frac(Rr.botT)} in ``
+- **Problem:** the fraction slash ran into the separator: "left: 3/4/1 1/8 flanges; right: 1/1 1/4 flanges", with no unit.
+- **Check case:** built-in example: "Gap 1/2 in; flanges (top / bottom): left 3/4 / 1 1/8 in, right 1 / 1 1/4 in".
+- **Other copies:** none.
