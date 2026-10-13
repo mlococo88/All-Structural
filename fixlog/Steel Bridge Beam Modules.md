@@ -7043,3 +7043,144 @@ index 6d16ec4..a6a31f6 100644
 - **Saved data both directions:** projects saved by main open here as above. The xsA project saved by this build (raw localStorage, with the new optional fields and the C1 rows) opened in main: no errors; main re-sends its own record (without the optional fields) and every result equals main's own run of the same project; the stored Design all rows are kept as saved until Design all is run again.
 - **Console:** no errors or alerts in any run.
 - **Tools containing shared snippets touched:** none (`bridgeSuite.v1.*` bootstrap and handoff code unchanged; no other tool file changed).
+
+## 2026-10-13 — PR: claude/girderdetail-cleanup2 (clean-up 2: fatigue inventory from Preliminary sizing, help text, end-frame quantities; engineer offline, "clean up the app and use judgement"; PR link added after merge)
+
+Main page and the embedded Preliminary sizing (PlateLine, `PL_B64`, decoded, edited and re-encoded on its one line). No storage key or `bridgeSuite.v1.*` payload is added, renamed or removed. One optional field is added to the Fatigue detail rows (C5). `lldf.html` is unchanged.
+
+### C4. Fatigue inventory: the connection-plate row of each span is placed at the cross-frame with the largest fatigue moment range   [§4: location of the demand] [more conservative on the built-in example]
+- **Where (decoded PlateLine):** `detailExport`, fatigue detail inventory (`// ---- fatigue detail inventory`), inside `spansF.forEach`; anchor `row(\`Span ${k + 1}, connection plate at cross-frame ${f2(fx)} ft, bottom flange\``. Main page: only the re-encoded `PL_B64` line.
+- **Before:**
+  ```js
+        const fs = frX.filter(x => x > a + 0.5 && x < b - 0.5); if (fs.length) { const fx = fs.reduce((q, x) => { const i = node(x), j = node(q); return T.MfP[i] > T.MfP[j] ? x : q; }, fs[0]); row(`Span ${k + 1}, connection plate at cross-frame ${f2(fx)} ft, bottom flange`, 'Cp-stiff', 'bfi', fx, sec(fx)); }
+  ```
+- **After:**
+  ```js
+        // connection plate (C4, 2026-10-13): the cross-frame with the largest fatigue moment range M_f+ − M_f−, as the TS rows; the stress range governs (6.6.1.2.2) (was the largest M_f+)
+        const fs = frX.filter(x => x > a + 0.5 && x < b - 0.5), rgF = i => Math.max(0, T.MfP[i]) - Math.min(0, T.MfN[i]); if (fs.length) { const fx = fs.reduce((q, x) => rgF(node(x)) > rgF(node(q)) ? x : q, fs[0]); row(`Span ${k + 1}, connection plate at cross-frame ${f2(fx)} ft, bottom flange`, 'Cp-stiff', 'bfi', fx, sec(fx)); }
+  ```
+  Selection key before: max M<sub>f+</sub>; after: max (max(0, M<sub>f+</sub>) − min(0, M<sub>f−</sub>)), the same values the row carries (`MfP`, `MfN`) and the same key the Transverse stiffeners connection-plate rows already use (`const rg = T.MfP[i] - T.MfN[i]`). Ties keep the first cross-frame, as before. The row's contents (section, moments, category C′, location `bfi`) are unchanged; only the station chosen can change.
+- **Problem:** the detail is checked for the stress range Δf, which comes from M<sub>f+</sub> and M<sub>f−</sub> together, but the cross-frame was chosen by M<sub>f+</sub> alone. Near the dead-load inflection region M<sub>f−</sub> grows faster than M<sub>f+</sub> falls, so the row missed the governing cross-frame. Less conservative before; fixed. Pier connection-plate rows (nearest cross-frame to the pier) are not changed.
+- **Governing provision:** AASHTO LRFD 10th Ed. 6.6.1.2.2 (γ(Δf) ≤ (ΔF)<sub>n</sub>, Eq. 6.6.1.2.2-1), 6.6.1.2.5 (Fatigue I: (ΔF)<sub>n</sub> = (ΔF)<sub>TH</sub>), Table 6.6.1.2.3-1, detail 4.1 (transverse connection plate fillet-welded to the flange, base metal at the weld toe: Category C′, (ΔF)<sub>TH</sub> = 12.0 ksi), Table 6.6.1.2.5-3. These are the provisions the Fatigue module and Preliminary sizing already apply; nothing about them is changed. Not re-checked against the printed 10th Edition here (no copy in the repo): verify.
+- **Check case (built-in example, Fatigue module, demands from Preliminary sizing; exterior girder, Span 1, connection plate on the bottom flange, inner face y = t<sub>bot</sub> = 1.125 in; section 60 × 9/16 web, top 16 × 3/4, bottom 16 × 1-1/8; n = 6.80; Fatigue I, γ = 1.75, (ΔF)<sub>TH</sub> = 12.0 ksi; module b<sub>eff</sub> = 114 in, short-term composite ȳ<sub>n</sub> = 55.100 in, I<sub>n</sub> = 106,168 in⁴; cracked negative section (steel + A<sub>r</sub> 9.8 in²) ȳ = 33.498 in, I = 50,834 in⁴):**
+  - Candidates: cross-frame at 38.91 ft: M<sub>f+</sub> = 866.8, M<sub>f−</sub> = −233.0 k-ft, range 1,099.8; at 60.91 ft: M<sub>f+</sub> = 812.7, M<sub>f−</sub> = −364.5 k-ft, range **1,177.2** (largest).
+  - **Before (38.91 ft):** f<sub>+</sub> = 866.8(12)(55.100 − 1.125)/106,168 = 5.288 ksi; f<sub>−</sub> = 233.0(12)(33.498 − 1.125)/50,834 = 1.781 ksi; Δf = 7.069 ksi; γΔf = 12.370 ksi; ratio **1.031**.
+  - **After (60.91 ft):** f<sub>+</sub> = 812.7(12)(53.975)/106,168 = 4.958 ksi; f<sub>−</sub> = 364.5(12)(32.373)/50,834 = 2.786 ksi; Δf = 7.744 ksi; γΔf = 13.551 ksi; ratio **1.129**.
+  - Negative section uncracked (option "Short-term composite"): before 0.979 (Δf 6.710), after 1.047 (Δf 7.182).
+  - Other rows that move: Span 2 (exterior 174.91 → 198.24 ft, ratio 0.981 → 0.996; interior 174.91 → 198.24 ft, 0.557 → 0.565), Span 1 interior (38.91 → 60.91 ft, 0.632 → 0.693). Span 3 (310.91 ft) does not move. Every other row identical.
+- **Saved data:** no key or format change. The rows of `P.fa.rows` with `src: 'analysis'` are replaced on the next import from Preliminary sizing, as before (manual rows are never changed).
+- **Other copies:** none.
+
+### C5. Fatigue rows from Preliminary sizing carry their girder's effective flange width   [§4: section properties, b<sub>eff</sub> per girder] [exterior rows more conservative on the built-in example] [optional field in the Fatigue rows]
+- **Where:**
+  - Decoded PlateLine: `detailExport`, the `row` helper of the fatigue inventory; anchor `Vf: r1(T.Vfm[e] || 0), do: 0, dfP: 0, dfN: 0, fDL: 0`.
+  - Main page: `FA_SPEC` (anchor `['do', 'Stiffener spacing d<sub>o</sub> (0 = none)', 'in', 'dim', { min: 0 }]`); `GM.fa.compute` (anchor `const S = secSet(r.D, r,`); `GM.fa.capacity`, step "Detail elevation and sections" (anchor `\text{in above the bottom of the steel (${locT.toLowerCase()})}; \quad`); `GM.fa.echo`, column "Section" (anchor `r.mode === 'M' ? secTxt(r)`).
+- **Before:** every row used the module's one "b<sub>eff</sub>" input (`fa.beff`, 114 in in the built-in example, the interior value) for its short-term (n) and long-term (3n) composite sections:
+  ```js
+          const S = secSet(r.D, r, dk), d = S.s.d, ...
+  ```
+  and the PlateLine rows had no b<sub>eff</sub>:
+  ```js
+  ... Vf: r1(T.Vfm[e] || 0), do: 0, dfP: 0, dfN: 0, fDL: 0 }); };
+  ```
+- **After:**
+  - PlateLine sends each row's girder b<sub>eff</sub>, the same value its Girder section rows carry (`props(s, gt).beff` = (b<sub>eff,ft</sub> from the analysis, or S/2 + overhang for exterior, S for interior) × 12):
+    ```js
+    ... Vf: r1(T.Vfm[e] || 0), do: 0, dfP: 0, dfN: 0, fDL: 0, beff: r2(props(s, gt).beff) }); };   // beff (C5, 2026-10-13): this girder's effective flange width, as the Girder section rows
+    ```
+  - Fatigue row field (optional; blank = the module's b<sub>eff</sub>), added at the end of `FA_SPEC`:
+    ```js
+      ['beff', 'b<sub>eff</sub> of this girder (blank: the b<sub>eff</sub> above)', 'in', 'num', { opt: true }]];   // optional (C5, 2026-10-13): Preliminary sizing sends each girder's effective flange width
+    ```
+  - `compute`:
+    ```js
+            const S = secSet(r.D, r, r.beff > 0 ? { ...dk, beff: r.beff } : dk), d = S.s.d, ...
+    ```
+  - Display: the calculation step "Detail elevation and sections" shows `b_eff = 96.00 in (this girder)` and the report's "Section" column appends `; b_eff 96.00 in`, only for rows that have their own b<sub>eff</sub>.
+  - Rows without the field (manual rows, rows imported from the other modules, rows saved before this change, rows from the Girder-section fallback) give `null` and use the module's b<sub>eff</sub> exactly as before. A row b<sub>eff</sub> of 0 or a negative value is an input error ("must be positive"), as for the other optional row fields.
+- **Problem:** the Fatigue module computed the exterior-girder rows with the interior b<sub>eff</sub> (114 in instead of 96 in), so the composite section was too stiff and the bottom-flange stress range too low, and its result did not match Preliminary sizing's own C′ check or the Girder section rows (which already use b<sub>eff</sub> per girder: interior 114 in, exterior 96 in, checked on the built-in example). Less conservative for exterior rows; fixed. The negative-moment cracked section (steel + reinforcement) does not depend on b<sub>eff</sub> and is unchanged. The long-term (3n) section for M<sub>D2</sub> also uses the row b<sub>eff</sub>, so f<sub>DL</sub> (net-tension rule) changes slightly for the same rows.
+- **Governing provision:** AASHTO LRFD 10th Ed. 4.6.2.6.1 (effective flange width: for exterior girders, the tributary width; the analysis's value is used as is), 6.6.1.2.1 (stress range from the short-term composite section for positive moment; the negative-moment section per the module's option), 6.10.1.1.1b. Not changed. Not re-checked against the printed 10th Edition here: verify.
+- **Check case (built-in example; exterior girder, Span 1, connection plate at 60.91 ft (after C4), bottom flange inner face y = 1.125 in; M<sub>f+</sub> = 812.7, M<sub>f−</sub> = −364.5 k-ft; n = 6.80; t<sub>s</sub> = 8 in, haunch 2 in):**
+  - Short-term composite section with b<sub>eff</sub> = 114 in (before): ȳ<sub>n</sub> = 55.100 in, I<sub>n</sub> = 106,168 in⁴; with **b<sub>eff</sub> = 96 in** (after): ȳ<sub>n</sub> = 53.568 in, I<sub>n</sub> = 102,183 in⁴ (slab area 96(8)/6.80 = 112.98 in² instead of 134.17 in²).
+  - **Negative section uncracked:** before f<sub>+</sub> = 812.7(12)(53.975)/106,168 = 4.958, f<sub>−</sub> = 364.5(12)(53.975)/106,168 = 2.224, Δf = 7.182 ksi, ratio 1.75(7.182)/12 = **1.047**; after f<sub>+</sub> = 812.7(12)(52.443)/102,183 = 5.005, f<sub>−</sub> = 364.5(12)(52.443)/102,183 = 2.245, Δf = 7.250 ksi, ratio **1.057**. Preliminary sizing's own Category C′ ratio for the exterior girder at 61 ft: 1.0573 (the same section; it uses the short-term section for both signs).
+  - **Cracked (default):** before Δf = 4.958 + 2.786 = 7.744 ksi, ratio 1.129; after 5.005 + 2.786 = 7.791 ksi, ratio **1.136**.
+  - Span 2, exterior (198.24 ft): cracked 0.996 → 1.002; uncracked 0.936 → 0.945. Interior rows: b<sub>eff</sub> 114 in, identical. The four manual rows of the built-in example: no b<sub>eff</sub>, identical.
+- **Saved data:** no key change. `P.fa.rows` items may carry the new optional number `beff` (rows from Preliminary sizing). A project saved here opens in main: main's `numRows` ignores the unknown field and uses the module's b<sub>eff</sub> (main's results). A project saved by main opens here unchanged until its rows are re-imported from Preliminary sizing.
+- **Other copies:** none.
+
+### C6. Preliminary sizing help text: where the Category C′ check is made   [text only] [results bit-identical]
+- **Where (decoded PlateLine):** the Manual paragraph "Quick suggestion and full design" (anchor `Category C′ at the connection plates welded to the flanges`) and the Full design summary note in `renderSuggest` (anchor `' and Category C′ at the connection plates welded to the flanges`). Main page: only the re-encoded `PL_B64` line.
+- **Before (both places):** "… and Category C′ at the connection plates welded to the flanges at every cross-frame (inner flange face, 6.6.1.3.1) …"
+- **After (both places):** "… and Category C′ at the connection plates welded to the flanges (inner flange face, 6.6.1.3.1; checked at every analysis point along the girder, not only at the cross-frames, which is conservative) …"
+- **Problem:** the text said the C′ check is made at every cross-frame; the check (`suggestLayout` → `checkLayout`, anchor `put(rB, gB, i, cB / thC, 'Fatigue I, Category C′ at connection plates (6.6.1.2)')`) is made at every analysis node of both girder types, as if a connection plate could be anywhere. That is conservative (the governing node can lie between cross-frames, e.g. 59 ft against the frame at 60.91 ft in the built-in example) and is kept: the cross-frame layout still moves during design. The text now says what is done. The code reference (6.6.1.3.1) is unchanged.
+- **Governing provision:** none changed.
+- **Check case:** none (text). The Full design note and the Manual paragraph read as above; every result is identical (below).
+- **Saved data:** none.
+- **Other copies:** none (the main page's Manual has no copy of this sentence).
+
+### C7. Design all: end cross-frames and end diaphragms take each bearing line's own skew; the DXF end detail lists them   [§4: geometry of a quantity estimate; quantities, cost and drawing text only; no check changes] [identical when every bearing line has the same skew]
+- **Where (main page):**
+  - `designAllRun0`, step 5, three new lines before `const cfE = adEval('cf');` (anchor `// end (bearing-line) frames (C7, 2026-10-13)`), the diaphragm branch (anchor `const eq = cfDiaEnd(dq), XE = cfDiaSec(eq),`) and the cross-frame branch (anchor `bE = 4 * 2 * parseDim(P.cf.conn.n);`).
+  - `dxfCF`, the end detail block (anchor `{ const th = Math.max(...m.skews.map(v => Math.abs(v))), Se = S / Math.cos(th * Math.PI / 180), ox = S + tf.b + 30 * h, i0 = D.mark();`) and its two titles (anchors `END DIAPHRAGM AT BEARINGS (` and `END CROSS-FRAME AT BEARINGS (`).
+  - Manual: Cross-frames part ("Design all counts them (length S/cos θ of …") and Design all part ("intermediate and end (bearing-line) frames").
+- **Before:** every end frame (n = `qty.framesSup` = bearing lines × (N<sub>b</sub> − 1)) had the length along the **largest** skew of the bridge, θ<sub>max</sub>:
+  ```js
+      const eq = cfDiaEnd(dq), XE = cfDiaSec(eq), nE = Math.max(0, q.framesSup || 0), skw = ((P.df || {}).bridge || {}).skews || [], skM = skw.length ? Math.max(...skw.map(v => Math.abs(+v) || 0)) : 0, LdE = Math.max(0, R.S / Math.cos(skM * Math.PI / 180) - 2 * cfDiaGap(eq)), lbE = XE.A * LdE * lbS, bE = 2 * Math.max(2, Math.round(+eq.nb || 2));   // end (bearing-line) diaphragms, length along the largest skew (2026-10-13)
+      if (nE) { add(`End diaphragms at the bearing lines (${nE}, ${XE.nm_}, ${f2(LdE / 12)} ft${skM ? ` along ${f0(skM)}° skew` : ''} at ${f2(XE.wpf)} lb/ft): steel`, nE * lbE / 1000, 'kip', nE * lbE * S.cDet); add('End diaphragms: bolts', nE * bE, 'each', nE * bE * S.cBolt); } }
+  ...
+      const nE = Math.max(0, q.framesSup || 0), skw = ((P.df || {}).bridge || {}).skews || [], skM = skw.length ? Math.max(...skw.map(v => Math.abs(+v) || 0)) : 0, Se = R.S / Math.cos(skM * Math.PI / 180), lbE = (Se * (R.mem.top.A + R.mem.bot.A) + 2 * Math.hypot(Se, R.h) * R.mem.diag.A) * lbS, bE = 4 * 2 * parseDim(P.cf.conn.n);   // end (bearing-line) cross-frames (C1, 2026-10-13): ...
+      if (nE) { add(`End cross-frames at the bearing lines (${nE}, X-type, ${f2(Se / 12)} ft${skM ? ` along ${f0(skM)}° skew` : ''}): members`, nE * lbE / 1000, 'kip', nE * lbE * S.cDet); add('End cross-frames: bolts', nE * bE, 'each', nE * bE * S.cBolt); } }
+  ```
+- **After:**
+  ```js
+    // end (bearing-line) frames (C7, 2026-10-13): each bearing line at its own skew, S/cos θ_k (was the largest skew for every line); q.framesSup = bearing lines × (girders − 1)
+    const nE = Math.max(0, q.framesSup || 0), skw = (((P.df || {}).bridge || {}).skews || []).map(v => Math.abs(+v) || 0), skM = skw.length ? Math.max(...skw) : 0, rad = th => th * Math.PI / 180;
+    const eG = !nE ? [] : skw.length && nE % skw.length === 0 ? [...new Set(skw)].sort((a, b) => a - b).map(th => ({ th, n: nE / skw.length * skw.filter(v => v === th).length })) : [{ th: skM, n: nE }];   // groups of end frames by skew; the largest skew for all if the counts do not match the bearing lines
+    const eLab = Lof => eG.length === 1 ? `${f2(Lof(eG[0].th) / 12)} ft${eG[0].th ? ` along ${f0(eG[0].th)}° skew` : ''}` : `along each bearing line's skew: ${eG.map(g => `${g.n} × ${f2(Lof(g.th) / 12)} ft at ${f0(g.th)}°`).join(', ')}`;
+  ...
+      const eq = cfDiaEnd(dq), XE = cfDiaSec(eq), LdE = th => Math.max(0, R.S / Math.cos(rad(th)) - 2 * cfDiaGap(eq)), lbE = eG.reduce((a, g) => a + g.n * (XE.A * LdE(g.th) * lbS), 0), bE = 2 * Math.max(2, Math.round(+eq.nb || 2));   // end (bearing-line) diaphragms, length along each bearing line's skew (C7; 2026-10-13)
+      if (nE) { add(`End diaphragms at the bearing lines (${nE}, ${XE.nm_}, ${eLab(LdE)}${eG.length === 1 ? '' : ','} at ${f2(XE.wpf)} lb/ft): steel`, lbE / 1000, 'kip', lbE * S.cDet); add('End diaphragms: bolts', nE * bE, 'each', nE * bE * S.cBolt); } }
+  ...
+      const Se = th => R.S / Math.cos(rad(th)), lbE = eG.reduce((a, g) => a + g.n * ((Se(g.th) * (R.mem.top.A + R.mem.bot.A) + 2 * Math.hypot(Se(g.th), R.h) * R.mem.diag.A) * lbS), 0), bE = 4 * 2 * parseDim(P.cf.conn.n);   // end (bearing-line) cross-frames (C1, C7; 2026-10-13): X-type with the module's top chord, bottom chord and diagonal angles, along each bearing line's skew
+      if (nE) { add(`End cross-frames at the bearing lines (${nE}, X-type, ${eLab(Se)}): members`, lbE / 1000, 'kip', lbE * S.cDet); add('End cross-frames: bolts', nE * bE, 'each', nE * bE * S.cBolt); } }
+  ```
+  - Each bearing line k has N<sub>b</sub> − 1 end frames of work-point length S<sub>e,k</sub> = S/cos θ<sub>k</sub> (diaphragm steel S<sub>e,k</sub> − 2 × gap), θ<sub>k</sub> = |skew of line k| from `P.df.bridge.skews` (one value per support, the same list Preliminary sizing sends). Lines with the same skew are grouped. Bolt counts do not depend on length and are unchanged.
+  - When every line has the same skew, `eG` has one group of n = nE frames and the arithmetic and the row text are exactly the old ones (0 + nE × lb = nE × lb), so the results are bit-identical. If the end-frame count is not a multiple of the number of skews (never seen; a guard), the old rule (θ<sub>max</sub> for every frame) is used.
+  - DXF (`dxfCF`): the end detail is still one typical detail drawn at θ<sub>max</sub>. When the lines' skews differ, its title reads "(… DRAWN ALONG THE LARGEST SKEW, 30.00 DEG.)" instead of "(ALONG 30.00 DEG. SKEW)" and a note lists the girder spacing along the skew at each bearing line ("GIRDER SPACING ALONG SKEW AT EACH BEARING LINE: ABUT. 1 114" (0.00 DEG.); PIER 1 118" (15.00 DEG.); …"), below the end detail (y = −5.4h for the cross-frame, −8.8h for the diaphragm). With equal skews the DXF is unchanged. The framing plan and the 3D view already draw each end frame along its own bearing line (`FR.frames`), unchanged.
+  ```js
+    const skA = m.skews.map(v => Math.abs(v)), mix = skA.some(v => v !== th), nSk = skA.length, thT = mix ? `DRAWN ALONG THE LARGEST SKEW, ${f2(th)} DEG.` : `ALONG ${f2(th)} DEG. SKEW`;   // ...
+    const skN = mix ? `GIRDER SPACING ALONG SKEW AT EACH BEARING LINE: ${skA.map((v, k) => `${k === 0 ? 'ABUT. 1' : k === nSk - 1 ? 'ABUT. 2' : `PIER ${k}`} ${dxfIn(S / Math.cos(v * Math.PI / 180))} (${f2(v)} DEG.)`).join('; ')}.` : '';
+  ...  `END DIAPHRAGM AT BEARINGS (${X.chS ? 'CHANNEL' : 'ROLLED W'}, ${thT})`); if (skN) D.text(ly.t, ox, -8.8 * h, h * 0.8, dxfStr(skN));
+  ...  `END CROSS-FRAME AT BEARINGS (${thT})`); if (skN) D.text(ly.t, ox, -5.4 * h, h * 0.8, dxfStr(skN));
+  ```
+- **Problem:** with different skews at the bearing lines (e.g. a square abutment and skewed piers), every end frame was counted at the largest skew's length, so the end-frame steel and cost were overstated. Conservative for cost; quantities only. Fixed.
+- **Governing provision:** none (quantity estimate and drawing text). Geometry: the length between girder webs along a bearing line skewed θ from the normal is S/cos θ. Steel density 0.2836 lb/in³ (490 pcf), as before.
+- **Check case 1 (built-in example, Design all from Preliminary sizing): skews 15°, 15°, 15°, 15°:** one group; rows, total and DXF identical before and after: "End cross-frames at the bearing lines (16, X-type, 9.84 ft along 15° skew): members 5.53 kip $19,360", "End cross-frames: bolts 256 $3,840", total $1,699,744.
+- **Check case 2 (built-in example with the skews in Preliminary sizing changed to 0°, 15°, 30°, 15° (Abut. 1, Pier 1, Pier 2, Abut. 2); after auto-design: X-frame end detail with top chord L5x5x3/8, A = 3.609 in²; bottom chord L3x3x3/8, A = 2.109 in²; diagonals L3-1/2x3-1/2x3/8, A = 2.484 in²; S = 114 in, h = 52 in; $3.50/lb; 16 end frames, 4 per line):**
+  - S<sub>e</sub>: 0°: 114.00 in; 15°: 118.02 in; 30°: 131.64 in. Diagonals √(S<sub>e</sub>² + 52²): 125.30, 128.97, 141.53 in.
+  - Steel per frame [S<sub>e</sub>(3.609 + 2.109) + 2(diag)(2.484)](0.2836): 0°: 361.5 lb; 15°: 373.1 lb; 30°: 412.9 lb.
+  - **Before:** 16 × 412.9 = 6,607 lb: "End cross-frames at the bearing lines (16, X-type, 10.97 ft along 30° skew): members **6.61 kip, $23,124**"; total $1,735,649.
+  - **After:** 4(361.5) + 8(373.1) + 4(412.9) = 6,083 lb: "End cross-frames at the bearing lines (16, X-type, along each bearing line's skew: 4 × 9.50 ft at 0°, 8 × 9.84 ft at 15°, 4 × 10.97 ft at 30°): members **6.08 kip, $21,290**"; total **$1,733,814** (−$1,834). Bolts 256, $3,840, unchanged. Every other row and every status identical.
+- **Check case 3 (as case 2 with diaphragms: Preliminary sizing's "Minimum girder depth for cross-frames" set to 100 in, so the cross-frame module selects diaphragms; end diaphragm W36x135, A = 39.372 in², 133.99 lb/ft, end gaps 2 in):**
+  - Steel length S<sub>e</sub> − 4: 110.00, 114.02, 127.64 in; per diaphragm 39.372 × L × 0.2836: 1,228.2, 1,273.2, 1,425.2 lb.
+  - **Before:** 16 × 1,425.2 = 22,803 lb: "(16, W36x135, 10.64 ft along 30° skew at 133.99 lb/ft): steel **22.80 kip, $79,809**"; total $1,991,344.
+  - **After:** 4(1,228.2) + 8(1,273.2) + 4(1,425.2) = 20,799 lb: "(16, W36x135, along each bearing line's skew: 4 × 9.17 ft at 0°, 8 × 9.50 ft at 15°, 4 × 10.64 ft at 30°, at 133.99 lb/ft): steel **20.80 kip, $72,796**"; total **$1,984,330**. Bolts 128, $1,920, unchanged.
+- **Saved data:** no key or format change; `P.designAll.cost` rows keep the same shape (`{ item, qn, unit, c }`).
+- **Other copies:** none.
+
+### Verification (C4–C7)
+- **Syntax:** `node --check` on every inline script of the main page and of the decoded PlateLine after each item.
+- **Results, main (445368e) against the final build (headless Chromium, Playwright):** the eight XS test projects (built-in example; sidewalks with median, ped and added rows; curb mode; curb mode with a sidewalk; AASHTO; 6 ft × 12 in sidewalks; xsA; "two adjacent"), migrated on opening. Compared (hashed): `compute` and `checks` of every module in `GM`, the field splice, the bearing stiffeners, `GM.sa.compute` for every girder, the Drawings-tab cross-section SVG, the `gd-dfx` payload, Preliminary sizing's analysis, fast suggestion and check statuses, the saved `P` and every localStorage key.
+  - Six projects (Fatigue rows are the four manual rows): every result and all saved data identical; the Fatigue `compute` hash differs only by the new `beff: null` key on each row (checked by hashing without the key `beff`: identical).
+  - The two projects whose Fatigue rows come from Preliminary sizing (c12, xsA): the only differences are the Fatigue rows (C4 stations and C5 `beff`), their import snapshot `P._imp.fa`, the stored inventory in `girderdetail_inbox_v1.mods.fa`, the Fatigue results, and the field splice result hash (the splice result object carries `P`; hashed without it: identical).
+  - C7 build against the C6 build: identical on all eight projects (their bearing lines have equal skews).
+- **C4 and C5 in the page:** built-in example, Fatigue module with demands from Preliminary sizing, cracked and uncracked: the values in the C4 and C5 check cases; Girder section rows from the same import carry b<sub>eff</sub> 114 in (interior) and 96 in (exterior) before and after. Screenshots: the exterior Span 1 connection-plate row with its b<sub>eff</sub> field and its calculation card, `scratchpad/followups/gd-c2/c5_after_row.png`, `c5_after_calc.png` (main: `c5_before_*.png`).
+- **C6:** two string literals only; results identical (C5 → C6 built identical PlateLine scripts apart from the two strings).
+- **C7:** Design all from Preliminary sizing on the built-in example (identical rows, total and DXF), and with skews 0/15/30/15° for cross-frames and for diaphragms: the values in the C7 check cases; the DXF end-detail title and the new note as quoted; the rest of the DXF identical apart from the new text entity and the changed quantity rows. Screenshot `c7_after_designall.png` (main: `c7_before_designall.png`).
+- **Saved data both directions:** projects saved by main open here as above. The c12 project saved by this build (raw localStorage, rows with `beff`) opened in main: no errors; main keeps the saved rows until the next import, ignores `beff` (its `numRows` copies only its own fields) and computes them with the module b<sub>eff</sub>; every other result equals main's own run of the same project (Preliminary sizing's analysis hash varies between runs of main itself on raw localStorage, so it was not compared).
+- **Console:** no errors or alerts in any run.
+- **Tools containing shared snippets touched:** none (`bridgeSuite.v1.*` bootstrap and handoff code unchanged; no other tool file changed).
+
+### Open items (C4–C7)
+- The Fatigue module's "Import details from other modules → Girder section" and the Girder-section fallback inventory still build rows without b<sub>eff</sub>, so they use the module's single b<sub>eff</sub> even though each Girder section row has its own. Not changed (outside this item); decide whether those imports should carry the row's b<sub>eff</sub> too.
+- Pier connection-plate rows still take the cross-frame nearest the pier (C4 changes only the span rows).
