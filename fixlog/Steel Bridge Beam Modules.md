@@ -6321,3 +6321,95 @@ index 9121d62..fe483bb 100644
 ### Verification (XS10)
 - `node --check` on the main page and the decoded PlateLine; the new `sgDF` run in Node against the old one for the check cases above (values as listed); the lever rule equal to the old closed form in each case.
 - Headless Chromium: the eight XS8–XS9 test projects again (main vs this build). GirderDetail results, `gd-dfx`, Structural analysis, the Checks/Summary/Factors text, and Design all: unchanged. Preliminary sizing: the current-layout checks and demands unchanged where GirderDetail's factors are in use (only the stored built-in factor objects gain fields); the suggestion, Full design and width study change as listed. The Suggest-tab derivation shows the rigid method and the d<sub>e</sub> limit (screenshot). The link from Preliminary sizing now shows the first deck-edge field below the sticky header (screenshot). No console errors.
+
+## 2026-10-13 — PR: claude/girderdetail-xs4 (cross-section and dead loads, PR4 of 4: downstream consumers of the cross-section; engineer's decisions 2026-10-13; PR link added after merge)
+
+Main page only. The PL_B64 line (Preliminary sizing) is not touched, and `lldf.html` is unchanged. **No calculation change:** no formula, factor, load, or default changed, and every module computes the same results (checked below). The Deck overhang inputs change only when the user presses the new button. No storage key, saved field, or `bridgeSuite.v1.*` payload is added, renamed, or removed. The fill undo is kept in memory and is not saved. The 3D layer state is saved in the existing `P.ui.v3b.lay` object, with one new optional key (`app`) that is written only when the user ticks or unticks the new box.
+
+### XS11. Deck overhang: "Fill from cross-section" button (manual, with a confirmation; undo; locks respected)   [new button] [results unchanged until it is pressed]
+- **Where (anchors):** `GM.oh.panes`, section "Loads on the brackets" (anchor `id="oh_fill"`): a new button "Fill from cross-section", a hidden "Undo fill from cross-section" button, and a note `#oh-fill-note`. `GM.oh` has a new `after() { ohFillNote(); }`. These are new and come after `GM.oh`: `let OH_FILL_UNDO`, `const OH_FILL_K`, `function ohFillVals()`, `function ohFillNote()`, `function ohFill()`, `function ohFillUndo()`, and a click listener (`oh_fill`, `oh_fill_undo`).
+- **Before:** the bracket deck geometry (`oh.wOH` "Deck width carried by brackets", `oh.tOH` "Overhang deck thickness", `oh.wc`) could be entered by hand or imported from Preliminary sizing (`mods.oh.gen` in its export: `wOH = max(ohL, ohR)·12 − topB/2` with topB taken 1 ft from the first support, `tOH = t_s`, `wc`).
+- **After:** the button reads the LLDF and DLs cross-section (`GM.df.compute(P.df)`, the bridge from Preliminary sizing with this module's deck edges) and fills:
+  - `wOH` = overhang × 12 − b<sub>f,top</sub>/2. The overhang is measured from the exterior girder centerline to the deck edge. The side with the larger overhang is used, or the left side when they are equal. b<sub>f,top</sub> is the narrowest top flange of the girder (`bridge.plates.top`), which gives the widest deck strip outside the flange. This matches the module's own definition, as Preliminary sizing uses it when it sends this module's inputs. Rounded to 0.01 in, as there.
+  - `tOH` = deck t<sub>s</sub> (`tsDeck`). The bridge data has no overhang thickening, and the haunch lies over the flange, not over the brackets.
+  - `wc` = the deck concrete unit weight.
+  - It asks for a confirmation that lists each value, before → after, with its source.
+  - A locked input (double-click its label) is kept and listed in the confirmation.
+  - It records the fill in the module's Source line, which shows in the input pane and in the report: "Deck geometry filled from the cross-section (left overhang) date: …".
+  - "Undo fill from cross-section" restores the previous values and the Source line. It works until the page is reloaded or another project is loaded; nothing is saved for it.
+- **Permanent deck-edge loads are not filled.** Engineer's decision: the permanent barrier is not a deck-placement (bracket) load unless it is cast before the forms are stripped. This module also has no input for permanent loads; its "Railing" and "Walkway" are construction items on the bracket. The barrier, or the curb and railing, on the chosen side is therefore only listed, with its weight and position, in the note and in the confirmation.
+- **Note (display only):** the pane shows what the cross-section gives and whether the current inputs differ, for example: "Cross-section (LLDF and DLs): Deck width carried by brackets 31.00 in (left overhang 3.25 ft × 12 − 16.00/2 in, the narrowest top flange); … The inputs match. Permanent deck-edge loads on that side, not bracket loads and not filled (no input here): Left barrier 0.400 klf at 0.75 ft from the deck edge."
+- **Governing provision:** AASHTO LRFD 10th Ed. 6.10.3.4 and C6.10.3.4 (deck overhang loads on the brackets during deck placement). The module's formulas are unchanged: the deck load = w<sub>c</sub>(t<sub>OH</sub>/12)(w<sub>OH</sub>/12).
+- **Check case:** built-in example with the right overhang changed to 4.50 ft in Preliminary sizing, top flanges 16 in, t<sub>s</sub> = 8 in, w<sub>c</sub> = 0.150 kcf, and the inputs first set by hand to w<sub>OH</sub> = 30 in, t<sub>OH</sub> = 9 in.
+  - The button fills w<sub>OH</sub> = 4.50 × 12 − 16/2 = **46.00 in** (right side, the larger overhang), t<sub>OH</sub> = **8.00 in** and w<sub>c</sub> = 0.150.
+  - Overhang deck load: before 0.150(9/12)(30/12) = 0.281 kip/ft; after 0.150(8/12)(46/12) = **0.383** kip/ft.
+  - w<sub>u</sub>: 0.817 → **0.964** kip/ft. OH1 at the first location: f<sub>ℓ</sub> 18.06 → 20.51 ksi, ratio 0.66 → 0.71 (screen).
+  - Undo returns 30 / 9 in and w<sub>u</sub> 0.817.
+  - With t<sub>OH</sub> locked, only w<sub>OH</sub> and w<sub>c</sub> are filled, and w<sub>u</sub> = 1.024.
+  - Built-in example with equal 3.25 ft overhangs (inputs as imported from Preliminary sizing): 3.25 × 12 − 8 = 31.00 in and 8.00 in, the same as the imported values ("The inputs match").
+- **Other copies:** none. (Preliminary sizing's export, `oh.gen` in the PL_B64 line, uses the same definition with the flange 1 ft from the first support; it is unchanged.)
+
+### Exact changes (XS11): main page (unified diff against 4d56d55)
+
+```diff
+diff --git a/Steel Bridge Beam Modules.html b/Steel Bridge Beam Modules.html
+index fe483bb..092fce2 100644
+--- a/Steel Bridge Beam Modules.html	
++++ b/Steel Bridge Beam Modules.html	
+@@ -3067,7 +3067,7 @@ tabs: { combos: 'Bracket loads', rptCombos: 'Bracket loads and flange lateral be
+   panes() { return {
+     oh_br: `<div class="pad" id="gm-src"></div>${secHd('sec-ohm', 'Materials and factors')}<div class="sec-body" id="sec-ohm">${fld('Flange grade', 'oh.gF', '', 'sel', { options: GR })}${fld('Web grade', 'oh.gW', '', 'sel', { options: GR })}${fld('R<sub>h</sub>', 'oh.Rh', '')}${fld('C<sub>b</sub>', 'oh.Cb', '')}${fld('γ<sub>DC</sub>', 'oh.gam.dc', '')}${fld('γ construction', 'oh.gam.cl', '')}</div>
+       ${secHd('sec-ohb', 'Overhang bracket')}<div class="sec-body" id="sec-ohb">${fld('Horizontal projection a', 'oh.a', 'in')}${fld('Vertical projection h<sub>b</sub>', 'oh.hb', 'in')}<p class="note">F = P·a/h<sub>b</sub> is the horizontal force at each flange from a vertical load P on the bracket (C6.10.3.4).</p></div>
+-      ${secHd('sec-ohl', 'Loads on the brackets')}<div class="sec-body" id="sec-ohl">${fld('Deck width carried by brackets', 'oh.wOH', 'in')}${fld('Overhang deck thickness', 'oh.tOH', 'in')}${fld('w<sub>c</sub>', 'oh.wc', 'kcf')}${fld('Overhang forms', 'oh.qForm', 'ksf')}
++      ${secHd('sec-ohl', 'Loads on the brackets')}<div class="sec-body" id="sec-ohl"><div class="full"><button type="button" class="proj-btn" id="oh_fill" style="width:100%">Fill from cross-section</button><button type="button" class="proj-btn" id="oh_fill_undo" style="width:100%;margin-top:6px" hidden>Undo fill from cross-section</button><div id="oh-fill-note"></div></div>${fld('Deck width carried by brackets', 'oh.wOH', 'in')}${fld('Overhang deck thickness', 'oh.tOH', 'in')}${fld('w<sub>c</sub>', 'oh.wc', 'kcf')}${fld('Overhang forms', 'oh.qForm', 'ksf')}
+         ${fld('Screed rail', 'oh.wScreed', 'k/ft')}${fld('Railing', 'oh.wRail', 'k/ft')}${fld('Walkway', 'oh.wWalk', 'k/ft')}${fld('Construction LL', 'oh.qCL', 'ksf')}${fld('Width with construction LL', 'oh.bCL', 'in')}${fld('Finishing machine (per bracket)', 'oh.Pfm', 'kip')}
+         <p class="note">Defaults are common planning values; confirm them against the contractor's bracket and finishing machine. The deck weight is factored by γ<sub>DC</sub>; all other loads by the construction factor.</p></div>`,
+     oh_loc: `${secHd('sec-ohr', 'Check locations, exterior girder')}<div class="sec-body one-col" id="sec-ohr">${gmRowsHtml('oh')}<p class="note">M<sub>DC1</sub> is the unfactored noncomposite moment at the end of deck placement (steel plus wet deck), and M<sub>CLL</sub> the construction live load moment; both on the steel section. L<sub>b</sub> is the cross-frame spacing.</p></div>` }; },
+@@ -3129,8 +3129,45 @@ tabs: { combos: 'Bracket loads', rptCombos: 'Bracket loads and flange lateral be
+   echo(R) { const p = R.p; return { kv: [['Grades: flange / web', `${p.gF} / ${p.gW}`], ['R_h / C_b', `${f2(R.Rh)} / ${f2(R.Cb)}`], ['γ_DC / γ construction', `${f2(R.gd)} / ${f2(R.gc)}`], ['Bracket a / h_b', `${f2(nm(p.a))} / ${f2(nm(p.hb))} in`],
+       ['Deck carried: width / thickness', `${f2(nm(p.wOH))} / ${f2(nm(p.tOH))} in, w_c = ${p.wc}`], ['Forms / screed / rail / walkway', `${p.qForm} ksf / ${p.wScreed} / ${p.wRail} / ${p.wWalk} k/ft`], ['Construction LL', `${p.qCL} ksf over ${f2(nm(p.bCL))} in`], ['Finishing machine', `${f2(nm(p.Pfm))} kip per bracket`]],
+       table: [['Location', 'Section', 'L_b (ft)', 'M_DC1 / M_CLL (k-ft)'], R.rows.map(r => [esc(r.name), secTxt(r), f2(r.Lb), `${f2(r.MDC1)} / ${f2(r.MCL)}`])] }; },
+-  inbox(j) { const s = j && j.mods && j.mods.oh; return s && s.rows.length ? { n: s.rows.length, what: 'exterior girder locations', apply: () => { P.oh.rows = clone(s.rows); Object.assign(P.oh, s.gen || {}); } } : null; }
++  inbox(j) { const s = j && j.mods && j.mods.oh; return s && s.rows.length ? { n: s.rows.length, what: 'exterior girder locations', apply: () => { P.oh.rows = clone(s.rows); Object.assign(P.oh, s.gen || {}); } } : null; },
++  after() { ohFillNote(); }   // display only: what "Fill from cross-section" would enter (XS11)
+ };
++/* "Fill from cross-section" (XS11; engineer's decision 2026-10-13: a button with a confirmation, never automatic). Fills the bracket deck geometry
++   from the LLDF and DLs cross-section, with the definition Preliminary sizing uses when it sends this module's inputs: deck width carried by the
++   brackets = overhang (exterior girder centerline to the deck edge) − half the top flange width; overhang deck thickness = deck t_s (the bridge data
++   has no overhang thickening); w_c = the deck concrete unit weight. The side with the larger overhang (left when equal); the narrowest top flange of
++   the girder (the widest deck strip outside the flange). Locked inputs are kept. The permanent barrier or curb and railing is not a bracket load
++   (it is placed after the deck forms are stripped unless the engineer states otherwise) and this module has no input for permanent loads, so it is
++   only listed. The undo is kept in memory for this project (no saved-data change). */
++let OH_FILL_UNDO = null;
++const OH_FILL_K = [['wOH', 'Deck width carried by brackets', 'in', f2], ['tOH', 'Overhang deck thickness', 'in', f2], ['wc', 'w_c', 'kcf', f3]];
++function ohFillVals() {
++  const b0 = P.df && P.df.bridge; if (!b0 || !b0.ok) return { err: 'No complete bridge yet: define the bridge in Preliminary sizing (the LLDF and DLs module needs it).' };
++  let R; try { R = GM.df.compute(P.df); } catch (e) { R = { errors: [e.message] }; }
++  if (R.errors && R.errors.length) return { err: `The LLDF and DLs module has input errors: ${R.errors[0]}` };
++  const b = R.b, sd = b.ohR > b.ohL + 1e-9 ? 'R' : 'L', oh = sd === 'L' ? b.ohL : b.ohR, tops = ((b.plates && b.plates.top) || []).map(q => +q.b).filter(v => v > 0), bf = tops.length ? Math.min(...tops) : R.regions[0].sec.topB;
++  const vals = { wOH: Math.round(Math.max(oh * 12 - bf / 2, 0) * 100) / 100, tOH: b.tsDeck, wc: b.wc };
++  const perm = R.dead.per.filter(L => L.side === sd && /^(bar|curb|rail)[LR]$/.test(L.id)).map(L => `${L.desc} ${f3(L.plf)} klf at ${f2(sd === 'L' ? L.x : R.dead.Wd - L.x)} ft from the deck edge`);
++  const why = { wOH: `${sd === 'L' ? 'left' : 'right'} overhang ${f2(oh)} ft × 12 − ${f2(bf)}/2 in, the narrowest top flange`, tOH: 'deck t_s; no overhang thickening in the bridge data', wc: 'deck concrete unit weight' };
++  return { sd, oh, bf, vals, why, perm };
++}
++function ohFillNote() {
++  const el = document.getElementById('oh-fill-note'), ub = document.getElementById('oh_fill_undo'); if (ub) ub.hidden = !(OH_FILL_UNDO && OH_FILL_UNDO.P === P); if (!el) return;
++  const F = ohFillVals(); if (F.err) { el.innerHTML = `<p class="note">${esc(F.err)}</p>`; return; }
++  const diff = OH_FILL_K.filter(([k]) => !(Math.abs(nm(P.oh[k]) - F.vals[k]) < 1e-9));
++  el.innerHTML = `<p class="note">Cross-section (LLDF and DLs): ${OH_FILL_K.map(([k, l, u, f]) => `${l} ${f(F.vals[k])} ${u} (${F.why[k]})`).join('; ')}. ${diff.length ? `The inputs differ in: ${diff.map(([k, l, u, f]) => `${l} (entered ${esc(String(P.oh[k]))})`).join(', ')}.` : 'The inputs match.'}${F.perm.length ? ` Permanent deck-edge loads on that side, not bracket loads and not filled (no input here): ${F.perm.join('; ')}.` : ''}</p>`;
++}
++function ohFill() {
++  const F = ohFillVals(); if (F.err) { alert(`Fill from cross-section\n\n${F.err}`); return; }
++  const set = OH_FILL_K.filter(([k]) => !adLocked('oh.' + k)), locked = OH_FILL_K.filter(([k]) => adLocked('oh.' + k));
++  if (!set.length) { alert('Fill from cross-section\n\nEvery input it fills is locked.'); return; }
++  if (!confirm(`Fill the deck overhang inputs from the cross-section (LLDF and DLs)?\n\n${set.map(([k, l, u, f]) => `${l}: ${P.oh[k]} → ${f(F.vals[k])} ${u} (${F.why[k]})`).join('\n')}${locked.length ? `\n\nLocked, kept: ${locked.map(q => q[1]).join(', ')}.` : ''}\n\nThe permanent barrier or curb and railing is not added to the bracket loads (placed after the deck forms are stripped).${F.perm.length ? ` On this side: ${F.perm.join('; ')}.` : ''} Use Undo to go back.`)) return;
++  const prev = { source: P.oh.source }; set.forEach(([k]) => { prev[k] = P.oh[k]; P.oh[k] = F.vals[k]; });
++  P.oh.source = `${(P.oh.source || '').replace(/ ?Deck geometry filled from the cross-section .*$/, '')} Deck geometry filled from the cross-section (${F.sd === 'L' ? 'left' : 'right'} overhang) ${new Date().toLocaleDateString()}: ${set.map(([k, l, u, f]) => `${l} ${f(F.vals[k])} ${u}`).join(', ')}.`.trim();
++  OH_FILL_UNDO = { P, prev }; fillInputs(); recompute(); autosave(); flash(`Filled ${set.length} input${set.length > 1 ? 's' : ''} from the cross-section.`);
++}
++function ohFillUndo() { const u = OH_FILL_UNDO; if (!u || u.P !== P) return; Object.entries(u.prev).forEach(([k, v]) => { if (v === undefined) delete P.oh[k]; else P.oh[k] = v; }); OH_FILL_UNDO = null; fillInputs(); recompute(); autosave(); flash('Restored the deck overhang inputs from before the fill.'); }
++document.addEventListener('click', e => { if (e.target.id === 'oh_fill') ohFill(); else if (e.target.id === 'oh_fill_undo') ohFillUndo(); });
+ function ohSVG(R, r) {
+   const s = r.s, D = r.D, sc = Math.min(4.2, 380 / (D + 20)), Wpx = 860, gx = 420, top = 40 + nm(R.p.tOH) * Math.min(4.2, 380 / (D + 20)) + 30, X = x => gx + x * sc, Y = y => top + (s.d - y) * sc; let o = '';
+   o += `<rect x="${X(-r.topB / 2)}" y="${Y(s.d)}" width="${r.topB * sc}" height="${r.topT * sc}" fill="${DC.stl}" stroke="${DC.stlS}"/><rect x="${X(-r.tw / 2)}" y="${Y(s.d - r.topT)}" width="${r.tw * sc}" height="${D * sc}" fill="${DC.stl}" stroke="${DC.stlS}"/><rect x="${X(-r.botB / 2)}" y="${Y(r.botT)}" width="${r.botB * sc}" height="${r.botT * sc}" fill="${DC.stl}" stroke="${DC.stlS}"/>`;
+```

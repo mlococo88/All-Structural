@@ -3067,7 +3067,7 @@ tabs: { combos: 'Bracket loads', rptCombos: 'Bracket loads and flange lateral be
   panes() { return {
     oh_br: `<div class="pad" id="gm-src"></div>${secHd('sec-ohm', 'Materials and factors')}<div class="sec-body" id="sec-ohm">${fld('Flange grade', 'oh.gF', '', 'sel', { options: GR })}${fld('Web grade', 'oh.gW', '', 'sel', { options: GR })}${fld('R<sub>h</sub>', 'oh.Rh', '')}${fld('C<sub>b</sub>', 'oh.Cb', '')}${fld('γ<sub>DC</sub>', 'oh.gam.dc', '')}${fld('γ construction', 'oh.gam.cl', '')}</div>
       ${secHd('sec-ohb', 'Overhang bracket')}<div class="sec-body" id="sec-ohb">${fld('Horizontal projection a', 'oh.a', 'in')}${fld('Vertical projection h<sub>b</sub>', 'oh.hb', 'in')}<p class="note">F = P·a/h<sub>b</sub> is the horizontal force at each flange from a vertical load P on the bracket (C6.10.3.4).</p></div>
-      ${secHd('sec-ohl', 'Loads on the brackets')}<div class="sec-body" id="sec-ohl">${fld('Deck width carried by brackets', 'oh.wOH', 'in')}${fld('Overhang deck thickness', 'oh.tOH', 'in')}${fld('w<sub>c</sub>', 'oh.wc', 'kcf')}${fld('Overhang forms', 'oh.qForm', 'ksf')}
+      ${secHd('sec-ohl', 'Loads on the brackets')}<div class="sec-body" id="sec-ohl"><div class="full"><button type="button" class="proj-btn" id="oh_fill" style="width:100%">Fill from cross-section</button><button type="button" class="proj-btn" id="oh_fill_undo" style="width:100%;margin-top:6px" hidden>Undo fill from cross-section</button><div id="oh-fill-note"></div></div>${fld('Deck width carried by brackets', 'oh.wOH', 'in')}${fld('Overhang deck thickness', 'oh.tOH', 'in')}${fld('w<sub>c</sub>', 'oh.wc', 'kcf')}${fld('Overhang forms', 'oh.qForm', 'ksf')}
         ${fld('Screed rail', 'oh.wScreed', 'k/ft')}${fld('Railing', 'oh.wRail', 'k/ft')}${fld('Walkway', 'oh.wWalk', 'k/ft')}${fld('Construction LL', 'oh.qCL', 'ksf')}${fld('Width with construction LL', 'oh.bCL', 'in')}${fld('Finishing machine (per bracket)', 'oh.Pfm', 'kip')}
         <p class="note">Defaults are common planning values; confirm them against the contractor's bracket and finishing machine. The deck weight is factored by γ<sub>DC</sub>; all other loads by the construction factor.</p></div>`,
     oh_loc: `${secHd('sec-ohr', 'Check locations, exterior girder')}<div class="sec-body one-col" id="sec-ohr">${gmRowsHtml('oh')}<p class="note">M<sub>DC1</sub> is the unfactored noncomposite moment at the end of deck placement (steel plus wet deck), and M<sub>CLL</sub> the construction live load moment; both on the steel section. L<sub>b</sub> is the cross-frame spacing.</p></div>` }; },
@@ -3129,8 +3129,45 @@ tabs: { combos: 'Bracket loads', rptCombos: 'Bracket loads and flange lateral be
   echo(R) { const p = R.p; return { kv: [['Grades: flange / web', `${p.gF} / ${p.gW}`], ['R_h / C_b', `${f2(R.Rh)} / ${f2(R.Cb)}`], ['γ_DC / γ construction', `${f2(R.gd)} / ${f2(R.gc)}`], ['Bracket a / h_b', `${f2(nm(p.a))} / ${f2(nm(p.hb))} in`],
       ['Deck carried: width / thickness', `${f2(nm(p.wOH))} / ${f2(nm(p.tOH))} in, w_c = ${p.wc}`], ['Forms / screed / rail / walkway', `${p.qForm} ksf / ${p.wScreed} / ${p.wRail} / ${p.wWalk} k/ft`], ['Construction LL', `${p.qCL} ksf over ${f2(nm(p.bCL))} in`], ['Finishing machine', `${f2(nm(p.Pfm))} kip per bracket`]],
       table: [['Location', 'Section', 'L_b (ft)', 'M_DC1 / M_CLL (k-ft)'], R.rows.map(r => [esc(r.name), secTxt(r), f2(r.Lb), `${f2(r.MDC1)} / ${f2(r.MCL)}`])] }; },
-  inbox(j) { const s = j && j.mods && j.mods.oh; return s && s.rows.length ? { n: s.rows.length, what: 'exterior girder locations', apply: () => { P.oh.rows = clone(s.rows); Object.assign(P.oh, s.gen || {}); } } : null; }
+  inbox(j) { const s = j && j.mods && j.mods.oh; return s && s.rows.length ? { n: s.rows.length, what: 'exterior girder locations', apply: () => { P.oh.rows = clone(s.rows); Object.assign(P.oh, s.gen || {}); } } : null; },
+  after() { ohFillNote(); }   // display only: what "Fill from cross-section" would enter (XS11)
 };
+/* "Fill from cross-section" (XS11; engineer's decision 2026-10-13: a button with a confirmation, never automatic). Fills the bracket deck geometry
+   from the LLDF and DLs cross-section, with the definition Preliminary sizing uses when it sends this module's inputs: deck width carried by the
+   brackets = overhang (exterior girder centerline to the deck edge) − half the top flange width; overhang deck thickness = deck t_s (the bridge data
+   has no overhang thickening); w_c = the deck concrete unit weight. The side with the larger overhang (left when equal); the narrowest top flange of
+   the girder (the widest deck strip outside the flange). Locked inputs are kept. The permanent barrier or curb and railing is not a bracket load
+   (it is placed after the deck forms are stripped unless the engineer states otherwise) and this module has no input for permanent loads, so it is
+   only listed. The undo is kept in memory for this project (no saved-data change). */
+let OH_FILL_UNDO = null;
+const OH_FILL_K = [['wOH', 'Deck width carried by brackets', 'in', f2], ['tOH', 'Overhang deck thickness', 'in', f2], ['wc', 'w_c', 'kcf', f3]];
+function ohFillVals() {
+  const b0 = P.df && P.df.bridge; if (!b0 || !b0.ok) return { err: 'No complete bridge yet: define the bridge in Preliminary sizing (the LLDF and DLs module needs it).' };
+  let R; try { R = GM.df.compute(P.df); } catch (e) { R = { errors: [e.message] }; }
+  if (R.errors && R.errors.length) return { err: `The LLDF and DLs module has input errors: ${R.errors[0]}` };
+  const b = R.b, sd = b.ohR > b.ohL + 1e-9 ? 'R' : 'L', oh = sd === 'L' ? b.ohL : b.ohR, tops = ((b.plates && b.plates.top) || []).map(q => +q.b).filter(v => v > 0), bf = tops.length ? Math.min(...tops) : R.regions[0].sec.topB;
+  const vals = { wOH: Math.round(Math.max(oh * 12 - bf / 2, 0) * 100) / 100, tOH: b.tsDeck, wc: b.wc };
+  const perm = R.dead.per.filter(L => L.side === sd && /^(bar|curb|rail)[LR]$/.test(L.id)).map(L => `${L.desc} ${f3(L.plf)} klf at ${f2(sd === 'L' ? L.x : R.dead.Wd - L.x)} ft from the deck edge`);
+  const why = { wOH: `${sd === 'L' ? 'left' : 'right'} overhang ${f2(oh)} ft × 12 − ${f2(bf)}/2 in, the narrowest top flange`, tOH: 'deck t_s; no overhang thickening in the bridge data', wc: 'deck concrete unit weight' };
+  return { sd, oh, bf, vals, why, perm };
+}
+function ohFillNote() {
+  const el = document.getElementById('oh-fill-note'), ub = document.getElementById('oh_fill_undo'); if (ub) ub.hidden = !(OH_FILL_UNDO && OH_FILL_UNDO.P === P); if (!el) return;
+  const F = ohFillVals(); if (F.err) { el.innerHTML = `<p class="note">${esc(F.err)}</p>`; return; }
+  const diff = OH_FILL_K.filter(([k]) => !(Math.abs(nm(P.oh[k]) - F.vals[k]) < 1e-9));
+  el.innerHTML = `<p class="note">Cross-section (LLDF and DLs): ${OH_FILL_K.map(([k, l, u, f]) => `${l} ${f(F.vals[k])} ${u} (${F.why[k]})`).join('; ')}. ${diff.length ? `The inputs differ in: ${diff.map(([k, l, u, f]) => `${l} (entered ${esc(String(P.oh[k]))})`).join(', ')}.` : 'The inputs match.'}${F.perm.length ? ` Permanent deck-edge loads on that side, not bracket loads and not filled (no input here): ${F.perm.join('; ')}.` : ''}</p>`;
+}
+function ohFill() {
+  const F = ohFillVals(); if (F.err) { alert(`Fill from cross-section\n\n${F.err}`); return; }
+  const set = OH_FILL_K.filter(([k]) => !adLocked('oh.' + k)), locked = OH_FILL_K.filter(([k]) => adLocked('oh.' + k));
+  if (!set.length) { alert('Fill from cross-section\n\nEvery input it fills is locked.'); return; }
+  if (!confirm(`Fill the deck overhang inputs from the cross-section (LLDF and DLs)?\n\n${set.map(([k, l, u, f]) => `${l}: ${P.oh[k]} → ${f(F.vals[k])} ${u} (${F.why[k]})`).join('\n')}${locked.length ? `\n\nLocked, kept: ${locked.map(q => q[1]).join(', ')}.` : ''}\n\nThe permanent barrier or curb and railing is not added to the bracket loads (placed after the deck forms are stripped).${F.perm.length ? ` On this side: ${F.perm.join('; ')}.` : ''} Use Undo to go back.`)) return;
+  const prev = { source: P.oh.source }; set.forEach(([k]) => { prev[k] = P.oh[k]; P.oh[k] = F.vals[k]; });
+  P.oh.source = `${(P.oh.source || '').replace(/ ?Deck geometry filled from the cross-section .*$/, '')} Deck geometry filled from the cross-section (${F.sd === 'L' ? 'left' : 'right'} overhang) ${new Date().toLocaleDateString()}: ${set.map(([k, l, u, f]) => `${l} ${f(F.vals[k])} ${u}`).join(', ')}.`.trim();
+  OH_FILL_UNDO = { P, prev }; fillInputs(); recompute(); autosave(); flash(`Filled ${set.length} input${set.length > 1 ? 's' : ''} from the cross-section.`);
+}
+function ohFillUndo() { const u = OH_FILL_UNDO; if (!u || u.P !== P) return; Object.entries(u.prev).forEach(([k, v]) => { if (v === undefined) delete P.oh[k]; else P.oh[k] = v; }); OH_FILL_UNDO = null; fillInputs(); recompute(); autosave(); flash('Restored the deck overhang inputs from before the fill.'); }
+document.addEventListener('click', e => { if (e.target.id === 'oh_fill') ohFill(); else if (e.target.id === 'oh_fill_undo') ohFillUndo(); });
 function ohSVG(R, r) {
   const s = r.s, D = r.D, sc = Math.min(4.2, 380 / (D + 20)), Wpx = 860, gx = 420, top = 40 + nm(R.p.tOH) * Math.min(4.2, 380 / (D + 20)) + 30, X = x => gx + x * sc, Y = y => top + (s.d - y) * sc; let o = '';
   o += `<rect x="${X(-r.topB / 2)}" y="${Y(s.d)}" width="${r.topB * sc}" height="${r.topT * sc}" fill="${DC.stl}" stroke="${DC.stlS}"/><rect x="${X(-r.tw / 2)}" y="${Y(s.d - r.topT)}" width="${r.tw * sc}" height="${D * sc}" fill="${DC.stl}" stroke="${DC.stlS}"/><rect x="${X(-r.botB / 2)}" y="${Y(r.botT)}" width="${r.botB * sc}" height="${r.botT * sc}" fill="${DC.stl}" stroke="${DC.stlS}"/>`;
