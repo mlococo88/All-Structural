@@ -5713,3 +5713,611 @@ index a867bf1..ab2a881 100644
   - A project saved here with overrides, class labels and fences loads in the main build without errors (the new fields are ignored and kept).
   - The new fields are written only when entered.
 - **Screenshots:** the input tab, cross-section, loads table and Derivations at 1400 px and 1000 px viewport widths were checked. The sidebar inputs, including the overrides table, fit the 343 px sidebar. The labels do not overlap.
+
+## 2026-10-13 — PR: claude/girderdetail-xs3 (cross-section and dead loads, PR3 of 4: the LLDF and DLs module owns the deck edges; engineer's decisions 2026-10-13; PR link added after merge)
+
+Main page (LLDF and DLs module `GM.df`) and the embedded Preliminary sizing (PlateLine, `PL_B64`, decoded, edited, re-encoded on its one line). Engineer's decision: "this should replace the current barrier input" — the deck edges are now entered in LLDF and DLs → Cross-section and dead loads; Preliminary sizing's Bridge-tab deck-edge fields and its Suggest-tab barrier weight are read-only and written from GirderDetail. `lldf.html` is unchanged. No `bridgeSuite.v1.*` key or payload, no storage key, and no existing saved field is renamed or removed. **Migrated projects give bit-identical results** (checked below); XS9 changes Preliminary sizing's own roadway and d<sub>e</sub> only where GirderDetail's live-load traffic face differs from the deck-edge face (§4 callout in XS9).
+
+New optional saved fields (absent in older projects; an older build ignores and keeps them):
+- `P.df.edges` = `{ L: {...}, R: {...} }` (GirderDetail project data and autosave), per side: `type` (`'barrier'` | `'curb'`), `bw` (barrier width at the deck, ft), `bwt` (barrier weight, klf), `cw`, `ch` (curb width and height, in), `rw` (railing weight, klf), `rp` (railing load point from the edge, ft), `rf` (railing traffic face from the edge, ft; blank = `rp`), `face` (optional edge to traffic face, ft; governs when entered).
+- `P.bridge.xs` (Preliminary sizing saved data): the record GirderDetail sends (per side the fields above plus `f`, the traffic face at the deck edge, and `r`, the live-load traffic face after the sidewalk rule; and `wcA`). It is echoed as an optional `xs` key in the `gd-bridge` message (so `P.df.bridge` carries it).
+
+### XS8. Deck-edge inputs in LLDF and DLs (per side: barrier, or curb and railing; optional traffic face); one-time migration from Preliminary sizing's stored values   [new inputs] [migration, results unchanged] [§4: derived traffic face of a curb (12 in mountable rule) when no face is entered]
+- **Where (anchors):** new `const DF_EDGE_K`, `const DF_EDGE_LBL`, `const dfHasEdges`, `function dfEdgeIn(E, errors)`, `function dfBridgeEff(b, Ed)`, `function dfEdgesInit(nb)`, `function dfEdgeFields()`, `const dfEdgeTxt`, `function dfEdgeVis()` and its `change` listener (all before `function dfEdgeSummary(b)`); `dfEdges` (anchor `else if (e && e.mode === 'barrier')`); `GM.df.panes` `df_dl` (anchor `dfHasEdges(P && P.df) ? dfEdgeFields() : dfEdgeSummary(b)`); `GM.df.compute` (`let b = p.bridge;`, anchor `const Ed = dfEdgeIn(p.edges, errors)` and `b = dfBridgeEff(b, Ed);`); `dfLLFace` (anchor `b.edge[sd].fby`); `dfXsSVG` (`e && e.mode === 'barrier' ? (e.bw > 0 ...`); `dfDLCalcs` (`b.gdEdges ? 'deck edges (entered)'`); `GM.df.after` (`dfEdgeVis()`); `GM.df.echo`, the Bridge pane summary; the `gd-bridge` listener (anchor `const init = !!nb.ok && !dfHasEdges(P.df)`); CSS `.df-hr`.
+- **Inputs:** section "Deck edges" of the "Cross-section and dead loads" tab, per side: type (Barrier / Curb and railing); barrier width at the deck and weight; or curb width and height, railing weight, railing load point from the edge, railing traffic face from the edge (blank = load point); and an optional "edge to traffic face". The fields of the other type are hidden; the derived face and its rule are shown next to the traffic-face input (and as its placeholder).
+- **Traffic face at the deck edge f (before the sidewalk rule of XS6):**
+  - entered "edge to traffic face": f = the entered value;
+  - barrier: f = barrier width (as before);
+  - curb and railing, curb height h < 12 in (mountable, engineer's rule 2026-10-13): f = railing traffic face (blank: the railing load point);
+  - curb h ≥ 12 in: f = max(curb width/12, railing traffic face) (the curb face unless the railing stands farther in).
+  Then XS6 applies unchanged: r = max(f, sidewalk width if t ≥ 12 in, railing or fence on the sidewalk). r feeds the roadway, N<sub>L</sub>, d<sub>e</sub>, the lever rule and the rigid method as before.
+- **Loads:** barrier: DC2 `bwt` at `bw`/2 from its edge (each side its own width and weight; before: one width and one weight from Preliminary sizing for both sides). Curb and railing: as before (curb (cw/12)(ch/12)γ<sub>c</sub> at cw/24, railing `rw` at `rp`).
+- **Migration (CLAUDE.md §5):** `P.df.edges` is absent in every project saved before this PR. On the first complete bridge received from Preliminary sizing (`gd-bridge`, `ok`), and only when `P.df.edges` is absent, `dfEdgesInit` fills it once from what Preliminary sizing holds: a GirderDetail record it already carries (`bridge.xs`) if any; else curb mode: per side `cw`, `ch`, `rw`, `rp` from `bridge.edge`, and its traffic faces `faceL`/`faceR` (= `bridge.edge.fL`/`fR`) as the entered "edge to traffic face"; else barrier mode: `bw` = `bridge.barrier`, `bwt` = `suggest.bar` on both sides (face left blank: the derived face is the barrier width, the face Preliminary sizing used). It is never re-run once `P.df.edges` exists, so the user's edges are never overwritten. While `P.df.edges` is absent (a project opened before Preliminary sizing has loaded), every result is computed from the bridge Preliminary sizing sent, exactly as before. The migrated values reproduce Preliminary sizing's loads and faces, so every result is unchanged (checked, below).
+- **§4 callout (curb and railing with no entered face):** before, the curb-mode traffic face was always the value entered in Preliminary sizing; now, when "edge to traffic face" is blank, it is derived by the 12 in rule. Migrated curb projects keep their entered faces, so nothing changes for them until the user clears the field.
+  - **Provision:** AASHTO LRFD 10th Ed. 3.6.1.1.1 (roadway between curbs and/or barriers), 3.6.1.3.1 (wheel 2.0 ft from the face of the curb or railing), 4.6.2.2.1 (d<sub>e</sub> to the inside face of the curb or barrier); the 12 in mountable limit is the engineer's rule (owner practice), not an AASHTO number.
+  - **Check case (curb test project: built-in bridge, 5 girders at 9.50 ft, overhangs 3.25 ft, W<sub>deck</sub> = 44.50 ft; left curb 12 × 10 in, railing 0.050 klf at 0.50 ft; right curb 10 × 8 in, railing 0.030 klf at 1.25 ft; faces entered in Preliminary sizing 1.00 / 1.50 ft):**
+    - Migrated (faces entered 1.00 / 1.50): identical to before: roadway 44.50 − 2.50 = 42.00 ft, N<sub>L</sub> 3, d<sub>e</sub> 2.25 / 1.75 ft, g<sub>M,ext</sub> G1 0.853 (lever), G5 0.811 (rigid).
+    - Faces cleared (both curbs < 12 in, mountable → railing face = load point): f = 0.50 / 1.25 ft; roadway 44.50 − 1.75 = 42.75 ft, N<sub>L</sub> 3; d<sub>e</sub> 2.75 / 2.00 ft; G1 lever 1.2 × ½ × [(9.50 + 2.75 − 2) + (9.50 + 2.75 − 8)]/9.50 = 0.6 × 14.50/9.50 = **0.916** (was 0.853); G5 lever 0.6 × (9.50 + 2.00 − 2 + 9.50 + 2.00 − 8)/9.50 = 0.6 × 13.00/9.50 = **0.821** (was 0.811 rigid); g<sub>V,ext</sub> 0.894 → 0.960 and 0.850 → 0.861. Screen values identical.
+    - Left curb raised to 12 in (not mountable): f<sub>L</sub> = 12/12 = 1.00 ft (curb face); G1 back to 0.853. Right railing traffic face entered 0.90 ft: f<sub>R</sub> = 0.90, d<sub>e,R</sub> = 2.35 ft, G5 0.853. Dead loads change only with the curb size (left curb 12 × 12 in: 1.00 × 1.00 × 0.150 = 0.150 klf, was 0.125).
+- **Other copies:** none (`lldf.html` `edgeInputs`/`faceOffset` were the reference; unchanged).
+
+### XS9. GirderDetail sends the deck edges to Preliminary sizing (`gd-xs`); its deck-edge fields are read-only; its roadway, d<sub>e</sub> and barrier DC2 use GirderDetail's traffic faces and per-side weights   [§4: Preliminary sizing roadway, d<sub>e</sub>, built-in approximate factors, deflection factor, where GirderDetail's live-load face differs from the deck-edge face] [migrated projects identical]
+- **Where (anchors), main page:** new `function dfXsMsg(p)` and `function dfXsPost()` (before `function dfFeed(R)`); `dfFeed` (first line `dfXsPost();`); the `gd-bridge` listener (anchors `const ae = document.activeElement, keep = !init`, `dfXsPost(); autosave();`, `const nx = o => JSON.stringify({ ...o, ts: 0, xs: 0 })`); new `pl-goto` listener (anchor `e.data.type !== 'pl-goto'`); `gdScheduleRefresh` (anchor `ae.closest('#ipane-df_dl')`); Manual part "Scope and the bridge definition"; Sidewalks note.
+- **Where (anchors), decoded PlateLine:** `brGeom` (anchor `X = b.xs && b.xs.L && b.xs.R ? b.xs : null`); `bridgeDef` (anchor `...(B.xs ? { xs: B.xs } : {})`); message listener (anchor `e.data.type === 'gd-xs'`); new `function xsLegacy(B, SG, X)`, `const XS_RO`, `function syncEdgeRO()` and the `[data-goxs]` click listener; `fillInputs` (`syncSpacingVis(); syncEdgeRO();`); Bridge tab `<p ... id="br-edge-ro">`; Suggest tab `<p ... id="sg-bar-ro">`; CSS `input[data-k]:disabled, select[data-k]:disabled`, `.hint .link-btn`; Manual "Variable spacing and deck edges".
+- **Messages (no `bridgeSuite.v1.*` change):** GirderDetail posts `{ type: 'gd-xs', xs }` to the embedded Preliminary sizing whenever its record (`dfXsMsg`) differs from the echo `P.df.bridge.xs` (as `gd-an` does with `analysis`). Preliminary sizing ignores an identical record; otherwise it stores `P.bridge.xs`, rewrites its own fields (`xsLegacy`), recomputes and posts `gd-bridge` with the `xs` echo. The record depends only on GirderDetail's inputs (not on the bridge), so the exchange ends after one round (checked: no further `gd-bridge`/`gd-xs` in 10 s after each edit). A change of the echo alone does not trigger the "Bridge changed: updating every module" refresh; a change of the faces or the legacy fields does (as an edit in Preliminary sizing did before). While the user types in a cross-section input, the returning `gd-bridge` does not rebuild that pane (focus and typed text kept) and the refresh waits until the field is left. The "Set in LLDF and DLs → Cross-section and dead loads" button in Preliminary sizing posts `pl-goto`; GirderDetail opens LLDF and DLs on the Cross-section and dead loads tab at Deck edges.
+- **Preliminary sizing fields written (`xsLegacy`; an equal stored value is kept, so a migrated project's fields and `sgGeoSig` are unchanged):** both sides barriers: `edge.mode` 'barrier', `bridge.barrier` = (f<sub>L</sub> + f<sub>R</sub>)/2, `suggest.bar` = (w<sub>L</sub> + w<sub>R</sub>)/2; any curb side: `edge.mode` 'curb' and per side `cw`, `ch`, `rp`, `rw`, and `f` = the deck-edge face; a barrier side next to a curb side is stored as a zero-size curb with a railing of the barrier weight at its centroid (bw/2). An older build reading the project therefore finds valid values with the same loads and deck-edge faces (checked below). These fields are disabled (read-only) while `bridge.xs` is present, with a note naming each side and a link back.
+- **Before (`brGeom`):**
+  ```js
+  const E = b.edge || { mode: 'barrier' }, curb = E.mode === 'curb', wc = num(b.wc) || 0.150;
+  let faceL = num(b.barrier), faceR = num(b.barrier), barW = barW0;
+  if (curb) { ...
+    faceL = num(E.fL); faceR = num(E.fR);
+    const wL = num(E.cwL) / 12 * num(E.chL) / 12 * wc + num(E.rwL), wR = num(E.cwR) / 12 * num(E.chR) / 12 * wc + num(E.rwR); barW = (wL + wR) / 2; }
+  ```
+- **After:**
+  ```js
+  const E = b.edge || { mode: 'barrier' }, X = b.xs && b.xs.L && b.xs.R ? b.xs : null, wc = num(b.wc) || 0.150;
+  let curb = E.mode === 'curb', faceL = num(b.barrier), faceR = num(b.barrier), barW = barW0;
+  if (X) {   // deck edges set in GirderDetail's LLDF and DLs module (XS9)
+    const wcx = X.wcA > 0 ? X.wcA : wc, w = q => q.type === 'curb' ? q.cw / 12 * q.ch / 12 * wcx + q.rw : q.bwt, ok = ...;
+    if (![X.L.r, X.R.r, w(X.L), w(X.R)].every(ok)) errs.push('The deck edges from the LLDF and DLs module are incomplete: ...');
+    curb = X.L.type === 'curb' || X.R.type === 'curb'; faceL = X.L.r; faceR = X.R.r; barW = (w(X.L) + w(X.R)) / 2; }
+  else if (curb) { ... unchanged ... }
+  ```
+  Sizing DC2 per girder stays `2 * BG.barW / nb` = (w<sub>L</sub> + w<sub>R</sub>)/N<sub>b</sub> (identical to 2·w/N<sub>b</sub> when the sides are equal: (w + w)/2 = w exactly in floating point). Sizing still uses the average face (`bar = (faceL + faceR)/2`, roadway = W − 2·bar, d<sub>e</sub> = max overhang − bar), as before.
+- **§4 callout — what changes in Preliminary sizing:** its traffic faces were the deck-edge faces (barrier width, or the entered curb traffic faces); they are now GirderDetail's live-load faces r, so they also include a sidewalk 12 in or thicker, a railing or fence on a sidewalk (XS4/XS6), and, when no face is entered, the curb 12 in rule (XS8); and the barrier weight is per side. Outputs that change: roadway, d<sub>e</sub> (its G7 range item), its built-in approximate factors (used when "Use these factors" is No, and for Suggest/Full design trial layouts whose geometry differs from the current one), the live-load deflection factor N<sub>L</sub>m/N<sub>b</sub> (A1), the Spacing study d<sub>e</sub> filter, and the suggested sections. Migrated projects (barrier mode, curb mode with entered faces, sidewalks under 12 in) are unchanged.
+  - **Provision:** AASHTO LRFD 10th Ed. 3.6.1.1.1 (number of lanes INT(w/12), w between curbs and/or barriers), 4.6.2.2.1 (d<sub>e</sub>), Table 4.6.2.2.2d-1 (lever rule, e = 0.77 + d<sub>e</sub>/9.1), 3.6.1.1.2 (multiple presence), 2.5.2.6.2 (deflection distribution); engineer's 12 in mountable rule; MassDOT 3.5.3 for the per-side barrier loads.
+  - **Check case 1 (built-in bridge with 6 ft sidewalks, 12 in thick, both sides; 5 girders at 9.50 ft, overhangs 3.25 ft, W = 44.50 ft; span 1 L = 110 ft, K<sub>g</sub> = 936,395 in⁴, t<sub>s</sub> = 8 in):** before: faces 1.50 / 1.50, bar = 1.50, roadway 44.50 − 3.00 = 41.50 ft (N<sub>L</sub> 3), d<sub>e</sub> = 3.25 − 1.50 = 1.75 ft; after: faces 6.00 / 6.00 (sidewalk curb face), roadway 32.50 ft (N<sub>L</sub> 2), d<sub>e</sub> = −2.75 ft (G7 "d<sub>e</sub>" item pass → warn, outside −1.0 to 5.5). Built-in exterior factor, span 1: lever a<sub>1</sub> = S + d<sub>e</sub> − 2: before 9.25, a<sub>2</sub> = 3.25, g = 1.2 × ½ × 12.50/9.50 = **0.789**; after a<sub>1</sub> = 4.75, a<sub>2</sub> < 0, g = 0.6 × 4.75/9.50 = **0.300**; e-factor before 0.962 × 0.708 = 0.681, after (0.77 − 2.75/9.1) × 0.708 = 0.468 × 0.708 = **0.331**; g<sub>M,ext</sub> 0.789 → **0.331**, g<sub>V,ext</sub> 0.789 → **0.300**; interior unchanged (0.708 / 0.918). Deflection factor 3(0.85)/5 = 0.510 → 2(1.00)/5 = **0.400** (A1 ratios 0.31 → 0.24). Fast suggestion web depth 63 → 61 in. With "Use these factors" Yes the analysis live load still uses GirderDetail's factors (unchanged: GirderDetail already used r = 6.00 ft since XS6).
+  - **Check case 2 (sidewalks 6 ft × 8 in / 5 ft × 9 in with fences 0.050 klf at 5.50 ft and 0.030 klf at 4.50 ft, XS4 test project xsA):** faces 1.50 / 1.50 → 5.50 / 4.50 (fences); bar 1.50 → 5.00; roadway 41.50 → 34.50 ft (N<sub>L</sub> 3 → 2); d<sub>e</sub> 1.75 → −1.75 ft; fast suggestion web depth 63 → 60 in.
+  - **Check case 3 (per-side weights, built-in bridge):** left barrier 0.500 klf, right 0.300 klf: DC2 = (0.500 + 0.300)/5 = 0.160 klf per girder (the same as 2 × 0.400/5); `suggest.bar` written 0.400. Right barrier 2.00 ft wide: faces 1.50 / 2.00, bar 1.75 (written to `bridge.barrier`), roadway 41.00 ft, d<sub>e</sub> 1.50 ft. Right side changed to curb 12 × 10 in with railing 0.050 klf at 0.50 ft (mountable: face 0.50 ft): w<sub>R</sub> = (12/12)(10/12)(0.150) + 0.050 = 0.175 klf; DC2 = (0.500 + 0.175)/5 = **0.135** klf; faces 1.50 / 0.50, roadway 42.50 ft; legacy fields: mode curb, left cw = ch = 0, rp = 0.75, rw = 0.500, f = 1.50.
+- **Found here, fixed in XS10:** Preliminary sizing's built-in exterior factor (`sgDF`) had no rigid cross-section check and did not limit d<sub>e</sub> to −1.0 ft in the e-factor (GirderDetail does both); with the larger live-load face of check case 1 its exterior factor dropped to 0.331 while GirderDetail gives 0.621. The values in check case 1 are those of this commit (XS9); XS10 raises the built-in exterior factor to 0.621.
+- **Other copies:** none.
+
+### Exact changes (XS8): main page (unified diff against d7ca4d6; the PL_B64 line is not touched)
+
+```diff
+diff --git a/Steel Bridge Beam Modules.html b/Steel Bridge Beam Modules.html
+index 435837e..c50f106 100644
+--- a/Steel Bridge Beam Modules.html	
++++ b/Steel Bridge Beam Modules.html	
+@@ -1019,6 +1019,7 @@ input.ovr, select.ovr { outline: 2px solid #c98a1b; outline-offset: -1px; backgr
+ .df-src { padding: 10px 12px; border: 1px solid var(--border); border-left: 5px solid var(--pass); background: var(--sheet); font-size: 13.5px; line-height: 1.45; margin-bottom: 8px; }
+ .df-src.df-lock { border-left-color: var(--warn); }
+ .df-kv td { padding: 4px 8px; font-size: 13px; }
++.df-hr { border: 0; border-top: 1px solid var(--border); margin: 8px 0; }
+ .df-lockview { padding: 6px 2px; font-size: 14.5px; line-height: 1.55; } .df-lockview p { margin: 0 0 10px; max-width: 68ch; }
+ .fa-imp { display: flex; flex-wrap: wrap; gap: 6px; } .fa-imp .proj-btn { flex: 1 1 45%; }
+ .cap-flag { margin: 14px 0 10px; padding: 12px 14px; border: 2px solid var(--fail); border-left-width: 8px; background: var(--fail-dim); color: var(--text); font-size: 14px; line-height: 1.5; }
+@@ -3962,6 +3963,7 @@ function dfEdges(b, wcA) {   // wcA: optional appurtenance concrete unit weight
+   ['L', 'R'].forEach(sd => { const e = b.edge && b.edge[sd], nm_ = sd === 'L' ? 'Left' : 'Right';
+     if (e && e.mode === 'curb') { if (e.cw > 0 && e.ch > 0) out.push({ id: 'curb' + sd, desc: `${nm_} curb`, cat: 'DC2', side: sd, x: e.cw / 24, plf: e.cw / 12 * e.ch / 12 * (wcA > 0 ? wcA : b.wc) });
+       if (e.rw > 0) out.push({ id: 'rail' + sd, desc: `${nm_} railing`, cat: 'DC2', side: sd, x: e.rp, plf: e.rw }); }
++    else if (e && e.mode === 'barrier') { if (e.w > 0) out.push({ id: 'bar' + sd, desc: `${nm_} barrier`, cat: 'DC2', side: sd, x: e.bw / 2, plf: e.w }); }   // per side, set in this module (XS8)
+     else if (b.barW > 0) out.push({ id: 'bar' + sd, desc: `${nm_} barrier`, cat: 'DC2', side: sd, x: b.barrier / 2, plf: b.barW }); });
+   return out;
+ }
+@@ -4032,12 +4034,73 @@ function dfXsIn(p, errors) {
+   return o;
+ }
+ 
+-/* deck edges as Preliminary sizing sends them (read-only here; PR3 of the cross-section plan moves them to this module) */
++/* Deck edges owned by this module (XS8, cross-section plan PR3). P.df.edges = { L: {...}, R: {...} }, per side:
++   type 'barrier' (bw: width at the deck, ft; bwt: weight, klf) or 'curb' (cw, ch: curb width and height, in; rw: railing weight, klf;
++   rp: railing load point from the edge, ft; rf: railing traffic face from the edge, ft, blank = rp); face: optional edge to traffic face (ft),
++   which governs when entered. Absent until the first complete bridge arrives from Preliminary sizing (dfEdgesInit, XS8 migration);
++   while absent the deck edges are those Preliminary sizing sends, as before. */
++const DF_EDGE_K = ['bw', 'bwt', 'cw', 'ch', 'rw', 'rp', 'rf', 'face'];
++const DF_EDGE_LBL = { bw: 'the barrier width', bwt: 'the barrier weight', cw: 'the curb width', ch: 'the curb height', rw: 'the railing weight', rp: 'the railing load point', rf: 'the railing traffic face', face: 'the edge to traffic face' };
++const dfHasEdges = p => !!(p && p.edges && p.edges.L && p.edges.R);
++/* each side normalized, with the traffic face at the deck edge f (before the sidewalk rule of dfLLFace). Curb and railing: a curb less
++   than 12 in high is mountable (engineer's rule 2026-10-13) and the face is the railing face; 12 in or higher, the curb face (or the
++   railing face if it is farther in). An entered "edge to traffic face" governs. */
++function dfEdgeIn(E, errors) {
++  if (!E || !E.L || !E.R) return null; const o = {};
++  ['L', 'R'].forEach(sd => { const e = E[sd] || {}, nm_ = sd === 'L' ? 'Left' : 'Right', q = { type: e.type === 'curb' ? 'curb' : 'barrier' };
++    DF_EDGE_K.forEach(k => { q[k] = dfOpt(e[k]); });
++    (q.type === 'curb' ? ['cw', 'ch', 'rw', 'rp'] : ['bw', 'bwt']).forEach(k => { if (!(q[k] !== null && q[k] >= 0)) errors.push(`${nm_} deck edge: enter ${DF_EDGE_LBL[k]} (zero or positive).`); });
++    ['rf', 'face'].forEach(k => { if (q[k] !== null && !(q[k] >= 0)) errors.push(`${nm_} deck edge: ${DF_EDGE_LBL[k]} must be zero or positive (or blank).`); });
++    if (q.type === 'barrier') { q.fAuto = q.bw; q.fbyAuto = 'barrier face'; }
++    else { const rf = q.rf !== null ? q.rf : q.rp, cf = q.cw / 12; q.mount = !(q.ch >= 12 - 1e-9);
++      if (q.mount) { q.fAuto = rf; q.fbyAuto = `railing face (the ${f2(q.ch)} in curb is mountable, < 12 in)`; }
++      else if (rf > cf + 1e-9) { q.fAuto = rf; q.fbyAuto = 'railing face'; } else { q.fAuto = cf; q.fbyAuto = `curb face (${f2(q.ch)} in ≥ 12 in)`; } }
++    if (q.face !== null) { q.f = q.face; q.fby = 'edge to traffic face entered'; } else { q.f = q.fAuto; q.fby = q.fbyAuto; }
++    o[sd] = q; });
++  return o;
++}
++/* the bridge from Preliminary sizing with this module's deck edges in place of the ones it sends (geometry, deck, plates, signature unchanged) */
++function dfBridgeEff(b, Ed) {
++  if (!Ed) return b; const edge = {};
++  ['L', 'R'].forEach(sd => { const q = Ed[sd]; edge[sd] = q.type === 'curb' ? { mode: 'curb', cw: q.cw, ch: q.ch, rp: q.rp, rw: q.rw, fby: q.fby } : { mode: 'barrier', bw: q.bw, w: q.bwt, fby: q.fby }; });
++  return { ...b, edge, faceL: Ed.L.f, faceR: Ed.R.f, gdEdges: Ed };
++}
++/* migration (XS8): the first complete bridge from Preliminary sizing initializes the deck edges from the values it holds, so every result
++   is unchanged: a GirderDetail record it already carries (bridge.xs, XS9), else its curb and railing values with its traffic faces as the
++   entered "edge to traffic face", else its barrier width and weight (the derived face is the barrier width, as before). */
++function dfEdgesInit(nb) {
++  const o = {}, ok = v => typeof v === 'number' && isFinite(v);
++  if (nb.xs && nb.xs.L && nb.xs.R) { ['L', 'R'].forEach(sd => { const s = nb.xs[sd] || {}; o[sd] = { type: s.type === 'curb' ? 'curb' : 'barrier' }; DF_EDGE_K.forEach(k => { if (ok(s[k])) o[sd][k] = s[k]; }); }); return o; }
++  ['L', 'R'].forEach(sd => { const e = nb.edge && nb.edge[sd], f = sd === 'L' ? nb.faceL : nb.faceR;
++    o[sd] = e && e.mode === 'curb' ? { type: 'curb', bw: nb.barrier, bwt: nb.barW, cw: e.cw, ch: e.ch, rw: e.rw, rp: e.rp, face: ok(f) ? f : nb.barrier }
++      : { type: 'barrier', bw: nb.barrier, bwt: nb.barW, cw: 12, ch: 10, rw: 0.05, rp: 0.5 }; });
++  return o;
++}
++/* deck-edge inputs (XS8): each side a barrier, or a curb and railing; the fields of the other type are hidden (dfEdgeVis) */
++function dfEdgeFields() {
++  const side = sd => { const s = sd === 'L' ? 'Left' : 'Right', k = `df.edges.${sd}.`;
++    return `<div class="pair">${fld(`${s} deck edge`, k + 'type', '', 'sel', { options: [['barrier', 'Barrier'], ['curb', 'Curb and railing']] })}<div></div></div>
++      <div class="pair" data-dfet="${sd}-barrier">${fld(`${s} barrier width at deck`, k + 'bw', 'ft')}${fld(`${s} barrier weight`, k + 'bwt', 'klf')}</div>
++      <div class="pair" data-dfet="${sd}-curb">${fld(`${s} curb width`, k + 'cw', 'in')}${fld(`${s} curb height`, k + 'ch', 'in')}${fld(`${s} railing weight`, k + 'rw', 'klf')}${fld(`${s} railing load point from edge`, k + 'rp', 'ft')}${fld(`${s} railing traffic face from edge`, k + 'rf', 'ft', 'num', { note: 'blank = load point' })}<div></div></div>
++      <div class="pair">${fld(`${s} edge to traffic face`, k + 'face', 'ft', 'num', { note: 'optional' })}<div class="ig"><p class="note" id="df-f${sd}" style="margin:18px 0 0"></p></div></div>`; };
++  return `${side('L')}<hr class="df-hr">${side('R')}<p class="note">Distances from the deck edge. These replace the deck-edge inputs of Preliminary sizing: its Bridge tab and its barrier weight follow them (read-only there), and its roadway and d<sub>e</sub> use the live-load traffic faces (Sidewalks). The traffic face at the deck edge: a barrier's width; a curb less than 12 in high is mountable and the railing face governs; a curb 12 in or higher, its face. An entered "edge to traffic face" governs. A sidewalk 12 in or thicker, or a railing or fence on a sidewalk, then moves the live-load face inward.</p>`;
++}
++const dfEdgeTxt = q => `${q.type === 'curb' ? `curb ${f2(q.cw)} × ${f2(q.ch)} in, railing ${f3(q.rw)} klf at ${f2(q.rp)} ft` : `barrier ${f2(q.bw)} ft, ${f3(q.bwt)} klf`}; traffic face ${f2(q.f)} ft (${q.fby})`;
++function dfEdgeVis() {
++  const E = P && P.df && P.df.edges; if (!dfHasEdges(P.df)) return; const errs = [], Ed = dfEdgeIn(E, errs);
++  ['L', 'R'].forEach(sd => { const t = E[sd].type === 'curb' ? 'curb' : 'barrier';
++    document.querySelectorAll(`[data-dfet^="${sd}-"]`).forEach(el => { el.style.display = el.dataset.dfet === `${sd}-${t}` ? '' : 'none'; });
++    const q = Ed && Ed[sd], fi = document.getElementById(`f_df_edges_${sd}_face`), nt = document.getElementById('df-f' + sd);
++    if (fi) fi.placeholder = q && isFinite(q.fAuto) ? f2(q.fAuto) : '';
++    if (nt) nt.innerHTML = q && isFinite(q.fAuto) ? (q.face !== null ? `Entered: ${f2(q.face)} ft (derived: ${f2(q.fAuto)} ft, ${q.fbyAuto})` : `Derived: ${f2(q.fAuto)} ft, ${q.fbyAuto}`) : ''; });
++}
++document.addEventListener('change', e => { const k = e.target && e.target.dataset && e.target.dataset.k; if (k && /^df\.edges\./.test(k)) dfEdgeVis(); });
++/* deck edges as Preliminary sizing sends them (before this module owns them) */
+ function dfEdgeSummary(b) {
+   if (!b) return '<p class="note">The deck edges come from Preliminary sizing once the bridge is complete.</p>';
+   const row = (k, v) => `<tr><td class="lbl">${k}</td><td class="val">${v}</td></tr>`, side = sd => { const e = b.edge && b.edge[sd], f = sd === 'L' ? b.faceL : b.faceR, nm_ = sd === 'L' ? 'Left' : 'Right';
+     return e && e.mode === 'curb' ? row(`${nm_} edge`, `curb ${f2(e.cw)} × ${f2(e.ch)} in; railing ${f3(e.rw)} klf at ${f2(e.rp)} ft; traffic face ${f2(f != null ? f : b.barrier)} ft`) : row(`${nm_} edge`, `barrier ${f2(b.barrier)} ft wide, ${f3(b.barW)} klf; traffic face ${f2(f != null ? f : b.barrier)} ft`); };
+-  return `<table class="tbl df-kv"><tbody>${side('L')}${side('R')}</tbody></table><p class="note">Read-only: these come from the Bridge tab of Preliminary sizing (distances from the deck edge).</p>`;
++  return `<table class="tbl df-kv"><tbody>${side('L')}${side('R')}</tbody></table><p class="note">Read-only: these come from the Bridge tab of Preliminary sizing (distances from the deck edge). They are set here once Preliminary sizing next sends the bridge (open it once); its values are kept.</p><button type="button" class="proj-btn" data-dfpl="1" style="width:100%">Open Preliminary sizing</button>`;
+ }
+ 
+ /* Live-load traffic face each side (engineer's rule 2026-10-13): a curb or sidewalk less than 12 in high is mountable and is ignored
+@@ -4047,7 +4110,7 @@ function dfEdgeSummary(b) {
+ function dfLLFace(b, dl, xs, fL, fR) {
+   const o = {};
+   ['L', 'R'].forEach(sd => { const f = sd === 'L' ? fL : fR, sw = nm(dl['sw' + sd]) > 0 ? nm(dl['sw' + sd]) : 0, t = nm(dl['swThk' + sd]), curb = !!(b.edge && b.edge[sd] && b.edge[sd].mode === 'curb');
+-    const mount = sw > 0 && !(t >= 12 - 1e-9), c = [{ x: f, by: curb ? 'curb and railing traffic face (Preliminary sizing)' : 'barrier face' }];
++    const mount = sw > 0 && !(t >= 12 - 1e-9), c = [{ x: f, by: b.edge && b.edge[sd] && b.edge[sd].fby ? b.edge[sd].fby : curb ? 'curb and railing traffic face (Preliminary sizing)' : 'barrier face' }];
+     if (sw > 0 && !mount) c.push({ x: sw, by: `sidewalk curb face (${f2(t)} in ≥ 12 in)` });
+     const fx = xs && xs['fenceX' + sd]; if (sw > 0 && fx > 0) c.push({ x: fx, by: 'railing or fence on the sidewalk' });
+     const g = c.reduce((a, q) => q.x > a.x + 1e-9 ? q : a);
+@@ -4090,7 +4153,7 @@ tabs: { combos: 'Factors and loads', cap: 'Derivations', rptCombos: 'Distributio
+   panes(p) { const b0 = P && P.df && P.df.bridge, b = b0 && b0.ok ? b0 : null;   // an invalid handoff carries only its errors
+     const src = b ? `<div class="df-src"><b>Bridge from Preliminary sizing</b> ("${esc(b.project)}", received ${new Date(b.ts).toLocaleString()}). It updates automatically whenever the sizing changes; edit the bridge there.</div>`
+       : `<div class="df-src df-lock"><b>No complete bridge yet.</b> Define the bridge in Preliminary sizing; this module unlocks as soon as the sizing has no input errors.</div>`;
+-    const kv = b ? `<table class="tbl df-kv"><tbody>${[['Spans', b.spans.map(s => f2(s)).join(' + ') + ' ft' + (b.cont ? ', continuous' : '')], ['Skew at supports', b.skews.map(s => f0(s) + '°').join(', ')], ['Girders', `${b.nb} at ${f2(b.S)} ft`], ['Overhangs L / R', `${f2(b.ohL)} / ${f2(b.ohR)} ft`], ['Barrier width', `${f2(b.barrier)} ft each side`], ['Deck', `t_s = ${f2(b.tsDeck)} in, haunch ${f2(b.haunch)} in, f′c = ${f2(b.fc)} ksi`], ['Barrier / FWS', `${f2(b.barW)} klf, ${f2(b.fws)} psf`]].map(([k, v]) => `<tr><td class="lbl">${k}</td><td class="val">${sub(v)}</td></tr>`).join('')}</tbody></table>` : '';
++    const kv = b ? `<table class="tbl df-kv"><tbody>${[['Spans', b.spans.map(s => f2(s)).join(' + ') + ' ft' + (b.cont ? ', continuous' : '')], ['Skew at supports', b.skews.map(s => f0(s) + '°').join(', ')], ['Girders', `${b.nb} at ${f2(b.S)} ft`], ['Overhangs L / R', `${f2(b.ohL)} / ${f2(b.ohR)} ft`], ...(dfHasEdges(P.df) ? [] : [['Barrier width', `${f2(b.barrier)} ft each side`]]), ['Deck', `t_s = ${f2(b.tsDeck)} in, haunch ${f2(b.haunch)} in, f′c = ${f2(b.fc)} ksi`], dfHasEdges(P.df) ? ['FWS', `${f2(b.fws)} psf (deck edges: Cross-section and dead loads tab)`] : ['Barrier / FWS', `${f2(b.barW)} klf, ${f2(b.fws)} psf`]].map(([k, v]) => `<tr><td class="lbl">${k}</td><td class="val">${sub(v)}</td></tr>`).join('')}</tbody></table>` : '';
+     return {
+       df_br: `<div class="pad" id="gm-src"></div>${secHd('sec-dfb', 'Bridge definition')}<div class="sec-body one-col" id="sec-dfb">${src}${kv}${gdLldfDfNote()}<button type="button" class="proj-btn" data-dfpl="1" style="width:100%">Open Preliminary sizing</button></div>
+         ${secHd('sec-dfo', 'Options')}<div class="sec-body" id="sec-dfo">${fld('Gap between adjacent trucks (lever rule)', 'df.gap', 'ft')}<div></div>
+@@ -4099,7 +4162,7 @@ tabs: { combos: 'Factors and loads', cap: 'Derivations', rptCombos: 'Distributio
+           ${fld('Exterior girder factors not less than interior (owner policy)', 'df.extMin', '', 'sel', { full: true, options: [['no', 'No (AASHTO)'], ['yes', 'Yes: exterior g ≥ interior g, moment and shear']] })}
+           ${fld('Girder radius (curved bridges; 0 = straight)', 'df.radius', 'ft')}<div></div>
+           ${fld('Skew correction for shear', 'df.skewV', '', 'sel', { full: true, options: [['all', 'All girders (common owner practice, conservative)'], ['ext', 'Exterior girders only (obtuse corner, 4.6.2.2.3c)']] })}<p class="note">Wheel lines of adjacent trucks are at least 4 ft apart (3.6.1.3.1). Trucks stay 2 ft from the barrier faces.</p></div>`,
+-      df_dl: `${secHd('sec-dfe', 'Deck edges')}<div class="sec-body one-col" id="sec-dfe">${dfEdgeSummary(b)}<button type="button" class="proj-btn" data-dfpl="1" style="width:100%">Edit the deck edges in Preliminary sizing</button>
++      df_dl: `${secHd('sec-dfe', 'Deck edges')}<div class="sec-body one-col" id="sec-dfe">${dfHasEdges(P && P.df) ? dfEdgeFields() : dfEdgeSummary(b)}
+           <div class="pair">${fld('Appurtenance concrete γ<sub>c</sub>', 'df.dl.wcA', 'kcf', 'num', { note: 'blank = deck' })}<div></div></div>
+           <p class="note">γ<sub>c</sub> applies to the curbs, sidewalks, and median; blank uses the deck w<sub>c</sub>${b ? ` (${b.wc} kcf)` : ''}. The deck, haunch, and SIP forms always use the deck w<sub>c</sub>.</p></div>
+         ${secHd('sec-dfs', 'Sidewalks')}<div class="sec-body" id="sec-dfs">${fld('Left sidewalk width', 'df.dl.swL', 'ft')}${fld('Left sidewalk thickness', 'df.dl.swThkL', 'in')}${fld('Left railing or fence weight', 'df.dl.fenceL', 'klf', 'num', { note: 'optional' })}${fld('Left railing or fence, x from deck edge', 'df.dl.fenceXL', 'ft')}
+@@ -4116,7 +4179,7 @@ tabs: { combos: 'Factors and loads', cap: 'Derivations', rptCombos: 'Distributio
+           <div class="full"><h4 class="sub-h" style="margin:4px 0">Beam classification (labels only)</h4><div id="df-bcls"><p class="note">Shown once the module has computed.</p></div><p class="note">MassDOT Fig. 3.5.3-1 classes, assigned automatically from the layout. An override changes the label only (tables, report, CSV), not any load.</p></div></div>
+         ${secHd('sec-dfov', 'Load overrides')}<div class="sec-body one-col" id="sec-dfov"><div id="df-ovr"><p class="note">Shown once the module has computed.</p></div><p class="note">For each automatic load, a blank cell uses the automatic value shown under its name; an entered value overrides it (outlined) and is kept until reset (↺). x is from the left deck edge. Added line loads, overlays, and the pedestrian load are set on their own inputs.</p></div>` }; },
+   compute(p) {
+-    const b = p.bridge;
++    let b = p.bridge;
+     if (!b || !b.ok) return { errors: [b && b.why ? `The bridge in Preliminary sizing is not complete: ${b.why.join(' ')}` : 'The bridge is not defined. Define the complete bridge in the Preliminary sizing module; this module unlocks when the sizing has no input errors.'], locked: true };
+     const bad = []; if (!(b.nb >= 2)) bad.push('at least two girders'); if (!(b.S > 0)) bad.push('a positive girder spacing'); if (!(b.tsDeck > 0)) bad.push('a positive deck thickness');
+     if (!(b.spans.length && b.spans.every(s => s > 0))) bad.push('positive span lengths'); if (!(b.ohL >= 0 && b.ohR >= 0 && b.barrier >= 0)) bad.push('non-negative overhangs and barrier width'); if (!(b.fc > 0 && b.wc > 0)) bad.push('positive concrete strength and unit weight');
+@@ -4126,7 +4189,9 @@ tabs: { combos: 'Factors and loads', cap: 'Derivations', rptCombos: 'Distributio
+     const extra = numRows(p.extra, GM.df.rowSpec, 'Added load', errors);
+     ['swL', 'swThkL', 'swR', 'swThkR', 'medW', 'medThk', 'ped'].forEach(k => { if (!(nm(p.dl[k]) >= 0)) errors.push(`Dead load "${k}" must be zero or positive.`); });
+     const xs = dfXsIn(p, errors);   // optional cross-section inputs (XS4); every one absent = the loads as before
++    const Ed = dfEdgeIn(p.edges, errors);   // deck edges set in this module (XS8); absent = as Preliminary sizing sends them
+     if (errors.length) return { errors };
++    b = dfBridgeEff(b, Ed);
+     const MR = modRatio(b.fc, b.wc, 1.0, 'exact'), Nb = b.nb, spacings = b.bays && b.bays.length === Nb - 1 ? b.bays.slice() : new Array(Nb - 1).fill(b.S);
+     const fL = b.faceL != null ? b.faceL : b.barrier, fR = b.faceR != null ? b.faceR : b.barrier, swL = nm(p.dl.swL), swR = nm(p.dl.swR);
+     const ll = dfLLFace(b, p.dl, xs, fL, fR);   // live-load traffic faces: a sidewalk thinner than 12 in is mountable and ignored (XS6)
+@@ -4218,9 +4283,9 @@ tabs: { combos: 'Factors and loads', cap: 'Derivations', rptCombos: 'Distributio
+     return card('dw-xs', 'Cross-section and dead loads', R.dead.method === 'massdot' ? 'MassDOT 3.5.3' : 'Typical AASHTO (equal)', `<div class="dwg-wrap">${dfXsSVG(R)}</div><p class="cap">Superimposed loads are drawn where they act, labeled with their line load and colored by class (DC1, DC2, DW, pedestrian PL); arrows are the added line loads (utilities and other line loads). Heights of the barriers, curbs, railings and fences, sidewalks, median, wearing surface, and overlays are schematic; widths and girder positions are to scale. Red dashed lines: the live-load traffic faces (a sidewalk under 12 in is mountable and ignored for the live load). Below each girder: its share of DC1 (deck, haunch, SIP forms, and any DC1 added loads), DC2, DW${R.dead.pl.some(v => v > 0) ? ', and PL' : ''} in klf, from the dead-load distribution (Derivations tab).</p>`)
+       + card('dw-df', 'Cross-section and lever rule', `${rg.label}; ${rg.members[v.j].label}`, `<div class="ctl-row dfv-ctl"><label>Region <select id="dfv-rg">${R.regions.map((r, k) => `<option value="${k}" ${k === v.rg ? 'selected' : ''}>${esc(r.label)} (${r.kind === 'span' ? '+M, V' : '−M'})</option>`).join('')}</select></label><label>Girder <select id="dfv-j">${rg.members.map((m, k) => `<option value="${k}" ${k === v.j ? 'selected' : ''}>${m.label} (${m.type === 'ext' ? 'exterior' : 'interior'})</option>`).join('')}</select></label></div><div class="dwg-wrap">${dfSVG(R, rg, v.j)}</div><p class="cap">Girders are colored by the method that governs their moment factor; hover a girder for its factors. Arrows are the wheels of the governing lever-rule truck train for the selected girder, labeled with each wheel's share of the reaction (before the multiple presence factor). Bars below the girders are DC + DW per girder.</p>`)
+       + card('dw-sens', 'Sensitivity to girder spacing', `${rg.label}; K<sub>g</sub> held at ${f0(rg.Kg)} in⁴`, `${dfSensSVG(R, rg)}<p class="cap">All bays scaled together from 70% to 130% of the current layout with the overhangs, barriers, and K<sub>g</sub> held; the dot is the current design. Letters along the exterior line show the governing exterior method: L lever rule, R rigid cross-section, E e-factor. Use it to see how close the layout is to a change of governing method.</p>`); },
+-  echo(R) { const b = R.b; return { kv: [['Bridge (from Preliminary sizing)', `"${esc(b.project)}", received ${new Date(b.ts).toLocaleString()}`], ['Spans', b.spans.map(s => f2(s)).join(' + ') + ' ft' + (b.cont ? ', continuous' : '')], ['Skew at supports', b.skews.map(s => f0(s) + '°').join(', ')], ['Girders', `${b.nb} at ${f2(b.S)} ft`], ['Overhangs L / R, barrier', `${f2(b.ohL)} / ${f2(b.ohR)} ft, ${f2(b.barrier)} ft`], ['Deck', `t_s = ${f2(b.tsDeck)} in, haunch ${f2(b.haunch)} in, f′c = ${f2(b.fc)} ksi, w_c = ${b.wc} kcf, n = ${f2(R.MR.n)}`], ['Superimposed', `barrier ${f2(b.barW)} klf each, FWS ${f2(b.fws)} psf`], ['Dead-load method', R.dead.method === 'massdot' ? 'MassDOT 3.5.3' : 'Typical AASHTO (equal)'], ['Truck gap', `${f2(R.base.gap)} ft`]],
++  echo(R) { const b = R.b; return { kv: [['Bridge (from Preliminary sizing)', `"${esc(b.project)}", received ${new Date(b.ts).toLocaleString()}`], ['Spans', b.spans.map(s => f2(s)).join(' + ') + ' ft' + (b.cont ? ', continuous' : '')], ['Skew at supports', b.skews.map(s => f0(s) + '°').join(', ')], ['Girders', `${b.nb} at ${f2(b.S)} ft`], b.gdEdges ? ['Overhangs L / R', `${f2(b.ohL)} / ${f2(b.ohR)} ft`] : ['Overhangs L / R, barrier', `${f2(b.ohL)} / ${f2(b.ohR)} ft, ${f2(b.barrier)} ft`], ['Deck', `t_s = ${f2(b.tsDeck)} in, haunch ${f2(b.haunch)} in, f′c = ${f2(b.fc)} ksi, w_c = ${b.wc} kcf, n = ${f2(R.MR.n)}`], ...(b.gdEdges ? [['Left deck edge', dfEdgeTxt(b.gdEdges.L)], ['Right deck edge', dfEdgeTxt(b.gdEdges.R)], ['Superimposed', `FWS ${f2(b.fws)} psf`]] : [['Superimposed', `barrier ${f2(b.barW)} klf each, FWS ${f2(b.fws)} psf`]]), ['Dead-load method', R.dead.method === 'massdot' ? 'MassDOT 3.5.3' : 'Typical AASHTO (equal)'], ['Truck gap', `${f2(R.base.gap)} ft`]],
+       table: [['Region', 'L (ft)', 'Station (ft)', 'Section', 'K_g (in⁴)', 'Skew M / V'], R.regions.map(rg => [rg.label, f2(rg.L), f2(rg.x), secTxt(rg.sec), f0(rg.Kg), `${f0(rg.sk.thM)}° / ${f0(rg.sk.thV)}°`])] }; },
+-  after(R) { dfFeed(R); dfOvrSync(R); },
++  after(R) { dfFeed(R); dfOvrSync(R); dfEdgeVis(); },
+   inbox() { return null; }, noInbox: 'This module takes its bridge directly from the Preliminary sizing module (see the Bridge tab); nothing needs to be imported.'
+ };
+ const DF_VIEW = { rg: 0, j: 0 };
+@@ -4260,7 +4325,7 @@ function dfXsSVG(R) {
+   const medW = nm(dl.medW) > 0 ? nm(dl.medW) : 0, medH = medW ? ht(nm(dl.medThk), 6, 22) : 0, m0 = Wd / 2 - medW / 2, m1 = Wd / 2 + medW / 2;
+   const xd = (sd, x) => sd === 'L' ? x : Wd - x, RAIL = 24, BAR = cl(34 / 12 * sc, 24, 44);
+   const ed = {}; ['L', 'R'].forEach(sd => { const e = b.edge && b.edge[sd];
+-    ed[sd] = e && e.mode === 'curb' ? { curb: true, cw: e.cw > 0 && e.ch > 0 ? e.cw / 12 : 0, cH: e.cw > 0 && e.ch > 0 ? ht(e.ch, 6, 40) : 0, rp: e.rp } : { curb: false, w: b.barrier > 0 ? b.barrier : 0 }; });
++    ed[sd] = e && e.mode === 'curb' ? { curb: true, cw: e.cw > 0 && e.ch > 0 ? e.cw / 12 : 0, cH: e.cw > 0 && e.ch > 0 ? ht(e.ch, 6, 40) : 0, rp: e.rp } : { curb: false, w: e && e.mode === 'barrier' ? (e.bw > 0 ? e.bw : 0) : b.barrier > 0 ? b.barrier : 0 }; });
+   const surf = x => { if (x <= sw.L + 1e-9 && sw.L) return -swH.L; if (x >= Wd - sw.R - 1e-9 && sw.R) return -swH.R; if (medW && x >= m0 - 1e-9 && x <= m1 + 1e-9) return -medH; return 0; };
+   const tD = Math.max(8, b.tsDeck / 12 * sc), labs = []; let o = '';
+   const lab = (L, xpx, top) => { if (L) labs.push({ x: xpx, top, col: DF_LCOL[L.cat] || '#17212b', t: `${L.desc}: ${f3(L.plf)} klf ${L.cat}${L.ovr ? ' (override)' : ''}` }); };
+@@ -4349,7 +4414,7 @@ function dfDLCalcs(R) {
+   // 2a. the superimposed line loads from the cross-section (XS4)
+   if (D.per.length) { const ed = sd => b.edge && b.edge[sd], dl = R.p.dl, wcA = nm(dl.wcA) > 0 ? nm(dl.wcA) : wc, wsW = L => f2(L.x1 - L.x0), qOf = L => L.thk ? `${f2(L.thk)}/12 × ${f3(L.gam)} × 1000 = ${f2(L.q)} psf; ` : '';
+     const how = L => { const sd = /L$/.test(L.id) ? 'L' : 'R', e = ed(sd);
+-      if (/^bar/.test(L.id) || /^rail/.test(L.id)) return 'from Preliminary sizing';
++      if (/^bar/.test(L.id) || /^rail/.test(L.id)) return b.gdEdges ? 'deck edges (entered)' : 'from Preliminary sizing';
+       if (/^curb/.test(L.id)) return `(${f2(e.cw)}/12)(${f2(e.ch)}/12)(${f3(wcA)})`;
+       if (/^sw[LR]$/.test(L.id)) return `${f2(nm(dl['sw' + sd]))} × (${f2(nm(dl['swThk' + sd]))}/12)(${f3(wcA)})`;
+       if (L.id === 'med') return `${f2(nm(dl.medW))} × (${f2(nm(dl.medThk))}/12)(${f3(wcA)})`;
+@@ -4445,7 +4510,8 @@ const gdFromPL = e => typeof PL_FRAME !== 'undefined' && !!PL_FRAME && e.source
+ window.addEventListener('message', e => {
+   if (!gdFromPL(e)) return;
+   if (!e.data || e.data.type !== 'gd-bridge' || !e.data.bridge) return; const nb = e.data.bridge, ob = P.df.bridge;
+-  if (ob && JSON.stringify({ ...ob, ts: 0 }) === JSON.stringify({ ...nb, ts: 0 })) return;
++  const init = !!nb.ok && !dfHasEdges(P.df); if (init) P.df.edges = dfEdgesInit(nb);   // XS8 migration: once, from the values Preliminary sizing holds; never over the user's edges
++  if (!init && ob && JSON.stringify({ ...ob, ts: 0 }) === JSON.stringify({ ...nb, ts: 0 })) return;
+   P.df.bridge = nb;
+   gmBuildPanes('df'); if (GM.sa) gmBuildPanes('sa'); fillInputs(); if (P.mod === 'df' || P.mod === 'sa') recompute(); else { refreshMarks(); try { dfFeed(GM.df.compute(P.df)); } catch (e) {} } autosave();
+   if (ob && ob.ok && nb.ok && typeof gdScheduleRefresh === 'function') gdScheduleRefresh();   // a real change to an existing bridge: refresh every module
+```
+
+### Exact changes (XS9): main page (unified diff against the XS8 commit; the changed PL_B64 line is omitted: it is the re-encoded PlateLine below)
+
+```diff
+diff --git a/Steel Bridge Beam Modules.html b/Steel Bridge Beam Modules.html
+index c50f106..9121d62 100644
+--- a/Steel Bridge Beam Modules.html	
++++ b/Steel Bridge Beam Modules.html	
+@@ -2329,7 +2329,7 @@ const MAN = [
+ <h3>Evaluation (MBE 7.2)</h3><div class="eq-math">\\[(\\Delta f)_{eff} = R_s\\Delta f, \\quad (\\Delta f)_{max} = 2.0(\\Delta f)_{eff} \\le (\\Delta F)_{TH}\\ \\text{(infinite life)}, \\quad Y = \\frac{\\log\\left[\\dfrac{R_RA\\,g}{365\\,n\\,(ADTT)_{SL}[(\\Delta f)_{eff}]^3(1+g)^{a-1}} + 1\\right]}{\\log(1+g)}\\]</div><p>a is the present age and g the traffic growth rate; with g = 0 the life is R<sub>R</sub>A/(365n(ADTT)<sub>SL</sub>[(Δf)<sub>eff</sub>]³). Remaining life = Y − a, compared with the required remaining life at the chosen level. R<sub>R</sub> = 1.0 gives the minimum life; enter R<sub>R</sub> for the Evaluation 1, Evaluation 2, and mean lives from MBE Table 7.2.5.1-1 (the program does not supply them). R<sub>s</sub> is the partial load factor of MBE 7.2.2.1.</p>
+ <h3>Verification</h3><p>Default detail 1: f<sub>+</sub> = 620(12)(55.10)/106,168 = 3.86 ksi; f<sub>−</sub> = 150(12)(33.50)/50,834 = 1.19 ksi; Δf = 5.05 ksi; γΔf = 8.83 ≤ 16.0 ksi (Category B, Fatigue I since 1,700 ≥ 1,120). Infinite-life equivalents computed with γ<sub>I</sub>/γ<sub>II</sub> = 1.75/0.80: B 1,120, C′ 974, E 4,616 trucks per day, matching the published values. Category E under Fatigue II with (ADTT)<sub>SL</sub> = 1,700: N = 46.5 × 10⁶, (ΔF)<sub>n</sub> = (11 × 10⁸/N)<sup>1/3</sup> = 2.87 ksi.</p>`],
+ ['p20', 'Distribution factors', `
+-<h3>Scope and the bridge definition</h3><p>Live load distribution factors for every girder of a steel I-girder bridge with a composite concrete deck (AASHTO LRFD 4.6.2.2, cross-section type (a)), and the distribution of the deck and superimposed dead loads to the girders (MassDOT Bridge Manual 3.5.3). The module works only from a <b>complete bridge</b>: it takes the spans, continuity, skews, girder count and spacing, overhangs, barrier width, deck, concrete, barrier weight, future wearing surface, and the girder plates in every region from the Preliminary sizing module, which publishes them each time it recalculates without input errors. Until then, or whenever the sizing has errors or an incomplete bridge, the module is locked and says why. It updates automatically when the sizing changes; the bridge is edited only in Preliminary sizing. The engine is a port of the standalone LL &amp; DL Distribution calculator (validated there against the FHWA steel girder example) and reproduces its factors exactly.</p>
++<h3>Scope and the bridge definition</h3><p>Live load distribution factors for every girder of a steel I-girder bridge with a composite concrete deck (AASHTO LRFD 4.6.2.2, cross-section type (a)), and the distribution of the deck and superimposed dead loads to the girders (MassDOT Bridge Manual 3.5.3). The module works only from a <b>complete bridge</b>: it takes the spans, continuity, skews, girder count and spacing, overhangs, deck, concrete, future wearing surface, and the girder plates in every region from the Preliminary sizing module, which publishes them each time it recalculates without input errors. The <b>deck edges</b> (barrier, or curb and railing, each side) are set in this module (Cross-section and dead loads tab); the first bridge received fills them from the values Preliminary sizing held, and from then on its deck-edge fields are read-only and follow this module. Until then, or whenever the sizing has errors or an incomplete bridge, the module is locked and says why. It updates automatically when the sizing changes; the rest of the bridge is edited only in Preliminary sizing. The engine is a port of the standalone LL &amp; DL Distribution calculator (validated there against the FHWA steel girder example) and reproduces its factors exactly.</p>
+ <h3>Design regions (Table C4.6.2.2.1-2)</h3><p>Every span is a region for positive moment and shear, with L equal to the span; every interior support of a continuous girder is a region for negative moment and the interior reaction, with L the average of the adjacent spans. Each region uses K<sub>g</sub> = n(I + Ae<sub>g</sub>²) from the girder section at that location (the maximum positive moment section of the span, or the section at the support), with e<sub>g</sub> = (d − ȳ) + t<sub>h</sub> + t<sub>s</sub>/2 and n = E<sub>s</sub>/E<sub>c</sub>.</p>
+ <h3>Interior girders</h3><div class="eq-math">\\[g_{M1} = 0.06 + \\left(\\tfrac{S}{14}\\right)^{0.4}\\left(\\tfrac{S}{L}\\right)^{0.3}\\left(\\tfrac{K_g}{12Lt_s^3}\\right)^{0.1},\\ g_{M2} = 0.075 + \\left(\\tfrac{S}{9.5}\\right)^{0.6}\\left(\\tfrac{S}{L}\\right)^{0.2}\\left(\\tfrac{K_g}{12Lt_s^3}\\right)^{0.1},\\ g_{V1} = 0.36 + \\tfrac{S}{25},\\ g_{V2} = 0.2 + \\tfrac{S}{12} - \\left(\\tfrac{S}{35}\\right)^2\\]</div><p>With N<sub>b</sub> = 3 the moment is the lesser of the equation and the lever rule and the shear is by the lever rule; with S &gt; 16 ft the lever rule is used.</p>
+ <h3>Exterior girders</h3><p>One lane: the lever rule (multiple presence 1.2). Two or more lanes: the larger of the e-factor (e<sub>M</sub> = 0.77 + d<sub>e</sub>/9.1, e<sub>V</sub> = 0.60 + d<sub>e</sub>/10, d<sub>e</sub> ≥ −1.0 ft) times the interior factor, and the rigid cross-section method R = N<sub>L</sub>/N<sub>b</sub> + X<sub>ext</sub>Σe/Σx² with multiple presence. The lever rule slides a train of trucks (6 ft wheel lines, adjacent trucks at the input gap, at least 4 ft) across the roadway with the wheels at least 2 ft from the barrier faces, for every truck count whose design lanes fit. A roadway 20 to 24 ft wide has two lanes of half the width (3.6.1.1.1).</p>
+@@ -2351,7 +2351,7 @@ const MAN = [
+ function buildManual() { $('#tab-manual').innerHTML = `<div class="man-nav">${MAN.map(([id, t], i) => `<button type="button" class="man-btn" data-man="${id}">${i + 1}. ${t}</button>`).join('')}</div>${MAN.map(([id, t, b], i) => `<article class="man-part" id="man-${id}"><h2 class="man-h">Part ${i + 1}. ${t}</h2>${b}</article>`).join('')}`; showManPart(); }
+ function showManPart() { const id = P.ui.man || 'p1'; $$('.man-btn').forEach(b => b.classList.toggle('active', b.dataset.man === id)); $$('.man-part').forEach(a => a.classList.toggle('active', a.id === 'man-' + id)); }
+ 
+ /* =====================================================================
+    GirderDetail: additional modules
+    ts  transverse stiffeners and connection plates (6.10.11.1, 6.6.1.3.1, 6.10.9)
+@@ -4168,7 +4168,7 @@ tabs: { combos: 'Factors and loads', cap: 'Derivations', rptCombos: 'Distributio
+         ${secHd('sec-dfs', 'Sidewalks')}<div class="sec-body" id="sec-dfs">${fld('Left sidewalk width', 'df.dl.swL', 'ft')}${fld('Left sidewalk thickness', 'df.dl.swThkL', 'in')}${fld('Left railing or fence weight', 'df.dl.fenceL', 'klf', 'num', { note: 'optional' })}${fld('Left railing or fence, x from deck edge', 'df.dl.fenceXL', 'ft')}
+         ${fld('Right sidewalk width', 'df.dl.swR', 'ft')}${fld('Right sidewalk thickness', 'df.dl.swThkR', 'in')}${fld('Right railing or fence weight', 'df.dl.fenceR', 'klf', 'num', { note: 'optional' })}${fld('Right railing or fence, x from deck edge', 'df.dl.fenceXR', 'ft')}
+         ${fld('Pedestrian LL', 'df.dl.ped', 'psf')}<div></div>
+-        <p class="note full">Sidewalk widths are measured from the deck edge to the curb face. A sidewalk 12 in or thicker limits the live load at its curb face; a thinner one is mountable and the live load is positioned to the next non-mountable element (railing or fence on the sidewalk, else the barrier or the traffic face from Preliminary sizing). The wearing surface stays between the curb faces. A railing or fence on a sidewalk is a DC2 line load at x from its deck edge (leave both blank for none).</p><div class="full" id="df-llface"></div></div>
++        <p class="note full">Sidewalk widths are measured from the deck edge to the curb face. A sidewalk 12 in or thicker limits the live load at its curb face; a thinner one is mountable and the live load is positioned to the next non-mountable element (railing or fence on the sidewalk, else the deck-edge traffic face). The wearing surface stays between the curb faces. A railing or fence on a sidewalk is a DC2 line load at x from its deck edge (leave both blank for none).</p><div class="full" id="df-llface"></div></div>
+         ${secHd('sec-dfm', 'Median')}<div class="sec-body" id="sec-dfm">${fld('Median width', 'df.dl.medW', 'ft')}${fld('Median thickness', 'df.dl.medThk', 'in')}${fld('Median longitudinal joint', 'df.dl.medJoint', '', 'sel', { options: [['no', 'No (continuous slab)'], ['yes', 'Yes (adjacent beams exterior)']] })}<div></div></div>
+         ${secHd('sec-dfw', 'Wearing surface and overlays')}<div class="sec-body" id="sec-dfw">${fld('Future wearing surface', 'df.dl.wsMode', '', 'sel', { full: true, options: [['', `Weight from Preliminary sizing${b ? ` (${f2(b.fws)} psf)` : ''}`], ['thk', 'Thickness × unit weight (entered here)']] })}${fld('Wearing surface thickness', 'df.dl.wsThk', 'in')}${fld('Wearing surface unit weight', 'df.dl.wsGam', 'kcf')}
+         <p class="note full">The wearing surface and the overlays are DW over the roadway between the curb faces, distributed equally to all girders. Thickness and unit weight are used only with "Thickness × unit weight".</p></div>
+@@ -4487,7 +4487,22 @@ function dfPayload(R, p) {
+   const dc2 = dlOf('dc2'), dw = dlOf('dw');
+   return { use: true, sig: R.b.sig, ts: Date.now(), span, pier, dl: { int: { dc2: dc2.int, dw: dw.int }, ext: { dc2: dc2.ext, dw: dw.ext } } };
+ }
++/* deck edges to Preliminary sizing (XS9, message gd-xs, like gd-an): per side the inputs, the traffic face at the deck edge f, and the
++   live-load face r (after the mountable-sidewalk rule, XS6), plus the appurtenance unit weight. Preliminary sizing stores it as bridge.xs,
++   writes its own deck-edge fields from it (read-only there), and echoes it in gd-bridge; it is sent only when the echo differs. */
++function dfXsMsg(p) {
++  const errs = [], Ed = dfEdgeIn(p && p.edges, errs); if (!Ed) return null;
++  const xs = dfXsIn(p, errs); ['swL', 'swThkL', 'swR', 'swThkR'].forEach(k => { if (!(nm(p.dl[k]) >= 0)) errs.push(k); }); if (errs.length) return null;
++  const ll = dfLLFace({}, p.dl, xs, Ed.L.f, Ed.R.f), side = sd => { const q = Ed[sd]; return { type: q.type, bw: q.bw, bwt: q.bwt, cw: q.cw, ch: q.ch, rw: q.rw, rp: q.rp, rf: q.rf, face: q.face, f: q.f, r: ll[sd].r }; };
++  return { L: side('L'), R: side('R'), wcA: xs.wcA };
++}
++function dfXsPost() {
++  if (typeof PL_FRAME === 'undefined' || !PL_FRAME || !PL_FRAME.contentWindow) return; let x = null; try { x = dfXsMsg(P.df); } catch (e) { x = null; } if (!x) return;
++  const echo = P.df.bridge && P.df.bridge.xs; if (JSON.stringify(x) === JSON.stringify(echo || null)) return;
++  PL_FRAME.contentWindow.postMessage({ type: 'gd-xs', xs: x }, '*');
++}
+ function dfFeed(R) {
++  dfXsPost();
+   const x = dfPayload(R, P.df), key = JSON.stringify({ ...x, ts: 0 }); if (key === DF_FED) return; DF_FED = key;
+   if (typeof PL_FRAME !== 'undefined' && PL_FRAME && PL_FRAME.contentWindow) PL_FRAME.contentWindow.postMessage({ type: 'gd-dfx', dfx: x }, '*');
+ }
+@@ -4513,9 +4528,16 @@ window.addEventListener('message', e => {
+   const init = !!nb.ok && !dfHasEdges(P.df); if (init) P.df.edges = dfEdgesInit(nb);   // XS8 migration: once, from the values Preliminary sizing holds; never over the user's edges
+   if (!init && ob && JSON.stringify({ ...ob, ts: 0 }) === JSON.stringify({ ...nb, ts: 0 })) return;
+   P.df.bridge = nb;
+-  gmBuildPanes('df'); if (GM.sa) gmBuildPanes('sa'); fillInputs(); if (P.mod === 'df' || P.mod === 'sa') recompute(); else { refreshMarks(); try { dfFeed(GM.df.compute(P.df)); } catch (e) {} } autosave();
+-  if (ob && ob.ok && nb.ok && typeof gdScheduleRefresh === 'function') gdScheduleRefresh();   // a real change to an existing bridge: refresh every module
++  const ae = document.activeElement, keep = !init && ae && ae.closest ? ae.closest('#ipane-df_dl') : null, kv = keep ? ae.value : null;   // the user is typing in this module's cross-section inputs (the echo of gd-xs): leave that pane alone
++  if (keep) Object.entries(GM.df.panes()).forEach(([k, h]) => { const el = document.getElementById('ipane-' + k); if (el && k !== 'df_dl') el.innerHTML = h.replace('id="gm-src"', 'id="gm-src-df"'); }); else gmBuildPanes('df');
++  if (GM.sa) gmBuildPanes('sa'); fillInputs(); if (keep && ae.value !== kv) ae.value = kv;
++  if (P.mod === 'df' || P.mod === 'sa') recompute(); else { refreshMarks(); try { dfFeed(GM.df.compute(P.df)); } catch (e) {} } dfXsPost(); autosave();
++  const nx = o => JSON.stringify({ ...o, ts: 0, xs: 0 });   // the gd-xs echo alone (XS9) is not a change of the bridge
++  if (ob && ob.ok && nb.ok && nx(ob) !== nx(nb) && typeof gdScheduleRefresh === 'function') gdScheduleRefresh();   // a real change to an existing bridge: refresh every module
+ });
++/* Preliminary sizing's "Set in LLDF and DLs" button (XS9) */
++window.addEventListener('message', e => { if (!gdFromPL(e) || !e.data || e.data.type !== 'pl-goto') return;
++  setMod('df'); setITab('df_dl'); const s = document.getElementById('sec-dfe'); if (s) { s.classList.remove('hidden'); (s.previousElementSibling || s).scrollIntoView({ block: 'start' }); } });
+ document.addEventListener('click', e => { if (e.target.closest('[data-dfpl]')) setMod('pl'); });
+ 
+ /* =====================================================================
+@@ -5825,7 +5847,8 @@ document.addEventListener('click', e => { if (e.target.id === 'btn-designall') d
+    re-imported from the last demand source and recomputed, so no module keeps stale demands or a stale status */
+ let GD_RF_T = null;
+ function gdScheduleRefresh() { if (std().autoRefresh === 'off') return; clearTimeout(GD_RF_T);
+-  GD_RF_T = setTimeout(() => { if (typeof GR_RUN !== 'undefined' && GR_RUN) return; flash('Bridge changed: updating every module…'); getDemands(P.ui.lastSrc || 'pl', 'refresh'); }, 1500); }
++  GD_RF_T = setTimeout(() => { if (typeof GR_RUN !== 'undefined' && GR_RUN) return; const ae = document.activeElement; if (ae && ae.closest && ae.closest('#ipane-df_dl') && /^(INPUT|SELECT)$/.test(ae.tagName)) { gdScheduleRefresh(); return; }   // the user is typing in the cross-section inputs (XS9): refresh once they leave the field
++    flash('Bridge changed: updating every module…'); getDemands(P.ui.lastSrc || 'pl', 'refresh'); }, 1500); }
+ 
+ /* =====================================================================
+    GirderDetail: girder report
+```
+
+### Exact changes (XS9): decoded PlateLine (unified diff)
+
+```diff
+--- PlateLine (decoded PL_B64, d7ca4d6)
++++ PlateLine (decoded PL_B64, XS9)
+@@ -139,6 +139,8 @@
+   font-size: 12px; font-weight: 500; color: var(--blue); white-space: nowrap;
+ }
+ .link-btn:hover { text-decoration: underline; }
++input[data-k]:disabled, select[data-k]:disabled { background: #eef0ec; color: #5f6873; cursor: not-allowed; }   /* deck edges set in GirderDetail (XS9) */
++.hint .link-btn { white-space: normal; text-align: left; }
+ .side-empty { padding: 18px 16px; font-size: 12.5px; color: var(--muted); display: none; }
+ 
+ .sidebar { flex: 1; overflow-y: auto; overscroll-behavior: contain; padding-bottom: 28px; }
+@@ -1087,9 +1089,13 @@
+     if (bays.some(v => !(v > 0))) errs.push('Variable spacing: every bay must be a positive number.'); }
+   if (b.spacing === 'exterior') { if (!(num(b.Wcc) > 0)) errs.push('Girder spacing from the exterior girders: enter a positive center-to-center distance between the exterior girders.'); if (!(nb >= 2)) errs.push('Girder spacing from the exterior girders needs at least 2 girders.'); }
+   const S = bays.length ? bays.reduce((a, v) => a + v, 0) / bays.length : num(b.S);
+-  const E = b.edge || { mode: 'barrier' }, curb = E.mode === 'curb', wc = num(b.wc) || 0.150;
+-  let faceL = num(b.barrier), faceR = num(b.barrier), barW = barW0;
+-  if (curb) { ['cwL', 'chL', 'rpL', 'rwL', 'fL', 'cwR', 'chR', 'rpR', 'rwR', 'fR'].forEach(k => { if (!(num(E[k]) >= 0)) errs.push(`Curb and railing input "${k}" must be zero or positive.`); });
++  const E = b.edge || { mode: 'barrier' }, X = b.xs && b.xs.L && b.xs.R ? b.xs : null, wc = num(b.wc) || 0.150;
++  let curb = E.mode === 'curb', faceL = num(b.barrier), faceR = num(b.barrier), barW = barW0;
++  if (X) {   // deck edges set in GirderDetail's LLDF and DLs module (XS9): the live-load traffic faces r (mountable rule, sidewalks) and each side's weight
++    const wcx = X.wcA > 0 ? X.wcA : wc, w = q => q.type === 'curb' ? q.cw / 12 * q.ch / 12 * wcx + q.rw : q.bwt, ok = v => typeof v === 'number' && isFinite(v) && v >= 0;
++    if (![X.L.r, X.R.r, w(X.L), w(X.R)].every(ok)) errs.push('The deck edges from the LLDF and DLs module are incomplete: complete them there (Cross-section and dead loads).');
++    curb = X.L.type === 'curb' || X.R.type === 'curb'; faceL = X.L.r; faceR = X.R.r; barW = (w(X.L) + w(X.R)) / 2; }
++  else if (curb) { ['cwL', 'chL', 'rpL', 'rwL', 'fL', 'cwR', 'chR', 'rpR', 'rwR', 'fR'].forEach(k => { if (!(num(E[k]) >= 0)) errs.push(`Curb and railing input "${k}" must be zero or positive.`); });
+     faceL = num(E.fL); faceR = num(E.fR);
+     const wL = num(E.cwL) / 12 * num(E.chL) / 12 * wc + num(E.rwL), wR = num(E.cwR) / 12 * num(E.chR) / 12 * wc + num(E.rwR); barW = (wL + wR) / 2; }
+   return { nb, bays, S, variable, curb, faceL, faceR, bar: (faceL + faceR) / 2, barW, errs };
+@@ -2418,7 +2424,7 @@
+ <p><b>Quick suggestion and full design.</b> Suggest has two modes. The <b>quick suggestion</b> updates as you edit. It picks the web depth and web type with the lowest estimated cost from a fast sizing (one constant-stiffness beam model, flange areas from lever-arm estimates, this tool's layout checks), then checks that girder with the same staged analysis and AASHTO checks as Full design (listed below) for the interior and exterior girders, including the Table 2.5.2.6.3-1 minimum depths when span-to-depth applies to Suggest. Where a ratio exceeds 1.0 it increases the flange plates there (required area = current area &times; ratio/0.97 &times; 1.01, at most 1.35 times per round, never less than the plate already there) and thickens the web by one increment if the web ratio exceeds 1.0, then checks again, up to 8 rounds. Plates are only increased, never trimmed, so the quick suggestion passes the strength and service checks (the card says so, or names the ratio that still exceeds 1.0) but is not necessarily the lightest girder. The check runs in the background after the fast result appears (the card shows &ldquo;checking&rdquo; with a progress bar; typically a second or less after the fast result); a new edit restarts it, and Apply pressed during the check applies the checked result, after confirmation, when it is ready. The girder-count study and the Alternatives study use the fast sizing only, without this check, to rank layouts. <b>Run full design</b> optimizes for the least steel: it takes the best fast candidates and, for each, repeats: the staged, cracked analysis of the current layout (the Structural analysis settings); the AASHTO checks at every node for the interior and exterior girders, on both sides of every plate boundary (Strength I positive flexure with the plastic moment, compactness, D<sub>p</sub>/D<sub>t</sub>, and 1.3M<sub>y</sub>; Strength I negative flexure by 6.10.8 with flange local buckling, lateral-torsional buckling at the cross-frame spacing with C<sub>b</sub> from the quarter-point moments of each unbraced segment (10th Edition 6.10.8.2.3b: C<sub>b</sub> = 12.5M<sub>max</sub>/(2.5M<sub>max</sub> + 3M<sub>A</sub> + 4M<sub>B</sub> + 3M<sub>C</sub>), with M<sub>max</sub> the largest moment compressing the flange and M<sub>A</sub>, M<sub>B</sub>, M<sub>C</sub> the absolute envelope values at the quarter points (largest compression, or smallest tension where the flange is never in compression), as defined in Appendix D6.6; brace points at the supports and at the cross-frame spacing), and R<sub>b</sub>; where the compression flange changes within the unbraced length, lateral-torsional buckling uses the smallest compression flange in it (conservative; the γ<sub>e</sub> methods of Appendix D6.6 are not implemented); deck-placement lateral-torsional buckling also uses C<sub>b</sub> from the deck-placement moments; Service II flange stresses and web bend-buckling; deck-placement constructibility; flange fatigue, Fatigue I, Category B at the flange-to-web welds (extreme fiber) and Category C′ at the connection plates welded to the flanges at every cross-frame (inner flange face, 6.6.1.3.1), unless turned off or limited to Category B; and optionally L/800 deflection); and resizing, with each flange's required area set from the check ratio so plates are thickened where a check exceeds 1.0 and trimmed where there is spare capacity. When the layout stops changing it is verified against its own recomputed demands, and the cheapest passing candidate is selected. The result lists the governing check and ratio for every plate. Applying it replaces the girder layout (and the stiffener setting); Revert restores the previous design.</p>
+ <p><b>Current girder compared with the suggestion.</b> Below the quick suggestion (or full design) card, the Suggest tab compares the current girder (the Girder tab plates and splices, with the Framing tab stiffeners and cross-frame spacing) with the suggestion, so you can see what the suggestion changes. The overall rows give the web depth and thickness, transverse stiffeners and d<sub>o</sub>/D, cross-frame spacing, field splices, shop transitions, steel per girder and per deck area, cost (Unit costs), the largest strength and service ratio, and the code proportion check counts, with each changed row highlighted. The top flange, web, and bottom flange are then compared plate by plate: the two plate lists are merged by station, so each row is a station range with the current and the suggested plate and what changes (for example &ldquo;t 1 1/8 &rarr; 1 1/4&rdquo;, &ldquo;b 16 &rarr; 15&rdquo;, &ldquo;new transition at 28 ft&rdquo;). A plot shows the flange thickness and width along the girder for both. The current girder is checked in the background with the same staged analysis and strength and service checks as the quick suggestion, at its own cross-frame spacing (an edit restarts the check); the card says whether a change is needed (the current girder exceeds 1.0, is shallower than the Table 2.5.2.6.3-1 minimum depth where that applies, or fails a code proportion check) or would only save steel and cost, and &ldquo;No change suggested&rdquo; when the suggestion is the same as the current girder. If the current girder has input errors, the card lists them instead. The comparison changes nothing until you press Apply.</p>
+ <h3>Analysis model</h3><p>The analysis of the current design uses a variable-stiffness, staged line-girder model: DC1 on the steel section, DC2 and DW on the long-term composite section, and live load on the short-term composite section, with the composite stages cracked near interior supports. Its settings (staged or constant EI, cracked zones, deck reinforcement) are made in GirderDetail's Structural analysis module. Suggest mode searches trial layouts with the faster constant-EI model and then designs the chosen layout with the staged model.</p>
+-<h3>Variable spacing and deck edges</h3><p>On the Bridge tab, <b>Girder spacing</b> can be <i>Variable</i>: enter the bay spacings from left to right (one fewer than the number of girders). It can also be <i>From exterior girders</i>: enter the center-to-center distance W<sub>cc</sub> between the two exterior girders, and the equal spacing is S = W<sub>cc</sub>/(N<sub>b</sub> − 1), recomputed whenever N<sub>b</sub> or W<sub>cc</sub> changes and shown with the out-to-out deck width W<sub>cc</sub> + left overhang + right overhang; everything else then works exactly as with equal spacing S. The framing plan, cross-section, deck width, and GirderDetail's LLDF and DLs module use each bay; the sizing checks and the built-in approximate distribution factors use the average spacing, and the spacing and overhang checks are made bay by bay. <b>Deck edges</b> can be a barrier (width and the Suggest barrier weight) or a <i>curb and railing</i> on each side: curb width and height, railing load point and weight, and the distance from the deck edge to the traffic face, which sets the roadway. When GirderDetail's LLDF and DLs module is in use, its factors and MassDOT dead loads replace the built-in ones (see the Analysis tab).</p>
++<h3>Variable spacing and deck edges</h3><p>On the Bridge tab, <b>Girder spacing</b> can be <i>Variable</i>: enter the bay spacings from left to right (one fewer than the number of girders). It can also be <i>From exterior girders</i>: enter the center-to-center distance W<sub>cc</sub> between the two exterior girders, and the equal spacing is S = W<sub>cc</sub>/(N<sub>b</sub> − 1), recomputed whenever N<sub>b</sub> or W<sub>cc</sub> changes and shown with the out-to-out deck width W<sub>cc</sub> + left overhang + right overhang; everything else then works exactly as with equal spacing S. The framing plan, cross-section, deck width, and GirderDetail's LLDF and DLs module use each bay; the sizing checks and the built-in approximate distribution factors use the average spacing, and the spacing and overhang checks are made bay by bay. <b>Deck edges</b> can be a barrier (width and the Suggest barrier weight) or a <i>curb and railing</i> on each side: curb width and height, railing load point and weight, and the distance from the deck edge to the traffic face, which sets the roadway. Inside GirderDetail the deck edges are set in the LLDF and DLs module (Cross-section and dead loads) and shown here read-only; the roadway and d<sub>e</sub> then use its live-load traffic faces (mountable curbs and sidewalks under 12 in ignored) and the sizing DC2 per girder is (w<sub>L</sub> + w<sub>R</sub>)/N<sub>b</sub>. When GirderDetail's LLDF and DLs module is in use, its factors and MassDOT dead loads replace the built-in ones (see the Analysis tab).</p>
+ <h3>Reverting a suggestion</h3><p>Applying a suggested layout (Suggest tab) or an alternative (Alternatives tab) keeps a copy of the design from just before it. A banner above the output tabs then offers <b>Revert to the previous design</b>; after reverting, the same button re-applies the change, so you can compare the two. The copy survives a reload and is replaced the next time you apply a suggestion or alternative. <b>Keep and dismiss</b> discards it.</p>
+ <h3>Checking a section in GirderDetail</h3><p>On the Analysis tab, <b>Send a section to Girder section</b> sends the plates and the staged moments, shears, fatigue-truck moments, and unbraced lengths at one location to the Girder section module and opens it. Choose the interior or exterior girder and a critical location (maximum positive moment in each span, each pier, and each shop flange transition on its smaller side), or choose <i>Station entered below</i> and type any station. <b>Send all critical sections</b> sends every location for both girders. The first send replaces the module's example locations; later sends add to them, replacing any location with the same name.</p>
+ <h3>Workflow</h3>
+@@ -2665,6 +2671,7 @@
+     <div class="sec-body" id="sec-sgload">
+       ${fld('Future wearing surface', 'suggest.fws', 'psf')}${fld('SIP forms', 'suggest.sip', 'psf')}
+       ${fld('Barrier weight, each', 'suggest.bar', 'klf')}${fld('Construction live load', 'suggest.cll', 'psf')}
++      <p class="hint static full" id="sg-bar-ro" style="display:none"></p>
+       <p class="note">HL-93 with 33% dynamic allowance and AASHTO distribution factors are applied automatically. Barriers and wearing surface are shared equally by all girders.</p>
+     </div>
+     ${secHd('sec-sgsize', 'Sizing rules')}
+@@ -3577,7 +3584,7 @@
+     curved: !!m.curved, nb: m.nb, S: m.S, bays: m.bays.slice(), faceL: m.faceL, faceR: m.faceR, edge: B.edge && B.edge.mode === 'curb' ? { L: { mode: 'curb', cw: num(B.edge.cwL), ch: num(B.edge.chL), rp: num(B.edge.rpL), rw: num(B.edge.rwL) }, R: { mode: 'curb', cw: num(B.edge.cwR), ch: num(B.edge.chR), rp: num(B.edge.rpR), rw: num(B.edge.rwR) } } : null, ohL: num(B.ohL), ohR: num(B.ohR), barrier: num(B.barrier), tsDeck: num(B.ts), haunch: num(B.haunch), fc: num(B.fc), wc: num(B.wc),
+     barW: num(sg.bar), fws: num(sg.fws), sip: num(sg.sip), cll: num(sg.cll), gF: m.gF, gW: m.gW, regions,
+     plates: { D: m.D, top: m.top.map(r => ({ x0: r.x0, x1: r.x1, b: r.b, t: r.t })), bot: m.bot.map(r => ({ x0: r.x0, x1: r.x1, b: r.b, t: r.t })), web: m.web.map(r => ({ x0: r.x0, x1: r.x1, t: r.t })) },
+-    allow: num(P.limits.allow), analysis: { method: 'fe', rebar: 1.0, ...(P.analysis || {}), crack: 'none' } };
++    allow: num(P.limits.allow), analysis: { method: 'fe', rebar: 1.0, ...(P.analysis || {}), crack: 'none' }, ...(B.xs ? { xs: B.xs } : {}) };
+ }
+ let _bdT = null, _bdLast = '';
+ function postBridge(force) {
+@@ -3587,7 +3594,29 @@
+ window.addEventListener('message', e => { if (e.source !== window.parent) return;   // accept messages only from the page that embeds PlateLine
+   if (e.data && e.data.type === 'pl-bridge-req') postBridge(true);
+   if (e.data && e.data.type === 'gd-an') { const na = { ...(P.analysis || {}), ...e.data.analysis }; if (JSON.stringify(na) === JSON.stringify(P.analysis || {})) return; P.analysis = na; recompute(); autosave(); postBridge(true); }
+-  if (e.data && e.data.type === 'gd-dfx') { const nx = e.data.dfx || null; if (JSON.stringify(nx) === JSON.stringify(P.dfx || null)) return; P.dfx = nx; recompute(); autosave(); } });
++  if (e.data && e.data.type === 'gd-dfx') { const nx = e.data.dfx || null; if (JSON.stringify(nx) === JSON.stringify(P.dfx || null)) return; P.dfx = nx; recompute(); autosave(); }
++  if (e.data && e.data.type === 'gd-xs') { const nx = e.data.xs; if (!nx || !nx.L || !nx.R || JSON.stringify(nx) === JSON.stringify(P.bridge.xs || null)) return; P.bridge.xs = nx; xsLegacy(P.bridge, P.suggest, nx); fillInputs(); recompute(); autosave(); postBridge(true); } });
++/* deck edges set in GirderDetail (XS9): this tool's own deck-edge fields follow them, so an older build opening the project still finds
++   valid values. A field is rewritten only when its value differs (an equal stored value, and so sgGeoSig, are kept). Sides of different
++   types: the barrier side is stored as a curb of zero size with a railing of its weight at its centroid. */
++function xsLegacy(B, SG, X) {
++  const set = (o, k, v) => { if (typeof v === 'number' && isFinite(v) && num(o[k]) !== v) o[k] = v; }, curb = X.L.type === 'curb' || X.R.type === 'curb';
++  if (!curb) { if (B.edge && B.edge.mode !== 'barrier') B.edge.mode = 'barrier'; set(B, 'barrier', (X.L.f + X.R.f) / 2); set(SG, 'bar', (X.L.bwt + X.R.bwt) / 2); return; }
++  const E = B.edge || (B.edge = { mode: 'curb' }); if (E.mode !== 'curb') E.mode = 'curb';
++  ['L', 'R'].forEach(sd => { const q = X[sd]; if (q.type === 'curb') { set(E, 'cw' + sd, q.cw); set(E, 'ch' + sd, q.ch); set(E, 'rp' + sd, q.rp); set(E, 'rw' + sd, q.rw); } else { set(E, 'cw' + sd, 0); set(E, 'ch' + sd, 0); set(E, 'rp' + sd, q.bw / 2); set(E, 'rw' + sd, q.bwt); } set(E, 'f' + sd, q.f); });
++}
++/* read-only deck-edge fields when GirderDetail owns them (XS9) */
++const XS_RO = ['bridge.edge.mode', 'bridge.barrier', ...['cw', 'ch', 'rp', 'rw', 'f'].flatMap(k => ['L', 'R'].map(sd => `bridge.edge.${k}${sd}`)), 'suggest.bar'];
++function syncEdgeRO() {
++  const X = EMBED && P.bridge.xs && P.bridge.xs.L && P.bridge.xs.R ? P.bridge.xs : null, why = 'Set in LLDF and DLs → Cross-section and dead loads';
++  XS_RO.forEach(k => { const el = document.querySelector(`[data-k="${k}"]`); if (!el) return; el.disabled = !!X; el.title = X ? why : ''; });
++  const go = `<button type="button" class="link-btn" data-goxs="1">${why}</button>`, a = document.getElementById('br-edge-ro'), b = document.getElementById('sg-bar-ro');
++  const wc = num(P.bridge.wc) || 0.150, wcx = X && X.wcA > 0 ? X.wcA : wc, w = q => q.type === 'curb' ? q.cw / 12 * q.ch / 12 * wcx + q.rw : q.bwt;
++  const sd = (q, n) => `${n}: ${q.type === 'curb' ? `curb ${f2(q.cw)} × ${f2(q.ch)} in and railing ${f3(q.rw)} klf at ${f2(q.rp)} ft` : `barrier ${f2(q.bw)} ft, ${f3(q.bwt)} klf`}; live-load traffic face ${f2(q.r)} ft`;
++  if (a) { a.style.display = X ? '' : 'none'; a.innerHTML = X ? `<b>Read-only here.</b> The deck edges are set in GirderDetail's LLDF and DLs module. ${sd(X.L, 'Left')}. ${sd(X.R, 'Right')}. The roadway and d<sub>e</sub> of the sizing use the average of the two live-load traffic faces (each after the mountable-curb and sidewalk rules). ${go}` : ''; }
++  if (b) { b.style.display = X ? '' : 'none'; b.innerHTML = X ? `<b>Read-only here.</b> Barrier or curb and railing weights from GirderDetail's LLDF and DLs module: left ${f3(w(X.L))}, right ${f3(w(X.R))} klf; DC2 per girder = (w<sub>L</sub> + w<sub>R</sub>)/N<sub>b</sub>. ${go}` : ''; }
++}
++document.addEventListener('click', e => { if (EMBED && e.target.closest && e.target.closest('[data-goxs]')) window.parent.postMessage({ type: 'pl-goto', to: 'df_dl' }, '*'); });
+ /* ---------- send sections to the Girder section module ---------- */
+ function gsLocOptions() {
+   const sel = $('#gs_loc'), gt = $('#gs_gt'); if (!sel || !gt) return; const dx = detailExport(P, M, AN, FR); if (!dx) return;
+@@ -4122,6 +4151,7 @@
+         ${fld('Number of girders', 'bridge.nb', '')}${fld('Girder spacing', 'bridge.spacing', '', 'sel', { options: [['equal', 'Equal'], ['variable', 'Variable (bay by bay)'], ['exterior', 'From exterior girders']] })}
+         ${fld('Girder spacing S (equal)', 'bridge.S', 'ft')}${fld('Bay spacings, left to right (variable)', 'bridge.bays', 'ft', 'text')}${fld('Exterior girders, center to center W<sub>cc</sub>', 'bridge.Wcc', 'ft')}<p class="hint static full" id="br-wcc-info"></p>
+         ${fld('Left overhang', 'bridge.ohL', 'ft')}${fld('Right overhang', 'bridge.ohR', 'ft')}
++        <p class="hint static full" id="br-edge-ro" style="display:none"></p>
+         ${fld('Deck edges', 'bridge.edge.mode', '', 'sel', { options: [['barrier', 'Barrier (width and weight)'], ['curb', 'Curb and railing, each side']] })}${fld('Barrier width at deck', 'bridge.barrier', 'ft')}
+         ${fld('Left curb width / height', 'bridge.edge.cwL', 'in')}${fld('', 'bridge.edge.chL', 'in')}${fld('Left railing load point from edge', 'bridge.edge.rpL', 'ft')}${fld('Left railing weight', 'bridge.edge.rwL', 'klf')}${fld('Left edge to traffic face', 'bridge.edge.fL', 'ft')}<div></div>
+         ${fld('Right curb width / height', 'bridge.edge.cwR', 'in')}${fld('', 'bridge.edge.chR', 'in')}${fld('Right railing load point from edge', 'bridge.edge.rpR', 'ft')}${fld('Right railing weight', 'bridge.edge.rwR', 'klf')}${fld('Right edge to traffic face', 'bridge.edge.fR', 'ft')}<div></div>
+@@ -4203,7 +4233,7 @@
+     else if (el.dataset.t === 'dim') el.value = typeof v === 'number' ? frac(v) : (v ?? '');
+     else el.value = v ?? '';
+   });
+-  syncSpacingVis();
++  syncSpacingVis(); syncEdgeRO();
+ }
+ function syncSpacingVis() { const el = document.getElementById('f_bridge_bays'), ig = el && el.closest('.ig'); if (ig) ig.style.display = P.bridge.spacing === 'variable' ? '' : 'none';
+   const ext = P.bridge.spacing === 'exterior', vis = (id, on) => { const e = document.getElementById(id), g = e && e.closest('.ig'); if (g) g.style.display = on ? '' : 'none'; };
+```
+
+### Verification (XS8–XS9)
+- `node --check` on every inline script of the main page and of the decoded PlateLine after each step.
+- **Migration, old projects (CLAUDE.md §5):** each project was built and saved with `origin/main` (d7ca4d6) and its whole localStorage (GirderDetail and PlateLine autosaves) was loaded into `origin/main` and into this branch; Preliminary sizing was opened (the migration point) and then LLDF and DLs. Projects: (1) the built-in example; (2) sidewalks 6 ft × 8 in / 5 ft × 9 in, median, ped 75 psf, added rows; (3) curb mode (curb 12 × 10 in and 10 × 8 in, railings 0.050 at 0.50 ft and 0.030 at 1.25 ft, faces 1.00 / 1.50 ft); (4) curb mode with a left sidewalk; (5) AASHTO; (6) 6 ft sidewalks 12 in; (7) xsA (fences, overlays, γ<sub>c</sub>); (8) "two adjacent" overhang loads. Compared: `GM.df.compute` (regions, members, dead loads, R.ll, base), `GM.sa.compute` for every girder, the `gd-dfx` payload, the Checks, Summary and Factors and loads text; in Preliminary sizing: the model faces, roadway, d<sub>e</sub>, every check item, the analysis (all arrays), the fast suggestion (`suggestLayout`), the `sgGeoSig` signature, whether the GirderDetail factors are in use; Design all (projects 1 and 2) and Full design (project 1).
+  - Projects 1–5 and 8: **all identical**; the only data differences are the new `P.df.edges`, `P.bridge.xs` and the `xs` echo in `P.df.bridge`, and in curb mode the label of the traffic face ("edge to traffic face entered" for "curb and railing traffic face (Preliminary sizing)"). Preliminary sizing's own fields (`bridge.barrier`, `bridge.edge`, `suggest.bar`) unchanged.
+  - Projects 6 and 7: GirderDetail identical; Preliminary sizing changes as in the XS9 callout (faces, roadway, d<sub>e</sub>, built-in factors, A1, suggestion).
+- **Interaction (branch):** editing the deck edges in GirderDetail (unequal weights, unequal widths, a mixed barrier / curb side, curb faces cleared, a 12 in curb, an entered railing face): Preliminary sizing follows (values in the XS8/XS9 check cases), its fields are disabled with the note, the signature `sgGeoSig` matches the factors GirderDetail sends after each change ("Use these factors" in use), no message traffic in the 10 s after each change, typing in an edge field keeps the focus and text, the link opens LLDF and DLs at Deck edges. No console errors.
+- **Saved data both directions:** an edited project saved by this branch opened in `origin/main`: no errors, Preliminary sizing computes from its written fields with the same faces and loads (its analysis, suggestion and the `gd-dfx` payload identical to this branch; GirderDetail labels a barrier stored next to a curb side as a railing), and `P.df.edges` / `P.bridge.xs` are kept. A main-saved project opened here migrates as above.
+- **Screenshots:** Preliminary sizing Bridge tab (read-only fields and note, barrier and curb projects), Suggest tab note, GirderDetail Deck edges (barrier, curb with entered and derived faces, mixed), the link target.
+
+### XS10. Preliminary sizing's built-in exterior-girder factors follow the LLDF and DLs rules: d<sub>e</sub> limited to −1.0 ft in the e-factor, lever rule, rigid cross-section method, S > 16 ft and N<sub>b</sub> = 3 rules   [§4: built-in approximate live load distribution factors, exterior girders] [more conservative; changes Suggest, Full design and the width study]
+- **Decision:** coordinator, 2026-10-13 (engineer offline): "don't ship an unconservative built-in factor"; make `sgDF`'s exterior factors follow GirderDetail's LLDF module (copied, not shared: CLAUDE.md §3). This resolves the XS9 open item.
+- **Where (anchors), decoded PlateLine:** new `const SG_MPF`, `function sgLeverC`, `function sgLever(G, N)`, `function sgRigid(G)` (copies of GirderDetail `DF_MPF`, `dfLeverC`, `dfLever` for the exterior girder j = 0, `dfRigid`, adapted to equal spacing S, N<sub>b</sub> girders, d<sub>e</sub> the same on both sides, and the roadway w); `sgDF(S, L, Kg, ts, de, nb, ext, rdwy)` (new 8th argument, the roadway); callers `demand` (anchor `sgDF(S, Ls, KgS[i].Kg, ts, de, nb, ext, rdwy)`) and `wsCase` (anchor `setup.W - 2 * setup.bar`); the exterior-girder derivation block on the Suggest tab (anchor `4.6.2.2.2d rigid cross-section`). Main page: the `pl-goto` listener scrolls Deck edges below the sticky section header (`scrollMarginTop`), display only.
+- **Before:**
+  ```js
+  const a1 = S + de - 2, a2 = a1 - 6, lev = 1.2 * 0.5 * (Math.max(a1, 0) + Math.max(Math.min(a2, S), 0)) / S;   // lever rule, one lane, m = 1.2
+  if (!ext) return { mM: Math.max(m1, m2), mV: Math.max(v1, v2), m1, m2, v1, v2, kr };
+  const eM = 0.77 + de / 9.1, eV = 0.6 + de / 10;
+  return { mM: Math.max(lev, eM * m2), mV: Math.max(lev, eV * v2), m1, m2, v1, v2, kr, lev, eM, eV };
+  ```
+  g<sub>ext</sub> = max(lever 1 lane, e·g<sub>int,2+</sub>), e = 0.77 + d<sub>e</sub>/9.1 (moment), 0.60 + d<sub>e</sub>/10 (shear), d<sub>e</sub> not limited.
+- **After:** (interior factors unchanged)
+  ```js
+  const w = rdwy != null && isFinite(rdwy) ? rdwy : (nb - 1) * S + 2 * de, twoHalf = w >= 20.0 - 1e-9 && w <= 24.0 + 1e-9, NL = twoHalf ? 2 : Math.max(1, Math.floor(w / 12)), laneW = twoHalf ? w / 2 : 12;
+  ... G = { pos, nb, de, rw0: -de, rw1: -de + w, NL, laneW, xc, sumX2 };
+  const l1 = sgLever(G, 1), lev = l1 ? l1.df : 0, deE = Math.max(de, -1.0), eM = 0.77 + deE / 9.1, eV = 0.6 + deE / 10;
+  let mE = eM * m2, vE = eV * v2;
+  if (S > 16.0) { const l2 = sgLever(G, 2); mE = vE = l2 ? l2.df : 0; }
+  else if (nb === 3) { const l2 = sgLever(G, 2); mE = Math.min(mE, l2 ? l2.df : mE); vE = l2 ? l2.df : vE; }
+  const rig = sgRigid(G);
+  return { mM: Math.max(lev, mE, rig.g), mV: Math.max(lev, vE, rig.g), ..., lev, eM, eV, deE, mE, vE, rig: rig.g, rigN: rig.n, NL, w, rule };
+  ```
+  g<sub>ext,M</sub> = max(g<sub>lever,1</sub>, e<sub>M</sub>·g<sub>int,M,2+</sub>, g<sub>rigid</sub>), g<sub>ext,V</sub> = max(g<sub>lever,1</sub>, e<sub>V</sub>·g<sub>int,V,2+</sub>, g<sub>rigid</sub>), with d<sub>e</sub> ≥ −1.0 ft in e; g<sub>rigid</sub> = max over n = 1…N<sub>L</sub> of m<sub>n</sub>(n/N<sub>b</sub> + X<sub>ext</sub>Σe/Σx²), e<sub>i</sub> = X<sub>ext</sub> + d<sub>e</sub> − (5 + 12(i − 1)) ft; N<sub>L</sub> = INT(w/12) (two lanes of w/2 for 20 ≤ w ≤ 24 ft); S > 16 ft: two or more lanes by the lever rule; N<sub>b</sub> = 3: moment the lesser of the e-factor and the two-lane lever rule, shear the two-lane lever rule. These are exactly GirderDetail's `dfMember` rules for an exterior girder (without its skew factors: Preliminary sizing applies its own skew correction for shear as before, and takes no moment reduction). The one-lane lever rule (truck 2 ft from the traffic face, m = 1.2) gives the same value as before in every normal case (it no longer caps the second wheel at one spacing, which only matters for d<sub>e</sub> > 8 ft). The fatigue factors (lever/1.2 for the exterior girder) are unchanged; the deflection factor (N<sub>L</sub>m/N<sub>b</sub>) is computed elsewhere and was already on the same roadway (XS9). Interior girders keep the equations (GirderDetail's S > 16 ft / N<sub>b</sub> = 3 rules for interior girders are not ported: not requested).
+- **Problem:** the built-in exterior factor had no rigid cross-section check and no d<sub>e</sub> limit, so it was below GirderDetail's factor for the same bridge (built-in example 0.789 vs 0.811), and far below it with a live-load face inside a 12 in sidewalk (0.331 vs 0.621). Less conservative; fixed.
+- **Governing provision:** AASHTO LRFD 10th Ed. Table 4.6.2.2.2d-1 (exterior girder moment: lever rule one lane, e = 0.77 + d<sub>e</sub>/9.1, range −1.0 ≤ d<sub>e</sub> ≤ 5.5 ft), Table 4.6.2.2.3b-1 (shear: e = 0.60 + d<sub>e</sub>/10), 4.6.2.2.2d and Eq. C4.6.2.2.2d-1 (rigid cross-section, steel beam-slab bridges with diaphragms or cross-frames: the exterior factor is not less than this), 3.6.1.1.1 and 3.6.1.1.2 (lanes, multiple presence), Table 4.6.2.2.2b-1 note (N<sub>b</sub> = 3) and the S > 16 ft lever rule (Tables 4.6.2.2.2b-1, 4.6.2.2.3a-1).
+- **Check cases (span 1, L = 110 ft, K<sub>g</sub> = 936,395 in⁴, t<sub>s</sub> = 8 in, S = 9.50 ft, N<sub>b</sub> = 5: X<sub>ext</sub> = 19.00 ft, Σx² = 902.50 ft², g<sub>int,M,2+</sub> = 0.708, g<sub>int,V,2+</sub> = 0.918):**
+  - **Built-in example** (d<sub>e</sub> = 1.75 ft, w = 41.50 ft, N<sub>L</sub> = 3): lever 0.789; e-factor M 0.962 × 0.708 = 0.681, V 0.775 × 0.918 = 0.711; rigid: curb = 19.00 + 1.75 = 20.75, e = 15.75, 3.75, −8.25; 1 lane 1.2(0.200 + 19.00 × 15.75/902.50) = 0.638; 2 lanes 1.0(0.400 + 19.00 × 19.50/902.50) = **0.811**; 3 lanes 0.85(0.600 + 19.00 × 11.25/902.50) = 0.711. g<sub>M,ext</sub> 0.789 → **0.811**, g<sub>V,ext</sub> 0.789 → **0.811** (= GirderDetail 0.811 / 0.850 before its skew correction for shear; GirderDetail's shear includes its skew factor).
+  - **6 ft × 12 in sidewalks** (d<sub>e</sub> = −2.75 ft, w = 32.50 ft, N<sub>L</sub> = 2): lever 0.300; e-factor with d<sub>e</sub> limited to −1.0: e<sub>M</sub> = 0.77 − 1.0/9.1 = 0.660, 0.660 × 0.708 = 0.467; e<sub>V</sub> = 0.500, 0.459; rigid: curb = 16.25, e = 11.25, −0.75; 2 lanes 1.0(0.400 + 19.00 × 10.50/902.50) = **0.621**. g<sub>M,ext</sub> 0.331 → **0.621**, g<sub>V,ext</sub> 0.300 → **0.621** (GirderDetail: 0.621).
+  - **xsA** (fences; d<sub>e</sub> = −1.75 ft, w = 34.50 ft, N<sub>L</sub> = 2): lever 0.363; e-factor (d<sub>e</sub> → −1.0) 0.467 / 0.459; rigid 2 lanes 0.400 + 19.00(12.25 + 0.25)/902.50 = **0.663**; g<sub>M,ext</sub> 0.409 → **0.663**, g<sub>V,ext</sub> 0.390 → **0.663**.
+  - **Curb project, faces cleared** (d<sub>e</sub> = 2.375 ft, w = 42.75 ft): lever 0.868 governs (rigid 0.837): unchanged 0.868.
+- **Effect on the built-in example (saved with main, migrated):** with "Use these factors" Yes (default) the analysis of the current layout still uses GirderDetail's factors: its checks and demands are unchanged. The built-in factors are used for trial layouts, so these change:
+  - Fast suggestion: web depth 63 → **69 in**; flanges: top 1.500 → 1.375 in and 0.875 → 0.750 in in four pieces, bottom widths 16/20 → 15/19 in; estimated cost $1,696,419 → $1,714,870.
+  - Full design: top flange 1.125 → 1.250 in (two pieces), bottom 1.125 → 1.250 in (one piece); governing ratio 0.965 → 0.957; cost $1,597,506 → $1,616,264 (+1.2%).
+  - Width study (W = 44.50 ft, N = 4 to 12): the exterior factor now rises with the overhang (rigid method), so the "balanced" overhang (exterior g closest to interior g) moves to the minimum overhang, 1.50 ft (d<sub>e</sub> = 0) for every girder count (was 2.75 ft for N = 4, 2.25 ft for N = 5–7, 2.00 ft for N = 8, 1.75 ft for N = 9–10, 1.50 ft for N = 11–12); for N = 5: S 10.00 → 10.38 ft, g<sub>E</sub> 0.690 → 0.776, web 65 → 68 in, 27.37 → 27.91 psf. Every row still passes.
+  - Design all (built-in example and the sidewalk project): unchanged (it uses the current layout).
+  - With "Use these factors" No, the current layout's exterior factors also rise (0.789 → 0.811 for the built-in example).
+- **Other copies:** GirderDetail `DF_MPF`, `dfLeverC`, `dfLever`, `dfRigid`, `dfMember` (main page; the source, unchanged).
+
+### Exact changes (XS10): main page (unified diff against the XS9 commit; the changed PL_B64 line is omitted)
+
+```diff
+diff --git a/Steel Bridge Beam Modules.html b/Steel Bridge Beam Modules.html
+index 9121d62..fe483bb 100644
+--- a/Steel Bridge Beam Modules.html	
++++ b/Steel Bridge Beam Modules.html	
+@@ -2351,7 +2351,7 @@ const MAN = [
+ function buildManual() { $('#tab-manual').innerHTML = `<div class="man-nav">${MAN.map(([id, t], i) => `<button type="button" class="man-btn" data-man="${id}">${i + 1}. ${t}</button>`).join('')}</div>${MAN.map(([id, t, b], i) => `<article class="man-part" id="man-${id}"><h2 class="man-h">Part ${i + 1}. ${t}</h2>${b}</article>`).join('')}`; showManPart(); }
+ function showManPart() { const id = P.ui.man || 'p1'; $$('.man-btn').forEach(b => b.classList.toggle('active', b.dataset.man === id)); $$('.man-part').forEach(a => a.classList.toggle('active', a.id === 'man-' + id)); }
+ 
+ /* =====================================================================
+    GirderDetail: additional modules
+    ts  transverse stiffeners and connection plates (6.10.11.1, 6.6.1.3.1, 6.10.9)
+@@ -4537,7 +4537,7 @@ window.addEventListener('message', e => {
+ });
+ /* Preliminary sizing's "Set in LLDF and DLs" button (XS9) */
+ window.addEventListener('message', e => { if (!gdFromPL(e) || !e.data || e.data.type !== 'pl-goto') return;
+-  setMod('df'); setITab('df_dl'); const s = document.getElementById('sec-dfe'); if (s) { s.classList.remove('hidden'); (s.previousElementSibling || s).scrollIntoView({ block: 'start' }); } });
++  setMod('df'); setITab('df_dl'); const s = document.getElementById('sec-dfe'); if (s) { s.classList.remove('hidden'); const hd = s.previousElementSibling; s.style.scrollMarginTop = ((hd ? hd.offsetHeight : 0) + 8) + 'px'; s.scrollIntoView({ block: 'start' }); } });   // clear the sticky section header
+ document.addEventListener('click', e => { if (e.target.closest('[data-dfpl]')) setMod('pl'); });
+ 
+ /* =====================================================================
+```
+
+### Exact changes (XS10): decoded PlateLine (unified diff against XS9)
+
+```diff
+--- PlateLine (decoded PL_B64, XS9)
++++ PlateLine (decoded PL_B64, XS10)
+@@ -1791,15 +1791,52 @@
+ /* ---------- continuous beam, constant EI, influence lines ---------- */
+ const SG_CACHE = { key: '', beam: null };
+ /* ---------- distribution factors (AASHTO 4.6.2.2) ---------- */
+-function sgDF(S, L, Kg, ts, de, nb, ext) {
++/* Exterior girders follow GirderDetail's LLDF and DLs module (dfMember, dfLever, dfLeverC, dfRigid, copied and adapted to equal spacing
++   S, N_b girders, d_e on both sides and the roadway w; XS10): one lane by the lever rule (truck 2 ft from the traffic face, m = 1.2);
++   two or more lanes the larger of the e-factor with d_e not less than -1.0 ft (Table 4.6.2.2.2d-1 range; 4.6.2.2.3b for shear) and
++   the rigid cross-section method (4.6.2.2.2d); S > 16 ft: the lever rule; N_b = 3: moment the lesser of the e-factor and the lever
++   rule, shear the lever rule. Lanes: N_L = INT(w/12), or 2 lanes of w/2 for 20 <= w <= 24 ft (3.6.1.1.1). */
++const SG_MPF = n => n <= 1 ? 1.20 : n === 2 ? 1.00 : n === 3 ? 0.85 : 0.65;
++function sgLeverC(pos, Nb, j, uw) {
++  const uj = pos[j];
++  if (j < Nb - 1 && uw >= uj - 1e-9 && uw <= pos[j + 1] + 1e-9) return (pos[j + 1] - uw) / (pos[j + 1] - uj);
++  if (j > 0 && uw <= uj + 1e-9 && uw >= pos[j - 1] - 1e-9) return (uw - pos[j - 1]) / (uj - pos[j - 1]);
++  if (j === 0 && Nb > 1 && uw < uj) return (pos[1] - uw) / (pos[1] - pos[0]);
++  if (j === Nb - 1 && Nb > 1 && uw > uj) return (uw - pos[Nb - 2]) / (pos[Nb - 1] - pos[Nb - 2]);
++  return 0;
++}
++function sgLever(G, N) {   // exterior girder (j = 0), truck train, 6-ft axles, gaps of 4 ft, 2 ft from the traffic faces
++  const pos = G.pos, Nb = G.nb, rw0 = G.rw0, rw1 = G.rw1, laneW = G.laneW || 12;
++  if (laneW * N > rw1 - rw0 + 1e-9) return null;
++  const off = []; let cum = 0; for (let t = 0; t < N; t++) { off.push(cum, cum + 6); cum += 6 + (t < N - 1 ? 4 : 0); }
++  const train = off[off.length - 1]; if (train > rw1 - rw0 - 4 + 1e-9) return null;
++  let best = null;
++  for (let s = rw0 + 2; s <= rw1 - 2 - train + 1e-9; s += 0.25) { let R = 0; for (const o of off) R += 0.5 * sgLeverC(pos, Nb, 0, s + o); if (!best || R > best.R + 1e-9) best = { R, s }; }
++  if (!best) return null; const m = SG_MPF(N);
++  return { N, R: best.R, m, df: best.R * m };
++}
++function sgRigid(G) {
++  const Nb = G.nb, Xext = G.xc - G.pos[0], curb = Xext + G.de, laneW = G.laneW || 12;
++  const ecc = []; for (let i = 0; i < G.NL; i++) ecc.push(curb - (5 + i * laneW));
++  let best = { g: -Infinity };
++  for (let n = 1; n <= G.NL; n++) { const sumE = ecc.slice(0, n).reduce((a, b) => a + b, 0), m = SG_MPF(n), R = n / Nb + Xext * sumE / G.sumX2, g = m * R; if (g > best.g) best = { g, m, sumE, R, n }; }
++  return { ...best, Xext, sumX2: G.sumX2 };
++}
++function sgDF(S, L, Kg, ts, de, nb, ext, rdwy) {
+   const kr = Kg / (12 * L * ts ** 3);
+   const m1 = 0.06 + (S / 14) ** 0.4 * (S / L) ** 0.3 * kr ** 0.1;
+   const m2 = 0.075 + (S / 9.5) ** 0.6 * (S / L) ** 0.2 * kr ** 0.1;
+   const v1 = 0.36 + S / 25, v2 = 0.2 + S / 12 - (S / 35) ** 2;
+-  const a1 = S + de - 2, a2 = a1 - 6, lev = 1.2 * 0.5 * (Math.max(a1, 0) + Math.max(Math.min(a2, S), 0)) / S;   // lever rule, one lane, m = 1.2
+   if (!ext) return { mM: Math.max(m1, m2), mV: Math.max(v1, v2), m1, m2, v1, v2, kr };
+-  const eM = 0.77 + de / 9.1, eV = 0.6 + de / 10;
+-  return { mM: Math.max(lev, eM * m2), mV: Math.max(lev, eV * v2), m1, m2, v1, v2, kr, lev, eM, eV };
++  const w = rdwy != null && isFinite(rdwy) ? rdwy : (nb - 1) * S + 2 * de, twoHalf = w >= 20.0 - 1e-9 && w <= 24.0 + 1e-9, NL = twoHalf ? 2 : Math.max(1, Math.floor(w / 12)), laneW = twoHalf ? w / 2 : 12;
++  const pos = []; for (let i = 0; i < nb; i++) pos.push(i * S); const xc = (nb - 1) * S / 2, sumX2 = pos.reduce((a, x) => a + (x - xc) ** 2, 0) || 1e-9;
++  const G = { pos, nb, de, rw0: -de, rw1: -de + w, NL, laneW, xc, sumX2 };
++  const l1 = sgLever(G, 1), lev = l1 ? l1.df : 0, deE = Math.max(de, -1.0), eM = 0.77 + deE / 9.1, eV = 0.6 + deE / 10;
++  let mE = eM * m2, vE = eV * v2, rule = 'e';
++  if (S > 16.0) { const l2 = sgLever(G, 2); mE = vE = l2 ? l2.df : 0; rule = 'S16'; }
++  else if (nb === 3) { const l2 = sgLever(G, 2); mE = Math.min(mE, l2 ? l2.df : mE); vE = l2 ? l2.df : vE; rule = 'N3'; }
++  const rig = sgRigid(G);
++  return { mM: Math.max(lev, mE, rig.g), mV: Math.max(lev, vE, rig.g), m1, m2, v1, v2, kr, lev, eM, eV, deE, mE, vE, rig: rig.g, rigN: rig.n, NL, w, rule };
+ }
+ 
+ /* ---------- section helpers ---------- */
+@@ -2010,8 +2047,8 @@
+         cf.push({ pier: k, xl, xr });
+       }
+       // distribution factors
+-      const dfSpan = spans.map((Ls, i) => sgDF(S, Ls, KgS[i].Kg, ts, de, nb, ext));
+-      const dfPier = spans.slice(1).map((_, k) => sgDF(S, (spans[k] + spans[k + 1]) / 2, (KgS[k].Kg + KgS[k + 1].Kg) / 2, ts, de, nb, ext));
++      const dfSpan = spans.map((Ls, i) => sgDF(S, Ls, KgS[i].Kg, ts, de, nb, ext, rdwy));
++      const dfPier = spans.slice(1).map((_, k) => sgDF(S, (spans[k] + spans[k + 1]) / 2, (KgS[k].Kg + KgS[k + 1].Kg) / 2, ts, de, nb, ext, rdwy));
+       const skV = spans.map((Ls, i) => { const th = skewSpan(i) * Math.PI / 180; return 1 + 0.2 * (12 * Ls * ts ** 3 / KgS[i].Kg) ** 0.3 * Math.tan(th); });
+       if (XF) { XF.span.forEach((v, i) => { if (v && dfSpan[i]) dfSpan[i] = { ...dfSpan[i], ...v }; }); XF.pier.forEach((v, k) => { if (v && dfPier[k]) dfPier[k] = { ...dfPier[k], ...v }; }); skV.fill(1); }   // skew already in the module's factors
+       const Mp = new Float64Array(N), Mn = new Float64Array(N), mgM = new Float64Array(N);
+@@ -2991,7 +3028,7 @@
+   if (TI) { const d = TI.dfSpan[iMax];
+     dfw += `<div class="eq-block"><div class="eq-title"><span>Interior girder, moment, Span ${iMax + 1}</span><span class="eq-ref">AASHTO Table 4.6.2.2.2b-1</span></div><div class="eq-math">\\[\\begin{aligned}g_{1} &= 0.06 + \\left(\\frac{S}{14}\\right)^{0.4}\\left(\\frac{S}{L}\\right)^{0.3}\\left(\\frac{K_g}{12Lt_s^3}\\right)^{0.1} = 0.06 + \\left(\\frac{${f2(num(P.bridge.S))}}{14}\\right)^{0.4}\\left(\\frac{${f2(num(P.bridge.S))}}{${f2(Lm)}}\\right)^{0.3}(${f3(d.kr)})^{0.1} = ${f3(d.m1)} \\\\ g_{2+} &= 0.075 + \\left(\\frac{S}{9.5}\\right)^{0.6}\\left(\\frac{S}{L}\\right)^{0.2}\\left(\\frac{K_g}{12Lt_s^3}\\right)^{0.1} = ${f3(d.m2)} \\\\ g_M &= \\max(${f3(d.m1)},\\ ${f3(d.m2)}) = ${f3(d.mM)} \\qquad g_V = \\max(0.36 + S/25,\\ 0.2 + S/12 - (S/35)^2) = ${f3(d.mV)}\\end{aligned}\\]</div></div>`; }
+   if (TE) { const d = TE.dfSpan[iMax];
+-    dfw += `<div class="eq-block"><div class="eq-title"><span>Exterior girder, moment, Span ${iMax + 1}</span><span class="eq-ref">AASHTO Table 4.6.2.2.2d-1, lever rule</span></div><div class="eq-math">\\[\\begin{aligned}d_e &= ${f2(s.de)}\\ \\text{ft}, \\quad g_{1,lever} = 1.2 \\times \\frac{0.5\\,(a_1 + a_2)}{S} = ${f3(d.lev)}, \\quad a_1 = S + d_e - 2 = ${f2(num(P.bridge.S) + s.de - 2)}\\ \\text{ft} \\\\ e &= 0.77 + \\frac{d_e}{9.1} = ${f3(d.eM)}, \\quad g_{2+} = e\\,g_{2+,int} = ${f3(d.eM)}(${f3(d.m2)}) = ${f3(d.eM * d.m2)} \\\\ g_M &= \\max(${f3(d.lev)},\\ ${f3(d.eM * d.m2)}) = ${f3(d.mM)}\\end{aligned}\\]</div></div>`; }
++    dfw += `<div class="eq-block"><div class="eq-title"><span>Exterior girder, moment, Span ${iMax + 1}</span><span class="eq-ref">AASHTO Table 4.6.2.2.2d-1, lever rule; 4.6.2.2.2d rigid cross-section</span></div><div class="eq-math">\\[\\begin{aligned}d_e &= ${f2(s.de)}\\ \\text{ft}, \\quad w = ${f2(d.w)}\\ \\text{ft}, \\quad N_L = ${d.NL}, \\quad g_{1,lever} = 1.2 \\times \\frac{0.5\\,(a_1 + a_2)}{S} = ${f3(d.lev)}, \\quad a_1 = S + d_e - 2 = ${f2(num(P.bridge.S) + s.de - 2)}\\ \\text{ft} \\\\ e &= 0.77 + \\frac{${d.deE > s.de + 1e-9 ? '-1.00' : 'd_e'}}{9.1} = ${f3(d.eM)}${d.deE > s.de + 1e-9 ? '\\ (d_e \\text{ limited to } -1.0)' : ''}, \\quad g_{2+} = ${d.rule === 'e' ? `e\\,g_{2+,int} = ${f3(d.eM)}(${f3(d.m2)})` : d.rule === 'S16' ? '\\text{lever rule, 2 lanes (S > 16 ft)}' : '\\min(e\\,g_{2+,int},\\ \\text{lever, 2 lanes})\\ (N_b = 3)'} = ${f3(d.mE)} \\\\ g_{rigid} &= \\max_n\\, m\\left(\\frac{N_L}{N_b} + \\frac{X_{ext}\\sum e}{\\sum x^2}\\right) = ${f3(d.rig)}\\ (${d.rigN}\\ \\text{lane${d.rigN > 1 ? 's' : ''}}) \\\\ g_M &= \\max(${f3(d.lev)},\\ ${f3(d.mE)},\\ ${f3(d.rig)}) = ${f3(d.mM)}, \\quad g_V = \\max(${f3(d.lev)},\\ ${f3(d.vE)},\\ ${f3(d.rig)}) = ${f3(d.mV)}\\end{aligned}\\]</div></div>`; }
+   const skv = tr[0].skV.map((v, i) => `Span ${i + 1}: ${f3(v)}`).join(', ');
+   h += card('sg-loads', 'Loads and distribution factors', '', `${ltbl}
+     <p class="note-p">Live load: HL-93 design truck (rear axle spacing 14 to 30 ft) or design tandem, plus 0.64 klf design lane loaded wherever it increases the effect; IM = 33% on truck and tandem only (3.6.1.2, 3.6.2.1). In negative moment regions between permanent-load contraflexure points, 90% of two design trucks spaced at least 50 ft plus 90% of the lane is also considered (3.6.1.3.1). Distribution factors include multiple presence; negative-moment regions use the average length of the adjacent spans. The skew correction for shear (Table 4.6.2.2.3c-1) is applied along the whole span for conservatism: ${skv}. The skew reduction for moment is not taken.</p>${dfw}`);
+@@ -3759,7 +3796,7 @@
+   const r0 = wsEval(c.N, S0.S, S0.oh); if (r0.err) return { ...r0, rule: 'trial' };
+   const sp = (P.bridge.spans || []).map(num), iMax = sp.indexOf(Math.max(...sp)), Kg = r0.Kg, ts = num(P.bridge.ts);   // K_g of the trial girder
+   if (!Kg) return { ...r0, rule: '0.375S' };
+-  const sc = c.ok.map(q => { const gi = sgDF(q.S, sp[iMax], Kg, ts, q.de, c.N, false).mM, ge = sgDF(q.S, sp[iMax], Kg, ts, q.de, c.N, true).mM; return { ...q, d: Math.abs(ge - gi) }; });
++  const sc = c.ok.map(q => { const gi = sgDF(q.S, sp[iMax], Kg, ts, q.de, c.N, false).mM, ge = sgDF(q.S, sp[iMax], Kg, ts, q.de, c.N, true, setup.W - 2 * setup.bar).mM; return { ...q, d: Math.abs(ge - gi) }; });
+   const best = sc.reduce((a, q) => q.d < a.d - 1e-6 || (Math.abs(q.d - a.d) <= 1e-6 && Math.abs(q.oh - 0.375 * q.S) < Math.abs(a.oh - 0.375 * a.S)) ? q : a);
+   if (Math.abs(best.oh - S0.oh) < 1e-9) return { ...r0, rule: 'balanced' };
+   const r1 = wsEval(c.N, best.S, best.oh); return r1.err ? { ...r0, rule: '0.375S' } : { ...r1, rule: 'balanced' };
+```
+
+### Verification (XS10)
+- `node --check` on the main page and the decoded PlateLine; the new `sgDF` run in Node against the old one for the check cases above (values as listed); the lever rule equal to the old closed form in each case.
+- Headless Chromium: the eight XS8–XS9 test projects again (main vs this build). GirderDetail results, `gd-dfx`, Structural analysis, the Checks/Summary/Factors text, and Design all: unchanged. Preliminary sizing: the current-layout checks and demands unchanged where GirderDetail's factors are in use (only the stored built-in factor objects gain fields); the suggestion, Full design and width study change as listed. The Suggest-tab derivation shows the rigid method and the d<sub>e</sub> limit (screenshot). The link from Preliminary sizing now shows the first deck-edge field below the sticky header (screenshot). No console errors.
