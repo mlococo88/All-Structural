@@ -7824,3 +7824,10 @@ Main page only; `PL_B64` (embedded Preliminary sizing) is not touched. Display o
 - **Problem:** with the rolled diaphragm in use (CFD, CFE) the note still named cross-frames only; the diaphragm checks use the same wind force.
 - **Check case:** 90 ft simple span with the diaphragm on: the note reads "… to the cross-frames or diaphragms (4.6.2.7.1)."; F<sub>w</sub> = 1.87 kip unchanged.
 - **Other copies:** none.
+
+### Q15. Output cards: a long subtitle wraps instead of squeezing the card title   [CSS only]
+- **Where:** main stylesheet, after `.card-right { display: inline-flex; align-items: center; gap: 8px; flex-shrink: 0; }` (anchor).
+- **Before:** that line only; `.card-right` never shrank, so a long right-hand subtitle (e.g. Shear connectors "Every stud row by zone, omitted regions at field splices, and a typical plan to scale") pushed the title into a narrow column ("Stud / layout: plan") at 1000 px.
+- **After:** one added line: `.card-right { flex-shrink: 1; min-width: 0; justify-content: flex-end; } .card-right > * { flex-shrink: 0; } .card-right > .card-ref { flex-shrink: 1; min-width: 0; text-align: right; } .cc-hd > .card-title { flex-shrink: 0; max-width: 60%; }   /* Q15: … */` — the title keeps its width up to 60% of the header; only the subtitle text shrinks and wraps (right-aligned); badges and the chevron keep their size.
+- **Check case:** built-in example at 1000 px: Shear connectors, Drawings, card 1 title on one line "Stud layout: plan" with the subtitle wrapped on the right.
+- **Other copies:** none.

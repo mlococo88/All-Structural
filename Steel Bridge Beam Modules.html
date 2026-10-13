@@ -635,6 +635,7 @@ select option { background: #fff; color: var(--text); }
 .cc-hd { width: 100%; background: none; border: 0; cursor: pointer; text-align: left; font: inherit; color: inherit; align-items: center; }
 .cc-hd:hover .card-title { color: var(--blue); }
 .card-right { display: inline-flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.card-right { flex-shrink: 1; min-width: 0; justify-content: flex-end; } .card-right > * { flex-shrink: 0; } .card-right > .card-ref { flex-shrink: 1; min-width: 0; text-align: right; } .cc-hd > .card-title { flex-shrink: 0; max-width: 60%; }   /* Q15: a long subtitle wraps instead of squeezing the card title */
 .cc.closed .card-body { display: none; }
 .cc.closed .cc-hd { border-bottom: 0; }
 .cc.closed .sec-hd-chevron { transform: rotate(-90deg); }
