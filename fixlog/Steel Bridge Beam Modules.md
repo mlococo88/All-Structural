@@ -7043,3 +7043,30 @@ index 6d16ec4..a6a31f6 100644
 - **Saved data both directions:** projects saved by main open here as above. The xsA project saved by this build (raw localStorage, with the new optional fields and the C1 rows) opened in main: no errors; main re-sends its own record (without the optional fields) and every result equals main's own run of the same project; the stored Design all rows are kept as saved until Design all is run again.
 - **Console:** no errors or alerts in any run.
 - **Tools containing shared snippets touched:** none (`bridgeSuite.v1.*` bootstrap and handoff code unchanged; no other tool file changed).
+
+## 2026-10-13 — PR: claude/girderdetail-cleanup2 (clean-up 2: fatigue inventory from Preliminary sizing, help text, end-frame quantities; engineer offline, "clean up the app and use judgement"; PR link added after merge)
+
+Main page and the embedded Preliminary sizing (PlateLine, `PL_B64`, decoded, edited and re-encoded on its one line). No storage key or `bridgeSuite.v1.*` payload is added, renamed or removed. One optional field is added to the Fatigue detail rows (C5). `lldf.html` is unchanged.
+
+### C4. Fatigue inventory: the connection-plate row of each span is placed at the cross-frame with the largest fatigue moment range   [§4: location of the demand] [more conservative on the built-in example]
+- **Where (decoded PlateLine):** `detailExport`, fatigue detail inventory (`// ---- fatigue detail inventory`), inside `spansF.forEach`; anchor `row(\`Span ${k + 1}, connection plate at cross-frame ${f2(fx)} ft, bottom flange\``. Main page: only the re-encoded `PL_B64` line.
+- **Before:**
+  ```js
+        const fs = frX.filter(x => x > a + 0.5 && x < b - 0.5); if (fs.length) { const fx = fs.reduce((q, x) => { const i = node(x), j = node(q); return T.MfP[i] > T.MfP[j] ? x : q; }, fs[0]); row(`Span ${k + 1}, connection plate at cross-frame ${f2(fx)} ft, bottom flange`, 'Cp-stiff', 'bfi', fx, sec(fx)); }
+  ```
+- **After:**
+  ```js
+        // connection plate (C4, 2026-10-13): the cross-frame with the largest fatigue moment range M_f+ − M_f−, as the TS rows; the stress range governs (6.6.1.2.2) (was the largest M_f+)
+        const fs = frX.filter(x => x > a + 0.5 && x < b - 0.5), rgF = i => Math.max(0, T.MfP[i]) - Math.min(0, T.MfN[i]); if (fs.length) { const fx = fs.reduce((q, x) => rgF(node(x)) > rgF(node(q)) ? x : q, fs[0]); row(`Span ${k + 1}, connection plate at cross-frame ${f2(fx)} ft, bottom flange`, 'Cp-stiff', 'bfi', fx, sec(fx)); }
+  ```
+  Selection key before: max M<sub>f+</sub>; after: max (max(0, M<sub>f+</sub>) − min(0, M<sub>f−</sub>)), the same values the row carries (`MfP`, `MfN`) and the same key the Transverse stiffeners connection-plate rows already use (`const rg = T.MfP[i] - T.MfN[i]`). Ties keep the first cross-frame, as before. The row's contents (section, moments, category C′, location `bfi`) are unchanged; only the station chosen can change.
+- **Problem:** the detail is checked for the stress range Δf, which comes from M<sub>f+</sub> and M<sub>f−</sub> together, but the cross-frame was chosen by M<sub>f+</sub> alone. Near the dead-load inflection region M<sub>f−</sub> grows faster than M<sub>f+</sub> falls, so the row missed the governing cross-frame. Less conservative before; fixed. Pier connection-plate rows (nearest cross-frame to the pier) are not changed.
+- **Governing provision:** AASHTO LRFD 10th Ed. 6.6.1.2.2 (γ(Δf) ≤ (ΔF)<sub>n</sub>, Eq. 6.6.1.2.2-1), 6.6.1.2.5 (Fatigue I: (ΔF)<sub>n</sub> = (ΔF)<sub>TH</sub>), Table 6.6.1.2.3-1, detail 4.1 (transverse connection plate fillet-welded to the flange, base metal at the weld toe: Category C′, (ΔF)<sub>TH</sub> = 12.0 ksi), Table 6.6.1.2.5-3. These are the provisions the Fatigue module and Preliminary sizing already apply; nothing about them is changed. Not re-checked against the printed 10th Edition here (no copy in the repo): verify.
+- **Check case (built-in example, Fatigue module, demands from Preliminary sizing; exterior girder, Span 1, connection plate on the bottom flange, inner face y = t<sub>bot</sub> = 1.125 in; section 60 × 9/16 web, top 16 × 3/4, bottom 16 × 1-1/8; n = 6.80; Fatigue I, γ = 1.75, (ΔF)<sub>TH</sub> = 12.0 ksi; module b<sub>eff</sub> = 114 in, short-term composite ȳ<sub>n</sub> = 55.100 in, I<sub>n</sub> = 106,168 in⁴; cracked negative section (steel + A<sub>r</sub> 9.8 in²) ȳ = 33.498 in, I = 50,834 in⁴):**
+  - Candidates: cross-frame at 38.91 ft: M<sub>f+</sub> = 866.8, M<sub>f−</sub> = −233.0 k-ft, range 1,099.8; at 60.91 ft: M<sub>f+</sub> = 812.7, M<sub>f−</sub> = −364.5 k-ft, range **1,177.2** (largest).
+  - **Before (38.91 ft):** f<sub>+</sub> = 866.8(12)(55.100 − 1.125)/106,168 = 5.288 ksi; f<sub>−</sub> = 233.0(12)(33.498 − 1.125)/50,834 = 1.781 ksi; Δf = 7.069 ksi; γΔf = 12.370 ksi; ratio **1.031**.
+  - **After (60.91 ft):** f<sub>+</sub> = 812.7(12)(53.975)/106,168 = 4.958 ksi; f<sub>−</sub> = 364.5(12)(32.373)/50,834 = 2.786 ksi; Δf = 7.744 ksi; γΔf = 13.551 ksi; ratio **1.129**.
+  - Negative section uncracked (option "Short-term composite"): before 0.979 (Δf 6.710), after 1.047 (Δf 7.182).
+  - Other rows that move: Span 2 (exterior 174.91 → 198.24 ft, ratio 0.981 → 0.996; interior 174.91 → 198.24 ft, 0.557 → 0.565), Span 1 interior (38.91 → 60.91 ft, 0.632 → 0.693). Span 3 (310.91 ft) does not move. Every other row identical.
+- **Saved data:** no key or format change. The rows of `P.fa.rows` with `src: 'analysis'` are replaced on the next import from Preliminary sizing, as before (manual rows are never changed).
+- **Other copies:** none.
