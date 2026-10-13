@@ -1287,3 +1287,133 @@ Engineer's decision 2026-10-13: AASHTO LRFD 10th Ed. Eq. 6.10.8.2.3a-4 is L_p = 
 - **How verified:** JSX transpiled with @babel/standalone (preset react) and every script block parsed (`new Function`); headless Chromium (Playwright), both files in one folder, over http and as `file://`, 28 checks pass in each: GirderDetail confirm text; new tab opened and flag removed; banner summary equal to the manual confirm's; no dialog in ST-Girder; `bridgeSuite.v1.girderDemands.adopted.stgirder` = producedAt; autosaved session holds the payload as `inp.external`; inputs equal to GirderDetail's values; saved project name kept; Ctrl+Z restores the previous inputs and Ctrl+Y re-applies; refresh: no banner, no re-import, session unchanged; manual Pull from the same starting session still shows the confirm and gives byte-identical session JSON, identical `computeAll` checks and rating, identical Rating tab text; mismatched, missing and invalid payloads apply nothing; GirderDetail cancel and blocked-tab paths. No console or page errors.
 - **Other copies:** sender in `Steel Bridge Beam Modules.html` (fixlog/Steel Bridge Beam Modules.md OD1).
 - **Open items:** an ST-Girder tab that was already open keeps its own inputs (it shows the new-data dot); all tabs share `stgirder.session`, so its next edit autosaves over the session written by the new tab (existing multi-tab behaviour, not changed). If the MCT demands channel is locked and adopts on the same load, the GirderDetail hand-off is applied after it and replaces the imported demands (the engineer chose it in GirderDetail).
+
+## 2026-10-13 — PR: claude/stgirder-camber-breakdown (Camber tab: dead-load deflection by load, graph and tables; PR link added after merge)
+
+### CB1. Camber: deflected shape by load (steel self-weight, wet concrete, DC2, DW, total) from the existing double integration   [display only] [no headline value, formula, section, unit, key or payload changed]
+- **Where:** `computeAll()`, Camber block (anchor `/* ---------- Camber — numeric double integration`), about line 2680; new components `camberSeries`, `camberTable`, `CamberBreakdown` before `function CamberTab({R})` (about line 4539); `CamberTab` graph (anchor `<SG n="3">Deflection by load along the span</SG>`); `ReportTab`, new card "Dead-load deflection by load (camber)" after the "Key results" card (anchor `title="Dead-load deflection by load (camber)"`).
+- **Before (calc):**
+  ```js
+    const deflOf=(Mkey,Ikey)=>{
+      const nS=stations.length, xin=stations.map(s=>s.x*12);
+      const k=stations.map(s=>(Mkey(s)*12)/(Es*segP[s.si][Ikey].I));
+      const th=[0]; for(let i=1;i<nS;i++) th.push(th[i-1]+0.5*(k[i]+k[i-1])*(xin[i]-xin[i-1]));
+      const v=[0];  for(let i=1;i<nS;i++) v.push(v[i-1]+0.5*(th[i]+th[i-1])*(xin[i]-xin[i-1]));
+      const vc=v.map((vi,i)=>vi - v[nS-1]*xin[i]/Math.max(xin[nS-1],1e-6));
+      return Math.max(...vc.map(Math.abs));
+    };
+    const camDC1=deflOf(s=>s.M1,'bare'), camDC2=deflOf(s=>s.M2,'c3N'), camDW=deflOf(s=>s.Mw,'c3N');
+    const camber={camDC1,camDC2,camDW,camTot:camDC1+camDC2+camDW};
+  ```
+- **After (calc):**
+  ```js
+    // deflShape: the deflected shape at every station (in, + up, so sagging gives negative values); deflOf = its largest magnitude.
+    const deflShape=(Mkey,Ikey)=>{
+      const nS=stations.length, xin=stations.map(s=>s.x*12);
+      const k=stations.map(s=>(Mkey(s)*12)/(Es*segP[s.si][Ikey].I));
+      const th=[0]; for(let i=1;i<nS;i++) th.push(th[i-1]+0.5*(k[i]+k[i-1])*(xin[i]-xin[i-1]));
+      const v=[0];  for(let i=1;i<nS;i++) v.push(v[i-1]+0.5*(th[i]+th[i-1])*(xin[i]-xin[i-1]));
+      const vc=v.map((vi,i)=>vi - v[nS-1]*xin[i]/Math.max(xin[nS-1],1e-6));
+      return vc;
+    };
+    const deflOf=(Mkey,Ikey)=>Math.max(...deflShape(Mkey,Ikey).map(Math.abs));
+    const camDC1=deflOf(s=>s.M1,'bare'), camDC2=deflOf(s=>s.M2,'c3N'), camDW=deflOf(s=>s.Mw,'c3N');
+    const camber={camDC1,camDC2,camDW,camTot:camDC1+camDC2+camDW};
+    // Breakdown by load (display only; the headline values above are unchanged). DC1 on the bare steel is split into
+    // steel self-weight (+ diaphragm point loads) and the rest of DC1 (deck slab + haunch + Add'l DC1), taken as M1 − M_steel
+    // so the two parts sum to M1 exactly. Imported DC1 is not split unless the import excludes self-weight (ST-Girder adds it).
+    const dc1Split = !(useExt&&ext.hasDC1) ? 'app' : (ext.swExcl ? 'swExcl' : 'none');
+    const Msteel = st => dc1Split==='app' ? simpleM(Ld.wsw,st.x)+diaM(st.x) : dc1Split==='swExcl' ? simpleM(wswAvg,st.x) : 0;
+    const shDC1=deflShape(s=>s.M1,'bare'), shDC2=deflShape(s=>s.M2,'c3N'), shDW=deflShape(s=>s.Mw,'c3N');
+    const shSW = dc1Split==='none' ? null : deflShape(Msteel,'bare');
+    const shWet= dc1Split==='none' ? null : deflShape(s=>s.M1-Msteel(s),'bare');
+    const shTot=stations.map((_,i)=>shDC1[i]+shDC2[i]+shDW[i]);
+    camber.shape={x:stations.map(s=>s.x), dc1Split, hasDia:dc1Split==='app'&&dph.length>0,
+      sw:shSW, wet:shWet, dc1:shDC1, dc2:shDC2, dw:shDW, tot:shTot,
+      splices:segP.filter(g=>g.x1>0.05&&g.x1<Lft-0.05).map(g=>g.x1)};
+    camber.camTotMax=Math.max(...shTot.map(Math.abs));    // largest per-station total (vs camTot = sum of the stage maxima)
+  ```
+- **Before (CamberTab):** `const cm=R.camber, L=R.geom.L, xs=[], ys=[];` and `for(let i=0;i<=20;i++){const x=L*i/20; const sh=(x*(L-x))/((L/2)*(L/2)); xs.push(x); ys.push(-cm.camTot*sh);}` with
+  ```jsx
+      <Fig h={260} data={[{x:xs,y:ys,name:'deflected shape',mode:'lines',fill:'tozeroy',line:{color:'#1C4FC4'}}]}
+        layout={{yaxis:{title:'Δ (in)'},xaxis:{title:'x (ft)'}}}/>
+  ```
+  (a parabola scaled to the total camber, not the computed shape).
+- **After (CamberTab):** `const cm=R.camber;` and the `Fig` replaced by
+  ```jsx
+      <SG n="3">Deflection by load along the span</SG>
+      <CamberBreakdown R={R} fig={true}/>
+  ```
+  ReportTab, after the Key results `</Card>`:
+  ```jsx
+    <Card title="Dead-load deflection by load (camber)" refTag="DC1 on bare steel · DC2, DW on 3n composite">
+      <CamberBreakdown R={R} fig={false}/>
+    </Card>
+  ```
+  New components (before `function CamberTab`):
+  ```jsx
+// Camber breakdown by load: curve definitions, tenth-point / flange-transition table (display only).
+// Values in the table are downward deflection (in, + down) = the camber (upward offset) to fabricate.
+function camberSeries(R){
+  const sh=R.camber.shape;
+  const swL = sh.dc1Split==='swExcl' ? 'Steel self-weight (added by ST-Girder)' : 'Steel self-weight'+(sh.hasDia?' + diaphragms':'');
+  const wetL= sh.dc1Split==='swExcl' ? 'Imported DC1 excl. self-weight' : 'Wet concrete (deck, haunch, add’l DC1)';
+  const out=[];
+  if(sh.dc1Split==='none') out.push({k:'dc1',l:'DC1 (imported, not split)',short:'DC1 (imported)',c:'#15803D',v:sh.dc1});
+  else { out.push({k:'sw',l:swL,short:sh.dc1Split==='swExcl'?'Self-weight (app)':'Steel self-wt'+(sh.hasDia?' + diaph.':''),c:'#6B7280',v:sh.sw});
+         out.push({k:'wet',l:wetL,short:sh.dc1Split==='swExcl'?'Imported DC1 − SW':'Wet concrete',c:'#15803D',v:sh.wet}); }
+  out.push({k:'dc2',l:'DC2 (3n composite)',short:'DC2',c:'#0E7490',v:sh.dc2});
+  out.push({k:'dw',l:'DW (3n composite)',short:'DW',c:'#B45309',v:sh.dw});
+  out.push({k:'tot',l:'Total (sum)',short:'Total',c:'#16212E',v:sh.tot});
+  return out;
+}
+function camberTable(R){
+  const sh=R.camber.shape, L=R.geom.L, ser=camberSeries(R), X=sh.x;
+  const at=(arr,x)=>{ if(x<=X[0]) return arr[0]; for(let i=1;i<X.length;i++) if(x<=X[i]+1e-9){
+      const t=(x-X[i-1])/Math.max(X[i]-X[i-1],1e-9); return arr[i-1]+(arr[i]-arr[i-1])*t; } return arr[arr.length-1]; };
+  const pts=[]; for(let i=0;i<=10;i++) pts.push({x:L*i/10,lab:(i/10).toFixed(1)+'L'});
+  sh.splices.forEach(x=>{ if(!pts.some(p=>Math.abs(p.x-x)<0.05)) pts.push({x,lab:'flange transition'}); });
+  pts.sort((a,b)=>a.x-b.x);
+  const head=['Location','x (ft)',...ser.map(c=>c.short+' (in)')];
+  const dn=v=>Math.abs(v)<5e-4?0:-v;                 // downward +, no "-0.000" at the supports
+  const rows=pts.map(p=>({c:[p.lab,fmt(p.x,2),...ser.map(c=>fmt(dn(at(c.v,p.x)),3))]}));
+  const mx=ser.map(c=>{ let j=0; c.v.forEach((v,i)=>{ if(Math.abs(v)>Math.abs(c.v[j])) j=i; }); return {v:-c.v[j],x:X[j]}; });
+  rows.push({_cls:'tot',c:[{v:<b>Maximum</b>},'',...mx.map(m=>({v:<span><b>{fmt(m.v,3)}</b> <span style={{color:'var(--ink2)'}}>@ {fmt(m.x,1)} ft</span></span>}))]});
+  return {head,rows,ser,mx};
+}
+function CamberBreakdown({R,fig}){
+  const sh=R.camber.shape, cm=R.camber, T=camberTable(R);
+  const d=Math.abs(cm.camTotMax-cm.camTot);
+  return (<React.Fragment>
+    {fig&&<Fig h={300} data={T.ser.map(c=>({x:sh.x,y:c.v,name:c.l,mode:'lines',
+        line:{color:c.c,width:c.k==='tot'?2.6:1.8,dash:c.k==='tot'?'solid':(c.k==='sw'?'dot':'solid')}}))}
+      layout={{yaxis:{title:'Δ (in), downward −'},xaxis:{title:'x (ft)'},legend:{orientation:'h',y:1.22,font:{size:10}},margin:{l:52,r:14,t:34,b:38}}}/>}
+    {fig&&<div className="hint" style={{marginTop:4}}>Dead-load deflected shapes from the double integration, drawn downward. <b>Camber = upward offset</b> equal and opposite to these curves.</div>}
+    <Tbl head={T.head} rows={T.rows}/>
+    <div className="hint" style={{marginTop:6}}>Downward dead-load deflection, in (+ = down) = camber (upward offset) to fabricate, at tenth points{sh.splices.length?' and flange transitions':''}. DC1 (steel self-weight and wet concrete) acts on the bare steel; DC2 and DW on the long-term (3n) composite section. Total = sum of the columns at each station.
+      {sh.dc1Split==='app'&&<span> Steel self-weight = girder steel at 0.490 kcf ({fmt(R.loads.wsw,3)} klf){sh.hasDia?' + the diaphragm point loads':''}; wet concrete = deck slab + haunch ({fmt(R.loads.wdk,3)} klf) + Add'l DC1 (forms, details: {fmt(+R.loads.wDC1-R.loads.wsw-R.loads.wdk,3)} klf).</span>}
+      {sh.dc1Split==='swExcl'&&<span> The imported DC1 excludes self-weight; ST-Girder adds the girder self-weight ({fmt(R.loads.wsw,3)} klf) on the span. The imported remainder is not split further.</span>}
+      {sh.dc1Split==='none'&&<span> <b>DC1 is imported</b> ({(R.ext&&R.ext.sel&&'span '+(R.ext.sel.idx||1))||'import'}) as one total; the import does not separate steel self-weight from wet concrete, so DC1 is shown as one column.</span>}
+      {d>0.0005&&<span> The largest per-station total ({fmt(cm.camTotMax,3)} in) differs from the headline total camber ({fmt(cm.camTot,3)} in, the sum of the stage maxima) by {fmt(d,3)} in because the stage maxima occur at different stations.</span>}
+    </div>
+  </React.Fragment>);
+}
+  ```
+- **Problem / request:** the engineer asked for the dead-load deflection broken down by load in the graph and in tables: steel self-weight, wet concrete, DC2, DW and the total, each along the span. The old graph was a parabola scaled to the total.
+- **Which DC1 components go where** (`loadsCalc`: `wDC1 = wsw + wdk + loads.wDCextra`, plus `diaM(x)` in the station moments `M1 = simpleM(Ld.wDC1,x) + diaM(x)`):
+  - *Steel self-weight* = `simpleM(Ld.wsw,x)` (girder steel at 0.490 kcf, the area-weighted `wswAvg` over the flange segments) **+ `diaM(x)` (diaphragm point loads)**, because diaphragms/cross-frames are steel erected with the girders, before the pour. The curve and column are labelled "Steel self-weight + diaphragms" when diaphragms are entered.
+  - *Wet concrete* = `M1 − M_steel` = deck slab `trib·(t_s,DL/12)·w_c` + haunch `(b_ft/12)(haunch/12)·w_c` + **Add'l DC1** (input labelled "forms, details", e.g. SIP forms). Taken as the remainder so the two parts sum to `M1` exactly.
+  - Both on the bare steel section (`'bare'`), DC2 and DW on the long-term 3n section (`'c3N'`), as before.
+- **Imported demands** (`R.useExt && R.ext.hasDC1`, i.e. MCT/MIDAS file or GirderDetail hand-off with `M_DC1`): the payload carries only the DC1 total (HANDOFF.md §4.9 has no self-weight/deck split), so DC1 is one curve and column "DC1 (imported, not split)" with a note. If the import has `selfWeightExcluded:true`, the existing calc already adds the girder self-weight (`simpleM(wswAvg,x)`), so the curves are "Steel self-weight (added by ST-Girder)" and "Imported DC1 excl. self-weight". An import without `M_DC1` uses the app's own DC1 and is split as for the built-in case.
+- **Headline values:** `camDC1/camDC2/camDW/camTot` unchanged (same function, same stations; `camTot` = sum of the stage maxima). The table's Maximum row gives each column's largest value and its station; when the largest per-station total (`camber.camTotMax`) differs from `camTot` by more than 0.0005 in, a note says so (stage maxima at different stations). On the built-in example they are equal (all at 60 ft).
+- **Governing provision:** none changed (display of the existing calc: dead-load deflection by double integration of M/(E·I) on the stage sections, DC1 on the bare steel, DC2 and DW on the 3n composite, as before).
+- **Check case (built-in example, L = 120 ft, I_bare = 48,910 in⁴, I_3n = 100,951 in⁴, E = 29,000 ksi):** w_sw = 0.2297 klf, w_deck+haunch = 0.9333 klf, Add'l DC1 = 0.015 klf (w_DC1 = 1.1780 klf), w_DC2 = 0.30, w_DW = 0.25 klf.
+  - Midspan (0.5L), downward: self-weight 0.752, wet concrete 3.107, DC2 0.476, DW 0.397, total 4.732 in. Before: Δ_DC1 = 3.859 = 0.752 + 3.107 (to 1e-15 at every station), Δ_DC2 0.476, Δ_DW 0.397, Δ_total 4.732 — unchanged.
+  - Hand check, 5wL⁴/384EI: self-weight 5(0.2297/12)(1440)⁴/(384·29,000·48,910) = 0.756 in; wet concrete (0.9483 klf) 3.119 in; DC2 0.478 in. The tool's 20-division trapezoidal integration gives 0.4 % less (existing, see open items).
+  - Tenth points 0.1L…0.9L total: 1.485, 2.810, 3.848, 4.507, 4.732, 4.507, 3.848, 2.810, 1.485 in.
+- **How verified:** JSX transpiled with @babel/standalone (preset react) and every script block parsed. Node (`computeAll` of main vs branch): the whole result object other than the new `camber.shape`/`camber.camTotMax` is identical (JSON) for the built-in example, diaphragms added, flange transitions on, GirderDetail hand-off span 1 and 2 (example 3-span 110/140/110 ft, G2), the same with `selfWeightExcluded:true`, and an import without `M_DC1`; |sw + wet − DC1| ≤ 3e-15 in at every station; the maxima of the DC1/DC2/DW shapes equal the old camDC1/camDC2/camDW exactly. Headless Chromium (Playwright), main vs branch, 20 scenarios (built-in, presets, grades, flange transitions, deck design, noncomposite, manual LL, exterior, typed inputs, MIDAS 2-span import span 1/2, GirderDetail hand-off JSON imported span 1/2, export/import round trip): inputs, status band, every tab's text except Camber and Report, autosave (`stgirder.session`), Export JSON, superReactions, capacity and lldfGeom hand-offs identical; Camber and Report text only gain the new lines (the old axis title "Δ (in)" is replaced); console errors identical on both (blocked font requests and the pre-existing NaN SVG warnings of the "Es blank" scenario). Screenshots of the Camber tab (built-in and GirderDetail import) checked.
+- **Other copies:** none.
+- **Open items:**
+  - The double integration uses the analysis stations (L/20 plus ±0.01 ft at flange transitions), trapezoidal; on the built-in example it gives Δ_DC1 = 3.859 in vs 3.875 in closed form (−0.4 %, slightly low for camber). Not changed; a finer station set would change the headline values.
+  - `selfWeightExcluded:true` imports: the self-weight added by ST-Girder is a simple-span moment on the selected span (existing, stated in the import banner). On a continuous span this overstates the self-weight deflection (GirderDetail example span 2 with the flag set: 1.89 in self-weight vs 1.58 in for the imported remainder). Not changed.
+  - Diaphragm point loads are grouped with the steel self-weight; Add'l DC1 ("forms, details") with the wet concrete. Engineer to confirm, or ask for a separate column.
