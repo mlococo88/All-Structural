@@ -5630,3 +5630,86 @@ index 2e973a9..a867bf1 100644
    const yd = yF + gH + 29 + (D.pl.some(v => v > 0) ? 4 : 3) * 12 + 6, ch = [0, ...D.ub, Wd];
    ch.slice(1).forEach((x, k) => { if (x - ch[k] > 1e-6) o += dimH(X(ch[k]), X(x), yd, f2(x - ch[k])); });
 ```
+
+### XS7. "Two adjacent" rule: a load on an overhang is levered about the first interior girder (port of lldf F6)   [§4: dead-load distribution] [more conservative for the exterior girder; less conservative (relief) for the first interior girder]
+- **Where (anchors):** `dfDead`, arrow `two` (anchor `// two adjacent (lldf F6, XS7)`); display: `dfDLCalcs` "Distribution rules" equation and note, and the per-load equation for a two-adjacent load outside the exterior girder (anchor `overhang } a =`).
+- **Before:**
+  ```js
+  const two = (P, xL) => { const r = ub.map(() => 0); if (xL <= ub[0]) r[0] = P; else if (xL >= ub[N - 1]) r[N - 1] = P; else { let k = 0; while (k < N - 2 && ub[k + 1] < xL) k++; const t = (xL - ub[k]) / (ub[k + 1] - ub[k]); r[k] = P * (1 - t); r[k + 1] = P * t; } return r; };
+  ```
+- **After:**
+  ```js
+  // two adjacent (lldf F6, XS7): a load outside an exterior girder is levered about the first interior girder, R_ext = P(1 + a/S), R_next = -P a/S (sums to P)
+  const two = (P, xL) => { const r = ub.map(() => 0);
+    if (xL <= ub[0]) { const S1 = N > 1 ? ub[1] - ub[0] : 0, a = ub[0] - xL; if (S1 > 0 && a > 0) { r[0] = P * (1 + a / S1); r[1] = -P * a / S1; } else r[0] = P; }
+    else if (xL >= ub[N - 1]) { const S1 = N > 1 ? ub[N - 1] - ub[N - 2] : 0, a = xL - ub[N - 1]; if (S1 > 0 && a > 0) { r[N - 1] = P * (1 + a / S1); r[N - 2] = -P * a / S1; } else r[N - 1] = P; } else { let k = 0; while (k < N - 2 && ub[k + 1] < xL) k++; const t = (xL - ub[k]) / (ub[k + 1] - ub[k]); r[k] = P * (1 - t); r[k + 1] = P * t; } return r; };
+  ```
+  (lldf F6 code adapted: `a > 0` added so a load exactly on the exterior girder still gives P to it and 0, not −0, to the next.)
+- **Problem:** a load outside the exterior girder set to "Two adjacent beams" went entirely (P) to the exterior girder. Simple-span lever action about the first interior girder gives P(1 + a/S) to the exterior girder and −Pa/S to the next one. lldf.html made this change as F6; GD's copy was not updated.
+- **Governing provision:** statics (simple-span lever distribution between the exterior and first interior girders), the "two adjacent beams" option of MassDOT Bridge Manual Part I 3.5.3 as implemented in lldf.html (fixlog/lldf.md F6). **Open:** lldf O6 / LLDF-O6 (MassDOT to confirm whether the negative share on the first interior girder should be kept, as statics gives, or dropped like the pile-cap rule's no-uplift relief) is still open; this port keeps the statics, as lldf does meanwhile.
+- **Check case (built-in example, girders at 3.25, 12.75, 22.25, 31.75, 41.25 ft, S = 9.50 ft):**
+  - P = 0.500 klf at x = 1.00 ft (a = 2.25 ft): before G1 0.500, G2 0; after G1 = 0.500(1 + 2.25/9.50) = **0.618**, G2 = −0.500(2.25/9.50) = **−0.118** (Σ = 0.500).
+  - P = 0.200 klf at x = 43.50 ft (a = 2.25 ft): before G5 0.200, G4 0; after G5 **0.247**, G4 **−0.047**.
+  - P = 0.050 klf at x = 2.00 ft (a = 1.25 ft): G1 0.050 → **0.057**, G2 0 → **−0.007**.
+  - Loads between girders and loads exactly on a girder: unchanged.
+  - With all three in the sidewalk test project: DC2 G1 1.465 → 1.590, G2 0.703 → 0.578, G4 0.698 → 0.651, G5 1.105 → 1.153 klf; the gd-dfx dead loads to Preliminary sizing (ext DC2 1.465 → 1.590, int 0.703 → 0.651) and the Structural analysis DC2 moments change accordingly.
+- **Affected projects:** only those with a load whose rule is "Two adjacent beams" and whose x is outside an exterior girder: an added line load row with that rule, or (XS5) an automatic load overridden to it. The defaults never use "Two adjacent". Changes: the per-girder DC1/DC2/DW/PL of the two girders, the gd-dfx dead loads (when "Use these factors" is Yes, the sizing DC2/DW demands), Structural analysis dead-load effects.
+- **Other copies:** `lldf.html` `distribute` arrow `two` (F6; the source, unchanged).
+
+### Exact changes (XS7): main page (unified diff against the XS6 commit; the PL_B64 line is not touched)
+
+```diff
+diff --git a/Steel Bridge Beam Modules.html b/Steel Bridge Beam Modules.html
+index a867bf1..ab2a881 100644
+--- a/Steel Bridge Beam Modules.html	
++++ b/Steel Bridge Beam Modules.html	
+@@ -4000,7 +4000,10 @@ function dfDead(p, geo, a) {
+   // distribution
+   const method = a.method === 'aashto' ? 'aashto' : 'massdot', xbar = ub.reduce((s, x) => s + x, 0) / N, c = ub.map(x => x - xbar), S2 = c.reduce((s, ci) => s + ci * ci, 0) || 1e-9;
+   const pile = (P, xL) => { const e = xL - xbar; return ub.map((x, i) => P / N + Math.max(0, P * e * c[i] / S2)); }, equal = P => ub.map(() => P / N);
+-  const two = (P, xL) => { const r = ub.map(() => 0); if (xL <= ub[0]) r[0] = P; else if (xL >= ub[N - 1]) r[N - 1] = P; else { let k = 0; while (k < N - 2 && ub[k + 1] < xL) k++; const t = (xL - ub[k]) / (ub[k + 1] - ub[k]); r[k] = P * (1 - t); r[k + 1] = P * t; } return r; };
++  // two adjacent (lldf F6, XS7): a load outside an exterior girder is levered about the first interior girder, R_ext = P(1 + a/S), R_next = -P a/S (sums to P)
++  const two = (P, xL) => { const r = ub.map(() => 0);
++    if (xL <= ub[0]) { const S1 = N > 1 ? ub[1] - ub[0] : 0, a = ub[0] - xL; if (S1 > 0 && a > 0) { r[0] = P * (1 + a / S1); r[1] = -P * a / S1; } else r[0] = P; }
++    else if (xL >= ub[N - 1]) { const S1 = N > 1 ? ub[N - 1] - ub[N - 2] : 0, a = xL - ub[N - 1]; if (S1 > 0 && a > 0) { r[N - 1] = P * (1 + a / S1); r[N - 2] = -P * a / S1; } else r[N - 1] = P; } else { let k = 0; while (k < N - 2 && ub[k + 1] < xL) k++; const t = (xL - ub[k]) / (ub[k + 1] - ub[k]); r[k] = P * (1 - t); r[k + 1] = P * t; } return r; };
+   const trib = ub.map((x, i) => (i === N - 1 ? Wd : (ub[i + 1] + x) / 2) - (i === 0 ? 0 : (ub[i - 1] + x) / 2));
+   const deck = trib.map(t => t * p.ts / 12 * uc), bf = (a.bf || 0) / 12, haunch = ub.map(() => (a.hh || 0) / 12 * bf * uc);
+   const bays = ub.slice(1).map((x, i) => Math.max(x - ub[i] - bf, 0)), sip = ub.map((_, i) => (a.sip || 0) / 1000 * ((i > 0 ? bays[i - 1] / 2 : 0) + (i < N - 1 ? bays[i] / 2 : 0)));
+@@ -4362,9 +4365,9 @@ function dfDLCalcs(R) {
+     [['x̄', 'centroid of the girder group (each girder a unit pile)', f2(D.xbar), ' ft'], ['Σc<sup>2</sup>', 'second moment of the group about x̄', f2(D.S2), ' ft²']]));
+   E.push(tbl(`<th>Girder</th>${gh}<th class="right">Σ</th>`, row('c<sub>i</sub> = x<sub>i</sub> − x̄ (ft)', D.c, f2, sum(D.c)) + row('c<sub>i</sub><sup>2</sup> (ft²)', D.c.map(v => v * v), f2, D.S2)));
+   // 4. rules
+-  E.push(eq('Distribution rules', 'MassDOT 3.5.3; AASHTO 4.6.2.2.1', T`\underbrace{R_i = \frac{P}{N_b}}_{\text{Equal}} \qquad \underbrace{R_i = \frac{P}{N_b} + \max\left(0,\ \frac{P\,e\,c_i}{\sum c^2}\right),\ e = x_L - \bar{x}}_{\text{MassDOT pile-cap}} \qquad \underbrace{R_k = P(1 - t),\ R_{k+1} = P\,t,\ t = \frac{x_L - x_k}{x_{k+1} - x_k}}_{\text{Two adjacent}}`,
++  E.push(eq('Distribution rules', 'MassDOT 3.5.3; AASHTO 4.6.2.2.1', T`\underbrace{R_i = \frac{P}{N_b}}_{\text{Equal}} \qquad \underbrace{R_i = \frac{P}{N_b} + \max\left(0,\ \frac{P\,e\,c_i}{\sum c^2}\right),\ e = x_L - \bar{x}}_{\text{MassDOT pile-cap}} \qquad \underbrace{R_k = P(1 - t),\ R_{k+1} = P\,t,\ t = \frac{x_L - x_k}{x_{k+1} - x_k};\ \text{overhang: } R_{ext} = P\left(1 + \frac{a}{S}\right),\ R_{next} = -\frac{P\,a}{S}}_{\text{Two adjacent}}`,
+     [['P', 'line load being distributed (klf)', '', ''], ['x<sub>L</sub>', 'position of the load from the left deck edge (ft)', '', ''], ['e', 'eccentricity of the load about x̄ (ft)', '', '']])
+-    + `<p class="note-p">${D.method === 'massdot' ? 'Method: <b>MassDOT 3.5.3</b>. Barriers, curbs, railings, sidewalks, the median, and the pedestrian load use the pile-cap rule; the future wearing surface (DW) is always distributed equally.' : 'Method: <b>typical AASHTO</b>. All superimposed loads are distributed equally to all girders.'} An added line load uses the distribution chosen on its row; a row set to "follows the method" takes the method's rule for its class (MassDOT: DW equally, DC1 and DC2 pile-cap; AASHTO: equally). The pile-cap rule gives no uplift relief: a girder on the far side of the centroid is not reduced below P/N<sub>b</sub>, so ΣR ≥ P. Two adjacent: a load between two girders is split by simple-span lever between them; a load at or outside an exterior girder goes entirely to that girder.</p>`);
++    + `<p class="note-p">${D.method === 'massdot' ? 'Method: <b>MassDOT 3.5.3</b>. Barriers, curbs, railings, sidewalks, the median, and the pedestrian load use the pile-cap rule; the future wearing surface (DW) is always distributed equally.' : 'Method: <b>typical AASHTO</b>. All superimposed loads are distributed equally to all girders.'} An added line load uses the distribution chosen on its row; a row set to "follows the method" takes the method's rule for its class (MassDOT: DW equally, DC1 and DC2 pile-cap; AASHTO: equally). The pile-cap rule gives no uplift relief: a girder on the far side of the centroid is not reduced below P/N<sub>b</sub>, so ΣR ≥ P. Two adjacent: a load between two girders is split by simple-span lever between them; a load on an overhang, a distance a outside the exterior girder, is levered about the first interior girder (S = exterior bay): P(1 + a/S) to the exterior girder and −Pa/S (relief) to the next one, so ΣR = P; a load exactly on a girder goes to it.</p>`);
+   // 5. worked example
+   const pc = D.per.filter(L => L.dist === 'pilecap' && L.plf > 0).sort((a, c) => c.plf - a.plf)[0];
+   if (pc) { let gi = 0; pc.r.forEach((v, i) => { if (v > pc.r[gi]) gi = i; }); const raw = D.ub.map((_, i) => pc.plf * pc.e * D.c[i] / D.S2), Rg = pc.plf / N + raw[gi];
+@@ -4378,7 +4381,8 @@ function dfDLCalcs(R) {
+     let tx;
+     if (L.dist === 'pilecap') tx = T`P = ${f3(L.plf)}\ \text{klf at } x = ${f2(L.x)}\ \text{ft},\ e = ${f2(L.e)}\ \text{ft} \\ &\Rightarrow ${tail}`;
+     else if (L.dist === 'two') { const k = kOf(L.x), out = L.x <= D.ub[0] || L.x >= D.ub[N - 1];
+-      tx = out ? T`P = ${f3(L.plf)}\ \text{klf at } x = ${f2(L.x)}\ \text{ft (at or outside the exterior girder: all to it)} \\ &\Rightarrow ${tail}` : T`P = ${f3(L.plf)}\ \text{klf at } x = ${f2(L.x)}\ \text{ft},\ t = \tfrac{${f2(L.x)} - ${f2(D.ub[k])}}{${f2(D.ub[k + 1])} - ${f2(D.ub[k])}} = ${f3((L.x - D.ub[k]) / (D.ub[k + 1] - D.ub[k]))} \\ &\Rightarrow ${tail}`; }
++      const lt = L.x < D.ub[0], aa = lt ? D.ub[0] - L.x : L.x - D.ub[N - 1], S1 = N > 1 ? (lt ? D.ub[1] - D.ub[0] : D.ub[N - 1] - D.ub[N - 2]) : 0;
++      tx = out ? (aa > 0 && S1 > 0 ? T`P = ${f3(L.plf)}\ \text{klf at } x = ${f2(L.x)}\ \text{ft, overhang } a = ${f2(aa)}\ \text{ft},\ S = ${f2(S1)}\ \text{ft:}\ R_{${lt ? 1 : N}} = P\left(1 + \tfrac{a}{S}\right) = ${f3(L.plf * (1 + aa / S1))},\ R_{${lt ? 2 : N - 1}} = -\tfrac{Pa}{S} = ${f3(-L.plf * aa / S1)} \\ &\Rightarrow ${tail}` : T`P = ${f3(L.plf)}\ \text{klf at } x = ${f2(L.x)}\ \text{ft (on the exterior girder: all to it)} \\ &\Rightarrow ${tail}`) : T`P = ${f3(L.plf)}\ \text{klf at } x = ${f2(L.x)}\ \text{ft},\ t = \tfrac{${f2(L.x)} - ${f2(D.ub[k])}}{${f2(D.ub[k + 1])} - ${f2(D.ub[k])}} = ${f3((L.x - D.ub[k]) / (D.ub[k + 1] - D.ub[k]))} \\ &\Rightarrow ${tail}`; }
+     else tx = T`P = ${f3(L.plf)}\ \text{klf},\ \tfrac{P}{N_b} = \tfrac{${f3(L.plf)}}{${N}} \\ &\Rightarrow ${tail}`;
+     E.push(eq(`${esc(L.desc)} (${L.cat})${L.ovr ? ` — override of ${L.ovr.map(f => f === 'x' ? `x (auto ${f2(L.xAuto)} ft)` : f === 'plf' ? `P (auto ${f3(L.plfAuto)} klf)` : `rule (auto ${DF_DIST[L.distAuto]})`).join(', ')}` : ''}`, (DF_DIST[L.dist] || L.dist) + (L.byMethod ? ', follows the method' : ''), T`\begin{aligned} &${tx} \\ &\textstyle\sum R = ${f3(sum(L.r))}\ \text{klf} \end{aligned}`)); });
+   // 7. summary
+```
+
+### Verification (XS4–XS7)
+- `node --check` on every inline script after each item.
+- Headless Chromium (Playwright), `origin/main` (b9e2254) against the branch after XS4, after XS5 and after XS7. The XS1 test projects were used: (1) the built-in example; (2) sidewalks 6 ft × 8 in and 5 ft × 9 in, a median with a joint, ped 75 psf, and the added rows; (3) curb mode; (4) curb mode with a sidewalk; (5) AASHTO. Compared: `GM.df.compute`, `GM.sa.compute` for every girder, the `gd-dfx` payload, Design all (projects 1 and 2), the saved `P` and every localStorage key, and the Factors and loads, Derivations, Drawings, Checks and Summary text.
+  - **XS4 and XS5:** results, payload, Design all, Checks and Summary are identical on all five projects. The only data difference is in the built-in example (projects 1 and 3): the 0-plf example row now reads `cat: 'DW', dist: 'auto'`. Timestamps also differ. Only the Derivations and Drawings text changed (new step, caption).
+  - **XS7 build:**
+    - Projects 1 and 3: results identical. The only addition is the new `R.ll` key in the compute output. The Checks text differs only in the DF3 note.
+    - Projects 2, 4 and 5: the expected XS6 changes (8 in and 9 in sidewalks are now mountable) and XS7 changes (the "Light pole" row, two adjacent at x = 2.00 ft, outside G1).
+    - Check projects with 6 ft sidewalks: at 12 in, every live-load result is identical, and only the XS7 change of the Light pole row remains. At 10 in, the XS6 values are as in the check case.
+  - **New inputs** (fences, γ<sub>c</sub>, wearing surface by thickness, overlays, "Follows the method" rows, AASHTO with a 12 in sidewalk, overrides and class labels): the hand checks in XS4, XS5 and XS7 match the screen. No console errors in any run.
+- **Saved data in both directions:**
+  - A main-saved project loads in this build with `P.df` unchanged (same keys and values).
+  - A project saved here with overrides, class labels and fences loads in the main build without errors (the new fields are ignored and kept).
+  - The new fields are written only when entered.
+- **Screenshots:** the input tab, cross-section, loads table and Derivations at 1400 px and 1000 px viewport widths were checked. The sidebar inputs, including the overrides table, fit the 343 px sidebar. The labels do not overlap.
