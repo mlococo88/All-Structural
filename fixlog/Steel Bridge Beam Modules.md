@@ -10154,3 +10154,78 @@ All code in this PR except the GirderDetail drawing and Structural analysis hunk
    }
    {
 ````
+
+### TB2. Preliminary sizing D3: stiffener moment of inertia with tension-field action (Eqs. 6.10.11.1.3-7 / -8), per-bay stiffeners   [§4: check added] [results: D3 of per-bay projects; uniform mode unchanged]
+- **Where (decoded PL):** `framingChecks` signature (new optional `AN0`), D3 block (anchor `const c = { id: 'D3', grp, title: 'Stiffener and connection plate moment of inertia'`), `recompute` (the analysis now runs before `framingChecks`, which gets `AN`; the order of the checks in `C` is unchanged), Manual Part 3 (D3/D4 sentence).
+- **Before:** D3 required I<sub>t</sub> ≥ I<sub>t1</sub> = b t<sub>w</sub>³ J (Eq. 6.10.11.1.3-1) only; per-bay mode used the narrowest panel of each field piece; its note said the tension-field requirement is not checked (GirderDetail TS3 checks it).
+- **After (per-bay mode only; uniform mode unchanged):** every intermediate stiffener and connection plate (bearing stiffeners excluded: D5/D6) of every girder with its two adjacent panels: d<sub>o</sub> = the smaller panel, b = min(d<sub>o</sub>, D), J = max(2.5/(d<sub>o</sub>/D)² − 2, 0.5), I<sub>t1</sub> = b t<sub>w</sub>³ J; F<sub>crs</sub> = min(0.31E/(b<sub>t</sub>/t<sub>p</sub>)², F<sub>ys</sub>) (Eq. -6), ρ<sub>t</sub> = max(F<sub>yw</sub>/F<sub>crs</sub>, 1.0), I<sub>t2</sub> = D⁴ρ<sub>t</sub><sup>1.3</sup>/40 (F<sub>yw</sub>/E)<sup>1.5</sup> (Eq. -4). A panel relies on tension-field action when it is an interior stiffened panel, Suggest's tension-field setting is on, and V<sub>u</sub> > φ<sub>v</sub>V<sub>cr</sub>, V<sub>cr</sub> = CV<sub>p</sub> (Eq. -9) with k of the panel, V<sub>u</sub> the largest Strength I shear in the panel (Analysis tab, envelope of the girder types); ρ<sub>w</sub> = (V<sub>u</sub> − φ<sub>v</sub>V<sub>cr</sub>)/(φ<sub>v</sub>V<sub>n</sub> − φ<sub>v</sub>V<sub>cr</sub>) ≤ 1, the larger of the two panels. ρ<sub>w</sub> > 0: I<sub>req</sub> = I<sub>t1</sub> + (I<sub>t2</sub> − I<sub>t1</sub>)ρ<sub>w</sub> if I<sub>t2</sub> > I<sub>t1</sub> (Eq. -7), else I<sub>t2</sub> (Eq. -8); otherwise I<sub>t1</sub> (Eq. -1, as before). The governing plate of each field piece and plate type is listed. Same equations as GirderDetail TS3.
+- **Governing provision:** AASHTO LRFD 10th Ed. (2024) Art. 6.10.11.1.3, Eqs. 6.10.11.1.3-1, -3 to -10 (read from the 10th Ed. text: ρ<sub>w</sub> "maximum ratio … within the two web panels" when both rely on the tension field, else the one panel; V<sub>u</sub> = the maximum shear in the web panel under consideration).
+- **Check case (built-in per-bay layout after Apply, D = 63 in, t<sub>w</sub> = 1/2 in, F<sub>yw</sub> = F<sub>ys</sub> = 50 ksi, stiffener 6 × 1/2 in):** G1 stiffener at 121.67 ft (field piece 2), panels 110–121.67 and 121.67–133.33 ft, both 140 in: J = max(2.5/2.222² − 2, 0.5) = 0.5, I<sub>t1</sub> = 63(0.5)³(0.5) = 3.94 in⁴; F<sub>crs</sub> = min(0.31·29,000/12², 50) = 50 ksi, ρ<sub>t</sub> = 1.0, I<sub>t2</sub> = 63⁴/40 × (50/29,000)<sup>1.5</sup> = 28.19 in⁴; panel 110–121.67: k = 6.0125, C = 0.3449, φV<sub>cr</sub> = 315.0 kip, φV<sub>n</sub> = 913.5(0.3449 + 0.2339) = 528.7 kip, V<sub>u</sub> = 396.8 kip → ρ<sub>w</sub> = (396.8 − 315.0)/(528.7 − 315.0) = 0.382; I<sub>req</sub> = 3.94 + (28.19 − 3.94)(0.382) = 13.22 in⁴ (Eq. -7) ≤ I<sub>t</sub> = 0.5(6)³/3 = 36.00 in⁴, ratio 0.367. Before: 3.94/36.00 = 0.110. D3 status pass before and after (largest 0.109 → 0.367); tension field off: 0.109 (ρ<sub>w</sub> = 0).
+- **Suggest:** stiffener plate sizes come from the Framing tab (Suggest does not size them), so the stiffener cost per plate is unchanged; D3 now reports when the plate is too small for the tension field Suggest relied on (GirderDetail's auto-design sizes plates with TS3).
+- **Open item:** for panels not relying on the tension field the 10th Ed. text requires I<sub>t</sub> ≥ the smaller of I<sub>t1</sub> and I<sub>t2</sub> (Eqs. -1, -2); D3 and GirderDetail TS3 both require I<sub>t1</sub> (conservative when I<sub>t2</sub> < I<sub>t1</sub>). Not changed (ENGINEER_CHECKS GD33).
+- **How verified:** see TB3.
+
+  Decoded PL page:
+
+````diff
+--- before
++++ after
+@@ -2756,7 +2756,7 @@
+ <h3>Detailing checks</h3>
+ <p>Transverse stiffeners and connection plates (which act as stiffeners) must satisfy 6.10.11.1.2 and 6.10.11.1.3:</p>
+ <div class="eq-math">\\[b_t \\ge 2.0 + \\frac{D}{30}, \\qquad 16t_p \\ge b_t \\ge \\frac{b_f}{4}, \\qquad I_t = \\frac{t_p b_t^3}{3} \\ge b\\,t_w^3 J, \\quad J = \\frac{2.5}{(d_o/D)^2} - 2.0 \\ge 0.5\\]</div>
+-<p>b<sub>f</sub> is the widest flange in the field piece (conservatively either flange), t<sub>w</sub> the thickest web in the piece, and b the smaller of d<sub>o</sub> and D. Connection plates use d<sub>o</sub> equal to the stiffener spacing if stiffeners are present, otherwise the cross-frame spacing. With per-bay stiffeners, D3 uses the narrowest panel in each field piece and D4 lists every bay with intermediate stiffeners (interior panels against 3D; an end panel with its own stiffener against 1.5D; a wider end panel of an evenly spaced bay is an unstiffened end panel, advisory). Bearing stiffeners satisfy b<sub>t</sub> ≤ 0.48t<sub>p</sub>√(E/F<sub>ys</sub>) (6.10.11.2.2) and must fit within the bottom flange (practice).</p>
++<p>b<sub>f</sub> is the widest flange in the field piece (conservatively either flange), t<sub>w</sub> the thickest web in the piece, and b the smaller of d<sub>o</sub> and D. Connection plates use d<sub>o</sub> equal to the stiffener spacing if stiffeners are present, otherwise the cross-frame spacing. With per-bay stiffeners, D3 checks every intermediate stiffener and connection plate with its two adjacent panels, adding Eq. 6.10.11.1.3-7 or -8 where a panel relies on tension-field action (ρ<sub>w</sub> from the largest V<sub>u</sub> in each panel), and D4 lists every bay (interior panels against 3D, end panels against 1.5D). Bearing stiffeners satisfy b<sub>t</sub> ≤ 0.48t<sub>p</sub>√(E/F<sub>ys</sub>) (6.10.11.2.2) and must fit within the bottom flange (practice).</p>
+ <h3>Camber and deflection</h3>
+ <p>Moments come from the constant-EI influence lines described in the Suggest methodology. Deflections are then computed by virtual work with the actual stiffness at each point:</p>
+ <div class="eq-math">\\[\\Delta(x) = \\int \\frac{M(s)\\,m_x(s)}{E\\,I(s)}\\,ds\\]</div>
+@@ -3498,7 +3498,7 @@
+ // girder list label: G1–G5 when consecutive, else G1, G3
+ function tsGLbl(gs) { const a = [...gs].sort((p, q) => p - q); return a.length > 1 && a[a.length - 1] - a[0] === a.length - 1 ? `G${a[0]}–G${a[a.length - 1]}` : a.map(g => `G${g}`).join(', '); }
+ 
+-function framingChecks(m, FR, P) {
++function framingChecks(m, FR, P, AN0) {   // AN0 (optional): the Analysis tab result, for the shears of D3's tension-field requirement (per-bay stiffeners)
+   const F = P.framing, L = P.limits, out = [], D = m.D;
+   const add = c => { c.status = c.items.length ? worst(c.items.map(i => i.st)) : 'na'; let gi = -1; c.items.forEach((it, k) => { if (gi < 0 || RANK[it.st] > RANK[c.items[gi].st] || (RANK[it.st] === RANK[c.items[gi].st] && (it.r ?? -1) > (c.items[gi].r ?? -1))) gi = k; }); c.gov = gi; out.push(c); };
+   const na = (c, why) => { c.items = []; c.naWhy = why; add(c); };
+@@ -3597,11 +3597,24 @@
+     add(c);
+   }
+   {
+-    const c = { id: 'D3', grp, title: 'Stiffener and connection plate moment of inertia', ref: 'AASHTO LRFD 6.10.11.1.3, Eq. 6.10.11.1.3-1', src: 'Code',
+-      sym: T`I_t \ge b\,t_w^3\,J, \quad J = \frac{2.5}{(d_o/D)^2} - 2.0 \ge 0.5, \quad I_t = \frac{t_p\,b_t^3}{3}`, cols: ['Plate, piece', 'd_o (in)', 'I_t (in⁴)', 'Required (in⁴)', 'Ratio'], items: [],
++    const c = { id: 'D3', grp, title: 'Stiffener and connection plate moment of inertia', ref: BM ? 'AASHTO LRFD 6.10.11.1.3, Eqs. 6.10.11.1.3-1, -7, -8' : 'AASHTO LRFD 6.10.11.1.3, Eq. 6.10.11.1.3-1', src: 'Code',
++      sym: BM ? T`I_t \ge I_{t1} = b\,t_w^3J\ \text{(no tension field)}; \quad I_t \ge I_{t1} + (I_{t2} - I_{t1})\rho_w\ \text{if}\ I_{t2} > I_{t1},\ \text{else}\ I_{t2}; \quad I_{t2} = \frac{D^4\rho_t^{1.3}}{40}\left(\frac{F_{yw}}{E}\right)^{1.5}` : T`I_t \ge b\,t_w^3\,J, \quad J = \frac{2.5}{(d_o/D)^2} - 2.0 \ge 0.5, \quad I_t = \frac{t_p\,b_t^3}{3}`, cols: ['Plate, piece', 'd_o (in)', 'I_t (in⁴)', 'Required (in⁴)', 'Ratio'], items: [],
+       note: !BM ? 'Single-sided plates, inertia taken about the face of the web in contact with the plate. b is the smaller of d_o and D. The tension-field requirement (Eq. 6.10.11.1.3-2) is not checked because the web sizing in this app does not use tension-field action.'
+-        : `Single-sided plates, inertia taken about the face of the web in contact with the plate. b is the smaller of d_o and D; per-bay stiffeners: d_o is the narrowest panel in the field piece. The tension-field requirement (Eq. 6.10.11.1.3-2) is not checked here${P.suggest && P.suggest.tfa !== 'off' ? ': Suggest uses tension-field action in interior panels, so check the stiffeners with GirderDetail\'s Transverse stiffeners module (TS3 includes Eq. 6.10.11.1.3-2)' : ' (Suggest\'s tension-field setting is off); GirderDetail\'s Transverse stiffeners module TS3 checks it'}.` };
+-    plates.forEach(([n, b, t, dd0]) => pieceInfo.forEach(({ p, tw }) => { const dd = BM ? ddPiece(p) : dd0;
++        : `Per-bay stiffeners (TB2, 2026-10-13): every intermediate stiffener and connection plate (not the bearing stiffeners, D5/D6) with its two adjacent panels, d_o the smaller of them, b the smaller of d_o and D, t_w the web at the plate; single-sided plates, I_t about the face in contact with the web. Where a panel relies on tension-field action (V_u > φ_vV_cr, V_cr = CV_p, interior stiffened panel, Suggest's tension-field setting ${P.suggest && P.suggest.tfa === 'off' ? 'off: not relied on' : 'on'}), Eq. 6.10.11.1.3-7 (I_t2 > I_t1) or -8 applies with ρ_w = (V_u − φ_vV_cr)/(φ_vV_n − φ_vV_cr), the larger of the two panels, V_u the largest Strength I shear in each panel from the Analysis tab (envelope of the girder types); otherwise Eq. 6.10.11.1.3-1. F_crs = 0.31E/(b_t/t_p)² ≤ F_ys (Eq. 6.10.11.1.3-6), ρ_t = max(F_yw/F_crs, 1.0). The governing plate of each field piece is listed.${AN0 && !AN0.errors ? '' : ' No analysis result: tension-field requirement not checked here.'}` };
++    if (BM) { const tfa = !(P.suggest && P.suggest.tfa === 'off'), vu = AN0 && !AN0.errors && AN0.R && AN0.xs ? tsVu(AN0.xs, AN0.R.types) : null, fns = tsSecFns(m), Fyw = m.FyW, best = {};
++      BG.forEach((l, gi) => { const pans = l.flatMap(tsPanels), br = FR.girders[gi].bear;
++        for (let j = 0; j < pans.length - 1; j++) { const Lp = pans[j], Rp = pans[j + 1], x = Lp.q; if (Math.abs(Rp.p - x) > 0.01 || br.some(v => Math.abs(v - x) < 0.05)) continue;
++          const nm = Lp.sq ? 'Transverse stiffener' : 'Connection plate', bt = Lp.sq ? F.stB : F.cpB, tp = Lp.sq ? F.stT : F.cpT;
++          const p = m.pieces.find(q => x >= q.x0 - 1e-9 && x < q.x1 - 1e-9) || m.pieces[m.pieces.length - 1], tw = m.at(m.web, x).t, dmin = Math.min(Lp.d, Rp.d), bb = Math.min(dmin, D), J = Math.max(2.5 / (dmin / D) ** 2 - 2, 0.5), It1 = bb * tw ** 3 * J;
++          const Fcrs = Math.min(0.31 * ES / (bt / tp) ** 2, Fys), rt = Math.max(Fyw / Fcrs, 1), It2 = D ** 4 * rt ** 1.3 / 40 * (Fyw / ES) ** 1.5;
++          const rho = q => { if (!vu || !tfa || q.end || !(q.d <= 3 * D + 1e-9)) return 0; const V = tsVn(D, fns.twAt(q.p, q.q), Fyw, q.d, false, fns.rat(q.p, q.q), true), Vcr = TS_PHIV * V.C * V.Vp, Vn = TS_PHIV * V.Vn, Vu = vu(q.p, q.q);
++            return Vu > Vcr + 1e-9 ? Math.min(1, (Vu - Vcr) / Math.max(Vn - Vcr, 1e-9)) : 0; };
++          const rw = Math.max(rho(Lp), rho(Rp)), req = rw > 0 ? (It2 > It1 ? It1 + (It2 - It1) * rw : It2) : It1, eq = rw > 0 ? (It2 > It1 ? '6.10.11.1.3-7' : '6.10.11.1.3-8') : '6.10.11.1.3-1', It = tp * bt ** 3 / 3, r = req / It, k = nm + '|' + p.i;
++          if (!best[k] || r > best[k].r) best[k] = { nm, p, x, gi, dmin, bb, J, tw, It1, It2, Fcrs, rt, rw, req, eq, It, r, bt, tp }; } });
++      Object.values(best).sort((a, b) => (a.nm === 'Transverse stiffener' ? 0 : 1) - (b.nm === 'Transverse stiffener' ? 0 : 1) || a.p.i - b.p.i).forEach(o => c.items.push({ loc: `${o.nm}, piece ${o.p.i + 1} (G${o.gi + 1} at ${f2(o.x)} ft)`, cells: [f2(o.dmin), f2(o.It), f2(o.req), f2(o.r)], r: o.r, st: o.It >= o.req - 1e-9 ? 'pass' : 'fail',
++        work: T`\begin{aligned}J &= \max\left(\frac{2.5}{(${f2(o.dmin)}/${f2(D)})^2} - 2.0,\ 0.5\right) = ${f3(o.J)}, \quad I_{t1} = (${f2(o.bb)})(${f3(o.tw)})^3(${f3(o.J)}) = ${f2(o.It1)}\ \text{in}^4 \\ F_{crs} &= \min\left(\frac{0.31(29{,}000)}{(${f2(o.bt)}/${f3(o.tp)})^2},\ ${f2(Fys)}\right) = ${f2(o.Fcrs)}\ \text{ksi}, \quad \rho_t = ${f3(o.rt)}, \quad I_{t2} = \frac{${f2(D)}^4(${f3(o.rt)})^{1.3}}{40}\left(\frac{${f2(Fyw)}}{29{,}000}\right)^{1.5} = ${f2(o.It2)}\ \text{in}^4 \\ \rho_w &= ${f3(o.rw)}, \quad I_{req} = ${f2(o.req)}\ \text{in}^4\ (\text{Eq. ${o.eq}}) \;${o.It >= o.req - 1e-9 ? '\\le' : '>'}\; I_t = \frac{(${f3(o.tp)})(${f2(o.bt)})^3}{3} = ${f2(o.It)}\ \text{in}^4\end{aligned}` }));
++    } else
++    plates.forEach(([n, b, t, dd0]) => pieceInfo.forEach(({ p, tw }) => { const dd = dd0;
+       const J = Math.max(2.5 / (dd / D) ** 2 - 2, 0.5), bb = Math.min(dd, D), req = bb * tw ** 3 * J, It = t * b ** 3 / 3, r = req / It;
+       c.items.push({ loc: `${n}, piece ${p.i + 1}`, cells: [f2(dd), f2(It), f2(req), f2(r)], r, st: It >= req - 1e-9 ? 'pass' : 'fail',
+         work: T`J = \max\left(\frac{2.5}{(${f2(dd)}/${f2(D)})^2} - 2.0,\ 0.5\right) = ${f3(J)}, \quad I_t = \frac{(${f3(t)})(${f2(b)})^3}{3} = ${f2(It)} \;${It >= req - 1e-9 ? '\\ge' : '<'}\; (${f2(bb)})(${f3(tw)})^3(${f3(J)}) = ${f2(req)}\ \text{in}^4` });
+@@ -4847,8 +4860,9 @@
+   M = buildModel(P);
+   if (M.errors.length) { C = null; FR = null; AN = null; renderErrors(); renderFrBays(); maybeSuggest(); maybeAlts(); return; }
+   C = runChecks(M);
+-  FR = framingLayout(P, M); C.push(...framingChecks(M, FR, P));
++  FR = framingLayout(P, M);
+   try { AN = analyzeGirder(P, M); } catch (e) { AN = { errors: ['Analysis failed: ' + e.message] }; console.error(e); }
++  C.push(...framingChecks(M, FR, P, AN));   // after the analysis: D3 (per-bay stiffeners) uses its shears (TB2, 2026-10-13); the checks' order in C is unchanged
+   C.push(...analysisChecks(M, AN, P));
+   C.sort((a, b) => GROUPS.indexOf(a.grp) - GROUPS.indexOf(b.grp));
+   M.st = sectionStatus(M, C);
+````
