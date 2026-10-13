@@ -6612,3 +6612,86 @@ index 092fce2..1a9659b 100644
  document.addEventListener('click', e => { const id = e.target.id;
    if (id === 'btn-v3dbr') v3bOpen();
 ```
+
+### XS13. LLDF and DLs report, input echo: deck edges and traffic faces, every superimposed element, options and overrides   [report only] [results bit-identical]
+- **Where (anchors):**
+  - `gmReportHead`, which is shared by every GM module: after `${tb(e.table2)}` it now renders an optional `e.more` list of `[title, table, note]` as `<h3 class="rpt-h3">` plus a table in the report's existing style. Modules that do not return `more` are unchanged.
+  - `GM.df.echo`: `more: dfEchoXs(R)`.
+  - New `function dfEchoXs(R)` (before `const DF_VIEW`).
+- **Content:** three new blocks in the Input echo of the LLDF and DLs report (the existing rows are unchanged):
+  1. **"Deck edges and traffic faces"**, one row per side:
+     - type (barrier, or curb and railing);
+     - dimensions from the deck edge (barrier width at the deck; curb width × height with "(mountable, < 12 in)"; railing load point and traffic face);
+     - weights (marked "(override)" when overridden);
+     - the traffic face at the deck edge with its rule (barrier face, railing face for a mountable curb, curb face at 12 in or higher, or "edge to traffic face entered");
+     - the live-load traffic face with the governing element (`dfLLTxt`, for example "5.50 ft to the railing or fence on the sidewalk; the 8.00 in sidewalk is mountable (< 12 in) and ignored (it would give 6.00 ft)").
+     
+     A note follows: whether the edges are entered in this module or sent by Preliminary sizing, the 12 in rule, and the roadway.
+  2. **"Superimposed loads on the cross-section"**: every load in `R.dead.per` (barriers, curbs, railings, sidewalks, fences, median, wearing surface, overlays, pedestrian load, utilities and other line loads). For each: class, size (for example "6.00 ft × 8.00 in (mountable)" or "2.50 in × 0.144 kcf = 30.00 psf over 33.50 ft"), x, line load, and distribution ("(method)" for a row that follows the method). An overridden value reads "0.450 (override; auto 0.400)".
+  3. **"Cross-section options and overrides"**: appurtenance γ<sub>c</sub>, the wearing-surface basis, the load overrides in use, overrides stored for loads that no longer exist (kept, not used), and beam classes set by hand, with their automatic class.
+- **Governing provision:** none (report text). Values are read from `GM.df.compute`.
+- **Check case (xsA project with test overrides: left barrier x 0.90 ft and 0.450 klf, right sidewalk "two adjacent", wearing surface pile-cap, a stored override for a missing id `zzz`, G1 and G3 classes):** the report lists:
+  - Left barrier "0.90 (override; auto 0.75)" and "0.450 (override; auto 0.400)";
+  - Right sidewalk slab "Two adjacent (override; auto MassDOT pile-cap)";
+  - "Overrides stored but not used: zzz";
+  - G1 "Exterior safety curb beam (auto: Exterior sidewalk beam)";
+  - live-load faces 5.50 / 4.50 ft (fences) and roadway 34.50 ft, as on the input tab.
+  
+  For the curb project: curbs 12 × 10 in and 10 × 8 in, both mountable; faces 1.00 / 1.50 ft entered; roadway 42.00 ft.
+- **Other copies:** none.
+
+### Exact changes (XS13): main page (unified diff against the XS12 commit)
+
+```diff
+diff --git a/Steel Bridge Beam Modules.html b/Steel Bridge Beam Modules.html
+index 1a9659b..bfad74d 100644
+--- a/Steel Bridge Beam Modules.html	
++++ b/Steel Bridge Beam Modules.html	
+@@ -4321,10 +4321,36 @@ tabs: { combos: 'Factors and loads', cap: 'Derivations', rptCombos: 'Distributio
+       + card('dw-df', 'Cross-section and lever rule', `${rg.label}; ${rg.members[v.j].label}`, `<div class="ctl-row dfv-ctl"><label>Region <select id="dfv-rg">${R.regions.map((r, k) => `<option value="${k}" ${k === v.rg ? 'selected' : ''}>${esc(r.label)} (${r.kind === 'span' ? '+M, V' : '−M'})</option>`).join('')}</select></label><label>Girder <select id="dfv-j">${rg.members.map((m, k) => `<option value="${k}" ${k === v.j ? 'selected' : ''}>${m.label} (${m.type === 'ext' ? 'exterior' : 'interior'})</option>`).join('')}</select></label></div><div class="dwg-wrap">${dfSVG(R, rg, v.j)}</div><p class="cap">Girders are colored by the method that governs their moment factor; hover a girder for its factors. Arrows are the wheels of the governing lever-rule truck train for the selected girder, labeled with each wheel's share of the reaction (before the multiple presence factor). Bars below the girders are DC + DW per girder.</p>`)
+       + card('dw-sens', 'Sensitivity to girder spacing', `${rg.label}; K<sub>g</sub> held at ${f0(rg.Kg)} in⁴`, `${dfSensSVG(R, rg)}<p class="cap">All bays scaled together from 70% to 130% of the current layout with the overhangs, barriers, and K<sub>g</sub> held; the dot is the current design. Letters along the exterior line show the governing exterior method: L lever rule, R rigid cross-section, E e-factor. Use it to see how close the layout is to a change of governing method.</p>`); },
+   echo(R) { const b = R.b; return { kv: [['Bridge (from Preliminary sizing)', `"${esc(b.project)}", received ${new Date(b.ts).toLocaleString()}`], ['Spans', b.spans.map(s => f2(s)).join(' + ') + ' ft' + (b.cont ? ', continuous' : '')], ['Skew at supports', b.skews.map(s => f0(s) + '°').join(', ')], ['Girders', `${b.nb} at ${f2(b.S)} ft`], b.gdEdges ? ['Overhangs L / R', `${f2(b.ohL)} / ${f2(b.ohR)} ft`] : ['Overhangs L / R, barrier', `${f2(b.ohL)} / ${f2(b.ohR)} ft, ${f2(b.barrier)} ft`], ['Deck', `t_s = ${f2(b.tsDeck)} in, haunch ${f2(b.haunch)} in, f′c = ${f2(b.fc)} ksi, w_c = ${b.wc} kcf, n = ${f2(R.MR.n)}`], ...(b.gdEdges ? [['Left deck edge', dfEdgeTxt(b.gdEdges.L)], ['Right deck edge', dfEdgeTxt(b.gdEdges.R)], ['Superimposed', `FWS ${f2(b.fws)} psf`]] : [['Superimposed', `barrier ${f2(b.barW)} klf each, FWS ${f2(b.fws)} psf`]]), ['Dead-load method', R.dead.method === 'massdot' ? 'MassDOT 3.5.3' : 'Typical AASHTO (equal)'], ['Truck gap', `${f2(R.base.gap)} ft`]],
+-      table: [['Region', 'L (ft)', 'Station (ft)', 'Section', 'K_g (in⁴)', 'Skew M / V'], R.regions.map(rg => [rg.label, f2(rg.L), f2(rg.x), secTxt(rg.sec), f0(rg.Kg), `${f0(rg.sk.thM)}° / ${f0(rg.sk.thV)}°`])] }; },
++      table: [['Region', 'L (ft)', 'Station (ft)', 'Section', 'K_g (in⁴)', 'Skew M / V'], R.regions.map(rg => [rg.label, f2(rg.L), f2(rg.x), secTxt(rg.sec), f0(rg.Kg), `${f0(rg.sk.thM)}° / ${f0(rg.sk.thV)}°`])], more: dfEchoXs(R) }; },
+   after(R) { dfFeed(R); dfOvrSync(R); dfEdgeVis(); },
+   inbox() { return null; }, noInbox: 'This module takes its bridge directly from the Preliminary sizing module (see the Bridge tab); nothing needs to be imported.'
+ };
++/* report input echo of the cross-section (XS13): deck edges per side with the traffic-face rules, every superimposed element with its size,
++   load, class and distribution, and the overrides in use (display only; values from GM.df.compute) */
++function dfEchoXs(R) {
++  const D = R.dead, b = R.b, dl = R.p.dl, FP = dfFoot(R), Wd = D.Wd, byId = id => D.per.find(L => L.id === id), side = sd => sd === 'L' ? 'Left' : 'Right', no = '—';
++  const edge = ['L', 'R'].map(sd => { const q = b.gdEdges && b.gdEdges[sd], e = b.edge && b.edge[sd], ll = R.ll && R.ll[sd], f = sd === 'L' ? R.base.fL : R.base.fR;
++    const typ = q ? (q.type === 'curb' ? 'Curb and railing' : 'Barrier') : e && e.mode === 'curb' ? 'Curb and railing' : 'Barrier';
++    const dim = q ? (q.type === 'curb' ? `curb ${f2(q.cw)} × ${f2(q.ch)} in${q.mount ? ' (mountable, < 12 in)' : ''}; railing at ${f2(q.rp)} ft${q.rf !== null ? `, traffic face ${f2(q.rf)} ft` : ''}` : `${f2(q.bw)} ft wide at the deck`) : e && e.mode === 'curb' ? `curb ${f2(e.cw)} × ${f2(e.ch)} in; railing at ${f2(e.rp)} ft` : `${f2(b.barrier)} ft wide at the deck`;
++    const w = ['bar', 'curb', 'rail'].map(k => byId(k + sd)).filter(Boolean).map(L => `${L.desc.replace(/^(Left|Right) /, '')} ${f3(L.plf)}${L.ovr && L.ovr.includes('plf') ? ' (override)' : ''}`).join('; ') || '0';
++    return [side(sd), typ, dim, w, `${f2(f)} ft: ${q ? q.fby : e && e.mode === 'curb' ? 'curb and railing traffic face (Preliminary sizing)' : 'barrier face'}`, ll ? dfLLTxt(ll) : no]; });
++  const sz = L => { const id = L.id, sd = /[LR]$/.test(id) ? id.slice(-1) : null;
++    if (/^bar/.test(id)) return `${f2(FP.ed[sd].w)} ft wide at the deck`; if (/^curb/.test(id)) return `${f2(FP.ed[sd].cw * 12)} × ${f2(FP.ed[sd].ch)} in`;
++    if (/^sw[LR]$/.test(id)) return `${f2(FP.sw[sd])} ft × ${f2(FP.swT[sd])} in${FP.swT[sd] >= 12 - 1e-9 ? '' : ' (mountable)'}`; if (id === 'med') return `${f2(FP.med.w)} ft × ${f2(FP.med.t)} in${FP.med.joint ? ', longitudinal joint' : ''}`;
++    if (id === 'ws' || /^ovl/.test(id)) return `${L.thk > 0 ? `${f2(L.thk)} in × ${f3(L.gam)} kcf = ` : ''}${f2(L.q != null ? L.q : L.plf * 1000 / (L.x1 - L.x0))} psf over ${f2(L.x1 - L.x0)} ft`;
++    if (/^ped/.test(id)) return `${f0(nm(dl.ped))} psf over the walkable width`; if (/^(rail|fence)/.test(id)) return `at ${f2(sd === 'L' ? L.x : Wd - L.x)} ft from the ${side(sd).toLowerCase()} deck edge`; return 'line load'; };
++  const ovT = (L, f, t, a) => L.ovr && L.ovr.includes(f) ? `${t} (override; auto ${a})` : t;
++  const loads = D.per.map(L => [esc(L.desc), L.cat, sz(L), ovT(L, 'x', f2(L.x), f2(L.xAuto)), ovT(L, 'plf', f3(L.plf), f3(L.plfAuto)), ovT(L, 'dist', (DF_DIST[L.dist] || L.dist) + (L.byMethod ? ' (method)' : ''), DF_DIST[L.distAuto])]);
++  const lo = R.p.loadOverrides && typeof R.p.loadOverrides === 'object' ? Object.keys(R.p.loadOverrides) : [], used = D.per.filter(L => L.ovr), unused = lo.filter(id => !D.per.some(L => L.id === id && L.ovr));
++  const bc = D.clsAuto ? D.cls.map((k, i) => k !== D.clsAuto[i] ? `G${i + 1}: ${DF_CLS[k]} (auto: ${DF_CLS[D.clsAuto[i]]})` : null).filter(Boolean) : [];
++  const xsA = R.p.dl || {}, gam = dfOpt(xsA.wcA);
++  const opt = [['Appurtenance concrete γ_c', gam !== null && gam > 0 ? `${f3(gam)} kcf (curbs, sidewalks, median)` : `deck w_c, ${b.wc} kcf`], ['Wearing surface', dl.wsMode === 'thk' ? 'thickness × unit weight (entered here)' : `weight from Preliminary sizing, ${f2(b.fws)} psf`],
++    ['Load overrides in use', used.length ? used.map(L => `${esc(L.desc)} (${L.ovr.join(', ')})`).join('; ') : 'none'], ...(unused.length ? [['Overrides stored but not used', esc(unused.join(', '))]] : []), ['Beam classification set by hand', bc.length ? bc.join('; ') : 'none (labels only)']];
++  return [['Deck edges and traffic faces', [['Side', 'Type', 'Dimensions (from the deck edge)', 'Weight (klf)', 'Traffic face at the deck edge (rule)', 'Live-load traffic face (governing element)'], edge],
++      `${b.gdEdges ? 'Deck edges entered in this module (Cross-section and dead loads tab).' : 'Deck edges as sent by Preliminary sizing.'} A curb or sidewalk less than 12 in high is mountable and is ignored when positioning the live load; the live-load face is the innermost non-mountable element (roadway ${f2(R.regions[0].geo.roadway)} ft).`],
++    ['Superimposed loads on the cross-section', [['Load', 'Class', 'Size', 'x (ft)', 'w (klf)', 'Distribution'], loads.length ? loads : [['none', '', '', '', '', '']]], 'x from the left deck edge. Utilities and the wearing surface are DW; other superimposed loads DC2 (or as entered). "(method)": the row follows the distribution method.'],
++    ['Cross-section options and overrides', [['Item', 'Value'], opt]]];
++}
+ const DF_VIEW = { rg: 0, j: 0 };
+ function dfView(R) { if (DF_VIEW.rg >= R.regions.length) DF_VIEW.rg = 0; if (DF_VIEW.j >= R.regions[DF_VIEW.rg].members.length) DF_VIEW.j = 0; return DF_VIEW; }
+ const DF_MCOL = m => /policy/.test(m.method) ? '#6b7280' : /lever/.test(m.method) ? '#c46a12' : /rigid/.test(m.method) ? '#7b3fa0' : /e-factor/.test(m.method) ? '#12806e' : '#1f4e8c';
+@@ -5477,7 +5503,7 @@ function gmReportHead(m) {
+   const tb = t => t ? `<div class="tscroll"><table class="tbl"><thead><tr>${t[0].map(h => `<th>${h}</th>`).join('')}</tr></thead><tbody>${t[1].map(r => `<tr>${r.map((c, i) => `<td class="${i ? 'val' : 'lbl'}">${c}</td>`).join('')}</tr>`).join('')}</tbody></table></div>` : '';
+   $('#rpt-head').innerHTML = `<div class="rpt-title"><h1>${m.rptTitle}</h1><p>${m.rptRef}. GirderDetail, by Mario Lococo.</p></div>
+     <table class="tb"><tr><td><span>Project</span>${esc(mt.name)}</td><td><span>Computed by</span>${esc(mt.compBy)}</td><td><span>Date</span>${esc(mt.compDate)}</td></tr><tr><td><span>Subject</span>${esc(mt.subject)}</td><td><span>Checked by</span>${esc(mt.chkBy)}</td><td><span>Date</span>${esc(mt.chkDate)}</td></tr><tr><td colspan="3"><span>Task</span>${esc(mt.task)}</td></tr></table>
+-    <h2 class="rpt-h">Input echo</h2>${d.source ? `<p class="note-p">Source: ${esc(d.source)}</p>` : ''}${kv(e.kv)}${tb(e.table)}${tb(e.table2)}
++    <h2 class="rpt-h">Input echo</h2>${d.source ? `<p class="note-p">Source: ${esc(d.source)}</p>` : ''}${kv(e.kv)}${tb(e.table)}${tb(e.table2)}${(e.more || []).map(([t, x, n]) => `<h3 class="rpt-h3">${t}</h3>${tb(x)}${n ? `<p class="note-p">${n}</p>` : ''}`).join('')}
+     ${P.assumptions.trim() ? `<h3 class="rpt-h3">Engineering assumptions</h3><div class="asm">${esc(P.assumptions)}</div>` : ''}`;
+ }
+ function gmApply(m, x, j) { x.apply(); P[m.id].source = `${j.srcLabel || 'PlateLine approximate analysis'} (${new Date(j.ts).toLocaleDateString()}). Confirm the geometry${j.src === 'sa' ? '' : ' and replace the demands with refined analysis results before final design'}.`; }
+```
