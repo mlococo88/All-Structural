@@ -7279,3 +7279,23 @@ Main page and the embedded Preliminary sizing (PlateLine, `PL_B64`, decoded, edi
   - The Fatigue module's own row for this plate (cracked negative section) is unchanged: 1.136.
 - **Saved data:** no key or format change; the `df` field of the stiffener rows has the same meaning (ksi, tension-flange stress range) and is replaced on the next import.
 - **Other copies:** none.
+
+### C11. Preliminary sizing G7: d<sub>e</sub> of each exterior girder from that side's own traffic face   [range-of-applicability status and display only; no calculation uses it]
+- **Where (decoded PlateLine):** `runChecks`, check G7; anchor `rng(\`d_e, ${sd} exterior girder\``. Main page: the re-encoded `PL_B64` line.
+- **Before:**
+  ```js
+      [['left', m.ohL], ['right', m.ohR]].forEach(([sd, w]) => rng(`d_e, ${sd} exterior girder`, w - m.barrier, -1.0, 5.5, 'ft'));
+  ```
+- **After:**
+  ```js
+      [['left', m.ohL, m.faceL], ['right', m.ohR, m.faceR]].forEach(([sd, w, fc]) => rng(`d_e, ${sd} exterior girder`, w - fc, -1.0, 5.5, 'ft'));   // each side's own traffic face (M2, 2026-10-13; was the average of both sides, m.barrier)
+  ```
+  `m.faceL` / `m.faceR` are the traffic-face distances the model already carries (`bridgeGeom`: the barrier width, the curb faces, or the deck edges from the LLDF and DLs module); `m.barrier` is their average. With equal faces the values are identical.
+- **Problem:** with different edges (e.g. a sidewalk on one side only) both d<sub>e</sub> values were the overhang minus the average face, so the range warning could be raised on the wrong side, or on both, or missed. Status/display only: the distribution factors themselves are computed in the LLDF and DLs module, not from this row.
+- **Governing provision:** AASHTO LRFD 10th Ed. Table 4.6.2.2.2d-1 (d<sub>e</sub>: distance from the exterior web to the interior edge of curb or traffic barrier, −1.0 ≤ d<sub>e</sub> ≤ 5.5 ft). Not changed.
+- **Check case (built-in example, overhangs 3.25 ft both sides, barrier 1.5 ft; LLDF and DLs: left sidewalk 8 ft wide × 12 in thick, none on the right, so traffic faces 8.0 ft left and 1.5 ft right, average 4.75 ft):**
+  - **Before:** d<sub>e</sub> left = 3.25 − 4.75 = −1.50 ft (warn), right = −1.50 ft (warn).
+  - **After:** d<sub>e</sub> left = 3.25 − 8.00 = **−4.75 ft (warn)**, right = 3.25 − 1.50 = **1.75 ft (pass)**.
+  - Built-in example without the sidewalk: 1.75 ft both sides before and after.
+- **Saved data:** none.
+- **Other copies:** none.
