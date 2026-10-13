@@ -7807,3 +7807,12 @@ Main page only; `PL_B64` (embedded Preliminary sizing) is not touched. Display o
 - **Problem:** the fraction slash ran into the separator: "left: 3/4/1 1/8 flanges; right: 1/1 1/4 flanges", with no unit.
 - **Check case:** built-in example: "Gap 1/2 in; flanges (top / bottom): left 3/4 / 1 1/8 in, right 1 / 1 1/4 in".
 - **Other copies:** none.
+
+### Q13. Equations: thousands separators set as "106,168", not "106, 168" (Shear connectors SC1 / fatigue shear flow; modular ratio E<sub>c</sub>)   [equation typesetting only]
+- **Where:** Shear connectors SC1 item work and the "Fatigue I shear flow range" report equation (anchor `` (${f2(z.Q)})}{${f0(z.I)}} = ${f3(z.Vfat)} ``, 2 places); `modTex` (anchor `const modTex = `, the two `${Math.round(m.Ec).toLocaleString('en-US')}`).
+- **Before:** `` {${f0(z.I)}} `` and `` ${Math.round(m.Ec).toLocaleString('en-US')} ``
+- **After:** `` {${f0(z.I).replace(/,/g, '{,}')}} `` and `` ${Math.round(m.Ec).toLocaleString('en-US').replace(/,/g, '{,}')} ``
+- **Problem:** in TeX a bare comma is punctuation and gets a space after it, so I = 106,168 in⁴ printed as "106, 168" (and E<sub>c</sub> = 3,834 ksi as "3, 834"). `{,}` is the form the file already uses for constants (`29{,}000`).
+- **Check case:** built-in example, Shear connectors SC1 governing equation: denominator "106,168". Numbers unchanged.
+- **Open item:** about 100 other `f0(...)` values inside TeX templates (Girder section, Fatigue, LLDF and DLs K<sub>g</sub>, …) have the same spacing when they reach 1,000; not changed here (each is a separate equation line). A single change to the MathJax `tex.digits` pattern would cover all of them but also affects any integer list written without spaces; ask before doing that.
+- **Other copies:** none.
