@@ -2,7 +2,7 @@
 
 Things only the engineer can do (check against printed specs, open files in CAD, try in a real browser) or decide. Kept here so nothing is lost; the same list is shown at the top of `tools.html` ("Open engineer checks"). **When an item is done or decided, remove it from both places** and record the outcome in the tool's fix log.
 
-Last updated: 2026-10-12 (after the all-tools open-item sweep, PRs #121–#160).
+Last updated: 2026-10-13 (after the all-tools open-item sweep, PRs #121–#160, and the GirderDetail PRs #170–#181).
 
 ## A. Checks (engineer's own action)
 
@@ -18,7 +18,7 @@ Last updated: 2026-10-12 (after the all-tools open-item sweep, PRs #121–#160).
 | A8 | Gusset Plate Rating | Check every "verify" value against the printed MBE / FHWA guide / AASHTO (rivet and fastener strengths, K, LFR values, etc.). | `fixlog/Gusset Plate Rating.md` O8 |
 | A9 | Gusset Plate Rating | Open an exported DXF in AutoCAD and MicroStation, save it from each, and re-import it. | O13 |
 
-## B. Results that changed in the 2026-10-12 sweep — please review first
+## B. Results that changed in the 2026-10-12 sweep and the GirderDetail PRs #170–#181 — please review first
 
 These changes were made under your delegation ("use your best judgment"). They are code-based and more conservative unless noted, but they change results of existing projects. Each has a before/after check case in the tool's fix log and PR.
 
@@ -41,6 +41,13 @@ These changes were made under your delegation ("use your best judgment"). They a
 | B16 | Stone Masonry Arch | Trucks now side by side on barrels ≥ 20 ft (Auto lanes, Art. 3.6.3): default HS20 RF 0.77 → 0.63, old projects too. "1 lane" restores the old numbers. | #163 |
 | B17 | Bridge suite hand-offs | CIP slab DFs (per 1-ft strip) are now refused by index, PS-Beam, ST-Girder and Steel Bridge (they were applied as girder DFs). | #166 |
 | B15 | Spread Footing | Depth factors default Off for new projects (default DCR 0.64 → 0.70). | #142 |
+| B18 | GirderDetail (Steel Bridge Beam Modules) | Suggest applies span-to-depth (Table 2.5.2.6.3-1) whenever the Limits tab treats it as mandatory (90 ft repro: fast D 30 → 37 in, G1 1.11 FAIL → 0.92); width-study overhangs capped by check G6. | [#171](https://github.com/mlococo88/All-Structural/pull/171) |
+| B19 | GirderDetail (Steel Bridge Beam Modules) | Shallow girders (d < 48 in) get a channel/W diaphragm from auto-design; check CFD decides (repro: K-frame, CF8 FAIL → W30x99, 5 bolts). | [#172](https://github.com/mlococo88/All-Structural/pull/172) |
+| B20 | GirderDetail (Steel Bridge Beam Modules) | Quick suggestion is now checked for strength/service and plates increased until it passes (built-in example: max ratio 1.046 → 0.987, cost $1,696,419 → $1,719,411). | [#174](https://github.com/mlococo88/All-Structural/pull/174) |
+| B21 | GirderDetail (Steel Bridge Beam Modules) | With the diaphragm: the 0.8D deep-bracing test uses the diaphragm depth (repro β<sub>T</sub> 12,950 FAIL → 112,558 pass); jacking moved to the new end-diaphragm check CFE (repro end diaphragm W30x99 → W33x118, 10 bolts); Design all adds end-diaphragm steel and bolts. | [#175](https://github.com/mlococo88/All-Structural/pull/175) |
+| B22 | GirderDetail (Steel Bridge Beam Modules) | End panel with d<sub>o</sub> > 1.5D is unstiffened, k = 5: φV<sub>n</sub> 489.58 → 391.66 kip (D = 60, d<sub>o</sub> = 2D, −20 %). Older saved layouts can now fail TS4 (120 ft example 0.85 → 1.06); PlateLine web may thicken (1/2 → 9/16 in). | [#176](https://github.com/mlococo88/All-Structural/pull/176) |
+| B23 | GirderDetail (Steel Bridge Beam Modules) | TS4 end panel uses the largest V<sub>u</sub> in the panel (at the bearing): 90 ft example 93.38 → 153.25 kip, ratio 0.21 → 0.35. Simple-span panels at piers are end panels. | [#180](https://github.com/mlococo88/All-Structural/pull/180) |
+| B24 | GirderDetail (Steel Bridge Beam Modules) | β<sub>sec</sub> uses the Transverse stiffeners module's connection plate (Type B 6 × 1/2 in, was the module's own 5 × 1/2): h = 40 in case β<sub>sec</sub> 10,309 → 16,263, CF8 7.94 → 5.13. New plate-fit items can fail CFD/CFE (e.g. bolt line 6 in on a 6 in plate). | [#181](https://github.com/mlococo88/All-Structural/pull/181) |
 
 ## C. Questions for you (decisions and printed-spec checks)
 
@@ -54,6 +61,24 @@ Each item has my recommendation; the tool currently follows it. Details are in t
 **ST-Girder** — sign off stud fatigue change (less conservative, FAIL → PASS) · printed checks 6.10.10.4.2, Tables 4.6.2.2.2d-1/3b-1, C6.10.1, 6.10.1.10.2 · 1.3R_hM_y cap (rec keep) · R_b = 1.0 (rec yes after check).
 **PS-Beam** — NEXT DFs per beam vs per stem · cracked-section strand fatigue (rec yes) · full PCI/Mast lifting (large) · φs on shear · overhang thickness · relabel "9th Ed." after printed check.
 **Steel Bridge Beam Modules** — L_p coefficient 1.1 vs 1.0, C_b equation · 10th Ed. Q_n equation · 1-1/8 in hole width · 6.13.6.1.3b φc 0.95, 6.10.11.2.4b web strip · MassDOT E_c unit weight 0.145 kcf? · open once with network access.
+
+**GirderDetail (Steel Bridge Beam Modules), PRs #170–#181** — each with the tool's current behavior; details in `fixlog/Steel Bridge Beam Modules.md`.
+- GD1. Width-study "Full design of the best N": A1–A3 (deflection, uplift, bearing stiffener) are shown but do not decide pass/fail (Suggest does not size bearing stiffeners; example N = 4: A3 R<sub>u</sub> 898 vs 840 kip). OK? Overhang/spacing are kept from the fast study. G6, [#170](https://github.com/mlococo88/All-Structural/pull/170)
+- GD2. Category C′ fatigue at connection plates: PlateLine gives 1.046 on the built-in example (1.059 in the current-girder comparison) while the Girder section module flags nothing on the same plates. Which model should govern? SQ1–SQ4 / SC1, [#174](https://github.com/mlococo88/All-Structural/pull/174), [#178](https://github.com/mlococo88/All-Structural/pull/178)
+- GD3. Quick suggestion and Full design pass at ratio ≤ 1.0005, so a reported 1.000 can be up to 1.0005. Accept the tolerance? SQ1, [#174](https://github.com/mlococo88/All-Structural/pull/174)
+- GD4. Suggest comparison: the current girder is checked with GirderDetail's LLDF/DL module factors where they match it, the suggestion with the built-in 4.6.2.2 factors, and each at its own cross-frame spacing (card says so). OK? SC1, [#178](https://github.com/mlococo88/All-Structural/pull/178)
+- GD5. 6.7.4.2.2 equation numbers: the tool cites Eqs. 6.7.4.2.2-14/-15 for M<sub>br</sub> and none for β<sub>sec</sub>, β<sub>T,req</sub>. Confirm against the printed 10th Ed. CF-D8, [#175](https://github.com/mlococo88/All-Structural/pull/175)
+- GD6. End (bearing-line) diaphragms: superstructure wind and seismic (3.10.9.2) forces to the bearings are not checked, nor torsional stiffness at supports. Add? CF-D9, [#175](https://github.com/mlococo88/All-Structural/pull/175)
+- GD7. Design all counts no end cross-frames in the cross-frame case (end diaphragms are counted); end-diaphragm length uses the largest skew for every bearing line. Change? CF-D9, [#175](https://github.com/mlococo88/All-Structural/pull/175)
+- GD8. Diaphragm wind model (assumptions): M<sub>w</sub> = F<sub>w</sub>·d end moment, shear 2M<sub>w</sub>/S, axial F<sub>w</sub> not combined with flexure; 1.0 in fillet allowance (0.5 in each side) in the bolt-line limit; nominal AISC dimensions, fillets neglected. Confirm. CF-D3, [#172](https://github.com/mlococo88/All-Structural/pull/172)
+- GD9. Diaphragm fatigue (member and bolted connection) is not checked (CF9 covers angles only; listed under "Not checked here"). Add a check? CF-D12, [#179](https://github.com/mlococo88/All-Structural/pull/179)
+- GD10. Connection plate entered as a pair: β<sub>sec</sub> uses one plate width (conservative); AISC App. 6 takes b<sub>s</sub> = 2× the plate width for pairs. Which for AASHTO 6.7.4.2.2? CF-D13, [#181](https://github.com/mlococo88/All-Structural/pull/181)
+- GD11. Plate-fit e<sub>min</sub> uses the rolled/gas-cut column of Table 6.13.2.6.6-1 (1 1/8 in for 7/8 in bolts); a sheared edge needs 1 1/2 in. Which edge do your plates have? CF-D14, [#181](https://github.com/mlococo88/All-Structural/pull/181)
+- GD12. End panel d<sub>o</sub> > 1.5D treated as unstiffened (k = 5) is your ruling of 2026-10-13; 6.10.9.3.3 states 1.5D as a spacing limit, not a definition. Confirm the wording in the printed 10th Ed. EK1, [#176](https://github.com/mlococo88/All-Structural/pull/176)
+- GD13. TS4 bearing shear: each component (DC1, DC2, DW, LL+IM) is its own maximum over the end panel, so V<sub>u</sub> can slightly exceed one load position's value (conservative). OK? Q4, [#180](https://github.com/mlococo88/All-Structural/pull/180)
+- GD14. "Two adjacent beams" DL relief (−P·a/S on the first interior beam; lldf F6, open item O6): still pending MassDOT confirmation. The DL/cross-section port from lldf into GirderDetail (upcoming PR) will carry the same option, so the decision applies to both.
+- Closed by these PRs (decided, nothing to do): Kb for auto-designed K-frames ([#169](https://github.com/mlococo88/All-Structural/pull/169)); diaphragm on shallow girders, 0.75d depth, actual tabulated depths, β<sub>sec</sub> from the diaphragm depth, end diaphragms ([#172](https://github.com/mlococo88/All-Structural/pull/172), [#175](https://github.com/mlococo88/All-Structural/pull/175)); splice warning in DXF/report and splice auto-design fallback (G9/G10 → Q1/Q2, [#173](https://github.com/mlococo88/All-Structural/pull/173)); TS5 for connection-plate-only webs (Q3, [#173](https://github.com/mlococo88/All-Structural/pull/173)); the TS5 end-panel band / end-panel k question → k = 5 (EK1–EK3, [#176](https://github.com/mlococo88/All-Structural/pull/176)); TS4 bearing shear and simple-span pier end panels ([#180](https://github.com/mlococo88/All-Structural/pull/180)); connection plate from the Transverse stiffeners module and plate-fit check ([#181](https://github.com/mlococo88/All-Structural/pull/181)).
+
 **Base Plate / Concrete Anchor** — ASCE 7-22 snow factors · −W combos and rain slot · plate b_eff rule (rec 2l_x) · narrow-member c_a1 limit (less conservative; rec yes) · §17.6.2.1.2 interpretation · seismic §17.10 (rec warning) · inline CSS instead of Tailwind CDN (rec).
 **Concrete Beam Capacity / Rebar / ASD** — sign off A_ℓ,min (9.6.4.3) and A_v,min trigger (9.6.3.1), both less conservative per 318-19 · printed checks of AASHTO 5.6.2.1, 5.4.3.1, 5.10.8.2.4b, 5.10.8.4.2a · ASD operating f_c 1,900 psi (MassDOT?) · ASD allowables for other grades · Headed Bar tab (rec yes) · relabel "9th Ed.".
 **Retaining Wall** — φτ 1.00 vs MassDOT 0.80 · MassDOT collision values · φb 0.45 on rock (rec) · w_c in E_c.
