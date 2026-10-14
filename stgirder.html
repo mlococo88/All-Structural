@@ -190,6 +190,8 @@ button.dl:hover,a.dl:hover{text-decoration-style:solid} button.dl:focus-visible{
 /* notices (GirderDetail .alert) */
 .callout{border:1px solid var(--blue-mid);border-left:3px solid var(--blue);border-radius:var(--r);background:var(--info-dim);padding:10px 14px;font-size:12.5px;line-height:1.5;color:var(--text-dim);margin-top:12px}
 .callout.warn{border-color:color-mix(in oklab,var(--warn) 30%,transparent);border-left-color:var(--warn);background:var(--warn-dim);color:#5f4209}
+.callout.oos{border-color:color-mix(in oklab,var(--redpencil) 45%,transparent);border-left:4px solid var(--fail);background:var(--fail-dim);color:var(--text)}
+.callout.oos b{color:var(--fail)}
 .callout b{color:var(--text)}
 /* headline results (GirderDetail scorecard figures) */
 .bigres{display:flex;gap:12px;flex-wrap:wrap;margin:4px 0 14px}
@@ -2102,7 +2104,11 @@ function plasticMoment(sec, mat, deck){
   // otherwise ("all other noncomposite sections") D_cp = D. Engineer's decision 2026-10-14 (was 0 with the PNA in the top flange).
   if(!deckOn && !(Pw >= Math.abs(Pc-Pt))) Dcp=D;
   const Dt=(deckOn?ts+hn:0)+tft+D+tfb;                  // total depth, top of slab → bottom
-  return {region,PNA,Mp,Dcp,Dp:PNA,Dt,Ps,Pc,Pw,Pt,Ybar,arm,off};
+  // PNA below the web (composite, positive flexure): P_t > P_s + P_c + P_w (deck rebar neglected), i.e. Case I gives
+  // Ȳ > D. Table D6.1-1 and D6.3.2 do not cover it, so the section is outside the scope of this app (engineer's decision
+  // 2026-10-14): the numbers above are left as they are, flagged here, and computeAll suppresses every result that uses them.
+  const belowWeb = deckOn && Pt > Ps+Pc+Pw;
+  return {region,PNA,Mp,Dcp,Dp:PNA,Dt,Ps,Pc,Pw,Pt,Ybar,arm,off,...(belowWeb?{belowWeb:true}:{})};
 }
 
 // Hybrid factor Rh (6.10.1.10.1). Non-hybrid → 1.0.
@@ -2755,8 +2761,12 @@ function computeAll(inp){
         compactWeb:compactWeb_, compact:compact_, Rh:Rh_, Rb:Rb_, RbNeg:RbNeg_,
         Mn_kft:Mn_, FncTop:FncTop_, FncNeg:FncNeg_, FncBotBare:FncBotBare_,
         FncPos:FncPosNC_? FncPosNC_.Fnc : Rb_*Rh_*Fyc, FncPosNC:FncPosNC_, Fnt:Rh_*Fyf, Iyc:Iyc_, Iyt:Iyt_,
-        ductOK:pl_.Dp<=0.42*pl_.Dt, wsw:bare_.A*0.490/144};
+        ductOK:pl_.Dp<=0.42*pl_.Dt, wsw:bare_.A*0.490/144, ...(pl_.belowWeb?{oos:true}:{})};
     });
+    // PNA-OOS (2026-10-14): segments whose positive-flexure PNA falls below the web (plasticMoment belowWeb) are outside the
+    // scope of this app. Their M_p, D_p and D_cp are not used for any reported result (see the overrides after the checks).
+    const pnaOOS=segP.filter(g=>g.oos).map(g=>({i:g.i, x0:g.x0, x1:g.x1, Ps:g.pl.Ps, Pc:g.pl.Pc, Pw:g.pl.Pw, Pt:g.pl.Pt}));
+    const oos=pnaOOS.length>0;
     const segIdxAt=x=>{ for(let i=0;i<segP.length;i++) if(x<=segP[i].x1+1e-9) return i; return segP.length-1; };
     const segMid=segP[segIdxAt(Lft0/2)];
     // midspan-segment aliases (drawings + Section Props tab display)
@@ -2939,7 +2949,7 @@ function computeAll(inp){
         if(isFinite(lim13) && lim13<MnSt) MnSt=Math.max(lim13,0);
       }
       // capacity as an equivalent moment (same stress→moment basis as the Rating tab's capM)
-      const capPos = sg.compact? phif*MnSt
+      const capPos = sg.oos? null : sg.compact? phif*MnSt
         : phif*Math.min(sg.FncPos*sg.cN.StSteel, sg.Fnt*sg.cN.Sb)/12;
       // negative capacity always computed (rating/capacity export need it even when the
       // current demands have no −M); the Flexure chart only draws it when hasNeg.
@@ -2949,7 +2959,8 @@ function computeAll(inp){
       // staged factored flange stresses (Strength I) at this station — computed once, reused below
       const fStg=stageF(st,1.25,1.25,1.5,1.75);
       // ── +M worked-calc record (compact → Mp basis · noncompact composite → stress basis) ──
-      const posC = sg.compact
+      const posC = sg.oos? {oos:true, compact:false, Mu:st.Mu, capPos:null, dc:NaN}
+        : sg.compact
         ? {compact:true, region:sg.pl.region, Mp:sg.pl.Mp/12, Dp:sg.pl.Dp, Dt:sg.pl.Dt,
            ductRed:sg.pl.Dp>0.1*sg.pl.Dt, Mn:MnSt, MnMp:sg.Mn_kft, my13, phiMn:phif*MnSt,
            capPos, Mu:st.Mu, dc: st.Mu>1e-6? st.Mu/(phif*MnSt):0}
@@ -2965,7 +2976,7 @@ function computeAll(inp){
         dcTop: fStg.neg.fT<0? Math.abs(fStg.neg.fT)/(phif*sg.Rh*Fyf):0};
       flexCalc.push({x:st.x, si:st.si, dims:sg.dims, Fyf, Fyc, Es, phif,
         Mu:st.Mu, Mun:st.Mun, hasNegDemand:st.Mun<-1, pos:posC, neg:negC});
-      if(st.Mu>0){
+      if(st.Mu>0&&!sg.oos){
         let r,mode;
         if(sg.compact){ r=st.Mu/(phif*MnSt); mode='Mp'; }
         else { r=Math.max(fStg.pos.fT/(phif*sg.FncPos), fStg.pos.fB/(phif*sg.Fnt)); mode='stress'; }
@@ -3391,6 +3402,14 @@ function computeAll(inp){
     if(deck.deckOn) checks.push({n:'Ductility Dp≤0.42Dt', t:'Ductility', v:sgPos.pl.Dp, lim:0.42*sgPos.pl.Dt, r:sgPos.pl.Dp/(0.42*sgPos.pl.Dt), u:'in', ref:'6.10.7.3', loc:posGov.x||Lft/2});
     checks.push({n:'Strength shear', t:'Shear', v:VuPeak, lim:phiv*Vcr, r:shearDC, u:'kip', ref:'6.10.9', loc:shearR.xGov});
 
+    // PNA-OOS: no result for the checks that use M_p / D_p / D_cp — Strength I +M flexure (M_p, or R_b from D_cp on the
+    // stress basis) and ductility (D_p) — nor for the +M and governing load ratings. They read OUT OF SCOPE (pass false).
+    if(oos){
+      checks.forEach(c=>{ if(c.t==='Flexure'||c.t==='Ductility'){ c.oos=true; c.v=NaN; c.lim=NaN; c.r=NaN; } });
+      flex.oos=true; flex.flexDC=NaN; flex.phiMnRep=NaN; flex.ductOK=false;
+      rating.oos=true; rating.flexInv=NaN; rating.flexOpr=NaN; rating.flexBasis='oos'; rating.capM=null;
+      rating.govInv=NaN; rating.govOpr=NaN;
+    }
     const checksF=checks.map(c=>({...c,loc:c.loc||0,pass:c.r<=1.0001}));
 
     /* ---------- warnings for effects not computed (display only) ---------- */
@@ -3411,7 +3430,7 @@ function computeAll(inp){
       segP, stations, useExt, ext, hasNeg, neg,
       stress, diag, flex, shearR, constr, camber, fatigue, tStiff, bearing, conn, rating, deckD,
       chartS2, chartFlex, chartFat, flexCalc, shearCalc, warnings,
-      checks:checksF, ...(swCont?{swCont}:{})};
+      checks:checksF, ...(swCont?{swCont}:{}), ...(oos?{pnaOOS}:{})};
   }catch(e){ return {ok:false, error:e.message}; }
 }
 
@@ -3574,10 +3593,12 @@ function CrossSection({R}){
       <line x1={cx-maxW*s/2} y1={pyB(cN.ybar)} x2={cx+maxW*s/2} y2={pyB(cN.ybar)}
         stroke="var(--blue)" strokeWidth={1} strokeDasharray="5 3"/>
       <text x={cx+maxW*s/2-2} y={pyB(cN.ybar)-3} fontSize="8" textAnchor="end" fill="var(--blue)" fontFamily="var(--mono)">ENA (n)</text>
-      {/* PNA */}
-      <line x1={cx-maxW*s/2} y1={pyB(pnaFromBottom)} x2={cx+maxW*s/2} y2={pyB(pnaFromBottom)}
+      {/* PNA (not drawn when it falls below the web: outside the scope of this app, PNA-OOS) */}
+      {pl.belowWeb
+        ? <text x={cx-maxW*s/2+2} y={pyB(0)+10} fontSize="8" fill="var(--fail)" fontFamily="var(--mono)">PNA below the web · out of scope</text>
+        : <React.Fragment><line x1={cx-maxW*s/2} y1={pyB(pnaFromBottom)} x2={cx+maxW*s/2} y2={pyB(pnaFromBottom)}
         stroke="var(--fail)" strokeWidth={1} strokeDasharray="2 2"/>
-      <text x={cx-maxW*s/2+2} y={pyB(pnaFromBottom)-3} fontSize="8" fill="var(--fail)" fontFamily="var(--mono)">PNA · {pl.region}</text>
+      <text x={cx-maxW*s/2+2} y={pyB(pnaFromBottom)-3} fontSize="8" fill="var(--fail)" fontFamily="var(--mono)">PNA · {pl.region}</text></React.Fragment>}
     </svg>
     <div className="viewlabel">COMPOSITE CROSS-SECTION · looking upstation</div>
   </div>);
@@ -4391,7 +4412,7 @@ function spGovTags(R){
   add(spMidIdx(R),'midspan: summary cards, drawings, derivations');
   const s2=R.stress&&R.stress.s2Gov; if(s2&&s2.r>0) add(s2.si,'Service II gov. @ '+fmt(s2.x,1)+' ft');
   const c=R.constr; if(c&&c.xGov!=null&&c.fbuTopC) add(siX(c.xGov),'constructibility gov. @ '+fmt(c.xGov,1)+' ft');
-  const fg=R.flex&&R.flex.gov; if(fg&&fg.r>0) add(fg.si,'Strength +M gov. @ '+fmt(fg.x,1)+' ft');
+  const fg=R.flex&&R.flex.gov; if(fg&&fg.r>0&&!R.flex.oos) add(fg.si,'Strength +M gov. @ '+fmt(fg.x,1)+' ft');
   const ng=R.hasNeg&&R.neg&&R.neg.negBGov; if(ng&&ng.r>0) add(ng.si,'Strength −M gov. @ '+fmt(ng.x,1)+' ft (cracked)');
   const fa=R.fatigue; if(fa&&fa.xGov!=null) add(siX(fa.xGov),'fatigue gov. @ '+fmt(fa.xGov,1)+' ft');
   return t;
@@ -4420,11 +4441,11 @@ function SegPropsTable({R}){
     <thead><tr><th>Segment</th><th>Section</th>{SP_HEAD.map(h=><th key={h}>{h}</th>)}<th>Mp (k-ft)</th><th>Dp (in)</th></tr></thead>
     <tbody>{R.segP.map(g=>spRows(R,g).map((r,k)=><tr key={g.i+'-'+k} className={k===0?'sp-first':''}>
       {k===0&&<td rowSpan={4} className="sp-seg"><b>Segment {g.i+1}</b><div>x = {spRange(R,g)}</div><div>{spPlates(g)}</div>
-        <div>web {fmt(g.dims.D,2)}×{fmt(g.dims.tw,4)} in · {g.compact?'compact':'noncompact'}</div>
+        <div>web {fmt(g.dims.D,2)}×{fmt(g.dims.tw,4)} in · {g.oos?<b style={{color:'var(--fail)'}}>{OOS_TXT}: PNA below the web</b>:g.compact?'compact':'noncompact'}</div>
         {tags[g.i].map((s,j)=><span key={j} className="sp-tag">{s}</span>)}</td>}
       <td style={{textAlign:'left'}}>{r.lab}<div className="sp-use">{r.use}</div></td>
       {r.c.map((v,j)=><td key={j}>{v}</td>)}
-      {k===0&&<td rowSpan={4}>{fmt(g.pl.Mp/12,0)}</td>}{k===0&&<td rowSpan={4}>{fmt(g.pl.Dp,2)}</td>}
+      {k===0&&<td rowSpan={4}>{g.oos?OOS_TXT:fmt(g.pl.Mp/12,0)}</td>}{k===0&&<td rowSpan={4}>{g.oos?OOS_TXT:fmt(g.pl.Dp,2)}</td>}
     </tr>))}</tbody></table></div>;
 }
 // Properties at any x along the span (and any span of a multi-span import). The position is a UI preference
@@ -4465,7 +4486,7 @@ function PropsAtX({R,inp}){
         ['Plates',spPlates(g)+' · web '+fmt(g.dims.D,2)+'×'+fmt(g.dims.tw,4)+' in'],
         ['Effective flange width b_eff',fmt(Rx.beff,1)+' in (constant along the span)'],
         ['Modular ratio',(Rx.deck.deckOn?'n = '+Rx.n+' (E_s/E_c = '+fmt(Rx.nRaw,2)+'), 3n = '+(3*Rx.n):'— (deck not composite)')],
-        ['Plastic moment',fmt(g.pl.Mp/12,0)+' k-ft · D_p = '+fmt(g.pl.Dp,2)+' in · '+(g.compact?'compact':'noncompact')]]
+        ['Plastic moment',g.oos? OOS_TXT+' (plastic neutral axis below the web, Table D6.1-1 / D6.3.2 do not cover it)' : fmt(g.pl.Mp/12,0)+' k-ft · D_p = '+fmt(g.pl.Dp,2)+' in · '+(g.compact?'compact':'noncompact')]]
         .map((r,i)=><React.Fragment key={i}><span className="k">{r[0]}</span><span className="dots"></span><span className="v">{r[1]}</span></React.Fragment>)}
     </div>
     <div className="scrollx" style={{marginTop:10}}><table className="eng sp-at">
@@ -4530,14 +4551,14 @@ function secDerivs(R,si0,right){
     const ge=(l,r)=>l>=r?'\\ge':'<', ok=v=>v?'\\checkmark':'\\text{N.G.}';
     const offV=on? nx(ts,2)+'+'+nx(th,2)+'+' : '';
     const arm=(sym,tx,y,v)=>v==null?null:<ML key={sym} s={Tx`${sym}=\left|D_p-${tx}\right|=\left|${nx(Dp,3)}-${nx(y,3)}\right|=${nx(v,3)}\;\text{in}`}/>;
-    const caseName=cs===1?'I':cs===2?'II':'III–VII';
+    const caseName=cs===1?'I':cs===2?'II':'III–VII', oosP=!!pl.belowWeb;   // PNA-OOS: PNA below the web
     return <Deriv id="stg-d-plastic" title={'Derivation — plastic moment Mₚ & PNA · '+segTxt} refTag="AASHTO Appendix D6.1 · Table D6.1-1 (positive flexure)">
       <VarTable title="Plastic forces (positive flexure, deck reinforcement neglected)" rows={[
         ['P_s','Deck slab compression 0.85f′_c·b_eff·t_s',pl.Ps,'kip'],
         ['P_c','Top-flange force F_yc·b_ft·t_ft',pl.Pc,'kip'],
         ['P_w','Web force F_yw·D·t_w',pl.Pw,'kip'],
         ['P_t','Bottom-flange force F_yt·b_fb·t_fb',pl.Pt,'kip'],
-        ['D_p','Depth of PNA below top of slab',pl.Dp,'in'],
+        ['D_p','Depth of PNA below top of slab',oosP?OOS_TXT:pl.Dp,'in'],
         ['D_t','Total depth (slab top to bottom flange)',pl.Dt,'in'],
       ]}/>
       <Step d="Plastic forces" r="D6.1">
@@ -4549,10 +4570,12 @@ function secDerivs(R,si0,right){
         <div className="mnote">The longitudinal deck reinforcement is neglected (P_rb = P_rt = 0), which D6.1 permits as conservative. Element forces act at mid-thickness of the deck and flanges and at mid-depth of the web.</div>
       </Step>
       <Step d="Which case applies — conditions checked in the order of Table D6.1-1" r="Table D6.1-1">
-        <ML s={Tx`\text{I (web): }P_t+P_w=${nx(pl.Pt,0)}+${nx(pl.Pw,0)}=${nx(pl.Pt+pl.Pw,0)}\;${ge(pl.Pt+pl.Pw,pl.Pc+pl.Ps)}\;P_c+P_s=${nx(pl.Pc,0)}+${nx(pl.Ps,0)}=${nx(pl.Pc+pl.Ps,0)}\;\Rightarrow\;\text{${cs===1?'Case I applies':'no'}}`}/>
+        <ML s={Tx`\text{I (web): }P_t+P_w=${nx(pl.Pt,0)}+${nx(pl.Pw,0)}=${nx(pl.Pt+pl.Pw,0)}\;${ge(pl.Pt+pl.Pw,pl.Pc+pl.Ps)}\;P_c+P_s=${nx(pl.Pc,0)}+${nx(pl.Ps,0)}=${nx(pl.Pc+pl.Ps,0)}\;\Rightarrow\;\text{${oosP?'condition met':cs===1?'Case I applies':'no'}}`}/>
+        {oosP&&<ML s={Tx`P_t=${nx(pl.Pt,0)}\;>\;P_s+P_c+P_w=${nx(pl.Ps,0)}+${nx(pl.Pc,0)}+${nx(pl.Pw,0)}=${nx(pl.Ps+pl.Pc+pl.Pw,0)}\;\text{kip}\;\Rightarrow\;\bar Y>D\text{: PNA below the web, not covered by Table D6.1-1 or D6.3.2}`}/>}
         {cs>=2&&<ML s={Tx`\text{II (top flange): }P_t+P_w+P_c=${nx(pl.Pt+pl.Pw+pl.Pc,0)}\;${ge(pl.Pt+pl.Pw+pl.Pc,pl.Ps)}\;P_s=${nx(pl.Ps,0)}\;\Rightarrow\;\text{${cs===2?'Case II applies':'no'}}`}/>}
         {cs===3&&<div className="mnote">Cases III–VII (PNA in the concrete deck): with P_rb = P_rt = 0 their conditions and equations reduce to the same Ȳ = t_s(P_c + P_w + P_t)/P_s and the same M_p, so the PNA is in the deck.</div>}
       </Step>
+      {oosP? <div className="callout oos" style={{marginTop:6}}><b>{OOS_TXT}.</b> {PNA_OOS_HEAD} M_p, D_p and D_cp of this segment are not reported, and the Strength I positive-flexure, ductility and compactness results that use them are not reported.</div> : <React.Fragment>
       <Step d={'Case '+caseName+': location of the PNA, Ȳ and D_p'} r="Table D6.1-1">
         {cs===1&&<ML s={Tx`\bar Y=\frac{D}{2}\left[\frac{P_t-P_c-P_s}{P_w}+1\right]=\frac{${nx(d.D,3)}}{2}\left[\frac{${nx(pl.Pt,1)}-${nx(pl.Pc,1)}-${nx(pl.Ps,1)}}{${nx(pl.Pw,1)}}+1\right]=${nx(Y,3)}\;\text{in}`}/>}
         {cs===2&&<ML s={Tx`\bar Y=\frac{t_{ft}}{2}\left[\frac{P_w+P_t-P_s}{P_c}+1\right]=\frac{${nx(d.tft,3)}}{2}\left[\frac{${nx(pl.Pw,1)}+${nx(pl.Pt,1)}-${nx(pl.Ps,1)}}{${nx(pl.Pc,1)}}+1\right]=${nx(Y,3)}\;\text{in}`}/>}
@@ -4606,27 +4629,30 @@ function secDerivs(R,si0,right){
         <div className="mnote">In a continuous span M_n is further limited to 1.3R_hM_y at each station (6.10.7.1.2-3), worked in the Flexure tab. The ductility result in the checks is that of the segment at the governing +M station.</div>
         <DLinks lead="Used in:" items={[{to:'flexpos',what:'M_n in the flexure check'}]}/>
       </Step>}
+      </React.Fragment>}
     </Deriv>; })();
   const cls=(
     <Deriv id="stg-d-cls" title={'Classification & stability factors · '+segTxt} refTag="6.10.1.10 · 6.10.6.2.2">
       <VarTable title="Web classification & stability" rows={[
         ['D/t_w','Web slenderness',sec.D/sec.tw,'≤ 150'],
-        ['2D_cp/t_w','Web slenderness in plastic compression',2*pl.Dcp/sec.tw,'vs λ_pw'],
+        ['2D_cp/t_w','Web slenderness in plastic compression',pl.belowWeb?OOS_TXT:2*pl.Dcp/sec.tw,'vs λ_pw'],
         ['λ_pw','Compact-web limit 3.76√(E/F_yc)',lambdaPw,'—'],
         ['F_yf','Flange yield (compact needs ≤ 70)',matR.Fyf,'ksi'],
         ['R_h','Hybrid factor (6.10.1.10.1)',Rh,'—'],
-        ['R_b','Load-shedding factor (6.10.1.10.2)',Rb,'—'],
+        ['R_b','Load-shedding factor (6.10.1.10.2)',pl.belowWeb?OOS_TXT:Rb,'—'],
         ['I_yc/I_yt','Flange inertia ratio (0.1–10)',IycIyt,'—'],
         ['D_c','Web depth in compression (elastic, n)',cN.Dc,'in'],
       ]}/>
       <Step d="Web compactness" r="6.10.6.2.2">
-        <ML s={Tx`\frac{2D_{cp}}{t_w}=${nx(2*pl.Dcp/sec.tw,1)}\;${compactWeb?'\\le':'>'}\;\lambda_{pw}=3.76\sqrt{E/F_{yc}}=${nx(lambdaPw,1)}\;\Rightarrow\;\text{${compactWeb?'compact':'noncompact'} web}`}/>
+        {pl.belowWeb? <div className="callout oos" style={{marginTop:0}}><b>{OOS_TXT}.</b> The plastic neutral axis of this segment falls below the web: D_cp (D6.3.2), the web compactness, the compact-section classification and R_b (which uses it) are not determined. {PNA_OOS_HEAD}</div>
+        : <ML s={Tx`\frac{2D_{cp}}{t_w}=${nx(2*pl.Dcp/sec.tw,1)}\;${compactWeb?'\\le':'>'}\;\lambda_{pw}=3.76\sqrt{E/F_{yc}}=${nx(lambdaPw,1)}\;\Rightarrow\;\text{${compactWeb?'compact':'noncompact'} web}`}/>}
         <ML s={Tx`\frac{D}{t_w}=${nx(sec.D/sec.tw,1)}\;${compactDtw?'\\le':'>'}\;150\qquad F_{yf}=${nx(matR.Fyf,0)}\;${compactMat?'\\le':'>'}\;70\;\text{ksi}`}/>
         <DLinks items={[{to:'plastic',seg:sgI(R,si),what:'D_cp'}]}/>
-        <div className="mnote">A section is <b>compact</b> (Mp-based positive-flexure capacity) only if the web is compact, F_yf ≤ 70 ksi, D/t_w ≤ 150, and the deck is composite — otherwise the noncompact stress-based check governs (see Flexure tab). Overall: <b>{compact?'COMPACT':'NONCOMPACT'}</b>.</div>
+        <div className="mnote">A section is <b>compact</b> (Mp-based positive-flexure capacity) only if the web is compact, F_yf ≤ 70 ksi, D/t_w ≤ 150, and the deck is composite — otherwise the noncompact stress-based check governs (see Flexure tab). Overall: <b>{pl.belowWeb?OOS_TXT:compact?'COMPACT':'NONCOMPACT'}</b>.</div>
       </Step>
       <Step d="Hybrid & load-shedding factors" r="6.10.1.10">
-        <ML s={Tx`R_h=${nx(Rh,3)}\;(\text{${Rh>=0.999?'non-hybrid':'hybrid'}})\qquad R_b=${nx(Rb,3)}\;(\text{${Rb>=0.999?'no web load-shedding':'web load-shedding active'}})`}/>
+        {pl.belowWeb? <ML s={Tx`R_h=${nx(Rh,3)}\;(\text{${Rh>=0.999?'non-hybrid':'hybrid'}})\qquad R_b\text{: out of scope (uses the web compactness)}`}/>
+        : <ML s={Tx`R_h=${nx(Rh,3)}\;(\text{${Rh>=0.999?'non-hybrid':'hybrid'}})\qquad R_b=${nx(Rb,3)}\;(\text{${Rb>=0.999?'no web load-shedding':'web load-shedding active'}})`}/>}
         <DLinks items={[{to:'trans',seg:sgI(R,si),what:'D_c (short-term n section) used in R_b'}]}/>
         <div className="mnote">R_h reduces flange resistance when the web yields before the flange (hybrid girders). R_b sheds load from a slender web in compression to the flanges. Both = 1.0 here when the web is compact and non-hybrid.</div>
       </Step>
@@ -4647,12 +4673,19 @@ function SectionTab({R,inp,go}){
   const SD=secDerivs(R,dSi,segPick);   // derivations shared with the calculation-sheet report (display only)
   const midTxt='segment '+(mi+1)+(nSeg>1?' of '+nSeg:'')+', x = '+fmt(gm.x0,1)+'–'+fmt(gm.x1,1)+' ft';
   const propRow=(lab,p,tr)=>({c:[lab,fmt(p.A,1),fmt(p.ybar,2),fmt(p.I,0),fmt(p.Sb,0),fmt(p.StSteel,0), tr||'—']});
+  const oosM=!!pl.belowWeb;   // PNA-OOS: midspan segment's PNA below the web
   return (<div>
+    <PnaOos R={R}/>
+    {oosM? <div className="bigres">
+      <div className="br f"><div className="l">Plastic moment Mp</div><div className="n" style={{fontSize:16}}>{OOS_TXT}</div><div className="u">PNA below the web</div></div>
+      <div className="br f"><div className="l">Web classification</div><div className="n" style={{fontSize:16}}>{OOS_TXT}</div><div className="u">D_cp: D6.3.2 does not cover it</div></div>
+      <div className="br f"><div className="l">Ductility Dp ≤ 0.42Dt</div><div className="n" style={{fontSize:16}}>{OOS_TXT}</div><div className="u">Table D6.1-1 does not cover it</div></div>
+    </div> :
     <div className="bigres">
       <div className="br"><div className="l">Plastic moment Mp</div><div className="n">{fmt(pl.Mp/12,0)}</div><div className="u">kip-ft · PNA in {pl.region}</div></div>
       <div className={'br '+(compact?'p':'')}><div className="l">Web classification</div><div className="n" style={{fontSize:16}}>{compact?'COMPACT':'NONCOMPACT'}</div><div className="u">2Dcp/tw vs {fmt(lambdaPw,1)}</div></div>
       <div className={'br '+(ductOK?'p':'f')}><div className="l">Ductility Dp ≤ 0.42Dt</div><div className="n">{fmt(pl.Dp/pl.Dt,3)}</div><div className="u">{fmt(pl.Dp,1)} / {fmt(0.42*pl.Dt,1)} in</div></div>
-    </div>
+    </div>}
 
     <Card title={'Elastic section properties at midspan — '+midTxt} refTag="bare · short-term n · long-term 3n">
       <Tbl head={['Section','A (in²)','ȳ from bot (in)','I (in⁴)','S_bot (in³)','S_top,st (in³)','Deck S_tr']}
@@ -4694,6 +4727,20 @@ function SectionTab({R,inp,go}){
   </div>);
 }
 
+/* PNA-OOS (2026-10-14): the positive-flexure PNA of a composite segment falls below the web (P_t > P_s + P_c + P_w),
+   outside AASHTO Table D6.1-1 / D6.3.2 and so outside the scope of this app. Warning text and callout (display only). */
+const PNA_OOS_HEAD='Outside the scope of this app: the plastic neutral axis falls below the web (bottom flange plastic force P_t exceeds P_s + P_c + P_w), which AASHTO LRFD 10th Ed. Table D6.1-1 and Art. D6.3.2 do not cover. Revise the section (e.g. reduce the bottom flange or increase the deck/top flange).';
+const PNA_OOS_NOT='Not reported (OUT OF SCOPE): Strength I positive flexure, ductility D_p \u2264 0.42D_t, the web compactness / compact-section classification and M_p, D_p, D_cp of the segment(s) named, and the positive-moment and governing load ratings. The overall verdict is "Not all checks pass". Sending capacity to the MCT rating is blocked; the other checks and hand-offs are unaffected.';
+const pnaOosSegs=R=>(R.pnaOOS||[]).map(g=>'Segment '+(g.i+1)+' (x = '+spRange(R,g)+'): P_t = '+fmt(g.Pt,0)+' kip > P_s + P_c + P_w = '+fmt(g.Ps,0)+' + '+fmt(g.Pc,0)+' + '+fmt(g.Pw,0)+' = '+fmt(g.Ps+g.Pc+g.Pw,0)+' kip.');
+const pnaOosText=R=>[PNA_OOS_HEAD,...pnaOosSegs(R)].join(' ');
+function PnaOos({R,style}){
+  if(!R||!R.ok||!R.pnaOOS) return null;
+  return <div className="callout oos" style={{marginTop:0,marginBottom:12,...(style||{})}}>
+    <div><b>OUT OF SCOPE.</b> {PNA_OOS_HEAD}</div>
+    {pnaOosSegs(R).map((t,i)=><div key={i} style={{marginTop:4}}><b>{t}</b></div>)}
+    <div style={{marginTop:4}}>{PNA_OOS_NOT}</div></div>;
+}
+const OOS_TXT='OUT OF SCOPE';
 /* Warnings for effects this app does not compute (STG-O1 flange lateral bending, STG-O8 fatigue with
    imported continuous demands). Display only. */
 function StgWarn({R,kind}){
@@ -4914,6 +4961,7 @@ function flexNegLines(R,g,hasDem,si){ const Fyf=R.matR.Fyf, F=g.Fnc;
     </React.Fragment>;
 }
 function flexWorkedCard(R,fcSel,right){ const p=fcSel.pos, g=fcSel.neg, hasDem=fcSel.hasNegDemand, nSeg=(R.segP||[]).length;
+      if(p.oos) return flexWorkedCardOos(R,fcSel,right);   // PNA-OOS: this station's segment is out of scope for +M
       const posPass=(p.dc||0)<=1.0001, negPass=Math.max(g.dcBot||0,g.dcTop||0)<=1.0001;
       return <Card title="Worked capacity calculation at a selected location"
         refTag="pick any station — +M and −M derived in full"
@@ -4935,9 +4983,29 @@ function flexWorkedCard(R,fcSel,right){ const p=fcSel.pos, g=fcSel.neg, hasDem=f
         {flexNegLines(R,g,hasDem,fcSel.si)}
       </Card>;
 }
+// PNA-OOS: worked card at a station whose segment has the PNA below the web: +M not reported, −M as usual.
+function flexWorkedCardOos(R,fcSel,right){ const g=fcSel.neg, hasDem=fcSel.hasNegDemand, nSeg=(R.segP||[]).length, negPass=Math.max(g.dcBot||0,g.dcTop||0)<=1.0001;
+      return <Card title="Worked capacity calculation at a selected location" refTag="pick any station — +M and −M derived in full" right={right}>
+        <div className="callout" style={{marginTop:0,marginBottom:12}}>
+          Station <b>x = {fmt(fcSel.x,1)} ft</b> · segment <b>{fcSel.si+1} of {nSeg}</b> ·
+          top flange <b>{fmt(fcSel.dims.bft,1)}×{fmt(fcSel.dims.tft,2)}</b> in,
+          bottom flange <b>{fmt(fcSel.dims.bfb,1)}×{fmt(fcSel.dims.tfb,2)}</b> in,
+          web <b>{fmt(R.sec.D,1)}×{fmt(R.sec.tw,3)}</b> in.
+        </div>
+        <div className="bigres" style={{marginBottom:10}}>
+          <div className="br f"><div className="l">+M  D/C</div><div className="n" style={{fontSize:16}}>{OOS_TXT}</div><div className="u">PNA below the web</div></div>
+          <div className={'br '+((hasDem?negPass:true)?'p':'f')}><div className="l">−M  D/C</div><div className="n">{hasDem?fmt(Math.max(g.dcBot,g.dcTop),2):'—'}</div><div className="u">{hasDem?'cracked section':'no −M here'}</div></div>
+        </div>
+        <div style={{fontStretch:'75%',fontWeight:700,fontSize:12,letterSpacing:'.5px',textTransform:'uppercase',color:'var(--blue)',margin:'6px 0 2px'}}>Positive moment — {OOS_TXT}</div>
+        <div className="callout oos" style={{marginTop:4}}><b>{OOS_TXT}.</b> {PNA_OOS_HEAD} Segment {fcSel.si+1}: no positive-flexure resistance is reported (M_u = {fmt(fcSel.Mu,0)} k-ft at this station).</div>
+        <div style={{fontStretch:'75%',fontWeight:700,fontSize:12,letterSpacing:'.5px',textTransform:'uppercase',color:'var(--blue)',margin:'14px 0 2px',borderTop:'1px solid var(--line2)',paddingTop:10}}>Negative moment — cracked section (6.10.8), bottom flange in compression</div>
+        {flexNegLines(R,g,hasDem,fcSel.si)}
+      </Card>;
+}
 // Plastic-moment record of the governing +M segment (the segment of R.flex.Mp_kft, Mn_kft and the ductility check; display only).
 const flexGovPl=R=>{ const g=R.segP&&R.segP[(R.flex&&R.flex.gov&&R.flex.gov.si)||0]; return g? g.pl : R.pl; };
 function flexPosCard(R){ const f=R.flex, pl=flexGovPl(R), pass=f.flexDC<=1.0001;
+  if(f.oos) return <Card id="stg-d-flexpos" title="Positive-flexure resistance" refTag={OOS_TXT}><PnaOos R={R} style={{marginBottom:0}}/></Card>;   // PNA-OOS
   return (    <Card id="stg-d-flexpos" title="Positive-flexure resistance" refTag={f.flexMode}>
       {f.compact? <React.Fragment>
         <ML s={Tx`M_p=${nx(f.Mp_kft,0)}\;\text{k-ft}\quad(\text{PNA in ${pl.region}})`}/>
@@ -4989,7 +5057,7 @@ function FlexTab({R}){
   const k1=fac?1.25:1, kw=fac?1.5:1, kl=fac?1.75:1;
   // ── location picker: per-station worked capacity calculation ──
   const fcAll=R.flexCalc||[], nSeg=(R.segP||[]).length, Lspan=R.geom.L;
-  const govX=(f.gov&&f.gov.x)||0;
+  const govX=f.oos? R.stress.xGov : (f.gov&&f.gov.x)||0;   // PNA-OOS: no governing +M station; open at the peak +M_u station
   const defIdx=fcAll.length? fcAll.reduce((bi,fc,i,a)=>Math.abs(fc.x-govX)<Math.abs(a[bi].x-govX)?i:bi,0):0;
   const [selIdx,setSelIdx]=useState(defIdx);
   const fcSel=fcAll.length? fcAll[Math.min(selIdx,fcAll.length-1)] : null;
@@ -5000,12 +5068,19 @@ function FlexTab({R}){
     return 'x = '+x.toFixed(1)+' ft'+(t.length?'  ·  '+t.join(', '):''); };
   return (<div>
     <StgWarn R={R} kind="fl"/>
+    <PnaOos R={R}/>
+    {f.oos? <div className="bigres">
+      <div className="br f"><div className="l">Strength flexure (+M) D/C</div><div className="n" style={{fontSize:16}}>{OOS_TXT}</div><div className="u">PNA below the web</div></div>
+      <div className="br f"><div className="l">Plastic moment Mp</div><div className="n" style={{fontSize:16}}>{OOS_TXT}</div><div className="u">Table D6.1-1 does not cover it</div></div>
+      <div className="br f"><div className="l">Ductility Dp / 0.42Dt</div><div className="n" style={{fontSize:16}}>{OOS_TXT}</div><div className="u">D_p not determined</div></div>
+    </div> :
     <div className="bigres">
       <div className={'br '+(pass?'p':'f')}><div className="l">{f.compact?'Mu / φMn':'Strength flexure D/C'}</div><div className="n">{fmt(f.flexDC,2)}</div><div className="u">{f.compact?fmt(f.MuPeak,0)+' / '+fmt(f.phif*f.MnGov,0)+' k-ft':'stress basis'}</div></div>
       <div className="br"><div className="l">Plastic moment Mp</div><div className="n">{fmt(f.Mp_kft,0)}</div><div className="u">k-ft · PNA {pl.region}</div></div>
       {f.composite&&<div className={'br '+(dPass?'p':'f')}><div className="l">Ductility Dp / 0.42Dt</div><div className="n">{fmt(pl.Dp/(0.42*pl.Dt),2)}</div><div className="u">{fmt(pl.Dp,1)} / {fmt(0.42*pl.Dt,1)} in</div></div>}
-    </div>
-    <DLinks items={[{to:'plastic',seg:sgI(R,f.gov&&f.gov.si!=null?f.gov.si:null),what:'M_p, D_p, D_t'}]}/>
+    </div>}
+    {f.oos? <DLinks items={[{to:'plastic',seg:sgI(R,R.pnaOOS[0].i),what:'plastic forces, PNA below the web'}]}/>
+    : <DLinks items={[{to:'plastic',seg:sgI(R,f.gov&&f.gov.si!=null?f.gov.si:null),what:'M_p, D_p, D_t'}]}/>}
     <Card title="Moment Breakdown vs Capacity" refTag={fac?'factored components (Strength I)':'unfactored service components'}>
       <div style={{marginBottom:6}}>
         <label style={{fontSize:11,color:'var(--ink2)',display:'flex',gap:7,alignItems:'center'}}>
@@ -5023,7 +5098,7 @@ function FlexTab({R}){
         {x:cf.map(p=>p.x),y:cf.map(p=>p.capPos),name:'+φMn capacity',line:{color:'#B3261E',width:2.6}},
         ...(R.hasNeg?[{x:cf.map(p=>p.x),y:cf.map(p=>p.capNeg),name:'−φMn capacity',line:{color:'#B3261E',width:2,dash:'dash'}}]:[])]}
         layout={{xaxis:{title:'x (ft)'},yaxis:{title:'moment (k-ft)',zeroline:true,zerolinecolor:'#16212E',zerolinewidth:1.2}}}/>
-      <div className="callout">Above the axis: positive-moment components, the factored +M<sub>u</sub> envelope, and the +φM<sub>n</sub> capacity (steps at flange splices{cf.some(p=>!p.compact)?'; noncompact segments use the stress-basis equivalent moment min(Fnc·St, Fnt·Sb) — the same basis as the Rating tab':''}).{R.hasNeg?' Below the axis: the −Mu envelope against the cracked-section −φMn over the pier.':''} The LL curves already include DF and impact. Governing +M D/C = <b>{fmt(f.flexDC,2)}</b> at <b>{fmt(f.gov&&f.gov.x||0,1)} ft</b>{R.hasNeg&&R.neg?'; −M D/C = '+fmt(R.neg.negBGov.r,2)+' at '+fmt(R.neg.negBGov.x||0,1)+' ft':''}.</div>
+      <div className="callout">Above the axis: positive-moment components, the factored +M<sub>u</sub> envelope, and the +φM<sub>n</sub> capacity (steps at flange splices{cf.some(p=>!p.compact)?'; noncompact segments use the stress-basis equivalent moment min(Fnc·St, Fnt·Sb) — the same basis as the Rating tab':''}).{R.hasNeg?' Below the axis: the −Mu envelope against the cracked-section −φMn over the pier.':''} The LL curves already include DF and impact. {f.oos?<span>Governing +M D/C: <b>{OOS_TXT}</b> (plastic neutral axis below the web in segment {R.pnaOOS.map(g=>g.i+1).join(', ')}; no +φM<sub>n</sub> is drawn there)</span>:<span>Governing +M D/C = <b>{fmt(f.flexDC,2)}</b> at <b>{fmt(f.gov&&f.gov.x||0,1)} ft</b></span>}{R.hasNeg&&R.neg?'; −M D/C = '+fmt(R.neg.negBGov.r,2)+' at '+fmt(R.neg.negBGov.x||0,1)+' ft':''}.</div>
     </Card>
     {fcSel&&flexWorkedCard(R,fcSel,<select value={selIdx} onChange={e=>setSelIdx(+e.target.value)}
           style={{fontFamily:'var(--mono)',fontSize:11,padding:'4px 8px',border:'1.5px solid var(--blue)',
@@ -5677,10 +5752,15 @@ function RatingTab({R,inp,set,onSendCapacity,capLocked,onToggleCapLock}){
       {capLocked&&<div style={{flexBasis:'100%',fontSize:'11.5px',color:'#9a3412',lineHeight:1.5}}>
         Every recompute republishes this envelope and the MCT rating adopts it automatically. Unlock to go back to one-shot sends.</div>}
     </div>}
+    <PnaOos R={R}/>
+    {r.oos? <div className="bigres">
+      <div className="br f"><div className="l">Inventory RF (gov)</div><div className="n" style={{fontSize:16}}>{OOS_TXT}</div><div className="u">+M rating not determined</div></div>
+      <div className="br f"><div className="l">Operating RF (gov)</div><div className="n" style={{fontSize:16}}>{OOS_TXT}</div><div className="u">+M rating not determined</div></div>
+    </div> :
     <div className="bigres">
       <div className={'br '+(r.govInv>=1?'p':'f')}><div className="l">Inventory RF (gov)</div><div className="n">{fmt(r.govInv,2)}</div><div className="u">HL-93 · γLL = 1.75</div></div>
       <div className={'br '+(r.govOpr>=1?'p':'f')}><div className="l">Operating RF (gov)</div><div className="n">{fmt(r.govOpr,2)}</div><div className="u">HL-93 · γLL = 1.35</div></div>
-    </div>
+    </div>}
     <Card title="Rating factors φc, φs" refTag="MBE 6A.4.2.3 · 6A.4.2.4">
       <div className="frow">
         <Num l="Condition factor φc" v={rq.phiC} set={v=>setRate('phiC',v)} step={0.05}/>
@@ -5690,6 +5770,7 @@ function RatingTab({R,inp,set,onSendCapacity,capLocked,onToggleCapLock}){
     </Card>
     <Card title="LRFR design-load rating" refTag="MBE 6A · RF = (C − γDC·DC − γDW·DW)/(γLL·LL)">
       <Tbl head={['Limit state','Capacity C','DC','DW','LL+IM','RF Inv','RF Opr']} rows={[
+        r.oos? {c:['Flexure +M (plastic neutral axis below the web)',OOS_TXT,'—','—','—',{v:OOS_TXT,cls:'no'},{v:OOS_TXT,cls:'no'}]} :
         {c:['Flexure +M ('+(r.flexBasis==='Mp'?'k-ft':'stress basis')+') @ x = '+fmt(r.flexX,1)+' ft',r.capM!=null?fmt(r.capM,0):'φcφsφf·F',fmt(r.MDC,0),fmt(r.MDWr,0),fmt(r.MLLr,0),cell(r.flexInv),cell(r.flexOpr)]},
         ...(r.negInv!==undefined?[{c:['Flexure −M (stress basis) @ x = '+fmt(r.negX,1)+' ft','φcφsφFnc','—','—','—',cell(r.negInv),cell(r.negOpr)]}]:[]),
         {c:['Shear (kip) @ x = '+fmt(r.shearX,1)+' ft',fmt(r.capV,0),fmt(r.VDC,0),fmt(r.VDWr,0),fmt(r.VLLr,0),cell(r.shearInv),cell(r.shearOpr)]},
@@ -5783,6 +5864,9 @@ const CrT=({head,rows,wide,gov})=>(<table className={'cr-tbl'+(wide?' cr-wide':'
   <tbody>{rows.map((r,i)=><tr key={i} className={gov&&gov(i)?'cr-gov':''}>{r.map((c,j)=><td key={j} className={j>0&&typeof c!=='object'&&/^[-−\d.,\s]+$/.test(String(c))?'n':''}>{c}</td>)}</tr>)}</tbody></table>);
 // Result line under a worked check (Gusset "cr-line cr-res"): the values are those of R.checks, as in the summary table.
 function CrRes({c}){
+  if(c.oos) return <div className="cr-line cr-res"><div className="cr-d">{c.n}<span className="cr-rf">LRFD {c.ref}</span></div>
+    <div className="cr-m">not reported: the plastic neutral axis falls below the web (Table D6.1-1 / D6.3.2 do not cover it)</div>
+    <div className="cr-r cr-st-fail"><b>{OOS_TXT}</b></div></div>;   // PNA-OOS
   return <div className="cr-line cr-res"><div className="cr-d">{c.n}<span className="cr-rf">LRFD {c.ref}</span></div>
     <div className="cr-m">demand <b>{fmt(c.v,2)}</b> {c.u} vs capacity <b>{fmt(c.lim,2)}</b> {c.u}; D/C = <b>{fmt(c.r,2)}</b>{c.loc?<span> at x = {fmt(c.loc,1)} ft</span>:null}</div>
     <div className={'cr-r'+(c.pass?'':' cr-st-fail')}><b>{c.pass?'PASS':'FAIL'}</b></div></div>;
@@ -5822,6 +5906,7 @@ function crModel(R,inp,o){
     <p className="cr-p">Design check of the built-up steel plate girder <b>{gt.girder}</b> ({gt.pos} girder, {gt.sp}){p.name?<span> of {p.name}</span>:null} to the AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024), Section 6: section proportions (6.10.2), constructibility (6.10.3), Service II (6.10.4) and live-load deflection (2.5.2.6.2, optional), Strength I flexure (6.10.7, 6.10.8) and shear (6.10.9), fatigue (6.6.1, 6.10.5.3), transverse and bearing stiffeners (6.10.11), shear connectors (6.10.10){R.deckD?', transverse deck design (4.6.2.1, Table A4-1, 9.7.3)':''}, an HL-93 design-load rating (AASHTO MBE 6A) and the dead-load camber.</p>
     <p className="cr-p">Demands: {R.useExt?<span>imported continuous-member envelopes ({(ext&&ext.source)||'external analysis'}{ext&&ext.producer?', '+ext.producer:''}); see 2. Input parameters.</span>:<span>ST-Girder’s built-in simple-span analysis (dead loads from the section and deck geometry, HL-93 live load times the distribution factors).</span>} Load factors: Strength I 1.25 DC + 1.50 DW + 1.75 (LL+IM); Service II DC + DW + 1.30 (LL+IM).</p>
     {gdn&&<React.Fragment><p className="cr-p"><b>{gdn.head}</b> {gdn.src}</p><p className="cr-p">Known differences between the two tools:</p><ul className="cr-ul">{gdn.diffs.map((d,i)=><li key={i}>{d}</li>)}</ul><p className="cr-p"><i>{gdn.tbc}</i></p></React.Fragment>}
+    {R.pnaOOS&&<React.Fragment><p className="cr-p cr-st-fail"><b>{OOS_TXT}.</b> {pnaOosText(R)}</p><p className="cr-p">{PNA_OOS_NOT}</p></React.Fragment>}
     {R.warnings&&(R.warnings.fl.length+R.warnings.fat.length)>0&&<React.Fragment><p className="cr-p"><b>Warnings:</b></p><ul className="cr-ul">{[...R.warnings.fl,...R.warnings.fat].map((w,i)=><li key={i}>{w}</li>)}</ul></React.Fragment>}
     <p className="cr-p"><b>Not included in this calculation:</b></p><ul className="cr-ul">{notIncl.map((t,i)=><li key={i}>{t}</li>)}</ul>
     <p className="cr-p">Design aid only — independent verification by a licensed engineer is required.</p>
@@ -5877,19 +5962,19 @@ function crModel(R,inp,o){
   // 3. Summary
   if(o.summary){ const allPass=R.checks.every(c=>c.pass);
     S('summary','Summary of results',{body:<React.Fragment>
-      <CrT wide head={['Check','Ref','Demand','Capacity','D/C','Status']} rows={R.checks.map(c=>[c.n,c.ref,fmt(c.v,2)+' '+c.u,fmt(c.lim,2)+' '+c.u,fmt(c.r,2),c.pass?'PASS':<b><u>FAIL</u></b>])}/>
+      <CrT wide head={['Check','Ref','Demand','Capacity','D/C','Status']} rows={R.checks.map(c=>c.oos?[c.n,c.ref,'—','—','—',<b><u>{OOS_TXT}</u></b>]:[c.n,c.ref,fmt(c.v,2)+' '+c.u,fmt(c.lim,2)+' '+c.u,fmt(c.r,2),c.pass?'PASS':<b><u>FAIL</u></b>])}/>
       <CrKV rows={[
         ['Section','built-up '+fmt(R.sec.D,0)+'×'+fmt(R.sec.tw,3)+' web',''],
-        ['Plastic moment Mp',fmt(R.pl.Mp/12,0),'k-ft'],
-        [R.flex.compact?'φMn flexure':'φMn flexure (stress-basis equivalent, φf·min(Fnc·S_t, Fnt·S_b))',fmt(R.flex.phiMnRep,0),'k-ft'],
+        ['Plastic moment Mp',R.pl.belowWeb?OOS_TXT:fmt(R.pl.Mp/12,0),R.pl.belowWeb?'':'k-ft'],
+        R.flex.oos? ['φMn flexure',OOS_TXT,''] : [R.flex.compact?'φMn flexure':'φMn flexure (stress-basis equivalent, φf·min(Fnc·S_t, Fnt·S_b))',fmt(R.flex.phiMnRep,0),'k-ft'],
         ['Peak Mu (Strength I)',fmt(R.flex.MuPeak,0),'k-ft'],
         ['φVn end panel',fmt(R.shearR.Vcr,0),'kip'],
         ['Peak Vu',fmt(R.shearR.VuPeak,0),'kip'],
         ['Service II bottom flange',fmt(R.stress.fBot.serv2,1),'ksi'],
         ['Total DL camber (max)',fmt(R.camber.camTotMax,2),'in at x = '+fmt(R.camber.xTot,1)+' ft'],
-        ['Inventory / Operating RF',fmt(R.rating.govInv,2)+' / '+fmt(R.rating.govOpr,2),''],
+        ['Inventory / Operating RF',R.rating.oos?OOS_TXT:fmt(R.rating.govInv,2)+' / '+fmt(R.rating.govOpr,2),''],
       ]}/>
-      <p className="cr-p cr-concl"><b>{allPass?'All limit-state checks pass.':'One or more checks fail — see the table above.'}</b> {R.checks.length} checks, {R.checks.filter(c=>c.pass).length} pass. Design aid only — independent verification by a licensed engineer is required.</p>
+      <p className="cr-p cr-concl"><b>{allPass?'All limit-state checks pass.':'One or more checks fail — see the table above.'}</b> {R.checks.length} checks, {R.checks.filter(c=>c.pass).length} pass.{R.pnaOOS?<b> Not all checks pass: {R.checks.filter(c=>c.oos).length} check(s) are OUT OF SCOPE because the plastic neutral axis falls below the web (see 1. Objectives).</b>:null} Design aid only — independent verification by a licensed engineer is required.</p>
     </React.Fragment>}); }
   // 4. Section properties
   if(o.props){ const s=S('props','Section properties'), SD=secDerivs(R);
@@ -5904,9 +5989,9 @@ function crModel(R,inp,o){
     sub(s,'Section properties by flange segment','bare · 3n · n · cracked (6.10.1.1.1c)',<React.Fragment>
       <table className="cr-tbl cr-wide cr-sp"><thead><tr><th>Segment</th><th>Section</th>{SP_HEAD.map(h=><th key={h}>{h}</th>)}<th>M_p (k-ft)</th><th>D_p (in)</th></tr></thead>
         {R.segP.map(g=><tbody key={g.i}>{spRows(R,g).map((r,k)=><tr key={k}>
-          {k===0&&<td rowSpan={4} className="cr-sp-seg"><b>{g.i+1}</b>: x = {spRange(R,g)}<br/>{spPlates(g)}<br/>{g.compact?'compact':'noncompact'}{tags[g.i].map((t,j)=><React.Fragment key={j}><br/><i>{t}</i></React.Fragment>)}</td>}
+          {k===0&&<td rowSpan={4} className="cr-sp-seg"><b>{g.i+1}</b>: x = {spRange(R,g)}<br/>{spPlates(g)}<br/>{g.oos?OOS_TXT+': PNA below the web':g.compact?'compact':'noncompact'}{tags[g.i].map((t,j)=><React.Fragment key={j}><br/><i>{t}</i></React.Fragment>)}</td>}
           <td>{r.lab}<br/><i>{r.use}</i></td>{r.c.map((v,j)=><td key={j} className="n">{v}</td>)}
-          {k===0&&<td rowSpan={4} className="n">{fmt(g.pl.Mp/12,0)}</td>}{k===0&&<td rowSpan={4} className="n">{fmt(g.pl.Dp,2)}</td>}</tr>)}</tbody>)}
+          {k===0&&<td rowSpan={4} className="n">{g.oos?OOS_TXT:fmt(g.pl.Mp/12,0)}</td>}{k===0&&<td rowSpan={4} className="n">{g.oos?OOS_TXT:fmt(g.pl.Dp,2)}</td>}</tr>)}</tbody>)}
       </table>
       <p className="cr-note">{spNote(R)} Web {fmt(R.sec.D,2)} × {fmt(R.sec.tw,4)} in constant. Bare steel carries DC1, 3n DC2 + DW, n LL + IM, cracked the DC2, DW and −LL where the moment is negative. Each check runs station by station on the segment at that station; the notes in the Segment column give the segment of each governing station.</p>
     </React.Fragment>);
@@ -5938,7 +6023,7 @@ function crModel(R,inp,o){
       </React.Fragment> : <ML s={Tx`DF_m=${nx(ld.dfm,3)}\qquad DF_v=${nx(ld.dfv,3)}\quad(\text{entered})`}/>}
       <ML s={Tx`M_{LL+IM}=DF_m\cdot${nx(ld.hl.M,0)}=${nx(ld.MLL,0)}\;\text{k-ft}\qquad V_{LL+IM}=DF_v\cdot${nx(ld.hl.V,1)}=${nx(ld.VLL,0)}\;\text{kip}`}/>
       <div className="mnote">Type (a)/(k) steel I-girder with concrete deck, LRFD 4.6.2.2 (multiple presence included in the formulas; the lever rule includes m = 1.2). Along the span the live-load moment and shear envelopes are the HL-93 influence-line values at each station times DF_m and DF_v.</div></div>);
-    const sM=at((R.flex.gov&&R.flex.gov.x)||L/2), sV=at(R.shearR.xGov||0);
+    const sM=at((R.flex.oos?R.stress.xGov:(R.flex.gov&&R.flex.gov.x))||L/2), sV=at(R.shearR.xGov||0);
     sub(s,'Load combinations','Table 3.4.1-1',<div className="cr-tab">
       <ML s={Tx`M_u=1.25(M_{DC1}+M_{DC2})+1.50M_{DW}+1.75M_{LL+IM}=1.25(${nx(sM.M1,0)}+${nx(sM.M2,0)})+1.50(${nx(sM.Mw,0)})+1.75(${nx(sM.Ml,0)})=${nx(sM.Mu,0)}\;\text{k-ft}\quad(x=${nx(sM.x,1)}')`}/>
       <ML s={Tx`V_u=\left|1.25(V_{DC1}+V_{DC2})+1.50V_{DW}\right|+1.75\left|V_{LL+IM}\right|=\left|1.25(${nx(sV.V1,1)}+${nx(sV.V2,1)})+1.50(${nx(sV.Vw,1)})\right|+1.75(${nx(Math.abs(sV.Vl),1)})=${nx(sV.Vu,1)}\;\text{kip}\quad(x=${nx(sV.x,1)}')`}/>
@@ -5973,14 +6058,14 @@ function crModel(R,inp,o){
         <div className="mnote">Design truck at midspan and the lane load on the short-term composite I = {fmt(R.cN.I,0)} in⁴ (midspan segment); all design lanes loaded and distributed equally to the girders.</div></div>,ck('LL defl'));
       if(all) sub(s,'All stations','6.10.4.2.2 · ksi',<CrT wide head={['x (ft)','f_bot (+LL)','f_top (+LL)','f_bot (−LL)','f_top (−LL)','Limit']}
         rows={ch.map(q=>[fmt(q.x,2),fmt(q.bP,2),fmt(q.tP,2),fmt(q.bN,2),fmt(q.tN,2),fmt(q.lim,2)])}/>); }
-    { const s=S('flex','Strength I flexure',{ref:'6.10.7 · 6.10.8'}), fc=R.flexCalc||[], i=crNear(fc,(R.flex.gov&&R.flex.gov.x)||0);
+    { const s=S('flex','Strength I flexure',{ref:'6.10.7 · 6.10.8'}), fc=R.flexCalc||[], i=crNear(fc,(R.flex.oos?R.stress.xGov:(R.flex.gov&&R.flex.gov.x))||0);
       sub(s,'Positive-flexure resistance','6.10.7',<CrTab el={flexPosCard(R)}/>,ck('Flexure','Ductility')); tag(s,'flex.pos');
-      if(fc[i]) sub(s,'Worked capacity at the governing +M station (x = '+fmt(fc[i].x,1)+' ft)','6.10.7 · 6.10.8',<CrTab el={flexWorkedCard(R,fc[i])}/>);
+      if(fc[i]) sub(s,'Worked capacity at the '+(R.flex.oos?'peak +M_u':'governing +M')+' station (x = '+fmt(fc[i].x,1)+' ft)','6.10.7 · 6.10.8',<CrTab el={flexWorkedCard(R,fc[i])}/>);
       if(R.hasNeg&&R.neg){ sub(s,'Negative flexure: pier region','6.10.8 · cracked section (6.10.1.1.1c)',<CrTab el={flexNegCard(R)}/>,ck('Neg flex','Neg tens','1% rebar')); tag(s,'flex.neg');
         const j=crNear(fc,R.neg.negBGov.x||0); if(fc[j]&&j!==i) sub(s,'Worked capacity at the governing −M station (x = '+fmt(fc[j].x,1)+' ft)','6.10.8',<CrTab el={flexWorkedCard(R,fc[j])}/>); }
       else if(!R.hasNeg) sub(s,'Negative flexure: pier region','not checked · no −M in this span',<p className="cr-note">{flexNoNegText(R)}</p>);
       if(all) sub(s,'All stations','6.10.7 · 6.10.8',<CrT wide head={['x (ft)','Seg','+M_u (k-ft)','+M basis','+M D/C','−M_u (k-ft)','−φM_n (k-ft)','−M D/C']}
-        rows={fc.map(q=>[fmt(q.x,2),q.si+1,fmt(q.pos.Mu,0),q.pos.compact?'M_p':'stress',fmt(q.pos.dc,3),fmt(q.Mun,0),fmt(q.neg.capNeg,0),q.hasNegDemand?fmt(Math.max(q.neg.dcBot,q.neg.dcTop),3):'—'])}/>); }
+        rows={fc.map(q=>[fmt(q.x,2),q.si+1,fmt(q.pos.Mu,0),q.pos.oos?OOS_TXT:q.pos.compact?'M_p':'stress',q.pos.oos?OOS_TXT:fmt(q.pos.dc,3),fmt(q.Mun,0),fmt(q.neg.capNeg,0),q.hasNegDemand?fmt(Math.max(q.neg.dcBot,q.neg.dcTop),3):'—'])}/>); }
     { const s=S('shear','Strength I shear',{ref:'6.10.9'}), sc=R.shearCalc||[], i=crNear(sc,R.shearR.xGov||0);
       sub(s,'Shear resistance','6.10.9',<CrTab el={shearResCard(R)}/>,ck('Shear','End panel')); tag(s,'shear.res');
       if(sc[i]) sub(s,'Worked shear at the governing station (x = '+fmt(sc[i].x,1)+' ft)','6.10.9.2 · 6.10.9.3',<CrTab el={shearWorkedCard(R,sc[i])}/>);
@@ -6012,7 +6097,8 @@ function crModel(R,inp,o){
     const rfL=(lab,C,dc,dw,ll,g,res,u)=>Tx`RF_{${lab}}=\frac{C-1.25\,DC-1.50\,DW}{${g}\,(LL+IM)}=\frac{${nx(C,u)}-1.25(${nx(dc,u)})-1.50(${nx(dw,u)})}{${g}(${nx(ll,u)})}=${nx(res,2)}`;
     sub(s,'Capacity factors','MBE 6A.4.2.1',<div className="cr-tab"><ML s={Tx`\phi_c\phi_s=\max(${nx(r.phiC,2)}\cdot${nx(r.phiS,2)},\;0.85)=${nx(r.phiCS,3)}`}/>
       <div className="mnote">Strength capacity C = φ_c·φ_s·φ·R_n (Service II not reduced). Inventory γ_LL = 1.75, Operating γ_LL = 1.35 (MBE Table 6A.4.2.2-1); dead load γ_DC = 1.25, γ_DW = 1.50. Each rating factor is evaluated at every station with that station’s capacity and demands; the lowest is reported.</div></div>);
-    sub(s,'Flexure, positive moment (x = '+fmt(r.flexX,1)+' ft)','MBE 6A.4.2 · 6.10.7',<div className="cr-tab">{r.flexBasis==='Mp'&&r.capM!=null? <React.Fragment>
+    if(r.oos) sub(s,'Flexure, positive moment','MBE 6A.4.2 · 6.10.7',<p className="cr-p cr-st-fail"><b>{OOS_TXT}.</b> {pnaOosText(R)} The positive-moment rating factors and the governing rating factor are not reported.</p>);
+    else sub(s,'Flexure, positive moment (x = '+fmt(r.flexX,1)+' ft)','MBE 6A.4.2 · 6.10.7',<div className="cr-tab">{r.flexBasis==='Mp'&&r.capM!=null? <React.Fragment>
         <ML s={rfL('Inv',r.capM,r.MDC,r.MDWr,r.MLLr,'1.75',r.flexInv,0)}/><ML s={rfL('Opr',r.capM,r.MDC,r.MDWr,r.MLLr,'1.35',r.flexOpr,0)}/>
         <div className="mnote">C = φ_cφ_sφ_f M_n of this station (k-ft); DC = M_DC1 + M_DC2, DW = M_DW, LL+IM = +M_LL+IM at x = {fmt(r.flexX,1)} ft.</div></React.Fragment>
       : <React.Fragment><ML s={Tx`RF=\min_{\text{flanges}}\frac{\phi_c\phi_s\phi_fF_n-(1.25f_{DC}+1.50f_{DW})}{\gamma_{LL}f_{LL}}\;\Rightarrow\;RF_{Inv}=${nx(r.flexInv,2)},\;RF_{Opr}=${nx(r.flexOpr,2)}`}/>
@@ -6026,12 +6112,14 @@ function crModel(R,inp,o){
       <div className="mnote">f_R = {fmt(R.stress.s2Coef,2)}R_hF_yf; f_D = unfactored dead-load stress in the direction of f_LL (ksi).</div></div>);
     const cell=v=>v===undefined?'—':fmt(v,2);
     sub(s,'Rating summary','MBE 6A',<React.Fragment><CrT wide head={['Limit state','Location','RF Inventory','RF Operating']} rows={[
-        ['Flexure +M ('+(r.flexBasis==='Mp'?'M_n basis':'stress basis')+')','x = '+fmt(r.flexX,1)+' ft',cell(r.flexInv),cell(r.flexOpr)],
+        r.oos? ['Flexure +M','—',OOS_TXT,OOS_TXT] : ['Flexure +M ('+(r.flexBasis==='Mp'?'M_n basis':'stress basis')+')','x = '+fmt(r.flexX,1)+' ft',cell(r.flexInv),cell(r.flexOpr)],
         ...(r.negInv!==undefined?[['Flexure −M (stress basis)','x = '+fmt(r.negX,1)+' ft',cell(r.negInv),cell(r.negOpr)]]:[]),
         ['Shear','x = '+fmt(r.shearX,1)+' ft',cell(r.shearInv),cell(r.shearOpr)],
         ...(r.servInv!==undefined?[['Service II flange ('+r.serv.tag+')','x = '+fmt(r.serv.x,1)+' ft',cell(r.servInv),cell(r.servOpr)]]:[])]}/>
-      <div className="cr-line cr-res"><div className="cr-d">Governing rating factor:</div><div className="cr-m">Inventory <b>{fmt(r.govInv,2)}</b>; Operating <b>{fmt(r.govOpr,2)}</b></div>
-        <div className={'cr-r'+(ok(r.govInv)?'':' cr-st-fail')}><b>{ok(r.govInv)?'RF ≥ 1.00':'RF < 1.00'}</b></div></div></React.Fragment>);
+      {r.oos? <div className="cr-line cr-res"><div className="cr-d">Governing rating factor:</div><div className="cr-m">not reported (positive-moment rating out of scope: plastic neutral axis below the web)</div>
+        <div className="cr-r cr-st-fail"><b>{OOS_TXT}</b></div></div>
+      : <div className="cr-line cr-res"><div className="cr-d">Governing rating factor:</div><div className="cr-m">Inventory <b>{fmt(r.govInv,2)}</b>; Operating <b>{fmt(r.govOpr,2)}</b></div>
+        <div className={'cr-r'+(ok(r.govInv)?'':' cr-st-fail')}><b>{ok(r.govInv)?'RF ≥ 1.00':'RF < 1.00'}</b></div></div>}</React.Fragment>);
   }
   // 15. Camber
   if(o.camber){ const s=S('camber','Camber (dead-load deflection)',{ref:'stage sections · double integration'});
@@ -6389,7 +6477,7 @@ function App(){
       const ext=inp.external;
       const extOk=!!(ext&&Array.isArray(ext.stations)&&ext.stations.length);
       const spansAll=extOk? externalSpans(ext) : [{idx:1,x0:0,x1:+inp.geom.L,len:+inp.geom.L}];
-      const stationsOut=[], warns=[];
+      const stationsOut=[], warns=[], oosSpans=[];
       spansAll.forEach(sp=>{
         let R2;
         if(extOk){
@@ -6397,6 +6485,7 @@ function App(){
           R2=computeAll({...inp, external:{...ext,_selSpan:sp}, geom:{...inp.geom,L:sp.len}, ...(secNew?{sec:secNew}:{})});
         } else R2=R;
         if(!R2.ok){ warns.push('Span '+sp.idx+' could not be evaluated: '+R2.error); return; }
+        if(R2.pnaOOS){ oosSpans.push(sp.idx); return; }   // PNA-OOS: no +φMn for that span, so nothing is published
         const phiVn=R2.shearR.phiv*R2.shearR.Vcr;                 // end-panel basis (conservative)
         (R2.chartFlex||[]).forEach(c=>{
           stationsOut.push({x:+(sp.x0+c.x).toFixed(3), span:sp.idx,
@@ -6407,6 +6496,7 @@ function App(){
             basis:c.compact?'Mp':'stress'});
         });
       });
+      if(oosSpans.length){ say('Capacity NOT sent to the MCT rating: span'+(oosSpans.length>1?'s ':' ')+oosSpans.join(', ')+' '+(oosSpans.length>1?'are':'is')+' outside the scope of this app. The plastic neutral axis falls below the web (bottom flange plastic force P_t exceeds P_s + P_c + P_w), which AASHTO LRFD 10th Ed. Table D6.1-1 and Art. D6.3.2 do not cover, so no positive-moment capacity is computed there. Revise the section (e.g. reduce the bottom flange or increase the deck/top flange). The capacity already in shared storage, if any, is left unchanged.'); return false; }
       if(!stationsOut.length){ say('No capacity stations could be computed.'); return false; }
       const supports=extOk&&ext.member?ext.member.supports:[0,+inp.geom.L];
       const payload={_schema:'bridge-design-capacity',schemaVersion:1,
@@ -6784,10 +6874,14 @@ function App(){
       <div className="statusband noprint">{(()=>{ const allOK=R.checks.every(c=>c.pass), gv=R.checks.reduce((a,c)=>(a==null||c.r>a.r)?c:a,null);
         return <React.Fragment>
           <span className={'verdict '+(allOK?'pass':'fail')}><span className="vd-ico">{allOK?'✓':'✕'}</span>{allOK?'All checks pass':'Not all checks pass'}</span>
+          {R.pnaOOS&&<span className="chip f" title={pnaOosText(R)}><b>!</b>Out of scope: PNA below the web (see the note below)</span>}
           {gv&&<span className="sb-gov" title={`${gv.n} · ${gv.ref}`}>Governing: <b>{gv.t||gv.n}</b><span className={'v '+(gv.pass?'p':'f')}>{fmt(gv.r,2)}</span></span>}
         </React.Fragment>; })()}
-        {R.checks.map((c,i)=><span key={i} className={'chip '+(c.pass?'p':'f')} title={`${c.n}: ${fmt(c.v,2)} vs ${fmt(c.lim,2)} ${c.u} · ${c.ref}`}><b>{c.pass?'✓':'✕'}</b>{c.t||c.n} <em>{fmt(c.r,2)}</em></span>)}
+        {R.checks.map((c,i)=>c.oos
+          ? <span key={i} className="chip f" title={`${c.n}: out of scope (plastic neutral axis below the web) · ${c.ref}`}><b>✕</b>{c.t||c.n} <em>{OOS_TXT}</em></span>
+          : <span key={i} className={'chip '+(c.pass?'p':'f')} title={`${c.n}: ${fmt(c.v,2)} vs ${fmt(c.lim,2)} ${c.u} · ${c.ref}`}><b>{c.pass?'✓':'✕'}</b>{c.t||c.n} <em>{fmt(c.r,2)}</em></span>)}
       </div>
+      {R.pnaOOS&&<div className="noprint" style={{padding:'10px 24px 0'}}><PnaOos R={R} style={{marginBottom:0}}/></div>}
       <div className="tabs noprint">{TABS.map(([k,l])=>
         <button key={k} className={'tab'+(tab===k?' on':'')+(LIVE[k]?'':' soon')} onClick={()=>setTab(k)}>{l}</button>)}</div>
 
