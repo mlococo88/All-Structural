@@ -4363,11 +4363,11 @@ function spRows(R,g){
     row('Bare steel','DC1 (noncomposite)',g.bare,g.bare.StSteel,null),
     row('Long-term composite, 3n = '+(3*n),'DC2 + DW',g.c3N,g.c3N.StSteel,g.c3N.StDeckTr),
     row('Short-term composite, n = '+n,'LL + IM',g.cN,g.cN.StSteel,g.cN.StDeckTr),
-    row('Cracked: steel + rebar','−M (DC2, DW, −LL) · '+(spAs(g)>0?'A_s = '+fmt(spAs(g),2)+' in² @ y = '+fmt(cr.yr,2)+' in':'no rebar included'),
+    row('Cracked: steel + rebar (6.10.1.1.1c)','−M (DC2, DW, −LL) · '+(spAs(g)>0?'A_s = '+fmt(spAs(g),2)+' in² @ y = '+fmt(cr.yr,2)+' in':'no rebar included'),
       cr,cr.St,spAs(g)>0?cr.Srb:null)];
 }
 const SP_HEAD=['A (in²)','ȳ from bot (in)','I (in⁴)','S_bot (in³)','S_top,steel (in³)','S_slab top (tr) / S_rebar (in³)'];
-const spNote=R=>'ȳ from the bottom of the bottom flange. S_slab top is I/(distance to the top of the slab) on the transformed section (concrete stress = M/(n·S)); S_rebar is I/(distance to the deck rebar) on the cracked section. Cracked section: steel + longitudinal deck reinforcement'+(spAs(R.segP[0])>0?' A_s = '+fmt(spAs(R.segP[0]),2)+' in² at '+fmt(spDtop(R,R.segP[0]),2)+' in below the top of the slab (y = its height above the bottom of the steel)':' (none included)')+', concrete neglected (crackedSection). '+(R.hasNeg?'The −M checks use it where the moment is negative.':'This span has no negative moment: the cracked rows are for information only.')+(R.deck.deckOn?'':' Deck not composite: the composite and cracked rows equal the bare steel.');
+const spNote=R=>'ȳ from the bottom of the bottom flange. S_slab top is I/(distance to the top of the slab) on the transformed section (concrete stress = M/(n·S)); S_rebar is I/(distance to the deck rebar) on the cracked section. Cracked section: steel + longitudinal deck reinforcement'+(spAs(R.segP[0])>0?' A_s = '+fmt(spAs(R.segP[0]),2)+' in² at '+fmt(spDtop(R,R.segP[0]),2)+' in below the top of the slab (y = its height above the bottom of the steel)':' (none included)')+', concrete neglected (6.10.1.1.1c; crackedSection). '+(R.hasNeg?'The −M checks use it where the moment is negative.':'This span has no negative moment: the cracked rows are for information only.')+(R.deck.deckOn?'':' Deck not composite: the composite and cracked rows equal the bare steel.');
 // Per-segment table (Section Props tab). Rows grouped by segment; the governing-segment tags are on the left.
 function SegPropsTable({R}){
   const tags=spGovTags(R);
@@ -4442,7 +4442,7 @@ function secDerivs(R,si0,right){
   const segTxt='segment '+(si+1)+(si===spMidIdx(R)?' (midspan)':'')+', x = '+fmt(sg.x0,1)+'–'+fmt(sg.x1,1)+' ft';
   const As=spAs(sg), bA=sg.bare;
   const trans=(
-    <Deriv title={'Derivation — transformed sections (n, 3n, cracked) · '+segTxt} refTag="LRFD 4.6.2.6 · 6.10.1.1.1b" right={right}>
+    <Deriv title={'Derivation — transformed sections (n, 3n, cracked) · '+segTxt} refTag="LRFD 4.6.2.6 · 6.10.1.1.1b · 6.10.1.1.1c" right={right}>
       <VarTable title={'Variables — section & materials ('+segTxt+')'} rows={[
         ['D','Web depth',sec.D,'in'],['t_w','Web thickness',sec.tw,'in'],
         ['b_ft','Top (compression) flange width',msDims.bft,'in'],['t_ft','Top flange thickness',msDims.tft,'in'],
@@ -4466,7 +4466,7 @@ function secDerivs(R,si0,right){
         <ML s={Tx`b_{tr}=\frac{b_{eff}}{3n}=\frac{${nx(beff,1)}}{${3*n}}=${nx(beff/(3*n),1)}\;\text{in}\qquad A_{deck,tr}=\frac{b_{eff}\,t_s}{3n}=${nx(beff*deck.ts/(3*n),1)}\;\text{in}^2`}/>
         <ML s={Tx`\bar y=${nx(c3N.ybar,2)}\;\text{in}\qquad I=${nx(c3N.I,0)}\;\text{in}^4\qquad S_{bot}=${nx(c3N.Sb,0)}\quad S_{top,st}=${nx(c3N.StSteel,0)}\;\text{in}^3`}/>
       </Step>
-      <Step d="Cracked section (steel + longitudinal deck reinforcement, concrete neglected)" r="parallel-axis theorem">
+      <Step d="Cracked section (steel + longitudinal deck reinforcement, concrete neglected)" r="parallel-axis theorem · AASHTO LRFD 6.10.1.1.1c">
         {As>0? <React.Fragment>
           <ML s={Tx`y_r=h_s+t_h+t_s-d_{top}=${nx(bA.hs,3)}+${nx(+deck.haunch,2)}+${nx(+deck.ts,2)}-${nx(spDtop(R,sg),2)}=${nx(cr.yr,2)}\;\text{in}\qquad A_s=${nx(As,2)}\;\text{in}^2`}/>
           <ML s={Tx`\bar y=\frac{A_{st}\bar y_{st}+A_s y_r}{A_{st}+A_s}=\frac{${nx(bA.A,2)}\cdot${nx(bA.ybar,3)}+${nx(As,2)}\cdot${nx(cr.yr,2)}}{${nx(bA.A,2)}+${nx(As,2)}}=${nx(cr.ybar,2)}\;\text{in}`}/>
@@ -4556,7 +4556,7 @@ function SectionTab({R,inp}){
         These are the midspan segment's properties (also the Mp, classification and ductility cards above); every check uses the segment at its own station: see the table below.</div>
     </Card>
 
-    <Card title="Section properties by flange segment" refTag="bare · 3n · n · cracked (steel + rebar) · where each check governs">
+    <Card title="Section properties by flange segment" refTag="bare · 3n · n · cracked (steel + rebar, 6.10.1.1.1c) · where each check governs">
       <SegPropsTable R={R}/>
       <div className="hint">{spNote(R)} Web {fmt(R.sec.D,2)}×{fmt(R.sec.tw,4)} in constant. Each check runs station by station on the segment at that station; the tags show the segment of each governing station.</div>
     </Card>
@@ -4569,7 +4569,7 @@ function SectionTab({R,inp}){
 
     {SD.cls}
 
-    {R.hasNeg&&R.neg&&<Card title={'Cracked negative-moment section (pier) — governing −M segment '+((R.neg.negBGov.si||0)+1)+(R.neg.negBGov.r>0?', x = '+fmt(R.neg.negBGov.x,1)+' ft':'')} refTag="steel + deck rebar · concrete neglected">
+    {R.hasNeg&&R.neg&&<Card title={'Cracked negative-moment section (pier) — governing −M segment '+((R.neg.negBGov.si||0)+1)+(R.neg.negBGov.r>0?', x = '+fmt(R.neg.negBGov.x,1)+' ft':'')} refTag="6.10.1.1.1c · steel + deck rebar · concrete neglected">
       <KV rows={[['Rebar As (in beff)',fmt(R.neg.AsProv,2),'in²'],
         ['I cracked',fmt(R.neg.cr.I,0),'in⁴'],['ȳ from bottom',fmt(R.neg.cr.ybar,2),'in'],
         ['S bot (comp. flange)',fmt(R.neg.cr.Sb,0),'in³'],['S top steel',fmt(R.neg.cr.St,0),'in³'],
@@ -4837,9 +4837,15 @@ function flexPosCard(R){ const f=R.flex, pl=R.pl, pass=f.flexDC<=1.0001;
       </React.Fragment>}
     </Card>);
 }
+// Note shown in place of the negative-flexure card when the span has no factored −M (R.hasNeg false). Display only.
+const flexNoNegText=R=>(R.useExt
+  ? 'No negative moment in this span: the imported demands produce no factored negative moment in this span.'
+  : 'Simple span — no negative moment. ST-Girder analyses a single simple span.')
+  +' The pier-region checks apply only where the factored moment is negative: Strength I negative flexure (6.10.8, on the steel + longitudinal deck reinforcement section, concrete neglected, 6.10.1.1.1c), the 1% longitudinal deck reinforcement (6.10.1.7), the Service II web bend-buckling check (−M) and, in a continuous span, the 1.3R_hM_y limit on M_n (6.10.7.1.2).'
+  +(R.useExt?'':' To check a continuous girder\'s pier region, import continuous demands from GirderDetail (Send to ST-Girder) or MCT/MIDAS.');
 function flexNegCard(R){ const ng=R.neg, b=ng.negBGov, sg=R.segP[b.si||0];
       const bPass=b.r<=1.0001, tPass=(ng.negTGov.r||0)<=1.0001;
-      return <Card title="Negative flexure — pier region" refTag="AASHTO 6.10.8 · cracked section (steel + rebar)">
+      return <Card title="Negative flexure — pier region" refTag="AASHTO 6.10.8 · cracked section (steel + rebar, 6.10.1.1.1c)">
       <div className="bigres">
         <div className={'br '+(bPass?'p':'f')}><div className="l">Bot flange (comp.) fbu/φFnc</div><div className="n">{fmt(b.r,2)}</div><div className="u">{fmt(b.fbu,1)} / {fmt(b.Fnc?b.Fnc.Fnc:0,1)} ksi @ {fmt(b.x,1)} ft</div></div>
         {ng.negTGov.r>0&&<div className={'br '+(tPass?'p':'f')}><div className="l">Top flange (tension)</div><div className="n">{fmt(ng.negTGov.r,2)}</div><div className="u">{fmt(ng.negTGov.fbu,1)} / {fmt(ng.negTGov.lim,1)} ksi</div></div>}
@@ -4849,7 +4855,7 @@ function flexNegCard(R){ const ng=R.neg, b=ng.negBGov, sg=R.segP[b.si||0];
         <ML s={Tx`F_{nc}=\min(F_{nc,FLB},F_{nc,LTB})=\min(${nx(b.Fnc.FncFLB,1)},${nx(b.Fnc.FncLTB,1)})=${nx(b.Fnc.Fnc,1)}\;\text{ksi}\quad(L_b=${nx(R.geom.Lb,0)}',\;L_p=${nx(b.Fnc.Lp,1)}',\;L_r=${nx(b.Fnc.Lr,1)}')`}/>
         <ML s={Tx`f_{bu}=${nx(b.fbu,1)}\le\phi_fF_{nc}=${nx(b.Fnc.Fnc,1)}\;\text{ksi}\;\Rightarrow\;\frac{D}{C}=${nx(b.r,3)}\;${bPass?'\\checkmark':'\\text{N.G.}'}`}/>
       </React.Fragment>}
-      <div className="hint">Over the pier the deck is in tension: the section is <b>steel + longitudinal reinforcement</b> (concrete neglected), the <b>bottom</b> flange is in compression braced only at the cross-frames (L_b = {fmt(R.geom.Lb,0)} ft), and F_nc is the smaller of flange local buckling and lateral-torsional buckling with R_b from the cracked-section web depth in compression (D_c = {fmt(sg.cr.DcNeg,1)} in). DC1 acts on the bare steel section; DC2, DW, and −LL on the cracked section. Peak −M_u = <b>{fmt(ng.MunPeak,0)} k-ft</b>. Moment-gradient factor C_b taken as 1.0 (conservative).</div>
+      <div className="hint">Over the pier the deck is in tension: the section is <b>steel + longitudinal reinforcement</b> (concrete neglected, 6.10.1.1.1c), the <b>bottom</b> flange is in compression braced only at the cross-frames (L_b = {fmt(R.geom.Lb,0)} ft), and F_nc is the smaller of flange local buckling and lateral-torsional buckling with R_b from the cracked-section web depth in compression (D_c = {fmt(sg.cr.DcNeg,1)} in). DC1 acts on the bare steel section; DC2, DW, and −LL on the cracked section. Peak −M_u = <b>{fmt(ng.MunPeak,0)} k-ft</b>. Moment-gradient factor C_b taken as 1.0 (conservative).</div>
     </Card>;
 }
 function FlexTab({R}){
@@ -4906,7 +4912,7 @@ function FlexTab({R}){
       <KV rows={[['Peak +M_u',fmt(f.MuPeak,0),'k-ft'],['Governing station',fmt(f.gov&&f.gov.x||0,1),'ft'],
         ['f_bu top flange',fmt(f.fbuTop,1),'ksi'],['f_bu bottom flange',fmt(f.fbuBot,1),'ksi']]}/>
     </Card>
-    {R.hasNeg&&flexNegCard(R)}
+    {R.hasNeg?flexNegCard(R):<Card title="Negative flexure — pier region" refTag="not checked · no −M in this span"><div className="hint">{flexNoNegText(R)}</div></Card>}
   </div>);
 }
 
@@ -5624,7 +5630,7 @@ function NomenclatureTab(){
 const CR_OPTS=[['inputs','Inputs'],['summary','Summary'],['props','Section properties'],['demands','Demands'],
   ['checks','Limit states, worked'],['rating','Rating'],['camber','Camber'],['drawing','Drawings'],['method','Appendix: method']];
 const CR_REFS=[
-  ['AASHTO LRFD','AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024): Art. 2.5.2.6.2 (live-load deflection); Section 3 (load factors Table 3.4.1-1, HL-93 and fatigue truck 3.6.1, dynamic load allowance 3.6.2, fatigue ADTT 3.6.1.4); Section 4 (distribution factors 4.6.2.2, effective width 4.6.2.6, equivalent strips 4.6.2.1 and Table A4-1); Art. 5.4.2.4 (E_c); Section 6 (fatigue 6.6.1, I-section flexural members 6.10 with Appendix D6); Art. 9.7.3 (deck reinforcement); Section 13 (deck overhang)'],
+  ['AASHTO LRFD','AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024): Art. 2.5.2.6.2 (live-load deflection); Section 3 (load factors Table 3.4.1-1, HL-93 and fatigue truck 3.6.1, dynamic load allowance 3.6.2, fatigue ADTT 3.6.1.4); Section 4 (distribution factors 4.6.2.2, effective width 4.6.2.6, equivalent strips 4.6.2.1 and Table A4-1); Art. 5.4.2.4 (E_c); Section 6 (fatigue 6.6.1, I-section flexural members 6.10 with Appendix D6; cracked section in negative flexure 6.10.1.1.1c); Art. 9.7.3 (deck reinforcement); Section 13 (deck overhang)'],
   ['AASHTO MBE','AASHTO Manual for Bridge Evaluation, Section 6A (LRFR design-load rating: Art. 6A.4.2, Tables 6A.4.2.2-1, 6A.4.2.3-1, 6A.4.2.4-1, Art. 6A.6.4.2.2). ST-Girder does not state the MBE edition: verify.']];
 function crOpts(){ const r=(loadUI().rpt)||{}; const o={};
   CR_OPTS.forEach(([k])=>o[k]= r[k]!==false && !(k==='method'&&!r.method));
@@ -5759,13 +5765,13 @@ function crModel(R,inp,o){
   if(o.props){ const s=S('props','Section properties'), SD=secDerivs(R);
     const pr=(lab,q,tr)=>[lab,fmt(q.A,1),fmt(q.ybar,2),fmt(q.I,0),fmt(q.Sb,0),fmt(q.StSteel,0),tr||'—'];
     const mi=spMidIdx(R), gm=R.segP[mi], tags=spGovTags(R), ngs=R.hasNeg&&R.neg? (R.neg.negBGov.si||0) : null;
-    sub(s,'Elastic section properties at midspan (segment '+(mi+1)+', x = '+fmt(gm.x0,1)+'–'+fmt(gm.x1,1)+' ft)','bare · 3n · n · cracked',<React.Fragment>
+    sub(s,'Elastic section properties at midspan (segment '+(mi+1)+', x = '+fmt(gm.x0,1)+'–'+fmt(gm.x1,1)+' ft)','bare · 3n · n · cracked (6.10.1.1.1c)',<React.Fragment>
       <CrT wide head={['Section','A (in²)','ȳ from bot (in)','I (in⁴)','S_bot (in³)','S_top,st (in³)','Deck S_tr (in³)']}
         rows={[pr('Bare steel (noncomposite)',R.bare),pr('Long-term composite (3n = '+(3*R.n)+')',R.c3N,R.c3N.StDeckTr?fmt(R.c3N.StDeckTr,0):'—'),pr('Short-term composite (n = '+R.n+')',R.cN,R.cN.StDeckTr?fmt(R.cN.StDeckTr,0):'—')]}/>
       {R.hasNeg&&R.neg&&<CrKV rows={[['Cracked section (steel + deck rebar, governing −M segment '+(ngs+1)+(R.neg.negBGov.r>0?', x = '+fmt(R.neg.negBGov.x,1)+' ft':'')+'): I',fmt(R.neg.cr.I,0),'in⁴'],['ȳ from bottom',fmt(R.neg.cr.ybar,2),'in'],['S bot / S top steel',fmt(R.neg.cr.Sb,0)+' / '+fmt(R.neg.cr.St,0),'in³'],['D_c web in compression (−M)',fmt(R.neg.cr.DcNeg,1),'in'],['Rebar A_s / 1% minimum (6.10.1.7)',fmt(R.neg.AsProv,2)+' / '+fmt(R.neg.AsMin1pct,2),'in²']]}/>}
-      <p className="cr-note">DC1 on the bare steel; DC2 + DW on the long-term (3n) composite; live load on the short-term (n) composite; −M regions on the cracked steel + rebar section. b_eff = {fmt(R.beff,1)} in; n = E_s/E_c = {fmt(R.nRaw,2)} → {R.n} (6.10.1.1.1b); E_c = {fmt(R.EcDeck,0)} ksi. These are the midspan segment's properties; each check uses the segment at its own station (next table).</p>
+      <p className="cr-note">DC1 on the bare steel; DC2 + DW on the long-term (3n) composite; live load on the short-term (n) composite; −M regions on the cracked steel + rebar section (6.10.1.1.1c). b_eff = {fmt(R.beff,1)} in; n = E_s/E_c = {fmt(R.nRaw,2)} → {R.n} (6.10.1.1.1b); E_c = {fmt(R.EcDeck,0)} ksi. These are the midspan segment's properties; each check uses the segment at its own station (next table).</p>
     </React.Fragment>);
-    sub(s,'Section properties by flange segment','bare · 3n · n · cracked',<React.Fragment>
+    sub(s,'Section properties by flange segment','bare · 3n · n · cracked (6.10.1.1.1c)',<React.Fragment>
       <table className="cr-tbl cr-wide cr-sp"><thead><tr><th>Segment</th><th>Section</th>{SP_HEAD.map(h=><th key={h}>{h}</th>)}<th>M_p (k-ft)</th><th>D_p (in)</th></tr></thead>
         {R.segP.map(g=><tbody key={g.i}>{spRows(R,g).map((r,k)=><tr key={k}>
           {k===0&&<td rowSpan={4} className="cr-sp-seg"><b>{g.i+1}</b>: x = {spRange(R,g)}<br/>{spPlates(g)}<br/>{g.compact?'compact':'noncompact'}{tags[g.i].map((t,j)=><React.Fragment key={j}><br/><i>{t}</i></React.Fragment>)}</td>}
@@ -5774,7 +5780,7 @@ function crModel(R,inp,o){
       </table>
       <p className="cr-note">{spNote(R)} Web {fmt(R.sec.D,2)} × {fmt(R.sec.tw,4)} in constant. Bare steel carries DC1, 3n DC2 + DW, n LL + IM, cracked the DC2, DW and −LL where the moment is negative. Each check runs station by station on the segment at that station; the notes in the Segment column give the segment of each governing station.</p>
     </React.Fragment>);
-    sub(s,'Transformed sections (n, 3n, cracked), '+SD.segTxt,'LRFD 4.6.2.6 · 6.10.1.1.1b',<CrTab el={SD.trans}/>);
+    sub(s,'Transformed sections (n, 3n, cracked), '+SD.segTxt,'LRFD 4.6.2.6 · 6.10.1.1.1b · 6.10.1.1.1c',<CrTab el={SD.trans}/>);
     sub(s,'Plastic moment Mₚ and PNA, '+SD.segTxt,'Appendix D6.1',<CrTab el={SD.plastic}/>);
     sub(s,'Classification and stability factors, '+SD.segTxt,'6.10.1.10 · 6.10.6.2.2',<CrTab el={SD.cls}/>);
     sub(s,'Section proportion limits','6.10.2 · worst segment governs',<p className="cr-note">Web D/t_w ≤ 150 (6.10.2.1.1); flanges b_f/2t_f ≤ 12, b_f ≥ D/6, t_f ≥ 1.1t_w, 0.1 ≤ I_yc/I_yt ≤ 10 (6.10.2.2), checked for every flange segment.</p>,
@@ -5838,8 +5844,9 @@ function crModel(R,inp,o){
     { const s=S('flex','Strength I flexure',{ref:'6.10.7 · 6.10.8'}), fc=R.flexCalc||[], i=crNear(fc,(R.flex.gov&&R.flex.gov.x)||0);
       sub(s,'Positive-flexure resistance','6.10.7',<CrTab el={flexPosCard(R)}/>,ck('Flexure','Ductility'));
       if(fc[i]) sub(s,'Worked capacity at the governing +M station (x = '+fmt(fc[i].x,1)+' ft)','6.10.7 · 6.10.8',<CrTab el={flexWorkedCard(R,fc[i])}/>);
-      if(R.hasNeg&&R.neg){ sub(s,'Negative flexure: pier region','6.10.8 · cracked section',<CrTab el={flexNegCard(R)}/>,ck('Neg flex','Neg tens','1% rebar'));
+      if(R.hasNeg&&R.neg){ sub(s,'Negative flexure: pier region','6.10.8 · cracked section (6.10.1.1.1c)',<CrTab el={flexNegCard(R)}/>,ck('Neg flex','Neg tens','1% rebar'));
         const j=crNear(fc,R.neg.negBGov.x||0); if(fc[j]&&j!==i) sub(s,'Worked capacity at the governing −M station (x = '+fmt(fc[j].x,1)+' ft)','6.10.8',<CrTab el={flexWorkedCard(R,fc[j])}/>); }
+      else if(!R.hasNeg) sub(s,'Negative flexure: pier region','not checked · no −M in this span',<p className="cr-note">{flexNoNegText(R)}</p>);
       if(all) sub(s,'All stations','6.10.7 · 6.10.8',<CrT wide head={['x (ft)','Seg','+M_u (k-ft)','+M basis','+M D/C','−M_u (k-ft)','−φM_n (k-ft)','−M D/C']}
         rows={fc.map(q=>[fmt(q.x,2),q.si+1,fmt(q.pos.Mu,0),q.pos.compact?'M_p':'stress',fmt(q.pos.dc,3),fmt(q.Mun,0),fmt(q.neg.capNeg,0),q.hasNegDemand?fmt(Math.max(q.neg.dcBot,q.neg.dcTop),3):'—'])}/>); }
     { const s=S('shear','Strength I shear',{ref:'6.10.9'}), sc=R.shearCalc||[], i=crNear(sc,R.shearR.xGov||0);
@@ -5904,7 +5911,7 @@ function crModel(R,inp,o){
   // 17. Appendix
   if(o.method){ S('method','Appendix: method and notation',{brk:true,body:<div className="cr-man">
     <h3>Method</h3><ul className="cr-ul">
-      <li>Stresses accumulate by construction stage on the section active at each stage: DC1 (self-weight, wet deck, added DC1) on the bare steel; DC2 and DW on the long-term composite (3n); live load on the short-term composite (n); in −M regions the cracked steel + longitudinal rebar section (concrete neglected).</li>
+      <li>Stresses accumulate by construction stage on the section active at each stage: DC1 (self-weight, wet deck, added DC1) on the bare steel; DC2 and DW on the long-term composite (3n); live load on the short-term composite (n); in −M regions the cracked steel + longitudinal rebar section (concrete neglected; 6.10.1.1.1c).</li>
       <li>Stations: the span tenth-and-twentieth points plus both sides of every flange transition; each check is evaluated at every station with that station’s plates and demands, and the worst ratio is reported with its location.</li>
       <li>Strength I = 1.25 DC + 1.50 DW + 1.75 (LL+IM); Service II = DC + DW + 1.30 (LL+IM); constructibility = 1.25 DC + 1.50 construction live load; maximum load factors only. φ_f = φ_v = 1.0, φ_sc = 0.85.</li>
       <li>Positive flexure: compact composite sections on the plastic moment (6.10.7.1, with the ductility reduction and, in continuous spans, 1.3R_hM_y); noncompact or noncomposite sections on the flange stresses (6.10.7.2, 6.10.8). Negative flexure: bottom flange F_nc = min(FLB, LTB) over L_b with C_b = 1.0 (6.10.8.2). Shear: end-panel C·V_p everywhere (conservative), tension field shown for interior panels.</li>
