@@ -66,6 +66,12 @@ See `AUDIT.md` for the current inventory, known issues, and the work plan, and
 
 - Preserve each tool's existing UI layout and behavior unless the task
   specifically asks to change it.
+- Show the work and link to it (engineer's guideline, 2026-10-14): every
+  computed value is worked somewhere in the tool (equation symbolically →
+  values substituted → result). Wherever a value is used or quoted away from
+  where it is worked (another tab, module or report section), link to that
+  derivation: an in-app link to the tab, module or card on screen, and a
+  "see §x.y" reference in the printed calculation report.
 
 ## 7. Scope of changes
 
