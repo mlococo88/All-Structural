@@ -137,6 +137,18 @@ table.eng td.ok{color:var(--pass);font-weight:600}
 table.eng td.no{color:var(--fail);font-weight:600}
 table.eng tr.tot td{border-top:1px solid var(--border-hi);font-weight:600}
 table.eng tr.row-fail td{background:#fdf6f5}
+/* Section Props: per-segment table and the x picker (display only) */
+table.eng.sp-tbl td.sp-seg{text-align:left;vertical-align:top;white-space:normal;min-width:190px;border-right:1px solid var(--line2);font-size:12.5px;color:var(--text-dim);line-height:1.45}
+table.eng.sp-tbl td.sp-seg b{color:var(--text);font-size:13px}
+table.eng.sp-tbl tr.sp-first td{border-top:1px solid var(--border-hi)}
+table.eng.sp-tbl tbody tr:first-child td{border-top:none}
+.sp-tag{display:block;width:max-content;max-width:100%;margin-top:4px;padding:1px 7px;border-radius:2px;background:var(--blue-dim);color:var(--blue);font-family:var(--cond);font-size:12px;font-weight:600;white-space:normal}
+.sp-use{font-size:11.5px;color:var(--muted)}
+table.eng.sp-at td:first-child{white-space:normal}
+table.eng.sp-tbl th,table.eng.sp-at th{white-space:normal;vertical-align:bottom} table.eng.sp-tbl th:nth-child(2){text-align:left}
+.sp-ctl{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;margin-bottom:10px;font-size:13px;color:var(--text-dim)}
+.sp-ctl label{display:flex;align-items:center;gap:6px}
+.sp-range{flex:1 1 260px} .sp-range input{flex:1;min-width:160px}
 .scrollx{overflow-x:auto}
 .badge{display:inline-flex;align-items:center;padding:2px 9px;border-radius:2px;font-family:var(--cond);font-size:12px;font-weight:600;letter-spacing:.01em;white-space:nowrap}
 .badge.pass{background:var(--pass-dim);color:var(--pass)}
@@ -433,6 +445,7 @@ table.eng tr.row-fail td{background:#fdf6f5}
 .crdoc .cr-tbl th, .crdoc .cr-body .tbl th { background: #e9e9e9; font-weight: 700; text-align: center; }
 .crdoc .cr-tbl td.n, .crdoc .cr-body .tbl td.val { text-align: right; font-variant-numeric: tabular-nums; }
 .crdoc .cr-tbl tr { break-inside: avoid; } .crdoc .cr-gov td { font-weight: 700; }
+.crdoc .cr-sp td.cr-sp-seg { vertical-align: top; font-size: 9pt; line-height: 1.3; } .crdoc .cr-sp tbody { break-inside: avoid; }
 .crdoc .cr-body .tscroll { overflow: visible; }
 /* equation blocks from the Combinations tab, recast as calculation lines */
 .crdoc .cr-body .eq-block { display: grid; grid-template-columns: 2.15in 1fr; gap: 0 12pt; border: 0; background: none; box-shadow: none; margin: 0; padding: 4pt 0; break-inside: avoid; border-radius: 0; }
@@ -4318,14 +4331,119 @@ function InputsTab({inp,set,R}){
   </div>);
 }
 
+/* Section properties by flange segment and at any location x (display only, 2026-10-14). Every value shown is a
+   segP entry built by computeAll: elasticProps (bare, n, 3n), crackedSection (steel + deck rebar) and plasticMoment,
+   i.e. the same objects the checks read station by station. Nothing here changes which section a check uses. */
+const spMidIdx=R=>{ const i=R.segP.findIndex(g=>R.geom.L/2<=g.x1+1e-9); return i<0?0:i; };   // same pick as segMid
+const spSegAt=(segP,x)=>{ for(let i=0;i<segP.length;i++) if(x<=segP[i].x1+1e-9) return i; return segP.length-1; };   // = computeAll segIdxAt
+const spX0=R=>(R.useExt&&R.ext&&R.ext.sel&&isFinite(+R.ext.sel.x0))? +R.ext.sel.x0 : 0;   // span start along the member
+const spRange=(R,g)=>fmt(g.x0,1)+'–'+fmt(g.x1,1)+' ft'+(R.useExt&&spX0(R)?' (member '+fmt(spX0(R)+g.x0,1)+'–'+fmt(spX0(R)+g.x1,1)+')':'');
+const spPlates=g=>'top '+fmt(g.dims.bft,2)+'×'+fmt(g.dims.tft,3)+' · bot '+fmt(g.dims.bfb,2)+'×'+fmt(g.dims.tfb,3)+' in';
+// Which segment each check's governing station lies in (station.si is the segment the check used there).
+function spGovTags(R){
+  const t=R.segP.map(()=>[]), add=(si,s)=>{ if(si!=null&&t[si]) t[si].push(s); };
+  const siX=x=>{ const st=(R.stations||[]).find(s=>s.x===x); return st? st.si : spSegAt(R.segP,x); };
+  add(spMidIdx(R),'midspan: summary cards, drawings, derivations');
+  const s2=R.stress&&R.stress.s2Gov; if(s2&&s2.r>0) add(s2.si,'Service II gov. @ '+fmt(s2.x,1)+' ft');
+  const c=R.constr; if(c&&c.xGov!=null&&c.fbuTopC) add(siX(c.xGov),'constructibility gov. @ '+fmt(c.xGov,1)+' ft');
+  const fg=R.flex&&R.flex.gov; if(fg&&fg.r>0) add(fg.si,'Strength +M gov. @ '+fmt(fg.x,1)+' ft');
+  const ng=R.hasNeg&&R.neg&&R.neg.negBGov; if(ng&&ng.r>0) add(ng.si,'Strength −M gov. @ '+fmt(ng.x,1)+' ft (cracked)');
+  const fa=R.fatigue; if(fa&&fa.xGov!=null) add(siX(fa.xGov),'fatigue gov. @ '+fmt(fa.xGov,1)+' ft');
+  return t;
+}
+// Deck rebar in the cracked section of a segment (0 when none is included: no A_s, or deck not composite),
+// and its depth below the top of the slab, read back from crackedSection's own result.
+const spAs=g=>{ const a=g.cr.A-g.bare.A; return a>1e-9? a : 0; };
+const spDtop=(R,g)=>g.bare.hs+(+R.deck.haunch)+(+R.deck.ts)-g.cr.yr;
+// The four property sets of one segment, as display strings (shared by the segment table, the x picker and the report).
+function spRows(R,g){
+  const n=R.n, cr=g.cr;
+  const row=(lab,use,p,St,Sx)=>({lab,use,c:[fmt(p.A,1),fmt(p.ybar,2),fmt(p.I,0),fmt(p.Sb,0),fmt(St,0),Sx==null?'—':fmt(Sx,0)]});
+  return [
+    row('Bare steel','DC1 (noncomposite)',g.bare,g.bare.StSteel,null),
+    row('Long-term composite, 3n = '+(3*n),'DC2 + DW',g.c3N,g.c3N.StSteel,g.c3N.StDeckTr),
+    row('Short-term composite, n = '+n,'LL + IM',g.cN,g.cN.StSteel,g.cN.StDeckTr),
+    row('Cracked: steel + rebar','−M (DC2, DW, −LL) · '+(spAs(g)>0?'A_s = '+fmt(spAs(g),2)+' in² @ y = '+fmt(cr.yr,2)+' in':'no rebar included'),
+      cr,cr.St,spAs(g)>0?cr.Srb:null)];
+}
+const SP_HEAD=['A (in²)','ȳ from bot (in)','I (in⁴)','S_bot (in³)','S_top,steel (in³)','S_slab top (tr) / S_rebar (in³)'];
+const spNote=R=>'ȳ from the bottom of the bottom flange. S_slab top is I/(distance to the top of the slab) on the transformed section (concrete stress = M/(n·S)); S_rebar is I/(distance to the deck rebar) on the cracked section. Cracked section: steel + longitudinal deck reinforcement'+(spAs(R.segP[0])>0?' A_s = '+fmt(spAs(R.segP[0]),2)+' in² at '+fmt(spDtop(R,R.segP[0]),2)+' in below the top of the slab (y = its height above the bottom of the steel)':' (none included)')+', concrete neglected (crackedSection). '+(R.hasNeg?'The −M checks use it where the moment is negative.':'This span has no negative moment: the cracked rows are for information only.')+(R.deck.deckOn?'':' Deck not composite: the composite and cracked rows equal the bare steel.');
+// Per-segment table (Section Props tab). Rows grouped by segment; the governing-segment tags are on the left.
+function SegPropsTable({R}){
+  const tags=spGovTags(R);
+  return <div className="scrollx"><table className="eng sp-tbl">
+    <thead><tr><th>Segment</th><th>Section</th>{SP_HEAD.map(h=><th key={h}>{h}</th>)}<th>Mp (k-ft)</th><th>Dp (in)</th></tr></thead>
+    <tbody>{R.segP.map(g=>spRows(R,g).map((r,k)=><tr key={g.i+'-'+k} className={k===0?'sp-first':''}>
+      {k===0&&<td rowSpan={4} className="sp-seg"><b>Segment {g.i+1}</b><div>x = {spRange(R,g)}</div><div>{spPlates(g)}</div>
+        <div>web {fmt(g.dims.D,2)}×{fmt(g.dims.tw,4)} in · {g.compact?'compact':'noncompact'}</div>
+        {tags[g.i].map((s,j)=><span key={j} className="sp-tag">{s}</span>)}</td>}
+      <td style={{textAlign:'left'}}>{r.lab}<div className="sp-use">{r.use}</div></td>
+      {r.c.map((v,j)=><td key={j}>{v}</td>)}
+      {k===0&&<td rowSpan={4}>{fmt(g.pl.Mp/12,0)}</td>}{k===0&&<td rowSpan={4}>{fmt(g.pl.Dp,2)}</td>}
+    </tr>))}</tbody></table></div>;
+}
+// Properties at any x along the span (and any span of a multi-span import). The position is a UI preference
+// (stgirder.ui.v1, key propsAt = {span, x}); nothing goes into the session data.
+function PropsAtX({R,inp}){
+  const ext=inp&&inp.external;
+  const spans=(R.useExt&&R.ext&&ext)? externalSpans(ext) : [];
+  const curIdx=(R.useExt&&R.ext&&R.ext.sel)? R.ext.sel.idx : null;
+  const ui0=(()=>{ try{ return loadUI().propsAt||{}; }catch(e){ return {}; } })();
+  const [spIdx,setSpIdx]=useState(()=>spans.some(s=>s.idx===ui0.span)? ui0.span : curIdx);
+  const [xIn,setXIn]=useState(()=>(ui0.x!=null&&isFinite(+ui0.x))? +ui0.x : null);
+  const sp=spans.find(s=>s.idx===spIdx);
+  const other=!!(sp&&spIdx!==curIdx);
+  const Rx=useMemo(()=>{ if(!other) return R;
+    try{ const secNew=zonesToSec(ext,sp,inp.sec);
+      return computeAll({...inp, external:{...ext,_selSpan:sp}, geom:{...inp.geom,L:sp.len}, ...(secNew?{sec:secNew}:{})}); }
+    catch(e){ return {ok:false,error:e.message}; } },[R,inp,spIdx,other]);
+  const L=Rx.ok? +Rx.geom.L : +R.geom.L;
+  const x=Math.min(Math.max(xIn==null? L/2 : xIn,0),L);
+  const save=(s,xv)=>{ try{ saveUI({propsAt:{span:s,x:xv}}); }catch(e){} };
+  const setX=v=>{ const xv=Math.min(Math.max(+v||0,0),L); setXIn(xv); save(spIdx,xv); };
+  const pickSpan=v=>{ const s=+v; setSpIdx(s); setXIn(null); save(s,null); };
+  const ctl={fontFamily:'var(--sans)',fontSize:13,height:28,border:'1px solid var(--border-hi)',borderRadius:'var(--r)',padding:'0 8px',background:'var(--sheet)',color:'var(--text)'};
+  if(!Rx.ok) return <Card title="Section properties at a location" refTag="pick x along the span">
+    <div className="callout" style={{marginTop:0}}>Span {spIdx} could not be evaluated: {Rx.error}</div></Card>;
+  const si=spSegAt(Rx.segP,x), g=Rx.segP[si], rows=spRows(Rx,g), x0=other? +sp.x0 : spX0(Rx);
+  return <Card title="Section properties at a location" refTag="pick x along the span · all four sets">
+    <div className="sp-ctl">
+      {spans.length>1&&<label>Span <select value={spIdx==null?'':spIdx} onChange={e=>pickSpan(e.target.value)} style={ctl}>
+        {spans.map(s=><option key={s.idx} value={s.idx}>Span {s.idx} ({fmt(s.x0,0)}–{fmt(s.x1,0)} ft){s.idx===curIdx?' · design span':''}</option>)}</select></label>}
+      <label className="sp-range">x <input type="range" min={0} max={L} step={L/1000} value={x} onChange={e=>setX(e.target.value)} aria-label="x along the span (ft)"/></label>
+      <label><input type="number" min={0} max={L} step={0.5} value={+x.toFixed(3)} onChange={e=>setX(e.target.value)} style={{...ctl,width:96}}/> ft</label>
+      <button className="btn sm" onClick={()=>setX(L/2)}>Midspan</button>
+    </div>
+    <div className="kv sp-kv">
+      {[['Location','x = '+fmt(x,2)+' ft of L = '+fmt(L,2)+' ft'+(spans.length?' · member x = '+fmt(x0+x,2)+' ft (span '+(other?spIdx:curIdx)+')':'')],
+        ['Segment',(si+1)+' of '+Rx.segP.length+' · x = '+fmt(g.x0,1)+'–'+fmt(g.x1,1)+' ft'+(Rx.segP.length>1&&Math.abs(x-g.x1)<1e-9&&si<Rx.segP.length-1?' (at the splice: left segment, as the checks)':'')],
+        ['Plates',spPlates(g)+' · web '+fmt(g.dims.D,2)+'×'+fmt(g.dims.tw,4)+' in'],
+        ['Effective flange width b_eff',fmt(Rx.beff,1)+' in (constant along the span)'],
+        ['Modular ratio',(Rx.deck.deckOn?'n = '+Rx.n+' (E_s/E_c = '+fmt(Rx.nRaw,2)+'), 3n = '+(3*Rx.n):'— (deck not composite)')],
+        ['Plastic moment',fmt(g.pl.Mp/12,0)+' k-ft · D_p = '+fmt(g.pl.Dp,2)+' in · '+(g.compact?'compact':'noncompact')]]
+        .map((r,i)=><React.Fragment key={i}><span className="k">{r[0]}</span><span className="dots"></span><span className="v">{r[1]}</span></React.Fragment>)}
+    </div>
+    <div className="scrollx" style={{marginTop:10}}><table className="eng sp-at">
+      <thead><tr><th>Section at x = {fmt(x,2)} ft</th>{SP_HEAD.map(h=><th key={h}>{h}</th>)}</tr></thead>
+      <tbody>{rows.map((r,k)=><tr key={k}><td>{r.lab}<div className="sp-use">{r.use}</div></td>{r.c.map((v,j)=><td key={j}>{v}</td>)}</tr>)}</tbody></table></div>
+    <div className="hint">{other?<span>Span {spIdx} is not the design span: its plates are the imported section zones, as ST-Girder would take them if this span were designed (the checks stay on span {curIdx}). </span>:null}
+      These are the properties of segment {si+1}, the same values as its rows in the table above; the checks at a station in this segment use them.</div>
+  </Card>;
+}
+
 /* Section Props derivations, shared by the Section Props tab and the calculation-sheet report (display only;
-   moved out of SectionTab unchanged so both show the same worked steps). */
-function secDerivs(R){
-  const {sec,matR,deck,cN,pl,n,nRaw,EcDeck,beff,compact,compactWeb,compactMat,compactDtw,lambdaPw,Rh,Rb,IycIyt}=R;
-  const msDims=(R.segP.find(g=>R.geom.L/2<=g.x1+1e-9)||R.segP[0]).dims;   // midspan-segment flange plates
+   moved out of SectionTab unchanged so both show the same worked steps). si = flange segment to work (default: the
+   midspan segment, as before); right = the segment picker shown on the tab. */
+function secDerivs(R,si0,right){
+  const {sec,matR,deck,n,nRaw,EcDeck,beff,compactMat,compactDtw,lambdaPw}=R;
+  const si=(si0!=null&&R.segP[si0])? si0 : spMidIdx(R), sg=R.segP[si];
+  const {cN,c3N,cr,pl,compact,compactWeb,Rh,Rb}=sg, IycIyt=sg.Iyc/sg.Iyt;
+  const msDims=sg.dims;   // flange plates of the worked segment
+  const segTxt='segment '+(si+1)+(si===spMidIdx(R)?' (midspan)':'')+', x = '+fmt(sg.x0,1)+'–'+fmt(sg.x1,1)+' ft';
+  const As=spAs(sg), bA=sg.bare;
   const trans=(
-    <Deriv title="Derivation — composite transformed section (short-term, n)" refTag="LRFD 4.6.2.6 · 6.10.1.1.1b">
-      <VarTable title="Variables — section & materials (midspan segment)" rows={[
+    <Deriv title={'Derivation — transformed sections (n, 3n, cracked) · '+segTxt} refTag="LRFD 4.6.2.6 · 6.10.1.1.1b" right={right}>
+      <VarTable title={'Variables — section & materials ('+segTxt+')'} rows={[
         ['D','Web depth',sec.D,'in'],['t_w','Web thickness',sec.tw,'in'],
         ['b_ft','Top (compression) flange width',msDims.bft,'in'],['t_ft','Top flange thickness',msDims.tft,'in'],
         ['b_fb','Bottom (tension) flange width',msDims.bfb,'in'],['t_fb','Bottom flange thickness',msDims.tfb,'in'],
@@ -4344,10 +4462,24 @@ function secDerivs(R){
         <ML s={Tx`S_{bot}=\frac{I}{\bar y}=${nx(cN.Sb,0)}\quad S_{top,st}=\frac{I}{h-\bar y}=${nx(cN.StSteel,0)}\;\text{in}^3`}/>
         <div className="mnote">The long-term (3n) section uses 3n in place of n to account for concrete creep under sustained SIDL; DC1 acts on the bare steel section before the deck cures.</div>
       </Step>
+      <Step d="Long-term transformed section (3n)" r="transformed-area method">
+        <ML s={Tx`b_{tr}=\frac{b_{eff}}{3n}=\frac{${nx(beff,1)}}{${3*n}}=${nx(beff/(3*n),1)}\;\text{in}\qquad A_{deck,tr}=\frac{b_{eff}\,t_s}{3n}=${nx(beff*deck.ts/(3*n),1)}\;\text{in}^2`}/>
+        <ML s={Tx`\bar y=${nx(c3N.ybar,2)}\;\text{in}\qquad I=${nx(c3N.I,0)}\;\text{in}^4\qquad S_{bot}=${nx(c3N.Sb,0)}\quad S_{top,st}=${nx(c3N.StSteel,0)}\;\text{in}^3`}/>
+      </Step>
+      <Step d="Cracked section (steel + longitudinal deck reinforcement, concrete neglected)" r="parallel-axis theorem">
+        {As>0? <React.Fragment>
+          <ML s={Tx`y_r=h_s+t_h+t_s-d_{top}=${nx(bA.hs,3)}+${nx(+deck.haunch,2)}+${nx(+deck.ts,2)}-${nx(spDtop(R,sg),2)}=${nx(cr.yr,2)}\;\text{in}\qquad A_s=${nx(As,2)}\;\text{in}^2`}/>
+          <ML s={Tx`\bar y=\frac{A_{st}\bar y_{st}+A_s y_r}{A_{st}+A_s}=\frac{${nx(bA.A,2)}\cdot${nx(bA.ybar,3)}+${nx(As,2)}\cdot${nx(cr.yr,2)}}{${nx(bA.A,2)}+${nx(As,2)}}=${nx(cr.ybar,2)}\;\text{in}`}/>
+          <ML s={Tx`I=I_{st}+A_{st}(\bar y-\bar y_{st})^2+A_s(y_r-\bar y)^2=${nx(bA.I,0)}+${nx(bA.A,2)}(${nx(cr.ybar-bA.ybar,3)})^2+${nx(As,2)}(${nx(cr.yr-cr.ybar,3)})^2=${nx(cr.I,0)}\;\text{in}^4`}/>
+          <ML s={Tx`S_{bot}=${nx(cr.Sb,0)}\quad S_{top,st}=${nx(cr.St,0)}\quad S_{rebar}=${nx(cr.Srb,0)}\;\text{in}^3\qquad D_{c}(-M)=${nx(cr.DcNeg,1)}\;\text{in}`}/>
+        </React.Fragment>
+        : <div className="mnote">{deck.deckOn?'No deck reinforcement entered (A_s = 0):':'Deck not composite:'} the cracked section is the bare steel section (I = {fmt(cr.I,0)} in⁴).</div>}
+        <div className="mnote">Used for DC2, DW and −LL stresses where the moment is negative; DC1 always acts on the bare steel. h_s = steel depth, t_h = haunch, d_top = rebar depth below the top of the slab.</div>
+      </Step>
     </Deriv>
   );
   const plastic=(
-    <Deriv title="Derivation — plastic moment Mₚ & PNA" refTag="AASHTO Appendix D6.1 (positive flexure)">
+    <Deriv title={'Derivation — plastic moment Mₚ & PNA · '+segTxt} refTag="AASHTO Appendix D6.1 (positive flexure)">
       <VarTable title="Plastic forces (positive flexure, deck reinforcement neglected)" rows={[
         ['P_s','Deck slab compression 0.85f′_c·b_eff·t_s',pl.Ps,'kip'],
         ['P_c','Top-flange force F_yc·b_ft·t_ft',pl.Pc,'kip'],
@@ -4368,7 +4500,7 @@ function secDerivs(R){
     </Deriv>
   );
   const cls=(
-    <Deriv title="Classification & stability factors" refTag="6.10.1.10 · 6.10.6.2.2">
+    <Deriv title={'Classification & stability factors · '+segTxt} refTag="6.10.1.10 · 6.10.6.2.2">
       <VarTable title="Web classification & stability" rows={[
         ['D/t_w','Web slenderness',sec.D/sec.tw,'≤ 150'],
         ['2D_cp/t_w','Web slenderness in plastic compression',2*pl.Dcp/sec.tw,'vs λ_pw'],
@@ -4390,13 +4522,19 @@ function secDerivs(R){
       </Step>
     </Deriv>
   );
-  return {trans,plastic,cls};
+  return {trans,plastic,cls,si,segTxt};
 }
-function SectionTab({R}){
+function SectionTab({R,inp}){
+  const [dSi,setDSi]=useState(null);   // segment worked in the derivations (null = midspan segment, as before)
   if(!R.ok) return null;
   const {sec,matR,deck,bare,cN,c3N,pl,n,nRaw,EcDeck,beff,compact,compactWeb,
     compactMat,compactDtw,lambdaPw,Rh,Rb,ductOK,Iyc,Iyt,IycIyt}=R;
-  const SD=secDerivs(R);   // derivations shared with the calculation-sheet report (display only)
+  const mi=spMidIdx(R), gm=R.segP[mi], nSeg=R.segP.length;
+  const segPick=nSeg>1? <select value={dSi!=null&&R.segP[dSi]?dSi:mi} onChange={e=>setDSi(+e.target.value)} aria-label="Segment for the worked derivations"
+      style={{fontFamily:'var(--sans)',fontSize:12.5,height:26,padding:'0 6px',border:'1px solid var(--border-hi)',borderRadius:'var(--r)',background:'var(--sheet)',color:'var(--text)',maxWidth:280}}>
+      {R.segP.map(g=><option key={g.i} value={g.i}>Segment {g.i+1} · x = {fmt(g.x0,1)}–{fmt(g.x1,1)} ft{g.i===mi?' · midspan':''}</option>)}</select> : null;
+  const SD=secDerivs(R,dSi,segPick);   // derivations shared with the calculation-sheet report (display only)
+  const midTxt='segment '+(mi+1)+(nSeg>1?' of '+nSeg:'')+', x = '+fmt(gm.x0,1)+'–'+fmt(gm.x1,1)+' ft';
   const propRow=(lab,p,tr)=>({c:[lab,fmt(p.A,1),fmt(p.ybar,2),fmt(p.I,0),fmt(p.Sb,0),fmt(p.StSteel,0), tr||'—']});
   return (<div>
     <div className="bigres">
@@ -4405,7 +4543,7 @@ function SectionTab({R}){
       <div className={'br '+(ductOK?'p':'f')}><div className="l">Ductility Dp ≤ 0.42Dt</div><div className="n">{fmt(pl.Dp/pl.Dt,3)}</div><div className="u">{fmt(pl.Dp,1)} / {fmt(0.42*pl.Dt,1)} in</div></div>
     </div>
 
-    <Card title="Elastic section properties" refTag="bare · short-term n · long-term 3n">
+    <Card title={'Elastic section properties at midspan — '+midTxt} refTag="bare · short-term n · long-term 3n">
       <Tbl head={['Section','A (in²)','ȳ from bot (in)','I (in⁴)','S_bot (in³)','S_top,st (in³)','Deck S_tr']}
         rows={[
           propRow('Bare steel (noncomposite)',bare),
@@ -4414,8 +4552,16 @@ function SectionTab({R}){
         ]}/>
       <div className="hint">Bare-steel props resist noncomposite dead load (DC1: self-weight + wet deck).
         Long-term composite (3n) carries permanent SIDL (DC2 + DW); short-term composite (n) carries live load.
-        b_eff = <b>{fmt(beff,1)} in</b>. n = Es/Ec = {fmt(nRaw,2)} → <b>{n}</b> (rounded, 6.10.1.1.1b); Ec = {fmt(EcDeck,0)} ksi.</div>
+        b_eff = <b>{fmt(beff,1)} in</b>. n = Es/Ec = {fmt(nRaw,2)} → <b>{n}</b> (rounded, 6.10.1.1.1b); Ec = {fmt(EcDeck,0)} ksi.
+        These are the midspan segment's properties (also the Mp, classification and ductility cards above); every check uses the segment at its own station: see the table below.</div>
     </Card>
+
+    <Card title="Section properties by flange segment" refTag="bare · 3n · n · cracked (steel + rebar) · where each check governs">
+      <SegPropsTable R={R}/>
+      <div className="hint">{spNote(R)} Web {fmt(R.sec.D,2)}×{fmt(R.sec.tw,4)} in constant. Each check runs station by station on the segment at that station; the tags show the segment of each governing station.</div>
+    </Card>
+
+    <PropsAtX R={R} inp={inp}/>
 
     {SD.trans}
 
@@ -4423,14 +4569,7 @@ function SectionTab({R}){
 
     {SD.cls}
 
-    {R.segP.length>1&&<Card title="Flange segments" refTag="plate transitions · per-segment properties">
-      <Tbl head={['Seg','x (ft)','Top flange','Bot flange','I bare (in⁴)','I comp n (in⁴)','Mp (k-ft)','Class']}
-        rows={R.segP.map(g=>({c:[g.i+1, fmt(g.x0,0)+'–'+fmt(g.x1,0),
-          fmt(g.dims.bft,1)+'×'+fmt(g.dims.tft,3), fmt(g.dims.bfb,1)+'×'+fmt(g.dims.tfb,3),
-          fmt(g.bare.I,0), fmt(g.cN.I,0), fmt(g.pl.Mp/12,0), g.compact?'compact':'noncompact']}))}/>
-      <div className="hint">Web {fmt(R.sec.D,0)}×{fmt(R.sec.tw,3)} constant. All checks run station-by-station across the segments; the drawings and the summary cards above show the <b>midspan</b> segment.</div>
-    </Card>}
-    {R.hasNeg&&R.neg&&<Card title="Cracked negative-moment section (pier)" refTag="steel + deck rebar · concrete neglected">
+    {R.hasNeg&&R.neg&&<Card title={'Cracked negative-moment section (pier) — governing −M segment '+((R.neg.negBGov.si||0)+1)+(R.neg.negBGov.r>0?', x = '+fmt(R.neg.negBGov.x,1)+' ft':'')} refTag="steel + deck rebar · concrete neglected">
       <KV rows={[['Rebar As (in beff)',fmt(R.neg.AsProv,2),'in²'],
         ['I cracked',fmt(R.neg.cr.I,0),'in⁴'],['ȳ from bottom',fmt(R.neg.cr.ybar,2),'in'],
         ['S bot (comp. flange)',fmt(R.neg.cr.Sb,0),'in³'],['S top steel',fmt(R.neg.cr.St,0),'in³'],
@@ -5619,17 +5758,25 @@ function crModel(R,inp,o){
   // 4. Section properties
   if(o.props){ const s=S('props','Section properties'), SD=secDerivs(R);
     const pr=(lab,q,tr)=>[lab,fmt(q.A,1),fmt(q.ybar,2),fmt(q.I,0),fmt(q.Sb,0),fmt(q.StSteel,0),tr||'—'];
-    sub(s,'Elastic section properties (midspan segment)','bare · 3n · n · cracked',<React.Fragment>
+    const mi=spMidIdx(R), gm=R.segP[mi], tags=spGovTags(R), ngs=R.hasNeg&&R.neg? (R.neg.negBGov.si||0) : null;
+    sub(s,'Elastic section properties at midspan (segment '+(mi+1)+', x = '+fmt(gm.x0,1)+'–'+fmt(gm.x1,1)+' ft)','bare · 3n · n · cracked',<React.Fragment>
       <CrT wide head={['Section','A (in²)','ȳ from bot (in)','I (in⁴)','S_bot (in³)','S_top,st (in³)','Deck S_tr (in³)']}
         rows={[pr('Bare steel (noncomposite)',R.bare),pr('Long-term composite (3n = '+(3*R.n)+')',R.c3N,R.c3N.StDeckTr?fmt(R.c3N.StDeckTr,0):'—'),pr('Short-term composite (n = '+R.n+')',R.cN,R.cN.StDeckTr?fmt(R.cN.StDeckTr,0):'—')]}/>
-      {R.hasNeg&&R.neg&&<CrKV rows={[['Cracked section (steel + deck rebar, governing −M segment): I',fmt(R.neg.cr.I,0),'in⁴'],['ȳ from bottom',fmt(R.neg.cr.ybar,2),'in'],['S bot / S top steel',fmt(R.neg.cr.Sb,0)+' / '+fmt(R.neg.cr.St,0),'in³'],['D_c web in compression (−M)',fmt(R.neg.cr.DcNeg,1),'in'],['Rebar A_s / 1% minimum (6.10.1.7)',fmt(R.neg.AsProv,2)+' / '+fmt(R.neg.AsMin1pct,2),'in²']]}/>}
-      <p className="cr-note">DC1 on the bare steel; DC2 + DW on the long-term (3n) composite; live load on the short-term (n) composite; −M regions on the cracked steel + rebar section. b_eff = {fmt(R.beff,1)} in; n = E_s/E_c = {fmt(R.nRaw,2)} → {R.n} (6.10.1.1.1b); E_c = {fmt(R.EcDeck,0)} ksi.</p>
+      {R.hasNeg&&R.neg&&<CrKV rows={[['Cracked section (steel + deck rebar, governing −M segment '+(ngs+1)+(R.neg.negBGov.r>0?', x = '+fmt(R.neg.negBGov.x,1)+' ft':'')+'): I',fmt(R.neg.cr.I,0),'in⁴'],['ȳ from bottom',fmt(R.neg.cr.ybar,2),'in'],['S bot / S top steel',fmt(R.neg.cr.Sb,0)+' / '+fmt(R.neg.cr.St,0),'in³'],['D_c web in compression (−M)',fmt(R.neg.cr.DcNeg,1),'in'],['Rebar A_s / 1% minimum (6.10.1.7)',fmt(R.neg.AsProv,2)+' / '+fmt(R.neg.AsMin1pct,2),'in²']]}/>}
+      <p className="cr-note">DC1 on the bare steel; DC2 + DW on the long-term (3n) composite; live load on the short-term (n) composite; −M regions on the cracked steel + rebar section. b_eff = {fmt(R.beff,1)} in; n = E_s/E_c = {fmt(R.nRaw,2)} → {R.n} (6.10.1.1.1b); E_c = {fmt(R.EcDeck,0)} ksi. These are the midspan segment's properties; each check uses the segment at its own station (next table).</p>
     </React.Fragment>);
-    sub(s,'Composite transformed section (short-term, n)','LRFD 4.6.2.6 · 6.10.1.1.1b',<CrTab el={SD.trans}/>);
-    sub(s,'Plastic moment Mₚ and PNA','Appendix D6.1',<CrTab el={SD.plastic}/>);
-    sub(s,'Classification and stability factors','6.10.1.10 · 6.10.6.2.2',<CrTab el={SD.cls}/>);
-    if(R.segP.length>1) sub(s,'Flange segments','per-segment properties',<CrT wide head={['Seg','x (ft)','Top flange','Bot flange','I bare (in⁴)','I comp n (in⁴)','Mp (k-ft)','Class']}
-      rows={R.segP.map(g=>[g.i+1,fmt(g.x0,0)+'–'+fmt(g.x1,0),fmt(g.dims.bft,1)+'×'+fmt(g.dims.tft,3),fmt(g.dims.bfb,1)+'×'+fmt(g.dims.tfb,3),fmt(g.bare.I,0),fmt(g.cN.I,0),fmt(g.pl.Mp/12,0),g.compact?'compact':'noncompact'])}/>);
+    sub(s,'Section properties by flange segment','bare · 3n · n · cracked',<React.Fragment>
+      <table className="cr-tbl cr-wide cr-sp"><thead><tr><th>Segment</th><th>Section</th>{SP_HEAD.map(h=><th key={h}>{h}</th>)}<th>M_p (k-ft)</th><th>D_p (in)</th></tr></thead>
+        {R.segP.map(g=><tbody key={g.i}>{spRows(R,g).map((r,k)=><tr key={k}>
+          {k===0&&<td rowSpan={4} className="cr-sp-seg"><b>{g.i+1}</b>: x = {spRange(R,g)}<br/>{spPlates(g)}<br/>{g.compact?'compact':'noncompact'}{tags[g.i].map((t,j)=><React.Fragment key={j}><br/><i>{t}</i></React.Fragment>)}</td>}
+          <td>{r.lab}<br/><i>{r.use}</i></td>{r.c.map((v,j)=><td key={j} className="n">{v}</td>)}
+          {k===0&&<td rowSpan={4} className="n">{fmt(g.pl.Mp/12,0)}</td>}{k===0&&<td rowSpan={4} className="n">{fmt(g.pl.Dp,2)}</td>}</tr>)}</tbody>)}
+      </table>
+      <p className="cr-note">{spNote(R)} Web {fmt(R.sec.D,2)} × {fmt(R.sec.tw,4)} in constant. Bare steel carries DC1, 3n DC2 + DW, n LL + IM, cracked the DC2, DW and −LL where the moment is negative. Each check runs station by station on the segment at that station; the notes in the Segment column give the segment of each governing station.</p>
+    </React.Fragment>);
+    sub(s,'Transformed sections (n, 3n, cracked), '+SD.segTxt,'LRFD 4.6.2.6 · 6.10.1.1.1b',<CrTab el={SD.trans}/>);
+    sub(s,'Plastic moment Mₚ and PNA, '+SD.segTxt,'Appendix D6.1',<CrTab el={SD.plastic}/>);
+    sub(s,'Classification and stability factors, '+SD.segTxt,'6.10.1.10 · 6.10.6.2.2',<CrTab el={SD.cls}/>);
     sub(s,'Section proportion limits','6.10.2 · worst segment governs',<p className="cr-note">Web D/t_w ≤ 150 (6.10.2.1.1); flanges b_f/2t_f ≤ 12, b_f ≥ D/6, t_f ≥ 1.1t_w, 0.1 ≤ I_yc/I_yt ≤ 10 (6.10.2.2), checked for every flange segment.</p>,
       R.checks.filter(c=>c.ref&&c.ref.indexOf('6.10.2')===0));
   }
@@ -6503,7 +6650,7 @@ function App(){
             <CrossSection R={R}/><Elevation R={R}/></Card></div>
         </div>
       :<div className="cols-full">
-        {tab==='section'&&<SectionTab R={R}/>}
+        {tab==='section'&&<SectionTab R={R} inp={inp}/>}
         {tab==='construct'&&<ConstructTab R={R}/>}
         {tab==='stresses'&&<StressTab R={R}/>}
         {tab==='flexure'&&<FlexTab R={R}/>}
