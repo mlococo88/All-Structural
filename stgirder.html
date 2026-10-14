@@ -4837,6 +4837,12 @@ function flexPosCard(R){ const f=R.flex, pl=R.pl, pass=f.flexDC<=1.0001;
       </React.Fragment>}
     </Card>);
 }
+// Note shown in place of the negative-flexure card when the span has no factored −M (R.hasNeg false). Display only.
+const flexNoNegText=R=>(R.useExt
+  ? 'No negative moment in this span: the imported demands produce no factored negative moment in this span.'
+  : 'Simple span — no negative moment. ST-Girder analyses a single simple span.')
+  +' The pier-region checks apply only where the factored moment is negative: Strength I negative flexure (6.10.8, on the steel + longitudinal deck reinforcement section, concrete neglected, 6.10.1.1.1c), the 1% longitudinal deck reinforcement (6.10.1.7), the Service II web bend-buckling check (−M) and, in a continuous span, the 1.3R_hM_y limit on M_n (6.10.7.1.2).'
+  +(R.useExt?'':' To check a continuous girder\'s pier region, import continuous demands from GirderDetail (Send to ST-Girder) or MCT/MIDAS.');
 function flexNegCard(R){ const ng=R.neg, b=ng.negBGov, sg=R.segP[b.si||0];
       const bPass=b.r<=1.0001, tPass=(ng.negTGov.r||0)<=1.0001;
       return <Card title="Negative flexure — pier region" refTag="AASHTO 6.10.8 · cracked section (steel + rebar, 6.10.1.1.1c)">
@@ -4906,7 +4912,7 @@ function FlexTab({R}){
       <KV rows={[['Peak +M_u',fmt(f.MuPeak,0),'k-ft'],['Governing station',fmt(f.gov&&f.gov.x||0,1),'ft'],
         ['f_bu top flange',fmt(f.fbuTop,1),'ksi'],['f_bu bottom flange',fmt(f.fbuBot,1),'ksi']]}/>
     </Card>
-    {R.hasNeg&&flexNegCard(R)}
+    {R.hasNeg?flexNegCard(R):<Card title="Negative flexure — pier region" refTag="not checked · no −M in this span"><div className="hint">{flexNoNegText(R)}</div></Card>}
   </div>);
 }
 
@@ -5840,6 +5846,7 @@ function crModel(R,inp,o){
       if(fc[i]) sub(s,'Worked capacity at the governing +M station (x = '+fmt(fc[i].x,1)+' ft)','6.10.7 · 6.10.8',<CrTab el={flexWorkedCard(R,fc[i])}/>);
       if(R.hasNeg&&R.neg){ sub(s,'Negative flexure: pier region','6.10.8 · cracked section (6.10.1.1.1c)',<CrTab el={flexNegCard(R)}/>,ck('Neg flex','Neg tens','1% rebar'));
         const j=crNear(fc,R.neg.negBGov.x||0); if(fc[j]&&j!==i) sub(s,'Worked capacity at the governing −M station (x = '+fmt(fc[j].x,1)+' ft)','6.10.8',<CrTab el={flexWorkedCard(R,fc[j])}/>); }
+      else if(!R.hasNeg) sub(s,'Negative flexure: pier region','not checked · no −M in this span',<p className="cr-note">{flexNoNegText(R)}</p>);
       if(all) sub(s,'All stations','6.10.7 · 6.10.8',<CrT wide head={['x (ft)','Seg','+M_u (k-ft)','+M basis','+M D/C','−M_u (k-ft)','−φM_n (k-ft)','−M D/C']}
         rows={fc.map(q=>[fmt(q.x,2),q.si+1,fmt(q.pos.Mu,0),q.pos.compact?'M_p':'stress',fmt(q.pos.dc,3),fmt(q.Mun,0),fmt(q.neg.capNeg,0),q.hasNegDemand?fmt(Math.max(q.neg.dcBot,q.neg.dcTop),3):'—'])}/>); }
     { const s=S('shear','Strength I shear',{ref:'6.10.9'}), sc=R.shearCalc||[], i=crNear(sc,R.shearR.xGov||0);
