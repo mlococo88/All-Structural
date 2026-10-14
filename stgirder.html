@@ -4925,7 +4925,9 @@ function flexWorkedCard(R,fcSel,right){ const p=fcSel.pos, g=fcSel.neg, hasDem=f
         {flexNegLines(R,g,hasDem,fcSel.si)}
       </Card>;
 }
-function flexPosCard(R){ const f=R.flex, pl=R.pl, pass=f.flexDC<=1.0001;
+// Plastic-moment record of the governing +M segment (the segment of R.flex.Mp_kft, Mn_kft and the ductility check; display only).
+const flexGovPl=R=>{ const g=R.segP&&R.segP[(R.flex&&R.flex.gov&&R.flex.gov.si)||0]; return g? g.pl : R.pl; };
+function flexPosCard(R){ const f=R.flex, pl=flexGovPl(R), pass=f.flexDC<=1.0001;
   return (    <Card id="stg-d-flexpos" title="Positive-flexure resistance" refTag={f.flexMode}>
       {f.compact? <React.Fragment>
         <ML s={Tx`M_p=${nx(f.Mp_kft,0)}\;\text{k-ft}\quad(\text{PNA in ${pl.region}})`}/>
@@ -4970,7 +4972,7 @@ function flexNegCard(R){ const ng=R.neg, b=ng.negBGov, sg=R.segP[b.si||0];
 }
 function FlexTab({R}){
   if(!R.ok) return null;
-  const f=R.flex, pl=R.pl, pass=f.flexDC<=1.0001, dPass=f.ductOK;
+  const f=R.flex, pl=flexGovPl(R), pass=f.flexDC<=1.0001, dPass=f.ductOK;
   // ── moment breakdown vs capacity (per-station capacity from computeAll) ──
   const stns=R.stations, cf=R.chartFlex||[], fx=stns.map(p=>p.x);
   const [fac,setFac]=useState(false);
