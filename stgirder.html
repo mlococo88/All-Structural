@@ -2097,6 +2097,10 @@ function plasticMoment(sec, mat, deck){
     Mp=(Ybar*Ybar*Ps/(2*ts)) + (Pc*dc+Pw*dw+Pt*dt);
     Dcp=0; arm={dc,dw,dt};
   }
+  // Noncomposite section: D_cp per D6.3.2 (10th Ed.) — Eq. D6.3.2-4 when Eq. D6.3.2-3 holds
+  // (F_yw·A_w ≥ |F_yc·A_c − F_yt·A_t|: PNA in the web, where Eq. -4 equals the Case I Ybar above),
+  // otherwise ("all other noncomposite sections") D_cp = D. Engineer's decision 2026-10-14 (was 0 with the PNA in the top flange).
+  if(!deckOn && !(Pw >= Math.abs(Pc-Pt))) Dcp=D;
   const Dt=(deckOn?ts+hn:0)+tft+D+tfb;                  // total depth, top of slab → bottom
   return {region,PNA,Mp,Dcp,Dp:PNA,Dt,Ps,Pc,Pw,Pt,Ybar,arm,off};
 }
@@ -4582,8 +4586,14 @@ function secDerivs(R,si0,right){
         <ML s={Tx`\frac{D_p}{D_t}=\frac{${nx(Dp,3)}}{${nx(pl.Dt,3)}}=${nx(Dp/pl.Dt,3)}`}/>
         {cs===1
           ? (on? <ML s={Tx`D_{cp}=\frac{D}{2}\left[\frac{F_{yt}A_t-F_{yc}A_c-0.85f'_cA_s}{F_{yw}A_w}+1\right]=${Math.abs(pl.Dcp-Y)<1e-9?'\\bar Y=':''}${nx(pl.Dcp,3)}\;\text{in}\quad(\text{D6.3.2-1},\;A_{rs}=0)`}/>
-             : <ML s={Tx`D_{cp}=\frac{D}{2A_wF_{yw}}\left(F_{yt}A_t+F_{yw}A_w-F_{yc}A_c\right)=${Math.abs(pl.Dcp-Y)<1e-9?'\\bar Y=':''}${nx(pl.Dcp,3)}\;\text{in}\quad(\text{D6.3.2-4})`}/>)
-          : <ML s={Tx`D_{cp}=0\quad(\text{PNA not in the web${on?', D6.3.2':''}})`}/>}
+             : null)
+          : (on? <ML s={Tx`D_{cp}=0\quad(\text{PNA not in the web, D6.3.2})`}/> : null)}
+        {!on&&<React.Fragment>
+          <ML s={Tx`F_{yw}A_w=P_w=${nx(pl.Pw,1)}\;${pl.Pw>=Math.abs(pl.Pc-pl.Pt)?'\\ge':'<'}\;\left|F_{yc}A_c-F_{yt}A_t\right|=\left|${nx(pl.Pc,1)}-${nx(pl.Pt,1)}\right|=${nx(Math.abs(pl.Pc-pl.Pt),1)}\quad(\text{D6.3.2-3})`}/>
+          {pl.Pw>=Math.abs(pl.Pc-pl.Pt)
+            ? <ML s={Tx`D_{cp}=\frac{D}{2A_wF_{yw}}\left(F_{yt}A_t+F_{yw}A_w-F_{yc}A_c\right)=\frac{${nx(d.D,3)}}{2\cdot${nx(pl.Pw,1)}}\left(${nx(pl.Pt,1)}+${nx(pl.Pw,1)}-${nx(pl.Pc,1)}\right)=${nx(pl.Dcp,3)}\;\text{in}\quad(\text{D6.3.2-4})`}/>
+            : <ML s={Tx`\text{D6.3.2-3 not satisfied}\;\Rightarrow\;D_{cp}=D=${nx(pl.Dcp,3)}\;\text{in}\quad(\text{D6.3.2, all other noncomposite sections})`}/>}
+        </React.Fragment>}
         <div className="mnote">D_cp feeds the web compactness check (Classification card); D_p/D_t feeds the ductility term of M_n.</div>
       </Step>
       {on&&<Step d="Nominal flexural resistance M_n and ductility of this segment" r="6.10.7.1.2 · 6.10.7.3">
