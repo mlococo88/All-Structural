@@ -11929,3 +11929,138 @@ The engine is the same code in the main page (Structural analysis) and the embed
 +<p>The girder line is modeled as a continuous beam (or independent simple spans) with pinned supports and elements about 1 ft long. Suggest mode searches trial layouts with constant EI, where the influence lines depend only on the span arrangement; the quick suggestion, Full design and the analysis of the current design use the staged variable-stiffness model of GirderDetail's Structural analysis (DC1 on the steel section, DC2 and DW on the long-term composite section, live load on the short-term composite section), or constant EI when that module is set to it. Influence lines for moment at every node and shear in every element are obtained from the stiffness solution (closed form for simple spans); shear influence lines keep the unit jump at the section, and the shears are the exact values just right of each node (just left of a support at the end of a span).</p>
  <h3>Loads</h3>
 ```
+
+
+## 2026-10-14 — PR: claude/gd-xf-race (Get demands: requests sent in order once Preliminary sizing is ready; request IDs so only the reply to an outstanding request is applied and the second pass is labelled on its own reply; engineer's decision 2026-10-14; PR link added after merge)
+
+No engineering formula, factor, unit or code reference is changed. This changes only the messaging between GirderDetail and the embedded Preliminary sizing (`PL_B64`, decoded, edited and re-encoded on one line). Saved data is unchanged: no new storage key, `girderdetail_inbox_v1` keeps its format (the request ID is a field of the message, not of the stored inbox), and project files are unchanged.
+
+### XR1. Requests made before Preliminary sizing is ready are queued and sent in order   [messaging] [no result change on a settled project]
+- **Where:** `getDemands` (anchor `post = msg => gdPlPost(gdXfSend(msg))`); new `GD_PLQ`, `gdPlPost`, `gdPlFlush` and a `pl-status` listener after `plEnsure` (anchor `XR1 (engineer's decision 2026-10-14)`); `plShow` (anchor `PL_FRAME.dataset.ready = '1'; gdPlFlush();`).
+- **Problem:** a request made before the embedded Preliminary sizing was ready was sent by `setTimeout(go, 3500)`. The frame shares the page's thread, so that timer can fire long after 3.5 s, and after a later request has already been sent. Example (xsA, main): a Design all requested at 18.96 s was delivered at 35.22 s, after the automatic refresh requested at 22.12 s. Its reply then arrived while the second pass was outstanding and was labelled "DC1 recomputed with the designed cross-frame sizes" (see XR2).
+- **After:** a request waits in `GD_PLQ` until Preliminary sizing is ready. Ready means both: its first `pl-status` message has arrived (posted after its first analysis), and the existing 2.5 s after its `load` event has passed (`dataset.ready`). The queue is then sent in the order the requests were made. A request made while others are waiting joins the queue behind them, so an earlier request never arrives after a later one. Once ready, requests are sent at once, as before.
+
+### XR2. Request IDs: only the reply to an outstanding request is applied; the second pass is labelled only on its own reply   [messaging] [no result change on a settled project; fixes a missing second pass when requests overlap]
+- **Where:** `gdXfReq`, new `GD_RQ`, `GD_RID`, `GD_XF_PEND`, `GD_LOADALL`, `gdRqCovers`, `gdXfSend` (anchor `XR2 (engineer's decision 2026-10-14)`); `gdXfAfter`, last two lines (anchor `GD_XF_PEND.push`); the `gd-inbox-err` listener; the `gd-inbox` listener (anchor `XR2: the reply to a request that a newer one replaced is ignored`). Preliminary sizing (`PL_B64`): its `pl-export-req` listener echoes the ID.
+- **Problem:** GirderDetail tracked one request in flight (`GD_XF_REQ`) and matched replies by target only. With two requests outstanding, a reply was applied with the other request's frame weights and second-pass flag. Results:
+  - A reply that was not the second pass was labelled "DC1 recomputed…" (XR1 example).
+  - The second pass could be sent for the wrong target, so a module never got its second pass. Built-in example: Get demands in Cross-frames followed at once by Get demands for Girder section. Main sends the second pass for Girder section only, so Cross-frames keeps demands computed with the frame weights from before its auto-design (final module checks `8b416a50f879`). Running the same two requests one after the other gives `4fbed927adbb`.
+  - xsA: Get demands for Girder section right after the automatic refresh was requested. Main never sends the refresh's second pass, so 409 stored values differ from the sequential reference. Example: fatigue row "field splice FS4 at 278.00 ft, bottom flange, interior", MD1 −234.1 instead of −232.7 kip-ft.
+- **After:**
+  - Every request gets an ID (`rid`). Preliminary sizing echoes it in `gd-inbox` and `gd-inbox-err` as an optional message field.
+  - `GD_RQ` holds the outstanding requests. A reply is applied only while its request is outstanding, with that request's own frame weights (`sig`) and second-pass flag. "DC1 recomputed…" is therefore shown only on the reply to a second-pass request. A reply to a replaced request is ignored: not stored in `girderdetail_inbox_v1` and not applied.
+  - Replacement rules:
+    - A new user request replaces any pending or running second pass. This is the XF2 rule, unchanged.
+    - A new request replaces an outstanding request with the same target.
+    - A request that loads every module (`all`, `refresh`, `xfall`, `pl`) replaces outstanding module and load-all requests. Exception: the automatic refresh does not replace a Design all, which keeps its summary.
+    - A girder report is replaced only by a newer girder report.
+  - When the replies to several outstanding requests each need a second pass, the passes wait in `GD_XF_PEND` and one timer sends them in order. Before, a second `setTimeout` overwrote `GD_XF_T`, so a new user request could not cancel the first pass.
+  - A reply without an ID (Preliminary sizing's own "Send to GirderDetail" button, or an older embedded page) is handled exactly as before (`GD_XF_REQ`, `GD_XF_STALE`).
+- **Governing provision:** none (no calculation change). DC1 of the cross-frames: AASHTO LRFD 10th Ed. (2024) 3.5.1, as in XF1/XF2.
+- **Check case (built-in example, Cross-frames undesigned):** Get demands in Cross-frames, then at once Get demands for Girder section.
+  - **Before:** the Cross-frames reply is applied with the Girder section request's frame weights. Its auto-design changes the frames from X h = 48 in to K (bottom) h = 52 in, and the second pass is sent for Girder section only. Final module checks `8b416a50f879`.
+  - **After:** the Cross-frames reply (rid 1) and the Girder section reply (rid 2) each have their own frame weights. Both were computed with the X frames, so a second pass is sent for each (rids 3 and 4), and each pass reply is labelled "DC1 recomputed…". Final module checks `4fbed927adbb`, equal to the two requests made one after the other on main or the branch.
+
+### Verification (XR1–XR2)
+- `node --check` on every script block of the main page and of the decoded Preliminary sizing.
+- **Headless Chromium, main (3d5d771) vs branch.** Each run waits until no request is outstanding or queued, no second pass is pending, and the project data has been unchanged for 8 s. Hashes cover every module's checks and the project data (without `ui`).
+  - Opening the project, 10 runs each:
+    - Built-in example: main and branch `85b05dc5fc25` / `fa53d5a7b0f0`.
+    - xsA (automatic refresh and second pass on open): main and branch `e2a00c149767` / `01bf721d4145`.
+    - curb: main and branch `6f96ebc6527e` / `1c7bbe4539bc`.
+  - Saved data both ways (xsA, curb): main's saved storage opened in the branch, and the reverse, give the same hashes. The saved storage differs only in time stamps.
+  - xsA, a user request at a given point of the open-time refresh. Points: before Preliminary sizing is ready; right after the refresh request; right after the first reply with the second pass pending; right after the second-pass request. Requests: Design all, Get demands for Girder section, Get demands for Cross-frames.
+    - Design all: identical module checks on main and branch at every point (`e2a00c149767`).
+    - Girder section or Cross-frames right after the refresh request: the branch equals the reference with the same request made after everything has settled (identical project data). Main differs (409 values, as above).
+    - At the other points the branch equals main.
+  - xsA, a Design all, Get demands for Girder section or Get demands for Cross-frames at 15 fixed times during the refresh. Pairing each reply with its request:
+    - Main: one request delivered out of order and one reply wrongly labelled as the second pass.
+    - Branch: 0 out-of-order deliveries and 0 wrong labels, here and in every other branch run.
+  - Built-in example, two overlapping requests (Cross-frames + Girder section, Cross-frames + Design all, Cross-frames twice): branch final checks equal the sequential reference in all three cases; main only for the last two. A reply to a replaced request (rid 1 when the same target is requested again) is ignored.
+  - No console errors or alerts in any run.
+
+### Open items
+- With the XF2 rule kept, a user request made while a second pass is pending or running cancels that pass. Other modules then keep the demands from the first pass. This happens on main and on the branch. If every module should always get its second pass, the rule needs your decision.
+
+#### Exact changes: main page (unified diff, 1 line of context, `PL_B64` shown as `...`)
+```diff
+@@ -2360,3 +2360,3 @@ function showManPart() { const id = P.ui.man || 'p1'; $$('.man-btn').forEach(b =
+ 
+-const PL_B64 = '...';
++const PL_B64 = '...';
+ /* =====================================================================
+@@ -6176,3 +6176,3 @@ function getDemands(src, tgt, xfPass) { if (tgt !== 'refresh') P.ui.lastSrc = sr
+   gdXfReq(src, tgt || P.mod, xfPass);   // XF2 (2026-10-13): the frame weights these demands are computed with
+-  plEnsure(); P.ui.srcSel = src; const target = tgt || P.mod, post = msg => { const go = () => { if (PL_FRAME && PL_FRAME.contentWindow) PL_FRAME.contentWindow.postMessage(msg, '*'); }; if (PL_FRAME && PL_FRAME.dataset.ready) go(); else setTimeout(go, 3500); };
++  plEnsure(); P.ui.srcSel = src; const target = tgt || P.mod, post = msg => gdPlPost(gdXfSend(msg));   // XR1/XR2 (2026-10-14): request ID; sent in order once Preliminary sizing is ready
+   if (src === 'pl') { post({ type: 'pl-export-req', src: 'pl', target }); flash('Requesting demands from Preliminary sizing…'); return; }
+@@ -6209,3 +6209,5 @@ function applyInboxTo(mod, j) {
+ }
+-window.addEventListener('message', e => { if (gdFromPL(e) && e.data && e.data.type === 'gd-inbox-err') { GD_XF_REQ = null; GD_XF_PASS = 0; GD_XF_STALE = null; alert(e.data.msg); } });
++window.addEventListener('message', e => { if (gdFromPL(e) && e.data && e.data.type === 'gd-inbox-err') {
++  if (e.data.rid != null) { if (!GD_RQ.has(e.data.rid)) return; GD_RQ.delete(e.data.rid); if (GD_XF_REQ && GD_XF_REQ.rid === e.data.rid) { GD_XF_REQ = null; GD_XF_PASS = 0; } GD_XF_STALE = null; alert(e.data.msg); return; }   // XR2: the error of a request a newer one replaced is ignored
++  GD_XF_REQ = null; GD_XF_PASS = 0; GD_XF_STALE = null; alert(e.data.msg); } });
+ /* XF2 (engineer's decision 2026-10-13): Get demands, Design all and the automatic refresh auto-design the Cross-frames module after importing, so the demands were
+@@ -6216,4 +6218,14 @@ let GD_XF_REQ = null, GD_XF_PASS = 0, GD_XF_T = null, GD_XF_STALE = null;   // G
+ function gdXfSig() { try { const X = gdXfModel(); return JSON.stringify(X.on ? ['kind', 'type', 'h', 'At', 'Ab', 'Ad', 'A', 'g', 'Ae', 'ge', 'Wi', 'We', 'allow'].map(k => X[k] ?? null) : 0); } catch (e) { return ''; } }
+-function gdXfReq(src, tgt, pass) { if (!pass) { clearTimeout(GD_XF_T); GD_XF_T = null; if (GD_XF_PASS && GD_XF_REQ) GD_XF_STALE = GD_XF_REQ.tgt; if (P.ui) delete P.ui.xfRe; }   // a new request of the user replaces a pending or running second pass
+-  GD_XF_PASS = pass ? 1 : 0; GD_XF_REQ = { src, tgt, sig: gdXfSig() }; }
++function gdXfReq(src, tgt, pass) { if (!pass) { clearTimeout(GD_XF_T); GD_XF_T = null; GD_XF_PEND = []; if (GD_XF_PASS && GD_XF_REQ) GD_XF_STALE = GD_XF_REQ.tgt; if (P.ui) delete P.ui.xfRe; GD_RQ.forEach((r, k) => { if (r.pass) GD_RQ.delete(k); }); }   // a new request of the user replaces a pending or running second pass
++  GD_XF_PASS = pass ? 1 : 0; GD_XF_REQ = { src, tgt, sig: gdXfSig(), pass: !!pass }; }
++/* XR2 (engineer's decision 2026-10-14): every request carries a request ID (rid), which Preliminary sizing echoes in its reply (gd-inbox, gd-inbox-err).
++   GD_RQ holds the outstanding requests by ID; a reply is applied only while its request is outstanding, with the frame weights and the second-pass flag
++   of that request, so "DC1 recomputed with the designed cross-frame sizes" is reported only on the reply to the second-pass request. A new request replaces
++   (its reply will be ignored) an outstanding request of the same target, and a request that loads every module replaces the outstanding module and
++   load-all requests (the automatic refresh does not replace a Design all); the girder report is replaced only by a newer girder report. A reply without
++   an ID is handled as before XR2 (GD_XF_REQ, GD_XF_STALE). */
++let GD_RQ = new Map(), GD_RID = 0, GD_XF_PEND = [];   // GD_XF_PEND: the second passes waiting for GD_XF_T [src, target]
++const GD_LOADALL = ['all', 'refresh', 'xfall', 'pl'], gdRqCovers = (n, o) => o === 'grpt' ? n === 'grpt' : n === o || (GD_LOADALL.includes(n) && !(n === 'refresh' && o === 'all'));
++function gdXfSend(msg) { const R = GD_XF_REQ; if (!R) return msg; if (!R.pass) GD_RQ.forEach((r, k) => { if (!r.pass && gdRqCovers(R.tgt, r.tgt)) GD_RQ.delete(k); });
++  R.rid = ++GD_RID; GD_RQ.set(R.rid, R); return { ...msg, rid: R.rid }; }
+ function gdXfAfter(sig0, tgt) {   // after an import: sig0 = the frame weights the demands were computed with
+@@ -6224,3 +6236,4 @@ function gdXfAfter(sig0, tgt) {   // after an import: sig0 = the frame weights t
+   flash('The cross-frame auto-design changed the frame weights: recomputing DC1 with the designed cross-frame sizes…'); gdXfPost();
+-  GD_XF_T = setTimeout(() => { GD_XF_T = null; getDemands(src, t === 'pl' || !t ? 'xfall' : t, true); }, 300); }
++  const pt = t === 'pl' || !t ? 'xfall' : t; if (!GD_XF_PEND.some(q => q[1] === pt)) GD_XF_PEND.push([src, pt]);   // XR2: replies to several outstanding requests can each need their second pass; one timer sends them in order
++  if (!GD_XF_T) GD_XF_T = setTimeout(() => { GD_XF_T = null; GD_XF_PEND.splice(0).forEach(q => getDemands(q[0], q[1], true)); }, 300); }
+ 
+@@ -8360,2 +8373,9 @@ window.addEventListener('message', e => { if (gdFromPL(e) && e.data && e.data.ty
+ function plEnsure() { if (!PL_FRAME) plShow(true); }   // load the sizing module in the background so it can publish the bridge
++/* XR1 (engineer's decision 2026-10-14): demand requests made before Preliminary sizing is ready wait in GD_PLQ and are sent in the order they were made once
++   it is ready: its first status message (pl-status, posted after its first analysis) received, and the 2.5 s after its load event passed (dataset.ready).
++   A request made while others wait joins the queue behind them, so an earlier request never arrives after a later one. */
++let GD_PLQ = [];
++function gdPlPost(msg) { if (PL_FRAME && PL_FRAME.contentWindow && PL_FRAME.dataset.ready && PL_FRAME.dataset.up && !GD_PLQ.length) { PL_FRAME.contentWindow.postMessage(msg, '*'); return; } GD_PLQ.push(msg); gdPlFlush(); }
++function gdPlFlush() { if (!PL_FRAME || !PL_FRAME.contentWindow || !PL_FRAME.dataset.ready || !PL_FRAME.dataset.up) return; GD_PLQ.splice(0).forEach(m => PL_FRAME.contentWindow.postMessage(m, '*')); }
++window.addEventListener('message', e => { if (gdFromPL(e) && e.data && e.data.type === 'pl-status' && !PL_FRAME.dataset.up) { PL_FRAME.dataset.up = '1'; gdPlFlush(); } });
+ function plShow(bg) {
+@@ -8364,3 +8384,3 @@ function plShow(bg) {
+   const bytes = Uint8Array.from(atob(PL_B64), c => c.charCodeAt(0));
+-  PL_FRAME = document.createElement('iframe'); PL_FRAME.id = 'pl-frame'; PL_FRAME.title = 'Preliminary sizing (PlateLine)'; PL_FRAME.addEventListener('load', () => setTimeout(() => { PL_FRAME.dataset.ready = '1'; }, 2500));
++  PL_FRAME = document.createElement('iframe'); PL_FRAME.id = 'pl-frame'; PL_FRAME.title = 'Preliminary sizing (PlateLine)'; PL_FRAME.addEventListener('load', () => setTimeout(() => { PL_FRAME.dataset.ready = '1'; gdPlFlush(); }, 2500));
+   PL_FRAME.srcdoc = new TextDecoder().decode(bytes); w.appendChild(PL_FRAME);
+@@ -8392,4 +8412,7 @@ window.addEventListener('message', e => {
+   if (!gdFromPL(e)) return;
+-  if (!e.data || e.data.type !== 'gd-inbox' || !e.data.inbox) return; const j = e.data.inbox; try { localStorage.setItem(KEY_IN, JSON.stringify(j)); } catch (er) {}
+-  if (GD_XF_STALE && j.target === GD_XF_STALE) { GD_XF_STALE = null; return; }   // XF2: the reply to a second pass that a newer request replaced
++  if (!e.data || e.data.type !== 'gd-inbox' || !e.data.inbox) return; const j = e.data.inbox;
++  if (e.data.rid != null) { const R = GD_RQ.get(e.data.rid); if (!R) return;   // XR2: the reply to a request that a newer one replaced is ignored (not stored, not applied)
++    GD_RQ.delete(e.data.rid); GD_XF_REQ = R; GD_XF_PASS = R.pass ? 1 : 0; GD_XF_STALE = null; }   // the frame weights and second-pass flag of this reply's own request
++  try { localStorage.setItem(KEY_IN, JSON.stringify(j)); } catch (er) {}
++  if (e.data.rid == null && GD_XF_STALE && j.target === GD_XF_STALE) { GD_XF_STALE = null; return; }   // XF2: the reply to a second pass that a newer request replaced (reply without a request ID)
+   const xs0 = GD_XF_REQ ? GD_XF_REQ.sig : gdXfSig();   // XF2: the frame weights these demands were computed with
+```
+
+#### Exact changes: embedded Preliminary sizing (decoded `PL_B64`)
+```diff
+@@ -4267,3 +4267,3 @@
+   if (!e.data || e.data.type !== 'pl-export-req') return; const q = e.data;
+-  const fail = msg => window.parent.postMessage({ type: 'gd-inbox-err', msg, target: q.target }, '*');
++  const rid = q.rid != null ? { rid: q.rid } : {}, fail = msg => window.parent.postMessage({ type: 'gd-inbox-err', msg, target: q.target, ...rid }, '*');   // rid: GirderDetail's request ID, echoed (XR2, 2026-10-14)
+   if (!M || M.errors.length) return fail('Preliminary sizing has input errors; fix them first.'); if (!AN || AN.errors) return fail('The preliminary analysis is not available.');
+@@ -4273,3 +4273,3 @@
+     label = `Structural analysis, ${d.gLabel} (${d.model})`; }
+-  try { window.parent.postMessage({ type: 'gd-inbox', inbox: inboxPayload(ANx, { target: q.target, srcLabel: label, src: q.src }) }, '*'); } catch (err) { fail('Could not build the demands: ' + err.message); }
++  try { window.parent.postMessage({ type: 'gd-inbox', inbox: inboxPayload(ANx, { target: q.target, srcLabel: label, src: q.src }), ...rid }, '*'); } catch (err) { fail('Could not build the demands: ' + err.message); }
+ });
+```
