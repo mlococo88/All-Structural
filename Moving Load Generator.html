@@ -428,6 +428,7 @@ function analyze(m){
   // Mesh: supports, 1/20 points of each span, segment transitions, then subdivide
   const key=[...sup]; m.spans.forEach((l,k)=>{for(let t=1;t<20;t++)key.push(sup[k]+l*t/20);});
   sb.forEach(b=>{if(b[1]>1e-6&&b[1]<Lt-1e-6)key.push(b[1]);});
+  if(m.scanKeys)m.scanKeys.forEach(v=>{if(v>1e-6&&v<Lt-1e-6)key.push(v);}); // absolute-maximum refinement pass only
   key.sort((a,b)=>a-b); const ks=[]; key.forEach(v=>{if(!ks.length||v-ks[ks.length-1]>1e-6)ks.push(v);});
   const hmax=Lt/240, x=[ks[0]];
   for(let i=1;i<ks.length;i++){const a=ks[i-1],b=ks[i],n=Math.max(1,Math.ceil((b-a)/hmax-1e-9));for(let j=1;j<=n;j++)x.push(a+(b-a)*j/n);}
@@ -470,6 +471,13 @@ function analyze(m){
     trans.push({x:x[i],k,mi,vi});});
   rows.sort((a,b)=>a.k-b.k||a.x-b.x); rows.trans=trans;
   sup.forEach((s,q)=>effs.push({t:'R',node:supNodes[q],q,x:s,spans:q===0?[0]:q===ns?[ns-1]:[q-1,q],interior:q>0&&q<ns}));
+  // Absolute-maximum scan passes only (m.scanM / m.scanV / m.scanKeys; never set for the reported envelope results):
+  // extra M sections at the mesh nodes nearest the m.scanM positions, and V just right of every node (m.scanV).
+  if(m.scanM||m.scanV){const spanAt=v=>{let k=0;while(k<ns-1&&v>sup[k+1]-1e-9)k++;return k;};
+    (m.scanM||[]).forEach(v=>{const i=idxOf(v);if(mKey[i]!==undefined||supNodes.includes(i))return;
+      mKey[i]=effs.length;effs.push({t:'M',node:i,x:x[i],spans:[spanAt(x[i])],scan:true});});
+    if(m.scanV)for(let e=0;e<nn-1;e++){if(vKey[e]!==undefined)continue;
+      vKey[e]=effs.length;effs.push({t:'V',el:e,cutL:true,x:x[e],spans:[spanAt((x[e]+x[e+1])/2)],scan:true});}}
 
   // Influence lines: unit downward load at every node
   const IL=effs.map(()=>new Float64Array(nn)), d=new Float64Array(nd), b=new Float64Array(nf);
@@ -1545,6 +1553,63 @@ reportHTML=function(out,o,base,dk){
   document.body.appendChild(cv);drawEI(cv,RES);const u=cv.toDataURL('image/png');cv.remove();
   const i=h.indexOf('<h2>2. Summary');
   return i<0?h:h.slice(0,i)+`<h3>Girder Stiffness Along Length (I used in the analysis)</h3><div class="img"><img src="${u}"></div>`+h.slice(i);
+};
+
+// --- Absolute maxima per span (display only; the envelope table, exports and saved data are unchanged) ---
+// Scans every analysis node with the same engine (separate analyze() passes with extra output sections),
+// then re-runs with 0.1 ft mesh points around each moment candidate. Runs after the main results are shown.
+$('envB').closest('.card').insertAdjacentHTML('afterend',`<div class="card" id="absCard"><div class="ch"><div><h2>Absolute Maxima per Span</h2><p id="absNote"></p></div></div>
+  <div class="tw"><table><thead><tr><th>Span</th><th>Result</th><th>Value</th><th>x (ft)</th><th>Location</th><th>Governing case / vehicle position</th></tr></thead><tbody id="absB"></tbody></table></div>
+  <p class="hint" style="padding:8px 14px">Found with the same moving-load engine and vehicle cases as the envelope, by adding output sections at every analysis node between the twentieth points (moment at each node, shear just right of each node), then re-solving with mesh points every 0.1 ft around each moment maximum. Rows are in addition to the envelope table above, which is unchanged. Shown on screen only; not in the CSV or the printed report.</p></div>`);
+let absTimer=null;
+function absScan(R){
+  const m=R.m,ns=m.spans.length,sup=R.sup,X=R.x;
+  const items=RR=>RR.effs.map((ef,ei)=>({ef,r:RR.res[ei],dfOf:RR.dfOf})).filter(o=>o.ef.t!=='R');
+  const inSpan=(o,k)=>o.ef.t==='M'?o.ef.x>=sup[k]-1e-6&&o.ef.x<=sup[k+1]+1e-6:o.ef.spans[0]===k;
+  const fac=(o,v,f)=>f?m.llf*o.dfOf(o.ef,v)*v:v;
+  // Pass 1: same mesh, M at every analysis node and V just right of every node
+  const R2=analyze({...m,scanM:[...X],scanV:true});
+  let all=[...items(R),...items(R2)];
+  // Pass 2: mesh points every 0.1 ft within one element length of each +M / −M candidate (factored and unfactored picks)
+  const keys=new Set();
+  for(let k=0;k<ns;k++)[false,true].forEach(f=>[true,false].forEach(isMax=>{let b=null;
+    all.forEach(o=>{if(o.ef.t!=='M'||!inSpan(o,k))return;const v=fac(o,isMax?o.r.max:o.r.min,f);if(!b||(isMax?v>b.v:v<b.v))b={v,x:o.ef.x};});
+    if(!b||Math.abs(b.v)<1e-9||b.x<=sup[k]+1e-6||b.x>=sup[k+1]-1e-6)return;
+    let i=0;while(i<X.length-1&&X[i+1]<=b.x+1e-9)i++;const h=Math.max(X[i]-(X[i-1]!=null?X[i-1]:X[i]),(X[i+1]!=null?X[i+1]:X[i])-X[i])+1e-9;
+    for(let j=Math.ceil((b.x-h)*10);j<=Math.floor((b.x+h)*10);j++){const v=+(j/10).toFixed(1);if(v>sup[k]+1e-6&&v<sup[k+1]-1e-6)keys.add(v);}}));
+  if(keys.size){const R3=analyze({...m,scanKeys:[...keys],scanM:[...keys]});all=all.concat(items(R3).filter(o=>o.ef.scan));}
+  return {all,inSpan,fac,nn:R.nn};
+}
+function absPaint(){
+  const R=RES; if(!R)return;
+  const A=R.abs,view=$('viewMode').value,f=view==='f',m=R.m,ns=m.spans.length,sup=R.sup;
+  const u=f?`factored per girder (LLF ${m.llf} × DF)`:'unfactored per lane, including impact';
+  if(!A){$('absNote').textContent='Computing… (starts about 1 s after the last input change)';$('absB').innerHTML='';return;}
+  if(A.err){$('absNote').textContent='Not computed: '+A.err;$('absB').innerHTML='';return;}
+  $('absNote').textContent=`Values ${u}. Maximum +M, minimum −M and maximum |V| anywhere in each span (all ${A.nn} analysis nodes scanned; moments located to 0.1 ft).`;
+  const G=g=>g?(g.lane?`${g.lab} @${g.p.toFixed(1)}'`:`${g.lab} ${g.dir>0?'→':'←'} @${g.p.toFixed(1)}'`):'—';
+  const loc=(b,k)=>{const x=b.x,V=b.ef.t==='V';
+    if(Math.abs(x-sup[k])<1e-6)return `Support ${'ABCDE'[k]}${V?' (right side)':''}`;
+    if(Math.abs(x-sup[k+1])<1e-6)return `Support ${'ABCDE'[k+1]}${V?' (left side)':''}`;
+    return `${((x-sup[k])/m.spans[k]).toFixed(3)}L${V?' (just right of x)':''}`;};
+  let h='';
+  for(let k=0;k<ns;k++){let mp=null,mn=null,va=null;
+    A.all.forEach(o=>{if(!A.inSpan(o,k))return;const a=A.fac(o,o.r.max,f),b=A.fac(o,o.r.min,f);
+      if(o.ef.t==='M'){if(!mp||a>mp.v+1e-9)mp={v:a,x:o.ef.x,g:o.r.maxG,ef:o.ef};if(!mn||b<mn.v-1e-9)mn={v:b,x:o.ef.x,g:o.r.minG,ef:o.ef};}
+      else{if(!va||Math.abs(a)>Math.abs(va.v)+1e-9)va={v:a,x:o.ef.x,g:o.r.maxG,ef:o.ef};if(Math.abs(b)>Math.abs(va.v)+1e-9)va={v:b,x:o.ef.x,g:o.r.minG,ef:o.ef};}});
+    const row=(lab,b,cls,un)=>!b?'':!b.g||Math.abs(b.v)<1e-9?`<tr><td>${k+1}</td><td>${lab}</td><td>0.0 <small>${un}</small></td><td>—</td><td>none in this span</td><td class="g">—</td></tr>`
+      :`<tr><td>${k+1}</td><td>${lab}</td><td class="${cls}" style="font-weight:700">${b.v.toFixed(1)} <small>${un}</small></td><td>${b.x.toFixed(2)}</td><td>${loc(b,k)}</td><td class="g">${G(b.g)}</td></tr>`;
+    h+=row('Max +M',mp,'pos','kip-ft')+row('Min −M',mn,'neg','kip-ft')+row('Max |V|',va&&{...va,v:Math.abs(va.v)},'','kips');}
+  $('absB').innerHTML=h;
+}
+// Starts after the inputs have been idle for a moment, and restarts on every input, so typing is not slowed down.
+function absArm(){const R=RES;clearTimeout(absTimer);if(!R||R.abs)return;
+  absTimer=setTimeout(()=>{if(RES!==R||R.abs)return;try{R.abs=absScan(R);}catch(e){console.error(e);R.abs={err:e.message};}absPaint();},1000);}
+document.addEventListener('input',absArm,true);
+const _render6=render;
+render=function(){
+  _render6(); if(!RES)return;
+  absArm(); absPaint();
 };
 
 // ═══════════ CSV ═══════════
