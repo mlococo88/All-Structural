@@ -2067,31 +2067,31 @@ function plasticMoment(sec, mat, deck){
   // y measured downward from top of slab (or top of steel if no deck)
   const off = deckOn? ts+hn : 0;
   const cSlab=ts/2, cC=off+tft/2, cW=off+tft+D/2, cT=off+tft+D+tfb/2;
-  let region,PNA,Mp,Dcp;
+  let region,PNA,Mp,Dcp,Ybar,arm;                       // Ybar, arm (moment arms d_i): returned for the worked display only
   if(Pt+Pw >= Pc+Ps){                                  // Case I: PNA in web
     region='Web';
-    const Ybar=(D/2)*((Pt-Pc-Ps)/Pw + 1);              // from top of web
+    Ybar=(D/2)*((Pt-Pc-Ps)/Pw + 1);                    // from top of web
     PNA=off+tft+Ybar;
     const ds=Math.abs(PNA-cSlab), dc=Math.abs(PNA-cC), dt=Math.abs(PNA-cT);
     Mp=(Pw/(2*D))*(Ybar*Ybar+(D-Ybar)*(D-Ybar)) + (Ps*ds+Pc*dc+Pt*dt);
-    Dcp=clamp(Ybar,0,D);
+    Dcp=clamp(Ybar,0,D); arm={ds,dc,dt};
   } else if(Pt+Pw+Pc >= Ps){                           // Case II: PNA in top flange
     region='Top flange';
-    const Ybar=(tft/2)*((Pw+Pt-Ps)/Pc + 1);            // from top of top flange
+    Ybar=(tft/2)*((Pw+Pt-Ps)/Pc + 1);                  // from top of top flange
     PNA=off+Ybar;
     const ds=Math.abs(PNA-cSlab), dw=Math.abs(PNA-cW), dt=Math.abs(PNA-cT);
     Mp=(Pc/(2*tft))*(Ybar*Ybar+(tft-Ybar)*(tft-Ybar)) + (Ps*ds+Pw*dw+Pt*dt);
-    Dcp=0;
+    Dcp=0; arm={ds,dw,dt};
   } else {                                             // Case III: PNA in slab
     region='Slab';
-    const Ybar=ts*(Pc+Pw+Pt)/Math.max(Ps,1e-9);        // from top of slab
+    Ybar=ts*(Pc+Pw+Pt)/Math.max(Ps,1e-9);              // from top of slab
     PNA=Ybar;
     const dc=Math.abs(PNA-cC), dw=Math.abs(PNA-cW), dt=Math.abs(PNA-cT);
     Mp=(Ybar*Ybar*Ps/(2*ts)) + (Pc*dc+Pw*dw+Pt*dt);
-    Dcp=0;
+    Dcp=0; arm={dc,dw,dt};
   }
   const Dt=(deckOn?ts+hn:0)+tft+D+tfb;                  // total depth, top of slab → bottom
-  return {region,PNA,Mp,Dcp,Dp:PNA,Dt,Ps,Pc,Pw,Pt};
+  return {region,PNA,Mp,Dcp,Dp:PNA,Dt,Ps,Pc,Pw,Pt,Ybar,arm,off};
 }
 
 // Hybrid factor Rh (6.10.1.10.1). Non-hybrid → 1.0.
@@ -4478,8 +4478,15 @@ function secDerivs(R,si0,right){
       </Step>
     </Deriv>
   );
-  const plastic=(
-    <Deriv title={'Derivation — plastic moment Mₚ & PNA · '+segTxt} refTag="AASHTO Appendix D6.1 (positive flexure)">
+  // Plastic moment worked per Table D6.1-1 (positive flexure) with the quantities plasticMoment returns (display only).
+  const plastic=(()=>{ const d=msDims, Fy=matR.Fyf, Fw=matR.Fyw, on=!!deck.deckOn, ts=+deck.ts, th=+deck.haunch, fc=+deck.fc;
+    const cs=pl.region==='Web'?1:pl.region==='Top flange'?2:3, a=pl.arm||{}, off=pl.off||0, Dp=pl.Dp, Y=pl.Ybar;
+    const yS=ts/2, yC=off+d.tft/2, yW=off+d.tft+d.D/2, yT=off+d.tft+d.D+d.tfb/2;
+    const ge=(l,r)=>l>=r?'\\ge':'<', ok=v=>v?'\\checkmark':'\\text{N.G.}';
+    const offV=on? nx(ts,2)+'+'+nx(th,2)+'+' : '';
+    const arm=(sym,tx,y,v)=>v==null?null:<ML key={sym} s={Tx`${sym}=\left|D_p-${tx}\right|=\left|${nx(Dp,3)}-${nx(y,3)}\right|=${nx(v,3)}\;\text{in}`}/>;
+    const caseName=cs===1?'I':cs===2?'II':'III–VII';
+    return <Deriv title={'Derivation — plastic moment Mₚ & PNA · '+segTxt} refTag="AASHTO Appendix D6.1 · Table D6.1-1 (positive flexure)">
       <VarTable title="Plastic forces (positive flexure, deck reinforcement neglected)" rows={[
         ['P_s','Deck slab compression 0.85f′_c·b_eff·t_s',pl.Ps,'kip'],
         ['P_c','Top-flange force F_yc·b_ft·t_ft',pl.Pc,'kip'],
@@ -4488,17 +4495,66 @@ function secDerivs(R,si0,right){
         ['D_p','Depth of PNA below top of slab',pl.Dp,'in'],
         ['D_t','Total depth (slab top to bottom flange)',pl.Dt,'in'],
       ]}/>
-      <Step d="Plastic forces">
-        <ML s={Tx`P_s=0.85f'_c\,b_{eff}\,t_s=${nx(pl.Ps,0)}\;\text{kip}\qquad P_c=F_{yc}b_{ft}t_{ft}=${nx(pl.Pc,0)}\;\text{kip}`}/>
-        <ML s={Tx`P_w=F_{yw}D\,t_w=${nx(pl.Pw,0)}\;\text{kip}\qquad P_t=F_{yt}b_{fb}t_{fb}=${nx(pl.Pt,0)}\;\text{kip}`}/>
+      <Step d="Plastic forces" r="D6.1">
+        {on? <ML s={Tx`P_s=0.85f'_c\,b_{eff}\,t_s=0.85\cdot${nx(fc,2)}\cdot${nx(beff,2)}\cdot${nx(ts,2)}=${nx(pl.Ps,0)}\;\text{kip}`}/>
+          : <div className="mnote">Deck not composite: the deck terms are dropped (D6.1, noncomposite section), P_s = 0, and depths are measured from the top of the steel.</div>}
+        <ML s={Tx`P_c=F_{yc}\,b_{ft}\,t_{ft}=${nx(Fy,1)}\cdot${nx(d.bft,3)}\cdot${nx(d.tft,3)}=${nx(pl.Pc,0)}\;\text{kip}`}/>
+        <ML s={Tx`P_w=F_{yw}\,D\,t_w=${nx(Fw,1)}\cdot${nx(d.D,3)}\cdot${nx(d.tw,4)}=${nx(pl.Pw,0)}\;\text{kip}`}/>
+        <ML s={Tx`P_t=F_{yt}\,b_{fb}\,t_{fb}=${nx(Fy,1)}\cdot${nx(d.bfb,3)}\cdot${nx(d.tfb,3)}=${nx(pl.Pt,0)}\;\text{kip}`}/>
+        <div className="mnote">The longitudinal deck reinforcement is neglected (P_rb = P_rt = 0), which D6.1 permits as conservative. Element forces act at mid-thickness of the deck and flanges and at mid-depth of the web.</div>
       </Step>
-      <Step d="Locate PNA by plastic force balance" r="D6.1">
-        <ML s={Tx`\text{PNA lies in the }\textbf{${pl.region}}\;\Rightarrow\;\bar y_{PNA}=${nx(pl.PNA,2)}\;\text{in below top of slab}`}/>
-        <ML s={Tx`M_p=\sum P_i\,d_i=${nx(pl.Mp/12,0)}\;\text{kip-ft}\qquad D_p/D_t=${nx(pl.Dp/pl.Dt,3)}`}/>
-        <div className="mnote">The PNA is where the plastic compression above equals the plastic tension below. M_p is the sum of each plastic force times its distance to the PNA. Deck reinforcement is neglected in the positive-flexure M_p (conservative). D_p/D_t drives the ductility term in the Flexure tab.</div>
+      <Step d="Which case applies — conditions checked in the order of Table D6.1-1" r="Table D6.1-1">
+        <ML s={Tx`\text{I (web): }P_t+P_w=${nx(pl.Pt,0)}+${nx(pl.Pw,0)}=${nx(pl.Pt+pl.Pw,0)}\;${ge(pl.Pt+pl.Pw,pl.Pc+pl.Ps)}\;P_c+P_s=${nx(pl.Pc,0)}+${nx(pl.Ps,0)}=${nx(pl.Pc+pl.Ps,0)}\;\Rightarrow\;\text{${cs===1?'Case I applies':'no'}}`}/>
+        {cs>=2&&<ML s={Tx`\text{II (top flange): }P_t+P_w+P_c=${nx(pl.Pt+pl.Pw+pl.Pc,0)}\;${ge(pl.Pt+pl.Pw+pl.Pc,pl.Ps)}\;P_s=${nx(pl.Ps,0)}\;\Rightarrow\;\text{${cs===2?'Case II applies':'no'}}`}/>}
+        {cs===3&&<div className="mnote">Cases III–VII (PNA in the concrete deck): with P_rb = P_rt = 0 their conditions and equations reduce to the same Ȳ = t_s(P_c + P_w + P_t)/P_s and the same M_p, so the PNA is in the deck.</div>}
       </Step>
-    </Deriv>
-  );
+      <Step d={'Case '+caseName+': location of the PNA, Ȳ and D_p'} r="Table D6.1-1">
+        {cs===1&&<ML s={Tx`\bar Y=\frac{D}{2}\left[\frac{P_t-P_c-P_s}{P_w}+1\right]=\frac{${nx(d.D,3)}}{2}\left[\frac{${nx(pl.Pt,1)}-${nx(pl.Pc,1)}-${nx(pl.Ps,1)}}{${nx(pl.Pw,1)}}+1\right]=${nx(Y,3)}\;\text{in}`}/>}
+        {cs===2&&<ML s={Tx`\bar Y=\frac{t_{ft}}{2}\left[\frac{P_w+P_t-P_s}{P_c}+1\right]=\frac{${nx(d.tft,3)}}{2}\left[\frac{${nx(pl.Pw,1)}+${nx(pl.Pt,1)}-${nx(pl.Ps,1)}}{${nx(pl.Pc,1)}}+1\right]=${nx(Y,3)}\;\text{in}`}/>}
+        {cs===3&&<ML s={Tx`\bar Y=t_s\,\frac{P_c+P_w+P_t}{P_s}=${nx(ts,2)}\cdot\frac{${nx(pl.Pc,1)}+${nx(pl.Pw,1)}+${nx(pl.Pt,1)}}{${nx(pl.Ps,1)}}=${nx(Y,3)}\;\text{in}`}/>}
+        {cs===1&&<ML s={Tx`D_p=${on?'t_s+t_h+':''}t_{ft}+\bar Y=${offV}${nx(d.tft,3)}+${nx(Y,3)}=${nx(Dp,3)}\;\text{in}`}/>}
+        {cs===2&&<ML s={Tx`D_p=${on?'t_s+t_h+':''}\bar Y=${offV}${nx(Y,3)}=${nx(Dp,3)}\;\text{in}`}/>}
+        {cs===3&&<ML s={Tx`D_p=\bar Y=${nx(Dp,3)}\;\text{in}`}/>}
+        <div className="mnote">Ȳ is measured from the top of the {cs===1?'web':cs===2?'top flange':'deck'}; D_p = depth of the PNA below the {on?'top of the concrete deck (t_h = haunch)':'top of the steel'}.</div>
+      </Step>
+      <Step d="Moment arms d_i from each element force to the PNA" r="D6.1">
+        {on&&arm('d_s',Tx`\tfrac{t_s}{2}`,yS,a.ds)}
+        {arm('d_c',on?Tx`\left(t_s+t_h+\tfrac{t_{ft}}{2}\right)`:Tx`\tfrac{t_{ft}}{2}`,yC,a.dc)}
+        {arm('d_w',on?Tx`\left(t_s+t_h+t_{ft}+\tfrac{D}{2}\right)`:Tx`\left(t_{ft}+\tfrac{D}{2}\right)`,yW,a.dw)}
+        {arm('d_t',on?Tx`\left(t_s+t_h+t_{ft}+D+\tfrac{t_{fb}}{2}\right)`:Tx`\left(t_{ft}+D+\tfrac{t_{fb}}{2}\right)`,yT,a.dt)}
+        <div className="mnote">The element containing the PNA ({cs===1?'web':cs===2?'top flange':'deck'}) is split at the PNA; its two parts are the first term of M_p below.</div>
+      </Step>
+      <Step d="Plastic moment M_p (moment of the plastic forces about the PNA)" r="Table D6.1-1">
+        {cs===1&&<React.Fragment>
+          <ML s={Tx`M_p=\frac{P_w}{2D}\left[\bar Y^2+(D-\bar Y)^2\right]+\left[${on?'P_sd_s+':''}P_cd_c+P_td_t\right]`}/>
+          <ML s={Tx`=\frac{${nx(pl.Pw,1)}}{2\cdot${nx(d.D,3)}}\left[(${nx(Y,3)})^2+(${nx(d.D,3)}-${nx(Y,3)})^2\right]+\left[${on?nx(pl.Ps,1)+'\\cdot '+nx(a.ds,3)+'+':''}${nx(pl.Pc,1)}\cdot${nx(a.dc,3)}+${nx(pl.Pt,1)}\cdot${nx(a.dt,3)}\right]`}/></React.Fragment>}
+        {cs===2&&<React.Fragment>
+          <ML s={Tx`M_p=\frac{P_c}{2t_{ft}}\left[\bar Y^2+(t_{ft}-\bar Y)^2\right]+\left[${on?'P_sd_s+':''}P_wd_w+P_td_t\right]`}/>
+          <ML s={Tx`=\frac{${nx(pl.Pc,1)}}{2\cdot${nx(d.tft,3)}}\left[(${nx(Y,3)})^2+(${nx(d.tft,3)}-${nx(Y,3)})^2\right]+\left[${on?nx(pl.Ps,1)+'\\cdot '+nx(a.ds,3)+'+':''}${nx(pl.Pw,1)}\cdot${nx(a.dw,3)}+${nx(pl.Pt,1)}\cdot${nx(a.dt,3)}\right]`}/></React.Fragment>}
+        {cs===3&&<React.Fragment>
+          <ML s={Tx`M_p=\frac{\bar Y^2P_s}{2t_s}+\left[P_cd_c+P_wd_w+P_td_t\right]`}/>
+          <ML s={Tx`=\frac{(${nx(Y,3)})^2\cdot${nx(pl.Ps,1)}}{2\cdot${nx(ts,2)}}+\left[${nx(pl.Pc,1)}\cdot${nx(a.dc,3)}+${nx(pl.Pw,1)}\cdot${nx(a.dw,3)}+${nx(pl.Pt,1)}\cdot${nx(a.dt,3)}\right]`}/></React.Fragment>}
+        <ML s={Tx`M_p=${nx(pl.Mp,0)}\;\text{kip-in}=\frac{${nx(pl.Mp,0)}}{12}=${nx(pl.Mp/12,0)}\;\text{k-ft}`}/>
+      </Step>
+      <Step d="Depths D_t, D_p/D_t and D_cp" r="6.10.7.1.2 · D6.3.2">
+        <ML s={Tx`D_t=${on?'t_s+t_h+':''}t_{ft}+D+t_{fb}=${offV}${nx(d.tft,3)}+${nx(d.D,3)}+${nx(d.tfb,3)}=${nx(pl.Dt,3)}\;\text{in}`}/>
+        <ML s={Tx`\frac{D_p}{D_t}=\frac{${nx(Dp,3)}}{${nx(pl.Dt,3)}}=${nx(Dp/pl.Dt,3)}`}/>
+        {cs===1
+          ? (on? <ML s={Tx`D_{cp}=\frac{D}{2}\left[\frac{F_{yt}A_t-F_{yc}A_c-0.85f'_cA_s}{F_{yw}A_w}+1\right]=${Math.abs(pl.Dcp-Y)<1e-9?'\\bar Y=':''}${nx(pl.Dcp,3)}\;\text{in}\quad(\text{D6.3.2-1},\;A_{rs}=0)`}/>
+             : <ML s={Tx`D_{cp}=\frac{D}{2A_wF_{yw}}\left(F_{yt}A_t+F_{yw}A_w-F_{yc}A_c\right)=${Math.abs(pl.Dcp-Y)<1e-9?'\\bar Y=':''}${nx(pl.Dcp,3)}\;\text{in}\quad(\text{D6.3.2-4})`}/>)
+          : <ML s={Tx`D_{cp}=0\quad(\text{PNA not in the web${on?', D6.3.2':''}})`}/>}
+        <div className="mnote">D_cp feeds the web compactness check (Classification card); D_p/D_t feeds the ductility term of M_n.</div>
+      </Step>
+      {on&&<Step d="Nominal flexural resistance M_n and ductility of this segment" r="6.10.7.1.2 · 6.10.7.3">
+        {sg.compact&&sg.Mn_kft!=null
+          ? (Dp<=0.1*pl.Dt
+            ? <ML s={Tx`D_p=${nx(Dp,2)}\le0.1D_t=${nx(0.1*pl.Dt,2)}\;\Rightarrow\;M_n=M_p=${nx(sg.Mn_kft,0)}\;\text{k-ft}\quad(6.10.7.1.2\text{-}1)`}/>
+            : <React.Fragment><ML s={Tx`D_p=${nx(Dp,2)}>0.1D_t=${nx(0.1*pl.Dt,2)}\;\Rightarrow\;M_n=M_p\left(1.07-0.7\frac{D_p}{D_t}\right)\quad(6.10.7.1.2\text{-}2)`}/><ML s={Tx`M_n=${nx(pl.Mp/12,0)}\left(1.07-0.7\cdot${nx(Dp/pl.Dt,4)}\right)=${nx(sg.Mn_kft,0)}\;\text{k-ft}`}/></React.Fragment>)
+          : <div className="mnote">This segment is noncompact (Classification card): M_n is not taken from M_p; the flexure check uses the flange stresses (6.10.7.2).</div>}
+        <ML s={Tx`D_p=${nx(Dp,2)}\;${Dp<=0.42*pl.Dt?'\\le':'>'}\;0.42D_t=${nx(0.42*pl.Dt,2)}\;\text{in}\;${ok(Dp<=0.42*pl.Dt)}\quad(6.10.7.3\text{-}1)`}/>
+        <div className="mnote">In a continuous span M_n is further limited to 1.3R_hM_y at each station (6.10.7.1.2-3), worked in the Flexure tab. The ductility result in the checks is that of the segment at the governing +M station.</div>
+      </Step>}
+    </Deriv>; })();
   const cls=(
     <Deriv title={'Classification & stability factors · '+segTxt} refTag="6.10.1.10 · 6.10.6.2.2">
       <VarTable title="Web classification & stability" rows={[
