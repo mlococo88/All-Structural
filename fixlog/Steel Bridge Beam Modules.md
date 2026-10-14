@@ -12064,3 +12064,67 @@ No engineering formula, factor, unit or code reference is changed. This changes 
 +  try { window.parent.postMessage({ type: 'gd-inbox', inbox: inboxPayload(ANx, { target: q.target, srcLabel: label, src: q.src }), ...rid }, '*'); } catch (err) { fail('Could not build the demands: ' + err.message); }
  });
 ```
+
+
+## 2026-10-14 — PR: claude/gd-xf-requeue (a user request no longer drops the cross-frame second pass, unless it loads every module; engineer's decision 2026-10-14 on the open item of claude/gd-xf-race; PR link added after merge)
+
+No engineering formula, factor, unit or code reference is changed, and the embedded Preliminary sizing (`PL_B64`) is unchanged. Saved data is unchanged.
+
+### XR3. The second pass is kept when the user makes another request   [messaging] [every module ends with demands computed with the designed frame weights]
+- **Where:** `getDemands`, first two lines (the `P.ui.lastSrc` assignment moves after `gdXfReq`; anchor `after gdXfReq (XR3)`); `gdXfReq` (anchor `XR3 (engineer's decision 2026-10-14)`).
+- **Problem:** under XF2/XR2, any new user request cancelled a pending second pass (not yet sent) and dropped the reply of a running one. When the user asked for one module while the second pass was pending or running, the other modules kept the demands from the first pass, computed with the frame weights from before the cross-frame auto-design. Examples on main (974509b):
+  - xsA, Get demands for Girder section while the open-time refresh's second pass was pending or running: final module checks `44ada5db4fdb`. Making the same request after the refresh has finished gives `e2a00c149767`.
+  - xsA, Get demands for Cross-frames in the same situation: `fdafca22eb1a`.
+  - Built-in example, Get demands in Cross-frames, then Get demands for Girder section while its second pass was pending or running: `8b416a50f879`; one after the other gives `4fbed927adbb`.
+- **After:**
+  - If the new user request loads every module (Design all, the automatic refresh, load all; `GD_LOADALL`), the pending and running second passes are still replaced, as before. That request's own reply makes its own second pass when the frame weights change, so the replaced pass would be redundant.
+  - Any other request (one module, the girder report): a pending second pass is sent at once, before the new request, and a running one is kept. Both are answered before the new request, so its reply comes last, exactly as when the requests are made one after the other.
+  - `P.ui.lastSrc` is set after `gdXfReq`, so a second pass sent there does not change the source of the user's request.
+  - The one-extra-pass limit is kept. A second pass never makes a third; if the weights still change, its reply shows the existing "Run Get demands again" notice.
+- **Governing provision:** none (no calculation change). DC1 of the cross-frames: AASHTO LRFD 10th Ed. (2024) 3.5.1, as in XF1/XF2.
+- **Check case (built-in example, Cross-frames undesigned):** Get demands in Cross-frames. Its auto-design changes the frames from X h = 48 in to K (bottom) h = 52 in, so a second pass for Cross-frames is pending. Get demands for Girder section is then made during the 300 ms before that pass is sent.
+  - **Before:** the pass is cancelled, so Cross-frames keeps demands computed with the X frames. Final module checks `8b416a50f879`.
+  - **After:** the Cross-frames second pass is sent first (rid 2, labelled "DC1 recomputed…"), then Girder section (rid 3). Final module checks `4fbed927adbb`, equal to the two requests made one after the other.
+
+### Verification (XR3)
+- `node --check` on every script block.
+- **Headless Chromium, main (974509b) vs branch.** Each run waits until no request is outstanding or queued, no second pass is pending, and the project data has been unchanged for 8 s.
+  - **Opening the project, 10 runs each (no interaction):** identical to main.
+    - Built-in example: `85b05dc5fc25` / `fa53d5a7b0f0`.
+    - xsA: `e2a00c149767` / `01bf721d4145`.
+    - curb: `6f96ebc6527e` / `1c7bbe4539bc`.
+  - **xsA, a user request at four points of the open-time refresh:** before Preliminary sizing is ready; right after the refresh request; right after the first reply with the second pass pending; right after the second-pass request.
+    - Design all: module checks `e2a00c149767` at every point, on main and branch. As decided, Design all still replaces the second pass; its own reply needs none, because it was computed with the designed frames.
+    - Get demands for Girder section or Cross-frames, pass pending or running: main `44ada5db4fdb` / `fdafca22eb1a`; branch `e2a00c149767`. The branch project data equals the reference with the same request made after the refresh has finished (`be17cf4ce77f`, `3fa788586899`).
+    - Same requests right after the refresh request: equal to that reference on main and branch.
+    - Same requests before Preliminary sizing is ready: equal on main and branch. Here the user's request is made before the refresh, so its reference order is the request first.
+  - **Built-in example, Get demands in Cross-frames, then Girder section / Design all / Cross-frames:** made at once, with the second pass pending, or with it running. The branch final module checks equal the one-after-the-other reference in all nine cases (`4fbed927adbb`, `78ca681176cd`, `f43598349cfb`). Main differs for Girder section with the pass pending or running (`8b416a50f879`).
+  - **Second-pass labels:** each reply paired with its request. 0 replies labelled as the second pass that were not; the "DC1 recomputed" notice appears on the second-pass reply.
+  - No console errors or alerts.
+
+### Open items
+- A module request made while a refresh's *first* reply is still outstanding: that refresh's second pass is decided after the user's request was sent, so its reply comes after the user's and reloads every module from the refresh's source. In the tests (same source) the final state equals the reference. With a different source for the module request (for example Structural analysis G2), the refresh's pass wins. Not changed.
+
+#### Exact changes (unified diff, 1 line of context)
+```diff
+@@ -6174,4 +6174,5 @@ function srcPanel() {
+ }
+-function getDemands(src, tgt, xfPass) { if (tgt !== 'refresh') P.ui.lastSrc = src;
++function getDemands(src, tgt, xfPass) {
+   gdXfReq(src, tgt || P.mod, xfPass);   // XF2 (2026-10-13): the frame weights these demands are computed with
++  if (tgt !== 'refresh') P.ui.lastSrc = src;   // after gdXfReq (XR3): a second pass it sends first does not change the source of this request
+   plEnsure(); P.ui.srcSel = src; const target = tgt || P.mod, post = msg => gdPlPost(gdXfSend(msg));   // XR1/XR2 (2026-10-14): request ID; sent in order once Preliminary sizing is ready
+@@ -6218,3 +6219,11 @@ let GD_XF_REQ = null, GD_XF_PASS = 0, GD_XF_T = null, GD_XF_STALE = null;   // G
+ function gdXfSig() { try { const X = gdXfModel(); return JSON.stringify(X.on ? ['kind', 'type', 'h', 'At', 'Ab', 'Ad', 'A', 'g', 'Ae', 'ge', 'Wi', 'We', 'allow'].map(k => X[k] ?? null) : 0); } catch (e) { return ''; } }
+-function gdXfReq(src, tgt, pass) { if (!pass) { clearTimeout(GD_XF_T); GD_XF_T = null; GD_XF_PEND = []; if (GD_XF_PASS && GD_XF_REQ) GD_XF_STALE = GD_XF_REQ.tgt; if (P.ui) delete P.ui.xfRe; GD_RQ.forEach((r, k) => { if (r.pass) GD_RQ.delete(k); }); }   // a new request of the user replaces a pending or running second pass
++/* XR3 (engineer's decision 2026-10-14): a new request of the user no longer drops a cross-frame second pass, unless it loads every module (Design all, the
++   automatic refresh, load all), whose own reply makes its own second pass when the frame weights change: then the pending and running second passes are
++   replaced, as before. Any other request: a pending second pass (GD_XF_PEND, not yet sent) is sent now, before this request, and a running one is kept, so
++   both are answered first and this request's reply comes last, as when the requests are made one after the other. A second pass never makes a third
++   (its reply only reports "DC1 recomputed" or "Run Get demands again"). */
++function gdXfReq(src, tgt, pass) { if (!pass) { clearTimeout(GD_XF_T); GD_XF_T = null; const pend = GD_XF_PEND.splice(0);
++    if (GD_LOADALL.includes(tgt)) { if (GD_XF_PASS && GD_XF_REQ) GD_XF_STALE = GD_XF_REQ.tgt; GD_RQ.forEach((r, k) => { if (r.pass) GD_RQ.delete(k); }); }   // a load-everything request replaces a pending or running second pass
++    else pend.forEach(q => getDemands(q[0], q[1], true));   // XR3: the pending second passes first
++    if (P.ui) delete P.ui.xfRe; }
+   GD_XF_PASS = pass ? 1 : 0; GD_XF_REQ = { src, tgt, sig: gdXfSig(), pass: !!pass }; }
+```
