@@ -5407,7 +5407,7 @@ tabs: { combos: 'Results', cap: 'Method', drawings: 'Diagrams', rptCombos: 'Anal
     // reactions: each load on the stage that carries it
     const rows = bm => sup.map((s, k) => { const row = new Float64Array(N); for (let q = 0; q < N; q++) row[q] = (s < N - 1 ? bm.ILV[s * N + q] : 0) - (s > 0 ? bm.ILV[(s - 1) * N + q] : 0) + (q === s ? 1 : 0); return row; });
     const rS = rows(bS), r3 = rows(b3), rN = rows(bN), dot = (row, w) => { let t = 0; for (let q = 0; q < N; q++) t += row[q] * (typeof w === 'number' ? w : w[q]) * trib[q]; return t; };
-    const reac = sup.map((s, k) => { const adj = [k - 1, k].filter(i => i >= 0 && i < spans.length), gV = Math.max(...adj.map(i => memS(i).gV)), interior = cont && k > 0 && k < sup.length - 1;
+    const reac = sup.map((s, k) => { const adj = [k - 1, k].filter(i => i >= 0 && i < spans.length), gV = Math.max(...adj.map(i => memS(i).gV)), interior = k > 0 && k < sup.length - 1;   // LL4 (2026-10-14): 90% two-truck case at all interior supports regardless of continuity (3.6.1.3.1)
       const e = feIM(sgLLRow(bN, rN[k]), im), pl = plRow(rN[k]), llMax = gV * (interior ? Math.max(e.pos, e.pos2) : e.pos), llMin = gV * e.neg;
       const v = { DC1: dot(rS[k], w1), DC2: dot(r3[k], wDC2), DW: dot(r3[k], wDW), Lp: llMax, Ln: llMin, Pp: pl.pp, Pn: pl.nn, CL: dot(rS[k], wCL), Fp: 0, Fn: 0 };
       const cmb = {}; SA_COMBOS.filter(C => !C.fat).forEach(C => cmb[C.id] = saComb(C, v));
