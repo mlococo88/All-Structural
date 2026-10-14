@@ -12128,3 +12128,377 @@ No engineering formula, factor, unit or code reference is changed, and the embed
 +    if (P.ui) delete P.ui.xfRe; }
    GD_XF_PASS = pass ? 1 : 0; GD_XF_REQ = { src, tgt, sig: gdXfSig(), pass: !!pass }; }
 ```
+
+## 2026-10-14 — PR: claude/girderdetail-pna-below-web (composite positive flexure with the PNA below the web is outside the scope of the app: Girder section, check at any location, Preliminary sizing; engineer's decision 2026-10-14; PR link added after merge)
+
+### OOS1. PNA below the web: OUT OF SCOPE, never passing   [BEHAVIOUR CHANGE — results suppressed, layouts rejected] [no formula, factor or unit changed; normal sections unchanged]
+- **Decision (engineer, 2026-10-14):** when the composite positive-flexure plastic force balance puts the plastic neutral axis below the web (P_t > P_s + P_c + P_w, plus P_rt + P_rb when the deck rebar is counted), the section is outside AASHTO LRFD 10th Ed. Table D6.1-1 and Art. D6.3.2 and so outside the scope of the app. Same treatment as ST-Girder (stgirder PR #224), including the whole-span rule: a flagged location blocks the positive-flexure results of its span.
+- **Before:** Girder section `d61pos` took Case I whenever P_t + P_w ≥ P_c + P_s + P_rb + P_rt and did not limit Ȳ, so with the PNA below the web Ȳ > D, the PNA was drawn at y_p = t_b + D − Ȳ (below the top of the bottom flange, or below the steel), M_p came from the extrapolated Case I expression, D_cp = Ȳ > D, D_p > D_t was possible, and GS5/GS6 reported PASS/FAIL numbers from those values. The only hint was the cross-check against the direct force balance on the Resistances tab ("differs by x %; review"). Preliminary sizing (`sgPlastic`, force balance by bisection) located the PNA in the bottom flange (D_cp = D), had no flag, and its quick suggestion, Full design and current-girder check could accept such a layout.
+- **After (Girder section, `Steel Bridge Beam Modules.html`):**
+  - `d61pos` returns `below: true` (only when true) for P_t > P_c + P_s + P_w + P_rt + P_rb; the values it returns are unchanged and are not reported.
+  - `GM.gs.compute`: positive-flexure rows with `below`, and every positive-flexure row of the same span (span from the row's station `x` on the bridge of Preliminary sizing, `gdFatSup`; the whole girder where a station is unknown), get `r.oos`; `R.pnaOOS` lists the flagged locations (name, x, span, plastic forces) and is present only when not empty. `p.oosExt` (transient, check at any location): flagged stations of the span found from every analysis node.
+  - GS5 (ductility) and GS6 (positive-flexure resistance) items of `r.oos` rows: `gsOosItem`, cells "out of scope", status `fail` with `oos: true` (badge and report status "Out of scope" / "OUT OF SCOPE"), so the module verdict is never passing (status bar adds "(out of scope: plastic neutral axis below the web)").
+  - Alert (required wording, each location with x, span and the forces with values) on the Summary, Checks, Resistances and Drawings tabs, in the calculation report (1. Objectives and the conclusion) and on the check at any location. Resistances tab: the case test shows P_t > … ⇒ Ȳ > D, then the alert; no Case I Ȳ, M_p, cross-check, D_cp, compactness, ductility or M_n for that location. Drawing: no PNA line (note instead). Key results: "out of scope" in the positive-section list.
+  - Check at any location: `gsaOos` (cached like the ratio plot) builds the rows at every analysis node of the girder; the station's run gets the flagged stations of its span. The ratio plot leaves out the out-of-scope items (no ratio).
+- **After (Preliminary sizing, embedded `PL_B64`: decoded, edited, re-encoded on its one line):**
+  - `sgPlastic` returns `oos: { Ps, Pc, Pw, Pt }` (only when P_t > P_s + P_c + P_w; rebar and haunch concrete ignored, as its M_p).
+  - New `sgOosScan` (positive-flexure nodes, M_u+ > 0, both sides of plate boundaries, per girder type and span). `checkLayout`: positive-flexure ratios (6.10.7.1/6.10.7.2 and the ductility note) of a flagged span are not computed; returns `oos` (only when not empty).
+  - Rejection: fast candidates (`evalCand`) with `oos` are `ok = false`; every pass test (quick check, Full design candidates and verification, the current-girder check) adds `!check.oos`; the "closest candidate" when none passes prefers one within scope.
+  - Display: "OUT OF SCOPE: not accepted" with the reason on the suggestion card, "Rejected: PNA below the web (out of scope)" in the depth-candidate and Full design candidate tables, an alert on the Full design card, the reason in the current-girder comparison card and in the Apply warning.
+- **Not changed:** the hand-off to ST-Girder (Structural analysis, Send to ST-Girder) still sends an out-of-scope girder; ST-Girder flags it itself (checked). Design all summary lists GS5/GS6 under "Fails" (saved `P.designAll.stat` format unchanged).
+- **Governing provision:** AASHTO LRFD 10th Ed. (2024) Appendix D6.1, Table D6.1-1 (Case I, Ȳ ≤ D only if P_t ≤ P_c + P_s + P_w + P_rt + P_rb); Appendix D6.3.2; 6.10.6.2.2; 6.10.7.1.2; 6.10.7.3.
+- **Check case (built-in example, Preliminary sizing: structural deck t_s = 5 in, bottom flange of plate 1, 0–82 ft (span 1 positive region), 30 × 3 in; then Get demands; F_y = 50 ksi, f′_c = 4 ksi, web 60 × 9/16, top flange 16 × 3/4, b_eff = 114 in interior, deck rebar excluded):** P_s = 0.85(4)(114)(5) = 1,938.0; P_c = 50(16)(0.75) = 600.0; P_w = 50(60)(0.5625) = 1,687.5; P_t = 50(30)(3) = 4,500.0 kip. P_c + P_s + P_w = 4,225.5 < P_t ⇒ PNA below the web. Case I extrapolated: Ȳ = 30[(4,500 − 600 − 1,938)/1,687.5 + 1] = 64.88 in > D = 60 in; D_p = 72.63 in > D_t = 70.75 in; M_p = 20,817 kip-ft against 18,337 kip-ft by the direct force balance (PNA 2.91 in above the bottom of the steel, in the bottom flange): +13.5 % (unconservative). Exterior girder: P_s = 1,632.0 kip, 3,919.5 < 4,500 kip.
+  - Before (main): GS5 Span 1 interior 2.44 FAIL, exterior 2.63 FAIL; **GS6 Span 1 interior/exterior PASS (noncompact, compression flange 0.41, tension flange 0.27/0.26)**; status bar "2 checks fail"; PNA drawn at y_p = 63 − 64.88 = −1.88 in; Preliminary sizing: no flag.
+  - After: GS5 and GS6 Span 1 interior and exterior "OUT OF SCOPE" (status fail, ratio —); status bar "3 checks fail (out of scope: plastic neutral axis below the web)"; alert with both locations and forces; no PNA drawn; check at any location at 44 ft (span 1): alert with the station and the 82 flagged stations of span 1 (1.00–81.99 ft), GS5/GS6 out of scope; at 180 ft (span 2): unchanged, every check satisfied. Preliminary sizing: the current-girder check reports OUT OF SCOPE (166 positive-flexure nodes of span 1, interior and exterior girders) and does not pass; the quick suggestion and Full design (their own plates) are within scope and unchanged.
+- **How verified:** every script block parses (Babel/`new Function`; the decoded Preliminary sizing too). Headless Chromium, main (b811952) vs branch, each project settled (`settle`): built-in, xsA and curb — the checks, results, calculation report, tab HTML and status bar of all 11 modules, the check at any location (results and ratio plot) and the project data `P` identical (sha256); quick suggestion (layout, check, candidates, card text) and Full design (layout, candidates, card text) identical for all three; no console errors. Test case as above in main and branch; Send to ST-Girder from Structural analysis still sends (G1, 363 stations) and ST-Girder (main, with #224) flags span 1 out of scope (P_t = 4,500 > 1,632 + 600 + 1,688 = 3,920 kip). Rejection: the Preliminary sizing pass tests read `!check.oos` (verify of the test-case girder: `passTest` false); no fast or Full design candidate became out of scope in sweeps down to t_s = 1.5 in (deck and spans varied), so the candidate-table wording ("Rejected: PNA below the web (out of scope)") was checked with an out-of-scope state injected for the display only.
+- **Other copies:** ST-Girder has its own (stgirder.md, PR #224).
+- **Open items:** none.
+
+Diff of the main file (the `PL_B64` line, re-encoded, is left out):
+
+```diff
+diff --git a/Steel Bridge Beam Modules.html b/Steel Bridge Beam Modules.html
+index b0f0bae..8b0378c 100644
+--- a/Steel Bridge Beam Modules.html	
++++ b/Steel Bridge Beam Modules.html	
+@@ -2360,3 +2360,3 @@ function showManPart() { const id = P.ui.man || 'p1'; $$('.man-btn').forEach(b =
+ 
+ /* =====================================================================
+@@ -3428,3 +3428,6 @@ function d61pos(r, X) {
+   const Mp = (lead + sum(terms.map(q => q.M))) / 12;
+-  return { pos: true, inc, P, Y, tests, cs, Yb, yp, ref, lead, leadTex, terms, Mp, crt, crb, ts, D, tc, tb, d, y1, Dcp: cs === 'I' ? Yb : 0 };
++  // PNA-OOS (engineer's decision 2026-10-14): P_t > P_c + P_s + P_w (+ P_rt + P_rb when the rebar is counted) puts the PNA below the web; Case I would give Ybar > D.
++  // Table D6.1-1 and D6.3.2 do not cover it: flagged here (the values above are left as they are and are not reported; see GM.gs.compute and checks).
++  const below = cs === 'I' && P.t > P.c + P.s + P.w + P.rt + P.rb;
++  return { pos: true, inc, P, Y, tests, cs, Yb, yp, ref, lead, leadTex, terms, Mp, crt, crb, ts, D, tc, tb, d, y1, Dcp: cs === 'I' ? Yb : 0, ...(below ? { below: true } : {}) };
+ }
+@@ -3637,3 +3640,14 @@ tabs: { combos: 'Loads and stresses', cap: 'Resistances', geometry: 'Proportions
+     });
+-    return { errors: [], MR, rows, Fyt, Fyb, Fyw, Fyr, fc, n, ts, hh, Art, Arb, tdeck: g('tdeck'), G, p };
++    // PNA-OOS (2026-10-14): a positive-flexure location whose PNA falls below the web is outside the scope of this module. Every positive-flexure
++    // location in the same span (by the row's station on Preliminary sizing's bridge; the whole girder where a station is unknown) is then out of
++    // scope too: its M_p, D_p, D_cp and compactness are not reported (GS5, GS6). p.oosExt: flagged stations of the span found elsewhere (check at any location).
++    const oosR = rows.filter(r => r.pos && r.d61.below), oosX = Array.isArray(p.oosExt) ? p.oosExt : [];
++    let pnaOOS = null;
++    if (oosR.length || oosX.length) {
++      const B = gdFatSup(), spOf = x => { if (!B || x == null || x === '' || !isFinite(+x)) return null; const k = B.sp.findIndex((L, i) => +x <= B.sup[i + 1] + 1e-6); return k < 0 ? B.sp.length - 1 : k; }, rx = r => (p.rows[r.i] || {}).x;
++      pnaOOS = [...oosR.map(r => ({ name: r.name, x: rx(r), span: spOf(rx(r)), P: r.d61.P, inc: r.d61.inc })), ...oosX.filter(e => !oosR.some(r => Math.abs(+rx(r) - +e.x) < 0.011))];
++      const ks = new Set(pnaOOS.map(o => o.span)), all = ks.has(null);
++      rows.forEach(r => { if (r.pos && (r.d61.below || all || spOf(rx(r)) == null || ks.has(spOf(rx(r))))) r.oos = true; });
++    }
++    return { errors: [], MR, rows, Fyt, Fyb, Fyw, Fyr, fc, n, ts, hh, Art, Arb, tdeck: g('tdeck'), G, p, ...(pnaOOS ? { pnaOOS } : {}) };
+   },
+@@ -3659,3 +3673,3 @@ tabs: { combos: 'Loads and stresses', cap: 'Resistances', geometry: 'Proportions
+     { const c = { id: 'GS5', grp: FX, title: 'Positive flexure: ductility', ref: 'AASHTO LRFD 6.10.7.3', src: 'Code', sym: T`D_p \le 0.42D_t`, cols: ['Location', 'D_p (in)', '0.42D_t (in)', 'Ratio'], items: [], note: 'D_p is the distance from the top of the concrete deck to the plastic neutral axis; D_t is the total depth of the composite section.' };
+-      R.rows.filter(r => r.pos).forEach(r => c.items.push(rc(L(r), [f2(r.Dp), f2(0.42 * r.Dt), f2(r.Dp / (0.42 * r.Dt))], r.Dp, 0.42 * r.Dt, T`D_p = ${f2(r.Dt)} - ${f2(r.pl.yp)} = ${f2(r.Dp)} \;${LE(r.Dp, 0.42 * r.Dt)}\; 0.42(${f2(r.Dt)}) = ${f2(0.42 * r.Dt)}\ \text{in}`)));
++      R.rows.filter(r => r.pos).forEach(r => c.items.push(r.oos ? gsOosItem(r, 3) : rc(L(r), [f2(r.Dp), f2(0.42 * r.Dt), f2(r.Dp / (0.42 * r.Dt))], r.Dp, 0.42 * r.Dt, T`D_p = ${f2(r.Dt)} - ${f2(r.pl.yp)} = ${f2(r.Dp)} \;${LE(r.Dp, 0.42 * r.Dt)}\; 0.42(${f2(r.Dt)}) = ${f2(0.42 * r.Dt)}\ \text{in}`)));
+       if (!c.items.length) c.naWhy = 'No positive-flexure location.'; out.add(c); }
+@@ -3664,3 +3678,3 @@ tabs: { combos: 'Loads and stresses', cap: 'Resistances', geometry: 'Proportions
+         note: 'Compact when F_y ≤ 70 ksi, D/t_w ≤ 150, and 2D_cp/t_w ≤ 3.76√(E/F_yc) (6.10.6.2.2). M_p is worked by the case equations of Appendix D6.1 on the Resistances tab (deck rebar per the toggle on the Materials and deck tab). Noncompact sections are checked by flange stresses: f_bu ≤ φ_fR_bR_hF_yc (compression) and f_bu + f_ℓ/3 ≤ φ_fR_hF_yt (tension), with R_b = 1.0.' };
+-      R.rows.filter(r => r.pos).forEach(r => { if (r.compact) { const dem = Math.abs(r.Mu) + r.fl * r.Sxt / 3 / 12;
++      R.rows.filter(r => r.pos).forEach(r => { if (r.oos) { c.items.push(gsOosItem(r, 4)); return; } if (r.compact) { const dem = Math.abs(r.Mu) + r.fl * r.Sxt / 3 / 12;
+           c.items.push(rc(L(r), ['Compact', `${f2(dem)} k-ft`, `${f2(r.Mn)} k-ft`, f2(dem / r.Mn)], dem, r.Mn,
+@@ -3747,3 +3761,3 @@ tabs: { combos: 'Loads and stresses', cap: 'Resistances', geometry: 'Proportions
+   kq(R) { const p = R.rows.filter(r => r.pos), n = R.rows.filter(r => !r.pos);
+-    return [['Locations', `${p.length} positive, ${n.length} negative`], ['Positive sections', p.length ? p.map(r => r.compact ? 'compact' : 'noncompact').filter((v, i, a) => a.indexOf(v) === i).join(', ') : '—'],
++    return [['Locations', `${p.length} positive, ${n.length} negative`], ['Positive sections', p.length ? p.map(r => r.oos ? 'out of scope' : r.compact ? 'compact' : 'noncompact').filter((v, i, a) => a.indexOf(v) === i).join(', ') : '—'],
+       ['Negative method', n.length ? (n.every(r => r.useA6) ? 'Appendix A6' : n.some(r => r.useA6) ? 'A6 / 6.10.8' : '6.10.8') : '—'], ['Max. V<sub>u</sub>', `${f2(Math.max(...R.rows.map(r => r.Vu)))} kip`]]; },
+@@ -3759,3 +3773,3 @@ tabs: { combos: 'Loads and stresses', cap: 'Resistances', geometry: 'Proportions
+     return h; },
+-  drawings(R) { let h = ''; R.rows.slice(0, 6).forEach(r => h += card('dw-g' + r.i, esc(r.name), 'Composite section with plastic and elastic neutral axes; Strength I stresses', `<div class="dwg-wrap">${gsSVG(R, r)}</div>`)); return h; },
++  drawings(R) { let h = gsOosAlert(R); R.rows.slice(0, 6).forEach(r => h += card('dw-g' + r.i, esc(r.name), 'Composite section with plastic and elastic neutral axes; Strength I stresses', `<div class="dwg-wrap">${gsSVG(R, r)}</div>`)); return h; },
+   echo(R) { const p = R.p; return { kv: [['Grades: top / bottom / web', `${p.gT} / ${p.gB} / ${p.gW}`], ['Deck', `f′c = ${f2(R.fc)} ksi, w_c = ${R.MR.wc.toFixed(3)} kcf, K_1 = ${f2(R.MR.K1)}; n = ${R.MR.n0.toFixed(2)}${R.MR.rule === 'round' ? ` → ${R.MR.n}` : ''} (computed, E_c = ${f0(R.MR.Ec)} ksi); t_s = ${f2(R.ts)} in (total ${f2(R.tdeck)}), haunch ${f2(R.hh)} in`], ['Rebar per girder', `top ${f2(R.Art)} in² at ${p.crt} in, bottom ${f2(R.Arb)} in² at ${p.crb} in, F_yr = ${f0(R.Fyr)} ksi`],
+@@ -3767,2 +3781,20 @@ tabs: { combos: 'Loads and stresses', cap: 'Resistances', geometry: 'Proportions
+ };
++/* PNA-OOS (2026-10-14): positive-flexure locations whose plastic neutral axis falls below the web (Table D6.1-1 / D6.3.2 do not cover it), and the
++   positive-flexure locations of the same span: GS5 and GS6 items read OUT OF SCOPE (status fail, so the module never reads as passing). */
++const GS_OOS_HEAD = 'Outside the scope of this app: the plastic neutral axis falls below the web (bottom flange plastic force P_t exceeds P_s + P_c + P_w), which AASHTO LRFD 10th Ed. Table D6.1-1 and Art. D6.3.2 do not cover. Revise the section (e.g. reduce the bottom flange or increase the deck/top flange).';
++const gsOosSum = o => `P_t = ${f2(o.P.t)} kip > P_s + P_c + P_w${o.inc ? ' + P_rt + P_rb' : ''} = ${f2(o.P.s)} + ${f2(o.P.c)} + ${f2(o.P.w)}${o.inc ? ` + ${f2(o.P.rt)} + ${f2(o.P.rb)}` : ''} = ${f2(o.P.s + o.P.c + o.P.w + (o.inc ? o.P.rt + o.P.rb : 0))} kip`;
++const gsOosWhere = o => `${esc(o.name)}${o.x != null && o.x !== '' && isFinite(+o.x) ? `, x = ${f2(+o.x)} ft` : ''}${o.span != null ? ` (span ${o.span + 1})` : ''}`;
++function gsOosAlert(R, m = '0 0 12px') {
++  const L = R.pnaOOS || []; if (!L.length) return '';
++  const all = L.some(o => o.span == null);
++  return `<div class="alert fail" role="alert" style="margin:${m}"><b>OUT OF SCOPE.</b> ${sub(GS_OOS_HEAD)}<ul class="err-list">${L.map(o => `<li><b>${gsOosWhere(o)}</b>: ${sub(gsOosSum(o))}.</li>`).join('')}</ul>Not reported (OUT OF SCOPE): positive-flexure resistance (GS6), ductility D<sub>p</sub> ≤ 0.42D<sub>t</sub> (GS5), and the compactness, M<sub>p</sub>, D<sub>p</sub> and D<sub>cp</sub> of ${all ? 'every positive-flexure location of the girder' : 'every positive-flexure location in the same span'}. These checks count as not satisfied, so the module does not pass.</div>`;
++}
++function gsOosItem(r, nc) {
++  const q = r.d61, own = !!q.below, P_ = q.P, inc = q.inc;
++  return { loc: `${r.name}: OUT OF SCOPE`, cells: ['out of scope', ...Array(nc - 1).fill('—')], st: 'fail', oos: true,
++    work: own ? T`\text{Out of scope: } P_t = ${f2(P_.t)} > P_s + P_c + P_w${inc ? ' + P_{rt} + P_{rb}' : ''} = ${f2(P_.s + P_.c + P_.w + (inc ? P_.rt + P_.rb : 0))}\ \text{kip: the PNA falls below the web, which Table D6.1-1 and D6.3.2 do not cover; revise the section}`
++      : T`\text{Out of scope: the plastic neutral axis falls below the web at another positive-flexure location of this span (see the summary); not reported}` };
++}
++const OOS_BADGE = '<span class="badge fail">Out of scope</span>';
++const itBadge = it => it.oos ? OOS_BADGE : badge(it.st), kBadge = k => ((k.items || [])[k.gov] || {}).oos ? OOS_BADGE : badge(k.status);
+ function gsSVG(R, r) {
+@@ -3777,3 +3809,4 @@ function gsSVG(R, r) {
+   const close = Math.abs(Y(r.pl.yp) - Y(en.yb)) < 14;
+-  o += ln(r.pl.yp, '#c0392b', '6 3', `PNA ${f2(r.pl.yp)} in`, close ? -7 : 0) + ln(en.yb, DC.plS, '2 3', `ENA (${r.pos ? 'n' : 'steel + rebar'}) ${f2(en.yb)} in`, close ? 7 : 0);
++  if (r.d61.below) o += ln(en.yb, DC.plS, '2 3', `ENA (n) ${f2(en.yb)} in`, 0) + `<text x="${X(-Wd / 2) - 20}" y="${Y(0) + 18}" class="sv-t sv-sm" fill="#c0392b">PNA below the web: out of scope (Table D6.1-1); not drawn</text>`;   // PNA-OOS
++  else o += ln(r.pl.yp, '#c0392b', '6 3', `PNA ${f2(r.pl.yp)} in`, close ? -7 : 0) + ln(en.yb, DC.plS, '2 3', `ENA (${r.pos ? 'n' : 'steel + rebar'}) ${f2(en.yb)} in`, close ? 7 : 0);
+   // Strength I stress diagram
+@@ -3791,3 +3824,3 @@ GM.gs.capacity = function (R) {
+   const k1 = v => v >= 0 ? '\\ge' : '<', yes = ok => ok ? T`\ \checkmark` : T`\ \times`;
+-  let h = card('cap-intro', 'Section capacity', 'AASHTO LRFD Appendices D6 and A6, Articles 6.10.7 and 6.10.8', `<p class="note-p">Each location is worked from first principles in the order of the specification: the plastic moment by the case equations of Appendix D6.1, the yield moment (D6.2), the depths of web in compression (D6.3), and then the nominal flexural resistance: Article 6.10.7 in positive flexure, and both Article 6.10.8 and Appendix A6 in negative flexure. The checks that compare these resistances with the factored demands are GS5 to GS9 on the Checks tab.</p>
++  let h = gsOosAlert(R) + card('cap-intro', 'Section capacity', 'AASHTO LRFD Appendices D6 and A6, Articles 6.10.7 and 6.10.8', `<p class="note-p">Each location is worked from first principles in the order of the specification: the plastic moment by the case equations of Appendix D6.1, the yield moment (D6.2), the depths of web in compression (D6.3), and then the nominal flexural resistance: Article 6.10.7 in positive flexure, and both Article 6.10.8 and Appendix A6 in negative flexure. The checks that compare these resistances with the factored demands are GS5 to GS9 on the Checks tab.</p>
+     <p class="note-p">Deck rebar in positive M<sub>p</sub>: <b>${R.p.rebarMp === 'incl' ? 'included (P<sub>rt</sub>, P<sub>rb</sub>)' : 'excluded'}</b>. In negative flexure the longitudinal deck reinforcement is part of the section (6.10.1.1.1c). The haunch concrete is ignored; the deck acts over its structural thickness t<sub>s</sub>.</p>`);
+@@ -3803,3 +3836,4 @@ GM.gs.capacity = function (R) {
+     // ---- case determination
+-    const tl = q.tests.map(t => T`\text{Case ${t.cs}: } ${t.lt} = ${f2(t.lhs)} \;${t.ok ? '\\ge' : '<'}\; ${t.rt} = ${f2(t.rhs)} \;\Rightarrow\; \text{${t.ok ? 'PNA in this region' : 'no'}}`);
++    const tl = q.tests.map(t => T`\text{Case ${t.cs}: } ${t.lt} = ${f2(t.lhs)} \;${t.ok ? '\\ge' : '<'}\; ${t.rt} = ${f2(t.rhs)} \;\Rightarrow\; \text{${t.ok ? (q.below ? 'condition met' : 'PNA in this region') : 'no'}}`);
++    if (q.below) tl.push(T`P_t = ${f2(P.t)} > P_c + P_s + P_w${q.inc ? ' + P_{rt} + P_{rb}' : ''} = ${f2(P.c + P.s + P.w + P.rt + P.rb)} \;\Rightarrow\; \bar{Y} > D\text{: PNA below the web, not covered by Table D6.1-1 or D6.3.2}`);   // PNA-OOS
+     if (q.pos && !q.inc && !['I', 'II'].includes(q.cs)) tl.push(T`\text{Cases IV and VI (PNA at a rebar layer) do not apply with the rebar excluded.}`);
+@@ -3807,3 +3841,4 @@ GM.gs.capacity = function (R) {
+     add(S('Location of the plastic neutral axis'), q.pos ? 'Table D6.1-1' : 'Table D6.1-2', T`\begin{array}{l} ${tl.join(' \\\\[3pt] ')} \end{array}`);
+-    if (q.out) { E_.push(`<div class="cap-flag"><b>The plastic neutral axis lies above the top flange, outside Table D6.1-2.</b> The steel is weaker than the reinforcement in tension. M<sub>p</sub> is taken from a direct force balance (${f2(r.plNum.Mp)} kip-ft) and should be reviewed.</div>`); }
++    if (q.below) E_.push(`<div class="cap-flag" role="alert"><b>OUT OF SCOPE.</b> ${sub(GS_OOS_HEAD)} ${sub(gsOosSum({ P, inc: q.inc }))}. M<sub>p</sub>, D<sub>p</sub>, D<sub>cp</sub> and the compactness of this location are not computed here, and GS5 and GS6 are not reported.</div>`);   // PNA-OOS
++    else if (q.out) { E_.push(`<div class="cap-flag"><b>The plastic neutral axis lies above the top flange, outside Table D6.1-2.</b> The steel is weaker than the reinforcement in tension. M<sub>p</sub> is taken from a direct force balance (${f2(r.plNum.Mp)} kip-ft) and should be reviewed.</div>`); }
+     else {
+@@ -3825,3 +3860,4 @@ GM.gs.capacity = function (R) {
+     // ---- D6.3
+-    add(S('Depth of the web in compression'), 'App. D6.3.1, D6.3.2', q.pos
++    if (q.pos && r.oos && !q.below) E_.push(`<div class="cap-flag"><b>OUT OF SCOPE (same span).</b> The plastic neutral axis falls below the web at another positive-flexure location of this span (see the alert above), so the positive-flexure results of this location (GS5, GS6) are not reported.</div>`);   // PNA-OOS
++    if (!q.below) add(S('Depth of the web in compression'), 'App. D6.3.1, D6.3.2', q.pos
+       ? T`D_{cp} = ${q.cs === 'I' ? T`\bar{Y} = ${f2(r.Dcp)}` : '0'}\ \text{in (PNA ${q.cs === 'I' ? 'in the web' : 'above the web'})}`
+@@ -3829,3 +3865,4 @@ GM.gs.capacity = function (R) {
+     // ---- positive: 6.10.6.2.2, 6.10.7
+-    if (q.pos) {
++    if (q.pos && q.below) { /* PNA-OOS: no compactness, ductility or M_n */ }
++    else if (q.pos) {
+       const lim = 3.76 * Math.sqrt(ES / R.Fyt);
+@@ -3936,3 +3973,13 @@ function gsaRows(st, S, list, names) {   // Girder section rows at the stations
+ }
+-function gsaRun(rows) { const p = { ...P.gs, rows: rows.map(r => ({ ...r })) }, R = GM.gs.compute(p); return R.errors.length ? { err: R.errors[0], R } : { R, CK: GM.gs.checks(R) }; }
++function gsaRun(rows, oosExt) { const p = { ...P.gs, rows: rows.map(r => ({ ...r })), ...(oosExt && oosExt.length ? { oosExt } : {}) }, R = GM.gs.compute(p); return R.errors.length ? { err: R.errors[0], R } : { R, CK: GM.gs.checks(R) }; }
++// PNA-OOS (2026-10-14): the positive-flexure stations of this girder whose plastic neutral axis falls below the web (rows at every analysis node, as the ratio plot), cached until an input changes
++function gsaOos(st, S) {
++  const key = GA.key + '|' + S.g + '|' + JSON.stringify({ ...P.gs, rows: 0, source: 0 });
++  if (GA.oosKey === key && GA.oos) return GA.oos;
++  const list = []; S.xs.forEach(x => gsaStations(S, x).forEach(q => list.push(q)));
++  const B = gsaRows(st, S, list), ok = B ? B.rows.filter(r => { const e = []; numRows([r], GS_SPEC, 'Location', e); return !e.length; }) : [], O = B ? gsaRun(ok) : null;
++  const by = {}; (O && O.R && !O.err ? O.R.pnaOOS || [] : []).forEach(o => { const ex = q => q.P.t - q.P.c - q.P.s - q.P.w - (q.inc ? q.P.rt + q.P.rb : 0), c = by[o.span];   // one entry per span: station range, the largest excess
++    if (!c) by[o.span] = { ...o, x0: +o.x, x1: +o.x, n: 1 }; else { c.x0 = Math.min(c.x0, +o.x); c.x1 = Math.max(c.x1, +o.x); c.n++; if (ex(o) > ex(c)) Object.assign(c, { name: o.name, x: o.x, P: o.P, inc: o.inc }); } });
++  GA.oos = Object.values(by).map(o => ({ name: `G${S.g}, ${o.n} station${o.n > 1 ? 's' : ''} from ${o.x0.toFixed(2)} to ${o.x1.toFixed(2)} ft; largest excess`, x: o.x, span: o.span, P: o.P, inc: o.inc })); GA.oosKey = key; return GA.oos;
++}
+ // the largest ratio of each row, overall and per check group; items of the method not in use, and N/A items, are left out
+@@ -3985,3 +4032,3 @@ function gsaShow(now) {   // results: the summary at once, the worked calculatio
+     if (list.length > 1) { const ar = r => r.topB * r.topT + r.botB * r.botT + r.D * r.tw, sm = ar(B.rows[0]) <= ar(B.rows[1]) ? 0 : 1; B.rows[sm].name += ', smaller section'; }
+-    const O = gsaRun(B.rows); GA.last = { x, O };
++    const OO = gsaOos(st, S), spX = v => { let k = 0; while (k < S.sup.length - 2 && v > S.sup[k + 1] + 1e-6) k++; return k; }, O = gsaRun(B.rows, OO.filter(o => o.span === spX(x))); GA.last = { x, O };   // PNA-OOS: flagged stations of this span
+     if (O.err) { res.innerHTML = `<div class="alert fail"><b>The row has an input error:</b> ${esc(O.err)}</div>`; return; }
+@@ -3990,5 +4037,5 @@ function gsaShow(now) {   // results: the summary at once, the worked calculatio
+     const E = GM.gs.echo(R), tb = (T, cls) => `<div class="tscroll"><table class="tbl ${cls || ''}"><thead><tr>${T[0].map(h => `<th>${sub(h)}</th>`).join('')}</tr></thead><tbody>${T[1].map(r => `<tr>${r.map(v => `<td>${v}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+-    const rowsT = CK.map(k => { const g = k.items[k.gov]; return `<tr class="row-${k.status}"><td><span class="cid">${k.id}</span></td><td>${esc(k.grp)}</td><td>${esc(k.title)}</td><td class="lbl">${g ? sub(g.loc) : `<span class="n-dim">${esc(k.naWhy || '')}</span>`}</td><td class="val">${g && g.r !== undefined && isFinite(g.r) ? f2(g.r) : '—'}</td><td>${badge(k.status)}</td></tr>`; }).join('');
++    const rowsT = CK.map(k => { const g = k.items[k.gov]; return `<tr class="row-${k.status}"><td><span class="cid">${k.id}</span></td><td>${esc(k.grp)}</td><td>${esc(k.title)}</td><td class="lbl">${g ? sub(g.loc) : `<span class="n-dim">${esc(k.naWhy || '')}</span>`}</td><td class="val">${g && g.r !== undefined && isFinite(g.r) ? f2(g.r) : '—'}</td><td>${kBadge(k)}</td></tr>`; }).join('');
+     const head = `<div class="ga-head ${c.fail ? 'fail' : 'pass'}"><div><b>G${S.g} at ${x.toFixed(2)} ft</b> <span class="n-dim">(${esc(gsaLocTxt(S, x))})</span><br>${c.fail ? `${c.fail} check${c.fail > 1 ? 's' : ''} fail` : 'Every check is satisfied'}${c.warn ? `, ${c.warn} warning${c.warn > 1 ? 's' : ''}` : ''}. ${R.rows.map(r => `${esc(r.name)}: ${r.pos ? 'positive' : 'negative'} flexure`).join('; ')}.</div><div class="ga-gov"><span>Governing ratio</span><b class="${gv && gv.it.r > 1 ? 'fail' : ''}">${gv ? f2(gv.it.r) : '—'}</b><span>${gv ? `${gv.k.id}, ${sub(gv.it.loc)}` : ''}</span></div></div>`;
+-    res.innerHTML = card('ga-sum', 'Checks at this station', `G${S.g}, ${x.toFixed(2)} ft`, head + `<div class="tscroll"><table class="tbl sumtbl"><thead><tr><th>ID</th><th>Group</th><th>Check</th><th>Governing</th><th class="right">Ratio</th><th>Status</th></tr></thead><tbody>${rowsT}</tbody></table></div>`)
++    res.innerHTML = gsOosAlert(R) + card('ga-sum', 'Checks at this station', `G${S.g}, ${x.toFixed(2)} ft`, head + `<div class="tscroll"><table class="tbl sumtbl"><thead><tr><th>ID</th><th>Group</th><th>Check</th><th>Governing</th><th class="right">Ratio</th><th>Status</th></tr></thead><tbody>${rowsT}</tbody></table></div>`)
+       + card('ga-row', 'Row checked (section, bracing, and demands)', 'From Structural analysis', tb(E.table) + tb(E.table2) + (R.rows.some(r => r.end === 'yes') ? '<p class="note-p">End panel: the station is within d<sub>o</sub> of an abutment bearing (or a bearing of a simple span), so V<sub>n</sub> = CV<sub>p</sub> (6.10.9.3.3) and GS18 does not apply.</p>' : ''))
+@@ -4005,6 +4052,6 @@ function gsaCalc(R, CK) {   // full worked calculations of every check (Checks t
+       if (!k.items.length) b += `<div class="alert info"><b>Not applicable.</b> ${esc(k.naWhy || '')}</div>`;
+-      else { b += `<div class="tscroll"><table class="tbl itbl"><thead><tr><th>${sub(k.cols[0])}</th>${k.cols.slice(1).map(c => `<th class="right">${sub(c)}</th>`).join('')}<th>Status</th></tr></thead><tbody>${k.items.map((it, i) => `<tr class="${i === k.gov ? 'gov' : ''}"><td class="lbl">${sub(it.loc)}${i === k.gov ? ' <span class="gov-tag">governs</span>' : ''}</td>${it.cells.map(c => `<td class="val">${sub(c)}</td>`).join('')}<td>${badge(it.st)}</td></tr>`).join('')}</tbody></table></div>`;
++      else { b += `<div class="tscroll"><table class="tbl itbl"><thead><tr><th>${sub(k.cols[0])}</th>${k.cols.slice(1).map(c => `<th class="right">${sub(c)}</th>`).join('')}<th>Status</th></tr></thead><tbody>${k.items.map((it, i) => `<tr class="${i === k.gov ? 'gov' : ''}"><td class="lbl">${sub(it.loc)}${i === k.gov ? ' <span class="gov-tag">governs</span>' : ''}</td>${it.cells.map(c => `<td class="val">${sub(c)}</td>`).join('')}<td>${itBadge(it)}</td></tr>`).join('')}</tbody></table></div>`;
+         k.items.forEach((it, i) => { if (it.work) b += eq(`${sub(it.loc)}${i === k.gov && k.items.length > 1 ? ' (governs)' : ''}`, '', it.work, it.where, it.st === 'fail' ? 'eq-fail' : ''); }); }
+       if (k.note) b += `<p class="note-p">${sub(k.note)}</p>`;
+-      h += card('ga-chk-' + k.id, `<span class="cid">${k.id}</span>${esc(k.title)}`, '', b, `${srcTag(k.src)}${badge(k.status)}`); }); });
++      h += card('ga-chk-' + k.id, `<span class="cid">${k.id}</span>${esc(k.title)}`, '', b, `${srcTag(k.src)}${kBadge(k)}`); }); });
+   const re = s => s.replace(/(id|data-cc)="(c[bap][\w-]*)"/g, '$1="ga-$2"');   // the module's own card ids stay unique
+@@ -5946,3 +5993,3 @@ function bsRenderSummary() {
+     <div class="kq">${used.map(k => `<div><span>Type ${k}, ${esc(R.types[k].name)}</span><b>${tl(k)}</b></div>`).join('')}<div><span>Grade</span><b>${P.bs.gS} stiffeners, ${P.bs.gW} web</b></div><div><span>Max. R<sub>u</sub></span><b>${f2(Math.max(...R.rows.map(r => r.Ru)))} kip</b></div></div></div>`;
+-  const rows = CK.map(k => { const g = k.items[k.gov]; return `<tr class="row-${k.status}"><td><a href="#chk-${k.id}" class="cid-link" data-goto="${k.id}">${k.id}</a></td><td>${esc(k.grp)}</td><td>${esc(k.title)} <a href="#" class="rpt-mini" data-rptjump="cr-chk-${k.id}">report</a></td><td class="lbl">${g ? sub(g.loc) : ''}</td><td class="val">${g && g.r !== undefined ? f2(g.r) : '—'}</td><td>${badge(k.status)}</td></tr>`; }).join('');
++  const rows = CK.map(k => { const g = k.items[k.gov]; return `<tr class="row-${k.status}"><td><a href="#chk-${k.id}" class="cid-link" data-goto="${k.id}">${k.id}</a></td><td>${esc(k.grp)}</td><td>${esc(k.title)} <a href="#" class="rpt-mini" data-rptjump="cr-chk-${k.id}">report</a></td><td class="lbl">${g ? sub(g.loc) : ''}</td><td class="val">${g && g.r !== undefined ? f2(g.r) : '—'}</td><td>${kBadge(k)}</td></tr>`; }).join('');
+   const per = R.rows.map(r => { const rs = [r.Ru / r.Rsb, r.Ru / r.Pr, r.Ru / r.Rweld], m = Math.max(...rs); return `<tr class="row-${m > 1 ? 'fail' : 'pass'}"><td class="lbl">${esc(r.name)}</td><td>Type ${r.type}</td><td class="val">${f2(r.Ru)}</td><td class="val">${f2(rs[0])}</td><td class="val">${f2(rs[1])}</td><td class="val">${f2(rs[2])}</td></tr>`; }).join('');
+@@ -6050,3 +6097,5 @@ function gmRecompute() {
+   if (m.stresses) { $('#tab-stress').innerHTML = m.stresses(RS); setTimeout(() => renderPlots(), 0); }
+-  renderChecks(); $('#tab-drawings').innerHTML = m.drawings(RS); setTimeout(() => renderPlots(), 0); gmReportHead(m); applyCollapse(); typeset();
++  renderChecks(); $('#tab-drawings').innerHTML = m.drawings(RS); setTimeout(() => renderPlots(), 0); gmReportHead(m);
++  if (RS.pnaOOS) { $('#tab-summary').insertAdjacentHTML('afterbegin', gsOosAlert(RS)); $('#tab-checks').insertAdjacentHTML('afterbegin', gsOosAlert(RS)); }   // PNA-OOS (Girder section)
++  applyCollapse(); typeset();
+ }
+@@ -6058,3 +6107,3 @@ function gmSummary(m) {
+     <div class="kq">${m.kq(RS).map(([k, v]) => `<div><span>${k}</span><b>${v}</b></div>`).join('')}</div></div>`;
+-  const rows = CK.map(k => { const g = k.items[k.gov]; return `<tr class="row-${k.status}"><td><a href="#chk-${k.id}" class="cid-link" data-goto="${k.id}">${k.id}</a></td><td>${esc(k.grp)}</td><td>${esc(k.title)} <a href="#" class="rpt-mini" data-rptjump="cr-chk-${k.id}">report</a></td><td class="lbl">${g ? sub(g.loc) : `<span class="n-dim">${esc(k.naWhy || '')}</span>`}</td><td class="val">${g && g.r !== undefined && isFinite(g.r) ? f2(g.r) : '—'}</td><td>${badge(k.status)}</td></tr>`; }).join('');
++  const rows = CK.map(k => { const g = k.items[k.gov]; return `<tr class="row-${k.status}"><td><a href="#chk-${k.id}" class="cid-link" data-goto="${k.id}">${k.id}</a></td><td>${esc(k.grp)}</td><td>${esc(k.title)} <a href="#" class="rpt-mini" data-rptjump="cr-chk-${k.id}">report</a></td><td class="lbl">${g ? sub(g.loc) : `<span class="n-dim">${esc(k.naWhy || '')}</span>`}</td><td class="val">${g && g.r !== undefined && isFinite(g.r) ? f2(g.r) : '—'}</td><td>${kBadge(k)}</td></tr>`; }).join('');
+   $('#tab-summary').innerHTML = head + card('sum-tbl', 'Checks at a glance', '', `<p class="note-p">Click a check ID for its derivation. Ratio is demand over resistance (≤ 1.00 satisfies) at the governing item.</p><div class="tscroll"><table class="tbl sumtbl"><thead><tr><th>ID</th><th>Group</th><th>Check</th><th>Governing</th><th class="right">Ratio</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table></div>`)
+@@ -7577,8 +7626,8 @@ function crCheck(k, full) {
+     if (!it.work) return;
+-    h += `<div class="cr-item ${it.st === 'fail' ? 'cr-ng' : ''}"><div class="cr-d">${sub(it.loc)}${i === k.gov && k.items.length > 1 ? ' <i>(governs)</i>' : ''}:</div><div class="cr-m">\\[${crBreak(it.work)}\\]</div><div class="cr-r cr-st-${it.st}">${ST[it.st]}${it.r !== undefined && isFinite(it.r) ? `<br>ratio ${f2(it.r)}` : ''}</div></div>`;
++    h += `<div class="cr-item ${it.st === 'fail' ? 'cr-ng' : ''}"><div class="cr-d">${sub(it.loc)}${i === k.gov && k.items.length > 1 ? ' <i>(governs)</i>' : ''}:</div><div class="cr-m">\\[${crBreak(it.work)}\\]</div><div class="cr-r cr-st-${it.st}">${it.oos ? 'OUT OF SCOPE' : ST[it.st]}${it.r !== undefined && isFinite(it.r) ? `<br>ratio ${f2(it.r)}` : ''}</div></div>`;
+     if (it.where && it.where.length) h += `<div class="cr-where">${whereTbl(it.where)}</div>`;
+   });
+-  if (k.items.length > 1 || !full) h += `<table class="cr-tbl"><thead><tr><th>${sub(k.cols[0])}</th>${k.cols.slice(1).map(c => `<th>${sub(c)}</th>`).join('')}<th>Status</th></tr></thead><tbody>${k.items.map((it, i) => `<tr class="${i === k.gov ? 'cr-gov' : ''}"><td>${sub(it.loc)}</td>${it.cells.map(c => `<td class="n">${sub(c)}</td>`).join('')}<td>${ST[it.st]}</td></tr>`).join('')}</tbody></table>`;
++  if (k.items.length > 1 || !full) h += `<table class="cr-tbl"><thead><tr><th>${sub(k.cols[0])}</th>${k.cols.slice(1).map(c => `<th>${sub(c)}</th>`).join('')}<th>Status</th></tr></thead><tbody>${k.items.map((it, i) => `<tr class="${i === k.gov ? 'cr-gov' : ''}"><td>${sub(it.loc)}</td>${it.cells.map(c => `<td class="n">${sub(c)}</td>`).join('')}<td>${it.oos ? 'OUT OF SCOPE' : ST[it.st]}</td></tr>`).join('')}</tbody></table>`;
+   const g = k.items[k.gov];
+-  h += `<div class="cr-line cr-res"><div class="cr-d">Ratio of required-to-provided capacity:</div><div class="cr-m"><b>${g && g.r !== undefined && isFinite(g.r) ? f2(g.r) : '—'}</b>${k.items.length > 1 ? ` at ${sub(g.loc)}` : ''}</div><div class="cr-r cr-st-${k.status}"><b>${ST[k.status]}</b></div></div>`;
++  h += `<div class="cr-line cr-res"><div class="cr-d">Ratio of required-to-provided capacity:</div><div class="cr-m"><b>${g && g.r !== undefined && isFinite(g.r) ? f2(g.r) : '—'}</b>${k.items.length > 1 ? ` at ${sub(g.loc)}` : ''}</div><div class="cr-r cr-st-${k.status}"><b>${(g || {}).oos ? 'OUT OF SCOPE' : ST[k.status]}</b></div></div>`;
+   if (k.note) h += `<p class="cr-note">Note: ${sub(k.note)}</p>`;
+@@ -7597,2 +7646,3 @@ function buildCalcReport(o) {
+   if (mod === 'splice' && spNoPL()) body += `<p class="cr-p"><b>Warning:</b> ${spNoPLMsg()}</p>`;
++  if (RS && RS.pnaOOS && RS.pnaOOS.length) body += `<p class="cr-p"><b>OUT OF SCOPE.</b> ${sub(GS_OOS_HEAD)} ${RS.pnaOOS.map(o => `${gsOosWhere(o)}: ${sub(gsOosSum(o))}`).join('; ')}. The positive-flexure checks (GS5, GS6) of the positive-flexure locations ${RS.pnaOOS.some(o => o.span == null) ? 'of the girder' : 'in the same span'} are not reported and count as not satisfied.</p>`;   // PNA-OOS
+   if (mt.task) body += `<p class="cr-p"><b>Task:</b> ${esc(mt.task)}</p>`;
+@@ -7617,4 +7667,4 @@ function buildCalcReport(o) {
+     body += `<section class="cr-sec cr-break">${H1('Summary of results')}<p class="cr-p">${CK.length} checks: ${c.pass} satisfied, ${c.fail} not satisfied, ${c.warn} warning${c.warn === 1 ? '' : 's'}${c.adv ? `, ${c.adv} advisory` : ''}, ${c.na} not applicable.</p>
+-      <table class="cr-tbl cr-wide"><thead><tr><th>ID</th><th>Check</th><th>Governing location</th><th>Ratio of required-to-provided capacity</th><th>Status</th></tr></thead><tbody>${CK.map(k => { const gi = k.items[k.gov]; return `<tr class="${k.status === 'fail' ? 'cr-ng' : ''}"><td>${o.checks ? `<a href="#cr-chk-${k.id}" data-crjump="cr-chk-${k.id}">${k.id}</a>` : k.id}</td><td>${sub(k.title)}</td><td>${gi ? sub(gi.loc) : `<i>${sub(k.naWhy || 'Not applicable')}</i>`}</td><td class="n">${gi && gi.r !== undefined && isFinite(gi.r) ? f2(gi.r) : '—'}</td><td>${STLBL[k.status]}</td></tr>`; }).join('')}</tbody></table>
+-      <p class="cr-p cr-concl"><b>Conclusion:</b> ${c.fail ? `${c.fail} check${c.fail > 1 ? 's are' : ' is'} not satisfied; revise the design.` : 'All applicable checks are satisfied.'}${c.adv ? ' Advisory items redistribute force (see their notes) and do not indicate failure.' : ''}</p></section>`; }
++      <table class="cr-tbl cr-wide"><thead><tr><th>ID</th><th>Check</th><th>Governing location</th><th>Ratio of required-to-provided capacity</th><th>Status</th></tr></thead><tbody>${CK.map(k => { const gi = k.items[k.gov]; return `<tr class="${k.status === 'fail' ? 'cr-ng' : ''}"><td>${o.checks ? `<a href="#cr-chk-${k.id}" data-crjump="cr-chk-${k.id}">${k.id}</a>` : k.id}</td><td>${sub(k.title)}</td><td>${gi ? sub(gi.loc) : `<i>${sub(k.naWhy || 'Not applicable')}</i>`}</td><td class="n">${gi && gi.r !== undefined && isFinite(gi.r) ? f2(gi.r) : '—'}</td><td>${(gi || {}).oos ? 'Out of scope' : STLBL[k.status]}</td></tr>`; }).join('')}</tbody></table>
++      <p class="cr-p cr-concl"><b>Conclusion:</b> ${c.fail ? `${c.fail} check${c.fail > 1 ? 's are' : ' is'} not satisfied; revise the design.` : 'All applicable checks are satisfied.'}${RS && RS.pnaOOS ? ' Positive-flexure checks are OUT OF SCOPE: the plastic neutral axis falls below the web (see 1. Objectives).' : ''}${c.adv ? ' Advisory items redistribute force (see their notes) and do not indicate failure.' : ''}</p></section>`; }
+   // drawings
+@@ -7990,2 +8040,3 @@ function renderStatus() { crMarkStale();
+   const c = counts(), v = c.fail ? { cls: 'fail', ico: '✕', t: `${c.fail} check${c.fail > 1 ? 's' : ''} fail` } : { cls: 'pass', ico: '✓', t: 'All checks pass' };
++  if (RS && RS.pnaOOS) v.t += ' (out of scope: plastic neutral axis below the web)';   // PNA-OOS
+   const chips = grps().map(g => { const s = worst(CK.filter(k => k.grp === g).map(k => k.status)), n = CK.filter(k => k.grp === g && k.status === 'fail').length; return `<button type="button" class="chip ${STCLS[s]}" data-goto-grp="${g}"><b>${s === 'fail' ? '✕' : s === 'warn' ? '!' : '✓'}</b>${g}${n ? `<em>${n}</em>` : ''}</button>`; }).join('');
+@@ -8010,3 +8061,3 @@ function renderSummary() {
+       ['Top plates', `${frac(R.fl.top.bo)} × ${frac(R.fl.top.to)}${R.fl.top.inner ? ` + 2 − ${frac(R.fl.top.bi)} × ${frac(R.fl.top.ti)}` : ''}`], ['Bottom plates', `${frac(R.fl.bot.bo)} × ${frac(R.fl.bot.to)}${R.fl.bot.inner ? ` + 2 − ${frac(R.fl.bot.bi)} × ${frac(R.fl.bot.ti)}` : ''}`], ['Web plates', `2 − ${frac(R.web.hw)} × ${frac(R.web.twp)}`]].map(([k, v]) => `<div><span>${k}</span><b>${v}</b></div>`).join('')}</div></div>`;
+-  const rows = CK.map(k => { const g = k.items[k.gov]; return `<tr class="row-${k.status}"><td><a href="#chk-${k.id}" class="cid-link" data-goto="${k.id}">${k.id}</a></td><td>${esc(k.grp)}</td><td>${esc(k.title)} <a href="#" class="rpt-mini" data-rptjump="cr-chk-${k.id}">report</a></td><td class="lbl">${g ? sub(g.loc) : `<span class="n-dim">${esc(k.naWhy || '')}</span>`}</td><td class="val">${g && g.r !== undefined ? f2(g.r) : '—'}</td><td>${badge(k.status)}</td></tr>`; }).join('');
++  const rows = CK.map(k => { const g = k.items[k.gov]; return `<tr class="row-${k.status}"><td><a href="#chk-${k.id}" class="cid-link" data-goto="${k.id}">${k.id}</a></td><td>${esc(k.grp)}</td><td>${esc(k.title)} <a href="#" class="rpt-mini" data-rptjump="cr-chk-${k.id}">report</a></td><td class="lbl">${g ? sub(g.loc) : `<span class="n-dim">${esc(k.naWhy || '')}</span>`}</td><td class="val">${g && g.r !== undefined ? f2(g.r) : '—'}</td><td>${kBadge(k)}</td></tr>`; }).join('');
+   const tbl = card('sum-tbl', 'Checks at a glance', '', `<p class="note-p">Click a check ID for its derivation. Ratio is demand over resistance (≤ 1.00 satisfies) at the governing location and combination.</p><div class="tscroll"><table class="tbl sumtbl"><thead><tr><th>ID</th><th>Group</th><th>Check</th><th>Governing</th><th class="right">Ratio</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table></div>`);
+@@ -8099,3 +8150,3 @@ function renderGeometry() {
+   if (P.mod === 'splice' && RS && RS.fl) h += card('geo-sched', 'Dimension schedule', 'Plates, fillers, and bolt patterns', spliceSchedule(RS));
+-  ks.forEach(k => { h += card('geo-' + k.id, `<span class="cid">${k.id}</span>${esc(k.title)}`, esc(k.ref), `${k.items.length ? `<div class="tscroll"><table class="tbl itbl"><thead><tr><th>${sub(k.cols[0])}</th>${k.cols.slice(1).map(c => `<th class="right">${sub(c)}</th>`).join('')}<th>Status</th></tr></thead><tbody>${k.items.map(it => `<tr class="${it.st === 'fail' ? 'row-fail' : ''}"><td class="lbl">${sub(it.loc)}</td>${it.cells.map(c => `<td class="val">${sub(c)}</td>`).join('')}<td>${badge(it.st)}</td></tr>`).join('')}</tbody></table></div>` : `<p class="note-p">${sub(k.naWhy || 'Not applicable.')}</p>`}${k.note ? `<p class="note-p">${sub(k.note)}</p>` : ''}<p class="rpt-jump"><a href="#" data-rptjump="cr-chk-${k.id}">Open the worked check in the report</a>&emsp;<a href="#" data-goto="${k.id}">Show on the Checks tab</a></p>`, badge(k.status)); });
++  ks.forEach(k => { h += card('geo-' + k.id, `<span class="cid">${k.id}</span>${esc(k.title)}`, esc(k.ref), `${k.items.length ? `<div class="tscroll"><table class="tbl itbl"><thead><tr><th>${sub(k.cols[0])}</th>${k.cols.slice(1).map(c => `<th class="right">${sub(c)}</th>`).join('')}<th>Status</th></tr></thead><tbody>${k.items.map(it => `<tr class="${it.st === 'fail' ? 'row-fail' : ''}"><td class="lbl">${sub(it.loc)}</td>${it.cells.map(c => `<td class="val">${sub(c)}</td>`).join('')}<td>${itBadge(it)}</td></tr>`).join('')}</tbody></table></div>` : `<p class="note-p">${sub(k.naWhy || 'Not applicable.')}</p>`}${k.note ? `<p class="note-p">${sub(k.note)}</p>` : ''}<p class="rpt-jump"><a href="#" data-rptjump="cr-chk-${k.id}">Open the worked check in the report</a>&emsp;<a href="#" data-goto="${k.id}">Show on the Checks tab</a></p>`, kBadge(k)); });
+   host.innerHTML = h; applyCollapse();
+@@ -8109,6 +8160,6 @@ function renderChecks() {
+       if (!k.items.length) b += `<div class="alert info"><b>Not applicable.</b> ${esc(k.naWhy || '')}</div>`;
+-      else { b += `<div class="tscroll"><table class="tbl itbl"><thead><tr><th>${sub(k.cols[0])}</th>${k.cols.slice(1).map(c => `<th class="right">${sub(c)}</th>`).join('')}<th>Status</th></tr></thead><tbody>${k.items.map((it, i) => `<tr class="${i === k.gov ? 'gov' : ''}"><td class="lbl">${sub(it.loc)}${i === k.gov ? ' <span class="gov-tag">governs</span>' : ''}</td>${it.cells.map(c => `<td class="val">${sub(c)}</td>`).join('')}<td>${badge(it.st)}</td></tr>`).join('')}</tbody></table></div>`;
++      else { b += `<div class="tscroll"><table class="tbl itbl"><thead><tr><th>${sub(k.cols[0])}</th>${k.cols.slice(1).map(c => `<th class="right">${sub(c)}</th>`).join('')}<th>Status</th></tr></thead><tbody>${k.items.map((it, i) => `<tr class="${i === k.gov ? 'gov' : ''}"><td class="lbl">${sub(it.loc)}${i === k.gov ? ' <span class="gov-tag">governs</span>' : ''}</td>${it.cells.map(c => `<td class="val">${sub(c)}</td>`).join('')}<td>${itBadge(it)}</td></tr>`).join('')}</tbody></table></div>`;
+         b += eq(`Governing: ${sub(gov.loc)}`, '', gov.work, gov.where, gov.st === 'fail' ? 'eq-fail' : ''); }
+       if (k.note) b += `<p class="note-p">${sub(k.note)}</p>`;
+-      h += card('chk-' + k.id, `<span class="cid">${k.id}</span>${esc(k.title)}`, '', `<p class="rpt-jump"><a href="#" data-rptjump="cr-chk-${k.id}">Open the worked calculation in the report</a></p>` + b, `${srcTag(k.src)}${badge(k.status)}`); }); });
++      h += card('chk-' + k.id, `<span class="cid">${k.id}</span>${esc(k.title)}`, '', `<p class="rpt-jump"><a href="#" data-rptjump="cr-chk-${k.id}">Open the worked calculation in the report</a></p>` + b, `${srcTag(k.src)}${kBadge(k)}`); }); });
+   $('#tab-checks').innerHTML = h;
+```
+
+Diff of the embedded Preliminary sizing (`PL_B64`, decoded):
+
+```diff
+--- pl_decoded.html	2026-10-14 15:03:56.367079195 +0000
++++ pl_branch.html	2026-10-14 16:44:58.311444162 +0000
+@@ -2062,3 +2062,5 @@
+   // twC (per-bay stiffeners): the web is at least twC thick, a thicker-web candidate of the cost trade-off (0: the floor web)
+-  const evalCand = (D, wt, kT, kB, twMin, shifts, doR, twC) => { const d0 = DO_R; if (doR) DO_R = doR; const res = sizeForDepth(D, wt, kT, kB, Math.max(twMin || 0, twC || 0), null, shifts), c = { D, wt, doR: DO_R, res, cost: costOf(res, D, wt, DO_R, res.rec), ok: depthOK(res, D), shifts: shifts || [] }; if (twC) c.twC = twC; if (c.cost.bayFail) c.ok = false; DO_R = d0; return c; };
++  const evalCand = (D, wt, kT, kB, twMin, shifts, doR, twC) => { const d0 = DO_R; if (doR) DO_R = doR; const res = sizeForDepth(D, wt, kT, kB, Math.max(twMin || 0, twC || 0), null, shifts), c = { D, wt, doR: DO_R, res, cost: costOf(res, D, wt, DO_R, res.rec), ok: depthOK(res, D), shifts: shifts || [] }; if (twC) c.twC = twC; if (c.cost.bayFail) c.ok = false;
++    { const oo = sgOosScan(D, res.top, res.bot, res.web, res.rec); if (oo.length) { c.ok = false; c.oos = oo; } }   // PNA-OOS: rejected
++    DO_R = d0; return c; };
+   function clearFrames(c) {   // move field splices off cross-frame locations on every girder (framing check X4), then re-size
+@@ -2112,3 +2114,3 @@
+   let best = pool[0]; const cleared = clearFrames(best); if (cleared !== best && cleared.ok) { cands[cands.indexOf(best)] = cleared; best = cleared; } const D = best.D; rec.D.final = D; rec.D.search = !SG.keepD && !opts.D;
+-  rec.cands = cands.map(c => ({ D: c.D, wt: c.wt, doR: c.doR, twC: c.twC, tw: c.res.tw, cost: c.cost, ok: c.ok, best: c === best })).sort((a, b) => a.cost.total - b.cost.total);
++  rec.cands = cands.map(c => ({ D: c.D, wt: c.wt, doR: c.doR, twC: c.twC, tw: c.res.tw, cost: c.cost, ok: c.ok, best: c === best, ...(c.oos ? { oos: c.oos } : {}) })).sort((a, b) => a.cost.total - b.cost.total);
+   return { errors: [], D, webType: best.wt, doR: best.doR, twC: best.twC, bays: best.wt === 'stiffened' && best.cost.bays || null, spacing: spCF, cost: best.cost, shifts: best.shifts, ...best.res, rec: { ...rec, ...best.res.rec }, beam, cont, spans, width, rdwy, de, n, Ec, types, noValid: !valid.length };
+@@ -2410,2 +2412,3 @@
+     sgLists(top, bot, web);
++    const oosL = sgOosScan(D, top, bot, web, R), oosS = new Set(oosL.map(o => o.gt + '|' + o.span));   // PNA-OOS
+     const E = ES, Fy = FyF, Fyw = FyW, Lb = spCF * 12, reb = (num((P.analysis || {}).rebar) || 1) / 100, rt3 = Math.sqrt(E / Fy);
+@@ -2471,3 +2474,4 @@
+           const pl = sgPlastic(q, D, beff, t, b, tw), comp = D / tw <= 150 && 2 * pl.Dcp / tw <= 3.76 * rt3;
+-          if (comp) { let Mn = pl.Dp <= 0.1 * pl.Dt ? pl.Mp : pl.Mp * (1.07 - 0.7 * pl.Dp / pl.Dt);
++          if (oosS.size && oosS.has(gt + '|' + spanIdx(x))) { /* PNA-OOS: positive flexure of this span not reported (out of scope) */ }
++          else if (comp) { let Mn = pl.Dp <= 0.1 * pl.Dt ? pl.Mp : pl.Mp * (1.07 - 0.7 * pl.Dp / pl.Dt);
+             if (cont) { const MD1 = gdP * M1, MD2 = gdP * M2 + gwP * Mw, MAD = Sb.n * (Fy - MD1 * 12 / Sb.s - MD2 * 12 / Sb.c3) / 12; Mn = Math.min(Mn, 1.3 * (MD1 + MD2 + MAD)); }
+@@ -2501,3 +2505,3 @@
+     const max = Math.max(...rT, ...rB);
+-    return { rT, rB, aT, aB, gT, gB, tT, tB, rWeb, gWeb, xWeb, tWeb, max, other, Lb: spCF, fat: FAT, cbMax, npW };
++    return { rT, rB, aT, aB, gT, gB, tT, tB, rWeb, gWeb, xWeb, tWeb, max, other, Lb: spCF, fat: FAT, cbMax, npW, ...(oosL.length ? { oos: oosL } : {}) };
+   }
+@@ -2510,3 +2514,16 @@
+     const hs = Math.max(0, y1 - Math.max(y0, yp)); if (hs) M += hs * beff * 0.85 * fc * ((Math.max(y0, yp) + y1) / 2 - yp);
+-    return { Mp: M / 12, yp, Dp: y1 - yp, Dt: y1, Dcp: Math.max(0, Math.min(tb + D, tb + D) - Math.max(tb, yp)) };
++    // PNA-OOS (engineer's decision 2026-10-14): the PNA below the web is outside Table D6.1-1 and D6.3.2, so outside the scope of this app
++    const Ps = 0.85 * fc * beff * ts, Pc = Fy * t.b * tt, Pw = Fw * D * tw, Pt = Fy * b.b * tb;
++    return { Mp: M / 12, yp, Dp: y1 - yp, Dt: y1, Dcp: Math.max(0, Math.min(tb + D, tb + D) - Math.max(tb, yp)), ...(Pt > Ps + Pc + Pw ? { oos: { Ps, Pc, Pw, Pt } } : {}) };
++  }
++  // PNA-OOS: positive-flexure nodes (M_u+ > 0, both sides of plate boundaries) whose PNA falls below the web, per girder type and span. A layout with any
++  // such node is outside the scope of this app: the positive-flexure checks of that span are not reported and the layout is rejected (never proposed).
++  function sgOosScan(D, top, bot, web, R) {
++    sgLists(top, bot, web); const out = [];
++    for (const gt of types) { const T = R.types[gt], beff = T.trW * 12;
++      for (let i = 0; i < N; i++) { if (!(T.Mup[i] > 0)) continue; const x = xs[i];
++        for (const side of [-1, 1]) { const xe = Math.min(Math.max(x + side * 1e-6, 0), Ltot), t = sgAt(top, xe), b = sgAt(bot, xe), tw = sgAt(web, xe).t;
++          const pl = sgPlastic({ top: { b: t.b, t: t.t }, bot: { b: b.b, t: b.t }, tw }, D, beff, t, b, tw);
++          if (pl.oos && !out.some(o => o.gt === gt && Math.abs(o.x - x) < 1e-9)) out.push({ gt, x, span: spanIdx(x), bot: { b: b.b, t: b.t }, ...pl.oos }); } } }
++    return out;
+   }
+@@ -2544,3 +2561,3 @@
+       if (!llCache && r.res.rec && r.res.rec.types) { llCache = {}; Object.entries(r.res.rec.types).forEach(([g, T]) => { if (T.bN) llCache[g] = T.bN; }); }
+-      const k = key(r.res), pass = ch.max <= 1.0005 && ch.rWeb <= 1.0005 && r.dOK && !r.cost.bayFail; costs.push(r.cost.total);   // bayFail: a bay cannot be stiffened enough (per-bay stiffeners, TB1)
++      const k = key(r.res), pass = ch.max <= 1.0005 && ch.rWeb <= 1.0005 && r.dOK && !r.cost.bayFail && !ch.oos; costs.push(r.cost.total);   // bayFail: a bay cannot be stiffened enough (per-bay stiffeners, TB1)
+       if (pass) passed.push(r);
+@@ -2555,6 +2572,6 @@
+     passed.sort((a, b) => a.cost.total - b.cost.total); let best = null, V = null;
+-    for (const cand of passed.slice(0, 3)) { prog && prog(Math.min(0.98, ++step / steps), `${tag || `Depth ${c.D} in`}: verifying`); await tick(); const v = suggestLayout(P, { full: true, verify: { ...cc, ...cand.res } }); if (v.check.max <= 1.0005 && v.check.rWeb <= 1.0005 && v.dOK && !v.cost.bayFail) { best = cand; V = v; break; } }
++    for (const cand of passed.slice(0, 3)) { prog && prog(Math.min(0.98, ++step / steps), `${tag || `Depth ${c.D} in`}: verifying`); await tick(); const v = suggestLayout(P, { full: true, verify: { ...cc, ...cand.res } }); if (v.check.max <= 1.0005 && v.check.rWeb <= 1.0005 && v.dOK && !v.cost.bayFail && !v.check.oos) { best = cand; V = v; break; } }
+     if (!best) { best = passed[0] || suggestLayout(P, { full: true, only: cc, kT: req, twMin, layout: { D: c.D, ...lay }, shifts }); V = suggestLayout(P, { full: true, verify: { ...cc, ...best.res } }); }
+     // cleanup: replace a plate by its lighter neighbor where the design still passes and costs less (removes leftovers of the iteration, such as heavy short end plates)
+-    if (V && V.check.max <= 1.0005 && V.check.rWeb <= 1.0005 && V.dOK && !V.cost.bayFail) { let res = JSON.parse(JSON.stringify(best.res)), Vb = V, better = true, n = 0;
++    if (V && V.check.max <= 1.0005 && V.check.rWeb <= 1.0005 && V.dOK && !V.cost.bayFail && !V.check.oos) { let res = JSON.parse(JSON.stringify(best.res)), Vb = V, better = true, n = 0;
+       const spn = (P.bridge.spans || []).map(Number), skw = (P.bridge.skews || []).map(v => Math.abs(+v || 0)), pal = a => a.every((v, i) => Math.abs(v - a[a.length - 1 - i]) < 1e-6), symB = pal(spn) && pal(skw);
+@@ -2567,6 +2584,6 @@
+             const cand = { ...res, [fk]: merged }, v = suggestLayout(P, { full: true, verify: { ...cc, ...cand } });
+-            if (v.check.max <= 1.0005 && v.check.rWeb <= 1.0005 && v.dOK && !v.cost.bayFail && v.cost.total < Vb.cost.total - 1) { res = cand; Vb = v; better = true; } }
++            if (v.check.max <= 1.0005 && v.check.rWeb <= 1.0005 && v.dOK && !v.cost.bayFail && !v.check.oos && v.cost.total < Vb.cost.total - 1) { res = cand; Vb = v; better = true; } }
+           if (better) break; } }
+       if (Vb !== V) { best = { ...best, res }; V = Vb; } }
+-    const pass = V.check.max <= 1.0005 && V.check.rWeb <= 1.0005 && V.dOK && !V.cost.bayFail; let defl = null;
++    const pass = V.check.max <= 1.0005 && V.check.rWeb <= 1.0005 && V.dOK && !V.cost.bayFail && !V.check.oos; let defl = null;
+     if (pass && SG.defl === 'on') { const Pc = { ...P, girder: { ...P.girder, D: c.D, web: best.res.web.map(w => ({ L: w.L, t: w.t })), top: best.res.top.map(g => ({ L: g.L, b: g.b, t: g.t })), bot: best.res.bot.map(g => ({ L: g.L, b: g.b, t: g.t })), splices: best.res.splices } };
+@@ -2582,3 +2599,3 @@
+   prog && prog(1, 'Done');
+-  const ok = out.filter(o => o.pass).sort((a, b) => a.cost.total - b.cost.total), best = ok[0] || out.slice().sort((a, b) => a.check.max - b.check.max)[0];
++  const ok = out.filter(o => o.pass).sort((a, b) => a.cost.total - b.cost.total), best = ok[0] || out.slice().sort((a, b) => (a.check.oos ? 1 : 0) - (b.check.oos ? 1 : 0) || a.check.max - b.check.max)[0];
+   const gov = (list, ratios, names) => { let x = 0; return list.map(g => { const x0 = x; x += g.L; let rm = 0, nm = ''; best.xs.forEach((xx, i) => { if (xx >= x0 - 1e-6 && xx < x - 1e-6 && ratios[i] > rm) { rm = ratios[i]; nm = names[i]; } }); return { ...g, x0, x1: x, ratio: rm, gov: nm }; }); };
+@@ -2586,3 +2603,3 @@
+   return { ...fast, D: best.D, webType: best.wt, doR: best.doR, twC: best.twC, bays: best.wt === 'stiffened' && best.cost.bays || null, spacing: best.spacing, cost: best.cost, tw: res.tw, web: res.web, top: res.top, bot: res.bot, splices: res.splices, rec: { ...fast.rec, ...res.rec, D: { ...fast.rec.D, final: best.D } },
+-    full: { cands: out.map(o => ({ D: o.D, wt: o.wt, doR: o.doR, twC: o.twC, spacing: o.spacing, pass: o.pass, dOK: o.dOK, iters: o.iters, max: o.check.max, web: o.check.rWeb, cost: o.cost, fastCost: o.fastCost, defl: o.defl, best: o === best })), check: ch, topGov: gov(res.top, ch.rT, ch.gT), botGov: gov(res.bot, ch.rB, ch.gB), passed: best.pass, fastCost: fast.cost } };
++    full: { cands: out.map(o => ({ D: o.D, wt: o.wt, doR: o.doR, twC: o.twC, spacing: o.spacing, pass: o.pass, dOK: o.dOK, iters: o.iters, max: o.check.max, web: o.check.rWeb, cost: o.cost, fastCost: o.fastCost, defl: o.defl, best: o === best, ...(o.check.oos ? { oos: o.check.oos } : {}) })), check: ch, topGov: gov(res.top, ch.rT, ch.gT), botGov: gov(res.bot, ch.rB, ch.gB), passed: best.pass, fastCost: fast.cost } };
+ }
+@@ -2600,3 +2617,3 @@
+   const cc = { D: fast.D, wt: fast.webType, doR: fast.doR, twC: fast.twC }, shifts = fast.shifts, incTw = num(P.limits.incTw) || 0.0625;
+-  const cp = l => l.map(r => ({ ...r })), pass = v => v.check.max <= OK && v.check.rWeb <= OK && v.dOK && !v.cost.bayFail;   // bayFail: per-bay stiffeners (TB1) cannot carry the staged shear
++  const cp = l => l.map(r => ({ ...r })), pass = v => v.check.max <= OK && v.check.rWeb <= OK && v.dOK && !v.cost.bayFail && !v.check.oos;   // bayFail: per-bay stiffeners (TB1) cannot carry the staged shear
+   const ver = L => suggestLayout(P, { full: true, verify: { ...cc, top: cp(L.top), bot: cp(L.bot), web: cp(L.web), splices: [...L.splices] } });
+@@ -3016,3 +3033,3 @@
+     if (r.err) { base.quick = { ...base.quick, state: 'error', msg: r.err }; SGQ_APPLY = 0; try { renderSuggest(); } catch (e) { console.error(e); } return; }
+-    const q = { state: 'done', qk: base.quick.qk, pass: r.pass, changed: r.changed, iters: r.iters, note: r.note, ms: r.ms, check: r.V.check, dOK: r.V.dOK, max0: r.V0.check.max, web0: r.V0.check.rWeb, pass0: r.V0.check.max <= 1.0005 && r.V0.check.rWeb <= 1.0005 && r.V0.dOK, fastCost: base.cost };
++    const q = { state: 'done', qk: base.quick.qk, pass: r.pass, changed: r.changed, iters: r.iters, note: r.note, ms: r.ms, check: r.V.check, dOK: r.V.dOK, max0: r.V0.check.max, web0: r.V0.check.rWeb, pass0: r.V0.check.max <= 1.0005 && r.V0.check.rWeb <= 1.0005 && r.V0.dOK && !r.V0.check.oos, fastCost: base.cost };
+     // per-bay stiffeners (TB1): the layout and cost of the checked girder under its staged shear (the fast one used the constant-stiffness shear)
+@@ -3030,2 +3047,6 @@
+ }
++// PNA-OOS (2026-10-14): why a layout is out of scope (display)
++const SG_OOS_HEAD = 'Outside the scope of this app: the plastic neutral axis falls below the web (bottom flange plastic force P_t exceeds P_s + P_c + P_w), which AASHTO LRFD 10th Ed. Table D6.1-1 and Art. D6.3.2 do not cover. Revise the section (e.g. reduce the bottom flange or increase the deck/top flange).';
++function sgOosTxt(L) { const by = {}; (L || []).forEach(o => { const k = `${o.gt}|${o.span}`, q = by[k]; if (!q) by[k] = { ...o, x0: o.x, x1: o.x }; else { q.x0 = Math.min(q.x0, o.x); q.x1 = Math.max(q.x1, o.x); if (o.Pt - o.Ps - o.Pc - o.Pw > q.Pt - q.Ps - q.Pc - q.Pw) Object.assign(q, { ...o, x0: q.x0, x1: q.x1 }); } });
++  return Object.values(by).map(o => `Span ${o.span + 1}, ${o.gt === 'ext' ? 'exterior' : 'interior'} girder, ${o.x1 > o.x0 ? `${f2(o.x0)} to ${f2(o.x1)} ft` : `${f2(o.x0)} ft`} (largest excess: bottom flange ${frac(o.bot.b)} × ${frac(o.bot.t)}): P_t = ${f0(o.Pt)} kip > P_s + P_c + P_w = ${f0(o.Ps)} + ${f0(o.Pc)} + ${f0(o.Pw)} = ${f0(o.Ps + o.Pc + o.Pw)} kip`).join('; '); }
+ function sgGovTxt(g, spans) {
+@@ -3053,3 +3074,3 @@
+     try { const V = suggestLayout(PP, { full: true, verify: inp });
+-      r = V.errors && V.errors.length ? { state: 'error', msg: V.errors[0] } : { state: 'done', V, pass: V.check.max <= 1.0005 && V.check.rWeb <= 1.0005 && V.dOK, dfx: !!sgDfx(PP, inp.D, inp.top, inp.bot, inp.web, false) }; }
++      r = V.errors && V.errors.length ? { state: 'error', msg: V.errors[0] } : { state: 'done', V, pass: V.check.max <= 1.0005 && V.check.rWeb <= 1.0005 && V.dOK && !V.check.oos, dfx: !!sgDfx(PP, inp.D, inp.top, inp.bot, inp.web, false) }; }
+     catch (e) { console.error(e); r = { state: 'error', msg: e.message || String(e) }; }
+@@ -3103,3 +3124,3 @@
+   const dep = ok => ok ? '' : '; shallower than the Table 2.5.2.6.3-1 minimum depth';
+-  const curR = S.state === 'done' ? `Current girder: largest ratio ${f3(cg.r)} (${esc(sgGovTxt(cg, s.spans))})${dep(S.V.dOK)}.` : S.state === 'checking' ? 'Current girder: checking…' : `Current girder: the check could not be completed (${esc(S.msg || 'no result')}).`;
++  const curR = S.state === 'done' ? `Current girder: ${S.V.check.oos ? `<b>OUT OF SCOPE</b> (${esc(SG_OOS_HEAD)} ${esc(sgOosTxt(S.V.check.oos))}); ` : ''}largest ratio ${f3(cg.r)} (${esc(sgGovTxt(cg, s.spans))})${dep(S.V.dOK)}.` : S.state === 'checking' ? 'Current girder: checking…' : `Current girder: the check could not be completed (${esc(S.msg || 'no result')}).`;
+   const sugR = gv ? `${W}: largest ratio ${f3(gv.r)} (${esc(sgGovTxt(gv, s.spans))})${dep(chk.dOK)}.` : Q && Q.state === 'checking' ? `${W}: checking…` : `${W}: not checked.`;
+@@ -3108,3 +3129,3 @@
+   else if (S.state === 'done') {
+-    const why = []; if (!S.pass) why.push(cg.r > 1.0005 ? `exceeds 1.0 (largest ratio ${f3(cg.r)})` : 'is shallower than the Table 2.5.2.6.3-1 minimum depth'); if (cP.fail) why.push(`fails ${cP.fail} code proportion check${cP.fail > 1 ? 's' : ''}`);
++    const why = []; if (!S.pass) why.push(S.V.check.oos ? `is outside the scope of this app (plastic neutral axis below the web: ${sgOosTxt(S.V.check.oos)})` : cg.r > 1.0005 ? `exceeds 1.0 (largest ratio ${f3(cg.r)})` : 'is shallower than the Table 2.5.2.6.3-1 minimum depth'); if (cP.fail) why.push(`fails ${cP.fail} code proportion check${cP.fail > 1 ? 's' : ''}`);
+     if (noChange) { cls = S.pass && !cP.fail ? 'pass' : 'fail'; head = 'No change suggested'; }
+@@ -3196,3 +3217,3 @@
+   let warn = '';
+-  if (bad) warn = `Warning: the ${what} does not pass every strength and service check: ${!ch ? 'the check could not be completed' : g.r > 1.0005 ? `ratio ${f3(g.r)} > 1.0 (${sgGovTxt(g, SG.spans)})${Q && !Q.dOK ? '; the girder is also shallower than the Table 2.5.2.6.3-1 minimum depth' : ''}` : SG.full ? 'a minimum depth (Table 2.5.2.6.3-1) or deflection limit is not met' : 'the girder is shallower than the Table 2.5.2.6.3-1 minimum depth'}. ${SG.full ? 'Review the Full design results, adjust the inputs, and run full design again before relying on it.' : 'Run full design (Suggest input tab) for a layout that passes.'}\n\n`;
++  if (bad) warn = `Warning: the ${what} does not pass every strength and service check: ${!ch ? 'the check could not be completed' : ch.oos ? `it is outside the scope of this app (${SG_OOS_HEAD} ${sgOosTxt(ch.oos)})` : g.r > 1.0005 ? `ratio ${f3(g.r)} > 1.0 (${sgGovTxt(g, SG.spans)})${Q && !Q.dOK ? '; the girder is also shallower than the Table 2.5.2.6.3-1 minimum depth' : ''}` : SG.full ? 'a minimum depth (Table 2.5.2.6.3-1) or deflection limit is not met' : 'the girder is shallower than the Table 2.5.2.6.3-1 minimum depth'}. ${SG.full ? 'Review the Full design results, adjust the inputs, and run full design again before relying on it.' : 'Run full design (Suggest input tab) for a layout that passes.'}\n\n`;
+   if (!confirm(`${warn}Replace the web, flange plates, and field splices on the Girder tab with the ${what}? You can revert to the current layout afterwards.`)) return;
+@@ -3232,2 +3253,3 @@
+   else if (chk) sv = `<b>${chk.pass ? 'Passes the strength and service checks' : 'Does not pass every strength and service check'}: largest ratio ${f3(gv.r)}</b><span class="sg-ln">Governing: ${esc(sgGovTxt(gv, s.spans))}.${chk.dOK ? '' : ' The girder is shallower than the Table 2.5.2.6.3-1 minimum depth.'}${Q ? (Q.changed ? ` Plates increased in ${Q.iters} round${Q.iters > 1 ? 's' : ''} from the fast sizing (largest ratio before: ${f3(Math.max(Q.max0, Q.web0))}).` : Q.pass ? ' The fast sizing passed as is; no plate was changed.' : '') : ''}${chk.pass ? '' : s.full ? ' Review the Full design results below.' : ` ${Q.note ? `Stopped: ${esc(Q.note)}. ` : ''}Run full design for a layout that passes.`}</span>`;
++  if (chk && chk.ch && chk.ch.oos && !(Q && Q.state === 'checking')) sv = `<b>OUT OF SCOPE: not accepted.</b><span class="sg-ln">${esc(SG_OOS_HEAD)} ${esc(sgOosTxt(chk.ch.oos))}. The positive-flexure checks of ${chk.ch.oos.length > 1 ? 'these spans' : 'this span'} are not reported.</span>` + sv;   // PNA-OOS
+   const verdict2 = Q && Q.state === 'checking' ? 'chk' : cnt.fail || (chk && !chk.pass) || (Q && Q.state === 'error') ? 'fail' : 'pass';
+@@ -3250,7 +3272,8 @@
+       ${s.full ? `<p class="note-p">Fast sizing (the quick suggestion before its strength and service check) for comparison: ${money(s.full.fastCost.total)}; the full design is ${f2(100 * (1 - C.total / s.full.fastCost.total))}% cheaper.</p>` : ''}${Q && Q.changed ? `<p class="note-p">Fast sizing before the strength and service check: ${money(Q.fastCost.total)}; the plates added by the check: ${money(C.total - Q.fastCost.total)}.</p>` : ''}
+-      ${!s.full && s.rec.cands ? `<h4 class="sg-h4">Depth candidates (fast sizing before the strength and service check, lowest cost first)</h4><div class="tscroll"><table class="tbl"><thead><tr><th class="right">D (in)</th><th>Web</th><th class="right">d<sub>o</sub>/D</th><th class="right">t<sub>w</sub></th><th class="right">Steel (kip)</th><th class="right">Transitions</th><th class="right">Stiffeners${s.rec.cands.some(c => c.cost.nStTot != null) ? ' (per girder; per bay: all girders)' : ''}</th><th class="right">Cost</th><th>Span-to-depth</th></tr></thead><tbody>${s.rec.cands.slice(0, 10).map(c => `<tr class="${c.best ? 'gov' : ''}"><td class="val">${f0(c.D)}</td><td>${c.wt}</td><td class="val">${c.wt === 'stiffened' ? (c.cost.nStTot != null ? 'per bay' : f2(c.doR)) : '—'}</td><td class="val">${frac(c.tw)}</td><td class="val">${f0(c.cost.wTot / 1000)}</td><td class="val">${c.cost.nTr}</td><td class="val">${c.cost.nStTot ?? c.cost.nSt}</td><td class="val">${money(c.cost.total)}</td><td>${c.ok ? 'OK' : 'Too shallow'}</td></tr>`).join('')}</tbody></table></div>` : ''}`);
++      ${!s.full && s.rec.cands ? `<h4 class="sg-h4">Depth candidates (fast sizing before the strength and service check, lowest cost first)</h4><div class="tscroll"><table class="tbl"><thead><tr><th class="right">D (in)</th><th>Web</th><th class="right">d<sub>o</sub>/D</th><th class="right">t<sub>w</sub></th><th class="right">Steel (kip)</th><th class="right">Transitions</th><th class="right">Stiffeners${s.rec.cands.some(c => c.cost.nStTot != null) ? ' (per girder; per bay: all girders)' : ''}</th><th class="right">Cost</th><th>Span-to-depth</th></tr></thead><tbody>${s.rec.cands.slice(0, 10).map(c => `<tr class="${c.best ? 'gov' : ''}"><td class="val">${f0(c.D)}</td><td>${c.wt}</td><td class="val">${c.wt === 'stiffened' ? (c.cost.nStTot != null ? 'per bay' : f2(c.doR)) : '—'}</td><td class="val">${frac(c.tw)}</td><td class="val">${f0(c.cost.wTot / 1000)}</td><td class="val">${c.cost.nTr}</td><td class="val">${c.cost.nStTot ?? c.cost.nSt}</td><td class="val">${money(c.cost.total)}</td><td>${c.oos ? 'Rejected: PNA below the web (out of scope)' : c.ok ? 'OK' : 'Too shallow'}</td></tr>`).join('')}</tbody></table></div>` : ''}`);
+   if (s.full) { const F = s.full, gt = list => `<div class="tscroll"><table class="tbl"><thead><tr><th class="right">From (ft)</th><th class="right">To (ft)</th><th class="right">Plate (in)</th><th class="right">Ratio</th><th>Governing check</th></tr></thead><tbody>${list.map(g => `<tr><td class="val">${f2(g.x0)}</td><td class="val">${f2(g.x1)}</td><td class="val" style="white-space:nowrap">${frac(g.b)} × ${frac(g.t)}</td><td class="val">${g.ratio ? f3(g.ratio) : '—'}</td><td>${g.gov || 'Minimum size or proportion'}</td></tr>`).join('')}</tbody></table></div>`;
+     h += card('sg-full', 'Full design', F.passed ? 'Every check at or below 1.0' : 'No candidate passed every check', `<p class="note-p">${F.passed ? '' : '<b>Review:</b> the layout shown is the closest candidate. '}Each candidate was iterated with the staged, cracked analysis (Structural analysis settings) until its layout stopped changing, then verified against its own recomputed demands. Every iteration re-runs the analysis on the current plates and recomputes the live load distribution factors (4.6.2.2) from that section's K<sub>g</sub>; the live load stage model of the first iteration is reused inside the loop to save time, and the final verification recomputes everything. Checks at every node for the interior and exterior girders: Strength I positive flexure (6.10.7, plastic moment, compactness, D<sub>p</sub>/D<sub>t</sub>, 1.3M<sub>y</sub> for continuous spans), Strength I negative flexure (6.10.8: flange local buckling, lateral-torsional buckling with L<sub>b</sub> = ${f2(F.check.Lb)} ft and C<sub>b</sub> of Eq. 6.10.8.2.3b-1 for each unbraced segment, R<sub>b</sub>; tension flange), Service II flange stresses and web bend-buckling (6.10.4.2.2), deck-placement constructibility (6.10.3.2), and flange fatigue when selected. Plate boundaries are checked on both sides. Where the section changes within an unbraced length, 6.10.8.2.3c: its simplification where it holds, otherwise C<sub>b</sub> = 1.0 and F<sub>e</sub> = γ<sub>e</sub>f<sub>bu</sub> (Eqs. c-1 to c-3) with γ<sub>e</sub> by App. D6.6.2 Method A (or the conservative bound, each section as a prismatic member over L<sub>b</sub> under uniform moment at its largest stress, where the D6.6.2.2 step limit is exceeded). Shear is sized by 6.10.9.${(P.suggest.depthRule !== 'off' || P.limits.sdMandatory) ? ' A candidate passes only if its final plates also meet the Table 2.5.2.6.3-1 minimum depths (span-to-depth applies to Suggest).' : ''}</p>
+-      <div class="tscroll"><table class="tbl"><thead><tr><th class="right">D (in)</th><th>Web</th><th class="right">Cross-frames</th><th class="right">Iterations</th><th class="right">Max. flange ratio</th><th class="right">Web ratio</th><th class="right">Cost</th><th class="right">Fast-sizing cost</th><th>Result</th></tr></thead><tbody>${F.cands.map(c => `<tr class="${c.best ? 'gov' : ''}"><td class="val">${f0(c.D)}</td><td>${c.wt}${c.wt === 'stiffened' ? (c.cost.nStTot != null ? `, ${c.cost.nStTot} stiffeners per bay` : `, d<sub>o</sub> = ${f2(c.doR)}D`) : ''}</td><td class="val">${f2(c.spacing)} ft</td><td class="val">${c.iters}</td><td class="val">${f3(c.max)}</td><td class="val">${f3(c.web)}</td><td class="val">${money(c.cost.total)}</td><td class="val">${money(c.fastCost.total)}</td><td>${c.pass ? (c.best ? 'Selected' : 'Passes') : c.dOK === false ? 'Too shallow (Table 2.5.2.6.3-1)' : 'Does not pass'}${c.defl ? `; Δ<sub>LL</sub> ${f3(c.defl.d)} / ${f3(c.defl.lim)} in` : ''}</td></tr>`).join('')}</tbody></table></div>
++      <div class="tscroll"><table class="tbl"><thead><tr><th class="right">D (in)</th><th>Web</th><th class="right">Cross-frames</th><th class="right">Iterations</th><th class="right">Max. flange ratio</th><th class="right">Web ratio</th><th class="right">Cost</th><th class="right">Fast-sizing cost</th><th>Result</th></tr></thead><tbody>${F.cands.map(c => `<tr class="${c.best ? 'gov' : ''}"><td class="val">${f0(c.D)}</td><td>${c.wt}${c.wt === 'stiffened' ? (c.cost.nStTot != null ? `, ${c.cost.nStTot} stiffeners per bay` : `, d<sub>o</sub> = ${f2(c.doR)}D`) : ''}</td><td class="val">${f2(c.spacing)} ft</td><td class="val">${c.iters}</td><td class="val">${f3(c.max)}</td><td class="val">${f3(c.web)}</td><td class="val">${money(c.cost.total)}</td><td class="val">${money(c.fastCost.total)}</td><td>${c.pass ? (c.best ? 'Selected' : 'Passes') : c.oos ? 'Rejected: PNA below the web (out of scope)' : c.dOK === false ? 'Too shallow (Table 2.5.2.6.3-1)' : 'Does not pass'}${c.defl ? `; Δ<sub>LL</sub> ${f3(c.defl.d)} / ${f3(c.defl.lim)} in` : ''}</td></tr>`).join('')}</tbody></table></div>
+       <div class="g2" style="margin-top:10px"><div><h4 class="sg-h4">Top flange: governing checks</h4>${gt(F.topGov)}</div><div><h4 class="sg-h4">Bottom flange: governing checks</h4>${gt(F.botGov)}</div></div>
++      ${F.check.oos ? `<div class="alert fail"><b>OUT OF SCOPE.</b> ${esc(SG_OOS_HEAD)} ${esc(sgOosTxt(F.check.oos))}. This layout is not accepted; the positive-flexure checks of ${F.check.oos.length > 1 ? 'these spans' : 'this span'} are not reported.</div>` : ''}
+       <p class="note-p">Web: ${F.check.gWeb ? `${F.check.gWeb}, ratio ${f3(F.check.rWeb)} at ${f2(F.check.xWeb)} ft` : 'no bend-buckling demand'}.${F.check.other.length ? ` Also: ${[...new Set(F.check.other.map(o => o.name))].join('; ')} exceeded at some points.` : ''}${(F.check.npW || []).length ? ` <b>Review:</b> outside the D6.6.2.2 step limit, so the conservative γ<sub>e</sub> bound (each section prismatic over L<sub>b</sub> at its largest stress) is used instead of App. D6.6.2 Method A; engineer to review: ${[...new Set(F.check.npW)].map(esc).join('; ')}.` : ''} ${F.check.fat ? `Flange fatigue: ${plFatTxt(P)}, Category B at the flange-to-web welds (extreme fiber)${P.suggest.fat !== 'B' ? ' and Category C′ at the connection plates welded to the flanges (inner flange face, 6.6.1.3.1; checked at every analysis point along the girder, not only at the cross-frames, which is conservative)' : ''} (6.6.1.2), short-term composite section for both signs (minimum reinforcement per 6.10.1.7).` : 'Flange fatigue was not checked (turned off).'} Other fatigue details are checked in the Fatigue module.</p>`); }
+```
