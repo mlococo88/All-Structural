@@ -1014,3 +1014,55 @@ Cross-tool connection PR (CLAUDE.md §7 exception): receivers of the `bridgeSuit
 - **Governing provision:** AASHTO LRFD 10th Ed. Art. 4.6.2.3 (equivalent strip; force effects per unit width). No formula changed.
 - **Check case:** lldf slab payload (1 span 120 ft, interior gM = gV = 0.076, fatM = fatV = 0.045) pulled into 2 spans × 100 ft: before and after the same DF inputs are written (dfm0 = dfv0 = 0.076; fatigue 0.045), so the results are identical; after, the dialog shows the slab box, the source line ends with the per-foot note, and the results show the per-foot warning (2 places). Girder payload θ = 30°, θ_V = 40°: same inputs and source line as before; the header now reads "skew 30° (moment), 40° (shear)".
 - **How verified:** headless Chromium, main vs branch, `MLGlldf.openDlg(payload)` / `MLGlldf.apply()`; the per-foot text was found in 2 warning elements after the slab pull; screenshot `mlg_dialog_slab_br.png` looked at. No page errors.
+
+## 2026-10-14 — PR: claude/mlg-absmax (absolute maxima per span; PR link added after merge)
+
+Engineer request 2026-10-14. Display-only addition. No formula, factor, unit, code reference, existing output, export format or saved-data key changed.
+
+### AM1. Absolute maxima per span (+M, −M, |V|) between the twentieth points   [display] [no result change]
+- **Problem:** the envelope is computed only at the 1/20 points and plate transitions, so the absolute maximum between stations was not shown. Example: 100 ft simple span, design truck alone, per lane, no IM: 1,523.9 k-ft at 47.67 ft, but the table shows 1,520.0 at midspan.
+- **Where:**
+  1. `analyze`, mesh keys. Anchor: `if(m.scanKeys)m.scanKeys.forEach(` (after `sb.forEach(b=>{if(b[1]>1e-6&&b[1]<Lt-1e-6)key.push(b[1]);});`).
+  2. `analyze`, right after the reaction effects are pushed. Anchor: `if(m.scanM||m.scanV){const spanAt=`.
+  3. New block before `// ═══════════ CSV ═══════════`. Anchors: `id="absCard"`, `function absScan(R){`, `function absPaint(){`, `function absArm(){`, `const _render6=render;`.
+- **Before (1, 2):**
+  ```js
+    sb.forEach(b=>{if(b[1]>1e-6&&b[1]<Lt-1e-6)key.push(b[1]);});
+    key.sort((a,b)=>a-b); ...
+  ...
+    sup.forEach((s,q)=>effs.push({t:'R',node:supNodes[q],q,x:s,spans:q===0?[0]:q===ns?[ns-1]:[q-1,q],interior:q>0&&q<ns}));
+
+    // Influence lines: unit downward load at every node
+  ```
+- **After (1, 2):**
+  ```js
+    sb.forEach(b=>{if(b[1]>1e-6&&b[1]<Lt-1e-6)key.push(b[1]);});
+    if(m.scanKeys)m.scanKeys.forEach(v=>{if(v>1e-6&&v<Lt-1e-6)key.push(v);}); // absolute-maximum refinement pass only
+    key.sort((a,b)=>a-b); ...
+  ...
+    sup.forEach((s,q)=>effs.push({t:'R',node:supNodes[q],q,x:s,spans:q===0?[0]:q===ns?[ns-1]:[q-1,q],interior:q>0&&q<ns}));
+    // Absolute-maximum scan passes only (m.scanM / m.scanV / m.scanKeys; never set for the reported envelope results):
+    // extra M sections at the mesh nodes nearest the m.scanM positions, and V just right of every node (m.scanV).
+    if(m.scanM||m.scanV){const spanAt=v=>{let k=0;while(k<ns-1&&v>sup[k+1]-1e-9)k++;return k;};
+      (m.scanM||[]).forEach(v=>{const i=idxOf(v);if(mKey[i]!==undefined||supNodes.includes(i))return;
+        mKey[i]=effs.length;effs.push({t:'M',node:i,x:x[i],spans:[spanAt(x[i])],scan:true});});
+      if(m.scanV)for(let e=0;e<nn-1;e++){if(vKey[e]!==undefined)continue;
+        vKey[e]=effs.length;effs.push({t:'V',el:e,cutL:true,x:x[e],spans:[spanAt((x[e]+x[e+1])/2)],scan:true});}}
+
+    // Influence lines: unit downward load at every node
+  ```
+  `m.scanKeys`, `m.scanM` and `m.scanV` are never set by `readModel`, `modelFor`, the report, the benchmarks or the sensitivity run, so every existing `analyze` call is unchanged. The extra sections are appended after the reactions, so the indices of the existing effects are unchanged even in the scan passes.
+- **After (3), how it works:** after the normal results are shown and the inputs have been idle for 1 s, `absScan(RES)` runs two more `analyze` passes on copies of the model (the reported `RES` is not modified):
+  - pass 1: the same mesh, with a moment section at every analysis node and a shear section just right of every node;
+  - pass 2: mesh points added every 0.1 ft within one element length of each span's +M and −M candidates (factored and unfactored picks), with moment sections at those points.
+  The per-span maximum +M, minimum −M and maximum |V| are taken over the original stations, pass 1 and pass 2, in the current view (factored per girder: LLF × DF as `dfOf`, or unfactored per lane), and shown in a new card "Absolute Maxima per Span" after the envelope table, with x, location (x/L, or support and side) and the governing case in the existing format. It is not added to the CSV, the printed report or the saved JSON (the report has no per-span force summary; the brief preferred display-only). Every input event restarts the 1 s delay, so typing is not slowed down.
+- **Governing provision:** none changed. Loads and factors as already applied by the envelope (AASHTO LRFD 10th Ed. Art. 3.6.1.2–3.6.1.3, Table 3.4.1-1, etc.).
+- **Check case (per lane, IM = 1.0, DF = 1, view "Unfactored"):** 100 ft simple span.
+  - Design truck alone (14 ft spacing): hand check 72(47.667)²/100 − 8·14 = 1,523.9 k-ft at 47.67 ft. Tool: **1,523.9 at 47.70 ft** (0.1 ft grid). Table at 0.5L: 1,520.0 (unchanged).
+  - Lane 0.64 klf alone: 0.64·100²/8 = 800.0 at 50.0 ft. Tool: **800.0 at 50.00 ft**.
+  - Design tandem alone: 50·(100 − 49 − 2)/100·49 = 1,200.5 at 49.0 ft (or 51.0). Tool: **1,200.5 at 49.00 ft**.
+  - HL-93 truck + lane (preset, IM = 1.0): brute-force hand check (truck positions every 0.01 ft + 0.32·x(100 − x)) gives 2,322.71 at 48.3–48.4 ft. Tool: **2,322.7 at 48.40 ft**; table at 0.5L: 2,320.0 (unchanged).
+  - 3 spans 110-140-110, HL-93 preset, IM = 1.0: +M 2,200.5 at 47.60 ft (span 1), 2,314.1 at 179.20 ft (span 2), 2,200.5 at 312.40 ft (span 3); −M −2,449.2 at Supports B and C (multi-vehicle 0.9 × 2 trucks, same as the table); max |V| 113.7 / 117.4 / 113.7 at the piers.
+- **How verified:** `node --check` on all four inline scripts. Headless Chromium, origin/main vs branch, 9 cases (default 2 × 100; the 100 ft simple-span cases above; 100 ft HL-93; 3-span HL-93 with IM 1.0 and 1.33; 2 × 100 HS20; 100 + 120 E80): metrics, warnings, envelope table, reactions, plate-transition table, influence-line info, CSV export (factored and unfactored) and printed report HTML are **byte-identical** (one SHA-256 over all of them matches). No page or console errors. As a cross-check, a full scan with moment sections at every node (no 0.1 ft refinement) gave per-span values ≤ the reported ones and within 0.9 k-ft of them in every case. Screenshot looked at.
+- **Run time:** the extra passes take about 1–1.5 s for 1–2 spans and about 3–3.5 s for the 3-span case, after the main results are already shown; the page is busy during that time.
+- **Other copies of this code:** none.
