@@ -378,6 +378,163 @@ table.eng tr.row-fail td{background:#fdf6f5}
   cursor: pointer;
 }
 
+/* Calculation-sheet report: the .cr-* / .crv-* rules below are copied from Gusset Plate Rating.html (same document style
+   as GirderDetail), kept duplicated per CLAUDE.md §3; the ST-Girder additions follow them. Display only. */
+/* ===== calculation-sheet report ===== */
+#calc-rpt { position: absolute; left: -99999px; top: 0; width: 7.3in; }
+.crdoc { background: #fff; color: #000; font: 11pt/1.35 "Times New Roman", Times, serif; }
+.crdoc * { color: #000; }
+.crdoc a { text-decoration: none; } .crdoc a:hover { text-decoration: underline; }
+@media print {
+  body.printing-calc { background: #fff !important; height: auto !important; overflow: visible !important; display: block !important; }
+  body.printing-calc > *:not(#calc-rpt):not([id^="MJX"]) { display: none !important; }
+  body.printing-calc #calc-rpt { position: static; width: auto; }
+}
+.crdoc .cr-cover { height: 8.4in; display: flex; align-items: center; break-after: page; }
+.crdoc .cr-cover-t { width: 52%; text-align: center; }
+.crdoc .cr-cover h1 { font: 700 25pt/1.2 Arial, Helvetica, sans-serif; margin: 0 0 14pt; }
+.crdoc .cr-cover p { font: 700 13pt Arial, Helvetica, sans-serif; margin: 0 0 6pt; }
+.crdoc .cr-cover-p { font-weight: 400 !important; }
+.crdoc .cr-front { break-after: page; }
+.crdoc .cr-break { break-before: page; }
+.crdoc .cr-h1 { font: 700 12pt "Times New Roman", Times, serif; text-decoration: underline; text-transform: uppercase; margin: 0 0 8pt; break-after: avoid; }
+.crdoc .cr-front .cr-h1 { margin-top: 10pt; }
+.crdoc .cr-h2row { display: flex; justify-content: space-between; align-items: baseline; gap: 12pt; margin: 14pt 0 6pt; break-after: avoid; }
+.crdoc .cr-h2 { font: 700 11pt "Times New Roman", Times, serif; margin: 0; }
+.crdoc .cr-r { font-size: 10pt; }
+.crdoc .cr-p { margin: 0 0 7pt; max-width: 6.6in; text-align: left; }
+.crdoc .cr-small { font-size: 9.5pt; margin-top: 18pt; }
+.crdoc .cr-note { font-size: 9.5pt; font-style: italic; margin: 3pt 0 8pt 0.25in; max-width: 6.3in; }
+.crdoc .cr-asm { white-space: pre-wrap; margin: 0 0 8pt 0.25in; }
+.crdoc .cr-ul { margin: 0 0 8pt 0.25in; padding-left: 14pt; }
+.crdoc .cr-refs { border-collapse: collapse; margin: 0 0 14pt; } .crdoc .cr-refs td { padding: 1pt 16pt 1pt 0; vertical-align: top; }
+.crdoc .cr-toc, .crdoc .cr-toc ol { list-style: none; margin: 0; padding: 0; } .crdoc .cr-toc > li { margin: 3pt 0; } .crdoc .cr-toc ol { padding-left: 18pt; font-size: 10.5pt; }
+/* three-column calculation lines */
+.crdoc .cr-line { display: grid; grid-template-columns: 2.15in 1fr 1.3in; gap: 0 12pt; align-items: center; padding: 3pt 0; break-inside: avoid; }
+.crdoc .cr-in { background: #fbd6b8; padding: 1pt 6pt; font-style: italic; }
+.crdoc .cr-item, .crdoc .cr-crit { display: grid; grid-template-columns: 1fr 1.1in; grid-template-areas: "d r" "m r"; gap: 1pt 12pt; padding: 5pt 0 3pt; break-inside: avoid; border-top: 0.4pt solid #bbb; }
+.crdoc .cr-crit { border-top: 0; }
+.crdoc .cr-item .cr-d, .crdoc .cr-crit .cr-d { grid-area: d; } .crdoc .cr-item .cr-m, .crdoc .cr-crit .cr-m { grid-area: m; padding-left: 0.25in; } .crdoc .cr-item .cr-r, .crdoc .cr-crit .cr-r { grid-area: r; align-self: center; text-align: right; }
+.crdoc .cr-res { margin-top: 4pt; border-top: 0.8pt solid #000; padding-top: 5pt; }
+.crdoc .cr-st-fail, .crdoc .cr-ng .cr-r { font-weight: 700; text-decoration: underline; }
+.crdoc .cr-m mjx-container[display="true"] { margin: 2pt 0 !important; text-align: left !important; }
+.crdoc mjx-container svg { max-width: 100%; height: auto; }
+.crdoc .cr-where { margin: 0 0 4pt 0.5in; font-size: 9.5pt; }
+.crdoc .eq-where { border: 0; background: none; padding: 0; }
+.crdoc .eq-where-hd { font-style: italic; font-weight: 400; font-size: 9.5pt; text-transform: none; letter-spacing: 0; }
+.crdoc .eq-where td { padding: 1pt 8pt 1pt 0; border: 0; font-size: 9.5pt; font-family: "Times New Roman", Times, serif; }
+.crdoc .eq-where td.wval, .crdoc .eq-where .wunit { font-family: "Times New Roman", Times, serif; }
+.crdoc .cr-sec + .cr-sec .cr-h1 { margin-top: 18pt; }
+.crdoc .cr-h1 { break-after: avoid; }
+/* tables */
+.crdoc table.cr-tbl, .crdoc .cr-body table { border-collapse: collapse; margin: 6pt 0 8pt; font-size: 9.5pt; width: auto; max-width: 100%; }
+.crdoc .cr-wide { width: 100% !important; }
+.crdoc .cr-tbl th, .crdoc .cr-tbl td, .crdoc .cr-body .tbl th, .crdoc .cr-body .tbl td { border: 0.6pt solid #000; padding: 2pt 5pt; background: none; font-family: "Times New Roman", Times, serif; text-transform: none; letter-spacing: 0; }
+.crdoc .cr-tbl th, .crdoc .cr-body .tbl th { background: #e9e9e9; font-weight: 700; text-align: center; }
+.crdoc .cr-tbl td.n, .crdoc .cr-body .tbl td.val { text-align: right; font-variant-numeric: tabular-nums; }
+.crdoc .cr-tbl tr { break-inside: avoid; } .crdoc .cr-gov td { font-weight: 700; }
+.crdoc .cr-body .tscroll { overflow: visible; }
+/* equation blocks from the Combinations tab, recast as calculation lines */
+.crdoc .cr-body .eq-block { display: grid; grid-template-columns: 2.15in 1fr; gap: 0 12pt; border: 0; background: none; box-shadow: none; margin: 0; padding: 4pt 0; break-inside: avoid; border-radius: 0; }
+.crdoc .cr-body .eq-title { display: block; background: none; border: 0; padding: 0; font: 11pt "Times New Roman", Times, serif; text-transform: none; letter-spacing: 0; }
+.crdoc .cr-body .eq-title .eq-ref { display: block; font-size: 9pt; font-style: italic; margin-top: 2pt; }
+.crdoc .cr-body .eq-math { border: 0; background: none; padding: 0; overflow: visible; }
+.crdoc .cr-body .eq-where { grid-column: 1 / -1; margin-left: 0.5in; }
+.crdoc .cr-body .note-p, .crdoc .cr-body .note { font-size: 9.5pt; font-style: italic; }
+.crdoc .cr-body .sub-h { font: 700 10.5pt "Times New Roman", Times, serif; margin: 8pt 0 2pt; text-transform: none; }
+.crdoc .cr-body .g2 { display: block; }
+.crdoc .cr-fig svg.dwg { max-width: 100%; height: auto; min-width: 0; }
+.crdoc .cr-fig .cap { font-size: 9.5pt; font-style: italic; }
+.crdoc .cr-man h3 { font: 700 11pt "Times New Roman", Times, serif; margin: 10pt 0 4pt; }
+.crdoc .cr-man .eq-math { border: 0; background: none; padding: 2pt 0; }
+.crdoc .cr-man table { border-collapse: collapse; font-size: 9.5pt; } .crdoc .cr-man td, .crdoc .cr-man th { border: 0.6pt solid #000; padding: 2pt 4pt; }
+
+/* ===== Report tab viewer ===== */
+.crv-bar { position: sticky; top: 0; z-index: 6; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; margin: -4px 0 14px; padding: 10px 12px; background: var(--sheet); border: 1px solid var(--border); border-radius: var(--r-lg); }
+.crv-tog { display: flex; flex-wrap: wrap; gap: 6px; }
+.crv-chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 9px; border: 1px solid var(--border-hi); border-radius: var(--r); font: 500 13px var(--cond); cursor: pointer; background: var(--sidebar); }
+.crv-chip:has(input:checked) { background: color-mix(in oklab, var(--ink) 9%, var(--sheet)); border-color: color-mix(in oklab, var(--ink) 45%, transparent); }
+.crv-det { display: inline-flex; align-items: center; gap: 6px; font: 500 13px var(--cond); } .crv-det select { width: auto; padding: 4px 8px; }
+.crv-sp { flex: 1; }
+.crv-body { display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: 18px; align-items: start; }
+.crv-toc { position: sticky; top: var(--crv-top, 70px); max-height: calc(100vh - 210px - var(--crv-top, 70px)); overflow: auto; background: var(--sheet); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 8px 4px; scrollbar-width: thin; }
+.crv-toc a { display: block; padding: 3px 10px; border-left: 2px solid transparent; color: var(--text-dim); text-decoration: none; font: 13.5px/1.35 var(--sans); }
+.crv-toc a.crv-l1 { font: 600 13.5px/1.35 var(--cond); color: var(--text); margin-top: 6px; }
+.crv-toc a.crv-l2 { padding-left: 22px; font-size: 12.5px; }
+.crv-toc a:hover { color: var(--ink); } .crv-toc a.on { color: var(--ink); border-left-color: var(--ink); background: var(--blue-dim); }
+.crv-doc { display: block; max-width: 8.5in; padding: 0.55in 0.7in 0.8in; border: 1px solid var(--border); border-radius: 2px; box-shadow: 0 1px 0 color-mix(in oklab, var(--graphite) 8%, transparent); }
+.crv-tb { width: 100%; border-collapse: collapse; margin: 0 0 22pt; font-size: 10pt; } .crv-tb td { border-bottom: 0.6pt solid #000; padding: 3pt 8pt 3pt 0; } .crv-tb span { display: block; font-size: 8pt; font-style: italic; }
+.crv-doc .cr-cover { height: auto; display: block; padding: 0 0 14pt; margin: 0 0 16pt; border-bottom: 1pt solid #000; }
+.crv-doc .cr-cover-t { width: auto; text-align: left; } .crv-doc .cr-cover h1 { font-size: 22pt; margin-bottom: 6pt; }
+.crv-doc .cr-front { margin-bottom: 10pt; }
+.crv-doc .cr-h1, .crv-doc .cr-h2row { cursor: pointer; scroll-margin-top: calc(var(--crv-top, 70px) + 10px); }
+.crv-doc .cr-h1::after, .crv-doc .cr-h2row .cr-h2::after { content: '▾'; display: inline-block; margin-left: 6pt; font-size: 9pt; color: #777; text-decoration: none; }
+.crv-doc .cr-closed > .cr-h1::after, .crv-doc .cr-closed > .cr-h2row .cr-h2::after { content: '▸'; }
+.crv-doc .cr-front .cr-h1::after { content: none; } .crv-doc .cr-front .cr-h1 { cursor: default; }
+.crv-doc .cr-sec.cr-closed > :not(.cr-h1) { display: none; }
+.crv-doc .cr-sub.cr-closed > :not(.cr-h2row) { display: none; }
+.crv-doc .cr-h1:hover, .crv-doc .cr-h2row:hover .cr-h2 { color: var(--ink); }
+.crv-doc .crv-flash { animation: crflash 1.4s ease-out; }
+@keyframes crflash { from { background: color-mix(in oklab, var(--ink) 18%, transparent); } to { background: transparent; } }
+@media (prefers-reduced-motion: reduce) { .crv-doc .crv-flash { animation: none; } }
+.rpt-jump { margin: 0 0 8px; font-size: 13px; } .rpt-jump a, .rpt-mini { color: var(--ink); text-decoration: none; } .rpt-jump a:hover, .rpt-mini:hover { text-decoration: underline; }
+.rpt-mini { font-size: 12px; margin-left: 4px; }
+input.ovr, select.ovr { outline: 2px solid #c98a1b; outline-offset: -1px; background: #fff8ec; }
+@media (max-width: 1100px) { .crv-body { grid-template-columns: 1fr; } .crv-toc { position: static; max-height: 240px; } }
+@media print { .rpt-jump, .rpt-mini { display: none !important; } }
+/* ===== ST-Girder additions: the tab derivation blocks (Deriv / Card children) re-set in the calculation-sheet look ===== */
+.crdoc,.crdoc *{color:#000!important}
+.crdoc .cr-tab{margin:0 0 4pt}
+.crdoc .cr-grp{margin:0 0 6pt}
+.crdoc .stepgroup{font:700 10.5pt "Times New Roman",Times,serif;margin:8pt 0 3pt;padding:0;background:none;border:0;break-after:avoid}
+.crdoc .calcnum{font:700 10.5pt "Times New Roman",Times,serif;min-width:0;margin-right:5pt}
+.crdoc .calcnum::after{content:'.'}
+.crdoc .mline{background:none;border:0;padding:1pt 0 1pt 0.25in;margin:0;overflow:visible;break-inside:avoid}
+.crdoc *:not(.mline)+.mline{margin-top:2pt}
+.crdoc .mline .katex-display{margin:2pt 0;text-align:left}
+.crdoc .mline .katex-display>.katex{text-align:left}
+.crdoc .katex{font-size:1.05em}
+.crdoc .mstep{background:none;border:0;border-radius:0;margin:0 0 6pt;padding:0;overflow:visible}
+.crdoc .mcap{padding:2pt 0;border:0}
+.crdoc .mcap span:first-child{font:italic 400 11pt "Times New Roman",Times,serif}
+.crdoc .mcap .mref{font-size:9.5pt}
+.crdoc .mnote,.crdoc .hint{font:italic 9.5pt/1.35 "Times New Roman",Times,serif;margin:3pt 0 6pt 0.25in;padding:0;max-width:6.4in}
+.crdoc .mstep>.mnote{padding:0}
+.crdoc .callout{border:0;border-left:1pt solid #000;background:none;border-radius:0;padding:1pt 0 1pt 8pt;margin:4pt 0 6pt;font:10pt/1.35 "Times New Roman",Times,serif}
+.crdoc .callout.warn{border-left-width:2.5pt}
+.crdoc .vartable{border:0;background:none;padding:0;margin:2pt 0 6pt}
+.crdoc .vartable>summary{list-style:none;font:italic 9.5pt "Times New Roman",Times,serif;cursor:default;pointer-events:none}
+.crdoc .vartable>summary::-webkit-details-marker{display:none}
+.crdoc .vartable thead{display:none}
+.crdoc table.eng{border-collapse:collapse;font:9.5pt "Times New Roman",Times,serif;width:auto;max-width:100%;margin:4pt 0 6pt}
+.crdoc table.eng th,.crdoc table.eng td{border:0.6pt solid #000;padding:1.5pt 5pt;white-space:normal;font-family:"Times New Roman",Times,serif;font-size:9.5pt;background:none}
+.crdoc table.eng th{background:#e9e9e9;font-weight:700;text-align:center}
+.crdoc .vartable table.eng{width:auto!important;margin:1pt 0 0 0.25in!important}
+.crdoc .vartable table.eng td{border:0;padding:0.5pt 8pt 0.5pt 0;font-size:9.5pt}
+.crdoc .vartable table.eng td.wsym{font:italic 10pt "Times New Roman",Times,serif}
+.crdoc .scrollx{overflow:visible}
+.crdoc .kv{display:grid;grid-template-columns:auto 1fr auto;gap:1pt 8pt;font:10pt "Times New Roman",Times,serif;max-width:6in;margin:2pt 0 6pt 0.25in}
+.crdoc .kv .dots{border-bottom:0.6pt dotted #000}
+.crdoc .kv .v{font-weight:400}
+.crdoc .bigres{display:flex;flex-wrap:wrap;gap:2pt 18pt;margin:2pt 0 6pt 0.25in}
+.crdoc .bigres .br{background:none!important;border:0;padding:0;min-width:0}
+.crdoc .bigres .br .l,.crdoc .bigres .br .u{font:italic 9.5pt "Times New Roman",Times,serif;display:inline}
+.crdoc .bigres .br .n{font:700 10.5pt "Times New Roman",Times,serif!important;display:inline;margin:0 4pt}
+.crdoc .cr-rf{display:block;font-size:9pt;font-style:italic}
+.crdoc .cr-tbl td,.crdoc .cr-tbl th{white-space:normal}
+.crdoc .cr-tbl td.n{white-space:nowrap}
+.crdoc .cr-gov td{font-weight:700}
+.crdoc .cr-concl{margin-top:6pt}
+.crdoc .cr-figbox{max-width:5.6in;margin:6pt auto 2pt}
+.crdoc .cr-figbox svg{max-width:100%;height:auto}
+.crdoc .viewlabel{font:italic 9pt "Times New Roman",Times,serif;text-align:center}
+.crv-tog,.crv-toc{--ink:var(--blue)}
+.crv-doc{background:#fff}
+.crv-flds{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center;flex-basis:100%;font:500 13px var(--cond)}
+.crv-fld{display:inline-flex;align-items:center;gap:6px}
+.crv-fld input{height:28px;padding:3px 8px;border:1px solid var(--border-hi);border-radius:var(--r);font:13px var(--sans);min-width:170px;background:#fff}
+.crv-fnote{font-size:11.5px;color:var(--muted)}
+.crv-det select{width:auto!important;min-width:0}
 </style>
 <!-- ═══════════════════════════════════════════════════════════════════════════
      Bridge Suite — shared DESIGN BEAM channel (v1)
@@ -463,6 +620,7 @@ var st=document.createElement('style'); st.textContent=css;
 </head>
 <body>
 <div id="root"></div>
+<div id="calc-rpt" class="crdoc"></div>
 <!-- ═══════════════════════════════════════════════════════════════════════════
      Bridge Suite shared-storage handoff (v1) — shared verbatim with index.html /
      psbeam.html. Reads the analysis app's external-demands payload from
@@ -5296,37 +5454,156 @@ function OptimizeTab({R,inp}){
   </div>);
 }
 
+// Nomenclature rows, shared by the Nomenclature tab and the report appendix (display only).
+const NOMEN_ROWS=[
+  ['D, tw','Web depth, thickness'],['bf, tf','Flange width, thickness (top / bottom)'],
+  ['Fyf, Fyw','Flange, web yield strength'],['Fu','Tensile strength'],['Es','Steel modulus (29,000 ksi)'],
+  ['n','Modular ratio Es/Ec (short-term); 3n long-term'],['beff','Effective deck width (4.6.2.6)'],
+  ['Mp / My / Mn','Plastic / yield / nominal flexural resistance'],['Dp, Dt','Depth to PNA; total composite depth'],
+  ['Dc, Dcp','Web depth in compression (elastic; plastic)'],['Rh','Hybrid factor (6.10.1.10.1)'],
+  ['Rb','Load-shedding factor (6.10.1.10.2)'],['Fnc, Fnt','Compression / tension flange resistance'],
+  ['Fcrw','Web bend-buckling resistance (6.10.1.9)'],['Vp, Vn, C','Plastic shear; nominal shear; buckling ratio'],
+  ['Vcr','Shear-buckling (end-panel) resistance'],['fbu','Factored flange stress from staged analysis'],
+  ['fℓ','Flange lateral bending stress'],['Lb, Lp, Lr','Unbraced length; compact / noncompact limits'],
+  ['Qn, Qr','Stud nominal / factored shear resistance'],['(ΔF)n, (ΔF)TH','Fatigue resistance; CA threshold'],
+  ['RF','Load rating factor (Inventory / Operating)'],['φf, φv, φsc','Resistance factors (flexure, shear, stud)'],
+];
 function NomenclatureTab(){
-  const rows=[
-    ['D, tw','Web depth, thickness'],['bf, tf','Flange width, thickness (top / bottom)'],
-    ['Fyf, Fyw','Flange, web yield strength'],['Fu','Tensile strength'],['Es','Steel modulus (29,000 ksi)'],
-    ['n','Modular ratio Es/Ec (short-term); 3n long-term'],['beff','Effective deck width (4.6.2.6)'],
-    ['Mp / My / Mn','Plastic / yield / nominal flexural resistance'],['Dp, Dt','Depth to PNA; total composite depth'],
-    ['Dc, Dcp','Web depth in compression (elastic; plastic)'],['Rh','Hybrid factor (6.10.1.10.1)'],
-    ['Rb','Load-shedding factor (6.10.1.10.2)'],['Fnc, Fnt','Compression / tension flange resistance'],
-    ['Fcrw','Web bend-buckling resistance (6.10.1.9)'],['Vp, Vn, C','Plastic shear; nominal shear; buckling ratio'],
-    ['Vcr','Shear-buckling (end-panel) resistance'],['fbu','Factored flange stress from staged analysis'],
-    ['fℓ','Flange lateral bending stress'],['Lb, Lp, Lr','Unbraced length; compact / noncompact limits'],
-    ['Qn, Qr','Stud nominal / factored shear resistance'],['(ΔF)n, (ΔF)TH','Fatigue resistance; CA threshold'],
-    ['RF','Load rating factor (Inventory / Operating)'],['φf, φv, φsc','Resistance factors (flexure, shear, stud)'],
-  ];
+  const rows=NOMEN_ROWS;
   return (<div><Card title="Nomenclature — steel plate girder" refTag="AASHTO LRFD Section 6">
     <Tbl head={['Symbol','Description']} rows={rows.map(r=>({c:r}))}/>
   </Card></div>);
 }
 
-function ReportTab({R,inp}){
-  if(!R.ok) return null;
-  const allPass=R.checks.every(c=>c.pass);
-  return (<div>
-    <GdNote ext={inp&&inp.external}/>
-    <StgWarn R={R} kind="all"/>
-    <Card title="Design summary — all limit-state checks" refTag="AASHTO LRFD Section 6">
-      <Tbl head={['Check','Ref','Demand','Capacity','D/C','Status']}
-        rows={R.checks.map(c=>({_cls:c.pass?'':'row-fail',c:[c.n,c.ref,fmt(c.v,2)+' '+c.u,fmt(c.lim,2)+' '+c.u,{v:<RBar r={c.r} pass={c.pass} t={fmt(c.r,2)}/>},PF(c.pass)]}))}/>
-    </Card>
-    <Card title="Key results" refTag="section · demands · resistances">
-      <KV rows={[
+/* ================= CALCULATION-SHEET REPORT =================
+   Same document style as GirderDetail / Gusset Plate Rating (the "crdoc" calculation sheet; its CSS and the
+   CR_OPTS / CR_REFS / crPageCSS / print pattern are copied from Gusset Plate Rating.html, kept duplicated per
+   CLAUDE.md §3). Display only: every number comes from computeAll (R) or from the tab derivations above, which are
+   the same functions the tabs render. Report options live in the UI store stgirder.ui.v1 (key rpt); the optional
+   title-block fields Description / Checked by / Check date are stored in the session inputs as proj.desc,
+   proj.checkedBy, proj.chkDate (new optional fields, absent until typed). */
+const CR_OPTS=[['inputs','Inputs'],['summary','Summary'],['props','Section properties'],['demands','Demands'],
+  ['checks','Limit states, worked'],['rating','Rating'],['camber','Camber'],['drawing','Drawings'],['method','Appendix: method']];
+const CR_REFS=[
+  ['AASHTO LRFD','AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024): Art. 2.5.2.6.2 (live-load deflection); Section 3 (load factors Table 3.4.1-1, HL-93 and fatigue truck 3.6.1, dynamic load allowance 3.6.2, fatigue ADTT 3.6.1.4); Section 4 (distribution factors 4.6.2.2, effective width 4.6.2.6, equivalent strips 4.6.2.1 and Table A4-1); Art. 5.4.2.4 (E_c); Section 6 (fatigue 6.6.1, I-section flexural members 6.10 with Appendix D6); Art. 9.7.3 (deck reinforcement); Section 13 (deck overhang)'],
+  ['AASHTO MBE','AASHTO Manual for Bridge Evaluation, Section 6A (LRFR design-load rating: Art. 6A.4.2, Tables 6A.4.2.2-1, 6A.4.2.3-1, 6A.4.2.4-1, Art. 6A.6.4.2.2). ST-Girder does not state the MBE edition: verify.']];
+function crOpts(){ const r=(loadUI().rpt)||{}; const o={};
+  CR_OPTS.forEach(([k])=>o[k]= r[k]!==false && !(k==='method'&&!r.method));
+  o.detail=r.detail==='all'?'all':'gov'; return o; }
+const crNear=(arr,x)=>arr.length? arr.reduce((bi,p,i,a)=>Math.abs(p.x-x)<Math.abs(a[bi].x-x)?i:bi,0) : -1;   // same pick as the tab pickers
+const crYes=v=>v?'yes':'no';
+// A tab's Deriv/Card element re-set as calculation-sheet content: its children (the worked steps) in the same order,
+// plots dropped, the camber table without its plot, SG groups kept together.
+function CrTab({el}){
+  if(!el) return null;
+  const kids=React.Children.toArray(el.props.children).filter(c=>!(c&&c.type===Fig))
+    .map(c=>(c&&c.type===CamberBreakdown)? React.cloneElement(c,{fig:false}) : c);
+  const out=[]; let grp=null;
+  kids.forEach(ch=>{ if(ch&&ch.type===SG){ grp=[ch]; out.push(grp); } else if(grp) grp.push(ch); else out.push(ch); });
+  return <div className="cr-tab">{out.map((o,i)=>Array.isArray(o)?<div key={'g'+i} className="cr-grp">{o}</div>:o)}</div>;
+}
+const CrKV=({rows})=>(<table className="cr-tbl"><tbody>{rows.filter(Boolean).map((r,i)=>
+  <tr key={i}><td>{r[0]}</td><td className="n">{r[1]}</td><td>{r[2]||''}</td></tr>)}</tbody></table>);
+const CrT=({head,rows,wide,gov})=>(<table className={'cr-tbl'+(wide?' cr-wide':'')}>
+  <thead><tr>{head.map((h,i)=><th key={i}>{h}</th>)}</tr></thead>
+  <tbody>{rows.map((r,i)=><tr key={i} className={gov&&gov(i)?'cr-gov':''}>{r.map((c,j)=><td key={j} className={j>0&&typeof c!=='object'&&/^[-−\d.,\s]+$/.test(String(c))?'n':''}>{c}</td>)}</tr>)}</tbody></table>);
+// Result line under a worked check (Gusset "cr-line cr-res"): the values are those of R.checks, as in the summary table.
+function CrRes({c}){
+  return <div className="cr-line cr-res"><div className="cr-d">{c.n}<span className="cr-rf">LRFD {c.ref}</span></div>
+    <div className="cr-m">demand <b>{fmt(c.v,2)}</b> {c.u} vs capacity <b>{fmt(c.lim,2)}</b> {c.u}; D/C = <b>{fmt(c.r,2)}</b>{c.loc?<span> at x = {fmt(c.loc,1)} ft</span>:null}</div>
+    <div className={'cr-r'+(c.pass?'':' cr-st-fail')}><b>{c.pass?'PASS':'FAIL'}</b></div></div>;
+}
+// Description of the girder line used on the cover, the header and the objectives.
+function crGirderText(R,inp){
+  const sp=R.useExt&&R.ext&&R.ext.sel&&R.ext.sel.idx? (()=>{ const all=externalSpans(inp.external), sel=R.ext.sel;
+      return 'span '+sel.idx+(all.length>1?' of a '+all.length+'-span continuous member':'')+' ('+fmt(sel.x0,1)+'–'+fmt(sel.x1,1)+' ft), L = '+fmt(R.geom.L,1)+' ft'; })()
+    : 'simple span, L = '+fmt(R.geom.L,1)+' ft';
+  return {sp, girder:(inp.proj&&inp.proj.girderId)||'Girder', pos:inp.loads.pos==='exterior'?'exterior':'interior'};
+}
+function crDesc(R,inp){ const p=inp.proj||{}; if(p.desc) return p.desc; const g=crGirderText(R,inp);
+  const n=R.useExt&&R.ext&&R.ext.sel&&R.ext.sel.idx? externalSpans(inp.external).length : 0;
+  return g.girder+', '+(n?'span '+R.ext.sel.idx+(n>1?' of '+n:'')+', ':'')+'L = '+fmt(R.geom.L,1)+' ft'; }
+// The page-header boxes do not wrap: a long description is shortened there (the full text is in 2.1 and the title block).
+const crShort=(t,n)=>{ t=String(t==null?'':t); return t.length>n? t.slice(0,n-1).replace(/\s+\S*$/,'')+'…' : t; };
+
+// The report model: numbered sections and subsections (title, code reference, body, result lines).
+function crModel(R,inp,o){
+  const ck=(...ts)=>R.checks.filter(c=>ts.includes(c.t));
+  const all=o.detail==='all', L=R.geom.L, gt=crGirderText(R,inp), secs=[];
+  const S=(key,t,extra)=>{ const s={key,t,subs:[],...(extra||{})}; secs.push(s); return s; };
+  const sub=(s,t,ref,body,res)=>s.subs.push({t,ref,body,res:res||[]});
+  const ld=R.loads, df=R.df, ext=inp.external, p=inp.proj||{}, sec=inp.sec, mat=inp.mat, dk=inp.deck, lq=inp.loads, st=inp.stiff, cn=inp.conn, fq=inp.fatigue;
+  const notIncl=[
+    'Flange lateral bending f_ℓ (taken as 0 for a straight girder in the constructibility, Service II and Strength flange checks); horizontally curved girders are outside the scope.',
+    'Legal- and permit-vehicle load rating (only the HL-93 design-load rating is computed).',
+    ...(R.deckD?['Deck overhang: the A13 railing-collision (Extreme Event II) design cases; the overhang is checked for gravity and the wheel load only.']:[]),
+    'Radial fatigue shear F_fat on the studs (curved or skewed girders).',
+    ...(R.flex.contSpan?['The B6.2 exemption for the 1.3R_hM_y limit in continuous spans is not evaluated.']:[]),
+    'Fabrication / residual camber (add per the fabricator’s practice).',
+    ...(R.useExt?[]:['Continuity: the built-in analysis is a simple span; import continuous demands for continuous girders.'])];
+  const gdn=gdNoteLines(ext);
+  // 1. Objectives
+  S('obj','Objectives',{body:<React.Fragment>
+    <p className="cr-p">Design check of the built-up steel plate girder <b>{gt.girder}</b> ({gt.pos} girder, {gt.sp}){p.name?<span> of {p.name}</span>:null} to the AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024), Section 6: section proportions (6.10.2), constructibility (6.10.3), Service II (6.10.4) and live-load deflection (2.5.2.6.2, optional), Strength I flexure (6.10.7, 6.10.8) and shear (6.10.9), fatigue (6.6.1, 6.10.5.3), transverse and bearing stiffeners (6.10.11), shear connectors (6.10.10){R.deckD?', transverse deck design (4.6.2.1, Table A4-1, 9.7.3)':''}, an HL-93 design-load rating (AASHTO MBE 6A) and the dead-load camber.</p>
+    <p className="cr-p">Demands: {R.useExt?<span>imported continuous-member envelopes ({(ext&&ext.source)||'external analysis'}{ext&&ext.producer?', '+ext.producer:''}); see 2. Input parameters.</span>:<span>ST-Girder’s built-in simple-span analysis (dead loads from the section and deck geometry, HL-93 live load times the distribution factors).</span>} Load factors: Strength I 1.25 DC + 1.50 DW + 1.75 (LL+IM); Service II DC + DW + 1.30 (LL+IM).</p>
+    {gdn&&<React.Fragment><p className="cr-p"><b>{gdn.head}</b> {gdn.src}</p><p className="cr-p">Known differences between the two tools:</p><ul className="cr-ul">{gdn.diffs.map((d,i)=><li key={i}>{d}</li>)}</ul><p className="cr-p"><i>{gdn.tbc}</i></p></React.Fragment>}
+    {R.warnings&&(R.warnings.fl.length+R.warnings.fat.length)>0&&<React.Fragment><p className="cr-p"><b>Warnings:</b></p><ul className="cr-ul">{[...R.warnings.fl,...R.warnings.fat].map((w,i)=><li key={i}>{w}</li>)}</ul></React.Fragment>}
+    <p className="cr-p"><b>Not included in this calculation:</b></p><ul className="cr-ul">{notIncl.map((t,i)=><li key={i}>{t}</li>)}</ul>
+    <p className="cr-p">Design aid only — independent verification by a licensed engineer is required.</p>
+  </React.Fragment>});
+  // 2. Inputs
+  if(o.inputs){ const s=S('inputs','Input parameters');
+    sub(s,'Project and girder','',<CrKV rows={[['Project',p.name||'—'],['Girder',p.girderId||'—'],['Job No.',p.job||'—'],['Computed by',p.by||'—'],['Date',p.date||'—'],
+      ['Checked by',p.checkedBy||'—'],['Check date',p.chkDate||'—'],['Description',crDesc(R,inp)]]}/>);
+    sub(s,'Geometry and framing','',<CrKV rows={[['Span L',fmt(R.geom.L,2),'ft'],['Girder spacing S',fmt(+inp.geom.S,2),'ft'],['Number of girders',fmt(+inp.geom.nGirders,0)],
+      ['Cross-frame spacing (unbraced length) L_b',fmt(+inp.geom.Lb,2),'ft'],['Girder position',gt.pos+(lq.posAuto!==false?' (follows the shared design beam)':' (set here)')],
+      ['Skew angle',fmt(+lq.skew||0,1),'deg'],['Construction','unshored (DC1 on the bare steel)'],['Analysis',R.useExt?'imported continuous-member envelopes':'built-in simple span']]}/>);
+    sub(s,'Girder section','',<React.Fragment>
+      <CrKV rows={[['Starting section',inp.preset||'—'],['Web D × t_w',fmt(R.sec.D,3)+' × '+fmt(R.sec.tw,4),'in'],
+        ...(R.segP.length>1?[]:[['Top flange b_ft × t_ft',fmt(R.segP[0].dims.bft,3)+' × '+fmt(R.segP[0].dims.tft,4),'in'],['Bottom flange b_fb × t_fb',fmt(R.segP[0].dims.bfb,3)+' × '+fmt(R.segP[0].dims.tfb,4),'in']]),
+        ['Flange transitions',R.segP.length>1?R.segP.length+' segments (table below)':'none (prismatic)']]}/>
+      {R.segP.length>1&&<CrT head={['Segment','x (ft)','Top flange b × t (in)','Bottom flange b × t (in)']}
+        rows={R.segP.map(g=>[g.i+1,fmt(g.x0,2)+' – '+fmt(g.x1,2),fmt(g.dims.bft,3)+' × '+fmt(g.dims.tft,4),fmt(g.dims.bfb,3)+' × '+fmt(g.dims.tfb,4)])}/>}
+    </React.Fragment>);
+    sub(s,'Materials','AASHTO 6.4.1',<CrKV rows={[['Steel grade',mat.grade],['Flange yield F_yf',fmt(R.matR.Fyf,1),'ksi'],['Web yield F_yw',fmt(R.matR.Fyw,1),'ksi'],
+      ['Tensile strength F_u',fmt(+mat.Fu,1),'ksi'],['Steel modulus E_s',fmt(R.matR.Es,0),'ksi'],['Hybrid girder input',crYes(mat.hybrid)],['Stiffener yield F_ys',fmt(R.bearing.Fys,1),'ksi']]}/>);
+    sub(s,'Deck and composite action','6.10.1.1 · 4.6.2.6',<CrKV rows={[['Composite deck',crYes(R.deck.deckOn)],["Concrete f'_c",fmt(R.deck.fc,2),'ksi'],['Unit weight w_c',fmt(+dk.wc,3),'kcf'],
+      ['Structural slab t_s',fmt(+dk.ts,2),'in'],...(dk.tsSeparate?[['Slab thickness for dead load',fmt(+dk.tsDL,2),'in']]:[]),['Haunch',fmt(+dk.haunch,2),'in'],
+      ['Effective width b_eff',fmt(R.beff,2),'in '+(dk.beffAuto?'(tributary width)':'(entered)')],['E_c (5.4.2.4)',fmt(R.EcDeck,0),'ksi'],['Modular ratio n (rounded, ≥ 6)',fmt(R.n,0)],
+      ['Overhang (girder CL to deck edge)',fmt(+dk.oh,2),'ft'],['Longitudinal deck rebar A_s (−M section)',fmt(+inp.negM.As,2),'in²'],['Rebar depth from top of slab',fmt(+inp.negM.dTop,2),'in'],
+      ...(R.deckD?[['Deck design: f_y / top bar / spacing',fmt(+dk.fyd,0)+' ksi / '+fmt(+dk.barTop,2)+' in² / '+fmt(+dk.sTop,2)+' in'],['Bottom bar / spacing',fmt(+dk.barBot,2)+' in² / '+fmt(+dk.sBot,2)+' in'],
+        ['Cover top / bottom',fmt(+dk.coverT,2)+' / '+fmt(+dk.coverB,2),'in'],['Future wearing surface',fmt(+dk.wsFut,3),'ksf'],['Barrier base width / weight',fmt(+dk.bBar,1)+' in / '+fmt(+dk.wBar,3)+' klf']]:[])]}/>);
+    sub(s,'Loads (per girder)','3.4.1 · 3.6',<React.Fragment><CrKV rows={[['Steel self-weight (0.490 kcf)',fmt(ld.wsw,3),'klf'],['Deck slab + haunch',fmt(ld.wdk,3),'klf'],
+      ["Add'l DC1 (forms, details)",fmt(+lq.wDCextra||0,3),'klf'],['Distributed DC1',fmt(ld.wDC1,3),'klf'],
+      ['Cross-frame / diaphragm point loads',(lq.diaph||[]).length?(lq.diaph||[]).map(d=>fmt(+d.P||0,2)+' kip @ '+fmt(+d.a||0,1)+' ft').join('; '):'none'],
+      ['Construction live load',fmt(+lq.wConstr||0,3),'klf'],['DC2 barrier / SIDL',fmt(ld.wDC2,3),'klf'],['DW wearing surface',fmt(ld.wDW,3),'klf'],
+      ['Live load',R.useExt?'imported ±LL+IM envelopes':(lq.llAuto?'HL-93 × distribution factor (auto)':'manual M_LL+IM = '+fmt(+lq.MLL||0,0)+' k-ft, V_LL+IM = '+fmt(+lq.VLL||0,0)+' kip')]]}/>
+      {R.useExt&&R.ext.hasDC1&&<p className="cr-note">DC1 is taken from the import; the distributed DC1 above applies only to the built-in analysis{R.ext.swExcl?' (the girder self-weight is added by ST-Girder, see Imported demands)':''}.</p>}</React.Fragment>);
+    sub(s,'Stiffeners, connectors and fatigue','6.10.11 · 6.10.10 · 6.6.1',<CrKV rows={[['Transverse stiffeners',st.transverse?'yes, d_o = '+fmt(+st.doSpc,1)+' in, b_t × t_p = '+fmt(+st.bt,2)+' × '+fmt(+st.tp,3)+' in':'none'],
+      ['Bearing stiffeners',fmt(R.bearing.nb,0)+' plate(s) each side of the web, b_b × t_b = '+fmt(R.bearing.bb,2)+' × '+fmt(R.bearing.tb,3)+' in'],
+      ['Shear studs','d = '+fmt(+cn.studD,3)+' in, h = '+fmt(+cn.studH,2)+' in, '+fmt(+cn.nRow,0)+' per row, pitch '+fmt(+cn.pitch,2)+' in'],
+      ['Fatigue detail category',R.fatigue.cat],['ADTT entered',fmt(R.fatigue.adttRaw,0)+' trucks/day ('+(R.fatigue.adttIsSingleLane?'single-lane (ADTT)SL':'gross, '+R.fatigue.lanes+' lanes')+')'],
+      ['Cycles per truck n / design life',fmt(R.fatigue.nCyc,2)+' / '+fmt(R.fatigue.lifeYr,0)+' yr'],['Fatigue limit state',fq.lsMode==='auto'?'auto (from the (ADTT)SL crossover)':'manual: Fatigue '+fq.lsMode]]}/>);
+    sub(s,'Rating factors','MBE 6A.4.2.3 · 6A.4.2.4',<CrKV rows={[['Condition factor φ_c',fmt(R.rating.phiC,2)],['System factor φ_s',fmt(R.rating.phiS,2)],['φ_c·φ_s used (≥ 0.85)',fmt(R.rating.phiCS,3)]]}/>);
+    if(R.useExt&&ext){ const e=ext, pg=extPerGirderOf(e);
+      sub(s,'Imported demands','',<React.Fragment><CrKV rows={[['Source',(e.source||'external analysis')],['Producer',e.producer||'—'],['Project',e.project||'—'],['Member',(e.member&&e.member.key)||'—'],
+        ...(e.producedAt?[['Produced',new Date(e.producedAt).toLocaleString()]]:[]),['Stations in the import',fmt((e.stations||[]).length,0)],['Live load',(e.liveLoadType||'HL-93')+', impact included'],
+        ['Units',e.units?((e.units.moment||'ft-kip')+' / '+(e.units.force||'kip')):'ft-kip / kip'],
+        ['Selected span','span '+(R.ext.sel.idx||1)+': '+fmt(R.ext.sel.x0,2)+' – '+fmt(R.ext.sel.x1,2)+' ft'],
+        ['LL distribution',pg?'per girder (DF and multiple presence already in the import; not applied)':'DF × m applied here: +M '+fmt(R.ext.llFac.pos,3)+', −M '+fmt(R.ext.llFac.neg,3)+', V '+fmt(R.ext.llFac.v,3)],
+        ['DC1',R.ext.hasDC1?'from the import'+(R.ext.swExcl?' (self-weight excluded; added by ST-Girder)':''):'computed by ST-Girder on the selected span'],
+        ['Plate geometry',e.section&&e.section.zones?'imported from section.zones':'ST-Girder inputs'],
+        ['Fatigue',R.fatigue.fatImp?'imported fatigue moments'+(R.fatigue.fatImpV?' and shears':''):'ST-Girder fatigue truck (simple span)']]}/>
+        {R.ext.swExcl&&R.ext.hasDC1&&<p className="cr-note"><SwContNote R={R}/></p>}
+        {pg&&e.girderDetail&&e.girderDetail.df&&Array.isArray(e.girderDetail.df.spans)&&<p className="cr-note">Factors used by {e.producer}: {e.girderDetail.df.spans.map(d=>'span '+d.span+' g_M = '+fmt(d.gM,3)+', g_V = '+fmt(d.gV,3)).join('; ')}{(e.girderDetail.df.piers||[]).length?'; '+e.girderDetail.df.piers.map(d=>'pier '+d.pier+' g_M = '+fmt(d.gM,3)).join('; '):''}.</p>}
+        {e.factored===true&&<p className="cr-note"><b>The import is flagged FACTORED; ST-Girder applies its own load factors.</b></p>}
+      </React.Fragment>); }
+  }
+  // 3. Summary
+  if(o.summary){ const allPass=R.checks.every(c=>c.pass);
+    S('summary','Summary of results',{body:<React.Fragment>
+      <CrT wide head={['Check','Ref','Demand','Capacity','D/C','Status']} rows={R.checks.map(c=>[c.n,c.ref,fmt(c.v,2)+' '+c.u,fmt(c.lim,2)+' '+c.u,fmt(c.r,2),c.pass?'PASS':<b><u>FAIL</u></b>])}/>
+      <CrKV rows={[
         ['Section','built-up '+fmt(R.sec.D,0)+'×'+fmt(R.sec.tw,3)+' web',''],
         ['Plastic moment Mp',fmt(R.pl.Mp/12,0),'k-ft'],
         [R.flex.compact?'φMn flexure':'φMn flexure (stress-basis equivalent, φf·min(Fnc·S_t, Fnt·S_b))',fmt(R.flex.phiMnRep,0),'k-ft'],
@@ -5337,11 +5614,244 @@ function ReportTab({R,inp}){
         ['Total DL camber (max)',fmt(R.camber.camTotMax,2),'in at x = '+fmt(R.camber.xTot,1)+' ft'],
         ['Inventory / Operating RF',fmt(R.rating.govInv,2)+' / '+fmt(R.rating.govOpr,2),''],
       ]}/>
-      <div className={'callout'+(allPass?'':' warn')}>{allPass?'All limit-state checks pass.':'One or more checks fail — see the table above.'} Design aid only — independent verification by a licensed engineer is required.</div>
-    </Card>
-    <Card title="Dead-load deflection by load (camber)" refTag="DC1 on bare steel · DC2, DW on 3n composite">
-      <CamberBreakdown R={R} fig={false}/>
-    </Card>
+      <p className="cr-p cr-concl"><b>{allPass?'All limit-state checks pass.':'One or more checks fail — see the table above.'}</b> {R.checks.length} checks, {R.checks.filter(c=>c.pass).length} pass. Design aid only — independent verification by a licensed engineer is required.</p>
+    </React.Fragment>}); }
+  // 4. Section properties
+  if(o.props){ const s=S('props','Section properties'), SD=secDerivs(R);
+    const pr=(lab,q,tr)=>[lab,fmt(q.A,1),fmt(q.ybar,2),fmt(q.I,0),fmt(q.Sb,0),fmt(q.StSteel,0),tr||'—'];
+    sub(s,'Elastic section properties (midspan segment)','bare · 3n · n · cracked',<React.Fragment>
+      <CrT wide head={['Section','A (in²)','ȳ from bot (in)','I (in⁴)','S_bot (in³)','S_top,st (in³)','Deck S_tr (in³)']}
+        rows={[pr('Bare steel (noncomposite)',R.bare),pr('Long-term composite (3n = '+(3*R.n)+')',R.c3N,R.c3N.StDeckTr?fmt(R.c3N.StDeckTr,0):'—'),pr('Short-term composite (n = '+R.n+')',R.cN,R.cN.StDeckTr?fmt(R.cN.StDeckTr,0):'—')]}/>
+      {R.hasNeg&&R.neg&&<CrKV rows={[['Cracked section (steel + deck rebar, governing −M segment): I',fmt(R.neg.cr.I,0),'in⁴'],['ȳ from bottom',fmt(R.neg.cr.ybar,2),'in'],['S bot / S top steel',fmt(R.neg.cr.Sb,0)+' / '+fmt(R.neg.cr.St,0),'in³'],['D_c web in compression (−M)',fmt(R.neg.cr.DcNeg,1),'in'],['Rebar A_s / 1% minimum (6.10.1.7)',fmt(R.neg.AsProv,2)+' / '+fmt(R.neg.AsMin1pct,2),'in²']]}/>}
+      <p className="cr-note">DC1 on the bare steel; DC2 + DW on the long-term (3n) composite; live load on the short-term (n) composite; −M regions on the cracked steel + rebar section. b_eff = {fmt(R.beff,1)} in; n = E_s/E_c = {fmt(R.nRaw,2)} → {R.n} (6.10.1.1.1b); E_c = {fmt(R.EcDeck,0)} ksi.</p>
+    </React.Fragment>);
+    sub(s,'Composite transformed section (short-term, n)','LRFD 4.6.2.6 · 6.10.1.1.1b',<CrTab el={SD.trans}/>);
+    sub(s,'Plastic moment Mₚ and PNA','Appendix D6.1',<CrTab el={SD.plastic}/>);
+    sub(s,'Classification and stability factors','6.10.1.10 · 6.10.6.2.2',<CrTab el={SD.cls}/>);
+    if(R.segP.length>1) sub(s,'Flange segments','per-segment properties',<CrT wide head={['Seg','x (ft)','Top flange','Bot flange','I bare (in⁴)','I comp n (in⁴)','Mp (k-ft)','Class']}
+      rows={R.segP.map(g=>[g.i+1,fmt(g.x0,0)+'–'+fmt(g.x1,0),fmt(g.dims.bft,1)+'×'+fmt(g.dims.tft,3),fmt(g.dims.bfb,1)+'×'+fmt(g.dims.tfb,3),fmt(g.bare.I,0),fmt(g.cN.I,0),fmt(g.pl.Mp/12,0),g.compact?'compact':'noncompact'])}/>);
+    sub(s,'Section proportion limits','6.10.2 · worst segment governs',<p className="cr-note">Web D/t_w ≤ 150 (6.10.2.1.1); flanges b_f/2t_f ≤ 12, b_f ≥ D/6, t_f ≥ 1.1t_w, 0.1 ≤ I_yc/I_yt ≤ 10 (6.10.2.2), checked for every flange segment.</p>,
+      R.checks.filter(c=>c.ref&&c.ref.indexOf('6.10.2')===0));
+  }
+  // 5. Demands
+  if(o.demands){ const s=S('demands','Demands');
+    const stn=R.stations, at=x=>stn[crNear(stn,x)];
+    if(!(R.useExt&&R.ext.hasDC1)) sub(s,'Dead loads','3.4.1 · simple span',<div className="cr-tab">
+      <ML s={Tx`w_{DC1}=w_{sw}+w_{deck}+w_{add}=${nx(ld.wsw,3)}+${nx(ld.wdk,3)}+${nx(+lq.wDCextra||0,3)}=${nx(ld.wDC1,3)}\;\text{klf}`}/>
+      <ML s={Tx`M_{DC1}=\frac{w_{DC1}L^2}{8}+M_{dia}=\frac{${nx(ld.wDC1,3)}\cdot${nx(L,1)}^2}{8}+${nx(ld.Mdia,0)}=${nx(ld.Mdc1,0)}\;\text{k-ft}`}/>
+      {!R.useExt&&<ML s={Tx`M_{DC2}=\frac{w_{DC2}L^2}{8}=\frac{${nx(ld.wDC2,3)}\cdot${nx(L,1)}^2}{8}=${nx(ld.Mdc2,0)}\;\text{k-ft}\qquad M_{DW}=\frac{w_{DW}L^2}{8}=\frac{${nx(ld.wDW,3)}\cdot${nx(L,1)}^2}{8}=${nx(ld.Mdw,0)}\;\text{k-ft}`}/>}
+      <div className="mnote">Midspan values of the simple span (built-in analysis). Steel self-weight = A_steel·0.490/144 klf, area-weighted over the flange segments; deck = tributary width·t_s·w_c + haunch·b_ft·w_c.{R.useExt?' DC2, DW and LL come from the import; DC1 is computed here because the import has no M_DC1.':''}</div></div>);
+    if(!R.useExt&&lq.llAuto) sub(s,'Live load: HL-93 and distribution factors','3.6.1.2 · 4.6.2.2',<div className="cr-tab">
+      <ML s={Tx`M_{LL+IM}/\text{lane}=1.33\max(M_{truck},M_{tandem})+M_{lane}=1.33\max(${nx(ld.hl.Mtr,0)},${nx(ld.hl.Mtd,0)})+${nx(ld.hl.Mln,0)}=${nx(ld.hl.M,0)}\;\text{k-ft}`}/>
+      <ML s={Tx`V_{LL+IM}/\text{lane}=1.33\max(V_{truck},V_{tandem})+V_{lane}=1.33\max(${nx(ld.hl.Vtr,1)},${nx(ld.hl.Vtd,1)})+${nx(ld.hl.Vln,1)}=${nx(ld.hl.V,1)}\;\text{kip}`}/>
+      {lq.dfAuto? <React.Fragment>
+        <ML s={Tx`K_g=n\left(I+Ae_g^2\right)=${nx(df.Kg,0)}\;\text{in}^4\quad(e_g=${nx(df.eg,2)}\;\text{in})`}/>
+        <ML s={Tx`g_{M1}=0.06+\left(\tfrac{S}{14}\right)^{0.4}\left(\tfrac{S}{L}\right)^{0.3}\left(\tfrac{K_g}{12Lt_s^3}\right)^{0.1}=${nx(df.m1,3)}\qquad g_{M2}=0.075+\left(\tfrac{S}{9.5}\right)^{0.6}\left(\tfrac{S}{L}\right)^{0.2}\left(\tfrac{K_g}{12Lt_s^3}\right)^{0.1}=${nx(df.m2,3)}`}/>
+        <ML s={Tx`g_{V1}=0.36+\tfrac{S}{25}=${nx(df.v1,3)}\qquad g_{V2}=0.2+\tfrac{S}{12}-\left(\tfrac{S}{35}\right)^2=${nx(df.v2,3)}`}/>
+        {df.ext? <ML s={Tx`\text{exterior: }g_M=\max(e\,g_{M2},\;\text{lever},\;\text{rigid})=\max(${nx(df.eM,3)}\cdot${nx(df.m2,3)},\;${nx(df.lever,3)},\;${nx(df.rigid,3)})=${nx(df.dfmRaw,3)}\qquad g_V=\max(${nx(df.eV,3)}\cdot${nx(df.v2,3)},\;${nx(df.lever,3)},\;${nx(df.rigid,3)})=${nx(df.dfvRaw,3)}`}/>
+          : <ML s={Tx`\text{interior: }g_M=\max(g_{M1},g_{M2})=${nx(df.dfmRaw,3)}\qquad g_V=\max(g_{V1},g_{V2})=${nx(df.dfvRaw,3)}`}/>}
+        <ML s={Tx`\text{skew: }DF_m=g_M\cdot${nx(df.skM,3)}=${nx(ld.dfm,3)}\qquad DF_v=g_V\cdot${nx(df.skV,3)}=${nx(ld.dfv,3)}\quad(\theta=${nx(df.th,1)}^\circ)`}/>
+      </React.Fragment> : <ML s={Tx`DF_m=${nx(ld.dfm,3)}\qquad DF_v=${nx(ld.dfv,3)}\quad(\text{entered})`}/>}
+      <ML s={Tx`M_{LL+IM}=DF_m\cdot${nx(ld.hl.M,0)}=${nx(ld.MLL,0)}\;\text{k-ft}\qquad V_{LL+IM}=DF_v\cdot${nx(ld.hl.V,1)}=${nx(ld.VLL,0)}\;\text{kip}`}/>
+      <div className="mnote">Type (a)/(k) steel I-girder with concrete deck, LRFD 4.6.2.2 (multiple presence included in the formulas; the lever rule includes m = 1.2). Along the span the live-load moment and shear envelopes are the HL-93 influence-line values at each station times DF_m and DF_v.</div></div>);
+    const sM=at((R.flex.gov&&R.flex.gov.x)||L/2), sV=at(R.shearR.xGov||0);
+    sub(s,'Load combinations','Table 3.4.1-1',<div className="cr-tab">
+      <ML s={Tx`M_u=1.25(M_{DC1}+M_{DC2})+1.50M_{DW}+1.75M_{LL+IM}=1.25(${nx(sM.M1,0)}+${nx(sM.M2,0)})+1.50(${nx(sM.Mw,0)})+1.75(${nx(sM.Ml,0)})=${nx(sM.Mu,0)}\;\text{k-ft}\quad(x=${nx(sM.x,1)}')`}/>
+      <ML s={Tx`V_u=\left|1.25(V_{DC1}+V_{DC2})+1.50V_{DW}\right|+1.75\left|V_{LL+IM}\right|=\left|1.25(${nx(sV.V1,1)}+${nx(sV.V2,1)})+1.50(${nx(sV.Vw,1)})\right|+1.75(${nx(Math.abs(sV.Vl),1)})=${nx(sV.Vu,1)}\;\text{kip}\quad(x=${nx(sV.x,1)}')`}/>
+      <ML s={Tx`\text{Service II: }M=M_{DC1}+M_{DC2}+M_{DW}+1.30M_{LL+IM}\;\text{(stresses accumulated on the stage sections)}`}/>
+      <div className="mnote">Strength I at the governing +M station (x = {fmt(sM.x,1)} ft) and the governing shear station (x = {fmt(sV.x,1)} ft). Maximum load factors only.{R.hasNeg?' The −M_u envelope uses the −LL+IM envelope in place of +LL+IM.':''}</div></div>);
+    const locs=[]; const add=(lab,x)=>{ if(x==null||!isFinite(x)) return; const i=crNear(stn,x); const e=locs.find(l=>l.i===i); if(e) e.lab+=', '+lab; else locs.push({i,lab}); };
+    add('left support',0); add('midspan',L/2); add('right support',L); add('governing +M',R.flex.gov&&R.flex.gov.x);
+    if(R.hasNeg&&R.neg) add('governing −M',R.neg.negBGov.x); add('governing shear',R.shearR.xGov); add('Service II',R.stress.s2Gov&&R.stress.s2Gov.x);
+    add('constructibility',R.constr.xGov); add('fatigue',R.fatigue.xGov);
+    locs.sort((a,b)=>stn[a.i].x-stn[b.i].x);
+    const rowsOf=list=>list.map(l=>{ const q=stn[l.i]; return {q,lab:l.lab}; });
+    const mt=list=><CrT wide head={['Location','x (ft)','M_DC1','M_DC2','M_DW','+M_LL+IM','−M_LL+IM','+M_u','−M_u']}
+      rows={rowsOf(list).map(({q,lab})=>[lab,fmt(q.x,2),fmt(q.M1,0),fmt(q.M2,0),fmt(q.Mw,0),fmt(q.Ml,0),fmt(q.Mln,0),fmt(q.Mu,0),fmt(q.Mun,0)])}/>;
+    const vt=list=><CrT wide head={['Location','x (ft)','V_DC1','V_DC2','V_DW','V_LL+IM','V_u']}
+      rows={rowsOf(list).map(({q,lab})=>[lab,fmt(q.x,2),fmt(q.V1,1),fmt(q.V2,1),fmt(q.Vw,1),fmt(q.Vl,1),fmt(q.Vu,1)])}/>;
+    sub(s,'Load effects at the governing stations','per girder · moments k-ft · shears kip',<React.Fragment>{mt(locs)}{vt(locs)}
+      <p className="cr-note">Unfactored per-girder effects (LL with impact and distribution) and the Strength I envelopes; {R.useExt?'imported envelopes on the selected span (x from its left support)':'built-in simple span'}{R.useExt&&R.ext.swExcl&&R.ext.hasDC1?', DC1 includes the self-weight added by ST-Girder':''}.</p></React.Fragment>);
+    if(all) sub(s,'Load effects at every station','all '+stn.length+' stations',<React.Fragment>{mt(stn.map((q,i)=>({i,lab:''})))}{vt(stn.map((q,i)=>({i,lab:''})))}</React.Fragment>);
+  }
+  // 6 – 13. Limit states, worked
+  if(o.checks){
+    { const s=S('constr','Constructibility',{ref:'6.10.3'}), c=R.constr, cc=c.constrCalc||[], i=crNear(cc,c.xGov);
+      sub(s,'Worked check at the governing station (x = '+fmt(cc[i]?cc[i].x:0,1)+' ft)','6.10.3 · bare steel · wet deck',cc[i]?<CrTab el={constrWorkedDeriv(R,cc[i])}/>:null,ck('Cnstr FLB','Cnstr yld','Cnstr −M','Cnstr V'));
+      if(all) sub(s,'All stations','6.10.3.2 · 6.10.3.3',<CrT wide head={['x (ft)','Region','M_c (k-ft)','V_c (kip)','f_bu (ksi)','F_nc','FLB/LTB','Yield','Web','Tension','Shear']}
+        rows={cc.map(q=>[fmt(q.x,2),q.region==='neg'?'−M':'+M',fmt(q.Mc,0),fmt(q.Vc,1),fmt(q.region==='neg'?q.fBot:q.fTop,2),fmt(q.Fnc.Fnc,1),fmt(q.dcFLB,3),fmt(q.dcYield,3),fmt(q.dcWeb,3),fmt(q.dcTen,3),fmt(q.dcV,3)])}/>); }
+    { const s=S('serv','Service II and live-load deflection',{ref:'6.10.4 · 2.5.2.6.2'}), st2=R.stress, ch=R.chartS2||[], i=crNear(ch,st2.s2Gov?st2.s2Gov.x:L/2);
+      sub(s,'Service II flange stresses at the governing station (x = '+fmt(ch[i]?ch[i].x:0,1)+' ft)','6.10.4.2.2',ch[i]?<CrTab el={s2Deriv(R,ch[i])}/>:null,ck('SrvII','SrvII web'));
+      sub(s,'Live-load deflection (optional criterion)','2.5.2.6.2',<div className="cr-tab">
+        <ML s={Tx`\Delta_{truck}=${nx(st2.dTruck,3)}\;\text{in (incl. IM)}\qquad\Delta_{lane}=${nx(st2.dLane,3)}\;\text{in}\qquad DF=\frac{m\,N_L}{N_b}=${nx(st2.dfDefl,3)}`}/>
+        <ML s={Tx`\Delta_{LL}=DF\cdot\max(\Delta_{truck},\;0.25\Delta_{truck}+\Delta_{lane})=${nx(st2.dLL,3)}\;\text{in}\;\le\;\frac{L}{800}=${nx(st2.dLim,3)}\;\text{in}\;${st2.dLL<=st2.dLim?'\\checkmark':'\\text{N.G.}'}`}/>
+        <div className="mnote">Design truck at midspan and the lane load on the short-term composite I = {fmt(R.cN.I,0)} in⁴ (midspan segment); all design lanes loaded and distributed equally to the girders.</div></div>,ck('LL defl'));
+      if(all) sub(s,'All stations','6.10.4.2.2 · ksi',<CrT wide head={['x (ft)','f_bot (+LL)','f_top (+LL)','f_bot (−LL)','f_top (−LL)','Limit']}
+        rows={ch.map(q=>[fmt(q.x,2),fmt(q.bP,2),fmt(q.tP,2),fmt(q.bN,2),fmt(q.tN,2),fmt(q.lim,2)])}/>); }
+    { const s=S('flex','Strength I flexure',{ref:'6.10.7 · 6.10.8'}), fc=R.flexCalc||[], i=crNear(fc,(R.flex.gov&&R.flex.gov.x)||0);
+      sub(s,'Positive-flexure resistance','6.10.7',<CrTab el={flexPosCard(R)}/>,ck('Flexure','Ductility'));
+      if(fc[i]) sub(s,'Worked capacity at the governing +M station (x = '+fmt(fc[i].x,1)+' ft)','6.10.7 · 6.10.8',<CrTab el={flexWorkedCard(R,fc[i])}/>);
+      if(R.hasNeg&&R.neg){ sub(s,'Negative flexure: pier region','6.10.8 · cracked section',<CrTab el={flexNegCard(R)}/>,ck('Neg flex','Neg tens','1% rebar'));
+        const j=crNear(fc,R.neg.negBGov.x||0); if(fc[j]&&j!==i) sub(s,'Worked capacity at the governing −M station (x = '+fmt(fc[j].x,1)+' ft)','6.10.8',<CrTab el={flexWorkedCard(R,fc[j])}/>); }
+      if(all) sub(s,'All stations','6.10.7 · 6.10.8',<CrT wide head={['x (ft)','Seg','+M_u (k-ft)','+M basis','+M D/C','−M_u (k-ft)','−φM_n (k-ft)','−M D/C']}
+        rows={fc.map(q=>[fmt(q.x,2),q.si+1,fmt(q.pos.Mu,0),q.pos.compact?'M_p':'stress',fmt(q.pos.dc,3),fmt(q.Mun,0),fmt(q.neg.capNeg,0),q.hasNegDemand?fmt(Math.max(q.neg.dcBot,q.neg.dcTop),3):'—'])}/>); }
+    { const s=S('shear','Strength I shear',{ref:'6.10.9'}), sc=R.shearCalc||[], i=crNear(sc,R.shearR.xGov||0);
+      sub(s,'Shear resistance','6.10.9',<CrTab el={shearResCard(R)}/>,ck('Shear','End panel'));
+      if(sc[i]) sub(s,'Worked shear at the governing station (x = '+fmt(sc[i].x,1)+' ft)','6.10.9.2 · 6.10.9.3',<CrTab el={shearWorkedCard(R,sc[i])}/>);
+      if(all) sub(s,'All stations','6.10.9 · kip',<CrT wide head={['x (ft)','Panel','V_u','φV_n','D/C']}
+        rows={sc.map(q=>[fmt(q.x,2),q.isEnd?'end':(q.tensionField?'interior (TFA)':'interior'),fmt(q.Vu,1),fmt(q.phiVn,1),fmt(q.dc,3)])}/>); }
+    { const s=S('fat','Fatigue',{ref:'6.6.1 · 6.10.5.3'}), fa=R.fatigue.fatCalc||[], i=crNear(fa,R.fatigue.xGov), FC=fatCards(R,fa[i]||null);
+      sub(s,'Fatigue traffic and number of stress cycles','3.6.1.4 · 6.6.1.2.5',<CrTab el={FC.s1}/>);
+      sub(s,'Fatigue I or Fatigue II','6.6.1.2.3',<CrTab el={FC.s2}/>);
+      sub(s,'Detail category and nominal fatigue resistance','6.6.1.2.5',<CrTab el={FC.s3}/>);
+      if(FC.s4) sub(s,'Fatigue live load and stress range at the peak station (x = '+fmt(fa[i].x,1)+' ft)','3.6.1.4 · 6.6.1.2.1',<CrTab el={FC.s4}/>);
+      sub(s,'Load-induced fatigue check','6.6.1.2.2',<CrTab el={FC.s5}/>,ck('Fatigue'));
+      sub(s,'Special fatigue requirement for webs','6.10.5.3',<CrTab el={FC.web}/>,ck('Fat web'));
+      if(all) sub(s,'All stations','6.6.1.2 · 6.10.5.3',<CrT wide head={['x (ft)','M_f (k-ft)','S_b (in³)','Δf (ksi)','γΔf (ksi)','D/C','V_u web (kip)','Web D/C']}
+        rows={fa.map(q=>[fmt(q.x,2),fmt(q.Mf,0),fmt(q.Sb,0),fmt(q.rng,2),fmt(q.gRng,2),fmt(q.dcFlex,3),fmt(q.Vf,1),fmt(q.dcWeb,3)])}/>); }
+    { const s=S('stiff','Stiffeners',{ref:'6.10.11'});
+      if(R.tStiff) sub(s,'Transverse intermediate stiffener','6.10.11.1',<CrTab el={stiffTransDeriv(R)}/>,ck('Trns stiff','Stiff bt min','Stiff bt max'));
+      else sub(s,'Transverse intermediate stiffener','6.10.11.1',<p className="cr-p">Not checked: the web is unstiffened for shear (no transverse stiffeners, or d_o &gt; 3D).</p>);
+      sub(s,'Bearing stiffener (at support)','6.10.11.2',<CrTab el={stiffBearDeriv(R)}/>,ck('Brg stiff','Brg bb')); }
+    { const s=S('conn','Shear connectors',{ref:'6.10.10'});
+      sub(s,'Stud resistance and strength requirement','6.10.10.4',<CrTab el={connStrDeriv(R)}/>,ck('Studs str'));
+      sub(s,'Fatigue pitch requirement','6.10.10.1.2 · 6.10.10.2',<CrTab el={connFatDeriv(R)}/>,ck('Studs fat')); }
+    if(R.deckD){ const s=S('deck','Deck design (transverse)',{ref:'4.6.2.1 · 9.7.3'});
+      const d=R.deckD;
+      sub(s,'Method','4.6.2.1 · Table A4-1',<p className="cr-p">Equivalent-strip method per foot of width. Interior-bay live-load moments from AASHTO Table A4-1 at S = {fmt(d.Ls,2)} ft and the −M design section x = {fmt(d.xneg,1)} in ({d.dsRule}); multiple presence and the 33% dynamic load allowance are already in the table. Overhang: 16-kip wheel 1 ft from the railing face on the 45.0 + 10.0X strip (X = {fmt(d.Xoh,2)} ft, SW = {fmt(d.SWoh,1)} in) with IM and the one-lane multiple presence factor. Distribution reinforcement (9.7.3.2) = {fmt(d.distPct,0)}% of the bottom steel.</p>);
+      deckCases(d).forEach((CS,k)=>sub(s,CS.l,k===2?'13.4 · 4.6.2.1.3':'9.7.3 · Table A4-1',<CrTab el={deckWorkedDeriv(R,CS)}/>,ck(['Deck +M','Deck −M','Deck OH'][k]))); }
+  }
+  // 14. Rating
+  if(o.rating){ const s=S('rating','Load rating (HL-93 design load, LRFR)',{ref:'MBE 6A'}), r=R.rating, ok=v=>v>=1;
+    const rfL=(lab,C,dc,dw,ll,g,res,u)=>Tx`RF_{${lab}}=\frac{C-1.25\,DC-1.50\,DW}{${g}\,(LL+IM)}=\frac{${nx(C,u)}-1.25(${nx(dc,u)})-1.50(${nx(dw,u)})}{${g}(${nx(ll,u)})}=${nx(res,2)}`;
+    sub(s,'Capacity factors','MBE 6A.4.2.1',<div className="cr-tab"><ML s={Tx`\phi_c\phi_s=\max(${nx(r.phiC,2)}\cdot${nx(r.phiS,2)},\;0.85)=${nx(r.phiCS,3)}`}/>
+      <div className="mnote">Strength capacity C = φ_c·φ_s·φ·R_n (Service II not reduced). Inventory γ_LL = 1.75, Operating γ_LL = 1.35 (MBE Table 6A.4.2.2-1); dead load γ_DC = 1.25, γ_DW = 1.50. Each rating factor is evaluated at every station with that station’s capacity and demands; the lowest is reported.</div></div>);
+    sub(s,'Flexure, positive moment (x = '+fmt(r.flexX,1)+' ft)','MBE 6A.4.2 · 6.10.7',<div className="cr-tab">{r.flexBasis==='Mp'&&r.capM!=null? <React.Fragment>
+        <ML s={rfL('Inv',r.capM,r.MDC,r.MDWr,r.MLLr,'1.75',r.flexInv,0)}/><ML s={rfL('Opr',r.capM,r.MDC,r.MDWr,r.MLLr,'1.35',r.flexOpr,0)}/>
+        <div className="mnote">C = φ_cφ_sφ_f M_n of this station (k-ft); DC = M_DC1 + M_DC2, DW = M_DW, LL+IM = +M_LL+IM at x = {fmt(r.flexX,1)} ft.</div></React.Fragment>
+      : <React.Fragment><ML s={Tx`RF=\min_{\text{flanges}}\frac{\phi_c\phi_s\phi_fF_n-(1.25f_{DC}+1.50f_{DW})}{\gamma_{LL}f_{LL}}\;\Rightarrow\;RF_{Inv}=${nx(r.flexInv,2)},\;RF_{Opr}=${nx(r.flexOpr,2)}`}/>
+        <div className="mnote">Stress basis (noncompact or noncomposite section): flange stresses on the staged sections (DC1 bare steel, DC2 + DW long-term 3n, LL short-term n) against φF_nc / φF_nt of this station.</div></React.Fragment>}</div>);
+    if(r.negInv!==undefined) sub(s,'Flexure, negative moment (x = '+fmt(r.negX,1)+' ft)','MBE 6A.4.2 · 6.10.8',<div className="cr-tab"><ML s={Tx`RF=\frac{\phi_c\phi_s\phi_fF_{nc}-\left|f_{DC+DW,factored}\right|}{\gamma_{LL}f_{LL}}\;\Rightarrow\;RF_{Inv}=${nx(r.negInv,2)},\;RF_{Opr}=${nx(r.negOpr,2)}`}/>
+      <div className="mnote">Bottom flange in compression at the station of the largest −M_u, cracked section for LL.</div></div>);
+    sub(s,'Shear (x = '+fmt(r.shearX,1)+' ft)','MBE 6A.4.2 · 6.10.9',<div className="cr-tab"><ML s={rfL('Inv',r.capV,r.VDC,r.VDWr,r.VLLr,'1.75',r.shearInv,1)}/><ML s={rfL('Opr',r.capV,r.VDC,r.VDWr,r.VLLr,'1.35',r.shearOpr,1)}/>
+      <div className="mnote">C = φ_cφ_sφ_v V_cr (end-panel basis, kip); DC, DW and LL+IM are |V| at x = {fmt(r.shearX,1)} ft.</div></div>);
+    if(r.servInv!==undefined) sub(s,'Service II (x = '+fmt(r.serv.x,1)+' ft, '+r.serv.tag+')','MBE 6A.6.4.2.2',<div className="cr-tab">
+      <ML s={Tx`RF_{Inv}=\frac{f_R-f_D}{1.30\,f_{LL}}=\frac{${nx(r.serv.fR,2)}-(${nx(r.serv.fD,2)})}{1.30(${nx(r.serv.fLL,2)})}=${nx(r.servInv,2)}\qquad RF_{Opr}=\frac{f_R-f_D}{1.00\,f_{LL}}=${nx(r.servOpr,2)}`}/>
+      <div className="mnote">f_R = {fmt(R.stress.s2Coef,2)}R_hF_yf; f_D = unfactored dead-load stress in the direction of f_LL (ksi).</div></div>);
+    const cell=v=>v===undefined?'—':fmt(v,2);
+    sub(s,'Rating summary','MBE 6A',<React.Fragment><CrT wide head={['Limit state','Location','RF Inventory','RF Operating']} rows={[
+        ['Flexure +M ('+(r.flexBasis==='Mp'?'M_n basis':'stress basis')+')','x = '+fmt(r.flexX,1)+' ft',cell(r.flexInv),cell(r.flexOpr)],
+        ...(r.negInv!==undefined?[['Flexure −M (stress basis)','x = '+fmt(r.negX,1)+' ft',cell(r.negInv),cell(r.negOpr)]]:[]),
+        ['Shear','x = '+fmt(r.shearX,1)+' ft',cell(r.shearInv),cell(r.shearOpr)],
+        ...(r.servInv!==undefined?[['Service II flange ('+r.serv.tag+')','x = '+fmt(r.serv.x,1)+' ft',cell(r.servInv),cell(r.servOpr)]]:[])]}/>
+      <div className="cr-line cr-res"><div className="cr-d">Governing rating factor:</div><div className="cr-m">Inventory <b>{fmt(r.govInv,2)}</b>; Operating <b>{fmt(r.govOpr,2)}</b></div>
+        <div className={'cr-r'+(ok(r.govInv)?'':' cr-st-fail')}><b>{ok(r.govInv)?'RF ≥ 1.00':'RF < 1.00'}</b></div></div></React.Fragment>);
+  }
+  // 15. Camber
+  if(o.camber){ const s=S('camber','Camber (dead-load deflection)',{ref:'stage sections · double integration'});
+    sub(s,'Dead-load deflection and camber','DC1 bare · DC2, DW 3n',<CrTab el={camberDeriv(R)}/>); }
+  // 16. Drawings
+  if(o.drawing){ S('drawing','Drawings',{brk:true,body:<div className="cr-fig">
+    <div className="cr-figbox"><CrossSection R={R}/></div><p className="cap">Cross-section at midspan (midspan flange segment), deck and haunch to scale.</p>
+    <div className="cr-figbox"><Elevation R={R}/></div><p className="cap">Elevation: span, cross-frame (brace) points{R.segP.length>1?' and flange transitions':''}.</p></div>}); }
+  // 17. Appendix
+  if(o.method){ S('method','Appendix: method and notation',{brk:true,body:<div className="cr-man">
+    <h3>Method</h3><ul className="cr-ul">
+      <li>Stresses accumulate by construction stage on the section active at each stage: DC1 (self-weight, wet deck, added DC1) on the bare steel; DC2 and DW on the long-term composite (3n); live load on the short-term composite (n); in −M regions the cracked steel + longitudinal rebar section (concrete neglected).</li>
+      <li>Stations: the span tenth-and-twentieth points plus both sides of every flange transition; each check is evaluated at every station with that station’s plates and demands, and the worst ratio is reported with its location.</li>
+      <li>Strength I = 1.25 DC + 1.50 DW + 1.75 (LL+IM); Service II = DC + DW + 1.30 (LL+IM); constructibility = 1.25 DC + 1.50 construction live load; maximum load factors only. φ_f = φ_v = 1.0, φ_sc = 0.85.</li>
+      <li>Positive flexure: compact composite sections on the plastic moment (6.10.7.1, with the ductility reduction and, in continuous spans, 1.3R_hM_y); noncompact or noncomposite sections on the flange stresses (6.10.7.2, 6.10.8). Negative flexure: bottom flange F_nc = min(FLB, LTB) over L_b with C_b = 1.0 (6.10.8.2). Shear: end-panel C·V_p everywhere (conservative), tension field shown for interior panels.</li>
+      <li>Camber: double integration of M/(E·I) on a fine station set on the stage sections (DC1 bare, DC2 and DW 3n).</li>
+      <li>Sign convention: moments sagging +; stresses f_B + = bottom tension, f_T + = top compression; deflections + down.</li>
+      <li>Units: kip, in, ksi; moments k-ft; lengths along the span in ft.</li></ul>
+    <h3>Notation</h3><CrT head={['Symbol','Description']} rows={NOMEN_ROWS}/></div>}); }
+  return secs;
+}
+// The document itself (viewer and print). idp prefixes the ids so the viewer and the print copy never share an id.
+function CalcDoc({R,inp,o,idp,model}){
+  const p=inp.proj||{}, gt=crGirderText(R,inp);
+  let n=0; const toc=[];
+  const body=model.map(s=>{ n++; const id=idp+'s'+n, t={n,t:s.t,id,subs:[]}; toc.push(t);
+    return <section key={s.key} className={'cr-sec'+(s.brk?' cr-break':'')}>
+      <h2 className="cr-h1" id={id} onClick={crToggle}>{n}. {s.t}:</h2>
+      {s.body}
+      {s.subs.map((q,k)=>{ const sid=idp+'s'+n+'-'+(k+1); t.subs.push({t:q.t,id:sid});
+        return <div key={k} className="cr-sub"><div className="cr-h2row" id={sid} onClick={crToggle}><h3 className="cr-h2">{n}.{k+1}. {q.t}:</h3>{q.ref?<span className="cr-r">{/^\d|^Table|^Appendix/.test(q.ref)?'AASHTO LRFD '+q.ref:q.ref}</span>:null}</div>
+          <div className="cr-body">{q.body}</div>
+          {q.res.map((c,j)=><CrRes key={j} c={c}/>)}</div>; })}
+    </section>; });
+  return <React.Fragment>
+    <section className="cr-cover"><div className="cr-cover-t"><h1>ST-Girder</h1><p>Steel plate girder design, AASHTO LRFD</p><p>{gt.girder}</p>
+      <p className="cr-cover-p">{p.name||''}{p.job?', Job '+p.job:''}</p><p className="cr-cover-p">{gt.pos} girder, {gt.sp}</p></div></section>
+    <section className="cr-front"><h2 className="cr-h1 cr-nonum">References:</h2>
+      <table className="cr-refs"><tbody>{CR_REFS.map(([a,b])=><tr key={a}><td>{a}</td><td>{b}</td></tr>)}</tbody></table>
+      <h2 className="cr-h1 cr-nonum">Table of contents:</h2>
+      <ol className="cr-toc">{toc.map(s=><li key={s.id}><a href={'#'+s.id} onClick={crJump}>{s.n}. {s.t}</a>
+        {s.subs.length?<ol>{s.subs.map((q,i)=><li key={q.id}><a href={'#'+q.id} onClick={crJump}>{s.n}.{i+1}. {q.t}</a></li>)}</ol>:null}</li>)}</ol>
+      <p className="cr-p cr-small">Prepared with ST-Girder (AASHTO LRFD BDS 10th Ed.). Equations are shown symbolically, then with values substituted, then with the result. Units: kip, in, ksi, k-ft unless noted. Detail: {o.detail==='all'?'governing locations worked, every checked station tabulated':'governing locations worked'}.</p></section>
+    {body}
+  </React.Fragment>;
+}
+// Clicking a heading collapses / expands its section in the viewer (display state only, not stored).
+function crToggle(e){ if(!e.currentTarget.closest('.crv-doc')) return; const h=e.currentTarget, box=h.classList.contains('cr-h1')? h.closest('.cr-sec') : h.closest('.cr-sub'); if(box) box.classList.toggle('cr-closed'); }
+function crJump(e){ const a=e.currentTarget, id=(a.getAttribute('href')||'').slice(1), el=document.getElementById(id);
+  if(!el) return; e.preventDefault();
+  let q=el.closest('.cr-closed'); while(q){ q.classList.remove('cr-closed'); q=q.parentElement&&q.parentElement.closest('.cr-closed'); }
+  el.scrollIntoView({behavior:'smooth',block:'start'}); el.classList.add('crv-flash'); setTimeout(()=>el.classList.remove('crv-flash'),1400); }
+// Shrink any display equation wider than its line so nothing is cut off on the printed page (display only).
+function crFit(root){ if(!root) return; root.querySelectorAll('.katex-display').forEach(el=>{ el.style.fontSize='';
+  const w=el.clientWidth, need=el.scrollWidth; if(w>0&&need>w+1) el.style.fontSize=Math.max(55,Math.floor(100*w/need)-1)+'%'; }); }
+const crEsc=s=>String(s==null?'':s).replace(/\\/g,'\\\\').replace(/"/g,'\\"').replace(/\n/g,' ');
+function crPageCSS(R,inp){ const p=inp.proj||{}, box='font: 9.5pt "Times New Roman", Times, serif; color: #000; white-space: pre; vertical-align: bottom; padding-bottom: 6pt;';
+  return `@page { size: letter portrait; margin: 0.95in 0.6in 0.7in 0.6in;
+    @top-left { content: "Project No: ${crEsc(p.job||'—')}\\A Description: ${crEsc(crShort(crDesc(R,inp),38))}"; ${box} text-align: left; }
+    @top-center { content: "Computed By: ${crEsc(p.by||'—')}\\A Checked By: ${crEsc(p.checkedBy||'—')}"; ${box} text-align: left; }
+    @top-right { content: "Date: ${crEsc(p.date||'—')}\\A Date: ${crEsc(p.chkDate||'—')}"; ${box} text-align: right; }
+    @bottom-left { content: "${crEsc(p.name||'')}, ${crEsc(p.girderId||'')} (ST-Girder)"; font: 9pt "Times New Roman", Times, serif; vertical-align: top; padding-top: 6pt; }
+    @bottom-right { content: "Page " counter(page) " of " counter(pages); font: 9pt "Times New Roman", Times, serif; vertical-align: top; padding-top: 6pt; } }`; }
+function crTitleBlock(R,inp){ const p=inp.proj||{}, c=v=>v||'—';
+  return <table className="crv-tb"><tbody><tr><td><span>Project No</span>{c(p.job)}</td><td><span>Computed by</span>{c(p.by)}</td><td><span>Date</span>{c(p.date)}</td></tr>
+    <tr><td><span>Description</span>{crDesc(R,inp)}</td><td><span>Checked by</span>{c(p.checkedBy)}</td><td><span>Date</span>{c(p.chkDate)}</td></tr></tbody></table>; }
+
+function ReportTab({R,inp,set}){
+  const [o,setO]=useState(()=>crOpts());
+  const [printing,setPrinting]=useState(false);
+  const docRef=useRef(null), barRef=useRef(null), viewRef=useRef(null);
+  const ok=!!(R&&R.ok);
+  const model=useMemo(()=>ok?crModel(R,inp,o):[],[R,inp,o,ok]);
+  React.useLayoutEffect(()=>{ crFit(docRef.current); const v=viewRef.current, b=barRef.current; if(v&&b) v.style.setProperty('--crv-top',(b.offsetHeight+10)+'px'); });
+  useEffect(()=>{ if(!printing) return;
+    let st=document.getElementById('cr-page'); if(!st){ st=document.createElement('style'); st.id='cr-page'; document.head.appendChild(st); }
+    st.textContent=crPageCSS(R,inp); document.body.classList.add('printing-calc');
+    const done=()=>{ document.body.classList.remove('printing-calc'); const s2=document.getElementById('cr-page'); if(s2) s2.textContent=''; window.removeEventListener('afterprint',done); setPrinting(false); };
+    window.addEventListener('afterprint',done);
+    const t=setTimeout(()=>{ crFit(document.getElementById('calc-rpt')); window.print(); },250);
+    return ()=>clearTimeout(t); },[printing]);
+  if(!ok) return null;
+  const setOpt=(k,v)=>{ const r={...((loadUI().rpt)||{}),[k]:v}; saveUI({rpt:r}); setO(crOpts()); };
+  const uP=(k,v)=>{ if(set) set(p=>({...p,proj:{...p.proj,[k]:v}})); };
+  const host=typeof document!=='undefined'? document.getElementById('calc-rpt') : null;
+  // TOC for the side navigation (same numbering as the document)
+  const nav=[]; model.forEach((s,i)=>{ nav.push({id:'crv-s'+(i+1),t:(i+1)+'. '+s.t,l:1}); s.subs.forEach((q,k)=>nav.push({id:'crv-s'+(i+1)+'-'+(k+1),t:(i+1)+'.'+(k+1)+' '+q.t,l:2})); });
+  const fld=(k,l,ph)=><label className="crv-fld">{l}<input value={(inp.proj&&inp.proj[k])||''} placeholder={ph} onChange={e=>uP(k,e.target.value)}/></label>;
+  return (<div className="crv" ref={viewRef}>
+    <div className="crv-bar noprint" ref={barRef}>
+      <div className="crv-tog" role="group" aria-label="Report sections">{CR_OPTS.map(([k,l])=>
+        <label key={k} className="crv-chip"><input type="checkbox" checked={!!o[k]} onChange={e=>setOpt(k,e.target.checked)}/>{l}</label>)}</div>
+      <label className="crv-det">Detail <select value={o.detail} onChange={e=>setOpt('detail',e.target.value)}>
+        <option value="gov">Governing locations worked</option><option value="all">Governing worked + every station tabulated</option></select></label>
+      <span className="crv-sp"></span>
+      <button type="button" className="btn sm ghost" onClick={()=>docRef.current&&docRef.current.querySelectorAll('.cr-closed').forEach(x=>x.classList.remove('cr-closed'))}>Expand all</button>
+      <button type="button" className="btn sm ghost" onClick={()=>docRef.current&&docRef.current.querySelectorAll('.cr-sec').forEach(x=>x.classList.add('cr-closed'))}>Collapse all</button>
+      <button type="button" className="btn sm pri" onClick={()=>setPrinting(true)}>Print this report</button>
+      <div className="crv-flds">{fld('desc','Description',crDesc(R,{...inp,proj:{...inp.proj,desc:''}}))}{fld('checkedBy','Checked by','')}{fld('chkDate','Check date','')}
+        <span className="crv-fnote">Report title block. Project, Girder, By, Date and Job No. are the fields at the top of the page.</span></div>
+    </div>
+    <div className="crv-body">
+      <nav className="crv-toc noprint" aria-label="Report contents">{nav.map(a=><a key={a.id} href={'#'+a.id} onClick={crJump} className={a.l===1?'crv-l1':'crv-l2'}>{a.t}</a>)}</nav>
+      <article className="crdoc crv-doc" ref={docRef}>{crTitleBlock(R,inp)}<CalcDoc R={R} inp={inp} o={o} idp="crv-" model={model}/></article>
+    </div>
+    {printing&&host&&ReactDOM.createPortal(<CalcDoc R={R} inp={inp} o={o} idp="crp-" model={model}/>,host)}
   </div>);
 }
 
@@ -6007,7 +6517,7 @@ function App(){
         {tab==='rating'&&<RatingTab R={R} inp={inp} set={setInp} onSendCapacity={publishCapacity} capLocked={capLocked} onToggleCapLock={toggleCapLock}/>}
         {tab==='optimize'&&<OptimizeTab R={R} inp={inp}/>}
         {tab==='nomen'&&<NomenclatureTab/>}
-        {tab==='report'&&<ReportTab R={R} inp={inp}/>}
+        {tab==='report'&&<ReportTab R={R} inp={inp} set={setInp}/>}
       </div>}
     </React.Fragment>}
 
