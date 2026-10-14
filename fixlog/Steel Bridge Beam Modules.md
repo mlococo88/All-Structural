@@ -11711,3 +11711,221 @@ The line-girder engine (`sgBeam`, `sgLLRow`, `sgFatRow`, `feIM`, `feVerify`) is 
 +    <p class="note-p">Live load: HL-93 design truck (rear axle spacing 14 to 30 ft) or design tandem, plus 0.64 klf design lane loaded wherever it increases the effect; IM = 33% on truck and tandem only (3.6.1.2, 3.6.2.1). Axles that do not contribute to the extreme effect are neglected. Between the points of contraflexure under a uniform load on all spans (and wherever the permanent-load moment is negative around a pier), 90% of two design trucks spaced at least 50 ft plus 90% of the lane is also considered (3.6.1.3.1). Distribution factors include multiple presence; negative-moment regions use the average length of the adjacent spans. The skew correction for shear (Table 4.6.2.2.3c-1) is applied along the whole span for conservatism: ${skv}. The skew reduction for moment is not taken.</p>${dfw}`);
  
 ```
+
+## 2026-10-14 — PR: claude/gd-ll-followup (live load follow-ups to LL1–LL7: deflection axle neglect, exact section shears; engineer's decisions 2026-10-14; PR link added after merge)
+
+The engine is the same code in the main page (Structural analysis) and the embedded Preliminary sizing (`PL_B64`, decoded, edited and re-encoded on one line); both copies are changed identically and remain byte-identical.
+
+### LL8. Live load deflection: truck axles that do not contribute are neglected   [§4: optional deflection criterion] [more conservative where an axle would sit on an upward part of the deflection influence line; no change on the test projects]
+- **Where:** `sgLLRow` (the `whole` argument is removed; anchor `The live load deflection rows (3.6.1.3.2) use the same rule (LL8`), both copies; Structural analysis `lld` (anchor `const e = sgLLRow(bN, row), dT = (1 + im)`), Preliminary sizing `analyzeGirder` (anchor `const e = sgLLRow(bN, row), dT = (1 + (Tg.IMk`); SA3 note.
+- **Problem:** LL3 kept every axle for the deflection rows, pending the engineer's decision. Decision 2026-10-14: apply the axle-neglect rule of 3.6.1.3.1 to the deflection of 3.6.1.3.2 as well (the truck alone, and 25% of the truck with the lane).
+- **Before:** truck deflection = max over positions of Σ Pᵢ·δ(xᵢ). **After:** Σ max(Pᵢ·δ(xᵢ), 0). The lane already used only the downward parts.
+- **Governing provision:** AASHTO LRFD 10th Ed. (2024) 3.6.1.3.2 with 3.6.1.3.1; 2.5.2.6.2.
+- **Check cases (constant EI, EI = 1, per lane, closed-form deflection influence lines):**
+  - Two continuous 100-ft spans, governing point x = 46 ft: truck 32@38 + 32@52 + 8@66 = 32(14,375.8) + 32(14,801.4) + 8(11,908.7) = 1,028,940/EI (program 1,029,208, 0.03%). Every axle is on the downward part, so **no change**: Δ = 1.33 × 1,028,940 = 1,368,491/EI before and after.
+  - Three spans 100-20-100, center of the 20-ft span (x = 110 ft): before 8@91 + 32@105 + 32@119 = 8(−150.4) + 32(92.9) + 32(19.4) = 2,393/EI; after only 32@110 adds: 32(137.8) = 4,410/EI. Δ = max(1.33·truck, 0.25·1.33·truck + lane 1,087.2) = **3,182.7 → 5,865.6/EI** (program 3,204 → 5,901, +84%).
+- **Results:** live load deflections of the built-in example, xsA, curb and the two-span simple case are unchanged (SA3 identical).
+
+### LL9. Shears: exact section values at the nodes in place of the element envelope   [§4: shear demands] [less conservative than LL2 by up to one element's change, e.g. fatigue shear range up to 1.7% lower; exact]
+- **Where:** `sgBeam` (anchor `LL9 (2026-10-14): exact section values, no envelope`), `feIM` (the `alt` envelope removed), `feStages` (`llFrom` also carries `VLLr`, `VFr`), both copies. Structural analysis `compute` (anchor `const vSec = (e, r) =>`; `R.vSec`), `gdStPayload` (anchor `row = (i, e, dx, rt)`), the shear table captions.
+- **Problem:** LL2 stored, for each element, the envelope of the sections at its two ends (1 ft apart), so element values (and the fatigue range, max at one end minus min at the other) were up to one element's change above the exact section values. Decision 2026-10-14: report the exact section values.
+- **After:**
+  - Element e carries the exact section just right of its left node e. An element that ends at a support (or the girder end) carries the section just left of that support, so the support faces are in the element arrays used by the checks.
+  - Maxima, minima and the fatigue range of an element come from the same section (range exact).
+  - `VLLr`/`VFr` (and `R.vSec(e, true)`) keep the section just right of node e for every element. The ST-Girder hand-off uses them at the node next to a support, so every station is the exact section: just right of each node, both sides of interior supports, just left of the girder end.
+  - The pedestrian load on shear is patterned on the same exact section influence line (lane area ÷ 0.64 × w<sub>PL</sub>); before, on the element's nodal influence line.
+  - Tenth-point tables: captions say "exact section"; values are those sections.
+- **Governing provision:** AASHTO LRFD 10th Ed. (2024) 3.6.1.3.1, 3.6.1.4.1 (axle and lane positions for the extreme at the section). No factor changes.
+- **Check case (100-ft simple span, fatigue truck × 1.15, element 48):**
+  - V+(48) = 32(0.52) + 32(0.22) + 8(0.08) = 24.32 → 27.968; V−(48) = −V+(52) = −[32(0.48) + 32(0.18) + 8(0.04)] = −21.44 → −24.656; range **52.624 kip** (after, exact).
+  - Before (LL2): min taken at the far end, V−(49) = −1.15[32(0.49) + 32(0.19) + 8(0.05)] = −25.484; range 27.968 + 25.484 = **53.452 kip** (−1.55%).
+  - HL-93 with IM, element 98 V−: −117.228 (section 99) → −115.640 (section 98, exact).
+- **Moving Load Generator comparison (every node, 100-ft simple span and the built-in girder with constant and variable EI, HL-93 with/without IM and fatigue):** section shears, element arrays (with `VLLr` at the node next to a support) and fatigue shear ranges all 0.0000% (V− compared with the exact value, the mirror of V+).
+
+### Verification (LL8–LL9)
+- `node --check` on every script block of the main page and the decoded Preliminary sizing at each commit; engine copies byte-identical.
+- Node: hand checks above from the extracted engine and closed-form influence lines; Moving Load Generator comparison as stated.
+- Headless Chromium, main (3b86bfa) vs branch: built-in example, xsA, curb, two 100-ft simple spans; every module's checks after Get demands from Preliminary sizing and Structural analysis G2; Get demands vs Any location; save and load both ways; the ST-Girder auto-open flow; no console errors.
+
+
+
+### Exact changes, per item (`PL_B64` shown as `...`)
+
+#### Exact changes (LL8): main page (unified diff, 1 line of context, `PL_B64` as `...`)
+```diff
+@@ -5189,6 +5189,6 @@
+    positive axle effects (P) and a minimum only the negative ones (M) (truck, tandem, and each truck of the 90% two-truck case).
+-   whole = true sums every axle (the live load deflection rows, 3.6.1.3.2, as before). cut: shear rows (LL2), see sgILGrid. */
+-function sgLLRow(beam, row, cut, whole) {
++   The live load deflection rows (3.6.1.3.2) use the same rule (LL8, engineer's decision 2026-10-14). cut: shear rows (LL2), see sgILGrid. */
++function sgLLRow(beam, row, cut) {
+   const { G, trib, N, xs } = beam, I = sgILGrid(beam, row, cut), PAD = I.PAD;
+-  const P = whole ? I.vP : I.vP.map(x => x > 0 ? x : 0), M = whole ? I.vN : I.vN.map(x => x < 0 ? x : 0);
++  const P = I.vP.map(x => x > 0 ? x : 0), M = I.vN.map(x => x < 0 ? x : 0);
+   let tMax = 0, tMin = 0, dMax = 0, dMin = 0, sMax = 14, sMin = 14;
+@@ -5202,3 +5202,3 @@
+   if (cut) {   // an axle exactly at the section, on either side of the jump (needed when the section is not on the 1-ft grid)
+-    const sum = (Q, q0, up) => Q.reduce((t, [w, o]) => { const v = w * I.f(q0 + o, up); return t + (whole || (up ? v > 0 : v < 0) ? v : 0); }, 0);
++    const sum = (Q, q0, up) => Q.reduce((t, [w, o]) => { const v = w * I.f(q0 + o, up); return t + ((up ? v > 0 : v < 0) ? v : 0); }, 0);
+     for (let s = 14; s <= 30; s++) for (const Q of [[[32, 0], [32, s], [8, s + 14]], [[8, 0], [32, 14], [32, 14 + s]]]) for (const [, o] of Q) {
+@@ -5430,3 +5430,3 @@
+       for (let i = sup[k] + 1; i < sup[k + 1]; i++) { if ((i - sup[k]) % 2) continue; const row = new Float64Array(N); for (let q = 0; q < N; q++) { let t = 0; for (let r = 0; r < N; r++) t += b0.ILM[r * N + i] * bN.ILM[r * N + q] * cN[r]; row[q] = t; }
+-        const e = sgLLRow(bN, row, null, true), dT = (1 + im) * e.truckMax, dL = 0.25 * dT + e.lanePos, d = Math.max(dT, dL) * gD; if (!best || d > best.d) best = { x: xs[i], d, dT, dL, gD }; }
++        const e = sgLLRow(bN, row), dT = (1 + im) * e.truckMax, dL = 0.25 * dT + e.lanePos, d = Math.max(dT, dL) * gD; if (!best || d > best.d) best = { x: xs[i], d, dT, dL, gD }; }
+       return { k, Ls, lim: Ls * 12 / nm(p.defl), ...best }; });
+@@ -5448,3 +5448,3 @@
+       Object.entries(R.eq).forEach(([k, [a, r]]) => c.items.push({ loc: k, cells: [f2(a), f2(r), `${f3(100 * Math.abs(a - r) / Math.max(Math.abs(a), 1e-9))}%`], st: Math.abs(a - r) <= 0.001 * Math.abs(a) + 1e-6 ? 'pass' : 'fail', work: T`\sum R = ${f2(r)} \text{ vs } ${f2(a)}\ \text{kip}` })); out.add(c); }
+-    { const c = { id: 'SA3', grp: 'Serviceability', title: 'Live load deflection (optional criterion)', ref: 'AASHTO LRFD 2.5.2.6.2', src: 'Practice', sym: T`\Delta_{LL} = g_\Delta\max(\Delta_{truck},\ 0.25\Delta_{truck} + \Delta_{lane}) \le L/${f0(nm(R.p.defl))}`, cols: ['Span', 'Δ (in)', 'Limit (in)', 'Ratio'], items: [], note: 'All lanes loaded, all girders deflecting equally (g_Δ from the LLDF and DLs module), short-term composite section with the cracked zones.' };
++    { const c = { id: 'SA3', grp: 'Serviceability', title: 'Live load deflection (optional criterion)', ref: 'AASHTO LRFD 2.5.2.6.2', src: 'Practice', sym: T`\Delta_{LL} = g_\Delta\max(\Delta_{truck},\ 0.25\Delta_{truck} + \Delta_{lane}) \le L/${f0(nm(R.p.defl))}`, cols: ['Span', 'Δ (in)', 'Limit (in)', 'Ratio'], items: [], note: 'All lanes loaded, all girders deflecting equally (g_Δ from the LLDF and DLs module), short-term composite section with the cracked zones. Truck axles that do not add to the deflection sought are neglected (3.6.1.3.1).' };
+       R.lld.forEach(d => c.items.push({ ...rc(`Span ${d.k + 1} at ${f2(d.x)} ft`, [f3(d.d), f3(d.lim), f2(d.d / d.lim)], d.d, d.lim, T`\Delta = ${f3(d.gD)}\max(${f3(d.dT)},\ ${f3(d.dL)}) = ${f3(d.d)} \;${LE(d.d, d.lim)}\; \tfrac{${f2(d.Ls)}(12)}{${f0(nm(R.p.defl))}} = ${f3(d.lim)}\ \text{in}`), st: d.d <= d.lim + 1e-9 ? 'pass' : 'warn' })); out.add(c); }
+```
+
+#### Exact changes (LL8): decoded PlateLine (unified diff, 1 line of context)
+```diff
+@@ -1714,6 +1714,6 @@
+    positive axle effects (P) and a minimum only the negative ones (M) (truck, tandem, and each truck of the 90% two-truck case).
+-   whole = true sums every axle (the live load deflection rows, 3.6.1.3.2, as before). cut: shear rows (LL2), see sgILGrid. */
+-function sgLLRow(beam, row, cut, whole) {
++   The live load deflection rows (3.6.1.3.2) use the same rule (LL8, engineer's decision 2026-10-14). cut: shear rows (LL2), see sgILGrid. */
++function sgLLRow(beam, row, cut) {
+   const { G, trib, N, xs } = beam, I = sgILGrid(beam, row, cut), PAD = I.PAD;
+-  const P = whole ? I.vP : I.vP.map(x => x > 0 ? x : 0), M = whole ? I.vN : I.vN.map(x => x < 0 ? x : 0);
++  const P = I.vP.map(x => x > 0 ? x : 0), M = I.vN.map(x => x < 0 ? x : 0);
+   let tMax = 0, tMin = 0, dMax = 0, dMin = 0, sMax = 14, sMin = 14;
+@@ -1727,3 +1727,3 @@
+   if (cut) {   // an axle exactly at the section, on either side of the jump (needed when the section is not on the 1-ft grid)
+-    const sum = (Q, q0, up) => Q.reduce((t, [w, o]) => { const v = w * I.f(q0 + o, up); return t + (whole || (up ? v > 0 : v < 0) ? v : 0); }, 0);
++    const sum = (Q, q0, up) => Q.reduce((t, [w, o]) => { const v = w * I.f(q0 + o, up); return t + ((up ? v > 0 : v < 0) ? v : 0); }, 0);
+     for (let s = 14; s <= 30; s++) for (const Q of [[[32, 0], [32, s], [8, s + 14]], [[8, 0], [32, 14], [32, 14 + s]]]) for (const [, o] of Q) {
+@@ -3867,3 +3867,3 @@
+         const row = new Float64Array(N); for (let j = 0; j < N; j++) { let s = 0; for (let q = 0; q < N; q++) s += ILM[q * N + i] * bN.ILM[q * N + j] * cN[q]; row[j] = s; }
+-        const e = sgLLRow(bN, row, null, true), dT = (1 + (Tg.IMk ?? 0.33)) * e.truckMax, dL = 0.25 * dT + e.lanePos, d = Math.max(dT, dL) * mgD;
++        const e = sgLLRow(bN, row), dT = (1 + (Tg.IMk ?? 0.33)) * e.truckMax, dL = 0.25 * dT + e.lanePos, d = Math.max(dT, dL) * mgD;
+         if (!best || d > best.d) best = { x: xs[i], d, dT, dL, truckMax: e.truckMax, lanePos: e.lanePos, In: In[i] };
+```
+
+#### Exact changes (LL9): main page (unified diff, 1 line of context, `PL_B64` as `...`)
+```diff
+@@ -2349,3 +2349,3 @@
+ <h3>Scope</h3><p>Line-girder analysis of any girder of the bridge defined in Preliminary sizing, and the analysis Preliminary sizing itself uses for its design demands (and so every module fed from it). The girder is modeled with beam finite elements about 1 ft long, each with the flexural stiffness of its own plates. Loads act on the section of the stage that carries them: DC1 (steel, deck, haunch, SIP forms) on the steel section; DC2 and DW on the long-term composite section (3n); live load on the short-term composite section (n). In continuous girders the composite stages are cracked, taking the steel plus the longitudinal deck reinforcement, over 15% of the adjacent spans on each side of every interior support, or optionally over the region of negative dead-load moment (found by a first, uncracked pass). The reinforcement is a percentage of the deck area at the deck centroid (1.0%, the minimum of 6.10.1.7, by default). The effective flange width is the girder's tributary width. Not included: deck pour sequence, settlement, temperature, permit or legal vehicles, and grid or curved-girder effects.</p>
+-<h3>Influence lines and live load</h3><p>The stiffness matrix of each stage is factored once (banded Cholesky); a unit load at every node gives the moment, shear, and reaction influence lines. HL-93 (3.6.1.3) is moved along each influence line on a 1-ft grid: the design truck in both directions with the rear axle spacing from 14 to 30 ft in 1-ft steps, the design tandem, and the 0.64 klf lane load on the parts of the line that increase the effect, with 33% dynamic allowance on the truck and tandem; axles that do not contribute to the extreme effect are neglected (3.6.1.3.1). Shear influence lines keep the unit jump at the section, evaluated just right and just left of every element, so axle ordinates and lane areas next to a section are exact. For negative moment between the points of contraflexure under a uniform load on all spans (live load stiffness model), and also wherever the permanent-load moment is negative around a pier, and for the reactions at all interior supports regardless of continuity, 90% of two design trucks at least 50 ft apart plus 90% of the lane load is also considered. The fatigue truck or axles thereof (30-ft rear axle spacing, 15% allowance; axles that do not contribute neglected) gives the fatigue ranges. The live load effects are multiplied by the selected girder's distribution factors from the LLDF and DLs module: the span factor for positive moment and shear, the pier factor in the negative dead-load moment region, and the fatigue factors for fatigue; the pedestrian load is patterned on the influence lines like the lane load.</p>
++<h3>Influence lines and live load</h3><p>The stiffness matrix of each stage is factored once (banded Cholesky); a unit load at every node gives the moment, shear, and reaction influence lines. HL-93 (3.6.1.3) is moved along each influence line on a 1-ft grid: the design truck in both directions with the rear axle spacing from 14 to 30 ft in 1-ft steps, the design tandem, and the 0.64 klf lane load on the parts of the line that increase the effect, with 33% dynamic allowance on the truck and tandem; axles that do not contribute to the extreme effect are neglected (3.6.1.3.1). Shear influence lines keep the unit jump at the section, evaluated and the shears reported are the exact values of the section just right of each analysis point (just left of a support at the end of a span), so axle ordinates and lane areas next to a section are exact. For negative moment between the points of contraflexure under a uniform load on all spans (live load stiffness model), and also wherever the permanent-load moment is negative around a pier, and for the reactions at all interior supports regardless of continuity, 90% of two design trucks at least 50 ft apart plus 90% of the lane load is also considered. The fatigue truck or axles thereof (30-ft rear axle spacing, 15% allowance; axles that do not contribute neglected) gives the fatigue ranges. The live load effects are multiplied by the selected girder's distribution factors from the LLDF and DLs module: the span factor for positive moment and shear, the pier factor in the negative dead-load moment region, and the fatigue factors for fatigue; the pedestrian load is patterned on the influence lines like the lane load.</p>
+ <h3>Results</h3><p>Moments and shears at every node for DC1, DC2, DW, LL+IM (positive and negative), and fatigue; the Strength I, Service II, and Fatigue I combinations; reactions with each load on its own stage (interior reactions include the two-truck case); dead load deflections (camber) by virtual work with the staged stiffness; the live load deflection with g<sub>Δ</sub> for the optional L/800 criterion; and a comparison with a constant-EI model under the same loads, which shows how much the stiffness modeling moves moment between spans and supports.</p>
+@@ -5159,12 +5159,9 @@
+   beam.MF = []; for (let i = 0; i < N; i++) beam.MF.push(sgFatRow(beam, ILM.subarray(i * N, (i + 1) * N)));
+-  // shear (LL2, 2026-10-14): influence lines with the unit jump at the section. sR[i]: the section just right of node i (element i);
+-  // the section just left of node i is the same section except at a support (then from element i - 1). Element e keeps the section
+-  // at each of its ends (VLL[e] and VLL[e].alt); feIM and VF take their envelope.
++  // shear (LL2, 2026-10-14): influence lines with the unit jump at the section. LL9 (2026-10-14): exact section values, no envelope.
++  // Element e carries the section just right of its left node e, except an element that ends at a support (or the girder end), which
++  // carries the section just left of that support. VLLr / VFr: the section just right of node e for every element (station output).
+   const isSup = new Uint8Array(N); sup.forEach(s => isSup[s] = 1);
+   const sec = (e, m) => { const row = ILV.subarray(e * N, (e + 1) * N), c = { e, m }; return [sgLLRow(beam, row, c), sgFatRow(beam, row, c)]; };
+-  const sR = []; for (let i = 0; i < N - 1; i++) sR.push(sec(i, i));
+-  beam.VLL = []; beam.VF = [];
+-  for (let e = 0; e < N - 1; e++) { const A = sR[e], B = e + 1 < N - 1 && !isSup[e + 1] ? sR[e + 1] : sec(e, e + 1);
+-    beam.VLL.push({ ...A[0], alt: { ...B[0] } });
+-    beam.VF.push({ max: Math.max(A[1].max, B[1].max), min: Math.min(A[1].min, B[1].min), rawMax: Math.max(A[1].rawMax, B[1].rawMax), rawMin: Math.min(A[1].rawMin, B[1].rawMin) }); }
++  beam.VLL = []; beam.VF = []; beam.VLLr = []; beam.VFr = [];
++  for (let e = 0; e < N - 1; e++) { const A = sec(e, e), S = isSup[e + 1] ? sec(e, e + 1) : A; beam.VLL.push(S[0]); beam.VF.push(S[1]); beam.VLLr.push(A[0]); beam.VFr.push(A[1]); }
+   FE_CACHE.set(key, beam); if (FE_CACHE.size > 24) FE_CACHE.delete(FE_CACHE.keys().next().value);
+@@ -5263,3 +5260,3 @@
+   return { Is, I3, In, I3u, Inu, Icr, crack: ck, mode: crack === 'dl' ? 'dl' : crack === 'none' ? 'none' : '15',
+-    bS: sgBeam(spans, !cont, Is, true), b3: sgBeam(spans, !cont, I3, true), bN: llFrom ? { ...sgBeam(spans, !cont, In, true), MLL: llFrom.MLL, VLL: llFrom.VLL, MF: llFrom.MF, VF: llFrom.VF } : sgBeam(spans, !cont, In, false) };
++    bS: sgBeam(spans, !cont, Is, true), b3: sgBeam(spans, !cont, I3, true), bN: llFrom ? { ...sgBeam(spans, !cont, In, true), MLL: llFrom.MLL, VLL: llFrom.VLL, MF: llFrom.MF, VF: llFrom.VF, VLLr: llFrom.VLLr, VFr: llFrom.VFr } : sgBeam(spans, !cont, In, false) };
+ }
+@@ -5289,5 +5286,3 @@
+ /* dynamic load allowance applied to stored envelope components (truck/tandem IM, fatigue IM) */
+-function feIM(e, im) { const k = 1 + im, r = { pos: k * Math.max(e.truckMax, e.tanMax) + e.lanePos, neg: k * Math.min(e.truckMin, e.tanMin) + e.laneNeg, neg2: 0.9 * (k * e.twoMin + e.laneNeg), pos2: 0.9 * (k * e.twoMax + e.lanePos), truckMax: e.truckMax };
+-  if (!e.alt) return r; const b = feIM(e.alt, im);   // shear element (LL2): envelope of the sections at its two ends
+-  return { pos: Math.max(r.pos, b.pos), neg: Math.min(r.neg, b.neg), neg2: Math.min(r.neg2, b.neg2), pos2: Math.max(r.pos2, b.pos2), truckMax: Math.max(r.truckMax, b.truckMax) }; }
++function feIM(e, im) { const k = 1 + im; return { pos: k * Math.max(e.truckMax, e.tanMax) + e.lanePos, neg: k * Math.min(e.truckMin, e.tanMin) + e.laneNeg, neg2: 0.9 * (k * e.twoMin + e.laneNeg), pos2: 0.9 * (k * e.twoMax + e.lanePos), truckMax: e.truckMax }; }
+ function feFatIM(e, imf) { const k = 1 + imf; return { max: k * e.rawMax, min: k * e.rawMin }; }
+@@ -5406,4 +5401,7 @@
+     const LVp = new Float64Array(N - 1), LVn = new Float64Array(N - 1), PVp = new Float64Array(N - 1), PVn = new Float64Array(N - 1), FVp = new Float64Array(N - 1), FVn = new Float64Array(N - 1);
+-    for (let e = 0; e < N - 1; e++) { const m = memS(spanOf((xs[e] + xs[e + 1]) / 2)), pl = plRow(bN.ILV.subarray(e * N, (e + 1) * N)), lv = feIM(bN.VLL[e], im), fv = feFatIM(bN.VF[e], imf);
+-      LVp[e] = m.gV * lv.pos; LVn[e] = m.gV * lv.neg; PVp[e] = pl.pp; PVn[e] = pl.nn; FVp[e] = m.fatV * fv.max; FVn[e] = m.fatV * fv.min; }
++    // LL9 (2026-10-14): each element's shears are those of its exact section (sgBeam); r = true: the section just right of node e. The pedestrian
++    // load is patterned on the same section influence line (lane area / 0.64 klf × w_PL)
++    const vSec = (e, r) => { const m = memS(spanOf((xs[e] + xs[e + 1]) / 2)), s = r ? bN.VLLr[e] : bN.VLL[e], lv = feIM(s, im), fv = feFatIM(r ? bN.VFr[e] : bN.VF[e], imf);
++      return { Lp: m.gV * lv.pos, Ln: m.gV * lv.neg, Pp: s.lanePos / 0.64 * wPL, Pn: s.laneNeg / 0.64 * wPL, Fp: m.fatV * fv.max, Fn: m.fatV * fv.min }; };
++    for (let e = 0; e < N - 1; e++) { const v = vSec(e); LVp[e] = v.Lp; LVn[e] = v.Ln; PVp[e] = v.Pp; PVn[e] = v.Pn; FVp[e] = v.Fp; FVn[e] = v.Fn; }
+     const MCL = MofB(bS, wCL), VCL = VofB(bS, wCL);
+@@ -5438,3 +5436,3 @@
+     const tenth = []; spans.forEach((Ls, k) => { for (let q = 0; q <= 10; q++) { if (k > 0 && q === 0) continue; const x = xs[sup[k]] + Ls * q / 10; let i = sup[k]; while (i < sup[k + 1] && xs[i] < x - 1e-6) i++; tenth.push({ k, q, i }); } });
+-    return { errors: [], b, DF, j, ext, beff, beffFt, n, Ar, fe, p, F, bS, b3, bN, b0, xs, N, sup, trib, spans, cont, wSt, wSX, wXF, xf: { X: XFm, pts: xfP, miss: XFm.on && !XFg, tot: xfP.reduce((a, q) => a + q.P, 0) }, wDeck, w1, wDC2, wDW, wPL, MS, MDk, MDC1, MDC2, MDW, VDC1, VDC2, VDW, VDC, VS, LLp, LLn, LVp, LVn, FMp, FMn, gMi, region, tw2,
++    return { errors: [], b, DF, j, ext, beff, beffFt, n, Ar, fe, p, F, bS, b3, bN, b0, xs, N, sup, trib, spans, cont, wSt, wSX, wXF, xf: { X: XFm, pts: xfP, miss: XFm.on && !XFg, tot: xfP.reduce((a, q) => a + q.P, 0) }, wDeck, w1, wDC2, wDW, wPL, MS, MDk, MDC1, MDC2, MDW, VDC1, VDC2, VDW, VDC, VS, LLp, LLn, LVp, LVn, FMp, FMn, gMi, region, tw2, vSec,
+       VH, StrMp, StrMn, SvcP, SvcN, StrV, CM, CV, MCL, VCL, PLp, PLn, PVp, PVn, FVp, FVn, im, imf, wCL, man, memS, memP, reac, dS, dDk, dSD, dTot, lld, cmp, eq: eqm, tenth, ver: feVerify() };
+@@ -5517,4 +5515,4 @@
+     h += card('sa-mf', 'Moments, factored (kip-ft)', 'All load combinations at tenth points', T10(headF, i => cmb.flatMap(C => C.fat ? [fmtM(R.CM[C.id].max[i])] : [fmtM(R.CM[C.id].max[i]), fmtM(R.CM[C.id].min[i])]), grpF));
+-    h += card('sa-vu', 'Shears, unfactored (kip)', 'Element just right of each point; each side of an interior pier', T10(['DC1', 'DC2', 'DW', 'LL+IM +', 'LL+IM −', ...(hasPL ? ['PL +', 'PL −'] : []), ...(hasCL ? ['Constr.'] : []), 'Fatigue +', 'Fatigue −'], e => { return [fmtV(R.VDC1[e]), fmtV(R.VDC2[e]), fmtV(R.VDW[e]), fmtV(R.LVp[e]), fmtV(R.LVn[e]), ...(hasPL ? [fmtV(R.PVp[e]), fmtV(R.PVn[e])] : []), ...(hasCL ? [fmtV(R.VCL[e])] : []), fmtV(R.FVp[e]), fmtV(R.FVn[e])]; }, null, vRows));
+-    h += card('sa-vf', 'Shears, factored (kip)', 'All load combinations; element just right of each point, each side of an interior pier', T10(headF, e => cmb.flatMap(C => C.fat ? [fmtV(R.CV[C.id].max[e])] : [fmtV(R.CV[C.id].max[e]), fmtV(R.CV[C.id].min[e])]), grpF, vRows));
++    h += card('sa-vu', 'Shears, unfactored (kip)', 'Exact section just right of each point; both sides of an interior pier; just left of the last support', T10(['DC1', 'DC2', 'DW', 'LL+IM +', 'LL+IM −', ...(hasPL ? ['PL +', 'PL −'] : []), ...(hasCL ? ['Constr.'] : []), 'Fatigue +', 'Fatigue −'], e => { return [fmtV(R.VDC1[e]), fmtV(R.VDC2[e]), fmtV(R.VDW[e]), fmtV(R.LVp[e]), fmtV(R.LVn[e]), ...(hasPL ? [fmtV(R.PVp[e]), fmtV(R.PVn[e])] : []), ...(hasCL ? [fmtV(R.VCL[e])] : []), fmtV(R.FVp[e]), fmtV(R.FVn[e])]; }, null, vRows));
++    h += card('sa-vf', 'Shears, factored (kip)', 'All load combinations; exact section just right of each point, both sides of an interior pier', T10(headF, e => cmb.flatMap(C => C.fat ? [fmtV(R.CV[C.id].max[e])] : [fmtV(R.CV[C.id].max[e]), fmtV(R.CV[C.id].min[e])]), grpF, vRows));
+     const rc_ = cmb.filter(C => !C.fat);
+@@ -5583,3 +5581,3 @@
+     add(S('Influence lines'), 'Müller-Breslau by unit loads', T`\text{For a unit load at each node } j: \ \mathbf{K}\mathbf{d} = \mathbf{f}_j \Rightarrow M_i(j),\ V_e(j),\ R_k(j) \quad (\text{banded Cholesky, factored once per stage})`);
+-    add(S('HL-93 live load'), '3.6.1.3.1, 3.6.1.2, 3.6.2.1', T`\begin{aligned}&\text{Truck } 8{-}32{-}32\ \text{kip}, 14\ \text{ft and } 14 \text{ to } 30\ \text{ft (1-ft steps), both directions; tandem } 25{-}25\ \text{kip at } 4\ \text{ft; } IM = 33\% \\ &\text{Axles that do not contribute to the extreme are neglected; shear influence lines with the unit jump at the section (each end of every element)} \\ &\text{Lane } 0.64\ \text{klf on the parts of the influence line that increase the effect} \\ &0.9(\text{two trucks} \ge 50\ \text{ft apart} + \text{lane})\text{: negative moment between the contraflexure points under a uniform load on all spans (and where the} \\ &\quad\text{permanent-load moment is negative at a pier); reactions at all interior supports} \\ &M_{LL} = g\,[1.33\max(\text{truck},\ \text{tandem}) + \text{lane}], \quad g \text{ from the LLDF and DLs module for G${R.j + 1}}\end{aligned}`);
++    add(S('HL-93 live load'), '3.6.1.3.1, 3.6.1.2, 3.6.2.1', T`\begin{aligned}&\text{Truck } 8{-}32{-}32\ \text{kip}, 14\ \text{ft and } 14 \text{ to } 30\ \text{ft (1-ft steps), both directions; tandem } 25{-}25\ \text{kip at } 4\ \text{ft; } IM = 33\% \\ &\text{Axles that do not contribute to the extreme are neglected; shear influence lines with the unit jump at the section (exact section values)} \\ &\text{Lane } 0.64\ \text{klf on the parts of the influence line that increase the effect} \\ &0.9(\text{two trucks} \ge 50\ \text{ft apart} + \text{lane})\text{: negative moment between the contraflexure points under a uniform load on all spans (and where the} \\ &\quad\text{permanent-load moment is negative at a pier); reactions at all interior supports} \\ &M_{LL} = g\,[1.33\max(\text{truck},\ \text{tandem}) + \text{lane}], \quad g \text{ from the LLDF and DLs module for G${R.j + 1}}\end{aligned}`);
+     add(S('Fatigue truck'), '3.6.1.4.1', T`8{-}32{-}32\ \text{kip at } 14 \text{ and } 30\ \text{ft (axles that do not contribute neglected)}, \ IM = 15\%, \ g_{fat} = g_{1\,lane}/1.2; \quad \text{Fatigue I range} = 1.75(M_{max} - M_{min})`);
+@@ -5756,13 +5754,14 @@
+   const hasPL = [...R.PLp, ...R.PVp].some(v => v > 1e-9) || [...R.PLn, ...R.PVn].some(v => v < -1e-9), pl = !!addPL && hasPL, a = (arr, k) => pl ? arr[k] : 0;
+-  // shears: element just right of a node (as this tool tabulates them); at an interior support one station 0.001 ft each side.
++  // shears: the section just right of a node (LL9: exact section values; the node next to a support uses R.vSec(e, true)); at an interior support
++  // one station 0.001 ft each side (just left: the element ending there; just right: the next element); at the girder end, just left.
+   // Sign: the schema's MIDAS convention (gravity shear negative at the left end of a span) = minus this tool's shear; ST-Girder negates it back.
+-  const stations = [], row = (i, e, dx) => { const o = { x: r3(xs[i] + dx),
++  const stations = [], row = (i, e, dx, rt) => { const v = rt ? R.vSec(e, true) : { Lp: R.LVp[e], Ln: R.LVn[e], Pp: R.PVp[e], Pn: R.PVn[e], Fp: R.FVp[e], Fn: R.FVn[e] }, pv = k => pl ? v[k] : 0, o = { x: r3(xs[i] + dx),
+       M_DC1: r3(R.MDC1[i]), V_DC1: r3(-R.VDC1[e]), M_DC2: r3(R.MDC2[i]), V_DC2: r3(-R.VDC2[e]), M_DW: r3(R.MDW[i]), V_DW: r3(-R.VDW[e]),
+-      M_LLpos: r3(R.LLp[i] + a(R.PLp, i)), M_LLneg: r3(R.LLn[i] + a(R.PLn, i)), V_LLpos: r3(-(R.LVn[e] + a(R.PVn, e))), V_LLneg: r3(-(R.LVp[e] + a(R.PVp, e))),
+-      M_FATpos: r3(R.FMp[i]), M_FATneg: r3(R.FMn[i]), V_FATpos: r3(-R.FVn[e]), V_FATneg: r3(-R.FVp[e]),
++      M_LLpos: r3(R.LLp[i] + a(R.PLp, i)), M_LLneg: r3(R.LLn[i] + a(R.PLn, i)), V_LLpos: r3(-(v.Ln + pv('Pn'))), V_LLneg: r3(-(v.Lp + pv('Pp'))),
++      M_FATpos: r3(R.FMp[i]), M_FATneg: r3(R.FMn[i]), V_FATpos: r3(-v.Fn), V_FATneg: r3(-v.Fp),
+       // CF4 (2026-10-13): optional DC1 split (HANDOFF.md 4.9), both on the steel section bS: steel = R.MS (plates x 490 pcf x (1 + detail allowance)); wet = R.MDk (deck, haunch, SIP, other DC1 rows)
+       M_DC1steel: r3(R.MS[i]), V_DC1steel: r3(-R.VS[e]), M_DC1wet: r3(R.MDk[i]), V_DC1wet: r3(-(R.VDC1[e] - R.VS[e])) };
+-    if (hasPL) Object.assign(o, { M_PLpos: r3(R.PLp[i]), M_PLneg: r3(R.PLn[i]), V_PLpos: r3(-R.PVn[e]), V_PLneg: r3(-R.PVp[e]) });
++    if (hasPL) Object.assign(o, { M_PLpos: r3(R.PLp[i]), M_PLneg: r3(R.PLn[i]), V_PLpos: r3(-v.Pn), V_PLneg: r3(-v.Pp) });
+     stations.push(o); };
+-  for (let i = 0; i < N; i++) { if (i > 0 && i < N - 1 && sup.includes(i)) { row(i, i - 1, -0.001); row(i, i, 0.001); } else row(i, Math.min(i, N - 2), 0); }
++  for (let i = 0; i < N; i++) { if (i > 0 && i < N - 1 && sup.includes(i)) { row(i, i - 1, -0.001); row(i, i, 0.001); } else row(i, Math.min(i, N - 2), 0, i < N - 1 && sup.includes(i + 1)); }
+   const PL_ = b.plates, cuts = [...new Set([...PL_.top, ...PL_.bot, ...PL_.web].flatMap(r => [r.x0, r.x1]))].sort((p, q) => p - q), zones = [];
+```
+
+#### Exact changes (LL9): decoded PlateLine (unified diff, 1 line of context)
+```diff
+@@ -1684,12 +1684,9 @@
+   beam.MF = []; for (let i = 0; i < N; i++) beam.MF.push(sgFatRow(beam, ILM.subarray(i * N, (i + 1) * N)));
+-  // shear (LL2, 2026-10-14): influence lines with the unit jump at the section. sR[i]: the section just right of node i (element i);
+-  // the section just left of node i is the same section except at a support (then from element i - 1). Element e keeps the section
+-  // at each of its ends (VLL[e] and VLL[e].alt); feIM and VF take their envelope.
++  // shear (LL2, 2026-10-14): influence lines with the unit jump at the section. LL9 (2026-10-14): exact section values, no envelope.
++  // Element e carries the section just right of its left node e, except an element that ends at a support (or the girder end), which
++  // carries the section just left of that support. VLLr / VFr: the section just right of node e for every element (station output).
+   const isSup = new Uint8Array(N); sup.forEach(s => isSup[s] = 1);
+   const sec = (e, m) => { const row = ILV.subarray(e * N, (e + 1) * N), c = { e, m }; return [sgLLRow(beam, row, c), sgFatRow(beam, row, c)]; };
+-  const sR = []; for (let i = 0; i < N - 1; i++) sR.push(sec(i, i));
+-  beam.VLL = []; beam.VF = [];
+-  for (let e = 0; e < N - 1; e++) { const A = sR[e], B = e + 1 < N - 1 && !isSup[e + 1] ? sR[e + 1] : sec(e, e + 1);
+-    beam.VLL.push({ ...A[0], alt: { ...B[0] } });
+-    beam.VF.push({ max: Math.max(A[1].max, B[1].max), min: Math.min(A[1].min, B[1].min), rawMax: Math.max(A[1].rawMax, B[1].rawMax), rawMin: Math.min(A[1].rawMin, B[1].rawMin) }); }
++  beam.VLL = []; beam.VF = []; beam.VLLr = []; beam.VFr = [];
++  for (let e = 0; e < N - 1; e++) { const A = sec(e, e), S = isSup[e + 1] ? sec(e, e + 1) : A; beam.VLL.push(S[0]); beam.VF.push(S[1]); beam.VLLr.push(A[0]); beam.VFr.push(A[1]); }
+   FE_CACHE.set(key, beam); if (FE_CACHE.size > 24) FE_CACHE.delete(FE_CACHE.keys().next().value);
+@@ -1788,3 +1785,3 @@
+   return { Is, I3, In, I3u, Inu, Icr, crack: ck, mode: crack === 'dl' ? 'dl' : crack === 'none' ? 'none' : '15',
+-    bS: sgBeam(spans, !cont, Is, true), b3: sgBeam(spans, !cont, I3, true), bN: llFrom ? { ...sgBeam(spans, !cont, In, true), MLL: llFrom.MLL, VLL: llFrom.VLL, MF: llFrom.MF, VF: llFrom.VF } : sgBeam(spans, !cont, In, false) };
++    bS: sgBeam(spans, !cont, Is, true), b3: sgBeam(spans, !cont, I3, true), bN: llFrom ? { ...sgBeam(spans, !cont, In, true), MLL: llFrom.MLL, VLL: llFrom.VLL, MF: llFrom.MF, VF: llFrom.VF, VLLr: llFrom.VLLr, VFr: llFrom.VFr } : sgBeam(spans, !cont, In, false) };
+ }
+@@ -1814,5 +1811,3 @@
+ /* dynamic load allowance applied to stored envelope components (truck/tandem IM, fatigue IM) */
+-function feIM(e, im) { const k = 1 + im, r = { pos: k * Math.max(e.truckMax, e.tanMax) + e.lanePos, neg: k * Math.min(e.truckMin, e.tanMin) + e.laneNeg, neg2: 0.9 * (k * e.twoMin + e.laneNeg), pos2: 0.9 * (k * e.twoMax + e.lanePos), truckMax: e.truckMax };
+-  if (!e.alt) return r; const b = feIM(e.alt, im);   // shear element (LL2): envelope of the sections at its two ends
+-  return { pos: Math.max(r.pos, b.pos), neg: Math.min(r.neg, b.neg), neg2: Math.min(r.neg2, b.neg2), pos2: Math.max(r.pos2, b.pos2), truckMax: Math.max(r.truckMax, b.truckMax) }; }
++function feIM(e, im) { const k = 1 + im; return { pos: k * Math.max(e.truckMax, e.tanMax) + e.lanePos, neg: k * Math.min(e.truckMin, e.tanMin) + e.laneNeg, neg2: 0.9 * (k * e.twoMin + e.laneNeg), pos2: 0.9 * (k * e.twoMax + e.lanePos), truckMax: e.truckMax }; }
+ function feFatIM(e, imf) { const k = 1 + imf; return { max: k * e.rawMax, min: k * e.rawMin }; }
+@@ -2785,3 +2780,3 @@
+ <h3>Analysis model</h3>
+-<p>The girder line is modeled as a continuous beam (or independent simple spans) with pinned supports and elements about 1 ft long. Suggest mode searches trial layouts with constant EI, where the influence lines depend only on the span arrangement; the quick suggestion, Full design and the analysis of the current design use the staged variable-stiffness model of GirderDetail's Structural analysis (DC1 on the steel section, DC2 and DW on the long-term composite section, live load on the short-term composite section), or constant EI when that module is set to it. Influence lines for moment at every node and shear in every element are obtained from the stiffness solution (closed form for simple spans); shear influence lines keep the unit jump at the section, just right and just left of every element.</p>
++<p>The girder line is modeled as a continuous beam (or independent simple spans) with pinned supports and elements about 1 ft long. Suggest mode searches trial layouts with constant EI, where the influence lines depend only on the span arrangement; the quick suggestion, Full design and the analysis of the current design use the staged variable-stiffness model of GirderDetail's Structural analysis (DC1 on the steel section, DC2 and DW on the long-term composite section, live load on the short-term composite section), or constant EI when that module is set to it. Influence lines for moment at every node and shear in every element are obtained from the stiffness solution (closed form for simple spans); shear influence lines keep the unit jump at the section, and the shears are the exact values just right of each node (just left of a support at the end of a span).</p>
+ <h3>Loads</h3>
+```
