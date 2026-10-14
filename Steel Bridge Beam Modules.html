@@ -6172,8 +6172,9 @@ function srcPanel() {
   host.insertAdjacentHTML('beforeend', adPanelHtml()); host.querySelectorAll('[data-k^="std."]').forEach(el => { const v = getPath(P, el.dataset.k); el.value = el.dataset.t === 'str' ? String(v) : (typeof v === 'number' ? frac(v) : v); });
   markOverrides();
 }
-function getDemands(src, tgt, xfPass) { if (tgt !== 'refresh') P.ui.lastSrc = src;
+function getDemands(src, tgt, xfPass) {
   gdXfReq(src, tgt || P.mod, xfPass);   // XF2 (2026-10-13): the frame weights these demands are computed with
+  if (tgt !== 'refresh') P.ui.lastSrc = src;   // after gdXfReq (XR3): a second pass it sends first does not change the source of this request
   plEnsure(); P.ui.srcSel = src; const target = tgt || P.mod, post = msg => gdPlPost(gdXfSend(msg));   // XR1/XR2 (2026-10-14): request ID; sent in order once Preliminary sizing is ready
   if (src === 'pl') { post({ type: 'pl-export-req', src: 'pl', target }); flash('Requesting demands from Preliminary sizing…'); return; }
   const g = +src.split(':')[1], R = GM.sa.compute({ ...P.sa, girder: g });
@@ -6216,7 +6217,15 @@ window.addEventListener('message', e => { if (gdFromPL(e) && e.data && e.data.ty
    again (P.ui.xfRe). GD_XF_REQ: the request in flight { src, tgt, sig }; GD_XF_PASS: 1 on the second pass */
 let GD_XF_REQ = null, GD_XF_PASS = 0, GD_XF_T = null, GD_XF_STALE = null;   // GD_XF_T: the second pass not yet sent; GD_XF_STALE: the target of a second pass made obsolete by a newer request (its reply is dropped)
 function gdXfSig() { try { const X = gdXfModel(); return JSON.stringify(X.on ? ['kind', 'type', 'h', 'At', 'Ab', 'Ad', 'A', 'g', 'Ae', 'ge', 'Wi', 'We', 'allow'].map(k => X[k] ?? null) : 0); } catch (e) { return ''; } }
-function gdXfReq(src, tgt, pass) { if (!pass) { clearTimeout(GD_XF_T); GD_XF_T = null; GD_XF_PEND = []; if (GD_XF_PASS && GD_XF_REQ) GD_XF_STALE = GD_XF_REQ.tgt; if (P.ui) delete P.ui.xfRe; GD_RQ.forEach((r, k) => { if (r.pass) GD_RQ.delete(k); }); }   // a new request of the user replaces a pending or running second pass
+/* XR3 (engineer's decision 2026-10-14): a new request of the user no longer drops a cross-frame second pass, unless it loads every module (Design all, the
+   automatic refresh, load all), whose own reply makes its own second pass when the frame weights change: then the pending and running second passes are
+   replaced, as before. Any other request: a pending second pass (GD_XF_PEND, not yet sent) is sent now, before this request, and a running one is kept, so
+   both are answered first and this request's reply comes last, as when the requests are made one after the other. A second pass never makes a third
+   (its reply only reports "DC1 recomputed" or "Run Get demands again"). */
+function gdXfReq(src, tgt, pass) { if (!pass) { clearTimeout(GD_XF_T); GD_XF_T = null; const pend = GD_XF_PEND.splice(0);
+    if (GD_LOADALL.includes(tgt)) { if (GD_XF_PASS && GD_XF_REQ) GD_XF_STALE = GD_XF_REQ.tgt; GD_RQ.forEach((r, k) => { if (r.pass) GD_RQ.delete(k); }); }   // a load-everything request replaces a pending or running second pass
+    else pend.forEach(q => getDemands(q[0], q[1], true));   // XR3: the pending second passes first
+    if (P.ui) delete P.ui.xfRe; }
   GD_XF_PASS = pass ? 1 : 0; GD_XF_REQ = { src, tgt, sig: gdXfSig(), pass: !!pass }; }
 /* XR2 (engineer's decision 2026-10-14): every request carries a request ID (rid), which Preliminary sizing echoes in its reply (gd-inbox, gd-inbox-err).
    GD_RQ holds the outstanding requests by ID; a reply is applied only while its request is outstanding, with the frame weights and the second-pass flag
