@@ -539,9 +539,14 @@ function analyze(m){
 
   const res=effs.map(()=>({max:0,maxG:null,min:0,minG:null}));
 
+  // Axle standing exactly at a shear cut (the unit jump in the V influence line): the envelope is the limit of the
+  // axle approaching from either side, so count it with the left-side ordinate or the right-side ordinate, whichever
+  // gives the larger value for the maximum and the smaller for the minimum. Returns [vMin,vMax], or null if not at the cut.
+  const vJump=(cutEl,cutL,f,xp,P)=>{const c=cutL?cutEl:cutEl+1;if(Math.abs(xp-x[c])>1e-6)return null;
+    const oL=cutL?f[c]:f[c]-1,u=P*oL,w=P*(oL+1);return [Math.min(u,w),Math.max(u,w)];};
   const cfgs=[];function sweep(cfg){cfgs.push(cfg);
     const nA=cfg.offs.length, Lv=cfg.offs[nA-1], tr=cfg.trail, ext=Lv+(tr?tr.gap:0)+m.step;
-    const J=new Int32Array(nA),T=new Float64Array(nA),on=new Uint8Array(nA);
+    const J=new Int32Array(nA),T=new Float64Array(nA),on=new Uint8Array(nA),XP=new Float64Array(nA);
     const act=[]; effs.forEach((ef,ei)=>{const s=cfg.sel(ef);if(s[0]||s[1])act.push([ei,s[0],s[1],imArr[ei],ef.t==='V'?ef.el:-1,ef.cutL,imMinArr[ei]]);});
     const loc=v=>{let lo=0,hi=nn-1;while(hi-lo>1){const md=(lo+hi)>>1;if(x[md]<=v)lo=md;else hi=md;}return lo;};
     for(const dir of m.dirs){
@@ -549,17 +554,19 @@ function analyze(m){
         let any=false;
         for(let a=0;a<nA;a++){const xp=p-dir*cfg.offs[a];
           if(xp<-1e-9||xp>Lt+1e-9){on[a]=0;continue;}
-          on[a]=1;any=true;const lo=loc(xp);J[a]=lo;T[a]=Math.min(1,Math.max(0,(xp-x[lo])/(x[lo+1]-x[lo])));}
+          on[a]=1;any=true;XP[a]=xp;const lo=loc(xp);J[a]=lo;T[a]=Math.min(1,Math.max(0,(xp-x[lo])/(x[lo+1]-x[lo])));}
         let sc=null;
         if(tr){const s0=p-dir*(Lv+tr.gap);if(dir>0){if(s0>0)sc=Math.min(s0,Lt);}else{if(s0<Lt)sc=Math.max(s0,0);}}
         if(!any&&sc===null)continue;
         let jc=0,tc=0; if(sc!==null){jc=loc(sc);tc=(sc-x[jc])/(x[jc+1]-x[jc]);}
         for(const [ei,dMax,dMin,im,cutEl,cutL,imn] of act){
-          const f=IL[ei]; let tot=0,ps=0,ng=0;
+          const f=IL[ei]; let tot=0,ps=0,ng=0,totN=0;
           for(let a=0;a<nA;a++){if(!on[a])continue;const j=J[a];let fa=f[j],fb=f[j+1];
             if(j===cutEl){if(cutL)fa+=1;else fb-=1;}
-            const v=cfg.loads[a]*(fa+(fb-fa)*T[a]);tot+=v;if(v>0)ps+=v;else ng+=v;}
-          const axMax=m.neglect?ps:tot, axMin=m.neglect?ng:tot;
+            const v=cfg.loads[a]*(fa+(fb-fa)*T[a]);
+            if(cutEl>=0){const vj=vJump(cutEl,cutL,f,XP[a],cfg.loads[a]);if(vj){tot+=vj[1];totN+=vj[0];if(vj[1]>0)ps+=vj[1];if(vj[0]<0)ng+=vj[0];continue;}}
+            tot+=v;totN+=v;if(v>0)ps+=v;else ng+=v;}
+          const axMax=m.neglect?ps:tot, axMin=m.neglect?ng:totN;
           let uMax=0,uMin=0;
           if(sc!==null){const D=DER[ei],CIs=D.CI[jc]+(D.CI[jc+1]-D.CI[jc])*tc;
             if(dir>0){if(tr.trunc){uMax=CIs-Math.min(D.pmin[jc],CIs);uMin=CIs-Math.max(D.pmax[jc],CIs);}else uMax=uMin=CIs;}
@@ -573,6 +580,9 @@ function analyze(m){
         }
       }
     }
+    // Shear: also place each axle exactly at the cut (the IL jump), so the limit from either side is always evaluated
+    for(const dir of m.dirs)for(const [ei,dMax,dMin,,cutEl,cutL] of act){if(cutEl<0)continue;const xc=x[cutL?cutEl:cutEl+1];
+      for(let a=0;a<nA;a++)refineAt(cfg,xc+dir*cfg.offs[a],dir,[[ei,dMax,dMin]]);}
   }
   const gov=(cfg,p,dir,on)=>({lab:cfg.lab,p,dir,pos:cfg.offs.map(o=>p-dir*o).filter((_,a)=>on[a])});
   const mk=(ax,vk,sv)=>{const offs=[0],loads=[ax[0][0]];for(let i=1;i<ax.length;i++){offs.push(offs[i-1]+(i+1===vk&&sv!=null?sv:ax[i][1]));loads.push(ax[i][0]);}return {offs,loads};};
@@ -600,7 +610,7 @@ function analyze(m){
 
   // Warnings
   // ── Refinement: spacing/headway at 0.5 ft, then each governing position at 0.1 ft ──
-  const refineAt=(cfg,p,dir,list)=>{
+  function refineAt(cfg,p,dir,list){   // function declaration (hoisted): also used by sweep() for the shear-jump positions
     const nA=cfg.offs.length,Lv=cfg.offs[nA-1],tr=cfg.trail,J=[],T=[],Pa=[],pos=[];
     for(let a=0;a<nA;a++){const xp=p-dir*cfg.offs[a];if(xp<-1e-9||xp>Lt+1e-9)continue;
       let lo=0,hi=nn-1;while(hi-lo>1){const md=(lo+hi)>>1;if(x[md]<=xp)lo=md;else hi=md;}
@@ -609,10 +619,12 @@ function analyze(m){
     if(!J.length&&sc===null)return;
     let jc=0,tc=0;if(sc!==null){let lo=0,hi=nn-1;while(hi-lo>1){const md=(lo+hi)>>1;if(x[md]<=sc)lo=md;else hi=md;}jc=lo;tc=(sc-x[jc])/(x[jc+1]-x[jc]);}
     list.forEach(([ei,dMax,dMin])=>{
-      const ef=effs[ei],f=IL[ei],im=imArr[ei],imn=imMinArr[ei],cutEl=ef.t==='V'?ef.el:-1;let tot=0,ps=0,ng=0;
+      const ef=effs[ei],f=IL[ei],im=imArr[ei],imn=imMinArr[ei],cutEl=ef.t==='V'?ef.el:-1;let tot=0,ps=0,ng=0,totN=0;
       for(let a=0;a<J.length;a++){const j=J[a];let fa=f[j],fb=f[j+1];if(j===cutEl){if(ef.cutL)fa+=1;else fb-=1;}
-        const v=Pa[a]*(fa+(fb-fa)*T[a]);tot+=v;if(v>0)ps+=v;else ng+=v;}
-      const axMax=m.neglect?ps:tot,axMin=m.neglect?ng:tot;let uMax=0,uMin=0;
+        const v=Pa[a]*(fa+(fb-fa)*T[a]);
+        if(cutEl>=0){const vj=vJump(cutEl,ef.cutL,f,pos[a],Pa[a]);if(vj){tot+=vj[1];totN+=vj[0];if(vj[1]>0)ps+=vj[1];if(vj[0]<0)ng+=vj[0];continue;}}
+        tot+=v;totN+=v;if(v>0)ps+=v;else ng+=v;}
+      const axMax=m.neglect?ps:tot,axMin=m.neglect?ng:totN;let uMax=0,uMin=0;
       if(sc!==null){const D=DER[ei],CIs=D.CI[jc]+(D.CI[jc+1]-D.CI[jc])*tc;
         if(dir>0){if(tr.trunc){uMax=CIs-Math.min(D.pmin[jc],CIs);uMin=CIs-Math.max(D.pmax[jc],CIs);}else uMax=uMin=CIs;}
         else{if(tr.trunc){uMax=Math.max(D.smax[jc+1],CIs)-CIs;uMin=Math.min(D.smin[jc+1],CIs)-CIs;}else uMax=uMin=D.end-CIs;}
@@ -621,7 +633,7 @@ function analyze(m){
       if(dMax&&vMax>r.max+1e-9){r.max=vMax;r.maxG={lab:cfg.lab,p,dir,pos:[...pos]};}
       if(dMin&&vMin<r.min-1e-9){r.min=vMin;r.minG={lab:cfg.lab,p,dir,pos:[...pos]};}
     });
-  };
+  }
   if(!$('refineChk')||$('refineChk').checked){
     const have={};cfgs.forEach(c=>have[c.lab]=1);
     const newS=new Set(),newH=new Set();

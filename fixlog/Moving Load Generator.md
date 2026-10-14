@@ -1066,3 +1066,99 @@ Engineer request 2026-10-14. Display-only addition. No formula, factor, unit, co
 - **How verified:** `node --check` on all four inline scripts. Headless Chromium, origin/main vs branch, 9 cases (default 2 × 100; the 100 ft simple-span cases above; 100 ft HL-93; 3-span HL-93 with IM 1.0 and 1.33; 2 × 100 HS20; 100 + 120 E80): metrics, warnings, envelope table, reactions, plate-transition table, influence-line info, CSV export (factored and unfactored) and printed report HTML are **byte-identical** (one SHA-256 over all of them matches). No page or console errors. As a cross-check, a full scan with moment sections at every node (no 0.1 ft refinement) gave per-span values ≤ the reported ones and within 0.9 k-ft of them in every case. Screenshot looked at.
 - **Run time:** the extra passes take about 1–1.5 s for 1–2 spans and about 3–3.5 s for the 3-span case, after the main results are already shown; the page is busy during that time.
 - **Other copies of this code:** none.
+
+## 2026-10-14 — PR: claude/mlg-shear-jump (shear just left / just right of a section; PR link added after merge)
+
+Engineer decision 2026-10-14. **Changes computed shear envelope values (V+ / V−) only**, always toward the exact influence-line value (larger V+, more negative V−). Moments, reactions, deflections, warnings, saved data and export formats are unchanged.
+
+### VJ1. Axle standing exactly at a shear section counted on one side of the unit jump only   [calc] [results change: shear only, less conservative before]
+- **Problem:** the shear influence line has a unit jump at the section. When an axle stood exactly at the section, `sweep` and `refineAt` used only one ordinate: for a section cut just right of a node (`cutL`, the 0.0L–0.95L rows) the right-side ordinate, and for a span-end section (1.0L, cut just left of the node) the right-side ordinate at an interior support or the left-side ordinate at the last support. The other side was reached only in the limit, at the nearest 0.1 ft refinement step, so V− (and V+ in the mirrored cases) was slightly low: by up to about 0.4 kip for HL-93 and up to 2.6 kip for the heavier rail vehicles in the test cases. Example: 100 ft simple span, 0.5L, per lane, no IM: V− = −37.21 kip vs exact −37.28 (truck −29.28 + lane −8.00). The Std. Spec. lane case and the uniform-load integrals already used both sides (`ends()`), and are unchanged.
+- **Fix:** (a) an axle within 1e-6 ft of the cut is counted with the left-side or right-side ordinate, whichever gives the larger value for the maximum and the smaller for the minimum (the limit of the axle approaching from either side); (b) every vehicle configuration in `sweep` (each spacing, each headway, primary and secondary vehicle, both directions) is also evaluated with each axle placed exactly at each shear cut, so the exact candidate is always found and does not depend on the position step. (b) is needed because with (a) alone a configuration that happened to land on the cut could win before refinement and steer the 0.1 ft refinement away from a better one; with (b) no shear value moved in the wrong direction in any test case.
+- **Where:** function `analyze`.
+  1. New helper before `const cfgs=[];function sweep(cfg){`. Anchor: `const vJump=(cutEl,cutL,f,xp,P)=>`.
+  2. `sweep`: anchors `XP=new Float64Array(nA)`, `on[a]=1;any=true;XP[a]=xp;`, `const vj=vJump(cutEl,cutL,f,XP[a],cfg.loads[a]);`, and the new loop at the end of `sweep`: `// Shear: also place each axle exactly at the cut`.
+  3. `refineAt` changed from a `const` arrow function to a hoisted function declaration (so `sweep` can call it; body unchanged except the shear-jump lines). Anchors: `function refineAt(cfg,p,dir,list){`, `const vj=vJump(cutEl,ef.cutL,f,pos[a],Pa[a]);`.
+- **Before:**
+  ```js
+    const cfgs=[];function sweep(cfg){cfgs.push(cfg);
+      const nA=cfg.offs.length, Lv=cfg.offs[nA-1], tr=cfg.trail, ext=Lv+(tr?tr.gap:0)+m.step;
+      const J=new Int32Array(nA),T=new Float64Array(nA),on=new Uint8Array(nA);
+  ...
+            on[a]=1;any=true;const lo=loc(xp);J[a]=lo;T[a]=Math.min(1,Math.max(0,(xp-x[lo])/(x[lo+1]-x[lo])));}
+  ...
+            const f=IL[ei]; let tot=0,ps=0,ng=0;
+            for(let a=0;a<nA;a++){if(!on[a])continue;const j=J[a];let fa=f[j],fb=f[j+1];
+              if(j===cutEl){if(cutL)fa+=1;else fb-=1;}
+              const v=cfg.loads[a]*(fa+(fb-fa)*T[a]);tot+=v;if(v>0)ps+=v;else ng+=v;}
+            const axMax=m.neglect?ps:tot, axMin=m.neglect?ng:tot;
+  ...
+            if(dMin&&vMin<r.min-1e-9){r.min=vMin;r.minG=gov(cfg,p,dir,on);}
+          }
+        }
+      }
+    }
+  ...
+    const refineAt=(cfg,p,dir,list)=>{
+  ...
+        const ef=effs[ei],f=IL[ei],im=imArr[ei],imn=imMinArr[ei],cutEl=ef.t==='V'?ef.el:-1;let tot=0,ps=0,ng=0;
+        for(let a=0;a<J.length;a++){const j=J[a];let fa=f[j],fb=f[j+1];if(j===cutEl){if(ef.cutL)fa+=1;else fb-=1;}
+          const v=Pa[a]*(fa+(fb-fa)*T[a]);tot+=v;if(v>0)ps+=v;else ng+=v;}
+        const axMax=m.neglect?ps:tot,axMin=m.neglect?ng:tot;let uMax=0,uMin=0;
+  ...
+      });
+    };
+    if(!$('refineChk')||$('refineChk').checked){
+  ```
+- **After:**
+  ```js
+    // Axle standing exactly at a shear cut (the unit jump in the V influence line): the envelope is the limit of the
+    // axle approaching from either side, so count it with the left-side ordinate or the right-side ordinate, whichever
+    // gives the larger value for the maximum and the smaller for the minimum. Returns [vMin,vMax], or null if not at the cut.
+    const vJump=(cutEl,cutL,f,xp,P)=>{const c=cutL?cutEl:cutEl+1;if(Math.abs(xp-x[c])>1e-6)return null;
+      const oL=cutL?f[c]:f[c]-1,u=P*oL,w=P*(oL+1);return [Math.min(u,w),Math.max(u,w)];};
+    const cfgs=[];function sweep(cfg){cfgs.push(cfg);
+      const nA=cfg.offs.length, Lv=cfg.offs[nA-1], tr=cfg.trail, ext=Lv+(tr?tr.gap:0)+m.step;
+      const J=new Int32Array(nA),T=new Float64Array(nA),on=new Uint8Array(nA),XP=new Float64Array(nA);
+  ...
+            on[a]=1;any=true;XP[a]=xp;const lo=loc(xp);J[a]=lo;T[a]=Math.min(1,Math.max(0,(xp-x[lo])/(x[lo+1]-x[lo])));}
+  ...
+            const f=IL[ei]; let tot=0,ps=0,ng=0,totN=0;
+            for(let a=0;a<nA;a++){if(!on[a])continue;const j=J[a];let fa=f[j],fb=f[j+1];
+              if(j===cutEl){if(cutL)fa+=1;else fb-=1;}
+              const v=cfg.loads[a]*(fa+(fb-fa)*T[a]);
+              if(cutEl>=0){const vj=vJump(cutEl,cutL,f,XP[a],cfg.loads[a]);if(vj){tot+=vj[1];totN+=vj[0];if(vj[1]>0)ps+=vj[1];if(vj[0]<0)ng+=vj[0];continue;}}
+              tot+=v;totN+=v;if(v>0)ps+=v;else ng+=v;}
+            const axMax=m.neglect?ps:tot, axMin=m.neglect?ng:totN;
+  ...
+            if(dMin&&vMin<r.min-1e-9){r.min=vMin;r.minG=gov(cfg,p,dir,on);}
+          }
+        }
+      }
+      // Shear: also place each axle exactly at the cut (the IL jump), so the limit from either side is always evaluated
+      for(const dir of m.dirs)for(const [ei,dMax,dMin,,cutEl,cutL] of act){if(cutEl<0)continue;const xc=x[cutL?cutEl:cutEl+1];
+        for(let a=0;a<nA;a++)refineAt(cfg,xc+dir*cfg.offs[a],dir,[[ei,dMax,dMin]]);}
+    }
+  ...
+    function refineAt(cfg,p,dir,list){   // function declaration (hoisted): also used by sweep() for the shear-jump positions
+  ...
+        const ef=effs[ei],f=IL[ei],im=imArr[ei],imn=imMinArr[ei],cutEl=ef.t==='V'?ef.el:-1;let tot=0,ps=0,ng=0,totN=0;
+        for(let a=0;a<J.length;a++){const j=J[a];let fa=f[j],fb=f[j+1];if(j===cutEl){if(ef.cutL)fa+=1;else fb-=1;}
+          const v=Pa[a]*(fa+(fb-fa)*T[a]);
+          if(cutEl>=0){const vj=vJump(cutEl,ef.cutL,f,pos[a],Pa[a]);if(vj){tot+=vj[1];totN+=vj[0];if(vj[1]>0)ps+=vj[1];if(vj[0]<0)ng+=vj[0];continue;}}
+          tot+=v;totN+=v;if(v>0)ps+=v;else ng+=v;}
+        const axMax=m.neglect?ps:tot,axMin=m.neglect?ng:totN;let uMax=0,uMin=0;
+  ...
+      });
+    }
+    if(!$('refineChk')||$('refineChk').checked){
+  ```
+  For an axle not at a cut, the arithmetic is identical to before (same terms in the same order), so moments and reactions are bit-identical. The absolute-maximum scan (`absScan`, #212) calls `analyze`, so its shear values get the same fix with no separate change. The jump candidates are added whether or not "Refine" is ticked.
+- **Governing provision:** AASHTO LRFD 10th Ed. Art. 3.6.1.2.1–3.6.1.2.4 (design truck, tandem, lane) and 3.6.1.3.1 (extreme force effect: the vehicle positioned to produce the extreme effect, applied to the influence line); Art. 3.6.1.4 (fatigue truck). Loads, factors, impact and distribution are unchanged; only the application of the axle loads to the influence line at its discontinuity changes.
+- **Check case:** 100 ft simple span, per lane, IM = 1.0, DF = 1. Closed form at section x (a = L − x): truck V+ = [32a + 32(a−14) + 8(a−28)]/L, tandem V+ = 25[a + (a−4)]/L, lane V+ = 0.64a²/(2L); V−(x) = −V+(L−x).
+  - 0.5L: truck V− before −29.208, after **−29.280** (= −[32·50 + 32·36 + 8·22]/100); tandem before −23.950, after **−24.000**; lane −8.000 both; HL-93 before −37.208, after **−37.280**.
+  - 0.1L: truck V− −3.168 → **−3.200** (= −32·10/100); tandem −3.950 → **−4.000**; HL-93 −4.270 → **−4.320** (tandem 4.00 + lane 0.32).
+  - 0.9L: truck V− −58.008 → **−58.080**; tandem −43.950 → **−44.000**; HL-93 −83.928 → **−84.000**.
+  - 0.0L and 1.0L, and every V+ in this case: unchanged (65.28, 49.00, 32.00, 97.28 at 0.0L; −65.28, −49.00, −32.00, −97.28 at 1.0L).
+  - 3 spans 110-140-110, symmetric: max |V+(x) + V−(Lt − x)| over all twentieth points was 0.134 (HL-93), 0.251 (truck), 1.442 kip (E80) before; after ≤ 3e-8 kip in every case.
+- **How verified:** `node --check` on all four inline scripts. Headless Chromium, origin/main vs branch, 22 cases (100 ft simple span: HL-93, truck, tandem, IM 1.33, axle-neglect off, fatigue, HS20 + Std. lane, E80; 110-140-110: HL-93, truck, tandem, IM 1.33, fatigue, HS20, H20, E80, E80-Alt, F40PH, 286K, ES44AC; 120-120 factored; 85-110-110-85 step 0.5) plus the FHWA and closed-form benchmark buttons: every moment and reaction (max, min, governing case and position), every deflection and every warning identical; only shear values changed, and every change is toward the exact value (V+ up, V− down; largest change 2.56 kip, F40PH); CSV export differs only in the +V, −V, |V| and governing-shear cells; the printed report only in shear cells; the absolute-maxima card only in "Max |V|" rows. No page or console errors. GirderDetail (`Steel Bridge Beam Modules.html`, exact engine) vs MLG at every 1 ft section, 9 cases (simple span, 3-span constant and variable EI; no IM, IM, fatigue): MLG V− vs GirderDetail before up to 0.67 kip; after ≤ 1e-6 kip in every case. Run time unchanged (analyze 0.3–0.9 s for 3 spans).
+- **Other copies of this code:** none.
