@@ -17152,3 +17152,599 @@ Diff of the embedded Preliminary sizing page (main → branch, decoded):
 +  $('#tab-drawings').innerHTML = (geo ? ownChecksCard() : '') +
      card('dw-elev', 'Girder elevation', geo ? 'Plates as defined' : 'Plates colored by check status', `<div class="ctl-row"><label class="dg-chip" style="--chip:#2346c2"><input type="checkbox" id="exag" ${exag ? 'checked' : ''}><span class="dg-dot"></span>Exaggerate vertical scale</label>
 ```
+
+## 2026-10-15 — PR: claude/gd-owner-profiles-3b (owner profiles phase 3a, part 2 of 2: plates and flanges, steel grade and coating, weathering steel, studs, integral abutments, CTDOT splice / Category C / refined analysis, MassDOT A6 and sidewalk beam; engineer decision GD41; PR link added after merge)
+
+Basis as part 1 (`owner_spec.md`, H rows of the three reviews; manuals cited, not quoted). Rules are rows of `OWN_RULES` with `dv: 2`; Preliminary sizing `OWN_DEF_V` 1 → 2 and GirderDetail `GD_DEF_V` = 2, so a project saved with part 1 moves only its untouched part-2 inputs, once, with the notice. **AASHTO: identical to main** (see How verified).
+
+### OWN20. Owner plate minimums and increments (RIDOT, CTDOT); RIDOT stiffener and connection plate minimums   [CHECK and SIZING CHANGE, defaults — §4 callout]
+- **Where:** `OWN_RULES` RIDOT `def.minTw` 7/16, `def.minBf` 12, `def.minTf` 3/4, `def.cpB` 5, `def.minPlate` (GirderDetail `std.minPlate` 7/16), `plate.min`, `stiff.min`; CTDOT `def.minTw` 3/8, `def.incD` 2, `def.minTf` 3/4, `def.minBf` 12, `def.incBf` 2, `def.thk` 2.0, `def.minPlate` (`std.minPlate` 1/2), `plate.min` (with b ≥ L/85), `plate.incD`, `plate.incBf`. Preliminary sizing `runChecks` W3, W4, F5, F6 (anchor `const rPm = ownR('plate.min'), rIncD = ownR('plate.incD')`), new D7 (anchor `// D7 (OWN20, RIDOT BDM 6.4.2`). Suggest and Full design size to the Limits-tab values (unchanged code; the defaults feed them).
+- **Before:** generic Limits defaults (web 1/2 in, flange 3/4 × 12 in, increments 1 in); W3 fails below the Limits-tab minimum, F5 a warning; W4/F6 warnings; no D7.
+- **After:** owner values as defaults (untouched inputs only); RIDOT and CTDOT minimum flange plates fail (F5; W3 fails as before, against the owner's minimum); CTDOT web depth and flange width off the 2 in increment fail (W4, F6); RIDOT D7 fails a stiffener < 7/16 in, a connection plate < 1/2 × 5 in or a bearing stiffener < 7/16 in. Owner standards minimum plate (stiffener, connection plate and splice plate auto-design): RIDOT 7/16 in, CTDOT 1/2 in.
+- **Governing provision:** RIDOT BDM 6.4.2; CTDOT BRSDM V2 6.10.2.1, 6.10.2.2, 6.10.11.1.1, 6.13.6.1; AASHTO/NSBA G12.1 (practice).
+- **Check case (built-in 15°, web 9/16 in):** RIDOT W3 = 7/16 ÷ 9/16 = **0.778** (was 1/2 ÷ 9/16 = 0.889); CTDOT W3 = 3/8 ÷ 9/16 = **0.667** (CTDOT's minimum is lower than the generic 1/2 in: a lower minimum, not a lower resistance); RIDOT D7: connection plate 1/2 × 5 in = minimum (ratio 1.00).
+
+### OWN21. Flange proportions and transitions (S4, T1, T2, T5, W5)   [CHECK CHANGE — §4 callout]
+- **Where:** `OWN_RULES` RIDOT `flange.l85c`; CTDOT `flange.l85`, `flange.wconst`, `flange.tratio`, `hybrid`; MassDOT `flange.l85` (warning), `flange.wconst`, `flange.tratio`, `flange.sizes`. Preliminary sizing S4 (anchor `const comp = !!rL85c, rS4 = rL85c || rL85`), T1, T2, T5, W5 hybrid item.
+- **Before:** S4 L/b ≤ 85 on the narrowest flange (warning); T1, T2 warnings; T5 advisory; no hybrid item.
+- **After:** RIDOT: the **compression** flange width (top flange; over an interior support the narrower of both) ≥ L_piece/85, fail. CTDOT: flange width ≥ L/85 (fail), width constant within a shipping piece (T1 fail), thinner ≥ 1/2 thicker (T2 fail), hybrid girder a warning. MassDOT: L/85 where practical (warning), width transitions only at field splices (T1 fail), thinner ≥ 1/2 thicker (T2 fail), no more than 3 sizes between bolted splices (T5 fail above 2 transitions per flange per piece).
+- **Governing provision:** RIDOT BDM 6.4.2; CTDOT BRSDM V2 6.10.2.2, 6.10.1.3; MassDOT Part I 3.6.3.4, 3.6.3.5, 3.6.5.6.
+- **Check case:** built-in piece 1, L = 82 ft, top flange 16 in: 82 × 12 / 16 = **61.5 ≤ 85** (ratio 0.72) for every owner; piece 2 has 2 thickness transitions per flange = 3 sizes: MassDOT T5 OK (fails at 3 transitions).
+
+### OWN22. RIDOT shear connectors   [CHECK and AUTO-DESIGN CHANGE — §4 callout]
+- **Where:** `OWN_RULES` RIDOT `stud`; Shear connectors SC3 (anchor `const rSt = gdOwnR('stud'), kp = rSt ? rSt.value.p : 4;`), new SC7, auto-design height loop (SC7 added) and pitch loop (minimum 6d).
+- **Before:** pitch ≥ 4d (AASHTO 6.10.10.1.2); no owner stud check.
+- **After (RIDOT):** pitch ≥ 6d; SC7: 7/8 in studs, at least 2 across the flange, h ≥ 5 in, and h ≥ haunch + 1.5 in bottom cover + 1.25 in bars + 1 in (top of the bottom mat + 1 in; bar depth assumed, ENGINEER_CHECKS).
+- **Governing provision:** RIDOT BDM 6.5.3 (and 9.4.1.1 for the cover); AASHTO LRFD 10th Ed. 6.10.10.1.2.
+- **Check case (built-in, d = 7/8 in, p = 6 in, h = 6 in, haunch 2 in):** SC3 min = 6(0.875) = **5.25 in**; ratio 5.25/6 = **0.875** (was 3.5/6 = 0.583). SC7: 2 + 1.5 + 1.25 + 1 = **5.75 in ≤ 6 in** (ratio 0.958).
+
+### OWN23. MassDOT steel grade and coating, Appendix A6, exterior sidewalk beam   [MATERIAL DEFAULT and checks — §4 callout]
+- **Where:** `OWN_RULES` MassDOT `def.gF`, `def.gW` ('50'), `steel.ws50`, `def.negM` (GirderDetail `gs.negM` '6108'), `a6`, `sw.ext`. Preliminary sizing G12 (anchor `// OWN23 (MassDOT 3.6.1.1)`), Limits input "Bridge over railroads alone" (`bridge.overRR`); Girder section GS22 (anchor `const rA = gdOwnR('a6');`); LLDF and DLs DF6 (anchor `const rS = gdOwnR('sw.ext')`).
+- **Before:** girder grade 50W (built-in default) for every owner; negative flexure 'auto' (Appendix A6 where permitted).
+- **After:** MassDOT default coated Grade 50 flanges and web (F_y 50, **F_u 65** ksi, was 70 for 50W); G12 warns for 50W unless the bridge is over railroads alone; negative flexure "Article 6.10.8 only" by default and GS22 warns where A6 is used; DF6 warns "not implemented" when a sidewalk is entered (Case I / Case II of 3.5.3.11).
+- **Governing provision:** MassDOT Part I 3.6.1.1, 3.6.1.2, 3.5.1.7, 3.5.3.11; AASHTO M 270 (Grade 50 F_u = 65 ksi, 50W F_u = 70 ksi); AASHTO LRFD 10th Ed. 6.10.8, Appendix A6.
+- **Check case:** web-to-flange fillet weld FW2 (built-in, Abut. 1 interior) resistance with the base-metal F_u: 18.270 × 65/70 = **16.965** kip/in (tool 18.270 → 16.965); ratio 0.2471 → 0.2661. Field splice MT1 (negative) resistance 2694.08 → 2501.64 kip-ft (F_u in the flange effective area; the splice is also re-designed for the new grade). GS7 unchanged on the built-in (A6 did not govern there).
+
+### OWN24. Integral abutment limits   [CHECK CHANGE, defaults — §4 callout]
+- **Where:** `OWN_RULES` `def.intL`, `def.intSkew`, `int.abut` for each owner; Preliminary sizing G10 integral (anchor `const rI = ownRule(plOwner(P), 'int.abut')`).
+- **Before:** Limits placeholders (300 ft, 30°), pass/fail.
+- **After:** RIDOT 150 ft, skew ≤ 30°, girder depth ≤ 6 ft (fail); CTDOT skew < 30° (strict), total length ≤ 150 ft and every span ≤ 150 ft (fail); MassDOT simplified method to 140 ft and 30° (warning beyond: 3D analysis required).
+- **Governing provision:** RIDOT BDM 11.3.2; CTDOT BRSDM V2 App. CT11.1.1.1; MassDOT Part I 3.10.11.1, 3.10.7.
+- **Check case:** built-in set to integral (L = 360 ft, skew 15°, D = 63.5 in): RIDOT 360 > 150 **fail**, 15 ≤ 30, 63.5 ≤ 72; CTDOT 360 > 150 **fail**, 15 < 30, longest span 140 ≤ 150; MassDOT 360 > 140 **warning**.
+
+### OWN25. CTDOT field splices, Category C at connection plates, refined analysis   [RESISTANCE and CHECK CHANGE — §4 callout; GD41]
+- **Where:** `OWN_RULES` CTDOT `spl.ovs`, `fat.catC`, `refined`. Field splice `gdCompute` (anchor `const rOv = gdOwnR('spl.ovs');`: K_h, e_min), DT7 (anchor `const rOv7 = gdOwnR('spl.ovs'), tmin =`), gap item in DT5, `fitSplice`/`autoDesignSplice` edge distance; Preliminary sizing `bSplice` (owner edge distance in the splice flange width); Fatigue `Cp-stiff` category (anchor `const rC = gdOwnR('fat.catC'); if (rC && r.det === 'Cp-stiff')`), Transverse stiffeners CP2 threshold, Preliminary sizing Full design `thC`; G13 (anchor `const rRf = ownR('refined');`).
+- **Before:** slip resistance with K_h = 1.0 (standard holes); splice plates ≥ 5/16 in; edge distance per AASHTO Table 6.13.2.6.6-1; flanges at connection plates Category C′ ((ΔF)_TH = 12 ksi).
+- **After (CTDOT):** R_n = K_h K_s N_s P_t with **K_h = 0.85** (designed as if oversized holes were used); splice plates ≥ 1/2 in; edge distance ≥ 2 in; gap between girder ends ≤ 1 in; flanges at connection plates **Category C, (ΔF)_TH = 10 ksi** (GD41, literal); G13 warns above 30° skew, curved girders, or non-uniform spacing (refined analysis required).
+- **Governing provision:** CTDOT BRSDM V2 6.13.6.1, 6.6.1.2.6CT, 4.4, 4.6.2.2.1; AASHTO LRFD 10th Ed. Eq. 6.13.2.8-1, Table 6.13.2.8-2, Table 6.6.1.2.3-1, Table 6.6.1.2.5-3.
+- **Check case (built-in FS1, top flange, 12 bolts 7/8 in A325, Class B, 2 slip planes):** R_n per bolt = K_h(0.50)(2)(39) = 39.00 → **33.15 kip**; 12 bolts: 468.00 → **397.80 kip**; TF3 Service II 342.10/397.80 = **0.860** (was 0.731). Category C: CP2 γ(Δf) = 1.0456 × 12 = 12.55 ksi; 12.55/10 = **1.255** (tool 1.0456 → 1.2548); Fatigue FA1 1.1376 → 1.3652 (× 1.2). The built-in 16 in flanges at the splice cannot take 2 gage lines with 2 in edges (needs 18 in): the splice auto-design reports it and DT4/DT7 fail until Suggest widens the flanges (it now sizes them with the 2 in edge).
+
+### OWN26. RIDOT uncoated weathering steel: sacrificial thickness   [SECTION CHANGE — §4 callout]
+- **Where:** `plWS(Pp)` (Preliminary sizing), Limits tab (Owner profile) input "Uncoated weathering steel" (`girder.wsU`, default 'no'); runChecks W1, W3, F1, F3, F5, D7, G12; sizing (`WSz`: net requirement + sacrificial), Full design `checkLayout` (net section), exports to the modules (`sec`, module rows: net plates), bridge `wsNet` (module note card).
+- **Before:** plates as entered everywhere.
+- **After (RIDOT, wsU = yes):** sacrificial 1/16 in on the top flange, web and stiffeners and 1/8 in on the bottom flange: added above the minimum thicknesses (W3, F5, D7) and removed from the design section (W1, F1, F3, Full design, and the plates sent to every module). Plates entered by hand in a module are used as entered (note card).
+- **Governing provision:** RIDOT BDM 6.2.1, 6.4.2.
+- **Check case (built-in, web 9/16, top 16 × 3/4, bottom 16 × 1 1/8):** W1 D/t_w = 60/(0.5625 − 0.0625) = **120.0** (was 106.7); F1 top 16/(2 × 0.6875) = **11.64** (was 10.67); F5 top 3/4 < 3/4 + 1/16 = 13/16 in: **fail**; D7 connection plate 1/2 < 1/2 + 1/16: **fail**; Girder section receives t_w = **0.5 in**.
+
+### OWN27. Owner defaults version 2, GirderDetail-side defaults, documentation   [SAVED DATA: version field only]
+- **Where:** Preliminary sizing `OWN_DEF_V = 2`; GirderDetail `GD_DEF_V = 2`, `gdOwnDefApply` (a project saved with an older version and the same owner applies only the rows added since, from the generic defaults, as `migrateOwnDef`), `gdDfMeth` value labels, `glbl`; help "Owner plates, steel and details (phase 3a part 2)", rules modal text, Preliminary sizing manual paragraph.
+- **Saved data (§5):** `P.ownDef.v` and `P.ownDefG.v` become 2; new optional inputs `girder.wsU` ('no'), `bridge.overRR` ('no'); nothing renamed or removed.
+- **Check case:** a part-1-saved CTDOT project opens with the notice "Min. web thickness 0.5 → 0.375; Web depth increment 1 → 2; Flange width increment 1 → 2; Integral abutments: max. length 300 → 150; … Minimum plate thickness (Owner standards: …) 3/8 in → 1/2 in; owner checks now applied: …"; reopening after Dismiss shows nothing new.
+
+### How verified
+- **Syntax:** `node --check` on every script block of both pages. A scan for `//` comments that hide code found false positives only.
+- **Matrix, main (part 1) vs branch:**
+  - Seeds: projects saved by main after part 1 (built-in 15°, 28°, xsA, curb) × AASHTO/MassDOT/RIDOT/CTDOT, plus RIDOT and CTDOT with user values.
+  - Every module after Get demands from Preliminary sizing, the Preliminary sizing checks and the analysis arrays.
+  - **AASHTO: no difference on the 4 projects** (re-run on the final build).
+  - No page errors.
+- **Suggest / Full design:** all 16 cases, main vs branch.
+  - AASHTO and MassDOT are identical: Grade 50 does not enter the sizing.
+  - Every Full design passes.
+  - No page errors.
+- **Hand checks** (matched to the tool):
+  - CTDOT slip resistance 468.00 → 397.80 kip (K_h 0.85);
+  - CTDOT Category C CP2 1.0456 → 1.2548;
+  - RIDOT SC3 6d and SC7 stud height;
+  - RIDOT weathering steel W1, F1, F5, D7 and the net t_w sent to Girder section;
+  - MassDOT FW2 × 65/70;
+  - integral G10 for each owner with the built-in set to integral.
+- **Notice and migration:**
+  - A part-1-saved CTDOT project lists the moved defaults (Limits and Owner standards) and the new checks once.
+  - MassDOT moves 50W → 50 and the negative flexure method to Article 6.10.8 only.
+  - Main (part 1) opens a branch-saved RIDOT project with weathering steel on without errors (it ignores `wsU`).
+- **Design modules mode:** CTDOT and RIDOT run without errors, with the same owner checks.
+- **Screenshots:** reviewed for:
+  - the notice;
+  - splice DT4/TF3 and CP2 (CTDOT);
+  - F5, G12 and the Limits input with weathering steel (RIDOT);
+  - SC7;
+  - the module card;
+  - the rules modal;
+  - GS22 and DF6 (MassDOT).
+
+### Open items
+See ENGINEER_CHECKS GD59–GD64:
+- the weathering steel switch and scope;
+- the stud bar assumption;
+- the RIDOT compression flange L/85;
+- the CTDOT splice readings: built-in flanges too narrow for 2 in edges until resized;
+- MassDOT Grade 50, A6 and the sidewalk beam (not implemented);
+- the integral limits.
+
+Diff of the outer file (main → branch):
+
+```diff
+--- main (outer file)
++++ branch (outer file)
+@@ -1451,4 +1451,5 @@
+   /* ---- bolt resistances ---- */
+-  const thrF = B.thr === 'excl' ? 0.56 : 0.45, Ks = B.cls === 'B' ? 0.50 : 0.30, Kh = 1.0, Pt = bolt.Pt[B.gr], Rp = B.prep === 'drilled' ? 1.0 : 0.90;
+-  const emin = bolt.emin[B.edge], d = bolt.d, gap = num(B.gap);
++  const rOv = gdOwnR('spl.ovs');   // OWN25 (CTDOT BRSDM V2 6.13.6.1): designed as if oversized holes were used (K_h = 0.85), edge distance at least 2 in
++  const thrF = B.thr === 'excl' ? 0.56 : 0.45, Ks = B.cls === 'B' ? 0.50 : 0.30, Kh = rOv ? rOv.value.Kh : 1.0, Pt = bolt.Pt[B.gr], Rp = B.prep === 'drilled' ? 1.0 : 0.90;
++  const emin = Math.max(bolt.emin[B.edge], rOv ? rOv.value.edge : 0), d = bolt.d, gap = num(B.gap);
+   const fl = {};
+@@ -1578,3 +1579,3 @@
+         sym: T`P_s = \frac{|f_s|}{R_h}A_g \le n\,K_hK_sN_sP_t`, cols: ['Combination', 'f (ksi)', 'P_s (kip)', 'Resistance (kip)', 'Ratio'], items: [],
+-        note: `Class ${B.cls} surface (K_s = ${f2(R.Ks)}), standard holes (K_h = 1.0), P_t = ${f0(R.Pt)} kip, ${F.Ns} slip plane${F.Ns > 1 ? 's' : ''}. Checked under Service II and during deck placement (constructibility). Fillers do not reduce slip resistance but must have the same faying surface class.` };
++        note: `Class ${B.cls} surface (K_s = ${f2(R.Ks)}), ${R.Kh !== 1 ? `standard holes specified but designed as if oversized (K_h = ${f2(R.Kh)}, ${esc(gdOwnCite(gdOwnR('spl.ovs') || { owner: '', sec: '' }))})` : 'standard holes (K_h = 1.0)'}, P_t = ${f0(R.Pt)} kip, ${F.Ns} slip plane${F.Ns > 1 ? 's' : ''}. Checked under Service II and during deck placement (constructibility). Fillers do not reduce slip resistance but must have the same faying surface class.` };
+       if (X10) { c.sym = T`P_s = \frac{M_s}{A} \le n\,K_hK_sN_sP_t`; c.cols = ['Combination', 'M_s (kip-ft)', 'P_s (kip)', 'Resistance (kip)', 'Ratio'];
+@@ -1742,2 +1743,3 @@
+       add5('Web bolt rows fit the plate (edge ≥ min.)', W.ev, R.emin, false, 'fail');
++      { const rG = gdOwnR('spl.ovs'); if (rG) add5(`Gap between the girder ends (${gdOwnCite(rG)})`, R.gap, rG.value.gap, true, 'fail'); }   // OWN25
+       add(c);
+@@ -1751,8 +1753,8 @@
+     {
+-      const tmin = 0.3125, c = { id: 'DT7', grp, title: 'Minimum plate thickness', ref: 'AASHTO LRFD 6.7.3', src: 'Code', sym: T`t \ge \tfrac{5}{16}\ \text{in}`, cols: ['Plate', 't (in)', 'Minimum (in)'], items: [],
++      const rOv7 = gdOwnR('spl.ovs'), tmin = rOv7 ? rOv7.value.tp : 0.3125, c = { id: 'DT7', grp, title: 'Minimum plate thickness', ref: rOv7 ? `AASHTO LRFD 6.7.3; ${gdOwnCite(rOv7)}` : 'AASHTO LRFD 6.7.3', src: rOv7 ? 'DOT' : 'Code', sym: rOv7 ? T`t \ge ${frac(tmin)}\ \text{in (splice plates, owner)}` : T`t \ge \tfrac{5}{16}\ \text{in}`, /* OWN25 */ cols: ['Plate', 't (in)', 'Minimum (in)'], items: [],
+         note: 'Structural steel plates, including splice plates and fillers developed as part of the connection, not less than 5/16 in. Article 6.7.3 was revised in recent editions; confirm the limit and any owner requirement (several owners require 3/8 in minimum for web splice plates). Fillers thinner than 5/16 in are permitted and are not checked here.' };
+       ['top', 'bot'].forEach(k => { const F = R.fl[k], nm = k === 'top' ? 'Top' : 'Bottom';
+-        c.items.push({ loc: `${nm} flange, outer plate`, cells: [frac(F.to), frac(tmin)], st: ge(F.to, tmin) ? 'pass' : 'fail', r: tmin / F.to, work: T`t = ${f3(F.to)} \;${ge(F.to, tmin) ? '\\ge' : '<'}\; 0.3125\ \text{in}` });
+-        if (F.inner) c.items.push({ loc: `${nm} flange, inner plates`, cells: [frac(F.ti), frac(tmin)], st: ge(F.ti, tmin) ? 'pass' : 'fail', r: tmin / F.ti, work: T`t = ${f3(F.ti)} \;${ge(F.ti, tmin) ? '\\ge' : '<'}\; 0.3125\ \text{in}` }); });
+-      c.items.push({ loc: 'Web splice plates', cells: [frac(W.twp), frac(tmin)], st: ge(W.twp, tmin) ? 'pass' : 'fail', r: tmin / W.twp, work: T`t = ${f3(W.twp)} \;${ge(W.twp, tmin) ? '\\ge' : '<'}\; 0.3125\ \text{in}` });
++        c.items.push({ loc: `${nm} flange, outer plate`, cells: [frac(F.to), frac(tmin)], st: ge(F.to, tmin) ? 'pass' : 'fail', r: tmin / F.to, work: T`t = ${f3(F.to)} \;${ge(F.to, tmin) ? '\\ge' : '<'}\; ${f3(tmin)}\ \text{in}` });
++        if (F.inner) c.items.push({ loc: `${nm} flange, inner plates`, cells: [frac(F.ti), frac(tmin)], st: ge(F.ti, tmin) ? 'pass' : 'fail', r: tmin / F.ti, work: T`t = ${f3(F.ti)} \;${ge(F.ti, tmin) ? '\\ge' : '<'}\; ${f3(tmin)}\ \text{in}` }); });
++      c.items.push({ loc: 'Web splice plates', cells: [frac(W.twp), frac(tmin)], st: ge(W.twp, tmin) ? 'pass' : 'fail', r: tmin / W.twp, work: T`t = ${f3(W.twp)} \;${ge(W.twp, tmin) ? '\\ge' : '<'}\; ${f3(tmin)}\ \text{in}` });
+       add(c);
+@@ -2223,2 +2225,6 @@
+ <b>Utilities in the detail modules.</b> Preliminary sizing and Structural analysis analyse the utilities on the steel section with their own factors (Strength I max: existing 1.50η, future 1.25η; min: 0.65/η and 0; Service 1.0, the future allowance only where it adds; camber: existing only). The detail modules carry DC1, DC2, DW and LL+IM, so their demands include the utilities in DC1 as 1.20 × the existing and 1.00 × the future allowance (the ratio of the maximum Strength factor to γ<sub>DC</sub> = 1.25): exact at Strength I where they add, conservative at Service; each module's loads tab says so (card "Owner deck and dead load rules").</p>
++<h3>Owner plates, steel and details (phase 3a part 2)</h3><p>The defaults below follow the same rule as part 1 (an untouched input moves, a value you entered is kept and flagged); projects saved with part 1 open once with a notice listing what moved. GirderDetail's own defaults (Owner standards minimum plate thickness; Girder section negative flexure method) follow the same rule.
++<b>RIDOT</b> (BDM 6.4.2, 6.2.1, 6.5.3, 11.3.2): minimum web 7/16 in, flanges 3/4 × 12 in, compression flange width at least 1/85 of the shipping piece (W3, F5, S4 fail; Suggest and Full design size to them); stiffeners and bearing stiffeners at least 7/16 in, connection plates 1/2 × 5 in (D7; Owner standards minimum plate 7/16 in); <b>uncoated weathering steel</b> (Limits tab input; default no): sacrificial 1/16 in on the top flange, web and stiffeners and 1/8 in on the bottom flange, added above the minimums and removed from the design section (Preliminary sizing checks, Suggest, Full design and the plates sent to every module are the net section; plates entered by hand in a module are used as entered); studs 7/8 in, at least two across, at least 5 in high and 1 in above the bottom mat, pitch at least 6d (SC3, SC7, auto-design); integral abutments: length 150 ft, skew 30°, girder depth 6 ft (G10, fail).
++<b>CTDOT</b> (BRSDM V2 6.10.2, 6.10.1.3, 6.13.6.1, 6.6.1.2.6CT, App. CT11.1.1.1, 4.4): web at least 3/8 in in 2 in depth increments, flanges at least 3/4 in thick, 12 in and L/85 of the field piece wide, in 2 in width increments, width constant within a shipping piece, thinner plate at least 1/2 of the thicker (W3, W4, F5, F6, S4, T1, T2 fail); hybrid girders a warning (W5); field splices designed as if oversized holes were used (K<sub>h</sub> = 0.85 in the slip resistance), splice plates at least 1/2 in, edge distance at least 2 in, gap at most 1 in (Field splice DT3, DT5, DT7; auto-design and fit); flanges designed for Category C at the connection plates ((ΔF)<sub>TH</sub> = 10 ksi; engineer decision GD41; Fatigue Cp-stiff, Transverse stiffeners CP2, Full design); Owner standards minimum plate 1/2 in; integral abutments: skew less than 30°, length and spans at most 150 ft (G10, fail); refined analysis required above 30° skew, for curved girders or non-uniform spacing (G13 warnings).
++<b>MassDOT</b> (Part I 3.6.1.1, 3.6.3.4, 3.6.3.5, 3.6.5.6, 3.10.11.1, 3.5.1.7, 3.5.3.11): coated Grade 50 is the default grade (flanges and web; F<sub>u</sub> 65 ksi), uncoated 50W only over railroads alone (G12 warning, Limits tab input); L/85 where practical (S4 warning); flange width transitions only at field splices (T1), thinner flange at least 1/2 of the thicker (T2), no more than 3 sizes between bolted splices (T5); integral abutments: simplified method to 140 ft and 30°, beyond a 3D analysis (G10 warnings); Appendix A6 not used: Girder section negative flexure method "Article 6.10.8 only" by default and GS22 warns where A6 is used; the exterior sidewalk beam Case I and Case II are not implemented (DF6 warning when a sidewalk is entered).</p>
+ <h3>Girder report</h3><p><b>Girder report</b> (top bar) builds one calculation package for a selected girder. Choose the girder, the chapters, and whether to re-run auto-design for that girder (otherwise the plates, bolts, and welds as currently entered are checked). Every module is loaded with that girder's demands from the Structural analysis module (its own distribution factors, dead loads, and effective flange width), and each chapter is that module's full worked report: 1, bridge and girder geometry (bridge data, typical cross-section, framing plan, girder elevation, plate schedule); 2, loads and live load distribution factors with derivations; 3, structural analysis (moment and shear envelopes, reactions, deflections, stresses by construction stage); 4, girder section (Strength I, Service II, constructibility, and fatigue at the critical sections); 5, fatigue details; then one chapter per field splice on the girder; bearing stiffeners; transverse stiffeners and connection plates; shear connectors; cross-frames; deck overhang (exterior girders only); and web-to-flange welds and transitions. The package opens with a title page (girder, source of demands, basis of the details, specification, preparer and checker) and a contents list, starts each chapter on a new page, and carries "Girder G# calculation package" in the running header; print it to PDF. The app returns to the module you started from when printing is finished.</p>
+@@ -2570,5 +2576,7 @@
+       if (!c.items.length) c.naWhy = 'No location uses a connection plate.'; out.add(c); }
+-    { const c = { id: 'CP2', grp: G3, title: 'Fatigue at stiffener weld toes', ref: 'AASHTO LRFD 6.6.1.2, Table 6.6.1.2.3-1 (Category C′)', src: 'Code', sym: T`\gamma(\Delta f) \le (\Delta F)_{TH} = 12.0\ \text{ksi}`, cols: ['Location', 'Δf (ksi)', 'γ(Δf) (ksi)', 'Ratio'], items: [],
++    { const rC = gdOwnR('fat.catC'), th = rC ? rC.value.th : 12;   // OWN25: CTDOT BRSDM V2 6.6.1.2.6CT, Category C (GD41)
++      const c = { id: 'CP2', grp: G3, title: 'Fatigue at stiffener weld toes', ref: rC ? `AASHTO LRFD 6.6.1.2, Table 6.6.1.2.3-1; ${gdOwnCite(rC)} (Category C)` : 'AASHTO LRFD 6.6.1.2, Table 6.6.1.2.3-1 (Category C′)', src: rC ? 'DOT' : 'Code', sym: T`\gamma(\Delta f) \le (\Delta F)_{TH} = ${f2(th)}\ \text{ksi}`, cols: ['Location', 'Δf (ksi)', 'γ(Δf) (ksi)', 'Ratio'], items: [],
+         note: 'Base metal at the toe of transverse stiffener-to-flange and stiffener-to-web welds is Category C′ (infinite life under Fatigue I). The tension flange stress range is used for the web weld toe near the tension flange, which is conservative. Δf received from Preliminary sizing is the stress range at the inner face of the bottom flange (the weld toe) from the short-term composite section for both the positive and the negative fatigue moment, the basis of Preliminary sizing\'s own Category C′ check; the Fatigue module checks the same connection plates with its negative-moment section (steel + reinforcement by default) and is the full check.' };   // basis stated (M1, 2026-10-13)
+-      R.rows.filter(r => r.df > 0).forEach(r => c.items.push(rc(L(r), [f2(r.df), f2(r.fat), f2(r.fat / 12)], r.fat, 12, T`\gamma(\Delta f) = ${f2(R.g.fat)}(${f2(r.df)}) = ${f2(r.fat)}\ \text{ksi} \;${LE(r.fat, 12)}\; 12.0\ \text{ksi}`)));
++      if (rC) c.note = `${gdOwnCite(rC)}: ${rC.text}. ` + c.note;
++      R.rows.filter(r => r.df > 0).forEach(r => c.items.push(rc(L(r), [f2(r.df), f2(r.fat), f2(r.fat / th)], r.fat, th, T`\gamma(\Delta f) = ${f2(R.g.fat)}(${f2(r.df)}) = ${f2(r.fat)}\ \text{ksi} \;${LE(r.fat, th)}\; ${f2(th)}\ \text{ksi}`)));
+       if (!c.items.length) c.naWhy = 'No fatigue stress range entered.'; out.add(c); }
+@@ -2668,4 +2676,5 @@
+       if (!c.items.length) c.naWhy = 'No strength regions entered.'; out.add(c); }
+-    { const c = { id: 'SC3', grp: 'Detailing', title: 'Pitch limits', ref: 'AASHTO LRFD 6.10.10.1.2', src: 'Code', sym: T`4d \le p \le 48\ \text{in}\ (24\ \text{in if}\ D < 24\ \text{in})`, cols: ['Zone', 'p (in)', 'Min. (in)', 'Max. (in)'], items: [] };
+-      R.zones.forEach(z => { const ok = ge(z.p, 4 * d) && ge(z.pmax, z.p); c.items.push({ loc: z.name, cells: [f2(z.p), f2(4 * d), f2(z.pmax)], st: ok ? 'pass' : 'fail', r: Math.max(4 * d / z.p, z.p / z.pmax), work: T`4(${f3(d)}) = ${f2(4 * d)} \le p = ${f2(z.p)} \le ${f2(z.pmax)}\ \text{in}${ok ? '' : T`\ \text{(not satisfied)}`}` }); }); out.add(c); }
++    { const rSt = gdOwnR('stud'), kp = rSt ? rSt.value.p : 4;   // OWN22 (RIDOT BDM 6.5.3): pitch not less than six stud diameters
++      const c = { id: 'SC3', grp: 'Detailing', title: 'Pitch limits', ref: rSt ? `AASHTO LRFD 6.10.10.1.2; ${gdOwnCite(rSt)}` : 'AASHTO LRFD 6.10.10.1.2', src: rSt ? 'DOT' : 'Code', sym: T`${kp}d \le p \le 48\ \text{in}\ (24\ \text{in if}\ D < 24\ \text{in})`, cols: ['Zone', 'p (in)', 'Min. (in)', 'Max. (in)'], items: [] };
++      R.zones.forEach(z => { const ok = ge(z.p, kp * d) && ge(z.pmax, z.p); c.items.push({ loc: z.name, cells: [f2(z.p), f2(kp * d), f2(z.pmax)], st: ok ? 'pass' : 'fail', r: Math.max(kp * d / z.p, z.p / z.pmax), work: T`${kp}(${f3(d)}) = ${f2(kp * d)} \le p = ${f2(z.p)} \le ${f2(z.pmax)}\ \text{in}${ok ? '' : T`\ \text{(not satisfied)}`}` }); }); out.add(c); }
+     { const c = { id: 'SC4', grp: 'Detailing', title: 'Transverse spacing and edge distance', ref: 'AASHTO LRFD 6.10.10.1.3', src: 'Code', sym: T`s_t \ge 4d, \qquad \text{clear distance to flange edge} \ge 1.0\ \text{in}`, cols: ['Zone, item', 'Value (in)', 'Limit (in)'], items: [] };
+@@ -2678,2 +2687,10 @@
+       c.items.push({ loc: 'Clear cover over the studs', cells: [f2(cov), '2.00'], st: ge(cov, 2) ? 'pass' : 'fail', r: 2 / cov, work: T`${f2(R.tdeck)} + ${f2(R.dk.hh)} - ${f2(R.h)} = ${f2(cov)} \;${GE(cov, 2)}\; 2.0\ \text{in}` }); out.add(c); }
++    { const rSt = gdOwnR('stud');   // SC7 (OWN22, RIDOT BDM 6.5.3): owner stud requirements
++      if (rSt) { const v = rSt.value, mat = R.dk.hh + v.cov + v.bars, c = { id: 'SC7', grp: 'Detailing', title: 'Owner stud requirements', ref: gdOwnCite(rSt), src: 'DOT', sym: T`d = ${frac(v.d)}\ \text{in},\ n_r \ge ${v.nr},\ h \ge ${f2(v.h)}\ \text{in},\ h \ge h_{haunch} + c_b + d_{bars} + ${f2(v.mat)}\ \text{in}`, cols: ['Item', 'Value', 'Required'], items: [],
++          note: `${gdOwnCite(rSt)}: ${rSt.text}. The top of the bottom reinforcement mat is taken at the haunch + ${f2(v.cov)} in bottom cover (BDM 9.4.1.1) + ${f2(v.bars)} in of bars (two layers of No. 5 assumed; ENGINEER_CHECKS) above the top of the flange.` };
++        c.items.push({ loc: 'Stud diameter', cells: [frac(d), frac(v.d)], st: Math.abs(d - v.d) < 1e-6 ? 'pass' : 'fail', work: T`d = ${f3(d)}\ \text{in}\ (${f3(v.d)}\ \text{in required})` });
++        R.zones.forEach(z => c.items.push({ loc: `${z.name}, studs across`, cells: [String(z.nr), `≥ ${v.nr}`], st: z.nr >= v.nr ? 'pass' : 'fail', work: T`n_r = ${z.nr} \;${z.nr >= v.nr ? '\\ge' : '<'}\; ${v.nr}` }));
++        c.items.push({ loc: 'Stud height', cells: [f2(R.h), `≥ ${f2(v.h)}`], st: ge(R.h, v.h) ? 'pass' : 'fail', r: v.h / R.h, work: T`h = ${f2(R.h)} \;${GE(R.h, v.h)}\; ${f2(v.h)}\ \text{in}` });
++        c.items.push({ loc: 'Above the bottom reinforcement mat', cells: [f2(R.h - mat + v.mat), `≥ ${f2(v.mat)}`], st: ge(R.h, mat + v.mat) ? 'pass' : 'fail', r: (mat + v.mat) / R.h, work: T`h - (h_{haunch} + c_b + d_{bars}) = ${f2(R.h)} - (${f2(R.dk.hh)} + ${f2(v.cov)} + ${f2(v.bars)}) = ${f2(R.h - mat)} \;${GE(R.h - mat, v.mat)}\; ${f2(v.mat)}\ \text{in}` });
++        out.add(c); } }
+     { const c = { id: 'SC6', grp: 'Detailing', title: 'Studs omitted over the top flange field splice plates', ref: 'Detailing; AASHTO LRFD 6.10.10.4 (strength with the studs omitted)', src: 'Code', sym: T`n_{prov} - n_{omitted} \ge n_{req}`, cols: ['Item', 'Omitted / from–to', 'Remaining n', 'Required n'], items: [],
+@@ -3775,2 +3792,6 @@
+       if (!c.items.length) c.naWhy = 'No negative-flexure location.'; out.add(c); }
++    { const rA = gdOwnR('a6');   // GS22 (OWN23, MassDOT 3.5.1.7): Appendix A6 should not be used
++      if (rA) { const c = { id: 'GS22', grp: P1, title: 'Appendix A6 not used (owner)', ref: gdOwnCite(rA), src: 'DOT', sym: T`\text{negative flexure by Article 6.10.8}`, cols: ['Location', 'Method', 'Owner'], items: [], note: `${gdOwnCite(rA)}: ${rA.text}. Negative flexure method: Materials and deck tab (the MassDOT default is Article 6.10.8 only).` };
++        R.rows.filter(r => !r.pos).forEach(r => c.items.push({ loc: L(r), cells: [r.useA6 ? 'Appendix A6' : 'Article 6.10.8', '6.10.8'], st: r.useA6 ? 'warn' : 'pass', work: T`\text{${r.useA6 ? 'Appendix A6 used: set the method to Article 6.10.8 only' : 'Article 6.10.8'}}` }));
++        if (!c.items.length) c.naWhy = 'No negative-flexure location.'; out.add(c); } }
+     // positive flexure
+@@ -4360,3 +4381,4 @@
+     rows.forEach(r => {
+-      const det = FA_DET.find(d => d[0] === r.det) || FA_DET[FA_DET.length - 1]; r.cat = det[1] || r.cat; r.detTxt = det[2]; const C = FA_CAT[r.cat]; r.A = C.A; r.th = C.th; r.nn = +r.n || 1;
++      const det = FA_DET.find(d => d[0] === r.det) || FA_DET[FA_DET.length - 1]; r.cat = det[1] || r.cat; r.detTxt = det[2];
++      { const rC = gdOwnR('fat.catC'); if (rC && r.det === 'Cp-stiff') { r.cat = 'C'; r.detTxt += ` (${gdOwnCite(rC)}: flanges designed for Category C)`; } } /* OWN25 (GD41) */ const C = FA_CAT[r.cat]; r.A = C.A; r.th = C.th; r.nn = +r.n || 1;
+       r.ADTTeq = C.A * (gI / (gII * C.th)) ** 3 / (365 * life * r.nn);
+@@ -4884,2 +4906,5 @@
+       out.add(c); }
++    { const rS = gdOwnR('sw.ext'), sw = nm(R.p.dl.swL) > 0 || nm(R.p.dl.swR) > 0;   // DF6 (OWN23): MassDOT 3.5.3.11 exterior sidewalk beam, not implemented
++      if (rS && sw) { const c = { id: 'DF6', grp: 'Applicability', title: 'Exterior beam under a sidewalk (owner cases)', ref: gdOwnCite(rS), src: 'DOT', sym: T`\text{Case I and Case II of the owner}`, cols: ['Item', 'Status'], items: [], note: `${gdOwnCite(rS)}: ${rS.text}. The exterior factors here are AASHTO's (lever rule, 4.6.2.2.2d, rigid cross-section); check the exterior sidewalk beam for both cases separately.` };
++        c.items.push({ loc: 'Case I and Case II', cells: ['not implemented'], st: 'warn', work: T`\text{not implemented in this tool: check separately}` }); out.add(c); } }
+     { const rU = gdOwner() === 'MassDOT' ? gdOwnRules('MassDOT', 'util.nc')[0] : null, dws = rU ? R.dead.per.filter(L => /^u\d/.test(L.id) && L.cat === 'DW' && L.plf > 0) : [];   // OWN16: MassDOT utilities act on the noncomposite section
+@@ -6580,3 +6605,3 @@
+   // stud height: the shortest standard length that passes the proportions, penetration, and cover
+-  if (!adLocked('sc.h')) { for (const h of [3, 4, 5, 6, 7, 8]) { C0.h = h; const r = adEval('sc'); if (r && adGood(r.C, ['SC5'])) break; } }
++  if (!adLocked('sc.h')) { for (const h of [3, 4, 5, 6, 7, 8]) { C0.h = h; const r = adEval('sc'); if (r && adGood(r.C, ['SC5', 'SC7'])) break; } }   // SC7 (OWN22): owner stud height
+   if (!adLocked('sc.st')) C0.st = uInc(4 * d, 0.5);
+@@ -6586,3 +6611,3 @@
+     for (let nr = adLocked(pre + 'nr') ? D(z.nr) : Math.min(nMax, 4); nr >= (adLocked(pre + 'nr') ? D(z.nr) : 2); nr--) { z.nr = nr;
+-      for (let p = adLocked(pre + 'p') ? D(z.p) : 24; p >= Math.ceil(4 * d); p--) { z.p = p; const r = adEval('sc'); if (!r) break;
++      for (let p = adLocked(pre + 'p') ? D(z.p) : 24; p >= Math.ceil((gdOwnR('stud') ? gdOwnR('stud').value.p : 4) * d); p--) { /* OWN22: owner minimum pitch */ z.p = p; const r = adEval('sc'); if (!r) break;
+         if (adGood(r.C, ['SC1', 'SC3', 'SC4'], mine)) { const dn = nr / p; if (!best || dn < best.dn * 0.98 || (dn <= best.dn * 1.02 && nr < best.nr)) best = { nr, p, dn }; break; } if (adLocked(pre + 'p')) break; } }
+@@ -8478,3 +8503,3 @@
+   const R0 = gdCompute(P); if (R0.errors.length) return { ok: false, msg: 'The splice has input errors; fix them before fitting.' };
+-  const bt = BOLT[P.bolts.d] || BOLT['0.875'], d = bt.d, em = bt.emin[P.bolts.edge === 'sh' ? 'sh' : 'cut'], q4 = v => Math.floor(v * 4 + 1e-6) / 4, u4 = v => Math.ceil(v * 4 - 1e-6) / 4, q2 = v => Math.floor(v * 2 + 1e-6) / 2;
++  const bt = BOLT[P.bolts.d] || BOLT['0.875'], d = bt.d, em = Math.max(bt.emin[P.bolts.edge === 'sh' ? 'sh' : 'cut'], (gdOwnR('spl.ovs') || { value: { edge: 0 } }).value.edge), /* OWN25: owner edge distance */ q4 = v => Math.floor(v * 4 + 1e-6) / 4, u4 = v => Math.ceil(v * 4 - 1e-6) / 4, q2 = v => Math.floor(v * 2 + 1e-6) / 2;
+   const cw = parseDim(P.clr.cw), cv = parseDim(P.clr.cv), before = JSON.stringify({ top: P.top, bot: P.bot, web: P.web });
+@@ -8512,3 +8537,3 @@
+   P._spUndo = JSON.parse(JSON.stringify({ top: P.top, bot: P.bot, web: P.web }));
+-  const bt = BOLT[P.bolts.d] || BOLT['0.875'], d = bt.d, em = bt.emin[P.bolts.edge === 'sh' ? 'sh' : 'cut'];
++  const bt = BOLT[P.bolts.d] || BOLT['0.875'], d = bt.d, em = Math.max(bt.emin[P.bolts.edge === 'sh' ? 'sh' : 'cut'], (gdOwnR('spl.ovs') || { value: { edge: 0 } }).value.edge);   // OWN25: owner edge distance
+   const q4 = v => Math.floor(v * 4 + 1e-6) / 4, u4 = v => Math.ceil(v * 4 - 1e-6) / 4, u16 = v => Math.ceil(v * 16 - 1e-6) / 16, q2 = v => Math.floor(v * 2 + 1e-6) / 2;
+@@ -8724,3 +8749,3 @@
+       where: 'Preliminary sizing: Suggest tab loads (DW of the analysis, sizing and checks); LLDF and DLs (weight from Preliminary sizing)', text: 'Future wearing surface 35 psf on new bridges, equally to all girders, DW factors (3.3.1); the asphalt wearing surface is two lifts of about 1½ in (9.4.7), weighed in addition (engineer decision GD39)' },
+-    { owner: 'RIDOT', id: 'dl.dist', dv: 1, kind: 'default', key: 'suggest.dlDist', value: '6040', gkey: 'df.dl.method', gvalue: 'ridot', lbl: 'Barrier and sidewalk dead load distribution', show: '60% to the fascia beams, 40% evenly to the interior beams', sec: '3.3.1',
++    { owner: 'RIDOT', id: 'dl.dist', dv: 1, kind: 'default', key: 'suggest.dlDist', value: '6040', gkey: 'df.dl.method', gvalue: 'ridot', lbl: 'Barrier and sidewalk dead load distribution', glbl: 'LLDF and DLs: dead load distribution method', show: '60% to the fascia beams, 40% evenly to the interior beams', sec: '3.3.1',
+       where: 'Preliminary sizing: Suggest tab loads (built-in barrier load); LLDF and DLs: distribution method "RIDOT BDM 3.3.1"', text: 'Unless a refined analysis is used: sidewalk, safety walk, barrier/railing loads 60% to the fascia beams and 40% evenly among all interior beams; a sidewalk over more than one beam, 60% evenly among the beams carrying it and 40% among the remaining interior beams; median barriers and other permanent appurtenances, 60% evenly among the beams carrying them and 40% among the remaining beams; wearing surface equally to all beams; SIP forms and utilities noncomposite, equally to the beams on either side' },
+@@ -8743,2 +8768,49 @@
+     { owner: 'CTDOT', id: 'cll.min', dv: 1, nm: 'G11 construction live load', kind: 'shall-check', value: 50, sec: 'V2 3.17CT', where: 'Preliminary sizing: check G11', text: 'Construction live load not less than 0.050 ksf' },
++    // phase 3a part 2 (OWN20–OWN27, dv 2): plates and flanges, steel grade and coating, studs, integral abutments, field splices, fatigue category, analysis method
++    { owner: 'RIDOT', id: 'def.minTw', dv: 2, kind: 'default', key: 'limits.minTw', value: 0.4375, lbl: 'Min. web thickness', show: '7/16 in', sec: '6.4.2', where: 'Preliminary sizing: Limits tab (W3; Suggest and Full design)', text: 'Minimum web plate thickness 7/16 in' },
++    { owner: 'RIDOT', id: 'def.minBf', dv: 2, kind: 'default', key: 'limits.minBf', value: 12, lbl: 'Min. flange width', show: '12 in', sec: '6.4.2', where: 'Preliminary sizing: Limits tab (F5; sizing)', text: 'Minimum flange width 12 in' },
++    { owner: 'RIDOT', id: 'def.minTf', dv: 2, kind: 'default', key: 'limits.minTf', value: 0.75, lbl: 'Min. flange thickness', show: '3/4 in', sec: '6.4.2', where: 'Preliminary sizing: Limits tab (F5; sizing)', text: 'Minimum flange thickness 3/4 in' },
++    { owner: 'RIDOT', id: 'def.cpB', dv: 2, kind: 'default', key: 'framing.cpB', value: 5, lbl: 'Connection plate width', show: '5 in', sec: '6.4.2', where: 'Preliminary sizing: Framing tab (D7)', text: 'Connection plates at least 1/2 in × 5 in' },
++    { owner: 'RIDOT', id: 'def.minPlate', dv: 2, kind: 'default', gkey: 'std.minPlate', gvalue: 0.4375, lbl: 'Minimum plate thickness (Owner standards: stiffener and plate auto-design)', show: '7/16 in', sec: '6.4.2', where: 'GirderDetail Owner standards (all modules)', text: 'Transverse and bearing stiffeners at least 7/16 in thick' },
++    { owner: 'RIDOT', id: 'def.intL', dv: 2, kind: 'default', key: 'limits.intL', value: 150, lbl: 'Integral abutments: max. length', show: '150 ft', sec: '11.3.2', where: 'Preliminary sizing: Limits tab (G10)', text: 'Integral abutments: steel superstructure length not more than 150 ft' },
++    { owner: 'RIDOT', id: 'def.intSkew', dv: 2, kind: 'default', key: 'limits.intSkew', value: 30, lbl: 'Integral abutments: max. skew', show: '30°', sec: '11.3.2', where: 'Preliminary sizing: Limits tab (G10)', text: 'Integral abutments: skew not more than 30°' },
++    { owner: 'RIDOT', id: 'plate.min', dv: 2, nm: 'W3, F5 minimum plates (fail)', kind: 'shall-check', value: { shall: true }, sec: '6.4.2', where: 'Preliminary sizing: W3, F5', text: 'Minimum plates: web 7/16 in; flanges 3/4 in thick and 12 in wide (uncoated weathering steel: plus the sacrificial thickness)' },
++    { owner: 'RIDOT', id: 'flange.l85c', dv: 2, nm: 'S4 compression flange L/85 (fail)', kind: 'shall-check', value: 85, sec: '6.4.2', where: 'Preliminary sizing: S4; Suggest and Full design flange widths', text: 'Compression flange width at least 1/85 of the length of the shipping piece' },
++    { owner: 'RIDOT', id: 'stiff.min', dv: 2, nm: 'D7 stiffener and connection plate minimums', kind: 'shall-check', value: { st: 0.4375, cpT: 0.5, cpB: 5, bs: 0.4375 }, sec: '6.4.2', where: 'Preliminary sizing: D7; GirderDetail Owner standards (auto-design)', text: 'Transverse and bearing stiffeners at least 7/16 in thick; connection plates at least 1/2 in × 5 in' },
++    { owner: 'RIDOT', id: 'ws.sac', dv: 2, nm: 'uncoated weathering steel: sacrificial thickness', kind: 'shall-check', value: { top: 0.0625, web: 0.0625, bot: 0.125, st: 0.0625 }, sec: '6.2.1, 6.4.2', where: "Preliminary sizing: Limits tab input 'Uncoated weathering steel'; W1, W3, F1, F3, F5, D7, sizing, Full design, and the section sent to every module", text: 'Uncoated weathering steel: sacrificial thickness 1/16 in on the top flange, web and stiffeners and 1/8 in on the bottom flange, above the minimum thicknesses; the design uses the reduced section' },
++    { owner: 'RIDOT', id: 'stud', dv: 2, nm: 'SC3, SC7 shear connectors', kind: 'shall-check', value: { d: 0.875, nr: 2, h: 5, mat: 1, p: 6, cov: 1.5, bars: 1.25 }, sec: '6.5.3', where: 'Shear connectors: SC3 (pitch at least 6d), SC7; auto-design', text: '7/8 in studs, at least two across the flange, height at least 5 in and at least 1 in above the top of the bottom reinforcement mat, spacing not less than six stud diameters' },
++    { owner: 'RIDOT', id: 'int.abut', dv: 2, nm: 'G10 integral abutments', kind: 'shall-check', value: { d: 72 }, sec: '11.3.2', where: 'Preliminary sizing: G10', text: 'Integral abutments: steel superstructure length not more than 150 ft, skew not more than 30°, girder depth not more than 6 ft' },
++    { owner: 'CTDOT', id: 'def.minTw', dv: 2, kind: 'default', key: 'limits.minTw', value: 0.375, lbl: 'Min. web thickness', show: '3/8 in', sec: 'V2 6.10.2.1', where: 'Preliminary sizing: Limits tab (W3; sizing)', text: 'Minimum web plate thickness 3/8 in' },
++    { owner: 'CTDOT', id: 'def.incD', dv: 2, kind: 'default', key: 'limits.incD', value: 2, lbl: 'Web depth increment', show: '2 in', sec: 'V2 6.10.2.1', where: 'Preliminary sizing: Limits tab (W4; Suggest depth search)', text: 'Web plate depths in 2 in increments' },
++    { owner: 'CTDOT', id: 'def.minTf', dv: 2, kind: 'default', key: 'limits.minTf', value: 0.75, lbl: 'Min. flange thickness', show: '3/4 in', sec: 'V2 6.10.2.2', where: 'Preliminary sizing: Limits tab (F5; sizing)', text: 'Minimum flange thickness 3/4 in' },
++    { owner: 'CTDOT', id: 'def.minBf', dv: 2, kind: 'default', key: 'limits.minBf', value: 12, lbl: 'Min. flange width', show: '12 in (and L/85 of the field piece)', sec: 'V2 6.10.2.2', where: 'Preliminary sizing: Limits tab (F5; sizing)', text: 'Minimum flange width the greater of 12 in and the field piece length / 85' },
++    { owner: 'CTDOT', id: 'def.incBf', dv: 2, kind: 'default', key: 'limits.incBf', value: 2, lbl: 'Flange width increment', show: '2 in', sec: 'V2 6.10.2.2', where: 'Preliminary sizing: Limits tab (F6; sizing)', text: 'Flange plate widths in 2 in increments' },
++    { owner: 'CTDOT', id: 'def.thk', dv: 2, kind: 'default', key: 'limits.thkRatio', value: 2, lbl: 'Max. thickness ratio', show: '2.0', sec: 'V2 6.10.2.2', where: 'Preliminary sizing: Limits tab (T2; sizing)', text: 'At a flange thickness transition the thinner plate at least 1/2 of the thicker' },
++    { owner: 'CTDOT', id: 'def.minPlate', dv: 2, kind: 'default', gkey: 'std.minPlate', gvalue: 0.5, lbl: 'Minimum plate thickness (Owner standards: splice plates and stiffeners)', show: '1/2 in', sec: 'V2 6.13.6.1, 6.10.11.1.1', where: 'GirderDetail Owner standards (all modules: splice and stiffener auto-design)', text: 'Splice plates at least 1/2 in; transverse stiffeners at least 1/2 in' },
++    { owner: 'CTDOT', id: 'def.intL', dv: 2, kind: 'default', key: 'limits.intL', value: 150, lbl: 'Integral abutments: max. length', show: '150 ft', sec: 'V2 App. CT11.1.1.1', where: 'Preliminary sizing: Limits tab (G10)', text: 'Integral abutments: total length not more than 150 ft for steel' },
++    { owner: 'CTDOT', id: 'def.intSkew', dv: 2, kind: 'default', key: 'limits.intSkew', value: 30, lbl: 'Integral abutments: max. skew', show: '30° (less than)', sec: 'V2 App. CT11.1.1.1', where: 'Preliminary sizing: Limits tab (G10)', text: 'Integral abutments: skew less than 30°' },
++    { owner: 'CTDOT', id: 'plate.min', dv: 2, nm: 'W3, F5 minimum plates (fail; b ≥ L/85)', kind: 'shall-check', value: { shall: true, bL85: true }, sec: 'V2 6.10.2.1, 6.10.2.2', where: 'Preliminary sizing: W3, F5', text: 'Web at least 3/8 in; flanges at least 3/4 in thick and as wide as the greater of 12 in and the unsupported field piece length / 85' },
++    { owner: 'CTDOT', id: 'plate.incD', dv: 2, nm: 'W4 web depth increment (fail)', kind: 'shall-check', value: 2, sec: 'V2 6.10.2.1', where: 'Preliminary sizing: W4', text: 'Web plate depths specified in 2 in increments' },
++    { owner: 'CTDOT', id: 'plate.incBf', dv: 2, nm: 'F6 flange width increment (fail)', kind: 'shall-check', value: 2, sec: 'V2 6.10.2.2', where: 'Preliminary sizing: F6', text: 'Flange plate widths specified in 2 in increments' },
++    { owner: 'CTDOT', id: 'flange.l85', dv: 2, nm: 'S4 L/85 (fail)', kind: 'shall-check', value: 85, sec: 'V2 6.10.2.2', where: 'Preliminary sizing: S4, F5', text: 'Flange width at least the unsupported field piece length / 85' },
++    { owner: 'CTDOT', id: 'flange.wconst', dv: 2, nm: 'T1 width constant in a shipping piece (fail)', kind: 'shall-check', value: 0, sec: 'V2 6.10.2.2', where: 'Preliminary sizing: T1', text: 'Flange width transitions not located within a shipping unit (width transitions generally avoided)' },
++    { owner: 'CTDOT', id: 'flange.tratio', dv: 2, nm: 'T2 thickness ratio (fail)', kind: 'shall-check', value: 2, sec: 'V2 6.10.2.2', where: 'Preliminary sizing: T2', text: 'Thinner plate at a flange thickness transition not less than 1/2 of the thicker' },
++    { owner: 'CTDOT', id: 'hybrid', dv: 2, nm: 'W5 hybrid girder (warning)', kind: 'should-warning', value: 0, sec: 'V2 6.10.1.3', where: 'Preliminary sizing: W5', text: 'Hybrid I-girders should be avoided (CTDOT approval required)' },
++    { owner: 'CTDOT', id: 'spl.ovs', dv: 2, nm: 'field splice: oversized-hole slip, plates, edge, gap', kind: 'shall-check', value: { Kh: 0.85, tp: 0.5, edge: 2, gap: 1 }, sec: 'V2 6.13.6.1', where: 'Field splice: slip checks (K_h = 0.85), DT3, DT5, DT7; splice auto-design', text: 'Standard holes specified, but bolted splices designed as if oversized holes were used (K_h = 0.85); splice plates at least 1/2 in, edge distance at least 2 in, gap between members not more than 1 in' },
++    { owner: 'CTDOT', id: 'fat.catC', dv: 2, nm: 'Category C at flange connection plates', kind: 'shall-check', value: { th: 10 }, sec: 'V2 6.6.1.2.6CT', where: 'Preliminary sizing: Full design flange fatigue; Fatigue: connection plate details (Cp-stiff); Transverse stiffeners: CP2', text: 'Flanges designed for Category C to allow welding the diaphragm connection plates to the flanges (literal Category C, (ΔF)_TH = 10 ksi; engineer decision GD41)' },
++    { owner: 'CTDOT', id: 'int.abut', dv: 2, nm: 'G10 integral abutments', kind: 'shall-check', value: { Lsp: 150, strict: true }, sec: 'V2 App. CT11.1.1.1', where: 'Preliminary sizing: G10', text: 'Fully integral abutments only if the skew is less than 30°, the total length not more than 150 ft for steel and no span more than 150 ft' },
++    { owner: 'CTDOT', id: 'refined', dv: 2, nm: 'G13 refined analysis required', kind: 'should-warning', value: { sk: 30 }, sec: 'V2 4.4, 4.6.2.2.1', where: 'Preliminary sizing: G13 (warnings)', text: 'Bridges with a support skewed more than 30° or curved girders analyzed by refined methods; the distribution factor equations not used unless the girders are parallel, of one section and uniformly spaced' },
++    { owner: 'MassDOT', id: 'def.gF', dv: 2, kind: 'default', key: 'girder.gF', value: '50', lbl: 'Flange grade', show: 'Gr. 50 (coated)', sec: '3.6.1.1', where: 'Preliminary sizing: Girder tab (every module through the bridge)', text: 'Coated AASHTO M 270 Grade 50 is the first choice' },
++    { owner: 'MassDOT', id: 'def.gW', dv: 2, kind: 'default', key: 'girder.gW', value: '50', lbl: 'Web grade', show: 'Gr. 50 (coated)', sec: '3.6.1.1', where: 'Preliminary sizing: Girder tab', text: 'Coated AASHTO M 270 Grade 50 is the first choice' },
++    { owner: 'MassDOT', id: 'steel.ws50', dv: 2, nm: 'G12 uncoated 50W only over railroads (warning)', kind: 'should-warning', value: 0, sec: '3.6.1.1, 3.6.1.2', where: 'Preliminary sizing: G12; Limits tab input "Bridge over railroads alone"', text: 'Uncoated weathering steel (Grade 50W) limited to bridges over railroads alone with no adjacent roadways or bodies of water' },
++    { owner: 'MassDOT', id: 'flange.l85', dv: 2, nm: 'S4 L/85 where practical', kind: 'should-warning', value: 85, sec: '3.6.3.4', where: 'Preliminary sizing: S4 (warning)', text: 'Shipping length / flange width limited to 85 where practical' },
++    { owner: 'MassDOT', id: 'flange.wconst', dv: 2, nm: 'T1 width transitions at field splices (fail)', kind: 'shall-check', value: 0, sec: '3.6.3.5', where: 'Preliminary sizing: T1', text: 'Flange width transitions shall occur at the field splices' },
++    { owner: 'MassDOT', id: 'flange.tratio', dv: 2, nm: 'T2 thinner ≥ 1/2 thicker (fail)', kind: 'shall-check', value: 2, sec: '3.6.5.6', where: 'Preliminary sizing: T2', text: 'At a butt-spliced flange the thinner segment not less than 1/2 of the adjoining' },
++    { owner: 'MassDOT', id: 'flange.sizes', dv: 2, nm: 'T5 no more than 3 sizes between bolted splices (fail)', kind: 'shall-check', value: 3, sec: '3.6.5.6', where: 'Preliminary sizing: T5', text: 'Flange thickness changes kept to a minimum, in no instance more than 3 sizes between bolted splices' },
++    { owner: 'MassDOT', id: 'def.intL', dv: 2, kind: 'default', key: 'limits.intL', value: 140, lbl: 'Integral abutments: max. length', show: '140 ft (simplified method)', sec: '3.10.11.1', where: 'Preliminary sizing: Limits tab (G10)', text: 'Integral abutment simplified method: total length not more than 140 ft for steel' },
++    { owner: 'MassDOT', id: 'def.intSkew', dv: 2, kind: 'default', key: 'limits.intSkew', value: 30, lbl: 'Integral abutments: max. skew', show: '30°', sec: '3.10.11.1', where: 'Preliminary sizing: Limits tab (G10)', text: 'Integral abutment simplified method: skew not more than 30°' },
++    { owner: 'MassDOT', id: 'int.abut', dv: 2, nm: 'G10 integral abutments (warning: 3D analysis beyond)', kind: 'should-warning', value: { ss: true }, sec: '3.10.11.1, 3.10.7', where: 'Preliminary sizing: G10 (warnings)', text: 'Simplified method for integral abutments only up to 140 ft (steel) and 30° skew; beyond, a 3D space frame analysis is required; the beams are designed as simply supported (frame action not used to reduce design moments)' },
++    { owner: 'MassDOT', id: 'def.negM', dv: 2, kind: 'default', gkey: 'gs.negM', gvalue: '6108', lbl: 'Girder section: negative flexure method', show: 'Article 6.10.8 only', sec: '3.5.1.7', where: 'Girder section: Materials and deck tab (GS7–GS9)', text: 'Appendix A6 (flexural resistance of composite sections in negative flexure) should not be used' },
++    { owner: 'MassDOT', id: 'a6', dv: 2, nm: 'GS22 Appendix A6 not used (warning)', kind: 'should-warning', value: 0, sec: '3.5.1.7', where: 'Girder section: GS22', text: 'Appendix A6 should not be used for MassDOT projects (Appendix B6 moment redistribution may be)' },
++    { owner: 'MassDOT', id: 'sw.ext', dv: 2, nm: 'DF6 exterior sidewalk beam cases (not implemented: warning)', kind: 'should-warning', value: 0, sec: '3.5.3.11', where: 'LLDF and DLs: DF6 (warning when a sidewalk is entered)', text: 'Exterior beam under a sidewalk: Case I (HL-93 2 ft from the sidewalk curb, lever rule or pile cap with the multiple presence factor, not the 4.6.2.2.2d equation) and Case II (Strength II, the truck of one HL-93 without IM 2 ft from the barrier as if no sidewalk, pile cap, m = 1.20, no pedestrian load); not implemented in this tool' },
+     { owner: 'CTDOT', id: 'deck.oh', dv: 1, nm: 'G6 deck overhang', kind: 'should-warning', value: { max: 4 }, sec: 'V2 9.7.1.5', where: 'Preliminary sizing: check G6 (warning)', text: 'Deck overhang (centerline of the fascia member to the deck edge) should be limited to 4 ft or the depth of the member, whichever is less; over 4 ft needs special forming requirements in the contract documents' }
+@@ -8752,12 +8824,16 @@
+ const gdGetK = (o, k) => k.split('.').reduce((a, q) => a == null ? a : a[q], o);
+-function gdOwnDefApply(o1) { const g0 = P.ownDefG, o0 = g0 && g0.o ? g0.o : 'AASHTO'; if (!o1 || o0 === o1 && g0) return null; if (o1 === 'AASHTO' && !g0) return null;
+-  const rows = o => o && o !== 'AASHTO' ? OWN_RULES.rules.filter(r => r.owner === o && r.gkey && r.gvalue != null) : [];
+-  const gen = k => { const [m, ...rest] = k.split('.'); return GM[m] ? gdGetK(GM[m].def, rest.join('.')) : undefined; }, base = (o, k) => { const r = rows(o).find(q => q.gkey === k); return r ? r.gvalue : gen(k); };
++const GD_DEF_V = 2;   // version of GirderDetail's own owner defaults (rows with gkey; rule field dv): 1 phase 3a part 1, 2 part 2 (Owner standards minimum plate, negative flexure method)
++function gdOwnDefApply(o1) { const g0 = P.ownDefG, gv = g0 ? +g0.v || 1 : 0, same = !!(g0 && g0.o === o1); if (!o1 || same && gv >= GD_DEF_V) return null; if (o1 === 'AASHTO' && !g0) return null;
++  /* the same owner, saved with an older version: only the rows added since, from the generic defaults (as Preliminary sizing's migrateOwnDef) */
++  const o0 = same ? 'AASHTO' : g0 && g0.o ? g0.o : 'AASHTO', since = same ? gv : 0;
++  const rows = o => o && o !== 'AASHTO' ? OWN_RULES.rules.filter(r => r.owner === o && r.gkey && r.gvalue != null && (r.dv || 1) > since) : [];
++  if (rows(o1).some(r => /^std\./.test(r.gkey)) || rows(o0).some(r => /^std\./.test(r.gkey))) std();   // Owner standards (P.std) present before they are read
++  const gen = k => { const [m, ...rest] = k.split('.'); return m === 'std' ? STD_DEF[rest.join('.')] : GM[m] ? gdGetK(GM[m].def, rest.join('.')) : undefined; }, base = (o, k) => { const r = rows(o).find(q => q.gkey === k); return r ? r.gvalue : gen(k); };
+   const ch = [], kept = [];
+-  [...new Set([...rows(o0), ...rows(o1)].map(r => r.gkey))].forEach(k => { const v = gdGetK(P, k), b0 = base(o0, k), b1 = base(o1, k), r1 = rows(o1).find(q => q.gkey === k), lbl = ([...rows(o0), ...rows(o1)].find(q => q.gkey === k) || {}).lbl || k;
++  [...new Set([...rows(o0), ...rows(o1)].map(r => r.gkey))].forEach(k => { const v = gdGetK(P, k), b0 = base(o0, k), b1 = base(o1, k), r1 = rows(o1).find(q => q.gkey === k), lbl = (q0 => q0.glbl || q0.lbl || k)([...rows(o0), ...rows(o1)].find(q => q.gkey === k) || {});
+     if (v === b1) return; const ks = k.split('.'), last = ks.pop(), host = gdGetK(P, ks.join('.')); if (!host || typeof host !== 'object') return;
+-    if (v === undefined || v === b0) { host[last] = b1; ch.push(`${lbl} (LLDF and DLs): ${gdDfMeth(v)} → ${gdDfMeth(b1)}${r1 ? ` (${gdOwnCite(r1)})` : ''}`); }
+-    else if (r1) kept.push(`${lbl} (LLDF and DLs): your choice ${gdDfMeth(v)} kept (${o1} default: ${gdDfMeth(b1)}, ${gdOwnCite(r1)})`); });
+-  P.ownDefG = { v: 1, o: o1 }; return { ch, kept }; }
+-const gdDfMeth = v => ({ massdot: 'MassDOT 3.5.3', aashto: 'Typical AASHTO (equal)', ridot: 'RIDOT BDM 3.3.1 (60/40)' })[v] || String(v);
++    if (v === undefined || v === b0) { host[last] = b1; ch.push(`${lbl}: ${gdDfMeth(v)} → ${gdDfMeth(b1)}${r1 ? ` (${gdOwnCite(r1)})` : ''}`); }
++    else if (r1) kept.push(`${lbl}: your choice ${gdDfMeth(v)} kept (${o1} default: ${gdDfMeth(b1)}, ${gdOwnCite(r1)})`); });
++  P.ownDefG = { v: GD_DEF_V, o: o1 }; return { ch, kept }; }
++const gdDfMeth = v => ({ massdot: 'MassDOT 3.5.3', aashto: 'Typical AASHTO (equal)', ridot: 'RIDOT BDM 3.3.1 (60/40)', auto: 'Appendix A6 where permitted', '6108': 'Article 6.10.8 only' })[v] || (typeof v === 'number' ? frac(v) + ' in' : String(v));
+ // the one-time notice of phase 3a (bridge.ownDef first arriving on an older project): the Preliminary sizing inputs moved and kept, GirderDetail's own, and the owner's new checks
+@@ -8770,2 +8846,3 @@
+ const gdOwnCite = r => `${(OWN_RULES.owners[r.owner] || {}).short || r.owner} ${r.sec}`;
++const gdOwnR = id => { const o = gdOwner(); return o && o !== 'AASHTO' ? OWN_RULES.rules.find(r => r.owner === o && r.id === id) || null : null; };   // the owner's rule with this id (phase 3a part 2)
+ /* owner load rules (OWN6–OWN8, phase 2): the factors Preliminary sizing publishes with the bridge (bridge.lf, from plLF there). gdLF(): { o, m, eD, eR, eI, eta, etaN, h0 };
+@@ -8803,2 +8880,3 @@
+   if (b.ut && !['sc', 'fa'].includes(id)) out.push(`<p class="note-p">Utilities on the noncomposite section (${b.owner === 'MassDOT' ? 'MassDOT 3.5.5.2, 3.5.5.4' : 'LLDF and DLs'}): the demands from Preliminary sizing or Structural analysis include them in DC1, as 1.20 × the existing utilities (DW load factor 1.50 = 1.20 × γ<sub>DC</sub> 1.25) and 1.00 × the future utility allowance (γ 1.25 max); per girder: ${Object.entries(b.ut).map(([g, q]) => `${g === 'ext' ? 'exterior' : 'interior'} ${f3(q.ex)} klf existing, ${f3(q.fu)} klf future`).join('; ')}. Exact at Strength I where they add; at Service 1.20 × the existing utilities (conservative); where they relieve, γ<sub>DC,min</sub> = 0.90 applies to them (the owner: 0.65, and 0 for the future allowance; ENGINEER_CHECKS).</p>`);
++  if (b.wsNet && ['gs', 'splice', 'bstf', 'ts', 'wt', 'fa'].includes(id)) out.push(`<p class="note-p">Uncoated weathering steel (${esc(gdOwnCite(gdOwnRules(b.owner, 'ws.sac')[0] || { owner: b.owner, sec: '' }))}): the plates received from Preliminary sizing are the design (net) section, less the sacrificial thickness (top flange and web ${frac(b.wsNet.t)} in, bottom flange ${frac(b.wsNet.b)} in). Plates entered here by hand are used as entered: enter the net thicknesses.</p>`);
+   return out.length ? card('cb-own3', 'Owner deck and dead load rules', esc(b.owner || ''), out.join('')) : ''; }
+@@ -8828,3 +8906,3 @@
+   const rows = OWN_LIST.filter(o => !OWN_RULES.owners[o].none).map(o => { const rs = gdOwnRules(o); return rs.map((r, i) => `<tr class="${o === cur ? 'own-cur' : ''}">${i === 0 ? `<td rowspan="${rs.length}"><b>${o}</b><br><span style="color:var(--muted)">${esc(OWN_RULES.owners[o].manual)}; AASHTO LRFD ${OWN_RULES.owners[o].aashto}</span></td>` : ''}<td>${esc(r.sec)}</td><td>${esc(r.text)}${r.kind === 'default' && r.show ? `<br><i>Default: ${esc(r.show)}</i>` : ''}</td><td>${K[r.kind] || esc(r.kind)}</td><td>${r.kind === 'pending-reference' ? `Not applied: needs ${esc(r.ref)}` : esc(r.where || '')}</td></tr>`).join(''); }).join('');
+-  $('#own-body').innerHTML = `<p>Bridge owner: <b>${cur || 'not known yet (open Preliminary sizing)'}</b>${cur === 'AASHTO' ? ' (no owner rules)' : ''}. ${esc(OWN_RULES.note)} Set the owner in the top bar or on Preliminary sizing's Limits tab; it is saved with the Preliminary sizing project. Owner rules in this version: the cross-frame layout (phase 1); the load rules (design load multiplier, load modifiers η, haunch in composite properties) and design rating targets (phase 2), with the η inputs on Preliminary sizing's Limits tab; the high-priority owner defaults and checks for dead loads, deck, live load deflection and span-to-depth (phase 3a). An owner default sets an input only while it is untouched; a value you entered is kept and flagged ("Overrides …" on Preliminary sizing's Limits tab). The remaining defaults and detailing checks follow.</p>
++  $('#own-body').innerHTML = `<p>Bridge owner: <b>${cur || 'not known yet (open Preliminary sizing)'}</b>${cur === 'AASHTO' ? ' (no owner rules)' : ''}. ${esc(OWN_RULES.note)} Set the owner in the top bar or on Preliminary sizing's Limits tab; it is saved with the Preliminary sizing project. Owner rules in this version: the cross-frame layout (phase 1); the load rules (design load multiplier, load modifiers η, haunch in composite properties) and design rating targets (phase 2), with the η inputs on Preliminary sizing's Limits tab; the high-priority owner defaults and checks for dead loads, deck, live load deflection and span-to-depth (phase 3a part 1) and for plates and flanges, steel grade and coating, shear connectors, integral abutments, field splices, the fatigue category at connection plates and the analysis method (phase 3a part 2). An owner default sets an input only while it is untouched; a value you entered is kept and flagged ("Overrides …" on Preliminary sizing's Limits tab). The remaining defaults and detailing checks follow.</p>
+     <table><thead><tr><th>Owner</th><th>Section</th><th>Rule (paraphrased)</th><th>Kind</th><th>Applied in</th></tr></thead><tbody>${rows}</tbody></table>`;
+```
+
+Diff of the embedded Preliminary sizing page (main → branch, decoded):
+
+```diff
+--- main (Preliminary sizing, decoded PL_B64)
++++ branch (Preliminary sizing, decoded PL_B64)
+@@ -1041,3 +1041,3 @@
+    ownDef is not written, so the project is migrated when GirderDetail next opens it. AASHTO has no default rows: nothing moves. */
+-const OWN_DEF_V = 1;
++const OWN_DEF_V = 2;   // 1: phase 3a part 1 (dead loads, deck, deflection, span-to-depth); 2: part 2 (plates, steel, studs, integral abutments, splices, fatigue)
+ const ownDefs = o => OWN_TBL && o !== 'AASHTO' ? OWN_TBL.rules.filter(r => r.owner === o && r.kind === 'default' && r.key && r.value != null && typeof r.value !== 'object') : [];
+@@ -1087,2 +1087,5 @@
+ const lfId = L => !L || (L.m === 1 && L.eta === 1 && L.etaN === 1 && !L.h0);
++/* OWN26 (RIDOT BDM 6.2.1, 6.4.2): uncoated weathering steel (girder.wsU 'yes' under RIDOT): sacrificial thickness added above the minimums and removed from the
++   design section: 1/16 in from the top flange, web and stiffeners, 1/8 in from the bottom flange. Returns { t, w, b, s } (in) or null */
++function plWS(Pp) { const r = ownRule(plOwner(Pp), 'ws.sac'); return r && Pp && Pp.girder && Pp.girder.wsU === 'yes' ? { t: r.value.top, w: r.value.web, b: r.value.bot, s: r.value.st, r } : null; }
+ /* OWN19: sidewalk or pedestrians on the bridge, for the owners' live load deflection limits (RIDOT BDM 2.4.2.6, MassDOT 3.5.6.1): limits.sidewalk 'yes' / 'no', or
+@@ -1122,3 +1125,3 @@
+   bridge: { spans: [110, 140, 110], cont: 'continuous', skews: [15, 15, 15, 15], curved: false, eta: { I: 'no', R: 'auto', D: 'no', eD: 1, eR: 1, eI: 1 },   // eta: owner load-modifier inputs (OWN7, optional; plLF); I default 'no' (GD46, 2026-10-15; was 'yes')
+-            abut: 'conventional', nb: 5, S: 9.5, spacing: 'equal', bays: '9.5, 9.5, 9.5, 9.5', ohL: 3.25, ohR: 3.25, barrier: 1.5, ts: 8, haunch: 2, fc: 4, wc: 0.150, tsac: 0, wcE: '',   // OWN17: sacrificial deck thickness (dead load only) and w_c for E_c (blank = w_c)
++            abut: 'conventional', nb: 5, S: 9.5, spacing: 'equal', bays: '9.5, 9.5, 9.5, 9.5', ohL: 3.25, ohR: 3.25, barrier: 1.5, ts: 8, haunch: 2, fc: 4, wc: 0.150, tsac: 0, wcE: '', overRR: 'no',   // OWN17: sacrificial deck thickness (dead load only) and w_c for E_c (blank = w_c)
+             edge: { mode: 'barrier', cwL: 12, chL: 10, rpL: 0.5, rwL: 0.05, fL: 1.0, cwR: 12, chR: 10, rpR: 0.5, rwR: 0.05, fR: 1.0 } },
+@@ -1126,3 +1129,3 @@
+   girder: {
+-    D: 60, gF: '50W', gW: '50W',
++    D: 60, gF: '50W', gW: '50W', wsU: 'no',   // wsU (OWN26): uncoated weathering steel with sacrificial thickness (RIDOT BDM 6.2.1)
+     web: [{ L: 360, t: 0.5625 }],
+@@ -1331,2 +1334,4 @@
+   const L = m.P.limits, out = [], ownR = id => ownRule(plOwner(m.P), id);
++  const WS = plWS(m.P), aW = WS ? WS.w : 0, aT = WS ? WS.t : 0, aB = WS ? WS.b : 0, aF = fl => fl === 'Top' ? aT : aB, wsTxt = WS ? ` Uncoated weathering steel (${ownCite(WS.r)}): the design section is the plate less its sacrificial thickness (top flange and web ${frac(aT)} in, bottom flange ${frac(aB)} in); minimum sizes include it.` : '';   // OWN26
++  const rPm = ownR('plate.min'), rIncD = ownR('plate.incD'), rIncB = ownR('plate.incBf'), rL85 = ownR('flange.l85'), rL85c = ownR('flange.l85c'), rWc = ownR('flange.wconst'), rTr = ownR('flange.tratio'), rSz = ownR('flange.sizes'), rHy = ownR('hybrid');   // OWN20–OWN22
+   const secsInSpan = i => m.secs.filter(s => s.x0 < m.sup[i + 1] - 1e-9 && s.x1 > m.sup[i] + 1e-9);
+@@ -1476,2 +1481,20 @@
+   }
++  {   // OWN23 (MassDOT 3.6.1.1): coated Grade 50 is the first choice; uncoated 50W only over railroads alone. OWN26 (RIDOT BDM 6.2.1): uncoated weathering steel sacrificial thickness
++    const rG = ownR('steel.ws50'), rW = WS ? WS.r : null;
++    if (rG || rW) { const c = { id: 'G12', grp: 'Global layout', title: 'Owner steel grade and coating', ref: [rG, rW].filter(Boolean).map(ownCite).join('; '), src: 'DOT', sym: T`\text{steel grade and coating per the owner}`, cols: ['Item', 'Value', 'Owner'], items: [],
++        note: [rG, rW].filter(Boolean).map(r => `${ownCite(r)}: ${esc(r.text)}`).join('. ') + '.' };
++      if (rG) { const ws = [m.gF, m.gW].some(g => /W$/.test(g)), rr = m.P.bridge.overRR === 'yes';
++        c.items.push({ loc: 'Girder steel', cells: [`flanges ${m.gF}, web ${m.gW}`, ws ? (rr ? 'uncoated 50W: bridge over railroads only (entered)' : 'coated Grade 50 preferred') : 'coated Grade 50'], st: ws && !rr ? 'warn' : 'pass',
++          work: T`\text{${ws ? (rr ? 'Weathering grade; the bridge is over railroads alone (Limits tab): permitted' : 'Weathering grade: MassDOT limits uncoated 50W to bridges over railroads alone; coated Grade 50 is the first choice') : 'Grade 50 (to be coated)'}}` }); }
++      if (rW) c.items.push({ loc: 'Uncoated weathering steel', cells: [`sacrificial ${frac(aT)} / ${frac(aW)} / ${frac(aB)} in`, 'top / web / bottom'], st: 'pass', work: T`\text{design section = plates less the sacrificial thickness (W1, F1, F3, Full design, the modules); minimum sizes include it (W3, F5, D7)}` });
++      add(c); }
++    const rRf = ownR('refined');   // OWN25 (CTDOT BRSDM V2 4.4, 4.6.2.2.1): approximate (line-girder) analysis and the LLDF equations not permitted
++    if (rRf) { const v = rRf.value, skM = Math.max(...m.skews.map(x => Math.abs(x))), c = { id: 'G13', grp: 'Global layout', title: 'Owner: approximate analysis permitted', ref: ownCite(rRf), src: 'DOT', sym: T`\theta_{max} \le ${v.sk}^\circ,\ \text{straight},\ \text{parallel equal girders, uniform spacing}`, cols: ['Item', 'Value', 'Limit'], items: [],
++        note: `${ownCite(rRf)}: ${esc(rRf.text)}. This tool's analysis is a line-girder analysis with the AASHTO distribution factors; where an item warns, use it for preliminary sizing only and design from a refined analysis.` };
++      c.items.push({ loc: 'Largest support skew', cells: [`${f2(skM)}°`, `≤ ${v.sk}°`], r: skM / v.sk, st: skM <= v.sk + 1e-9 ? 'pass' : 'warn', work: T`\theta_{max} = ${f2(skM)}^\circ \;${skM <= v.sk + 1e-9 ? '\\le' : '>'}\; ${v.sk}^\circ${skM > v.sk + 1e-9 ? T`\ \Rightarrow\ \text{refined analysis required}` : ''}` });
++      c.items.push({ loc: 'Horizontal curvature', cells: [m.curved ? 'curved' : 'straight', 'straight'], st: m.curved ? 'warn' : 'pass', work: T`\text{${m.curved ? 'curved girders: refined analysis required' : 'straight girders'}}` });
++      const uni = !m.variable || Math.max(...m.bays) - Math.min(...m.bays) < 1e-6;
++      c.items.push({ loc: 'Girder spacing', cells: [uni ? 'uniform' : `${f2(Math.min(...m.bays))} to ${f2(Math.max(...m.bays))} ft`, 'uniform'], st: uni ? 'pass' : 'warn', work: T`\text{${uni ? 'parallel girders, uniform spacing, one section: distribution factor equations permitted' : 'spacing not uniform: the distribution factor equations shall not be used'}}` });
++      add(c); }
++  }
+   {
+@@ -1544,6 +1567,6 @@
+       sym: T`\frac{D}{t_w} \le 150`, cols: ['Section', 'D (in)', 't_w (in)', 'D/t_w', 'Ratio'], items: [],
+-      note: 'Webs exceeding D/t_w = 150 require longitudinal stiffeners (6.10.2.1.2, limit 300). Longitudinally stiffened webs are outside the scope of this tool.' };
+-    c.items = secItems(s => { const v = m.D / s.tw; return { cells: [f2(m.D), frac(s.tw), f2(v), f2(v / 150)], r: v / 150, st: v <= 150 + 1e-9 ? 'pass' : 'fail',
+-      work: T`\frac{D}{t_w} = \frac{${f2(m.D)}}{${f3(s.tw)}} = ${f2(v)} \;${v <= 150 + 1e-9 ? '\\le' : '>'}\; 150`,
+-      where: [['D', 'Web depth', f2(m.D), 'in'], ['t<sub>w</sub>', 'Web thickness', f3(s.tw), 'in']] }; });
++      note: 'Webs exceeding D/t_w = 150 require longitudinal stiffeners (6.10.2.1.2, limit 300). Longitudinally stiffened webs are outside the scope of this tool.' + wsTxt };
++    c.items = secItems(s => { const twd = s.tw - aW, v = m.D / twd; return { cells: [f2(m.D), frac(twd), f2(v), f2(v / 150)], r: v / 150, st: v <= 150 + 1e-9 ? 'pass' : 'fail',
++      work: T`\frac{D}{t_w} = \frac{${f2(m.D)}}{${f3(twd)}} = ${f2(v)} \;${v <= 150 + 1e-9 ? '\\le' : '>'}\; 150`,
++      where: [['D', 'Web depth', f2(m.D), 'in'], ['t<sub>w</sub>', WS ? `Web thickness less ${frac(aW)} in sacrificial` : 'Web thickness', f3(twd), 'in']] }; });
+     add(c);
+@@ -1559,7 +1582,8 @@
+   {
+-    const c = { id: 'W3', grp: 'Web', title: 'Owner / practical minimum web thickness', ref: `DOT limit (${L.dot === 'AASHTO' ? 'AASHTO profile: user limit' : L.dot}); AASHTO/NSBA G12.1`, src: 'DOT',
+-      sym: T`t_w \ge t_{w,min} = ${f3(L.minTw)}\ \text{in}`, cols: ['Section', 't_w (in)', 'Min (in)'], items: [],
+-      note: 'The minimum is set on the Limits tab. Verify it against the governing Bridge Design Manual.' };
+-    c.items = secItems(s => ({ cells: [frac(s.tw), frac(L.minTw)], r: L.minTw / s.tw, st: s.tw >= L.minTw - 1e-9 ? 'pass' : 'fail',
+-      work: T`t_w = ${f3(s.tw)}\ \text{in} \;${s.tw >= L.minTw - 1e-9 ? '\\ge' : '<'}\; ${f3(L.minTw)}\ \text{in}` }));
++    const tm = L.minTw + aW;   // OWN26: the sacrificial thickness above the minimum
++    const c = { id: 'W3', grp: 'Web', title: 'Owner / practical minimum web thickness', ref: rPm ? `${ownCite(rPm)}; AASHTO/NSBA G12.1` : `DOT limit (${L.dot === 'AASHTO' ? 'AASHTO profile: user limit' : L.dot}); AASHTO/NSBA G12.1`, src: 'DOT',
++      sym: T`t_w \ge t_{w,min} = ${f3(tm)}\ \text{in}`, cols: ['Section', 't_w (in)', 'Min (in)'], items: [],
++      note: (rPm ? `${ownCite(rPm)}: ${esc(rPm.text)}. ` : '') + 'The minimum is set on the Limits tab. Verify it against the governing Bridge Design Manual.' + (WS ? ` Minimum ${frac(L.minTw)} + ${frac(aW)} in sacrificial (${ownCite(WS.r)}).` : '') };
++    c.items = secItems(s => ({ cells: [frac(s.tw), frac(tm)], r: tm / s.tw, st: s.tw >= tm - 1e-9 ? 'pass' : 'fail',
++      work: T`t_w = ${f3(s.tw)}\ \text{in} \;${s.tw >= tm - 1e-9 ? '\\ge' : '<'}\; ${f3(tm)}\ \text{in}` }));
+     add(c);
+@@ -1567,7 +1591,7 @@
+   {
+-    const c = { id: 'W4', grp: 'Web', title: 'Web plate increments', ref: 'AASHTO/NSBA G12.1 (plate availability)', src: 'Guide',
++    const c = { id: 'W4', grp: 'Web', title: 'Web plate increments', ref: rIncD ? `${ownCite(rIncD)} (web depth); AASHTO/NSBA G12.1` : 'AASHTO/NSBA G12.1 (plate availability)', src: rIncD ? 'DOT' : 'Guide',
+       sym: T`D = k\,\Delta_D, \qquad t_w = k\,\Delta_{t_w}`, cols: ['Section', 'D (in)', 't_w (in)', 'Increments'], items: [],
+-      note: `Increments in use: web depth ${f2(L.incD)} in, web thickness ${frac(L.incTw)} in.` };
+-    c.items = secItems(s => { const ok = isMult(m.D, L.incD) && isMult(s.tw, L.incTw);
+-      return { cells: [f2(m.D), frac(s.tw), ok ? 'OK' : 'Off increment'], st: ok ? 'pass' : 'warn',
++      note: `Increments in use: web depth ${f2(L.incD)} in, web thickness ${frac(L.incTw)} in.${rIncD ? ` ${ownCite(rIncD)}: ${esc(rIncD.text)} (a depth off the increment fails).` : ''}` };
++    c.items = secItems(s => { const okD = isMult(m.D, L.incD), ok = okD && isMult(s.tw, L.incTw);
++      return { cells: [f2(m.D), frac(s.tw), ok ? 'OK' : 'Off increment'], st: ok ? 'pass' : rIncD && !okD ? 'fail' : 'warn',
+         work: T`\frac{D}{\Delta_D} = \frac{${f2(m.D)}}{${f3(L.incD)}} = ${f2(m.D / L.incD)}, \qquad \frac{t_w}{\Delta_{t_w}} = \frac{${f3(s.tw)}}{${f3(L.incTw)}} = ${f2(s.tw / L.incTw)}` }; });
+@@ -1583,2 +1607,3 @@
+       where: [['F<sub>yw</sub>', 'Web yield strength', f2(m.FyW), 'ksi'], ['F<sub>yf,max</sub>', 'Higher flange yield strength', f2(Fymax), 'ksi']] });
++    if (rHy) { c.ref += `; ${ownCite(rHy)}`; const hy = m.gW !== m.gF; c.items.push({ loc: 'Hybrid girder (owner)', cells: [hy ? 'Hybrid' : 'Homogeneous', '—'], st: hy ? 'warn' : 'pass', work: T`\text{${hy ? `web ${m.gW}, flanges ${m.gF}: hybrid, to be avoided (${ownCite(rHy)}; needs owner approval)` : 'web and flanges of one grade'}}` }); }   // OWN21
+     add(c);
+@@ -1594,6 +1619,6 @@
+     const c = { id: 'F1', grp: 'Flanges', title: 'Flange width-to-thickness ratio', ref: 'AASHTO LRFD 6.10.2.2, Eq. 6.10.2.2-1', src: 'Code',
+-      sym: T`\frac{b_f}{2\,t_f} \le 12.0`, cols: ['Flange', 'b_f (in)', 't_f (in)', 'b_f/2t_f', 'Ratio'], items: [], note: 'Applies to both flanges.' };
+-    c.items = flItems((s, f) => { const v = f.b / (2 * f.t); return { cells: [frac(f.b), frac(f.t), f2(v), f2(v / 12)], r: v / 12, st: v <= 12 + 1e-9 ? 'pass' : 'fail',
+-      work: T`\frac{b_f}{2t_f} = \frac{${f2(f.b)}}{2(${f3(f.t)})} = ${f2(v)} \;${v <= 12 + 1e-9 ? '\\le' : '>'}\; 12.0`,
+-      where: [['b<sub>f</sub>', 'Flange width', f2(f.b), 'in'], ['t<sub>f</sub>', 'Flange thickness', f3(f.t), 'in']] }; });
++      sym: T`\frac{b_f}{2\,t_f} \le 12.0`, cols: ['Flange', 'b_f (in)', 't_f (in)', 'b_f/2t_f', 'Ratio'], items: [], note: 'Applies to both flanges.' + wsTxt };
++    c.items = flItems((s, f, fl) => { const tfd = f.t - aF(fl), v = f.b / (2 * tfd); return { cells: [frac(f.b), frac(tfd), f2(v), f2(v / 12)], r: v / 12, st: v <= 12 + 1e-9 ? 'pass' : 'fail',
++      work: T`\frac{b_f}{2t_f} = \frac{${f2(f.b)}}{2(${f3(tfd)})} = ${f2(v)} \;${v <= 12 + 1e-9 ? '\\le' : '>'}\; 12.0`,
++      where: [['b<sub>f</sub>', 'Flange width', f2(f.b), 'in'], ['t<sub>f</sub>', WS ? 'Flange thickness less the sacrificial thickness' : 'Flange thickness', f3(tfd), 'in']] }; });
+     add(c);
+@@ -1610,6 +1635,6 @@
+     const c = { id: 'F3', grp: 'Flanges', title: 'Minimum flange thickness relative to web', ref: 'AASHTO LRFD 6.10.2.2, Eq. 6.10.2.2-3', src: 'Code',
+-      sym: T`t_f \ge 1.1\,t_w`, cols: ['Flange', 't_f (in)', '1.1 t_w (in)', 'Ratio'], items: [], note: 'Uses the web thickness of the same section.' };
+-    c.items = flItems((s, f) => { const q = 1.1 * s.tw; return { cells: [frac(f.t), f3(q), f2(q / f.t)], r: q / f.t, st: f.t >= q - 1e-9 ? 'pass' : 'fail',
+-      work: T`t_f = ${f3(f.t)}\ \text{in} \;${f.t >= q - 1e-9 ? '\\ge' : '<'}\; 1.1\,t_w = 1.1(${f3(s.tw)}) = ${f3(q)}\ \text{in}`,
+-      where: [['t<sub>f</sub>', 'Flange thickness', f3(f.t), 'in'], ['t<sub>w</sub>', 'Web thickness', f3(s.tw), 'in']] }; });
++      sym: T`t_f \ge 1.1\,t_w`, cols: ['Flange', 't_f (in)', '1.1 t_w (in)', 'Ratio'], items: [], note: 'Uses the web thickness of the same section.' + wsTxt };
++    c.items = flItems((s, f, fl) => { const tfd = f.t - aF(fl), twd = s.tw - aW, q = 1.1 * twd; return { cells: [frac(tfd), f3(q), f2(q / tfd)], r: q / tfd, st: tfd >= q - 1e-9 ? 'pass' : 'fail',
++      work: T`t_f = ${f3(tfd)}\ \text{in} \;${tfd >= q - 1e-9 ? '\\ge' : '<'}\; 1.1\,t_w = 1.1(${f3(twd)}) = ${f3(q)}\ \text{in}`,
++      where: [['t<sub>f</sub>', 'Flange thickness', f3(tfd), 'in'], ['t<sub>w</sub>', 'Web thickness', f3(twd), 'in']] }; });
+     add(c);
+@@ -1627,8 +1652,9 @@
+   {
+-    const c = { id: 'F5', grp: 'Flanges', title: 'Minimum flange plate size', ref: 'AASHTO/NSBA G12.1; owner limit', src: 'Guide',
+-      sym: T`b_f \ge ${f2(L.minBf)}\ \text{in}, \qquad t_f \ge ${f3(L.minTf)}\ \text{in}`, cols: ['Flange', 'b_f (in)', 't_f (in)', 'Result'], items: [],
+-      note: 'Minimum flange sizes improve handling, erection stability, and resistance to distortion during welding. Values are editable on the Limits tab.' };
+-    c.items = flItems((s, f) => { const ok = f.b >= L.minBf - 1e-9 && f.t >= L.minTf - 1e-9;
+-      return { cells: [frac(f.b), frac(f.t), ok ? 'OK' : (f.b < L.minBf - 1e-9 ? 'Narrow' : 'Thin')], st: ok ? 'pass' : 'warn',
+-        work: T`b_f = ${f2(f.b)} \;${f.b >= L.minBf - 1e-9 ? '\\ge' : '<'}\; ${f2(L.minBf)}\ \text{in}, \qquad t_f = ${f3(f.t)} \;${f.t >= L.minTf - 1e-9 ? '\\ge' : '<'}\; ${f3(L.minTf)}\ \text{in}` }; });
++    const pcOf = s => m.pieces.find(p => (s.x0 + s.x1) / 2 >= p.x0 - 1e-9 && (s.x0 + s.x1) / 2 < p.x1 - 1e-9) || m.pieces[m.pieces.length - 1], bL85 = !!(rPm && rPm.value && rPm.value.bL85), shall = !!(rPm && rPm.value && rPm.value.shall);
++    const c = { id: 'F5', grp: 'Flanges', title: 'Minimum flange plate size', ref: rPm ? `${ownCite(rPm)}; AASHTO/NSBA G12.1` : 'AASHTO/NSBA G12.1; owner limit', src: rPm ? 'DOT' : 'Guide',
++      sym: bL85 ? T`b_f \ge \max\left(${f2(L.minBf)}\ \text{in},\ \frac{12\,L_{pc}}{85}\right), \qquad t_f \ge ${f3(L.minTf)}\ \text{in}` : T`b_f \ge ${f2(L.minBf)}\ \text{in}, \qquad t_f \ge ${f3(L.minTf)}${WS ? ' + t_{sac}' : ''}\ \text{in}`, cols: ['Flange', 'b_f (in)', 't_f (in)', 'Result'], items: [],
++      note: (rPm ? `${ownCite(rPm)}: ${esc(rPm.text)} (${shall ? 'a shortfall fails' : 'a warning'}). ` : '') + 'Minimum flange sizes improve handling, erection stability, and resistance to distortion during welding. Values are editable on the Limits tab.' + (bL85 ? ' L_pc is the length of the field piece containing the section.' : '') + (WS ? ` t_f minimum plus the sacrificial thickness (top ${frac(aT)} in, bottom ${frac(aB)} in; ${ownCite(WS.r)}).` : '') };
++    c.items = flItems((s, f, fl) => { const bm = bL85 ? Math.max(L.minBf, pcOf(s).len * 12 / 85) : L.minBf, tm = L.minTf + aF(fl), ok = f.b >= bm - 1e-9 && f.t >= tm - 1e-9;
++      return { cells: [frac(f.b), frac(f.t), ok ? 'OK' : (f.b < bm - 1e-9 ? 'Narrow' : 'Thin')], st: ok ? 'pass' : shall ? 'fail' : 'warn',
++        work: T`b_f = ${f2(f.b)} \;${f.b >= bm - 1e-9 ? '\\ge' : '<'}\; ${bL85 ? T`\max(${f2(L.minBf)},\ 12(${f2(pcOf(s).len)})/85) = ` : ''}${f2(bm)}\ \text{in}, \qquad t_f = ${f3(f.t)} \;${f.t >= tm - 1e-9 ? '\\ge' : '<'}\; ${f3(tm)}\ \text{in}` }; });
+     add(c);
+@@ -1636,7 +1662,7 @@
+   {
+-    const c = { id: 'F6', grp: 'Flanges', title: 'Flange plate increments', ref: 'AASHTO/NSBA G12.1 (plate availability)', src: 'Guide',
++    const c = { id: 'F6', grp: 'Flanges', title: 'Flange plate increments', ref: rIncB ? `${ownCite(rIncB)} (flange width); AASHTO/NSBA G12.1` : 'AASHTO/NSBA G12.1 (plate availability)', src: rIncB ? 'DOT' : 'Guide',
+       sym: T`b_f = k\,\Delta_{b},\qquad t_f = k\,\Delta_{t}`, cols: ['Flange', 'b_f (in)', 't_f (in)', 'Result'], items: [],
+-      note: `Increments in use: flange width ${frac(L.incBf)} in, flange thickness ${frac(L.incTf)} in.` };
+-    c.items = flItems((s, f) => { const ok = isMult(f.b, L.incBf) && isMult(f.t, L.incTf);
+-      return { cells: [frac(f.b), frac(f.t), ok ? 'OK' : 'Off increment'], st: ok ? 'pass' : 'warn',
++      note: `Increments in use: flange width ${frac(L.incBf)} in, flange thickness ${frac(L.incTf)} in.${rIncB ? ` ${ownCite(rIncB)}: ${esc(rIncB.text)} (a width off the increment fails).` : ''}` };
++    c.items = flItems((s, f) => { const okB = isMult(f.b, L.incBf), ok = okB && isMult(f.t, L.incTf);
++      return { cells: [frac(f.b), frac(f.t), ok ? 'OK' : 'Off increment'], st: ok ? 'pass' : rIncB && !okB ? 'fail' : 'warn',
+         work: T`\frac{b_f}{\Delta_b} = \frac{${f2(f.b)}}{${f3(L.incBf)}} = ${f2(f.b / L.incBf)}, \qquad \frac{t_f}{\Delta_t} = \frac{${f3(f.t)}}{${f3(L.incTf)}} = ${f2(f.t / L.incTf)}` }; });
+@@ -1656,3 +1682,3 @@
+   {
+-    const c = { id: 'T1', grp: 'Transitions', title: 'Flange width constant within a field piece', ref: 'AASHTO/NSBA G12.1', src: 'Guide',
++    const c = { id: 'T1', grp: 'Transitions', title: 'Flange width constant within a field piece', ref: rWc ? `${ownCite(rWc)}; AASHTO/NSBA G12.1` : 'AASHTO/NSBA G12.1', src: rWc ? 'DOT' : 'Guide',   // OWN21: owner "shall" (fails)
+       sym: T`\Delta b_f = 0 \ \text{except at field splices}`, cols: ['Transition', 'From', 'To', 'At splice?'], items: [],
+@@ -1662,3 +1688,3 @@
+     else { c.items = wt.map(t => ({ loc: trLoc(t), cells: [pl(t.a.b, t.a.t), pl(t.c.b, t.c.t), t.atSplice ? 'Yes' : `No (${f2(t.dSplice)} ft away)`],
+-      st: t.atSplice ? 'pass' : 'warn', work: T`\Delta b_f = ${f2(t.c.b)} - ${f2(t.a.b)} = ${f2(t.c.b - t.a.b)}\ \text{in}; \quad \text{distance to nearest splice} = ${isFinite(t.dSplice) ? f2(t.dSplice) : '\\infty'}\ \text{ft}` })); add(c); }
++      st: t.atSplice ? 'pass' : rWc ? 'fail' : 'warn', work: T`\Delta b_f = ${f2(t.c.b)} - ${f2(t.a.b)} = ${f2(t.c.b - t.a.b)}\ \text{in}; \quad \text{distance to nearest splice} = ${isFinite(t.dSplice) ? f2(t.dSplice) : '\\infty'}\ \text{ft}` })); add(c); }
+   }
+@@ -1666,3 +1692,3 @@
+   {
+-    const c = { id: 'T2', grp: 'Transitions', title: 'Thickness ratio at shop-welded transitions', ref: 'AASHTO/NSBA G12.1', src: 'Guide',
++    const c = { id: 'T2', grp: 'Transitions', title: 'Thickness ratio at shop-welded transitions', ref: rTr ? `${ownCite(rTr)}; AASHTO/NSBA G12.1` : 'AASHTO/NSBA G12.1', src: rTr ? 'DOT' : 'Guide',   // OWN21: owner "shall" (fails)
+       sym: T`\frac{t_{f,thick}}{t_{f,thin}} \le ${f2(L.thkRatio)}`, cols: ['Transition', 'From', 'To', 't ratio', 'Ratio'], items: [],
+@@ -1671,3 +1697,3 @@
+     else { c.items = thk.map(t => { const q = Math.max(t.a.t, t.c.t) / Math.min(t.a.t, t.c.t);
+-      return { loc: trLoc(t), cells: [pl(t.a.b, t.a.t), pl(t.c.b, t.c.t), f2(q), f2(q / L.thkRatio)], r: q / L.thkRatio, st: q <= L.thkRatio + 1e-9 ? 'pass' : 'warn',
++      return { loc: trLoc(t), cells: [pl(t.a.b, t.a.t), pl(t.c.b, t.c.t), f2(q), f2(q / L.thkRatio)], r: q / L.thkRatio, st: q <= L.thkRatio + 1e-9 ? 'pass' : rTr ? 'fail' : 'warn',
+         work: T`\frac{t_{f,thick}}{t_{f,thin}} = \frac{${f3(Math.max(t.a.t, t.c.t))}}{${f3(Math.min(t.a.t, t.c.t))}} = ${f2(q)} \;${q <= L.thkRatio + 1e-9 ? '\\le' : '>'}\; ${f2(L.thkRatio)}` }; }); add(c); }
+@@ -1699,3 +1725,3 @@
+   {
+-    const c = { id: 'T5', grp: 'Transitions', title: 'Shop-welded transitions per flange per field piece', ref: 'Practice', src: 'Practice',
++    const c = { id: 'T5', grp: 'Transitions', title: 'Shop-welded transitions per flange per field piece', ref: rSz ? `${ownCite(rSz)} (no more than ${rSz.value} plate sizes between bolted splices)` : 'Practice', src: rSz ? 'DOT' : 'Practice',   // OWN21
+       sym: T`n_{trans} \le ${L.maxTrans}`, cols: ['Piece', 'Top', 'Bottom'], items: [],
+@@ -1703,3 +1729,3 @@
+     c.items = m.pieces.map(p => { const nt = thk.filter(t => t.fl === 'Top' && t.piece === p).length, nb = thk.filter(t => t.fl === 'Bottom' && t.piece === p).length, mx = Math.max(nt, nb);
+-      return { loc: `Piece ${p.i + 1} (${f2(p.x0)}–${f2(p.x1)} ft)`, cells: [String(nt), String(nb)], st: mx <= L.maxTrans ? 'pass' : 'adv', work: T`n_{top} = ${nt}, \quad n_{bot} = ${nb}` }; });
++      return { loc: `Piece ${p.i + 1} (${f2(p.x0)}–${f2(p.x1)} ft)`, cells: [String(nt), String(nb)], st: mx <= L.maxTrans ? (rSz && mx > rSz.value - 1 ? 'fail' : 'pass') : rSz && mx > rSz.value - 1 ? 'fail' : 'adv', work: T`n_{top} = ${nt}, \quad n_{bot} = ${nb}` }; });
+     add(c);
+@@ -1746,8 +1772,11 @@
+   {
+-    const c = { id: 'S4', grp: 'Splices & shipping', title: 'Lateral stability of field pieces for lifting and shipping', ref: 'AASHTO/NSBA G12.1 (L/b_f ≈ 85)', src: 'Guide',
+-      sym: T`\frac{L_{pc}}{b_{f,min}} \le ${f2(L.lbRatio)}`, cols: ['Piece', 'L_pc (ft)', 'b_f,min (in)', 'L/b_f', 'Ratio'], items: [],
+-      note: 'b_f,min is the narrowest flange (top or bottom) anywhere in the piece, which is conservative. Pieces that exceed the limit may need temporary bracing or a spreader beam for lifting.' };
+-    c.items = m.pieces.map(p => { const q = p.len * 12 / p.bmin;
+-      return { loc: `Piece ${p.i + 1}`, cells: [f2(p.len), frac(p.bmin), f2(q), f2(q / L.lbRatio)], r: q / L.lbRatio, st: q <= L.lbRatio + 1e-9 ? 'pass' : 'warn',
+-        work: T`\frac{L_{pc}}{b_{f,min}} = \frac{(${f2(p.len)})(12)}{${f2(p.bmin)}} = ${f2(q)} \;${q <= L.lbRatio + 1e-9 ? '\\le' : '>'}\; ${f2(L.lbRatio)}` }; });
++    const comp = !!rL85c, rS4 = rL85c || rL85, shall = !!(rS4 && rS4.kind === 'shall-check');   // OWN21: RIDOT the compression flange (top flange; and the bottom flange of a piece over an interior support), others the narrowest flange
++    const bOf = p => { if (!comp) return p.bmin; const q = m.secs.filter(s => Math.min(p.x1, s.x1) - Math.max(p.x0, s.x0) > 1e-9), pier = m.cont && m.sup.slice(1, -1).some(x => x > p.x0 + 1e-9 && x < p.x1 - 1e-9);
++      return Math.min(...q.map(s => pier ? Math.min(s.top.b, s.bot.b) : s.top.b)); };
++    const c = { id: 'S4', grp: 'Splices & shipping', title: 'Lateral stability of field pieces for lifting and shipping', ref: rS4 ? `${ownCite(rS4)}; AASHTO/NSBA G12.1 (L/b_f ≈ 85)` : 'AASHTO/NSBA G12.1 (L/b_f ≈ 85)', src: rS4 ? 'DOT' : 'Guide',
++      sym: T`\frac{L_{pc}}{b_{f${comp ? ',c' : ',min'}}} \le ${f2(L.lbRatio)}`, cols: ['Piece', 'L_pc (ft)', comp ? 'b_fc,min (in)' : 'b_f,min (in)', 'L/b_f', 'Ratio'], items: [],
++      note: (rS4 ? `${ownCite(rS4)}: ${esc(rS4.text)} (${shall ? 'a shortfall fails' : 'a warning'}). ` : '') + (comp ? 'b_fc is the narrowest compression flange in the piece: the top flange, and in a piece over an interior support also the bottom flange.' : 'b_f,min is the narrowest flange (top or bottom) anywhere in the piece, which is conservative.') + ' Pieces that exceed the limit may need temporary bracing or a spreader beam for lifting.' };
++    c.items = m.pieces.map(p => { const bf = bOf(p), q = p.len * 12 / bf;
++      return { loc: `Piece ${p.i + 1}`, cells: [f2(p.len), frac(bf), f2(q), f2(q / L.lbRatio)], r: q / L.lbRatio, st: q <= L.lbRatio + 1e-9 ? 'pass' : shall ? 'fail' : 'warn',
++        work: T`\frac{L_{pc}}{b_{f}} = \frac{(${f2(p.len)})(12)}{${f2(bf)}} = ${f2(q)} \;${q <= L.lbRatio + 1e-9 ? '\\le' : '>'}\; ${f2(L.lbRatio)}` }; });
+     add(c);
+@@ -2189,3 +2218,3 @@
+     suggest: { ...P.suggest, keepD: opts.D ? true : P.suggest.keepD, web: opts.web ?? P.suggest.web }, girder: { ...P.girder, D: opts.D ?? P.girder.D } };
+-  const B = P.bridge, SG = P.suggest, errors = [], FAB = SG.fab !== 'off';
++  const B = P.bridge, SG = P.suggest, errors = [], FAB = SG.fab !== 'off', WSz = plWS(P);   // WSz (OWN26): RIDOT uncoated weathering steel, sacrificial thickness
+   // AASHTO minimums always (6.7.3, 6.10.2); AASHTO/NSBA G12.1 fabrication limits (the Limits tab) when on
+@@ -2336,3 +2365,3 @@
+       const W = webFromShear(D, R.VuMax, R.VuLoc, wt, twMin, R, { top, bot });
+-      tw = W.tw; web = [{ L: Ltot, t: tw }];
++      tw = WSz ? up(W.tw + WSz.w, L.incTw) : W.tw; web = [{ L: Ltot, t: tw }];   // OWN26: the net web for shear plus the sacrificial thickness
+       // splices
+@@ -2582,4 +2611,5 @@
+         while (Amax / bf > L.maxTf + 1e-9 && bf < 42) bf += L.incBf;
+-        const tmin = up(Math.max(L.minTf, 1.1 * tw, bf / 24), L.incTf);
+-        const treq = i => Math.max(tmin, up(A[i] / bf, L.incTf));
++        const aFz = WSz ? (fl === 'Top' ? WSz.t : WSz.b) : 0, twN = tw - (WSz ? WSz.w : 0);   // OWN26: the net thickness required plus the sacrificial thickness
++        const tmin = up(Math.max(L.minTf, 1.1 * twN, bf / 24) + aFz, L.incTf);
++        const treq = i => Math.max(tmin, up(A[i] / bf + aFz, L.incTf));
+         // candidate cut points on whole feet
+@@ -2628,2 +2658,3 @@
+     sgLists(top, bot, web);
++    { const W = plWS(P); if (W) { top = top.map(r => ({ ...r, t: r.t - W.t })); bot = bot.map(r => ({ ...r, t: r.t - W.b })); web = web.map(r => ({ ...r, t: r.t - W.w })); sgLists(top, bot, web); } }   // OWN26: the design section without the sacrificial thickness
+     const oosL = sgOosScan(D, top, bot, web, R), oosS = new Set(oosL.map(o => o.gt + '|' + o.span));   // PNA-OOS
+@@ -2636,3 +2667,3 @@
+     const uS = (T, k, sg) => (T.MUT ? T.MUT[k] : 0) + (T.MUF ? (sg > 0 ? Math.max(T.MUF[k], 0) : Math.min(T.MUF[k], 0)) : 0);
+-    const FAT = SG.fat !== 'off', thB = 16.0, thC = 12.0;   // Fatigue I: Category B at the flange-to-web welds; Category C′ at connection plates welded to the flanges (6.6.1.3.1)
++    const rCC = ownRule(plOwner(P), 'fat.catC'), FAT = SG.fat !== 'off', thB = 16.0, thC = rCC ? rCC.value.th : 12.0, cCn = rCC ? 'C' : 'C′';   // OWN25: CTDOT BRSDM V2 6.6.1.2.6CT (GD41): Category C, 10 ksi   // Fatigue I: Category B at the flange-to-web welds; Category C′ at connection plates welded to the flanges (6.6.1.3.1)
+     // Fatigue I or II (F12-1, 2026-10-13): GirderDetail's Fatigue module sets the limit state for the bridge (P.analysis.fat, from the gd-an message): Fatigue I where
+@@ -2719,3 +2750,3 @@
+         if (FAT) { const rng = (T.MfP[i] - T.MfN[i]) * 12, fl = fatAt(x), fB = fl.B, fC = fl.C, dT = fB.g * rng * (d - cn.yb) / cn.I, dB = fB.g * rng * cn.yb / cn.I; put(rT, gT, i, dT / fB.res, `Fatigue ${fB.lim}, Category B (6.6.1.2)`); put(rB, gB, i, dB / fB.res, `Fatigue ${fB.lim}, Category B (6.6.1.2)`);
+-          if (SG.fat !== 'B') { const cT = fC.g * rng * (d - t.t - cn.yb) / cn.I, cB = fC.g * rng * (cn.yb - b.t) / cn.I; put(rT, gT, i, cT / fC.res, `Fatigue ${fC.lim}, Category C′ at connection plates (6.6.1.2)`); put(rB, gB, i, cB / fC.res, `Fatigue ${fC.lim}, Category C′ at connection plates (6.6.1.2)`); } }
++          if (SG.fat !== 'B') { const cT = fC.g * rng * (d - t.t - cn.yb) / cn.I, cB = fC.g * rng * (cn.yb - b.t) / cn.I; put(rT, gT, i, cT / fC.res, `Fatigue ${fC.lim}, Category ${cCn} at connection plates (6.6.1.2${rCC ? '; ' + ownCite(rCC) : ''})`); put(rB, gB, i, cB / fC.res, `Fatigue ${fC.lim}, Category ${cCn} at connection plates (6.6.1.2${rCC ? '; ' + ownCite(rCC) : ''})`); } }
+         // positive flexure, Strength I (6.10.7) and Service II (6.10.4.2.2)
+@@ -2783,3 +2814,3 @@
+   function bSplice(tw) {   // flange width for n gage lines each side of the web, without staggering
+-    const d = num(SG.spD) || 0.875, em = { 0.75: 1.0, 0.875: 1.125, 1: 1.25, 1.125: 1.5 }[d] || 1.125, g = Math.max(num(SG.spG) || 3, 3 * d), nl = Math.max(1, Math.round(num(SG.spLines) || 2));
++    const rOvP = ownRule(plOwner(P), 'spl.ovs'), d = num(SG.spD) || 0.875, em = Math.max({ 0.75: 1.0, 0.875: 1.125, 1: 1.25, 1.125: 1.5 }[d] || 1.125, rOvP ? rOvP.value.edge : 0), g = Math.max(num(SG.spG) || 3, 3 * d), nl = Math.max(1, Math.round(num(SG.spLines) || 2));   /* OWN25: the owner's edge distance (CTDOT V2 6.13.6.1: 2 in), as GirderDetail's splice auto-design */
+     const twp = num(SG.spTwp) || 0.5, cw = num(SG.spCw) || 0.5, C1 = num(SG.spC1) || 1.5, u4 = v => Math.ceil(v * 4 - 1e-6) / 4;
+@@ -2960,3 +2991,3 @@
+ <h4>Owner rules (phase 1)</h4>
+-<p>The owner profile (Limits tab) applies owner rules on top of AASHTO LRFD 10th Ed. (2024). The MassDOT LRFD Bridge Manual and the CTDOT BRSDM are written to the 9th Ed.; the RIDOT BDM (April 2026) to the 10th Ed. In this version: the cross-frame orientation rule of RIDOT (BDM 6.4.3) and CTDOT (BRSDM V2 6.7.4.2) for the whole bridge (layout and check X1, pass/fail), and the MassDOT skew warnings above 40° and 50° (Part I 2.3.4.1, in X1). The owners' load rules (phase 2) and the high-priority owner defaults and checks (phase 3a) are listed on the Limits tab: RIDOT wearing surface 70 psf, barrier dead load 60/40, span-to-depth not mandatory, deflection L/800 or L/1000 with pedestrians (A1), overhang (G6); MassDOT deck f′<sub>c</sub> 5.0 ksi, deflection L/1000 with sidewalks (else L/800, L/1000 preferred; interior beam only), span-to-depth ratios 30 / 25 / 21 with L between the dead load points of contraflexure (G1, G2 and the Suggest depth rule), utilities on the noncomposite section; CTDOT overlay 38.75 psf, 0.5 in sacrificial deck and 8.5 in total, w<sub>c</sub> = 0.145 kcf for E<sub>c</sub>, haunch ≥ 1 in, construction live load 50 psf (G11), overhang (G6). An owner default sets its input only while the input is untouched (still at the former default); a value you entered is kept and flagged "Overrides …". Items that need the owners' standard details (MassDOT Part II, RIDOT Bridge Standard Details, CTDOT standard details) are listed as pending references. AASHTO has no owner rules.</p>
++<p>The owner profile (Limits tab) applies owner rules on top of AASHTO LRFD 10th Ed. (2024). The MassDOT LRFD Bridge Manual and the CTDOT BRSDM are written to the 9th Ed.; the RIDOT BDM (April 2026) to the 10th Ed. In this version: the cross-frame orientation rule of RIDOT (BDM 6.4.3) and CTDOT (BRSDM V2 6.7.4.2) for the whole bridge (layout and check X1, pass/fail), and the MassDOT skew warnings above 40° and 50° (Part I 2.3.4.1, in X1). The owners' load rules (phase 2) and the high-priority owner defaults and checks (phase 3a) are listed on the Limits tab: RIDOT wearing surface 70 psf, barrier dead load 60/40, span-to-depth not mandatory, deflection L/800 or L/1000 with pedestrians (A1), overhang (G6); MassDOT deck f′<sub>c</sub> 5.0 ksi, deflection L/1000 with sidewalks (else L/800, L/1000 preferred; interior beam only), span-to-depth ratios 30 / 25 / 21 with L between the dead load points of contraflexure (G1, G2 and the Suggest depth rule), utilities on the noncomposite section; CTDOT overlay 38.75 psf, 0.5 in sacrificial deck and 8.5 in total, w<sub>c</sub> = 0.145 kcf for E<sub>c</sub>, haunch ≥ 1 in, construction live load 50 psf (G11), overhang (G6). Phase 3a part 2: owner plate minimums and increments (W3, W4, F5, F6; RIDOT web 7/16 in, flanges 3/4 × 12 in; CTDOT web 3/8 in in 2 in depths, flanges 3/4 in, 12 in and L/85 in 2 in widths), L/85 (S4), width and thickness transitions (T1, T2, T5), hybrid girders (W5, CTDOT), RIDOT stiffener and connection plate minimums (D7) and uncoated weathering steel with sacrificial thickness (Limits tab, Owner profile input; the design and the plates sent to the modules use the net section), MassDOT coated Grade 50 default and 50W only over railroads (G12), CTDOT refined analysis (G13) and Category C at connection plates in Full design, owner integral abutment limits (G10); Suggest and Full design size to the owner minimums and increments. An owner default sets its input only while the input is untouched (still at the former default); a value you entered is kept and flagged "Overrides …". Items that need the owners' standard details (MassDOT Part II, RIDOT Bridge Standard Details, CTDOT standard details) are listed as pending references. AASHTO has no owner rules.</p>
+ <h4>Span-to-depth ratios are optional in AASHTO</h4>
+@@ -4103,3 +4134,13 @@
+       note: 'Applies only when the abutments are set to integral on the Bridge tab. The limits in use are placeholders until verified against the owner manual, which may also restrict pile type, span length, curvature, and abutment height.' };
++    const rI = ownRule(plOwner(P), 'int.abut'), wI = !!(rI && rI.kind === 'should-warning'), fI = wI ? 'warn' : 'fail', strict = !!(rI && rI.value.strict);   // OWN24: owner integral abutment limits
++    if (rI) { c.ref = `${ownCite(rI)}`; c.note = `${ownCite(rI)}: ${esc(rI.text)}. Total length and skew limits from the Limits tab (the owner's values are the defaults there).${wI ? ' Beyond them the simplified method does not apply: a warning (3D analysis required), not a prohibition.' : ' Beyond them integral abutments are not permitted without the owner\'s approval.'}${rI.value.ss ? ' The girders are designed as simply supported at the abutments (this tool models the abutments as simple supports); frame action is not used to reduce the design moments.' : ''}`; }
+     if (P.bridge.abut !== 'integral') na(c, 'Abutments are not integral.');
++    else if (rI) {
++      const sk = Math.max(Math.abs(m.skews[0]), Math.abs(m.skews[m.skews.length - 1])), skOk = strict ? sk < L.intSkew - 1e-9 : sk <= L.intSkew + 1e-9, v = rI.value;
++      c.items.push({ loc: 'Total girder length', cells: [f2(m.Ltot) + ' ft', f2(L.intL) + ' ft'], r: m.Ltot / L.intL, st: m.Ltot <= L.intL + 1e-9 ? 'pass' : fI, work: T`L_{tot} = ${f2(m.Ltot)}\ \text{ft} \;${m.Ltot <= L.intL + 1e-9 ? '\\le' : '>'}\; ${f2(L.intL)}\ \text{ft}` });
++      c.items.push({ loc: 'Abutment skew', cells: [f2(sk) + '°', (strict ? '< ' : '≤ ') + f2(L.intSkew) + '°'], r: sk / L.intSkew, st: skOk ? 'pass' : fI, work: T`\theta = ${f2(sk)}^\circ \;${skOk ? (strict ? '<' : '\\le') : (strict ? '\\ge' : '>')}\; ${f2(L.intSkew)}^\circ` });
++      if (v.Lsp) { const Lm = Math.max(...m.spans); c.items.push({ loc: 'Longest span', cells: [f2(Lm) + ' ft', f2(v.Lsp) + ' ft'], r: Lm / v.Lsp, st: Lm <= v.Lsp + 1e-9 ? 'pass' : fI, work: T`L_{span} = ${f2(Lm)}\ \text{ft} \;${Lm <= v.Lsp + 1e-9 ? '\\le' : '>'}\; ${f2(v.Lsp)}\ \text{ft}` }); }
++      if (v.d) { const dM = Math.max(...m.secs.map(s => s.p.d)); c.items.push({ loc: 'Girder depth', cells: [f2(dM) + ' in', f2(v.d) + ' in'], r: dM / v.d, st: dM <= v.d + 1e-9 ? 'pass' : fI, work: T`d = ${f2(dM)}\ \text{in} \;${dM <= v.d + 1e-9 ? '\\le' : '>'}\; ${f2(v.d)}\ \text{in (6 ft)}` }); }
++      add(c);
++    }
+     else {
+@@ -4315,2 +4356,11 @@
+   }
++  {   // D7 (OWN20, RIDOT BDM 6.4.2; 6.2.1 for uncoated weathering steel): owner minimum stiffener and connection plate sizes
++    const rS = ownRule(plOwner(P), 'stiff.min'), WSf = plWS(P), aS = WSf ? WSf.s : 0;
++    if (rS) { const v = rS.value, c = { id: 'D7', grp, title: 'Owner minimum stiffener and connection plate sizes', ref: ownCite(rS), src: 'DOT', sym: T`t_{st} \ge ${frac(v.st)},\quad t_{cp} \ge ${frac(v.cpT)},\quad b_{cp} \ge ${f2(v.cpB)},\quad t_{bs} \ge ${frac(v.bs)}\ \text{in}${aS ? ` + ${frac(aS)}` : ''}`, cols: ['Plate', 'Value (in)', 'Minimum (in)'], items: [],
++        note: `${ownCite(rS)}: ${esc(rS.text)}. Plates from the Framing tab.${aS ? ` Uncoated weathering steel: ${frac(aS)} in sacrificial thickness added to the stiffener minimums (${ownCite(WSf.r)}).` : ''}` };
++      const it = (loc, x, mn) => c.items.push({ loc, cells: [frac(x), frac(mn)], r: mn / x, st: x >= mn - 1e-9 ? 'pass' : 'fail', work: T`${f3(x)} \;${x >= mn - 1e-9 ? '\\ge' : '<'}\; ${f3(mn)}\ \text{in}` });
++      if (F.stiff === 'on') it('Intermediate stiffener thickness', F.stT, v.st + aS);
++      it('Connection plate thickness', F.cpT, v.cpT + aS); it('Connection plate width', F.cpB, v.cpB); it('Bearing stiffener thickness', F.bsT, v.bs + aS);
++      add(c); }
++  }
+   return out;
+@@ -4537,2 +4587,3 @@
+   if (!AN || AN.errors || !m.splices.length) return [];
++  const WSx = plWS(P), aw = WSx ? WSx.w : 0, at_ = WSx ? WSx.t : 0, ab = WSx ? WSx.b : 0;   // OWN26
+   const xs = AN.xs, N = xs.length, list = [];
+@@ -4546,3 +4597,3 @@
+       list.push({ label: `FS${k + 1} @ ${f2(x)} ft, ${ext ? 'exterior' : 'interior'} girder`, x,
+-        sec: { D: m.D, gF: m.gF, gW: m.gW, L: { tw: L.tw, topB: L.top.b, topT: L.top.t, botB: L.bot.b, botT: L.bot.t }, R: { tw: Rr.tw, topB: Rr.top.b, topT: Rr.top.t, botB: Rr.bot.b, botT: Rr.bot.t },
++        sec: { D: m.D, gF: m.gF, gW: m.gW, L: { tw: L.tw - aw, topB: L.top.b, topT: L.top.t - at_, botB: L.bot.b, botT: L.bot.t - ab }, R: { tw: Rr.tw - aw, topB: Rr.top.b, topT: Rr.top.t - at_, botB: Rr.bot.b, botT: Rr.bot.t - ab },   // OWN26: net section
+           ts: AN.ts, hh: AN.hh, beff: +((AN.beffFt || (ext ? AN.S / 2 + AN.oh : AN.S)) * 12).toFixed(2), fc: M.fc, wc: M.wcE, K1: 1.0 },   // wc: the unit weight for E_c (OWN17; = w_c unless entered)
+@@ -4565,3 +4616,4 @@
+     const x = back ? xs - 0.01 : xs + 0.01, top = m.at(m.top, x), bot = m.at(m.bot, x), tw = m.at(m.web, x).t;
+-    list.push({ D: m.D, gW: m.gW, row: { name: `${b.name}, ${gt === 'ext' ? 'exterior' : 'interior'}`, type: end ? 'A' : 'B', tw, bft: top.b, bfb: bot.b, tfb: bot.t, ed: end ? 9 : 0,
++    const WSx = plWS(P);   // OWN26: net section
++    list.push({ D: m.D, gW: m.gW, row: { name: `${b.name}, ${gt === 'ext' ? 'exterior' : 'interior'}`, type: end ? 'A' : 'B', tw: tw - (WSx ? WSx.w : 0), bft: top.b, bfb: bot.b, tfb: bot.t - (WSx ? WSx.b : 0), ed: end ? 9 : 0,
+       RDC1: +b.DC1.toFixed(1), RDC2: +(b.DC - b.DC1).toFixed(1), RDW: +b.DW.toFixed(1), RLL: +b.llMax.toFixed(1) } });
+@@ -4580,3 +4632,4 @@
+   const vmax = (arr, e) => Math.max(...[e - 1, e, e + 1].filter(k => k >= 0 && k < arr.length).map(k => Math.abs(arr[k])));
+-  const sec = x => { const t = m.at(m.top, x), b = m.at(m.bot, x); return { D: m.D, tw: m.at(m.web, x).t, topB: t.b, topT: t.t, botB: b.b, botT: b.t }; };
++  const WSx = plWS(P), aw = WSx ? WSx.w : 0, at_ = WSx ? WSx.t : 0, ab = WSx ? WSx.b : 0;   // OWN26: the modules get the design (net) section of uncoated weathering steel
++  const sec = x => { const t = m.at(m.top, x), b = m.at(m.bot, x); return { D: m.D, tw: m.at(m.web, x).t - aw, topB: t.b, topT: t.t - at_, botB: b.b, botT: b.t - ab }; };
+   // flange lateral bending from skew in lieu of a refined analysis (AASHTO LRFD C6.10.1): skews over 20 degrees, factored
+@@ -4822,3 +4875,3 @@
+     allow: num(P.limits.allow), analysis: (({ fat, xf, ...a }) => ({ method: 'fe', rebar: 1.0, ...a, crack: 'none' }))(P.analysis || {}), ...(B.xs ? { xs: B.xs } : {}), ...(FR ? { xf: plXfDef(FR) } : {}), owner: plOwner(P), lf: plLF(P), ...(() => { const U = AN && !AN.errors && AN.R ? Object.keys(AN.R.types).filter(g => AN.R.types[g].wUT || AN.R.types[g].wUF) : []; return U.length ? { ut: Object.fromEntries(U.map(g => [g, { ex: +(AN.R.types[g].wUT || 0).toFixed(4), fu: +(AN.R.types[g].wUF || 0).toFixed(4) }])) } : {}; })(),   // ut (OWN16): utilities per girder type
+-    ...(ownRule(plOwner(P), 'defl.ll') ? { swOwn: plSidewalk(P).on } : {}), ...(plOwner(P) !== 'AASHTO' && P.ownDef ? { ownDef: { v: P.ownDef.v, mig: P.ownDef.mig || [], kept: P.ownDef.kept || [] } } : {}) };   // ownDef (OWN14): the owner defaults applied (one-time notice in GirderDetail)   // owner (OWN1): the bridge-level owner profile; lf (OWN6): its load rules, applied by every GirderDetail module
++    ...(ownRule(plOwner(P), 'defl.ll') ? { swOwn: plSidewalk(P).on } : {}), ...(plWS(P) ? { wsNet: (({ t, w, b, s }) => ({ t, w, b, s }))(plWS(P)) } : {}), /* wsNet (OWN26) */ ...(plOwner(P) !== 'AASHTO' && P.ownDef ? { ownDef: { v: P.ownDef.v, mig: P.ownDef.mig || [], kept: P.ownDef.kept || [] } } : {}) };   // ownDef (OWN14): the owner defaults applied (one-time notice in GirderDetail)   // owner (OWN1): the bridge-level owner profile; lf (OWN6): its load rules, applied by every GirderDetail module
+ }
+@@ -5721,3 +5774,3 @@
+         + (rD ? rD.value.fixed ? `<p class="hint static full">η<sub>D</sub> = ${(+rD.value.f).toFixed(2)} (${esc(ownCite(rD))}: ${esc(rD.text)})</p>` : fld(`Nonductile components or connections <span class="lbl-note">${esc(ownCite(rD))}: η<sub>D</sub> = ${rD.value.f}</span>`, 'bridge.eta.D', '', 'sel', { full: true, options: YN }) : '')
+-      : fld('η<sub>D</sub> ductility (1.3.3)', 'bridge.eta.eD', '') + fld('η<sub>R</sub> redundancy (1.3.4)', 'bridge.eta.eR', '') + fld('η<sub>I</sub> operational importance (1.3.5)', 'bridge.eta.eI', '')}</div><p class="hint static" id="own-lf-res"></p>${own && q('defl.ll') ? `<div class="sec-body" style="padding:0">${fld(`Sidewalk or pedestrians on the bridge <span class="lbl-note">${esc(ownCite(q('defl.ll')))}: live load deflection L/${q('defl.ll').value.ped} with, L/${q('defl.ll').value.veh} without</span>`, 'limits.sidewalk', '', 'sel', { full: true, options: [['auto', "Automatic: a sidewalk in GirderDetail's cross-section"], ['yes', 'Yes'], ['no', 'No']] })}</div>` : ''}`;   // OWN19
++      : fld('η<sub>D</sub> ductility (1.3.3)', 'bridge.eta.eD', '') + fld('η<sub>R</sub> redundancy (1.3.4)', 'bridge.eta.eR', '') + fld('η<sub>I</sub> operational importance (1.3.5)', 'bridge.eta.eI', '')}</div><p class="hint static" id="own-lf-res"></p>${own && q('ws.sac') ? `<div class="sec-body" style="padding:0">${fld(`Uncoated weathering steel <span class="lbl-note">${esc(ownCite(q('ws.sac')))}: sacrificial ${frac(q('ws.sac').value.top)} in top flange, web, stiffeners; ${frac(q('ws.sac').value.bot)} in bottom flange</span>`, 'girder.wsU', '', 'sel', { full: true, options: [['no', 'No (coated)'], ['yes', 'Yes: design with the reduced section']] })}</div>` : ''}${own && q('steel.ws50') ? `<div class="sec-body" style="padding:0">${fld(`Bridge over railroads alone (uncoated 50W permitted) <span class="lbl-note">${esc(ownCite(q('steel.ws50')))}</span>`, 'bridge.overRR', '', 'sel', { full: true, options: [['no', 'No'], ['yes', 'Yes']] })}</div>` : ''}${own && q('defl.ll') ? `<div class="sec-body" style="padding:0">${fld(`Sidewalk or pedestrians on the bridge <span class="lbl-note">${esc(ownCite(q('defl.ll')))}: live load deflection L/${q('defl.ll').value.ped} with, L/${q('defl.ll').value.veh} without</span>`, 'limits.sidewalk', '', 'sel', { full: true, options: [['auto', "Automatic: a sidewalk in GirderDetail's cross-section"], ['yes', 'Yes'], ['no', 'No']] })}</div>` : ''}`;   // OWN19
+     fillInputs(); }
+```
