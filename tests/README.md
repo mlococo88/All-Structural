@@ -45,6 +45,8 @@ node tests/suggest.mjs same --project builtin,xsA --owner AASHTO,RIDOT      # ad
 # modes honoured (web depth Range/List/Locked, girder count List/Range, overhangs Locked, spacing near piers Locked), Cancel, Apply and module sync,
 # saved data both ways (main opens a project with the new fields; an older project opens in the branch), Design modules hides the button
 node tests/suggest.mjs locks
+# objectives (cost, steel weight, shallowest), maximum structure depth, the short list of options, Show the work and Apply of an option (part 2)
+node tests/suggest.mjs options
 ```
 
 Each `same` case opens A (`--a`, default `origin/main`) and B (`--b`, default the working tree) in parallel, waits for idle, sets the owner like `compare.mjs`, and compares the Suggest results (web depth and type, plates, splices, stiffeners, cross-frame spacing, cost, the fast-sizing candidates, the quick check or Full design candidates and ratios) exactly. Exit code 0 when everything passes.

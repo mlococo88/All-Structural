@@ -5,6 +5,8 @@
 //       as --b (default the working tree, driven by the panel's Quick suggestion and Full design buttons)
 //   node tests/suggest.mjs locks [--b file]
 //       Locked / Range / List honoured by the engines, Apply writes the inputs and GirderDetail's modules follow, Cancel, saved data both ways
+//   node tests/suggest.mjs options [--b file]
+//       objectives (cost, steel weight, shallowest), maximum structure depth, the short list of options, Show the work and Apply of an option
 // Exit code: 0 all pass, 1 a failure, 2 an error.
 import fs from 'fs';
 import path from 'path';
@@ -111,7 +113,8 @@ async function locks() {
     await f.click('[data-sgpv="nb"][data-sgpm="lock"]');
     // cancel: Full design, cancelled after 3 s
     await f.click('#sgp-full'); await p.waitForTimeout(3000);
-    const was = await f.evaluate(() => !!SG_RUN); await f.click('#sgp-cancel');
+    const was = await f.evaluate(() => !!SG_RUN); if (!was) console.log('  (debug) not running: ' + await f.evaluate(() => JSON.stringify({ b: sgpBusy() && sgpBusy().what, dis: document.getElementById('sgp-full').disabled, full: !!(SG && SG.full), want: SGP_WANT, alt: SGP_ALT && SGP_ALT.state })));
+    await f.click('#sgp-cancel');
     await f.waitForFunction(() => !SG_RUN, null, { timeout: 60000 }); await p.waitForTimeout(900);
     ok('Full design starts, shows progress and Cancel stops it', was && await f.evaluate(() => !(SG && SG.full) && document.getElementById('sgp-prog').hidden));
     // responsiveness while a run is going: the engine yields between its steps (one step can take a few seconds); median answer time of the main page
@@ -124,7 +127,7 @@ async function locks() {
     await f.click('#sgp-quick'); await f.waitForFunction(() => !sgpBusy() && SG && SG.quick && SG.quick.state === 'done' && SG_KEY === sgKey(), null, { timeout: 180000 });
     await p.waitForTimeout(600);
     const sg = await f.evaluate(() => JSON.stringify(sgGirder()));
-    await f.click('[data-sgpapply="sg"]'); await p.waitForTimeout(500);
+    await f.click('[data-sgpapply="sg"], [data-sgpapply="alt:0"]');   // alt:0: the recommended option of the short list (SGP2) await p.waitForTimeout(500);
     ok('Apply writes the suggestion into the Preliminary sizing inputs', await f.evaluate(s => JSON.stringify(P.girder) === s, sg));
     await f.click('#sgp-close'); await p.waitForTimeout(500);
     ok('Close returns to GirderDetail', await p.evaluate(() => !document.body.classList.contains('gd-sgp')));
@@ -160,5 +163,61 @@ async function locks() {
   return res.some(r => !r[1]) ? 1 : 0;
 }
 
-const code = CMD === 'locks' ? await locks() : (await same()) ? 1 : 0;
+
+// SGP2: objectives, maximum structure depth and the short list of options
+async function options() {
+  const res = []; const ok = (name, c, info) => { res.push([name, !!c]); console.log(`${c ? 'PASS' : 'FAIL'}  ${name}${info ? ' — ' + info : ''}`); };
+  const { b, p, errs } = await boot(B.file, 'builtin', 'AASHTO'), f = plf(p);
+  const quick = async () => { await f.click('#sgp-quick'); await f.waitForFunction(() => !sgpBusy() && SG && SG.quick && SG.quick.state !== 'checking' && SG_KEY === sgKey() && (!sgpNbLock() || (SGP_ALT && SGP_ALT.state === 'done' && sgpAltValid())), null, { timeout: 400000, polling: 500 }); await p.waitForTimeout(600); };
+  const list = () => f.evaluate(() => SGP_ALT.list.map(q => ({ D: q.sg.D, wt: q.sg.webType, cost: Math.round(q.sg.cost.total), w: Math.round(q.sg.cost.wTot), pass: sgpPass(q.sg), tags: q.tags, h: +sgpH(q.sg.top, q.sg.bot, q.sg.D).toFixed(3) })));
+  try {
+    await p.click('#gd-sgp-b'); await f.waitForFunction(() => SGP_OPEN, null, { timeout: 60000 });
+    ok('objective defaults to lowest cost, no field written', await f.evaluate(() => document.getElementById('sgp-obj').value === 'cost' && !('obj' in P.suggest)));
+    await quick(); let L = await list();
+    ok('quick: short list after the quick suggestion (recommended first, distinct options, labels)', L.length >= 2 && new Set(L.map(o => o.D + o.wt)).size === L.length && L.some(o => o.tags.includes('cost')) && L.some(o => o.tags.includes('shallow')), JSON.stringify(L));
+    ok('quick: the recommended option is the quick suggestion (same as without the panel)', await f.evaluate(() => SGP_ALT.list[0].sg === SG));
+    ok('options shown side by side with the current design', await f.evaluate(() => document.querySelectorAll('#sgp-res .sgp-ot thead th').length === SGP_ALT.list.length + 2 && document.querySelectorAll('#sgp-res [data-sgpapply^="alt:"]').length === SGP_ALT.list.length));
+    // objective: lowest steel weight
+    await f.selectOption('#sgp-obj', 'wt'); await p.waitForTimeout(500); await quick();
+    let r = await f.evaluate(() => { const ok = SG.rec.cands.filter(c => c.ok), m = Math.min(...ok.map(c => c.cost.wTot)), b = SG.rec.cands.find(c => c.best); return { obj: P.suggest.obj, bw: b.cost.wTot, m, D: SG.D }; });
+    ok('objective lowest steel weight: the fast pick has the least steel of the passing candidates', r.obj === 'wt' && Math.abs(r.bw - r.m) < 1e-6, JSON.stringify(r));
+    await f.selectOption('#sgp-obj', 'shallow'); await p.waitForTimeout(500); await quick();
+    r = await f.evaluate(() => { const ok = SG.rec.cands.filter(c => c.ok); return { D: SG.D, min: Math.min(...ok.map(c => c.D)) }; });
+    ok('objective shallowest: the fast pick is the shallowest passing depth', r.D === r.min, JSON.stringify(r));
+    await f.selectOption('#sgp-obj', 'cost'); await p.waitForTimeout(500);
+    // maximum structure depth
+    const h0 = await f.evaluate(() => sgpH(SG.top, SG.bot, SG.D));
+    const hmax = Math.round(h0 - 4);
+    await f.evaluate(v => { P.suggest.maxH = v; fillInputs(); schedule(); }, hmax); await p.waitForTimeout(500); await quick(); L = await list();
+    r = await f.evaluate(() => ({ cands: SG.rec.cands.filter(c => c.ok).map(c => c.h), hOver: SG.rec.cands.filter(c => c.hOver).length }));
+    ok(`maximum structure depth ${hmax} in honoured (fast candidates over it rejected; every option within it)`, r.cands.every(h => h <= hmax + 1e-9) && r.hOver > 0 && L.every(o => !o.pass || o.h <= hmax + 1e-9), `rejected ${r.hOver}; options ${JSON.stringify(L.map(o => [o.D, o.h, o.pass]))}`);
+    await f.evaluate(() => { delete P.suggest.maxH; fillInputs(); schedule(); }); await p.waitForTimeout(500);
+    // show the work for an option, then Apply it
+    await quick(); L = await list();
+    if (L.length > 1) {
+      await f.click('#sgp-res .sgp-go[data-sgpgo$="|alt:1"]'); await p.waitForTimeout(1500);
+      r = await f.evaluate(() => ({ open: SGP_OPEN, tab: P.ui.otab, D: SG.D, card: !!document.getElementById('sg-sum') && document.getElementById('sg-sum').textContent.includes('Quick suggestion') }));
+      ok('Show the work of option 2: the Suggest tab shows that option\'s derivation', !r.open && r.tab === 'suggest' && r.D === L[1].D && r.card, JSON.stringify(r));
+      await p.click('#gd-sgp-b'); await f.waitForFunction(() => SGP_OPEN); await p.waitForTimeout(800);
+      ok('reopened: the short list is kept', await f.evaluate(() => !!sgpAltValid() && SGP_ALT.list.length) === L.length);
+      await f.click('[data-sgpapply="alt:1"]'); await p.waitForTimeout(800);
+      ok('Apply option 2 writes it into the inputs', await f.evaluate(d => +P.girder.D === d, L[1].D), `D = ${L[1].D}`);
+    }
+    // Full design short list
+    await f.click('#sgp-full'); await f.waitForFunction(() => !SG_RUN && SG && SG.full && SGP_ALT && SGP_ALT.kind === 'full', null, { timeout: 900000, polling: 2000 }); await p.waitForTimeout(600);
+    L = await list();
+    ok('Full design: short list from its refined candidates (recommended = Full design result, all passing)', L.length >= 1 && await f.evaluate(() => SGP_ALT.list[0].sg === SG) && L.every(o => o.pass), JSON.stringify(L));
+    // girder count Free: one girder fewer / more
+    await f.click('[data-sgpv="nb"][data-sgpm="free"]'); await p.waitForTimeout(400); await f.click('#sgp-quick');
+    await f.waitForFunction(() => WS && WS.done && WS.key === wsKey(), null, { timeout: 300000 }); await p.waitForTimeout(800);
+    r = await f.evaluate(() => sgpOptWS().map(o => [o.nb, o.tags, o.rec]));
+    const rec = r.find(o => o[2]);
+    ok('girder count Free: recommended count plus one fewer / one more and the best of each objective', rec && r.some(o => o[1].includes('nbm') || o[1].includes('nbp')), JSON.stringify(r));
+  } catch (e) { console.error(e); try { await b.close(); } catch (e2) {} return 2; }
+  await b.close();
+  if (errs.length) { console.log('console errors: ' + errs.join(' | ')); return 1; }
+  return res.some(r => !r[1]) ? 1 : 0;
+}
+
+const code = CMD === 'locks' ? await locks() : CMD === 'options' ? await options() : (await same()) ? 1 : 0;
 process.exit(code);
