@@ -138,8 +138,8 @@ Each item has my recommendation; the tool currently follows it. Details are in t
 - GD48. Design load rating GS20 (OWN9) — method to confirm: HL-93 inventory RF from the Girder section's own checks (Strength I: GS6/GS7 or GS9/GS8/GS11, γ<sub>LL</sub> 1.75; Service II: GS12/GS13, 1.30; Fatigue: 1/(GS17 ratio) at GS17's limit state), dead load factors as entered, **no η, no multiplier**, φ<sub>c</sub> = φ<sub>s</sub> = 1.0; RF = (1 − r<sub>0</sub>)/(r<sub>1</sub> − r<sub>0</sub>), quadratic where the resistance depends on the load (nonprismatic F<sub>e</sub> = γ<sub>e</sub>f<sub>bu</sub>); Girder section locations only (splices, stiffeners, studs, cross-frames not rated); RIDOT "infinite fatigue life" read as fatigue RF ≥ 1.00 at GS17's limit state (Fatigue II where the Fatigue module selects it); MassDOT reported only; legal/permit/posting/emergency/CT-TLC vehicles **pending** (not in the tool). Built-in under CTDOT fails GS20 (Strength I 1.18 < 1.20; 28°: 0.93), under RIDOT at 28° 0.84 < 1.10 — reported, not resized (owner_spec). OK?
 - GD49. ~~ST-Girder hand-off (Send to ST-Girder): the payload's unfactored forces come from the owner-compliant analysis (haunch 0 in the stiffness for RIDOT/MassDOT) but the **owner rules are not passed as data**: a note line lists them. ST-Girder applies its own factors (no multiplier, no η) and the haunch as entered. Reaching ST-Girder needs a cross-tool change (HANDOFF.md, `stgirder.html`) — not in this PR (one tool per PR). Do it?~~ **Engineer decision 2026-10-15: do it.** Implemented in claude/gd-st-owner-rules (OWN13 / stgirder GD49): the hand-off carries `ownerRules`; ST-Girder applies η, m (not on the pedestrian load) and haunch 0 to its girder checks and reports the rating target. ~~Still open for you: should the multiplier and η also apply to ST-Girder's transverse **Deck** design (BDM 3.4.1.2 says "all bridge components")?~~ **Engineer decision 2026-10-15: yes** (m on HL-93 LL+IM at Strength and Service, η at Strength). Implemented in claude/stgirder-deck-owner (stgirder GD49-D, B44): the Deck tab's Strength I uses 1.25η, 1.50η, 1.75ηm (the deck has no Service check in ST-Girder). GirderDetail has no transverse deck design (its Deck overhang module is deck-placement constructibility, where m does not apply).
 - GD50. ~~Working modes (PR #232) decisions 1–3.~~ **Engineer-confirmed 2026-10-15:** (1) older projects with hand-entered module demands open in Design modules: OK; (2) Preliminary designer keeps auto-design on automatic updates; (3) Design modules: the Bridge & girder elevation does not colour plates by Preliminary sizing check status — implemented in claude/gd-owner2-followups (OWN12, neutral colours; unchanged in Preliminary designer).
-- GD51. Owner defaults (OWN14, claude/gd-owner-profiles-3a): an input counts as **untouched** when its value equals the default it had before (the previous owner's default, or the tool's generic default), so a value you typed that happens to equal the old default moves with the owner. A project saved before opens once with the defaults applied and a notice listing what moved, what was kept and the checks now applied. The alternative is to track every edit per input, which is a new saved field on every input. Is matching by value OK?
-- GD52. RIDOT BDM 3.3.1 60/40 (OWN15), readings to confirm:
+- GD51. **Engineer-confirmed 2026-10-15** (claude/gd-owner3a-followups): matching by value, as implemented. Owner defaults (OWN14, claude/gd-owner-profiles-3a): an input counts as **untouched** when its value equals the default it had before (the previous owner's default, or the tool's generic default), so a value you typed that happens to equal the old default moves with the owner. A project saved before opens once with the defaults applied and a notice listing what moved, what was kept and the checks now applied. The alternative is to track every edit per input, which is a new saved field on every input. Is matching by value OK?
+- GD52. **Engineer-confirmed 2026-10-15** (claude/gd-owner3a-followups): readings (a) to (f) as implemented. RIDOT BDM 3.3.1 60/40 (OWN15), readings:
   - (a) Each load is split on its own. A barrier, curb, railing or fence puts 60% on the fascia beam on its side and 40% evenly on all the interior beams.
   - (b) A sidewalk over more than one beam puts 60% on the beams under it and 40% on the remaining interior beams. Over one beam or less, it is treated as an edge load.
   - (c) A median or other line load puts 60% on the beams under it (or on the two beams either side) and 40% on the remaining beams.
@@ -147,28 +147,28 @@ Each item has my recommendation; the tool currently follows it. Details are in t
   - (e) Preliminary sizing applies the rule only to its built-in barrier load: exterior 0.6 w_bar, interior 0.8 w_bar/(N_b − 2).
   - (f) The rule is used even when a refined analysis is used. The BDM allows "unless a refined analysis is used"; the tool has no switch for that.
   - Effect: on xsA (sidewalk) the fascia girder gets less than under the MassDOT pile-cap rule that main used for every owner (GS8 1.010 → 0.977). OK?
-- GD53. RIDOT asphalt unit weight: 3 in × 0.140 kcf (AASHTO Table 3.5.1-1 bituminous wearing surface) = 35 psf, plus 35 psf FWS = 70 psf. The BDM gives the 3 in thickness (9.4.7) but not the unit weight. OK, or another unit weight?
-- GD54. MassDOT utilities (OWN16), readings to confirm:
+- GD53. **Engineer-confirmed 2026-10-15** (claude/gd-owner3a-followups): 0.140 kcf. RIDOT asphalt unit weight: 3 in × 0.140 kcf (AASHTO Table 3.5.1-1 bituminous wearing surface) = 35 psf, plus 35 psf FWS = 70 psf. The BDM gives the 3 in thickness (9.4.7) but not the unit weight. OK, or another unit weight?
+- GD54. MassDOT utilities (OWN16), readings. **Engineer-confirmed 2026-10-15** (claude/gd-owner3a-followups): (a), (c), (e) as implemented; (d) the ST-Girder hand-off still does not carry the utilities (a note line lists them; not changed here, see the fix log GD54b). **(b) changed (GD54b, engineer decision 2026-10-15):** the utilities are now carried as their own loads (M<sub>UT</sub>, M<sub>UF</sub>, V<sub>UT</sub>, V<sub>UF</sub>) in every module's demands and each module applies the exact factors (existing: DW 1.50/0.65, Service 1.0; future: 1.25/0, Service 1.0 where it adds; neither at deck placement). The original readings:
   - (a) Existing utilities use the DW factors: 1.50η maximum, 0.65/η minimum, 1.0 at Service, and they are in the camber. The future allowance uses 1.25η maximum and 0 minimum, Service 1.0 only where it adds, and is not in the camber.
-  - (b) The detail modules (splice, stiffeners, studs, bearings and so on) carry only DC1/DC2/DW/LL+IM, so the utilities are folded into DC1 as 1.20 × existing + 1.00 × future. This is exact at Strength I where they add and conservative at Service. **Where they relieve it is less conservative:** the module's γ_DC,min 0.90 gives 1.08 × existing and 0.90 × future, against 0.65 and 0. Recommendation: accept, since utilities are small next to DC1. The alternative is a separate utility load in every module.
+  - (b) ~~The detail modules (splice, stiffeners, studs, bearings and so on) carry only DC1/DC2/DW/LL+IM, so the utilities are folded into DC1 as 1.20 × existing + 1.00 × future. This is exact at Strength I where they add and conservative at Service. **Where they relieve it is less conservative:** the module's γ_DC,min 0.90 gives 1.08 × existing and 0.90 × future, against 0.65 and 0. Recommendation: accept, since utilities are small next to DC1. The alternative is a separate utility load in every module.~~ Replaced by the separate utility loads (GD54b).
   - (c) Preliminary sizing's deck placement (constructibility) does not include the utilities. They are installed after the deck.
   - (d) The ST-Girder hand-off does not carry the utilities; a note line says so. Add them there (a cross-tool change)?
   - (e) In the RIDOT method, utilities go to the two beams either side (BDM 3.3.1 "equally to the beams on either side").
-- GD55. CTDOT deck (OWN17), readings to confirm:
+- GD55. **Engineer-confirmed 2026-10-15** (claude/gd-owner3a-followups): (a) to (e) as implemented. CTDOT deck (OWN17), readings:
   - (a) The 0.5 in sacrificial top is weighed in DC1 and is not in any section property. The structural t_s stays 8 in and the total deck is 8.5 in. An older CTDOT project with an 8 in deck now weighs 8.5 in.
   - (b) w_c = 0.145 kcf is used only for E_c, so it also enters n, K_g, every composite property and the stud Q_n (E_c in 6.10.10.4.3). The dead load keeps w_c = 0.150.
   - (c) The haunch rule (≥ 1 in) is a fail in G11.
   - (d) The construction live load (50 psf) is a fail in G11 when lower.
   - (e) The ST-Girder hand-off sends w_c = 0.150 (dead load) together with the E_c and n computed from 0.145.
   - OK?
-- GD56. MassDOT f′c 5.0 ksi default (OWN17, Part I 4.2.2.3): the built-in example and every new project (default owner MassDOT) now use 5.0 ksi. n goes 6.80 → 6.32 and Strength I M_u+ 4909.65 → 4888.48 kip-ft. Older MassDOT projects with 4.0 ksi untouched move to 5.0, with the notice. OK?
-- GD57. Overhang (OWN17), readings to confirm:
+- GD56. **Engineer-confirmed 2026-10-15** (claude/gd-owner3a-followups): as implemented. MassDOT f′c 5.0 ksi default (OWN17, Part I 4.2.2.3): the built-in example and every new project (default owner MassDOT) now use 5.0 ksi. n goes 6.80 → 6.32 and Strength I M_u+ 4909.65 → 4888.48 kip-ft. Older MassDOT projects with 4.0 ksi untouched move to 5.0, with the notice. OK?
+- GD57. **Engineer-confirmed 2026-10-15** (claude/gd-owner3a-followups): as implemented. Overhang (OWN17), readings:
   - RIDOT 9.4.1.4: G6 fails above min(d, S/2, 4 ft, or 3 ft when d < 5 ft) and warns when w_oh/d > 0.6. d is the fascia girder's steel depth at its shallowest section.
   - The built-in example (3.25 ft overhang, 61.88 in girder) now warns: 0.63 > 0.6.
   - CTDOT 9.7.1.5: a warning above min(4 ft, d).
   - The Limits-tab overhang placeholder (0.40 S, 4 ft) is not used under these owners.
   - OK?
-- GD58. Deflection and span-to-depth (OWN19), readings to confirm:
+- GD58. **Engineer-confirmed 2026-10-15** (claude/gd-owner3a-followups): (a) to (f) as implemented. Deflection and span-to-depth (OWN19), readings:
   - (a) "Sidewalk or pedestrians" is taken from GirderDetail's LLDF and DLs cross-section unless entered on the Limits tab.
   - (b) The required ratio is max(owner, Limits-tab entry). The check applies even with the deflection switch off.
   - (c) MassDOT 3.5.6.1 "typical interior beam": exterior items are reported as not applicable. Structural analysis SA3 for an exterior girder becomes n/a.
@@ -176,20 +176,20 @@ Each item has my recommendation; the tool currently follows it. Details are in t
   - (e) MassDOT 3.6.1.3: L runs between the dead-load contraflexure points of the analysis (interior girder, permanent loads), from abutment to contraflexure in end spans. With no analysis, a uniform load on a constant-EI beam is used. D_st is the shallowest steel section in the span. t_s is the structural deck without the haunch. 25 fails and 21 warns. G1 steel ≤ 30 fails.
   - (f) RIDOT: span-to-depth is a guide (warning).
   - OK?
-- GD59. RIDOT uncoated weathering steel (OWN26, claude/gd-owner-profiles-3b), readings to confirm:
+- GD59. RIDOT uncoated weathering steel (OWN26, claude/gd-owner-profiles-3b), readings. **Engineer decision 2026-10-15** (claude/gd-owner3a-followups): the switch stays **default off**; (a) to (d) and (f) as implemented; **(e) changed:** with the switch on, the Transverse stiffeners (intermediate stiffeners and connection plates, connection plates taken as stiffeners) and Bearing stiffeners modules check the design thickness t<sub>p</sub> − 1/16 in and their auto-design adds the 1/16 in above the minimum plate (BDM 6.2.1, 6.4.2; fix log GD59). The original readings:
   - (a) A Limits tab (Owner profile) input "Uncoated weathering steel" turns it on; the default is **no**. Grade 50W alone does not imply uncoated: the built-in grade is 50W for every owner.
   - (b) The sacrificial thickness is added above the minimums: W3, F5 and D7 require the minimum + 1/16 in (bottom flange 1/8 in).
   - (c) The sacrificial thickness is removed from the design section: W1, F1 and F3, Full design, and the plates sent to every module.
   - (d) Plates entered by hand in a module are used as entered (a note asks for the net thicknesses).
-  - (e) The stiffener and connection plate modules design with full plates: only the D7 minimum includes the 1/16 in.
+  - (e) ~~The stiffener and connection plate modules design with full plates: only the D7 minimum includes the 1/16 in.~~ Changed (GD59).
   - (f) The girder weight uses the full plates.
   - Set it on for RIDOT by default instead, or apply it to the stiffener modules?
-- GD60. RIDOT studs (OWN22):
+- GD60. **Engineer-confirmed 2026-10-15** (claude/gd-owner3a-followups): as implemented (6d; 1.25 in of bars). RIDOT studs (OWN22):
   - The minimum pitch is 6d, in place of 4d.
   - The top of the bottom reinforcement mat is taken at haunch + 1.5 in cover (BDM 9.4.1.1) + 1.25 in of bars (two layers of No. 5 assumed), and the stud must reach 1 in above it. Built-in: 2 + 1.5 + 1.25 + 1 = 5.75 in ≤ 6 in.
   - OK, or give the bar layers?
-- GD61. RIDOT flange width L/85 (OWN21, BDM 6.4.2) is read for the **compression** flange of each shipping piece: the top flange, and over an interior support the narrower of both flanges. It is a fail. OK?
-- GD62. CTDOT (OWN20, OWN25), readings to confirm:
+- GD61. **Engineer-confirmed 2026-10-15** (claude/gd-owner3a-followups): as implemented. RIDOT flange width L/85 (OWN21, BDM 6.4.2) is read for the **compression** flange of each shipping piece: the top flange, and over an interior support the narrower of both flanges. It is a fail. OK?
+- GD62. CTDOT (OWN20, OWN25), readings. **Engineer-confirmed 2026-10-15** (claude/gd-owner3a-followups): (a) to (f) as implemented; (c) existing CTDOT projects whose splices fail DT3/DT4/DT7 because the flanges cannot take 2 gage lines with 2 in edges and 1/2 in plates **keep failing**; the splice checks, the splice summary and the auto-design message now say why and how to fix it (the width needed, widen the flange at the splice; fix log GD62). The original readings:
   - (a) K_h = 0.85 multiplies the slip resistance only. Hole size, bearing and net section use standard holes, since standard holes are specified.
   - (b) The 1/2 in minimum applies to every splice plate (flange outer and inner, web). Through Owner standards it also applies to stiffener, connection plate and bearing stiffener auto-design (one "minimum plate thickness").
   - (c) The 2 in edge distance applies to all bolt edges of the splice. **The built-in 16 in flanges at the splices no longer take 2 gage lines (18 in needed).** A CTDOT project's splice fails DT4/DT7 until Suggest widens the flanges; Suggest now sizes them with the 2 in edge.
@@ -197,12 +197,12 @@ Each item has my recommendation; the tool currently follows it. Details are in t
   - (e) Category C ((ΔF)_TH = 10 ksi, GD41) applies to the flange at every connection plate (Fatigue detail Cp-stiff, CP2, Full design). FA1 on the built-in goes 1.138 → 1.365.
   - (f) G13 (refined analysis) is a warning only. The tool keeps its line-girder analysis.
   - OK?
-- GD63. MassDOT (OWN23), readings to confirm:
+- GD63. **Engineer-confirmed 2026-10-15** (claude/gd-owner3a-followups): (a), (b) as implemented; (c) the exterior sidewalk beam Case I / Case II **stays a warning** (DF6, not implemented). MassDOT (OWN23), readings:
   - (a) The default grade is coated Grade 50 (F_u 65 ksi, was 50W with 70) for the built-in example and every new MassDOT project. The fracture and weld resistances drop by 65/70: FW2 18.27 → 16.97 kip/in, splice MT1 negative 2694 → 2502 kip-ft. The cost has no coating item.
   - (b) Girder section negative flexure defaults to Article 6.10.8 only, and GS22 warns where A6 is used.
   - (c) The exterior sidewalk beam Case I / Case II (3.5.3.11) is **not implemented**: DF6 warns when a sidewalk is entered. Implement it?
   - OK?
-- GD64. Integral abutments (OWN24), readings to confirm:
+- GD64. **Engineer-confirmed 2026-10-15** (claude/gd-owner3a-followups): as implemented. Integral abutments (OWN24), readings:
   - RIDOT: L ≤ 150 ft, skew ≤ 30°, depth ≤ 6 ft (largest steel depth), fail.
   - CTDOT: skew < 30° (strict), total and every span ≤ 150 ft, fail.
   - MassDOT: 140 ft / 30° are the simplified-method limits, a warning beyond (3D analysis).
