@@ -15152,3 +15152,577 @@ Diff of the embedded Preliminary sizing page (decoded PL_B64):
 +  r.innerHTML = `η = η<sub>D</sub>η<sub>R</sub>η<sub>I</sub> = ${L.eD.toFixed(2)} × ${L.eR.toFixed(2)} × ${L.eI.toFixed(2)} = <b>${(L.eD * L.eR * L.eI).toFixed(3)}</b> on the Strength load factors (1/η on the minimum factors)${L.m !== 1 ? `; design load multiplier <b>${L.m}</b> on LL+IM at Strength and Service (${esc(L.cite.m)})` : ''}${L.h0 ? `; haunch 0 in composite properties (${esc(L.cite.h)})` : ''}. Worked on the Analysis tab.`;
  }
 ```
+
+## 2026-10-15 — PR: claude/gd-mode-toggle (working mode toggle "Preliminary designer" / "Design modules", and one project title block; engineer's decisions of 2026-10-15; PR link added after merge)
+
+No engineering formula, load or resistance factor, unit, unit conversion or code reference is changed. The change is in where the modules take their demands from, when they are reloaded, which inputs are shown, and where the project information is kept. Every module's checks are identical to main for the same demand source (verification below). The embedded Preliminary sizing (`PL_B64`) is decoded, edited and re-encoded on one line.
+
+Saved data: no storage key and no existing field is changed. New optional fields in the GirderDetail project (`girderdetail_autosave_v1`, `girderdetail_projects_v1`, Export JSON): `gdMode` ('pl' or 'mod'), `tb` (the title block), `tbMig` (the migration record, with the earlier values), `plSync` (`{ sig, ts }`: the signature and time of the Preliminary sizing demands last loaded into every module). Preliminary sizing's saved data (`plateline_*`) is unchanged; its project-info fields are hidden in GirderDetail, not changed. `girderdetail_inbox_v1` is unchanged (the demand signature `dsig` is a field of the message, not of the stored inbox). A project saved by this version opens in main without errors and with the same results (main ignores the new fields); a project saved by main opens here through the migrations below.
+
+### GDM1. Working-mode toggle at the top of GirderDetail, saved per project   [UI, saved data: new optional field]
+- **Where:** new bar `#gd-top` between the header and the module tabs (anchor `<div class="gd-top" id="gd-top">`); new code block "GirderDetail: working modes (GDM) and the project title block (GDT)" before `/* ---------- print ---------- */` (`gdModeInfer`, `gdModeInit`, `applyGdMode`, `setGdMode`); `initP` and `loadData` call `gdModeInit`; `init` calls `applyGdMode`; CSS anchor `/* working mode and project title block bar (GDM, GDT; 2026-10-15) */`.
+- **After:** two large buttons, **Preliminary designer** and **Design modules**. The mode is saved in `P.gdMode`. Switching keeps the module tab, its output tab and scroll position (only the Preliminary sizing tab's own output tab moves to Drawings when its current tab is hidden in Design modules).
+- **Projects saved before the toggle** (`gdMode` missing; decision asked of me, stated here): **Design modules** when
+  1. a module's demands came from anywhere but Preliminary sizing (`_impSrc` label not "Preliminary sizing…"/"PlateLine…", e.g. "Structural analysis, G2"), or
+  2. the last request was from Structural analysis (`ui.lastSrc` = `sa:g`), or
+  3. a module that takes demands (field splice, bearing stiffeners, transverse stiffeners, shear connectors, cross-frames, deck overhang, welds, girder section, fatigue) has no import record and its data differ from the built-in example (values entered by hand; not to be overwritten);
+  
+  otherwise **Preliminary designer**. When an older project opens in Design modules the top bar says why ("Opened in Design modules: Girder section: values entered here…"), until the mode is switched. A new project (built-in example) is Preliminary designer.
+- Switching to Preliminary designer with modules on another source asks first ("These modules have other demands: Girder section: Structural analysis, G2 … will be replaced by Preliminary sizing's (your overrides and locked inputs are kept)"); Cancel keeps Design modules.
+
+### GDM2. Preliminary designer: every module takes its demands from Preliminary sizing and stays in sync automatically   [demand source and timing; no formula change]
+- **Where:** Preliminary sizing (decoded `PL_B64`): new `plHash`, `plDsigOf`, `plDsig`, `postDsig`, `gdModeSet` and a `gd-mode`/`gd-tb` listener before `function sendSplices(` (anchor `GirderDetail working modes (GDM, engineer's decisions 2026-10-15)`); the `pl-export-req` reply and the embedded "Send to GirderDetail" message carry `dsig`; the recompute wrapper posts `pl-dsig` (anchor `// GDM: the demand signature`); the gd-owner / gd-an / gd-dfx / gd-xs handlers are wrapped in `PL_GDMSG++ … finally PL_GDMSG--`. GirderDetail: `gdScheduleRefresh` (anchor `GDM (2026-10-15): why = 'bridge'`), the `gd-inbox` listener (anchor `gdSyncNote(j, e.data.dsig);`), `gdSyncAdopt`, `gdSyncCheck`, `gdSyncNote`, `gdSyncTxt`, `gdSyncShow`, `srcPanel` (anchor `GDM (2026-10-15): Preliminary designer: no source choice`), `renderInbox`, `getDemands` (anchor `GDM: Preliminary designer keeps Design modules' source`), `designAllStart` and the `da_go` click, the girder report dialog.
+- **Before:** each module chose its demand source (Preliminary sizing or Structural analysis Gx) and loaded it with Get demands; the automatic refresh reloaded every module only when the bridge record changed (spans, skews, girders, plates, splices, owner load rules), from the last source.
+- **After (Preliminary designer):**
+  - All tabs are present. No module offers a source choice, Get demands or the Import-from-PlateLine buttons (the field splice case list stays: it picks which case the module shows). The module's Project tab reads "Demands from Preliminary sizing, updated (time)"; Keep my overrides / Reset overrides and the auto-design panel stay. The top bar says "Demands from Preliminary sizing, in sync, updated (time)", "Updating the modules from Preliminary sizing…", or a warning.
+  - After each analysis Preliminary sizing posts `pl-dsig`: a signature (FNV-1a hash and length) of the demands it would send (`inboxPayload` of the envelope analysis, time stamps removed). The reply to a Preliminary sizing request carries the signature of the demands it contains (`dsig`), and GirderDetail stores it in `P.plSync` when the reply loads every module (`all`, `refresh`, `xfall`). When the posted signature differs from `P.plSync.sig`, the existing automatic refresh runs 1.5 s later: `getDemands('pl', 'refresh')`, i.e. every module loaded and auto-designed through the request IDs, ordering and cross-frame second pass of XR1–XR3, unchanged. It is skipped if the signatures match again by then or a request is outstanding (re-checked when it is answered). Any change in Preliminary sizing that changes the demands therefore updates every module, also changes that did not refresh before (for example the cross-frame spacing or the stiffener spacing d<sub>o</sub>/D on the Framing tab, or GirderDetail inputs that Preliminary sizing uses, such as the LLDF and DLs factors) — no button.
+  - The bridge-change refresh is unchanged in Design modules mode. In Preliminary designer it always runs (the owner standard "Auto-refresh" is for Design modules) and always from Preliminary sizing; a bridge change and a demand change in the same 1.5 s make one refresh.
+  - Preliminary sizing with input errors: no request and no alert; "Preliminary sizing has input errors: the modules keep their last demands."; updated once the errors are fixed.
+  - Loop guard: Preliminary sizing counts its own recomputes (`u`, not those caused by GirderDetail's messages). At most 3 automatic updates in a row without a change by the user (in Preliminary sizing, or an input in GirderDetail); then "Automatic updates paused after 3 in a row (the cross-frame auto-design keeps changing the frame weights). Update now".
+  - Design all: Preliminary sizing only (no source choice). The girder report still loads one girder's Structural analysis demands into every module for its chapters; afterwards every module is loaded from Preliminary sizing again (the dialog says so). The "Run Get demands again" banner reads "The demands are updated again automatically."
+  - The remembered source of Design modules mode (`ui.lastSrc`, `ui.srcSel`) is not changed by requests made in Preliminary designer.
+  - A project from before the toggle opening in Preliminary designer whose modules all took their demands from Preliminary sizing is taken as in sync (`plSync.adopted`; nothing is reloaded on opening, as on main, until Preliminary sizing changes). One with modules never loaded (the built-in example) is loaded from Preliminary sizing when it opens.
+- **Governing provision:** none (no calculation change).
+- **Check case (built-in example saved by main, 5 girders, AASHTO):** Preliminary sizing → Framing → cross-frame spacing 20 ft.
+  - **Before (main):** no module changes; Get demands or Design all needed. Module checks `6f4aa5d36108`.
+  - **After (Preliminary designer):** 1.5 s later one refresh from Preliminary sizing, no button; module checks `4b91646ea70b`, identical to main with Get demands for every module (`getDemands('pl','refresh')`) after the same edit (`4b91646ea70b`). In Design modules mode nothing is reloaded, as on main (`79446684b1d5` = main).
+
+### GDM3. Design modules: Preliminary sizing becomes "Bridge & girder", the bridge definition only   [UI only]
+- **Where:** Preliminary sizing CSS (anchor `GirderDetail working modes (GDM, 2026-10-15): in "Design modules"`), `gdModeSet`, `openReport`/`doPrint` (`RPT_GEO`, `rptOn`); GirderDetail `MODS.pl.title` (getter), `applyGdMode` (tab label), the `pl-status` listener (no sizing-check count on the tab).
+- **After:** the tab reads **Bridge & girder**; its Summary and Checks tabs, Suggest and Alternatives (with Full design, candidates and the girder-count study), the status bar of the sizing checks and the Suggest undo bar are hidden (not removed; switching back shows them). Inputs kept: Project, Bridge (spans, supports and skews, girders and spacing, deck and cross-section), Girder (plates, web, field splices, grades), Framing, Limits (owner, η inputs, plate limits). The Suggest input tab reads **Loads** and shows only its Loads section (FWS, SIP forms, barrier, construction live load: part of the bridge record). Output tabs kept: Drawings, Analysis, Schedule, Manual; its print options are those four. It publishes the bridge record exactly as before. Every module keeps its own demand source and Get demands, as on main (Structural analysis Gx, Preliminary sizing, or values entered).
+
+### GDT1. One project title block, read by every report, drawing and hand-off   [UI, saved data: new optional field; printed headers unchanged for the same values]
+- **Where:** `#tb-sum` (top bar) and the dialogs `#tb-modal`, `#tb-note`; `gdMeta`, `tbBuild`, `tbRender`, `tbOpen`, `tbNotice`, `gdTbMigrate`, `gdPlState`; the Project tab's "Calculation header" (anchor `Edit the title block</button>`); readers: `bsRenderReportHead`, `gmReportHead`, `renderReportHead`, `buildCalcReport` (cover: bridge No. and description when entered), `crPageCSS`, `crTitleBlock`, girder report cover and footer, `dxfCover`, `dxfSheet` (anchor `const mt = gdMeta(), cells =`), DXF/PNG/CSV file names, Save's default name, `gdStPayload` (`project`), the shared-project-info map (anchor `GDT (2026-10-15): the project title block's fields`); Preliminary sizing `renderReportHead` (anchor `GDT: GirderDetail's project title block`), its Project tab (`#gd-tb-note`, `html.gd-tb`).
+- **After:** `P.tb = { name, no, bridge, desc, compBy, compDate, chkBy, chkDate }` (project name, project No., bridge / structure No., description, computed by, date, checked by, checked date), with the owner shown (read only, from the top-bar owner). The top bar shows it; "Title block" edits it. Each module's Project tab keeps only Subject and Task (per calculation), with "Edit the title block"; Preliminary sizing hides its project name, computed/checked and date fields (kept in its data) and its report uses the title block. Imports no longer rewrite `P.meta.name` once the title block exists (the old values stay as they were). "Use shared project info" / "Share project info" (HANDOFF §4.1) moved to the title block dialog, with `bridgeId` now mapped (Bridge / structure No.). The ST-Girder hand-off (`girderDemands`, HANDOFF §4.9) sends the title block's project name as `project` (a string as before; was Preliminary sizing's bridge name, which the title block takes on migration, so the value is the same for migrated projects).
+
+### GDT2. Migration of the project information (§5)   [saved data: new optional fields; nothing removed]
+- **Where:** `gdTbMigrate` (runs when Preliminary sizing has loaded: its first status message, or at Open/Import when it is up), `tbNotice`.
+- **Rule:** a project without `tb`: each field takes **Preliminary sizing's value** (its own saved `meta`: name, computed by, date, checked by, checked date; it has no project No.); a blank is filled from the **modules' calculation header** (`P.meta`: project No., project name, computed/checked by, dates; one header shared by every GirderDetail module); bridge No. and description start blank. Fields where both are filled and differ are listed **once** in a notice (module, field, earlier value, title block value) and recorded in `P.tbMig.conf`; `P.tbMig` also keeps both sources' values, listed under "Values before the title block" in the title block dialog. `P.meta` and Preliminary sizing's fields are left unchanged.
+- **Check case:** modules' header: project No. 2024-117, name "Route 6 over Blackstone River", computed by MLL, date 10/01/2026, checked by JDS; Preliminary sizing: name "Example 3-span continuous", computed by blank, checked by ABC, checked date 10/02/2026.
+  - **After:** title block: name "Example 3-span continuous", No. 2024-117, computed by MLL, date 10/01/2026, checked by ABC, checked date 10/02/2026. Notice: "GirderDetail modules (calculation header on the Project tab) | Project name | Route 6 over Blackstone River | Example 3-span continuous" and "… | Checked by | JDS | ABC". `P.meta` unchanged, also after a refresh; no second notice after reopening.
+
+### Manual
+- Part 1 "Read this first": new section "Working modes and the project title block" (anchor `<h3>Working modes and the project title block</h3>`).
+- HANDOFF.md: §4.1 (GirderDetail's title-block mapping) and §4.9 (`project` from the title block).
+
+### Verification (GDM1–GDM3, GDT1–GDT2)
+- `node --check` on every script block of the main page (4) and of the decoded Preliminary sizing (2).
+- Headless Chromium, main (6e37567) vs branch. Every run waits until no request is outstanding or queued, no second pass is pending, Preliminary sizing is ready, and the project data has been unchanged for 8 s. Hashes: every module's checks (`all`), the project data without `ui` and the new fields (`P`), and the module demand data (`D`).
+- **Opening a project saved by main** (built-in example, xsA and curb, each under AASHTO and RIDOT, settled and saved by main): main, branch Preliminary designer (inferred) and branch Design modules give identical hashes, with no request on opening:
+
+  | Project | Module checks | Project data |
+  |---|---|---|
+  | built-in, AASHTO | `6f4aa5d36108` | `2d0467af86e1` |
+  | built-in, RIDOT | `91837336359c` | `807f3251b587` |
+  | xsA, AASHTO | `c0cbc27dd960` | `cb0fcfc02b9a` |
+  | xsA, RIDOT | `1bec023fd132` | `e8dc8a4e6e22` |
+  | curb, AASHTO | `e55d2b85f382` | `8339b733e925` |
+  | curb, RIDOT | `cfb6430e33d1` | `ac4d043a2cac` |
+- **Older projects (saved before XS/XF, refreshed on opening):** curb opens in Preliminary designer, xsA in Design modules (its Girder section holds values without an import record); both equal main (`a56234414c37`, `8473e2b1cdf1`; one and two refreshes from Preliminary sizing, as on main), and Design modules forced on either also equals main.
+- **No saved project (built-in example):** Preliminary designer loads every module from Preliminary sizing on opening (refresh + cross-frame second pass): `57f33b514193` / `452ab55689f2`, identical to main followed by Get demands for every module from Preliminary sizing (`getDemands('pl','refresh')`). Main without it keeps the example demands (`04d6971cd816`), as intended.
+- **Auto-sync (an edit in Preliminary sizing, no button):** built-in AASHTO and curb RIDOT; framing spacing 20 ft, d<sub>o</sub>/D 1.5, deck t<sub>s</sub> 8.5 in. Preliminary designer: one automatic refresh from Preliminary sizing; module checks and demand data identical to main with a refresh after the same edit (built-in: `4b91646ea70b`, `3911ee6cc294`, `ba5fec9653d4`; curb: `97261ee391c6`, `1fec4b627b62`, `51e5f4c02ca4`). Design modules: identical to main without a request (no refresh for framing spacing or d<sub>o</sub>/D; the bridge-change refresh for t<sub>s</sub>, as before).
+- **Saved data both ways:** main's storage into the branch: the table above. Branch storage (with `gdMode`, `tb`, `tbMig`, `plSync`; Preliminary designer and Design modules) opened in main: no errors, identical hashes (`cfb6430e33d1`, `c0cbc27dd960`, `57f33b514193`); reopened in the branch: identical, no request.
+- **Modes:** switching keeps the module tab and scroll position, makes no request when nothing needs loading; Bridge & girder hides the sizing tabs and opens on Drawings; Design modules shows the source choice and Get demands; a module loaded from Structural analysis G2 then switching to Preliminary designer asks, then loads every module from Preliminary sizing; Design all offers no source in Preliminary designer; `ui.lastSrc` kept. Preliminary sizing input errors: no request, no alert, status shown; fixed: one update. Girder report (G2) in Preliminary designer: built, then every module back on Preliminary sizing and in sync. Loop limit: held after 3, "Update now" updates.
+- **Title block migration** with conflicting values (check case of GDT2): every item as stated; the notice; `P.meta` unchanged (also after a refresh); Share project info publishes the title block (`bridgeId` included); Use shared project info fills it; Preliminary sizing's report head and the calculation report, page header and ST-Girder `project` read it; no second notice after reopening. Open of a main project from the project list: Design modules (Structural analysis demands) with the reason shown, title block migrated, notice.
+- **GirderDetail → ST-Girder "open now" test** (28 checks, over http and as files in one folder): 28/28 pass, no console errors.
+- No console errors or unexpected alerts in any run. Screenshots of both modes, the title block dialog and the migration notice were reviewed.
+
+### Open items
+- The plate colours of Preliminary sizing's girder elevation (Drawings) still follow its sizing checks in Design modules mode (a drawing, left as is).
+- In Preliminary designer an update auto-designs the detail modules (as Design all and the bridge-change refresh do), so a member size changed by hand without locking it is redesigned at the next update; lock inputs to keep them.
+- Preliminary designer uses Preliminary sizing's envelope demands only; per-girder Structural analysis demands need Design modules (or the girder report).
+
+#### Exact changes: main page (unified diff, 1 line of context, `PL_B64` shown as `...`)
+```diff
+--- gd_main_ph.html	2026-10-15 15:59:14.973969713 +0000
++++ gd_work_ph.html	2026-10-15 16:16:48.673945612 +0000
+@@ -96,2 +96,31 @@
+ @media print { .own-pill { display: none !important; } }
++/* working mode and project title block bar (GDM, GDT; 2026-10-15) */
++.gd-top { display: flex; align-items: center; gap: 14px; padding: 8px 16px; background: var(--surface); border-bottom: 1px solid var(--border); flex-shrink: 0; flex-wrap: wrap; }
++.gd-mode { display: inline-flex; border: 1.5px solid var(--text); border-radius: 6px; overflow: hidden; flex-shrink: 0; }
++.gd-mode-b { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; padding: 6px 16px; border: 0; background: var(--surface); color: var(--text-dim); cursor: pointer; text-align: left; min-width: 210px; }
++.gd-mode-b + .gd-mode-b { border-left: 1.5px solid var(--text); }
++.gd-mode-b b { font-size: 15px; font-weight: 700; }
++.gd-mode-b span { font-size: 11.5px; color: var(--muted); }
++.gd-mode-b[aria-checked="true"] { background: var(--text); color: #fff; }
++.gd-mode-b[aria-checked="true"] span { color: rgba(255,255,255,.78); }
++.gd-mode-b[aria-checked="true"] b::before { content: '\25CF\00a0'; }
++.gd-mode-b:not([aria-checked="true"]):hover { background: var(--blue-dim); color: var(--text); }
++.gd-sync { font-size: 12.5px; color: var(--text-dim); min-width: 0; flex: 1 1 180px; }
++.gd-sync .gs-warn { color: var(--warn); font-weight: 600; }
++.gd-sync button, .src-pl button { border: 0; background: none; color: var(--blue); text-decoration: underline; cursor: pointer; font-size: 12.5px; padding: 0 2px; }
++.gd-why { font-size: 12px; color: var(--info); }
++.tb-sum { margin-left: auto; flex: 0 1 auto; max-width: min(640px, 100%); display: flex; align-items: center; gap: 10px; max-width: 100%; min-width: 0; padding: 5px 10px; border: 1px solid var(--border-hi); border-radius: var(--r); background: var(--surface); cursor: pointer; text-align: left; font-size: 12.5px; color: var(--text-dim); }
++.tb-sum:hover { border-color: var(--blue); }
++.tb-sum .tb-l { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
++.tb-sum b { color: var(--text); font-size: 13.5px; }
++.tb-sum .tb-e { color: var(--blue); text-decoration: underline; white-space: nowrap; }
++.modal-box.tb-box { width: min(720px, 94vw); max-height: 88vh; overflow: auto; }
++.tb-box .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 14px; margin: 10px 0; }
++.tb-box .grid2 .full { grid-column: 1 / -1; }
++.tb-box table { width: 100%; border-collapse: collapse; font-size: 12.5px; margin-top: 8px; }
++.tb-box th, .tb-box td { text-align: left; vertical-align: top; padding: 5px 6px; border-bottom: 1px solid var(--border); }
++.tb-box th { color: var(--muted); font-weight: 600; }
++.src-pl { padding: 8px 10px; border: 1px solid var(--border); border-left: 3px solid var(--pass); border-radius: var(--r); background: var(--pass-dim); font-size: 13px; }
++@media (max-width: 700px) { .tb-sum { max-width: 100%; } .gd-mode-b { min-width: 0; padding: 6px 10px; } .gd-mode-b span { display: none; } .tb-box .grid2 { grid-template-columns: 1fr; } }
++@media print { .gd-top { display: none !important; } }
+ 
+@@ -1156,3 +1185,3 @@
+   var TOOL='Steel Bridge Beam Modules', FILE='Steel Bridge Beam Modules.html';
+-  var MAP={ projectName:'#f_meta_name', bridgeId:'', jobNo:'#f_meta_projNo', client:'', location:'', preparedBy:'#f_meta_compBy', checkedBy:'#f_meta_chkBy', date:'#f_meta_compDate' }; // shared field -> this tool's input ('' = this tool has no such field)
++  var MAP={ projectName:'#f_tb_name', bridgeId:'#f_tb_bridge', jobNo:'#f_tb_no', client:'', location:'', preparedBy:'#f_tb_compBy', checkedBy:'#f_tb_chkBy', date:'#f_tb_compDate' }; // shared field -> this tool's input ('' = this tool has no such field); GDT (2026-10-15): the project title block's fields (were the Project tab's calculation header)
+   var LBL={ projectName:'Project name', bridgeId:'Bridge ID', jobNo:'Job / project no.', client:'Client', location:'Location', preparedBy:'Prepared by', checkedBy:'Checked by', date:'Date' };
+@@ -1196,2 +1225,10 @@
+ </header>
++<div class="gd-top" id="gd-top">
++  <div class="gd-mode" role="radiogroup" aria-label="Working mode">
++    <button type="button" role="radio" class="gd-mode-b" data-gdmode="pl" aria-checked="true" title="Preliminary sizing designs the girder; every module takes its demands from it and is updated automatically when it changes"><b>Preliminary designer</b><span>Sizing drives every module, kept in sync</span></button>
++    <button type="button" role="radio" class="gd-mode-b" data-gdmode="mod" aria-checked="false" title="Preliminary sizing becomes the bridge and girder definition only; each module chooses its own demand source (Structural analysis, Preliminary sizing, or entered)"><b>Design modules</b><span>Bridge &amp; girder only; each module picks its demands</span></button>
++  </div>
++  <div class="gd-sync" id="gd-sync" role="status"></div>
++  <button type="button" class="tb-sum" id="tb-sum" title="Project title block: used by every report, drawing and hand-off. Click to edit."></button>
++</div>
+ <nav class="modbar" id="modbar" aria-label="Design modules"></nav>
+@@ -1218,2 +1255,4 @@
+ <div class="modal" id="own-modal" hidden><div class="modal-box own-box" role="dialog" aria-labelledby="own-h"><h2 id="own-h">Owner rules</h2><div id="own-body"></div><div class="modal-foot"><button type="button" class="btn" id="own-close">Close</button></div></div></div>
++<div class="modal" id="tb-modal" hidden><div class="modal-box tb-box" role="dialog" aria-labelledby="tb-h"><h2 id="tb-h">Project title block</h2><div id="tb-body"></div><div class="modal-foot"><button type="button" class="btn btn-primary" id="tb-close">Done</button></div></div></div>
++<div class="modal" id="tb-note" hidden><div class="modal-box tb-box" role="dialog" aria-labelledby="tb-note-h"><h2 id="tb-note-h">One project title block</h2><div id="tb-note-body"></div><div class="modal-foot"><button type="button" class="btn btn-primary" id="tb-note-ok">OK</button></div></div></div>
+ <div class="modal" id="rpt-modal" hidden><div class="modal-box" role="dialog"><h2>Print report</h2><p>Choose what the report contains. Sections renumber to match your selection. In the print dialog, choose "Save as PDF".</p><div id="rpt-opts"></div><div class="modal-foot"><button type="button" class="btn" id="rpt-cancel">Cancel</button><button type="button" class="btn btn-primary" id="rpt-go">Print</button></div></div></div>
+@@ -2140,2 +2179,10 @@
+ <p>GirderDetail designs steel I-girder details in modules chosen at the top of the window. <b>Field splice</b> (Parts 2 through 8) designs bolted field splices to AASHTO LRFD Article 6.13.6. <b>Bearing stiffeners</b> (Parts 10 through 12) checks bearing stiffeners to Article 6.10.11.2 at every bearing of a girder line. <b>Transverse stiffeners</b> (Part 13), <b>Shear connectors</b> (Part 14), <b>Cross-frames</b> (Part 15; the tab reads <b>Diaphragms</b> when the diaphragm is the bracing used), <b>Deck overhang</b> (Part 16), and <b>Welds and transitions</b> (Part 17) complete the girder detail package, and <b>Girder section</b> (Part 18) checks the composite girder itself at its critical sections, <b>Fatigue</b> (Part 19) designs and evaluates the fatigue details along the girder, and <b>Distribution factors</b> (Part 20) computes the live and dead load distribution for the whole bridge defined in Preliminary sizing. Every detail module has a <b>Detailing</b> tab (<b>Proportions</b> in the Girder section module) listing its proportion and detailing limits as a checklist (the field splice adds a dimension schedule of plates, fillers, and bolt patterns) and a <b>Report</b> tab with the full calculation document. Choose the module from the list at the top of the window. <b>Preliminary sizing (PlateLine)</b> is the first module: it proportions the girder line, runs the approximate analysis, and has its own manual, projects, and report inside it. Its "Send to GirderDetail" button (Analysis tab) offers to load every detail module at once. The detail modules share one project file and title block; the sizing module keeps its own saved projects. The field splice module covers flange splices with outer and inner splice plates, the web splice with two web plates, slip-critical high-strength bolts, and the detailing rules of Article 6.13.2.6. Every load combination is fully worked, every check shows its governing location with the substituted equation, and drawings and a 3D view are generated to scale. Splice sections and approximate demands can be imported from PlateLine.</p>
++<h3>Working modes and the project title block</h3>
++<p>The toggle at the top of the window chooses how the modules get their demands. It is saved with the project.</p>
++<ul>
++<li><b>Preliminary designer.</b> Preliminary sizing designs the girder, and every tab is present. Every module takes its demands from Preliminary sizing (the envelope of the interior and exterior girders) and is updated automatically, about 1.5 s after any change in Preliminary sizing that changes those demands. The update loads every module and auto-designs the detail modules, exactly as Design all does. There is no demand-source choice and no Get demands button; each module's Project tab reads "Demands from Preliminary sizing, updated (time)", and the bar at the top says when an update is running. Overrides of imported values and locked inputs are kept. When the cross-frame auto-design keeps changing the frame weights, the automatic updates stop after 3 in a row and ask for "Update now". The girder report still loads one girder's Structural analysis demands into every module for its chapters; the modules return to the Preliminary sizing demands afterwards.</li>
++<li><b>Design modules.</b> The Preliminary sizing tab becomes <b>Bridge &amp; girder</b>: the bridge definition only (spans, supports and skews, girders and spacing, deck and cross-section, plates, field splices, framing, materials, limits and owner), which it publishes to the modules as before. Its sizing work (Summary and Checks, Suggest, Full design, candidates, Alternatives and the girder-count study) is hidden, not deleted; the Suggest input tab reads "Loads" and shows only the loads (wearing surface, SIP forms, barrier, construction live load). Each module keeps its own demand source (Structural analysis girder, Preliminary sizing, or values entered on its tabs) with its Get demands button, as before.</li>
++<li><b>Projects saved before the toggle</b> open in Design modules when a module's demands came from Structural analysis (or the last request was from Structural analysis), or when a module that takes demands holds values entered by hand; otherwise in Preliminary designer. A project whose modules all took their demands from Preliminary sizing is taken as in sync when it opens (nothing is reloaded until Preliminary sizing changes); one with modules never loaded is loaded from Preliminary sizing when it opens. The top bar says which rule chose the mode.</li>
++<li><b>Project title block.</b> The button at the top right shows and edits the one title block of the project: project name, project No., bridge or structure No., description, computed by, checked by and dates, with the owner shown. Every module's calculation report, the girder report, Preliminary sizing's report, the DXF title blocks, file names, the ST-Girder hand-off and "Share project info" use it; each module's Project tab keeps only the calculation subject and task. A project saved before the title block takes Preliminary sizing's project info, with blanks filled from the modules' calculation header; fields where the two differed are listed once, and the earlier values stay in the saved project (the title block editor lists them).</li>
++</ul>
+ <h3>What this app does NOT do</h3>
+@@ -2787,3 +2834,3 @@
+   if (P.df && P.df.xfNew && X.on) o.push(`<div class="alert warn" style="margin:0 0 12px"><b>DC1 now includes the cross-frames and diaphragms.</b> This project was saved before their weight was added to DC1 (engineer's decision 2026-10-13): ${esc(gdXfDesc(X))}, as point loads at each frame, half to each girder${X.kind !== 'ovr' ? ` (including a ${f0(X.allow)}% allowance for gusset plates and bolts; the default is 10%, editable there)` : ''}. DC1 moments, shears, reactions and camber, and every demand from them, are larger than when the project was saved; get the demands again in the detail modules. Change it under LLDF and DLs → Cross-section and dead loads → Cross-frames and diaphragms (DC1). <button type="button" class="link-btn" data-xfack="1">Dismiss</button></div>`);
+-  const re = P.ui && P.ui.xfRe; if (re && re.st === 'again') o.push(`<div class="alert warn" style="margin:0 0 12px"><b>Run Get demands again.</b> The cross-frame auto-design changed the member sizes twice (${new Date(re.ts).toLocaleString()}); DC1 in the imported demands may not use the final cross-frame weights.</div>`);
++  const re = P.ui && P.ui.xfRe; if (re && re.st === 'again') o.push(`<div class="alert warn" style="margin:0 0 12px"><b>${gdPLmode() ? 'The demands are updated again automatically.' : 'Run Get demands again.'}</b> The cross-frame auto-design changed the member sizes twice (${new Date(re.ts).toLocaleString()}); DC1 in the imported demands may not use the final cross-frame weights.</div>`);
+   else if (re && re.st === 'ok') o.push(`<div class="alert info" style="margin:0 0 12px"><b>DC1 recomputed with the designed cross-frame sizes</b> (${new Date(re.ts).toLocaleString()}): the cross-frame auto-design changed the member sizes, so the demands were computed again with the new frame weights.</div>`);   // XF2
+@@ -5164,3 +5211,3 @@
+   if (b.dataset.dfcsv === 'copy') { const t = dfTable(RS, '\t'); (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(() => flash('Copied; paste into Excel or BrD.'), () => flash('Copy failed; use the CSV download.')); return; }
+-  const blob = new Blob([dfTable(RS, ',')], { type: 'text/csv' }), a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `${(P.meta.name || 'bridge').replace(/[^\w-]+/g, '_')}_distribution_factors.csv`; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500); });
++  const blob = new Blob([dfTable(RS, ',')], { type: 'text/csv' }), a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `${(gdMeta().name || 'bridge').replace(/[^\w-]+/g, '_')}_distribution_factors.csv`; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500); });
+ /* receive the bridge definition from the sizing module */
+@@ -5927,3 +5974,3 @@
+   const p = { _schema: GD_ST.schema, schemaVersion: 1, producer: GD_ST.producer, producerFile: GD_ST.file, producedAt: new Date().toISOString(),
+-    project: String(b.project || 'GirderDetail'), source: `GirderDetail Structural analysis, ${lab} (${ext ? 'exterior' : 'interior'}), ${model}`, liveLoadType: 'HL-93',
++    project: String((P.tb && P.tb.name) || b.project || 'GirderDetail'), source: `GirderDetail Structural analysis, ${lab} (${ext ? 'exterior' : 'interior'}), ${model}`, liveLoadType: 'HL-93',
+     units: { x: 'ft', moment: 'ft-kip', force: 'kip', plate: 'in', stress: 'ksi', deck: 'in', area: 'in2', unitWeight: 'kcf', spacing: 'ft', Lb: 'ft', skew: 'deg' },
+@@ -6124,3 +6171,3 @@
+ function bsRenderReportHead() {
+-  const mt = P.meta, R = RS, B = P.bs;
++  const mt = gdMeta(), R = RS, B = P.bs;
+   const kv = rows => `<table class="tbl"><tbody>${rows.map(([k, v, u]) => `<tr><td class="lbl">${k}</td><td class="val">${v}</td><td class="unit">${u || ''}</td></tr>`).join('')}</tbody></table>`;
+@@ -6135,3 +6182,3 @@
+ function bsApply(j) { P.bs.rows = clone(j.bearings.map(b => b.row)); if (j.stiff) { ['A', 'B'].forEach(k => P.bs.types[k] = { ...P.bs.types[k], ...j.stiff[k] }); P.bs.gS = j.stiff.gS || P.bs.gS; }
+-  P.bs.D = j.bearings[0].D || P.bs.D; P.bs.gW = j.bearings[0].gW || P.bs.gW; P.meta.name = j.project || P.meta.name;
++  P.bs.D = j.bearings[0].D || P.bs.D; P.bs.gW = j.bearings[0].gW || P.bs.gW; if (!P.tb) P.meta.name = j.project || P.meta.name;
+   P.bs.source = `PlateLine approximate analysis (${new Date(j.ts).toLocaleDateString()}). End-bearing distances to the girder end were assumed as 9 in; confirm them and replace the reactions with refined analysis results before final design.`; }
+@@ -6148,3 +6195,4 @@
+    ===================================================================== */
+-MODS.pl = { title: 'steel I-girder preliminary sizing (PlateLine), AASHTO LRFD', groups: [], itabs: ['project'], rpt: [] };
++MODS.pl = { groups: [], itabs: ['project'], rpt: [] };
++Object.defineProperty(MODS.pl, 'title', { get: () => gdPLmode() ? 'steel I-girder preliminary sizing (PlateLine), AASHTO LRFD' : 'bridge and girder definition (Preliminary sizing, geometry only)', enumerable: true });   // GDM
+ Object.values(GM).forEach(m => { MODS[m.id] = { title: m.title, groups: m.groups, itabs: ['project', ...m.itabs.map(t => t[0])],
+@@ -6212,3 +6260,3 @@
+ function gmReportHead(m) {
+-  const mt = P.meta, e = m.echo(RS), d = P[m.id];
++  const mt = gdMeta(), e = m.echo(RS), d = P[m.id];
+   const kv = rows => `<table class="tbl"><tbody>${rows.map(([k, v, u]) => `<tr><td class="lbl">${k}</td><td class="val">${v}</td><td class="unit">${u || ''}</td></tr>`).join('')}</tbody></table>`;
+@@ -6227,3 +6275,3 @@
+   $('#inbox_gm').onclick = () => { if (!confirm(`Load ${x.what} from PlateLine? This replaces the ${m.label.toLowerCase()} inputs it provides.`)) return;
+-    const kept = importInto(m.id, () => gmApply(m, x, j), j.srcLabel); if (kept) setTimeout(() => flash(`${kept} override${kept > 1 ? 's' : ''} kept.`), 600); P.meta.name = j.project || P.meta.name; P.meta.subject = m.label;
++    const kept = importInto(m.id, () => gmApply(m, x, j), j.srcLabel); if (kept) setTimeout(() => flash(`${kept} override${kept > 1 ? 's' : ''} kept.`), 600); if (!P.tb) P.meta.name = j.project || P.meta.name; P.meta.subject = m.label;
+     gmBuildPanes(m.id); fillInputs(); recompute(); autosave(); flash(`Loaded ${x.what}.`); };
+@@ -6248,3 +6296,3 @@
+ function refreshMarks() { clearTimeout(MARK_T); MARK_T = setTimeout(() => ['df', 'sa', 'gs', 'fa', 'splice', 'bstf', 'ts', 'sc', 'cf', 'oh', 'wt'].forEach(id => setMark(id, modStatus(id))), 250); }
+-window.addEventListener('message', e => { if (gdFromPL(e) && e.data && e.data.type === 'pl-status') setMark('pl', e.data); });
++window.addEventListener('message', e => { if (gdFromPL(e) && e.data && e.data.type === 'pl-status') { GD_PLST = e.data; setMark('pl', gdPLmode() ? e.data : null); } });   // GDM: no sizing-check count on "Bridge & girder"
+ 
+@@ -6313,2 +6361,9 @@
+   const b = P.df && P.df.bridge, nb = b && b.ok ? b.nb : 0, s = (P._impSrc || {})[P.mod];
++  if (gdPLmode()) {   // GDM (2026-10-15): Preliminary designer: no source choice and no Get demands; the demands follow Preliminary sizing automatically
++    host.innerHTML = `<div class="src-pl">${s && !gdIsPLsrc(s.label) ? `Current demands: ${esc(s.label)}, imported ${new Date(s.ts).toLocaleString()}; being replaced by Preliminary sizing's.` : `<b>Demands from Preliminary sizing</b>${s ? `, updated ${new Date(s.ts).toLocaleString()}` : ' (not loaded yet)'}.`}<br><span id="src_sync"></span></div>
++    <div class="ck-row" style="margin-top:8px"><input type="checkbox" id="src_keep" ${P.ui.keepOvr !== false ? 'checked' : ''}><label for="src_keep">Keep my overrides when the demands update</label></div>
++    <button type="button" class="proj-btn" id="src_reset" style="width:100%;margin-top:6px">Reset overrides</button>
++    <p class="hint static">Preliminary designer mode: every module takes its demands from Preliminary sizing (envelope of the interior and exterior girders) and is updated automatically when Preliminary sizing changes. Any imported value can be changed; changed values are outlined and kept on update. For other demand sources, switch to Design modules at the top.</p><div id="src_spwarn">${spNoPLBox()}</div>`;
++    host.insertAdjacentHTML('beforeend', adPanelHtml()); host.querySelectorAll('[data-k^="std."]').forEach(el => { const v = getPath(P, el.dataset.k); el.value = el.dataset.t === 'str' ? String(v) : (typeof v === 'number' ? frac(v) : v); });
++    markOverrides(); gdSyncShow(); return; }
+   host.innerHTML = `<div class="ig"><label for="src_sel">Demands from</label><select id="src_sel"><option value="pl">Preliminary sizing (envelope of interior and exterior)</option>${[...Array(nb)].map((_, i) => `<option value="sa:${i + 1}">Structural analysis, G${i + 1} (${i === 0 || i === nb - 1 ? 'exterior' : 'interior'})</option>`).join('')}</select></div>
+@@ -6324,4 +6379,4 @@
+   gdXfReq(src, tgt || P.mod, xfPass);   // XF2 (2026-10-13): the frame weights these demands are computed with
+-  if (tgt !== 'refresh') P.ui.lastSrc = src;   // after gdXfReq (XR3): a second pass it sends first does not change the source of this request
+-  plEnsure(); P.ui.srcSel = src; const target = tgt || P.mod, post = msg => gdPlPost(gdXfSend(msg));   // XR1/XR2 (2026-10-14): request ID; sent in order once Preliminary sizing is ready
++  if (tgt !== 'refresh' && !gdPLmode()) P.ui.lastSrc = src;   // after gdXfReq (XR3): a second pass it sends first does not change the source of this request; GDM: Preliminary designer keeps Design modules' source
++  plEnsure(); if (!gdPLmode()) P.ui.srcSel = src; const target = tgt || P.mod, post = msg => gdPlPost(gdXfSend(msg));   // XR1/XR2 (2026-10-14): request ID; sent in order once Preliminary sizing is ready
+   if (src === 'pl') { post({ type: 'pl-export-req', src: 'pl', target }); flash('Requesting demands from Preliminary sizing…'); return; }
+@@ -6620,3 +6675,3 @@
+   daModal(`<h3>Design all</h3><p>Gets demands for every module, auto-designs every field splice case and the stiffener, stud, bearing stiffener, weld, cross-frame, and overhang modules, runs every check, and totals the quantities and costs. Locked inputs are kept.</p>
+-    <div class="ig"><label for="da_src">Demands from</label><select id="da_src">${opts}</select></div><button type="button" class="proj-btn proj-btn-primary" id="da_go" style="margin-top:10px">Run</button>`);
++    ${gdPLmode() ? '<p class="note-p">Demands from Preliminary sizing (Preliminary designer mode).</p>' : `<div class="ig"><label for="da_src">Demands from</label><select id="da_src">${opts}</select></div>`}<button type="button" class="proj-btn proj-btn-primary" id="da_go" style="margin-top:10px">Run</button>`);
+ }
+@@ -6689,3 +6744,3 @@
+ document.addEventListener('click', e => { if (e.target.id === 'btn-designall') designAllStart(); else if (e.target.id === 'da_close') document.getElementById('da-modal').hidden = true;
+-  else if (e.target.id === 'da_go') { const v = document.getElementById('da_src').value; daModal('<h3>Design all</h3><p>Requesting demands…</p>'); getDemands(v, 'all'); } });
++  else if (e.target.id === 'da_go') { const ds = document.getElementById('da_src'), v = ds ? ds.value : 'pl'; daModal('<h3>Design all</h3><p>Requesting demands…</p>'); getDemands(v, 'all'); } });
+ 
+@@ -6693,6 +6748,15 @@
+    re-imported from the last demand source and recomputed, so no module keeps stale demands or a stale status */
+-let GD_RF_T = null;
+-function gdScheduleRefresh() { if (std().autoRefresh === 'off') return; clearTimeout(GD_RF_T);
+-  GD_RF_T = setTimeout(() => { if (typeof GR_RUN !== 'undefined' && GR_RUN) return; const ae = document.activeElement; if (ae && ae.closest && ae.closest('#ipane-df_dl') && /^(INPUT|SELECT)$/.test(ae.tagName)) { gdScheduleRefresh(); return; }   // the user is typing in the cross-section inputs (XS9): refresh once they leave the field
+-    flash('Bridge changed: updating every module…'); getDemands(P.ui.lastSrc || 'pl', 'refresh'); }, 1500); }
++/* GDM (2026-10-15): why = 'bridge' (the bridge changed, as before; the default), 'sync' (Preliminary designer: the demand signature of Preliminary sizing differs
++   from that of the demands last loaded; skipped when they match again by the time the timer fires, or while a request is outstanding), 'force' (Update now),
++   'retry' (adds no reason). Design modules mode: exactly as before (the owner standard "Auto-refresh" applies; the last demand source). Preliminary designer:
++   always on, from Preliminary sizing. */
++let GD_RF_T = null, GD_RF_WHY = {};
++function gdScheduleRefresh(why) { const pm = gdPLmode(); if (std().autoRefresh === 'off' && !pm) return; GD_RF_WHY[why || 'bridge'] = 1; clearTimeout(GD_RF_T);
++  GD_RF_T = setTimeout(() => { GD_RF_T = null; if (typeof GR_RUN !== 'undefined' && GR_RUN) { if (gdPLmode()) gdScheduleRefresh('retry'); return; } const ae = document.activeElement; if (ae && ae.closest && ae.closest('#ipane-df_dl') && /^(INPUT|SELECT)$/.test(ae.tagName)) { gdScheduleRefresh('retry'); return; }   // the user is typing in the cross-section inputs (XS9): refresh once they leave the field
++    if (gdPLmode()) { const w = GD_RF_WHY;
++      if (!w.bridge && !w.force) { if (GD_RQ.size || GD_XF_T || GD_PLQ.length) { gdScheduleRefresh('retry'); return; }   // a reply on its way may bring the demands in sync
++        if (!w.sync || !GD_PLD || GD_PLD.sig === 'err' || (P.plSync && P.plSync.sig === GD_PLD.sig)) { GD_RF_WHY = {}; gdSyncShow(); return; }
++        GD_SYNC.n++; GD_SYNC.u = GD_PLD.u; }
++      GD_RF_WHY = {}; flash(w.bridge ? 'Bridge changed: updating every module…' : 'Preliminary sizing changed: updating every module…'); getDemands('pl', 'refresh'); gdSyncShow(); return; }
++    GD_RF_WHY = {}; flash('Bridge changed: updating every module…'); getDemands(P.ui.lastSrc || 'pl', 'refresh'); }, 1500); gdSyncShow(); }
+ 
+@@ -6715,3 +6779,3 @@
+   const nb = b.nb, sel = P.ui.grG || 1, ch = P.ui.grCh || {};
+-  daModal(`<h3>Girder report</h3><p>One calculation package for the selected girder. Every module is loaded with that girder's demands from the Structural analysis module (its distribution factors, dead loads, and effective width), and each chapter is the module's full worked report.</p>
++  daModal(`<h3>Girder report</h3><p>One calculation package for the selected girder. Every module is loaded with that girder's demands from the Structural analysis module (its distribution factors, dead loads, and effective width), and each chapter is the module's full worked report.${gdPLmode() ? ' Afterwards every module returns to the Preliminary sizing demands (Preliminary designer mode).' : ''}</p>
+     <div class="ig"><label for="gr_g">Girder</label><select id="gr_g">${[...Array(nb)].map((_, i) => `<option value="${i + 1}" ${i + 1 === sel ? 'selected' : ''}>G${i + 1} (${i === 0 || i === nb - 1 ? 'exterior' : 'interior'})</option>`).join('')}</select></div>
+@@ -6772,4 +6836,4 @@
+     // assemble
+-    const mt = P.meta, today = new Date().toLocaleDateString();
+-    const cover = `<div class="gr-cover"><h1>Girder G${g} Calculation Package</h1><p class="gr-sub">${esc(mt.name || 'Project')}${mt.projNo ? ` (Project No. ${esc(mt.projNo)})` : ''}</p>
++    const mt = gdMeta(), today = new Date().toLocaleDateString();
++    const cover = `<div class="gr-cover"><h1>Girder G${g} Calculation Package</h1><p class="gr-sub">${esc(mt.name || 'Project')}${mt.projNo ? ` (Project No. ${esc(mt.projNo)})` : ''}${mt.bridgeNo ? `, Bridge No. ${esc(mt.bridgeNo)}` : ''}</p>${mt.desc ? `<p class="gr-sub">${esc(mt.desc)}</p>` : ''}
+       <table class="cr-tbl"><tbody><tr><td class="lbl">Girder</td><td>G${g} of ${nb} (${ext ? 'exterior' : 'interior'})</td></tr><tr><td class="lbl">Demands</td><td>${esc(j.srcLabel || 'Structural analysis')}</td></tr><tr><td class="lbl">Details</td><td>${R.ad ? 'Auto-designed for this girder (locked inputs kept)' : 'As currently entered, checked for this girder'}</td></tr><tr><td class="lbl">Specification</td><td>AASHTO LRFD Bridge Design Specifications, 10th Edition (2024)</td></tr><tr><td class="lbl">Prepared</td><td>${esc(mt.compBy || '—')}, ${today}</td></tr><tr><td class="lbl">Checked</td><td>${esc(mt.chkBy || '—')}${mt.chkDate ? ', ' + esc(mt.chkDate) : ''}</td></tr></tbody></table>
+@@ -6788,3 +6852,3 @@
+     const subj0 = P.meta.subject; P.meta.subject = `Girder G${g} calculation package`; let css = crPageCSS(); P.meta.subject = subj0;
+-    css = css.replace(/@bottom-left \{ content: "[^"]*";/, `@bottom-left { content: "${crEsc(P.meta.name || 'Project')}, Girder G${g} calculation package (GirderDetail)";`);
++    css = css.replace(/@bottom-left \{ content: "[^"]*";/, `@bottom-left { content: "${crEsc(gdMeta().name || 'Project')}, Girder G${g} calculation package (GirderDetail)";`);
+     st.textContent = css; document.body.classList.add('printing-calc');
+@@ -7212,3 +7276,3 @@
+ function dxfCover(D, C) { const h = D.h, l = D.layer('ANNO-TEXT', 7), tb = D.layer('TABL', 7), m = C.m;
+-  D.text(l, 0, 0, 3 * h, dxfStr((P.meta.name || 'BRIDGE').toUpperCase())); D.text(l, 0, -4 * h, 1.6 * h, 'STEEL GIRDER SUPERSTRUCTURE');
++  D.text(l, 0, 0, 3 * h, dxfStr((gdMeta().name || 'BRIDGE').toUpperCase())); D.text(l, 0, -4 * h, 1.6 * h, 'STEEL GIRDER SUPERSTRUCTURE');
+   D.text(l, 0, -6.5 * h, h, `${m.spans.length} SPAN${m.spans.length > 1 ? 'S' : ''} (${m.spans.map(v => f2(v)).join(' + ')} FT), ${m.nb} GIRDERS, SKEW ${m.skews.map(v => f2(v)).join(' / ')} DEG.`);
+@@ -7216,3 +7280,3 @@
+   if (C.miss.length) dxfTable(D, tb, 0, t.y - 2 * h, ['NOT GENERATED', 'REASON'], C.miss, 'DRAWINGS NOT IN THIS SET');
+-  dxfTable(D, tb, t.w + 10 * h, -10 * h, ['REV.', 'DATE', 'DESCRIPTION', 'BY'], [['0', new Date().toISOString().slice(0, 10), 'ISSUED FROM GIRDERDETAIL', dxfStr(P.meta.compBy || '')], ['', '', '', ''], ['', '', '', ''], ['', '', '', '']], 'REVISIONS'); }
++  dxfTable(D, tb, t.w + 10 * h, -10 * h, ['REV.', 'DATE', 'DESCRIPTION', 'BY'], [['0', new Date().toISOString().slice(0, 10), 'ISSUED FROM GIRDERDETAIL', dxfStr(gdMeta().compBy || '')], ['', '', '', ''], ['', '', '', ''], ['', '', '', '']], 'REVISIONS'); }
+ /* ---------- erection diagram, shipping pieces, girder layout ---------- */
+@@ -7334,3 +7398,3 @@
+   const W = pw * k, H = ph * k; D.move(i0, ox + 1.25 * k - b[0], H - 1.0 * k - b[3]);
+-  const cells = [[0.75, 'PROJECT', P.meta.name || ''], [9, 'PROJECT NO.', P.meta.projNo || ''], [13, 'SHEET TITLE', S.title], [24, 'SCALE', dxfScaleName(k)], [28, 'DESIGNED / CHECKED', `${P.meta.compBy || '-'} / ${P.meta.chkBy || '-'}`], [31, 'SHEET', `${S.n} OF ${S.of}`]];
++  const mt = gdMeta(), cells = [[0.75, 'PROJECT', mt.name || ''], [9, 'PROJECT NO.', mt.projNo || ''], [13, 'SHEET TITLE', S.title], [24, 'SCALE', dxfScaleName(k)], [28, 'DESIGNED / CHECKED', `${mt.compBy || '-'} / ${mt.chkBy || '-'}`], [31, 'SHEET', `${S.n} OF ${S.of}`]];
+   const foot = `GENERATED BY GIRDERDETAIL ${new Date().toISOString().slice(0, 10)}. VIEWPORT SCALE ${k === 1 ? 'FULL SIZE' : '1:' + k}; MODEL SPACE IS FULL SIZE IN INCHES.`;
+@@ -7410,3 +7474,3 @@
+ }
+-function dxfSave(text) { const blob = new Blob([text], { type: 'application/dxf' }), a = document.createElement('a'), nm = (P.meta.name || 'GirderDetail').replace(/[^\w\-]+/g, '_');
++function dxfSave(text) { const blob = new Blob([text], { type: 'application/dxf' }), a = document.createElement('a'), nm = (gdMeta().name || 'GirderDetail').replace(/[^\w\-]+/g, '_');
+   a.href = URL.createObjectURL(blob); a.download = `${nm}_drawings.dxf`; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500); }
+@@ -7414,3 +7478,3 @@
+   let r; try { r = dxfBuild(); } catch (e) { console.error(e); alert('DXF export failed: ' + e.message); return; }
+-  const blob = new Blob([r.text], { type: 'application/dxf' }), a = document.createElement('a'), nm = (P.meta.name || 'GirderDetail').replace(/[^\w\-]+/g, '_');
++  const blob = new Blob([r.text], { type: 'application/dxf' }), a = document.createElement('a'), nm = (gdMeta().name || 'GirderDetail').replace(/[^\w\-]+/g, '_');
+   a.href = URL.createObjectURL(blob); a.download = `${nm}_drawings.dxf`; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+@@ -7587,3 +7651,3 @@
+   else if (id === 'v3b_reset') V3B && (V3B.home2 || V3B.home) && (V3B.home2 || V3B.home)();
+-  else if (id === 'v3b_png' && V3B) { const a = document.createElement('a'); a.href = V3B.renderer.domElement.toDataURL('image/png'); a.download = `${(P.meta.name || 'bridge').replace(/[^\w\-]+/g, '_')}_${P.ui.v3b.mode}_3D.png`; a.click(); } });
++  else if (id === 'v3b_png' && V3B) { const a = document.createElement('a'); a.href = V3B.renderer.domElement.toDataURL('image/png'); a.download = `${(gdMeta().name || 'bridge').replace(/[^\w\-]+/g, '_')}_${P.ui.v3b.mode}_3D.png`; a.click(); } });
+ document.addEventListener('pointermove', e => { if (!V3B || !V3B.fences || !V3B.fences.length || e.target !== V3B.renderer.domElement) return; const r = e.target.getBoundingClientRect(), rc = new THREE.Raycaster(), mv = new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+@@ -7737,3 +7801,3 @@
+   if (!CK) { window.CR_TOC = []; return `<p class="cr-p">${P.mod === 'splice' && !spIncl() ? 'Field splices not included.' : 'The report is unavailable until the input errors are fixed (see the status bar).'}</p>`; }   // no checks: splices not included or input errors (L11, 2026-10-13; was a TypeError on CK.filter)
+-  const mod = P.mod, M = MODS[mod], g = GM[mod], meta = CR_META[mod] || { refs: ['LRFD'], obj: () => '' }, mt = P.meta;
++  const mod = P.mod, M = MODS[mod], g = GM[mod], meta = CR_META[mod] || { refs: ['LRFD'], obj: () => '' }, mt = gdMeta();
+   const toc = []; let n = 0, body = '';
+@@ -7775,3 +7839,3 @@
+   const refs = meta.refs.map(k => CR_REFS[k]);
+-  const front = `<section class="cr-cover"><div class="cr-cover-t"><h1>${esc(crTitle())}</h1><p>${esc(mt.subject || '')}</p><p class="cr-cover-p">${esc(mt.name || '')}</p></div></section>
++  const front = `<section class="cr-cover"><div class="cr-cover-t"><h1>${esc(crTitle())}</h1><p>${esc(mt.subject || '')}</p><p class="cr-cover-p">${esc(mt.name || '')}</p>${mt.bridgeNo ? `<p class="cr-cover-p">Bridge No. ${esc(mt.bridgeNo)}</p>` : ''}${mt.desc ? `<p class="cr-cover-p">${esc(mt.desc)}</p>` : ''}</div></section>
+     <section class="cr-front"><h2 class="cr-h1 cr-nonum">References:</h2><table class="cr-refs">${refs.map(([a, b]) => `<tr><td>${a}</td><td>${b}</td></tr>`).join('')}</table>
+@@ -7784,3 +7848,3 @@
+ function crPageCSS() {
+-  const mt = P.meta, M = MODS[P.mod], g = GM[P.mod], lbl = g ? g.label : P.mod === 'bstf' ? 'Bearing stiffeners' : 'Field splice';
++  const mt = gdMeta(), M = MODS[P.mod], g = GM[P.mod], lbl = g ? g.label : P.mod === 'bstf' ? 'Bearing stiffeners' : 'Field splice';
+   const box = 'font: 9.5pt "Times New Roman", Times, serif; color: #000; white-space: pre; vertical-align: bottom; padding-bottom: 6pt;';
+@@ -7811,3 +7875,3 @@
+ function crMarkStale() { CR_STALE = true; if (P && P.ui.otab === 'report') { clearTimeout(CR_T); CR_T = setTimeout(() => renderReportTab(), 700); } }
+-function crTitleBlock() { const m = P.meta, c = v => esc(v || '—');
++function crTitleBlock() { const m = gdMeta(), c = v => esc(v || '—');
+   return `<table class="crv-tb"><tr><td><span>Project No</span>${c(m.projNo)}</td><td><span>Computed by</span>${c(m.compBy)}</td><td><span>Date</span>${c(m.compDate)}</td></tr><tr><td><span>Description</span>${c(m.subject || m.name)}</td><td><span>Checked by</span>${c(m.chkBy)}</td><td><span>Date</span>${c(m.chkDate)}</td></tr></table>`; }
+@@ -7888,3 +7952,3 @@
+ let P = null, RS = null, CK = null, CUR = '';
+-function initP() { P = GD_FULL(); try { const a = LS && JSON.parse(localStorage.getItem(KEY_AS) || 'null'); if (a && a.data) { P = deepMerge(GD_FULL(), a.data); CUR = a.name || ''; gdXfMark(P, a.data); } } catch (e) {} gdMigrateK(P); }
++function initP() { P = GD_FULL(); try { const a = LS && JSON.parse(localStorage.getItem(KEY_AS) || 'null'); if (a && a.data) { P = deepMerge(GD_FULL(), a.data); CUR = a.name || ''; gdXfMark(P, a.data); } } catch (e) {} gdMigrateK(P); gdModeInit(P); }
+ /* XF1 (2026-10-13): a project saved before the cross-frame weight setting existed (no df.dl.xf) now has it on, by the engineer's decision; df.xfNew shows
+@@ -7943,5 +8007,3 @@
+       ${secHd('sec-meta', 'Calculation header')}
+-      <div class="sec-body one-col" id="sec-meta">${fld('Project No.', 'meta.projNo', '', 'text')}${fld('Project name', 'meta.name', '', 'text')}${fld('Subject', 'meta.subject', '', 'text')}${fld('Task', 'meta.task', '', 'text')}
+-        <div class="pair">${fld('Computed by', 'meta.compBy', '', 'text')}${fld('Date', 'meta.compDate', '', 'text')}</div><div class="pair">${fld('Checked by', 'meta.chkBy', '', 'text')}${fld('Checked date', 'meta.chkDate', '', 'text')}</div>
+-        <div class="proj-row" style="grid-template-columns: 1fr 1fr"><button type="button" id="bx-pm-use" class="proj-btn" title="Fill this header from the project info shared by another tool">Use shared project info</button><button type="button" id="bx-pm-share" class="proj-btn" title="Share this header's project info with the other tools">Share project info</button></div></div>
++      <div class="sec-body one-col" id="sec-meta"><p class="hint static">Project name, project and bridge numbers, description, computed and checked by, and dates are in the project title block at the top of the page, shared by every module. <button type="button" class="link-btn" data-tbedit="1">Edit the title block</button></p>${fld('Subject', 'meta.subject', '', 'text')}${fld('Task', 'meta.task', '', 'text')}</div>
+       ${secHd('sec-asm', 'Engineering assumptions')}
+@@ -8289,3 +8351,3 @@
+ function renderReportHead() {
+-  const mt = P.meta, R = RS;
++  const mt = gdMeta(), R = RS;
+   const kv = rows => `<table class="tbl"><tbody>${rows.map(([k, v, u]) => `<tr><td class="lbl">${k}</td><td class="val">${v}</td><td class="unit">${u || ''}</td></tr>`).join('')}</tbody></table>`;
+@@ -8317,6 +8379,6 @@
+ function refreshList() { const n = Object.keys(store()).sort(); $('#proj_list').innerHTML = n.length ? n.map(x => `<option ${x === CUR ? 'selected' : ''}>${esc(x)}</option>`).join('') : '<option value="">No saved projects</option>'; }
+-function loadData(d, name) { P = deepMerge(GD_FULL(), d); gdXfMark(P, d); gdMigrateK(P); bsRebuildRows(); Object.keys(GM).forEach(gmBuildPanes); CUR = name || ''; fillInputs(); setITab(P.ui.itab || 'project'); setOTab(P.ui.otab || 'summary'); recompute(); autosave(); }
++function loadData(d, name) { P = deepMerge(GD_FULL(), d); gdXfMark(P, d); gdMigrateK(P); gdModeInit(P); GD_PLD = null; GD_SYNC.n = 0; GD_SYNC.held = false; bsRebuildRows(); Object.keys(GM).forEach(gmBuildPanes); CUR = name || ''; fillInputs(); setITab(P.ui.itab || 'project'); setOTab(P.ui.otab || 'summary'); applyGdMode(); gdTbMigrate(); tbRender(); recompute(); autosave(); }   // GDM, GDT
+ function initProjects() {
+   refreshList();
+-  $('#pb_save').onclick = () => { let n = CUR || P.meta.name || prompt('Save project as:'); if (!n) return; const s = store(); s[n] = clone(P); if (putStore(s)) { CUR = n; refreshList(); flash(`Saved "${n}".`); } };
++  $('#pb_save').onclick = () => { let n = CUR || gdMeta().name || prompt('Save project as:'); if (!n) return; const s = store(); s[n] = clone(P); if (putStore(s)) { CUR = n; refreshList(); flash(`Saved "${n}".`); } };
+   $('#pb_saveas').onclick = () => { const n = prompt('Save project as:', P.meta.subject || ''); if (!n) return; const s = store(); if (s[n] && !confirm(`"${n}" exists. Overwrite it?`)) return; s[n] = clone(P); putStore(s); CUR = n; refreshList(); flash(`Saved "${n}".`); };
+@@ -8334,2 +8396,3 @@
+   srcPanel(); const j = LS ? readInbox() : null, host = $('#inbox'); if (!host) return;
++  if (gdPLmode() && P.mod !== 'splice') { host.innerHTML = ''; return; }   // GDM: Preliminary designer: no other import (the splice case list stays)
+   if (P.mod === 'bstf') return bsInbox(j, host);
+@@ -8521,3 +8584,3 @@
+ document.addEventListener('click', e => { if (e.target.id !== 'sp_fit' || P.mod !== 'splice') return; const r = fitSplice(); fillInputs(); recompute(); autosave(); alert(`Splice fitted to the girder.\n\n${r.msg}`); });
+-function spliceApply(j, s) { P.sec = deepMerge(P.sec, s.sec); if (s.sec && s.sec.L && s.sec.R) { const eqv = ks => ks.every(k => Math.abs(parseDim(s.sec.L[k]) - parseDim(s.sec.R[k])) < 1e-6); P.sec.same = { top: eqv(SAME_KEYS.top), web: eqv(SAME_KEYS.web), bot: eqv(SAME_KEYS.bot) }; } P.dem = deepMerge(P.dem, s.dem); P.meta.name = j.project || P.meta.name; P.source = `${j.srcLabel || 'PlateLine approximate analysis'}, ${s.label} (${new Date(j.ts).toLocaleDateString()}).${j.src === 'sa' ? '' : ' Replace with refined analysis results before final design.'}`;
++function spliceApply(j, s) { P.sec = deepMerge(P.sec, s.sec); if (s.sec && s.sec.L && s.sec.R) { const eqv = ks => ks.every(k => Math.abs(parseDim(s.sec.L[k]) - parseDim(s.sec.R[k])) < 1e-6); P.sec.same = { top: eqv(SAME_KEYS.top), web: eqv(SAME_KEYS.web), bot: eqv(SAME_KEYS.bot) }; } P.dem = deepMerge(P.dem, s.dem); if (!P.tb) P.meta.name = j.project || P.meta.name; P.source = `${j.srcLabel || 'PlateLine approximate analysis'}, ${s.label} (${new Date(j.ts).toLocaleDateString()}).${j.src === 'sa' ? '' : ' Replace with refined analysis results before final design.'}`;
+   if (typeof std === 'function' && std().auto === 'off') { P.source += ' Splice plates and bolts as entered (not redesigned for these demands).'; return; }
+@@ -8623,3 +8686,3 @@
+ let GD_OWN_PEND = null;   // an owner chosen in the top bar, until Preliminary sizing publishes it back
+-function ownBadge() { const s = document.getElementById('gd-owner'); if (!s) return; const o = GD_OWN_PEND || gdOwner(); if (s.value !== (o || '')) s.value = o || '';
++function ownBadge() { if (typeof tbRender === 'function') tbRender(); const s = document.getElementById('gd-owner'); if (!s) return; const o = GD_OWN_PEND || gdOwner(); if (s.value !== (o || '')) s.value = o || '';
+   s.title = o ? `${(OWN_RULES.owners[o] || {}).manual || o}${GD_OWN_PEND ? ' (being applied in Preliminary sizing)' : ''}. ${OWN_RULES.note}` : 'Not known yet: Preliminary sizing publishes the owner with the bridge (open it, or choose an owner here).'; }
+@@ -8666,3 +8729,3 @@
+   Object.values(GM).forEach(m => { const x = m.inbox(j); if (x) { importInto(m.id, () => gmApply(m, x, j), j.srcLabel); done.push(m.label + (x.note ? ` (${x.note})` : '')); } });
+-  P.meta.name = j.project || P.meta.name; bsRebuildRows(); Object.keys(GM).forEach(gmBuildPanes); fillInputs();
++  if (!P.tb) P.meta.name = j.project || P.meta.name; bsRebuildRows(); Object.keys(GM).forEach(gmBuildPanes); fillInputs();
+   if (std().auto !== 'off') { const cur = P.mod; ['ts', 'sc', 'bstf', 'wt', 'cf', 'oh'].forEach(mm => { try { P.mod = mm; runAutoDesign(mm, true); } catch (er) { console.error(er); } }); P.mod = cur; done.push('Transverse stiffeners, shear connectors, bearing stiffeners, welds, cross-frames, and deck overhang auto-designed'); }
+@@ -8688,2 +8751,3 @@
+   if (e.data.rid == null && GD_XF_STALE && j.target === GD_XF_STALE) { GD_XF_STALE = null; return; }   // XF2: the reply to a second pass that a newer request replaced (reply without a request ID)
++  gdSyncNote(j, e.data.dsig);   // GDM: the signature of the demands loaded
+   const xs0 = GD_XF_REQ ? GD_XF_REQ.sig : gdXfSig();   // XF2: the frame weights these demands were computed with
+@@ -8697,2 +8761,109 @@
+ });
++/* =====================================================================
++   GirderDetail: working modes (GDM) and the project title block (GDT); engineer's decisions 2026-10-15
++   Preliminary designer ('pl'): every tab is present; every module takes its demands from Preliminary sizing and stays in sync with it: Preliminary sizing
++   posts the signature of the demands it would send (pl-dsig) after each analysis; when it differs from the signature of the demands last loaded (P.plSync),
++   the automatic refresh (getDemands('pl', 'refresh'): every module loaded and auto-designed, with the request IDs and the cross-frame second pass of
++   XR1–XR3) runs after 1.5 s. Design modules ('mod'): Preliminary sizing is the bridge and girder definition only ("Bridge & girder"; its sizing work is
++   hidden); each module keeps its own demand source, exactly as before. Saved per project in P.gdMode; a project saved without it opens in Design modules
++   when a module's demands came from elsewhere than Preliminary sizing (Structural analysis), the last request was from Structural analysis, or a module that
++   takes demands holds values entered by hand (never imported and different from the example); otherwise in Preliminary designer.
++   Title block: P.tb { name, no, bridge, desc, compBy, compDate, chkBy, chkDate }, read by every report, the DXF title blocks, file names and the ST-Girder
++   hand-off (gdMeta). Migration (P.tb missing): Preliminary sizing's project info first, blanks filled from the modules' calculation header (P.meta); the fields
++   where both are filled and differ are listed once (P.tbMig); P.meta and Preliminary sizing's own fields are kept, unchanged.
++   ===================================================================== */
++const GDM_MODES = ['pl', 'mod'], GDM_DEM = ['splice', 'bstf', 'ts', 'sc', 'cf', 'oh', 'wt', 'gs', 'fa'];   // the modules that take demands
++const gdPLmode = () => !P || P.gdMode !== 'mod';
++const gdIsPLsrc = l => /^(Preliminary sizing|PlateLine)/.test(l || 'Preliminary sizing');
++const gdModLabel = k => k === 'splice' ? 'Field splice' : k === 'bstf' ? 'Bearing stiffeners' : GM[k] ? GM[k].label : k;
++let GD_PLD = null, GD_PLST = null, GD_PLUP = 0, GD_MODE_WHY = null;   // GD_PLD: the last demand signature from Preliminary sizing { sig, u }
++const GD_SYNC = { n: 0, u: null, held: false };   // automatic updates in a row without a user change (at most 3: a cross-frame design that keeps changing the frame weights)
++function gdModeInfer(p) {
++  const S = p._impSrc || {}, other = Object.entries(S).filter(([, q]) => q && !gdIsPLsrc(q.label)), last = String((p.ui || {}).lastSrc || '');
++  if (other.length) return { mode: 'mod', why: `${other.map(([k]) => gdModLabel(k)).join(', ')}: demands from ${other[0][1].label}` };
++  if (/^sa:/.test(last)) return { mode: 'mod', why: `the last demands were requested from Structural analysis, G${last.slice(3)}` };
++  const D = GD_FULL(); gdMigrateK(D); const man = GDM_DEM.filter(k => !S[k] && JSON.stringify(IMP_ROOTS(k).map(r => p[r])) !== JSON.stringify(IMP_ROOTS(k).map(r => D[r])));
++  if (man.length) return { mode: 'mod', why: `${man.map(gdModLabel).join(', ')}: values entered here (not from Preliminary sizing)` };
++  return { mode: 'pl', why: Object.keys(S).length ? 'every module\'s demands came from Preliminary sizing' : null };
++}
++function gdModeInit(p) { if (GDM_MODES.includes(p.gdMode)) { GD_MODE_WHY = null; return; } const r = gdModeInfer(p); p.gdMode = r.mode; GD_MODE_WHY = r.mode === 'mod' ? `Design modules: ${r.why}` : null; }   // the reason is shown when an older project opens in Design modules
++function applyGdMode() { const pm = gdPLmode();
++  document.body.classList.toggle('gdm-pl', pm); document.body.classList.toggle('gdm-mod', !pm);
++  $$('.gd-mode-b').forEach(b => b.setAttribute('aria-checked', String((b.dataset.gdmode === 'pl') === pm)));
++  const l = document.querySelector('#mtab-pl .mtab-l'); if (l) l.textContent = pm ? 'Preliminary sizing' : 'Bridge & girder';
++  if (P.mod === 'pl') $('#mod-sub').textContent = MODS.pl.title;
++  setMark('pl', pm ? GD_PLST : null); gdPlState(); gdSyncShow(); if (!GD_BG) renderInbox(); }
++function setGdMode(m) { if (!GDM_MODES.includes(m) || P.gdMode === m) return;
++  const other = Object.entries(P._impSrc || {}).filter(([, q]) => q && !gdIsPLsrc(q.label));
++  if (m === 'pl' && other.length && !confirm(`Preliminary designer: every module takes its demands from Preliminary sizing and is kept in sync with it.\n\nThese modules have other demands:\n${other.map(([k, q]) => `  ${gdModLabel(k)}: ${q.label}`).join('\n')}\n\nTheir demands will be replaced by Preliminary sizing's (your overrides and locked inputs are kept). Switch to Preliminary designer?`)) { applyGdMode(); return; }
++  P.gdMode = m; GD_MODE_WHY = null; GD_SYNC.n = 0; GD_SYNC.held = false;
++  if (m === 'pl') { GD_PLD = null; if (!P.plSync || other.length) P.plSync = { sig: null, ts: (P.plSync && P.plSync.ts) || 0 }; }   // the next signature from Preliminary sizing decides (the demands are loaded unless they match)
++  applyGdMode(); autosave(); flash(m === 'pl' ? 'Preliminary designer: the modules follow Preliminary sizing.' : 'Design modules: each module keeps its own demand source.'); }
++/* the mode and the title block to Preliminary sizing (gd-mode, gd-tb) once it is up */
++function gdPlState() { if (!PL_FRAME || !PL_FRAME.contentWindow || !PL_FRAME.dataset.up) return; try { PL_FRAME.contentWindow.postMessage({ type: 'gd-mode', mode: gdPLmode() ? 'pl' : 'mod' }, '*'); PL_FRAME.contentWindow.postMessage({ type: 'gd-tb', tb: P.tb ? clone(P.tb) : null }, '*'); } catch (e) {} }
++window.addEventListener('message', e => { if (!gdFromPL(e) || !e.data) return;
++  if (e.data.type === 'pl-status' && !GD_PLUP) { GD_PLUP = 1; gdTbMigrate(); gdPlState(); }
++  if (e.data.type === 'pl-dsig') { GD_PLD = { sig: String(e.data.sig), u: e.data.u }; gdSyncAdopt(); gdSyncCheck(); }
++  if (e.data.type === 'gd-inbox' || e.data.type === 'gd-inbox-err') setTimeout(gdSyncShow, 0); });
++/* a project saved before the modes whose demands all came from Preliminary sizing: its demands are taken as in sync (no update on opening, as before) */
++function gdSyncAdopt() { if (!gdPLmode() || P.plSync || !GD_PLD || GD_PLD.sig === 'err') return; const s = Object.values(P._impSrc || {});
++  if (s.length && s.every(q => q && gdIsPLsrc(q.label))) { P.plSync = { sig: GD_PLD.sig, ts: Math.max(0, ...s.map(q => +q.ts || 0)), adopted: 1 }; autosave(); } }
++function gdSyncCheck() { if (!gdPLmode()) return; gdSyncShow(); if (!GD_PLD || GD_PLD.sig === 'err') return;
++  if (P.plSync && P.plSync.sig === GD_PLD.sig) { GD_SYNC.held = false; gdSyncShow(); return; }
++  if (GD_PLD.u !== GD_SYNC.u) GD_SYNC.n = 0;   // Preliminary sizing changed by the user since the last automatic update
++  if (GD_SYNC.n >= 3) { GD_SYNC.held = true; gdSyncShow(); return; }
++  gdScheduleRefresh('sync'); }
++function gdSyncNote(j, dsig) { const all = ['all', 'refresh', 'xfall'].includes(j.target);
++  if (all && j.src === 'pl' && dsig) P.plSync = { sig: String(dsig), ts: Date.now() };
++  else if ((all || j.target === 'grpt') && j.src !== 'pl' && P.plSync) P.plSync = { ...P.plSync, sig: null };   // every module loaded from another source (Design all from Structural analysis, the girder report)
++  setTimeout(gdSyncCheck, 0); }
++function gdSyncTxt() { if (!gdPLmode()) return 'Design modules: each module chooses its demand source on its Project tab (Get demands); Preliminary sizing is the bridge and girder definition.';
++  if (GD_PLD && GD_PLD.sig === 'err') return '<span class="gs-warn">Preliminary sizing has input errors: the modules keep their last demands.</span>';
++  if (GD_SYNC.held) return '<span class="gs-warn">Automatic updates paused after 3 in a row (the cross-frame auto-design keeps changing the frame weights).</span> <button type="button" data-gdsync="1">Update now</button>';
++  if (GD_RF_T || GD_RQ.size || GD_XF_T || GD_PLQ.length) return 'Updating the modules from Preliminary sizing…';
++  const t = P.plSync && P.plSync.ts; return P.plSync && P.plSync.sig ? `Demands from Preliminary sizing, in sync${t ? `, updated ${new Date(t).toLocaleString()}` : ''}` : 'Demands from Preliminary sizing';
++}
++function gdSyncShow() { if (!P) return; const h = gdSyncTxt(), a = document.getElementById('gd-sync'), b = document.getElementById('src_sync');
++  if (a) a.innerHTML = h + (GD_MODE_WHY ? `${h ? '<br>' : ''}<span class="gd-why">Opened in ${esc(GD_MODE_WHY)}. Switch with the buttons on the left.</span>` : '');
++  if (b) b.innerHTML = gdPLmode() && h && !h.startsWith('Demands from') ? h : ''; }   // the module's own line already says where its demands come from
++document.addEventListener('click', e => { const mb = e.target.closest && e.target.closest('.gd-mode-b'); if (mb) { setGdMode(mb.dataset.gdmode); return; }
++  if (e.target.closest && e.target.closest('[data-gdsync]')) { GD_SYNC.n = 0; GD_SYNC.held = false; gdScheduleRefresh('force'); } });
++['input', 'change'].forEach(t => document.addEventListener(t, e => { if (e.target && e.target.closest && e.target.closest('#side, header, #tb-modal')) { GD_SYNC.n = 0; GD_SYNC.held = false; } }, true));   // a change by the user: automatic updates count from 0
++/* the project title block */
++const TB_F = [['name', 'Project name', 1], ['no', 'Project No.'], ['bridge', 'Bridge / structure No.'], ['desc', 'Description', 1], ['compBy', 'Computed by'], ['compDate', 'Date'], ['chkBy', 'Checked by'], ['chkDate', 'Checked date']];
++const TB_FROM = { name: 'name', no: 'projNo', compBy: 'compBy', compDate: 'compDate', chkBy: 'chkBy', chkDate: 'chkDate' };   // title block field: calculation header field
++const TB_EMPTY = () => ({ name: '', no: '', bridge: '', desc: '', compBy: '', compDate: '', chkBy: '', chkDate: '' });
++function gdMeta() { const m = P.meta, t = P.tb; if (!t) return m; return { ...m, name: t.name, projNo: t.no, bridgeNo: t.bridge, desc: t.desc, compBy: t.compBy, compDate: t.compDate, chkBy: t.chkBy, chkDate: t.chkDate }; }
++function gdTbMigrate(noPL) { if (!P) return; if (P.tb) { if (P.tbMig && !P.tbMig.seen && (P.tbMig.conf || []).length) tbNotice(); return; }
++  let pm = null; try { const pp = PL_FRAME && PL_FRAME.dataset.up && PL_FRAME.contentWindow.eval('P'); pm = pp && pp.meta ? JSON.parse(JSON.stringify(pp.meta)) : null; } catch (e) {}
++  if (!pm && !noPL) return;   // Preliminary sizing is not up yet: migrated on its first status message
++  const gm = P.meta || {}, sv = v => v == null ? '' : String(v).trim(), tb = TB_EMPTY(), conf = [], pick = o => o ? Object.fromEntries(Object.values(TB_FROM).filter(k => k in o).map(k => [k, o[k]])) : null;
++  Object.entries(TB_FROM).forEach(([k, f]) => { const a = pm ? sv(pm[f]) : '', b = sv(gm[f]); tb[k] = a || b;
++    if (a && b && a !== b) conf.push({ mod: 'GirderDetail modules (calculation header on the Project tab)', f: TB_F.find(q => q[0] === k)[1], old: b, used: a }); });
++  P.tb = tb; P.tbMig = { ts: Date.now(), pl: pick(pm), gd: pick(gm), conf, seen: conf.length ? 0 : 1 }; autosave(); tbRender(); gdPlState(); if (conf.length) tbNotice(); }
++function tbNotice() { const q = P.tbMig;
++  $('#tb-note-body').innerHTML = `<p>GirderDetail now has one project title block (top of the page) for every module, its reports, drawings and hand-offs. It was filled from Preliminary sizing's project info, with blanks filled from the modules' calculation header. These fields had a different value in the modules; the title block uses Preliminary sizing's value:</p>
++    <table><thead><tr><th>Module</th><th>Field</th><th>Earlier value (kept for reference)</th><th>Title block</th></tr></thead><tbody>${q.conf.map(c => `<tr><td>${esc(c.mod)}</td><td>${esc(c.f)}</td><td>${esc(c.old)}</td><td>${esc(c.used)}</td></tr>`).join('')}</tbody></table>
++    <p class="note-p">Nothing was deleted: the earlier values stay in the saved project and are listed under "Values before the title block" in the title block editor. Edit the title block to use another value.</p>`;
++  $('#tb-note').hidden = false; }
++function tbBuild() { const host = document.getElementById('tb-body'); if (!host) return;
++  host.innerHTML = `<p class="note-p">One title block for the whole project: every module's calculation report, the girder report, Preliminary sizing's report, the DXF title blocks, file names and the ST-Girder hand-off use it.</p>
++    <div class="grid2">${TB_F.map(([k, l, full]) => fld(l, 'tb.' + k, '', k === 'desc' ? 'area' : 'text', { full: !!full })).join('')}</div>
++    <p class="note-p">Owner: <b id="tb-own"></b> (set in the top bar or on Preliminary sizing's Limits tab; saved with the Preliminary sizing project).</p>
++    <div class="proj-row" style="grid-template-columns: 1fr 1fr"><button type="button" id="bx-pm-use" class="proj-btn" title="Fill the title block from the project info shared by another tool">Use shared project info</button><button type="button" id="bx-pm-share" class="proj-btn" title="Share the title block's project info with the other tools">Share project info</button></div>
++    <details id="tb-old" style="margin-top:10px"><summary>Values before the title block</summary><div id="tb-old-b"></div></details>`;
++  host.querySelector('textarea').rows = 2;
++  host.addEventListener('input', e => { const el = e.target; if (!el.dataset || !el.dataset.k || !el.dataset.k.startsWith('tb.')) return; if (!P.tb) gdTbMigrate(true); setPath(P, el.dataset.k, el.value); tbRender(true); crMarkStale(); autosave(); gdPlState(); }); }
++function tbRender(typing) { if (!P) return; const t = P.tb || TB_EMPTY(), m = gdMeta(), b = document.getElementById('tb-sum'), o = (typeof GD_OWN_PEND !== 'undefined' && GD_OWN_PEND) || gdOwner();
++  if (b) b.innerHTML = `<span class="tb-l"><b>${esc(m.name || '(no project name)')}</b> · Project No. ${esc(m.projNo || '—')} · Bridge ${esc(m.bridgeNo || '—')} · Computed ${esc(m.compBy || '—')} · Checked ${esc(m.chkBy || '—')} · Owner ${esc(o || '—')}</span><span class="tb-e">Title block</span>`;
++  const ow = document.getElementById('tb-own'); if (ow) ow.textContent = o || 'not known yet (Preliminary sizing publishes it)';
++  if (!typing) TB_F.forEach(([k]) => { const el = document.getElementById('f_tb_' + k); if (el && document.activeElement !== el) el.value = t[k] ?? ''; });
++  const ob = document.getElementById('tb-old-b'), q = P.tbMig, row = (src, o2) => o2 ? Object.entries(TB_FROM).map(([k, f]) => o2[f] != null && String(o2[f]).trim() ? `<tr><td>${src}</td><td>${esc(TB_F.find(x => x[0] === k)[1])}</td><td>${esc(o2[f])}</td></tr>` : '').join('') : '';
++  if (ob) ob.innerHTML = q ? `<p class="note-p">Recorded when the title block was created (${new Date(q.ts).toLocaleString()}); kept in the saved project, not used.</p><table><thead><tr><th>Where</th><th>Field</th><th>Value</th></tr></thead><tbody>${row('Preliminary sizing', q.pl) + row('GirderDetail modules (calculation header)', q.gd) || '<tr><td colspan="3">All blank.</td></tr>'}</tbody></table>` : '<p class="note-p">The title block is created when Preliminary sizing has loaded.</p>'; }
++function tbOpen() { if (!P.tb) gdTbMigrate(true); tbRender(); $('#tb-modal').hidden = false; const f = document.getElementById('f_tb_name'); if (f) f.focus(); }
++document.addEventListener('click', e => { if (e.target.closest && (e.target.closest('#tb-sum') || e.target.closest('[data-tbedit]'))) { tbOpen(); return; }
++  if (e.target.id === 'tb-close' || e.target.id === 'tb-modal') { $('#tb-modal').hidden = true; renderReportHeadSafe(); return; }
++  if (e.target.id === 'tb-note-ok' || e.target.id === 'tb-note') { $('#tb-note').hidden = true; if (P.tbMig) { P.tbMig.seen = 1; autosave(); } } });
++function renderReportHeadSafe() { try { if (CK && P.mod !== 'pl') recompute(); } catch (e) {} }   // the module's report head reads the title block
++
+ /* ---------- print ---------- */
+@@ -8704,3 +8875,3 @@
+     + `<div class="ig" style="margin-top:10px"><label for="ro-detail">Level of detail in the checks</label><select id="ro-detail"><option value="full">Every item worked (full calculation)</option><option value="gov">Governing item worked, others tabulated</option></select></div>
+-       <p class="note">The header uses the Project No., Subject, and Computed/Checked fields on the Project tab. In the print dialog choose "Save as PDF", Letter, and turn off the browser's own headers and footers.</p>`;
++       <p class="note">The header uses the project title block at the top of the page (Project No., Computed/Checked by and dates) and the Subject on the Project tab. In the print dialog choose "Save as PDF", Letter, and turn off the browser's own headers and footers.</p>`;
+   $('#ro-detail').value = r.detail || 'full'; if (r.manual === undefined) $('#ro-manual').checked = false; $('#rpt-modal').hidden = false; }
+@@ -8713,3 +8884,4 @@
+ function init() {
+-  initP(); buildSidebar(); gmInitDom(); fillInputs(); buildManual();
++  initP(); buildSidebar(); gmInitDom(); tbBuild(); fillInputs(); buildManual(); applyGdMode(); tbRender();   // GDM, GDT
++  if (window.ResizeObserver) new ResizeObserver(() => { const w = $('#pl-wrap'); if (w) w.style.top = Math.ceil($('#modbar').getBoundingClientRect().bottom) + 'px'; }).observe($('#gd-top'));   // the Preliminary sizing frame starts under the module tabs when the top bar changes height
+   refreshMarks();
+```
+
+#### Exact changes: embedded Preliminary sizing (decoded `PL_B64`)
+```diff
+--- pl_main.html	2026-10-15 15:11:11.497518130 +0000
++++ pl_work.html	2026-10-15 15:23:25.920365901 +0000
+@@ -774,2 +774,12 @@
+ html.embedded header .brand { display: none; }
++/* GirderDetail working modes (GDM, 2026-10-15): in "Design modules" GirderDetail shows this page as "Bridge & girder", the bridge definition only;
++   the sizing work (Summary and Checks tabs, Suggest and Alternatives, the status bar of the sizing checks, the undo bar of Suggest) is hidden, not removed.
++   The Suggest input tab shows only its Loads section (FWS, SIP forms, barrier, construction live load: part of the bridge definition) and reads "Loads". */
++html.gd-geo .tab-btn[data-tab="summary"], html.gd-geo .tab-btn[data-tab="checks"], html.gd-geo .tab-btn[data-tab="suggest"], html.gd-geo .tab-btn[data-tab="alts"], html.gd-geo #status-bar, html.gd-geo #undo-bar { display: none !important; }
++html.gd-geo #ipane-suggest > :not([data-target="sec-sgload"]):not(#sec-sgload) { display: none !important; }
++html.gd-geo #rpt-opts .ck-row[data-geo="0"] { display: none; }
++/* project title block in GirderDetail (GDT, 2026-10-15): this page's project name, engineer and date fields are hidden (kept in its saved data) */
++#gd-tb-note { display: none; }
++html.gd-tb #gd-tb-note { display: block; }
++html.gd-tb #sec-meta .ig:has(#f_meta_name), html.gd-tb #sec-meta .pair { display: none; }
+ /* =====================================================================
+@@ -4653,2 +4663,3 @@
+   if (e.data && e.data.type === 'pl-bridge-req') postBridge(true);
++  PL_GDMSG++; try {   // GDM: a recompute caused by a GirderDetail message is not counted in PL_U
+   if (e.data && e.data.type === 'gd-owner') { const o = e.data.owner; if (!OWN_LIST.includes(o) || o === P.limits.dot) { postBridge(true); return; } P.limits.dot = o; fillInputs(); recompute(); autosave(); postBridge(true); }   // OWN1: owner set in GirderDetail
+@@ -4656,3 +4667,4 @@
+   if (e.data && e.data.type === 'gd-dfx') { const nx = e.data.dfx || null; if (JSON.stringify(nx) === JSON.stringify(P.dfx || null)) return; P.dfx = nx; recompute(); autosave(); }
+-  if (e.data && e.data.type === 'gd-xs') { const nx = e.data.xs; if (!nx || !nx.L || !nx.R || JSON.stringify(nx) === JSON.stringify(P.bridge.xs || null)) return; P.bridge.xs = nx; xsLegacy(P.bridge, P.suggest, nx); fillInputs(); recompute(); autosave(); postBridge(true); } });
++  if (e.data && e.data.type === 'gd-xs') { const nx = e.data.xs; if (!nx || !nx.L || !nx.R || JSON.stringify(nx) === JSON.stringify(P.bridge.xs || null)) return; P.bridge.xs = nx; xsLegacy(P.bridge, P.suggest, nx); fillInputs(); recompute(); autosave(); postBridge(true); }
++  } finally { PL_GDMSG--; } });
+ /* deck edges set in GirderDetail (XS9): this tool's own deck-edge fields follow them, so an older build opening the project still finds
+@@ -4717,4 +4729,22 @@
+     label = `Structural analysis, ${d.gLabel} (${d.model})`; }
+-  try { window.parent.postMessage({ type: 'gd-inbox', inbox: inboxPayload(ANx, { target: q.target, srcLabel: label, src: q.src }), ...rid }, '*'); } catch (err) { fail('Could not build the demands: ' + err.message); }
++  try { const j = inboxPayload(ANx, { target: q.target, srcLabel: label, src: q.src }); window.parent.postMessage({ type: 'gd-inbox', inbox: j, ...rid, ...(q.src === 'pl' ? { dsig: plDsigOf(j) } : {}) }, '*'); } catch (err) { fail('Could not build the demands: ' + err.message); }   // dsig (GDM, 2026-10-15): the signature of these demands
+ });
++/* GirderDetail working modes (GDM, engineer's decisions 2026-10-15). GirderDetail sends its mode with gd-mode: 'pl' (Preliminary designer: every module takes
++   its demands from this page and stays in sync) or 'mod' (Design modules: this page is the bridge definition only, html.gd-geo). In 'pl' mode this page posts
++   pl-dsig after each analysis: the signature of the demands it would send (inboxPayload of the envelope analysis, time stamps removed), and u, the count of
++   its own recomputes not caused by a GirderDetail message (GirderDetail uses it to stop an automatic loop). GirderDetail compares the signature with that of
++   the demands last loaded and, when they differ, updates every module (its automatic refresh). The same signature is sent with the reply (dsig). */
++let GD_MODE = null, GD_TB = null, PL_U = 0, PL_GDMSG = 0, _dsT = null, _dsLast = '';
++function plHash(s) { let h = 0x811c9dc5; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0).toString(16).padStart(8, '0') + s.length.toString(16); }
++function plDsigOf(j) { return plHash(JSON.stringify({ ...j, ts: 0, target: 0, srcLabel: 0, src: 0 }).replace(/"ts":\d+/g, '"ts":0')); }
++function plDsig() { try { if (!M || M.errors.length || !AN || AN.errors) return 'err'; return plDsigOf(inboxPayload(AN, {})); } catch (e) { return 'err'; } }
++function postDsig(force) { if (!EMBED || GD_MODE !== 'pl') return; clearTimeout(_dsT);
++  _dsT = setTimeout(() => { const s = plDsig(); if (!force && s === _dsLast) return; _dsLast = s; window.parent.postMessage({ type: 'pl-dsig', sig: s, u: PL_U }, '*'); }, force ? 0 : 600); }
++function gdModeSet(md) { const geo = md === 'mod'; GD_MODE = md; document.documentElement.classList.toggle('gd-geo', geo);
++  const it = document.querySelector('.itab[data-pane="suggest"]'); if (it) it.textContent = geo ? 'Loads' : 'Suggest';
++  if (geo && ['summary', 'checks', 'suggest', 'alts'].includes(P.ui.otab)) setOTab('drawings');   // the tab on screen is hidden: the drawings (the bridge as defined)
++  if (md === 'pl') postDsig(true); }
++window.addEventListener('message', e => { if (e.source !== window.parent || !e.data) return;
++  if (e.data.type === 'gd-mode') gdModeSet(e.data.mode === 'mod' ? 'mod' : 'pl');
++  if (e.data.type === 'gd-tb') { GD_TB = e.data.tb && typeof e.data.tb === 'object' ? e.data.tb : null; document.documentElement.classList.toggle('gd-tb', !!GD_TB); if (M && !M.errors.length) renderReportHead(); } });
+ function sendSplices(download) {
+@@ -4723,3 +4753,3 @@
+   if (download) { const b = new Blob([JSON.stringify(j, null, 2)], { type: 'application/json' }), a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = (P.meta.name || 'plateline').replace(/[^\w\-]+/g, '_') + '_splices.json'; a.click(); return; }
+-  if (EMBED) { try { localStorage.setItem('girderdetail_inbox_v1', JSON.stringify(j)); } catch (e) {} window.parent.postMessage({ type: 'gd-inbox', inbox: j }, '*'); return; }
++  if (EMBED) { try { localStorage.setItem('girderdetail_inbox_v1', JSON.stringify(j)); } catch (e) {} window.parent.postMessage({ type: 'gd-inbox', inbox: j, dsig: plDsigOf(j) }, '*'); return; }
+   try { localStorage.setItem('girderdetail_inbox_v1', JSON.stringify(j)); alert(`Sent ${list.length} splice cases, ${brg.length} bearing reactions, and detail demands (stiffeners, studs, cross-frames, overhang, welds) to GirderDetail. Open GirderDetail in this browser (same site or folder), choose a module, and use Import from PlateLine on its Project tab.`); } catch (e) { alert('Browser storage is not available; use "Download splice JSON" instead.'); }
+@@ -5275,2 +5305,3 @@
+       <div class="sec-body one-col" id="sec-meta">
++        <p class="hint static" id="gd-tb-note">Project name, project and bridge numbers, computed and checked by, and dates: GirderDetail's project title block at the top of the page (used by this report too).</p>
+         ${fld('Project name', 'meta.name', '', 'text')}${fld('Subject', 'meta.subject', '', 'text')}${fld('Task', 'meta.task', '', 'text')}
+@@ -5832,3 +5863,3 @@
+ function renderReportHead() {
+-  const m = M, mt = P.meta;
++  const m = M, mt = GD_TB ? { ...P.meta, name: GD_TB.name, compBy: GD_TB.compBy, compDate: GD_TB.compDate, chkBy: GD_TB.chkBy, chkDate: GD_TB.chkDate } : P.meta;   // GDT: GirderDetail's project title block
+   const tb = `<table class="tb"><tr><td><span>Project</span>${esc(mt.name)}</td><td><span>Computed by</span>${esc(mt.compBy)}</td><td><span>Date</span>${esc(mt.compDate)}</td></tr>
+@@ -5908,15 +5939,17 @@
+   if (!C) { alert('Fix the input errors before printing a report.'); return; }
+-  $('#rpt-opts').innerHTML = `<div class="ck-row"><input type="checkbox" checked disabled><label>Title block and input echo (always printed)</label></div>` + RPT.map(([k, l]) => `<div class="ck-row"><input type="checkbox" id="ro-${k}" ${P.ui.rpt[k] ? 'checked' : ''}><label for="ro-${k}">${l}</label></div>`).join('');
++  $('#rpt-opts').innerHTML = `<div class="ck-row"><input type="checkbox" checked disabled><label>Title block and input echo (always printed)</label></div>` + RPT.map(([k, l]) => `<div class="ck-row" data-geo="${RPT_GEO.includes(k) ? 1 : 0}"><input type="checkbox" id="ro-${k}" ${P.ui.rpt[k] ? 'checked' : ''}><label for="ro-${k}">${l}</label></div>`).join('');
+   $('#rpt-modal').hidden = false;
+ }
++const RPT_GEO = ['drawings', 'analysis', 'schedule', 'manual'];   // GDM: the parts printed in GirderDetail's "Design modules" mode (no sizing summary, checks, suggestion or alternatives)
++const rptOn = k => !!P.ui.rpt[k] && (GD_MODE !== 'mod' || RPT_GEO.includes(k));
+ function doPrint() {
+   RPT.forEach(([k]) => P.ui.rpt[k] = $('#ro-' + k).checked); autosave();
+-  if (P.ui.rpt.suggest) maybeSuggest(true);
+-  if (P.ui.rpt.alts && !(ALT && ALT.done && ALT_KEY === altKey())) runAlts(altKey(), true);
++  if (rptOn('suggest')) maybeSuggest(true);
++  if (rptOn('alts') && !(ALT && ALT.done && ALT_KEY === altKey())) runAlts(altKey(), true);
+   $('#rpt-modal').hidden = true;
+   document.body.classList.add('printing');
+-  RPT.forEach(([k]) => document.getElementById('tab-' + k).classList.toggle('print-on', !!P.ui.rpt[k]));
++  RPT.forEach(([k]) => document.getElementById('tab-' + k).classList.toggle('print-on', rptOn(k)));
+   // number printed sections sequentially
+   let n = 0; RPT.forEach(([k, l]) => { const tp = document.getElementById('tab-' + k); tp.querySelector(':scope > .print-h')?.remove();
+-    if (P.ui.rpt[k]) { const h = document.createElement('h2'); h.className = 'print-h'; h.textContent = `${++n}. ${l}`; tp.prepend(h); } });
++    if (rptOn(k)) { const h = document.createElement('h2'); h.className = 'print-h'; h.textContent = `${++n}. ${l}`; tp.prepend(h); } });
+   if (window.Plotly) $$('.plt').forEach(el => { if (el.data) Plotly.relayout(el, { width: 960, autosize: false }); });
+@@ -5958,3 +5991,3 @@
+ /* report status to GirderDetail when embedded */
+-if (EMBED) { const _rc = recompute; recompute = function () { _rc.apply(this, arguments); try { const s = C ? { f: C.filter(c => c.status === 'fail').length, w: C.filter(c => c.status === 'warn').length } : { err: true }; window.parent.postMessage({ type: 'pl-status', ...s }, '*'); } catch (e) {} postBridge(); }; }
++if (EMBED) { const _rc = recompute; recompute = function () { _rc.apply(this, arguments); try { const s = C ? { f: C.filter(c => c.status === 'fail').length, w: C.filter(c => c.status === 'warn').length } : { err: true }; window.parent.postMessage({ type: 'pl-status', ...s }, '*'); } catch (e) {} postBridge(); if (!PL_GDMSG) PL_U++; postDsig(); }; }   // GDM: the demand signature
+ 
+```

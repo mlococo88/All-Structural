@@ -77,6 +77,7 @@ This matches the existing BridgeLocks "project" channel (`index.html`).
 
 - Each tool maps these fields onto its own title-block fields. Fields a tool doesn't have are ignored.
 - Each tool offers **"Use shared project info"** (pull) and **"Share project info"** (publish).
+- Steel Bridge Beam Modules / GirderDetail (since 2026-10-15) maps them onto its one project title block (top of the page): `projectName` → Project name, `bridgeId` → Bridge / structure No., `jobNo` → Project No., `preparedBy` → Computed by, `checkedBy` → Checked by, `date` → Date; `client` and `location` are not used. (Before, the same fields of each module's calculation header, without `bridgeId`.)
 - Section Property Calculator (added 2026-10-10, receiver id `sectionProps`) maps `projectName` → Project, `jobNo` → Job #, `client` → Client, `preparedBy` → Prepared by, `checkedBy` → Checked by, `date` → Date; `bridgeId` and `location` are not used. It uses no other channel (Phase 1).
 - Gusset Plate Rating (added 2026-10-05) has all eight fields: `projectName`, `bridgeId`, `jobNo`, `client`, `location`, `preparedBy`, `checkedBy` map to its Calculation header fields of the same names, and `date` maps to its "Date" (prepared) field. It uses no other channel.
 
@@ -250,12 +251,12 @@ This matches the existing BridgeLocks "project" channel (`index.html`).
 One girder's line-girder analysis results from GirderDetail (Steel Bridge Beam Modules, Structural analysis) for ST-Girder's checks and LRFR rating: GirderDetail's forces and geometry, not ST-Girder's own analysis. The payload uses ST-Girder's **existing** imported-demands schema (the MIDAS station format ST-Girder already reads with Import), extended only with optional fields, so the same JSON file loads with ST-Girder's existing **Import** button.
 
 - **Transport.** Key `bridgeSuite.v1.girderDemands` (+ `.updatedAt`, `.adopted.stgirder`), written with `BridgeXfer.publish` on GirderDetail's **"Send to ST-Girder"**, and the same payload as a file with **"Export hand-off (JSON)"** (Structural analysis, "Girder and model" tab, section "Send to ST-Girder"). It is not written to the MCT hand-off map (`bridgeSuite.v1.handoffs` / `latestId`), because PS-Beam also reads that map (and auto-adopts it when its demands channel is locked); this channel is read by ST-Girder only. Opened as files, both tools must be in one folder and opened in Chrome or Edge (§1); otherwise use the file.
-- **Envelope differences** (kept for the existing schema): `_schema` is `stgirder-external-demands`, not `bridge-…`; `project` is a **string** (the bridge name from Preliminary sizing), as in the other external-demand files; `producer:"GirderDetail"`, `producerFile:"Steel Bridge Beam Modules.html"`.
+- **Envelope differences** (kept for the existing schema): `_schema` is `stgirder-external-demands`, not `bridge-…`; `project` is a **string** (the project name of GirderDetail's project title block; before 2026-10-15 the bridge name from Preliminary sizing, which the title block takes when it is created), as in the other external-demand files; `producer:"GirderDetail"`, `producerFile:"Steel Bridge Beam Modules.html"`.
 - **Shape:**
 
   ```js
   { _schema:"stgirder-external-demands", schemaVersion:1, producer:"GirderDetail", producerFile:"Steel Bridge Beam Modules.html",
-    producedAt, project:"<bridge name>", source:"GirderDetail Structural analysis, G2 (interior), staged, variable stiffness (steel / 3n / n)",
+    producedAt, project:"<project name>", source:"GirderDetail Structural analysis, G2 (interior), staged, variable stiffness (steel / 3n / n)",
     liveLoadType:"HL-93",
     units:{ x:"ft", moment:"ft-kip", force:"kip", plate:"in", stress:"ksi", deck:"in", area:"in2", unitWeight:"kcf", spacing:"ft", Lb:"ft", skew:"deg" },
     factored:false, imIncluded:true, dfIncluded:true, multiplePresenceIncluded:true,
