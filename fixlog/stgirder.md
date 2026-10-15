@@ -2397,3 +2397,11 @@ index 63575b9..9f357b4 100644
 +        {tab==='deck'&&<DeckTab R={R} go={setTab}/>}
          {tab==='fatigue'&&<FatigueTab R={R}/>}
 ```
+
+## 2026-10-15 — Report §1 load-factor sentence shows the owner factors (RF1, display only, Tier 0)
+- **Function / anchor:** `ReportTab` calc-sheet builder, §1 Objectives paragraph, text `Load factors: Strength I`.
+- **Before:** fixed text `Load factors: Strength I 1.25 DC + 1.50 DW + 1.75 (LL+IM); Service II DC + DW + 1.30 (LL+IM).`, even when GirderDetail owner load rules (#234) were in use.
+- **After:** the text is built from `lfFac(ownLFOf(ext))`, the factors the checks already use. With no owner rules it reads exactly as before. With owner rules it appends "(owner load rules from GirderDetail; see 2. Input parameters, Owner load rules)".
+- **Provision:** none changed (display of the factors already applied by #234: AASHTO LRFD 10th Ed. 1.3.2.1, Table 3.4.1-1; RIDOT BDM 3.4.1.2).
+- **Check case:** built-in RIDOT G2 hand-off (η = 1.05, m = 1.2) gives `Strength I 1.3125 DC + 1.575 DW + 2.205 (LL+IM); Service II DC + DW + 1.56 (LL+IM) (owner load rules …)`. The default project shows the old text unchanged.
+- **Verification:** Babel transpile OK; headless report text checked for the default project and a RIDOT payload; no page errors. No computed value changed.
