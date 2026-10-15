@@ -13615,3 +13615,537 @@ Diff of the decoded Preliminary sizing page (`pl_main` = main 0929719, `pl` = br
      + card('dw-secs', 'Girder section details', 'Common scale, to scale', `<div class="secgrid">${secs}</div><p class="cap">Each distinct plate combination is drawn once, at a common scale, with the stations where it occurs.</p>`)
      + card('dw-prof', 'Plate profile along the girder', '', `<div id="plt-prof" class="plt tall"></div><p class="cap">Solid vertical lines are supports; dashed lines are field splices. Click legend entries to toggle series.</p>`);
 ```
+
+## 2026-10-15 — PR: claude/gd-owner-profiles-1 (owner (DOT) profiles, phase 1 of 3: framework and the cross-frame orientation owner rule; engineer's decisions of 2026-10-15; PR link added after merge)
+
+Changes in the main file (GirderDetail outer page) and in the embedded Preliminary sizing page (`const PL_B64`: decoded, edited, re-encoded on its one line). Basis: AASHTO LRFD 10th Ed. (2024) Art. 6.7.4.2.1 (owner rules applied on top); RIDOT Bridge Design Manual (April 2026) §6.4.3; CTDOT BRSDM Release 1, V2 6.7.4.2 (replaces the 4th and 5th paragraphs of BDS 6.7.4.2); MassDOT LRFD Bridge Manual Part I (Hundredth Anniversary Ed.) 2.3.4.1. Only citations (manual + section) and short paraphrases are in the tool; no manual text is reproduced. Phases 2 (load rules: RIDOT 1.2 multiplier, η, haunch = 0, rating targets) and 3 (owner defaults and checks) are not in this PR; they add rows to the rules table and apply them by rule id.
+
+### OWN1. Owner selector: options, migration, default   [saved data: read-time migration (CLAUDE.md §5)]
+- **Where (PL):** `DEFAULT`-adjacent helpers (anchor `const OWN_LIST = ['RIDOT', 'MassDOT', 'CTDOT', 'AASHTO'];`, `function migrateOwner(p)`); autosave load (anchor `P = migrateOwner(migrateCosts(deepMerge(clone(DEFAULT), a.data)))`); `loadData` (same call; used by Open project and Import JSON); Limits tab (anchor `fld('Owner', 'limits.dot'`); owner-limit profiles (anchor `const pfAll = () =>`).
+- **Before:** `options: [['MassDOT', 'MassDOT'], ['RIDOT', 'RIDOT'], ['CTDOT', 'CTDOT'], ['Custom', 'Custom']]`; change handler `/* profile switched: nothing else */`; profiles read with `JSON.parse(localStorage.getItem(KEY_PF) || '{}')`.
+- **After:** `options: [['RIDOT', 'RIDOT'], ['MassDOT', 'MassDOT'], ['CTDOT', 'CTDOT'], ['AASHTO', 'AASHTO (no owner rules)']]`; handler `renderOwnInfo()` (+ the usual recompute).
+- **Migration:** `limits.dot` = 'Custom' (or any value not in the list, which no build could write) is read as 'AASHTO'; every limit value is kept (only the `dot` field changes). AASHTO applies no owner rule, which is exactly what 'Custom' (and every owner) did before, so these projects compute identically. Projects without the field get the default `'MassDOT'` (deepMerge), as before. Saved owner-limit profiles (`plateline_profiles_v1`, keyed by owner): a 'Custom' entry is read as the 'AASHTO' entry (copied with `dot: 'AASHTO'`; the stored 'Custom' entry is kept, never deleted); "Load saved limits" keeps the selected owner in `dot`. No key renamed; the stored project is rewritten with 'AASHTO' only when it is next saved.
+- **Default for new projects: MassDOT** (unchanged). MassDOT applies AASHTO behaviour plus warnings above 40°/50° (OWN5), so new projects at the built-in skews compute as before.
+- **Older builds** opening a project saved as 'AASHTO': the select shows blank, nothing else changes (checked: main `loadData`, no error, no check change).
+
+### OWN2. Bridge-level owner: hand-off, GirderDetail top bar, refresh   [hand-off payload: one new field]
+- **PL `bridgeDef`:** new field `owner: plOwner(P)` (also on the `ok: false` object). **New message `gd-owner`** (GirderDetail → PL): sets `limits.dot`, recompute, autosave, publish.
+- **GirderDetail:** top bar "Owner [RIDOT ▾] rules" (anchor `<label class="own-pill" for="gd-owner"`), `gdOwner()` (the owner every module reads: `P.df.bridge.owner`, null until Preliminary sizing has published it), `ownSet` (posts `gd-owner` through the ready queue `gdPlPost`, loading Preliminary sizing in the background if needed), `ownBadge` (in `recompute` and on each `gd-bridge`).
+- **Refresh (anchor `const ownCh =`):** `nx` now also leaves out `owner` (so the field first appearing on an old project triggers no refresh); an owner change refreshes every module (as a bridge change) only when it also changed the cross-frame list `xf`. An owner change that changes nothing computed (e.g. MassDOT ↔ AASHTO below 40°) does not refresh.
+- **Before:** `const nx = o => { const { ts, xs, xf, ...r } = o; ...}; if (ob && ob.ok && nb.ok && nx(ob) !== nx(nb) && ...) gdScheduleRefresh();` **After:** `const nx = o => { const { ts, xs, xf, owner, ...r } = o; ...}; const ownCh = !!(ob && ob.owner && nb.owner && ob.owner !== nb.owner) && JSON.stringify(ob.xf || null) !== JSON.stringify(nb.xf || null); if (ob && ob.ok && nb.ok && (nx(ob) !== nx(nb) || ownCh) && ...) gdScheduleRefresh();`
+
+### OWN3. Owner rules table and infrastructure   [display / infrastructure; no computed change by itself]
+- **One table, in GirderDetail:** `OWN_RULES` (anchor `const OWN_RULES = {`): `owners` (manual, short name, AASHTO edition it is written to) and `rules` rows `{ owner, id, kind, sec, value, key?, show?, where, ref?, text }` with kind `default` | `shall-check` | `should-warning` | `pending-reference`. Preliminary sizing receives it when its frame is created: `plShow` places `<script>window.GD_OWN_RULES = …</script>` before the page's own scripts (anchor `// OWN1: the owner rules table, before Preliminary sizing's scripts`); PL reads it as `OWN_TBL` (null when the page runs on its own: no owner rule applied, the Limits tab says so).
+- **Rows in phase 1:** RIDOT `xf.orient` (BDM 6.4.3, shall) and CTDOT `xf.orient` (BRSDM V2 6.7.4.2, shall), both `{ thr: 20, scope: 'bridge' }`; MassDOT `xf.skew40` / `xf.skew50` (Part I 2.3.4.1, should); pending references: RIDOT Bridge Standard Details (BDM 6.4.3: spacing, stagger pattern, details), CTDOT standard details (V2 6.7.4.2), MassDOT Part II (2.3.4.1 cross-frame details; 3.6.3.1 plate/weld minimums; 3.6.5.5 stiffener locations; 3.5.2.1 deck tables/overhang; 3.5.1.2 standard haunch; 3.5.6.2 camber Z).
+- **Edition note** (table `note`, shown in the top-bar rules panel and the Limits tab): MassDOT and CTDOT BRSDM written to AASHTO 9th Ed. (RIDOT BDM to the 10th); the tool applies the 10th Ed. with owner rules on top.
+- **UI:** GirderDetail "rules" opens a panel (`#own-modal`, `ownModal`) listing every owner's rows with section, kind and where applied (pending references: "Not applied: needs …"). PL Limits tab: `renderOwnInfo` (note, the selected owner's rows, link "All owners' rules" → `pl-goto` `to: 'owner'`), and the label of Orientation "Automatic" names the owner rule.
+- **Override flags for `default` rows** (`ownFlags`, PL): a row with an input `key` whose value differs is flagged under the input "Overrides <manual> <sec>: <show>" (not blocked). No `default` row exists in phase 1; verified with a test row at run time (RIDOT minTw 7/16: flag at 1/2 in, none at 7/16 in). The cross-frame rule has its own flag (OWN4).
+
+### OWN4. Cross-frame orientation owner rule in `framingLayout`   [LAYOUT / RESULT CHANGE for RIDOT and CTDOT bridges with a support skewed more than 20° — §4 callout]
+- **Where (PL):** `framingLayout` span loop (anchors `ox = plOwnXf(P, m), oxA = ox.on && F.orient === 'auto'`, `const arr = oxA && o === 'normal' ? 'staggered' : F.arrange;`), memo key, `normSpan(k, bf, dmin, pz, arr)`, `orient[k].arr`, return `own: ox`; new `plOwnXf(P, m)` after `framingLayout`; Framing tab line `#fr-own` (`frOwnHtml`); spacing table note uses `o.arr`.
+- **Before:** `const o = F.orient === 'auto' ? (th <= 20 + 1e-9 ? 'parallel' : 'normal') : F.orient;` (th = larger skew of the span's two supports) and `const stag = F.arrange === 'staggered'`.
+- **After:** `const o = F.orient === 'auto' ? (oxA ? ox.o : th <= 20 + 1e-9 ? 'parallel' : 'normal') : F.orient;` and `const stag = arr === 'staggered'`, with `plOwnXf`: θ_max = max |skew| over **every support of the bridge**; owner with `xf.orient` (RIDOT, CTDOT) and Orientation Automatic: θ_max ≤ 20° → every span parallel to the skew (not staggered); θ_max > 20° → every span normal to the girders and **staggered** (the "Normal frames" setting is not used). Orientation set by hand: as entered (flagged, OWN5 fails it if it does not conform). AASHTO, MassDOT, no table: per span exactly as before. All #227/#228 rules still apply unchanged (grid on each girder's obtuse bearing, first offset X5, stagger offsets ≥ max(min. offset, 4b_f) with s/2 < d_min kept contiguous, splice/transition shifts, pier-region spacing) — the owner rule only chooses `o` and the arrangement passed in.
+- **Governing provisions:** RIDOT BDM (Apr. 2026) 6.4.3; CTDOT BRSDM R1 V2 6.7.4.2; whole-bridge application per the engineer's decision of 2026-10-15; AASHTO LRFD 10th Ed. 6.7.4.2.1 (either arrangement "may" be used, so the owner rule is a permitted choice).
+- **Check cases (headless, branch; "main" = the same project on main, MassDOT):**
+  1. **Built-in, all supports 28°, RIDOT** (also CTDOT, identical): θ_max = max(28, 28, 28, 28) = 28° > 20° ⇒ normal + staggered in all three spans. Grid s = 23.63 / 24.96 / 23.63 ft (unchanged); stagger s/2 = 23.63/2 = 11.81 ft ≥ d_min = max(4, 4 × 18/12 = 6.00) = 6.00 ft, so the bays are staggered (not flat); X3 G2/G3/G4 11.81 ≥ 6.00 ft pass. Intermediate frames **58 → 52** (all frames 74 → 68). Girder section L_b: interior positive regions **23.63 / 24.96 / 23.63 → 11.82 / 12.48 / 11.81 ft**; **exterior at Pier 1 / Pier 2 12.66 / 13.05 → 22.46 / 21.27 ft** (exterior girders have frames on one side only); interior at the piers 19.56 ft (unchanged). Results: GS14 Span 1 interior top flange 0.407 → 0.340; GS14 Pier 1 exterior bottom flange buckling 0.302 → 0.329, Pier 2 0.303 → 0.337; GS10 Pier 2 exterior 0.313 → 0.450; Cross-frames stability-bracing n 5 → 4, CF8 β_T 0.043 → 0.054; Fatigue/CP2 connection plate moves (exterior C′ 1.138 at 56.71 ft → 1.119 at 53.29 ft, still failing as on main, GD25). All checks that passed still pass. **Identical** (every module, `xf`, layout) to main with Normal frames = Staggered set by hand: verified.
+  2. **Built-in 15°, RIDOT / CTDOT**: θ_max = 15° ≤ 20° ⇒ parallel, not staggered = the per-span AASHTO result: frames, hand-off and all module results identical to main; only X1 gains the owner column. Same with "Staggered" saved (parallel frames ignore it).
+  3. **Built-in 15° and 28°, AASHTO** (incl. projects saved as 'Custom', migrated): identical to main.
+  4. **Built-in 28° at the abutments only (28/0/0/28), RIDOT**: θ_max = 28° ⇒ whole bridge normal + staggered, **including Span 2 (0°/0°), which was parallel**: intermediate frames 54 → 56; interior L_b at the piers 22.70 → 11.67 ft (C_b 1.197); **GS7 Pier 1 interior 1.057 FAIL → 0.858 pass**, Pier 2 1.056 → 0.858; exterior Pier 1 1.050 → 1.050, Pier 2 1.050 → 1.032 (still fail: exterior frames on one side, L_b 22.70 ft; s_p of #228 is the remedy); GS10 Pier interior 0.641 → 0.417. Identical to main with Orientation Normal + Staggered set by hand.
+  5. **Override**: built-in 28°, RIDOT, Orientation "Normal" + Contiguous: layout identical to main (contiguous), X1 **fails** every span, Framing tab flag "Overrides RIDOT BDM 6.4.3: normal to the girders and staggered (θ_max = 28.00°) …". Built-in 15°, RIDOT, Orientation Normal: X1 fails ("Parallel to skew, not staggered" required). 28°, RIDOT, Orientation Parallel: X1 fails (as on main by AASHTO, now citing both).
+- **Suggest / Full design** use `framingLayout` with the project's owner, so they price and check the owner's arrangement: quick suggestion at 28°, RIDOT = main with Staggered set by hand (D 63, $1,681,041, 68 frames, identical JSON).
+
+### OWN5. Check X1 owner items   [CHECK CHANGE — §4 callout]
+- **Where (PL):** `framingChecks` X1 (anchor `/* X1 orientation. OWN1 (2026-10-15)`).
+- **Before:** items per span: fail only if parallel at θ > 20° (AASHTO 6.7.4.2), ref 'AASHTO LRFD 6.7.4.2', src Code.
+- **After:** owner without rules (AASHTO, MassDOT): the same items (cells use the arrangement actually used, equal to the setting). RIDOT / CTDOT: ref 'AASHTO LRFD 10th Ed. 6.7.4.2.1; RIDOT BDM 6.4.3' (or 'CTDOT BRSDM V2 6.7.4.2'), src DOT, a "Required" column; per span **fail** unless θ_max ≤ 20° and parallel, or θ_max > 20° and normal + staggered (a span whose half-spacing is below d_min, kept contiguous by the layout, fails). MassDOT: θ_max > 40° adds a **warning** item (2.3.4.1: standard details may need modification), > 50° a second warning (diaphragm/connection fatigue; consider an alternate beam layout); X1 is then src DOT.
+- **Check cases:** built-in 45°, MassDOT: X1 pass → **warning** (one item "Largest skew over 40° …", θ_max = 45.00 > 40.00), layout and all module results identical to main. 55°: two warning items. 28°, RIDOT, contiguous by hand: X1 fail (case 5 above).
+
+### Saved data
+- `limits.dot` values: 'AASHTO' added, 'Custom' read as 'AASHTO' (OWN1). Profiles key `plateline_profiles_v1`: 'Custom' read as 'AASHTO' (entry kept). Bridge hand-off: new field `bridge.owner` (stored in GirderDetail's `P.df.bridge`; excluded from the "real change" comparison). Message `gd-owner` new. No key renamed or removed; no other format changed.
+
+### How verified
+- `node --check` on every script block (main file 4, decoded page 2); PL_B64 round trip byte-identical.
+- `framingLayout` main vs branch in Node (rules table from the branch file): 6,912 configurations (12 skew sets incl. 15/21/15/15, 28/0/0/28, 0/28/28/0, mixed, 45, 55, ±30; owners AASHTO, MassDOT, RIDOT, CTDOT, 'Custom', an unknown value; contiguous/staggered; auto/normal/parallel; 20/25 ft; 3/5 girders; continuous/simple; s_p none/15): **0 differences**, where for RIDOT/CTDOT with Automatic and θ_max > 20° (512 cases) the main reference is Normal + Staggered set by hand.
+- Headless Chromium, main 648a0bd vs branch, settled (`settle`), every module after Get demands: built-in 15°, 28°, 28° abutments only, xsA, curb (MassDOT default), 28° and 28° abutments-only with Staggered/Normal+Staggered set by hand, 45°, 55°: GirderDetail project (owner field removed), hand-off `xf`, all module check hashes and all 10 modules identical; Preliminary sizing project identical except `ts`; PL checks identical except X1 at 45°/55° (the MassDOT warnings). Projects saved by main as 'Custom' (15° and 28°, custom min. web 7/16 in) opened in the branch: AASHTO, limits kept, everything identical. Owner scenarios as in OWN4/OWN5; DC1 frame list = layout (0 mismatches) in all; no console errors.
+- UI (`followups/owner1/*.png`): top-bar owner and rules panel, Limits tab panel, Framing tab line and override flag, X1 for RIDOT and MassDOT 55°; owner set from the top bar reaches Preliminary sizing and comes back in the hand-off; profile load/save with a 'Custom' profile; import of a 'Custom' project; project without `dot` → MassDOT; main opening a branch 'AASHTO' project: no error.
+
+### Open items (ENGINEER_CHECKS GD38–GD43)
+- Whole-bridge rule readings (GD43): θ_max over abutments and piers; a 0° span on a > 20° bridge is staggered; a span that cannot stagger (s/2 < d_min, e.g. a pier-region spacing s_p ≤ 12 ft with 18 in flanges) fails X1 under RIDOT/CTDOT; the stagger pattern (alternate bays at s/2) awaits the owners' standard details (pending reference).
+- Exterior girders under staggered frames get L_b ≈ 2 × the interior one near piers (case 1: 12.66 → 22.46 ft); X2 still passes against the 25 ft target. Noted for the engineer.
+- FSP open item "region definition and minimum" (GD37 a–c): engineer-confirmed 2026-10-15, no change.
+
+Diff of the outer file (main 648a0bd → branch; the PL_B64 line elided):
+
+```diff
+--- main (outer file)
++++ branch (outer file)
+@@ -85,2 +85,13 @@
+ .hdr-lbl { font-size: 12px; color: var(--muted); }
++/* owner (DOT) profile in the top bar (OWN1) */
++.own-pill { display: inline-flex; align-items: center; gap: 4px; height: 34px; padding: 0 2px 0 10px; border: 1px solid var(--border-hi); border-radius: var(--r); background: var(--surface); font-size: 12px; color: var(--muted); white-space: nowrap; }
++.own-pill select { border: 0; background: transparent; font: inherit; font-size: 13px; font-weight: 700; color: var(--text); padding: 4px 2px; cursor: pointer; }
++.own-pill .own-i { border: 0; background: transparent; color: var(--blue); cursor: pointer; font-size: 12px; text-decoration: underline; padding: 0 8px 0 4px; }
++.modal-box.own-box { width: min(820px, 94vw); max-height: 86vh; overflow: auto; }
++.own-box td:first-child { width: 22%; }
++.own-box table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 8px; }
++.own-box th, .own-box td { text-align: left; vertical-align: top; padding: 5px 6px; border-bottom: 1px solid var(--border); }
++.own-box th { color: var(--muted); font-weight: 600; }
++.own-box tr.own-cur td { background: rgba(35,70,194,.05); }
++@media print { .own-pill { display: none !important; } }
+ 
+@@ -1182,2 +1193,3 @@
+   <div class="hdr-spacer"></div>
++  <div class="hdr-group"><label class="own-pill" for="gd-owner" title="Owner (DOT) profile of the bridge: owner rules on top of AASHTO LRFD 10th Ed. Set here or on Preliminary sizing's Limits tab.">Owner <select id="gd-owner"><option value="" hidden>(open Preliminary sizing)</option><option value="RIDOT">RIDOT</option><option value="MassDOT">MassDOT</option><option value="CTDOT">CTDOT</option><option value="AASHTO">AASHTO</option></select><button type="button" class="own-i" id="own-info" title="Owner rules">rules</button></label></div>
+   <div class="hdr-group"><button type="button" class="btn" id="btn-designall" style="margin-right:8px">Design all</button><button type="button" class="btn" id="btn-grpt" style="margin-right:8px">Girder report</button><button type="button" class="btn" id="btn-v3dbr" style="margin-right:8px">3D view</button><button type="button" class="btn" id="btn-dxf" style="margin-right:8px">Export DXF</button><button type="button" class="btn btn-primary" id="btn-print"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6V2.5h8V6M4 11.5H2.5v-5h11v5H12M4.5 9.5h7v4h-7z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg><span>Print report</span></button></div>
+@@ -1205,2 +1217,3 @@
+ </div>
++<div class="modal" id="own-modal" hidden><div class="modal-box own-box" role="dialog" aria-labelledby="own-h"><h2 id="own-h">Owner rules</h2><div id="own-body"></div><div class="modal-foot"><button type="button" class="btn" id="own-close">Close</button></div></div></div>
+ <div class="modal" id="rpt-modal" hidden><div class="modal-box" role="dialog"><h2>Print report</h2><p>Choose what the report contains. Sections renumber to match your selection. In the print dialog, choose "Save as PDF".</p><div id="rpt-opts"></div><div class="modal-foot"><button type="button" class="btn" id="rpt-cancel">Cancel</button><button type="button" class="btn btn-primary" id="rpt-go">Print</button></div></div></div>
+@@ -2154,2 +2167,3 @@
+ <h3>Automatic refresh</h3><p>When the bridge changes in Preliminary sizing (spans, skews, girders, spacing, plates, splices), every module is updated automatically about 1.5 s after the last edit: demands are re-imported from the last demand source used (Preliminary sizing, or Structural analysis for a chosen girder), overrides and locked values are kept, auto-design runs if it is switched on in Owner standards, every module's checks are recomputed so the status marks on the module tabs are current, and you stay in the module you are working in. The update runs in the background: no module is drawn while it runs (only the module on screen is redrawn once at the end), so the tab and the scroll position do not change. Switch it off with Auto-refresh every module when the bridge changes in Owner standards.</p>
++<h3>Owner (DOT) profile</h3><p><b>Owner</b> (top bar) is the bridge owner: RIDOT, MassDOT, CTDOT, or AASHTO (no owner rules). It is stored with the Preliminary sizing project (its Limits tab has the same selector; a project saved with the former "Custom" owner opens as AASHTO with its limits kept) and every module reads it. The owner's rules are applied on top of AASHTO LRFD 10th Ed. (2024); the MassDOT LRFD Bridge Manual and the CTDOT BRSDM are written to the 9th Ed., the RIDOT BDM (April 2026) to the 10th Ed. <b>rules</b> lists every owner rule with the manual section, its kind (shall: pass/fail check; should: warning; default: an editable value, a different entry is flagged "overrides …" but not blocked; pending reference: needs a document not available yet, such as MassDOT Part II, the RIDOT Bridge Standard Details or CTDOT standard details) and where it is applied. In this version (phase 1): the cross-frame orientation rule of RIDOT (BDM 6.4.3) and CTDOT (BRSDM V2 6.7.4.2), applied to the whole bridge in the Preliminary sizing layout (largest support skew 20° or less: parallel to the skew, not staggered; more: normal to the girders and staggered) and checked by X1; and the MassDOT skew warnings above 40° and 50° (Part I 2.3.4.1). Changing the owner refreshes every module like a bridge change when its rules change the cross-frames (otherwise nothing computed changes and no refresh runs). The owners' load rules and owner defaults follow in later versions.</p>
+ <h3>Girder report</h3><p><b>Girder report</b> (top bar) builds one calculation package for a selected girder. Choose the girder, the chapters, and whether to re-run auto-design for that girder (otherwise the plates, bolts, and welds as currently entered are checked). Every module is loaded with that girder's demands from the Structural analysis module (its own distribution factors, dead loads, and effective flange width), and each chapter is that module's full worked report: 1, bridge and girder geometry (bridge data, typical cross-section, framing plan, girder elevation, plate schedule); 2, loads and live load distribution factors with derivations; 3, structural analysis (moment and shear envelopes, reactions, deflections, stresses by construction stage); 4, girder section (Strength I, Service II, constructibility, and fatigue at the critical sections); 5, fatigue details; then one chapter per field splice on the girder; bearing stiffeners; transverse stiffeners and connection plates; shear connectors; cross-frames; deck overhang (exterior girders only); and web-to-flange welds and transitions. The package opens with a title page (girder, source of demands, basis of the details, specification, preparer and checker) and a contents list, starts each chapter on a new page, and carries "Girder G# calculation package" in the running header; print it to PDF. The app returns to the module you started from when printing is finished.</p>
+@@ -5087,3 +5101,3 @@
+   if (!init && ob && JSON.stringify({ ...ob, ts: 0 }) === JSON.stringify({ ...nb, ts: 0 })) return;
+-  P.df.bridge = nb;
++  P.df.bridge = nb; if (GD_OWN_PEND && nb.owner === GD_OWN_PEND) GD_OWN_PEND = null; ownBadge();   // OWN1: the owner as published
+   const ae = document.activeElement, keep = !init && ae && ae.closest ? ae.closest('#ipane-df_dl') : null, kv = keep ? ae.value : null;   // the user is typing in this module's cross-section inputs (the echo of gd-xs): leave that pane alone
+@@ -5092,4 +5106,5 @@
+   if (P.mod === 'df' || P.mod === 'sa') recompute(); else { refreshMarks(); try { dfFeed(GM.df.compute(P.df)); } catch (e) {} } dfXsPost(); autosave();
+-  const nx = o => { const { ts, xs, xf, ...r } = o; return JSON.stringify(r); };   // the gd-xs echo alone (XS9) is not a change of the bridge; nor the cross-frame list (XF1: no automatic re-import of stored demands; keys removed, not zeroed, so their order cannot matter)
+-  if (ob && ob.ok && nb.ok && nx(ob) !== nx(nb) && typeof gdScheduleRefresh === 'function') gdScheduleRefresh();   // a real change to an existing bridge: refresh every module
++  const nx = o => { const { ts, xs, xf, owner, ...r } = o; return JSON.stringify(r); };   // the gd-xs echo alone (XS9) is not a change of the bridge; nor the cross-frame list (XF1: no automatic re-import of stored demands; keys removed, not zeroed, so their order cannot matter); nor the owner field first appearing (OWN1)
++  const ownCh = !!(ob && ob.owner && nb.owner && ob.owner !== nb.owner) && JSON.stringify(ob.xf || null) !== JSON.stringify(nb.xf || null);   // OWN1: the owner changed and its rules changed the cross-frames: refresh as for a bridge change (an owner change that changes nothing computed does not)
++  if (ob && ob.ok && nb.ok && (nx(ob) !== nx(nb) || ownCh) && typeof gdScheduleRefresh === 'function') gdScheduleRefresh();   // a real change to an existing bridge: refresh every module
+ });
+@@ -5097,2 +5112,3 @@
+ window.addEventListener('message', e => { if (!gdFromPL(e) || !e.data || e.data.type !== 'pl-goto') return;
++  if (e.data.to === 'owner') { ownModal(); return; }   // OWN1: Limits tab "All owners' rules"
+   setMod('df'); setITab('df_dl'); const s = document.getElementById('sec-dfe'); if (s) { s.classList.remove('hidden'); const hd = s.previousElementSibling; s.style.scrollMarginTop = ((hd ? hd.offsetHeight : 0) + 8) + 'px'; s.scrollIntoView({ block: 'start' }); } });   // clear the sticky section header
+@@ -8001,2 +8017,3 @@
+   if (GD_BG) return;
++  ownBadge();    // OWN1: the bridge owner in the top bar
+   gdFatPost();   // F12-1 (2026-10-13): the Fatigue module's limit-state settings to Preliminary sizing
+@@ -8424,2 +8441,56 @@
+   const fit = autoDesignSplice(); delete P._spUndo; P.source += ` Splice plates and bolts were auto-designed for these demands: ${fit.msg}`; setTimeout(() => flash(fit.ok ? 'Splice plates and bolts auto-designed; every check passes.' : `Splice designed; still failing: ${(fit.fails || []).join(', ')}.`), 300); }
++/* ---------- owner (DOT) profile (OWN1, 2026-10-15; engineer's decisions of 2026-10-15, phase 1 of 3) ----------
++   The owner is bridge-level. Its source is Preliminary sizing's Limits tab (limits.dot: RIDOT, MassDOT, CTDOT or AASHTO, saved with that project; the
++   former 'Custom' reads as 'AASHTO'), published in the bridge hand-off (gd-bridge: bridge.owner) and set from the top bar here with the gd-owner
++   message. Every module reads it with gdOwner() (null until Preliminary sizing has published it).
++   OWN_RULES is the one table of owner rules applied on top of AASHTO LRFD 10th Ed. Preliminary sizing receives it when its frame is created
++   (window.GD_OWN_RULES, a script placed before its own, plShow). Per rule: owner, id (a module applies a rule by its id), kind ('default': an editable
++   input default (key: the input; show: the value as shown), a different user value is flagged "overrides <manual> <section>: <value>" and not blocked;
++   'shall-check': a pass/fail check; 'should-warning': a warning; 'pending-reference': needs a document not available yet, listed only), sec (manual
++   section), value, where (the check or input that applies it), ref (pending references: the document needed) and text (a short paraphrase; no manual
++   text is reproduced). Phases 2 (load rules) and 3 (owner defaults and checks) add rows. */
++const OWN_LIST = ['RIDOT', 'MassDOT', 'CTDOT', 'AASHTO'];
++const OWN_RULES = {
++  v: 1,
++  note: 'The MassDOT LRFD Bridge Manual and the CTDOT BRSDM are written to AASHTO LRFD 9th Ed. (the RIDOT BDM, April 2026, to the 10th Ed.); this tool applies AASHTO LRFD 10th Ed. (2024) with the owner rules on top.',
++  owners: {
++    RIDOT: { manual: 'RIDOT Bridge Design Manual (April 2026)', short: 'RIDOT BDM', aashto: '10th Ed.' },
++    MassDOT: { manual: 'MassDOT LRFD Bridge Manual, Part I (Hundredth Anniversary Ed.)', short: 'MassDOT Bridge Manual Part I', aashto: '9th Ed.' },
++    CTDOT: { manual: 'CTDOT Bridge and Roadway Structures Design Manual (BRSDM), Release 1', short: 'CTDOT BRSDM', aashto: '9th Ed.' },
++    AASHTO: { manual: 'AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024)', short: 'AASHTO LRFD', aashto: '10th Ed.', none: true }
++  },
++  rules: [
++    { owner: 'RIDOT', id: 'xf.orient', kind: 'shall-check', sec: '6.4.3', value: { thr: 20, scope: 'bridge' }, where: 'Preliminary sizing: Framing tab layout (Orientation: Automatic) and check X1',
++      text: 'Intermediate cross-frames, whole bridge: largest support skew 20° or less, parallel to the bearing lines and not staggered; more than 20°, normal to the girders and staggered' },
++    { owner: 'CTDOT', id: 'xf.orient', kind: 'shall-check', sec: 'V2 6.7.4.2', value: { thr: 20, scope: 'bridge' }, where: 'Preliminary sizing: Framing tab layout (Orientation: Automatic) and check X1',
++      text: 'Intermediate cross-frames, whole bridge: largest support skew 20° or less, in line along the skew; more than 20°, normal to the girders in discontinuous (staggered) lines' },
++    { owner: 'MassDOT', id: 'xf.skew40', kind: 'should-warning', sec: '2.3.4.1', value: 40, where: 'Preliminary sizing: check X1 (warning)',
++      text: 'largest skew over 40°: the standard details (Parts II and III) may need modification' },
++    { owner: 'MassDOT', id: 'xf.skew50', kind: 'should-warning', sec: '2.3.4.1', value: 50, where: 'Preliminary sizing: check X1 (warning)',
++      text: 'largest skew over about 50°: acute-corner, thermal twist and diaphragm/connection fatigue problems; mitigate them and consider an alternate beam layout' },
++    { owner: 'RIDOT', id: 'xf.details', kind: 'pending-reference', sec: '6.4.3', ref: 'RIDOT Bridge Standard Details', text: 'Cross-frame spacing, stagger pattern and connection details' },
++    { owner: 'CTDOT', id: 'xf.details', kind: 'pending-reference', sec: 'V2 6.7.4.2', ref: 'CTDOT standard details', text: 'Stagger pattern and cross-frame / diaphragm connection details (the BRSDM gives the arrangement rule only)' },
++    { owner: 'MassDOT', id: 'xf.details', kind: 'pending-reference', sec: '2.3.4.1', ref: 'MassDOT Bridge Manual Part II', text: 'Steel superstructure standard details: diaphragm / cross-frame layout and details (Part I has no spacing, orientation or stagger rule)' },
++    { owner: 'MassDOT', id: 'plates.min', kind: 'pending-reference', sec: '3.6.3.1', ref: 'MassDOT Bridge Manual Part II', text: 'Minimum web, flange and weld sizes and plate girder detailing' },
++    { owner: 'MassDOT', id: 'stiff.loc', kind: 'pending-reference', sec: '3.6.5.5', ref: 'MassDOT Bridge Manual Part II', text: 'Transverse stiffener locations' },
++    { owner: 'MassDOT', id: 'deck.tables', kind: 'pending-reference', sec: '3.5.2.1', ref: 'MassDOT Bridge Manual Part II (Ch. 7)', text: 'Deck slab thickness and reinforcement design tables, overhang limits' },
++    { owner: 'MassDOT', id: 'haunch.std', kind: 'pending-reference', sec: '3.5.1.2', ref: 'MassDOT Bridge Manual Part II', text: 'Standard haunch detail (depth used in composite properties)' },
++    { owner: 'MassDOT', id: 'camber.z', kind: 'pending-reference', sec: '3.5.6.2', ref: 'MassDOT Bridge Manual Part II', text: 'Camber diagrams and "Z" values for steel beams' }
++  ]
++};
++const gdOwner = () => { const b = P && P.df && P.df.bridge; return b && OWN_LIST.includes(b.owner) ? b.owner : null; };
++const gdOwnRules = (o, id) => OWN_RULES.rules.filter(r => r.owner === o && (!id || r.id === id));
++const gdOwnCite = r => `${(OWN_RULES.owners[r.owner] || {}).short || r.owner} ${r.sec}`;
++let GD_OWN_PEND = null;   // an owner chosen in the top bar, until Preliminary sizing publishes it back
++function ownBadge() { const s = document.getElementById('gd-owner'); if (!s) return; const o = GD_OWN_PEND || gdOwner(); if (s.value !== (o || '')) s.value = o || '';
++  s.title = o ? `${(OWN_RULES.owners[o] || {}).manual || o}${GD_OWN_PEND ? ' (being applied in Preliminary sizing)' : ''}. ${OWN_RULES.note}` : 'Not known yet: Preliminary sizing publishes the owner with the bridge (open it, or choose an owner here).'; }
++function ownSet(o) { if (!OWN_LIST.includes(o)) return; GD_OWN_PEND = o === gdOwner() ? null : o; ownBadge(); if (!GD_OWN_PEND) return; plEnsure(); gdPlPost({ type: 'gd-owner', owner: o }); }
++function ownModal() {
++  const cur = GD_OWN_PEND || gdOwner(), K = { 'shall-check': 'Shall: pass/fail check', 'should-warning': 'Should: warning', default: 'Default (editable; overrides flagged)', 'pending-reference': 'Pending reference' };
++  const rows = OWN_LIST.filter(o => !OWN_RULES.owners[o].none).map(o => { const rs = gdOwnRules(o); return rs.map((r, i) => `<tr class="${o === cur ? 'own-cur' : ''}">${i === 0 ? `<td rowspan="${rs.length}"><b>${o}</b><br><span style="color:var(--muted)">${esc(OWN_RULES.owners[o].manual)}; AASHTO LRFD ${OWN_RULES.owners[o].aashto}</span></td>` : ''}<td>${esc(r.sec)}</td><td>${esc(r.text)}</td><td>${K[r.kind] || esc(r.kind)}</td><td>${r.kind === 'pending-reference' ? `Not applied: needs ${esc(r.ref)}` : esc(r.where || '')}</td></tr>`).join(''); }).join('');
++  $('#own-body').innerHTML = `<p>Bridge owner: <b>${cur || 'not known yet (open Preliminary sizing)'}</b>${cur === 'AASHTO' ? ' (no owner rules)' : ''}. ${esc(OWN_RULES.note)} Set the owner in the top bar or on Preliminary sizing's Limits tab; it is saved with the Preliminary sizing project. Owner rules in this version (phase 1): the cross-frame layout; the owners' load rules and defaults follow.</p>
++    <table><thead><tr><th>Owner</th><th>Section</th><th>Rule (paraphrased)</th><th>Kind</th><th>Applied in</th></tr></thead><tbody>${rows}</tbody></table>`;
++  $('#own-modal').hidden = false; }
++document.addEventListener('change', e => { if (e.target && e.target.id === 'gd-owner') ownSet(e.target.value); });
++document.addEventListener('click', e => { if (e.target.id === 'own-info') { e.preventDefault(); ownModal(); } else if (e.target.id === 'own-close' || e.target.id === 'own-modal') $('#own-modal').hidden = true; });
+ /* ---------- preliminary sizing module (PlateLine, embedded) ---------- */
+@@ -8445,3 +8516,4 @@
+   PL_FRAME = document.createElement('iframe'); PL_FRAME.id = 'pl-frame'; PL_FRAME.title = 'Preliminary sizing (PlateLine)'; PL_FRAME.addEventListener('load', () => setTimeout(() => { PL_FRAME.dataset.ready = '1'; gdPlFlush(); }, 2500));
+-  PL_FRAME.srcdoc = new TextDecoder().decode(bytes); w.appendChild(PL_FRAME);
++  const own = `<script>window.GD_OWN_RULES = ${JSON.stringify(OWN_RULES).replace(/</g, '\\u003c')};<\/script>`;   // OWN1: the owner rules table, before Preliminary sizing's scripts
++  PL_FRAME.srcdoc = new TextDecoder().decode(bytes).replace(/<head>/i, h => h + own); w.appendChild(PL_FRAME);
+ }
+```
+
+Diff of the decoded Preliminary sizing page (`pl_main` = main 648a0bd, `pl` = branch):
+
+```diff
+--- pl_main.html	2026-10-15 11:20:35.890352117 +0000
++++ pl.html	2026-10-15 11:45:32.731698762 +0000
+@@ -172,6 +172,11 @@
+   line-height: 1.3;
+ }
+ .lbl-note { color: var(--muted); font-weight: 400; }
++/* owner (DOT) profile (OWN1): a user value that differs from the owner's value or rule */
++.own-flag { grid-column: 1 / -1; font-size: 12px; line-height: 1.45; color: #74490a; background: var(--warn-dim); border-left: 3px solid var(--warn); padding: 5px 8px; border-radius: 2px; margin-top: 4px; }
++.own-list { margin: 4px 0 0 16px; padding: 0; font-size: 12px; line-height: 1.5; color: var(--text-dim); }
++.own-list li { margin: 2px 0; }
++.own-kind { font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .03em; color: var(--muted); }
+ .iw { position: relative; display: flex; align-items: center; }
+ 
+ input[type=number], input[type=text], select, textarea {
+@@ -996,6 +1001,20 @@
+ const STEEL_PLF_PER_IN2 = 490 / 144;            // lb/ft per in^2 of area (490 pcf steel)
+ const ES = 29000;                                 // ksi
+ 
++/* ---------- owner (DOT) profile (OWN1, 2026-10-15; engineer's decisions of 2026-10-15, phase 1) ----------
++   limits.dot (Limits tab): RIDOT, MassDOT, CTDOT or AASHTO (was MassDOT / RIDOT / CTDOT / Custom: a saved 'Custom', or any value not in the list, is
++   read as 'AASHTO' with every limit kept, migrateOwner; a project without the field keeps the default 'MassDOT'). The owner is bridge-level: it is
++   published to GirderDetail in the bridge hand-off (bridge.owner) and GirderDetail can set it (message gd-owner).
++   The owner rules come from GirderDetail's one table (OWN_RULES there), placed in this page as window.GD_OWN_RULES when GirderDetail creates its
++   frame. Without it (this page opened on its own) no owner rule is applied and the Limits tab says so. AASHTO: no owner rule (AASHTO LRFD 10th Ed.
++   and the limits as entered). Rules applied here (phase 1): xf.orient (RIDOT BDM 6.4.3, CTDOT BRSDM V2 6.7.4.2; framingLayout and check X1),
++   xf.skew40 / xf.skew50 (MassDOT Part I 2.3.4.1; warnings in X1). Rows of kind 'default' with an input key are flagged where the value differs (ownFlags). */
++const OWN_LIST = ['RIDOT', 'MassDOT', 'CTDOT', 'AASHTO'];
++const OWN_TBL = (() => { try { const t = window.GD_OWN_RULES; return t && t.v === 1 && Array.isArray(t.rules) && t.owners ? t : null; } catch (e) { return null; } })();
++const plOwner = Pp => { const d = Pp && Pp.limits && Pp.limits.dot; return OWN_LIST.includes(d) ? d : 'AASHTO'; };
++const ownRule = (o, id) => (OWN_TBL ? OWN_TBL.rules.find(r => r.owner === o && r.id === id) : null) || null;
++const ownCite = r => r ? `${(OWN_TBL.owners[r.owner] || {}).short || r.owner} ${r.sec}` : '';
++function migrateOwner(p) { const L = p && p.limits; if (L && !OWN_LIST.includes(L.dot)) L.dot = 'AASHTO'; return p; }   // 'Custom' (and any other value) -> 'AASHTO'; the limits are kept
+ const DEFAULT = {
+   v: 1,
+   meta: { name: 'Example 3-span continuous', subject: 'Preliminary steel I-girder proportioning', task: 'TS&L girder layout',
+@@ -1384,7 +1403,7 @@
+     add(c);
+   }
+   {
+-    const c = { id: 'W3', grp: 'Web', title: 'Owner / practical minimum web thickness', ref: `DOT limit (${L.dot}); AASHTO/NSBA G12.1`, src: 'DOT',
++    const c = { id: 'W3', grp: 'Web', title: 'Owner / practical minimum web thickness', ref: `DOT limit (${L.dot === 'AASHTO' ? 'AASHTO profile: user limit' : L.dot}); AASHTO/NSBA G12.1`, src: 'DOT',
+       sym: T`t_w \ge t_{w,min} = ${f3(L.minTw)}\ \text{in}`, cols: ['Section', 't_w (in)', 'Min (in)'], items: [],
+       note: 'The minimum is set on the Limits tab. Verify it against the governing Bridge Design Manual.' };
+     c.items = secItems(s => ({ cells: [frac(s.tw), frac(L.minTw)], r: L.minTw / s.tw, st: s.tw >= L.minTw - 1e-9 ? 'pass' : 'fail',
+@@ -2739,6 +2758,8 @@
+ <h3>Known limitations and assumptions</h3>
+ <h4>Owner limits are placeholders</h4>
+ <p>The default minimum plate sizes, increments, shipping limits, overhang limits, and practice bands are reasonable starting values, not values taken from any owner's Bridge Design Manual. Verify each against the governing manual and save the verified set as that owner's defaults on the Limits tab.</p>
++<h4>Owner rules (phase 1)</h4>
++<p>The owner profile (Limits tab) applies owner rules on top of AASHTO LRFD 10th Ed. (2024). The MassDOT LRFD Bridge Manual and the CTDOT BRSDM are written to the 9th Ed.; the RIDOT BDM (April 2026) to the 10th Ed. In this version: the cross-frame orientation rule of RIDOT (BDM 6.4.3) and CTDOT (BRSDM V2 6.7.4.2) for the whole bridge (layout and check X1, pass/fail), and the MassDOT skew warnings above 40° and 50° (Part I 2.3.4.1, in X1). The owners' load rules and owner defaults follow in later versions; items that need the owners' standard details (MassDOT Part II, RIDOT Bridge Standard Details, CTDOT standard details) are listed as pending references. AASHTO has no owner rules.</p>
+ <h4>Span-to-depth ratios are optional in AASHTO</h4>
+ <p>Table 2.5.2.6.3-1 is an optional criterion in AASHTO LRFD, adopted as mandatory by many owners. A setting controls whether a shortfall is reported as a failure or a warning.</p>
+ <h4>Splice location is judged by a band, not by the dead load moment diagram</h4>
+@@ -2769,7 +2790,7 @@
+ <li><b>Project tab.</b> Fill in the calculation header (it prints on the report) and any engineering assumptions.</li>
+ <li><b>Bridge tab.</b> Enter span lengths, continuity, skew at each support line, and the deck cross-section.</li>
+ <li><b>Girder tab.</b> Enter the web depth and grades, then the web, top flange, and bottom flange plate segments from Abutment 1, and the field splice stations. Each segment table shows its running total against the girder length; "Fit last to girder" sets the final segment to the remaining length.</li>
+-<li><b>Limits tab.</b> Choose the owner and confirm every limit. Save verified limits as that owner's defaults so later projects can load them.</li>
++<li><b>Limits tab.</b> Choose the owner (RIDOT, MassDOT, CTDOT, or AASHTO for no owner rules; also settable in GirderDetail's top bar, where it shows as "Owner") and confirm every limit. The owner applies its rules on top of AASHTO LRFD 10th Ed.; the panel under the owner lists them, with the section of the owner's manual and the check that applies each, and the items that need a reference not available yet (pending reference). Save verified limits as that owner's defaults so later projects can load them. Projects saved with the former "Custom" owner open as AASHTO with their limits kept.</li>
+ <li><b>Framing tab.</b> Set the cross-frame spacing (and, optionally, a closer spacing near interior supports with the length of the pier region each side) and orientation rule, the stiffener arrangement, and the stiffener, connection plate, and bearing stiffener sizes. Stiffener spacing is either uniform (d<sub>o</sub>/D in every bay) or per cross-frame bay: a table of the bays of each girder (stations along the girder from its Abut. 1 bearing, length, number of intermediate stiffeners n, the widest panel d<sub>o</sub> and d<sub>o</sub>/D, and the largest V<sub>u</sub>/φV<sub>n</sub> of its panels with the Analysis tab shears), girders with the same layout together. Suggest Apply fills it; the counts can be edited. A bay with no stored count (the framing changed afterwards) uses the uniform d<sub>o</sub>/D and is flagged. The framing plan on the Drawings tab updates live.</li>
+ <li><b>Suggest (optional).</b> With the Bridge and Limits tabs complete, open the Suggest output tab to see a proposed layout with its full derivation, adjust the settings on the Suggest input tab, and choose "Apply to girder" to copy it into the Girder tab. Everything on the Girder tab can then be edited by hand.</li>
+ <li><b>Review the output.</b> The status bar and Summary tab show the verdict and the governing location for every check. Click any check ID or status chip to jump to its derivation.</li>
+@@ -2803,7 +2824,7 @@
+ <tr><td>Field splices</td><td>ft</td><td>Stations from Abutment 1, strictly inside the girder.</td></tr>
+ <tr><td>Abutments</td><td>—</td><td>Conventional or integral. Integral abutments enable check G10.</td></tr>
+ <tr><td>Cross-frame spacing</td><td>ft</td><td>Target maximum distance between bracing points along any girder (X2). Default 25 ft.</td></tr>
+-<tr><td>Orientation, arrangement</td><td>—</td><td>Automatic follows 6.7.4.2 (parallel to the skew at 20° or less, otherwise normal). Normal frames may be contiguous lines or staggered by bay.</td></tr>
++<tr><td>Orientation, arrangement</td><td>—</td><td>Automatic follows 6.7.4.2 (parallel to the skew at 20° or less, otherwise normal), per span. Normal frames may be contiguous lines or staggered by bay. Under RIDOT (BDM 6.4.3) and CTDOT (BRSDM V2 6.7.4.2), Automatic applies the owner's rule to the whole bridge: largest support skew 20° or less, parallel and not staggered; more, normal to the girders and staggered (the Normal frames setting is then not used). An orientation set by hand that does not conform is flagged on the Framing tab and fails X1.</td></tr>
+ <tr><td>Clear of skewed bearing line, min. offset</td><td>ft</td><td>Minimum distance of a normal intermediate frame from a skewed bearing line (at a support skewed more than 20°, at least max(this, 4b<sub>f</sub>, 0.4 × the grid spacing) for the grid and max(this, 4b<sub>f</sub>) for corner frames, C6.7.4.2.1; check X5); minimum offset between non-aligned frames on opposite sides of a girder, raised to 4b<sub>f</sub> where that is larger (C6.7.4.2.1; the layout enforces it, check X3).</td></tr>
+ <tr><td>Transverse stiffeners, d<sub>o</sub>/D</td><td>—</td><td>Whether the web has intermediate stiffeners and their spacing as a multiple of D (uniform), or per cross-frame bay (the count in each bay; Suggest Apply sets it).</td></tr>
+ <tr><td>Stiffener, connection plate, bearing stiffener sizes</td><td>in</td><td>Projecting width and thickness; bearing stiffener corner clip and pairs per bearing; plate grade.</td></tr>
+@@ -3539,6 +3560,10 @@
+ }
+ /* cross-frame layout (SKX, 2026-10-15; AASHTO LRFD 10th Ed. 6.7.4.2.1 and C6.7.4.2.1). Per span:
+    - orientation as before: automatic, parallel where both supports are skewed 20° or less, else normal to the girders.
++     Owner rule xf.orient (OWN1, 2026-10-15; RIDOT BDM 6.4.3, CTDOT BRSDM V2 6.7.4.2; whole bridge, engineer's decision): with the orientation
++     Automatic, the largest support skew anywhere on the bridge decides for every span: 20° or less, parallel to the skew (not staggered); more,
++     normal to the girders and staggered (the "Normal frames" setting is not used). Set by hand (Parallel / Normal): as entered, check X1 flags it.
++     AASHTO and MassDOT: per span, as before.
+    - parallel frames: n = ⌈L_max/s⌉ − 1 per bay, with L_max the longest girder span between the two bearing lines (was the centerline span), interpolated
+      between the bearing lines, so no girder exceeds the target s.
+    - normal frames: a grid at one spacing for the span (half a spacing further in alternate bays if staggered), anchored at the bearing of the obtuse-corner
+@@ -3593,10 +3618,11 @@
+   for (let k = 0; k < m.sup.length; k++) for (let b = 0; b < nb - 1; b++) frames.push({ type: 'sup', k, bay: b, xa: xb(k, b), xc: xb(k, b + 1) });
+   const feats = [...m.splices, ...m.trans.filter(t => !t.atSplice).map(t => t.x), ...m.webTrans.map(t => t.x)], fc = +P.limits.spliceClear;
+   const conflicts = list => list.reduce((n, f) => n + [[f.xa, f.bay], [f.xc, f.bay + 1]].some(([x, g]) => feats.some(q => Math.abs(x - xb(0, g) - q) < fc - 1e-9)), 0);
+-  const gi = [...Array(nb).keys()];
++  const gi = [...Array(nb).keys()], ox = plOwnXf(P, m), oxA = ox.on && F.orient === 'auto';   // OWN1: owner orientation rule (whole bridge)
+   m.spans.forEach((Ls, k) => {
+     const th = Math.max(Math.abs(m.skews[k]), Math.abs(m.skews[k + 1]));
+-    const o = F.orient === 'auto' ? (th <= 20 + 1e-9 ? 'parallel' : 'normal') : F.orient;
++    const o = F.orient === 'auto' ? (oxA ? ox.o : th <= 20 + 1e-9 ? 'parallel' : 'normal') : F.orient;
++    const arr = oxA && o === 'normal' ? 'staggered' : F.arrange;   // OWN1: the arrangement used (the "Normal frames" setting unless the owner rule applies)
+     const Lmax = Math.max(...gi.map(i => xb(k + 1, i) - xb(k, i)));
+     // b_f (C6.7.4.2.1): the widest top or bottom flange plate within the span (any girder; own stations from its Abut. 1 bearing)
+     const s0g = Math.min(...gi.map(i => xb(k, i) - xb(0, i))), s1g = Math.max(...gi.map(i => xb(k + 1, i) - xb(0, i))); let bfIn = 0;
+@@ -3605,11 +3631,11 @@
+     // the span's frames depend only on these inputs: memoized (Suggest builds the layout of many candidates with the same splices and transitions); copies returned
+     // FSP: the pier regions of this span (support k and k + 1 interior, continuous unit, s_p in use)
+     const pz = sp2 ? { sp2, pS: k > 0, pE: k + 1 < nS - 1, rS: plPierLen(F, Ls), rE: plPierLen(F, Ls) } : null;
+-    const mk = JSON.stringify([k, o, sp, clr, F.stagMin, F.arrange, fc, m.sup, m.skews, m.bays, feats, bf, ...(pz ? [pz] : [])]);
+-    let pick = FL_MEMO.get(mk); if (!pick) { pick = o === 'parallel' ? (pz ? parSpanP(k, Lmax, pz) : parSpan(k, Lmax)) : normSpan(k, bf, dmin, pz); FL_MEMO.set(mk, pick); if (FL_MEMO.size > 400) FL_MEMO.delete(FL_MEMO.keys().next().value); }
++    const mk = JSON.stringify([k, o, sp, clr, F.stagMin, arr, fc, m.sup, m.skews, m.bays, feats, bf, ...(pz ? [pz] : [])]);
++    let pick = FL_MEMO.get(mk); if (!pick) { pick = o === 'parallel' ? (pz ? parSpanP(k, Lmax, pz) : parSpan(k, Lmax)) : normSpan(k, bf, dmin, pz, arr); FL_MEMO.set(mk, pick); if (FL_MEMO.size > 400) FL_MEMO.delete(FL_MEMO.keys().next().value); }
+     pick = { ...pick, fr: pick.fr.map(f => ({ ...f })) };
+     frames.push(...pick.fr);
+-    orient.push({ k, th, o, nInt: pick.n, base: pick.base, conflicts: pick.c, s: pick.s, n: pick.n, shift: pick.shift || 0, extra: pick.n > pick.base, bf, dmin, Lmax, ...(pick.info || {}), ...(pick.pz ? { pz: pick.pz } : {}) });
++    orient.push({ k, th, o, arr, nInt: pick.n, base: pick.base, conflicts: pick.c, s: pick.s, n: pick.n, shift: pick.shift || 0, extra: pick.n > pick.base, bf, dmin, Lmax, ...(pick.info || {}), ...(pick.pz ? { pz: pick.pz } : {}) });
+   });
+   /* parallel frames: n per bay from the longest girder; frames at the fractions (j + d)/(n + 1) of each girder's span. Conflicts: shifts d of up to a
+      quarter panel first (the end panel of the longest girder stays within s), then up to three extra frames, accepted only when they clear every conflict; if none does, evenly spaced (d = 0) */
+@@ -3642,7 +3668,7 @@
+     return best || { fr: gen(G0), c: conflicts(gen(G0)), n: G0.L.length, base: G0.L.length, s: G0.tm, shift: 0, pz: info(G0) };
+   }
+   /* normal frames */
+-  function normSpan(k, bf, dmin, pz) {
++  function normSpan(k, bf, dmin, pz, arr) {
+     const A = gi.map(i => xb(k, i)), B = gi.map(i => xb(k + 1, i)), Amax = Math.max(...A), Bmin = Math.min(...B);
+     const lo0 = Math.min(...A), hi0 = Math.max(...B), e4 = 4 * bf, skS = Math.abs(m.skews[k]) > 20 + 1e-9, skE = Math.abs(m.skews[k + 1]) > 20 + 1e-9;
+     const eOf = s => Math.max(clr, e4, 0.4 * s), eFl = Math.max(clr, e4);   // C6.7.4.2.1: first frame offset from a skewed support; floor 4b_f for corner frames
+@@ -3656,7 +3682,7 @@
+     if (pz) { rc0 = Amax + pz.rS; rc1 = Bmin - pz.rE; dA = !skS; dZ = !skE; let tm = s;
+       for (let it = 0; it < 8; it++) { X0 = skS ? Amax + eOf(pz.pS ? sp2 : tm) : Amax; X1 = skE ? Bmin - eOf(pz.pE ? sp2 : tm) : Bmin; tm = pzGrid(pz, rc0, rc1, X0, X1, 0, dA, dZ).tm; }
+       s = tm; q = 0; eA = skS ? eOf(pz.pS ? sp2 : tm) : clr; eZ = skE ? eOf(pz.pE ? sp2 : tm) : clr; }
+-    const stag = F.arrange === 'staggered', flat = stag && (pz ? Math.min(s, sp2) : s) / 2 < dmin - 1e-9;
++    const stag = arr === 'staggered', flat = stag && (pz ? Math.min(s, sp2) : s) / 2 < dmin - 1e-9;
+     let LIM = null; const limP = (g0, g1) => LIM ? LIM(g0, g1) : sp;   // FSP: the panel limit (s_p in a pier zone, else s)
+     const gen = (x0, x1, qq) => {   // grid lines x0..x1 (qq intervals, extended past both ends), kept per bay; then the corner frames (FSP: pier zones, qq extra intervals)
+       const G = pz ? pzGrid(pz, rc0, rc1, x0, x1, qq, dA, dZ) : null, ss = G ? G.tm : qq > 0 ? (x1 - x0) / qq : s, eS = G ? eA : skS ? e : clr, eE = G ? eZ : skE ? e : clr, bays = [];
+@@ -3745,7 +3771,15 @@
+     const pts = frames.filter(f => f.bay === i - 1 || f.bay === i).map(f => ({ s: (f.bay === i ? f.xa : f.xc) - x0, f, side: f.bay === i ? 'R' : 'L' }));
+     return { i, y, x0, bear, pts };
+   });
+-  return { frames, girders, orient, xb, ys, yc, sp };
++  return { frames, girders, orient, xb, ys, yc, sp, own: ox };
++}
++/* OWN1 (2026-10-15): the owner's cross-frame orientation rule for the bridge (xf.orient): on, the largest support skew θ_max (absolute, every support),
++   the threshold, and the orientation and arrangement it requires for every span; off (AASHTO, MassDOT, or no rules table): per span as AASHTO 6.7.4.2.1 */
++function plOwnXf(P, m) {
++  const own = plOwner(P), thB = Math.max(0, ...m.skews.map(v => Math.abs(+v) || 0)), r = ownRule(own, 'xf.orient');
++  if (!r) return { own, thB, on: false };
++  const thr = +(r.value && r.value.thr) || 20, gt = thB > thr + 1e-9;
++  return { own, thB, on: true, r, thr, o: gt ? 'normal' : 'parallel', arr: gt ? 'staggered' : null };
+ }
+ 
+ /* ---------- transverse stiffeners per cross-frame bay (TB1, 2026-10-13) ----------
+@@ -3859,7 +3893,7 @@
+   const grp = 'Framing & detailing';
+   /* G10 integral abutments */
+   {
+-    const c = { id: 'G10', grp: 'Global layout', title: 'Integral abutment eligibility', ref: `Owner limit (${L.dot}); edit per Bridge Design Manual`, src: 'DOT',
++    const c = { id: 'G10', grp: 'Global layout', title: 'Integral abutment eligibility', ref: `Owner limit (${L.dot === 'AASHTO' ? 'AASHTO profile: user limit' : L.dot}); edit per Bridge Design Manual`, src: 'DOT',
+       sym: T`L_{tot} \le ${f2(L.intL)}\ \text{ft}, \qquad \theta_{abut} \le ${f2(L.intSkew)}^\circ`, cols: ['Item', 'Value', 'Limit'], items: [],
+       note: 'Applies only when the abutments are set to integral on the Bridge tab. The limits in use are placeholders until verified against the owner manual, which may also restrict pile type, span length, curvature, and abutment height.' };
+     if (P.bridge.abut !== 'integral') na(c, 'Abutments are not integral.');
+@@ -3870,13 +3904,30 @@
+       add(c);
+     }
+   }
+-  /* X1 orientation */
+-  {
+-    const c = { id: 'X1', grp, title: 'Intermediate cross-frame orientation', ref: 'AASHTO LRFD 6.7.4.2', src: 'Code',
+-      sym: T`\theta > 20^\circ \;\Rightarrow\; \text{normal to girders}`, cols: ['Span', 'θ max (deg)', 'Orientation'], items: [],
++  /* X1 orientation. OWN1 (2026-10-15): under an owner with the xf.orient rule (RIDOT BDM 6.4.3, CTDOT BRSDM V2 6.7.4.2; whole bridge) every span must
++     have the arrangement that the largest support skew θ_max requires (pass / fail, "shall"); MassDOT Part I 2.3.4.1: warnings above 40° and 50° (θ_max).
++     AASHTO and MassDOT: the AASHTO items as before */
++  {
++    const ox = FR.own || { on: false, own: plOwner(P), thB: Math.max(0, ...m.skews.map(v => Math.abs(+v) || 0)) }, oc = ox.on ? ownCite(ox.r) : '';
++    const c = { id: 'X1', grp, title: 'Intermediate cross-frame orientation', ref: ox.on ? `AASHTO LRFD 10th Ed. 6.7.4.2.1; ${oc}` : 'AASHTO LRFD 6.7.4.2', src: ox.on ? 'DOT' : 'Code',
++      sym: ox.on ? T`\theta_{max} \le ${ox.thr}^\circ \Rightarrow \text{parallel to the skew, not staggered};\quad \theta_{max} > ${ox.thr}^\circ \Rightarrow \text{normal to the girders, staggered}` : T`\theta > 20^\circ \;\Rightarrow\; \text{normal to girders}`,
++      cols: ox.on ? ['Span', 'θ max (deg)', 'Orientation', `Required (${oc})`] : ['Span', 'θ max (deg)', 'Orientation'], items: [],
+       note: `Where supports are skewed more than 20°, intermediate cross-frames must be normal to the girders; at 20° or less they may be parallel to the skew. Orientation setting: ${F.orient === 'auto' ? 'automatic' : F.orient}. Cross-frames along the bearing lines follow the skew in all cases.` };
+-    c.items = FR.orient.map(o => ({ loc: `Span ${o.k + 1}`, cells: [f2(o.th), o.o === 'parallel' ? 'Parallel to skew' : `Normal (${F.arrange})`], st: o.o === 'parallel' && o.th > 20 + 1e-9 ? 'fail' : 'pass',
++    const oTxt = o => o.o === 'parallel' ? 'Parallel to skew' : `Normal (${o.arr || F.arrange}${o.flat ? ', lines kept contiguous: half a spacing < d_min' : ''})`;
++    if (!ox.on) c.items = FR.orient.map(o => ({ loc: `Span ${o.k + 1}`, cells: [f2(o.th), o.o === 'parallel' ? 'Parallel to skew' : `Normal (${o.arr || F.arrange})`], st: o.o === 'parallel' && o.th > 20 + 1e-9 ? 'fail' : 'pass',
+       work: T`\theta = ${f2(o.th)}^\circ \;${o.th > 20 + 1e-9 ? '>' : '\\le'}\; 20^\circ \;\Rightarrow\; \text{${o.o === 'parallel' ? 'parallel' : 'normal'}}` }));
++    else {
++      const gt = ox.o === 'normal', req = gt ? 'Normal, staggered' : 'Parallel to skew, not staggered';
++      c.note = `${ox.own} rule (${oc}; applied to the whole bridge, engineer's decision of 2026-10-15): where the largest support skew anywhere on the bridge, θ_max, is ${ox.thr}° or less, the intermediate cross-frames are parallel to the skew (along the bearing lines) and not staggered; where it is more than ${ox.thr}°, they are normal to the girders and staggered (discontinuous lines). Here θ_max = ${f2(ox.thB)}°. With the orientation Automatic (Framing tab) the layout follows this rule; an orientation set by hand that does not conform fails. AASHTO LRFD 10th Ed. 6.7.4.2.1 allows either arrangement ("may"). The stagger pattern and spacing details are in the owner's standard details, not available here (pending reference). Orientation setting: ${F.orient === 'auto' ? 'automatic' : F.orient}. Cross-frames along the bearing lines follow the skew in all cases.`;
++      c.items = FR.orient.map(o => { const ok = gt ? o.o === 'normal' && o.arr === 'staggered' && !o.flat : o.o === 'parallel';
++        return { loc: `Span ${o.k + 1}`, cells: [f2(o.th), oTxt(o), req], st: ok ? 'pass' : 'fail',
++          work: T`\theta_{max} = ${f2(ox.thB)}^\circ \;${gt ? '>' : '\\le'}\; ${ox.thr}^\circ \;\Rightarrow\; \text{${gt ? 'normal, staggered' : 'parallel, not staggered'}};\ \text{span ${o.k + 1}: ${o.o === 'parallel' ? 'parallel' : o.flat ? 'normal, contiguous lines (half a spacing too short to stagger)' : 'normal, ' + (o.arr || F.arrange)}}${ok ? '' : T`\ \text{(does not conform)}`}` }; });
++    }
++    // MassDOT Part I 2.3.4.1 (OWN1): warnings at the largest support skew above 40° (standard details may need modification) and above 50° (diaphragm fatigue)
++    const wl = [ownRule(ox.own, 'xf.skew40'), ownRule(ox.own, 'xf.skew50')].filter(r => r && ox.thB > +r.value + 1e-9);
++    wl.forEach(r => { c.items.push({ loc: `Bridge, largest support skew (${ownCite(r)})`, cells: [f2(ox.thB), r.text.charAt(0).toUpperCase() + r.text.slice(1), ...(ox.on ? [''] : [])], st: 'warn',
++      work: T`\theta_{max} = ${f2(ox.thB)}^\circ > ${f2(+r.value)}^\circ\ (\text{${ownCite(r)}})` }); });
++    if (wl.length) { c.src = 'DOT'; c.ref += `; ${ownCite(wl[0])}`; c.note += ` ${ox.own} (${ownCite(wl[0])}): the owner's standard details are written for skews up to 40°; above 40° they may need modification, and above about 50° diaphragm and connection fatigue becomes a problem (consider an alternate beam layout). Warnings only; the details (Part II) are a pending reference.`; }
+     add(c);
+   }
+   /* X2 unbraced length */
+@@ -4496,7 +4547,7 @@
+   return `Fatigue I or II for each detail category as GirderDetail's Fatigue module sets for the bridge (${s.limit === 'I' || s.limit === 'II' ? `Fatigue ${s.limit} for every detail` : 'by ADTT'}: ADTT<sub>SL</sub> = ${(+s.p).toFixed(2)} × ${Math.round(+s.ADTT).toLocaleString('en-US')} = ${Math.round(s.p * s.ADTT).toLocaleString('en-US')} trucks/day, ${+s.life} years, γ<sub>I</sub> = ${(+s.gI).toFixed(2)}, γ<sub>II</sub> = ${(+s.gII).toFixed(2)}; n per Table 6.6.1.2.5-2; 6.6.1.2.3)`; }
+ /* ---------- complete bridge definition for GirderDetail's LLDF and DLs module ---------- */
+ function bridgeDef() {
+-  if (!M || M.errors.length) return { ok: false, why: M ? M.errors.slice(0, 6) : ['The bridge has not been computed yet.'], project: P.meta.name || 'PlateLine project', ts: Date.now() };
++  if (!M || M.errors.length) return { ok: false, why: M ? M.errors.slice(0, 6) : ['The bridge has not been computed yet.'], project: P.meta.name || 'PlateLine project', ts: Date.now(), owner: plOwner(P) };   // owner: OWN1
+   const m = M, B = P.bridge, xs = AN && !AN.errors ? AN.xs : null, T = xs ? AN.R.types.int : null, nSp = m.sup.length - 1;
+   const sec = x => { const t = m.at(m.top, x), b = m.at(m.bot, x); return { D: m.D, tw: m.at(m.web, x).t, topB: t.b, topT: t.t, botB: b.b, botT: b.t }; };
+   const segs = (a0, a1) => { const br = new Set([a0, a1]); [m.top, m.bot, m.web].forEach(l => l.forEach(r => [r.x0, r.x1].forEach(v => { if (v > a0 + 1e-6 && v < a1 - 1e-6) br.add(v); })));
+@@ -4511,7 +4562,7 @@
+     curved: !!m.curved, nb: m.nb, S: m.S, bays: m.bays.slice(), faceL: m.faceL, faceR: m.faceR, edge: B.edge && B.edge.mode === 'curb' ? { L: { mode: 'curb', cw: num(B.edge.cwL), ch: num(B.edge.chL), rp: num(B.edge.rpL), rw: num(B.edge.rwL) }, R: { mode: 'curb', cw: num(B.edge.cwR), ch: num(B.edge.chR), rp: num(B.edge.rpR), rw: num(B.edge.rwR) } } : null, ohL: num(B.ohL), ohR: num(B.ohR), barrier: num(B.barrier), tsDeck: num(B.ts), haunch: num(B.haunch), fc: num(B.fc), wc: num(B.wc),
+     barW: num(sg.bar), fws: num(sg.fws), sip: num(sg.sip), cll: num(sg.cll), gF: m.gF, gW: m.gW, regions,
+     plates: { D: m.D, top: m.top.map(r => ({ x0: r.x0, x1: r.x1, b: r.b, t: r.t })), bot: m.bot.map(r => ({ x0: r.x0, x1: r.x1, b: r.b, t: r.t })), web: m.web.map(r => ({ x0: r.x0, x1: r.x1, t: r.t })) },
+-    allow: num(P.limits.allow), analysis: (({ fat, xf, ...a }) => ({ method: 'fe', rebar: 1.0, ...a, crack: 'none' }))(P.analysis || {}), ...(B.xs ? { xs: B.xs } : {}), ...(FR ? { xf: plXfDef(FR) } : {}) };
++    allow: num(P.limits.allow), analysis: (({ fat, xf, ...a }) => ({ method: 'fe', rebar: 1.0, ...a, crack: 'none' }))(P.analysis || {}), ...(B.xs ? { xs: B.xs } : {}), ...(FR ? { xf: plXfDef(FR) } : {}), owner: plOwner(P) };   // owner (OWN1): the bridge-level owner profile
+ }
+ /* the cross-frames of the current framing for GirderDetail's DC1 (XF1, 2026-10-13): per girder its bearing stations (ft, from its Abut. 1 bearing);
+    per frame [on a bearing line 1/0, span or support index k, bay (girders bay and bay + 1), station on girder bay, station on girder bay + 1, length between
+@@ -4525,6 +4576,7 @@
+ }
+ window.addEventListener('message', e => { if (e.source !== window.parent) return;   // accept messages only from the page that embeds PlateLine
+   if (e.data && e.data.type === 'pl-bridge-req') postBridge(true);
++  if (e.data && e.data.type === 'gd-owner') { const o = e.data.owner; if (!OWN_LIST.includes(o) || o === P.limits.dot) { postBridge(true); return; } P.limits.dot = o; fillInputs(); recompute(); autosave(); postBridge(true); }   // OWN1: owner set in GirderDetail
+   if (e.data && e.data.type === 'gd-an') { const na = { ...(P.analysis || {}), ...e.data.analysis }; if (JSON.stringify(na) === JSON.stringify(P.analysis || {})) return; P.analysis = na; recompute(); autosave(); postBridge(true); }
+   if (e.data && e.data.type === 'gd-dfx') { const nx = e.data.dfx || null; if (JSON.stringify(nx) === JSON.stringify(P.dfx || null)) return; P.dfx = nx; recompute(); autosave(); }
+   if (e.data && e.data.type === 'gd-xs') { const nx = e.data.xs; if (!nx || !nx.L || !nx.R || JSON.stringify(nx) === JSON.stringify(P.bridge.xs || null)) return; P.bridge.xs = nx; xsLegacy(P.bridge, P.suggest, nx); fillInputs(); recompute(); autosave(); postBridge(true); } });
+@@ -4549,6 +4601,7 @@
+   if (b) { b.style.display = X ? '' : 'none'; b.innerHTML = X ? `<b>Read-only here.</b> Barrier or curb and railing weights from GirderDetail's LLDF and DLs module: left ${f3(w(X.L))}, right ${f3(w(X.R))} klf; DC2 per girder = (w<sub>L</sub> + w<sub>R</sub>)/N<sub>b</sub>. ${go}` : ''; }
+ }
+ document.addEventListener('click', e => { if (EMBED && e.target.closest && e.target.closest('[data-goxs]')) window.parent.postMessage({ type: 'pl-goto', to: 'df_dl' }, '*'); });
++document.addEventListener('click', e => { if (EMBED && e.target.closest && e.target.closest('[data-goown]')) window.parent.postMessage({ type: 'pl-goto', to: 'owner' }, '*'); });   // OWN1: GirderDetail's owner rules panel
+ /* ---------- send sections to the Girder section module ---------- */
+ function gsLocOptions() {
+   const sel = $('#gs_loc'), gt = $('#gs_gt'); if (!sel || !gt) return; const dx = detailExport(P, M, AN, FR); if (!dx) return;
+@@ -4612,6 +4665,7 @@
+       ${fld('Spacing near interior supports', 'framing.spPier', 'ft', 'num', { note: '(blank: target spacing)' })}${fld('Pier region each side', 'framing.pierLen', 'ft', 'num', { note: '(blank: 0.25 × span)' })}
+       ${fld('Orientation', 'framing.orient', '', 'sel', { full: true, options: [['auto', 'Automatic (parallel if θ ≤ 20°, else normal)'], ['parallel', 'Parallel to skew'], ['normal', 'Normal to girders']] })}
+       ${fld('Normal frames', 'framing.arrange', '', 'sel', { options: [['contiguous', 'Contiguous lines'], ['staggered', 'Staggered by bay']] })}${fld('Min. offset if not aligned', 'framing.stagMin', 'ft')}
++      <div id="fr-own" class="full"></div>
+       ${fld('Minimum girder depth for cross-frames', 'framing.xfMinD', 'in', 'num', { full: true, note: 'common practice (e.g. AISC/NSBA G13.1 guidance; owner standards govern); verify' })}
+       <p class="note">Cross-frames are placed at every bearing line and evenly between them, with extra frames added in skewed corners. At supports skewed more than 20° (normal frames) the first intermediate frame is at least max(clear distance, 4b<sub>f</sub>, 0.4 × spacing) from each girder's bearing and non-aligned frames are at least max(min. offset, 4b<sub>f</sub>) apart (AASHTO LRFD C6.7.4.2.1). Where frames would land on field splices or flange transitions, the grid is shifted, or frames are added, only where that clears them; otherwise the conflict is reported (X4 and the table below). <b>Spacing near interior supports</b> (optional, continuous units): a closer spacing s<sub>p</sub> in the negative-moment regions next to each pier, the <b>pier region</b> each side of the support (blank: 0.25 × the adjacent span, about the dead-load point of contraflexure); the rest of the span keeps the target spacing. Blank: the target spacing everywhere. Suggest and Full design may tighten it where lateral-torsional buckling in negative flexure governs.</p>
+       <div id="fr-sum" class="full"></div>
+@@ -4662,7 +4716,7 @@
+       let mx = 0; for (let q = 1; q < s.length; q++) mx = Math.max(mx, s[q] - s[q - 1]); return mx; });
+     const same = lb.every(v => Math.abs(v - lb[0]) < 0.005), lbTxt = same ? `${f2(lb[0])} (all girders)` : lb.map((v, i) => `G${i + 1} ${f2(v)}`).join(', ');
+     const par = o.o === 'parallel', spTxt = o.pz ? `${f2(o.pz.tm)}${o.pz.one ? '' : `; ${f2(o.pz.sp2)} near ${[o.pz.pS && supN(k), o.pz.pE && supN(k + 1)].filter(Boolean).join(', ')}`}` : par ? (() => { const L = FR.girders.map(g => g.bear[k + 1] - g.bear[k]), n1 = o.n + 1, a = Math.min(...L) / n1, b = Math.max(...L) / n1; return Math.abs(b - a) < 0.005 ? f2(a) : `${f2(a)}–${f2(b)} (G${L.indexOf(Math.min(...L)) + 1}–G${L.indexOf(Math.max(...L)) + 1})`; })() : f2(o.s);
+-    const notes = [par ? `parallel to the skew, ${o.n} per bay` : `normal to the girders (${P.framing.arrange}${o.flat ? ': half a spacing < d_min, lines kept contiguous' : ''}); per bay ${[...new Set(perBay)].length === 1 ? perBay[0] : perBay.join(' / ')}`];
++    const notes = [par ? `parallel to the skew, ${o.n} per bay` : `normal to the girders (${o.arr || P.framing.arrange}${o.flat ? ': half a spacing < d_min, lines kept contiguous' : ''}); per bay ${[...new Set(perBay)].length === 1 ? perBay[0] : perBay.join(' / ')}`];
+     if (o.pz) notes.push(o.pz.one ? `the pier regions cover the span: frames at most ${f2(o.pz.sp2)} ft throughout` : `pier region${o.pz.pS && o.pz.pE ? 's' : ''}: frames at ${f2(o.pz.sp2)} ft within ${[o.pz.pS && `${f2(o.pz.rS)} ft of ${supN(k)}`, o.pz.pE && `${f2(o.pz.rE)} ft of ${supN(k + 1)}`].filter(Boolean).join(' and ')} (each girder, from its own bearing; to the next grid line), ${f2(o.pz.tm)} ft between`);
+     if (!par && o.e0 != null) notes.push(`first line ${f2(o.e0)} ft from the obtuse bearing at ${supN(k)}`);
+     if (!par && o.e1 != null) notes.push(`last line ${f2(o.e1)} ft from the obtuse bearing at ${supN(k + 1)}`);
+@@ -4672,7 +4726,19 @@
+     h += `<tr><td>${k + 1}</td><td>${nI.length}</td><td>${spTxt}</td><td style="white-space:normal">${lbTxt}${Math.max(...lb) > sp + 1e-6 ? ' <span style="color:var(--fail)">&gt; target (X2)</span>' : ''}${o.pz ? '<br><span class="n-dim">(pier regions against s<sub>p</sub>: check X2)</span>' : ''}</td></tr><tr class="tsb-g"><td colspan="4" style="font-weight:normal;white-space:normal">${notes.join('; ')}</td></tr>`; });
+   return h + `</table></div>`;
+ }
++/* OWN1 (2026-10-15): the owner's cross-frame orientation rule on the Framing tab: applied (orientation Automatic), or the orientation set here
++   conforms, or a flag that it overrides the owner's rule (check X1 fails) */
++function frOwnHtml() {
++  const ox = FR && FR.own; if (!ox || !ox.on) return '';
++  const F = P.framing, gt = ox.o === 'normal', oc = esc(ownCite(ox.r)), req = gt ? 'normal to the girders and staggered' : 'parallel to the skew (along the bearing lines), not staggered';
++  const head = `${esc(ox.own)} (${oc}), whole bridge: largest support skew θ<sub>max</sub> = ${f2(ox.thB)}° ${gt ? '&gt;' : '≤'} ${ox.thr}°, so the intermediate cross-frames are ${req}.`;
++  if (F.orient === 'auto') return `<p class="hint static">${head} Applied (Orientation: Automatic)${gt ? '; the "Normal frames" setting is not used' : ''}. <a href="#chk-X1" class="cid-link" data-goto="X1">Check X1</a>.</p>`;
++  const bad = FR.orient.filter(o => gt ? !(o.o === 'normal' && o.arr === 'staggered' && !o.flat) : o.o !== 'parallel');
++  if (!bad.length) return `<p class="hint static">${head} The orientation set here conforms. <a href="#chk-X1" class="cid-link" data-goto="X1">Check X1</a>.</p>`;
++  return `<div class="own-flag">Overrides ${oc}: ${req} (θ<sub>max</sub> = ${f2(ox.thB)}°). ${bad.map(o => `Span ${o.k + 1}`).join(', ')} ${bad.length === 1 ? 'does' : 'do'} not conform, so <a href="#chk-X1" class="cid-link" data-goto="X1">check X1</a> fails. Set Orientation to Automatic to use the owner's arrangement.</div>`;
++}
+ function renderFrSum() {
++  const ho = $('#fr-own'); if (ho) { try { ho.innerHTML = M && !M.errors.length && FR ? frOwnHtml() : ''; } catch (e) { console.error(e); ho.innerHTML = ''; } }
+   const host = $('#fr-sum'); if (!host) return;
+   if (!M || M.errors.length || !FR) { host.innerHTML = ''; return; }
+   try { host.innerHTML = frSumHtml(); } catch (e) { console.error(e); host.innerHTML = `<p class="hint static">The spacing summary could not be built: ${esc(e.message)}</p>`; }
+@@ -5097,7 +5163,7 @@
+ 
+ let P = clone(DEFAULT), M = null, C = null, CUR_NAME = '';
+ function migrateCosts(p) { const s = p.suggest || {}, c = p.costs || (p.costs = {}), map = [['cSteel', 'steel'], ['cTrans', 'trans'], ['cStiff', 'stiff'], ['cSplice', 'splice'], ['cCF', 'xf']]; map.forEach(([o, n]) => { if (s[o] != null && isFinite(+s[o])) { c[n] = +s[o]; delete s[o]; } }); return p; }
+-try { const a = LS && JSON.parse(localStorage.getItem(KEY_AS) || 'null'); if (a && a.data) { P = migrateCosts(deepMerge(clone(DEFAULT), a.data)); CUR_NAME = a.name || ''; } } catch (e) {}
++try { const a = LS && JSON.parse(localStorage.getItem(KEY_AS) || 'null'); if (a && a.data) { P = migrateOwner(migrateCosts(deepMerge(clone(DEFAULT), a.data))); CUR_NAME = a.name || ''; } } catch (e) {}
+ 
+ /* =====================================================================
+    Sidebar construction
+@@ -5183,7 +5249,8 @@
+     limits: `
+       ${secHd('sec-prof', 'Owner profile')}
+       <div class="sec-body" id="sec-prof">
+-        ${fld('Owner', 'limits.dot', '', 'sel', { full: true, options: [['MassDOT', 'MassDOT'], ['RIDOT', 'RIDOT'], ['CTDOT', 'CTDOT'], ['Custom', 'Custom']] })}
++        ${fld('Owner', 'limits.dot', '', 'sel', { full: true, options: [['RIDOT', 'RIDOT'], ['MassDOT', 'MassDOT'], ['CTDOT', 'CTDOT'], ['AASHTO', 'AASHTO (no owner rules)']] })}
++        <div id="own-info" class="full"></div>
+         <div class="proj-row full" style="grid-template-columns:1fr 1fr"><button type="button" class="proj-btn" id="pf_load">Load saved limits</button><button type="button" class="proj-btn" id="pf_save">Save as owner defaults</button></div>
+         <p class="hint static">Default limits are placeholders. Verify each value against the owner's Bridge Design Manual, then save them as that owner's defaults.</p>
+         ${fld('Treat span-to-depth (G1, G2) as mandatory', 'limits.sdMandatory', '', 'bool')}
+@@ -5261,7 +5328,7 @@
+     const nb = Math.round(Number(P.bridge.nb)), bays = M && !M.errors.length && M.bays && M.bays.length === nb - 1 ? M.bays : new Array(Math.max(nb - 1, 0)).fill(Number(P.bridge.S));
+     const w = bays.reduce((a, v) => a + v, 0); if (w > 0) { P.bridge.Wcc = +w.toFixed(4); const wi = document.getElementById('f_bridge_Wcc'); if (wi) wi.value = P.bridge.Wcc; } }
+   if (el.dataset.k === 'bridge.spacing') syncSpacingVis();
+-  if (el.dataset.k === 'limits.dot') { /* profile switched: nothing else */ }
++  if (el.dataset.k === 'limits.dot') renderOwnInfo();   // OWN1: owner switched (the layout and checks follow on recompute; the hand-off carries bridge.owner)
+   schedule();
+ }
+ 
+@@ -5330,7 +5397,7 @@
+   spExtSync();   // "From exterior girders": S = W_cc/(N_b - 1) before anything reads bridge.S (Q6)
+   const drn = $('#sg-dr-note'); if (drn) drn.hidden = !(P.limits.sdMandatory && P.suggest.depthRule === 'off');   // Suggest span-to-depth setting overridden by the Limits tab (2026-10-12)
+   M = buildModel(P);
+-  if (M.errors.length) { C = null; FR = null; AN = null; renderErrors(); renderFrBays(); renderFrSum(); maybeSuggest(); maybeAlts(); return; }
++  if (M.errors.length) { C = null; FR = null; AN = null; renderErrors(); renderFrBays(); renderFrSum(); renderOwnInfo(); maybeSuggest(); maybeAlts(); return; }
+   C = runChecks(M);
+   FR = framingLayout(P, M);
+   try { AN = analyzeGirder(P, M); } catch (e) { AN = { errors: ['Analysis failed: ' + e.message] }; console.error(e); }
+@@ -5338,9 +5405,31 @@
+   C.push(...analysisChecks(M, AN, P));
+   C.sort((a, b) => GROUPS.indexOf(a.grp) - GROUPS.indexOf(b.grp));
+   M.st = sectionStatus(M, C);
+-  renderStatus(); renderSummary(); renderDrawings(); renderChecks(); renderAnalysis(); renderSchedule(); renderReportHead(); renderFrBays(); renderFrSum();
++  renderStatus(); renderSummary(); renderDrawings(); renderChecks(); renderAnalysis(); renderSchedule(); renderReportHead(); renderFrBays(); renderFrSum(); renderOwnInfo();
+   applyCollapse(); typeset(); maybeSuggest(); maybeAlts();
+ }
++/* OWN1 (2026-10-15): the Limits tab owner panel (edition note, the owner's rules applied here and elsewhere, pending references), the label of the
++   automatic orientation, and the override flags of 'default' rules with an input key (a value different from the owner's is flagged, not blocked) */
++function renderOwnInfo() {
++  const o = plOwner(P), host = $('#own-info'), opt = document.querySelector('#f_framing_orient option[value="auto"]'), xr = ownRule(o, 'xf.orient');
++  if (opt) opt.textContent = xr ? `Automatic (${ownCite(xr)}: whole bridge, parallel if θ_max ≤ ${(xr.value && xr.value.thr) || 20}°, else normal and staggered)` : 'Automatic (parallel if θ ≤ 20°, else normal)';
++  ownFlags();
++  if (!host) return;
++  if (!OWN_TBL) { host.innerHTML = `<p class="hint static">The owner rules are supplied by GirderDetail; this page is open on its own, so no owner rule is applied (AASHTO LRFD 10th Ed. and the limits below).</p>`; return; }
++  const K = { 'shall-check': 'shall: check', 'should-warning': 'should: warning', default: 'default', 'pending-reference': 'pending reference' }, rs = OWN_TBL.rules.filter(r => r.owner === o), ow = OWN_TBL.owners[o] || {};
++  const li = r => `<li><span class="own-kind">${K[r.kind] || esc(r.kind)}</span> <b>${esc(ownCite(r))}</b>: ${esc(r.text)}${r.kind === 'pending-reference' ? ` (needs ${esc(r.ref)}; not applied)` : r.where ? ` (${esc(r.where)})` : ''}</li>`;
++  const go = EMBED ? ' <button type="button" class="link-btn" data-goown="1">All owners\' rules</button>' : '';
++  host.innerHTML = `<p class="hint static">${esc(OWN_TBL.note || '')}${go}</p>` + (ow.none || !rs.length ? `<p class="hint static">${o === 'AASHTO' ? 'AASHTO: no owner rules; AASHTO LRFD 10th Ed. and the limits as entered (a project saved with the former "Custom" owner opens as AASHTO, its limits kept).' : 'No owner rules in the table for this owner.'}</p>`
++    : `<p class="hint static"><b>${esc(ow.manual || o)}</b>: owner rules in this version (phase 1: cross-frame layout; load rules and owner defaults follow):</p><ul class="own-list">${rs.map(li).join('')}</ul>`);
++}
++function ownFlags() {
++  $$('.own-flag[data-ownk]').forEach(e => e.remove()); if (!OWN_TBL) return; const o = plOwner(P);
++  OWN_TBL.rules.filter(r => r.owner === o && r.kind === 'default' && r.key && r.value != null && typeof r.value !== 'object').forEach(r => {
++    const el = document.querySelector(`[data-k="${r.key}"]`); if (!el) return; const v = getPath(P, r.key);
++    if (typeof r.value === 'number' ? Math.abs(Number(v) - r.value) < 1e-9 : String(v) === String(r.value)) return;
++    const ig = el.closest('.ig') || el.closest('.ck-row') || el.parentElement;
++    if (ig) ig.insertAdjacentHTML('beforeend', `<div class="own-flag" data-ownk="${esc(r.key)}">Overrides ${esc(ownCite(r))}: ${esc(r.show || String(r.value))}</div>`); });
++}
+ function typeset(root) {
+   if (window.MathJax && MathJax.typesetPromise) {
+     const els = root ? [root] : ['#tab-summary', '#tab-checks', '#tab-manual', '#rpt-head'].map(s => $(s)).filter(Boolean);
+@@ -5702,7 +5791,7 @@
+ const putStore = s => { try { localStorage.setItem(KEY_PR, JSON.stringify(s)); return true; } catch (e) { return false; } };
+ function flash(msg, cls = 'pass') { const el = $('#proj_msg'); if (!el) return; el.textContent = msg; el.style.color = cls === 'fail' ? 'var(--fail)' : 'var(--pass)'; clearTimeout(flash.t); flash.t = setTimeout(() => el.textContent = '', 3500); }
+ function refreshList() { const s = store(), names = Object.keys(s).sort(); $('#proj_list').innerHTML = names.length ? names.map(n => `<option ${n === CUR_NAME ? 'selected' : ''}>${esc(n)}</option>`).join('') : '<option value="">No saved projects</option>'; }
+-function loadData(d, name) { P = migrateCosts(deepMerge(clone(DEFAULT), d)); CUR_NAME = name || ''; syncSkews(); fillInputs(); Object.keys(ARR).forEach(renderArr); setITab(P.ui.itab || 'project'); setOTab(P.ui.otab || 'summary'); recompute(); autosave(); }
++function loadData(d, name) { P = migrateOwner(migrateCosts(deepMerge(clone(DEFAULT), d))); CUR_NAME = name || ''; syncSkews(); fillInputs(); Object.keys(ARR).forEach(renderArr); setITab(P.ui.itab || 'project'); setOTab(P.ui.otab || 'summary'); recompute(); autosave(); }
+ function initProjects() {
+   refreshList();
+   $('#pb_save').onclick = () => { let n = CUR_NAME || P.meta.name || ''; if (!n) n = prompt('Save project as:'); if (!n) return; const s = store(); s[n] = clone(P); if (putStore(s)) { CUR_NAME = n; refreshList(); flash(`Saved "${n}".`); autosave(); } else flash('Browser storage is full or unavailable.', 'fail'); };
+@@ -5713,8 +5802,10 @@
+   $('#pb_import').onclick = () => $('#pb_file').click();
+   $('#pb_file').onchange = ev => { const f = ev.target.files[0]; if (!f) return; const r = new FileReader(); r.onload = () => { try { const j = JSON.parse(r.result); if (!j.data || !j.data.girder) throw 0; loadData(j.data, j.name || ''); flash(`Imported ${f.name}.`); } catch (e) { flash('That file is not a PlateLine project.', 'fail'); } }; r.readAsText(f); ev.target.value = ''; };
+   $('#pb_new').onclick = () => { if (confirm('Replace the current inputs with the built-in example? Unsaved changes are lost.')) { loadData(clone(DEFAULT), ''); refreshList(); } };
+-  $('#pf_save').onclick = () => { if (!LS) return; let all = {}; try { all = JSON.parse(localStorage.getItem(KEY_PF) || '{}') || {}; } catch (e) { flashPf('Not saved: the owner defaults already in browser storage could not be read (corrupt data), and saving would overwrite them.', 'fail'); return; } all[P.limits.dot] = clone(P.limits); try { localStorage.setItem(KEY_PF, JSON.stringify(all)); } catch (e) { flashPf('Could not save the defaults: the browser storage is full or blocked.', 'fail'); return; } flashPf(`Saved these limits as the ${P.limits.dot} defaults.`); };
+-  $('#pf_load').onclick = () => { let all = {}; try { all = (LS ? JSON.parse(localStorage.getItem(KEY_PF) || '{}') : {}) || {}; } catch (e) { flashPf('The saved owner defaults could not be read (corrupt data in browser storage).', 'fail'); return; } const d = all[P.limits.dot]; if (!d) { flashPf(`No saved defaults for ${P.limits.dot} yet. Set the limits, then choose "Save as owner defaults".`, 'fail'); return; } P.limits = deepMerge(clone(DEFAULT.limits), d); fillInputs(); schedule(); flashPf(`Loaded the ${P.limits.dot} defaults.`); };
++  /* OWN1: saved owner-limit profiles keyed by owner; a profile saved as 'Custom' is read as 'AASHTO' (copied; the stored 'Custom' entry is kept) */
++  const pfAll = () => { const all = (LS ? JSON.parse(localStorage.getItem(KEY_PF) || '{}') : {}) || {}; if (all.Custom && typeof all.Custom === 'object' && !all.AASHTO) all.AASHTO = { ...all.Custom, dot: 'AASHTO' }; return all; };
++  $('#pf_save').onclick = () => { if (!LS) return; let all = {}; try { all = pfAll(); } catch (e) { flashPf('Not saved: the owner defaults already in browser storage could not be read (corrupt data), and saving would overwrite them.', 'fail'); return; } all[P.limits.dot] = clone(P.limits); try { localStorage.setItem(KEY_PF, JSON.stringify(all)); } catch (e) { flashPf('Could not save the defaults: the browser storage is full or blocked.', 'fail'); return; } flashPf(`Saved these limits as the ${P.limits.dot} defaults.`); };
++  $('#pf_load').onclick = () => { let all = {}; try { all = pfAll(); } catch (e) { flashPf('The saved owner defaults could not be read (corrupt data in browser storage).', 'fail'); return; } const d = all[P.limits.dot]; if (!d) { flashPf(`No saved defaults for ${P.limits.dot} yet. Set the limits, then choose "Save as owner defaults".`, 'fail'); return; } const own = P.limits.dot; P.limits = deepMerge(clone(DEFAULT.limits), d); P.limits.dot = own; fillInputs(); schedule(); flashPf(`Loaded the ${P.limits.dot} defaults.`); };
+ }
+ function flashPf(msg, cls) { let el = $('#pf_msg'); if (!el) { el = document.createElement('p'); el.id = 'pf_msg'; el.className = 'hint static full'; $('#sec-prof').appendChild(el); } el.textContent = msg; el.style.color = cls === 'fail' ? 'var(--fail)' : 'var(--pass)'; }
+ 
+```
