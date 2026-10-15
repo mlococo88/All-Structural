@@ -17794,3 +17794,26 @@ function plShow(bg) {
   - File size: 2,444,330 → 2,191,238 bytes (−253,092 bytes, −10.4 %).
 - **Saved data:** no key or format changed.
 - **Other copies:** none (no standalone PlateLine file exists).
+
+## 2026-10-15 — PR: claude/gd-testkit (idle signal for headless checks, with the tests/ kit and docs/AGENT_BRIEF.md; engineer-approved 2026-10-15; PR link added after merge)
+
+### IDLE. `window.gdIdle()`: a Promise that resolves when GirderDetail has finished its automatic work   [test hook] [no result change, no behaviour change]
+- **Why:** opening a project can start automatic work: the bridge publish from Preliminary sizing, the automatic refresh, the cross-frame auto-design and the XF2 second pass. This takes 20–50 s, so headless checks must not read results at fixed times. Until now the wait (`settle()`) lived in each test script. It now lives in the app, so every script waits the same way.
+- **Where:** new code right after `function plEnsure() {` (anchor: `function gdBusy() {`), main script. Nothing calls it; nothing else changed.
+- **Code added:**
+```js
+function gdBusy() { return !!(GD_XF_REQ || GD_XF_T) || GD_RQ.size > 0 || GD_PLQ.length > 0 || !PL_FRAME || !PL_FRAME.dataset.ready; }
+window.gdIdle = function ({ quiet = 8000, max = 150000, step = 500 } = {}) {
+  const t0 = Date.now(); let last = null, since = t0;
+  return new Promise((res, rej) => { const tick = () => {
+    let s; try { const q = JSON.parse(JSON.stringify(P)); delete q.ui; s = (gdBusy() ? 'busy:' : '') + JSON.stringify(q).replace(/"ts":\d+/g, '"ts":0'); } catch (e) { s = 'busy:' + e.message; }
+    const now = Date.now();
+    if (s !== last || s.startsWith('busy:')) { last = s; since = now; } else if (now - since >= quiet) return res(now - t0);
+    if (now - t0 >= max) return rej(new Error('gdIdle: not idle after ' + max + ' ms'));
+    setTimeout(tick, step); }; tick(); });
+};
+```
+  (preceded by a comment block "IDLE (2026-10-15)"). Idle means all of these: no demand request in flight (`GD_XF_REQ`, `GD_RQ`) or waiting for the frame (`GD_PLQ`), no second pass pending (`GD_XF_T`), Preliminary sizing loaded and ready (`PL_FRAME.dataset.ready`), and the project data (`P` without `ui`, time stamps ignored) unchanged for `quiet` ms. It does not load Preliminary sizing itself; call `plEnsure()` first. This is the same logic as the earlier `settle()` helper (the scratchpad's `xfrace/settle.mjs`, 2026-10-14), moved inside the page.
+- **Governing provision:** none.
+- **How verified (Tier 1):** `node tests/check-syntax.mjs "Steel Bridge Beam Modules.html"` passes (main page and the pl-src page). `node tests/compare.mjs --tool gd` (main 3ef3506 vs branch, built-in project, AASHTO): all 16 sections identical, covering the GirderDetail and Preliminary sizing project data, Preliminary sizing checks and analysis, every module's check items after Get demands, and the girder-1 structural analysis. No console errors. Main was waited on with the external settle logic and the branch with `gdIdle()` (≈23 s each). Also run on xsA × AASHTO/RIDOT and built-in × RIDOT: identical (see PR).
+- **Saved data:** none touched.

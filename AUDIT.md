@@ -1,6 +1,9 @@
 # AUDIT.md — Review of the single-file HTML engineering tools
 
 **Scope.** This is a read-only review of all 24 HTML files on `main` as of 2026-10-03. No tool file was changed.
+
+**Working on the tools (added 2026-10-15):** see `docs/AGENT_BRIEF.md` (workflow, verification tiers, GirderDetail architecture notes, pitfalls) and `tests/README.md` (headless main-vs-branch test kit; developer tooling only, never loaded by a tool).
+
 **Method.**
 - **Reading.** Each file was read in full, except embedded base64, inlined libraries and other blobs, which were identified but not dumped. Calculation code was checked against the code provisions the tool cites.
 - **Running.** Several engines were run outside the browser (in Node) to reproduce results numerically: the moving-load engine, the geometry/alignment engine, the concrete flexure solver, and the DF formulas.
