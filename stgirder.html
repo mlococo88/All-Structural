@@ -2189,7 +2189,11 @@ function buildExternal(ext, L, llf){
   const hasFatV=hasFat&&slice.some(s=>s.V_FATpos!==undefined&&s.V_FATneg!==undefined);
   // GD45/GD49 (2026-10-15): the pedestrian load alone (GirderDetail, optional M_PL…/V_PL…). V_PLq: the part of V_LL (the larger of |V_LL+|, |V_LL−|) that is PL
   const hasPL=slice.some(s=>s.M_PLpos!==undefined||s.V_PLpos!==undefined);
-  return { spanLen, slice, sel, hasDC1, hasDC1split, swExcl, hasFat, hasFatV, hasPL,
+  // GD54c (2026-10-15): MassDOT utilities as their own loads (GirderDetail, optional): M_UT/V_UT existing utilities, M_UF/V_UF future utility
+  // allowance; unfactored, on the steel (noncomposite) section; shears in the same MIDAS sign convention, negated like the other dead-load shears
+  const hasUT=slice.some(s=>s.M_UT!==undefined), hasUF=slice.some(s=>s.M_UF!==undefined);
+  return { spanLen, slice, sel, hasDC1, hasDC1split, swExcl, hasFat, hasFatV, hasPL, hasUT, hasUF,
+    M_UT:(x)=>interp('M_UT',x), V_UT:(x)=>-interp('V_UT',x), M_UF:(x)=>interp('M_UF',x), V_UF:(x)=>-interp('V_UF',x),
     M_PLpos:(x)=>interp('M_PLpos',x)*fPos, M_PLneg:(x)=>interp('M_PLneg',x)*fNeg,
     V_PLq:(x)=>{const p=interp('V_LLpos',x)*fV,n=interp('V_LLneg',x)*fV; return Math.abs(p)>=Math.abs(n)? Math.sign(p)*interp('V_PLpos',x)*fV : Math.sign(n)*interp('V_PLneg',x)*fV;},
     M_DC1steel:(x)=>interp('M_DC1steel',x),                              // k-ft (CF4)
@@ -2417,6 +2421,39 @@ function OwnBanner({R,go}){ const L=R&&R.ok&&R.lf; if(!L||!L.on) return null; co
     <ul style={{fontSize:11.5,margin:'4px 0 0 18px',lineHeight:1.6,padding:0}}>{ls.map((t,i)=><li key={i}>{t}</li>)}</ul>
     <div style={{fontSize:11.5,marginTop:4}}>Applied to every girder check{R.deckD?' and to the transverse deck design':''} while GirderDetail’s demands are in use; worked in the report, <i>2. Input parameters — Owner load rules</i> and <i>Demands — Load combinations</i>.{go?<span> Go to: <a href="#" onClick={e=>{e.preventDefault();go('inputs');}}>Inputs (imported demands)</a> · <a href="#" onClick={e=>{e.preventDefault();go('diagrams');}}>Diagrams (M_u, V_u)</a>{R.deckD?<span> · <a href="#" onClick={e=>{e.preventDefault();go('deck');}}>Deck</a></span>:null}{L.rt?<span> · <a href="#" onClick={e=>{e.preventDefault();go('rating');}}>Rating (target)</a></span>:null} · <a href="#" onClick={e=>{e.preventDefault();go('report');}}>Report</a></span>:null}</div>
   </div>; }
+/* GD54c (engineer decision 2026-10-15): MassDOT utilities from GirderDetail as their own loads (R.ut; computeAll). Display helpers. */
+const utG=(M,sg,mx,mn)=>sg*M>=0? mx : mn;
+function utLines(R){ const U=R&&R.ok&&R.ut; if(!U) return null; const f3=v=>fmt(v,3), i=U.info||{}, F=U.F.U, out=[];
+  if(U.hasUT) out.push('Existing utilities M_UT, V_UT'+(i.existing&&i.existing.w?' ('+fmt(i.existing.w,3)+' klf on this girder)':'')+': on the steel (noncomposite) section; Strength I γ_UT = 1.50η = '+f3(F.t)+' where they add to the effect checked, 0.65/η = '+f3(F.tn)+' where they relieve it (DW factors, AASHTO LRFD Table 3.4.1-2; existing utilities = DW, GD42); Service II 1.0; in the camber.');
+  if(U.hasUF) out.push('Future utility allowance M_UF, V_UF'+(i.future&&i.future.w?' ('+fmt(i.future.w,3)+' klf on this girder)':'')+': on the steel section; Strength I γ_UF = 1.25η = '+f3(F.f)+' where it adds, 0 where it relieves; Service II 1.0 where it adds, 0 where it relieves; not in the camber (MassDOT 3.5.5.2).');
+  out.push('Not at deck placement: the constructibility checks (6.10.3) use DC1 only (the utilities are installed after the deck).');
+  out.push('Shear: V_u = |γ_DC(V_DC1 + V_DC2) + γ_DW V_DW + γ_UT V_UT + γ_UF V_UF| in the worse direction (each utility factor by whether it adds in that direction) + γ_LL|V_LL+IM|. Web special fatigue (6.10.5.3): permanent shear with V_UT and V_UF (where it adds) at 1.0.');
+  out.push('Load rating (default chosen, engineer to confirm): both included where they add (existing as DW, γ 1.50; future allowance as DC, γ 1.25; Service II 1.0), no relief taken.');
+  out.push('Source: '+(i.cite||'MassDOT LRFD Bridge Manual Part I 3.5.5.2, 3.5.5.4')+'.');
+  return out; }
+// the utility terms of the worked Strength I equations at station q (sg = +1 for +M_u, −1 for −M_u); empty strings without utilities
+function utTxM(R,q,sg){ const U=R&&R.ut; if(!U||q.Mut==null) return {sym:'',val:''}; const F=U.F.U;
+  return {sym:(U.hasUT?'+\\gamma_{UT}M_{UT}':'')+(U.hasUF?'+\\gamma_{UF}M_{UF}':''),
+    val:(U.hasUT?'+'+nx(utG(q.Mut,sg,F.t,F.tn),3)+'('+nx(q.Mut,0)+')':'')+(U.hasUF?'+'+nx(utG(q.Muf,sg,F.f,F.fn),3)+'('+nx(q.Muf,0)+')':'')}; }
+function utTxV(R,q){ const U=R&&R.ut; if(!U||q.Vut==null) return {sym:'',val:''}; const F=U.F.U, sg=(q.Vd+q.uV)>=0?1:-1;
+  return {sym:(U.hasUT?'+\\gamma_{UT}V_{UT}':'')+(U.hasUF?'+\\gamma_{UF}V_{UF}':''),
+    val:(U.hasUT?'+'+nx(utG(q.Vut,sg,F.t,F.tn),3)+'('+nx(q.Vut,1)+')':'')+(U.hasUF?'+'+nx(utG(q.Vuf,sg,F.f,F.fn),3)+'('+nx(q.Vuf,1)+')':'')}; }
+function UtBanner({R}){ const ls=utLines(R); if(!ls) return null;
+  return <div className="callout" style={{marginTop:0,marginBottom:0,borderLeftColor:'#0f766e',background:'#f0fdfa'}}>
+    <b>MassDOT utilities from GirderDetail: their own loads</b>
+    <ul style={{fontSize:11.5,margin:'4px 0 0 18px',lineHeight:1.6,padding:0}}>{ls.slice(0,2).map((t,i)=><li key={i}>{t}</li>)}</ul>
+    <div style={{fontSize:11.5,marginTop:4}}>In every Strength I and Service II check, the yield moment, the camber (existing only), the web special fatigue check and the rating; not at deck placement. Worked in the report, <i>2. Input parameters — MassDOT utilities</i> and <i>Demands — Load combinations</i>.</div>
+    <DLinks lead="Go to:" items={[{to:'ut',what:'utility loads and factors'},{to:'menv',what:'M_u with the utilities'},{to:'venv',what:'V_u'}]}/>
+  </div>; }
+function UtCard({R}){ const ls=utLines(R); if(!ls) return null; const U=R.ut, st=R.stations, F=U.F.U;
+  const pick=[['governing +M_u',st.reduce((b,q)=>q.Mu>b.Mu?q:b,st[0])],['governing −M_u',st.reduce((b,q)=>q.Mun<b.Mun?q:b,st[0])],['governing V_u',st.reduce((b,q)=>q.Vu>b.Vu?q:b,st[0])]];
+  return <Card id="stg-d-ut" title="MassDOT utilities (from GirderDetail)" refTag="own load components · steel section · MassDOT 3.5.5.2, 3.5.5.4">
+    <ul style={{fontSize:11.5,margin:'0 0 6px 18px',lineHeight:1.6,padding:0}}>{ls.map((t,i)=><li key={i}>{t}</li>)}</ul>
+    <Tbl head={['Station','x (ft)','M_UT','M_UF','γ_UT, γ_UF (+M_u)','γ_UT, γ_UF (−M_u)','V_UT','V_UF','factored utility shear']} rows={pick.map(([lab,q])=>({c:[lab,fmt(q.x,2),fmt(q.Mut,1),fmt(q.Muf,1),
+      fmt(utG(q.Mut,1,F.t,F.tn),3)+', '+fmt(utG(q.Muf,1,F.f,F.fn),3),fmt(utG(q.Mut,-1,F.t,F.tn),3)+', '+fmt(utG(q.Muf,-1,F.f,F.fn),3),fmt(q.Vut,1),fmt(q.Vuf,1),fmt(q.uV,1)]}))}/>
+    <div className="hint" style={{marginTop:4}}>Unfactored moments k-ft, shears kip (per girder, this tool's sign convention). The factored utility shear is in the direction that governs V_u.</div>
+    <DLinks items={[{to:'menv',what:'M_u envelope'},{to:'venv',what:'V_u envelope'},{to:'s2',what:'Service II with the utilities'}]}/>
+  </Card>; }
 function GdNote({ext,style}){
   const n=gdNoteLines(ext); if(!n) return null;
   return <div className="callout" style={{marginTop:0,marginBottom:12,borderColor:'var(--blue)',background:'#EEF4FF',...(style||{})}}>
@@ -2837,6 +2874,15 @@ function computeAll(inp){
       {pos:(+inp.loads.extDFpos||1)*mpfExt, neg:(+inp.loads.extDFneg||1)*mpfExt, v:(+inp.loads.extDFv||1)*mpfExt});
     const useExt=!!ext;
     const plOn=OWN.m!==1&&useExt&&ext.hasPL&&inp.external.pedestrianInLL===true;   // GD45: the pedestrian load in LL+IM, taken without m
+    /* GD54c (engineer decision 2026-10-15; HANDOFF.md 4.9): MassDOT utilities from GirderDetail as their own loads, on the steel section, as GirderDetail
+       applies them (MassDOT Part I 3.5.5.2, 3.5.5.4; GD42: existing utilities = DW). Factor by whether the load adds to the effect checked (AASHTO 3.4.1):
+       existing (UT) Strength 1.50η where it adds, 0.65/η where it relieves, Service 1.0; future allowance (UF) Strength 1.25η / 0, Service 1.0 / 0.
+       Not at deck placement (constructibility uses DC1 only), future allowance not in the camber. Rating (default chosen, engineer to confirm): both
+       included where they add (UT as DW 1.50, UF as DC 1.25; Service 1.0), no relief taken. UTon false (no fields): every result exactly as before. */
+    const UTon=useExt&&(ext.hasUT||ext.hasUF);
+    const UF_={U:{t:gDW,tn:0.65*OWN.etaN,f:gDC,fn:0}, S:{t:1,tn:1,f:1,fn:0}, R:{t:1.5,tn:0,f:1.25,fn:0}, RS:{t:1,tn:0,f:1,fn:0}};
+    const uFac=(M,sg,mx,mn)=>sg*M>=0? mx : mn;
+    const uSum=(st,sg,k)=>{ const F=UF_[k]; return uFac(st.Mut,sg,F.t,F.tn)*st.Mut+uFac(st.Muf,sg,F.f,F.fn)*st.Muf; };   // factored utility moment, case sg (+1 / −1)
     // SW-CONT (2026-10-13): the self-weight ST-Girder adds to an import with selfWeightExcluded:true is analysed on the
     // continuous girder of the import (swContinuous); null = one span / no support layout → simple span w·x(L−x)/2 as before.
     // SW-ED (2026-10-13): the selected span uses ST-Girder's current plates when they differ from the imported zones of that span.
@@ -2904,8 +2950,16 @@ function computeAll(inp){
       const MlD=plOn? llD(Ml,qM,OWN.m):Ml, MlnD=plOn? llD(Mln,qMn,OWN.m):Mln, VlD=plOn? llD(Math.abs(Vl),qV,OWN.m):Vl;
       const Mu =gDC*(M1+M2)+gDW*Mw+gLL*MlD;            // factored, +LL case
       const Mun=gDC*(M1+M2)+gDW*Mw+gLL*MlnD;           // factored, −LL case
-      const Vu=Math.abs(gDC*(V1+V2)+gDW*Vw)+gLL*Math.abs(VlD);
-      return {x,si,M1,M2,Mw,Ml,Mln,V1,V2,Vw,Vl,Mu,Mun,Vu,MlD,MlnD,VlD,...(plOn?{qM,qMn,qV}:{})};
+      if(!UTon){ const Vu=Math.abs(gDC*(V1+V2)+gDW*Vw)+gLL*Math.abs(VlD);
+      return {x,si,M1,M2,Mw,Ml,Mln,V1,V2,Vw,Vl,Mu,Mun,Vu,MlD,MlnD,VlD,...(plOn?{qM,qMn,qV}:{})}; }
+      // GD54c: the utilities, factor by sign (+M_u case: a positive utility moment adds; −M_u case: a negative one adds);
+      // shear: the worse direction of the factored dead load + utilities (without utilities this is |V_D| exactly), plus γ_LL|V_LL|
+      const Mut=ext.M_UT(x), Muf=ext.M_UF(x), Vut=ext.V_UT(x), Vuf=ext.V_UF(x), q={Mut,Muf};
+      const uP=uSum(q,1,'U'), uN=uSum(q,-1,'U'), Vd=gDC*(V1+V2)+gDW*Vw, F=UF_.U;
+      const vDir=sg=>sg*(Vd+uFac(Vut,sg,F.t,F.tn)*Vut+uFac(Vuf,sg,F.f,F.fn)*Vuf), vP=vDir(1), vN=vDir(-1), vSg=vP>=vN?1:-1;
+      const uV=vSg*Math.max(vP,vN)-Vd;                  // the factored utility shear in the governing direction (signed, app convention)
+      const Vu=Math.max(vP,vN)+gLL*Math.abs(VlD);
+      return {x,si,M1,M2,Mw,Ml,Mln,V1,V2,Vw,Vl,Mu:Mu+uP,Mun:Mun+uN,Vu,MlD,MlnD,VlD,...(plOn?{qM,qMn,qV}:{}),Mut,Muf,Vut,Vuf,uP,uN,uV,Vd};
     });
     const diag=stations;
     const MuPeak=Math.max(...stations.map(d=>d.Mu)), VuPeak=Math.max(...stations.map(d=>d.Vu));
@@ -2914,7 +2968,7 @@ function computeAll(inp){
 
     // staged flange stresses at a station (kip-ft in → ksi). Sign: fB + = bottom tension; fT + = top compression.
     // Section per component: DC1 → bare; others → composite (3n / n) when M ≥ 0, cracked (steel+rebar) when M < 0.
-    const stageF=(st,g1,g2,gw,gll,des)=>{   // des (GD49): the owner combinations' LL+IM (MlD, MlnD; = Ml, Mln without a pedestrian part)
+    const stageF=(st,g1,g2,gw,gll,des,uk)=>{   // des (GD49): the owner combinations' LL+IM (MlD, MlnD; = Ml, Mln without a pedestrian part); uk (GD54c): the utility factor set
       const sg=segP[st.si];
       const one=(M,kind)=>{ let Sb,St;
         if(kind==='dc1'){ Sb=sg.bare.Sb; St=sg.bare.StSteel; }
@@ -2923,6 +2977,10 @@ function computeAll(inp){
         return {fB:M*12/Sb, fT:M*12/St}; };
       const dc=one(g1*st.M1,'dc1'), d2=one(g2*st.M2,'lt'), dw=one(gw*st.Mw,'lt');
       const lp=one(gll*(des?st.MlD:st.Ml),'ll'), ln=one(gll*(des?st.MlnD:st.Mln),'ll');
+      if(UTon&&uk){ const up=one(uSum(st,1,uk),'dc1'), un=one(uSum(st,-1,uk),'dc1');   // GD54c: the utilities on the steel section, factored per case
+        return { pos:{fB:dc.fB+d2.fB+dw.fB+lp.fB+up.fB, fT:dc.fT+d2.fT+dw.fT+lp.fT+up.fT},
+                 neg:{fB:dc.fB+d2.fB+dw.fB+ln.fB+un.fB, fT:dc.fT+d2.fT+dw.fT+ln.fT+un.fT},
+                 parts:{dc,d2,dw,lp,ln,up,un} }; }
       return { pos:{fB:dc.fB+d2.fB+dw.fB+lp.fB, fT:dc.fT+d2.fT+dw.fT+lp.fT},
                neg:{fB:dc.fB+d2.fB+dw.fB+ln.fB, fT:dc.fT+d2.fT+dw.fT+ln.fT},
                parts:{dc,d2,dw,lp,ln} };
@@ -2937,7 +2995,7 @@ function computeAll(inp){
     const s2CoefLabel=s2Composite?'0.95R_hF_yf':'0.80R_hF_yf';
     const chartS2=[];                                  // per-station Service II stresses for the Stresses tab charts
     stations.forEach(st=>{ const sg=segP[st.si];
-      const s=stageF(st,1,1,1,gS2,true), lim=s2Coef*sg.Rh*Fyf;   // GD49: Service II γ_LL = 1.30m
+      const s=stageF(st,1,1,1,gS2,true,'S'), lim=s2Coef*sg.Rh*Fyf;   // GD49: Service II γ_LL = 1.30m; GD54c: utilities 1.0 (future allowance 0 where it relieves)
       chartS2.push({x:st.x, si:st.si, lim, Rh:sg.Rh,
         bP:s.pos.fB, tP:s.pos.fT, bN:s.neg.fB, tN:s.neg.fT,
         dc1B:s.parts.dc.fB, sidlB:s.parts.d2.fB+s.parts.dw.fB, llB:s.parts.lp.fB,
@@ -2946,7 +3004,8 @@ function computeAll(inp){
         M1:st.M1, M2:st.M2, Mw:st.Mw, Ml:st.Ml, Mln:st.Mln, MlD:st.MlD,
         SbBare:sg.bare.Sb, StBare:sg.bare.StSteel, Sb3n:sg.c3N.Sb, St3n:sg.c3N.StSteel,
         Sbn:sg.cN.Sb, Stn:sg.cN.StSteel, SbCr:sg.cr.Sb, StCr:sg.cr.St,
-        dc1Bp:s.parts.dc.fB, d2Bp:s.parts.d2.fB, dwBp:s.parts.dw.fB, llBp:s.parts.lp.fB, lnBp:s.parts.ln.fB});
+        dc1Bp:s.parts.dc.fB, d2Bp:s.parts.d2.fB, dwBp:s.parts.dw.fB, llBp:s.parts.lp.fB, lnBp:s.parts.ln.fB,
+        ...(s.parts.up?{utBp:s.parts.up.fB, utBn:s.parts.un.fB, Mut:st.Mut, Muf:st.Muf, uSP:uSum(st,1,'S'), uSN:uSum(st,-1,'S')}:{})});   // GD54c
       [['top +LL',s.pos.fT],['bot +LL',s.pos.fB],['top −LL',s.neg.fT],['bot −LL',s.neg.fB]].forEach(([tag,f])=>{
         const r=Math.abs(f)/lim; if(r>s2Gov.r) s2Gov={r,x:st.x,si:st.si,tag,f,lim,st,s}; });
       if(s.neg.fB<0){                                   // −M region: web bend-buckling turns on
@@ -2956,10 +3015,10 @@ function computeAll(inp){
     });
     // stress display object (kept shape: governing positive-flexure station)
     const stMaxPos=stations.reduce((b,st)=>st.Mu>b.Mu?st:b,stations[0]);
-    const sDisp=stageF(stMaxPos,1,1,1,gS2,true);
+    const sDisp=stageF(stMaxPos,1,1,1,gS2,true,'S');
     const sgDisp=segP[stMaxPos.si];
-    const fTop={dc1:sDisp.parts.dc.fT, sid:sDisp.parts.d2.fT+sDisp.parts.dw.fT, ll:sDisp.parts.lp.fT/gS2, serv2:sDisp.pos.fT};
-    const fBot={dc1:sDisp.parts.dc.fB, sid:sDisp.parts.d2.fB+sDisp.parts.dw.fB, ll:sDisp.parts.lp.fB/gS2, serv2:sDisp.pos.fB};
+    const fTop={dc1:sDisp.parts.dc.fT, sid:sDisp.parts.d2.fT+sDisp.parts.dw.fT, ll:sDisp.parts.lp.fT/gS2, serv2:sDisp.pos.fT, ...(sDisp.parts.up?{ut:sDisp.parts.up.fT}:{})};   // ut (GD54c): the utilities, Service
+    const fBot={dc1:sDisp.parts.dc.fB, sid:sDisp.parts.d2.fB+sDisp.parts.dw.fB, ll:sDisp.parts.lp.fB/gS2, serv2:sDisp.pos.fB, ...(sDisp.parts.up?{ut:sDisp.parts.up.fB}:{})};
     const fServLim=s2Coef*sgDisp.Rh*Fyf;
     // optional LL deflection (2.5.2.6.2) — short-term composite at midspan segment
     const EI=Es*segMid.cN.I;
@@ -2989,8 +3048,8 @@ function computeAll(inp){
     //   My = MD1 + MD2 + MAD,  MAD = S_n·(Fyf − f_D1 − f_D2) for each flange, lesser flange governs.
     const contSpan = useExt && hasNeg;
     const yieldMy=(st,sg)=>{
-      const MD1=gDC*st.M1, MD2=gDC*st.M2+gDW*st.Mw;              // k-ft, factored permanent (GD49: × η under the owner rules)
-      const fd=stageF(st,gDC,gDC,gDW,0).pos;                      // ksi, fB tension+, fT compression+
+      const MD1=UTon? gDC*st.M1+st.uP : gDC*st.M1, MD2=gDC*st.M2+gDW*st.Mw;   // k-ft, factored permanent (GD49: × η under the owner rules; GD54c: + the factored utilities, steel section)
+      const fd=stageF(st,gDC,gDC,gDW,0,false,'U').pos;            // ksi, fB tension+, fT compression+
       const MADb=sg.cN.Sb*(Fyf-fd.fB)/12, MADt=sg.cN.StSteel*(Fyf-fd.fT)/12;
       const MyB=MD1+MD2+MADb, MyT=MD1+MD2+MADt;
       return {MD1,MD2,fDb:fd.fB,fDt:fd.fT,MADb,MADt,MyB,MyT,My:Math.min(MyB,MyT)};
@@ -3011,7 +3070,7 @@ function computeAll(inp){
       chartFlex.push({x:st.x, capPos, capNeg, compact:sg.compact,
         SxPos:sg.cN.Sb, SxNeg:sg.cr.St, fServLim:s2Coef*sg.Rh*Fyf});
       // staged factored flange stresses (Strength I) at this station — computed once, reused below
-      const fStg=stageF(st,gDC,gDC,gDW,gLL,true);   // GD49
+      const fStg=stageF(st,gDC,gDC,gDW,gLL,true,'U');   // GD49; GD54c
       // ── +M worked-calc record (compact → Mp basis · noncompact composite → stress basis) ──
       const posC = sg.oos? {oos:true, compact:false, Mu:st.Mu, capPos:null, dc:NaN}
         : sg.compact
@@ -3048,7 +3107,7 @@ function computeAll(inp){
     });
     const sgPos=segP[posGov.si||0];
     const stPos=stations.reduce((b,st)=>st.Mu>b.Mu?st:b,stations[0]);
-    const fStr=stageF(stPos,gDC,gDC,gDW,gLL,true);
+    const fStr=stageF(stPos,gDC,gDC,gDW,gLL,true,'U');
     const Mp_kft=sgPos.pl.Mp/12, Mn_kft=sgPos.Mn_kft;
     const flexMode=sgPos.compact?'Compact composite — Mp basis (6.10.7.1)'
       :(deck.deckOn?'Noncompact composite — stress basis (6.10.7.2)':'Noncomposite — stress basis, Fnc per 6.10.8.2 (FLB/LTB)');
@@ -3161,7 +3220,7 @@ function computeAll(inp){
     const camSt=[...camSet].filter(x=>x>=0&&x<=Lft).sort((a,b)=>a-b).map(x=>({x, si:segIdxAt(x),
       M1: (useExt&&ext.hasDC1)? ext.M_DC1(x)+(ext.swExcl? swM(x):0) : simpleM(Ld.wDC1,x)+diaM(x),
       M2: useExt? ext.M_DC2(x) : simpleM(Ld.wDC2,x),
-      Mw: useExt? ext.M_DW(x)  : simpleM(Ld.wDW,x)}));
+      Mw: useExt? ext.M_DW(x)  : simpleM(Ld.wDW,x), ...(UTon?{Mut:ext.M_UT(x)}:{})}));   // Mut (GD54c): existing utilities (the future allowance is not in the camber)
     // deflShape: the deflected shape at every camber station (in, + up, so sagging gives negative values); deflOf = its largest magnitude.
     const deflShape=(Mkey,Ikey)=>{
       const nS=camSt.length, xin=camSt.map(s=>s.x*12);
@@ -3173,7 +3232,8 @@ function computeAll(inp){
     };
     const deflOf=(Mkey,Ikey)=>Math.max(...deflShape(Mkey,Ikey).map(Math.abs));
     const camDC1=deflOf(s=>s.M1,'bare'), camDC2=deflOf(s=>s.M2,'c3N'), camDW=deflOf(s=>s.Mw,'c3N');
-    const camber={camDC1,camDC2,camDW,camTot:camDC1+camDC2+camDW};
+    const camUT=UTon&&ext.hasUT? deflOf(s=>s.Mut,'bare') : 0;   // GD54c: existing utilities on the steel section (MassDOT 3.5.5.2: not the future allowance)
+    const camber=UTon&&ext.hasUT? {camDC1,camDC2,camDW,camUT,camTot:camDC1+camDC2+camDW+camUT} : {camDC1,camDC2,camDW,camTot:camDC1+camDC2+camDW};
     // Breakdown by load (display only). DC1 on the bare steel is split into steel self-weight (+ diaphragm point loads) and the
     // rest of DC1 (deck slab + haunch + Add'l DC1), taken as M1 − M_steel so the two parts sum to M1 exactly. Imported DC1 is split
     // by the payload's M_DC1steel when present (GirderDetail, CF4), or by the self-weight ST-Girder adds (selfWeightExcluded); else not split.
@@ -3182,10 +3242,11 @@ function computeAll(inp){
     const shDC1=deflShape(s=>s.M1,'bare'), shDC2=deflShape(s=>s.M2,'c3N'), shDW=deflShape(s=>s.Mw,'c3N');
     const shSW = dc1Split==='none' ? null : deflShape(Msteel,'bare');
     const shWet= dc1Split==='none' ? null : deflShape(s=>s.M1-Msteel(s),'bare');
-    const shTot=camSt.map((_,i)=>shDC1[i]+shDC2[i]+shDW[i]);
+    const shUT=UTon&&ext.hasUT? deflShape(s=>s.Mut,'bare') : null;   // GD54c
+    const shTot=camSt.map((_,i)=>shUT? shDC1[i]+shDC2[i]+shDW[i]+shUT[i] : shDC1[i]+shDC2[i]+shDW[i]);
     const argMax=a=>{ let j=0; a.forEach((v,i)=>{ if(Math.abs(v)>Math.abs(a[j])) j=i; }); return j; };
     camber.shape={x:camSt.map(s=>s.x), dc1Split, hasDia:dc1Split==='app'&&dph.length>0,
-      sw:shSW, wet:shWet, dc1:shDC1, dc2:shDC2, dw:shDW, tot:shTot,
+      sw:shSW, wet:shWet, dc1:shDC1, dc2:shDC2, dw:shDW, tot:shTot, ...(shUT?{ut:shUT}:{}),
       splices:segP.filter(g=>g.x1>0.05&&g.x1<Lft-0.05).map(g=>g.x1)};
     camber.xDC1=camSt[argMax(shDC1)].x; camber.xTot=camSt[argMax(shTot)].x;   // CF3: locations of the maxima (headline)
     camber.camTotMax=Math.max(...shTot.map(Math.abs));    // largest per-station total (vs camTot = sum of the stage maxima)
@@ -3248,7 +3309,8 @@ function computeAll(inp){
       const rng=Mf*12/sg.cN.Sb;                               // Δf, bottom-flange stress range (short-term composite)
       if(rng>fatGov.dfRange) fatGov={dfRange:rng,MfatR:Mf,MrangeR:Mrange,SbR:sg.cN.Sb,x:st.x,si:st.si};
       // special fatigue for webs (6.10.5.3): unfactored permanent + Fatigue I LL shear ≤ Vcr
-      const Vperm=Math.abs(st.V1+st.V2+st.Vw);
+      // GD54c: the permanent shear with the utilities at 1.0 (existing always, the future allowance where it adds), as GirderDetail's web check
+      const Vperm=UTon? (()=>{ const v=st.V1+st.V2+st.Vw, sg=v>=0?1:-1; return Math.abs(v+st.Vut+(sg*st.Vuf>0?st.Vuf:0)); })() : Math.abs(st.V1+st.V2+st.Vw);
       const Vll=fatImpV? Math.max(Math.abs(ext.V_FATpos(st.x)),Math.abs(ext.V_FATneg(st.x)))
         : fatShearAt(Lft,st.x)*1.15*dfFatV;                  // fatigue-truck shear, single-lane SHEAR DF, IM 1.15
       const Vf=Vperm+1.75*Vll;                                // Fatigue I factored (γ=1.75) per 6.10.5.3
@@ -3376,30 +3438,34 @@ function computeAll(inp){
       if(sg.compact){
         const fc=flexCalc.find(f=>f.x===st.x), MnSt=(fc&&fc.pos&&fc.pos.Mn!=null)? fc.pos.Mn : sg.Mn_kft;
         cap=phiCS*phif*MnSt; basis='Mp';
-        inv=rf(cap,st.M1+st.M2,st.Mw,st.Ml,1.75); opr=rf(cap,st.M1+st.M2,st.Mw,st.Ml,1.35);
+        // GD54c (default chosen, engineer to confirm): the utilities where they add, existing as DW, future allowance as DC; no relief taken
+        const mDC=UTon? st.M1+st.M2+Math.max(st.Muf,0) : st.M1+st.M2, mDW=UTon? st.Mw+Math.max(st.Mut,0) : st.Mw;
+        inv=rf(cap,mDC,mDW,st.Ml,1.75); opr=rf(cap,mDC,mDW,st.Ml,1.35);
       } else {
-        const fd=stageF(st,1.25,1.25,1.5,0).pos, fl=stageF(st,0,0,0,1).pos; basis='stress';
+        const fd=stageF(st,1.25,1.25,1.5,0,false,'R').pos, fl=stageF(st,0,0,0,1).pos; basis='stress';
         inv=Math.min(rfStress(sg.FncPos,fd.fT,fl.fT,1.75), rfStress(sg.Fnt,fd.fB,fl.fB,1.75));
         opr=Math.min(rfStress(sg.FncPos,fd.fT,fl.fT,1.35), rfStress(sg.Fnt,fd.fB,fl.fB,1.35));
       }
-      if(!flexRow||inv<flexRow.inv) flexRow={inv,opr,cap,basis,x:st.x,MDC:st.M1+st.M2,MDW:st.Mw,MLL:st.Ml};
+      if(!flexRow||inv<flexRow.inv) flexRow=UTon? {inv,opr,cap,basis,x:st.x,MDC:st.M1+st.M2+Math.max(st.Muf,0),MDW:st.Mw+Math.max(st.Mut,0),MLL:st.Ml,MUT:Math.max(st.Mut,0),MUF:Math.max(st.Muf,0)}   // GD54c: DC with M_UF, DW with M_UT (where they add)
+        : {inv,opr,cap,basis,x:st.x,MDC:st.M1+st.M2,MDW:st.Mw,MLL:st.Ml};
     });
     if(!flexRow) flexRow={inv:99,opr:99,cap:null,basis:sgPos.compact?'Mp':'stress',x:stPos.x,MDC:stPos.M1+stPos.M2,MDW:stPos.Mw,MLL:stPos.Ml};
     const capM=flexRow.cap;
-    const MDC=flexRow.MDC, MDWr=flexRow.MDW, MLLr=flexRow.MLL;
+    const MDC=flexRow.MDC, MDWr=flexRow.MDW, MLLr=flexRow.MLL, utR=UTon? {flexRowUT:flexRow.MUT||0, flexRowUF:flexRow.MUF||0} : {};   // GD54c
     // Shear: φcφs·φv·Vcr (end-panel basis, unchanged) against the demand at each station; lowest RF.
     let shRow=null;
-    stations.forEach(st=>{ const dc=Math.abs(st.V1+st.V2), dw=Math.abs(st.Vw), ll=Math.abs(st.Vl);
+    stations.forEach(st=>{ let dc=Math.abs(st.V1+st.V2), dw=Math.abs(st.Vw), uT=0, uF=0; const ll=Math.abs(st.Vl);
+      if(UTon){ const sg=(st.V1+st.V2+st.Vw)>=0?1:-1; uT=Math.max(sg*st.Vut,0); uF=Math.max(sg*st.Vuf,0); dc+=uF; dw+=uT; }   // GD54c: where they add (rating default)
       const inv=rf(phiCS*phiv*Vcr,dc,dw,ll,1.75);
-      if(!shRow||inv<shRow.inv) shRow={inv,opr:rf(phiCS*phiv*Vcr,dc,dw,ll,1.35),x:st.x,VDC:dc,VDW:dw,VLL:ll}; });
+      if(!shRow||inv<shRow.inv) shRow={inv,opr:rf(phiCS*phiv*Vcr,dc,dw,ll,1.35),x:st.x,VDC:dc,VDW:dw,VLL:ll,...(UTon?{VUT:uT,VUF:uF}:{})}; });
     const VDC=shRow.VDC, VDWr=shRow.VDW, VLLr=shRow.VLL;
     const rating={
       flexInv:flexRow.inv, flexOpr:flexRow.opr, flexX:flexRow.x, flexBasis:flexRow.basis,
       shearInv:shRow.inv, shearOpr:shRow.opr, shearX:shRow.x,
-      capM,capV:phiCS*phiv*Vcr,MDC,MDWr,MLLr,VDC,VDWr,VLLr,phiC,phiS,phiCS,phiCSfloor};
+      capM,capV:phiCS*phiv*Vcr,MDC,MDWr,MLLr,VDC,VDWr,VLLr,phiC,phiS,phiCS,phiCSfloor,...utR};
     if(hasNeg&&negBGov.r>0){ const stN=stations.reduce((b,st)=>st.Mun<b.Mun?st:b,stations[0]);
       const sgN=segP[stN.si];
-      const fPerm=stageF(stN,1.25,1.25,1.5,0).neg.fB;         // factored permanent, compression (−)
+      const fPerm=stageF(stN,1.25,1.25,1.5,0,false,'R').neg.fB;   // factored permanent, compression (−); GD54c: the utilities where they add
       const fLL1=Math.abs(stN.Mln*12/sgN.cr.Sb);              // LL stress per γ=1.0
       rating.negInv=fLL1>1e-6? (phiCS*phif*sgN.FncNeg.Fnc-Math.abs(Math.min(fPerm,0)))/(1.75*fLL1):99;
       rating.negOpr=fLL1>1e-6? (phiCS*phif*sgN.FncNeg.Fnc-Math.abs(Math.min(fPerm,0)))/(1.35*fLL1):99;
@@ -3409,9 +3475,10 @@ function computeAll(inp){
     // (composite; 0.80RhFyf noncomposite, as the design check), γD = 1.0, γLL = 1.30 Inventory /
     // 1.00 Operating. Both flanges, +LL and −LL, every station; f_D in the direction of f_LL.
     let s2Row=null;
-    stations.forEach(st=>{ const sg=segP[st.si], fR=s2Coef*sg.Rh*Fyf, s=stageF(st,1,1,1,1);
+    stations.forEach(st=>{ const sg=segP[st.si], fR=s2Coef*sg.Rh*Fyf, s=stageF(st,1,1,1,1,false,'RS');
       const fD={fB:s.parts.dc.fB+s.parts.d2.fB+s.parts.dw.fB, fT:s.parts.dc.fT+s.parts.d2.fT+s.parts.dw.fT};
-      [['bot +LL',fD.fB,s.parts.lp.fB],['top +LL',fD.fT,s.parts.lp.fT],['bot −LL',fD.fB,s.parts.ln.fB],['top −LL',fD.fT,s.parts.ln.fT]].forEach(([tag,fd,fl])=>{
+      const up=s.parts.up, un=s.parts.un;   // GD54c: the utilities (rating default: 1.0 where they add), per LL case
+      [['bot +LL',up?fD.fB+up.fB:fD.fB,s.parts.lp.fB],['top +LL',up?fD.fT+up.fT:fD.fT,s.parts.lp.fT],['bot −LL',un?fD.fB+un.fB:fD.fB,s.parts.ln.fB],['top −LL',un?fD.fT+un.fT:fD.fT,s.parts.ln.fT]].forEach(([tag,fd,fl])=>{
         if(!(Math.abs(fl)>1e-6)) return; const sgn=Math.sign(fl), base=(fR-sgn*fd)/Math.abs(fl);
         if(!s2Row||base/1.30<s2Row.inv) s2Row={inv:base/1.30,opr:base/1.00,x:st.x,tag,fR,fD:sgn*fd,fLL:Math.abs(fl)}; }); });
     if(s2Row){ rating.servInv=s2Row.inv; rating.servOpr=s2Row.opr; rating.serv=s2Row; }
@@ -3486,7 +3553,8 @@ function computeAll(inp){
       segP, stations, useExt, ext, hasNeg, neg,
       stress, diag, flex, shearR, constr, camber, fatigue, tStiff, bearing, conn, rating, deckD,
       chartS2, chartFlex, chartFat, flexCalc, shearCalc, warnings,
-      checks:checksF, ...(swCont?{swCont}:{}), ...(oos?{pnaOOS}:{})};
+      checks:checksF, ...(swCont?{swCont}:{}), ...(oos?{pnaOOS}:{}),
+      ...(UTon?{ut:{hasUT:ext.hasUT, hasUF:ext.hasUF, F:UF_, info:((inp.external.girderDetail||{}).utilities)||null}}:{})};   // GD54c
   }catch(e){ return {ok:false, error:e.message}; }
 }
 
@@ -3576,6 +3644,7 @@ const DL_T={
   flexneg:{tab:'flexure',id:'stg-d-flexneg',cr:'flex.neg',l:'Flexure · Negative flexure'},
   shear:{tab:'shear',id:'stg-d-shear',cr:'shear.res',l:'Shear · Shear resistance'},
   s2:{tab:'stresses',id:'stg-d-s2',cr:'serv.s2',l:'Stresses · Service II buildup'},
+  ut:{tab:'inputs',id:'stg-d-ut',cr:'inp.ut',l:'Inputs · MassDOT utilities'},   // GD54c
 };
 const sgI=(R,si)=>(R&&R.segP&&R.segP.length>1&&si!=null)? si : null;   // name a segment only when there are several
 const CrRefCtx=React.createContext(null);   // set by CalcDoc: {map: report key -> {n, id}, idp, midSeg}
@@ -4099,6 +4168,7 @@ function InputsTab({inp,set,R}){
       </div>}
       {selSpan&&<div style={{fontSize:11.5,marginTop:6}}>Active: <b>Span {selSpan.idx}</b> ({fmt(selSpan.len,1)} ft). Negative envelope values at the span ends drive the 6.10.8 pier checks.</div>}
     </div>}
+    {extActive&&R&&R.ok&&R.ut&&<UtCard R={R}/>}
     <div className="stgInTabs" role="tablist" aria-label="Input groups">{STG_IN_TABS.map(([k,l])=>
       <button key={k} type="button" role="tab" id={'stgInTab_'+k} aria-controls={'stgInPane_'+k}
         aria-selected={inTab===k?'true':'false'} tabIndex={inTab===k?0:-1}
@@ -4819,6 +4889,7 @@ function s2Deriv(R,psel,right){
         ['M_DC2','Superimposed DL — barrier (3n)',psel.M2,'k-ft'],
         ['M_DW','Wearing surface (3n)',psel.Mw,'k-ft'],
         ['M_LL','+LL+IM envelope (n)',psel.Ml,'k-ft'],
+        ...(psel.utBp!=null?[['M_UT','Existing utilities (bare; GirderDetail)',psel.Mut,'k-ft'],['M_UF','Future utility allowance (bare; GirderDetail)',psel.Muf,'k-ft']]:[]),
         ['S_b(bare)','Bottom modulus, bare steel',psel.SbBare,'in³'],
         ['S_b(3n)','Bottom modulus, long-term composite',psel.Sb3n,'in³'],
         ['S_b(n)','Bottom modulus, short-term composite',psel.Sbn,'in³'],
@@ -4831,7 +4902,8 @@ function s2Deriv(R,psel,right){
       {lfS(R).on&&<div className="mnote">Service II γ_LL = 1.30m = {lfP(lfS(R).gS2,'1.30')} (owner rule, see the owner load rules banner){lfS(R).plOn?'; M_LL = (LL+IM+PL) − PL + PL/m = '+fmt(psel.MlD,1)+' k-ft at this station':''}.</div>}
       <DLinks items={[{to:'segs',seg:sgI(R,psel.si),what:'S_b (bare)'},{to:'trans',seg:sgI(R,psel.si),what:'S_b (3n, n)'},{to:'menv',what:'stage moments'}]}/>
       <SG n="2">Service II combination & check</SG>
-      <ML s={Tx`f_{ServII}=f_{DC1}+f_{DC2}+f_{DW}+f_{LL}=${nx(psel.dc1Bp,2)}+${nx(psel.d2Bp,2)}+${nx(psel.dwBp,2)}+${nx(psel.llBp,2)}=${nx(psel.bP,2)}\;\text{ksi}`}/>
+      {psel.utBp!=null&&<ML s={Tx`f_{U}=\frac{(M_{UT}+\gamma_{UF}M_{UF})\cdot12}{S_{b,bare}}=\frac{${nx(psel.uSP,1)}\cdot12}{${nx(psel.SbBare,0)}}=${nx(psel.utBp,2)}\;\text{ksi}\quad(\gamma_{UF}=${psel.Muf>=0?'1.0':'0'}\text{: the future allowance only where it adds; GirderDetail utilities})`}/>}
+      <ML s={Tx`f_{ServII}=f_{DC1}+f_{DC2}+f_{DW}+f_{LL}${psel.utBp!=null?'+f_{U}':''}=${nx(psel.dc1Bp,2)}+${nx(psel.d2Bp,2)}+${nx(psel.dwBp,2)}+${nx(psel.llBp,2)}${psel.utBp!=null?'+'+nx(psel.utBp,2):''}=${nx(psel.bP,2)}\;\text{ksi}`}/>
       <ML s={Tx`\frac{f_{ServII}}{0.95R_hF_yf}=\frac{${nx(Math.abs(psel.bP),2)}}{${nx(psel.lim,2)}}=${nx(Math.abs(psel.bP)/psel.lim,3)}\;${Math.abs(psel.bP)<=psel.lim*1.0001?'\\checkmark':'\\text{N.G.}'}`}/>
       <div className="mnote">Top-flange Service II Σ at this station = {fmt(psel.tP,2)} ksi (compression). Sign convention: f_B + = bottom tension, f_T + = top compression. R_h = {fmt(psel.Rh,3)}. Flange lateral bending f_ℓ = 0 (straight girder).{R.hasNeg?' In −M regions the bottom-flange stress uses the cracked steel+rebar section (S_b,cr = '+fmt(psel.SbCr,0)+' in³).':''}</div>
       <DLinks items={[{to:'cls',seg:sgI(R,psel.si),what:'R_h'},...(R.hasNeg?[{to:'trans',seg:sgI(R,psel.si),what:'S_b,cr'}]:[])]}/>
@@ -4936,14 +5008,18 @@ function DiagramsTab({R,inp,set}){
     const a=k=>+s[k]||0; const m1=a('M_DC1'),m2=a('M_DC2'),mw=a('M_DW'),mlp=a('M_LLpos'),mln=a('M_LLneg');
     const v1=a('V_DC1'),v2=a('V_DC2'),vw=a('V_DW'),vlp=a('V_LLpos'),vln=a('V_LLneg');
     const d=(v,k)=>F.plOn? llD(v,a(k),F.m) : v;
+    // GD54c: the utilities by sign, as computeAll (display of the other spans; 0 without them)
+    const U=R.ut&&R.ut.F.U, ut=a('M_UT'), uf=a('M_UF'), vt=a('V_UT'), vf=a('V_UF'), sv=(v1+v2+vw)>=0?1:-1;
+    const uM=sg=>U? utG(ut,sg,U.t,U.tn)*ut+utG(uf,sg,U.f,U.fn)*uf : 0, uVv=U? utG(vt,sv,U.t,U.tn)*vt+utG(vf,sv,U.f,U.fn)*vf : 0;
     return {x:+s.x,M1:m1,M2:m2,Mw:mw,Mlp:mlp,Mln:mln,
-      Mup:F.gDC*(m1+m2)+F.gDW*mw+F.gLL*d(mlp,'M_PLpos'),Mun:F.gDC*(m1+m2)+F.gDW*mw+F.gLL*d(mln,'M_PLneg'),
+      Mup:F.gDC*(m1+m2)+F.gDW*mw+F.gLL*d(mlp,'M_PLpos')+uM(1),Mun:F.gDC*(m1+m2)+F.gDW*mw+F.gLL*d(mln,'M_PLneg')+uM(-1),
       V1:v1,V2:v2,Vw:vw,Vlp:vlp,Vln:vln,
-      Vup:F.gDC*(v1+v2)+F.gDW*vw+F.gLL*d(vlp,'V_PLpos')};});
+      Vup:F.gDC*(v1+v2)+F.gDW*vw+F.gLL*d(vlp,'V_PLpos')+uVv};});
   const lnR=(rows,k,name,color,dash)=>({x:rows.map(r=>r.x),y:rows.map(r=>r[k]||0),name,mode:'lines',line:{color,width:2,dash:dash||'solid'}});
   const ln=(k,name,color,dash)=>({x:xs,y:d.map(p=>p[k]),name,mode:'lines',line:{color,width:2,dash:dash||'solid'}});
   const mData=[ln('M1','DC1','#15803D'),ln('M2','DC2','#0E7490'),ln('Mw','DW','#B45309'),
     ln('Ml','+LL+IM','#B3261E'),ln('Mu','Strength I +Mu','#1C4FC4','dot')];
+  if(R.ut){ if(R.ut.hasUT) mData.splice(3,0,ln('Mut','UT (existing utilities)','#0f766e')); if(R.ut.hasUF) mData.splice(3,0,ln('Muf','UF (future utility allowance)','#0f766e','dash')); }   // GD54c
   if(R.hasNeg){ mData.push(ln('Mln','−LL+IM','#B3261E','dash')); mData.push(ln('Mun','Strength I −Mu','#1C4FC4','dashdot')); }
   return (<div>
     {extActive&&multiSpan&&<div className="callout" style={{marginTop:0,marginBottom:12,borderColor:'var(--blue)',background:'#EEF4FF',display:'flex',alignItems:'center',gap:10,flexWrap:'wrap'}}>
@@ -4972,6 +5048,7 @@ function DiagramsTab({R,inp,set}){
     </Card>
     <Card id="stg-d-venv" title="Shear envelope" refTag="per girder · kip">
       <Fig h={320} data={[ln('V1','DC1','#15803D'),ln('V2','DC2','#0E7490'),ln('Vw','DW','#B45309'),
+        ...(R.ut&&R.ut.hasUT?[ln('Vut','UT (existing utilities)','#0f766e')]:[]),...(R.ut&&R.ut.hasUF?[ln('Vuf','UF (future utility allowance)','#0f766e','dash')]:[]),
         ln('Vl','LL+IM','#B3261E'),ln('Vu','Strength I Vu','#1C4FC4','dot')]}
         layout={{yaxis:{title:'V (kip)'},xaxis:{title:'x (ft)'}}}/>
     </Card>
@@ -5150,6 +5227,7 @@ function FlexTab({R}){
         {x:fx,y:stns.map(p=>k1*p.M1),name:'DC1'+(fac?' ×'+lfP(F.gDC,'1.25'):''),line:{color:'#15803D',width:1.8}},
         {x:fx,y:stns.map(p=>k1*p.M2),name:'DC2'+(fac?' ×'+lfP(F.gDC,'1.25'):''),line:{color:'#0E7490',width:1.6,dash:'dot'}},
         {x:fx,y:stns.map(p=>kw*p.Mw),name:'DW'+(fac?' ×'+lfP(F.gDW,'1.50'):''),line:{color:'#B45309',width:1.6,dash:'dot'}},
+        ...(R.ut?[{x:fx,y:stns.map(p=>fac?p.uP:p.Mut+p.Muf),name:'Utilities UT + UF'+(fac?' (factored for +M_u)':''),line:{color:'#0f766e',width:1.6,dash:'dot'}}]:[]),   // GD54c
         {x:fx,y:stns.map(p=>kl*(fac?p.MlD:p.Ml)),name:'+LL+IM'+(fac?' ×'+lfP(F.gLL,'1.75'):''),line:{color:'#B3261E',width:1.8}},
         ...(R.hasNeg?[{x:fx,y:stns.map(p=>kl*(fac?p.MlnD:p.Mln)),name:'−LL+IM'+(fac?' ×'+lfP(F.gLL,'1.75'):''),line:{color:'#7C3AED',width:1.8,dash:'dash'}}]:[]),
         {x:fx,y:stns.map(p=>p.Mu),name:'+Mu (Strength I)',fill:'tozeroy',fillcolor:'rgba(28,79,196,.05)',line:{color:'#1C4FC4',width:2.2}},
@@ -5416,6 +5494,7 @@ function camberSeries(R){
          out.push({k:'wet',l:wetL,short:sh.dc1Split==='swExcl'?'Imported DC1 − SW':'Wet concrete',c:'#15803D',v:sh.wet}); }
   out.push({k:'dc2',l:'DC2 (3n composite)',short:'DC2',c:'#0E7490',v:sh.dc2});
   out.push({k:'dw',l:'DW (3n composite)',short:'DW',c:'#B45309',v:sh.dw});
+  if(sh.ut) out.push({k:'ut',l:'Existing utilities (steel section)',short:'UT',c:'#0f766e',v:sh.ut});   // GD54c (the future allowance is not in the camber)
   out.push({k:'tot',l:'Total (sum)',short:'Total',c:'#16212E',v:sh.tot});
   return out;
 }
@@ -5447,6 +5526,7 @@ function CamberBreakdown({R,fig}){
       {sh.dc1Split==='swExcl'&&<span> The imported DC1 excludes self-weight; ST-Girder adds the girder self-weight. The imported remainder is not split further.<SwContNote R={R}/></span>}
       {sh.dc1Split==='import'&&<span> DC1 is imported ({(R.ext&&R.ext.sel&&'span '+(R.ext.sel.idx||1))||'import'}) with its split: steel = the payload's M_DC1steel (girder plates + the details allowance, on the steel section), wet concrete = M_DC1 − M_DC1steel (deck, haunch, SIP forms and other noncomposite DC1).</span>}
       {sh.dc1Split==='none'&&<span> <b>DC1 is imported</b> ({(R.ext&&R.ext.sel&&'span '+(R.ext.sel.idx||1))||'import'}) as one total; the import does not separate steel self-weight from wet concrete, so DC1 is shown as one column.</span>}
+      {sh.ut&&<span> Existing utilities (from GirderDetail, M_UT) on the steel section are in the camber; the future utility allowance is not (MassDOT 3.5.5.2).</span>}
       {d>0.0005&&<span> The largest total ({fmt(cm.camTotMax,3)} in, the headline value) is {fmt(d,3)} in less than Δ_total = Δ_DC1 + Δ_DC2 + Δ_DW ({fmt(cm.camTot,3)} in, the sum of the stage maxima) because the stage maxima occur at different stations.</span>}
     </div>
   </React.Fragment>);
@@ -5462,6 +5542,7 @@ function camberDeriv(R){ const cm=R.camber;
         ['Δ_DC1','Deflection from DC1 (bare)',cm.camDC1,'in'],
         ['Δ_DC2','Deflection from DC2 (3n)',cm.camDC2,'in'],
         ['Δ_DW','Deflection from DW (3n)',cm.camDW,'in'],
+        ...(cm.camUT!=null?[['Δ_UT','Deflection from the existing utilities (bare; GirderDetail)',cm.camUT,'in']]:[]),
         ['Δ_total','Total dead-load camber',cm.camTot,'in'],
       ]}/>
       <SG n="1">Stage deflections (each on its stage-correct section)</SG>
@@ -5469,7 +5550,8 @@ function camberDeriv(R){ const cm=R.camber;
       <ML s={Tx`\Delta_{DC2}=${nx(cm.camDC2,3)}\;\text{in}\qquad\Delta_{DW}=${nx(cm.camDW,3)}\;\text{in}\quad(\text{long-term }3n,\;I=${nx(R.c3N.I,0)}\;\text{in}^4)`}/>
       <DLinks items={[{to:'segs',what:'I (bare, 3n) of each segment'},{to:'menv',what:'DC1, DC2, DW moments'}]}/>
       <SG n="2">Total camber</SG>
-      <ML s={Tx`\Delta_{total}=\Delta_{DC1}+\Delta_{DC2}+\Delta_{DW}=${nx(cm.camDC1,3)}+${nx(cm.camDC2,3)}+${nx(cm.camDW,3)}=${nx(cm.camTot,3)}\;\text{in}\;\uparrow`}/>
+      {cm.camUT!=null&&<ML s={Tx`\Delta_{UT}=${nx(cm.camUT,3)}\;\text{in (existing utilities, bare steel; the future allowance is not in the camber, MassDOT 3.5.5.2)}`}/>}
+      <ML s={Tx`\Delta_{total}=\Delta_{DC1}+\Delta_{DC2}+\Delta_{DW}${cm.camUT!=null?'+\\Delta_{UT}':''}=${nx(cm.camDC1,3)}+${nx(cm.camDC2,3)}+${nx(cm.camDW,3)}${cm.camUT!=null?'+'+nx(cm.camUT,3):''}=${nx(cm.camTot,3)}\;\text{in}\;\uparrow`}/>
       <SG n="3">Deflection by load along the span</SG>
       <CamberBreakdown R={R} fig={true}/>
       <div className="mnote">Deflections are found by numerically double-integrating M/(E·I) along the span on a camber-only station set about 0.5 ft apart, plus the supports, both sides of each flange transition and any imported stations (handling flange segments and any imported continuous-moment diagram), which is exact for variable sections — not the closed-form 5wL⁴/384EI that assumes a prismatic simple span. There is no prestress term (unlike the PS-Beam app). Add fabrication/residual camber per the fabricator's practice.</div>
@@ -5844,6 +5926,7 @@ function RatingTab({R,inp,set,onSendCapacity,capLocked,onToggleCapLock}){
         {c:['Shear (kip) @ x = '+fmt(r.shearX,1)+' ft',fmt(r.capV,0),fmt(r.VDC,0),fmt(r.VDWr,0),fmt(r.VLLr,0),cell(r.shearInv),cell(r.shearOpr)]},
         ...(r.servInv!==undefined?[{c:['Service II flange ('+r.serv.tag+', ksi) @ x = '+fmt(r.serv.x,1)+' ft',fmt(r.serv.fR,1),{v:fmt(r.serv.fD,1)+' (DC+DW)'},'—',fmt(r.serv.fLL,1),cell(r.servInv),cell(r.servOpr)]}]:[]),
       ]}/>
+      {R.ut&&<div className="hint" style={{marginBottom:4}}>MassDOT utilities from GirderDetail (default chosen, engineer to confirm): included where they add, the existing utilities in DW (γ 1.50; flexure M_UT = {fmt(r.flexRowUT||0,0)} k-ft at the flexure station) and the future allowance in DC (γ 1.25); Service II at 1.0; no relief taken where they relieve.</div>}
       <DLinks items={[{to:'flexpos',what:'flexure capacity'},...(r.negInv!==undefined?[{to:'flexneg',what:'−M capacity'}]:[]),{to:'shear',what:'shear capacity'},...(r.servInv!==undefined?[{to:'s2',what:'Service II stresses'}]:[]),{to:'menv',what:'DC, DW, LL+IM'}]}/>
       <div className="hint">Design-load rating on HL-93. Strength: Inventory γLL = 1.75, Operating γLL = 1.35 (MBE Table 6A.4.2.2-1); capacity C = φc·φs·φ·Rn. Each rating factor is evaluated at every station with that station's own capacity and demands, and the lowest is shown with its location. Flexure +M uses φf Mn (Mp basis, incl. the 1.3R<sub>h</sub>M<sub>y</sub> cap in continuous spans) for compact sections, or the flange stresses on the staged sections (DC1 bare steel, DC2 + DW long-term 3n, LL short-term n) against φF<sub>nc</sub> / φF<sub>nt</sub> otherwise. Shear is φv Vn (end-panel C·V<sub>p</sub>, conservative). Service II (MBE 6A.6.4.2.2): RF = (f<sub>R</sub> − f<sub>D</sub>)/(γLL·f<sub>LL</sub>) with f<sub>R</sub> = {fmt(R.stress.s2Coef,2)}R<sub>h</sub>F<sub>yf</sub>, γLL = 1.30 Inventory and 1.00 Operating, unfactored dead load, both flanges. RF ≥ 1.0 means the girder carries the rating vehicle at that level. Legal- and permit-vehicle rating uses the same equation with the entered live-load effects and LRFR factors — a small extension planned next.</div>
     </Card>
@@ -6022,6 +6105,12 @@ function crModel(R,inp,o){
         <ML s={Tx`\text{haunch in composite properties: }${L.h0?'0\;\text{(owner rule; entered '+nx(+dk.haunch,2)+'\;\text{in})}':nx(+dk.haunch,2)+'\;\text{in (as entered)}'}`}/></div>
         <ul className="cr-ul">{ownLines(R).map((t,i)=><li key={i}>{t}</li>)}</ul></React.Fragment>);
     }
+    if(R.ut){ const U=R.ut, F=U.F.U;   // GD54c
+      sub(s,'MassDOT utilities (from GirderDetail)','MassDOT Part I 3.5.5.2, 3.5.5.4 · Table 3.4.1-2',<React.Fragment><div className="cr-tab">
+        {U.hasUT&&<ML s={Tx`\text{existing utilities (DW factors): }\gamma_{UT}=1.50\eta=${nx(F.t,3)}\;\text{where they add},\quad\gamma_{UT}=0.65/\eta=${nx(F.tn,3)}\;\text{where they relieve};\quad\text{Service II }1.0`}/>}
+        {U.hasUF&&<ML s={Tx`\text{future utility allowance: }\gamma_{UF}=1.25\eta=${nx(F.f,3)}\;\text{where it adds},\quad\gamma_{UF}=0\;\text{where it relieves};\quad\text{Service II }1.0\,/\,0`}/>}</div>
+        <ul className="cr-ul">{utLines(R).map((t,i)=><li key={i}>{t}</li>)}</ul></React.Fragment>); tag(s,'inp.ut');
+    }
     sub(s,'Rating factors','MBE 6A.4.2.3 · 6A.4.2.4',<CrKV rows={[['Condition factor φ_c',fmt(R.rating.phiC,2)],['System factor φ_s',fmt(R.rating.phiS,2)],['φ_c·φ_s used (≥ 0.85)',fmt(R.rating.phiCS,3)]]}/>);
     if(R.useExt&&ext){ const e=ext, pg=extPerGirderOf(e);
       sub(s,'Imported demands','',<React.Fragment><CrKV rows={[['Source',(e.source||'external analysis')],['Producer',e.producer||'—'],['Project',e.project||'—'],['Member',(e.member&&e.member.key)||'—'],
@@ -6031,7 +6120,8 @@ function crModel(R,inp,o){
         ['LL distribution',pg?'per girder (DF and multiple presence already in the import; not applied)':'DF × m applied here: +M '+fmt(R.ext.llFac.pos,3)+', −M '+fmt(R.ext.llFac.neg,3)+', V '+fmt(R.ext.llFac.v,3)],
         ['DC1',R.ext.hasDC1?'from the import'+(R.ext.swExcl?' (self-weight excluded; added by ST-Girder)':''):'computed by ST-Girder on the selected span'],
         ['Plate geometry',e.section&&e.section.zones?'imported from section.zones':'ST-Girder inputs'],
-        ['Fatigue',R.fatigue.fatImp?'imported fatigue moments'+(R.fatigue.fatImpV?' and shears':''):'ST-Girder fatigue truck (simple span)']]}/>
+        ['Fatigue',R.fatigue.fatImp?'imported fatigue moments'+(R.fatigue.fatImpV?' and shears':''):'ST-Girder fatigue truck (simple span)'],
+        ...(R.ut?[['Utilities (MassDOT)',[R.ut.hasUT?'existing M_UT, V_UT':'',R.ut.hasUF?'future allowance M_UF, V_UF':''].filter(Boolean).join('; ')+': their own loads on the steel section (see MassDOT utilities above)']]:[])]}/>
         {R.ext.swExcl&&R.ext.hasDC1&&<p className="cr-note"><SwContNote R={R}/></p>}
         {pg&&e.girderDetail&&e.girderDetail.df&&Array.isArray(e.girderDetail.df.spans)&&<p className="cr-note">Factors used by {e.producer}: {e.girderDetail.df.spans.map(d=>'span '+d.span+' g_M = '+fmt(d.gM,3)+', g_V = '+fmt(d.gV,3)).join('; ')}{(e.girderDetail.df.piers||[]).length?'; '+e.girderDetail.df.piers.map(d=>'pier '+d.pier+' g_M = '+fmt(d.gM,3)).join('; '):''}.</p>}
         {e.factored===true&&<p className="cr-note"><b>The import is flagged FACTORED; ST-Girder applies its own load factors.</b></p>}
@@ -6103,16 +6193,19 @@ function crModel(R,inp,o){
       <div className="mnote">Type (a)/(k) steel I-girder with concrete deck, LRFD 4.6.2.2 (multiple presence included in the formulas; the lever rule includes m = 1.2). Along the span the live-load moment and shear envelopes are the HL-93 influence-line values at each station times DF_m and DF_v.</div></div>);
     const sM=at((R.flex.oos?R.stress.xGov:(R.flex.gov&&R.flex.gov.x))||L/2), sV=at(R.shearR.xGov||0);
     const OL=R.lf&&R.lf.on? R.lf : null;   // GD49: the owner load rules (the AASHTO factors 1.25, 1.50, 1.75, 1.30 exactly as before without them)
+    const uM=utTxM(R,sM,1), uV=utTxV(R,sV), uS=R.ut?'+M_{UT}+M_{UF}\\;(\\text{steel section; }M_{UF}\\text{ only where it adds})':'';   // GD54c: '' without utilities
     if(!OL) sub(s,'Load combinations','Table 3.4.1-1',<div className="cr-tab">
-      <ML s={Tx`M_u=1.25(M_{DC1}+M_{DC2})+1.50M_{DW}+1.75M_{LL+IM}=1.25(${nx(sM.M1,0)}+${nx(sM.M2,0)})+1.50(${nx(sM.Mw,0)})+1.75(${nx(sM.Ml,0)})=${nx(sM.Mu,0)}\;\text{k-ft}\quad(x=${nx(sM.x,1)}')`}/>
-      <ML s={Tx`V_u=\left|1.25(V_{DC1}+V_{DC2})+1.50V_{DW}\right|+1.75\left|V_{LL+IM}\right|=\left|1.25(${nx(sV.V1,1)}+${nx(sV.V2,1)})+1.50(${nx(sV.Vw,1)})\right|+1.75(${nx(Math.abs(sV.Vl),1)})=${nx(sV.Vu,1)}\;\text{kip}\quad(x=${nx(sV.x,1)}')`}/>
-      <ML s={Tx`\text{Service II: }M=M_{DC1}+M_{DC2}+M_{DW}+1.30M_{LL+IM}\;\text{(stresses accumulated on the stage sections)}`}/>
+      <ML s={Tx`M_u=1.25(M_{DC1}+M_{DC2})+1.50M_{DW}+1.75M_{LL+IM}${uM.sym}=1.25(${nx(sM.M1,0)}+${nx(sM.M2,0)})+1.50(${nx(sM.Mw,0)})+1.75(${nx(sM.Ml,0)})${uM.val}=${nx(sM.Mu,0)}\;\text{k-ft}\quad(x=${nx(sM.x,1)}')`}/>
+      <ML s={Tx`V_u=\left|1.25(V_{DC1}+V_{DC2})+1.50V_{DW}${uV.sym}\right|+1.75\left|V_{LL+IM}\right|=\left|1.25(${nx(sV.V1,1)}+${nx(sV.V2,1)})+1.50(${nx(sV.Vw,1)})${uV.val}\right|+1.75(${nx(Math.abs(sV.Vl),1)})=${nx(sV.Vu,1)}\;\text{kip}\quad(x=${nx(sV.x,1)}')`}/>
+      <ML s={Tx`\text{Service II: }M=M_{DC1}+M_{DC2}+M_{DW}+1.30M_{LL+IM}${uS}\;\text{(stresses accumulated on the stage sections)}`}/>
+      {R.ut&&<div className="mnote">MassDOT utilities from GirderDetail as their own loads (factors in 2. Input parameters, MassDOT utilities): each utility factor by whether it adds to the effect checked; V_u in the worse direction.</div>}
       <div className="mnote">Strength I at the governing +M station (x = {fmt(sM.x,1)} ft) and the governing shear station (x = {fmt(sV.x,1)} ft). Maximum load factors only.{R.hasNeg?' The −M_u envelope uses the −LL+IM envelope in place of +LL+IM.':''}</div></div>);
     else sub(s,'Load combinations (owner load rules of '+OL.o+')','Table 3.4.1-1 · 1.3.2.1',<div className="cr-tab">
       {OL.plOn&&<ML s={Tx`M_{LL+IM,used}=M_{LL+IM+PL}-M_{PL}+\frac{M_{PL}}{m}=${nx(sM.Ml,1)}-${nx(sM.qM||0,1)}+\frac{${nx(sM.qM||0,1)}}{${nx(OL.m,2)}}=${nx(sM.MlD,1)}\;\text{k-ft}\qquad V_{LL+IM,used}=${nx(Math.abs(sV.Vl),1)}-${nx(sV.qV||0,1)}+\frac{${nx(sV.qV||0,1)}}{${nx(OL.m,2)}}=${nx(Math.abs(sV.VlD),1)}\;\text{kip}`}/>}
-      <ML s={Tx`M_u=1.25\eta(M_{DC1}+M_{DC2})+1.50\eta M_{DW}+1.75\eta m\,M_{LL+IM}=${nx(OL.gDC,3)}(${nx(sM.M1,0)}+${nx(sM.M2,0)})+${nx(OL.gDW,3)}(${nx(sM.Mw,0)})+${nx(OL.gLL,3)}(${nx(sM.MlD,0)})=${nx(sM.Mu,0)}\;\text{k-ft}\quad(x=${nx(sM.x,1)}')`}/>
-      <ML s={Tx`V_u=\left|1.25\eta(V_{DC1}+V_{DC2})+1.50\eta V_{DW}\right|+1.75\eta m\left|V_{LL+IM}\right|=\left|${nx(OL.gDC,3)}(${nx(sV.V1,1)}+${nx(sV.V2,1)})+${nx(OL.gDW,3)}(${nx(sV.Vw,1)})\right|+${nx(OL.gLL,3)}(${nx(Math.abs(sV.VlD),1)})=${nx(sV.Vu,1)}\;\text{kip}\quad(x=${nx(sV.x,1)}')`}/>
-      <ML s={Tx`\text{Service II: }M=M_{DC1}+M_{DC2}+M_{DW}+1.30m\,M_{LL+IM}=M_{DC1}+M_{DC2}+M_{DW}+${nx(OL.gS2,3)}M_{LL+IM}\;\text{(stresses accumulated on the stage sections)}`}/>
+      <ML s={Tx`M_u=1.25\eta(M_{DC1}+M_{DC2})+1.50\eta M_{DW}+1.75\eta m\,M_{LL+IM}${uM.sym}=${nx(OL.gDC,3)}(${nx(sM.M1,0)}+${nx(sM.M2,0)})+${nx(OL.gDW,3)}(${nx(sM.Mw,0)})+${nx(OL.gLL,3)}(${nx(sM.MlD,0)})${uM.val}=${nx(sM.Mu,0)}\;\text{k-ft}\quad(x=${nx(sM.x,1)}')`}/>
+      <ML s={Tx`V_u=\left|1.25\eta(V_{DC1}+V_{DC2})+1.50\eta V_{DW}${uV.sym}\right|+1.75\eta m\left|V_{LL+IM}\right|=\left|${nx(OL.gDC,3)}(${nx(sV.V1,1)}+${nx(sV.V2,1)})+${nx(OL.gDW,3)}(${nx(sV.Vw,1)})${uV.val}\right|+${nx(OL.gLL,3)}(${nx(Math.abs(sV.VlD),1)})=${nx(sV.Vu,1)}\;\text{kip}\quad(x=${nx(sV.x,1)}')`}/>
+      <ML s={Tx`\text{Service II: }M=M_{DC1}+M_{DC2}+M_{DW}+1.30m\,M_{LL+IM}${uS}=M_{DC1}+M_{DC2}+M_{DW}+${nx(OL.gS2,3)}M_{LL+IM}${uS}\;\text{(stresses accumulated on the stage sections)}`}/>
+      {R.ut&&<div className="mnote">MassDOT utilities from GirderDetail as their own loads (factors in 2. Input parameters, MassDOT utilities): each utility factor by whether it adds to the effect checked; V_u in the worse direction.</div>}
       <div className="mnote">Owner load rules of {OL.o} from GirderDetail (factors worked in 2. Input parameters, Owner load rules): η = {fmt(OL.eta,3)} on the Strength I maximum factors, design load multiplier m = {fmt(OL.m,2)} on HL-93 LL+IM at Strength I and Service II{OL.plOn?' (not on the pedestrian load PL)':''}. Live-load deflection, fatigue, constructibility and the load rating use neither η nor m.</div>
       <div className="mnote">Strength I at the governing +M station (x = {fmt(sM.x,1)} ft) and the governing shear station (x = {fmt(sV.x,1)} ft). Maximum load factors only.{R.hasNeg?' The −M_u envelope uses the −LL+IM envelope in place of +LL+IM.':''}</div></div>);
     const locs=[]; const add=(lab,x)=>{ if(x==null||!isFinite(x)) return; const i=crNear(stn,x); const e=locs.find(l=>l.i===i); if(e) e.lab+=', '+lab; else locs.push({i,lab}); };
@@ -6121,9 +6214,13 @@ function crModel(R,inp,o){
     add('constructibility',R.constr.xGov); add('fatigue',R.fatigue.xGov);
     locs.sort((a,b)=>stn[a.i].x-stn[b.i].x);
     const rowsOf=list=>list.map(l=>{ const q=stn[l.i]; return {q,lab:l.lab}; });
-    const mt=list=><CrT wide head={['Location','x (ft)','M_DC1','M_DC2','M_DW','+M_LL+IM','−M_LL+IM','+M_u','−M_u']}
+    const mt=list=>R.ut? <CrT wide head={['Location','x (ft)','M_DC1','M_DC2','M_DW','M_UT','M_UF','+M_LL+IM','−M_LL+IM','+M_u','−M_u']}
+      rows={rowsOf(list).map(({q,lab})=>[lab,fmt(q.x,2),fmt(q.M1,0),fmt(q.M2,0),fmt(q.Mw,0),fmt(q.Mut,0),fmt(q.Muf,0),fmt(q.Ml,0),fmt(q.Mln,0),fmt(q.Mu,0),fmt(q.Mun,0)])}/>   // GD54c
+      : <CrT wide head={['Location','x (ft)','M_DC1','M_DC2','M_DW','+M_LL+IM','−M_LL+IM','+M_u','−M_u']}
       rows={rowsOf(list).map(({q,lab})=>[lab,fmt(q.x,2),fmt(q.M1,0),fmt(q.M2,0),fmt(q.Mw,0),fmt(q.Ml,0),fmt(q.Mln,0),fmt(q.Mu,0),fmt(q.Mun,0)])}/>;
-    const vt=list=><CrT wide head={['Location','x (ft)','V_DC1','V_DC2','V_DW','V_LL+IM','V_u']}
+    const vt=list=>R.ut? <CrT wide head={['Location','x (ft)','V_DC1','V_DC2','V_DW','V_UT','V_UF','V_LL+IM','V_u']}
+      rows={rowsOf(list).map(({q,lab})=>[lab,fmt(q.x,2),fmt(q.V1,1),fmt(q.V2,1),fmt(q.Vw,1),fmt(q.Vut,1),fmt(q.Vuf,1),fmt(q.Vl,1),fmt(q.Vu,1)])}/>   // GD54c
+      : <CrT wide head={['Location','x (ft)','V_DC1','V_DC2','V_DW','V_LL+IM','V_u']}
       rows={rowsOf(list).map(({q,lab})=>[lab,fmt(q.x,2),fmt(q.V1,1),fmt(q.V2,1),fmt(q.Vw,1),fmt(q.Vl,1),fmt(q.Vu,1)])}/>;
     sub(s,'Load effects at the governing stations','per girder · moments k-ft · shears kip',<React.Fragment>{mt(locs)}{vt(locs)}
       <p className="cr-note">Unfactored per-girder effects (LL with impact and distribution) and the Strength I envelopes; {R.useExt?'imported envelopes on the selected span (x from its left support)':'built-in simple span'}{R.useExt&&R.ext.swExcl&&R.ext.hasDC1?', DC1 includes the self-weight added by ST-Girder':''}.</p></React.Fragment>);
@@ -6720,7 +6817,7 @@ function App(){
     if(p.factored!==false) return 'the forces must be unfactored (factored:false)';
     const keys=['x','M_DC1','V_DC1','M_DC2','V_DC2','M_DW','V_DW','M_LLpos','M_LLneg','V_LLpos','V_LLneg'];
     for(const st of p.stations){ for(const k of keys) if(typeof st[k]!=='number'||!isFinite(st[k])) return 'station value '+k+' is not a number';
-      for(const k of ['M_FATpos','M_FATneg','V_FATpos','V_FATneg','M_DC1steel','V_DC1steel','M_DC1wet','V_DC1wet','M_PLpos','M_PLneg','V_PLpos','V_PLneg']) if(st[k]!==undefined&&!(typeof st[k]==='number'&&isFinite(st[k]))) return 'station value '+k+' is not a number'; }
+      for(const k of ['M_FATpos','M_FATneg','V_FATpos','V_FATneg','M_DC1steel','V_DC1steel','M_DC1wet','V_DC1wet','M_PLpos','M_PLneg','V_PLpos','V_PLneg','M_UT','V_UT','M_UF','V_UF']) if(st[k]!==undefined&&!(typeof st[k]==='number'&&isFinite(st[k]))) return 'station value '+k+' is not a number'; }
     if(p.ownerRules!==undefined){ const o=p.ownerRules, ok=v=>v===undefined||v===null||(typeof v==='number'&&isFinite(v)&&v>0);   // GD49 (optional)
       if(!o||typeof o!=='object') return 'ownerRules is not an object';
       if(!ok(o.llMultiplier&&o.llMultiplier.m)||!['D','R','I','max','min'].every(k=>ok(o.eta&&o.eta[k]))||!ok(o.ratingTarget&&o.ratingTarget.rf)) return 'ownerRules: a factor is not a positive number';
@@ -6766,6 +6863,7 @@ function App(){
       +'Per girder, unfactored; LL+IM with GirderDetail\u2019s distribution factors (not applied again here)'+(p.stations.some(s=>s.M_FATpos!==undefined)?'; fatigue moments and shears for the Fatigue and stud checks':'')+'.\n'
       +(secNew?'Plates: web and flange segments from the girder\u2019s plate zones.\n':'')
       +(p.ownerRules?(()=>{ const L={...ownLFOf(p),...lfFac(ownLFOf(p))}; return 'Owner load rules ('+(L.o||'?')+'), applied to the girder checks and the transverse deck design: \u03b7 = '+fmt(L.eta,3)+' on the Strength I factors, design load multiplier m = '+fmt(L.m,2)+' on HL-93 LL+IM at Strength I and Service II'+(L.m!==1&&p.pedestrianInLL===true&&p.stations.some(s=>s.M_PLpos!==undefined)?' (not on the pedestrian load)':'')+', haunch '+(L.h0?'0':'as entered')+' in composite properties'+(L.rt?', design rating target RF \u2265 '+fmt(L.rt,2):'')+'.\n'; })():'')
+      +(p.stations.some(s=>s.M_UT!==undefined||s.M_UF!==undefined)?'MassDOT utilities as their own loads (GD54c): '+[p.stations.some(s=>s.M_UT!==undefined)?'existing M_UT/V_UT (DW factors 1.50/0.65, Service 1.0, in the camber)':'',p.stations.some(s=>s.M_UF!==undefined)?'future allowance M_UF/V_UF (1.25/0, Service 1.0 where it adds, not in the camber)':''].filter(Boolean).join('; ')+', on the steel section; not at deck placement.\n':'')
       +(rows.length?'\nDesign inputs that change:\n'+rows.join('\n')+'\n':'')
       +((p.notes||[]).length?'\nNotes from GirderDetail:\n- '+p.notes.join('\n- ')+'\n':'')
       +'\nApply?';
@@ -6976,6 +7074,7 @@ function App(){
       </div>
       {R.pnaOOS&&<div className="noprint" style={{padding:'10px 24px 0'}}><PnaOos R={R} style={{marginBottom:0}}/></div>}
       {R.ok&&R.lf&&R.lf.on&&<div className="noprint" style={{padding:'10px 24px 0'}}><OwnBanner R={R} go={setTab}/></div>}
+      {R.ok&&R.ut&&<div className="noprint" style={{padding:'10px 24px 0'}}><UtBanner R={R}/></div>}
       <div className="tabs noprint">{TABS.map(([k,l])=>
         <button key={k} className={'tab'+(tab===k?' on':'')+(LIVE[k]?'':' soon')} onClick={()=>setTab(k)}>{l}</button>)}</div>
 
