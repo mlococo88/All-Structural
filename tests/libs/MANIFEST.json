@@ -1,0 +1,30 @@
+{
+  "_note": "Offline copies of the CDN libraries loaded by the bridge-suite tools (index.html, lldf.html, psbeam.html, stgirder.html, Steel Bridge Beam Modules.html incl. its embedded Preliminary sizing page), at the exact versions pinned in their tags. Taken from the npm package of the same version (npm pack), which is what cdnjs/jsdelivr serve; a CDN copy can differ in a header comment or source-map line, not in code. routes: CDN URL without scheme -> file under tests/libs. prefixes: CDN folder -> local folder. Anything not listed is blocked during a test and printed as 'blocked'. Pyodide (GirderDetail DXF layouts only, ~10 MB+) is deliberately not included.",
+  "routes": {
+    "cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js": "react@18.2.0/umd/react.production.min.js",
+    "cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js": "react-dom@18.2.0/umd/react-dom.production.min.js",
+    "cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js": "babel-standalone@7.23.5/babel.min.js",
+    "cdnjs.cloudflare.com/ajax/libs/plotly.js/2.26.0/plotly.min.js": "plotly.js@2.26.0/plotly.min.js",
+    "cdnjs.cloudflare.com/ajax/libs/plotly.js/2.27.0/plotly.min.js": "plotly.js@2.27.0/plotly.min.js",
+    "cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js": "three@0.128.0/build/three.min.js",
+    "cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js": "three@0.128.0/examples/js/controls/OrbitControls.js",
+    "cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-svg.js": "mathjax@3.2.2/es5/tex-svg.js",
+    "cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js": "katex@0.16.9/dist/katex.min.js",
+    "cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css": "katex@0.16.9/dist/katex.min.css",
+    "cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js": "chart.js@4.4.1/dist/chart.umd.js"
+  },
+  "prefixes": {
+    "cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/fonts/": "katex@0.16.9/dist/fonts/"
+  },
+  "packages": {
+    "react@18.2.0": { "npm": "react@18.2.0", "license": "MIT", "used_by": ["index.html", "psbeam.html", "stgirder.html"] },
+    "react-dom@18.2.0": { "npm": "react-dom@18.2.0", "license": "MIT", "used_by": ["index.html", "psbeam.html", "stgirder.html"] },
+    "babel-standalone@7.23.5": { "npm": "@babel/standalone@7.23.5", "license": "MIT", "used_by": ["index.html", "psbeam.html", "stgirder.html"] },
+    "plotly.js@2.26.0": { "npm": "plotly.js-dist-min@2.26.0", "license": "MIT", "used_by": ["index.html"] },
+    "plotly.js@2.27.0": { "npm": "plotly.js-dist-min@2.27.0", "license": "MIT", "used_by": ["psbeam.html", "stgirder.html", "Steel Bridge Beam Modules.html (and its Preliminary sizing page)"] },
+    "three@0.128.0": { "npm": "three@0.128.0", "license": "MIT", "used_by": ["index.html (r128)", "Steel Bridge Beam Modules.html (r128 + OrbitControls)"] },
+    "mathjax@3.2.2": { "npm": "mathjax@3.2.2", "license": "Apache-2.0", "used_by": ["Steel Bridge Beam Modules.html (and its Preliminary sizing page)"] },
+    "katex@0.16.9": { "npm": "katex@0.16.9", "license": "MIT", "used_by": ["index.html", "psbeam.html", "stgirder.html"], "note": "woff2 fonts only" },
+    "chart.js@4.4.1": { "npm": "chart.js@4.4.1", "license": "MIT", "used_by": ["index.html"] }
+  }
+}

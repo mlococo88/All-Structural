@@ -15177,6 +15177,20 @@ function gdFatPost() { if (!PL_FRAME || !PL_FRAME.contentWindow) return; const s
   try { PL_FRAME.contentWindow.postMessage({ type: 'gd-an', analysis: { fat } }, '*'); } catch (e) {} }
 window.addEventListener('message', e => { if (gdFromPL(e) && e.data && e.data.type === 'gd-bridge') { gdFatPost(); gdXfPost(); } });
 function plEnsure() { if (!PL_FRAME) plShow(true); }   // load the sizing module in the background so it can publish the bridge
+/* IDLE (2026-10-15): window.gdIdle() is for test scripts and headless checks only; calling it changes nothing. It resolves (with the ms waited) once
+   GirderDetail has finished its automatic work: no demand request in flight (GD_XF_REQ, GD_RQ) or waiting (GD_PLQ), no second pass pending (GD_XF_T),
+   Preliminary sizing loaded and ready (PL_FRAME.dataset.ready; call plEnsure() first if it may not be loaded yet), and the project data (P without ui,
+   time stamps ignored) unchanged for `quiet` ms. It rejects after `max` ms. Same logic as the settle() helper used for verification since 2026-10-14. */
+function gdBusy() { return !!(GD_XF_REQ || GD_XF_T) || GD_RQ.size > 0 || GD_PLQ.length > 0 || !PL_FRAME || !PL_FRAME.dataset.ready; }
+window.gdIdle = function ({ quiet = 8000, max = 150000, step = 500 } = {}) {
+  const t0 = Date.now(); let last = null, since = t0;
+  return new Promise((res, rej) => { const tick = () => {
+    let s; try { const q = JSON.parse(JSON.stringify(P)); delete q.ui; s = (gdBusy() ? 'busy:' : '') + JSON.stringify(q).replace(/"ts":\d+/g, '"ts":0'); } catch (e) { s = 'busy:' + e.message; }
+    const now = Date.now();
+    if (s !== last || s.startsWith('busy:')) { last = s; since = now; } else if (now - since >= quiet) return res(now - t0);
+    if (now - t0 >= max) return rej(new Error('gdIdle: not idle after ' + max + ' ms'));
+    setTimeout(tick, step); }; tick(); });
+};
 /* XR1 (engineer's decision 2026-10-14): demand requests made before Preliminary sizing is ready wait in GD_PLQ and are sent in the order they were made once
    it is ready: its first status message (pl-status, posted after its first analysis) received, and the 2.5 s after its load event passed (dataset.ready).
    A request made while others wait joins the queue behind them, so an earlier request never arrives after a later one. */
