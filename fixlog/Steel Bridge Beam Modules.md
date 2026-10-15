@@ -6,6 +6,11 @@ The embedded PlateLine app (the base64 `PL_B64` string, line 2229) was **not** c
 Line numbers below are approximate, at the time of the fix. Long lines are quoted as the exact
 substring that changed. Search for the anchor text.
 
+**Note (2026-10-15, PLSRC):** since the PLSRC entry (end of this log), the PlateLine (Preliminary sizing) page is
+stored as plain HTML text in `<script type="text/plain" id="pl-src">`, not as the base64 string `PL_B64`. Entries
+before it that say "base64-decode `PL_B64`, edit, re-encode" are kept as written; on a current copy, apply their
+decoded-page edits directly to the text in the `pl-src` block (closing script tags written `<\/script>`; see PLSRC).
+
 ## 2026-10-04 — PR: claude/fix-girderdetail (PR link added after merge)
 
 ### F1. SC3 stud pitch: the work string printed "6(d)" next to a 4d value   [display] [no result change]
@@ -17748,3 +17753,44 @@ Diff of the embedded Preliminary sizing page (main → branch, decoded):
 +      : fld('η<sub>D</sub> ductility (1.3.3)', 'bridge.eta.eD', '') + fld('η<sub>R</sub> redundancy (1.3.4)', 'bridge.eta.eR', '') + fld('η<sub>I</sub> operational importance (1.3.5)', 'bridge.eta.eI', '')}</div><p class="hint static" id="own-lf-res"></p>${own && q('ws.sac') ? `<div class="sec-body" style="padding:0">${fld(`Uncoated weathering steel <span class="lbl-note">${esc(ownCite(q('ws.sac')))}: sacrificial ${frac(q('ws.sac').value.top)} in top flange, web, stiffeners; ${frac(q('ws.sac').value.bot)} in bottom flange</span>`, 'girder.wsU', '', 'sel', { full: true, options: [['no', 'No (coated)'], ['yes', 'Yes: design with the reduced section']] })}</div>` : ''}${own && q('steel.ws50') ? `<div class="sec-body" style="padding:0">${fld(`Bridge over railroads alone (uncoated 50W permitted) <span class="lbl-note">${esc(ownCite(q('steel.ws50')))}</span>`, 'bridge.overRR', '', 'sel', { full: true, options: [['no', 'No'], ['yes', 'Yes']] })}</div>` : ''}${own && q('defl.ll') ? `<div class="sec-body" style="padding:0">${fld(`Sidewalk or pedestrians on the bridge <span class="lbl-note">${esc(ownCite(q('defl.ll')))}: live load deflection L/${q('defl.ll').value.ped} with, L/${q('defl.ll').value.veh} without</span>`, 'limits.sidewalk', '', 'sel', { full: true, options: [['auto', "Automatic: a sidewalk in GirderDetail's cross-section"], ['yes', 'Yes'], ['no', 'No']] })}</div>` : ''}`;   // OWN19
      fillInputs(); }
 ```
+
+## 2026-10-15 — PR: claude/gd-pl-plaintext (Preliminary sizing page stored as plain text instead of base64; engineer-approved 2026-10-15; PR link added after merge)
+
+### PLSRC. The embedded Preliminary sizing (PlateLine) page is plain HTML text, not the base64 string `PL_B64`   [storage of the embedded page only] [no result change]
+- **Why:** the base64 string was one ~1 MB line: every Preliminary sizing edit meant decode → edit → re-encode, every such PR conflicted on that one line, and diffs of it were unreadable. Plain text is diffable, editable in place and about 250 KB smaller.
+- **Where:**
+  1. The `const PL_B64 = '...';` line (≈ line 2436 before this PR, in the main `<script>`) is **removed**.
+  2. A new block just before the main `<script>` (after the `rpt-modal` div, ≈ line 1259): an HTML comment, then `<script type="text/plain" id="pl-src">` + the page + `</script>`. A `text/plain` script is never run by the browser; its text is the page source. Anchor: `<script type="text/plain" id="pl-src">`.
+  3. Loader `plShow` (anchor `function plShow(bg) {`) and the new helper `plSrc()` just above it.
+- **Escaping rule (so that nothing inside the page can end the block early — HTML spec "script data" states):** in the stored text, every `<` that is followed by zero or more backslashes and then `/script` or `!--` (any letter case) gets **one extra backslash** after the `<`. So the page's four closing script tags are stored as `<\/script>`. `<!--` would be stored as `<\!--` (the page has none today; it matters because `<!--` followed by `<script` switches the parser into the "double-escaped" state, in which the block's own closing tag would not close it). `plSrc()` removes exactly one backslash from each such sequence, so the round trip is exact for any text (including text that already contains `<\/script`). Nothing else is changed: no CR, NUL or BOM is in the page (checked), so the HTML parser hands the text back unchanged. The block starts directly with `<!DOCTYPE html>` and ends directly with the page's final newline; no whitespace is added around it.
+- **Before (loader):**
+```js
+function plShow(bg) {
+  const w = $('#pl-wrap'); w.style.top = Math.ceil($('#modbar').getBoundingClientRect().bottom) + 'px';
+  if (PL_FRAME) return;
+  const bytes = Uint8Array.from(atob(PL_B64), c => c.charCodeAt(0));
+  ...
+  PL_FRAME.srcdoc = new TextDecoder().decode(bytes).replace(/<head>/i, h => h + own); w.appendChild(PL_FRAME);
+```
+- **After (loader):**
+```js
+/* PLSRC (2026-10-15): ... (comment explaining the rule) */
+function plSrc() { return document.getElementById('pl-src').textContent.replace(/<\\(\\*)(\/script|!--)/gi, '<$1$2'); }
+function plShow(bg) {
+  const w = $('#pl-wrap'); w.style.top = Math.ceil($('#modbar').getBoundingClientRect().bottom) + 'px';
+  if (PL_FRAME) return;
+  const src = plSrc();
+  ...
+  PL_FRAME.srcdoc = src.replace(/<head>/i, h => h + own); w.appendChild(PL_FRAME);
+```
+  The frame is built exactly as before (`srcdoc`, the owner-rules script inserted after `<head>`, same load/ready handling). One code comment (C_b helper, ≈ line 11798) now says "the pl-src page" instead of "PL_B64".
+- **How to edit Preliminary sizing now:** open `Steel Bridge Beam Modules.html`, search `<script type="text/plain" id="pl-src">`, and edit the page text between that tag and the next `</script>` like any HTML. Line numbers of the page inside the block are the decoded-page line number + about 1260 (the page's line 1 is on the line of the opening tag). When adding code: write every closing script tag as `<\/script>` and every HTML comment opener as `<\!--` (one extra backslash; an existing `<\/script` inside the page's own JavaScript would be stored as `<\\/script`). To check your edit, compare `plSrc()` in the browser console with the page you intended, and run `node --check` on the page's inline scripts (copy each inline script of the page to a .js file first). There is no decode/re-encode step any more.
+- **Earlier entries in this log** that say "base64-decode `PL_B64`, edit, re-encode" are kept as written (history). To re-apply such an edit to this or a later version, apply the decoded-page diff directly to the text inside the `pl-src` block (escaping closing script tags as above). To re-apply one to a copy from before this PR, follow the entry as written.
+- **Governing provision:** none (no calculation, factor, unit or code reference changed).
+- **Check case / how verified:**
+  - **Byte identity:** SHA-256 of the string handed to the loader — main `new TextDecoder().decode(Uint8Array.from(atob(PL_B64), ...))` and branch `plSrc()` — both `7678d884a13d8a5350c1957e04ad45ea23b6c49b23ad260eab98c8b239838b62` (760,459 characters), measured in headless Chromium from `file://` and from `http://127.0.0.1` for both files; the frame `srcdoc` (with the owner rules inserted) also hashes the same on both (`bd86039b…`). The same identity checked offline in Python (strict UTF-8 decode of the base64 vs un-escaped block text).
+  - `node --check` on every inline script of the main page and of the embedded page: all pass.
+  - Tier 1 (main 4193ddc vs branch, after settle): built-in project (AASHTO) and xsA (RIDOT): GirderDetail project hash, Preliminary sizing checks hash, analysis hash, every module's check items after Get demands, girder-1 structural analysis, plAdj — identical. Preliminary sizing project data differs only in `dfx.ts` (a time stamp; main vs main differs the same way). No console errors, no alerts; Preliminary sizing renders (screenshot checked).
+  - File size: 2,444,330 → 2,191,238 bytes (−253,092 bytes, −10.4 %).
+- **Saved data:** no key or format changed.
+- **Other copies:** none (no standalone PlateLine file exists).
