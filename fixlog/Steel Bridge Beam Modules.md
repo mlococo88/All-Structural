@@ -14506,3 +14506,649 @@ ENGINEER_CHECKS GD44 (readings (a)–(e) above).
  function crTitle() { const g = GM[P.mod]; return (CR_META[P.mod] && CR_META[P.mod].title) || (g ? g.rptTitle : 'Steel Girder Design'); }
  function crSource() { return P.mod === 'splice' ? P.source : P.mod === 'bstf' ? (P.bs && P.bs.source) : (P[P.mod] && P[P.mod].source); }
 ```
+
+## 2026-10-15 — PR: claude/gd-owner-profiles-2 (owner (DOT) profiles, phase 2 of 3: load-level owner rules — RIDOT design load multiplier, load modifiers η, haunch = 0 in composite properties, design rating targets; engineer's decisions of 2026-10-15; PR link added after merge)
+
+Changes in the main file (GirderDetail outer page) and in the embedded Preliminary sizing page (`const PL_B64`: decoded, edited, re-encoded on its one line; round trip byte-identical). Basis: AASHTO LRFD 10th Ed. (2024) Art. 1.3.2.1 (Eqs. 1.3.2.1-1 to -3), 1.3.3–1.3.5, Table 3.4.1-1; AASHTO MBE Eq. 6A.4.2.1-1 (rating form); RIDOT Bridge Design Manual (April 2026) 1.3.1–1.3.3, 3.4.1.2, 4.3.1, 6.5.1, 9.4.6; MassDOT LRFD Bridge Manual Part I (Hundredth Anniversary Ed.) 3.1.2, 3.1.4.3, 3.1.4.4, 3.5.1.2; CTDOT BRSDM Release 1 V2 1.3.3–1.3.5 and V1B "Load Ratings". Only citations and short paraphrases are in the tool. Owner rows are added to the one table `OWN_RULES` (phase 1); Preliminary sizing turns them into one set of factors for the bridge (`plLF`) and publishes it with the bridge (`bridge.lf`); every GirderDetail module reads it (`gdLF`). **AASHTO (and every owner with the factors at 1) computes exactly as before** (all factors multiply by 1, IEEE-exact; proven below).
+
+### OWN6. RIDOT design load multiplier m = 1.2 on HL-93 at Strength and Service   [LOAD FACTOR CHANGE, RIDOT — §4 callout]
+- **Reading of BDM 3.4.1.2:** "HL-93 x Multiplier" at the Strength and Service limit states: the multiplier is on the **live load (LL+IM) only** (truck or tandem plus lane), not on DC/DW; not on the live load for deflection (stated), not in the design check load rating (stated), not on fatigue (not a Strength or Service limit state), not on the pedestrian load (not HL-93), not on deck placement (no HL-93). Applied at Strength I, Strength I uplift (A2: the multiplier increases uplift, so it is not "unconservative" there), Service I (bearing reactions), Service II.
+- **Where (PL):** `plLF(P)` (new; anchor `function plLF(Pp) {`); `suggestLayout` (anchor `const LF = plLF(P), hh = LF.h0 ? 0 : hhW, gDC = 1.25 * LF.eta`): `demand` (M_u±, V_u, Service II M_s±, required flange areas), `checkLayout` (positive compact/noncompact, Service II, negative compression/tension flange incl. the nonprismatic f_bu), `analyzeGirder` reactions (`strMax`, `strMin`, `serv`), `detailExport` (`fBotN`, `gsPan` ranking), check texts A2/A3, Analysis tab card "Owner load rules", Suggest tab caption, Service II area derivation, manual "Combinations".
+- **Where (GD):** `gdOwnM(OWN_K.<module>)` multiplies the module's entered γ: field splice (`llS` × ηm, `llSv` × m), bearing stiffeners (`ll`), transverse stiffeners (`ll`), welds/transitions (`ll`), Girder section (`ll`, `sll`); Structural analysis `saCombosOwn()` (Strength LL × ηm, Service LL × m, pedestrian load `pl` without m; `saComb` uses `C.pl` only when m ≠ 1), `saStress` (Strength/Service stresses with m on LL+IM only), DXF/diagram shear envelopes. Fatigue γ, deck placement γ unchanged.
+- **Before:** e.g. PL `Mup[i] = (dc >= 0 ? 1.25 : 0.90) * dc + (dw >= 0 ? 1.50 : 0.65) * dw + 1.75 * Mp[i]; Msp[i] = dc + dw + 1.3 * Mp[i];` GD `const g = k => num(G[k]);` (splice), `r.Vu = g('dc') * (...) + g('ll') * r.VLL` (ts) with g the entered factor.
+- **After:** `Mup[i] = (dc >= 0 ? gDC : gDCn) * dc + (dw >= 0 ? gDW : gDWn) * dw + gLL * Mp[i]; Msp[i] = dc + dw + gSV * Mp[i];` with `gLL = 1.75 * LF.eta * LF.m`, `gSV = 1.3 * LF.m`; GD `const gO = gdOwnM(OWN_K.splice), g = k => num(G[k]) * gO(k);` (and the same in each module).
+- **Hand check (review case):** M_LL+IM = 1000, M_DC = 800, M_DW = 150 kip-ft. Strength I before: 1.25(800) + 1.50(150) + 1.75(1000) = 1000 + 225 + 1750 = **2975**. RIDOT, m only: 1000 + 225 + 1.75(1.2)(1000) = **3325** kip-ft (the all-loads reading would give 1.2 × 2975 = 3570; the text supports LL only). With RIDOT's default η_I = 1.05 (OWN7): 1.05 × 3325 = **3491.25**. Service II: 800 + 150 + 1.30(1000) = 2250 → 800 + 150 + 1.30(1.2)(1000) = **2510**.
+- **Tool check (built-in 15°, RIDOT, Girder section row "Span 1, max. positive at 43.0 ft, interior"):** M_DC1 = 1007.8, M_DC2 = 193.9, M_DW = 160.6, M_LL+IM = 1809.5 kip-ft; γ_DC = 1.25(1.05) = 1.3125, γ_DW = 1.50(1.05) = 1.575, γ_LL = 1.75(1.05)(1.2) = 2.205; M_u = 1.3125(1201.7) + 1.575(160.6) + 2.205(1809.5) = 1577.23 + 252.95 + 3989.95 = **5820.12** kip-ft (tool 5820.12; AASHTO factors on the same row: 4909.65); Service II M_s = 1362.3 + 1.56(1809.5) = **4185.12** (tool 4185.12).
+
+### OWN7. Load modifiers η = η_D η_R η_I at the Strength limit states   [LOAD FACTOR CHANGE, every owner with η ≠ 1 — §4 callout]
+- **Inputs (new optional field `bridge.eta`, Preliminary sizing Limits tab, Owner profile; `lfInputs`):** `I` 'yes'|'no' (RIDOT: ADT ≥ 5000, BDM 1.3.3; MassDOT: critical or essential, 3.1.2/3.1.4.4; CTDOT: on or over an NHS/STRAHNET route or an evacuation route, V2 1.3.5) — **default 'yes'**; `R` 'auto'|'yes'|'no' (nonredundant; RIDOT 1.3.2, MassDOT 3.1.4.4, CTDOT V2 1.3.4) — **default automatic: nonredundant when 3 girders or fewer**; `D` 'yes'|'no' (nonductile; MassDOT 3.1.4.4, CTDOT V2 1.3.3) — **default 'no'**; RIDOT η_D = 1.00 fixed (BDM 1.3.1). AASHTO: η_D, η_R, η_I entered (`eD`, `eR`, `eI`, default 1.00; AASHTO 1.3.3–1.3.5). Each owner factor is 1.05 (the CTDOT "≥ 1.05" taken as 1.05).
+- **Application (AASHTO 1.3.2.1):** maximum Strength load factors × η, η = max(η_Dη_Rη_I, 0.95) (Eq. 1.3.2.1-2); minimum factors (0.90 DC, 0.65 DW) × 1/η, capped at 1.0 (Eq. 1.3.2.1-3); LL × η (with m, OWN6). Strength I, Strength IV (Structural analysis), the wind at Strength III/V in the Cross-frames module (γ_WS = 1.0η). **Not** applied: Service, Fatigue, deck placement (constructibility: 6.10.3 checks, the overhang bracket module, the stability bracing), cross-frame Strength I forces entered from a refined analysis (used as entered), jacking (1.3 × permanent, unchanged).
+- **Where:** as OWN6 (the same factor objects). Structural analysis SA6: the "Load modifier η" item now states the factor used (`η = η_D η_R η_I = … `, pass) instead of the advisory "Taken as 1.0 … must be scaled accordingly" (adv).
+- **Hand check:** MassDOT critical/essential bridge: η = 1.00 × 1.00 × 1.05 = 1.05: M_u = 1.05 × 2975 = **3123.75** kip-ft; minimum factors 0.90/1.05 = **0.857**, 0.65/1.05 = **0.619**. RIDOT, ADT ≥ 5000 and nonredundant: η = 1.00 × 1.05 × 1.05 = 1.1025. CTDOT, built-in, defaults: η = 1.05, no multiplier: PL interior M_u+ 4944 → 5180 kip-ft (1.048, the haunch rule does not apply to CTDOT; the small difference from 1.05 is the dead/live split of the envelope point); Service II unchanged (3741 → 3733 only through the cross-frame weight of the refreshed design).
+
+### OWN8. Haunch = 0 in composite section properties, RIDOT and MassDOT   [SECTION PROPERTY CHANGE — §4 callout]
+- **Reading:** RIDOT BDM 6.5.1 and 9.4.6 ("taken as zero for the computation of the flexural stiffness and flexural capacity"; dead load uses the haunch, 2 in minimum) and 4.3.1 (haunches not in the structural model); MassDOT 3.5.1.2 ("any composite section properties"). Applied to **every** composite section property: analysis stiffness (I_3n, I_n, cracked I) and so the moment distribution, deflections and camber; K_g (distribution factors: PL `demand`, PL G8, LLDF and DLs `KgOf`); section moduli and stresses; M_p lever arms (`sgPlastic`, Girder section plastic analysis, D_t); the deck reinforcement location of the cracked section; field splice, studs (shear flow Q/I), welds, fatigue properties. **Kept as entered:** the haunch weight in DC1 (`wHaunch`, LLDF DC1), the depth check G2 (span-to-depth, a phase-3 MassDOT item), the stud penetration and cover check SC5 and the drawings. CTDOT and AASHTO: unchanged.
+- **Where (PL):** `buildModel` (`model.hP`), G8 K_g; `suggestLayout` (`hh` = 0 for properties, `hhW` for weight and G2); `analyzeGirder` (`hP`), `detailExport` (`props`, `crk`). **(GD):** `gdHP(…)` in field splice (`hh`), shear connectors (`dkP` for `secSet`; `dk` kept for SC5), welds (`dk.hh`), Girder section (`hh`), Fatigue (`dk.hh`), LLDF and DLs (`KgOf`, e_g text), Structural analysis (`hh` of the stage stiffness, `saSeq`, `saStress`).
+- **Hand check (built-in positive section 16 × 3/4 top, 60 × 9/16 web, 16 × 1 1/8 bottom; t_s = 8 in, b_eff = 114 in, n = 6.80):** steel A = 63.75 in², ȳ = 28.213 in, I = 37,472 in⁴, d = 61.875 in. Slab centroid y = d + h_h + t_s/2 = 67.875 → **65.875 in**; short-term composite I_n = **106,168 → 99,485 in⁴** (−6.3%), S_bot = 1,927 → **1,851 in³** (tool, Girder section row Span 1 interior: I_n = 99,484.85, ȳ_n = 53.744). K_g: e_g = (61.875 − 28.213) + h_h + 4 = 39.662 → **37.662 in**, K_g = 6.80(37,472 + 63.75 e_g²) = **936,395 → 869,379 in⁴** (tool DF1 Span 1/3: 936,395 → 869,379). Plastic moment (PNA in the steel: P_s = 0.85(4)(114)(8) = 3,101 kip < steel 3,188 kip): the slab force's lever arm drops by 2 in, M_p drops by P_s(2)/12 = **516.8 kip-ft** (tool 9,974.8 kip-ft with h_h = 0, i.e. 10,491.6 with 2 in). Live load deflection (built-in, interior, span 2): 0.6916 → 0.7365 in (A1 ratio 0.33 → 0.35).
+
+### OWN9. Design rating targets (GS20), owner notice, refresh, documentation   [NEW CHECK (owner); saved data: new optional fields]
+- **GS20 "Design load rating, HL-93 inventory"** (Girder section, group "Design load rating", src DOT; only when the owner has a `rate.*` row: RIDOT, CTDOT, MassDOT): per location and limit state, RF = the multiple of the HL-93 inventory live load at which that module's own check reaches 1.00, at the dead load factors entered (no owner η, no multiplier): `RF = (1 − r_0)/(r_1 − r_0)` with r_0 the check ratio with γ_LL = 0 and r_1 with γ_LL = 1.75 (Strength I: GS6, GS7 or GS9 as used, GS8, GS11) or 1.30 (Service II: GS12, GS13) — the MBE form (C − γ_DC DC − γ_DW DW)/(γ_LL(LL+IM)) with φ_c = φ_s = 1.0; where the resistance depends on the load (r at 2 × LL off the straight line: nonprismatic F_e = γ_e f_bu, web bend-buckling through D_c, amplified f_ℓ) RF is the root of the quadratic through 0, 1, 2 × LL; Fatigue: RF = 1/(GS17 ratio) at GS17's limit state. Targets: **RIDOT RF ≥ 1.10** at Strength I and Service II, **infinite fatigue life** (fatigue RF ≥ 1.00) (BDM 3.4.1.2; GD43); **CTDOT RF ≥ 1.20** at Strength I, Service II and Fatigue (BRSDM V1B Load Ratings); **MassDOT**: reported (3.1.4.3), no limit. Checked and reported only: no sizing uses it. Legal, permit, emergency, posting and CT-TLC vehicles are not in the tool: listed as **pending** items (rows `rate.veh`, kind pending-reference). Anchor `function gsRateCheck(R, out) {`; called at the end of the Girder section checks (`if (!R.base && gdRateRule()) gsRateCheck(R, out);`); `compute(p, opt)` with `opt.base` (entered factors, no owner rule) for the rating runs.
+- **Hand check (built-in 15°, RIDOT, Span 1 max. positive, interior; GS6 compact):** dead load only: 1.25(1201.7) + 1.50(160.6) = 1,743.0 kip-ft; r_0 = 0.187 ⇒ φM_n = 1,743.0/0.1867 ≈ 9,335 kip-ft (the M_n of the rating run, D6.2.2 M_y with the unscaled dead loads); r_1 = (1,743.0 + 1.75 × 1,809.5)/9,335 = 0.526; **RF = (1 − 0.187)/(0.526 − 0.187) = 2.40** = (9,335 − 1,743.0)/(1.75 × 1,809.5) ≥ 1.10 pass. Pier 1, exterior (GS7, nonprismatic, quadratic): r = 0.526, 0.952, 1.371 at k = 0, 1, 2 ⇒ RF = 1.11 ≥ 1.10.
+- **Refresh and notice (GD bridge handler, anchor `const lfS = l =>`):** `lf` is left out of the "real change" comparison (`nx`); a change of the load factors (owner, η inputs, girder count) refreshes every module; a project saved before these rules (saved bridge without `lf`) whose owner now has an effect gets `P.ownLd = { o, items }` and a one-time notice at the top of every module summary ("RIDOT load rules are now applied … Dismiss"); AASHTO projects get no refresh and no notice.
+- **Display:** every module's loads tab starts with an "Owner load rules" card (entered γ, rule, γ used; haunch note; link to Preliminary sizing) when any factor is not 1 (`gdOwnCard`); Preliminary sizing Analysis tab card "Owner load rules" works η, m and every factor (`lfCardBody`), and the Limits tab shows the inputs with the resulting η. Help "Owner load rules (phase 2)" and the Preliminary sizing manual (Combinations). Send to ST-Girder: a note line in the payload's `notes` when the owner rules are not all 1 (the fields are unchanged; ST-Girder does not apply them — see open items).
+
+### Saved data (CLAUDE.md §5)
+- New optional fields only: Preliminary sizing `bridge.eta` (defaults filled by `deepMerge` for older projects); hand-off `bridge.lf` (computed, stored in GirderDetail's `P.df.bridge`; ignored in the change comparison except as a factor change); GirderDetail `P.ownLd` (the one-time notice; removed by Dismiss). No key renamed, no format changed. Older builds: main opening a branch-saved project shows no error; it sees `lf` as a bridge change and refreshes once (its own refresh, identical to main refreshing its own project).
+
+### How verified
+- `node --check` on every script block (outer 4, decoded page 2); PL_B64 round trip byte-identical.
+- Headless Chromium, main 320d149 vs branch, `settle()`, each module after Get demands from Preliminary sizing, on **main-saved projects** (built-in 15°, built-in 28°, xsA, curb, each saved by main under AASHTO, MassDOT, RIDOT and CTDOT; plus the phase-1 'Custom' projects Lc15/Lc28) opened in both builds: **AASHTO (8 projects incl. Lc15/Lc28): GirderDetail project, Preliminary sizing checks, analysis arrays and every module check identical**, except the SA6 "Load modifier η" item (text, adv → pass). Quick suggestion and Full design (layout and cost JSON) identical for AASHTO on all four projects. MassDOT/RIDOT/CTDOT: before/after in the PR (key ratios, GS20, quick suggestion and Full design), one-time notice listing the rules. Variants with the η_I input set to "no". Module reports (Girder section, Structural analysis, field splice, bearing stiffeners, cross-frames, LLDF) build with the owner card; GS20 in the Girder section report. No console errors. Screenshots `followups/owner2/`.
+
+### Open items (ENGINEER_CHECKS GD45–GD49)
+- Interpretations: multiplier on LL+IM only and not on the pedestrian load (detail-module rows from Structural analysis carry LL+IM with the pedestrian load added, so there the 1.2 also multiplies the pedestrian load: conservative); η defaults (η_I question 'yes'); η not on constructibility; haunch = 0 also in deflection/camber stiffness and fatigue properties; GS20 method, fatigue at GS17's limit state, Girder section only; ST-Girder hand-off does not carry the owner rules.
+
+Diff of the outer file (main 320d149 → branch; the PL_B64 line elided):
+
+```diff
+--- main (outer file)
++++ branch (outer file)
+@@ -1314,3 +1314,3 @@
+   const gF = GD_GR[S.gF], gW = GD_GR[S.gW], gP = GD_GR[S.gP], bolt = BOLT[B.d], Fub = FUB[B.gr];
+-  const MR = modRatio(num(S.fc), num(S.wc), num(S.K1), S.nRule), ts = num(S.ts), hh = num(S.hh), beff = num(S.beff), n = MR.n, Ar = num(S.Ar), dr = num(S.dr), Rh = num(S.Rh);
++  const MR = modRatio(num(S.fc), num(S.wc), num(S.K1), S.nRule), ts = num(S.ts), hh = gdHP(num(S.hh)), beff = num(S.beff), n = MR.n, Ar = num(S.Ar), dr = num(S.dr), Rh = num(S.Rh);   // hh: 0 in composite properties under the owner rule (OWN8)
+   const ySlab = ps.d + hh + ts / 2;
+@@ -1331,3 +1331,3 @@
+   Object.values(comp).forEach(c => c.f = fAt(c.M, c.sec));
+-  const g = k => num(G[k]);
++  const gO = gdOwnM(OWN_K.splice), g = k => num(G[k]) * gO(k);   // OWN6/OWN7: the owner load rules (factors × 1 for AASHTO)
+   const combos = [
+@@ -1799,3 +1799,3 @@
+ 
+-  const g = k => num(B.gam[k]), Fys = gS.Fy, Fyw = gW.Fy, rootE = Math.sqrt(ES / Fys);
++  const gO = gdOwnM(OWN_K.bstf), g = k => num(B.gam[k]) * gO(k), Fys = gS.Fy, Fyw = gW.Fy, rootE = Math.sqrt(ES / Fys);   // OWN6/OWN7
+   const rows = B.rows.map((r0, i) => {
+@@ -2167,3 +2167,4 @@
+ <h3>Automatic refresh</h3><p>When the bridge changes in Preliminary sizing (spans, skews, girders, spacing, plates, splices), every module is updated automatically about 1.5 s after the last edit: demands are re-imported from the last demand source used (Preliminary sizing, or Structural analysis for a chosen girder), overrides and locked values are kept, auto-design runs if it is switched on in Owner standards, every module's checks are recomputed so the status marks on the module tabs are current, and you stay in the module you are working in. The update runs in the background: no module is drawn while it runs (only the module on screen is redrawn once at the end), so the tab and the scroll position do not change. Switch it off with Auto-refresh every module when the bridge changes in Owner standards.</p>
+-<h3>Owner (DOT) profile</h3><p><b>Owner</b> (top bar) is the bridge owner: RIDOT, MassDOT, CTDOT, or AASHTO (no owner rules). It is stored with the Preliminary sizing project (its Limits tab has the same selector; a project saved with the former "Custom" owner opens as AASHTO with its limits kept) and every module reads it. The owner's rules are applied on top of AASHTO LRFD 10th Ed. (2024); the MassDOT LRFD Bridge Manual and the CTDOT BRSDM are written to the 9th Ed., the RIDOT BDM (April 2026) to the 10th Ed. <b>rules</b> lists every owner rule with the manual section, its kind (shall: pass/fail check; should: warning; default: an editable value, a different entry is flagged "overrides …" but not blocked; pending reference: needs a document not available yet, such as MassDOT Part II, the RIDOT Bridge Standard Details or CTDOT standard details) and where it is applied. In this version (phase 1): the cross-frame orientation rule of RIDOT (BDM 6.4.3) and CTDOT (BRSDM V2 6.7.4.2), applied to the whole bridge in the Preliminary sizing layout (largest support skew 20° or less: parallel to the skew, not staggered; more: normal to the girders and staggered) and checked by X1; and the MassDOT skew warnings above 40° and 50° (Part I 2.3.4.1). Changing the owner refreshes every module like a bridge change when its rules change the cross-frames (otherwise nothing computed changes and no refresh runs). The owners' load rules and owner defaults follow in later versions.</p>
++<h3>Owner (DOT) profile</h3><p><b>Owner</b> (top bar) is the bridge owner: RIDOT, MassDOT, CTDOT, or AASHTO (no owner rules). It is stored with the Preliminary sizing project (its Limits tab has the same selector; a project saved with the former "Custom" owner opens as AASHTO with its limits kept) and every module reads it. The owner's rules are applied on top of AASHTO LRFD 10th Ed. (2024); the MassDOT LRFD Bridge Manual and the CTDOT BRSDM are written to the 9th Ed., the RIDOT BDM (April 2026) to the 10th Ed. <b>rules</b> lists every owner rule with the manual section, its kind (shall: pass/fail check; should: warning; default: an editable value, a different entry is flagged "overrides …" but not blocked; pending reference: needs a document not available yet, such as MassDOT Part II, the RIDOT Bridge Standard Details or CTDOT standard details) and where it is applied. In this version (phase 1): the cross-frame orientation rule of RIDOT (BDM 6.4.3) and CTDOT (BRSDM V2 6.7.4.2), applied to the whole bridge in the Preliminary sizing layout (largest support skew 20° or less: parallel to the skew, not staggered; more: normal to the girders and staggered) and checked by X1; and the MassDOT skew warnings above 40° and 50° (Part I 2.3.4.1). Changing the owner refreshes every module like a bridge change when its rules change the cross-frames or the load rules below (otherwise nothing computed changes and no refresh runs). The owners' defaults and detailing checks follow in a later version.</p>
++<h3>Owner load rules (phase 2)</h3><p>Preliminary sizing turns the owner's load rules into factors for the whole bridge and publishes them with it; every module uses them, and each module's loads tab has an <b>Owner load rules</b> card (entered factor, rule, factor used) when any of them is not 1. The rules are worked once on Preliminary sizing's Analysis tab (card "Owner load rules"). <b>Load modifier η</b> (AASHTO LRFD 1.3.2.1; Strength limit states only): η = η<sub>D</sub>η<sub>R</sub>η<sub>I</sub> multiplies the maximum load factors (1.25 DC, 1.50 DW, 1.75 LL) and 1/η the minimum ones (0.90 DC, 0.65 DW); Service, Fatigue and deck placement (constructibility) take η = 1. The owner's yes/no inputs are on Preliminary sizing's Limits tab (Owner profile): RIDOT η<sub>I</sub> = 1.05 for ADT ≥ 5000 (BDM 1.3.3) and η<sub>R</sub> = 1.05 for nonredundant members (1.3.2; η<sub>D</sub> = 1.00, 1.3.1); MassDOT 1.05 each for nonductile, nonredundant, and critical or essential bridges (3.1.4.4); CTDOT 1.05 each (BRSDM V2 1.3.3 to 1.3.5; η<sub>I</sub> for bridges on or over the NHS / STRAHNET or an evacuation route). Defaults: the η<sub>I</sub> question yes (conservative), nonredundant automatic (3 girders or fewer), nonductile no. AASHTO: η<sub>D</sub>, η<sub>R</sub>, η<sub>I</sub> entered (default 1.00, AASHTO 1.3.3 to 1.3.5). <b>Design load multiplier</b> (RIDOT BDM 3.4.1.2): HL-93 (LL+IM) × 1.2 at the Strength and Service limit states (the pedestrian load is not multiplied); not on the live load deflection, fatigue, deck placement, or the design check load rating. <b>Haunch = 0</b> (RIDOT BDM 6.5.1, 9.4.6, 4.3.1; MassDOT 3.5.1.2): the haunch is taken as zero in every composite section property (the stiffness of the analysis and the deflections, K<sub>g</sub> for the distribution factors, section moduli, M<sub>p</sub> lever arms, the reinforcement of the cracked section); its weight stays in DC1, and the stud penetration and cover checks (SC5) use the haunch as entered. Cross-frame analysis forces entered for Strength I are used as entered; the wind at Strength III and V takes γ<sub>WS</sub> = 1.0η. <b>Design load rating</b> (check GS20 in Girder section; RIDOT BDM 3.4.1.2: RF ≥ 1.10 without the multiplier, infinite fatigue life; CTDOT BRSDM V1B: RF ≥ 1.20 at Strength, Service and Fatigue; MassDOT 3.1.4.3: reported): the HL-93 inventory rating factor of each location, from that module's own checks at the AASHTO factors as entered (no η, no multiplier): RF = (1 − r<sub>0</sub>)/(r<sub>1</sub> − r<sub>0</sub>), r<sub>0</sub> the check ratio with the dead load only and r<sub>1</sub> with HL-93 at the inventory factor (1.75 Strength I, 1.30 Service II), which is (C − γ<sub>DC</sub>DC − γ<sub>DW</sub>DW)/(γ<sub>LL</sub>(LL+IM)); where the resistance depends on the load, the root of the quadratic through 0, 1 and 2 × LL; fatigue: 1/(GS17 ratio). Reported only; the girder is not resized for it. The owners' legal, permit and posting vehicles are not in this tool and are listed as pending. A project saved before these rules opens with them applied and a one-time notice listing them.</p>
+ <h3>Girder report</h3><p><b>Girder report</b> (top bar) builds one calculation package for a selected girder. Choose the girder, the chapters, and whether to re-run auto-design for that girder (otherwise the plates, bolts, and welds as currently entered are checked). Every module is loaded with that girder's demands from the Structural analysis module (its own distribution factors, dead loads, and effective flange width), and each chapter is that module's full worked report: 1, bridge and girder geometry (bridge data, typical cross-section, framing plan, girder elevation, plate schedule); 2, loads and live load distribution factors with derivations; 3, structural analysis (moment and shear envelopes, reactions, deflections, stresses by construction stage); 4, girder section (Strength I, Service II, constructibility, and fatigue at the critical sections); 5, fatigue details; then one chapter per field splice on the girder; bearing stiffeners; transverse stiffeners and connection plates; shear connectors; cross-frames; deck overhang (exterior girders only); and web-to-flange welds and transitions. The package opens with a title page (girder, source of demands, basis of the details, specification, preparer and checker) and a contents list, starts each chapter on a new page, and carries "Girder G# calculation package" in the running header; print it to PDF. The app returns to the module you started from when printing is finished.</p>
+@@ -2448,3 +2449,3 @@
+   compute(p) {
+-    const errors = [], Fyw = GD_GR[p.gW].Fy, Fys = GD_GR[p.gS].Fy, Fexx = nm(p.Fexx), g = k => nm(p.gam[k]);
++    const errors = [], Fyw = GD_GR[p.gW].Fy, Fys = GD_GR[p.gS].Fy, Fexx = nm(p.Fexx), gO = gdOwnM(OWN_K.ts), g = k => nm(p.gam[k]) * gO(k);   // OWN6/OWN7
+     const types = {}; Object.entries(p.types).forEach(([k, t]) => { const q = { k, name: t.name, role: t.role, sides: +t.sides }; ['bt', 'tp', 'w', 'gap', 'wf', 'c', 'Fcp'].forEach(f => { q[f] = nm(t[f]); if (!(q[f] >= 0)) errors.push(`Type ${k}: "${f}" must be zero or positive.`); }); if (!(q.bt > 0 && q.tp > 0 && q.w > 0)) errors.push(`Type ${k}: width, thickness, and weld size must be positive.`); types[k] = q; });
+@@ -2577,4 +2578,4 @@
+     const Asc = Math.PI * d ** 2 / 4, fc = g('fc'), Ec = 120000 * g('K1') * g('wc') ** 2 * fc ** 0.33, Qn1 = 0.5 * Asc * Math.sqrt(fc * Ec), Qn9 = Math.min(Qn1, Asc * g('Fu')), Qn10 = nm(p.Qn10), Qn = Qn10 > 0 ? Qn10 : Qn9, Qr = 0.85 * Qn, Zr = 7.0 * Asc;
+-    const MR = modRatio(g('fc'), g('wc'), g('K1'), p.nRule), dk = { ts: g('ts'), hh: g('hh'), beff: g('beff'), n: MR.n, Ar: 0, dr: 0 }, gf = nm(p.gam.fat), Ffat = p.skew === 'yes' ? g('Frc') / g('wv') : 0;
+-    zones.forEach(z => { const S = secSet(z.D, z, dk), c = S.cn; z.I = c.I; z.yb = c.yb; z.Aslab = dk.beff * dk.ts / dk.n; z.Q = z.Aslab * (S.ySlab - c.yb);
++    const MR = modRatio(g('fc'), g('wc'), g('K1'), p.nRule), dk = { ts: g('ts'), hh: g('hh'), beff: g('beff'), n: MR.n, Ar: 0, dr: 0 }, dkP = { ...dk, hh: gdHP(dk.hh) }, gf = nm(p.gam.fat), Ffat = p.skew === 'yes' ? g('Frc') / g('wv') : 0;   // dkP: composite properties (OWN8); dk: SC5 and the drawings
++    zones.forEach(z => { const S = secSet(z.D, z, dkP), c = S.cn; z.I = c.I; z.yb = c.yb; z.Aslab = dk.beff * dk.ts / dk.n; z.Q = z.Aslab * (S.ySlab - c.yb);
+       // limit state (F12-1, 2026-10-13): Fatigue I or II as the Fatigue module decides, n from the zone's stations (largest n over the zone); was Fatigue I only
+@@ -2905,3 +2906,3 @@
+     const PZ = V => 2.56e-6 * V ** 2 * nm(p.wind.Kz) * nm(p.wind.G) * nm(p.wind.Cd), dft = g('dg') / 12, Lb = g('Lb');
+-    const W = { III: { V: nm(p.wind.V) }, V: { V: 80 } }; Object.values(W).forEach(w => { w.PZ = PZ(w.V); w.W = 1.0 * w.PZ * dft / 2; w.Fw = w.W * Lb; });
++    const gWS = 1.0 * gdLF().eta, W = { III: { V: nm(p.wind.V) }, V: { V: 80 } }; Object.values(W).forEach(w => { w.PZ = PZ(w.V); w.W = gWS * w.PZ * dft / 2; w.Fw = w.W * Lb; });   // OWN7: γ_WS = 1.0 × η at Strength III and V
+     // stability bracing strength for deck placement (AASHTO LRFD 10th Ed. 6.7.4.2.2; AISC App. 6.3.2a form)
+@@ -3012,4 +3013,4 @@
+     : ['Refined analysis of skewed or curved framing (enter those member forces directly)', 'Gusset plate and connection plate design (see the Transverse stiffeners module for connection plate welds)', 'Slip resistance of the bolted connections', 'Tension-only diagonals', 'WT and double-angle members']; },
+-  combos(R) { const w = R.W, dia = cfDiaOn(R.p); let h = card('cb-w', 'Wind load on the exterior girder', 'AASHTO LRFD 3.8.1.2.1, 4.6.2.7.1', eq('Strength III', '', T`P_Z = 2.56\times10^{-6}(${f0(w.III.V)})^2(${f2(nm(R.p.wind.Kz))})(${f2(nm(R.p.wind.G))})(${f2(nm(R.p.wind.Cd))}) = ${w.III.PZ.toFixed(4)}\ \text{ksf}, \quad W = \frac{1.0\,P_Zd}{2} = \frac{${w.III.PZ.toFixed(4)}(${f3(R.dft)})}{2} = ${f3(w.III.W)}\ \text{kip/ft}, \quad F_w = WL_b = ${f3(w.III.W)}(${f2(R.Lb)}) = ${f2(w.III.Fw)}\ \text{kip}`)
+-      + eq('Strength V', '', T`P_Z = 2.56\times10^{-6}(80)^2(${f2(nm(R.p.wind.Kz))})(${f2(nm(R.p.wind.G))})(${f2(nm(R.p.wind.Cd))}) = ${w.V.PZ.toFixed(4)}\ \text{ksf}, \quad F_w = \frac{${w.V.PZ.toFixed(4)}(${f3(R.dft)})}{2}(${f2(R.Lb)}) = ${f2(w.V.Fw)}\ \text{kip}`)
++  combos(R) { const w = R.W, dia = cfDiaOn(R.p); let h = card('cb-w', 'Wind load on the exterior girder', 'AASHTO LRFD 3.8.1.2.1, 4.6.2.7.1', eq('Strength III', '', T`P_Z = 2.56\times10^{-6}(${f0(w.III.V)})^2(${f2(nm(R.p.wind.Kz))})(${f2(nm(R.p.wind.G))})(${f2(nm(R.p.wind.Cd))}) = ${w.III.PZ.toFixed(4)}\ \text{ksf}, \quad W = \frac{${gdLF().eta === 1 ? '1.0' : f3(gdLF().eta)}\,P_Zd}{2} = \frac{${gdLF().eta === 1 ? '' : f3(gdLF().eta) + '\\,'}${w.III.PZ.toFixed(4)}(${f3(R.dft)})}{2} = ${f3(w.III.W)}\ \text{kip/ft}, \quad F_w = WL_b = ${f3(w.III.W)}(${f2(R.Lb)}) = ${f2(w.III.Fw)}\ \text{kip}`)
++      + eq('Strength V', '', T`P_Z = 2.56\times10^{-6}(80)^2(${f2(nm(R.p.wind.Kz))})(${f2(nm(R.p.wind.G))})(${f2(nm(R.p.wind.Cd))}) = ${w.V.PZ.toFixed(4)}\ \text{ksf}, \quad F_w = \frac{${gdLF().eta === 1 ? '' : f3(gdLF().eta) + '\\,'}${w.V.PZ.toFixed(4)}(${f3(R.dft)})}{2}(${f2(R.Lb)}) = ${f2(w.V.Fw)}\ \text{kip}`)
+       + (dia ? `<p class="note-p">F<sub>w</sub> acts horizontally at the bottom flange of the exterior girder and is reacted at the deck (top flange): a torque F<sub>w</sub>d on the girder, resisted by bending of the diaphragm (CFD, CFE).</p>` : `<p class="note-p">F<sub>w</sub> is applied horizontally at the bottom flange of the exterior girder; the top chord work points are held by the deck. Wind can act in either direction, so each member is designed for its analysis force plus and minus the wind force.</p>`));
+@@ -3322,3 +3323,3 @@
+     if (errors.length) return { errors };
+-    const MR = modRatio(g('fc'), g('wc'), g('K1'), p.nRule), dk = { ts: g('ts'), hh: g('hh'), beff: g('beff'), n: MR.n, Ar: g('Ar'), dr: g('dr') }, G = k => nm(p.gam[k]), Fexx = g('Fexx'), Fuw = GD_GR[p.gW].Fu;
++    const MR = modRatio(g('fc'), g('wc'), g('K1'), p.nRule), dk = { ts: g('ts'), hh: gdHP(g('hh')), beff: g('beff'), n: MR.n, Ar: g('Ar'), dr: g('dr') }, gO = gdOwnM(OWN_K.wt), G = k => nm(p.gam[k]) * gO(k), Fexx = g('Fexx'), Fuw = GD_GR[p.gW].Fu;   // OWN6–OWN8
+     fw.forEach(r => { const dk_ = r.beff > 0 ? { ...dk, beff: r.beff } : dk, S = secSet(r.D, r, dk_), yTf = S.s.d - r.topT / 2, yBf = r.botT / 2, At = r.topB * r.topT, Ab = r.botB * r.botT;   // dk_: the row's own b_eff when given (L6, 2026-10-13)
+@@ -3549,3 +3550,3 @@
+     gs_loc: `${secHd('sec-gsr', 'Check locations')}<div class="sec-body one-col" id="sec-gsr">${gmRowsHtml('gs')}<p class="note">Moments and shears per girder, unfactored, live load with IM and distribution factors; negative moments negative. M<sub>DC1</sub> acts on the steel section, M<sub>DC2</sub> and M<sub>DW</sub> on the long-term (3n) section in positive flexure, and all composite loads on the steel plus reinforcement in negative flexure. f<sub>ℓ</sub> is the first-order flange lateral bending stress from wind, skew, or curvature (0 if none).</p></div>` }; },
+-  compute(p) { (p.rows || []).forEach(r => { if (r.MDCc == null || r.MDCc === '') r.MDCc = 0; if (r.lbB == null || r.lbB === '') r.lbB = 0; if (r.lbT == null || r.lbT === '') r.lbT = 0; });   // rows saved before these inputs existed are prismatic
++  compute(p, opt) { (p.rows || []).forEach(r => { if (r.MDCc == null || r.MDCc === '') r.MDCc = 0; if (r.lbB == null || r.lbB === '') r.lbB = 0; if (r.lbT == null || r.lbT === '') r.lbT = 0; });   // rows saved before these inputs existed are prismatic
+     const errors = [], g = k => nm(p[k]), gm = k => nm(p.gam[k]);
+@@ -3557,4 +3558,5 @@
+     if (errors.length) return { errors };
+-    const Fyt = GD_GR[p.gT].Fy, Fyb = GD_GR[p.gB].Fy, Fyw = GD_GR[p.gW].Fy, Fyr = g('Fyr'), fc = g('fc'), MR = modRatio(fc, g('wc'), g('K1'), p.nRule), n = MR.n, ts = g('ts'), hh = g('hh'), Art = g('Art'), Arb = g('Arb');
+-    const G = { dc: gm('dc'), dw: gm('dw'), dcMin: gm('dcMin'), dwMin: gm('dwMin'), ll: gm('ll'), sll: gm('sll'), fat: gm('fat'), cdc: gm('cdc'), ccl: gm('ccl') };
++    const Fyt = GD_GR[p.gT].Fy, Fyb = GD_GR[p.gB].Fy, Fyw = GD_GR[p.gW].Fy, Fyr = g('Fyr'), fc = g('fc'), MR = modRatio(fc, g('wc'), g('K1'), p.nRule), n = MR.n, ts = g('ts'), hh = gdHP(g('hh')), Art = g('Art'), Arb = g('Arb');   // hh: 0 in composite properties under the owner rule (OWN8)
++    const base = !!(opt && opt.base), gO = base ? (() => 1) : gdOwnM(OWN_K.gs), go = k => gm(k) * gO(k);   // OWN6/OWN7: owner load rules; base: AASHTO factors as entered (the design load rating, GS20)
++    const G = { dc: go('dc'), dw: go('dw'), dcMin: go('dcMin'), dwMin: go('dwMin'), ll: go('ll'), sll: go('sll'), fat: gm('fat'), cdc: gm('cdc'), ccl: gm('ccl') };
+     rows.forEach(r => {
+@@ -3696,3 +3698,3 @@
+     }
+-    return { errors: [], MR, rows, Fyt, Fyb, Fyw, Fyr, fc, n, ts, hh, Art, Arb, tdeck: g('tdeck'), G, p, ...(pnaOOS ? { pnaOOS } : {}) };
++    return { errors: [], MR, rows, Fyt, Fyb, Fyw, Fyr, fc, n, ts, hh, Art, Arb, tdeck: g('tdeck'), G, p, ...(base ? { base } : {}), ...(pnaOOS ? { pnaOOS } : {}) };
+   },
+@@ -3805,2 +3807,3 @@
+       out.add(c); }
++    if (!R.base && gdRateRule()) gsRateCheck(R, out);   // OWN9: owner design rating target (RIDOT, CTDOT; MassDOT reported)
+     return out;
+@@ -3846,2 +3849,36 @@
+ const itBadge = it => it.oos ? OOS_BADGE : badge(it.st), kBadge = k => ((k.items || [])[k.gov] || {}).oos ? OOS_BADGE : badge(k.status);
++/* GS20 (OWN9, 2026-10-15): design load rating, HL-93 inventory, from this module's own Strength I, Service II and fatigue checks. Every check ratio r is
++   demand/resistance; with the dead loads at their AASHTO factors as entered (no owner η or multiplier: RIDOT BDM 3.4.1.2 rates without the multiplier, and the
++   rating uses no load modifier) and HL-93 at k × the inventory factor (Strength I 1.75, Service II 1.30), RF is the k at which the check reaches 1.00:
++   RF = (1 − r_0)/(r_1 − r_0) with r_0 at k = 0 (dead load only) and r_1 at k = 1, i.e. (C − γ_DC DC − γ_DW DW)/(γ_LL (LL+IM)) of MBE Eq. 6A.4.2.1-1 (φ_c = φ_s = 1.0).
++   Where the resistance depends on the load (r at k = 2 departs from the straight line, e.g. web bend-buckling through D_c, or the amplified f_ℓ), RF is the root of the
++   quadratic through k = 0, 1, 2. Fatigue: RF = 1/r of GS17 (its limit state and γ). Checks used: GS6, GS7 or GS9 (the method in use), GS8, GS11 (Strength I);
++   GS12, GS13 (Service II); GS17 (Fatigue). Reported per location; pass/fail against the owner's target; the girder is not resized for it. */
++function gsRateCheck(R, out) {
++  const rr = gdRateRule(), tg = rr.value || {}, rf0 = +tg.rf > 0 ? +tg.rf : null, rfF = +tg.fat > 0 ? +tg.fat : rf0, pend = gdOwnRules(rr.owner, 'rate.veh');
++  const run = k => { const p = R.p, R2 = GM.gs.compute({ ...p, gam: { ...p.gam, ll: 1.75 * k, sll: 1.30 * k } }, { base: true }); return R2.errors && R2.errors.length ? null : GM.gs.checks(R2); };
++  const C0 = run(0), C1 = run(1), C2 = run(2); if (!C0 || !C1 || !C2) return;
++  const LS = { 'Strength I': ['GS6', 'GS7', 'GS8', 'GS9', 'GS11'], 'Service II': ['GS12', 'GS13'] }, its = (C, id) => (C.find(c => c.id === id) || { items: [] }).items;
++  const rowOf = loc => R.rows.map(r => r.name).filter(nm_ => loc === nm_ || loc.startsWith(nm_ + ',') || loc.startsWith(nm_ + ' ')).sort((a, b) => b.length - a.length)[0];
++  const best = {};   // row -> limit state -> governing { rf, id, loc, r0, r1, r2, quad }
++  const put = (row, ls, q) => { if (!row) return; const o = best[row] || (best[row] = {}); if (!o[ls] || q.rf < o[ls].rf) o[ls] = q; };
++  Object.entries(LS).forEach(([ls, ids]) => ids.forEach(id => its(C1, id).forEach((it, k) => { const a = its(C0, id)[k], c = its(C2, id)[k];
++    if (!a || !c || a.loc !== it.loc || /not the method in use/.test(it.loc) || ![a.r, it.r, c.r].every(v => v != null && isFinite(v))) return;
++    const r0 = a.r, r1 = it.r, r2 = c.r; if (!(r1 - r0 > 1e-9)) return;   // the live load does not add to this check
++    const cq = (r2 - 2 * r1 + r0) / 2, quad = Math.abs(cq) > 1e-6 * Math.max(1, Math.abs(r1)); let rf;
++    if (r0 >= 1) rf = 0; else if (!quad) rf = (1 - r0) / (r1 - r0); else { const b = r1 - r0 - cq, d = b * b - 4 * cq * (r0 - 1); const ks = d >= 0 ? [(-b + Math.sqrt(d)) / (2 * cq), (-b - Math.sqrt(d)) / (2 * cq)].filter(v => v > 0) : []; rf = ks.length ? Math.min(...ks) : (1 - r0) / (r1 - r0); }
++    put(rowOf(it.loc), ls, { rf, id, loc: it.loc, r0, r1, r2, quad }); })));
++  its(out, 'GS17').forEach(it => { if (it.r > 0 && isFinite(it.r)) put(rowOf(it.loc), 'Fatigue', { rf: 1 / it.r, id: 'GS17', loc: it.loc, r1: it.r, fat: true }); });
++  const tgt = ls => ls === 'Fatigue' ? rfF : rf0, tx = v => String(v).replace(/[{}\\$&#^_%~]/g, ' ');
++  const c = { id: 'GS20', grp: 'Design load rating', title: 'Design load rating, HL-93 inventory', ref: `${gdOwnCite(rr)}; AASHTO MBE 6A.4.2 (RF from the checks of this module)`, src: 'DOT',
++    sym: T`RF = \frac{C - \gamma_{DC}DC - \gamma_{DW}DW}{\gamma_{LL}(LL + IM)} = \frac{1 - r_0}{r_1 - r_0}${rf0 ? T` \ge ${rf0.toFixed(2)}` : ''}`, cols: ['Location, limit state', 'RF', 'Target', 'Governing check'], items: [],
++    note: `HL-93 design inventory rating from this module's checks, at the dead load factors entered here (DC ${f2(nm(R.p.gam.dc))}/${f2(nm(R.p.gam.dcMin))}, DW ${f2(nm(R.p.gam.dw))}/${f2(nm(R.p.gam.dwMin))}) without the owner's load modifier η or design load multiplier, γ_LL = 1.75 (Strength I) and 1.30 (Service II); fatigue: 1/(ratio) of GS17 at its limit state. r_0: the governing check's ratio with the dead load only; r_1: with HL-93 at the inventory factor (that check is worked above at the design factors). ${rr.owner}: ${rr.text} (${gdOwnCite(rr)}). Checked and reported only: the girder is not resized for it.${pend.length ? ` Pending (vehicles not in this tool): ${pend.map(q => q.ref).join('; ')}.` : ''}` };
++  R.rows.forEach(r => { const o = best[r.name] || {}; ['Strength I', 'Service II', 'Fatigue'].forEach(ls => { const q = o[ls]; if (!q) return; const t = tgt(ls);
++    const work = q.fat ? T`RF = \frac{1}{\gamma(\Delta f)/(\Delta F)_n} = \frac{1}{${f3(q.r1)}} = ${f2(q.rf)}\ \ (\text{GS17, ${tx(q.loc)}})`
++      : q.quad ? T`r(k) = ${f3(q.r0)},\ ${f3(q.r1)},\ ${f3(q.r2)}\ \text{at } k = 0, 1, 2\ \Rightarrow\ r(k) = 1 \text{ at } k = RF = ${f2(q.rf)}\ \ (\text{${q.id}, ${tx(q.loc)}; resistance depends on the load: quadratic})`
++      : T`RF = \frac{1 - r_0}{r_1 - r_0} = \frac{1 - ${f3(q.r0)}}{${f3(q.r1)} - ${f3(q.r0)}} = ${f2(q.rf)}\ \ (\text{${q.id}, ${tx(q.loc)}})`;
++    c.items.push({ loc: `${r.name}, ${ls}`, cells: [f2(q.rf), t ? f2(t) : 'reported', `${q.id}: ${q.loc}`], r: t ? t / Math.max(q.rf, 1e-9) : undefined, st: t ? (q.rf >= t - 1e-9 ? 'pass' : 'fail') : 'adv', work }); }); });
++  pend.forEach(q => c.items.push({ loc: `Pending: ${q.ref}`, cells: ['pending', rf0 ? f2(rf0) : '—', '—'], st: 'adv', work: T`\text{Rating vehicle not available in this tool}` }));
++  out.add(c);
++}
+ function gsSVG(R, r) {
+@@ -4260,3 +4297,3 @@
+     if (errors.length) return { errors };
+-    const MR = modRatio(g('fc'), g('wc'), g('K1'), p.nRule), dk = { ts: g('ts'), hh: g('hh'), beff: g('beff'), n: MR.n, Ar: g('Ar'), dr: g('dr') };
++    const MR = modRatio(g('fc'), g('wc'), g('K1'), p.nRule), dk = { ts: g('ts'), hh: gdHP(g('hh')), beff: g('beff'), n: MR.n, Ar: g('Ar'), dr: g('dr') };   // hh: 0 in composite properties under the owner rule (OWN8)
+     const gI = nm(p.gam.fI), gII = nm(p.gam.fII), ADTTSL = g('p') * g('ADTT'), life = g('life'), Fyw = GD_GR[p.gW].Fy;
+@@ -4732,3 +4769,3 @@
+     const base = { Nb, spacings, OL: b.ohL, OR: b.ohR, rL: ll.L.r, rR: ll.R.r, fL, fR, ts: b.tsDeck, gap: nm(p.gap), simple: p.kg === 'simple' };
+-    const KgOf = s => { const eg = (s.d - s.yb) + b.haunch + b.tsDeck / 2; return { eg, Kg: MR.n * (s.I + s.A * eg * eg) }; };
++    const KgOf = s => { const eg = (s.d - s.yb) + gdHP(b.haunch) + b.tsDeck / 2; return { eg, Kg: MR.n * (s.I + s.A * eg * eg) }; };   // OWN8: the haunch is 0 in K_g under the owner rule (its weight stays in DC1)
+     const regions = b.regions.map(rg => {
+@@ -4797,3 +4834,3 @@
+       const kgMax = R.MR.n * (rg.s.I + rg.s.A * rg.eg * rg.eg);
+-      add(S('Longitudinal stiffness parameter'), '4.6.2.2.1-1', T`\begin{aligned}e_g &= (d - \bar{y}) + t_h + \tfrac{t_s}{2} = (${f2(rg.s.d)} - ${f2(rg.s.yb)}) + ${f2(b.haunch)} + \tfrac{${f2(b.tsDeck)}}{2} = ${f2(rg.eg)}\ \text{in} \\ K_g &= n(I + Ae_g^2) = ${f2(R.MR.n)}(${f0(rg.s.I)} + ${f2(rg.s.A)}(${f2(rg.eg)})^2) = ${f0(kgMax)}\ \text{in}^4\ \text{(section at the maximum-moment point)}${R.p.kg === 'avg' && rg.KgAvg ? T` \\ K_{g,avg} &= \frac{\sum K_{g,i}L_i}{\sum L_i} = \frac{${rg.KgAvg.parts.map(q => `${f0(q.Kg)}(${f2(q.L)})`).join(' + ')}}{${f2(rg.KgAvg.Lt)}} = ${f0(rg.KgAvg.Kg)}\ \text{in}^4\ \text{(used)}` : ''}\end{aligned}`, [['Section', secTxt(rg.sec), `x = ${f2(rg.x)}`, 'ft'], ['n', 'E<sub>s</sub>/E<sub>c</sub>, K<sub>1</sub> = 1.0', f2(R.MR.n), '']]);
++      add(S('Longitudinal stiffness parameter'), '4.6.2.2.1-1', T`\begin{aligned}e_g &= (d - \bar{y}) + t_h + \tfrac{t_s}{2} = (${f2(rg.s.d)} - ${f2(rg.s.yb)}) + ${f2(gdHP(b.haunch))} + \tfrac{${f2(b.tsDeck)}}{2} = ${f2(rg.eg)}\ \text{in}${gdLF().h0 ? T`\ \ (t_h = 0:\ \text{owner rule; ${f2(b.haunch)} in entered, in DC1})` : ''} \\ K_g &= n(I + Ae_g^2) = ${f2(R.MR.n)}(${f0(rg.s.I)} + ${f2(rg.s.A)}(${f2(rg.eg)})^2) = ${f0(kgMax)}\ \text{in}^4\ \text{(section at the maximum-moment point)}${R.p.kg === 'avg' && rg.KgAvg ? T` \\ K_{g,avg} &= \frac{\sum K_{g,i}L_i}{\sum L_i} = \frac{${rg.KgAvg.parts.map(q => `${f0(q.Kg)}(${f2(q.L)})`).join(' + ')}}{${f2(rg.KgAvg.Lt)}} = ${f0(rg.KgAvg.Kg)}\ \text{in}^4\ \text{(used)}` : ''}\end{aligned}`, [['Section', secTxt(rg.sec), `x = ${f2(rg.x)}`, 'ft'], ['n', 'E<sub>s</sub>/E<sub>c</sub>, K<sub>1</sub> = 1.0', f2(R.MR.n), '']]);
+       if (R.p.kg === 'simple') E.push(`<p class="note-p"><b>Simplified basis (Table 4.6.2.2.1-3, type a):</b> (K<sub>g</sub>/12Lt<sub>s</sub>³)<sup>0.1</sup> = 1.02, (K<sub>g</sub>/12Lt<sub>s</sub>³)<sup>0.25</sup> = 1.03, and (12Lt<sub>s</sub>³/K<sub>g</sub>)<sup>0.3</sup> = 0.97 replace the computed terms below. For preliminary design only; the computed K<sub>g</sub> above is shown for comparison.</p>`);
+@@ -5139,5 +5176,8 @@
+   if (P.mod === 'df' || P.mod === 'sa') recompute(); else { refreshMarks(); try { dfFeed(GM.df.compute(P.df)); } catch (e) {} } dfXsPost(); autosave();
+-  const nx = o => { const { ts, xs, xf, owner, ...r } = o; return JSON.stringify(r); };   // the gd-xs echo alone (XS9) is not a change of the bridge; nor the cross-frame list (XF1: no automatic re-import of stored demands; keys removed, not zeroed, so their order cannot matter); nor the owner field first appearing (OWN1)
++  const nx = o => { const { ts, xs, xf, owner, lf, ...r } = o; return JSON.stringify(r); };   // lf (OWN6): handled below   // the gd-xs echo alone (XS9) is not a change of the bridge; nor the cross-frame list (XF1: no automatic re-import of stored demands; keys removed, not zeroed, so their order cannot matter); nor the owner field first appearing (OWN1)
+   const ownCh = !!(ob && ob.owner && nb.owner && ob.owner !== nb.owner) && JSON.stringify(ob.xf || null) !== JSON.stringify(nb.xf || null);   // OWN1: the owner changed and its rules changed the cross-frames: refresh as for a bridge change (an owner change that changes nothing computed does not)
+-  if (ob && ob.ok && nb.ok && (nx(ob) !== nx(nb) || ownCh) && typeof gdScheduleRefresh === 'function') gdScheduleRefresh();   // a real change to an existing bridge: refresh every module
++  // OWN6–OWN9: the owner's load rules changed (owner, η inputs or girder count), or appear for the first time with an effect on an older project (one-time notice P.ownLd)
++  const lfS = l => JSON.stringify(l && typeof l === 'object' ? { m: l.m, eta: l.eta, etaN: l.etaN, h0: !!l.h0 } : { m: 1, eta: 1, etaN: 1, h0: false }), lfCh = !!(ob && nb.lf && lfS(ob.lf) !== lfS(nb.lf));
++  if (lfCh && ob.ok && nb.ok && !ob.lf) { const it = gdOwnLdItems(nb.lf); if (it.length) { P.ownLd = { o: nb.owner || nb.lf.o, items: it }; autosave(); } }
++  if (ob && ob.ok && nb.ok && (nx(ob) !== nx(nb) || ownCh || lfCh) && typeof gdScheduleRefresh === 'function') gdScheduleRefresh();   // a real change to an existing bridge: refresh every module
+ });
+@@ -5429,2 +5469,7 @@
+   { id: 'FatI', name: 'Fatigue I', fat: 1.75, note: 'Infinite life' }, { id: 'FatII', name: 'Fatigue II', fat: 0.80, note: 'Finite life' }];
++/* the combinations with the owner load rules (OWN6/OWN7): Strength factors × η (minimum × 1/η), LL+IM × m at Strength and Service; the pedestrian load
++   takes the LL factor without m (pl: the RIDOT multiplier is on HL-93 only); fatigue and deck placement unchanged. SA_COMBOS itself when every factor is 1 */
++function saCombosOwn() { const L = gdLF(); if (gdLFid(L)) return SA_COMBOS;
++  return SA_COMBOS.map(C => { if (C.fat || C.id === 'Con') return C; const st = /^Str/.test(C.id), e = st ? L.eta : 1, en = st ? L.etaN : 1;
++    return { ...C, dc: [C.dc[0] * e, C.dc[1] * en], dw: [C.dw[0] * e, C.dw[1] * en], ll: C.ll * e * L.m, ...(L.m !== 1 ? { pl: C.ll * e } : {}) }; }); }
+ function saComb(C, v) {   // v: { DC1, DC2, DW, Lp, Ln, Pp, Pn, CL, Fp, Fn } -> { max, min } (fatigue: range)
+@@ -5433,2 +5478,3 @@
+   const dc = v.DC1 + v.DC2, g = (x, f) => x >= 0 ? f[0] * x : f[1] * x, h = (x, f) => x <= 0 ? f[0] * x : f[1] * x;
++  if (C.pl != null) return { max: g(dc, C.dc) + g(v.DW, C.dw) + C.ll * v.Lp + C.pl * v.Pp, min: h(dc, C.dc) + h(v.DW, C.dw) + C.ll * v.Ln + C.pl * v.Pn };   // OWN6: m on LL+IM only
+   return { max: g(dc, C.dc) + g(v.DW, C.dw) + C.ll * (v.Lp + v.Pp), min: h(dc, C.dc) + h(v.DW, C.dw) + C.ll * (v.Ln + v.Pn) };
+@@ -5466,3 +5512,3 @@
+     const bays = DF.base.spacings, beffFt = j === 0 ? bays[0] / 2 + b.ohL : j === b.nb - 1 ? bays[bays.length - 1] / 2 + b.ohR : (bays[j - 1] + bays[j]) / 2, beff = beffFt * 12;
+-    const n = DF.MR.n, ts = b.tsDeck, hh = b.haunch, Ar = nm(p.rebar) / 100 * beff * ts, D = DF.dead;
++    const n = DF.MR.n, ts = b.tsDeck, hh = gdHP(b.haunch), Ar = nm(p.rebar) / 100 * beff * ts, D = DF.dead;   // hh: composite stiffness (0 under the owner rule, OWN8); the haunch weight is in D (DC1)
+     const wSt = xs.map(x => { const s = saSec(b.plates, x); return (s.topB * s.topT + s.botB * s.botT + s.D * s.tw) * SA_PLF / 1000 * (1 + b.allow / 100); });
+@@ -5505,3 +5551,3 @@
+     const Vv = e => ({ DC1: VDC1[e], DC2: VDC2[e], DW: VDW[e], Lp: LVp[e], Ln: LVn[e], Pp: PVp[e], Pn: PVn[e], CL: VCL[e], Fp: FVp[e], Fn: FVn[e] });
+-    const CM = {}, CV = {}; SA_COMBOS.forEach(C => { CM[C.id] = { max: new Float64Array(N), min: new Float64Array(N) }; CV[C.id] = { max: new Float64Array(N - 1), min: new Float64Array(N - 1) };
++    const CMB = saCombosOwn(), CM = {}, CV = {}; CMB.forEach(C => { CM[C.id] = { max: new Float64Array(N), min: new Float64Array(N) }; CV[C.id] = { max: new Float64Array(N - 1), min: new Float64Array(N - 1) };
+       for (let i = 0; i < N; i++) { const r = saComb(C, Mv(i)); CM[C.id].max[i] = r.max; CM[C.id].min[i] = r.min; }
+@@ -5515,3 +5561,3 @@
+       const v = { DC1: dot(rS[k], w1), DC2: dot(r3[k], wDC2), DW: dot(r3[k], wDW), Lp: llMax, Ln: llMin, Pp: pl.pp, Pn: pl.nn, CL: dot(rS[k], wCL), Fp: 0, Fn: 0 };
+-      const cmb = {}; SA_COMBOS.filter(C => !C.fat).forEach(C => cmb[C.id] = saComb(C, v));
++      const cmb = {}; CMB.filter(C => !C.fat).forEach(C => cmb[C.id] = saComb(C, v));
+       return { k, name: k === 0 ? 'Abut. 1' : k === sup.length - 1 ? 'Abut. 2' : `Pier ${k}`, ...v, gV, llMax, llMin, two: interior && e.pos2 > e.pos, cmb, str: cmb.StrI.max, strMin: cmb.StrI.min, svc: cmb.SerI.max }; });
+@@ -5584,3 +5630,3 @@
+       it('Non-hybrid, F_y 36 or 50 ksi', `flanges ${b.gF}, web ${b.gW}`, fyF === fyW && [36, 50].includes(fyF), fyF === fyW && [36, 50].includes(fyF) ? 'Same grade, 36 or 50 ksi' : 'Hybrid or other grade: not routine');
+-      it('Load modifier η (1.3.2.1)', 'η = η_D η_R η_I = 1.0', true, 'Taken as 1.0 at every limit state (typical for routine bridges); if the Owner specifies other values (e.g., η_I = 1.05), the factored demands in every module must be scaled accordingly', 'adv');
++      { const L = gdLF(), e = L.eD * L.eR * L.eI; it('Load modifier η (1.3.2.1)', `η = η_D η_R η_I = ${L.eD.toFixed(2)} × ${L.eR.toFixed(2)} × ${L.eI.toFixed(2)} = ${e.toFixed(3)}`, true, `Applied to the Strength load factors in every module (maximum factors × ${L.eta.toFixed(3)}, minimum × ${L.etaN.toFixed(3)}); η = 1.0 at Service, Fatigue and deck placement. ${L.o && L.o !== 'AASHTO' ? `${L.o} rules` : 'AASHTO LRFD 1.3.3 to 1.3.5'}; inputs on Preliminary sizing's Limits tab${L.m !== 1 ? `. Design load multiplier ${L.m} on LL+IM at Strength and Service` : ''}`, 'pass'); }   // OWN7 (was an advisory: η = 1.0, scale by hand)
+       it('Live load deflection limit', sa3 ? sa3.status : '—', !sa3 || sa3.status === 'pass' || sa3.status === 'na', 'Routine bridges are designed to meet 2.5.2.6.2 (check SA3)');
+@@ -5602,3 +5648,3 @@
+     const T10 = (heads, cells, grp, rows) => `<div class="tscroll"><table class="tbl sa-t"><thead>${grp ? `<tr><th colspan="2"></th>${grp.map(([l, n]) => `<th colspan="${n}" class="sa-grp">${l}</th>`).join('')}</tr>` : ''}<tr><th>Point</th><th class="right">x (ft)</th>${heads.map(l => `<th class="right">${l}</th>`).join('')}</tr></thead><tbody>${(rows || R.tenth.map(t => [pt(t), t.i, t.i])).map(([l, i, c]) => `<tr><td class="lbl">${l}</td><td class="val">${f2(R.xs[i])}</td>${cells(c).map(v => `<td class="val">${v}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+-    const cmb = SA_COMBOS, fmtM = v => f0(v), fmtV = v => f2(v);
++    const cmb = saCombosOwn(), fmtM = v => f0(v), fmtV = v => f2(v);
+     // LL6 (2026-10-14): shear rows [label, node, element]: the element just right of each point; at an interior pier the element on each side; at the last support the one to its left
+@@ -5606,3 +5652,3 @@
+     const grpF = cmb.map(C => [C.name, C.fat ? 1 : 2]), headF = cmb.flatMap(C => C.fat ? ['range'] : ['max', 'min']);
+-    const facRow = C => C.fat ? [`—`, `—`, `—`, `${f2(C.fat)} (fatigue truck)`, `—`] : C.id === 'Con' ? [`${f2(C.dc1)} (DC1 only)`, `—`, `—`, `—`, `${f2(C.cl)}`] : [`${f2(C.dc[0])} / ${f2(C.dc[1])}`, `${f2(C.dw[0])} / ${f2(C.dw[1])}`, C.ll ? f2(C.ll) : '—', '—', '—'];
++    const facRow = C => C.fat ? [`—`, `—`, `—`, `${f2(C.fat)} (fatigue truck)`, `—`] : C.id === 'Con' ? [`${f2(C.dc1)} (DC1 only)`, `—`, `—`, `—`, `${f2(C.cl)}`] : [`${f2(C.dc[0])} / ${f2(C.dc[1])}`, `${f2(C.dw[0])} / ${f2(C.dw[1])}`, C.ll ? f2(C.ll) + (C.pl != null ? ` (PL ${f2(C.pl)})` : '') : '—', '—', '—'];
+     let h = card('sa-model', 'Model and loads', `G${R.j + 1}`, `<table class="tbl"><tbody>${[['Girder', `G${R.j + 1} (${R.ext ? 'exterior' : 'interior'}); effective flange width ${f2(R.beffFt)} ft (tributary)`], ['Model', R.fe ? `Variable EI per element, staged; cracked composite ${R.F.mode === 'dl' ? 'over the negative dead-load region' : 'over 15% of the adjacent spans each side of interior supports'} (A<sub>r</sub> = ${f2(R.Ar)} in², ${f2(nm(R.p.rebar))}% of the deck)` : 'Constant EI'], ['Modular ratio', `n = ${f2(R.n)}, 3n = ${f2(3 * R.n)}`], ['DC1', `steel ${f3(Math.min(...R.wSt))} to ${f3(Math.max(...R.wSt))} klf (plates + ${f0(R.b.allow)}% details) + deck, haunch, SIP ${f3(R.wDeck)} klf${R.xf.X.on ? (R.xf.miss ? ' + cross-frames: waiting for the framing from Preliminary sizing (none applied)' : ` + cross-frames and diaphragms: ${R.xf.pts.filter(q => !q.end).length} intermediate and ${R.xf.pts.filter(q => q.end).length} end-frame point loads, ${f2(R.xf.tot)} kip in all (${esc(R.xf.X.kind === 'ovr' ? 'entered weights' : R.xf.X.own ? 'Cross-frames module' : "Cross-frames module's default sizes, no design yet")}; LLDF and DLs module)`) : ' (cross-frames not included)'}`], ['DC2 / DW / PL / construction', `${f3(R.wDC2)} / ${f3(R.wDW)} / ${f3(R.wPL)} / ${f3(R.wCL)} klf`], ['Dynamic load allowance', `${f0(100 * R.im)}% truck and tandem, ${f0(100 * R.imf)}% fatigue (lane and pedestrian loads without IM)`], ['Distribution factors', R.man ? 'Entered manually for this girder' : `From the LLDF and DLs module, G${R.j + 1}`], ['Elements', `${R.N - 1} (nodes about 1 ft apart)`]].map(([k, v]) => `<tr><td class="lbl">${k}</td><td>${v}</td></tr>`).join('')}</tbody></table>`);
+@@ -5679,3 +5725,3 @@
+     add(S('Fatigue truck'), '3.6.1.4.1', T`8{-}32{-}32\ \text{kip at } 14 \text{ and } 30\ \text{ft (axles that do not contribute neglected)}, \ IM = 15\%, \ g_{fat} = g_{1\,lane}/1.2; \quad \text{Fatigue I range} = 1.75(M_{max} - M_{min})`);
+-    add(S('Load combinations'), 'Table 3.4.1-1, 3.4.1-2', T`\text{Strength I: } \gamma_{DC}DC + \gamma_{DW}DW + 1.75(LL + IM + PL), \ \gamma_{DC} = 1.25/0.90, \ \gamma_{DW} = 1.50/0.65; \quad \text{Service II: } DC + DW + 1.30(LL + IM)`);
++    add(S('Load combinations'), 'Table 3.4.1-1, 3.4.1-2', T`\text{Strength I: } \gamma_{DC}DC + \gamma_{DW}DW + 1.75(LL + IM + PL), \ \gamma_{DC} = 1.25/0.90, \ \gamma_{DW} = 1.50/0.65; \quad \text{Service II: } DC + DW + 1.30(LL + IM)${(() => { const L = gdLF(); return gdLFid(L) || (L.eta === 1 && L.etaN === 1 && L.m === 1) ? '' : T` \quad \text{Owner load rules: Strength factors} \times \eta = ${L.eta.toFixed(3)}\ (\text{minimum} \times 1/\eta = ${L.etaN.toFixed(3)})${L.m !== 1 ? T`,\ LL + IM \times m = ${L.m.toFixed(2)}\ \text{at Strength and Service (not PL)}` : ''}`; })()}`);
+     add(S('Deflections by virtual work'), '2.5.2.6', T`\Delta(x) = \sum_k M(k)\,m_x(k)\,\frac{\Delta x_k}{E I_{stage}(k)}, \quad m_x \text{ statically admissible (constant-EI unit-load moments)}`);
+@@ -5877,3 +5923,4 @@
+     'Moments sagging positive. Shears in the MIDAS convention of this schema (negative at the left end of a span under gravity load). Shear at a node is the element just right of it; at each interior support there is one station 0.001 ft either side.',
+-    'Not sent: construction live load, deck placement sequence, wind and flange lateral bending.'];
++    'Not sent: construction live load, deck placement sequence, wind and flange lateral bending.',
++    ...(() => { const L = gdLF(); return gdLFid(L) ? [] : [`Owner load rules of ${L.o} (OWN6–OWN8), applied in GirderDetail's own checks, are NOT in these unfactored forces: ${[L.m !== 1 ? `design load multiplier ${L.m} on LL+IM at the Strength and Service limit states` : '', L.eta !== 1 || L.etaN !== 1 ? `load modifier eta = ${(L.eD * L.eR * L.eI).toFixed(3)} on the Strength load factors (1/eta on the minimum factors)` : '', L.h0 ? 'haunch taken as 0 in composite section properties (deck.haunch is the haunch as entered; the forces come from an analysis with the haunch at 0 in the composite stiffness)' : ''].filter(Boolean).join('; ')}. Apply them in the receiving tool.`]; })()];   // OWN6–OWN8: a note only (the payload's fields are unchanged)
+   const p = { _schema: GD_ST.schema, schemaVersion: 1, producer: GD_ST.producer, producerFile: GD_ST.file, producedAt: new Date().toISOString(),
+@@ -5922,3 +5969,3 @@
+   if (R._seq !== undefined) return R._seq; const p = R.p; if (p.seqOn === 'off' || !R.cont) return (R._seq = null);
+-  const xs = Array.from(R.xs), N = xs.length, NE = N - 1, trib = R.trib, sp = R.spans, L = xs[N - 1], ts = R.b.tsDeck, hh = R.b.haunch, nr = p.seqMod === '3n' ? 3 * R.n : R.n;
++  const xs = Array.from(R.xs), N = xs.length, NE = N - 1, trib = R.trib, sp = R.spans, L = xs[N - 1], ts = R.b.tsDeck, hh = gdHP(R.b.haunch), nr = p.seqMod === '3n' ? 3 * R.n : R.n;
+   // pours: custom list, or positive regions (by span) then negative regions, from the simultaneous DC1 moment sign
+@@ -5942,3 +5989,3 @@
+   if (!R || R.errors && R.errors.length) return null;
+-  const ts = R.b.tsDeck, hh = R.b.haunch, N = R.N, Fy = (GD_GR[R.b.gF] || GD_GR['50W']).Fy, crack = R.fe && R.F ? R.F.crack : null;
++  const ts = R.b.tsDeck, hh = gdHP(R.b.haunch), N = R.N, Fy = (GD_GR[R.b.gF] || GD_GR['50W']).Fy, crack = R.fe && R.F ? R.F.crack : null, LF = gdLF();   // OWN6–OWN8
+   const ck = i => !!crack && ((i > 0 && crack[i - 1]) || (i < N - 1 && crack[i]));
+@@ -5949,8 +5996,9 @@
+   const out = { Fy, crack, bot: mk(), top: mk(), deck: { lt: new Float64Array(N), sx: new Float64Array(N), sn: new Float64Array(N) }, secs: [] };
+-  const g1 = (x, mx) => (x >= 0) === mx ? 1.25 : 0.90, gw = (x, mx) => (x >= 0) === mx ? 1.50 : 0.65;
++  const g1 = (x, mx) => (x >= 0) === mx ? 1.25 * LF.eta : 0.90 * LF.etaN, gw = (x, mx) => (x >= 0) === mx ? 1.50 * LF.eta : 0.65 * LF.etaN;
+   let iMax = 0;
+   for (let i = 0; i < N; i++) { const g = sec(i); out.secs.push(g); const D1 = R.MDC1[i], D2 = R.MDC2[i], W = R.MDW[i], Lp = R.LLp[i] + (R.PLp ? R.PLp[i] : 0), Ln = R.LLn[i] + (R.PLn ? R.PLn[i] : 0);
+-    [['bot', fB], ['top', fT]].forEach(([k, fn]) => { const q = out[k], a1 = fn(D1, g.S), a2 = fn(D2, g.L), aw = fn(W, g.L), p = fn(Lp, Lp < 0 ? g.ShR : g.Sh), n = fn(Ln, Ln < 0 ? g.ShR : g.Sh), hi = Math.max(p, n), lo = Math.min(p, n);
++    const Lpm = R.LLp[i] * LF.m + (R.PLp ? R.PLp[i] : 0), Lnm = R.LLn[i] * LF.m + (R.PLn ? R.PLn[i] : 0);   // OWN6: m on LL+IM, not on the pedestrian load (equal to Lp, Ln when m = 1)
++    [['bot', fB], ['top', fT]].forEach(([k, fn]) => { const q = out[k], a1 = fn(D1, g.S), a2 = fn(D2, g.L), aw = fn(W, g.L), p = fn(Lp, Lp < 0 ? g.ShR : g.Sh), n = fn(Ln, Ln < 0 ? g.ShR : g.Sh), pm = fn(Lpm, Lpm < 0 ? g.ShR : g.Sh), nm_ = fn(Lnm, Lnm < 0 ? g.ShR : g.Sh), hi = Math.max(pm, nm_), lo = Math.min(pm, nm_);
+       q.c1[i] = a1; q.c2[i] = a1 + a2 + aw; q.lp[i] = p; q.ln[i] = n; q.s2x[i] = a1 + a2 + aw + 1.3 * hi; q.s2n[i] = a1 + a2 + aw + 1.3 * lo;
+-      q.stx[i] = g1(a1 + a2, true) * (a1 + a2) + gw(aw, true) * aw + 1.75 * hi; q.stn[i] = g1(a1 + a2, false) * (a1 + a2) + gw(aw, false) * aw + 1.75 * lo; });
++      q.stx[i] = g1(a1 + a2, true) * (a1 + a2) + gw(aw, true) * aw + 1.75 * LF.eta * hi; q.stn[i] = g1(a1 + a2, false) * (a1 + a2) + gw(aw, false) * aw + 1.75 * LF.eta * lo; });
+     const dL = fD(D2 + W, g.L), dp = fD(Lp, Lp < 0 ? g.ShR : g.Sh), dn = fD(Ln, Ln < 0 ? g.ShR : g.Sh); out.deck.lt[i] = dL ?? 0; out.deck.sx[i] = (dL ?? 0) + Math.max(dp ?? 0, dn ?? 0); out.deck.sn[i] = (dL ?? 0) + Math.min(dp ?? 0, dn ?? 0);
+@@ -6053,3 +6101,3 @@
+   const tr = R.rows.map(r => `<tr><td class="lbl">${esc(r.name)}</td><td class="val">${f2(r.RDC1)}</td><td class="val">${f2(r.RDC2)}</td><td class="val">${f2(r.RDW)}</td><td class="val">${f2(r.RLL)}</td><td class="val">${f2(r.Ru)}</td></tr>`).join('');
+-  let h = card('cb-bs', 'Strength I factored reactions', 'AASHTO LRFD 3.4.1, Table 3.4.1-1', `<p class="note-p">Strength I is the only combination that governs the bearing stiffener checks of 6.10.11.2. Permanent loads use their maximum factors because every reaction component adds to the stiffener force.</p>
++  let h = gdOwnCard('bstf', P.bs.gam) + card('cb-bs', 'Strength I factored reactions', 'AASHTO LRFD 3.4.1, Table 3.4.1-1', `<p class="note-p">Strength I is the only combination that governs the bearing stiffener checks of 6.10.11.2. Permanent loads use their maximum factors because every reaction component adds to the stiffener force.</p>
+     <div class="tscroll"><table class="tbl"><thead><tr><th>Bearing</th><th class="right">R<sub>DC1</sub></th><th class="right">R<sub>DC2</sub></th><th class="right">R<sub>DW</sub></th><th class="right">R<sub>LL+IM</sub></th><th class="right">R<sub>u</sub></th></tr></thead><tbody>${tr}</tbody></table></div>
+@@ -6141,5 +6189,6 @@
+   showN(m.id, RS.MR); if (m.after) m.after(RS); CK = m.checks(RS); renderStatus(); gmSummary(m);
+-  if (typeof gdXfAlerts === 'function') { const a = gdXfAlerts(m.id === 'df' || m.id === 'sa'); if (a) $('#tab-summary').insertAdjacentHTML('afterbegin', a); }   // XF1 (2026-10-13): the notice in every module; the double-count warning in LLDF and DLs and Structural analysis
++  if (typeof gdXfAlerts === 'function') { const a = gdXfAlerts(m.id === 'df' || m.id === 'sa'); if (a) $('#tab-summary').insertAdjacentHTML('afterbegin', a); }
++  { const a = gdOwnLdNote(); if (a) $('#tab-summary').insertAdjacentHTML('afterbegin', a); }   // OWN9: owner load rules newly applied to an older project (one-time)   // XF1 (2026-10-13): the notice in every module; the double-count warning in LLDF and DLs and Structural analysis
+   if (m.id === 'cf' && d.migK) { $('#tab-summary').insertAdjacentHTML('afterbegin', '<div class="alert info" style="margin:0 0 12px">Migrated from \'K\' (computed as Kt) to Kb; top/bottom chords swapped.</div>'); delete d.migK; autosave(); }   // shown once per project
+-  $('#tab-combos').innerHTML = `<div class="ctl-row"><button type="button" class="dg-btn" data-exp="combos">Expand all</button><button type="button" class="dg-btn" data-col="combos">Collapse all</button></div>` + (RS.MR ? card('cb-mr', 'Modular ratio', 'AASHTO LRFD 5.4.2.4, 6.10.1.1.1b', eq('Short-term modular ratio', '5.4.2.4-1', modTex(RS.MR)) + `<p class="note-p">The long-term (creep) section uses 3n = ${f2(3 * RS.MR.n)}.</p>`) : '') + m.combos(RS);
++  $('#tab-combos').innerHTML = `<div class="ctl-row"><button type="button" class="dg-btn" data-exp="combos">Expand all</button><button type="button" class="dg-btn" data-col="combos">Collapse all</button></div>` + gdOwnCard(m.id, d.gam, ['gs', 'sc', 'wt', 'fa'].includes(m.id) ? nm(d.hh) : ['df', 'sa'].includes(m.id) && P.df.bridge ? P.df.bridge.haunch : null, m.id === 'cf' && gdLF().eta !== 1 ? `<p class="note-p">Wind (Strength III and V): γ<sub>WS</sub> = 1.0η = ${gdLF().eta.toFixed(3)}. Analysis forces entered for Strength I are used as entered (factored by the analysis that produced them); deck placement unchanged.</p>` : '') + (RS.MR ? card('cb-mr', 'Modular ratio', 'AASHTO LRFD 5.4.2.4, 6.10.1.1.1b', eq('Short-term modular ratio', '5.4.2.4-1', modTex(RS.MR)) + `<p class="note-p">The long-term (creep) section uses 3n = ${f2(3 * RS.MR.n)}.</p>`) : '') + m.combos(RS);
+   if (m.capacity) $('#tab-cap').innerHTML = m.capacity(RS);
+@@ -7228,3 +7277,3 @@
+   y -= gap; const xm = xs.slice(0, -1).map((x, i) => (x + xs[i + 1]) / 2), VD = ADD(Array.from(r.VDC1), Array.from(r.VDC2)), VW = Array.from(r.VDW), Vp = Array.from(r.LVp), Vn = Array.from(r.LVn);
+-  const f = (a, mx) => (a >= 0) === mx ? 1.25 : 0.90, fw = (a, mx) => (a >= 0) === mx ? 1.5 : 0.65, Sx = VD.map((v, i) => f(v, true) * v + fw(VW[i], true) * VW[i] + 1.75 * Vp[i]), Sn = VD.map((v, i) => f(v, false) * v + fw(VW[i], false) * VW[i] + 1.75 * Vn[i]);
++  const LF = gdLF(), f = (a, mx) => (a >= 0) === mx ? 1.25 * LF.eta : 0.90 * LF.etaN, fw = (a, mx) => (a >= 0) === mx ? 1.5 * LF.eta : 0.65 * LF.etaN, Sx = VD.map((v, i) => f(v, true) * v + fw(VW[i], true) * VW[i] + 1.75 * LF.eta * LF.m * Vp[i]), Sn = VD.map((v, i) => f(v, false) * v + fw(VW[i], false) * VW[i] + 1.75 * LF.eta * LF.m * Vn[i]);   // OWN6/OWN7
+   const ps = dxfPlot(D, L.dc, y, xm, [{ ys: VD, l: L.dc }, { ys: VW, l: L.dw }, { ys: Vp, l: L.ll }, { ys: Vn, l: L.ll, lt: 'HIDDEN' }, { ys: Sx, l: L.st }, { ys: Sn, l: L.st, lt: 'HIDDEN' }], `G${C.g} SHEAR ENVELOPES: DC, DW, LL+IM (+/-), STRENGTH I (MAX/MIN)`, 'KIP', sup);
+@@ -7397,5 +7446,5 @@
+   if (k === 'mSD') return { x: xs, hi: add(A(R.MDC2), A(R.MDW)), lo: null, u: 'kip-ft' }; if (k === 'fat') return { x: xs, hi: A(R.FMp), lo: A(R.FMn), u: 'kip-ft' };
+-  const VD = add(A(R.VDC1), A(R.VDC2)), VW = A(R.VDW), Vp = A(R.LVp), Vn = A(R.LVn), f = (a, mx) => (a >= 0) === mx ? 1.25 : 0.90, fw = (a, mx) => (a >= 0) === mx ? 1.5 : 0.65;
++  const LF = gdLF(), VD = add(A(R.VDC1), A(R.VDC2)), VW = A(R.VDW), Vp = A(R.LVp), Vn = A(R.LVn), f = (a, mx) => (a >= 0) === mx ? 1.25 * LF.eta : 0.90 * LF.etaN, fw = (a, mx) => (a >= 0) === mx ? 1.5 * LF.eta : 0.65 * LF.etaN;   // OWN6/OWN7
+   if (k === 'vLL') return { x: xm, hi: Vp, lo: Vn, u: 'kip' }; if (k === 'vDC') return { x: xm, hi: add(VD, VW), lo: null, u: 'kip' };
+-  return { x: xm, hi: VD.map((v, i) => f(v, true) * v + fw(VW[i], true) * VW[i] + 1.75 * Vp[i]), lo: VD.map((v, i) => f(v, false) * v + fw(VW[i], false) * VW[i] + 1.75 * Vn[i]), u: 'kip' }; }
++  return { x: xm, hi: VD.map((v, i) => f(v, true) * v + fw(VW[i], true) * VW[i] + 1.75 * LF.eta * LF.m * Vp[i]), lo: VD.map((v, i) => f(v, false) * v + fw(VW[i], false) * VW[i] + 1.75 * LF.eta * LF.m * Vn[i]), u: 'kip' }; }
+ function v3bLabel(txt, size, color) { const c = document.createElement('canvas'), g = c.getContext('2d'); g.font = 'bold 40px system-ui, sans-serif'; const w = Math.ceil(g.measureText(txt).width) + 16; c.width = w; c.height = 56;
+@@ -8071,2 +8120,3 @@
+   renderStatus(); renderSummary(); renderCombos(); renderChecks(); renderDrawings(); render3D(); renderReportHead(); spNoPLMark();
++  { const a = gdOwnLdNote(); if (a) $('#tab-summary').insertAdjacentHTML('afterbegin', a); }   // OWN9
+   applyCollapse(); typeset();
+@@ -8086,3 +8136,3 @@
+ }
+-const grps = () => P.mod === 'cf' && cfDiaOn(P.cf) ? ['Diaphragm (intermediate bracing used)', 'End diaphragms (bearing lines)', 'Bracing type'] : (MODS[P.mod] || MODS.splice).groups;   // cross-frames: with the diaphragm used only its groups (CFD, CFE) and the bracing type (CF10) are listed; the angle groups are not shown (2026-10-13)
++const grps = () => P.mod === 'cf' && cfDiaOn(P.cf) ? ['Diaphragm (intermediate bracing used)', 'End diaphragms (bearing lines)', 'Bracing type'] : gdGrpOwn((MODS[P.mod] || MODS.splice).groups);   // cross-frames: with the diaphragm used only its groups (CFD, CFE) and the bracing type (CF10) are listed; the angle groups are not shown (2026-10-13)
+ function counts() { const c = { fail: 0, warn: 0, adv: 0, pass: 0, na: 0 }; CK.forEach(k => c[k.status]++); return c; }
+@@ -8123,3 +8173,3 @@
+   const pr = R.ps.parts.map(p => `<tr><td class="lbl">${p.n}</td><td class="val">${f2(p.A)}</td><td class="val">${f2(p.y)}</td><td class="val">${f2(p.I0)}</td><td class="val">${f2(p.Ad2)}</td></tr>`).join('');
+-  let h = (R.code === '10' ? pfyCard(R) : '') + card('cb-sec', `Section properties, ${R.smSide === 'L' ? 'left' : 'right'} (smaller) side`, 'AASHTO LRFD 6.13.6.1.1', `
++  let h = gdOwnCard('splice', P.gam, num2(P.sec.hh)) + (R.code === '10' ? pfyCard(R) : '') + card('cb-sec', `Section properties, ${R.smSide === 'L' ? 'left' : 'right'} (smaller) side`, 'AASHTO LRFD 6.13.6.1.1', `
+     <p class="note-p">The splice is designed for the smaller section: I<sub>steel</sub> = ${f0(R.pL.I)} in⁴ left, ${f0(R.pR.I)} in⁴ right. Flange stresses are taken at the mid-thickness of each flange: y = ${f2(R.yT)} in (top) and ${f2(R.yB)} in (bottom) above the bottom of the steel.</p>
+@@ -8128,3 +8178,3 @@
+     ${eq('Modular ratio', '5.4.2.4-1, 6.10.1.1.1b', modTex(R.MR))}
+-    ${eq('Composite slab, short term', '6.10.1.1.1b', T`A_{slab} = \frac{b_{eff}t_s}{n} = \frac{${f2(num2(P.sec.beff))}(${f2(num2(P.sec.ts))})}{${f2(R.MR.n)}} = ${f2(num2(P.sec.beff) * num2(P.sec.ts) / R.MR.n)}\ \text{in}^2 \ \text{at}\ y = d + h_h + \frac{t_s}{2} = ${f2(R.ps.d + num2(P.sec.hh) + num2(P.sec.ts) / 2)}\ \text{in}`)}
++    ${eq('Composite slab, short term', '6.10.1.1.1b', T`A_{slab} = \frac{b_{eff}t_s}{n} = \frac{${f2(num2(P.sec.beff))}(${f2(num2(P.sec.ts))})}{${f2(R.MR.n)}} = ${f2(num2(P.sec.beff) * num2(P.sec.ts) / R.MR.n)}\ \text{in}^2 \ \text{at}\ y = d + h_h + \frac{t_s}{2} = ${f2(R.ps.d + gdHP(num2(P.sec.hh)) + num2(P.sec.ts) / 2)}\ \text{in}`)}
+     ${eq('Flange stress', '', T`f = -\frac{M(12)\,(y - \bar{y})}{I} \qquad (\text{tension positive})`)}`);
+@@ -8510,3 +8560,28 @@
+     { owner: 'MassDOT', id: 'haunch.std', kind: 'pending-reference', sec: '3.5.1.2', ref: 'MassDOT Bridge Manual Part II', text: 'Standard haunch detail (depth used in composite properties)' },
+-    { owner: 'MassDOT', id: 'camber.z', kind: 'pending-reference', sec: '3.5.6.2', ref: 'MassDOT Bridge Manual Part II', text: 'Camber diagrams and "Z" values for steel beams' }
++    { owner: 'MassDOT', id: 'camber.z', kind: 'pending-reference', sec: '3.5.6.2', ref: 'MassDOT Bridge Manual Part II', text: 'Camber diagrams and "Z" values for steel beams' },
++    // phase 2 (OWN6–OWN9, 2026-10-15): load rules (kind 'load': applied to the factored demands; value.f the factor, value.q the question of the owner's yes/no
++    // input, value.fixed: no input) and design rating targets (rate.*: GS20). Preliminary sizing turns them into bridge.lf (plLF), which every module applies.
++    { owner: 'RIDOT', id: 'ld.mult', kind: 'load', sec: '3.4.1.2', value: { f: 1.2 }, where: 'Preliminary sizing (sizing, checks, Suggest, Full design) and every GirderDetail module: LL+IM at Strength I and Service I / II',
++      text: 'Design load multiplier 1.2 on HL-93 (truck or tandem plus lane) at the Strength and Service limit states; not on the live load for deflection, not in the design check load rating' },
++    { owner: 'RIDOT', id: 'ld.etaD', kind: 'load', sec: '1.3.1', value: { f: 1.0, fixed: true }, where: 'Strength load factors (η)', text: 'η_D = 1.00 at all limit states; nonductile components and connections are not used' },
++    { owner: 'RIDOT', id: 'ld.etaR', kind: 'load', sec: '1.3.2', value: { f: 1.05 }, where: 'Strength load factors (η); input on Preliminary sizing\'s Limits tab', text: 'η_R = 1.05 for nonredundant members (NSTM), Strength limit state; 1.00 for load-path redundant structures' },
++    { owner: 'RIDOT', id: 'ld.etaI', kind: 'load', sec: '1.3.3', value: { f: 1.05, q: 'ADT of 5000 or greater' }, where: 'Strength load factors (η); input on Preliminary sizing\'s Limits tab', text: 'η_I = 1.05 for bridges with an ADT of 5000 or greater, Strength limit state; 1.00 otherwise' },
++    { owner: 'RIDOT', id: 'ld.haunch0', kind: 'load', sec: '6.5.1, 9.4.6', value: { h: 0 }, where: 'Composite section properties in Preliminary sizing and every GirderDetail module (stiffness, K_g, section moduli, M_p); the haunch weight stays in DC1',
++      text: 'Deck haunch taken as zero for the flexural stiffness and flexural capacity; the haunch (2 in minimum) is counted as dead load (also 4.3.1: haunches not in the structural model)' },
++    { owner: 'RIDOT', id: 'rate.dclr', kind: 'shall-check', sec: '3.4.1.2', value: { rf: 1.10, fat: 1.0 }, where: 'Girder section: check GS20 (HL-93 inventory, AASHTO factors without the multiplier); reported, the girder is not resized for it',
++      text: 'Design check load rating (90% submission), without the design load multiplier: every rating vehicle RF ≥ 1.10, and infinite fatigue life' },
++    { owner: 'RIDOT', id: 'rate.veh', kind: 'pending-reference', sec: '3.4.1.2', ref: 'RIDOT LRFR Guidelines rating vehicles (AASHTO legal loads, RIPTA bus, RI permit vehicles), not in this tool', text: 'Legal and permit vehicle ratings of the design check load rating' },
++    { owner: 'MassDOT', id: 'ld.etaD', kind: 'load', sec: '3.1.4.4', value: { f: 1.05 }, where: 'Strength load factors (η); input on Preliminary sizing\'s Limits tab', text: 'η_D = 1.05 for nonductile components and connections; 1.0 for all others' },
++    { owner: 'MassDOT', id: 'ld.etaR', kind: 'load', sec: '3.1.4.4', value: { f: 1.05 }, where: 'Strength load factors (η); input on Preliminary sizing\'s Limits tab', text: 'η_R = 1.05 for nonredundant members; 1.0 for all others' },
++    { owner: 'MassDOT', id: 'ld.etaI', kind: 'load', sec: '3.1.4.4, 3.1.2', value: { f: 1.05, q: 'Critical or essential bridge (3.1.2: Interstate, other NHS, STRAHNET, evacuation routes)' }, where: 'Strength load factors (η); input on Preliminary sizing\'s Limits tab', text: 'η_I = 1.05 for critical or essential bridges; 1.0 for all others' },
++    { owner: 'MassDOT', id: 'ld.haunch0', kind: 'load', sec: '3.5.1.2', value: { h: 0 }, where: 'Composite section properties in Preliminary sizing and every GirderDetail module (stiffness, K_g, section moduli, M_p); the haunch weight stays in DC1',
++      text: 'Depth of the standard haunch conservatively assumed zero in any composite section property' },
++    { owner: 'MassDOT', id: 'rate.prelim', kind: 'report', sec: '3.1.4.3', value: {}, where: 'Girder section: check GS20 (HL-93 inventory rating factors, reported)', text: 'Preliminary load rating calculations are part of the design (submitted with the structural submittals)' },
++    { owner: 'MassDOT', id: 'rate.veh', kind: 'pending-reference', sec: '3.1.4.3, 7.2.4', ref: 'Massachusetts posting and permit vehicles (Part I Ch. 7), not in this tool', text: 'Ratings for the Massachusetts posting vehicles (the purpose of 3.1.4.3)' },
++    { owner: 'CTDOT', id: 'ld.etaD', kind: 'load', sec: 'V2 1.3.3', value: { f: 1.05 }, where: 'Strength load factors (η); input on Preliminary sizing\'s Limits tab', text: 'η_D ≥ 1.05 for nonductile components and connections (1.05 used); 1.00 otherwise' },
++    { owner: 'CTDOT', id: 'ld.etaR', kind: 'load', sec: 'V2 1.3.4', value: { f: 1.05 }, where: 'Strength load factors (η); input on Preliminary sizing\'s Limits tab', text: 'η_R ≥ 1.05 for nonredundant members (1.05 used; nonredundant members need written CTDOT approval); 1.00 otherwise' },
++    { owner: 'CTDOT', id: 'ld.etaI', kind: 'load', sec: 'V2 1.3.5', value: { f: 1.05, q: 'On or over an NHS route (Interstate, other NHS, STRAHNET) or a designated emergency evacuation route' }, where: 'Strength load factors (η); input on Preliminary sizing\'s Limits tab', text: 'η_I ≥ 1.05 for critical or essential bridges (1.05 used); 1.00 for all other bridges' },
++    { owner: 'CTDOT', id: 'rate.inv', kind: 'shall-check', sec: 'V1B Load Ratings', value: { rf: 1.20, fat: 1.20 }, where: 'Girder section: check GS20 (HL-93 inventory at Strength I, Service II and Fatigue); reported, the girder is not resized for it',
++      text: 'New and superstructure-replacement bridges: minimum RF 1.20 for the HL-93 design inventory rating at all limit states (Strength, Service, Fatigue)' },
++    { owner: 'CTDOT', id: 'rate.veh', kind: 'pending-reference', sec: 'V1B Load Ratings', ref: 'Legal, permit and emergency vehicles (RF ≥ 1.20) and the CT-TLC paving train (RF ≥ 1.10), not in this tool', text: 'Legal, permit, emergency vehicle and CT-TLC ratings' }
+   ]
+@@ -8516,2 +8591,32 @@
+ const gdOwnCite = r => `${(OWN_RULES.owners[r.owner] || {}).short || r.owner} ${r.sec}`;
++/* owner load rules (OWN6–OWN8, phase 2): the factors Preliminary sizing publishes with the bridge (bridge.lf, from plLF there). gdLF(): { o, m, eD, eR, eI, eta, etaN, h0 };
++   all 1 (and h0 false) when not published (no bridge yet, or a bridge from an older build). Every module that forms Strength or Service demands applies them:
++   maximum Strength factors (DC, DW) × eta, minimum Strength factors × etaN, Strength LL × eta·m, Service LL × m; fatigue, deck placement and the live load
++   deflection unchanged. gdHP(h): the haunch in composite section properties (0 under RIDOT BDM 6.5.1 / MassDOT 3.5.1.2; the weight stays in DC1). */
++const LF_ONE = { v: 1, o: null, m: 1, eD: 1, eR: 1, eI: 1, eta: 1, etaN: 1, h0: false };
++function gdLF() { const b = P && P.df && P.df.bridge, l = b && b.lf; return l && typeof l === 'object' && +l.m > 0 && +l.eta > 0 && +l.etaN > 0 ? l : LF_ONE; }
++const gdLFid = (L = gdLF()) => L.m === 1 && L.eta === 1 && L.etaN === 1 && !L.h0;
++const gdHP = v => gdLF().h0 ? 0 : v;
++// a module's load factors (K: the input keys by kind: mx maximum Strength, mn minimum Strength, ll Strength LL, sv Service LL) -> its multiplier for key k
++function gdOwnM(K) { const L = gdLF(), f = {}; (K.mx || []).forEach(k => f[k] = L.eta); (K.mn || []).forEach(k => f[k] = L.etaN); (K.ll || []).forEach(k => f[k] = L.eta * L.m); (K.sv || []).forEach(k => f[k] = L.m); return k => f[k] ?? 1; }
++const OWN_K = { splice: { mx: ['dcMax', 'dwMax'], mn: ['dcMin', 'dwMin'], ll: ['llS'], sv: ['llSv'] }, bstf: { mx: ['dc', 'dw'], ll: ['ll'] }, ts: { mx: ['dc', 'dw'], ll: ['ll'] }, wt: { mx: ['dc', 'dw'], ll: ['ll'] },
++  gs: { mx: ['dc', 'dw'], mn: ['dcMin', 'dwMin'], ll: ['ll'], sv: ['sll'] } };
++const OWN_KL = { dcMax: 'γ<sub>DC</sub> max', dcMin: 'γ<sub>DC</sub> min', dwMax: 'γ<sub>DW</sub> max', dwMin: 'γ<sub>DW</sub> min', llS: 'γ<sub>LL</sub> Strength I', llSv: 'γ<sub>LL</sub> Service II', dc: 'γ<sub>DC</sub> Strength I', dw: 'γ<sub>DW</sub> Strength I', ll: 'γ<sub>LL</sub> Strength I', sll: 'γ<sub>LL</sub> Service II' };
++// the worked card of the owner load rules in a module (first card of its loads tab; nothing when every factor is 1 and the haunch is used as entered)
++function gdOwnCard(id, gam, hhIn, extra) {
++  const L = gdLF(); if (gdLFid(L)) return ''; const K = OWN_K[id], f3_ = v => (+v).toFixed(3);
++  const how = k => (K.mx || []).includes(k) ? `× η = × ${f3_(L.eta)}` : (K.mn || []).includes(k) ? `× 1/η = × ${f3_(L.etaN)}` : (K.ll || []).includes(k) ? `× ηm = × ${f3_(L.eta)} × ${f3_(L.m)}` : (K.sv || []).includes(k) ? `× m = × ${f3_(L.m)}` : '';
++  const rows = K && gam ? [...(K.mx || []), ...(K.mn || []), ...(K.ll || []), ...(K.sv || [])].filter(k => k in gam).map(k => `<tr><td class="lbl">${OWN_KL[k]}</td><td class="val">${f2(nm(gam[k]))}</td><td>${how(k)}</td><td class="val"><b>${f3_(nm(gam[k]) * gdOwnM(K)(k))}</b></td></tr>`).join('') : '';
++  return card('cb-own', 'Owner load rules', `${esc(L.o || '')}; AASHTO LRFD 1.3.2.1, Table 3.4.1-1`, `<p class="note-p">From the bridge in <a href="#" data-dfpl="1">Preliminary sizing</a> (owner and inputs on its Limits tab; worked there on the Analysis tab, card "Owner load rules"): η = η<sub>D</sub>η<sub>R</sub>η<sub>I</sub> = ${f3_(L.eD)} × ${f3_(L.eR)} × ${f3_(L.eI)}, so the maximum Strength factors take η = ${f3_(L.eta)} and the minimum ones 1/η = ${f3_(L.etaN)} (Strength limit states only)${L.m !== 1 ? `; design load multiplier m = ${f3_(L.m)} on LL+IM at the Strength and Service limit states (not fatigue, deck placement or deflection)` : ''}.</p>
++    ${rows ? `<div class="tscroll"><table class="tbl"><thead><tr><th>Factor</th><th class="right">Entered</th><th>Owner rule</th><th class="right">Used</th></tr></thead><tbody>${rows}</tbody></table></div>` : ''}${extra || ''}
++    ${L.h0 && hhIn != null ? `<p class="note-p">Haunch: ${f2(hhIn)} in entered; taken as <b>0</b> in every composite section property of this module (owner rule; the haunch weight is in DC1 of the analysis).</p>` : ''}`); }
++/* the one-time notice (OWN9): a project saved before the owner load rules, under an owner that has some, gets P.ownLd = { o, items } when its bridge first arrives with them */
++function gdOwnLdNote() { const q = P.ownLd; if (!q || !Array.isArray(q.items)) return '';
++  return `<div class="alert info" style="margin:0 0 12px"><b>${esc(q.o)} load rules are now applied</b> to this project (saved before they were): ${q.items.map(esc).join('; ')}. Every module was refreshed with them; results differ from those saved. <button type="button" class="link-btn" data-ownld-x="1">Dismiss</button></div>`; }
++document.addEventListener('click', e => { if (e.target.closest && e.target.closest('[data-ownld-x]')) { delete P.ownLd; autosave(); document.querySelectorAll('[data-ownld-x]').forEach(b => { const a = b.closest('.alert'); if (a) a.remove(); }); } });
++function gdOwnLdItems(L) { const it = []; if (L.m !== 1) it.push(`design load multiplier ${L.m} on LL+IM at Strength and Service`); const e = L.eD * L.eR * L.eI;
++  if (e !== 1) it.push(`η = ${L.eD.toFixed(2)} × ${L.eR.toFixed(2)} × ${L.eI.toFixed(2)} = ${e.toFixed(3)} on the Strength load factors`); if (L.h0) it.push('haunch taken as 0 in composite section properties'); return it; }
++// design rating target of the owner (OWN9; GS20): the rate.* row that is not pending, or null (AASHTO: none)
++const gdRateRule = () => { const o = gdOwner(); return o && o !== 'AASHTO' ? OWN_RULES.rules.find(r => r.owner === o && /^rate\./.test(r.id) && r.kind !== 'pending-reference') || null : null; };
++const gdGrpOwn = g => P && P.mod === 'gs' && gdRateRule() ? [...g, 'Design load rating'] : g;
+ let GD_OWN_PEND = null;   // an owner chosen in the top bar, until Preliminary sizing publishes it back
+@@ -8521,5 +8626,5 @@
+ function ownModal() {
+-  const cur = GD_OWN_PEND || gdOwner(), K = { 'shall-check': 'Shall: pass/fail check', 'should-warning': 'Should: warning', default: 'Default (editable; overrides flagged)', 'pending-reference': 'Pending reference' };
++  const cur = GD_OWN_PEND || gdOwner(), K = { 'shall-check': 'Shall: pass/fail check', 'should-warning': 'Should: warning', default: 'Default (editable; overrides flagged)', 'pending-reference': 'Pending reference', load: 'Load rule (applied to the factored demands)', report: 'Reported (no limit)' };
+   const rows = OWN_LIST.filter(o => !OWN_RULES.owners[o].none).map(o => { const rs = gdOwnRules(o); return rs.map((r, i) => `<tr class="${o === cur ? 'own-cur' : ''}">${i === 0 ? `<td rowspan="${rs.length}"><b>${o}</b><br><span style="color:var(--muted)">${esc(OWN_RULES.owners[o].manual)}; AASHTO LRFD ${OWN_RULES.owners[o].aashto}</span></td>` : ''}<td>${esc(r.sec)}</td><td>${esc(r.text)}</td><td>${K[r.kind] || esc(r.kind)}</td><td>${r.kind === 'pending-reference' ? `Not applied: needs ${esc(r.ref)}` : esc(r.where || '')}</td></tr>`).join(''); }).join('');
+-  $('#own-body').innerHTML = `<p>Bridge owner: <b>${cur || 'not known yet (open Preliminary sizing)'}</b>${cur === 'AASHTO' ? ' (no owner rules)' : ''}. ${esc(OWN_RULES.note)} Set the owner in the top bar or on Preliminary sizing's Limits tab; it is saved with the Preliminary sizing project. Owner rules in this version (phase 1): the cross-frame layout; the owners' load rules and defaults follow.</p>
++  $('#own-body').innerHTML = `<p>Bridge owner: <b>${cur || 'not known yet (open Preliminary sizing)'}</b>${cur === 'AASHTO' ? ' (no owner rules)' : ''}. ${esc(OWN_RULES.note)} Set the owner in the top bar or on Preliminary sizing's Limits tab; it is saved with the Preliminary sizing project. Owner rules in this version: the cross-frame layout (phase 1); the load rules (design load multiplier, load modifiers η, haunch in composite properties) and design rating targets (phase 2), with the η inputs on Preliminary sizing's Limits tab; the owners' defaults and detailing checks follow.</p>
+     <table><thead><tr><th>Owner</th><th>Section</th><th>Rule (paraphrased)</th><th>Kind</th><th>Applied in</th></tr></thead><tbody>${rows}</tbody></table>`;
+```
+
+Diff of the embedded Preliminary sizing page (decoded PL_B64):
+
+```diff
+--- main (Preliminary sizing, decoded PL_B64)
++++ branch (Preliminary sizing, decoded PL_B64)
+@@ -1017,2 +1017,40 @@
+ function migrateOwner(p) { const L = p && p.limits; if (L && !OWN_LIST.includes(L.dot)) L.dot = 'AASHTO'; return p; }   // 'Custom' (and any other value) -> 'AASHTO'; the limits are kept
++/* ---------- owner load rules (OWN6–OWN9, 2026-10-15; engineer's decisions of 2026-10-15, phase 2) ----------
++   plLF(P): the load-level rules of the bridge's owner, from the rules table (rows ld.*), used by every Strength and Service demand of this page and published
++   to GirderDetail with the bridge (bridge.lf), so that every module applies the same factors:
++   m   design load multiplier on HL-93 (LL+IM) at the Strength and Service limit states (RIDOT BDM 3.4.1.2: 1.2). Not on the live load deflection (A1), fatigue,
++       deck placement, or a design-check load rating.
++   eta load modifier eta_D eta_R eta_I (AASHTO LRFD 10th Ed. 1.3.2.1) on the Strength limit states only: the maximum load factors (DC, DW, LL) times
++       eta = max(eta_D eta_R eta_I, 0.95) (Eq. 1.3.2.1-2), the minimum factors (0.90 DC, 0.65 DW) times etaN = min(1/(eta_D eta_R eta_I), 1.0) (Eq. 1.3.2.1-3).
++       Not on Service, Fatigue or deck placement (constructibility). Owner rows: RIDOT BDM 1.3.1-1.3.3, MassDOT 3.1.4.4, CTDOT BRSDM V2 1.3.3-1.3.5, each with a
++       yes/no input (bridge.eta, optional): I = 'yes'|'no' (RIDOT ADT >= 5000; MassDOT critical or essential; CTDOT on or over the NHS / STRAHNET or an evacuation
++       route; default 'yes'), R = 'auto'|'yes'|'no' (nonredundant; auto: 3 girders or fewer; default 'auto'), D = 'yes'|'no' (nonductile; default 'no'). AASHTO:
++       eta_D, eta_R, eta_I entered (bridge.eta.eD, eR, eI; default 1.00, AASHTO LRFD 1.3.3-1.3.5).
++   h0  haunch taken as 0 in the composite section properties (stiffness for the analysis and deflections, K_g, section moduli, M_p lever arms, the cracked
++       section's reinforcement) (RIDOT BDM 6.5.1, 9.4.6, 4.3.1; MassDOT 3.5.1.2); the haunch weight stays in DC1 and the haunch in the depth checks (G2).
++   AASHTO with the default inputs (and this page opened on its own) gives m = eta = etaN = 1 and h0 false: every result exactly as before. */
++function plLF(Pp) {
++  const o = plOwner(Pp), E = (Pp && Pp.bridge && Pp.bridge.eta) || {}, nb = Math.round(Number(Pp && Pp.bridge && Pp.bridge.nb)) || 0, own = !!OWN_TBL && o !== 'AASHTO';
++  const rv = id => { const r = own ? ownRule(o, id) : null; return r && r.value && +r.value.f > 0 ? r : null; }, yn = (v, d) => v === 'yes' ? true : v === 'no' ? false : d;
++  const nonred = E.R === 'yes' ? true : E.R === 'no' ? false : nb > 0 && nb <= 3, rM = rv('ld.mult'), rI = rv('ld.etaI'), rR = rv('ld.etaR'), rD = rv('ld.etaD'), rH = own ? ownRule(o, 'ld.haunch0') : null;
++  let eD = 1, eR = 1, eI = 1;
++  if (own) { if (rD) eD = rD.value.fixed ? +rD.value.f : yn(E.D, false) ? +rD.value.f : 1; if (rR) eR = nonred ? +rR.value.f : 1; if (rI) eI = yn(E.I, true) ? +rI.value.f : 1; }
++  else { const e = k => { const v = Number(E[k]); return isFinite(v) && v > 0 ? v : 1; }; eD = e('eD'); eR = e('eR'); eI = e('eI'); }
++  const pr = eD * eR * eI;
++  return { v: 1, o, m: rM ? +rM.value.f : 1, eD, eR, eI, eta: Math.max(pr, 0.95), etaN: Math.min(1 / pr, 1), h0: !!rH, nonred, nb, inI: own && rI ? yn(E.I, true) : null, inD: own && rD && !rD.value.fixed ? yn(E.D, false) : null, inR: E.R === 'yes' || E.R === 'no' ? E.R : 'auto',
++    cite: { m: rM ? ownCite(rM) : '', I: rI ? ownCite(rI) : 'AASHTO LRFD 1.3.5', R: rR ? ownCite(rR) : 'AASHTO LRFD 1.3.4', D: rD ? ownCite(rD) : 'AASHTO LRFD 1.3.3', h: rH ? ownCite(rH) : '' } };
++}
++const lfId = L => !L || (L.m === 1 && L.eta === 1 && L.etaN === 1 && !L.h0);
++/* the owner load rules as a worked card (Analysis tab; OWN6–OWN8) */
++function lfCardBody(L, hhW) {
++  const r3 = v => (+v).toFixed(3).replace(/0$/, ''), g = (a, k) => r3(a * k);
++  const rows = [['γ<sub>DC</sub> max (Strength)', `1.25 η = 1.25(${r3(L.eta)})`, g(1.25, L.eta)], ['γ<sub>DC</sub> min (Strength)', `0.90 / η = 0.90(${r3(L.etaN)})`, g(0.90, L.etaN)], ['γ<sub>DW</sub> max (Strength)', `1.50 η = 1.50(${r3(L.eta)})`, g(1.50, L.eta)], ['γ<sub>DW</sub> min (Strength)', `0.65 / η = 0.65(${r3(L.etaN)})`, g(0.65, L.etaN)],
++    ['γ<sub>LL</sub> Strength I', `1.75 η m = 1.75(${r3(L.eta)})(${r3(L.m)})`, g(1.75, L.eta * L.m)], ['γ<sub>LL</sub> Service II', `1.30 m = 1.30(${r3(L.m)})`, g(1.30, L.m)], ['γ<sub>LL</sub> Service I (reactions)', `1.00 m`, g(1.00, L.m)],
++    ['Deck placement', '1.25 DC1 + 1.50 construction LL (no η, no m)', '—'], ['Fatigue, live load deflection', 'unchanged (no η, no m)', '—']];
++  return `<p class="note-p">Owner <b>${esc(L.o)}</b>. ${L.m !== 1 ? `Design load multiplier m = ${r3(L.m)} on HL-93 (LL+IM) at the Strength and Service limit states (${esc(L.cite.m)}); not on the live load deflection (A1), fatigue, deck placement, or the design-check load rating. ` : 'No design load multiplier (m = 1). '}
++    Load modifier (AASHTO LRFD 1.3.2.1, Strength limit states only): η = η<sub>D</sub>η<sub>R</sub>η<sub>I</sub> = ${r3(L.eD)} × ${r3(L.eR)} × ${r3(L.eI)} = ${r3(L.eD * L.eR * L.eI)}; maximum factors × η = ${r3(L.eta)} (≥ 0.95, Eq. 1.3.2.1-2), minimum factors × 1/η = ${r3(L.etaN)} (≤ 1.0, Eq. 1.3.2.1-3).
++    η<sub>D</sub>: ${esc(L.cite.D)}${L.inD != null ? `, nonductile: ${L.inD ? 'yes' : 'no'}` : ''}; η<sub>R</sub>: ${esc(L.cite.R)}${L.o !== 'AASHTO' ? `, nonredundant: ${L.nonred ? 'yes' : 'no'}${L.inR === 'auto' ? ` (automatic: ${L.nb} girders, nonredundant when 3 or fewer)` : ' (entered)'}` : ''}; η<sub>I</sub>: ${esc(L.cite.I)}${L.inI != null ? `: ${L.inI ? 'yes' : 'no'}` : ''}. Inputs on the Limits tab (Owner profile).</p>
++    <table class="tbl"><thead><tr><th>Factor</th><th>Expression</th><th class="right">Value</th></tr></thead><tbody>${rows.map(([a, b, c]) => `<tr><td class="lbl">${a}</td><td>${b}</td><td class="val">${c}</td></tr>`).join('')}</tbody></table>
++    <p class="note-p">${L.h0 ? `Haunch: ${f2(hhW)} in entered; its weight is in DC1, and it counts in the depth checks (G2), but it is taken as <b>0 in every composite section property</b> (stiffness for the analysis and deflections, K<sub>g</sub>, section moduli, M<sub>p</sub> lever arms, the reinforcement of the cracked section) (${esc(L.cite.h)}).` : `Haunch: ${f2(hhW)} in, in the composite section properties and in DC1, as entered.`}</p>`;
++}
+ const DEFAULT = {
+@@ -1022,3 +1060,3 @@
+   assumptions: '',
+-  bridge: { spans: [110, 140, 110], cont: 'continuous', skews: [15, 15, 15, 15], curved: false,
++  bridge: { spans: [110, 140, 110], cont: 'continuous', skews: [15, 15, 15, 15], curved: false, eta: { I: 'yes', R: 'auto', D: 'no', eD: 1, eR: 1, eI: 1 },   // eta: owner load-modifier inputs (OWN7, optional; plLF)
+             abut: 'conventional', nb: 5, S: 9.5, spacing: 'equal', bays: '9.5, 9.5, 9.5, 9.5', ohL: 3.25, ohR: 3.25, barrier: 1.5, ts: 8, haunch: 2, fc: 4, wc: 0.150,
+@@ -1215,4 +1253,5 @@
+     nb: Math.round(num(b.nb)), S: BG.S, bays: BG.bays, variable: BG.variable, curb: BG.curb, faceL: BG.faceL, faceR: BG.faceR, ohL: num(b.ohL), ohR: num(b.ohR), barrier: BG.bar,
+-    ts: num(b.ts), haunch: num(b.haunch), cont: b.cont === 'continuous' && spans.length > 1, curved: !!b.curved,
++    ts: num(b.ts), haunch: num(b.haunch), LF: plLF(P), cont: b.cont === 'continuous' && spans.length > 1, curved: !!b.curved,
+     FyF: GRADES[g.gF], FyW: GRADES[g.gW], gF: g.gF, gW: g.gW });
++  model.hP = model.LF.h0 ? 0 : model.haunch;   // OWN8: the haunch in composite section properties (0 under RIDOT BDM 6.5.1 / MassDOT 3.5.1.2)
+   model.width = model.bays.reduce((a, v) => a + v, 0) + model.ohL + model.ohR;
+@@ -1342,3 +1381,3 @@
+       const s = m.secs.find(q => { const xm = (m.sup[i] + m.sup[i + 1]) / 2; return xm >= q.x0 - 1e-9 && xm < q.x1 + 1e-9; });
+-      const eg = (s.p.d - s.p.yb) + m.haunch + m.ts / 2, Kg = m.n * (s.p.I + s.p.A * eg ** 2);
++      const eg = (s.p.d - s.p.yb) + m.hP + m.ts / 2, Kg = m.n * (s.p.I + s.p.A * eg ** 2);
+       rng(`K_g, ${spanName(i)} midspan`, Kg, 10000, 7000000, 'in⁴', 0);
+@@ -1348,3 +1387,3 @@
+         ['I', 'Moment of inertia of steel girder', Math.round(s.p.I).toLocaleString('en-US'), 'in⁴'], ['A', 'Area of steel girder', f2(s.p.A), 'in²'],
+-        ['e<sub>g</sub>', `(d − ȳ<sub>b</sub>) + h<sub>h</sub> + t<sub>s</sub>/2 = (${f2(s.p.d)} − ${f2(s.p.yb)}) + ${f2(m.haunch)} + ${f2(m.ts)}/2`, f2(eg), 'in']];
++        ['e<sub>g</sub>', `(d − ȳ<sub>b</sub>) + h<sub>h</sub> + t<sub>s</sub>/2 = (${f2(s.p.d)} − ${f2(s.p.yb)}) + ${f2(m.hP)} + ${f2(m.ts)}/2${m.LF.h0 ? ` (h<sub>h</sub> = 0, ${esc(m.LF.cite.h)})` : ''}`, f2(eg), 'in']];
+       it.r = 0;
+@@ -2041,5 +2080,7 @@
+   if (!spans.length || spans.some(x => !(x > 0))) errors.push('Every span length must be a positive number.');
+-  const BG = brGeom(B, num(SG.bar)), S = BG.S, nb = Math.round(num(B.nb)), ts = num(B.ts), hh = num(B.haunch), wc = num(B.wc), fc = num(B.fc);
++  const BG = brGeom(B, num(SG.bar)), S = BG.S, nb = Math.round(num(B.nb)), ts = num(B.ts), hhW = num(B.haunch), wc = num(B.wc), fc = num(B.fc);
++  // OWN6–OWN8: the owner load rules; hh is the haunch of the composite properties (0 where the owner says so), hhW the haunch as entered (DC1 weight, depth check G2)
++  const LF = plLF(P), hh = LF.h0 ? 0 : hhW, gDC = 1.25 * LF.eta, gDCn = 0.90 * LF.etaN, gDW = 1.50 * LF.eta, gDWn = 0.65 * LF.etaN, gLL = 1.75 * LF.eta * LF.m, gSV = 1.3 * LF.m;
+   const oh = Math.max(num(B.ohL), num(B.ohR)), bar = BG.bar;
+-  if (!(S > 0 && nb >= 2 && ts > 0 && wc > 0 && fc > 0 && hh >= 0 && oh >= 0 && bar >= 0)) errors.push('Complete the Bridge tab cross-section inputs (N_b ≥ 2, positive S, t_s, f′c, w_c).');
++  if (!(S > 0 && nb >= 2 && ts > 0 && wc > 0 && fc > 0 && hhW >= 0 && oh >= 0 && bar >= 0)) errors.push('Complete the Bridge tab cross-section inputs (N_b ≥ 2, positive S, t_s, f′c, w_c).');
+   const FyF = GRADES[P.girder.gF], FyW = GRADES[P.girder.gW];
+@@ -2061,3 +2102,3 @@
+     const A = opts.analyze, cp = l => l.map(r => ({ ...r })); const t = cp(A.top), b = cp(A.bot), w = cp(A.web); sgLists(t, b, w);
+-    return { errors: [], R: demand(A.D, t, b, w), dfxUsed: !!sgDfx(P, A.D, t, b, w, false), beam, cont, spans, width, rdwy, de, n, Ec, types, S, nb, ts, hh, wc, oh, bar, FyF, FyW };
++    return { errors: [], R: demand(A.D, t, b, w), dfxUsed: !!sgDfx(P, A.D, t, b, w, false), beam, cont, spans, width, rdwy, de, n, Ec, types, S, nb, ts, hh: hhW, hP: hh, LF, wc, oh, bar, FyF, FyW };
+   }
+@@ -2104,3 +2145,3 @@
+       for (let x = a + 0.5; x < c; x += 1) dmin = Math.min(dmin, D + sgAt(t, x).t + sgAt(b, x).t);
+-      return dmin >= (cont ? 0.027 : 0.033) * Ls * 12 - 1e-9 && dmin + hh + ts >= (cont ? 0.032 : 0.040) * Ls * 12 - 1e-9; });
++      return dmin >= (cont ? 0.027 : 0.033) * Ls * 12 - 1e-9 && dmin + hhW + ts >= (cont ? 0.032 : 0.040) * Ls * 12 - 1e-9; });
+   }
+@@ -2227,3 +2268,3 @@
+       const wSteel = xs.map(x => { const s = secAt(x); return (s.t.b * s.t.t + s.b.b * s.b.t + D * s.tw) * SG_PLF / 1000 * (1 + L.allow / 100); });
+-      const wHaunch = xs.map(x => sgAt(top, x).b / 12 * hh / 12 * wc);
++      const wHaunch = xs.map(x => sgAt(top, x).b / 12 * hhW / 12 * wc);   // the haunch weight as entered (OWN8)
+       const Mof = w => { const M = new Float64Array(N); for (let i = 0; i < N; i++) { let s = 0; const r = i * N; for (let j = 0; j < N; j++) s += ILM[r + j] * w[j] * trib[j]; M[i] = s; } return M; };
+@@ -2284,5 +2325,5 @@
+         const dc = MDC1[i] + MDC2[i], dw = MDW[i];
+-        Mup[i] = (dc >= 0 ? 1.25 : 0.90) * dc + (dw >= 0 ? 1.50 : 0.65) * dw + 1.75 * Mp[i];
+-        Mun[i] = (dc <= 0 ? 1.25 : 0.90) * dc + (dw <= 0 ? 1.50 : 0.65) * dw + 1.75 * Mn[i];
+-        Msp[i] = dc + dw + 1.3 * Mp[i]; Msn[i] = dc + dw + 1.3 * Mn[i];
++        Mup[i] = (dc >= 0 ? gDC : gDCn) * dc + (dw >= 0 ? gDW : gDWn) * dw + gLL * Mp[i];   // OWN6/OWN7: 1.25η or 0.90/η, 1.50η or 0.65/η, 1.75ηm
++        Mun[i] = (dc <= 0 ? gDC : gDCn) * dc + (dw <= 0 ? gDW : gDWn) * dw + gLL * Mn[i];
++        Msp[i] = dc + dw + gSV * Mp[i]; Msn[i] = dc + dw + gSV * Mn[i];   // Service II: 1.30m
+         Mc[i] = 1.25 * MDC1[i] + 1.5 * MCL[i];
+@@ -2290,4 +2331,4 @@
+       let VuMax = 0, VuLoc = 0; const VuE = new Float64Array(N - 1);   // VuE: Strength I |V_u| per element (end-panel shear, webFromShear)
+-      for (let e = 0; e < N - 1; e++) { const vf = s => (s * VDC[e] >= 0 ? 1.25 : 0.90) * VDC[e] + (s * VDW[e] >= 0 ? 1.5 : 0.65) * VDW[e];   // 3.4.1: minimum factors where a permanent load relieves the extreme
+-        const v = Math.max(Math.abs(vf(1) + 1.75 * Vp[e]), Math.abs(vf(-1) + 1.75 * Vn[e])); VuE[e] = v; if (v > VuMax) { VuMax = v; VuLoc = (xs[e] + xs[e + 1]) / 2; } }
++      for (let e = 0; e < N - 1; e++) { const vf = s => (s * VDC[e] >= 0 ? gDC : gDCn) * VDC[e] + (s * VDW[e] >= 0 ? gDW : gDWn) * VDW[e];   // 3.4.1: minimum factors where a permanent load relieves the extreme
++        const v = Math.max(Math.abs(vf(1) + gLL * Vp[e]), Math.abs(vf(-1) + gLL * Vn[e])); VuE[e] = v; if (v > VuMax) { VuMax = v; VuLoc = (xs[e] + xs[e + 1]) / 2; } }
+       // required flange areas (in^2)
+@@ -2298,3 +2339,3 @@
+           ['Strength I, positive (composite)', Math.max(Mup[i], 0) * 12 / (FyF * armC)],
+-          ['Service II, positive', (Math.max(MDC1[i], 0) * 12 / armS + Math.max(MDC2[i] + MDW[i] + 1.3 * Mp[i], 0) * 12 / armC) / (0.95 * FyF)],
++          ['Service II, positive', (Math.max(MDC1[i], 0) * 12 / armS + Math.max(MDC2[i] + MDW[i] + gSV * Mp[i], 0) * 12 / armC) / (0.95 * FyF)],
+           ['Strength I, negative (compression)', Math.max(-Mun[i], 0) * 12 / (eff * FyF * armS)],
+@@ -2548,3 +2589,3 @@
+         if (T.Mup[i] > 0) {
+-          const gdP = M1 + M2 >= 0 ? 1.25 : 0.90, gwP = Mw >= 0 ? 1.50 : 0.65;   // the same permanent-load factors as M_u+ (3.4.1)
++          const gdP = M1 + M2 >= 0 ? gDC : gDCn, gwP = Mw >= 0 ? gDW : gDWn;   // the same permanent-load factors as M_u+ (3.4.1)
+           const pl = sgPlastic(q, D, beff, t, b, tw), comp = D / tw <= 150 && 2 * pl.Dcp / tw <= 3.76 * rt3;
+@@ -2555,5 +2596,5 @@
+             if (pl.Dp > 0.42 * pl.Dt) other.push({ x, name: 'Ductility D_p ≤ 0.42D_t (6.10.7.3)', r: pl.Dp / (0.42 * pl.Dt) });
+-          } else { const fb = (gdP * M1 * 12 / Sb.s + (gdP * M2 + gwP * Mw) * 12 / Sb.c3 + 1.75 * Lp * 12 / Sb.n), ft = (gdP * M1 * 12 / St.s + (gdP * M2 + gwP * Mw) * 12 / St.c3 + 1.75 * Lp * 12 / St.n);   // compression flange: every stage on its own section (6.10.7.2.1, 6.10.1.1.1a)
++          } else { const fb = (gdP * M1 * 12 / Sb.s + (gdP * M2 + gwP * Mw) * 12 / Sb.c3 + gLL * Lp * 12 / Sb.n), ft = (gdP * M1 * 12 / St.s + (gdP * M2 + gwP * Mw) * 12 / St.c3 + gLL * Lp * 12 / St.n);   // compression flange: every stage on its own section (6.10.7.2.1, 6.10.1.1.1a)
+             put(rB, gB, i, (fb + fl / 3) / Fy, 'Strength I, positive, noncompact (6.10.7.2)'); put(rT, gT, i, ft / Fy, 'Strength I, positive, noncompact (6.10.7.2)'); }
+-          put(rB, gB, i, (M1 * 12 / Sb.s + (M2 + Mw) * 12 / Sb.c3 + 1.3 * Lp * 12 / Sb.n + flS / 2) / (0.95 * Fy), flS ? 'Service II, positive, with skew f_ℓ/2 (6.10.4.2.2)' : 'Service II, positive (6.10.4.2.2)');
++          put(rB, gB, i, (M1 * 12 / Sb.s + (M2 + Mw) * 12 / Sb.c3 + gSV * Lp * 12 / Sb.n + flS / 2) / (0.95 * Fy), flS ? 'Service II, positive, with skew f_ℓ/2 (6.10.4.2.2)' : 'Service II, positive (6.10.4.2.2)');
+         }
+@@ -2561,7 +2602,7 @@
+         if (T.Mun[i] < -1e-6) {
+-          const dc = M1 + M2, gd = dc <= 0 ? 1.25 : 0.90, gw = Mw <= 0 ? 1.50 : 0.65, Mcomp = gd * M2 + gw * Mw + 1.75 * Ln;
++          const dc = M1 + M2, gd = dc <= 0 ? gDC : gDCn, gw = Mw <= 0 ? gDW : gDWn, Mcomp = gd * M2 + gw * Mw + gLL * Ln;
+           const fb = -(gd * M1 * 12 / Sb.s + Mcomp * 12 / Sb.cr), ft = -(gd * M1 * 12 / St.s + Mcomp * 12 / St.cr), Dc = Math.max(ybc - b.t, 1);
+           if (fb > 0) { const np = nprAt(x, T.Mun, -1, 'S'); let Cb = 1, Fn;   // CB2: 6.10.8.2.3b (prismatic), its simplification in 6.10.8.2.3c, or C_b = 1.0 and F_e = γ_e f_bu (Eqs. c-1 to c-3)
+-            if (np.kind === 'ge') { const fF = (s, k) => { const sp = secP(s, beff), M1k = T.MDC1[k], M2k = T.MDC2[k], Mwk = T.MDW[k], g1 = M1k + M2k <= 0 ? 1.25 : 0.90, g2 = Mwk <= 0 ? 1.50 : 0.65;
+-                return -(g1 * M1k * 12 / sp.Ss + (g1 * M2k + g2 * Mwk + 1.75 * T.Mn[k]) * 12 / sp.Scr); };
++            if (np.kind === 'ge') { const fF = (s, k) => { const sp = secP(s, beff), M1k = T.MDC1[k], M2k = T.MDC2[k], Mwk = T.MDW[k], g1 = M1k + M2k <= 0 ? gDC : gDCn, g2 = Mwk <= 0 ? gDW : gDWn;
++                return -(g1 * M1k * 12 / sp.Ss + (g1 * M2k + g2 * Mwk + gLL * T.Mn[k]) * 12 / sp.Scr); };
+               const G = geAt(x, 'S', np, s => rtOf(s.botB, s.botT, secP(s, beff).DcN, s.tw), fF), gv = G ? govAt('S', np, s => RbOf(s.botB, s.botT, secP(s, beff).DcN, s.tw, false), fF) : null;   // NPG: governing section
+@@ -2572,3 +2613,3 @@
+           if (ft > 0) put(rT, gT, i, ft / Fy, 'Strength I, negative, tension flange (6.10.8.3)');
+-          const sb = -(M1 * 12 / Sb.s + (M2 + Mw + 1.3 * Ln) * 12 / Sb.cr), st_ = -(M1 * 12 / St.s + (M2 + Mw + 1.3 * Ln) * 12 / St.cr);
++          const sb = -(M1 * 12 / Sb.s + (M2 + Mw + gSV * Ln) * 12 / Sb.cr), st_ = -(M1 * 12 / St.s + (M2 + Mw + gSV * Ln) * 12 / St.cr);
+           if (sb > 0) { put(rB, gB, i, (sb + flS / 2) / (0.95 * Fy), flS ? 'Service II, negative, with skew f_ℓ/2 (6.10.4.2.2)' : 'Service II, negative (6.10.4.2.2)'); const rw = sb / Fcrw(Dc, tw); if (rw > rWeb) { rWeb = rw; gWeb = 'Service II web bend-buckling (6.10.4.2.2)'; xWeb = x; tWeb = gtNow; } }
+@@ -2920,2 +2961,3 @@
+ <div class="eq-math">\\[M_s = M_{DC} + M_{DW} + 1.30M_{LL+IM} \\quad (\\text{Service II}), \\qquad M_c = 1.25M_{DC1} + 1.50M_{CLL}\\]</div>
++<p><b>Owner load rules</b> (Limits tab, Owner profile; worked on the Analysis tab, card "Owner load rules"): the Strength factors are multiplied by the load modifier η = η<sub>D</sub>η<sub>R</sub>η<sub>I</sub> (1.3.2.1; the minimum factors 0.90 and 0.65 by 1/η), and LL+IM at the Strength and Service limit states by the owner's design load multiplier m (RIDOT BDM 3.4.1.2: 1.2): M<sub>u</sub> = η(1.25M<sub>DC</sub> + 1.50M<sub>DW</sub> + 1.75mM<sub>LL+IM</sub>), M<sub>s</sub> = M<sub>DC</sub> + M<sub>DW</sub> + 1.30mM<sub>LL+IM</sub>. Deck placement, fatigue and the live load deflection take neither. Under RIDOT (BDM 6.5.1, 9.4.6) and MassDOT (3.5.1.2) the haunch is taken as 0 in every composite section property (stiffness, K<sub>g</sub>, section moduli, M<sub>p</sub>), and its weight stays in DC1. AASHTO with η = 1.00: the factors above, unchanged.</p>
+ <h3>Web</h3>
+@@ -3413,3 +3455,3 @@
+   /* 3. envelopes, 4. required areas */
+-  h += card('sg-env', 'Moment envelopes', 'Per girder, kip-ft', `<div id="plt-sg-M" class="plt tall"></div><p class="cap">Strength I = 1.25DC + 1.50DW + 1.75(LL+IM), with minimum factors 0.90 and 0.65 where permanent load reduces the effect. Service II = DC + DW + 1.30(LL+IM). Deck placement = 1.25DC1 + 1.50 construction live load.</p>`);
++  h += card('sg-env', 'Moment envelopes', 'Per girder, kip-ft', `<div id="plt-sg-M" class="plt tall"></div><p class="cap">${(() => { const L = plLF(P); return lfId(L) ? 'Strength I = 1.25DC + 1.50DW + 1.75(LL+IM), with minimum factors 0.90 and 0.65 where permanent load reduces the effect. Service II = DC + DW + 1.30(LL+IM).' : `Strength I = ${f3(1.25 * L.eta)}DC + ${f3(1.5 * L.eta)}DW + ${f3(1.75 * L.eta * L.m)}(LL+IM), with minimum factors ${f3(0.9 * L.etaN)} and ${f3(0.65 * L.etaN)} where permanent load reduces the effect. Service II = DC + DW + ${f3(1.3 * L.m)}(LL+IM) (owner load rules of ${esc(L.o)}: η = ${f3(L.eta)}, m = ${f2(L.m)}; worked on the Analysis tab).`; })()} Deck placement = 1.25DC1 + 1.50 construction live load.</p>`);
+   h += card('sg-area', 'Required and provided flange area', 'in²', `<div id="plt-sg-A" class="plt tall"></div><p class="cap">Required area is the envelope of the criteria in section 7 over the girders designed. Provided area is the suggested plate. Vertical lines mark supports (solid) and field splices (dashed).</p>`);
+@@ -3453,3 +3495,3 @@
+     if (g.startsWith('Strength I, positive')) tex = T`A_{fb} = \frac{M_u^+(12)}{F_y\,a_c} = \frac{${f2(Tg.Mup[i])}(12)}{${f2(Fy)}(${f2(aC)})} = ${f2(A)}\ \text{in}^2`;
+-    else if (g.startsWith('Service II, positive')) tex = T`A_{fb} = \frac{1}{0.95F_y}\left[\frac{M_{DC1}(12)}{a_s} + \frac{(M_{DC2}+M_{DW}+1.3M_{LL})(12)}{a_c}\right] = \frac{1}{0.95(${f2(Fy)})}\left[\frac{${f2(Math.max(Tg.MDC1[i], 0))}(12)}{${f2(aS)}} + \frac{${f2(Math.max(Tg.MDC2[i] + Tg.MDW[i] + 1.3 * Tg.Mp[i], 0))}(12)}{${f2(aC)}}\right] = ${f2(A)}\ \text{in}^2`;
++    else if (g.startsWith('Service II, positive')) tex = T`A_{fb} = \frac{1}{0.95F_y}\left[\frac{M_{DC1}(12)}{a_s} + \frac{(M_{DC2}+M_{DW}+${f2(1.3 * plLF(P).m)}M_{LL})(12)}{a_c}\right] = \frac{1}{0.95(${f2(Fy)})}\left[\frac{${f2(Math.max(Tg.MDC1[i], 0))}(12)}{${f2(aS)}} + \frac{${f2(Math.max(Tg.MDC2[i] + Tg.MDW[i] + 1.3 * plLF(P).m * Tg.Mp[i], 0))}(12)}{${f2(aC)}}\right] = ${f2(A)}\ \text{in}^2`;
+     else if (g.startsWith('Strength I, negative (compression)')) tex = T`A_{fb} = \frac{|M_u^-|(12)}{\eta F_y\,a_s} = \frac{${f2(-Tg.Mun[i])}(12)}{${f2(eff)}(${f2(Fy)})(${f2(aS)})} = ${f2(A)}\ \text{in}^2`;
+@@ -4202,6 +4244,6 @@
+   if (r.errors.length) return { errors: r.errors };
+-  const { beam, R, n, ts, hh, S, oh, nb, rdwy, dfxUsed } = r, { xs, N, ILM, ILV, trib, sup } = beam;
++  const { beam, R, n, ts, hh, hP, LF, S, oh, nb, rdwy, dfxUsed } = r, { xs, N, ILM, ILV, trib, sup } = beam;   // hh: haunch as entered; hP: in composite properties (OWN8)
+   const E = ES, secAt = x => ({ top: m.at(m.top, x), bot: m.at(m.bot, x), tw: m.at(m.web, x).t });
+   const NL = Math.max(1, Math.floor(rdwy / 12)), mpf = [1.2, 1.0, 0.85, 0.65][Math.min(NL, 4) - 1], mgD = NL * mpf / nb;
+-  const out = { types: {}, mgD, NL, mpf, beam, n, cont: r.cont, spans: r.spans, xs, R, ts, hh, S, oh };
++  const out = { types: {}, mgD, NL, mpf, beam, n, cont: r.cont, spans: r.spans, xs, R, ts, hh, hP, LF, S, oh };
+   const Mof = w => { const M = new Float64Array(N); for (let i = 0; i < N; i++) { let s = 0; const q = i * N; for (let j = 0; j < N; j++) s += ILM[q + j] * w[j] * trib[j]; M[i] = s; } return M; };
+@@ -4225,6 +4267,6 @@
+     const Is = new Float64Array(N), I3 = new Float64Array(N), In = new Float64Array(N);
+-    for (let i = 0; i < N; i++) { const s = secAt(xs[i]); Is[i] = props({ D: m.D, tw: s.tw, top: s.top, bot: s.bot }).I; I3[i] = compositeProps(s, m.D, beff, 3 * n, ts, hh).I; In[i] = compositeProps(s, m.D, beff, n, ts, hh).I; }
++    for (let i = 0; i < N; i++) { const s = secAt(xs[i]); Is[i] = props({ D: m.D, tw: s.tw, top: s.top, bot: s.bot }).I; I3[i] = compositeProps(s, m.D, beff, 3 * n, ts, hP).I; In[i] = compositeProps(s, m.D, beff, n, ts, hP).I; }
+     const wSteel = Tg.wXF ? Tg.wSteel.map((w, j) => w + Tg.wXF[j]) : Tg.wSteel, wDeck = Tg.w1.map((w, j) => w - wSteel[j]);   // XF1: the cross-frames are in the steel part
+     const bS = Tg.bS || beam, b3 = Tg.b3 || beam, bN = Tg.bN || beam, MofB = (bm, w) => { const M = new Float64Array(N); for (let i = 0; i < N; i++) { let s = 0; const q = i * N; for (let j = 0; j < N; j++) s += bm.ILM[q + j] * w[j] * trib[j]; M[i] = s; } return M; };
+-    if (Tg.stg) { const ck = Tg.stg.crack; for (let i = 0; i < N; i++) { const c = (i > 0 && ck[i - 1]) || (i < N - 1 && ck[i]); if (c) { const s = secAt(xs[i]), p = props({ D: m.D, tw: s.tw, top: s.top, bot: s.bot }), yr = p.d + hh + ts / 2, Ar = Tg.stg.Ar, A = p.A + Ar, yb = (p.A * p.yb + Ar * yr) / A, Ic = p.I + p.A * (yb - p.yb) ** 2 + Ar * (yr - yb) ** 2; I3[i] = Ic; In[i] = Ic; } } }
++    if (Tg.stg) { const ck = Tg.stg.crack; for (let i = 0; i < N; i++) { const c = (i > 0 && ck[i - 1]) || (i < N - 1 && ck[i]); if (c) { const s = secAt(xs[i]), p = props({ D: m.D, tw: s.tw, top: s.top, bot: s.bot }), yr = p.d + hP + ts / 2, Ar = Tg.stg.Ar, A = p.A + Ar, yb = (p.A * p.yb + Ar * yr) / A, Ic = p.I + p.A * (yb - p.yb) ** 2 + Ar * (yr - yb) ** 2; I3[i] = Ic; In[i] = Ic; } } }
+     const MS = MofB(bS, wSteel), MD = MofB(bS, wDeck);
+@@ -4253,3 +4295,3 @@
+       return { name: b.name, k: b.k, DC1, DC, DW, mV, sk, llMax, llMin, twoTruck: b.interior && bll.pos2 > bll.pos,
+-        serv: DC + DW + llMax, strMax: 1.25 * DC + 1.5 * DW + 1.75 * llMax, strMin: 0.9 * DC + 0.65 * DW + 1.75 * llMin };
++        serv: DC + DW + LF.m * llMax, strMax: 1.25 * LF.eta * DC + 1.5 * LF.eta * DW + 1.75 * LF.eta * LF.m * llMax, strMin: 0.9 * LF.etaN * DC + 0.65 * LF.etaN * DW + 1.75 * LF.eta * LF.m * llMin };   // OWN6/OWN7
+     });
+@@ -4284,3 +4326,3 @@
+     const c = { id: 'A2', grp, title: 'Bearing uplift', ref: 'AASHTO LRFD 3.4.1, 14.8.3 (uplift must be resisted)', src: 'Code',
+-      sym: T`R_{u,min} = 0.90\,R_{DC} + 0.65\,R_{DW} + 1.75\,R_{LL,min} \ge 0`, cols: ['Bearing, girder', 'R_DC (kip)', 'R_DW (kip)', 'R_LL,min (kip)', 'R_u,min (kip)'], items: [],
++      sym: lfId(AN.LF) ? T`R_{u,min} = 0.90\,R_{DC} + 0.65\,R_{DW} + 1.75\,R_{LL,min} \ge 0` : T`R_{u,min} = \frac{0.90}{\eta}R_{DC} + \frac{0.65}{\eta}R_{DW} + 1.75\,\eta\,m\,R_{LL,min} \ge 0`, cols: ['Bearing, girder', 'R_DC (kip)', 'R_DW (kip)', 'R_LL,min (kip)', 'R_u,min (kip)'], items: [],
+       note: 'A negative minimum reaction means the bearing lifts off and needs tie-downs or a revised span arrangement. Live load uses the shear distribution factor with the skew correction.' };
+@@ -4288,3 +4330,3 @@
+       c.items.push({ loc: `${b.name}, ${TT(gt)}`, cells: [f2(b.DC), f2(b.DW), f2(b.llMin), f2(b.strMin)], st: ok ? 'pass' : 'warn',
+-        work: T`R_{u,min} = 0.90(${f2(b.DC)}) + 0.65(${f2(b.DW)}) + 1.75(${f2(b.llMin)}) = ${f2(b.strMin)}\ \text{kip}` }); }));
++        work: lfId(AN.LF) ? T`R_{u,min} = 0.90(${f2(b.DC)}) + 0.65(${f2(b.DW)}) + 1.75(${f2(b.llMin)}) = ${f2(b.strMin)}\ \text{kip}` : T`R_{u,min} = ${f3(0.9 * AN.LF.etaN)}(${f2(b.DC)}) + ${f3(0.65 * AN.LF.etaN)}(${f2(b.DW)}) + ${f3(1.75 * AN.LF.eta * AN.LF.m)}(${f2(b.llMin)}) = ${f2(b.strMin)}\ \text{kip}\ \ (\eta = ${f3(AN.LF.eta)},\ m = ${f2(AN.LF.m)};\ \text{owner load rules, Analysis tab})` }); }));
+     add(c);
+@@ -4299,3 +4341,3 @@
+         work: T`(R_{sb})_r = 1.0(1.4)\left[2(${f2(F.bsB)} - ${f2(F.clip)})(${f3(F.bsT)})(${F.bsPairs})\right](${f2(Fys)}) = ${f2(Rr)}\ \text{kip} \;${r <= 1 + 1e-9 ? '\\ge' : '<'}\; R_u = ${f2(b.strMax)}\ \text{kip}`,
+-        where: [['R<sub>u</sub>', `1.25R<sub>DC</sub> + 1.50R<sub>DW</sub> + 1.75R<sub>LL+IM</sub> = 1.25(${f2(b.DC)}) + 1.50(${f2(b.DW)}) + 1.75(${f2(b.llMax)})`, f2(b.strMax), 'kip']] }); }));
++        where: [['R<sub>u</sub>', lfId(AN.LF) ? `1.25R<sub>DC</sub> + 1.50R<sub>DW</sub> + 1.75R<sub>LL+IM</sub> = 1.25(${f2(b.DC)}) + 1.50(${f2(b.DW)}) + 1.75(${f2(b.llMax)})` : `1.25ηR<sub>DC</sub> + 1.50ηR<sub>DW</sub> + 1.75ηmR<sub>LL+IM</sub> = ${f3(1.25 * AN.LF.eta)}(${f2(b.DC)}) + ${f3(1.5 * AN.LF.eta)}(${f2(b.DW)}) + ${f3(1.75 * AN.LF.eta * AN.LF.m)}(${f2(b.llMax)}) (owner load rules, Analysis tab)`, f2(b.strMax), 'kip']] }); }));
+     add(c);
+@@ -4372,4 +4414,5 @@
+   const skMax = Math.max(...m.skews.map(v => Math.abs(v))), Lm = P.limits, skF = gt => skMax > 20 + 1e-9 ? +((num(Lm.flSkG) || 1.25) * (gt === 'ext' ? (num(Lm.flSkE) || 7.5) : (num(Lm.flSkI) || 10))).toFixed(2) : 0;
++  const hP = AN.hP != null ? AN.hP : AN.hh, LF = AN.LF || plLF(P);   // OWN6–OWN8: the haunch of the composite properties and the owner load factors of the analysis
+   const props = (s, gt) => { // short-term composite section
+-    const ext = gt === 'ext', beff = (AN.beffFt || (ext ? AN.S / 2 + AN.oh : AN.S)) * 12, d = s.D + s.topT + s.botT, ySl = d + AN.hh + AN.ts / 2, As = beff * AN.ts / AN.n;
++    const ext = gt === 'ext', beff = (AN.beffFt || (ext ? AN.S / 2 + AN.oh : AN.S)) * 12, d = s.D + s.topT + s.botT, ySl = d + hP + AN.ts / 2, As = beff * AN.ts / AN.n;
+     const parts = [[s.botB * s.botT, s.botT / 2, s.botB * s.botT ** 3 / 12], [s.D * s.tw, s.botT + s.D / 2, s.tw * s.D ** 3 / 12], [s.topB * s.topT, d - s.topT / 2, s.topB * s.topT ** 3 / 12], [As, ySl, As * AN.ts ** 2 / 12]];
+@@ -4383,7 +4426,7 @@
+     const A = parts.reduce((q, p) => q + p[0], 0), yb = parts.reduce((q, p) => q + p[0] * p[1], 0) / A; return { A, yb, d, I: parts.reduce((q, p) => q + p[2] + p[0] * (p[1] - yb) ** 2, 0) }; };
+-  const crk = (s, gt) => { const { A, yb, d, I } = stP(s), Ar = rbP / 100 * props(s, gt).beff * AN.ts, yr = d + AN.hh + AN.ts / 2;
++  const crk = (s, gt) => { const { A, yb, d, I } = stP(s), Ar = rbP / 100 * props(s, gt).beff * AN.ts, yr = d + hP + AN.ts / 2;
+     const Ac = A + Ar, ybc = (A * yb + Ar * yr) / Ac, Ic = I + A * (ybc - yb) ** 2 + Ar * (yr - ybc) ** 2, Dc = Math.max(ybc - s.botT, 1);
+     return { Ss: I / yb, Scr: Ic / ybc, Dc, rt: s.botB / Math.sqrt(12 * (1 + Dc * s.tw / (3 * s.botB * s.botT))) }; };
+-  const fBotN = (s, gt, T, k) => { const M1 = T.MDC1[k], M2 = T.MDC2[k], Mw = T.MDW[k], gd = M1 + M2 <= 0 ? 1.25 : 0.90, gw = Mw <= 0 ? 1.50 : 0.65, p = crk(s, gt);
+-    return -(gd * M1 * 12 / p.Ss + (gd * M2 + gw * Mw + 1.75 * T.Mn[k]) * 12 / p.Scr); };
++  const fBotN = (s, gt, T, k) => { const M1 = T.MDC1[k], M2 = T.MDC2[k], Mw = T.MDW[k], gd = M1 + M2 <= 0 ? 1.25 * LF.eta : 0.90 * LF.etaN, gw = Mw <= 0 ? 1.50 * LF.eta : 0.65 * LF.etaN, p = crk(s, gt);
++    return -(gd * M1 * 12 / p.Ss + (gd * M2 + gw * Mw + 1.75 * LF.eta * LF.m * T.Mn[k]) * 12 / p.Scr); };
+   // NPG (2026-10-15): R_b of section s in negative flexure (6.10.1.10.2, as checkLayout), and the governing section of a 'ge' unbraced length (feGov) as Girder section
+@@ -4410,3 +4453,3 @@
+     const c = PG.filter(q => x >= q.p - 0.05 && x <= q.q + 0.05), L = c.length ? c : [PG.reduce((a, q) => Math.abs((q.p + q.q) / 2 - x) < Math.abs((a.p + a.q) / 2 - x) ? q : a)];
+-    const vu = q => { const o = shearIn(T, Math.max(0, q.p), Math.min(m.Ltot, q.q)); return 1.25 * (o.VDC1b + o.VDC2b) + 1.5 * o.VDWb + 1.75 * o.VLLb; }, rat = 2 * s.D * s.tw / (s.topB * s.topT + s.botB * s.botT);
++    const vu = q => { const o = shearIn(T, Math.max(0, q.p), Math.min(m.Ltot, q.q)); return 1.25 * LF.eta * (o.VDC1b + o.VDC2b) + 1.5 * LF.eta * o.VDWb + 1.75 * LF.eta * LF.m * o.VLLb; }, rat = 2 * s.D * s.tw / (s.topB * s.topT + s.botB * s.botT);
+     const sc = q => BM ? vu(q) / tsVn(s.D, s.tw, m.FyW, q.d, q.end, rat, true).Vn : vu(q);
+@@ -4596,3 +4639,3 @@
+     plates: { D: m.D, top: m.top.map(r => ({ x0: r.x0, x1: r.x1, b: r.b, t: r.t })), bot: m.bot.map(r => ({ x0: r.x0, x1: r.x1, b: r.b, t: r.t })), web: m.web.map(r => ({ x0: r.x0, x1: r.x1, t: r.t })) },
+-    allow: num(P.limits.allow), analysis: (({ fat, xf, ...a }) => ({ method: 'fe', rebar: 1.0, ...a, crack: 'none' }))(P.analysis || {}), ...(B.xs ? { xs: B.xs } : {}), ...(FR ? { xf: plXfDef(FR) } : {}), owner: plOwner(P) };   // owner (OWN1): the bridge-level owner profile
++    allow: num(P.limits.allow), analysis: (({ fat, xf, ...a }) => ({ method: 'fe', rebar: 1.0, ...a, crack: 'none' }))(P.analysis || {}), ...(B.xs ? { xs: B.xs } : {}), ...(FR ? { xf: plXfDef(FR) } : {}), owner: plOwner(P), lf: plLF(P) };   // owner (OWN1): the bridge-level owner profile; lf (OWN6): its load rules, applied by every GirderDetail module
+ }
+@@ -5119,2 +5162,3 @@
+   let h = (AN.dfxUsed ? `<div class="alert pass"><b>Distribution factors from GirderDetail's LLDF and DLs module</b> (computed ${new Date(AN.dfxTs).toLocaleString()}): live load factors per region with skew, and MassDOT 3.5.3 barrier and wearing-surface loads per girder. Change them in that module.</div>` : P.dfx && P.dfx.use ? `<div class="alert warn"><b>Built-in distribution factors in use.</b> The factors from the LLDF and DLs module were computed for a different bridge or girder; they update automatically once that module recalculates.</div>` : '') + `<div class="alert info"><b>Approximate analysis of the current girder.</b> Same model as Suggest mode: moments from a constant-EI continuous beam, with deflections integrated using the actual steel, long-term (3n), and short-term (n) composite stiffness at each point. Use for preliminary camber, deflection, and bearing reactions only.</div>`;
++  h += card('an-own', 'Owner load rules', `${esc(AN.LF.o)}; AASHTO LRFD 1.3.2.1, Table 3.4.1-1`, lfCardBody(AN.LF, AN.hh));   // OWN6–OWN8 (worked once here; the checks and GirderDetail use these factors)
+   h += card('an-cam', 'Dead load deflection (camber required)', 'Downward positive, in', `<div id="plt-cam" class="plt tall"></div>
+@@ -5130,3 +5174,3 @@
+   h += card('an-reac', 'Bearing reactions, per girder', 'kip', `<div class="tscroll"><table class="tbl sumtbl"><thead><tr><th>Bearing</th><th>Girder</th><th class="right">DC1</th><th class="right">DC total</th><th class="right">DW</th><th class="right">LL+IM max</th><th class="right">LL+IM min</th><th class="right">g<sub>V</sub> × skew</th><th class="right">Service I</th><th class="right">Strength I max</th><th class="right">Strength I min</th></tr></thead><tbody>${rRows}</tbody></table></div>
+-    <p class="note-p">Live load uses the shear distribution factor with the skew correction of Table 4.6.2.2.3c-1 (the larger of the adjacent spans). * 90% of two design trucks plus 90% of the lane governs at this interior pier (3.6.1.3.1). Service I = DC + DW + LL; Strength I max = 1.25DC + 1.50DW + 1.75LL; Strength I min = 0.90DC + 0.65DW + 1.75LL<sub>min</sub>. Reactions do not include cross-frame distribution of skew effects; obtuse-corner bearings of skewed bridges typically see more.</p>`);
++    <p class="note-p">Live load uses the shear distribution factor with the skew correction of Table 4.6.2.2.3c-1 (the larger of the adjacent spans). * 90% of two design trucks plus 90% of the lane governs at this interior pier (3.6.1.3.1). ${lfId(AN.LF) ? 'Service I = DC + DW + LL; Strength I max = 1.25DC + 1.50DW + 1.75LL; Strength I min = 0.90DC + 0.65DW + 1.75LL<sub>min</sub>.' : `Service I = DC + DW + ${f2(AN.LF.m)}LL; Strength I max = ${f3(1.25 * AN.LF.eta)}DC + ${f3(1.5 * AN.LF.eta)}DW + ${f3(1.75 * AN.LF.eta * AN.LF.m)}LL; Strength I min = ${f3(0.9 * AN.LF.etaN)}DC + ${f3(0.65 * AN.LF.etaN)}DW + ${f3(1.75 * AN.LF.eta * AN.LF.m)}LL<sub>min</sub> (owner load rules, first card of this tab).`} Reactions do not include cross-frame distribution of skew effects; obtuse-corner bearings of skewed bridges typically see more.</p>`);
+   const secRows = M.types.map(ty => { const s = ty.sec, i = Math.max(0, xs.findIndex(x => x >= (ty.ranges[0][0] + ty.ranges[0][1]) / 2));
+@@ -5134,3 +5178,3 @@
+   h += card('an-props', 'Section stiffness used', 'in⁴', `<div class="tscroll"><table class="tbl"><thead><tr><th>Section</th><th class="right">Top / web / bottom (in)</th>${types.map(g => `<th class="right">${TT(g)} I<sub>steel</sub></th><th class="right">I<sub>3n</sub></th><th class="right">I<sub>n</sub></th>`).join('')}</tr></thead><tbody>${secRows}</tbody></table></div>
+-    <p class="note-p">Composite sections use the full tributary deck width as the effective width (4.6.2.6.1): ${types.map(g => `${TT(g).toLowerCase()} ${f2(AN.types[g].beff)} in`).join(', ')}, with the structural deck thickness, the haunch ignored as concrete, and the modular ratio n = ${f2(AN.n)}.</p>`);
++    <p class="note-p">Composite sections use the full tributary deck width as the effective width (4.6.2.6.1): ${types.map(g => `${TT(g).toLowerCase()} ${f2(AN.types[g].beff)} in`).join(', ')}, with the structural deck thickness, the haunch ignored as concrete${AN.LF.h0 ? ` and taken as 0 in the composite depth (${esc(AN.LF.cite.h)})` : ''}, and the modular ratio n = ${f2(AN.n)}.</p>`);
+   const sx = spliceExport(P, M, AN), bx = bearingExport(P, M, AN);
+@@ -5285,2 +5329,3 @@
+         <div id="own-info" class="full"></div>
++        <div id="own-lf" class="full"></div>
+         <div class="proj-row full" style="grid-template-columns:1fr 1fr"><button type="button" class="proj-btn" id="pf_load">Load saved limits</button><button type="button" class="proj-btn" id="pf_save">Save as owner defaults</button></div>
+@@ -5447,6 +5492,6 @@
+   if (opt) opt.textContent = xr ? `Automatic (${ownCite(xr)}: whole bridge, parallel if θ_max ≤ ${(xr.value && xr.value.thr) || 20}°, else normal and staggered)` : 'Automatic (parallel if θ ≤ 20°, else normal)';
+-  ownFlags();
++  ownFlags(); lfInputs();
+   if (!host) return;
+   if (!OWN_TBL) { host.innerHTML = `<p class="hint static">The owner rules are supplied by GirderDetail; this page is open on its own, so no owner rule is applied (AASHTO LRFD 10th Ed. and the limits below).</p>`; return; }
+-  const K = { 'shall-check': 'shall: check', 'should-warning': 'should: warning', default: 'default', 'pending-reference': 'pending reference' }, rs = OWN_TBL.rules.filter(r => r.owner === o), ow = OWN_TBL.owners[o] || {};
++  const K = { 'shall-check': 'shall: check', 'should-warning': 'should: warning', default: 'default', 'pending-reference': 'pending reference', load: 'load rule', report: 'reported' }, rs = OWN_TBL.rules.filter(r => r.owner === o), ow = OWN_TBL.owners[o] || {};
+   const li = r => `<li><span class="own-kind">${K[r.kind] || esc(r.kind)}</span> <b>${esc(ownCite(r))}</b>: ${esc(r.text)}${r.kind === 'pending-reference' ? ` (needs ${esc(r.ref)}; not applied)` : r.where ? ` (${esc(r.where)})` : ''}</li>`;
+@@ -5454,3 +5499,17 @@
+   host.innerHTML = `<p class="hint static">${esc(OWN_TBL.note || '')}${go}</p>` + (ow.none || !rs.length ? `<p class="hint static">${o === 'AASHTO' ? 'AASHTO: no owner rules; AASHTO LRFD 10th Ed. and the limits as entered (a project saved with the former "Custom" owner opens as AASHTO, its limits kept).' : 'No owner rules in the table for this owner.'}</p>`
+-    : `<p class="hint static"><b>${esc(ow.manual || o)}</b>: owner rules in this version (phase 1: cross-frame layout; load rules and owner defaults follow):</p><ul class="own-list">${rs.map(li).join('')}</ul>`);
++    : `<p class="hint static"><b>${esc(ow.manual || o)}</b>: owner rules in this version (phase 1: cross-frame layout; phase 2: load rules and design rating targets; owner defaults follow):</p><ul class="own-list">${rs.map(li).join('')}</ul>`);
++}
++/* the owner's load-modifier inputs (OWN7): rebuilt only when the owner changes (so typing is not interrupted), with the resulting factors below */
++function lfInputs() {
++  const host = $('#own-lf'); if (!host) return; const o = plOwner(P), own = !!OWN_TBL && o !== 'AASHTO', key = own ? o : 'AASHTO';
++  if (host.dataset.o !== key) { host.dataset.o = key;
++    const q = id => { const r = own ? ownRule(o, id) : null; return r && r.value ? r : null; }, rI = q('ld.etaI'), rR = q('ld.etaR'), rD = q('ld.etaD'), YN = [['yes', 'Yes'], ['no', 'No']];
++    host.innerHTML = `<p class="hint static"><b>Load modifiers η (Strength limit states)</b></p><div class="sec-body" style="padding:0">${own
++      ? (rI ? fld(`${esc(rI.value.q || 'η_I = ' + rI.value.f)} <span class="lbl-note">${esc(ownCite(rI))}: η<sub>I</sub> = ${rI.value.f}</span>`, 'bridge.eta.I', '', 'sel', { full: true, options: YN }) : '')
++        + (rR ? fld(`Nonredundant members <span class="lbl-note">${esc(ownCite(rR))}: η<sub>R</sub> = ${rR.value.f}</span>`, 'bridge.eta.R', '', 'sel', { full: true, options: [['auto', 'Automatic: 3 girders or fewer'], ['yes', 'Yes'], ['no', 'No']] }) : '')
++        + (rD ? rD.value.fixed ? `<p class="hint static full">η<sub>D</sub> = ${(+rD.value.f).toFixed(2)} (${esc(ownCite(rD))}: ${esc(rD.text)})</p>` : fld(`Nonductile components or connections <span class="lbl-note">${esc(ownCite(rD))}: η<sub>D</sub> = ${rD.value.f}</span>`, 'bridge.eta.D', '', 'sel', { full: true, options: YN }) : '')
++      : fld('η<sub>D</sub> ductility (1.3.3)', 'bridge.eta.eD', '') + fld('η<sub>R</sub> redundancy (1.3.4)', 'bridge.eta.eR', '') + fld('η<sub>I</sub> operational importance (1.3.5)', 'bridge.eta.eI', '')}</div><p class="hint static" id="own-lf-res"></p>`;
++    fillInputs(); }
++  const L = plLF(P), r = $('#own-lf-res'); if (!r) return;
++  r.innerHTML = `η = η<sub>D</sub>η<sub>R</sub>η<sub>I</sub> = ${L.eD.toFixed(2)} × ${L.eR.toFixed(2)} × ${L.eI.toFixed(2)} = <b>${(L.eD * L.eR * L.eI).toFixed(3)}</b> on the Strength load factors (1/η on the minimum factors)${L.m !== 1 ? `; design load multiplier <b>${L.m}</b> on LL+IM at Strength and Service (${esc(L.cite.m)})` : ''}${L.h0 ? `; haunch 0 in composite properties (${esc(L.cite.h)})` : ''}. Worked on the Analysis tab.`;
+ }
+```
