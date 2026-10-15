@@ -13010,3 +13010,608 @@ Diff of the decoded Preliminary sizing page (`pl_main` = main, `pl` = branch):
 +  renderStatus(); renderSummary(); renderDrawings(); renderChecks(); renderAnalysis(); renderSchedule(); renderReportHead(); renderFrBays(); renderFrSum();
    applyCollapse(); typeset(); maybeSuggest(); maybeAlts();
 ```
+
+## 2026-10-15 — PR: claude/gd-pier-frame-spacing (closer cross-frame spacing near interior supports as a design variable, engineer's decision B of 2026-10-15 on the PR #227 follow-ups; PR link added after merge)
+
+All code changes are in the embedded Preliminary sizing page (`const PL_B64`, main file line 2361: decoded, edited, re-encoded on its one line). Nothing else in the main file changed. Basis: AASHTO LRFD 10th Ed. (2024) Art. 6.7.4.2.1 and C6.7.4.2.1 (cross-frame spacing; closer frames "may be necessary" near interior supports; first-frame offset; 0.4 panel ratio), 6.10.8.2.3 (lateral-torsional buckling with L_b between brace points), 6.10.3.2.1, 6.10.4.2.2. Engineer's decision A of the same day (keep #227's L_b from the spacing built; Full design at 15° accepted; b_f, X5 levels and the > 20° offset rule confirmed) is recorded in ENGINEER_CHECKS GD36; no code change.
+
+### FSP1. Spacing near interior supports in `framingLayout`   [layout change; only with the new input set]
+- **Where:** new helpers before `framingLayout` (anchor `function plPierSp(F, m)`, `function plPierLen(F, Ls)`, `const PL_SPPIER_MIN = 10`); inside `framingLayout`: `pzGrid`, `pzLim` (anchor `const sp2 = plPierSp(F, m), nS = m.sup.length;   // FSP`), the span loop (anchor `// FSP: the pier regions of this span`), new `parSpanP` after `parSpan`, and `normSpan(k, bf, dmin, pz)` (anchors `// FSP pier regions: the end lines at an unskewed support`, `let LIM = null; const limP`, `// FSP: the lines extended past both ends`, `// FSP: end panels within their limits`).
+- **New optional inputs (Framing tab, Cross-frames):** `framing.spPier` "Spacing near interior supports" (ft; blank = the target spacing) and `framing.pierLen` "Pier region each side" (ft; blank = 0.25 × the adjacent span).
+- **Rule:** active only in a continuous unit with interior supports and 0 < s_p < s (target). Region: R each side of each interior support, measured along each girder from its own bearing (R = `pierLen` or 0.25 × that span — about the dead-load point of contraflexure of continuous spans; chosen over the analysis's DL contraflexure because the layout feeds the analysis' DC1 frame loads, which would make it circular). Per span: from the pier end, panels s_p (normal frames: first line s_p from an unskewed support's bearing, or e = max(clear, 4b_f, 0.4 s_p) from the obtuse bearing of a support skewed > 20°; parallel frames: along the longest girder from the bearings, interpolated on the others, the region taken on the shortest girder) until the region is covered on every girder (to the next grid line beyond it); between the two zones (or to the abutment-end anchor, unchanged rule) evenly at most s, starting on the zone line, so there is no short closing panel; if less than s_p would remain between the zones, the whole span is evenly spaced at most s_p. Corner (fill) frames, conflict shifts, extra intervals (added between the zones), stagger offsets ≥ d_min and the X5 offset are the #227 rules, with the panel limit s_p for every girder panel whose midpoint is in a pier zone (`pzLim`).
+- **Before:** `const mk = JSON.stringify([k, o, sp, clr, F.stagMin, F.arrange, fc, m.sup, m.skews, m.bays, feats, bf]);` … `pick = o === 'parallel' ? parSpan(k, Lmax) : normSpan(k, bf, dmin);`
+- **After:** `const pz = sp2 ? { sp2, pS: k > 0, pE: k + 1 < nS - 1, rS: plPierLen(F, Ls), rE: plPierLen(F, Ls) } : null;` … `pick = o === 'parallel' ? (pz ? parSpanP(k, Lmax, pz) : parSpan(k, Lmax)) : normSpan(k, bf, dmin, pz);` (full code in the diff below). With `pz` null every expression evaluates as before (`limP` returns s; `ex` = max(0, mx − s) as before).
+- **Check case (manual, §4 worked example):** built-in, skews 28° / 0° / 0° / 28° (abutments only), s = 25 ft, s_p = 15 ft, region blank (Span 1/3: 0.25 × 110 = 27.5 ft; Span 2: 0.25 × 140 = 35 ft).
+  - Span 1 (normal frames, Abut. 1 skewed, Pier 1 unskewed): pier zone n = ⌈27.5/15⌉ = 2 panels → lines at 95, 80 ft; obtuse bearing at Abut. 1 is G5 (own station 0; global +10.10 ft from the centerline station). Abutment anchor e = max(3, 4·18/12 = 6, 0.4·t_m) with t_m = (80 − 10.10 − e)/3 → e = 8.22 ft, t_m = 20.56 ft. G3 stations: 0, 18.33, 38.88, 59.44, 80, 95, 110.
+  - Span 2 (parallel, both piers unskewed, 140 ft): n = ⌈35/15⌉ = 3 each end → 15, 30, 45 and 95, 110, 125 from Pier 1; between 45 and 95: 50/⌈50/25⌉ = 25 ft. G3 stations 110, 125, 140, 155, 180, 205, 220, 235, 250.
+  - L_b at Pier 1, interior girder: **22.70 → 15.00 ft** (both sides); exterior: 22.70 → 15.00 ft. Intermediate frames 54 → 70.
+  - GS7 (Girder section, Strength I negative flexure, 6.10.8.2.3, nonprismatic L_b → prismatic): Pier 1 interior **1.057 FAIL → 0.915**, Pier 2 interior 1.056 → 0.915, Pier 1 exterior 1.050 FAIL → 0.914, Pier 2 exterior 1.050 → 0.914. GS10 Pier 1 interior bottom flange 0.641 → 0.443.
+  - Positive region: Span 1/3 L_b 22.70 → 20.56 ft, Span 2 23.33 → 25.00 ft (two panels of 25 ft between the zones; within the target). Cross-frames module L_b 23.33 → 25.00 ft, stability-bracing n 4 → 5; overhang L_b 22.70 / 23.33 / 22.70 → 20.56 / 25.00 / 20.56 ft.
+  - X2: new items "Pier 1 region (27.50 / 35.00 ft)" G4 15.00 ≤ 15.00, "Pier 2 region" G5 15.00 ≤ 15.00 (pass). X3, X5 pass; X4 warns as on main (the built-in transitions at 100/127 ft lie inside the pier zone; 4 girders with a frame within 2 ft, main: 4).
+
+### FSP2. Display: Framing tab, X2, framing plan   [display; X2 items added only with s_p]
+- Framing tab: the two inputs and a note; the spacing table shows "t_m; s_p near Pier k" and a pier-region line per span; a note when s_p is entered but not used (not below the target, or not continuous).
+- X2 (`framingChecks`, anchor `// FSP (2026-10-15): with a spacing near interior supports s_p`): one item per interior support, the largest panel of any girder whose midpoint is within the region (own bearing ± R), against s_p (pass/warn as X2).
+- Framing plan (`framingSVG`, anchor `// FSP: pier regions`): the regions shaded with "s_p = … ft"; caption line.
+- Manual: Framing methodology ("Spacing near interior supports"), Suggest Full design paragraph, Framing tab bullet.
+
+### FSP3. Suggest / Full design: s_p as a design variable   [CALCULATION CHANGE — §4 callout: design-variable behaviour]
+- **Where:** `checkLayout` (anchors `let ltbLast = false; const ltbB`, `ltbLast = LTB < FLB - 1e-9 && LTB < Rb * Fy - 1e-9;`, `if (ltbLast) ltbB[i]`, `let ltbN = 0;`); new `sgPierCur`, `sgPierList` before `suggestFull`; `suggestFull` (anchor `// FSP (2026-10-15): spacing near interior supports. Where lateral-torsional`); `suggestQuickCheck` (now `runQ(P, f0, f1, tag)` inside, anchor `/* FSP (2026-10-15): spacing near interior supports as a variable`); `sgQuickStart` (`pierSet`), `applySuggestion` and the girder-count study apply (`spPier`), comparison card row, Full design table column, `sgPierQuickTxt` / `sgPierFullTxt`.
+- **No formula changed.** `checkLayout` only records, per node, the Strength I negative-flexure bottom-flange ratio where F_nc is set by LTB below R_bF_y (`ltbN`: the largest such ratio that governs the node's bottom flange). L_b in every check still comes from the candidate's own layout (#227).
+- **Before:** Full design tried other uniform spacings (cfOpt); the quick suggestion only increased plates.
+- **After:** values tried: 22.5, 20, 17.5, 15, 12.5, 10 ft, below the spacing and ≥ max(10 ft, 0.4 × spacing) (0.4 = the C6.7.4.2.1 panel ratio at the region boundary), minus the current s_p (Full design also tries "none" when one is set).
+  - Full design (with "Optimize cross-frame spacing" on, continuous units): when `ltbN > 0` for the best passing candidate at the Framing tab spacing, that candidate is re-run (full refine and verification) with each s_p, loosest first, stopping when two closer values in a row each cost more; all are priced with the cross-frames of their own layout; the cheapest passing candidate overall is selected (as before).
+  - Quick suggestion: when the fast plates fail and `ltbN > 1.0005`, the check-and-fix is repeated with each s_p (loosest first, until one passes without a plate change); the cheapest passing result is kept (the plates-only result competes).
+  - Apply writes `framing.spPier` (only when it differs).
+- **Check cases (headless, branch):**
+  - Built-in 28° abutments only, default unit costs ($2,500/frame): quick passes as is (0.988; ltbN 0.957 < 1, no variants: same as main). Full design: best at 25 ft D 69 in $1,589,552 (70 frames), ltbN 0.913 → pier study: s_p 22.5 $1,589,552 (70 frames, same layout cost), 20 $1,617,850 (80), 17.5 $1,655,282 (92) → stop. **Kept: plates only, $1,589,552** (the same result as main; closer frames cost $28,298–$65,730 more than the plate steel they save).
+  - Same with $500/frame: main and branch both select uniform 17.5 ft, $1,443,764; pier study at 25 ft base: 15 ft $1,474,694, 12.5 ft $1,479,462 → plates/uniform spacing kept.
+  - Built-in, target spacing 30 ft, 28° abutments only (quick suggestion): main: fast plates 81.18 (LTB, see open item), plate increases fail after 8 rounds at 16.87, $3,430,161. Branch: plates-only path the same; s_p 22.5 ft passes with the fast plates unchanged (0.989), **$1,686,982, kept**.
+  - Two spans 160/160 ft, skews 28/0/28 (quick suggestion): plates only $1,937,683 (pass 0.925); **s_p 22.5 ft $1,915,616 (pass 0.979) kept**. Full design of the same bridge: plates only D 72 $1,765,444 kept; s_p 22.5 … 10: $1,777,500 – $1,819,000.
+- **Existing projects:** without s_p the layout is identical, so Full design's plain candidates are identical; Full design can now add pier-study candidates and select one (built-in 15° and 28° abutments only: same selection as main).
+
+### Saved data
+- New optional fields `framing.spPier`, `framing.pierLen` (not in the defaults; blank input stores NaN → null, read as blank). Existing projects and blank inputs: layout, checks, hand-off identical to main (verified below). Main opening a branch project ignores the fields (checked: loadData, no errors, main layout). No key renamed; `bridge.xf` hand-off format unchanged.
+
+### How verified
+- `node --check` on every script block (main file and decoded page).
+- `framingLayout` main vs branch in Node: 3,240 configurations (skews 0/15/20/28 all, 28 abutments, 28 piers, mixed 35/10/25/45, 45, ±30; contiguous/staggered; auto/normal/parallel; 20/25 ft; 3/5 girders; continuous/simple; s_p undefined, '', null, NaN, 0, ≥ target, and 15 on simple spans): identical frames and `orient` in all.
+- Headless Chromium, main 0929719 vs branch, settled (`settle`): built-in 15°, 28° all, 28° abutments only, xsA, curb: GirderDetail project hash, hand-off `bridge.xf` hash, all module check hashes, PlateLine checks hash identical; all 10 modules after Get demands identical; Preliminary sizing project identical except its `ts` timestamp. Pier cases (branch): built-in 15°, 28° all, 28° abutments only with s_p = 15: DC1 frame list = layout (0 mismatches), no console errors. Saved data: branch autosave + reload keeps s_p (70 frames); branch project into main loads with no error. Suggest (fast, quick, Full design) on built-in 15° and 28° abutments only, main vs branch, and the cases above.
+
+### Open items
+- Region definition (0.25 × span, or the input) and the minimum max(10 ft, 0.4 s) — engineer to confirm (ENGINEER_CHECKS GD37).
+- Pre-existing (main): the quick suggestion at a 30 ft target spacing, 28° abutments only, reports a Strength I negative compression-flange ratio of 81.18 at 197 ft (Span 2, interior, "with skew f_ℓ") for the fast plates, and plate increases do not resolve it (16.87 after 8 rounds). Not changed here (CLAUDE.md §4); GD37.
+
+Diff of the decoded Preliminary sizing page (`pl_main` = main 0929719, `pl` = branch):
+
+```diff
+--- pl_main.html	2026-10-15 09:53:07.526472160 +0000
++++ pl.html	2026-10-15 10:50:58.698392766 +0000
+@@ -2437,6 +2437,7 @@
+       const lim = FS.limit === 'I' ? 'I' : FS.limit === 'II' ? 'II' : SL >= eq ? 'I' : 'II'; return lim === 'I' ? { lim, g: gI, res: th } : { lim, g: gII, res: Math.cbrt(A / (365 * life * nn * SL)) }; };
+     const fatMemo = {}, fatAt = x => { const nn = fatN(x); return fatMemo[nn] || (fatMemo[nn] = { B: fatLS(120e8, thB, nn), C: fatLS(44e8, thC, nn) }); };
+     const Fcrw = (Dc, tw) => Math.min(0.9 * E * (9 / Math.max(Dc / D, 0.05) ** 2) / (D / tw) ** 2, Fy, Fyw / 0.7);
++    let ltbLast = false; const ltbB = new Float64Array(N);   // FSP: the last F_nc was set by lateral-torsional buckling below R_bF_y; the Strength I negative-flexure ratios so governed
+     const Fnc = (bf, tf, Dc, tw, Rb1, Cb = 1, ltbOnly = false, bL = bf, tL = tf, rtO = 0) => { const Fyr = Math.min(0.7 * Fy, Fyw), lf = bf / (2 * tf), lpf = 0.38 * rt3, lrf = 0.56 * Math.sqrt(E / Fyr), lrw = 5.7 * rt3;
+       let Rb = 1; if (!Rb1 && 2 * Dc / tw > lrw) { const awc = Math.min(2 * Dc * tw / (bf * tf), 10); Rb = 1 - awc / (1200 + 300 * awc) * (2 * Dc / tw - lrw); }
+       const FLB = lf <= lpf ? Rb * Fy : (1 - (1 - Fyr / Fy) * (lf - lpf) / (lrf - lpf)) * Rb * Fy;
+@@ -2444,6 +2445,7 @@
+       // equivalent r_t = (L_b/π)√(F_e/E) of a nonprismatic unbraced length (rtO, Eq. 6.10.8.2.3c-3; CB2, 2026-10-13; was: the smallest flange of the segment, with C_b of Eq. b-1)
+       const rt = rtO > 0 ? rtO : bL / Math.sqrt(12 * (1 + Dc * tw / (3 * bL * tL))), Lp = 1.1 * rt * rt3, Lr = Math.PI * rt * Math.sqrt(E / Fyr);
+       const LTB = Lb <= Lp ? Rb * Fy : Lb <= Lr ? Math.min(Rb * Fy, Cb * (1 - (1 - Fyr / Fy) * (Lb - Lp) / (Lr - Lp)) * Rb * Fy) : Math.min(Rb * Fy, Cb * Rb * Math.PI ** 2 * E / (Lb / rt) ** 2);
++      ltbLast = LTB < FLB - 1e-9 && LTB < Rb * Fy - 1e-9;
+       return ltbOnly ? LTB : Math.min(FLB, LTB); };
+     // nonprismatic unbraced lengths (CB2, 2026-10-13): each segment classified by feNpr (6.10.8.2.3c) for its envelope (tag S: Strength I bottom flange; C: deck placement), and
+     // gamma_e by App. D6.6.2 Method A (feGeA) for those that do not meet the simplification, or the bound feGe where the step limit of D6.6.2.2 is not met (listed in
+@@ -2521,6 +2523,7 @@
+                 return -(g1 * M1k * 12 / sp.Ss + (g1 * M2k + g2 * Mwk + 1.75 * T.Mn[k]) * 12 / sp.Scr); });
+               Fn = Fnc(b.b, b.t, Dc, tw, false, 1, false, b.b, b.t, G ? Lb / Math.PI * Math.sqrt(G.g * fb / E) : 0); }
+             else { Cb = cbAt(T.Mun, x, -1); Fn = Fnc(b.b, b.t, Dc, tw, false, Cb, false, np.kind === 'simp' ? np.big.botB : b.b, np.kind === 'simp' ? np.big.botT : b.t); }
++            if (ltbLast) ltbB[i] = Math.max(ltbB[i], (fb + fl / 3) / Fn);   // FSP
+             cbMax = Math.max(cbMax, Cb); put(rB, gB, i, (fb + fl / 3) / Fn, fl ? 'Strength I, negative, compression flange with skew f_ℓ (6.10.8.1.1)' : 'Strength I, negative, compression flange (6.10.8.2)'); }
+           if (ft > 0) put(rT, gT, i, ft / Fy, 'Strength I, negative, tension flange (6.10.8.3)');
+           const sb = -(M1 * 12 / Sb.s + (M2 + Mw + 1.3 * Ln) * 12 / Sb.cr), st_ = -(M1 * 12 / St.s + (M2 + Mw + 1.3 * Ln) * 12 / St.cr);
+@@ -2534,7 +2537,8 @@
+         else if (Mc < 0) { const fc = -Mc * 12 / Sb.s, Dc = ybs - b.t; put(rB, gB, i, fc / fncCon(x, T, -1, fc, b, Dc, tw, beff), 'Constructibility, compression flange (6.10.3.2.1)'); put(rT, gT, i, -Mc * 12 / St.s / Fy, 'Constructibility, tension flange (6.10.3.2.2)'); }
+       } }
+     const max = Math.max(...rT, ...rB);
+-    return { rT, rB, aT, aB, gT, gB, tT, tB, rWeb, gWeb, xWeb, tWeb, max, other, Lb: spCF, fat: FAT, cbMax, npW, ...(oosL.length ? { oos: oosL } : {}) };
++    let ltbN = 0; for (let i = 0; i < N; i++) if (ltbB[i] > 0 && ltbB[i] >= rB[i] - 1e-9) ltbN = Math.max(ltbN, ltbB[i]);   // FSP: largest bottom-flange ratio governed by LTB in negative flexure (0: none)
++    return { rT, rB, aT, aB, gT, gB, tT, tB, rWeb, gWeb, xWeb, tWeb, max, other, Lb: spCF, fat: FAT, cbMax, npW, ltbN, ...(oosL.length ? { oos: oosL } : {}) };
+   }
+   function sgPlastic(q, D, beff, t, b, tw) {   // positive plastic moment (App. D6.1), deck rebar ignored, haunch concrete ignored
+     const tb = b.t, tt = t.t, d = tb + D + tt, y0 = d + hh, y1 = y0 + ts, Fy = FyF, Fw = FyW;
+@@ -2578,6 +2582,14 @@
+    Each iteration's demand() recomputes K_g and the 4.6.2.2 distribution factors from the current plates; the live-load stage model
+    (bN, influence lines on the short-term composite section) of the first iteration is reused inside the loop (llCache), and the
+    verification recomputes everything. Also used by the girder-count study (wsfRun) on a copy of the project with that row's bridge. */
++/* FSP (2026-10-15): the spacing near interior supports in use for a project (null: none; continuous unit with more than one span, framing.spPier > 0 and below
++   the spacing sp, default framing.spacing), and the values Suggest / Full design try: 22.5, 20, 17.5, 15, 12.5, 10 ft below sp and not below
++   max(PL_SPPIER_MIN, 0.4 sp) (the 0.4 panel ratio of C6.7.4.2.1 at the region boundary), the current value left out; withBlank: also none (first) where one is set */
++function sgPierCur(Pp, sp) { const B = Pp.bridge || {}, F = Pp.framing || {}, s2 = +F.spPier, s = sp != null ? sp : +F.spacing;
++  return B.cont === 'continuous' && (B.spans || []).length > 1 && s2 > 0 && s2 < s - 1e-9 ? s2 : null; }
++function sgPierList(Pp, sp, withBlank) { const B = Pp.bridge || {}; if (!(B.cont === 'continuous' && (B.spans || []).length > 1)) return [];
++  const cur = sgPierCur(Pp, sp), lo = Math.max(PL_SPPIER_MIN, 0.4 * sp), l = [22.5, 20, 17.5, 15, 12.5, 10].filter(v => v < sp - 0.01 && v >= lo - 1e-9 && !(cur != null && Math.abs(v - cur) < 0.01));
++  return withBlank && cur != null ? [null, ...l] : l; }
+ async function suggestFull(P, prog, cancelled) {
+   const tick = () => new Promise(r => setTimeout(r, 0)), fast = suggestLayout(P); if (fast.errors.length) return fast;
+   const SG = P.suggest, okC = fast.rec.cands.filter(c => c.ok), pool = okC.length ? okC : fast.rec.cands, picks = pool.slice(0, SG.keepD ? 2 : 3);
+@@ -2619,7 +2631,7 @@
+     const pass = V.check.max <= 1.0005 && V.check.rWeb <= 1.0005 && V.dOK && !V.cost.bayFail && !V.check.oos; let defl = null;
+     if (pass && SG.defl === 'on') { const Pc = { ...P, girder: { ...P.girder, D: c.D, web: best.res.web.map(w => ({ L: w.L, t: w.t })), top: best.res.top.map(g => ({ L: g.L, b: g.b, t: g.t })), bot: best.res.bot.map(g => ({ L: g.L, b: g.b, t: g.t })), splices: best.res.splices } };
+       const m = buildModel(Pc); if (!m.errors.length) { const an = analyzeGirder(Pc, m); if (!an.errors) defl = Object.values(an.types).flatMap(T => T.dl).reduce((a, q) => (!a || q.d / q.lim > a.d / a.lim) ? q : a, null); } }
+-    return { D: c.D, wt: c.wt, doR: c.doR, twC: c.twC, spacing: +PP.framing.spacing, res: best.res, check: V.check, cost: V.cost, pass: pass && (!defl || defl.d <= defl.lim + 1e-9), dOK: V.dOK, iters: it + 1, defl, xs: best.xs, fastCost: c.cost };
++    return { D: c.D, wt: c.wt, doR: c.doR, twC: c.twC, spacing: +PP.framing.spacing, spPier: sgPierCur(PP), res: best.res, check: V.check, cost: V.cost, pass: pass && (!defl || defl.d <= defl.lim + 1e-9), dOK: V.dOK, iters: it + 1, defl, xs: best.xs, fastCost: c.cost };
+   };
+   for (const c of picks) { const r = await refine(P, c); if (!r) return null; out.push(r); }
+   // cross-frame spacing: re-run the best candidate at other spacings, cross-frame cost included
+@@ -2627,12 +2639,23 @@
+   if (spList.length) { const okO = out.filter(o => o.pass).sort((a, b) => a.cost.total - b.cost.total)[0];
+     if (okO) { const c0 = picks.find(p => p.D === okO.D && p.wt === okO.wt && p.doR === okO.doR && (p.twC || 0) === (okO.twC || 0)) || { D: okO.D, wt: okO.wt, doR: okO.doR, twC: okO.twC, cost: okO.fastCost };
+       for (const sp of spList) { const PP = { ...P, framing: { ...P.framing, spacing: sp } }; const r = await refine(PP, c0, `Cross-frames at ${sp} ft`); if (!r) return null; r.spTry = true; spOut.push(r); out.push(r); } } }
++  // FSP (2026-10-15): spacing near interior supports. Where lateral-torsional buckling in negative flexure governs the bottom flange of the best passing
++  // candidate at the Framing tab spacing (continuous units), it is re-run at that spacing with closer cross-frames in the pier regions (from 22.5 ft down to max(10 ft, 0.4 × spacing),
++  // priced as the extra frames of the layout), loosest first, until a passing one costs more than the previous; with a spacing near supports already set,
++  // also without it. The cheapest passing candidate is kept
++  if (SG.cfOpt !== 'off' && fast.cont && fast.spans.length > 1) { const okB = out.filter(o => o.pass && Math.abs(o.spacing - sp0) < 0.01).sort((a, b) => a.cost.total - b.cost.total)[0];
++    if (okB && okB.check.ltbN > 0) { const PB = { ...P, framing: { ...P.framing, spacing: okB.spacing, spPier: okB.spPier ?? '' } }, list = sgPierList(PB, okB.spacing, true);
++      const c0 = picks.find(p => p.D === okB.D && p.wt === okB.wt && p.doR === okB.doR && (p.twC || 0) === (okB.twC || 0)) || { D: okB.D, wt: okB.wt, doR: okB.doR, twC: okB.twC, cost: okB.fastCost };
++      let prev = okB, up = 0;
++      for (const s2 of list) { const PP = { ...P, framing: { ...P.framing, spacing: okB.spacing, spPier: s2 ?? '' } }; const r = await refine(PP, c0, s2 ? `Cross-frames at ${s2} ft near piers` : 'Cross-frames without closer spacing near piers'); if (!r) return null;
++        r.spTry = true; r.pierTry = true; out.push(r); if (s2 == null || !r.pass) continue;
++        up = prev.pass && r.cost.total > prev.cost.total + 0.5 ? up + 1 : 0; prev = r; if (up >= 2) break; } } }   // two closer spacings in a row each cost more: stop
+   prog && prog(1, 'Done');
+   const ok = out.filter(o => o.pass).sort((a, b) => a.cost.total - b.cost.total), best = ok[0] || out.slice().sort((a, b) => (a.check.oos ? 1 : 0) - (b.check.oos ? 1 : 0) || a.check.max - b.check.max)[0];
+   const gov = (list, ratios, names) => { let x = 0; return list.map(g => { const x0 = x; x += g.L; let rm = 0, nm = ''; best.xs.forEach((xx, i) => { if (xx >= x0 - 1e-6 && xx < x - 1e-6 && ratios[i] > rm) { rm = ratios[i]; nm = names[i]; } }); return { ...g, x0, x1: x, ratio: rm, gov: nm }; }); };
+   const res = best.res, ch = best.check;
+-  return { ...fast, D: best.D, webType: best.wt, doR: best.doR, twC: best.twC, bays: best.wt === 'stiffened' && best.cost.bays || null, spacing: best.spacing, cost: best.cost, tw: res.tw, web: res.web, top: res.top, bot: res.bot, splices: res.splices, rec: { ...fast.rec, ...res.rec, D: { ...fast.rec.D, final: best.D } },
+-    full: { cands: out.map(o => ({ D: o.D, wt: o.wt, doR: o.doR, twC: o.twC, spacing: o.spacing, pass: o.pass, dOK: o.dOK, iters: o.iters, max: o.check.max, web: o.check.rWeb, cost: o.cost, fastCost: o.fastCost, defl: o.defl, best: o === best, ...(o.check.oos ? { oos: o.check.oos } : {}) })), check: ch, topGov: gov(res.top, ch.rT, ch.gT), botGov: gov(res.bot, ch.rB, ch.gB), passed: best.pass, fastCost: fast.cost } };
++  return { ...fast, D: best.D, webType: best.wt, doR: best.doR, twC: best.twC, bays: best.wt === 'stiffened' && best.cost.bays || null, spacing: best.spacing, spPier: best.spPier, cost: best.cost, tw: res.tw, web: res.web, top: res.top, bot: res.bot, splices: res.splices, rec: { ...fast.rec, ...res.rec, D: { ...fast.rec.D, final: best.D } },
++    full: { cands: out.map(o => ({ D: o.D, wt: o.wt, doR: o.doR, twC: o.twC, spacing: o.spacing, spPier: o.spPier, pierTry: !!o.pierTry, ltbN: o.check.ltbN, pass: o.pass, dOK: o.dOK, iters: o.iters, max: o.check.max, web: o.check.rWeb, cost: o.cost, fastCost: o.fastCost, defl: o.defl, best: o === best, ...(o.check.oos ? { oos: o.check.oos } : {}) })), check: ch, topGov: gov(res.top, ch.rT, ch.gT), botGov: gov(res.bot, ch.rB, ch.gB), passed: best.pass, fastCost: fast.cost } };
+ }
+ 
+ /* Quick suggestion: strength and service check and fix of the fast result (approved 2026-10-12).
+@@ -2643,15 +2666,17 @@
+    already there, so plates only increase; the web is thickened by one increment where its ratio exceeds 1.0 (as in Full design).
+    The layout is re-sized (opts.only with kT.areq, the fast demand for splices and shear) and re-verified, at most 8 rounds.
+    Depth, web type, d_o/D, and splice shifts of the fast pick are kept. Full design (suggestFull) does not use this. */
+-async function suggestQuickCheck(P, fast, prog, cancelled) {
++async function suggestQuickCheck(P0, fast, prog, cancelled) {
+   const tick = () => new Promise(r => setTimeout(r, 0)), OK = 1.0005, t0 = performance.now(), MAXIT = 8;
+-  const cc = { D: fast.D, wt: fast.webType, doR: fast.doR, twC: fast.twC }, shifts = fast.shifts, incTw = num(P.limits.incTw) || 0.0625;
++  const cc = { D: fast.D, wt: fast.webType, doR: fast.doR, twC: fast.twC }, shifts = fast.shifts, incTw = num(P0.limits.incTw) || 0.0625;
+   const cp = l => l.map(r => ({ ...r })), pass = v => v.check.max <= OK && v.check.rWeb <= OK && v.dOK && !v.cost.bayFail && !v.check.oos;   // bayFail: per-bay stiffeners (TB1) cannot carry the staged shear
+-  const ver = L => suggestLayout(P, { full: true, verify: { ...cc, top: cp(L.top), bot: cp(L.bot), web: cp(L.web), splices: [...L.splices] } });
+   const areaAt = (list, x) => { const g = sgAt(list, x); return g.b * g.t; };
+-  const spn = (P.bridge.spans || []).map(Number), skw = (P.bridge.skews || []).map(v => Math.abs(+v || 0)), pal = a => a.every((v, i) => Math.abs(v - a[a.length - 1 - i]) < 1e-6), symB = pal(spn) && pal(skw);
++  const spn = (P0.bridge.spans || []).map(Number), skw = (P0.bridge.skews || []).map(v => Math.abs(+v || 0)), pal = a => a.every((v, i) => Math.abs(v - a[a.length - 1 - i]) < 1e-6), symB = pal(spn) && pal(skw);
++  // the check and fix of the fast plates for the project P (FSP: also for copies with a spacing near interior supports, f0..f1 of the progress bar)
++  const runQ = async (P, f0, f1, tag) => {
++  const ver = L => suggestLayout(P, { full: true, verify: { ...cc, top: cp(L.top), bot: cp(L.bot), web: cp(L.web), splices: [...L.splices] } });
+   let lay = { top: cp(fast.top), bot: cp(fast.bot), web: cp(fast.web), splices: [...fast.splices], tw: fast.tw };
+-  prog && prog(0.05, 'Strength and service check of the fast result'); await tick(); if (cancelled()) return null;
++  prog && prog(f0 + 0.05 * (f1 - f0), `${tag || ''}Strength and service check of the fast result`); await tick(); if (cancelled()) return null;
+   let V = ver(lay); const V0 = V; let it = 0, twMin = fast.tw, note = '';
+   while (!pass(V) && it < MAXIT) {
+     const ch = V.check, xs = V.xs; sgLists(lay.top, lay.bot, lay.web); const Lt = lay.top.reduce((a, g) => a + g.L, 0);
+@@ -2670,10 +2695,22 @@
+     const key = L => JSON.stringify([L.tw, L.splices, L.top.map(g => [g.L, g.b, g.t]), L.bot.map(g => [g.L, g.b, g.t])]);
+     if (key(nl) === key(lay)) { note = 'no plate change can raise the capacity further'; break; }
+     lay = nl; it++;
+-    prog && prog(Math.min(0.95, 0.1 + 0.85 * it / MAXIT), `Plates increased, round ${it}: re-checking`); await tick(); if (cancelled()) return null;
++    prog && prog(f0 + (f1 - f0) * Math.min(0.95, 0.1 + 0.85 * it / MAXIT), `${tag || ''}Plates increased, round ${it}: re-checking`); await tick(); if (cancelled()) return null;
+     V = ver(lay);
+   }
+-  return { lay, V, V0, iters: it, pass: pass(V), changed: it > 0, note, ms: performance.now() - t0 };
++  return { lay, V, V0, iters: it, pass: pass(V), changed: it > 0, note, spPier: sgPierCur(P) };
++  };
++  /* FSP (2026-10-15): spacing near interior supports as a variable. Where the fast plates fail on lateral-torsional buckling in negative flexure (a bottom
++     flange ratio above 1.0 governed by it; continuous units), the check and fix is repeated with closer cross-frames in the pier regions (sgPierList, loosest first, until one
++     passes without plate changes); each is priced with the frames of its own layout, and the cheapest passing result is kept (the plates-only result if none
++     is cheaper) */
++  const list = sgPierList(P0, +P0.framing.spacing, false), r0 = await runQ(P0, 0, list.length ? 0.4 : 1); if (!r0) return null;
++  const alts = [];
++  if (list.length && !pass(r0.V0) && r0.V0.check.ltbN > OK) {
++    for (let j = 0; j < list.length; j++) { const PP = { ...P0, framing: { ...P0.framing, spPier: list[j] } }, r = await runQ(PP, 0.4 + 0.6 * j / list.length, 0.4 + 0.6 * (j + 1) / list.length, `Cross-frames at ${list[j]} ft near piers: `); if (!r) return null;
++      alts.push(r); if (r.pass && !r.changed) break; } }
++  const all = [r0, ...alts], best = all.filter(r => r.pass).sort((a, b) => a.V.cost.total - b.V.cost.total)[0] || r0;
++  return { ...best, ms: performance.now() - t0, pierSet: best !== r0, pierAlts: alts.length ? all.map(r => ({ spPier: r.spPier, pass: r.pass, changed: r.changed, iters: r.iters, max: Math.max(r.V.check.max, r.V.check.rWeb), ltbN: r.V0.check.ltbN, cost: r.V.cost.total, nFr: r.V.cost.nFr, best: r === best })) : null };
+ }
+ 
+ 
+@@ -2733,7 +2770,7 @@
+ <li><b>Bridge tab.</b> Enter span lengths, continuity, skew at each support line, and the deck cross-section.</li>
+ <li><b>Girder tab.</b> Enter the web depth and grades, then the web, top flange, and bottom flange plate segments from Abutment 1, and the field splice stations. Each segment table shows its running total against the girder length; "Fit last to girder" sets the final segment to the remaining length.</li>
+ <li><b>Limits tab.</b> Choose the owner and confirm every limit. Save verified limits as that owner's defaults so later projects can load them.</li>
+-<li><b>Framing tab.</b> Set the cross-frame spacing and orientation rule, the stiffener arrangement, and the stiffener, connection plate, and bearing stiffener sizes. Stiffener spacing is either uniform (d<sub>o</sub>/D in every bay) or per cross-frame bay: a table of the bays of each girder (stations along the girder from its Abut. 1 bearing, length, number of intermediate stiffeners n, the widest panel d<sub>o</sub> and d<sub>o</sub>/D, and the largest V<sub>u</sub>/φV<sub>n</sub> of its panels with the Analysis tab shears), girders with the same layout together. Suggest Apply fills it; the counts can be edited. A bay with no stored count (the framing changed afterwards) uses the uniform d<sub>o</sub>/D and is flagged. The framing plan on the Drawings tab updates live.</li>
++<li><b>Framing tab.</b> Set the cross-frame spacing (and, optionally, a closer spacing near interior supports with the length of the pier region each side) and orientation rule, the stiffener arrangement, and the stiffener, connection plate, and bearing stiffener sizes. Stiffener spacing is either uniform (d<sub>o</sub>/D in every bay) or per cross-frame bay: a table of the bays of each girder (stations along the girder from its Abut. 1 bearing, length, number of intermediate stiffeners n, the widest panel d<sub>o</sub> and d<sub>o</sub>/D, and the largest V<sub>u</sub>/φV<sub>n</sub> of its panels with the Analysis tab shears), girders with the same layout together. Suggest Apply fills it; the counts can be edited. A bay with no stored count (the framing changed afterwards) uses the uniform d<sub>o</sub>/D and is flagged. The framing plan on the Drawings tab updates live.</li>
+ <li><b>Suggest (optional).</b> With the Bridge and Limits tabs complete, open the Suggest output tab to see a proposed layout with its full derivation, adjust the settings on the Suggest input tab, and choose "Apply to girder" to copy it into the Girder tab. Everything on the Girder tab can then be edited by hand.</li>
+ <li><b>Review the output.</b> The status bar and Summary tab show the verdict and the governing location for every check. Click any check ID or status chip to jump to its derivation.</li>
+ <li><b>Print.</b> "Print report" opens a dialog to choose the report contents, then prints to PDF.</li>
+@@ -2850,6 +2887,7 @@
+ ['p5f', 'Framing, detailing, and analysis methodology', `
+ <h3>Cross-frame layout</h3>
+ <p>Girders are placed at y = 0, S, 2S, … and each support line passes through the bridge centerline station at its skew angle, so the bearing of girder i at support k is at x = X<sub>k</sub> + (y<sub>i</sub> − y<sub>c</sub>)tan θ<sub>k</sub>. A cross-frame is placed in every bay along every bearing line. Parallel frames (both supports of the span skewed 20° or less, AASHTO LRFD 10th Ed. 6.7.4.2.1): n = ⌈L<sub>max</sub>/s⌉ − 1 per bay, where s is the target spacing and L<sub>max</sub> the longest girder span between the two bearing lines, interpolated between the bearing lines, so no girder exceeds s. Normal frames (a support skewed more than 20°): one grid per span at a spacing of at most s (offset by half a spacing in alternate bays if staggered, unless half a spacing is less than d<sub>min</sub>). At a support skewed more than 20° the grid is anchored on the bearing of the obtuse-corner girder: its first line is e = max(clear distance, 4b<sub>f</sub>, 0.4s) from that bearing, so the first intermediate frame on every girder is at least e from that girder's own bearing (C6.7.4.2.1; b<sub>f</sub> is the widest flange plate in the span); at a support skewed 20° or less the first line is one spacing from the bearing. In each bay a grid station is kept where it is at least e (or the clear distance) from both bearings of the bay. Where a girder panel is still longer than s (the acute corners), a frame is added in an adjacent bay: at the station of a frame on the girder's other side (connecting through) or at least d<sub>min</sub> = max(min. offset, 4b<sub>f</sub>) from every other frame on both girders it connects, at least max(clear distance, 4b<sub>f</sub>) from their bearings, preferring positions that close the gap, clear splices and transitions, keep the adjacent panels at least 0.4 times each other, and line up. If any frame falls within the splice clearance of a field splice or shop transition, the grid is shifted within the span (end offsets changed by up to 4 ft, parallel frames by up to a quarter panel, same number of frames), or extra frames are used (up to three per bay line, or two more grid intervals), only when that clears every conflict (the smallest shift with the fewest frames); otherwise the unshifted grid is kept. Conflicts that remain are listed in X4, and the Framing tab lists the spacing used in each span.</p>
++<p><b>Spacing near interior supports</b> (optional; continuous units). With s<sub>p</sub> entered and below the target spacing s, the pier region extends from each interior support a distance R each side (the Pier region input, or, blank, 0.25 times the adjacent span: about the dead-load point of contraflexure of continuous spans; measured along each girder from its own bearing). In each span the frames next to an interior support are spaced s<sub>p</sub>: normal frames from the obtuse-corner bearing (the first line s<sub>p</sub> from an unskewed support, or e = max(clear distance, 4b<sub>f</sub>, 0.4s<sub>p</sub>) at a support skewed more than 20°), parallel frames from the bearings along the longest girder; the pier zone continues to the first grid line beyond the region on every girder. The rest of the span is evenly spaced at most s, starting and ending on the pier-zone lines, so there is no short closing panel (between the zones at least s<sub>p</sub>; where less would remain, the whole span is spaced at most s<sub>p</sub>). Corner frames, splice and transition shifts, extra frames, the stagger offsets d<sub>min</sub> and the first-frame offset at skewed supports follow the rules above, with the limit s<sub>p</sub> for every girder panel whose midpoint is in a pier zone. X2 checks the panels whose midpoint is within the region against s<sub>p</sub>. L<sub>b</sub> everywhere (Girder section rows, Cross-frames module, overhangs, and the checks of the quick suggestion and Full design) is taken from the frames actually laid out. The framing plan shades the regions. Blank, s<sub>p</sub> ≥ s, or simple spans: the layout is the same as without the input.</p>
+ <h3>Detailing checks</h3>
+ <p>Transverse stiffeners and connection plates (which act as stiffeners) must satisfy 6.10.11.1.2 and 6.10.11.1.3:</p>
+ <div class="eq-math">\\[b_t \\ge 2.0 + \\frac{D}{30}, \\qquad 16t_p \\ge b_t \\ge \\frac{b_f}{4}, \\qquad I_t = \\frac{t_p b_t^3}{3} \\ge \\min(I_{t1}, I_{t2}), \\quad I_{t1} = b\\,t_w^3 J, \\quad J = \\frac{2.5}{(d_o/D)^2} - 2.0 \\ge 0.5, \\quad I_{t2} = \\frac{D^4\\rho_t^{1.3}}{40}\\left(\\frac{F_{yw}}{E}\\right)^{1.5}\\]</div>
+@@ -3062,15 +3100,22 @@
+     try { r = await suggestQuickCheck(PP, base, prog, () => run !== SGQ_RUN || SG !== base); } catch (e) { console.error(e); r = { err: e.message || String(e) }; }
+     if (run !== SGQ_RUN || SG !== base || !r) return;
+     if (r.err) { base.quick = { ...base.quick, state: 'error', msg: r.err }; SGQ_APPLY = 0; try { renderSuggest(); } catch (e) { console.error(e); } return; }
+-    const q = { state: 'done', qk: base.quick.qk, pass: r.pass, changed: r.changed, iters: r.iters, note: r.note, ms: r.ms, check: r.V.check, dOK: r.V.dOK, max0: r.V0.check.max, web0: r.V0.check.rWeb, pass0: r.V0.check.max <= 1.0005 && r.V0.check.rWeb <= 1.0005 && r.V0.dOK && !r.V0.check.oos, fastCost: base.cost };
++    const q = { state: 'done', qk: base.quick.qk, pass: r.pass, changed: r.changed, iters: r.iters, note: r.note, ms: r.ms, pierSet: r.pierSet, spPier: r.spPier, pierAlts: r.pierAlts, check: r.V.check, dOK: r.V.dOK, max0: r.V0.check.max, web0: r.V0.check.rWeb, pass0: r.V0.check.max <= 1.0005 && r.V0.check.rWeb <= 1.0005 && r.V0.dOK && !r.V0.check.oos, fastCost: base.cost };
+     // per-bay stiffeners (TB1): the layout and cost of the checked girder under its staged shear (the fast one used the constant-stiffness shear)
+     const pbV = base.webType === 'stiffened' && r.V.cost.bays ? { cost: r.V.cost, bays: r.V.cost.bays } : {};
+     SG = r.changed ? { ...base, top: r.lay.top, bot: r.lay.bot, web: r.lay.web, tw: r.lay.tw, splices: r.lay.splices, cost: r.V.cost, ...pbV, quick: q } : { ...base, ...pbV, quick: q };
++    if (r.pierSet) SG = { ...SG, cost: r.V.cost, spPier: r.spPier };   // FSP: the result uses a spacing near interior supports (its frames priced)
+     const pend = SGQ_APPLY === run; if (pend) SGQ_APPLY = 0;
+     try { renderSuggest(); } catch (e) { console.error(e); }
+     if (pend) { if (SG_KEY === key && sgKey() === key) applySuggestion(); else flash('The inputs changed while the quick suggestion was being checked; press Apply again.', 'fail'); }
+   }, 30);
+ }
++/* FSP (2026-10-15): the spacing near interior supports tried by the quick suggestion (fast plates fail, LTB in negative flexure governs) and by Full design */
++function sgPierQuickTxt(Q) { const money = v => '$' + Math.round(v).toLocaleString('en-US'), b = Q.pierAlts.find(a => a.best);
++  return `<span class="sg-ln">Lateral-torsional buckling in negative flexure governed the fast plates (bottom flange ratio ${f3(Q.pierAlts[0].ltbN)}), so closer cross-frames near the interior supports were also tried (Framing tab, spacing near interior supports): ${Q.pierAlts.map(a => `${a.spPier != null ? `${f2(a.spPier)} ft near piers` : 'target spacing (plates only)'}: ${a.pass ? `${money(a.cost)}, ${a.nFr} cross-frames${a.changed ? `, plates increased in ${a.iters} round${a.iters > 1 ? 's' : ''}` : ', no plate change'}` : `does not pass (${f3(a.max)})`}`).join('; ')}. Kept: ${b.spPier != null ? `<b>${f2(b.spPier)} ft near the piers</b> (the cheapest passing)` : 'the target spacing with heavier plates (the cheapest passing)'}.</span>`; }
++function sgPierFullTxt(F, money) { const pc = F.cands.filter(c => c.pierTry); if (!pc.length) return '';
++  const base = F.cands.filter(c => !c.pierTry && c.pass && Math.abs(c.spacing - pc[0].spacing) < 0.01).sort((a, b) => a.cost.total - b.cost.total)[0];
++  return `<p class="note-p">Spacing near interior supports: lateral-torsional buckling in negative flexure governs the bottom flange of the best passing candidate at the Framing tab spacing${base ? ` (${money(base.cost.total)}, ${base.cost.nFr} cross-frames, ${base.spPier != null ? `${f2(base.spPier)} ft near piers` : 'target spacing'})` : ''}, so it was re-run with closer cross-frames in the pier regions (Framing tab), loosest first: ${pc.map(c => `${c.spPier != null ? `${f2(c.spPier)} ft` : 'none'}: ${c.pass ? `${money(c.cost.total)} (${c.cost.nFr} cross-frames)` : 'does not pass'}`).join('; ')}. The cheapest passing candidate is selected (extra cross-frames against lighter plates).</p>`; }
+ function sgGov(ch, xs) {   // largest ratio of a verify check: flange (top or bottom) or web
+   let g = { r: ch.rWeb || 0, name: ch.gWeb, x: ch.xWeb, gt: ch.tWeb, where: 'web' };
+   [[ch.rT, ch.gT, ch.tT, 'top flange'], [ch.rB, ch.gB, ch.tB, 'bottom flange']].forEach(([rr, gg, tt, w]) => { for (let i = 0; i < rr.length; i++) if (rr[i] > g.r) g = { r: rr[i], name: gg[i], x: xs[i], gt: tt ? tt[i] : '', where: w }; });
+@@ -3144,12 +3189,13 @@
+   const stTxt = (st, d, bm, n) => !st ? 'unstiffened (connection plates only)' : bm ? `per cross-frame bay, ${n} intermediate stiffeners in all girders` : `stiffened, d<sub>o</sub> = ${f2(d)}D`;
+   const stChg = cSt !== sSt || (sSt && (BC ? BC.nChg > 0 || cBM !== sBM : Math.abs(cDo - sDo) > 1e-6));
+   const cSp = num(F.spacing), sSp = s.spacing || cSp, spChg = !!s.spacing && Math.abs(sSp - cSp) > 1e-6;
++  const cP2 = sgPierCur(P), sP2 = s.spPier !== undefined ? s.spPier : sgPierCur(P, sSp), p2Chg = (cP2 ?? 0) !== (sP2 ?? 0);   // FSP: spacing near interior supports
+   const dChg = Math.abs(cur.D - s.D) > 1e-9, twC = [...new Set(cur.web.map(w => frac(w.t)))].join(', '), twS = [...new Set(mS.web.map(w => frac(w.t)))].join(', '), twChg = twC !== twS;
+   const has = (l, v) => l.some(u => Math.abs(u - v) < 1e-3), sAdd = s.splices.filter(v => !has(cur.splices, v)), sDel = cur.splices.filter(v => !has(s.splices, v)), splChg = !!(sAdd.length || sDel.length);
+   const nTc = cur.trans.filter(t => !t.atSplice).length, nTs = mS.trans.filter(t => !t.atSplice).length;
+   const ids = new Set(cS.map(k => k.id)), cP = { fail: 0, warn: 0 }; (C || []).forEach(k => { if (ids.has(k.id) && cP[k.status] !== undefined) cP[k.status]++; });
+   const chT = rT.some(r => r.chg), chB = rB.some(r => r.chg), chW = rW.some(r => r.chg);
+-  const noChange = !chT && !chB && !chW && !dChg && !twChg && !splChg && !stChg && !spChg;
++  const noChange = !chT && !chB && !chW && !dChg && !twChg && !splChg && !stChg && !spChg && !p2Chg;
+   const S = SGC && SGC.key === sgcKey() ? SGC : { state: 'checking' };
+   const cg = S.state === 'done' ? sgGov(S.V.check, S.V.xs) : null;
+   const dep = ok => ok ? '' : '; shallower than the Table 2.5.2.6.3-1 minimum depth';
+@@ -3177,6 +3223,7 @@
+     ${row('Web thickness t<sub>w</sub>', `${twC} in`, `${twS} in`, twChg, `${twC} → ${twS} in`)}
+     ${row('Transverse stiffeners', stTxt(cSt, cDo, cBM, BC && BC.nC), stTxt(sSt, sDo, sBM, BC && BC.nS), stChg, cSt !== sSt ? (sSt ? 'stiffeners added' : 'stiffeners removed') : BC ? `${BC.nChg} bay${BC.nChg === 1 ? '' : 's'} changed, ${BC.nC} → ${BC.nS} stiffeners (per-bay table below)` : `d<sub>o</sub>/D ${f2(cDo)} → ${f2(sDo)}`)}
+     ${row('Cross-frame spacing', `${f2(cSp)} ft`, s.spacing ? `${f2(sSp)} ft` : `${f2(cSp)} ft (not changed by the ${what})`, spChg, `${sgn(sSp - cSp, f2)} ft`)}
++    ${cP2 != null || sP2 != null ? row('Cross-frame spacing near interior supports', cP2 != null ? `${f2(cP2)} ft` : 'none (target spacing)', sP2 != null ? `${f2(sP2)} ft` : 'none (target spacing)', p2Chg, sP2 != null ? (cP2 != null ? `${sgn(sP2 - cP2, f2)} ft` : `${f2(sP2)} ft in the pier regions`) : 'removed') : ''}
+     ${row('Field splices', spl(cur.splices), spl(s.splices), splChg, sAdd.length && sAdd.length === sDel.length ? `moved ${sDel.map((v, i) => `${sgFs(v)} → ${sgFs(sAdd[i])}`).join(', ')} ft` : [sAdd.length ? `added at ${sAdd.map(sgFs).join(', ')} ft` : '', sDel.length ? `removed at ${sDel.map(sgFs).join(', ')} ft` : ''].filter(Boolean).join('; '))}
+     ${row('Shop transitions (all flanges)', nTc, nTs, nTc !== nTs, sgn(nTs - nTc, String))}
+     ${row('Steel per girder, with allowance', `${f2(cur.wt)} kip`, `${f2(mS.wt)} kip`, Math.abs(dWt) >= 5e-3, `${sgn(dWt, f2)} kip (${pct(dWt, cur.wt)})`)}
+@@ -3186,7 +3233,7 @@
+     ${row('Code proportion checks', `${cP.fail} fail, ${cP.warn} warn`, `${cnt.fail} fail, ${cnt.warn} warn`, cP.fail !== cnt.fail || cP.warn !== cnt.warn, [cP.fail !== cnt.fail ? `fail ${cP.fail} → ${cnt.fail}` : '', cP.warn !== cnt.warn ? `warn ${cP.warn} → ${cnt.warn}` : ''].filter(Boolean).join(', '))}</tbody></table></div>`;
+   const ptbl = (title, rows, isWeb) => `<div><h4 class="sg-h4">${title}</h4><div class="tscroll"><table class="tbl"><thead><tr><th class="right">From (ft)</th><th class="right">To (ft)</th><th class="right">Current (in)</th><th class="right">${W} (in)</th><th>Change</th></tr></thead><tbody>${rows.map(r => `<tr class="${r.chg ? 'chg' : ''}"><td class="val">${f2(r.x0)}</td><td class="val">${f2(r.x1)}</td><td class="val nw">${isWeb ? `${frac(cur.D)} × ${frac(r.c.t)}` : pl(r.c.b, r.c.t)}</td><td class="val nw">${isWeb ? `${frac(s.D)} × ${frac(r.g.t)}` : pl(r.g.b, r.g.t)}</td><td class="${r.chg ? 'chg-t' : ''}">${r.note}</td></tr>`).join('')}</tbody></table></div></div>`;
+   const nCh = [rT, rW, rB].reduce((a, l) => a + l.filter(r => r.chg).length, 0);
+-  const parts = [dChg && 'web depth', twChg && 'web thickness', stChg && 'stiffeners', spChg && 'cross-frame spacing', splChg && 'field splices', chT && 'top flange plates', chB && 'bottom flange plates'].filter(Boolean);
++  const parts = [dChg && 'web depth', twChg && 'web thickness', stChg && 'stiffeners', spChg && 'cross-frame spacing', p2Chg && 'cross-frame spacing near interior supports', splChg && 'field splices', chT && 'top flange plates', chB && 'bottom flange plates'].filter(Boolean);
+   const line = noChange ? `No change suggested: the ${what} is the same as the current girder.` : `Changes from the current girder: ${parts.join(', ')} (compared below).`;
+   const fast = Q && Q.state === 'checking' ? ` While the ${what} is being checked, the fast result is compared; its plates may still increase.` : '';
+   const note = `<p class="note-p">Current girder: the Girder tab plates and splices with the Framing tab stiffeners and cross-frame spacing. The two plate lists are merged by station, so each row below is a station range over which neither girder changes plate; changed rows are highlighted. Both girders are checked with the same staged analysis and AASHTO strength and service checks (those of the quick suggestion and Full design, for the interior and exterior girders)${s.full ? ', the current girder at its Framing tab cross-frame spacing and the full design at its own' : ''}. Steel includes the ${f2(P.limits.allow)}% detail allowance; costs use the Unit costs on the Suggest input tab.${S.dfx ? ' The current girder\'s check uses the factors and dead loads of GirderDetail\'s LLDF and DLs module (computed for this girder); the suggestion, the built-in ones.' : ''}${fast} Nothing changes until you press Apply.</p>`;
+@@ -3204,7 +3251,7 @@
+   const F = P.framing, cBM = F.stiff === 'on' && tsBaysOn(P), dO = (num(F.doRatio) || 1) * M.D / 12;
+   const uni = B => { if (F.stiff !== 'on') return 0; let n = 0; for (let x = B.a + dO; x < B.b - dO * 0.5; x += dO) n++; return n; };   // as GirderDetail's drawings place a uniform d_o
+   const cur = FR.girders.map((g, i) => cBM ? tsGirderBays(P, M, FR, i) : tsBaysOf(M, FR, i).map(B => ({ ...B, n: uni(B) })));
+-  const Pg = { ...P, girder: sgGirder(), framing: { ...P.framing, spacing: s.spacing || P.framing.spacing, stiff: 'on', doMode: s.bays ? 'bays' : 'uniform', bays: s.bays || P.framing.bays, doRatio: s.doR || F.doRatio } };
++  const Pg = { ...P, girder: sgGirder(), framing: { ...P.framing, spacing: s.spacing || P.framing.spacing, ...(s.spPier !== undefined ? { spPier: s.spPier ?? '' } : {}), stiff: 'on', doMode: s.bays ? 'bays' : 'uniform', bays: s.bays || P.framing.bays, doRatio: s.doR || F.doRatio } };
+   const FRs = framingLayout(Pg, mS), sug = FRs.girders.map((g, i) => s.bays ? tsGirderBays(Pg, mS, FRs, i) : tsBaysOf(mS, FRs, i).map(B => ({ ...B, n: Math.max(0, Math.ceil((B.b - B.a) * 12 / ((s.doR || 1) * mS.D) - 1e-9) - 1) })));
+   const per = cur.map((cl, i) => { const sl = sug[i] || [], keys = [...new Set([...cl, ...sl].map(B => `${B.a.toFixed(2)}|${B.b.toFixed(2)}`))].sort((a, b) => parseFloat(a) - parseFloat(b) || parseFloat(a.split('|')[1]) - parseFloat(b.split('|')[1]));
+     return keys.map(k => { const [a, b] = k.split('|').map(Number), c = cl.find(B => Math.abs(B.a - a) < 0.02 && Math.abs(B.b - b) < 0.02), q = sl.find(B => Math.abs(B.a - a) < 0.02 && Math.abs(B.b - b) < 0.02);
+@@ -3249,7 +3296,9 @@
+   if (bad) warn = `Warning: the ${what} does not pass every strength and service check: ${!ch ? 'the check could not be completed' : ch.oos ? `it is outside the scope of this app (${SG_OOS_HEAD} ${sgOosTxt(ch.oos)})` : g.r > 1.0005 ? `ratio ${f3(g.r)} > 1.0 (${sgGovTxt(g, SG.spans)})${Q && !Q.dOK ? '; the girder is also shallower than the Table 2.5.2.6.3-1 minimum depth' : ''}` : SG.full ? 'a minimum depth (Table 2.5.2.6.3-1) or deflection limit is not met' : 'the girder is shallower than the Table 2.5.2.6.3-1 minimum depth'}. ${SG.full ? 'Review the Full design results, adjust the inputs, and run full design again before relying on it.' : 'Run full design (Suggest input tab) for a layout that passes.'}\n\n`;
+   if (!confirm(`${warn}Replace the web, flange plates, and field splices on the Girder tab with the ${what}? You can revert to the current layout afterwards.`)) return;
+   snapshotBefore(SG.full ? 'Full design' : 'Quick suggestion');
+-  P.girder = sgGirder(); sgFrStiff(P.framing, SG); if (SG.spacing) P.framing.spacing = SG.spacing; fillInputs(); ['web', 'top', 'bot', 'spl'].forEach(renderArr); recompute(); setOTab('summary'); autosave();
++  P.girder = sgGirder(); sgFrStiff(P.framing, SG); if (SG.spacing) P.framing.spacing = SG.spacing;
++  if (SG.spPier !== undefined && SG.spPier !== sgPierCur(P)) P.framing.spPier = SG.spPier ?? '';   // FSP: the spacing near interior supports of the result (Full design, or a quick suggestion that tightened it)
++  fillInputs(); ['web', 'top', 'bot', 'spl'].forEach(renderArr); recompute(); setOTab('summary'); autosave();
+ }
+ 
+ function renderSuggest() {
+@@ -3282,6 +3331,7 @@
+   if (Q && Q.state === 'checking') sv = `<b>Checking strength and service…</b><span class="sg-ln">The fast result is shown. The staged analysis and AASHTO strength and service checks (interior and exterior girders) are running on it; plates may increase when the check finishes.</span><div class="sg-prog-bar"><div id="sg_q_fill" style="width:${Math.round(100 * (Q.f || 0))}%"></div></div><span class="sg-ln" id="sg_q_msg">${esc(Q.msg || '')}</span>`;
+   else if (Q && Q.state === 'error') sv = `<b>The strength and service check could not be completed</b><span class="sg-ln">${esc(Q.msg || '')}. The fast result shown is not checked; run full design.</span>`;
+   else if (chk) sv = `<b>${chk.pass ? 'Passes the strength and service checks' : 'Does not pass every strength and service check'}: largest ratio ${f3(gv.r)}</b><span class="sg-ln">Governing: ${esc(sgGovTxt(gv, s.spans))}.${chk.dOK ? '' : ' The girder is shallower than the Table 2.5.2.6.3-1 minimum depth.'}${Q ? (Q.changed ? ` Plates increased in ${Q.iters} round${Q.iters > 1 ? 's' : ''} from the fast sizing (largest ratio before: ${f3(Math.max(Q.max0, Q.web0))}).` : Q.pass ? ' The fast sizing passed as is; no plate was changed.' : '') : ''}${chk.pass ? '' : s.full ? ' Review the Full design results below.' : ` ${Q.note ? `Stopped: ${esc(Q.note)}. ` : ''}Run full design for a layout that passes.`}</span>`;
++  if (Q && Q.state === 'done' && Q.pierAlts) sv += sgPierQuickTxt(Q);   // FSP
+   if (chk && chk.ch && chk.ch.oos && !(Q && Q.state === 'checking')) sv = `<b>OUT OF SCOPE: not accepted.</b><span class="sg-ln">${esc(SG_OOS_HEAD)} ${esc(sgOosTxt(chk.ch.oos))}. The positive-flexure checks of ${chk.ch.oos.length > 1 ? 'these spans' : 'this span'} are not reported.</span>` + sv;   // PNA-OOS
+   const verdict2 = Q && Q.state === 'checking' ? 'chk' : cnt.fail || (chk && !chk.pass) || (Q && Q.state === 'error') ? 'fail' : 'pass';
+   const dnote = `<div class="note-p" style="margin:0">Designed for the ${SG_TYPES_TXT(types)}. Web depth ${s.rec.D.keep ? 'kept from the Girder tab' : `from the target L/D<sub>st</sub> of ${f2(R.D.ratio)}${R.D.bumps ? `, increased ${R.D.bumps} time${R.D.bumps > 1 ? 's' : ''} to satisfy G1/G2` : ''}`}. Widths are constant within each field piece; thickness changes only where the steel saved exceeds the ${f0(P.suggest.weld)} lb weld-cost equivalent.</div>`;   // design basis note (beside the plate lists when the current girder cannot be compared)
+@@ -3298,13 +3348,14 @@
+   const C = s.cost, money = v => '$' + Math.round(v).toLocaleString('en-US'), cc = curCost || { parts: { steel: 0, trans: 0, stiff: 0, splice: 0 }, wTot: 0, nTr: 0, nSt: 0, nSp: 0, total: 0 }, crow = (l, a, b2) => `<tr><td class="lbl">${l}</td><td class="val">${a}</td>${curCost ? `<td class="val">${b2}</td>` : ''}</tr>`;
+   if (C) h += card('sg-cost', s.full ? 'Cost of the full design' : 'Cost of the quick suggestion', `${C.nb} girders`, `<table class="tbl narrow"><thead><tr><th></th><th class="right">${s.full ? 'Full design' : 'Quick suggestion'}</th>${curCost ? '<th class="right">Current girder</th>' : ''}</tr></thead><tbody>
+       ${crow('Structural steel', `${money(C.parts.steel)} (${f0(C.wTot / 1000)} kip)`, `${money(cc.parts.steel)} (${f0(cc.wTot / 1000)} kip)`)}${crow('Flange transitions', `${money(C.parts.trans)} (${C.nTr} per girder)`, `${money(cc.parts.trans)} (${cc.nTr})`)}
+-      ${crow('Transverse stiffeners', C.nStTot != null ? `${money(C.parts.stiff)} (${C.nStTot} in all girders, per cross-frame bay)` : `${money(C.parts.stiff)} (${C.nSt} per girder${C.nSt ? `, d<sub>o</sub> = ${f2(C.doR)}D` : ''})`, cc.nStTot != null ? `${money(cc.parts.stiff)} (${cc.nStTot} in all girders)` : `${money(cc.parts.stiff)} (${cc.nSt})`)}${crow('Intermediate cross-frames', `${money(C.parts.frames || 0)} (${C.nFr || 0} at ${f2(C.spCF || 0)} ft)`, `${money((cc.parts || {}).frames || 0)} (${cc.nFr || 0})`)}${crow('Field splices', `${money(C.parts.splice)} (${C.nSp} per girder)`, `${money(cc.parts.splice)} (${cc.nSp})`)}
++      ${crow('Transverse stiffeners', C.nStTot != null ? `${money(C.parts.stiff)} (${C.nStTot} in all girders, per cross-frame bay)` : `${money(C.parts.stiff)} (${C.nSt} per girder${C.nSt ? `, d<sub>o</sub> = ${f2(C.doR)}D` : ''})`, cc.nStTot != null ? `${money(cc.parts.stiff)} (${cc.nStTot} in all girders)` : `${money(cc.parts.stiff)} (${cc.nSt})`)}${crow('Intermediate cross-frames', `${money(C.parts.frames || 0)} (${C.nFr || 0} at ${f2(C.spCF || 0)} ft${(s.spPier !== undefined ? s.spPier : sgPierCur(P, C.spCF)) != null ? `, ${f2(s.spPier !== undefined ? s.spPier : sgPierCur(P, C.spCF))} ft near piers` : ''})`, `${money((cc.parts || {}).frames || 0)} (${cc.nFr || 0})`)}${crow('Field splices', `${money(C.parts.splice)} (${C.nSp} per girder)`, `${money(cc.parts.splice)} (${cc.nSp})`)}
+       <tr class="tot"><td>Total</td><td class="val"><b>${money(C.total)}</b></td>${curCost ? `<td class="val">${money(curCost.total)}</td>` : ''}</tr></tbody></table>
+       ${s.full ? `<p class="note-p">Fast sizing (the quick suggestion before its strength and service check) for comparison: ${money(s.full.fastCost.total)}; the full design is ${f2(100 * (1 - C.total / s.full.fastCost.total))}% cheaper.</p>` : ''}${Q && Q.changed ? `<p class="note-p">Fast sizing before the strength and service check: ${money(Q.fastCost.total)}; the plates added by the check: ${money(C.total - Q.fastCost.total)}.</p>` : ''}
+       ${!s.full && s.rec.cands ? `<h4 class="sg-h4">Depth candidates (fast sizing before the strength and service check, lowest cost first)</h4><div class="tscroll"><table class="tbl"><thead><tr><th class="right">D (in)</th><th>Web</th><th class="right">d<sub>o</sub>/D</th><th class="right">t<sub>w</sub></th><th class="right">Steel (kip)</th><th class="right">Transitions</th><th class="right">Stiffeners${s.rec.cands.some(c => c.cost.nStTot != null) ? ' (per girder; per bay: all girders)' : ''}</th><th class="right">Cost</th><th>Span-to-depth</th></tr></thead><tbody>${s.rec.cands.slice(0, 10).map(c => `<tr class="${c.best ? 'gov' : ''}"><td class="val">${f0(c.D)}</td><td>${c.wt}</td><td class="val">${c.wt === 'stiffened' ? (c.cost.nStTot != null ? 'per bay' : f2(c.doR)) : '—'}</td><td class="val">${frac(c.tw)}</td><td class="val">${f0(c.cost.wTot / 1000)}</td><td class="val">${c.cost.nTr}</td><td class="val">${c.cost.nStTot ?? c.cost.nSt}</td><td class="val">${money(c.cost.total)}</td><td>${c.oos ? 'Rejected: PNA below the web (out of scope)' : c.ok ? 'OK' : 'Too shallow'}</td></tr>`).join('')}</tbody></table></div>` : ''}`);
+   if (s.full) { const F = s.full, gt = list => `<div class="tscroll"><table class="tbl"><thead><tr><th class="right">From (ft)</th><th class="right">To (ft)</th><th class="right">Plate (in)</th><th class="right">Ratio</th><th>Governing check</th></tr></thead><tbody>${list.map(g => `<tr><td class="val">${f2(g.x0)}</td><td class="val">${f2(g.x1)}</td><td class="val" style="white-space:nowrap">${frac(g.b)} × ${frac(g.t)}</td><td class="val">${g.ratio ? f3(g.ratio) : '—'}</td><td>${g.gov || 'Minimum size or proportion'}</td></tr>`).join('')}</tbody></table></div>`;
+     h += card('sg-full', 'Full design', F.passed ? 'Every check at or below 1.0' : 'No candidate passed every check', `<p class="note-p">${F.passed ? '' : '<b>Review:</b> the layout shown is the closest candidate. '}Each candidate was iterated with the staged, cracked analysis (Structural analysis settings) until its layout stopped changing, then verified against its own recomputed demands. Every iteration re-runs the analysis on the current plates and recomputes the live load distribution factors (4.6.2.2) from that section's K<sub>g</sub>; the live load stage model of the first iteration is reused inside the loop to save time, and the final verification recomputes everything. Checks at every node for the interior and exterior girders: Strength I positive flexure (6.10.7, plastic moment, compactness, D<sub>p</sub>/D<sub>t</sub>, 1.3M<sub>y</sub> for continuous spans), Strength I negative flexure (6.10.8: flange local buckling, lateral-torsional buckling with L<sub>b</sub> = ${f2(F.check.Lb)} ft and C<sub>b</sub> of Eq. 6.10.8.2.3b-1 for each unbraced segment, R<sub>b</sub>; tension flange), Service II flange stresses and web bend-buckling (6.10.4.2.2), deck-placement constructibility (6.10.3.2), and flange fatigue when selected. Plate boundaries are checked on both sides. Where the section changes within an unbraced length, 6.10.8.2.3c: its simplification where it holds, otherwise C<sub>b</sub> = 1.0 and F<sub>e</sub> = γ<sub>e</sub>f<sub>bu</sub> (Eqs. c-1 to c-3) with γ<sub>e</sub> by App. D6.6.2 Method A (or the conservative bound, each section as a prismatic member over L<sub>b</sub> under uniform moment at its largest stress, where the D6.6.2.2 step limit is exceeded). Shear is sized by 6.10.9.${(P.suggest.depthRule !== 'off' || P.limits.sdMandatory) ? ' A candidate passes only if its final plates also meet the Table 2.5.2.6.3-1 minimum depths (span-to-depth applies to Suggest).' : ''}</p>
+-      <div class="tscroll"><table class="tbl"><thead><tr><th class="right">D (in)</th><th>Web</th><th class="right">Cross-frames</th><th class="right">Iterations</th><th class="right">Max. flange ratio</th><th class="right">Web ratio</th><th class="right">Cost</th><th class="right">Fast-sizing cost</th><th>Result</th></tr></thead><tbody>${F.cands.map(c => `<tr class="${c.best ? 'gov' : ''}"><td class="val">${f0(c.D)}</td><td>${c.wt}${c.wt === 'stiffened' ? (c.cost.nStTot != null ? `, ${c.cost.nStTot} stiffeners per bay` : `, d<sub>o</sub> = ${f2(c.doR)}D`) : ''}</td><td class="val">${f2(c.spacing)} ft</td><td class="val">${c.iters}</td><td class="val">${f3(c.max)}</td><td class="val">${f3(c.web)}</td><td class="val">${money(c.cost.total)}</td><td class="val">${money(c.fastCost.total)}</td><td>${c.pass ? (c.best ? 'Selected' : 'Passes') : c.oos ? 'Rejected: PNA below the web (out of scope)' : c.dOK === false ? 'Too shallow (Table 2.5.2.6.3-1)' : 'Does not pass'}${c.defl ? `; Δ<sub>LL</sub> ${f3(c.defl.d)} / ${f3(c.defl.lim)} in` : ''}</td></tr>`).join('')}</tbody></table></div>
++      <div class="tscroll"><table class="tbl"><thead><tr><th class="right">D (in)</th><th>Web</th><th class="right">Cross-frames</th><th class="right">Iterations</th><th class="right">Max. flange ratio</th><th class="right">Web ratio</th><th class="right">Cost</th><th class="right">Fast-sizing cost</th><th>Result</th></tr></thead><tbody>${F.cands.map(c => `<tr class="${c.best ? 'gov' : ''}"><td class="val">${f0(c.D)}</td><td>${c.wt}${c.wt === 'stiffened' ? (c.cost.nStTot != null ? `, ${c.cost.nStTot} stiffeners per bay` : `, d<sub>o</sub> = ${f2(c.doR)}D`) : ''}</td><td class="val">${f2(c.spacing)} ft${c.spPier != null ? `<br><span class="n-dim">${f2(c.spPier)} ft near piers</span>` : c.pierTry ? '<br><span class="n-dim">none near piers</span>' : ''}</td><td class="val">${c.iters}</td><td class="val">${f3(c.max)}</td><td class="val">${f3(c.web)}</td><td class="val">${money(c.cost.total)}</td><td class="val">${money(c.fastCost.total)}</td><td>${c.pass ? (c.best ? 'Selected' : 'Passes') : c.oos ? 'Rejected: PNA below the web (out of scope)' : c.dOK === false ? 'Too shallow (Table 2.5.2.6.3-1)' : 'Does not pass'}${c.defl ? `; Δ<sub>LL</sub> ${f3(c.defl.d)} / ${f3(c.defl.lim)} in` : ''}</td></tr>`).join('')}</tbody></table></div>
++      ${sgPierFullTxt(F, money)}
+       <div class="g2" style="margin-top:10px"><div><h4 class="sg-h4">Top flange: governing checks</h4>${gt(F.topGov)}</div><div><h4 class="sg-h4">Bottom flange: governing checks</h4>${gt(F.botGov)}</div></div>
+       ${F.check.oos ? `<div class="alert fail"><b>OUT OF SCOPE.</b> ${esc(SG_OOS_HEAD)} ${esc(sgOosTxt(F.check.oos))}. This layout is not accepted; the positive-flexure checks of ${F.check.oos.length > 1 ? 'these spans' : 'this span'} are not reported.</div>` : ''}
+       <p class="note-p">Web: ${F.check.gWeb ? `${F.check.gWeb}, ratio ${f3(F.check.rWeb)} at ${f2(F.check.xWeb)} ft` : 'no bend-buckling demand'}.${F.check.other.length ? ` Also: ${[...new Set(F.check.other.map(o => o.name))].join('; ')} exceeded at some points.` : ''}${(F.check.npW || []).length ? ` <b>Review:</b> outside the D6.6.2.2 step limit, so the conservative γ<sub>e</sub> bound (each section prismatic over L<sub>b</sub> at its largest stress) is used instead of App. D6.6.2 Method A; engineer to review: ${[...new Set(F.check.npW)].map(esc).join('; ')}.` : ''} ${F.check.fat ? `Flange fatigue: ${plFatTxt(P)}, Category B at the flange-to-web welds (extreme fiber)${P.suggest.fat !== 'B' ? ' and Category C′ at the connection plates welded to the flanges (inner flange face, 6.6.1.3.1; checked at every analysis point along the girder, not only at the cross-frames, which is conservative)' : ''} (6.6.1.2), short-term composite section for both signs (minimum reinforcement per 6.10.1.7).` : 'Flange fatigue was not checked (turned off).'} Other fatigue details are checked in the Fatigue module.</p>`); }
+@@ -3499,13 +3550,46 @@
+      from their bearings. b_f: the widest flange plate in the span.
+    - field splices and shop transitions: where a frame falls within the splice clearance, the grid is shifted within the span (end offsets changed, same
+      number of frames); extra frames are used only where that clears every conflict; otherwise the conflicts are reported (check X4, Framing tab).
+-   orient[k] (per span): { k, th, o, nInt, base, conflicts, s, n (frames per bay), e0, e1, bf, dmin, flat (staggered at s/2 < d_min: contiguous), shift, extra } */
++   - pier regions (FSP, 2026-10-15; optional framing.spPier, "Spacing near interior supports"): in a continuous unit, with s_p > 0 and below the target s,
++     the frames next to each interior support are spaced s_p (the first one s_p, or e = max(clear, 4b_f, 0.4 s_p) at a support skewed more than 20°, from the
++     obtuse-corner bearing) until the region is covered on every girder: framing.pierLen each side of the support (blank: 0.25 times the adjacent span, about
++     the dead-load point of contraflexure of continuous spans); the rest of the span is evenly spaced at most s, the region boundary being a common grid line
++     (no panel shorter than the smaller spacing); where the two pier zones of a span would leave less than s_p between them, the whole span is spaced at most
++     s_p. Corner frames, shifts, extra frames and conflicts as above, with the limit s_p for panels whose midpoint is in a pier zone. Blank (or s_p >= s, or
++     simple spans): exactly as before.
++   orient[k] (per span): { k, th, o, nInt, base, conflicts, s, n (frames per bay), e0, e1, bf, dmin, flat (staggered at s/2 < d_min: contiguous), shift, extra,
++     pz (pier regions only: { sp2, pS, pE, rS, rE, Z0, Z1, one, par }) } */
+ const FL_MEMO = new Map();   // framingLayout: span frames by their inputs (SKX)
++// FSP: the pier-region spacing in use (null: none): framing.spPier > 0 and below the target spacing, continuous unit with interior supports
++function plPierSp(F, m) { const s2 = +F.spPier, sp = +F.spacing; return m.cont && m.sup.length > 2 && s2 > 0 && s2 < sp - 1e-9 ? s2 : null; }
++// FSP: length of the pier region on the span side of a support (ft): framing.pierLen, or 0.25 times that span
++function plPierLen(F, Ls) { const r = +F.pierLen; return r > 0 ? r : 0.25 * Ls; }
++const PL_SPPIER_MIN = 10;   // FSP: Suggest / Full design try pier-region spacings down to max(10 ft, 0.4 × the target spacing)
+ function framingLayout(P, m) {
+   const F = P.framing, nb = m.nb, S = m.S, ys = [0]; m.bays.forEach(v => ys.push(ys[ys.length - 1] + v)); const yc = ys[ys.length - 1] / 2;
+   const tn = m.skews.map(d => Math.tan(d * Math.PI / 180));
+   const xb = (k, i) => m.sup[k] + (ys[i] - yc) * tn[k];               // global x of bearing k on girder i
+   const sp = +F.spacing, clr = +F.supClear, frames = [], orient = [], EPS = 1e-6;
++  const sp2 = plPierSp(F, m), nS = m.sup.length;   // FSP
++  /* FSP: grid lines a..z (ft, increasing) with pier zones: from a, panels sp2 until c0 (the region end at the start support) is passed (pS), the same back
++     from z to c1 (pE); between, at most sp, evenly; add: extra intervals between. If the zones leave less than sp2 between them, one zone a..z at most sp2.
++     dropA / dropZ: a / z is a bearing (an unskewed support), not a frame line, and is left out of L. s2 (optional): the zone panel, at most sp2.
++     Returns { L (lines), tm (spacing between the zones), t0 / t1 (end panels of a..z), Z0 / Z1 (zone boundaries; +-Infinity: none or all), one } */
++  function pzGrid(pz, c0, c1, a, z, add, dropA, dropZ, s2) {
++    const q = s2 || sp2, out = (L, o) => ({ ...o, L: L.filter((x, j) => !(dropA && j === 0) && !(dropZ && j === L.length - 1)) });
++    if (!(z > a + 1e-9)) return out([a, z], { tm: sp, t0: q, t1: q, Z0: pz.pS ? Infinity : -Infinity, Z1: pz.pE ? -Infinity : Infinity, one: true });
++    const n0 = pz.pS ? Math.max(0, Math.ceil((c0 - a) / q - 1e-9)) : 0, n1 = pz.pE ? Math.max(0, Math.ceil((z - c1) / q - 1e-9)) : 0, Z0 = a + n0 * q, Z1 = z - n1 * q;
++    if (Z1 - Z0 < q - 1e-9) { const n = Math.max(1, Math.ceil((z - a) / q - 1e-9)) + add, t = (z - a) / n, L = [];
++      for (let j = 0; j < n; j++) L.push(a + j * t); L.push(z);
++      return out(L, { tm: t, t0: t, t1: t, Z0: pz.pS ? Infinity : -Infinity, Z1: pz.pE ? -Infinity : Infinity, one: true }); }
++    const nm = Math.max(1, Math.ceil((Z1 - Z0) / sp - 1e-9)) + add, tm = (Z1 - Z0) / nm, L = [];
++    for (let j = 0; j < n0; j++) L.push(a + j * q);
++    for (let j = 0; j < nm; j++) L.push(Z0 + j * tm);
++    for (let j = 0; j < n1; j++) L.push(Z1 + j * q); L.push(z);
++    return out(L, { tm, t0: n0 ? q : tm, t1: n1 ? q : tm, Z0: pz.pS ? Z0 : -Infinity, Z1: pz.pE ? Z1 : Infinity, one: false });
++  }
++  // FSP: the panel limit for a panel g0..g1 of a grid G (sp2 where its midpoint is in a pier zone)
++  const pzLim = (pz, G) => (g0, g1) => { const mid = (g0 + g1) / 2; return (pz.pS && mid < G.Z0) || (pz.pE && mid > G.Z1) ? sp2 : sp; };
+   for (let k = 0; k < m.sup.length; k++) for (let b = 0; b < nb - 1; b++) frames.push({ type: 'sup', k, bay: b, xa: xb(k, b), xc: xb(k, b + 1) });
+   const feats = [...m.splices, ...m.trans.filter(t => !t.atSplice).map(t => t.x), ...m.webTrans.map(t => t.x)], fc = +P.limits.spliceClear;
+   const conflicts = list => list.reduce((n, f) => n + [[f.xa, f.bay], [f.xc, f.bay + 1]].some(([x, g]) => feats.some(q => Math.abs(x - xb(0, g) - q) < fc - 1e-9)), 0);
+@@ -3519,11 +3603,13 @@
+     [...m.top, ...m.bot].forEach(r => { if (r.x1 > s0g + 1e-9 && r.x0 < s1g - 1e-9) bfIn = Math.max(bfIn, r.b); });
+     const bf = bfIn / 12, dmin = Math.max(+F.stagMin || 0, 4 * bf);
+     // the span's frames depend only on these inputs: memoized (Suggest builds the layout of many candidates with the same splices and transitions); copies returned
+-    const mk = JSON.stringify([k, o, sp, clr, F.stagMin, F.arrange, fc, m.sup, m.skews, m.bays, feats, bf]);
+-    let pick = FL_MEMO.get(mk); if (!pick) { pick = o === 'parallel' ? parSpan(k, Lmax) : normSpan(k, bf, dmin); FL_MEMO.set(mk, pick); if (FL_MEMO.size > 400) FL_MEMO.delete(FL_MEMO.keys().next().value); }
++    // FSP: the pier regions of this span (support k and k + 1 interior, continuous unit, s_p in use)
++    const pz = sp2 ? { sp2, pS: k > 0, pE: k + 1 < nS - 1, rS: plPierLen(F, Ls), rE: plPierLen(F, Ls) } : null;
++    const mk = JSON.stringify([k, o, sp, clr, F.stagMin, F.arrange, fc, m.sup, m.skews, m.bays, feats, bf, ...(pz ? [pz] : [])]);
++    let pick = FL_MEMO.get(mk); if (!pick) { pick = o === 'parallel' ? (pz ? parSpanP(k, Lmax, pz) : parSpan(k, Lmax)) : normSpan(k, bf, dmin, pz); FL_MEMO.set(mk, pick); if (FL_MEMO.size > 400) FL_MEMO.delete(FL_MEMO.keys().next().value); }
+     pick = { ...pick, fr: pick.fr.map(f => ({ ...f })) };
+     frames.push(...pick.fr);
+-    orient.push({ k, th, o, nInt: pick.n, base: pick.base, conflicts: pick.c, s: pick.s, n: pick.n, shift: pick.shift || 0, extra: pick.n > pick.base, bf, dmin, Lmax, ...(pick.info || {}) });
++    orient.push({ k, th, o, nInt: pick.n, base: pick.base, conflicts: pick.c, s: pick.s, n: pick.n, shift: pick.shift || 0, extra: pick.n > pick.base, bf, dmin, Lmax, ...(pick.info || {}), ...(pick.pz ? { pz: pick.pz } : {}) });
+   });
+   /* parallel frames: n per bay from the longest girder; frames at the fractions (j + d)/(n + 1) of each girder's span. Conflicts: shifts d of up to a
+      quarter panel first (the end panel of the longest girder stays within s), then up to three extra frames, accepted only when they clear every conflict; if none does, evenly spaced (d = 0) */
+@@ -3538,8 +3624,25 @@
+         if (!c) return r; if (!add && !best) best = r; } }   // none clears every conflict: evenly spaced (d = 0), conflicts reported
+     return best;
+   }
++  /* FSP: parallel frames with pier regions. Lines at t along the longest girder (0..L_max, bearings at both ends), on every girder at the fraction t/L_max
++     between its bearings; the pier zones cover the region on the shortest girder (r·L_max/L_min). Conflicts: either end anchor moved by up to a quarter of
++     its end panel (the end panel kept within its limit, s_p in a pier zone), then up to three extra intervals between the zones; none clears: the base layout */
++  function parSpanP(k, Lmax, pz) {
++    const Lmin = Math.min(...gi.map(i => xb(k + 1, i) - xb(k, i))), f = Lmax / Math.max(Lmin, 1e-6), c0 = pz.rS * f, c1 = Lmax - pz.rE * f;
++    const gen = G => { const fr = []; G.L.forEach(t => { const q = t / Lmax; for (let b = 0; b < nb - 1; b++) fr.push({ type: 'int', k, bay: b, xa: (1 - q) * xb(k, b) + q * xb(k + 1, b), xc: (1 - q) * xb(k, b + 1) + q * xb(k + 1, b + 1) }); }); return fr; };
++    const G0 = pzGrid(pz, c0, c1, 0, Lmax, 0, true, true), limS = pz.pS ? sp2 : sp, limE = pz.pE ? sp2 : sp;
++    const info = G => ({ sp2, pS: pz.pS, pE: pz.pE, rS: pz.rS, rE: pz.rE, Z0: G.Z0, Z1: G.Z1, one: G.one, par: true, tm: G.tm });
++    const FS = [0.05, 0.1, 0.15, 0.2, 0.25], pairs = [[0, 0]]; FS.forEach(q => pairs.push([q, 0], [-q, 0], [0, q], [0, -q], [q, q], [-q, -q], [q, -q], [-q, q]));
++    let best = null;
++    for (let add = 0; add <= 3; add++) for (const [d0, d1] of pairs) {
++      const a = d0 * G0.t0, z = Lmax - d1 * G0.t1, G = pzGrid(pz, c0, c1, a, z, add, true, true);
++      if (!G.L.length || G.L[0] > limS + 1e-9 || Lmax - G.L[G.L.length - 1] > limE + 1e-9 || G.L[0] < 0.7 * G0.t0 || Lmax - G.L[G.L.length - 1] < 0.7 * G0.t1) continue;
++      const fr = gen(G), c = conflicts(fr), r = { fr, c, n: G.L.length, base: G0.L.length, s: G.tm, shift: d0 || d1 ? Math.max(Math.abs(d0), Math.abs(d1)) : 0, pz: info(G) };
++      if (!c) return r; if (!best) best = r; }
++    return best || { fr: gen(G0), c: conflicts(gen(G0)), n: G0.L.length, base: G0.L.length, s: G0.tm, shift: 0, pz: info(G0) };
++  }
+   /* normal frames */
+-  function normSpan(k, bf, dmin) {
++  function normSpan(k, bf, dmin, pz) {
+     const A = gi.map(i => xb(k, i)), B = gi.map(i => xb(k + 1, i)), Amax = Math.max(...A), Bmin = Math.min(...B);
+     const lo0 = Math.min(...A), hi0 = Math.max(...B), e4 = 4 * bf, skS = Math.abs(m.skews[k]) > 20 + 1e-9, skE = Math.abs(m.skews[k + 1]) > 20 + 1e-9;
+     const eOf = s => Math.max(clr, e4, 0.4 * s), eFl = Math.max(clr, e4);   // C6.7.4.2.1: first frame offset from a skewed support; floor 4b_f for corner frames
+@@ -3547,23 +3650,33 @@
+     // the default grid: q intervals between the first and the last full line, end panels e (skewed support) or one spacing
+     let s = sp, e = eOf(sp), q = 0;
+     for (let it = 0; it < 8; it++) { const fx = (skS ? e : 0) + (skE ? e : 0), tot = Math.max(1, Math.ceil((T - fx) / sp - 1e-9)); q = Math.max(0, tot - cnt); s = tot > 0 && T - fx > 0 ? (T - fx) / tot : sp; e = eOf(s); }
+-    const X0 = Amax + (skS ? e : s), X1 = Bmin - (skE ? e : s);
+-    const stag = F.arrange === 'staggered', flat = stag && s / 2 < dmin - 1e-9;
+-    const gen = (x0, x1, qq) => {   // grid lines x0..x1 (qq intervals, extended past both ends), kept per bay; then the corner frames
+-      const ss = qq > 0 ? (x1 - x0) / qq : s, eS = skS ? e : clr, eE = skE ? e : clr, bays = [];
++    let X0 = Amax + (skS ? e : s), X1 = Bmin - (skE ? e : s), dA = false, dZ = false, rc0 = 0, rc1 = 0, eA = 0, eZ = 0;
++    // FSP pier regions: the end lines at an unskewed support are its bearing (left out); at a support skewed more than 20°, e from the obtuse bearing with
++    // the panel next to it (s_p in a pier zone; else the spacing between the zones, iterated); region ends c0 / c1 from the obtuse bearings
++    if (pz) { rc0 = Amax + pz.rS; rc1 = Bmin - pz.rE; dA = !skS; dZ = !skE; let tm = s;
++      for (let it = 0; it < 8; it++) { X0 = skS ? Amax + eOf(pz.pS ? sp2 : tm) : Amax; X1 = skE ? Bmin - eOf(pz.pE ? sp2 : tm) : Bmin; tm = pzGrid(pz, rc0, rc1, X0, X1, 0, dA, dZ).tm; }
++      s = tm; q = 0; eA = skS ? eOf(pz.pS ? sp2 : tm) : clr; eZ = skE ? eOf(pz.pE ? sp2 : tm) : clr; }
++    const stag = F.arrange === 'staggered', flat = stag && (pz ? Math.min(s, sp2) : s) / 2 < dmin - 1e-9;
++    let LIM = null; const limP = (g0, g1) => LIM ? LIM(g0, g1) : sp;   // FSP: the panel limit (s_p in a pier zone, else s)
++    const gen = (x0, x1, qq) => {   // grid lines x0..x1 (qq intervals, extended past both ends), kept per bay; then the corner frames (FSP: pier zones, qq extra intervals)
++      const G = pz ? pzGrid(pz, rc0, rc1, x0, x1, qq, dA, dZ) : null, ss = G ? G.tm : qq > 0 ? (x1 - x0) / qq : s, eS = G ? eA : skS ? e : clr, eE = G ? eZ : skE ? e : clr, bays = [];
++      LIM = G ? pzLim(pz, G) : null;
++      let ext = null; if (G && G.L.length) { ext = [...G.L]; const f = G.L[0], l = G.L[G.L.length - 1];   // FSP: the lines extended past both ends with the end panels
++        for (let x = f - G.t0; x >= lo0 - G.t0 - 1e-9; x -= G.t0) ext.unshift(x); for (let x = l + G.t1; x <= hi0 + G.t1 + 1e-9; x += G.t1) ext.push(x); }
+       for (let b = 0; b < nb - 1; b++) {
+         const lo = Math.max(A[b], A[b + 1]) + eS, hi = Math.min(B[b], B[b + 1]) - eE, off = stag && !flat && b % 2 ? ss / 2 : 0, xs = [];
+-        if (x1 >= x0 - 1e-9) { const j0 = Math.floor((lo0 - x0 - off) / ss) - 1, j1 = Math.ceil((hi0 - x0 - off) / ss) + 1;
++        if (G) { if (ext) (off ? ext.slice(1).map((x, j) => (x + ext[j]) / 2) : ext).forEach(x => { if (x >= lo - 1e-9 && x <= hi + 1e-9) xs.push(x); }); }
++        else if (x1 >= x0 - 1e-9) { const j0 = Math.floor((lo0 - x0 - off) / ss) - 1, j1 = Math.ceil((hi0 - x0 - off) / ss) + 1;
+           for (let j = j0; j <= j1; j++) { const x = x0 + off + j * ss; if (x >= lo - 1e-9 && x <= hi + 1e-9) xs.push(x); } }
+         bays.push(xs);
+       }
+       // the corner frames, gaps taken largest first and smallest first: the result with no girder panel over s (or the smallest excess), then the fewer frames
+-      const score = bb => { let mx = 0, n = 0; gi.forEach(i => { const br = [A[i], ...(bb[i - 1] || []), ...(bb[i] || []), B[i]].sort((u, v) => u - v); for (let j = 1; j < br.length; j++) mx = Math.max(mx, br[j] - br[j - 1]); }); bb.forEach(l => n += l.length); return [mx > sp + 1e-6 ? mx : 0, n]; };
++      const score = bb => { let mx = 0, n = 0; gi.forEach(i => { const br = [A[i], ...(bb[i - 1] || []), ...(bb[i] || []), B[i]].sort((u, v) => u - v); for (let j = 1; j < br.length; j++) mx = Math.max(mx, LIM ? br[j] - br[j - 1] - LIM(br[j - 1], br[j]) : br[j] - br[j - 1]); }); bb.forEach(l => n += l.length); return [LIM ? (mx > 1e-6 ? mx : 0) : (mx > sp + 1e-6 ? mx : 0), n]; };   // FSP: the largest excess over the panel limit
+       let pick = null; for (const mode of [1, -1]) { if (pick && !pick.sc[0]) break; const bb = bays.map(l => l.slice()); fill(bb, skS ? eFl : clr, skE ? eFl : clr, mode); const sc = score(bb);
+         if (!pick || sc[0] < pick.sc[0] - 1e-9 || (Math.abs(sc[0] - pick.sc[0]) < 1e-9 && sc[1] < pick.sc[1])) pick = { bb, sc }; }
+       bays.splice(0, bays.length, ...pick.bb); const mxG = pick.sc[0] || (() => { let mx = 0; gi.forEach(i => { const br = [A[i], ...(bays[i - 1] || []), ...(bays[i] || []), B[i]].sort((u, v) => u - v); for (let j = 1; j < br.length; j++) mx = Math.max(mx, br[j] - br[j - 1]); }); return mx; })();
+       const fr = []; bays.forEach((xs, b) => [...new Set(xs.map(x => +x.toFixed(3)))].sort((u, v) => u - v).forEach(x => fr.push({ type: 'int', k, bay: b, xa: x, xc: x })));
+-      return { fr, s: ss, e0: x0 - Amax, e1: Bmin - x1, mx: mxG };
++      return { fr, s: ss, e0: x0 - Amax, e1: Bmin - x1, mx: mxG, ex: LIM ? pick.sc[0] : Math.max(0, mxG - sp), ...(G ? { Z0: G.Z0, Z1: G.Z1, one: G.one } : {}) };
+     };
+     // corner frames: while a girder panel in this span exceeds s, add a frame in an adjacent bay (rules above); a gap that cannot be closed is left (X2)
+     const cfM = new Map(), cfAt = (b, x) => { const kk = b + '|' + x.toFixed(3); if (!cfM.has(kk)) cfM.set(kk, conflicts([{ xa: x, xc: x, bay: b }]) ? 1 : 0); return cfM.get(kk); };
+@@ -3572,20 +3685,20 @@
+       for (let it = 0; it < 400; it++) {
+         let w = null;
+         for (const i of gi) { const br = [A[i], ...(bays[i - 1] || []), ...(bays[i] || []), B[i]].sort((u, v) => u - v);
+-          for (let j = 1; j < br.length; j++) { const g = br[j] - br[j - 1], key = i + '|' + br[j - 1].toFixed(3); if (g > sp + 1e-6 && !tried.has(key) && (!w || mode * (g - w.g) > 1e-9)) w = { i, g0: br[j - 1], g1: br[j], g, key }; } }
++          for (let j = 1; j < br.length; j++) { const g = br[j] - br[j - 1], key = i + '|' + br[j - 1].toFixed(3), lim = limP(br[j - 1], br[j]); if (g > lim + 1e-6 && !tried.has(key) && (!w || mode * (g - w.g) > 1e-9)) w = { i, g0: br[j - 1], g1: br[j], g, key, lim }; } }
+         if (!w) return;
+         let best = null;
+         for (const b of [w.i - 1, w.i]) { if (b < 0 || b > nb - 2) continue;
+           const lo = Math.max(A[b], A[b + 1]) + fS, hi = Math.min(B[b], B[b + 1]) - fE, gs = [b, b + 1];
+           const near = gs.flatMap(g => [...(g > 0 && g - 1 !== b ? bays[g - 1] : []), ...(g < nb - 1 && g !== b ? bays[g] : [])]);   // frames on the other side of these two girders
+-          const cand = new Set([(w.g0 + w.g1) / 2, w.g1 - sp, w.g0 + sp, lo, hi, ...near.flatMap(y => [y, y - dmin, y + dmin])]);
++          const cand = new Set([(w.g0 + w.g1) / 2, w.g1 - w.lim, w.g0 + w.lim, lo, hi, ...near.flatMap(y => [y, y - dmin, y + dmin])]);
+           for (let x = Math.max(lo, w.g0) + 0.5; x < Math.min(hi, w.g1); x += 0.5) cand.add(x);   // and every 0.5 ft (positions clear of splices and transitions)
+           for (const x of cand) {
+             if (x < lo - 1e-6 || x > hi + 1e-6 || x <= w.g0 + 1e-6 || x >= w.g1 - 1e-6) continue;
+             let ok = bays[b].every(y => Math.abs(x - y) >= dmin - 1e-6), snap = false;
+             if (ok) for (const y of near) { const d = Math.abs(x - y); if (d < 0.01) snap = true; else if (d < dmin - 1e-6) { ok = false; break; } }
+             if (!ok) continue;
+-            const mx = Math.max(x - w.g0, w.g1 - x), k0 = mx > sp + 1e-6 ? 1 : 0; if (best && k0 > best.key[0]) continue;
++            const mx = Math.max(x - w.g0, w.g1 - x), k0 = LIM ? (x - w.g0 > LIM(w.g0, x) + 1e-6 || w.g1 - x > LIM(x, w.g1) + 1e-6 ? 1 : 0) : mx > sp + 1e-6 ? 1 : 0; if (best && k0 > best.key[0]) continue;
+             const cf = cfAt(b, x); if (best && k0 === best.key[0] && cf > best.key[1]) continue;
+             // the panels next to x on both girders: one shorter than 0.4 times its neighbour is avoided where another position closes the gap (C6.7.4.2.1)
+             const sh = gs.some(g => { let p0 = A[g], p1 = B[g]; for (const l of [bays[g - 1], bays[g]]) if (l) for (const y of l) { if (y < x - 1e-6 && y > p0) p0 = y; if (y > x + 1e-6 && y < p1) p1 = y; }
+@@ -3599,8 +3712,9 @@
+       }
+     }
+     const n0 = gen(X0, X1, q), c0 = conflicts(n0.fr), info = { e0: skS ? e : null, e1: skE ? e : null, flat, skS, skE };
+-    const res = (r, base) => ({ fr: r.g.fr, c: r.c, n: r.g.fr.length, base, s: r.g.s, shift: r.sh, q: r.qq, info: { ...info, e0: skS ? r.g.e0 : null, e1: skE ? r.g.e1 : null } });
+-    const ex0 = Math.max(0, n0.mx - sp);
++    const res = (r, base) => ({ fr: r.g.fr, c: r.c, n: r.g.fr.length, base, s: r.g.s, shift: r.sh, q: r.qq, info: { ...info, e0: skS ? r.g.e0 : null, e1: skE ? r.g.e1 : null },
++      ...(pz ? { pz: { sp2, pS: pz.pS, pE: pz.pE, rS: pz.rS, rE: pz.rE, Z0: r.g.Z0, Z1: r.g.Z1, one: r.g.one, tm: r.g.s } } : {}) });
++    const ex0 = n0.ex;
+     if ((!c0 && ex0 < 1e-6) || !(X1 > X0 - 1e-9)) return res({ g: n0, c: c0, sh: 0, qq: q }, n0.fr.length);
+     // conflicts, or a corner panel the corner frames could not bring within s: shift the first and last full lines (end offsets; a skewed end keeps
+     // e >= max(clear, 4b_f, 0.4s)), with the same or up to two more grid intervals. Kept: the least excess over s (none if possible); of those, a layout clear
+@@ -3611,8 +3725,10 @@
+     for (const qq of [q, q + 1, q + 2]) {
+       for (const [d0, d1] of pairs) { if (done) break; if (qq === q && !d0 && !d1) continue;
+         const a = X0 + d0, z = X1 - d1, ss = qq > 0 ? (z - a) / qq : s;
+-        if (!(z >= a - 1e-9) || ss > sp + 1e-9 || (!skS && (a - Amax > sp + 1e-9 || a - Amax < clr)) || (!skE && (Bmin - z > sp + 1e-9 || Bmin - z < clr)) || (skS && a - Amax < eOf(ss) - 1e-6) || (skE && Bmin - z < eOf(ss) - 1e-6)) continue;
+-        const g = gen(a, z, qq), r = { g, c: conflicts(g.fr), sh: Math.abs(d0) + Math.abs(d1), qq, ex: Math.max(0, g.mx - sp) }; all.push(r);
++        if (pz) { const G = pzGrid(pz, rc0, rc1, a, z, qq, dA, dZ), n = G.L.length, f0 = n ? G.L[0] - Amax : 0, f1 = n ? Bmin - G.L[n - 1] : 0, lS = pz.pS ? sp2 : sp, lE = pz.pE ? sp2 : sp;   // FSP: end panels within their limits
++          if (!(z >= a - 1e-9) || !n || (!skS && (f0 > lS + 1e-9 || f0 < clr)) || (!skE && (f1 > lE + 1e-9 || f1 < clr)) || (skS && f0 < eOf(G.t0) - 1e-6) || (skE && f1 < eOf(G.t1) - 1e-6)) continue; }
++        else if (!(z >= a - 1e-9) || ss > sp + 1e-9 || (!skS && (a - Amax > sp + 1e-9 || a - Amax < clr)) || (!skE && (Bmin - z > sp + 1e-9 || Bmin - z < clr)) || (skS && a - Amax < eOf(ss) - 1e-6) || (skE && Bmin - z < eOf(ss) - 1e-6)) continue;
++        const g = gen(a, z, qq), r = { g, c: conflicts(g.fr), sh: Math.abs(d0) + Math.abs(d1), qq, ex: g.ex }; all.push(r);
+         if (!r.c && r.ex < 1e-6 && g.fr.length <= n0.fr.length) done = true;   // pairs are in order of increasing shift: the first clean one with no more frames is kept
+       }
+       const exM = Math.min(...all.map(r => r.ex)); if (exM < 1e-6 && all.some(r => r.ex < 1e-6 && !r.c && r.g.fr.length <= n0.fr.length)) break;
+@@ -3778,6 +3894,17 @@
+       const r = worstG.mx / FR.sp;
+       c.items.push({ loc: `Span ${k + 1}`, cells: [`G${worstG.g + 1}`, f2(worstG.mx), f2(r)], r, st: r <= 1 + 1e-6 ? 'pass' : 'warn', work: T`L_{b,max} = ${f2(worstG.mx)}\ \text{ft} \;${r <= 1 + 1e-6 ? '\\le' : '>'}\; ${f2(FR.sp)}\ \text{ft}` });
+     });
++    // FSP (2026-10-15): with a spacing near interior supports s_p, the panels whose midpoint is within the pier region (each girder's own bearing, region
++    // length each side) against s_p
++    const s2 = plPierSp(F, m);
++    if (s2) { c.sym = T`L_b \le ${f2(FR.sp)}\ \text{ft};\quad L_b \le s_p = ${f2(s2)}\ \text{ft near interior supports}`;
++      c.note += ` Near interior supports (Framing tab, spacing near interior supports s_p = ${f2(s2)} ft): every panel whose midpoint is within the pier region (${+F.pierLen > 0 ? `${f2(+F.pierLen)} ft` : '0.25 times the adjacent span'} each side of the support, along each girder from its own bearing) is checked against s_p.`;
++      for (let kk = 1; kk < m.sup.length - 1; kk++) { const rL = plPierLen(F, m.spans[kk - 1]), rR = plPierLen(F, m.spans[kk]); let worstG = null;
++        FR.girders.forEach(g => { const bp = g.bear[kk], st = [...new Set([...g.bear, ...g.pts.map(p => p.s)].map(v => +v.toFixed(3)))].sort((u, v) => u - v); let mx = 0;
++          for (let q = 1; q < st.length; q++) { const mid = (st[q] + st[q - 1]) / 2; if (mid >= bp - rL - 1e-6 && mid <= bp + rR + 1e-6) mx = Math.max(mx, st[q] - st[q - 1]); }
++          if (!worstG || mx > worstG.mx) worstG = { g: g.i, mx }; });
++        const r = worstG.mx / s2;
++        c.items.push({ loc: `Pier ${kk} region (${f2(rL)} / ${f2(rR)} ft)`, cells: [`G${worstG.g + 1}`, f2(worstG.mx), f2(r)], r, st: r <= 1 + 1e-6 ? 'pass' : 'warn', work: T`L_{b,max} = ${f2(worstG.mx)}\ \text{ft} \;${r <= 1 + 1e-6 ? '\\le' : '>'}\; s_p = ${f2(s2)}\ \text{ft}` }); } }
+     add(c);
+   }
+   /* X3 stagger offset (SKX, 2026-10-15): d_min = max(min. offset setting, 4b_f) of the span (C6.7.4.2.1: 4b_f, the recommended lower limit for stagger
+@@ -3964,6 +4091,11 @@
+   m.sup.forEach((x, k) => { const a = FR.xb(k, 0), b = FR.xb(k, m.nb - 1), ax = X(a), ay = Y(FR.ys[0]), bx = X(b), by = Y(FR.ys[m.nb - 1]), len = Math.hypot(bx - ax, by - ay) || 1, ux = (bx - ax) / len, uy = (by - ay) / len, ext = 16;   // extend along the skewed line itself
+     o += `<path d="M${ax - ux * ext} ${ay - uy * ext}L${bx + ux * ext} ${by + uy * ext}" stroke="#7a8590" stroke-width="1" stroke-dasharray="6 3 1.5 3"/>`;
+     o += `<text x="${X(b)}" y="${Y(wid) - 20}" class="sv-t" text-anchor="middle" font-weight="600">${k === 0 ? 'Abut. 1' : k === m.sup.length - 1 ? 'Abut. 2' : 'Pier ' + k}</text><text x="${X(a)}" y="${Y(0) + 28}" class="sv-t sv-dim" text-anchor="middle">θ = ${f2(m.skews[k])}°</text>`; });
++  // FSP: pier regions (spacing near interior supports), each side of the support along every girder from its own bearing
++  for (let k = 1; k < m.sup.length - 1; k++) { const oL = FR.orient[k - 1], oR = FR.orient[k]; if (!(oL && oL.pz && oR && oR.pz)) continue;
++    const rL = oL.pz.rE, rR = oR.pz.rS, n1 = m.nb - 1, y0 = FR.ys[0], y1 = FR.ys[n1];
++    o += `<path d="M${X(FR.xb(k, 0) - rL)} ${Y(y0)}L${X(FR.xb(k, n1) - rL)} ${Y(y1)}L${X(FR.xb(k, n1) + rR)} ${Y(y1)}L${X(FR.xb(k, 0) + rR)} ${Y(y0)}Z" fill="#e0a526" fill-opacity=".14" stroke="#b07a10" stroke-width=".8" stroke-dasharray="4 3"/>`;
++    o += `<text x="${X(FR.xb(k, n1))}" y="${Y(y1) - 6}" class="sv-t sv-dim" text-anchor="middle">s<tspan font-size="80%" dy="3">p</tspan><tspan dy="-3"> = ${f2(oR.pz.sp2)} ft</tspan></text>`; }
+   // cross-frames
+   FR.frames.forEach(f => { const ya = FR.ys[f.bay], yb = FR.ys[f.bay + 1];
+     o += f.type === 'sup' ? `<path d="M${X(f.xa)} ${Y(ya)}L${X(f.xc)} ${Y(yb)}" stroke="#17212b" stroke-width="2"/>` : `<path d="M${X(f.xa)} ${Y(ya)}L${X(f.xc)} ${Y(yb)}" stroke="#15724a" stroke-width="1.3"/>`; });
+@@ -4477,10 +4609,11 @@
+     ${secHd('sec-xf', 'Cross-frames')}
+     <div class="sec-body" id="sec-xf">
+       ${fld('Target spacing (max. L<sub>b</sub>)', 'framing.spacing', 'ft')}${fld('Clear of skewed bearing line', 'framing.supClear', 'ft')}
++      ${fld('Spacing near interior supports', 'framing.spPier', 'ft', 'num', { note: '(blank: target spacing)' })}${fld('Pier region each side', 'framing.pierLen', 'ft', 'num', { note: '(blank: 0.25 × span)' })}
+       ${fld('Orientation', 'framing.orient', '', 'sel', { full: true, options: [['auto', 'Automatic (parallel if θ ≤ 20°, else normal)'], ['parallel', 'Parallel to skew'], ['normal', 'Normal to girders']] })}
+       ${fld('Normal frames', 'framing.arrange', '', 'sel', { options: [['contiguous', 'Contiguous lines'], ['staggered', 'Staggered by bay']] })}${fld('Min. offset if not aligned', 'framing.stagMin', 'ft')}
+       ${fld('Minimum girder depth for cross-frames', 'framing.xfMinD', 'in', 'num', { full: true, note: 'common practice (e.g. AISC/NSBA G13.1 guidance; owner standards govern); verify' })}
+-      <p class="note">Cross-frames are placed at every bearing line and evenly between them, with extra frames added in skewed corners. At supports skewed more than 20° (normal frames) the first intermediate frame is at least max(clear distance, 4b<sub>f</sub>, 0.4 × spacing) from each girder's bearing and non-aligned frames are at least max(min. offset, 4b<sub>f</sub>) apart (AASHTO LRFD C6.7.4.2.1). Where frames would land on field splices or flange transitions, the grid is shifted, or frames are added, only where that clears them; otherwise the conflict is reported (X4 and the table below).</p>
++      <p class="note">Cross-frames are placed at every bearing line and evenly between them, with extra frames added in skewed corners. At supports skewed more than 20° (normal frames) the first intermediate frame is at least max(clear distance, 4b<sub>f</sub>, 0.4 × spacing) from each girder's bearing and non-aligned frames are at least max(min. offset, 4b<sub>f</sub>) apart (AASHTO LRFD C6.7.4.2.1). Where frames would land on field splices or flange transitions, the grid is shifted, or frames are added, only where that clears them; otherwise the conflict is reported (X4 and the table below). <b>Spacing near interior supports</b> (optional, continuous units): a closer spacing s<sub>p</sub> in the negative-moment regions next to each pier, the <b>pier region</b> each side of the support (blank: 0.25 × the adjacent span, about the dead-load point of contraflexure); the rest of the span keeps the target spacing. Blank: the target spacing everywhere. Suggest and Full design may tighten it where lateral-torsional buckling in negative flexure governs.</p>
+       <div id="fr-sum" class="full"></div>
+     </div>
+     ${secHd('sec-stf', 'Stiffeners and connection plates')}
+@@ -4521,21 +4654,22 @@
+ /* the spacing the cross-frame layout uses (SKX, 2026-10-15): per span the orientation, intermediate frames, the grid (or parallel) spacing against the target,
+    the largest girder panel per girder, the first-line offsets at supports skewed more than 20°, and splice / transition conflicts that remain (framingLayout) */
+ function frSumHtml() {
+-  const sp = FR.sp, nS = M.sup.length, supN = k => k === 0 ? 'Abut. 1' : k === nS - 1 ? 'Abut. 2' : `Pier ${k}`;
+-  let h = `<p class="hint static">Spacing used (target ${f2(sp)} ft). L<sub>b</sub>: the largest distance between consecutive bracing points (bearings, cross-frames on either side) along each girder in the span, at its own stations; listed per girder where it differs.</p>`;
++  const sp = FR.sp, nS = M.sup.length, supN = k => k === 0 ? 'Abut. 1' : k === nS - 1 ? 'Abut. 2' : `Pier ${k}`, s2 = plPierSp(P.framing, M), s2In = +P.framing.spPier > 0;
++  let h = `<p class="hint static">Spacing used (target ${f2(sp)} ft${s2 ? `; ${f2(s2)} ft near interior supports, in the pier regions shaded on the framing plan` : s2In ? `; the spacing near interior supports (${f2(+P.framing.spPier)} ft) is not used: ${M.cont && M.sup.length > 2 ? 'it is not below the target spacing' : 'not a continuous unit with interior supports'}` : ''}). L<sub>b</sub>: the largest distance between consecutive bracing points (bearings, cross-frames on either side) along each girder in the span, at its own stations; listed per girder where it differs.</p>`;
+   h += `<div class="tscroll"><table class="atbl tsb"><tr><th>Span</th><th>Frames</th><th>Spacing (ft)</th><th>L<sub>b,max</sub> (ft)</th></tr>`;
+   FR.orient.forEach(o => { const k = o.k, nI = FR.frames.filter(f => f.type === 'int' && f.k === k), perBay = [...Array(M.nb - 1).keys()].map(b => nI.filter(f => f.bay === b).length);
+     const lb = FR.girders.map(g => { const a = g.bear[k], b = g.bear[k + 1], s = [a, b, ...g.pts.filter(q => q.f.type === 'int' && q.s > a + 1e-6 && q.s < b - 1e-6).map(q => q.s)].sort((u, v) => u - v);
+       let mx = 0; for (let q = 1; q < s.length; q++) mx = Math.max(mx, s[q] - s[q - 1]); return mx; });
+     const same = lb.every(v => Math.abs(v - lb[0]) < 0.005), lbTxt = same ? `${f2(lb[0])} (all girders)` : lb.map((v, i) => `G${i + 1} ${f2(v)}`).join(', ');
+-    const par = o.o === 'parallel', spTxt = par ? (() => { const L = FR.girders.map(g => g.bear[k + 1] - g.bear[k]), n1 = o.n + 1, a = Math.min(...L) / n1, b = Math.max(...L) / n1; return Math.abs(b - a) < 0.005 ? f2(a) : `${f2(a)}–${f2(b)} (G${L.indexOf(Math.min(...L)) + 1}–G${L.indexOf(Math.max(...L)) + 1})`; })() : f2(o.s);
++    const par = o.o === 'parallel', spTxt = o.pz ? `${f2(o.pz.tm)}${o.pz.one ? '' : `; ${f2(o.pz.sp2)} near ${[o.pz.pS && supN(k), o.pz.pE && supN(k + 1)].filter(Boolean).join(', ')}`}` : par ? (() => { const L = FR.girders.map(g => g.bear[k + 1] - g.bear[k]), n1 = o.n + 1, a = Math.min(...L) / n1, b = Math.max(...L) / n1; return Math.abs(b - a) < 0.005 ? f2(a) : `${f2(a)}–${f2(b)} (G${L.indexOf(Math.min(...L)) + 1}–G${L.indexOf(Math.max(...L)) + 1})`; })() : f2(o.s);
+     const notes = [par ? `parallel to the skew, ${o.n} per bay` : `normal to the girders (${P.framing.arrange}${o.flat ? ': half a spacing < d_min, lines kept contiguous' : ''}); per bay ${[...new Set(perBay)].length === 1 ? perBay[0] : perBay.join(' / ')}`];
++    if (o.pz) notes.push(o.pz.one ? `the pier regions cover the span: frames at most ${f2(o.pz.sp2)} ft throughout` : `pier region${o.pz.pS && o.pz.pE ? 's' : ''}: frames at ${f2(o.pz.sp2)} ft within ${[o.pz.pS && `${f2(o.pz.rS)} ft of ${supN(k)}`, o.pz.pE && `${f2(o.pz.rE)} ft of ${supN(k + 1)}`].filter(Boolean).join(' and ')} (each girder, from its own bearing; to the next grid line), ${f2(o.pz.tm)} ft between`);
+     if (!par && o.e0 != null) notes.push(`first line ${f2(o.e0)} ft from the obtuse bearing at ${supN(k)}`);
+     if (!par && o.e1 != null) notes.push(`last line ${f2(o.e1)} ft from the obtuse bearing at ${supN(k + 1)}`);
+     if (o.shift) notes.push(par ? `grid shifted ${f2(o.shift * 100)}% of a panel to clear splices / transitions` : `grid shifted (end offsets ${f2(o.shift)} ft in all) to clear splices / transitions`);
+     if (o.extra) notes.push(`${par ? o.n - o.base + ' extra per bay' : o.n - o.base + ' extra frames'} to clear splices / transitions`);
+     if (o.conflicts) notes.push(`<span style="color:var(--fail)">${o.conflicts} frame${o.conflicts === 1 ? '' : 's'} within the splice clearance: the field splice / transition locations conflict with the frames (X4)</span>`);
+-    h += `<tr><td>${k + 1}</td><td>${nI.length}</td><td>${spTxt}</td><td style="white-space:normal">${lbTxt}${Math.max(...lb) > sp + 1e-6 ? ' <span style="color:var(--fail)">&gt; target (X2)</span>' : ''}</td></tr><tr class="tsb-g"><td colspan="4" style="font-weight:normal;white-space:normal">${notes.join('; ')}</td></tr>`; });
++    h += `<tr><td>${k + 1}</td><td>${nI.length}</td><td>${spTxt}</td><td style="white-space:normal">${lbTxt}${Math.max(...lb) > sp + 1e-6 ? ' <span style="color:var(--fail)">&gt; target (X2)</span>' : ''}${o.pz ? '<br><span class="n-dim">(pier regions against s<sub>p</sub>: check X2)</span>' : ''}</td></tr><tr class="tsb-g"><td colspan="4" style="font-weight:normal;white-space:normal">${notes.join('; ')}</td></tr>`; });
+   return h + `</table></div>`;
+ }
+ function renderFrSum() {
+@@ -4682,7 +4816,7 @@
+   const base = { N: c.N, S: c.S, oh: c.oh, de: c.de, fastPsf: c.psf, fastWt: c.wt, secs };
+   if (!r || (r.errors && r.errors.length)) return { ...base, err: r ? r.errors[0] : 'No result.' };
+   const strip = l => l.map(x => { const o = { L: x.L, t: x.t }; if (x.b !== undefined) o.b = x.b; return o; });
+-  const fr0 = { ...Pc.framing }; sgFrStiff(fr0, r); if (r.spacing) fr0.spacing = r.spacing;
++  const fr0 = { ...Pc.framing }; sgFrStiff(fr0, r); if (r.spacing) fr0.spacing = r.spacing; if (r.spPier !== undefined) fr0.spPier = r.spPier ?? '';   // FSP
+   const girder = { ...Pc.girder, D: r.D, web: strip(r.web), top: strip(r.top), bot: strip(r.bot), splices: [...r.splices] }, Pg = { ...Pc, girder, framing: fr0 };
+   const m = buildModel(Pg); if (m.errors.length) return { ...base, err: m.errors[0] };
+   const fr = framingLayout(Pg, m), cc = [...runChecks(m), ...framingChecks(m, fr, Pg)];
+@@ -4694,7 +4828,7 @@
+   const aFails = ac.filter(k => k.status === 'fail').map(k => k.id);
+   return { ...base, aFails, D: r.D, tw: r.tw, webType: r.webType, doR: r.doR, spacing: r.spacing, top: mx(r.top), bot: mx(r.bot), wt: m.wt, psf: m.psf, tot: m.wt * c.N, cost: r.cost.total,
+     fMax: F.check.max, fWeb: F.check.rWeb, fPass: !!F.passed, iters: sel.iters, nCand: F.cands.length, gI, gE, dfx: !!A.dfxUsed, fails, warns, pass: !!F.passed && !fails.length,
+-    dg: r.D + r.top[0].t + r.bot[0].t, girder, framing: { stiff: fr0.stiff, doRatio: fr0.doRatio, spacing: fr0.spacing, doMode: fr0.doMode, bays: fr0.bays } };
++    dg: r.D + r.top[0].t + r.bot[0].t, girder, framing: { stiff: fr0.stiff, doRatio: fr0.doRatio, spacing: fr0.spacing, doMode: fr0.doMode, bays: fr0.bays, ...(r.spPier !== undefined ? { spPier: fr0.spPier } : {}) } };
+ }
+ function wsfPick(res) { const ok = res.filter(r => !r.err && r.pass); if (!ok.length) return null;
+   return P.ws.obj === 'nb' ? ok.reduce((a, r) => r.N < a.N || (r.N === a.N && r.psf < a.psf) ? r : a) : ok.reduce((a, r) => r.psf < a.psf - 1e-9 ? r : a); }
+@@ -4724,7 +4858,7 @@
+ function wsfHtml() {
+   if (!WS || !WS.done || !WS.res.some(r => !r.err)) return '';
+   const W = WSF && WSF.ws === WS ? WSF : null, picks = W ? W.picks : wsfPicks().map(r => r.N), n = picks.length, stale = WS.key !== wsKey(), dmin = num(P.framing.xfMinD) || 48;
+-  const notes = `<p class="note-p"><b>What this step does.</b> The table above sizes every girder count quickly with Suggest's fast sizing (the quick suggestion without its strength and service check: constant-stiffness beam, lever-arm flange areas, layout checks only). This step takes the best ${n} of those rows (ranked by the study's objective, ${P.ws.obj === 'nb' ? 'fewest girders' : 'least total steel weight'}: passing rows first, then the others by governing ratio) and runs <b>Full design</b> on each, the same procedure as <i>Run full design</i> on the Suggest input tab, with that row's girder count, spacing (equal), and overhangs. For each girder count, Full design takes Suggest's best depth and web candidates and repeats: the staged, cracked analysis of the current plates (DC1 on the steel section; DC2 and DW on the long-term composite section, 3n; live load on the short-term composite section, n; the composite stages cracked near interior piers; GirderDetail's Structural analysis settings), the live load distribution factors recomputed from that section's K<sub>g</sub> (this tool's AASHTO 4.6.2.2 equations), the AASHTO checks at every node (Strength I, Service II, deck placement, and flange fatigue when selected), and resizing of the flanges and web. To save time, the live load model of the first iteration is reused inside the loop. When the plates stop changing, the girder is verified against fully recomputed demands and factors, and those final checks decide pass or fail. With "Optimize cross-frame spacing" on, it also tries other cross-frame spacings.</p>
++  const notes = `<p class="note-p"><b>What this step does.</b> The table above sizes every girder count quickly with Suggest's fast sizing (the quick suggestion without its strength and service check: constant-stiffness beam, lever-arm flange areas, layout checks only). This step takes the best ${n} of those rows (ranked by the study's objective, ${P.ws.obj === 'nb' ? 'fewest girders' : 'least total steel weight'}: passing rows first, then the others by governing ratio) and runs <b>Full design</b> on each, the same procedure as <i>Run full design</i> on the Suggest input tab, with that row's girder count, spacing (equal), and overhangs. For each girder count, Full design takes Suggest's best depth and web candidates and repeats: the staged, cracked analysis of the current plates (DC1 on the steel section; DC2 and DW on the long-term composite section, 3n; live load on the short-term composite section, n; the composite stages cracked near interior piers; GirderDetail's Structural analysis settings), the live load distribution factors recomputed from that section's K<sub>g</sub> (this tool's AASHTO 4.6.2.2 equations), the AASHTO checks at every node (Strength I, Service II, deck placement, and flange fatigue when selected), and resizing of the flanges and web. To save time, the live load model of the first iteration is reused inside the loop. When the plates stop changing, the girder is verified against fully recomputed demands and factors, and those final checks decide pass or fail. With "Optimize cross-frame spacing" on, it also tries other cross-frame spacings, and, in continuous units where lateral-torsional buckling in negative flexure governs the bottom flange of the best passing candidate at the Framing tab spacing, closer cross-frames near the interior supports (the Framing tab's spacing near interior supports s<sub>p</sub>: 22.5, 20, 17.5, 15, 12.5 and 10 ft, below the spacing and not below max(10 ft, 0.4 × the spacing), loosest first, stopping when two in a row each cost more; with an s<sub>p</sub> already set, also without it). Each is priced with the cross-frames of its own layout, so extra frames are weighed against lighter plates, and the cheapest passing candidate is kept. The quick suggestion does the same when the fast plates fail on lateral-torsional buckling in negative flexure (a bottom flange ratio above 1.0 governed by it): it repeats its check and fix with each closer s<sub>p</sub> (until one passes without a plate change) and keeps the cheapest passing result. Apply writes s<sub>p</sub> to the Framing tab.</p>
+     <p class="note-p"><b>Kept from the fast study:</b> the girder count, spacing, and overhangs; they are not re-optimized here. <b>Why only the best few:</b> Full design runs dozens of staged analyses for each girder count (about 20 to 60 s each, longer for many spans), so it is run on request for the leading rows only (number set on the Suggest input tab). The ranking below uses the full-design results. <b>Still preliminary:</b> the distribution factors are this tool's estimate; run LL &amp; DL (lldf) for the chosen layout and complete the design checks in GirderDetail before final design.</p>`;
+   let body = '';
+   if (W && W.running) body = `<div class="sg-prog"><div class="sg-prog-top"><b>Full design running</b><span id="wsf_msg">${esc(W.msg)}</span><button type="button" class="dg-btn" id="wsf_cancel">Cancel</button></div><div class="sg-prog-bar"><div id="wsf_fill" style="width:${Math.round(100 * W.frac)}%"></div></div></div>`;
+@@ -4751,7 +4885,7 @@
+   if (!confirm(`Apply ${r.N} girders at ${f2(r.S)} ft with ${f2(r.oh)} ft overhangs and the full-design girder (web ${frac(r.D)} × ${frac(r.tw)}, cross-frames at ${f2(r.spacing)} ft) to the project? This replaces the girder count, spacing, overhangs, girder plates, splices, the stiffener setting, and the cross-frame spacing. You can revert afterwards.`)) return;
+   snapshotBefore(`Girder count from deck width, full design (${r.N} girders at ${f2(r.S)} ft)`);
+   P.bridge.nb = r.N; P.bridge.S = +r.S.toFixed(4); spKeepExt(P.bridge, r.S); P.bridge.ohL = r.oh; P.bridge.ohR = r.oh; P.girder = JSON.parse(JSON.stringify(r.girder));
+-  P.framing.stiff = r.framing.stiff; if (r.webType === 'stiffened' && r.doR) P.framing.doRatio = r.framing.doRatio; if (r.framing.doMode) P.framing.doMode = r.framing.doMode; if (r.framing.bays) P.framing.bays = clone(r.framing.bays); if (r.spacing) P.framing.spacing = r.framing.spacing;
++  P.framing.stiff = r.framing.stiff; if (r.webType === 'stiffened' && r.doR) P.framing.doRatio = r.framing.doRatio; if (r.framing.doMode) P.framing.doMode = r.framing.doMode; if (r.framing.bays) P.framing.bays = clone(r.framing.bays); if (r.spacing) P.framing.spacing = r.framing.spacing; if (r.framing.spPier !== undefined && r.framing.spPier !== (sgPierCur(P) ?? '')) P.framing.spPier = r.framing.spPier;   // FSP
+   fillInputs(); ['web', 'top', 'bot', 'spl'].forEach(renderArr); recompute(); setOTab('summary'); autosave(); }
+ document.addEventListener('click', e => { if (e.target.id === 'wsf_run') { wsfRun(); return; } if (e.target.id === 'wsf_cancel' && WSF && WSF.running) { WSF.cancel = true; return; } const a = e.target.closest && e.target.closest('[data-wsfapply]'); if (a) wsfApply(+a.dataset.wsfapply); });
+ function xfNoteHtml(s) { const dmin = num(P.framing.xfMinD) || 48, d = s.D + s.top[0].t + s.bot[0].t;
+@@ -5466,7 +5600,7 @@
+     card('dw-elev', 'Girder elevation', 'Plates colored by check status', `<div class="ctl-row"><label class="dg-chip" style="--chip:#2346c2"><input type="checkbox" id="exag" ${exag ? 'checked' : ''}><span class="dg-dot"></span>Exaggerate vertical scale</label>
+       <span class="lgd"><i style="background:${COL.pass[0]};border-color:${COL.pass[1]}"></i>OK <i style="background:${COL.warn[0]};border-color:${COL.warn[1]}"></i>Warning <i style="background:${COL.fail[0]};border-color:${COL.fail[1]}"></i>Fail</span></div>
+       <div class="dwg-wrap">${e.svg}</div><p class="cap">${e.cap} Tick marks above and below the flanges locate plate transitions. Hover a plate for its size.</p>`)
+-    + card('dw-plan', 'Framing plan', 'Cross-frames from the Framing tab', `<div class="dwg-wrap">${framingSVG(M, FR, fpEx)}</div><p class="cap">Blue: girders. Black: cross-frames on bearing lines. Green: intermediate cross-frames. Red ticks: field splices. ${fpEx > 1.001 ? `Transverse scale exaggerated ${f2(fpEx)}× so the bays are readable; skew angles appear steeper than true.` : 'True scale.'} ${FR.frames.length} cross-frames in total. Span dimensions are along the bridge centerline.</p>`)
++    + card('dw-plan', 'Framing plan', 'Cross-frames from the Framing tab', `<div class="dwg-wrap">${framingSVG(M, FR, fpEx)}</div><p class="cap">Blue: girders. Black: cross-frames on bearing lines. Green: intermediate cross-frames. Red ticks: field splices. ${FR.orient.some(o => o.pz) ? `Shaded: pier regions (Framing tab), intermediate cross-frames at most ${f2(plPierSp(P.framing, M))} ft. ` : ''}${fpEx > 1.001 ? `Transverse scale exaggerated ${f2(fpEx)}× so the bays are readable; skew angles appear steeper than true.` : 'True scale.'} ${FR.frames.length} cross-frames in total. Span dimensions are along the bridge centerline.</p>`)
+     + card('dw-xs', 'Typical cross-section', 'To scale', `<div class="dwg-wrap">${x.svg}</div><p class="cap">${x.cap}</p>`)
+     + card('dw-secs', 'Girder section details', 'Common scale, to scale', `<div class="secgrid">${secs}</div><p class="cap">Each distinct plate combination is drawn once, at a common scale, with the stations where it occurs.</p>`)
+     + card('dw-prof', 'Plate profile along the girder', '', `<div id="plt-prof" class="plt tall"></div><p class="cap">Solid vertical lines are supports; dashed lines are field splices. Click legend entries to toggle series.</p>`);
+```
