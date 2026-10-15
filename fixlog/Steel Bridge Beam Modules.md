@@ -18545,3 +18545,250 @@ window.gdIdle = function ({ quiet = 8000, max = 150000, step = 500 } = {}) {
 +document.addEventListener('click', e => { if (e.target.closest && e.target.closest('#gd-sgp-b')) gdSgpOpen(); });
 +window.addEventListener('message', e => { if (gdFromPL(e) && e.data && e.data.type === 'pl-sgp' && !e.data.open) gdSgpClose(!!e.data.show); });
 ```
+
+## 2026-10-15 — PR: claude/gd-suggest-panel-2 (Suggest panel, part 2 of 2: objectives, maximum structure depth, the short list of options; engineer-approved design of 2026-10-15; PR link added after merge)
+
+Note on the previous entry (SGP, part 1): merged as PR #242 (https://github.com/mlococo88/All-Structural/pull/242).
+
+### SGP2. Suggest panel: objectives (lowest cost, lowest steel weight, shallowest depth), maximum structure depth, short list of distinct options   [NEW FEATURE — no result change with the settings as saved] [Tier 2/3]
+- **Engineer-approved design (2026-10-15):** objectives lowest cost (default), lowest steel weight, shallowest depth (cost as tie-break); constraints maximum structure depth (clearance) and deflection limit (part 1); results as a SHORT LIST of distinct options — the best per objective plus notable alternatives close on cost (one girder more/fewer, deeper/shallower web) — side by side with the current design, each linked to its checks, Apply.
+- **Engine (only when a new optional field is set):**
+  - New `sgObjCmp(obj)` (above `sgDVar`): candidate comparator. `suggest.obj` absent or 'cost': `(a, b) => a.cost.total - b.cost.total`, the comparator used before (results unchanged); 'wt': least `cost.wTot` (steel of all girders with the detail allowance), cost as tie-break; 'shallow': least D, cost as tie-break. Used in `suggestLayout` (fine-search start `best0`, the pick `pool.sort(CMP)`), and in `suggestFull` (the candidates refined `picks` when obj is set, the cross-frame and FSP base candidates, the final pick).
+  - `suggest.maxH` (in): structure depth h = t_s + haunch (as entered) + D + max over the girder of (t_top + t_bot) (`hOf` in `suggestLayout`). A fast candidate with h > maxH is rejected (`ok = false`, `hOver`), the verify and one-candidate paths report `hOK`, and the quick check and Full design count `hOK === false` as not passing. Blank: no check (as before).
+  - `suggestFull`: the return shaping moved unchanged into `sgFullShape(fast, best, out)` (pure refactor), and `full.outs` keeps every refined candidate (for the short list). `wsEval` rows carry `cost` (the fast sizing cost; ranking only).
+- **Panel:** Objective and constraints rows (objective select `#sgp-obj` writes `suggest.obj` only when changed from the default; maximum structure depth `suggest.maxH`; the current structure depth shown). A Structure depth row in the options table (red above the maximum). Short list (`SGP_ALT`): girder count Locked — after a quick suggestion: the recommended (= the quick suggestion, unchanged) plus, found with the engines themselves and each checked like the quick suggestion (`suggestQuickCheck`): the best for each other objective (`suggestLayout` with that objective) and the nearest shallower and deeper depths whose fast cost is within 3% of the cheapest (`suggestLayout(P, { D })`); after Full design: chosen among Full design's refined candidates (best per other objective, nearest shallower / deeper within 3% of the lowest passing cost). Girder count varying: the best of each objective among the study (or its Full design) rows, plus one girder fewer and one more than the recommended. Duplicates merge their labels. Each option: Apply (the existing Apply on that result: `sgpAltUse` makes it the Suggest result first) and "Show the work" (the Suggest tab's derivation, checks and comparison of that option).
+- **Governing provision:** none changed. Structure depth is a project clearance input (no code value).
+- **Check case (built-in, AASHTO, `tests/suggest.mjs options`):** quick short list: D 63 stiffened $1,686,891, 441.6 kip, h = 8 + 2 + 63 + 3.125 = 76.125 in (recommended; lowest cost and lowest weight); D 44 $1,927,398 h 57.625 (shallowest); D 60 $1,764,883 (shallower, fast cost within 3%); D 66 $1,692,840 (deeper). Objective 'wt' → fast pick 441,630 lb = the least of the passing candidates; 'shallow' → D 44 = the least passing D. maxH = 54 in → 52 fast candidates rejected, no option passes (every girder ≥ 54.875 in). Full design list: D 69 $1,571,864 (recommended), D 69 at another cross-frame layout 420.9 kip (lowest weight), D 63 (shallowest), D 66 (shallower within 3%). Girder count Free: 4 girders (recommended), 10 (shallowest), 5 (one more).
+- **How verified:** `node tests/check-syntax.mjs`; `node tests/compare.mjs --tool gd --project builtin,xsA --owner AASHTO,RIDOT` (identical); `node tests/suggest.mjs same --project builtin,xsA --owner AASHTO,RIDOT` (main vs panel identical, default settings); `node tests/suggest.mjs locks`; `node tests/suggest.mjs options` (12 checks pass); screenshots.
+- **Saved data:** new optional fields `suggest.obj`, `suggest.maxH` (written only when set). Older projects unchanged; main ignores them.
+- **Other copies:** none.
+- **Open items:** "close on cost" is 3% (`SGP_NEAR`), an assumption to confirm. The girder-count study's Full design still picks its counts by the study's own objective (Engine settings: weight or fewest girders); the panel ranks the results by the panel objective.
+- **Diff** (unified diff with no context lines; line numbers approximate):
+```diff
+@@ -2076,0 +2077 @@ html.sgp-on body { overflow: hidden; }
++.sgp-tags { margin: 3px 0 0; display: flex; flex-wrap: wrap; gap: 3px; } .sgp-tags i { font-style: normal; font-size: 11px; font-weight: 600; padding: 0 5px; border-radius: 4px; background: var(--blue-dim); color: var(--blue); }
+@@ -3512,0 +3514,3 @@ function sgDfx(P, D, top, bot, web, ext) {
++/* SGP2 (2026-10-15): the objective of the Suggest panel (suggest.obj): 'cost' (absent: the default, as before) lowest cost; 'wt' lowest steel weight,
++   cost as the tie-break; 'shallow' shallowest web depth, cost as the tie-break. A comparator of candidates { D, cost: { total, wTot } } */
++function sgObjCmp(obj) { if (obj === 'wt') return (a, b) => a.cost.wTot - b.cost.wTot || a.cost.total - b.cost.total; if (obj === 'shallow') return (a, b) => a.D - b.D || a.cost.total - b.cost.total; return (a, b) => a.cost.total - b.cost.total; }
+@@ -3538,0 +3543,4 @@ function suggestLayout(P, opts = {}) {
++  // SGP2: maximum structure depth (suggest.maxH, in; blank: none) = t_s + haunch (as entered) + D + top and bottom flange thicknesses, the largest along the girder
++  const HMAX = num(SG.maxH) > 0 ? num(SG.maxH) : 0, CMP = sgObjCmp(SG.obj);
++  const hOf = (res, D) => { const t = res.top.map(r => ({ ...r })), b = res.bot.map(r => ({ ...r })); sgLists(t, b, []); const xs = [...new Set([...t, ...b].flatMap(r => [r.x0, r.x1]))].sort((p, q) => p - q); let m = 0;
++    for (let i = 0; i < xs.length - 1; i++) { if (xs[i + 1] - xs[i] < 1e-6) continue; const x = (xs[i] + xs[i + 1]) / 2; m = Math.max(m, sgAt(t, x).t + sgAt(b, x).t); } return num(B.ts) + num(B.haunch) + D + m; };
+@@ -3603,0 +3612 @@ function suggestLayout(P, opts = {}) {
++    if (HMAX) { c.h = hOf(res, D); if (c.h > HMAX + 1e-9) { c.ok = false; c.hOver = true; } }   // SGP2: deeper than the maximum structure depth: rejected
+@@ -3628 +3637 @@ function suggestLayout(P, opts = {}) {
+-    if (V.doR) DO_R = V.doR; const Rv = demand(V.D, t, b, w); return { errors: [], check: checkLayout(V.D, t, b, w, Rv, V.splices), dOK: depthOK({ top: t, bot: b, web: w }, V.D), cost: costOf({ top: t, bot: b, web: w, splices: V.splices }, V.D, V.wt, V.doR, Rv, V.keepSt ? { keep: true, nAll: V.nStTot } : null), N, xs };
++    if (V.doR) DO_R = V.doR; const Rv = demand(V.D, t, b, w); return { errors: [], check: checkLayout(V.D, t, b, w, Rv, V.splices), dOK: depthOK({ top: t, bot: b, web: w }, V.D), cost: costOf({ top: t, bot: b, web: w, splices: V.splices }, V.D, V.wt, V.doR, Rv, V.keepSt ? { keep: true, nAll: V.nStTot } : null), N, xs, ...(HMAX ? { h: hOf({ top: t, bot: b }, V.D), hOK: hOf({ top: t, bot: b }, V.D) <= HMAX + 1e-9 } : {}) };   // hOK (SGP2): within the maximum structure depth
+@@ -3634 +3643 @@ function suggestLayout(P, opts = {}) {
+-    c.check = R0 ? checkLayout(o.D, res.top, res.bot, res.web, R0, res.splices) : null; c.dOK = depthOK(res, o.D); return { errors: [], ...c, N, xs };
++    c.check = R0 ? checkLayout(o.D, res.top, res.bot, res.web, R0, res.splices) : null; c.dOK = depthOK(res, o.D); if (HMAX) { c.h = hOf(res, o.D); c.hOK = c.h <= HMAX + 1e-9; } return { errors: [], ...c, N, xs };
+@@ -3649 +3658 @@ function suggestLayout(P, opts = {}) {
+-    const best0 = cands.filter(c => c.ok).sort((a, b) => a.cost.total - b.cost.total)[0] || cands.sort((a, b) => a.cost.total - b.cost.total)[0];
++    const best0 = cands.filter(c => c.ok).sort(CMP)[0] || cands.sort(CMP)[0];   // CMP (SGP2): the objective; cost unless set
+@@ -3653 +3662 @@ function suggestLayout(P, opts = {}) {
+-  pool.sort((a, b) => a.cost.total - b.cost.total);
++  pool.sort(CMP);   // SGP2: the objective (cost unless set)
+@@ -3655 +3664 @@ function suggestLayout(P, opts = {}) {
+-  rec.cands = cands.map(c => ({ D: c.D, wt: c.wt, doR: c.doR, twC: c.twC, tw: c.res.tw, cost: c.cost, ok: c.ok, best: c === best, ...(c.oos ? { oos: c.oos } : {}) })).sort((a, b) => a.cost.total - b.cost.total);
++  rec.cands = cands.map(c => ({ D: c.D, wt: c.wt, doR: c.doR, twC: c.twC, tw: c.res.tw, cost: c.cost, ok: c.ok, best: c === best, ...(c.oos ? { oos: c.oos } : {}), ...(c.h != null ? { h: c.h, hOver: !!c.hOver } : {}) })).sort((a, b) => a.cost.total - b.cost.total);
+@@ -4150 +4159 @@ async function suggestFull(P, prog, cancelled) {
+-  const SG = P.suggest, okC = fast.rec.cands.filter(c => c.ok), pool = okC.length ? okC : fast.rec.cands, picks = pool.slice(0, SG.keepD ? 2 : 3);
++  const SG = P.suggest, okC = fast.rec.cands.filter(c => c.ok), pool0 = okC.length ? okC : fast.rec.cands, pool = SG.obj && SG.obj !== 'cost' ? pool0.slice().sort(sgObjCmp(SG.obj)) : pool0, picks = pool.slice(0, SG.keepD ? 2 : 3);   // SGP2: the best by the objective
+@@ -4160 +4169 @@ async function suggestFull(P, prog, cancelled) {
+-      const k = key(r.res), pass = ch.max <= 1.0005 && ch.rWeb <= 1.0005 && r.dOK && !r.cost.bayFail && !ch.oos; costs.push(r.cost.total);   // bayFail: a bay cannot be stiffened enough (per-bay stiffeners, TB1)
++      const k = key(r.res), pass = ch.max <= 1.0005 && ch.rWeb <= 1.0005 && r.dOK && !r.cost.bayFail && !ch.oos && r.hOK !== false; costs.push(r.cost.total);   // bayFail: a bay cannot be stiffened enough (per-bay stiffeners, TB1)
+@@ -4171 +4180 @@ async function suggestFull(P, prog, cancelled) {
+-    for (const cand of passed.slice(0, 3)) { prog && prog(Math.min(0.98, ++step / steps), `${tag || `Depth ${c.D} in`}: verifying`); await tick(); const v = suggestLayout(P, { full: true, verify: { ...cc, ...cand.res } }); if (v.check.max <= 1.0005 && v.check.rWeb <= 1.0005 && v.dOK && !v.cost.bayFail && !v.check.oos) { best = cand; V = v; break; } }
++    for (const cand of passed.slice(0, 3)) { prog && prog(Math.min(0.98, ++step / steps), `${tag || `Depth ${c.D} in`}: verifying`); await tick(); const v = suggestLayout(P, { full: true, verify: { ...cc, ...cand.res } }); if (v.check.max <= 1.0005 && v.check.rWeb <= 1.0005 && v.dOK && !v.cost.bayFail && !v.check.oos && v.hOK !== false) { best = cand; V = v; break; } }
+@@ -4174 +4183 @@ async function suggestFull(P, prog, cancelled) {
+-    if (V && V.check.max <= 1.0005 && V.check.rWeb <= 1.0005 && V.dOK && !V.cost.bayFail && !V.check.oos) { let res = JSON.parse(JSON.stringify(best.res)), Vb = V, better = true, n = 0;
++    if (V && V.check.max <= 1.0005 && V.check.rWeb <= 1.0005 && V.dOK && !V.cost.bayFail && !V.check.oos && V.hOK !== false) { let res = JSON.parse(JSON.stringify(best.res)), Vb = V, better = true, n = 0;
+@@ -4183 +4192 @@ async function suggestFull(P, prog, cancelled) {
+-            if (v.check.max <= 1.0005 && v.check.rWeb <= 1.0005 && v.dOK && !v.cost.bayFail && !v.check.oos && v.cost.total < Vb.cost.total - 1) { res = cand; Vb = v; better = true; } }
++            if (v.check.max <= 1.0005 && v.check.rWeb <= 1.0005 && v.dOK && !v.cost.bayFail && !v.check.oos && v.hOK !== false && v.cost.total < Vb.cost.total - 1) { res = cand; Vb = v; better = true; } }
+@@ -4186 +4195 @@ async function suggestFull(P, prog, cancelled) {
+-    const pass = V.check.max <= 1.0005 && V.check.rWeb <= 1.0005 && V.dOK && !V.cost.bayFail && !V.check.oos; let defl = null;
++    const pass = V.check.max <= 1.0005 && V.check.rWeb <= 1.0005 && V.dOK && !V.cost.bayFail && !V.check.oos && V.hOK !== false; let defl = null;
+@@ -4194 +4203,2 @@ async function suggestFull(P, prog, cancelled) {
+-  if (spList.length) { const okO = out.filter(o => o.pass).sort((a, b) => a.cost.total - b.cost.total)[0];
++  const CMPF = sgObjCmp(SG.obj);   // SGP2: the objective (cost unless set)
++  if (spList.length) { const okO = out.filter(o => o.pass).sort(CMPF)[0];
+@@ -4201 +4211 @@ async function suggestFull(P, prog, cancelled) {
+-  if (SG.cfOpt !== 'off' && SG.pierOpt !== 'off' && fast.cont && fast.spans.length > 1) { const okB = out.filter(o => o.pass && Math.abs(o.spacing - sp0) < 0.01).sort((a, b) => a.cost.total - b.cost.total)[0];   // pierOpt 'off' (SGP): spacing near interior supports Locked in the Suggest panel
++  if (SG.cfOpt !== 'off' && SG.pierOpt !== 'off' && fast.cont && fast.spans.length > 1) { const okB = out.filter(o => o.pass && Math.abs(o.spacing - sp0) < 0.01).sort(CMPF)[0];   // pierOpt 'off' (SGP): spacing near interior supports Locked in the Suggest panel
+@@ -4209 +4219,5 @@ async function suggestFull(P, prog, cancelled) {
+-  const ok = out.filter(o => o.pass).sort((a, b) => a.cost.total - b.cost.total), best = ok[0] || out.slice().sort((a, b) => (a.check.oos ? 1 : 0) - (b.check.oos ? 1 : 0) || a.check.max - b.check.max)[0];
++  const ok = out.filter(o => o.pass).sort(CMPF), best = ok[0] || out.slice().sort((a, b) => (a.check.oos ? 1 : 0) - (b.check.oos ? 1 : 0) || a.check.max - b.check.max)[0];
++  const R = sgFullShape(fast, best, out); R.full.outs = out; return R;   // outs (SGP2): every refined candidate, for the panel's short list
++}
++/* the Full design result for the candidate `best` of the refined candidates `out` (SGP2: also used by the Suggest panel for its other options) */
++function sgFullShape(fast, best, out) {
+@@ -4227 +4241 @@ async function suggestQuickCheck(P0, fast, prog, cancelled) {
+-  const cp = l => l.map(r => ({ ...r })), pass = v => v.check.max <= OK && v.check.rWeb <= OK && v.dOK && !v.cost.bayFail && !v.check.oos;   // bayFail: per-bay stiffeners (TB1) cannot carry the staged shear
++  const cp = l => l.map(r => ({ ...r })), pass = v => v.check.max <= OK && v.check.rWeb <= OK && v.dOK && !v.cost.bayFail && !v.check.oos && v.hOK !== false;   // hOK (SGP2): maximum structure depth   // bayFail: per-bay stiffeners (TB1) cannot carry the staged shear
+@@ -4314 +4328 @@ const MAN = [
+-<h3>The Suggest panel (GirderDetail, Preliminary designer mode)</h3><p>GirderDetail's top bar <b>Suggest</b> button opens a full-screen panel over the app (Close or Esc returns). The left side lists the design inputs, grouped (bridge layout, girder plates, framing, materials), each with its current value, a mode, and the code and owner (DOT) limits that bound it. <b>Locked</b> uses the current value; <b>Range</b> (minimum, maximum, step) and <b>List</b> limit what the engines try; <b>Free</b> lets the app decide within the code and the owner limits shown. A mode an engine cannot honour yet is disabled, and the row says why. What each mode does: <b>Number of girders</b> Locked: the quick suggestion and Full design below, on the Bridge tab layout; Range, List or Free: the girder-count study at the held out-to-out width (the counts in the range or list only), then Full design of its best counts. <b>Girder spacing</b> and <b>overhangs</b> vary only with the girder count (Range: the study's limits; Free: the default limits; overhangs Locked: both at the Bridge tab value); the study never exceeds the Limits tab overhang limits of check G6. <b>Web depth</b> Locked: the Girder tab depth; Range: the depths from the minimum to the maximum in steps (blank step: about six steps), then a finer search near the cheapest within the range; List: those depths only; Free: L/36 to L/18 as described below. <b>Web stiffening</b> Locked (stiffened or unstiffened) or Free (the cheaper). <b>Cross-frame spacing</b> Locked: the Framing tab spacing; Range: Full design tries 15 to 30 ft in 2.5 ft steps within it (the Framing tab spacing is always a candidate); Free: up to 25 ft. <b>Spacing near interior supports</b> Locked: the Framing tab setting is kept (no closer spacing is tried); Free: tried where lateral-torsional buckling in negative flexure governs. <b>Stiffener spacing</b> Locked: uniform at the Framing tab d<sub>o</sub>/D; Free: per cross-frame bay. <b>Tension-field action</b>: use or do not use. Web thickness, flanges, transitions and field splices are sized by the engines (Free only); the cross-frame type, steel grade and deck f′<sub>c</sub> are Locked (they are set on their own tabs or in GirderDetail's Cross-frames module). The modes are stored in the Suggest settings of the project (existing settings, plus new optional fields only when a mode is chosen), so a project saved earlier opens with its settings as they were.</p><p>The right side runs the existing engines: <b>Quick suggestion</b> (about a second; the girder-count study takes a few seconds) and <b>Full design</b> (about 20 to 80 s), with a progress bar and <b>Cancel</b>; the page stays usable. The options are shown side by side with the current design: girders, spacing, overhangs, web, largest flange plates, field splices, cross-frames, stiffeners, steel weight, cost (Unit costs), the governing strength and service ratio, and the result. Each option links to its worked derivation and checks in Preliminary sizing (the Suggest output tab); the current design links to its Checks tab. <b>Apply</b> writes the option into the Preliminary sizing inputs (with the usual confirmation and Revert); in Preliminary designer mode GirderDetail then updates every module.</p>
++<h3>The Suggest panel (GirderDetail, Preliminary designer mode)</h3><p>GirderDetail's top bar <b>Suggest</b> button opens a full-screen panel over the app (Close or Esc returns). The left side lists the design inputs, grouped (bridge layout, girder plates, framing, materials), each with its current value, a mode, and the code and owner (DOT) limits that bound it. <b>Locked</b> uses the current value; <b>Range</b> (minimum, maximum, step) and <b>List</b> limit what the engines try; <b>Free</b> lets the app decide within the code and the owner limits shown. A mode an engine cannot honour yet is disabled, and the row says why. What each mode does: <b>Number of girders</b> Locked: the quick suggestion and Full design below, on the Bridge tab layout; Range, List or Free: the girder-count study at the held out-to-out width (the counts in the range or list only), then Full design of its best counts. <b>Girder spacing</b> and <b>overhangs</b> vary only with the girder count (Range: the study's limits; Free: the default limits; overhangs Locked: both at the Bridge tab value); the study never exceeds the Limits tab overhang limits of check G6. <b>Web depth</b> Locked: the Girder tab depth; Range: the depths from the minimum to the maximum in steps (blank step: about six steps), then a finer search near the cheapest within the range; List: those depths only; Free: L/36 to L/18 as described below. <b>Web stiffening</b> Locked (stiffened or unstiffened) or Free (the cheaper). <b>Cross-frame spacing</b> Locked: the Framing tab spacing; Range: Full design tries 15 to 30 ft in 2.5 ft steps within it (the Framing tab spacing is always a candidate); Free: up to 25 ft. <b>Spacing near interior supports</b> Locked: the Framing tab setting is kept (no closer spacing is tried); Free: tried where lateral-torsional buckling in negative flexure governs. <b>Stiffener spacing</b> Locked: uniform at the Framing tab d<sub>o</sub>/D; Free: per cross-frame bay. <b>Tension-field action</b>: use or do not use. Web thickness, flanges, transitions and field splices are sized by the engines (Free only); the cross-frame type, steel grade and deck f′<sub>c</sub> are Locked (they are set on their own tabs or in GirderDetail's Cross-frames module). The modes are stored in the Suggest settings of the project (existing settings, plus new optional fields only when a mode is chosen), so a project saved earlier opens with its settings as they were.</p><p>The right side runs the existing engines: <b>Quick suggestion</b> (about a second; the girder-count study takes a few seconds) and <b>Full design</b> (about 20 to 80 s), with a progress bar and <b>Cancel</b>; the page stays usable. The options are shown side by side with the current design: girders, spacing, overhangs, web, largest flange plates, field splices, cross-frames, stiffeners, steel weight, cost (Unit costs), the governing strength and service ratio, and the result. Each option links to its worked derivation and checks in Preliminary sizing (the Suggest output tab); the current design links to its Checks tab. <b>Apply</b> writes the option into the Preliminary sizing inputs (with the usual confirmation and Revert); in Preliminary designer mode GirderDetail then updates every module.</p><p><b>Objective and constraints.</b> The <b>objective</b> is lowest cost (the default), lowest steel weight (all girders, with the detail allowance; cost decides ties) or shallowest web depth (cost decides ties); the quick suggestion and Full design pick by it. <b>Maximum structure depth</b> (clearance; blank: none): structure depth = deck t<sub>s</sub> + haunch + D + top and bottom flange thicknesses at the deepest point; a candidate deeper than this is rejected by the fast sizing, and the quick check and Full design count it as not passing. The live load deflection limit is the Full design option of Part 1. <b>Short list.</b> After a run the panel lists a few distinct options next to the current design: the <b>recommended</b> one (the objective's pick: the quick suggestion or Full design result itself), the best for each other objective, and the nearest shallower and deeper web depths whose cost is within 3% of the lowest (girder count Locked; found with the same engines and checked like the quick suggestion, or chosen among the candidates Full design refined); with the girder count varying, the best count for each objective and one girder fewer and one more than the recommended. An option found more than once lists all its labels. Each option has <b>Apply</b> and <b>Show the work</b> (its derivation, checks and comparison on the Suggest output tab).</p>
+@@ -6485 +6499 @@ function wsEval(N, S, oh) {
+-  return { N, S, oh, de: r.de, gI, gE, D: r.D, tw: r.tw, top: mx(r.top), bot: mx(r.bot), webType: r.webType, wt: m.wt, psf: m.psf, tot: m.wt * N, gov, fails: cc.filter(k => k.status === 'fail').map(k => k.id), warns: cc.filter(k => k.status === 'warn').map(k => k.id), girder: Pc.girder, framing: { stiff: fr0.stiff, doRatio: fr0.doRatio, doMode: fr0.doMode, bays: fr0.bays }, dg, Kg: r.rec.Kg && r.rec.Kg[iMax] ? r.rec.Kg[iMax].Kg : null };
++  return { N, S, oh, de: r.de, cost: r.cost && r.cost.total, gI, gE, D: r.D, tw: r.tw, top: mx(r.top), bot: mx(r.bot), webType: r.webType, wt: m.wt, psf: m.psf, tot: m.wt * N, gov, fails: cc.filter(k => k.status === 'fail').map(k => k.id), warns: cc.filter(k => k.status === 'warn').map(k => k.id), girder: Pc.girder, framing: { stiff: fr0.stiff, doRatio: fr0.doRatio, doMode: fr0.doMode, bays: fr0.bays }, dg, Kg: r.rec.Kg && r.rec.Kg[iMax] ? r.rec.Kg[iMax].Kg : null };
+@@ -6730,2 +6744,3 @@ function sgpVarsHtml() {
+-  const dO = sgpOwn('defl.ll');
+-  h += `<tr class="sgp-grp"><th colspan="4">Constraints</th></tr><tr><td class="lbl">Live load deflection (Full design)</td><td class="val">${P.suggest.defl === 'on' ? 'applied' : 'not applied'}</td><td>${sgpSel('suggest.defl', [['off', 'Do not apply (optional criterion)'], ['on', 'Apply']])}</td><td class="sgp-bnd">L/${f0(num(P.limits.deflRatio) || 800)} (Limits tab; AASHTO 2.5.2.6.2, optional)${dO ? ` ${sgpOwnTxt('defl.ll', 'mandatory for this owner: checked as A1 on the Analysis tab')}` : ''}</td></tr>`;
++  const dO = sgpOwn('defl.ll'), hNow = sgpH(P.girder.top || [], P.girder.bot || [], num(P.girder.D));
++  h += `<tr class="sgp-grp"><th colspan="4">Objective and constraints</th></tr><tr><td class="lbl">Objective</td><td class="val">${esc(SGP_OBJ[P.suggest.obj || 'cost'])}</td><td><select class="sgp-sel" id="sgp-obj">${Object.entries(SGP_OBJ).map(([k, l]) => `<option value="${k}"${(P.suggest.obj || 'cost') === k ? ' selected' : ''}>${l}</option>`).join('')}</select><div class="sgp-note">The quick suggestion and Full design pick by it; the options also show the best for the other objectives.</div></td><td class="sgp-bnd">Cost: the Unit costs (Engine settings); weight: steel of all girders with the detail allowance; shallowest: the smallest web depth that passes (cost decides between equal depths)</td></tr>
++    <tr><td class="lbl">Maximum structure depth (clearance)</td><td class="val">${isFinite(hNow) ? `${f2(hNow)} in now` : '—'}</td><td>${sgpIn('suggest.maxH', 'max', 'in', 'num', 80)}<div class="sgp-note">Blank: no limit. Structure depth = deck t<sub>s</sub> + haunch + D + top and bottom flange thicknesses, at the deepest point; a candidate deeper than this is rejected (the fast sizing, the quick check and Full design).</div></td><td class="sgp-bnd">Project clearance (vertical clearance at the low point; owner manual)</td></tr><tr><td class="lbl">Live load deflection (Full design)</td><td class="val">${P.suggest.defl === 'on' ? 'applied' : 'not applied'}</td><td>${sgpSel('suggest.defl', [['off', 'Do not apply (optional criterion)'], ['on', 'Apply']])}</td><td class="sgp-bnd">L/${f0(num(P.limits.deflRatio) || 800)} (Limits tab; AASHTO 2.5.2.6.2, optional)${dO ? ` ${sgpOwnTxt('defl.ll', 'mandatory for this owner: checked as A1 on the Analysis tab')}` : ''}</td></tr>`;
+@@ -6734,0 +6750,6 @@ function sgpVarsHtml() {
++const SGP_OBJ = { cost: 'Lowest cost', wt: 'Lowest steel weight', shallow: 'Shallowest depth (cost as tie-break)' };
++const SGP_TAG = { cost: 'Lowest cost', wt: 'Lowest steel weight', shallow: 'Shallowest', shallower: 'Shallower web, close on cost', deeper: 'Deeper web, close on cost', nbm: 'One girder fewer', nbp: 'One girder more' };
++// structure depth (SGP2): deck t_s + haunch + D + the top and bottom flange thicknesses, the deepest point
++function sgpH(top, bot, D) { const t = top.map(r => ({ L: num(r.L), b: num(r.b), t: num(r.t) })), b = bot.map(r => ({ L: num(r.L), b: num(r.b), t: num(r.t) })); if (!t.length || !b.length) return NaN; sgLists(t, b, []);
++  const xs = [...new Set([...t, ...b].flatMap(r => [r.x0, r.x1]))].sort((p, q) => p - q); let m = 0; for (let i = 0; i < xs.length - 1; i++) { if (xs[i + 1] - xs[i] < 1e-6) continue; const x = (xs[i] + xs[i + 1]) / 2; m = Math.max(m, sgAt(t, x).t + sgAt(b, x).t); }
++  return num(P.bridge.ts) + num(P.bridge.haunch) + D + m; }
+@@ -6746,4 +6767,5 @@ function sgpOptCur() {
+-function sgpOptSG() {
+-  const s = SG; if (!s || s.errors.length || SG_KEY !== sgKey()) return null;
+-  const fresh = s.full ? SG_FULL && SG_FULL.key === sgKey() : s.quick && s.quick.qk === sgQKey(); if (!fresh) return null;
+-  const Pg = { ...P, girder: sgGirder() }, m = buildModel(Pg); if (m.errors.length) return { name: s.full ? 'Full design' : 'Quick suggestion', err: m.errors[0] };
++function sgpOptSG(s0, i) {   // a quick suggestion or Full design result (SG, or option i of the short list) with the girder count Locked
++  const s = s0 || SG; if (!s || s.errors.length) return null;
++  if (!s0) { if (SG_KEY !== sgKey()) return null; const fresh = s.full ? SG_FULL && SG_FULL.key === sgKey() : s.quick && s.quick.qk === sgQKey(); if (!fresh) return null; }
++  const strip = l => l.map(r => { const o = { L: r.L, t: r.t }; if (r.b !== undefined) o.b = r.b; return o; });
++  const Pg = { ...P, girder: { ...P.girder, D: s.D, web: strip(s.web), top: strip(s.top), bot: strip(s.bot), splices: [...s.splices] } }, m = buildModel(Pg); if (m.errors.length) return { name: s.full ? 'Full design' : 'Quick suggestion', err: m.errors[0] };
+@@ -6750,0 +6773 @@ function sgpOptSG() {
++  const ref = i != null ? 'alt:' + i : 'sg';
+@@ -6754,5 +6777,54 @@ function sgpOptSG() {
+-    r: g ? g.r : null, gov: g ? sgGovTxt(g, s.spans) : Q && Q.state === 'checking' ? 'checking…' : 'not checked', pass: s.full ? !!s.full.passed : Q && Q.state === 'done' ? !!Q.pass : null, rec: true,
+-    apply: 'sg', link: ['suggest', 'sg-sum', 'Suggest tab: derivation, checks and the detailed comparison'] };
+-}
+-function sgpOptWS() {   // girder count varying: the full design of the best counts when done for these inputs, otherwise the fast study (best 3 by its objective)
+-  const out = [];
++    r: g ? g.r : null, gov: g ? sgGovTxt(g, s.spans) : Q && Q.state === 'checking' ? 'checking…' : 'not checked', pass: s.full ? !!s.full.passed : Q && Q.state === 'done' ? !!Q.pass : null, rec: i == null || i === 0,
++    apply: ref, link: ['suggest', 'sg-sum', 'Show the work: derivation, checks and comparison (Suggest tab)', ref] };
++}
++/* SGP2 short list (girder count Locked): after a quick suggestion or Full design, distinct options besides the recommended one (the objective's pick):
++   the best for each other objective, and the nearest shallower and deeper web depths whose cost is within SGP_NEAR of the cheapest. Quick: each found with
++   the engines themselves (suggestLayout with that objective, or at that depth: opts.D) and checked like the quick suggestion (suggestQuickCheck);
++   Full design: chosen among the candidates Full design refined (full.outs). Every option respects the modes (same settings). SGP_ALT: { kind, key, list, state } */
++const SGP_NEAR = 0.03;
++let SGP_ALT = null, SGP_WANT = '';
++const sgpCandKey = c => [c.D, c.webType || c.wt, c.doR, c.twC || 0, c.spacing || 0, c.spPier ?? 0].join('|');
++function sgpQuickMerge(base, r, qk) {   // the same merge as sgQuickStart: the checked quick suggestion
++  const q = { state: 'done', qk, pass: r.pass, changed: r.changed, iters: r.iters, note: r.note, ms: r.ms, pierSet: r.pierSet, spPier: r.spPier, pierAlts: r.pierAlts, check: r.V.check, dOK: r.V.dOK, max0: r.V0.check.max, web0: r.V0.check.rWeb, pass0: r.V0.check.max <= 1.0005 && r.V0.check.rWeb <= 1.0005 && r.V0.dOK && !r.V0.check.oos, fastCost: base.cost };
++  const pbV = base.webType === 'stiffened' && r.V.cost.bays ? { cost: r.V.cost, bays: r.V.cost.bays } : {};
++  let S = r.changed ? { ...base, top: r.lay.top, bot: r.lay.bot, web: r.lay.web, tw: r.lay.tw, splices: r.lay.splices, cost: r.V.cost, ...pbV, quick: q } : { ...base, ...pbV, quick: q };
++  if (r.pierSet) S = { ...S, cost: r.V.cost, spPier: r.spPier }; return S; }
++function sgpAltKey(kind) { return JSON.stringify([kind, sgQKey(), kind === 'full' && SG_FULL ? SG_FULL.at : 0]); }
++function sgpAltValid() { return SGP_ALT && SGP_ALT.key === sgpAltKey(SGP_ALT.kind) ? SGP_ALT : null; }
++const sgpPass = s => s.full ? !!s.full.passed : !!(s.quick && s.quick.state === 'done' && s.quick.pass);
++function sgpTagAll(list) {   // tags: the best of each objective among the passing options (all options when none passes)
++  const pass = list.filter(o => sgpPass(o.sg)), pool = pass.length ? pass : list, tag = (k, cmp) => { const b = pool.slice().sort(cmp)[0]; if (b && !b.tags.includes(k)) b.tags.unshift(k); };
++  list.forEach(o => { o.tags = o.tags.filter(t => !['cost', 'wt', 'shallow'].includes(t)); });
++  tag('shallow', (a, b) => a.sg.D - b.sg.D || a.sg.cost.total - b.sg.cost.total); tag('wt', (a, b) => a.sg.cost.wTot - b.sg.cost.wTot || a.sg.cost.total - b.sg.cost.total); tag('cost', (a, b) => a.sg.cost.total - b.sg.cost.total); }
++async function sgpAltQuick() {
++  const base = SG, P0 = clone(P), qk = sgQKey(), A = SGP_ALT = { kind: 'quick', key: sgpAltKey('quick'), list: [{ sg: base, tags: [] }], state: 'running', f: 0, msg: 'Starting…', t0: Date.now(), cancel: false };
++  const tick = () => new Promise(r => setTimeout(r, 0)), tries = [], obj = P0.suggest.obj || 'cost', fk = c => [c.D, c.webType, c.doR, c.twC || 0].join('|');
++  ['cost', 'wt', 'shallow'].filter(o => o !== obj).forEach(o => tries.push({ tag: o, P: { ...P0, suggest: { ...P0.suggest, obj: o } } }));
++  const okc = (base.rec.cands || []).filter(c => c.ok), c0 = okc.slice().sort((a, b) => a.cost.total - b.cost.total)[0];
++  if (c0) { const near = okc.filter(c => c.cost.total <= c0.cost.total * (1 + SGP_NEAR) && c.D !== base.D), sh = near.filter(c => c.D < base.D).sort((a, b) => b.D - a.D)[0], dp = near.filter(c => c.D > base.D).sort((a, b) => a.D - b.D)[0];
++    if (sh) tries.push({ tag: 'shallower', P: P0, D: sh.D }); if (dp) tries.push({ tag: 'deeper', P: P0, D: dp.D }); }
++  const seen = new Map([[fk(base), A.list[0]]]);
++  for (let i = 0; i < tries.length; i++) { const t = tries[i]; if (A.cancel || SGP_ALT !== A) return;
++    A.f = i / tries.length; A.msg = `${SGP_TAG[t.tag]}: fast sizing`; await tick(); if (A.cancel || SGP_ALT !== A) return;
++    let f; try { f = t.D ? suggestLayout(t.P, { D: t.D }) : suggestLayout(t.P); } catch (e) { console.error(e); continue; } if (!f || f.errors.length) continue;
++    const dup = seen.get(fk(f)); if (dup) { if (!dup.tags.includes(t.tag)) dup.tags.push(t.tag); continue; }
++    const prog = (ff, m) => { A.f = (i + ff) / tries.length; A.msg = `${SGP_TAG[t.tag]}: ${m}`; };
++    let r = null; try { r = await suggestQuickCheck(t.P, f, prog, () => A.cancel || SGP_ALT !== A); } catch (e) { console.error(e); continue; }
++    if (!r) return; if (r.err) continue; const o = { sg: sgpQuickMerge(f, r, qk), tags: [t.tag] }; seen.set(fk(f), o); A.list.push(o); }
++  sgpTagAll(A.list); A.state = 'done'; A.f = 1; }
++function sgpAltFull() {
++  const s = SG, outs = (s.full && s.full.outs) || [], A = SGP_ALT = { kind: 'full', key: sgpAltKey('full'), list: [{ sg: s, tags: [] }], state: 'done' };
++  const bi = s.full.cands.findIndex(c => c.best), best = outs[bi], seen = new Map(); if (best) seen.set(sgpCandKey(best), A.list[0]);
++  const pick = (o, tag) => { if (!o) return; const k = sgpCandKey(o), d = seen.get(k); if (d) { if (!d.tags.includes(tag)) d.tags.push(tag); return; }
++    const sh = sgFullShape({ ...s, cost: s.full.fastCost }, o, outs); sh.full.outs = outs; const q = { sg: sh, tags: [tag] }; seen.set(k, q); A.list.push(q); };
++  const pass = outs.filter(q => q.pass), obj = P.suggest.obj || 'cost';
++  ['cost', 'wt', 'shallow'].filter(o => o !== obj).forEach(o => pick(pass.slice().sort(sgObjCmp(o))[0], o));
++  const c0 = pass.slice().sort((a, b) => a.cost.total - b.cost.total)[0];
++  if (c0 && best) { const near = pass.filter(q => q.cost.total <= c0.cost.total * (1 + SGP_NEAR) && q.D !== best.D);
++    pick(near.filter(q => q.D < best.D).sort((a, b) => b.D - a.D || a.cost.total - b.cost.total)[0], 'shallower'); pick(near.filter(q => q.D > best.D).sort((a, b) => a.D - b.D || a.cost.total - b.cost.total)[0], 'deeper'); }
++  sgpTagAll(A.list); }
++function sgpOptWS() {   // girder count varying: the full design of the best counts when done for these inputs, otherwise the fast study; the best of each objective, and one girder more and fewer than the recommended (SGP2)
++  const obj = P.suggest.obj || 'cost', cmp = { cost: (a, b) => (a.cost ?? Infinity) - (b.cost ?? Infinity) || a.tot - b.tot, wt: (a, b) => a.tot - b.tot || (a.cost ?? 0) - (b.cost ?? 0), shallow: (a, b) => a.D - b.D || (a.cost ?? 0) - (b.cost ?? 0) };
++  const pickList = (rows, okf) => { const ok = rows.filter(r => !r.err), pool = ok.filter(okf).length ? ok.filter(okf) : ok, out = [], add = (r, t) => { if (!r) return; let o = out.find(q => q.r === r); if (!o) { o = { r, tags: [] }; out.push(o); } if (!o.tags.includes(t)) o.tags.push(t); };
++    const best = pool.slice().sort(cmp[obj])[0]; add(best, obj); ['cost', 'wt', 'shallow'].filter(o => o !== obj).forEach(o => add(pool.slice().sort(cmp[o])[0], o));
++    if (best) { add(ok.find(r => r.N === best.N - 1), 'nbm'); add(ok.find(r => r.N === best.N + 1), 'nbp'); } return { out, best }; };
+@@ -6760,2 +6832,2 @@ function sgpOptWS() {   // girder count varying: the full design of the best cou
+-    const best = wsfPick(WSF.res), ok = WSF.res.filter(r => !r.err).sort((a, b) => (b === best) - (a === best) || (b.pass - a.pass) || (P.ws.obj === 'nb' ? a.N - b.N : a.psf - b.psf));
+-    ok.slice(0, 3).forEach(r => out.push({ name: `${r.N} girders`, sub: 'Full design of the study\'s best counts', nb: r.N, S: r.S, oh: [r.oh, r.oh], D: r.D, tw: r.girder.web.map(w => w.t), top: r.girder.top, bot: r.girder.bot, nTr: null, spl: r.girder.splices,
++    const { out, best } = pickList(WSF.res, r => r.pass);
++    return out.map(({ r, tags }) => ({ name: `${r.N} girders`, sub: 'Full design of the study\'s best counts', tags, nb: r.N, S: r.S, oh: [r.oh, r.oh], D: r.D, tw: r.girder.web.map(w => w.t), top: r.girder.top, bot: r.girder.bot, nTr: null, spl: r.girder.splices,
+@@ -6763,2 +6835 @@ function sgpOptWS() {   // girder count varying: the full design of the best cou
+-      r: Math.max(r.fMax, r.fWeb), gov: 'largest flange or web ratio of the final verification', pass: !!r.pass, rec: r === best, apply: 'wsf:' + WSF.res.indexOf(r), link: ['suggest', 'ws-fd', 'Suggest tab: girder-count study and its Full design'] }));
+-    return out;
++      r: Math.max(r.fMax, r.fWeb), gov: 'largest flange or web ratio of the final verification', pass: !!r.pass, rec: r === best, apply: 'wsf:' + WSF.res.indexOf(r), link: ['suggest', 'ws-fd', 'Show the work: girder-count study and its Full design (Suggest tab)'] }));
+@@ -6767,5 +6838,4 @@ function sgpOptWS() {   // girder count varying: the full design of the best cou
+-    const best = wsPick(WS.res), ok = WS.res.filter(r => !r.err), pass = ok.filter(r => !r.fails.length), fail = ok.filter(r => r.fails.length);
+-    pass.sort(P.ws.obj === 'nb' ? (a, b) => a.N - b.N || a.psf - b.psf : (a, b) => a.psf - b.psf || a.N - b.N); fail.sort((a, b) => a.gov.r - b.gov.r || a.psf - b.psf);
+-    [...pass, ...fail].slice(0, 3).forEach(r => out.push({ name: `${r.N} girders`, sub: 'girder-count study (fast sizing: not checked for strength)', nb: r.N, S: r.S, oh: [r.oh, r.oh], D: r.D, tw: r.girder.web.map(w => w.t), top: r.girder.top, bot: r.girder.bot, nTr: null, spl: r.girder.splices,
+-      cf: num(P.framing.spacing), cfP: sgPierCur(P), nFr: null, st: sgpStiffTxt(r.webType, !!r.framing.bays, null, r.framing.doRatio), wt: r.tot, psf: r.psf, cost: null,
+-      r: r.gov.r, gov: `layout checks only${r.gov.id ? ` (${r.gov.id})` : ''}; run Full design for strength`, pass: r.fails.length ? false : null, rec: r === best, apply: 'ws:' + WS.res.indexOf(r), link: ['suggest', 'ws-tbl', 'Suggest tab: girder-count study table'] }));
++    const { out, best } = pickList(WS.res, r => !r.fails.length);
++    return out.map(({ r, tags }) => ({ name: `${r.N} girders`, sub: 'girder-count study (fast sizing: not checked for strength)', tags, nb: r.N, S: r.S, oh: [r.oh, r.oh], D: r.D, tw: r.girder.web.map(w => w.t), top: r.girder.top, bot: r.girder.bot, nTr: null, spl: r.girder.splices,
++      cf: num(P.framing.spacing), cfP: sgPierCur(P), nFr: null, st: sgpStiffTxt(r.webType, !!r.framing.bays, null, r.framing.doRatio), wt: r.tot, psf: r.psf, cost: r.cost,
++      r: r.gov.r, gov: `layout checks only${r.gov.id ? ` (${r.gov.id})` : ''}; run Full design for strength`, pass: r.fails.length ? false : null, rec: r === best, apply: 'ws:' + WS.res.indexOf(r), link: ['suggest', 'ws-tbl', 'Show the work: girder-count study table (Suggest tab)'] }));
+@@ -6773 +6843 @@ function sgpOptWS() {   // girder count varying: the full design of the best cou
+-  return out;
++  return [];
+@@ -6781,0 +6852 @@ function sgpTable(opts) {
++    ['Structure depth', o => { const h = sgpH(o.top, o.bot, o.D), mH = num(P.suggest.maxH); return isFinite(h) ? `<span class="${mH > 0 && h > mH + 1e-9 ? 'sgp-bad' : ''}">${f2(h)} in</span>${mH > 0 ? ` (max. ${f2(mH)})` : ''}` : '—'; }],
+@@ -6788 +6859 @@ function sgpTable(opts) {
+-  const head = opts.map((o, i) => `<th class="${i ? 'sgp-oh' : 'sgp-ch'}"><b>${esc(o.name)}</b>${o.rec ? ' <span class="badge pass">Recommended</span>' : ''}<span>${esc(o.sub || '')}</span></th>`).join('');
++  const head = opts.map((o, i) => `<th class="${i ? 'sgp-oh' : 'sgp-ch'}"><b>${esc(o.name)}</b>${o.rec ? ' <span class="badge pass">Recommended</span>' : ''}${(o.tags || []).length ? `<div class="sgp-tags">${o.tags.map(t => `<i>${esc(SGP_TAG[t] || t)}</i>`).join('')}</div>` : ''}<span>${esc(o.sub || '')}</span></th>`).join('');
+@@ -6790 +6861 @@ function sgpTable(opts) {
+-  const foot = `<tr class="sgp-foot"><td></td>${opts.map((o, i) => `<td>${o.apply ? `<button type="button" class="btn btn-primary sgp-apply" data-sgpapply="${o.apply}">Apply</button>` : i ? '' : '<span class="sgp-gov">in use</span>'}${o.link ? ` <a href="#" class="sgp-go" data-sgpgo="${o.link[0]}|${o.link[1]}">${esc(o.link[2])}</a>` : ''}</td>`).join('')}</tr>`;
++  const foot = `<tr class="sgp-foot"><td></td>${opts.map((o, i) => `<td>${o.apply ? `<button type="button" class="btn btn-primary sgp-apply" data-sgpapply="${o.apply}">Apply</button>` : i ? '' : '<span class="sgp-gov">in use</span>'}${o.link ? ` <a href="#" class="sgp-go" data-sgpgo="${o.link[0]}|${o.link[1]}|${o.link[3] || ''}">${esc(o.link[2])}</a>` : ''}</td>`).join('')}</tr>`;
+@@ -6796 +6867,4 @@ function sgpResHtml() {
+-  if (lock) { const o = sgpOptSG(); if (o) opts.push(o); else why = SG && SG.errors && SG.errors.length && SG_KEY === sgKey() ? `<div class="alert fail"><b>Suggest needs valid inputs.</b> ${SG.errors.map(esc).join(' ')}</div>` : '<p class="sgp-note">No result for these settings yet: choose <b>Quick suggestion</b> (about a second) or <b>Full design</b>.</p>'; }
++  const A = lock ? sgpAltValid() : null;
++  if (lock && A && A.list.length) { opts = A.list.map((q, i) => { const o = sgpOptSG(q.sg, i); if (o && !o.err) { o.tags = q.tags; o.name = i ? (q.sg.full ? 'Full design option' : 'Quick option') : o.name; } return o; }).filter(Boolean);
++    if (A.state === 'running') why = '<p class="sgp-note">Finding the other options (best for each objective, close alternatives)…</p>'; else if (A.list.length === 1) why = '<p class="sgp-note">No other distinct option: the other objectives and the nearby depths within ' + Math.round(SGP_NEAR * 100) + '% of the cost give the same design (or none passes).</p>'; }
++  else if (lock) { const o = sgpOptSG(); if (o) opts.push(o); else why = SG && SG.errors && SG.errors.length && SG_KEY === sgKey() ? `<div class="alert fail"><b>Suggest needs valid inputs.</b> ${SG.errors.map(esc).join(' ')}</div>` : '<p class="sgp-note">No result for these settings yet: choose <b>Quick suggestion</b> (about a second) or <b>Full design</b>.</p>'; }
+@@ -6800 +6874 @@ function sgpResHtml() {
+-    <p class="sgp-note">Show the work: each option links to its derivation and checks in Preliminary sizing (the panel closes); the current design links to its Checks tab. Cost: the Unit costs (Engine settings), all girders, cross-frames and stiffeners included; the girder-count study's fast rows are not priced. Steel includes the ${f2(num(P.limits.allow))}% detail allowance. Apply writes the option into the Preliminary sizing inputs (girders, spacing and overhangs where the option changes them, plates, splices, stiffeners and cross-frame spacing; Revert in Preliminary sizing undoes it); in Preliminary designer mode GirderDetail then updates every module.</p>${SGP_MSG ? `<div class="alert info">${SGP_MSG}</div>` : ''}`;
++    <p class="sgp-note">Options: the recommended one (the objective's pick), the best for each other objective, and ${lock ? `the nearest shallower and deeper web depths within ${Math.round(SGP_NEAR * 100)}% of the lowest cost` : 'one girder fewer and one more than the recommended count'}, each within your modes and constraints; an option found more than once lists all its labels. Show the work: each option links to its derivation and checks in Preliminary sizing (the panel closes); the current design links to its Checks tab. Cost: the Unit costs (Engine settings), all girders, cross-frames and stiffeners included; the girder-count study's fast rows are not priced. Steel includes the ${f2(num(P.limits.allow))}% detail allowance. Apply writes the option into the Preliminary sizing inputs (girders, spacing and overhangs where the option changes them, plates, splices, stiffeners and cross-frame spacing; Revert in Preliminary sizing undoes it); in Preliminary designer mode GirderDetail then updates every module.</p>${SGP_MSG ? `<div class="alert info">${SGP_MSG}</div>` : ''}`;
+@@ -6806,0 +6881 @@ function sgpBusy() {
++  const A = sgpAltValid(); if (sgpNbLock() && A && A.state === 'running') return { alt: true, what: 'Other options', f: A.f || 0, msg: A.msg, t0: A.t0, cancel: () => { A.cancel = true; A.state = 'done'; sgpTagAll(A.list); } };
+@@ -6810 +6885 @@ function sgpBusy() {
+-function sgpQuick() { if (sgpBusy()) return; SGP_MSG = '';
++function sgpQuick() { const b = sgpBusy(); if (b && !b.alt) return; if (b) b.cancel(); SGP_MSG = ''; SGP_ALT = null; SGP_WANT = '';   // a new run replaces the search for other options
+@@ -6811,0 +6887 @@ function sgpQuick() { if (sgpBusy()) return; SGP_MSG = '';
++  SGP_WANT = 'quick|' + sgKey();
+@@ -6813 +6889 @@ function sgpQuick() { if (sgpBusy()) return; SGP_MSG = '';
+-function sgpFull() { const b = sgpBusy(); if (b && !b.bg) return; SGP_MSG = '';
++function sgpFull() { const b = sgpBusy(); if (b && !b.bg && !b.alt) return; if (b && b.alt) b.cancel(); SGP_MSG = ''; SGP_ALT = null; SGP_WANT = sgpNbLock() ? 'full|' + sgKey() : '';
+@@ -6819 +6895 @@ function sgpApply(a) {
+-  if (a === 'sg') applySuggestion(); else if (a.startsWith('wsf:')) wsfApply(+a.slice(4)); else if (a.startsWith('ws:')) wsApply(+a.slice(3));
++  if (a.startsWith('alt:')) { if (sgpAltUse(+a.slice(4))) applySuggestion(); } else if (a === 'sg') applySuggestion(); else if (a.startsWith('wsf:')) wsfApply(+a.slice(4)); else if (a.startsWith('ws:')) wsApply(+a.slice(3));
+@@ -6821,0 +6898,2 @@ function sgpApply(a) {
++function sgpAltUse(i) {   // make option i of the short list the Suggest result (SG): Apply and the Suggest tab's derivation then use it
++  const A = sgpAltValid(), q = A && A.list[i]; if (!q) return false; SGQ_RUN++; SGQ_APPLY = 0; SG = q.sg; SG_KEY = sgKey(); SG_FULL = q.sg.full ? { key: sgKey(), at: SG_FULL ? SG_FULL.at : Date.now() } : null; if (A.kind === 'full') A.key = sgpAltKey('full'); return true; }
+@@ -6826,0 +6905,4 @@ function sgpTick(force) {
++  if (SGP_WANT && SGP_WANT.slice(SGP_WANT.indexOf('|') + 1) !== sgKey()) SGP_WANT = '';   // the inputs changed since the run was asked for
++  if (SGP_WANT && sgpNbLock() && !SG_RUN && !SGP_FAST && !sgpAltValid() && SG && !SG.errors.length && SG_KEY === sgKey()) {   // SGP2: the short list after a run
++    if (SGP_WANT.startsWith('full|') && SG.full && SG_FULL && SG_FULL.key === sgKey()) { SGP_WANT = ''; try { sgpAltFull(); } catch (e) { console.error(e); } }
++    else if (SGP_WANT.startsWith('quick|') && !SG.full && SG.quick && SG.quick.state === 'done' && SG.quick.qk === sgQKey()) { SGP_WANT = ''; sgpAltQuick().catch(e => console.error(e)); } }
+@@ -6829,2 +6911,2 @@ function sgpTick(force) {
+-  const q = $('#sgp-quick'), fu = $('#sgp-full'); if (q) q.disabled = !!b; if (fu) fu.disabled = !!b && !b.bg;   // Full design may start while the quick suggestion is being checked
+-  const sig = JSON.stringify([!!b, SG_KEY === sgKey(), SG && SG.full ? 1 : 0, SG && SG.quick && [SG.quick.state, SG.quick.qk === sgQKey()], SG_FULL && SG_FULL.key, WS && [WS.done, WS.key === wsKey(), WS.res.length], WSF && [WSF.running, WSF.res.length, WSF.key === wsKey()], SGC && [SGC.state, SGC.key === sgcKey()], P.bridge, P.girder, P.framing, P.suggest, P.ws, P.costs, SGP_MSG]);
++  const q = $('#sgp-quick'), fu = $('#sgp-full'); if (q) q.disabled = !!b && !b.alt; if (fu) fu.disabled = !!b && !b.bg && !b.alt;   // Full design may start while the quick suggestion is being checked
++  const sig = JSON.stringify([!!b, SG_KEY === sgKey(), SG && SG.full ? 1 : 0, SG && SG.quick && [SG.quick.state, SG.quick.qk === sgQKey()], SG_FULL && SG_FULL.key, WS && [WS.done, WS.key === wsKey(), WS.res.length], WSF && [WSF.running, WSF.res.length, WSF.key === wsKey()], SGC && [SGC.state, SGC.key === sgcKey()], SGP_ALT && [SGP_ALT.state, SGP_ALT.list.length, SGP_ALT.key], P.bridge, P.girder, P.framing, P.suggest, P.ws, P.costs, SGP_MSG]);
+@@ -6856 +6938,2 @@ function sgpInit() {
+-  el.addEventListener('change', e => { if (e.target.dataset.t === 'bool' || e.target.tagName === 'SELECT') { onScalar(e); sgpRenderVars(); } });
++  el.addEventListener('change', e => { if (e.target.id === 'sgp-obj') { if (e.target.value === 'cost' && !P.suggest.obj) return; P.suggest.obj = e.target.value; SGP_ALT = null; sgpRenderVars(); schedule(); sgpTick(true); return; }   // SGP2: the objective (field written only when chosen)
++    if (e.target.dataset.t === 'bool' || e.target.tagName === 'SELECT') { onScalar(e); sgpRenderVars(); } });
+@@ -6860 +6943 @@ function sgpInit() {
+-    const go = e.target.closest('[data-sgpgo]'); if (go) { e.preventDefault(); const [t, a] = go.dataset.sgpgo.split('|'); sgpGo(t, a); return; }
++    const go = e.target.closest('[data-sgpgo]'); if (go) { e.preventDefault(); const [t, a, r] = go.dataset.sgpgo.split('|'); if (r && r.startsWith('alt:')) sgpAltUse(+r.slice(4)); sgpGo(t, a); return; }
+```
