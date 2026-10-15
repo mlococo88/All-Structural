@@ -1785,3 +1785,467 @@ function CamberBreakdown({R,fig}){
 - **How verified:** see the PR description (Node: full `computeAll` JSON and reactions payload identical main vs branch for the standard cases; headless Chromium main vs branch on every tab; screenshots of the OOS case).
 - **Other copies:** none in this tool. GirderDetail (`Steel Bridge Beam Modules.html`) has its own plastic-moment code with the same gap (reported, not changed: one tool per PR).
 - **Open items:** none for ST-Girder.
+
+## 2026-10-15 — PR: claude/gd-st-owner-rules (GD49: the bridge owner's load rules from GirderDetail applied to ST-Girder's checks; cross-tool PR with Steel Bridge Beam Modules.html and HANDOFF.md §4.9; engineer decision 2026-10-15; PR link added after merge)
+
+### GD49. Owner load rules from GirderDetail (`ownerRules`)   [LOAD FACTOR AND SECTION PROPERTY CHANGE for GirderDetail imports carrying ownerRules — §4 callout]
+- **Where:** new `LF_ST`, `ownLFOf`, `lfFac`, `lfS`, `lfP`, `llD`, `ownLines`, `OwnBanner` (anchor `/* Owner load rules from GirderDetail (GD49`); `buildExternal` (`hasPL`, `M_PLpos`, `M_PLneg`, `V_PLq`); `computeAll`: `OWN`, `gDC = 1.25η`, `gDW = 1.50η`, `gLL = 1.75ηm`, `gS2 = 1.30m`; `deck` with `haunch: 0` when `OWN.h0` (properties only; `loadsCalc` keeps `inp.deck`); `plOn`; stations `MlD, MlnD, VlD` (= Ml, Mln, Vl without a pedestrian part) and `Mu, Mun, Vu` with the owner factors; `stageF(…, des)`; Service II `stageF(st,1,1,1,gS2,true)`; `yieldMy` (factored permanent with η); `fStg`/`fStr`; `rating.target`; result fields `lf`, `deckIn`. Displays: Stresses (Service II factor), Diagrams (other-span envelopes and callouts), Flexure (factored components), Shear note, Rating tab (target), report (1. Objectives list, 2. Input parameters "Owner load rules (from GirderDetail)" with the factors worked, Demands "Load combinations (owner load rules …)", Rating target line, Appendix), `CrossSection` (drawn with the entered haunch), banner on every tab, pull dialog / auto-load summary line, `gdCheck` validation of `ownerRules` and `M_PL…`/`V_PL…`.
+- **Before:** `const Mu =1.25*(M1+M2)+1.5*Mw+1.75*Ml; … const Vu=Math.abs(1.25*(V1+V2)+1.5*Vw)+1.75*Math.abs(Vl);`, `stageF(st,1,1,1,1.30)`, `stageF(st,1.25,1.25,1.5,1.75)`, `const deck={...deck0, beff, fc:+deck0.fc};`.
+- **After:** `const Mu =gDC*(M1+M2)+gDW*Mw+gLL*MlD; … const Vu=Math.abs(gDC*(V1+V2)+gDW*Vw)+gLL*Math.abs(VlD);`, `stageF(st,1,1,1,gS2,true)`, `stageF(st,gDC,gDC,gDW,gLL,true)`, `const deck={...deck0, beff, fc:+deck0.fc, ...(OWN.h0?{haunch:0}:{})};`. Without `ownerRules` every factor is exactly 1.25, 1.5, 1.75, 1.30 (× 1) and MlD = Ml: results bit-identical.
+- **Governing provision:** AASHTO LRFD 10th Ed. (2024) 1.3.2.1 (Eq. 1.3.2.1-2), Table 3.4.1-1, 3.6.1.6; RIDOT BDM (April 2026) 1.3.1–1.3.3, 3.4.1.2, 6.5.1, 9.4.6; MassDOT LRFD Bridge Manual Part I 3.1.4.4, 3.5.1.2; CTDOT BRSDM V2 1.3.3–1.3.5, V1B Load Ratings; MBE 6A (rating unchanged).
+- **Check case 1 (built-in example, RIDOT, η_I = Yes, G2 span 1, x = 44 ft; M_DC1 = 1001.73, M_DC2 = 192.87, M_DW = 159.74, M_LL+IM = 1814.29 kip-ft; η = 1.05, m = 1.2):**
+  - Before: M_u = 1.25(1194.60) + 1.50(159.74) + 1.75(1814.29) = 1493.25 + 239.61 + 3175.01 = **4907.87** kip-ft (tool 4907.88).
+  - After: M_u = 1.3125(1194.60) + 1.575(159.74) + 2.205(1814.29) = 1567.91 + 251.59 + 4000.51 = **5820.01** kip-ft (tool 5820.02); GirderDetail Structural analysis Strength I at the same x: 5820.03.
+  - Strength flexure (+M) 0.509 → 0.627 (φM_n 9635 → 9289: haunch 0 and the 1.3R_hM_y cap with η); Neg flexure bottom flange 0.910 → 1.055 FAIL; Service II top 0.653 → 0.718; LL deflection 0.346 → 0.369 (haunch 0 only); inventory RF 1.205 → 1.190 (haunch 0 only), target 1.10 met.
+- **Check case 2 (xsA, RIDOT, G1 exterior, 75 psf pedestrian load added to LL+IM, x = 44 ft; M_DC1+DC2 = 1599.79, M_DW = 288.97, M_LL+IM+PL = 1963.80, M_PL = 307.06 kip-ft):** LL+IM used = 1963.80 − 307.06 + 307.06/1.2 = 1912.62; M_u = 1.3125(1599.79) + 1.575(288.97) + 2.205(1912.62) = 2099.72 + 455.13 + 4217.33 = **6772.18** kip-ft (tool 6772.18; GirderDetail 6772.18). Before 5869.84. Inventory RF 0.717 < 1.10: "below the target" (reported).
+- **Check case 3 (old payloads):** GirderDetail payloads without `ownerRules` (main build: built-in RIDOT G2, xsA RIDOT G1, built-in AASHTO G2) and the new payloads with `ownerRules` removed: every check, rating, station envelope, section property: **identical** to main. New AASHTO payload (η = 1, m = 1, haunch as entered): identical.
+- **How verified:** Babel transform of the JSX block; headless Chromium, main vs branch, the payloads auto-applied through `#gdpull`, `computeAll` JSON compared; GirderDetail → ST-Girder auto-open test 28/28 (http and file); banner, Rating and report text checked; no console errors.
+- **Other copies:** none.
+- **Open items:** the Deck tab (transverse deck design) is not changed by the owner rules (ask: should RIDOT's multiplier and η apply to the deck slab design too?); the owner rules apply only while GirderDetail's demands are in use (the built-in simple-span analysis has no owner).
+
+Diff (main → branch):
+
+```diff
+--- main stgirder.html
++++ branch stgirder.html
+@@ -2187,7 +2187,11 @@
+   // included, unfactored. Shears in the same MIDAS sign convention, so they are negated like V_LL (app + branch = −MIDAS − branch).
+   const hasFat=slice.some(s=>s.M_FATpos!==undefined&&s.M_FATneg!==undefined);
+   const hasFatV=hasFat&&slice.some(s=>s.V_FATpos!==undefined&&s.V_FATneg!==undefined);
+-  return { spanLen, slice, sel, hasDC1, hasDC1split, swExcl, hasFat, hasFatV,
++  // GD45/GD49 (2026-10-15): the pedestrian load alone (GirderDetail, optional M_PL…/V_PL…). V_PLq: the part of V_LL (the larger of |V_LL+|, |V_LL−|) that is PL
++  const hasPL=slice.some(s=>s.M_PLpos!==undefined||s.V_PLpos!==undefined);
++  return { spanLen, slice, sel, hasDC1, hasDC1split, swExcl, hasFat, hasFatV, hasPL,
++    M_PLpos:(x)=>interp('M_PLpos',x)*fPos, M_PLneg:(x)=>interp('M_PLneg',x)*fNeg,
++    V_PLq:(x)=>{const p=interp('V_LLpos',x)*fV,n=interp('V_LLneg',x)*fV; return Math.abs(p)>=Math.abs(n)? Math.sign(p)*interp('V_PLpos',x)*fV : Math.sign(n)*interp('V_PLneg',x)*fV;},
+     M_DC1steel:(x)=>interp('M_DC1steel',x),                              // k-ft (CF4)
+     M_FATpos:(x)=>interp('M_FATpos',x), M_FATneg:(x)=>interp('M_FATneg',x),
+     V_FATpos:(x)=>-interp('V_FATneg',x), V_FATneg:(x)=>-interp('V_FATpos',x),
+@@ -2369,9 +2373,49 @@
+     diffs:['C_b = 1.0 and one unbraced length L_b for the whole span (GirderDetail: C_b and L_b per location)',
+       'no Appendix A6 (web plastification) for negative flexure',
+       'shear without tension-field action (end-panel V_cr basis)',
+-      'fixed maximum load factors (1.25 DC, 1.50 DW, 1.75 LL; no minimum-factor combinations)'],
++      'fixed maximum load factors (1.25 DC, 1.50 DW, 1.75 LL; no minimum-factor combinations)'+(ext.ownerRules?'; the owner load rules GirderDetail sends with the demands (η, design load multiplier, haunch 0 in properties) are applied to them here':'')],
+     tbc:'Known differences to be confirmed by the engineer.'};
+ }
++/* Owner load rules from GirderDetail (GD49, engineer decision 2026-10-15; HANDOFF.md §4.9, optional field ownerRules). GirderDetail applies the bridge
++   owner's rules to its own checks and sends them with the demands; ST-Girder applies the same to its girder checks while those demands are in use:
++   - m: design load multiplier on HL-93 LL+IM at Strength I and Service II (RIDOT BDM 3.4.1.2: 1.2); not on the live-load deflection, fatigue,
++     constructibility or the load rating, and not on the pedestrian load (when the import has it in LL+IM, LL+IM used = (LL+IM+PL) − PL + PL/m);
++   - eta = max(eta_D eta_R eta_I, 0.95) on the Strength I maximum load factors (AASHTO LRFD 1.3.2.1; ST-Girder uses maximum factors only, so 1/eta
++     on the minimum factors does not arise);
++   - h0: haunch taken as 0 in every composite section property (RIDOT BDM 6.5.1/9.4.6, MassDOT 3.5.1.2); the haunch weight is in the imported DC1;
++   - rt: the owner's design rating target (inventory RF), shown against the Rating tab result (reported only).
++   ownLFOf(ext): the rules of a GirderDetail import; LF_ST (identity: m = eta = 1, h0 false) for any other import, a GirderDetail payload without
++   ownerRules (sent before 2026-10-15), or the built-in analysis. With LF_ST every factor is 1.25, 1.50, 1.75 and 1.30 exactly as before. */
++const LF_ST={on:false,o:'',manual:'',m:1,eta:1,etaN:1,eD:1,eR:1,eI:1,pr:1,h0:false,rt:null,rtKind:'',cite:{m:'',eta:'',h:'',rt:''}};
++function ownLFOf(ext){ const r=ext&&extFromGD(ext)&&ext.ownerRules; if(!r||typeof r!=='object') return LF_ST;
++  const pf=v=>{ v=+v; return isFinite(v)&&v>0? v : 1; }, lm=r.llMultiplier||{}, E=r.eta||{}, t=r.ratingTarget||null;
++  const m=pf(lm.m), eD=pf(E.D), eR=pf(E.R), eI=pf(E.I), pr=eD*eR*eI;
++  const eta=E.max!=null&&+E.max>0? +E.max : Math.max(pr,0.95), etaN=E.min!=null&&+E.min>0? +E.min : Math.min(1/pr,1);
++  return {on:true, o:String(r.owner||''), manual:String(r.manual||''), m, eta, etaN, eD, eR, eI, pr, h0:r.haunchInProperties===false,
++    rt:t&&+t.rf>0? +t.rf : null, rtFat:t&&+t.fatigue>0? +t.fatigue : null, rtKind:t?String(t.kind||''):'',
++    cite:{m:String(lm.cite||''), eta:String(E.cite||''), h:String(r.haunchCite||''), rt:t?String(t.cite||''):''}}; }
++// the girder-check load factors of a rule set: Strength I maximum (DC, DW, LL) and Service II LL
++function lfFac(L){ return {gDC:1.25*L.eta, gDW:1.5*L.eta, gLL:1.75*L.eta*L.m, gS2:1.30*L.m}; }
++const lfS=R=>(R&&R.lf)||{...LF_ST,...lfFac(LF_ST),plOn:false};
++// a factor as text: the AASHTO value exactly as before when no owner rule changes it
++const lfP=(v,base)=>Math.abs(v-(+base))<1e-12? base : fmt(v,3);
++// LL+IM for the owner combinations (GD45): (LL+IM+PL) − PL + PL/m, so that m × it = m(LL+IM) + PL; unchanged without a pedestrian part or with m = 1
++const llD=(v,q,m)=>q&&m!==1? v-q+q/m : v;
++// the owner rules in words (banner, Inputs tab, report 1 and 2)
++function ownLines(R){ const L=R&&R.lf; if(!L||!L.on) return null; const f3=v=>fmt(v,3), out=[];
++  out.push(L.m!==1? 'Design load multiplier m = '+fmt(L.m,2)+' on HL-93 LL+IM at Strength I and Service II'+(L.cite.m?' ('+L.cite.m+')':'')+'; not on the live-load deflection, fatigue, constructibility or the load rating'+(L.plOn?'; not on the pedestrian load: LL+IM used = (LL+IM+PL) − PL + PL/m':'')+'.' : 'No design load multiplier (m = 1).');
++  out.push('Load modifier η = η_D·η_R·η_I = '+fmt(L.eD,2)+' × '+fmt(L.eR,2)+' × '+fmt(L.eI,2)+' = '+f3(L.pr)+(L.cite.eta?' ('+L.cite.eta+')':'')+': Strength I maximum load factors × η = '+f3(L.eta)+' (AASHTO LRFD 1.3.2.1; Eq. 1.3.2.1-2 with η ≥ 0.95). The minimum factors × 1/η = '+f3(L.etaN)+' do not arise: ST-Girder uses maximum factors only. Service II, fatigue, constructibility and the rating: η = 1.');
++  out.push('Factors used: Strength I γ_DC = 1.25η = '+f3(L.gDC)+', γ_DW = 1.50η = '+f3(L.gDW)+', γ_LL = 1.75ηm = '+f3(L.gLL)+'; Service II γ_LL = 1.30m = '+f3(L.gS2)+'.');
++  out.push(L.h0? 'Haunch taken as 0 in every composite section property (elastic n and 3n sections, cracked section, M_p)'+(L.cite.h?' ('+L.cite.h+')':'')+'; its weight is in the imported DC1; the drawing shows the haunch as entered.' : 'Haunch in the composite section properties as entered.');
++  if(L.rt) out.push('Design rating target: HL-93 inventory RF ≥ '+fmt(L.rt,2)+(L.rtFat?' (fatigue '+fmt(L.rtFat,2)+')':'')+(L.cite.rt?' ('+L.cite.rt+')':'')+'; checked on the Rating tab, reported only (no resizing).');
++  else if(L.rtKind==='report') out.push('Design load rating reported (no target)'+(L.cite.rt?' ('+L.cite.rt+')':'')+'; see the Rating tab.');
++  return out; }
++function OwnBanner({R,go}){ const L=R&&R.ok&&R.lf; if(!L||!L.on) return null; const ls=ownLines(R);
++  return <div className="callout" style={{marginTop:0,marginBottom:0,borderLeftColor:'#7c3aed',background:'#f5f3ff'}}>
++    <b>Owner load rules from GirderDetail: {L.o||'—'}</b>{L.manual?<span style={{fontSize:11.5}}> · {L.manual}</span>:null}
++    <ul style={{fontSize:11.5,margin:'4px 0 0 18px',lineHeight:1.6,padding:0}}>{ls.map((t,i)=><li key={i}>{t}</li>)}</ul>
++    <div style={{fontSize:11.5,marginTop:4}}>Applied to every girder check while GirderDetail’s demands are in use; worked in the report, <i>2. Input parameters — Owner load rules</i> and <i>Demands — Load combinations</i>.{go?<span> Go to: <a href="#" onClick={e=>{e.preventDefault();go('inputs');}}>Inputs (imported demands)</a> · <a href="#" onClick={e=>{e.preventDefault();go('diagrams');}}>Diagrams (M_u, V_u)</a>{L.rt?<span> · <a href="#" onClick={e=>{e.preventDefault();go('rating');}}>Rating (target)</a></span>:null} · <a href="#" onClick={e=>{e.preventDefault();go('report');}}>Report</a></span>:null}</div>
++  </div>; }
+ function GdNote({ext,style}){
+   const n=gdNoteLines(ext); if(!n) return null;
+   return <div className="callout" style={{marginTop:0,marginBottom:12,borderColor:'var(--blue)',background:'#EEF4FF',...(style||{})}}>
+@@ -2711,6 +2755,8 @@
+ function computeAll(inp){
+   try{
+     const sec=inp.sec, mat=inp.mat, deck0=inp.deck, geom=inp.geom;
++    // GD49: the owner load rules of a GirderDetail import (identity otherwise): Strength I maximum factors and Service II LL factor
++    const OWN=ownLFOf(inp.external), LFc=lfFac(OWN), gDC=LFc.gDC, gDW=LFc.gDW, gLL=LFc.gLL, gS2=LFc.gS2;
+     // resolve grades
+     const Fyf=+mat.Fyf, Fyw=+mat.Fyw, Es=+mat.Es||29000, Fyc=Fyf, Fyt=Fyf;
+     const matR={...mat,Fyf,Fyw,Es,Fyc,Fyt};
+@@ -2721,7 +2767,7 @@
+     const extTrib = inp.loads.pos==='exterior' && deck0.extTribAuto!==false;
+     const tribFt = extTrib? (+geom.S)/2 + Math.max(+deck0.oh||0,0) : +geom.S;
+     const beff = deck0.beffAuto? tribFt*12 : +deck0.beff;
+-    const deck={...deck0, beff, fc:+deck0.fc};
++    const deck={...deck0, beff, fc:+deck0.fc, ...(OWN.h0?{haunch:0}:{})};   // GD49: haunch 0 in every composite property under the owner rule (the dead loads keep inp.deck)
+     // modular ratio
+     const EcDeck=Ec(deck.fc, +deck0.wc);
+     const nRaw=Es/EcDeck;
+@@ -2786,6 +2832,7 @@
+     const ext=buildExternal(inp.external,Lft0, extPerGirder? {pos:1,neg:1,v:1} :
+       {pos:(+inp.loads.extDFpos||1)*mpfExt, neg:(+inp.loads.extDFneg||1)*mpfExt, v:(+inp.loads.extDFv||1)*mpfExt});
+     const useExt=!!ext;
++    const plOn=OWN.m!==1&&useExt&&ext.hasPL&&inp.external.pedestrianInLL===true;   // GD45: the pedestrian load in LL+IM, taken without m
+     // SW-CONT (2026-10-13): the self-weight ST-Girder adds to an import with selfWeightExcluded:true is analysed on the
+     // continuous girder of the import (swContinuous); null = one span / no support layout → simple span w·x(L−x)/2 as before.
+     // SW-ED (2026-10-13): the selected span uses ST-Girder's current plates when they differ from the imported zones of that span.
+@@ -2848,10 +2895,13 @@
+       const Ml = useExt? Math.max(ext.M_LLpos(x),0) : llMomentAt(Lft,x)*Ld.dfm;   // +LL envelope
+       const Mln= useExt? Math.min(ext.M_LLneg(x),0) : 0;                          // −LL envelope
+       const Vl = useExt? ext.V_LL(x) : llShearAt(Lft,x)*Ld.dfv;
+-      const Mu =1.25*(M1+M2)+1.5*Mw+1.75*Ml;            // factored, +LL case
+-      const Mun=1.25*(M1+M2)+1.5*Mw+1.75*Mln;           // factored, −LL case
+-      const Vu=Math.abs(1.25*(V1+V2)+1.5*Vw)+1.75*Math.abs(Vl);
+-      return {x,si,M1,M2,Mw,Ml,Mln,V1,V2,Vw,Vl,Mu,Mun,Vu};
++      // GD49: owner factors (1.25, 1.50, 1.75 without owner rules); MlD, MlnD, VlD: LL+IM with the pedestrian part taken without m (GD45; = Ml, Mln, Vl otherwise)
++      const qM=plOn&&Ml>0? ext.M_PLpos(x):0, qMn=plOn&&Mln<0? ext.M_PLneg(x):0, qV=plOn? ext.V_PLq(x):0;
++      const MlD=plOn? llD(Ml,qM,OWN.m):Ml, MlnD=plOn? llD(Mln,qMn,OWN.m):Mln, VlD=plOn? llD(Math.abs(Vl),qV,OWN.m):Vl;
++      const Mu =gDC*(M1+M2)+gDW*Mw+gLL*MlD;            // factored, +LL case
++      const Mun=gDC*(M1+M2)+gDW*Mw+gLL*MlnD;           // factored, −LL case
++      const Vu=Math.abs(gDC*(V1+V2)+gDW*Vw)+gLL*Math.abs(VlD);
++      return {x,si,M1,M2,Mw,Ml,Mln,V1,V2,Vw,Vl,Mu,Mun,Vu,MlD,MlnD,VlD,...(plOn?{qM,qMn,qV}:{})};
+     });
+     const diag=stations;
+     const MuPeak=Math.max(...stations.map(d=>d.Mu)), VuPeak=Math.max(...stations.map(d=>d.Vu));
+@@ -2860,7 +2910,7 @@
+ 
+     // staged flange stresses at a station (kip-ft in → ksi). Sign: fB + = bottom tension; fT + = top compression.
+     // Section per component: DC1 → bare; others → composite (3n / n) when M ≥ 0, cracked (steel+rebar) when M < 0.
+-    const stageF=(st,g1,g2,gw,gll)=>{
++    const stageF=(st,g1,g2,gw,gll,des)=>{   // des (GD49): the owner combinations' LL+IM (MlD, MlnD; = Ml, Mln without a pedestrian part)
+       const sg=segP[st.si];
+       const one=(M,kind)=>{ let Sb,St;
+         if(kind==='dc1'){ Sb=sg.bare.Sb; St=sg.bare.StSteel; }
+@@ -2868,7 +2918,7 @@
+         else { Sb=sg.cr.Sb; St=sg.cr.St; }
+         return {fB:M*12/Sb, fT:M*12/St}; };
+       const dc=one(g1*st.M1,'dc1'), d2=one(g2*st.M2,'lt'), dw=one(gw*st.Mw,'lt');
+-      const lp=one(gll*st.Ml,'ll'), ln=one(gll*st.Mln,'ll');
++      const lp=one(gll*(des?st.MlD:st.Ml),'ll'), ln=one(gll*(des?st.MlnD:st.Mln),'ll');
+       return { pos:{fB:dc.fB+d2.fB+dw.fB+lp.fB, fT:dc.fT+d2.fT+dw.fT+lp.fT},
+                neg:{fB:dc.fB+d2.fB+dw.fB+ln.fB, fT:dc.fT+d2.fT+dw.fT+ln.fT},
+                parts:{dc,d2,dw,lp,ln} };
+@@ -2883,13 +2933,13 @@
+     const s2CoefLabel=s2Composite?'0.95R_hF_yf':'0.80R_hF_yf';
+     const chartS2=[];                                  // per-station Service II stresses for the Stresses tab charts
+     stations.forEach(st=>{ const sg=segP[st.si];
+-      const s=stageF(st,1,1,1,1.30), lim=s2Coef*sg.Rh*Fyf;
++      const s=stageF(st,1,1,1,gS2,true), lim=s2Coef*sg.Rh*Fyf;   // GD49: Service II γ_LL = 1.30m
+       chartS2.push({x:st.x, si:st.si, lim, Rh:sg.Rh,
+         bP:s.pos.fB, tP:s.pos.fT, bN:s.neg.fB, tN:s.neg.fT,
+         dc1B:s.parts.dc.fB, sidlB:s.parts.d2.fB+s.parts.dw.fB, llB:s.parts.lp.fB,
+         dc1T:s.parts.dc.fT, sidlT:s.parts.d2.fT+s.parts.dw.fT, llT:s.parts.lp.fT,
+         // moments (k-ft) and section moduli (in³) per stage, for the worked-calc picker
+-        M1:st.M1, M2:st.M2, Mw:st.Mw, Ml:st.Ml, Mln:st.Mln,
++        M1:st.M1, M2:st.M2, Mw:st.Mw, Ml:st.Ml, Mln:st.Mln, MlD:st.MlD,
+         SbBare:sg.bare.Sb, StBare:sg.bare.StSteel, Sb3n:sg.c3N.Sb, St3n:sg.c3N.StSteel,
+         Sbn:sg.cN.Sb, Stn:sg.cN.StSteel, SbCr:sg.cr.Sb, StCr:sg.cr.St,
+         dc1Bp:s.parts.dc.fB, d2Bp:s.parts.d2.fB, dwBp:s.parts.dw.fB, llBp:s.parts.lp.fB, lnBp:s.parts.ln.fB});
+@@ -2902,10 +2952,10 @@
+     });
+     // stress display object (kept shape: governing positive-flexure station)
+     const stMaxPos=stations.reduce((b,st)=>st.Mu>b.Mu?st:b,stations[0]);
+-    const sDisp=stageF(stMaxPos,1,1,1,1.30);
++    const sDisp=stageF(stMaxPos,1,1,1,gS2,true);
+     const sgDisp=segP[stMaxPos.si];
+-    const fTop={dc1:sDisp.parts.dc.fT, sid:sDisp.parts.d2.fT+sDisp.parts.dw.fT, ll:sDisp.parts.lp.fT/1.30, serv2:sDisp.pos.fT};
+-    const fBot={dc1:sDisp.parts.dc.fB, sid:sDisp.parts.d2.fB+sDisp.parts.dw.fB, ll:sDisp.parts.lp.fB/1.30, serv2:sDisp.pos.fB};
++    const fTop={dc1:sDisp.parts.dc.fT, sid:sDisp.parts.d2.fT+sDisp.parts.dw.fT, ll:sDisp.parts.lp.fT/gS2, serv2:sDisp.pos.fT};
++    const fBot={dc1:sDisp.parts.dc.fB, sid:sDisp.parts.d2.fB+sDisp.parts.dw.fB, ll:sDisp.parts.lp.fB/gS2, serv2:sDisp.pos.fB};
+     const fServLim=s2Coef*sgDisp.Rh*Fyf;
+     // optional LL deflection (2.5.2.6.2) — short-term composite at midspan segment
+     const EI=Es*segMid.cN.I;
+@@ -2935,8 +2985,8 @@
+     //   My = MD1 + MD2 + MAD,  MAD = S_n·(Fyf − f_D1 − f_D2) for each flange, lesser flange governs.
+     const contSpan = useExt && hasNeg;
+     const yieldMy=(st,sg)=>{
+-      const MD1=1.25*st.M1, MD2=1.25*st.M2+1.5*st.Mw;              // k-ft, factored permanent
+-      const fd=stageF(st,1.25,1.25,1.5,0).pos;                      // ksi, fB tension+, fT compression+
++      const MD1=gDC*st.M1, MD2=gDC*st.M2+gDW*st.Mw;              // k-ft, factored permanent (GD49: × η under the owner rules)
++      const fd=stageF(st,gDC,gDC,gDW,0).pos;                      // ksi, fB tension+, fT compression+
+       const MADb=sg.cN.Sb*(Fyf-fd.fB)/12, MADt=sg.cN.StSteel*(Fyf-fd.fT)/12;
+       const MyB=MD1+MD2+MADb, MyT=MD1+MD2+MADt;
+       return {MD1,MD2,fDb:fd.fB,fDt:fd.fT,MADb,MADt,MyB,MyT,My:Math.min(MyB,MyT)};
+@@ -2957,7 +3007,7 @@
+       chartFlex.push({x:st.x, capPos, capNeg, compact:sg.compact,
+         SxPos:sg.cN.Sb, SxNeg:sg.cr.St, fServLim:s2Coef*sg.Rh*Fyf});
+       // staged factored flange stresses (Strength I) at this station — computed once, reused below
+-      const fStg=stageF(st,1.25,1.25,1.5,1.75);
++      const fStg=stageF(st,gDC,gDC,gDW,gLL,true);   // GD49
+       // ── +M worked-calc record (compact → Mp basis · noncompact composite → stress basis) ──
+       const posC = sg.oos? {oos:true, compact:false, Mu:st.Mu, capPos:null, dc:NaN}
+         : sg.compact
+@@ -2994,7 +3044,7 @@
+     });
+     const sgPos=segP[posGov.si||0];
+     const stPos=stations.reduce((b,st)=>st.Mu>b.Mu?st:b,stations[0]);
+-    const fStr=stageF(stPos,1.25,1.25,1.5,1.75);
++    const fStr=stageF(stPos,gDC,gDC,gDW,gLL,true);
+     const Mp_kft=sgPos.pl.Mp/12, Mn_kft=sgPos.Mn_kft;
+     const flexMode=sgPos.compact?'Compact composite — Mp basis (6.10.7.1)'
+       :(deck.deckOn?'Noncompact composite — stress basis (6.10.7.2)':'Noncomposite — stress basis, Fnc per 6.10.8.2 (FLB/LTB)');
+@@ -3411,6 +3461,8 @@
+       rating.govInv=NaN; rating.govOpr=NaN;
+     }
+     const checksF=checks.map(c=>({...c,loc:c.loc||0,pass:c.r<=1.0001}));
++    // GD49: the owner's design rating target (inventory RF of the HL-93 design-load rating; reported, not a check of this list)
++    rating.target= OWN.rt? {rf:OWN.rt, inv:rating.govInv, pass:isFinite(rating.govInv)&&rating.govInv>=OWN.rt-1e-9, cite:OWN.cite.rt, fat:OWN.rtFat} : null;
+ 
+     /* ---------- warnings for effects not computed (display only) ---------- */
+     const warnings={fl:[],fat:[]};
+@@ -3423,7 +3475,7 @@
+     if(useExt&&fatImp) warnings.fat.push('Fatigue from the imported fatigue envelopes ('+((inp.external&&inp.external.producer)||'import')+': fatigue truck, IM and single-lane fatigue distribution factors included): bottom-flange stress range = (M_FAT+ \u2212 M_FAT\u2212)/S_b on the short-term composite section for both signs (6.6.1.2.1; requires shear connectors throughout and the 6.10.1.7 deck reinforcement)'+(fatImpV?', web special fatigue and stud fatigue pitch from the imported fatigue shears':'; no fatigue shears imported, so the web special fatigue and stud pitch still use the fatigue truck on a simple span of L = '+fmt(Lft,1)+' ft')+'. The top flange and its attachments and the deck reinforcement at interior piers are not checked here.');
+     else if(useExt) warnings.fat.push('Imported MIDAS demands: the fatigue checks still use the fatigue truck on a SIMPLE span of L = '+fmt(Lft,1)+' ft (flange stress range, web special fatigue, stud pitch). Negative-moment fatigue at interior piers (top flange and its welded attachments, deck reinforcement) is not checked'+(hasNeg?', although this span has negative moment':'')+'. Check those details with a fatigue-truck range from the continuous analysis.');
+ 
+-    return {ok:true, sec, matR, deck, geom, beff, n, nRaw, EcDeck,
++    return {ok:true, sec, matR, deck, deckIn:deck0, lf:{...OWN,...LFc,plOn}, geom, beff, n, nRaw, EcDeck,
+       bare, cN, c3N, pl, compact, compactWeb, compactMat, compactDtw, lambdaPw,
+       Rh, Rb, ductOK, Iyc, Iyt, IycIyt, My_bareTop, My_bareBot,
+       loads:Ld, hl:Ld.hl, df:Ld.df, dfm:Ld.dfm, dfv:Ld.dfv, MLL:Ld.MLL, VLL:Ld.VLL,
+@@ -3557,7 +3609,7 @@
+ 
+ /* ================= SVG DRAWINGS ================= */
+ function CrossSection({R}){
+-  const {sec,deck,cN,pl}=R;
++  const {sec,cN,pl}=R, deck=R.deckIn? {...R.deck, haunch:+R.deckIn.haunch} : R.deck;   // GD49: drawn with the haunch as entered (properties may use 0)
+   const segMid=R.segP? (R.segP.find(g=>R.geom.L/2<=g.x1+1e-9)||R.segP[0]) : null;
+   const {D,tw,bft,tft,bfb,tfb}=segMid? {D:sec.D,tw:sec.tw,...segMid.dims} : sec;
+   const hs=tfb+D+tft;
+@@ -4771,7 +4823,8 @@
+       <SG n="1">Stage stresses at the bottom flange (each on its stage-correct section)</SG>
+       <ML s={Tx`f_{DC1}=\frac{M_{DC1}\cdot12}{S_{b,bare}}=\frac{${nx(psel.M1,0)}\cdot12}{${nx(psel.SbBare,0)}}=${nx(psel.dc1Bp,2)}\;\text{ksi}`}/>
+       <ML s={Tx`f_{DC2}=\frac{M_{DC2}\cdot12}{S_{b,3n}}=${nx(psel.d2Bp,2)}\;\text{ksi}\qquad f_{DW}=\frac{M_{DW}\cdot12}{S_{b,3n}}=${nx(psel.dwBp,2)}\;\text{ksi}`}/>
+-      <ML s={Tx`f_{LL}=1.30\cdot\frac{M_{LL}\cdot12}{S_{b,n}}=${nx(psel.llBp,2)}\;\text{ksi}`}/>
++      <ML s={Tx`f_{LL}=${lfP(lfS(R).gS2,'1.30')}\cdot\frac{M_{LL}\cdot12}{S_{b,n}}=${nx(psel.llBp,2)}\;\text{ksi}`}/>
++      {lfS(R).on&&<div className="mnote">Service II γ_LL = 1.30m = {lfP(lfS(R).gS2,'1.30')} (owner rule, see the owner load rules banner){lfS(R).plOn?'; M_LL = (LL+IM+PL) − PL + PL/m = '+fmt(psel.MlD,1)+' k-ft at this station':''}.</div>}
+       <DLinks items={[{to:'segs',seg:sgI(R,psel.si),what:'S_b (bare)'},{to:'trans',seg:sgI(R,psel.si),what:'S_b (3n, n)'},{to:'menv',what:'stage moments'}]}/>
+       <SG n="2">Service II combination & check</SG>
+       <ML s={Tx`f_{ServII}=f_{DC1}+f_{DC2}+f_{DW}+f_{LL}=${nx(psel.dc1Bp,2)}+${nx(psel.d2Bp,2)}+${nx(psel.dwBp,2)}+${nx(psel.llBp,2)}=${nx(psel.bP,2)}\;\text{ksi}`}/>
+@@ -4808,7 +4861,7 @@
+     </div>
+ 
+     <Card title="What Service II checks" refTag="AASHTO 6.10.4.2.2 · permanent-deformation control">
+-      <div className="hint">Service II limits the flexural stress under <b>DC + DW + 1.30(LL+IM)</b> to <b>{fmt(st.s2Coef,2)} R_h F_yf</b> to prevent objectionable permanent deflection from occasional heavy overloads. The coefficient is <b>0.95</b> for the flanges of a composite section and <b>0.80</b> for both flanges of a noncomposite one. Stresses <b>accumulate by construction stage</b> on the section active at each stage: DC1 (self-weight + wet deck) on the bare steel, DC2 + DW on the long-term (3n) composite, and live load on the short-term (n) composite. The picker below shows the full stage buildup at any station.</div>
++      <div className="hint">Service II limits the flexural stress under <b>DC + DW + {lfP(lfS(R).gS2,'1.30')}(LL+IM)</b> to <b>{fmt(st.s2Coef,2)} R_h F_yf</b> to prevent objectionable permanent deflection from occasional heavy overloads. The coefficient is <b>0.95</b> for the flanges of a composite section and <b>0.80</b> for both flanges of a noncomposite one. Stresses <b>accumulate by construction stage</b> on the section active at each stage: DC1 (self-weight + wet deck) on the bare steel, DC2 + DW on the long-term (3n) composite, and live load on the short-term (n) composite. The picker below shows the full stage buildup at any station.</div>
+     </Card>
+ 
+     {psel&&s2Deriv(R,psel,<select value={selIdx} onChange={e=>setSelIdx(+e.target.value)}
+@@ -4825,7 +4878,7 @@
+         {x:cx,y:ch.map(p=>p.lim),name:'+'+fmt(st.s2Coef,2)+'RhFyf',line:{color:'#B3261E',width:1.4,dash:'dot'}},
+         {x:cx,y:ch.map(p=>-p.lim),name:'−'+fmt(st.s2Coef,2)+'RhFyf',line:{color:'#B3261E',width:1.4,dash:'dot'}}]}
+         layout={{xaxis:{title:'x (ft)'},yaxis:{title:'stress (ksi · fB + = bottom tension, fT + = top compression)'}}}/>
+-      <div className="callout">Service II = DC + DW + 1.30(LL+IM), accumulated on the stage-correct sections (DC1 on bare steel, DC2+DW on 3n, LL on n{R.hasNeg?'; −M regions on the cracked steel+rebar section':''}). Both flanges are limited to ±{fmt(st.s2Coef,2)}R<sub>h</sub>F<sub>yf</sub>{st.s2Composite?' (composite section)':' — the 0.80 coefficient applies because the deck is not acting compositely with the steel'}; the limit line steps where R<sub>h</sub> changes at a flange splice. Governing: <b>{fmt(Math.abs(st.s2Gov.f||0),1)} ksi</b> ({st.s2Gov.tag}) at <b>{fmt(st.s2Gov.x||0,1)} ft</b>.</div>
++      <div className="callout">Service II = DC + DW + {lfP(lfS(R).gS2,'1.30')}(LL+IM), accumulated on the stage-correct sections (DC1 on bare steel, DC2+DW on 3n, LL on n{R.hasNeg?'; −M regions on the cracked steel+rebar section':''}). Both flanges are limited to ±{fmt(st.s2Coef,2)}R<sub>h</sub>F<sub>yf</sub>{st.s2Composite?' (composite section)':' — the 0.80 coefficient applies because the deck is not acting compositely with the steel'}; the limit line steps where R<sub>h</sub> changes at a flange splice. Governing: <b>{fmt(Math.abs(st.s2Gov.f||0),1)} ksi</b> ({st.s2Gov.tag}) at <b>{fmt(st.s2Gov.x||0,1)} ft</b>.</div>
+     </Card>
+     <Card title="Stage Buildup — Overlay" refTag="toggle curves · cumulative by construction stage">
+       <div className="btnrow" style={{marginBottom:6}}>{OVS.map(([k,l])=>
+@@ -4846,12 +4899,12 @@
+           {x:cx,y:ch.map(p=>p.lim),name:'+'+fmt(st.s2Coef,2)+'RhFyf',line:{color:'#B3261E',width:1.4,dash:'dot'}},
+           {x:cx,y:ch.map(p=>-p.lim),name:'−'+fmt(st.s2Coef,2)+'RhFyf',line:{color:'#B3261E',width:1.4,dash:'dot'}}]:[])]}
+         layout={{xaxis:{title:'x (ft)'},yaxis:{title:'stress (ksi)'}}}/>
+-      <div className="hint">Each curve adds one stage: DC1 locked into the bare girder before the deck cures, then superimposed dead load on the long-term composite, then 1.30(LL+IM) on the short-term composite. The gap between the Σ curve and the limit is the Service II reserve at every station.</div>
++      <div className="hint">Each curve adds one stage: DC1 locked into the bare girder before the deck cures, then superimposed dead load on the long-term composite, then {lfP(lfS(R).gS2,'1.30')}(LL+IM) on the short-term composite. The gap between the Σ curve and the limit is the Service II reserve at every station.</div>
+     </Card>
+     <Card title="Flange stresses by construction stage" refTag="6.10.4.2.2 · Service II @ midspan">
+       <Tbl head={['Steel flange','DC1 (bare)','DC2+DW (3n)','LL+IM (n)','Service II Σ']}
+         rows={[row('Top flange (comp.)',st.fTop),row('Bottom flange (tens.)',st.fBot)]}/>
+-      <div className="hint">Stress accumulates on the section active at each stage: <b>DC1</b> (self-weight + wet deck) on bare steel, <b>DC2 + DW</b> on the long-term (3n) composite, <b>LL+IM</b> on the short-term (n) composite. Service II factors live load by <b>1.30</b> (Table 3.4.1-1). Both flanges are limited to <b>{fmt(st.s2Coef,2)} R_h F_yf = {fmt(st.fServLim,1)} ksi</b> — 0.95 for a composite section, 0.80 for both flanges of a noncomposite one (6.10.4.2.2){st.s2Composite?'':', which is the case here because the deck is switched off'}. The bottom (tension) flange, farthest from the high composite neutral axis, typically governs. Flange lateral bending f_ℓ is taken as 0 for this straight girder (the check adds f_ℓ/2 to the bottom flange when present).</div>
++      <div className="hint">Stress accumulates on the section active at each stage: <b>DC1</b> (self-weight + wet deck) on bare steel, <b>DC2 + DW</b> on the long-term (3n) composite, <b>LL+IM</b> on the short-term (n) composite. Service II factors live load by <b>{lfP(lfS(R).gS2,'1.30')}</b> (Table 3.4.1-1{lfS(R).m!==1?'; 1.30 × the owner multiplier m':''}). Both flanges are limited to <b>{fmt(st.s2Coef,2)} R_h F_yf = {fmt(st.fServLim,1)} ksi</b> — 0.95 for a composite section, 0.80 for both flanges of a noncomposite one (6.10.4.2.2){st.s2Composite?'':', which is the case here because the deck is switched off'}. The bottom (tension) flange, farthest from the high composite neutral axis, typically governs. Flange lateral bending f_ℓ is taken as 0 for this straight girder (the check adds f_ℓ/2 to the bottom flange when present).</div>
+     </Card>
+     <Card title="Live-load deflection" refTag="2.5.2.6.2 (optional)">
+       <div className="hint">Δ_truck(incl. IM) = <b>{fmt(st.dTruck,3)} in</b> · Δ_lane = <b>{fmt(st.dLane,3)} in</b> · deflection DF (all lanes ÷ girders) = <b>{fmt(st.dfDefl,3)}</b> → Δ_LL = <b>{fmt(st.dLL,3)} in</b> vs L/800 = <b>{fmt(st.dLim,3)} in</b> ({defPass?'OK':'N.G.'}). Optional criterion; taken as the larger of the design truck alone or 25% truck + lane, on the short-term composite I = {fmt(R.cN.I,0)} in⁴.</div>
+@@ -4874,13 +4927,15 @@
+   const vr=spanView==='all'?{x0:0,x1:memberLen,label:'Entire beam'}
+     :(spanView!=='design'?(()=>{const sp=allSpans.find(s=>('s'+s.idx)===spanView);return sp?{x0:sp.x0,x1:sp.x1,label:'Span '+sp.idx,sp}:null;})():null);
+   const designThisSpan=sp=>{ if(set){ const secNew=zonesToSec(ext,sp,inp.sec); set({...inp, external:{...ext,_selSpan:sp}, geom:{...inp.geom,L:sp.len}, ...(secNew?{sec:secNew}:{})}); } setSpanView('design'); };
++  const F=lfS(R);   // GD49: the owner factors (1.25, 1.50, 1.75 without owner rules); the pedestrian part without m (GD45)
+   const vrows=(x0,x1)=>ext.stations.filter(s=>(+s.x)>=x0-1e-6&&(+s.x)<=x1+1e-6).sort((a,b)=>a.x-b.x).map(s=>{
+     const a=k=>+s[k]||0; const m1=a('M_DC1'),m2=a('M_DC2'),mw=a('M_DW'),mlp=a('M_LLpos'),mln=a('M_LLneg');
+     const v1=a('V_DC1'),v2=a('V_DC2'),vw=a('V_DW'),vlp=a('V_LLpos'),vln=a('V_LLneg');
++    const d=(v,k)=>F.plOn? llD(v,a(k),F.m) : v;
+     return {x:+s.x,M1:m1,M2:m2,Mw:mw,Mlp:mlp,Mln:mln,
+-      Mup:1.25*(m1+m2)+1.5*mw+1.75*mlp,Mun:1.25*(m1+m2)+1.5*mw+1.75*mln,
++      Mup:F.gDC*(m1+m2)+F.gDW*mw+F.gLL*d(mlp,'M_PLpos'),Mun:F.gDC*(m1+m2)+F.gDW*mw+F.gLL*d(mln,'M_PLneg'),
+       V1:v1,V2:v2,Vw:vw,Vlp:vlp,Vln:vln,
+-      Vup:1.25*(v1+v2)+1.5*vw+1.75*vlp};});
++      Vup:F.gDC*(v1+v2)+F.gDW*vw+F.gLL*d(vlp,'V_PLpos')};});
+   const lnR=(rows,k,name,color,dash)=>({x:rows.map(r=>r.x),y:rows.map(r=>r[k]||0),name,mode:'lines',line:{color,width:2,dash:dash||'solid'}});
+   const ln=(k,name,color,dash)=>({x:xs,y:d.map(p=>p[k]),name,mode:'lines',line:{color,width:2,dash:dash||'solid'}});
+   const mData=[ln('M1','DC1','#15803D'),ln('M2','DC2','#0E7490'),ln('Mw','DW','#B45309'),
+@@ -4905,7 +4960,7 @@
+           <Fig h={360} data={md} layout={{yaxis:{title:'M (k-ft)'},xaxis:{title:'x (ft, member)'}}}/></Card>
+         <Card title={'Shear envelope — '+vr.label} refTag="imported demands · kip">
+           <Fig h={340} data={vd} layout={{yaxis:{title:'V (kip)'},xaxis:{title:'x (ft, member)'}}}/></Card>
+-        <div className="callout">Strength I = 1.25(DC1+DC2)+1.50 DW+1.75 LL from the imported per-station envelope over {vr.label.toLowerCase()} (member coordinates). Switch back to <b>Design span</b> for the full design envelopes, or use <b>Design Span n</b> to move the analysis there.</div>
++        <div className="callout">Strength I = {lfP(F.gDC,'1.25')}(DC1+DC2)+{lfP(F.gDW,'1.50')} DW+{lfP(F.gLL,'1.75')} LL{F.on?' (owner load rules)':''} from the imported per-station envelope over {vr.label.toLowerCase()} (member coordinates). Switch back to <b>Design span</b> for the full design envelopes, or use <b>Design Span n</b> to move the analysis there.</div>
+       </React.Fragment>; })()
+     :<React.Fragment>
+     <Card id="stg-d-menv" title="Moment envelope" refTag={'per girder · k-ft'+(R.useExt?' · imported demands':'')}>
+@@ -4916,7 +4971,7 @@
+         ln('Vl','LL+IM','#B3261E'),ln('Vu','Strength I Vu','#1C4FC4','dot')]}
+         layout={{yaxis:{title:'V (kip)'},xaxis:{title:'x (ft)'}}}/>
+     </Card>
+-    <div className="callout">Strength I = 1.25 DC + 1.50 DW + 1.75 (LL+IM). Peak +M_u = <b>{fmt(Math.max(...d.map(p=>p.Mu)),0)} k-ft</b>{R.hasNeg&&<span> · peak −M_u = <b>{fmt(Math.min(...d.map(p=>p.Mun)),0)} k-ft</b></span>} · peak V_u = <b>{fmt(Math.max(...d.map(p=>p.Vu)),0)} kip</b>. {R.useExt?'Demands from the imported continuous envelope (impact included; per-effect DF × m applied).':'Live-load envelopes are HL-93 (1.33× truck/tandem + lane) × distribution factor.'} Station spacing includes every flange-transition point, so the governing section is always sampled.</div>
++    <div className="callout">Strength I = {lfP(F.gDC,'1.25')} DC + {lfP(F.gDW,'1.50')} DW + {lfP(F.gLL,'1.75')} (LL+IM){F.on?<span> (owner load rules of {F.o}: η = {fmt(F.eta,3)}, m = {fmt(F.m,2)}{F.plOn?'; LL+IM = (LL+IM+PL) − PL + PL/m':''}; see the banner above)</span>:null}. Peak +M_u = <b>{fmt(Math.max(...d.map(p=>p.Mu)),0)} k-ft</b>{R.hasNeg&&<span> · peak −M_u = <b>{fmt(Math.min(...d.map(p=>p.Mun)),0)} k-ft</b></span>} · peak V_u = <b>{fmt(Math.max(...d.map(p=>p.Vu)),0)} kip</b>. {R.useExt?'Demands from the imported continuous envelope (impact included; per-effect DF × m applied).':'Live-load envelopes are HL-93 (1.33× truck/tandem + lane) × distribution factor.'} Station spacing includes every flange-transition point, so the governing section is always sampled.</div>
+     </React.Fragment>}
+   </div>);
+ }
+@@ -5054,7 +5109,7 @@
+   // ── moment breakdown vs capacity (per-station capacity from computeAll) ──
+   const stns=R.stations, cf=R.chartFlex||[], fx=stns.map(p=>p.x);
+   const [fac,setFac]=useState(false);
+-  const k1=fac?1.25:1, kw=fac?1.5:1, kl=fac?1.75:1;
++  const F=lfS(R), k1=fac?F.gDC:1, kw=fac?F.gDW:1, kl=fac?F.gLL:1;   // GD49: the owner factors (1.25, 1.5, 1.75 without owner rules)
+   // ── location picker: per-station worked capacity calculation ──
+   const fcAll=R.flexCalc||[], nSeg=(R.segP||[]).length, Lspan=R.geom.L;
+   const govX=f.oos? R.stress.xGov : (f.gov&&f.gov.x)||0;   // PNA-OOS: no governing +M station; open at the peak +M_u station
+@@ -5085,14 +5140,14 @@
+       <div style={{marginBottom:6}}>
+         <label style={{fontSize:11,color:'var(--ink2)',display:'flex',gap:7,alignItems:'center'}}>
+           <input type="checkbox" checked={fac} onChange={e=>setFac(e.target.checked)}/>
+-          Show components factored (1.25 DC · 1.50 DW · 1.75 LL) — the M<sub>u</sub> envelopes are always factored</label>
++          Show components factored ({lfP(F.gDC,'1.25')} DC · {lfP(F.gDW,'1.50')} DW · {lfP(F.gLL,'1.75')} LL{F.on?', owner load rules':''}) — the M<sub>u</sub> envelopes are always factored</label>
+       </div>
+       <Fig h={400} data={[
+-        {x:fx,y:stns.map(p=>k1*p.M1),name:'DC1'+(fac?' ×1.25':''),line:{color:'#15803D',width:1.8}},
+-        {x:fx,y:stns.map(p=>k1*p.M2),name:'DC2'+(fac?' ×1.25':''),line:{color:'#0E7490',width:1.6,dash:'dot'}},
+-        {x:fx,y:stns.map(p=>kw*p.Mw),name:'DW'+(fac?' ×1.50':''),line:{color:'#B45309',width:1.6,dash:'dot'}},
+-        {x:fx,y:stns.map(p=>kl*p.Ml),name:'+LL+IM'+(fac?' ×1.75':''),line:{color:'#B3261E',width:1.8}},
+-        ...(R.hasNeg?[{x:fx,y:stns.map(p=>kl*p.Mln),name:'−LL+IM'+(fac?' ×1.75':''),line:{color:'#7C3AED',width:1.8,dash:'dash'}}]:[]),
++        {x:fx,y:stns.map(p=>k1*p.M1),name:'DC1'+(fac?' ×'+lfP(F.gDC,'1.25'):''),line:{color:'#15803D',width:1.8}},
++        {x:fx,y:stns.map(p=>k1*p.M2),name:'DC2'+(fac?' ×'+lfP(F.gDC,'1.25'):''),line:{color:'#0E7490',width:1.6,dash:'dot'}},
++        {x:fx,y:stns.map(p=>kw*p.Mw),name:'DW'+(fac?' ×'+lfP(F.gDW,'1.50'):''),line:{color:'#B45309',width:1.6,dash:'dot'}},
++        {x:fx,y:stns.map(p=>kl*(fac?p.MlD:p.Ml)),name:'+LL+IM'+(fac?' ×'+lfP(F.gLL,'1.75'):''),line:{color:'#B3261E',width:1.8}},
++        ...(R.hasNeg?[{x:fx,y:stns.map(p=>kl*(fac?p.MlnD:p.Mln)),name:'−LL+IM'+(fac?' ×'+lfP(F.gLL,'1.75'):''),line:{color:'#7C3AED',width:1.8,dash:'dash'}}]:[]),
+         {x:fx,y:stns.map(p=>p.Mu),name:'+Mu (Strength I)',fill:'tozeroy',fillcolor:'rgba(28,79,196,.05)',line:{color:'#1C4FC4',width:2.2}},
+         ...(R.hasNeg?[{x:fx,y:stns.map(p=>p.Mun),name:'−Mu (Strength I)',line:{color:'#1C4FC4',width:1.8,dash:'dashdot'}}]:[]),
+         {x:cf.map(p=>p.x),y:cf.map(p=>p.capPos),name:'+φMn capacity',line:{color:'#B3261E',width:2.6}},
+@@ -5144,7 +5199,7 @@
+           : <ML s={Tx`V_n=V_p\!\left(C+\dfrac{0.87(1-C)}{\sqrt{1+(d_o/D)^2}}\right)=${nx(s.VnInt,0)}\;\text{kip (tension field)}`}/>}
+         <ML s={Tx`\frac{V_u}{\phi_vV_n}=\frac{${nx(scSel.Vu,0)}}{${nx(scSel.phiVn,0)}}=${nx(scSel.dc,3)}\;${pass2?'\\checkmark':'\\text{N.G.}'}`}/>
+         <DLinks items={[{to:'venv',what:'V_u'}]}/>
+-      <div className="mnote">V_u is the Strength I factored shear envelope at this station: |1.25(V_DC1+V_DC2)+1.50 V_DW| + 1.75|V_LL| (LL with DF and impact). φ_v = 1.0.{s.stiffened?' End-panel length taken as the first stiffener spacing d_o = '+fmt(s.doSpc,0)+' in from each support.':''}</div>
++      <div className="mnote">V_u is the Strength I factored shear envelope at this station: |{lfP(lfS(R).gDC,'1.25')}(V_DC1+V_DC2)+{lfP(lfS(R).gDW,'1.50')} V_DW| + {lfP(lfS(R).gLL,'1.75')}|V_LL| (LL with DF and impact{lfS(R).on?'; owner load rules'+(lfS(R).plOn?', LL+IM = (LL+IM+PL) − PL + PL/m':''):''}). φ_v = 1.0.{s.stiffened?' End-panel length taken as the first stiffener spacing d_o = '+fmt(s.doSpc,0)+' in from each support.':''}</div>
+       </Card>;
+ }
+ function ShearTab({R}){
+@@ -5760,7 +5815,9 @@
+     <div className="bigres">
+       <div className={'br '+(r.govInv>=1?'p':'f')}><div className="l">Inventory RF (gov)</div><div className="n">{fmt(r.govInv,2)}</div><div className="u">HL-93 · γLL = 1.75</div></div>
+       <div className={'br '+(r.govOpr>=1?'p':'f')}><div className="l">Operating RF (gov)</div><div className="n">{fmt(r.govOpr,2)}</div><div className="u">HL-93 · γLL = 1.35</div></div>
++      {r.target&&<div className={'br '+(r.target.pass?'p':'f')}><div className="l">Owner design rating target</div><div className="n">{fmt(r.target.inv,2)} {r.target.pass?'≥':'<'} {fmt(r.target.rf,2)}</div><div className="u">inventory RF · {r.target.cite||R.lf.o} (reported)</div></div>}
+     </div>}
++    {r.target&&<div className="hint" style={{margin:'-4px 0 10px'}}>Design rating target of {R.lf.o} (from GirderDetail’s owner rules): HL-93 inventory RF ≥ {fmt(r.target.rf,2)}{r.target.fat?' and fatigue RF ≥ '+fmt(r.target.fat,2)+' (fatigue not rated here; see GirderDetail GS20)':''}. The rating below is the MBE design-load rating without the owner’s multiplier or η, as GirderDetail’s GS20. Reported only; the girder is not resized for it.</div>}
+     <Card title="Rating factors φc, φs" refTag="MBE 6A.4.2.3 · 6A.4.2.4">
+       <div className="frow">
+         <Num l="Condition factor φc" v={rq.phiC} set={v=>setRate('phiC',v)} step={0.05}/>
+@@ -5900,11 +5957,12 @@
+     ...(R.flex.contSpan?['The B6.2 exemption for the 1.3R_hM_y limit in continuous spans is not evaluated.']:[]),
+     'Fabrication / residual camber (add per the fabricator’s practice).',
+     ...(R.useExt?[]:['Continuity: the built-in analysis is a simple span; import continuous demands for continuous girders.'])];
+-  const gdn=gdNoteLines(ext);
++  const gdn=gdNoteLines(ext), owl=ownLines(R);   // owl (GD49): the owner load rules from GirderDetail
+   // 1. Objectives
+   S('obj','Objectives',{body:<React.Fragment>
+     <p className="cr-p">Design check of the built-up steel plate girder <b>{gt.girder}</b> ({gt.pos} girder, {gt.sp}){p.name?<span> of {p.name}</span>:null} to the AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024), Section 6: section proportions (6.10.2), constructibility (6.10.3), Service II (6.10.4) and live-load deflection (2.5.2.6.2, optional), Strength I flexure (6.10.7, 6.10.8) and shear (6.10.9), fatigue (6.6.1, 6.10.5.3), transverse and bearing stiffeners (6.10.11), shear connectors (6.10.10){R.deckD?', transverse deck design (4.6.2.1, Table A4-1, 9.7.3)':''}, an HL-93 design-load rating (AASHTO MBE 6A) and the dead-load camber.</p>
+     <p className="cr-p">Demands: {R.useExt?<span>imported continuous-member envelopes ({(ext&&ext.source)||'external analysis'}{ext&&ext.producer?', '+ext.producer:''}); see 2. Input parameters.</span>:<span>ST-Girder’s built-in simple-span analysis (dead loads from the section and deck geometry, HL-93 live load times the distribution factors).</span>} Load factors: Strength I 1.25 DC + 1.50 DW + 1.75 (LL+IM); Service II DC + DW + 1.30 (LL+IM).</p>
++    {owl&&<React.Fragment><p className="cr-p"><b>Owner load rules ({R.lf.o}{R.lf.manual?', '+R.lf.manual:''}), sent by GirderDetail with the demands and applied to every girder check here</b> (worked in 2. Input parameters, Owner load rules, and in Demands, Load combinations):</p><ul className="cr-ul">{owl.map((t,i)=><li key={i}>{t}</li>)}</ul></React.Fragment>}
+     {gdn&&<React.Fragment><p className="cr-p"><b>{gdn.head}</b> {gdn.src}</p><p className="cr-p">Known differences between the two tools:</p><ul className="cr-ul">{gdn.diffs.map((d,i)=><li key={i}>{d}</li>)}</ul><p className="cr-p"><i>{gdn.tbc}</i></p></React.Fragment>}
+     {R.pnaOOS&&<React.Fragment><p className="cr-p cr-st-fail"><b>{OOS_TXT}.</b> {pnaOosText(R)}</p><p className="cr-p">{PNA_OOS_NOT}</p></React.Fragment>}
+     {R.warnings&&(R.warnings.fl.length+R.warnings.fat.length)>0&&<React.Fragment><p className="cr-p"><b>Warnings:</b></p><ul className="cr-ul">{[...R.warnings.fl,...R.warnings.fat].map((w,i)=><li key={i}>{w}</li>)}</ul></React.Fragment>}
+@@ -5944,6 +6002,15 @@
+       ['Shear studs','d = '+fmt(+cn.studD,3)+' in, h = '+fmt(+cn.studH,2)+' in, '+fmt(+cn.nRow,0)+' per row, pitch '+fmt(+cn.pitch,2)+' in'],
+       ['Fatigue detail category',R.fatigue.cat],['ADTT entered',fmt(R.fatigue.adttRaw,0)+' trucks/day ('+(R.fatigue.adttIsSingleLane?'single-lane (ADTT)SL':'gross, '+R.fatigue.lanes+' lanes')+')'],
+       ['Cycles per truck n / design life',fmt(R.fatigue.nCyc,2)+' / '+fmt(R.fatigue.lifeYr,0)+' yr'],['Fatigue limit state',fq.lsMode==='auto'?'auto (from the (ADTT)SL crossover)':'manual: Fatigue '+fq.lsMode]]}/>);
++    if(R.lf&&R.lf.on){ const L=R.lf, f3=v=>fmt(v,3);
++      sub(s,'Owner load rules (from GirderDetail)',(L.cite.m||L.cite.eta||'AASHTO LRFD 1.3.2.1')+' · Table 3.4.1-1',<React.Fragment><div className="cr-tab">
++        <ML s={Tx`\eta=\max(\eta_D\eta_R\eta_I,\;0.95)=\max(${nx(L.eD,2)}\cdot${nx(L.eR,2)}\cdot${nx(L.eI,2)},\;0.95)=${nx(L.eta,3)}\qquad m=${nx(L.m,2)}`}/>
++        <ML s={Tx`\text{Strength I: }\gamma_{DC}=1.25\eta=${nx(L.gDC,3)},\quad\gamma_{DW}=1.50\eta=${nx(L.gDW,3)},\quad\gamma_{LL}=1.75\eta m=1.75(${nx(L.eta,3)})(${nx(L.m,2)})=${nx(L.gLL,3)}`}/>
++        <ML s={Tx`\text{Service II: }\gamma_{LL}=1.30m=1.30(${nx(L.m,2)})=${nx(L.gS2,3)}`}/>
++        {L.plOn&&<ML s={Tx`(LL+IM)_{used}=(LL+IM+PL)-PL+\frac{PL}{m}\quad\Rightarrow\quad\gamma_{LL}(LL+IM)_{used}=1.75\eta\,m(LL+IM)+1.75\eta\,PL`}/>}
++        <ML s={Tx`\text{haunch in composite properties: }${L.h0?'0\;\text{(owner rule; entered '+nx(+dk.haunch,2)+'\;\text{in})}':nx(+dk.haunch,2)+'\;\text{in (as entered)}'}`}/></div>
++        <ul className="cr-ul">{ownLines(R).map((t,i)=><li key={i}>{t}</li>)}</ul></React.Fragment>);
++    }
+     sub(s,'Rating factors','MBE 6A.4.2.3 · 6A.4.2.4',<CrKV rows={[['Condition factor φ_c',fmt(R.rating.phiC,2)],['System factor φ_s',fmt(R.rating.phiS,2)],['φ_c·φ_s used (≥ 0.85)',fmt(R.rating.phiCS,3)]]}/>);
+     if(R.useExt&&ext){ const e=ext, pg=extPerGirderOf(e);
+       sub(s,'Imported demands','',<React.Fragment><CrKV rows={[['Source',(e.source||'external analysis')],['Producer',e.producer||'—'],['Project',e.project||'—'],['Member',(e.member&&e.member.key)||'—'],
+@@ -6024,11 +6091,19 @@
+       <ML s={Tx`M_{LL+IM}=DF_m\cdot${nx(ld.hl.M,0)}=${nx(ld.MLL,0)}\;\text{k-ft}\qquad V_{LL+IM}=DF_v\cdot${nx(ld.hl.V,1)}=${nx(ld.VLL,0)}\;\text{kip}`}/>
+       <div className="mnote">Type (a)/(k) steel I-girder with concrete deck, LRFD 4.6.2.2 (multiple presence included in the formulas; the lever rule includes m = 1.2). Along the span the live-load moment and shear envelopes are the HL-93 influence-line values at each station times DF_m and DF_v.</div></div>);
+     const sM=at((R.flex.oos?R.stress.xGov:(R.flex.gov&&R.flex.gov.x))||L/2), sV=at(R.shearR.xGov||0);
+-    sub(s,'Load combinations','Table 3.4.1-1',<div className="cr-tab">
++    const OL=R.lf&&R.lf.on? R.lf : null;   // GD49: the owner load rules (the AASHTO factors 1.25, 1.50, 1.75, 1.30 exactly as before without them)
++    if(!OL) sub(s,'Load combinations','Table 3.4.1-1',<div className="cr-tab">
+       <ML s={Tx`M_u=1.25(M_{DC1}+M_{DC2})+1.50M_{DW}+1.75M_{LL+IM}=1.25(${nx(sM.M1,0)}+${nx(sM.M2,0)})+1.50(${nx(sM.Mw,0)})+1.75(${nx(sM.Ml,0)})=${nx(sM.Mu,0)}\;\text{k-ft}\quad(x=${nx(sM.x,1)}')`}/>
+       <ML s={Tx`V_u=\left|1.25(V_{DC1}+V_{DC2})+1.50V_{DW}\right|+1.75\left|V_{LL+IM}\right|=\left|1.25(${nx(sV.V1,1)}+${nx(sV.V2,1)})+1.50(${nx(sV.Vw,1)})\right|+1.75(${nx(Math.abs(sV.Vl),1)})=${nx(sV.Vu,1)}\;\text{kip}\quad(x=${nx(sV.x,1)}')`}/>
+       <ML s={Tx`\text{Service II: }M=M_{DC1}+M_{DC2}+M_{DW}+1.30M_{LL+IM}\;\text{(stresses accumulated on the stage sections)}`}/>
+       <div className="mnote">Strength I at the governing +M station (x = {fmt(sM.x,1)} ft) and the governing shear station (x = {fmt(sV.x,1)} ft). Maximum load factors only.{R.hasNeg?' The −M_u envelope uses the −LL+IM envelope in place of +LL+IM.':''}</div></div>);
++    else sub(s,'Load combinations (owner load rules of '+OL.o+')','Table 3.4.1-1 · 1.3.2.1',<div className="cr-tab">
++      {OL.plOn&&<ML s={Tx`M_{LL+IM,used}=M_{LL+IM+PL}-M_{PL}+\frac{M_{PL}}{m}=${nx(sM.Ml,1)}-${nx(sM.qM||0,1)}+\frac{${nx(sM.qM||0,1)}}{${nx(OL.m,2)}}=${nx(sM.MlD,1)}\;\text{k-ft}\qquad V_{LL+IM,used}=${nx(Math.abs(sV.Vl),1)}-${nx(sV.qV||0,1)}+\frac{${nx(sV.qV||0,1)}}{${nx(OL.m,2)}}=${nx(Math.abs(sV.VlD),1)}\;\text{kip}`}/>}
++      <ML s={Tx`M_u=1.25\eta(M_{DC1}+M_{DC2})+1.50\eta M_{DW}+1.75\eta m\,M_{LL+IM}=${nx(OL.gDC,3)}(${nx(sM.M1,0)}+${nx(sM.M2,0)})+${nx(OL.gDW,3)}(${nx(sM.Mw,0)})+${nx(OL.gLL,3)}(${nx(sM.MlD,0)})=${nx(sM.Mu,0)}\;\text{k-ft}\quad(x=${nx(sM.x,1)}')`}/>
++      <ML s={Tx`V_u=\left|1.25\eta(V_{DC1}+V_{DC2})+1.50\eta V_{DW}\right|+1.75\eta m\left|V_{LL+IM}\right|=\left|${nx(OL.gDC,3)}(${nx(sV.V1,1)}+${nx(sV.V2,1)})+${nx(OL.gDW,3)}(${nx(sV.Vw,1)})\right|+${nx(OL.gLL,3)}(${nx(Math.abs(sV.VlD),1)})=${nx(sV.Vu,1)}\;\text{kip}\quad(x=${nx(sV.x,1)}')`}/>
++      <ML s={Tx`\text{Service II: }M=M_{DC1}+M_{DC2}+M_{DW}+1.30m\,M_{LL+IM}=M_{DC1}+M_{DC2}+M_{DW}+${nx(OL.gS2,3)}M_{LL+IM}\;\text{(stresses accumulated on the stage sections)}`}/>
++      <div className="mnote">Owner load rules of {OL.o} from GirderDetail (factors worked in 2. Input parameters, Owner load rules): η = {fmt(OL.eta,3)} on the Strength I maximum factors, design load multiplier m = {fmt(OL.m,2)} on HL-93 LL+IM at Strength I and Service II{OL.plOn?' (not on the pedestrian load PL)':''}. Live-load deflection, fatigue, constructibility and the load rating use neither η nor m.</div>
++      <div className="mnote">Strength I at the governing +M station (x = {fmt(sM.x,1)} ft) and the governing shear station (x = {fmt(sV.x,1)} ft). Maximum load factors only.{R.hasNeg?' The −M_u envelope uses the −LL+IM envelope in place of +LL+IM.':''}</div></div>);
+     const locs=[]; const add=(lab,x)=>{ if(x==null||!isFinite(x)) return; const i=crNear(stn,x); const e=locs.find(l=>l.i===i); if(e) e.lab+=', '+lab; else locs.push({i,lab}); };
+     add('left support',0); add('midspan',L/2); add('right support',L); add('governing +M',R.flex.gov&&R.flex.gov.x);
+     if(R.hasNeg&&R.neg) add('governing −M',R.neg.negBGov.x); add('governing shear',R.shearR.xGov); add('Service II',R.stress.s2Gov&&R.stress.s2Gov.x);
+@@ -6119,7 +6194,9 @@
+       {r.oos? <div className="cr-line cr-res"><div className="cr-d">Governing rating factor:</div><div className="cr-m">not reported (positive-moment rating out of scope: plastic neutral axis below the web)</div>
+         <div className="cr-r cr-st-fail"><b>{OOS_TXT}</b></div></div>
+       : <div className="cr-line cr-res"><div className="cr-d">Governing rating factor:</div><div className="cr-m">Inventory <b>{fmt(r.govInv,2)}</b>; Operating <b>{fmt(r.govOpr,2)}</b></div>
+-        <div className={'cr-r'+(ok(r.govInv)?'':' cr-st-fail')}><b>{ok(r.govInv)?'RF ≥ 1.00':'RF < 1.00'}</b></div></div>}</React.Fragment>);
++        <div className={'cr-r'+(ok(r.govInv)?'':' cr-st-fail')}><b>{ok(r.govInv)?'RF ≥ 1.00':'RF < 1.00'}</b></div></div>}
++      {r.target&&<div className="cr-line cr-res"><div className="cr-d">Owner design rating target ({r.target.cite||R.lf.o}; see 2. Input parameters, Owner load rules):</div><div className="cr-m">Inventory RF {fmt(r.target.inv,2)} {r.target.pass?'≥':'<'} {fmt(r.target.rf,2)} (reported; the girder is not resized for it)</div>
++        <div className={'cr-r'+(r.target.pass?'':' cr-st-fail')}><b>{r.target.pass?'meets the target':'below the target'}</b></div></div>}</React.Fragment>);
+   }
+   // 15. Camber
+   if(o.camber){ const s=S('camber','Camber (dead-load deflection)',{ref:'stage sections · double integration'});
+@@ -6133,7 +6210,7 @@
+     <h3>Method</h3><ul className="cr-ul">
+       <li>Stresses accumulate by construction stage on the section active at each stage: DC1 (self-weight, wet deck, added DC1) on the bare steel; DC2 and DW on the long-term composite (3n); live load on the short-term composite (n); in −M regions the cracked steel + longitudinal rebar section (concrete neglected; 6.10.1.1.1c).</li>
+       <li>Stations: the span tenth-and-twentieth points plus both sides of every flange transition; each check is evaluated at every station with that station’s plates and demands, and the worst ratio is reported with its location.</li>
+-      <li>Strength I = 1.25 DC + 1.50 DW + 1.75 (LL+IM); Service II = DC + DW + 1.30 (LL+IM); constructibility = 1.25 DC + 1.50 construction live load; maximum load factors only. φ_f = φ_v = 1.0, φ_sc = 0.85.</li>
++      <li>Strength I = {lfP(lfS(R).gDC,'1.25')} DC + {lfP(lfS(R).gDW,'1.50')} DW + {lfP(lfS(R).gLL,'1.75')} (LL+IM); Service II = DC + DW + {lfP(lfS(R).gS2,'1.30')} (LL+IM){lfS(R).on?' (owner load rules from GirderDetail, see 2. Input parameters)':''}; constructibility = 1.25 DC + 1.50 construction live load; maximum load factors only. φ_f = φ_v = 1.0, φ_sc = 0.85.</li>
+       <li>Positive flexure: compact composite sections on the plastic moment (6.10.7.1, with the ductility reduction and, in continuous spans, 1.3R_hM_y); noncompact or noncomposite sections on the flange stresses (6.10.7.2, 6.10.8). Negative flexure: bottom flange F_nc = min(FLB, LTB) over L_b with C_b = 1.0 (6.10.8.2). Shear: end-panel C·V_p everywhere (conservative), tension field shown for interior panels.</li>
+       <li>Camber: double integration of M/(E·I) on a fine station set on the stage sections (DC1 bare, DC2 and DW 3n).</li>
+       <li>Sign convention: moments sagging +; stresses f_B + = bottom tension, f_T + = top compression; deflections + down.</li>
+@@ -6632,7 +6709,11 @@
+     if(p.factored!==false) return 'the forces must be unfactored (factored:false)';
+     const keys=['x','M_DC1','V_DC1','M_DC2','V_DC2','M_DW','V_DW','M_LLpos','M_LLneg','V_LLpos','V_LLneg'];
+     for(const st of p.stations){ for(const k of keys) if(typeof st[k]!=='number'||!isFinite(st[k])) return 'station value '+k+' is not a number';
+-      for(const k of ['M_FATpos','M_FATneg','V_FATpos','V_FATneg','M_DC1steel','V_DC1steel','M_DC1wet','V_DC1wet']) if(st[k]!==undefined&&!(typeof st[k]==='number'&&isFinite(st[k]))) return 'station value '+k+' is not a number'; }
++      for(const k of ['M_FATpos','M_FATneg','V_FATpos','V_FATneg','M_DC1steel','V_DC1steel','M_DC1wet','V_DC1wet','M_PLpos','M_PLneg','V_PLpos','V_PLneg']) if(st[k]!==undefined&&!(typeof st[k]==='number'&&isFinite(st[k]))) return 'station value '+k+' is not a number'; }
++    if(p.ownerRules!==undefined){ const o=p.ownerRules, ok=v=>v===undefined||v===null||(typeof v==='number'&&isFinite(v)&&v>0);   // GD49 (optional)
++      if(!o||typeof o!=='object') return 'ownerRules is not an object';
++      if(!ok(o.llMultiplier&&o.llMultiplier.m)||!['D','R','I','max','min'].every(k=>ok(o.eta&&o.eta[k]))||!ok(o.ratingTarget&&o.ratingTarget.rf)) return 'ownerRules: a factor is not a positive number';
++      if(o.haunchInProperties!==undefined&&typeof o.haunchInProperties!=='boolean') return 'ownerRules.haunchInProperties must be true or false'; }
+     const sp=externalSpans(p); if(!sp.length||sp.some(s=>!(s.len>0))) return 'invalid span layout';
+     return null; };
+   const gdAdopt=(p,how,auto)=>{
+@@ -6673,6 +6754,7 @@
+       +'Imported demands: '+p.stations.length+' stations, '+spans.length+' span'+(spans.length>1?'s':'')+' ('+spans.map(s=>fmt(s.len,1)).join(', ')+' ft); span 1 is selected.\n'
+       +'Per girder, unfactored; LL+IM with GirderDetail\u2019s distribution factors (not applied again here)'+(p.stations.some(s=>s.M_FATpos!==undefined)?'; fatigue moments and shears for the Fatigue and stud checks':'')+'.\n'
+       +(secNew?'Plates: web and flange segments from the girder\u2019s plate zones.\n':'')
++      +(p.ownerRules?(()=>{ const L={...ownLFOf(p),...lfFac(ownLFOf(p))}; return 'Owner load rules ('+(L.o||'?')+'), applied to the girder checks: \u03b7 = '+fmt(L.eta,3)+' on the Strength I factors, design load multiplier m = '+fmt(L.m,2)+' on HL-93 LL+IM at Strength I and Service II'+(L.m!==1&&p.pedestrianInLL===true&&p.stations.some(s=>s.M_PLpos!==undefined)?' (not on the pedestrian load)':'')+', haunch '+(L.h0?'0':'as entered')+' in composite properties'+(L.rt?', design rating target RF \u2265 '+fmt(L.rt,2):'')+'.\n'; })():'')
+       +(rows.length?'\nDesign inputs that change:\n'+rows.join('\n')+'\n':'')
+       +((p.notes||[]).length?'\nNotes from GirderDetail:\n- '+p.notes.join('\n- ')+'\n':'')
+       +'\nApply?';
+@@ -6882,6 +6964,7 @@
+           : <span key={i} className={'chip '+(c.pass?'p':'f')} title={`${c.n}: ${fmt(c.v,2)} vs ${fmt(c.lim,2)} ${c.u} · ${c.ref}`}><b>{c.pass?'✓':'✕'}</b>{c.t||c.n} <em>{fmt(c.r,2)}</em></span>)}
+       </div>
+       {R.pnaOOS&&<div className="noprint" style={{padding:'10px 24px 0'}}><PnaOos R={R} style={{marginBottom:0}}/></div>}
++      {R.ok&&R.lf&&R.lf.on&&<div className="noprint" style={{padding:'10px 24px 0'}}><OwnBanner R={R} go={setTab}/></div>}
+       <div className="tabs noprint">{TABS.map(([k,l])=>
+         <button key={k} className={'tab'+(tab===k?' on':'')+(LIVE[k]?'':' soon')} onClick={()=>setTab(k)}>{l}</button>)}</div>
+ 
+```

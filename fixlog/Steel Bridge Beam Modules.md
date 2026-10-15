@@ -16213,3 +16213,55 @@ Diff of the decoded Preliminary sizing page (PL_B64):
      + card('dw-plan', 'Framing plan', 'Cross-frames from the Framing tab', `<div class="dwg-wrap">${framingSVG(M, FR, fpEx)}</div><p class="cap">Blue: girders. Black: cross-frames on bearing lines. Green: intermediate cross-frames. Red ticks: field splices. ${FR.orient.some(o => o.pz) ? `Shaded: pier regions (Framing tab), intermediate cross-frames at most ${f2(plPierSp(P.framing, M))} ft. ` : ''}${fpEx > 1.001 ? `Transverse scale exaggerated ${f2(fpEx)}× so the bays are readable; skew angles appear steeper than true.` : 'True scale.'} ${FR.frames.length} cross-frames in total. Span dimensions are along the bridge centerline.</p>`)
      + card('dw-xs', 'Typical cross-section', 'To scale', `<div class="dwg-wrap">${x.svg}</div><p class="cap">${x.cap}</p>`)
 ```
+
+## 2026-10-15 — PR: claude/gd-st-owner-rules (GD49: owner load rules carried to ST-Girder; cross-tool PR with stgirder.html and HANDOFF.md §4.9, approved exception of 2026-10-04; engineer decision 2026-10-15; PR link added after merge)
+
+### OWN13. Send to ST-Girder carries the owner rules (`ownerRules`)   [HAND-OFF: new optional field; GirderDetail's own results unchanged]
+- **Where:** `gdStPayload` (anchor `const ownerRules = (() => { const lf0 = P.df && P.df.bridge && P.df.bridge.lf;`): new optional payload field `ownerRules` = { owner, manual, codeBasis, llMultiplier { m, cite, liveLoad, limitStates, notApplied }, eta { D, R, I, product, max, min, cite, limitStates, rule }, haunchInProperties, haunchCite, ratingTarget { kind, rf, fatigue, cite, basis } | null }, from `gdLF()` (the factors Preliminary sizing publishes) and `OWN_RULES`; present whenever the bridge has published load rules (every owner, including AASHTO). The owner note line now says the rules are sent in `ownerRules` (and that m is not on the pedestrian load); the Send to ST-Girder help text says ST-Girder applies them.
+- **Before:** the payload had no owner data; a note asked the receiver to apply the rules.
+- **After:** the same stations, section, girderDetail and other fields, plus `ownerRules` (verified: main vs branch payloads differ only in `ownerRules` and that note line).
+- **Governing provision / check case:** see `fixlog/stgirder.md` (GD49): ST-Girder's Strength I M_u for the RIDOT built-in G2 at x = 44 ft = 5820.02 kip-ft vs this tool's Structural analysis Strength I 5820.03 kip-ft (0.001 rounding of the payload); xsA G1 with the pedestrian load 6772.18 vs 6772.18.
+- **How verified:** payloads from main and branch (built-in RIDOT/AASHTO G2, xsA RIDOT G1) compared field by field; GirderDetail → ST-Girder auto-open test 28/28 over http and as files; `node --check` all blocks.
+- **Other copies:** none (`BridgeXfer` helper unchanged).
+
+Diff of the outer file (main → branch):
+
+```diff
+--- main (outer file)
++++ branch (outer file)
+@@ -5942,7 +5942,7 @@
+   return `<div class="full" id="gd-st-box"><div class="ig"><label for="gd-st-g">Girder to send</label><select id="gd-st-g">${[...Array(nb)].map((_, i) => `<option value="${i + 1}"${i + 1 === g0 ? ' selected' : ''}>G${i + 1} (${i === 0 || i === nb - 1 ? 'exterior' : 'interior'})</option>`).join('')}</select></div>
+     <div class="ck-row"><input type="checkbox" id="gd-st-pl" checked><label for="gd-st-pl">Add the pedestrian load (when there is one) to LL+IM, as this tool does for its own design demands</label></div>
+     <div class="fa-imp"><button type="button" class="proj-btn" data-gdst="send" title="Write this girder's analysis results to the shared browser storage for ST-Girder (stgirder.html): Pull from GirderDetail. Then offers to open ST-Girder in a new tab with this girder loaded">Send to ST-Girder</button><button type="button" class="proj-btn" data-gdst="file" title="Save the same hand-off as a JSON file (ST-Girder: Import)">Export hand-off (JSON)</button></div>
+-    <p class="note">Sends the unfactored forces of this analysis at every node (DC1, DC2, DW, LL+IM already multiplied by the girder's distribution factors, fatigue moments and shears) with the girder's plates, materials, deck, cross-frame spacing, skew and distribution factors, for ST-Girder's checks and LRFR rating. ST-Girder applies its own load factors and resistances and does not apply distribution factors again. After sending you can open ST-Girder in a new tab with this girder loaded, or click Pull from GirderDetail there later. Opened as files, both tools must be in one folder and opened in Chrome or Edge; otherwise use Export hand-off (JSON) and ST-Girder's Import.</p></div>`;
++    <p class="note">Sends the unfactored forces of this analysis at every node (DC1, DC2, DW, LL+IM already multiplied by the girder's distribution factors, fatigue moments and shears) with the girder's plates, materials, deck, cross-frame spacing, skew and distribution factors, for ST-Girder's checks and LRFR rating. ST-Girder applies its own load factors and resistances (with the bridge owner's load rules, sent with the demands) and does not apply distribution factors again. After sending you can open ST-Girder in a new tab with this girder loaded, or click Pull from GirderDetail there later. Opened as files, both tools must be in one folder and opened in Chrome or Edge; otherwise use Export hand-off (JSON) and ST-Girder's Import.</p></div>`;
+ }
+ function gdStPayload(g, addPL) {
+   const R = GM.sa.compute({ ...P.sa, girder: g }); if (R.errors && R.errors.length) return { error: R.errors[0] };
+@@ -5976,13 +5976,23 @@
+     hasPL ? (pl ? 'The pedestrian load is ADDED to LL+IM (as GirderDetail does for its own design demands); M_PL/V_PL give it separately.' : 'The pedestrian load is NOT in LL+IM; M_PL/V_PL give it separately.') : 'No pedestrian load.',
+     'Moments sagging positive. Shears in the MIDAS convention of this schema (negative at the left end of a span under gravity load). Shear at a node is the element just right of it; at each interior support there is one station 0.001 ft either side.',
+     'Not sent: construction live load, deck placement sequence, wind and flange lateral bending.',
+-    ...(() => { const L = gdLF(); return gdLFid(L) ? [] : [`Owner load rules of ${L.o} (OWN6–OWN8), applied in GirderDetail's own checks, are NOT in these unfactored forces: ${[L.m !== 1 ? `design load multiplier ${L.m} on LL+IM at the Strength and Service limit states` : '', L.eta !== 1 || L.etaN !== 1 ? `load modifier eta = ${(L.eD * L.eR * L.eI).toFixed(3)} on the Strength load factors (1/eta on the minimum factors)` : '', L.h0 ? 'haunch taken as 0 in composite section properties (deck.haunch is the haunch as entered; the forces come from an analysis with the haunch at 0 in the composite stiffness)' : ''].filter(Boolean).join('; ')}. Apply them in the receiving tool.`]; })()];   // OWN6–OWN8: a note only (the payload's fields are unchanged)
++    ...(() => { const L = gdLF(); return gdLFid(L) ? [] : [`Owner load rules of ${L.o} (OWN6–OWN8), applied in GirderDetail's own checks, are NOT in these unfactored forces: ${[L.m !== 1 ? `design load multiplier ${L.m} on HL-93 LL+IM at the Strength and Service limit states (not on the pedestrian load)` : '', L.eta !== 1 || L.etaN !== 1 ? `load modifier eta = ${(L.eD * L.eR * L.eI).toFixed(3)} on the Strength load factors (1/eta on the minimum factors)` : '', L.h0 ? 'haunch taken as 0 in composite section properties (deck.haunch is the haunch as entered; the forces come from an analysis with the haunch at 0 in the composite stiffness)' : ''].filter(Boolean).join('; ')}. They are sent in ownerRules; ST-Girder applies them to its own checks.`]; })()];   // OWN6–OWN8; GD49: also sent as data (ownerRules)
++  // GD49 (engineer decision 2026-10-15; HANDOFF.md §4.9): the owner rules as data, optional field ownerRules, whenever the bridge publishes its load rules (bridge.lf).
++  // ST-Girder applies them to its Strength I and Service II combinations and section properties as this tool does; payloads without it behave as before.
++  const ownerRules = (() => { const lf0 = P.df && P.df.bridge && P.df.bridge.lf; if (!lf0 || typeof lf0 !== 'object') return null;
++    const L = gdLF(), o = gdOwner() || L.o || 'AASHTO', ow = OWN_RULES.owners[o] || {}, row = id => gdOwnRules(o, id)[0] || null, cit = r => r ? gdOwnCite(r) : '', rr = gdRateRule(), mr = row('ld.mult'), hr = row('ld.haunch0');
++    const ec = [...new Set([L.cite && L.cite.D, L.cite && L.cite.R, L.cite && L.cite.I].filter(Boolean))].join('; ') || 'AASHTO LRFD 1.3.3 to 1.3.5';
++    return { owner: o, manual: ow.manual || '', codeBasis: 'AASHTO LRFD 10th Ed. (2024) with the owner rules on top',
++      llMultiplier: { m: L.m, cite: cit(mr), liveLoad: 'HL-93 LL+IM only; not the pedestrian load', limitStates: ['Strength I', 'Service I', 'Service II'], notApplied: ['live load deflection', 'fatigue', 'deck placement (constructibility)', 'load rating'] },
++      eta: { D: L.eD, R: L.eR, I: L.eI, product: r4(L.eD * L.eR * L.eI), max: L.eta, min: L.etaN, cite: ec, limitStates: ['Strength'], rule: 'maximum Strength load factors x max; minimum factors x min (AASHTO LRFD 1.3.2.1)' },
++      haunchInProperties: !L.h0, haunchCite: cit(hr),
++      ratingTarget: rr ? { kind: rr.kind, rf: rr.value && +rr.value.rf > 0 ? +rr.value.rf : null, fatigue: rr.value && +rr.value.fat > 0 ? +rr.value.fat : null, cite: cit(rr), basis: 'HL-93 inventory design-load rating, AASHTO factors without m or eta' } : null }; })();
+   const p = { _schema: GD_ST.schema, schemaVersion: 1, producer: GD_ST.producer, producerFile: GD_ST.file, producedAt: new Date().toISOString(),
+     project: String((P.tb && P.tb.name) || b.project || 'GirderDetail'), source: `GirderDetail Structural analysis, ${lab} (${ext ? 'exterior' : 'interior'}), ${model}`, liveLoadType: 'HL-93',
+     units: { x: 'ft', moment: 'ft-kip', force: 'kip', plate: 'in', stress: 'ksi', deck: 'in', area: 'in2', unitWeight: 'kcf', spacing: 'ft', Lb: 'ft', skew: 'deg' },
+     factored: false, imIncluded: true, dfIncluded: true, multiplePresenceIncluded: true, liveLoadPerGirder: true, fatigueIncluded: true, pedestrianInLL: pl, selfWeightExcluded: false,
+     member: { key: lab, type: 'steel I-girder', totalLength: r3(xs[N - 1]), spans: R.spans.slice(), supports: sup.map(i => r3(xs[i])) },
+-    section: { zones }, stations, notes,
++    section: { zones }, stations, notes, ...(ownerRules ? { ownerRules } : {}),
+     girderDetail: { girder: g, label: lab, position: ext ? 'exterior' : 'interior', nGirders: nb, spacing: r4(S), overhang: ext ? (j === 0 ? b.ohL : b.ohR) : null, analysis: model,
+       materials: { Fyf: gF.Fy, Fyw: gW.Fy, Fu: gF.Fu, gradeFlange: b.gF, gradeWeb: b.gW, Es: ES, fc: b.fc, wc: b.wc, Ec: r3(R.DF.MR.Ec), n: r4(R.n) },
+       deck: { ts: b.tsDeck, haunch: b.haunch, beff: r3(R.beff), rebarPct: nm(R.p.rebar), Ar: r3(R.Ar), rebarAt: 'deck mid-depth' },
+```
