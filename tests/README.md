@@ -37,6 +37,18 @@ Options of `compare.mjs`: `--tool gd|st|page`, `--a` (default `origin/main`), `-
 
 A git ref is written with `git show` to `<tmp>/allstruct-tests/<sha>/` and opened from there (`file://`). Fetch first (`git fetch origin main`) so `origin/main` is current.
 
+## Suggest panel checks (`suggest.mjs`)
+
+```bash
+# default settings: the panel's Quick suggestion and Full design give the same results as origin/main's Suggest tab (quick suggestion, then Full design)
+node tests/suggest.mjs same --project builtin,xsA --owner AASHTO,RIDOT      # add --full no to skip Full design (about 80 s per case)
+# modes honoured (web depth Range/List/Locked, girder count List/Range, overhangs Locked, spacing near piers Locked), Cancel, Apply and module sync,
+# saved data both ways (main opens a project with the new fields; an older project opens in the branch), Design modules hides the button
+node tests/suggest.mjs locks
+```
+
+Each `same` case opens A (`--a`, default `origin/main`) and B (`--b`, default the working tree) in parallel, waits for idle, sets the owner like `compare.mjs`, and compares the Suggest results (web depth and type, plates, splices, stiffeners, cross-frame spacing, cost, the fast-sizing candidates, the quick check or Full design candidates and ratios) exactly. Exit code 0 when everything passes.
+
 ## Output
 
 For each case, one line per section with the hash of A and B and `same` or `DIFFERENT`, then for each different section the values that differ (path, A, B), then console errors, dialogs, blocked requests and how long the idle wait took. The exit code is 0 when every section is identical, 1 on a difference, 2 on an error (including console errors). Raw readouts (JSON) are saved in `--out`.
