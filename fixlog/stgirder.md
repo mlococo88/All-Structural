@@ -2249,3 +2249,151 @@ Diff (main → branch):
          <button key={k} className={'tab'+(tab===k?' on':'')+(LIVE[k]?'':' soon')} onClick={()=>setTab(k)}>{l}</button>)}</div>
  
 ```
+
+## 2026-10-15 — PR: claude/stgirder-deck-owner (GD49 deck: the owner load rules from GirderDetail applied to the transverse Deck design; engineer decision 2026-10-15; PR link added after merge)
+
+### GD49-D. Owner load rules (`ownerRules`) on the transverse deck design   [LOAD FACTOR CHANGE for GirderDetail imports carrying ownerRules — §4 callout]
+- **Problem / decision:** GD49 (#234) applied GirderDetail's owner rules (η, RIDOT design load multiplier m) to the girder checks only; the Deck tab (transverse deck, equivalent strip) kept 1.25 / 1.50 / 1.75. Engineer decision 2026-10-15: RIDOT BDM 3.4.1.2 applies m to "all bridge components" (HL-93 LL+IM, Strength and Service; not deflection, fatigue, rating), and η (AASHTO LRFD 1.3.2.1) applies at Strength, so both apply to the deck design whenever ST-Girder has owner rules from GirderDetail. More conservative (RIDOT and CTDOT with η = 1.05; MassDOT/AASHTO with η = 1, m = 1: unchanged).
+- **Where:** `deckDesign` (anchor `function deckDesign(inp,F){`): new argument `F` = the Strength I factors of `computeAll` (`lfFac(OWN)`: γ_DC = 1.25η, γ_DW = 1.50η, γ_LL = 1.75ηm; exactly 1.25, 1.50, 1.75 without owner rules); `Mu_pos`, `Mu_neg`, `Mu_oh` use them; returned as `gDC, gDW, gLL`. `computeAll` (anchor `deckD=deckDesign(inp,LFc);`). Display: `deckWorkedDeriv` (factors in the step 1 title and equation, the η/m line and an owner note with links), `DeckTab` (prop `go`; hint text factors; owner callout with links to Inputs and Report), `ownLines` (new deck line, so the banner, Inputs tab and report 1/2 list it), `OwnBanner` (text and a Deck link), report 1 "Owner load rules" paragraph, report Deck design "Method" paragraph (owner factors; "see 2. Input parameters — Owner load rules"), the pull/apply message ("applied to the girder checks and the transverse deck design").
+- **Not changed:** the deck has no Service limit-state check in ST-Girder, so only Strength I changes; the A4-1 table values, the overhang wheel moment (IM 1.33, MPF 1.20), the dead-load moments and the resistance φM_n are unchanged. Haunch 0 (h0) does not touch the deck design (it uses t_s only). The owner rules apply only while a GirderDetail import with `ownerRules` is in use (same `OWN` as the girder, `ownLFOf(inp.external)`).
+- **Before:**
+  ```js
+  function deckDesign(inp){
+  ...
+    const Mu_pos=1.25*MDC_pos+1.50*MDW_pos+1.75*MLL_pos;
+    const Mu_neg=1.25*MDC_neg+1.50*MDW_neg+1.75*MLL_neg;
+  ...
+    const Mu_oh=1.25*MohDC+1.50*MohDW+1.75*Math.max(MohLL,0);
+  ...
+      deckD=deckDesign(inp);
+  ```
+- **After:**
+  ```js
+  function deckDesign(inp,F){
+    const gDC=F?F.gDC:1.25, gDW=F?F.gDW:1.50, gLL=F?F.gLL:1.75;
+  ...
+    const Mu_pos=gDC*MDC_pos+gDW*MDW_pos+gLL*MLL_pos;
+    const Mu_neg=gDC*MDC_neg+gDW*MDW_neg+gLL*MLL_neg;
+  ...
+    const Mu_oh=gDC*MohDC+gDW*MohDW+gLL*Math.max(MohLL,0);
+  ...
+      deckD=deckDesign(inp,LFc);
+  ```
+  Without owner rules `lfFac(LF_ST)` gives 1.25·1, 1.5·1, 1.75·1·1 = exactly 1.25, 1.5, 1.75 (bit-identical products).
+- **Governing provision:** RIDOT Bridge Design Manual (April 2026) 3.4.1.2 (design load multiplier 1.2 on HL-93 LL+IM, all bridge components, Strength and Service); AASHTO LRFD 10th Ed. (2024) 1.3.2.1 (Eq. 1.3.2.1-2, η ≥ 0.95), Table 3.4.1-1 (Strength I), 4.6.2.1 and Table A4-1 (deck strip moments), 4.6.2.1.3 (overhang strip 45.0 + 10.0X); RIDOT BDM 1.3.1–1.3.3 (η_D, η_R, η_I).
+- **Check case (built-in GirderDetail example, RIDOT, η_I = Yes → η = 1.05, m = 1.2; G2 sent to ST-Girder; S = 9.50 ft, t_s = 8 in, w_c = 0.150 kcf, FWS 25 psf, b_ft = 16 in → x = b_ft/4 = 4.0 in; top bars 0.31 in² @ 6 in, cover 2.5 in, f′_c 4 ksi, f_y 60 ksi):**
+  - Interior −M (top bars): M_DC = 0.100(9.50²)/10 = 0.9025, M_DW = 0.025(9.50²)/10 = 0.2256 k-ft/ft; M_LL+IM (A4-1, S = 9.50 ft, between x = 3 in 6.31 and x = 6 in 5.46) = 6.31 − (0.85)(1/3) = 6.0267 k-ft/ft.
+  - Before: M_u = 1.25(0.9025) + 1.50(0.2256) + 1.75(6.0267) = 1.1281 + 0.3384 + 10.5467 = **12.013** k-ft/ft; φM_n = 13.197 k-ft/ft; D/C **0.910** (PASS).
+  - After: γ_DC = 1.25(1.05) = 1.3125, γ_DW = 1.50(1.05) = 1.575, γ_LL = 1.75(1.05)(1.2) = 2.205; M_u = 1.3125(0.9025) + 1.575(0.2256) + 2.205(6.0267) = 1.1845 + 0.3554 + 13.2888 = **14.829** k-ft/ft; D/C **1.124 FAIL**.
+  - Interior +M: 12.866 → 15.931 k-ft/ft (D/C 0.740 → 0.917). Overhang: M_DC = 1.125, M_DW = 0.0281, M_LL+IM = 1.33(1.2)(16)(0.50)/(50.0/12) = 3.0643 k-ft/ft; M_u 1.25(1.125) + 1.50(0.0281) + 1.75(3.0643) = 6.811 → 1.3125(1.125) + 1.575(0.0281) + 2.205(3.0643) = 8.278 k-ft/ft (D/C 0.516 → 0.627).
+  - CTDOT (η = 1.05, m = 1): −M 12.013 → 12.614 (D/C 0.910 → 0.956). xsA RIDOT G1 (exterior, wider overhang): overhang 9.316 → 11.390 (0.706 → 0.863).
+- **Check case (old payloads / no ownerRules):** payloads sent by GirderDetail before #234 (built-in RIDOT G2, xsA RIDOT G1, built-in AASHTO G2), the new payloads with `ownerRules` deleted (RIDOT, xsA RIDOT, MassDOT, CTDOT, AASHTO), new AASHTO and MassDOT payloads (η = 1, m = 1), and ST-Girder's defaults: the whole `computeAll` result **identical** to main (JSON compare; the only new fields are `deckD.gDC/gDW/gLL` = 1.25/1.5/1.75), and the Deck tab, the overhang worked case, the report deck section, the owner banner and report 1/2 texts identical to main.
+- **How verified:** Babel transform of the whole JSX script (main, branch); Node: `computeAll` main vs branch on the defaults and on the session inputs of 13 headless runs (above): identical except the deck results of RIDOT/CTDOT payloads, and nothing else differs in those; headless Chromium (payload auto-applied through `#gdpull`), main vs branch: texts as above, no console errors; GirderDetail → ST-Girder auto-open test 28/28 (http and file); screenshots of the Deck tab, the overhang worked case and the report deck section checked.
+- **Other copies:** none in this tool. GirderDetail (`Steel Bridge Beam Modules.html`) has no transverse deck design module; its "Deck overhang" module is the exterior-girder deck-placement constructibility check (6.10.3), to which RIDOT 3.4.1.2 does not apply m ("deck placement" excluded) — not changed.
+- **Open items:** none. (Closes the open item of the GD49 entry above: "the Deck tab is not changed by the owner rules".)
+
+Diff (main → branch):
+
+```diff
+diff --git a/stgirder.html b/stgirder.html
+index 63575b9..9f357b4 100644
+--- a/stgirder.html
++++ b/stgirder.html
+@@ -2409,2 +2409,3 @@ function ownLines(R){ const L=R&&R.lf; if(!L||!L.on) return null; const f3=v=>fm
+   out.push(L.h0? 'Haunch taken as 0 in every composite section property (elastic n and 3n sections, cracked section, M_p)'+(L.cite.h?' ('+L.cite.h+')':'')+'; its weight is in the imported DC1; the drawing shows the haunch as entered.' : 'Haunch in the composite section properties as entered.');
++  if(R.deckD) out.push('Transverse deck design (Deck tab): Strength I M_u = '+lfP(R.deckD.gDC,'1.25')+' M_DC + '+lfP(R.deckD.gDW,'1.50')+' M_DW + '+lfP(R.deckD.gLL,'1.75')+' M_LL+IM (1.25η, 1.50η, 1.75ηm) for the interior bays (Table A4-1) and the overhang wheel load; the deck has no Service check in this tool.');
+   if(L.rt) out.push('Design rating target: HL-93 inventory RF ≥ '+fmt(L.rt,2)+(L.rtFat?' (fatigue '+fmt(L.rtFat,2)+')':'')+(L.cite.rt?' ('+L.cite.rt+')':'')+'; checked on the Rating tab, reported only (no resizing).');
+@@ -2416,3 +2417,3 @@ function OwnBanner({R,go}){ const L=R&&R.ok&&R.lf; if(!L||!L.on) return null; co
+     <ul style={{fontSize:11.5,margin:'4px 0 0 18px',lineHeight:1.6,padding:0}}>{ls.map((t,i)=><li key={i}>{t}</li>)}</ul>
+-    <div style={{fontSize:11.5,marginTop:4}}>Applied to every girder check while GirderDetail’s demands are in use; worked in the report, <i>2. Input parameters — Owner load rules</i> and <i>Demands — Load combinations</i>.{go?<span> Go to: <a href="#" onClick={e=>{e.preventDefault();go('inputs');}}>Inputs (imported demands)</a> · <a href="#" onClick={e=>{e.preventDefault();go('diagrams');}}>Diagrams (M_u, V_u)</a>{L.rt?<span> · <a href="#" onClick={e=>{e.preventDefault();go('rating');}}>Rating (target)</a></span>:null} · <a href="#" onClick={e=>{e.preventDefault();go('report');}}>Report</a></span>:null}</div>
++    <div style={{fontSize:11.5,marginTop:4}}>Applied to every girder check{R.deckD?' and to the transverse deck design':''} while GirderDetail’s demands are in use; worked in the report, <i>2. Input parameters — Owner load rules</i> and <i>Demands — Load combinations</i>.{go?<span> Go to: <a href="#" onClick={e=>{e.preventDefault();go('inputs');}}>Inputs (imported demands)</a> · <a href="#" onClick={e=>{e.preventDefault();go('diagrams');}}>Diagrams (M_u, V_u)</a>{R.deckD?<span> · <a href="#" onClick={e=>{e.preventDefault();go('deck');}}>Deck</a></span>:null}{L.rt?<span> · <a href="#" onClick={e=>{e.preventDefault();go('rating');}}>Rating (target)</a></span>:null} · <a href="#" onClick={e=>{e.preventDefault();go('report');}}>Report</a></span>:null}</div>
+   </div>; }
+@@ -2654,3 +2655,6 @@ function deckTableA4(S,x){
+ // Ported from PS-Girder; the deck is reinforced concrete regardless of the girder material.
+-function deckDesign(inp){
++// F (GD49 deck, engineer decision 2026-10-15): the Strength I factors {gDC, gDW, gLL} of computeAll (lfFac): 1.25η, 1.50η, 1.75ηm under the owner
++// load rules from GirderDetail; exactly 1.25, 1.50, 1.75 otherwise (or when F is not given).
++function deckDesign(inp,F){
++  const gDC=F?F.gDC:1.25, gDW=F?F.gDW:1.50, gLL=F?F.gLL:1.75;
+   const D=inp.deck, S=inp.geom.S, ts=+D.ts, fcd=+D.fc, fy=+D.fyd, wcd=+D.wc;
+@@ -2673,5 +2677,5 @@ function deckDesign(inp){
+   const SWpos=26+6.6*S, SWneg=48+3.0*S;                 // in
+-  // ---- Strength I: DC 1.25, DW 1.50, LL+IM 1.75 ----
+-  const Mu_pos=1.25*MDC_pos+1.50*MDW_pos+1.75*MLL_pos;
+-  const Mu_neg=1.25*MDC_neg+1.50*MDW_neg+1.75*MLL_neg;
++  // ---- Strength I: DC 1.25, DW 1.50, LL+IM 1.75 (GD49: × η, LL+IM × ηm under the owner load rules) ----
++  const Mu_pos=gDC*MDC_pos+gDW*MDW_pos+gLL*MLL_pos;
++  const Mu_neg=gDC*MDC_neg+gDW*MDW_neg+gLL*MLL_neg;
+   const cap=(barA,sp,cover,Mu)=>{
+@@ -2699,3 +2703,3 @@ function deckDesign(inp){
+   const MohLL=1.33*1.2*16*Xoh/(SWoh/12);                // IM 1.33, MPF 1.20, 16-kip wheel
+-  const Mu_oh=1.25*MohDC+1.50*MohDW+1.75*Math.max(MohLL,0);
++  const Mu_oh=gDC*MohDC+gDW*MohDW+gLL*Math.max(MohLL,0);
+   const ohCap=cap(+D.barTop,+D.sTop,+D.coverT,Mu_oh);
+@@ -2704,3 +2708,3 @@ function deckDesign(inp){
+           MDC_pos,MDC_neg,MDW_pos,MDW_neg,A4,xneg,xnegAuto,dsRule,bft,
+-          pos,neg,oh,bBar,Pbar,Xoh,SWoh,MohDC,MohDW,MohDL,MohLL,Mu_oh,ohCap,distPct,fcd,fy,ts};
++          pos,neg,oh,bBar,Pbar,Xoh,SWoh,MohDC,MohDW,MohDL,MohLL,Mu_oh,ohCap,distPct,fcd,fy,ts,gDC,gDW,gLL};
+ }
+@@ -3443,3 +3447,3 @@ function computeAll(inp){
+     if(deck.deckOn && inp.deck.designOn){
+-      deckD=deckDesign(inp);
++      deckD=deckDesign(inp,LFc);   // GD49 deck: the owner Strength I factors (1.25, 1.50, 1.75 without owner rules)
+       checks.push({n:'Deck +M (bottom bars)', t:'Deck +M', v:deckD.Mu_pos, lim:deckD.pos.phiMn, r:deckD.pos.dc, u:'k-ft/ft', ref:'9.7.3', loc:0});
+@@ -5255,3 +5259,5 @@ function deckCases(d){
+ }
+-function deckWorkedDeriv(R,CS,right){ const d=R.deckD, cc=CS.c;
++function deckWorkedDeriv(R,CS,right,goOwn){ const d=R.deckD, cc=CS.c;
++  // GD49 deck: the Strength I factors used (text exactly '1.25', '1.50', '1.75' without owner load rules)
++  const L=lfS(R), own=!!L.on, fD=lfP(d.gDC,'1.25'), fW=lfP(d.gDW,'1.50'), fL=lfP(d.gLL,'1.75');
+   return (    <Deriv title="Worked deck design at a selected case"
+@@ -5271,4 +5277,6 @@ function deckWorkedDeriv(R,CS,right){ const d=R.deckD, cc=CS.c;
+       ]}/>
+-      <SG n="1">Factored design moment — Strength I (DC 1.25, DW 1.50, LL+IM 1.75)</SG>
+-      <ML s={Tx`M_u=1.25M_{DC}+1.50M_{DW}+1.75M_{LL+IM}=1.25(${nx(CS.MDC,2)})+1.50(${nx(CS.MDW,2)})+1.75(${nx(CS.MLL,2)})=${nx(CS.Mu,2)}\;\text{k-ft/ft}`}/>
++      <SG n="1">Factored design moment — Strength I (DC {fD}, DW {fW}, LL+IM {fL})</SG>
++      {own&&<ML s={Tx`\gamma_{DC}=1.25\eta=1.25(${nx(L.eta,3)})=${fD},\quad\gamma_{DW}=1.50\eta=${fW},\quad\gamma_{LL}=1.75\eta m=1.75(${nx(L.eta,3)})(${nx(L.m,2)})=${fL}`}/>}
++      <ML s={Tx`M_u=${fD}M_{DC}+${fW}M_{DW}+${fL}M_{LL+IM}=${fD}(${nx(CS.MDC,2)})+${fW}(${nx(CS.MDW,2)})+${fL}(${nx(CS.MLL,2)})=${nx(CS.Mu,2)}\;\text{k-ft/ft}`}/>
++      {own&&<div className="mnote">Owner load rules from GirderDetail ({L.o||'—'}): η = {fmt(L.eta,3)} on the Strength I factors (AASHTO LRFD 1.3.2.1) and the design load multiplier m = {fmt(L.m,2)} on the HL-93 LL+IM{L.cite.m?' ('+L.cite.m+')':''}; M_LL+IM above is the value without m ({CS.src}). See the calculation report, 2. Input parameters — Owner load rules{goOwn?<span> (<a href="#" onClick={e=>{e.preventDefault();goOwn('report');}}>Report</a> · <a href="#" onClick={e=>{e.preventDefault();goOwn('inputs');}}>Inputs</a>)</span>:null}.</div>}
+       <SG n="2">Flexural resistance of the deck section</SG>
+@@ -5282,3 +5290,3 @@ function deckWorkedDeriv(R,CS,right){ const d=R.deckD, cc=CS.c;
+ }
+-function DeckTab({R}){
++function DeckTab({R,go}){
+   if(!R.ok) return null;
+@@ -5299,5 +5307,8 @@ function DeckTab({R}){
+     <Card title="What this check is" refTag="LRFD 4.6.2.1 · equivalent-strip method">
+-      <div className="hint">The deck spans transversely between girders and is designed per foot of width. For the <b>interior bays</b> the live-load moments come straight from <b>AASHTO Table A4-1</b>, interpolated on the girder spacing S = {fmt(d.Ls,2)} ft and on the negative-moment design section x = {fmt(d.xneg,1)} in ({d.dsRule}); those tabulated values already include the multiple presence factors and the 33% dynamic load allowance, so no further impact is applied. The <b>overhang</b> is not covered by A4-1, so a 16-kip wheel placed 1 ft clear of the railing face is spread over the 45.0 + 10.0X strip (X = {fmt(d.Xoh,2)} ft, SW = {fmt(d.SWoh,1)} in) with IM and the one-lane multiple presence factor applied by hand. Dead load is the slab as DC and the future wearing surface as DW, factored 1.25 and 1.50 respectively. Distribution reinforcement (9.7.3.2) = min(220/√S, 67%) = <b>{fmt(d.distPct,0)}%</b> of the bottom steel, placed parallel to traffic.</div>
++      <div className="hint">The deck spans transversely between girders and is designed per foot of width. For the <b>interior bays</b> the live-load moments come straight from <b>AASHTO Table A4-1</b>, interpolated on the girder spacing S = {fmt(d.Ls,2)} ft and on the negative-moment design section x = {fmt(d.xneg,1)} in ({d.dsRule}); those tabulated values already include the multiple presence factors and the 33% dynamic load allowance, so no further impact is applied. The <b>overhang</b> is not covered by A4-1, so a 16-kip wheel placed 1 ft clear of the railing face is spread over the 45.0 + 10.0X strip (X = {fmt(d.Xoh,2)} ft, SW = {fmt(d.SWoh,1)} in) with IM and the one-lane multiple presence factor applied by hand. Dead load is the slab as DC and the future wearing surface as DW, factored {lfP(d.gDC,'1.25')} and {lfP(d.gDW,'1.50')} respectively{lfS(R).on?<span>, and the live load {lfP(d.gLL,'1.75')} (owner load rules, below)</span>:null}. Distribution reinforcement (9.7.3.2) = min(220/√S, 67%) = <b>{fmt(d.distPct,0)}%</b> of the bottom steel, placed parallel to traffic.</div>
+     </Card>
+ 
++    {lfS(R).on&&(()=>{ const L=lfS(R); return <div className="callout" style={{borderLeftColor:'#7c3aed',background:'#f5f3ff'}}>
++      <b>Owner load rules from GirderDetail ({L.o||'—'}) applied to the deck design</b> (engineer decision 2026-10-15): Strength I M_u = 1.25η M_DC + 1.50η M_DW + 1.75ηm M_LL+IM = <b>{lfP(d.gDC,'1.25')}</b> M_DC + <b>{lfP(d.gDW,'1.50')}</b> M_DW + <b>{lfP(d.gLL,'1.75')}</b> M_LL+IM, with η = {fmt(L.eta,3)} (AASHTO LRFD 1.3.2.1) and the design load multiplier m = {fmt(L.m,2)} on the HL-93 LL+IM{L.cite.m?' ('+L.cite.m+')':''}, for the interior bays (Table A4-1) and the overhang wheel load alike. The deck has no Service limit-state check in this tool, so only Strength I changes.{go?<span> Go to: <a href="#" onClick={e=>{e.preventDefault();go('inputs');}}>Inputs (owner load rules)</a> · <a href="#" onClick={e=>{e.preventDefault();go('report');}}>Report (2. Input parameters — Owner load rules; Deck design)</a></span>:null}</div>; })()}
++
+     <Card title="Summary — all deck design cases" refTag="dead + HL-93 · per foot of strip">
+@@ -5313,3 +5324,3 @@ function DeckTab({R}){
+         {CASES.map(x=><option key={x.k} value={x.k}>{x.l}</option>)}
+-      </select>)}
++      </select>,go)}
+ 
+@@ -5964,3 +5975,3 @@ function crModel(R,inp,o){
+     <p className="cr-p">Demands: {R.useExt?<span>imported continuous-member envelopes ({(ext&&ext.source)||'external analysis'}{ext&&ext.producer?', '+ext.producer:''}); see 2. Input parameters.</span>:<span>ST-Girder’s built-in simple-span analysis (dead loads from the section and deck geometry, HL-93 live load times the distribution factors).</span>} Load factors: Strength I 1.25 DC + 1.50 DW + 1.75 (LL+IM); Service II DC + DW + 1.30 (LL+IM).</p>
+-    {owl&&<React.Fragment><p className="cr-p"><b>Owner load rules ({R.lf.o}{R.lf.manual?', '+R.lf.manual:''}), sent by GirderDetail with the demands and applied to every girder check here</b> (worked in 2. Input parameters, Owner load rules, and in Demands, Load combinations):</p><ul className="cr-ul">{owl.map((t,i)=><li key={i}>{t}</li>)}</ul></React.Fragment>}
++    {owl&&<React.Fragment><p className="cr-p"><b>Owner load rules ({R.lf.o}{R.lf.manual?', '+R.lf.manual:''}), sent by GirderDetail with the demands and applied to every girder check here{R.deckD?' and to the transverse deck design':''}</b> (worked in 2. Input parameters, Owner load rules, and in Demands, Load combinations{R.deckD?'; deck: Deck design (transverse)':''}):</p><ul className="cr-ul">{owl.map((t,i)=><li key={i}>{t}</li>)}</ul></React.Fragment>}
+     {gdn&&<React.Fragment><p className="cr-p"><b>{gdn.head}</b> {gdn.src}</p><p className="cr-p">Known differences between the two tools:</p><ul className="cr-ul">{gdn.diffs.map((d,i)=><li key={i}>{d}</li>)}</ul><p className="cr-p"><i>{gdn.tbc}</i></p></React.Fragment>}
+@@ -6166,3 +6177,3 @@ function crModel(R,inp,o){
+       const d=R.deckD;
+-      sub(s,'Method','4.6.2.1 · Table A4-1',<p className="cr-p">Equivalent-strip method per foot of width. Interior-bay live-load moments from AASHTO Table A4-1 at S = {fmt(d.Ls,2)} ft and the −M design section x = {fmt(d.xneg,1)} in ({d.dsRule}); multiple presence and the 33% dynamic load allowance are already in the table. Overhang: 16-kip wheel 1 ft from the railing face on the 45.0 + 10.0X strip (X = {fmt(d.Xoh,2)} ft, SW = {fmt(d.SWoh,1)} in) with IM and the one-lane multiple presence factor. Distribution reinforcement (9.7.3.2) = {fmt(d.distPct,0)}% of the bottom steel.</p>);
++      sub(s,'Method','4.6.2.1 · Table A4-1',<p className="cr-p">Equivalent-strip method per foot of width. Interior-bay live-load moments from AASHTO Table A4-1 at S = {fmt(d.Ls,2)} ft and the −M design section x = {fmt(d.xneg,1)} in ({d.dsRule}); multiple presence and the 33% dynamic load allowance are already in the table. Overhang: 16-kip wheel 1 ft from the railing face on the 45.0 + 10.0X strip (X = {fmt(d.Xoh,2)} ft, SW = {fmt(d.SWoh,1)} in) with IM and the one-lane multiple presence factor. Distribution reinforcement (9.7.3.2) = {fmt(d.distPct,0)}% of the bottom steel.{lfS(R).on?<span> Strength I with the owner load rules from GirderDetail: M_u = {lfP(d.gDC,'1.25')} M_DC + {lfP(d.gDW,'1.50')} M_DW + {lfP(d.gLL,'1.75')} M_LL+IM (1.25η, 1.50η, 1.75ηm; η = {fmt(lfS(R).eta,3)}, m = {fmt(lfS(R).m,2)}); see 2. Input parameters — Owner load rules.</span>:null}</p>);
+       deckCases(d).forEach((CS,k)=>sub(s,CS.l,k===2?'13.4 · 4.6.2.1.3':'9.7.3 · Table A4-1',<CrTab el={deckWorkedDeriv(R,CS)}/>,ck(['Deck +M','Deck −M','Deck OH'][k]))); }
+@@ -6756,3 +6767,3 @@ function App(){
+       +(secNew?'Plates: web and flange segments from the girder\u2019s plate zones.\n':'')
+-      +(p.ownerRules?(()=>{ const L={...ownLFOf(p),...lfFac(ownLFOf(p))}; return 'Owner load rules ('+(L.o||'?')+'), applied to the girder checks: \u03b7 = '+fmt(L.eta,3)+' on the Strength I factors, design load multiplier m = '+fmt(L.m,2)+' on HL-93 LL+IM at Strength I and Service II'+(L.m!==1&&p.pedestrianInLL===true&&p.stations.some(s=>s.M_PLpos!==undefined)?' (not on the pedestrian load)':'')+', haunch '+(L.h0?'0':'as entered')+' in composite properties'+(L.rt?', design rating target RF \u2265 '+fmt(L.rt,2):'')+'.\n'; })():'')
++      +(p.ownerRules?(()=>{ const L={...ownLFOf(p),...lfFac(ownLFOf(p))}; return 'Owner load rules ('+(L.o||'?')+'), applied to the girder checks and the transverse deck design: \u03b7 = '+fmt(L.eta,3)+' on the Strength I factors, design load multiplier m = '+fmt(L.m,2)+' on HL-93 LL+IM at Strength I and Service II'+(L.m!==1&&p.pedestrianInLL===true&&p.stations.some(s=>s.M_PLpos!==undefined)?' (not on the pedestrian load)':'')+', haunch '+(L.h0?'0':'as entered')+' in composite properties'+(L.rt?', design rating target RF \u2265 '+fmt(L.rt,2):'')+'.\n'; })():'')
+       +(rows.length?'\nDesign inputs that change:\n'+rows.join('\n')+'\n':'')
+@@ -6984,3 +6995,3 @@ function App(){
+         {tab==='camber'&&<CamberTab R={R}/>}
+-        {tab==='deck'&&<DeckTab R={R}/>}
++        {tab==='deck'&&<DeckTab R={R} go={setTab}/>}
+         {tab==='fatigue'&&<FatigueTab R={R}/>}
+```
