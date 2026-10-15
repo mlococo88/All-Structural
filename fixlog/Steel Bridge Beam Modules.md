@@ -18792,3 +18792,55 @@ Note on the previous entry (SGP, part 1): merged as PR #242 (https://github.com/
 -    const go = e.target.closest('[data-sgpgo]'); if (go) { e.preventDefault(); const [t, a] = go.dataset.sgpgo.split('|'); sgpGo(t, a); return; }
 +    const go = e.target.closest('[data-sgpgo]'); if (go) { e.preventDefault(); const [t, a, r] = go.dataset.sgpgo.split('|'); if (r && r.startsWith('alt:')) sgpAltUse(+r.slice(4)); sgpGo(t, a); return; }
 ```
+
+
+## 2026-10-15 — PR: claude/gd-st-utilities (GD54c: MassDOT utilities sent to ST-Girder as their own loads; cross-tool PR with stgirder.html and HANDOFF.md §4.9; engineer decision GD54(d) "yes"; PR link added after merge)
+
+### GD54c. "Send to ST-Girder": the utilities as their own load components   [HAND-OFF CHANGE, optional fields; no GirderDetail result changes]
+- **Where:** `gdStPayload` (anchors `GD54c (engineer decision 2026-10-15, GD54 "yes")`, `Utilities (OWN16, GD54b/GD54c;`, `// GD54c: what the utility fields are`); `gdStUi` note text (`and the MassDOT utilities as their own loads when there are any`).
+- **Before:** the utilities were not sent; a note line said "Not sent (OWN16): the utilities on the noncomposite section … add them in the receiving tool."
+- **After:** each station carries `M_UT`, `V_UT` (existing utilities, from `R.MUT`, `-R.VUT[e]`) and `M_UF`, `V_UF` (future allowance, `R.MUF`, `-R.VUF[e]`) when this girder has them, unfactored, steel section, shears in the schema's MIDAS sign like the other dead-load shears; `girderDetail.utilities` = { section, cite, existing: { w, strMax 1.50, strMin 0.65, service 1.0, camber true, deckPlacement false }, future: { w, strMax 1.25, strMin 0, service 1.0, serviceRelieving 0, camber false, deckPlacement false } }; the "Not sent" note is replaced by a note describing the fields. M_DC1/V_DC1 unchanged (they never included the utilities).
+- **Governing provision:** MassDOT LRFD Bridge Manual Part I 3.5.5.2, 3.5.5.4; AASHTO LRFD 10th Ed. (2024) Table 3.4.1-1, Table 3.4.1-2, 3.4.1; engineer decisions GD42, GD54b, GD54(d).
+- **Check case (built-in 15°, MassDOT, η = 1.0, m = 1; utility rows UT 0.30 klf and UF 0.25 klf at x = 17.5 ft, two adjacent → G2 0.150 klf existing, 0.125 klf future; project `tests/projects/gd/util.json`, payload `tests/projects/st/util_MassDOT_G2.json`; ST-Girder span 1, x = 44.0 ft):**
+  - Payload station x = 44: M_DC1 = 1001.730, M_DC2 = 192.929, M_DW = 159.794, M_LL+IM = 1802.184, **M_UT = 112.031, M_UF = 93.359** kip-ft (GirderDetail Structural analysis: M_UT 112.031, M_UF 93.359).
+  - Before (main ST-Girder, utilities not used): M_u = 1.25(1001.730 + 192.929) + 1.50(159.794) + 1.75(1802.184) = 1493.324 + 239.691 + 3153.822 = **4886.837 kip-ft** (tool 4886.837).
+  - After: M_u = 4886.837 + 1.50(112.031) + 1.25(93.359) = 4886.837 + 168.047 + 116.699 = **5171.582 kip-ft** (tool 5171.582); GirderDetail Structural analysis Strength I max +M at x = 44.0 ft: **5171.583** (equal within the 0.001 rounding of the sent values).
+  - Shear (governing x = 110.0 ft, pier, app sign): V_u = |1.25(−96.7 − 17.5) + 1.50(−14.5) + 1.50(−10.6) + 1.25(−8.8)| + 1.75(132.6) = 191.4 + 232.1 = **423.5 kip** (before 396.7).
+  - Other results that moved (ST-Girder, this payload): Strength flexure (+M) 0.521 → 0.560; Strength shear 0.506 → 0.541; Service II flange (top, −LL) 0.659 → 0.720; Service II web bend-buckling 0.594 → 0.643; negative flexure bottom flange 0.913 → 0.992, top flange 0.816 → 0.896; web special fatigue 0.271 → 0.296; bearing stiffener 0.687 → 0.733; φM_n at the governing +M station 9388 → 9239 kip-ft (1.3R_hM_y cap, M_D1 now includes the factored utilities); camber Δ_UT = 0.155 in, Δ_total 1.613 → 1.768 in; rating inventory: flexure 2.427 → 2.290, shear 2.666 → 2.551, −M 1.198 → 1.018, Service II 2.208 → 1.993 (governing 1.198 → 1.018).
+- **How verified (Tier 2):** `node tests/compare.mjs --tool st --payload def15_AASHTO_G2,def15_RIDOT_Iyes_G2,xsA_RIDOT_Iyes_G1` (payloads without the fields): **all sections identical** to main; the utility payload: only the values above differ. `node tests/compare.mjs --tool gd --project builtin,util --owner MassDOT` and `--project builtin --owner AASHTO`: all sections identical (the sender change is in the hand-off only). Every ST-Girder tab and the report rendered headless with the utility payload: no console errors, no KaTeX errors; screenshots of the Inputs card, banner and camber checked. Main's ST-Girder opens the new payload (validation passes, the fields are ignored). Babel transpile of the JSX (`tests/check-syntax.mjs`).
+- **Saved data:** none (the payload gains optional fields; key, channel, `_schema`, `schemaVersion` unchanged; HANDOFF.md §4.9 updated).
+- **Other copies:** the receiver is `stgirder.html` (fixlog/stgirder.md GD54c).
+- **Open items:** ENGINEER_CHECKS GD65 (ST-Girder defaults: rating, shear direction, web fatigue).
+- **Diff:**
+```diff
+diff --git a/Steel Bridge Beam Modules.html b/Steel Bridge Beam Modules.html
+index 2376a83..419c792 100644
+--- a/Steel Bridge Beam Modules.html	
++++ b/Steel Bridge Beam Modules.html	
+@@ -12714,3 +12714,3 @@ function gdStUi() {
+     <div class="fa-imp"><button type="button" class="proj-btn" data-gdst="send" title="Write this girder's analysis results to the shared browser storage for ST-Girder (stgirder.html): Pull from GirderDetail. Then offers to open ST-Girder in a new tab with this girder loaded">Send to ST-Girder</button><button type="button" class="proj-btn" data-gdst="file" title="Save the same hand-off as a JSON file (ST-Girder: Import)">Export hand-off (JSON)</button></div>
+-    <p class="note">Sends the unfactored forces of this analysis at every node (DC1, DC2, DW, LL+IM already multiplied by the girder's distribution factors, fatigue moments and shears) with the girder's plates, materials, deck, cross-frame spacing, skew and distribution factors, for ST-Girder's checks and LRFR rating. ST-Girder applies its own load factors and resistances (with the bridge owner's load rules, sent with the demands) and does not apply distribution factors again. After sending you can open ST-Girder in a new tab with this girder loaded, or click Pull from GirderDetail there later. Opened as files, both tools must be in one folder and opened in Chrome or Edge; otherwise use Export hand-off (JSON) and ST-Girder's Import.</p></div>`;
++    <p class="note">Sends the unfactored forces of this analysis at every node (DC1, DC2, DW, LL+IM already multiplied by the girder's distribution factors, fatigue moments and shears, and the MassDOT utilities as their own loads when there are any) with the girder's plates, materials, deck, cross-frame spacing, skew and distribution factors, for ST-Girder's checks and LRFR rating. ST-Girder applies its own load factors and resistances (with the bridge owner's load rules, sent with the demands) and does not apply distribution factors again. After sending you can open ST-Girder in a new tab with this girder loaded, or click Pull from GirderDetail there later. Opened as files, both tools must be in one folder and opened in Chrome or Edge; otherwise use Export hand-off (JSON) and ST-Girder's Import.</p></div>`;
+ }
+@@ -12730,2 +12730,6 @@ function gdStPayload(g, addPL) {
+     if (hasPL) Object.assign(o, { M_PLpos: r3(R.PLp[i]), M_PLneg: r3(R.PLn[i]), V_PLpos: r3(-v.Pn), V_PLneg: r3(-v.Pp) });
++    // GD54c (engineer decision 2026-10-15, GD54 "yes"): MassDOT utilities as their own loads (optional, only when this girder has them; HANDOFF.md 4.9):
++    // M_UT/V_UT existing utilities, M_UF/V_UF future utility allowance, unfactored, on the steel (noncomposite) section, shears in the schema's sign convention
++    if (R.MUT) Object.assign(o, { M_UT: r3(R.MUT[i]), V_UT: r3(-R.VUT[e]) });
++    if (R.MUF) Object.assign(o, { M_UF: r3(R.MUF[i]), V_UF: r3(-R.VUF[e]) });
+     stations.push(o); };
+@@ -12748,3 +12752,3 @@ function gdStPayload(g, addPL) {
+     'Not sent: construction live load, deck placement sequence, wind and flange lateral bending.',
+-    ...(R.wUT || R.wUF ? [`Not sent (OWN16): the utilities on the noncomposite section (MassDOT 3.5.5.2, 3.5.5.4; existing ${(R.wUT || 0).toFixed(3)} klf as DW, future allowance ${(R.wUF || 0).toFixed(3)} klf, 1.25/0, on the steel section). M_DC1/V_DC1 do not include them; add them in the receiving tool.`] : []),
++    ...(R.wUT || R.wUF ? [`Utilities (OWN16, GD54b/GD54c; MassDOT 3.5.5.2, 3.5.5.4) sent as their own loads on the steel (noncomposite) section, unfactored: ${R.MUT ? `M_UT/V_UT = existing utilities ${(R.wUT || 0).toFixed(3)} klf (DW factors: Strength 1.50 where they add, 0.65 where they relieve, with eta; Service 1.0; in the camber)` : 'no existing utilities on this girder'}; ${R.MUF ? `M_UF/V_UF = future utility allowance ${(R.wUF || 0).toFixed(3)} klf (Strength 1.25 where it adds, 0 where it relieves, with eta; Service 1.0 where it adds, 0 where it relieves; not in the camber)` : 'no future utility allowance on this girder'}. Neither is at deck placement (constructibility). M_DC1/V_DC1 do not include them.`] : []),
+     ...(() => { const L = gdLF(); return gdLFid(L) ? [] : [`Owner load rules of ${L.o} (OWN6–OWN8), applied in GirderDetail's own checks, are NOT in these unfactored forces: ${[L.m !== 1 ? `design load multiplier ${L.m} on HL-93 LL+IM at the Strength and Service limit states (not on the pedestrian load)` : '', L.eta !== 1 || L.etaN !== 1 ? `load modifier eta = ${(L.eD * L.eR * L.eI).toFixed(3)} on the Strength load factors (1/eta on the minimum factors)` : '', L.h0 ? 'haunch taken as 0 in composite section properties (deck.haunch is the haunch as entered; the forces come from an analysis with the haunch at 0 in the composite stiffness)' : ''].filter(Boolean).join('; ')}. They are sent in ownerRules; ST-Girder applies them to its own checks.`]; })()];   // OWN6–OWN8; GD49: also sent as data (ownerRules)
+@@ -12771,3 +12775,7 @@ function gdStPayload(g, addPL) {
+       skew: { bySupport: skews, max: Math.max(0, ...skews.map(Math.abs)) },
+-      df: { source: R.man ? 'entered manually in Structural analysis' : 'LLDF and DLs module', spans: dfSpans, piers: dfPiers }, im: { truck: r3(R.im * 100), fatigue: r3(R.imf * 100) } } };
++      df: { source: R.man ? 'entered manually in Structural analysis' : 'LLDF and DLs module', spans: dfSpans, piers: dfPiers }, im: { truck: r3(R.im * 100), fatigue: r3(R.imf * 100) },
++      // GD54c: what the utility fields are (only with utilities on this girder)
++      ...(R.MUT || R.MUF ? { utilities: { section: 'noncomposite (steel)', cite: 'MassDOT LRFD Bridge Manual Part I 3.5.5.2, 3.5.5.4; existing utilities = DW (GD42)',
++        existing: R.MUT ? { w: r4(R.wUT), strMax: 1.50, strMin: 0.65, service: 1.0, camber: true, deckPlacement: false } : null,
++        future: R.MUF ? { w: r4(R.wUF), strMax: 1.25, strMin: 0, service: 1.0, serviceRelieving: 0, camber: false, deckPlacement: false } : null } } : {}) } };
+   return { ok: true, payload: p };
+```
