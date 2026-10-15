@@ -12502,3 +12502,511 @@ Diff of the embedded Preliminary sizing (`PL_B64`, decoded):
 +      ${F.check.oos ? `<div class="alert fail"><b>OUT OF SCOPE.</b> ${esc(SG_OOS_HEAD)} ${esc(sgOosTxt(F.check.oos))}. This layout is not accepted; the positive-flexure checks of ${F.check.oos.length > 1 ? 'these spans' : 'this span'} are not reported.</div>` : ''}
        <p class="note-p">Web: ${F.check.gWeb ? `${F.check.gWeb}, ratio ${f3(F.check.rWeb)} at ${f2(F.check.xWeb)} ft` : 'no bend-buckling demand'}.${F.check.other.length ? ` Also: ${[...new Set(F.check.other.map(o => o.name))].join('; ')} exceeded at some points.` : ''}${(F.check.npW || []).length ? ` <b>Review:</b> outside the D6.6.2.2 step limit, so the conservative γ<sub>e</sub> bound (each section prismatic over L<sub>b</sub> at its largest stress) is used instead of App. D6.6.2 Method A; engineer to review: ${[...new Set(F.check.npW)].map(esc).join('; ')}.` : ''} ${F.check.fat ? `Flange fatigue: ${plFatTxt(P)}, Category B at the flange-to-web welds (extreme fiber)${P.suggest.fat !== 'B' ? ' and Category C′ at the connection plates welded to the flanges (inner flange face, 6.6.1.3.1; checked at every analysis point along the girder, not only at the cross-frames, which is conservative)' : ''} (6.6.1.2), short-term composite section for both signs (minimum reinforcement per 6.10.1.7).` : 'Flange fatigue was not checked (turned off).'} Other fatigue details are checked in the Fatigue module.</p>`); }
 ```
+
+## 2026-10-15 — PR: claude/gd-skew-framing (cross-frame layout at skewed supports and the unbraced lengths taken from it: AASHTO-level fixes approved by the engineer 2026-10-15; owner rules such as "staggered above 20°" are not in this PR; PR link added after merge)
+
+All changes are in the embedded Preliminary sizing page (`const PL_B64`, main file line 2361: decoded, edited, re-encoded on its one line). Nothing else in the main file changed. Basis: AASHTO LRFD 10th Ed. (2024) Art. 6.7.4.2.1 and C6.7.4.2.1 (first intermediate frame offset "by a minimum of the larger of 4b_f or 0.4L_b from the support ... where b_f is the largest girder flange width within the unbraced lengths on either side of the first cross-frame ... and L_b is the unbraced length between the first and the second intermediate cross-frame ... along the girder under consideration"; "maximized at the obtuse corners"; "as large as practicable but not less than 4b_f"; "4b_f is the recommended lower limit for the smallest unbraced lengths, offsets, or stagger distances"), 6.10.8.2.3 (L_b in LTB), 6.10.3.2.1 (deck placement). Diagnosis: problems P2–P7 of the read-only skew study (2026-10-15).
+
+### SKX1. L_b per girder from the actual frame stations   [CALCULATION CHANGE — §4 callout] [unconservative at skewed piers before; positive-region and deck-placement L_b less conservative everywhere]
+- **Where:** `detailExport` — new helpers after the anchor `const frX0 = gt => stG(gOf(gt), true), rgF = ...` (`braceG`, `toG`, `toX`, `lbSegs`, `lbMax`); `gsRow` (anchor `// unbraced segment(s) containing x on every girder of the type`); the Cross-frames block (anchor `const cf = { S: r2(m.S * 12)`); stability bracing `nBr`; deck overhang rows (anchor `lbE = Math.max(...lbSegs('ext', bx)`); Suggest `checkLayout` (SKX5).
+- **Before:** Girder section rows took brace points from **G1's** frame stations plus the **centerline** bearing stations (`[...m.sup, ...stG([0], false, 3)]`) for every girder type; negative region L_b = that G1 segment; positive region L_b = `FR.sp` (the target spacing); deck placement L_b,C = `FR.sp` for every row (deck-placement segments ranked by C_b only). Cross-frames module `cf.Lb = FR.sp`; stability bracing `n` = G1's frames between the centerline bearing stations; deck overhang rows `Lb = FR.sp`.
+- **After:** each row looks at **every girder of its type** (exterior: G1 and Gn; interior: G2 to G(n−1); the chosen girder for Structural analysis, `gOf`), each at **its own** bearings and frame stations (own station s from its Abut. 1 bearing; an analysis station maps to the girder proportionally within the span, exact when the girder's span equals the analysis span). The segment(s) containing x (both at a brace point) are candidates; the governing one is the largest L_b/C_b (L_b = the girder's own length) in both regions; L_b,C the same way with the deck-placement C_b. `cf.Lb` = the largest unbraced length on any girder; `cf.sb.n` = the fewest intermediate frames in that span on any girder (own bearings); overhang rows `Lb` = the exterior girders' segment at the row station.
+- **Check case (built-in, all supports 28°, contiguous, Pier 1 interior, negative flexure):** brace points of G3 (bearings 0 / 110 / 250 / 360 ft):
+  - Before: L_b = **10.10 ft** (G1's panel 110.00–120.10, applied to the interior type).
+  - With the old layout (main's frames) the actual interior L_b is **18.33 ft** (G3 91.67–110.00 = 110/6); G2 13.28, G4 14.95.
+  - After (final layout, SKX2–SKX4): L_b = **19.56 ft** (G3 90.44–110.00; the other side 110.00–130.09 = 20.09 ft has the larger C_b; L_b/C_b governs, both C_b = 1.0 for the nonprismatic segment). GS7 Pier 1 interior 0.859 → **0.973** (pass).
+  - Hand check of the station: G3 is the centreline girder, so its stations equal the analysis stations; first line of span 1 at e = 9.45 ft past G5's bearing (+10.10) → 19.55; grid s = 23.63 → 19.55 + 3 × 23.63 = 90.44; L_b = 110 − 90.44 = 19.56 ft.
+- **0° and 15° (frames identical to main):** negative-region L_b unchanged (22.00 ft at the piers); positive-region L_b and every L_b,C 25.00 → **22.00 / 23.33 / 22.00 ft** (spans 1/2/3), `cf.Lb` 25.00 → 23.33 ft, overhang rows 25.00 → 22.00 / 23.33 / 22.00 ft. Less conservative (the target spacing was used before, not the spacing built).
+
+### SKX2. Field-splice / transition conflicts: shift the grid, add frames only if that clears them   [layout change]
+- **Where:** `framingLayout` (anchor `const FL_MEMO = new Map();`), `parSpan` and `normSpan`; X4 note; Framing tab summary (`frSumHtml`, `renderFrSum`, `#fr-sum`).
+- **Before:** each span was regenerated with n, n+1, n+2, n+3 frames and the layout with the fewest conflicts kept (extra frames even when they did not clear anything; built-in at 28°: 72 instead of 52 intermediate frames, still 0.05 ft from splices).
+- **After:** parallel frames: shifts of the frame fractions (j + d)/(n + 1), |d| ≤ 0.25 panel (end panel of the longest girder ≤ s), then up to 3 extra per bay line; normal frames: the first / last full grid line moved inward up to 4 ft (an unskewed end: ±4 ft, keeping its end panel ≤ s and ≥ the clear distance; a skewed end keeps e ≥ max(clear, 4b_f, 0.4s)), with the same or up to two more grid intervals. A candidate is kept only if it clears every conflict (fewest frames, then smallest shift); otherwise the unshifted grid is kept and the conflicts are reported (X4 note names the spans; Framing tab table, in red). The Framing tab lists per span the frames, the spacing used against the target (parallel: per girder range when it varies), L_b,max per girder (where it varies), first/last line offsets, shifts, extra frames and conflicts.
+
+### SKX3. Normal-frame grid anchored on each girder's own bearings; first-frame offset at skewed supports   [layout change] [new check X5]
+- **Before:** grid x = X_k + j·L_s/(n+1) anchored at the **centerline** bearing; points within `supClear` (3 ft) of the farther bearing of a bay dropped; first panels at 28° of 5.05 ft (G2) up to 18.33 ft.
+- **After:** per span, at a support skewed **more than 20°** the first full line is e = max(supClear, 4b_f, 0.4s) past the bearing of the **obtuse-corner girder** (the most advanced bearing on that line), so every girder's first intermediate frame is ≥ e from its own bearing (the obtuse girder gets exactly e, the others more); at a support skewed 20° or less the first line is one spacing from the bearing (as before; identical at 0°). s and e: q + cnt = ⌈(B_min − A_max − Σe)/s_target⌉ intervals, iterated (e depends on s). b_f: the widest top or bottom flange plate in the span. Grid stations are kept in a bay where they are ≥ e (skewed support) or ≥ supClear (other) from both bearings of that bay.
+- **New check X5** (AASHTO LRFD 10th Ed. C6.7.4.2.1): per span end at a support skewed > 20° with normal frames, the governing girder's d₁ against max(4b_f, 0.4L_b), L_b the first-to-second frame panel on that girder; pass if met, **advisory** if only 4b_f is met, **warning** below 4b_f (the commentary's "should"). 0.005 ft tolerance (stations are kept to 0.001 ft).
+- **Check case (built-in 28°, span 1):** A (bearings at Abut. 1, centreline 0) = −10.10, −5.05, 0, 5.05, 10.10; B_min = 110 − 10.10 = 99.90; T = 89.80; b_f = 18 in → 4b_f = 6.00 ft; e = 0.4s: e = 10 → s = (89.80 − 20)/3 = 23.27 → e 9.31 → s 23.73 → … → s = 23.63, e = 9.45 ft. First line at 10.10 + 9.45 = 19.55 → G5 own 9.45, G3 19.55, G1 29.65 (G1 panel 29.65 > 25 → corner frame at 14.83 in bay G1–G2, SKX4). X5: d₁ = 9.45 ≥ max(6.00, 0.4 × 23.63 = 9.45) → pass.
+
+### SKX4. Corner (fill) frames and stagger offsets enforced   [layout change] [X3 limit raised to max(min. offset, 4b_f)]
+- **Before:** each bay added its own fill frames between its nearest bearing and its first grid frame, independently of the next bay; `stagMin` used only by X3 (warning); offsets down to 2.52 ft (built-in staggered), 1.04 ft in the sweep.
+- **After:** while a girder panel in the span exceeds s, a frame is added in an adjacent bay at a position that (a) is ≥ max(supClear, 4b_f) from both bearings of the bay (skewed support) and (b) either coincides with a frame on the other side of either girder it connects (connecting through) or is ≥ d_min = max(stagMin, 4b_f) from every other frame on both girders. Preference: closes the gap, no splice conflict, adjacent panels ≥ 0.4× each other (C6.7.4.2.1), lines up, balanced. Gaps are taken largest first, and smallest first if that leaves a panel over s; staggered by bay uses s/2 only when s/2 ≥ d_min (else contiguous, noted). X3 now checks d = 0 or d ≥ d_min (the span's max(stagMin, 4b_f)).
+
+### SKX5. Suggest / Full design price and check the actual layout   [CALCULATION CHANGE — §4 callout]
+- **Where:** `suggestLayout`: new `layoutOf` (memoized per candidate), `stiffBays` uses it, `costOf` (anchor `nFrC = ly ? ly.FR.frames.length : nFr`), `checkLayout(D, top, bot, web, R, spl)` (anchor `// unbraced segments from the candidate's actual cross-frame layout`), both callers pass the splices.
+- **Before:** frame cost `nFr = (nb − 1)(Σ(⌈L/s⌉ − 1) + spans + 1)` (idealised); checks with brace points every s from the nearest support and L_b = s everywhere.
+- **After:** cost = the candidate's `framingLayout` frame count; each node uses the governing actual segment of the girder type (as SKX1, by L_b/C_b for the check's moment), L_b = its own length; fallback to the old grid when a candidate's model cannot be built.
+- **Results (built-in):** 15°: fast $1,686,891 (68 frames) unchanged; Full design D 69 → 66 in, $1,570,591 → $1,596,256 (the iteration path changes with the actual L_b; main's 69 in result still passes the branch checks: max 0.993, $1,570,591). 28° all: fast $1,676,113 (68 frames priced, 88 built) → $1,699,636 (74 = built); Full design D 71 → 69 in, $1,582,491 → $1,581,235. 28° abutments: fast $1,680,012 → $1,691,570 (70 frames); Full D 69 → 69, $1,584,252 → $1,589,552. xsA (15°): Full D 63 → 63, $1,504,022 → $1,496,640.
+
+### SKX6. Parallel frames: n from the longest girder   [layout change]
+- **Before:** n = ⌈L_s/s⌉ − 1 from the centerline span (100 ft, skews 20°/0°, S = 12 ft: G1 27.18 ft > 25). **After:** n = ⌈L_max/s⌉ − 1, L_max = max over girders of their span (same example: n 3 → 4, G1 21.75, G5 18.25 ft). Unchanged where all supports have the same skew.
+
+### Per-girder stations (built-in, 28° all supports, contiguous; ft from each girder's own Abut. 1 bearing; bearings 0 / 110 / 250 / 360)
+| Girder | Before (main): brace-to-brace gaps | After: brace-to-brace gaps |
+|---|---|---|
+| G1 | 10.1, 18.34, 18.33, 18.33, 18.34, 18.33, 8.23, 10.1, 20, 20, 20, 20, 20, 20, 9.9, 10.1, 18.34, 18.33, 18.33, 18.34, 18.33, 8.23 | 14.83, 14.83, 23.63, 23.63, 23.63, 9.45, 14.55, 15.64, 24.96, 24.95, 24.96, 24.96, 9.98, 13.05, 16.61, 23.63, 23.63, 23.63, 9.45 |
+| G2 | 5.05, 18.33, 18.34, 18.33, 18.33, 18.34, 13.28, 5.05, 7.48, 12.52, 20, 20, 20, 20, 20, 14.95, 5.05, 18.33, 18.34, 18.33, 18.33, 18.34, 13.28 | 9.78, 14.83, 23.63, 23.63, 23.63, 14.5, 9.5, 15.64, 24.95, 24.96, 24.96, 24.96, 15.03, 8, 16.61, 23.63, 23.63, 23.63, 14.5 |
+| G3 | 18.33, 18.34, 18.33, 18.33, 18.34, 18.33, 7.47, 12.53, 20, 20, 20, 20, 20, 12.53, 7.47, 18.33, 18.34, 18.33, 18.33, 18.34, 18.33 | 19.55, 23.64, 23.62, 23.63, 19.56, 20.09, 24.95, 24.96, 24.96, 24.95, 20.09, 19.56, 23.63, 23.62, 23.63, 19.56 |
+| G4 | 13.28, 18.34, 18.33, 18.33, 18.34, 18.33, 5.05, 14.95, 20, 20, 20, 20, 20, 12.52, 7.48, 5.05, 13.28, 18.34, 18.33, 18.33, 18.34, 18.33, 5.05 | 14.5, 23.63, 23.63, 23.63, 17, 7.61, 15.03, 24.96, 24.96, 24.96, 24.95, 15.5, 9.64, 14.5, 23.63, 23.63, 23.63, 14.83, 9.78 |
+| G5 | 8.23, 18.33, 18.34, 18.33, 18.33, 18.34, 10.1, 9.9, 20, 20, 20, 20, 20, 20, 10.1, 8.23, 18.33, 18.34, 18.33, 18.33, 18.34, 10.1 | 9.45, 23.63, 23.63, 23.63, 17, 12.66, 9.98, 24.96, 24.96, 24.95, 24.96, 15.5, 14.69, 9.45, 23.63, 23.63, 23.63, 14.83, 14.83 |
+- Intermediate frames 72 → 58 (15°: 52); smallest panel 5.05 → 7.61 ft; largest 20.0 → 24.96 ft (target 25); X3 offsets ≥ 6.00 ft (4b_f); X4 conflicts remain in all three spans (field splices 82/145/215/278 and transitions hit every girder line; no shift clears them) and are reported.
+- **15° (as shipped), 0°, 20°, 0° forced normal, 0° at 20 ft:** frame stations identical to main (node run of `framingLayout`, and GirderDetail DC1 frame list compared, 0 differences).
+
+### Downstream results (GirderDetail modules after Get demands from Preliminary sizing; main → branch)
+| Case | Intermediate frames | Pier L_b int / ext (ft) | GS7 Pier 1 int / ext | GS7 Pier 2 int / ext | GS8 piers | GS14 Pier 1 int (buckling) | Cross-frames L_b | Overhang L_b |
+|---|---|---|---|---|---|---|---|---|
+| Built-in 15° | 52 → 52 | 22.00 / 22.00 (unch.) | 0.900 / 0.921 (unch.) | 0.900 / 0.922 (unch.) | unch. | 0.423 → 0.407 | 25 → 23.33 | 25 → 22.00 / 23.33 / 22.00 |
+| 28° all, contiguous | 72 → 58 | 10.10 → 19.56 / 10.10 → 12.66 (P2 13.05) | 0.859 → 0.973 / 0.856 → 0.874 | 0.859 → 0.973 / 0.856 → 0.877 | 0.80 (±0.001) | 0.369 → 0.388 | 25 → 24.96 | 25 → 23.63 / 24.96 / 23.63 |
+| 28° abutments only | 60 → 54 | 11.90 / 10.10 → 22.70 | 0.858 → **1.057 FAIL** / 0.856 → **1.050 FAIL** | 0.858 → **1.056 FAIL** / 0.856 → **1.050 FAIL** | 0.80 | 0.357 → 0.408 | 25 → 23.33 | 25 → 22.70 / 23.33 / 22.70 |
+| 28° all, staggered | 74 → 52 | 10.10 → 19.56 / 22.46 (P2 21.27) | 0.859 → 0.973 / 0.857 → 0.980 | 0.859 → 0.973 / 0.856 → **1.016 FAIL** | 0.80 | 0.386 → 0.388 | 25 → 24.96 | 25 → 23.63 / 24.96 / 23.63 |
+| xsA (15°) | 52 → 52 | unch. | 1.051 / 1.043 (unch., fails on main) | unch. | unch. | 0.420 → 0.404 | 25 → 23.33 | 25 → 22.00 / 23.33 / 22.00 |
+- Also changed at 15° / 0° / xsA / curb: GS14 (constructibility, L_b,C) at every row (e.g. Span 1 positive interior top flange 0.415 → 0.392), Cross-frames CF1–CF7 (e.g. CF1 bottom chord 0.106 → 0.099), Overhang OH1/OH2/OH4/OH5 (e.g. OH1 Span 1 0.604 → 0.514, OH5 top 0.559 → 0.408). Fatigue, transverse stiffeners, shear connectors, welds, bearing stiffeners, splice: unchanged at 15°/0° (frames identical). At 28° they change with the frame layout (DC1 frame loads, connection-plate candidates).
+- 28° abutments only: the piers are 0° so the pier panels are one grid spacing (22.70 ft); main sent 11.90 / 10.10 ft (a false brace at the centerline pier station and G1's panel). The built-in plates do not pass GS7 at that L_b; C6.7.4.2.1 notes closer spacing may be necessary adjacent to interior piers — not generated here (open item).
+
+### Saved data
+- No new or changed saved fields or keys. `orient[]` and the Framing tab summary are runtime only. Existing projects load unchanged; the frames are re-generated from `P.framing` on every recompute, and GirderDetail's stored `bridge.xf` (DC1 frame loads) is re-published by Preliminary sizing when the project opens (checked: 0 station mismatches in every case below).
+- Projects with a skewed support > 20° (normal frames), or with conflicts that main resolved by adding frames, get a different layout; a stored per-bay stiffener table (`framing.bays`, doMode 'bays') then no longer matches those bays: D4 flags them and the uniform d_o/D is used until Suggest Apply or the table is edited (existing behaviour for a changed framing).
+
+### How verified
+- Every script block parses (`node --check`, the decoded Preliminary sizing too).
+- `framingLayout` run in Node (extracted from the page) on main and branch: built-in at 0°, 15°, 20°, 0° forced normal, 0° at 20 ft spacing: identical stations. Sweep of 270 single-span cases at 28° (L 60–160 ft, S 8/9.5/12, s 15/20/25, contiguous/staggered, 28/28, 28/0, −28/28): X2, X3, X5 pass in all 270 (main: 105 + 107 cases with a first panel < 4b_f, 137 with offsets < stagMin); intermediate frames 6,240 → 6,094.
+- Headless Chromium, main (6942b45) vs branch, each project settled (`settle`): built-in at 15°, 0°, 28° all (contiguous and staggered), 28° abutments only; xsA; curb (15° and 0°): all 10 modules after Get demands; DC1 frame list = layout (0 mismatches, every case); no console errors or alerts. Suggest fast + quick + Full design (with the spacing study) on built-in 15°, 28°, 28° abutments, xsA. Screenshots: Framing tab summary and X5 at 28°.
+- Performance: `framingLayout` memoizes each span's frames by its inputs (EX 28°: 42 ms first call, 0.3 ms repeated; main 1.5 ms); Full design 15° 75 s → 76 s.
+
+### Open items
+- See ENGINEER_CHECKS B37 and GD36: 0° results change through SKX1 (positive-region / deck-placement / Cross-frames / overhang L_b now the spacing built); b_f taken as the widest plate in the span; X5 status levels; offset rule only at supports > 20°; built-in at 28° abutments-only fails GS7 at the piers (no closer pier spacing); Full design at 15° picks a costlier layout (heuristic path).
+- Owner rules (RIDOT/CTDOT "staggered above 20°") — later owner-profile PR.
+
+Diff of the decoded Preliminary sizing page (`pl_main` = main, `pl` = branch):
+
+```diff
+--- pl_main.html	2026-10-15 01:24:11.157045514 +0000
++++ pl.html	2026-10-15 02:15:16.381014990 +0000
+@@ -2037,7 +2037,17 @@
+   const PB = SG.doOpt !== 'off', TFA = SG.tfa !== 'off';
++  // the cross-frame layout of a candidate (SKX, 2026-10-15): its own model and framingLayout (frame count for the cost, brace points for the checks), memoized by
++  // depth, plates and splices; null when the model cannot be built (the cost then counts the idealized frames and the checks use the idealized grid, as before)
++  const lyMemo = new Map();
++  function layoutOf(D, res) {
++    if (typeof framingLayout !== 'function' || !res || !res.top || !res.bot || !res.web) return null;
++    const spl = res.splices || [], key = JSON.stringify([D, spl, res.web.map(w => [w.L, w.t]), res.top.map(g => [g.L, g.b, g.t]), res.bot.map(g => [g.L, g.b, g.t])]);
++    if (lyMemo.has(key)) return lyMemo.get(key);
++    const Pg = { ...P, girder: { ...P.girder, D, web: res.web.map(w => ({ L: w.L, t: w.t })), top: res.top.map(g => ({ L: g.L, b: g.b, t: g.t })), bot: res.bot.map(g => ({ L: g.L, b: g.b, t: g.t })), splices: [...spl] } };
++    let out = null; try { const m = buildModel(Pg); if (!m.errors.length) out = { m, FR: framingLayout(Pg, m) }; } catch (e) { out = null; }
++    lyMemo.set(key, out); return out;
++  }
+   function stiffBays(D, res, R) {   // the per-bay layout of a sized candidate: its own model and cross-frames (framingLayout), the shear envelope of R
+     if (typeof framingLayout !== 'function' || !R || !R.types) return null;
+-    const Pg = { ...P, girder: { ...P.girder, D, web: res.web.map(w => ({ L: w.L, t: w.t })), top: res.top.map(g => ({ L: g.L, b: g.b, t: g.t })), bot: res.bot.map(g => ({ L: g.L, b: g.b, t: g.t })), splices: [...res.splices] } };
+-    const m = buildModel(Pg); if (m.errors.length) return null;
+-    return tsDesign(m, framingLayout(Pg, m), FyW, tsVu(xs, R.types), TFA);
++    const ly = layoutOf(D, res); if (!ly) return null;
++    return tsDesign(ly.m, ly.FR, FyW, tsVu(xs, R.types), TFA);
+   }
+@@ -2048,4 +2058,5 @@
+     const pieces = res.splices.length + 1, nTr = (res.top.length - pieces) + (res.bot.length - pieces), nSt = wt === 'stiffened' ? Math.max(0, Math.ceil(Ltot * 12 / ((doR || DO_R) * D)) - Math.ceil(Ltot / spCF)) : 0, nSp = res.splices.length;
+-    const parts = { steel: nb * wG * cS, trans: nb * nTr * cT, stiff: nAll != null && wt === 'stiffened' ? nAll * cSt : nb * nSt * cSt, splice: nb * nSp * cSp, frames: nFr * cCF };
+-    const o = { total: parts.steel + parts.trans + parts.stiff + parts.splice + parts.frames, parts, wG, wTot: nb * wG, nTr, nSt, nSp, nb, nFr, spCF, doR: doR || DO_R };
++    const ly = layoutOf(D, res), nFrC = ly ? ly.FR.frames.length : nFr;   // cross-frames of the candidate's actual layout (SKX, 2026-10-15; was the idealized count nFr)
++    const parts = { steel: nb * wG * cS, trans: nb * nTr * cT, stiff: nAll != null && wt === 'stiffened' ? nAll * cSt : nb * nSt * cSt, splice: nb * nSp * cSp, frames: nFrC * cCF };
++    const o = { total: parts.steel + parts.trans + parts.stiff + parts.splice + parts.frames, parts, wG, wTot: nb * wG, nTr, nSt, nSp, nb, nFr: nFrC, spCF, doR: doR || DO_R };
+     if (nAll != null && wt === 'stiffened') { o.nSt = nAll / nb; o.nStTot = nAll; }   // per-bay counts: nStTot for all girders, nSt the average per girder
+@@ -2088,3 +2099,3 @@
+     const V = opts.verify, cp = l => l.map(r => ({ ...r })), t = cp(V.top), b = cp(V.bot), w = cp(V.web); sgLists(t, b, w);
+-    if (V.doR) DO_R = V.doR; const Rv = demand(V.D, t, b, w); return { errors: [], check: checkLayout(V.D, t, b, w, Rv), dOK: depthOK({ top: t, bot: b, web: w }, V.D), cost: costOf({ top: t, bot: b, web: w, splices: V.splices }, V.D, V.wt, V.doR, Rv, V.keepSt ? { keep: true, nAll: V.nStTot } : null), N, xs };
++    if (V.doR) DO_R = V.doR; const Rv = demand(V.D, t, b, w); return { errors: [], check: checkLayout(V.D, t, b, w, Rv, V.splices), dOK: depthOK({ top: t, bot: b, web: w }, V.D), cost: costOf({ top: t, bot: b, web: w, splices: V.splices }, V.D, V.wt, V.doR, Rv, V.keepSt ? { keep: true, nAll: V.nStTot } : null), N, xs };
+   }
+@@ -2094,3 +2105,3 @@
+     const res = sizeForDepth(o.D, o.wt, opts.kT, opts.kB, Math.max(opts.twMin || 0, o.twC || 0), R0, opts.shifts), c = { D: o.D, wt: o.wt, doR: DO_R, twC: o.twC, res, cost: costOf(res, o.D, o.wt, DO_R, res.rec) };
+-    c.check = R0 ? checkLayout(o.D, res.top, res.bot, res.web, R0) : null; c.dOK = depthOK(res, o.D); return { errors: [], ...c, N, xs };
++    c.check = R0 ? checkLayout(o.D, res.top, res.bot, res.web, R0, res.splices) : null; c.dOK = depthOK(res, o.D); return { errors: [], ...c, N, xs };
+   }
+@@ -2410,6 +2421,6 @@
+   /* ---- AASHTO LRFD strength and service checks of a layout at every node (full design) ---- */
+-  function checkLayout(D, top, bot, web, R) {
++  function checkLayout(D, top, bot, web, R, spl) {
+     sgLists(top, bot, web);
+     const oosL = sgOosScan(D, top, bot, web, R), oosS = new Set(oosL.map(o => o.gt + '|' + o.span));   // PNA-OOS
+-    const E = ES, Fy = FyF, Fyw = FyW, Lb = spCF * 12, reb = (num((P.analysis || {}).rebar) || 1) / 100, rt3 = Math.sqrt(E / Fy);
++    const E = ES, Fy = FyF, Fyw = FyW, reb = (num((P.analysis || {}).rebar) || 1) / 100, rt3 = Math.sqrt(E / Fy);
+     const rT = new Float64Array(N), rB = new Float64Array(N), aT = new Float64Array(N), aB = new Float64Array(N), gT = new Array(N).fill(''), gB = new Array(N).fill(''); let rWeb = 0, gWeb = '', xWeb = 0; const other = [];
+@@ -2440,4 +2451,4 @@
+     const secL = q => { const z = Math.min(Math.max(q, 1e-6), Ltot), t = sgAt(top, z), b = sgAt(bot, z), w = sgAt(web, z); return { topB: t.b, topT: t.t, botB: b.b, botT: b.t, tw: w.t }; };
+-    const nprMemo = {}, nprAt = (x, M, sgn, tag) => { const [a, b] = seg(x), k = `${gtNow}|${tag}|${sgn}|${a}|${b}`; return nprMemo[k] || (nprMemo[k] = feNpr(a, b, secL, q => sgn * feAt(xs, M, q))); };
+-    const segNodes = x => { const [a, b] = seg(x), ks = []; for (let q = 0; q < N; q++) if (xs[q] >= a - 1e-6 && xs[q] <= b + 1e-6) ks.push(q); return ks; };
++    const nprMemo = {}, nprAt = (x, M, sgn, tag) => { const g = segG(x, M, sgn, tag), a = g.a, b = g.b, k = `${gtNow}|${tag}|${sgn}|${a}|${b}`; segNow = g; Lb = g.L * 12; return nprMemo[k] || (nprMemo[k] = feNpr(a, b, secL, q => sgn * feAt(xs, M, q))); };
++    const segNodes = x => { const a = segNow.a, b = segNow.b, ks = []; for (let q = 0; q < N; q++) if (xs[q] >= a - 1e-6 && xs[q] <= b + 1e-6) ks.push(q); return ks; };
+     const secP = (s, beff) => { const p = sgSec(D, s.tw, { b: s.topB, t: s.topT }, { b: s.botB, t: s.botT }), Ar = reb * beff * ts, yr = p.d + hh + ts / 2, Acr = p.A + Ar, ybc = (p.A * p.yb + Ar * yr) / Acr, Icr = p.I + p.A * (ybc - p.yb) ** 2 + Ar * (yr - ybc) ** 2;
+@@ -2445,3 +2456,3 @@
+     const rtOf = (b, t, Dc, tw) => b / Math.sqrt(12 * (1 + Dc * tw / (3 * b * t)));
+-    const geMemo = {}, npW = [], geAt = (x, tag, np, rtF, fF) => { const [a, b] = seg(x), k = `${gtNow}|${tag}|${a}|${b}`; if (k in geMemo) return geMemo[k];
++    const geMemo = {}, npW = [], geAt = (x, tag, np, rtF, fF) => { const a = segNow.a, b = segNow.b, k = `${gtNow}|${tag}|${a}|${b}|${Lb}`; if (k in geMemo) return geMemo[k];
+       const A = feGeA(np.pcs, np.tr, a, b, Lb, D, xs, rtF, fF); if (A && !A.ok) npW.push(`${gtNow === 'ext' ? 'exterior' : 'interior'} girder, ${tag[0] === 'C' ? 'deck placement' : 'Strength I'}, ${a.toFixed(1)}–${b.toFixed(1)} ft: ${A.why}`);
+@@ -2450,3 +2461,23 @@
+       const j = Math.floor(Math.abs(x - xp) / spCF + 1e-9), a = xp + sg * j * spCF, b = xp + sg * Math.min((j + 1) * spCF, Math.abs(lim - xp)); return sg > 0 ? [a, Math.max(a + 1e-3, b)] : [Math.min(a - 1e-3, b), a]; };
+-    const cbAt = (M, x, sgn) => { const [a, b] = seg(x); return feCb(xs, M, a, b, sgn); }; let cbMax = 1;
++    // unbraced segments from the candidate's actual cross-frame layout (SKX, 2026-10-15; was the idealized grid seg(x), brace points every spCF from the nearest
++    // support with L_b = spCF): at node x, on every girder of the type (exterior: G1 and Gn; interior: G2 to G(n−1)), the segment(s) between that girder's own
++    // brace points (bearings, cross-frames) containing x, mapped to the analysis stations proportionally within the span; both segments at a brace point;
++    // the governing one (largest L_b/C_b for the moment of the check) is used, with L_b the girder's own length. Without a layout: the idealized grid, as before
++    const FRc = (layoutOf(D, { top, bot, web, splices: spl || [] }) || {}).FR, segC = {}, segM = {}; let segNow = { a: 0, b: 0, L: spCF }, Lb = spCF * 12;
++    const brC = {}, braceC = gi => brC[gi] || (brC[gi] = [...new Set([...FRc.girders[gi].bear, ...FRc.girders[gi].pts.map(q => q.s)].map(v => +v.toFixed(3)))].sort((p1, p2) => p1 - p2).filter((v, k, arr) => k === 0 || v - arr[k - 1] > 0.25));
++    const gOfC = gt => { const nG = FRc.girders.length; return gt === 'ext' ? [...new Set([0, nG - 1])] : nG > 2 ? [...Array(nG - 2).keys()].map(i => i + 1) : [0]; };
++    const segsAt = x => { const key = `${gtNow}|${x}`; if (segC[key]) return segC[key];
++      let k = 0; while (k < supX.length - 2 && x > supX[k + 1] + 1e-9) k++;
++      const out = gOfC(gtNow).flatMap(gi => { const B = FRc.girders[gi].bear, bp = braceC(gi), sg = B[k] + (x - supX[k]) / (supX[k + 1] - supX[k]) * (B[k + 1] - B[k]);
++        const toX = v => { let j = 0; while (j < B.length - 2 && v > B[j + 1] + 1e-9) j++; return supX[j] + (v - B[j]) / (B[j + 1] - B[j]) * (supX[j + 1] - supX[j]); };
++        const pr = [], ib = bp.findIndex(v => Math.abs(v - sg) < 0.25);
++        if (ib >= 0) { if (ib > 0) pr.push([bp[ib - 1], bp[ib]]); if (ib < bp.length - 1) pr.push([bp[ib], bp[ib + 1]]); }
++        else pr.push([[...bp].reverse().find(v => v < sg) ?? bp[0], bp.find(v => v > sg) ?? bp[bp.length - 1]]);
++        return pr.map(([p0, p1]) => ({ a: toX(p0), b: Math.max(toX(p0) + 1e-3, toX(p1)), L: p1 - p0 })); });
++      return (segC[key] = out); };
++    const segG = (x, M, sgn, tag) => { if (!FRc) { const [a, b] = seg(x); return { a, b, L: spCF }; }
++      const key = `${gtNow}|${tag}|${sgn}|${x}`; if (segM[key]) return segM[key];
++      const c = segsAt(x).map(q => ({ ...q, Cb: feCb(xs, M, q.a, q.b, sgn) })).sort((u, v) => v.L / v.Cb - u.L / u.Cb)[0];
++      return (segM[key] = c ? { a: c.a, b: c.b, L: c.L } : (() => { const [a, b] = seg(x); return { a, b, L: spCF }; })()); };
++    const cbAt = (M, x, sgn) => feCb(xs, M, segNow.a, segNow.b, sgn); let cbMax = 1;   // the segment of the preceding nprAt (same x, moment and sign)
+     // deck placement (6.10.3.2.1): F_nc of the flange f (b × t) that M_c compresses (sgn +1 top, -1 bottom), stress fc, steel section; nonprismatic segments as above (CB2)
+@@ -2738,3 +2769,3 @@
+ <tr><td>Orientation, arrangement</td><td>—</td><td>Automatic follows 6.7.4.2 (parallel to the skew at 20° or less, otherwise normal). Normal frames may be contiguous lines or staggered by bay.</td></tr>
+-<tr><td>Clear of skewed bearing line, min. offset</td><td>ft</td><td>Minimum distance of a normal intermediate frame from a skewed bearing line; minimum offset between non-aligned frames on opposite sides of a girder (X3).</td></tr>
++<tr><td>Clear of skewed bearing line, min. offset</td><td>ft</td><td>Minimum distance of a normal intermediate frame from a skewed bearing line (at a support skewed more than 20°, at least max(this, 4b<sub>f</sub>, 0.4 × the grid spacing) for the grid and max(this, 4b<sub>f</sub>) for corner frames, C6.7.4.2.1; check X5); minimum offset between non-aligned frames on opposite sides of a girder, raised to 4b<sub>f</sub> where that is larger (C6.7.4.2.1; the layout enforces it, check X3).</td></tr>
+ <tr><td>Transverse stiffeners, d<sub>o</sub>/D</td><td>—</td><td>Whether the web has intermediate stiffeners and their spacing as a multiple of D (uniform), or per cross-frame bay (the count in each bay; Suggest Apply sets it).</td></tr>
+@@ -2820,3 +2851,3 @@
+ <h3>Cross-frame layout</h3>
+-<p>Girders are placed at y = 0, S, 2S, … and each support line passes through the bridge centerline station at its skew angle, so the bearing of girder i at support k is at x = X<sub>k</sub> + (y<sub>i</sub> − y<sub>c</sub>)tan θ<sub>k</sub>. A cross-frame is placed in every bay along every bearing line. Between bearing lines, n = ⌈L/s⌉ − 1 intermediate frames are placed, where s is the target spacing. Parallel frames interpolate between the two bearing lines. Normal frames are placed at even stations (offset by half a spacing in alternate bays if staggered), dropped where they would fall within the clear distance of a skewed bearing line, and supplemented near the acute corners so no girder exceeds the target spacing. If any frame falls within the splice clearance of a field splice or shop transition, up to three additional frames per span are tried and the layout with the fewest conflicts is kept.</p>
++<p>Girders are placed at y = 0, S, 2S, … and each support line passes through the bridge centerline station at its skew angle, so the bearing of girder i at support k is at x = X<sub>k</sub> + (y<sub>i</sub> − y<sub>c</sub>)tan θ<sub>k</sub>. A cross-frame is placed in every bay along every bearing line. Parallel frames (both supports of the span skewed 20° or less, AASHTO LRFD 10th Ed. 6.7.4.2.1): n = ⌈L<sub>max</sub>/s⌉ − 1 per bay, where s is the target spacing and L<sub>max</sub> the longest girder span between the two bearing lines, interpolated between the bearing lines, so no girder exceeds s. Normal frames (a support skewed more than 20°): one grid per span at a spacing of at most s (offset by half a spacing in alternate bays if staggered, unless half a spacing is less than d<sub>min</sub>). At a support skewed more than 20° the grid is anchored on the bearing of the obtuse-corner girder: its first line is e = max(clear distance, 4b<sub>f</sub>, 0.4s) from that bearing, so the first intermediate frame on every girder is at least e from that girder's own bearing (C6.7.4.2.1; b<sub>f</sub> is the widest flange plate in the span); at a support skewed 20° or less the first line is one spacing from the bearing. In each bay a grid station is kept where it is at least e (or the clear distance) from both bearings of the bay. Where a girder panel is still longer than s (the acute corners), a frame is added in an adjacent bay: at the station of a frame on the girder's other side (connecting through) or at least d<sub>min</sub> = max(min. offset, 4b<sub>f</sub>) from every other frame on both girders it connects, at least max(clear distance, 4b<sub>f</sub>) from their bearings, preferring positions that close the gap, clear splices and transitions, keep the adjacent panels at least 0.4 times each other, and line up. If any frame falls within the splice clearance of a field splice or shop transition, the grid is shifted within the span (end offsets changed by up to 4 ft, parallel frames by up to a quarter panel, same number of frames), or extra frames are used (up to three per bay line, or two more grid intervals), only when that clears every conflict (the smallest shift with the fewest frames); otherwise the unshifted grid is kept. Conflicts that remain are listed in X4, and the Framing tab lists the spacing used in each span.</p>
+ <h3>Detailing checks</h3>
+@@ -3457,2 +3488,17 @@
+ }
++/* cross-frame layout (SKX, 2026-10-15; AASHTO LRFD 10th Ed. 6.7.4.2.1 and C6.7.4.2.1). Per span:
++   - orientation as before: automatic, parallel where both supports are skewed 20° or less, else normal to the girders.
++   - parallel frames: n = ⌈L_max/s⌉ − 1 per bay, with L_max the longest girder span between the two bearing lines (was the centerline span), interpolated
++     between the bearing lines, so no girder exceeds the target s.
++   - normal frames: a grid at one spacing for the span (half a spacing further in alternate bays if staggered), anchored at the bearing of the obtuse-corner
++     girder of each skewed (> 20°) support: the first full line at e = max(clear of bearing, 4b_f, 0.4 s) from it, so on every girder the first intermediate
++     frame is at least e from that girder's own bearing (C6.7.4.2.1); at a support skewed 20° or less the first line is one spacing from the bearing (as
++     before). Grid stations are kept in each bay where they are at least e (skewed support) or the clear distance from both of that bay's bearings. A girder
++     panel still longer than s (the acute corners) gets frames in an adjacent bay, each either at the station of a frame on the girder's other side
++     (connecting through) or at least d_min = max(min. offset, 4b_f) from every other frame on both girders it connects, and at least max(clear, 4b_f)
++     from their bearings. b_f: the widest flange plate in the span.
++   - field splices and shop transitions: where a frame falls within the splice clearance, the grid is shifted within the span (end offsets changed, same
++     number of frames); extra frames are used only where that clears every conflict; otherwise the conflicts are reported (check X4, Framing tab).
++   orient[k] (per span): { k, th, o, nInt, base, conflicts, s, n (frames per bay), e0, e1, bf, dmin, flat (staggered at s/2 < d_min: contiguous), shift, extra } */
++const FL_MEMO = new Map();   // framingLayout: span frames by their inputs (SKX)
+ function framingLayout(P, m) {
+@@ -3461,3 +3507,3 @@
+   const xb = (k, i) => m.sup[k] + (ys[i] - yc) * tn[k];               // global x of bearing k on girder i
+-  const sp = +F.spacing, clr = +F.supClear, frames = [], orient = [];
++  const sp = +F.spacing, clr = +F.supClear, frames = [], orient = [], EPS = 1e-6;
+   for (let k = 0; k < m.sup.length; k++) for (let b = 0; b < nb - 1; b++) frames.push({ type: 'sup', k, bay: b, xa: xb(k, b), xc: xb(k, b + 1) });
+@@ -3465,2 +3511,3 @@
+   const conflicts = list => list.reduce((n, f) => n + [[f.xa, f.bay], [f.xc, f.bay + 1]].some(([x, g]) => feats.some(q => Math.abs(x - xb(0, g) - q) < fc - 1e-9)), 0);
++  const gi = [...Array(nb).keys()];
+   m.spans.forEach((Ls, k) => {
+@@ -3468,31 +3515,111 @@
+     const o = F.orient === 'auto' ? (th <= 20 + 1e-9 ? 'parallel' : 'normal') : F.orient;
+-    const base = Math.max(0, Math.ceil(Ls / sp - 1e-9) - 1);
+-    let pick = null;
+-    for (let add = 0; add <= 3; add++) { const fr = genSpan(k, o, base + add), c = conflicts(fr); if (!pick || c < pick.c) pick = { fr, c, n: base + add }; if (!c) break; }
++    const Lmax = Math.max(...gi.map(i => xb(k + 1, i) - xb(k, i)));
++    // b_f (C6.7.4.2.1): the widest top or bottom flange plate within the span (any girder; own stations from its Abut. 1 bearing)
++    const s0g = Math.min(...gi.map(i => xb(k, i) - xb(0, i))), s1g = Math.max(...gi.map(i => xb(k + 1, i) - xb(0, i))); let bfIn = 0;
++    [...m.top, ...m.bot].forEach(r => { if (r.x1 > s0g + 1e-9 && r.x0 < s1g - 1e-9) bfIn = Math.max(bfIn, r.b); });
++    const bf = bfIn / 12, dmin = Math.max(+F.stagMin || 0, 4 * bf);
++    // the span's frames depend only on these inputs: memoized (Suggest builds the layout of many candidates with the same splices and transitions); copies returned
++    const mk = JSON.stringify([k, o, sp, clr, F.stagMin, F.arrange, fc, m.sup, m.skews, m.bays, feats, bf]);
++    let pick = FL_MEMO.get(mk); if (!pick) { pick = o === 'parallel' ? parSpan(k, Lmax) : normSpan(k, bf, dmin); FL_MEMO.set(mk, pick); if (FL_MEMO.size > 400) FL_MEMO.delete(FL_MEMO.keys().next().value); }
++    pick = { ...pick, fr: pick.fr.map(f => ({ ...f })) };
+     frames.push(...pick.fr);
+-    orient.push({ k, th, o, nInt: pick.n, base, conflicts: pick.c });
++    orient.push({ k, th, o, nInt: pick.n, base: pick.base, conflicts: pick.c, s: pick.s, n: pick.n, shift: pick.shift || 0, extra: pick.n > pick.base, bf, dmin, Lmax, ...(pick.info || {}) });
+   });
+-  function genSpan(k, o, nInt) {
+-    const Ls = m.spans[k], frames = [];
+-    if (o === 'parallel') {
+-      for (let j = 1; j <= nInt; j++) { const f = j / (nInt + 1); for (let b = 0; b < nb - 1; b++) frames.push({ type: 'int', k, bay: b, xa: (1 - f) * xb(k, b) + f * xb(k + 1, b), xc: (1 - f) * xb(k, b + 1) + f * xb(k + 1, b + 1) }); }
+-    } else {
+-      const s = Ls / (nInt + 1);
++  /* parallel frames: n per bay from the longest girder; frames at the fractions (j + d)/(n + 1) of each girder's span. Conflicts: shifts d of up to a
++     quarter panel first (the end panel of the longest girder stays within s), then up to three extra frames, accepted only when they clear every conflict; if none does, evenly spaced (d = 0) */
++  function parSpan(k, Lmax) {
++    const base = Math.max(0, Math.ceil(Lmax / sp - 1e-9) - 1), gen = (n, d) => { const fr = [];
++      for (let j = 1; j <= n; j++) { const f = (j + d) / (n + 1); for (let b = 0; b < nb - 1; b++) fr.push({ type: 'int', k, bay: b, xa: (1 - f) * xb(k, b) + f * xb(k + 1, b), xc: (1 - f) * xb(k, b + 1) + f * xb(k + 1, b + 1) }); }
++      return fr; };
++    const DS = [0, 0.05, -0.05, 0.1, -0.1, 0.15, -0.15, 0.2, -0.2, 0.25, -0.25]; let best = null;
++    for (let add = 0; add <= 3; add++) { const n = base + add;
++      for (const d of (n ? DS : [0])) { if (d && (1 + Math.abs(d)) * Lmax / (n + 1) > sp + 1e-9) continue;
++        const fr = gen(n, d), c = conflicts(fr), r = { fr, c, n, base, s: Lmax / (n + 1), shift: d };
++        if (!c) return r; if (!add && !best) best = r; } }   // none clears every conflict: evenly spaced (d = 0), conflicts reported
++    return best;
++  }
++  /* normal frames */
++  function normSpan(k, bf, dmin) {
++    const A = gi.map(i => xb(k, i)), B = gi.map(i => xb(k + 1, i)), Amax = Math.max(...A), Bmin = Math.min(...B);
++    const lo0 = Math.min(...A), hi0 = Math.max(...B), e4 = 4 * bf, skS = Math.abs(m.skews[k]) > 20 + 1e-9, skE = Math.abs(m.skews[k + 1]) > 20 + 1e-9;
++    const eOf = s => Math.max(clr, e4, 0.4 * s), eFl = Math.max(clr, e4);   // C6.7.4.2.1: first frame offset from a skewed support; floor 4b_f for corner frames
++    const T = Bmin - Amax, cnt = (skS ? 0 : 1) + (skE ? 0 : 1);
++    // the default grid: q intervals between the first and the last full line, end panels e (skewed support) or one spacing
++    let s = sp, e = eOf(sp), q = 0;
++    for (let it = 0; it < 8; it++) { const fx = (skS ? e : 0) + (skE ? e : 0), tot = Math.max(1, Math.ceil((T - fx) / sp - 1e-9)); q = Math.max(0, tot - cnt); s = tot > 0 && T - fx > 0 ? (T - fx) / tot : sp; e = eOf(s); }
++    const X0 = Amax + (skS ? e : s), X1 = Bmin - (skE ? e : s);
++    const stag = F.arrange === 'staggered', flat = stag && s / 2 < dmin - 1e-9;
++    const gen = (x0, x1, qq) => {   // grid lines x0..x1 (qq intervals, extended past both ends), kept per bay; then the corner frames
++      const ss = qq > 0 ? (x1 - x0) / qq : s, eS = skS ? e : clr, eE = skE ? e : clr, bays = [];
+       for (let b = 0; b < nb - 1; b++) {
+-        const off = F.arrange === 'staggered' && b % 2 ? s / 2 : 0;
+-        const lo = Math.max(xb(k, b), xb(k, b + 1)) + clr, hi = Math.min(xb(k + 1, b), xb(k + 1, b + 1)) - clr;
+-        let xsx = []; for (let j = 0; j <= nInt + 1; j++) { const x = m.sup[k] + j * s + off; if (x >= lo - 1e-9 && x <= hi + 1e-9) xsx.push(x); }
+-        // fill the skewed corners so no girder in this bay exceeds the spacing
+-        const r0 = Math.min(xb(k, b), xb(k, b + 1)), r1 = Math.max(xb(k + 1, b), xb(k + 1, b + 1));
+-        if (!xsx.length && hi > lo) xsx = [(lo + hi) / 2];
+-        if (xsx.length) {
+-          const f0 = xsx[0], nA = Math.max(0, Math.ceil((f0 - r0) / sp - 1e-9) - 1);
+-          for (let q = 1; q <= nA; q++) { const x = r0 + (f0 - r0) * q / (nA + 1); if (x >= lo - 1e-9) xsx.push(x); }
+-          const fl = Math.max(...xsx), nB = Math.max(0, Math.ceil((r1 - fl) / sp - 1e-9) - 1);
+-          for (let q = 1; q <= nB; q++) { const x = fl + (r1 - fl) * q / (nB + 1); if (x <= hi + 1e-9) xsx.push(x); }
++        const lo = Math.max(A[b], A[b + 1]) + eS, hi = Math.min(B[b], B[b + 1]) - eE, off = stag && !flat && b % 2 ? ss / 2 : 0, xs = [];
++        if (x1 >= x0 - 1e-9) { const j0 = Math.floor((lo0 - x0 - off) / ss) - 1, j1 = Math.ceil((hi0 - x0 - off) / ss) + 1;
++          for (let j = j0; j <= j1; j++) { const x = x0 + off + j * ss; if (x >= lo - 1e-9 && x <= hi + 1e-9) xs.push(x); } }
++        bays.push(xs);
++      }
++      // the corner frames, gaps taken largest first and smallest first: the result with no girder panel over s (or the smallest excess), then the fewer frames
++      const score = bb => { let mx = 0, n = 0; gi.forEach(i => { const br = [A[i], ...(bb[i - 1] || []), ...(bb[i] || []), B[i]].sort((u, v) => u - v); for (let j = 1; j < br.length; j++) mx = Math.max(mx, br[j] - br[j - 1]); }); bb.forEach(l => n += l.length); return [mx > sp + 1e-6 ? mx : 0, n]; };
++      let pick = null; for (const mode of [1, -1]) { if (pick && !pick.sc[0]) break; const bb = bays.map(l => l.slice()); fill(bb, skS ? eFl : clr, skE ? eFl : clr, mode); const sc = score(bb);
++        if (!pick || sc[0] < pick.sc[0] - 1e-9 || (Math.abs(sc[0] - pick.sc[0]) < 1e-9 && sc[1] < pick.sc[1])) pick = { bb, sc }; }
++      bays.splice(0, bays.length, ...pick.bb); const mxG = pick.sc[0] || (() => { let mx = 0; gi.forEach(i => { const br = [A[i], ...(bays[i - 1] || []), ...(bays[i] || []), B[i]].sort((u, v) => u - v); for (let j = 1; j < br.length; j++) mx = Math.max(mx, br[j] - br[j - 1]); }); return mx; })();
++      const fr = []; bays.forEach((xs, b) => [...new Set(xs.map(x => +x.toFixed(3)))].sort((u, v) => u - v).forEach(x => fr.push({ type: 'int', k, bay: b, xa: x, xc: x })));
++      return { fr, s: ss, e0: x0 - Amax, e1: Bmin - x1, mx: mxG };
++    };
++    // corner frames: while a girder panel in this span exceeds s, add a frame in an adjacent bay (rules above); a gap that cannot be closed is left (X2)
++    const cfM = new Map(), cfAt = (b, x) => { const kk = b + '|' + x.toFixed(3); if (!cfM.has(kk)) cfM.set(kk, conflicts([{ xa: x, xc: x, bay: b }]) ? 1 : 0); return cfM.get(kk); };
++    function fill(bays, fS, fE, mode) {
++      const tried = new Set(), lexLt = (u, v) => { for (let j = 0; j < u.length; j++) if (Math.abs(u[j] - v[j]) > 1e-9) return u[j] < v[j]; return false; };
++      for (let it = 0; it < 400; it++) {
++        let w = null;
++        for (const i of gi) { const br = [A[i], ...(bays[i - 1] || []), ...(bays[i] || []), B[i]].sort((u, v) => u - v);
++          for (let j = 1; j < br.length; j++) { const g = br[j] - br[j - 1], key = i + '|' + br[j - 1].toFixed(3); if (g > sp + 1e-6 && !tried.has(key) && (!w || mode * (g - w.g) > 1e-9)) w = { i, g0: br[j - 1], g1: br[j], g, key }; } }
++        if (!w) return;
++        let best = null;
++        for (const b of [w.i - 1, w.i]) { if (b < 0 || b > nb - 2) continue;
++          const lo = Math.max(A[b], A[b + 1]) + fS, hi = Math.min(B[b], B[b + 1]) - fE, gs = [b, b + 1];
++          const near = gs.flatMap(g => [...(g > 0 && g - 1 !== b ? bays[g - 1] : []), ...(g < nb - 1 && g !== b ? bays[g] : [])]);   // frames on the other side of these two girders
++          const cand = new Set([(w.g0 + w.g1) / 2, w.g1 - sp, w.g0 + sp, lo, hi, ...near.flatMap(y => [y, y - dmin, y + dmin])]);
++          for (let x = Math.max(lo, w.g0) + 0.5; x < Math.min(hi, w.g1); x += 0.5) cand.add(x);   // and every 0.5 ft (positions clear of splices and transitions)
++          for (const x of cand) {
++            if (x < lo - 1e-6 || x > hi + 1e-6 || x <= w.g0 + 1e-6 || x >= w.g1 - 1e-6) continue;
++            let ok = bays[b].every(y => Math.abs(x - y) >= dmin - 1e-6), snap = false;
++            if (ok) for (const y of near) { const d = Math.abs(x - y); if (d < 0.01) snap = true; else if (d < dmin - 1e-6) { ok = false; break; } }
++            if (!ok) continue;
++            const mx = Math.max(x - w.g0, w.g1 - x), k0 = mx > sp + 1e-6 ? 1 : 0; if (best && k0 > best.key[0]) continue;
++            const cf = cfAt(b, x); if (best && k0 === best.key[0] && cf > best.key[1]) continue;
++            // the panels next to x on both girders: one shorter than 0.4 times its neighbour is avoided where another position closes the gap (C6.7.4.2.1)
++            const sh = gs.some(g => { let p0 = A[g], p1 = B[g]; for (const l of [bays[g - 1], bays[g]]) if (l) for (const y of l) { if (y < x - 1e-6 && y > p0) p0 = y; if (y > x + 1e-6 && y < p1) p1 = y; }
++              const l = x - p0, r = p1 - x; return Math.min(l, r) < 0.4 * Math.max(l, r) - 1e-6; });
++            const key = [k0, cf, sh ? 1 : 0, snap ? 0 : 1, mx];
++            if (!best || lexLt(key, best.key)) best = { b, x, key };
++          }
+         }
+-        [...new Set(xsx.map(x => +x.toFixed(3)))].sort((a, c) => a - c).forEach(x => frames.push({ type: 'int', k, bay: b, xa: x, xc: x }));
++        if (!best) { tried.add(w.key); continue; }
++        bays[best.b].push(best.x); bays[best.b].sort((u, v) => u - v);
+       }
+     }
+-    return frames;
++    const n0 = gen(X0, X1, q), c0 = conflicts(n0.fr), info = { e0: skS ? e : null, e1: skE ? e : null, flat, skS, skE };
++    const res = (r, base) => ({ fr: r.g.fr, c: r.c, n: r.g.fr.length, base, s: r.g.s, shift: r.sh, q: r.qq, info: { ...info, e0: skS ? r.g.e0 : null, e1: skE ? r.g.e1 : null } });
++    const ex0 = Math.max(0, n0.mx - sp);
++    if ((!c0 && ex0 < 1e-6) || !(X1 > X0 - 1e-9)) return res({ g: n0, c: c0, sh: 0, qq: q }, n0.fr.length);
++    // conflicts, or a corner panel the corner frames could not bring within s: shift the first and last full lines (end offsets; a skewed end keeps
++    // e >= max(clear, 4b_f, 0.4s)), with the same or up to two more grid intervals. Kept: the least excess over s (none if possible); of those, a layout clear
++    // of every conflict with the fewest frames and the smallest shift (extra frames only this way); if none is clear, the unshifted grid
++    const D = [0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4], DN = [0.5, -0.5, 1, -1, 1.5, -1.5, 2, -2, 2.5, -2.5, 3, -3, 3.5, -3.5, 4, -4], all = [{ g: n0, c: c0, sh: 0, qq: q, ex: ex0 }];
++    const pairs = [[0, 0], ...(skS ? D : DN).map(d => [d, 0]), ...(skE ? D : DN).map(d => [0, d]), ...D.map(d => [d, d]), ...(!skS && !skE ? D.map(d => [-d, d]) : [])];   // one end, the other, both inward (both outward), or a translation between unskewed ends
++    let done = false;
++    for (const qq of [q, q + 1, q + 2]) {
++      for (const [d0, d1] of pairs) { if (done) break; if (qq === q && !d0 && !d1) continue;
++        const a = X0 + d0, z = X1 - d1, ss = qq > 0 ? (z - a) / qq : s;
++        if (!(z >= a - 1e-9) || ss > sp + 1e-9 || (!skS && (a - Amax > sp + 1e-9 || a - Amax < clr)) || (!skE && (Bmin - z > sp + 1e-9 || Bmin - z < clr)) || (skS && a - Amax < eOf(ss) - 1e-6) || (skE && Bmin - z < eOf(ss) - 1e-6)) continue;
++        const g = gen(a, z, qq), r = { g, c: conflicts(g.fr), sh: Math.abs(d0) + Math.abs(d1), qq, ex: Math.max(0, g.mx - sp) }; all.push(r);
++        if (!r.c && r.ex < 1e-6 && g.fr.length <= n0.fr.length) done = true;   // pairs are in order of increasing shift: the first clean one with no more frames is kept
++      }
++      const exM = Math.min(...all.map(r => r.ex)); if (exM < 1e-6 && all.some(r => r.ex < 1e-6 && !r.c && r.g.fr.length <= n0.fr.length)) break;
++    }
++    const exM = Math.min(...all.map(r => r.ex)), pool = all.filter(r => r.ex < exM + 1e-6), nB = Math.min(...pool.map(r => r.g.fr.length));
++    const zero = pool.filter(r => !r.c).sort((u, v) => u.g.fr.length - v.g.fr.length || u.sh - v.sh)[0];   // clear of every conflict: the fewest frames, then the smallest shift
++    if (zero) return res(zero, nB);
++    // no shift or extra frame clears every conflict: the unshifted grid is kept (the conflicts are reported, X4 and the Framing tab)
++    return res(pool.includes(all[0]) ? all[0] : pool.filter(r => r.g.fr.length <= nB).sort((u, v) => u.sh - v.sh || u.c - v.c)[0], nB);
+   }
+@@ -3642,3 +3769,3 @@
+       sym: T`L_b \le ${f2(FR.sp)}\ \text{ft}`, cols: ['Span', 'Governing girder', 'L_b,max (ft)', 'Ratio'], items: [],
+-      note: 'L_b is the largest distance along any girder between consecutive bracing points (cross-frames on either side, or bearings). It sets the compression flange unbraced length used in the flexural design. In skewed bays with normal cross-frames, extra frames are added near the acute corners to keep L_b within the target.' };
++      note: 'L_b is the largest distance along any girder between consecutive bracing points (cross-frames on either side, or bearings). It sets the compression flange unbraced length used in the flexural design. In skewed bays with normal cross-frames, extra frames are added near the acute corners to keep L_b within the target. The spacing used in each span is listed on the Framing tab (Cross-frames).' };
+     m.spans.forEach((Ls, k) => {
+@@ -3655,7 +3782,9 @@
+   }
+-  /* X3 stagger offset */
++  /* X3 stagger offset (SKX, 2026-10-15): d_min = max(min. offset setting, 4b_f) of the span (C6.7.4.2.1: 4b_f, the recommended lower limit for stagger
++     distances); the layout keeps every pair at 0 or at least d_min, so this check confirms it (was: the min. offset setting alone) */
+   {
+-    const c = { id: 'X3', grp, title: 'Offset between cross-frames on opposite sides of a girder', ref: 'Practice (NCHRP Report 725 guidance on staggered frames)', src: 'Practice',
+-      sym: T`d = 0 \ \ \text{or}\ \ d \ge ${f2(F.stagMin)}\ \text{ft}`, cols: ['Girder', 'Closest offset (ft)', 'At station (ft)'], items: [],
+-      note: 'Cross-frames on opposite sides of an interior girder should either line up or be offset enough to detail the connection plates separately. Small offsets crowd the web and introduce local flange lateral bending.' };
++    const dmK = k => { const o = FR.orient[k]; return o && o.dmin != null ? o.dmin : F.stagMin; };
++    const c = { id: 'X3', grp, title: 'Offset between cross-frames on opposite sides of a girder', ref: 'AASHTO LRFD 10th Ed. C6.7.4.2.1 (4b_f); practice (NCHRP Report 725 guidance on staggered frames)', src: 'Practice',
++      sym: T`d = 0 \ \ \text{or}\ \ d \ge d_{min} = \max(${f2(F.stagMin)}\ \text{ft},\ 4b_f)`, cols: ['Girder', 'Closest offset (ft)', 'At station (ft)', 'd_min (ft)'], items: [],
++      note: 'Cross-frames on opposite sides of an interior girder should either line up or be offset enough to detail the connection plates separately. Small offsets crowd the web and introduce local flange lateral bending. AASHTO C6.7.4.2.1 recommends 4b_f as the lower limit for stagger distances (b_f: the widest flange plate in the span). The layout generator keeps every offset at 0 or at least d_min.' };
+     if (FR.orient.every(o => o.o === 'parallel')) na(c, 'All intermediate cross-frames are parallel to the skew and line up across the girders.');
+@@ -3664,6 +3793,6 @@
+         const L1 = g.pts.filter(p => p.side === 'L' && p.f.type === 'int'), R1 = g.pts.filter(p => p.side === 'R' && p.f.type === 'int');
+-        let best = null; L1.forEach(p => R1.forEach(q => { const d = Math.abs(p.s - q.s); if (d > 0.05 && (!best || d < best.d)) best = { d, s: p.s }; }));
++        let best = null; L1.forEach(p => R1.forEach(q => { const d = Math.abs(p.s - q.s), dm = dmK(p.f.k); if (d > 0.05 && (!best || d / dm < best.d / best.dm)) best = { d, s: p.s, dm }; }));
+         if (!best) return;
+-        const ok = best.d >= F.stagMin - 1e-9;
+-        c.items.push({ loc: `G${g.i + 1}`, cells: [f2(best.d), f2(best.s)], r: ok ? 0 : F.stagMin / best.d, st: ok ? 'pass' : 'warn', work: T`d = ${f2(best.d)}\ \text{ft} \;${ok ? '\\ge' : '<'}\; ${f2(F.stagMin)}\ \text{ft}` });
++        const ok = best.d >= best.dm - 0.005;
++        c.items.push({ loc: `G${g.i + 1}`, cells: [f2(best.d), f2(best.s), f2(best.dm)], r: ok ? 0 : best.dm / best.d, st: ok ? 'pass' : 'warn', work: T`d = ${f2(best.d)}\ \text{ft} \;${ok ? '\\ge' : '<'}\; d_{min} = ${f2(best.dm)}\ \text{ft}` });
+       });
+@@ -3672,2 +3801,20 @@
+   }
++  /* X5 first intermediate cross-frame next to a support skewed more than 20° (SKX, 2026-10-15): AASHTO LRFD 10th Ed. C6.7.4.2.1, with normal intermediate
++     frames: offset from the support along each girder at least max(4b_f, 0.4L_b), L_b the panel from the first to the second intermediate frame on that
++     girder; where 0.4L_b is impracticable not less than 4b_f. The commentary's "should": below 4b_f a warning; between 4b_f and 0.4L_b advisory */
++  {
++    const c = { id: 'X5', grp, title: 'First intermediate cross-frame offset from a skewed support', ref: 'AASHTO LRFD 10th Ed. C6.7.4.2.1', src: 'Code',
++      sym: T`d_1 \ge \max(4b_f,\ 0.4L_b)\ \ (\text{not less than } 4b_f)`, cols: ['Span end', 'Girder', 'd₁ (ft)', '4b_f (ft)', '0.4L_b (ft)'], items: [],
++      note: 'Where a support is skewed more than 20° and the intermediate cross-frames next to it are normal to the girders, the first one should be offset from the support, along each girder, by at least the larger of 4b_f and 0.4L_b (L_b: the unbraced length between the first and the second intermediate cross-frame on that girder; b_f: the widest flange plate in the span), maximized at the obtuse corners; where 0.4L_b is impracticable, as large as practicable but not less than 4b_f (C6.7.4.2.1, a recommendation: below 4b_f a warning, between 4b_f and 0.4L_b advisory). The governing girder of each span end is listed.' };
++    const nSx = m.sup.length, supNx = k => k === 0 ? 'Abut. 1' : k === nSx - 1 ? 'Abut. 2' : `Pier ${k}`;
++    FR.orient.forEach(o => { if (o.o !== 'normal') return; const k = o.k, bf = o.bf, e4 = 4 * bf;
++      [[k, 1], [k + 1, -1]].forEach(([ks, dir]) => { if (!(Math.abs(m.skews[ks]) > 20 + 1e-9)) return; let gov = null;
++        FR.girders.forEach(g => { const a = g.bear[k], b = g.bear[k + 1], sb = g.bear[ks], br = [...new Set(g.pts.filter(q => q.f.type === 'int' && q.s > a + 1e-6 && q.s < b - 1e-6).map(q => +q.s.toFixed(3)))].sort((u, v) => dir * (u - v));
++          if (!br.length) return; const d = Math.abs(br[0] - sb), Lb = Math.abs((br.length > 1 ? br[1] : (dir > 0 ? b : a)) - br[0]), req = Math.max(e4, 0.4 * Lb);
++          if (!gov || d / req < gov.d / gov.req) gov = { g: g.i, d, Lb, req }; });
++        if (!gov) return; const st = gov.d >= gov.req - 0.005 ? 'pass' : gov.d >= e4 - 0.005 ? 'adv' : 'warn';   // 0.005 ft: frame stations are kept to 0.001 ft
++        c.items.push({ loc: `Span ${k + 1}, ${supNx(ks)} end`, cells: [`G${gov.g + 1}`, f2(gov.d), f2(e4), f2(0.4 * gov.Lb)], r: gov.req / Math.max(gov.d, 1e-3), st,
++          work: T`d_1 = ${f2(gov.d)}\ \text{ft} \;${st === 'pass' ? '\\ge' : '<'}\; \max(4b_f,\ 0.4L_b) = \max(4(${f2(bf * 12)})/12,\ 0.4(${f2(gov.Lb)})) = \max(${f2(e4)},\ ${f2(0.4 * gov.Lb)}) = ${f2(gov.req)}\ \text{ft}${st === 'adv' ? T`;\ d_1 \ge 4b_f = ${f2(e4)}\ \text{ft}` : ''}` }); }); });
++    if (!c.items.length) na(c, 'No span has intermediate cross-frames normal to the girders next to a support skewed more than 20°.'); else add(c);
++  }
+   /* X4 clearance to splices and transitions */
+@@ -3676,3 +3823,3 @@
+       sym: T`d \ge ${f2(L.spliceClear)}\ \text{ft}`, cols: ['Girder', 'Nearest feature', 'Frame station (ft)', 'd (ft)'], items: [],
+-      note: `Connection plates should not land on a splice plate or a butt-welded flange transition. Stations are along each girder from its Abutment 1 bearing; the plate layout is the same on every girder. The layout generator tries up to three extra cross-frames per span to clear these features${FR.orient.some(o => o.nInt > o.base) ? ' and used extra frames in ' + FR.orient.filter(o => o.nInt > o.base).map(o => 'Span ' + (o.k + 1)).join(', ') : ''}.` };
++      note: `Connection plates should not land on a splice plate or a butt-welded flange transition. Stations are along each girder from its Abutment 1 bearing; the plate layout is the same on every girder. Where a cross-frame falls within the clearance, the layout generator shifts the frame grid within the span (same number of frames) or uses extra frames, only where that clears every conflict${FR.orient.some(o => o.extra) ? '; extra frames were used in ' + FR.orient.filter(o => o.extra).map(o => 'Span ' + (o.k + 1)).join(', ') : ''}${FR.orient.some(o => o.conflicts) ? '; in ' + FR.orient.filter(o => o.conflicts).map(o => 'Span ' + (o.k + 1)).join(', ') + ' the field splice or transition locations conflict with the cross-frames (no shift clears them): move the splices or transitions (Suggest does this) or accept the items below' : ''}.` };
+     const feats = [...m.splices.map(x => ({ x, n: 'Field splice' })), ...m.trans.filter(t => !t.atSplice).map(t => ({ x: t.x, n: `${t.fl} flange transition` })), ...m.webTrans.map(t => ({ x: t.x, n: 'Web thickness change' }))];
+@@ -4064,2 +4211,16 @@
+   const frX0 = gt => stG(gOf(gt), true), rgF = (T, i) => Math.max(0, T.MfP[i]) - Math.min(0, T.MfN[i]);
++  // unbraced lengths per girder (SKX, 2026-10-15): girder gi's brace points are its own bearings and its cross-frame stations (s from its Abut. 1 bearing); an analysis
++  // station x maps to the girder proportionally within its span (exact where the girder's span equals the analysis span), and back. lbSegs(gt, x): the unbraced
++  // segment(s) containing x on every girder of the type (both segments at a brace point), as { xa, xb } (analysis stations) and L (the girder's own length)
++  const brOf = {}, braceG = gi => brOf[gi] || (brOf[gi] = [...new Set([...FR.girders[gi].bear, ...FR.girders[gi].pts.map(q => q.s)].map(v => +v.toFixed(3)))].sort((p1, p2) => p1 - p2).filter((v, k, arr) => k === 0 || v - arr[k - 1] > 0.25));
++  const spanX = x => { let k = 0; while (k < m.sup.length - 2 && x > m.sup[k + 1] + 1e-9) k++; return k; };
++  const toG = (gi, x) => { const B = FR.girders[gi].bear, k = spanX(x); return B[k] + (x - m.sup[k]) / (m.sup[k + 1] - m.sup[k]) * (B[k + 1] - B[k]); };
++  const toX = (gi, sg) => { const B = FR.girders[gi].bear; let k = 0; while (k < B.length - 2 && sg > B[k + 1] + 1e-9) k++; return m.sup[k] + (sg - B[k]) / (B[k + 1] - B[k]) * (m.sup[k + 1] - m.sup[k]); };
++  const lbSegs = (gt, x) => gOf(gt).flatMap(gi => { const bp = braceG(gi), sg = toG(gi, x), out = [], ib = bp.findIndex(v => Math.abs(v - sg) < 0.25), L = bp[bp.length - 1];
++    if (ib >= 0) { if (ib > 0) out.push([bp[ib - 1], bp[ib]]); if (ib < bp.length - 1) out.push([bp[ib], bp[ib + 1]]); }
++    else out.push([[...bp].reverse().find(v => v < sg) ?? 0, bp.find(v => v > sg) ?? L]);
++    return out.map(([p0, p1]) => ({ xa: toX(gi, p0), xb: toX(gi, p1), L: p1 - p0, g: gi })); });
++  // the largest unbraced length on girders gs within analysis stations a..b (cross-frames module L_b, deck overhang rows)
++  const lbMax = (gs, a, b) => Math.max(0, ...gs.map(gi => { const bp = braceG(gi), s0 = a == null ? -Infinity : toG(gi, a + 1e-6), s1 = b == null ? Infinity : toG(gi, b - 1e-6); let mx = 0;
++    for (let k = 1; k < bp.length; k++) if (bp[k] > s0 + 1e-6 && bp[k - 1] < s1 - 1e-6) mx = Math.max(mx, bp[k] - bp[k - 1]); return mx; }));
+   const cpAt = (T, a, b, gt) => { const fs = frX0(gt).filter(x => x > a + 0.5 && x < b - 0.5); return fs.length ? fs.reduce((q, x) => rgF(T, node(x)) > rgF(T, node(q)) ? x : q, fs[0]) : null; };
+@@ -4100,3 +4261,4 @@
+   const s0 = sec(m.sup[0] + 1), dg = s0.D + s0.topT + s0.botT;
+-  const cf = { S: r2(m.S * 12), h: Math.round(Math.max(m.D - 8, m.D * 0.75)), dg: r2(dg), Lb: r2(FR.sp), primary: m.skews.some(s => Math.abs(s) > 20) ? 'yes' : 'no' };
++  // L_b (SKX, 2026-10-15): the largest unbraced length on any girder of the layout (was the target spacing FR.sp)
++  const cf = { S: r2(m.S * 12), h: Math.round(Math.max(m.D - 8, m.D * 0.75)), dg: r2(dg), Lb: r2(lbMax(FR.girders.map(g => g.i))), primary: m.skews.some(s => Math.abs(s) > 20) ? 'yes' : 'no' };
+   if (num(P.framing.xfMinD) > 0) cf.dMinXF = num(P.framing.xfMinD);   // minimum girder depth for cross-frames (GirderDetail recommends the bracing type)
+@@ -4105,3 +4267,3 @@
+     const xM = xs[iMx]; let k = 0; while (k < m.sup.length - 2 && m.sup[k + 1] < xM) k++; const x0 = m.sup[k], x1 = m.sup[k + 1];
+-    const nBr = FR.girders[0].pts.filter(q => q.f.type === 'int' && q.s > x0 + 0.5 && q.s < x1 - 0.5).length, s = sec(xM);   // G1 stations (C24, 2026-10-13; was the global x, f.xa)
++    const nBr = Math.min(...FR.girders.map(g => g.pts.filter(q => q.f.type === 'int' && q.s > g.bear[k] + 0.5 && q.s < g.bear[k + 1] - 0.5).length)), s = sec(xM);   // the fewest on any girder, between its own bearings (SKX, 2026-10-15; was G1's frames between the centerline bearing stations)
+     cf.sb = { on: 'yes', full: cf.h >= 0.8 * m.D ? 'yes' : 'no', L: r2(x1 - x0), n: Math.max(1, nBr), Mu: r1(T0.Mc[iMx]), Cb: 1, D: m.D, tw: s.tw, bc: s.topB, tc: s.topT, bt: s.botB, tt: s.botT, ng: m.nb }; }
+@@ -4111,3 +4273,4 @@
+     spans.forEach(k => { const x0 = m.sup[k], x1 = m.sup[k + 1]; let bx = (x0 + x1) / 2, mx = -Infinity; xs.forEach((x, i) => { if (x > x0 && x < x1 && T.Mc[i] > mx) { mx = T.Mc[i]; bx = x; } });
+-      const i = node(bx), s = sec(bx); oh.rows.push({ name: `Span ${k + 1}, max. deck placement moment at ${bx.toFixed(1)} ft`, ...s, Lb: r2(FR.sp), MDC1: r1(T.MDC1[i]), MCL: r1(T.MCL[i]) }); });
++      const i = node(bx), s = sec(bx), lbE = Math.max(...lbSegs('ext', bx).map(q => q.L));   // L_b: the exterior girders' unbraced segment at bx (SKX, 2026-10-15; was the target spacing FR.sp)
++      oh.rows.push({ name: `Span ${k + 1}, max. deck placement moment at ${bx.toFixed(1)} ft`, ...s, Lb: r2(lbE), MDC1: r1(T.MDC1[i]), MCL: r1(T.MCL[i]) }); });
+     const s1 = sec(m.sup[0] + 1); oh.gen = { gF: m.gF, gW: m.gW, wOH: r2(Math.max(oF * 12 - s1.topB / 2, 0)), tOH: B.ts, wc: m.wc, hb: Math.round(m.D * 0.9) }; }
+@@ -4124,8 +4287,5 @@
+   const gsRow = (gt, name, x, region) => { const T = AN.R.types[gt], i = node(x), e = el(x), s = sec(x), gP = gsPan(gt, T, x, s);
+-    // brace points at G1 stations (C24, 2026-10-13; was the global x of the G1 frames, f.xa)
+-    const bp = [...new Set([...m.sup, ...stG([0], false, 3)])].sort((p1, p2) => p1 - p2).filter((v, k, arr) => k === 0 || v - arr[k - 1] > 0.25), Lend = m.sup[m.sup.length - 1];
+-    // unbraced segment(s) containing x; at a brace point both adjacent segments are considered and the more critical (larger L_b/C_b) is used
+-    const segs = []; const ib = bp.findIndex(v => Math.abs(v - x) < 0.25);
+-    if (ib >= 0) { if (ib > 0) segs.push([bp[ib - 1], bp[ib]]); if (ib < bp.length - 1) segs.push([bp[ib], bp[ib + 1]]); }
+-    else { const a0 = [...bp].reverse().find(v => v < x) ?? 0, b0 = bp.find(v => v > x) ?? Lend; segs.push([a0, b0]); }
++    // unbraced segment(s) containing x on every girder of the type, each at that girder's own brace points and bearings (SKX, 2026-10-15; was G1's stations and
++    // the centerline bearing stations for every type); at a brace point both adjacent segments; the more critical (larger L_b/C_b) is used, L_b the girder's own length
++    const Lend = m.sup[m.sup.length - 1], segs = lbSegs(gt, x);
+     // nonprismatic unbraced length (CB2, 2026-10-13): 6.10.8.2.3c (feNpr); C_b = 1.0 (Eq. c-1) unless its simplification holds, and the segments ranked with that C_b
+@@ -4138,6 +4298,6 @@
+     // two 'ge' segments at a brace point: the one with the smaller gamma_e governs (F_nc of Eqs. c-1 to c-3 depends on L_b only through gamma_e f_bu); otherwise as before
+-    const cand = segs.map(([p0, p1]) => { const Cb = region === 'neg' ? feCb(AN.xs, T.Mun, p0, p1, -1) : 1, np = region === 'neg' ? feNpr(p0, p1, secAt, q => -feAt(xs, T.Mun, q)) : null;
+-      return { xa: p0, xb: p1, np, Cb: np && np.kind === 'ge' ? 1 : Cb, ge: np && np.kind === 'ge' ? geSeg(np, p0, p1, (p1 - p0) * 12, rtS, fS) : null }; })
+-      .sort((u, v) => byGe(u, v) ?? (v.xb - v.xa) / v.Cb - (u.xb - u.xa) / u.Cb)[0] || { xa: 0, xb: Lend, Cb: 1, np: null };
+-    const xa = cand.xa, xb = cand.xb, CbN = cand.Cb, LbN = region === 'neg' ? xb - xa : FR.sp, np = cand.np;
++    const cand = segs.map(({ xa: p0, xb: p1, L }) => { const Cb = region === 'neg' ? feCb(AN.xs, T.Mun, p0, p1, -1) : 1, np = region === 'neg' ? feNpr(p0, p1, secAt, q => -feAt(xs, T.Mun, q)) : null;
++      return { xa: p0, xb: p1, L, np, Cb: np && np.kind === 'ge' ? 1 : Cb, ge: np && np.kind === 'ge' ? geSeg(np, p0, p1, L * 12, rtS, fS) : null }; })
++      .sort((u, v) => byGe(u, v) ?? v.L / v.Cb - u.L / u.Cb)[0] || { xa: 0, xb: Lend, L: Lend, Cb: 1, np: null };
++    const xa = cand.xa, xb = cand.xb, CbN = cand.Cb, LbN = cand.L, np = cand.np;   // L_b: the governing segment in both regions (SKX; was the target spacing FR.sp in positive flexure)
+     // the compression flange for LTB (lbB × lbT) and the method (npr): 'simp', the section next to the brace point with the larger moment; 'ge', the section with the
+@@ -4159,4 +4319,5 @@
+     const rtC = q => { const p = stP(q); return q[kb] / Math.sqrt(12 * (1 + (sgC > 0 ? p.d - p.yb - q.topT : p.yb - q.botT) * q.tw / (3 * q[kb] * q[kt]))); };
+-    const cC = segs.map(([p0, p1]) => { const n2 = feNpr(p0, p1, secAt, q => sgC * feAt(xs, T.Mc, q)); return { p0, p1, n2, Cb: n2.kind === 'ge' ? 1 : feCb(AN.xs, T.Mc, p0, p1, sgC), ge: n2.kind === 'ge' ? geSeg(n2, p0, p1, FR.sp * 12, rtC, fCon) : null }; })
+-      .sort((u, v) => byGe(u, v) ?? u.Cb - v.Cb)[0], CbC = cC ? cC.Cb : 1;
++    // deck placement (SKX, 2026-10-15): L_b,C the governing segment's own length (larger L_b/C_b; was the target spacing FR.sp for every segment, ranked by C_b)
++    const cC = segs.map(({ xa: p0, xb: p1, L }) => { const n2 = feNpr(p0, p1, secAt, q => sgC * feAt(xs, T.Mc, q)); return { p0, p1, L, n2, Cb: n2.kind === 'ge' ? 1 : feCb(AN.xs, T.Mc, p0, p1, sgC), ge: n2.kind === 'ge' ? geSeg(n2, p0, p1, L * 12, rtC, fCon) : null }; })
++      .sort((u, v) => byGe(u, v) ?? v.L / v.Cb - u.L / u.Cb)[0], CbC = cC ? cC.Cb : 1, LbCN = cC ? cC.L : FR.sp;
+     let nprC = ''; if (cC && cC.n2.kind === 'simp') nprC = { kind: 'simp', fl: sgC > 0 ? 'top' : 'bottom', b: cC.n2.big[kb], t: cC.n2.big[kt], Ir: r3(cC.n2.Ir) };
+@@ -4164,3 +4325,3 @@
+       nprC = { kind: 'ge', fl: sgC > 0 ? 'top' : 'bottom', b: G ? G.s[kb] : s[kb], t: G ? G.s[kt] : s[kt], k: G && fr > 0 && !mA ? r3(Math.max(1, G.fm / fr)) : '', Ir: r3(cC.n2.Ir), why: cC.n2.why, A: geRec(A) }; }
+-    gs.rows.push({ name: `${name}, ${TT(gt)}`, gt, x: r2(x), region, cont: m.sup.length > 2 && m.cont ? 'yes' : 'no', beff: r2(props(s, gt).beff), ...s, Lb: r2(LbN), LbC: r2(FR.sp), Cb: +CbN.toFixed(3), CbC: +CbC.toFixed(3), lbB, lbT, npr, lbK, lbIr, nprWhy, geA, nprC, MDCc: T.MDCc ? +T.MDCc[i].toFixed(1) : '', ...gsDo(gt, x, s, gP),
++    gs.rows.push({ name: `${name}, ${TT(gt)}`, gt, x: r2(x), region, cont: m.sup.length > 2 && m.cont ? 'yes' : 'no', beff: r2(props(s, gt).beff), ...s, Lb: r2(LbN), LbC: r2(LbCN), Cb: +CbN.toFixed(3), CbC: +CbC.toFixed(3), lbB, lbT, npr, lbK, lbIr, nprWhy, geA, nprC, MDCc: T.MDCc ? +T.MDCc[i].toFixed(1) : '', ...gsDo(gt, x, s, gP),
+       MDC1: r1(T.MDC1[i]), MDC2: r1(T.MDC2[i]), MDW: r1(T.MDW[i]), MLLp: r1(Math.max(0, T.Mp[i])), MLLn: r1(Math.min(0, T.Mn[i])), MCL: r1(T.MCL[i]), MfP: r1(T.MfP[i]), MfN: r1(T.MfN[i]),
+@@ -4321,3 +4482,4 @@
+       ${fld('Minimum girder depth for cross-frames', 'framing.xfMinD', 'in', 'num', { full: true, note: 'common practice (e.g. AISC/NSBA G13.1 guidance; owner standards govern); verify' })}
+-      <p class="note">Cross-frames are placed at every bearing line and evenly between them, with extra frames added in skewed corners and where needed to clear field splices and flange transitions.</p>
++      <p class="note">Cross-frames are placed at every bearing line and evenly between them, with extra frames added in skewed corners. At supports skewed more than 20° (normal frames) the first intermediate frame is at least max(clear distance, 4b<sub>f</sub>, 0.4 × spacing) from each girder's bearing and non-aligned frames are at least max(min. offset, 4b<sub>f</sub>) apart (AASHTO LRFD C6.7.4.2.1). Where frames would land on field splices or flange transitions, the grid is shifted, or frames are added, only where that clears them; otherwise the conflict is reported (X4 and the table below).</p>
++      <div id="fr-sum" class="full"></div>
+     </div>
+@@ -4358,2 +4520,27 @@
+ }
++/* the spacing the cross-frame layout uses (SKX, 2026-10-15): per span the orientation, intermediate frames, the grid (or parallel) spacing against the target,
++   the largest girder panel per girder, the first-line offsets at supports skewed more than 20°, and splice / transition conflicts that remain (framingLayout) */
++function frSumHtml() {
++  const sp = FR.sp, nS = M.sup.length, supN = k => k === 0 ? 'Abut. 1' : k === nS - 1 ? 'Abut. 2' : `Pier ${k}`;
++  let h = `<p class="hint static">Spacing used (target ${f2(sp)} ft). L<sub>b</sub>: the largest distance between consecutive bracing points (bearings, cross-frames on either side) along each girder in the span, at its own stations; listed per girder where it differs.</p>`;
++  h += `<div class="tscroll"><table class="atbl tsb"><tr><th>Span</th><th>Frames</th><th>Spacing (ft)</th><th>L<sub>b,max</sub> (ft)</th></tr>`;
++  FR.orient.forEach(o => { const k = o.k, nI = FR.frames.filter(f => f.type === 'int' && f.k === k), perBay = [...Array(M.nb - 1).keys()].map(b => nI.filter(f => f.bay === b).length);
++    const lb = FR.girders.map(g => { const a = g.bear[k], b = g.bear[k + 1], s = [a, b, ...g.pts.filter(q => q.f.type === 'int' && q.s > a + 1e-6 && q.s < b - 1e-6).map(q => q.s)].sort((u, v) => u - v);
++      let mx = 0; for (let q = 1; q < s.length; q++) mx = Math.max(mx, s[q] - s[q - 1]); return mx; });
++    const same = lb.every(v => Math.abs(v - lb[0]) < 0.005), lbTxt = same ? `${f2(lb[0])} (all girders)` : lb.map((v, i) => `G${i + 1} ${f2(v)}`).join(', ');
++    const par = o.o === 'parallel', spTxt = par ? (() => { const L = FR.girders.map(g => g.bear[k + 1] - g.bear[k]), n1 = o.n + 1, a = Math.min(...L) / n1, b = Math.max(...L) / n1; return Math.abs(b - a) < 0.005 ? f2(a) : `${f2(a)}–${f2(b)} (G${L.indexOf(Math.min(...L)) + 1}–G${L.indexOf(Math.max(...L)) + 1})`; })() : f2(o.s);
++    const notes = [par ? `parallel to the skew, ${o.n} per bay` : `normal to the girders (${P.framing.arrange}${o.flat ? ': half a spacing < d_min, lines kept contiguous' : ''}); per bay ${[...new Set(perBay)].length === 1 ? perBay[0] : perBay.join(' / ')}`];
++    if (!par && o.e0 != null) notes.push(`first line ${f2(o.e0)} ft from the obtuse bearing at ${supN(k)}`);
++    if (!par && o.e1 != null) notes.push(`last line ${f2(o.e1)} ft from the obtuse bearing at ${supN(k + 1)}`);
++    if (o.shift) notes.push(par ? `grid shifted ${f2(o.shift * 100)}% of a panel to clear splices / transitions` : `grid shifted (end offsets ${f2(o.shift)} ft in all) to clear splices / transitions`);
++    if (o.extra) notes.push(`${par ? o.n - o.base + ' extra per bay' : o.n - o.base + ' extra frames'} to clear splices / transitions`);
++    if (o.conflicts) notes.push(`<span style="color:var(--fail)">${o.conflicts} frame${o.conflicts === 1 ? '' : 's'} within the splice clearance: the field splice / transition locations conflict with the frames (X4)</span>`);
++    h += `<tr><td>${k + 1}</td><td>${nI.length}</td><td>${spTxt}</td><td style="white-space:normal">${lbTxt}${Math.max(...lb) > sp + 1e-6 ? ' <span style="color:var(--fail)">&gt; target (X2)</span>' : ''}</td></tr><tr class="tsb-g"><td colspan="4" style="font-weight:normal;white-space:normal">${notes.join('; ')}</td></tr>`; });
++  return h + `</table></div>`;
++}
++function renderFrSum() {
++  const host = $('#fr-sum'); if (!host) return;
++  if (!M || M.errors.length || !FR) { host.innerHTML = ''; return; }
++  try { host.innerHTML = frSumHtml(); } catch (e) { console.error(e); host.innerHTML = `<p class="hint static">The spacing summary could not be built: ${esc(e.message)}</p>`; }
++}
+ function renderFrBays() {
+@@ -5011,3 +5198,3 @@
+   M = buildModel(P);
+-  if (M.errors.length) { C = null; FR = null; AN = null; renderErrors(); renderFrBays(); maybeSuggest(); maybeAlts(); return; }
++  if (M.errors.length) { C = null; FR = null; AN = null; renderErrors(); renderFrBays(); renderFrSum(); maybeSuggest(); maybeAlts(); return; }
+   C = runChecks(M);
+@@ -5019,3 +5206,3 @@
+   M.st = sectionStatus(M, C);
+-  renderStatus(); renderSummary(); renderDrawings(); renderChecks(); renderAnalysis(); renderSchedule(); renderReportHead(); renderFrBays();
++  renderStatus(); renderSummary(); renderDrawings(); renderChecks(); renderAnalysis(); renderSchedule(); renderReportHead(); renderFrBays(); renderFrSum();
+   applyCollapse(); typeset(); maybeSuggest(); maybeAlts();
+```
