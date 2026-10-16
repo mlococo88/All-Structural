@@ -1519,3 +1519,38 @@ Engineer request 2026-10-16. A new export only: **no input, result, report or sa
   - `node tests/check-syntax.mjs BasePlateAnchorDesigner.html` passes.
   - `node tests/bpad-profis.mjs` passes: results are identical to main, and the example is reproduced with only the expected differences.
   - A headless export of the engineer's design writes 381 mm on all four edges.
+
+## 2026-10-16 — BP-X6: PROFIS export, catalog items learned from the engineer's re-saved files (Tier 2, export only)
+- **Source:** four PROFIS re-saves of an exported design, `Drafts_Untitled*.pe` in Structural_References, plus the engineer's answers on 2026-10-16.
+- **Learned:**
+  - ConcreteGradeId 67 = 4000 psi (confirmed by the engineer).
+  - ConcreteGradeType "Custom" is accepted: PROFIS opened and re-saved such files.
+  - Stand-off with grouting = `StandoffType WithGrouting` with `StandoffRestraintLevel 2`. The engineer set this in PROFIS; the meaning of the restraint level is not identified.
+  - Concrete edges 381 mm were kept unchanged by PROFIS.
+- **Not yet identified (engineer to look up in PROFIS):**
+  - FastenerId 1901, the anchor picked in file (2), with "Untorqued" and nut and washer set.
+  - Profile family 24 / size 920, the column picked in file (3), probably W12X65.
+  - EdgeReinforcementId 6, which goes with Condition A and anchor reinforcement on.
+- **Function / anchor:** `PROFIS_PE_IDS.concreteGrades`; `profisBuildPe` f′c verify text; stand-off block, comment `/* BP-X6 (2026-10-16)`.
+- **Before:**
+  ```js
+  concreteGrades:[],
+  ...
+  if(so.hasStandoff){ row("Stand-off",…,"StandoffType None (template)","select"); verify.push("Select in PROFIS after opening: stand-off …"); }
+  ```
+- **After:**
+  ```js
+  concreteGrades:[ { id:67, fc:4, … confirmed:true } ],
+  ...
+  if(so.hasStandoff && so.type==="grout"){ StandoffType "WithGrouting", StandoffDistance = mm(gap), StandoffRestraintLevel 2, status "check" }
+  else if(so.hasStandoff){ …unchanged… }
+  ```
+  - f′c of exactly 4 ksi is now written as Predefined grade 67; other strengths are still written as Custom.
+  - A flush plate on a grout pad (stand-off type "none") is unchanged: it is still written as no stand-off, with a note.
+- **Provision:** none. No calculation in the tool changed; this is only the export file mapping.
+- **Check case:**
+  - f′c 4 ksi. Before: Custom 27.579 MPa. After: Predefined grade 67.
+  - Grouted stand-off with a 1.0 in gap. Before: None / 30 mm / 0. After: WithGrouting / 25.4 mm / 2.
+- **Verification:**
+  - `node tests/check-syntax.mjs BasePlateAnchorDesigner.html` passes.
+  - `node tests/bpad-profis.mjs` passes. The expected diff for the example is now ConcreteGradeId 65 → 67.

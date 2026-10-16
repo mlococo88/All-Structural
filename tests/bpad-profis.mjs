@@ -141,7 +141,7 @@ console.log(`  well-formed ${r.wellFormed}, root ${r.root}, ns ${r.ns}, state un
 /* expected differences: what the tool cannot know or deliberately writes differently */
 const EXPECT = [
   [/\/ProjectName$|\/DesignName$|\/Options\/ReportNotes$/, 'title block / export notes'],
-  [/\/BaseMaterial\/ConcreteGradeType$|\/BaseMaterial\/CustomCompressiveStrength$/, "f'c written as Custom strength (example: Predefined grade 65, strength unknown)"],
+  [/\/BaseMaterial\/ConcreteGradeId$/, "f'c 4 ksi written as Predefined grade 67 (engineer 2026-10-16; example grade 65, strength unknown)"],
   [/LoadCombinationEntity\[2\]\/MomentZ$|^ProjectDesignConcreteEntity\/Loads\/MomentZ$/, 'torsion: this tool has no Mz, written 0 (example 10 ft-kip)'],
   [/LoadCombinationEntity\[1\]\/Description$/, 'combination description: nil vs empty'],
 ];
