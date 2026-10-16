@@ -647,8 +647,9 @@ function standoffParams(){
     case "noclamp": return {type:"noclamp", label:"Stand-off without clamping", hasStandoff:true, z,
       groutFilled:false, groutShearFactor:1.0, checkBending:true, alphaM:1.0, restraintN:(nOv!=null?nOv:0.5),
       note:"Exposed rod bends in single curvature (plate free to rotate at the nut). Air gap → no grout shear factor. Steel-with-lever-arm (bending) check governs shear."};
+    /* BP-C1 (2026-10-16): PROFIS 3.1.36 (example 10) uses n = 0 for a clamped stand-off (L_b = z) */
     case "clamp": return {type:"clamp", label:"Stand-off with clamping", hasStandoff:true, z,
-      groutFilled:false, groutShearFactor:1.0, checkBending:true, alphaM:2.0, restraintN:(nOv!=null?nOv:0.5),
+      groutFilled:false, groutShearFactor:1.0, checkBending:true, alphaM:2.0, restraintN:(nOv!=null?nOv:0.0),
       note:"Nuts above and below clamp the plate → double curvature (αM=2). Air gap → no grout shear factor. Steel-with-lever-arm (bending) check governs shear."};
     case "grout": {
       const doBend = (so.groutBendingCheck!==false);
@@ -2250,7 +2251,12 @@ function computeAll(){
        matching Hilti PROFIS. Anchors on the tension side of the neutral axis
        carry tension even when they sit on the geometric compression half;
        the concrete bearing block resists the compression. */
-    const useNA = !(S.forceModel && S.forceModel.method==="elastic");
+    /* BP-C1 (2026-10-16, engineer-approved): an OPEN stand-off (no grout) has no bearing block —
+       the rods carry the compression, so the anchor forces are the elastic bolt group
+       T_i = P/n + Mx·y_i/Σy² − My·x_i/Σx², as Hilti PROFIS does (examples 9 and 10). */
+    const soF = standoffParams();
+    const openSO = !!(soF.hasStandoff && !soF.groutFilled);
+    const useNA = !(S.forceModel && S.forceModel.method==="elastic") && !openSO;
     const naRes = useNA ? naAnchorForces(g, cb, S) : null;
     let naUsed = !!(naRes && naRes.method==="na");
     const perAnchor = g.pts.map((p,i)=>{
@@ -2323,7 +2329,7 @@ function computeAll(){
     return {ci,name:cb.name,raw:cb,Pc,resX,resY,fx,fy,nTx,nTy,TuX,TuY,Tu_perX,Tu_perY,uplift,
       vCase,vCaseOffset,
       Tu_per,nT,nV,Tu_group,Vres,Vu_per,frontDesc,eccN,eccN_x,eccN_y,perAnchor,Tmax_anchor,nT_dist,
-      na:naRes, naUsed,
+      na:naRes, naUsed, openSO, Ixx, Iyy, nAll,
       ecc_regime:(resX.regime==="large"||resY.regime==="large")?"large":"small"};
   });
 
@@ -5606,7 +5612,20 @@ function buildAnchorTab(pg){
   },pg);
 
   mkSection("anDemand",SN()+"Anchor Demands (this combination)",body=>{
-    if(c.naUsed){
+    if(c.openSO){
+      /* BP-C1: open stand-off — elastic bolt group, compression kept in the rods */
+      const nTd=Math.max(c.nT_dist||0,1);
+      const pm=(c.perAnchor||[]).reduce((m,p)=>(!m||p.t>m.t)?p:m,null)||{x:0,y:0,t:0};
+      const cb=c.raw;
+      body.appendChild(eqBlock({title:"Per-anchor force — open stand-off: elastic bolt group (no bearing block, rods carry compression)",ref:"rigid plate, matches Hilti PROFIS",
+        lines:[
+          "T_i=\frac{P}{n}+\frac{M_x\,y_i}{\sum y^2}-\frac{M_y\,x_i}{\sum x^2}\quad(+\ \text{tension})",
+          "T_{u,max}=\frac{"+fmt(cb.P,2)+"}{"+c.nAll+"}+\frac{"+fmt(cb.Mx,1)+"\times("+fmt(pm.y,2)+")}{"+fmt(c.Iyy,2)+"}-\frac{"+fmt(cb.My,1)+"\times("+fmt(pm.x,2)+")}{"+fmt(c.Ixx,2)+"}="+fmt(Math.max(pm.t,0),2)+"\ \text{kip}",
+          "N_{ua}=\sum_{T_i>0} T_i="+fmt(c.Tu_group,2)+"\ \text{kip (group, "+nTd+" anchors in tension)}"],
+        vars:[["T_{u,max}",fmt(Math.max(pm.t,0),2)+" k","governs steel tension & pullout"],
+              ["N_{ua}",fmt(c.Tu_group,2)+" k","governs concrete breakout"],
+              ["T_i<0","—","compression carried by the rods; see the rod compression check"]]}));
+    } else if(c.naUsed){
       const nTd=Math.max(c.nT_dist||0,1);
       body.appendChild(eqBlock({title:"Per-anchor tension demand (rigid-plate neutral-axis solve)",ref:"see Anchor Layout table above",
         lines:[
@@ -9894,6 +9913,7 @@ const VALIDATION_CASES = [
   {
     id:"struct2v1",
     name:"CB Plaza Struct 2 (v1) — ¾\" F1554-55, 6 anchors",
+    note:"PROFIS 3.1.34 run with an open (clamped) stand-off and concrete bearing under the plate, n = 0.5. This tool follows PROFIS 3.1.36 (engineer decision 2026-10-16, BP-C1): an open stand-off has no bearing, the rods carry compression (elastic bolt group) and n = 0 when clamped. Rows that depend on the anchor-force distribution are expected to differ.",
     ref:"HDR / Ilyssa Creamer, PROFIS 3.1.34",
     setup(){
       const s=defaultState();
@@ -9926,6 +9946,7 @@ const VALIDATION_CASES = [
   {
     id:"struct2v2",
     name:"CB Plaza Struct 2 (v2) — eb=1.5, 6 anchors in tension",
+    note:"PROFIS 3.1.34 run with an open (clamped) stand-off and concrete bearing under the plate, n = 0.5. This tool follows PROFIS 3.1.36 (engineer decision 2026-10-16, BP-C1): an open stand-off has no bearing, the rods carry compression (elastic bolt group) and n = 0 when clamped. Rows that depend on the anchor-force distribution are expected to differ.",
     ref:"HDR / Ilyssa Creamer, PROFIS 3.1.34",
     setup(){
       const s=defaultState();
@@ -10196,6 +10217,7 @@ function buildValidationTab(pg){
   VALIDATION_CASES.forEach(vc=>{
     mkSection("val_"+vc.id, vc.name, body=>{
       body.appendChild(el("div","note",vc.ref));
+      if(vc.note) body.appendChild(el("div","warnBox",vc.note));
       let ours;
       try{ ours=runValidationCase(vc); }
       catch(e){ body.appendChild(el("div","errBox","Engine error on this case: "+e.message)); return; }
