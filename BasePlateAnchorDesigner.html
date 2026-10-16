@@ -11927,8 +11927,38 @@ function profisBuildPe(opts){
   } else
     verify.push("Edge reinforcement ("+(C.edgeReinf==="stirrups"?"bar with stirrups, ψ_c,V 1.4":"edge bar, ψ_c,V 1.2")+") is not exported: set the edge reinforcement in PROFIS.");
   if(C.psi_cV_override) verify.push("ψ_c,V is overridden in this tool ("+fmt(C.psi_cV,2)+"); set the equivalent edge reinforcement in PROFIS.");
-  if((S.tRebar&&S.tRebar.present)||(S.vRebar&&S.vRebar.present))
-    verify.push("Anchor reinforcement ("+[S.tRebar.present?"tension":null,S.vRebar.present?"shear":null].filter(Boolean).join(" and ")+") is not exported: the file keeps \"no anchor reinforcement\", Condition B. Set it in PROFIS.");
+  /* BP-X9 (2026-10-16, engineer decision (d)): write the reinforcement as this tool uses it.
+     §17.5.2.1 substitution justified -> anchor reinforcement + Condition A (example 4);
+     intercept credits a leg but substitution not justified -> Condition A only (example 1);
+     otherwise Condition B, no anchor reinforcement. Tension and shear set separately (example 8). */
+  const reinf={};
+  ["tension","shear"].forEach(kind=>{
+    const R=(kind==="tension")?S.tRebar:S.vRebar;
+    let st="none";
+    if(R && R.present){
+      let just=false, cA=false;
+      try{ const J=substitutionJustified(CC); just=!!(J && (kind==="tension"?J.t:J.v).justified); }catch(e){ just=false; }
+      try{ cA=conditionA(kind, CC)===true; }catch(e){ cA=false; }
+      st= just? "anchor" : (cA? "condA" : "present");
+    }
+    reinf[kind]=st;
+  });
+  const isT=reinf.tension==="anchor", isV=reinf.shear==="anchor";
+  setT(kid(bm,"IsAnchorReinforcement"),(isT||isV)?"true":"false");
+  setT(kid(bm,"IsAnchorReinforcementTension"),isT?"true":"false");
+  setT(kid(bm,"IsAnchorReinforcementShear"),isV?"true":"false");
+  setT(kid(bm,"ReinforcementConditionTension"),(reinf.tension==="anchor"||reinf.tension==="condA")?"A":"B");
+  setT(kid(bm,"ReinforcementConditionShear"),(reinf.shear==="anchor"||reinf.shear==="condA")?"A":"B");
+  const rTxt={none:"none",present:"present, but it does not cross the failure surface (Condition B)",
+              condA:"supplementary — crosses the failure surface, §17.5.2.1 substitution not justified (Condition A)",
+              anchor:"anchor reinforcement — §17.5.2.1 substitution justified (Condition A)"};
+  const rOut=st=>st==="anchor"?"anchor reinforcement on, Condition A":(st==="condA"?"Condition A, no anchor reinforcement":"Condition B, no anchor reinforcement");
+  row("Reinforcement — tension",rTxt[reinf.tension],rOut(reinf.tension),"ok");
+  row("Reinforcement — shear",rTxt[reinf.shear],rOut(reinf.shear),"ok");
+  if(isT||isV||reinf.tension==="condA"||reinf.shear==="condA")
+    verify.push("Reinforcement was written as this tool uses it (tension: "+rOut(reinf.tension)+"; shear: "+rOut(reinf.shear)+"). PROFIS does not design the bars: their size, position and development are checked only in this tool's report.");
+  if(reinf.tension==="present"||reinf.shear==="present")
+    verify.push("Reinforcement is entered in this tool but does not cross the assumed failure surface, so it was written as Condition B with no anchor reinforcement, as this tool treats it.");
   if(C.hefReduce===true) verify.push("This design forces the §17.6.2.1.2 reduced h_ef; PROFIS decides this itself.");
 
   /* ---- stand-off / grout ---- */

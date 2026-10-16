@@ -161,7 +161,7 @@ const u = r.unknown;
 console.log(`  well-formed ${u.wellFormed}; file ${u.fileName}; combos ${u.nCombos}/${u.nAppCombos}; anchor points ${u.nPts}; FastenerId ${u.fastener}`);
 u.rows.forEach(x => console.log(`   [${x[1]}] ${x[0]}: ${x[2]}`));
 console.log('  verify list:'); u.verify.forEach(v => console.log('   - ' + v));
-const need = [/anchor 3\/4 in Hex head bolt, F1554 Gr\. 55/, /column profile W12X65/, /plate steel A572 Gr\. 50/, /no PROFIS layout ID is known for 3 × 2/, /Column orientation/, /Uncracked/, /Anchor reinforcement/, /Seismic/, /Column offset/];
+const need = [/anchor 3\/4 in Hex head bolt, F1554 Gr\. 55/, /column profile W12X65/, /plate steel A572 Gr\. 50/, /no PROFIS layout ID is known for 3 × 2/, /Column orientation/, /Uncracked/, /Reinforcement (was written|is entered)/, /Seismic/, /Column offset/];
 const miss = need.filter(re => !u.verify.some(v => re.test(v)));
 if (miss.length || !u.wellFormed || u.nCombos !== u.nAppCombos || u.nPts !== 6) { fail = true; console.log('  MISSING: ' + miss.map(String).join(', ')); }
 
