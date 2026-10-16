@@ -1718,3 +1718,30 @@ Engineer request 2026-10-16. A new export only: **no input, result, report or sa
 - **Verification:**
   - `node tests/check-syntax.mjs BasePlateAnchorDesigner.html` passes.
   - `node tests/bpad-profis.mjs` passes.
+
+## 2026-10-16 — BP-X12: PROFIS export, Heavy Hex Head F1554 Gr. 36 / 55 / 105, all PROFIS sizes (Tier 2, export only)
+- **Source:** 18 PROFIS files `Drafts_Untitled (1) (1–18).pe` in `Hilti_Profis_References`. Each file stores FastenerId, FastenerFamilyName and Diameter, so every ID read is self-identifying.
+  - Gr. 36: 1/2–1-1/8 in = 1829, 1832, 1835, 1838, (1841 from example 12), 1844.
+  - Gr. 55: 1/2–1-1/8 in = 1862, 1865, 1868, 1871, 1874, 1877.
+  - Gr. 105: 1/2–1-1/4 in = 1895, 1898, 1901, 1904, 1907, 1910, 1913.
+- **Numbering:**
+  - PROFIS offers 11 sizes: 1/2, 5/8, 3/4, 7/8, 1, 1-1/8, 1-1/4, 1-3/8, 1-1/2, 1-3/4, 2 in.
+  - Each grade is one block, step 3: Gr. 36 = 1829 + 3k, Gr. 55 = 1862 + 3k, Gr. 105 = 1895 + 3k.
+  - The block starts are exactly 33 = 11 × 3 apart (1862 − 1829, 1895 − 1862). That fixes the sizes not read: Gr. 36 and Gr. 55 1-1/4–2 in, and Gr. 105 1-3/8–2 in.
+- **Function / anchor:** the IIFE after `PROFIS_PE_IDS`, comment `/* BP-X12 (2026-10-16)`, appends the missing entries. The `profisBuildPe` anchor row is "check" for an inferred ID, with a verify note.
+- **Before:** only Gr. 36 1/2–1-1/8 in and Gr. 105 3/4 in were mapped.
+- **After:**
+  - Gr. 36, 55 and 105, 1/2–2 in are mapped (33 IDs).
+  - IDs read from a file → "ok".
+  - Inferred IDs → "check", plus a note to confirm the anchor name on page 1 of the PROFIS report.
+  - 2-1/4 and 2-1/2 in (not offered by PROFIS) still write the template with "select in PROFIS".
+- **Provision:** none. No calculation in the tool changed; this is only the export file mapping.
+- **Check case:** the default design with a heavy hex head, exported for every diameter and grade:
+  - Gr. 36: 1829 … 1844, then 1847i, 1850i, 1853i, 1856i, 1859i.
+  - Gr. 55: 1862 … 1877, then 1880i … 1892i.
+  - Gr. 105: 1895 … 1913, then 1916i … 1925i.
+  - 2.25 and 2.5 in → template.
+  - (i = inferred.)
+- **Verification:**
+  - `node tests/check-syntax.mjs BasePlateAnchorDesigner.html` passes.
+  - `node tests/bpad-profis.mjs` passes.
