@@ -37,6 +37,14 @@ Options of `compare.mjs`: `--tool gd|st|page`, `--a` (default `origin/main`), `-
 
 A git ref is written with `git show` to `<tmp>/allstruct-tests/<sha>/` and opened from there (`file://`). Fetch first (`git fetch origin main`) so `origin/main` is current.
 
+## Base Plate & Anchor Designer: PROFIS export (`bpad-profis.mjs`)
+
+```bash
+node tests/bpad-profis.mjs        # origin/main vs working tree results + export to PROFIS (.pe) checks
+```
+
+Compares `computeAll()`, the governing combination, every combination's capacities, the validation messages and the print-report text between `--a` (default `origin/main`) and `--b` (default the working tree) on the default project and every built-in `VALIDATION_CASES` project. Then, on `--b`: exports a design that reproduces `projects/bpad/profis-example.pe` (the engineer's PROFIS file, also the template embedded in the tool) and compares every XML leaf field with it, listing the expected differences; exports a design with no known catalog IDs and checks the "select in PROFIS" list; clicks the dialog's Download button and parses the file. The tool's CDN libraries are not in `libs/` and are blocked; the tool runs without them (KaTeX falls back to plain text, the same on both sides).
+
 ## Suggest panel checks (`suggest.mjs`)
 
 ```bash

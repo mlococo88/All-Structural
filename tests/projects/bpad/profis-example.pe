@@ -1,0 +1,649 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ProjectDesignConcreteEntity xmlns:i="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://schemas.agito.si/PROFIS3">
+  <ProjectDesignVersion>10000</ProjectDesignVersion>
+  <InternalProjectDesignType>1</InternalProjectDesignType>
+  <ProjectDesignType>Concrete</ProjectDesignType>
+  <ProjectName></ProjectName>
+  <DesignName>Concrete - Oct 13, 2026</DesignName>
+  <IsStressDistributionVisible>false</IsStressDistributionVisible>
+  <IsAnchorPlatePresent>true</IsAnchorPlatePresent>
+  <AnchorPlate>
+    <PlateShape>Rectangular</PlateShape>
+    <LengthA>304.79999999999995</LengthA>
+    <LengthB>304.8</LengthB>
+    <Thickness>12.7</Thickness>
+    <RotationZ>0</RotationZ>
+    <ShapePoints i:nil="true" />
+    <StandoffType>None</StandoffType>
+    <StandoffDistance>30</StandoffDistance>
+    <StandoffRestraintLevel>0</StandoffRestraintLevel>
+    <StandoffNutAndWasherHeight>0</StandoffNutAndWasherHeight>
+    <CustomGroutCompressiveStrength>30</CustomGroutCompressiveStrength>
+    <SteelTypeId>40</SteelTypeId>
+    <IsThicknessOptimizationActive>false</IsThicknessOptimizationActive>
+    <CustomAnchorPlateSteelMaterial>
+      <Name>Custom anchor plate material</Name>
+      <Fy>235</Fy>
+      <Fu>360</Fu>
+      <Es>200000</Es>
+      <Density>7850</Density>
+      <Poisson>0.2</Poisson>
+      <Bw>0.8</Bw>
+      <SteelTypeTDBId>1</SteelTypeTDBId>
+    </CustomAnchorPlateSteelMaterial>
+    <IsAnchorPlateSteelMaterialCustom>false</IsAnchorPlateSteelMaterialCustom>
+    <LedgerAngleProfile>
+      <ProfileFamilyId>160</ProfileFamilyId>
+      <ProfileSizeId>12571</ProfileSizeId>
+      <CustomProfileSizeId i:nil="true" />
+      <CustomWidth>60</CustomWidth>
+      <CustomWidth2>0</CustomWidth2>
+      <CustomHeight>60</CustomHeight>
+      <CustomThickness>5</CustomThickness>
+      <CustomFlangeThickness>0</CustomFlangeThickness>
+    </LedgerAngleProfile>
+    <VerifyDiaphragmShear>false</VerifyDiaphragmShear>
+    <AngleBracketHeight i:nil="true" />
+    <SlottedHoles i:nil="true" />
+    <OffsetX>0</OffsetX>
+    <OffsetY>0</OffsetY>
+  </AnchorPlate>
+  <IsProfilePresent>true</IsProfilePresent>
+  <Profile>
+    <ProfileFamilyId>28</ProfileFamilyId>
+    <ProfileSizeId>2958</ProfileSizeId>
+    <CustomProfileSizeId i:nil="true" />
+    <CustomWidth>59.182</CustomWidth>
+    <CustomWidth2>29.591</CustomWidth2>
+    <CustomHeight>76.2</CustomHeight>
+    <CustomThickness>4.318</CustomThickness>
+    <CustomFlangeThickness>6.604</CustomFlangeThickness>
+    <Angle>0</Angle>
+    <CustomProfileSteelMaterial>
+      <Name>Custom profile material</Name>
+      <Fy>235</Fy>
+      <Fu>360</Fu>
+      <Es>200000</Es>
+      <Density>7850</Density>
+      <Poisson>0.2</Poisson>
+      <Bw>0.8</Bw>
+      <SteelTypeTDBId>1</SteelTypeTDBId>
+    </CustomProfileSteelMaterial>
+    <IsProfileSteelMaterialCustom>false</IsProfileSteelMaterialCustom>
+    <SteelTypeId>46</SteelTypeId>
+    <OffsetX>0</OffsetX>
+    <OffsetY>0</OffsetY>
+    <Utilization>100</Utilization>
+    <IsWeldVisible>false</IsWeldVisible>
+    <WeldThicknessWeb>4</WeldThicknessWeb>
+    <WeldThicknessFlange>5</WeldThicknessFlange>
+    <WeldMaterialWeb>0</WeldMaterialWeb>
+  </Profile>
+  <Options>
+    <RegionId>6</RegionId>
+    <DesignStandard>ACI</DesignStandard>
+    <DesignMethodGroup>ACI31819</DesignMethodGroup>
+    <EtagEnOnly>false</EtagEnOnly>
+    <ReportTemplateId i:nil="true" />
+    <ReportContactPerson i:nil="true" />
+    <ReportAddress i:nil="true" />
+    <ReportLoadCombination>876a09d9-1a47-816a-2be7-f4dc9ed5d974</ReportLoadCombination>
+    <ReportCompanyName i:nil="true" />
+    <ReportPhoneNumber i:nil="true" />
+    <ReportEmail i:nil="true" />
+    <ReportType>Unknown</ReportType>
+    <ReportLanguage>1033</ReportLanguage>
+    <ReportPaperSize>Unknown</ReportPaperSize>
+    <ReportFirstPageNumber>1</ReportFirstPageNumber>
+    <ReportFasteningPoint i:nil="true" />
+    <ReportNotes i:nil="true" />
+    <NoteLoadCaseResultingAnchorForces></NoteLoadCaseResultingAnchorForces>
+    <NoteTensionLoad></NoteTensionLoad>
+    <NoteShearLoad></NoteShearLoad>
+    <NoteCombinedTensionAndShearLoad></NoteCombinedTensionAndShearLoad>
+    <NoteDisplacements></NoteDisplacements>
+    <NoteInstallationData></NoteInstallationData>
+    <UnitLength>inch</UnitLength>
+    <UnitArea>inch2</UnitArea>
+    <UnitStress>KSI</UnitStress>
+    <UnitForce>Kip</UnitForce>
+    <UnitMoment>ft_kip</UnitMoment>
+    <UnitTemperature>F</UnitTemperature>
+    <UnitTime>min</UnitTime>
+    <UnitAngle>degree</UnitAngle>
+    <UnitPercentage>percent</UnitPercentage>
+    <UnitForcePerLength>Kip_ft</UnitForcePerLength>
+    <UnitLengthLarge>ft</UnitLengthLarge>
+    <UnitStressSmall>kNm2</UnitStressSmall>
+    <UnitVelocity>m_s</UnitVelocity>
+    <UnitMomentPerLength>ft_kip_ft</UnitMomentPerLength>
+    <UnitDensity>lb_ft3</UnitDensity>
+    <UnitAreaPerLength>None</UnitAreaPerLength>
+    <EdgeDistanceDisplayType>FromAnchorCenter</EdgeDistanceDisplayType>
+    <CoordinateSystemCenter>Profile</CoordinateSystemCenter>
+    <SteelGuideline>ACI</SteelGuideline>
+    <MinimumAnchorToProfileDistance i:nil="true" />
+    <MinimumConcreteCover i:nil="true" />
+    <AnchorPlateFactor i:nil="true" />
+    <SafetyFactorForPermanentLoads i:nil="true" />
+    <SafetyFactorForVariableLoads i:nil="true" />
+    <SteelSafetyFactorGammaM0 i:nil="true" />
+    <SteelSafetyFactorGammaM1 i:nil="true" />
+    <SteelSafetyFactorGammaM2 i:nil="true" />
+    <SteelSafetyFactorGammaM5 i:nil="true" />
+    <MaterialSafetyFactor i:nil="true" />
+    <ConcreteSafetyFactorGammaC i:nil="true" />
+    <HandrailDisplacementLimit i:nil="true" />
+    <HandrailDisplacementLimitBridges i:nil="true" />
+    <TrimbleConnectUpload>false</TrimbleConnectUpload>
+    <TrimbleConnectLocation i:nil="true" />
+    <TrimbleConnectReportName i:nil="true" />
+    <TrimbleConnectFolderId i:nil="true" />
+    <CoordinateSystemCenterX i:nil="true" />
+    <CoordinateSystemCenterY i:nil="true" />
+    <StainlessSteel>false</StainlessSteel>
+    <OstInputsEnabled i:nil="true" />
+    <AdvancedBaseplateCalculation>
+      <StopAtLimitStrain i:nil="true" />
+      <JointCoefficientBj i:nil="true" />
+      <EffectiveArea i:nil="true" />
+      <LoadDistributionAngle i:nil="true" />
+      <AlphaCC i:nil="true" />
+      <LimitPlasticStrain i:nil="true" />
+      <DivisionOfSurfaceOfCHS i:nil="true" />
+      <DivisionOfArcsOfRHS i:nil="true" />
+      <NumberOfElementsOfEdge i:nil="true" />
+      <NumberOfAnalysisIterations i:nil="true" />
+      <DivergentIterationsCount i:nil="true" />
+      <MinimumSizeOfElement i:nil="true" />
+      <MaximumSizeOfElement i:nil="true" />
+      <UseULSStresses>true</UseULSStresses>
+      <ConcreteInCompressionMethod i:nil="true" />
+      <EffectiveAreaAISC i:nil="true" />
+      <NumberOfElementsOfPlateEdge i:nil="true" />
+    </AdvancedBaseplateCalculation>
+    <WeldsCapacityFactor>0.8</WeldsCapacityFactor>
+    <SteelCapacityFactor i:nil="true" />
+    <ConcreteCapacityFactor i:nil="true" />
+    <INSteelSafetyFactorGammaM0 i:nil="true" />
+    <INSteelSafetyFactorGammaM1 i:nil="true" />
+    <INSteelSafetyFactorGammaMw i:nil="true" />
+    <INSteelSafetyFactorGammaMb i:nil="true" />
+    <IsRamDesignFile>false</IsRamDesignFile>
+    <CustomPictures i:nil="true" />
+    <MeasureAnchorPlate>UsingOverallWidthAndHeight</MeasureAnchorPlate>
+    <MeasureBaseMaterialEdgeFrom>NearestAnchorCenter</MeasureBaseMaterialEdgeFrom>
+    <AllowPlateOutsideConcrete>false</AllowPlateOutsideConcrete>
+    <ConcreteSafetyFactorGammaCFreeValue>1.5</ConcreteSafetyFactorGammaCFreeValue>
+    <DanishNA>false</DanishNA>
+    <DimensionSymmetryType>Symmetric</DimensionSymmetryType>
+    <ConcreteSafetyFactorGammaCSeismic>1.5</ConcreteSafetyFactorGammaCSeismic>
+    <AdjustAnchorSpacing>false</AdjustAnchorSpacing>
+  </Options>
+  <CalculatedData>
+    <IsDesignValid>true</IsDesignValid>
+    <DesignMethod>ACI31819_CIP</DesignMethod>
+    <EmbedmentDepth>254</EmbedmentDepth>
+    <NominalEmbedmentDepth i:nil="true" />
+    <FastenerFamilyName>Heavy Hex Head ASTM F 1554 GR. 36</FastenerFamilyName>
+    <MaxWeldThickness>0</MaxWeldThickness>
+    <AnchorLayoutPoints>
+      <AnchorLayoutPointEntity>
+        <X>-127</X>
+        <Y>-101.6</Y>
+        <Id i:nil="true" />
+        <IsSlotted>false</IsSlotted>
+        <SlottingOrientation i:nil="true" />
+      </AnchorLayoutPointEntity>
+      <AnchorLayoutPointEntity>
+        <X>127</X>
+        <Y>-101.6</Y>
+        <Id i:nil="true" />
+        <IsSlotted>false</IsSlotted>
+        <SlottingOrientation i:nil="true" />
+      </AnchorLayoutPointEntity>
+      <AnchorLayoutPointEntity>
+        <X>-127</X>
+        <Y>101.6</Y>
+        <Id i:nil="true" />
+        <IsSlotted>false</IsSlotted>
+        <SlottingOrientation i:nil="true" />
+      </AnchorLayoutPointEntity>
+      <AnchorLayoutPointEntity>
+        <X>127</X>
+        <Y>101.6</Y>
+        <Id i:nil="true" />
+        <IsSlotted>false</IsSlotted>
+        <SlottingOrientation i:nil="true" />
+      </AnchorLayoutPointEntity>
+    </AnchorLayoutPoints>
+    <AnchorPlatePoints>
+      <Point2DEntity>
+        <X>-152.39999999999998</X>
+        <Y>-152.4</Y>
+      </Point2DEntity>
+      <Point2DEntity>
+        <X>152.39999999999998</X>
+        <Y>-152.4</Y>
+      </Point2DEntity>
+      <Point2DEntity>
+        <X>152.39999999999998</X>
+        <Y>152.4</Y>
+      </Point2DEntity>
+      <Point2DEntity>
+        <X>-152.39999999999998</X>
+        <Y>152.4</Y>
+      </Point2DEntity>
+    </AnchorPlatePoints>
+    <ProfileLayoutPoints>
+      <Point2DEntity>
+        <X>-50.8</X>
+        <Y>-50.8</Y>
+      </Point2DEntity>
+      <Point2DEntity>
+        <X>50.8</X>
+        <Y>-50.8</Y>
+      </Point2DEntity>
+      <Point2DEntity>
+        <X>50.8</X>
+        <Y>50.8</Y>
+      </Point2DEntity>
+      <Point2DEntity>
+        <X>-50.8</X>
+        <Y>50.8</Y>
+      </Point2DEntity>
+      <Point2DEntity>
+        <X>-50.8</X>
+        <Y>-50.799</Y>
+      </Point2DEntity>
+      <Point2DEntity>
+        <X>-44.449999999999996</X>
+        <Y>-44.449</Y>
+      </Point2DEntity>
+      <Point2DEntity>
+        <X>-44.449999999999996</X>
+        <Y>44.449999999999996</Y>
+      </Point2DEntity>
+      <Point2DEntity>
+        <X>44.449999999999996</X>
+        <Y>44.449999999999996</Y>
+      </Point2DEntity>
+      <Point2DEntity>
+        <X>44.449999999999996</X>
+        <Y>-44.449999999999996</Y>
+      </Point2DEntity>
+      <Point2DEntity>
+        <X>-44.449999999999996</X>
+        <Y>-44.449999999999996</Y>
+      </Point2DEntity>
+    </ProfileLayoutPoints>
+    <ArticleNumberMechanical></ArticleNumberMechanical>
+    <ArticleNumberChemical i:nil="true" />
+    <ArticleNumberSieveSleeve xmlns:d3p1="http://schemas.microsoft.com/2003/10/Serialization/Arrays" />
+    <ProfileName>HSS4X4X.25</ProfileName>
+    <Diameter>12.7</Diameter>
+    <HoleSize>14.2875</HoleSize>
+    <HoleSizeBase>0</HoleSizeBase>
+    <TeklaBoltStandard i:nil="true" />
+    <IsChemicalAnchor>false</IsChemicalAnchor>
+    <IsCounterSunk>false</IsCounterSunk>
+    <ChemName i:nil="true" />
+    <InsertLength>0</InsertLength>
+    <TFixMin>0</TFixMin>
+    <TFixMaxPlusHNom>1000</TFixMaxPlusHNom>
+    <ProfileHeight>101.6</ProfileHeight>
+    <ProfileWidth>101.6</ProfileWidth>
+    <ProfileThickness>6.35</ProfileThickness>
+    <ProfileFlangeThickness>0</ProfileFlangeThickness>
+    <MortarCalculation i:nil="true" />
+  </CalculatedData>
+  <Dialogs />
+  <IntegrationDocument xmlns:d2p1="http://schemas.datacontract.org/2004/07/Hilti.PE.IntegrationServices.Shared.Entities.Document" i:nil="true" />
+  <CalculationType>Rigid</CalculationType>
+  <Stiffeners>
+    <StiffenerMaterial>40</StiffenerMaterial>
+    <StiffenerShape>Triangular</StiffenerShape>
+    <StiffenerThickness>4</StiffenerThickness>
+    <StiffenerLayout>39</StiffenerLayout>
+    <StiffenerWidth>50</StiffenerWidth>
+    <StiffenerHeight>120</StiffenerHeight>
+    <StiffenerHorizontalEdgeLength>25</StiffenerHorizontalEdgeLength>
+    <StiffenerVerticalEdgeLength>25</StiffenerVerticalEdgeLength>
+    <StiffenerWeldMaterial>95</StiffenerWeldMaterial>
+    <StiffenerWeldThickness>4</StiffenerWeldThickness>
+    <WeldLocation>Butt</WeldLocation>
+    <StiffenerRadialOffset>0.03490658503988659</StiffenerRadialOffset>
+    <CustomStiffenerSteelMaterial>
+      <Name>Custom stiffeners material</Name>
+      <Fy>235</Fy>
+      <Fu>360</Fu>
+      <Es>200000</Es>
+      <Density>7850</Density>
+      <Poisson>0.2</Poisson>
+      <Bw>0.8</Bw>
+      <SteelTypeTDBId>1</SteelTypeTDBId>
+    </CustomStiffenerSteelMaterial>
+    <IsStiffenerSteelMaterialCustom>false</IsStiffenerSteelMaterialCustom>
+    <IsCustomStiffener>false</IsCustomStiffener>
+    <CustomStiffeners />
+  </Stiffeners>
+  <Welds>
+    <WebWeldThickness>4</WebWeldThickness>
+    <WebWeldMaterial>95</WebWeldMaterial>
+    <WebWeldLocation>Butt</WebWeldLocation>
+    <FlangeWeldThickness>4</FlangeWeldThickness>
+    <FlangeWeldMaterial>95</FlangeWeldMaterial>
+    <FlangeWeldLocation>Butt</FlangeWeldLocation>
+    <DirectWeldThickness>0</DirectWeldThickness>
+    <DirectWeldMaterial>0</DirectWeldMaterial>
+    <DirectWeldLocation>Unknown</DirectWeldLocation>
+    <WeldingType>AutomaticAndMachine</WeldingType>
+  </Welds>
+  <CreatedWithCheckbot>false</CreatedWithCheckbot>
+  <Beams />
+  <BeamWelds />
+  <CheckbotBolts />
+  <StiffnessUsed>RigidBaseplate</StiffnessUsed>
+  <Anchor>
+    <EmbedmentDepthOptimizationType>UserSelected</EmbedmentDepthOptimizationType>
+    <CustomEmbedmentDepth>254</CustomEmbedmentDepth>
+    <AnchorFilters>
+      <MinMaxFilters>
+        <FixtureThicknesMin i:nil="true" />
+        <FixtureThicknesMax i:nil="true" />
+        <HoleDiameterMin i:nil="true" />
+        <HoleDiameterMax i:nil="true" />
+      </MinMaxFilters>
+      <CheckboxFilters />
+    </AnchorFilters>
+    <ShowFullInternalPortfolio>false</ShowFullInternalPortfolio>
+    <CorrosionMaterial>Unknown</CorrosionMaterial>
+    <FastenerId>1829</FastenerId>
+    <ElongationLength>120.015</ElongationLength>
+    <CipMinSpacing i:nil="true" />
+    <CipMinimumEdgeDistance i:nil="true" />
+    <CustomHeadThickness i:nil="true" />
+    <CustomHeadDiameter i:nil="true" />
+    <CipAh i:nil="true" />
+    <CipK8 i:nil="true" />
+    <AnchorWorkingLife>FiftyYears</AnchorWorkingLife>
+    <AnchorStiffness>PreDefined</AnchorStiffness>
+    <KT i:nil="true" />
+    <KtUcr i:nil="true" />
+    <KTN i:nil="true" />
+    <KtnUcr i:nil="true" />
+    <FLT i:nil="true" />
+    <FltUcr i:nil="true" />
+    <ULT i:nil="true" />
+    <UltUcr i:nil="true" />
+  </Anchor>
+  <BaseMaterial>
+    <TemperatureShortTerm>0</TemperatureShortTerm>
+    <TemperatureLongTerm>0</TemperatureLongTerm>
+    <DrillingMethod>Hammer</DrillingMethod>
+    <InstallationDirection>VerticalDownwards</InstallationDirection>
+    <BrickDataSource>None</BrickDataSource>
+    <UserUnselectCompressedAirFilter i:nil="true" />
+    <Thickness>10668</Thickness>
+    <ConcreteCharacteristic>Cracked</ConcreteCharacteristic>
+    <ConcreteGradeType>Predefined</ConcreteGradeType>
+    <ConcreteGradeId>65</ConcreteGradeId>
+    <CustomCompressiveStrength>25</CustomCompressiveStrength>
+    <HoleType>Dry</HoleType>
+    <ConcreteReinforcement>Wide</ConcreteReinforcement>
+    <EdgeReinforcementId>4</EdgeReinforcementId>
+    <IsSplittingReinforcement>false</IsSplittingReinforcement>
+    <TorquingType>Manual</TorquingType>
+    <CustomDensity>2500</CustomDensity>
+    <CustomPoisson>0.2</CustomPoisson>
+    <CustomShearOfSteel>12000</CustomShearOfSteel>
+    <CustomElasticity>30000</CustomElasticity>
+    <WHGType>None</WHGType>
+    <ConcreteType>NormalConcrete</ConcreteType>
+    <UseSFRCHighStrength>false</UseSFRCHighStrength>
+    <SFRCFiberContent>0</SFRCFiberContent>
+    <SFRCFiberLength>0</SFRCFiberLength>
+    <EdgeXPositive>228.6</EdgeXPositive>
+    <EdgeYPositive>228.6</EdgeYPositive>
+    <EdgeXNegative>228.6</EdgeXNegative>
+    <EdgeYNegative>228.6</EdgeYNegative>
+    <IsEdgeXPositiveReinforced>false</IsEdgeXPositiveReinforced>
+    <IsEdgeYPositiveReinforced>false</IsEdgeYPositiveReinforced>
+    <IsEdgeXNegativeReinforced>false</IsEdgeXNegativeReinforced>
+    <IsEdgeYNegativeReinforced>false</IsEdgeYNegativeReinforced>
+    <IsEdgeXPositiveLocked>false</IsEdgeXPositiveLocked>
+    <IsEdgeYPositiveLocked>false</IsEdgeYPositiveLocked>
+    <IsEdgeXNegativeLocked>false</IsEdgeXNegativeLocked>
+    <IsEdgeYNegativeLocked>false</IsEdgeYNegativeLocked>
+    <IsLightweightConcrete>false</IsLightweightConcrete>
+    <LightweightConcreteLambdaA>0.75</LightweightConcreteLambdaA>
+    <HoleCondition>One</HoleCondition>
+    <ReinforcementConditionTension>B</ReinforcementConditionTension>
+    <ReinforcementConditionShear>B</ReinforcementConditionShear>
+    <IsAnchorReinforcement>false</IsAnchorReinforcement>
+    <IsAnchorReinforcementTension>false</IsAnchorReinforcementTension>
+    <IsAnchorReinforcementShear>false</IsAnchorReinforcementShear>
+    <IsCornerReinforcement>false</IsCornerReinforcement>
+    <SupplementaryReinforcementCategory>None</SupplementaryReinforcementCategory>
+    <SupplementaryReinforcement>
+      <ReinforcementType>Stirrups</ReinforcementType>
+      <YieldStrength>500</YieldStrength>
+      <ReinforcementDiameterId>3</ReinforcementDiameterId>
+      <ReinforcementSpacing>200</ReinforcementSpacing>
+      <ReinforcementUtilization>0</ReinforcementUtilization>
+      <PositionTolerance>0</PositionTolerance>
+      <SurfaceReinforcementId>3</SurfaceReinforcementId>
+      <SurfaceUtilization>0</SurfaceUtilization>
+      <DirectionOfCasting>ZPositive</DirectionOfCasting>
+      <EdgeOffset>25</EdgeOffset>
+      <EdgeOffsetLeft>98.6</EdgeOffsetLeft>
+      <EdgeOffsetRight>38.599999999999994</EdgeOffsetRight>
+      <TopOffset>25</TopOffset>
+      <ReinforcementRotation>0</ReinforcementRotation>
+      <Width>250</Width>
+      <Height>10608</Height>
+      <FirstRebarCenterOffset>0</FirstRebarCenterOffset>
+      <ApplyTensionValuesToShear>false</ApplyTensionValuesToShear>
+      <TensionReinforcementLeftWidth>100</TensionReinforcementLeftWidth>
+      <TensionReinforcementRightWidth>160</TensionReinforcementRightWidth>
+    </SupplementaryReinforcement>
+  </BaseMaterial>
+  <AnchorLayout>
+    <OffsetX>0</OffsetX>
+    <OffsetY>0</OffsetY>
+    <AnchorLayoutId>8</AnchorLayoutId>
+    <AnchorLayoutSlottedId i:nil="true" />
+    <AnchorLayoutPoints>
+      <AnchorLayoutPointEntity>
+        <X>-127</X>
+        <Y>-101.6</Y>
+        <Id>2</Id>
+        <IsSlotted>false</IsSlotted>
+        <SlottingOrientation i:nil="true" />
+      </AnchorLayoutPointEntity>
+      <AnchorLayoutPointEntity>
+        <X>127</X>
+        <Y>-101.6</Y>
+        <Id>3</Id>
+        <IsSlotted>false</IsSlotted>
+        <SlottingOrientation i:nil="true" />
+      </AnchorLayoutPointEntity>
+      <AnchorLayoutPointEntity>
+        <X>-127</X>
+        <Y>101.6</Y>
+        <Id>5</Id>
+        <IsSlotted>false</IsSlotted>
+        <SlottingOrientation i:nil="true" />
+      </AnchorLayoutPointEntity>
+      <AnchorLayoutPointEntity>
+        <X>127</X>
+        <Y>101.6</Y>
+        <Id>6</Id>
+        <IsSlotted>false</IsSlotted>
+        <SlottingOrientation i:nil="true" />
+      </AnchorLayoutPointEntity>
+    </AnchorLayoutPoints>
+    <AnchorLayoutRotation>0</AnchorLayoutRotation>
+    <IsHiltiSeismicFillingSet>false</IsHiltiSeismicFillingSet>
+    <FilledHoleType>None</FilledHoleType>
+    <IsReducedInstallTorque>false</IsReducedInstallTorque>
+    <AnchorTorqueType>Torqued</AnchorTorqueType>
+    <MinConcreteCover>9.525</MinConcreteCover>
+    <MinRebarSize>9.525</MinRebarSize>
+    <IsNutAndWasher>false</IsNutAndWasher>
+    <WasherThickness>2.54</WasherThickness>
+    <WasherDiameter>2.54</WasherDiameter>
+    <AnchorLayoutSymmetry>Symmetric</AnchorLayoutSymmetry>
+  </AnchorLayout>
+  <Loads>
+    <IsLoadCombinationsActive>true</IsLoadCombinationsActive>
+    <IsFactoredSustainedLoadsActive>false</IsFactoredSustainedLoadsActive>
+    <FactoredSustainedLoadsFactor>1</FactoredSustainedLoadsFactor>
+    <StandOffDesignMethod>Unknown</StandOffDesignMethod>
+    <LoadType>Static</LoadType>
+    <StaticLoadType>Design</StaticLoadType>
+    <ForceZ>-44482.21617233439</ForceZ>
+    <ForceX>44482.21617233439</ForceX>
+    <ForceY>8896.443234466878</ForceY>
+    <ForceZVariable>0</ForceZVariable>
+    <ForceXVariable>0</ForceXVariable>
+    <ForceYVariable>0</ForceYVariable>
+    <MomentZ>13558179.483313993</MomentZ>
+    <MomentX>6779089.741656996</MomentX>
+    <MomentY>13558179.483313993</MomentY>
+    <MomentZVariable>0</MomentZVariable>
+    <MomentXVariable>0</MomentXVariable>
+    <MomentYVariable>0</MomentYVariable>
+    <ForceZSustained>0</ForceZSustained>
+    <MomentXSustained>0</MomentXSustained>
+    <MomentYSustained>0</MomentYSustained>
+    <ActiveLoadCombinationId>876a09d9-1a47-816a-2be7-f4dc9ed5d974</ActiveLoadCombinationId>
+    <LoadCombinations>
+      <LoadCombinationEntity>
+        <Id>7c165881-4c70-4cfb-9bfa-98065fef8ea6</Id>
+        <ForceZ>0</ForceZ>
+        <ForceX>44482.21617233439</ForceX>
+        <ForceY>0</ForceY>
+        <MomentZ>0</MomentZ>
+        <MomentX>0</MomentX>
+        <MomentY>0</MomentY>
+        <ForceZVariable>0</ForceZVariable>
+        <ForceXVariable>0</ForceXVariable>
+        <ForceYVariable>0</ForceYVariable>
+        <MomentZVariable>0</MomentZVariable>
+        <MomentXVariable>0</MomentXVariable>
+        <MomentYVariable>0</MomentYVariable>
+        <LoadType>Static</LoadType>
+        <Comment>Combination 1</Comment>
+        <Description></Description>
+        <IsWizardGenerated>false</IsWizardGenerated>
+        <LoadCharacteristic i:nil="true" />
+        <AnchorLoads i:nil="true" />
+      </LoadCombinationEntity>
+      <LoadCombinationEntity>
+        <Id>876a09d9-1a47-816a-2be7-f4dc9ed5d974</Id>
+        <ForceZ>-44482.21617233439</ForceZ>
+        <ForceX>44482.21617233439</ForceX>
+        <ForceY>8896.443234466878</ForceY>
+        <MomentZ>13558179.483313993</MomentZ>
+        <MomentX>6779089.741656996</MomentX>
+        <MomentY>13558179.483313993</MomentY>
+        <ForceZVariable>0</ForceZVariable>
+        <ForceXVariable>0</ForceXVariable>
+        <ForceYVariable>0</ForceYVariable>
+        <MomentZVariable>0</MomentZVariable>
+        <MomentXVariable>0</MomentXVariable>
+        <MomentYVariable>0</MomentYVariable>
+        <LoadType>Static</LoadType>
+        <Comment>Combo 2</Comment>
+        <Description i:nil="true" />
+        <IsWizardGenerated>false</IsWizardGenerated>
+        <LoadCharacteristic i:nil="true" />
+        <AnchorLoads i:nil="true" />
+      </LoadCombinationEntity>
+    </LoadCombinations>
+    <ImportLoadCombinations>false</ImportLoadCombinations>
+    <LoadCombinationsCalculationType>All</LoadCombinationsCalculationType>
+    <LoadsPositionZ>0</LoadsPositionZ>
+    <LoadCombinationHNAWizard>
+      <LoadCombinationHNAWizardEquations />
+      <LoadCombinationHNAWizardFactors />
+    </LoadCombinationHNAWizard>
+    <SeismicCategory>C1</SeismicCategory>
+    <SeismicDisplacementsType>ETA</SeismicDisplacementsType>
+    <IsSeismicLoadLessThan20Percent>false</IsSeismicLoadLessThan20Percent>
+    <SeismicDesignType>Capacity</SeismicDesignType>
+    <SeismicDLSTension>3</SeismicDLSTension>
+    <SeismicDLSShear>3</SeismicDLSShear>
+    <FatigueLoadCycles>100000000</FatigueLoadCycles>
+    <UseToleranceCalculation>false</UseToleranceCalculation>
+    <ToleranceDirectionX>0</ToleranceDirectionX>
+    <ToleranceDirectionY>0</ToleranceDirectionY>
+    <ToleranceDirectionZ>0</ToleranceDirectionZ>
+    <SeismicPhiNonductile>0.4</SeismicPhiNonductile>
+    <SeismicTensionType>t171053d</SeismicTensionType>
+    <SeismicShearType>t171063c</SeismicShearType>
+    <FatigueLoadType>Pulsating</FatigueLoadType>
+    <FireDurationId>1</FireDurationId>
+    <FireExposure>One</FireExposure>
+    <IsFatigueExpertMode>false</IsFatigueExpertMode>
+    <SeismicIntensityFactor i:nil="true" />
+    <StructuralMember>false</StructuralMember>
+    <SafetyLevel i:nil="true" />
+    <GammaZero i:nil="true" />
+    <ShearLoadDistributionType>UpToFirstThreeRows</ShearLoadDistributionType>
+    <LoadDefinitionType>PerPlate</LoadDefinitionType>
+  </Loads>
+  <BeamLoads i:nil="true" />
+  <IsShearLugPresent>false</IsShearLugPresent>
+  <ShearLug>
+    <CustomWidth i:nil="true" />
+    <CustomLength i:nil="true" />
+    <CustomDepth>101.6</CustomDepth>
+    <CustomThickness i:nil="true" />
+    <Angle>0</Angle>
+    <ShearLugFamilyId>20</ShearLugFamilyId>
+    <ShearLugSizeId>361</ShearLugSizeId>
+  </ShearLug>
+  <SmartAnchor>
+    <CategoryId>1</CategoryId>
+    <ApplicationId>1</ApplicationId>
+    <SmartBaseplateEnabled>false</SmartBaseplateEnabled>
+    <ProfilePositionAtBaseplate>Centered</ProfilePositionAtBaseplate>
+    <AnchorsPosition>Outside</AnchorsPosition>
+    <MaximumUtilization>100</MaximumUtilization>
+    <PlateHidden>false</PlateHidden>
+    <AnchorGroupsForAsad i:nil="true" />
+    <OptimizeOnEmbedmentDepth>false</OptimizeOnEmbedmentDepth>
+    <UserAnchorSelection>true</UserAnchorSelection>
+    <UserSelectedAnchorGroupsForAsad />
+    <UserSelectedAnchorSizes />
+    <TcoCalculationEnabled>false</TcoCalculationEnabled>
+    <StructuralSteelPrice>3000</StructuralSteelPrice>
+    <InstallationHourlyRate>35</InstallationHourlyRate>
+    <AnchorPriceDiscount>0</AnchorPriceDiscount>
+    <IsLastSelectedSolution>false</IsLastSelectedSolution>
+    <RoundingTolerance i:nil="true" />
+    <UserSelectedCorrosionMaterial />
+    <CurrencyId>1</CurrencyId>
+    <NumberOfBaseplateInstallations>1</NumberOfBaseplateInstallations>
+    <KeepMyPlateSize>false</KeepMyPlateSize>
+    <KeepMyAnchorLayout>true</KeepMyAnchorLayout>
+    <MinimumUtilization>0</MinimumUtilization>
+    <EmbedmentDepthMinimizingType>EmbedmentDepth</EmbedmentDepthMinimizingType>
+  </SmartAnchor>
+  <CheckbotDesignData>
+    <CheckbotSourceApplicationName i:nil="true" />
+    <CheckbotIOMVersion i:nil="true" />
+    <CheckbotSourceApplicationType i:nil="true" />
+  </CheckbotDesignData>
+  <InstallationConditions>
+    <InstallationConditionsAdvancedSettings i:nil="true" />
+    <InstallationConditionsTraditionalSettings i:nil="true" />
+    <DrillingCleaningAdvanced i:nil="true" />
+    <DrillingCleaningTraditional i:nil="true" />
+    <TorquingAdvanced i:nil="true" />
+    <TorquingTraditional i:nil="true" />
+    <Cleaning i:nil="true" />
+  </InstallationConditions>
+</ProjectDesignConcreteEntity>

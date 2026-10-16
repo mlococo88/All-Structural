@@ -1406,3 +1406,67 @@ Follow-up to the claude/sweep-baseplate entry (#132), on the coordinator's instr
   - The default model and every `VALIDATION_CASES` target are identical. The autosaved JSON is identical in every scenario. The generator lists are identical.
 - No console errors from the page in either build, apart from the harness-only 3-D `setTimeout` error noted in #132.
 - Screenshots checked: the Summary hairpin warning, the open stand-off rod-compression section (C_u 40.00, DCR 2.08 FAILS), and the generator note in bold.
+
+## 2026-10-16 — PR: claude/bpad-profis-export (Export to Hilti PROFIS Engineering (.pe); PR link added after merge)
+
+Engineer request 2026-10-16. A new export only: **no input, result, report or saved-data change** (verified below).
+
+### X1. "Export to Hilti PROFIS (.pe)"   [new feature] [no result change]
+- **Where:**
+  - Header button, after `<button id="btnImportProfis">Import PROFIS PDF</button>`:
+    ```html
+    <button id="btnExportProfis" title="Write this design as a Hilti PROFIS Engineering file (.pe), with a summary of what to check in PROFIS">Export to Hilti PROFIS (.pe)</button>
+    ```
+  - Wiring in `init`, after `{ const b=document.getElementById("btnImportProfis"); if(b) b.addEventListener("click",openProfisImport); }`:
+    ```js
+    { const b=document.getElementById("btnExportProfis"); if(b) b.addEventListener("click",openProfisExport); }
+    ```
+  - New section `EXPORT TO HILTI PROFIS ENGINEERING (.pe)` inserted just before the `USER MANUAL & TECHNICAL GUIDE` comment block (after `openProfisImport`). It contains: `PROFIS_PE_NS`, `PROFIS_PE_XSI`, `PROFIS_PE_U` (unit factors), `PROFIS_PE_IDS` (catalog ID table), `PROFIS_PE_TEMPLATE` (the engineer's PROFIS file, verbatim, in a `String.raw` template literal), `profisNewGuid`, `profisNum`, `profisFastenerFor`, `profisProfileCandidates`, `profisDiaLabel`, `profisBuildPe(opts)` (builder) and `openProfisExport()` (dialog). To re-apply by hand, copy the whole section from this PR's commit; the template is `tests/projects/bpad/profis-example.pe` unchanged.
+  - Manual §1.5: new sub-heading `Export to PROFIS (.pe)` after the note `Nothing is applied until you confirm. Anchor edge distances are imported as explicit overrides`.
+- **How it works:** the template is parsed with `DOMParser`, values are replaced in place (`kid()` walks direct children by local name; `setT()` removes `i:nil` and sets the text), lists (anchor points, plate points, profile points, load combinations) are rebuilt by cloning the template's own entity, and the document is serialised with `XMLSerializer` and downloaded with a Blob (works from `file://`). `profisBuildPe` reads `S`, `anchorCoords()`, `anchorGeom()`, `colDims()`, `standoffParams()` and `governingComboIndex()`; it refreshes the cache `CC=computeAll()` with the same state (identical values) and writes nothing to `S` or storage.
+- **Mapping and units** (PROFIS stores SI whatever its display units; the example confirms this: 10 kip = 44482.216 N, 10 ft-kip = 13558179.48 N·mm, 12 in = 304.8 mm):
+
+  | PROFIS field | from | factor |
+  |---|---|---|
+  | AnchorPlate LengthA / LengthB / Thickness | plate B (x) / N (y) / t | × 25.4 mm/in |
+  | AnchorLayout AnchorLayoutPoints X, Y (+ CalculatedData copy) | `anchorCoords()` (plate centre) | × 25.4 |
+  | CalculatedData AnchorPlatePoints | ±B/2, ±N/2 | × 25.4 |
+  | Anchor CustomEmbedmentDepth, CalculatedData EmbedmentDepth | h_ef | × 25.4 |
+  | BaseMaterial Thickness | pedestal H | × 25.4 |
+  | BaseMaterial EdgeXPositive / XNegative / YPositive / YNegative | `anchorGeom()` ca_x_pos / ca_x_neg / ca_y_pos / ca_y_neg (from the nearest anchor centre, as the template's `MeasureBaseMaterialEdgeFrom NearestAnchorCenter`) | × 25.4 |
+  | BaseMaterial ConcreteGradeType Custom + CustomCompressiveStrength | f'c | × 6.894757293168361 MPa/ksi |
+  | BaseMaterial ConcreteCharacteristic | cracked | Cracked / Uncracked |
+  | Loads LoadCombinationEntity ForceZ / ForceX / ForceY | P / Vx / Vy | × 4448.2216152605 N/kip |
+  | Loads LoadCombinationEntity MomentX / MomentY | Mx / My (kip-in) | × 112984.829027617 N·mm per kip-in |
+  | MomentZ | — (no torsion input) | 0 |
+  | Comment | combination name | — |
+  | ActiveLoadCombinationId, Options ReportLoadCombination, top-level Loads Force*/Moment* | the governing combination (`governingComboIndex()`) | — |
+  | ProjectName / DesignName | title block name (and number) | DesignName ends "(from Base Plate & Anchor Designer - verify in PROFIS)" |
+  | Options ReportNotes | the check list shown in the dialog | — |
+  | BaseMaterial SupplementaryReinforcement Height | Thickness − 60 mm (the template's relation; the reinforcement is inactive) | — |
+
+  PROFIS's own kip factor in the example is 4448.221617233 N (4e-10 relative to the exact 4448.2216152605); the exact value is used.
+- **Sign convention (assumed, flagged in the dialog and the file):** ForceZ = P (+ tension), ForceX = Vx, ForceY = Vy, MomentX = Mx, MomentY = My. Reasoning: this tool stores P tension-positive and the PROFIS PDF importer maps PROFIS N straight to P (PROFIS N + = tension); the engine header records that this tool's Mx/My (right-hand rule about the named axis: +Mx lifts +y, +My lifts −x) reproduce PROFIS anchor forces (Ramp Canopy report); Vx/Vy and the axes x = plate B, y = plate N are the importer's mapping (lx → B, anchor x → x). The example's Combo 2 (ForceZ −10 kip with moments) is consistent with compression being negative. Not yet confirmed by a PROFIS test file.
+- **Catalog IDs (`PROFIS_PE_IDS`)** — only IDs seen in real files:
+  - FastenerId **1829** = ½ in Heavy Hex Head ASTM F1554 Gr. 36, cast-in, `ACI31819_CIP` (engineer's file). Matches this tool's head `hvyhexhead` ("Heavy hex head bolt"), grade `f1554_36`, d = 0.5 only.
+  - FastenerId **9952** = HIT-HY 200 V3 + HAS-V-36 (ASTM F1554 Gr.36), ½ in, `CSA_A233_19_Chem`, from the base file of github.com/rpakishore/Hilti-Profis (MPL-2.0; Canada region, CSA A23.3-19, ProjectDesignVersion 8100). Post-installed adhesive: never matched (this tool is cast-in only); marked "seen in a CSA/Canada file — confirm it is valid under the US/ACI region before relying on it". Only the ID facts were used, no code.
+  - Profile **28 / 2958** = HSS4X4X.25 (matched from this tool's `HSS4X4`; wall thickness assumed, flagged).
+  - AnchorLayoutId **8** with point Ids 2, 3, 5, 6 = the 2 × 2 grid.
+  - Not identified (always "select in PROFIS"): plate SteelTypeId 40, profile SteelTypeId 46, ConcreteGradeId 65 (all three also appear in the CSA base file, so they look like defaults).
+  - **Adding an ID:** copy it from a PROFIS .pe into the matching list of `PROFIS_PE_IDS` (the comment above the table names the fields) with its source; nothing else changes.
+- **Not exported** (template value kept, listed in the dialog when it applies): stand-off / grout type, edge reinforcement, anchor reinforcement (kept Condition B), seismic options, plate and column steel grades, user f_uta, forced reduced h_ef. Lightweight concrete is always false (this tool is normalweight only).
+- **Check case (reproduction of the engineer's file, `tests/bpad-profis.mjs`):** plate 12 × 12 × ½ in, HSS4X4 (→ HSS4X4X.25), 2 × 2 ½ in heavy hex head F1554 Gr. 36, h_ef 10 in, edx 1 / edy 2 in (anchors ±5, ±4 in), pedestal 28 × 26 in (edges 9 in), H 420 in, f'c 4 ksi, cracked; combinations "Combination 1" (Vx 10 kip) and "Combo 2" (P −10, Vx 10, Vy 2 kip, Mx 60, My 120 kip-in).
+  - Hand: 12 × 25.4 = 304.8 mm; ½ × 25.4 = 12.7; 10 × 25.4 = 254; 5 × 25.4 = 127, 4 × 25.4 = 101.6; 9 × 25.4 = 228.6; 420 × 25.4 = 10668; P −10 × 4448.2216 = −44482.216 N; Vy 2 → 8896.443 N; Mx 60 kip-in × 112984.829 = 6779089.7 N·mm (= 5 ft-kip); My 120 → 13558179.5 N·mm; f'c 4 × 6.894757 = 27.579 MPa.
+  - Field-by-field against the example (542 leaf fields): all match within 1e-9 relative except the 8 expected ones: ProjectName, DesignName, ReportNotes (title block / notes); ConcreteGradeType Custom vs Predefined and CustomCompressiveStrength 27.579 vs 25 (f'c written as a custom strength; with the "Template grade" option these two match); MomentZ of Combo 2 and the top-level MomentZ 0 vs 10 ft-kip (no torsion in this tool); Description of Combination 1 nil vs empty. The governing combination is Combo 2, as the example's active one.
+- **How verified:** `node tests/check-syntax.mjs BasePlateAnchorDesigner.html` (all scripts pass); `node tests/bpad-profis.mjs` (headless Chromium, offline):
+  1. origin/main vs branch: `computeAll()` (every field), `governingComboIndex()`, every combination's `comboCapacities`, `VALIDATION` and the full print-report text identical on the default project and on all `VALIDATION_CASES` (msa3a, struct2v1, struct2v2); no console errors.
+  2. reproduction as above; output well-formed XML, root `ProjectDesignConcreteEntity`, namespace `http://schemas.agito.si/PROFIS3`; `S` unchanged by the export.
+  3. a design with unknown items (¾ in hex head F1554 Gr. 55, 3 × 2 anchors, W12X65, A572 Gr. 50 plate offset 1 in, uncracked, edge stirrups, tension reinforcement, grouted stand-off, seismic on): every item listed as "select in PROFIS" or "check"; 6 anchor points and all combinations written.
+  4. the dialog's Download button writes a well-formed `Untitled.pe`; screenshot of the dialog checked.
+- **Saved data:** none changed. No new storage keys.
+- **Other copies:** none.
+- **Open items:**
+  - BP-X1: load sign convention and the plate LengthA/LengthB orientation are unconfirmed. Confirm by opening an exported file in PROFIS (ENGINEER_CHECKS A10). A PROFIS file with a non-square plate and one combination per load component (+N, +Vx, +Vy, +Mx, +My, +Mz alone) saved from PROFIS would settle both.
+  - BP-X2: enum values not seen in a file: ConcreteGradeType `Custom`, ConcreteCharacteristic `Uncracked`. If PROFIS refuses the file, use "Template grade". A PROFIS file with a custom f'c and one with uncracked concrete would confirm them.
+  - BP-X3: catalog IDs still needed (one PROFIS file each fills them): other cast-in anchors (⅝–2½ in, hex / heavy hex / square heads, F1554 Gr. 55 and 105, A449, A354 …), HSS of other sizes and walls, W shapes, round HSS, plate steels (A36, A572 Gr. 50 …), column steel, predefined concrete grades (2500–8000 psi), anchor layouts other than 2 × 2 (e.g. 2 × 3, 3 × 3, 4 × 2), the stand-off types (without clamping / with clamping / grouted), edge and anchor reinforcement settings, and a column offset on the plate.
+  - BP-X4 (found, not changed): the PROFIS **PDF import** maps "Heavy Hex Head …" (any text matching `hex\s*head`) to head `heavyhex`, which this tool calls "Hex head bolt" (A_brg for ½ in: 0.291 vs heavy hex 0.467 in²). An imported heavy-hex design is therefore checked with the smaller standard-hex bearing area (conservative for pullout and side-face blowout) and will not match FastenerId 1829 on export. Decision needed before changing the importer (§4).
