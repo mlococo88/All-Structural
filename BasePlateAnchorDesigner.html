@@ -11059,7 +11059,9 @@ const PROFIS_PE_IDS={
   /* BaseMaterial/ConcreteGradeId 65 (Predefined) appears in both known files with
      CustomCompressiveStrength 25 MPa beside it; its strength is NOT identified,
      so f'c is written as a Custom strength. Add {id, fc (ksi)} when known. */
-  concreteGrades:[],
+  concreteGrades:[
+    { id:67, fc:4, src:"engineer's PROFIS re-save Drafts_Untitled (2).pe, confirmed 4000 psi (2026-10-16)", confirmed:true }
+  ],
   /* AnchorLayout/AnchorLayoutId 8 with point Ids 2,3,5,6 = the 2 × 2 grid of
      the example (points listed -x-y, +x-y, -x+y, +x+y). */
   layouts:[ { id:8, nx:2, ny:2, pointIds:[2,3,5,6], src:"engineer's PROFIS file (2026-10-13)" } ]
@@ -11883,7 +11885,7 @@ function profisBuildPe(opts){
   } else if(concMode==="custom"){
     setT(kid(bm,"ConcreteGradeType"),"Custom"); setN(kid(bm,"CustomCompressiveStrength"),C.fc*U.MPa);
     row("f'c",fmt(C.fc,3)+" ksi","Custom, CustomCompressiveStrength "+fmt(C.fc*U.MPa,3)+" MPa","check");
-    verify.push("f'c was written as a Custom strength ("+fmt(C.fc*U.MPa,3)+" MPa = "+fmt(C.fc*1000,0)+" psi). The value \"Custom\" for ConcreteGradeType is inferred, not seen in a file: if PROFIS will not open the file, export again with \"Template grade\" and set f'c in PROFIS.");
+    verify.push("f'c was written as a Custom strength ("+fmt(C.fc*U.MPa,3)+" MPa = "+fmt(C.fc*1000,0)+" psi). PROFIS opened and re-saved a file with \"Custom\" (engineer, 2026-10-16); check f'c on the base material in PROFIS.");
   } else {
     row("f'c",fmt(C.fc,3)+" ksi","Predefined grade "+kid(bm,"ConcreteGradeId").textContent+" (template)","select");
     verify.push("Select in PROFIS after opening: concrete f'c = "+fmt(C.fc*1000,0)+" psi. The template concrete grade (ID 65, strength not identified) is written.");
@@ -11907,7 +11909,13 @@ function profisBuildPe(opts){
 
   /* ---- stand-off / grout ---- */
   const so=standoffParams();
-  if(so.hasStandoff){
+  if(so.hasStandoff && so.type==="grout"){
+    /* BP-X6 (2026-10-16): PROFIS name "WithGrouting" seen in the engineer's re-saved file, with StandoffRestraintLevel 2 */
+    const ap2=at("AnchorPlate");
+    setT(kid(ap2,"StandoffType"),"WithGrouting"); setN(kid(ap2,"StandoffDistance"),mm(so.z)); setN(kid(ap2,"StandoffRestraintLevel"),2);
+    row("Stand-off",so.label+", gap "+fmt(so.z,3)+" in","StandoffType WithGrouting, StandoffDistance "+fmt(mm(so.z),1)+" mm, StandoffRestraintLevel 2","check");
+    verify.push("Stand-off with grouting was written as StandoffType \"WithGrouting\" (gap "+fmt(so.z,3)+" in) with StandoffRestraintLevel 2, copied from the engineer's PROFIS file; the meaning of the restraint level is not identified — check the stand-off settings in PROFIS.");
+  } else if(so.hasStandoff){
     row("Stand-off",so.label+", gap "+fmt(so.z,3)+" in","StandoffType None (template)","select");
     verify.push("Select in PROFIS after opening: stand-off \""+so.label+"\" (gap "+fmt(so.z,3)+" in). The template \"no stand-off\" is written; the PROFIS names of the other stand-off types are not known.");
   } else if(S.grout && S.grout.present){
