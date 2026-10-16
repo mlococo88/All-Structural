@@ -1816,3 +1816,9 @@ Engineer request 2026-10-16. A new export only: **no input, result, report or sa
 - **Verification:**
   - `node tests/check-syntax.mjs BasePlateAnchorDesigner.html` passes.
   - `node tests/bpad-profis.mjs`: the default design is identical. msa3a, struct2v1 and struct2v2 have identical values; the only difference is the two new reporting fields, `govAnchorN` and `govAnchorV`.
+
+## 2026-10-16 — BP-X13: export note wording for standard hex heads (Tier 0)
+- **Function / anchor:** `profisBuildPe` anchor block, the `A.head==="heavyhex"` verify note (BP-X10).
+- **Before:** "PROFIS lists cast-in bolts as Heavy Hex Head. …"
+- **After:** "This design uses a standard Hex head bolt; only the Heavy Hex Head catalog IDs are known, so pick the Hex Head anchor in PROFIS …"
+- **Why:** the built-in PROFIS cases (msa3a, struct2) show that PROFIS offers standard hex heads too (A_brg 1.163 in² for 1 in). The old wording was wrong. Wording only; no result changes.
