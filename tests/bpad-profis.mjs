@@ -97,7 +97,7 @@ async function exportChecks(src) {
       u.anchor.dia = 0.75; u.anchor.grade = 'f1554_55'; u.anchor.head = 'heavyhex'; u.anchor.nx = 3; u.anchor.ny = 2;
       u.plate.B = 20; u.plate.N = 16; u.plate.grade = 'a572_50'; u.plate.exc_x = 1;
       u.col.custom = false; u.col.shapeType = 'W'; u.col.shape = 'W12X65';
-      u.conc.cracked = false; u.conc.edgeReinf = 'stirrups'; u.standoff.type = 'grout'; u.tRebar.present = true;
+      u.conc.cracked = false; u.conc.edgeReinf = 'bar'; u.standoff.type = 'grout'; u.tRebar.present = true;
       u.serviceLoads.useSeismic = true;
       S = mergeState(u); refreshAll();
       const ru = profisBuildPe(); const fu = flat(ru.xml);
@@ -161,7 +161,7 @@ const u = r.unknown;
 console.log(`  well-formed ${u.wellFormed}; file ${u.fileName}; combos ${u.nCombos}/${u.nAppCombos}; anchor points ${u.nPts}; FastenerId ${u.fastener}`);
 u.rows.forEach(x => console.log(`   [${x[1]}] ${x[0]}: ${x[2]}`));
 console.log('  verify list:'); u.verify.forEach(v => console.log('   - ' + v));
-const need = [/anchor 3\/4 in Hex head bolt, F1554 Gr\. 55/, /column profile W12X65/, /plate steel A572 Gr\. 50/, /no PROFIS layout ID is known for 3 × 2/, /stand-off/, /Uncracked/, /Edge reinforcement/, /Anchor reinforcement/, /Seismic/, /Column offset/, /Plate orientation/];
+const need = [/anchor 3\/4 in Hex head bolt, F1554 Gr\. 55/, /column profile W12X65/, /plate steel A572 Gr\. 50/, /no PROFIS layout ID is known for 3 × 2/, /Column orientation/, /Uncracked/, /Edge reinforcement/, /Anchor reinforcement/, /Seismic/, /Column offset/, /Plate orientation/];
 const miss = need.filter(re => !u.verify.some(v => re.test(v)));
 if (miss.length || !u.wellFormed || u.nCombos !== u.nAppCombos || u.nPts !== 6) { fail = true; console.log('  MISSING: ' + miss.map(String).join(', ')); }
 

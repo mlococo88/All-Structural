@@ -1554,3 +1554,53 @@ Engineer request 2026-10-16. A new export only: **no input, result, report or sa
 - **Verification:**
   - `node tests/check-syntax.mjs BasePlateAnchorDesigner.html` passes.
   - `node tests/bpad-profis.mjs` passes. The expected diff for the example is now ConcreteGradeId 65 → 67.
+
+## 2026-10-16 — BP-X7: PROFIS export, mappings confirmed by the engineer's PROFIS files and reports (Tier 2, export only)
+- **Source:** the private repo `mlococo88/Hilti_Profis_References`, files `1–4.pe` with their PROFIS 3.1.36 reports `1–4.pdf`. The files stay in that private repo and are not copied here.
+- **Confirmed:**
+  - **Load signs.** This tool's anchor tensions (`naAnchorForces`) match the reports for the same inputs:
+    - Report 3, combination 1 (N 10, Vx 10, Vy 10, Mx 1, My 1 ft-kip): PROFIS 2.501 / 1.004 / 3.998 / 2.501 kip; tool 2.501 / 1.004 / 3.998 / 2.501 kip.
+    - Report 4, combination 2: PROFIS 2.336 / 0 / 4.928 / 2.336 kip; tool 2.335 / 0 / 4.931 / 2.335 kip.
+    - Report 1, combination 2: PROFIS 2.352 / 0 / 5.735 / 2.352 kip; tool 2.351 / 0 / 5.740 / 2.351 kip.
+    - So ForceZ = P (+ tension), MomentX = Mx and MomentY = My are confirmed. Anchor numbering is −x−y, +x−y, −x+y, +x+y.
+  - **Concrete edges are measured from the plate centre (BP-X5).** Report 1 has edges of 355.6 mm with anchors at ±4 in and prints c_a,min = 10.000 in.
+  - **FastenerId 1901** = ¾ in Heavy Hex Head ASTM F1554 Gr. 105 (Diameter 19.05 mm, HoleSize 20.6375 mm).
+  - **Profile family 24** = W shape (AISC); size 911 = W10X15. W10X15 is not in this tool's library, so this entry is recorded but never matched yet.
+  - **W orientation.** PROFIS draws a W at Angle 0 with its depth along X (W10X15 layout points ±126.873 mm in x). This tool has the depth along y.
+  - **EdgeReinforcementId 6** = "> No. 4 bar with stirrups" (ψ_c,V 1.400 in the report).
+  - **Grouted stand-off.** `StandoffRestraintLevel 2` is printed as "restraint level (anchor plate): 2.00", and `StandoffDistance` is e_b.
+  - **ConcreteGradeId 67** = "4000", f′c 4,000 psi.
+- **Function / anchors:** `PROFIS_PE_IDS.fasteners` and `.profiles`; `profisBuildPe`, at comments `BP-X7 (2026-10-16)` (W orientation, edge reinforcement, stand-off, load signs); and the export-dialog sign-mapping text.
+- **Before:**
+  - FastenerId 1901 and W10X15 were not in the table.
+  - Edge reinforcement "bar with stirrups" was not exported (verify note).
+  - The grouted stand-off row was "check", with a note that the restraint level was not identified.
+  - The load-sign mapping was listed as an assumption in the verify list.
+  - The dialog said "Sign mapping (assumed)".
+- **After:**
+  - The 1901 and W10X15 entries are added.
+  - Stirrups → `EdgeReinforcementId 6` (ok).
+  - The grouted stand-off row is "ok".
+  - Load signs are a confirmed "ok" row.
+  - The dialog says "confirmed against PROFIS reports".
+  - A W-shape column adds a verify note to rotate the profile 90° in PROFIS. Angle stays 0, because its unit has not been seen.
+- **Provision:** none. No calculation in the tool changed; this is only the export file mapping. ψ_c,V = 1.4 for No. 4 bar with stirrups is ACI 318-19 §17.7.2.5.1, unchanged.
+- **Check case:** export a design matching report 1 and compare with `1.pe`:
+  - 12 × 12 × 0.5 in plate; ¾ in heavy hex F1554 Gr. 105; h_ef 8 in; anchors ±4 in; 28 × 28 in concrete, h 420 in; f′c 4 ksi; stirrups; grouted stand-off.
+  - Every input field matches except these, all expected:
+    - StandoffDistance (e_b) comes from this tool's grout thickness.
+    - ReinforcementConditionTension: A in PROFIS; this tool's Condition A is not mapped.
+    - SupplementaryReinforcement EdgeOffsetLeft/Right: PROFIS recomputes them as edge − 130 / edge − 190 mm.
+    - MomentZ: this tool has no torsion.
+    - The active combination.
+    - Rounding at 1e-9.
+- **Still open:**
+  - Plate LengthA/LengthB orientation: all four plates are square.
+  - Profile size 920.
+  - Edge reinforcement IDs for "none" (the template's 4) and "edge bar".
+  - Condition A / anchor reinforcement mapping.
+  - Plate and column steel IDs: the reports do not print the plate steel.
+  - Stand-off types other than grouted.
+- **Verification:**
+  - `node tests/check-syntax.mjs BasePlateAnchorDesigner.html` passes.
+  - `node tests/bpad-profis.mjs` passes. The unknown-items case now uses an edge bar, which is still unmapped, and expects the W orientation note.
