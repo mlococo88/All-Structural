@@ -1822,3 +1822,43 @@ Engineer request 2026-10-16. A new export only: **no input, result, report or sa
 - **Before:** "PROFIS lists cast-in bolts as Heavy Hex Head. …"
 - **After:** "This design uses a standard Hex head bolt; only the Heavy Hex Head catalog IDs are known, so pick the Hex Head anchor in PROFIS …"
 - **Why:** the built-in PROFIS cases (msa3a, struct2) show that PROFIS offers standard hex heads too (A_brg 1.163 in² for 1 in). The old wording was wrong. Wording only; no result changes.
+
+## 2026-10-16 — BP-C1: open stand-off — elastic bolt-group anchor forces; clamped n = 0 (§4, Tier 2)
+- **Engineer decision:** 2026-10-16, "Treat 3.1.36 as current, go ahead with item 1". The decision follows PROFIS 3.1.36 (examples 9 and 10) over the built-in PROFIS 3.1.34 cases (CB Plaza Struct 2).
+- **Function / anchor:**
+  - `computeAll()`: `useNA`, comment `BP-C1 (2026-10-16, engineer-approved)`.
+  - `standoffParams()`: case "clamp", comment `BP-C1`.
+  - "Anchor Demands" section: new `c.openSO` branch.
+  - `VALIDATION_CASES` struct2v1 / struct2v2: new `note`, shown on the PROFIS check tab.
+- **Change 1, anchor forces under an open stand-off** (types noclamp and clamp; grouted and flush are unchanged):
+  - Before: rigid-plate neutral-axis solve with a concrete bearing block, as for a flush plate.
+  - After: elastic bolt group with no bearing block. The rods carry compression:
+    T_i = P/n + M_x·y_i/Σy² − M_y·x_i/Σx².
+    Tension anchors (T_i > 0) drive the tension checks. The step "Per-anchor force — open stand-off" shows the equation with the values substituted.
+- **Change 2, clamped stand-off spalling factor n in L_b = z + n·d₀:**
+  - Before: n = 0.5.
+  - After: n = 0. A user override (`restraintOverride`) is still respected. Without clamping n stays 0.5, and grouted stays 0.5.
+- **Basis:** the PROFIS 3.1.36 reports.
+  - Example 9 (without clamping): "Max. concrete compressive strain: –", anchor forces 0.5 / −7.0 / 8.0 / 0.5 kip, n = 0.5.
+  - Example 10 (with clamping): the same forces, n = 0.000, L_b = z = 2.806 in.
+  - ACI 318-19 §17.7.1.2.1 / R17.7.1.2.1 (stand-off).
+- **Check case 1 (example 9, combo 2):**
+  - Inputs: P = +2 kip, M_x = M_y = 60 kip-in, anchors at ±4 in, Σx² = Σy² = 64 in².
+  - Anchor 3 (−4, +4): T = 2/4 + 60(4)/64 − 60(−4)/64 = 0.5 + 3.75 + 3.75 = 8.00 kip.
+  - Anchor 2 (+4, −4): T = 0.5 − 3.75 − 3.75 = −7.00 kip (compression).
+  - Before: 2.572 / 0 / 4.619 / 2.036 kip. After: 0.500 / −7.000 / 8.000 / 0.500 kip. PROFIS: 0.500 / −7.000 / 8.000 / 0.500 kip.
+  - φN_cbg: before 31.00 kip; after 23.612 kip. PROFIS: 23.612 kip.
+- **Check case 2 (example 10, with clamping, combo 2):** ¾ in Gr. 105; M⁰_s = 3.891 kip-in; φN_sa = 31.312 kip; z = 2.181 + 1.25/2 = 2.806 in; α_M = 2.
+  - Before: L_b = 2.806 + 0.5 × 0.75 = 3.181 in.
+  - After: L_b = 2.806 in.
+    - With the highest-shear anchor's |N| = 7.0 kip (PROFIS): reduction 0.776 (BP-C3).
+    - φV_s^M = 0.65 × 2 × 3.891 × 0.776 / 2.806 = 1.40 kip. PROFIS: 1.400 kip. Example-run value: 1.401 kip.
+- **Effect on saved projects:** no data change.
+  - A saved open stand-off now gets higher anchor tensions (conservative) and the rod compression is explicit.
+  - A saved clamped stand-off without an override gets L_b reduced by 0.5d₀ (higher bending capacity), as PROFIS 3.1.36 does.
+- **Built-in PROFIS 3.1.34 cases:** struct2v2's anchor-force rows (1994 / 1110 / 225 lb) no longer match (now 2333 / 833 / −667 lb). Those cases carry a note explaining the 3.1.34 vs 3.1.36 difference.
+  - Unrelated to this change and already present on main: msa3a φN_cbg −42% and φV_cbg +127%, and struct2v1 φN_cbg +17% and φV_cbg +52% against their targets. Reported to the engineer; not changed.
+- **Verification:**
+  - `node tests/check-syntax.mjs BasePlateAnchorDesigner.html` passes.
+  - Examples 1–12 comparison (private scratch script): examples 9 and 10 match PROFIS in anchor forces, steel, pullout, breakout and stand-off bending.
+  - `node tests/bpad-profis.mjs`: the default design differs only in the added reporting fields (`openSO`, `Ixx`, `Iyy`, `nAll`).
