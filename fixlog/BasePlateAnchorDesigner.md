@@ -1640,3 +1640,31 @@ Engineer request 2026-10-16. A new export only: **no input, result, report or sa
 - **Verification:**
   - `node tests/check-syntax.mjs BasePlateAnchorDesigner.html` passes.
   - `node tests/bpad-profis.mjs` passes. The unknown-items case no longer expects edge reinforcement and plate orientation notes, since both are mapped.
+
+## 2026-10-16 — BP-X9: PROFIS export writes tension/shear reinforcement as this tool uses it (Tier 2, export only)
+- **Engineer decision:** 2026-10-16, option (d): write the reinforcement as this tool uses it.
+- **Function / anchor:** `profisBuildPe`, comment `/* BP-X9 (2026-10-16, engineer decision (d))`. It replaces the "Anchor reinforcement … is not exported" verify note.
+- **Mapping:** done separately for tension (`S.tRebar`) and shear (`S.vRebar`); PROFIS stores them as separate flags (example 8).
+
+  | This tool | PROFIS file | Seen in |
+  |---|---|---|
+  | §17.5.2.1 substitution justified (`substitutionJustified(CC)`) | IsAnchorReinforcement[Tension/Shear] true, ReinforcementCondition A | example 4 |
+  | Not justified, but `conditionA(kind, CC)` true (a leg crosses the surface) | Condition A, anchor reinforcement off | example 1 |
+  | Present, but no leg crosses the surface | Condition B, anchor reinforcement off, plus a note | — |
+  | None | Condition B, anchor reinforcement off | template |
+
+  `IsAnchorReinforcement` = tension OR shear. A verify note says PROFIS does not design the bars.
+- **Before:**
+  ```js
+  if((S.tRebar&&S.tRebar.present)||(S.vRebar&&S.vRebar.present))
+    verify.push("Anchor reinforcement (…) is not exported: the file keeps \"no anchor reinforcement\", Condition B. Set it in PROFIS.");
+  ```
+- **After:** the mapping above, two "Reinforcement — tension/shear" rows, and the notes.
+- **Provision:** ACI 318-19 §17.5.2.1 (anchor reinforcement in lieu of breakout) and Table 17.5.3 (Condition A/B). This tool's checks are unchanged; this is only the export file mapping.
+- **Check cases (default design):**
+  - Tension and shear rebar at their defaults: the tension legs do not cross the cone, and the shear hairpins cross it but are not justified. Written: tension B, shear A, no anchor reinforcement.
+  - With `substitutionJustified` stubbed to tension justified, shear not: IsAnchorReinforcement true, Tension true, Shear false, conditions A / A.
+  - No rebar: B / B, all flags false (unchanged).
+- **Verification:**
+  - `node tests/check-syntax.mjs BasePlateAnchorDesigner.html` passes.
+  - `node tests/bpad-profis.mjs` passes. The unknown-items case expects the new reinforcement note.
