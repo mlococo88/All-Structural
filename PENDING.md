@@ -2,7 +2,7 @@
 
 One list of everything that is not finished or not yet verified by the engineer. Details and check cases are in `ENGINEER_CHECKS.md` (item IDs below) and the fix logs. Update this file in the same PR whenever an item is added or closed.
 
-Last updated: 2026-10-16 (PROFIS BP-X9).
+Last updated: 2026-10-16 (PROFIS export items closed).
 
 ## 1. Decisions for the engineer to verify (built with a default, results may depend on them)
 
@@ -14,7 +14,6 @@ Last updated: 2026-10-16 (PROFIS BP-X9).
 | 4 | Suggest panel: ranking when the girder count varies | GirderDetail | How the objective ranks counts for Full design | GD66 (f) |
 | 5 | Owner phase 3b part 1 readings | GirderDetail | Shipping limits as warnings; RIDOT T2 thickness ratios; transition saving as weld equivalent; MassDOT quarter-point splices; CTDOT girder count/spacing as warnings; RIDOT skew G13; CTDOT construction wind advisory and L/100 camber shown separately | GD67 (a)–(g) |
 | 6 | Owner phase 3b part 2 readings | GirderDetail | RIDOT 40 in diaphragm rule and X/K by S/d; CTDOT web-depth rule and channel table; CTDOT 4 bolts as a warning; MassDOT 0.5d uses girder depth; fascia stiffener rule incl. connection plates; RIDOT stiffener minimums; RIDOT fatigue categories (warns on B′ and studs); RIDOT jacking includes m and η | GD68 (a)–(h) |
-| 7 | Export to Hilti PROFIS (.pe) assumptions | Base Plate & Anchor | Confirmed 2026-10-16 (BP-X7, X8): load signs, edges, plate LengthA/B, anchor 1901, W family 24, edge reinf. 4/5/6, all stand-off types, grade 67, reinforcement as this tool uses it (BP-X9). Still open: W12X65 size ID (920?), plate/column steel IDs, W rotation angle, stand-off nut and washer height | ENGINEER_CHECKS A10; fixlog BP-X1–X9 |
 
 ## 2. Blocked — reference documents not available
 
@@ -33,6 +32,7 @@ Items marked "pending reference" in the owner rules panel. Add the documents to 
 
 ## 4. Known limits (documented, no action planned)
 
+- PROFIS export (Base Plate & Anchor, closed by the engineer 2026-10-16): W shapes other than W10X15, plate/column steel grades and the stand-off nut and washer height are not mapped — the export dialog and the file's report notes list them as "select/check in PROFIS"; W columns need a 90° rotation in PROFIS (noted in the dialog).
 - Design all summary lists GS5/GS6 under "Fails" without an "out of scope" label (saved format).
 - Automatic refresh can override a module "Get demands" from a different source while an older project's open-time refresh is still running; wait for it to finish (about 25 s).
 - The section exactly 1 ft before each support is not stored in the check arrays (support-face value governs; tables and hand-offs show it).
