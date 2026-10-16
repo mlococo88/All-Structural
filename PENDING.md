@@ -2,7 +2,7 @@
 
 One list of everything that is not finished or not yet verified by the engineer. Details and check cases are in `ENGINEER_CHECKS.md` (item IDs below) and the fix logs. Update this file in the same PR whenever an item is added or closed.
 
-Last updated: 2026-10-16 (after PR #247).
+Last updated: 2026-10-16 (PROFIS edge fix BP-X5).
 
 ## 1. Decisions for the engineer to verify (built with a default, results may depend on them)
 
@@ -14,7 +14,7 @@ Last updated: 2026-10-16 (after PR #247).
 | 4 | Suggest panel: ranking when the girder count varies | GirderDetail | How the objective ranks counts for Full design | GD66 (f) |
 | 5 | Owner phase 3b part 1 readings | GirderDetail | Shipping limits as warnings; RIDOT T2 thickness ratios; transition saving as weld equivalent; MassDOT quarter-point splices; CTDOT girder count/spacing as warnings; RIDOT skew G13; CTDOT construction wind advisory and L/100 camber shown separately | GD67 (a)–(g) |
 | 6 | Owner phase 3b part 2 readings | GirderDetail | RIDOT 40 in diaphragm rule and X/K by S/d; CTDOT web-depth rule and channel table; CTDOT 4 bolts as a warning; MassDOT 0.5d uses girder depth; fascia stiffener rule incl. connection plates; RIDOT stiffener minimums; RIDOT fatigue categories (warns on B′ and studs); RIDOT jacking includes m and η | GD68 (a)–(h) |
-| 7 | Export to Hilti PROFIS (.pe) assumptions | Base Plate & Anchor | Open an exported file in PROFIS: load signs (ForceZ = P tension +, Mx/My as this tool), plate LengthA = B, custom f'c and "Uncracked" enum values; send example .pe files for the missing catalog IDs | ENGINEER_CHECKS A10; fixlog BP-X1–X3 |
+| 7 | Export to Hilti PROFIS (.pe) assumptions | Base Plate & Anchor | Open an exported file in PROFIS: load signs (ForceZ = P tension +, Mx/My as this tool), plate LengthA = B, custom f'c and "Uncracked" enum values; send example .pe files for the missing catalog IDs. Also confirm the concrete block now matches the pedestal (BP-X5: edges written from the plate centre) | ENGINEER_CHECKS A10; fixlog BP-X1–X3 |
 
 ## 2. Blocked — reference documents not available
 
