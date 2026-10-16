@@ -10514,7 +10514,9 @@ function parseProfisText(pages){
       else if(d) add("dia","Anchor diameter","UNRECOGNISED ("+d+") — set manually",txtv,"low");
     }
     /* head type */
-    if(/hex\s*head/i.test(txtv)){ st.head="heavyhex"; add("head","Head type","Heavy hex head",txtv,"high"); }
+    /* BP-X4 (2026-10-16): "Heavy Hex Head" -> heavy hex head bolt (hvyhexhead, larger A_brg); a plain "Hex Head" -> standard hex head bolt (heavyhex key) */
+    if(/heavy\s*hex\s*head/i.test(txtv)){ st.head="hvyhexhead"; add("head","Head type","Heavy hex head",txtv,"high"); }
+    else if(/hex\s*head/i.test(txtv)){ st.head="heavyhex"; add("head","Head type","Hex head",txtv,"high"); }
   }
 
   /* --- effective embedment: "Effective embedment depth: hef = 12.000 in." --- */
