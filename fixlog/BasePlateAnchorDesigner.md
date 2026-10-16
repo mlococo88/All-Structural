@@ -1862,3 +1862,33 @@ Engineer request 2026-10-16. A new export only: **no input, result, report or sa
   - `node tests/check-syntax.mjs BasePlateAnchorDesigner.html` passes.
   - Examples 1–12 comparison (private scratch script): examples 9 and 10 match PROFIS in anchor forces, steel, pullout, breakout and stand-off bending.
   - `node tests/bpad-profis.mjs`: the default design differs only in the added reporting fields (`openSO`, `Ixx`, `Iyy`, `nAll`).
+
+## 2026-10-16 — G1: graphics review — W column drawn as an I-shape; label clashes; stand-off gap; 3-D (Tier 1, display only)
+- **Engineer request:** 2026-10-16, "review all the graphics … particularly when a wf column is used it just shows a square shape".
+- **Data (display only):** `LIB.wshapes` entries gain `tf` and `tw` (AISC Manual 16th Ed. values) for the 47 W shapes in the list. No check uses them.
+- **New helpers:** `colShape()`, `colPlanDraw()` and `colElevDraw()`, defined just before `colDims()`.
+  - W: an I-shape, depth along y, flanges along x, as the tool already models it.
+  - Round HSS: a circle.
+  - Rectangular HSS / custom: a rectangle.
+- **Changes by view:**
+  - **Plan (Input & Schematics):** a W column is drawn as an I-shape (was a solid box).
+  - **Elevations:**
+    - Column: looking along x, the flanges show edge-on as strips at each side; looking along y, the hidden web is shown dashed. HSS gets dashed inner wall lines (indicative).
+    - Shear arrow: starts at the column face, so it no longer runs through the column and its name.
+    - Moment arc: drawn above the column top, with the same rotational sense, and labelled at its left end. It was drawn down over the plate and grout, with the label on the plate.
+    - Plate-width dimension: lifted clear of the moment arc.
+    - **Open stand-off:** the gap e_b is now drawn and dimensioned (clickable), with a leveling nut under the plate, plus a nut on top for a clamped stand-off. The plate used to sit on the concrete.
+  - **Anchor Bolts key, Tension breakout, Tension rebar plan, Hairpin plan:** a faint column footprint is drawn for orientation.
+  - **Shear label:** placed beyond the arrowhead in the Anchor Bolts key (it sat on the arrow), and on the tail side in the hairpin plan (it sat on the hairpin labels).
+  - **Hairpin plan legend:** wrapped onto two lines; it ran off both edges.
+  - **Tension breakout:** where A_Nc is smaller than the rectangle (BP-C2), the uncovered cells are drawn and labelled "not in A_Nc". `breakoutExtents()` now also returns those cells (`holes`); its A_Nc value is unchanged.
+  - **3-D:**
+    - W column built as two flanges + web; round HSS as a cylinder.
+    - Open stand-off gap included: the plate is raised and the rods lengthened.
+    - Labels 2× larger (sprite scale 0.03 → 0.06 of the model size).
+    - New projects default to concrete opacity 0.45, so the anchors show. A saved 3-D setting is kept.
+- **Provision:** none. No formula, factor, unit or result changed.
+- **Verification:**
+  - `node tests/check-syntax.mjs BasePlateAnchorDesigner.html` passes.
+  - `node tests/bpad-profis.mjs`: computed results and the printed report text are identical to main for the default design and the three built-in PROFIS cases; there are no console errors.
+  - Every graphic was screenshotted headless before and after, for: W12X65 (default), W10X33 with plate eccentricity, HSS8X8, a clamped stand-off, both rebar types, and a 3-anchor tension breakout (PROFIS example 1 geometry).

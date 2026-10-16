@@ -419,55 +419,56 @@ const LIB = {
     {size:"#9",db:1.128,Ab:1.00},{size:"#10",db:1.270,Ab:1.27},{size:"#11",db:1.410,Ab:1.56},
     {size:"#14",db:1.693,Ab:2.25},{size:"#18",db:2.257,Ab:4.00}
   ],
-  /* ---- column W-shapes (name, depth d along y, flange width b along x), AISC v16 ---- */
+  /* ---- column W-shapes (name, depth d along y, flange width b along x), AISC v16 ----
+     tf, tw (AISC v16) are used for DRAWING the I-shape only (G1, 2026-10-16); no check uses them. */
   wshapes:[
-    {name:"W14X730",d:22.40,b:17.90},
-    {name:"W14X311",d:17.10,b:16.20},
-    {name:"W14X257",d:16.40,b:16.00},
-    {name:"W14X211",d:15.70,b:15.80},
-    {name:"W14X176",d:15.20,b:15.70},
-    {name:"W14X145",d:14.80,b:15.50},
-    {name:"W14X132",d:14.70,b:14.70},
-    {name:"W14X120",d:14.50,b:14.70},
-    {name:"W14X109",d:14.30,b:14.60},
-    {name:"W14X99",d:14.20,b:14.60},
-    {name:"W14X90",d:14.00,b:14.50},
-    {name:"W14X82",d:14.30,b:10.10},
-    {name:"W14X74",d:14.20,b:10.10},
-    {name:"W14X68",d:14.00,b:10.00},
-    {name:"W14X61",d:13.90,b:10.00},
-    {name:"W14X53",d:13.90,b:8.06},
-    {name:"W14X48",d:13.80,b:8.03},
-    {name:"W14X43",d:13.70,b:8.00},
-    {name:"W12X336",d:16.80,b:13.40},
-    {name:"W12X279",d:15.90,b:13.10},
-    {name:"W12X230",d:15.10,b:12.90},
-    {name:"W12X190",d:14.40,b:12.70},
-    {name:"W12X152",d:13.70,b:12.50},
-    {name:"W12X136",d:13.40,b:12.40},
-    {name:"W12X120",d:13.10,b:12.30},
-    {name:"W12X106",d:12.90,b:12.20},
-    {name:"W12X96",d:12.70,b:12.20},
-    {name:"W12X87",d:12.50,b:12.10},
-    {name:"W12X79",d:12.40,b:12.10},
-    {name:"W12X72",d:12.30,b:12.00},
-    {name:"W12X65",d:12.10,b:12.00},
-    {name:"W12X58",d:12.20,b:10.00},
-    {name:"W12X53",d:12.10,b:10.00},
-    {name:"W12X50",d:12.20,b:8.08},
-    {name:"W12X45",d:12.10,b:8.05},
-    {name:"W12X40",d:11.90,b:8.01},
-    {name:"W10X112",d:11.40,b:10.40},
-    {name:"W10X100",d:11.10,b:10.30},
-    {name:"W10X88",d:10.80,b:10.30},
-    {name:"W10X77",d:10.60,b:10.20},
-    {name:"W10X68",d:10.40,b:10.10},
-    {name:"W10X60",d:10.20,b:10.10},
-    {name:"W10X54",d:10.10,b:10.00},
-    {name:"W10X49",d:10.00,b:10.00},
-    {name:"W10X45",d:10.10,b:8.02},
-    {name:"W10X39",d:9.92,b:7.99},
-    {name:"W10X33",d:9.73,b:7.96},
+    {name:"W14X730",d:22.40,b:17.90,tf:4.91,tw:3.07},
+    {name:"W14X311",d:17.10,b:16.20,tf:2.26,tw:1.41},
+    {name:"W14X257",d:16.40,b:16.00,tf:1.89,tw:1.18},
+    {name:"W14X211",d:15.70,b:15.80,tf:1.56,tw:0.98},
+    {name:"W14X176",d:15.20,b:15.70,tf:1.31,tw:0.83},
+    {name:"W14X145",d:14.80,b:15.50,tf:1.09,tw:0.68},
+    {name:"W14X132",d:14.70,b:14.70,tf:1.03,tw:0.645},
+    {name:"W14X120",d:14.50,b:14.70,tf:0.94,tw:0.59},
+    {name:"W14X109",d:14.30,b:14.60,tf:0.86,tw:0.525},
+    {name:"W14X99",d:14.20,b:14.60,tf:0.78,tw:0.485},
+    {name:"W14X90",d:14.00,b:14.50,tf:0.71,tw:0.44},
+    {name:"W14X82",d:14.30,b:10.10,tf:0.855,tw:0.51},
+    {name:"W14X74",d:14.20,b:10.10,tf:0.785,tw:0.45},
+    {name:"W14X68",d:14.00,b:10.00,tf:0.72,tw:0.415},
+    {name:"W14X61",d:13.90,b:10.00,tf:0.645,tw:0.375},
+    {name:"W14X53",d:13.90,b:8.06,tf:0.66,tw:0.37},
+    {name:"W14X48",d:13.80,b:8.03,tf:0.595,tw:0.34},
+    {name:"W14X43",d:13.70,b:8.00,tf:0.53,tw:0.305},
+    {name:"W12X336",d:16.80,b:13.40,tf:2.96,tw:1.78},
+    {name:"W12X279",d:15.90,b:13.10,tf:2.47,tw:1.53},
+    {name:"W12X230",d:15.10,b:12.90,tf:2.07,tw:1.29},
+    {name:"W12X190",d:14.40,b:12.70,tf:1.74,tw:1.06},
+    {name:"W12X152",d:13.70,b:12.50,tf:1.4,tw:0.87},
+    {name:"W12X136",d:13.40,b:12.40,tf:1.25,tw:0.79},
+    {name:"W12X120",d:13.10,b:12.30,tf:1.11,tw:0.71},
+    {name:"W12X106",d:12.90,b:12.20,tf:0.99,tw:0.61},
+    {name:"W12X96",d:12.70,b:12.20,tf:0.9,tw:0.55},
+    {name:"W12X87",d:12.50,b:12.10,tf:0.81,tw:0.515},
+    {name:"W12X79",d:12.40,b:12.10,tf:0.735,tw:0.47},
+    {name:"W12X72",d:12.30,b:12.00,tf:0.67,tw:0.43},
+    {name:"W12X65",d:12.10,b:12.00,tf:0.605,tw:0.39},
+    {name:"W12X58",d:12.20,b:10.00,tf:0.64,tw:0.36},
+    {name:"W12X53",d:12.10,b:10.00,tf:0.575,tw:0.345},
+    {name:"W12X50",d:12.20,b:8.08,tf:0.64,tw:0.37},
+    {name:"W12X45",d:12.10,b:8.05,tf:0.575,tw:0.335},
+    {name:"W12X40",d:11.90,b:8.01,tf:0.515,tw:0.295},
+    {name:"W10X112",d:11.40,b:10.40,tf:1.25,tw:0.755},
+    {name:"W10X100",d:11.10,b:10.30,tf:1.12,tw:0.68},
+    {name:"W10X88",d:10.80,b:10.30,tf:0.99,tw:0.605},
+    {name:"W10X77",d:10.60,b:10.20,tf:0.87,tw:0.53},
+    {name:"W10X68",d:10.40,b:10.10,tf:0.77,tw:0.47},
+    {name:"W10X60",d:10.20,b:10.10,tf:0.68,tw:0.42},
+    {name:"W10X54",d:10.10,b:10.00,tf:0.615,tw:0.37},
+    {name:"W10X49",d:10.00,b:10.00,tf:0.56,tw:0.34},
+    {name:"W10X45",d:10.10,b:8.02,tf:0.62,tw:0.35},
+    {name:"W10X39",d:9.92,b:7.99,tf:0.53,tw:0.315},
+    {name:"W10X33",d:9.73,b:7.96,tf:0.435,tw:0.29},
     {name:"W8X67",d:9.00,b:8.28},
     {name:"W8X58",d:8.75,b:8.22},
     {name:"W8X48",d:8.50,b:8.11},
@@ -668,6 +669,50 @@ function standoffParams(){
 function wshapeOf(nm){ return LIB.wshapes.find(s=>s.name===nm)||LIB.wshapes[0]; }
 function hssOf(nm){ return LIB.hss.find(s=>s.name===nm)||LIB.hss[0]; }
 /* resolve current column depth d (along y) & width b (along x) from shape or custom */
+/* G1 (2026-10-16): column outline for the drawings — W as an I-shape (depth along y, flanges along x),
+   round HSS as a circle, rectangular HSS / custom as a rectangle. Display only. */
+function colShape(){
+  const c=S.col, cd=colDims();
+  if(!c.custom && c.shapeType==="W"){ const w=wshapeOf(c.shape); if(w.tf&&w.tw) return {kind:"W",b:cd.b,d:cd.d,tf:w.tf,tw:w.tw,label:cd.label}; }
+  if(!c.custom && c.shapeType!=="W" && hssOf(c.shape).kind==="HSSround") return {kind:"round",b:cd.b,d:cd.d,label:cd.label};
+  return {kind:(c.custom?"custom":"HSS"),b:cd.b,d:cd.d,label:cd.label};
+}
+/* plan footprint in PLATE coordinates; XP/YP map plate x,y to px */
+function colPlanDraw(s,XP,YP,sc,o){
+  o=o||{}; const P=S.plate, k=colShape(), ex=P.exc_x||0, ey=P.exc_y||0;
+  const fill=o.fill||"rgba(58,110,165,.18)", st=o.stroke||"#3a6ea5", sw=o.sw||1.4;
+  if(k.kind==="round"){ circ(s,XP(ex),YP(ey),(k.b/2)*sc,fill,st,sw); }
+  else if(k.kind==="W"){
+    const b=k.b/2, d=k.d/2, tf=k.tf, tw=k.tw/2;
+    const pts=[[-b,d],[b,d],[b,d-tf],[tw,d-tf],[tw,-d+tf],[b,-d+tf],[b,-d],[-b,-d],[-b,-d+tf],[-tw,-d+tf],[-tw,d-tf],[-b,d-tf]];
+    const pg=document.createElementNS(SVGNS,"polygon");
+    pg.setAttribute("points",pts.map(p=>XP(ex+p[0])+","+YP(ey+p[1])).join(" "));
+    pg.setAttribute("fill",fill); pg.setAttribute("stroke",st); pg.setAttribute("stroke-width",sw);
+    svgHost(s).appendChild(pg);
+  } else rect(s,XP(ex-k.b/2),YP(ey+k.d/2),k.b*sc,k.d*sc,fill,st,sw);
+  if(o.label!==false) txt(s,XP(ex)+(k.kind==="W"?(k.tw/2)*sc+3:0),YP(ey)+3,k.label,null,k.kind==="W"?"start":"middle",o.fs||9,"#1f4e79");
+  return k;
+}
+/* elevation of the column stub. view "x": horizontal = y (sees the flanges edge-on);
+   view "y": horizontal = x (sees a flange face-on, web hidden behind it). */
+function colElevDraw(s,XP,ctr,view,yBot,hPx,sc){
+  const k=colShape(), w=(view==="x")? k.d : k.b, x0=XP(ctr-w/2), yTop=yBot-hPx;
+  rect(s,x0,yTop,w*sc,hPx,"rgba(58,110,165,.14)","#3a6ea5",1.3);
+  if(k.kind==="W"){
+    if(view==="x"){ /* flanges edge-on at each side, web face between */
+      rect(s,x0,yTop,k.tf*sc,hPx,"rgba(58,110,165,.38)","#3a6ea5",1);
+      rect(s,XP(ctr+w/2)-k.tf*sc,yTop,k.tf*sc,hPx,"rgba(58,110,165,.38)","#3a6ea5",1);
+    } else {        /* web hidden behind the near flange */
+      line(s,XP(ctr-k.tw/2),yTop,XP(ctr-k.tw/2),yBot,"#3a6ea5",0.9,"4 3");
+      line(s,XP(ctr+k.tw/2),yTop,XP(ctr+k.tw/2),yBot,"#3a6ea5",0.9,"4 3");
+    }
+  } else if(k.kind==="HSS"||k.kind==="round"){
+    /* hollow section: inner wall lines (wall thickness not modelled — indicative) */
+    const iw=Math.min(3,w*sc*0.06);
+    line(s,x0+iw,yTop,x0+iw,yBot,"#3a6ea5",0.8,"4 3"); line(s,x0+w*sc-iw,yTop,x0+w*sc-iw,yBot,"#3a6ea5",0.8,"4 3");
+  }
+  return {k,w,yTop};
+}
 function colDims(){
   const c=S.col;
   if(c.custom) return {d:c.d, b:c.b, label:"Custom "+fmt(c.b,2)+'"(x) × '+fmt(c.d,2)+'"(y)'};
@@ -1556,13 +1601,14 @@ function breakoutExtents(pts, hef, C, pxo, pyo){
               .filter(r=>r[1]>r[0] && r[3]>r[2]);
   const xe=[...new Set(sq.flatMap(r=>[r[0],r[1]]))].sort((a,b)=>a-b);
   const ye=[...new Set(sq.flatMap(r=>[r[2],r[3]]))].sort((a,b)=>a-b);
-  let ANcUnion=0;
+  let ANcUnion=0; const holes=[];
   for(let i=0;i<xe.length-1;i++) for(let j=0;j<ye.length-1;j++){
     const cx=(xe[i]+xe[i+1])/2, cy=(ye[j]+ye[j+1])/2;
     if(sq.some(r=>cx>r[0]&&cx<r[1]&&cy>r[2]&&cy<r[3])) ANcUnion+=(xe[i+1]-xe[i])*(ye[j+1]-ye[j]);
+    else holes.push([xe[i],xe[i+1],ye[j],ye[j+1]]);   /* G1: uncovered cells, for the drawing */
   }
   const ANc=(sq.length? Math.min(ANcUnion,ANcRect) : ANcRect);
-  return {xmin,xmax,ymin,ymax,ux1,ux2,uy1,uy2,x1,x2,y1,y2,ANcRect,
+  return {xmin,xmax,ymin,ymax,ux1,ux2,uy1,uy2,x1,x2,y1,y2,ANcRect,holes:(sq.length && ANcUnion<ANcRect-1e-6)? holes : [],
           ANc:(Math.abs(ANc-ANcRect)<1e-6? ANcRect : ANc)};
 }
 
@@ -6682,10 +6728,7 @@ function drawPlan(body){
   /* plate (shifted) */
   rect(s,XP(-P.B/2),YP(P.N/2),P.B*sc,P.N*sc,"#f6f4ee","#333",1.6);
   /* column footprint (plate ecc, then plate offset) */
-  const isRound=(!S.col.custom && S.col.shapeType==="HSS" && /round/.test(S.col.shape));
-  if(isRound){ circ(s,XP(P.exc_x),YP(P.exc_y),(col.b/2)*sc,"rgba(58,110,165,.18)","#3a6ea5",1.4); }
-  else rect(s,XP(P.exc_x-col.b/2),YP(P.exc_y+col.d/2),col.b*sc,col.d*sc,"rgba(58,110,165,.18)","#3a6ea5",1.4);
-  txt(s,XP(P.exc_x),YP(P.exc_y),col.label,null,"middle",9,"#1f4e79");
+  colPlanDraw(s,XP,YP,sc);   /* G1: I-shape for W columns */
   /* anchors (plate coords) */
   const ar=Math.max(4,A.dia/2*sc);
   g.pts.forEach(p=>{ circ(s,XP(p.x),YP(p.y),ar,"#fff","#000"); });
@@ -6934,7 +6977,8 @@ function drawElevation(body,view){
   const spanPed   = (view==="x")? C.By : C.Bx;           /* pedestal dim shown horizontally */
   const colW      = (view==="x")? col.d : col.b;
   const W=900,H=560,pad=150;
-  const grout_t=(G.present?G.tg:0), colStub=Math.max(0.18*C.H, 8/1);   /* stub height in inches (visual) */
+  const soE=standoffParams(), openGap=(soE.hasStandoff && !soE.groutFilled)? standoffClearGap() : 0;   /* G1: open stand-off gap */
+  const grout_t=(G.present?G.tg:0)+openGap, colStub=Math.max(0.18*C.H, 8/1);   /* stub height in inches (visual) */
   const totalH = C.H + grout_t + P.t + colStub;
   const spanMax=Math.max(spanPed,spanPlate);
   const sc=Math.min((W-2*pad)/spanMax,(H-2*pad)/totalH);
@@ -6950,13 +6994,14 @@ function drawElevation(body,view){
   const XP=x=>cx+(x+hoff)*sc;                            /* plate-frame horizontal mapping */
   let y=pedTopY;
   /* grout */
-  if(G.present){ rect(s,XP(-spanPlate/2),y-grout_t*sc,spanPlate*sc,grout_t*sc,"#d9d4c4","#777",1); y-=grout_t*sc; }
+  if(G.present){ rect(s,XP(-spanPlate/2),y-G.tg*sc,spanPlate*sc,G.tg*sc,"#d9d4c4","#777",1); y-=G.tg*sc; }
+  if(openGap>0){ y-=openGap*sc; }
   /* plate */
   rect(s,XP(-spanPlate/2),y-P.t*sc,spanPlate*sc,P.t*sc,"#b8b2a4","#333",1.5); const plateTopY=y-P.t*sc; y=plateTopY;
   /* column stub */
   const colStubPx=colStub*sc;
   const colCtr=(view==="x")? (P.exc_y||0) : (P.exc_x||0);   /* column ecc along drawn axis */
-  rect(s,XP(colCtr-colW/2),y-colStubPx,colW*sc,colStubPx,"rgba(58,110,165,.18)","#3a6ea5",1.3); const colTop=y-colStubPx;
+  colElevDraw(s,XP,colCtr,view,y,colStubPx,sc); const colTop=y-colStubPx;   /* G1: flanges / web shown */
   txt(s,XP(colCtr+colW/2)+3,colTop+12,col.label,"lblTxt","start",9,"#1f4e79");
   /* anchors: from plate top down to embedment; head plate at hef depth */
   const embedTopY = plateTopY;                          /* rods start at plate top (through plate) */
@@ -6967,6 +7012,9 @@ function drawElevation(body,view){
     line(s,pxs,embedTopY,pxs,headY,"#2b2b2b",Math.max(2.2,A.dia*sc*0.5));   /* shank */
     line(s,pxs-7,headY,pxs+7,headY,"#2b2b2b",3.4);                          /* head */
     line(s,pxs-5,embedTopY+2,pxs+5,embedTopY+2,"#2b2b2b",2.4);              /* nut atop plate */
+    if(openGap>0){                                                          /* G1: leveling nut under the plate */
+      const yUnder=plateTopY+P.t*sc; rect(s,pxs-6,yUnder,12,3.5,"#2b2b2b","#2b2b2b",1);
+      if(soE.type==="clamp") rect(s,pxs-6,yUnder-P.t*sc-7,12,3.5,"#2b2b2b","#2b2b2b",1); }
   });
 
   /* ---- loads (governing combo), arrows scaled by magnitude with a fixed minimum ---- */
@@ -6994,9 +7042,11 @@ function drawElevation(body,view){
   }
   /* shear V */
   if(Math.abs(Vval)>1e-9){ const dir=Vval>=0?1:-1, len=flen(Vval);
-    arrow(s,XP(colCtr),plateTopY-6,XP(colCtr)+dir*len,plateTopY-6,"#1f4e79","arrShear",2.4);
-    txt(s,XP(colCtr)+dir*len+dir*4,plateTopY-9,Vlab+" = "+fF(Vval)+" "+Fu,null,dir>0?"start":"end",11,"#1f4e79");
-    clickableLoad(s,XP(colCtr)+dir*len/2,plateTopY-6,Math.max(14,len/2),()=>
+    /* G1: starts at the column face so the arrow and its label stay clear of the column and its name */
+    const vx0=XP(colCtr+dir*colW/2)+dir*4, vy=plateTopY-8;
+    arrow(s,vx0,vy,vx0+dir*len,vy,"#1f4e79","arrShear",2.4);
+    txt(s,vx0+dir*len+dir*4,vy+4,Vlab+" = "+fF(Vval)+" "+Fu,null,dir>0?"start":"end",11,"#1f4e79");
+    clickableLoad(s,vx0+dir*len/2,vy,Math.max(14,len/2),()=>
       editNum(Vlab+" for combination \u201C"+cb.name+"\u201D ("+Fu+")",Vval*uf,
         v=>{ if(view==="x") cb.Vy=v/uf; else cb.Vx=v/uf; }," "+Fu));
   }
@@ -7004,7 +7054,10 @@ function drawElevation(body,view){
   if(Math.abs(Mval)>1e-9){ const rmin=16,rmax=Math.max(22,colW*sc*0.5);
     const r=rmin+(rmax-rmin)*(Math.abs(Mval)/Mmax);
     const sgn=Mval>=0?1:-1;
-    momentArc(s,XP(colCtr),colTop-4, r, sgn>0?Math.PI*0.85:Math.PI*0.15, sgn>0?Math.PI*0.15:Math.PI*0.85, "#6a1b9a", Mlab+" = "+fM(Mval)+" "+Mu);
+    /* G1: arc drawn ABOVE the column top (same rotational sense as before) and labelled at its
+       left end, so it no longer sits on the plate / grout or under the P arrow label */
+    momentArc(s,XP(colCtr),colTop-4, r, sgn>0?-Math.PI*0.15:-Math.PI*0.85, sgn>0?-Math.PI*0.85:-Math.PI*0.15, "#6a1b9a", null);
+    txt(s,XP(colCtr)-r-6,colTop-4-r*0.35,Mlab+" = "+fM(Mval)+" "+Mu,null,"end",11,"#6a1b9a");
     clickableLoad(s,XP(colCtr),colTop-4,r,()=>
       editNum(Mlab+" for combination \u201C"+cb.name+"\u201D ("+Mu+")",Mval*momentFactor(),
         v=>{ if(view==="x") cb.Mx=v/momentFactor(); else cb.My=v/momentFactor(); }," "+Mu));
@@ -7056,14 +7109,17 @@ function drawElevation(body,view){
   clickableDim(s,"v",plateTopY,plateTopY+P.t*sc,lL(),"t_p = "+fmt(P.t,2)+'"',
     {onEdit:()=>editNum("Base plate thickness t (in)",P.t,v=>S.plate.t=v,'"')});
   if(G.present){
-    clickableDim(s,"v",pedTopY-grout_t*sc,pedTopY,lL(),"t_g = "+fmt(grout_t,2)+'"',
+    clickableDim(s,"v",pedTopY-G.tg*sc,pedTopY,lL(),"t_g = "+fmt(G.tg,2)+'"',
       {onEdit:()=>editNum("Grout thickness t_g (in)",G.tg,v=>S.grout.tg=v,'"')});
   }
+  if(openGap>0)   /* G1: open stand-off clear gap */
+    clickableDim(s,"v",pedTopY-openGap*sc,pedTopY,lL(),"e_b = "+fmt(openGap,2)+'"',
+      {onEdit:()=>editNum("Stand-off clear gap e_b (in)",S.standoff.z,v=>S.standoff.z=v,'"')});
 
   /* TOP: plate width. Placed above the column stub, clear of the load arrows,
      which start at colTop and rise — the label previously sat at plateTopY-18
      and collided with both the column box and the P arrow. */
-  const topLane = colTop - 30;
+  const topLane = colTop - Math.max(30, Math.max(22,colW*sc*0.5)+14);   /* G1: clear of the moment arc */
   clickableDim(s,"h",XP(-spanPlate/2),XP(spanPlate/2),topLane,
     (view==="x"?"N = ":"B = ")+fmt(spanPlate,2)+'"',
     {onEdit:()=>editNum((view==="x"?"Plate length N (in)":"Plate width B (in)"),spanPlate,
@@ -7380,6 +7436,7 @@ function drawAnchorPlan(body, c){
   /* pedestal + plate outlines */
   rect(s,X(-C.Bx/2),Y(C.By/2),C.Bx*sc,C.By*sc,"#f2efe8","#8a8577",1.1,"6 4");
   rect(s,XP(-P.B/2),YP(P.N/2),P.B*sc,P.N*sc,"#fbfaf6","#333",1.4);
+  colPlanDraw(s,XP,YP,sc,{fill:"rgba(58,110,165,.07)",stroke:"#9db4cc",sw:1,label:false});   /* G1: column footprint for orientation */
 
   /* ---- neutral axis and compression zone -------------------------------
      The rigid-plate solver finds a single plane w(x,y) = a + b·x + c·y whose
@@ -7499,7 +7556,8 @@ function drawAnchorPlan(body, c){
     const ux=c.raw.Vx/c.Vres, uy=c.raw.Vy/c.Vres;
     const L=Math.min(58, Math.max(26, c.Vres*3));
     arrow(s,XP(0),YP(0),XP(0)+ux*L,YP(0)-uy*L,"#1f4e79","arrShear",2.4);
-    txt(s,XP(0)+ux*(L+13),YP(0)-uy*(L+13),"V = "+fF(c.Vres)+" "+forceUnit(),null,"middle",10,"#1f4e79");
+    /* G1: label anchored beyond the arrowhead (start/end by direction) so it never sits on the arrow */
+    txt(s,XP(0)+ux*(L+6),YP(0)-uy*(L+6)+(Math.abs(ux)>0.3?4:(uy>0?-6:14)),"V = "+fF(c.Vres)+" "+forceUnit(),null,ux>0.3?"start":(ux<-0.3?"end":"middle"),10,"#1f4e79");
   }
 
   /* legend */
@@ -7714,6 +7772,12 @@ function drawBreakout(body,c){
   tip(rect(s,X(x1),Y(y2),(x2-x1)*sc,(y2-y1)*sc,"rgba(183,28,28,.14)","#b71c1c",1.6),
     "A_Nc = "+fmt(ANc,1)+" in\u00b2 \u2014 the projected failure area of the anchors in tension (§17.6.2.1).\n"+
     fmt(x2-x1,2)+"\u2033 \u00d7 "+fmt(y2-y1,2)+"\u2033"+(clipped?"  (clipped by the concrete edges)":""));
+  /* G1: parts of the rectangle no tension anchor's 1.5h_ef square covers are NOT in A_Nc (BP-C2) */
+  (ext.holes||[]).forEach(hc=>tip(rect(s,X(hc[0]),Y(hc[3]),(hc[1]-hc[0])*sc,(hc[3]-hc[2])*sc,"#f2efe8","#b71c1c",0.8,"3 2"),
+    "Not in A_Nc: no anchor in tension has its 1.5h_ef square here (§17.6.2.1)"));
+  if(ext.holes&&ext.holes.length){ const hc=ext.holes.reduce((m,h)=>((h[1]-h[0])*(h[3]-h[2])>(m[1]-m[0])*(m[3]-m[2]))?h:m);
+    txt(s,X((hc[0]+hc[1])/2),Y((hc[2]+hc[3])/2)+3,"not in A_Nc","lblTxt","middle",8.5,"#b71c1c"); }
+  colPlanDraw(s,X,Y,sc,{fill:"rgba(58,110,165,.07)",stroke:"#9db4cc",sw:1,label:false});   /* G1: column footprint */
 
   /* anchors, tension vs compression from the governing combination */
   const pa=(c&&c.perAnchor)?c.perAnchor:null;
@@ -7818,6 +7882,7 @@ function drawHairpinPlan(body, cGov){
 
   rect(s,X(-C.Bx/2),Y(C.By/2),C.Bx*sc,C.By*sc,"#f2efe8","#8a8577",1.2,"6 4");
   rect(s,XP(-P.B/2),YP(P.N/2),P.B*sc,P.N*sc,"#fbfaf6","#333",1.3);
+  colPlanDraw(s,XP,YP,sc,{fill:"rgba(58,110,165,.07)",stroke:"#9db4cc",sw:1,label:false});   /* G1: column footprint for orientation */
 
   const Vx=(cGov&&cGov.raw)?cGov.raw.Vx:0, Vy=(cGov&&cGov.raw)?cGov.raw.Vy:0;
   const Vres=Math.hypot(Vx,Vy);
@@ -7936,14 +8001,16 @@ function drawHairpinPlan(body, cGov){
     const ux=Vx/Vres, uy=Vy/Vres;
     const L=Math.min(70,Math.max(30,Vres*3));
     arrow(s,XP(0),YP(0),XP(0)+ux*L,YP(0)-uy*L,"#1f4e79","arrShear",2.6);
-    txt(s,XP(0)+ux*(L+16),YP(0)-uy*(L+16),"V = "+fF(Vres)+" "+forceUnit(),null,"middle",10,"#1f4e79");
+    /* G1: label on the TAIL side of the arrow, clear of the hairpin legs and labels at the loaded edge */
+    txt(s,XP(0)-ux*10,YP(0)+uy*10+(Math.abs(ux)>0.3?4:(uy>0?14:-6)),"V = "+fF(Vres)+" "+forceUnit(),null,ux>0.3?"end":(ux<-0.3?"start":"middle"),10,"#1f4e79");
   }
 
   txt(s,cx,18,"HAIRPIN PLAN — shear breakout body and leg verdicts"+(cGov?("  ·  combination "+cGov.name):""),"lblTxt","middle",10);
-  txt(s,cx,H-30, ic
-    ? ("green = effective · red = not creditable · grey = outside the pedestal · shaded trapezoid = shear breakout body toward the "+
-       ic.govEdge+" edge (rear plane at the leading anchors, opening 1.5·c_a1 = "+fmt(1.5*ic.ca1,2)+"″ beyond each outer anchor) · dashed blue = 0.5·c_a1 band at each anchor")
-    : "no shear reinforcement defined","lblTxt","middle",8.5);
+  /* G1: legend split over two lines (it ran off both edges of the drawing) */
+  if(ic){
+    txt(s,cx,H-44,"green = effective · red = not creditable · grey = outside the pedestal · dashed blue = 0.5·c_a1 band at each anchor","lblTxt","middle",8.5);
+    txt(s,cx,H-30,"shaded = shear breakout body toward the "+ic.govEdge+" edge (opening 1.5·c_a1 = "+fmt(1.5*ic.ca1,2)+"″ beyond each outer anchor)","lblTxt","middle",8.5);
+  } else txt(s,cx,H-30,"no shear reinforcement defined","lblTxt","middle",8.5);
   if(ic && ic.nEff<ic.nLegsTotal){
     txt(s,cx,H-16,(ic.nLegsTotal-ic.nEff)+" of "+ic.nLegsTotal+" legs are not creditable — see the table above.",
       "lblTxt","middle",9,"#b71c1c");
@@ -8061,6 +8128,7 @@ function drawRebarPlan(body){
   /* pedestal + plate */
   rect(s,X(-C.Bx/2),Yp(C.By/2),C.Bx*sc,C.By*sc,"#eae7df","#555",1.2);
   rect(s,X(-S.plate.B/2),Yp(S.plate.N/2),S.plate.B*sc,S.plate.N*sc,"none","#888",1.0,"4 3");
+  colPlanDraw(s,X,Yp,sc,{fill:"rgba(58,110,165,.07)",stroke:"#9db4cc",sw:1,label:false});   /* G1: column footprint for orientation */
   /* effective zones and anchors — the dashed circle is the 0.5·h_ef (REDUCED)
      EFFECTIVE-PLACEMENT zone, the hard limit a leg must fall within to be
      credited (entry 71), NOT the 1.5·h_ef breakout prism. At 0.5·h_ef the circle
@@ -8546,11 +8614,22 @@ function build3D(container){
   box(groups.concrete,concMat,C.Bx,C.By,C.H,0,0,z+C.H/2); z+=C.H/2+C.H/2;
   let top=C.H;
   if(G.present){ box(groups.grout,groutMat,P.B,P.N,G.tg,pxo,pyo,top+G.tg/2); top+=G.tg; }
+  const so3=standoffParams(), gap3=(so3.hasStandoff && !so3.groutFilled)? standoffClearGap() : 0;   /* G1: open stand-off gap */
+  top+=gap3;
   box(groups.plate,plateMat,P.B,P.N,P.t,pxo,pyo,top+P.t/2); const plateTopZ=top+P.t;
-  box(groups.plate,new THREE.MeshLambertMaterial({color:0x3a6ea5,transparent:true,opacity:0.4}),col.b,col.d,10,pxo+(P.exc_x||0),pyo+(P.exc_y||0),plateTopZ+5);
+  /* G1: column stub — W as an I-shape (two flanges + web), otherwise the outline box */
+  { const k=colShape(), colMat=new THREE.MeshLambertMaterial({color:0x3a6ea5,transparent:true,opacity:0.55});
+    const cxw=pxo+(P.exc_x||0), cyw=pyo+(P.exc_y||0), hS=10, zc=plateTopZ+hS/2;
+    if(k.kind==="W"){
+      box(groups.plate,colMat,k.b,k.tf,hS,cxw,cyw+(k.d/2-k.tf/2),zc);
+      box(groups.plate,colMat,k.b,k.tf,hS,cxw,cyw-(k.d/2-k.tf/2),zc);
+      box(groups.plate,colMat,k.tw,Math.max(k.d-2*k.tf,0.01),hS,cxw,cyw,zc);
+    } else if(k.kind==="round"){
+      const m=new THREE.Mesh(new THREE.CylinderGeometry(k.b/2,k.b/2,hS,32,1,true),colMat); setPos(m,cxw,cyw,zc); groups.plate.add(m);
+    } else box(groups.plate,colMat,k.b,k.d,hS,cxw,cyw,zc); }
   /* anchors (plate coords → shifted by plate offset) */
   const r=S.anchor.dia/2;
-  g.pts.forEach(p=>{ const len=S.anchor.hef+P.t+(G.present?G.tg:0);
+  g.pts.forEach(p=>{ const len=S.anchor.hef+P.t+(G.present?G.tg:0)+gap3;
     const m=new THREE.Mesh(new THREE.CylinderGeometry(r,r,len,16),boltMat);
     setPos(m, p.x+pxo, p.y+pyo, C.H - S.anchor.hef + len/2); groups.anchors.add(m);
     const head=new THREE.Mesh(new THREE.CylinderGeometry(r*1.7,r*1.7,0.6,6),boltMat);
@@ -8655,7 +8734,7 @@ function build3D(container){
     ctx.fillStyle=cssColor(color); ctx.textBaseline="middle"; ctx.fillText(str,8,cvs.height/2);
     const tex=new THREE.CanvasTexture(cvs); tex.needsUpdate=true;
     const spr=new THREE.Sprite(new THREE.SpriteMaterial({map:tex,depthTest:false}));
-    const scl=maxDimEarly*0.03; spr.scale.set(scl*cvs.width/cvs.height, scl, 1);
+    const scl=maxDimEarly*0.06; spr.scale.set(scl*cvs.width/cvs.height, scl, 1);
     return spr;
   }
   const maxDimEarly=Math.max(C.Bx,C.By,C.H);
@@ -8955,7 +9034,7 @@ function build3D(container){
 
 function buildVisualTab(pg){
   mkSection("vis3D","1. 3-D Model",body=>{
-    if(!S._vis3) S._vis3={show:{concrete:true,grout:true,plate:true,anchors:true,rebar:true,loads:true,axes:true,dims:true},op:{concrete:1,grout:1,plate:1}};
+    if(!S._vis3) S._vis3={show:{concrete:true,grout:true,plate:true,anchors:true,rebar:true,loads:true,axes:true,dims:true},op:{concrete:0.45,grout:1,plate:1}};   /* G1: concrete see-through by default so the anchors show */
     if(S._vis3.show.dims===undefined) S._vis3.show.dims=true;   /* added after first release */
     const filt=el("div"); filt.style.cssText="display:flex;gap:12px;flex-wrap:wrap;margin:4px 0;";
     [["concrete","Concrete"],["grout","Grout"],["plate","Plate/Col"],["anchors","Anchors"],["rebar","Rebar"],["loads","Loads"],["dims","Dimensions"],["axes","Axes"]].forEach(([k,label])=>{
