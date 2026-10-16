@@ -1745,3 +1745,31 @@ Engineer request 2026-10-16. A new export only: **no input, result, report or sa
 - **Verification:**
   - `node tests/check-syntax.mjs BasePlateAnchorDesigner.html` passes.
   - `node tests/bpad-profis.mjs` passes.
+
+## 2026-10-16 — BP-D1: default anchor head changed to heavy hex (§4, Tier 2)
+- **Engineer request:** 2026-10-16, "Change the app's default head to heavy hex". PROFIS cast-in anchors are Heavy Hex Head (BP-X10–X12).
+- **Function / anchor:** `defaultState()`, `anchor.head`; `mergeState()`, comment `BP-D1 migration`.
+- **Before:**
+  ```js
+  head:"heavyhex",      /* heavyhex(hex) | hvyhexhead | ... */
+  ```
+- **After:**
+  ```js
+  head:"hvyhexhead",    /* default heavy hex head (engineer 2026-10-16, BP-D1; was "heavyhex" = standard hex) | ... */
+  ```
+- **Migration (CLAUDE.md §5):** a saved project, autosave or imported JSON whose `anchor` group has no `head` field keeps `"heavyhex"`, the old default. A stored head is always kept. Tested:
+  - saved without head → heavyhex;
+  - saved sqhead → sqhead;
+  - new project → hvyhexhead.
+- **Effect:** new projects only.
+  - A_brg from the existing table (PROFIS Design Guide values; no table value changed).
+  - Pullout: ACI 318-19 §17.6.3.2.2(a), N_p = 8 A_brg f′c.
+  - Side-face blowout: §17.6.4.1, which uses √A_brg.
+- **Check case:** the default design (1 in F1554 Gr. 36, f′c = 4 ksi, ψ_c,P = 1.0).
+  - Before: A_brg = 1.163 in², N_p = 8 × 1.163 × 4 = 37.22 kip, φN_pn = 0.70 × 37.22 = 26.05 kip.
+  - After: A_brg = 1.501 in², N_p = 8 × 1.501 × 4 = 48.03 kip, φN_pn = 0.70 × 48.03 = 33.62 kip.
+  - The after value equals PROFIS example 12 (33.622 kip).
+  - The default design's other results are unchanged.
+- **Verification:**
+  - `node tests/check-syntax.mjs BasePlateAnchorDesigner.html` passes.
+  - `node tests/bpad-profis.mjs`: the default design differs from main only in the pullout values above, as intended. The three PROFIS validation cases (msa3a, struct2v1, struct2v2) are identical.
