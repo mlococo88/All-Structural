@@ -11924,7 +11924,7 @@ function profisBuildPe(opts){
     row("Anchor",anchorTxt,"FastenerId "+kid(an,"FastenerId").textContent+" (template: ½ in Heavy Hex Head F1554 Gr. 36)","select");
     verify.push("Select in PROFIS after opening: anchor "+anchorTxt+". No catalog ID is known for it, so the template anchor (½ in Heavy Hex Head ASTM F1554 Gr. 36, FastenerId 1829) is written.");
     /* BP-X10 (2026-10-16): PROFIS cast-in anchors are Heavy Hex Head; this tool's "Hex head bolt" has the smaller standard-hex A_brg */
-    if(A.head==="heavyhex") verify.push("PROFIS lists cast-in bolts as Heavy Hex Head. This design uses a standard Hex head bolt (smaller bearing area A_brg, so lower pullout and side-face blowout than PROFIS will give). If the bolt is heavy hex, set the head to \"Heavy hex head bolt\" in this tool before exporting.");
+    if(A.head==="heavyhex") verify.push("This design uses a standard Hex head bolt; only the Heavy Hex Head catalog IDs are known, so pick the Hex Head anchor in PROFIS (its A_brg is smaller than heavy hex). If the bolt is heavy hex, set the head to \"Heavy hex head bolt\" in this tool before exporting.");
   }
   if(A.futa_from_grade===false) verify.push("Anchor f_uta is a user value in this tool ("+fmt(A.futa,1)+" ksi); PROFIS uses its catalog value.");
   setN(kid(an,"CustomEmbedmentDepth"),mm(A.hef)); setT(kid(an,"EmbedmentDepthOptimizationType"),"UserSelected");

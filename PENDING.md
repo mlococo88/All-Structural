@@ -2,7 +2,7 @@
 
 One list of everything that is not finished or not yet verified by the engineer. Details and check cases are in `ENGINEER_CHECKS.md` (item IDs below) and the fix logs. Update this file in the same PR whenever an item is added or closed.
 
-Last updated: 2026-10-16 (PROFIS export items closed).
+Last updated: 2026-10-16 (open stand-off question).
 
 ## 1. Decisions for the engineer to verify (built with a default, results may depend on them)
 
@@ -14,6 +14,7 @@ Last updated: 2026-10-16 (PROFIS export items closed).
 | 4 | Suggest panel: ranking when the girder count varies | GirderDetail | How the objective ranks counts for Full design | GD66 (f) |
 | 5 | Owner phase 3b part 1 readings | GirderDetail | Shipping limits as warnings; RIDOT T2 thickness ratios; transition saving as weld equivalent; MassDOT quarter-point splices; CTDOT girder count/spacing as warnings; RIDOT skew G13; CTDOT construction wind advisory and L/100 camber shown separately | GD67 (a)–(g) |
 | 6 | Owner phase 3b part 2 readings | GirderDetail | RIDOT 40 in diaphragm rule and X/K by S/d; CTDOT web-depth rule and channel table; CTDOT 4 bolts as a warning; MassDOT 0.5d uses girder depth; fascia stiffener rule incl. connection plates; RIDOT stiffener minimums; RIDOT fatigue categories (warns on B′ and studs); RIDOT jacking includes m and η | GD68 (a)–(h) |
+| 7 | Open stand-off (no grout) in Base Plate & Anchor: anchor forces and clamped n | Base Plate & Anchor | PROFIS 3.1.36 examples 9/10: no concrete bearing (elastic bolt group, rods take compression: 0.5/−7/8/0.5 kip vs this tool 2.57/0/4.62/2.04) and n = 0 when clamped. The built-in PROFIS 3.1.34 cases (CB Plaza Struct 2, clamped) match concrete bearing and n = 0.5. Which applies? Change prepared (BP-C1), not merged | fixlog BP-C3; examples 9, 10 |
 
 ## 2. Blocked — reference documents not available
 
