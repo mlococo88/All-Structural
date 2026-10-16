@@ -11795,8 +11795,7 @@ function profisBuildPe(opts){
   fill(ap,{LengthA:mm(P.B), LengthB:mm(P.N), Thickness:mm(P.t)});
   row("Plate B × N × t", fmt(P.B,3)+" × "+fmt(P.N,3)+" × "+fmt(P.t,3)+" in",
       "LengthA "+fmt(mm(P.B),2)+", LengthB "+fmt(mm(P.N),2)+", Thickness "+fmt(mm(P.t),2)+" mm","ok");
-  if(Math.abs(P.B-P.N)>1e-9)
-    verify.push("Plate orientation: LengthA was written from B (along x) and LengthB from N (along y). The example plate is square, so which PROFIS side lies along X is not confirmed — check the plate in PROFIS.");
+  /* BP-X8 (2026-10-16): LengthA = l_x, LengthB = l_y confirmed (example 5: LengthB 406.4 mm printed as "lx x ly = 14 x 16 in") */
   const pg=pgrade(P.grade);
   const pst=PROFIS_PE_IDS.plateSteels.find(s=>s.grade===P.grade);
   if(pst){ setN(kid(ap,"SteelTypeId"),pst.id); row("Plate steel",pg.name,"SteelTypeId "+pst.id,"ok"); }
@@ -11915,10 +11914,17 @@ function profisBuildPe(opts){
   setT(kid(bm,"IsLightweightConcrete"),"false");
   row("Concrete weight","normalweight (λ_a = 1.0; this tool has no lightweight option)","IsLightweightConcrete false","ok");
   /* BP-X7 (2026-10-16): EdgeReinforcementId 6 = "> No. 4 bar with stirrups" (ψ_c,V 1.4), engineer's reports 1-4 */
+  /* BP-X8 (2026-10-16): 4 = "none or < No. 4 bar", 5 = "> No. 4 bar" (examples 6/7) */
   if(C.edgeReinf==="stirrups"){
     setN(kid(bm,"EdgeReinforcementId"),6);
     row("Edge reinforcement","bar with stirrups (ψ_c,V 1.4)","EdgeReinforcementId 6 (> No. 4 bar with stirrups)","ok");
-  } else if(C.edgeReinf && C.edgeReinf!=="none")
+  } else if(C.edgeReinf==="bar"){
+    setN(kid(bm,"EdgeReinforcementId"),5);
+    row("Edge reinforcement","edge bar (ψ_c,V 1.2)","EdgeReinforcementId 5 (> No. 4 bar)","ok");
+  } else if(!C.edgeReinf || C.edgeReinf==="none"){
+    setN(kid(bm,"EdgeReinforcementId"),4);
+    row("Edge reinforcement","none (ψ_c,V 1.0)","EdgeReinforcementId 4 (none or < No. 4 bar)","ok");
+  } else
     verify.push("Edge reinforcement ("+(C.edgeReinf==="stirrups"?"bar with stirrups, ψ_c,V 1.4":"edge bar, ψ_c,V 1.2")+") is not exported: set the edge reinforcement in PROFIS.");
   if(C.psi_cV_override) verify.push("ψ_c,V is overridden in this tool ("+fmt(C.psi_cV,2)+"); set the equivalent edge reinforcement in PROFIS.");
   if((S.tRebar&&S.tRebar.present)||(S.vRebar&&S.vRebar.present))
@@ -11933,9 +11939,16 @@ function profisBuildPe(opts){
     setT(kid(ap2,"StandoffType"),"WithGrouting"); setN(kid(ap2,"StandoffDistance"),mm(so.z)); setN(kid(ap2,"StandoffRestraintLevel"),2);
     /* BP-X7: PROFIS report prints "grouted standoff; restraint level (anchor plate): 2.00; eb = StandoffDistance" */
     row("Stand-off",so.label+", gap "+fmt(so.z,3)+" in","StandoffType WithGrouting, StandoffDistance (e_b) "+fmt(mm(so.z),1)+" mm, restraint level 2.00","ok");
+  } else if(so.hasStandoff && (so.type==="noclamp" || so.type==="clamp")){
+    /* BP-X8 (2026-10-16): examples 9/10 — "without clamping (anchor); restraint level 1.00" and
+       "with clamping (anchor); restraint level 2.00"; StandoffDistance = e_b as printed */
+    const ap2=at("AnchorPlate"), cl=(so.type==="clamp"), lvl=cl?2:1;
+    setT(kid(ap2,"StandoffType"),cl?"WithClamping":"WithoutClamping"); setN(kid(ap2,"StandoffDistance"),mm(so.z)); setN(kid(ap2,"StandoffRestraintLevel"),lvl);
+    row("Stand-off",so.label+", gap "+fmt(so.z,3)+" in","StandoffType "+(cl?"WithClamping":"WithoutClamping")+", StandoffDistance (e_b) "+fmt(mm(so.z),1)+" mm, restraint level "+lvl.toFixed(2),"ok");
+    verify.push("Stand-off nut and washer height is left at 0 in the file (PROFIS filled 15/16 in for a 3/4 in anchor in the engineer's examples) — check it in PROFIS.");
   } else if(so.hasStandoff){
     row("Stand-off",so.label+", gap "+fmt(so.z,3)+" in","StandoffType None (template)","select");
-    verify.push("Select in PROFIS after opening: stand-off \""+so.label+"\" (gap "+fmt(so.z,3)+" in). The template \"no stand-off\" is written; the PROFIS names of the other stand-off types are not known.");
+    verify.push("Select in PROFIS after opening: stand-off \""+so.label+"\" (gap "+fmt(so.z,3)+" in). The template \"no stand-off\" is written.");
   } else if(S.grout && S.grout.present){
     notes.push("Flush plate on a "+fmt(S.grout.tg,3)+" in grout pad in this tool; written as no stand-off (the template). Check the grout setting in PROFIS.");
   }
