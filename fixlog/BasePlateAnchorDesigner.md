@@ -1604,3 +1604,39 @@ Engineer request 2026-10-16. A new export only: **no input, result, report or sa
 - **Verification:**
   - `node tests/check-syntax.mjs BasePlateAnchorDesigner.html` passes.
   - `node tests/bpad-profis.mjs` passes. The unknown-items case now uses an edge bar, which is still unmapped, and expects the W orientation note.
+
+## 2026-10-16 — BP-X8: PROFIS export, plate orientation, edge reinforcement and clamped stand-offs from examples 5–10 (Tier 2, export only)
+- **Source:** `mlococo88/Hilti_Profis_References`, files `5–10.pe` with their reports. Each example changes one setting from the one before.
+- **Confirmed:**
+  - **Example 5, plate orientation:** LengthB 355.6 → 406.4 mm is printed as "lx x ly = 14.000 x 16.000 in". So LengthA = l_x = B and LengthB = l_y = N, as the export already writes.
+  - **Examples 6/7, edge reinforcement IDs:**
+    - 4 = "none or < No. 4 bar";
+    - 5 = "> No. 4 bar";
+    - 6 = "> No. 4 bar with stirrups" (BP-X7).
+  - **Example 8:** `IsAnchorReinforcementTension/Shear` are separate flags; "anchor reinforcement: shear" means tension false, shear true.
+  - **Example 9, stand-off without clamping:** `StandoffType WithoutClamping` is printed as "without clamping (anchor); restraint level (anchor plate): 1.00; eb = 1.181 in" (StandoffDistance 30 mm). PROFIS also set `StandoffNutAndWasherHeight` 23.8125 mm (15/16 in) for the ¾ in anchor.
+  - **Example 10, stand-off with clamping:** `StandoffType WithClamping` with restraint level 2 is printed as "with clamping (anchor); restraint level 2.00; eb = 2.181 in" (StandoffDistance 55.3974 mm). So StandoffDistance = e_b.
+- **Function / anchors:** `profisBuildPe`, at comments `BP-X8 (2026-10-16)` (plate, edge reinforcement, stand-off).
+- **Before:**
+  - Non-square plates added a verify note that the orientation was unconfirmed.
+  - Edge reinforcement: only "stirrups" was mapped (ID 6); "edge bar" gave a verify note; "none" kept the template ID 4 implicitly.
+  - Stand-off without / with clamping wrote StandoffType None, with a "select in PROFIS" note.
+- **After:**
+  - The plate orientation note is removed.
+  - Edge reinforcement: none → 4, bar → 5, stirrups → 6 (all "ok").
+  - Stand-off without clamping → `WithoutClamping`, StandoffDistance = clear gap, restraint level 1.
+  - Stand-off with clamping → `WithClamping`, StandoffDistance = clear gap, restraint level 2.
+  - Both clamping types add a verify note: the nut and washer height is written as 0.
+  - These restraint levels equal this tool's α_M (1.0 and 2.0) for the same types.
+- **Provision:** none. No calculation in the tool changed; this is only the export file mapping.
+- **Check case:** designs matching examples 7, 9 and 10 were exported with a 14 × 16 × 1.25 in plate; anchors ±4 in by ±4 in; 28 × 28 × 30 in concrete; f′c 4 ksi.
+  - LengthA/B, Edge*, EdgeReinforcementId, StandoffType, StandoffDistance and StandoffRestraintLevel all match the PROFIS files.
+  - The exceptions are StandoffNutAndWasherHeight (0 vs 23.8125 mm, noted in the verify list) and the leftover restraint level when there is no stand-off.
+- **Still open:**
+  - W12X65 size ID (920?) and other shapes.
+  - Plate and column steel IDs.
+  - W rotation angle field.
+  - Condition A (supplementary reinforcement) and anchor-reinforcement mapping: needs an engineer decision on how this tool's tension/shear rebar maps to PROFIS "supplementary" vs "anchor" reinforcement.
+- **Verification:**
+  - `node tests/check-syntax.mjs BasePlateAnchorDesigner.html` passes.
+  - `node tests/bpad-profis.mjs` passes. The unknown-items case no longer expects edge reinforcement and plate orientation notes, since both are mapped.
