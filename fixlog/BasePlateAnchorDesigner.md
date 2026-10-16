@@ -1694,3 +1694,27 @@ Engineer request 2026-10-16. A new export only: **no input, result, report or sa
 - **Verification:**
   - `node tests/check-syntax.mjs BasePlateAnchorDesigner.html` passes.
   - `node tests/bpad-profis.mjs` passes.
+
+## 2026-10-16 — BP-X11: PROFIS export, Heavy Hex Head F1554 Gr. 36 sizes 5/8–1-1/8 in (Tier 2, export only)
+- **Source:** the engineer, read from PROFIS on 2026-10-16:
+  - 5/8 in = 1832;
+  - 3/4 in = 1835;
+  - 7/8 in = 1838;
+  - 1-1/8 in = 1844.
+  - These complete the series with 1/2 in = 1829 and 1 in = 1841 (example 12).
+- **Assumption (flag):** these are the **Gr. 36** heavy hex IDs. They are the same series as 1829 and 1841, with a step of 3 per 1/8 in.
+- **Function / anchor:** `PROFIS_PE_IDS.fasteners`. The four new entries follow the 1841 entry.
+- **Before:** these sizes wrote the template 1/2 in anchor (1829), with "select in PROFIS".
+- **After:** each size writes its own FastenerId.
+  - The CalculatedData HoleSize is d + 1/16 in, as in 1829 (14.2875 mm) and 1841 (26.9875 mm). PROFIS recomputes this field on open.
+  - Sizes above 1-1/8 in still write the template, with "select in PROFIS".
+- **Provision:** none. No calculation in the tool changed; this is only the export file mapping.
+- **Check case:** the default design with a heavy hex head, exported at each diameter:
+
+  | Diameter (in) | 0.5 | 0.625 | 0.75 | 0.875 | 1.0 | 1.125 | 1.25 |
+  |---|---|---|---|---|---|---|---|
+  | FastenerId | 1829 | 1832 | 1835 | 1838 | 1841 | 1844 | 1829 (template) |
+
+- **Verification:**
+  - `node tests/check-syntax.mjs BasePlateAnchorDesigner.html` passes.
+  - `node tests/bpad-profis.mjs` passes.
