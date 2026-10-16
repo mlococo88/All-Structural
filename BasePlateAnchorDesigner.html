@@ -11097,6 +11097,28 @@ const PROFIS_PE_IDS={
      the example (points listed -x-y, +x-y, -x+y, +x+y). */
   layouts:[ { id:8, nx:2, ny:2, pointIds:[2,3,5,6], src:"engineer's PROFIS file (2026-10-13)" } ]
 };
+/* BP-X12 (2026-10-16): Heavy Hex Head ASTM F1554 — PROFIS numbers each grade as one block of 11 sizes
+   (1/2, 5/8, 3/4, 7/8, 1, 1-1/8, 1-1/4, 1-3/8, 1-1/2, 1-3/4, 2 in), step 3:
+   Gr. 36 = 1829–1859, Gr. 55 = 1862–1892, Gr. 105 = 1895–1925.
+   Read from PROFIS files (Hilti_Profis_References, 18 files + examples 1–12): Gr. 36 1/2–1-1/8, Gr. 55 1/2–1-1/8,
+   Gr. 105 1/2–1-1/4. The block boundaries (1862 = 1829 + 33, 1895 = 1862 + 33) fix the remaining
+   larger sizes; those are marked inferred and the export asks to confirm the anchor name in the PROFIS report. */
+(function(){
+  const sizes=[0.5,0.625,0.75,0.875,1.0,1.125,1.25,1.375,1.5,1.75,2.0];
+  const grades=[["f1554_36",1829,"36",[0.5,0.625,0.75,0.875,1.0,1.125]],
+                ["f1554_55",1862,"55",[0.5,0.625,0.75,0.875,1.0,1.125]],
+                ["f1554_105",1895,"105",[0.5,0.625,0.75,0.875,1.0,1.125,1.25]]];
+  grades.forEach(([grade,base,gnm,read])=>sizes.forEach((d,k)=>{
+    const id=base+3*k;
+    if(PROFIS_PE_IDS.fasteners.some(f=>f.id===id)) return;
+    const seen=read.some(x=>Math.abs(x-d)<1e-9);
+    PROFIS_PE_IDS.fasteners.push({ id, head:"hvyhexhead", grade, dia:d,
+      family:"Heavy Hex Head ASTM F 1554 GR. "+gnm, designMethod:"ACI31819_CIP",
+      diameterMM:d*25.4, holeSizeMM:(d+1/16)*25.4, elongationMM:null,
+      src: seen? "PROFIS file read 2026-10-16 (Hilti_Profis_References)" : "inferred from the PROFIS block numbering (2026-10-16)",
+      confirmed:seen, inferred:!seen });
+  }));
+})();
 
 /* The template: the engineer's PROFIS file, unchanged (26 kB). */
 const PROFIS_PE_TEMPLATE=String.raw`<?xml version="1.0" encoding="utf-8"?>
@@ -11865,7 +11887,8 @@ function profisBuildPe(opts){
     fill(cd,{FastenerFamilyName:fa.family, DesignMethod:fa.designMethod, Diameter:fa.diameterMM});
     if(fa.holeSizeMM!=null) setN(kid(cd,"HoleSize"),fa.holeSizeMM);
     if(fa.elongationMM!=null) setN(kid(an,"ElongationLength"),fa.elongationMM);
-    row("Anchor",anchorTxt,"FastenerId "+fa.id+" ("+fa.family+", "+fa.diameterMM+" mm)","ok");
+    row("Anchor",anchorTxt,"FastenerId "+fa.id+" ("+fa.family+", "+fa.diameterMM+" mm)"+(fa.inferred?" — ID from the PROFIS numbering":""),fa.inferred?"check":"ok");
+    if(fa.inferred) verify.push("Anchor FastenerId "+fa.id+" ("+profisDiaLabel(A.dia)+" "+fa.family+") follows PROFIS's numbering but was not read from a PROFIS file — confirm the anchor name and size on page 1 of the PROFIS report.");
   } else {
     row("Anchor",anchorTxt,"FastenerId "+kid(an,"FastenerId").textContent+" (template: ½ in Heavy Hex Head F1554 Gr. 36)","select");
     verify.push("Select in PROFIS after opening: anchor "+anchorTxt+". No catalog ID is known for it, so the template anchor (½ in Heavy Hex Head ASTM F1554 Gr. 36, FastenerId 1829) is written.");
