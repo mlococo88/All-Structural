@@ -1773,3 +1773,30 @@ Engineer request 2026-10-16. A new export only: **no input, result, report or sa
 - **Verification:**
   - `node tests/check-syntax.mjs BasePlateAnchorDesigner.html` passes.
   - `node tests/bpad-profis.mjs`: the default design differs from main only in the pullout values above, as intended. The three PROFIS validation cases (msa3a, struct2v1, struct2v2) are identical.
+
+## 2026-10-16 — BP-C2: tension breakout A_Nc is the area covered by the tension anchors' 1.5h_ef squares (§4, Tier 2)
+- **Engineer decision:** 2026-10-16, "go ahead". Found by comparing this tool with the engineer's PROFIS examples 1–12 (`Hilti_Profis_References`).
+- **Function / anchor:** `breakoutExtents()`, comment `BP-C2 (2026-10-16)`; `tensionBreakoutGroup()`, step "Projected areas & modification factors", A_Nc line.
+- **Before:** A_Nc = the bounding rectangle of the tension anchors ± 1.5h_ef, clipped by the member edges:
+  ```js
+  ANc:Math.max(0,(x2-x1))*Math.max(0,(y2-y1))
+  ```
+- **After:** A_Nc = the union of each tension anchor's 2(1.5h_ef) square, clipped by the edges (exact, by coordinate cells), and never more than the rectangle.
+  - The rectangle is still returned as `ANcRect` for the drawing extents.
+  - When the two differ, the step shows the rectangle minus the uncovered area.
+- **Code:** ACI 318-19 §17.6.2.1 and Fig. R17.6.2.1(b). A_Nc is the projected area of the failure surface of the anchors in tension.
+- **Effect:** a full rectangular tension group with s ≤ 3h_ef is unchanged. An L-shaped group (e.g. 3 of 4 anchors in tension) or widely spaced anchors (s > 3h_ef) now get the smaller, correct area. The old value was unconservative.
+- **Check case 1 (PROFIS example 1):**
+  - Inputs: 2 × 2 anchors at ±4 in; 28 × 28 in member; h_ef = 8 in reduced to h_ef′ = 6.667 in (§17.6.2.1.2), so 1.5h_ef′ = 10 in; anchors 1, 3, 4 in tension, anchor 2 (+4, −4) not.
+  - Before: A_Nc = 28 × 28 = 784 in²; φN_cbg = 32.53 kip.
+  - After: A_Nc = 784 − (14 − 6)(14 − 6) = 784 − 64 = 720 in².
+    - φN_cbg = 0.75 × (720/400) × 0.920 × 0.920 × 1.0 × 1.0 × 1.0 × 26.128 = 29.88 kip.
+    - PROFIS: A_Nc = 720 in², φN_cbg = 29.885 kip.
+- **Check case 2 (PROFIS example 11):** ½ in anchors at ±6 in; 30 × 30 in member; h_ef′ = 6.0 in, so 1.5h_ef′ = 9 in.
+  - Before: A_Nc = 900 in², φN_cbg = 30.72 kip.
+  - After: A_Nc = 900 − 12 × 12 = 756 in², φN_cbg = 25.81 kip. PROFIS: 756 in², 25.808 kip.
+- **Pryout:** unchanged. It uses all anchors, a full grid.
+- **Verification:**
+  - `node tests/check-syntax.mjs BasePlateAnchorDesigner.html` passes.
+  - `node tests/bpad-profis.mjs`: the default design and the three built-in PROFIS cases (msa3a, struct2v1, struct2v2) are identical to main.
+  - The examples 1–12 comparison (private scratch script) gives φN_cbg within 0.03% of PROFIS for examples 1, 2, 3, 8, 11 and 12.
