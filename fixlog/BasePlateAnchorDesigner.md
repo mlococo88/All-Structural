@@ -1470,3 +1470,27 @@ Engineer request 2026-10-16. A new export only: **no input, result, report or sa
   - BP-X2: enum values not seen in a file: ConcreteGradeType `Custom`, ConcreteCharacteristic `Uncracked`. If PROFIS refuses the file, use "Template grade". A PROFIS file with a custom f'c and one with uncracked concrete would confirm them.
   - BP-X3: catalog IDs still needed (one PROFIS file each fills them): other cast-in anchors (⅝–2½ in, hex / heavy hex / square heads, F1554 Gr. 55 and 105, A449, A354 …), HSS of other sizes and walls, W shapes, round HSS, plate steels (A36, A572 Gr. 50 …), column steel, predefined concrete grades (2500–8000 psi), anchor layouts other than 2 × 2 (e.g. 2 × 3, 3 × 3, 4 × 2), the stand-off types (without clamping / with clamping / grouted), edge and anchor reinforcement settings, and a column offset on the plate.
   - BP-X4 (found, not changed): the PROFIS **PDF import** maps "Heavy Hex Head …" (any text matching `hex\s*head`) to head `heavyhex`, which this tool calls "Hex head bolt" (A_brg for ½ in: 0.291 vs heavy hex 0.467 in²). An imported heavy-hex design is therefore checked with the smaller standard-hex bearing area (conservative for pullout and side-face blowout) and will not match FastenerId 1829 on export. Decision needed before changing the importer (§4).
+
+## 2026-10-16 — BP-X4: PROFIS PDF import maps "Heavy Hex Head" to the heavy hex head bolt (§4, Tier 2)
+- **Engineer decision:** 2026-10-16, "map to heavy hex".
+- **Function / anchor:** PROFIS PDF import, anchor line parser, comment `/* head type */`.
+- **Before:**
+  ```js
+  if(/hex\s*head/i.test(txtv)){ st.head="heavyhex"; add("head","Head type","Heavy hex head",txtv,"high"); }
+  ```
+  Every "… Hex Head …" anchor, including "Heavy Hex Head", became the tool's `heavyhex` key. That key is the **standard** hex head bolt (A_brg table "hex"), even though the label said "Heavy hex head".
+- **After:**
+  ```js
+  if(/heavy\s*hex\s*head/i.test(txtv)){ st.head="hvyhexhead"; add("head","Head type","Heavy hex head",txtv,"high"); }
+  else if(/hex\s*head/i.test(txtv)){ st.head="heavyhex"; add("head","Head type","Hex head",txtv,"high"); }
+  ```
+- **Provision:** ACI 318-19 §17.6.3.2.2(a), N_p = 8 A_brg f′c. A_brg comes from the tool's existing bolt-head table (PROFIS Design Guide values); no table value changed.
+- **Check case:** ½ in anchor, f′c = 4 ksi.
+  - Before: imported as hex head, A_brg = 0.291 in², N_p = 8(0.291)(4) = 9.31 kip.
+  - After: imported as heavy hex head, A_brg = 0.467 in², N_p = 8(0.467)(4) = 14.94 kip.
+  - Side-face blowout, which uses √A_brg, rises in the same way.
+  - Only designs **imported from a PROFIS PDF that names "Heavy Hex Head"** change; designs entered by hand are unaffected. Such an import now also exports with FastenerId 1829.
+- **Verification:**
+  - `node tests/check-syntax.mjs BasePlateAnchorDesigner.html` passes.
+  - The regex was checked on "Heavy Hex Head … 1/2" → heavy hex, "Hex Head … 3/4" → hex, and "HEAVY HEX HEAD 1" → heavy hex.
+  - `node tests/bpad-profis.mjs` passes.
