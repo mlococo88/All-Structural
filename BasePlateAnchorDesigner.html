@@ -3861,12 +3861,22 @@ function standoffLeverArm(combo){
   const Lb=z + n*d0;
   const phi=0.65;
   const phiNsa1=0.75*sp.Ase*fu_ksi;
-  const Tanc = combo? (combo.Tmax_anchor||combo.Tu_per||0) : 0;
+  /* BP-C3 (2026-10-16, engineer-approved): as Hilti PROFIS (examples 1, 9, 10), the check is made on the
+     anchor with the highest SHEAR, reduced by that anchor's own axial force |N_ua| (tension or compression).
+     Ties in shear → the largest |N_ua| (conservative). Previously the highest TENSION anchor was used. */
+  let Tanc=0, govAnchor=null;
+  if(combo && Array.isArray(combo.perAnchor) && combo.perAnchor.length){
+    const vmax=Math.max(...combo.perAnchor.map(p=>p.V||0));
+    combo.perAnchor.filter(p=>(p.V||0)>=vmax-1e-9*Math.max(1,vmax)).forEach(p=>{
+      if(!govAnchor || Math.abs(p.t||0)>Math.abs(govAnchor.t||0)) govAnchor=p; });
+    Tanc=Math.abs(govAnchor? (govAnchor.t||0) : 0);
+  } else if(combo) Tanc=combo.Tmax_anchor||combo.Tu_per||0;
   const redux=Math.max(0, 1 - Tanc/phiNsa1);
   const Ms=M0*redux;
   const VMs=aM*Ms/Lb;
   const phiVMs=phi*VMs;
   return {z,ebClear,n,d0,aM,ds,dMinor,dStress,basis,pThr,nThr,S_elastic,M0,Lb,phi,phiNsa1,Tanc,redux,Ms,VMs,phiVMs,
+          govAnchorN:govAnchor? govAnchor.n : null, govAnchorV:govAnchor? (govAnchor.V||0) : null,
           fu_ksi,soLabel:so.label,soType:so.type};
 }
 
@@ -3919,7 +3929,7 @@ function levelingNutCheck(cc){
        lines:[
         "\\frac{N_{ua}}{\\phi N_{sa}} = \\frac{"+fmt(Tmax,3)+"}{"+fmt(phiNsa1,3)+"} = "+fmt(phiNsa1>0?Tmax/phiNsa1:0,4),
         "M_s = M^0_s\\left(1-\\frac{N_{ua}}{\\phi N_{sa}}\\right) = "+fmt(M0,3)+"\\times"+fmt(redux,4)+" = "+fmt(Ms,3)+"\\ \\text{kip-in} = "+fmt(Ms*1000,0)+"\\ \\text{lb-in}"],
-       vars:[["N_{ua}",fmt((Tmax)*forceFactor(),3)+" "+forceUnit(),"tension on the highest-loaded anchor, same combination"],
+       vars:[["N_{ua}",fmt((Tmax)*forceFactor(),3)+" "+forceUnit(),(la.govAnchorN? "|axial force| (tension or compression) on anchor "+la.govAnchorN+", the anchor with the highest shear, same combination" : "axial force on the anchor with the highest shear, same combination")],
              ["\\phi N_{sa}",fmt((phiNsa1)*forceFactor(),3)+" "+forceUnit(),"per-anchor steel tension capacity (φ=0.75)"],
              ["(1-N/\\phi N)",fmt(redux,4),"reduction factor"]]},
 

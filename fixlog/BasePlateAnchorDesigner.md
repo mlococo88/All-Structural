@@ -1800,3 +1800,19 @@ Engineer request 2026-10-16. A new export only: **no input, result, report or sa
   - `node tests/check-syntax.mjs BasePlateAnchorDesigner.html` passes.
   - `node tests/bpad-profis.mjs`: the default design and the three built-in PROFIS cases (msa3a, struct2v1, struct2v2) are identical to main.
   - The examples 1–12 comparison (private scratch script) gives φN_cbg within 0.03% of PROFIS for examples 1, 2, 3, 8, 11 and 12.
+
+## 2026-10-16 — BP-C3: stand-off bending (lever arm) uses the highest-shear anchor's own axial force (§4, Tier 2)
+- **Engineer decision:** 2026-10-16, "go ahead". Found by comparing with the engineer's PROFIS examples 1, 9 and 10.
+- **Function / anchor:** `standoffLeverArm()`, comment `BP-C3 (2026-10-16)`; `levelingNutCheck()`, Step 4 description of N_ua.
+- **Before:** N_ua in M_s = M⁰_s(1 − N_ua/φN_sa) was the highest anchor tension in the combination (`combo.Tmax_anchor`), paired with the highest shear.
+- **After:** N_ua = |T| of the anchor with the highest shear in that combination, tension or compression. With tied shears, the anchor with the largest |T| is taken, which is conservative. Step 4 names the anchor.
+- **Code / method:** ACI 318-19 §17.7.1.2.1 and R17.7.1.2.1 (stand-off shear via bending); the PROFIS lever-arm method, V_s^M = α_M·M_s/L_b.
+  - PROFIS report text for the anchor used: example 1, combo 2: N_ua = 0.000 on anchor 2 (shear 4.419 kip), while anchor 3 carried 5.735 kip tension. Example 9: N_ua = −7.000 kip (compression), reduction 0.776.
+- **Check case (PROFIS example 1, combo 2):** ¾ in F1554 Gr. 105; M⁰_s = 0.32427 ft-kip = 3.891 kip-in; φN_sa = 31.312 kip; L_b = 1.806 in; α_M = 2.
+  - Before (this tool, N_ua = highest tension 5.740 kip): reduction 1 − 5.740/31.312 = 0.817; φV_s^M = 0.65 × 2 × 3.891 × 0.817 / 1.806 = 2.29 kip.
+  - After (anchor with the highest shear, N_ua = 0): reduction 1.000; φV_s^M = 0.65 × 2 × 3.891 / 1.806 = 2.80 kip. PROFIS: 2.801 kip.
+  - In the headless run, this tool has no torsion input, so all four anchors carry equal shear. The tie rule then picks the largest |T|, and the run gives 2.58 kip for this example (it was 2.45). PROFIS's unique highest-shear anchor comes from its torsion, Mz = 5 ft-kip.
+- **Not changed (pending engineer):** the clamped stand-off spalling factor n. PROFIS 3.1.36 (example 10) used n = 0; the built-in PROFIS 3.1.34 cases (CB Plaza Struct 2) match n = 0.5.
+- **Verification:**
+  - `node tests/check-syntax.mjs BasePlateAnchorDesigner.html` passes.
+  - `node tests/bpad-profis.mjs`: the default design is identical. msa3a, struct2v1 and struct2v2 have identical values; the only difference is the two new reporting fields, `govAnchorN` and `govAnchorV`.
