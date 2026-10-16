@@ -17,6 +17,7 @@ Last updated: 2026-10-13 (after the all-tools open-item sweep, PRs #121–#160, 
 | A7 | Timber Beam Check | Supply values not built in, if wanted: Southern Pine Stud (Table 4B), SPF timbers (Table 4D), Dense / Non-Dense grades, other glulam combinations. | P2-3 |
 | A8 | Gusset Plate Rating | Check every "verify" value against the printed MBE / FHWA guide / AASHTO (rivet and fastener strengths, K, LFR values, etc.). | `fixlog/Gusset Plate Rating.md` O8 |
 | A9 | Gusset Plate Rating | Open an exported DXF in AutoCAD and MicroStation, save it from each, and re-import it. | O13 |
+| A10 | Base Plate & Anchor Designer | Export to Hilti PROFIS (.pe): open an exported file in PROFIS Engineering. Check it opens (custom f'c; if not, export with "Template grade"), the load signs (compare PROFIS anchor forces with the Anchor Bolts tab), the plate orientation of a non-square plate, and the items listed "select in PROFIS". Example .pe files that would fill the catalog gaps are listed in the fix log. | `fixlog/BasePlateAnchorDesigner.md` X1, BP-X1–X3 |
 
 ## B. Results that changed in the 2026-10-12 sweep and the GirderDetail PRs #170–#181 and #183–#189 — please review first
 
