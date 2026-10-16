@@ -1494,3 +1494,28 @@ Engineer request 2026-10-16. A new export only: **no input, result, report or sa
   - `node tests/check-syntax.mjs BasePlateAnchorDesigner.html` passes.
   - The regex was checked on "Heavy Hex Head … 1/2" → heavy hex, "Hex Head … 3/4" → hex, and "HEAVY HEX HEAD 1" → heavy hex.
   - `node tests/bpad-profis.mjs` passes.
+
+## 2026-10-16 — BP-X5: PROFIS export writes concrete edges from the plate centre (Tier 2, export only)
+- **Reported by the engineer:** the exported design (18 × 18 in plate, 2 × 2 anchors at 12 in, c_a = 9 in, 30 × 30 in pedestal) opened in PROFIS with the concrete flush with the plate.
+- **Cause:** PROFIS stores `BaseMaterial/EdgeXPositive … EdgeYNegative` as the distance from the plate (anchor-layout) origin to each concrete edge. `MeasureBaseMaterialEdgeFrom = NearestAnchorCenter` only changes how PROFIS displays the edges. The export wrote c_a (9 in from the anchors), which PROFIS took as 9 in from the plate centre, i.e. the plate edge. Two checks support this reading. The engineer's example file (12 × 12 plate, anchors at ±5/±4 in, 228.6 mm edges) is an 18 × 18 in block. The public sample file in rpakishore/Hilti-Profis writes 10000 mm for "far" edges.
+- **Function / anchor:** `profisBuildPe`, comment `/* BP-X5 (2026-10-16)`.
+- **Before:**
+  ```js
+  fill(bm,{EdgeXPositive:mm(g.ca_x_pos), EdgeXNegative:mm(g.ca_x_neg), EdgeYPositive:mm(g.ca_y_pos), EdgeYNegative:mm(g.ca_y_neg)});
+  ```
+- **After:**
+  ```js
+  const eg=[g.ca_x_pos+g.xmax, g.ca_x_neg-g.xmin, g.ca_y_pos+g.ymax, g.ca_y_neg-g.ymin];
+  fill(bm,{EdgeXPositive:mm(eg[0]), EdgeXNegative:mm(eg[1]), EdgeYPositive:mm(eg[2]), EdgeYNegative:mm(eg[3])});
+  ```
+  The export-dialog row now lists the edges from the plate centre and also shows c_a.
+- **Provision:** none. No calculation in the tool changed; this is only the export file mapping.
+- **Check case:** the engineer's design. The anchors are at ±6 in, c_a = 9 in, and the pedestal is 30 in.
+  - Before: Edge* = 9 in = 228.6 mm, so the concrete ends at the 18 in plate edge.
+  - After: Edge* = 9 + 6 = 15 in = 381.0 mm, giving a 30 × 30 in pedestal with 9 in from each anchor.
+  - With a pedestal offset or c_a overrides, the edge is still c_a + the outer anchor offset.
+- **Test change:** the reproduction design in `tests/bpad-profis.mjs` is now an 18 × 18 in pedestal instead of 28 × 26, matching the corrected reading of the example.
+- **Verification:**
+  - `node tests/check-syntax.mjs BasePlateAnchorDesigner.html` passes.
+  - `node tests/bpad-profis.mjs` passes: results are identical to main, and the example is reproduced with only the expected differences.
+  - A headless export of the engineer's design writes 381 mm on all four edges.

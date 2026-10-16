@@ -73,7 +73,7 @@ async function exportChecks(src) {
       s.anchor.dia = 0.5; s.anchor.grade = 'f1554_36'; s.anchor.head = 'hvyhexhead'; s.anchor.hef = 10;
       s.anchor.nx = 2; s.anchor.ny = 2; s.anchor.edx = 1; s.anchor.edy = 2;          /* anchors at ±5, ±4 in */
       s.conc.H = 420; s.conc.fc = 4; s.conc.cracked = true;                          /* 10668 mm = 420 in */
-      s.conc.Bx = 28; s.conc.By = 26; s.conc.plate_off_x = 0; s.conc.plate_off_y = 0; /* edges 9 in from the anchors */
+      s.conc.Bx = 18; s.conc.By = 18; s.conc.plate_off_x = 0; s.conc.plate_off_y = 0; /* Edge* 228.6 mm = 9 in from the plate centre */
       s.grout.present = false; s.standoff.type = 'none';
       s.combos = [{ name: 'Combination 1', P: 0, Vx: 10, Vy: 0, Mx: 0, My: 0 },
                   { name: 'Combo 2', P: -10, Vx: 10, Vy: 2, Mx: 60, My: 120 }];          /* 5 / 10 ft-kip = 60 / 120 kip-in */

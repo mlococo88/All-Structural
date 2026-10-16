@@ -11889,10 +11889,13 @@ function profisBuildPe(opts){
     verify.push("Select in PROFIS after opening: concrete f'c = "+fmt(C.fc*1000,0)+" psi. The template concrete grade (ID 65, strength not identified) is written.");
   }
   const g=anchorGeom();
-  fill(bm,{EdgeXPositive:mm(g.ca_x_pos), EdgeXNegative:mm(g.ca_x_neg), EdgeYPositive:mm(g.ca_y_pos), EdgeYNegative:mm(g.ca_y_neg)});
-  row("Edge distances c+x / c−x / c+y / c−y (from the nearest anchor centre)",
-      [g.ca_x_pos,g.ca_x_neg,g.ca_y_pos,g.ca_y_neg].map(v=>fmt(v,3)).join(" / ")+" in",
-      [g.ca_x_pos,g.ca_x_neg,g.ca_y_pos,g.ca_y_neg].map(v=>fmt(mm(v),1)).join(" / ")+" mm","ok");
+  /* BP-X5 (2026-10-16): PROFIS stores Edge* from the plate (anchor-layout) origin, not from the nearest anchor
+     (MeasureBaseMaterialEdgeFrom only changes how PROFIS displays them) -> c_a + outer anchor offset */
+  const eg=[g.ca_x_pos+g.xmax, g.ca_x_neg-g.xmin, g.ca_y_pos+g.ymax, g.ca_y_neg-g.ymin];
+  fill(bm,{EdgeXPositive:mm(eg[0]), EdgeXNegative:mm(eg[1]), EdgeYPositive:mm(eg[2]), EdgeYNegative:mm(eg[3])});
+  row("Concrete edges +x / −x / +y / −y from the plate centre (c_a "+[g.ca_x_pos,g.ca_x_neg,g.ca_y_pos,g.ca_y_neg].map(v=>fmt(v,2)).join(" / ")+" in from the outer anchors)",
+      eg.map(v=>fmt(v,3)).join(" / ")+" in",
+      eg.map(v=>fmt(mm(v),1)).join(" / ")+" mm","ok");
   setT(kid(bm,"IsLightweightConcrete"),"false");
   row("Concrete weight","normalweight (λ_a = 1.0; this tool has no lightweight option)","IsLightweightConcrete false","ok");
   if(C.edgeReinf && C.edgeReinf!=="none")
