@@ -1702,7 +1702,7 @@ Engineer request 2026-10-16. A new export only: **no input, result, report or sa
   - 7/8 in = 1838;
   - 1-1/8 in = 1844.
   - These complete the series with 1/2 in = 1829 and 1 in = 1841 (example 12).
-- **Assumption (flag):** these are the **Gr. 36** heavy hex IDs. They are the same series as 1829 and 1841, with a step of 3 per 1/8 in.
+- **Grade:** Gr. 36, confirmed by the engineer on 2026-10-16. Same series as 1829 and 1841, with a step of 3 per 1/8 in.
 - **Function / anchor:** `PROFIS_PE_IDS.fasteners`. The four new entries follow the 1841 entry.
 - **Before:** these sizes wrote the template 1/2 in anchor (1829), with "select in PROFIS".
 - **After:** each size writes its own FastenerId.
