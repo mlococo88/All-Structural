@@ -7,6 +7,8 @@
 //       Locked / Range / List honoured by the engines, Apply writes the inputs and GirderDetail's modules follow, Cancel, saved data both ways
 //   node tests/suggest.mjs options [--b file]
 //       objectives (cost, steel weight, shallowest), maximum structure depth, the short list of options, Show the work and Apply of an option
+//   node tests/suggest.mjs objpicks [--b file]
+//       girder count varying: the panel objective chooses the counts Full design runs on (SGF-a); Locked: the study's own objective (as before)
 // Exit code: 0 all pass, 1 a failure, 2 an error.
 import fs from 'fs';
 import path from 'path';
@@ -219,5 +221,34 @@ async function options() {
   return res.some(r => !r[1]) ? 1 : 0;
 }
 
-const code = CMD === 'locks' ? await locks() : CMD === 'options' ? await options() : (await same()) ? 1 : 0;
+// SGF-a (2026-10-15): which girder counts the study designs in full (wsfPicks), by the panel objective when the count varies
+async function objpicks() {
+  const res = []; const ok = (name, c, info) => { res.push([name, !!c]); console.log(`${c ? 'PASS' : 'FAIL'}  ${name}${info ? ' — ' + info : ''}`); };
+  const { b, p, errs } = await boot(B.file, 'builtin', null), f = plf(p);
+  try {
+    await p.click('#gd-sgp-b'); await f.waitForFunction(() => SGP_OPEN, null, { timeout: 60000 });
+    await f.click('[data-sgpv="nb"][data-sgpm="free"]'); await p.waitForTimeout(400); await f.evaluate(() => { P.ws.nFull = 3; });
+    const study = async () => { await f.click('#sgp-quick'); await f.waitForFunction(() => WS && WS.done && WS.key === wsKey(), null, { timeout: 300000 }); await p.waitForTimeout(500); };
+    const expect = o => { const ok = WS.res.filter(r => !r.err), pass = ok.filter(r => !r.fails.length), fail = ok.filter(r => r.fails.length).sort((a, b) => a.gov.r - b.gov.r || a.psf - b.psf);
+      const c = { cost: (a, b) => a.cost - b.cost || a.tot - b.tot || a.N - b.N, wt: (a, b) => a.tot - b.tot || a.cost - b.cost || a.N - b.N, shallow: (a, b) => a.D - b.D || a.cost - b.cost || a.N - b.N,
+        study: P.ws.obj === 'nb' ? (a, b) => a.N - b.N || a.psf - b.psf : (a, b) => a.psf - b.psf || a.N - b.N }[o];
+      return [...pass.sort(c), ...fail].slice(0, 3).map(r => r.N); };
+    for (const o of ['cost', 'wt', 'shallow']) {
+      await f.evaluate(o => { if (o === 'cost') delete P.suggest.obj; else P.suggest.obj = o; autosave(); }, o); await study();
+      const got = await f.evaluate(() => wsfPicks().map(r => r.N)), want = await f.evaluate(`(${expect.toString()})(${JSON.stringify(o)})`);
+      const rows = await f.evaluate(() => WS.res.filter(r => !r.err).map(r => `N${r.N}: $${Math.round(r.cost)}, ${r.tot.toFixed(1)} kip, D ${r.D}, ${r.fails.length ? 'fail' : 'pass'}`));
+      ok(`count Free, panel objective ${o}: Full design picks by it`, JSON.stringify(got) === JSON.stringify(want) && (await f.evaluate(() => wsfObj())) === o, `picks ${got.join(', ')}; expected ${want.join(', ')}; ${rows.join('; ')}`);
+      const note = await f.evaluate(() => wsfHtml()); ok(`objective ${o} named in the Full design step`, note.includes("the Suggest panel's objective"));
+    }
+    // Locked: the study's own objective (unchanged)
+    await f.evaluate(() => { P.suggest.obj = 'shallow'; }); await f.click('[data-sgpv="nb"][data-sgpm="lock"]'); await p.waitForTimeout(400);
+    const lk = await f.evaluate(() => ({ o: wsfObj(), got: WS && WS.done ? wsfPicks().map(r => r.N) : [] })), wantL = await f.evaluate(`(${expect.toString()})('study')`);
+    ok('count Locked: the study objective (ws.obj) as before', lk.o === null && JSON.stringify(lk.got) === JSON.stringify(wantL), `picks ${lk.got.join(', ')}; expected ${wantL.join(', ')}`);
+  } catch (e) { console.error(e); try { await b.close(); } catch (e2) {} return 2; }
+  await b.close();
+  if (errs.length) { console.log('console errors: ' + errs.join(' | ')); return 1; }
+  return res.some(r => !r[1]) ? 1 : 0;
+}
+
+const code = CMD === 'locks' ? await locks() : CMD === 'options' ? await options() : CMD === 'objpicks' ? await objpicks() : (await same()) ? 1 : 0;
 process.exit(code);

@@ -45,6 +45,8 @@ node tests/suggest.mjs same --project builtin,xsA --owner AASHTO,RIDOT      # ad
 # modes honoured (web depth Range/List/Locked, girder count List/Range, overhangs Locked, spacing near piers Locked), Cancel, Apply and module sync,
 # saved data both ways (main opens a project with the new fields; an older project opens in the branch), Design modules hides the button
 node tests/suggest.mjs locks
+# girder count varying: the panel objective chooses which counts the study designs in full (SGF-a); Locked: the study's own objective
+node tests/suggest.mjs objpicks
 # objectives (cost, steel weight, shallowest), maximum structure depth, the short list of options, Show the work and Apply of an option (part 2)
 node tests/suggest.mjs options
 ```
