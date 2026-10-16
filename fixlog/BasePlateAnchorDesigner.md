@@ -1668,3 +1668,29 @@ Engineer request 2026-10-16. A new export only: **no input, result, report or sa
 - **Verification:**
   - `node tests/check-syntax.mjs BasePlateAnchorDesigner.html` passes.
   - `node tests/bpad-profis.mjs` passes. The unknown-items case expects the new reinforcement note.
+
+## 2026-10-16 — BP-X10: PROFIS export, FastenerId 1841 (1 in Heavy Hex Head F1554 Gr. 36) and a standard-hex note (Tier 2, export only)
+- **Source:** `Hilti_Profis_References`, files `11.pe` / `11.pdf` / the app report, and `12.pe` / `12.pdf`.
+  - Example 11 is the engineer's export of the default design. PROFIS used the template ½ in anchor, because the design's 1 in "Hex head bolt" had no catalog ID.
+  - Example 12 is the same file with 1 in Heavy Hex Head F1554 Gr. 36 selected: `FastenerId 1841` (Diameter 25.4 mm, HoleSize 26.9875 mm).
+- **Example 11 explained:** PROFIS's anchor tensions (0.966 / 0 / 1.761 / 0.102 kip, combination 0.9D+1.0W) match this tool run with a ½ in heavy hex (0.970 / 0 / 1.769 / 0.102). The difference was only the anchor.
+- **Example 12 vs this tool, default design:**
+  - Anchor tensions: PROFIS 1.499 / 0 / 3.813 / 0 kip; tool 1.501 / 0 / 3.827 / 0 kip.
+  - φN_sa: PROFIS 26.361 kip; tool 26.36.
+  - φN_cbg: PROFIS 20.169 kip; tool 20.16.
+  - φV_cbg (y+): PROFIS 14.346 kip; tool 14.35.
+  - φV_cpg: PROFIS 86.755 kip; tool 86.75.
+  - φN_pn: PROFIS 33.622 kip; tool 26.05 with the standard Hex head, or 33.622 with Heavy hex head.
+  - These method differences remain:
+    - steel shear: this tool puts the shear on 2 anchors (8.08 kip each), PROFIS on 4 (4.04 kip each);
+    - grout: this tool applies the §17.7.1.2.1 0.80 factor for its 1 in grout pad, PROFIS has no stand-off. 13.708 × 0.80 = 10.97 kip, as this tool gives.
+- **Function / anchor:** `PROFIS_PE_IDS.fasteners` (new 1841 entry); `profisBuildPe` anchor block, comment `BP-X10 (2026-10-16)`.
+- **Before:** a 1 in heavy hex Gr. 36 design wrote the template ½ in anchor (1829), with "select in PROFIS".
+- **After:**
+  - It writes FastenerId 1841.
+  - A design with the standard "Hex head bolt" still writes the template, and adds a note: PROFIS cast-in bolts are Heavy Hex Head, and this tool's hex head has a smaller A_brg.
+- **Provision:** none. No calculation in the tool changed; this is only the export file mapping.
+- **Check case:** default design, HSS4X4, head set to Heavy hex head bolt. The export is identical to `12.pe` in every input field; only the report-option and empty-vs-nil formatting fields differ.
+- **Verification:**
+  - `node tests/check-syntax.mjs BasePlateAnchorDesigner.html` passes.
+  - `node tests/bpad-profis.mjs` passes.
