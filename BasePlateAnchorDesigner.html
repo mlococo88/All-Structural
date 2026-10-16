@@ -11029,6 +11029,10 @@ const PROFIS_PE_IDS={
       family:"Heavy Hex Head ASTM F 1554 GR. 36", designMethod:"ACI31819_CIP",
       diameterMM:12.7, holeSizeMM:14.2875, elongationMM:120.015,
       src:"engineer's PROFIS file, US region, ACI 318-19 (2026-10-13)", confirmed:true },
+    { id:1901, head:"hvyhexhead", grade:"f1554_105", dia:0.75,
+      family:"Heavy Hex Head ASTM F 1554 GR. 105", designMethod:"ACI31819_CIP",
+      diameterMM:19.05, holeSizeMM:20.6375, elongationMM:null,
+      src:"Hilti_Profis_References 1-4.pe + reports (2026-10-16)", confirmed:true },
     /* Post-installed adhesive anchor: this tool designs cast-in anchors only, so it
        is never matched automatically. Recorded for completeness. */
     { id:9952, head:null, grade:"f1554_36", dia:0.5, postInstalled:true,
@@ -11048,7 +11052,14 @@ const PROFIS_PE_IDS={
               [-44.449999999999996,-44.449],[-44.449999999999996,44.449999999999996],
               [44.449999999999996,44.449999999999996],[44.449999999999996,-44.449999999999996],
               [-44.449999999999996,-44.449999999999996]],
-      src:"engineer's PROFIS file (2026-10-13)" }
+      src:"engineer's PROFIS file (2026-10-13)" },
+    /* Family 24 = W shape (AISC). PROFIS draws a W at Angle 0 with the DEPTH ALONG X (this tool: depth along y).
+       W10X15 is not in this tool's library; recorded for when it is. */
+    { name:"W10X15", appShape:"W10X15", familyId:24, sizeId:911, wallAssumed:false,
+      heightMM:253.746, widthMM:101.6, thicknessMM:5.842, flangeThicknessMM:6.858,
+      layout:[[-126.873,50.8],[-126.873,-50.8],[-120.015,-50.8],[-120.015,-2.921],[120.015,-2.921],[120.015,-50.8],
+              [126.873,-50.8],[126.873,50.8],[120.015,50.8],[120.015,2.921],[-120.015,2.921],[-120.015,50.8]],
+      src:"Hilti_Profis_References 2.pe + report (2026-10-16)" }
   ],
   /* AnchorPlate/SteelTypeId 40 and Profile/SteelTypeId 46 appear in both known
      files (also the CSA base file), so they look like defaults. Their grades are
@@ -11812,6 +11823,9 @@ function profisBuildPe(opts){
     row("Column profile",colTxt,kid(cd,"ProfileName").textContent+" (template)","select");
     verify.push("Select in PROFIS after opening: column profile "+colTxt+". The template profile "+kid(cd,"ProfileName").textContent+" is written (no catalog ID known for this column).");
   }
+  /* BP-X7 (2026-10-16): PROFIS W shape at Angle 0 has its depth along X (W10X15 layout points); this tool has d along y */
+  if(!S.col.custom && S.col.shapeType==="W")
+    verify.push("Column orientation: PROFIS draws a W shape with its depth along X (Angle 0, seen in the engineer's W10X15 file); this tool has the depth along y. The file keeps Angle 0 — rotate the profile 90° in PROFIS to match this tool.");
   const pss=PROFIS_PE_IDS.profileSteels[0];
   if(!pss) verify.push("Select in PROFIS after opening: column steel grade (this tool does not use it; the template SteelTypeId 46 is written).");
   if(Math.abs(P.exc_x||0)>1e-9 || Math.abs(P.exc_y||0)>1e-9){
@@ -11900,7 +11914,11 @@ function profisBuildPe(opts){
       eg.map(v=>fmt(mm(v),1)).join(" / ")+" mm","ok");
   setT(kid(bm,"IsLightweightConcrete"),"false");
   row("Concrete weight","normalweight (λ_a = 1.0; this tool has no lightweight option)","IsLightweightConcrete false","ok");
-  if(C.edgeReinf && C.edgeReinf!=="none")
+  /* BP-X7 (2026-10-16): EdgeReinforcementId 6 = "> No. 4 bar with stirrups" (ψ_c,V 1.4), engineer's reports 1-4 */
+  if(C.edgeReinf==="stirrups"){
+    setN(kid(bm,"EdgeReinforcementId"),6);
+    row("Edge reinforcement","bar with stirrups (ψ_c,V 1.4)","EdgeReinforcementId 6 (> No. 4 bar with stirrups)","ok");
+  } else if(C.edgeReinf && C.edgeReinf!=="none")
     verify.push("Edge reinforcement ("+(C.edgeReinf==="stirrups"?"bar with stirrups, ψ_c,V 1.4":"edge bar, ψ_c,V 1.2")+") is not exported: set the edge reinforcement in PROFIS.");
   if(C.psi_cV_override) verify.push("ψ_c,V is overridden in this tool ("+fmt(C.psi_cV,2)+"); set the equivalent edge reinforcement in PROFIS.");
   if((S.tRebar&&S.tRebar.present)||(S.vRebar&&S.vRebar.present))
@@ -11913,8 +11931,8 @@ function profisBuildPe(opts){
     /* BP-X6 (2026-10-16): PROFIS name "WithGrouting" seen in the engineer's re-saved file, with StandoffRestraintLevel 2 */
     const ap2=at("AnchorPlate");
     setT(kid(ap2,"StandoffType"),"WithGrouting"); setN(kid(ap2,"StandoffDistance"),mm(so.z)); setN(kid(ap2,"StandoffRestraintLevel"),2);
-    row("Stand-off",so.label+", gap "+fmt(so.z,3)+" in","StandoffType WithGrouting, StandoffDistance "+fmt(mm(so.z),1)+" mm, StandoffRestraintLevel 2","check");
-    verify.push("Stand-off with grouting was written as StandoffType \"WithGrouting\" (gap "+fmt(so.z,3)+" in) with StandoffRestraintLevel 2, copied from the engineer's PROFIS file; the meaning of the restraint level is not identified — check the stand-off settings in PROFIS.");
+    /* BP-X7: PROFIS report prints "grouted standoff; restraint level (anchor plate): 2.00; eb = StandoffDistance" */
+    row("Stand-off",so.label+", gap "+fmt(so.z,3)+" in","StandoffType WithGrouting, StandoffDistance (e_b) "+fmt(mm(so.z),1)+" mm, restraint level 2.00","ok");
   } else if(so.hasStandoff){
     row("Stand-off",so.label+", gap "+fmt(so.z,3)+" in","StandoffType None (template)","select");
     verify.push("Select in PROFIS after opening: stand-off \""+so.label+"\" (gap "+fmt(so.z,3)+" in). The template \"no stand-off\" is written; the PROFIS names of the other stand-off types are not known.");
@@ -11946,7 +11964,8 @@ function profisBuildPe(opts){
   setT(at("Options","ReportLoadCombination"),act.id);
   row("Load combinations",S.combos.length+" factored (LRFD) combinations",
       S.combos.length+" LoadCombinationEntity, Static, Design; active = \""+act.name+"\" (governing)","check");
-  verify.push("Load signs: ForceZ = P (+ = tension), ForceX = Vx, ForceY = Vy, MomentX = Mx, MomentY = My, MomentZ = 0. This mapping is assumed (PROFIS convention, matching this tool's validated Mx/My sense) and not yet confirmed by a PROFIS test file — compare the anchor forces in PROFIS with the Anchor Bolts tab before relying on the PROFIS results.");
+  /* BP-X7 (2026-10-16): sign mapping confirmed — this tool's anchor forces match the engineer's PROFIS reports 1, 3, 4 */
+  row("Load signs","P (+ tension), Vx, Vy, Mx, My","ForceZ = P, ForceX = Vx, ForceY = Vy, MomentX = Mx, MomentY = My, MomentZ = 0 (confirmed against PROFIS reports)","ok");
   if(govNote) verify.push("Active combination: "+govNote+".");
   if(S.serviceLoads && (S.serviceLoads.useSeismic||S.serviceLoads.useOmega))
     verify.push("Seismic combinations are written as ordinary static design loads. Set the seismic design options (ACI 318-19 §17.10) in PROFIS.");
@@ -12015,7 +12034,7 @@ function openProfisExport(){
     host.appendChild(el("h4",null,"Load combinations (factored) and unit conversion"));
     const cv=el("div","note");
     cv.textContent="PROFIS stores SI values: force N = kip × 4448.2216; moment N·mm = kip-in × 112984.829 (= kip-ft × 1355817.95); length mm = in × 25.4; stress MPa = ksi × 6.894757. "+
-      "Sign mapping (assumed): ForceZ = P (+ tension), ForceX = Vx, ForceY = Vy, MomentX = Mx, MomentY = My, MomentZ = 0.";
+      "Sign mapping (confirmed against PROFIS reports, 2026-10-16): ForceZ = P (+ tension), ForceX = Vx, ForceY = Vy, MomentX = Mx, MomentY = My, MomentZ = 0.";
     host.appendChild(cv);
     const lt=el("table","tbl"); const lh=el("tr");
     ["#","Name","P ("+forceUnit()+")","Vx","Vy","Mx ("+momentUnit()+")","My","→ ForceZ (N)","ForceX (N)","ForceY (N)","MomentX (N·mm)","MomentY (N·mm)"].forEach(h=>lh.appendChild(el("th",null,h)));
