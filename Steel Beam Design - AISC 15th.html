@@ -4267,7 +4267,7 @@ manPart('pS','V-b. Strength Methodology',[
 {h3:'Composite cross section drawing'},
 {p:'The Composite tab draws the section to scale in Plotly: steel shape, haunch, deck ribs at the fraction of rib concrete counted in A\u1D9C, solid slab, the plastic neutral axis, and the plastic stress blocks \u2014 the 0.85f\u2032\u1D9C compression block of depth a, any steel in compression, and the yielded tension zone. The rib pitch drawn is indicative rather than a deck profile.'},
 {h3:'Inherited inputs'},
-{p:'The composite panel does not ask again for anything the model already knows. Left blank, the span comes from the geometry (the longest span in beam mode, the unbraced length in member check mode), the beam spacings come from the tributary widths, and the tributary width and the post-composite dead and live pressures come from the tributary generator. Every inherited value is listed in a box at the top of the panel and repeated beside the field it fills, so nothing is assumed silently; typing a value overrides it.'},
+{p:'The composite panel does not ask again for anything the model already knows. Left blank, the span comes from the geometry (the longest span in beam mode, the unbraced length in member check mode), the beam spacings come from the tributary widths, and the tributary width and the post-composite live pressure come from the tributary generator. The superimposed dead pressure is <b>entered</b> (default 0 psf): it is not taken from the generator’s DL, which may include the slab, unless you clear the field. Every inherited value is listed in a box at the top of the panel and repeated beside the field it fills, so nothing is assumed silently; typing a value overrides it.'},
 {p:'Two things are deliberately <b>not</b> inherited. The construction unbraced length is not taken from the final bracing, because a slab that braces the beam once cured does not brace it during the pour. And where the superimposed dead pressure is inherited, the output warns that it must exclude the slab and deck, which the module derives from the slab geometry \u2014 otherwise the slab is counted twice.'},
 {p:'\u00A7I3.1a is written per span, so the effective width uses the <b>span</b> length, not the overall member length. On a two-span beam the difference is large: a 30 + 28 ft beam gives L/8 = 3.75 ft per side from the 30 ft span, where the 58 ft total would have given 7.25 ft and let the beam spacing govern instead.'},
 {h3:'Effective width override'},
@@ -8633,7 +8633,8 @@ function compositeInputs(body){
   const p=AN&&AN.sect;
   if(p&&p._kind!=='I'){body.appendChild(el('div','warnBox','\u00A7I3.2 composite flexure here covers I-shaped beams only.'));return;}
   if(typeof compInherit==='function'){
-    const inh=compInherit(),keys=Object.keys(inh).filter(k=>inh[k]&&inh[k].v!=null);
+    const sdl=constrCfg().superDL;   /* superimposed dead is entered (default 0); listed only when its field is blank and it really inherits */
+    const inh=compInherit(),keys=Object.keys(inh).filter(k=>inh[k]&&inh[k].v!=null&&(k!=='superDL'||sdl==null||sdl===''));
     const nm={L:'Span L',sLeft:'Beam spacing, left',sRight:'Beam spacing, right',
       trib:'Tributary width',superDL:'Superimposed dead',LL:'Live load'};
     const un={L:'ft',sLeft:'ft',sRight:'ft',trib:'ft',superDL:'psf',LL:'psf'};
@@ -8712,7 +8713,7 @@ function compositeInputs(body){
 function constrCfg(){
   const c=compCfg();
   if(!c.constr)c.constr={};
-  const d={shored:false,trib:null,deckPsf:2,consLL:25,superDL:0,LL:0,
+  const d={shored:false,trib:null,deckPsf:2,consLL:25,superDL:0,LL:null,   /* LL blank -> inherits the tributary generator's LL (compInherit); superDL entered, default 0 */
     Lb:null,camber:0,denPre:360,absPre:1.0,denLL:360,denTot:240,LLpct:100};
   Object.keys(d).forEach(k=>{if(c.constr[k]===undefined)c.constr[k]=d[k];});
   return c.constr;
@@ -9073,7 +9074,7 @@ function constrInputs(body){
   }
   body.appendChild(el('div','hint','<b>Loads applied after the concrete cures</b> \u2014 carried by the composite section on I\u1D38\u1D2E.'));
   fRow(body,'Superimposed dead load',numInput(()=>k.superDL,v=>{k.superDL=v;},5,'ckSDL'),'psf',
-    inhHint('superDL',k.superDL,'psf','Ceiling, MEP, finishes \u2014 must exclude the slab and deck, which are derived from the geometry above.'));
+    inhHint('superDL',k.superDL,'psf',((k.superDL!=null&&k.superDL!=='')?'Entered (default 0 psf) — not taken from the tributary generator’s DL. ':'')+'Ceiling, MEP, finishes \u2014 must exclude the slab and deck, which are derived from the geometry above.'));
   fRow(body,'Live load',numInput(()=>k.LL,v=>{k.LL=v;},10,'ckLL'),'psf',inhHint('LL',k.LL,'psf'));
   fRow(body,'Live load used for deflection',numInput(()=>k.LLpct,v=>{k.LLpct=v;},10,'ckLLp'),'%','Design Guide 3 often uses 50% of the unreduced live load');
   fRow(body,'Live-load limit  L /',numInput(()=>k.denLL,v=>{k.denLL=v;},30,'ckDL'),'\u2014');

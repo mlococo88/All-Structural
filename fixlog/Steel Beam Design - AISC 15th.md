@@ -1894,3 +1894,73 @@ Engineer's decision 2026-10-12 on Q3 of the sweep (closes O14).
 - **Composite live-load deflection is 0.000** in the default composite project (live load from the tributary generator), while Service 1.0LL gives 0.062 in. The generator's live load does not seem to be counted as post-composite load; please check.
 - **On-screen links of the Summary chips:** the HSS "Concentrated forces" N/A row carries `tab:'tabComp'`, and the member-mode Deflection row carries `tab:'tabSummary'`. Those chips open the Compression / Summary tab instead of Concentrated Forces / Serviceability. Not changed (outside the report); the report places their result lines correctly.
 - **`1728 = ft³/in³`** (member deflection variable list): the factor's unit is in³/ft³. The text is kept as it was; only the TeX rendering is fixed.
+
+## 2026-10-18 — PR: claude/steelbeam-comp-defl (PR link added after merge)
+
+### CD1. Composite live-load deflection inherits the tributary generator's LL (engineer's option C, 2026-10-18)   [calc change] [more conservative]
+- **Problem:** in the default composite project, "Composite live-load deflection" was **0.000 in**, while the 1.0LL service case gave 0.062 in. This was the D11 open item.
+- **Root cause:**
+  - The composite deflections come from `constructionStage(p,r)` (the last definition, anchor `out.dLL=dfl(out.wLL*(llp/100),I2);`). It is a simple-span model on its own pressure inputs: `w_LL = trib × LL / 1000`, on I_LB. It does not read the load list, so generator loads and manual loads alike are ignored.
+  - A blank LL is meant to inherit the generator's LL pressure: `compInherit()` offers it, `inhVal()` uses it only when the field is null or '', and the User Manual says so.
+  - But `constrCfg()` wrote the default `LL:0` into `S.composite.constr`. 0 counts as a typed value, so inheritance never happened. Meanwhile the panel box said "Live load = 40.00 psf (inherited)".
+  - The same happened to `superDL:0`. The engineer chose to keep super DL entered (default 0), because the generator's DL may include the slab. Only the display claiming that super DL is inherited is corrected.
+- **Governing provision:** AISC Design Guide 3 (edition: verify; the tool states none), with the composite live-load deflection on the lower-bound I_LB. The limit is the tool's composite live-load limit input, L/360 by default (`denLL`); the total limit is L/240 (`denTot`). The limits are not changed.
+- **Where / before / after:**
+  1. `constrCfg` (anchor `const d={shored:false,trib:null,deckPsf:2,consLL:25,superDL:0,`):
+     ```js
+     // before
+     const d={shored:false,trib:null,deckPsf:2,consLL:25,superDL:0,LL:0,
+     // after
+     const d={shored:false,trib:null,deckPsf:2,consLL:25,superDL:0,LL:null,   /* LL blank -> inherits the tributary generator's LL (compInherit); superDL entered, default 0 */
+     ```
+  2. Composite panel, "Inherited from the rest of the model" box (anchor `const inh=compInherit(),keys=`). Super DL is listed only when its field is blank, which is the only case in which it really inherits:
+     ```js
+     // before
+     const inh=compInherit(),keys=Object.keys(inh).filter(k=>inh[k]&&inh[k].v!=null);
+     // after
+     const sdl=constrCfg().superDL;   /* superimposed dead is entered (default 0); listed only when its field is blank and it really inherits */
+     const inh=compInherit(),keys=Object.keys(inh).filter(k=>inh[k]&&inh[k].v!=null&&(k!=='superDL'||sdl==null||sdl===''));
+     ```
+  3. `constrInputs`, super DL field hint (anchor `inhHint('superDL',k.superDL,'psf',`):
+     ```js
+     // before
+     inhHint('superDL',k.superDL,'psf','Ceiling, MEP, finishes — must exclude …'));
+     // after
+     inhHint('superDL',k.superDL,'psf',((k.superDL!=null&&k.superDL!=='')?'Entered (default 0 psf) — not taken from the tributary generator’s DL. ':'')+'Ceiling, MEP, finishes — must exclude …'));
+     ```
+  4. User Manual, "Inherited inputs" (anchor `the beam spacings come from the tributary widths, and the tributary width and the post-composite`):
+     - before: "… the tributary width and the post-composite dead and live pressures come from the tributary generator."
+     - after: "… the tributary width and the post-composite live pressure come from the tributary generator. The superimposed dead pressure is **entered** (default 0 psf): it is not taken from the generator's DL, which may include the slab, unless you clear the field."
+- **Unchanged:**
+  - The slab double-count note logic (`constrCfg().superDL==null`), which still appears if the super DL field is cleared.
+  - `compInherit`, `inhVal`, `compEffCfg` and `constructionStage`.
+  - The service-case split (`postLoads`, bare steel unless ticked).
+  - Member and batch modes: no tributary generator there, so blank LL = 0, as before.
+- **Saved data:** no key or format change and **no migration**. A project saved before this change has `composite.constr.LL = 0` stored (the old default was written into the state). It keeps 0, and its composite live-load deflection stays 0 until the user clears the Live load field (or types a value). New projects, and composite projects whose `constr` was never created, store `LL: null` and inherit.
+- **Check case** (default project with composite on: W18X50, one 20 ft simple span, trib 5 + 5 ft, generator DL 15 psf / LL 40 psf; slab 4.5 in on 3 in deck, perpendicular ribs; LL used 100 %):
+  - w_LL = 40 psf × 10 ft / 1000 = **0.400 klf**.
+  - I_LB = **2387.94 in⁴** (unchanged); E = 29,000 ksi.
+  - Δ_LL = 5 w L⁴ / (384 E I_LB) = 5(0.400)(1728)(20⁴) / (384 × 29,000 × 2387.94) = 552.96×10⁶ / 2.6592×10¹⁰ = **0.0208 in** (before **0.000**).
+  - Limit L/360 = 240/360 = 0.667 in; DCR **0 → 0.031**, PASS.
+  - Cross-check: service 1.0LL is 0.0621 in on the bare I_x = 800 in⁴, and 0.0621 × 800/2387.94 = 0.0208 in. The only difference is I_LB vs I_x.
+  - Total = pre-composite net 0.1234 (w_D,pre 0.795 klf on I_x; no camber) + super DL 0 + LL 0.0208 = **0.144 in** (before 0.123); limit L/240 = 1.000 in; DCR **0.123 → 0.144**, PASS.
+- **Changed outputs (default composite project; nothing else moved):**
+  - `AN.constr`: wLL 0 → 0.4, dLL 0 → 0.0208, dcrLL 0 → 0.031, dTot 0.1234 → 0.1442, dcrTot 0.1234 → 0.1442.
+  - `AN.design.checks` rows "Composite live-load deflection" and "Composite total deflection": dem and dcr as above, both PASS before and after.
+  - Summary chips and table (DCR 0.00 → 0.03, 0.12 → 0.14).
+  - Serviceability "Composite and Construction-Stage Deflections" rows Live load and Total.
+  - Mₓ tab construction-load table "Live load, composite" 0.0000 → 0.4000 klf.
+  - The panel box (Super DL line removed), the super DL tooltip, the Live load field (now blank, tooltip "blank → 40.00 psf …") and the User Manual paragraph.
+- **How verified:**
+  - `node tests/check-syntax.mjs "Steel Beam Design - AISC 15th.html"`: all scripts pass.
+  - `node tests/compare.mjs --tool page --file "Steel Beam Design - AISC 15th.html"`: page.text and page.storage are the same. The default project is not composite, and the same 3 KaTeX 0.16.11 requests that the kit does not hold fail on both sides.
+  - Headless Chromium, origin/main against the branch, with KaTeX 0.16.11 and plotly-basic 2.35.2 served locally, on the six D11 projects (default; 2-span; open-section torsion; composite; member mode; HSS). Compared: `AN`, the saved state, the localStorage keys and every tab's text.
+    - Default, 2-span, open-section torsion, member and HSS are **identical**.
+    - Composite differs only by the values listed above, plus `state.composite.constr.LL` 0 → null.
+    - No console errors.
+  - Saved project: main's composite state (`constr.LL = 0`) loaded from `sbd_autosave_v1` into the branch gives dLL = 0 and dTot = 0.1234, the same as main.
+  - Screenshot of the Serviceability card looked at: Live load 2388 / 0.021 / 0.667 / 0.031 PASS; Total 0.144 / 1.000 / 0.144 PASS.
+- **Other copies:** the dead first definitions of `constructionStage` / `compositeFor` (O4) do not read `constrCfg().LL` through inheritance and never run; not changed.
+- **Open items:**
+  - Field tooltips built by `inhHint` show raw `<b>` tags (label `title`). This is pre-existing and also affects the Tributary width tooltip; not changed.
+  - The LL used for deflection defaults to 100 %; DG 3 often uses 50 %. Not changed.
