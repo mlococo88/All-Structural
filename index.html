@@ -27,6 +27,9 @@
   input:focus,select:focus{border-color:#1d4ed8 !important;box-shadow:0 0 0 3px rgba(29,78,216,0.1);outline:none;}
   button:active{transform:translateY(1px);}
   @media print{.bx-alltools,.bx-projbtns{display:none!important;}}
+  /* D11 links (CLAUDE.md §6): "Worked in: → …" flash on arrival */
+  .idx-wkFlash{animation:idxwkflash 1.5s ease-out;} @keyframes idxwkflash{from{box-shadow:0 0 0 4px #93c5fd;}to{box-shadow:0 0 0 4px rgba(147,197,253,0);}}
+  .idx-wkA:hover{text-decoration:underline !important;} @media print{.idx-wk{display:none!important;}}
 </style>
 <!-- ═══════════════════════════════════════════════════════════════════════════
      Bridge Suite — shared DESIGN BEAM channel (v1)
@@ -2331,17 +2334,18 @@ function generateAremaReport({cfg, ap, data, govN, govX, govM, govFat, settings=
       <td style="padding:3px 7px;border:1px solid #e5e7eb;font-size:8pt;font-family:monospace">${formula}</td>
       <td style="padding:3px 7px;border:1px solid #e5e7eb;font-size:8pt;font-weight:${bold?700:400};color:${color||'#374151'};text-align:right;font-family:monospace">${value}</td>
     </tr>`;
-  const Sec = (title,{color='#1d4ed8',bg='#eff6ff',br=false}={})=>
-    `${br?'<div class="pb">':''}<h2 style="background:${bg};color:${color};padding:7px 14px;margin:18px 0 6px;border-left:4px solid ${color};font-size:11pt;font-family:monospace">${title}</h2>`;
-  const Sub = (t,{color='#374151'}={})=>
-    `<h3 style="color:${color};font-size:10pt;margin:14px 0 4px;font-family:monospace;border-bottom:1px solid #e5e7eb;padding-bottom:3px">${t}</h3>`;
+  // D11: optional cid = target id for the report's "see §n.k" links (idxCalcSheet)
+  const Sec = (title,{color='#1d4ed8',bg='#eff6ff',br=false,cid=''}={})=>
+    `${br?'<div class="pb">':''}<h2${cid?` data-cid="${cid}"`:''} style="background:${bg};color:${color};padding:7px 14px;margin:18px 0 6px;border-left:4px solid ${color};font-size:11pt;font-family:monospace">${title}</h2>`;
+  const Sub = (t,{color='#374151',cid=''}={})=>
+    `<h3${cid?` data-cid="${cid}"`:''} style="color:${color};font-size:10pt;margin:14px 0 4px;font-family:monospace;border-bottom:1px solid #e5e7eb;padding-bottom:3px">${t}</h3>`;
 
   // ── Calc detail section for one governing node ────────────────────────────
   const mkCalcDetail=(p,caseLabel,caseColor,caseBg,mc,mt,vn,denom,dV_denom,govCtrl,rfC_,rft_,rfv_,gRF)=>{
     if(!p) return '';
     const s=p.sec, a=p.allo;
     return `
-    ${Sub(caseLabel+` — Governing Node N${p.node} @ ${f(p.pos,2)} ft · Controls: ${govCtrl}`,{color:caseColor})}
+    ${Sub(caseLabel+` — Governing Node N${p.node} @ ${f(p.pos,2)} ft · Controls: ${govCtrl}`,{color:caseColor,cid:'ac'+caseLabel.split(' ')[0]})}
     <table style="width:100%;border-collapse:collapse;margin-bottom:8px">
       <colgroup><col style="width:38%"><col style="width:40%"><col style="width:22%"></colgroup>
       <tbody>
@@ -2357,6 +2361,7 @@ function generateAremaReport({cfg, ap, data, govN, govX, govM, govFat, settings=
       ${Row(tex('RF_{shear} = \\frac{V_n - V_{DL}}{dV}'),tex('\\frac{'+f(vn)+' - '+f(p.VDL)+'}{'+f(dV_denom)+'}'),f(rfv_,3),{bg:govCtrl==='Shear'?caseBg:'',color:rfC(rfv_),bold:govCtrl==='Shear'})}
       </tbody>
     </table>
+    <div class="cr-see-line"><a class="cr-see" data-see="avlp" data-txt="(1+I) = ${f(ap.f1pI,4)}, DF = ${ap.DF}"></a> · <a class="cr-see" data-see="alat" data-txt="CF factor and lateral effects"></a></div>
     <div style="padding:6px 12px;background:${caseColor};color:#fff;display:inline-block;border-radius:4px;margin-bottom:12px;font-family:monospace;font-size:10pt">
       RF = min(${f(rfC_,3)}, ${f(rft_,3)}, ${f(rfv_,3)}) = <strong>${f(gRF,3)}</strong> [${govCtrl}] — ${rfLbl(gRF)}
     </div>`;
@@ -2380,7 +2385,6 @@ function generateAremaReport({cfg, ap, data, govN, govX, govM, govFat, settings=
   const reportCSS = [
     '*{box-sizing:border-box;margin:0;padding:0}',
     'body{font-family:Arial,sans-serif;font-size:9pt;color:#1f2937;background:#fff;padding:0}',
-    '@page{margin:0.75in;size:letter}',
     '@media print{.pb{page-break-before:always}.no-print{display:none}body{padding:0}}',
     '@media screen{body{max-width:850px;margin:0 auto;padding:20px}.no-print{margin-bottom:16px}}',
     'h1{font-size:16pt;margin-bottom:4px}h2{font-size:11pt}h3{font-size:10pt}',
@@ -2397,7 +2401,7 @@ function generateAremaReport({cfg, ap, data, govN, govX, govM, govFat, settings=
     '.leg-item{display:flex;align-items:center;gap:4px}',
     '.leg-line{width:24px;height:3px;display:inline-block}',
   ].join('\n    ');
-  return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">
+  const html = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">
   <title>AREMA Load Rating Report</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css"/>
   <style>
@@ -2411,8 +2415,8 @@ function generateAremaReport({cfg, ap, data, govN, govX, govM, govFat, settings=
     <span style="font-size:11px;color:#6b7280;line-height:32px">Use browser Print → Save as PDF for best results. Recommend landscape if tables are wide.</span>
   </div>
 
-  ${show('cover')?`<!-- ═══════════════ COVER PAGE ═══════════════ -->
-  <div class="cover">
+  ${show('cover')?`<!-- ═══════════════ COVER PAGE ═══════════════ (D11: replaced by the calculation-sheet cover) -->
+  <div class="cover" data-cr-drop>
     <div style="font-size:10pt;color:#6b7280;letter-spacing:2px;text-transform:uppercase;margin-bottom:8px">AREMA Manual for Railway Engineering</div>
     <h1 style="color:#1d4ed8;margin-bottom:4px">LOAD RATING REPORT</h1>
     <div style="font-size:12pt;color:#374151;margin-bottom:24px">Allowable Stress Design — Chapter 15</div>
@@ -2434,7 +2438,7 @@ function generateAremaReport({cfg, ap, data, govN, govX, govM, govFat, settings=
   </div>`:''}
 
   ${show('toc')?`<!-- ═══════════════ TABLE OF CONTENTS ═══════════════ -->
-  <div style="page-break-after:avoid;margin-bottom:24px;padding:14px 20px;border:1px solid #e5e7eb;border-radius:6px;font-family:monospace">
+  <div data-cr-drop style="page-break-after:avoid;margin-bottom:24px;padding:14px 20px;border:1px solid #e5e7eb;border-radius:6px;font-family:monospace">
     <div style="font-size:11pt;font-weight:700;color:#1d4ed8;margin-bottom:10px;border-bottom:1px solid #e5e7eb;padding-bottom:6px">TABLE OF CONTENTS</div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 24px;font-size:9pt">
       ${['1. Bridge Geometry & Configuration','2. Cross-Section Properties',
@@ -2486,7 +2490,7 @@ function generateAremaReport({cfg, ap, data, govN, govX, govM, govFat, settings=
   </div>`:''}
   <div class="info-grid">
     <div>
-      ${[['Project / Bridge ID',cfg?.projectUser||'—'],['Date',cfg?.projectDate||today],
+      ${[['Project / Bridge ID',[cfg?.projectName,cfg?.projectBridgeId].filter(Boolean).join(' / ')||'—'],['Date',cfg?.projectDate||today],
          ['Structure Type','Girder–Floorbeam–Stringer grillage'],
          ['Span',f(gfsGeo.span,2)+' ft'],['Deck Width',f(gfsGeo.width,2)+' ft'],
          ['Skew (entry / exit)',f(+(cfg.gfs?.skewEntry||0),1)+'° / '+f(+(cfg.gfs?.skewExit||0),1)+'°']
@@ -2508,7 +2512,7 @@ function generateAremaReport({cfg, ap, data, govN, govX, govM, govFat, settings=
   ${Sec('1. Bridge Geometry &amp; Configuration',{color:'#1d4ed8',bg:'#eff6ff',br:true})}
   <div class="info-grid">
     <div>
-      ${[['Project / Bridge ID',cfg?.projectUser||'—'],['Date',cfg?.projectDate||today],
+      ${[['Project / Bridge ID',[cfg?.projectName,cfg?.projectBridgeId].filter(Boolean).join(' / ')||'—'],['Date',cfg?.projectDate||today],
          ['Total Span',f(totalLen,2)+' ft'],['No. of Spans',spans.length],
          ['Elements per Span',cfg?.elemsPerSpan||10],['Total Nodes',data.length]].map(([l,v])=>`
       <div class="info-row"><span class="info-label">${l}</span><span>${v}</span></div>`).join('')}
@@ -2707,7 +2711,7 @@ function generateAremaReport({cfg, ap, data, govN, govX, govM, govFat, settings=
   ${Sec('4. Rating Parameters &amp; Load Cases',{color:'#7c3aed',bg:'#f5f3ff',br:true})}
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
     <div>
-      ${Sub('Vertical Load Parameters')}
+      ${Sub('Vertical Load Parameters',{cid:'avlp'})}
       ${[...(isGFSRpt&&gfsInfo?.memberKey?[['Rated member (GFS)',gfsInfo.memberKey+' ('+(gfsInfo.memberType||'')+')']]:[]),
          ['Rated span L',f(ap.span,1)+' ft'+(ap.spanSource?' · '+ap.spanSource:'')],['Distribution factor DF',f(ap.DF,4)],
          ['Track gauge',f(ap.gauge,1)+' in'],['Governing axle load',f(ap.axle,1)+' k'],
@@ -2732,7 +2736,7 @@ function generateAremaReport({cfg, ap, data, govN, govX, govM, govFat, settings=
   </div>
 
   <!-- ═══════════════ SECTION 5: LATERAL FORCE CALCULATIONS ═══════════════ -->
-  ${Sec('5. Lateral Force Calculations — Overturning Couple Method',{color:'#c2410c',bg:'#fff7ed',br:true})}
+  ${Sec('5. Lateral Force Calculations — Overturning Couple Method',{color:'#c2410c',bg:'#fff7ed',br:true,cid:'alat'})}
   <p class="note" style="margin-bottom:8px">AREMA §1.3.4, §1.3.6, §1.3.7 · Lateral forces converted to additional vertical load on governing girder via overturning couple: R = F×H×d_max/Ix_grp</p>
   <table style="border-collapse:collapse;width:100%;margin-bottom:12px">
     <colgroup><col style="width:22%"><col style="width:8%"><col style="width:30%"><col style="width:12%"><col style="width:14%"><col style="width:14%"></colgroup>
@@ -2792,7 +2796,7 @@ function generateAremaReport({cfg, ap, data, govN, govX, govM, govFat, settings=
   </div>`:''}
 
   <!-- ═══════════════ SECTION 6: RATING RESULTS SUMMARY ═══════════════ -->
-  ${Sec('6. Rating Results — Summary',{color:'#374151',bg:'#f3f4f6',br:true})}
+  ${Sec('6. Rating Results — Summary',{color:'#374151',bg:'#f3f4f6',br:true,cid:'asum'})}
   <div class="sum-grid">
     ${[['NORMAL','#15803d','#f0fdf4','#86efac',govN,'gN','govN'],
        ['MAXIMUM','#c2410c','#fff7ed','#fdba74',govX,'gX','govX'],
@@ -2822,6 +2826,9 @@ function generateAremaReport({cfg, ap, data, govN, govX, govM, govFat, settings=
     </tr>`:'').join('')}
     </tbody>
   </table>
+  ${show('ratingCalcs')?`<div class="cr-see-line">${[['Normal',govN,'gN','ac8.2'],['Maximum',govX,'gX','ac8.3'],['Modified',govM,'gM','ac8.4'],['Fatigue',govFat,'rfFat','ac8.5']]
+    .filter(r=>r[1]).map(([l,g,k,c])=>`<a class="cr-see" data-see="${c}" data-txt="${l} RF ${f(g[k],3)}"></a>`).join(' · ')}</div>`:''}
+  <div data-cr-results="2"></div>
 
   <!-- ═══════════════ SECTION 7: RF ENVELOPE ═══════════════ -->
   ${Sec('7. RF Envelope',{color:'#374151',bg:'#f3f4f6',br:true})}
@@ -2833,7 +2840,7 @@ function generateAremaReport({cfg, ap, data, govN, govX, govM, govFat, settings=
   ${envelopeSVG}
 
   ${show('ratingCalcs')?`<!-- ═══════════════ SECTION 8: DETAILED CALCULATIONS ═══════════════ -->
-  ${Sec('8. Detailed Calculations at Governing Nodes',{color:'#1d4ed8',bg:'#eff6ff',br:true})}
+  ${Sec('8. Detailed Calculations at Governing Nodes',{color:'#1d4ed8',bg:'#eff6ff',br:true,cid:'acalc'})}
 
   ${Sub('8.1 Section Properties at Governing Node (Normal)',{color:'#15803d'})}
   ${sec&&allo?`<table style="border-collapse:collapse;width:100%;margin-bottom:10px">
@@ -2856,7 +2863,7 @@ function generateAremaReport({cfg, ap, data, govN, govX, govM, govFat, settings=
     govX.McX,govX.MtX,govX.VnX,govX.denomN,govX.dV_N,govX.govX,govX.rfcX,govX.rftX,govX.rfvX,govX.gX):''}
   ${govM?mkCalcDetail(govM,'8.4 Modified Rating (K-factor, wind+rock+long in denom)','#92400e','#fffbeb',
     govM.McX,govM.MtX,govM.VnX,govM.denomMod,govM.dV_mod,govM.govM,govM.rfcM,govM.rftM,govM.rfvM,govM.gM):''}
-  ${govFat?`${Sub('8.5 Fatigue Rating — AREMA §1.7  ·  Cat '+ap.fatCat+'  ·  SFT='+ap.SFT+' ksi  ·  α='+ap.fatAlpha+'  ·  β='+ap.fatBeta,{color:'#7e22ce'})}
+  ${govFat?`${Sub('8.5 Fatigue Rating — AREMA §1.7  ·  Cat '+ap.fatCat+'  ·  SFT='+ap.SFT+' ksi  ·  α='+ap.fatAlpha+'  ·  β='+ap.fatBeta,{color:'#7e22ce',cid:'ac8.5'})}
   <table style="border-collapse:collapse;width:100%;margin-bottom:10px">
     <tbody>
     ${Row('Stress range allowable SFT','AREMA §1.7 Category '+ap.fatCat,ap.SFT+' ksi')}
@@ -2871,7 +2878,7 @@ function generateAremaReport({cfg, ap, data, govN, govX, govM, govFat, settings=
   <div style="padding:6px 12px;background:#7e22ce;color:#fff;display:inline-block;border-radius:4px;font-family:monospace;font-size:10pt">
     RF_Fat = ${f(govFat.rfFat,3)} — ${rfLbl(govFat.rfFat)}
   </div>`:''}
-
+  <div data-cr-results="1"></div>
 
   `:''}  <!-- closes show('ratingCalcs') -->
 
@@ -2956,6 +2963,28 @@ function generateAremaReport({cfg, ap, data, govN, govX, govM, govFat, settings=
     Generated: ${today} · Spans: ${spans.map((s,i)=>`Span ${i+1}=${s}ft`).join(', ')} · Nodes: ${data.length}
   </div>
   </body></html>`;
+  // D11: calculation-sheet format (cover, references, contents, numbering, result lines, print header/footer)
+  const aRes = [['Normal rating (AREMA Table 15-1-11)',govN,'gN','govN','ac8.2'],
+                ['Maximum rating (Table 15-7-1)',govX,'gX','govX','ac8.3'],
+                ['Modified rating (Table 15-7-1, wind + rocking + longitudinal)',govM,'gM','govM','ac8.4'],
+                ['Fatigue (AREMA §1.7)',govFat,'rfFat',null,'ac8.5']]
+    .filter(r=>r[1]&&r[1][r[2]]!=null&&isFinite(r[1][r[2]]))
+    .map(([lbl,g,k,ck,cid])=>({label:lbl, val:'RF = '+f(g[k],3)+' (E-'+f(g[k]*80,1)+')',
+      ref:'AREMA Ch. 15 §7.3; N'+g.node+' @ '+f(g.pos,2)+' ft'+(ck&&g[ck]?'; '+g[ck]:''), see:show('ratingCalcs')?cid:'', ok:g[k]>=1}));
+  const aTb = { project: cfg?.projectName||cfg?.projectBridgeId||'', num: R2.arema_reportProjectNum||'',
+    desc: cfg?.projectName||cfg?.projectBridgeId||'', by: R2.arema_reportInspector||cfg?.projectUser||'',
+    date: R2.arema_reportRatingDate||cfg?.projectDate||today, chk: '', chkDate: '' };
+  return idxCalcSheet(html, {
+    title: 'Load Rating Report — AREMA', project: cfg?.projectName||cfg?.projectBridgeId||'Bridge Rating',
+    codes: 'AREMA Manual for Railway Engineering, Chapter 15 · Allowable Stress Design · Normal (Table 15-1-11) · Maximum & Modified (Table 15-7-1)',
+    tb: aTb, tool: 'MIDAS Civil MCT Generator — AREMA rating',
+    info: [['Bridge ID',cfg?.projectBridgeId],['Bridge Owner',R2.arema_reportOwner],['Rating Date',R2.arema_reportRatingDate||today],
+           ...(isGFSRpt&&gfsInfo?.memberKey?[['Rated member (GFS)',gfsInfo.memberKey+' ('+(gfsInfo.memberType||'')+')']]:[])],
+    gov: govN ? 'Normal rating: RF = '+f(govN.gN,3)+' (E-'+f(govN.gN*80,1)+') at N'+govN.node+' @ '+f(govN.pos,2)+' ft, '+(govN.govN||'')+' — '+rfLbl(govN.gN) : '',
+    refs: IDX_REFS_AREMA, results: aRes, resultsTitle: 'Results — Rating factors',
+    cover: show('cover'), toc: show('toc'),
+    note: 'Equations are shown symbolically, then with values substituted, then with the result. The rating ends with one result line per rating case (PASS: RF ≥ 1.0; E-rating = 80 × RF). Units: kip, ft, in, ksi as noted.',
+  });
 }
 
 // Strip characters MIDAS mojibakes (em/en dash, figure dash, minus sign, middot,
@@ -13197,6 +13226,8 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
       ratingDcLC, ratingDwLC, ratingLLposLC, ratingLLnegLC,
       ratingVehicleTon, ratingVehicleName,
       capAt,
+      // D11: the LL-scale product as the Inputs & Setup panel writes it (report §"Live-Load Scale Factor")
+      ratingLLScaleExpr: ratingLLFactors.filter(llFactorActive).map(f=>f.id==='im'?`(1+${f.value}/100)`:f.value).join(' × ')||'1',
       // ── handoff wiring: let App publish the external-demands payload from the sidebar ──
       isGFS, gfsMember, gfsMembers, aremaSpan: (_aremaParams&&_aremaParams.span)||0,
     });
@@ -13965,7 +13996,7 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
           </div>
 
           {/* ── LL Scale Factors (LLDF, IM, MPF, User) ── */}
-          <div style={{borderTop:'1px solid #e5e7eb',paddingTop:'12px'}}>
+          <div id="idx-ll-scale" style={{borderTop:'1px solid #e5e7eb',paddingTop:'12px'}}>
             <button onClick={()=>setRatingLLOpen(v=>!v)}
               style={{width:'100%',display:'flex',alignItems:'center',gap:'8px',background:'none',border:'none',cursor:'pointer',padding:'0',textAlign:'left',marginBottom:'8px'}}>
               <span style={{fontSize:'11.5px',fontWeight:'600',color:'#374151'}}>⚙ Live Load Scale Factors</span>
@@ -17517,6 +17548,8 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
                     <div style={{marginTop:'5px',fontSize:'9px',fontFamily:'monospace',fontWeight:'600',color:govAsdN.gN>=1?'#15803d':'#dc2626'}}>
                       {govAsdN.gN>=1?'✅ PASS':'❌ POSTING REQUIRED'}
                     </div>
+                    {aremaCalcX===''&&<IdxWorkedIn items={[{txt:'RF', label:'AREMA ASD Calculation Sheet',
+                      go:()=>idxGotoEl('idx-arema-calc')}]}/>}
                   </div>
                   )}
                   {/* MAXIMUM */}
@@ -17997,7 +18030,7 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
                   const eq  = {margin:'7px 0',fontSize:'13px'};
                   const note= {marginBottom:'5px',color:'#475569',fontSize:'10px'};
                   return (
-                    <div style={{background:'#f0f9ff',border:'1px solid #0369a1',borderRadius:'8px',padding:'12px 16px',marginBottom:'12px'}}>
+                    <div id="idx-arema-llf" style={{background:'#f0f9ff',border:'1px solid #0369a1',borderRadius:'8px',padding:'12px 16px',marginBottom:'12px'}}>
                       <div style={{display:'flex',alignItems:'center',gap:'8px',cursor:'pointer',marginBottom:showRocking?'12px':'0'}}
                         onClick={()=>setShowRocking(!showRocking)}>
                         <span style={{fontSize:'12px',fontWeight:'700',color:'#0369a1'}}>📐 Live Load Factors — Distribution, Impact (incl. Rocking) & Centrifugal Force</span>
@@ -18676,7 +18709,7 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
                       fontSize:'10px',fontWeight:'700',fontFamily:'monospace',color,marginTop:'6px'}}>{children}</div>
                   );
                   return (
-                  <div style={{background:'#fff',border:'2px solid #1d4ed8',borderRadius:'8px',marginBottom:'12px',overflow:'hidden'}}>
+                  <div id="idx-arema-calc" style={{background:'#fff',border:'2px solid #1d4ed8',borderRadius:'8px',marginBottom:'12px',overflow:'hidden'}}>
                     <div style={{padding:'10px 16px',background:'#1d4ed8',color:'#fff',display:'flex',alignItems:'center',gap:'10px'}}>
                       <span style={{fontSize:'13px',fontWeight:'700',fontFamily:'monospace'}}>📐 AREMA ASD Calculation Sheet</span>
                       <span style={{fontSize:'10px',fontFamily:'monospace',opacity:0.8}}>
@@ -18753,6 +18786,9 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
                     <Row tex={`dM = M_{LL}(1+I)\\,DF\\,(1+CF)`}
                          texF={`${fmt(p.MLL)} \\times ${fmt(f1pI,3)} \\times ${DF} \\times ${fmt(1+(CF_factor||0),4)}`}
                          value={`${fmt(dM)} ft-kips`} bold bg="#f9fafb"/>
+                    <IdxWorkedIn sx={{margin:0,padding:'3px 8px 4px',borderBottom:'1px solid #f3f4f6'}} items={[{txt:'1 + I, DF, 1 + CF',
+                      label:'AREMA Rating · Live Load Factors — Distribution, Impact & Centrifugal Force',
+                      go:()=>{ setShowRocking(true); idxGotoEl('idx-arema-llf'); }}]}/>
                     <Row label={`Denom_N = dM (LL+I+CF)`}
                          formula="LL × (1+I) × DF × (1+CF) — Normal & Maximum denominator"
                          value={`${fmt(p.denomN)} ft-kips`} bold bg="#f0fdf4"/>
@@ -18897,7 +18933,7 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
                         w.document.write(`<html><head><title>Rating Report Card</title>
                           <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet"/>
                           <style>*{box-sizing:border-box}body{font-family:'IBM Plex Sans',sans-serif;padding:20px;max-width:780px;margin:0 auto}
-                          @media print{body{padding:0}button{display:none}}</style></head><body>
+                          @media print{body{padding:0}button{display:none}} .idx-wk{display:none}</style></head><body>
                           ${el.innerHTML}
                           <button onclick="window.print()" style="margin-top:16px;background:#1d4ed8;color:#fff;border:none;padding:10px 24px;border-radius:6px;cursor:pointer;font-size:14px">🖨 Print</button>
                           </body></html>`);
@@ -18956,6 +18992,8 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
                           </div>
                         ))}
                       </div>
+                      <IdxWorkedIn sx={{margin:'-14px 0 16px'}} items={[{txt:`LL scale ×${ratingLLScale.toFixed(4)}`, label:'AASHTO Rating · Inputs & Setup · Live Load Scale Factors',
+                        go:()=>{ setRatingSubTab('inputs'); setRatingLLOpen(true); idxGotoEl('idx-ll-scale'); }}]}/>
 
                       {/* THE RATING BOX */}
                       <div style={{border:'2px solid #e5e7eb',borderRadius:'8px',overflow:'hidden',marginBottom:'20px'}}>
@@ -19074,6 +19112,8 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
                             </span>
                           </div>
                         </div>
+                        {govAsdN&&aremaCalcX===''&&<IdxWorkedIn items={[{txt:`Normal RF ${govAsdN.gN.toFixed(3)} (N${govAsdN.node})`,
+                          label:'AREMA Rating · AREMA ASD Calculation Sheet', go:()=>{ if(setStep) setStep(10); idxGotoEl('idx-arema-calc'); }}]}/>}
                         {/* AREMA section props summary */}
                         {(()=>{
                           const aremaZone = capZones.find(z=>z.type==='arema');
@@ -19668,13 +19708,184 @@ const DEFAULT_CFG = {
 // loadCombos is computed from deadLoads so it can reference names
 DEFAULT_CFG.loadCombos = buildDefaultCombos(DEFAULT_CFG.deadLoads);
 
+/* D11 (2026-10-18): calculation-sheet report in the Gusset Plate Rating / ST-Girder format.
+   Both reports ("Generate Report": generateReportHTML; "Print AREMA Report": generateAremaReport)
+   are passed through idxCalcSheet(), which adds the cover with the title block, the references,
+   a numbered table of contents with links, numbers the sections n and subsections n.k, inserts
+   the result lines (RF and PASS/FAIL from the tool's own values) and the print header / "Page X
+   of Y" footer (@page margin boxes, idxPageCSS, print only). Nothing is recomputed here. */
+const IDX_REFS_MBE=[
+  ['AASHTO MBE','Manual for Bridge Evaluation: 6A.4.2.1 (LRFR rating equation; Eq. 6A.4.2.1-3, φc·φs ≥ 0.85), Table 6A.4.2.2-1 (load factors), Table 6A.4.2.3-1 (condition factor φc), Table 6A.4.2.4-1 (system factor φs), 6A.8 (posting), Section 6B (LFR). Edition: verify'],
+  ['AASHTO LRFD','Bridge Design Specifications: 3.6.1.2.2 / 3.6.1.2.3 (HL-93 truck and tandem), 3.6.2.1 (dynamic load allowance IM), 4.6.2.2 (distribution factor g), Table 3.4.1-1 (load factors). 10th Ed. where the tool states one; otherwise edition: verify'],
+  ['MIDAS Civil','Analysis results (beam forces) pasted from the MIDAS model built from the MCT file in this report'],
+];
+const IDX_REFS_AREMA=[
+  ['AREMA Ch. 15','Manual for Railway Engineering, Chapter 15 (Steel Structures): §7.3 (rating), Table 15-1-11 (Normal allowable stresses), Table 15-7-1 (Maximum and Modified), §1.3.1 / §1.3.3 / §1.3.4 / §1.3.6 / §1.3.7 (impact, longitudinal, lateral, rocking, centrifugal and wind forces), §1.5.8 (net section), §1.7 (fatigue), §1.12.3 (lateral-torsional buckling). Edition: verify'],
+  ['MIDAS Civil','Analysis results (beam forces) pasted from the MIDAS model built from the MCT file of this project'],
+];
+function idxEsc(v){ return String(v==null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+// KaTeX → HTML string (the report window has no KaTeX script; the CSS link is in its head)
+function idxTex(latex,display){
+  try { return window.katex ? window.katex.renderToString(String(latex),{throwOnError:false,displayMode:!!display,output:'html'}) : idxEsc(latex); }
+  catch(e){ return idxEsc(latex); }
+}
+// tb = {project, num, desc, by, date, chk, chkDate}
+function idxPageCSS(tb,tool){
+  const esc=v=>String(v==null||v===''?'—':v).replace(/\\/g,'\\\\').replace(/"/g,'\\"').replace(/\n/g,' ');
+  const box='font: 9.5pt "Times New Roman", Times, serif; color: #000; white-space: pre; vertical-align: bottom; padding-bottom: 6pt;';
+  return '@media print { @page { size: letter portrait; margin: 0.95in 0.6in 0.7in 0.6in;'+
+    ' @top-left { content: "Project No: '+esc(tb.num)+'\\A Description: '+esc(String(tb.desc||tb.project||'Bridge').slice(0,38))+'"; '+box+' text-align: left; }'+
+    ' @top-center { content: "Computed By: '+esc(tb.by)+'\\A Checked By: '+esc(tb.chk)+'"; '+box+' text-align: left; }'+
+    ' @top-right { content: "Date: '+esc(tb.date)+'\\A Date: '+esc(tb.chkDate)+'"; '+box+' text-align: right; }'+
+    ' @bottom-left { content: "'+esc(tb.project||'Untitled')+' ('+esc(tool)+')"; font: 9pt "Times New Roman", Times, serif; vertical-align: top; padding-top: 6pt; }'+
+    ' @bottom-right { content: "Page " counter(page) " of " counter(pages); font: 9pt "Times New Roman", Times, serif; vertical-align: top; padding-top: 6pt; } } }';
+}
+const IDX_CR_CSS=[
+  'body.crdoc{background:#fff;color:#000;font:11pt/1.35 "Times New Roman",Times,serif;}',
+  '.crdoc a{color:#000;text-decoration:none;}',
+  '.crdoc .cr-cover{min-height:8.4in;display:flex;flex-direction:column;justify-content:center;break-after:page;}',
+  '.crdoc .cr-cover-t{text-align:center;margin-bottom:28pt;}',
+  '.crdoc .cr-cover h1{font:700 25pt/1.2 Arial,Helvetica,sans-serif;margin:0 0 14pt;border:0;color:#000;}',
+  '.crdoc .cr-cover p{font:700 13pt Arial,Helvetica,sans-serif;margin:0 0 6pt;}',
+  '.crdoc .cr-cover .cr-cover-p{font-weight:400;}',
+  '.crdoc .cr-tb{display:grid;grid-template-columns:repeat(3,1fr);gap:2px 14px;border:1px solid #000;padding:6px 8px;font-size:10pt;margin-bottom:10px;}',
+  '.crdoc .cr-info{display:grid;grid-template-columns:repeat(2,1fr);gap:2px 14px;font-size:10pt;margin:4px 0 8px;}',
+  '.crdoc .cr-desc{font-size:10pt;margin:4px 0 8px;white-space:pre-wrap;}',
+  '.crdoc .cr-gov{font-size:10.5pt;margin:10pt 0 0;text-align:center;}',
+  '.crdoc .cr-front{break-after:page;}',
+  '.crdoc h2.cr-h1{font:700 12pt "Times New Roman",Times,serif;text-decoration:underline;text-transform:uppercase;border:0;margin:0 0 8pt;padding:0;background:none;color:#000;break-after:avoid;}',
+  '.crdoc h2.cr-break{break-before:page;}',
+  '.crdoc .cr-front h2.cr-h1{margin-top:10pt;}',
+  '.crdoc h3.cr-h2{font:700 11pt "Times New Roman",Times,serif;color:#000;border:0;margin:12pt 0 4pt;padding:0;background:none;break-after:avoid;}',
+  '.crdoc table.cr-refs{border-collapse:collapse;margin:0 0 14pt;width:auto;} .crdoc .cr-refs tr{background:none;} .crdoc .cr-refs td{padding:1pt 16pt 1pt 0;vertical-align:top;border:0;background:none;font-size:10.5pt;} .crdoc .cr-refs td:first-child{white-space:nowrap;}',
+  '.crdoc .cr-toc,.crdoc .cr-toc ol{list-style:none;margin:0;padding:0;} .crdoc .cr-toc>li{margin:3pt 0;} .crdoc .cr-toc ol{padding-left:18pt;font-size:10.5pt;}',
+  '.crdoc .cr-small{font-size:9.5pt;margin-top:18pt;}',
+  '.crdoc .cr-resh{font:700 11pt "Times New Roman",Times,serif;margin:12pt 0 2pt;break-after:avoid;}',
+  '.crdoc .cr-line{display:grid;grid-template-columns:2.6in 1fr 0.8in;gap:0 12pt;align-items:center;padding:3pt 0;break-inside:avoid;}',
+  '.crdoc .cr-res{border-top:0.6pt solid #000;} .crdoc .cr-results{border-bottom:0.8pt solid #000;margin-bottom:8pt;}',
+  '.crdoc .cr-r{text-align:right;} .crdoc .cr-st-fail{text-decoration:underline;} .crdoc .cr-refi{font-size:9pt;font-style:italic;}',
+  '.crdoc .cr-see-line{font-size:9.5pt;font-style:italic;margin:2pt 0 8pt;}',
+  '.crdoc table.cr-wk{border-collapse:collapse;margin:2pt 0 8pt;width:100%;} .crdoc .cr-wk tr{background:none;} .crdoc .cr-wk td{border:0;padding:2pt 8pt 2pt 0;vertical-align:middle;background:none;}',
+  '.crdoc .cr-wk-note{font-size:9.5pt;margin:0 0 4pt;}',
+  '.crdoc .page-break,.crdoc .pb{break-before:auto!important;page-break-before:auto!important;}',
+  '@media screen{body.crdoc{padding:16px 24px;}}',
+].join('\n');
+// rows: [{label, val, ref, see (data-cid of the worked subsection), ok (true/false/null)}]
+function idxResultBlock(rows){
+  if(!rows||!rows.length) return '';
+  return '<div class="cr-results">'+rows.map(r=>{
+    const st=r.ok==null?'N/A':(r.ok?'PASS':'FAIL');
+    return '<div class="cr-line cr-res"><div class="cr-d">'+idxEsc(r.label)+':</div>'+
+      '<div class="cr-m"><b>'+idxEsc(r.val)+'</b> <span class="cr-refi">('+idxEsc(r.ref)+
+      (r.see?'; <a class="cr-see" data-see="'+idxEsc(r.see)+'"></a>':'')+')</span></div>'+
+      '<div class="cr-r'+(r.ok===false?' cr-st-fail':'')+'"><b>'+st+'</b></div></div>';
+  }).join('')+'</div>';
+}
+/* Post-process a report: o = {title, project, codes, tb, info:[[k,v]], desc, gov, refs, results,
+   resultsTitle, note, cover:true, toc:true}. Elements marked data-cr-drop are removed (the old
+   cover / contents). h2 → "n. Title", h3 under it → "n.k Title" (the builders' own numbers are
+   replaced). a.cr-see[data-see=cid] → "see §n.k" (target: h2/h3 with data-cid). The result block
+   replaces the [data-cr-results] placeholder with the lowest value. */
+function idxCalcSheet(html,o){
+  let doc=null;
+  try{ doc=new DOMParser().parseFromString(html,'text/html'); }catch(e){ doc=null; }
+  if(!doc||!doc.body) return html;
+  const body=doc.body, E=(t,c,h)=>{ const e=doc.createElement(t); if(c) e.className=c; if(h!=null) e.innerHTML=h; return e; };
+  body.classList.add('crdoc');
+  body.querySelectorAll('[data-cr-drop]').forEach(e=>e.remove());
+  body.querySelectorAll('.page-break').forEach(e=>e.remove());
+  // results block (before numbering, so a heading inside it would be counted; it has none)
+  const ph=[...body.querySelectorAll('[data-cr-results]')].sort((a,b)=>(+a.dataset.crResults)-(+b.dataset.crResults));
+  ph.forEach((p,i)=>{
+    if(i===0&&o.results&&o.results.length){
+      const box=E('div','cr-resblock','<div class="cr-resh">'+idxEsc(o.resultsTitle||'Results')+'</div>'+idxResultBlock(o.results));
+      p.replaceWith(box);
+    } else p.remove();
+  });
+  // numbering
+  const toc=[], cid={}; let n=0, k=0, cur=null;
+  const strip=t=>String(t||'').replace(/\s+/g,' ').trim().replace(/^\d+[a-z]?(\.\d+)*\.?\s+/,'');
+  body.querySelectorAll('h2,h3').forEach(h=>{
+    const t=strip(h.textContent);
+    if(h.tagName==='H2'){
+      n++; k=0; h.id='crs-'+n; h.textContent=n+'. '+t; h.removeAttribute('style');
+      h.className='cr-h1'+(n>1?' cr-break':''); cur={n,t,id:h.id,subs:[]}; toc.push(cur);
+      if(h.dataset.cid) cid[h.dataset.cid]={num:String(n),id:h.id};
+    } else if(cur){
+      k++; h.id='crs-'+n+'-'+k; h.textContent=n+'.'+k+' '+t; h.removeAttribute('style'); h.className='cr-h2';
+      cur.subs.push({t,id:h.id,num:n+'.'+k});
+      if(h.dataset.cid) cid[h.dataset.cid]={num:n+'.'+k,id:h.id};
+    }
+  });
+  // "see §n.k" links
+  body.querySelectorAll('a.cr-see').forEach(a=>{
+    const hit=cid[a.dataset.see]; const pre=a.dataset.txt?a.dataset.txt+': ':'';
+    if(hit){ a.textContent=pre+'see §'+hit.num; a.setAttribute('href','#'+hit.id); }
+    else { a.textContent=pre+'worked section not in this printout'; a.removeAttribute('href'); }
+  });
+  // front matter
+  const front=E('div','cr-frontall');
+  if(o.cover!==false){
+    const tb=o.tb||{}, v=x=>idxEsc(x==null||x===''?'—':x);
+    const cov=E('section','cr-cover');
+    cov.appendChild(E('div','cr-cover-t','<h1>'+idxEsc(o.title)+'</h1><p>'+idxEsc(o.project||'Untitled')+'</p>'+
+      (o.codes?'<p class="cr-cover-p">'+idxEsc(o.codes)+'</p>':'')));
+    cov.appendChild(E('div','cr-tb',[['Project',tb.project],['Project No.',tb.num],['Computed by',tb.by],
+      ['Date',tb.date],['Checked by',tb.chk],['Checked date',tb.chkDate]].map(([a,b])=>'<div><b>'+a+':</b> '+v(b)+'</div>').join('')));
+    if(o.info&&o.info.length) cov.appendChild(E('div','cr-info',o.info.map(([a,b])=>'<div><b>'+idxEsc(a)+':</b> '+v(b)+'</div>').join('')));
+    if(o.desc) cov.appendChild(E('div','cr-desc',idxEsc(o.desc)));
+    if(o.gov) cov.appendChild(E('div','cr-gov',idxEsc(o.gov)));
+    front.appendChild(cov);
+  }
+  const fm=E('section','cr-front');
+  fm.appendChild(E('h2','cr-h1','References:'));
+  fm.appendChild(E('table','cr-refs','<tbody>'+(o.refs||[]).map(([a,b])=>'<tr><td>'+idxEsc(a)+'</td><td>'+idxEsc(b)+'</td></tr>').join('')+'</tbody>'));
+  if(o.toc!==false){
+    fm.appendChild(E('h2','cr-h1','Table of contents:'));
+    fm.appendChild(E('ol','cr-toc',toc.map(s=>'<li><a href="#'+s.id+'">'+s.n+'. '+idxEsc(s.t)+'</a>'+
+      (s.subs.length?'<ol>'+s.subs.map(q=>'<li><a href="#'+q.id+'">'+q.num+'. '+idxEsc(q.t)+'</a></li>').join('')+'</ol>':'')+'</li>').join('')));
+  }
+  if(o.note) fm.appendChild(E('p','cr-small',idxEsc(o.note)));
+  front.appendChild(fm);
+  body.insertBefore(front, body.firstChild);
+  const st=doc.createElement('style'); st.textContent=IDX_CR_CSS+'\n'+idxPageCSS(o.tb||{},o.tool||'MCT Generator');
+  doc.head.appendChild(st);
+  return '<!DOCTYPE html>'+doc.documentElement.outerHTML;
+}
+
+/* ---- D11 links (CLAUDE.md §6, 2026-10-18): a value quoted away from where it is worked links to it.
+   items: [{txt, label, go}] — go() switches the step / sub-tab / panel; idxGotoEl scrolls and flashes. */
+function IdxWorkedIn({items, sx}){
+  return (<div className="idx-wk" style={{fontSize:'10px',color:'#6b7280',margin:'5px 0 0',fontFamily:'monospace',...(sx||{})}}>
+    Worked in:{' '}{items.map((it,i)=>(<React.Fragment key={i}>{i?' · ':''}<a href="#" className="idx-wkA"
+      style={{color:'#1d4ed8',textDecoration:'none',cursor:'pointer'}}
+      onClick={e=>{e.preventDefault(); e.stopPropagation(); it.go();}}>{it.txt?it.txt+' → ':''}{it.label}</a></React.Fragment>))}
+  </div>);
+}
+function idxGotoEl(id){
+  let n=0;
+  const t=()=>{ const e=document.getElementById(id);
+    if(!e){ if(++n<40) setTimeout(t,50); return; }
+    // Scroll only the nearest scrolling panel (scrollIntoView would also shift the fixed app frame).
+    let sc=null;
+    for(let q=e.parentElement;q&&q!==document.body;q=q.parentElement){
+      const oy=getComputedStyle(q).overflowY;
+      if((oy==='auto'||oy==='scroll')&&q.scrollHeight>q.clientHeight){ sc=q; break; }
+    }
+    if(sc) sc.scrollTo({top:e.getBoundingClientRect().top-sc.getBoundingClientRect().top+sc.scrollTop-8,behavior:'smooth'});
+    else e.scrollIntoView({behavior:'smooth',block:'start'});
+    e.classList.remove('idx-wkFlash'); void e.offsetWidth; e.classList.add('idx-wkFlash');
+    setTimeout(()=>e.classList.remove('idx-wkFlash'),1500); };
+  setTimeout(t,60);
+}
+
 // ── Report Generator ─────────────────────────────────────────────────────────
 function generateReportHTML({ cfg, mctOutput, rows, nodePositions, ratingData,
     ratingCapZones, resultsCombos, capAt, phiC, phiS, ratingPhiF, ratingPhiV,
     gamDC, gamDW, gamLL, ratingLLScale, ratingLLScaleMn, ratingLLScaleV, dfSplit,
     ratingVehicleTon, ratingVehicleName,
     ratingDcLC, ratingDwLC, ratingLLposLC, ratingLLnegLC,
-    ratingMethod, ratingLimitState, ratingLevel, ratingEta, chartImages }) {
+    ratingMethod, ratingLimitState, ratingLevel, ratingEta, chartImages, ratingLLScaleExpr }) {
 
   const DLL = cfg.deadLoadLabels||{deckSlab:'Deck Slab',haunch:'Haunch',barrier:'Movable Barrier',diaphragm:'Diaphragm'};
   const totalLen = (cfg.spans||[]).reduce((a,b)=>a+b,0);
@@ -19684,7 +19895,6 @@ function generateReportHTML({ cfg, mctOutput, rows, nodePositions, ratingData,
   const css = `
     *{box-sizing:border-box;margin:0;padding:0}
     body{font-family:'Segoe UI',system-ui,sans-serif;font-size:11pt;color:#1a1a1a;background:#fff;padding:0}
-    @page{size:A4 portrait;margin:18mm 14mm 18mm 14mm}
     @media print{.no-print{display:none!important} .page-break{page-break-before:always} body{padding:0}}
     h1{font-size:18pt;font-weight:700;color:#1d4ed8;margin-bottom:4px}
     h2{font-size:13pt;font-weight:700;color:#1d4ed8;margin:18px 0 8px;padding-bottom:5px;border-bottom:2px solid #e5e7eb}
@@ -19734,26 +19944,16 @@ function generateReportHTML({ cfg, mctOutput, rows, nodePositions, ratingData,
     .sort((a,b)=>a[1]-b[1])
     .map(([node,pos])=>({node:parseInt(node),pos}));
 
-  // ── SECTION: Project Info ──
-  const secProject = `
-    <div class="cover">
-      <h1>Bridge Rating & MCT Report</h1>
-      <div style="font-size:14pt;color:#374151;margin-top:4px">${cfg.projectName||'(unnamed project)'}</div>
-      ${cfg.projectBridgeId?`<div style="font-size:11pt;color:#6b7280">${cfg.projectBridgeId}</div>`:''}
-      <div class="meta">
-        ${[
+  // ── SECTION: Project Info ── (D11: printed on the calculation-sheet cover by idxCalcSheet)
+  const projMeta = [
+          ['Bridge ID',       cfg.projectBridgeId||'—'],
           ['Client / Owner',  cfg.projectClient||'—'],
-          ['Engineer',        cfg.projectUser||'—'],
-          ['Date',            cfg.projectDate||'—'],
           ['Revision',        cfg.projectRevision||'0'],
           ['Address',         cfg.projectAddress||'—'],
           ['MIDAS Version',   cfg.version||'—'],
           ['Report Generated',now],
           ['Rating Method',   `${ratingMethod||'LRFR'} · ${ratingLimitState||'Strength I'} · ${ratingLevel||'Inventory'}`],
-        ].map(([l,v])=>`<div class="meta-item"><span class="meta-label">${l}</span><span class="meta-value">${v}</span></div>`).join('')}
-      </div>
-      ${cfg.projectDesc?`<div style="margin-top:12px;padding:10px;background:#f8fafc;border-radius:5px;font-size:10pt;color:#374151;border-left:3px solid #1d4ed8">${cfg.projectDesc}</div>`:''}
-    </div>`;
+  ];
 
   // ── SECTION: Model Inputs ──
   const secGeometry = `
@@ -19933,10 +20133,10 @@ function generateReportHTML({ cfg, mctOutput, rows, nodePositions, ratingData,
 
   const secRatingInputs = (ratingCapZones&&ratingCapZones.length>0) ? `
     <div class="page-break"></div>
-    <h2>9. Rating — Inputs & Method</h2>
+    <h2 data-cid="rinp">9. Rating — Inputs & Method</h2>
     <div class="two-col">
       <div>
-        <h3>Method & Load Factors</h3>
+        <h3 data-cid="rmeth">Method & Load Factors</h3>
         <table>
           <tbody>
             <tr><td>Method</td><td class="mono">${ratingMethod||'LRFR'}</td></tr>
@@ -19946,7 +20146,7 @@ function generateReportHTML({ cfg, mctOutput, rows, nodePositions, ratingData,
             <tr><td>γ_DW</td><td class="mono">${gamDW}</td></tr>
             <tr><td>γ_LL</td><td class="mono">${gamLL}</td></tr>
             <tr><td>LL Scale (LLDF·IM·MPF·…)</td><td class="mono">×${(ratingLLScale||1).toFixed(4)}${
-              dfSplit?'  (positive moment)':''}</td></tr>
+              dfSplit?'  (positive moment)':''}${ratingLLScaleExpr?' (<a class="cr-see" data-see="rscale"></a>)':''}</td></tr>
             ${dfSplit?`<tr><td>LL Scale — hogging moment</td><td class="mono">×${(ratingLLScaleMn||ratingLLScale||1).toFixed(4)}</td></tr>
             <tr><td>LL Scale — shear</td><td class="mono">×${(ratingLLScaleV||ratingLLScale||1).toFixed(4)}</td></tr>`:''}
             <tr><td>η Load Modifier</td><td class="mono">not used (MBE 6A LRFR has no η)</td></tr>
@@ -19971,7 +20171,11 @@ function generateReportHTML({ cfg, mctOutput, rows, nodePositions, ratingData,
         </table>
       </div>
     </div>
-    <h3>Capacity Zones</h3>
+    ${ratingLLScaleExpr?`<h3 data-cid="rscale">Live-Load Scale Factor</h3>
+    <p class="cr-wk-note">Product of the enabled live-load factors (Rating step, Inputs &amp; Setup, Live Load Scale Factors); g = distribution factor, IM = dynamic load allowance (skipped when the MCT already carries it), m = multiple presence factor.</p>
+    <table class="cr-wk"><tbody><tr><td>${idxTex('s = '+ratingLLScaleExpr.replace(/ × /g,' \\times ')+' = '+(ratingLLScale||1).toFixed(4),true)}</td></tr></tbody></table>
+    ${dfSplit?`<p class="cr-wk-note">Each action is rated on its own distribution factor: s(M⁺) = ${(ratingLLScale||1).toFixed(4)}, s(M⁻) = ${(ratingLLScaleMn||ratingLLScale||1).toFixed(4)}, s(V) = ${(ratingLLScaleV||ratingLLScale||1).toFixed(4)}.</p>`:''}`:''}
+    <h3 data-cid="rcap">Capacity Zones</h3>
     <table>
       <thead><tr><th>Zone</th><th>Start (ft)</th><th>End (ft)</th><th>Type</th><th>Mn⁺ (ft·k)</th><th>Mn⁻ (ft·k)</th><th>Vn (kips)</th><th>φMn⁺</th><th>φMn⁻</th><th>φVn</th></tr></thead>
       <tbody>
@@ -19998,8 +20202,52 @@ function generateReportHTML({ cfg, mctOutput, rows, nodePositions, ratingData,
 
   const rfCol = rf => rf>=1?'rf-ok':rf>=0.3?'rf-warn':'rf-fail';
 
+  // D11 (2026-10-18): each rated action worked at the node where its RF is lowest, from the
+  // tool's own ratingData values (C, DC, DW, LL, s and RF as computed by the rating step).
+  const rateRef = (ratingMethod||'LRFR')==='LFR' ? 'MBE Section 6B (LFR)' : 'MBE 6A.4.2.1';
+  const rateLbl = `${ratingLimitState||'Strength I'}, ${ratingLevel||'Inventory'}`;
+  const govCid  = g => g==='M+'?'w-mpos':g==='M-'?'w-mneg':'w-v';
+  const rateResults = [];
+  const secWorked = !hasRating ? '' : (()=>{
+    const sM=ratingLLScale||1, sMn=ratingLLScaleMn??sM, sV=ratingLLScaleV??sM;
+    const n2=v=>(+v||0).toFixed(2), U={m:'\\ \\text{ft}\\cdot\\text{k}', v:'\\ \\text{kips}'};
+    const acts=[
+      {id:'w-mpos', rf:'rfMpos', t:'Positive flexure M⁺', C:'CmnPos', Rn:'MnPos', phi:ratingPhiF, ps:'\\varphi_f', rs:'M_n^{+}', D:'Mdc', W:'Mdw', L:'Mllpos', s:sM, u:U.m,
+        lc:`DC = |M| from "${ratingDcLC||'—'}", DW = |M| from "${ratingDwLC||'(none)'}", LL = sagging M from "${ratingLLposLC||'—'}"`},
+      {id:'w-mneg', rf:'rfMneg', t:'Negative flexure M⁻', C:'CmnNeg', Rn:'MnNeg', phi:ratingPhiF, ps:'\\varphi_f', rs:'M_n^{-}', D:'Mdc', W:'Mdw', L:'Mllneg', s:sMn, u:U.m,
+        lc:`DC = |M| from "${ratingDcLC||'—'}", DW = |M| from "${ratingDwLC||'(none)'}", LL = hogging |M| from "${ratingLLnegLC||ratingLLposLC||'—'}"`},
+      {id:'w-v', rf:'rfV', t:'Shear V', C:'Cvn', Rn:'Vn', phi:ratingPhiV, ps:'\\varphi_v', rs:'V_n', D:'Vdc', W:'Vdw', L:'Vll', s:sV, u:U.v,
+        lc:`DC = |V| from "${ratingDcLC||'—'}", DW = |V| from "${ratingDwLC||'(none)'}", LL = larger |V| of "${ratingLLposLC||'—'}" and "${ratingLLnegLC||ratingLLposLC||'—'}"`},
+    ];
+    return acts.map(a=>{
+      const cand=ratingData.filter(p=>p[a.rf]!=null&&isFinite(p[a.rf]));
+      if(!cand.length){
+        rateResults.push({label:`${a.t} (${rateLbl})`, val:'RF = n/a', ref:`${rateRef}; no live-load effect of this sense at any node`, see:a.id, ok:null});
+        return `<h3 data-cid="${a.id}">Worked Rating Factor — ${a.t}</h3><p class="cr-wk-note">No live-load ${a.L==='Vll'?'shear':'moment'} of this sense at any node, so this action is not rated (RF shown as "—" in the table below).</p>`;
+      }
+      const p=cand.reduce((x,y)=>x[a.rf]<y[a.rf]?x:y,cand[0]);   // ties → last node, as govRating
+      const cap=capAt?capAt(p.pos):null, Rn=cap?cap[a.Rn]:null;
+      const rf=p[a.rf];
+      rateResults.push({label:`${a.t} (${rateLbl})`, val:'RF = '+rf.toFixed(3), ref:`${rateRef}; node ${p.node}, x = ${p.pos.toFixed(2)} ft`, see:a.id, ok:rf>=1});
+      const eqC = Rn!=null&&isFinite(Rn)
+        ? `C = \\varphi_c\\,\\varphi_s\\,${a.ps}\\,${a.rs} = ${phiC}\\times ${phiS}\\times ${a.phi}\\times ${(+Rn).toFixed(1)} = ${p[a.C]}${a.u}`
+        : `C = \\varphi_c\\,\\varphi_s\\,${a.ps}\\,${a.rs} = ${p[a.C]}${a.u}`;
+      const eqR = `RF = \\frac{C-\\gamma_{DC}\\,DC-\\gamma_{DW}\\,DW}{\\gamma_{LL}\\,s\\,LL} = \\frac{${p[a.C]}-${gamDC}\\times ${n2(p[a.D])}-${gamDW}\\times ${n2(p[a.W])}}{${gamLL}\\times ${(+a.s).toFixed(4)}\\times ${n2(p[a.L])}} = ${rf.toFixed(3)}`;
+      return `<h3 data-cid="${a.id}">Worked Rating Factor — ${a.t} at Node ${p.node} (x = ${p.pos.toFixed(2)} ft)</h3>
+    <p class="cr-wk-note">Lowest ${a.t.charAt(0).toLowerCase()+a.t.slice(1)} RF of all nodes. Unfactored MIDAS results at node ${p.node}: ${idxEsc(a.lc)} (largest of the element-end values at the node). s = live-load scale factor${ratingLLScaleExpr?' (<a class="cr-see" data-see="rscale"></a>)':''}; capacity: <a class="cr-see" data-see="rcap"></a>.</p>
+    <table class="cr-wk"><tbody>
+      <tr><td>${idxTex(eqC,true)}</td></tr>
+      <tr><td>${idxTex(eqR,true)}</td></tr>
+    </tbody></table>
+    <p class="cr-wk-note">${a.t}: RF = ${rf.toFixed(3)} ${rf>=1?'≥':'<'} 1.0 → ${rf>=1?'PASS':'FAIL'}.</p>`;
+    }).join('');
+  })();
+  if(hasRating&&govRating) rateResults.push({label:`Governing rating factor (${rateLbl})`,
+    val:`RF = ${govRating.rfGov.toFixed(3)} → ${govRating.rfTons.toFixed(1)} tons`,
+    ref:`${ratingVehicleName||'rated vehicle'}, ${ratingVehicleTon||36} t; node ${govRating.node}`, see:govCid(govRating.governs), ok:govRating.rfGov>=1});
+
   const secRatingResults = hasRating ? `
-    <h2>${(ratingCapZones&&ratingCapZones.length>0)?'10':'9'}. Rating Factor Results</h2>
+    <h2 data-cid="rres">${(ratingCapZones&&ratingCapZones.length>0)?'10':'9'}. Rating Factor Results</h2>
     ${govRating?`
     <div class="kv-grid">
       ${[
@@ -20014,6 +20262,7 @@ function generateReportHTML({ cfg, mctOutput, rows, nodePositions, ratingData,
         ['φ_c · φ_s',         `${phiC} · ${phiS}`],
       ].map(([l,v])=>`<div class="kv"><div class="kv-label">${l}</div><div class="kv-val ${l==='AASHTO Rating RF'?rfCol(govRating.rfGov):''}">${v}</div></div>`).join('')}
     </div>
+    <div class="cr-see-line">AASHTO Rating RF ${govRating.rfGov.toFixed(3)}: <a class="cr-see" data-see="${govCid(govRating.governs)}"></a></div>
     ${govRating.rfGov<1?`
     <div style="margin-bottom:14px;padding:10px 14px;background:#fee2e2;border:1px solid #fca5a5;border-radius:6px">
       <strong style="color:#991b1b">⚠ Load Posting Required — MBE §6A.8</strong><br/>
@@ -20024,6 +20273,7 @@ function generateReportHTML({ cfg, mctOutput, rows, nodePositions, ratingData,
       </div>
     </div>`:''}` : ''}
     ${chartImages?.rating?`<img src="${chartImages.rating}" class="chart-img" alt="RF Diagram"/>`:''}
+    ${secWorked}
     <h3>Critical Locations — All Nodes by RF (Governing)</h3>
     <table>
       <thead><tr><th>Node</th><th>Pos (ft)</th><th>φMn⁺</th><th>φMn⁻</th><th>φVn</th><th>RF M⁺</th><th>RF M⁻</th><th>RF Shear</th><th>RF Gov</th><th>Tons</th><th>Controls</th><th>Status</th></tr></thead>
@@ -20046,7 +20296,8 @@ function generateReportHTML({ cfg, mctOutput, rows, nodePositions, ratingData,
           </tr>`;
         }).join('')}
       </tbody>
-    </table>` : '<div class="info-box">No rating data available — paste results and configure rating inputs to include rating in this report.</div>';
+    </table>
+    <div data-cr-results="1"></div>` : '<div class="info-box">No rating data available — paste results and configure rating inputs to include rating in this report.</div>';
 
   const footer = `<div class="footer">Generated by MCT File Generator · ${now} · ${cfg.projectName||''} ${cfg.projectBridgeId||''}</div>`;
 
@@ -20059,11 +20310,11 @@ function generateReportHTML({ cfg, mctOutput, rows, nodePositions, ratingData,
       <h3>${k}</h3><img src="${src}" class="chart-img" alt="${k}"/>`).join('')}
   ` : '';
 
-  return `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">
+  const html = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">
     <title>Report — ${cfg.projectName||cfg.projectBridgeId||'Bridge'}</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css"/>
     <style>${css}</style>
   </head><body>
-    ${secProject}
     ${secGeometry}
     ${secSections}
     ${secLoads}
@@ -20081,6 +20332,20 @@ function generateReportHTML({ cfg, mctOutput, rows, nodePositions, ratingData,
       <button onclick="window.close()" style="background:#fff;color:#374151;border:1px solid #d1d5db;border-radius:6px;padding:9px 16px;cursor:pointer;font-size:13px">✕ Close</button>
     </div>
   </body></html>`;
+  // D11: calculation-sheet format (cover, references, contents, numbering, result lines, print header/footer)
+  const R0 = cfg.rating||{};
+  const tb = { project: cfg.projectName||cfg.projectBridgeId||'', num: R0.arema_reportProjectNum||'',
+    desc: cfg.projectName||cfg.projectBridgeId||'', by: cfg.projectUser||'', date: cfg.projectDate||'', chk: '', chkDate: '' };
+  return idxCalcSheet(html, {
+    title: 'Bridge Rating & MCT Report', project: cfg.projectName||cfg.projectBridgeId||'(unnamed project)',
+    codes: 'MIDAS Civil MCT model · AASHTO MBE '+((ratingMethod||'LRFR')==='LFR'?'Section 6B (LFR)':'Section 6A (LRFR)')+' · AASHTO LRFD',
+    tb, info: projMeta, desc: cfg.projectDesc||'', tool: 'MIDAS Civil MCT Generator',
+    gov: (hasRating&&govRating)
+      ? `Governing rating factor (${rateLbl}): RF = ${govRating.rfGov.toFixed(3)} → ${govRating.rfTons.toFixed(1)} tons (${ratingVehicleName||'rated vehicle'}) at node ${govRating.node}, x = ${govRating.pos.toFixed(2)} ft — ${govRating.rfGov>=1?'PASS':'FAIL'}`
+      : 'No rating in this report (no MIDAS results or rating inputs yet).',
+    refs: IDX_REFS_MBE, results: rateResults, resultsTitle: 'Results — Rating factors',
+    note: 'Equations are shown symbolically, then with values substituted, then with the result. The rating section ends with one result line per rated action (PASS: RF ≥ 1.0). Units: kip, ft unless noted. DC, DW and LL are the unfactored MIDAS results of the load cases named in the rating inputs.',
+  });
 }
 
 const SAVES_KEY = 'mct_saves_v1';
@@ -21330,6 +21595,7 @@ function App() {
       ratingLimitState: rs.ratingLimitState || 'Strength I',
       ratingLevel:      rs.ratingLevel      || 'Inventory',
       chartImages,
+      ratingLLScaleExpr: rs.ratingLLScaleExpr || '',
     });
     const win = window.open('', '_blank');
     if (win) { win.document.write(html); win.document.close(); }
