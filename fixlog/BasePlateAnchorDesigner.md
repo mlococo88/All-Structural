@@ -1932,3 +1932,27 @@ Engineer request 2026-10-16. A new export only: **no input, result, report or sa
   - `node tests/check-syntax.mjs BasePlateAnchorDesigner.html` passes.
   - `node tests/bpad-profis.mjs`: every computed field is identical to main for the default design and the 3 built-in PROFIS cases. Only `report` (the printed text) differs, as intended, so its results-identity step reports DIFFERENT for this PR only.
   - Headless Chromium PDF (print media, `preferCSSPageSize`, KaTeX 0.16.11 served locally): pages checked for the cover, references and TOC, a Base Plate section with its result block, Anchor Bolts, Concrete Embedment and the header/footer boxes. No console errors.
+
+## 2026-10-18 — D11 links: quoted values link to the card where they are worked (CLAUDE.md §6) (Tier 1, display only)
+- **Engineer request:** 2026-10-18, the embedded links of the CLAUDE.md §6 guideline (2026-10-14).
+- **New helpers** (after `mkSection`, anchor `/* ---- D11 links`): `BPAD_TABNAME`, `BPAD_CARDS`, `bpadCardFor`, `bpadComboIndex`, `bpadLink`, `bpadWorkedIn`, `bpadGoto`, and a click handler on `a.wkA`. CSS `.wkLink`, `a.wkA`, `.sec.wkFlash`.
+- **Links added:**
+  1. **Summary, Governing Demand–Capacity table:** a new "Worked in" column, linking each check to its card at the governing combination.
+  2. **Summary chips:** clicking now opens the worked card at the governing combination (was: the tab only).
+  3. **Anchor Bolts, Governing Tension / Shear Capacity (envelope):** a "Worked in" column per mode.
+  4. **Anchor Bolts, Tension / Shear Load results summaries:** a "Worked in" line under each.
+  5. **Anchor Bolts, Combined interaction:** φN_n and φV_n link to the governing tension and shear modes.
+- **Clicking a link** switches the tab and the detailed combination to the one the value belongs to, expands the card, scrolls to it and highlights it. Inputs, results and saved data are unchanged, apart from `S.ui.tab`, `S.detailCombo` and the card's collapse state, which tab clicks already set.
+- **Calculation report:** `buildPrintReport` records each card's report number per tab and combination (`cardMap`) and rewrites every link to "see §n.k".
+  - The target is the same combination's section, or the governing combination's for the Summary.
+  - A cross-referenced identical combination maps to the section that holds the derivation.
+  - A card in a section not printed reads "see the <tab> tab (…; not in this printout)".
+- **Provision:** none. No result changed.
+- **Check case (default design):**
+  - Summary: Concrete Breakout (V), governed by 1.2D+1.0W, shows "see §10.5" in the report = Concrete Embedment — 1.2D+1.0W, 5. Concrete Breakout — Shear. In the app, the link opens Concrete Embedment at 1.2D+1.0W and highlights `coVB`.
+  - Anchor Bolts 1.2D+1.6L interaction: "φN_n: see §6.5 · φV_n: see §9.5".
+  - Link counts: 10 on Summary, 14 on Anchor Bolts.
+- **Verification:**
+  - `node tests/check-syntax.mjs BasePlateAnchorDesigner.html` passes.
+  - `node tests/bpad-profis.mjs`: every computed field is identical to main. Its `report` field reads only the front matter: the body sections are hidden off-screen, so `innerText` skips them. The "see §" lines were therefore checked in the generated PDF (pdftotext) instead.
+  - Headless click test: the tab, combination and highlighted card are as stated above, with no console errors.

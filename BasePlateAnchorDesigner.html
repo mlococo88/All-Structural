@@ -170,6 +170,9 @@
   #printReport .cr-r{text-align:right;} #printReport .cr-st-fail{text-decoration:underline;}
   #printReport .cr-refi{font-size:9pt;font-style:italic;}
   #printReport .caret{display:none;}
+  .wkLink{font-size:9pt;color:#555;margin:2px 0 8px;} a.wkA{color:var(--accent,#1f4e79);text-decoration:none;cursor:pointer;} a.wkA:hover{text-decoration:underline;}
+  .sec.wkFlash{animation:wkflash 1.4s ease-out;} @keyframes wkflash{from{background:#dde9f6;}to{background:transparent;}}
+  #printReport a.wkA{color:#000;font-style:italic;}
   #valBox{margin:6px 0 0;}
   .valErr{background:#fdecea;border-left:4px solid var(--fail);padding:5px 10px;margin:4px 0;font-size:9.5pt;}
   .valWarn{background:#fef7e6;border-left:4px solid var(--warn);padding:5px 10px;margin:4px 0;font-size:9.5pt;}
@@ -1096,6 +1099,58 @@ function mkSection(id,title,builder,parent){
   const body=el("div","secBody"); builder(body); sec.appendChild(body);
   parent.appendChild(sec); return sec;
 }
+
+/* ---- D11 links (CLAUDE.md §6, 2026-10-18): a value quoted away from where it is worked links to that card.
+   On screen: "Worked in: → Tab · Card" (opens the tab on the same combination, scrolls, flashes).
+   In the calculation report the same link reads "see §n.k" (buildPrintReport rewrites it). ---- */
+const BPAD_TABNAME={tabInput:"Input & Schematics",tabSummary:"Summary",tabPlate:"Base Plate",tabAnchor:"Anchor Bolts",tabConc:"Concrete Embedment",tabVCase:"Shear Distribution",tabTRebar:"Tension Rebar",tabVRebar:"Shear Rebar"};
+const BPAD_CARDS={pbBend:["tabPlate","Base Plate Bending"],pbTear:["tabPlate","Bolt Bearing / Tearout in Plate"],
+  coBrg:["tabConc","Concrete Bearing"],coPull:["tabConc","Pullout"],coTB:["tabConc","Concrete Breakout — Tension"],coSFB:["tabConc","Side-Face Blowout"],
+  coVB:["tabConc","Concrete Breakout — Shear"],coPry:["tabConc","Pryout"],
+  anSteelT:["tabAnchor","Steel Strength — Tension"],anSteelV:["tabAnchor","Steel Strength — Shear"],anLevNut:["tabAnchor","Stand-off Bending"],
+  anRodComp:["tabAnchor","Exposed Rod Compression"],anInt:["tabAnchor","Combined Tension–Shear Interaction"],
+  trCap:["tabTRebar","Anchor Reinforcement — Tension"],trDev:["tabTRebar","Development Each Side of the Breakout Cone"],vrCap:["tabVRebar","Hairpin Shear Reinforcement"]};
+/* card for a check label (allChecks) or a capacity mode label (kind "T"/"V") */
+function bpadCardFor(label,kind){
+  const l=String(label||"").toLowerCase();
+  if(/base plate bending/.test(l)) return "pbBend";
+  if(/tearout/.test(l)) return "pbTear";
+  if(/concrete bearing/.test(l)) return "coBrg";
+  if(/rod compression/.test(l)) return "anRodComp";
+  if(/stand-off|lever/.test(l)) return "anLevNut";
+  if(/interaction/.test(l)) return "anInt";
+  if(/development/.test(l)) return "trDev";
+  if(/hairpin/.test(l)) return "vrCap";
+  if(/reinf/.test(l)) return (kind==="V")? "vrCap" : "trCap";
+  if(/pullout/.test(l)) return "coPull";
+  if(/side-face/.test(l)) return "coSFB";
+  if(/pryout/.test(l)) return "coPry";
+  if(/breakout/.test(l)) return (kind==="V"||/\(v\)|shear/.test(l))? "coVB" : "coTB";
+  if(/steel/.test(l)) return (kind==="V"||/shear/.test(l))? "anSteelV" : "anSteelT";
+  return null;
+}
+function bpadComboIndex(name){ if(!CC) return null; const i=CC.combos.findIndex(c=>c.name===name); return i>=0? i : null; }
+function bpadLink(card,ci,txt){
+  const cd=BPAD_CARDS[card]; if(!cd) return null;
+  const a=el("a","wkA",(txt? txt+" → " : "")+BPAD_TABNAME[cd[0]]+" · "+cd[1]); a.href="#";
+  a.dataset.tab=cd[0]; a.dataset.card=card; if(ci!=null) a.dataset.ci=ci; if(txt) a.dataset.txt=txt;
+  return a;
+}
+function bpadWorkedIn(parent,items){   /* items: [{card, ci, txt}] */
+  const links=items.map(o=>bpadLink(o.card,o.ci,o.txt)).filter(Boolean); if(!links.length) return null;
+  const d=el("div","wkLink"); d.appendChild(document.createTextNode("Worked in: "));
+  links.forEach((a,i)=>{ if(i) d.appendChild(document.createTextNode(" · ")); d.appendChild(a); });
+  parent.appendChild(d); return d;
+}
+function bpadGoto(tab,card,ci){
+  if(ci!=null && CC && CC.combos[+ci]) S.detailCombo=+ci;
+  if(!TABS().some(t=>t[0]===tab)) return;
+  S.ui.tab=tab; if(card) S.ui.collapse[card]=false; autosave(); buildTabs();
+  setTimeout(()=>{ const e=document.getElementById(card); if(!e) return;
+    e.scrollIntoView({behavior:"smooth",block:"start"}); e.classList.add("wkFlash"); setTimeout(()=>e.classList.remove("wkFlash"),1400); },60);
+}
+document.addEventListener("click",e=>{ const a=e.target.closest&&e.target.closest("a.wkA"); if(!a || a.closest("#printReport")) return;
+  e.preventDefault(); bpadGoto(a.dataset.tab,a.dataset.card,a.dataset.ci); });
 
 /* input controls */
 /* whether the hook ψ-factor rows (confinement / discontinuous end) apply — i.e.
@@ -5365,7 +5420,7 @@ function buildSummary(pg){
     const lab=el("span",null,c.label+" ["+c.ref+"]"); chip.appendChild(lab);
     const r=el("span","ratio", c.na?"N/A":("DCR "+fmtDCR(c.dcr))); chip.appendChild(r);
     chip.title="Governs: "+(c.combo||"—");
-    chip.addEventListener("click",()=>{ S.ui.tab=c.tab; autosave(); buildTabs(); });
+    chip.addEventListener("click",()=>{ const cd=bpadCardFor(c.label); if(cd) bpadGoto(c.tab,cd,bpadComboIndex(c.combo)); else { S.ui.tab=c.tab; autosave(); buildTabs(); } });   /* D11: opens the worked card */
     dash.appendChild(chip);
   });
   /* overall */
@@ -5416,10 +5471,11 @@ function buildSummary(pg){
   /* per-check governing table */
   mkSection("sumTable","Governing Demand–Capacity Summary",body=>{
     const t=el("table","tbl");
-    const hd=el("tr"); ["Check","Reference","Governing Combo","DCR","Status"].forEach(h=>hd.appendChild(el("th",null,h))); t.appendChild(hd);
+    const hd=el("tr"); ["Check","Reference","Governing Combo","DCR","Status","Worked in"].forEach(h=>hd.appendChild(el("th",null,h))); t.appendChild(hd);
     checks.forEach(c=>{ const tr=el("tr"); const st=statusOf(c.dcr,c.na);
       [c.label,c.ref,c.combo||"—",c.na?"N/A":fmtDCR(c.dcr),st.toUpperCase()].forEach((v,idx)=>{
         const td=el("td",idx===0?"lft":null,String(v)); if(idx===4){td.style.color=st==="fail"?"var(--fail)":st==="pass"?"var(--pass)":"#777";td.style.fontWeight="bold";} tr.appendChild(td); });
+      const tdl=el("td","lft"); const a=bpadLink(bpadCardFor(c.label),bpadComboIndex(c.combo)); if(a) tdl.appendChild(a); tr.appendChild(tdl);   /* D11 */
       t.appendChild(tr); });
     body.appendChild(t);
   },pg);
@@ -5674,11 +5730,13 @@ function buildAnchorTab(pg){
   mkSection("anResT",SN()+"Tension Load — Results Summary",body=>{
     body.appendChild(el("div","note","Layout matches Hilti PROFIS section \u201CTension load\u201D so results can be checked line-for-line."));
     profisResultsTable(body,c,cap,"tension");
+    bpadWorkedIn(body,cap.tensionModes.map(m=>({card:bpadCardFor(m.label,"T"),ci:c.ci,txt:m.label.replace(/\s*\(.*$/,"")})).filter((o,i,a)=>o.card&&a.findIndex(q=>q.card===o.card)===i));   /* D11 */
   },pg);
 
   mkSection("anResV",SN()+"Shear Load — Results Summary",body=>{
     body.appendChild(el("div","note","Layout matches Hilti PROFIS section \u201CShear load\u201D."));
     profisResultsTable(body,c,cap,"shear");
+    bpadWorkedIn(body,cap.shearModes.map(m=>({card:bpadCardFor(m.label,"V"),ci:c.ci,txt:m.label.replace(/\s*\(.*$/,"")})).filter((o,i,a)=>o.card&&a.findIndex(q=>q.card===o.card)===i));   /* D11 */
   },pg);
 
   mkSection("anDemand",SN()+"Anchor Demands (this combination)",body=>{
@@ -5757,13 +5815,15 @@ function buildAnchorTab(pg){
     const Fu=forceUnit(), uf=forceFactor();
     const gov=cap.govTfor(c);
     const t=el("table","tbl"); const hd=el("tr");
-    ["Mode","Reference","Basis","N_ua ("+Fu+")","φN ("+Fu+")","DCR"].forEach(h=>hd.appendChild(el("th",null,h))); t.appendChild(hd);
+    ["Mode","Reference","Basis","N_ua ("+Fu+")","φN ("+Fu+")","DCR","Worked in"].forEach(h=>hd.appendChild(el("th",null,h))); t.appendChild(hd);
     cap.tensionModes.forEach(m=>{ const tr=el("tr");
       const dem=cap.tDemand(c,m), dcr=cap.tDCR(c,m);
       if(m===gov)tr.className="gov";
       const basis=(m.per==="anchor")? "single anchor" : "group ("+cap.nT+")";
       [m.label,m.ref,basis,fmt(dem*uf,2),fmt(m.phiN*uf,2),fmt(dcr,2)]
-        .forEach((v,i)=>tr.appendChild(el("td",i<3?"lft":null,String(v)))); t.appendChild(tr); });
+        .forEach((v,i)=>tr.appendChild(el("td",i<3?"lft":null,String(v))));
+      const tdl=el("td","lft"); const a=bpadLink(bpadCardFor(m.label,"T"),c.ci); if(a) tdl.appendChild(a); tr.appendChild(tdl);   /* D11 */
+      t.appendChild(tr); });
     body.appendChild(t);
     body.appendChild(el("div","note",
       "Governing: "+gov.label+" at DCR "+fmt(cap.tDCR(c,gov),2)+
@@ -5789,13 +5849,15 @@ function buildAnchorTab(pg){
     const Fu=forceUnit(), uf=forceFactor();
     const gov=cap.govVfor(c);
     const t=el("table","tbl"); const hd=el("tr");
-    ["Mode","Reference","Basis","V_ua ("+Fu+")","φV ("+Fu+")","DCR"].forEach(h=>hd.appendChild(el("th",null,h))); t.appendChild(hd);
+    ["Mode","Reference","Basis","V_ua ("+Fu+")","φV ("+Fu+")","DCR","Worked in"].forEach(h=>hd.appendChild(el("th",null,h))); t.appendChild(hd);
     cap.shearModes.forEach(m=>{ const tr=el("tr");
       const dem=cap.vDemand(c,m), dcr=cap.vDCR(c,m);
       if(m===gov)tr.className="gov";
       const basis=(m.per==="anchor")? "single anchor" : "group ("+cap.nV+")";
       [m.label,m.ref,basis,fmt(dem*uf,2),fmt(m.phiV*uf,2),fmt(dcr,2)]
-        .forEach((v,i)=>tr.appendChild(el("td",i<3?"lft":null,String(v)))); t.appendChild(tr); });
+        .forEach((v,i)=>tr.appendChild(el("td",i<3?"lft":null,String(v))));
+      const tdl=el("td","lft"); const a=bpadLink(bpadCardFor(m.label,"V"),c.ci); if(a) tdl.appendChild(a); tr.appendChild(tdl);   /* D11 */
+      t.appendChild(tr); });
     body.appendChild(t);
     body.appendChild(el("div","note",
       "Governing: "+gov.label+" at DCR "+fmt(cap.vDCR(c,gov),2)+
@@ -5814,6 +5876,7 @@ function buildAnchorTab(pg){
             ["\\phi V_n",fmt(cap.govVfor(c).phiV*forceFactor(),2)+" "+forceUnit(),
              "governing shear ("+cap.govVfor(c).label+", "+(cap.govVfor(c).per==="anchor"?"single anchor":"group")+")"],
             ["\\text{DCR}",fmt(it.dcr,3),it.para<=1?"OK":"FAILS"]]}));
+    bpadWorkedIn(body,[{card:bpadCardFor(cap.govTfor(c).label,"T"),ci:c.ci,txt:"φN_n"},{card:bpadCardFor(cap.govVfor(c).label,"V"),ci:c.ci,txt:"φV_n"}]);   /* D11 */
     body.appendChild(eqBlock({title:"Trilinear interaction"+(it.governingForm==="trilinear"?" — GOVERNS":"")+" (also permitted by §17.8.3)",ref:"ACI 318-19 §17.8.1–.3",
       lines:[
         it.rV<=0.2? "V_{ua}\\le0.2\\phi V_n\\Rightarrow\\text{tension only, ratio}="+fmt(it.rN,3)
@@ -9776,17 +9839,21 @@ function buildPrintReport(){
   if(S.print.collapseIdentical===undefined) S.print.collapseIdentical=true;
   const combosToRender = (S.print.combos.all!==false)? CC.combos.map((c,i)=>i) : [gi];
   const toc=[]; const bodyEl=el("div","cr-bodyall"); let secNum=1;
+  const cardMap={};   /* "tab|ci|card" → {num:"n.k", id} — for the "see §n.k" links (D11 links) */
 
   /* a numbered top-level section; its mkSection cards become numbered subsections n.k */
-  function addSection(title, content, resRows, xrefHtml){
+  function addSection(title, content, resRows, xrefHtml, meta){
     const n=secNum++, id="crp-"+n, sec=el("section","cr-sec"+(n>1?" cr-break":""));
+    meta=meta||{}; if(meta.tab) sec.dataset.tab=meta.tab; if(meta.ci!=null) sec.dataset.ci=meta.ci;
     const h=el("h2","cr-h1",n+". "+title); h.id=id; sec.appendChild(h);
     const subs=[];
     if(xrefHtml){ const p=el("div","cr-p"); p.innerHTML=xrefHtml; sec.appendChild(p); }
     if(content){
       content.querySelectorAll(".sec").forEach((sc,k)=>{
         const t=sc.querySelector(".secTitle"); if(!t) return;
-        const sid=id+"-"+(k+1); sc.id=sid; sc.removeAttribute("data-secid");
+        const sid=id+"-"+(k+1);
+        if(meta.tab && sc.id) cardMap[meta.tab+"|"+(meta.ci!=null?meta.ci:"")+"|"+sc.id]={num:n+"."+(k+1),id:sid};
+        sc.id=sid; sc.removeAttribute("data-secid");
         const tt=t.textContent.replace(/^\s*\d+\.\s*/,"");   /* the tab's own card number is replaced by n.k */
         subs.push({t:tt, id:sid}); t.textContent=n+"."+(k+1)+" "+tt;
       });
@@ -9828,23 +9895,35 @@ function buildPrintReport(){
         const sig=[cbo.raw.P,cbo.raw.Vx,cbo.raw.Vy,cbo.raw.Mx,cbo.raw.My].join("|");
         if(collapse && firstBySig[sig]!==undefined){
           const f=firstBySig[sig];
+          Object.keys(cardMap).forEach(k=>{ const p=k.split("|"); if(p[0]===id && p[1]===String(f.ci)) cardMap[id+"|"+ci+"|"+p[2]]=cardMap[k]; });   /* same derivation */
           addSection(label+" — Combination: "+cbo.name, null, bpadResultRows(id,ci),
             "Produces factored actions <b>identical</b> to combination <b>"+f.name+"</b> (P, V<sub>x</sub>, V<sub>y</sub>, M<sub>x</sub>, M<sub>y</sub> all equal); "+
-            "see <a href='#crp-"+f.n+"'>§"+f.n+"</a> for the complete derivation. Repeating it here would add pages without adding information.");
+            "see <a href='#crp-"+f.n+"'>§"+f.n+"</a> for the complete derivation. Repeating it here would add pages without adding information.", {tab:id,ci});
           return;
         }
         S.ui.tab=id; S.detailCombo=ci;
-        const n=addSection(label+" — Combination: "+cbo.name, renderTab(id), bpadResultRows(id,ci));
-        firstBySig[sig]={name:cbo.name,n};
+        const n=addSection(label+" — Combination: "+cbo.name, renderTab(id), bpadResultRows(id,ci), null, {tab:id,ci});
+        firstBySig[sig]={name:cbo.name,n,ci};
       });
     } else {
       S.ui.tab=id;
       const rr=(id==="tabTRebar"||id==="tabVRebar")? bpadResultRows(id,null) : null;
-      addSection((BPAD_OPTIN[id]?"Appendix: ":"")+label, renderTab(id), rr);
+      addSection((BPAD_OPTIN[id]?"Appendix: ":"")+label, renderTab(id), rr, null, {tab:id});
     }
   });
   /* assumptions */
   if(S.assume.trim()){ const p=el("div"); p.style.whiteSpace="pre-wrap"; p.textContent=S.assume; addSection("Engineering Assumptions", p, null); }
+
+  /* D11 links: "→ Tab · Card" becomes "see §n.k" (the same combination's section; else the governing one) */
+  bodyEl.querySelectorAll("a.wkA").forEach(a=>{
+    const sec=a.closest("section.cr-sec"); const ci=(a.dataset.ci!=null && a.dataset.ci!=="")? a.dataset.ci : (sec&&sec.dataset.ci!=null? sec.dataset.ci : "");
+    const tab=a.dataset.tab, card=a.dataset.card;
+    const hit=cardMap[tab+"|"+ci+"|"+card] || cardMap[tab+"||"+card] || cardMap[tab+"|"+gi+"|"+card];
+    const pre=a.dataset.txt? a.dataset.txt+": " : "";
+    if(hit){ a.textContent=pre+"see §"+hit.num; a.href="#"+hit.id; }
+    else { a.textContent=pre+"see the "+(BPAD_TABNAME[tab]||tab)+" tab ("+(BPAD_CARDS[card]?BPAD_CARDS[card][1]:card)+"; not in this printout)"; a.removeAttribute("href"); }
+  });
+  bodyEl.querySelectorAll(".wkLink").forEach(d=>{ if(d.firstChild && d.firstChild.nodeType===3) d.firstChild.textContent=""; });
 
   /* front matter: cover with title block, references, table of contents */
   const front=el("div","cr-frontall");
