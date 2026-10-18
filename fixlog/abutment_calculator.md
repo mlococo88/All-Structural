@@ -2600,3 +2600,117 @@ index 6c9b39f..ebe0502 100644
 +    ["Extreme Event I",S.seismic.on?("ON — As="+fmt(+S.seismic.As,3)+", kh="+fmt(+S.seismic.khR,2)+"·As, kv="+fmt(+S.seismic.kv,2)+", ΔPAE @ "+fmt(+S.seismic.hEQr,2)+"H; φτ/φb/φc(EE)="+fmt(+S.seismic.phiTauEQ,2)+"/"+fmt(+S.seismic.phiBEQ,2)+"/"+fmt(+S.seismic.phiCEQ,2)+", e/B ≤ "+fmt(+S.seismic.eFracEQ,3)+", γEH(EE) = "+(eqEHfixed()!==null?fmt(eqEHfixed(),2)+" (agency policy)":"γp max/min")):"OFF",""],
      ["Scour condition",f.scour?"ON — passive eliminated; qn at scoured grade":"off",""]]);
 ```
+
+## 2026-10-18 — PR: claude/abutment-d11-report (PR link added after merge)
+
+### D11: calculation-sheet report in the Gusset Plate Rating / ST-Girder format (Tier 1, display only)
+- **Engineer request:** 2026-10-14 / 2026-10-18 (AUDIT.md D11: "have a report builder, to be reviewed against the format").
+- **Functions / anchors:**
+  - `buildReport()` is rewritten, preceded by the new `ABUT_REFS`, `abutPageCSS()`, `abutApplyPageCSS()` and `abutResultBlock()` (anchor `/* D11 (2026-10-18): calculation-sheet report`). To re-apply by hand, copy the whole block from that anchor down to `function syncRptDlg(){` from this version. The tab clones, the chart-to-image swap, `inputEchoHTML()`, `captureD3()`, `selfTestHTML()` and `generateReport()` are reused unchanged.
+  - CSS anchor `/* D11 calculation-sheet report` (after `#report .plotimg{…}`), and `.wklink` after `.xlink:hover`.
+  - Report Contents dialog (`#rptOptList`): the labels lose their section letters, which no longer exist.
+    - Before: `Section E — full input echo`, `Section G — γp load-combination &amp; permutation tables`, `Section L — detailed force-effect tables (per-load breakdown)`, `Section M — 3D load visualization snapshot`, `Section N — validation self-test result`.
+    - After: `Input echo (full)`, `Load combinations &amp; γp permutation tables`, `Detailed force-effect tables (per-load breakdown)`, `3D load visualization snapshot`, `Validation self-test result`.
+    - The `data-ropt` keys and `S.ui.rptOpts` are unchanged.
+- **Before:**
+  - A title block and a lettered contents list (A–O) without links.
+  - Lettered sections, with the tabs cloned under their own panel numbers (1.0 … 8.6, "2.3" repeated for every limit state, and "3.6a").
+  - A references paragraph at the end (section O).
+  - A running header "name · Input ID · date" and a "Sheet X of Y" footer.
+- **After:**
+  - **Cover:** title, project, abutment type, codes, by-line, the existing title block (Project / Project No. / Calculated By / Date / Subject / Input ID / Checked By / Checked Date), the pass/fail banner and the Input ID note. All project fields already existed (`proj.name`, `num`, `calcBy`, `date`, `chkBy`, `chkDate`), so no field was added.
+  - **References table** (`ABUT_REFS`), listing only the articles the tool cites:
+    - AASHTO LRFD 10th Ed. (2024): Sections 3 and 5, Art. 4.7.4.4, Sections 10 and 11, Appendix A11.3.1, and Art. 14.6.3.1;
+    - MassDOT LRFD Bridge Manual Part I §3.1.8.3, marked "edition: verify" (the tool states no edition);
+    - the tool's own "Design basis §x" notes.
+    - The note on load factors from the old section O is kept under the table.
+  - **Numbered table of contents** with links (sections and subsections).
+  - **Numbered sections:**
+    1. Results Summary;
+    2. Key Results;
+    3. Warnings;
+    4. Assumptions & Modified Constants;
+    5. Input Echo;
+    6. Geometry & Loads;
+    7. Load Combinations (optional);
+    8. External Stability;
+    9. Foundation / Pile Group;
+    10. Structural Design;
+    11. V & M Diagrams;
+    12. Detailed Tables (optional);
+    13. 3D (optional);
+    14. Self-Test (optional).
+    - The numbers close up when an optional section is left out.
+  - **Subsections n.k:** every tab panel (its own number is replaced by n.k) and every `h3` heading of sections 4 and 5. Panels keep their worked equations (symbolic → substituted → result) exactly as on screen.
+  - **Result lines** at the end of §8, §9 and §10, one per check in `R.dash`: "<check>: D/C = x.xx (AASHTO LRFD 10th Ed. Art. <ref>; <governing>; §n.k) PASS / FAIL". The values are the dashboard's.
+  - **Summary and key-result tables** gain a "Worked in" column: the §n.k of the panel where the value is worked, from `DASH_ANCHOR`.
+  - **Print:** `@page` letter with margin boxes, in a `<head>` style (`#abut-page`) inside `@media print`, so they apply only while printing.
+    - Top: "Project No / Description", "Computed By / Checked By", "Date / Date".
+    - Bottom: "<project> (Bridge Abutment Design Calculator)" with "Input ID …" on a second line (kept from the old running header), and "Page X of Y".
+  - Live `<select>` controls print as the text of the selected option. Buttons (Re-run self-test, Run sensitivity analysis) are hidden in the report.
+- **Fixed along the way (display only):**
+  - Key Results said "see Section F" for the modified constants, but they were in section D. It is now a link to §4.2.
+  - Pile branch, Tab 3 §3.0 note: "their factor sets are shown in §Tab 4" (stray §). It now reads "Tab 4", as a link. Before: `` §${fn.branch==="spread"?"3.1 / 3.2":"Tab 4"} ``.
+  - The section heading "Load Combinations & γp Permutations" printed as "ΓP" under the upper-case heading style. γ<sub>p</sub> is now kept lower case.
+  - The in-text references "§3.0", "Tab 2 §2.3", "Tab 3, §3.6", "Tab 5 §5.x" and "Tab 6" printed the app's tab numbers, which do not exist in the report. They now print the report's §n.k (see D11 links).
+- **Provision:** none. No formula, factor, unit, code reference or result changed.
+- **Saved data:** none. No key or format change, and the `S.ui.rptOpts` keys are unchanged.
+- **Check case (default project "Example Single-Span Bridge", all report options on):**
+  - 14 sections and 61 subsections; 74 letter pages (main: 71).
+  - §8 results (equal to the dashboard):
+    - Sliding: D/C = 1.15 (Art. 10.6.3.4; Constr — Str I; §8.2) FAIL;
+    - Eccentricity: 0.57 (11.6.3.3; Strength I; §8.3) PASS;
+    - Bearing: 0.93 (10.6.3.1; Strength I; §8.4) PASS;
+    - Minimum support length: 0.31 (4.7.4.4; §8.6) PASS.
+  - §10 results: 18 lines, e.g. Stem flexure 0.36 PASS (§10.3).
+  - Pile branch with Extreme Event I on: 76 pages. §9 results, all PASS: pile compression 0.91, pile uplift 0.21 (Extreme Event I), pile punching 0.20.
+
+### D11 links: quoted values link to the panel where they are worked (CLAUDE.md §6) (Tier 1, display only)
+- **New helper** (after `govNote`, anchor `/* ---- D11 links`): `ABUT_TABNAME` and `abutWorkedIn(items)`, which returns a "Worked in: <value> → <Tab> · <panel>" line made of `.xlink` spans. Clicks use the existing `.xlink[data-jump]` handler (`gotoPanel`), which opens the tab, expands the panel, scrolls to it and flashes it.
+- **"Worked in" lines added:**
+  1. Tab 4 §4.4 Pile Axial Capacity: P_max → 4.2 Axial Pile Reactions; P_min → 4.3 Pile Reactions per Limit State. Inserted after `${govNote(pc.lbl+" — "+pc.ls)}`.
+  2. Tab 4 §4.6 Punching: V_u (pile reaction) → 4.2. Inserted after the `govNote(...governing pile...)` line.
+  3. Tab 5 §5.5 Shear Friction: V_ui (stem-base V_u) → 5.2 Stem (`R.checks.shearFric.Vui = R.stemDem.Vu`). Inserted after `${govNote((sf.lbl||"")+" — "+(sf.ls||""))}`.
+  4. Tab 5 §5.7 Reinforcement Schedule (A<sub>s</sub> prov/req and ℓ<sub>d</sub>): A1 → 5.2 Stem, B1 → 5.1 Backwall, C1 → 5.3 Toe, D1 → 5.4 Heel. Inserted after `${rt}`.
+- **Existing plain-text references made into links.** The on-screen text is unchanged, except that "§3.1 / 3.2" now reads "§3.1 / §3.2".
+  - Tab 2 §2.2: `The tables in §2.3` → `The tables in <span class="xlink" data-jump="tab-comb|o-perm-<first limit state>">§2.3</span>`.
+  - Tab 3 §3.0 note: `§3.1 / 3.2` → links to `o-slide` / `o-ecc`. Pile branch: `Tab 4` → link to `o-pilecap`.
+  - Tab 3 §3.3 note (rock, biaxial): `the 2-D free body in §3.0` → link to `o-fbd`.
+  - Tab 3 pile-branch note: `see Tab 4` → link to `o-pilecap`.
+  - Tab 4 spread-branch note: `results are in Tab 3` → link to `o-brg`.
+  - Tab 5 §5.1 backwall note: `(Tab 3, §3.6)` → link to `o-seis`.
+  - Tab 6 panels: `Governing design demand (Tab 5 ${d.ref})` → link to `o-str-Stem|Backwall|Toe|Heel`.
+  - Tab 6 §6.0: `matching Tab 5` → link to `o-str-Toe`.
+  - Tab 8 §8.0 and §8.6: `Tab 6` → link to `o-vm-note`.
+- **Calculation report:** `buildReport` records each panel's §n.k by its `data-cid` and rewrites every `.xlink`:
+  - "Worked in" links read "<value>: see §n.k".
+  - In-text references have their tab/§ number replaced by the report's §n.k (e.g. "Tab 2 §2.3 (Strength I)" → "§7.4 (Strength I)").
+  - All of them become PDF links.
+  - A target left out of the printout reads "… (not in this printout)".
+- **Provision:** none. No result changed.
+- **Check case (default project):**
+  - In the report:
+    - "§3.1 / §3.2" prints "§8.2 / §8.3";
+    - "Tab 2 §2.3 (Strength I)" prints "§7.4 (Strength I)";
+    - "Tab 3, §3.6" prints "§8.7".
+  - Structural section: "V_ui (stem-base V_u): see §10.3" and "A1: see §10.3 · B1: see §10.2 · C1: see §10.4 · D1: see §10.5".
+  - Pile branch: "P_max: see §9.2 · P_min: see §9.3".
+  - The report DOM has 143 internal links (the PDF has 145 link annotations), none broken.
+  - With load combinations and detailed tables omitted, the reference prints "Tab 2 §2.3 (Strength I) (not in this printout)".
+  - In the app, clicking "V_ui … → Structural Design · 5.2 Stem" opens Tab 5, expands the Stem panel (also when it was collapsed), scrolls to it and flashes it. The Tab 3, Tab 4, Tab 6 and Tab 8 links tested behave the same way.
+- **Verification (both entries):**
+  - `node tests/check-syntax.mjs abutment_calculator.html`: all scripts pass.
+  - `node tests/compare.mjs --tool page --file abutment_calculator.html`: page.text and page.storage identical. The console errors on both sides come only from CDN libraries the kit does not hold (KaTeX 0.16.11, Plotly 2.35.2, three 0.128.0 from unpkg).
+  - **Main vs branch with the libraries served locally** (KaTeX 0.16.11, Plotly 2.35.2 and three 0.128.0 from `npm pack`, outside the repo):
+    - Five cases: default, pile branch, Extreme Event I on, pile + EE-I, and rock.
+    - In every case these are identical: the full `computeAll()` result (functions removed), `R.dash`, `extractKeyResults`, the Input ID and the self-test. 0 console errors.
+    - The rendered text of every tab differs only by the "Worked in" lines, "§3.1 / §3.2", and the pile-branch fix "§Tab 4" → "Tab 4".
+  - Headless Chromium PDF (print media, `preferCSSPageSize`). Pages checked:
+    - cover; references and TOC; Results Summary; Load Combinations;
+    - §8.1 free body with its links; the §8 and §10 result blocks; the "Worked in" line under the reinforcement schedule;
+    - pile §9.6 with its result block;
+    - the header and footer boxes.
+- **Other copies:** none. The report builder is specific to this tool.
+- **Open items:**
+  - Tab 3 §3.1 Sliding says "See §3.0 free-body ledger for the force × arm breakdown of the governing case". However, §3.0 is assembled for the governing *bearing/pile* case (its own note says so); the sliding case uses its own permutation with LSv excluded. Not changed (wording only). Should the link say so, or should §3.1 get its own ledger?
+  - The "Design basis §x" citations (the tool's own notes) now appear in a report whose sections are also numbered §x. They are labelled "Design basis", but the engineer may prefer a different marker.
