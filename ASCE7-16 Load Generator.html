@@ -129,6 +129,8 @@ a.jump{color:var(--outblue);text-decoration:none;border-bottom:1px dotted var(--
 a.jump:hover{color:var(--navy)}
 .flash{animation:fl 1.6s ease-out}
 @keyframes fl{0%{background:#fff29a}100%{background:transparent}}
+/* D11 links (CLAUDE.md §6, 2026-10-18): "Worked in" lines under values quoted away from where they are worked */
+.wkLink{font-size:9.5pt;color:#555;margin:2px 0 8px}
 
 /* ---------- Schematic ---------- */
 svg.sch{width:100%;height:auto;background:#fff;border:1px solid var(--line)}
@@ -174,8 +176,25 @@ svg.sch .ld{stroke:var(--bad);fill:var(--bad)}
   #main,#mainwrap{display:block;overflow:visible}
   #report{display:block!important}
   .rpt-pg{page-break-after:always}
-  #rpt-hdr{position:fixed;top:0;left:0;right:0;background:#fff;z-index:99}
-  #report{padding-top:0.72in}
+  /* D11 calculation sheet (2026-10-18): cover, references, contents; the page header / footer is the @page rule
+     of a7PageCSS (style #a7-page, present only while the report exists) */
+  #report a{color:#000;text-decoration:none;border:none}
+  .cr-cover{page-break-after:always;break-after:page;padding-top:0.9in}
+  .cr-cover-t{text-align:center;margin:0 0 0.5in}
+  .cr-cover-t h1{font-size:22pt;color:#1F497D;margin:0 0 12pt}
+  .cr-cover-t p{font-size:13pt;font-weight:700;margin:0 0 6pt}
+  .cr-cover-t p.cr-cover-p{font-weight:400;font-size:11pt}
+  .cr-tb{width:100%;border-collapse:collapse;font-size:10pt;margin:0 0 12pt;border:1.4px solid #1F497D}
+  .cr-tb td{padding:4px 8px;border:.6px solid #B8C2CE;vertical-align:top;width:50%}
+  .cr-front{page-break-after:always;break-after:page}
+  .cr-h1{font-size:12pt;text-transform:uppercase;text-decoration:underline;color:#000;margin:10pt 0 8pt;break-after:avoid}
+  .cr-refs{border-collapse:collapse;margin:0 0 14pt;font-size:10pt}
+  .cr-refs td{padding:2pt 14pt 2pt 0;vertical-align:top}
+  .cr-refs td:first-child{white-space:nowrap;font-weight:700}
+  .cr-toc,.cr-toc ol{list-style:none;margin:0;padding:0}
+  .cr-toc>li{margin:4pt 0;font-size:10.5pt}
+  .cr-toc ol{padding-left:18pt;font-size:9.5pt}
+  .cr-p{margin:0 0 7pt;font-size:10pt}
   .pnl{border:none;margin:0 0 8px}
   .eq,.kx,table.vt,table.dt,table.dash,svg.sch,.pltbox,.note,.keybox,.warnbox{page-break-inside:avoid;break-inside:avoid}
   .pltbox{border:none!important}
@@ -236,7 +255,7 @@ svg.sch .ld{stroke:var(--bad);fill:var(--bad)}
 
 <div id="pdlg"><div id="pdbox">
   <h3>Report Contents</h3>
-  <div class="hint">The title block and the disclaimer footer always print and cannot be deselected.
+  <div class="hint">The cover with the title block, the references, the contents, the inputs, the results summary and the disclaimer footer always print and cannot be deselected.
   Deselected sections are removed and the remainder renumbered sequentially.</div>
   <div id="pdlist"></div>
   <div class="btnrow" style="margin-top:12px">
@@ -1356,7 +1375,7 @@ const get=p=>p.split(".").reduce((o,k)=>o[k],S);
 const set=(p,v)=>{const ks=p.split("."),last=ks.pop();ks.reduce((o,k)=>o[k],S)[last]=v;};
 
 function panel(host,key,num,title,ref,sub){
-  const p=el("div","pnl"+(sub?" sub":"")); p.id="pnl-"+key;
+  const p=el("div","pnl"+(sub?" sub":"")); p.id="pnl-"+key; p.dataset.k=key;   /* data-k: D11 link target (ids are overwritten for some panels) */
   if(S.open[key]===false) p.classList.add("closed");
   const hd=el("div","hd");
   hd.innerHTML='<span class="car">\u25BC</span><span class="num">'+(num||"")+'</span><span class="ttl">'+esc(title)+'</span>'+(ref?'<span class="ref">'+esc(ref)+'</span>':'');
@@ -1916,6 +1935,21 @@ function goto(a){
       setTimeout(()=>t.classList.remove("flash"),1700);}},60);
 }
 
+/* D11 links (CLAUDE.md §6, 2026-10-18): a value quoted away from where it is worked links to the panel that works it.
+   On screen "Worked in: <values>: \u2192 Tab \u00B7 Panel" opens the tab, expands the panel, scrolls to it and flashes it;
+   in the calculation report runPrint rewrites each link to "see \u00A7n.k". Display only. */
+const a7TabName=k=>(TABS.find(t=>t[0]===k)||[k,k])[1];
+function a7WorkedIn(host,items){   /* items: [values quoted, tab, panel key, panel title] */
+  host.appendChild(el("div","wkLink","Worked in: "+items.map(i=>i[0]+": <a class=\"jump wkA\" data-wk=\""+i[2]+"\" onclick=\"a7Goto('"+
+    i[1]+"','"+i[2]+"')\">\u2192 "+esc(a7TabName(i[1]))+" \u00B7 "+esc(i[3])+"</a>").join("; ")));
+}
+function a7Goto(tab,key){
+  S.tab=tab; S.open[key]=true; autosave(); render();
+  setTimeout(()=>{ const a=document.querySelectorAll('#outbody .pnl[data-k="'+key+'"]'), t=a[a.length-1];   /* last: "o-rf0" is used twice on the Roof tab */
+    if(t){ t.classList.remove("closed"); t.scrollIntoView({behavior:"smooth",block:"start"}); t.classList.add("flash");
+      setTimeout(()=>t.classList.remove("flash"),1700); } },60);
+}
+
 /* ---------------- Dashboard ---------------- */
 function renderDash(host){
   let n=0;
@@ -1963,6 +1997,11 @@ function renderDash(host){
     [{v:"Seismic response coefficient"},{v:"C<sub>s</sub>"},{v:RN(R.seis.Cs,4)},{v:"Sec. 12.8.1.1"}],
     [{v:"Seismic base shear"},{v:"V"},{v:R2(R.seis.Vbase)+" kip",cls:"hl"},{v:"Eq. 12.8-1"}]);
   dtable(b,null,["Quantity","Symbol","Value","Reference"],rows);
+  a7WorkedIn(b,[["Enclosure, GC<sub>pi</sub>","encl",R.enc.freeRoof?"o-enfree":"o-en3",R.enc.freeRoof?"Enclosure Classification":"Classification and Internal Pressure"],
+    ["h","basis","o-geom","Building Geometry"],["q<sub>h</sub>","windp","o-wp4","Velocity Pressure"],
+    ["p<sub>f,des</sub>","snow",R.snow.minApplies?"o-sn2":"o-sn1",R.snow.minApplies?"Minimum Roof Snow Load":"Flat Roof Snow Load"],
+    ["p<sub>s</sub>","snow","o-sn6","Design Snow Summary"]].concat(R.seis.Fa!==null?[["SDC","seis","o-se2","Seismic Design Category"],
+    ["C<sub>s</sub>","seis","o-se4","Seismic Response Coefficient"],["V","seis","o-se5","Base Shear and Vertical Distribution"]]:[]));   /* D11 links */
 
   b=panel(host,"o-wind",++n+".","Wind Pressure Envelope by Direction","Fig. 27.3-1");
   dtable(b,null,["Direction","Windward wall","Leeward wall","Roof, most negative","Roof, most positive"],
@@ -1973,6 +2012,8 @@ function renderDash(host){
         {v:R2(Math.min(c.pLW.pPos,c.pLW.pNeg))+" psf"},
         {v:R2(Math.min(...rp))+" psf",cls:"hl"},{v:R2(Math.max(...rp))+" psf",cls:"hl"}];}),
     "Windward wall value is at the mean roof height, the maximum over the two internal pressure signs. Negative is suction on the surface.");
+  a7WorkedIn(b,R.geom.free?[["roof","roof","o-fr1","Monoslope Free Roof"]]:[].concat(...R.cases.map((c,i)=>[[c.id+" walls","walls","o-wa"+i,"Wind Direction "+c.id],
+    [c.id+" roof","roof","o-rf"+i,"Roof, Wind Direction "+c.id]])));   /* D11 links */
   if(R.warn.length){const wb=panel(host,"o-warn",++n+".","Advisory Notices","");R.warn.forEach(x=>note(wb,esc(x),"w"));}
 }
 
@@ -2982,6 +3023,8 @@ function renderComb(host){
           ["Q<sub>E</sub>","Seismic base shear",q.Fa!==null?R2(q.Vbase)+" kip":"\u2014","Eq. 12.8-1"],
           ["E<sub>v</sub>","Vertical seismic effect, 0.2 S\u2091\u209b D",q.Fa!==null?R2(q.Ev)+" psf":"\u2014","Sec. 12.4.2.2"],
           ["\u03C1","Redundancy factor",R2(S.rho),"Sec. 12.3.4, user input"]]);
+  a7WorkedIn(b,[["W","walls",R.geom.free?"o-minwf":"o-minw","Minimum Design Wind Load"]].concat(q.Fa!==null?[["Q<sub>E</sub>","seis","o-se5","Base Shear and Vertical Distribution"]]:[],
+    [["S, balanced","snow","o-sn6","Design Snow Summary"]],SC.length>1?[["S, unbalanced","snow","o-sn5","Unbalanced Snow Load"]]:[]));   /* D11 links */
   dtable(b,"Snow load cases carried through every combination",["Case","S (psf)","Basis"],
     SC.map(sc=>[{v:sc.n},{v:R2(sc.v),cls:"hl"},
       {v:sc.n.indexOf("unbalanced")>=0?"Sec. 7.6.1":"Sec. 7.3 and 7.4"}]),
@@ -4392,8 +4435,9 @@ function printSel(){
 }
 function openPrint(){
   const sel=printSel(), d=document.getElementById("pdlist"); d.innerHTML="";
-  d.innerHTML='<label style="color:#555"><input type="checkbox" checked disabled> Title block and disclaimer footer <i>(always printed)</i></label>'+
-    '<label style="color:#555"><input type="checkbox" checked disabled> Status register and governing loads <i>(always printed)</i></label>';
+  d.innerHTML='<label style="color:#555"><input type="checkbox" checked disabled> Cover with title block, references, contents and disclaimer footer <i>(always printed)</i></label>'+
+    '<label style="color:#555"><input type="checkbox" checked disabled> Inputs <i>(always printed)</i></label>'+
+    '<label style="color:#555"><input type="checkbox" checked disabled> Results summary: status register and governing loads <i>(always printed, after the selected sections)</i></label>';
   RSECS.forEach(s=>{
     const empty = s.skip && s.skip();
     d.innerHTML+='<label'+(empty?' style="color:#999"':'')+'><input type="checkbox" data-pk="'+s.k+'"'+(sel[s.k]?" checked":"")+(empty?" disabled":"")+'> '+esc(s.t)+(empty?' <i>(empty, will not print)</i>':'')+'</label>'+
@@ -4402,54 +4446,185 @@ function openPrint(){
   document.getElementById("pdlg").classList.add("on");
 }
 function pdAll(v){ document.querySelectorAll("#pdlist input[data-pk]").forEach(i=>i.checked=v); }
+/* D11 (2026-10-18): slim calculation-sheet report (engineer's scope: inputs -> worked results, no D/C section), in the
+   Gusset Plate Rating / Section Property Calculator format: cover with title block, references (only what the printed
+   sections cite), numbered table of contents (links), numbered sections n and subsections n.k (the tabs' own panels,
+   built by the tabs' own renderers: symbolic -> values substituted -> result), the Results summary (the dashboard's
+   status register and governing values, with "see \u00A7n.k"), and the print header / "Page X of Y" footer (@page margin
+   boxes, a7PageCSS, present only while the report exists). No value is computed here: every number is the one the tabs show. */
+const A7_TOOL="ASCE 7-16 Building Load Generator";
+function a7PageCSS(tb){
+  const q=v=>String(v==null||v===""?"\u2014":v).replace(/\\/g,"\\\\").replace(/"/g,'\\"').replace(/[\r\n]+/g," ");
+  const desc=(tb.subject||tb.task||"Design loads").slice(0,44);
+  const box='font: 9.5pt "Times New Roman", Times, serif; color: #000; white-space: pre; vertical-align: bottom; padding-bottom: 6pt;';
+  const foot='font: 9pt "Times New Roman", Times, serif; vertical-align: top; padding-top: 6pt;';
+  return '@media print { @page { size: letter portrait; margin: 0.95in 0.5in 0.7in 0.5in;'+
+    ' @top-left { content: "Project No: '+q(tb.job)+'\\A Description: '+q(desc)+'"; '+box+' text-align: left; }'+
+    ' @top-center { content: "Computed By: '+q(tb.by)+'\\A Checked By: '+q(tb.chk)+'"; '+box+' text-align: left; }'+
+    ' @top-right { content: "Date: '+q(tb.date)+'\\A Date: '+q(tb.chkdate)+'"; '+box+' text-align: right; }'+
+    ' @bottom-left { content: "'+q(tb.project||"Untitled")+' ('+A7_TOOL+')"; '+foot+' }'+
+    ' @bottom-right { content: "Page " counter(page) " of " counter(pages); '+foot+' } } }';
+}
+function a7ApplyPageCSS(css){
+  let st=document.getElementById("a7-page");
+  if(!st){ st=document.createElement("style"); st.id="a7-page"; document.head.appendChild(st); }
+  st.textContent=css||"";
+}
+/* References: the provisions the printed sections actually cite, collected from their text (panel and equation
+   references, tables, notes), grouped by chapter. Nothing is added that the sections do not cite. */
+const A7_CH={1:"General",2:"Combinations of Loads",3:"Dead Loads, Soil Loads, and Hydrostatic Pressure",4:"Live Loads",7:"Snow Loads",
+  8:"Rain Loads",11:"Seismic Design Criteria",12:"Seismic Design Requirements for Building Structures",
+  13:"Seismic Design Requirements for Nonstructural Components",15:"Seismic Design Requirements for Nonbuilding Structures",20:"Site Classification Procedure for Seismic Design",
+  26:"Wind Loads: General Requirements",27:"Wind Loads on Buildings: Main Wind Force Resisting System (Directional Procedure)",
+  28:"Wind Loads on Buildings: Main Wind Force Resisting System (Envelope Procedure)",
+  29:"Wind Loads on Building Appurtenances and Other Structures: Main Wind Force Resisting System (Directional Procedure)",
+  30:"Wind Loads: Components and Cladding",
+  32:"cited by the User Manual for tornado loads; ASCE 7-16 has no Ch. 32 (tornado loads are Ch. 32 of ASCE 7-22): verify"};
+function a7Refs(body,sel){
+  const c=body.cloneNode(true); c.querySelectorAll(".katex,svg,script").forEach(x=>x.remove());
+  const tw=document.createTreeWalker(c,NodeFilter.SHOW_TEXT), parts=[];   /* text nodes joined with spaces: adjacent cells must not run together */
+  while(tw.nextNode()) parts.push(tw.currentNode.nodeValue);
+  const txt=parts.join(" ").replace(/\s+/g," ");
+  const N="\\d+\\.\\d+(?:\\.\\d+)*(?:-\\d+[a-z]?)?";
+  const re=new RegExp("\\b(Secs?|Eqs?|Tables?|Figs?|Figures?)\\.?\\s+("+N+"(?:\\s*(?:,|\\/|and|or|&)\\s*"+N+")*)","g");
+  const KIND={S:"Sec.",E:"Eq.",T:"Table",F:"Fig."}, asce={}, cmr={}, chap=new Set();
+  let m;
+  while((m=re.exec(txt))){
+    const k=KIND[m[1][0]];
+    m[2].match(new RegExp(N,"g")).forEach(v=>{ const ch=parseInt(v,10);
+      const tgt=ch>=100?cmr:(asce[ch]=asce[ch]||{}); (tgt[k]=tgt[k]||new Set()).add(v); });
+  }
+  (txt.match(/780 CMR (?:Table )?\d{4}(?:\.\d+)+/g)||[]).forEach(v=>{ const n=v.match(/\d{4}(?:\.\d+)+/)[0], k=/Table/.test(v)?"Table":"Sec.";
+    (cmr[k]=cmr[k]||new Set()).add(n); });
+  (txt.match(/\bCh\.\s+\d{1,2}\b/g)||[]).forEach(v=>chap.add(parseInt(v.slice(3),10)));
+  const nat=(a,b)=>a.localeCompare(b,undefined,{numeric:true});
+  const list=o=>["Sec.","Eq.","Table","Fig."].filter(k=>o[k]).map(k=>k+" "+[...o[k]].sort(nat).join(", ")).join("; ");
+  const rows=[["ASCE/SEI 7-16","<i>Minimum Design Loads and Associated Criteria for Buildings and Other Structures</i> (edition as stated by the tool). Provisions cited in this report, by chapter:"]];
+  [...new Set([...Object.keys(asce).map(Number),...chap])].sort((a,b)=>a-b).forEach(ch=>
+    rows.push(["\u2003Ch. "+ch,esc(A7_CH[ch]||"(chapter title not listed)")+(asce[ch]?": "+list(asce[ch]):" (chapter cited)")]));
+  if(Object.keys(cmr).length||S.jur==="MA") rows.push(["780 CMR, 10th Ed.","<i>Massachusetts State Building Code</i>, 10th Edition"+(Object.keys(cmr).length?": "+list(cmr)+" (with the notes cited in the text)":"")+"."]);
+  if(S.jur!=="MA") rows.push(["Hazard data","Manually entered; source as entered: "+esc(S.hazSource||"(not stated)")+"."]);
+  if(sel.man){ rows.push(["IBC 2021","<i>International Building Code</i>, 2021 Edition (User Manual, Part 11.2)."]);
+    rows.push(["Legacy workbook","<i>Snow, Wind &amp; Seismic Per MA Building Code and ASCE 7</i> (User Manual, Part 11.2); edition: verify."]); }
+  return rows;
+}
+/* Inputs: the entered values, echoed as entered (no computation) */
+function a7InputEcho(h){
+  const T=(host,rows)=>dtable(host,null,["Input","Symbol","Value"],rows.map(r=>[{v:r[0],cls:"d"},{v:r[1]||"\u2014"},{v:r[2]}]));
+  const yn=b=>b?"Yes":"No";
+  let b=panel(h,"r-in1","1.","Site, Risk Category and Hazard Data","780 CMR / ASCE 7-16");
+  T(b,[["Jurisdiction","",S.jur==="MA"?"Massachusetts (780 CMR)":"Other \u2013 manual entry"]].concat(S.jur==="MA"?[["City / Town","",esc(S.town)]]:
+    [["Site label","",esc(S.customLabel||"\u2014")],["Ground snow load","p<sub>g</sub>",R2(S.pgIn)+" psf"],["Minimum flat roof snow","p<sub>f,min</sub>",R2(S.pfMinIn)+" psf"],
+     ["Basic wind speed","V",R2(S.Vin)+" mph"],["Mapped short-period acceleration","S<sub>s</sub>",RN(S.SsIn,3)+" g"],
+     ["Mapped 1-second acceleration","S<sub>1</sub>",RN(S.S1In,3)+" g"],["Source of the values above","",esc(S.hazSource||"\u2014")]],
+    [["Site elevation above sea level","z<sub>g</sub>",R2(S.siteElev)+" ft"],["Risk category","",S.risk]]));
+  b=panel(h,"r-in2","2.","Exposure and Topography","ASCE 7-16 Sec. 26.7 / 26.8");
+  T(b,[["Exposure category","",S.expCat],["Topographic feature","",esc(S.topoType)]].concat(S.topoType==="None"?[]:
+    [["Height of feature","H",R2(S.topoH)+" ft"],["Upwind distance to H/2","L<sub>h</sub>",R2(S.topoLh)+" ft"],["Distance from crest (+ upwind)","x",R2(S.topoX)+" ft"]]));
+  b=panel(h,"r-in3","3.","Building Geometry and Roof Loads","");
+  T(b,[["Plan dimension, X direction","L<sub>x</sub>",R2(S.Lx)+" ft"],["Plan dimension, Y direction","L<sub>y</sub>",R2(S.Ly)+" ft"],
+    ["Eave height (low roof height)","h<sub>e</sub>",R2(S.hEave)+" ft"],["Roof type","",esc(S.roofType)]].concat(S.roofType==="Flat"?[]:
+    [["Roof slope, rise over run","m",RN(S.slope,4)],["Ridge / high point runs parallel with","",S.ridgeDir]],
+    [["Roof dead load, on the horizontal projection","D",R2(S.DLroof)+" psf"],["Roof live load","L<sub>r</sub>",R2(S.LrRoof)+" psf"]]));
+  b=panel(h,"r-in4","4.","Openings, Glazing and Enclosure","ASCE 7-16 Sec. 26.2 / 26.12");
+  T(b,[1,2,3,4].map(i=>["Wall "+i+" openings / glazed area","A<sub>o,"+i+"</sub> / A<sub>gl,"+i+"</sub>",R2(S["ao"+i])+" / "+R2(S["gl"+i])+" ft\u00B2"]).concat([
+    ["Roof openings","A<sub>o,roof</sub>",R2(S.aoRoof)+" ft\u00B2"],["Glazing impact-protected (Sec. 26.12.3.2)","",yn(S.glazProt)],
+    ["Within 1 mile of the coastal mean high water line","",yn(S.coastal)],["Wind-borne debris region","",esc(S.dbrOverride)],["Enclosure classification","",esc(S.enclOverride)]]));
+  b=panel(h,"r-in5","5.","Snow, Wind and Seismic Options","ASCE 7-16 Ch. 7 / 26 / 27 / 11 / 12");
+  const rx={full:"Fully Exposed",partial:"Partially Exposed",shelt:"Sheltered"}[S.roofExp]||S.roofExp;
+  T(b,[["Roof exposure condition","",rx],["Thermal condition","",esc(S.thermal)],["Unobstructed slippery surface (Fig. 7.4-1)","",yn(S.slippery)]].concat(
+    (S.roofType==="Gable"||S.roofType==="Hip")?[["Simply supported prismatic members, eave to ridge (Sec. 7.6.1 exception)","",yn(S.simplySupported)]]:[],
+    [["Drift locations entered","",String((S.drifts||[]).length)],["Code table treatment","",S.tblMode==="cons"?"Conservative round-up":"Linear interpolation"],
+     ["Gust-effect factor","G",S.Goverride?R2(S.Gval)+" (user override)":"not overridden"]],
+    S.roofType==="Monoslope free roof (open canopy)"?[["Wind flow beneath roof","",S.windFlow]]:[],
+    [["Chapter 29 elements entered","",String((S.elems||[]).length)],["Site class","",S.siteClass]],
+    S.siteClass==="D"?[["Site Class D is the default site class (Sec. 11.4.2)","",yn(S.siteDefaultD)]]:[],
+    S.siteClass==="B"?[["Site Class B without a measured shear wave velocity","",yn(S.siteBnoVs)]]:[],
+    [["Period coefficient case (Table 12.8-2)","",esc(S.seisSysType)],["Seismic force-resisting system (Table 12.2-1)","",esc(S.sfrs)],
+     ["Structural height","h<sub>n</sub>",R2(S.hn)+" ft"],["Long-period transition period","T<sub>L</sub>",R2(S.TL)+" s"],
+     ["Effective seismic weight","W",R2(S.seisW)+" kip"],["Redundancy factor","\u03C1",R2(S.rho)],["Use T = T<sub>a</sub> rather than C<sub>u</sub>T<sub>a</sub>","",yn(S.useTa)],
+     ["Story schedule levels","",String((S.levels||[]).length)+" (listed in the Seismic section)"]]));
+  note(b,"Values as entered on the input tabs. Derived values (p<sub>g</sub> used, V, S<sub>s</sub>, S<sub>1</sub>, h, \u03B8, wall areas) are worked in the sections that follow.");
+}
 function runPrint(){
   const sel=printSel();
   document.querySelectorAll("#pdlist input[data-pk]").forEach(i=>sel[i.dataset.pk]=i.checked);
   autosave();
   const rep=document.getElementById("report"); rep.innerHTML="";
   const tb={}; document.querySelectorAll("[data-tb]").forEach(i=>tb[i.id.slice(3)]=i.value);
-
-  /* ---- title block, always printed ---- */
-  const hd=el("div"); hd.id="rpt-hdr";
-  hd.style.cssText="border-bottom:2px solid #1F497D;padding-bottom:4px;margin-bottom:10px";
-  hd.innerHTML='<table style="width:100%;border-collapse:collapse;font-size:10pt">'+
-    '<tr><td style="width:36%;vertical-align:top"><b style="font-size:13pt;color:#1F497D">ASCE 7-16 Building Load Generator</b>'+
-    '<br><i>by Mario Lococo</i><br>Snow, Wind &amp; Seismic &mdash; '+APP_VERSION+'</td>'+
-    '<td style="width:34%;vertical-align:top"><b>Project:</b> '+esc(tb.project||"")+'<br><b>Subject:</b> '+esc(tb.subject||"")+
-    '<br><b>Task:</b> '+esc(tb.task||"")+'<br><b>Job No.:</b> '+esc(tb.job||"")+'</td>'+
-    '<td style="width:30%;vertical-align:top"><b>Computed by:</b> '+esc(tb.by||"")+' &nbsp; <b>Date:</b> '+esc(tb.date||"")+
-    '<br><b>Checked by:</b> '+esc(tb.chk||"__________")+' &nbsp; <b>Date:</b> '+esc(tb.chkdate||"__________")+'</td></tr></table>';
-  rep.appendChild(hd);
-
-  /* ---- always-printed summary ---- */
-  const s0=el("div"); rep.appendChild(s0);
   const savedTab=S.tab, savedOpen=JSON.parse(JSON.stringify(S.open));
   Object.keys(S.open).forEach(k=>S.open[k]=true);
-  renderDash(s0);
 
-  /* ---- selected sections, renumbered sequentially ---- */
+  /* ---- numbered sections n; their numbered panels become subsections n.k ---- */
+  const body=el("div"), toc=[], cardMap={};
   let idx=0;
-  RSECS.forEach(s=>{
-    if(!sel[s.k]) return;
-    if(s.skip && s.skip()) return;          /* empty sections drop out and do not consume a number */
-    idx++;
-    const wrap=el("div","rpt-pg");
-    wrap.appendChild(el("h2","sec",idx+".  "+esc(s.t)));
-    if(s.k==="man"){
-      const saved=S.manPart;
-      MANUAL.forEach((p,i)=>{ S.manPart=i; const c=el("div"); renderManual(c);
-        const nav=c.querySelector("#mannav"); if(nav) nav.remove(); wrap.appendChild(c); });
-      S.manPart=saved;
-    } else {
-      s.fn(wrap);
-      if(s.tier2 && !sel[s.k+"_d"]) wrap.querySelectorAll(".pnl.sub").forEach(p=>p.remove());
+  const addSec=(title,fill,flat)=>{
+    idx++; const wrap=el("div","rpt-pg"), sid="rpt-s"+idx;
+    const h=el("h2","sec",idx+".  "+esc(title)); h.id=sid; wrap.appendChild(h);
+    fill(wrap);
+    const subs=[];
+    if(!flat){
       /* only top-level numbered panels take a number; nested worked-derivation panels are unnumbered
          and must not consume one, or the sequence develops gaps */
       const nums=[...wrap.querySelectorAll(".pnl>.hd .num")].filter(n=>n.textContent.trim()!=="");
-      nums.forEach((n,j)=>{ n.textContent=idx+"."+(j+1)+"."; });
+      nums.forEach((n,j)=>{ const num=idx+"."+(j+1), pn=n.parentElement.parentElement, id2="rpt-"+idx+"-"+(j+1);
+        n.textContent=num+"."; pn.id=id2;
+        if(pn.dataset.k) cardMap[pn.dataset.k]={num,id:id2};   /* a key used twice ("o-rf0"): the later panel wins, as on screen */
+        const t=pn.querySelector(".hd .ttl"); subs.push({num,id:id2,t:t?t.textContent:""}); });
     }
-    rep.appendChild(wrap);
+    body.appendChild(wrap); toc.push({n:idx,t:title,id:sid,subs});
+  };
+  addSec("Inputs",a7InputEcho);
+  RSECS.forEach(s=>{
+    if(!sel[s.k] || s.k==="man") return;
+    if(s.skip && s.skip()) return;          /* empty sections drop out and do not consume a number */
+    addSec(s.t,wrap=>{ s.fn(wrap); if(s.tier2 && !sel[s.k+"_d"]) wrap.querySelectorAll(".pnl.sub").forEach(p=>p.remove()); });
   });
+  /* ---- Results summary, always printed: the dashboard (status register, governing design values, wind envelope) ---- */
+  addSec("Results Summary",renderDash);
+  if(sel.man) addSec("User Manual (design basis)",wrap=>{
+      const saved=S.manPart;
+      MANUAL.forEach((p,i)=>{ S.manPart=i; const c=el("div"); renderManual(c);
+        const nav=c.querySelector("#mannav"); if(nav) nav.remove(); wrap.appendChild(c); });
+      S.manPart=saved; },true);
+
+  /* ---- D11 links: "-> Tab . Panel" reads "see \u00A7n.k" in the report ---- */
+  body.querySelectorAll("a.wkA").forEach(a=>{
+    const hit=cardMap[a.dataset.wk]; a.removeAttribute("onclick");
+    if(hit){ a.textContent="see \u00A7"+hit.num; a.href="#"+hit.id; }
+    else a.textContent="see the "+a.textContent.replace(/^\u2192\s*/,"").replace(" \u00B7 "," tab, ")+" (not in this printout)";
+  });
+
+  /* ---- cover with title block ---- */
+  const cover=el("div","cr-cover"), site=S.jur==="MA"?S.town:(S.customLabel||"Manual entry");
+  cover.appendChild(el("div","cr-cover-t","<h1>"+A7_TOOL+"</h1><p>"+esc(tb.project||"Untitled project")+"</p>"+
+    (tb.subject?'<p class="cr-cover-p">'+esc(tb.subject)+'</p>':"")+(tb.task?'<p class="cr-cover-p">'+esc(tb.task)+'</p>':"")+
+    '<p class="cr-cover-p">Design loads: inputs and worked results</p>'+
+    '<p class="cr-cover-p">Codes: ASCE/SEI 7-16'+(S.jur==="MA"?"; 780 CMR, Massachusetts State Building Code, 10th Ed.":"")+'</p>'+
+    '<p class="cr-cover-p"><i>by Mario Lococo</i> &middot; '+APP_VERSION+'</p>'));
+  const tt=el("table","cr-tb"), mk=(a,b,c,d)=>{ const tr=el("tr"); tr.appendChild(el("td",null,"<b>"+a+":</b> "+esc(b||"\u2014")));
+    tr.appendChild(el("td",null,"<b>"+c+":</b> "+esc(d||"\u2014"))); tt.appendChild(tr); };
+  mk("Project",tb.project,"Project No.",tb.job); mk("Calculated by",tb.by,"Date",tb.date); mk("Checked by",tb.chk,"Checked date",tb.chkdate);
+  mk("Subject",tb.subject,"Task",tb.task); mk("Site",site,"Risk Category",S.risk);
+  cover.appendChild(tt);
+
+  /* ---- references and contents ---- */
+  const fm=el("div","cr-front");
+  fm.appendChild(el("h2","cr-h1","References:"));
+  const rt=el("table","cr-refs");
+  a7Refs(body,sel).forEach(([a,b])=>{ const tr=el("tr"); tr.appendChild(el("td",null,a)); tr.appendChild(el("td",null,b)); rt.appendChild(tr); });
+  fm.appendChild(rt);
+  fm.appendChild(el("h2","cr-h1","Table of contents:"));
+  const ol=el("ol","cr-toc");
+  toc.forEach(s=>{ const li=el("li",null,'<a href="#'+s.id+'">'+s.n+". "+esc(s.t)+"</a>");
+    if(s.subs.length) li.appendChild(el("ol",null,s.subs.map(q=>'<li><a href="#'+q.id+'">'+q.num+" "+esc(q.t)+"</a></li>").join("")));
+    ol.appendChild(li); });
+  fm.appendChild(ol);
+  fm.appendChild(el("p","cr-p","Inputs first, then each load the tool generates, in the order of its tabs. Where the tool works a value, the "+
+    "equation is shown symbolically, then with the values substituted, then with the result; code tables are printed at their point of use. "+
+    "\u201Csee \u00A7n.k\u201D points to the subsection where a quoted value is worked. This tool generates design loads only: there are no "+
+    "demand-to-capacity ratios. Units: ft, psf, lbf, kip, mph, s and g as labelled."));
+  rep.appendChild(cover); rep.appendChild(fm); rep.appendChild(body);
 
   /* ---- disclaimer footer, always printed ---- */
   const ft=el("div");
@@ -4462,13 +4637,14 @@ function runPrint(){
   rep.appendChild(ft);
 
   S.open=savedOpen; S.tab=savedTab;
+  a7ApplyPageCSS(a7PageCSS(tb));
   document.getElementById("pdlg").classList.remove("on");
   /* the figures are drawn asynchronously; wait for them to finish before printing */
   const t0=Date.now();
   (function waitForPlots(){
     const pending=(typeof PLOT_PENDING==="number")?PLOT_PENDING:0;
     if(pending>0 && Date.now()-t0<6000){ setTimeout(waitForPlots,120); return; }
-    setTimeout(()=>{ window.print(); setTimeout(()=>{ rep.innerHTML=""; render(); },500); },260);
+    setTimeout(()=>{ window.print(); setTimeout(()=>{ rep.innerHTML=""; a7ApplyPageCSS(""); render(); },500); },260);
   })();
 }
 
