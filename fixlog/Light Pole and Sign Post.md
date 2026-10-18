@@ -814,3 +814,233 @@ Check cases come from headless Chromium, main (e29761a) vs branch, with the page
 - **O10. Generic `activeTab` localStorage key** (output tabs, `switchTab`). Every file:// page in Chromium shares this name, and CLAUDE.md §5 forbids generic names. It was left unchanged in F9 and F13 because changing a key needs a migration. Decide whether to move it to `lpp_activeTab_v1` and migrate the old value.
   - **RESOLVED 2026-10-09 (F14):** engineer: rename to `lpp_activeTab_v1`. The old value is migrated once if it is a valid output-tab id; the old `activeTab` key is left in place and no longer written.
 - **O2, O3, O4, O5, O6, O9, O11, O12 / LP-A1, LP-A2:** RESOLVED 2026-10-12 (sweep), see F15–F25. The open sub-questions are listed under "Needs engineer" (N1–N7).
+
+## 2026-10-18 — PR: claude/lightpole-d11-report (AUDIT.md D11, display only; PR link added after merge)
+
+### D11: calculation-sheet report in the Gusset Plate Rating / ST-Girder format (Tier 1, display only)
+- **Engineer request:** 2026-10-14; scope decided 2026-10-18 (AUDIT.md D11: full report for every design-check tool).
+- **Where (anchors; line numbers drift):**
+  - **New block** before `// ================= CALCULATION REPORT =================`, anchor `// ================= D11 (2026-10-18): CALCULATION-SHEET REPORT + DERIVATION LINKS`:
+    - `LPP_SUMCTX`, `lppEsc`, `LPP_TABNAME`, `LPP_CHK2K`, `LPP_K2TGT`;
+    - `lppTgt`, `lppLink`, `lppWorkedIn`, `lppGoto`, the `a.wkA` click handler;
+    - `lppResLine`, `LPP_REFS`, `lppPageCSS`, `lppApplyPageCSS`;
+    - `lppSecRef`, `lppRes`, `lppDtHTML`, `lppTorsionHTML`, `lppReportDoc`.
+  - **`buildReport(inp,allCombos,gov,embed,struct)`** (light pole) and **`buildSignReport(inp,sw,pw,allCombos,postDesigns,poleSeg)`** (sign):
+    - They still write one `<details class="rpt-sec">` per section. Each now carries `data-old="<old tag>"`.
+    - They end with `lppReportDoc(H,{title,sub})` instead of writing `#reportBody` directly.
+  - **`renderSummary(ctx)`:** first line `LPP_SUMCTX=ctx;`. The report reads the same Summary context.
+  - **`summaryHTML(ctx)`:** a "Worked in" column in "Governing demands" and in "Demand vs capacity", and a B₂ link in "Key design inputs" (see "D11 links" below).
+  - **`bearingWorkedHTML(bearing, N, inp)`:** the square-shaft A_base formula (see "Also fixed" below).
+  - **Report card header:** new button `id="lppRptPrint"` ("Print / PDF report").
+  - **End of the script:** anchor `// D11: printing prints the calculation report` (the button, `beforeprint`, `afterprint`).
+  - **CSS:** anchor `/* D11 calculation-sheet report (Gusset Plate Rating / ST-Girder format)`. It also holds the print rules.
+  - **Manual:** the §3.7 "Report tab" paragraph now describes the new layout.
+- **Before:**
+  ```js
+  // end of buildReport (light pole) and of buildSignReport (sign), identical:
+  $('reportBody').innerHTML=H;
+  if(window.renderMathInElement){
+    renderMathInElement($('reportBody'),{delimiters:[{left:'\\[',right:'\\]',display:true},{left:'$',right:'$',display:false}],throwOnError:false});
+  }
+  ```
+  ```css
+  @media print{ … .tabpage{display:block!important} … }   /* every output tab printed, then the report */
+  ```
+  - The Report tab was a stack of collapsible sections:
+    - light pole tags 0, 1, 2, 2b, 3, 4, 4b, 4c, 5, 6, 6b, 7, 8;
+    - sign tags 0, 1, 1b, 3.
+  - It had no cover, title block, references, table of contents, n.k numbering, result lines, page header or page footer.
+  - Ctrl+P printed every output tab (Geometry, Summary, Loading, Post, Anchors, Shaft) and then the report.
+  - The "Export PDF / Print" button sits in the hidden `#cardSource` block and was never visible. It is unchanged.
+- **After:**
+  - **Cover:**
+    - tool title (the masthead title: Light Pole / Monopost Sign / Double-Post Sign Pier Designer);
+    - project (the saved project name, else "Untitled");
+    - the masthead eyebrow line;
+    - codes, tool, author and print time.
+  - **Title block:** Project / Project No. / Calculated by / Date / Checked by / Checked date.
+    - **No field was added.** The tool has no project-number, engineer or date fields, so these read "—". The contents page says so.
+  - **References** (only what the tool cites): ASCE/SEI 7-22, IBC 2021, ACI 318-19, AISC 360-16, ASTM F1554, AASHTO LTS C13.6.1.1.
+    - AASHTO LTS is cited for the Broms check, which is reference only. The tool states no edition, so it reads "edition: verify".
+    - The ASCE 7 load combinations are listed with "the tool cites no section".
+  - **Numbered table of contents** with links.
+  - **Section 1, Design Summary:**
+    - It is the Summary tab's own `summaryHTML(ctx)`, with the check chips removed.
+    - It is split at its headings:
+      - 1.1 Verdict and items not checked;
+      - 1.2 Design;
+      - 1.3 Governing demands;
+      - 1.4 Demand vs capacity;
+      - 1.5 Key design inputs;
+      - 1.6 Reference comparisons (only when Broms is on).
+    - It ends with "Results — all checks": one result line per `collectChecks` item, each with "see §n.k".
+  - **Sections 2, 3, …:** one per old report section.
+    - Subsections n.k are cut at the section's `.eq-title` / `.subhead` headings, or at its `.step-label` steps when it has none.
+    - A heading directly followed by another heading stays inside the first one's subsection.
+    - The old "(§2)", "(§2b)", "(§3)", "(§4)", "(§4c)", "(§6b)" references in the text point to the renumbered sections.
+    - "(§2b)" and "(§3)" are dropped when there are no fixtures / no cables. They used to point at a missing section.
+  - **Result line** after each worked check: `<check>: D/C = x.xx (<code>) PASS/FAIL`. The D/C and the verdict are `collectChecks`' own `ratio` and `ok`, as in the Summary table.
+  - **Print:** only the report prints, from any tab. The print CSS hides the masthead and every other tab.
+    - `@page` letter with margin boxes. They are set only while printing (button / `beforeprint`) and cleared on `afterprint`.
+    - Top: "Project No: — / Description: <project or tool title>", "Computed By: — / Checked By: —", "Date: — / Date: —".
+    - Bottom: "<project> (Light Pole and Sign Post)" and "Page X of Y".
+  - **On screen,** the Report tab shows the same document. Its sections are no longer collapsible.
+- **Content changes inside the report** (display only, same values). The tab derivations are reused: "one copy of each derivation", as the manual states.
+  - **Light pole §7 → section "Shaft reinforcement":**
+    - Three blocks of the report's own are replaced by the Shaft tab's `rebarWorkedHTML(reo,inp,Mu,Pu,Vu)`: "Flexural capacity by circular P-M interaction", "Concrete shear capacity" and "Tie size & spacing".
+      - The removed blocks gave φM_n with no work shown.
+      - They were captioned "circular" for a square shaft.
+      - They were titled "auto-sized" in check mode.
+    - `rebarWorkedHTML` shows A_s,max, the strain-compatibility φM_n with the bar table, and the check-mode table.
+    - The section title now reads "(check of the specified bars)" in check mode.
+  - **"Minimum longitudinal reinforcement":**
+    - The prose is kept. It now follows the "full 1 %" option when that option is selected.
+    - The equation is dropped. `A_g = π/4 b²` was wrong for a square shaft; A_g is worked in the next block.
+  - **Light pole §6b → "Soil bearing":** now the Shaft tab's `bearingWorkedHTML`.
+    - The prose said the axial came "from the governing ASD combination".
+    - Since F2 it is the ASD combination with the largest axial. That combination is now named.
+  - **Light pole §6 → "Embedment":** adds the Shaft tab's Broms reference check when a Broms soil model is selected. It is `bromsWorkedHTML`, with the same call as the tab.
+  - **Light pole §4c → "Pole combined stress":** adds a report-only line for the D/t < 0.45E/F_y check. The Summary lists that check, but no tab works it.
+    - Default: `(D/t)max = 40.0 < 0.45E/Fy = 0.45(29,000)/50 = 261.0`.
+  - **Sign report:**
+    - **Basis line:** "<b>Torsion is not evaluated</b> — see the limitation note below (§2)" was stale since F19 (monopost torsion is checked), and it pointed at a section that did not exist. It is replaced by the Loading tab's own torsion note (`#sgTorsionNote`).
+    - **New section "Load combinations — per-post demand":** the Loading tab's `#sgComboTbl`. The report had no combination table. The two-post force split moves here.
+    - **One section per post,** with the Post / Anchors / Shaft tabs' derivations, called exactly as `populateDetailStack` calls them:
+      - `demandWorkedHTML`, `embedWorkedHTML`, `bromsWorkedHTML` (when on), `bearingWorkedHTML`;
+      - `rebarWorkedHTML`, `boltWorkedHTML`, `poleWorkedBody`.
+    - **Removed:** the report's own sign blocks.
+      - "Embedment (IBC §1807.3, non-constrained)" said non-constrained and showed the non-constrained equation even with "constrained" selected.
+      - "Soil bearing" and "Longitudinal reinforcement" gave results with no substitution.
+    - **Monopost:** a report-only "Shaft torsion threshold" block. The Summary lists the check, but no tab works it.
+      - Default monopost: `φT_th = φλ√f′c·A_cp²/p_cp = 0.75(1.0)√4000·(1,017.9)²/113.10·1/12 = 36,212 lb·ft`; `T_u = 6,411 < φT_th`.
+  - **Plain-text TeX** in two light-pole prose lines now uses subscripts: `K_{z,top}`, `K_{z,mid}`, `q_{z,mid}·G·C_f·A_pole`, `M_{pole}`.
+- **Also fixed (display only, app and report):** `bearingWorkedHTML` showed `A_base = π/4·b²` for a square shaft, while the value was b² (`bearingCheck` uses b² for a square shaft).
+  - Before:
+    ```js
+    H+=g(`A_{base} = \\tfrac{\\pi}{4}b^2 = \\tfrac{\\pi}{4}(${fmt(inp.b,2)}\\ \\text{ft})^2 = ${fmt(bearing.Abase,2)}\\ \\text{ft}^2`);
+    ```
+  - After: when `inp.shaftShape==='square'`, it shows `A_{base} = b^2 = (${fmt(inp.b,2)}\\ \\text{ft})^2 = …`. Round shafts are unchanged.
+  - Check (square 3.00 ft shaft):
+    - Before: "A_base = π/4 b² = π/4(3.00 ft)² = 9.00 ft²".
+    - After: "A_base = b² = (3.00 ft)² = 9.00 ft²".
+    - The value is unchanged.
+- **Provision:** none. No formula, factor, unit, code reference or result changed. The references and the codes in the result lines are those the tool already cites.
+- **Saved data:** none. No key or format changed, and no key was added. The report reads the Summary context in memory (`LPP_SUMCTX`), never storage.
+- **Check case:** default light pole, project "Main St Pole 4".
+  - **27 letter pages:** cover, front matter (references and contents, 3 pages), then 14 sections:
+    1. Design Summary (1.1–1.5);
+    2. Design inputs & basis (2.1–2.8);
+    3. Wind velocity pressure (3.1–3.3);
+    4. Wind force on the pole (4.1–4.2);
+    5. Fixture loads (5.1–5.4);
+    6. Cable loads (6.1–6.6);
+    7. Load combinations;
+    8. Wind direction envelope;
+    9. Pole combined stress (9.1–9.7);
+    10. Governing ASD demand (10.1–10.3);
+    11. Embedment (11.1–11.2);
+    12. Soil bearing (12.1);
+    13. Shaft reinforcement (13.1–13.4);
+    14. Anchor bolts (14.1–14.8).
+  - **Result lines** (same as the Summary):
+
+    | Check | D/C | Worked | Result |
+    |---|---|---|---|
+    | Tie spacing | 1.00 | 12 / 12 in | PASS |
+    | Longitudinal steel, min | 0.96 | 5.09 / 5.28 in² | PASS |
+    | Anchor tension | 0.49 | 9,791 / 20,160 lb | PASS |
+    | Post combined stress (AISC 360 §H1.1) | 0.24 | — | PASS |
+    | D/t | 0.15 | 40.0 / 261.0 | PASS |
+    | Soil bearing | 0.08 | q = 1,117 lb / 7.07 ft² = 0.16 ksf ≤ 2.00 ksf | PASS |
+    | Shaft flexure | 0.08 | 19,949 / 255,217 lb·ft | PASS |
+
+  - **Other cases:**
+    - monopost sign: 19 pages, 6 sections;
+    - two-post sign: 26 pages, 7 sections (one per post);
+    - square shaft / check mode / constrained: 27 pages;
+    - no cables: 22 pages, 13 sections;
+    - Broms on: 30 pages.
+
+### D11 links: quoted values link to where they are worked (CLAUDE.md §6) (Tier 1, display only)
+- **Links added** (Summary tab; they read "Worked in: → Tab · Card"):
+  1. **"Demand vs capacity":** a "Worked in" column. Each check opens its worked calculation:
+     - shaft checks → Shaft · Shaft structural check (`#rebarExample`);
+     - soil bearing → `#bearingExample`;
+     - anchor checks → Anchors · Anchor bolt design (`#boltExample`);
+     - shaft torsion → the Anchors limit-state table (`#boltTbl`);
+     - post combined stress → Post · Pole/Post combined stress (`#poleStrExample`);
+     - D/t → `#poleStressTbl`.
+  2. **"Governing demands":**
+     - ASD row → Shaft · Foundation demand & embedment (`#demandExample`);
+     - LRFD row → Loading · Load combinations (`#comboMatrixTbl`; sign: `#sgComboTbl`).
+  3. **"Key design inputs":** the B₂ value → Post · Pole combined stress. B₂ is worked in step 1 of the pole/post derivation.
+- **Sign mode:**
+  - The targets are the per-post ids (`…_sp1`, `…_sp2`).
+  - With two posts, the link first selects that post (`__selectedPost`, the post selector), then opens the tab.
+- **Clicking a link:**
+  - It switches the tab, opens a closed worked-calculation `<details>`, scrolls to the block and flashes it.
+  - Only the shown tab / post changes, as a tab click does. `switchTab` writes the remembered tab key `lpp_activeTab_v1` as before.
+  - Inputs, results and saved projects are untouched.
+- **In the report,** each link reads "see §n.k" (the subsection that holds that worked block).
+  - A target missing from the printout would read "see the <Tab> tab (…); not in this printout". None of the 6 test cases has one.
+- **Check case:**
+  - **Default pole, Summary tab:** "Anchor tension … → Anchors · Anchor bolt design" opens Anchors at the worked Ch. 17 block.
+    - The report reads "see §14.7".
+    - The results block reads "Anchor tension: D/C = 0.49 (ACI 318-19 Ch.17) see §14.7 PASS".
+  - **Two-post sign:** "Anchor tension · P2" selects Post 2 and opens `#boltExample_sp2`. The report reads "see §7.5".
+
+### Verification (whole PR)
+- **Syntax:** `node tests/check-syntax.mjs "Light Pole and Sign Post.html"`: all scripts pass.
+- **No computed result changed.** Headless Chromium, origin/main (9119f2a) vs this branch, with KaTeX 0.16.9 served locally (npm pack).
+  - **Method:** every function declaration is global, so the harness wrapped `renderSummary`, `buildReport` and `buildSignReport` to capture their full argument objects:
+    - the Summary context, with every stack's `found`, `pstress`, `asd`, `lrfd`, `nat`, `b2` and `broms`;
+    - `allCombos`, `struct`, `postDesigns` and the other builder arguments;
+    - `window.__summary`.
+  - **6 cases:**
+    1. default pole;
+    2. square shaft, square HSS, check-mode rebar, constrained, no anchor reinforcement;
+    3. no cables, rectangular HSS, V = 140, custom soil, isolated ×2;
+    4. monopost sign;
+    5. two-post sign (V = 130, square shaft);
+    6. Broms cohesive, K_d override 0.95.
+  - **Results:**
+    - In all 6 cases, the captured objects (99–283 k characters of JSON each) are identical.
+    - The text of the Geometry / Summary / Loading / Post / Anchors / Shaft tabs is identical once the new "Worked in" cells and links are removed. The only remaining difference is the square-shaft A_base formula (cases 2 and 5), as intended.
+    - No console errors.
+- **Page smoke test:** `node tests/compare.mjs --tool page --file "Light Pole and Sign Post.html"`.
+  - `page.text` and `page.storage` are the same.
+  - The 3 console errors are the kit's blocked jsDelivr KaTeX requests, identical on main.
+- **Report PDF** for the 6 cases (print media, `preferCSSPageSize`, `printBackground`):
+  - Every internal link (`#crp-…`) resolves.
+  - KaTeX: 0 errors, and no raw TeX outside KaTeX.
+  - No empty subsection and no unmapped "§" reference.
+  - pdftotext shows the "see §" links.
+  - Pages inspected:
+    - cover; references / contents; Design Summary with its results;
+    - wind (3.x); the cable section; pole stress with its result lines and the D/t line;
+    - shaft reinforcement; soil bearing;
+    - sign load combinations; a sign post section with the torsion block.
+- **Headless click test** (default pole, two-post sign, monopost):
+  - Every link type opens the right tab / post, opens the collapsed calculation and flashes the target in view.
+  - No console errors.
+- **Print and narrow screens:**
+  - Printing from the Geometry tab shows only the report; the masthead and the other tabs are hidden.
+  - At 390 px wide the page has no horizontal scroll.
+
+### Open items (not changed; engineer to decide)
+- **Calculation (raised only), shaft φ:** the shaft P–M uses φ = 0.65 ("tied, compression-controlled") for every section, including clearly tension-controlled ones.
+  - Default pole: the extreme bar strain is −15.7×10⁻³.
+  - ACI 318-19 Table 21.2.2 gives φ = 0.90 when ε_t ≥ 0.005.
+  - The tool's value is conservative. Keep 0.65?
+- **Calculation (raised only), sign Broms arguments:** in sign mode the Broms reference check is called with different moments.
+  - The Summary's "Reference comparisons" calls `bromsEmbedment(inp, gLRFD.M/1000, gLRFD.P/1000)` (first-order M).
+  - The Shaft tab and the report call it with `F.Mu/1000, F.Vu/1000` (B₂·M).
+  - Monopost default with cohesive soil: L = 7.35 ft (Summary) vs 7.37 ft (tab / report).
+  - It is a reference check with no design effect. Which arguments should both use?
+- **Not worked anywhere (§6 gap):**
+  - The natural frequency n₁ (Rayleigh) and G_f are quoted, not derived.
+  - Shaft torsion φT_th and the D/t limit are now worked in the report only. Show those two blocks in the Post / Anchors tabs too?
+- **Title block fields:** the tool has no Project No., Calculated by, Checked by or date fields, so the cover and the page header show "—". Add optional tool-prefixed fields, saved in the project state?
+- **Behaviour change to confirm:**
+  - Ctrl+P now prints only the calculation report. Before, it printed every output tab, then the report.
+  - The Report tab's sections are no longer collapsible.
