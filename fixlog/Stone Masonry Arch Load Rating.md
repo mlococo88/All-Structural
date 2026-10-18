@@ -381,3 +381,150 @@ Engineer's instruction (2026-10-12): work through every open item, use best judg
 ### Remaining open items
 - Art. 6.4.2 "the total width of distribution shall not exceed the total width of the supporting slab": not applied (one or several trucks). Under very deep fill on a narrow barrel the merged width can exceed the barrel width, which understates the pressure. Recommendation: cap the merged width at the barrel width (a §4 calc change; not done here).
 - The Live Load transverse figure draws one truck; it could draw the adjacent truck when κ > 1.
+
+## 2026-10-18 — PR: claude/arch-d11-report (PR link added after merge)
+
+### D11: calculation-sheet report in the Gusset Plate Rating / ST-Girder format (Tier 1, display only)
+- **Engineer request:** 2026-10-14 / 2026-10-18 (AUDIT.md D11: "have a report builder, to be reviewed against the format").
+- **Functions / anchors:**
+  - New, immediately before `function buildReport(sel){` (anchor `/* D11 (2026-10-18): calculation-sheet report in the Gusset Plate Rating / ST-Girder format`): `ARCH_REFS`, `archPageCSS()`, `archApplyPageCSS()`, `archResultBlock()`, `archCalcSheet()`. To re-apply by hand, copy that block from this version.
+  - `buildReport()`:
+    - The `#rptHead` box is replaced by a cover section (anchor `/* D11 (2026-10-18): cover page with the title block`).
+    - `sec()` takes an optional third argument, a target id written as `data-cid` on the `h2`. Before: `` const sec=(title,body)=>`<h2>${N()}. ${title}</h2>${body}`; `` After: `` const sec=(title,body,cid)=>`<h2${cid?` data-cid="${cid}"`:""}>${N()}. ${title}</h2>${body}`; ``. Ids passed: `"o_dash"` (Summary Dashboard), `"o_geo"` (Geometry), `"o_dl"` (Dead Load), `"rate"` (Rating — Vehicle by Vehicle), `"man"` (User Manual).
+    - The per-vehicle `h3` gets `data-cid="veh_${r.id}"`. Before: `` body+=`<h3>${n+1}.${++sub} `` After: `` body+=`<h3 data-cid="veh_${r.id}">${n+1}.${++sub} ``.
+    - Block "C3 — running header and footer" (filled `#runHead` / `#runFoot`) is replaced by `archApplyPageCSS();`.
+    - Certification is appended inside the document. Before: `$("rptHost").insertAdjacentHTML("beforeend",sig);` After: `$("rptHost").querySelector(".rpt").insertAdjacentHTML("beforeend",sig);`.
+    - Block "C5 — contents" (an unlinked table of the `h2` headings) is replaced by `archCalcSheet($("rptHost"));`.
+  - `reportModal()`: the default-selection lines move into the new `rptSelDefaults()`, and the build goes through the new `archBuildReport(sel)`. Before: `window.__buildingReport=true; try{buildReport(sel);}finally{window.__buildingReport=false;}`. After: `archBuildReport(sel);`.
+  - New `let renderSeq=0, rptBuiltSeq=-1;`, `archBuildReport()` and a `beforeprint` listener (after `rptSelDefaults`). `render()` gains `renderSeq++;` as its first line.
+  - CSS:
+    - The `@page{margin:1.25in 0.55in 1.15in;}` rule and the `@media print` block that showed `#runHead` / `#runFoot` as `position:fixed` bands are replaced by `#runHead,#runFoot{display:none !important;}` (anchor `/* D11 (2026-10-18): the running header and footer are now @page margin boxes`).
+    - New rules after `#rptFoot{…}`: anchor `/* D11 calculation-sheet report (Gusset Plate Rating / ST-Girder format) */`.
+- **Before:**
+  - A title box on page 1 (Project, Subject, Task, Computed by, Date, Checked by, Date).
+  - An unlinked "Contents" table of the 18 section headings, with no subsections.
+  - Sections numbered 1–18 that ran on without page breaks. Inside them, the panels kept their own tab numbering ("1. Method", "2. Degrees of freedom …"), and only the rating section had "8.k" headings.
+  - A running header "Project · Subject | Task · Stone Arch LR" and footer "Computed … · Checked … | Inventory level · Allowable Stress · MBE 6A.9.1". These were `position:fixed` bands without page numbers.
+- **After:**
+  - **Cover:**
+    - Title, project (or "Untitled"), subject when entered, method and codes (railroad mode names AREMA Ch. 8), by-line.
+    - The controlling result, with the same values as the dashboard ("EV3 (Inv basis), RF = 0.451 (19.4 tons) at section SL-L — at least one vehicle rates below 1.0").
+    - The title block: Project / Project No. / Subject / Computed by / Date / Task / Checked by / Checked date / Program (Stone Arch LR build).
+    - **Project No.:** the tool has no project-number field (title block: `tbProject`, `tbSubject`, `tbTask`, `tbBy`, `tbDate`, `tbChk`, `tbChkDate`). It prints "—", and no field was added.
+  - **References table** (`ARCH_REFS`), listing only what the tool cites:
+    - MassDOT BM Pt. I §7.2.7 (§7.2.7.2B–§7.2.7.12, Fig. 7.2.7-1), §7.2.4.1B and §7.2.4.6B;
+    - AASHTO MBE 6A.9.1, 6B.5.2.6 and 6B.7;
+    - AASHTO Std. Spec. 6.4 / 6.4.1 / 6.4.2, 3.8.2.3, 3.24.3 / 3.24.3.2 / 3.24.10 / 3.30, and 3.6.3 / 3.12.1;
+    - AASHTO LRFD 3.6.1.2.6 (tire-patch option only);
+    - AREMA Ch. 8 (railroad);
+    - the two papers in Manual §9.2.
+    - Every row says "Edition: verify". The tool states no edition (AUDIT.md inventory: "No editions stated."). The Std. Spec. row notes that this fix log works to the 17th Ed. (2002).
+  - **Table of contents:** numbered, with links, listing sections and subsections.
+  - **Numbered sections** (`section.cr-sec`, each starting on a new page, headings in the house style), unchanged in content and order:
+    1. Input Echo;
+    2. Summary Dashboard;
+    3. Design Basis and Sign Conventions;
+    4. Geometry, Restraint and Model Definition;
+    5. Longitudinal Section;
+    6. Dead Load;
+    7. Live Load Distribution Through Fill;
+    8. Rating — Vehicle by Vehicle;
+    9. Rating Vehicle Configurations;
+    10. Force Diagrams;
+    11. Lateral Earth Pressure;
+    12. Influence Line Development;
+    13. Nodal Results;
+    14. Independent Verification against Midas Civil;
+    15. Rating Summary;
+    16. Mesh Convergence;
+    17. User Manual and Design Basis;
+    18. Certification.
+    - Deselected sections close up the numbering, as before.
+  - **Subsections n.k:**
+    - The top-level panels of a section (the panel's own number is replaced by n.k), the per-vehicle headings of §8, and the "Worked calculation — node …" heading of §13.
+    - Where a section has none of those, its top-level `h4` headings (§3, §4, §6, §7).
+    - The User Manual keeps its own chapter numbering and gets no n.k.
+    - Worked equations (symbolic → substituted → result) are exactly as on screen; nothing is recomputed.
+  - **Result lines** ("Results — Rating factors") at the end of §8, or of the Summary Dashboard when §8 is not printed. There is one line per rated vehicle: "<vehicle> rating factor: RF = x.xxx → tons [, E-number] (MassDOT BM Pt. I §7.2.7.12; MBE 6A.9.1; governs at <section>; §8.k) PASS/FAIL". PASS means RF ≥ 1.0, the dashboard's rule, and the values are the tool's `results`.
+  - **Print:** `@page` letter with margin boxes, in `<style id="arch-page">` inside `@media print`, so they apply only while printing.
+    - Top: "Project No: — / Description: <Subject, else Project>", "Computed By / Checked By", "Date / Date".
+    - Bottom: "<project> (Stone Masonry Arch Load Rating)", with "Stone Arch LR <build> · Inventory level · Allowable Stress · MBE 6A.9.1" on a second line (kept from the old footer), and "Page X of Y".
+    - The Task field, which was in the old running header, now prints on the cover only.
+- **Fixed along the way (display only):**
+  1. **Raw TeX.** Influence Lines tab, panel "Element stiffness — worked for one element", step "Axial and flexural rigidity" (screen and report). It printed "EI = 144000 kip\cdotpft²", because KaTeX has no text-mode "·". Anchor `EI=${num(E*I,0)}\\ \\text{kip`.
+     - Before: `` res:`EA=${num(E*A,0)}\\ \\text{kip},\\ EI=${num(E*I,0)}\\ \\text{kip·ft²}`}) ``
+     - After: `` res:`EA=${num(E*A,0)}\\ \\text{kip},\\ EI=${num(E*I,0)}\\ \\text{kip}\\cdot\\text{ft²}`}) ``
+     - It now reads "kip⋅ft²". Same value.
+  2. **Stale or empty print.** Ctrl+P (or the browser's Print) printed the report as last built. Before the first build that was an empty `#rptHost`: a blank sheet with only the running bands. After any input change it was a stale report. The `beforeprint` listener now rebuilds the report whenever `render()` has run since the last build, using the last report selection (all sections by default). The "Build report & print" button builds once and is not rebuilt.
+  3. **Unlinked contents.** The old contents table had no links and no subsections. Subsection numbering mixed each tab's own "1., 2. …" with document numbers. All of this is now n.k as above.
+- **Provision:** none. No formula, factor, unit, code reference or result changed.
+- **Saved data:** none.
+  - No key or format change: `stoneArchLR.autosave`, `stoneArchLR.projects`, `stoneArchLR.probe`, `stoneArchLR.inputTab_v1`, the JSON export and `bridgeSuite.v1.projectMeta` are untouched.
+  - The report selection (`rptSel`) is in memory only, as before.
+- **Check case:** default project, all report options on, title block blank.
+  - 18 sections and 69 subsections; 167 letter pages (main: 165).
+  - §8 result lines, equal to the dashboard: H20 0.690 FAIL, HS20 (V=14′) 0.626, Type 3 0.822, Type 3S2 0.901, Type 3-3 0.998, SU4 0.705, SU5 0.675, SU6 0.638, SU7 0.656, EV2 0.638 and EV3 0.451 (19.4 tons, governs at SL-L, §8.11), all FAIL. The full-precision RFs are 0.689613 … 0.450739.
+  - Railroad mode (E80, F40PH, HSP46): the cover names AREMA Ch. 8. The result lines are "AREMA Cooper E-80 rating factor: RF = 0.114 → 4.6 tons, E9 … §8.1 FAIL", F40PH 0.196 and HSP-46 0.186.
+
+### D11 links: quoted values link to the panel where they are worked (CLAUDE.md §6) (Tier 1, display only)
+- **New global helper** `archWorkedIn(items)`, before the CALC module (anchor `/* ---- D11 links (CLAUDE.md §6, 2026-10-18)`). It returns `<div class="wkLink">Worked in: <a class="wkA" data-wtab data-wcard [data-wsub] data-txt>value → Tab · Panel</a></div>`.
+- **New in the application layer** (before `function postRender(p){`): `archGoto(tab,card,sub)` and a document click handler for `a.wkA`. A click:
+  - sets `activeTab` and re-renders;
+  - expands the panel (also when it was collapsed);
+  - scrolls the output panel, or the window on narrow screens, so the panel (or the `h4` / `h5` named by `sub`) sits just below the sticky tab bar;
+  - flashes the panel.
+- **"Worked in" lines added:**
+  1. Summary Dashboard, "Controlling result" message: governing RF → Rating · <vehicle>. Anchor: after `"Cooper derives from that same 80 kip reference and is not a physical vehicle weight."`.
+  2. Live Load tab, "Worked at the controlling case" message: governing position x → Rating · <governing vehicle>. Anchor `` `${gv.dir<0?", traveling right to left":""}.`+ ``.
+  3. Live Load tab, "Influence line superposition at …": influence coefficients → Influence Lines · Influence coefficient table — moment (`il_tabM`).
+  4. Vehicles tab, each vehicle panel (`vh_<id>`, title "… — RF x.xxx"): RF → Rating · <vehicle>. Anchor: first line of the `UI.pnl("vh_"+v.id,…)` body.
+  5. Rating tab, every vehicle's "Dead load at this section, by component" table (`CALC.vehicleSection`): P_DL, M_DL at <section> → Dead Load · Dead load section forces (`o_dl`, sub-heading). Anchor `` `Share columns are blank where the total passes through zero.</div>`+ ``.
+  6. Earth Pressure tab, "Sensitivity of the rating to K": reported RF → Rating · <governing vehicle>. Anchor `§7.2.7.5B. The prescribed value is shaded.</div>`+`.
+  7. Nodal Results tab, "Influence line summary": moment influence ordinates → Influence Lines · Influence coefficient table — moment. Anchor `into the two numbers that tell you where load has to sit to hurt a given section.</div>`+`.
+- **Calculation report:** `archCalcSheet` records each subsection's §n.k by panel id, `h3` `data-cid` and `<section cid>|<h4 title>`, and rewrites:
+  - "Worked in" links to "<value>: see §n.k" (PDF links). A target left out of the printout reads "<value>: see the <Tab> tab (<Panel>; not in this printout)".
+  - the dashboard's existing "<vehicle> rating factor" jumps (`a.jump[data-go]`, which work only on screen) get "(see §8.k)" after them, or "(worked section not in this printout)".
+  - Links 2 and 3 are on panels that the report does not print, so they are in-app only.
+- **Provision:** none. No result changed.
+- **Check case (default project, all options):**
+  - The report prints "RF 0.451: see §8.11" (dashboard); "(see §8.1)" … "(see §8.11)" in the dashboard rows; "P_DL, M_DL at SL-L: see §6.2" in each of the 11 vehicle sections; "RF 0.690: see §8.1" … in §9; "reported RF 0.451: see §8.11" in §11.6; and "moment influence ordinates: see §12.7" in §13.6.
+  - The report DOM has 134 internal links, none broken.
+  - With Dead Load and the EV3 detail deselected: "P_DL, M_DL at SL-L: see the Dead Load tab (Dead load section forces; not in this printout)", "RF 0.451: see the Rating tab (EV3 (Inv basis); not in this printout)", and the EV3 result line reads "worked section not in this printout".
+- **Verification (both entries):**
+  - `node tests/check-syntax.mjs "Stone Masonry Arch Load Rating.html"`: all 15 scripts pass.
+  - `node tests/compare.mjs --tool page --file "Stone Masonry Arch Load Rating.html"`:
+    - page.storage is the same;
+    - page.text differs by exactly one line, the new "Worked in: RF 0.451 → Rating · EV3 (Inv basis)".
+    - The kit does not route this tool's jsdelivr KaTeX / cdn.plot.ly URLs, so both sides run without libraries there.
+  - **Main vs branch with KaTeX 0.16.9 and Plotly 2.27.0** (the pinned versions, files from `tests/libs`), routed for this tool's URLs.
+    - Five cases:
+      1. default;
+      2. railroad mode (10 rail vehicles, t_ws 0);
+      3. pinned + 2% grade + cover 3.5 ft + local impact + adverse-only placement + SDL items + 30 ft barrel;
+      4. parabolic 30/6 ft, 18/30 in ring, one lane, tire-patch spread, Bernoulli, f_a 180, cover 1.5 ft, slab shallow-fill width, K 0.30;
+      5. grade by springing covers 13/15 ft, shear check f_v 40, 16 ft barrel.
+    - Identical in every case:
+      - `ARCH.rateVehicle` for every selected vehicle at full precision (rf, tons, sec, pos, dir);
+      - the model arrays (DL, ILM, ILC, ILV, depths, nodes, DL components);
+      - `snapshot()`;
+      - the `stoneArchLR.*` localStorage;
+      - the text of all 13 output tabs (with the new "Worked in" lines removed).
+    - The one exception is the Influence Lines tab line of fix 1, "kip\cdotpft²" → "kip⋅ft²". Normalising that line makes it identical too.
+    - 0 console errors, no dialogs.
+  - In-app click test (headless):
+    - Each link type opens the right tab: dashboard, Vehicles, Rating DL, Earth Pressure and Live Load → Rating or Dead Load or Influence Lines, as listed above.
+    - The EV3 panel, collapsed beforehand, opens and lands just below the sticky tab bar.
+    - The DL link lands on the "Dead load section forces" heading.
+    - At 420 px the target lands 6 px below the bar.
+  - Print refresh: `beforeprint` with no report built builds one (cover and page CSS present). After changing the project name and f_a (250 → 300 psi), it rebuilt the report: the cover read RF 0.745 instead of 0.451, and the page CSS carried the new name.
+  - Headless Chromium PDF (print media, `preferCSSPageSize`), with the title block blank and filled. Pages checked: cover; references and TOC; Summary Dashboard; §8.1; the §8 result block; §9.1; §12.1–12.2; Certification; the header and footer boxes. pdftotext shows no raw TeX after fix 1.
+- **Other copies:** none. The report builder and the link helper are specific to this tool.
+- **Open items (not changed):**
+  - **Project No.** There is no field, so it prints "—" on the cover and in every page header. Add an optional `tbProjNo` (a new key in `snapshot().title`, absent in old files), or leave it as is? Engineer to decide.
+  - **Live Load tab, panel "How the load spreads through the fill":**
+    - It works the vehicle selected in the focus bar (`animVehId`) at the *governing vehicle's* position (`gv.pos`, `gv.dir`), and its message says "worked for <that vehicle> — the governing vehicle — at its governing position".
+    - When the focus-bar vehicle is not the governing one, the label is wrong (another vehicle at a position found for the governing vehicle).
+    - The printed report (§7) uses the governing vehicle and its own position, so it is consistent.
+    - Screen wording or behaviour only; no rating uses it. Not changed. Which is intended?
+  - **Dashboard jumps.** The existing "<vehicle> rating factor" jumps (`data-go`) still use `scrollIntoView`, so the panel header lands under the sticky tab bar. The new links avoid this. Not changed (existing behaviour); they could route through `archGoto`.
+  - **Section order.** The report keeps its existing section order: Rating Summary (§15) prints after the Midas verification (§14), and Mesh Convergence after it.
