@@ -891,3 +891,54 @@ Inventory items ASD-O1 … ASD-O9, ASD-A2, ASD-C7 (scratchpad `open_inventory.md
 - O7. **Closed 2026-10-12 (N2 of the sweep):** harmless; not changed.
 - O8. **Basis line added 2026-10-12 (F11).** — Confirm the editions cited (Needs engineer E5).
 - O9. **Narrow screens (about 400 px)**: the sidebar is a fixed 380 px column beside `<main>`, so `<main>` is squeezed to a sliver and the navbar text wraps. Same before and after the tabs change (the body has `overflow: hidden`, so there is no page scroll). Not changed (UI layout, CLAUDE.md §6). — Decide whether a stacked mobile layout is wanted.
+
+## 2026-10-18 — PR: claude/asd-d11-report — D11: calculation-sheet report and §6 derivation links (Tier 1, display only; PR link added after merge)
+
+Line numbers are approximate; search for the anchor text. The tool file uses CRLF line endings (kept). Edits were scripted exact-string replacements (each anchor found once).
+
+- **Engineer request:** AUDIT.md D11 (2026-10-14; scope 2026-10-18: full report for design-check tools) and the CLAUDE.md §6 "show the work and link to it" guideline.
+- **Relation to the suite's ASD tab** (`Concrete Beam Capacity.html`, `#suite-frame-asd`, D11 in PR #275): a different app with the same calculation engine (AUDIT.md §2.1), not a CLAUDE.md §3 shared snippet. The format was copied from it: the same report CSS rules (under `#cbasdPrintReport`), the same `@page` boxes and margins, the same cover heading, the same three sections and the same five Analysis cards in the same order, the same result-line form and PASS rule, the same "see §n.k" rewrite. The code is not byte-identical, and the suite file is not touched.
+
+### D11-1. Calculation-sheet report (what Print / Ctrl+P outputs changes)
+- **Before (print):** a dump of the screen: navbar, the two result cards, the section visualizer and the "Checkable Calculation Report" panel (sections 1–4). No cover, references, contents, result lines, page header or footer (default project: 3 pages).
+- **After (print):** only `#cbasdPrintReport` prints (the screen is hidden by a print rule); on screen it is hidden. It is rebuilt at the end of `updateUI()` / `showInputErrors()` and on `beforeprint`. The `@page` CSS is applied on `beforeprint` and cleared on `afterprint` (`cbasdApplyPageCSS`).
+  - **Cover:** "Concrete Beam Load Rating — ASD", "Untitled", the codes; title block Project / Project No. / Description / Calculated by / Date / Sheet / Checked by / Checked date / Method. The tool has **no project fields** and none was added: every field prints "—", with the note "complete the title block by hand".
+  - **References** (`CBASD_REFS`, only what the tool cites): Std. Spec. 17th Ed. (2002) Art. 8.15, 8.15.2, 8.15.3, 8.15.3.4, 8.15.5 (not checked), 8.10.1.1 / 8.10.1.2; MBE 3rd Ed. Part B 6B.6.2.3 / Table 6B.6.2.3-1; MassDOT f_c,op = 1,900 psi. The editions are those of the tool's basis line, marked "edition: verify, fix log E5".
+  - **Contents** with links. **1. Input Echo:** 1.1 Analysis Options, 1.2 Materials and Allowable Stresses (with the (auto)/(override) tags), 1.3 Section Geometry, 1.4 Reinforcement, 1.5 Applied Loads, 1.6 Section Diagram (the visualizer's SVG). **2. Summary & Rating:** 2.1 table (level, M_all, controlled by, RF, PASS/FAIL, "see §3.4 / §3.5"); 2.2 the report's scope, basis and notes; 2.3 Key Parameters. **3. Analysis:** 3.1–3.5 are a copy of the rendered on-screen report cards, their "k." replaced by "3.k".
+  - **Result lines** ("Results — Load Rating"), one per rating level shown, e.g. "Inventory rating: RF = 0.258 (RF = (C − M_DL)/M_LL+I, §3.5; M_all = 353.3 k-ft, steel controlled, §3.4) FAIL". PASS when RF ≥ 1.00 (the RF card's red-below-1.0 rule); M_LL+I = 0 gives N/A. Input-error state: cover, front matter, 1. Input Echo, 2. Results (the error list).
+  - **Page boxes:** top "Project No: — / Description: —", "Computed By: — / Checked By: —", "Date: — / Date: —"; bottom "Untitled (ASD Bridge Rater)" and "Page X of Y".
+- **Where:** CSS block anchor `/* D11 calculation-sheet report (Gusset Plate Rating / ST-Girder format).`; `<div id="cbasdPrintReport"></div>` after `</main>`; functions before `// --- Initialization ---` (anchor `/* D11 (2026-10-18): calculation-sheet report`): `CBASD_TOOL`, `CBASD_REFS`, `cbasdEsc`, `cbasdPageCSS`, `cbasdApplyPageCSS`, `cbasdLevels`, `cbasdBuildReport`; print hooks in the DOMContentLoaded handler (anchor `// D11: "Worked in" links on the result cards`). Copy them from this version.
+
+### D11-2. On-screen report: every value worked (display only)
+- **calculate()** passes values it already computes (no value change). Before: `let k, kd, j, z, isTBeamAction = false;` and `beffCapped: beffEntered !== null && v.b_eff === beffLim`. After: `let k, kd, j, z, isTBeamAction = false, tsolve = null; // …`, the line `tsolve = { A_q, B_q, C_q, y_bar_wings, y_bar_web, C_web_u, C_wings_u, y_total };` after `j = z / v.d_eff;` (T-beam branch), and `beffCapped: beffEntered !== null && v.b_eff === beffLim,` followed by `Es, Ec, n_ratio: Es / Ec, tsolve // D11: …`.
+- **updateUI()** report (anchor `<!-- Elastic section properties (D11`):
+  - new card **1. Elastic Section Properties**: E_c = 57,000√f′c, E_s/E_c, n = max(6, round(E_s/E_c)) (the 8.15.3.4 note moved here) and ρ = A_s/(b d), stating which width b is;
+  - the old cards are renumbered 2–5 and get ids `cbasdCard_na|z|cap|rf` (`data-cr="card"`);
+  - T-beam neutral axis: A_q, B_q, C_q substituted and the quadratic root; T-beam lever arm: C_web, ȳ_web, C_wings, ȳ_wings, ȳ_total, z, j substituted;
+  - Moment Capacity: C (½ b kd, or C_web + C_wings) and M_c, M_s for each level shown, symbolic → substituted → result;
+  - the notes and Key Parameters are wrapped in `data-cr="notes"` / `data-cr="params"`; long equations scroll sideways on screen.
+- **Provision:** none. No formula, factor, unit, code reference or result changed (the equations shown are the code in `calculate()`).
+
+### D11-3. §6 links ("Worked in: → Report · n. Card"; "see §n.k" in print)
+- Helpers before `// --- Initialization ---` (anchor `/* ---- D11 links (CLAUDE.md §6, 2026-10-18)`): `CBASD_CARDS`, `CBASD_CARD_NO`, `cbasdLink`, `cbasdWorkedIn`, `cbasdGoto`, and one click handler for `a.wkA` (scrolls `<main>` to the card and flashes it; no page scroll, no hash change).
+- Links: Moment Capacity card (M_all → 4. Moment Capacity) and Rating Factors card (RF → 5. Load Rating), in the new placeholders `#cbasdWkCap` / `#cbasdWkRF`; Key Parameters (n, ρ → 1.; k → 2.; j → 3.). In print: "M_all: see §3.4", "RF: see §3.5", "n, ρ: see §3.1 · k: see §3.2 · j: see §3.3".
+
+### D11-4. Display fix (no result change)
+- Display math inside running text broke the line ("T-Beam Action Detected (", the formula, ")"; likewise in the Inventory/Operating boxes). Before: `T-Beam Action Detected ($$kd > h_f$$)` and `Concrete Limit ($$f_c = ${res.v.fc_inv}$$): <strong>$$${res.M_conc_inv.toFixed(1)} \\text{ k-ft}$$</strong>` (the same for Steel Limit, Operating and both "Governing:" lines). After: single `$…$` (inline math), e.g. `Concrete Limit ($f_c = ${res.v.fc_inv}$): <strong>$${res.M_conc_inv.toFixed(1)} \\text{ k-ft}$</strong>`.
+
+### Check case
+- **Default project** (T-beam, f′c 3,000, Gr 40, b_eff 90, h_f 7, b_w 14, d 28.5, A_s 8.00, M_DL 250, M_LL+I 400): E_c = 57,000√3,000 = 3,122,019 psi; E_s/E_c = 9.29 → n = 9; ρ = 8/(90·28.5) = 0.0031; k = 0.2105, kd = 6.000 in (< h_f: rectangular); j = 0.930, z = 26.500 in; C = ½·90·6.000 = 270 in²; M_c,inv = 270·1,200·26.5/12,000 = 715.5 and M_s,inv = 8·20,000·26.5/12,000 = 353.3 → M_inv = 353.3 k-ft; M_op = 494.7; RF 0.258 / 0.612, unchanged. Report: 7 letter pages (main's print: 3), both levels FAIL.
+- **T-beam action** (h_f 3, A_s 14; b_eff capped to 50): A_q 7, B_q 234, C_q −3,753, kd 11.843 in, C_web 82.9, C_wings 94.321, ȳ 2.606, z 25.894; M_inv 458.9 (concrete), M_op 726.6; RF 0.522 FAIL / 1.191 PASS; 8 pages.
+
+### Verification (Tier 1)
+- `node tests/check-syntax.mjs "Concrete Beam ASD.html"`: all scripts pass.
+- `node tests/compare.mjs --tool page --file "Concrete Beam ASD.html"`: page.storage same; page.text differs only by the new report and link lines and the D11-4 delimiters (all numbers identical). Console errors are only the blocked CDN loads, the same on both sides (the kit has no copies of this tool's libraries).
+- Own headless comparison (Playwright, Chromium; KaTeX 0.16.9 and @phosphor-icons/web 2.1.2 from `npm pack`; Tailwind 3.4.17 CSS compiled from both files and injected on both sides), origin/main vs branch, 13 cases (default; rectangular −M; T-beam action; Gr 60 + f′c 4,000, operating only; b_eff 120 capped / limit off; f′c 10,000 (n = 6); M_LL+I = 0; T-beam −M; inventory off; f′c = 0; 5 #10 bars; a passing case): the full `calculate()` result object passed to `updateUI` (without the new fields), the result cards and badge, the SVG, the saved JSON, all inputs and localStorage are **identical**. No console errors.
+- Report PDFs (print media, `preferCSSPageSize`) looked at: cover, references and contents, Input Echo, section diagram, Summary, Analysis (rectangular and T-beam), results, input-error report. Every TOC entry and "see §" link resolves; no duplicate ids. In-app clicks scroll the report panel to the card and flash it.
+
+### Other copies
+- None. The suite's ASD tab is a different app (see above); it already has its own D11 report (PR #275).
+
+### Open items (not changed)
+- The tool has no project / title-block fields, so the title block and page header print "—". Adding optional fields (e.g. tool-prefixed keys in the saved JSON) is a decision for the engineer.
+- The suite's ASD tab cites the RF equation as "AASHTO MBE 6B (ASD)" and E_c as Std. Spec. 8.7.1. This tool cites neither, so its report does not either (adding them would be a code-reference change, CLAUDE.md §4).

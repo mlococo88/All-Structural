@@ -64,6 +64,62 @@
         .cbasdInDot { display: none; width: 7px; height: 7px; border-radius: 50%; background: #dc2626; }
         .cbasdInTab.has-err .cbasdInDot { display: inline-block; }
         .cbasdInTab[hidden], .cbasdInPane[hidden] { display: none !important; }
+
+        /* D11 calculation-sheet report (Gusset Plate Rating / ST-Girder format). Built by cbasdBuildReport() into
+           #cbasdPrintReport, which is hidden on screen and is the only thing printed. */
+        #cbasdPrintReport { display: none; }
+        #cbasdPrintReport.crdoc { background: #fff; color: #000; font: 10.5pt/1.35 "Times New Roman", Times, serif; }
+        #cbasdPrintReport.crdoc a { color: #000; text-decoration: none; }
+        #cbasdPrintReport .cr-cover { min-height: 8.4in; display: flex; flex-direction: column; justify-content: center; break-after: page; }
+        #cbasdPrintReport .cr-cover-t { text-align: center; margin-bottom: 28pt; }
+        #cbasdPrintReport .cr-cover h1 { font: 700 25pt/1.2 Arial, Helvetica, sans-serif; margin: 0 0 14pt; }
+        #cbasdPrintReport .cr-cover p { font: 700 13pt Arial, Helvetica, sans-serif; margin: 0 0 6pt; }
+        #cbasdPrintReport .cr-cover .cr-cover-p { font-weight: 400; }
+        #cbasdPrintReport .rptHdrGrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px 14px; border: 1px solid #000; padding: 6px 8px; font-size: 10pt; }
+        #cbasdPrintReport .cr-note, #cbasdPrintReport .cr-cover p.cr-note { font: italic 400 9pt "Times New Roman", Times, serif; margin: 4pt 0 0; }
+        #cbasdPrintReport .cr-front { break-after: page; }
+        #cbasdPrintReport .cr-break { break-before: page; }
+        #cbasdPrintReport h2.cr-h1 { font: 700 12pt "Times New Roman", Times, serif; text-decoration: underline; text-transform: uppercase; margin: 0 0 8pt; break-after: avoid; }
+        #cbasdPrintReport .cr-front h2.cr-h1 { margin-top: 10pt; }
+        #cbasdPrintReport h3.cr-h2, #cbasdPrintReport h4 { font: 700 11pt "Times New Roman", Times, serif; color: #000; border: 0; border-bottom: 0.6pt solid #000; padding-bottom: 1pt; margin: 12pt 0 5pt; break-after: avoid; }
+        #cbasdPrintReport .cr-refs { border-collapse: collapse; margin: 0 0 14pt; }
+        #cbasdPrintReport .cr-refs td { padding: 1pt 16pt 2pt 0; vertical-align: top; }
+        #cbasdPrintReport .cr-refs td:first-child { white-space: nowrap; }
+        #cbasdPrintReport .cr-toc, #cbasdPrintReport .cr-toc ol { list-style: none; margin: 0; padding: 0; }
+        #cbasdPrintReport .cr-toc > li { margin: 3pt 0; }
+        #cbasdPrintReport .cr-toc ol { padding-left: 18pt; font-size: 10pt; }
+        #cbasdPrintReport .cr-p { margin: 0 0 7pt; }
+        #cbasdPrintReport .cr-small { font-size: 9.5pt; margin-top: 18pt; }
+        #cbasdPrintReport .cr-tbl { border-collapse: collapse; margin: 2pt 0 6pt; font-size: 10pt; }
+        #cbasdPrintReport .cr-tbl th, #cbasdPrintReport .cr-tbl td { border: 0.6pt solid #000; padding: 2pt 6pt; text-align: left; vertical-align: top; }
+        #cbasdPrintReport .cr-tbl td.n { text-align: right; font-variant-numeric: tabular-nums; }
+        #cbasdPrintReport .cr-fig svg { width: 100%; max-width: 6.5in; max-height: 4.2in; height: auto; }
+        #cbasdPrintReport .cr-resh { font: 700 11pt "Times New Roman", Times, serif; margin: 12pt 0 2pt; }
+        #cbasdPrintReport .cr-line { display: grid; grid-template-columns: 2.2in 1fr 0.8in; gap: 0 12pt; align-items: center; padding: 3pt 0; break-inside: avoid; }
+        #cbasdPrintReport .cr-res { border-top: 0.6pt solid #000; }
+        #cbasdPrintReport .cr-results { border-bottom: 0.8pt solid #000; margin-bottom: 8pt; }
+        #cbasdPrintReport .cr-r { text-align: right; }
+        #cbasdPrintReport .cr-st-fail { text-decoration: underline; }
+        #cbasdPrintReport .cr-refi { font-size: 9pt; font-style: italic; }
+        #cbasdPrintReport .math-display { break-inside: avoid; }
+        #cbasdPrintReport .foot { margin-top: 16px; border-top: 1px solid #000; padding-top: 6px; font-size: 9pt; font-style: italic; color: #444; }
+        /* D11 links (CLAUDE.md §6): "Worked in: → Report · n. Card"; "see §n.k" in the printed report */
+        .wkLink { font-size: 10px; color: #64748b; margin-top: 0.25rem; }
+        a.wkA { color: #2563eb; text-decoration: none; cursor: pointer; }
+        a.wkA:hover { text-decoration: underline; }
+        .wkOnDark { background: #eef2ff; color: #475569; }
+        .wkOnDark a.wkA { color: #4338ca; }
+        #report-content .math-display { overflow-x: auto; overflow-y: hidden; }
+        .wkFlash { animation: wkflash 1.4s ease-out; }
+        @keyframes wkflash { from { background: #dbeafe; } to { background: transparent; } }
+        #cbasdPrintReport .wkLink { font-size: 9.5pt; color: #000; margin: 2pt 0 6pt; }
+        #cbasdPrintReport a.wkA { color: #000; font-style: italic; }
+        @media print {
+            body.h-screen { display: block !important; height: auto !important; overflow: visible !important; }
+            body > nav, #app-container { display: none !important; }
+            #cbasdPrintReport { display: block !important; }
+            #cbasdPrintReport .math-display { overflow: visible; }
+        }
     </style>
 </head>
 <body class="h-screen flex flex-col overflow-hidden">
@@ -282,6 +338,7 @@
                             </div>
                         </div>
                     </div>
+                    <div id="cbasdWkCap" class="wkLink px-4 pb-2"></div><!-- D11 link -->
                 </div>
 
                 <!-- Rating Factor Card -->
@@ -300,6 +357,7 @@
                             <div id="disp-rf-op" class="text-3xl font-bold text-yellow-300">--</div>
                         </div>
                     </div>
+                    <div id="cbasdWkRF" class="wkLink wkOnDark px-4 py-1"></div><!-- D11 link -->
                 </div>
 
             </div>
@@ -345,6 +403,9 @@
         </main>
 
     </div>
+
+    <!-- D11 calculation-sheet report: built by cbasdBuildReport(); hidden on screen, the only thing printed -->
+    <div id="cbasdPrintReport"></div>
 
     <!-- LOGIC -->
     <script>
@@ -469,6 +530,201 @@
             });
         }
 
+        /* ---- D11 links (CLAUDE.md §6, 2026-10-18): a value quoted away from where it is worked links to the report
+           card that works it. On screen: "Worked in: <qty> → Report · n. Card" (scrolls the report to the card and
+           flashes it). In the printed calculation report the same link reads "see §n.k" (cbasdBuildReport rewrites it).
+           Display only. ---- */
+        const CBASD_CARDS = { props: 'Elastic Section Properties', na: 'Neutral Axis Calculation', z: 'Lever Arm', cap: 'Moment Capacity', rf: 'Load Rating' };
+        const CBASD_CARD_NO = { props: 1, na: 2, z: 3, cap: 4, rf: 5 };
+        function cbasdLink(card, txt) {
+            return '<a href="#cbasdCard_' + card + '" class="wkA" data-card="' + card + '"' + (txt ? ' data-txt="' + txt + '"' : '') + '>' +
+                (txt ? txt + ' → ' : '→ ') + 'Report · ' + CBASD_CARD_NO[card] + '. ' + CBASD_CARDS[card] + '</a>';
+        }
+        function cbasdWorkedIn(items) { return 'Worked in: ' + items.map(([c, t]) => cbasdLink(c, t)).join(' · '); }
+        function cbasdGoto(card) {
+            const e = document.getElementById('cbasdCard_' + card), m = document.querySelector('main');
+            if (!e || !m) return;   // input-error state: no cards
+            m.scrollTo({ top: m.scrollTop + e.getBoundingClientRect().top - m.getBoundingClientRect().top - 8, behavior: 'smooth' });
+            e.classList.remove('wkFlash'); void e.offsetWidth; e.classList.add('wkFlash');
+            setTimeout(() => e.classList.remove('wkFlash'), 1400);
+        }
+        document.addEventListener('click', e => {
+            const a = e.target.closest && e.target.closest('a.wkA');
+            if (!a || a.closest('#cbasdPrintReport')) return;
+            e.preventDefault(); cbasdGoto(a.dataset.card);
+        });
+
+        /* D11 (2026-10-18): calculation-sheet report in the Gusset Plate Rating / ST-Girder format (as the suite's ASD tab,
+           Concrete Beam Capacity.html): cover with title block, references, numbered table of contents (links), numbered
+           sections n and subsections n.k, a result line per rating level, the "see §n.k" form of the D11 links, and the
+           print header / "Page X of Y" footer (@page margin boxes, cbasdPageCSS, only while printing).
+           Section 3 is a copy of the rendered on-screen report cards (updateUI); sections 1 and 2 echo the inputs and
+           calculate()'s results. Display only: every value shown is calculate()'s. The tool has no project fields, so
+           the title block and the page header print "—" (fill in by hand). */
+        const CBASD_TOOL = 'ASD Bridge Rater';
+        const CBASD_REFS = [
+            ['AASHTO Std. Spec.', 'AASHTO Standard Specifications for Highway Bridges, 17th Ed. (2002) (the edition in the tool’s basis line; edition: verify, fix log E5) — Art. 8.15 (service load design): 8.15.2 (allowable stresses), 8.15.3 (flexure), 8.15.3.4 (modular ratio n, not less than 6), 8.15.5 (shear: not checked by this tool); Art. 8.10.1.1 / 8.10.1.2 (effective flange width).'],
+            ['AASHTO MBE', 'Manual for Bridge Evaluation, 3rd Ed. (the edition in the tool’s basis line; edition: verify, fix log E5), Part B — Art. 6B.6.2.3 and Table 6B.6.2.3-1 (operating allowable stresses).'],
+            ['MassDOT', 'Operating allowable concrete stress default f_c,op = 1,900 psi (a MassDOT value per the tool; source to be confirmed, fix log E1).']];
+        function cbasdEsc(v) { return String(v).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+        function cbasdPageCSS() {
+            const box = 'font: 9.5pt "Times New Roman", Times, serif; color: #000; white-space: pre; vertical-align: bottom; padding-bottom: 6pt;';
+            return '@page { size: letter portrait; margin: 0.95in 0.6in 0.7in 0.6in;' +
+                ' @top-left { content: "Project No: —\\A Description: —"; ' + box + ' text-align: left; }' +
+                ' @top-center { content: "Computed By: —\\A Checked By: —"; ' + box + ' text-align: left; }' +
+                ' @top-right { content: "Date: —\\A Date: —"; ' + box + ' text-align: right; }' +
+                ' @bottom-left { content: "Untitled (' + CBASD_TOOL + ')"; font: 9pt "Times New Roman", Times, serif; vertical-align: top; padding-top: 6pt; }' +
+                ' @bottom-right { content: "Page " counter(page) " of " counter(pages); font: 9pt "Times New Roman", Times, serif; vertical-align: top; padding-top: 6pt; } }';
+        }
+        function cbasdApplyPageCSS(on) {
+            let st = document.getElementById('cbasd-page');
+            if (!st) { st = document.createElement('style'); st.id = 'cbasd-page'; document.head.appendChild(st); }
+            st.textContent = on ? cbasdPageCSS() : '';
+        }
+        // rating levels shown (the Inventory / Operating checkboxes), with calculate()'s values; PASS when RF >= 1.00
+        // (the RF card's rule: red below 1.0)
+        function cbasdLevels(res) {
+            const L = [];
+            if (document.getElementById('chk_inv').checked) L.push({ lab: 'Inventory', rf: res.rf_inv, M: res.M_inv, ctrl: res.M_conc_inv < res.M_steel_inv ? 'Concrete' : 'Steel' });
+            if (document.getElementById('chk_op').checked) L.push({ lab: 'Operating', rf: res.rf_op, M: res.M_op, ctrl: res.M_conc_op < res.M_steel_op ? 'Concrete' : 'Steel' });
+            return L;
+        }
+        function cbasdBuildReport() {
+            const Rp = document.getElementById('cbasdPrintReport'); if (!Rp) return;
+            const res = state.results;
+            const mk = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; };
+            const fv = id => cbasdEsc(document.getElementById(id).value);
+            const ft = id => { const s = document.getElementById(id); return cbasdEsc(s.options[s.selectedIndex] ? s.options[s.selectedIndex].text : s.value); };
+            const tbl = (head, rows) => '<table class="cr-tbl"><tr>' + head.map(h => '<th>' + h + '</th>').join('') + '</tr>' +
+                rows.map(r => '<tr>' + r.map((c, i) => '<td' + (i === 2 && head.length === 4 ? ' class="n"' : '') + '>' + c + '</td>').join('') + '</tr>').join('') + '</table>';
+            const body = mk('div'), toc = [], cardMap = {};
+            let n = 0;
+            const section = (title, subs) => {   // subs: [{t, node, card}]
+                n++;
+                const sid = 'crp-' + n, sec = mk('section', 'cr-sec' + (n > 1 ? ' cr-break' : ''));
+                const h = mk('h2', 'cr-h1'); h.textContent = n + '. ' + title; h.id = sid; sec.appendChild(h);
+                const list = [];
+                subs.forEach((s, i) => {
+                    const num = n + '.' + (i + 1), nid = sid + '-' + (i + 1);
+                    let hd = s.node.querySelector && s.node.querySelector('h4');
+                    if (hd) {   // a report card: its own "k." is replaced by n.k
+                        const t0 = hd.firstChild;
+                        if (t0 && t0.nodeType === 3) t0.textContent = t0.textContent.replace(/^\s*\d+\.\s*/, num + ' ');
+                    } else { hd = mk('h3', 'cr-h2'); hd.textContent = num + ' ' + s.t; s.node.insertBefore(hd, s.node.firstChild); }
+                    s.node.id = nid;
+                    if (s.card) cardMap[s.card] = { num, id: nid };
+                    list.push({ t: s.t, id: nid });
+                    sec.appendChild(s.node);
+                });
+                body.appendChild(sec); toc.push({ n, t: title, id: sid, subs: list });
+                return sec;
+            };
+            const box = html => mk('div', 'cr-sub', html);
+
+            // 1. Input Echo (the form values the calculation read)
+            const shape = document.getElementById('section_shape').value;
+            const geo = [];
+            if (shape === 't-beam') {
+                geo.push(['Effective flange width (entered)', 'b<sub>eff</sub>', fv('b_eff'), 'in']);
+                geo.push(['Flange thickness', 'h<sub>f</sub>', fv('h_f'), 'in']);
+                geo.push(['Limit b<sub>eff</sub> to b<sub>w</sub> + 12h<sub>f</sub> (Std. Spec. 8.10.1.1)', '', document.getElementById('cbasd_beff_lim').checked ? 'on' : 'off', '']);
+            }
+            geo.push(['Web width', 'b<sub>w</sub>', fv('b_w'), 'in'], ['Total height', 'h', fv('h_total'), 'in'], ['Effective depth', 'd', fv('d_eff'), 'in']);
+            const src = id => { const t = document.getElementById(id + '_src'); return t ? cbasdEsc(t.textContent) : '(input)'; };
+            const H4 = ['Quantity', 'Symbol', 'Value', 'Units'];
+            const ie = [
+                { t: 'Analysis Options', node: box(tbl(['Option', 'Setting'], [['Moment sense', ft('moment_type')], ['Section shape', ft('section_shape')],
+                    ['Rating levels', [document.getElementById('chk_inv').checked ? 'Inventory' : '', document.getElementById('chk_op').checked ? 'Operating' : ''].filter(Boolean).join(', ') || 'none']])) },
+                { t: 'Materials and Allowable Stresses', node: box(tbl(H4, [
+                    ['Concrete strength', 'f′<sub>c</sub>', fv('fc'), 'psi'], ['Steel yield strength', 'f<sub>y</sub>', fv('fy'), 'psi'],
+                    ['Allowable concrete stress, inventory ' + src('fc_inv'), 'f<sub>c,inv</sub>', fv('fc_inv'), 'psi'],
+                    ['Allowable steel stress, inventory ' + src('fs_inv'), 'f<sub>s,inv</sub>', fv('fs_inv'), 'psi'],
+                    ['Allowable concrete stress, operating (input)', 'f<sub>c,op</sub>', fv('fc_op'), 'psi'],
+                    ['Allowable steel stress, operating ' + src('fs_op'), 'f<sub>s,op</sub>', fv('fs_op'), 'psi'],
+                    ['Steel modulus (fixed)', 'E<sub>s</sub>', '29,000,000', 'psi']]) +
+                    '<p class="cr-note">(auto) = set from f′c / f<sub>y</sub>: inventory f<sub>c</sub> = 0.40f′c; f<sub>s</sub> = 20,000 (Gr 40/50) or 24,000 psi (Gr 60); operating f<sub>s</sub> = 28,000 (Gr 40) or 36,000 psi (Gr 60). Operating f<sub>c</sub> is always the input value.</p>') },
+                { t: 'Section Geometry', node: box(tbl(H4, geo) + (shape === 'rect' ? '<p class="cr-note">Rectangular section: b = b<sub>w</sub>.</p>' : '')) },
+                { t: 'Reinforcement', node: box(tbl(H4, [['Bar picker (sets A<sub>s</sub>)', '', ft('bar_count') + ' ' + ft('bar_size'), ''], ['Total tension steel area (used)', 'A<sub>s</sub>', fv('as'), 'in²']])) },
+                { t: 'Applied Loads', node: box(tbl(H4, [['Dead load moment', 'M<sub>DL</sub>', fv('m_dl'), 'k-ft'], ['Live load moment incl. impact', 'M<sub>LL+I</sub>', fv('m_ll'), 'k-ft']])) }];
+            const svg = document.querySelector('#svg-container svg');
+            if (svg && res) ie.push({ t: 'Section Diagram', node: box('<div class="cr-fig">' + svg.outerHTML.replace(/concPattern/g, 'crConcPattern').replace(/compClip/g, 'crCompClip') + '</div>' +
+                '<p class="cr-note">Blue: compression zone (concrete) • Red: tension steel. Drawn by the tool’s section visualizer.</p>') });
+            section('Input Echo', ie);
+
+            // the rendered on-screen report (KaTeX already typeset), ids renamed so they stay unique
+            const rc = document.getElementById('report-content').cloneNode(true);
+            rc.querySelectorAll('[id]').forEach(e => { e.id = 'cr-' + e.id; });
+            if (!res) {
+                section('Results', [{ t: 'Input Error', node: box(rc.innerHTML) }]);
+            } else {
+                // 2. Summary & Rating
+                const lv = cbasdLevels(res);
+                const sumRows = lv.map(o => [o.lab, (+o.M).toFixed(1), o.ctrl + ' controlled', isFinite(o.rf) ? o.rf.toFixed(3) : 'n/a',
+                    isFinite(o.rf) ? (o.rf >= 1.0 ? 'PASS' : '<u>FAIL</u>') : 'N/A', '<span class="wkLink">' + cbasdLink('cap', 'M_all') + ' · ' + cbasdLink('rf', 'RF') + '</span>']);
+                const sum = box((lv.length ? '<table class="cr-tbl"><tr><th>Rating level</th><th>M<sub>all</sub> (k-ft)</th><th>Controlled by</th><th>RF</th><th>Status</th><th>Worked in</th></tr>' +
+                    sumRows.map(r => '<tr>' + r.map((c, i) => '<td' + (i === 1 || i === 3 ? ' class="n"' : '') + '>' + c + '</td>').join('') + '</tr>').join('') + '</table>'
+                    : '<p class="cr-p">No rating level is selected (Inventory and Operating are both off).</p>') +
+                    '<p class="cr-note">' + (res.isTBeamAction ? 'T-beam' : 'Rectangular') + ' analysis. RF = (C − M<sub>DL</sub>) / M<sub>LL+I</sub> with C = M<sub>all</sub>; a level passes when RF ≥ 1.00.</p>');
+                const notes = rc.querySelector('[data-cr="notes"]'), params = rc.querySelector('[data-cr="params"]');
+                const s2 = [{ t: 'Load Rating Summary', node: sum }];
+                if (notes) s2.push({ t: 'Scope, Basis and Notes', node: box(notes.outerHTML) });
+                if (params) s2.push({ t: 'Key Parameters', node: box(params.outerHTML) });
+                section('Summary & Rating', s2);
+                // 3. Analysis: the on-screen report cards 1-5
+                const cards = [...rc.querySelectorAll('[data-cr="card"]')].map(c => {
+                    const key = c.id.replace(/^cr-cbasdCard_/, '');
+                    return { t: CBASD_CARDS[key] || key, node: c, card: key };
+                });
+                const s3 = section('Analysis', cards);
+                if (lv.length) {
+                    s3.appendChild(mk('div', 'cr-resh', 'Results — Load Rating'));
+                    const rb = mk('div', 'cr-results');
+                    lv.forEach(o => {
+                        const na = !isFinite(o.rf), ok = !na && o.rf >= 1.0;
+                        const line = mk('div', 'cr-line cr-res');
+                        line.appendChild(mk('div', 'cr-d', o.lab + ' rating:'));
+                        line.appendChild(mk('div', 'cr-m', 'RF = <b>' + (na ? 'n/a' : o.rf.toFixed(3)) + '</b> <span class="cr-refi">(RF = (C − M<sub>DL</sub>)/M<sub>LL+I</sub>, §' +
+                            (cardMap.rf ? cardMap.rf.num : '') + '; M<sub>all</sub> = ' + (+o.M).toFixed(1) + ' k-ft, ' + o.ctrl.toLowerCase() + ' controlled, §' + (cardMap.cap ? cardMap.cap.num : '') + ')</span>'));
+                        line.appendChild(mk('div', 'cr-r' + (!na && !ok ? ' cr-st-fail' : ''), '<b>' + (na ? 'N/A' : (ok ? 'PASS' : 'FAIL')) + '</b>'));
+                        rb.appendChild(line);
+                    });
+                    s3.appendChild(rb);
+                }
+            }
+            // D11 links: "→ Report · n. Card" becomes "see §n.k"
+            body.querySelectorAll('a.wkA').forEach(a => {
+                const hit = cardMap[a.dataset.card], pre = a.dataset.txt ? a.dataset.txt + ': ' : '';
+                if (hit) { a.textContent = pre + 'see §' + hit.num; a.href = '#' + hit.id; }
+                else { a.textContent = pre + 'see ' + (CBASD_CARDS[a.dataset.card] || a.dataset.card); a.removeAttribute('href'); }
+            });
+            body.querySelectorAll('.wkLink').forEach(d => { if (d.firstChild && d.firstChild.nodeType === 3) d.firstChild.textContent = d.firstChild.textContent.replace(/^Worked in:\s*/, ''); });
+
+            // front matter: cover with title block, references, table of contents
+            Rp.innerHTML = ''; Rp.className = 'crdoc';
+            const cover = mk('section', 'cr-cover'), ct = mk('div', 'cr-cover-t');
+            ct.appendChild(mk('h1', null, 'Concrete Beam Load Rating — ASD'));
+            ct.appendChild(mk('p', null, 'Untitled'));
+            ct.appendChild(mk('p', 'cr-cover-p', 'AASHTO Standard Specifications, Art. 8.15 (Service Load Design) · AASHTO MBE Part B · Universal ASD Bridge Rater'));
+            cover.appendChild(ct);
+            const grid = mk('div', 'rptHdrGrid');
+            [['Project', ''], ['Project No.', ''], ['Description', ''], ['Calculated by', ''], ['Date', ''], ['Sheet', ''], ['Checked by', ''], ['Checked date', ''], ['Method', 'AASHTO 8.15 (ASD)']]
+                .forEach(([k, v]) => grid.appendChild(mk('div', null, '<b>' + k + ':</b> ' + (v || '—'))));
+            cover.appendChild(grid);
+            cover.appendChild(mk('p', 'cr-note', 'This tool has no project fields: complete the title block by hand.'));
+            const fm = mk('section', 'cr-front');
+            fm.appendChild(mk('h2', 'cr-h1', 'References:'));
+            fm.appendChild(mk('table', 'cr-refs', CBASD_REFS.map(([a, b]) => '<tr><td>' + a + '</td><td>' + b + '</td></tr>').join('')));
+            fm.appendChild(mk('h2', 'cr-h1', 'Table of contents:'));
+            fm.appendChild(mk('ol', 'cr-toc', toc.map(s => '<li><a href="#' + s.id + '">' + s.n + '. ' + s.t + '</a>' +
+                (s.subs.length ? '<ol>' + s.subs.map((q, k) => '<li><a href="#' + q.id + '">' + s.n + '.' + (k + 1) + '. ' + q.t + '</a></li>').join('') + '</ol>' : '') + '</li>').join('')));
+            fm.appendChild(mk('p', 'cr-p cr-small', 'Equations are shown symbolically, then with values substituted, then with the result. ' +
+                'A rating level passes when RF ≥ 1.00. Units: psi, in, k-ft unless noted.'));
+            Rp.appendChild(cover); Rp.appendChild(fm); Rp.appendChild(body);
+            Rp.appendChild(mk('div', 'foot', 'This calculation is a computation aid. All results must be independently verified and ' +
+                'sealed by the responsible engineer of record. Generated ' + cbasdEsc(new Date().toLocaleString()) + '.'));
+        }
+
+
         // --- Initialization ---
         document.addEventListener('DOMContentLoaded', () => {
             cbasdInputTabs(); // move the input sections into the input tabs (UI only)
@@ -502,6 +758,12 @@
             // Save/Load
             document.getElementById('save-local-btn').addEventListener('click', saveToJson);
             document.getElementById('file-input').addEventListener('change', loadFromJson);
+
+            // D11: "Worked in" links on the result cards; calculation report and page header/footer while printing
+            document.getElementById('cbasdWkCap').innerHTML = cbasdWorkedIn([['cap', 'M_all']]);
+            document.getElementById('cbasdWkRF').innerHTML = cbasdWorkedIn([['rf', 'RF']]);
+            window.addEventListener('beforeprint', () => { cbasdBuildReport(); cbasdApplyPageCSS(true); });
+            window.addEventListener('afterprint', () => cbasdApplyPageCSS(false));
 
             // Initial Run
             updateVisibility();
@@ -574,7 +836,7 @@
             const rho = v.as / (b_calc * v.d_eff);
 
             // 3. Neutral Axis (kd)
-            let k, kd, j, z, isTBeamAction = false;
+            let k, kd, j, z, isTBeamAction = false, tsolve = null; // tsolve: T-beam intermediates, shown in the report (D11)
             
             // Standard Rectangular Formula
             const k_rect = Math.sqrt(2 * rho * n + Math.pow(rho * n, 2)) - (rho * n);
@@ -609,6 +871,7 @@
                 const y_total = (C_web_u*y_bar_web + C_wings_u*y_bar_wings) / (C_web_u + C_wings_u);
                 z = v.d_eff - y_total;
                 j = z / v.d_eff;
+                tsolve = { A_q, B_q, C_q, y_bar_wings, y_bar_web, C_web_u, C_wings_u, y_total };
 
             } else {
                 // Rectangular Action
@@ -652,7 +915,8 @@
                 C_force_factor, M_inv, M_op, M_conc_inv, M_steel_inv, 
                 M_conc_op, M_steel_op,
                 rf_inv, rf_op, v, shape, b_calc, n_raw, allowSrc, beffLim, beffEntered,
-                beffCapped: beffEntered !== null && v.b_eff === beffLim
+                beffCapped: beffEntered !== null && v.b_eff === beffLim,
+                Es, Ec, n_ratio: Es / Ec, tsolve // D11: shown in the report (no value change)
             });
 
             drawDiagram(v, kd, z, isTBeamAction, isPosMoment, shape);
@@ -668,6 +932,7 @@
             document.getElementById('report-content').innerHTML =
                 `<div class="text-sm text-red-700 bg-red-50 p-3 rounded border border-red-200"><strong>Input error — no results.</strong><ul class="list-disc pl-5 mt-1">${errors.map(m => `<li>${m}</li>`).join('')}</ul></div>`;
             document.getElementById('svg-container').innerHTML = '';
+            state.results = null; cbasdBuildReport(); // D11 report: input-error state
         }
 
         // --- UI Renderer ---
@@ -695,32 +960,55 @@
             const showInv = document.getElementById('chk_inv').checked;
             const showOp = document.getElementById('chk_op').checked;
 
-            // Report Generation
+            // Report Generation (D11: the cards carry ids; data-cr marks the parts the calculation report reuses)
+            const q = x => String(+(+x).toFixed(3));
+            const g = x => Math.round(x).toLocaleString('en-US').replace(/,/g, '{,}');
+            const ts = res.tsolve;
             let reportHTML = `
                 <div class="space-y-6">
 
                     <!-- Scope note -->
+                    <div data-cr="notes" class="space-y-6">
                     <div class="text-xs text-amber-800 bg-amber-50 p-3 rounded border border-amber-200"><strong>Scope:</strong> singly reinforced flexure only (working stress, AASHTO Std. Spec. 8.15). Compression steel (8.15.3, 2n&middot;A's) is ignored and ASD shear (8.15.5) is not checked.</div>
                     <p class="text-xs text-slate-500">Basis: AASHTO Standard Specifications for Highway Bridges, 17th Ed. (2002), Art. 8.15 (service load design) and 8.10.1 (effective flange width); AASHTO Manual for Bridge Evaluation, 3rd Ed., Part B, Art. 6B.6.2.3 (operating allowables).</p>
                     ${res.beffEntered !== null ? `<div class="text-xs ${res.beffCapped ? 'text-amber-800 bg-amber-50 border-amber-200' : 'text-red-700 bg-red-50 border-red-200'} p-3 rounded border">Entered $b_{eff}$ = ${res.beffEntered} in. exceeds the Std. Spec. 8.10.1.1 limit $b_w + 12h_f$ = ${res.v.b_w} + 12&middot;${res.v.h_f} = ${+res.beffLim.toFixed(3)} in. ${res.beffCapped ? `$b_{eff}$ = ${+res.beffLim.toFixed(3)} in. is used.` : '<strong>The limit is switched off: the entered width is used.</strong>'} The span/4 and web-spacing limits (8.10.1.1) and the one-sided-slab limit $b_w + 6h_f$ (8.10.1.2) are not checked here; check them by hand.</div>` : ''}
                     ${loadNotice ? `<div class="text-xs text-red-700 bg-red-50 p-3 rounded border border-red-200">${loadNotice}</div>` : ''}
+                    </div>
 
                     <!-- Params -->
+                    <div data-cr="params">
                     <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs text-slate-600 bg-slate-50 p-4 rounded border border-slate-200">
                         <div><strong>Modular Ratio ($n$):</strong> $$${res.n}$$</div>
                         <div><strong>Steel Ratio ($\\rho$):</strong> $$${res.rho.toFixed(4)}$$</div>
                         <div><strong>Neutral Axis ($k$):</strong> $$${res.k.toFixed(3)}$$</div>
                         <div><strong>Lever Arm ($j$):</strong> $$${res.j.toFixed(3)}$$</div>
                     </div>
-                    ${res.n_raw < 6 ? `<p class="text-xs text-slate-500 italic">$n = E_s/E_c$ rounds to ${res.n_raw}; the minimum $n = 6$ is used (Std. Spec. 8.15.3.4).</p>` : ''}
+                    <div class="wkLink">${cbasdWorkedIn([['props', 'n, \u03c1'], ['na', 'k'], ['z', 'j']])}</div>
+                    </div>
+
+                    <!-- Elastic section properties (D11: n and rho worked, from calculate()'s values) -->
+                    <div id="cbasdCard_props" data-cr="card">
+                        <h4 class="text-sm font-bold text-slate-800 border-b pb-1 mb-2">1. Elastic Section Properties</h4>
+                        <p class="math-display">$$E_c = 57{,}000\\sqrt{f'_c} = 57{,}000\\sqrt{${res.v.fc}} = ${g(res.Ec)} \\text{ psi}$$</p>
+                        <p class="math-display">$$\\frac{E_s}{E_c} = \\frac{${g(res.Es)}}{${g(res.Ec)}} = ${res.n_ratio.toFixed(2)}$$</p>
+                        <p class="math-display">$$n = \\max\\left(6,\\ \\text{round}\\frac{E_s}{E_c}\\right) = \\max(6,\\ ${res.n_raw}) = \\mathbf{${res.n}}$$</p>
+                        ${res.n_raw < 6 ? `<p class="text-xs text-slate-500 italic">$n = E_s/E_c$ rounds to ${res.n_raw}; the minimum $n = 6$ is used (Std. Spec. 8.15.3.4).</p>` : ''}
+                        <p class="math-display">$$\\rho = \\frac{A_s}{b\\,d} = \\frac{${res.v.as}}{${q(res.b_calc)} \\cdot ${res.v.d_eff}} = \\mathbf{${res.rho.toFixed(4)}}$$</p>
+                        <p class="text-xs text-slate-500 italic mt-1">$b$ = ${res.shape === 'rect' ? '$b_w$ (rectangular section)' : (res.isPosMoment ? '$b_{eff}$ (T-beam, positive moment)' : '$b_w$ (T-beam, negative moment)')}.</p>
+                    </div>
 
                     <!-- Neutral Axis -->
-                    <div>
-                        <h4 class="text-sm font-bold text-slate-800 border-b pb-1 mb-2">1. Neutral Axis Calculation</h4>
+                    <div id="cbasdCard_na" data-cr="card">
+                        <h4 class="text-sm font-bold text-slate-800 border-b pb-1 mb-2">2. Neutral Axis Calculation</h4>
                         ${res.isTBeamAction ? 
-                            `<p class="text-sm mb-2 text-amber-700 bg-amber-50 p-2 rounded inline-block"><i class="ph ph-warning"></i> T-Beam Action Detected ($$kd > h_f$$)</p>
+                            `<p class="text-sm mb-2 text-amber-700 bg-amber-50 p-2 rounded inline-block"><i class="ph ph-warning"></i> T-Beam Action Detected ($kd > h_f$)</p>
                              <p class="math-display">$$kd = ${res.kd.toFixed(3)} \\text{ in.}$$</p>
-                             <p class="text-xs text-slate-500 italic mt-1">Derived from quadratic of first moment of areas (Web + Flange Wings).</p>`
+                             <p class="text-xs text-slate-500 italic mt-1">Derived from quadratic of first moment of areas (Web + Flange Wings).</p>
+                             <p class="math-display">$$A_q\\,(kd)^2 + B_q\\,kd + C_q = 0$$</p>
+                             <p class="math-display">$$A_q = \\tfrac{1}{2}b_w = \\tfrac{1}{2} \\cdot ${res.v.b_w} = ${q(ts.A_q)}$$</p>
+                             <p class="math-display">$$B_q = (b_{eff} - b_w)h_f + nA_s = (${q(res.v.b_eff)} - ${res.v.b_w}) \\cdot ${res.v.h_f} + ${res.n} \\cdot ${res.v.as} = ${q(ts.B_q)}$$</p>
+                             <p class="math-display">$$C_q = -\\tfrac{1}{2}(b_{eff} - b_w)h_f^2 - nA_s d = -\\tfrac{1}{2}(${q(res.v.b_eff)} - ${res.v.b_w}) \\cdot ${res.v.h_f}^2 - ${res.n} \\cdot ${res.v.as} \\cdot ${res.v.d_eff} = ${q(ts.C_q)}$$</p>
+                             <p class="math-display">$$kd = \\frac{-B_q + \\sqrt{B_q^2 - 4A_qC_q}}{2A_q} = \\mathbf{${res.kd.toFixed(3)} \\text{ in.}}, \\quad k = \\frac{kd}{d} = \\frac{${res.kd.toFixed(3)}}{${res.v.d_eff}} = ${res.k.toFixed(3)}$$</p>`
                             : 
                             `<p class="text-xs text-slate-500 italic mb-1">Analyzed as Rectangular Section ($b = ${res.b_calc} \\text{ in.}$)</p>
                              <p class="math-display">$$k = \\sqrt{2\\rho n + (\\rho n)^2} - \\rho n = ${res.k.toFixed(4)}$$</p>
@@ -729,11 +1017,15 @@
                     </div>
 
                     <!-- Lever Arm -->
-                    <div>
-                        <h4 class="text-sm font-bold text-slate-800 border-b pb-1 mb-2">2. Lever Arm ($z$)</h4>
+                    <div id="cbasdCard_z" data-cr="card">
+                        <h4 class="text-sm font-bold text-slate-800 border-b pb-1 mb-2">3. Lever Arm ($z$)</h4>
                          ${res.isTBeamAction ? 
                              `<p class="text-sm text-slate-700">Centroid of trapezoidal compression zone:</p>
-                              <p class="math-display">$$z = d - \\bar{y}_{total} = ${res.z.toFixed(3)} \\text{ in.}$$</p>`
+                              <p class="math-display">$$C_{web} = \\tfrac{1}{2}b_w\\,kd = \\tfrac{1}{2} \\cdot ${res.v.b_w} \\cdot ${res.kd.toFixed(3)} = ${q(ts.C_web_u)}, \\quad \\bar{y}_{web} = \\frac{kd}{3} = ${q(ts.y_bar_web)} \\text{ in.}$$</p>
+                              <p class="math-display">$$C_{wings} = (b_{eff} - b_w)h_f\\,\\frac{2kd - h_f}{2kd} = (${q(res.v.b_eff)} - ${res.v.b_w}) \\cdot ${res.v.h_f} \\cdot \\frac{2 \\cdot ${res.kd.toFixed(3)} - ${res.v.h_f}}{2 \\cdot ${res.kd.toFixed(3)}} = ${q(ts.C_wings_u)}$$</p>
+                              <p class="math-display">$$\\bar{y}_{wings} = \\frac{3kd - 2h_f}{2kd - h_f} \\cdot \\frac{h_f}{3} = \\frac{3 \\cdot ${res.kd.toFixed(3)} - 2 \\cdot ${res.v.h_f}}{2 \\cdot ${res.kd.toFixed(3)} - ${res.v.h_f}} \\cdot \\frac{${res.v.h_f}}{3} = ${q(ts.y_bar_wings)} \\text{ in.}$$</p>
+                              <p class="math-display">$$\\bar{y}_{total} = \\frac{C_{web}\\,\\bar{y}_{web} + C_{wings}\\,\\bar{y}_{wings}}{C_{web} + C_{wings}} = \\frac{${q(ts.C_web_u)} \\cdot ${q(ts.y_bar_web)} + ${q(ts.C_wings_u)} \\cdot ${q(ts.y_bar_wings)}}{${q(ts.C_web_u)} + ${q(ts.C_wings_u)}} = ${q(ts.y_total)} \\text{ in.}$$</p>
+                              <p class="math-display">$$z = d - \\bar{y}_{total} = ${res.v.d_eff} - ${q(ts.y_total)} = ${res.z.toFixed(3)} \\text{ in.}, \\quad j = \\frac{z}{d} = ${res.j.toFixed(3)}$$</p>`
                              :
                              `<p class="math-display">$$j = 1 - k/3 = ${res.j.toFixed(3)}$$</p>
                               <p class="math-display">$$z = j \\cdot d = ${res.z.toFixed(3)} \\text{ in.}$$</p>`
@@ -741,21 +1033,27 @@
                     </div>
 
                     <!-- Capacities (Conditional) -->
-                    <div>
-                        <h4 class="text-sm font-bold text-slate-800 border-b pb-1 mb-2">3. Moment Capacity ($M_{all}$)</h4>
+                    <div id="cbasdCard_cap" data-cr="card">
+                        <h4 class="text-sm font-bold text-slate-800 border-b pb-1 mb-2">4. Moment Capacity ($M_{all}$)</h4>
                         <p class="text-xs text-slate-500 mb-2">Allowables (psi): $f_{c,inv}$ = ${res.v.fc_inv} (${res.allowSrc.fc_inv === 'auto' ? "0.40f'c" : res.allowSrc.fc_inv}); $f_{s,inv}$ = ${res.v.fs_inv} (${res.allowSrc.fs_inv === 'auto' ? 'by grade' : res.allowSrc.fs_inv}); $f_{c,op}$ = ${res.v.fc_op} (input); $f_{s,op}$ = ${res.v.fs_op} (${res.allowSrc.fs_op === 'auto' ? 'by grade' : res.allowSrc.fs_op}).</p>
                         ${['fs_inv', 'fs_op'].filter(id => res.allowSrc[id] === 'input (no grade rule)').map(id => `<p class="text-xs text-red-700 bg-red-50 p-2 rounded border border-red-200 mb-2">$f_y$ = ${res.v.fy} psi has no automatic rule for ${id === 'fs_inv' ? '$f_{s,inv}$' : '$f_{s,op}$'}: the value used (${res.v[id]} psi) is the field's current entry and may be left from an earlier $f_y$. Check it against AASHTO MBE Table 6B.6.2.3-1.</p>`).join('')}
                         ${res.v.fc_op > 0.60 * res.v.fc + 1e-9 ? `<p class="text-xs text-amber-800 bg-amber-50 p-2 rounded border border-amber-200 mb-2">Operating $f_c$ = ${res.v.fc_op} psi is greater than $0.60f'_c$ = ${+(0.60 * res.v.fc).toFixed(1)} psi (AASHTO MBE 6B.6.2.3). Confirm the owner's basis for this value (the 1,900 psi default is a MassDOT value).</p>` : ''}
+                        <p class="math-display">${res.isTBeamAction ? `$$C = C_{web} + C_{wings} = ${q(ts.C_web_u)} + ${q(ts.C_wings_u)} = ${q(res.C_force_factor)} \\text{ in.}^2$$` : `$$C = \\tfrac{1}{2}\\,b\\,kd = \\tfrac{1}{2} \\cdot ${q(res.b_calc)} \\cdot ${res.kd.toFixed(3)} = ${q(res.C_force_factor)} \\text{ in.}^2$$`}</p>
+                        <p class="text-xs text-slate-500 italic mb-1">$C$ = compression resultant per unit peak concrete stress${res.isTBeamAction ? ' ($C_{web}$, $C_{wings}$: section 3)' : ''}. Concrete limit $M_c = C f_c z / 12{,}000$; steel limit $M_s = A_s f_s z / 12{,}000$ (k-ft); $M_{all}$ = the smaller.</p>
+                        ${showInv ? `<p class="math-display">$$M_{c,inv} = \\frac{C\\,f_{c,inv}\\,z}{12{,}000} = \\frac{${q(res.C_force_factor)} \\cdot ${res.v.fc_inv} \\cdot ${res.z.toFixed(3)}}{12{,}000} = ${res.M_conc_inv.toFixed(1)} \\text{ k-ft}$$</p>
+                        <p class="math-display">$$M_{s,inv} = \\frac{A_s\\,f_{s,inv}\\,z}{12{,}000} = \\frac{${res.v.as} \\cdot ${res.v.fs_inv} \\cdot ${res.z.toFixed(3)}}{12{,}000} = ${res.M_steel_inv.toFixed(1)} \\text{ k-ft}$$</p>` : ''}
+                        ${showOp ? `<p class="math-display">$$M_{c,op} = \\frac{C\\,f_{c,op}\\,z}{12{,}000} = \\frac{${q(res.C_force_factor)} \\cdot ${res.v.fc_op} \\cdot ${res.z.toFixed(3)}}{12{,}000} = ${res.M_conc_op.toFixed(1)} \\text{ k-ft}$$</p>
+                        <p class="math-display">$$M_{s,op} = \\frac{A_s\\,f_{s,op}\\,z}{12{,}000} = \\frac{${res.v.as} \\cdot ${res.v.fs_op} \\cdot ${res.z.toFixed(3)}}{12{,}000} = ${res.M_steel_op.toFixed(1)} \\text{ k-ft}$$</p>` : ''}
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">`;
 
             if (showInv) {
                 reportHTML += `
                             <div class="bg-blue-50 p-3 rounded border border-blue-100">
                                 <p class="text-xs font-bold text-blue-600 uppercase mb-2">Inventory Level</p>
-                                <p class="text-xs mb-1">Concrete Limit ($$f_c = ${res.v.fc_inv}$$): <strong>$$${res.M_conc_inv.toFixed(1)} \\text{ k-ft}$$</strong></p>
-                                <p class="text-xs mb-1">Steel Limit ($$f_s = ${res.v.fs_inv}$$): <strong>$$${res.M_steel_inv.toFixed(1)} \\text{ k-ft}$$</strong></p>
+                                <p class="text-xs mb-1">Concrete Limit ($f_c = ${res.v.fc_inv}$): <strong>$${res.M_conc_inv.toFixed(1)} \\text{ k-ft}$</strong></p>
+                                <p class="text-xs mb-1">Steel Limit ($f_s = ${res.v.fs_inv}$): <strong>$${res.M_steel_inv.toFixed(1)} \\text{ k-ft}$</strong></p>
                                 <hr class="border-blue-200 my-2">
-                                <p class="text-sm font-bold text-blue-800">Governing: $$${res.M_inv.toFixed(1)} \\text{ k-ft}$$</p>
+                                <p class="text-sm font-bold text-blue-800">Governing: $${res.M_inv.toFixed(1)} \\text{ k-ft}$</p>
                             </div>`;
             }
 
@@ -763,10 +1061,10 @@
                 reportHTML += `
                             <div class="bg-emerald-50 p-3 rounded border border-emerald-100">
                                 <p class="text-xs font-bold text-emerald-600 uppercase mb-2">Operating Level</p>
-                                <p class="text-xs mb-1">Concrete Limit ($$f_c = ${res.v.fc_op}$$): <strong>$$${res.M_conc_op.toFixed(1)} \\text{ k-ft}$$</strong></p>
-                                <p class="text-xs mb-1">Steel Limit ($$f_s = ${res.v.fs_op}$$): <strong>$$${res.M_steel_op.toFixed(1)} \\text{ k-ft}$$</strong></p>
+                                <p class="text-xs mb-1">Concrete Limit ($f_c = ${res.v.fc_op}$): <strong>$${res.M_conc_op.toFixed(1)} \\text{ k-ft}$</strong></p>
+                                <p class="text-xs mb-1">Steel Limit ($f_s = ${res.v.fs_op}$): <strong>$${res.M_steel_op.toFixed(1)} \\text{ k-ft}$</strong></p>
                                 <hr class="border-emerald-200 my-2">
-                                <p class="text-sm font-bold text-emerald-800">Governing: $$${res.M_op.toFixed(1)} \\text{ k-ft}$$</p>
+                                <p class="text-sm font-bold text-emerald-800">Governing: $${res.M_op.toFixed(1)} \\text{ k-ft}$</p>
                             </div>`;
             }
 
@@ -774,8 +1072,8 @@
                     </div>
 
                     <!-- Rating Factor (Conditional) -->
-                    <div>
-                         <h4 class="text-sm font-bold text-slate-800 border-b pb-1 mb-2">4. Load Rating ($RF$)</h4>
+                    <div id="cbasdCard_rf" data-cr="card">
+                         <h4 class="text-sm font-bold text-slate-800 border-b pb-1 mb-2">5. Load Rating ($RF$)</h4>
                          <p class="text-sm text-slate-600 mb-2">Using Equation: $$RF = \\frac{C - M_{DL}}{M_{LL+I}}$$</p>
                          ${res.v.m_ll === 0 ? '<p class="text-xs text-red-600 mb-2">M<sub>LL+I</sub> = 0: the rating factor is not defined (n/a).</p>' : ''}
                          <div class="flex gap-8">`;
@@ -816,6 +1114,7 @@
                     ]
                 });
             }
+            state.results = res; cbasdBuildReport(); // D11 report (rebuilt from the rendered report above)
         }
 
         // --- Diagram Drawer (SVG) ---
