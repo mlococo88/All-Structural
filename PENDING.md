@@ -25,7 +25,7 @@ Items marked "pending reference" in the owner rules panel. Add the documents to 
 
 ## 3. Parked features (agreed, not started)
 
-- **D11** — calculation-sheet report (Gusset / ST-Girder format, with links to derivations per CLAUDE.md §6) in every other tool, one tool per PR, display only. Engineer: end of week. See AUDIT.md D11.
+- **D11** — calculation-sheet report (Gusset / ST-Girder format, with links to derivations per CLAUDE.md §6), one tool per PR, display only. In progress: Base Plate & Anchor done (#269, #270). Scope per tool decided 2026-10-18 (full / slim / refresh / none) — see AUDIT.md D11.
 - **Suggest: steel grade options** — needs grade-dependent unit prices first (GD66 (e)).
 - **MassDOT exterior sidewalk beam Case I / Case II** (3.5.3.11) — warning only today (GD63 (c)).
 - **Low-priority owner items** from the manual reviews (mostly information-only notes).
