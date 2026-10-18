@@ -2255,5 +2255,245 @@ initSelects(); renderSpans(); $('preset').value='HL93-Truck'; applyPreset('HL93-
   marks();
 })();
 </script>
+<script>
+/* ═══════════ D11 (2026-10-18): CALCULATION-SHEET REPORT, SLIM (display only) ═══════════
+   AUDIT.md D11, slim scope for this tool (engineer 2026-10-18): inputs -> vehicle definitions ->
+   worked results, no D/C section. This block is the LAST wrapper of reportHTML: it takes the
+   finished report HTML (built by every earlier wrapper from the same `out` array of analyze()
+   results) and recasts it in the house calculation-sheet format: cover with title block,
+   references, numbered table of contents with links, numbered sections n / n.k, the factoring of
+   each governing value worked out (gamma_LL x g x per-lane value, from the values the tool already
+   holds), print-legible diagrams and @page margin boxes (letter; header Project No / Computed By /
+   Date, footer "<project> (Moving Load Generator)" and "Page X of Y"). Nothing is analysed or
+   recomputed here, no input or saved key is added, and the report window's Print / Save as PDF
+   button is unchanged. If the recast fails for any reason, the report prints as before. */
+(function(){
+  var TOOL='Moving Load Generator';
+  var e=function(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});};
+  var cssq=function(s){return String(s==null?'':s).replace(/\\/g,'\\\\').replace(/"/g,'\\"').replace(/[\r\n]+/g,' ');};
+  var fx=function(v,d){return (+v).toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d});};
+
+  /* On-screen CLAUDE.md §6 link line: the headline values above the plots are the peaks of the envelopes below */
+  document.head.insertAdjacentHTML('beforeend','<style>.mlgWk{font-size:11px;color:#64748b;margin-top:-6px}.mlgWk a{color:#4f46e5;cursor:pointer;text-decoration:none}.mlgWk a:hover{text-decoration:underline}.mlgWkFlash{box-shadow:0 0 0 3px #a5b4fc}@media print{.mlgWk{display:none!important}}</style>');
+  var mets=document.querySelector('main > .mets');
+  if(mets){
+    mets.insertAdjacentHTML('afterend','<div class="mlgWk" id="mlgWk">Worked in: Max ±M → <a data-wk="cM">Moment Envelope</a> · Max ±V → <a data-wk="cV">Shear Envelope</a> · Max reaction → <a data-wk="rB">Support Reactions</a> (factored view) · governing vehicle positions → <a data-wk="envB">Envelope Table</a>, <a data-wk="cIL">Influence Line Viewer</a></div>');
+    document.getElementById('mlgWk').addEventListener('click',function(ev){
+      var a=ev.target.closest('a[data-wk]'); if(!a) return; ev.preventDefault();
+      var t=document.getElementById(a.getAttribute('data-wk')), c=t&&t.closest('.card'); if(!c) return;
+      c.scrollIntoView({behavior:'smooth',block:'start'}); c.classList.add('mlgWkFlash'); setTimeout(function(){c.classList.remove('mlgWkFlash');},1200);
+    });
+  }
+
+  /* References: only what the tool cites, and only for the vehicles in this report */
+  function refs(out,o){
+    var keys=out.map(function(r){return r.k==='__current'?r.R.m.short:r.k;});
+    var hw=out.some(function(r){return !r.R.m.rail;}), rail=out.some(function(r){return r.R.m.rail;});
+    var has=function(re){return keys.some(function(k){return re.test(k);});};
+    var hl=out.some(function(r){return !r.R.m.rail&&!/^(HS20|H20|Fatigue)$/.test(r.R.m.short);});
+    var fat=has(/^Fatigue$/), std=out.some(function(r){return /^(HS20|H20)$/.test(r.R.m.short)||r.R.m.stdLane||r.R.m.imp.method==='std';});
+    var L='AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024)', S='AASHTO Standard Specifications for Highway Bridges, 17th Ed. (2002)';
+    var R=[[L,'Table 3.4.1-1','Load factors: live load factor γ<sub>LL</sub> (limit state selected)']];
+    if(hl){R.push([L,'Art. 3.6.1.2','Design vehicular live load (HL-93): design truck, design tandem, design lane load']);
+      R.push([L,'Art. 3.6.1.3.1','Application of design vehicular live loads (axles that do not contribute neglected)']);}
+    if(hw)R.push([L,'Art. 3.6.1.1.2','Multiple presence of live load: included in the distribution factors entered, not applied again']);
+    if(fat)R.push([L,'Art. 3.6.1.4, 3.6.1.4.3b; C3.6.1.1.2','Fatigue truck; fatigue distribution factor (one-lane DF ÷ 1.2)']);
+    if(hl||fat)R.push([L,'Art. 3.6.2','Dynamic load allowance IM']);
+    R.push([L,'Art. 6.10.1.5','Stiffness for live load analysis (uncracked short-term composite section)']);
+    if(o.defl){R.push([L,'Art. 2.5.2.6.2','Deflection criteria; deflection distribution factor']);
+      if($('dCase')&&$('dCase').value==='lrfd'&&hw)R.push([L,'Art. 3.6.1.3.2','Loading for optional live load deflection evaluation']);}
+    try{var src=window.MLGlldf&&MLGlldf.src&&MLGlldf.src(); if(src&&src.perFootStrip&&hw)R.push([L,'Art. 4.6.2.3','Equivalent strip widths for slab-type bridges (DFs per 1-ft strip)']);}catch(_){}
+    if(std){R.push([S,'Art. 3.7.1.1, Fig. 3.7.6B','H20 / HS20 truck and lane loading']);R.push([S,'Art. 3.8.1, 3.8.2','Impact']);R.push([S,'Art. 3.11.3','Lane loading for negative moment in continuous spans']);}
+    if(rail)R.push(['AREMA Manual for Railway Engineering, edition: verify','Ch. 8 / Ch. 15','Cooper E80 and rail equipment loading; impact (steel formula)']);
+    return R;
+  }
+
+  /* Re-draw a plot at a print-legible size (same series, same plot() as the report already used) */
+  function img(series,o,w,h){try{return offPlot(series,o,w,h);}catch(_){return null;}}
+
+  function recast(h,out,o){
+    var doc=new DOMParser().parseFromString(h,'text/html'), B=doc.body;
+    var secs=[].slice.call(B.children).filter(function(n){return n.tagName==='SECTION'&&n.querySelector('h2');});
+    if(!secs.length||secs.length!==out.length) return h;   // not the expected structure: print as before
+    var hw=out.filter(function(r){return !r.R.m.rail;}), rl=out.filter(function(r){return r.R.m.rail;});
+    var ord=(hw.length&&rl.length)?hw.concat(rl):out;
+    var proj=($('rProj')&&$('rProj').value)||o.proj||'', by=o.by||'';
+    var hdr=B.querySelector('table.hdr'), dateTxt='';
+    if(hdr)[].slice.call(hdr.rows).forEach(function(tr){if(tr.cells[0]&&tr.cells[0].textContent.trim()==='Date')dateTxt=tr.cells[1].textContent.trim();});
+    var unit=o.fac?'factored per girder (LLF '+out[0].R.m.llf+' × DF)':'unfactored per lane, including impact';
+    var sTop=[], n=0;   // [{n,id,t,subs:[{id,t}]}]
+    var mk=function(tag,cls,html){var x=doc.createElement(tag);if(cls)x.className=cls;if(html!=null)x.innerHTML=html;return x;};
+    var head=function(sec,title){n++;var s={n:n,id:'s'+n,t:title,subs:[]};sTop.push(s);var h2=mk('h2','cr-h1',n+'. '+e(title));h2.id=s.id;sec.insertBefore(h2,sec.firstChild);return s;};
+    var sub=function(s,h3,title){var k=s.subs.length+1,id=s.id+'-'+k;s.subs.push({id:id,t:title});h3.className='cr-h2';h3.id=id;h3.textContent=s.n+'.'+k+' '+title;return id;};
+    var sref=function(id){return '§'+id.slice(1).replace('-','.');}, alink=function(id){return '<a href="#'+id+'">'+sref(id)+'</a>';};
+    var stripN=function(t){return t.replace(/^\s*\d+\.\s*/,'').trim();};
+
+    // ---- collect the top-level pieces in document order ----
+    var kids=[].slice.call(B.children), np=null, foot=null, inputs=[], sums=[], cur=null;
+    kids.forEach(function(k){
+      if(k.classList.contains('np')){np=k;return;}
+      if(k.tagName==='H1'||k===hdr) return;
+      if(k.tagName==='P'&&/text-align:\s*center/.test(k.getAttribute('style')||'')){foot=k;return;}
+      if(k.tagName==='SECTION'){cur=null;return;}
+      if(k.tagName==='H2'){if(/Structure/.test(k.textContent)){cur=inputs;}else{cur=[];sums.push({t:stripN(k.textContent),nodes:cur});}return;}
+      if(cur)cur.push(k);
+    });
+
+    var body=mk('div','cr-body');
+    // ---- 1. Structure & Analysis Inputs ----
+    var s1el=mk('section','cr-sec cr-break'), s1=head(s1el,'Structure & Analysis Inputs');
+    var h=mk('h3');s1el.appendChild(h);var id11=sub(s1,h,'Spans, Stiffness, Factors and Analysis Settings');
+    inputs.forEach(function(k){
+      if(k.tagName==='H3'){var t=k.textContent.replace(/\s*\(.*$/,'').trim();var nt=/Segments/.test(t)?'Girder Segments (* = I override used for stiffness)':/Stiffness/.test(t)?'Girder Stiffness Along Length (I used in the analysis)':t;sub(s1,k,nt);}
+      s1el.appendChild(k);});
+    var eh=mk('h3');s1el.appendChild(eh);var id14=sub(s1,eh,'Analysis Model and Engine Check');
+    s1el.appendChild(mk('div','cr-chk',out[0].R.check));
+    body.appendChild(s1el);
+
+    // ---- 2. Vehicle Definitions (moved from each vehicle section; input echo of each vehicle) ----
+    var s2el=mk('section','cr-sec cr-break'), s2=head(s2el,'Vehicle Definitions');
+    s2el.appendChild(mk('p','cr-p','Each vehicle is analysed with its own preset rules (uniform load, impact, variable spacing, secondary vehicle, multi-vehicle case); spans, girder section, distribution factors and LLF are shared ('+alink(id11)+'). Axle 1 is the lead axle.'));
+    var vdef=[];
+    ord.forEach(function(r,i){
+      var sec=secs[i], m=r.R.m, h3=mk('h3');s2el.appendChild(h3);vdef[i]=sub(s2,h3,r.name);
+      var vi=sec.querySelector('.img'), info=sec.querySelector('p.info');
+      if(vi)s2el.appendChild(vi); if(info)s2el.appendChild(info);
+      var off=0, rows=m.axles.map(function(a,j){off+=j?+a[1]:0;var vs=r.R.varOK&&j+1===m.vK;return '<tr><td>'+(j+1)+'</td><td class="n">'+fx(a[0],2)+'</td><td class="n">'+(j?(vs?m.vMin+'–'+m.vMax+' (varies)':fx(a[1],2)):'—')+'</td><td class="n">'+(vs?'—':fx(off,2))+'</td></tr>';}).join('');
+      s2el.appendChild(mk('table','cr-tbl','<thead><tr><th>Axle</th><th>Load (kips)</th><th>Spacing from previous (ft)</th><th>Distance from axle 1 (ft)</th></tr></thead><tbody>'+rows+'</tbody>'));
+      s2el.appendChild(mk('p','cr-note','Axles that do not contribute: '+(m.neglect?'neglected (LRFD 3.6.1.3.1)':'always included')+' · travel: '+(m.dirs&&m.dirs.length>1?'both directions':'one direction')+(m.rail?' · rail vehicle (rail DF set)':' · highway vehicle')+'.'));
+    });
+    body.appendChild(s2el);
+
+    // ---- summaries and vehicle results, in the order the report had them ----
+    var sumSec=function(sm,list){
+      var el=mk('section','cr-sec cr-break'), s=head(el,sm.t.replace(/^Summary/,'Results Summary'));
+      sm.nodes.forEach(function(k){el.appendChild(k);});
+      return {el:el,s:s,list:list};
+    };
+    var vehSec=function(r,i){
+      var sec=secs[i];sec.className='cr-sec cr-break';
+      var oh2=sec.querySelector('h2'),t=stripN(oh2.textContent);oh2.remove();
+      var s=head(sec,t+' — Results');
+      var wn=sec.querySelector('p.wn'), lk=mk('p','cr-note','Vehicle definition: see '+alink(vdef[i])+' · inputs, DFs and LLF: see '+alink(id11)+'.');
+      (wn?wn:sec.querySelector('h2')).insertAdjacentElement('afterend',lk);
+      var h3s=[].slice.call(sec.querySelectorAll('h3'));
+      h3s.forEach(function(x){var t3=x.textContent.trim();if(/^Governing Results/.test(t3))t3='Governing Results — '+unit;sub(s,x,t3);});
+      // worked factoring of each governing value: value per girder = gamma_LL x g x (per-lane value incl. IM)
+      var kv=sec.querySelector('table.kv');
+      if(kv){
+        var R=r.R,X=r.X,m=R.m,lines=[];
+        if(o.fac){
+          [['M','<sup>+</sup>',X.Mp,1,'kip-ft'],['M','<sup>−</sup>',X.Mn,0,'kip-ft'],['V','<sup>+</sup>',X.Vp,1,'kips'],['V','<sup>−</sup>',X.Vn,0,'kips'],['R','<sup>+</sup>',X.Rp,1,'kips'],['R','<sup>−</sup>',X.Rn,0,'kips']].forEach(function(q){
+            var b=q[2]; if(!b) return; var ei=R.effs.indexOf(b.ef); if(ei<0) return;
+            var raw=q[3]?R.res[ei].max:R.res[ei].min, g=R.dfOf(b.ef,raw), ef=b.ef;
+            var gl=ef.t==='M'?(raw<0&&m.dfNeg>0?'negative-moment DF':'moment DF, '+(ef.spans.length>1?'larger of spans '+ef.spans.map(function(z){return z+1;}).join(' and '):'span '+(ef.spans[0]+1))):ef.t==='V'?'shear DF, span '+(ef.spans[0]+1):'shear DF, '+(ef.spans.length>1?'larger of spans '+ef.spans.map(function(z){return z+1;}).join(' and '):'span '+(ef.spans[0]+1));
+            if(m.rail)gl+=' (rail set)'; else if(m.fatDF)gl+=' (fatigue set where entered)';
+            var sym=q[0]+q[1];
+            lines.push('<div class="cr-line"><div>'+sym+' = γ<sub>LL</sub> · g · '+sym+'<sub>LL+IM</sub></div><div>= '+m.llf+' × '+(+g.toFixed(4))+' × '+fx(raw,2)+'</div><div class="cr-r"><b>'+fx(b.v,1)+'</b> '+q[4]+'</div></div><div class="cr-where">g = '+gl+'; '+sym+'<sub>LL+IM</sub> = envelope value per lane including impact at '+(ef.t==='R'?'Support '+'ABCDE'[ef.q]:'x = '+b.x.toFixed(2)+' ft')+' (influence-line envelope, '+alink(id14)+')</div>');
+          });
+          kv.insertAdjacentElement('afterend',mk('div','cr-work','<p class="cr-p"><i>Factoring of the governing values</i> (γ<sub>LL</sub> and DFs: '+alink(id11)+'):</p>'+lines.join('')));
+        } else kv.insertAdjacentElement('afterend',mk('p','cr-note','Values are per lane, unfactored, including impact (γ<sub>LL</sub> and DFs not applied).'));
+      }
+      // deflection: allowable worked once
+      var dt=[].slice.call(sec.querySelectorAll('h3')).filter(function(x){return /Deflection/.test(x.textContent);})[0];
+      if(dt){var tb=dt.nextElementSibling;while(tb&&tb.tagName!=='TABLE')tb=tb.nextElementSibling;
+        if(tb)tb.insertAdjacentElement('afterend',mk('p','cr-note','Allowable = 12 · L / N (in), L = span length (ft), N = deflection limit entered; ratio = |δ| / allowable. Service level: LLF not applied; deflection DF, impact and load case per '+alink(id11)+'.'));}
+      return s;
+    };
+    // the report body lists: summary (highway or all) -> its vehicles -> [rail summary -> rail vehicles]
+    var groups=(hw.length&&rl.length)?[[sums[0],hw,0],[sums[1],rl,hw.length]]:[[sums[0],out,0]];
+    groups.forEach(function(G){
+      var S=G[0]?sumSec(G[0],G[1]):null; if(S)body.appendChild(S.el);
+      var made=G[1].map(function(r,j){var i=G[2]+j;var s=vehSec(r,i);return s;});
+      G[1].forEach(function(r,j){body.appendChild(secs[G[2]+j]);});
+      if(S){var tb=S.el.querySelector('table');if(tb)[].slice.call(tb.tBodies[0].rows).forEach(function(tr,j){var s=made[j];if(!s)return;
+        tr.cells[0].insertAdjacentHTML('beforeend','<small><a href="#'+s.id+'-1">see §'+s.n+'.1</a></small>');});
+        S.el.appendChild(mk('p','cr-note','Each value is worked in the vehicle\'s results section (§n.1, linked in the first column).'));}
+    });
+
+    // ---- cover, references, contents ----
+    var vehNames=out.map(function(r){return e(r.name);}).join(', ');
+    var basis=$('mlgBasis')?$('mlgBasis').textContent.replace(/^Basis:\s*/,''):'';
+    var c=function(v){return e(v||'—');};
+    var cover='<section class="cr-cover"><div class="cr-cover-t"><h1>Bridge Moving Load Analysis</h1><p>'+e(proj||'Untitled project')+'</p>'+
+      '<p class="cr-cover-p">'+TOOL+' (BridgeLoad Pro — Continuous) · Calculation Report</p><p class="cr-cover-p">'+e(out[0].R.m.spans.join(' + '))+' = '+e(out[0].R.m.spans.reduce(function(a,b){return a+b;},0))+' ft · '+out.length+' vehicle'+(out.length>1?'s':'')+' · '+e(unit)+'</p>'+
+      '<p class="cr-cover-c">Codes: '+e(basis)+'</p>'+
+      '<table class="cr-tb"><tr><td><span>Project</span>'+c(proj)+'</td><td><span>Project No</span>—</td></tr><tr><td><span>Calculated by</span>'+c(by)+'</td><td><span>Date</span>'+c(dateTxt)+'</td></tr><tr><td><span>Checked by</span>—</td><td><span>Checked date</span>—</td></tr></table>'+
+      '<p class="cr-cover-v">Vehicles analysed: '+vehNames+'</p></div></section>';
+    var R=refs(out,o);
+    var front='<section class="cr-front"><h2 class="cr-h1">References</h2><table class="cr-refs">'+R.map(function(x,i){return (i&&R[i-1][0]===x[0]?'':'<tr><td colspan="2"><b>'+x[0]+'</b></td></tr>')+'<tr><td class="cr-ra">'+x[1]+'</td><td>'+x[2]+'</td></tr>';}).join('')+'</table>'+
+      '<p class="cr-note">Only what this tool cites, for the vehicles in this report. The distribution factors, deflection limit and owner criteria are user inputs.</p>'+
+      '<h2 class="cr-h1">Table of Contents</h2><ol class="cr-toc">'+sTop.map(function(s){return '<li><a href="#'+s.id+'">'+s.n+'. '+e(s.t)+'</a>'+(s.subs.length?'<ol>'+s.subs.map(function(q,i){return '<li><a href="#'+q.id+'">'+s.n+'.'+(i+1)+' '+e(q.t)+'</a></li>';}).join('')+'</ol>':'')+'</li>';}).join('')+'</ol>'+
+      '<p class="cr-p cr-small">Prepared with '+TOOL+'. Moving-load envelopes by influence lines on the girder line model ('+alink(id14)+'); the factored values are worked as γ<sub>LL</sub> · g · value per lane in each results section. No design checks (D/C) are made in this report. Units: kip, ft, in unless noted.</p></section>';
+
+    // ---- print-legible diagrams (same series, smaller canvas so the text prints larger) ----
+    var saved=RES;
+    try{
+      ord.forEach(function(r,i){var sec=secs[i],Rr=r.R,imgs=[].slice.call(sec.querySelectorAll('img')).concat([].slice.call(s2el.querySelectorAll('img')));
+        var rep=function(old,nu){if(!old||!nu)return;imgs.forEach(function(im){if(im.getAttribute('src')===old)im.setAttribute('src',nu);});};
+        rep(r.mImg,img(r.E.M,{Lt:Rr.Lt,sup:Rr.sup,ylab:'Moment (kip-ft)'},760,250));
+        rep(r.vImg,img(r.E.V,{Lt:Rr.Lt,sup:Rr.sup,ylab:'Shear (kips)'},760,250));
+        if(r.D&&r.dImg)rep(r.dImg,img([{pts:r.D.secs.map(function(s,j){return [s.x,r.D.res[j].dn];}),color:'#2563eb',fill:'rgba(37,99,235,.1)',peak:-1},{pts:r.D.secs.map(function(s,j){return [s.x,r.D.res[j].up];}),color:'#0d9488',fill:'rgba(13,148,136,.1)',peak:1}],{Lt:Rr.Lt,sup:Rr.sup,ylab:'Deflection (in)'},760,220));
+        if(saved){var cv=$('cVeh'),ow=cv.style.width;RES=Rr;cv.style.width='760px';try{drawVehicle();rep(r.veh,cv.toDataURL('image/png'));}finally{cv.style.width=ow;}}
+      });
+    }finally{RES=saved;if(saved){try{drawVehicle();}catch(_){}}}
+    if(saved){var eiH=[].slice.call(s1el.querySelectorAll('h3')).filter(function(x){return /Stiffness Along/.test(x.textContent);})[0],eiI=eiH&&eiH.nextElementSibling&&eiH.nextElementSibling.querySelector('img');
+      if(eiI){var cv2=document.createElement('canvas');cv2.style.cssText='position:fixed;left:-99999px;top:0;width:760px;height:220px';document.body.appendChild(cv2);try{drawEI(cv2,saved);eiI.setAttribute('src',cv2.toDataURL('image/png'));}catch(_){}cv2.remove();}}
+
+    // ---- assemble ----
+    B.innerHTML='';
+    if(np)B.appendChild(np);
+    var docEl=mk('div','crdoc');docEl.innerHTML=cover+front;docEl.appendChild(body);if(foot){foot.className='cr-foot';foot.removeAttribute('style');docEl.appendChild(foot);}
+    B.appendChild(docEl);
+    var mt={no:'—',desc:proj||'—',by:by||'—',chk:'—',d1:dateTxt||'—',d2:'—'};
+    var box='font: 9.5pt "Times New Roman", Times, serif; color: #000; white-space: pre; vertical-align: bottom; padding-bottom: 6pt;';
+    var st=doc.createElement('style');st.id='mlg-cr';st.textContent=CSS+
+      '@page { size: letter portrait; margin: 0.95in 0.6in 0.7in 0.6in;'+
+      ' @top-left { content: "Project No: '+cssq(mt.no)+'\\A Description: '+cssq(mt.desc)+'"; '+box+' text-align: left; }'+
+      ' @top-center { content: "Computed By: '+cssq(mt.by)+'\\A Checked By: '+cssq(mt.chk)+'"; '+box+' text-align: left; }'+
+      ' @top-right { content: "Date: '+cssq(mt.d1)+'\\A Date: '+cssq(mt.d2)+'"; '+box+' text-align: right; }'+
+      ' @bottom-left { content: "'+cssq((proj||'Untitled project')+' ('+TOOL+')')+'"; font: 9pt "Times New Roman", Times, serif; vertical-align: top; padding-top: 6pt; }'+
+      ' @bottom-right { content: "Page " counter(page) " of " counter(pages); font: 9pt "Times New Roman", Times, serif; vertical-align: top; padding-top: 6pt; } }';
+    doc.head.appendChild(st);
+    var ti=doc.querySelector('title');if(ti)ti.textContent=(proj?proj+' — ':'')+'Moving Load Analysis';
+    return '<!DOCTYPE html>'+doc.documentElement.outerHTML;
+  }
+
+  var CSS=
+    'body{max-width:7.6in;padding:24px 20px}'+
+    '.crdoc{color:#000;font:11pt/1.35 "Times New Roman",Times,serif}.crdoc *{color:#000}'+
+    '.crdoc a{text-decoration:none;color:#1e3a8a}.crdoc a:hover{text-decoration:underline}'+
+    '.crdoc .cr-cover{min-height:8.4in;display:flex;align-items:center;justify-content:center;break-after:page;page-break-after:always}'+
+    '.crdoc .cr-cover-t{width:80%;text-align:center}.crdoc .cr-cover h1{font:700 24pt/1.2 Arial,Helvetica,sans-serif;margin:0 0 14pt;border:0;padding:0}'+
+    '.crdoc .cr-cover p{font:700 13pt Arial,Helvetica,sans-serif;margin:0 0 6pt}.crdoc .cr-cover .cr-cover-p{font-weight:400;font-size:11pt}'+
+    '.crdoc .cr-cover .cr-cover-c,.crdoc .cr-cover .cr-cover-v{font:400 9.5pt "Times New Roman",Times,serif;margin:10pt 0}'+
+    '.crdoc table.cr-tb{width:100%;margin:16pt 0 6pt;border-collapse:collapse}.crdoc .cr-tb td{border:0.6pt solid #000;padding:4pt 6pt;text-align:left;font-size:10.5pt;width:50%}.crdoc .cr-tb td span{display:block;font-size:8pt;color:#333;text-transform:uppercase;letter-spacing:.04em}'+
+    '.crdoc .cr-front{break-after:page;page-break-after:always}.crdoc .cr-break{break-before:page;page-break-before:always}'+
+    '.crdoc h2.cr-h1{font:700 12pt "Times New Roman",Times,serif;text-decoration:underline;text-transform:uppercase;margin:0 0 8pt;border:0;padding:0;color:#000;break-after:avoid}'+
+    '.crdoc .cr-front h2.cr-h1{margin-top:10pt}'+
+    '.crdoc h3.cr-h2{font:700 11pt "Times New Roman",Times,serif;text-transform:none;letter-spacing:0;margin:14pt 0 6pt;color:#000;break-after:avoid}'+
+    '.crdoc .cr-p{margin:0 0 7pt}.crdoc .cr-small{font-size:9.5pt;margin-top:18pt}.crdoc .cr-note{font-size:9.5pt;font-style:italic;margin:3pt 0 8pt}'+
+    '.crdoc .cr-refs{border-collapse:collapse;margin:0 0 6pt;width:100%}.crdoc .cr-refs td{border:0;padding:1pt 10pt 1pt 0;vertical-align:top;text-align:left;font-size:10pt}.crdoc .cr-refs td.cr-ra{padding-left:14pt;white-space:nowrap;width:1%}'+
+    '.crdoc .cr-toc,.crdoc .cr-toc ol{list-style:none;margin:0;padding:0}.crdoc .cr-toc>li{margin:3pt 0}.crdoc .cr-toc ol{padding-left:18pt;font-size:10.5pt}'+
+    '.crdoc table{font-size:9.5pt;margin:6pt 0 8pt}.crdoc th,.crdoc td{border:0.6pt solid #000;padding:2pt 5pt;font-family:"Times New Roman",Times,serif}'+
+    '.crdoc th{background:#e9e9e9!important;color:#000;font-size:9.5pt;text-transform:none;letter-spacing:0;text-align:center}'+
+    '.crdoc tr{break-inside:avoid}.crdoc td.gv{background:none;font-weight:700;text-decoration:underline}.crdoc td small{color:#333;font-size:8.5pt}'+
+    '.crdoc table.hdr td:first-child{background:none;color:#000;width:30%}.crdoc table.cr-tbl{width:auto}.crdoc td.n{text-align:right}'+
+    '.crdoc .img{border:0.6pt solid #999;border-radius:0;break-inside:avoid}.crdoc .info{font-size:9.5pt;color:#000}'+
+    '.crdoc .wn{background:none;border:0.6pt solid #000;border-radius:0;font-size:9.5pt}'+
+    '.crdoc .ok,.crdoc .ng{color:#000}'+
+    '.crdoc .cr-chk{font-size:10pt;line-height:1.5;margin:0 0 6pt;break-inside:avoid}.crdoc .cr-chk .hint{font-size:9pt;font-style:italic}'+
+    '.crdoc .cr-work{margin:4pt 0 10pt}.crdoc .cr-line{display:grid;grid-template-columns:2.3in 1fr 1.2in;gap:0 10pt;align-items:baseline;padding:3pt 0 0;border-top:0.4pt solid #bbb;break-inside:avoid}'+
+    '.crdoc .cr-line .cr-r{text-align:right}.crdoc .cr-where{margin:0 0 3pt 0.3in;font-size:9pt;break-before:avoid}'+
+    '.crdoc .cr-foot{text-align:center;font-size:9pt;margin-top:24pt;color:#555}'+
+    '@media print{body{max-width:none;padding:0}.np{display:none}}';
+
+  var prev=reportHTML;
+  reportHTML=function(out,o,base,dk){
+    var h=prev(out,o,base,dk);
+    try{ return recast(h,out,o); }catch(err){ console.warn('D11 report format not applied:',err); return h; }
+  };
+})();
+</script>
 </body>
 </html>
