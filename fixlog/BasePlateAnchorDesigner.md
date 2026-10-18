@@ -1954,5 +1954,5 @@ Engineer request 2026-10-16. A new export only: **no input, result, report or sa
   - Link counts: 10 on Summary, 14 on Anchor Bolts.
 - **Verification:**
   - `node tests/check-syntax.mjs BasePlateAnchorDesigner.html` passes.
-  - `node tests/bpad-profis.mjs`: every computed field is identical to main; only the report text differs (the "see §" lines and the new column).
+  - `node tests/bpad-profis.mjs`: every computed field is identical to main. Its `report` field reads only the front matter: the body sections are hidden off-screen, so `innerText` skips them. The "see §" lines were therefore checked in the generated PDF (pdftotext) instead.
   - Headless click test: the tab, combination and highlighted card are as stated above, with no console errors.
