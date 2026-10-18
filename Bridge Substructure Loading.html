@@ -3553,6 +3553,149 @@ async function rxImport(file) {
   });
   window.SubLoadsFoundationHandoff = { build, levels, open, send, close, state: () => DLG };   // used by tests; no effect on results
 })();
+/* =====================================================================
+   D11 (2026-10-18): calculation-sheet report in the Gusset Plate Rating / abutment calculator format.
+   The calculation package (rptPrint: chapters built from the tabs' own render functions) is kept as it
+   is and completed around it: cover with title block, references, numbered contents with links,
+   chapters n and subsections n.k, a governing-effect line per limit state after each unit's
+   Combinations (the combination table's own values), the CLAUDE.md §6 links rewritten to
+   "see §n.k", and the @page header / "Page X of Y" footer (slPageCSS; only while the package prints).
+   Nothing is recomputed. Display only: no formula, factor or saved field changes.
+   ===================================================================== */
+const SL_REFS = [
+  ['AASHTO LRFD', 'AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024), Section 3: 3.4.1 (Tables 3.4.1-1, 3.4.1-2, 3.4.1-3), 3.5, 3.6.1.1.1, 3.6.1.1.2, 3.6.1.3.1, 3.6.1.6, 3.6.2.1, 3.6.3, 3.6.4, 3.6.5'],
+  ['', '3.7.3 (Tables 3.7.3.1-1, 3.7.3.2-1); 3.8.1.1.2 (Figure 3.8.1.1.2-1, Table 3.8.1.1.2-1), 3.8.1.2 (Table 3.8.1.2.3a-1), 3.8.1.2.4, 3.8.1.3, 3.8.2; 3.9.2.2, 3.9.2.4, 3.9.3, 3.9.4, 3.9.5'],
+  ['', '3.10.2 to 3.10.4 (Tables 3.10.3.2-1 to -3), 3.10.6 (Table 3.10.6-1), 3.10.7.1 (Tables 3.10.7.1-1, -2), 3.10.8, 3.10.9.1 to 3.10.9.4; 3.11.5, 3.11.6.4 (Table 3.11.6.4-1); 3.12.2 (Table 3.12.2.1.1-1); 3.13; 3.14 (3.14.5, 3.14.7 to 3.14.11, 3.14.14.1)'],
+  ['', 'Art. 4.7.4.3.2c (uniform load method), Art. 4.7.4.4 (minimum support length N); Art. 11.6.5 (seismic earth pressure, 11.6.5.2.2)'],
+  ['MassDOT', 'MassDOT LRFD Bridge Manual, Part I, Chapter 3 (January 2025): 3.1.6, 3.1.8.2, 3.2.10.5, 3.3.1.3, 3.4.1.2, 3.4.3.3, 3.4.4.3 to 3.4.4.5 (applied when the owner is MassDOT)'],
+  ['USGS', 'USGS AASHTO-2009 seismic design web service (PGA, S<sub>s</sub>, S<sub>1</sub>), when used; values may be typed instead'],
+  ['Other', 'UF/FDOT report 2010/68901 (form of the barge impact equations, as noted on the Vessel collision tab); FHWA LRFD Steel Girder Superstructure Design Example (projected-area wind option and the tool’s verification); edition: verify']];
+function slPageCSS(on) {
+  let st = document.getElementById('sl-page'); if (!st) { st = document.createElement('style'); st.id = 'sl-page'; document.head.appendChild(st); }
+  if (!on) { st.textContent = ''; return; }
+  const m = P.meta || {}, q = v => String(v == null || v === '' ? '—' : v).replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/[\r\n]+/g, ' ');
+  const box = 'font: 9.5pt "Times New Roman", Times, serif; color: #000; white-space: pre; vertical-align: bottom; padding-bottom: 6pt;', foot = 'font: 9pt "Times New Roman", Times, serif; color: #000; white-space: pre; vertical-align: top; padding-top: 6pt;';
+  st.textContent = '@media print { @page { size: letter portrait; margin: 0.95in 0.6in 0.75in 0.6in;'
+    + ` @top-left { content: "Project No: ${q(m.num)}\\A Description: ${q(String(m.name || 'Bridge').slice(0, 40))}"; ${box} text-align: left; }`
+    + ` @top-center { content: "Computed By: ${q(m.by)}\\A Checked By: ${q(m.chk)}"; ${box} text-align: left; }`
+    + ` @top-right { content: "Date: ${q(m.date)}\\A Date: —"; ${box} text-align: right; }`
+    + ` @bottom-left { content: "${q(m.name || 'Bridge')} (SubLoads: Bridge Substructure Loads)"; ${foot} text-align: left; }`
+    + ` @bottom-right { content: "Page " counter(page) " of " counter(pages); ${foot} text-align: right; } } }`;
+}
+/* ---- D11 links (CLAUDE.md §6, 2026-10-18): a value quoted away from where it is worked links to that card.
+   On screen: "Worked in: <value> → <Tab> · <card>" (a click opens the tab and scrolls to the card). In the
+   calculation package every link reads "<value>: see §n.k"; an in-text "Force distribution tab" reads
+   "Force distribution, §n.k". ---- */
+const slTabName = id => { const t = TABS.find(x => x !== '|' && x[0] === id); return t ? t[1] : id; };
+function slWk(items) {   // items: [[tab, unit index or '', card title (start), quoted value]]
+  return `<div class="sl-wkl">Worked in: ${items.map(([tb, k, card, txt]) => `<span class="sl-wk" role="link" tabindex="0" data-wt="${tb}" data-wu="${k}" data-wc="${esc(card)}" data-txt="${esc(txt)}">${txt} → ${esc(slTabName(tb))} · ${esc(card)}</span>`).join(' · ')}</div>`;
+}
+const slIn = (tb, card, txt) => `<span class="sl-wk sl-in" role="link" tabindex="0" data-wt="${tb}" data-wu="" data-wc="${esc(card)}">${txt}</span>`;
+function slAppend(h, title, add) {   // insert html at the end of the card whose title starts with `title`
+  const i = h.indexOf('<h2>' + title); if (i < 0) return h; const nx = h.indexOf('<div class="card">', i), j = h.lastIndexOf('</div></div>', nx < 0 ? h.length : nx);
+  return j < i ? h : h.slice(0, j) + add + h.slice(j);
+}
+function slGoto(tb, wu, wc) {
+  if (wu !== '' && wu != null && +wu !== P.ui.sel && P.units[+wu]) selectUnit(+wu);
+  showTab(tb); const el = document.getElementById('tab-' + tb); if (!el) return;
+  const h = [...el.querySelectorAll('.card-h h2')].find(x => x.textContent.trim().startsWith(wc || '\u0000')), c = h ? h.closest('.card') : el;
+  c.scrollIntoView({ block: 'start' }); c.classList.add('sl-flash'); setTimeout(() => c.classList.remove('sl-flash'), 1600);
+}
+document.addEventListener('click', e => { const a = e.target.closest && e.target.closest('.sl-wk'); if (a && !a.closest('#print-area')) slGoto(a.dataset.wt, a.dataset.wu, a.dataset.wc); });
+document.addEventListener('keydown', e => { const a = e.target; if (e.key === 'Enter' && a.classList && a.classList.contains('sl-wk')) slGoto(a.dataset.wt, a.dataset.wu, a.dataset.wc); });
+/* the loads the combination table takes, each linked to the card where it is worked (unfactored) */
+function slComboLinks(k) {
+  const u = P.units[k], nm = u.name, eff = 'Effects at ' + nm, it = [['dl', k, 'Dead load effects', 'DC, DW']];
+  try { const EL = earthLoads(k); if (!EL.err && (u.type === 'abut' || EL.E.items.length)) it.push(['earth', k, eff, u.type === 'abut' ? 'EH, EV, ES, LS' : 'EV']); } catch (e) { }
+  it.push(['ll', k, 'Live load: ' + nm, nz(P.br.swL) > 2 || nz(P.br.swR) > 2 ? 'LL + IM, PL' : 'LL + IM'], ['brce', k, eff, 'BR, CE'], ['wind', k, eff, 'WS, WL']);
+  try { const p4 = phase4(k); it.push(['temp', k, eff, p4.SH ? 'TU, FR, SH' : 'TU, FR']);
+    if (u.type !== 'abut' && u.water && u.water.on === 'yes' && isFinite(num(u.water.wse))) it.push(['water', k, eff, 'WA']);
+    if (p4.ice && !p4.ice.none) it.push(['ice', k, eff, 'IC']); } catch (e) { }
+  try { if (eqSite().ok) it.push(['eq', k, eff, 'EQ']); } catch (e) { }
+  try { const p6 = phase6(k); if (p6.cv) it.push(['cv', k, eff, 'CV']); if (p6.ct) it.push(['ct', k, eff, 'CT']); } catch (e) { }
+  return slWk(it);
+}
+{ const ch = comboHtml; comboHtml = function () { const h = ch(), k = P.ui.sel; if (!P.units[k]) return h; return slAppend(h, 'Load combinations: ', slComboLinks(k)); }; }
+{ const dh = dlHtml; dlHtml = function () { return slAppend(dh(), 'Dead load effects', slWk([['summary', '', 'Substructure self-weight', 'DC sub (self-weight by component)']])); }; }
+{ const FD = h => h.replace('(Force distribution tab)', `(${slIn('dist', 'Force distribution', 'Force distribution tab')})`);
+  const bh = brceHtml; brceHtml = function () { return FD(bh()); };
+  const th = tempHtml; tempHtml = function () { return FD(th()); };
+  const eh = eqHtml; eqHtml = function () { return FD(eh()); }; }
+/* governing-effect lines: per limit state, the factored maximum / minimum at the unit's lowest resultant section, from combine(k) as the table shows them */
+function slResults(k, ref) {
+  if (needOK()) return '';   // the Combinations tab shows no table either
+  let r, C; try { r = unitRes(k); C = combine(k); } catch (e) { return ''; } if (!r || r.err || !C) return '';
+  const defs = r.UM.defs; let qi = -1; defs.forEach((d, j) => { if (d.grp === 'Resultant' && /^Axial/.test(d.label)) qi = j; }); if (qi < 0) return '';
+  const loc = defs[qi].label.replace(/^Axial, /, ''), qs = [['P', qi, 'kip'], ['M<sub>t</sub>', defs.findIndex(d => d.grp === 'Resultant' && d.label === 'M<sub>t</sub>, ' + loc), 'kip-ft'], ['M<sub>l</sub>', defs.findIndex(d => d.grp === 'Resultant' && d.label === 'M<sub>l</sub>, ' + loc), 'kip-ft']].filter(x => x[1] >= 0);
+  const CV = COMBOS.filter(c => C[c.id]), line = (a, b) => `<div class="sl-line"><div>${a}</div><div>${b}</div></div>`;
+  return `<div class="sl-resh">Results: ${esc(P.units[k].name)}, factored effects at the resultant, ${esc(loc)} (maximum / minimum, η = 1.0; ${ref})</div><div class="sl-results">`
+    + CV.map(c => line(esc(c.name) + ':', qs.map(([s, q, un]) => `${s} = ${fv(C[c.id].max[q], defs[q].u)} / ${fv(C[c.id].min[q], defs[q].u)} ${un}`).join('; '))).join('')
+    + line('<b>Governing (Strength and Extreme Event):</b>', qs.map(([s, q, un]) => `${s} max <b>${fv(C.env.max[q], defs[q].u)}</b> ${un} (${esc(C.env.gmx[q] || '—')}), min <b>${fv(C.env.min[q], defs[q].u)}</b> ${un} (${esc(C.env.gmn[q] || '—')})`).join('; ')) + '</div>';
+}
+function slReport() {
+  const pa = document.getElementById('print-area'); if (!pa || !document.body.classList.contains('printing')) return;
+  const toc0 = pa.querySelector('.rpt-toc'), secs = [], map = {}; let cur = null;
+  [...pa.children].forEach(el => { if (el === toc0) return; if (el.matches('h1.rpt-h1')) { cur = document.createElement('section'); cur.className = 'sl-sec'; el.before(cur); cur.appendChild(el); secs.push({ el: cur, h: el }); } else if (cur) cur.appendChild(el); });
+  const rptKey = t => (RPT.find(x => x[1] === t) || [])[0];
+  secs.forEach(s => { const m = s.h.textContent.match(/^(\d+)\.\s*(.*)$/); s.n = m ? +m[1] : secs.indexOf(s) + 1; s.t = m ? m[2] : s.h.textContent; s.id = 'sl-s' + s.n; s.h.id = s.id; s.subs = [];
+    s.key = s.t === 'User manual and open items' ? 'manual' : rptKey(s.t) || 'unit'; s.k = s.key === 'unit' ? P.units.findIndex(u => `${u.name}: ${TYPE_NAME[u.type]}` === s.t) : '';
+    map[`ch|${s.key}|${s.k}`] = { num: String(s.n), id: s.id };
+    const els = s.key === 'unit' ? [...s.el.querySelectorAll(':scope > h2.rpt-h2')] : s.key === 'govsum' ? [...s.el.querySelectorAll('.card-b > h3')] : s.key === 'manual' ? [...s.el.querySelectorAll('h3')] : [...s.el.querySelectorAll(':scope > .card > .card-h > h2')];
+    els.forEach((h, i) => { const num = `${s.n}.${i + 1}`, id = `${s.id}-${i + 1}`, t = h.textContent.trim(); h.id = id; h.insertAdjacentText('afterbegin', num + ' '); s.subs.push({ t, id, num });
+      if (s.key === 'unit') map[`${rptKey(t)}|${s.k}`] = { num, id };
+      else if (s.key === 'govsum') { const k = P.units.findIndex(u => `${u.name}: ${TYPE_NAME[u.type]}` === t); if (k >= 0) h.insertAdjacentHTML('afterend', slWk([['combo', k, 'Load combinations: ' + P.units[k].name, 'Values (envelopes of the combination table)']])); }
+      else { if (!map[`${s.key}|`]) map[`${s.key}|`] = { num, id }; map[`${s.key}|${t}`] = { num, id }; } }); });
+  /* governing-effect lines at the end of each unit chapter that prints its Combinations */
+  secs.forEach(s => { const hit = s.key === 'unit' && s.k >= 0 && map[`combo|${s.k}`]; if (hit) s.el.insertAdjacentHTML('beforeend', slResults(s.k, `<span class="sl-wk" data-wt="combo" data-wu="${s.k}" data-wc="" data-txt="worked">§${hit.num}</span>`)); });
+  /* §6 links -> "see §n.k" */
+  pa.querySelectorAll('.sl-wk').forEach(x => { const d = x.dataset, wc = (d.wc || '').replace(/^\s+|\s+$/g, ''), hit = (d.wu !== '' && map[`${d.wt}|${d.wu}`]) || map[`${d.wt}|${wc}`] || map[`${d.wt}|`] || map[`ch|${d.wt}|${d.wu}`];
+    let txt; if (x.classList.contains('sl-in')) txt = hit ? `${x.textContent.replace(/ tab$/, '')}, §${hit.num}` : x.textContent + ' (not in this printout)';
+    else if (d.txt === 'worked') txt = hit ? '§' + hit.num : '—';
+    else txt = (d.txt ? d.txt + ': ' : '') + (hit ? 'see §' + hit.num : `see the ${slTabName(d.wt)} tab (not in this printout)`);
+    const a = document.createElement(hit ? 'a' : 'span'); a.className = 'xref'; if (hit) a.href = '#' + hit.id; a.innerHTML = esc(txt).replace(/&lt;(\/?su[bp])&gt;/g, '<$1>'); x.replaceWith(a); });
+  pa.querySelectorAll('.sl-wkl').forEach(d => { if (d.firstChild && d.firstChild.nodeType === 3) d.firstChild.textContent = ''; });
+  pa.querySelectorAll('p.note').forEach(n => { if (/Hover the limit state/.test(n.textContent)) n.innerHTML = n.innerHTML.replace(/\s*Hover the limit state to see the loads and cases it uses\./, ''); });   // a tooltip does not print
+  /* front matter: cover with title block, references, contents */
+  const m = P.meta, G = MODEL.G, o = P.ui.rpt || {}, un = P.units.filter((u, i) => !o.units || o.units[i]).map(u => esc(u.name)).join(', '), tb = (l, v) => `<td><span class="sl-tbl">${l}</span>${esc(v) || '—'}</td>`;
+  const toc = secs.map(s => `<li><a href="#${s.id}">${s.n}. ${esc(s.t)}</a>${s.subs.length ? `<ol>${s.subs.map(q => `<li><a href="#${q.id}">${q.num} ${esc(q.t)}</a></li>`).join('')}</ol>` : ''}</li>`).join('');
+  const front = document.createElement('div'); front.className = 'sl-front-all';
+  front.innerHTML = `<section class="sl-cover"><div class="sl-cover-t"><h1>Bridge Substructure Loads: Calculation</h1><p>${esc(m.name) || 'Untitled'}</p>
+      <p class="sl-cp">${G && !G.E.length ? `${G.spans.length} span${G.spans.length > 1 ? 's' : ''} (${G.spans.map(s => f1(s)).join(' + ')} ft), ${G.nSup} substructure units; ` : ''}units in this package: ${un || '—'}</p>
+      <p class="sl-cp">AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024), Section 3${isMass() ? ' · MassDOT LRFD Bridge Manual, Part I, Chapter 3 (January 2025)' : ''}</p><p class="sl-cp">SubLoads: Bridge Substructure Loads</p></div>
+    <table class="sl-titleblock"><tr>${tb('Project', m.name)}${tb('Project No.', m.num)}${tb('Calculated by', m.by)}${tb('Date', m.date)}</tr>
+      <tr><td colspan="2"><span class="sl-tbl">Subject</span>Substructure loads (unfactored load effects and AASHTO LRFD load combinations)</td>${tb('Checked by', m.chk)}${tb('Checked date', '')}</tr></table></section>
+    <section class="sl-front"><h2 class="sl-fh">References</h2><table class="sl-refs"><tbody>${SL_REFS.map(([a, b]) => `<tr><td>${a}</td><td>${b}</td></tr>`).join('')}</tbody></table>
+      <p class="sl-small">Load factors are those of Tables 3.4.1-1 to 3.4.1-3 unless overridden on the Bridge tab (listed in ${map['ch|basis|'] ? `<a class="xref" href="#${map['ch|basis|'].id}">§${map['ch|basis|'].num}</a>, Load factors` : 'the Project and design basis chapter, Load factors'}). Article numbers without a prefix are AASHTO LRFD; the MassDOT rows apply only when the owner is MassDOT.</p>
+      <h2 class="sl-fh">Contents</h2><ol class="sl-toc">${toc}</ol></section>`;
+  if (toc0) toc0.replaceWith(front); else pa.prepend(front);
+  pa.classList.add('sl-doc'); slPageCSS(true);
+  const off = () => { slPageCSS(false); window.removeEventListener('afterprint', off); }; window.addEventListener('afterprint', off);
+}
+{ const rp = rptPrint; rptPrint = function () { rp(); try { slReport(); } catch (e) { console.warn('report layout', e); } }; }
+(function slCSS() { const css = document.createElement('style'); css.textContent = `
+  .sl-wkl { font-size: .8rem; color: var(--text-dim); margin: 8px 0 0; line-height: 1.5; }
+  .sl-wk { color: var(--blue); cursor: pointer; } .sl-wk:hover, .sl-wk:focus { text-decoration: underline; }
+  .card.sl-flash { outline: 2px solid var(--blue); outline-offset: 2px; }
+  #print-area .sl-line { display: grid; grid-template-columns: 2.1in 1fr; gap: 0 12pt; padding: 3pt 0; border-top: 0.6pt solid #000; break-inside: avoid; font-size: 9.5pt; }
+  #print-area .sl-results { border-bottom: 0.8pt solid #000; margin-bottom: 8pt; }
+  #print-area .sl-resh { font: 700 11pt "Times New Roman", Times, serif; margin: 14pt 0 2pt; break-after: avoid; }
+  @media print {
+    #print-area.sl-doc h1.rpt-h1 { font: 700 12pt "Times New Roman", Times, serif; text-transform: uppercase; text-decoration: underline; margin: 0 0 8pt; }
+    #print-area.sl-doc h2.rpt-h2 { font: 700 11pt "Times New Roman", Times, serif; margin: 12pt 0 6pt; }
+    #print-area .sl-cover { min-height: 8.2in; display: flex; flex-direction: column; justify-content: center; break-after: page; }
+    #print-area .sl-cover-t { text-align: center; margin-bottom: 24pt; }
+    #print-area .sl-cover h1 { font: 700 22pt/1.2 Arial, Helvetica, sans-serif; margin: 0 0 14pt; }
+    #print-area .sl-cover p { font: 700 13pt Arial, Helvetica, sans-serif; margin: 0 0 6pt; } #print-area .sl-cover p.sl-cp { font-weight: 400; font-size: 11pt; }
+    #print-area .sl-titleblock { width: 100%; border-collapse: collapse; font-size: 10.5pt; } #print-area .sl-titleblock td { border: 1px solid #000; padding: 4pt 6pt; vertical-align: top; }
+    #print-area .sl-tbl { display: block; font-size: 7.5pt; text-transform: uppercase; color: #333; }
+    #print-area .sl-front { break-after: page; }
+    #print-area h2.sl-fh { font: 700 12pt "Times New Roman", Times, serif; text-decoration: underline; text-transform: uppercase; margin: 0 0 8pt; }
+    #print-area .sl-refs { border-collapse: collapse; margin: 0 0 6pt; } #print-area .sl-refs td { padding: 1pt 14pt 1pt 0; vertical-align: top; font-size: 9.5pt; } #print-area .sl-refs td:first-child { white-space: nowrap; font-weight: 700; }
+    #print-area .sl-small { font-size: 9pt; margin: 0 0 14pt; }
+    #print-area .sl-toc, #print-area .sl-toc ol { list-style: none; margin: 0; padding: 0; } #print-area .sl-toc > li { margin: 3pt 0; font-size: 10.5pt; }
+    #print-area .sl-toc ol { padding-left: 18pt; font-size: 9.5pt; columns: 2; column-gap: 14pt; }
+    #print-area a { color: #000; text-decoration: none; } #print-area .xref { font-style: italic; }
+    #print-area .sl-wkl { font-size: 9pt; color: #000; } }`; document.head.appendChild(css); })();
 /* ---------- start ---------- */
 (function start() {
   P = defP();

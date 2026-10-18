@@ -878,3 +878,78 @@ Open-item sweep of inventory section 19 (SUB-PEND, SUB-O1 to O4, SUB-F6, SUB-F8,
   - Screenshot of the Bridge tab with the select, and with the agency value field shown, checked.
 - **Not changed:** the superseded early `combine` wrapper in the earth section (`const eh = c.eq ? [nz(br.gEHEQ) || 1, …`) is not used by the final engine and was left as is (O4).
 - **Other copies:** `abutment_calculator.html` F25 has the same rule (separate code; no shared snippet).
+
+## 2026-10-18 — PR: claude/subload-d11-report (PR link added after merge)
+
+Line numbers are approximate; search for the anchor text.
+
+### D11: calculation-sheet report in the Gusset Plate Rating / abutment calculator format (Tier 1, display only)
+- **Engineer request:** AUDIT.md D11 (2026-10-14 / 2026-10-18).
+- **What changes for the user:** the printout of **Print → Print** (the calculation package) changes as listed under "After". Ctrl+P without the Print button is unchanged (it prints a blank page, as on main; see Open items). On screen, only the "Worked in" lines are new (next entry). No new input, button or saved field.
+- **Approach:** the package (`rptPrint`) already built its chapters from the tabs' own render functions (`summaryHtml`, `dlHtml`, … `comboHtml`, `concHtml`, `govSumHtml`), with the worked tables and equations. That is kept as it is; nothing is recomputed. The new `slReport()` runs right after `rptPrint` has built the package (before the print dialog opens) and completes it around the existing content.
+- **Before (print):** a title line and a plain list of chapter names (no links, references or title block); chapters "n. Title" with unnumbered load sub-headings and cards; no result lines; no print header or footer (browser default margins).
+- **After (print):**
+  - **Cover:** "Bridge Substructure Loads: Calculation", the project name, spans and units, the codes (AASHTO LRFD 10th Ed. (2024), Section 3; plus MassDOT LRFD Bridge Manual Part I Ch. 3 (January 2025) when the owner is MassDOT), and a title block Project / Project No. / Calculated by / Date / Subject / Checked by / Checked date from `P.meta.name`, `num`, `by`, `date`, `chk`. The tool has no checked-date field, so it prints "—" (no field added).
+  - **References** (`SL_REFS`): the AASHTO articles, tables and figures the tool cites (Section 3; Art. 4.7.4.3.2c, 4.7.4.4, 11.6.5), the MassDOT Manual sections (applied only for owner MassDOT), the USGS AASHTO-2009 service, and UF/FDOT 2010/68901 and the FHWA steel girder example ("edition: verify").
+  - **Numbered contents with links:** chapters n and subsections n.k.
+  - **Subsections n.k:** in each unit chapter, the load chapters (n.1 Dead load … n.12 Combinations); in Summary, Geometry and Force distribution, each card; in Governing design forces, each unit; in the Manual, each heading.
+  - **Result lines** at the end of each unit chapter that prints its Combinations (`slResults`): one line per limit state, "P = max / min kip; M_t = max / min kip-ft; M_l = max / min kip-ft" at the unit's lowest resultant section (normally the bottom of footing), then a "Governing (Strength and Extreme Event)" line with the governing limit state of each extreme. The values are `combine(k)` (`C[id].max/min`, `C.env.max/min/gmx/gmn`) formatted with `fv`, exactly as the Load combinations table shows them. No PASS/FAIL: the tool makes no capacity checks. There are no lines when the Combinations tab itself shows no table (`needOK()`).
+  - **Print header and footer** (`slPageCSS(true)` in `slReport`, cleared on `afterprint`): `@page` letter, margins 0.95 / 0.6 / 0.75 / 0.6 in. Top: "Project No / Description" (Description = project name), "Computed By / Checked By", "Date / Date" (checked date "—"). Bottom: "<project> (SubLoads: Bridge Substructure Loads)" and "Page X of Y".
+  - Headings in the calculation-sheet style (Times; chapter titles underlined, upper case).
+- **Fixed along the way (report display only):** the Concurrent design sets note says "Hover the limit state to see the loads and cases it uses." A tooltip does not print, so the report drops that sentence (screen unchanged).
+- **Where (re-apply by hand):** one block inserted just before `/* ---------- start ---------- */`, from the anchor `D11 (2026-10-18): calculation-sheet report in the Gusset Plate Rating / abutment calculator format.` (with its `/* ====` line) to the end of `(function slCSS() {…})();`. It holds `SL_REFS`, `slPageCSS`, the D11 links (next entry), `slResults`, `slReport`, the wrapper `{ const rp = rptPrint; rptPrint = function () { rp(); try { slReport(); } catch (e) { console.warn('report layout', e); } }; }` and the CSS. Copy it from this version. No existing line was edited.
+- **Provision:** none. No formula, factor, unit, code reference or result changed.
+- **Saved data:** none. `subloads_v1`, the project JSON, `P.ui.rpt` and the `bridgeSuite.v1.*` hand-off payloads are unchanged; no new key.
+- **Check case (default project, all chapters, all units):** 109 letter pages (main: 96). Contents: 1 Project and design basis; 2 Summary and input checks (2.1–2.4); 3 Governing design forces (3.1–3.4); 4 Geometry (4.1–4.6); 5 Force distribution (5.1); 6–9, one per unit (n.1–n.12). Abut. 1 result lines, e.g. "Strength I: P = 2,540.7 / 1,366.6 kip; M_t = 3,527 / -3,495 kip-ft; M_l = 4,148 / -1,248 kip-ft" and "Governing: P max 2,540.7 kip (Strength I), min 1,139.0 kip (Construction, Str. I); …". These equal the Combinations table (§6.12).
+
+### D11 links: quoted values link to the card where they are worked (CLAUDE.md §6) (Tier 1, display only)
+- **Helpers** (anchor `/* ---- D11 links (CLAUDE.md §6, 2026-10-18)`): `slTabName`, `slWk` ("Worked in: <value> → <Tab> · <card>"), `slIn` (an in-text link), `slAppend` (adds a line at the end of a card), `slGoto`, and one document click / Enter handler for `.sl-wk`. A click opens the tab, scrolls to the card and outlines it for 1.6 s.
+- **Lines added** (render-function wrappers; the wrapped functions are not edited):
+  1. `comboHtml`, end of "Load combinations: <unit>":
+     - DC, DW → Dead load · Dead load effects;
+     - EH, EV, ES, LS (abutments) or EV (piers with soil over the footing) → Earth loads;
+     - LL + IM (plus PL with sidewalks over 2 ft) → Live load · Live load: <unit>;
+     - BR, CE → Braking and centrifugal; WS, WL → Wind; TU, FR (plus SH) → Temperature;
+     - WA, IC, EQ, CV, CT, only when the unit has them → Water and scour, Ice, Seismic, Vessel collision, Vehicle collision;
+     - each of these goes to the tab's "Effects at <unit>" card.
+  2. `dlHtml`, end of "Dead load effects": DC sub (self-weight by component) → Summary · Substructure self-weight.
+  3. `brceHtml`, `tempHtml`, `eqHtml`: the in-text "(Force distribution tab)" becomes a link to Force distribution (text unchanged on screen).
+  4. Report only: under each unit of Governing design forces, "Values (envelopes of the combination table): see §n.12".
+- **In the report:** every link reads "<value>: see §n.k" (the in-text one: "Force distribution, §5.1") and is a PDF link. A target left out of the printout reads "… (not in this printout)".
+- **Check case (default):**
+  - "DC sub (self-weight by component): see §2.4"; "Force distribution, §5.1"; "Values …: see §6.12".
+  - Abut. 1: "DC, DW: see §6.1 · EH, EV, ES, LS: see §6.2 · LL + IM: see §6.3 · BR, CE: see §6.4 · WS, WL: see §6.5 · TU, FR: see §6.6".
+  - 117 internal links, none broken.
+  - With water, ice and collision: Pier 1 "WA: see §7.7 · IC: see §7.8 · EQ: see §7.9 · CT: see §7.11"; Pier 2 "CV: see §8.10".
+
+### How verified (both entries)
+- `node tests/check-syntax.mjs "Bridge Substructure Loading.html"`: all scripts pass.
+- `node tests/compare.mjs --tool page --file "Bridge Substructure Loading.html"`: page.text and page.storage identical, 0 console errors (three r128 and OrbitControls are in the kit).
+- **Main vs branch, headless, six cases:**
+  1. default;
+  2. seismic (PGA 0.25, S_s 0.60, S_1 0.20, site D);
+  3. water + ice and vehicle collision at Pier 1, water + barge collision at Pier 2, low seismic;
+  4. MassDOT owner with a 6 ft sidewalk, γSH 0.5, at-rest Abut. 1, and title-block text with `"` and `\`;
+  5. a chapter/unit subset;
+  6. an input error (Fix).
+  - In every case these are identical: `MODEL.C`, the force distribution, and per unit `unitRes`, `combine`, `concurrentSets`, `phase3`–`phase6` and `earthLoads`; the abutment hand-off payload (`abutHandoffPayload`, time stamp normalized); the foundation hand-off payload of every unit; localStorage.
+  - Building the report changes none of them. The only change is the existing autosave of `P.ui.rpt`, the same on both sides.
+  - The text of every tab of every unit differs only by the "Worked in" lines. 0 console errors.
+- Every number printed in main's default package is also in the branch's (numeric-token counts of the two PDFs).
+- **Headless Chromium PDF** (print media, `preferCSSPageSize`) of all six cases: no broken internal link, no leftover screen link, header and footer filled. Pages looked at:
+  - the cover (default, and MassDOT with the quoted name); references and contents;
+  - §1, §2.4, and §6.1 with its link;
+  - §6.12 with its links and the result lines; the water case §7.12;
+  - the subset contents.
+- **In the app:** every link in the Combinations and Dead load tabs of Abut. 1 and Pier 1, and the Force distribution links of Braking and Temperature, were clicked (18 clicks). Each opens the right tab and card.
+- **Other copies:** none (the report builder is specific to this tool).
+
+### Open items (noticed, not changed)
+- **Ctrl+P** without the Print button prints a blank page, on main and on this branch: the print CSS hides every tab panel unless the package (or the old `printReport`) marks one. Should Ctrl+P open the package dialog?
+- **Concurrent design sets:** the loads and cases behind each row are only in a tooltip, so the printout does not show them (the sentence pointing to the tooltip is now dropped in print). Should they print as a column or a note?
+- **Governing design forces** (§3) prints envelope values even when the Combinations tab shows "Fix the items marked Fix" (input error). Its links then point to a Combinations section without a table. Existing behaviour.
+- "All units at the lowest section" can print "-0" for M_t of a symmetric unit (`f0` rounding of a tiny negative number). Cosmetic, existing.
+
+### Needs engineer
+- **Report length:** the default is 109 pages (was 96). The cover, references and contents add 3; the narrower print area adds the rest.
+- **Description** in the print header is the project name (the tool has no description field). **Checked date** prints "—" (no field; none added).
