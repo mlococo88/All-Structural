@@ -2,7 +2,7 @@
 
 One list of everything that is not finished or not yet verified by the engineer. Details and check cases are in `ENGINEER_CHECKS.md` (item IDs below) and the fix logs. Update this file in the same PR whenever an item is added or closed.
 
-Last updated: 2026-10-18 (BP-C1 open stand-off).
+Last updated: 2026-10-18 (live load deflection question added).
 
 ## 1. Decisions for the engineer to verify (built with a default, results may depend on them)
 
