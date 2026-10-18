@@ -216,6 +216,46 @@ tbody tr.ud:hover td{background:#dbeafe}
   #repView h2{break-after:avoid}
   #repView img,#repView table,#repView .cload,#repView .cseg{break-inside:avoid}
 }
+/* D11 calculation-sheet report (Gusset Plate Rating / ST-Girder format) */
+#repView.crdoc{font:11pt/1.35 "Times New Roman",Times,serif;color:#000;padding:0}
+#repView.crdoc a{color:#000;text-decoration:none}
+#repView.crdoc th{text-transform:none;letter-spacing:0;font-size:10px}   /* upper case printed δ as Δ */
+#repView .cr-cover{min-height:8.2in;display:flex;flex-direction:column;justify-content:center;break-after:page}
+#repView .cr-cover-t{text-align:center;margin-bottom:24pt}
+#repView .cr-cover h1{font:700 24pt/1.2 Arial,Helvetica,sans-serif;color:#000;margin:0 0 14pt}
+#repView .cr-cover p{font:700 13pt Arial,Helvetica,sans-serif;margin:0 0 6pt}
+#repView .cr-cover p.cr-cover-p{font-weight:400;font-size:11pt}
+#repView .cr-tb{display:grid;grid-template-columns:repeat(3,1fr);gap:2pt 14pt;border:1px solid #000;padding:6pt 8pt;font-size:10.5pt}
+#repView .cr-front{break-after:page}
+#repView .cr-break{break-before:page}
+#repView h2.cr-h1{font:700 12pt "Times New Roman",Times,serif;color:#000;text-decoration:underline;text-transform:uppercase;border:0;padding:0;margin:14pt 0 8pt;break-after:avoid}
+#repView h3.cr-h2{font:700 11pt "Times New Roman",Times,serif;color:#000;margin:10pt 0 4pt;break-after:avoid}
+#repView .cr-refs{width:auto;border-collapse:collapse;margin:0 0 10pt;font-size:10.5pt}
+#repView .cr-refs td{border:0;padding:1pt 14pt 1pt 0;vertical-align:top}
+#repView .cr-refs td:first-child{white-space:nowrap}
+#repView .cr-toc,#repView .cr-toc ol{list-style:none;margin:0;padding:0}
+#repView .cr-toc>li{margin:3pt 0}
+#repView .cr-toc ol{padding-left:18pt;font-size:10pt}
+#repView .cr-p{margin:0 0 7pt}
+#repView .cr-small{font-size:9.5pt;margin-top:10pt}
+#repView .cr-resh{font:700 11pt "Times New Roman",Times,serif;margin:12pt 0 2pt;break-after:avoid}
+#repView .cr-line{display:grid;grid-template-columns:2.3in 1fr 0.8in;gap:0 12pt;align-items:center;padding:3pt 0;break-inside:avoid}
+#repView .cr-res{border-top:0.6pt solid #000}
+#repView .cr-results{border-bottom:0.8pt solid #000;margin-bottom:8pt}
+#repView .cr-r{text-align:right}
+#repView .cr-st-fail{text-decoration:underline}
+#repView .cr-refi{font-size:9pt;font-style:italic}
+#repView .wkLink{font-size:9.5pt;font-style:italic;margin:2pt 0 8pt}
+#repView .cr-calc .csb{border:0;padding:2pt 0 6pt}
+#repView .cr-calc .keq{overflow:visible}
+#repView .cr-calc .bxg,#repView .cr-calc .bxr,#repView .cr-calc .bxb,#repView .cr-calc .bxo,#repView .cr-calc .keq,#repView .cr-calc .cload{break-inside:avoid}
+@media print{body.repMode{background:#fff!important}}
+/* D11 links (CLAUDE.md §6): "Worked in: → Engineering Calculations · <card>" */
+.wkLink{grid-column:1/-1;font-size:10px;color:var(--mu)}
+a.wkA{color:var(--bl);text-decoration:none;cursor:pointer}
+a.wkA:hover{text-decoration:underline}
+.csb.wkFlash{animation:wkflash 1.4s ease-out}
+@keyframes wkflash{from{background:#dbeafe}to{background:transparent}}
 ::-webkit-scrollbar{width:4px;height:4px}
 ::-webkit-scrollbar-thumb{background:#e2e8f0;border-radius:99px}
 </style>
@@ -705,6 +745,30 @@ function deflSpans(){
     return{i,L:sp.L,dm,x:dx,allow,ratio:allow>0?dm/allow:0,ok:allow>0?dm<=allow:true,c};});
 }
 function deflGov(){const a=deflSpans();return a.length?a.reduce((b,s2)=>s2.ratio>b.ratio?s2:b,a[0]):null;}
+/* ---- D11 links (CLAUDE.md §6, 2026-10-18): the result cards above the diagrams quote values that are
+   worked in the Engineering Calculations cards; a "Worked in" line links to those cards (in the report:
+   "see §7.k"). Only cards that actually work the value are named. */
+function smdWkCards(){
+  if(window.unstable||!loads.length)return[];
+  if(envOn){const q=['|V|','|M|'];if(secOn&&Iv>0&&cv>0)q.push('σ');if(deD.length)q.push('|δ|');
+    return[['R','Support Reactions — Envelope Max / Min'],[q.join(', ')+' env','Envelope Results — All Combinations']];}
+  const L=[['R','Support Reactions'],['|V|max, |M|max','Critical Points']];
+  if(secOn&&Ev>0&&Iv>0){const q=[];if(cv>0)q.push('σmax');if(deD.length)q.push('δmax');if(q.length)L.push([q.join(', '),'Section Analysis']);}
+  return L;
+}
+function smdWorkedIn(){const L=smdWkCards();if(!L.length)return'';
+  return`<div class="wkLink">Worked in: ${L.map(([q,c])=>`${q} <a class="wkA" href="#" data-card="${c}">→ Engineering Calculations · ${c}</a>`).join(' &nbsp;·&nbsp; ')}</div>`;}
+function smdGoto(card){
+  const hit=[...document.querySelectorAll('#cOut .csh')].find(e=>e.textContent.replace(/^\d+/,'').trim()===card);
+  if(!hit){toast('Calculations are updating — try again');return;}
+  const b=hit.nextSibling;if(b)b.classList.remove('hidden');
+  const m=document.querySelector('.main');   /* scroll the output column only (the page itself has no scroll on desktop) */
+  if(m&&getComputedStyle(m).overflowY!=='visible'&&m.scrollHeight>m.clientHeight)m.scrollTop+=hit.getBoundingClientRect().top-m.getBoundingClientRect().top-8;
+  else hit.scrollIntoView({block:'start'});
+  if(b){b.classList.remove('wkFlash');void b.offsetWidth;b.classList.add('wkFlash');}
+}
+document.addEventListener('click',e=>{const a=e.target.closest&&e.target.closest('a.wkA[data-card]');
+  if(a&&!a.closest('#repView')){e.preventDefault();smdGoto(a.dataset.card);}});
 /* Max shear stress: W-shape preset → average web shear V/(d·tw) (AISC Spec. G2.1, Aw = d·tw);
    custom section → 1.5V/A (solid rectangle). */
 function tauOf(v){
@@ -751,6 +815,7 @@ function updStats(){
       if(defLim>0){const gv=deflGov();ok=deflSpans().every(s2=>s2.ok);lim=` / span ${gv.i+1}: L/${defLim}=${gv.allow.toFixed(4)} ${ok?'✓':'✗'}`;}
       h+=`<div class="sc ${ok?'cam':'crd'}"><div class="sc-l">δ max</div><div class="sc-v">${dm.toFixed(4)}</div><div class="sc-u">${lu}${lim}</div></div>`;}
   }
+  h+=smdWorkedIn();   /* D11 links */
   g('statsRow').innerHTML=h;
   if(envOn){g('pkV').textContent='envelope';g('pkM').textContent='envelope';if(g('pkD'))g('pkD').textContent=deD.length?`|δ|max:${Math.max(...deD.map(p=>Math.abs(p.y))).toFixed(4)} ${lu} (envelope)`:'';}
   else{
@@ -1976,26 +2041,71 @@ async function diagImg(id){
   const PMAP={cS:'pS',cM:'pM',cD:'pD'},pd=PMAP[id];
   if(hasPlotly()&&pd&&g(pd)&&!g(pd).classList.contains('hidden')){
     try{return await Plotly.toImage(g(pd),{format:'png',scale:2,
-      width:g(pd).clientWidth||900,height:id==='cD'?240:275});}catch(e){}
+      width:Math.min(g(pd).clientWidth||900,820),height:id==='cD'?240:275});}catch(e){}   /* D11: at most 820 px wide, so the axis text prints at about 7 pt on letter */
   }
   return g(id).toDataURL('image/png');
 }
+/* D11 (2026-10-18): calculation-sheet report in the Gusset Plate Rating / ST-Girder format (format refresh
+   only, engineer's scope decision 2026-10-18) — cover with title block, references (only what the tool
+   cites), numbered table of contents (links), numbered sections n / subsections n.k wrapping the existing
+   report output, the on-screen Engineering Calculations cards (§7), "see §7.k" links (CLAUDE.md §6), a
+   result line per active check (the existing σ and per-span δ checks), and the print header / "Page X of Y"
+   footer (@page margin boxes, smdPageCSS; inside @media print, applied only while the report prints).
+   No value is recomputed: every number is the one the tables and the calculation cards already show. */
+const SMD_TOOL='Multi-Span Beam Pro';
+function smdRefs(){
+  const r=[['ASCE 7-16','Minimum Design Loads — Sec. 2.3.1 (strength / LRFD) and Sec. 2.4.1 (allowable stress / ASD) basic combinations: the combination presets and the default combination list. Factors as entered in the combination table.']];
+  if(envOn)r.push(['IBC','Named in the envelope method note (“each IBC combination”); the combinations are those of the combination table; edition: verify']);
+  if(secOn&&shpW)r.push(['AISC 360','Specification for Structural Steel Buildings — Sec. G2.1 (web shear area A<sub>w</sub> = d·t<sub>w</sub>, average web shear for the W-shape presets); edition: verify']);
+  return r;
+}
+function smdPageCSS(dt){
+  const nm=g('projNm').value.trim(),q=v=>String(v==null||v===''?'—':v).replace(/\\/g,'\\\\').replace(/"/g,'\\"').replace(/[\r\n]+/g,' ');
+  const box='font: 9.5pt "Times New Roman", Times, serif; color: #000; white-space: pre; vertical-align: bottom; padding-bottom: 6pt;';
+  const foot='font: 9pt "Times New Roman", Times, serif; color: #000; white-space: pre; vertical-align: top; padding-top: 6pt;';
+  return '@media print { @page { size: letter portrait; margin: 0.95in 0.6in 0.75in 0.6in;'+
+    ' @top-left { content: "Project No: —\\A Description: '+q((nm||'Beam analysis').slice(0,38))+'"; '+box+' text-align: left; }'+
+    ' @top-center { content: "Computed By: —\\A Checked By: —"; '+box+' text-align: left; }'+
+    ' @top-right { content: "Date: '+q(dt)+'\\A Date: —"; '+box+' text-align: right; }'+
+    ' @bottom-left { content: "'+q(nm||'Untitled')+' ('+SMD_TOOL+')"; '+foot+' text-align: left; }'+
+    ' @bottom-right { content: "Page " counter(page) " of " counter(pages); '+foot+' text-align: right; } } }';
+}
+function smdApplyPageCSS(on,dt){
+  let st=g('smd-page');
+  if(!st){st=document.createElement('style');st.id='smd-page';document.head.appendChild(st);}
+  st.textContent=on?smdPageCSS(dt):'';
+}
+/* result lines for the checks the tool already makes (σ ≤ σ_allow, δ_span ≤ L_span/x); PASS rule as the table */
+function smdResultBlock(rows){
+  if(!rows.length)return'';
+  return`<div class="cr-results">${rows.map(([lab,dc,ref,ok])=>`<div class="cr-line cr-res"><div class="cr-d">${lab}:</div><div class="cr-m">D/C = <b>${dc.toFixed(2)}</b> <span class="cr-refi">(${ref})</span></div><div class="cr-r${ok?'':' cr-st-fail'}"><b>${ok?'PASS':'FAIL'}</b></div></div>`).join('')}</div>`;
+}
 async function buildReport(){
   readIn();solve();updStats();renderTable();drawAll();
+  { /* the Engineering Calculations cards are rendered 600 ms after an edit: render them now (collapsed cards stay collapsed on screen) */
+    const shut=[...document.querySelectorAll('#cOut .csh')].filter(e=>e.nextSibling&&e.nextSibling.classList.contains('hidden')).map(e=>e.textContent);
+    renderKaTeX();
+    document.querySelectorAll('#cOut .csh').forEach(e=>{if(shut.includes(e.textContent)&&e.nextSibling)e.nextSibling.classList.add('hidden');}); }
   const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   const nm=esc(g('projNm').value||'Untitled Beam Analysis');
-  const modeTxt=curName();
-  let h=`<div class="rp-title"><h1>${nm}</h1><div class="rp-sub">Continuous Beam Analysis — Calculation Report</div>
-    <table class="rp-meta"><tr><td><b>Date:</b> ${new Date().toLocaleDateString()}</td><td><b>Combination:</b> ${modeTxt}</td><td><b>Spans:</b> ${spans.length}</td><td><b>Total length:</b> ${totL.toFixed(3)} ${lu}</td></tr></table></div>`;
+  const modeTxt=curName(),dt=new Date().toLocaleDateString();
+  smdApplyPageCSS(true,dt);
+  const rv=g('repView');rv.className='crdoc';
+  /* cover with title block (the tool has a project name only; the other fields print "—") */
+  let cover=`<section class="cr-cover"><div class="cr-cover-t"><h1>Continuous Beam Analysis</h1><p>${nm}</p>
+    <p class="cr-cover-p">${SMD_TOOL} — shear, moment and deflection diagrams · Calculation Report</p>
+    <p class="cr-cover-p">Combination: ${esc(modeTxt)} · Spans: ${spans.length} · Total length: ${totL.toFixed(3)} ${lu}</p></div>
+    <div class="cr-tb">${[['Project',nm],['Project No.','—'],['Calculated by','—'],['Date',dt],['Checked by','—'],['Checked date','—']].map(([k,v])=>`<div><b>${k}:</b> ${v}</div>`).join('')}</div></section>`;
   if(window.unstable){
-    h+=`<div class="rp-warn">⚠ UNSTABLE STRUCTURE — the support configuration is a mechanism. Results suppressed.</div>`;
-    g('repView').innerHTML=h;return;}
+    rv.innerHTML=cover+`<div class="rp-warn">⚠ UNSTABLE STRUCTURE — the support configuration is a mechanism. Results suppressed.</div>`;return;}
+  const secs=[];   /* {t, html, brk, subs:[{t,html}]} → numbered n / n.k */
   // 1 — geometry
-  h+=`<h2>1. Geometry &amp; Supports</h2><table><tr><th>Span</th><th>Length (${lu})</th><th>From node</th><th>To node</th></tr>`;
+  let h=`<table><tr><th>Span</th><th>Length (${lu})</th><th>From node</th><th>To node</th></tr>`;
   spans.forEach((sp,i)=>h+=`<tr><td>${i+1}</td><td>${sp.L.toFixed(3)}</td><td>${NN[i]} (${nodes[i].t})</td><td>${NN[i+1]} (${nodes[i+1].t})</td></tr>`);
   h+=`</table>`;
+  secs.push({t:'Geometry &amp; Supports',html:h});
   // 2 — loads
-  h+=`<h2>2. Applied Loads (unfactored)</h2><table><tr><th>#</th><th>Name</th><th>Type</th><th>Case</th><th>Location</th><th>Magnitude</th><th>Status</th></tr>`;
+  h=`<table><tr><th>#</th><th>Name</th><th>Type</th><th>Case</th><th>Location</th><th>Magnitude</th><th>Status</th></tr>`;
   loads.forEach((ld,i)=>{
     const si=Math.min(ld.si||0,spans.length-1);
     const loc=ld.allSpans?'Entire beam':`Span ${si+1}`;
@@ -2007,50 +2117,81 @@ async function buildReport(){
     h+=`<tr${ld.off?' style="color:#94a3b8"':''}><td>${i+1}</td><td>${esc(ld.nm||'')}</td><td>${tn}</td><td>${ld.lc}</td><td>${loc}</td><td>${esc(mg)}</td><td>${ld.off?'<b>EXCLUDED</b>':'Included'}</td></tr>`;});
   h+=`</table>`;
   if(loads.some(l=>l.off))h+=`<p class="rp-p" style="color:#b45309"><b>Note:</b> ${loads.filter(l=>l.off).length} load(s) are excluded from this analysis and contribute nothing to the results below.</p>`;
+  secs.push({t:'Applied Loads (unfactored)',html:h});
   // 3 — reactions
-  h+=`<h2>3. Support Reactions</h2><table>`;
+  h=`<table>`;
   if(envOn){h+=`<tr><th>Node</th><th>Rmax (${fu})</th><th>Governing combination</th><th>Rmin (${fu})</th><th>Governing combination (min)</th></tr>`;
     nodes.forEach((nd2,j)=>{if(nd2.t==='free')return;h+=`<tr><td>${NN[j]}</td><td>${env.R[j].mx.toFixed(4)}</td><td>${COMBOS[env.R[j].mc].name}</td><td>${env.R[j].mn.toFixed(4)}${env.R[j].mn<-1e-9?' <b style="color:#b91c1c">UPLIFT</b>':''}</td><td>${COMBOS[env.R[j].mnc]?COMBOS[env.R[j].mnc].name:''}</td></tr>`;});}
   else{h+=`<tr><th>Node</th><th>R (${fu})</th><th>M<sub>R</sub> (${fu}·${lu})</th></tr>`;
     nodes.forEach((nd2,j)=>{if(nd2.t==='free')return;h+=`<tr><td>${NN[j]}</td><td>${nodeR[j].v.toFixed(4)}</td><td>${Math.abs(nodeR[j].m)>1e-9?nodeR[j].m.toFixed(4):'—'}</td></tr>`;});}
   h+=`</table>`;
+  const wk=smdWkCards();   /* [quantity, card title] → "see §7.k" once §7 is numbered */
+  if(wk[0])h+=`<div class="wkLink">Worked in: <a class="wkA" data-card="${wk[0][1]}">${wk[0][0]}</a></div>`;
+  secs.push({t:'Support Reactions',html:h});
   // 4 — governing results & checks
-  h+=`<h2>4. Governing Results &amp; Checks</h2><table><tr><th>Quantity</th><th>Value</th><th>Limit</th><th>Status</th></tr>`;
-  let vm,mm;
+  h=`<table><tr><th>Quantity</th><th>Value</th><th>Limit</th><th>Status</th></tr>`;
+  let vm,mm;const res=[];
   if(envOn){vm=Math.max(...env.V.mx.map(p=>Math.abs(p.y)),...env.V.mn.map(p=>Math.abs(p.y)));
     mm=Math.max(...env.M.mx.map(p=>Math.abs(p.y)),...env.M.mn.map(p=>Math.abs(p.y)));}
   else{vm=shD.length?Math.max(...shD.map(p=>Math.abs(p.y))):0;mm=moD.length?Math.max(...moD.map(p=>Math.abs(p.y))):0;}
   h+=`<tr><td>|V|<sub>max</sub></td><td>${vm.toFixed(4)} ${fu}</td><td>—</td><td>—</td></tr>`;
   h+=`<tr><td>|M|<sub>max</sub></td><td>${mm.toFixed(4)} ${fu}·${lu}</td><td>—</td><td>—</td></tr>`;
   if(secOn&&Iv>0&&cv>0){const sg=mm*cv/Iv;
-    h+=`<tr><td>σ<sub>max</sub> = |M|c/I</td><td>${sg.toFixed(4)} ${fu}/${lu}²</td><td>${Fbv>0?Fbv+' '+fu+'/'+lu+'²':'—'}</td><td>${Fbv>0?(sg<=Fbv?'<b style="color:#15803d">OK ✓</b> ('+(sg/Fbv*100).toFixed(1)+'%)':'<b style="color:#b91c1c">NG ✗</b> ('+(sg/Fbv*100).toFixed(1)+'%)'):'—'}</td></tr>`;}
+    h+=`<tr><td>σ<sub>max</sub> = |M|c/I</td><td>${sg.toFixed(4)} ${fu}/${lu}²</td><td>${Fbv>0?Fbv+' '+fu+'/'+lu+'²':'—'}</td><td>${Fbv>0?(sg<=Fbv?'<b style="color:#15803d">OK ✓</b> ('+(sg/Fbv*100).toFixed(1)+'%)':'<b style="color:#b91c1c">NG ✗</b> ('+(sg/Fbv*100).toFixed(1)+'%)'):'—'}</td></tr>`;
+    if(Fbv>0)res.push(['Bending stress σ<sub>max</sub> = |M|c/I',sg/Fbv,`σ<sub>allow</sub> = ${Fbv} ${fu}/${lu}², user input`,sg<=Fbv]);}
   {const tq=secOn?tauOf(vm):null;if(tq)h+=`<tr><td>τ<sub>max</sub> = ${tq.lbl}${shpW?' ('+esc(shpW.nm)+')':''}</td><td>${tq.val.toFixed(4)} ${fu}/${lu}²</td><td>—</td><td>—</td></tr>`;}
   if(deD.length){const dm=Math.max(...deD.map(p=>Math.abs(p.y)));
-    if(defLim>0)deflSpans().forEach(s2=>{h+=`<tr><td>δ<sub>max</sub>, span ${s2.i+1}${s2.c&&COMBOS[s2.c]?' ('+esc(COMBOS[s2.c].name)+')':''}</td><td>${s2.dm.toFixed(6)} ${lu}</td><td>L/${defLim} = ${s2.L}/${defLim} = ${s2.allow.toFixed(5)} ${lu}</td><td>${s2.ok?'<b style="color:#15803d">OK ✓</b>':'<b style="color:#b91c1c">NG ✗</b>'}</td></tr>`;});
+    if(defLim>0)deflSpans().forEach(s2=>{h+=`<tr><td>δ<sub>max</sub>, span ${s2.i+1}${s2.c&&COMBOS[s2.c]?' ('+esc(COMBOS[s2.c].name)+')':''}</td><td>${s2.dm.toFixed(6)} ${lu}</td><td>L/${defLim} = ${s2.L}/${defLim} = ${s2.allow.toFixed(5)} ${lu}</td><td>${s2.ok?'<b style="color:#15803d">OK ✓</b>':'<b style="color:#b91c1c">NG ✗</b>'}</td></tr>`;
+      res.push([`Deflection δ<sub>max</sub>, span ${s2.i+1}`,s2.ratio,`limit L/${defLim} = ${s2.allow.toFixed(5)} ${lu}, user input${s2.c&&COMBOS[s2.c]?'; governing combination '+esc(COMBOS[s2.c].name):''}`,s2.ok]);});
     else h+=`<tr><td>δ<sub>max</sub></td><td>${dm.toFixed(6)} ${lu}</td><td>—</td><td>—</td></tr>`;}
   h+=`</table>`;
+  if(wk.length>1)h+=`<div class="wkLink">Worked in: ${wk.slice(1).map(([q,c])=>`<a class="wkA" data-card="${c}">${q}</a>`).join(' · ')}</div>`;
+  if(res.length)h+=`<div class="cr-resh">Results — Governing Results &amp; Checks</div>`+smdResultBlock(res);
+  secs.push({t:'Governing Results &amp; Checks',html:h});
   // 5 — diagrams
-  h+=`<h2>5. Diagrams</h2>`;
+  const dg=[];
   for(const [id,t] of [['cL','Loading Diagram'],['cS','Shear Force Diagram'],['cM','Bending Moment Diagram'],['cD','Deflection Curve']]){
     if(id==='cD'&&!(secOn&&deD.length))continue;
-    h+=`<h3>${t}</h3><img src="${await diagImg(id)}">`;}
+    dg.push({t,html:`<img src="${await diagImg(id)}">`});}
+  secs.push({t:'Diagrams',html:'',subs:dg,brk:1});
   // 6 — tabular results
-  h+=`<h2>6. Tabular Results</h2><table>`;
+  h=`<table>`;
   if(envOn){const eD=!!(env&&env.D);h+=`<tr><th>x (${lu})</th><th>Vmax (${fu})</th><th>Vmin (${fu})</th><th>Mmax (${fu}·${lu})</th><th>Mmin (${fu}·${lu})</th>${eD?`<th>δmax (${lu})</th><th>δmin (${lu})</th>`:''}</tr>`;
     tabR.forEach(r=>h+=`<tr><td>${r.x.toFixed(3)}</td><td>${r.Vmx.toFixed(3)}</td><td>${r.Vmn.toFixed(3)}</td><td>${r.Mmx.toFixed(3)}</td><td>${r.Mmn.toFixed(3)}</td>${eD?`<td>${r.Dmx.toFixed(5)}</td><td>${r.Dmn.toFixed(5)}</td>`:''}</tr>`);}
   else{h+=`<tr><th>x (${lu})</th><th>V (${fu})</th><th>M (${fu}·${lu})</th>${deD.length?`<th>δ (${lu})</th>`:''}</tr>`;
     tabR.forEach(r=>h+=`<tr><td>${r.x.toFixed(3)}</td><td>${r.V.toFixed(3)}</td><td>${r.M.toFixed(3)}</td>${deD.length?`<td>${(r.D||0).toFixed(5)}</td>`:''}</tr>`);}
   h+=`</table>`;
-  h+=`<p class="rp-p"><b>Method:</b> Direct Stiffness Method, Euler-Bernoulli beam elements (2 DOF/node), Gaussian elimination with partial pivoting. Internal forces by left-segment statics; deflection by double numerical integration of M/EI anchored at the first and last supports.</p>`;
-  h+=`<div class="rp-foot">Generated by Beam Pro · ${new Date().toLocaleString()} · Verify all results independently before use in design.</div>`;
-  g('repView').innerHTML=h;
+  secs.push({t:'Tabular Results',html:h,brk:1});
+  // 7 — the on-screen Engineering Calculations cards (worked equations), except the two that repeat §1 / §2
+  const cards=[];
+  document.querySelectorAll('#cOut .csh').forEach(e=>{const t=e.textContent.replace(/^\d+/,'').trim();
+    if(t==='Configuration'||t==='Applied Loads (unfactored)')return;
+    const b=e.nextSibling?e.nextSibling.cloneNode(true):null;if(!b)return;b.classList.remove('hidden');
+    cards.push({t:esc(t),key:t,html:`<div class="cr-calc">${b.outerHTML}</div>`});});
+  secs.push({t:'Engineering Calculations',html:`<p class="cr-p"><b>Method:</b> Direct Stiffness Method, Euler-Bernoulli beam elements (2 DOF/node), Gaussian elimination with partial pivoting. Internal forces by left-segment statics; deflection by double numerical integration of M/EI anchored at the first and last supports.</p>`+(cards.length?'':`<p class="cr-p">No calculation cards (no loads entered).</p>`),subs:cards,brk:1});
+  /* number everything, build the table of contents, rewrite the "Worked in" links to "see §n.k" */
+  const at={};let body='',toc='';
+  secs.forEach((s,i)=>{const n=i+1,id='crp-'+n;
+    let sh='',st='';
+    (s.subs||[]).forEach((q,k)=>{const sid=id+'-'+(k+1);if(q.key)at[q.key]={num:n+'.'+(k+1),id:sid};
+      sh+=`<h3 class="cr-h2" id="${sid}">${n}.${k+1} ${q.t}</h3>${q.html}`;st+=`<li><a href="#${sid}">${n}.${k+1}. ${q.t}</a></li>`;});
+    body+=`<section class="cr-sec${s.brk?' cr-break':''}"><h2 class="cr-h1" id="${id}">${n}. ${s.t}</h2>${s.html}${sh}</section>`;
+    toc+=`<li><a href="#${id}">${n}. ${s.t}</a>${st?`<ol>${st}</ol>`:''}</li>`;});
+  const refs=smdRefs();
+  const front=`<section class="cr-front"><h2 class="cr-h1">References:</h2><table class="cr-refs">${refs.map(([a,b])=>`<tr><td>${a}</td><td>${b}</td></tr>`).join('')}</table>
+    <p class="cr-p cr-small">The deflection limit L/x and the allowable stress σ<sub>allow</sub> are user inputs; the tool cites no provision for them. The analysis itself (statics, Euler-Bernoulli beam theory) cites no design code.</p>
+    <h2 class="cr-h1">Table of contents:</h2><ol class="cr-toc">${toc}</ol>
+    <p class="cr-p cr-small">Units: ${fu}, ${lu} unless noted. Combination: ${esc(modeTxt)}. Each check in §4 ends with its D/C result line; the worked equations are in §7 (symbolic → substituted → result, as on screen).</p></section>`;
+  rv.innerHTML=cover+front+body+`<div class="rp-foot">Generated by Beam Pro · ${new Date().toLocaleString()} · Verify all results independently before use in design.</div>`;
+  rv.querySelectorAll('a.wkA[data-card]').forEach(a=>{const hit=at[a.dataset.card],q=a.innerHTML;
+    if(hit){a.innerHTML=q+': see §'+hit.num;a.href='#'+hit.id;}else{a.innerHTML=q+': see the Engineering Calculations card “'+esc(a.dataset.card)+'” (not in this printout)';a.removeAttribute('href');}});
 }
 g('bRp').onclick=async()=>{
   toast('Building report…');
   await buildReport();
   document.body.classList.add('repMode');
   setTimeout(()=>window.print(),120);};
-window.addEventListener('afterprint',()=>document.body.classList.remove('repMode'));
+window.addEventListener('afterprint',()=>{document.body.classList.remove('repMode');smdApplyPageCSS(false);});
 
 refreshLC();
 refreshDG();
