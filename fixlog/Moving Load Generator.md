@@ -1187,7 +1187,7 @@ Engineer decision 2026-10-14. **Changes computed shear envelope values (V+ / V�
 - **In the report:** each Results Summary row links "see §n.1"; each results section links its vehicle definition (§2.k) and the inputs (§1.1); each factoring line links §1.4.
 
 ### Check case
-- 1 span 100 ft, HL-93 truck as configured, DF 1, LLF 1.75, IM 1.33 (report "simple", 12 pages): §4.1 `M⁺ = 1.75 × 1 × 2,821.60 = 4,937.8 kip-ft` at x = 50.00 ft. Hand check: design truck, middle axle at midspan, 14 ft spacing: 32·25 + 32·(25 − 7)… = 1,520.0 k-ft (influence ordinates 25, 18, 18 ft: 32·25 + 32·18 + 8·18 = 1,520.0); × 1.33 = 2,021.6 + lane 0.64·100²/8 = 800.0 → 2,821.6 × 1.75 = **4,937.8** (tenth-point table 0.5L: 4,937.8). `V⁺ = 1.75 × 1 × 118.82 = 207.9 kips` (truck 65.28 × 1.33 = 86.82 + lane 32.00).
+- 1 span 100 ft, HL-93 truck as configured, DF 1, LLF 1.75, IM 1.33 (report "simple", 12 pages): §4.1 `M⁺ = 1.75 × 1 × 2,821.60 = 4,937.8 kip-ft` at x = 50.00 ft. Hand check: design truck, middle axle at midspan, 14 ft spacing, influence ordinates 25, 18, 18 ft: 32·25 + 32·18 + 8·18 = 1,520.0 k-ft; × 1.33 = 2,021.6 + lane 0.64·100²/8 = 800.0 → 2,821.6 × 1.75 = **4,937.8** (tenth-point table 0.5L: 4,937.8). `V⁺ = 1.75 × 1 × 118.82 = 207.9 kips` (truck 65.28 × 1.33 = 86.82 + lane 32.00).
 - 3 spans 110-140-110, DF M 0.6 / V 0.8, negative-moment DF 0.65 (report "span3", 20 pages): `M⁻ = 1.75 × 0.65 × −2,916.48 = −3,317.5 kip-ft` at Support B, governing case "0.9×2 HL93-Truck H=73".
 - Default project, all 12 presets (default report selection): **52 letter pages** (cover, references + contents 2 pages, §1–§16).
 
