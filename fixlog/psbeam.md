@@ -1399,3 +1399,43 @@ Cross-tool connection PR (CLAUDE.md §7 exception): receivers of the `bridgeSuit
 - D11-O6. **No worked step for two checks:** "Release tens (+M, bot)" and "Srv tens (top)" are computed on the grid but not worked symbolically anywhere (CLAUDE.md §6 gap); the report points to the tabulated stresses. Adding steps would add calculation content.
 - D11-O7. **Title-block fields:** no Checked by / Checked date fields; they print "—". Optional tool-prefixed fields (absent from saved data until typed) can be added if wanted.
 - D11-O8. **Edition:** the tool states "AASHTO LRFD BDS (9th Ed. article numbering)"; the fix-log basis is the 10th Ed. (2024). The report says "edition: verify".
+
+## 2026-10-18 — PR: claude/psbeam-pier-status — Flexure tab: continuity pier-check status and d_t substitution (D11-O1, D11-O2; Tier 1, display only; PR link added after merge)
+
+- **Engineer request:** approved 2026-10-18: fix on the Flexure tab what D11-2.1 and D11-2.2 fixed in the report only (open items D11-O1, D11-O2).
+- **Provision:** none changed. No formula, factor, unit, code reference or computed result changed (`computeAll` untouched; the pier D/C and its pass flag were already right, only the flag *displayed* was wrong). No saved-data key or format changed. The shared `bridgeSuite.v1.*` bootstrap blocks are not touched.
+- **Status band and Summary not affected:** the header "n/N PASS" (`nPass`, `R.checks.filter(c=>c.pass)`), the check chips, the Report 1.1 summary table and the report's continuity ✓ (fixed in D11-2.1) all read each check's own `c.pass`. No hand-off payload carries a check status. Only the four Flexure-tab places below used `R.checks.at(-1)`; no displayed overall PASS/FAIL outcome changes.
+
+### PS1. Flexure tab: pier-check status read the last check instead of "Neg flexure (pier)"   [display] [no result change]
+- **Where:** `function FlexTab({inp,R}){`. Anchor (before): `R.checks.at(-1).pass` (4 places; none left after the fix). New anchor: `const okPier=`.
+- **Problem:** `R.checks.at(-1)` is "Neg flexure (pier)" only when the Handling and Deck modules are off (their checks are pushed after it in `computeAll`). With either module on, the tile colour, the callout "OK / N.G.", the KV "PASS / FAIL" and the derivation ✓ showed the status of the last Handling / Deck check, e.g. a failing pier check shown as OK. Unconservative display; the status band and the summary were already right.
+- **Before / After (exact):**
+  1. New line after `const ok9=(R.checks.find(c=>c.n==='Flexure')||{}).pass, okMin=(R.checks.find(c=>c.n==='Min reinf')||{}).pass;`:
+     ```js
+       const okPier=(R.checks.find(c=>c.n==='Neg flexure (pier)')||{}).pass;   // pier check's own flag (not the last check: Handling / Deck checks come after it)
+     ```
+  2. Tile "−Mu / −φMn @ pier". Before: `{R.cont&&<div className={'br '+(R.checks.at(-1).pass?'p':'f')}>`. After: `{R.cont&&<div className={'br '+(okPier?'p':'f')}>`.
+  3. Moment-plot callout ("Pier check: Mu(−M) = …"). Before: `(D/C = <b>{fmt(R.cont.dc,2)}</b>, {R.checks.at(-1).pass?'OK':'N.G.'})`. After: `(D/C = <b>{fmt(R.cont.dc,2)}</b>, {okPier?'OK':'N.G.'})`.
+  4. Card "Negative Moment at Pier — Continuity for LL + SIDL", KV row. Before: `['M_u / φM_n',fmt(R.cont.dc,2),R.checks.at(-1).pass?'PASS':'FAIL']]}/>`. After: `['M_u / φM_n',fmt(R.cont.dc,2),okPier?'PASS':'FAIL']]}/>`.
+  5. Same card, step "Capacity — deck steel tension, bottom-flange compression", end of the second equation. Before: `\frac{M_u}{\phi M_n}=${nx(R.cont.dc,3)}\;${R.checks.at(-1).pass?'\\checkmark':'\\text{N.G.}'}`. After: `\frac{M_u}{\phi M_n}=${nx(R.cont.dc,3)}\;${okPier?'\\checkmark':'\\text{N.G.}'}`.
+- **Check case:** default project, L = 110 ft, continuity on with A_s = 8.0 in², deck module on. M_u = 4,533 k-ft, φM_n = 2,672 k-ft, D/C = 4,533 / 2,672 = 1.697 > 1.0 → FAIL (status band 22/23 PASS, before and after). Last check = "Deck overhang" (pass).
+  - Before: tile green, callout "(D/C = 1.70, OK)", KV "1.70 PASS", derivation "1.697 ✓".
+  - After: tile red, callout "(D/C = 1.70, N.G.)", KV "1.70 FAIL", derivation "1.697 N.G.".
+  - Passing case (L = 110 ft, continuity A_s = 16.0 in² default, handling + deck on): D/C = 4,533 / 5,252 = 0.863 → green / OK / PASS / ✓ before and after. Without Handling / Deck (A_s = 8.0): FAIL shown before and after (the last check was the pier check).
+
+### PS2. Flexure tab: d_t printed as "–" in the ε_t substitution   [display] [no result change]
+- **Where:** `FlexTab`, card "Derivation — Strength I Flexure @ Midspan", step "Nominal resistance, strain & φ". Anchor: `\varepsilon_t=0.003\left(\frac{d_t}{c}-1\right)=0.003\left(\frac{`.
+- **Problem:** `R.fMid` is a `flexFull` row and carries no `dt`, so `nx(f.dt,2)` printed "–". Same fix as D11-2.2, the expression `flexure()` uses (`const dt=cp.hc-ss.yLow;`); `cp = R.cp`, `ss = R.ss` are already in scope in that block.
+- **Before:** `\frac{${nx(f.dt,2)}}{${nx(f.c,2)}}`. **After:** `\frac{${nx(cp.hc-ss.yLow,2)}}{${nx(f.c,2)}}`.
+- **Check case:** default project: d_t = h_c − y_low = 80.00 − 2.00 = 78.00 in, c = 7.30 in, ε_t = 0.003(78.00/7.30 − 1) = 29.04×10⁻³, φ = 1.000. Before: "0.003(–/7.30 − 1) = 29.04×10⁻³"; after: "0.003(78.00/7.30 − 1) = 29.04×10⁻³" (result unchanged; only the substitution is new).
+
+### How verified (Tier 1)
+- `node tests/check-syntax.mjs psbeam.html`: all scripts pass (JSX transpiled).
+- `node tests/compare.mjs --tool page --file psbeam.html`: `page.text` and `page.storage` same; the only console message on both sides is Babel's "deoptimised the styling" note.
+- Headless Chromium, origin/main vs branch, 5 cases (default; L = 110 / continuity A_s = 8.0 / deck; L = 110 / continuity / handling + deck; L = 110 / continuity A_s = 8.0 alone; L = 145 / transformed section / deck): `computeAll(mergeInputs(case))` hashes identical; status band identical; Flexure-tab pier status and d_t as in the check cases above. No console errors. Screenshots of the fixed tile, pier card and flexure derivation looked at.
+
+### Other copies
+- None. The report already has both fixes (D11-2.1, D11-2.2).
+
+### Open items
+- D11-O1 and D11-O2 are closed by this entry.

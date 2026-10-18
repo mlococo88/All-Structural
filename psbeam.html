@@ -6260,6 +6260,7 @@ function FlexTab({inp,R}){
   const cap=fg.map(r=>r.phiMn/12);
   const dem=fg.map(r=>r.Mu/12);
   const ok9=(R.checks.find(c=>c.n==='Flexure')||{}).pass, okMin=(R.checks.find(c=>c.n==='Min reinf')||{}).pass;
+  const okPier=(R.checks.find(c=>c.n==='Neg flexure (pier)')||{}).pass;   // pier check's own flag (not the last check: Handling / Deck checks come after it)
   // ---- moment-breakdown plot state ----
   const [factored,setFactored]=useState(false);
   const allLines=['SW','DC1','DC2','DW','LLpos','LLneg','Mu','phiMn','phiMnNeg','MuNeg'];
@@ -6303,7 +6304,7 @@ function FlexTab({inp,R}){
       <div className="br"><div className="l">f_ps</div><div className="n">{fmt(f.fps,1)}</div><div className="u">ksi · c = {fmt(f.c,2)}″ ({f.rect?'rectangular':'T-section'})</div></div>
       <div className="br"><div className="l">φ (ε_t = {fmt(f.et*1000,1)}‰)</div><div className="n">{fmt(f.phi,2)}</div><div className="u">5.5.4.2 · {f.et>=0.005?'tension-controlled':'transition'}</div></div>
       <div className={'br '+(okMin?'p':'f')}><div className="l">Min reinf (5.6.3.3)</div><div className="n">{fmt(R.minGov.r,2)}</div><div className="u">min(Mcr, 1.33Mu)/φMn @ x = {fmt(R.minGov.x,1)} ft</div></div>
-      {R.cont&&<div className={'br '+(R.checks.at(-1).pass?'p':'f')}><div className="l">−Mu / −φMn @ pier</div><div className="n">{fmt(R.cont.dc,3)}</div><div className="u">{fmt(R.cont.MuN/12,0)} / {fmt(R.cont.phiMnN/12,0)} k-ft</div></div>}
+      {R.cont&&<div className={'br '+(okPier?'p':'f')}><div className="l">−Mu / −φMn @ pier</div><div className="n">{fmt(R.cont.dc,3)}</div><div className="u">{fmt(R.cont.MuN/12,0)} / {fmt(R.cont.phiMnN/12,0)} k-ft</div></div>}
     </div>
     <Card title="Moment Breakdown vs Capacity" refTag={factored?'factored (Strength I)':'unfactored service components'}>
       <div style={{display:'flex',gap:14,alignItems:'center',flexWrap:'wrap',marginBottom:8}}>
@@ -6325,7 +6326,7 @@ function FlexTab({inp,R}){
         layout={{xaxis:{title:'x (ft)'},yaxis:{title:'moment (k-ft)',zeroline:true,zerolinecolor:'#16212E',zerolinewidth:1.2},showlegend:false}}/>
       {!R.cont&&hasNeg&&<div className="callout" style={{borderColor:'#B45309'}}>Negative live-load moment is present in the imported demands but <b>continuity is off</b>, so the negative-moment lines and pier check are not shown. Turn on <b>continuity for live load</b> (Inputs → continuity) to include negative moment.</div>}
       {R.cont
-        ? <div className="callout">Above the axis: positive-moment components and capacity. Below the axis: the negative-moment demand (−Mu envelope, dashed) and the deck-reinforced −φMn capacity at the pier. Pier check: Mu(−M) = <b>{fmt(R.cont.MuN/12,0)} k-ft</b> vs −φMn = <b>{fmt(R.cont.phiMnN/12,0)} k-ft</b> (D/C = <b>{fmt(R.cont.dc,2)}</b>, {R.checks.at(-1).pass?'OK':'N.G.'}) — the demand matches the −Mu envelope at the support. The factored demand is drawn as <b>two separate envelopes</b>, +Mu (solid) and −Mu (dashed), so neither risers across zero. The LL ±M lines include the distribution factor and impact, i.e. (LL+IM)×DF. {factored?'Component lines are factored (Strength I).':'Component lines are unfactored service moments.'} {R.useExt?'LL from the imported MIDAS envelope.':''}</div>
+        ? <div className="callout">Above the axis: positive-moment components and capacity. Below the axis: the negative-moment demand (−Mu envelope, dashed) and the deck-reinforced −φMn capacity at the pier. Pier check: Mu(−M) = <b>{fmt(R.cont.MuN/12,0)} k-ft</b> vs −φMn = <b>{fmt(R.cont.phiMnN/12,0)} k-ft</b> (D/C = <b>{fmt(R.cont.dc,2)}</b>, {okPier?'OK':'N.G.'}) — the demand matches the −Mu envelope at the support. The factored demand is drawn as <b>two separate envelopes</b>, +Mu (solid) and −Mu (dashed), so neither risers across zero. The LL ±M lines include the distribution factor and impact, i.e. (LL+IM)×DF. {factored?'Component lines are factored (Strength I).':'Component lines are unfactored service moments.'} {R.useExt?'LL from the imported MIDAS envelope.':''}</div>
         : <div className="callout">{factored?'Components shown factored (Strength I): 1.25 DC, 1.50 DW, 1.75 LL.':'Components shown as unfactored service moments; +Mu is the factored Strength I envelope regardless of the checkbox.'} The live-load lines (LL ±M) already include the distribution factor and dynamic load allowance (impact) — i.e. (LL+IM)×DF. {R.useExt?'LL from the imported MIDAS envelope.':'Self-weight and DC1 are computed; DC2/DW from inputs; LL is the HL-93 envelope.'}</div>}
     </Card>
     <div className="cols" style={{paddingTop:0,gridTemplateColumns:'1fr 1fr'}}>
@@ -6381,7 +6382,7 @@ function FlexTab({inp,R}){
         <Step d="Nominal resistance, strain & φ" r="5.6.3.2 / 5.5.4.2">
           <ML s={f.rect?Tx`M_n=A_{ps}f_{ps}\left(d_p-\frac{a}{2}\right)=${nx(rMid.Aps,3)}(${nx(f.fps,1)})\left(${nx(f.dp,2)}-\frac{${nx(f.a,2)}}{2}\right)=${nx(f.Mn,0)}\;\mathrm{k\text{-}in}=${nx(f.Mn/12,0)}\;\mathrm{k\text{-}ft}`
             :Tx`M_n=A_{ps}f_{ps}(d_p-\tfrac a2)+0.85f'_{cd}(b_{eff}-b_{tf})h_f(\tfrac a2-\tfrac{h_f}2)=${nx(f.Mn/12,0)}\;\mathrm{k\text{-}ft}`}/>
-          <ML s={Tx`\varepsilon_t=0.003\left(\frac{d_t}{c}-1\right)=0.003\left(\frac{${nx(f.dt,2)}}{${nx(f.c,2)}}-1\right)=${nx(f.et*1000,2)}\times10^{-3}\Rightarrow\phi=0.75+0.25\frac{\varepsilon_t-0.002}{0.003}\le1.0=${nx(f.phi,3)}`}/>
+          <ML s={Tx`\varepsilon_t=0.003\left(\frac{d_t}{c}-1\right)=0.003\left(\frac{${nx(cp.hc-ss.yLow,2)}}{${nx(f.c,2)}}-1\right)=${nx(f.et*1000,2)}\times10^{-3}\Rightarrow\phi=0.75+0.25\frac{\varepsilon_t-0.002}{0.003}\le1.0=${nx(f.phi,3)}`}/>
           <ML s={Tx`\phi M_n=${nx(f.phi,3)}(${nx(f.Mn/12,0)})=${nx(f.phiMn/12,0)}\ge M_u=${nx(R.MuMid/12,0)}\;\mathrm{k\text{-}ft}\quad\frac{M_u}{\phi M_n}=${nx(R.MuMid/f.phiMn,3)}\;${(R.MuMid<=f.phiMn*1.0001)?'\\checkmark':'\\text{N.G.}'}`}/>
         </Step>
         <Step d="Minimum reinforcement" r="5.6.3.3">
@@ -6419,7 +6420,7 @@ function FlexTab({inp,R}){
             ['a vs bottom-flange thickness',`${fmt(R.cont.aN,2)} vs ${fmt(R.cont.tbf,1)}`,R.cont.aOK?'in · OK':'in · EXCEEDS'],
             ['ε_t / φ',`${fmt(R.cont.etN*1000,1)}‰ / ${fmt(R.cont.phiN,2)}`,''],
             ['φM_n',fmt(R.cont.phiMnN/12,0),'k-ft'],
-            ['M_u / φM_n',fmt(R.cont.dc,2),R.checks.at(-1).pass?'PASS':'FAIL']]}/>
+            ['M_u / φM_n',fmt(R.cont.dc,2),okPier?'PASS':'FAIL']]}/>
         </div>
       </div>
       <div className="callout">Section: deck reinforcement in tension at d = h_c − {fmt(+inp.cont.dTop,1)}″, rectangular compression block in the girder bottom flange (girder f′c). Equal adjacent spans assumed; strand contribution near the pier (debonded/ineffective for negative bending) neglected. Positive-moment connection at the diaphragm and time-dependent restraint moments per 5.12.3.3 are not computed here.</div>
@@ -6433,7 +6434,7 @@ function FlexTab({inp,R}){
         </Step>
         <Step d="Capacity — deck steel tension, bottom-flange compression" r="5.12.3.3">
           <ML s={Tx`a=\frac{A_s f_y}{0.85f'_c b_{bf}}=\frac{${nx(R.cont.As,2)}(${nx(R.cont.fyr,0)})}{0.85(${nx(inp.mat.fc,1)})(${nx(R.g.bbf,0)})}=${nx(R.cont.aN,2)}\;\mathrm{in}\;${R.cont.aOK?Tx`\le t_{bf}=${nx(R.cont.tbf,1)}\;\checkmark`:Tx`>t_{bf}\;\text{N.G.}`}\qquad c=\frac{a}{\beta_1}=${nx(R.cont.cN,2)}\;\mathrm{in}`}/>
-          <ML s={Tx`\phi=0.75+0.15\frac{\varepsilon_t-0.002}{0.003}\le0.9=${nx(R.cont.phiN,3)}\qquad \phi M_n=\phi A_s f_y\left(d-\frac a2\right)=${nx(R.cont.phiMnN/12,0)}\;\mathrm{k\text{-}ft}\qquad\frac{M_u}{\phi M_n}=${nx(R.cont.dc,3)}\;${R.checks.at(-1).pass?'\\checkmark':'\\text{N.G.}'}`}/>
+          <ML s={Tx`\phi=0.75+0.15\frac{\varepsilon_t-0.002}{0.003}\le0.9=${nx(R.cont.phiN,3)}\qquad \phi M_n=\phi A_s f_y\left(d-\frac a2\right)=${nx(R.cont.phiMnN/12,0)}\;\mathrm{k\text{-}ft}\qquad\frac{M_u}{\phi M_n}=${nx(R.cont.dc,3)}\;${okPier?'\\checkmark':'\\text{N.G.}'}`}/>
         </Step>
       </div>
     </Card>}
