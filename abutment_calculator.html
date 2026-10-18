@@ -188,6 +188,7 @@ table.itbl td.ro{background:var(--panel);color:#333;}
 .panel.flash{animation:panelflash 1.6s ease-out;}
 .xlink{color:#2e5077;cursor:pointer;text-decoration:underline dotted;}
 .xlink:hover{color:#1f3a5f;}
+.wklink{font-size:0.8rem;color:#555;margin:2px 0 6px;}   /* D11 links: "Worked in: → Tab · Panel" */
 #fpBadge.dirty{border-color:#c0392b;color:#c0392b;background:#fdecea;}
 .csvrow{text-align:right;margin:1px 0 2px 0;}
 .dash-summary{font-size:0.9rem;margin:4px 0 8px 0;}
@@ -295,6 +296,38 @@ dialog h3{margin-top:0;}
 #report .panel>.p-head .tri{display:none;}
 #report .panel>.p-body{display:block !important;padding:4px 0 8px 0;}
 #report .plotimg{max-width:6.6in;display:block;margin:6px auto;}
+/* D11 calculation-sheet report (Gusset Plate Rating / ST-Girder format) */
+#report.crdoc{font-family:"Times New Roman",Times,serif;}
+#report .cr-cover h1,#report h2.cr-h1,#report h3.cr-h2,#report .cr-resh{color:#000;}
+#report .cr-refs td:first-child{white-space:nowrap;}
+#report a{color:#000;text-decoration:none;}
+#report .cr-cover{min-height:8.2in;display:flex;flex-direction:column;justify-content:center;break-after:page;}
+#report .cr-cover-t{text-align:center;margin-bottom:24pt;}
+#report .cr-cover h1{font:700 24pt/1.2 Arial,Helvetica,sans-serif;margin:0 0 14pt;}
+#report .cr-cover p{font:700 13pt Arial,Helvetica,sans-serif;margin:0 0 6pt;}
+#report .cr-cover p.cr-cover-p{font-weight:400;font-size:11pt;}
+#report .cr-front{break-after:page;}
+#report .cr-break{break-before:page;}
+#report h2.cr-h1{font:700 12pt "Times New Roman",Times,serif;text-decoration:underline;text-transform:uppercase;border:0;margin:14pt 0 8pt;break-after:avoid;}
+#report h3.cr-h2{font:700 11pt "Times New Roman",Times,serif;margin:10pt 0 4pt;break-after:avoid;}
+#report .cr-refs{border-collapse:collapse;margin:0 0 10pt;}
+#report .cr-refs td{padding:1pt 14pt 1pt 0;vertical-align:top;font-size:10.5pt;}
+#report .cr-toc,#report .cr-toc ol{list-style:none;margin:0;padding:0;}
+#report .cr-toc>li{margin:3pt 0;}
+#report .cr-toc ol{padding-left:18pt;font-size:10pt;}
+#report .cr-p{margin:0 0 7pt;}
+#report .cr-small{font-size:9.5pt;margin-top:10pt;}
+#report .cr-resh{font:700 11pt "Times New Roman",Times,serif;margin:12pt 0 2pt;break-after:avoid;}
+#report .cr-line{display:grid;grid-template-columns:2.3in 1fr 0.8in;gap:0 12pt;align-items:center;padding:3pt 0;break-inside:avoid;}
+#report .cr-res{border-top:0.6pt solid #000;}
+#report .cr-results{border-bottom:0.8pt solid #000;margin-bottom:8pt;}
+#report .cr-r{text-align:right;}
+#report .cr-st-fail{text-decoration:underline;}
+#report .cr-refi{font-size:9pt;font-style:italic;}
+#report .xref{font-style:italic;}
+#report .nocase{text-transform:none;}
+#report .wklink{font-size:9pt;}
+#report button{display:none !important;}
 /* "All tools" link + shared project info buttons */
 .bx-all-tools{font-size:0.8rem;color:var(--ref);text-decoration:none;}
 .bx-all-tools:hover{text-decoration:underline;}
@@ -486,12 +519,12 @@ dialog h3{margin-top:0;}
     <button class="mini-btn" id="rptPresetSlim">Slim submittal</button>
   </div>
   <div id="rptOptList" style="display:flex;flex-direction:column;gap:6px;font-size:13px;">
-    <label><input type="checkbox" data-ropt="inputEcho"> Section E — full input echo</label>
-    <label><input type="checkbox" data-ropt="permFull"> Section G — γp load-combination &amp; permutation tables</label>
-    <label><input type="checkbox" data-ropt="detailTables"> Section L — detailed force-effect tables (per-load breakdown)</label>
+    <label><input type="checkbox" data-ropt="inputEcho"> Input echo (full)</label>
+    <label><input type="checkbox" data-ropt="permFull"> Load combinations &amp; γp permutation tables</label>
+    <label><input type="checkbox" data-ropt="detailTables"> Detailed force-effect tables (per-load breakdown)</label>
     <label><input type="checkbox" data-ropt="charts"> Charts &amp; diagrams (pressure, bearing, V&amp;M, sensitivity)</label>
-    <label><input type="checkbox" data-ropt="viz3d"> Section M — 3D load visualization snapshot</label>
-    <label><input type="checkbox" data-ropt="selftest"> Section N — validation self-test result</label>
+    <label><input type="checkbox" data-ropt="viz3d"> 3D load visualization snapshot</label>
+    <label><input type="checkbox" data-ropt="selftest"> Validation self-test result</label>
   </div>
   <div style="text-align:right;margin-top:12px;">
     <button id="dlgRptCancel" class="mini-btn">Cancel</button>
@@ -2614,6 +2647,15 @@ function checkLine(name,dTex,dc,extra){
     ${extra?`<span>${extra}</span>`:""}</div>`;
 }
 function govNote(txt){ return `<div class="govnote"><b>Governing combination:</b> ${esc(txt)}</div>`; }
+/* ---- D11 links (CLAUDE.md §6, 2026-10-18): a value quoted away from where it is worked links to that panel.
+   On screen: "Worked in: → Tab · Panel" (an .xlink — the existing click handler opens the tab, scrolls, flashes).
+   In the calculation report buildReport() rewrites every .xlink to "see §n.k" / "§n.k". ---- */
+const ABUT_TABNAME={"tab-loads":"Geometry & Loads","tab-comb":"Load Combinations","tab-stab":"External Stability","tab-found":"Foundation / Piles",
+  "tab-struct":"Structural Design","tab-vm":"V & M Diagrams","tab-3d":"3D View","tab-tables":"Detailed Tables"};
+function abutWorkedIn(items){   /* items: [[tab, panel cid, panel label, quoted value (optional)]] */
+  return `<div class="wklink">Worked in: ${items.map(([tb,cid,lab,txt])=>
+    `<span class="xlink wk" data-jump="${tb}|${cid}"${txt?` data-txt="${esc(txt)}"`:""}>${txt?esc(txt)+" ":""}→ ${esc(ABUT_TABNAME[tb]||tb)} · ${esc(lab)}</span>`).join(" · ")}</div>`;
+}
 function renderMathIn(el){
   if(!window.katex) return;
   el.querySelectorAll(".ktx").forEach(n=>{
@@ -2905,7 +2947,7 @@ function renderTabComb(R){
     <tr><td class="lft">Overturning / eccentricity</td><td>minimum</td><td>maximum</td><td class="lft">Least stabilizing moment</td></tr>
     <tr><td class="lft">Bearing resistance</td><td>maximum</td><td>maximum</td><td class="lft">Greatest vertical + eccentricity</td></tr>
     <tr><td class="lft">Structural / pile demand</td><td>governing per check</td><td>maximum</td><td class="lft">Worst factored section / pile demand</td></tr></table>
-    <div class="eq-note">The tables in §2.3 list every permutation so the selection is fully auditable. Vertical live-load surcharge (LSv) is zeroed where it would aid stability.</div>`);
+    <div class="eq-note">The tables in <span class="xlink" data-jump="tab-comb|o-perm-${Object.keys(R.permTables)[0]?.replace(/\s/g,"")}">§2.3</span> list every permutation so the selection is fully auditable. Vertical live-load surcharge (LSv) is zeroed where it would aid stability.</div>`);
   for(const [ls,rows] of Object.entries(R.permTables)){
     const anyGov=rows.some(r=>r.govFor);
     let t=`<table class="rtbl"><tr><th>γDC</th><th>γDW</th><th>γEV</th><th>γEH</th><th>Live</th><th>ΣV (kip)</th><th>ΣH<sub>x</sub> (kip)</th><th>ΣM<sub>V</sub> (kip·ft)</th><th>ΣM<sub>H</sub> (kip·ft)</th><th>x̄ (ft)</th><th>e (ft)</th><th>Governs</th></tr>`;
@@ -2964,7 +3006,7 @@ function renderTabStab(R){
           : `\\Sigma M_{toe}:\\;\\; \\Sigma P_i x_i = ${fmtT(cl.Mq)}\\ \\text{kip-ft} \\;\\;\\text{vs}\\;\\; \\Sigma\\gamma V\\cdot\\bar{x} = ${fmtT(cl.Mv)}\\ \\text{kip-ft} \\;\\;\\Rightarrow\\;\\; \\text{residual} = ${fmtT(cl.dM,3)}\\ \\text{kip-ft}`],
         "Residuals ≈ 0 demonstrate the reaction distribution is in equilibrium with the applied loads (a warning is raised above the dashboard if either residual exceeds 1%).")
         :""}
-      <div class="note-box">The ledger above is assembled for the governing <b>bearing/pile-demand</b> case (LSv included). Sliding and eccentricity re-assemble with their own governing γ<sub>p</sub> permutations and LSv excluded — their factor sets are shown in §${fn.branch==="spread"?"3.1 / 3.2":"Tab 4"}.</div>
+      <div class="note-box">The ledger above is assembled for the governing <b>bearing/pile-demand</b> case (LSv included). Sliding and eccentricity re-assemble with their own governing γ<sub>p</sub> permutations and LSv excluded — their factor sets are shown in ${fn.branch==="spread"?'<span class="xlink" data-jump="tab-stab|o-slide">§3.1</span> / <span class="xlink" data-jump="tab-stab|o-ecc">§3.2</span>':'<span class="xlink" data-jump="tab-found|o-pilecap">Tab 4</span>'}.</div>
     `);
   }
   if(fn.branch==="spread"){
@@ -3017,7 +3059,7 @@ function renderTabStab(R){
             bc.mode==="biaxFull"
               ? `q_{max} = \\dfrac{\\Sigma V_f}{B\\,L_{ftg}}\\left(1+\\dfrac{6e}{B}+\\dfrac{6e_L}{L_{ftg}}\\right) = \\dfrac{${fmtT(bc.V)}}{(${fmtT(geo.B)})(${fmtT(g.Lftg)})}(1+${fmtT(bc.bx.kern,3)}) = ${fmtT(bc.q)}\\ \\text{ksf (corner)}`
               : `q = a + b\\,x + c\\,y \\ge 0:\\ \\int q\\,dA = \\Sigma V_f,\\ \\int q\\,x\\,dA = \\Sigma V_f\\,e,\\ \\int q\\,y\\,dA = \\Sigma V_f\\,e_L \\;\\Rightarrow\\; q_{max} = ${fmtT(bc.q)}\\ \\text{ksf (corner)}`],
-            "e_L: transverse eccentricity from the transverse moment M_t about the abutment centreline (footing taken as centred on it). Partial contact: plane solved numerically (no tension); the 2-D free body in §3.0 shows the pressure averaged along L_ftg.")
+            "e_L: transverse eccentricity from the transverse moment M_t about the abutment centreline (footing taken as centred on it). Partial contact: plane solved numerically (no tension); the 2-D free body in <span class='xlink' data-jump='tab-stab|o-fbd'>§3.0</span> shows the pressure averaged along L_ftg.")
         : eqB(`Linear distribution — rock (${bc.mode==="trap"?"trapezoidal, e ≤ B/6":"triangular, e > B/6"})`,"AASHTO 10.6.3.1, 11.6.3.2",[
             bc.mode==="trap"?"q_{max} = \\dfrac{\\Sigma V_f}{B\\,L_{ftg}}\\left(1+\\dfrac{6e}{B}\\right)":"q_{max} = \\dfrac{2\\,\\Sigma V_f}{3\\,L_{ftg}\\,(B/2-e)}",
             bc.mode==="trap"?`q_{max} = \\dfrac{${fmtT(bc.V)}}{(${fmtT(geo.B)})(${fmtT(g.Lftg)})}\\left(1+\\dfrac{6(${fmtT(bc.e)})}{${fmtT(geo.B)}}\\right)`:`q_{max} = \\dfrac{2(${fmtT(bc.V)})}{3(${fmtT(g.Lftg)})(${fmtT(geo.B)}/2-${fmtT(bc.e)})}`,
@@ -3041,7 +3083,7 @@ function renderTabStab(R){
     `);
   }else{
     h+=panel("o-stab-na","3.1","External Stability — Pile Branch Active",`
-      <div class="note-box">The pile-supported branch is active: soil sliding, eccentricity and bearing checks are replaced by pile-group demands — see Tab 4. Lateral pile resistance is a hand-off to LPILE (p–y) analysis. Global stability and settlement remain external geotechnical checks at Service I.</div>`);
+      <div class="note-box">The pile-supported branch is active: soil sliding, eccentricity and bearing checks are replaced by pile-group demands — see <span class="xlink" data-jump="tab-found|o-pilecap">Tab 4</span>. Lateral pile resistance is a hand-off to LPILE (p–y) analysis. Global stability and settlement remain external geotechnical checks at Service I.</div>`);
   }
   const st=R.checks.seat;
   h+=panel("o-seat","3.5","Minimum Support (Seat) Length [4.7.4.4]",`
@@ -3092,7 +3134,7 @@ function renderTabFound(R){
   let h="";
   if(S.fnd.branch!=="pile"){
     h+=panel("o-pile-na","4.1","Pile Branch Inactive",`
-      <div class="note-box">The spread-footing branch is active (panel I-4). Switch the foundation branch to <b>Pile-supported footing</b> to compute rigid-cap pile-group demands. Spread-footing bearing and eccentricity results are in Tab 3.</div>`);
+      <div class="note-box">The spread-footing branch is active (panel I-4). Switch the foundation branch to <b>Pile-supported footing</b> to compute rigid-cap pile-group demands. Spread-footing bearing and eccentricity results are in <span class="xlink" data-jump="tab-stab|o-brg">Tab 3</span>.</div>`);
     document.getElementById("tab-found").innerHTML=h; return;
   }
   const pi=R.pile;
@@ -3131,6 +3173,7 @@ function renderTabFound(R){
   const pc=R.checks.pileComp, pu=R.checks.pileUplift, sh=R.pile.shear;
   h+=panel("o-pilecap","4.4","Pile Axial Capacity Checks [10.7]",`
     ${govNote(pc.lbl+" — "+pc.ls)}
+    ${abutWorkedIn([["tab-found","o-pileform","4.2 Axial Pile Reactions","P_max"],["tab-found","o-pilels","4.3 Pile Reactions per Limit State","P_min"]])}
     ${eqB("Compression","AASHTO 10.7.3.8 / 10.5.5.2.3",[
       "P_{max} \\le \\varphi_c R_n",
       `${fmtT(pc.P)} \\le (${fmtT(p.phiC)})(${fmtT(p.Rn)}) = ${fmtT(pc.RR)}\\ \\text{kip}`])}
@@ -3155,6 +3198,7 @@ function renderTabFound(R){
   if(pnc){
     h+=panel("o-punch","4.6","Two-Way (Punching) Shear at Piles [AASHTO 5.12.8.6]",`
       ${govNote((pnc.lbl||"")+" — "+(pnc.ls||"")+" (governing pile "+pnc.pile+", "+pnc.sides+"-sided critical section)")}
+      ${abutWorkedIn([["tab-found","o-pileform","4.2 Axial Pile Reactions","V_u (pile reaction)"]])}
       ${eqB("Footing effective depth & shear depth","AASHTO 5.12.8.6, 5.7.2.8",[
         `d_e = t_f - c_{cl} - d_b = ${fmtT(g.tf*12,1)} - ${fmtT(S.mat.coverF,2)} - ${fmtT(BARS[S.reinf.toe.size].db,3)} = ${fmtT(pnc.de)}\\ \\text{in}`,
         `d_v = \\max(0.9d_e,\\,0.72h) = ${fmtT(pnc.dv)}\\ \\text{in}`])}
@@ -3237,7 +3281,7 @@ function renderTabStruct(R){
       `M_{EH} = \\dfrac{k_{ah}\\gamma h^3}{6} = \\dfrac{(${fmtT(kah,4)})(${fmtT(s.gamma,3)})(${fmtT(bd.hbwRet)})^3}{6} = ${fmtT(bd.Mbw_EH)}\\ \\text{kip-ft/ft}`,
       `M_{LS} = \\dfrac{k_{ah}\\gamma h_{eq} h^2}{2} = \\dfrac{(${fmtT(kah,4)})(${fmtT(s.gamma,3)})(${fmtT(bd.heqBW)})(${fmtT(bd.hbwRet)})^2}{2} = ${fmtT(bd.Mbw_LS)}\\ \\text{kip-ft/ft}`,
       `M_u = ${fmtT(R.GP.EH[1])}(${fmtT(bd.Mbw_EH)}) + ${fmtT(+S.factors.llS1)}(${fmtT(bd.Mbw_LS)}) = ${fmtT(bd.MuBW)}\\ \\text{kip-ft/ft}\\,, \\qquad V_u = ${fmtT(bd.VuBW)}\\ \\text{kip/ft}`],
-      `Retained height at backwall h = ${fmt(bd.hbwRet)} ft; h_eq(${fmt(bd.hbwRet)} ft) = ${fmt(bd.heqBW)} ft. The minimum seismic connection force (Tab 3, §3.6) governs shear-key/keeper detailing separately.`),
+      `Retained height at backwall h = ${fmt(bd.hbwRet)} ft; h_eq(${fmt(bd.hbwRet)} ft) = ${fmt(bd.heqBW)} ft. The minimum seismic connection force (<span class="xlink" data-jump="tab-stab|o-seis">Tab 3, §3.6</span>) governs shear-key/keeper detailing separately.`),
     "5.1","Backwall — Flexure, Shear, Crack Control");
   const sd=R.stemDem, cS=R.checks.stemFlex;
   h+=sectionHTML(cS, eqB("Stem base demands — EH + LS + girder longitudinal + vertical-reaction eccentricity","Design basis §8.2; AASHTO 11.6.3",[
@@ -3274,6 +3318,7 @@ function renderTabStruct(R){
   const sf=R.checks.shearFric, m=S.mat;
   h+=panel("o-str-shearfric","5.5","Stem-to-Footing Shear Friction [AASHTO 5.7.4]",`
     ${govNote((sf.lbl||"")+" — "+(sf.ls||""))}
+    ${abutWorkedIn([["tab-struct","o-str-Stem","5.2 Stem","V_ui (stem-base V_u)"]])}
     <div class="note-box">Interface: <b>${esc(sf.prep.name)}</b> — c = ${fmt(sf.prep.c,3)} ksi, μ = ${fmt(sf.prep.mu,2)}, K₁ = ${fmt(sf.prep.K1,2)}, K₂ = ${fmt(sf.prep.K2,1)} ksi [Table 5.7.4.4-1]. Per 1-ft strip of wall; the crossing reinforcement is the stem back-face dowels (A<sub>vf</sub> = A<sub>s,stem</sub>).</div>
     ${eqB("Interface shear resistance","AASHTO 5.7.4.3, Eq. 5.7.4.3-3 (caps: Eq. -4, -5)",[
       "V_{ni} = c\\,A_{cv} + \\mu\\,(A_{vf}f_y + P_c) \\le \\min(K_1 f'_c A_{cv},\\; K_2 A_{cv})",
@@ -3327,6 +3372,7 @@ function renderTabStruct(R){
       <div class="svgbox" id="rebarSvg"></div>
       <div class="figcap">Reinforcement placement — schematic; bar marks keyed to the schedule below.</div>
       ${rt}
+      ${abutWorkedIn([["tab-struct","o-str-Stem","5.2 Stem","A1"],["tab-struct","o-str-Backwall","5.1 Backwall","B1"],["tab-struct","o-str-Toe","5.3 Toe","C1"],["tab-struct","o-str-Heel","5.4 Heel","D1"]])}
       <div class="note-box"><b>Lengths are estimates for quantity take-off only</b> (member length + development/hook allowances, no laps or bends detailed). Splice locations, hooks, corner bars and bar lists are the detailer's responsibility; development shown with all modification factors = 1.0.</div>
     `);
   }
@@ -3397,7 +3443,7 @@ function renderTabVM(R){
       <span></span>
     </div>
     <div class="note-box">Showing: <b>${esc(selLabel)}</b> ${isLS
-      ? "— factored, with each element using its governing γ<sub>p</sub> max/min permutation (stem/backwall on maximum EH; toe and heel on the permutation that gives the largest toe / heel moment, each with that permutation's own load factors, as in the toe and heel design). Footing pressure uses the design (effective-width / triangular) distribution matching Tab 5."
+      ? "— factored, with each element using its governing γ<sub>p</sub> max/min permutation (stem/backwall on maximum EH; toe and heel on the permutation that gives the largest toe / heel moment, each with that permutation's own load factors, as in the toe and heel design). Footing pressure uses the design (effective-width / triangular) distribution matching <span class=\"xlink\" data-jump=\"tab-struct|o-str-Toe\">Tab 5</span>."
       : "— a single load applied unfactored (γ = 1.0), showing its <b>full effect</b> on every component, including indirect effects. A lateral load (EH, BR, wind) carries no direct load to the footing but produces a bearing-pressure redistribution (elastic superposition) that bends the footing — so EH shows toe shear and moment. Vertical loads (DC, DW, LL, EV) show their pressure effect net of any direct weight on the cantilever."}
       Diagrams redraw live; hover any point for the value.</div>
     ${R.superChk?`<div class="checkline ${Math.abs(R.superChk.stemSum-R.superChk.stemSvc)<0.02*Math.max(1,Math.abs(R.superChk.stemSvc))?"pass":"fail"}">
@@ -3419,7 +3465,7 @@ function renderTabVM(R){
     const relieving=(!isLS)&&!nearZero&&(Math.abs(endM)>1e-2)&&(endM*govSign<0);
     const shearNote=(!isLS)?"" : isFooting?" One-way design shear V<sub>u</sub> is taken at d<sub>v</sub> from the face, less than the peak face shear.":"";
     const demandNote=isLS
-      ? `Diagram maxima for this combination: |V| = ${fmt(maxV)} kip/ft, |M| = ${fmt(maxM)} kip·ft/ft. Governing design demand (Tab 5 ${d.ref}): M<sub>u</sub> = ${fmt(d.peakM)}, V<sub>u</sub> = ${fmt(d.peakV)}.${shearNote}`
+      ? `Diagram maxima for this combination: |V| = ${fmt(maxV)} kip/ft, |M| = ${fmt(maxM)} kip·ft/ft. Governing design demand (<span class="xlink" data-jump="tab-struct|o-str-${({stem:"Stem",backwall:"Backwall",toe:"Toe",heel:"Heel"})[key]}">Tab 5 ${d.ref}</span>): M<sub>u</sub> = ${fmt(d.peakM)}, V<sub>u</sub> = ${fmt(d.peakV)}.${shearNote}`
       : nearZero
         ? `This load produces negligible shear or moment in the ${title.toLowerCase()}.`
         : `${isFooting?"Effect of ":"Unfactored contribution of "}${esc(selLabel.split(" — ")[0])}${isFooting&&isLateral?" via bearing-pressure redistribution":""}: |V| = ${fmt(maxV)} kip/ft, |M| = ${fmt(maxM)} kip·ft/ft.${relieving?` <b>Relieving</b> — this load acts opposite to the governing ${title.toLowerCase()} demand (it reduces it); the full combination stays in compression.`:` Adds to the governing ${title.toLowerCase()} demand.`}`;
@@ -3450,7 +3496,7 @@ function renderTabTables(R){
   lsNames.forEach(ls=>{ combo[ls]=R.buildVM("ls:"+ls); });
   let h="";
   h+=panel("o-tbl-note","8.0","Basis — Detailed Force-Effect Tables",`
-    <div class="note-box">Critical-section shear V and moment M for every element, broken down by individual load (unfactored, γ = 1.0) and assembled per limit state. Wall elements (stem, backwall) are exactly linear, so Σ(γ × unfactored) reproduces the combination total. Footing elements use <b>elastic superposition</b> for the per-load rows but the <b>design bearing distribution</b> (effective-width / triangular, with per-check γ<sub>p</sub> bounds) for the engine total — the reconciliation row quantifies the difference (pressure redistribution + min/max bound selection). Extreme Event I is tabulated in Tabs 3–5; its distributed seismic terms are not carried in these element tables. Signs follow the diagram convention (Tab 6); magnitude governs design.</div>`);
+    <div class="note-box">Critical-section shear V and moment M for every element, broken down by individual load (unfactored, γ = 1.0) and assembled per limit state. Wall elements (stem, backwall) are exactly linear, so Σ(γ × unfactored) reproduces the combination total. Footing elements use <b>elastic superposition</b> for the per-load rows but the <b>design bearing distribution</b> (effective-width / triangular, with per-check γ<sub>p</sub> bounds) for the engine total — the reconciliation row quantifies the difference (pressure redistribution + min/max bound selection). Extreme Event I is tabulated in Tabs 3–5; its distributed seismic terms are not carried in these element tables. Signs follow the diagram convention (<span class="xlink" data-jump="tab-vm|o-vm-note">Tab 6</span>); magnitude governs design.</div>`);
   /* ---- 8.1 unfactored matrix ---- */
   { let t=`<table class="rtbl"><tr><th rowspan="2">Load (γ = 1.0)</th>${TBL_ELS.map(([,lab])=>`<th colspan="2">${lab}</th>`).join("")}</tr>
       <tr>${TBL_ELS.map(()=>"<th>V (kip/ft)</th><th>M (kip·ft/ft)</th>").join("")}</tr>`;
@@ -3505,7 +3551,7 @@ function renderTabTables(R){
       body+=t;
     });
     h+=panel("o-tbl-sta","8.6","Station Tables — V and M at Tenth Points, per Limit State",
-      `<div class="eq-note">Values from the same diagrams as Tab 6 (V in kip/ft, M in kip·ft/ft), tabulated at eleven stations from the free end to the fixed end of each element. Limit states use each element's governing demand-side factors; footing values use the design bearing distribution.</div>`+body);
+      `<div class="eq-note">Values from the same diagrams as <span class="xlink" data-jump="tab-vm|o-vm-note">Tab 6</span> (V in kip/ft, M in kip·ft/ft), tabulated at eleven stations from the free end to the fixed end of each element. Limit states use each element's governing demand-side factors; footing values use the design bearing distribution.</div>`+body);
   }
   host.innerHTML=h;
 }
@@ -4826,80 +4872,100 @@ function inputEchoHTML(){
     ["Bearing-seat mat","#"+S.bearing.seatBar+" @ "+fmt(+S.bearing.seatSp,1)+" in each way",""]]);
   return h;
 }
+/* D11 (2026-10-18): calculation-sheet report in the Gusset Plate Rating / ST-Girder format —
+   cover with title block, references, numbered table of contents (links), numbered sections n and
+   subsections n.k (each tab's panels keep their worked equations: symbolic → substituted → result),
+   a D/C result line per check at the end of the stability, foundation and structural sections, the
+   CLAUDE.md §6 links rewritten to "see §n.k", and the print header / "Page X of Y" footer (@page
+   margin boxes, abutPageCSS; inside @media print, so only while printing). The worked content is the
+   same as the tabs (cloned from them); no value is recomputed. */
+const ABUT_REFS=[
+  ["AASHTO LRFD","AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024): Section 3 — 3.4.1 (Tables 3.4.1-1, 3.4.1-2), 3.5.1, 3.6.1.1, 3.6.4, 3.10.9.2, 3.11.1, 3.11.3, 3.11.5, 3.11.6, 3.12.2"],
+  ["","Art. 4.7.4.4 (minimum support length)"],
+  ["","Section 5 — 5.4.2, 5.5.4.2, 5.6.2.1, 5.6.3, 5.6.5, 5.6.7, 5.7.2.8, 5.7.3, 5.7.4, 5.8, 5.10.6, 5.10.8.2.1a, 5.12.8.6"],
+  ["","Section 10 — 10.5.5.2.3, 10.6.1.3, 10.6.2, 10.6.3.1, 10.6.3.4, 10.6.5, 10.7.1.5, 10.7.3.8, 10.7.3.10"],
+  ["","Section 11 — 11.6.2.3, 11.6.3, 11.6.5; Appendix A11.3.1 (Mononobe–Okabe)"],
+  ["","Art. 14.6.3.1 (elastomeric bearing shear force)"],
+  ["MassDOT","MassDOT LRFD Bridge Manual, Part I — §3.1.8.3 (floating-bridge longitudinal distribution; seismic connection); edition: verify"],
+  ["Design basis","This tool's own design-basis notes, cited as “Design basis §x” (method statements, not a published standard)"]];
+function abutPageCSS(){
+  const P=S.proj||{}, q=v=>String(v==null||v===""?"—":v).replace(/\\/g,"\\\\").replace(/"/g,'\\"').replace(/[\r\n]+/g," ");
+  const fp=(window.LAST_R&&window.LAST_R.fingerprint)||"—";
+  const box='font: 9.5pt "Times New Roman", Times, serif; color: #000; white-space: pre; vertical-align: bottom; padding-bottom: 6pt;';
+  const foot='font: 9pt "Times New Roman", Times, serif; color: #000; white-space: pre; vertical-align: top; padding-top: 6pt;';
+  return '@media print { @page { size: letter portrait; margin: 0.95in 0.6in 0.75in 0.6in;'+
+    ' @top-left { content: "Project No: '+q(P.num)+'\\A Description: '+q(String(P.name||"Bridge abutment").slice(0,38))+'"; '+box+' text-align: left; }'+
+    ' @top-center { content: "Computed By: '+q(P.calcBy)+'\\A Checked By: '+q(P.chkBy)+'"; '+box+' text-align: left; }'+
+    ' @top-right { content: "Date: '+q(P.date)+'\\A Date: '+q(P.chkDate)+'"; '+box+' text-align: right; }'+
+    ' @bottom-left { content: "'+q(P.name||"Untitled")+' (Bridge Abutment Design Calculator)\\A Input ID '+q(fp)+'"; '+foot+' text-align: left; }'+
+    ' @bottom-right { content: "Page " counter(page) " of " counter(pages); '+foot+' text-align: right; } } }';
+}
+function abutApplyPageCSS(on){
+  let st=document.getElementById("abut-page");
+  if(!st){ st=document.createElement("style"); st.id="abut-page"; document.head.appendChild(st); }
+  st.textContent=on? abutPageCSS() : "";
+}
+/* D/C result lines for one tab's checks (the dashboard values, R.dash) */
+function abutResultBlock(R, tabId, title, map){
+  const rows=R.dash.filter(d=>d.tab===tabId); if(!rows.length) return "";
+  return `<div class="cr-resh">Results — ${esc(title)}</div><div class="cr-results">`+rows.map(d=>{
+    const m=/^(.*?)\s*\[([^\]]+)\]\s*$/.exec(d.name), lab=m?m[1]:d.name;
+    const hit=map[DASH_ANCHOR[d.id]];
+    const bits=[m?"AASHTO LRFD 10th Ed. Art. "+esc(m[2]):"", esc(d.gov||""), hit?`<a href="#${hit.id}">§${hit.num}</a>`:""].filter(Boolean).join("; ");
+    return `<div class="cr-line cr-res"><div class="cr-d">${esc(lab)}:</div>`+
+      `<div class="cr-m">D/C = <b>${d.pass===null?"n/a":fmt(d.dc)}</b>${bits?` <span class="cr-refi">(${bits})</span>`:""}</div>`+
+      `<div class="cr-r${d.pass===false?" cr-st-fail":""}"><b>${d.pass===null?"N/A":(d.pass?"PASS":"FAIL")}</b></div></div>`;
+  }).join("")+"</div>";
+}
 async function buildReport(){
   const R=window.LAST_R; if(!R) return;
   const rp=document.getElementById("report");
   const P=S.proj;
   const RO=Object.assign({inputEcho:true,permFull:true,detailTables:true,viz3d:true,selftest:true,charts:true},S.ui.rptOpts||{});
+  const wk=(tab,cid)=>`<span class="xlink" data-jump="${tab}|${cid||""}" data-rpt="1"></span>`;   /* report-only "§n.k" link */
   // sorted results table (worst D/C first; informational rows last)
   const sorted=R.dash.slice().sort((a,b)=>{ if(a.pass===null&&b.pass===null)return 0; if(a.pass===null)return 1; if(b.pass===null)return -1; return b.dc-a.dc; });
-  let dashT=`<table class="rtbl"><tr><th>#</th><th>Code check (sorted by D/C, worst first)</th><th>D/C</th><th>Result</th><th>Governing</th></tr>`;
-  sorted.forEach((d,i)=>{ dashT+=`<tr${d.pass===false?' class="failrow"':''}><td>${i+1}</td><td class="lft">${d.name}</td><td>${d.pass===null?"n/a":fmt(d.dc)}</td><td><b>${d.pass===null?"—":(d.pass?"PASS":"FAIL")}</b></td><td class="lft small">${esc(d.gov)}</td></tr>`; });
+  let dashT=`<table class="rtbl"><tr><th>#</th><th>Code check (sorted by D/C, worst first)</th><th>D/C</th><th>Result</th><th>Governing</th><th>Worked in</th></tr>`;
+  sorted.forEach((d,i)=>{ dashT+=`<tr${d.pass===false?' class="failrow"':''}><td>${i+1}</td><td class="lft">${d.name}</td><td>${d.pass===null?"n/a":fmt(d.dc)}</td><td><b>${d.pass===null?"—":(d.pass?"PASS":"FAIL")}</b></td><td class="lft small">${esc(d.gov)}</td><td>${wk(d.tab,DASH_ANCHOR[d.id])}</td></tr>`; });
   dashT+="</table>";
   // key results
   const g1=sorted.find(d=>d.pass!==null);
-  let key=`<table class="rtbl"><tr><th style="width:45%">Key result</th><th>Value</th></tr>
-    <tr><td class="lft"><b>Governing check</b></td><td class="lft"><b>${g1?g1.name+" — D/C "+fmt(g1.dc)+" ("+(g1.pass?"PASS":"FAIL")+")":"—"}</b></td></tr>`;
-  if(S.fnd.branch==="spread"&&R.checks.bearing){ key+=`<tr><td class="lft">Max factored bearing pressure vs φ·qn</td><td>${fmt(R.checks.bearing.q)} vs ${fmt(S.fnd.phiB*S.fnd.qn)} ksf</td></tr>
-    <tr><td class="lft">Eccentricity vs limit</td><td>${fmt(R.checks.ecc.e)} vs ${fmt(R.checks.ecc.eLim)} ft (e ≤ ${fmt(S.fnd.matl==="rock"?+S.fnd.eFracRock:+S.fnd.eFracSoil,3)}·B)</td></tr>
-    <tr><td class="lft">Sliding demand vs resistance</td><td>${fmt(R.checks.sliding.D)} vs ${fmt(R.checks.sliding.RR)} kip</td></tr>`; }
-  else if(R.checks.pileComp){ key+=`<tr><td class="lft">Max / min pile reaction vs φRn</td><td>${fmt(R.checks.pileComp.P)} / ${fmt(R.checks.pileUplift.P)} vs ${fmt(R.checks.pileComp.RR)} kip</td></tr>`; }
-  key+=`<tr><td class="lft">Stem base: Mu vs φMn</td><td>${fmt(R.checks.stemFlex.Mu)} vs ${fmt(R.checks.stemFlex.phiMn)} kip·ft/ft</td></tr>
-    <tr><td class="lft">Constants modified from defaults</td><td>${(R.overrides||[]).length? "<b>"+R.overrides.length+" — see Section F</b>":"none"}</td></tr></table>`;
+  let key=`<table class="rtbl"><tr><th style="width:45%">Key result</th><th>Value</th><th>Worked in</th></tr>
+    <tr><td class="lft"><b>Governing check</b></td><td class="lft"><b>${g1?g1.name+" — D/C "+fmt(g1.dc)+" ("+(g1.pass?"PASS":"FAIL")+")":"—"}</b></td><td>${g1?wk(g1.tab,DASH_ANCHOR[g1.id]):""}</td></tr>`;
+  if(S.fnd.branch==="spread"&&R.checks.bearing){ key+=`<tr><td class="lft">Max factored bearing pressure vs φ·qn</td><td>${fmt(R.checks.bearing.q)} vs ${fmt(S.fnd.phiB*S.fnd.qn)} ksf</td><td>${wk("tab-stab","o-brg")}</td></tr>
+    <tr><td class="lft">Eccentricity vs limit</td><td>${fmt(R.checks.ecc.e)} vs ${fmt(R.checks.ecc.eLim)} ft (e ≤ ${fmt(S.fnd.matl==="rock"?+S.fnd.eFracRock:+S.fnd.eFracSoil,3)}·B)</td><td>${wk("tab-stab","o-ecc")}</td></tr>
+    <tr><td class="lft">Sliding demand vs resistance</td><td>${fmt(R.checks.sliding.D)} vs ${fmt(R.checks.sliding.RR)} kip</td><td>${wk("tab-stab","o-slide")}</td></tr>`; }
+  else if(R.checks.pileComp){ key+=`<tr><td class="lft">Max / min pile reaction vs φRn</td><td>${fmt(R.checks.pileComp.P)} / ${fmt(R.checks.pileUplift.P)} vs ${fmt(R.checks.pileComp.RR)} kip</td><td>${wk("tab-found","o-pilecap")}</td></tr>`; }
+  key+=`<tr><td class="lft">Stem base: Mu vs φMn</td><td>${fmt(R.checks.stemFlex.Mu)} vs ${fmt(R.checks.stemFlex.phiMn)} kip·ft/ft</td><td>${wk("tab-struct","o-str-Stem")}</td></tr>
+    <tr><td class="lft">Constants modified from defaults</td><td>${(R.overrides||[]).length? "<b>"+R.overrides.length+"</b>":"none"}</td><td>${wk("rpt","ovr")}</td></tr></table>`;
   const warnT=WARNINGS.length?("<ul>"+WARNINGS.map(w=>`<li><b>${w.level==="err"?"ERROR":"Warning"}:</b> ${esc(w.msg)}</li>`).join("")+"</ul>"):"<p>No active warnings.</p>";
   const ovT=(R.overrides&&R.overrides.length)?`<p><b>${R.overrides.length} constant(s) differ from code/tool defaults:</b></p>
     <table class="rtbl"><tr><th>Constant</th><th>Default</th><th>In use</th></tr>
     ${R.overrides.map(o=>`<tr class="failrow"><td class="lft">${o.label}</td><td>${fmt(o.def)}</td><td><b>${fmt(o.cur)}</b></td></tr>`).join("")}</table>`
     :"<p>All load factors, resistance factors, eccentricity limits and h_eq table values match their AASHTO / tool defaults — no overrides in effect.</p>";
-  // running header + sheet numbers (Chromium margin boxes; harmless where unsupported)
-  const runTxt=`${(P.name||"Abutment Calc").replace(/"/g,"'")} · Input ID ${R.fingerprint} · ${P.date||""}`;
-  const secList=["A — Results Summary","B — Key Results","C — Warnings & Applicability Flags","D — Engineering Assumptions & Modified Constants","E — Input Echo","F — Geometry, Self-Weights & Loads",
-    ...(RO.permFull?["G — Load Combinations & γp Permutations"]:[]),
-    "H — External Stability, Free Body & Notes","I — Foundation / Pile Group","J — Structural Design (Concrete)","K — Shear & Moment Diagrams",
-    ...(RO.detailTables?["L — Detailed Force-Effect Tables"]:[]),
-    ...(RO.viz3d?["M — 3D Load Visualization"]:[]),
-    ...(RO.selftest?["N — Validation Self-Test Result"]:[]),
-    "O — Governing References"];
-  let h=`
-    <style id="rptPageStyle">@media print{ @page{ size:letter; margin:0.75in 0.7in;
-      @top-right{ content:"${runTxt}"; font-family:"Times New Roman",serif; font-size:8pt; color:#444; }
-      @bottom-right{ content:"Sheet " counter(page) " of " counter(pages); font-family:"Times New Roman",serif; font-size:9pt; } } }</style>
-    <table class="rpt-titleblock"><tr>
-      <td style="width:34%"><span class="tb-label">Project</span>${esc(P.name)||"—"}</td>
-      <td style="width:22%"><span class="tb-label">Project No.</span>${esc(P.num)||"—"}</td>
-      <td style="width:22%"><span class="tb-label">Calculated By</span>${esc(P.calcBy)||"—"}</td>
-      <td style="width:22%"><span class="tb-label">Date</span>${esc(P.date)||"—"}</td></tr>
-      <tr><td><span class="tb-label">Subject</span>Bridge Abutment Design — ${S.fnd.branch==="pile"?"Pile-Supported":"Spread Footing"} Cantilever Abutment</td>
-      <td><span class="tb-label">Input ID</span><b>${R.fingerprint}</b></td>
-      <td><span class="tb-label">Checked By</span>${esc(P.chkBy)||"—"}</td>
-      <td><span class="tb-label">Checked Date</span>${esc(P.chkDate)||"—"}</td></tr></table>
-    <h1 class="rpt-title">Bridge Abutment Design Calculation</h1>
-    <div class="rpt-sub">Conventional cantilever abutment · AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024) · MassDOT LRFD Bridge Manual<br>
-    Bridge Abutment Design Calculator v2.1, by Mario Lococo · printed ${new Date().toLocaleString()} · Input ID <b>${R.fingerprint}</b><br>
-    <i>The Input ID is a fingerprint of the complete input set — a reviewer can confirm this printout corresponds to the model by matching it against the ID shown in the app toolbar.</i></div>
-    <div class="rpt-banner ${R.nFail===0?'ok':'bad'}">
-      <span class="rpt-banner-status">${R.nFail===0?'ALL CHECKS PASS':R.nFail+' CHECK'+(R.nFail>1?'S':'')+' FAIL'}</span>
-      <span class="rpt-banner-detail">Governing: ${g1?esc(g1.name)+' — D/C '+fmt(g1.dc):'—'} · ${R.dash.filter(d=>d.pass!==null).length} coded checks · ${S.fnd.branch==="pile"?"pile-supported":"spread"} footing${S.seismic&&S.seismic.on?" · seismic (Extreme Event I)":""}</span>
-    </div>
-    <h3 style="margin-top:14px;">Contents</h3>
-    <div style="columns:2;font-size:10pt;">${secList.map(s2=>`<div>${s2}</div>`).join("")}</div>
-    <h2 class="rpt-sec">A — Results Summary (All Code Checks, Ranked)</h2>
-    <p>${R.nFail===0?"All "+R.dash.length+" code checks PASS.":"<b style='color:#c62828'>"+R.nFail+" check(s) FAIL — see red rows.</b>"}</p>
-    ${dashT}
-    <h2 class="rpt-sec">B — Key Results</h2>${key}
-    <h2 class="rpt-sec">C — Validation Warnings & Applicability Flags</h2>${warnT}
-    <h2 class="rpt-sec">D — Engineering Assumptions & Modified Constants</h2>
-    <div style="white-space:pre-wrap;border:1px solid #999;padding:8px;">${esc(S.assumptions)||"—"}</div>
-    <h3>Constants differing from code / tool defaults</h3>${ovT}
+
+  /* ---- numbered sections ---- */
+  const secs=[]; let body="";
+  function sec(title, html, o={}){
+    const n=secs.length+1, id="crs-"+n; secs.push({n,title,id,key:o.key||""});
+    body+=`<section class="cr-sec${o.brk?" cr-break":""}" data-key="${o.key||""}"><h2 class="cr-h1" id="${id}">${n}. ${esc(title).replace(/γp/g,'<span class="nocase">γ<sub>p</sub></span>')}</h2>${html}</section>`;
+  }
+  sec("Results Summary (All Code Checks, Ranked)",
+    `<p>${R.nFail===0?"All "+R.dash.length+" code checks PASS.":"<b style='color:#c62828'>"+R.nFail+" check(s) FAIL — see red rows.</b>"}</p>${dashT}`);
+  sec("Key Results",key);
+  sec("Validation Warnings & Applicability Flags",warnT);
+  sec("Engineering Assumptions & Modified Constants",
+    `<h3>Engineering assumptions (as entered)</h3><div style="white-space:pre-wrap;border:1px solid #999;padding:8px;">${esc(S.assumptions)||"—"}</div>
+    <h3 data-sub="ovr">Constants differing from code / tool defaults</h3>${ovT}
     ${(S.meta&&S.meta.revs&&S.meta.revs.length)?`<h3>Revision history (project saves)</h3>
       <table class="rtbl"><tr><th>#</th><th>Saved as</th><th>Date</th><th>Input ID at save</th></tr>
-      ${S.meta.revs.map((r2,i)=>`<tr><td>${i+1}</td><td class="lft">${esc(r2.n)}</td><td>${new Date(r2.ts).toLocaleString()}</td><td>${esc(r2.fp||"—")}</td></tr>`).join("")}</table>`:""}
-    ${RO.inputEcho?`<h2 class="rpt-sec pagebreak">E — Input Echo</h2>${inputEchoHTML()}`:`<h2 class="rpt-sec pagebreak">E — Input Echo</h2><p class="small"><i>Omitted from this report set. Input ID <b>${R.fingerprint}</b> fixes the complete input set; export JSON for the full echo.</i></p>`}
-  `;
-  // clone the six tabs with all panels open
-  const secNames={ "tab-loads":"F — Geometry, Self-Weights & Loads","tab-comb":"G — Load Combinations & γp Permutations",
-    "tab-stab":"H — External Stability, Free Body & Notes","tab-found":"I — Foundation / Pile Group","tab-struct":"J — Structural Design (Concrete)",
-    "tab-vm":"K — Shear & Moment Diagrams","tab-tables":"L — Detailed Force-Effect Tables"};
+      ${S.meta.revs.map((r2,i)=>`<tr><td>${i+1}</td><td class="lft">${esc(r2.n)}</td><td>${new Date(r2.ts).toLocaleString()}</td><td>${esc(r2.fp||"—")}</td></tr>`).join("")}</table>`:""}`);
+  sec("Input Echo", RO.inputEcho? inputEchoHTML()
+    : `<p class="small"><i>Omitted from this report set. Input ID <b>${R.fingerprint}</b> fixes the complete input set; export JSON for the full echo.</i></p>`, {brk:true});
+  // the worked tabs, cloned with all panels open
+  const secNames={ "tab-loads":"Geometry, Self-Weights & Loads","tab-comb":"Load Combinations & γp Permutations",
+    "tab-stab":"External Stability, Free Body & Notes","tab-found":"Foundation / Pile Group","tab-struct":"Structural Design (Concrete)",
+    "tab-vm":"Shear & Moment Diagrams","tab-tables":"Detailed Force-Effect Tables"};
   const SKIP={ "tab-comb":!RO.permFull, "tab-tables":!RO.detailTables };
   for(const [id,name] of Object.entries(secNames)){
     if(SKIP[id]) continue;
@@ -4908,30 +4974,108 @@ async function buildReport(){
     cl.querySelectorAll(".panel").forEach(p=>p.classList.remove("closed"));
     if(RO.charts){ cl.querySelectorAll(".plotbox").forEach(pb=>{ pb.setAttribute("data-plot-src",pb.id); }); }
     else{ cl.querySelectorAll(".plotbox").forEach(pb=>pb.remove()); }
-    h+=`<h2 class="rpt-sec pagebreak">${name}</h2><div>${cl.innerHTML}</div>`;
+    sec(name,`<div>${cl.innerHTML}</div>`,{brk:true,key:id});
   }
   // 3D isometric snapshot
   if(RO.viz3d){
     let d3url=null; try{ d3url=await captureD3(R); }catch(e){ d3url=null; }
     if(d3url){ const selLbl=(()=>{for(const[,o]of VM_SEL_GROUPS)for(const[v,l]of o)if(v===(S.ui.d3Sel||"ls:Strength I"))return l;return S.ui.d3Sel;})();
-      h+=`<h2 class="rpt-sec pagebreak">M — 3D Load Visualization</h2>
-        <div class="rpt-sub">Load case: ${esc(selLbl)} — isometric schematic (girder reaction components, earth pressure, surcharge)</div>
-        <img class="plotimg" src="${d3url}" style="max-width:7.0in;">`; }
+      sec("3D Load Visualization",`<div class="rpt-sub">Load case: ${esc(selLbl)} — isometric schematic (girder reaction components, earth pressure, surcharge)</div>
+        <img class="plotimg" src="${d3url}" style="max-width:7.0in;">`,{brk:true}); }
   }
-  if(RO.selftest) h+=`<h2 class="rpt-sec">N — Validation Self-Test Result</h2>${selfTestHTML()}`;
-  h+=`<h2 class="rpt-sec">O — Governing References</h2>
-    <p>AASHTO LRFD Bridge Design Specifications, 10th Edition (2024): §3 Loads & Load Factors; §4.7.4.4 Minimum Support Length; §5 Concrete Structures; §10 Foundations; §11 Abutments, Piers & Walls.<br>
-    MassDOT LRFD Bridge Manual, Part I, §3.1.8.3 (floating-bridge concept; seismic connection).<br>
-    Load factors reflect Tables 3.4.1-1 / 3.4.1-2 as implemented (editable constants echoed in Section D); the engineer of record confirms current values and state-DOT overrides.</p>`;
+  if(RO.selftest) sec("Validation Self-Test Result",selfTestHTML());
   // strip on-screen interaction language so the printed report reads as a static document
-  h=h
+  body=body
     .replace(/Toggle series in the legend;\s*hover for pile numbers and values\./g,
              "Series are grouped by limit state; each bar is labeled with its pile number and governing axial value.")
     .replace(/Diagrams redraw live;\s*hover any point for the value\./g,
              "Peak values are marked at the critical section of each diagram.")
     .replace(/\s*Drag to orbit,\s*scroll to zoom\./g,"")
     .replace(/\s*Drag to orbit and scroll to zoom\./g,"");
-  rp.innerHTML=h;
+  rp.className="crdoc";
+  rp.innerHTML=`<div id="crFront"></div>`+body;
+
+  /* ---- subsections n.k: each tab panel (its own number is replaced) and each h3 heading ---- */
+  const map={};   /* panel data-cid (or h3 data-sub) → {num:"n.k", id} — for the "see §n.k" links */
+  rp.querySelectorAll("section.cr-sec").forEach(se=>{
+    const h=se.querySelector("h2.cr-h1"), s=secs.find(x=>x.id===h.id); s.subs=[]; let k=0;
+    se.querySelectorAll(".panel, h3").forEach(el=>{
+      if(el.tagName==="H3"){ if(el.closest(".panel")) return; }
+      else if(el.parentElement.closest(".panel")) return;
+      k++; const num=s.n+"."+k, sid=s.id+"-"+k;
+      if(el.tagName==="H3"){
+        const t=el.textContent.trim(); el.id=sid; el.className="cr-h2"; el.textContent=num+" "+t;
+        if(el.dataset.sub) map[el.dataset.sub]={num,id:sid};
+        s.subs.push({t,id:sid});
+      }else{
+        el.id=sid; const no=el.querySelector(".p-head .sec-no"); if(no) no.textContent=num;
+        const tt=el.querySelector(".p-head")?.children[2]; let t="";
+        if(tt){ const c=tt.cloneNode(true); c.querySelectorAll(".flagchip").forEach(f=>f.remove()); t=c.textContent.trim(); }
+        if(el.dataset.cid) map[el.dataset.cid]={num,id:sid};
+        s.subs.push({t,id:sid});
+      }
+    });
+  });
+  /* ---- D/C result line per check at the end of the sections that hold checks ---- */
+  rp.querySelectorAll("section.cr-sec").forEach(se=>{
+    const k=se.dataset.key; if(!/^tab-(stab|found|struct)$/.test(k)) return;
+    const s=secs.find(x=>x.key===k);
+    se.insertAdjacentHTML("beforeend",abutResultBlock(R,k,s.title,map));
+  });
+  /* ---- §6 links: "Worked in: → Tab · Panel" / in-text references become "see §n.k" ---- */
+  rp.querySelectorAll(".xlink[data-jump]").forEach(x=>{
+    const [tb,an]=x.dataset.jump.split("|"), hit=map[an];
+    let txt;
+    if(x.classList.contains("wk")) txt=(x.dataset.txt?x.dataset.txt+": ":"")+(hit?"see §"+hit.num:"see the "+(ABUT_TABNAME[tb]||tb)+" tab (not in this printout)");
+    else if(x.dataset.rpt) txt=hit?"§"+hit.num:"—";
+    else{ const t=x.textContent;
+      if(hit){ txt=t.replace(/(Tab\s*\d+,?\s*)?§\s*\d+(\.\d+)?[a-z]?/,"§"+hit.num);
+        if(txt===t) txt=t.replace(/Tab\s*\d+/,"§"+hit.num);
+        if(txt===t) txt=t+" (§"+hit.num+")"; }
+      else txt=t+" (not in this printout)"; }
+    const a=document.createElement(hit?"a":"span"); a.className="xref"; if(hit) a.href="#"+hit.id; a.textContent=txt; x.replaceWith(a);
+  });
+  rp.querySelectorAll(".wklink").forEach(d=>{ if(d.firstChild&&d.firstChild.nodeType===3) d.firstChild.textContent=""; });
+  /* a live <select> prints as a form control: show the selected option as text */
+  rp.querySelectorAll("select").forEach(sl=>{ const o=sl.options[sl.selectedIndex]; const b=document.createElement("b"); b.textContent=o?o.textContent:""; sl.replaceWith(b); });
+
+  /* ---- front matter: cover with title block, references, table of contents ---- */
+  const toc=secs.map(s=>`<li><a href="#${s.id}">${s.n}. ${esc(s.title)}</a>${s.subs.length?`<ol>${s.subs.map((q,k)=>`<li><a href="#${q.id}">${s.n}.${k+1}. ${esc(q.t)}</a></li>`).join("")}</ol>`:""}</li>`).join("");
+  const stabN=(secs.find(s=>s.key==="tab-stab")||{}).n, fndN=(secs.find(s=>s.key==="tab-found")||{}).n, strN=(secs.find(s=>s.key==="tab-struct")||{}).n;
+  document.getElementById("crFront").outerHTML=`
+    <section class="cr-cover">
+      <div class="cr-cover-t">
+        <h1>Bridge Abutment Design Calculation</h1>
+        <p>${esc(P.name)||"Untitled"}</p>
+        <p class="cr-cover-p">Conventional cantilever abutment — ${S.fnd.branch==="pile"?"pile-supported":"spread"} footing</p>
+        <p class="cr-cover-p">AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024) · MassDOT LRFD Bridge Manual</p>
+        <p class="cr-cover-p">Bridge Abutment Design Calculator v2.1, by Mario Lococo</p>
+      </div>
+      <table class="rpt-titleblock"><tr>
+        <td style="width:34%"><span class="tb-label">Project</span>${esc(P.name)||"—"}</td>
+        <td style="width:22%"><span class="tb-label">Project No.</span>${esc(P.num)||"—"}</td>
+        <td style="width:22%"><span class="tb-label">Calculated By</span>${esc(P.calcBy)||"—"}</td>
+        <td style="width:22%"><span class="tb-label">Date</span>${esc(P.date)||"—"}</td></tr>
+        <tr><td><span class="tb-label">Subject</span>Bridge Abutment Design — ${S.fnd.branch==="pile"?"Pile-Supported":"Spread Footing"} Cantilever Abutment</td>
+        <td><span class="tb-label">Input ID</span><b>${R.fingerprint}</b></td>
+        <td><span class="tb-label">Checked By</span>${esc(P.chkBy)||"—"}</td>
+        <td><span class="tb-label">Checked Date</span>${esc(P.chkDate)||"—"}</td></tr></table>
+      <div class="rpt-banner ${R.nFail===0?'ok':'bad'}">
+        <span class="rpt-banner-status">${R.nFail===0?'ALL CHECKS PASS':R.nFail+' CHECK'+(R.nFail>1?'S':'')+' FAIL'}</span>
+        <span class="rpt-banner-detail">Governing: ${g1?esc(g1.name)+' — D/C '+fmt(g1.dc):'—'} · ${R.dash.filter(d=>d.pass!==null).length} coded checks · ${S.fnd.branch==="pile"?"pile-supported":"spread"} footing${S.seismic&&S.seismic.on?" · seismic (Extreme Event I)":""}</span>
+      </div>
+      <div class="rpt-sub">Printed ${new Date().toLocaleString()} · Input ID <b>${R.fingerprint}</b><br>
+      <i>The Input ID is a fingerprint of the complete input set — a reviewer can confirm this printout corresponds to the model by matching it against the ID shown in the app toolbar.</i></div>
+    </section>
+    <section class="cr-front">
+      <h2 class="cr-h1">References:</h2>
+      <table class="cr-refs">${ABUT_REFS.map(([a,b])=>`<tr><td>${esc(a)}</td><td>${esc(b)}</td></tr>`).join("")}</table>
+      <p class="cr-p cr-small">Load factors reflect Tables 3.4.1-1 / 3.4.1-2 as implemented (editable constants; any change from the defaults is listed in <a href="#crs-4">§4</a>); the engineer of record confirms current values and state-DOT overrides.</p>
+      <h2 class="cr-h1">Table of contents:</h2>
+      <ol class="cr-toc">${toc}</ol>
+      <p class="cr-p cr-small">Equations are shown symbolically, then with values substituted, then with the result. ${[stabN,fndN,strN].filter(Boolean).map(n=>"§"+n).join(", ")} end with the D/C result of their checks. Units: kip, ft, in, ksi, ksf unless noted.</p>
+    </section>`;
+  abutApplyPageCSS(true);
   // swap live Plotly charts for images — preserve each chart's true on-screen aspect ratio
   const jobs=[];
   rp.querySelectorAll(".plotbox").forEach(pb=>{
