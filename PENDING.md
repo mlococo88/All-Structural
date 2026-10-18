@@ -2,7 +2,7 @@
 
 One list of everything that is not finished or not yet verified by the engineer. Details and check cases are in `ENGINEER_CHECKS.md` (item IDs below) and the fix logs. Update this file in the same PR whenever an item is added or closed.
 
-Last updated: 2026-10-16 (BP-C1 open stand-off).
+Last updated: 2026-10-18 (BP-C1 open stand-off).
 
 ## 1. Decisions for the engineer to verify (built with a default, results may depend on them)
 
@@ -14,6 +14,7 @@ Last updated: 2026-10-16 (BP-C1 open stand-off).
 | 4 | Suggest panel: ranking when the girder count varies | GirderDetail | How the objective ranks counts for Full design | GD66 (f) |
 | 5 | Owner phase 3b part 1 readings | GirderDetail | Shipping limits as warnings; RIDOT T2 thickness ratios; transition saving as weld equivalent; MassDOT quarter-point splices; CTDOT girder count/spacing as warnings; RIDOT skew G13; CTDOT construction wind advisory and L/100 camber shown separately | GD67 (a)–(g) |
 | 6 | Owner phase 3b part 2 readings | GirderDetail | RIDOT 40 in diaphragm rule and X/K by S/d; CTDOT web-depth rule and channel table; CTDOT 4 bolts as a warning; MassDOT 0.5d uses girder depth; fascia stiffener rule incl. connection plates; RIDOT stiffener minimums; RIDOT fatigue categories (warns on B′ and studs); RIDOT jacking includes m and η | GD68 (a)–(h) |
+| 7 | Live load deflection: neglect non-contributing axles? | GirderDetail (Structural analysis + Preliminary sizing) | The optional deflection check (3.6.1.3.2, design truck alone) still sums every axle. HL-93 strength/service and fatigue now drop axles that reduce the effect (3.6.1.3.1, LL1/LL3). Apply the same to deflection, or keep every axle? Deflections unchanged until decided | fixlog Steel Bridge Beam Modules, LL1–LL7 open items |
 
 ## 2. Blocked — reference documents not available
 
